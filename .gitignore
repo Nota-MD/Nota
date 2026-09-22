@@ -1,0 +1,24 @@
+# 前端
+node_modules/
+dist/
+*.local
+.vite/
+
+# Rust / Tauri（旧后端，移植期间留着当参照）
+src-tauri/target/
+src-tauri/gen/
+
+# 编辑器
+*.swp
+*~
+.idea/
+.vscode/
+
+# 构建产物
+build/
+*.AppImage
+*.deb
+*.rpm
+
+# 运行时（插件安装目录不入库）
+plugins/*/dist/

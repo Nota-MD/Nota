@@ -1,0 +1,150 @@
+/**
+ * 外观的三条轴。
+ *
+ * 组织形式是**两层相乘**，不是三选一：
+ *
+ *   [data-ui-style="…"]  定**形状**：圆角、间距、控件比例、字体栈、阴影
+ *   [data-ui-mode="…"]   定**颜色**：前景/背景/边框/强调色
+ *   [data-doc-theme="…"] 定**正文**：只作用于 .editor-mount 里面
+ *
+ * ⚠️ 写新风格时**别把颜色写进 style 那一段**。颜色一旦在 style 里写死，
+ * 这个风格就没法配暗色了——而"我要 macOS 风格 + 暗色"是必然会出现的需求。
+ * 反过来也一样：mode 那一段只管颜色，不许改圆角和行为性尺寸。
+ *
+ * 加一条新轴上的新值时，要改的地方：本文件、`src-tauri/src/settings.rs` 的枚举、
+ * `docs/04-ui-map.md` 的外观一节。三处缺一不可。
+ */
+
+/* ── 基础：与风格无关的公共量 ─────────────────────────────────────────── */
+
+:root {
+  --ui-font-size: 15px;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans CJK SC",
+    "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas,
+    "Noto Sans Mono CJK SC", monospace;
+  --font-doc: "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman",
+    "Songti SC", serif;
+
+  --sidebar-width: 240px;
+  /* 右侧插件栏。**比左侧栏宽 20px**：插件卡片里有名称+版本+能力标签，
+     跟文件树那种一行一个名字的密度不一样。 */
+  --dock-width: 260px;
+  --toolbar-height: 38px;
+  --statusbar-height: 26px;
+}
+
+/* ── 轴二：明暗（任何风格下都成立）────────────────────────────────────── */
+
+:root,
+[data-ui-mode="light"] {
+  --bg: #ffffff;
+  --bg-subtle: #f6f7f9;
+  --bg-raised: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.045);
+  --bg-active: rgba(0, 0, 0, 0.075);
+  --fg: #1d1d1f;
+  --fg-muted: #6b6f76;
+  --fg-faint: #9aa0a6;
+  --border: rgba(0, 0, 0, 0.11);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --accent: #2a5e9e;
+  --accent-fg: #ffffff;
+  --danger: #c0392b;
+  --warn: #b7791f;
+  --success: #2f855a;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  --doc-bg: #ffffff;
+  --doc-fg: #23272e;
+
+  /* 代码高亮的 token 色。**归 mode 管，不归 style 管**——底色和前景是一套的，
+     只换一半会得到一个"浅底配浅字"读不了的代码块。 */
+  --code-comment: #6a737d;
+  --code-keyword: #cf222e;
+  --code-string: #0a3069;
+  --code-number: #0550ae;
+  --code-function: #8250df;
+  --code-attr: #953800;
+  --code-tag: #116329;
+}
+
+[data-ui-mode="dark"] {
+  --bg: #1b1d21;
+  --bg-subtle: #23262b;
+  --bg-raised: #2a2e34;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --fg: #e6e8eb;
+  --fg-muted: #a3a9b3;
+  --fg-faint: #767d88;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --accent: #5b9bd5;
+  --accent-fg: #10131a;
+  --danger: #e57373;
+  --warn: #e0b04a;
+  --success: #6ec08a;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  --doc-bg: #1b1d21;
+  --doc-fg: #dfe3e8;
+
+  /* 同上的暗色一份。⚠️ 暗色下**不能靠调透明度**去压暗注释——
+     代码块底色本来就和页面底色接近，透明度一变就成了糊的。 */
+  --code-comment: #8b949e;
+  --code-keyword: #ff7b72;
+  --code-string: #a5d6ff;
+  --code-number: #79c0ff;
+  --code-function: #d2a8ff;
+  --code-attr: #ffa657;
+  --code-tag: #7ee787;
+}
+
+/* ── 轴一：界面风格（只定形状，不定颜色）──────────────────────────────── */
+
+/* Adwaita（GNOME 原生）：中等圆角、紧凑、无明显阴影 */
+[data-ui-style="adwaita"] {
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --control-height: 30px;
+  --spacing: 8px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 500;
+}
+
+/* macOS：大圆角、控件偏矮、层次靠阴影 */
+[data-ui-style="macos"] {
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 14px;
+  --control-height: 26px;
+  --spacing: 9px;
+  --toolbar-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+  --btn-font-weight: 500;
+  --font-ui: -apple-system, "SF Pro Text", "Helvetica Neue", "PingFang SC",
+    "Noto Sans CJK SC", sans-serif;
+}
+
+/* Yaru（Ubuntu）：圆角更大、控件更高、强调色偏橙（颜色部分在 mode 那段之外
+   单独覆盖 accent —— 这是**允许的例外**，因为 Yaru 的橙是它的识别特征，
+   不该随明暗换色相，只换明度） */
+[data-ui-style="yaru"] {
+  --radius-sm: 6px;
+  --radius: 9px;
+  --radius-lg: 14px;
+  --control-height: 32px;
+  --spacing: 9px;
+  --toolbar-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+  --btn-font-weight: 500;
+}
+
+[data-ui-style="windows"] {
+  --radius-sm: 3px;
+  --radius: 5px;
+  --radius-lg: 8px;
+  --control-height: 30px;
+  --spacing: 7px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 400;
+}

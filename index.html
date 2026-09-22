@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      CSP 不写在这里：Tauri 会在 src-tauri/tauri.conf.json 的
+      `app.security.csp` 注入一条更完整的策略（含 ipc: 源）。
+      两处都写等于两条策略同时生效取交集，只会互相打架。
+    -->
+    <title>Nota</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

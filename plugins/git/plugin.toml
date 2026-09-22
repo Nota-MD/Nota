@@ -1,0 +1,27 @@
+# Git 版本控制插件（内置）。
+#
+# 能力申请只有三条，**每一条都要有实际用到的地方**——
+# 申请了不用的能力是在扩大攻击面而不换任何功能。
+#
+# 为什么没有 `fs.write`：这个插件只让 git 自己去改工作区，不直接写文件。
+# 哪天要做"从 git 恢复某个版本到工作区"，那时再加——加的时候要说明用在哪。
+
+[plugin]
+id          = "nota.git"
+name        = "Git 版本控制"
+version     = "0.1.0"
+api         = 1
+
+description = "查看改动、比较差异、提交。走系统 git 命令，尊重你的 gitconfig 与 hook。"
+license     = "BSD-2-Clause"
+authors     = ["Nota contributors"]
+entry       = "main.lua"
+
+capabilities = [
+  "document.read",   # 提交信息默认取文档标题
+  "fs.read",         # 读工作区文件（将来做逐文件 diff 用）
+  "process.git",     # 本插件存在的理由
+  "ui.notify",       # 提交成功/失败要说一声
+  "ui.panel",        # 侧栏的改动列表
+  "ui.menu",         # 菜单里的「提交…」
+]

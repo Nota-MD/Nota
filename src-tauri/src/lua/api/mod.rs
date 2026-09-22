@@ -1,0 +1,363 @@
+//! 注入给插件的 `nota.*` 表。
+//!
+//! # 一条硬规矩：**按能力装表，不装空壳**
+//!
+//! 插件没申请 `document.read`，`nota.document` 就是 `nil`。**不要**给它装一张
+//! 调用时才报"你没权限"的表——那既让插件作者在开发期发现不了问题（写完才炸），
+//! 也让"权限"变成一句运行时的客气话而不是一道结构上的墙。
+//!
+//! 唯一的例外是本文件里那几个**永远可用**的东西（`log` / `command` / `event` /
+//! `version` / `plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、跟宿主说话用的。
+//!
+//! # 加新成员时的判据
+//!
+//! 见 `plugin/manifest.rs` 顶上那段：**加成员不动 API 版本号，改语义/改名才动**。
+
+pub mod document;
+pub mod fs;
+pub mod git;
+pub mod ui;
+
+use mlua::{Lua, Table, Value};
+
+use crate::error::NotaError;
+use crate::plugin::manifest::{Capability, Manifest, NOTA_PLUGIN_API_VERSION};
+use crate::lua::HostContext;
+
+/// 把 `NotaError` 转成 Lua 错误。统一从这一处走，报错信息里一定带得出人话。
+pub fn lua_err(e: NotaError) -> mlua::Error {
+    mlua::Error::RuntimeError(e.to_string())
+}
+
+/// 组装整张 `nota` 表。
+pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table, NotaError> {
+    let nota = lua.create_table().map_err(mlua_to_nota)?;
+
+    // ── 永远可用：身份 ────────────────────────────────────────────────────
+    set(nota.set("version", env!("CARGO_PKG_VERSION")), lua)?;
+    set(nota.set("api_version", NOTA_PLUGIN_API_VERSION), lua)?;
+    set(nota.set("plugin_id", manifest.meta.id.clone()), lua)?;
+
+    // ── 永远可用：日志 ────────────────────────────────────────────────────
+    // 前缀统一加上插件 id，多插件同时刷输出时分得清是谁。
+    let prefix = format!("[nota:{}]", manifest.meta.id);
+    let log = lua.create_table().map_err(mlua_to_nota)?;
+    for (name, level) in [("info", "INFO"), ("warn", "WARN"), ("error", "ERROR")] {
+        let p = prefix.clone();
+        let f = lua
+            .create_function(move |_, msg: Value| {
+                eprintln!("{p} {level} {}", value_to_text(&msg));
+                Ok(())
+            })
+            .map_err(mlua_to_nota)?;
+        set(log.set(name, f), lua)?;
+    }
+    set(nota.set("log", log), lua)?;
+
+    // ── 永远可用：命令注册 ────────────────────────────────────────────────
+    set(
+        nota.set("command", command_table(lua, &manifest.meta.id)?),
+        lua,
+    )?;
+
+    // ── 永远可用：事件 ────────────────────────────────────────────────────
+    set(nota.set("event", event_table(lua, ctx)?), lua)?;
+
+    // ── 按能力装 ──────────────────────────────────────────────────────────
+    if manifest.has(Capability::DocumentRead) || manifest.has(Capability::DocumentWrite) {
+        set(
+            nota.set("document", document::build(lua, manifest, ctx)?),
+            lua,
+        )?;
+    }
+
+    if manifest.has(Capability::FsRead) || manifest.has(Capability::FsWrite) {
+        set(nota.set("fs", fs::build(lua, manifest, ctx)?), lua)?;
+    }
+
+    if manifest.has(Capability::ProcessGit) {
+        set(nota.set("git", git::build(lua, ctx)?), lua)?;
+    }
+
+    // ⚠️ 三条能力**都要列上**。这里漏一个，申请了那个能力的插件就拿不到 `nota.ui`
+    // 这张表（`nil`），进而 `attempt to index a nil value`。
+    // 漏 `UiMenu` 是 BUG-8：`ui.menu` 这一条能力曾经形同虚设，
+    // 因为 `ui.rs` 表内虽然按 `UiMenu` 装了 `register_menu`，但**表本身**装不出来。
+    // 里面有判据、外面也得有——两处是**相乘**的关系，不是一个能代替另一个。
+    //
+    // 判据剥成了 `装_ui吗()`：`build()` 要真的 `AppHandle`，构造不出来，
+    // 而这条判断是纯的、正是最该被用例钉住的那一条（BUG-8 就是它的锅）。
+    if 装_ui吗(manifest) {
+        set(nota.set("ui", ui::build(lua, manifest, ctx)?), lua)?;
+    }
+
+    // ── 声明了但本轮还没实现的，装一张**会明说没实现**的表 ───────────────
+    // 这份诚实是有用的：插件作者写 `nota.http.get(...)` 会立刻拿到一句
+    // "尚未实现（docs/07 第 12 项）"，而不是 `attempt to index a nil value`
+    // ——后者会让人以为是自己的能力没申请对，白查半天。
+    if manifest.has(Capability::NetworkHttp) {
+        set(nota.set("http", not_implemented(lua, "网络请求", "docs/07 第 12 项")?), lua)?;
+    }
+
+    if manifest.has(Capability::SettingsOwn) {
+        set(nota.set("settings", not_implemented(lua, "插件设置", "docs/07 第 13 项")?), lua)?;
+    }
+
+    Ok(nota)
+}
+
+/// `nota.command` —— 注册命令给宿主/前端调。
+fn command_table(lua: &Lua, plugin_id: &str) -> Result<Table, NotaError> {
+    let t = lua.create_table().map_err(mlua_to_nota)?;
+
+    // 命令表存在 registry 里，`LuaPlugin::call_command` 按名字取。
+    let commands = lua.create_table().map_err(mlua_to_nota)?;
+    lua.set_named_registry_value("nota_commands", commands)
+        .map_err(mlua_to_nota)?;
+
+    let id = plugin_id.to_owned();
+    let register = lua
+        .create_function(move |lua, (name, f): (String, mlua::Function)| {
+            if name.is_empty() {
+                return Err(mlua::Error::RuntimeError("命令名不能为空".to_owned()));
+            }
+            let commands: Table = lua.named_registry_value("nota_commands")?;
+            // 同名覆盖要报出来：多半是复制粘贴改漏了，静默覆盖会让人对着
+            // "怎么点下去跑的是另一个函数"查到天亮。
+            if let Ok(Value::Function(_)) = commands.get::<Value>(name.as_str()) {
+                return Err(mlua::Error::RuntimeError(format!(
+                    "插件 {id} 重复注册命令 `{name}`"
+                )));
+            }
+            commands.set(name, f)?;
+            Ok(())
+        })
+        .map_err(mlua_to_nota)?;
+
+    set(t.set("register", register), lua)?;
+    Ok(t)
+}
+
+/// `nota.event` —— 发事件给前端。
+///
+/// 本轮只做**插件 → 前端**这一个方向（`emit`）。前端 → 插件那一侧由命令承担，
+/// `nota.command.register` 就是那条路——两条路各管一头，别混。
+fn event_table(lua: &Lua, ctx: &HostContext) -> Result<Table, NotaError> {
+    use tauri::Emitter;
+
+    let t = lua.create_table().map_err(mlua_to_nota)?;
+
+    let app = ctx.app.clone();
+    // ⚠️ 用 `channel_id()` 而不是原样的 id：清单里的 id 允许 `.`（`nota.git`），
+    // 而 Tauri 的事件名不认点。见 `manifest::channel_id` 的说明与 `docs/07` BUG-3。
+    let plugin_id = crate::plugin::manifest::channel_id(&ctx.plugin_id);
+    let emit = lua
+        .create_function(move |lua, (name, payload): (String, Value)| {
+            // 事件名统一加 `plugin:` 前缀，前端一眼看得出是从插件来的，
+            // 也不会跟宿主自己的事件名撞。
+            let channel = format!("plugin:{plugin_id}:{name}");
+            let json = lua_to_json(lua, payload)?;
+            app.emit(&channel, json)
+                .map_err(|e| mlua::Error::RuntimeError(format!("发事件 {channel} 失败：{e}")))?;
+            Ok(())
+        })
+        .map_err(mlua_to_nota)?;
+
+    set(t.set("emit", emit), lua)?;
+    Ok(t)
+}
+
+/// 造一张"这个能力还没实现"的表。
+///
+/// 表里每个方法都返回同一个明确的错误。**给的是线索不是哑弹**——
+/// 带着文档条目号，插件作者能直接翻到 backlog 那一项。
+fn not_implemented(lua: &Lua, what: &str, where_: &str) -> Result<Table, NotaError> {
+    let t = lua.create_table().map_err(mlua_to_nota)?;
+    let msg = format!("{what}尚未实现（见 {where_}）");
+
+    // 用 __index 元表兜住任意方法名：`nota.http.get` / `nota.http.post` 都能答上，
+    // 不用逐个列。
+    let meta = lua.create_table().map_err(mlua_to_nota)?;
+    let f = lua
+        .create_function(move |_, _: mlua::MultiValue| -> mlua::Result<()> {
+            Err(mlua::Error::RuntimeError(msg.clone()))
+        })
+        .map_err(mlua_to_nota)?;
+    set(meta.set("__index", f), lua)?;
+    set(t.set_metatable(Some(meta)), lua)?;
+
+    Ok(t)
+}
+
+// ── 小工具 ────────────────────────────────────────────────────────────────
+
+/// `Table::set` 返回 `Result<()>`，串起来写会很难看。这个把 `mlua::Error`
+/// 转成 `NotaError` 好让 `?` 一路走到底。
+fn set(r: mlua::Result<()>, _lua: &Lua) -> Result<(), NotaError> {
+    r.map_err(mlua_to_nota)
+}
+
+pub fn mlua_to_nota(e: mlua::Error) -> NotaError {
+    NotaError::other(format!("Lua：{e}"))
+}
+
+/// 把 Lua 值渲染成人看的文本（给日志用）。
+fn value_to_text(v: &Value) -> String {
+    match v {
+        Value::Nil => "nil".to_owned(),
+        Value::Boolean(b) => b.to_string(),
+        Value::Integer(i) => i.to_string(),
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => s.to_string_lossy().to_string(),
+        other => format!("{other:?}"),
+    }
+}
+
+/// Lua 值 → JSON，用于跨 IPC 发出去。
+pub fn lua_to_json(lua: &Lua, v: Value) -> mlua::Result<serde_json::Value> {
+    Ok(match v {
+        Value::Nil => serde_json::Value::Null,
+        Value::Boolean(b) => serde_json::Value::Bool(b),
+        Value::Integer(i) => serde_json::Value::Number(i.into()),
+        Value::Number(n) => serde_json::Number::from_f64(n)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        Value::String(s) => serde_json::Value::String(s.to_string_lossy().to_string()),
+        Value::Table(t) => {
+            // 是数组还是字典？Lua 里只有 table，靠"有没有 1..n 连续整数键"判。
+            let len = t.raw_len();
+            if len > 0 {
+                let mut arr = Vec::with_capacity(len);
+                for i in 1..=len {
+                    arr.push(lua_to_json(lua, t.raw_get(i)?)?);
+                }
+                serde_json::Value::Array(arr)
+            } else {
+                let mut map = serde_json::Map::new();
+                for pair in t.pairs::<Value, Value>() {
+                    let (k, val) = pair?;
+                    if let Value::String(ks) = k {
+                        map.insert(ks.to_string_lossy().to_string(), lua_to_json(lua, val)?);
+                    }
+                }
+                serde_json::Value::Object(map)
+            }
+        }
+        other => serde_json::Value::String(format!("{other:?}")),
+    })
+}
+
+/// 装 `nota.ui` 这张表需要哪些能力。
+///
+/// ⚠️ **`ui.rs` 里每多一个 `manifest.has(Capability::Ui…)`，这里就要多一项。**
+/// 两处是**相乘**的关系：里面那个判据决定"表里有没有这个函数"，
+/// 外面这个决定"表本身在不在"。漏一个就是 **BUG-8**——
+/// 只申请 `ui.menu` 的插件曾经连 `nota.ui` 都拿不到，`register_menu` 无从谈起。
+///
+/// 写成数组而不是一串 `||`，是为了让用例能**遍历它**（见下面的 `tests`）：
+/// 加能力时只要往数组里加一项，用例自动覆盖到。
+const UI能力: [Capability; 3] = [
+    Capability::UiNotify,
+    Capability::UiPanel,
+    Capability::UiMenu,
+];
+
+/// `nota.ui` 这张表装不装。**纯函数**，单独剥出来是为了能被用例钉住。
+fn 装_ui吗(manifest: &Manifest) -> bool {
+    UI能力.iter().any(|c| manifest.has(*c))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 能力 → 清单里那个字符串。
+    ///
+    /// 用 serde 拿（`Capability` 上每条都有 `#[serde(rename = "…")]`），
+    /// 不为测试专门加一个 `as_str()`。
+    fn 能力名(c: Capability) -> String {
+        serde_json::to_value(c).unwrap().as_str().unwrap().to_owned()
+    }
+
+    /// 写一份最小清单并读回来。与 `plugin/manifest.rs` 的用例同一个路子。
+    fn 造清单(名字: &str, 能力: &[Capability]) -> Manifest {
+        let dir = std::env::temp_dir().join(format!("nota-api-test-{名字}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let caps = 能力
+            .iter()
+            .map(|c| format!("\"{}\"", 能力名(*c)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        std::fs::write(
+            dir.join("plugin.toml"),
+            format!(
+                "[plugin]\nid = \"nota.{名字}\"\nname = \"T\"\napi = 1\ncapabilities = [{caps}]\n"
+            ),
+        )
+        .unwrap();
+        Manifest::load(&dir.join("plugin.toml")).unwrap()
+    }
+
+    /// ⚠️ **这条就是 BUG-8 的回归用例。**
+    ///
+    /// `ui.rs` 里三个函数各自判一次能力，但**表本身**是这里判的。
+    /// 曾经这里只写了 `ui.notify || ui.panel`，于是 `UI能力` 里的 `ui.menu`
+    /// 判不出 `true`——只申请 `ui.menu` 的插件拿到 `nota.ui == nil`。
+    #[test]
+    fn 每一条_ui_能力都能单独装出_nota_ui() {
+        for (i, c) in UI能力.iter().enumerate() {
+            let m = 造清单(&format!("u{i}"), &[*c]);
+            assert!(
+                装_ui吗(&m),
+                "只申请 `{}` 也应该装出 nota.ui —— 漏了它，插件会拿到 nil 并报 \
+                 `attempt to index a nil value`（BUG-8）",
+                能力名(*c)
+            );
+        }
+    }
+
+    #[test]
+    fn 没申请_ui_能力就不装_nota_ui() {
+        // 按能力装表、不装空壳：没申请就是 nil，不是"存在但调用时报错"。
+        // ⚠️ 目录名只能是 ASCII——清单的 id 过校验，`nota.空` 这种会被 `load` 拦下。
+        let m = 造清单("empty", &[Capability::ProcessGit, Capability::DocumentRead]);
+        assert!(!装_ui吗(&m), "没申请任何 ui.* 的插件不该拿到 nota.ui");
+    }
+
+    /// ⚠️ **`UI能力` 与 `ui.rs` 里实际的判据必须一一对应。**
+    ///
+    /// Rust 没有反射，这条推不出来，所以退一步钉"数量"：
+    /// 谁往 `ui.rs` 加了第四个 `ui.*` 判据，这条就会红，于是被提醒来改 `UI能力`。
+    #[test]
+    fn ui_能力清单要和_ui_rs_对得上() {
+        let src = include_str!("ui.rs");
+        let 实际 = src.matches("manifest.has(Capability::Ui").count();
+        assert_eq!(
+            实际,
+            UI能力.len(),
+            "`ui.rs` 里有 {实际} 处 `manifest.has(Capability::Ui…)`，\
+             而 `UI能力` 只有 {} 项。两处必须一一对应：往 `UI能力` 补上缺的那一项，\
+             并在 `api/mod.rs` 的表装配里也带上它——漏一项 = 那条能力形同虚设（BUG-8）",
+            UI能力.len()
+        );
+    }
+
+    /// `#[serde(rename)]` 与 `Capability::parse()` 必须说同一套名字。
+    ///
+    /// 这两处是**各写各的**（一个在属性上，一个在 `match` 里），
+    /// 任一处改了另一处没改，插件清单就会出现"写得进、读不出"或反过来。
+    /// 本用例的 `造清单` 正是靠 `能力名()` 拼清单再让 `parse()` 读回来，
+    /// 任何不一致都会在这里炸。
+    #[test]
+    fn 能力的_serde_名字与_parse_说同一套话() {
+        for c in UI能力 {
+            let 名 = 能力名(c);
+            assert_eq!(
+                Capability::parse(&名).unwrap(),
+                c,
+                "`{名}` 这个名字 `parse()` 认，但认回来的不是同一个变体"
+            );
+        }
+    }
+}

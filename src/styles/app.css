@@ -1,0 +1,717 @@
+/**
+ * 外壳与编辑区的样式。
+ *
+ * 颜色与尺寸**一律走变量**（见 `theme.css`），本文件里不该出现写死的色值或圆角
+ * ——写死一个就少支持一种风格组合。
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden; /* 滚动条交给各自的面板，body 不滚 */
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ── 外壳布局 ─────────────────────────────────────────────────────────── */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0; /* 没有这行，flex 子项的滚动区会被撑破 */
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 工具条 ───────────────────────────────────────────────────────────── */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  height: var(--toolbar-height);
+  padding: 0 var(--spacing);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+  box-shadow: var(--toolbar-shadow);
+  flex: none;
+}
+
+.toolbar-brand {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--fg-muted);
+  padding-right: var(--spacing);
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* ── 按钮 ─────────────────────────────────────────────────────────────── */
+
+.btn {
+  height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  font-weight: var(--btn-font-weight);
+  cursor: pointer;
+  transition: background 90ms ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.btn:active:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.btn:disabled {
+  color: var(--fg-faint);
+  cursor: default;
+}
+
+/* ── 侧栏 ─────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+  min-height: 0;
+}
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.sidebar-tab {
+  flex: 1;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 0.92em;
+  border-bottom: 2px solid transparent;
+}
+
+.sidebar-tab:hover {
+  background: var(--bg-hover);
+}
+
+.sidebar-tab-active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing) 0;
+  min-height: 0;
+}
+
+.sidebar-empty {
+  padding: 0 var(--spacing);
+  color: var(--fg-faint);
+  font-size: 0.9em;
+  line-height: 1.6;
+}
+
+/* ── 右侧插件栏 ───────────────────────────────────────────────────────────
+   为什么插件在右边见 `ui/PluginDock.tsx` 的文件头。这里只记样式上的两条：
+
+   ① 它**不是 `.sidebar` 加一个 `flex-direction: row-reverse`**。左右两侧
+      边框、圆角、将来要加的折叠动效方向都相反，共用一套类名只会让每条规则
+      都要写 `:first/last` 的特例。**是两套独立的类。**
+   ② 宽度走 `--dock-width`，与 `--sidebar-width` 分开——见 theme.css 那句。 */
+
+.plugin-dock {
+  width: var(--dock-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-subtle);
+  min-height: 0;
+}
+
+.dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding-left: calc(var(--spacing) * 1.5);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.dock-title {
+  font-weight: 600;
+  font-size: 0.92em;
+  color: var(--fg-muted);
+}
+
+.dock-close {
+  border: 0;
+  background: transparent;
+  padding: 0 calc(var(--spacing) * 1.25);
+  cursor: pointer;
+  color: var(--fg-faint);
+  height: 100%;
+}
+
+.dock-close:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.dock-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing) 0;
+  min-height: 0;
+}
+
+/* ── 栏内分区：插件声明的面板 / 没落脚处的 / 已装插件 ──────────────────────
+
+   面板在上（那是这一栏的理由），清单在下（诊断用）。分区标题用 `.dock-subtitle`，
+   与 `.dock-title`（栏标题）**分开**：栏标题要盖过内容，分区标题是内容的注脚，
+   两者字重和色阶不同，共用一个类就得在每处写覆盖。 */
+
+.dock-subtitle {
+  margin: var(--spacing) 0 calc(var(--spacing) * 0.75);
+  padding: 0 calc(var(--spacing) * 1.5);
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+  text-transform: none;
+}
+
+.dock-subtitle:first-child {
+  margin-top: 0;
+}
+
+.panel {
+  margin: 0 calc(var(--spacing) * 0.75) var(--spacing);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.panel-head {
+  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 1.25);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.panel-title {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.panel-body {
+  padding: var(--spacing) calc(var(--spacing) * 1.25);
+}
+
+/* 「内容尚未接入」这句。**故意做得显眼但不刺眼**——它是句实话，
+   不是错误；做成红色会让人以为插件坏了。 */
+.panel-pending {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--fg-faint);
+}
+
+.dock-hint {
+  margin: 0 calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.5);
+  font-size: 0.85em;
+  color: var(--fg-faint);
+}
+
+.dock-orphan {
+  margin: 0 calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.25);
+  font-size: 0.9em;
+}
+
+.dock-orphan-where {
+  margin-left: calc(var(--spacing) * 0.5);
+  padding: 0 0.4em;
+  border-radius: 3px;
+  background: var(--bg-active);
+  color: var(--fg-muted);
+  font-size: 0.85em;
+}
+
+/* 工具条上那个开关。推到最右靠 `auto` 外边距，不靠 spacer 元素。 */
+.toolbar-dock-toggle {
+  margin-left: auto;
+}
+
+/* 开关处于「开着」的状态。⚠️ 用的是 `bg-active` 而不是 `accent` 底：
+   accent 在这一栏里已经表示"有未保存改动"（`.tab-dot`/`.status-dirty`），
+   同一个色再表示一次"面板开着"，两个意思就糊了。 */
+.btn-on {
+  background: var(--bg-active);
+}
+
+/* ── 文件树 ───────────────────────────────────────────────────────────── */
+
+.tree,
+.outline,
+.plugins,
+.home-plugins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-dir-name {
+  display: block;
+  padding: 3px var(--spacing);
+  color: var(--fg-muted);
+  font-weight: 600;
+  font-size: 0.88em;
+}
+
+.tree-file-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 3px calc(var(--spacing) * 2);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-file-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* ── 大纲 ─────────────────────────────────────────────────────────────── */
+
+.outline-item {
+  padding: 3px 8px;
+  color: var(--fg-muted);
+  cursor: default;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* ── 插件列表 ─────────────────────────────────────────────────────────── */
+
+.plugin {
+  padding: var(--spacing) calc(var(--spacing) * 1.5);
+  border-bottom: 1px solid var(--border);
+}
+
+.plugin-failed {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.plugin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.plugin-name {
+  font-weight: 600;
+}
+
+.plugin-version {
+  color: var(--fg-faint);
+  font-size: 0.82em;
+  font-family: var(--font-mono);
+}
+
+.plugin-id {
+  font-family: var(--font-mono);
+  font-size: 0.76em;
+  color: var(--fg-faint);
+  margin-top: 2px;
+}
+
+.plugin-desc {
+  margin: 5px 0 0;
+  font-size: 0.87em;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.plugin-error {
+  margin: 5px 0 0;
+  font-size: 0.82em;
+  color: var(--danger);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.plugin-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.cap {
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-faint);
+}
+
+/* ── 标签栏 ───────────────────────────────────────────────────────────── */
+
+.tabbar {
+  display: flex;
+  gap: 1px;
+  height: 32px;
+  flex: none;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.tab-active {
+  background: var(--bg);
+}
+
+.tab-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 100%;
+  padding: 0 8px 0 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+
+.tab-close {
+  border: 0;
+  background: transparent;
+  padding: 0 9px;
+  cursor: pointer;
+  color: var(--fg-faint);
+  height: 100%;
+}
+
+.tab-close:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+/* ── 状态栏 ───────────────────────────────────────────────────────────── */
+
+.statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing);
+  height: var(--statusbar-height);
+  flex: none;
+  padding: 0 var(--spacing);
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+  font-size: 0.84em;
+  color: var(--fg-muted);
+}
+
+.status-left {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-dirty {
+  margin-left: 8px;
+  color: var(--accent);
+}
+
+.status-right {
+  display: flex;
+  gap: 14px;
+  flex: none;
+}
+
+/* ── 主页 ─────────────────────────────────────────────────────────────── */
+
+.home {
+  display: flex;
+  gap: 40px;
+  padding: 64px 48px;
+  overflow: auto;
+  height: 100%;
+}
+
+.home-main {
+  flex: 1;
+  min-width: 0;
+  max-width: 460px;
+}
+
+.home-title {
+  margin: 0;
+  font-size: 2.1em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home-lead {
+  margin: 6px 0 32px;
+  color: var(--fg-muted);
+}
+
+.home-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  cursor: pointer;
+  text-align: left;
+  transition: background 90ms ease;
+}
+
+.home-action:hover {
+  background: var(--bg-hover);
+}
+
+.home-action-label {
+  font-weight: 600;
+}
+
+.home-action-hint {
+  color: var(--fg-faint);
+  font-size: 0.85em;
+}
+
+.home-side {
+  width: 260px;
+  flex: none;
+}
+
+.home-side-title {
+  font-size: 0.82em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-faint);
+  margin: 0 0 10px;
+}
+
+.home-plugin {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.home-plugin-state {
+  color: var(--fg-faint);
+  font-size: 0.85em;
+}
+
+.home-plugin-failed .home-plugin-state {
+  color: var(--danger);
+}
+
+.home-hint {
+  color: var(--fg-faint);
+}
+
+.home-warn {
+  margin-top: 12px;
+  color: var(--danger);
+  font-size: 0.88em;
+}
+
+/* ── 编辑区 ───────────────────────────────────────────────────────────── */
+
+.editor-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--doc-bg);
+  position: relative;
+}
+
+.editor-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--fg-faint);
+  pointer-events: none;
+}
+
+/* 正文容器。**宽度上限**是 Typora 的"正文宽度"设置。 */
+.editor-mount .milkdown {
+  max-width: var(--content-width, 760px);
+  margin: 0 auto;
+  padding: 48px 32px 120px;
+}
+
+/* ProseMirror 本体：颜色走文档主题那条轴（见文件末尾）。 */
+.editor-mount .ProseMirror {
+  outline: none;
+  font-family: var(--font-doc);
+  color: var(--doc-fg);
+  line-height: 1.75;
+  font-size: 1.02em;
+}
+
+.editor-mount .ProseMirror > * + * {
+  margin-top: 0.85em;
+}
+
+/* ── 即时渲染：块级标记的浅灰标注 ─────────────────────────────────────────
+   由 `src/editor/instant-render.ts` 用 `Decoration.node` 给块挂上
+   `.nota-srcmark` 和 `data-srcmark`（值就是该显示的文字：`##`、`>`、`1.`、
+   三个反引号加语言名）。**样式只此一处。**
+
+   ⚠️ 三条关键，动之前先读懂：
+
+   ① **标记走 `::before`，不认识第二个元素**。理由见那个插件的文件头：
+      用 widget 插 `<span>` 时，**列表项的标记会画到隔壁项上去**
+      （块边界上的 widget 落点不由我们说了算）。改成给块自己挂 class 之后，
+      "标记属于哪一块"就成了定义，不再是推断。
+
+   ② **定位祖先就是块自己**（下面那条 `position: relative`），所以
+      `right: 100%` 必定落在块的左外侧，而且**不占文档流**。这是手感的全部：
+      正文一个字都不许因为标记的出现或消失而左右挪。
+
+   ③ **列表项要多一条 `list-style: none`**：默认的圆点也画在 li 左外侧，
+      不关掉就会跟短横**叠在一起**。关掉之后恰好就是 Typora 的样子——
+      光标进列表项，圆点让位给 `-`；光标一走，圆点回来。 */
+
+.editor-mount .ProseMirror .nota-srcmark {
+  position: relative;
+}
+
+.editor-mount .ProseMirror .nota-srcmark::before {
+  content: attr(data-srcmark);
+  position: absolute;
+  right: 100%;
+  padding-right: 0.5em;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  font-weight: 400;
+  line-height: inherit;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  opacity: 0.55;
+  user-select: none;
+  pointer-events: none;
+  /* 淡入。⚠️ **只有进入有过渡**：伪元素是跟着 class 一起被摘掉的，
+     没有机会播退场动画。别为此去搞"先淡出再删"——那要跟重绘抢时序，
+     抢输了就是标记赖在屏幕上不走，比没有动画糟得多。 */
+  animation: nota-srcmark-in 0.16s ease-out;
+}
+
+/* 列表项：圆点让位给短横（理由见上面 ③）。
+   ⚠️ 只去掉 marker，**不动 padding**——缩进必须保持原样，否则光标一进一出，
+   整行文字会横向跳一下。 */
+.editor-mount .ProseMirror li.nota-srcmark {
+  list-style: none;
+}
+
+/* 代码块：标记要多退一截。
+   ⚠️ 定位祖先是 `pre`，而 `pre` 的左边**不等于**代码块可见框的左边——
+   中间隔着它的 14px 内边距和 1px 边框。只写 `right: 100%` 的话，标记最右
+   那几个字符会**压在代码块的背景上**，看着像钻进框里去了。
+   15px = 14（padding）+ 1（border）；改 `pre` 的内边距时这里要跟着改。 */
+.editor-mount .ProseMirror pre.nota-srcmark::before {
+  right: calc(100% + 15px);
+}
+
+@keyframes nota-srcmark-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.55;
+  }
+}

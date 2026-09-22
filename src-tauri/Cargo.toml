@@ -1,0 +1,49 @@
+[package]
+name = "nota"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Nota — 对标 Typora 的所见即所得 Markdown 编辑器"
+authors = ["Nota contributors"]
+license = "BSD-2-Clause"
+repository = "https://github.com/nota/nota"
+default-run = "nota"
+
+[lib]
+# Tauri 2 的惯例：逻辑放 lib，main.rs 只做壳。
+# 这样将来要加第二个二进制（比如 CLI、或者像 Folio 那样的多应用共享核心）不用搬代码。
+name = "nota_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# ── 宿主框架 ──────────────────────────────────────────────────────────────
+tauri = { version = "2", features = ["protocol-asset", "devtools"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
+
+# ── 序列化 / 配置 ─────────────────────────────────────────────────────────
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.9"
+
+# ── Lua 插件运行时 ────────────────────────────────────────────────────────
+# vendored：把 Lua 5.4 源码一起编进来，不依赖系统 liblua（容器里也没有）。
+# send：Lua 状态要放进 Tauri 的 managed state（跨线程），不加这个 feature
+#       编译期就会因为 Lua 不是 Send 而卡住。
+# ⚠️ mlua 的 Lua::new() **不能**当沙箱用：它的 "safe" 只等于"不能加载 C 模块"，
+#    io / os / package / require 全都在（ALL_SAFE = (1 << 30) - 1，只排除 bit31 的
+#    debug）。所以第一道闸在 src/lua/mod.rs 的 硬化的_lua() 里自己列白名单，
+#    不要再退回 Lua::new()。第二道闸在 src/lua/api/ 里按清单声明的能力放行。
+#    详见 docs/07 BUG-10。
+mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"] }
+
+# ── 杂项 ──────────────────────────────────────────────────────────────────
+thiserror = "2"
+dirs = "6"
+notify = "8"          # 文件树 / 外部改动监视
+similar = "3"         # AI 插件的 diff、Git 插件的变更预览
+shlex = "1"           # Git 插件拼命令行时的转义

@@ -1,0 +1,32 @@
+# AI 助手插件（内置）。
+#
+# ⚠️ **本轮（第一轮）只有本地那半是真的**：收集上下文、拼提示词、把结果写回文档。
+# `network.http` 已经申请了，但宿主那一侧的 `nota.http` 目前是一张
+# 「尚未实现」的表，调用会返回一句明确的错误。见 docs/07 第 12 项。
+#
+# 为什么还把它装出来：这条链路（命令 → 收集上下文 → 发请求 → 落回文档）
+# 是插件体系最复杂的一条，早一点让骨架跑通，比等所有零件齐了再拼要稳。
+#
+# 申请 `document.write` 是因为"把 AI 的回答插入文档"是这个插件的主用法。
+# 但**写之前一定要让用户看见要写什么**——见 main.lua 里 apply 那条命令的注释。
+
+[plugin]
+id          = "nota.ai"
+name        = "AI 助手"
+version     = "0.1.0"
+api         = 1
+
+description = "写作助手：润色、续写、总结、翻译。需要自备 API 密钥。"
+license     = "BSD-2-Clause"
+authors     = ["Nota contributors"]
+entry       = "main.lua"
+
+capabilities = [
+  "document.read",
+  "document.write",
+  "network.http",   # ⚠️ 宿主侧尚未实现，见本文件顶部
+  "ui.notify",
+  "ui.panel",
+  "ui.menu",
+  "settings.own",   # ⚠️ 同上，宿主侧尚未实现
+]

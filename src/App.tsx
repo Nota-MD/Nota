@@ -21,6 +21,7 @@ import {
   type NotifyPayload,
   type DocumentChangedPayload,
 } from "@/bridge/ipc";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
 import { EditorPane, type EditorPaneHandle } from "@/ui/EditorPane";
 import { Home } from "@/ui/Home";
@@ -48,6 +49,20 @@ export default function App() {
 
   const editorRef = useRef<EditorPaneHandle>(null);
 
+  // 自己画的确认框。**不再用 `window.confirm`**——它会阻塞 WebView，把中文
+  // 输入法的组合态打断（见 `ui/ConfirmDialog.tsx` 文件头）。
+  // 这里存的是"谁在等答案"：`askConfirm` 返回的 Promise 由按钮的点击来兑现。
+  const [confirmReq, setConfirmReq] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    danger?: boolean;
+  } | null>(null);
+  const confirmResolve = useRef<((ok: boolean) => void) | null>(null);
+  // 事件订阅里要读"当前是哪份"，但**不能把它写进依赖数组**——那会让每次切标签都
+  // 退订再订一遍，中间那一刻的事件是丢的。用 ref 读最新值，订阅只发生一次。
+  const activeIdRef = useRef<DocId | null>(null);
+
   // ── 提示 ────────────────────────────────────────────────────────────────
   const toast = useCallback((message: string, level: Toast["level"] = "info") => {
     const id = Math.random().toString(36).slice(2);
@@ -63,6 +78,30 @@ export default function App() {
     const list = await api.doc.list();
     setDocs(list);
     return list;
+  }, []);
+
+  /**
+   * 弹一个确认框，等用户点。返回他点的是不是"确定"。
+   *
+   * ⚠️ 一次只可能有一个：`confirmResolve` 是**单个** ref，不是队列。
+   * 今天所有调用点都是用户动作直接触发的（关文档、退出），不存在并发；
+   * 真要并发弹两个，后来者会把前一个的 Promise 永远挂着——那时再改成队列。
+   */
+  const askConfirm = useCallback(
+    (req: { title: string; message: string; confirmLabel?: string; danger?: boolean }) => {
+      return new Promise<boolean>((resolve) => {
+        confirmResolve.current = resolve;
+        setConfirmReq(req);
+      });
+    },
+    [],
+  );
+
+  const answerConfirm = useCallback((ok: boolean) => {
+    setConfirmReq(null);
+    const resolve = confirmResolve.current;
+    confirmResolve.current = null;
+    resolve?.(ok);
   }, []);
 
   const refreshTree = useCallback(async () => {
@@ -128,9 +167,18 @@ export default function App() {
         // ⚠️ 这里**不去比 revision**，直接覆盖：能走到这条分支就说明
         // 改动不是本编辑器发起的（自己发起的不会绕一圈回来）。
         on<DocumentChangedPayload>(events.documentChanged, (p) => {
-          if (p.origin === "plugin" && p.id === activeId) {
+          if (p.origin !== "plugin") return;
+
+          if (p.id === activeIdRef.current) {
             editorRef.current?.setMarkdown(p.text);
+            return;
           }
+
+          // ⚠️ 改的不是当前这份：`setMarkdown` 无处可放（编辑器就挂着一个），
+          // 但**必须让 state 跟上**——否则那份文档在 React 里还是旧文本，
+          // 用户切回去时 `EditorPane` 用旧的 `doc.text` 重建，下一次去抖 sync
+          // 就把插件的改动**覆盖掉了**（backlog 第 33 项）。
+          void refreshDocs();
         }),
       ]);
 
@@ -142,11 +190,29 @@ export default function App() {
       alive = false;
       unlisteners.forEach((u) => u());
     };
-  }, [toast, activeId]);
+    // `refreshDocs` 与 `toast` 都是空依赖的 useCallback，这个 effect 只跑一次。
+  }, [toast, refreshDocs]);
+
+  // 活动文档变了就告诉后端。
+  //
+  // ⚠️ 后端只记得"最后一次新建/打开的那份"。不在这里统一同步的话，用户点了标签 A
+  // 在看 A，插件调 `nota.document.get_text()` 拿到的却是 B——AI 助手插件按这个
+  // 路径写回就会**改错文档**（BUG-6）。放在 effect 里而不是只补在 `onSelect` 上，
+  // 是为了把 `open` / `new` / `close` 那几条路径也一起兜住（多喊一次无害）。
+  useEffect(() => {
+    activeIdRef.current = activeId;
+    if (activeId === null) return;
+    void api.doc.setActive(activeId).catch((e) => {
+      toast(`切换活动文档失败：${e}`, "error");
+    });
+  }, [activeId, toast]);
 
   // ── 主题 ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (settings) applyTheme(settings);
+    // ⚠️ 必须把 `applyTheme` 返回的退订函数交出去。`ui_mode = "auto"` 时它挂了一个
+    // `matchMedia` 监听，不接返回值就等于每次 settings 变化都再挂一个、旧的从不移除
+    //（BUG-7）。`paint()` 幂等所以症状不明显，只是监听器越积越多。
+    if (settings) return applyTheme(settings);
   }, [settings]);
 
   // ── 打开 / 新建 / 保存 ──────────────────────────────────────────────────
@@ -183,7 +249,7 @@ export default function App() {
         const picked = await saveDialog({
           title: "保存为",
           defaultPath: doc.path ?? `${doc.title}.md`,
-          filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
+          filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdx"] }],
         });
         if (!picked) return; // 用户取消了，不是错误
         target = picked;
@@ -209,8 +275,11 @@ export default function App() {
     const picked = await openDialog({
       title: "打开",
       multiple: false,
+      // ⚠️ 这张表要和后端 `is_markdown()` 对齐。它认 `.mdx`，这里漏掉的话
+      // 文件其实**打得开**（拖进来、从文件树点），只是在对话框里筛不出来，
+      // 用户会以为打不开（backlog 第 28 项）。
       filters: [
-        { name: "Markdown", extensions: ["md", "markdown", "mdown", "mkd", "txt"] },
+        { name: "Markdown", extensions: ["md", "markdown", "mdx", "mdown", "mkd", "txt"] },
       ],
     });
     if (typeof picked === "string") await openPath(picked);
@@ -238,8 +307,12 @@ export default function App() {
     async (id: DocId) => {
       const doc = docs.find((d) => d.id === id);
       if (doc?.dirty && settings?.confirm_unsaved) {
-        // 本轮先用原生确认框。自己画一个对话框排在界面那一轮（docs/07）。
-        const ok = window.confirm(`「${doc.title}」有未保存的改动，仍然关闭吗？`);
+        const ok = await askConfirm({
+          title: "有未保存的改动",
+          message: `「${doc.title}」还没存盘，关掉这份改动就没了。`,
+          confirmLabel: "丢弃并关闭",
+          danger: true,
+        });
         if (!ok) return;
       }
       try {
@@ -250,7 +323,7 @@ export default function App() {
         toast(String(e), "error");
       }
     },
-    [docs, settings, refreshDocs, toast],
+    [docs, settings, refreshDocs, toast, askConfirm],
   );
 
   // ── 快捷键 ──────────────────────────────────────────────────────────────
@@ -343,6 +416,16 @@ export default function App() {
         <StatusBar doc={activeDoc} />
 
         <Toasts items={toasts} onDismiss={(id) => setToasts((p) => p.filter((t) => t.id !== id))} />
+
+        {confirmReq && (
+          <ConfirmDialog
+            title={confirmReq.title}
+            message={confirmReq.message}
+            confirmLabel={confirmReq.confirmLabel}
+            danger={confirmReq.danger}
+            onAnswer={answerConfirm}
+          />
+        )}
       </div>
     </ErrorBoundary>
   );

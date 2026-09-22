@@ -42,6 +42,20 @@ pub struct Document {
     pub dirty: bool,
     /// 每次 `sync` / `save` 递增。插件与前端靠它判断"我拿到的是不是旧的"。
     pub revision: u64,
+    /// 这份文档的"未命名"序号。**建的时候定死，之后一律用它**（BUG-9）。
+    ///
+    /// 序号不能现算：正文标题会随打字出现又消失，`derive_title` 的回退分支
+    /// 会被反复走到，现算就会让好几份文档同时叫「未命名 0」。
+    #[serde(skip)]
+    pub untitled_index: u64,
+    /// 拿来跟 `text` 比出 `dirty` 的那一份"干净文本"。
+    ///
+    /// ⚠️ **`dirty` 不是"发生过 sync"**。编辑器装载一份文件时会把它规范化
+    /// （尾段、空行、标记写法），那是编辑器改的、不是用户改的——见 BUG-12。
+    /// 判据只能是"跟干净那份一不一样"，这份就是"干净那份"。
+    /// 打开 / 存盘 / 重载 / `settle` 时更新。
+    #[serde(skip)]
+    pub clean_text: String,
 }
 
 impl Document {
@@ -166,6 +180,8 @@ impl DocumentStore {
             text: String::new(),
             dirty: false,
             revision: 0,
+            untitled_index: self.untitled_count,
+            clean_text: String::new(),
         };
         self.docs.push(doc);
         self.active = Some(id);
@@ -185,6 +201,7 @@ impl DocumentStore {
             source,
         })?;
 
+        let clean = text.clone();
         let id = self.alloc_id();
         self.docs.push(Document {
             id,
@@ -193,6 +210,10 @@ impl DocumentStore {
             text,
             dirty: false,
             revision: 0,
+            // 有路径的文档走不到"未命名 N"那个回退分支（除非文件名是空的），
+            // 所以不占号——`untitled_count` 是给新建文档排队的。
+            untitled_index: 0,
+            clean_text: clean,
         });
         self.active = Some(id);
         Ok(id)
@@ -209,7 +230,9 @@ impl DocumentStore {
             source,
         })?;
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
-        doc.title = derive_title(&text, Some(&path), 0);
+        let idx = doc.untitled_index;
+        doc.title = derive_title(&text, Some(&path), idx);
+        doc.clean_text = text.clone();
         doc.text = text;
         doc.dirty = false;
         doc.revision += 1;
@@ -217,15 +240,54 @@ impl DocumentStore {
     }
 
     /// 前端推来的新文本。`revision` 由这里有意义地递增。
+    ///
+    /// ⚠️ **不无条件标脏**：`dirty` 的判据是"与 `clean_text` 一不一样"。
+    /// 早先这里写的是 `doc.dirty = true`，于是编辑器装载文件时做的那次
+    /// 规范化也被算成了用户改动（BUG-12）。
     pub fn sync(&mut self, id: DocId, text: String) -> Result<u64> {
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
         if doc.text == text {
             return Ok(doc.revision); // 内容没变就别动 revision，插件靠它判新旧
         }
         doc.text = text;
-        doc.dirty = true;
+        doc.dirty = doc.text != doc.clean_text;
         doc.revision += 1;
-        doc.title = derive_title(&doc.text, doc.path.as_deref(), 0);
+        let idx = doc.untitled_index;
+        doc.title = derive_title(&doc.text, doc.path.as_deref(), idx);
+        Ok(doc.revision)
+    }
+
+    /// 前端编辑器**装载完之后**交回来的那份文本：认它做正文，**同时**认它做干净的那份。
+    ///
+    /// # 为什么需要这么一步
+    ///
+    /// 编辑器把 markdown 解析成文档树、再序列化回来，结果未必与磁盘上那份逐字节相同
+    /// （尾段、空行、标记写法都可能被规范化）。那是**编辑器**改的，不是**用户**改的，
+    /// 可它确实会让 `text` 与 `clean_text` 对不上、于是 `dirty` 变真——症状就是
+    /// "文件刚打开就显示已修改"，关窗口还要多问一句（BUG-12）。
+    ///
+    /// # 它为什么安全
+    ///
+    /// 调用点只有一个：`EditorPane` 在 `createEditor()` 返回之后、**用户还没碰键盘之前**。
+    /// 那一刻不存在"用户的改动"可以被这一步吞掉。真编辑走的是 `sync`。
+    ///
+    /// ⚠️ 这一招**与根因无关**：不管规范化是哪个插件做的（当时没能坐实，`trailing`
+    /// 和序列化器都是候选），"用户还没打过字"这个事实都成立，所以它一定对。
+    pub fn settle(&mut self, id: DocId, text: String) -> Result<u64> {
+        let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
+
+        if doc.text != text {
+            doc.text = text.clone();
+            doc.revision += 1;
+            let idx = doc.untitled_index;
+            doc.title = derive_title(&doc.text, doc.path.as_deref(), idx);
+        }
+
+        // ⚠️ **不能早退**。编辑器那次规范化可能已经先走 `sync` 把文本推上来了，
+        // 于是走到这里时 `text` 与 `doc.text` 已经相等，可脏标记还立着——
+        // 早退就等于这一步白做（这条是被用例逮住的，别改回去）。
+        doc.clean_text = text;
+        doc.dirty = false;
         Ok(doc.revision)
     }
 
@@ -251,7 +313,9 @@ impl DocumentStore {
         })?;
 
         doc.dirty = false;
-        doc.title = derive_title(&doc.text, Some(&path), 0);
+        doc.clean_text = doc.text.clone(); // 磁盘上现在就是这份，它成了新的"干净"
+        let idx = doc.untitled_index;
+        doc.title = derive_title(&doc.text, Some(&path), idx);
         doc.revision += 1;
         Ok(path)
     }
@@ -386,5 +450,69 @@ mod tests {
         let mut s = DocumentStore::new();
         let id = s.create_untitled();
         assert!(s.save(id, None).is_err());
+    }
+
+    /// BUG-9：四十二个生产调用点都传字面量 0，于是未命名文档一打字就叫「未命名 0」，
+    /// 开两份就重名。序号必须**存在文档上**，不能现算。
+    #[test]
+    fn 未命名序号不会被打字抹掉() {
+        let mut s = DocumentStore::new();
+        let a = s.create_untitled();
+        let b = s.create_untitled();
+        assert_eq!(s.get(a).unwrap().title, "未命名 1");
+        assert_eq!(s.get(b).unwrap().title, "未命名 2");
+
+        // 打一行**不含标题**的正文——`derive_title` 会走"未命名 N"那个回退分支。
+        s.sync(a, "只是正文".to_owned()).unwrap();
+        s.sync(b, "另一份正文".to_owned()).unwrap();
+        assert_eq!(s.get(a).unwrap().title, "未命名 1");
+        assert_eq!(s.get(b).unwrap().title, "未命名 2");
+    }
+
+    /// BUG-12：编辑器装载文件时会做一次规范化，那不是用户改动。
+    #[test]
+    fn 装载时的规范化不算用户改动() {
+        let dir = std::env::temp_dir().join("nota-docstore-settle");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.md");
+        std::fs::write(&path, "# A\n").unwrap();
+
+        let mut s = DocumentStore::new();
+        let id = s.open(&path).unwrap();
+        assert!(!s.get(id).unwrap().dirty, "刚打开不该脏");
+
+        // 编辑器序列化回来多了一个尾段——正是 BUG-12 那个规范化。
+        s.sync(id, "# A\n\n".to_owned()).unwrap();
+        assert!(s.get(id).unwrap().dirty, "规范化确实让它与磁盘不同了");
+
+        // 前端装载完喊一嗓子：这份是编辑器给的，不是用户打的。
+        s.settle(id, "# A\n\n".to_owned()).unwrap();
+        assert!(!s.get(id).unwrap().dirty, "settle 之后不该脏");
+
+        // 再打字还是要脏——settle 不能把真改动一起吞了。
+        s.sync(id, "# A\n\n新写的".to_owned()).unwrap();
+        assert!(s.get(id).unwrap().dirty);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 未命名文档：空的不脏，打了字就脏（它的"干净那份"是空串）。
+    #[test]
+    fn 未命名文档空的不脏() {
+        let mut s = DocumentStore::new();
+        let id = s.create_untitled();
+        assert!(!s.get(id).unwrap().dirty);
+        s.sync(id, "".to_owned()).unwrap();
+        assert!(!s.get(id).unwrap().dirty, "推空串不该变脏");
+        s.sync(id, "有东西了".to_owned()).unwrap();
+        assert!(s.get(id).unwrap().dirty);
+        // 存盘之后又干净了，且磁盘上那份成了新的基准
+        let path = std::env::temp_dir().join("nota-docstore-untitled-clean.md");
+        s.save(id, Some(path.clone())).unwrap();
+        assert!(!s.get(id).unwrap().dirty);
+        s.sync(id, "有东西了".to_owned()).unwrap();
+        assert!(!s.get(id).unwrap().dirty, "推回一模一样的内容不该变脏");
+        let _ = std::fs::remove_file(&path);
     }
 }

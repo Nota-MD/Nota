@@ -6,6 +6,10 @@ import { installErrorHooks } from "./ui/ErrorBoundary";
 
 import "./styles/theme.css";
 import "./styles/app.css";
+// ⚠️ **必须在 `app.css` 之后**。两份文件的选择器有重叠的部分（比如都碰过
+// `.ProseMirror` 那棵树），靠后者覆盖前者。顺序反过来，正文区的字号、行高、
+// 代码块底色就都会被外壳那几条盖掉。这条约束写在 `editor.css` 的文件头里。
+import "./styles/editor.css";
 
 // ⚠️ KaTeX 的排版样式，**必须引，而且只能从这里引**。
 //

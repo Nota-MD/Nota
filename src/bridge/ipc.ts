@@ -96,8 +96,13 @@ export const api = {
   doc: {
     create: () => invoke<DocId>("nota_doc_new"),
     open: (path: string) => invoke<DocId>("nota_doc_open", { path }),
-    /** 前端推文本给后端。返回新 revision。 */
+    /** 前端推文本给后端。返回新 revision。**意思是"用户改了"。** */
     sync: (id: DocId, text: string) => invoke<number>("nota_doc_sync", { id, text }),
+    /**
+     * 编辑器**装载完之后**把文本交回来认领——**意思是"编辑器把文件规范化成了这样，
+     * 用户还没碰"**。与 `sync` 只差一个 `dirty` 的判法，别混用（BUG-12）。
+     */
+    settle: (id: DocId, text: string) => invoke<number>("nota_doc_settle", { id, text }),
     save: (id: DocId, path?: string) =>
       invoke<string>("nota_doc_save", { id, path: path ?? null }),
     close: (id: DocId) => invoke<void>("nota_doc_close", { id }),

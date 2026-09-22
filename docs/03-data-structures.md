@@ -165,7 +165,9 @@ pub struct DocId(pub u64);
 | `path` | `Option<PathBuf>` | 还没存过盘的新文档是 `None`（`is_untitled()` 的判据） |
 | `title` | `String` | 派生而来，见 §4.4 |
 | `text` | `String` | **镜像**（§1.1）。存盘写的就是它 |
-| `dirty` | `bool` | **相对上次落盘**有无改动。只由 `sync` 置 `true`，由 `save` / `reload` 置 `false`；不落盘、不持久化 |
+| `dirty` | `bool` | **相对「上次认领的干净文本」**有无改动——**不是「发生过 sync」**。置 `true` 的只有 `sync`（内容真的变了时）；置 `false` 的是 `save` / `reload` / **`settle`**。不落盘、不持久化。⚠️ 判据是 `doc.text != doc.clean_text` 算出来的，不是打标记打出来的 |
+| `clean_text` | `String` | **跟 `text` 比出 `dirty` 的那一份**"干净文本"。`open` / `reload` / `save` / `settle` 四处把它刷成当时的 `text`。⚠️ `#[serde(skip)]`：它是内存里的比对基准，不该出现在发给前端的 `Document` 快照里。加这个字段是为了 BUG-12——只靠 `dirty: bool` 一张标记，装载流程里编辑器那次"规范化"一到就洗不掉了 |
+| `untitled_index` | `u64` | 这份未命名文档的**序号**，建的时候从 `untitled_count` 定死，之后一律用它。⚠️ `#[serde(skip)]`。加它是为了 BUG-9：原来四个调用点都传字面量 `0`，于是一叠未命名文档全叫「未命名 0」 |
 | `revision` | `u64` | 版本号。**每次 `sync`（仅当内容真的变了）/ `save` / `reload` 递增**；新建与打开时是 `0` |
 
 `revision` 的用途是给**插件与前端**判断"我手里这份是不是旧的"——
@@ -178,6 +180,12 @@ pub struct DocId(pub u64);
 - **`save` 无论内容是否变过都 `revision += 1`**（存盘本身就是一次新的落点），
   同时 `dirty = false`、`title` 重新派生（另存为会改文件名 → 标题可能跟着变）。
 - **`reload` 也 `revision += 1`**，并清 `dirty`。
+- **`settle(id, text)` 与 `sync` 的差别只有一条：它同时清 `dirty`。**
+  ⚠️ 它是**唯一一个"不当作编辑"的写入口**，用途只有装载流程的最后一步
+  （见 §1.2 与 `commands/document.rs`）。⚠️ 实现里**有一处 `if` 不能改成早退**：
+  编辑器那次规范化很可能**已经先走 `sync` 把文本推上来了**，走到 `settle` 时
+  `text == doc.text` 已经成立、可脏标记还立着——早退就等于这一步白做。
+  这条有回归用例钉着（`装载时的规范化不算用户改动`，第一版就是被它逮住的）。
 
 ### 4.3 `DocumentStore`
 
@@ -192,10 +200,11 @@ pub struct DocId(pub u64);
 
 | 方法 | 行为 |
 |---|---|
-| `create_untitled()` | `untitled_count += 1`，建一份空文档，**设为活动** |
+| `create_untitled()` | 建一份空文档，把当时的 `untitled_count` **抄进 `untitled_index`**，`untitled_count += 1`，**设为活动** |
 | `open(path)` | 已在集合里则**复用那一份**（不重复开标签）并设为活动；否则读盘、派生标题 |
 | `reload(id)` | 从磁盘重读，`dirty = false`，`revision += 1`。没有路径时报 `NoActiveDocument` |
 | `sync(id, text)` | 内容没变 → 原样返回；变了 → 换文本、`dirty = true`、`revision += 1`、重派生标题 |
+| `settle(id, text)` | **装载收尾**：换文本（变了才 `revision += 1`）、刷 `clean_text`、`dirty = false`。⚠️ **不早退**，理由见上面那一段 |
 | `save(id, path_override)` | `path_override` 就是「另存为」。没有路径又没给 override → 报"这份文档还没有路径，请用「另存为」"。落盘后清 `dirty`、重派生标题、`revision += 1` |
 | `close(id)` | 从 `docs` 里移掉；**若关的是活动文档，活动切到 `docs` 里的最后一份**（没有就 `None`） |
 | `get` / `get_mut` / `active` / `active_id` / `list` | 读 |

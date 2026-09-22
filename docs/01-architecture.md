@@ -170,16 +170,22 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 
 ### 通道 A：前端 → 后端（`invoke` 命令）
 
-注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 21 个**。
+注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 24 个**。
 所有调用的唯一出口是 `src/bridge/ipc.ts`——组件里不许直接 `invoke()`。
 
-**文档（10 个）**
+⚠️ **这个数是数出来的**（`sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs | grep -c nota_`），
+改过注册表就重数一遍。它已经错过一次：BUG-13 那批加了 `nota_plugin_panels` /
+`nota_plugin_menus` 两条、本批又加了 `nota_doc_settle`，而表里一直写着 21
+——**加命令时最容易漏的就是这个总数和它上面那个分组小标题**。
+
+**文档（11 个）**
 
 | 命令 | 签名要点 |
 |---|---|
 | `nota_doc_new` | `() -> DocId`，新建空文档并设为活动 |
 | `nota_doc_open` | `(path: String) -> DocId`，**已打开就复用**那一份 |
 | `nota_doc_sync` | `(id, text) -> u64`，前端推文本，返回新 `revision` |
+| `nota_doc_settle` | `(id, text) -> u64`，**装载流程的最后一步**：把编辑器那边的文本认领成「干净文本」，**顺带清掉 `dirty`**。⚠️ 与 `sync` 只差这一条，**别当 `sync` 的别名用**；调用点只有 `EditorPane` 一处，且**必须在 `handle.focus()` 之后**。存在的理由是 BUG-12 |
 | `nota_doc_save` | `(id, path: Option<String>) -> String`，给了 `path` 就是「另存为」，返回最终落盘路径 |
 | `nota_doc_close` | `(id)`，**不做未保存询问**（那是前端的事） |
 | `nota_doc_set_active` | `(id)`，切活动文档 |
@@ -204,7 +210,7 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 | `nota_settings_get` | `() -> Settings` |
 | `nota_settings_set` | `(settings: Settings)`，**整份替换**并落盘，落盘失败回滚内存 |
 
-**插件（4 个）**
+**插件（6 个）**
 
 | 命令 | 签名要点 |
 |---|---|
@@ -212,6 +218,8 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 | `nota_plugin_set_enabled` | `(id: String, enabled: bool)` |
 | `nota_plugin_call` | `(plugin: String, command: String, args: Option<Value>) -> Value`，载荷是 JSON |
 | `nota_plugin_find_command` | `(command: String) -> Option<String>`，某个命令是哪个插件注册的 |
+| `nota_plugin_panels` | `() -> Vec<PanelInfo>`，**拉**面板清单（BUG-13 之后改走这里，不再发事件） |
+| `nota_plugin_menus` | `() -> Vec<MenuInfo>`，**拉**菜单清单，同上 |
 
 **握手（1 个）**
 
@@ -220,12 +228,23 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 | `nota_frontend_ready` | `(app: AppHandle) -> Result<(), String>`，**今天是有意的无操作**，见下一节 |
 
 ⚠️ `nota_plugin_call` 的 `plugin` **必须**是注册者自己的 id（从 `nota_plugin_menus`
-事件里带过来），**不许凭命令名去猜是哪个插件的**——两个插件重名时猜错就是静默跑到别人家里。
+**命令**拉回来的那份清单里带过来），**不许凭命令名去猜是哪个插件的**——
+两个插件重名时猜错就是静默跑到别人家里。
+（⚠️ 原文这里写的是「从 `nota_plugin_menus` **事件**里带过来」——那是 BUG-13 之前的
+口径，那两条事件已经删了。改成命令之后**语义反而更顺**：清单本来就是"按需拉"。）
 
 ⚠️ 前端侧还有一批命令**在 `ipc.ts` 里声明了但今天没有任何调用者**：
-`api.doc.setActive` / `get` / `reload` / `hasUnsaved`、`api.workspace.close`、
-`api.settings.set`、`api.plugin.setEnabled` / `call` / `findCommand`。
+`api.doc.get` / `reload` / `hasUnsaved`、`api.workspace.close`、
+`api.settings.set`、`api.plugin.setEnabled` / `call` / `findCommand` / `menus`。
 见本文"前端那一侧的装配"里的遗留项。
+
+⚠️ **这个名单会烂，看之前先数一遍**（`grep -rn "api\." src --include=*.tsx`）。
+本批就抓出两处过期：`api.doc.setActive` **已经有人调了**（BUG-6 修完之后
+`App.tsx` 里那个只依赖 `activeId` 的 effect），`api.plugin.panels` 也是
+（BUG-13 那批接上的）。**"声明了没人调"这个判断和"某某不存在"一样，
+是要靠 grep 复核的否定命题**——别照着上一版抄。
+⚠️ 名单里 `api.plugin.menus` 的"没人调"**是暂时的、不是漏**：菜单栏还没做
+（`docs/07` backlog 第 40 项），拉回来的清单眼下没处可放。
 
 ### 通道 B：后端 → 前端（Tauri 事件）
 

@@ -73,6 +73,7 @@ pub fn run() {
             commands::document::nota_doc_new,
             commands::document::nota_doc_open,
             commands::document::nota_doc_sync,
+            commands::document::nota_doc_settle,
             commands::document::nota_doc_save,
             commands::document::nota_doc_close,
             commands::document::nota_doc_set_active,

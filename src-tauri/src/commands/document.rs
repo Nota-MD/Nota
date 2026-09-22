@@ -31,6 +31,17 @@ pub fn nota_doc_sync(state: State<'_, AppState>, id: DocId, text: String) -> Res
     docs.sync(id, text)
 }
 
+/// 编辑器**装载完之后**把文本交回来认领。
+///
+/// ⚠️ 这是 `sync` 的兄弟，但语义完全不同：`sync` 是"用户改了"，
+/// 本命令是"编辑器把文件规范化成了这个样子、用户还没碰呢"。
+/// 混用会让 `dirty` 说谎（要么打开就脏、要么改完不脏）。见 `DocumentStore::settle`。
+#[tauri::command]
+pub fn nota_doc_settle(state: State<'_, AppState>, id: DocId, text: String) -> Result<u64> {
+    let mut docs = state.documents.lock().unwrap();
+    docs.settle(id, text)
+}
+
 /// 存盘。`path` 给了就是「另存为」。返回最终落盘路径。
 #[tauri::command]
 pub fn nota_doc_save(

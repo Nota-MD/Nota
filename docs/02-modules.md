@@ -46,10 +46,13 @@
 | `bridge/ipc.ts` | 调用后端的唯一出口 + 事件名表（**只放"发生类"**）+ 类型定义 |
 | `editor/create.ts` | Milkdown 封装，对外只有 `EditorHandle` |
 | `editor/instant-render.ts` | 「光标所在块的 Markdown 标记淡化显示」那个 ProseMirror 插件 |
+| `editor/task-list.ts` | 任务项复选框：`- [x]` 画方框、点它勾上、回车切出来的新项**不继承勾** |
+| `editor/code-block.ts` | 代码块的 NodeView（语言选择器 / 复制 / 折叠）。**全仓唯一一处 `$view`** |
 | `styles/applyTheme.ts` | 把三条外观轴写到 `<html>` |
 | `ui/EditorPane.tsx` | 编辑器挂载点与去抖同步 |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲） |
 | `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 已装插件清单 |
+| `ui/ConfirmDialog.tsx` | 自绘确认框（替掉 `window.confirm`）。**受控**：开与答案都由 `App.tsx` 给 |
 | `ui/Home.tsx` | 没有文档时那一屏 |
 | `ui/StatusBar.tsx` | 未保存状态 + 字数四项 |
 | `ui/Toasts.tsx` | 提示条 |
@@ -562,6 +565,7 @@ pub struct DocumentStore {
 | `pub fn nota_doc_new(state: State<'_, AppState>) -> Result<DocId>` | `documents.lock()` → `create_untitled()`。不会失败 |
 | `pub fn nota_doc_open(state: State<'_, AppState>, path: String) -> Result<DocId>` | `docs.open(&PathBuf::from(path))`。**已打开就复用**（不重复开标签）并把活动标签切过去。路径不存在/读不了 → `Read{…}` |
 | `pub fn nota_doc_sync(state: State<'_, AppState>, id: DocId, text: String) -> Result<u64>` | 前端推文本，返回新 `revision`。前端**去抖 300ms** 调一次，存盘/插件读文档前会强制再调一次 |
+| `pub fn nota_doc_settle(state: State<'_, AppState>, id: DocId, text: String) -> Result<u64>` | **装载流程的最后一步**：编辑器把 `setMarkdown` 之后的文本原样交回来认领——「这份文本就是当前的干净文本」。⚠️ 与 `sync` 的差别只有一条：**它同时清掉 `dirty`**。存在的理由是 BUG-12（打开文件就显示已修改）。⚠️ 调用点只有 `EditorPane` 一处，而且**必须在 `handle.focus()` 之后**——`focus()` 自己会派发一笔事务，那一笔就可能改文本 |
 | `pub fn nota_doc_save(state: State<'_, AppState>, id: DocId, path: Option<String>) -> Result<String>` | `path` 给了就是「另存为」。返回最终落盘路径的字符串（过 `paths::path_to_string`，非 UTF-8 路径会在这里报错）。未存盘又没给 `path` → `other("这份文档还没有路径，请用「另存为」")` |
 | `pub fn nota_doc_close(state: State<'_, AppState>, id: DocId) -> Result<()>` | **不做未保存询问**——那是前端的事（它才知道用户点了什么）。永远 `Ok` |
 | `pub fn nota_doc_set_active(state: State<'_, AppState>, id: DocId) -> Result<()>` | 透传 `DocumentStore::set_active` 的错 |
@@ -2116,9 +2120,10 @@ Rust 侧它是 `Option<PathBuf>`，所以前端一定可能拿到 `null`——**
 | `doc` | `create()` | `nota_doc_new` | 无 |
 | | `open(path)` | `nota_doc_open` | `{path}` |
 | | `sync(id, text)` | `nota_doc_sync` | `{id, text}`，返回新 revision |
+| | `settle(id, text)` | `nota_doc_settle` | `{id, text}`。⚠️ **只在装载流程里用一次**，别拿它当 `sync` 的别名 |
 | | `save(id, path?)` | `nota_doc_save` | `{id, path: path ?? null}` —— ⚠️ **显式传 `null`** 而不是省略 |
 | | `close(id)` | `nota_doc_close` | `{id}` |
-| | `setActive(id)` | `nota_doc_set_active` | ⚠️ 组件里没有调用者 |
+| | `setActive(id)` | `nota_doc_set_active` | 由 `App.tsx` 里跟着 `activeId` 走的那个 effect 统一调（BUG-6） |
 | | `get(id)` | `nota_doc_get` | ⚠️ 同上 |
 | | `list()` | `nota_doc_list` | |
 | | `reload(id)` | `nota_doc_reload` | ⚠️ 没有调用者 |

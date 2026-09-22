@@ -67,10 +67,13 @@
 | `src/App.tsx` | `02` `04` | 快捷键表与全局状态都在 `04` |
 | `src/bridge/ipc.ts` | `02` `05` `04` | **事件名字表**改了两份都得改。⚠️ 表中**只该有「发生类」事件**——声明类走 `api.plugin.panels()`/`menus()` 拉（BUG-13） |
 | `src/editor/create.ts` | `05` | Milkdown 装配 |
-| `src/editor/instant-render.ts` | `05` `04` `10` | 即时渲染的块级标记。⚠️ **`Decoration.node` 而不是 widget** 这条是踩出来的，理由写在它自己的文件头与 `07` §4 |
+| `src/editor/instant-render.ts` | `05` `04` `10` | 即时渲染的块级标记。⚠️ **`Decoration.node` 而不是 widget** 这条是踩出来的，理由写在它自己的文件头与 `07` §4。⚠️ 任务项**不给短横**那条例外也在这里 |
+| `src/editor/task-list.ts` | `05` `04` `10` | 任务项复选框：靠 `mousedown` 判命中装订线 + `setNodeMarkup` 翻 `checked`。⚠️ **不改 schema、不改 `toDOM`**——DOM 钩子 `data-checked` 是 `preset-gfm` 本来就给的（`07` 第 36 项的旧写法说它没给，那是错的，见 `07` §4） |
+| `src/editor/code-block.ts` | `05` `04` `10` | 代码块 NodeView：语言选择器 / 复制 / 折叠。⚠️ 本仓库**唯一**一处 `$view`；**语言高亮不归它管**，归 `plugin-prism` 读 `attrs.language` |
 | `src/ui/EditorPane.tsx` | `05` | "那个 div 从不被 React 重渲染"是硬约束 |
 | `src/ui/Sidebar.tsx` | `04` | |
 | `src/ui/PluginDock.tsx` | `04` `10` `02` | 右侧插件栏：面板 + 清单三组。⚠️「面板内容尚未接入」是**如实的空态**，不是待修的占位符——它有机制要等（`07` 第 15 项） |
+| `src/ui/ConfirmDialog.tsx` | `04` `02` | 自绘确认框，替掉 `window.confirm`（`07` 第 29 项）。⚠️ 它是**受控组件**：`open` 与答案都从 `App.tsx` 走，自己不持有状态 |
 | `src/ui/Home.tsx` | `04` `10` | 主页那一屏也在对标矩阵里 |
 | `src/ui/StatusBar.tsx` | `04` | |
 | `src/ui/Toasts.tsx` | `04` | |
@@ -78,7 +81,8 @@
 | `src/ui/outline.ts` | `05` | ⚠️ 是**启发式正则**不是 AST，已知误差记在 `05` |
 | `src/styles/theme.css` | `04` `08` | 三条外观轴的变量表 |
 | `src/styles/applyTheme.ts` | `04` | 轴 → `<html>` 属性的写入口 |
-| `src/styles/app.css` | `04` | |
+| `src/styles/app.css` | `04` | 外壳：窗口骨架 → 主页，加确认框。⚠️ **不含正文编辑区** |
+| `src/styles/editor.css` | `04` | 正文编辑区：编辑区外壳、块标记、代码块、任务列表。2026-09-22 按 1000 行规矩从 `app.css` 拆出，那条线怎么划见它自己的文件头 |
 
 ### 2.3 插件与工程
 

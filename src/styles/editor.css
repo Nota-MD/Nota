@@ -1,0 +1,370 @@
+/**
+ * 正文编辑区里的样式：编辑区外壳、即时渲染的块标记、代码块、任务列表。
+ *
+ * # 为什么从 `app.css` 拆出来（2026-09-22）
+ *
+ * `app.css` 撑到 1002 行，撞上了 1000 行的硬规矩（docs/09 §4）。切法是**按职责**
+ * 而不是按行数就近砍一刀：
+ *
+ * - `app.css` 管**外壳**——窗口骨架、工具条、侧栏、插件栏、标签栏、状态栏、主页，
+ *   以及那个跟外壳同级的确认框（它 `position: fixed` 挂在最外层）。
+ * - 本文件管**里面那本 Markdown 文档长什么样**——正文区、块标记、代码块、任务项。
+ *
+ * 那条线是能说清楚的：**换一本主题改的是本文件，换一个排版改的是 `app.css`**。
+ *
+ * 加载顺序仍然是 `theme.css` → `app.css` → 本文件（`main.tsx`），
+ * 跟拆之前完全一样，所以选择器权重和覆盖关系没有任何变化。
+ */
+
+/* ── 编辑区 ───────────────────────────────────────────────────────────── */
+
+.editor-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--doc-bg);
+  position: relative;
+}
+
+.editor-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--fg-faint);
+  pointer-events: none;
+}
+
+/* 正文容器。**宽度上限**是 Typora 的"正文宽度"设置。
+ *
+ * ⚠️ **左右各 56px，不是 32px**，而且**两边必须一样**。左边那一条是给块标记
+ * 留的（`##`、`>`、`1.`、` ```lang ` 都画在正文列的左外侧，见下面"即时渲染"
+ * 那一段），右边留同样宽只是为了正文仍然居中。
+ *
+ * 📌 这一格是 **2026-09-22 实测抓出来的**，别改窄：原来写的是 32px，窗口
+ * 稍窄一点（正文列正好顶到 `--content-width`）时，标记会被 `.editor-pane` 的
+ * `overflow: auto` **从左边裁掉**——左边溢出在 LTR 里是滚不到的，只能被裁。
+ * 症状很有迷惑性：**代码块的围栏只剩尾巴**（` ```rust ` 只剩一个「st」），
+ * 因为它是最长的一个标记；`##` 这种两三个字符的在同样宽度下刚好还在。
+ * 判据：只要正文列左边距 < 最宽标记的宽度 + `pre` 那 15px，就会开始裁。 */
+.editor-mount .milkdown {
+  max-width: var(--content-width, 760px);
+  margin: 0 auto;
+  padding: 48px 56px 120px;
+}
+
+/* ProseMirror 本体：颜色走文档主题那条轴（见文件末尾）。 */
+.editor-mount .ProseMirror {
+  outline: none;
+  font-family: var(--font-doc);
+  color: var(--doc-fg);
+  line-height: 1.75;
+  font-size: 1.02em;
+}
+
+.editor-mount .ProseMirror > * + * {
+  margin-top: 0.85em;
+}
+
+/* ── 即时渲染：块级标记的浅灰标注 ─────────────────────────────────────────
+   由 `src/editor/instant-render.ts` 用 `Decoration.node` 给块挂上
+   `.nota-srcmark` 和 `data-srcmark`（值就是该显示的文字：`##`、`>`、`1.`、
+   三个反引号）。**样式只此一处。**
+
+   ⚠️ 三条关键，动之前先读懂：
+
+   ① **标记走 `::before`，不认识第二个元素**。理由见那个插件的文件头：
+      用 widget 插 `<span>` 时，**列表项的标记会画到隔壁项上去**
+      （块边界上的 widget 落点不由我们说了算）。改成给块自己挂 class 之后，
+      "标记属于哪一块"就成了定义，不再是推断。
+
+   ② **定位祖先就是块自己**（下面那条 `position: relative`），所以
+      `right: 100%` 必定落在块的左外侧，而且**不占文档流**。这是手感的全部：
+      正文一个字都不许因为标记的出现或消失而左右挪。
+
+   ③ **列表项要多一条 `list-style: none`**：默认的圆点也画在 li 左外侧，
+      不关掉就会跟短横**叠在一起**。关掉之后恰好就是 Typora 的样子——
+      光标进列表项，圆点让位给 `-`；光标一走，圆点回来。 */
+
+.editor-mount .ProseMirror .nota-srcmark {
+  position: relative;
+}
+
+.editor-mount .ProseMirror .nota-srcmark::before {
+  content: attr(data-srcmark);
+  position: absolute;
+  right: 100%;
+  padding-right: 0.5em;
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  font-weight: 400;
+  line-height: inherit;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  opacity: 0.55;
+  user-select: none;
+  pointer-events: none;
+  /* 淡入。⚠️ **只有进入有过渡**：伪元素是跟着 class 一起被摘掉的，
+     没有机会播退场动画。别为此去搞"先淡出再删"——那要跟重绘抢时序，
+     抢输了就是标记赖在屏幕上不走，比没有动画糟得多。 */
+  animation: nota-srcmark-in 0.16s ease-out;
+}
+
+/* 列表项：圆点让位给短横（理由见上面 ③）。
+   ⚠️ 只去掉 marker，**不动 padding**——缩进必须保持原样，否则光标一进一出，
+   整行文字会横向跳一下。 */
+.editor-mount .ProseMirror li.nota-srcmark {
+  list-style: none;
+}
+
+/* 代码块：标记要多退一截。
+   ⚠️ 定位祖先是 `pre`，而 `pre` 的左边**不等于**代码块可见框的左边——
+   中间隔着它的 14px 内边距和 1px 边框。只写 `right: 100%` 的话，标记最右
+   那几个字符会**压在代码块的背景上**，看着像钻进框里去了。
+   15px = 14（padding）+ 1（border）；⚠️ **改 `pre` 的内边距时这里要跟着改**
+   （那条规则就在本文件代码块那一段，写着同样一句话）。
+   📌 补记：这条注释一直是对的，但它引用的"14px 内边距"在 2026-09-22 之前
+   **根本不存在**（全仓没有一条 `pre` 规则，浏览器默认内边距是 0）。
+   是补代码块样式时才把这个数坐实的——**注释里的数也要当场核**。 */
+.editor-mount .ProseMirror pre.nota-srcmark::before {
+  right: calc(100% + 15px);
+}
+
+@keyframes nota-srcmark-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
+
+/* ── 代码块 ───────────────────────────────────────────────────────────────
+   ⚠️ **这一段是补的**。`theme.css` 里那七个 `--code-*` 变量早就定义了，
+   但全仓**没有一个选择器用过它们**，`pre` 连底色和内边距都没有——
+   所以代码块一直是"有 class、有语言、就是没颜色"。
+   和 backlog §4 里记的"配色已补"对不上，以代码为准。
+
+   着色由 `@milkdown/plugin-prism` 加的 `span.token.*` 承担（它读的是节点属性，
+   不是 DOM），所以下面这些选择器**只认 class**，不要去匹配语言。 */
+
+.editor-mount .ProseMirror pre {
+  position: relative;
+  /* ⚠️ **内边距是 14px，别改**。`instant-render.ts` 把代码块的围栏标记画在
+     `pre` 左外侧，偏移量写死成 `calc(100% + 15px)` = 14（padding）+ 1（border）。
+     改这里就得同批改那一条——两个文件里的同一个数，最容易改漏一个。 */
+  padding: 14px;
+  /* 浏览器给 `pre` 的默认 `margin: 1em 0` 会和 `.ProseMirror > * + *` 叠起来。 */
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  line-height: 1.6;
+  /* ⚠️ `overflow` 必须留 `visible`：`instant-render.ts` 把围栏标记
+     （```rust）画在 `pre` 的**左外侧**，`overflow-x: auto` 会把它裁掉。
+     代价是长行不横向滚动 —— 改成自动换行，这也正是 Typora 的默认值
+     （它「代码块自动换行」本来就是勾上的）。 */
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.editor-mount .ProseMirror pre code {
+  font-family: inherit;
+  background: none;
+  padding: 0;
+}
+
+/* token 配色。变量归 `data-ui-mode` 管（见 theme.css 那段注释）。 */
+.editor-mount .ProseMirror .token.comment,
+.editor-mount .ProseMirror .token.prolog,
+.editor-mount .ProseMirror .token.doctype,
+.editor-mount .ProseMirror .token.cdata {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.editor-mount .ProseMirror .token.keyword,
+.editor-mount .ProseMirror .token.atrule,
+.editor-mount .ProseMirror .token.rule,
+.editor-mount .ProseMirror .token.important {
+  color: var(--code-keyword);
+}
+.editor-mount .ProseMirror .token.string,
+.editor-mount .ProseMirror .token.char,
+.editor-mount .ProseMirror .token.attr-value,
+.editor-mount .ProseMirror .token.regex {
+  color: var(--code-string);
+}
+.editor-mount .ProseMirror .token.number,
+.editor-mount .ProseMirror .token.boolean,
+.editor-mount .ProseMirror .token.constant,
+.editor-mount .ProseMirror .token.symbol {
+  color: var(--code-number);
+}
+.editor-mount .ProseMirror .token.function,
+.editor-mount .ProseMirror .token.class-name,
+.editor-mount .ProseMirror .token.selector {
+  color: var(--code-function);
+}
+.editor-mount .ProseMirror .token.attr-name,
+.editor-mount .ProseMirror .token.property,
+.editor-mount .ProseMirror .token.variable,
+.editor-mount .ProseMirror .token.builtin {
+  color: var(--code-attr);
+}
+.editor-mount .ProseMirror .token.tag,
+.editor-mount .ProseMirror .token.deleted {
+  color: var(--code-tag);
+}
+.editor-mount .ProseMirror .token.operator,
+.editor-mount .ProseMirror .token.punctuation,
+.editor-mount .ProseMirror .token.entity,
+.editor-mount .ProseMirror .token.url {
+  color: var(--fg-muted);
+}
+
+/* ── 代码块右下角那一条（`editor/code-block.ts`）─────────────────────────
+   语言选择器 / 复制 / 折叠。 */
+
+.nota-code-bar {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* 平时淡到几乎看不见，鼠标进代码块才亮起来——Typora 也是这么收着的，
+     否则满屏都是按钮。 */
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+/* ⚠️ 两条选择器管的**不是**同一件事，别以为有一条是多余的：
+   - `:hover` 是主要那条：鼠标进代码块就亮（Typora 的手感）；
+   - `:focus-within` 只在**键盘 Tab 到那条上的按钮**时才成立。
+     ⚠️ **光标在代码里打字时它是不成立的**——contenteditable 的焦点在
+     `.ProseMirror` 上，`<code>` 拿不到 `document.activeElement`，于是
+     `pre:focus-within` 永远是假。写代码的时候顺手一试很容易以为这条写错了，
+     它不是写错，是**管不着那件事**。真要让"光标在块里就亮"，得在 NodeView 里
+     监听选区——那是另一件事，没做。 */
+.editor-mount .ProseMirror pre:hover .nota-code-bar,
+.editor-mount .ProseMirror pre:focus-within .nota-code-bar {
+  opacity: 1;
+}
+
+.nota-code-btn,
+.nota-code-lang {
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nota-code-btn:hover,
+.nota-code-lang:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+
+.nota-code-lang {
+  max-width: 140px;
+}
+
+/* 折叠：靠 `max-height` 收起来，**不是 `display: none`**。
+   理由见 `code-block.ts`：藏起来的 contentDOM 会让 ProseMirror 没法在里面
+   放光标。留一点高度（1.6em 约等于一行）当作"这儿有东西"的提示。 */
+.editor-mount .ProseMirror pre.nota-code-folded > code {
+  display: block;
+  max-height: 1.6em;
+  overflow: hidden;
+}
+
+.editor-mount .ProseMirror pre.nota-code-folded {
+  /* 折叠时把右下角那一条留在原地，用户得有地方点"展开"。 */
+  padding-bottom: 16px;
+}
+
+/* ── 任务列表的复选框 ─────────────────────────────────────────────────────
+   `- [x] 做完了` 渲染成 `li[data-item-type="task"][data-checked]`——钩子是
+   `@milkdown/preset-gfm` 给的，**这份 CSS 才是第 36 项真正缺的那一半**。
+
+   ⚠️ 四条关键：
+
+   ① **圆点必须无条件去掉**。普通列表项是靠 `.nota-srcmark` 那条规则临时去掉的
+      （光标进列表项，圆点让位给 `-`），任务项不行——它的方框是**一直在**的，
+      圆点也一直在，就会画成 `• ☐ 文字`。
+
+   ② **装订线宽度只定义在这里**（`--task-check-gutter`）。`task-list.ts` 判"这一击
+      落没落在方框上"时把这个变量读回去，所以两边不会各写一个数。
+
+   ③ **方框画在左外侧，不占文档流**。理由和块级标记一样：正文一个字都不许因为
+      勾没勾上而左右挪。
+
+   ④ **`vertical-align` 要对齐正文的第一行**，不是对 li 的盒子居中——任务项
+      折行之后盒子会变高，居中的方框会跑到两行中间去。 */
+.editor-mount .ProseMirror {
+  --task-check-gutter: 22px;
+}
+
+.editor-mount .ProseMirror li[data-item-type="task"] {
+  list-style: none;
+  position: relative;
+}
+
+.editor-mount .ProseMirror li[data-item-type="task"]::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  /* 22px 的格子里放 14px 的方框，两边各留 4px 的点击余量。 */
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  /* 对齐第一行正文：1.75 的行高下，正文的视觉中线在 0.62em 上下。 */
+  top: 0.42em;
+  border: 1.5px solid var(--fg-faint);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 勾上的样子：填色 + 一个用两条边框折出来的对勾（不引图标字体，
+   少一个网络/打包依赖）。 */
+.editor-mount .ProseMirror li[data-checked="true"]::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.editor-mount .ProseMirror li[data-checked="true"]::after {
+  content: "";
+  position: absolute;
+  right: 100%;
+  width: 4px;
+  height: 8px;
+  margin-right: 9px;
+  top: 0.55em;
+  /* 对勾的颜色跟着强调色上的前景色走——暗色主题下它是深色，
+     写死 `#fff` 会在暗色里糊成一团。 */
+  border: solid var(--accent-fg);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  cursor: pointer;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 勾上的那一项，正文跟着淡一点（Typora 也是这么标的）。
+   ⚠️ 只淡第一段：任务项下面还可以挂子列表，整条 `li` 一起淡化会把子项也带上。 */
+.editor-mount .ProseMirror li[data-checked="true"] > p:first-child {
+  color: var(--fg-faint);
+  text-decoration: line-through;
+}

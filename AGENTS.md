@@ -71,9 +71,9 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `paths.rs` | XDG 目录（`~/.config/nota`、`~/.local/share/nota`）、`settings_file()`、`user_plugins_dir()`、`builtin_plugins_dirs()`（debug 构建额外返回仓库的 `plugins/`） |
 | `state.rs` | `AppState`：四个共享句柄。**锁顺序不变量写在文件头**（`plugins → documents → settings`） |
 | `settings.rs` | `Settings` 与三条**互相独立**的外观轴（`ui_style` / `ui_mode` / `document_theme`），kebab-case 落盘 |
-| `document/mod.rs` | `DocId` / `Document` / `DocumentStore`；`derive_title()`（front matter → 一级标题 → 文件名）；**「前端是文本的唯一真相、后端持有 300ms 镜像」这条口径写在文件头** |
+| `document/mod.rs` | `DocId` / `Document` / `DocumentStore`；`derive_title()`（front matter → 一级标题 → 文件名）；**「前端是文本的唯一真相、后端持有 300ms 镜像」这条口径写在文件头**。⚠️ `untitled_index`（未命名序号，建时定死）与 `clean_text`（比脏标记的那一份）不许省 |
 | `commands/mod.rs` | 命令模块的表；只有 `pub mod` 声明，没有逻辑 |
-| `commands/document.rs` | `nota_doc_*` 十个命令 |
+| `commands/document.rs` | `nota_doc_*` 十一个命令。⚠️ `settle` 是唯一一个**不当作编辑**的写入口（装载后的规范化认领），它有测试盯着，别合并进 `sync`） |
 | `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode`（**相对路径、`/` 分隔**） |
 | `commands/settings.rs` | `nota_settings_get/set`（整份替换；保存失败则回滚内存） |
 | `commands/plugin.rs` | `nota_plugins_list` / `nota_plugin_set_enabled` / `nota_plugin_call` / `nota_plugin_find_command` |
@@ -84,7 +84,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `lua/api/document.rs` | `nota.document`：读（`get_text` 等）/ 写（`set_text` / `append_text`，写完发事件通知前端） |
 | `lua/api/fs.rs` | `nota.fs`：读写文件，**限死在当前工作区内**；裁决逻辑是纯函数 `resolve_in()` |
 | `lua/api/git.rs` | `nota.git`：**子进程**跑 `git`，不是 libgit2；拒绝会重定向目标目录的参数 |
-| `lua/api/ui.rs` | `nota.ui`：`notify` / `register_panel` / `register_menu`（都是**发事件给前端**） |
+| `lua/api/ui.rs` | `nota.ui`：`notify` / `register_panel` / `register_menu`。⚠️ 2026-09-22 起**不再是三个都发事件**：`notify` 推事件（发生），后两个写 registry 供宿主**拉**（声明）。判据见 `docs/07` BUG-13 |
 
 ### 前端 `src/`
 
@@ -93,9 +93,14 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `main.tsx` | React 入口 |
 | `App.tsx` | 外壳与全部状态：文档表、活动文档、设置、工作区、插件、toast；快捷键（Ctrl+N/O/S/Shift+S/W） |
 | `bridge/ipc.ts` | **调用后端的唯一出口**。`api.doc.*` / `api.workspace.*` / `api.settings.*` / `api.plugin.*`、`on<T>()`、`events` 名字表 |
-| `editor/create.ts` | Milkdown 封装，对外只有 `EditorHandle` 四个方法 |
+| `editor/create.ts` | Milkdown 封装，对外只有 `EditorHandle` 四个方法。⚠️ 插件清单里**没有什么**和有什么一样重要，理由在函数注释里 |
+| `editor/instant-render.ts` | 光标所在块的 Markdown 标记（`##`、`>`、`-`）浅灰画在块左边。⚠️ 用 **`Decoration.node` 不是 widget**，理由在文件头 |
+| `editor/task-list.ts` | 任务项复选框：画方框 + 点它勾上。⚠️ **不改 schema**——`data-checked` 是 `preset-gfm` 本来就给的 |
+| `editor/code-block.ts` | 代码块 NodeView：语言选择器 / 复制 / 折叠。**全仓唯一一处 `$view`** |
 | `ui/EditorPane.tsx` | 编辑器挂载点。**那个 div 从不被 React 重新渲染**（Milkdown 拥有那棵 DOM） |
 | `ui/Sidebar.tsx` | 侧栏三页：文件（工作区树）/ 大纲 / 插件 |
+| `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 清单。**为什么在右边**写在文件头 |
+| `ui/ConfirmDialog.tsx` | 自绘确认框，替掉 `window.confirm`（**它阻塞 WebView、会打断输入法组合态**） |
 | `ui/Home.tsx` | 没有文档时那一屏 |
 | `ui/StatusBar.tsx` | 未保存状态、字数**四项**（词/字符/行/分钟） |
 | `ui/Toasts.tsx` | 提示条 |
@@ -103,7 +108,8 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `ui/outline.ts` | 大纲与字数的**纯函数**（启发式正则，跳过 front matter 与围栏代码块） |
 | `styles/theme.css` | 三条外观轴的 CSS 变量。**二维相乘**：`[data-ui-mode]` 只给颜色、`[data-ui-style]` 只给形状 |
 | `styles/applyTheme.ts` | 把三条轴写到 `<html>` 的属性上 |
-| `styles/app.css` | 外壳/侧栏/编辑区/状态栏的布局样式。**全仓最大的文件（786 行）**，要拆见 `docs/09` §4 |
+| `styles/app.css` | **外壳**：窗口骨架 → 主页，加确认框 |
+| `styles/editor.css` | **正文编辑区**：编辑区外壳、块标记、代码块、任务列表。⚠️ 2026-09-22 因撞 1000 行上限从 `app.css` 按职责拆出；加载顺序必须是 `theme → app → editor` |
 
 ### 插件与工具
 

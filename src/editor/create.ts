@@ -63,6 +63,12 @@ import "refractor/all";
 // 光标所在块的 Markdown 标记（`##`、`>`、`-`……）浅灰画在块左边。
 // 这是"标记不消失、只淡化"那条 Typora 手感，理由写在它自己的文件头上。
 import { instantRender } from "./instant-render";
+// 任务项的复选框：画出来 + 点它勾上。DOM 钩子（`data-checked`）是
+// `preset-gfm` 早就给了的，缺的是 CSS 和点击，理由写在它自己的文件头上。
+import { taskList } from "./task-list";
+// 代码块的右下角那一条：语言选择器 / 复制 / 折叠。这是**唯一**一处用 NodeView
+// 的地方（别处要么改 schema、要么用 Decoration），理由写在它自己的文件头上。
+import { codeBlockView } from "./code-block";
 
 /** 编辑器句柄。调用方只通过这些方法跟编辑器打交道。 */
 export interface EditorHandle {
@@ -120,6 +126,8 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     .use(indent)
     .use(trailing)
     .use(instantRender)
+    .use(taskList)
+    .use(codeBlockView)
     .use(prism)
     .use(math)
     .use(diagram)

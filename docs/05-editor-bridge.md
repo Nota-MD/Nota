@@ -52,6 +52,8 @@ Nota 是 **WebKitGTK 4.1 里的 ProseMirror 文档树**（前端是真相）。�
 | `@milkdown/kit/plugin/indent` | `indent` | 列表里按 Tab/空格缩进的快捷键（`indentConfig` 可配 `type` / `size`，**没配**，走默认） |
 | `@milkdown/kit/plugin/trailing` | `trailing` | 文末按 `trailingConfig.shouldAppend` 补一个节点（默认段落），保证末尾能落光标 |
 | `./instant-render`（**本仓**） | `instantRender` | 光标所在块的 Markdown 标记（`##`/`>`/`-`/围栏）淡化画在块左边。**这是本仓唯一一个自己写的 ProseMirror 插件** |
+| `./task-list`（**本仓**） | `taskList` | 任务项的复选框：画方框 + 点它勾上 + **回车切出来的新项不继承勾**。⚠️ **不改 schema**——DOM 钩子（`data-checked`）是 `preset-gfm` 本来就给的 |
+| `./code-block`（**本仓**） | `codeBlockView` | 代码块右下角那一条（语言选择器 / 复制 / 折叠）。⚠️ 走 `$view`（NodeView），**全仓唯一一处**——它要加的是真的会交互的元素，`Decoration` 那种只读装饰做不到 |
 | `@milkdown/kit/utils` | `replaceAll` | `setMarkdown` 用的整篇替换（§6） |
 | `@milkdown/plugin-prism` | `prism` | 代码块高亮 |
 | `@milkdown/plugin-math` | `math` | 数学公式（KaTeX） |
@@ -61,11 +63,31 @@ Nota 是 **WebKitGTK 4.1 里的 ProseMirror 文档树**（前端是真相）。�
 `rootCtx` / `defaultValueCtx` / `listenerCtx`）。所以它们的行为完全由上游版本决定，
 升级 Milkdown 时这一屏是最可能变的。
 
-⚠️ **`instantRender` 是把东西"只改显示、不改文档"地画到编辑区上的例子**，值得单独说一句
-因为它是**唯一**一条自制路径。它走 ProseMirror 的 `Decoration`——**这是硬约束不是选择**：
+⚠️ **`instantRender` 是把东西"只改显示、不改文档"地画到编辑区上的例子。**它走 ProseMirror 的 `Decoration`——**这是硬约束不是选择**：
 直接 `appendChild` 的东西会被 ProseMirror 重绘时冲掉。将来任何"想给某个节点加个角标/
 背景/浮层"的需求都走同一条路。⚠️ 而且**只用 `Decoration.node`，不要用 `Decoration.widget`**
 （块边界上的 widget 落点不可控，踩过，见 `docs/02` 那一节与 `docs/07` §4）。
+
+### 2.1b 两条自制路径，判据只有一条
+
+| 路径 | 机制 | 什么时候用 |
+|---|---|---|
+| 只改**显示**、不加元素 | `Decoration`（`instant-render.ts`） | 加角标、背景、浮层——只要不指望它接事件 |
+| **这个节点由我来画** | `$view` NodeView（`code-block.ts`） | 要加 **`<select>` / `<button>` 这类真的会交互的元素**时。widget 是只读装饰，点它、让它持有焦点、让它开下拉都不是它的职责 |
+
+⚠️ **NodeView 的三条契约**（`code-block.ts` 里全用上了，缺一条就出怪现象）：
+
+- `dom` / `contentDOM`：`contentDOM` 是**ProseMirror 只许动这一块**的那个子节点，
+  其余部分（那条按钮栏）归我们。
+- `stopEvent`：事件一进来就拦下（点、按键、滚轮）。没有它，PM 会把"点在 `<select>` 上"
+  当成"用户点了编辑区"去挪光标。
+- `ignoreMutation`：已经发生的 DOM 变更要不要告诉 PM。⚠️ **少了它，"复制"按钮把文字改成
+  「已复制」这件事会被 PM 当成"用户在编辑区里改了东西"**，于是它去重解析，**光标当场飞走**。
+  这两条是**两件事**，别合并。
+
+⚠️ 还有一条类型上的坑：`$view` 收的是 `$Node | $Mark`，而 `codeBlockSchema` 是
+`$NodeSchema`（"schema 定义 + 那个 node"的合成体）——**要传 `codeBlockSchema.node`**，
+传它自己过不了 `tsc`。
 
 ### 2.2 四个必须知道的三方包事实
 
@@ -238,6 +260,11 @@ export interface EditorHandle {
 **强制同步点**（`docs/03` §1.1 对策②）：`App.tsx::saveDoc()` 在 `api.doc.save` 之前
 先 `editorRef.current?.getMarkdown()` 再 `api.doc.sync(id, text)`——因为镜像可能还差
 最后几次击键（用户按下 Ctrl+S 时那个 300ms 定时器通常还没到点）。
+
+**装载方向的收尾点**（`docs/03` §4.2）：`EditorPane` 在 `handle.focus()` **之后**调一次
+`api.doc.settle(id, text)`，把编辑器给出的文本认领成"当前的干净文本"。
+⚠️ **顺序是硬约束**：`focus()` 自己会派发一笔事务，那一笔就可能改文本，
+所以必须在它之后取。这一步是为了 BUG-12（打开文件就显示「已修改」）。
 
 ⚠️ 去抖定时器在组件卸载时会被清掉：**关掉标签前的最后 300ms 若没有落点，这段文本
 不会进镜像**。走 `closeDoc` 前并没有补一次强制同步（`saveDoc` 有）。所以"打字 → 立刻

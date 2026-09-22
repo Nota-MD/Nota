@@ -190,6 +190,9 @@ CSS 给的是 `border-top`）。这与"标签在顶部"的常见布局相反，�
 |---|---|---|---|
 | 加载提示 | 「正在准备编辑器…」 | 无（`ready === false` 时显示） | ✅ |
 | 编辑器本体 | — | Milkdown 拥有那棵 DOM；文本变化走**去抖 300ms → `api.doc.sync()`** | ✅ 能用，链路见 `docs/05` |
+| 任务项复选框 | 无文案（方框画在列表项的**左外侧装订线**里） | 点方框 → `editor/task-list.ts` 按几何命中 → `setNodeMarkup` 翻 `checked` | ✅ 能勾（2026-09-22 开窗实测）；装订线宽度走 `--task-check-gutter` |
+| 代码块右下角那一条 | 「折叠」「复制」+ 语言下拉（首项「纯文本」） | 同一处的 NodeView（`editor/code-block.ts`）：复制走 `navigator.clipboard` 兜底 `execCommand`，**界面文案会在 1200ms 内变成「已复制」/「复制失败」**；折叠**只活在这个视图里、不写进文档** | ✅（2026-09-22 开窗实测）。⚠️ 那一条是 `opacity: 0` 的，**鼠标进代码块才亮**（Typora 也这么收着） |
+| 装载后的认领 | 无文案 | `EditorPane` 在 `focus()` 之后调一次 `api.doc.settle(id, text)` | ✅ 修 BUG-12 的那一步，见 `docs/03` §4.2 |
 | 空态（`Home`） | 「新建文档」+「Ctrl+N」 | `onNew` → `newDoc()` | ✅ |
 | 空态（`Home`） | 「打开文件」+「Ctrl+O」 | `onOpen` → `openViaDialog()` | ✅ |
 | 空态（`Home`） | 「打开文件夹」+「把一整个目录当工作区」 | `onOpenFolder` → `openFolder()` | ✅ |
@@ -235,8 +238,27 @@ CSS 给的是 `border-top`）。这与"标签在顶部"的常见布局相反，�
 行为：`toast(message, level)` 生成本地 id 后追加；`error` 存活 8000ms，其余 3200ms；
 `role="status" aria-live="polite"`。⚠️ **自己画而不用 `window.alert`**：
 alert 会**阻塞整个 WebView**，在编辑器里打字打到一半弹一个 alert，输入法组合态会被打断。
-（唯一的例外是 `closeDoc` 里的 `window.confirm`——代码注释里说明这是临时的，
-自画对话框排在界面那一轮。）
+⚠️ **同一口径现在覆盖全仓**：原来唯一的例外是 `closeDoc` 里的
+`window.confirm`，2026-09-22 起换成自画的 `ui/ConfirmDialog.tsx`（见下）。
+
+### 2.6b 确认框（`ConfirmDialog`）—— 2026-09-22 起
+
+| 控件 | 文案 | 回调 → 最终动作 | 当前状态 |
+|---|---|---|---|
+| 标题 | 调用方给（如「有未保存的改动」） | 无 | ✅ |
+| 正文 | 调用方给（如「「未命名 1」还没存盘，关掉这份改动就没了。」） | 无 | ✅ |
+| 「取消」 | 「取消」 | `onAnswer(false)` | ✅ 默认焦点**不**在它身上 |
+| 确认键 | 调用方给（缺省「确定」）；危险动作用 `.btn-danger` 画红 | `onAnswer(true)` | ✅ **自动聚焦** |
+
+键盘：`Esc` → 取消、`Enter` → 确定；点背景（`mousedown` 落在 backdrop 上）→ 取消。
+⚠️ **它是受控组件**：自己不持有"开不开"，也不持有答案——`App.tsx` 里
+`askConfirm()` 返回一个 `Promise<boolean>`，由按钮的点击来兑现（`answerConfirm`）。
+⚠️ `confirmResolve` 是**单个 ref、不是队列**：今天所有调用点都是用户动作直接触发的
+（关文档），不存在并发；真要并发弹两个，后来者会把前一个的 Promise 永远挂着。
+
+**为什么要自己画**：`window.confirm` **阻塞整个 WebView**，而"关一份没存盘的文档"
+随时会发生、且多半发生在用户刚打完字的时候——它会打断中文输入法的组合态。
+与 `Toasts` 避开 `alert` 是同一条理由，只是那边先做到、这边漏了（`docs/07` 第 29 项）。
 
 ### 2.7 崩溃屏（`ErrorBoundary`）
 

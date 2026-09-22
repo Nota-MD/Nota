@@ -87,6 +87,27 @@ export function EditorPane({ doc, contentWidth, onToast, onDocsChanged, ref }: P
         handleRef.current = handle;
         setReady(true);
         handle.focus();
+
+        // 装载完之后把编辑器的文本交回后端**认领**一次。
+        //
+        // ⚠️ 这不是 `sync`。编辑器把 markdown 解析成文档树再序列化回来，结果未必
+        // 与磁盘上那份逐字节相同（尾段、空行、标记写法都会被规范化），而那是
+        // **编辑器**改的、不是**用户**改的。不认领的话，打开一个文件就会显示
+        // 「已修改」、关窗口还多问一句（BUG-12）。
+        //
+        // 此刻用户还没碰键盘，所以这一步吞不掉任何真改动；真改动走上面的 onChange。
+        // ⚠️ 这一步**必须在 `focus()` 之后**：聚焦本身会派一次事务（补尾段、定选区），
+        // 要认领就认领最后一次同步事务之后的结果。
+        const settled = handle.getMarkdown();
+        if (settled !== doc.text) {
+          try {
+            await api.doc.settle(doc.id, settled);
+            await onDocsChanged();
+          } catch (e) {
+            // 认领失败不该挡住编辑——最坏的结果是脏标记虚报一次。
+            console.warn("[nota] 装载后认领文本失败：", e);
+          }
+        }
       } catch (e) {
         onToast(`编辑器启动失败：${e}`, "error");
       }

@@ -66,18 +66,30 @@ function markerOf(node: PMNode, parent: PMNode | null, index: number): string | 
       return ">";
 
     case "list_item": {
+      // 任务项（`- [x] …`）**不给短横**：它的方框已经画在同一个装订线里了
+      //（见 `task-list.ts` 与 `app.css`），再叠一个 `-` 就得二选一地挪位，
+      // 而挪出来的读序（`☐ -`）和 markdown 的（`- [x]`）是反的。
+      // 方框本身就是 `- [ ]` 这个结构渲染出来的样子。
+      if (node.attrs.checked != null) return null;
+
       if (parent?.type.name === "ordered_list") {
         // `order` 是列表的起始号（Markdown 允许从 3 开始），默认 1。
         return `${Number(parent.attrs.order ?? 1) + index}.`;
       }
-      // 无序列表（bullet_list）。任务项也走这里——它的短横照样要显示。
+      // 无序列表（bullet_list）。
       return "-";
     }
 
-    case "code_block": {
-      const lang = node.attrs.language;
-      return lang ? "```" + String(lang) : "```";
-    }
+    case "code_block":
+      // ⚠️ **只画三个反引号，不带语言名**（2026-09-22 改的，原来是 ```` + 语言名）。
+      // 理由是**宽度**：这条标记画在正文列的左外侧，而左边那条空位是固定的
+      // 56px（见 `editor.css` 里 `.milkdown` 的 `padding`），语言名一长
+      //（`javascript`、`markup-templating`）标记就**顶出正文列、被编辑区的
+      // `overflow` 从左边裁掉**——实测抓到过只剩一个「st」的样子。
+      // 想给语言名留位置就得把左边距按最长的语言名来定，那是几十个像素买
+      // 一个信息量很低的东西：**语言名就在代码块右下角的选择器里摆着**，
+      // 用户要的是"这一块是代码"，不是"再读一遍语言名"。
+      return "```";
 
     default:
       return null;

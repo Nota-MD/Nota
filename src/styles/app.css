@@ -1,5 +1,9 @@
 /**
- * 外壳与编辑区的样式。
+ * 外壳的样式：窗口骨架、工具条、按钮、侧栏、插件栏、文件树、大纲、
+ * 标签栏、状态栏、主页，以及确认框。
+ *
+ * ⚠️ **正文编辑区不在这里**，在 `editor.css` —— 2026-09-22 因为撞上 1000 行
+ * 上限按职责拆的，那条线怎么划见 `editor.css` 的文件头。
  *
  * 颜色与尺寸**一律走变量**（见 `theme.css`），本文件里不该出现写死的色值或圆角
  * ——写死一个就少支持一种风格组合。
@@ -608,110 +612,62 @@ button {
   font-size: 0.88em;
 }
 
-/* ── 编辑区 ───────────────────────────────────────────────────────────── */
+/* ── 确认框（`ui/ConfirmDialog.tsx`）───────────────────────────────────────
+   替掉 `window.confirm` 的那个。它阻塞 WebView、会打断输入法组合态，
+   而"关一份没存盘的文档"随时会发生。 */
 
-.editor-pane {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  background: var(--doc-bg);
-  position: relative;
-}
-
-.editor-loading {
-  position: absolute;
+.confirm-backdrop {
+  position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  color: var(--fg-faint);
-  pointer-events: none;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 32%);
 }
 
-/* 正文容器。**宽度上限**是 Typora 的"正文宽度"设置。 */
-.editor-mount .milkdown {
-  max-width: var(--content-width, 760px);
-  margin: 0 auto;
-  padding: 48px 32px 120px;
+.confirm-dialog {
+  min-width: 320px;
+  max-width: 440px;
+  padding: 20px 22px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  /* 用 `--bg-raised` 那一层：它在亮色下是纯白、暗色下比 `--bg` 高一档，
+     正好是"浮在正文上面"该有的关系。 */
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
 }
 
-/* ProseMirror 本体：颜色走文档主题那条轴（见文件末尾）。 */
-.editor-mount .ProseMirror {
-  outline: none;
-  font-family: var(--font-doc);
-  color: var(--doc-fg);
-  line-height: 1.75;
-  font-size: 1.02em;
+.confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.05em;
+  font-weight: 600;
 }
 
-.editor-mount .ProseMirror > * + * {
-  margin-top: 0.85em;
+.confirm-message {
+  margin: 0 0 18px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  /* 长文件名/长路径不要撑破框 */
+  overflow-wrap: anywhere;
 }
 
-/* ── 即时渲染：块级标记的浅灰标注 ─────────────────────────────────────────
-   由 `src/editor/instant-render.ts` 用 `Decoration.node` 给块挂上
-   `.nota-srcmark` 和 `data-srcmark`（值就是该显示的文字：`##`、`>`、`1.`、
-   三个反引号加语言名）。**样式只此一处。**
-
-   ⚠️ 三条关键，动之前先读懂：
-
-   ① **标记走 `::before`，不认识第二个元素**。理由见那个插件的文件头：
-      用 widget 插 `<span>` 时，**列表项的标记会画到隔壁项上去**
-      （块边界上的 widget 落点不由我们说了算）。改成给块自己挂 class 之后，
-      "标记属于哪一块"就成了定义，不再是推断。
-
-   ② **定位祖先就是块自己**（下面那条 `position: relative`），所以
-      `right: 100%` 必定落在块的左外侧，而且**不占文档流**。这是手感的全部：
-      正文一个字都不许因为标记的出现或消失而左右挪。
-
-   ③ **列表项要多一条 `list-style: none`**：默认的圆点也画在 li 左外侧，
-      不关掉就会跟短横**叠在一起**。关掉之后恰好就是 Typora 的样子——
-      光标进列表项，圆点让位给 `-`；光标一走，圆点回来。 */
-
-.editor-mount .ProseMirror .nota-srcmark {
-  position: relative;
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.editor-mount .ProseMirror .nota-srcmark::before {
-  content: attr(data-srcmark);
-  position: absolute;
-  right: 100%;
-  padding-right: 0.5em;
-  font-family: var(--font-mono);
-  font-size: 0.78em;
-  font-weight: 400;
-  line-height: inherit;
-  white-space: nowrap;
-  color: var(--fg-faint);
-  opacity: 0.55;
-  user-select: none;
-  pointer-events: none;
-  /* 淡入。⚠️ **只有进入有过渡**：伪元素是跟着 class 一起被摘掉的，
-     没有机会播退场动画。别为此去搞"先淡出再删"——那要跟重绘抢时序，
-     抢输了就是标记赖在屏幕上不走，比没有动画糟得多。 */
-  animation: nota-srcmark-in 0.16s ease-out;
+/* 危险动作（丢改动、删东西）：确认键画红，别让它长得跟"确定保存"一样。 */
+.btn-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
 }
 
-/* 列表项：圆点让位给短横（理由见上面 ③）。
-   ⚠️ 只去掉 marker，**不动 padding**——缩进必须保持原样，否则光标一进一出，
-   整行文字会横向跳一下。 */
-.editor-mount .ProseMirror li.nota-srcmark {
-  list-style: none;
-}
-
-/* 代码块：标记要多退一截。
-   ⚠️ 定位祖先是 `pre`，而 `pre` 的左边**不等于**代码块可见框的左边——
-   中间隔着它的 14px 内边距和 1px 边框。只写 `right: 100%` 的话，标记最右
-   那几个字符会**压在代码块的背景上**，看着像钻进框里去了。
-   15px = 14（padding）+ 1（border）；改 `pre` 的内边距时这里要跟着改。 */
-.editor-mount .ProseMirror pre.nota-srcmark::before {
-  right: calc(100% + 15px);
-}
-
-@keyframes nota-srcmark-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 0.55;
-  }
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
 }

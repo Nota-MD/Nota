@@ -1,0 +1,115 @@
+# 六个平台的安装包。**每个平台只能在它自己的系统上打**——这是工具链的硬约束，
+# 不是我们图省事：
+#
+#   - Windows 的 `setup.exe` 由 NSIS 生成，macOS 的 `.dmg` 由 `hdiutil` 生成，
+#     两个都是原生工具，Linux 上没有；
+#   - Linux 的 `.deb`/`.rpm`/`.AppImage` 反过来要 `dpkg-deb`/`rpmbuild`/linuxdeploy。
+#
+# 唯一能省的是**架构**：Windows 那一格一条 runner 就能出 x64 和 arm64 两个包
+#（`--target` 换了而已，SDK 是同一套），所以 arm64 不需要单独的机器。
+# macOS 那两格**必须分开**：`macos-13` 是 Intel 机器，`macos-latest` 是 Apple Silicon，
+# 而 dmg 只能在对应的机器上打——交叉那一步 Tauri 不做。
+#
+# ⚠️ Linux 两格固定在 **22.04** 而不是 `ubuntu-latest`：打出来的包要能跑在
+# 老发行版上，而 glibc 是**向前兼容、不向后兼容**的（在新系统上编的二进制
+# 在旧系统上会因为找不到新符号而启动失败）。22.04 是 Tauri 文档推荐的下限。
+# `ubuntu-22.04-arm` 是 GitHub 的 arm64 托管机，不是自建。
+
+name: 打包
+
+on:
+  push:
+    tags: ["v*"]
+  # 允许手动跑一次，便于验证配置改动（比如 resources 有没有真的进包）。
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      # 一个平台挂了不代表别的平台也挂，让其余的跑完——六个平台跑一轮很贵。
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,rpm,appimage
+            label: linux-x86_64
+          - platform: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            bundles: deb,rpm,appimage
+            label: linux-arm64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+            label: windows-x86_64
+          - platform: windows-latest
+            target: aarch64-pc-windows-msvc
+            bundles: nsis
+            label: windows-arm64
+          - platform: macos-13 # Intel
+            target: x86_64-apple-darwin
+            bundles: dmg
+            label: macos-x86_64
+          - platform: macos-latest # Apple Silicon
+            target: aarch64-apple-darwin
+            bundles: dmg
+            label: macos-arm64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装 Linux 的系统依赖
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            build-essential \
+            curl wget file
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Rust 依赖的增量缓存。不缓存的话每次都要把 webkit 那一整套绑定重编一遍，
+      # 一个平台二十分钟起。
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.label }}
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          # 不签名的构建也要这个变量存在，否则 macOS 那两格会在打 dmg 时报错。
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # ⚠️ `--bundles` 一定要给。配置里写的是 `"targets": "all"`，
+          # 在 Windows 上"all" 会连 MSI 一起打，而我们要的是 exe 安装程序（NSIS）。
+          args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      # ⚠️ 收包用的是**产物目录**而不是 `target/release/bundle`：
+      # 带 `--target` 时 Tauri 把产物放在 `target/<三元组>/release/bundle/` 下，
+      # 写死路径会在 CI 上收不到东西（本地不带 --target 时又是另一个路径）。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nota-${{ matrix.label }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg

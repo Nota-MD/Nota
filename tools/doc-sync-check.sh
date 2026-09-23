@@ -59,6 +59,8 @@ PAIRS=(
   "src-tauri/src/commands/workspace.rs            02,04"
   "src-tauri/src/commands/settings.rs             02,04"
   "src-tauri/src/commands/plugin.rs               02,04"
+  "src-tauri/src/commands/theme.rs                02,04,10"
+  "src-tauri/src/themes.rs                        02,03,08"
   "src-tauri/src/plugin/mod.rs                    01,02,11"
   "src-tauri/src/plugin/manifest.rs               03,11,12"
   "src-tauri/src/lua/mod.rs                       01,12"
@@ -77,6 +79,8 @@ PAIRS=(
   "src/editor/code-block.ts                       05,04,10"
   "src/ui/EditorPane.tsx                          05"
   "src/ui/Sidebar.tsx                             04"
+  "src/ui/MenuBar.tsx                             04,10"
+  "src/ui/commands.ts                             04,05"
   "src/ui/PluginDock.tsx                          04,10,02"
   "src/ui/ConfirmDialog.tsx                       04,02"
   "src/ui/Home.tsx                                04,10"
@@ -86,6 +90,7 @@ PAIRS=(
   "src/ui/outline.ts                              05"
   "src/styles/theme.css                           04,08"
   "src/styles/applyTheme.ts                       04"
+  "src/styles/typora-theme.ts                     04,05,08"
   "src/styles/app.css                             04"
   "src/styles/editor.css                          04"
   # 插件与工程
@@ -99,6 +104,7 @@ PAIRS=(
   "vite.config.ts                                 06"
   "tsconfig.json                                  06"
   "index.html                                     06"
+  ".github/workflows/release.yml                  06"
 )
 
 # 文档编号 → 文件。找不到就说明 docs/ 里缺了这份。

@@ -50,6 +50,8 @@
 | `src-tauri/src/commands/workspace.rs` | `02` `04` | 树节点形状是前端契约 |
 | `src-tauri/src/commands/settings.rs` | `02` `04` | |
 | `src-tauri/src/commands/plugin.rs` | `02` `04` | 加/改命令要同批改 `02` 的命令表与 `04` 的控件表 |
+| `src-tauri/src/commands/theme.rs` | `02` `04` `10` | 主题的列/读/读资源/拿目录四个命令。⚠️ `nota_theme_asset` 还回来的**是 data: URL 不是路径**，理由在 `themes.rs` 顶上，改签名要连带改 `08` |
+| `src-tauri/src/themes.rs` | `02` `03` `08` | 主题的发现与读盘。⚠️ 顶上那段"为什么字体不走 asset 协议"是**实测判据**（wry 注册 `asset:` 时没登记 cors-enabled），前端 `typora-theme.ts` 的注释引它，两处要一起改 |
 | `src-tauri/src/plugin/mod.rs` | `01` `02` `11` | 宿主的发现/加载/派发/卸载流程。⚠️「声明是状态 → 拉」的判据写在 `panels()` 的文档注释里，`05` §5.3 与 `07` BUG-13 引它，**三处要一起改** |
 | `src-tauri/src/plugin/manifest.rs` | `03` `11` `12` | 清单格式与**能力表**是插件的对外契约 |
 | `src-tauri/src/lua/mod.rs` | `01` `12` | 一插件一状态、沙箱边界画在哪 |
@@ -71,6 +73,8 @@
 | `src/editor/task-list.ts` | `05` `04` `10` | 任务项复选框：靠 `mousedown` 判命中装订线 + `setNodeMarkup` 翻 `checked`。⚠️ **不改 schema、不改 `toDOM`**——DOM 钩子 `data-checked` 是 `preset-gfm` 本来就给的（`07` 第 36 项的旧写法说它没给，那是错的，见 `07` §4） |
 | `src/editor/code-block.ts` | `05` `04` `10` | 代码块 NodeView：语言选择器 / 复制 / 折叠。⚠️ 本仓库**唯一**一处 `$view`；**语言高亮不归它管**，归 `plugin-prism` 读 `attrs.language` |
 | `src/ui/EditorPane.tsx` | `05` | "那个 div 从不被 React 重渲染"是硬约束 |
+| `src/ui/MenuBar.tsx` | `04` `10` | 菜单栏骨架（`07` 第 40 项）。⚠️ 条目表在 `ui/commands.ts`，这里只管画；新增菜单项要同时看 `10` 的对标矩阵 |
+| `src/ui/commands.ts` | `04` `05` | **菜单项 → 动作**的唯一映射表，也是快捷键表（菜单里显示的键位就是它）。⚠️ 它调 `EditorHandle` 上的方法而不是直接碰 Milkdown，见 `05` |
 | `src/ui/Sidebar.tsx` | `04` | |
 | `src/ui/PluginDock.tsx` | `04` `10` `02` | 右侧插件栏：面板 + 清单三组。⚠️「面板内容尚未接入」是**如实的空态**，不是待修的占位符——它有机制要等（`07` 第 15 项） |
 | `src/ui/ConfirmDialog.tsx` | `04` `02` | 自绘确认框，替掉 `window.confirm`（`07` 第 29 项）。⚠️ 它是**受控组件**：`open` 与答案都从 `App.tsx` 走，自己不持有状态 |
@@ -79,9 +83,10 @@
 | `src/ui/Toasts.tsx` | `04` | |
 | `src/ui/ErrorBoundary.tsx` | `04` | |
 | `src/ui/outline.ts` | `05` | ⚠️ 是**启发式正则**不是 AST，已知误差记在 `05` |
-| `src/styles/theme.css` | `04` `08` | 三条外观轴的变量表 |
+| `src/styles/typora-theme.ts` | `04` `05` `08` | **"兼容 Typora 主题"的核心**：展开 `@import`、把 `url()` 内联成 data: URL、按 `#write` 收拢选择器、把 `:root` 变量提升到全局。四步的规矩和边界都写在它顶上，改这里要连着改 `08` |
+| `src/styles/theme.css` | `04` `08` | 三条外观轴的变量表。⚠️ 末尾那段 `html[data-doc-theme]` 桥接块是**消费主题提升上来的变量**的地方，删了主题就只剩正文变色、外壳不变 |
 | `src/styles/applyTheme.ts` | `04` | 轴 → `<html>` 属性的写入口 |
-| `src/styles/app.css` | `04` | 外壳：窗口骨架 → 主页，加确认框。⚠️ **不含正文编辑区** |
+| `src/styles/app.css` | `04` | 外壳：工具条 → 菜单栏（`.menubar` / `.menu-popup`）→ 窗口骨架 → 主页，加确认框。⚠️ **不含正文编辑区**（它在 `editor.css`） |
 | `src/styles/editor.css` | `04` | 正文编辑区：编辑区外壳、块标记、代码块、任务列表。2026-09-22 按 1000 行规矩从 `app.css` 拆出，那条线怎么划见它自己的文件头 |
 
 ### 2.3 插件与工程
@@ -94,6 +99,7 @@
 | `src-tauri/tauri.conf.json` | `01` `06` | ⚠️ CSP 只在这儿写，见 `AGENTS.md` §4b |
 | `vite.config.ts` / `tsconfig.json` | `06` | ⚠️ `@/` 别名两处必须一致 |
 | `index.html` | `06` | |
+| `.github/workflows/release.yml` | `06` | 六格打包矩阵。⚠️ 平台/架构/`--bundles` 为什么是这么分的，`06` §2.4 有一整节，两边要一起改 |
 | `tools/*` | `06` `09`（工具自己改规则时） | |
 
 ### 2.4 任何改动都可能连带的两份

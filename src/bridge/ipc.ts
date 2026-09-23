@@ -91,6 +91,25 @@ export interface PluginMenuItem {
   accelerator: string | null;
 }
 
+/**
+ * 一个可用的主题。对应 Rust 侧 `themes::ThemeInfo`。
+ *
+ * ⚠️ 主题是**一对东西**：`<name>.css` ＋ 同名目录 `<name>/`（装字体图片）。
+ * `css` 是那个文件的绝对路径，`dir` 是它所在目录——**相对 url 的基准**。
+ */
+export interface ThemeInfo {
+  /** 显示名，同时是唯一键（文件名去掉 `.css`）。 */
+  name: string;
+  /** `nota`（我们自己的目录）/ `typora` / `typora-flatpak`。 */
+  source: string;
+  /** CSS 文件绝对路径，读的时候拿它当入参。 */
+  css: string;
+  /** 主题所在目录。 */
+  dir: string;
+  /** 有没有同名资源目录（字体/图片）。没有的话多半会缺字体。 */
+  has_assets: boolean;
+}
+
 // ── 文档 ──────────────────────────────────────────────────────────────────
 export const api = {
   doc: {
@@ -127,6 +146,27 @@ export const api = {
   settings: {
     get: () => invoke<Settings>("nota_settings_get"),
     set: (settings: Settings) => invoke<void>("nota_settings_set", { settings }),
+  },
+
+  theme: {
+    /** 扫一遍所有主题目录。没装 Typora 就只剩我们自己那份，返回空表也不报错。 */
+    list: () => invoke<ThemeInfo[]>("nota_themes_list"),
+    /**
+     * 读一份主题 CSS 的**文本**。改造（限域 + url 绝对化）在前端做，
+     * 所以这里要的是文本不是渲染结果——见 `styles/typora-theme.ts` 顶上那段。
+     */
+    read: (path: string) => invoke<string>("nota_theme_read", { path }),
+    /**
+     * 读一份主题资源（字体/图片），拿回来的是 **data: URL**，不是路径。
+     *
+     * ⚠️ 为什么不让后端还路径、前端走 asset 协议：那条路在 WebKitGTK 上
+     * **取不到字体**（`@font-face` 是 CORS 模式的请求，而 wry 注册 `asset:`
+     * 时没登记 `register_uri_scheme_as_cors_enabled`）。详见 `src-tauri/src/themes.rs`
+     * 顶上那段，那儿记着实测的判据。
+     */
+    asset: (path: string) => invoke<string>("nota_theme_asset", { path }),
+    /** 建好并返回我们自己的主题目录，供「打开主题文件夹」用。 */
+    dir: () => invoke<string>("nota_themes_dir"),
   },
 
   plugin: {

@@ -61,25 +61,131 @@ button {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: calc(var(--spacing) * 2);
+  gap: var(--spacing);
   height: var(--toolbar-height);
   padding: 0 var(--spacing);
   border-bottom: 1px solid var(--border);
   background: var(--bg-subtle);
   box-shadow: var(--toolbar-shadow);
   flex: none;
+  /* ⚠️ 这两行是给菜单弹层用的。工具条在 DOM 里排在 `.app-body` **前面**，
+     不提升层级的话，展开的菜单会被下面的侧栏和正文盖住一截。 */
+  position: relative;
+  z-index: 30;
 }
 
 .toolbar-brand {
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--fg-muted);
-  padding-right: var(--spacing);
+  padding-right: 2px;
 }
 
-.toolbar-actions {
+/* ── 菜单栏 ───────────────────────────────────────────────────────────── */
+
+.menubar {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 1px;
+}
+
+/* 弹层的定位基准。**每栏各自一个**，这样弹层从自己那一栏的左边缘展开。 */
+.menu-root {
+  position: relative;
+}
+
+.menu-title {
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.menu-title:hover {
+  background: var(--bg-hover);
+}
+
+/* 菜单开着时那一栏保持高亮——不然鼠标移开就不知道自己刚才点的是哪个。 */
+.menu-title-open {
+  background: var(--bg-active);
+}
+
+.menu-popup {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 40;
+  min-width: 208px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.menu-item:disabled {
+  color: var(--fg-faint);
+  cursor: default;
+}
+
+/* 危险动作（删除…）只在**能用**时画红；灰掉的时候红会显得还能点。 */
+.menu-item-danger:not(:disabled) {
+  color: var(--danger);
+}
+
+/* 勾选列。不管勾没勾都占同样宽度——否则勾一下整行文字会往右挪。 */
+.menu-check {
+  flex: none;
+  width: 12px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.menu-label {
+  flex: 1;
+}
+
+.menu-accel {
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--fg-faint);
+}
+
+.menu-item:disabled .menu-accel {
+  opacity: 0.65;
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
 
 /* ── 按钮 ─────────────────────────────────────────────────────────────── */
@@ -651,6 +757,9 @@ button {
   line-height: 1.6;
   /* 长文件名/长路径不要撑破框 */
   overflow-wrap: anywhere;
+  /* 消息里的换行要**真的换行**。它是个 `<p>`，默认会把 `\n` 折成空格——
+     「关于 Nota」那条消息就是靠换行分行的。 */
+  white-space: pre-line;
 }
 
 .confirm-actions {

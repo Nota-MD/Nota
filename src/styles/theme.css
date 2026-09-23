@@ -39,15 +39,18 @@
 
 :root,
 [data-ui-mode="light"] {
-  --bg: #ffffff;
-  --bg-subtle: #f6f7f9;
-  --bg-raised: #ffffff;
-  --bg-hover: rgba(0, 0, 0, 0.045);
-  --bg-active: rgba(0, 0, 0, 0.075);
-  --fg: #1d1d1f;
-  --fg-muted: #6b6f76;
+  /* ⚠️ 每个颜色都写成 `var(--nota-bridge-X, 默认值)` 的形状。
+     有 Typora 主题时桥接值接管（末尾那一节），没有时用逗号后面这个默认值。
+     **别把默认值删掉**——`--nota-bridge-*` 平时根本没定义，删了就全白。 */
+  --bg: var(--nota-bridge-bg, #ffffff);
+  --bg-subtle: var(--nota-bridge-sidebar, #f6f7f9);
+  --bg-raised: var(--nota-bridge-bg, #ffffff);
+  --bg-hover: var(--nota-bridge-hover, rgba(0, 0, 0, 0.045));
+  --bg-active: var(--nota-bridge-active, rgba(0, 0, 0, 0.075));
+  --fg: var(--nota-bridge-fg, #1d1d1f);
+  --fg-muted: var(--nota-bridge-muted, #6b6f76);
   --fg-faint: #9aa0a6;
-  --border: rgba(0, 0, 0, 0.11);
+  --border: var(--nota-bridge-border, rgba(0, 0, 0, 0.11));
   --border-strong: rgba(0, 0, 0, 0.2);
   --accent: #2a5e9e;
   --accent-fg: #ffffff;
@@ -55,8 +58,8 @@
   --warn: #b7791f;
   --success: #2f855a;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  --doc-bg: #ffffff;
-  --doc-fg: #23272e;
+  --doc-bg: var(--nota-bridge-bg, #ffffff);
+  --doc-fg: var(--nota-bridge-fg, #23272e);
 
   /* 代码高亮的 token 色。**归 mode 管，不归 style 管**——底色和前景是一套的，
      只换一半会得到一个"浅底配浅字"读不了的代码块。 */
@@ -70,15 +73,15 @@
 }
 
 [data-ui-mode="dark"] {
-  --bg: #1b1d21;
-  --bg-subtle: #23262b;
-  --bg-raised: #2a2e34;
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-active: rgba(255, 255, 255, 0.1);
-  --fg: #e6e8eb;
-  --fg-muted: #a3a9b3;
+  --bg: var(--nota-bridge-bg, #1b1d21);
+  --bg-subtle: var(--nota-bridge-sidebar, #23262b);
+  --bg-raised: var(--nota-bridge-bg, #2a2e34);
+  --bg-hover: var(--nota-bridge-hover, rgba(255, 255, 255, 0.06));
+  --bg-active: var(--nota-bridge-active, rgba(255, 255, 255, 0.1));
+  --fg: var(--nota-bridge-fg, #e6e8eb);
+  --fg-muted: var(--nota-bridge-muted, #a3a9b3);
   --fg-faint: #767d88;
-  --border: rgba(255, 255, 255, 0.12);
+  --border: var(--nota-bridge-border, rgba(255, 255, 255, 0.12));
   --border-strong: rgba(255, 255, 255, 0.22);
   --accent: #5b9bd5;
   --accent-fg: #10131a;
@@ -86,8 +89,8 @@
   --warn: #e0b04a;
   --success: #6ec08a;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
-  --doc-bg: #1b1d21;
-  --doc-fg: #dfe3e8;
+  --doc-bg: var(--nota-bridge-bg, #1b1d21);
+  --doc-fg: var(--nota-bridge-fg, #dfe3e8);
 
   /* 同上的暗色一份。⚠️ 暗色下**不能靠调透明度**去压暗注释——
      代码块底色本来就和页面底色接近，透明度一变就成了糊的。 */
@@ -147,4 +150,38 @@
   --spacing: 7px;
   --toolbar-shadow: none;
   --btn-font-weight: 400;
+}
+
+/* ── 轴三 → 外壳的桥接（Typora 主题变量）──────────────────────────────────
+ *
+ * Typora 主题把配色定义成一组自定义属性（`--bg-color`、`--text-color`…），
+ * 定义在 `:root` 上。`styles/typora-theme.ts` 在改造主题时会把这些**变量**
+ * 提升到全局（其余规则一律收拢进 `#write`），于是这里就能消费它们——
+ * 换主题时侧栏、边框、正文底色跟着一起变，而不是只有正文变、外壳还是原来那套。
+ *
+ * ⚠️ **只桥接"成对"的变量。** 背景和前景都是同一套主题挑的，对比度天然成立；
+ * 而 `--accent`（强调色）**故意不桥接**：Typora 拿它当链接色，我们拿它当按钮底色，
+ * 用法不同。硬桥过来的后果是"浅底配浅字"这种读不了的组合，而且没有任何
+ * 纯 CSS 手段能在运行时判对比度（`color-contrast()` 至今没有实现）。
+ * 强调色留在我们自己的明暗两套里，是更安全的选择。
+ *
+ * ⚠️ `--nota-bridge-*` 平时**根本不定义**——只有 `html[data-doc-theme]` 存在时才有值。
+ * 上面那两个颜色块里的 `var(--某桥接值, 默认值)` 就是靠这一点在两种状态间切换的。
+ */
+html[data-doc-theme] {
+  --nota-bridge-bg: var(--bg-color);
+  --nota-bridge-fg: var(--text-color);
+  --nota-bridge-sidebar: var(--side-bar-bg-color);
+  --nota-bridge-muted: var(--control-text-color);
+  --nota-bridge-border: var(--window-border);
+  --nota-bridge-hover: var(--item-hover-bg-color);
+  --nota-bridge-active: var(--active-file-bg-color);
+}
+
+/* 选中文字的底色。**故意不给 fallback**：`var()` 取不到值时整条声明会失效，
+   于是浏览器默认的选中色保留下来。给个 `transparent` 反而会让选中**看不见**。 */
+html[data-doc-theme] .editor-mount .ProseMirror::selection,
+html[data-doc-theme] .editor-mount .ProseMirror *::selection {
+  background: var(--select-text-bg-color);
+  color: var(--select-text-font-color);
 }

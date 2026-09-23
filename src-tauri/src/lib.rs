@@ -17,6 +17,7 @@ pub mod paths;
 pub mod plugin;
 pub mod settings;
 pub mod state;
+pub mod themes;
 
 use std::sync::{Arc, Mutex};
 
@@ -87,6 +88,10 @@ pub fn run() {
             commands::workspace::nota_workspace_tree,
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
+            commands::theme::nota_themes_list,
+            commands::theme::nota_theme_read,
+            commands::theme::nota_theme_asset,
+            commands::theme::nota_themes_dir,
             commands::plugin::nota_plugins_list,
             commands::plugin::nota_plugin_set_enabled,
             commands::plugin::nota_plugin_call,

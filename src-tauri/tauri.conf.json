@@ -35,16 +35,31 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "rpm", "appimage"],
+    "targets": "all",
+    "resources": {
+      "../plugins": "plugins"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.png"
+      "icons/icon.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
     ],
-    "category": "Office",
+    "category": "Productivity",
     "shortDescription": "所见即所得的 Markdown 编辑器",
     "longDescription": "Nota 是一款对标 Typora 的所见即所得 Markdown 编辑器，带 Lua 插件系统。",
+    "windows": {
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true,
+        "installMode": "currentUser"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
     "linux": {
       "deb": {
         "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0"]

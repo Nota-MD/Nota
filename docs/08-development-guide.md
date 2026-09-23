@@ -378,6 +378,61 @@ export type UiStyle = "auto" | "adwaita" | "macos" | "yaru" | "windows";
 
 ---
 
+## 5b. 加一份文档主题（Typora 格式）
+
+⚠️ **和 §5 完全不是一回事**：§5 加的是**我们自己写的**一套外观风格（要动 Rust 枚举、
+CSS 变量、TS 联合类型三处）；这一节加的是**用户那边的一份 CSS 文件**——
+**一行代码都不用改**。
+
+### 放哪儿
+
+三个目录，**按顺序**（靠前的盖掉同名的）：
+
+| 目录 | 谁的 |
+|---|---|
+| `~/.config/nota/themes/` | **用户自己的**（菜单栏「主题 → 打开主题文件夹…」会建出来） |
+| `~/.config/Typora/themes/` | Typora 装的 |
+| `~/.var/app/io.typora.Typora/config/Typora/themes/` | Typora flatpak 的 |
+
+### 长什么样（就是 Typora 的形状）
+
+```
+themes/
+├── night.css
+└── night/               # 同名目录：字体、图片
+    ├── open-sans.woff2
+    └── bg.png
+```
+
+`night.css` 里按 **相对** 路径引用：`url('./night/open-sans.woff2')`。
+也支持 `@import`（最多 8 层，防环）。
+
+⚠️ **`@include-when-export` 会被删掉**：那段是"导出时才生效"的规则，我们还没有导出，
+留着它会污染正文，所以 `typora-theme.ts` 用一条正则把它整条去掉（`INCLUDE_WHEN_EXPORT_RE`）。
+⚠️ 同理，**解析器不认识的 at 规则一律丢掉**（`@charset` 之类）——
+只有 `@media`（下钻）、`@font-face` / `@keyframes` / `@supports` / `@page`（原样保留）
+这几种是过的。
+
+### 为什么不用改代码
+
+`typora-theme.ts` 那四步（展开 `@import` → `url()` 换成 `data:` → 浏览器解析 →
+收拢进 `#write`）是**通用的**，它不认识任何具体主题名。所以：
+丢一个 `.css` 进去 → **重启 Nota** → 菜单栏「主题」里就有了。
+⚠️ **必须重启**：主题清单只在启动时拉一次（`docs/07` 第 41 项）。
+
+### 要验什么（这一步别人替不了）
+
+| 看什么 | 怎么看 |
+|---|---|
+| 版式对不对 | 拿一份**有标题、列表、引用、代码块、表格**的文档过一遍 |
+| 字体真的加载了 | ⚠️ **别拿 `github` 验**——它的第一条 `@font-face` 是 `local('Open Sans Regular')`，容器里装着 Open Sans，字体压根不会被请求。要验就用**去掉了 `local()` 的探针主题** |
+| 外壳有没有被带歪 | 换完主题看侧栏/顶栏/标签栏——它们只该跟着**提升上来的那几个变量**变（`theme.css` 末尾那段桥接），不该散架 |
+
+⚠️ **主题里给我们没有的 DOM 写的规则是死规则**（`#typora-sidebar`、`.md-toc`…），
+不报错、不生效——那是**边界**不是 bug，别去"修"它。
+
+---
+
 ## 6. 新增一个内置插件
 
 完整规格在 `docs/11-writing-a-plugin.md`（目录形状、清单逐栏、能力表）与
@@ -406,26 +461,25 @@ plugins/<名字>/
 
 逐栏说明、默认值、校验规则、写错会得到什么错误，全在 `docs/11` §2。
 
-### 第 3 步 · 构建接线：⚠️ **打包那半目前是断的**
+### 第 3 步 · 构建接线：✅ 已接好（BUG-11，2026-09-23 修并验过）
 
 **开发态不用做任何事**：debug 构建会自动扫仓库根的 `plugins/`
 （`paths.rs:53-60`，`cfg!(debug_assertions)` 那条分支），
 所以放好目录、重启应用就能看到。
 
-⚠️ **打包态不行。** `builtin_plugins_dirs()` 在打包后走的是
-`resource_dir.join("plugins")`（`paths.rs:48-50`），而
-**`src-tauri/tauri.conf.json` 的 `bundle` 段里没有 `resources` 键**——
-`plugins/` 不会被拷进资源目录；而 release 构建又**不走** `cfg!(debug_assertions)`
-那条分支。两件事合起来的结果是：**装出来的包里一个内置插件都没有**，
-而界面上不会有任何提示，只会在侧栏「插件」页看到一片空。
+**打包态**现在也通了：`bundle.resources` 里有一条
+`{"../plugins": "plugins"}`，bundler 会把整棵目录拷进资源目录的 `plugins/`
+（`resource_dir.join("plugins")` 就是 `paths::builtin_plugins_dirs()` 打包后看的地方）。
 
-修法（还没做）：
+⚠️⚠️ **这条之所以单列一段，是因为它踩了三版才写对**（详见 `docs/06` §2.4）。
+要加**新的**资源目录时照抄这一条的形状，两条硬规矩：
 
-1. 在 `tauri.conf.json` 的 `bundle` 段加 `"resources": ["../plugins/"]`（或逐个插件目录）；
-2. 重新打包，确认资源目录下真有 `plugins/`；
-3. 同批改 `docs/06`（`tauri.conf.json → 01,06`，`docs/09` §2.3）。
+1. **键写目录，别写 glob**。glob 那一支只取 `file_name()`，会把树拍平
+   （两个插件的 `main.lua` 会互相盖掉）；数组形式则会把 `..` 变成 `_up_`。
+2. **加完必须真拆一个包看**——`ar x <包>.deb && tar tf data.tar.gz`。
+   开发期走的是仓库目录，**"跑起来没问题"完全证明不了这件事**。
 
-⚠️ 这条**不影响开发**，所以极容易漏——但它是"发布出去的版本没插件"这种级别的事。
+⚠️ 这属于 `docs/09` §2.3 的 `src-tauri/tauri.conf.json → 01,06`，改完同批改文档。
 
 ### 第 4 步 · 怎么测它（不靠开窗）
 

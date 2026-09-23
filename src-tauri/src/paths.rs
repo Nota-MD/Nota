@@ -36,6 +36,40 @@ pub fn user_plugins_dir() -> Result<PathBuf> {
     Ok(data_dir()?.join("plugins"))
 }
 
+/// 我们自己的主题目录（`~/.config/nota/themes`）。
+///
+/// ⚠️ 这个目录**用到时才建**，所以这里只算路径不建目录——
+/// 首次启动就凭空造一个空目录，用户会以为里面该有什么东西。
+pub fn user_themes_dir() -> Result<PathBuf> {
+    Ok(config_dir()?.join("themes"))
+}
+
+/// 所有主题目录，**按优先级从高到低**。同名主题以靠前的为准。
+///
+/// 后两个是 Typora 的安装位置——第 3 条是 **flatpak** 那份，
+/// 不是备胎：这台机器上 Typora 就是 flatpak 装的。
+/// 路径按 XDG 算（`~/.config` 只是默认值），别写死字符串。
+pub fn theme_dirs() -> Vec<(PathBuf, &'static str)> {
+    let mut out = Vec::new();
+
+    if let Ok(mine) = user_themes_dir() {
+        out.push((mine, "nota"));
+    }
+
+    if let Some(cfg) = dirs::config_dir() {
+        out.push((cfg.join("Typora/themes"), "typora"));
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        out.push((
+            home.join(".var/app/io.typora.Typora/config/Typora/themes"),
+            "typora-flatpak",
+        ));
+    }
+
+    out
+}
+
 /// 内置插件目录。
 ///
 /// 开发时是仓库根的 `plugins/`（改完 Lua 存盘即生效，不用重编）；

@@ -63,7 +63,26 @@
   只会给你一个少了字段的对象，然后在某个 `.map` 上炸掉。
 
 CSP **只写在 `src-tauri/tauri.conf.json`** 里，`index.html` 里不许再写一份
-（两个策略会同时生效并互相冲突）。
+（两个策略会同时生效并互相冲突）。现在的策略是：
+
+```
+default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:;
+style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self';
+worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost
+```
+
+两处**不是随手写的**，改之前先看这里：
+
+- **`asset:` / `http://asset.localhost`**（在 `img-src` 里）配套的是
+  `capabilities` 里的 `assetProtocol` 开关——⚠️ **它只服务图片**。
+  主题里的字体**走的是 `data:`**，不走 asset，理由是实测出来的：
+  wry 注册 `asset:` 时只登记了 `register_uri_scheme_as_secure`、
+  **没登记** `register_uri_scheme_as_cors_enabled`，而 `@font-face` 发的是
+  CORS 模式的请求，结果是 `document.fonts.load()` 抛 `NetworkError`、字体静默退回
+  系统字体。判据与实测过程记在 `src-tauri/src/themes.rs` 顶上。
+  ⚠️ 所以**别为了"统一"把 `font-src` 加回 `asset:`**——那一条是死的。
+- **`style-src` 里的 `'unsafe-inline'`** 是主题功能的**前提**：主题 CSS 是运行时
+  拼出来再注入 `<style>` 的（`styles/typora-theme.ts`），没有它主题一律不生效。
 
 ---
 
@@ -170,13 +189,13 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 
 ### 通道 A：前端 → 后端（`invoke` 命令）
 
-注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 24 个**。
+注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 28 个**。
 所有调用的唯一出口是 `src/bridge/ipc.ts`——组件里不许直接 `invoke()`。
 
 ⚠️ **这个数是数出来的**（`sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs | grep -c nota_`），
 改过注册表就重数一遍。它已经错过一次：BUG-13 那批加了 `nota_plugin_panels` /
-`nota_plugin_menus` 两条、本批又加了 `nota_doc_settle`，而表里一直写着 21
-——**加命令时最容易漏的就是这个总数和它上面那个分组小标题**。
+`nota_plugin_menus` 两条、之后又加了 `nota_doc_settle`，而表里一直写着 21。
+**加命令时最容易漏的就是这个总数和它上面那个分组小标题。**
 
 **文档（11 个）**
 
@@ -209,6 +228,19 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 |---|---|
 | `nota_settings_get` | `() -> Settings` |
 | `nota_settings_set` | `(settings: Settings)`，**整份替换**并落盘，落盘失败回滚内存 |
+
+**主题（4 个）**
+
+| 命令 | 签名要点 |
+|---|---|
+| `nota_themes_list` | `() -> Vec<ThemeInfo>`，扫遍所有主题目录；**一个都没装也不算错**，返回空表 |
+| `nota_theme_read` | `(path) -> String`，一份主题 CSS 的**文本**。⚠️ 返回文本而不是渲染结果——改造（收拢到 `#write`、内联 url）在**前端**做，见 `05` |
+| `nota_theme_asset` | `(path) -> String`，读字体/图片，还回来的是 **data: URL 不是路径**。理由是 WebKitGTK 上 asset 协议取不回字体（`themes.rs` 顶上那段实测）。⚠️ 调用方要把它**原样塞进 `url("…")`**，别当路径处理 |
+| `nota_themes_dir` | `() -> String`，**建好**（不存在就建）并返回我们自己的主题目录，给「打开主题文件夹」用 |
+
+⚠️ 这四条都**只认主题目录里的路径**——`themes.rs::check_scope()` 会拿
+`paths::theme_dirs()` 逐个 `starts_with` 比对，读主题目录之外的文件一律拒绝。
+改 `theme_dirs()` 等于同时改了这道围栏。
 
 **插件（6 个）**
 
@@ -404,6 +436,10 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
   `id` 是清单里声明的、插件之间互相引用的名字。用目录名去重会出现"改个文件夹名就多出
   一份插件"这种事。debug 构建下 `builtin_plugins_dirs` 额外返回仓库根的 `plugins/`，
   所以改完 Lua 存盘即生效，不用重编。
+- ⚠️ **打包后那个资源目录里的 `plugins/` 是 `bundle.resources` 拷进去的**，
+  它**不是**自动的：`tauri.conf.json` 里那条 `{"../plugins": "plugins"}`
+  必须**键写目录**（写 glob 会被拍平成一层文件，两个插件的 `main.lua` 互相盖掉）。
+  这条只有**真拆开一个包**才验得了，开发期看不出来——完整经过见 `docs/06` §2.4。
 
 ### 通道名归一化（`plugin::manifest::channel_id()`）
 
@@ -437,24 +473,35 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 |---|---|---|
 | `docs` | `Document[]` | 标签栏、状态栏、`activeDoc` 的推算 |
 | `activeId` | `DocId \| null` | 决定渲染 `EditorPane` 还是 `Home` |
-| `settings` | `Settings \| null` | 主题、`content_width`、`confirm_unsaved` |
+| `settings` | `Settings \| null` | 外观三轴、`content_width`、`confirm_unsaved`、`document_theme` |
 | `workspace` | `string \| null` | 侧栏文件树、`refreshTree` 的开关 |
 | `tree` | `TreeNode[]` | 侧栏文件树 |
-| `plugins` | `PluginInfo[]` | 侧栏「插件」页、`Home` 的插件状态列 |
+| `plugins` / `panels` | `PluginInfo[]` / `PluginPanel[]` | 侧栏「插件」页、`Home` 的插件状态列、右侧插件栏 |
+| `themes` | `ThemeInfo[]` | 菜单栏「主题」那一栏。**启动时拉一次** |
 | `toasts` | `Toast[]` | `Toasts` 组件 |
+| `dockOpen` / `sidebarOpen` / `sidebarTab` / `statusBarOpen` | `bool` / `bool` / `SidebarTab` / `bool` | 界面三块的开合，以及左栏当前是哪一页 |
+| `confirmReq` | `{…} \| null` | 自绘确认框的受控状态（`ui/ConfirmDialog.tsx`），配一个 `confirmResolve` ref 存 Promise 的 resolve |
 
-外加一个 `editorRef: Ref<EditorPaneHandle>`——它是 App 伸手进编辑器内部**唯一**的通道，
-只有两个方法：`getMarkdown()`（存盘前强制同步用）和 `setMarkdown()`（插件改了文档时用）。
+外加一个 `editorRef: Ref<EditorPaneHandle>`——它是 App 伸手进编辑器内部**唯一**的通道：
+`getMarkdown()`（存盘前强制同步用）、`setMarkdown()`（插件改了文档时用），
+外加 `ui/commands.ts` 里那些菜单/快捷键动作转发过去的**编辑器命令**（见 `05`）。
 
-### 五个 effect 各自干什么
+⚠️ `sidebarOpen` / `sidebarTab` / `statusBarOpen` / `dockOpen` 是**受控的**：
+状态全在 `App.tsx`，`Sidebar` / `PluginDock` / `StatusBar` 自己不持有。
+所以菜单栏（在 `App.tsx` 里渲染）能直接改它们——这是"快捷键能开某个侧栏页"
+（Ctrl+Shift+1 大纲、Ctrl+Shift+3 文件树）能实现的原因。
+
+### 几个 effect 各自干什么
 
 | effect | 依赖 | 干什么 |
 |---|---|---|
-| 启动 | `[refreshDocs, toast]` | `Promise.all` 拉 settings / workspace / plugins → `refreshDocs()` → 调一次 `api.frontendReady()`（失败只 `console.warn`）。用 `alive` 标志挡住卸载后的 setState |
-| 事件订阅 | `[toast, activeId]` | 订 `nota:notify`（→ toast）与 `nota:document-changed`（→ 活动文档且 `origin === "plugin"` 时整篇覆盖编辑器）。返回时逐个退订 ⚠️ 见下面遗留项 |
-| 主题 | `[settings]` | `settings` 有值就 `applyTheme(settings)` |
+| 启动 | `[refreshDocs, toast]` | `Promise.all` 拉 settings / workspace / plugins / panels / themes → `refreshDocs()` → 调一次 `api.frontendReady()`（失败只 `console.warn`）。用 `alive` 标志挡住卸载后的 setState |
+| 事件订阅 | `[toast, refreshDocs]` | 订 `nota:notify`（→ toast）与 `nota:document-changed`（→ 活动文档且 `origin === "plugin"` 时整篇覆盖编辑器；**改的不是当前那份**就退而 `refreshDocs()`，否则用户切回去时会拿旧文本重建、把插件的改动覆盖掉）。返回时逐个退订。⚠️ 依赖里**没有 `activeId`**——它在回调里读 `activeIdRef`，所以这个 effect 只跑一次 |
+| 活动文档上报 | `[activeId, toast]` | 写 `activeIdRef` 并 `api.doc.setActive(id)`，让后端的"活动文档"跟上用户真正在看的那个标签（BUG-6） |
+| 外观 | `[settings]` | `settings` 有值就 `applyTheme(settings)` |
+| 文档主题 | `[settings?.document_theme, themes]` | 找到同名主题就 `applyDocTheme()`，空名/找不到就撤掉样式 |
 | 重取文件树 | `[refreshTree]` | 而 `refreshTree` 依赖 `workspace`，所以工作区一变就重取 |
-| 快捷键 | `[activeId, saveDoc, newDoc, openViaDialog, closeDoc]` | `window` 上听 `keydown`：Ctrl+N 新建、Ctrl+O 打开、Ctrl+S 保存、Ctrl+Shift+S 另存为、Ctrl+W 关标签 |
+| 快捷键 | `[...回调]` | `window` 上听 `keydown`：Ctrl+N 新建、Ctrl+O 打开、Ctrl+S 保存、Ctrl+Shift+S 另存为、Ctrl+W 关标签，以及 §快捷键表里的那些编辑命令 |
 
 ### 三条主链路
 
@@ -488,13 +535,11 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 
 | 位置 | 现象 | 原因 |
 |---|---|---|
-| `applyTheme` 的返回值 | `App.tsx` 里 `if (settings) applyTheme(settings);` —— **退订函数被丢掉了**。`ui_mode = auto` 时每次 `settings` 变化都会再挂一个 `matchMedia` 监听，旧的从不移除 | effect 没有 `return` 清理函数。功能上不致命（`paint()` 是幂等的），但监听器会累积 |
-| 事件订阅 effect 依赖 `activeId` | `activeId` 一变就整体退订再重订。重订期间到达的事件会被丢掉 | 为了在回调里读到最新的 `activeId` 而把 `activeId` 写进依赖。要消掉得用 ref 存 `activeId` |
-| 切标签 | `TabBar.onSelect` 只 `setActiveId(id)`，**从不调 `api.doc.setActive`** | 于是后端的"活动文档"只被 `new`/`open`/`close` 改过。插件调 `nota.document.get_text` 读到的**不是用户在看的那个标签**，而是最后一次新建/打开的那份 ⚠️ |
 | `applyTheme` 的 `detectStyle()` | `guessDesktop()` 恒返回空串，所以 `ui_style = auto` **永远落到 Adwaita** | WebKitGTK 不把桌面环境告诉 JS；等接上 XDG portal 的 `color-scheme` 再换 |
-| 三条外观轴 | 只有 CSS 与设置项，**没有切换界面**（`docs/07` 第 11 项） | 设置项存在，但没有 UI 去改；`Sidebar`/`Home` 里没有设置入口 |
-| `window.confirm` | `closeDoc` 里关掉有未保存改动的文档时用的是**原生 `confirm`** | 代码里注明了"本轮先用原生确认框"。⚠️ 注意它与 `Toasts.tsx` 的口径不一致——那边明确避开 `alert` 是因为阻塞 WebView 会打断输入法组合态，`confirm` 同样阻塞。自己画的对话框排在界面那一轮 |
+| 设置入口 | 只有 CSS 与设置项，**还没有一个"设置"面板**（`docs/07` 第 10/11 项） | 菜单栏「文件 → 偏好设置…」占着位置但是**灰的**（`App.tsx` 的 `menuHandlers` 里没有 `file.preferences`）。设置项存在，改它得手改 `settings.toml` |
 | 打开对话框的后缀 | `openViaDialog` 的过滤器是 `md/markdown/mdown/mkd/txt`，**没有 `mdx`**；而后端 `is_markdown()` 认 `.mdx` | 能打开（可以把 mdx 文件拖进来或从文件树点），只是对话框里筛不出来。这两张表该对齐 |
+| 主题文件的 own 目录 | 主题**来源**标出来了（`nota` / `typora` / `typora-flatpak`），但 `~/.config/nota/themes` 里放的主题**没有单独的来源标记** | 三种来源里前两种是"别人的"，最后一种是我们自己的，界面上暂时没必要区分 |
+| 点正文下方空白不聚焦 | 空文档里 ProseMirror 只有一行高，点到下面那片内边距上**编辑器不聚焦**，接着打字什么都不会发生 | `.editor-mount .milkdown` 的 `padding: 48px 56px 120px` 是拖到 `.milkdown` 上的，而可编辑区在它内层。要修得把命中区域撑到整片，见 BUG-15 |
 
 ---
 

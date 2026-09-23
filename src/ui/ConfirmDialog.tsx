@@ -26,10 +26,24 @@ interface Props {
   confirmLabel?: string;
   /** 危险动作（丢改动、删东西）时把确认键画红。 */
   danger?: boolean;
+  /**
+   * 只报信、不问事时把「取消」藏掉（比如「关于 Nota」）。
+   *
+   * ⚠️ 这种情况下面两个按钮是**同一个答案**，留着「取消」会让人以为
+   * 关掉它和点确定有区别——一个不存在的选择比少一个按钮更让人犹豫。
+   */
+  hideCancel?: boolean;
   onAnswer: (ok: boolean) => void;
 }
 
-export function ConfirmDialog({ title, message, confirmLabel, danger, onAnswer }: Props) {
+export function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  danger,
+  hideCancel,
+  onAnswer,
+}: Props) {
   const okRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -66,9 +80,11 @@ export function ConfirmDialog({ title, message, confirmLabel, danger, onAnswer }
         <h2 className="confirm-title">{title}</h2>
         <p className="confirm-message">{message}</p>
         <div className="confirm-actions">
-          <button type="button" className="btn" onClick={() => onAnswer(false)}>
-            取消
-          </button>
+          {!hideCancel && (
+            <button type="button" className="btn" onClick={() => onAnswer(false)}>
+              取消
+            </button>
+          )}
           <button
             ref={okRef}
             type="button"

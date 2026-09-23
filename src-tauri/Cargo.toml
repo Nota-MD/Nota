@@ -29,6 +29,8 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
+# 主题资源内联成 data: URL 要用。见 `src/themes.rs` 顶上"为什么字体也不走 asset 协议"。
+base64 = "0.22"
 
 # ── Lua 插件运行时 ────────────────────────────────────────────────────────
 # vendored：把 Lua 5.4 源码一起编进来，不依赖系统 liblua（容器里也没有）。

@@ -17,16 +17,18 @@
 | 文件 | 一句话 |
 |---|---|
 | `main.rs` | 进程入口，`nota_lib::run()` 的一层壳 |
-| `lib.rs` | 建 Tauri、`setup()` 里按顺序启动、21 个命令的注册表、窗口销毁时卸载插件 |
+| `lib.rs` | 建 Tauri、`setup()` 里按顺序启动、28 个命令的注册表、窗口销毁时卸载插件 |
 | `error.rs` | `NotaError`，中文 Display，自定义 `Serialize` 过 IPC |
-| `paths.rs` | XDG 目录与插件目录的**唯一**算法所在地 |
+| `paths.rs` | XDG 目录、插件目录、**主题目录**的**唯一**算法所在地 |
 | `state.rs` | `AppState` 四个句柄 + 锁序不变量 |
 | `settings.rs` | `Settings` 与三条互相独立的外观轴，kebab-case 落盘 |
+| `themes.rs` | 主题的发现与读盘：`ThemeInfo` / `discover()` / `read_css()` / `read_asset()` / `user_themes_dir()` / 围栏 `check_scope()`。⚠️ 顶上那段"为什么字体也不走 asset 协议"是实测判据 |
 | `document/mod.rs` | `DocId` / `Document` / `DocumentStore` / `derive_title()` |
-| `commands/mod.rs` | 只是四个子模块的声明 + 命令层的分工说明（无函数） |
+| `commands/mod.rs` | 只是**五**个子模块的声明 + 命令层的分工说明（无函数） |
 | `commands/document.rs` | `nota_doc_*` 十个命令 |
 | `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode` + 文件树遍历 |
 | `commands/settings.rs` | `nota_settings_get/set` |
+| `commands/theme.rs` | `nota_themes_list` / `nota_theme_read` / `nota_theme_asset` / `nota_themes_dir` |
 | `commands/plugin.rs` | `nota_plugins_list` / `set_enabled` / `call` / `find_command` / `panels` / `menus` |
 | `plugin/mod.rs` | `PluginHost`：发现 → 加载 → 派发 → 卸载；`PluginInfo` / `PluginPanel` / `PluginMenuItem` 快照 |
 | `plugin/manifest.rs` | `Capability` / `PluginMeta` / `Manifest` / `channel_id()` |
@@ -49,8 +51,11 @@
 | `editor/task-list.ts` | 任务项复选框：`- [x]` 画方框、点它勾上、回车切出来的新项**不继承勾** |
 | `editor/code-block.ts` | 代码块的 NodeView（语言选择器 / 复制 / 折叠）。**全仓唯一一处 `$view`** |
 | `styles/applyTheme.ts` | 把三条外观轴写到 `<html>` |
+| `styles/typora-theme.ts` | **Typora 主题兼容的核心**：展开 `@import` → `url()` 内联成 data: URL → 用 `CSSStyleSheet` 解析 → 收拢到 `#write` + 把 `:root` 变量提升到全局 |
+| `ui/MenuBar.tsx` | 菜单栏（七栏）。⚠️ **只管画**，条目表在 `ui/commands.ts`，灰不灰由 `App.tsx` 的 `menuHandlers` 决定 |
+| `ui/commands.ts` | 菜单的**条目表**（逐条抄自 Typora）+ 快捷键的显示文本。⚠️ 里面**故意没有** `implemented` 标志位 |
 | `ui/EditorPane.tsx` | 编辑器挂载点与去抖同步 |
-| `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲） |
+| `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲）。⚠️ 开合与当前页都是 `App.tsx` 给的**受控**状态 |
 | `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 已装插件清单 |
 | `ui/ConfirmDialog.tsx` | 自绘确认框（替掉 `window.confirm`）。**受控**：开与答案都由 `App.tsx` 给 |
 | `ui/Home.tsx` | 没有文档时那一屏 |
@@ -66,7 +71,8 @@
 
 | 有 `#[cfg(test)]` 的文件 | 测试数 |
 |---|---|
-| `document/mod.rs` | 9 |
+| `document/mod.rs` | 12 |
+| `themes.rs` | 7 |
 | `lua/api/git.rs` | 6 |
 | `lua/api/ui.rs` | 6 |
 | `plugin/manifest.rs` | 5 |
@@ -76,15 +82,17 @@
 | `settings.rs` | 3 |
 | `commands/workspace.rs` | 3 |
 
-合计 **45 个 Rust 单元测试**。其余 Rust 文件没有测试；前端**没有任何测试**
+合计 **55 个 Rust 单元测试**。其余 Rust 文件没有测试；前端**没有任何测试**
 （`package.json` 里没有测试运行器，跑的是 `tsc --noEmit` + `vite build`）。
 `tests/` 目录下只有一个空的 `fixtures/`，还没有 Rust 集成测试。
 
 ⚠️ **总数只在 `docs/06` 记数**（那里写着一份"这 N 条到底钉住了什么"的说明）。
 本表列**逐文件**明细，是为了回答"改这个文件时哪几条会红"。
-⚠️ **本表曾经漏掉两个文件、总数停在 32**（漏了 `lua/api/mod.rs` 与 `lua/mod.rs`，
-而 `docs/06` 已经写到 40）——**两张表都是手抄的，这就是它们会分叉的原因**。
-2026-09-22 按 `grep -c '#\[test\]'` 实测重排了一遍；**下次改完测试记得两边都跑一次数**。
+⚠️ **本表两次落后于真值**：一次漏掉两个文件、总数停在 32（漏了 `lua/api/mod.rs`
+与 `lua/mod.rs`，而 `docs/06` 已经写到 40）；2026-09-23 又停在 45（漏了 `themes.rs` 那 7 条）。
+**两张表都是手抄的，这就是它们会分叉的原因。** 每次都是按
+`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 重排的——
+**改完测试记得两边都跑一次数**，别只改一边。
 
 ---
 
@@ -126,6 +134,7 @@ pub mod paths;
 pub mod plugin;
 pub mod settings;
 pub mod state;
+pub mod themes;
 ```
 
 ### `pub fn run()`
@@ -143,7 +152,8 @@ pub mod state;
      `eprintln!("[nota] 载入 {} 个插件", plugins.count());`
    - `app.manage(AppState { documents, settings, workspace, plugins: Mutex::new(plugins) })`
    - `Ok(())`
-3. `.invoke_handler(tauri::generate_handler![ …21 项… ])`，前 20 项是 `commands::*` 里的命令，
+3. `.invoke_handler(tauri::generate_handler![ …28 项… ])`，前 27 项是 `commands::*` 里的命令
+   （document 11 / workspace 4 / settings 2 / **theme 4** / plugin 6），
    最后一项是本文件里的 `nota_frontend_ready`
 4. `.on_window_event(|window, event| …)`：`WindowEvent::Destroyed` 时
    `window.try_state::<AppState>()` → `state.plugins.lock()` → `host.unload_all()`。
@@ -235,7 +245,7 @@ fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S:
 
 ---
 
-## `src-tauri/src/paths.rs`（79 行）
+## `src-tauri/src/paths.rs`（113 行）
 
 目录布局。**所有路径只在这里算**，别处一律调这里取——散落的 `dirs::config_dir()`
 是将来"换存法"时最先烂掉的地方。
@@ -252,9 +262,29 @@ XDG 目录下的子目录名。
 | `pub fn data_dir() -> Result<PathBuf>` | `$XDG_DATA_HOME/nota`（一般 `~/.local/share/nota`） | 同上 |
 | `pub fn settings_file() -> Result<PathBuf>` | `config_dir()?.join("settings.toml")` | 透传 `config_dir` 的错 |
 | `pub fn user_plugins_dir() -> Result<PathBuf>` | `data_dir()?.join("plugins")`，用户自装插件目录，也是插件状态的落点 | 透传 `data_dir` 的错 |
+| `pub fn user_themes_dir() -> Result<PathBuf>` | `config_dir()?.join("themes")`（一般 `~/.config/nota/themes`） | 透传 `config_dir` 的错 |
+
+⚠️ `user_themes_dir()` **只算路径不建目录**——`nota_themes_dir` 命令那侧才 `ensure_dir`。
+理由：首次启动就凭空造一个空目录，用户会以为里面该有什么东西。
 
 ⚠️ `pub fn cache_dir() -> Result<PathBuf>`（`$XDG_CACHE_HOME/nota`）**定义了但没有调用者**——
 今天没有任何东西往缓存目录写。留着是因为它是这套布局里少不得的一格，不是漏接的线。
+
+### `pub fn theme_dirs() -> Vec<(PathBuf, &'static str)>`
+
+**主题发现的三条来源**，按优先级从高到低，同名主题以靠前的为准：
+
+| 顺序 | 目录 | 来源标记 |
+|---|---|---|
+| 1 | `user_themes_dir()` = `~/.config/nota/themes` | `nota` |
+| 2 | `dirs::config_dir()/Typora/themes` | `typora` |
+| 3 | `~/.var/app/io.typora.Typora/config/Typora/themes` | `typora-flatpak` |
+
+⚠️ 第 3 条**不是备胎**：这台机器上 Typora 就是 flatpak 装的。
+⚠️ 后两条**按 XDG 算**（`~/.config` 只是默认值），别写死字符串。
+⚠️ 这个函数**同时是安全围栏**：`themes.rs::check_scope()` 拿它逐个 `starts_with` 比对，
+`nota_theme_read` / `nota_theme_asset` 读主题目录之外的文件一律拒绝。改这里等于改围栏。
+（`builtin_plugins_dirs()` 那条围栏是另一套，两者都从 `paths.rs` 出去，但服务的对象不同。）
 
 ### `pub fn builtin_plugins_dirs(resource_dir: Option<&Path>) -> Vec<PathBuf>`
 
@@ -687,6 +717,90 @@ pub struct TreeNode {
 
 ---
 
+## `src-tauri/src/themes.rs`（366 行）
+
+**Typora 主题兼容的后端那一半**：发现有哪些主题、把文件读出来。
+⚠️ 改造（收拢到 `#write`、展开 `@import`、内联 url）**不在后端**，在前端
+`src/styles/typora-theme.ts`——后端只负责"把文本交出去"。
+这条分工的理由写在那个文件顶上：改造要用**浏览器的 CSS 解析器**，而后端没有。
+
+### 文件头那段"为什么字体也不走 asset 协议"（**实测判据，改之前必读**）
+
+按原设计，主题里 `url('./x.woff2')` 换成 `convertFileSrc()` 的 asset 协议地址。
+实测**取不回字体**：`document.fonts.load()` 抛 `NetworkError`。
+根因在 `wry 0.55.1`——它注册自定义协议时调了 `register_uri_scheme_as_secure`，
+**没调** `register_uri_scheme_as_cors_enabled`，而 `@font-face` 发的是 **CORS 模式**的请求。
+所以 `nota_theme_asset` 改成**读盘 + base64 内联成 data: URL** 返回。
+
+⚠️ 验证时踩过一个坑，别重蹈：拿 `github.css` 验**测不出区别**，因为它的第一条
+`@font-face` 写的是 `local('Open Sans Regular')`，而容器里装着 Open Sans，
+**字体压根不会被请求**。要验得用一个去掉 `local()` 的探针主题。
+
+### `pub struct ThemeInfo`
+
+⚠️ 字段与 `src/bridge/ipc.ts` 的 `ThemeInfo` **手抄两份**，改一边必须同批改另一边。
+`name`（文件名去掉 `.css`）既是显示名也是唯一键；`source` ∈ `nota` / `typora` / `typora-flatpak`；
+`css` 是该文件的绝对路径；`dir` 是它所在目录；`has_assets` 表示有没有同名资源目录。
+
+### `pub fn discover() -> Vec<ThemeInfo>`
+
+扫 `paths::theme_dirs()` 三条目录。⚠️ **目录不存在不是错**——不装 Typora 的机器就是这种情况，
+返回空表。同名主题**以靠前的来源为准**（后面的直接跳过），所以用户自己的那份能盖掉 Typora 的。
+
+### `pub fn read_css(path: &Path) -> Result<String>` / `pub fn read_asset(path: &Path) -> Result<String>`
+
+两个都是「先 `check_scope` 再 `check_size` 再读」。差别只有一个：
+`read_asset` 把字节 **base64（STANDARD 字母表）** 编码，拼成 `data:{mime};base64,{…}`。
+
+⚠️ 两个上限常量是有意的：`MAX_CSS_BYTES` = **2 MiB**、`MAX_ASSET_BYTES` = **4 MiB**。
+挡的是"用户往主题目录里丢了个大文件，读进来把内存吃光"——资源那档比 CSS 宽，
+是因为字体动辄 200 KB、图片可能上 MB，**但不能不设**：内联成 data: URL 之后
+这些东西要整个过一遍 IPC 并在内存里多留一份（base64 还要涨 1/3），
+没有上限就等于把一个"读任意大文件"的口子开在了主题菜单上。
+`mime_of()` 按扩展名给 MIME，认不出的一律 `application/octet-stream`。
+
+### `fn check_scope(path: &Path) -> Result<()>`（私有）
+
+把路径与 `paths::theme_dirs()` 的每一条逐个 `starts_with` 比对，都不中就是
+`NotaError::other("… 不在任何主题目录里，拒绝读取")`。**这是主题功能的唯一一道围栏**——
+`nota_theme_read` / `nota_theme_asset` 都能读任意文件，全靠这里挡住。
+⚠️ `starts_with` 是**按路径分量**比的（不是字符串前缀），所以 `.../themes-evil/` 这种
+"前缀像主题目录的兄弟目录"不算数——有一条用例专门钉它。
+
+### `pub fn user_themes_dir() -> Result<String>`
+
+转发 `paths::user_themes_dir()` 再 `ensure_dir`——「打开主题文件夹」这个动作
+要求目录真的存在。**返回 `String` 而不是 `PathBuf`**：它的唯一去处是要交给前端/opener 的。
+
+### 测试（7）
+
+| 用例 | 钉住什么 |
+|---|---|
+| `扫出_css_并认出同名资源目录` | 只认 `.css`；同名目录存在时 `has_assets = true` |
+| `靠前的目录覆盖同名的` | `theme_dirs()` 的优先级真的生效 |
+| `目录不存在时返回空表而不是报错` | ⚠️ **"扫不到"不是错**——不装 Typora 的机器就是这种情况 |
+| `拒绝读主题目录之外的文件` | `check_scope` 挡住 `/etc/…` 之类 |
+| `拒绝读主题目录之外的资源` | 同上，走 `read_asset` 那条路 |
+| `前缀像主题目录的兄弟目录不算数` | ⚠️ 钉的是"按**路径分量**比不是按字符串前缀比" |
+| `资源读成_data_url_而不是路径` | `mime_of` 的映射（含**大写扩展名** `.PNG` → `image/png`、认不出的 → octet-stream）+ base64 的字母表口径（`STANDARD.encode([0,1,2,253]) == "AAEC/Q=="`——⚠️ **这条钉的是"`+` `/` 用得上"**，换成 URL-safe 字母表会得到另一个答案） |
+
+---
+
+## `src-tauri/src/commands/theme.rs`（37 行）
+
+四条命令，对应界面上四个动作。**都是薄壳**，逻辑全在 `themes.rs`。
+
+| 签名 | 行为 / 失败 |
+|---|---|
+| `pub fn nota_themes_list() -> Vec<ThemeInfo>` | `themes::discover()`。⚠️ **返回 `Vec` 不是 `Result`**——扫不到主题不是错 |
+| `pub fn nota_theme_read(path: String) -> Result<String>` | `themes::read_css()`。返回**文本**不是渲染结果，改造在前端做 |
+| `pub fn nota_theme_asset(path: String) -> Result<String>` | `themes::read_asset()`。返回 **data: URL**。⚠️ 调用方要把它**原样塞进 `url("…")`**，别当路径处理 |
+| `pub fn nota_themes_dir() -> Result<String>` | `themes::user_themes_dir()`，**建好**再返回，给「打开主题文件夹」用。⚠️ 返回 `String` 是因为要给前端/opener 插件 |
+
+无测试（逻辑都在 `themes.rs`，测试也在那边）。
+
+---
+
 ## `src-tauri/src/commands/plugin.rs`（96 行）
 
 | 签名 | 行为 / 失败 |
@@ -696,7 +810,7 @@ pub struct TreeNode {
 | `pub fn nota_plugin_call(state: State<'_, AppState>, plugin: String, command: String, args: Option<serde_json::Value>) -> Result<serde_json::Value>` | 见下 |
 | `pub fn nota_plugin_find_command(state: State<'_, AppState>, command: String) -> Result<Option<String>>` | `host.find_command_owner(&command).map(str::to_owned)` |
 | `pub fn nota_plugin_panels(state: State<'_, AppState>) -> Result<Vec<PluginPanel>>` | `host.panels()`。**前端挂载后主动拉一次**，别改成等事件（BUG-13） |
-| `pub fn nota_plugin_menus(state: State<'_, AppState>) -> Result<Vec<PluginMenuItem>>` | `host.menus()`。⚠️ **今天没有调用者**——还没有菜单栏（backlog 第 40 项） |
+| `pub fn nota_plugin_menus(state: State<'_, AppState>) -> Result<Vec<PluginMenuItem>>` | `host.menus()`。⚠️ **今天仍然没有调用者**——菜单栏有了（backlog 第 40 项已结），但还没把它拉来的条目挂进去（第 42 项） |
 
 ### `nota_plugin_call` 的四步
 
@@ -716,10 +830,12 @@ pub struct TreeNode {
 - 参数与返回值**直接走 JSON 而不是自定义类型**：命令的入参出参由插件自己决定，
   宿主不该、也不可能为它们定形。JSON 是这条边界上唯一不需要两边都改的公共语言。
 - ⚠️ 前端调这个命令时**必须**走 `nota_plugin_call(owner, name, args)` 的形式，`owner`
-  从 `nota:plugin-menu` 事件里带过来。**不要让前端凭命令名去猜是哪个插件的**——
+  从 `api.plugin.menus()` **拉**回来的那份清单里带过来（BUG-13 之前是从
+  `nota:plugin-menu` 事件里拿的，那条事件已经删了）。**不要让前端凭命令名去猜是哪个插件的**——
   两个插件重名时猜错就是静默跑到别人家里。`nota_plugin_find_command` 就是为这条对账准备的。
 - 前端**只有 `panels` 有调用者**（`App.tsx` 启动时拉一次）；`call` / `findCommand` /
-  `menus` 今天都只是声明——`call` 要等菜单栏或面板里的按钮，`menus` 要等菜单栏本身。
+  `menus` 今天都只是声明——`call` 与 `menus` 都卡在**同一根线**上：菜单栏还没把插件的
+  菜单项挂进去（`docs/07` 第 42 项）。
 
 无测试。
 
@@ -790,7 +906,7 @@ pub struct PluginHost {
 | `call_command` | `pub fn call_command(&self, plugin_id: &str, command: &str, args: mlua::Value) -> Result<mlua::Value>` | 没有插件 → `Err(other)`；在 `disabled` 里 → `Err(other("插件 {plugin_id} 已被禁用"))`；`Loaded` → 交给 `LuaPlugin::call_command`；`Failed(e)` → `Err(other("插件 {plugin_id} 加载失败，无法执行命令：{e}"))`；`Disabled` → `Err(other("插件 {plugin_id} 已被禁用"))` |
 | `find_command_owner` | `pub fn find_command_owner(&self, command: &str) -> Option<&str>` | 在**正在生效**的插件里找**第一个**注册了该命令的。实现是读 registry 的 `nota_commands` 表再 `contains_key`。⚠️ 取不到 registry 时 `unwrap_or(false)` 当"没有"——所以加载失败的插件不会误报 |
 | `panels` | `pub fn panels(&self) -> Vec<PluginPanel>` | 所有生效插件声明的面板。逐个调 `读面板(&p.lua, id)` 再摊平。**这是 BUG-13 的修法**：前端挂载后**拉**它，不是等事件推 |
-| `menus` | `pub fn menus(&self) -> Vec<PluginMenuItem>` | 同上，菜单项。⚠️ 还没有菜单栏来消费（backlog 第 40 项） |
+| `menus` | `pub fn menus(&self) -> Vec<PluginMenuItem>` | 同上，菜单项。⚠️ 前端**拉了但还没用**——菜单栏本体已建（backlog 第 40 项结清），缺的是把这几条挂进对应栏（第 42 项） |
 | `count` | `pub fn count(&self) -> usize` | 插件**条目**数（含失败的），`lib.rs` 启动日志用它 |
 | `unload_all` | `pub fn unload_all(&mut self) -> ()` | 逐个 `LuaPlugin::unload()`。窗口销毁时调 |
 
@@ -1887,14 +2003,14 @@ React 入口，四件事：
 
 ---
 
-## `src/App.tsx`（433 行）
+## `src/App.tsx`（816 行）
 
 应用外壳：状态编排 + 布局。文件头写明这一层只做三件事——**取数据、派事件、拼布局**；
 编辑器的活全在 `ui/EditorPane.tsx`，文件树的活在 `ui/Sidebar.tsx`，别往这里堆。
 
 `export default function App()`，无 props。
 
-### 八个 state + 一个 ref
+### 十四个 state + 三个 ref（`grep useState` / `grep useRef` 数出来的）
 
 | 名字 | 类型 | 说明 |
 |---|---|---|
@@ -1905,8 +2021,36 @@ React 入口，四件事：
 | `tree` | `useState<TreeNode[]>([])` | 只有一层（`depth = 1`） |
 | `plugins` | `useState<PluginInfo[]>([])` | 插件**清单**（名称/版本/能力/报错） |
 | `panels` | `useState<PluginPanel[]>([])` | 插件**声明**的面板。⚠️ 与 `plugins` 是两个来源：清单走 `plugin.list()`，面板走 `plugin.panels()`，**都是启动时一起拉的** |
+| `themes` | `useState<ThemeInfo[]>([])` | 扫到的主题，喂给菜单栏「主题」那一栏。**启动时拉一次** |
 | `toasts` | `useState<Toast[]>([])` | |
-| `editorRef` | `useRef<EditorPaneHandle>(null)` | App 伸手进编辑器的唯一通道 |
+| `dockOpen` | `useState(true)` | 右侧插件栏 |
+| `sidebarOpen` | `useState(true)` | 左侧栏 |
+| `sidebarTab` | `useState<SidebarTab>("tree")` | 左栏当前哪一页 |
+| `statusBarOpen` | `useState(true)` | 状态栏 |
+| `confirmReq` | `useState<{…} \| null>(null)` | 自绘确认框的受控状态（`title` / `message` / `confirmLabel` / `danger` / `hideCancel`） |
+
+三个 ref（⚠️ `MenuBar.tsx` 内部另有自己的 `barRef`，不算这里的）：
+
+| 名字 | 说明 |
+|---|---|
+| `editorRef` | `useRef<EditorPaneHandle>(null)`，App 伸手进编辑器的唯一通道 |
+| `confirmResolve` | `useRef<((ok: boolean) => void) \| null>(null)`，存 `askConfirm()` 那个 Promise 的 resolve |
+| `activeIdRef` | `useRef<DocId \| null>(null)`，让**只跑一次**的事件订阅 effect 也能读到最新的活动文档 |
+
+⚠️ **后三个界面开关 + `sidebarTab` 都是受控的**：状态在 `App.tsx`，
+`Sidebar` / `PluginDock` / `StatusBar` 自己不持有。这正是**菜单栏能切它们**的原因——
+菜单在 `App.tsx` 里渲染，够不着子组件的局部状态（`Sidebar` 的 `tab` 2026-09-23 就是
+为这件事从 `useState` 改过来的）。
+
+### `askConfirm()` / `answerConfirm()`：自绘确认框怎么用
+
+`askConfirm({title, message, confirmLabel?, danger?, hideCancel?}) -> Promise<boolean>`：
+把一坨状态塞进 `confirmReq`，同时**把 Promise 的 resolve 存进 `confirmResolve`**；
+`answerConfirm(ok)` 取出 resolve、清空 ref、`setConfirmReq(null)` 并兑现它。
+
+⚠️ `confirmResolve` 是**单个 ref 不是队列**——一次只可能有一个确认框。
+⚠️ 取代的是原生 `window.confirm`（`docs/07` 第 29 项，已修）：后者**阻塞 WebView**，
+会把中文输入法的组合态打断，和 `Toasts.tsx` 明确避开 `alert` 是同一条理由。
 
 ### 三个 `useCallback` 工具
 
@@ -1916,14 +2060,14 @@ React 入口，四件事：
 | `refreshDocs() -> Promise<Document[]>` | `api.doc.list()` → `setDocs(list)` → **返回 list**（`closeDoc` 要靠返回值取新活动标签） |
 | `refreshTree() -> Promise<void>` | 没有 `workspace` 就 `setTree([])` 并返回；否则 `api.workspace.tree(undefined, 1)`，失败 `toast(String(e), "error")` |
 
-### 五个 `useEffect`
+### 七个 `useEffect`
 
 **① 启动**（依赖 `[refreshDocs, toast]`）
 
 ```text
 Promise.all([api.settings.get(), api.workspace.get(),
-             api.plugin.list(), api.plugin.panels()])
-  → setSettings / setWorkspace / setPlugins / setPanels
+             api.plugin.list(), api.plugin.panels(), api.theme.list()])
+  → setSettings / setWorkspace / setPlugins / setPanels / setThemes
   → await refreshDocs()
 失败 → toast(`启动时读取状态失败：${e}`, "error")
 
@@ -1935,15 +2079,21 @@ Promise.all([api.settings.get(), api.workspace.get(),
 ⚠️ `alive` 只挡了 `Promise.all` 之后的那一段——`refreshDocs()` 的 `setDocs` 在 `alive`
 检查之后调用，所以安全；但 `api.frontendReady()` 没有 `alive` 检查（它不改 state，无害）。
 
-**② 事件订阅**（依赖 `[toast, activeId]`）
+⚠️ **主题只在这里拉一次**（`api.theme.list()`）。所以用户点「打开主题文件夹…」丢进去一份
+新主题之后**菜单里不会出现**，得重启——欠账记在 `docs/07` 第 41 项。
+
+**② 事件订阅**（依赖 `[toast, refreshDocs]`）
 
 ```text
 await Promise.all([
   on<NotifyPayload>(events.notify, (p) => toast(p.message, p.level)),
   on<DocumentChangedPayload>(events.documentChanged, (p) => {
-    if (p.origin === "plugin" && p.id === activeId) {
-      editorRef.current?.setMarkdown(p.text);
+    if (p.origin !== "plugin") return;              // 不是插件发的 → 早退
+    if (p.id === activeIdRef.current) {
+      editorRef.current?.setMarkdown(p.text);        // 命中活动文档 → 整篇覆盖
+      return;
     }
+    void refreshDocs();                              // 不是活动文档 → 让 state 跟上
   }),
 ])
 ```
@@ -1955,20 +2105,42 @@ await Promise.all([
   已改走"拉"，见 `bridge/ipc.ts`）。⚠️ 别往这里加 `listen` 去等插件的 UI 注册——那类东西
   在插件加载时就注册完了，比这个 effect 早（BUG-13）
 - ⚠️ **不去比 revision，直接覆盖**：注释说"能走到这条分支就说明改动不是本编辑器发起的
-  （自己发起的不会绕一圈回来）"。判据是 `origin === "plugin"` **且** id 等于当前活动文档
-- ⚠️ 依赖里有 `activeId`，所以每次切标签都会整体退订再重订一次。
-  重订期间到达的事件会被丢掉
+  （自己发起的不会绕一圈回来）"。判据是 `origin === "plugin"`
+- ⚠️ **依赖里没有 `activeId`**，回调读的是 `activeIdRef.current`。此前依赖里有 `activeId`，
+  于是每次切标签都整体退订再重订一次，**重订期间到达的事件会被丢掉**
+- ⚠️ **"不是活动文档"那条分支不能省**（backlog 第 33 项）：`setMarkdown` 只对当前挂载的
+  编辑器生效，非活动文档无处可放；不 `refreshDocs()` 的话 React state 里还是旧文本，
+  用户切回去时 `EditorPane` 用旧文本重建，下一次去抖 sync 就**把插件的改动覆盖掉了**
 
-**③ 主题**（依赖 `[settings]`）
+**③ 活动文档上报**（依赖 `[activeId, toast]`）
+
+写 `activeIdRef.current = activeId`，并 `api.doc.setActive(activeId)`。
+
+⚠️ 后端只记得"最后一次新建/打开的那份"。不在这里统一同步的话，用户点了标签 A 在看 A，
+插件调 `nota.document.get_text()` 拿到的却是 B——AI 助手插件按这个路径写回就会**改错文档**
+（BUG-6）。放在 effect 里而不是只补在 `TabBar.onSelect` 上，是为了把
+`open` / `new` / `close` 那几条路径也一起兜住（多喊一次无害，后端幂等）。
+
+**④ 外观**（依赖 `[settings]`）
 
 ```ts
-if (settings) applyTheme(settings);
+if (settings) return applyTheme(settings);
 ```
 
-⚠️ **`applyTheme` 返回的退订函数被丢掉了**。`ui_mode = auto` 时每次 `settings` 变化都会
-再挂一个 `matchMedia` 监听器，旧的不移除。`paint()` 幂等所以功能上不出错，但监听器会累积。
+⚠️ **必须把返回值交出去**（BUG-7）：`ui_mode = "auto"` 时它挂了一个 `matchMedia` 监听，
+不接返回值就等于每次 `settings` 变化都再挂一个、旧的从不移除。
+⚠️ `settings` 为 `null`（还没拉到）时**不能**把主题刷成默认值——那会让首屏闪一下再跳回来。
 
-**④ 重取文件树**（依赖 `[refreshTree]`）
+**⑤ 文档主题**（依赖 `[settings?.document_theme, themes]`）
+
+找到同名主题就 `applyDocTheme({css: info.css})`，空名/找不到就 `applyDocTheme(null)`。
+
+⚠️ **与 ④ 分开是有意的**：主题 CSS 要**读文件 + 改造**才能注入，是异步的，
+跟 `applyTheme` 那种纯写属性的事不是一个节奏，塞在一起会让 ④ 也变成异步。
+⚠️ **找不到对应的主题文件时安静地退回内置默认，不弹错**——settings 里记着一个名字、
+而用户的主题文件被删了，这是很平常的事（换机器、清理磁盘），不是需要打断用户的错误。
+
+**⑥ 重取文件树**（依赖 `[refreshTree]`）
 
 ```ts
 void refreshTree();
@@ -1976,38 +2148,71 @@ void refreshTree();
 
 注释：`refreshTree` 已经依赖 `workspace`，这里不必再列一遍。
 
-**⑤ 快捷键**（依赖 `[activeId, saveDoc, newDoc, openViaDialog, closeDoc]`）
+**⑦ 快捷键**（依赖一大串回调）
 
 在 `window` 上听 `keydown`：
 
 | 键 | 条件 | 动作 |
 |---|---|---|
+| `F11` | **先判，不带 mod** | `toggleFullscreen()` |
 | `mod = e.ctrlKey \|\| e.metaKey` | **没有 mod 直接 return** | — |
 | Ctrl+S | `activeId !== null` | `e.preventDefault()` + `saveDoc(activeId, e.shiftKey)` —— **Ctrl+Shift+S 就是另存为**（`shiftKey` 传成 `forceDialog`） |
 | Ctrl+N | — | `newDoc()` |
 | Ctrl+O | — | `openViaDialog()` |
 | Ctrl+W | `activeId !== null` | `closeDoc(activeId)` |
+| Ctrl+Shift+C | `key === "c" && shiftKey` | `copyAsMarkdown()`。⚠️ **只在有 Shift 时接**——不带 Shift 的 Ctrl+C 是系统的复制，抢过来会让编辑器里选不中的东西复制不了 |
+| Ctrl+Shift+L | `key === "l" && shiftKey` | 开关侧栏 |
+| Ctrl+Shift+1 | `e.shiftKey && e.code === "Digit1"` | 开侧栏 + 切大纲页 |
+| Ctrl+Shift+3 | `e.shiftKey && e.code === "Digit3"` | 开侧栏 + 切文件树页 |
+| Ctrl+1..6 | `!e.shiftKey && key >= "1" && key <= "6"` | `runCommand(h1..h6)` 切标题级别 |
+| Ctrl+0 | `!e.shiftKey && key === "0"` | `runCommand("text")` 正文段落 |
+
+⚠️⚠️ **`Ctrl+Shift+1/3` 判的是 `e.code` 不是 `e.key`**，这是踩出来的：
+按着 Shift 敲数字排，`e.key` 拿到的是**上档字符**——Shift+1 是 `"!"`、Shift+3 是 `"#"`，
+所以 `key === "1"` **永远不成立**，那两条曾是**按了没反应**的死代码。
+`e.code` 是物理键位，不随 Shift 变。
+
+⚠️ **`Ctrl+1..6` 必须不带 Shift**：Shift 那两条已经被侧栏页占走了，两者不能混。
+ProseMirror 自己的标题快捷键是 Ctrl+Alt+1..6，所以也不冲突。
 
 键名用 `e.key.toLowerCase()` 比，所以大小写不敏感。`return` 里移除监听。
 
-⚠️ 没有 **Ctrl+Shift+1/2/3**（Typora 的侧栏切换）、没有 Ctrl+F、没有 Ctrl+Z 之类的
+⚠️ 没有 Ctrl+F、Ctrl+H（查找/替换，`docs/07` 第 4 项）、也没有 Ctrl+Z 之类的
 编辑器内快捷键（那些由 ProseMirror 自己处理，`history` 插件）。
 
-### 五个业务函数（都是 `useCallback`）
+### 菜单栏那三张派生表
+
+| 表 | 怎么算出来 | 用途 |
+|---|---|---|
+| `menuHandlers` | `useMemo`，**手写**的 `Record<string, () => void>`，键就是 `commands.ts` 里的条目 id | 点菜单项的落点。**没有键 = 这一项没实现** |
+| `disabledCommands` | 遍历 `MENUS`，`!menuHandlers[entry.id]`（没实现）**或** `entry.needsDoc && activeId === null`（没文档）就进集合 | 喂给 `MenuBar` 的 `disabled` |
+| `menuChecks` | 手写的 `Record<string, boolean>`：`view.toggleSidebar` / `view.outline` / `view.fileTree` / `view.toggleDock` / `view.statusBar` | 喂给 `MenuBar` 的 `checks`，画那个 `✓` |
+
+⚠️ **`menuHandlers` 是"这一项能不能兑现"的唯一判据**（见 `ui/commands.ts` 顶上那段）。
+往里加一个键，菜单里对应那项就亮了——**这是有意的单点**，别在别处再写一份标志位。
+
+### 业务函数（都是 `useCallback`）
 
 | 函数 | 签名 | 行为 / 失败 |
 |---|---|---|
 | `openPath` | `(path: string) => Promise<void>` | `api.doc.open(path)` → `refreshDocs()` → `setActiveId(id)`。失败 → `toast(String(e), "error")` |
 | `newDoc` | `() => Promise<void>` | `api.doc.create()` → `refreshDocs()` → `setActiveId(id)` |
 | `saveDoc` | `(id: DocId, forceDialog = false) => Promise<void>` | 见下 |
-| `openViaDialog` | `() => Promise<void>` | `openDialog({title:"打开", multiple:false, filters:[{name:"Markdown", extensions:["md","markdown","mdown","mkd","txt"]}]})`，返回字符串才 `openPath(picked)`。**取消不是错误** |
+| `reloadDoc` | `(id: DocId) => Promise<void>` | 有改动就先 `askConfirm`（「丢弃并重新加载」）；`api.doc.reload(id)` → **只有当它就是活动文档时**才 `setMarkdown(fresh.text)` → `refreshDocs()` |
+| `openViaDialog` | `() => Promise<void>` | `openDialog({title:"打开", multiple:false, filters:[{name:"Markdown", extensions:["md","markdown","mdx","mdown","mkd","txt"]}]})`，返回字符串才 `openPath(picked)`。**取消不是错误** |
 | `openFolder` | `() => Promise<void>` | `openDialog({title:"打开文件夹", directory:true})` → `api.workspace.open(picked)` → `setWorkspace(canonical)` → `api.workspace.tree(undefined, 1)` 直接 `setTree`（**没走 `refreshTree`**） |
 | `closeDoc` | `(id: DocId) => Promise<void>` | 见下 |
+| `updateSettings` | `(patch: Partial<Settings>) => Promise<void>` | **先改内存**（主题、字号要立刻见效果）→ `api.settings.set(next)`；失败**回滚成 `previous`** 并 toast。免得"界面上是新的、重开又变回去" |
+| `pickTheme` | `(name: string) => void` | `updateSettings({document_theme: name})` + 一句 toast。空串 = 回内置默认 |
+| `openThemesDir` | `() => Promise<void>` | `openWithSystem(await api.theme.dir())`。⚠️ 后端会把目录**建出来**再返回——首次使用时它多半还不存在，直接打开一个不存在的路径会被文件管理器拒掉 |
+| `copyAsMarkdown` | `() => Promise<void>` | `editorRef.getMarkdown()` → `navigator.clipboard.writeText()` |
+| `toggleFullscreen` | `() => Promise<void>` | `getCurrentWindow()` → `setFullscreen(!await isFullscreen())` |
+| `showAbout` | `() => Promise<void>` | `getVersion()`（**取不到也照样弹**，那正是用户来查版本的地方）→ `askConfirm`，`hideCancel: true` |
 
 **`saveDoc` 的流程**：
 
 1. `docs.find(d => d.id === id)`，找不到**静默 return**
-2. 若 `forceDialog || !doc.path`：弹 `saveDialog({title:"保存为", defaultPath: doc.path ?? `${doc.title}.md`, filters:[{name:"Markdown", extensions:["md","markdown"]}]})`；
+2. 若 `forceDialog || !doc.path`：弹 `saveDialog({title:"保存为", defaultPath: doc.path ?? `${doc.title}.md`, filters:[{name:"Markdown", extensions:["md","markdown","mdx"]}]})`；
    **用户取消（返回 falsy）→ 直接 return**，不报错
 3. `const text = editorRef.current?.getMarkdown()` —— **存盘前强制同步一次**，
    因为镜像可能还差最后几次击键；`text !== undefined` 时 `await api.doc.sync(id, text)`
@@ -2017,20 +2222,22 @@ void refreshTree();
 ⚠️ 前端**不自己同步内容再存盘**（Step 4 的 `save` 用的是后端镜像）——这正是 Step 3
 存在的理由。漏掉 Step 3 的表现是"保存下来的比屏幕上少最后几个字"。
 
+⚠️ 两张对话框的**后缀表都含 `mdx`**（backlog 第 28 项已修），与后端 `is_markdown()` 对齐。
+
 ⚠️ `saveDoc` 依赖 `docs`，所以每次 `docs` 变化它的引用都变，进而让快捷键 effect 重挂
 （依赖里有 `saveDoc`）。功能上没问题，是次数上的浪费。
 
 **`closeDoc` 的流程**：
 
 1. 找到 doc，若 `doc.dirty && settings?.confirm_unsaved`：
-   **`window.confirm(\`「${doc.title}」有未保存的改动，仍然关闭吗？\`)`**，用户选否就 return
+   **`askConfirm(\`「${doc.title}」还没存盘，关掉这份改动就没了。\`)`**（`danger: true`、
+   确定键写「丢弃并关闭」），用户选否就 return
 2. `api.doc.close(id)` → `refreshDocs()` → `setActiveId(list.length ? list[list.length - 1]!.id : null)`
    （⚠️ `list[list.length - 1]!` 那个非空断言是 `noUncheckedIndexedAccess` 逼出来的）
 3. 失败 → toast
 
-⚠️ 用的是**原生 `window.confirm`**（代码注释：本轮先用原生确认框，自己画一个对话框排在
-界面那一轮）。它与 `ui/Toasts.tsx` 里"避开 `alert` 因为它阻塞 WebView、会打断输入法组合态"
-的口径不一致——`confirm` 同样阻塞。
+⚠️ **不再是原生 `window.confirm`**（`docs/07` 第 29 项已修）——`confirm` **阻塞 WebView**，
+会打断中文输入法的组合态，和 `Toasts.tsx` 明确避开 `alert` 是同一条理由。
 
 ⚠️ 关文档**不通知后端活动文档的变化**（只 `setActiveId`），后端 `close` 里自己把活动
 切到"列表最后一份"。前端是从 `refreshDocs` 的返回值里取 `list` 最后一份——两边**碰巧**
@@ -2041,9 +2248,13 @@ void refreshTree();
 ```jsx
 <ErrorBoundary>
   <div className="app">
-    <Toolbar onNew onOpen onOpenFolder onSave hasActive dockOpen onToggleDock />
+    <TopBar disabled checks themes currentTheme onCommand onTheme onOpenThemesDir
+            dockOpen onToggleDock />
     <div className="app-body">
-      <Sidebar workspace tree docText={activeDoc?.text ?? ""} onOpenFile={openPath} />
+      {sidebarOpen && (
+        <Sidebar workspace tree docText={activeDoc?.text ?? ""}
+                 tab={sidebarTab} onTab={setSidebarTab} onOpenFile={openPath} />
+      )}
       <main className="app-main">
         {activeDoc ? <EditorPane ref={editorRef} key={activeDoc.id} doc={activeDoc}
                                  contentWidth={settings?.content_width ?? 760}
@@ -2055,8 +2266,9 @@ void refreshTree();
       )}
     </div>
     {docs.length > 0 && <TabBar docs activeId onSelect={setActiveId} onClose={closeDoc} />}
-    <StatusBar doc={activeDoc} />
+    {statusBarOpen && <StatusBar doc={activeDoc} />}
     <Toasts items={toasts} onDismiss={…} />
+    {confirmReq && <ConfirmDialog … onAnswer={answerConfirm} />}
   </div>
 </ErrorBoundary>
 ```
@@ -2065,20 +2277,30 @@ void refreshTree();
 ⚠️ `EditorPane` 带 `key={activeDoc.id}` —— **换文档就是整组件重挂**，
 省得去写"把 A 文档的撤销栈换成 B 的"这种活。
 
-### 三个同文件内的子组件
+⚠️ **`TopBar` / `TabBar` 是「无条件渲染」的两个例外**：`Sidebar` 外面套了 `sidebarOpen`、
+`StatusBar` 外面套了 `statusBarOpen`、`PluginDock` 外面套了 `dockOpen`——
+菜单栏本身**没有开关**（Typora 也没有"藏起菜单栏"这一项），标签栏则只看有没有文档。
+
+### 两个同文件内的子组件
 
 | 组件 | props | 行为 |
 |---|---|---|
-| `Toolbar` | `{onNew, onOpen, onOpenFolder, onSave, hasActive}` | 品牌名 + 四个按钮：新建 / 打开 / 打开文件夹 / 保存。**保存**按钮在 `!hasActive` 时 `disabled` |
+| `TopBar` | `{disabled, checks, themes, currentTheme, onCommand, onTheme, onOpenThemesDir, dockOpen, onToggleDock}` | `<header className="toolbar">`：品牌名「Nota」+ `<MenuBar>` + 右侧的插件栏开关按钮 |
 | `TabBar` | `{docs: Document[], activeId, onSelect, onClose}` | `role="tablist"`。每个标签是一个 `role="tab"` 的 div，内含两个 button：标签名（点击 `onSelect`）与 `×`（点击 `onClose`）。`d.dirty` 时渲染 `<span className="tab-dot" title="有未保存的改动" />` |
-| `EditorPane` / `Home` / … | — | 在别的文件里 |
+| `EditorPane` / `Home` / `MenuBar` / … | — | 在别的文件里 |
+
+⚠️⚠️ **四个工具条按钮（新建/打开/打开文件夹/保存）2026-09-23 撤掉了**——
+它们各是「文件」菜单里的一项，留着就是同一件事的两个入口，而 **Typora 顶栏上并没有
+这一排按钮**。对标的是它的布局，不是"多留几个快捷方式"。
+快捷键一个没少（Ctrl+N/O/S…），「文件」菜单里也都还在，所以撤掉的是那个**重复的**入口，
+不是能力。
 
 ⚠️ `TabBar` 里 `aria-selected` 挂在 div 上、但点击处理在两个内部的 button 上——
 键盘导航（左右方向键切标签）今天没有。
 
 ---
 
-## `src/bridge/ipc.ts`（161 行）
+## `src/bridge/ipc.ts`（247 行）
 
 IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖：命令名是字符串，散在组件里
 改一次要全仓搜；集中在这里还能顺手把返回值的形状标出来（`invoke` 本身是 `any`，
@@ -2103,6 +2325,7 @@ IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖�
 | `DocumentChangedPayload` | `{id: DocId, text: string, origin?: string}` | `nota:document-changed` 的载荷 |
 | `PluginPanel` | `{plugin, id, title, icon: string\|null, location: string}` | `nota_plugin_panels` 的返回（**命令，不是事件**）。⚠️ `location` **不收窄成联合类型**——不认识的据点会被 `PluginDock` 放进「没有落脚处」那组，收窄了反而要把不认识的丢掉 |
 | `PluginMenuItem` | `{plugin, label, command, menu, accelerator: string\|null}` | `nota_plugin_menus` 的返回（同上） |
+| `ThemeInfo` | `{name, source, css, dir, has_assets}` | `themes::ThemeInfo`。⚠️ 它是一**对**东西：`<name>.css` ＋ 同名目录 `<name>/`。`css` 是那个文件的绝对路径，`dir` 是**相对 url 的基准** |
 
 ⚠️ 改 Rust 侧字段时**必须同批改这里**。两边不一致时 `invoke` 不会报错，只会给你一个
 少了字段的对象，然后在某个 `.map` 上炸掉。
@@ -2113,7 +2336,8 @@ Rust 侧它是 `Option<PathBuf>`，所以前端一定可能拿到 `null`——**
 
 ### `export const api`
 
-一个对象，四组方法 + 一个握手。**全部返回 `Promise`**（`invoke` 的返回值）。
+一个对象，**五组**方法（`doc` / `workspace` / `settings` / `theme` / `plugin`）+ 一个握手。
+**全部返回 `Promise`**（`invoke` 的返回值）。
 
 | 组 | 方法 | 对应命令 | 参数映射 |
 |---|---|---|---|
@@ -2126,20 +2350,24 @@ Rust 侧它是 `Option<PathBuf>`，所以前端一定可能拿到 `null`——**
 | | `setActive(id)` | `nota_doc_set_active` | 由 `App.tsx` 里跟着 `activeId` 走的那个 effect 统一调（BUG-6） |
 | | `get(id)` | `nota_doc_get` | ⚠️ 同上 |
 | | `list()` | `nota_doc_list` | |
-| | `reload(id)` | `nota_doc_reload` | ⚠️ 没有调用者 |
+| | `reload(id)` | `nota_doc_reload` | `App.tsx::reloadDoc`（菜单「从磁盘重新加载」）。⚠️ **不是活动文档时不动编辑器**，只 `refreshDocs()` |
 | | `hasUnsaved()` | `nota_doc_has_unsaved` | ⚠️ 没有调用者 |
 | `workspace` | `open(path)` | `nota_workspace_open` | 返回**规范化后**的路径 |
 | | `close()` | `nota_workspace_close` | ⚠️ 没有调用者 |
 | | `get()` | `nota_workspace_get` | |
 | | `tree(subPath?, depth?)` | `nota_workspace_tree` | `{subPath: subPath ?? null, depth: depth ?? 1}`，**默认 depth 是 1** |
 | `settings` | `get()` | `nota_settings_get` | |
-| | `set(settings)` | `nota_settings_set` | ⚠️ 没有调用者 |
+| | `set(settings)` | `nota_settings_set` | ⚠️ 调用者只有 `App.tsx` 的 `updateSettings`（**整份替换**，不是逐项 patch） |
+| `theme` | `list()` | `nota_themes_list` | **`App.tsx` 启动时拉一次**（同一个 `Promise.all`）。⚠️ 不重扫，见 `docs/07` 第 41 项 |
+| | `read(path)` | `nota_theme_read` | 返回**文本**。改造在前端做，见 `styles/typora-theme.ts` |
+| | `asset(path)` | `nota_theme_asset` | 返回 **data: URL**，不是路径。⚠️ 读不动时调用方退回 `convertFileSrc`（`absolutize` 里的 `catch`） |
+| | `dir()` | `nota_themes_dir` | 给「打开主题文件夹…」用。⚠️ 后端**会把目录建出来**再返回 |
 | `plugin` | `list()` | `nota_plugins_list` | |
 | | `setEnabled(id, enabled)` | `nota_plugin_set_enabled` | ⚠️ 没有调用者 |
-| | `call(plugin, command, args?)` | `nota_plugin_call` | `{plugin, command, args: args ?? null}`。⚠️ 没有调用者 |
+| | `call(plugin, command, args?)` | `nota_plugin_call` | `{plugin, command, args: args ?? null}`。⚠️ 没有调用者——要等第 42 项 |
 | | `findCommand(command)` | `nota_plugin_find_command` | ⚠️ 没有调用者 |
 | | `panels()` | `nota_plugin_panels` | **`App.tsx` 启动时拉一次**（与 `list()` 同一个 `Promise.all`）。⚠️ 别改成等事件，见 BUG-13 |
-| | `menus()` | `nota_plugin_menus` | ⚠️ 没有调用者——还没有菜单栏（backlog 第 40 项） |
+| | `menus()` | `nota_plugin_menus` | ⚠️ **仍然**没有调用者——菜单栏有了（第 40 项已结），但还没接这根线（第 42 项） |
 | （顶层） | `frontendReady()` | `nota_frontend_ready` | 启动时调一次 |
 
 ⚠️ **参数名是"按名字对上号"的，写错就是静默收到 `None`**，不会报错。
@@ -2186,7 +2414,7 @@ export const events = {
 
 ---
 
-## `src/editor/create.ts`（164 行）
+## `src/editor/create.ts`（301 行）
 
 编辑器内核：Milkdown（ProseMirror + remark）的封装。
 
@@ -2396,8 +2624,9 @@ DOM 节点里"的映射，而块首那种位置是有歧义的）。
   返回 `() => mq.removeEventListener("change", paint)`
 - 否则返回一个 **no-op** `() => {}`
 
-⚠️ 调用方（`App.tsx`）**丢掉了这个返回值**，所以 auto 模式下每次 `settings` 变化都会
-多挂一个监听器且从不移除。
+⚠️ 调用方（`App.tsx`）**曾经丢掉了这个返回值**（BUG-7），所以 auto 模式下每次 `settings`
+变化都会多挂一个监听器且从不移除。**2026-09-22 已修**：现在写的是
+`if (settings) return applyTheme(settings);`，退订函数被正确地交了出去。
 
 ⚠️ `--ui-font-size` 用的是 `style.setProperty`（内联样式），而三条轴用 `dataset`
 （属性）—— 两者在 CSS 里的优先级不同，写新样式时要意识到字号的来源是内联的。
@@ -2407,7 +2636,177 @@ SSR）下它可能不存在。
 
 ---
 
-## `src/ui/EditorPane.tsx`（121 行）
+## `src/styles/typora-theme.ts`（389 行）
+
+**"兼容 Typora 主题"整件事的核心文件。** 把一份**给整个应用写的** Typora 主题 CSS，
+改造成**只作用于正文**的样式。
+
+### 为什么不能直接把主题 CSS 塞进 `<style>`
+
+实测真实主题（github / night / newsprint / pixyll / whitey）里，
+**每套有 21–59 条裸元素规则**——`h1 { font-size: 2.25em }`、`body { color: … }`、
+`a { color: … }`，**全都没有前缀**。原样注入的后果是应用外壳的标题、链接、按钮一起被改，
+侧栏和菜单栏当场散架。所以要先**把它们关进 `#write` 里**——`#write` 是 Typora 给正文区的
+id，我们把它挂到 ProseMirror 那一层上（见 `src/editor/create.ts`），
+于是主题规则只作用于正文，外壳一根头发都不动。
+
+### 改造四步（顺序不能换）
+
+| 步 | 函数 | 干什么 |
+|---|---|---|
+| 1 | `loadThemeCss()` → `inline()` | 展开 `@import`（**异步**，所以排在解析之前）。真实主题会跨文件引：`night.css` 里 import 了 `night/mermaid.dark.css` |
+| 2 | `absolutize()` | 把 `url()` 换成可用的绝对地址。⚠️ **换成的是 data: URL，不是 asset 协议**——见下 |
+| 3 | `scopeThemeCss()` | 用**浏览器的 `CSSStyleSheet`** 解析，**不用正则** |
+| 4 | `walk()` / `emitStyleRule()` / `scopeSelector()` | 选择器收拢到 `#write`，同时把 `:root` 上的自定义属性**提升到全局** |
+
+⚠️ **第 2 步在合并前按"每个文件自己所在的目录"改写**：主题用相对路径引用自己旁边的字体
+（`url('./github/xxx.woff2')`），注入文档之后相对基准会变成**应用的 URL**，字体全丢。
+
+⚠️ **第 3 步为什么不用正则**：正则切 CSS 是经典翻车现场（注释里的花括号、
+`content: "}"`、嵌套 `@media`）。浏览器自己的解析器是最准的那个，而且免费。
+
+### `scopeSelector()` 的三条规矩（顺序不能换）
+
+1. 已经含 `#write` 的**原样放过**——主题自己写了 `#write p`，再套一层会变成
+   `#write #write p`，永远命不中（**这是最容易犯的错**）；
+2. `:root` / `html` / `body` 单独出现时**换成** `#write`（不是加前缀）——
+   它们指的就是"正文那棵树的根"；
+3. 其余一律加 `#write ` 前缀，**包括我们根本没有的那些选择器**（`#typora-sidebar` 之类）。
+   给它们加前缀等于让它们安全地失效，正是我们要的：不报错、不起作用、也不污染外壳。
+
+⚠️ 连续的前导 `html`/`body`（`html body`、`body > p`）要一并换成 `#write`；
+`splitTop()` 按**顶层**逗号切选择器，`:is(a, b) h1` 里那个逗号不是分隔符。
+
+### `emitStyleRule()`：变量提升的判据
+
+一条规则拆成**最多两条**：自定义属性（`--x`）与普通声明分开。
+**只有选择器里出现 `:root` / `html` / `body` 时，变量才提升到全局**——
+别的选择器上的自定义属性是**局部**变量，跟着它自己走。
+提升上去的变量由 `theme.css` 末尾那段桥接块消费，于是换主题时侧栏、强调色也跟着变。
+
+⚠️ `@font-face` / `@keyframes` / `@supports` / `@page` **原样放过**——它们的关键帧/描述符
+不是选择器，套上 `#write` 会当场失效。
+
+### 边界：兼容不了什么
+
+Typora 主题里有大量按**它自己的 DOM** 写的选择器（`#typora-sidebar` / `.megamenu` /
+`#top-titlebar` / `#typora-source` / `.md-toc` / `.md-math` / `.md-image`），我们没有那些元素，
+这些规则会变成**永远不会命中的死规则**——不报错，也不起作用。
+**这不是 bug 是边界**：我们没有和它一样的 DOM 契约，就不该假装有。
+能拿到的部分是"**正文版式 + 配色**"，而那正是主题的主要价值。
+
+### `export async function applyDocTheme(theme: { css: string } | null)`
+
+换主题。传 `null` / 空串表示"用内置默认"，会把主题样式整个撤掉。
+
+⚠️ 用**一个固定的 `<style id="nota-doc-theme">`** 做替换，而不是每次 append 一个新的：
+后者在用户来回切主题时会原地堆出一串 `<style>`，而且旧的那份仍然生效，
+最后谁都说不清当前是哪套主题。
+
+⚠️ 解析失败（语法坏到浏览器都不认）时**返回空串而不是抛**——换主题失败不该带崩编辑器。
+
+无测试（前端没有测试运行器）。
+
+---
+
+## `src/ui/MenuBar.tsx`（205 行）
+
+菜单栏。**这是"模仿 Typora 界面布局"里最主要的一块。**
+
+在这之前 Nota 只有一条工具条 + 四个按钮（新建/打开/打开文件夹/保存），
+而 Typora 单是「段落」一栏就有二十来项（`docs/07` 第 40 项记的就是这个缺口，已结清）。
+
+### `export function MenuBar(props: Props)`
+
+| prop | 类型 | 用途 |
+|---|---|---|
+| `disabled` | `Set<string>` | 当前**用不了**的命令 id。没实现、或缺活动文档，都进这个集合 |
+| `checks` | `Record<string, boolean>` | 可勾选项的当前状态 |
+| `themes` | `ThemeInfo[]` | 已经扫到的主题 |
+| `currentTheme` | `string` | 当前文档主题名。空串 = 内置默认 |
+| `onCommand` | `(id: string) => void` | 点了一个普通条目 |
+| `onTheme` | `(name: string) => void` | 选了某个主题（空串 = 无主题） |
+| `onOpenThemesDir` | `() => void` | 点了「打开主题文件夹…」 |
+
+内部只有一个 state：`const [open, setOpen] = useState<string | null>(null)`（哪一栏开着，
+`null` = 全关）+ 一个 `barRef`。
+
+### 灰掉的项不是省事，是**如实**
+
+菜单里会出现一些灰条目（「查找和替换」「源代码模式」）。它们不是占位符，
+也不是"以后会做"的许诺——它们是**当前确实做不到**的能力，摆在那里是为了**让缺口可见**。
+判据是"`App.tsx` 里有没有这个 id 的处理函数"（见 `commands.ts` 顶上那段），
+所以**灰的就一定是真没有**，不存在"忘了翻标志"。
+
+### 交互按桌面惯例，不是按网页惯例
+
+- 菜单开着时**鼠标划过另一栏就切过去**（`onMouseEnter` 里 `open && setOpen(...)`）——
+  不用先点开再点另一栏；
+- 点空白处关：⚠️ 用 **`mousedown` 不是 `click`**——`click` 要等鼠标抬起，期间菜单还开着，
+  点到的东西会被菜单挡住，手感是"点了两下才关掉"；
+- 按下 Esc 关，**且焦点回到那一栏的按钮上**——不然键盘用户在菜单关掉后就没有落点了，
+  下一次 Tab 会从页面开头重新数；
+- 点已经开着的那一栏 = 收起（桌面惯例）。
+
+### 「主题」那一栏是**动态**的
+
+`MENUS` 里 `theme` 那一项只写了 `dynamic: "themes"`、`items: []`——
+内容由 `themeEntries()` 现算：一条「无主题（内置）」+ 每个主题一条 + 末尾一条
+「打开主题文件夹…」。⚠️ 这两条**不在 `commands.ts` 里**，因为它们只属于这一栏。
+
+主题条目的 id 是合成的：`__theme-none` 与 `__theme:<名字>`（前缀常量 `THEME_PREFIX`），
+`pick()` 按前缀分流到 `onTheme`，其余走 `onCommand`。
+
+出处标在名字后面（`（Typora）` / `（Typora flatpak）`，我们自己的不标）。
+不标的话"我明明删了那个文件它怎么还在"会变成一个查不动的问题——**三个目录都扫**，
+得让人看出是哪一份。没有同名资源目录的主题后面跟一个「　无字体」。
+⚠️ 全角空格开头是**对齐用的**，别改成半角。
+
+---
+
+## `src/ui/commands.ts`（195 行）
+
+菜单栏的**骨架**：菜单怎么排、每一项叫什么、有没有快捷键。
+逐条抄自 Typora 的菜单（用户 2026-09-22 截了 6 张图，抄录在 `docs/10` §11.1）。
+
+### 类型
+
+| 类型 | 说明 |
+|---|---|
+| `MenuItemSpec` | `{ id, label, accel?, needsDoc?, checkable?, danger? }` |
+| `MenuEntry` | `MenuItemSpec \| "sep"` |
+| `MenuSpec` | `{ id, label, items: MenuEntry[], dynamic?: "themes" }` |
+
+`export const MENUS: MenuSpec[]` —— 七栏：文件 / 编辑 / 段落 / 格式 / 视图 / 主题 / 帮助。
+
+### ⚠️ 「能不能兑现」不是这里说了算
+
+本文件**不写** `implemented: true/false` 这样的标志位。判据是
+**`App.tsx` 里有没有这个 id 的处理函数**：有就亮，没有就灰。
+
+这是**有意的**。手写的标志位一定会腐坏——加了实现忘了翻标志、或者翻了标志
+实现早被删了，两种都不会报错，只会让界面撒谎。用"有没有处理函数"当判据，
+它就不可能不一致：**界面永远不会声称一个它做不到的能力**。
+派生表在 `App.tsx` 的 `menuHandlers` 上（`disabledCommands` 由它算出来）。
+
+⚠️ `accel` **只是显示**——真正的按键绑定在 `App.tsx` 的 `keydown` 里。
+两处不一致时以那边为准（这边写错了用户按下去没反应，不会报错），
+所以**改了那边记得回来对一眼**。
+
+### 为什么界面串一律中文
+
+Typora 自己的菜单是**中英混杂**的（"帮助"整栏除最后三行外全是英文），
+用户 2026-09-22 明确说过「注意不要像他一样中英混杂」。
+规矩：**菜单项、按钮、提示语一律中文**；`Markdown` / `LaTeX` / `Pandoc`
+这种**专有名词**照写原文（它们是名字不是词）。
+
+⚠️ 「帮助」那一栏**只留了「关于 Nota」一条**：Typora 那里是
+「What's New / Quick Start / Markdown Reference…」全是外链，我们离线优先，
+外链既打不开也不该假装能打开。
+
+---
+
+## `src/ui/EditorPane.tsx`（145 行）
 
 编辑区：把 Milkdown 实例接进 React 生命周期。
 
@@ -2518,7 +2917,7 @@ catch → onToast(`编辑器启动失败：${e}`, "error")
 
 ---
 
-## `src/ui/Sidebar.tsx`（136 行）
+## `src/ui/Sidebar.tsx`（144 行）
 
 左侧栏：**文件树 / 大纲** 两页。对标 Typora 的侧栏（它的快捷键是 Ctrl+Shift+1/2/3
 切文件树/文档列表/大纲）。"文档列表"（最近打开的文档）排在后面。
@@ -2526,9 +2925,9 @@ catch → onToast(`编辑器启动失败：${e}`, "error")
 ⚠️ **原本这里是三页，第三页「插件」2026-09-22 搬到了右边**（`ui/PluginDock.tsx`）——
 这一栏只管**文档导航**，工具面板不跟它挤。所以 `Tab` 也从三个值收成两个。
 
-### `type Tab = "tree" | "outline";`（模块内，未导出）
+### `export type SidebarTab = "tree" | "outline";`（**导出了**，`App.tsx` 要用）
 
-### `export function Sidebar({ workspace, tree, docText, onOpenFile }: Props)`
+### `export function Sidebar({ workspace, tree, docText, tab, onTab, onOpenFile }: Props)`
 
 props：
 
@@ -2537,18 +2936,21 @@ props：
 | `workspace` | `string \| null` | `null` → 文件树页显示"还没打开文件夹" |
 | `tree` | `TreeNode[]` | **只有一层**（App 只请求 `depth = 1`） |
 | `docText` | `string` | 当前文档正文，用来抽大纲 |
+| `tab` | `SidebarTab` | 当前是哪一页。**由 App 持有** |
+| `onTab` | `(t: SidebarTab) => void` | 切页 |
 | `onOpenFile` | `(path: string) => void` | 接的是 `App.openPath`，传的是**绝对路径** |
 
 ⚠️ **`plugins` 这个 prop 2026-09-22 拿掉了**——插件那一页搬去了右边的 `PluginDock`。
 
-内部：`const [tab, setTab] = useState<Tab>("tree")`（默认文件树页）、
-`const outline = useMemo(() => extractOutline(docText), [docText])`。
+内部只有 `const outline = useMemo(() => extractOutline(docText), [docText])`。
 
 渲染结构：`<aside className="sidebar">` 里一个 `role="tablist"` 的 nav（两个 `TabButton`）
 + `<div className="sidebar-body">`（按 `tab` 二选一）。
 
-⚠️ `tab` 是**组件内 state**，不持久化，也不受外部控制——所以没有"从外部切页"
-这条路（Ctrl+Shift+1/2/3 也因此没做）。
+⚠️ **`tab` 2026-09-23 从组件内 `useState` 改成受控**。理由是「视图 → 大纲 / 文件树」
+那两个菜单项要能切它，而**菜单栏在 `App.tsx` 里，够不着这里的局部状态**。
+改受控之后 Ctrl+Shift+1（大纲）/ Ctrl+Shift+3（文件树）才有落点——⚠️ 那两条快捷键
+此前是**死代码**，成因是 `e.key` 与 `e.code` 混用（见 `docs/07` §4 2026-09-23 那条）。
 
 ### 私有子组件
 

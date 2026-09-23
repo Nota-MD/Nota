@@ -34,13 +34,21 @@
 ```text
 ErrorBoundary                       (ui/ErrorBoundary.tsx)  兜住渲染期崩溃
 └─ div.app
-   ├─ Toolbar                       (App.tsx 内联)  <header class="toolbar">
+   ├─ TopBar                        (App.tsx 内联)  <header class="toolbar">
    │  ├─ span.toolbar-brand          文案「Nota」
-   │  ├─ div.toolbar-actions
-   │  │  ├─ button.btn               「新建」
-   │  │  ├─ button.btn               「打开」
-   │  │  ├─ button.btn               「打开文件夹」
-   │  │  └─ button.btn               「保存」        disabled = 没有活动文档
+   │  ├─ MenuBar                    (ui/MenuBar.tsx)  <div class="menubar" role="menubar">
+   │  │  ├─ div.menu-root           每栏一个
+   │  │  │  ├─ button.menu-title     「文件」「编辑」「段落」「格式」「视图」「主题」「帮助」
+   │  │  │  │                        ⚠️ 展开时加 `.menu-title-open`；同时只开一栏
+   │  │  │  └─ div.menu-popup        该栏展开时的弹层（`role="menu"`）
+   │  │  │     ├─ button.menu-item   label + 可选 `span.menu-accel`（快捷键提示）
+   │  │  │     │                     ⚠️ 灰不灰由 `disabled` 推（来自 App 的 `menuHandlers`），
+   │  │  │     │                     勾没勾由 `checked` 推（`menuChecks`），**没有第三个标志位**；
+   │  │  │     │                     危险项加 `.menu-item-danger` 画红
+   │  │  │     ├─ span.menu-check    可勾项的勾形；不可勾项留一个等宽空位（防文字跳动）
+   │  │  │     └─ div.menu-sep       role="separator"
+   │  │  │                           ⚠️ **没有子菜单**（`MenuItemSpec` 里没有 `submenu` 字段），
+   │  │  │                           Typora 那些 ▸ 项现在是一条平铺项，点不动（灰）
    │  └─ button.btn.toolbar-dock-toggle  「插件」     aria-pressed = dockOpen
    │                                   ⚠️ 靠 `margin-left: auto` 推到最右，没加 spacer 元素
    │
@@ -125,16 +133,63 @@ CSS 给的是 `border-top`）。这与"标签在顶部"的常见布局相反，�
 
 ## 2. 逐控件表
 
-### 2.1 工具条（`Toolbar`）
+### 2.1 顶栏（`TopBar`）与菜单栏
+
+⚠️ **2026-09-23 起顶栏只剩三样东西**：品牌字、菜单栏、最右那个「插件」开关。
+原来的四个按钮（新建/打开/打开文件夹/保存）**全删了**——它们现在都在「文件」菜单里，
+一个入口只有一个地方，不给两处各留一份（两份必然有一份先腐坏）。
 
 | 控件 | 文案 | 回调 → 最终动作 | 当前状态 |
 |---|---|---|---|
 | 品牌 | `Nota` | 无 | 纯文本 |
-| 按钮 | 新建 | `newDoc()` → `api.doc.create()` → `refreshDocs()` → `setActiveId(id)` | ✅ 能用 |
-| 按钮 | 打开 | `openViaDialog()` → `plugin-dialog` 的 `open({title:"打开", filters:[md, markdown, mdown, mkd, txt]})` → `openPath()` → `api.doc.open(path)` | ✅ 能用 |
-| 按钮 | 打开文件夹 | `openFolder()` → `open({title:"打开文件夹", directory:true})` → `api.workspace.open(picked)` → `api.workspace.tree(undefined, 1)` | ✅ 能用（⚠️ 开了之后**没法关**，见 §2.2） |
-| 按钮 | 保存 | `saveDoc(activeId)` → 需要时弹 `save({title:"保存为"})` → `editorRef.getMarkdown()` → `api.doc.sync()` → `api.doc.save()` → toast「已保存到 …」 | ✅ 能用；`hasActive === false` 时 `disabled` |
+| 菜单栏 | 七栏 | 见 §2.1b | ✅ 画出来了、能开关 |
 | 按钮（最右） | 插件 | `setDockOpen(v => !v)`——**纯前端，不走后端** | ✅ 实测过：开→关，正文区宽度跟着补上。⚠️ 状态**不持久化**，重启回到默认（开）。`title` 跟着状态换「收起插件栏」/「展开插件栏」 |
+
+### 2.1b 菜单栏（`ui/MenuBar.tsx` + `ui/commands.ts`）
+
+**骨架是静态的、状态是推出来的。** 逐栏逐项列在 `src/ui/commands.ts` 的 `MENUS`
+（抄自 `docs/10` §11.1），**但那里一个 `disabled` 标志位都没有**。判据是：
+
+```
+App.tsx 的 menuHandlers 里有没有这个 id ──有──> 能点
+                                        ──没有─> 灰
+```
+
+这条规矩的理由写在 `commands.ts` 文件头：**手写的标志位一定会腐坏**
+（加实现忘了翻标志、翻了标志实现早删了，两种都不报错，只让界面撒谎）。
+用"有没有处理函数"当判据则**不可能不一致**：界面永远不会声称一个它做不到的能力。
+
+**现在能点的就是 `menuHandlers` 那 34 条，一条不多**（数出来的，不是看菜单拍的）：
+
+| 栏 | 能点的 id |
+|---|---|
+| 文件 | `file.new` · `file.open` · `file.openFolder` · `file.reload` · `file.save` · `file.saveAs` · `file.close` |
+| 编辑 | `edit.undo` · `edit.redo` · `edit.copyAsMarkdown` |
+| 段落 | `para.h1`…`para.h6` · `para.text` · `para.table` · `para.codeBlock` · `para.quote` · `para.ol` · `para.ul` · `para.hr` |
+| 格式 | `fmt.bold` · `fmt.italic` · `fmt.code` · `fmt.strike` |
+| 视图 | `view.toggleSidebar` · `view.outline` · `view.fileTree` · `view.toggleDock` · `view.statusBar` · `view.fullscreen` |
+| 主题 | **动态**，不经 `menuHandlers`：每个扫到的主题 + 「无主题（内置）」+ 「打开主题文件夹…」 |
+| 帮助 | `help.about` |
+
+⚠️ **「剪切/复制/粘贴/全选」不在这张表里**：它们交给 WebView 原生处理，
+自己接一遍只会把系统剪贴板的行为做坏。同理**「超链接」「清除样式」没有处理函数**，
+所以是灰的——**灰不代表忘了做**，代表 `menuHandlers` 里确实没有它。
+⚠️ `disabledCommands` 还多一条判据：条目标了 `needsDoc` 而当前没有活动文档时**也灰**。
+
+⚠️ **快捷键表与这里不是一回事**：`keydown` 里另有一张（`Ctrl+S/N/O/…`），
+两者只是**恰好覆盖同一批能力**，不是同一张表。改一处要顺手对另一处。
+
+⚠️ **「主题」是唯一动态的一栏**（`MenuSpec.dynamic === "themes"`）：条目来自
+`api.theme.list()`，用户装了什么就有什么，抄不进静态表。名字后面标出处
+（`（Typora）` / `（Typora flatpak）`），**我们自己那份不标**；没有同名资源目录的
+主题标「无字体」。理由：三个目录都扫，不标出处的话"我明明删了它怎么还在"会变成
+一个查不动的问题。
+
+⚠️ **关弹层用 `mousedown` 不是 `click`**：`click` 要等鼠标抬起，中间那段时间
+弹层还开着，看起来像"点了一下没关掉"。这条与 `ConfirmDialog` 同源。
+
+⚠️ **快捷键提示（`accel`）只是显示**。真绑定在 `App.tsx` 的 `keydown` 里，
+两处不一致时以那边为准——**这边写错了用户按下去没反应，不会报错**。
 
 ### 2.2 侧栏（`Sidebar`）
 
@@ -174,7 +229,8 @@ CSS 给的是 `border-top`）。这与"标签在顶部"的常见布局相反，�
 与 `nota_commands` 同一范式。开窗实测 Git 面板出现在栏顶。
 ⚠️ **别把它改回事件**：注册发生在**插件加载时**、前端订阅在**挂载之后**，直连必漏且漏得安静。
 
-⚠️ **这一栏没有快捷键**，只能点工具条那个开关或栏里的 ×。
+⚠️ **这一栏没有自己的快捷键**，三个入口都是"点"：顶栏那个开关、栏里的 ×、
+菜单栏「视图 → 插件栏」（可勾项，勾选状态跟着 `dockOpen` 走）。
 
 ⚠️ **侧栏没有「文档列表」页**（Typora 的 Ctrl+Shift+1/2/3 里的第二页是最近打开的文档）。
 `Sidebar.tsx` 的文件头注释里写明了：文档列表排在后面。
@@ -205,8 +261,15 @@ CSS 给的是 `border-top`）。这与"标签在顶部"的常见布局相反，�
 
 | 控件 | 文案 | 回调 → 最终动作 | 当前状态 |
 |---|---|---|---|
-| 标签题 | 文档标题（脏时前面有小圆点，`title="有未保存的改动"`） | `onSelect` → `setActiveId(id)` | ⚠️ **只改前端 state，不调 `api.doc.setActive`**：后端的 `active` 仍停在最后一次新建/打开/关闭的那份。插件 `nota.document.*` 读的是**后端 active**，所以用户点了别的标签后插件可能读错文档（见 `docs/03` §11 第 1 条） |
-| 关闭 | `×`（`title="关闭"`） | `closeDoc(id)`：`doc.dirty && settings.confirm_unsaved` → `window.confirm("「标题」有未保存的改动，仍然关闭吗？")` → `api.doc.close()` → `refreshDocs()` → 活动切到列表最后一份 | ✅ 能用 |
+| 标签题 | 文档标题（脏时前面有小圆点，`title="有未保存的改动"`） | `onSelect` → `setActiveId(id)`；⚠️ 后端那一侧的同步**不在这里**——`App.tsx` 有一个盯 `activeId` 的 effect 去调 `api.doc.setActive`（BUG-6 的修法就是那一段，见下） | ✅ 能用 |
+| 关闭 | `×`（`title="关闭"`） | `closeDoc(id)`：`doc.dirty && settings.confirm_unsaved` → `askConfirm({title:"有未保存的改动", confirmLabel:"丢弃并关闭", danger:true})` → `api.doc.close()` → `refreshDocs()` → 活动切到列表最后一份 | ✅ 能用 |
+
+⚠️ **「活动文档」是两处状态、靠一个 effect 对齐**：前端的 `activeId`
+（决定画哪一份）与后端的 `active`（插件 `nota.document.*` 读的那份）。
+点标签只改前者，所以 `App.tsx` 里有一段 `useEffect` 盯 `activeId` 去喊
+`api.doc.setActive`——**放在 effect 而不是补在 `onSelect` 上**，是为了把
+`open` / `new` / `close` 那几条路也一起兜住（多喊一次无害）。
+这就是 BUG-6（切标签后插件读写错文档）的修法。
 
 ### 2.5 状态栏（`StatusBar`）
 
@@ -364,59 +427,100 @@ alert 会**阻塞整个 WebView**，在编辑器里打字打到一半弹一个 a
 加一条新轴上的新值，**三处缺一不可**：`theme.css`、`src-tauri/src/settings.rs`
 的枚举、本节。
 
-### 3.3 轴三（文档主题）怎么落的
+### 3.3 轴三（文档主题）怎么落的 —— 2026-09-23 起是"装 Typora 主题"
 
-⚠️ 轴三的那几段 CSS **在 `src/styles/app.css` 末尾**（`/* ── 轴三：文档主题 ── */`，约 685 行起），
-**不在 `theme.css`**——`theme.css` 只管前两条轴的变量，轴三要能选中 `.editor-mount` 里面。
+⚠️⚠️ **轴三和轴一/轴二不是同一种东西，别照前两条的样子去理解它**：
+轴一/轴二的取值是**我们自己写的几套 CSS**（枚举就那么几个值），
+轴三的取值是**用户装了什么就有什么**——它是**运行时加载的第三方 CSS**。
 
-```css
-/* src/styles/app.css */
-[data-doc-theme="github"] .editor-mount .ProseMirror { --doc-fg: …; --accent: …; }
-[data-ui-mode="dark"][data-doc-theme="github"] .editor-mount .ProseMirror { … }
-[data-doc-theme="newsprint"] .editor-mount .ProseMirror { --doc-fg: …; --font-doc: …; line-height: 1.9; }
+**管线**（`src/styles/typora-theme.ts` 四步 + `theme.css` 末尾那一段）：
+
+```
+启动时 api.theme.list() → ThemeInfo[]（name / source / **css = 绝对路径** / has_assets）
+选了某条 → updateSettings({document_theme: name}) → settings 落盘 + setSettings
+          → useDocTheme effect 拿 name 在 themes 里查到那条 ThemeInfo
+          → applyDocTheme({css: 路径})：① api.theme.read(路径) 取回文本
+          → ② 展开 @import（最多 8 层，防环）
+          → ③ url('./x.woff2') 逐个走 api.theme.asset() 换成 data: URL
+               （按**那个文件自己所在目录**折算，不是按应用目录）
+          → ④ new CSSStyleSheet().replaceSync() 让浏览器自己解析（**不用正则切**）
+          → ⑤ 选择器收拢进 #write、:root 变量**提升到全局**
+          → 注进 <style id="nota-doc-theme">
+          → theme.css 末尾的 html[data-doc-theme] 规则把提升上来的变量**桥**给外壳
 ```
 
-三个观察点：
+⚠️ **`applyDocTheme(null)` 就是"无主题"**：不是注入一段空 CSS，是**把那个 `<style>`
+元素删掉**。所以「无主题（内置）」回到的是我们自己的样式，不是"没有样式的裸 HTML"。
+⚠️ 名字在 `themes` 里找不到时（用户把那份 CSS 删了）**安静地走 null 那条路**，
+不弹错——换机器、清理磁盘都会造成这种情况，不是该打断用户的错误。
 
-- 选择器**必须带 `.editor-mount` 前缀**——这是"只管正文"的实现方式；
-- 明暗是**叠乘**进来的（`[data-ui-mode="dark"][data-doc-theme="github"]`），
-  又一次印证 §3.2 那条"两条轴相乘"；
-- 加一个主题 = 在 `app.css` 末尾加一段 + 往主题目录放一个 CSS
-  （`settings.rs` 里说用户可以放 `.user.css` 覆盖，那部分还没实现）。
-- 目前真实存在的具名主题只有两个：**`github`**（含暗色那一段）与 **`newsprint`**。
+为什么非要收拢（第 ④ 步）：真实主题里**每一套都有 21–59 条裸元素规则**
+（`h1 {…}` / `body {…}` / `a {…}`），原样注入会把外壳的标题、链接、按钮一起改掉，
+侧栏和顶栏当场散架。收拢的三条规则按顺序是：**已经带 `#write` 的放行 →
+`:root`/`html`/`body` 单独出现就换成 `#write` → 其余一律加 `#write ` 前缀**。
 
-### 3.4 ⚠️ 三条轴目前只有设置项与 CSS，没有切换界面
+为什么第 ② 步换成 **data: URL 而不是 asset 协议地址**：`@font-face` 的装载
+**永远走 CORS 模式**，而 wry 没给自定义协议登记 `cors_enabled`——字体请求直接
+NetworkError。⚠️ **图片不受影响**（`<img>` 不走 CORS），所以只拿图片试会以为路是通的。
 
-- 设置**能存能读**：`settings.toml` 里的 `ui_style` / `ui_mode` / `document_theme`、
-  命令 `nota_settings_get` / `nota_settings_set` 都是通的；
-- 但**前端从未调过 `api.settings.set`**（全仓只有 `api.settings.get` 一处调用），
-  界面上也**没有任何设置面板**、没有菜单、没有快捷键；
-- 所以想换外观只能手改 `~/.config/nota/settings.toml` 再重启。
+**桥接只桥"成对"的变量**：`--bg-color` / `--text-color` / `--side-bar-bg-color` 这些
+抄进 `--nota-bridge-*` 供外壳用；⚠️ **`--accent` 故意不桥**——Typora 拿它当链接色、
+我们拿它当按钮底色，硬桥过来会出现"浅底配浅字"，而纯 CSS 判不了对比度。
 
-实现排在后面的轮次：`docs/07` **第 11 项**（三条外观轴的切换界面 + 文档主题目录），
-它依赖 **第 10 项**（设置对话框）——两者做完之前，本节描述的一切都只能靠改 TOML 生效。
+**兼容边界**（不是 bug，是边界）：主题里写给**它自己的 DOM** 的选择器
+（`#typora-sidebar` / `.megamenu` / `.md-toc` / `.md-math`…）在我们这儿是死规则，
+不报错也不起作用。能拿到的是**正文版式 + 配色**，那正是主题的主要价值。
 
-⚠️ `docs/10` §7 把"文档主题"那格填成"一份文档主题的 CSS 都没有"，与 §3.3 **不符**：
-`app.css` 末尾已经有 `github`（含暗色）与 `newsprint` 两段。见 §7。
+⚠️ **本仓不发布任何第三方主题**（版权），一份都不带——只扫用户机器上已有的。
+
+### 3.4 切换界面：轴三有了，轴一/轴二还没有
+
+| 轴 | 切换界面 | 怎么改它 |
+|---|---|---|
+| 轴三（文档主题） | ✅ **有**：菜单栏「主题」栏 | 选一条 → `updateSettings({document_theme: name})` |
+| 轴一（界面风格） | ⬜ 没有 | 手改 `~/.config/nota/settings.toml` 再重启 |
+| 轴二（明暗） | ⬜ 没有 | 同上 |
+
+`api.settings.set` **现在有调用者了**（`updateSettings`，只被主题选择用了这一处）。
+`docs/07` 第 11 项（三条轴的切换界面）**只结清了三分之一**：剩下两条要等设置对话框
+（第 10 项）。
+
+⚠️ 主题那一栏**不重扫目录**：`api.theme.list()` 在启动时拉一次就定住了。
+往主题目录里丢一个新 `.css`，**要重启才出现在菜单里**（`docs/07` 第 41 项）。
 
 ---
 
 ## 4. 快捷键表
 
 **全部快捷键都绑在同一个 effect 里**：`src/App.tsx` 的
-`useEffect(() => { … window.addEventListener("keydown", onKey) … }, [activeId, saveDoc, newDoc, openViaDialog, closeDoc])`。
+`useEffect(() => { … window.addEventListener("keydown", onKey) … }, [activeId, saveDoc, newDoc, openViaDialog, closeDoc, copyAsMarkdown, toggleFullscreen])`。
 
-`onKey` 的前两行决定了整张表的形状：`const mod = e.ctrlKey || e.metaKey; if (!mod) return;`
-——**只认 Ctrl（或 macOS 的 Cmd）**，没有单独的 F 键、Alt 组合，也不处理没有修饰键的键。
-命中后一律 `e.preventDefault()`。
+`onKey` 的结构决定了整张表的形状：先单判 `F11`，然后
+`const mod = e.ctrlKey || e.metaKey; if (!mod) return;`——**除了 F11 之外只认 Ctrl
+（或 macOS 的 Cmd）**，没有别的无修饰键、也没有 Alt 组合。命中后一律 `e.preventDefault()`。
 
-| 快捷键 | 分支条件 | 动作 | 当前状态 |
-|---|---|---|---|
-| `Ctrl+S` | `key === "s" && activeId !== null` | `saveDoc(activeId, e.shiftKey)` → 有路径就存，没有就弹「保存为」 | ✅ |
-| `Ctrl+Shift+S` | 同上（`e.shiftKey` 为真） | `saveDoc(activeId, true)` → **强制**弹「保存为」 | ✅ |
-| `Ctrl+N` | `key === "n"` | `newDoc()` | ✅ |
-| `Ctrl+O` | `key === "o"` | `openViaDialog()` | ✅ |
-| `Ctrl+W` | `key === "w" && activeId !== null` | `closeDoc(activeId)`（走未保存确认） | ✅ |
+| 快捷键 | 分支条件 | 动作 |
+|---|---|---|
+| `F11` | `e.key === "F11"`（**唯一不带修饰键的**，在 `mod` 判断之前） | `toggleFullscreen()` |
+| `Ctrl+S` | `key === "s" && activeId !== null` | `saveDoc(activeId, e.shiftKey)` → 有路径就存，没有就弹「保存为」 |
+| `Ctrl+Shift+S` | 同上（`e.shiftKey` 为真） | `saveDoc(activeId, true)` → **强制**弹「保存为」 |
+| `Ctrl+N` | `key === "n"` | `newDoc()` |
+| `Ctrl+O` | `key === "o"` | `openViaDialog()` |
+| `Ctrl+W` | `key === "w" && activeId !== null` | `closeDoc(activeId)`（走未保存确认） |
+| `Ctrl+Shift+C` | `key === "c" && e.shiftKey` | `copyAsMarkdown()`。⚠️ **只在有 Shift 时接**——不带 Shift 的 `Ctrl+C` 是系统的复制，抢过来会让编辑器里选不中的东西复制不了 |
+| `Ctrl+Shift+L` | `key === "l" && e.shiftKey` | `setSidebarOpen(v => !v)` |
+| `Ctrl+Shift+1` | `e.shiftKey && e.code === "Digit1"` | 开侧栏并切到**大纲** |
+| `Ctrl+Shift+3` | `e.shiftKey && e.code === "Digit3"` | 开侧栏并切到**文件树** |
+| `Ctrl+1`…`Ctrl+6` | `!e.shiftKey && key >= "1" && key <= "6"` | `runCommand("h1"…"h6")` |
+| `Ctrl+0` | `!e.shiftKey && key === "0"` | `runCommand("text")` |
+
+⚠️⚠️ **`Ctrl+Shift+1/3` 判的是 `e.code` 不是 `e.key`**，这条踩过坑：按着 Shift 敲数字排，
+`e.key` 拿到的是**上档字符**（Shift+1 是 `"!"`、Shift+3 是 `"#"`），所以 `key === "1"`
+**永远不成立**——那两条曾经是**按了没反应**的死代码，而静态读代码完全看不出来。
+`e.code` 是物理键位，不随 Shift 变。
+
+⚠️ **`Ctrl+1..6` 与 `Ctrl+Shift+1/3` 不能混**：前者切标题级别、后者切侧栏页，
+靠 `e.shiftKey` 分开。另外 ProseMirror 自己的标题快捷键是 `Ctrl+Alt+1..6`，所以不冲突。
 
 ⚠️ 这几条**与焦点无关**：`Ctrl+N` / `Ctrl+O` 没有 `activeId` 条件，所以在输入框里
 （将来有设置面板时）也会被吞掉。
@@ -425,61 +529,86 @@ alert 会**阻塞整个 WebView**，在编辑器里打字打到一半弹一个 a
 
 | 键 | Typora 里是 | Nota 现状 |
 |---|---|---|
-| `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` | 撤销 / 重做 | 没有显式绑定——**撤销走 ProseMirror 的 `history` 插件自己的键盘处理**，不经过 `App.tsx` |
-| `Ctrl+Shift+1/2/3` | 切侧栏的文件树 / 文档列表 / 大纲 | 没绑（且没有"文档列表"页） |
-| `Ctrl+B` / `Ctrl+I` / `Ctrl+K` | 粗体 / 斜体 / 链接 | 没绑；**富文本工具栏也还没有**（`docs/10` 矩阵里是 ⬜） |
+| `Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+Y` | 撤销 / 重做 | 没有显式绑定——**撤销走 ProseMirror 的 `history` 插件自己的键盘处理**，不经过 `App.tsx`。菜单栏那两条走 `runCommand` |
+| `Ctrl+Shift+2` | 文档列表 | 没绑（我们**没有"文档列表"页**，侧栏只有文件树/大纲两页） |
+| `Ctrl+B` / `Ctrl+I` | 粗体 / 斜体 | **这张表里没绑**；⚠️ **菜单栏「格式」栏里能点**，而且 Milkdown 自己的 keymap 可能也接了（**没实测过**，别拿这条当结论） |
+| `Ctrl+K` | 超链接 | 没绑，菜单项也是灰的（没有处理函数） |
 | `Ctrl+/` | 斜杠菜单 | 没绑，编辑器也**刻意没装 slash 插件**（见 `docs/05`） |
-| `Ctrl+P` | 快速打开 | 没绑 |
-| `Ctrl+,` | 设置 | 没绑（没有设置界面） |
+| `Ctrl+P` | 快速打开 | 没绑，菜单项也是灰的 |
+| `Ctrl+,` | 设置 | 没绑（**没有设置界面**，见 §3.4） |
 
-⚠️ 这个 effect 的依赖数组里列了 `saveDoc` / `newDoc` / `openViaDialog` / `closeDoc`
-四个回调，而它们各自又依赖 `docs` / `settings` / `activeId`——所以**文档列表一变，
-监听器就重装一次**。功能上是对的（新闭包看到新的 `docs`），只是别把它当成"只装一次"。
+⚠️ 这个 effect 的依赖数组里列了 6 个回调，而它们各自又依赖
+`docs` / `settings` / `activeId`——所以**文档列表一变，监听器就重装一次**。
+功能上是对的（新闭包看到新的 `docs`），只是别把它当成"只装一次"。
+
+⚠️ **`commands.ts` 里的 `accel` 只是显示**，真正的绑定在这张表里。
+两处不一致时**以这里为准**——那边写错了用户按下去没反应，不会报错。
 
 ---
 
 ## 5. 状态存在哪（改界面之前先看这张表）
 
-`App.tsx` 是**唯一**的状态编排处，界面里所有 `useState` 都在这一个组件（除了
-`Sidebar` 自己那个"当前是哪一页"的 `tab`）：
+`App.tsx` 是**唯一**的状态编排处，界面里所有 `useState` 都在这一个组件
+（`Sidebar` 那个"当前是哪一页"的 `tab` **是受控的**——它住在这里，见下）。
+
+**14 个 `useState`**（`grep` 数出来的）：
 
 | 状态 | 类型 | 谁改它 |
 |---|---|---|
 | `docs` | `Document[]` | `refreshDocs()`（`api.doc.list()`）：启动、新建、打开、保存、关闭、**以及编辑器去抖同步之后** |
-| `activeId` | `DocId \| null` | 新建/打开/关闭，以及点标签（`setActiveId` 直接传给了 `TabBar`） |
-| `settings` | `Settings \| null` | 只在启动时读一次 `api.settings.get()`——**之后再没刷新过** |
+| `activeId` | `DocId \| null` | 新建/打开/关闭，以及点标签（`setActiveId` 直接传给了 `TabBar`）。⚠️ 它一变就有一个 effect 去喊 `api.doc.setActive`（BUG-6） |
+| `settings` | `Settings \| null` | 启动读一次 + **`updateSettings()` 改它**（今天唯一的调用点是主题切换）。⚠️ 不是"读一次就不动了"了 |
 | `workspace` | `string \| null` | 启动读一次 + 打开文件夹 |
 | `tree` | `TreeNode[]` | `refreshTree()`，随 `workspace` 变 |
 | `plugins` | `PluginInfo[]` | 只在启动时读一次 `api.plugin.list()`。**插件清单**（名称/版本/能力/报错） |
 | `panels` | `PluginPanel[]` | 只在启动时读一次 `api.plugin.panels()`。**插件声明的面板**，与 `plugins` 是两个来源，但同一个 `Promise.all` 里一起拉 |
 | `toasts` | `Toast[]` | `toast()` 加、定时器或用户点 × 减 |
-| `dockOpen` | `boolean`（默认 `true`） | 工具条的「插件」开关、右栏的 ×。⚠️ **只在内存里，没进 `settings`**——它和左栏选哪一页一样是「看的时候的状态」，不是文档属性。刷新即复位 |
-| `editorRef` | `useRef<EditorPaneHandle>` | 命令式通道：`getMarkdown()`（存盘前强制同步）、`setMarkdown()`（插件改了文档） |
+| `sidebarOpen` | `boolean`（默认 `true`） | 菜单栏「视图」栏、`Ctrl+Shift+L` |
+| `sidebarTab` | `"tree" \| "outline"` | **受控**：`Sidebar` 自己不再持有它，点标签页、菜单栏「大纲/文件树」、`Ctrl+Shift+1/3` 都改这里 |
+| `statusBarOpen` | `boolean`（默认 `true`） | 菜单栏「视图 → 状态栏」 |
+| `dockOpen` | `boolean`（默认 `true`） | 顶栏的「插件」开关、右栏的 ×、菜单栏「视图 → 插件栏」。⚠️ **只在内存里，没进 `settings`**——它和左栏选哪一页一样是「看的时候的状态」，不是文档属性。刷新即复位 |
+| `themes` | `ThemeInfo[]` | **只在启动时读一次** `api.theme.list()`。⚠️ 所以往主题目录丢新 `.css` 得重启才看得见（`docs/07` 第 41 项） |
+| `confirmReq` | `{title, message, confirmLabel?, danger?} \| null` | `askConfirm()` 开、`answerConfirm()` 关 |
 
-⚠️ `settings` 与 `plugins` 都**只在启动时取一次**：将来做设置面板时，改完必须
-`setSettings(...)` 把新的那份放回 state（否则 `applyTheme` 不会重跑）。
+**3 个 `useRef`**（`App.tsx`；`MenuBar` 自己内部还有一个 `barRef`）：
+
+| ref | 类型 | 干什么 |
+|---|---|---|
+| `editorRef` | `EditorPaneHandle` | 命令式通道：`getMarkdown()`（存盘前强制同步）、`setMarkdown()`（插件改了文档）、`focus()`、`runCommand()`（菜单栏与快捷键从这儿进） |
+| `activeIdRef` | `DocId \| null` | **给事件订阅用的**。订阅那个 effect 不该因为 `activeId` 变了就重装，所以回调里读 ref 而不是闭包里的值 |
+| `confirmResolve` | `((ok: boolean) => void) \| null` | `askConfirm()` 返回的 Promise 的兑现函数。⚠️ **单个 ref、不是队列**，理由见 §2.6b |
+
+⚠️ `MenuBar.tsx` 里还有个 `barRef`（挂在 `.menubar` 上），用途是判"这次 `mousedown`
+点到的是不是菜单以外"→ 是就关弹层。
+
+⚠️ **`settings` 改完必须 `setSettings(...)` 把新的那份放回 state**（`updateSettings`
+就是这么做的），否则 `applyTheme` 与文档主题那个 effect 都不会重跑——
+症状是"设置存进去了，界面没变"。
 
 ---
 
 ## 6. 与 `api.*` 的对账（哪些命令前端还没用上）
 
-`src/bridge/ipc.ts` 导出的全部命令里，**从未被调用过的**有下面这些。
-它们不是死代码——是后端已经做好、前端还没接线的口子：
+`src/bridge/ipc.ts` 导出的 **28 个方法**里，**从未被调用过的有 6 个**（`grep` 数出来的，
+不是估的）。它们不是死代码——是后端已经做好、前端还没接线的口子：
 
 | 命令 | 谁会用到它 |
 |---|---|
-| `api.doc.setActive` | 点标签时应当调（见 §2.4 的 ⚠️） |
 | `api.doc.get` | 单取一份文档的最新状态（而不是拉整张表） |
-| `api.doc.reload` | "磁盘上的文件被外部改了，重读" / "放弃修改" |
 | `api.doc.hasUnsaved` | 退出前决定要不要拦一下 |
-| `api.workspace.close` | 关掉工作区（只清围栏，**不关文档**） |
-| `api.settings.set` | 设置面板（§3.4） |
-| `api.plugin.setEnabled` | 插件页的启用/禁用开关（§2.2） |
-| `api.plugin.call` | 点了插件菜单项之后真正跑那条命令 |
+| `api.workspace.close` | 关掉工作区（只清围栏，**不关文档**）——⚠️ **今天打开文件夹之后没法关** |
+| `api.plugin.setEnabled` | 插件页的启用/禁用开关（`docs/07` 第 18 项） |
+| `api.plugin.call` | 点了**插件菜单项**之后真正跑那条命令 |
 | `api.plugin.findCommand` | 同上，用来对账"这个命令是哪个插件的" |
 
-这几条命令里，`api.plugin.call` **今天仍然没有调用者**——它要等菜单栏
-（`docs/07` 第 40 项）；`api.plugin.panels()` 已经接上了（`App.tsx` 启动时拉一次）。
+⚠️ 后两条要等**插件菜单挂进菜单栏**（`docs/07` 第 42 项）——
+菜单栏本体（第 40 项）2026-09-23 已经做了，缺的是"把 `nota_plugin_menus` 拉回来的
+那几条塞进对应栏里"这最后一根线。
+
+⚠️ **已经接上的**（这份对账表以前把它们列成"没用上"，逐条澄清一下，免得再被抄回来）：
+`api.doc.setActive`（BUG-6 的 effect）、`api.doc.reload`（菜单「从磁盘重新加载」）、
+`api.settings.set`（主题切换）、`api.plugin.panels` / `api.plugin.menus`
+（启动时拉一次，BUG-13 的修法）、`api.theme.*` 四条、`api.frontendReady`。
 
 ⚠️ **插件声明的面板与菜单不走事件，走上面这两条命令拉**（BUG-13，2026-09-22）。
 曾经它们是 `events.pluginPanel` / `events.pluginMenu` 两条事件，而 `App.tsx` 里
@@ -489,11 +618,15 @@ alert 会**阻塞整个 WebView**，在编辑器里打字打到一半弹一个 a
 **第 17 项仍然开着**，但它不是同一个根：那讲的是**数据类**事件没人消费
 （`plugin:<id>:<name>` 这条通道对发生类数据是正解，缺的只是订阅端）。
 
-`docs/07` §3 里与上表直接相关的还有：**第 2 项**（工具栏的格式化按钮）、
-**第 3 项**（插入菜单）、**第 10 项**（设置对话框——`api.settings.set` 与
-`api.plugin.setEnabled` 都等它）、**第 18 项**（插件启用/禁用开关，依赖第 10 项）、
-**第 20 项**（自动保存接上 `autosave_seconds`）、**第 26 项**（「放弃修改并重载」入口，
-对应 `api.doc.reload`，后端 `nota_doc_reload` 已经就绪）。
+`docs/07` §3 里与上表直接相关的还有：**第 2 项**（工具栏的格式化按钮——⚠️
+菜单栏「段落」「格式」两栏已经能兑现其中大半，缺的是**一条常驻工具栏**）、
+**第 3 项**（插入菜单——`para.table` / `para.codeBlock` / `para.hr` 已经在菜单里能点，
+图片/链接/公式/图表还没有）、**第 10 项**（设置对话框）、
+**第 18 项**（插件启用/禁用开关，依赖第 10 项）、
+**第 20 项**（自动保存接上 `autosave_seconds`）、
+**第 26 项**（「放弃修改并重载」入口——⚠️ **菜单「从磁盘重新加载」已经调 `api.doc.reload` 了**，
+第 26 项要的是"放弃修改"那个语义，两回事）、
+**第 41 项**（主题清单不重扫）、**第 42 项**（插件菜单接进菜单栏）。
 
 ---
 
@@ -508,14 +641,15 @@ alert 会**阻塞整个 WebView**，在编辑器里打字打到一半弹一个 a
 |---|---|---|---|
 | 1 | `docs/07` 第 25 项："文件树点击打开文件……现在树只读，点了不开"；`docs/10` §2 同行："树能列出来，但**点文件不会打开**" | `Sidebar.tsx::TreeNodeRow`（第 130 行）的文件分支有 `onClick={() => onOpenFile(…)}`，一路接到 `App.tsx::openPath()` → `api.doc.open()`，**点了就开** | `docs/07` 第 25 项**保留编号**、结清并写明"本条原是我按印象写错的"；`docs/10` §2 那格改成 ⚠️ **仍是 🟡 而不是 ✅**——按 `10` 自己的规矩，✅ 要求"有人在界面上点过"，而本轮只核了接线、没人实测点过 |
 | 2 | `AGENTS.md` §2 与 `docs/10` §4："字数统计……**六项**（字符 / 词 / 行 / 阅读分钟）" | `StatusBar.tsx` 只渲染**四项**：`{words} 词`、`{characters} 字符`、`{lines} 行`、`约 N 分钟` | 两处都改成**四项**（`docs/10` 那格连自己列的清单都只有四项——**清单是对的，数字是错的**，典型的没数就写） |
-| 3 | `docs/10` §7："文档主题（只管正文）⬜ —— 一份文档主题的 CSS 都没有" | `src/styles/app.css` 第 690/700 行已有 `github`（含 `data-ui-mode="dark"` 那个变体）与 `newsprint` 两个主题 | `docs/10` §7 那格改 **🟡**（有两个主题，但没有主题目录、没有切换界面、没人看过渲染效果），§1 计数已重算 |
+| 3 | `docs/10` §7："文档主题（只管正文）⬜ —— 一份文档主题的 CSS 都没有" | ⚠️⚠️ **这一格当时我给出的"代码是什么"是编的。** 写的是「`app.css:690/700` 已有 `github` 与 `newsprint`」——**`grep -rn 'github\|newsprint' src/styles/*.css` 返回 0 行**，那两行是 `.home-*` 的规则。原始文档说"一份都没有"**其实是对的** | 2026-09-23 按事实重写：文档主题系统是**那一批新做的**（装 Typora 主题 + 菜单栏切换），状态 **✅**、§1 计数已重算。⚠️ 这一格的教训写在 `docs/07` §4：**"实际 X 已经有 Y"这种更正，必须附上能复现的搜索命令与输出**——我当时手上没有任何搜索结果，行号是编出来的 |
 | 4 | `docs/07` BUG-3 与 `plugin/mod.rs` 的注释/错误信息："`.` **与 `_`** 在事件名里都写作 `-`" | `channel_id()` 第 258 行：**`_` 原样保留**（它本来就在 Tauri 事件名的允许集合里），只有 `.` 等不合法字符换 `-`。有用例钉着：`channel_id("a_b-c") == "a_b-c"` | **三处**都改成只提 `.`：`plugin/mod.rs` 的注释与错误信息、`manifest.rs` 的 `channel_id()` 文档注释（第 245–255 行）、`docs/07` BUG-3。同时补上"`nota_git` 与 `nota-git` **不撞**" |
 
 另有一处小疵也已改：`docs/10` §2 的"打开最近的文件"那格原本写"见 §3 第 9 项"，
 指的是**本文档自己的** §3（那是"编辑与格式化"），实际要引的是 **`docs/07` §3 第 9 项**。
 
 > ⚠️ **这四处的共同成因值得记住**：它们**全部是"按先入判断填的"**，没有一处是"忘了更新"。
-> 三处把"其实能做"写成"没做"，一处把允许字符集记宽了。
+> 两处把"其实能做"写成"没做"，一处把允许字符集记宽了，
+> **还有一处（第 3 格）是"为了纠正前一处，我编了一条没查过的更正"**——四种错里最坏的一种。
 > 所以 `docs/10` §10 第 3 条那条规矩要**双向**执行：
 > 填 ✅ 之前先点一下；**填 ⬜/🟡 之前先 `grep` 一下**。
 > 而核对的手段必须看**上下文几行**，不能只看 `grep` 命中的那一行——

@@ -27,7 +27,7 @@ Typora 能做到的那几样看起来"琐碎"的功能，**恰恰是文本缓冲
 
 选 Milkdown 作为文档树的具体形态，是因为它底下就是**裸 ProseMirror**：将来某个节点要
 下沉到 PM 原语（自定义 schema、自定义 plugin），这条路是敞开的。`create.ts` 刻意不做
-任何"只此一家"的封装——对外只给四个方法（§4）。
+任何"只此一家"的封装——对外只给五个方法（§4）。
 
 ⚠️ 与 Folio 的对照：Folio 的编辑区是 WebKitGTK 6 里的 `contenteditable`（宿主才是真相）；
 Nota 是 **WebKitGTK 4.1 里的 ProseMirror 文档树**（前端是真相）。两条结论不能互相照搬。
@@ -211,26 +211,67 @@ Milkdown（ProseMirror）自己拥有那块 `contenteditable`；React 只负责"
 
 ---
 
-## 4. `EditorHandle`：对外只有四个方法
+## 4. `EditorHandle`：对外只有五个方法
 
 ```ts
 export interface EditorHandle {
   getMarkdown: () => string;
   setMarkdown: (markdown: string) => void;
   focus: () => void;
+  runCommand: (name: EditorCommand) => void;   // 2026-09-23 加的
   destroy: () => void;
 }
 ```
 
 | 方法 | 语义 | 实现 | 实际调用点 |
 |---|---|---|---|
-| `getMarkdown()` | **取当前 markdown 文本**（序列化 `view.state.doc`，走 `serializerCtx`） | `editor.action(...)` | `App.tsx::saveDoc()`：存盘前**强制同步一次**（§5.1 对策②） |
-| `setMarkdown(md)` | **整篇替换**，底层是 `editor.action(replaceAll(md))` | 同步执行 | 只有一处：`App.tsx` 收到 `nota:document-changed` 且 `origin === "plugin"` 时。⚠️ `create.ts` 的注释说它还用于"打开文件 / 放弃修改重载"——**那两条路目前走的是重挂组件**（`key={doc.id}`），并没有调它 |
+| `getMarkdown()` | **取当前 markdown 文本**（序列化 `view.state.doc`，走 `serializerCtx`） | `editor.action(...)` | `App.tsx::saveDoc()`（存盘前**强制同步一次**，§5.1 对策②）、`copyAsMarkdown()` |
+| `setMarkdown(md)` | **整篇替换**，底层是 `editor.action(replaceAll(md))` | 同步执行 | `App.tsx` 收到 `nota:document-changed` 且 `origin === "plugin"`、以及 `reloadDoc()` 命中活动文档时。⚠️ `create.ts` 的注释说它还用于"打开文件"——**那条路走的是重挂组件**（`key={doc.id}`），并没有调它 |
 | `focus()` | 把焦点交给编辑区 | `editorViewCtx.focus()` | `EditorPane` 挂载完成后 |
+| `runCommand(name)` | 跑一条编辑命令 | 见 §4.1 | 菜单栏（`menuHandlers`）与快捷键（Ctrl+1..6 / Ctrl+0） |
 | `destroy()` | **销毁**。组件卸载时**必须**调，否则 ProseMirror 的 DOM 监听会留着 | `editor.destroy()` | `EditorPane` 的清理函数、以及 StrictMode 那一遍 |
 
 ⚠️ **别的模块不要直接去摸 `editorViewCtx` 里的 state**（`create.ts` 文件头的原话）。
-要加功能就加第五个方法，别把命令式通道开成两道。
+要加功能就加第六个方法，别把命令式通道开成两道。
+
+### 4.1 `EditorCommand`：一张**白名单**联合类型
+
+```ts
+export type EditorCommand =
+  | "undo" | "redo"
+  | "bold" | "italic" | "inlineCode" | "strike"
+  | "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+  | "text" | "quote" | "ul" | "ol" | "codeBlock" | "hr" | "table";
+```
+
+⚠️ **不是"随便什么命令名都能传"**。任意的命令名字符串从菜单传进来，等于把一个 `any`
+形状的入口开给界面层——写错了不报错、只是没反应。列成联合类型，**写错就是编译错**。
+
+⚠️ `h1`~`h6` 走**同一族**命令（`wrapInHeadingCommand` 带层数参数），在 `runCommand`
+里拆开，所以这里列六个而不是一个 `heading` 加参数。
+
+⚠️ **命令不认识时静默无操作**（返回 `false`）。界面那边本来就该保证只派发白名单里的值，
+真走到 `default` 分支是代码写错了，而"按一下没反应"比"抛个异常打断编辑"更不打扰人。
+
+⚠️ 全仓**唯一**一处 `$view`（代码块 NodeView）不在这个通道上——它自己处理 DOM 事件。
+另外**行内标记**（`**`、反引号）也不在这里，那是 `docs/07` 第 39 项要动 schema 的活。
+
+### 4.2 正文区挂的是 `id="write"`
+
+```ts
+ctx.update(editorViewOptionsCtx, (prev) => ({
+  ...prev,
+  attributes: { ...(typeof prev.attributes === "function" ? {} : prev.attributes), id: "write" },
+}));
+```
+
+**这一步是主题兼容的支点**：改造 Typora 主题 CSS 时，所有裸元素规则（`h1`、`body`、`a`…）
+都被收拢到 `#write` 之下（见 `styles/typora-theme.ts`）。**没有这个 id，主题一条都命不中；
+反过来正因为有它，主题的规则才只作用于正文、碰不到外壳。**
+
+⚠️ 走 `editorViewOptionsCtx` 而**不是**建完之后去改 DOM：ProseMirror 重建 view 时
+只会重放这里的属性，手动改的那一下会丢。
+⚠️ `attributes` 的类型允许是**函数**形式，这里只可能是对象形式，所以先归一化再展开。
 
 ---
 
@@ -308,7 +349,7 @@ Ctrl+W 确认关闭"这条路里，最后几次击键不进后端。
 |---|---|---|---|
 | `nota.ui.notify` | 一件**此刻发生**的事 | **推** | 事件 `nota:notify` → `App.tsx` → toast ✅ |
 | `nota.ui.register_panel` | 一份**启动时声明、之后一直成立**的状态 | **拉** | registry `nota_panels` → `nota_plugin_panels` ✅ |
-| `nota.ui.register_menu` | 同上 | **拉** | registry `nota_menus` → `nota_plugin_menus` ⚠️ 前端还没有菜单栏来接 |
+| `nota.ui.register_menu` | 同上 | **拉** | registry `nota_menus` → `nota_plugin_menus` ⚠️ 拉回来了但**还没塞进菜单栏**——菜单栏本体 2026-09-23 已建，缺的是最后一根线（`docs/07` 第 42 项） |
 | 插件自己的 `nota.event.emit(x, …)` | 多半是**数据**（Git 的改动列表之类） | **推** | `plugin:<id>:x` ⚠️ 前端没有订阅插件频道，见 `docs/07` 第 17 项 |
 
 **判据一句话：声明是状态 → 拉；发生是事件 → 推。**

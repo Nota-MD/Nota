@@ -249,7 +249,7 @@ pub struct Settings { … }
 |---|---|---|---|
 | `ui_style` | `UiStyle` | `UiStyle::Auto` | **轴一**：界面风格（设计语言） |
 | `ui_mode` | `UiMode` | `UiMode::Auto` | **轴二**：明暗 |
-| `document_theme` | `String` | `""` | **轴三**：文档主题名，对应 `themes/<name>.css`；**空串 = 内置默认** |
+| `document_theme` | `String` | `""` | **轴三**：文档主题名（**就是 `.css` 的文件名去掉后缀**，如 `night`）；**空串 = 内置默认**。⚠️ 名字是**扫出来的**不是约定的——`paths::theme_dirs()` 那三个目录里扫到哪个就有哪个，所以换机器可能"这个主题没了"（见 §9.4） |
 | `ui_font_size` | `u32` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
 | `content_width` | `u32` | `760` | 内容区宽度上限（px）。Typora 的"正文宽度" |
 | `confirm_unsaved` | `bool` | `true` | 关闭有未保存改动的文档时是否询问 |
@@ -267,7 +267,7 @@ pub struct Settings { … }
 |---|---|---|---|
 | 界面风格 | `ui_style` | `data-ui-style` | **一整套设计语言**（macOS / Yaru / Adwaita / Windows）：换的不只是颜色，还包括控件形状、圆角、间距、动效、字体栈。⚠️ 它**不是**"主题"的同义词 |
 | 明暗 | `ui_mode` | `data-ui-mode` | 亮/暗。`auto` 时跟随系统。**这条轴在任何风格下都成立** |
-| 文档主题 | `document_theme` | `data-doc-theme` | **只管正文那一块**（Typora 的 Themes 菜单）。纯 CSS，用户可以在主题目录里放 `.user.css` 覆盖，**不动应用外壳一分** |
+| 文档主题 | `document_theme` | `data-doc-theme` | **只管正文那一块**（Typora 的 Themes 菜单）。纯 CSS，用**用户的 Typora 主题**（也能放自己的 `.css`），**不动应用外壳一分**。⚠️ 但主题里的 `:root` 变量会**被提升到全局**给外壳桥接用（`theme.css` 末尾那段），所以严格说是"只动正文 + 供出几个颜色给外壳" |
 
 把"形状"和"颜色"合成一条的后果很具体：想做"macOS 风格 + 暗色"时发现颜色写死在
 风格里了，于是只能再加一套 `macos-dark`——轴数就从 3 变成了排列组合。所以 CSS 的
@@ -500,6 +500,12 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 1;
 | `$XDG_CONFIG_HOME/nota/settings.toml` | 用户设置 | `paths::settings_file()` |
 | `$XDG_DATA_HOME/nota/plugins/` | 用户自装插件（**覆盖内置同名**） | `paths::user_plugins_dir()` |
 | 资源目录的 `plugins/`，debug 构建额外加仓库根的 `plugins/` | 内置插件 | `paths::builtin_plugins_dirs()` |
+| `$XDG_CONFIG_HOME/nota/themes/` | **用户主题**（点「打开主题文件夹…」时才 `create_dir_all`） | `paths::user_themes_dir()` |
+| `~/.config/typora/themes/`、`~/.var/app/io.typora.Typora/config/Typora/themes/` | **Typora 自己装的主题**（含 flatpak 落点），我们只读 | `paths::theme_dirs()` |
+
+⚠️ **`theme_dirs()` 的顺序就是优先级**：`nota` 那份在最前，所以**同名主题用户自己的赢**。
+后两个目录是"借"来的——**我们既不发布也不修改它们**（版权，见 `themes.rs` 文件头）。
+三个目录**一个都没有也算正常**（不装 Typora 的机器就是这样），返回空表而不是报错。
 
 应用名常量：`pub const APP_DIR: &str = "nota";`
 
@@ -549,11 +555,14 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 1;
 下面的编号只用于区分本表内的条目；**逐项状态与排期一律以 `docs/07-feature-status.md`
 为准**（代码注释里出现的"docs/07 第 N 项 / BUG-N"用的是那份文档的编号，这里不重编）。
 
+⚠️ **下面 6 条里有 4 条已经修掉了**（保留行、改写结论——编号在本表内有效，
+但**跨文档引用一律用 `docs/07` 的 BUG-N / 第 N 项**）。
+
 | # | 现象 | 原因 | 影响 |
 |---|---|---|---|
-| 1 | 活动文档的后端副本可能与前端不一致 | `api.doc.setActive` **从未被调用**：`App.tsx` 切标签只 `setActiveId(id)`（React state），后端的 `active` 只在 `create` / `open` / `close` 时变 | 插件 `nota.document.*` 读的是**后端 active**，用户点了别的标签后它可能读错文档 |
-| 2 | 插件改了**非活动**文档时，改动会丢 | `nota:document-changed` 的处理器见 `p.id !== activeId` **直接丢弃**，且不触发 `refreshDocs()`；切回那个标签时 `EditorPane` 用 `App` 里**过时的** `doc.text` 重建编辑器 | 下一次去抖 sync 会把旧文本推回后端，覆盖插件的改动 |
-| 3 | `parseMarkdown()` 没有调用点 | `create.ts` 导出了它，但没有模块用它 | 目前所有进编辑器的文本都走裸 `replaceAll`，"语法坏掉的串"只能靠肉眼发现（见 `docs/05` §整篇替换） |
-| 4 | `autosave_seconds` 是死设置 | 字段能存能读，**没有任何代码读它** | 用户改了它不会有任何效果。接上它排在 `docs/07` 第 20 项 |
-| 5 | `ui_style` / `ui_mode` / `document_theme` 只有设置项与 CSS | 没有设置面板，`api.settings.set` 前端从未调用（docs/07 第 11 项） | 想换外观只能手改 `settings.toml` 再重启 |
-| 6 | `applyTheme()` 返回的退订函数被丢掉 | `App.tsx` 写的是 `if (settings) applyTheme(settings);`，**没有 return** | `ui_mode = "auto"` 时每次 `settings` 变化都会**再挂一个** `prefers-color-scheme` 监听器；旧监听器闭包里是旧设置。因为目前没有改设置的界面，所以还没暴露 |
+| 1 | ~~活动文档的后端副本可能与前端不一致~~ **✅ 已修（BUG-6）** | 原先是 `api.doc.setActive` **从未被调用**。现在 `App.tsx` 有一段盯 `activeId` 的 effect 去喊它，`open` / `new` / `close` 几条路一起兜住 | 当时的影响：插件读的是**后端 active**，用户点了别的标签后插件可能读错文档。现在不会再分叉了 |
+| 2 | ~~插件改了**非活动**文档时，改动会丢~~ **✅ 已修（backlog 第 33 项）** | 原先是 `nota:document-changed` 的处理器见 `p.id !== activeId` **直接丢弃**。现在非活动那份走 `refreshDocs()` 把 state 拉齐 | 当时的影响：下一次去抖 sync 会把旧文本推回后端、覆盖插件的改动 |
+| 3 | ⬜ **`parseMarkdown()` 没有调用点** | `create.ts` 导出了它，但全仓没有模块用它（`grep` 过） | 目前所有进编辑器的文本都走裸 `replaceAll`，"语法坏掉的串"只能靠肉眼发现（见 `docs/05` §整篇替换） |
+| 4 | ⬜ **`autosave_seconds` 是死设置** | 字段能存能读，**没有任何代码读它** | 用户改了它不会有任何效果。接上它排在 `docs/07` 第 20 项 |
+| 5 | ~~三条外观轴都只有设置项与 CSS~~ **🟡 只结清三分之一** | `document_theme` 现在有切换界面（菜单栏「主题」），`api.settings.set` 也有调用者了（`updateSettings`）。**`ui_style` / `ui_mode` 仍然没有**（要等设置对话框，`docs/07` 第 10/11 项） | 明暗与界面风格还是只能手改 `settings.toml` 再重启 |
+| 6 | ~~`applyTheme()` 返回的退订函数被丢掉~~ **✅ 已修（BUG-7）** | 现在写的是 `if (settings) return applyTheme(settings);`——**退订函数交出去了** | 当时的影响：`ui_mode = "auto"` 时每次 `settings` 变化都会**再挂一个** `prefers-color-scheme` 监听器，旧监听器闭包里是旧设置。⚠️ 这条已经**不只是理论**了：主题切换会改 `settings`，所以那种情形现在已经会真发生 |

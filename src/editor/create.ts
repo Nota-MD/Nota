@@ -23,6 +23,7 @@ import {
   rootCtx,
   defaultValueCtx,
   editorViewCtx,
+  editorViewOptionsCtx,
   serializerCtx,
   parserCtx,
 } from "@milkdown/kit/core";
@@ -41,6 +42,24 @@ import { replaceAll } from "@milkdown/kit/utils";
 import { prism } from "@milkdown/plugin-prism";
 import { math } from "@milkdown/plugin-math";
 import { diagram } from "@milkdown/plugin-diagram";
+
+// 菜单栏要用的编辑命令。**只从这里进**——别处不许自己去摸 `editorViewCtx`
+// 派事务（见本文件顶上那段"真相在哪"）。
+import {
+  toggleStrongCommand,
+  toggleEmphasisCommand,
+  toggleInlineCodeCommand,
+  wrapInHeadingCommand,
+  turnIntoTextCommand,
+  wrapInBlockquoteCommand,
+  wrapInBulletListCommand,
+  wrapInOrderedListCommand,
+  createCodeBlockCommand,
+  insertHrCommand,
+} from "@milkdown/kit/preset/commonmark";
+import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/preset/gfm";
+import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
+import { callCommand } from "@milkdown/kit/utils";
 
 // ⚠️ 副作用导入，**不是多余的**：把 refractor 的语言表从 36 种补到 400 个
 // （297 种语言 + 别名，比如 ts→typescript、sh→bash）。
@@ -70,6 +89,37 @@ import { taskList } from "./task-list";
 // 的地方（别处要么改 schema、要么用 Decoration），理由写在它自己的文件头上。
 import { codeBlockView } from "./code-block";
 
+/**
+ * 菜单栏能派发的编辑命令。
+ *
+ * ⚠️ 这是一张**白名单**，不是"随便什么命令名都能传"。任意的命令名字符串
+ * 从菜单传进来，等于把一个 `any` 形状的入口开给界面层——写错了不报错、
+ * 只是没反应。列成联合类型，写错就是编译错。
+ *
+ * `h1`~`h6` 走同一族命令（`wrapInHeadingCommand` 带层数参数），
+ * 在 `runCommand` 里拆开，所以这里列六个而不是一个 `heading` 加参数。
+ */
+export type EditorCommand =
+  | "undo"
+  | "redo"
+  | "bold"
+  | "italic"
+  | "inlineCode"
+  | "strike"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
+  | "text"
+  | "quote"
+  | "ul"
+  | "ol"
+  | "codeBlock"
+  | "hr"
+  | "table";
+
 /** 编辑器句柄。调用方只通过这些方法跟编辑器打交道。 */
 export interface EditorHandle {
   /** 取出当前 markdown 文本。 */
@@ -78,6 +128,14 @@ export interface EditorHandle {
   setMarkdown: (markdown: string) => void;
   /** 把焦点交给编辑区。 */
   focus: () => void;
+  /**
+   * 跑一条编辑命令。菜单栏和快捷键都走这里，**不认识 ProseMirror**。
+   *
+   * 命令不认识时静默无操作（返回 `false`）——界面那边本来就该保证
+   * 只派发 `EditorCommand` 里的值，真走到 default 分支是代码写错了，
+   * 而"按一下没反应"比"抛个异常打断编辑"更不打扰人。
+   */
+  runCommand: (name: EditorCommand) => void;
   /** 销毁。组件卸载时**必须**调，否则 ProseMirror 的 DOM 监听会留着。 */
   destroy: () => void;
 }
@@ -110,6 +168,22 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, initialMarkdown);
 
+      // 正文区挂上 Typora 的 `#write`。**这一步是主题兼容的支点**：
+      // 改造主题 CSS 时，所有裸元素规则（`h1`、`body`、`a`…）都被收拢到
+      // `#write` 之下（见 `styles/typora-theme.ts`），没有这个 id，主题一条都命不中。
+      // 反过来，正因为有它，主题的规则才**只**作用于正文、碰不到外壳。
+      //
+      // ⚠️ 走 `editorViewOptionsCtx` 而不是建完之后去改 DOM：ProseMirror 重建 view
+      // 时只会重放这里的属性，手动改的那一下会丢。
+      // ⚠️ `attributes` 的类型允许是函数，这里只可能是对象形式，所以先归一化再展开。
+      ctx.update(editorViewOptionsCtx, (prev) => ({
+        ...prev,
+        attributes: {
+          ...(typeof prev.attributes === "function" ? {} : prev.attributes),
+          id: "write",
+        },
+      }));
+
       // 文档变化 → 通知调用方。
       // ⚠️ 这里**不做去抖**：去抖是调用方的事，因为"多快算太快"取决于
       // 它拿这个回调干什么（存草稿 vs 推给后端 vs 更新字数，三种节奏不一样）。
@@ -133,6 +207,11 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     .use(diagram)
     .create();
 
+  const 聚焦 = () =>
+    editor.action((ctx) => {
+      ctx.get(editorViewCtx).focus();
+    });
+
   return {
     getMarkdown: () =>
       editor.action((ctx) => {
@@ -145,10 +224,21 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       editor.action(replaceAll(markdown));
     },
 
-    focus: () => {
-      editor.action((ctx) => {
-        ctx.get(editorViewCtx).focus();
-      });
+    focus: 聚焦,
+
+    runCommand: (name: EditorCommand) => {
+      if (isHeading(name)) {
+        editor.action(callCommand(wrapInHeadingCommand.key, Number(HEADING_RE.exec(name)![1])));
+      } else {
+        COMMANDS[name](editor);
+      }
+
+      // ⚠️ 跑完必须把焦点交回编辑区。命令是从**菜单按钮**上点下去的，
+      // 那一刻 DOM 焦点在按钮上；命令本身改的是 ProseMirror 的 state
+      //（它自己的 selection 还在原处，所以命令能正确生效），但**光标不会
+      // 自己回到正文**——用户点完「加粗」接着打字，字会打到一个没有焦点的
+      // 编辑区里，看起来就是"菜单点完就卡住了"。
+      聚焦();
     },
 
     destroy: () => {
@@ -156,6 +246,45 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     },
   };
 }
+
+/** `h1`~`h6`。它们共用一条命令，只是层数不同，所以单独一族。 */
+type HeadingCommand = `h${1 | 2 | 3 | 4 | 5 | 6}`;
+type BlockCommand = Exclude<EditorCommand, HeadingCommand>;
+
+const HEADING_RE = /^h([1-6])$/;
+
+/**
+ * ⚠️ 类型谓词而不是 `as`。写成 `HEADING_RE.test(name)` 的话 TS 收窄不了，
+ * 后面查表就得 `as` 一下——而那个 `as` 会把"表里漏了一项"这种错误也一起放过去。
+ * 写成谓词，两个分支各自拿到准确类型，漏项仍然是编译错。
+ */
+function isHeading(name: EditorCommand): name is HeadingCommand {
+  return HEADING_RE.test(name);
+}
+
+/**
+ * 命令白名单的**实体**。
+ *
+ * ⚠️ 存的是 `$Command` 的**回调**而不是 `$Command` 本身：Milkdown 的
+ * `callCommand` 要的是 `slice.key`，直接传 `$Command` 过不了类型
+ *（`$Command<T>` 是个带 `run`/`key` 的插件对象，不是 `CmdKey`）。
+ * 包成"吃一个 editor"的闭包之后，调用点也不必再碰 Milkdown 的类型。
+ */
+const COMMANDS: Record<BlockCommand, (editor: Editor) => void> = {
+  undo: (e) => e.action(callCommand(undoCommand.key)),
+  redo: (e) => e.action(callCommand(redoCommand.key)),
+  bold: (e) => e.action(callCommand(toggleStrongCommand.key)),
+  italic: (e) => e.action(callCommand(toggleEmphasisCommand.key)),
+  inlineCode: (e) => e.action(callCommand(toggleInlineCodeCommand.key)),
+  strike: (e) => e.action(callCommand(toggleStrikethroughCommand.key)),
+  text: (e) => e.action(callCommand(turnIntoTextCommand.key)),
+  quote: (e) => e.action(callCommand(wrapInBlockquoteCommand.key)),
+  ul: (e) => e.action(callCommand(wrapInBulletListCommand.key)),
+  ol: (e) => e.action(callCommand(wrapInOrderedListCommand.key)),
+  codeBlock: (e) => e.action(callCommand(createCodeBlockCommand.key)),
+  hr: (e) => e.action(callCommand(insertHrCommand.key)),
+  table: (e) => e.action(callCommand(insertTableCommand.key)),
+};
 
 /**
  * 把 markdown 文本解析成 ProseMirror 文档（用于校验、或将来做"粘贴前预检"）。

@@ -68,7 +68,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `main.rs` | 进程入口，只是 `nota_lib::run()` 的一层壳 |
 | `lib.rs` | `run()`：建 Tauri、装 dialog/fs/opener 插件、`setup()` 里**按顺序**做三件事（载设置 → 建共享状态 → 发现并加载插件）→ `manage(AppState)`；全部 `nota_*` 命令的注册表；`on_window_event` 在窗口销毁时 `unload_all()` |
 | `error.rs` | `NotaError` 枚举，**中文 Display 消息**，自定义 `Serialize` 以便过 Tauri IPC |
-| `paths.rs` | XDG 目录（`~/.config/nota`、`~/.local/share/nota`）、`settings_file()`、`user_plugins_dir()`、`builtin_plugins_dirs()`（debug 构建额外返回仓库的 `plugins/`） |
+| `paths.rs` | XDG 目录（`~/.config/nota`、`~/.local/share/nota`）、`settings_file()`、`user_plugins_dir()`、`builtin_plugins_dirs()`（debug 构建额外返回仓库的 `plugins/`）、`theme_dirs()`（三个主题来源，**按优先级排序**：我们自己的 → Typora → Typora flatpak，靠前的盖掉同名的） |
 | `state.rs` | `AppState`：四个共享句柄。**锁顺序不变量写在文件头**（`plugins → documents → settings`） |
 | `settings.rs` | `Settings` 与三条**互相独立**的外观轴（`ui_style` / `ui_mode` / `document_theme`），kebab-case 落盘 |
 | `document/mod.rs` | `DocId` / `Document` / `DocumentStore`；`derive_title()`（front matter → 一级标题 → 文件名）；**「前端是文本的唯一真相、后端持有 300ms 镜像」这条口径写在文件头**。⚠️ `untitled_index`（未命名序号，建时定死）与 `clean_text`（比脏标记的那一份）不许省 |
@@ -77,6 +77,8 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode`（**相对路径、`/` 分隔**） |
 | `commands/settings.rs` | `nota_settings_get/set`（整份替换；保存失败则回滚内存） |
 | `commands/plugin.rs` | `nota_plugins_list` / `nota_plugin_set_enabled` / `nota_plugin_call` / `nota_plugin_find_command` |
+| `themes.rs` | 主题的**发现与读取**。扫三个目录（我们自己的 + Typora + Typora flatpak），**不随包发布任何第三方主题**（版权）。⚠️ **资源读成 `data:` URL 而不是返回路径**——asset 协议在 WebKitGTK 上取不回字体，判据在文件头 |
+| `commands/theme.rs` | `nota_themes_list` / `nota_theme_read` / `nota_theme_asset` / `nota_themes_dir` 四条 |
 | `plugin/mod.rs` | `PluginHost`：**发现 → 加载 → 派发 → 卸载**；`PluginInfo` 是给前端的只读快照 |
 | `plugin/manifest.rs` | `Capability` 枚举、`PluginMeta`、`Manifest`、`NOTA_PLUGIN_API_VERSION`、**`channel_id()`**（事件通道名归一化） |
 | `lua/mod.rs` | `HostContext` / `LuaPlugin` / `PluginState`；一个插件一个 `Lua` |
@@ -91,14 +93,16 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | 文件 | 职责 |
 |---|---|
 | `main.tsx` | React 入口 |
-| `App.tsx` | 外壳与全部状态：文档表、活动文档、设置、工作区、插件、toast；快捷键（Ctrl+N/O/S/Shift+S/W） |
-| `bridge/ipc.ts` | **调用后端的唯一出口**。`api.doc.*` / `api.workspace.*` / `api.settings.*` / `api.plugin.*`、`on<T>()`、`events` 名字表 |
-| `editor/create.ts` | Milkdown 封装，对外只有 `EditorHandle` 四个方法。⚠️ 插件清单里**没有什么**和有什么一样重要，理由在函数注释里 |
+| `App.tsx` | 外壳与全部状态：文档表、活动文档、设置、工作区、插件、toast、侧栏/插件栏/状态栏开关、主题表；快捷键一整张表在 `useEffect` 里；⚠️ **`menuHandlers` 是"菜单项能不能点"的唯一真相**——灰不灰由它推出来，不另设标志位 |
+| `bridge/ipc.ts` | **调用后端的唯一出口**。`api.doc.*` / `api.workspace.*` / `api.settings.*` / `api.plugin.*` / `api.theme.*`、`on<T>()`、`events` 名字表 |
+| `editor/create.ts` | Milkdown 封装，对外只有 `EditorHandle` **五个**方法（最后一个是 `runCommand`，菜单栏与快捷键从这儿进）。⚠️ 插件清单里**没有什么**和有什么一样重要，理由在函数注释里 |
 | `editor/instant-render.ts` | 光标所在块的 Markdown 标记（`##`、`>`、`-`）浅灰画在块左边。⚠️ 用 **`Decoration.node` 不是 widget**，理由在文件头 |
 | `editor/task-list.ts` | 任务项复选框：画方框 + 点它勾上。⚠️ **不改 schema**——`data-checked` 是 `preset-gfm` 本来就给的 |
 | `editor/code-block.ts` | 代码块 NodeView：语言选择器 / 复制 / 折叠。**全仓唯一一处 `$view`** |
-| `ui/EditorPane.tsx` | 编辑器挂载点。**那个 div 从不被 React 重新渲染**（Milkdown 拥有那棵 DOM） |
-| `ui/Sidebar.tsx` | 侧栏三页：文件（工作区树）/ 大纲 / 插件 |
+| `ui/EditorPane.tsx` | 编辑器挂载点。**那个 div 从不被 React 重新渲染**（Milkdown 拥有那棵 DOM）。对外句柄多一个 `runCommand`，菜单栏的命令从这儿进 |
+| `ui/MenuBar.tsx` | 顶部菜单栏（文件/编辑/段落/格式/视图/主题/帮助）。⚠️ 关闭用 **`mousedown` 不是 `click`**，主题那一栏是**动态**的（`entries` 由 App 现算） |
+| `ui/commands.ts` | 菜单的**静态骨架**：一栏一项抄自 `docs/10` §11.1。⚠️ 这里**没有** `disabled` 标志位——灰不灰由 App 的 `menuHandlers` 推 |
+| `ui/Sidebar.tsx` | 侧栏两页：文件（工作区树）/ 大纲。⚠️ `tab` 是**受控**属性（菜单栏也要能切它） |
 | `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 清单。**为什么在右边**写在文件头 |
 | `ui/ConfirmDialog.tsx` | 自绘确认框，替掉 `window.confirm`（**它阻塞 WebView、会打断输入法组合态**） |
 | `ui/Home.tsx` | 没有文档时那一屏 |
@@ -106,9 +110,10 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `ui/Toasts.tsx` | 提示条 |
 | `ui/ErrorBoundary.tsx` | 兜住前端渲染错误 |
 | `ui/outline.ts` | 大纲与字数的**纯函数**（启发式正则，跳过 front matter 与围栏代码块） |
-| `styles/theme.css` | 三条外观轴的 CSS 变量。**二维相乘**：`[data-ui-mode]` 只给颜色、`[data-ui-style]` 只给形状 |
+| `styles/theme.css` | 三条外观轴的 CSS 变量。**二维相乘**：`[data-ui-mode]` 只给颜色、`[data-ui-style]` 只给形状。末尾那段把 Typora 主题的变量**桥**到外壳上 |
 | `styles/applyTheme.ts` | 把三条轴写到 `<html>` 的属性上 |
-| `styles/app.css` | **外壳**：窗口骨架 → 主页，加确认框 |
+| `styles/typora-theme.ts` | **Typora 主题的加载与改造**（"兼容 Typora 主题"整件事的核心）。四步：展开 `@import` → `url()` 换成 `data:` → 用 `CSSStyleSheet` 解析 → 把裸元素选择器收拢进 `#write`，同时把 `:root` 变量**提升到全局**供外壳桥接 |
+| `styles/app.css` | **外壳**：窗口骨架 → 主页，加菜单栏与确认框 |
 | `styles/editor.css` | **正文编辑区**：编辑区外壳、块标记、代码块、任务列表。⚠️ 2026-09-22 因撞 1000 行上限从 `app.css` 按职责拆出；加载顺序必须是 `theme → app → editor` |
 
 ### 插件与工具
@@ -119,6 +124,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `plugins/ai/` | **内置 AI 助手插件**：提示词模板 + 写回文档。⚠️ **网络那半在宿主侧尚未实现**（`nota.http` 是一张「尚未实现」的表） |
 | `tools/gen-icons.py` | 纯标准库的 PNG 图标生成器（不依赖 PIL） |
 | `tools/doc-sync-check.sh` | 文档同步与行数上限的启发式检查（见 `docs/09`） |
+| `.github/workflows/release.yml` | 六个平台的打包矩阵（Windows x64/arm64 的 exe、macOS 双架构 dmg、Linux 双架构 deb/rpm/AppImage）。**每个平台只能在自己的系统上打**，理由在文件头 |
 | `THIRD-PARTY.md` | **第三方组件与许可证清单**。加/删依赖要同批改它（`docs/09` §2.3） |
 
 ---
@@ -222,6 +228,35 @@ Xvfb + ImageMagick 那一条是验证过可用的。
   prism/math/diagram 都不在其中。
 - **不要同时写 `index.html` 的 CSP meta 与 `tauri.conf.json` 的 `csp`**——
   两个策略会**同时生效并互相冲突**。CSP 只放在 `tauri.conf.json`。
+- ⚠️⚠️ **`asset://` 在 WebKitGTK 上传不了字体，主题资源必须内联成 `data:` URL**。
+  wry 给自定义协议注册了 `register_uri_scheme_as_secure`，**但没注册
+  `register_uri_scheme_as_cors_enabled`**；而 `@font-face` 的装载**永远走 CORS 模式**，
+  于是字体请求直接被判 NetworkError——**图片却能正常显示**（`<img>` 不走 CORS），
+  所以只看图片会以为协议是通的。这就是 `themes.rs` 把资源读成 `data:` URL 的理由
+  （⚠️ 这条**不是** BUG-11，BUG-11 是打包丢插件那条；经过见 `docs/07` §4）。
+  ⚠️ 连带一条：**CSP 的 `font-src` 里不要加 `asset:`**，加了也没用。
+- **菜单栏里的 Shift+数字快捷键判据是 `e.code === "Digit1"`，不是 `e.key`**。
+  Shift 按住时 `e.key` 是 `"!"` 这类符号（Shift+1 给的是 `"!"`，不是 `"1"`），
+  拿 `e.key` 比 `"1"` 的快捷键**永远不触发**，而且静态看代码完全看不出来。
+- **Tauri 2 的 `bundle.category` 枚举里没有 `Office`**（那是 Tauri 1 的值）。
+  写错不会在 `cargo build` 时报——⚠️ **编到最后一个打包步骤**才
+  `failed to build bundler settings: invalid category`，前面几分钟全白等。用 `Productivity`。
+- ⚠️⚠️ **`bundle.resources` 的键要写目录，不要写 glob**：`{"../plugins": "plugins"}`。
+  三种写法里**只有这一种是对的**，另两种都会"看起来成了"——
+  数组 `["../plugins/**/*"]` 会把 `..` 映射成 `_up_`；
+  映射 + glob `{"../plugins/**/*": "plugins/"}` **能打对目录名但会把树拍平**
+  （`tauri-utils` 里 glob+dest 那支只取 `file_name()`），两个内置插件互相盖掉一个。
+  ⚠️ **开发期走的是仓库目录，所以这条只有真拆开一个包才看得见**——
+  "跑起来没问题"完全证明不了它（BUG-11）。验法见 `docs/06` §2.4。
+- ⚠️⚠️ **Rust 报一堆 `cannot find macro panic` / `cannot find trait Clone`，
+  先去看有没有 `error[E0514]`——那是工具链在说话，不是代码。**
+  本机 rustc 是 Fedora 打过补丁的 RPM（sysroot 在 `/usr`，**没有 rustup**），
+  与 `static.rust-lang.org` 发的 `rust-std` 哈希对不上；`E0514` 把 `core` 判成
+  "别的编译器编的"，于是**凡是从 `core` 来的东西全部找不到**，
+  一个包能塌出几千个 E0425/E0405，**看着像整个仓库都写坏了**。
+  判断 std 是不是本机编的：`rpm -qf <libstd 路径>`——**查不到包名的就是外来的**。
+  ⚠️ Windows 交叉编译**要走 `x86_64-pc-windows-gnu`**（`rust-std-static-x86_64-pc-windows-gnu`
+  是 Fedora 自带的），**`msvc` 在 Fedora 上没有 std 可装**。见 `docs/06` §2.4。
 
 ---
 
@@ -244,18 +279,21 @@ Xvfb + ImageMagick 那一条是验证过可用的。
   `nota:document-changed`，插件自定义通道（`plugin:<id>:<name>`）**没有任何订阅者**。
   ⚠️ 这条通道对**发生类**数据是正解，缺的只是订阅端——别把结论推广成"事件机制别用"。
   见 `07` 第 17 项。
-- **菜单栏**（`07` 第 40 项）：`register_menu` 的写侧与拉侧都通了，只差接一根线。
+- **菜单栏上的插件菜单没接线**（`07` 第 42 项）：`register_menu` 的写侧与拉侧都通了，
+  菜单栏本体也在，缺的只是把插件声明的那几条挂进对应的栏里。
 - **AI 插件的网络那一半**（`nota.http` 是一张「尚未实现」的表）、
   **`nota.settings`**（同样是尚未实现）。
-- **三条外观轴只有 CSS 与设置项，没有切换界面**（`07` 第 11 项）。
+- **外观轴还差两条没有切换界面**（`07` 第 11 项）：**文档主题**已经有了
+  （菜单栏「主题」，见 §4b 那条 asset 协议的坑）；`ui_mode`（明暗）与
+  `ui_style`（macOS/Yaru/Adwaita/Windows）**仍然只有 CSS 与设置项**。
 - **`docs/10` 那张 Typora 对照矩阵里标 ⬜ 的一切**——斜杠菜单、富文本工具栏、
-  导出、主题市场、拼写检查……逐项状态以矩阵为准。
+  导出、拼写检查……逐项状态以矩阵为准。
 
-**缺陷**（`docs/07` §2，**编号是永久的**）：已修 4 条（BUG-1…BUG-4），
-**未修 4 条（BUG-6/7/8/9）+ 待查 1 条（BUG-5，中文 IME）**。
-⚠️ **未修的 BUG 优先于 backlog 的新功能**，其中 **BUG-6 尤其**——
-切标签时后端的「活动文档」不跟着变，**插件会读到、写错文档**。
-动手前请读 `docs/07` §2 拿最新状态，别只看这一段。
+**缺陷**（`docs/07` §2，**编号是永久的**）：**已修 14 条（BUG-1…BUG-14）**，
+**未修 1 条（BUG-15，点正文下方的空白不聚焦）+ 待查 1 条（BUG-5，中文 IME）**。
+⚠️ **未修的 BUG 优先于 backlog 的新功能**。
+动手前请读 `docs/07` §2 拿最新状态，别只看这一段——这段只记条数，
+**哪条是什么得看那张表**。
 
 ---
 

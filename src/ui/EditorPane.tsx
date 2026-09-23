@@ -14,11 +14,13 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from "react";
 
 import { api, type Document } from "@/bridge/ipc";
-import { createEditor, type EditorHandle } from "@/editor/create";
+import { createEditor, type EditorCommand, type EditorHandle } from "@/editor/create";
 
 export interface EditorPaneHandle {
   getMarkdown: () => string | undefined;
   setMarkdown: (markdown: string) => void;
+  /** 跑一条编辑命令。菜单栏与快捷键走这里，见 `EditorHandle.runCommand`。 */
+  runCommand: (name: EditorCommand) => void;
 }
 
 interface Props {
@@ -44,6 +46,7 @@ export function EditorPane({ doc, contentWidth, onToast, onDocsChanged, ref }: P
     () => ({
       getMarkdown: () => handleRef.current?.getMarkdown(),
       setMarkdown: (markdown: string) => handleRef.current?.setMarkdown(markdown),
+      runCommand: (name: EditorCommand) => handleRef.current?.runCommand(name),
     }),
     [],
   );

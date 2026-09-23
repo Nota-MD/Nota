@@ -8,30 +8,38 @@
  * 这一栏只管**文档导航**，工具面板不跟它挤。
  */
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import type { TreeNode } from "@/bridge/ipc";
 import { extractOutline } from "@/ui/outline";
 
-type Tab = "tree" | "outline";
+export type SidebarTab = "tree" | "outline";
 
 interface Props {
   workspace: string | null;
   tree: TreeNode[];
   /** 当前文档正文，用来抽大纲。 */
   docText: string;
+  /**
+   * 当前是哪一页。**由 App 持有，不由这里自己存。**
+   *
+   * ⚠️ 原来这里是 `useState`。改成受控是因为「视图 → 大纲 / 文件树」那两个
+   * 菜单项要能切它——菜单在 App 里，够不着这里的局部状态。同样的理由让
+   * `dockOpen` 一开始就放在 App 上。
+   */
+  tab: SidebarTab;
+  onTab: (t: SidebarTab) => void;
   onOpenFile: (path: string) => void;
 }
 
-export function Sidebar({ workspace, tree, docText, onOpenFile }: Props) {
-  const [tab, setTab] = useState<Tab>("tree");
+export function Sidebar({ workspace, tree, docText, tab, onTab, onOpenFile }: Props) {
   const outline = useMemo(() => extractOutline(docText), [docText]);
 
   return (
     <aside className="sidebar">
       <nav className="sidebar-tabs" role="tablist">
-        <TabButton id="tree" current={tab} onSelect={setTab} label="文件" />
-        <TabButton id="outline" current={tab} onSelect={setTab} label="大纲" />
+        <TabButton id="tree" current={tab} onSelect={onTab} label="文件" />
+        <TabButton id="outline" current={tab} onSelect={onTab} label="大纲" />
       </nav>
 
       <div className="sidebar-body">
@@ -68,9 +76,9 @@ export function Sidebar({ workspace, tree, docText, onOpenFile }: Props) {
 }
 
 function TabButton(props: {
-  id: Tab;
-  current: Tab;
-  onSelect: (t: Tab) => void;
+  id: SidebarTab;
+  current: SidebarTab;
+  onSelect: (t: SidebarTab) => void;
   label: string;
 }) {
   return (

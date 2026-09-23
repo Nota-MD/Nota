@@ -3,9 +3,9 @@
 > 最后同步：2026-09-22
 >
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
-> 每一步踩过的坑、不接显示器怎么看界面、以及 `cargo test` 里那 48 条到底钉住了什么。
+> 每一步踩过的坑、不接显示器怎么看界面、以及 `cargo test` 里那 55 条到底钉住了什么。
 >
-> ⚠️ **测试数只在本文记数（当前 48）**，别处一律写"见 `docs/06`"。
+> ⚠️ **测试数只在本文记数（当前 55）**，别处一律写"见 `docs/06`"。
 > 理由见 `docs/07` §4 第二条漂移登记：这个总数已经漂过一次了。
 
 ---
@@ -117,7 +117,7 @@ toolbox 容器 `tauri-dev` 里跑。容器里有两个用户身份可选，**日
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 
-# ① 只编译后端 + 跑单元测试（§6 那 48 条）
+# ① 只编译后端 + 跑单元测试（§6 那 55 条）
 podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test
 
 # ② 前端类型检查
@@ -177,24 +177,169 @@ podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev ./target/debug/nota
 ### 2.4 打包
 
 ```sh
-podman exec -u 1000 -w "$PWD" tauri-dev npm run app:build    # = tauri build
+podman exec -u 1000 -w "$PWD" tauri-dev npm run app:build            # = tauri build
+podman exec -u 1000 -w "$PWD" tauri-dev npx tauri build --bundles deb # 只打 deb，验证配置用
 ```
 
-产物与 `tauri.conf.json` 的 `bundle` 段对应：`targets = ["deb", "rpm", "appimage"]`，
-图标四个（`icons/` 下，由 `tools/gen-icons.py` 生成，**纯标准库、不依赖 PIL**），
-`category = "Office"`，Linux 的依赖声明是 `deb` 写 `libwebkit2gtk-4.1-0` / `libgtk-3-0`、
-`rpm` 写 `webkit2gtk4.1` / `gtk3`。
+#### 六种安装包，以及**为什么只能在各自的系统上打**
 
-打包后插件的落点变了：内置插件从**资源目录**的 `plugins/` 里扫，不再是仓库根的
+目标是：Windows x86_64 / arm64 的 `setup.exe`、macOS Intel / Apple Silicon 的 `.dmg`、
+Linux x86_64 / arm64 的 `.deb` + `.rpm` + `.AppImage`。**六格，两类。**
+
+**两类里的第一类：跨不过去的。** Windows 的 `setup.exe` 由 **NSIS** 生成、
+macOS 的 `.dmg` 由 **`hdiutil`** 生成，两个都是原生工具，Linux 上没有；
+Linux 三种反过来要 `dpkg-deb` / `rpmbuild` / linuxdeploy。
+这不是配置问题，是工具链的硬约束。
+⚠️ 但**"编译"和"打包"要分开看**：Windows 的**可执行文件**在 Linux 上是编得出来的
+（`x86_64-pc-windows-gnu`，见下面 §2.4 末尾），跨不过去的是**安装程序**那一步。
+
+**第二类是能省的：架构。** Windows 那一格一条 runner 就能出 x64 和 arm64
+（`--target` 换了而已，SDK 是同一套）；而 macOS 那两格**必须分开**，
+因为 `macos-13` 是 Intel 机器、`macos-latest` 是 Apple Silicon，
+dmg 只能在对应的机器上打——**交叉那一步 Tauri 不做**。
+
+所以落点是 `.github/workflows/release.yml`，六格矩阵。
+⚠️ Linux 两格固定在 **`ubuntu-22.04`** 而不是 `ubuntu-latest`：
+glibc 是**向前兼容、不向后兼容**的，在新系统上编的二进制在旧系统上会因为
+找不到新符号而启动失败，22.04 是 Tauri 文档推荐的下限。
+
+⚠️ 工作流里 **`--bundles` 一定要给**。配置里写的是 `"targets": "all"`，
+在 Windows 上 `all` 会连 **MSI** 一起打，而我们要的是 exe 安装程序（NSIS）。
+收包路径也**用的是产物目录**（`src-tauri/target/<三元组>/release/bundle/**`）
+而不是 `target/release/bundle`——带 `--target` 时 Tauri 换目录，
+写死路径在 CI 上会一个文件都收不到。
+
+#### `bundle` 段里每一项为什么是那样
+
+| 键 | 值 | 为什么 |
+|---|---|---|
+| `targets` | `"all"` | 本地想打哪种就打哪种（配合 `--bundles`），CI 上用 `--bundles` 收窄 |
+| `category` | `"Productivity"` | ⚠️ **必须是 Tauri 2 那张枚举里的值**。可选项是 `Business` / `DeveloperTool` / `Education` / `GraphicsAndDesign` / `Music` / `Photography` / `Productivity` / `Utility` / … **没有 `Office`**。写错不会在 `cargo build` 时报——⚠️ **编到最后一刻**才 `failed to build bundler settings: invalid category`，等于白等一轮（见 §2.4 末尾那条实测） |
+| `resources` | `{ "../plugins": "plugins" }` | **这就是 BUG-11 的修法**。⚠️ **键必须是目录、不能带 glob**——写成 `"../plugins/**/*"` 会打出**平的一片文件**，见下 |
+| `icon` | 6 个（见 `icons/`） | Tauri 各平台各取所需：Windows 要 `.ico`、macOS 要 `.icns`、Linux 要 `.png` |
+| `windows.nsis` | `languages: [SimpChinese, English]` + 语言选择器 | 中文用户双击安装看到中文。⚠️ 界面文案一律中文，但**安装器的是语言选择器**，两种都列出来让用户选 |
+| `windows.nsis.installMode` | `currentUser` | 免 UAC 提权。装到用户目录，卸载干净 |
+| `macOS.minimumSystemVersion` | `10.15` | 与 `tauri` 2.x 的 WebView 要求对齐 |
+| `linux.deb.depends` | `libwebkit2gtk-4.1-0` / `libgtk-3-0` | Tauri 会自动填大部分，我们补的是**运行期真正要的那两个 soname** |
+| `linux.rpm.depends` | `webkit2gtk4.1` / `gtk3` | 同上，rpm 的包名和 deb 不一样 |
+
+#### 插件在打包后从哪儿扫（BUG-11，**已修**）
+
+打包后内置插件的落点变了：从**资源目录**的 `plugins/` 里扫，不再是仓库根的
 `plugins/`——这条分支在 `paths::builtin_plugins_dirs()`（`src-tauri/src/paths.rs:44`），
 展开见 `docs/11` §插件放哪。
 
-⚠️⚠️ **但打包出来现在是空的（BUG-11）**：`tauri.conf.json` 的 `bundle` 段**没有
-`resources` 键**，所以那份 `plugins/` 根本不会被塞进包里，`resource_dir.join("plugins")`
-**永不命中**，且 release 下也不走 `debug_assertions` 分支。
-**开发期看不出来**（走的是仓库目录），只有真装一次包才会发现"一个内置插件都没有"。
-修法与排期见 `docs/07` §2 BUG-11。**在那之前，本节描述的"从资源目录扫"只是代码的意图，
-不是打包后的实际行为。**
+⚠️ **2026-09-23 之前这里是坏的**：`bundle` 段**没有 `resources` 键**，
+那份 `plugins/` 根本不会被塞进包里，`resource_dir.join("plugins")` **永不命中**，
+release 下也不走 `debug_assertions` 分支。**开发期看不出来**（走的是仓库目录），
+只有真装一次包才会发现"一个内置插件都没有"。
+
+⚠️⚠️ **修法改了三版，前两版都"看起来成了"**。这一节留着这条弯路，是因为**它的坑很隐蔽**：
+
+| 版本 | 写法 | 实际打出来什么 |
+|---|---|---|
+| ① 数组 | `["../plugins/**/*"]` | 目标路径由 `resource_relpath()` 算，它把 `..` **映射成 `_up_`** → `_up_/plugins/...`，`resource_dir.join("plugins")` 命不中 |
+| ② 映射 + glob | `{"../plugins/**/*": "plugins/"}` | **目录名对了、里面是错的**：`plugins/main.lua` + `plugins/plugin.toml` ——**只取文件名**，两个插件的 `main.lua` 互相盖掉一个。根因在 `tauri-utils` 的 `resources.rs`：glob 且 dest 非空时目标就是 `dest.join(path.file_name())`，树被**拍平**（源码注释自己写着 "preserving the file name as it is"） |
+| ③ **现行** | `{"../plugins": "plugins"}` | ✅ 走的是 `Walk` 分支：`dest.join(path.strip_prefix(pattern))`，**保留结构**。实测包里是 `usr/lib/Nota/plugins/ai/{plugin.toml,main.lua}` + `git/` 各自一份 |
+
+**判据：`**键要写成目录，不要写 glob**`。要吃"某几个文件"而不是"整棵目录"时，
+这条不成立——那时得逐条列出来（`{"../plugins/git/main.lua": "plugins/git/main.lua"}`），
+因为 glob 那一支没有保留结构的能力。
+
+**验证方法**（三条缺一不可，只做第一条会漏掉上面的版本②）：
+
+```sh
+cd /tmp && ar x <包>.deb && tar tf data.tar.gz | grep plugins   # ⚠️ 别停在这一步，见下
+# ✅ 要看到 ai/ 与 git/ 各自的子目录：
+#    usr/lib/Nota/plugins/ai/plugin.toml
+#    usr/lib/Nota/plugins/ai/main.lua
+#    usr/lib/Nota/plugins/git/plugin.toml
+#    usr/lib/Nota/plugins/git/main.lua
+```
+
+⚠️ **`grep plugins` 这一步本身不够**：上面那个"版本②"**也能** grep 到
+`usr/lib/Nota/plugins/…`，它就是靠这一条骗过我的。**要看全量清单**
+（`tar tf data.tar.gz`，不加管道）——平的布局在完整清单里一眼就露馅。
+⚠️ **宿主是 Fedora，没有 `dpkg-deb`**（`command not found`），容器里也没有——
+用 `ar` + `tar` 拆，`ar` 和 `tar` 都是标准工具。
+⚠️ 这三版都发生在 **deb** 上；rpm / AppImage 走的是同一份 `bundle.resources`
+与同一段 bundler 代码，**但没有逐平台验过**。
+
+#### 图标：现在这四个是**占位的**
+
+`icons/` 下那套由 `tools/gen-icons.py` 画出来（**纯标准库 zlib + struct，
+不依赖 PIL**），画的是"带折角的便笺"。`.ico` / `.icns` 和 Windows Store 那几张
+`Square*Logo.png` 是 `npx tauri icon` 从 PNG 派生的。
+
+⚠️ **正式设计稿还没出**，所以现在这些都是占位符。拿到设计稿之后：
+
+```sh
+npx tauri icon <设计稿.png>      # 一次生成全套，含 icns / ico
+rm -rf src-tauri/icons/android src-tauri/icons/ios   # 这两个我们不要
+```
+
+`tauri icon` 会把 `android/` 和 `ios/` 也一并生成，而 Nota 不做移动端，
+留着只会让人以为我们有手机版。
+
+#### Windows 交叉编译：**能编过，但出不了安装程序**
+
+本机（Fedora）没有 Windows 工具链。实测的结论分三层，**第一层是最大的坑**。
+
+**① 目标必须是 `x86_64-pc-windows-gnu`，`msvc` 在这台机器上走不通。**
+⚠️ Tauri 文档和网上都主推 `cargo-xwin` + `msvc`，那条路在这里**失败得极像"代码写坏了"**：
+
+```text
+error[E0514]: found crate `core` compiled by an incompatible version of rustc
+error[E0514]: found crate `compiler_builtins` compiled by an incompatible version of rustc
+error: cannot find macro `include_str` in this scope
+error[E0405]: cannot find trait `Clone` in this scope
+error: requires `sized` lang_item
+…（`serde_core` 一个包就 5883 个报错）
+```
+
+⚠️ **根因跟代码一行关系都没有**：本机 rustc 是 Fedora 打过补丁的 RPM
+（sysroot 在 `/usr`，**没有 rustup**），编译器哈希与 `static.rust-lang.org`
+发的 `rust-std` 对不上。`E0514` 于是把 `core` 判成"别的编译器编的"，
+**凡是从 `core` 来的东西全部找不到**——`Ok` / `Err` / `Clone` / `Sized` /
+`include_str!` / `derive` / `assert!` 一起消失，每个包都塌成一堆 E0425/E0405。
+看到 `cannot find macro panic` 别去翻代码，先看有没有 E0514。
+
+⚠️ 而且 **msvc 在 Fedora 上无解**：`dnf list rust-std-static*` 里只有
+`*-windows-gnu` / `wasm32*` / `none` / `uefi`，**没有任何 msvc**。
+手动解进去的那份 std 现在挪到了容器的 `/root/msvc-std-rejected`（留个证据，别再装回去）。
+
+**② `windows-gnu` 是 Fedora 自带的，版本戳天然对得上，编得出来。**
+
+```bash
+podman exec -u 0 tauri-dev dnf install -y \
+  rust-std-static-x86_64-pc-windows-gnu mingw64-gcc mingw64-winpthreads
+```
+
+`rust-std-static-x86_64-pc-windows-gnu` 是 Fedora 自己编的（`rpm -qf` 查得到，
+不像解进去的那份"不属于任何包"），所以没有 E0514；`mingw64-gcc` 提供链接器。
+实测（`cargo-xwin` 那套完全不用装）：
+
+```bash
+cd src-tauri && cargo build --release --target x86_64-pc-windows-gnu   # 约 4 分半
+```
+
+得到 `src-tauri/target/x86_64-pc-windows-gnu/release/nota.exe`，
+`file` 认它是 **PE32+ executable for MS Windows 5.02 (GUI), x86-64**，26 MB。
+
+⚠️ **这不是 CI 出的那个包**：这里是 mingw（gnu），CI 用 msvc。
+**mingw 编过 ≠ msvc 编过**，所以它不能当替身。它唯一的价值是
+**在本地提前发现"这段代码在 Windows 上根本编不过"**（比如误用了 unix 专有的 API）。
+
+**③ 出不了 `setup.exe`，arm64 也不行。**
+
+- NSIS 那一步要 `makensis`，而非 Windows 宿主上 Tauri 是**下载 NSIS 再用 `wine` 跑**的。
+  容器里 `wine`、`makensis` 都没有，**装 NSIS 自带的 makensis 也没用**——
+  tauri-bundler 只认自己下载的那份，不读 `PATH`。所以安装程序仍然只能在 CI 上出
+- `aarch64-pc-windows-*` 的 std 在 Fedora 仓库里**根本没有**（gnu 的也没有），
+  Windows arm64 同样交给 CI
+
+口径不变：**CI 是 Windows 包的唯一出处**，本地交叉编译只是提前报警
+（CI 的六格矩阵见上面 §2.4 开头，Windows arm64 走 `windows-latest` 原生 runner）。
 
 ---
 
@@ -546,11 +691,11 @@ podman exec -u 1000 -w "$PWD/src-tauri" -e DISPLAY=:99 -e GDK_BACKEND=x11 \
 podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test
 ```
 
-**当前 48 条，全过。** 另有**两个 test target 是 0 条**：`src/main.rs`（只是个壳）与
+**当前 55 条，全过。** 另有**两个 test target 是 0 条**：`src/main.rs`（只是个壳）与
 Doc-tests（`nota_lib` 没有文档测试）。`tests/` 目录下**只有一个空的 `tests/fixtures/`**，
-还没有 Rust 集成测试——所以下面这 48 条**全部是单元测试**。
+还没有 Rust 集成测试——所以下面这 55 条**全部是单元测试**。
 
-> ⚠️ 记数只在本文记（48）。别处提到测试数一律写"见 `docs/06`"。
+> ⚠️ 记数只在本文记（55）。别处提到测试数一律写"见 `docs/06`"。
 
 ### 6.1 逐条
 
@@ -654,15 +799,32 @@ Doc-tests（`nota_lib` 没有文档测试）。`tests/` 目录下**只有一个�
 | `文件树只列_markdown_并且目录在前` | 排序口径：目录在前、按名字（**不区分大小写**）、跳过点开头（`.git`）与非 md（`b.png`） |
 | `depth_为_1_时不给子节点` | `depth=1` 时 `children` 是 `None`（**不是空数组**）；`depth=2` 才递归一层 |
 
+**`themes::tests`（7）—— 主题的发现、围栏与 MIME**
+
+⚠️ 这一组是 2026-09-23 做"兼容 Typora 主题"时加的。**围栏那三条是重点**：
+`nota_theme_read` / `nota_theme_asset` 都能读任意文件，全靠 `check_scope()` 挡住。
+
+| 测试 | 钉住什么 |
+|---|---|
+| `扫出_css_并认出同名资源目录` | 只认 `.css`（同目录下的 `.txt` / 无扩展名的都不算）；有同名目录时 `has_assets = true`，没有是 `false` |
+| `靠前的目录覆盖同名的` | `paths::theme_dirs()` 的**优先级真的生效**——用户自己那份要能盖掉 Typora 的 |
+| `目录不存在时返回空表而不是报错` | ⚠️ **"扫不到"不是错**——不装 Typora 的机器就是这种情况，`nota_themes_list` 返回的是 `Vec` 不是 `Result` |
+| `拒绝读主题目录之外的文件` | `check_scope()` 挡住 `/etc/…` 这类路径 |
+| `拒绝读主题目录之外的资源` | 同上，走 `read_asset()` 那条路 |
+| `前缀像主题目录的兄弟目录不算数` | ⚠️ 钉的是"按**路径分量**比，不是按字符串前缀比"——`.../themes-evil/` 这种必须拒 |
+| `资源读成_data_url_而不是路径` | `mime_of()` 的映射（含**大写扩展名** `.PNG` → `image/png`、认不出的 → `application/octet-stream`）+ base64 的字母表口径（`STANDARD.encode([0,1,2,253]) == "AAEC/Q=="`——⚠️ **这条钉的是"`+` `/` 用得上"**，换成 URL-safe 字母表会得到另一个答案） |
+
 ### 6.2 这些测试**没**覆盖什么
 
-⚠️ 别把"48 条全过"读成"哪都没问题"。四条已知的空白：
+⚠️ 别把"55 条全过"读成"哪都没问题"。**六条**已知的空白：
 
 | 空白 | 为什么 |
 |---|---|
 | **`HostContext` 相关的一切** | 它要一个**真的 `AppHandle`**，构造不出来。所以 `nota.document.*` / `nota.ui.*` 发事件那几条路**没有单元测试**——这正是 `AGENTS.md` §4 那条"**别把安全边界写在 `HostContext` 里面**"的由来：写了就没法测 |
 | **`HostContext` 之外的插件加载流程** | `PluginHost::discover` / `LuaPlugin::load` 都要 `HostContext`。所以"插件真能被加载"只能在 §5 开窗（或至少起 Xvfb）验 |
 | **前端** | 没有任何前端测试（`package.json` 里没有测试框架）。前端靠 `tsc --noEmit` + §5 抓图 |
+| **主题 CSS 的改造** | `styles/typora-theme.ts` 那整套（展开 `@import`、内联 url、收拢到 `#write`）**一条测试都没有**，而它是主题兼容的核心。原因是前端没有测试运行器。**今天的验证方式是取像素**（换主题后采外壳与正文两处的颜色，见 `docs/07` §1）——⚠️ 这只覆盖了"变量提升 + 桥接"，**选择器收拢到底对不对没有机器判据**，只能靠人看版式 |
+| **主题资源真的能加载** | Rust 侧那 7 条只钉到"读成 data: URL"。**"这个 data: URL 真的被浏览器用上了"**是另一回事——而且实测踩过坑：拿 `github` 验**测不出来**，因为它的第一条 `@font-face` 是 `local('Open Sans Regular')`、容器里装着 Open Sans，字体压根不会被请求。要验得用去掉 `local()` 的探针主题 |
 | **`.mdx` 的后缀不一致** | 不是"没测"，是**两处表真的不一样**（`workspace.rs` 的 `is_markdown()` 认 `.mdx`，`App.tsx` 的过滤器不认）。见 backlog 第 28 项 |
 
 ---

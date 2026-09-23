@@ -10,4 +10,5 @@
 pub mod document;
 pub mod plugin;
 pub mod settings;
+pub mod theme;
 pub mod workspace;

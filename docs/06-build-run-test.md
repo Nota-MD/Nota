@@ -265,21 +265,41 @@ cd /tmp && ar x <包>.deb && tar tf data.tar.gz | grep plugins   # ⚠️ 别停
 ⚠️ 这三版都发生在 **deb** 上；rpm / AppImage 走的是同一份 `bundle.resources`
 与同一段 bundler 代码，**但没有逐平台验过**。
 
-#### 图标：现在这四个是**占位的**
+#### 图标：**矢量母版在 `icons/nota.svg`**（2026-09-23 换成正式设计稿）
 
-`icons/` 下那套由 `tools/gen-icons.py` 画出来（**纯标准库 zlib + struct，
-不依赖 PIL**），画的是"带折角的便笺"。`.ico` / `.icns` 和 Windows Store 那几张
-`Square*Logo.png` 是 `npx tauri icon` 从 PNG 派生的。
-
-⚠️ **正式设计稿还没出**，所以现在这些都是占位符。拿到设计稿之后：
+`src-tauri/icons/nota.svg` 是**唯一的手写源**，其余全部由它派生：
 
 ```sh
-npx tauri icon <设计稿.png>      # 一次生成全套，含 icns / ico
+# ① 矢量母版 → 1024 PNG（Chrome 无头光栅化，宿主就能跑，不需要容器）
+google-chrome --headless=new --disable-gpu --hide-scrollbars \
+  --window-size=1024,1024 --screenshot=/tmp/master.png \
+  "file://$PWD/src-tauri/icons/nota.svg"
+
+# ② 1024 PNG → 全套（icns / ico / png / Square*Logo）
+podman exec -u 1000 -w "$PWD" tauri-dev npx tauri icon /tmp/master.png
 rm -rf src-tauri/icons/android src-tauri/icons/ios   # 这两个我们不要
 ```
 
-`tauri icon` 会把 `android/` 和 `ios/` 也一并生成，而 Nota 不做移动端，
+⚠️ `nota.svg` 里写的是 `width="100%" height="100%"` + `viewBox="0 0 1254 1254"`，
+**故意不给固定像素**——这样 Chrome 会按窗口尺寸整幅缩放（给 1024 就出 1024），
+而不是**按原尺寸画完再裁**。少了这一条，出图会是被裁掉一角的。
+
+⚠️ `tauri icon` 会把 `android/` 和 `ios/` 也一并生成，而 Nota 不做移动端，
 留着只会让人以为我们有手机版。
+
+**设计稿的来历**：用户自己画的（蓝色 `N` + 光标竖条 + 折角纸 + 三行文字），
+本仓库里那份 SVG 是**照图逆向**出来的，不是设计稿的原生文件。
+⚠️ 母版里那层浅灰底只占画布 **72%**，所以在 32px 这种小尺寸下会比较"小一圈"
+（四周留白多）——这是**忠实于原图**的做法；真嫌小就重新生成底衬：
+
+```sh
+tools/gen-squircle.py 580      # 把底衬从 453 放大到 580（约 92%），输出整条替换进 SVG
+```
+
+⚠️ 底衬那条路径是**采样出来的数据**（每象限 6 段贝塞尔，逼近超椭圆 `n=4.4`），
+不是几个可读的参数，所以**手改不动，只能重新生成**。默认参数跑出来的那条
+与仓库里现存的那条**逐字符一致**（用脚本对着 SVG 反查过）。
+尺寸与配色都写在 SVG 里。
 
 #### Windows 交叉编译：**能编过，但出不了安装程序**
 

@@ -122,7 +122,8 @@ Forma（表格）同一家族。项目结构参照 Folio。
 |---|---|
 | `plugins/git/` | **内置 Git 插件**（`plugin.toml` + `main.lua`）：状态解析、diff、提交。是"一个插件到底怎么写"的活样例 |
 | `plugins/ai/` | **内置 AI 助手插件**：提示词模板 + 写回文档。⚠️ **网络那半在宿主侧尚未实现**（`nota.http` 是一张「尚未实现」的表） |
-| `tools/gen-icons.py` | 纯标准库的 PNG 图标生成器（不依赖 PIL） |
+| `src-tauri/icons/nota.svg` | **图标的手写矢量母版**（用户设计的蓝色 `N` + 光标条 + 折角纸）。其余图标文件全由它派生，**别再手改那些 PNG**——改这个 SVG 再走 `docs/06` §2.4 那两步 |
+| `tools/gen-squircle.py` | 生成 `nota.svg` 里那块浅灰底衬（**超椭圆**，不是圆角矩形）的路径数据。⚠️ 那条 `d` 是采样出来的，改大小**只能重新生成**。默认参数跑出来的和仓库里那条**逐字符一致**（验过） |
 | `tools/doc-sync-check.sh` | 文档同步与行数上限的启发式检查（见 `docs/09`） |
 | `.github/workflows/release.yml` | 六个平台的打包矩阵（Windows x64/arm64 的 exe、macOS 双架构 dmg、Linux 双架构 deb/rpm/AppImage）。**每个平台只能在自己的系统上打**，理由在文件头 |
 | `THIRD-PARTY.md` | **第三方组件与许可证清单**。加/删依赖要同批改它（`docs/09` §2.3） |

@@ -13,6 +13,21 @@
  * 一条规则都没在猜内容：插件的字符串只会出现在子节点位置，见
  * `ui/panel-nodes.ts` 顶上那三条规矩。这里**不许**出现 `content:` 之类
  * 能把字符串变成画面的写法。
+ *
+ * # 2026-09-24：一栏一页签（`.dock-tabs`）
+ *
+ * 用户要求「每一个拓展应该独占一个窗口……两个拓展面板不能同时打开」。
+ * 改之前是几个面板**沿着这一栏叠起来**，而面板是会自己长高的（AI 那页一轮
+ * 问答就长出好几屏）——叠起来的结果是两边互相把对方挤没，用户想看的那个
+ * 常常在屏幕外。这不是"高度没调好"，是**两样东西共用一个滚动条**本身错。
+ *
+ * ⚠️ 三个高度层级是**分开的**，别把 `.dock-tabs` 挪进 `.dock-body`：
+ * `dock-head`（栏名＋收起）／`dock-tabs`（页签）在外，`.dock-body` 内滚动。
+ * 页签跟着内容一起滚走的话，一个长面板滚到底部就再也切不回去了。
+ *
+ * ⚠️ 面板标题（`.panel-head` / `.panel-title` / `.panel-from`）**全删了**：
+ * 一页只画一个面板之后，标题在页签上、来源在页签的 `title` 里，
+ * 卡片头上再写一遍是同一句话说三次。
  */
 
 
@@ -64,6 +79,56 @@
   background: var(--bg-hover);
 }
 
+/* ── 页签：一个插件一页，一次只开一页 ──────────────────────────────────────
+
+   ⚠️ `flex-wrap: wrap` 是**故意的**：这一栏只有 260px，页签多了横着放不下。
+   横向滚动条在这一栏里是没法用的（见下面 `.panel-body` 那段），所以宁可
+   让它折成第二行——多出来的高度是有界的（页签数 = 插件数），横向溢出没有。 */
+.dock-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  flex: none;
+  padding: 3px calc(var(--spacing) * 0.75) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dock-tab {
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+  /* 名字长的面板（"AI 助手"）不许把这一行顶宽：多余的字打点。 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dock-tab:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* 选中的那一页。⚠️ 用底色 ＋ 字重，**不用 accent 下划线**：
+   下划线在折行的页签组上会指到"上一行"去。 */
+.dock-tab[data-active="true"] {
+  background: var(--bg);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* 「插件」页（清单）。**它永远在最右**，表示"这里还有不属于任何插件的东西"，
+   和插件页签之间留一道空隙，免得看起来像是某个插件的页。 */
+.dock-tab-plugins {
+  margin-left: auto;
+  font-style: italic;
+}
+
 .dock-body {
   flex: 1;
   overflow: auto;
@@ -91,36 +156,10 @@
   margin-top: 0;
 }
 
+/* 一页里就这一个面板，所以**没有卡片边框了**：页签已经是它的边框，
+   再套一层框就是"框里有框"，而这一栏总共只有 260px 宽。 */
 .panel {
-  margin: 0 calc(var(--spacing) * 0.75) var(--spacing);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  overflow: hidden;
-}
-
-.panel-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 1.25);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
-}
-
-.panel-title {
-  font-weight: 600;
-  font-size: 0.9em;
-}
-
-/* 面板是从哪个插件来的。**这一栏里可能并排着好几个插件的面板**，
-   所以谁是谁得写在每一块上，不能只写在栏标题里。 */
-.panel-from {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 0.72em;
-  color: var(--fg-faint);
+  margin: 0;
 }
 
 .panel-body {
@@ -285,6 +324,129 @@
   margin: 8px 0;
   border: 0;
   border-top: 1px solid var(--border);
+}
+
+/* ── 对话框那三块（`message` / `diff` / `input`，2026-09-24 加）──────────────
+
+   给 AI 插件那张「对话框」用的，但样式本身**不认识 AI**：它只管把
+   "谁说的"／"一块改动"／"一个输入框"画清楚。别的插件要做对话也用这三块。
+
+   ⚠️ 宽度只有 260px，所以 `message` 的正文和 `diff` 的每一行都**必须能折行**。
+   这里给 `pre-wrap` ＋ `anywhere`，代价是 `diff` 里一行长代码会折成两行——
+   但横向滚动条在这一栏里是**没法用**的（见上面 `.panel-body` 那段），
+   折行只是难看，横向滚动是看不了。 */
+
+.panel-msg {
+  margin: 0 0 8px;
+  font-size: 0.87em;
+  line-height: 1.5;
+}
+
+/* 谁说的。**两边的名字都写出来**，不靠左右对齐区分：
+   这一栏只有 260px，左右对齐要靠边距，读起来反而更挤。 */
+.panel-msg-who {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--fg-faint);
+}
+
+/* 用户那一句。左边一道竖线 ＋ 略微缩进：一眼能看出"这段是问题，
+   下面是回答"，而**不用底色**（tone 只上色的那条理由同样适用）。 */
+.panel-msg-user {
+  padding-left: 8px;
+  border-left: 2px solid var(--border-strong, var(--border));
+  color: var(--fg-muted);
+}
+
+.panel-msg-user .panel-msg-who {
+  color: var(--fg-muted);
+}
+
+/* ⚠️ `pre-wrap`：AI 的回答里换行是**内容的一部分**（列表、代码、改动块），
+   当普通段落折叠成一行就不是它说的那句话了。仍然走 `{text}` 由 React 转义。 */
+.panel-msg-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.panel-diff {
+  margin: 0 0 8px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  line-height: 1.45;
+  /* `pre` 默认 `pre`：长行会顶宽这一栏。这里改成折行。 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.panel-diff-line {
+  display: block;
+  /* 折下来的第二行缩进到内容的左边界，不跟 `-`/`+` 对齐——否则
+     "哪一行是新起的"就看不出来了（悬挂缩进的标准写法）。 */
+  padding: 0 8px 0 20px;
+  text-indent: -12px;
+}
+
+.panel-diff-del {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+.panel-diff-add {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+.panel-input {
+  margin: 8px 0 2px;
+}
+
+/* 输入框的底子和宿主的 `PromptDialog`（`.prompt-input`）**长一样**：
+   同一个界面里两个输入框两副样子，用户会以为它们不是一回事。 */
+.panel-input-box {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 0.87em;
+  /* ⚠️ 多行那个框**只许竖向拉**：横向拉会把这一栏顶出去。 */
+  resize: vertical;
+}
+
+.panel-input-box:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.panel-input-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.panel-input-send {
+  flex: none;
+}
+
+.panel-input-hint {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-faint);
+  font-size: 0.8em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 /* 认不出的内容块。**画成"注意"而不是"错误"**：多半是插件比 Nota 新，

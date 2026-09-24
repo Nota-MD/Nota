@@ -18,9 +18,11 @@
  * 宿主没实现、还是自己写错了字段名，而界面上一点线索都没有。
  */
 
+import { useState } from "react";
+
 import { 问参数 } from "@/ui/plugin-prompt";
 import type { PromptRequest } from "@/ui/useDialogs";
-import type { PanelNode } from "@/ui/panel-nodes";
+import type { PanelInput as PanelInputSpec, PanelNode } from "@/ui/panel-nodes";
 
 interface Props {
   /** 这些按钮属于哪个插件。`panelContent(plugin, id)` 里的那个 `plugin`。 */
@@ -135,6 +137,41 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
           case "separator":
             return <hr key={i} className="panel-sep" />;
 
+          case "message":
+            return (
+              <div key={i} className={`panel-msg panel-msg-${node.from}`}>
+                <span className="panel-msg-who">{node.from === "user" ? "你" : "AI"}</span>
+                {/* 预格式：AI 的回答里换行是内容的一部分（列表、代码、改动块），
+                    当普通段落会被折叠成一行。仍然走 `{text}`——React 转义。 */}
+                <span className="panel-msg-text">{node.text}</span>
+              </div>
+            );
+
+          case "diff":
+            return (
+              <pre key={i} className="panel-diff">
+                {node.items.map((l, j) => (
+                  // 粘在一行里的 `-`/`+` 行没有可点的东西，所以这里不需要交互；
+                  // 应用由插件那条命令负责（它才知道该改哪儿）。
+                  <span key={j} className={`panel-diff-line panel-diff-${l.op}`}>
+                    {l.op === "del" ? "- " : "+ "}
+                    {l.text}
+                    {"\n"}
+                  </span>
+                ))}
+              </pre>
+            );
+
+          case "input":
+            return (
+              <PanelInput
+                key={i}
+                spec={node.spec}
+                disabled={busy !== null}
+                onSubmit={(值) => onCall(plugin, node.spec.submit, { [node.spec.arg]: 值 })}
+              />
+            );
+
           case "unknown":
             return (
               <p key={i} className="panel-unknown">
@@ -145,5 +182,94 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
         }
       })}
     </>
+  );
+}
+
+/**
+ * 面板里的输入框。
+ *
+ * # ⚠️ 发出去之后**立刻清空**，不等结果
+ *
+ * 输入框里的字是**用户还没交出去的东西**，而交出去之后它的归属就变了：
+ * 它成了对话里的一条消息，**由插件那边记着**（`render` 下一趟就把它画出来）。
+ * 所以"清空"不是"扔掉"，是"交给插件保管"。
+ *
+ * 反过来（等成功再清）会有一个更坏的表现：慢接口下用户看着自己刚打的字
+ * 一动不动地待在那儿，既没发出去也没法改——而这个框**只在下一次重拉时才重画**，
+ * 拖得越久越像卡住了。真失败时插件会把它当成一条"发送失败"的 AI 消息画出来，
+ * 字没丢。
+ *
+ * ⚠️ 这里**没有** `value` 之外的受控逻辑：面板是"每次拉都现跑"的，
+ * 组件会被整块重画，所以输入到一半的草稿**可能随重画消失**——
+ * 这是这一版的已知取舍（面板不适合当草稿本），写进 `docs/13` §input。
+ */
+function PanelInput({
+  spec,
+  disabled,
+  onSubmit,
+}: {
+  spec: PanelInputSpec;
+  disabled: boolean;
+  onSubmit: (值: string) => Promise<void>;
+}) {
+  const [草稿, set草稿] = useState("");
+  const 灰 = disabled || !spec.submit || !spec.arg;
+
+  const 发 = () => {
+    const 值 = 草稿.trim();
+    if (灰 || !值) return;
+    set草稿("");
+    void onSubmit(值);
+  };
+
+  return (
+    <div className="panel-input">
+      {spec.multiline ? (
+        <textarea
+          className="panel-input-box"
+          rows={3}
+          value={草稿}
+          placeholder={spec.placeholder}
+          disabled={灰}
+          onChange={(e) => set草稿(e.target.value)}
+          // 多行框用 `Ctrl/Cmd+Enter` 发：回车在这个框里是**换行**，
+          // 否则一段话永远打不完（发出去的都是第一行）。
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              发();
+            }
+          }}
+        />
+      ) : (
+        <input
+          type="text"
+          className="panel-input-box"
+          value={草稿}
+          placeholder={spec.placeholder}
+          disabled={灰}
+          onChange={(e) => set草稿(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              发();
+            }
+          }}
+        />
+      )}
+
+      <div className="panel-input-foot">
+        <button
+          type="button"
+          className="btn btn-primary panel-input-send"
+          disabled={灰 || !草稿.trim()}
+          title={灰 ? "这个输入框没有写 `submit` / `arg`，点了也没事发生" : undefined}
+          onClick={发}
+        >
+          {spec.submitLabel}
+        </button>
+        {spec.hint && <span className="panel-input-hint">{spec.hint}</span>}
+      </div>
+    </div>
   );
 }

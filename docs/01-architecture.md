@@ -451,7 +451,9 @@ LuaPlugin                       lua/mod.rs               一个插件一个 Lua 
             │
             ▼
 lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
-  ├─ 永远可用：version / api_version / plugin_id / log / command / event
+  ├─ 永远可用：version / api_version / plugin_id / log / command / event / diff
+  │              （diff 是 2026-09-24 加的**纯函数**表：一段文本进、一段文本出，
+  │                不碰文档不碰磁盘，见 lua/api/diff.rs 与 `docs/13` §11）
   ├─ document.read | document.write  → nota.document
   ├─ fs.read | fs.write             → nota.fs
   ├─ process.git                    → nota.git
@@ -569,7 +571,7 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 | `settings` | `Settings \| null` | 外观两条界面轴 + `document_theme`（文档主题 id）、`content_width`、`confirm_unsaved`、`view_mode`（⚠️ **编辑模式偏好，不是第三条外观轴**，见 `03`） |
 | `workspace` | `string \| null` | 侧栏文件树、`refreshTree` 的开关 |
 | `tree` | `TreeNode[]` | 侧栏文件树 |
-| `plugins` / `panels` | `PluginInfo[]` / `PluginPanel[]` | 侧栏「插件」页、`Home` 的插件状态列、右侧插件栏 |
+| `plugins` / `panels` | `PluginInfo[]` / `PluginPanel[]` | 右侧插件栏的「插件」页签（清单）、`Home` 的插件状态列。⚠️ **当前是哪一页签、每页拉到什么内容**都不在这里——住在 `PluginDock` 自己家里（内容每页一份、还有请求序号），见 `docs/04` §状态 |
 | `themes` | `DocThemeInfo[]` | 菜单栏「主题」那一栏（**全是文档主题**）。**启动时拉一次** |
 | `settingsOpen` | `boolean` | 偏好设置框开不开（`ui/SettingsDialog.tsx`）。入口是菜单「文件 → 偏好设置」 |
 | `toasts` | `Toast[]` | `Toasts` 组件 |
@@ -582,6 +584,8 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 
 ⚠️ `sidebarOpen` / `sidebarTab` / `statusBarOpen` / `dockOpen` 是**受控的**：
 状态全在 `App.tsx`，`Sidebar` / `PluginDock` / `StatusBar` 自己不持有。
+⚠️ 例外是 `PluginDock` 里**页签选中了哪一页**与每页的内容——那是"这一刻从插件拉回来的
+东西"，没有第二个人要用，所以不往上抬（2026-09-24 页签化时定的；面板内容本来就这样）。
 所以菜单栏（在 `App.tsx` 里渲染）能直接改它们——这是"快捷键能开某个侧栏页"
 （Ctrl+Shift+1 大纲、Ctrl+Shift+3 文件树）能实现的原因。
 

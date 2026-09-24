@@ -10,7 +10,8 @@
 #
 # 申请 `document.write` 是因为"把 AI 的回答写进文档"是这个插件的主用法。
 # 但**写之前一定要让用户看见要写什么**——见 main.lua 顶部那条设计原则，
-# 以及 `apply` 命令的注释：内容先落在预览里，用户点了确认才动文档。
+# 以及 `apply_patch` 命令的注释：回答里那段改动先画成一块 diff，
+# 用户点了「应用改动」才动文档。
 
 [plugin]
 id          = "nota.ai"
@@ -29,6 +30,6 @@ capabilities = [
   "network.http",    # 请求 {base_url}/chat/completions；只发给用户填的那个地址
   "settings.own",    # 存 api_key / base_url / model（只这一个插件自己的文件）
   "ui.notify",       # 生成好了、写完了、失败了都要说一声
-  "ui.panel",        # 右侧那块面板：设置、预设按钮、生成结果预览
-  "ui.menu",         # 「插件」菜单里那五个预设
+  "ui.panel",        # 右侧那块面板：设置、对话清单、消息、待应用的改动、输入框
+  "ui.menu",         # 「插件」菜单里那五个预设 ＋「新对话」
 ]

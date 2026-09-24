@@ -413,12 +413,14 @@ view_mode = "split"
 也让"权限"变成一句运行时的客气话，而不是一道结构上的墙。
 
 永远可用、不需要任何能力的只有这几项（它们不碰文档也不碰磁盘，是插件跟自己、
-跟宿主说话用的）：身份三项 `version` / `api_version` / `plugin_id`，以及三张表
-`log` / `command` / `event`。
+跟宿主说话用的）：身份三项 `version` / `api_version` / `plugin_id`，以及四张表
+`log` / `command` / `event` / `diff`（最后那张 2026-09-24 加的，是**纯函数**：
+一段文本进、一段文本出，见 `docs/13` §11）。
 
 ⚠️ **能力申请只写真的用到的**。申请了不用的能力是在扩大攻击面而不换任何功能——
 `plugins/git/plugin.toml` 连 `fs.write` 都没申请（它让 git 自己去改工作区），
-`plugins/ai/plugin.toml` 顶部则明说 `network.http` 与 `settings.own` 申请了但宿主还没实现。
+`plugins/ai/plugin.toml` 的 `network.http` / `settings.own` 两条 2026-09-24 起都**已经实现**了，
+申请它们是有用的（这条早先的记录说的"申请了但宿主还没实现"已经不成立）。
 
 ---
 

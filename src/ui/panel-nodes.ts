@@ -63,10 +63,43 @@ export type PanelNode =
   | { kind: "empty"; text: string }
   | { kind: "separator" }
   /**
+   * 对话框里的一条消息（2026-09-24 加，AI 插件那张「对话框」用的）。
+   *
+   * ⚠️ `from` **只认 `user` / `ai`**，别的一律当 `ai`：多出来的第三种
+   * 只会在样式表里没有落点（画出来跟 AI 一样），不如在类型上就说清楚。
+   */
+  | { kind: "message"; from: PanelFrom; text: string }
+  /** 一块改动（见 `PanelDiffLine`）。**只画，不应用**——应用得插件自己去点。 */
+  | { kind: "diff"; items: PanelDiffLine[] }
+  /** 一行输入框 ＋ 一个提交按钮。**面板里唯一能打字的地方。** */
+  | { kind: "input"; spec: PanelInput }
+  /**
    * 认不出的 `kind`。**带着原始 JSON 的简写**，画一句"不认识"——
    * 静默丢掉的话，插件作者看到的是"我的面板少了一块"，而没有任何线索。
    */
   | { kind: "unknown"; raw: string };
+
+/** 一条消息是谁说的。 */
+export type PanelFrom = "user" | "ai";
+
+/** 改动块里的一行。`del` 是被换掉的原行，`add` 是换上来的新行。 */
+export interface PanelDiffLine {
+  op: "del" | "add";
+  text: string;
+}
+
+/** 面板里的输入框（`kind = "input"`）。 */
+export interface PanelInput {
+  /** 用户敲的内容放进 `args[arg]` 传给 `submit` 那条命令。空串 = 这个框不可用。 */
+  arg: string;
+  /** 点了调哪条命令。空串 = 画成灰的。 */
+  submit: string;
+  submitLabel: string;
+  placeholder: string;
+  hint: string;
+  /** 多行输入（默认单行）。谈话类用它。 */
+  multiline: boolean;
+}
 
 /** 一块内容最多这么多项（和宿主的 `面板节点上限` 同量级，但**各自把关**）。 */
 const 每块上限 = 200;
@@ -74,8 +107,17 @@ const 每块上限 = 200;
 /** 文本兜底上限。宿主已经截过一刀，这是防手改过的数据。 */
 const 文本上限 = 4000;
 
-function 文本(v: unknown): string {
-  if (typeof v === "string") return v.length > 文本上限 ? `${v.slice(0, 文本上限)}…` : v;
+/**
+ * 一条**消息**的兜底上限，比别的块宽得多。
+ *
+ * ⚠️ 对话面板里的一条消息就是**一段完整的回答**（一节稿子、一份翻译），
+ * 4000 字会把正经内容从中间劈掉，而截断只留一个 `…`，用户会以为模型就
+ * 写到那儿。宿主那边同样是 20000（`ui.rs::面板文本上限`），两处对齐。
+ */
+const 消息上限 = 20000;
+
+function 文本(v: unknown, 上限 = 文本上限): string {
+  if (typeof v === "string") return v.length > 上限 ? `${v.slice(0, 上限)}…` : v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   return "";
 }
@@ -126,6 +168,25 @@ function 提示(v: unknown): PluginPrompt | null {
   };
 }
 
+/**
+ * 读一个输入框。
+ *
+ * ⚠️ **没有 `arg` 或没有 `submit` 时仍然画出来**（画成灰的、不能提交）：
+ * 这与 `buttons` 那条规矩一致——少写了一根线要**看得见**，
+ * 而不是让整块消失。`提示()` 那边相反（没有 `arg` 就当没写），因为那时
+ * 弹出来的框"填完什么都不会发生"，多一个框比少一个框更坏。
+ */
+function 输入框(raw: Record<string, unknown>): PanelInput {
+  return {
+    arg: 文本(raw.arg),
+    submit: 文本(raw.submit),
+    submitLabel: 文本(raw.submit_label) || "提交",
+    placeholder: 文本(raw.placeholder),
+    hint: 文本(raw.hint),
+    multiline: raw.multiline === true,
+  };
+}
+
 function 一块(raw: Record<string, unknown>): PanelNode {
   const kind = 文本(raw.kind);
   switch (kind) {
@@ -170,6 +231,24 @@ function 一块(raw: Record<string, unknown>): PanelNode {
       return { kind: "empty", text: 文本(raw.text) };
     case "separator":
       return { kind: "separator" };
+    case "message":
+      return {
+        kind: "message",
+        from: raw.from === "user" ? "user" : "ai",
+        text: 文本(raw.text, 消息上限),
+      };
+    case "diff":
+      return {
+        kind: "diff",
+        // 只认 `del` / `add` 两种 op；别的一律当 `add`（宁可多画一行，
+        // 也不要静默吞掉——吞掉的正是插件作者以为会显示的那一行）。
+        items: 表数组(raw.items).map((it) => ({
+          op: it.op === "del" ? ("del" as const) : ("add" as const),
+          text: 文本(it.text),
+        })),
+      };
+    case "input":
+      return { kind: "input", spec: 输入框(raw) };
     default: {
       const 名 = kind || "（没写 kind）";
       return { kind: "unknown", raw: 名 };

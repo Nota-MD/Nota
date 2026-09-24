@@ -191,6 +191,7 @@ mlua 对这个 feature 的定义（`README.md`）：
 | 层 | 判据写在哪 | 内容 |
 |---|---|---|
 | **表装不装** | `lua/api/mod.rs` 的 `fn build()` 里那一串 `if manifest.has(…)` | `document`（`document.read` 或 `document.write`）、`fs`（`fs.read` 或 `fs.write`）、`git`（`process.git`）、`ui`（`ui.notify` 或 `ui.panel` 或 `ui.menu`——三条都在，见 §4.3）、`http` / `settings`（各自的单项能力） |
+| **不需要能力的那几张** | 同一个 `build()` 里，**没有 `if`** | 身份三项 `version` / `api_version` / `plugin_id`、`log` / `command` / `event` / **`diff`**（2026-09-24 加的：`nota.diff` 是**纯函数**——一段文本进、一段文本出，不碰文档不碰磁盘，拿它做不出清单之外的事） |
 | **表里成员装不装** | `document.rs` / `fs.rs` / `ui.rs` 各自开头 | 例如 `ui.rs` 的 `build()` 里三处判据各守一个成员：`UiNotify` → `notify`、`UiPanel` → `register_panel`、`UiMenu` → `register_menu` |
 
 **两层是相乘的**：只申请 `ui.panel` 的插件，`nota.ui` 表存在、`register_panel` 存在，
@@ -329,6 +330,23 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 
 ⚠️ **`nota.ui.refresh` 的代价是每次都要重跑一遍 `render`**，而 `render` 里通常是
 一个子进程。所以别在循环里调它，也别指望它"顺便"更新别的东西。
+
+**⚠️ 只有"当前那一页"在被拉（2026-09-24）。** 右侧栏改成页签式之后
+（一个插件独占一页，用户要求"两个拓展不能同时占用"，见 `docs/04` §右侧栏），
+前端**只拉活动页**：没显示的那几页的 `render` 不会被调，`nota:plugin-panel`
+的事件也只会让活动页重拉。所以：
+
+- 好处是"用户不开的面板不花时间"（`render` 里那些子进程不会被白跑）；
+- 代价是**切过去的一瞬间会现拉一次**（慢接口下会闪一下「正在读取…」）。
+  这一次拉是**必须**的，别指望"反正事件刚到过、内容还热着"——插件得把
+  **拉到的那一刻**算准（`render` 里不许缓存的另一条理由）。
+
+**面板内容的大小上限**：宿主那一侧截大小（`ui.rs::面板文本上限` = **20000 字符**、
+每块 200 项、嵌套 6 层）。⚠️ 这个数 **2026-09-24 从 4000 抬上来的**：
+一条 `kind = "message"` 就是模型的一整段回答，4000 字在长回答上会被
+**静默截断**（只留一个 `…`），用户会以为模型就写了这么多。超了是**截断不是报错**，
+所以插件自己该截的还要自己截（AI 插件压到 15000，好让"后面还有内容"这句话
+由插件说出来——见 `docs/13` §8.5）。
 
 ---
 

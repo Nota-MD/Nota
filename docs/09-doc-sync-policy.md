@@ -68,6 +68,7 @@
 | `src-tauri/src/lua/api/ui.rs` | `13` `04` `02` `05` `11` | ⚠️ 2026-09-22 起**不再是「三个方法都发事件」**：`notify` 推事件，`register_panel`/`register_menu` 写 registry 供宿主拉。改这里要连带读侧（`plugin/mod.rs`）与 `11` 的插件作者文档。⚠️ 2026-09-24 起 `register_panel` 多了 `render`（面板 DSL 的入口，形状定义在前端 `ui/panel-nodes.ts`）、`register_menu` 多了 `prompt` |
 | `src-tauri/src/lua/api/http.rs` | `13` `12` `02` `06` | **`nota.http`**（2026-09-24 落地，backlog 第 12 项）：ureq 3.4.0 + rustls，**阻塞**所以整条命令走 `spawn_blocking`。⚠️ 四条对外口径改任一条都要同步文档：`https` 随便 / `http` **只放行回环**（`检查地址`，按**主机名**判）、**4xx/5xx 不是错误**（`http_status_as_error(false)`）、返回 `{code, text}` 且**能解析时另给 `json`**（`json_to_lua`，数组下标**从 1 起**）、`timeout_ms` 默认 30s/上限 180s（超了截断不报错）。⚠️ `写了_content_type` 那条防的是**重复 content-type 头**（`Request::builder().header()` 是追加） |
 | `src-tauri/src/lua/api/settings.rs` | `13` `12` `07` | **`nota.settings`**（2026-09-24 落地，backlog 第 13 项）：一个插件一个**明文** TOML，`~/.config/nota/plugin-settings/<id>.toml`，文件 0600 / 目录 0700。⚠️ **明文是决定不是欠账**，理由在 `12` §4.5，**别顺手"修"成加密**。⚠️ 键名只认 ASCII 字母数字下划线且不含点、`set(k, nil)` 是删除、每次 `set` 立刻落盘 |
+| `src-tauri/src/lua/api/diff.rs` | `13` `11` `12` `07` `06` | **`nota.diff`**（2026-09-24 新增，487 行 / 13 条用例）：**改动块**（`` ```nota-diff `` 围栏、`-` 原文 / `+` 新话）的解析与应用，纯函数、**不需要任何能力**（`build()` 只做包装，核心的 `解析`/`应用` 不认识 Lua，所以能被单测按住）。⚠️ **契约改一处要改三处**：本文件 ＋ `plugins/ai/main.lua` 的 `SYSTEM_PROMPT` ＋ `13` §11。⚠️ 三条不许松的：**失败＝什么都没做**（不给半截结果）、`-` 行要**连续且逐字一致**、没有 `-` 行＝**追加到文末** |
 
 ### 2.2 前端
 
@@ -106,9 +107,9 @@
 | `src/ui/accel.ts` | `04` `05` | **快捷键的唯一真相源**。⚠️ 判键名**优先 `e.code`**（Shift 之下 `e.key` 是上档字符，`Ctrl+Shift+1` 曾经因此永远不成立，见 `07` §4）；`Ctrl` 在 macOS 上指 ⌘。界面上的键位文字由 `formatAccel` 出，改它要连带改 `04` §4 那张表 |
 | `src/ui/commands.ts` | `04` `05` | **菜单项 → 动作**的唯一映射表，也是**快捷键表**（`ui/accel.ts` 反过来查它）。⚠️ 它调 `EditorHandle` 上的方法而不是直接碰 Milkdown，见 `05`。⚠️ 「主题」那栏的条目与勾是**合成**的（`themeEntries`/`themeChecks`/`resolvePick`），自绘与原生两边共用 |
 | `src/ui/Sidebar.tsx` | `04` | 侧栏两页：文件（工作区树）/ 大纲，两棵树都能折（`07` §4 2026-09-24）。⚠️ 2026-09-24 补了右上角**收起那颗 ×**（`.sidebar-close`，照右侧插件栏那颗做）与空工作区里的**「打开文件夹…」**——但**开合只有 `App.tsx` 的 `sidebarOpen` 一份**，× 只是同一个 setter 的第二个入口；⚠️ × 放在 `role="tablist"` **外面**（塞进去读屏会把它念成一个页签） |
-| `src/ui/PluginDock.tsx` | `04` `10` `02` | 右侧插件栏：面板 + 清单三组。⚠️ 2026-09-24 起面板**真的有内容**了（第 15 项落地）：「面板内容尚未接入」那句空态已经删掉，别再照着旧文档去找它 |
-| `src/ui/PanelBody.tsx` | `04` `11` | **面板内容块的渲染层**（2026-09-24）：七种 `kind` 各画成什么。⚠️ 面板按钮的 `prompt` 在这里走 `plugin-prompt.ts::问参数`。⚠️ 这里**永远不许**出现 `dangerouslySetInnerHTML`——"字符串变不成 HTML"是这条路的全部保证 |
-| `src/ui/panel-nodes.ts` | `11` `13` | **面板 DSL 的真相源**（2026-09-24）：`normalise()` 把宿主发来的一坨 JSON 收成 `PanelNode[]`。⚠️ **形状校验只在这一层**（宿主只管"是 JSON + 大小上限"，它连 `kind` 有几种都不知道）；⚠️ 认不出的 `kind` **如实显示**、字段类型不对**退回默认值**、插件塞的别的键**一概不往 DOM 上带** |
+| `src/ui/PluginDock.tsx` | `04` `10` `02` `11` | 右侧插件栏：**页签式，一次只画一页**（2026-09-24 用户要求"一个拓展独占一页、两个不能同时开"）＋「插件」页的清单/没有落脚处。⚠️ 只拉活动页：非活动页的 `render` 不会被调、事件也只重拉活动页（代价见文件头）。⚠️ 面板**真的有内容**（第 15 项落地），「面板内容尚未接入」那句空态已经删掉 |
+| `src/ui/PanelBody.tsx` | `04` `11` `13` | **面板内容块的渲染层**（2026-09-24）：**十种** `kind` 各画成什么；`message`/`diff` 只画，`input` 是**唯一**的输入控件（发出去＝调 `submit` 命令，参数 `{ [arg] = 输入 }`，跟按钮零区别）。⚠️ 面板按钮的 `prompt` 在这里走 `plugin-prompt.ts::问参数`。⚠️ 这里**永远不许**出现 `dangerouslySetInnerHTML`——"字符串变不成 HTML"是这条路的全部保证 |
+| `src/ui/panel-nodes.ts` | `11` `13` | **面板 DSL 的真相源**（2026-09-24）：`normalise()` 把宿主发来的一坨 JSON 收成 `PanelNode[]`。⚠️ **形状校验只在这一层**（宿主只管"是 JSON + 大小上限"，它连 `kind` 有几种都不知道）；⚠️ 认不出的 `kind` **如实显示**、字段类型不对**退回默认值**、插件塞的别的键**一概不往 DOM 上带**。⚠️ **`消息上限` = 20000**，跟宿主那个 `面板文本上限` 是同一个数、改要一起改 |
 | `src/ui/pluginMenus.ts` | `04` `13` | **插件菜单项 → 菜单栏「插件」栏**（2026-09-24，第 42 项）：id 是合成的 `__plugin:<插件>:<命令>`，走既有的 `resolvePick` → `menuHandlers` 老路。⚠️ `menu` 写别的值**不静默丢掉**（灰掉 + 后缀写明想挂哪栏）；⚠️ 返回值每次都是新数组，调用方**必须** `useMemo`（下游牵着原生菜单重建） |
 | `src/ui/plugin-prompt.ts` | `04` `13` | **"点之前先问一句"的唯一实现**（2026-09-24）：`问参数()` 把 `prompt` 弹成宿主的输入框、把答案并进 `args[arg]`。⚠️ 面板按钮与菜单项**共用**它——"取消就什么都不发生"这条只在它里面写一次 |
 | `src/ui/usePlugins.ts` | `02` `04` | 插件这份状态的编排（2026-09-24 从 `App.tsx` 搬出）：拉插件/面板/菜单 + 处理函数表 + 出错提示。⚠️ 菜单栏拿到的是 `带插件栏(MENUS, 菜单项们)` 的结果，**不是常量 `MENUS`** |
@@ -240,26 +241,45 @@ mtime 是近似：拉取代码、`touch`、检出旧版本都会让它误报。
   前提是**同时改 `main.tsx` 的 import**（脚本查不到 import 是否断了，
   所以改完要 `npx vite build` 确认）。
 
-**当前最大值**（2026-09-24 再数一次，那天往里加了状态栏两格与侧栏那颗 ×）：前端 `src/App.tsx` **888 行**、
-`src/styles/app.css` 849 行（左侧栏拆去 `sidebar.css` 之后）、`src/editor/source.ts` 742 行、`src/editor/create.ts` 526 行、
-`src/styles/editor.css` 463 行、`src/bridge/ipc.ts` 446 行、`src/ui/commands.ts` 415 行；
-后端最大是 `src-tauri/src/document/mod.rs` **639 行**（`slidev.rs` 638、`native_menu.rs` 492、
-`lua/mod.rs` 464、`slidev_probe.rs` 461）。
-⚠️ **900 以上一条都没有**：`App.tsx` 888、`app.css` 849——**但这两条都在往 900 上走**，
-下一次往里加东西之前先想好拆哪一块（`App.tsx` 能拆的是"外观那两条轴的接线"，`app.css` 按
-「外壳 / 状态栏 / 主页」再分一份）。纯样式那份 2026-09-24
-顶破 1000 行之后已经按上面那条例外拆过一次（`app.css` → `sidebar.css`）。
-`App.tsx` 2026-09-24 **沿职责拆了五刀**（`ui/useMenus.ts` + `ui/useDialogs.ts` + `ui/useExport.ts`
-+ `ui/useDocTheme.ts` + `ui/useEditorCommands.ts`），1016 → 864，**已经回到 900 以下**。
-⚠️ 但那次拆的过程本身值得记：**先拆两刀仍是 916 行**，因为同批又往里加了工具栏与查找条的接线
-——**"拆了"和"变小了"不是同一件事**，别把行数当拆分的目标。
-**都在限内，没有欠账。**
- ⚠️ 这一行**每次拆完/长文件之后要重数**，不要凭印象递推——
+**当前最大值**（2026-09-24 深夜再数一次，那天加了 AI 改动块、页签式插件栏、
+以及插件侧的 `clean_error`）：
+`src/App.tsx` **926 行**、`plugins/ai/main.lua` **902 行**、`src/editor/source.ts` 742 行、
+`src-tauri/src/lua/api/ui.rs` 710 行、`src/styles/app.css` 646 行、
+`src-tauri/src/document/mod.rs` 639 行、`src-tauri/src/slidev.rs` 638 行、
+`src/styles/dock.css` 578 行、`src/editor/create.ts` 575 行、
+`src-tauri/src/lua/api/http.rs` 540 行、`src/bridge/ipc.ts` 529 行、
+`src-tauri/src/lua/mod.rs` 516 行、`src-tauri/src/lua/api/diff.rs` 487 行。
+⚠️ **过 900 的现在是两条**：`App.tsx` **926** 与 `plugins/ai/main.lua` **902**——
+两条都已登记在 `docs/07` §4。前者的欠账是"外观那两条轴的接线"，但**这是欠账不是
+现在要做的**（拆一次要连带改文档，别顺手做）。
+⚠️ `App.tsx` 那 **926** 是同一批里第二次改的：918 → 926 只因为把插件栏的两个
+默认值从 `true` 改成 `false` 并各写了一段"为什么改"的注释（用户原话「**默认打开
+应用不要展开两个菜单**」）。**改注释也会涨行数**——这不是第一次了（`docs/07` §4
+记着上一回同样的事）。所以这个数**只能靠 `wc -l` 现数**。
+⚠️ `plugins/ai/main.lua` 是**同一天里第二次贴到 900 线**：它 2026-09-24 白天因为
+顶破 1000 被拆过一次（把改动块的解析与应用搬去 `lua/api/diff.rs`，1066 → 872），
+晚上加 `clean_error` 又回到 902。**下一次往里加东西之前先拆，别再往上贴**——
+按职责分，候选是这两块：
+- **对话状态机**（`chats` / `cur` / `reset_chat` / `find_chat` / `title_from` ＋
+  `new_chat` / `switch_chat` / `del_chat` 三个命令，约 150 行）——它和"面板怎么画"
+  没有关系，是纯粹的数据结构；
+- **面板渲染**（`settings_blocks` / `chats_blocks` / `messages_blocks` /
+  `patch_blocks` / `panel_content`，约 270 行）——四个 `*_blocks` 只往一张表里塞
+  块，彼此不调用。
+⚠️ 拆的时候照着白天那次的做法：**先想清楚"这条接口将来还有谁用"**再动手。
+改动块的解析当初搬去宿主，就是因为"那份格式不是 AI 专有的、而且它唯一会改坏
+文档"——不是为凑行数（`main.lua:224-237` 那段注释就是当时的理由）。
+⚠️ `App.tsx` 2026-09-24 **沿职责拆了五刀**（`ui/useMenus.ts` + `ui/useDialogs.ts` + `ui/useExport.ts`
++ `ui/useDocTheme.ts` + `ui/useEditorCommands.ts`），1016 → 864——**但同批又长回 918**，
+因为那批同时往里加了工具栏与查找条的接线。**"拆了"和"变小了"不是同一件事**，
+别把行数当拆分的目标。
+⚠️ 这一行**每次拆完/长文件之后要重数**（上面这组是 `wc -l` 出来的），不要凭印象递推——
 下面那段「同一节里写出两个数」就是凭印象写出来的。
 
-⚠️ 本节的 `app.css` 行数**同一节里曾经写出两个数**（上面说 706、下面说 704），
-实测 **704**。原因就是"上面的数是凭印象写的、下面那个是 `wc -l` 出来的"——
+⚠️ 本节的 `app.css` 行数**曾经在同一节里写出两个数**（一处 706、一处 704），
+实测 704。原因就是"一个数是凭印象写的、另一个是 `wc -l` 出来的"——
 **同一个数要写两遍的地方，第二遍必须复制第一遍，不许重新估**。
+（那之后 `app.css` 又拆过两次，现在是 646——**这条教训比那个数本身重要**。）
 （`tools/doc-sync-check.sh` 查的是"有没有超 1000"，**查不出这种自相矛盾**，
 所以这种错只能靠人：写在两处的同一个数，改的时候要一起改。）
 

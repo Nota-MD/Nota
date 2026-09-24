@@ -7,12 +7,14 @@
 //! 也让"权限"变成一句运行时的客气话而不是一道结构上的墙。
 //!
 //! 唯一的例外是本文件里那几个**永远可用**的东西（`log` / `command` / `event` /
-//! `version` / `plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、跟宿主说话用的。
+//! `diff` / `version` / `plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、
+//! 跟宿主说话用的，或者（`diff`）是**纯函数**——给它一段文本，它给一段文本。
 //!
 //! # 加新成员时的判据
 //!
 //! 见 `plugin/manifest.rs` 顶上那段：**加成员不动 API 版本号，改语义/改名才动**。
 
+pub mod diff;
 pub mod document;
 pub mod fs;
 pub mod git;
@@ -64,6 +66,17 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
 
     // ── 永远可用：事件 ────────────────────────────────────────────────────
     set(nota.set("event", event_table(lua, ctx)?), lua)?;
+
+    // ── 永远可用：改动块（`nota.diff`）────────────────────────────────────
+    //
+    // 2026-09-24 加，跟 AI 插件那张「对话框」一起长出来的。判据与上面那几样
+    // 一致：**它是纯的**——一段文本进、一段文本出，不碰文档、不碰磁盘、不碰网络，
+    // 插件拿它做不出清单之外的事，所以不需要申请任何能力。
+    //
+    // ⚠️ 它**不是 AI 专有的**：界面上那块 `kind = "diff"` 的渲染本来就在宿主里
+    //（`src/ui/panel-nodes.ts` 的白名单），格式的定义放这边才不会两边各写一份。
+    // 详见 `lua/api/diff.rs` 顶上那段。
+    set(nota.set("diff", diff::build(lua)?), lua)?;
 
     // ── 按能力装 ──────────────────────────────────────────────────────────
     if manifest.has(Capability::DocumentRead) || manifest.has(Capability::DocumentWrite) {

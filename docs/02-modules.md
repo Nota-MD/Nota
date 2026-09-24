@@ -42,13 +42,14 @@
 | `lua/api/fs.rs` | `nota.fs` + 纯函数 `resolve_in()`（工作区围栏） |
 | `lua/api/git.rs` | `nota.git`，子进程跑 `git` |
 | `lua/api/ui.rs` | `nota.ui`：通知**推**事件，面板/菜单**存** registry 供宿主拉 |
+| `lua/api/diff.rs` | `nota.diff`：**改动块**的解析与应用（纯函数，不需要能力）。⚠️ 只解析与应用，**不碰文档**——写进去的是插件的事 |
 
 **前端 `src/`**
 
 | 文件 | 一句话 |
 |---|---|
 | `main.tsx` | React 入口 |
-| `App.tsx` | 外壳与状态编排。⚠️ `TopBar` / `TabBar` 2026-09-23 搬去了同名文件，本文件只剩 `App` 一个组件；⚠️ 2026-09-24 又搬走了**六块**（菜单判据与两个对话框的状态 → `ui/useMenus.ts` / `ui/useDialogs.ts`；导出打印、文档主题、命令转交 → `ui/useExport.ts` / `ui/useDocTheme.ts` / `ui/useEditorCommands.ts`；**插件三份清单 ＋ 跑命令 → `ui/usePlugins.ts`**），1118 → 916 → **918 行**。⚠️ **"搬了"≠"变小了"**：头两次搬完反而还在 916 行，因为同批又加进了格式工具栏与查找条的接线 |
+| `App.tsx` | 外壳与状态编排。⚠️ `TopBar` / `TabBar` 2026-09-23 搬去了同名文件，本文件只剩 `App` 一个组件；⚠️ 2026-09-24 又搬走了**六块**（菜单判据与两个对话框的状态 → `ui/useMenus.ts` / `ui/useDialogs.ts`；导出打印、文档主题、命令转交 → `ui/useExport.ts` / `ui/useDocTheme.ts` / `ui/useEditorCommands.ts`；**插件三份清单 ＋ 跑命令 → `ui/usePlugins.ts`**），1118 → 916 → 918 → **926 行**（最后一次只多了 8 行：插件栏那两个默认值从 `true` 改成 `false`，各配一段"为什么改"的注释，见 `docs/04` §1）。⚠️ **"搬了"≠"变小了"**：头两次搬完反而还在 916 行，因为同批又加进了格式工具栏与查找条的接线 |
 | `bridge/ipc.ts` | 调用后端的唯一出口 + 事件名表（**只放"发生类"**）+ 类型定义 |
 | `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 |
 | `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化** |
@@ -88,9 +89,9 @@
 | `ui/settings/ShortcutsPane.tsx` | 快捷键一览（只读）。⚠️ 条目**从 `MENUS` 读出来**（`walkMenuItems` 深度优先 + `formatAccel`），不是抄一份静态表 |
 | `ui/EditorPane.tsx` | 编辑区：按 `mode` 摆一到两个窗格（所见即所得 / 源码 / 分屏），管两类编辑器的挂载与去抖同步。⚠️ **分屏是单向的**：源码 → 预览，预览只读且从不回写 |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲）。⚠️ 开合与当前页都是 `App.tsx` 给的**受控**状态；**折叠状态**（哪个目录、哪个标题）反过来住在自己家里。2026-09-24 补了右上角的 × 与空态那颗「打开文件夹…」 |
-| `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 已装插件清单。⚠️ 面板**内容**不在它手里——它只负责"哪些面板、哪一张打开着"，内容由 `ui/PanelBody.tsx` 现拉现画 |
-| `ui/PanelBody.tsx` | **一张插件面板的身体**（2026-09-24）：拉 `nota_plugin_panel_content` → 交给 `panel-nodes.ts` 认形状 → 按白名单画。⚠️ 拉是**每次打开都拉**，不是缓存；`nota:plugin-panel` 那条事件只是"去重拉"的信号 |
-| `ui/panel-nodes.ts` | **面板 DSL 的形状判据**（2026-09-24）：`normalise` 把后端给的 JSON 认成七种节点（`heading`/`text`/`fields`/`list`/`buttons`/`empty`/`separator`），认不出的如实变成 `unknown`。⚠️ **形状校验只在这里**——Rust 侧只管"是 JSON、有上限"，不管形状 |
+| `ui/PluginDock.tsx` | 右侧插件栏：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
+| `ui/PanelBody.tsx` | **一张插件面板的身体**（2026-09-24）：拉 `nota_plugin_panel_content` → 交给 `panel-nodes.ts` 认形状 → 按白名单画。⚠️ 拉是**每次打开都拉**，不是缓存；`nota:plugin-panel` 那条事件只是"去重拉"的信号。⚠️ 2026-09-24 起多了三种块：`message`（一问一答，保留换行）/ `diff`（增删对照，**只画**）/ `input`（**面板里唯一的输入控件**，发出去＝调 `submit` 命令、参数 `{ [arg] = 输入 }`，跟按钮零区别） |
+| `ui/panel-nodes.ts` | **面板 DSL 的形状判据**（2026-09-24）：`normalise` 把后端给的 JSON 认成**十种**节点（`heading`/`text`/`fields`/`list`/`buttons`/`empty`/`separator` ＋ `message`/`diff`/`input`），认不出的如实变成 `unknown`。⚠️ **形状校验只在这里**——Rust 侧只管"是 JSON、有上限"，不管形状。⚠️ `消息上限 = 20000` 与宿主那个 `面板文本上限` 是同一个数，改要一起改 |
 | `ui/pluginMenus.ts` | **把插件菜单项并进菜单表**（2026-09-24，backlog 第 42 项）：合成 id `__plugin:<plugin>:<command>`，插件那一列插在 `help` 之前。⚠️ **先到先得**的快捷键索引 ⇒ 内置永远赢（`docs/13` §8.3） |
 | `ui/plugin-prompt.ts` | **「点之前先问一句」的统一入口**（2026-09-24）：菜单项的 `prompt` 与面板按钮的 `prompt` 两条路都汇进 `问参数`。⚠️ 取消 ⇒ **命令根本不调**（不是调一个空参数） |
 | `ui/usePlugins.ts` | **插件那三份状态与四条命令**（2026-09-24 从 `App.tsx` 搬出）：清单 / 面板清单 / 菜单项 + 刷新。⚠️ 与 `ui/useMenus.ts` 同类——都是"从 `App.tsx` 搬走的接线层" |
@@ -122,6 +123,7 @@
 |---|---|
 | `lua/api/ui.rs` | 18 |
 | `document/mod.rs` | 15 |
+| `lua/api/diff.rs` | 13 |
 | `slidev_probe.rs` | 10 |
 | `slidev.rs` | 10 |
 | `lua/api/http.rs` | 9 |
@@ -138,13 +140,15 @@
 | `commands/workspace.rs` | 3 |
 | `paths.rs` | 2 |
 
-合计 **121 个 Rust 单元测试**（2026-09-24 实测：`grep -r '#\[test\]' src-tauri/src 1 数出来 121`）。其余 Rust 文件没有测试；前端**没有任何测试**
+合计 **134 个 Rust 单元测试**（2026-09-24 晚实测：`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 数出来 134，
+`cargo test` 报的也是 134；比上一版多的 13 条全在 `lua/api/diff.rs`）。其余 Rust 文件没有测试；前端**没有任何测试**
 （`package.json` 里没有测试运行器，跑的是 `tsc --noEmit` + `vite build`）。
 `tests/` 目录下只有一个空的 `fixtures/`，还没有 Rust 集成测试。
 
 ⚠️ **总数只在 `docs/06` 记数**（那里写着一份"这 N 条到底钉住了什么"的说明）。
 本表列**逐文件**明细，是为了回答"改这个文件时哪几条会红"。
-⚠️ **本表落后过真值三次**：一次漏掉两个文件、总数停在 32（漏了 `lua/api/mod.rs`
+⚠️ **本表落后过真值三次**（另加 2026-09-24 晚这一次：新增 `lua/api/diff.rs` 后这张表没跟上，
+现已补）：一次漏掉两个文件、总数停在 32（漏了 `lua/api/mod.rs`
 与 `lua/mod.rs`，而 `docs/06` 已经写到 40）；2026-09-23 又停在 45；
 **2026-09-24 重数时又发现三处**——`native_menu.rs` 那 6 条**整行没有**（上一批说"补齐了"，
 其实只补了 `docs/06` 那边）、`settings.rs` 写 3 实 4、`themes.rs` 写 7 实 6
@@ -1738,7 +1742,7 @@ pub fn call_command(&self, name: &str, args: mlua::Value) -> Result<mlua::Value>
 
 ---
 
-## `src-tauri/src/lua/api/mod.rs`（386 行）
+## `src-tauri/src/lua/api/mod.rs`（400 行）
 
 注入给插件的 `nota.*` 表。
 
@@ -1748,8 +1752,9 @@ pub fn call_command(&self, name: &str, args: mlua::Value) -> Result<mlua::Value>
 就是 `nil`。**不要**给它装一张调用时才报"你没权限"的表——那既让插件作者在开发期发现不了
 问题（写完才炸），也让"权限"变成一句运行时的客气话而不是一道结构上的墙。
 
-唯一的例外是本文件里那几个**永远可用**的东西（`log` / `command` / `event` / `version` /
-`plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、跟宿主说话用的。
+唯一的例外是本文件里那几个**永远可用**的东西（`log` / `command` / `event` / `diff` /
+`version` / `plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、跟宿主说话用的；
+`diff` 是另一类**纯函数**（一段文本进、一段文本出，见 `lua/api/diff.rs` 那一节）。
 
 ### `pub fn lua_err(e: NotaError) -> mlua::Error`
 
@@ -2272,7 +2277,7 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 
 ---
 
-## `src-tauri/src/lua/api/ui.rs`（704 行）
+## `src-tauri/src/lua/api/ui.rs`（710 行）
 
 `nota.ui` —— 插件往外壳里放东西。
 
@@ -2422,7 +2427,7 @@ fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value  // 私有，�
 
 | 限制 | 值 | 挡的是 |
 |---|---|---|
-| 文本长度 | `面板文本上限` = 4000 **字符** | 一个插件把一整个文件塞进 `text`。截断从尾巴上截、留一个 `…`，⚠️ **按字符不按字节**，别把汉字劈成半个 |
+| 文本长度 | `面板文本上限` = **20000** 字符 | 一个插件把一整个文件塞进 `text`。截断从尾巴上截、留一个 `…`，⚠️ **按字符不按字节**，别把汉字劈成半个。⚠️ **这个数 2026-09-24 从 4000 抬上来的**：一条 `message` 块就是模型的一整段回答，4000 字在长回答上会**静默截断**，用户会以为模型就写了这么多。前端那条兜底（`panel-nodes.ts::消息上限`）跟着调成同一个数 |
 | 一层里的项数 | `面板节点上限` = 200 | 一次渲染出几千行，前端卡死。**不是为了防坏人，是为了防手滑** |
 | 嵌套层数 | `面板层数上限` = 6 | 自引用/超深表把栈打穿。超了那一层是 `null`，**不是报错** |
 | 值类型 | 只留 nil/bool/number/string/table | 函数、userdata 过不了 JSON，一律变 `null`（**不是**变成一句假字符串） |
@@ -2643,6 +2648,66 @@ fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value  // 私有，�
 
 ---
 
+## `src-tauri/src/lua/api/diff.rs`（487 行）
+
+`nota.diff` —— **改动块**的解析与应用（2026-09-24 新增，13 条用例）。
+
+### 它是干什么的
+
+一段普通文本，**最末尾**附一个围栏包起来的块：
+
+~~~text
+我把第二句改短了。
+
+```nota-diff
+- 他慢慢地走了过来。
++ 他走过来。
+```
+~~~
+
+`-` 开头的是**原文里要被换掉的那几行**，`+` 开头的是换上去的新话。
+应用方式是**逐字找到那几行、就地替换**——不是"用新文本覆盖整篇"。
+
+### ⚠️ 为什么它在宿主里，不在 AI 插件里
+
+它跟 AI 插件一起长出来的（用户要求「AI 生成 diff，在末尾用特殊标注写」），
+但**不是 AI 专有的**：任何"我建议你把文档改成这样"的插件都要同一样东西，
+而界面上那块 `kind = "diff"` 的渲染**早就是宿主的**（`ui/panel-nodes.ts` 的白名单）。
+一份格式两处实现迟早会漂，漂的症状是"明明一模一样的两行，它说没找到"。
+另外它是一个**唯一会改坏用户文档**的地方，所以必须能被单元测试一条条按住——
+核心的 `解析` / `应用` 是**普通 Rust 函数、不认识 Lua**，`build()` 只做包装。
+
+⚠️ **它不碰文档**（不 import 任何 `document` 那侧的东西）：写进去的那一句永远在
+**插件**手里，也就是说**永远要用户点一下确认**。
+
+### 三条规矩（`docs/13` §11 与 AI 插件的 `SYSTEM_PROMPT` 里各有一份同样的表）
+
+| # | 规矩 | 为什么 |
+|---|---|---|
+| 1 | **失败＝什么都没做**：要么给新全文，要么给一句原因，**不给半截结果** | "改了一半"比"没改"坏得多：用户按 Ctrl+Z 都不知道该退到哪一步 |
+| 2 | `-` 那几行要与文档里**连续的一段逐字一致** | 模型爱顺手改标点、补空格。宁可报"没找到"，也不拿近似的文字去猜 |
+| 3 | **没有 `-` 行＝追加到文末** | 没有落点就别猜位置 |
+
+### 容错的地方（都是"认不出就当普通文本/忽略"，不报错）
+
+- 收尾的 `` ``` `` **漏写也认**；围栏行**前后允许有空白**（`trim` 后整行相等才算）
+- **空的改动块当没写**（模型偶尔画一个空块表示"不用改"）
+- 围栏里既不 `-` 也不 `+` 的行**数出来（`坏行`）、不当改动**——面板要把这个数如实说出来
+- 多处改动**按出现顺序应用**；第二处先从上一次的落点往后找，找不到**再从头找一遍**
+  （模型把顺序写反了）
+- **CRLF** 按行掐掉 `\r` 再匹配、join 时补回去；结尾那个换行有就保留
+
+### 用例覆盖（13 条，`cargo test`）
+
+基本替换 / 找不到就**整份拒绝**（不是跳过那处）/ `-` 行不连续要拒 /
+纯插入（含空文档）/ 两处按序 / **两处顺序写反** / 坏行计数 / 没有围栏 /
+**漏写收尾围栏** / 空改动块忽略 / **CRLF 保持** / 纯删除 / 删最后一行的空行。
+
+⚠️ **这几条就是为什么它必须在 Rust 里**：输入是"模型现编的一段文字"，
+线上撞见的形状（少个围栏、多一个 `\r`、顺序写反）用接口是试不完的。
+
+---
+
 ## `src/main.tsx`（61 行）
 
 React 入口，四件事：
@@ -2661,7 +2726,7 @@ React 入口，四件事：
 
 ---
 
-## `src/App.tsx`（918 行）
+## `src/App.tsx`（926 行）
 
 应用外壳：状态编排 + 布局。文件头写明这一层只做三件事——**取数据、派事件、拼布局**；
 编辑器的活全在 `ui/EditorPane.tsx`，文件树的活在 `ui/Sidebar.tsx`，别往这里堆。
@@ -4276,13 +4341,19 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 
 ---
 
-## `src/ui/PluginDock.tsx`（264 行）
+## `src/ui/PluginDock.tsx`（358 行）
 
 **右侧插件栏**。用户 2026-09-22 定的：「插件的话我的想法是右侧边栏。」
 
 文件头记的是**为什么分左右**：左边那条是**文档导航**（文件树、大纲），写东西时一直在用，
 得贴着正文；插件是**工具面**（Git 的暂存区、AI 的对话框），是"看着正文顺便操作"的东西。
 两者的**使用节奏不同**，挤在一列里就要来回切页。
+
+⚠️ **在那一栏里面，一个插件独占一页**（2026-09-24 用户要求：「每一个拓展应该独占一个
+窗口……两个拓展面板不能同时打开」）。改之前是**叠着画**（两块内容共用一个滚动条），
+而**面板会自己长高**（AI 那页一轮问答就是好几屏）——叠起来的结果是两条内容互相
+把对方挤没，用户想看的那个常常在屏幕外。**那不是"样式没调好"，是共用滚动条本身错。**
+代价写在文件头：**看不到的那一页不刷新**（只拉当前页），切过去时现拉一次。
 
 ### `export function PluginDock({ plugins, panels, onClose }: Props)`
 
@@ -4294,14 +4365,20 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 | `onCall` | `(plugin, command, args?) => Promise<void>` | 跑一条插件命令。错误由 `App.tsx` 那边 toast，**这一栏不管** |
 | `askPrompt` | `(req: PromptRequest) => Promise<…\|null>` | 「点之前先问一句」的入口（面板按钮的 `prompt` 走它） |
 
-渲染结构：`<aside className="plugin-dock">` → `nav.dock-head`（标题「插件」+ `×`）
-+ `div.dock-body`，里面**三组**（顺序就是这个顺序）：
+渲染结构：`<aside className="plugin-dock">` → `nav.dock-head`（**活动页的标题** + `×`）
++ `nav.dock-tabs`（**一页签一个插件**，外加最右那个「插件」页签）
++ `div.dock-body`，里面**一次只画一页**：
 
-| 组 | 选择器 | 内容 |
+| 页 | 选择器 | 内容 |
 |---|---|---|
-| 面板 | `section.dock-panels` → `article.panel` | `location === "right"` 的面板，每张一个标题栏 + 一个 `<PanelBody>` |
-| 没有落脚处 | `section.dock-orphans` | `location` 不是 `right` 的面板，逐条列出并标出它声明的 `location` |
-| 已装插件 | `h4.dock-subtitle` + `ul.plugins` | 原有的插件清单（名称/版本/能力/报错） |
+| 某个插件 | `section.dock-panels` → `article.panel`（`key` = `插件/面板 id`） | 那个面板的 `<PanelBody>`。`key` 用坐标是为了**换页时整棵子树换掉**——否则 `input` 块里的草稿会跟着页签跑到另一页去 |
+| 「插件」 | `section.dock-orphans` + `h4.dock-subtitle` + `ul.plugins` | 「没有落脚处」的面板（`location` 不是 `right`，逐条标出它声明的位置）＋ 已装插件清单（名称/版本/能力/报错） |
+
+⚠️ **页签永远都在**（哪怕只有一个面板）——它是"这里还有别的东西"的唯一线索，
+藏起来的话用户会以为这一栏就叫这个名字。
+⚠️ **自动选页的规矩**：面板清单是启动时异步拉的（第一次渲染时还是空的），
+清单到了补选第一页，**除非用户自己点过页签**（他点了「插件」页就该留在那儿）；
+当前页那个面板消失（插件被卸）也一样落到第一页。**页签不做持久化**，重开回第一页。
 
 📌 **更正（2026-09-24）**：面板体里曾经是「面板内容尚未接入。」这一行字——
 当时面板**内容**机制还没有（要等 `docs/07` 第 15 项）。现在那行字**已经换成了
@@ -4324,6 +4401,10 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 数组每次渲染都是新身份，拿它当依赖会让 effect **每渲染一次都重拉一遍所有面板**。
 （这两处都挂了 `eslint-disable exhaustive-deps`，别当成可以随手删的噪声。）
 
+⚠️ **两个 effect 都只认活动页**：切页时拉当前页；`nota:plugin-panel` 到了先看
+"是不是活动面板那一家的"，不是就丢。**没显示的那几页连 `render` 都不跑**——
+这是那一栏"一次只画一页"的直接后果，不是漏写。
+
 ### 面板上按钮的 `busy`
 
 `跑()` 先把这个面板标成 `busy: command`（那颗按钮因此灰着），跑完**在 `finally` 里**
@@ -4345,7 +4426,7 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 
 ---
 
-## `src/ui/PanelBody.tsx`（149 行）
+## `src/ui/PanelBody.tsx`（275 行）
 
 一串 `PanelNode` → 一串 DOM。**面板内容的渲染层。**
 
@@ -4374,12 +4455,26 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 - `busy !== null` 时**所有**按钮一起灰（防连点）；`b.label || b.command`——
   只写了命令名没写标签时，拿命令名顶上。
 
+### 2026-09-24 多出来的三种块（`message` / `diff` / `input`）
+
+| `kind` | 画成 | 关键细节 |
+|---|---|---|
+| `message` | 一条一问一答 | `from = "user"` 靠左、`"ai"` 靠右（**认不出的 `from` 当 `ai`**）；文本 `white-space: pre-wrap` + `overflow-wrap: anywhere`（长词硬折行） |
+| `diff` | 一块增删对照 | `op = "del"` 红底 `-`、`"add"` 绿底 `+`（**其它 `op` 当 `add`**）。是 `<pre>`：行首空格**保留**；每行用**悬挂缩进**（`text-indent: -12px`）让折行后的第二行对齐到内容、不顶到 `-` 号 |
+| `input` | 输入框 ＋ 发送键 | ⚠️ `arg` / `submit` **缺一个整块就不画**（跟 `prompt` 同一条规矩：问了也送不出去）。`multiline` → `textarea`（回车换行、**Ctrl/Cmd+Enter 发送**），否则单行（回车发送）。**发出去＝调 `submit` 命令、参数 `{ [arg] = 输入 }`**——跟按钮零区别 |
+
+⚠️ **`input` 的草稿是在结果回来之前清掉的**（`set草稿("")` 在 `void onSubmit(值)`
+之前）。看上去反直觉，理由是：那条输入**马上会变成插件的一条消息**，而插件
+`nota.ui.refresh` 之后整块面板会重拉、这块输入框会重新挂载。等着结果回来再清的话，
+用户看到的是"我按了发送，字还在框里，是不是没发出去"。
+⚠️ 代价如实说：**重拉时正在敲的草稿会没**（面板是"每次拉都是新的"的，见下）。
+
 `prompt` 那一步（以及"取消就什么都不做"这条规矩）**不在这里**，
 在 `ui/plugin-prompt.ts`，与插件菜单项那条路共用同一份实现。
 
 ---
 
-## `src/ui/panel-nodes.ts`（192 行）
+## `src/ui/panel-nodes.ts`（271 行）
 
 **面板内容的形状判据**：宿主发来的那一坨 JSON 在这里被收成 `PanelNode[]`。
 
@@ -4402,7 +4497,7 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 ⚠️ 不认识的**顶层项**（不是表的）**丢掉**——它连 `kind` 都没有，没有任何可说的。
 这一条与上面第 1 条**不矛盾**：有 `kind` 才有话可说。
 
-### 七种 `kind` 与它们的字段
+### 十种 `kind` 与它们的字段
 
 | `kind` | 字段 | 备注 |
 |---|---|---|
@@ -4413,6 +4508,9 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 | `buttons` | `items[{label, command, args, prompt, style, disabled}]` | ⚠️ `args` **原样带着**：形状由插件和它自己的命令约定，宿主和这里都不解析 |
 | `empty` | `text` | |
 | `separator` | — | |
+| `message` | `text`, `from` | 2026-09-24。⚠️ `from` 只认 `user` / `ai`，**认不出的当 `ai`**；文本上限走**另一个**更宽的数（`消息上限 = 20000`） |
+| `diff` | `items[{op, text}]` | 2026-09-24。⚠️ `op` 只认 `del` / `add`，**其它当 `add`**。它**只是一块显示**——不认识 `nota-diff` 那份格式 |
+| `input` | `arg`, `submit`, `submit_label`, `placeholder`, `hint`, `multiline` | 2026-09-24。⚠️ 与 `提示()` 不同：**缺 `arg` / `submit` 时块还在**（画一个禁用的框），因为"我这里少写了一根线"要比"整块消失"好查 |
 | `unknown` | `raw` | 认不出的 |
 
 **`tone`** = `normal` / `muted` / `success` / `warn` / `danger`，
@@ -4423,7 +4521,7 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 **`style`** 只认 `primary` / `danger`，其余一律 `normal`。
 **`disabled`** 只认严格的 `true`。
 
-⚠️ 本文件还各设了一道 `每块上限` = 200 与 `文本上限` = 4000——
+⚠️ 本文件还各设了一道 `每块上限` = 200 与 `文本上限` = **20000**——
 **和宿主的 `面板节点上限` / `面板文本上限` 同量级，但各自把关**：
 宿主那道防的是"插件写坏"，这一道防的是"数据被动过"。
 

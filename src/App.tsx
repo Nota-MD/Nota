@@ -74,16 +74,24 @@ export default function App() {
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  // 右侧插件栏开着没有。**默认开**——用户点名要的就是"插件在右侧边栏"，
-  // 默认藏起来等于没做。收起后这一格宽度全还给正文。
+  // 右侧插件栏开着没有。**默认关**。
+  // ⚠️ 2026-09-24 用户改的口径，原话：「**默认打开应用不要展开两个菜单**」——
+  // 此前这里是 `true`，理由是"用户点名要的就是插件在右侧边栏，默认藏起来等于没做"。
+  // 那条理由**没有被推翻**（插件确实该在右侧栏），被推翻的是**默认值**：
+  // 打开应用先看到的应该是一篇干净的正文，而不是左右各占一条。
+  // 插件栏照旧是"顶栏那颗「插件」按钮 / 栏里的 × / 视图菜单"三处都能开，
+  // 藏起来的只是**开机那一刻**的状态。收起后这一格宽度全还给正文。
   // ⚠️ 只在内存里，没进 settings：它跟左侧栏选的是哪一页一样是**看的时候的状态**，
   // 不是文档的属性。真要持久化时跟 `content_width` 那批一起走。
-  const [dockOpen, setDockOpen] = useState(true);
+  const [dockOpen, setDockOpen] = useState(false);
 
   // 左侧栏开着没有、以及它现在是哪一页。**放在 App 上**是为了让
   // 「视图 → 显示/隐藏侧边栏 / 大纲 / 文件树」那几条菜单项能驱动它
   //（见 `ui/Sidebar.tsx` 里那段"为什么改成受控"）。
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // ⚠️ 2026-09-24 **默认关**，理由同上（用户那句「不要展开两个菜单」指的就是
+  // 左侧栏与右侧插件栏这一对）。三处菜单项（`view.toggleSidebar` /
+  // `view.showOutline` / `view.showTree`）照旧能把它开出来。
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("tree");
   const [statusBarOpen, setStatusBarOpen] = useState(true);
 

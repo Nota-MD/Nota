@@ -185,11 +185,11 @@ bundler 会把整棵目录拷进资源目录——内置插件在装出来的包
 | `fs.read` | `nota.fs.read(path)` / `.exists(path)` / `.list(path)`（`lua/api/fs.rs:30-72`） | 读**工作区围栏内**的文件与目录名。⚠️ 围栏的裁决在 `resolve_in()`：只收相对路径、`..` 在碰文件系统之前就算掉、符号链接逃逸会拒、**没开工作区时一律拒绝**——详见 `docs/13` |
 | `fs.write` | `nota.fs.write(path, text)` / `.remove(path)`（`lua/api/fs.rs:74-98`） | **在工作区内新建/覆盖/删除文件**（写会自动建父目录）。⚠️ 这是**破坏性**的：`remove` 删的是真文件，没有回收站 |
 | `process.git` | `nota.git.run(argv)` / `.status()` / `.diff(staged)` / `.repo_root()`（`lua/api/git.rs:55-137`） | **起 `git` 这一个子进程**，工作目录锁死在围栏内，并拒绝 `-C` / `--git-dir` / `--work-tree` / `--namespace`。⚠️ **已知边界（不是漏洞，是记录）**：`git config --global` 这类会写用户全局配置的子命令挡不住——参数层面分不清它跟合法的 `git config --get`。所以这个能力等于"**能对你的机器做 git 能做的事**"，装插件时该按这个尺度信任（`git.rs:25-27`）。⚠️ 它不是通用 subprocess，**加别的进程之前先读这段** |
-| `network.http` | ⚠️ **只有一张「尚未实现」的表**（见 §3.5） | 声明了它，将来等于信任插件**把文档内容发到任意地址**。这是整张表里最重的一条，落地时要一起定"密钥存哪"（backlog 第 12 项） |
+| `network.http` | `nota.http.request(spec)` / `.get(url或表)` / `.post(url或表)`（`lua/api/http.rs`） | 声明了它等于信任插件**把文档内容发到任意地址**——这是整张表里最重的一条。**两道围栏**：`https://` 随便，`http://` **只放行回环**（本机大模型服务用）；响应体 2 MiB、请求体 1 MiB 封顶。⚠️ **它是阻塞的**（跑在 `spawn_blocking` 线程里，界面不冻但也没有流式）。⚠️ 密钥别写死在插件里——用 `settings.own` 存 |
 | `ui.notify` | `nota.ui.notify(msg, level)`（`lua/api/ui.rs:35-53`） | 在界面上弹一条提示条。⚠️ 它能**冒充宿主的口径**对用户说话（提示里看不出是插件发的），所以别用它做误导性文案。⚠️ 这是三条里**唯一推事件**的（`nota:notify`），所以**在 `on_load` 里调它，前端还没起来，那条提示会静默丢掉**（Tauri 的 `emit` 对没有监听者的频道是静默成功的） |
-| `ui.panel` | `nota.ui.register_panel(spec)`（`lua/api/ui.rs:75-112`） | 在**右侧栏**声明**多一页**。⚠️ **它推的不是事件，是状态**：写进 `nota_panels` registry，前端挂载后拉一次（BUG-13，见 §5.7）。⚠️ **只声明"有这么个面板"，面板里长什么样没有表达力**——内容要等声明式 DSL（backlog 第 15 项），界面上如实写着「面板内容尚未接入。」 |
-| `ui.menu` | `nota.ui.register_menu(spec)`（`lua/api/ui.rs:115-149`） | 往菜单里**加条目**，点了回调插件自己注册过的命令。同上，**走 registry 拉**。⚠️ **菜单栏本身还没做**（backlog 第 40 项），所以现在注册了也暂时看不见。⚠️ 它和另外两条 `ui.*` 是**任选其一**就能拿到 `nota.ui` 这张表——但"表在"不等于"三个函数都在"，见 §3.4 |
-| `settings.own` | ⚠️ **只有一张「尚未实现」的表**（见 §3.5） | 声明了它，将来等于信任插件**读写自己那一段设置**（不碰别人的） |
+| `ui.panel` | `nota.ui.register_panel(spec)`（`lua/api/ui.rs:75-112`） | 在**右侧栏**声明**多一页**，`render` 里返回一串内容块决定它长什么样（**面板 DSL**，七种 `kind`，见 `docs/13` §8.5）。⚠️ **它推的不是事件，是状态**：写进 `nota_panels` registry，前端挂载后拉一次（BUG-13，见 §5.7）。⚠️ `render` 是**每次拉都现跑**的——里面必须是"此刻"，不是"加载时" |
+| `ui.menu` | `nota.ui.register_menu(spec)`（`lua/api/ui.rs:115-149`） | 往菜单里**加条目**，点了回调插件自己注册过的命令。同上，**走 registry 拉**。✅ **2026-09-24 起接进菜单栏了**：合成一栏「插件」，插在「帮助」前面（backlog 第 42 项，规则见 `docs/13` §8.3）。⚠️ `accelerator` 走内置菜单同一条索引、同一条"先到先得"，**内置键位永远赢**。⚠️ 写 `prompt` 就是「点了先问一句」（见 §3.5 末）。⚠️ 它和另外两条 `ui.*` 是**任选其一**就能拿到 `nota.ui` 这张表——但"表在"不等于"三个函数都在"，见 §3.4 |
+| `settings.own` | `nota.settings.get(k)` / `.set(k, v)` / `.all()`（`lua/api/settings.rs`） | **读写自己那一段设置**（不碰别人的）：一个插件一个文件，`~/.config/nota/plugin-settings/<id>.toml`，文件 0600、目录 0700。⚠️ **明文，没有加密**——理由见 `docs/12` §"插件设置为什么不加密"。⚠️ `set(k, nil)` 是"删掉这一项" |
 
 ### 3.3 不申请任何能力也有的东西
 
@@ -217,8 +217,8 @@ bundler 会把整棵目录拷进资源目录——内置插件在装出来的包
 | `nota.fs` | `fs.read` **或** `fs.write` |
 | `nota.git` | `process.git` |
 | `nota.ui` | `ui.notify` **或** `ui.panel` **或** `ui.menu`（三条 `ui.*` **都要列**——见下） |
-| `nota.http` | `network.http`（装出来是「尚未实现」的表） |
-| `nota.settings` | `settings.own`（同上） |
+| `nota.http` | `network.http` |
+| `nota.settings` | `settings.own` |
 
 **第二层——表里装哪些成员**：`document.rs` / `fs.rs` / `ui.rs` 各自**再判一次**，
 只装申请到的那几个函数（`ui.rs:35` 判 `UiNotify`、`ui.rs:56` 判 `UiPanel`、
@@ -264,24 +264,50 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 所以退一步钉"数量"，注释与断言消息里都写明了"这是提醒不是证明"）、
 以及 `#[serde(rename)]` 的名字与 `Capability::parse()` 同口径。
 
-### 3.5 ⚠️ 两张「尚未实现」的表
+### 3.5 ⚠️ 声明式的两条路：面板与菜单项（**不走事件**）
 
-`nota.http` 与 `nota.settings` 是**故意装出来的假表**（`lua/api/mod.rs:94-104`）：
-用 `__index` 元表兜住任意方法名，**任何一次调用都抛**一句带文档条目号的错误
+能力表里那六张子表都是"你调宿主"；但插件还要能**告诉宿主它有什么**——
+面板和菜单项就是这么来的。它们**不走 `nota.event.emit`，走 registry**：
 
-| 表 | 调用任何方法得到 |
-|---|---|
-| `nota.http.*` | `网络请求尚未实现（见 docs/07 第 12 项）` |
-| `nota.settings.*` | `插件设置尚未实现（见 docs/07 第 13 项）` |
+| 形式 | 什么时候发生 | 宿主怎么知道 |
+|---|---|---|
+| `nota.command.register(name, fn)` | `on_load` 里一次 | 宿主按名字**拉** |
+| `nota.ui.register_panel({…, render = fn})` | `on_load` 里一次 | 前端挂载后 `nota_plugin_panels` **拉**；内容靠 `render` 每次现调 |
+| `nota.ui.register_menu({…})` | `on_load` 里一次 | 前端挂载后 `nota_plugin_menus` **拉**，合成「插件」栏 |
 
-**为什么给假表而不是不给**（`lua/api/mod.rs:87-89`）：给的是**线索不是哑弹**。
-插件作者写 `nota.http.get(...)` 会立刻拿到一句"尚未实现"，
-而不是 `attempt to index a nil value`——后者会让人以为是**自己的能力没申请对**，
-白查半天。
+⚠️ **别用事件去送这些**。注册发生在**插件加载时**，前端订阅发生在**挂载之后**，
+推的话必然漏，而且**漏得安静**：界面看着好好的，只是永远空着。
+判据一句话：**需要靠"幂等"或"重放"来兜底的设计，通常意味着状态被存了两份。**
+（本仓真按"记账 + 重放"写过一版，落地时被推翻 —— `docs/07` BUG-13，完整论述见 §5.7。）
 
-`plugins/ai/main.lua` 就是照这个写的：它用 `pcall` 包住调用，把宿主那句错误
-当成"联网那半没接通"的**正常状态**来报告（`plugins/ai/main.lua:57-71`、
-`plugins/ai/main.lua:122-131`）。**这是"宿主功能还没落地时插件该怎么写"的范例。**
+⚠️ **`render` 里不许缓存**：它每次被调都要现算（`docs/13` §8.2）。
+存一份快照的症状是"面板显示的是几分钟前的东西，而且看着像是对的"。
+
+⚠️ **`register_menu` 的 `command` 不做校验**，写一个没注册过的名字不会当场报错，
+点了才得到 `插件 {id} 没有注册命令 \`{name}\``。**注册菜单前先把命令注册了。**
+
+**「点了先问一句」——`prompt`。** 菜单项和面板按钮都能写一个 `prompt`，
+点下去先弹一个单行输入框、把答案并进 `args` 再跑命令：
+
+```lua
+nota.ui.register_menu({
+  label = "提交…", command = "commit",
+  prompt = {
+    arg = "message",              -- 答案放进 args.message（**必填**，缺了整个 prompt 当没写）
+    label = "提交信息",
+    placeholder = "一句话说清这次改了什么",
+    secret = false,               -- true → 输入框遮屏（`type=password`）
+    hint = "……",                  -- 框下面那行小字
+  },
+})
+```
+
+⚠️ **`arg` 缺了就当没写**——不是报错，只是不弹框（问了也没地方放）。
+⚠️ **用户按取消 ⇒ 你的命令一次都不会被调**，别在命令里假设"被调了就是用户答应了"。
+⚠️ `secret = true` **遮的是旁边人的眼睛，不是存盘**——设置是明文的（见 `settings.own`）。
+⚠️ 两种 `prompt` 的字段**完全一样**，但归一化在两个地方做（菜单项在宿主
+`plugin/mod.rs`、面板按钮在前端 `ui/panel-nodes.ts`），最后汇到**同一个**弹框
+（`ui/plugin-prompt.ts`）。完整字段表见 `docs/13` §8.5。
 
 ---
 

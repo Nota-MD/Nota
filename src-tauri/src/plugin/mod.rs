@@ -57,9 +57,7 @@ pub struct PluginPanel {
     pub location: String,
 }
 
-/// 插件声明的菜单项。同上，是**拉**的。目前还没有菜单栏来接（`docs/07` 第 40 项），
-/// 但先按同一范式存好：菜单栏一落地就是 `plugin.menus()` 一句话的事，
-/// 不用再动一遍写入侧。
+/// 插件声明的菜单项。同上，是**拉**的。
 #[derive(Debug, Clone, Serialize)]
 pub struct PluginMenuItem {
     pub plugin: String,
@@ -69,6 +67,28 @@ pub struct PluginMenuItem {
     /// 挂在哪个菜单下（`plugins` / `file` / `format` …）。
     pub menu: String,
     pub accelerator: Option<String>,
+    /// 点之前先问一句？`None` = 直接跑。
+    pub prompt: Option<PluginPrompt>,
+}
+
+/// 一条「点之前先问一句」的声明。
+///
+/// ⚠️ **两份实现，字段名必须一样。** 菜单项那一份在这里读（registry 里存的是
+/// 一张原表，见 `读提示`）；面板按钮那一份在**前端**收形状
+/// （`ui/panel-nodes.ts::提示`）——因为面板内容走的是 `剥成_json`，
+/// 那边只保证"是 JSON、有上限"，不认形状。两条路最后都汇进
+/// `ui/plugin-prompt.ts::问参数`，所以字段名、默认值不一致的话，
+/// 同一个 `prompt` 写在菜单里和写在面板上会是两种表现。
+#[derive(Debug, Clone, Serialize)]
+pub struct PluginPrompt {
+    /// 用户填的值放进 `args` 的哪个键。**没有它这条声明就没用**（问了也送不出去）。
+    pub arg: String,
+    pub label: String,
+    pub placeholder: String,
+    pub hint: String,
+    /// 输入框画成密码框（API key 那种不该被人从肩膀上看到的）。
+    /// ⚠️ 遮的只是**屏幕**，值本身原样存进插件设置文件（明文）。
+    pub secret: bool,
 }
 
 /// 面板 / 菜单的 registry 名。**只此一处定义。**
@@ -78,6 +98,16 @@ pub struct PluginMenuItem {
 /// 改一处忘一处，症状是界面永远空着且不报错（BUG-13 就是这个形状）。
 pub const REG_PANELS: &str = "nota_panels";
 pub const REG_MENUS: &str = "nota_menus";
+
+/// 「某个面板的内容变了，去重拉」那条事件的频道名。
+///
+/// ⚠️ 发射侧在 `lua/api/ui.rs::刷新表`，收侧在 `ipc.ts` 的 `events.pluginPanel`
+/// **加 `ui/PluginDock.tsx` 的订阅**。三处必须说同一个字符串，所以它只在这里定一次。
+/// 与 `REG_PANELS` 同一个理由：拆成两处字面量就是又造一对"改一处忘一处"。
+///
+/// ⚠️ 与面板**清单**不同，这条**是事件**（BUG-13 的判据）：
+/// 它报的是"此刻变了"这个动作，不是"有哪些面板"那份状态。
+pub const EVENT_PANEL_DIRTY: &str = "nota:plugin-panel";
 
 pub struct PluginHost {
     plugins: Vec<LuaPlugin>,
@@ -213,6 +243,30 @@ impl PluginHost {
         Ok(())
     }
 
+    /// 取一个**现在能跑代码**的插件，取不到就说清楚为什么。
+    ///
+    /// ⚠️ 抽出来的理由是"两处相乘"：派发命令和取面板内容都要过同一道闸
+    /// （存在 / 加载成功 / 没被禁用），各写一遍的话，改一处忘一处就会出现
+    /// "禁用了还能拉面板"或"加载失败的命令还能搜到"这种半生效状态。
+    fn 可调用的(&self, plugin_id: &str) -> Result<&LuaPlugin> {
+        let plugin = self
+            .get(plugin_id)
+            .ok_or_else(|| NotaError::other(format!("没有这个插件：{plugin_id}")))?;
+
+        match &plugin.state {
+            // 用户禁用**先于**加载状态判：禁用是用户的显式动作，
+            // 说"已被禁用"比说"加载失败"更接近用户看到的事实。
+            _ if self.disabled.contains(plugin_id) => {
+                Err(NotaError::other(format!("插件 {plugin_id} 已被禁用")))
+            }
+            PluginState::Loaded => Ok(plugin),
+            PluginState::Failed(e) => Err(NotaError::other(format!(
+                "插件 {plugin_id} 加载失败，无法执行命令：{e}"
+            ))),
+            PluginState::Disabled => Err(NotaError::other(format!("插件 {plugin_id} 已被禁用"))),
+        }
+    }
+
     /// 派发一个命令到某个插件。
     pub fn call_command(
         &self,
@@ -220,21 +274,19 @@ impl PluginHost {
         command: &str,
         args: mlua::Value,
     ) -> Result<mlua::Value> {
-        let plugin = self
-            .get(plugin_id)
-            .ok_or_else(|| NotaError::other(format!("没有这个插件：{plugin_id}")))?;
+        self.可调用的(plugin_id)?.call_command(command, args)
+    }
 
-        if self.disabled.contains(plugin_id) {
-            return Err(NotaError::other(format!("插件 {plugin_id} 已被禁用")));
-        }
-
-        match &plugin.state {
-            PluginState::Loaded => plugin.call_command(command, args),
-            PluginState::Failed(e) => Err(NotaError::other(format!(
-                "插件 {plugin_id} 加载失败，无法执行命令：{e}"
-            ))),
-            PluginState::Disabled => Err(NotaError::other(format!("插件 {plugin_id} 已被禁用"))),
-        }
+    /// 现调一个面板的 `render`，拿到它此刻的内容。
+    ///
+    /// ⚠️ 这是**拉**（`docs/12` §面板内容）：面板清单只有一份、启动时定；
+    /// 内容是"现在长什么样"，每次打开/被 `nota.ui.refresh` 提醒时现取。
+    /// ⚠️ 它**会跑插件的 Lua**，所以调用方必须把它放到阻塞线程上去
+    /// （`commands/plugin.rs` 里那条 `spawn_blocking`）——`render` 里
+    /// 常常要起 git 子进程，跑在主线程上就是冻界面。
+    pub fn panel_content(&self, plugin_id: &str, panel_id: &str) -> Result<serde_json::Value> {
+        let plugin = self.可调用的(plugin_id)?;
+        crate::lua::api::ui::面板内容(&plugin.lua, plugin_id, panel_id)
     }
 
     /// 正在生效的插件：**加载成功** 且 **用户没禁用**。
@@ -337,8 +389,34 @@ pub(crate) fn 读菜单(lua: &Lua, plugin_id: &str) -> Vec<PluginMenuItem> {
             command: s.get("command").unwrap_or_default(),
             menu: s.get("menu").unwrap_or_else(|_| "plugins".to_owned()),
             accelerator: s.get("accelerator").ok(),
+            // 形状**在这一侧收**（写入侧 `菜单表` 原样存）——和 `读面板` 补默认值
+            // 是同一个分工：注册函数只负责收下来，读的时候才归一。
+            prompt: s.get::<mlua::Table>("prompt").ok().and_then(|p| 读提示(&p)),
         })
         .collect()
+}
+
+/// 读一条 `prompt` 声明。**没有 `arg` 就当没写**。
+///
+/// 没有 `arg` 的话用户填的值没有地方放——问了也送不出去。那时**宁可不问**：
+/// 弹一个"填完什么都不会发生"的框，比这条菜单项直接跑掉更让人摸不着头脑。
+/// （前端的 `ui/panel-nodes.ts::提示` 是同一条判据，两个地方都得有。）
+fn 读提示(t: &mlua::Table) -> Option<PluginPrompt> {
+    let arg: String = t.get("arg").ok()?;
+    if arg.is_empty() {
+        return None;
+    }
+    Some(PluginPrompt {
+        arg,
+        label: t
+            .get::<String>("label")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "请输入".to_owned()),
+        placeholder: t.get::<String>("placeholder").unwrap_or_default(),
+        hint: t.get::<String>("hint").unwrap_or_default(),
+        secret: t.get::<bool>("secret").unwrap_or(false),
+    })
 }
 
 /// 读一个 `Lua` 在 `reg` 名下声明的条目（面板 / 菜单）。

@@ -1,0 +1,416 @@
+/* 右侧插件栏：栏本身、打开它的开关、面板内容的渲染、已装插件清单。
+ *
+ * 2026-09-24 从 `app.css` 拆出来——那支文件当时 1043 行、过了 1000 行上限
+ * （见 `AGENTS.md` §0.4）。拆的是**一整块能自己讲圆的东西**：插件栏从
+ * `ui/PluginDock.tsx` 到 `ui/PanelBody.tsx` 全是它自己的，和外壳骨架
+ * （菜单、标签栏、状态栏）没有一条共用规则。不是按行数从中间切一刀。
+ *
+ * ⚠️ **必须在 `app.css` 之后引**（见 `main.tsx`）。它借了 `app.css` 里
+ * `.btn` / `.btn-primary` / `.btn-danger` 那套按钮底子（`.panel-btn` 是在
+ * 那上面收小一号、`.btn-on` 是换底色），顺序反过来就会被那几条盖掉。
+ *
+ * ⚠️ 面板内容那一段（`.panel-heading` 往下）是**插件给的 JSON 的落点**，
+ * 一条规则都没在猜内容：插件的字符串只会出现在子节点位置，见
+ * `ui/panel-nodes.ts` 顶上那三条规矩。这里**不许**出现 `content:` 之类
+ * 能把字符串变成画面的写法。
+ */
+
+
+/* ── 右侧插件栏 ───────────────────────────────────────────────────────────
+   为什么插件在右边见 `ui/PluginDock.tsx` 的文件头。这里只记样式上的两条：
+
+   ① 它**不是 `.sidebar` 加一个 `flex-direction: row-reverse`**。左右两侧
+      边框、圆角、将来要加的折叠动效方向都相反，共用一套类名只会让每条规则
+      都要写 `:first/last` 的特例。**是两套独立的类。**
+   ② 宽度走 `--dock-width`，与 `--sidebar-width` 分开——见 theme.css 那句。 */
+
+.plugin-dock {
+  width: var(--dock-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-subtle);
+  min-height: 0;
+}
+
+.dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding-left: calc(var(--spacing) * 1.5);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.dock-title {
+  font-weight: 600;
+  font-size: 0.92em;
+  color: var(--fg-muted);
+}
+
+.dock-close {
+  border: 0;
+  background: transparent;
+  padding: 0 calc(var(--spacing) * 1.25);
+  cursor: pointer;
+  color: var(--fg-faint);
+  height: 100%;
+}
+
+.dock-close:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.dock-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing) 0;
+  min-height: 0;
+}
+
+/* ── 栏内分区：插件声明的面板 / 没落脚处的 / 已装插件 ──────────────────────
+
+   面板在上（那是这一栏的理由），清单在下（诊断用）。分区标题用 `.dock-subtitle`，
+   与 `.dock-title`（栏标题）**分开**：栏标题要盖过内容，分区标题是内容的注脚，
+   两者字重和色阶不同，共用一个类就得在每处写覆盖。 */
+
+.dock-subtitle {
+  margin: var(--spacing) 0 calc(var(--spacing) * 0.75);
+  padding: 0 calc(var(--spacing) * 1.5);
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+  text-transform: none;
+}
+
+.dock-subtitle:first-child {
+  margin-top: 0;
+}
+
+.panel {
+  margin: 0 calc(var(--spacing) * 0.75) var(--spacing);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 1.25);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.panel-title {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+/* 面板是从哪个插件来的。**这一栏里可能并排着好几个插件的面板**，
+   所以谁是谁得写在每一块上，不能只写在栏标题里。 */
+.panel-from {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  color: var(--fg-faint);
+}
+
+.panel-body {
+  padding: var(--spacing) calc(var(--spacing) * 1.25);
+}
+
+/* 「正在读取…」这句。**故意做得显眼但不刺眼**——它是句实话，
+   不是错误；做成红色会让人以为插件坏了。 */
+.panel-pending {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--fg-faint);
+}
+
+/* ── 面板内容（`ui/PanelBody.tsx` 画的那些块）─────────────────────────────
+
+   ⚠️ 宽度只有 `--dock-width`（260px）上下，所以这里**没有一条横向铺开**的规则：
+   字段名和值、标题和徽章，全是能折行或能截断的。挤不下的时候宁可截断
+   （`text-overflow`）也不要撑出横向滚动条——那一栏里横向滚动是没法用的。
+
+   ⚠️ 语气（`tone-*`）**只上色，不换字重不换底色**：浅底深底、七套界面风格
+   共用这一条，用底色表达语气的话每套风格都要重新配一遍。 */
+
+.tone-normal {
+  color: inherit;
+}
+
+.tone-muted {
+  color: var(--fg-muted);
+}
+
+.tone-success {
+  color: var(--success);
+}
+
+.tone-warn {
+  color: var(--warn);
+}
+
+.tone-danger {
+  color: var(--danger);
+}
+
+.panel-heading {
+  margin: 0 0 6px;
+  font-size: 0.88em;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+.panel-text {
+  margin: 0 0 6px;
+  font-size: 0.87em;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.panel-text:last-child,
+.panel-heading:last-child {
+  margin-bottom: 0;
+}
+
+.panel-fields {
+  margin: 0 0 6px;
+  font-size: 0.85em;
+}
+
+.panel-field {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.panel-field dt {
+  flex: none;
+  color: var(--fg-faint);
+}
+
+/* ⚠️ `min-width: 0`：flex 子项默认不肯缩到内容宽度以下，不加这一条长值
+   （路径、分支名）会把整个面板顶宽，右边的字被裁掉。 */
+.panel-field dd {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.panel-list {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85em;
+}
+
+.panel-item {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-item:last-child {
+  border-bottom: 0;
+}
+
+.panel-item-main {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* 标题吃满剩余宽度、超出打点。⚠️ `min-width: 0` 同上。 */
+.panel-item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 徽章（分支名、状态那种短标签）。**不吃语气色**——它是分类不是判断，
+   跟着标题变红会让"这条是错的"和"这条属于某类"糊在一起。 */
+.panel-item-badge {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--fg-muted);
+}
+
+.panel-item-sub {
+  color: var(--fg-faint);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.panel-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 2px;
+}
+
+/* 面板上的按钮比工具条上的小一号：这一栏窄，`--control-height` 那套在这里
+   会一排只塞得下两颗。 */
+.panel-btn {
+  height: calc(var(--control-height) - 6px);
+  padding: 0 10px;
+  font-size: 0.85em;
+}
+
+.panel-empty {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--fg-faint);
+}
+
+.panel-sep {
+  margin: 8px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+/* 认不出的内容块。**画成"注意"而不是"错误"**：多半是插件比 Nota 新，
+   不是插件坏了——用户该做的是升级 Nota，不是去查插件。 */
+.panel-unknown {
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--warn);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+.panel-unknown code {
+  font-family: var(--font-mono);
+}
+
+/* 面板内容读不出来（插件里的 `render` 抛了）。**这里必须是红的**：
+   面板作者最需要看到的就是这一句，做得像句提示就没人会去改。 */
+.panel-error {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 3px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font-size: 0.85em;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dock-hint {
+  margin: 0 calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.5);
+  font-size: 0.85em;
+  color: var(--fg-faint);
+}
+
+.dock-orphan {
+  margin: 0 calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.25);
+  font-size: 0.9em;
+}
+
+.dock-orphan-where {
+  margin-left: calc(var(--spacing) * 0.5);
+  padding: 0 0.4em;
+  border-radius: 3px;
+  background: var(--bg-active);
+  color: var(--fg-muted);
+  font-size: 0.85em;
+}
+
+/* 工具条上那个开关。推到最右靠 `auto` 外边距，不靠 spacer 元素。 */
+.toolbar-dock-toggle {
+  margin-left: auto;
+}
+
+/* 开关处于「开着」的状态。⚠️ 用的是 `bg-active` 而不是 `accent` 底：
+   accent 在这一栏里已经表示"有未保存改动"（`.tab-dot`/`.status-dirty`），
+   同一个色再表示一次"面板开着"，两个意思就糊了。 */
+.btn-on {
+  background: var(--bg-active);
+}
+
+
+/* ── 插件列表 ─────────────────────────────────────────────────────────── */
+
+.plugin {
+  padding: var(--spacing) calc(var(--spacing) * 1.5);
+  border-bottom: 1px solid var(--border);
+}
+
+.plugin-failed {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.plugin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.plugin-name {
+  font-weight: 600;
+}
+
+.plugin-version {
+  color: var(--fg-faint);
+  font-size: 0.82em;
+  font-family: var(--font-mono);
+}
+
+.plugin-id {
+  font-family: var(--font-mono);
+  font-size: 0.76em;
+  color: var(--fg-faint);
+  margin-top: 2px;
+}
+
+.plugin-desc {
+  margin: 5px 0 0;
+  font-size: 0.87em;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.plugin-error {
+  margin: 5px 0 0;
+  font-size: 0.82em;
+  color: var(--danger);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.plugin-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.cap {
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-faint);
+}

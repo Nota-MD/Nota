@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 图形填充色：实心圆角方块 + 底部色条 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<rect x="1.8" y="2.0" width="9.2" height="7.4" rx="0.9" fill="#2e3436"/>
+<rect x="1.8" y="11.6" width="12.4" height="1.9" rx="0.8" fill="#2e3436"/>
+</svg>

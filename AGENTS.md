@@ -23,8 +23,10 @@
    **触发条件（这条会到期）**：只在**首次提交到 GitHub 之前**成立。一旦对外发布
    它就作废，从那以后老文档要能开、老插件要能加载。
    ⚠️ **它不豁免"同一批必须全改干净"**：留着半新半旧两套形状比"不兼容"更糟。
-6. **任何 `.rs` / `.ts` / `.tsx` / `.lua` 文件不得超过 1000 行**，超了就地拆分
-   （口径见 `docs/08-development-guide.md` §1.1）。`tools/doc-sync-check.sh` 会检查。
+6. **任何 `.rs` / `.ts` / `.tsx` / `.lua` / `.css` / `.sh` 文件不得超过 1000 行**，
+   超了就地拆分（口径见 `docs/08-development-guide.md` §1.1）。`tools/doc-sync-check.sh`
+   会检查，**到 900 行就报 WARN**——那条 WARN 是提醒你**现在就规划怎么拆**，
+   不是"还能再写 100 行"（`src/App.tsx` 就是这么从 1118 行拆回来的）。
 
 ---
 
@@ -68,7 +70,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `main.rs` | 进程入口，只是 `nota_lib::run()` 的一层壳 |
 | `lib.rs` | `run()`：建 Tauri、装 dialog/fs/opener 插件、`setup()` 里**按顺序**做三件事（载设置 → 建共享状态 → 发现并加载插件）→ `manage(AppState)`；全部 `nota_*` 命令的注册表；`on_window_event` 在窗口销毁时 `unload_all()` |
 | `error.rs` | `NotaError` 枚举，**中文 Display 消息**，自定义 `Serialize` 以便过 Tauri IPC |
-| `paths.rs` | XDG 目录（`~/.config/nota`、`~/.local/share/nota`）、`settings_file()`、`user_plugins_dir()`、`builtin_plugins_dirs()`（debug 构建额外返回仓库的 `plugins/`）、`theme_dirs()`（三个主题来源，**按优先级排序**：我们自己的 → Typora → Typora flatpak，靠前的盖掉同名的） |
+| `paths.rs` | XDG 目录（`~/.config/nota`、`~/.local/share/nota`）、`settings_file()`、`user_plugins_dir()`、`builtin_plugins_dirs()`（debug 构建额外返回仓库的 `plugins/`）、`user_themes_dir()`（⚠️ **只有这一个主题目录**，Typora 那两处已按版权要求停止扫描） |
 | `state.rs` | `AppState`：四个共享句柄。**锁顺序不变量写在文件头**（`plugins → documents → settings`） |
 | `settings.rs` | `Settings` 与三条**互相独立**的外观轴（`ui_style` / `ui_mode` / `document_theme`），kebab-case 落盘 |
 | `document/mod.rs` | `DocId` / `Document` / `DocumentStore`；`derive_title()`（front matter → 一级标题 → 文件名）；**「前端是文本的唯一真相、后端持有 300ms 镜像」这条口径写在文件头**。⚠️ `untitled_index`（未命名序号，建时定死）与 `clean_text`（比脏标记的那一份）不许省 |
@@ -77,53 +79,103 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode`（**相对路径、`/` 分隔**） |
 | `commands/settings.rs` | `nota_settings_get/set`（整份替换；保存失败则回滚内存） |
 | `commands/plugin.rs` | `nota_plugins_list` / `nota_plugin_set_enabled` / `nota_plugin_call` / `nota_plugin_find_command` |
-| `themes.rs` | 主题的**发现与读取**。扫三个目录（我们自己的 + Typora + Typora flatpak），**不随包发布任何第三方主题**（版权）。⚠️ **资源读成 `data:` URL 而不是返回路径**——asset 协议在 WebKitGTK 上取不回字体，判据在文件头 |
-| `commands/theme.rs` | `nota_themes_list` / `nota_theme_read` / `nota_theme_asset` / `nota_themes_dir` 四条 |
+| `commands/menu.rs` | `nota_native_menu_apply` 一条，转给 `native_menu.rs`。⚠️ 返回值是**"挂上了没有"**，前端据此决定藏不藏自绘菜单栏——不要改成按平台判断 |
+| `slidev.rs` | Slidev 预览服务器的生命周期：**挑端口 → 写入口文件 → 起进程（自成进程组）→ 探活 → 收摊**。⚠️ 入口写在**文档所在目录**（Slidev 拿它的父目录当项目根，相对图片才解析得对），未存盘才退回数据目录；⚠️ 杀的是**整个进程组**；⚠️ 四条实测结论（只绑 `[::1]`、必须有可解析的主题、点文件入口可用且热更新会触发、`--no-open` 而非 `--open false`）都在文件头。调试口子 `NOTA_SLIDEV_CMD` |
+| `slidev_probe.rs` | 「本机装没装 Slidev」（2026-09-24 从 `slidev.rs` 拆出）：跑 `start` 会跑的那条**同一条命令**、**同一个 cwd**，末尾加 `--version`，npm 上 `npm_config_offline=true`（⚠️ **不许联网、不许变重**：缓存命中 1.3 秒、没命中 0.26 秒；挂住时 20 秒连**进程组**一起杀）。⚠️ 判据两条同时成立：CLI 离线拿得到 **且** 文档目录**向上**找得到 `node_modules/@slidev/theme-*`（`@slidev/cli` 不自带主题） |
+| `commands/slidev.rs` | `nota_slidev_*` 八条：`start` / `probe_install` / `probe` / `log` / `status` / `open_window` / `sync` / `stop`。⚠️ `probe_install` 是唯一**异步**的一条（探测要起进程、最长 20 秒，走 `spawn_blocking`），且**不改任何状态**。⚠️ 全是**短命令**：`start` 起来就返回，端口通没通由前端 500ms 一次 `probe`（后端同步命令跑在主线程，在后端等 = 冻界面）。⚠️ `stop` 里先 `slidev::stop` 再 `close_window`，顺序反了会因**同线程重入同一把锁**卡死 |
+| `themes.rs` | **文档主题**：内置六套（`src/styles/themes/*.css`，`include_str!` 编进二进制）＋ 用户放进 `~/.config/nota/themes/` 的（**同名覆盖内置**）。⚠️ `check_id` 是安全边界：id 只放行 ASCII 字母数字与 `-` `_`，因为路径是拿它拼的。⛔ **不兼容也不内置 Typora 主题**（版权） |
+| `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_dir` 三条。⚠️ 入参是 **id 不是路径**——路径由后端自己拼，前端没有"读任意文件"的能力 |
+| `commands/export.rs` | 导出与打印的 **IO 那半**（2026-09-24）：`nota_export_write`（写一段文本到指定路径）与 `nota_export_print`（写成 HTML → 交给系统默认程序）。⚠️ **这一层不认识 Markdown 也不认识 HTML**，生成在前端（`editor/export.ts`）——搬过来就是把渲染引擎实现两遍。⚠️ 打印落点跟**文档自己的目录**（相对路径的图片才解析得对），固定名 `.nota-print.html`、点号开头默认隐藏；⚠️ 打印**不是** `window.print()`，理由在文件头 |
 | `plugin/mod.rs` | `PluginHost`：**发现 → 加载 → 派发 → 卸载**；`PluginInfo` 是给前端的只读快照 |
 | `plugin/manifest.rs` | `Capability` 枚举、`PluginMeta`、`Manifest`、`NOTA_PLUGIN_API_VERSION`、**`channel_id()`**（事件通道名归一化） |
 | `lua/mod.rs` | `HostContext` / `LuaPlugin` / `PluginState`；一个插件一个 `Lua` |
-| `lua/api/mod.rs` | `nota` 表的构造：**按清单声明的能力决定装哪些子表**；辅助函数 `lua_err` / `lua_to_json` / `not_implemented` |
+| `lua/api/mod.rs` | `nota` 表的构造：**按清单声明的能力决定装哪些子表**；辅助函数 `lua_err` / `lua_to_json`。⚠️ **本文件里没有"装了但不能用"的表**——曾经为 `http`/`settings` 装过假表，2026-09-24 两张都落地后那个 `not_implemented()` 已删，`nil` 只意味着"没申请" |
 | `lua/api/document.rs` | `nota.document`：读（`get_text` 等）/ 写（`set_text` / `append_text`，写完发事件通知前端） |
 | `lua/api/fs.rs` | `nota.fs`：读写文件，**限死在当前工作区内**；裁决逻辑是纯函数 `resolve_in()` |
 | `lua/api/git.rs` | `nota.git`：**子进程**跑 `git`，不是 libgit2；拒绝会重定向目标目录的参数 |
-| `lua/api/ui.rs` | `nota.ui`：`notify` / `register_panel` / `register_menu`。⚠️ 2026-09-22 起**不再是三个都发事件**：`notify` 推事件（发生），后两个写 registry 供宿主**拉**（声明）。判据见 `docs/07` BUG-13 |
+| `lua/api/http.rs` | `nota.http`（2026-09-24）：`request` / `get` / `post`。⚠️ 是**同步**的（ureq），所以整条命令走 `spawn_blocking`——插件那一侧本来就是一条阻塞的 Lua 调用。**两道围栏**：`https://` 随便、`http://` **只放行回环**（本机大模型服务），⚠️ 按**主机名**判（`127.0.0.1.evil.com` 不是本机）；`4xx/5xx` **不是错误**（关掉了 `http_status_as_error`），响应体回 `{code, text}`、能解析时另给 `json`（数组下标**从 1 起**，Lua 没有 JSON 库）。理由与两条坑（`host` 解析、重复 `content-type`）在文件头，见 `docs/13` §9 |
+| `lua/api/settings.rs` | `nota.settings`（2026-09-24）：`get` / `set` / `all`，**一个插件一个明文 TOML**（`~/.config/nota/plugin-settings/<安全文件名(id)>.toml`，文件 0600 / 目录 0700）。⚠️ 键名只认 ASCII 且**不含点**（`a.b` 在 TOML 里是嵌套表）；`set(k, nil)` 是**删掉**。⚠️ **明文是决定不是欠账**（不做系统密钥环的理由在 `docs/12` §4.5），所以**界面上不许说它"安全"** |
+| `lua/api/ui.rs` | `nota.ui`：`notify` / `register_panel` / `register_menu`。⚠️ 2026-09-22 起**不再是三个都发事件**：`notify` 推事件（发生），后两个写 registry 供宿主**拉**（声明）。判据见 `docs/07` BUG-13。⚠️ 2026-09-24 起面板**有内容**了：`register_panel` 收的 `render` 每次拉都**现跑**，由 `面板内容()` 剥成 JSON 交给前端（`面板文本上限` 4000 字 / `面板节点上限` 200 项 / `面板层数上限` 6 层，见 `docs/13` §8.5） |
+| `native_menu.rs` | **macOS 的原生菜单**（自绘菜单在那边的兜底）。⚠️ **这里没有菜单定义**——树由前端推来（`ui/nativeMenu.ts`），这里只管建；点了只把 id 用 `nota:native-menu` 发回前端去执行。判定用 `cfg!` 不用 `#[cfg]`，于是它在 Linux 上也参与类型检查 |
 
 ### 前端 `src/`
 
 | 文件 | 职责 |
 |---|---|
 | `main.tsx` | React 入口 |
-| `App.tsx` | 外壳与全部状态：文档表、活动文档、设置、工作区、插件、toast、侧栏/插件栏/状态栏开关、主题表；快捷键一整张表在 `useEffect` 里；⚠️ **`menuHandlers` 是"菜单项能不能点"的唯一真相**——灰不灰由它推出来，不另设标志位 |
+| `App.tsx` | 外壳与全部状态：文档表、活动文档、设置、工作区、插件、toast、侧栏/插件栏/状态栏/格式栏开关、**专注/打字机两个写作开关**、查找条的开与命中状态、光标状态、主题表。⚠️ **`menuHandlers` 是"菜单项能不能点"的唯一真相**——灰不灰由它推出来，不另设标志位，**三条入口（自绘菜单 / 快捷键 / 原生菜单）都汇到它**。⚠️ 2026-09-24 沿职责拆走五块（1016 → **864 行**，五块都各自有完整理由可写）：菜单判据与快捷键分发 → `ui/useMenus.ts`、两个对话框的状态 → `ui/useDialogs.ts`、导出与打印 → `ui/useExport.ts`、文档主题三件事 → `ui/useDocTheme.ts`、「把命令送进编辑器」→ `ui/useEditorCommands.ts`。⚠️ **拆的是职责不是行数**：那一批同时往里加了工具栏与查找条的接线，不减反增过一次——别把"降到多少行"当验收口径 |
 | `bridge/ipc.ts` | **调用后端的唯一出口**。`api.doc.*` / `api.workspace.*` / `api.settings.*` / `api.plugin.*` / `api.theme.*`、`on<T>()`、`events` 名字表 |
-| `editor/create.ts` | Milkdown 封装，对外只有 `EditorHandle` **五个**方法（最后一个是 `runCommand`，菜单栏与快捷键从这儿进）。⚠️ 插件清单里**没有什么**和有什么一样重要，理由在函数注释里 |
+| `editor/create.ts` | Milkdown 封装（**所见即所得**）。对外只有 `EditorHandle` **十一条**：老的五个（`getMarkdown` / `setMarkdown` / `focus` / `runCommand` / `destroy`）＋ **查找五条** ＋ `setWritingModes`。⚠️ `runCommand` **返回"这条通路上有没有实现"**（所见即所得恒 `true`，源码模式表格那十条给 `false`），调用方据此提示用户。⚠️ 插件清单里**没有什么**和有什么一样重要，理由在函数注释里。⚠️ `readOnly` 只给分屏预览用，要**两件事同时成立**才算只读 |
+| `editor/source.ts` | **源码模式**（CodeMirror 6），对外只有 `SourceHandle`——十一条与 `EditorHandle` 同名同义（`EditorPane` 两边通用）。⚠️ **不做任何规范化**，所以源码模式**不 `settle`** |
+| `editor/command-state.ts` | **光标状态的只读观察者**（`CommandState`）。喂给两处：格式工具栏的高亮、菜单的第二条判据（表格那十条要 `inTable`）。⚠️ 报的是**签名串比对**之后的差异，直接回调等于每次光标动一下都重渲染 |
+| `editor/insert.ts` | 插链接 / 插图片的**节点构造**。⚠️ 它**不问地址**——弹框那半在 `ui/PromptDialog.tsx`，两者刻意分开 |
+| `editor/find.ts` | **查找与替换**。纯匹配函数 `在文本里找匹配` 是**唯一一份**语义（两种编辑模式都调它）＋ ProseMirror 适配器 ＋ 装饰插件。⚠️ 高亮是**装饰**（不进文档、不进撤销栈），替换才是文档改动 |
+| `editor/writing-modes.ts` | **专注模式 + 打字机模式**。专注：从光标那层往上**把同层兄弟压暗**（⚠️ 不是"所有块压暗、当前块加亮"——`opacity` 不会因为子元素亮回来而恢复，那样嵌套就错了）。打字机：把光标那行滚到**容器正中**。⚠️ 容器**不写死选择器**（两种编辑器的滚动元素不是同一个），偏差 <1px 不动 |
+| `editor/export.ts` | **导出 HTML**。⚠️ 走**同一条渲染路径**——起一个只读 Milkdown 实例、摘它渲染出来的 DOM（`DOMSerializer` 那条路会丢掉宽松模式下的标题显示与任务项方框，导出对不上屏幕）。⚠️ 摘完全**按类名前缀 `nota-`** 把编辑时的零件洗掉（代码块工具条、块标记）——一条规则，将来加零件自动生效。⚠️「含样式」复用**编辑器自己那份 `editor.css`**（动态 `?inline`，单独一个 5 kB chunk），不是另写一份 |
 | `editor/instant-render.ts` | 光标所在块的 Markdown 标记（`##`、`>`、`-`）浅灰画在块左边。⚠️ 用 **`Decoration.node` 不是 widget**，理由在文件头 |
+| `editor/atx.ts` | **「什么算标题」的唯一判据**——宽松/严格两种口径的正则、以及"这段文本算几级标题"都只在这里。⚠️ 三个调用点（`lax-heading.ts` / `source.ts` / `outline.ts`）都得往这儿问，别各自再写一份；Rust 侧那份同构实现在 `document/mod.rs::strip_atx` |
+| `editor/lax-heading.ts` | 宽松模式的两半：① `宽松标题显示`（`Decoration.node` + `nodeName`，把 `#标题` **按标题排版**）② `不转义行首井号`（序列化时不往你写的井号上加反斜杠）。⚠️⚠️ **宽松模式一个字节都不改**（用户 2026-09-24 定的死规矩），理由在文件头 |
 | `editor/task-list.ts` | 任务项复选框：画方框 + 点它勾上。⚠️ **不改 schema**——`data-checked` 是 `preset-gfm` 本来就给的 |
 | `editor/code-block.ts` | 代码块 NodeView：语言选择器 / 复制 / 折叠。**全仓唯一一处 `$view`** |
-| `ui/EditorPane.tsx` | 编辑器挂载点。**那个 div 从不被 React 重新渲染**（Milkdown 拥有那棵 DOM）。对外句柄多一个 `runCommand`，菜单栏的命令从这儿进 |
-| `ui/MenuBar.tsx` | 顶部菜单栏（文件/编辑/段落/格式/视图/主题/帮助）。⚠️ 关闭用 **`mousedown` 不是 `click`**，主题那一栏是**动态**的（`entries` 由 App 现算） |
-| `ui/commands.ts` | 菜单的**静态骨架**：一栏一项抄自 `docs/10` §11.1。⚠️ 这里**没有** `disabled` 标志位——灰不灰由 App 的 `menuHandlers` 推 |
-| `ui/Sidebar.tsx` | 侧栏两页：文件（工作区树）/ 大纲。⚠️ `tab` 是**受控**属性（菜单栏也要能切它） |
-| `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 清单。**为什么在右边**写在文件头 |
-| `ui/ConfirmDialog.tsx` | 自绘确认框，替掉 `window.confirm`（**它阻塞 WebView、会打断输入法组合态**） |
+| `editor/image-attrs.ts` | **图片装载兜底**（2026-09-24，P0 数据丢失的补丁）：上游 preset 少写了一个 `\|null`，于是**不带 title 的图片在装载时被整节点丢掉**（打开含图文档 → 存盘 → 图从文件里消失）。这里挂一个 `$remark` 插件，在 mdast 上把 `null` 抹成 `""`。⚠️ **`editor/create.ts` 里的 `.use(补全图片属性)` 不许删**；⚠️ 只读实例（分屏预览、导出）同样要走 `createEditor` 才带上它。根因与实测记录在文件头，`docs/05` §4.8 |
+| `editor/math-macros.ts` | **数学宏表**（2026-09-24）：physics 那一套 `\qty`/`\dv`/`\braket`… 共 **108 条** + 每条一份可渲染样例，交给 `create.ts` 的 `katexOptionsCtx`。⚠️ KaTeX **官方没有 physics**，`katex-physics`（2019、无 LICENSE）**刻意没引**，所以这张表是我们自己写的。⚠️ 三条硬约束（参数要带花括号 / **KaTeX 的宏完全不支持可选参** / 星号不吃）与"默认关"的理由（会重定义 `\div` `\Re` `\Im`）都在文件头；**做不到的写法逐条列在 `docs/10` §12.1**。⚠️⚠️ 2026-09-24 修过一轮静默画错（`\dv` / `\dd` 那一族），**判据不能只是"能不能渲染"**——还有一张 `PHYSICS_EQUIVALENTS` 对照表 |
+| `ui/EditorPane.tsx` | 编辑器挂载点，**按 `mode` 分派**三种模式（`wysiwyg` → Milkdown / `source` → CodeMirror / `split` → 左源码 + 右只读预览）。**那个 div 从不被 React 重新渲染**（Milkdown 拥有那棵 DOM）。⚠️ 它把十一条句柄**原样转发**给当前那个 handle——少一条就是"切到源码模式后查找条整个失灵"。⚠️ 切模式是**换实例**，不是复用——两家的撤销栈不通用。⚠️ effect 依赖是 `[doc.id, mode, strict, physics]`，**两个写作开关刻意不在里面**（走 `setWritingModes`，拨开关不重建实例） |
+| `ui/FormatBar.tsx` | 格式工具栏（2026-09-24）：一排按钮，高亮读 `commandState`、点击走 `runCommand`。⚠️ **没有自己的状态**；⚠️ 快捷键提示**从菜单表派生**，不手写第二份；⚠️ 每颗按钮 `onMouseDown` 拦默认行为（不拦的话按钮会先把选区抢走，命令跑在一个已经塌掉的光标上）。**图标与文字字形混排**：Folio 那套里没有 H1/引用/任务列表的图标，那几颗就留文字（`H1`、`引`、`任`），理由写在 `按钮.icon` 那段注释里 |
+| `ui/Icon.tsx` | **界面图标**（2026-09-24）：把 `src/assets/icons/` 里那 96 个 Folio 图标（BSD-2，来路见 `THIRD-PARTY.md` §5）当**遮罩**用——`?url` 只把网址带进 JS，形状由 `mask-image` 取，颜色由 `.icon` 的 `currentColor` 给，所以文件里写死的 `fill="#2e3436"` 不参与渲染。⚠️ 名字表**手写**（`import.meta.glob` 的键是 `string`，写错一个字母类型不报），加载时**逐个核对文件在不在**，缺了就 `console.error` + 画虚线框。⚠️ 调用处写错名字是**编译期**红。只搬"动作"图标，**不搬 Folio 的应用图标** |
+| `ui/FindBar.tsx` | 查找与替换条（2026-09-24）。⚠️ 它是**显示端 + 输入端**，命中数一律是编辑器报上来的。⚠️ Esc 收在**条子自己身上**且带 `isComposing` 判据；查询上报走 **ref 读**（`onQuery` 每次渲染都是新身份，进依赖会让光标乱跳） |
+| `ui/PromptDialog.tsx` | 自绘单行输入框（2026-09-24），替掉 `window.prompt`——**它在 WebKitGTK 上默认被关掉、调用静默返回 `null`** |
+| `ui/useMenus.ts` | **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出）：三条判据（有没有处理函数 / `needsDoc` / `光标条件`）→ `disabledCommands` / `menuChecks` / `usingNativeMenu`。⚠️ **"能不能点"只有这一处真相源**，它派生出自绘菜单、原生菜单、键盘三个消费者——各写一份的症状是**"菜单灰着、快捷键却照跑"** |
+| `ui/useDialogs.ts` | 两个自绘对话框的"谁在等答案"（2026-09-24 从 `App.tsx` 搬出）。⚠️ 每个框后面是**单个 ref 不是队列**：今天所有调用点都是用户动作直接触发的，不存在并发 |
+| `ui/useEditorCommands.ts` | 「把一条菜单命令送进编辑器」（2026-09-24 从 `App.tsx` 搬出）：`run` 转交 ＋「插入链接」「插入图像」先问参数再转交。⚠️ 转交时**必须看 `runCommand` 的返回值**——`false` 说的是"这个编辑模式下没有这个实现"，不看它用户就只会看到"点了没反应" |
+| `ui/useDocTheme.ts` | 文档主题的**应用 / 切换 / 打开主题文件夹**（2026-09-24 从 `App.tsx` 搬出）。⚠️ 和 `applyTheme`（界面主题）**分家**：界面主题是纯写属性，文档主题要**取回来 + 限域**才能注入，是异步的，节奏不同不塞一个 effect。⚠️ `themeId` 进依赖、`themes` 也进（清单重扫后要能重取）；取不到 CSS **安静退回无主题**，不弹错 |
+| `ui/useExport.ts` | 导出与打印的编排（2026-09-24 从 `App.tsx` 搬出）。⚠️ 正文**从编辑器拿，不是从 `doc.text`**（后者是 300ms 去抖后的镜像，屏幕上和导出里会不一致）；⚠️ 打印**不是在应用里打印**——写成 HTML 交给系统默认程序，如实把两步都说给用户听 |
+| `ui/TopBar.tsx` | 顶栏（品牌字 + 菜单栏 + 「插件」开关）。**纯展示、零状态**。⚠️ `hideMenuBar` 的真假来自**后端返回值**（只有后端说"原生菜单真挂上了"才隐藏自绘那条），**不是按平台判** |
+| `ui/TabBar.tsx` | 标签栏（脏点 + ×）。**纯展示、零状态**，也**不管"关之前要不要存盘"**——`confirmReq` 在 `App.tsx` 手上。⚠️ 键盘切标签今天**没有** |
+| `ui/MenuBar.tsx` | 顶部菜单栏（文件/编辑/段落/格式/视图/主题/帮助）。**只管"哪一栏开着"**，栏里的内容与键盘导航在 `useMenuRovingFocus.ts` / `MenuPopup.tsx`。⚠️ 关闭用 **`mousedown` 不是 `click`**，主题那一栏是**动态**的（条目来自 `nota_doc_themes`）。⛔ 这一栏**只装文档主题**，界面风格/明暗在偏好设置里 |
+| `ui/MenuPopup.tsx` | 一层弹层 + 它飞出的子菜单。⚠️ 子菜单走 **portal 到 `body` ＋ `position: fixed`**（父弹层的 `overflow-y:auto` 会把它裁掉），坐标自己量、夹回视口。**只支持一层子菜单** |
+| `ui/useMenuRovingFocus.ts` | 菜单的方向键导航（漫游 tabindex）。⚠️ 吃掉的键**必须 `stopPropagation`**——子菜单套在父弹层里，不拦住父层会把同一个键再处理一遍。`focusItem` 与 `setFocusedIndex` 的差别写在文件头（值没变时 effect 不跑） |
+| `ui/useSlidev.ts` | Slidev 预览的全部编排（2026-09-23 从 `App.tsx` 搬出）：**先过一道「装没装」的闸**（`gate` + `gateActions`）→ 起进程 → 轮询 `probe` 到端口通 → 开窗口，之后正文一改就重写入口文件，剩下的热更新归 Slidev。⚠️ 会话状态**只在内存里**（菜单勾选跟着它走）；⚠️ 用 `run.current` 计数让在途轮询作废；⚠️ 开窗失败退回系统浏览器。⚠️ `GUIDE_URL` 与**它怎么核出来的**（查页面表，SPA 的状态码核不出来）都写在这里 |
+| `ui/SlidevPanel.tsx` | 「装没装」那个面板。⚠️ 只认一份 `SlidevProbe` ＋ 四个回调，**判定的话全在后端写的 `message` 里**，它只按 `state` 摆按钮；⚠️ **不是一堵墙**——`missing` 时旁边仍留「仍然打开预览」（探测是有根据的猜测）；⚠️ 不用 `window.confirm`/`alert` |
+
+| `ui/nativeMenu.ts` | 把菜单树＋当前状态转成 `NativeMenuNode[]` 推给 Rust。⚠️ **只做形状转换，不重算"该不该灰"**——那是 `App.tsx` 的 `disabledCommands` 说了算 |
+| `ui/accel.ts` | **快捷键的唯一真相源**：解析 `commands.ts` 里的 `accel` 文本，反过来驱动按键分发。⚠️ 判键名**优先 `e.code`**（Shift 之下 `e.key` 是上档字符，`Ctrl+Shift+1` 曾经因此永远不成立）；`Ctrl` 在 macOS 上指 ⌘（显示成 `⇧⌘S`） |
+| `ui/settings/` | **偏好设置**（文件 → 偏好设置… / `Ctrl+,`），四个文件：`SettingsDialog.tsx`（左栏分节 + 搜索的壳）· `primitives.tsx`（行/组/控件）· `panes.tsx`（外观 / 文档主题 / 编辑器）· `ShortcutsPane.tsx`（快捷键一览，从 `MENUS` 读出来）。版式照 VMark 的偏好面板（用户 2026-09-23 要求，参考源码在仓库外 `../vmark-ref`）。⚠️ **改动即时生效，没有「确定」也没有「取消」**，理由写在文件头 |
+| `ui/commands.ts` | 菜单的**静态骨架**：一栏一项抄自 `docs/10` §11.1。⚠️ 这里**没有** `disabled` 标志位——灰不灰由 App 的 `menuHandlers` 推。`accel` 是**唯一真相源**（`ui/accel.ts` 反过来查它）。「主题」那栏的条目与勾是合成的（`themeEntries` / `themeChecks` / `resolvePick`），自绘与原生两边共用 |
+| `ui/Sidebar.tsx` | 侧栏两页：文件（工作区树）/ 大纲。⚠️ `tab` 是**受控**属性（菜单栏也要能切它）。⚠️ 2026-09-24 补了右上角那颗 **×（收起本栏）**与空工作区里的**「打开文件夹…」**——两处都是"别让用户找不到路"，但**开合状态仍只有 `App.tsx` 的 `sidebarOpen` 一份**（× 只是第二个入口） |
+| `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 清单。**为什么在右边**写在文件头。⚠️ 面板内容**是拉的**（`api.plugin.panel(id)`），`nota:plugin-panel` 那条事件只是**失效信号、不带内容**——判据是"丢掉那条事件，打开面板仍然对"（`docs/07` BUG-13）。⚠️ 每个面板有自己的 `序号` ref，两个 effect 的依赖是**拼好的键串**不是那个数组 |
+| `ui/PanelBody.tsx` | **面板节点的渲染**（2026-09-24）：七种 `kind` 各一段 JSX（`heading` / `text` / `fields` / `list` / `buttons` / `empty` / `separator`）。⚠️ **没有 `dangerouslySetInnerHTML`**，字符串永远只是文本；没有 `command` 的按钮**画成灰的并写明原因**，不是静默不画 |
+| `ui/panel-nodes.ts` | **面板内容的形状校验**（2026-09-24）。⚠️ 这里是**唯一**一处判"形状对不对"——宿主那边只管"是 JSON ＋ 大小上限"。三条规矩：认不出的 `kind` 如实显示、字段类型不对给默认值、**只有这里定义过的字段能到 DOM** |
+| `ui/pluginMenus.ts` | 把插件声明的菜单项合成**一栏「插件」**（2026-09-24），插在「帮助」前面。⚠️ 走的是老路：id 是合成的 `__plugin:<插件>:<命令>`，`resolvePick` / `menuHandlers` / 加速键索引**一行都没为插件改**；`menu` 写别的值的条目**不静默丢掉**，照样摆出来、写明"想挂到哪一栏"、且是灰的 |
+| `ui/plugin-prompt.ts` | 「点之前先问一句」（2026-09-24）：把菜单项/面板按钮上的 `prompt` 规格交给 `ui/PromptDialog.tsx`，答完把用户输入并进 `args` 再跑命令。⚠️ 返回的是 `{args} \| null`——**"用户取消"和"没有参数"必须分得开**，取消就**不调**命令 |
+| `ui/usePlugins.ts` | 插件那三样（清单 / 面板 / 菜单项）**一起拉** ＋ 跑一条插件命令（2026-09-24 从 `App.tsx` 搬出）。⚠️ 三者是一个 `Promise.all`：分开拉会让菜单栏短暂少一栏。⚠️ 命令失败**弹 toast 不抛**（用户点了按钮，不该只看到控制台红字） |
+| `ui/ConfirmDialog.tsx` | 自绘确认框，替掉 `window.confirm`（**它阻塞 WebView、会打断输入法组合态**）。⚠️ **受控**：开与答案都由 `ui/useDialogs.ts` 给 |
 | `ui/Home.tsx` | 没有文档时那一屏 |
-| `ui/StatusBar.tsx` | 未保存状态、字数**四项**（词/字符/行/分钟） |
+| `ui/StatusBar.tsx` | 未保存状态、字数**四项**（词/字符/行/分钟），加 2026-09-24 补的**模式名**（恒显）与**「严格」徽标**（只在开着时）。⚠️ 两个都是**只读指示、不是开关**——点一下切模式看着顺，但那会变成第三个切换入口 |
 | `ui/Toasts.tsx` | 提示条 |
 | `ui/ErrorBoundary.tsx` | 兜住前端渲染错误 |
 | `ui/outline.ts` | 大纲与字数的**纯函数**（启发式正则，跳过 front matter 与围栏代码块） |
-| `styles/theme.css` | 三条外观轴的 CSS 变量。**二维相乘**：`[data-ui-mode]` 只给颜色、`[data-ui-style]` 只给形状。末尾那段把 Typora 主题的变量**桥**到外壳上 |
-| `styles/applyTheme.ts` | 把三条轴写到 `<html>` 的属性上 |
-| `styles/typora-theme.ts` | **Typora 主题的加载与改造**（"兼容 Typora 主题"整件事的核心）。四步：展开 `@import` → `url()` 换成 `data:` → 用 `CSSStyleSheet` 解析 → 把裸元素选择器收拢进 `#write`，同时把 `:root` 变量**提升到全局**供外壳桥接 |
-| `styles/app.css` | **外壳**：窗口骨架 → 主页，加菜单栏与确认框 |
-| `styles/editor.css` | **正文编辑区**：编辑区外壳、块标记、代码块、任务列表。⚠️ 2026-09-22 因撞 1000 行上限从 `app.css` 按职责拆出；加载顺序必须是 `theme → app → editor` |
+| `ui/view-modes.ts` | 三种编辑模式的**显示名**（一长一短两列）与出厂顺序，`StatusBar` 与偏好设置共用一份。⚠️ 只是名字，**不含任何切换逻辑** |
+| `styles/theme.css` | **界面主题**的 CSS 变量（含 `--find-hit` / `--find-current`：查找高亮要盖在**正文**上，和 `--accent` 在暗色下的合适值差得很远，所以单独两个）。**二维相乘 = 7 风格 × 2 模式**：`[data-ui-mode]` 只给颜色、`[data-ui-style]` 只给形状，确有识别色的风格（GitHub / Plasma / Yaru…）写成**两属性**选择器放在最后。⛔ **文档主题一个变量都不许经这里中转**。⛔ `--font-ui` **不许出现衬线**（用户 2026-09-24：「绝对不要用衬线字体做UI字体」；`tools/doc-sync-check.sh` 的 ⑥ 查这个），`--font-doc` 可以是衬线但**只有正文能引**。⚠️ **2026-09-24 按「默认风格轻快一点」调过**：底色/次底色各浅一档、`--border` 0.11→0.08、`--accent` 换亮一档，**Adwaita（`ui_style=auto` 在 GNOME 上落到的那一档）的圆角/间距/控件高也各放松一格**——理由与"原值是多少"都写在那两段注释里 |
+| `styles/icons.css` | 那一套搬来的图标怎么画：`.icon`（`mask-image` + `background-color: currentColor`，**`-webkit-` 前缀两条都要留**——真窗口是 WebKitGTK、试验台是 Chrome）、`.icon-missing`（名字对不上文件时画虚线框，别让它"空着像设计如此"）、`.btn-with-icon`（图标 + 文字的 `gap`）。⚠️ 与前后几份样式**没有重叠选择器**，加载顺序不影响结果 |
+| `styles/applyTheme.ts` | 把 `ui_style` / `ui_mode` 两条轴写到 `<html>` 的属性上 + 探测表（KDE→plasma、Ubuntu→yaru…） |
+| `styles/doc-theme.ts` | **文档主题的限域与注入**。用户主题会写 `h1 {…}` 这种裸选择器，注入前把**每条选择器挂到 `.editor-pane` 之下**（`:root`/`html`/`body` **改写**成锚点，不是加前缀）。⚠️ **这是"文档主题碰不到界面"的唯一保证**，机械执行，不靠写主题时自觉 |
+| `styles/themes/*.css` | **内置六套文档主题**（素纸/蓝图/晨雾/报刊/墨色/松林）。按**普通文档 CSS** 写、**不带作用域前缀**（由 `doc-theme.ts` 统一挂）；一套主题 = `:root` 里改 token（纸面、代码块底、圆角、代码高亮）＋ 写 editor.css 没覆盖过的排版（标题/链接/引用/表格/分隔线） |
+| `styles/app.css` | **外壳**：窗口骨架 → 主页，加菜单栏与确认框。⚠️ **不含左侧栏**（栏本身/文件树/大纲，在 `sidebar.css`） |
+| `styles/sidebar.css` | **左侧栏**：栏本身 + 文件树 + 大纲。2026-09-24 从 `app.css` 拆出（加上折叠三角后顶破 1000 行）：拆的线是「**栏里的那两棵树**」，折叠三角/缩进/按层级隐藏两处是同一套写法。⚠️ **必须在 `app.css` 之后加载** |
+| `styles/bars.css` | **编辑区上方那两条横条**（格式化工具栏 + 查找替换条）。2026-09-24 从 `app.css` 拆出（那时 880 多行）：那几条贴着编辑区、跟着 `mode` 走，外壳骨架那套不跟。⚠️ **必须在 `app.css` 之后加载** |
+| `styles/slidev.css` | Slidev「装没装」面板的样式。⚠️ **必须在 `app.css` 之后加载**（`.slidev-panel` 要盖掉 `.confirm-dialog` 的 440px 宽度，同权重靠顺序）；2026-09-24 从 `app.css` 拆出（那时 985 行） |
+| `styles/dock.css` | **右侧插件栏**（2026-09-24 按 1000 行规矩从 `app.css` 拆出，那时 1043 行）：栏本身 + 面板内容块 + 插件清单。⚠️ **必须在 `app.css` 之后加载**——它借了那边的 `.btn` / `.btn-primary` / `.btn-danger`（同权重靠顺序）。⚠️ 里面**不许有任何一条规则把插件给的字符串变成视觉**（插件的内容全是文本节点） |
+| `styles/settings.css` | 偏好设置那个框的样式（`.settings-*` 壳 + `.stg-*` 原语，自成一体的覆盖层，复用 `app.css` 的遮罩底子）。⚠️ 加载顺序在 `app.css` **之后**；框体**不复用** `.confirm-dialog` |
+| `styles/editor.css` | **正文编辑区**：编辑区外壳、块标记、代码块、任务列表。⚠️ 2026-09-22 因撞 1000 行上限从 `app.css` 按职责拆出；加载顺序必须是 `theme → app → settings → editor` |
 
 ### 插件与工具
 
 | 路径 | 职责 |
 |---|---|
-| `plugins/git/` | **内置 Git 插件**（`plugin.toml` + `main.lua`）：状态解析、diff、提交。是"一个插件到底怎么写"的活样例 |
-| `plugins/ai/` | **内置 AI 助手插件**：提示词模板 + 写回文档。⚠️ **网络那半在宿主侧尚未实现**（`nota.http` 是一张「尚未实现」的表） |
-| `src-tauri/icons/nota.svg` | **图标的手写矢量母版**（用户设计的蓝色 `N` + 光标条 + 折角纸）。其余图标文件全由它派生，**别再手改那些 PNG**——改这个 SVG 再走 `docs/06` §2.4 那两步 |
-| `tools/gen-squircle.py` | 生成 `nota.svg` 里那块浅灰底衬（**超椭圆**，不是圆角矩形）的路径数据。⚠️ 那条 `d` 是采样出来的，改大小**只能重新生成**。默认参数跑出来的和仓库里那条**逐字符一致**（验过） |
+| `plugins/git/` | **内置 Git 插件**（`plugin.toml` + `main.lua`）：状态解析、diff、提交。是"一个插件到底怎么写"的活样例。⚠️ 2026-09-24 起它的改动列表**在右栏面板里现拉**（`render` → `nota.git.status()`），**没走事件订阅**——改动列表是状态不是发生（`docs/07` 第 17 项） |
+| `plugins/ai/` | **内置 AI 助手插件**：提示词模板 + 写回文档 + 真的发请求（2026-09-24 起 `nota.http` 不是空壳了）。密钥走 `nota.settings`（**明文**，见 `docs/12` §4.5），端点只放行 `https` 与本机回环。⚠️ **没有做流式**，长文上体验差是已知的 |
+| `src-tauri/icons/nota.svg` | **图标的手写矢量母版**（用户设计的蓝色 `N` + 光标条 + 折角纸）。其余图标文件全由它派生，**别再手改那些 PNG**——改这个 SVG 再走 `docs/06` §2.4 那两步。⚠️ 2026-09-23 换过两版，**逐条差异记在它自己的文件头里**，改之前先读那段 |
+| `tools/gen-squircle.py` | 生成 `nota.svg` 里那块浅灰底衬（**超椭圆**，不是圆角矩形）的路径数据。⚠️ 那条 `d` 是采样出来的，改大小**只能重新生成**。默认参数跑出来的和**第一版**里那条**逐字符一致**（验过）。⚠️ **现在没有调用点了**：第二版底衬换成了普通圆角矩形 `rx=250`。留着是因为原图那块底衬确实是超椭圆的形状，要更贴原图还得靠它 |
 | `tools/doc-sync-check.sh` | 文档同步与行数上限的启发式检查（见 `docs/09`） |
 | `.github/workflows/release.yml` | 六个平台的打包矩阵（Windows x64/arm64 的 exe、macOS 双架构 dmg、Linux 双架构 deb/rpm/AppImage）。**每个平台只能在自己的系统上打**，理由在文件头 |
 | `THIRD-PARTY.md` | **第三方组件与许可证清单**。加/删依赖要同批改它（`docs/09` §2.3） |
@@ -229,13 +281,14 @@ Xvfb + ImageMagick 那一条是验证过可用的。
   prism/math/diagram 都不在其中。
 - **不要同时写 `index.html` 的 CSP meta 与 `tauri.conf.json` 的 `csp`**——
   两个策略会**同时生效并互相冲突**。CSP 只放在 `tauri.conf.json`。
-- ⚠️⚠️ **`asset://` 在 WebKitGTK 上传不了字体，主题资源必须内联成 `data:` URL**。
-  wry 给自定义协议注册了 `register_uri_scheme_as_secure`，**但没注册
-  `register_uri_scheme_as_cors_enabled`**；而 `@font-face` 的装载**永远走 CORS 模式**，
-  于是字体请求直接被判 NetworkError——**图片却能正常显示**（`<img>` 不走 CORS），
-  所以只看图片会以为协议是通的。这就是 `themes.rs` 把资源读成 `data:` URL 的理由
-  （⚠️ 这条**不是** BUG-11，BUG-11 是打包丢插件那条；经过见 `docs/07` §4）。
-  ⚠️ 连带一条：**CSP 的 `font-src` 里不要加 `asset:`**，加了也没用。
+- ⚠️ **`asset://` 在 WebKitGTK 上传不了字体**：wry 给自定义协议注册了
+  `register_uri_scheme_as_secure`，**但没注册 `register_uri_scheme_as_cors_enabled`**；
+  而 `@font-face` 的装载**永远走 CORS 模式**，于是字体请求直接被判 NetworkError
+  ——**图片却能正常显示**（`<img>` 不走 CORS），所以只看图片会以为协议是通的。
+  ⚠️ 这条今天**已经没有代码依赖它**（文档主题不再加载任何外部资源，我们自己的
+  主题一套字体都不带），但它仍然是"要不要往 WebView 里塞字体"这个决定的前提，
+  所以留着。连带一条：**CSP 的 `font-src` 里不要加 `asset:`**，加了也没用。
+  经过见 `docs/07` §4；⚠️ 这条**不是** BUG-11（那是打包丢插件）。
 - **菜单栏里的 Shift+数字快捷键判据是 `e.code === "Digit1"`，不是 `e.key`**。
   Shift 按住时 `e.key` 是 `"!"` 这类符号（Shift+1 给的是 `"!"`，不是 `"1"`），
   拿 `e.key` 比 `"1"` 的快捷键**永远不触发**，而且静态看代码完全看不出来。
@@ -272,26 +325,26 @@ Xvfb + ImageMagick 那一条是验证过可用的。
 
 **仍然是空壳或没接线**（动手前先看 `docs/07` §3）：
 
-- **插件面板里还没有内容**：`register_panel` 声明出来的面板**能出现在右栏**了
-  （BUG-13 已修，走 `nota_plugin_panels` 拉），但面板里长什么样没有表达力，
-  界面上如实写着「面板内容尚未接入。」。要等声明式 DSL，见 `07` 第 15 项。
-  ⚠️ **第 16 项已作废**——原先打算的"记账 + 重放"是**错的修法**，不是没做完。
-- **插件数据类事件没有订阅端**：前端只订了 `nota:notify` 与
+- **插件自定义事件通道仍然没有订阅端**：前端只订了 `nota:notify` 与
   `nota:document-changed`，插件自定义通道（`plugin:<id>:<name>`）**没有任何订阅者**。
   ⚠️ 这条通道对**发生类**数据是正解，缺的只是订阅端——别把结论推广成"事件机制别用"。
   见 `07` 第 17 项。
-- **菜单栏上的插件菜单没接线**（`07` 第 42 项）：`register_menu` 的写侧与拉侧都通了，
-  菜单栏本体也在，缺的只是把插件声明的那几条挂进对应的栏里。
-- **AI 插件的网络那一半**（`nota.http` 是一张「尚未实现」的表）、
-  **`nota.settings`**（同样是尚未实现）。
-- **外观轴还差两条没有切换界面**（`07` 第 11 项）：**文档主题**已经有了
-  （菜单栏「主题」，见 §4b 那条 asset 协议的坑）；`ui_mode`（明暗）与
-  `ui_style`（macOS/Yaru/Adwaita/Windows）**仍然只有 CSS 与设置项**。
+  ⚠️ **它和"面板没内容""菜单没接线"是两回事**：那两件 2026-09-24 都做完了
+  （第 15 / 42 项），而且都**没走事件**——声明类的东西是**拉**的（`docs/07` BUG-13）。
+  所以"没有订阅端"不是缺陷，是这条通道今天的实际用途（只有别的插件在听）。
+- **面板 DSL 只做到"够用"**（`07` 第 15 项已结清）：七种 `kind`。**不做富文本面板**，
+  要表达力就加新 `kind`，别开口子。
+- ⚠️ **`07` 第 16 项已作废**——原先打算的"记账 + 重放"是**错的修法**，不是没做完。
+- **三条外观轴都接通了**（`07` 第 11 项已结清）：界面风格与明暗在**偏好设置 →
+  外观**（7 风格 × 2 模式 = 14 格 CSS 与切换界面都在），文档主题在**菜单栏「主题」**
+  （内置六套 ＋ 用户目录）。⚠️ 两者**互不影响**是硬约束，机制在 `styles/doc-theme.ts`。
 - **`docs/10` 那张 Typora 对照矩阵里标 ⬜ 的一切**——斜杠菜单、富文本工具栏、
   导出、拼写检查……逐项状态以矩阵为准。
 
-**缺陷**（`docs/07` §2，**编号是永久的**）：**已修 14 条（BUG-1…BUG-14）**，
-**未修 1 条（BUG-15，点正文下方的空白不聚焦）+ 待查 1 条（BUG-5，中文 IME）**。
+**缺陷**（`docs/07` §2，**编号是永久的**）：**已修 16 条（BUG-1…BUG-14 + BUG-5 + BUG-16）**，
+**未修 1 条（BUG-15，点正文下方的空白不聚焦）**。
+⚠️ BUG-5（中文 IME）是**用户实测结清的**，不是我们跑出来的——本仓的无头流程
+喂不进多字节输入，这一条没有可复现的自检办法。
 ⚠️ **未修的 BUG 优先于 backlog 的新功能**。
 动手前请读 `docs/07` §2 拿最新状态，别只看这一段——这段只记条数，
 **哪条是什么得看那张表**。

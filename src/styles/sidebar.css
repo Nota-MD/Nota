@@ -1,0 +1,228 @@
+/**
+ * 左侧栏的样式：**栏本身、文件树、大纲**。
+ *
+ * ⚠️ 2026-09-24 从 `app.css` 里拆出来的——加上折叠三角之后它顶破了 1000 行
+ * 上限（`docs/09` §4）。划线理由是**"这块东西归谁"**而不是行数：文件树与大纲
+ * 都是"左侧栏里的一棵树"，折叠的写法（转三角、缩进、按层级隐藏）两处是同一套；
+ * 右侧插件栏**不在这里**（它跟侧栏是两套独立的类，见 `app.css` 那段注释）。
+ *
+ * ⚠️ **必须在 `app.css` 之后引入**：这里的选择器比 `app.css` 里的通用规则
+ * （按钮、行）更具体，靠顺序而不是靠 `!important` 压过去。
+ *
+ * 颜色与尺寸一律走变量（见 `theme.css`）。
+ */
+/* ── 侧栏 ─────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+  min-height: 0;
+}
+
+/* 页签行 + 右上角那颗 ×。
+   ⚠️ 那条下边框**挪到了这一层**：留在 `.sidebar-tabs` 上的话，线会在 × 左边
+   就断掉（× 在 tabs 之外，见 `Sidebar.tsx` —— 它不能塞进 `role="tablist"`）。 */
+.sidebar-head {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+
+.sidebar-tabs {
+  display: flex;
+  flex: 1;
+  /* ⚠️ `min-width: 0` 不能省：不加的话页签文字会把这个 flex 子项撑得比容器
+     还宽，那颗 × 就被挤出可见区——而"叉看不见"正是这次要修的东西。 */
+  min-width: 0;
+}
+
+/* 收起侧边栏。⚠️ 与右侧插件栏那颗 ×（`app.css` 的 `.dock-close`）**同一套值**：
+   两栏并排站着，一颗有叉一颗没有、或者两颗长得不一样，都像两个人做的。
+   高度靠父层 `align-items: stretch` 撑满，所以这里不写 `height`。 */
+.sidebar-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  padding: 0 calc(var(--spacing) * 1.25);
+  cursor: pointer;
+  color: var(--fg-faint);
+}
+
+.sidebar-close:hover {
+  color: var(--fg);
+  background: var(--bg-hover);
+}
+
+.sidebar-tab {
+  flex: 1;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 0.92em;
+  border-bottom: 2px solid transparent;
+}
+
+.sidebar-tab:hover {
+  background: var(--bg-hover);
+}
+
+.sidebar-tab-active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing) 0;
+  min-height: 0;
+}
+
+.sidebar-empty {
+  padding: 0 var(--spacing);
+  color: var(--fg-faint);
+  font-size: 0.9em;
+  line-height: 1.6;
+}
+
+/* 空态里的那句话。⚠️ 余白只写在下边：那一节现在是个 `div`（里面还有一颗
+   按钮），不归零的话段落的上下余白会和 `.sidebar-empty` 自己的 padding 叠加。 */
+.sidebar-empty-lead {
+  margin: 0 0 calc(var(--spacing) * 0.75);
+}
+
+
+/* ── 文件树 ───────────────────────────────────────────────────────────── */
+
+.tree,
+.outline,
+.plugins,
+.home-plugins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tree-dir-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 3px var(--spacing);
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font-weight: 600;
+  font-size: 0.88em;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-dir-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* 展开态的那个三角：**同一个字形转 90°**，不是换一个字符。
+   换字符（▸/▾）在字体缺字时会出现"点一下那一格变空白"。 */
+.tree-twisty,
+.outline-twisty {
+  flex: none;
+  display: inline-block;
+  width: 12px;
+  color: var(--fg-faint);
+  font-size: 0.9em;
+  line-height: 1;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.tree-twisty[data-open="true"],
+.outline-twisty[data-folded="true"] {
+  transform: rotate(90deg);
+}
+
+.tree-file-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 3px calc(var(--spacing) * 2);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-file-btn:hover {
+  background: var(--bg-hover);
+}
+
+.tree-error {
+  margin: 0;
+  padding: 2px 8px;
+  color: var(--danger);
+  font-size: 0.85em;
+}
+
+/* ── 大纲 ─────────────────────────────────────────────────────────────── */
+
+/* 一行 = 三角 + 标题（+ 折起来的条数）。⚠️ 缩进在下发时按层级算好写在
+   行内，见 `Sidebar.tsx`——层级是数据的一部分，不该再在 CSS 里算一遍。 */
+.outline-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.outline-twisty {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* 没有子标题的那一行留一个同宽的占位，否则叶子和父标题的文字起点差 14px。 */
+.outline-twisty-leaf {
+  cursor: default;
+}
+
+.outline-item {
+  /* ⚠️ `min-width: 0` 不能省：flex 子项默认 `min-width: auto`，长标题
+     会把整行撑宽、把条数挤出去而不是自己出省略号。 */
+  min-width: 0;
+  flex: 1;
+  padding: 3px 8px;
+  color: var(--fg-muted);
+  cursor: default;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline-row:hover .outline-item {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* 折起来时在右边点一下"里面有几条"，比只留一个转过来的三角清楚。 */
+.outline-folded-count {
+  flex: none;
+  padding-right: 6px;
+  color: var(--fg-faint);
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+}

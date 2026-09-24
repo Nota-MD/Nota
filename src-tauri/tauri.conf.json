@@ -49,7 +49,7 @@
     ],
     "category": "Productivity",
     "shortDescription": "所见即所得的 Markdown 编辑器",
-    "longDescription": "Nota 是一款对标 Typora 的所见即所得 Markdown 编辑器，带 Lua 插件系统。",
+    "longDescription": "Nota 是一款所见即所得的 Markdown 编辑器，带 Lua 插件系统。",
     "windows": {
       "nsis": {
         "languages": ["SimpChinese", "English"],

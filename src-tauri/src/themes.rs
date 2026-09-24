@@ -1,55 +1,46 @@
-//! 主题：发现与读取。
+//! 文档主题：内置的那几套 ＋ 用户自己放进来的。
 //!
-//! # 什么算一个「Typora 主题」
+//! # 文档主题和界面主题是**两回事**
 //!
-//! 一对东西：`<名字>.css` ＋ **同名目录** `<名字>/`（装字体、图片）。
-//! CSS 里用**相对路径**引用它，例如 github 主题里
-//! `@font-face { src: url('./github/open-sans-600.woff2') }`。
-//! 所以"发现一个主题"要两样一起看，"读一个主题"要**连目录一起**交给前端
-//! ——相对 url 没有基准就解析不出来，字体全变豆腐块。
+//! 用户 2026-09-23 把这条划得很死：
 //!
-//! # 从哪儿找
+//! | 轴 | 值 | 作用范围 |
+//! |---|---|---|
+//! | 界面风格 `ui_style` | Adwaita / GitHub / KDE Plasma / macOS / Windows / Yaru | 整个应用外壳 |
+//! | 明暗 `ui_mode` | 跟随系统 / 浅色 / 深色 | 整个应用外壳 |
+//! | 文档主题 `document_theme` | 本模块列出的那些 | **只有编辑区** |
 //!
-//! 三个地方，**前面的覆盖后面的**（同名时以靠前的为准）：
+//! 前两条相乘 = 我们对外承诺的界面外观；第三条**一根头发都不许碰到外壳**。
+//! 之前那版把文档主题的配色桥接进 UI 变量（`--nota-bridge-*`），结果是
+//! 选一个浅色文档主题、界面跟着变亮，整个应用一半亮一半暗——用户截图报了
+//! 这个 bug，那一整套桥接已经拆干净。守住这条线的机制在
+//! `src/styles/doc-theme.ts`：注入前把每条选择器统一挂到编辑区之下，
+//! **不靠写主题时自觉**。
 //!
-//! 1. `~/.config/nota/themes/` —— 我们自己的。用户想改哪套主题就复制到这儿改，
-//!    不动原文件，也不会被 Typora 升级冲掉；
-//! 2. `~/.config/Typora/themes/` —— Typora 的常规安装位置；
-//! 3. `~/.var/app/io.typora.Typora/config/Typora/themes/` —— Typora 的 **flatpak** 安装。
-//!    这台机器上 Typora 就是 flatpak 装的，所以第 3 条不是备胎而是主路。
+//! # ⛔ 不兼容 Typora 主题，一个都不内置
 //!
-//! ⚠️ **我们不随包发布任何第三方主题。** Typora 自带的那几套（github / night /
-//! newsprint / pixyll / whitey）版权是 Typora 的，用户机器上装了就有、没有就没有。
-//! 这是有意的取舍：把别人的 CSS 塞进我们的安装包，比"新装的机器主题列表是空的"
-//! 糟得多——后者只是空，前者是许可问题。
+//! Typora 自带的那几套（github / night / newsprint / pixyll / whitey）
+//! **版权是 Typora 的，随包发就是侵权**。用户 2026-09-23 明确说了
+//! 「请不要内置typora主题。会侵权。」并且「typora主题先不用兼容」。
+//! 所以：既不扫描 Typora 的安装目录，也不带 Typora 主题的解析器
+//! （那套 `@import` 展开 ＋ `url()` 内联成 data: URL 的机器一起删了，
+//! 见 `docs/07` §4 的记录）。
 //!
-//! # 为什么读取不直接用 asset 协议去 fetch
+//! 内置的这几套是**我们自己写的**（`src/styles/themes/*.css`），
+//! 用 `include_str!` 编进二进制，所以新装的机器上主题菜单不是空的。
 //!
-//! 因为**主题 CSS 必须先改造再用**（见 `src/styles/typora-theme.ts` 顶上那段：
-//! Typora 主题里有几十条裸元素规则，直接塞进来会把应用外壳一起改掉）。
-//! 要改造就得先拿到**文本**，而 `<link href="asset://...">` 拿到的是渲染结果不是文本。
-//! 所以走命令读文本，改造完再由前端注入 `<style>`。
+//! # 用户主题放哪儿
 //!
-//! # 为什么字体也不走 asset 协议（2026-09-23 实测抓出来的）
+//! `~/.config/nota/themes/<id>.css`。**只扫这一个目录**。
+//! 文件名去掉 `.css` 就是 id，与内置主题**同名即覆盖内置那套**
+//! （想改哪套就复制出去改，升级不会冲掉）。
 //!
-//! 因为**走不通**。WebKitGTK 对 `@font-face` 的取字是 **CORS 模式**的请求
-//!（字体和图片不一样：图片按普通模式取，字体必须过 CORS），而 wry 注册
-//! `asset:` 这个自定义协议时只登记了 `register_uri_scheme_as_secure`，
-//! **没有** `register_uri_scheme_as_cors_enabled`（见 `wry/src/webkitgtk/web_context.rs`）。
-//! 结果就是字体的取回阶段报 `NetworkError`，字体静默退回系统字体。
-//!
-//! 这不是猜的：在容器里用一个只引 woff2、**去掉 `local()` 回退**、家族名
-//! 换成系统里不存在的 `ProbeFont` 的探针主题量过——`asset://localhost/...` 取不到
-//!（`document.fonts.load` 抛 `NetworkError`），同一个文件改成 `data:` URL 立刻加载成功。
-//!
-//! 所以本模块多了一条 `read_asset`：把主题的资源**读成 data: URL**，
-//! 由前端内联进 CSS。这也顺带把 Windows（`http://asset.localhost`）和
-//! macOS 的协议差异一并绕开了——data: 在三个平台上走的是同一条路。
+//! ⚠️ 这条覆盖规则意味着 id 是**用户可控的字符串**，所以 `css_of` 里
+//! 有一道 id 形状检查——不能让 `../../etc/passwd` 这样的名字拼进路径。
+//! 判据是"只允许字母数字和 `-` `_`"，比"过滤掉 `..`"更难绕过。
 
-use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use base64::Engine as _;
 use serde::Serialize;
 
 use crate::error::{NotaError, Result};
@@ -58,128 +49,175 @@ use crate::paths;
 /// 主题 CSS 的体积上限。超过这个数基本可以断定不是在装主题。
 const MAX_CSS_BYTES: u64 = 2 * 1024 * 1024;
 
-/// 单个主题资源（字体、图片）的体积上限。
+/// 一套内置主题。三个字段都是编译期常量。
+struct Builtin {
+    /// 唯一键。同时是用户覆盖它时该用的文件名（`<id>.css`）。
+    id: &'static str,
+    /// 菜单里显示的名字。**中文**——界面文案一律中文。
+    name: &'static str,
+    /// CSS 正文，编译期嵌进来。
+    css: &'static str,
+}
+
+/// 内置主题清单。**顺序就是菜单里的顺序**：浅色四套在前，深色两套在后。
 ///
-/// 比 CSS 宽一档：字体动辄 200 KB，图片可能上 MB。**但不能不设**——
-/// 内联成 data: URL 之后这些东西要整个过一遍 IPC 并在内存里多留一份
-///（base64 还要涨 1/3），没有上限就等于把一个"读任意大文件"的口子
-/// 开在了主题菜单上。
-const MAX_ASSET_BYTES: u64 = 4 * 1024 * 1024;
+/// ⚠️ 这些文件在仓库的 `src/styles/themes/` 下，不在 `src-tauri/` 里。
+/// 改完主题 CSS 后 `cargo build` 会跟着重编（`include_str!` 的依赖会进
+/// dep-info），**不需要 `touch` 什么**；但 `vite` 那边不认这些文件，
+/// 前端拿到的永远是后端发过去的文本——单一真相源就在这儿。
+///
+/// ⚠️ 文件名是 ASCII、显示名是中文，**故意分开的**：中文文件名在
+/// Windows 交叉编译和 zip 打包时都是麻烦，而菜单里要显示中文。
+const BUILTIN: &[Builtin] = &[
+    Builtin {
+        id: "paper",
+        name: "素纸",
+        css: include_str!("../../src/styles/themes/paper.css"),
+    },
+    Builtin {
+        id: "blueprint",
+        name: "蓝图",
+        css: include_str!("../../src/styles/themes/blueprint.css"),
+    },
+    Builtin {
+        id: "mist",
+        name: "晨雾",
+        css: include_str!("../../src/styles/themes/mist.css"),
+    },
+    Builtin {
+        id: "print",
+        name: "报刊",
+        css: include_str!("../../src/styles/themes/print.css"),
+    },
+    Builtin {
+        id: "ink",
+        name: "墨色",
+        css: include_str!("../../src/styles/themes/ink.css"),
+    },
+    Builtin {
+        id: "pine",
+        name: "松林",
+        css: include_str!("../../src/styles/themes/pine.css"),
+    },
+];
 
-/// 一个可用的主题。
+/// 菜单/设置里要列的一项。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct ThemeInfo {
-    /// 显示名，同时是**唯一键**（取自文件名去掉 `.css`）。
+pub struct DocThemeInfo {
+    /// 唯一键。存进 `settings.document_theme` 的就是它。空串表示"无主题"。
+    pub id: String,
+    /// 显示名（中文）。
     pub name: String,
-    /// 从哪儿来的：`nota` / `typora` / `typora-flatpak`。
-    /// 界面上要标出来——否则"我明明删了那个文件它怎么还在"会变成一个查不动的问题。
-    pub source: String,
-    /// CSS 文件的绝对路径。读取时拿它当入参。
-    pub css: String,
-    /// 主题所在**目录**。前端把相对 `url()` 拼到这个目录上。
-    pub dir: String,
-    /// 有没有同名资源目录。没有的话主题多半会缺字体（还能用，但字形会退回系统字体）。
-    pub has_assets: bool,
+    /// 是不是内置的那几套。界面上要标出来——用户自己放的同名文件会盖掉内置，
+    /// 不标的话"我改的文件怎么没生效"会变成一个查不动的问题。
+    pub builtin: bool,
 }
 
-/// 扫一遍所有主题目录，返回去重后的清单（按名字排序）。
-pub fn discover() -> Vec<ThemeInfo> {
-    discover_in(&paths::theme_dirs())
-}
+/// 列出所有可用主题：内置的 ＋ 用户目录里多出来的。
+///
+/// 用户主题**同名覆盖内置**，所以清单一律按 id 去重，用户那份赢。
+pub fn discover() -> Vec<DocThemeInfo> {
+    let user = user_ids();
 
-/// `discover` 的纯函数版本：目录从外面给，便于测试。
-pub fn discover_in(dirs: &[(PathBuf, &'static str)]) -> Vec<ThemeInfo> {
-    let mut seen: HashSet<String> = HashSet::new();
-    let mut out = Vec::new();
+    // 内置的在前，保持 `BUILTIN` 里排好的顺序。被用户同名文件盖掉的那条
+    // **仍然在原来的位置**（只是 `builtin` 翻成 false），这样菜单的顺序
+    // 不会因为用户放了个文件就整体挪位——菜单位置变来变去比"多一个条目"烦人。
+    let mut out: Vec<DocThemeInfo> = BUILTIN
+        .iter()
+        .map(|b| DocThemeInfo {
+            id: b.id.to_owned(),
+            name: b.name.to_owned(),
+            builtin: !user.iter().any(|id| id == b.id),
+        })
+        .collect();
 
-    for (dir, source) in dirs {
-        // 目录不存在是**正常情况**（没装 Typora 就没有那个目录），不是错误。
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("css") {
-                continue;
-            }
-            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            // 靠前的目录已经给过同名主题了，跳过。
-            if !seen.insert(stem.to_owned()) {
-                continue;
-            }
-            let (Some(css), Some(dir_s)) = (path.to_str(), dir.to_str()) else {
-                continue; // 非 UTF-8 路径：前端拿不动，跳过好过报错
-            };
-            out.push(ThemeInfo {
-                name: stem.to_owned(),
-                source: (*source).to_owned(),
-                css: css.to_owned(),
-                dir: dir_s.to_owned(),
-                has_assets: dir.join(stem).is_dir(),
-            });
-        }
+    // 然后是用户自己新加的（id 不与内置重合的那些）。
+    // **排序**：`read_dir` 的顺序在不同文件系统上不一样，不排就是随机的。
+    let mut extra: Vec<&String> = user
+        .iter()
+        .filter(|id| !BUILTIN.iter().any(|b| &b.id == *id))
+        .collect();
+    extra.sort();
+    for id in extra {
+        out.push(DocThemeInfo {
+            id: id.clone(),
+            name: id.clone(),
+            builtin: false,
+        });
     }
 
-    out.sort_by(|a, b| a.name.cmp(&b.name));
     out
 }
 
-/// 读一份主题 CSS。
+/// 取一份主题的 CSS 文本。
 ///
-/// ⚠️ 会先验一下 `path` 确实躺在某个主题目录**里面**（不要求正好在它那一层）。
-/// 判据是"**在里面**"而不是"父目录等于"：主题除了主 CSS，还会 `@import`
-/// 子目录里的东西——night 主题就 import 了 `night/mermaid.dark.css`，
-/// 那个文件在主题目录的**下一层**。按"父目录等于"判会把这些正当读取一起拒掉。
-///
-/// 前端传回来的是我们刚给它的路径，今天没有被利用的路径；但"任意路径读文件"
-/// 这个口子一旦开着，将来某个插件或某段粘进来的内容就有可能把它捅穿。
-/// `Path::starts_with` 是按路径分量比的，所以 `/a/themes-evil` **不会**误命中
-/// `/a/themes`。守住比事后查便宜。
-pub fn read_css(path: &Path) -> Result<String> {
-    check_scope(path)?;
-    check_size(path, MAX_CSS_BYTES)?;
+/// 用户目录里有同名文件就用它，否则回落到内置。找不到就报错——
+/// 这里**不能静默给空串**：静默的后果是"设置里记着一个名字、界面上一片默认"，
+/// 而用户看不出是名字错了还是文件没了。
+pub fn css_of(id: &str) -> Result<String> {
+    check_id(id)?;
 
-    std::fs::read_to_string(path).map_err(|source| NotaError::Read {
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-/// 把一个主题资源（字体、图片）读成 **data: URL**。
-///
-/// 为什么必须内联、不能用 asset 协议，见本文件顶上那段"为什么字体也不走 asset 协议"。
-/// 相对 url 的解析在前端做（它才知道 CSS 文件在哪个目录），这里只负责
-/// "给一个绝对路径、还一个能直接写进 CSS 的 URL"。
-pub fn read_asset(path: &Path) -> Result<String> {
-    check_scope(path)?;
-    check_size(path, MAX_ASSET_BYTES)?;
-
-    let bytes = std::fs::read(path).map_err(|source| NotaError::Read {
-        path: path.to_path_buf(),
-        source,
-    })?;
-
-    // base64 是**标准字母表 + 无换行**：data: URL 里出现换行会让浏览器
-    // 解析到空白字符而截断（`STANDARD` 不带 padding 之外的任何装饰，正好）。
-    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    Ok(format!("data:{};base64,{}", mime_of(path), encoded))
-}
-
-/// 路径必须躺在某个主题目录**里面**。见 `read_css` 的文档注释。
-fn check_scope(path: &Path) -> Result<()> {
-    let allowed = paths::theme_dirs();
-    if allowed.iter().any(|(d, _)| path.starts_with(d)) {
-        return Ok(());
+    let path = paths::user_themes_dir()?.join(format!("{id}.css"));
+    if path.is_file() {
+        check_size(&path, MAX_CSS_BYTES)?;
+        return std::fs::read_to_string(&path).map_err(|source| NotaError::Read { path, source });
     }
-    Err(NotaError::other(format!(
-        "{} 不在任何主题目录里，拒绝读取",
-        path.display()
-    )))
+
+    BUILTIN
+        .iter()
+        .find(|b| b.id == id)
+        .map(|b| b.css.to_owned())
+        .ok_or_else(|| NotaError::other(format!("没有名为 {id} 的文档主题")))
 }
 
-/// 体积闸。`limit` 由调用方给——CSS 和资源的上限不是一回事。
+/// id 的形状检查。**这是本模块的安全边界**，见文件头那段。
+///
+/// 白名单而不是黑名单：只放行 ASCII 字母、数字、`-`、`_`，长度 1–64。
+/// 中文文件名（`素纸.css`）因此用不了——**这是有意的取舍**：主题的显示名
+/// 在文件里写着（菜单显示中文），文件名只是个键，用 ASCII 键换掉一整类
+/// 路径穿越问题，划算。
+fn check_id(id: &str) -> Result<()> {
+    let ok = !id.is_empty()
+        && id.len() <= 64
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_');
+    if ok {
+        Ok(())
+    } else {
+        Err(NotaError::other(format!("主题 id「{id}」不合法")))
+    }
+}
+
+/// 用户主题目录里的所有 id（文件名去掉 `.css`）。目录不存在就是空表。
+///
+/// 认不出来的文件名**跳过**（不符合 `check_id` 的直接不要），
+/// 免得清单里出现一个读不了的条目。
+fn user_ids() -> Vec<String> {
+    let Ok(dir) = paths::user_themes_dir() else {
+        return Vec::new();
+    };
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("css") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if check_id(stem).is_ok() {
+            out.push(stem.to_owned());
+        }
+    }
+    out
+}
+
+/// 体积闸。
 fn check_size(path: &Path, limit: u64) -> Result<()> {
     let meta = std::fs::metadata(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
@@ -196,43 +234,11 @@ fn check_size(path: &Path, limit: u64) -> Result<()> {
     Ok(())
 }
 
-/// 按扩展名给 MIME。
-///
-/// ⚠️ 认不出来的**不要瞎猜**，给 `application/octet-stream`。data: URL 的
-/// MIME 是浏览器判断"这是不是我能用的东西"的依据之一：给一个 `.svg` 标成
-/// `image/png` 会让它拒收，而标成 `application/octet-stream` 的 `<img>`
-/// 反而会被嗅探救回来。所以"不知道"比"猜错"安全。
-fn mime_of(path: &Path) -> &'static str {
-    match path
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_ascii_lowercase())
-        .as_deref()
-    {
-        Some("woff2") => "font/woff2",
-        Some("woff") => "font/woff",
-        Some("ttf") => "font/ttf",
-        Some("otf") => "font/otf",
-        Some("ttc") => "font/collection",
-        Some("eot") => "application/vnd.ms-fontobject",
-        Some("png") => "image/png",
-        Some("jpg" | "jpeg") => "image/jpeg",
-        Some("gif") => "image/gif",
-        Some("svg") => "image/svg+xml",
-        Some("webp") => "image/webp",
-        Some("avif") => "image/avif",
-        Some("bmp") => "image/bmp",
-        Some("ico") => "image/x-icon",
-        _ => "application/octet-stream",
-    }
-}
-
 /// 我们自己的主题目录，**用到时才建**。返回它的绝对路径。
 ///
-/// 与另两个目录的区别：那两个是别人的，我们只读；这个是我们的，
 /// 「打开主题文件夹」菜单项要能把它建出来再打开——首次使用时它多半还不存在。
 pub fn user_themes_dir() -> Result<String> {
-    let dir = paths::user_themes_dir()?;
+    let dir: PathBuf = paths::user_themes_dir()?;
     paths::ensure_dir(&dir)?;
     paths::path_to_string(&dir)
 }
@@ -241,126 +247,103 @@ pub fn user_themes_dir() -> Result<String> {
 mod tests {
     use super::*;
 
-    /// 造一个临时的主题目录树。
-    fn 铺一个(dir: &Path, name: &str, with_assets: bool) {
-        std::fs::create_dir_all(dir).unwrap();
-        std::fs::write(dir.join(format!("{name}.css")), "body { color: red }").unwrap();
-        if with_assets {
-            std::fs::create_dir_all(dir.join(name)).unwrap();
+    #[test]
+    fn 内置主题的_id_与文件名一一对应() {
+        // 每一条都要能取到 CSS，而且不是空的。这条挡的是"加了条目忘了建文件"、
+        // 或者 `include_str!` 指错了路径——后者在编译期就会炸，但**空文件不会**。
+        let mut ids = Vec::new();
+        for b in BUILTIN {
+            assert!(check_id(b.id).is_ok(), "内置 id 自己都不合法：{}", b.id);
+            assert!(!b.name.is_empty(), "{} 没有显示名", b.id);
+            assert!(
+                b.css.contains("--doc-bg"),
+                "{} 没定义 --doc-bg，多半不是一份文档主题",
+                b.id
+            );
+            ids.push(b.id);
+        }
+        let n = ids.len();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "内置 id 有重复");
+    }
+
+    #[test]
+    fn 内置主题不碰界面变量() {
+        // ⚠️ 这条是**回归闸**：上一版就是文档主题里定义了界面变量、
+        // 再靠桥接规则漏进外壳的。文档主题只许定义 `--doc-*` / `--code-*`
+        // / `--select-*` 这一批，以及 `--fg*` `--bg*` `--border*` `--radius*`
+        // `--accent*`（这些在编辑区里被 editor.css 消费，作用域已收拢）。
+        //
+        // 界面独有的那几个变量名一旦出现在主题文件里，就说明有人又开始
+        // 往"让文档主题改外壳"那条路上走了。
+        const UI_ONLY: &[&str] = &["--ui-font-size", "--font-ui", "--sidebar-width",
+            "--dock-width", "--toolbar-height", "--statusbar-height", "--shadow"];
+        for b in BUILTIN {
+            for bad in UI_ONLY {
+                assert!(
+                    !b.css.contains(bad),
+                    "{} 里出现了界面变量 {bad}——文档主题不许碰外壳",
+                    b.id
+                );
+            }
+            assert!(
+                !b.css.contains("--nota-bridge"),
+                "{} 里还有桥接变量，那是已经拆掉的老路",
+                b.id
+            );
         }
     }
 
     #[test]
-    fn 扫出_css_并认出同名资源目录() {
-        let base = std::env::temp_dir().join("nota-themes-test-1");
-        let _ = std::fs::remove_dir_all(&base);
-        let a = base.join("a");
-        铺一个(&a, "带字体", true);
-        铺一个(&a, "不带字体", false);
-        // 干扰项：不是 .css 的文件、以及一个叫 old-themes 的目录
-        std::fs::write(a.join("Readme.md"), "x").unwrap();
-        std::fs::create_dir_all(a.join("old-themes")).unwrap();
-
-        let dirs = vec![(a.clone(), "nota")];
-        let list = discover_in(&dirs);
-
-        assert_eq!(list.len(), 2, "只该扫出两个主题，实际：{list:?}");
-        assert_eq!(list[0].name, "不带字体");
-        assert!(!list[0].has_assets);
-        assert_eq!(list[1].name, "带字体");
-        assert!(list[1].has_assets);
-        assert_eq!(list[1].source, "nota");
-
-        let _ = std::fs::remove_dir_all(&base);
+    fn 内置主题都带自己的一套代码高亮() {
+        // 底色是主题挑的，沿用界面那套会出现"深底配深字"。
+        for b in BUILTIN {
+            for tok in [
+                "--code-comment",
+                "--code-keyword",
+                "--code-string",
+                "--code-number",
+                "--code-function",
+                "--code-attr",
+                "--code-tag",
+            ] {
+                assert!(b.css.contains(tok), "{} 少了 {tok}", b.id);
+            }
+        }
     }
 
     #[test]
-    fn 靠前的目录覆盖同名的() {
-        let base = std::env::temp_dir().join("nota-themes-test-2");
-        let _ = std::fs::remove_dir_all(&base);
-        let mine = base.join("mine");
-        let theirs = base.join("theirs");
-        铺一个(&mine, "night", false);
-        铺一个(&theirs, "night", false);
-        铺一个(&theirs, "github", false);
-
-        let dirs = vec![(mine.clone(), "nota"), (theirs.clone(), "typora")];
-        let list = discover_in(&dirs);
-
-        assert_eq!(list.len(), 2);
-        let night = list.iter().find(|t| t.name == "night").unwrap();
-        assert_eq!(night.source, "nota", "同名时该用靠前那个目录的");
-
-        let _ = std::fs::remove_dir_all(&base);
+    fn 拒绝形状不对的_id() {
+        // 路径穿越与空 id。判据是白名单，所以这些一律进不来。
+        for bad in ["", "..", "../../etc/passwd", "a/b", "a\\b", "素纸", ".hidden"] {
+            assert!(check_id(bad).is_err(), "「{bad}」不该被放行");
+        }
+        for good in ["paper", "my-theme", "my_theme_2", "A1"] {
+            assert!(check_id(good).is_ok(), "「{good}」该被放行");
+        }
     }
 
     #[test]
-    fn 目录不存在时返回空表而不是报错() {
-        let dirs = vec![(PathBuf::from("/nonexistent-nota-xyz/themes"), "typora")];
-        assert!(discover_in(&dirs).is_empty());
+    fn 取一份不存在的主题要报错而不是给空串() {
+        let err = css_of("no-such-theme-xyz").unwrap_err();
+        assert!(err.to_string().contains("没有名为"), "实际：{err}");
     }
 
     #[test]
-    fn 拒绝读主题目录之外的文件() {
-        let base = std::env::temp_dir().join("nota-themes-test-3");
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        std::fs::write(base.join("evil.css"), "body{}").unwrap();
-
-        // ⚠️ 这条测的是"守卫在不在"，所以用真实路径喂它。
-        // `paths::theme_dirs()` 在测试环境探到的是真 home，
-        // 这个临时目录必然不在里面。
-        let err = read_css(&base.join("evil.css")).unwrap_err();
-        assert!(err.to_string().contains("拒绝读取"), "实际：{err}");
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn 资源读成_data_url_而不是路径() {
-        // ⚠️ 这条钉的是**形状**：data: 前缀 + 正确的 MIME + base64 正文。
-        // 用 asset:// 那次翻车翻在"字体取不回来"，所以"是不是 data: URL"
-        // 就是这条路的判据，不能只测"读到了字节"。
-        let base = std::env::temp_dir().join("nota-themes-test-4");
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(base.join("night")).unwrap();
-        std::fs::write(base.join("night/root.woff2"), [0u8, 1, 2, 253]).unwrap();
-
-        // read_asset 会过 check_scope，而 scope 来自真实 home；所以这里
-        // 只测"编码与 MIME"这两件纯函数的事。
-        assert_eq!(mime_of(Path::new("/a/b/x.woff2")), "font/woff2");
-        assert_eq!(mime_of(Path::new("/a/b/x.PNG")), "image/png");
-        assert_eq!(mime_of(Path::new("/a/b/x.unknownext")), "application/octet-stream");
-        assert_eq!(mime_of(Path::new("/a/b/无扩展名")), "application/octet-stream");
-
-        let encoded = base64::engine::general_purpose::STANDARD.encode([0u8, 1, 2, 253]);
-        assert_eq!(encoded, "AAEC/Q==", "标准字母表、带 padding、不带换行");
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn 拒绝读主题目录之外的资源() {
-        let base = std::env::temp_dir().join("nota-themes-test-5");
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
-        std::fs::write(base.join("evil.woff2"), [0u8; 4]).unwrap();
-
-        let err = read_asset(&base.join("evil.woff2")).unwrap_err();
-        assert!(err.to_string().contains("拒绝读取"), "实际：{err}");
-
-        let _ = std::fs::remove_dir_all(&base);
-    }
-
-    #[test]
-    fn 前缀像主题目录的兄弟目录不算数() {
-        // `Path::starts_with` 是**按分量**比的：`/x/themes-evil` 不该因为
-        // 字符串以 `/x/themes` 开头就被放过。这条钉住这个语义。
-        let themelike = PathBuf::from("/x/themes");
-        let sibling = PathBuf::from("/x/themes-evil/a.css");
-        assert!(!sibling.starts_with(&themelike));
-
-        let inside = PathBuf::from("/x/themes/night/mermaid.dark.css");
-        assert!(inside.starts_with(&themelike), "子目录里的 @import 目标要放行");
+    fn 目录不存在时清单只剩内置的() {
+        // 用户目录不存在（新机器）时，内置那几套必须还在——这正是
+        // "新装的机器主题菜单是空的"那个问题的反面。
+        let list = discover();
+        let builtin_count = list.iter().filter(|t| t.builtin).count();
+        assert!(builtin_count <= BUILTIN.len());
+        for b in BUILTIN {
+            // 可能被用户同名文件盖成 builtin: false，所以只查 id 在不在。
+            assert!(
+                list.iter().any(|t| t.id == b.id),
+                "内置主题 {} 从清单里消失了",
+                b.id
+            );
+        }
     }
 }

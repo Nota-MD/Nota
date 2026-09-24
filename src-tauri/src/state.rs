@@ -26,6 +26,16 @@ use crate::document::DocumentStore;
 use crate::plugin::PluginHost;
 use crate::settings::Settings;
 
+/// ⚠️ **这个结构体没有构造函数**，`lib.rs` 是手写 `AppState { … }` 字面量建的。
+///
+/// 曾经有一个 `AppState::new(settings, plugins)`，**而且它没有任何调用者**——
+/// 2026-09-24 删掉了。它死于一个具体的错误：它是全仓唯一一处把
+/// `settings.strict_markdown` 传给文档仓的地方（"开机时标题按什么口径算"），
+/// 而因为它没人调用，**那份设置开机时从来没到达文档仓**。两个构造函数里
+/// 只有一个记得口径，另一个照样编译过——这就是"两处都改"那句告诫的反例。
+///
+/// 现在口径从 `DocumentStore::new(strict)` 的**参数**进去（忘就编译不过），
+/// 见 `lib.rs` 第 ② 步。
 pub struct AppState {
     pub documents: Arc<Mutex<DocumentStore>>,
     pub settings: Arc<Mutex<Settings>>,
@@ -33,15 +43,4 @@ pub struct AppState {
     pub workspace: Arc<Mutex<Option<PathBuf>>>,
     /// 插件宿主。锁在**最外层**（见上面的锁序）。
     pub plugins: Mutex<PluginHost>,
-}
-
-impl AppState {
-    pub fn new(settings: Settings, plugins: PluginHost) -> Self {
-        Self {
-            documents: Arc::new(Mutex::new(DocumentStore::new())),
-            settings: Arc::new(Mutex::new(settings)),
-            workspace: Arc::new(Mutex::new(None)),
-            plugins: Mutex::new(plugins),
-        }
-    }
 }

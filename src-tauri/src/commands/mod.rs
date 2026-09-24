@@ -8,7 +8,10 @@
 //! 前缀不是装饰——它让前端代码里**一眼分得清**哪些是跨进程调用、哪些是本地函数。
 
 pub mod document;
+pub mod export;
+pub mod menu;
 pub mod plugin;
 pub mod settings;
+pub mod slidev;
 pub mod theme;
 pub mod workspace;

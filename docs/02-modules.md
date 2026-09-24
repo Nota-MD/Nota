@@ -1,6 +1,6 @@
 # 02 · 逐文件接口参考
 
-> 最后同步：2026-09-22
+> 最后同步：2026-09-23
 
 **公开函数的签名以本文为准，本文与代码不一致时以代码为准并立即改本文。**
 本文只讲"这个函数做什么、参数什么意思、失败会怎样"，不讲为什么这样设计——
@@ -17,19 +17,23 @@
 | 文件 | 一句话 |
 |---|---|
 | `main.rs` | 进程入口，`nota_lib::run()` 的一层壳 |
-| `lib.rs` | 建 Tauri、`setup()` 里按顺序启动、28 个命令的注册表、窗口销毁时卸载插件 |
+| `lib.rs` | 建 Tauri、`setup()` 里按顺序启动、**37 条**命令的注册表、窗口销毁时卸载插件（⚠️ 按窗口 label 分派，见下） |
 | `error.rs` | `NotaError`，中文 Display，自定义 `Serialize` 过 IPC |
 | `paths.rs` | XDG 目录、插件目录、**主题目录**的**唯一**算法所在地 |
 | `state.rs` | `AppState` 四个句柄 + 锁序不变量 |
 | `settings.rs` | `Settings` 与三条互相独立的外观轴，kebab-case 落盘 |
-| `themes.rs` | 主题的发现与读盘：`ThemeInfo` / `discover()` / `read_css()` / `read_asset()` / `user_themes_dir()` / 围栏 `check_scope()`。⚠️ 顶上那段"为什么字体也不走 asset 协议"是实测判据 |
+| `themes.rs` | **文档主题**的发现与读盘：`DocThemeInfo` / `discover()` / `css_of()` / `user_themes_dir()` / 围栏 `check_id()`。⛔ **不兼容也不内置 Typora 主题**（版权，用户 2026-09-23 定的）。⚠️ 入参是 **id 不是路径** |
 | `document/mod.rs` | `DocId` / `Document` / `DocumentStore` / `derive_title()` |
-| `commands/mod.rs` | 只是**五**个子模块的声明 + 命令层的分工说明（无函数） |
+| `commands/mod.rs` | 只是**八**个子模块的声明 + 命令层的分工说明（无函数） |
 | `commands/document.rs` | `nota_doc_*` 十个命令 |
 | `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode` + 文件树遍历 |
 | `commands/settings.rs` | `nota_settings_get/set` |
-| `commands/theme.rs` | `nota_themes_list` / `nota_theme_read` / `nota_theme_asset` / `nota_themes_dir` |
+| `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_dir` |
 | `commands/plugin.rs` | `nota_plugins_list` / `set_enabled` / `call` / `find_command` / `panels` / `menus` |
+| `commands/export.rs` | 导出与打印的**落盘那一步**：`nota_export_write` 写字节、`nota_export_print` 写到 `.nota-print.html` 再交给系统默认程序。⚠️ 本题**不生成 HTML**——HTML 由前端生成（`editor/export.ts`），这一层只管 IO 与落点 |
+| `commands/slidev.rs` | `nota_slidev_*` 八条：**探测装没装** / 起预览服务器 / 探活 / 日志 / 查状态 / 开窗口 / 同步正文 / 收摊。⚠️ 除 `probe_install` 外全是**短命令**（`start` 不等端口，等待在前端）；`probe_install` 最长 20 秒，所以它是**异步**命令、走 `spawn_blocking` |
+| `slidev.rs` | Slidev 预览服务器的**生命周期**：挑端口 · 写入口文件 · 起进程（自成进程组）· 探活 · 收摊。⚠️ 四条实测结论写在文件头。「装没装」那半 2026-09-24 拆去了 `slidev_probe.rs`（当时这边 1023 行） |
+| `slidev_probe.rs` | **「本机装没装 Slidev」**（2026-09-24 从 `slidev.rs` 拆出）：跑 `start` 会跑的**同一条命令**、**同一个 cwd**，末尾加 `--version`，npm 上 `npm_config_offline=true`。⚠️ **不许联网**（缓存命中 1.3 秒 / 没命中 0.26 秒），挂住时 20 秒连**进程组**一起杀 |
 | `plugin/mod.rs` | `PluginHost`：发现 → 加载 → 派发 → 卸载；`PluginInfo` / `PluginPanel` / `PluginMenuItem` 快照 |
 | `plugin/manifest.rs` | `Capability` / `PluginMeta` / `Manifest` / `channel_id()` |
 | `lua/mod.rs` | `HostContext` / `LuaPlugin` / `PluginState`；一插件一个 `Lua` |
@@ -44,25 +48,70 @@
 | 文件 | 一句话 |
 |---|---|
 | `main.tsx` | React 入口 |
-| `App.tsx` | 外壳与全部状态 |
+| `App.tsx` | 外壳与状态编排。⚠️ `TopBar` / `TabBar` 2026-09-23 搬去了同名文件，本文件只剩 `App` 一个组件；⚠️ 2026-09-24 又搬走了**六块**（菜单判据与两个对话框的状态 → `ui/useMenus.ts` / `ui/useDialogs.ts`；导出打印、文档主题、命令转交 → `ui/useExport.ts` / `ui/useDocTheme.ts` / `ui/useEditorCommands.ts`；**插件三份清单 ＋ 跑命令 → `ui/usePlugins.ts`**），1118 → 916 → **918 行**。⚠️ **"搬了"≠"变小了"**：头两次搬完反而还在 916 行，因为同批又加进了格式工具栏与查找条的接线 |
 | `bridge/ipc.ts` | 调用后端的唯一出口 + 事件名表（**只放"发生类"**）+ 类型定义 |
-| `editor/create.ts` | Milkdown 封装，对外只有 `EditorHandle` |
+| `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 |
+| `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化** |
+| `editor/command-state.ts` | **光标状态**的只读观察者插件（`CommandState`）：在不在表格里、有没有选区、当前块是什么。⚠️ 喂给工具栏高亮与菜单的第二条判据 |
+| `editor/insert.ts` | 插链接 / 插图片的**节点构造**（`fmt.link` / `fmt.image` 的落点）。⚠️ 与"问地址"的对话框分开——那是 `ui/` 的事 |
+| `editor/find.ts` | **查找/替换**：纯匹配函数 `在文本里找匹配` + ProseMirror 适配器 + 装饰插件。⚠️ **只读观察者**，高亮不进文档、不进撤销栈 |
+| `editor/writing-modes.ts` | **专注模式 + 打字机模式**：装饰（压暗兄弟块 / 当前行）+ 就近滚动。⚠️ 同上只读；两个开关**随时可拨，不重建实例** |
 | `editor/instant-render.ts` | 「光标所在块的 Markdown 标记淡化显示」那个 ProseMirror 插件 |
+| `editor/atx.ts` | **「什么算标题」的唯一判据**（宽松/严格两套正则）。⚠️ 三个调用点都往这儿问 |
+| `editor/export.ts` | **HTML 导出**：另起一个屏外只读 Milkdown 实例**摘它渲染出来的 DOM**（不是再写一遍序列化——那样宽松标题的显示、任务框都会在导出里丢掉），加外壳 + 限域主题 CSS。⚠️ 用 `?inline` 复用**编辑器自己那份** `editor.css`，不是第二套样式表 |
+| `editor/lax-heading.ts` | 宽松模式：把 `#标题` 按标题**排版**而不改字（显示层装饰 + 序列化层那条"别加反斜杠"） |
 | `editor/task-list.ts` | 任务项复选框：`- [x]` 画方框、点它勾上、回车切出来的新项**不继承勾** |
 | `editor/code-block.ts` | 代码块的 NodeView（语言选择器 / 复制 / 折叠）。**全仓唯一一处 `$view`** |
-| `styles/applyTheme.ts` | 把三条外观轴写到 `<html>` |
-| `styles/typora-theme.ts` | **Typora 主题兼容的核心**：展开 `@import` → `url()` 内联成 data: URL → 用 `CSSStyleSheet` 解析 → 收拢到 `#write` + 把 `:root` 变量提升到全局 |
-| `ui/MenuBar.tsx` | 菜单栏（七栏）。⚠️ **只管画**，条目表在 `ui/commands.ts`，灰不灰由 `App.tsx` 的 `menuHandlers` 决定 |
-| `ui/commands.ts` | 菜单的**条目表**（逐条抄自 Typora）+ 快捷键的显示文本。⚠️ 里面**故意没有** `implemented` 标志位 |
-| `ui/EditorPane.tsx` | 编辑器挂载点与去抖同步 |
-| `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲）。⚠️ 开合与当前页都是 `App.tsx` 给的**受控**状态 |
-| `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 已装插件清单 |
-| `ui/ConfirmDialog.tsx` | 自绘确认框（替掉 `window.confirm`）。**受控**：开与答案都由 `App.tsx` 给 |
+| `editor/image-attrs.ts` | **图片装载兜底**（2026-09-24，P0）：上游 preset 少写 `\|null`，不带 title 的图**装载时被整节点丢掉**（打开含图文档 → 存盘 → 图没了）。一个 `$remark` 插件，在 mdast 上把 `null` 抹成 `""`。⚠️ **只读实例也要挂**（导出、分屏预览） |
+| `editor/math-macros.ts` | **physics 宏包的表**（2026-09-24）：108 条宏 + 每条一个可渲染样例，做成 KaTeX 的 `macros`；外加 `PHYSICS_EQUIVALENTS` 对照表（宏写法 vs 手写等价 TeX）。⚠️ 官方没有 physics，`katex-physics`（2019）**刻意没引**（无 LICENSE），表是我们自己写的。**能写与写不出来的逐条在 `docs/10` §12.1** |
+| `styles/applyTheme.ts` | 把**两条界面轴**写到 `<html>`（`data-ui-style` / `data-ui-mode`）。⚠️ **文档主题不在这里，它连 DOM 属性都没有** |
+| `styles/theme.css` | 两条界面轴的变量表（7 风格 × 2 明暗；`yaru-blue` 与 `yaru` 共用形状段）。⚠️ **只管外壳**；`--find-hit` / `--find-current` 是 2026-09-24 为查找高亮加的。⛔ `--font-ui` 不许有衬线、`--font-doc`（可以是衬线）只有正文能引——用户 2026-09-24：「绝对不要用衬线字体做UI字体」，机器判据在 `tools/doc-sync-check.sh` ⑥ |
+| `styles/icons.css` | 搬来的图标（`src/assets/icons/`，96 个，来路见 `THIRD-PARTY.md` §5）怎么画：`.icon` 用 `mask-image` 取形状、`background-color: currentColor` 上色（所以 SVG 里写死的 `fill` 不参与渲染）、`.icon-missing` 画虚线框、`.btn-with-icon` 补图标与文字之间的 `gap` |
+| `styles/sidebar.css` | **左侧栏**：栏本身 + 文件树 + 大纲。2026-09-24 按 1000 行规矩从 `app.css` 拆出（折叠三角进去之后超了）。⚠️ 拆的线是「**栏里的那两棵树**」：文件树与大纲的折叠（转三角、缩进、按祖孙链隐藏）是同一套写法；右侧插件栏**不在这里** |
+| `styles/bars.css` | **两条横条**（格式工具栏 + 查找条）的样式，2026-09-24 按 1000 行规矩从 `app.css` 拆出（那时 `app.css` 880 多行，正在往 931 涨）。⚠️ 拆它们是因为它们**贴着编辑区、跟着编辑模式走**，而 `app.css` 里那些是外壳骨架 |
+| `styles/editor.css` | 正文编辑区。⚠️ 排版是**用 token 写的**——文档主题改 token 就能换掉，不用抢选择器权重 |
+| `styles/doc-theme.ts` | **文档主题的限域注入器**：用 `CSSStyleSheet` 解析后把每条选择器收到 `.editor-pane` 之下。⚠️ `:root`/`html`/`body` 是**改写**成 `.editor-pane` 而不是加前缀——**这一步就是「文档主题碰不到外壳」的全部保证** |
+| `styles/themes/*.css` | 内置六套文档主题（素纸/蓝图/晨雾/报刊/墨色/松林）。⚠️ 按**普通文档 CSS** 写、**不带作用域前缀**，靠 `doc-theme.ts` 统一挂；每套必须自带一套 `--code-*` |
+| `styles/settings.css` | 偏好设置框的样式：左栏分节 + 右栏「标签在左、控件在右」的行。2026-09-23 按 1000 行规矩从 `app.css` 拆出，同日晚些改成 VMark 那套版式 |
+| `styles/dock.css` | **右侧插件栏 + 插件面板内容块**的样式（2026-09-24 按 1000 行规矩从 `app.css` 拆出）。⚠️ 拆的线是「**插件那一竖条**」：栏、卡片、面板内容节点（`.panel-*`）与它们的状态色都在这里；左侧栏在 `sidebar.css`，别混 |
+| `styles/slidev.css` | Slidev 面板的样式（`.slidev-panel` / `.slidev-status` / `.slidev-mark` / `.slidev-facts` / `.slidev-side`）。2026-09-24 按「900 行就该想怎么拆」从 `app.css` 拆出（那时 985 行）。⚠️ **必须在 `app.css` 之后加载**：`.slidev-panel` 要盖掉 `.confirm-dialog` 的 440px 宽度（同权重靠顺序） |
+| `ui/TopBar.tsx` | 顶栏：品牌字 + 菜单栏 + 最右的「插件」开关。⚠️ **纯展示、零状态**（2026-09-23 从 `App.tsx` 拆出，当时那支文件 921 行）。`hideMenuBar` 的真假由**后端返回值**决定，不是平台 |
+| `ui/TabBar.tsx` | 标签栏：脏标记 + 关闭按钮。⚠️ **纯展示、零状态**，也**不管"关之前要不要存盘"**——`confirmReq` 在 `App.tsx` 手上 |
+| `ui/MenuBar.tsx` | 菜单栏（**七栏 ＋ 插件一栏**，见 `ui/pluginMenus.ts`）。⚠️ **只管「哪一栏开着」**，条目表在 `ui/commands.ts`，灰不灰由 `App.tsx` 的 `menuHandlers` 决定；弹层与子菜单在 `ui/MenuPopup.tsx` |
+| `ui/MenuPopup.tsx` | 一栏的弹层 + 它飞出来的子菜单。⚠️ 子菜单必须 **portal 到 `body` + `position: fixed`**（父弹层要能滚，`overflow-y: auto` 会把 `overflow-x` 也算成 `auto`，飞出右边缘的子菜单会被裁成一条竖线） |
+| `ui/commands.ts` | 菜单的**条目表**（逐条抄自 Typora）+ **快捷键的唯一真源**（`accel` 字段）。⚠️ 里面**故意没有** `implemented` 标志位 |
+| `ui/accel.ts` | 快捷键的解析/显示/派发：`parseAccel` · `accelSig` · `eventAccel` · `formatAccel` · `buildAccelIndex` · `isOutsideEditor`。⚠️ 判 `e.code` 不判 `e.key`，理由见文件头 |
+| `ui/nativeMenu.ts` | 把同一份 `MENUS` 翻译成后端要的原生菜单树（macOS 兜底）。⚠️ **不碰 `muda` 的语法**——那是纯 Rust 那边的事 |
+| `ui/settings/SettingsDialog.tsx` | 偏好设置的**壳**：左栏（搜索 + 五节 + 「完成」）+ 右栏内容。⚠️ 搜索是**就地过滤**（五节叠着渲染，每行自己筛），不是跳转 |
+| `ui/settings/primitives.tsx` | 偏好设置的原语：`SettingRow` · `SettingsGroup` · `Select` · `Toggle` · `Range` · `SearchField` · `Icon`。⚠️ 搜索靠它们各自 `hits()` 比对，没有第二份索引 |
+| `ui/settings/panes.tsx` | 四节内容：外观（**界面风格 × 明暗** + 界面字号）、文档主题（只读）、编辑器、Markdown。⚠️ `STYLES` 写成 `Record<UiStyle, …>`，加风格时**编译期**就漏不掉。⚠️ 「自动保存」那节有一条**如实告知**的 `stg-note`（那个开关还没接线，见 `docs/07` 第 20 项）——接好之后**连同注释一起删掉** |
+| `ui/settings/ShortcutsPane.tsx` | 快捷键一览（只读）。⚠️ 条目**从 `MENUS` 读出来**（`walkMenuItems` 深度优先 + `formatAccel`），不是抄一份静态表 |
+| `ui/EditorPane.tsx` | 编辑区：按 `mode` 摆一到两个窗格（所见即所得 / 源码 / 分屏），管两类编辑器的挂载与去抖同步。⚠️ **分屏是单向的**：源码 → 预览，预览只读且从不回写 |
+| `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲）。⚠️ 开合与当前页都是 `App.tsx` 给的**受控**状态；**折叠状态**（哪个目录、哪个标题）反过来住在自己家里。2026-09-24 补了右上角的 × 与空态那颗「打开文件夹…」 |
+| `ui/PluginDock.tsx` | 右侧插件栏：插件声明的面板 + 已装插件清单。⚠️ 面板**内容**不在它手里——它只负责"哪些面板、哪一张打开着"，内容由 `ui/PanelBody.tsx` 现拉现画 |
+| `ui/PanelBody.tsx` | **一张插件面板的身体**（2026-09-24）：拉 `nota_plugin_panel_content` → 交给 `panel-nodes.ts` 认形状 → 按白名单画。⚠️ 拉是**每次打开都拉**，不是缓存；`nota:plugin-panel` 那条事件只是"去重拉"的信号 |
+| `ui/panel-nodes.ts` | **面板 DSL 的形状判据**（2026-09-24）：`normalise` 把后端给的 JSON 认成七种节点（`heading`/`text`/`fields`/`list`/`buttons`/`empty`/`separator`），认不出的如实变成 `unknown`。⚠️ **形状校验只在这里**——Rust 侧只管"是 JSON、有上限"，不管形状 |
+| `ui/pluginMenus.ts` | **把插件菜单项并进菜单表**（2026-09-24，backlog 第 42 项）：合成 id `__plugin:<plugin>:<command>`，插件那一列插在 `help` 之前。⚠️ **先到先得**的快捷键索引 ⇒ 内置永远赢（`docs/13` §8.3） |
+| `ui/plugin-prompt.ts` | **「点之前先问一句」的统一入口**（2026-09-24）：菜单项的 `prompt` 与面板按钮的 `prompt` 两条路都汇进 `问参数`。⚠️ 取消 ⇒ **命令根本不调**（不是调一个空参数） |
+| `ui/usePlugins.ts` | **插件那三份状态与四条命令**（2026-09-24 从 `App.tsx` 搬出）：清单 / 面板清单 / 菜单项 + 刷新。⚠️ 与 `ui/useMenus.ts` 同类——都是"从 `App.tsx` 搬走的接线层" |
+| `ui/FormatBar.tsx` | 格式工具栏（2026-09-24，`docs/07` 第 2 项）：一排按钮，**高亮读 `commandState`、点击走 `runCommand`**。⚠️ **没有自己的状态**——数据全从外面来。2026-09-24 起 9 颗按钮画图标（Folio 那套），另外 6 颗仍是文字字形（`H1`/`引`/`任`…，那套里没有对应的图） |
+| `ui/Icon.tsx` | **界面图标**（2026-09-24）：`src/assets/icons/` 里那 96 个 Folio 图标（BSD-2，`THIRD-PARTY.md` §5）当**遮罩**用——`?url` 只把网址带进 JS，形状由 CSS 取、颜色由 `currentColor` 给。⚠️ 名字表手写 + 加载时核对文件在不在（写错一个字母，类型不报，界面上只是少一颗图标） |
+| `ui/FindBar.tsx` | 查找与替换条（2026-09-24，`docs/07` 第 4 项）。⚠️ 它是**显示端 + 输入端**，不是查找的实现：命中数一律是编辑器报上来的 |
+| `ui/ConfirmDialog.tsx` | 自绘确认框（替掉 `window.confirm`）。**受控**：开与答案都由 `ui/useDialogs.ts` 给 |
+| `ui/PromptDialog.tsx` | 自绘单行输入框（2026-09-24，替掉 `window.prompt`——它在 WebKitGTK 上**默认被关掉且静默返回 `null`**）。⚠️ 挂载即聚焦 |
+| `ui/useMenus.ts` | **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出）：三条判据 → `disabledCommands` / `menuChecks` / `usingNativeMenu` |
+| `ui/useDialogs.ts` | **两个自绘对话框的"谁在等答案"**（2026-09-24 从 `App.tsx` 搬出）：两个 `useState` + 两个 resolve ref |
+| `ui/useExport.ts` | **导出与打印的接线**（2026-09-24 从 `App.tsx` 搬出）：取正文 → 取主题 → 生成 HTML → 问落点/交给系统 → 报结果。⚠️ 正文**必须从编辑器拿**（`doc.text` 是 300ms 去抖后的镜像）；主题取不到**不算失败** |
+| `ui/useDocTheme.ts` | **文档主题的应用/切换/打开目录**（2026-09-24 从 `App.tsx` 搬出）。⚠️ 与界面主题的 `applyTheme` **分家**：那条是同步写属性，这条要取回来 + 限域，节奏不一样 |
+| `ui/useEditorCommands.ts` | **把一条菜单命令送进编辑器**（2026-09-24 从 `App.tsx` 搬出）：`run` 直接转交，「插入链接」「插入图像」先问参数。⚠️ 转交时**必须看返回值**——`false` 说的是"这个模式下没实现"，不看就是"点了没反应" |
 | `ui/Home.tsx` | 没有文档时那一屏 |
-| `ui/StatusBar.tsx` | 未保存状态 + 字数四项 |
+| `ui/StatusBar.tsx` | 未保存状态 + 字数四项 + 右侧两个**只读**小标（编辑模式 / 严格模式开着） |
+| `ui/view-modes.ts` | **三种编辑模式的名字**（2026-09-24）：每个模式一长一短（状态栏用 `short`、菜单与设置用 `full`）。⚠️ **只是名字，没有切换逻辑**——切换在 `App.tsx` / `ui/commands.ts` |
 | `ui/Toasts.tsx` | 提示条 |
 | `ui/ErrorBoundary.tsx` | 渲染错误兜底 + 全局错误钩子 |
 | `ui/outline.ts` | 大纲与字数的纯函数 |
+| `ui/useSlidev.ts` | Slidev 预览的**全部编排**（2026-09-23 从 `App.tsx` 搬出）：**先过一道「装没装」的闸** → 起进程 → 轮询到端口通 → 开窗口 → 正文一变就重写入口文件。⚠️ 会话状态**只在内存里**；⚠️ `GUIDE_URL` 与它怎么核出来的都写在这里 |
+| `ui/SlidevPanel.tsx` | 「装没装」那个面板（2026-09-24）：一份 `SlidevProbe` + 四个回调，**判定的话全在后端写的 `message` 里**。⚠️ 它**不是一堵墙**——`missing` 时旁边仍留「仍然打开预览」 |
 
 `src-tauri/build.rs` 只有 `fn main() { tauri_build::build() }`，是 Tauri 的标准构建脚本
 （生成 `gen/schemas/*` 那些权限 schema），没有本项目自己的逻辑，下文不再单列。
@@ -71,28 +120,48 @@
 
 | 有 `#[cfg(test)]` 的文件 | 测试数 |
 |---|---|
-| `document/mod.rs` | 12 |
-| `themes.rs` | 7 |
+| `lua/api/ui.rs` | 18 |
+| `document/mod.rs` | 15 |
+| `slidev_probe.rs` | 10 |
+| `slidev.rs` | 10 |
+| `lua/api/http.rs` | 9 |
+| `lua/api/settings.rs` | 7 |
 | `lua/api/git.rs` | 6 |
-| `lua/api/ui.rs` | 6 |
+| `native_menu.rs` | 6 |
+| `themes.rs` | 6 |
 | `plugin/manifest.rs` | 5 |
 | `lua/api/fs.rs` | 5 |
+| `lua/mod.rs` | 5 |
+| `settings.rs` | 5 |
+| `commands/export.rs` | 5 |
 | `lua/api/mod.rs` | 4 |
-| `lua/mod.rs` | 4 |
-| `settings.rs` | 3 |
 | `commands/workspace.rs` | 3 |
+| `paths.rs` | 2 |
 
-合计 **55 个 Rust 单元测试**。其余 Rust 文件没有测试；前端**没有任何测试**
+合计 **121 个 Rust 单元测试**（2026-09-24 实测：`grep -r '#\[test\]' src-tauri/src 1 数出来 121`）。其余 Rust 文件没有测试；前端**没有任何测试**
 （`package.json` 里没有测试运行器，跑的是 `tsc --noEmit` + `vite build`）。
 `tests/` 目录下只有一个空的 `fixtures/`，还没有 Rust 集成测试。
 
 ⚠️ **总数只在 `docs/06` 记数**（那里写着一份"这 N 条到底钉住了什么"的说明）。
 本表列**逐文件**明细，是为了回答"改这个文件时哪几条会红"。
-⚠️ **本表两次落后于真值**：一次漏掉两个文件、总数停在 32（漏了 `lua/api/mod.rs`
-与 `lua/mod.rs`，而 `docs/06` 已经写到 40）；2026-09-23 又停在 45（漏了 `themes.rs` 那 7 条）。
+⚠️ **本表落后过真值三次**：一次漏掉两个文件、总数停在 32（漏了 `lua/api/mod.rs`
+与 `lua/mod.rs`，而 `docs/06` 已经写到 40）；2026-09-23 又停在 45；
+**2026-09-24 重数时又发现三处**——`native_menu.rs` 那 6 条**整行没有**（上一批说"补齐了"，
+其实只补了 `docs/06` 那边）、`settings.rs` 写 3 实 4、`themes.rs` 写 7 实 6
+（少的那条随"停止扫描 Typora 主题目录"一起删了，表没跟着改）。
 **两张表都是手抄的，这就是它们会分叉的原因。** 每次都是按
 `grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 重排的——
 **改完测试记得两边都跑一次数**，别只改一边。
+
+⚠️ **下面每个小节标题里的「N 行」同样是手抄的**，2026-09-23 一次核对发现 13 处是旧数
+（最多的 `lua/mod.rs` 差 209 行——它当年 255 行，现在 464）。别信这些数字，
+要真值就跑这一条（只打印对不上的）：
+
+```sh
+node -e 'const fs=require("fs");const t=fs.readFileSync("docs/02-modules.md","utf8");for(const m of t.matchAll(/^## `([^`]+)`（(\d+) 行）/gm)){const n=fs.readFileSync(m[1],"utf8").split("\n").length-1;if(+m[2]!==n)console.log(m[1],m[2],"->",n)}'
+```
+
+它和结构无关，只是给"这文件多大"一个量级感——**正因为无关，才最容易烂在这儿**。
 
 ---
 
@@ -118,7 +187,7 @@ fn main() {
 
 ---
 
-## `src-tauri/src/lib.rs`（130 行）
+## `src-tauri/src/lib.rs`（245 行）
 
 建 Tauri 应用、按顺序启动、注册全部命令、挂窗口事件。模块头把**启动顺序为什么是这个顺序**
 写在最上面（`docs/01-architecture.md` 把它展开讲了一遍）。
@@ -130,9 +199,12 @@ pub mod commands;
 pub mod document;
 pub mod error;
 pub mod lua;
+pub mod native_menu;
 pub mod paths;
 pub mod plugin;
 pub mod settings;
+pub mod slidev;
+pub mod slidev_probe;
 pub mod state;
 pub mod themes;
 ```
@@ -152,19 +224,30 @@ pub mod themes;
      `eprintln!("[nota] 载入 {} 个插件", plugins.count());`
    - `app.manage(AppState { documents, settings, workspace, plugins: Mutex::new(plugins) })`
    - `Ok(())`
-3. `.invoke_handler(tauri::generate_handler![ …28 项… ])`，前 27 项是 `commands::*` 里的命令
-   （document 11 / workspace 4 / settings 2 / **theme 4** / plugin 6），
-   最后一项是本文件里的 `nota_frontend_ready`
-4. `.on_window_event(|window, event| …)`：`WindowEvent::Destroyed` 时
-   `window.try_state::<AppState>()` → `state.plugins.lock()` → `host.unload_all()`。
-   给插件一次 `on_unload`，让它们有机会落盘自己的状态
-5. `.run(tauri::generate_context!()).expect("Nota 启动失败")`
+3. `.invoke_handler(tauri::generate_handler![ …38 项… ])`，前 37 项是 `commands::*` 里的命令
+   （document 11 / workspace 4 / settings 2 / theme 4 / plugin 6 / slidev 8 / menu 1 /
+   **export 2**），最后一项是本文件里的 `nota_frontend_ready`
+4. `.on_menu_event(|app, event| …)`（**2026-09-23 加**）：把 `event.id().0`
+   经 `emit("nota:native-menu", …)` 发回前端。⚠️ 这里**不执行任何命令**——
+   在 Rust 里再写一遍"哪个 id 干什么"就又成了两个真相源，而且大部分命令
+   本来就得前端执行（改 React 状态、动编辑器），这边根本没有入口
+5. `.on_window_event(|window, event| …)`：`WindowEvent::Destroyed` 时**按 `window.label()` 分派**
+   （2026-09-23 加预览窗口时才需要分派，在那之前是「任何窗口销毁都卸载全部插件」）：
+   - `"main"` → `window.try_state::<AppState>()` → `state.plugins.lock()` → `host.unload_all()`。
+     给插件一次 `on_unload`，让它们有机会落盘自己的状态；
+   - `"slidev"` → `window.try_state::<SlidevState>()` → `slidev::stop()`，再 `emit("nota:slidev-stopped")`。
+     ⚠️ 前端那个监听只负责**把菜单的勾去掉**，状态由 `useSlidev` 自己维护
+   - 别的 label → 什么也不做
+
+   ⚠️ 这一条是**读代码时发现的**：预览窗口一加进来，原先那种写法会在用户
+   叉掉预览窗时**把所有插件卸掉**。改动很小，但漏了就是静默的。
+6. `.run(tauri::generate_context!()).expect("Nota 启动失败")`
 
 失败行为逐项见 `docs/01-architecture.md` 的"每一步失败会怎样"表。要点是：
-**只有第 5 步会让进程直接死掉**，其余每一步都是"记一笔然后继续"。
+**只有第 6 步会让进程直接死掉**，其余每一步都是"记一笔然后继续"。
 
-⚠️ 第 2 步里 `AppState` 是**手写字面量**，没走 `state.rs::AppState::new()`。
-两者字段一致，但改字段时别只看其中一个。
+⚠️ 第 2 步里 `AppState` 是**手写字面量**（`state.rs` 那个结构体**没有构造函数**，2026-09-24 把没人调用的 `AppState::new` 删了——见 `state.rs` 那一节）。
+⚠️ 同一行里 `DocumentStore::new(settings.strict_markdown)` 那个**参数别漏**：标签页标题是文档仓自己算的。
 
 ### `#[tauri::command] fn nota_frontend_ready(app: tauri::AppHandle) -> Result<(), String>`
 
@@ -245,7 +328,7 @@ fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S:
 
 ---
 
-## `src-tauri/src/paths.rs`（113 行）
+## `src-tauri/src/paths.rs`（186 行）
 
 目录布局。**所有路径只在这里算**，别处一律调这里取——散落的 `dirs::config_dir()`
 是将来"换存法"时最先烂掉的地方。
@@ -264,26 +347,25 @@ XDG 目录下的子目录名。
 | `pub fn user_plugins_dir() -> Result<PathBuf>` | `data_dir()?.join("plugins")`，用户自装插件目录，也是插件状态的落点 | 透传 `data_dir` 的错 |
 | `pub fn user_themes_dir() -> Result<PathBuf>` | `config_dir()?.join("themes")`（一般 `~/.config/nota/themes`） | 透传 `config_dir` 的错 |
 
-⚠️ `user_themes_dir()` **只算路径不建目录**——`nota_themes_dir` 命令那侧才 `ensure_dir`。
+⚠️ `user_themes_dir()` **只算路径不建目录**——`nota_doc_themes_dir` 命令那侧才 `ensure_dir`。
 理由：首次启动就凭空造一个空目录，用户会以为里面该有什么东西。
+
+⚠️ **它是当前唯一的主题目录**。2026-09-23 之前这里还有个 `theme_dirs()`（三条来源，
+含 Typora 自己的两个主题目录），那版整个删了，理由见上面那一节。
 
 ⚠️ `pub fn cache_dir() -> Result<PathBuf>`（`$XDG_CACHE_HOME/nota`）**定义了但没有调用者**——
 今天没有任何东西往缓存目录写。留着是因为它是这套布局里少不得的一格，不是漏接的线。
 
-### `pub fn theme_dirs() -> Vec<(PathBuf, &'static str)>`
+### ~~`pub fn theme_dirs()`~~（**2026-09-23 整个删了**）
 
-**主题发现的三条来源**，按优先级从高到低，同名主题以靠前的为准：
+**曾经**是主题发现的三条来源（我们自己的 + Typora 的 + Typora flatpak 的），**同时**是
+`themes.rs::check_scope()` 那道围栏的依据。
 
-| 顺序 | 目录 | 来源标记 |
-|---|---|---|
-| 1 | `user_themes_dir()` = `~/.config/nota/themes` | `nota` |
-| 2 | `dirs::config_dir()/Typora/themes` | `typora` |
-| 3 | `~/.var/app/io.typora.Typora/config/Typora/themes` | `typora-flatpak` |
+用户 2026-09-23 说「请不要内置typora主题。会侵权。」「typora主题先不用兼容。」之后，
+**这个函数连同 `check_scope()` 一起删了**——扫别人的主题目录这件事本身就不做了。
 
-⚠️ 第 3 条**不是备胎**：这台机器上 Typora 就是 flatpak 装的。
-⚠️ 后两条**按 XDG 算**（`~/.config` 只是默认值），别写死字符串。
-⚠️ 这个函数**同时是安全围栏**：`themes.rs::check_scope()` 拿它逐个 `starts_with` 比对，
-`nota_theme_read` / `nota_theme_asset` 读主题目录之外的文件一律拒绝。改这里等于改围栏。
+现在只扫**一个**目录：`user_themes_dir()` = `~/.config/nota/themes`（**按 XDG 算**，
+别写死 `~/.config`）。围栏也跟着换了一种做法，见 `themes.rs::check_id`。
 （`builtin_plugins_dirs()` 那条围栏是另一套，两者都从 `paths.rs` 出去，但服务的对象不同。）
 
 ### `pub fn builtin_plugins_dirs(resource_dir: Option<&Path>) -> Vec<PathBuf>`
@@ -312,7 +394,7 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 
 ---
 
-## `src-tauri/src/state.rs`（47 行）
+## `src-tauri/src/state.rs`（46 行）
 
 应用全局状态。文件头就是**锁序不变量**的正文（`plugins → documents → settings`），
 理由与今天实际会交叉的路径见 `docs/01-architecture.md` 的"共享状态与锁顺序"。
@@ -330,14 +412,27 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 插件的 Lua 闭包需要**长期持有**它们（生命周期比任何一次命令调用都长），所以得是 `Arc`；
 `plugins` 只在宿主自己的调用栈里用，不需要共享所有权。
 
-### `pub fn new(settings: Settings, plugins: PluginHost) -> Self`
+### ⚠️ 「两个构造函数」那个隐患**真的发生了**，所以删掉了一个（2026-09-24）
 
-构造一个 `AppState`：内部自己 `Arc::new(Mutex::new(DocumentStore::new()))`、
-`Arc::new(Mutex::new(settings))`、`Arc::new(Mutex::new(None))`、`Mutex::new(plugins)`。
+这里曾经有一个 `pub fn new(settings: Settings, plugins: PluginHost) -> Self`，
+**而它没有任何调用者**（`lib.rs` 一直是手写 `AppState { … }` 字面量）。当时的判断是
+"两者字段一致，不构成 bug，只是改字段时要两处都改"——**字段那一半是对的，
+而遗漏的不止字段**：
 
-⚠️ **今天没有任何调用者。** `lib.rs` 是手写 `AppState { … }` 字面量建的。
-两者字段一致，所以不构成 bug，但改 `AppState` 字段时**必须两处都改**——
-只改这里会编译不过（好事），只改 `lib.rs` 则会留下一个悄悄过期的构造函数。
+那个构造函数里有一句 `documents.set_strict_markdown(settings.strict_markdown)`，
+是全仓**唯一**一处把开机时的标题口径传给文档仓的地方；因为它没人调用，
+**设置文件里写着 `strict_markdown = true`，开机的标签页却按宽松算**——
+不报错、不崩，只是标题的名字不对（`#标签` 被当成了标题），而且**只有真去比对
+正文和标签页才看得出来**。字段一致不代表**行为**一致。
+
+⚠️ 处置不是"把 `lib.rs` 改成调它"，而是**删掉它**：口径现在从
+`DocumentStore::new(strict_markdown)` 的**参数**进去，忘就编译不过。
+`lib.rs` 那一步的注释、`DocumentStore::new` 的文档、以及回归测试
+`建仓时就把标题口径定下来` 是这条的三道锁。
+
+📌 **可迁移的一条**：两个构造同一个东西的入口，**迟早会分叉**——
+而且分叉出来的多半不是字段，是**初始化顺序 / 副作用**那类不写在同一行的东西。
+发现"有个没人调用的构造函数"时，正确处置通常是**删掉它**，不是"记得两处都改"。
 
 ### 测试
 
@@ -345,7 +440,7 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 
 ---
 
-## `src-tauri/src/settings.rs`（167 行）
+## `src-tauri/src/settings.rs`（298 行）
 
 用户设置。文件头讲的是三条**互相独立**的外观轴（用户 2026-09-22 明确要求，别混成一条）：
 
@@ -353,10 +448,15 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
    换的不只是颜色，还包括控件形状、圆角、间距、动效、字体栈。⚠️ 它**不是**"主题"的同义词。
 2. `ui_mode` —— 明暗。`auto` 时跟随系统（Linux 走 XDG desktop portal 的 `color-scheme`）。
    这条轴在**任何**风格下都成立。
-3. `document_theme` —— **文档主题**，只管正文那一块（Typora 的 Themes 菜单）。
-   纯 CSS，用户可以在主题目录里放 `.user.css` 覆盖，不动应用外壳一分。
+3. `document_theme` —— **文档主题**，只管正文那一块。
+   纯 CSS，用户往 `~/.config/nota/themes/` 里丢一份 `<id>.css` 就能覆盖同名的内置主题，
+   **不动应用外壳一分**。
 
-落地形态见 `docs/04-ui-map.md` §外观；实现（切换界面）排在后面轮次。
+⚠️ **前两条是"界面轴"，第三条不是**（用户 2026-09-23 划的线，原话「这是文档风格，
+不是界面风格，不应该影响到UI主题」）。前两条在 `<html>` 上是 `data-ui-*` 属性、
+由 `styles/theme.css` 消费；第三条是注进 `<head>` 的一份 `<style>`、只对 `.editor-pane`
+之下生效——**连 DOM 属性都没有**。三者的切换界面也不在一处（前两条在偏好设置，
+第三条在菜单栏「主题」）。落地形态见 `docs/04-ui-map.md` §3；`docs/04` §3.3 有完整的分工表。
 
 ### `pub enum UiStyle`
 
@@ -388,6 +488,25 @@ pub enum UiMode { Auto, Light, Dark }
 
 `impl Default for UiMode` → `UiMode::Auto`。
 
+### `pub enum ViewMode`
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ViewMode { Wysiwyg, Source, Split }
+```
+
+`impl Default for ViewMode` → `ViewMode::Wysiwyg`。
+
+⚠️ **它不是第四条外观轴。** 三条外观轴（`ui_style` / `ui_mode` / `document_theme`）
+管"长什么样"，这条管"**怎么编辑**"——编辑区里摆几个窗格、谁的话算数。
+两者之间没有任何耦合，别把 `view_mode` 写进 `theme.css` 那种地方。
+
+⚠️ 加值时同时要改四处：本枚举、`src/bridge/ipc.ts` 的 `ViewMode`、
+`src/ui/commands.ts` 的「视图」栏、`docs/04-ui-map.md`。
+**默认值必须和前端 `App.tsx` 的兜底值一致**（两处都写 `wysiwyg`），
+否则老设置文件（里面根本没有这一项）打开会进错模式——见下面那条测试的注释。
+
 ### `pub struct Settings`
 
 ```rust
@@ -397,6 +516,7 @@ pub struct Settings {
     pub ui_style: UiStyle,
     pub ui_mode: UiMode,
     pub document_theme: String,
+    pub view_mode: ViewMode,
     pub ui_font_size: u32,
     pub content_width: u32,
     pub confirm_unsaved: bool,
@@ -409,6 +529,7 @@ pub struct Settings {
 | `ui_style` | `Auto` | 界面风格轴 |
 | `ui_mode` | `Auto` | 明暗轴 |
 | `document_theme` | `""` | 主题名，对应 `themes/<name>.css`。**空串表示用内置默认** |
+| `view_mode` | `Wysiwyg` | **编辑模式**：所见即所得 / 源码 / 分屏。⚠️ 不是外观轴 |
 | `ui_font_size` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
 | `content_width` | `760` | 内容区宽度上限（px），Typora 的"正文宽度" |
 | `confirm_unsaved` | `true` | 关窗口时若有未保存改动是否询问 |
@@ -447,10 +568,11 @@ pub fn save_to(&self, path: &Path) -> Result<()>
 | `默认设置能往返序列化` | `save_to` → `load_from` 后 `ui_style`/`ui_mode` 保持，且**没显式设过的字段**（`content_width`）回到默认 760 |
 | `文件不存在时回默认而不是报错` | `load_from` 对一个不存在的路径返回 `Ok`，`ui_style == Auto` |
 | `枚举落盘用_kebab_风格` | 序列化出来的文本里有 `ui_style = "macos"`（不是 `"Macos"`）。注释：**存法即接口** |
+| `编辑模式也走_kebab_而且默认是所见即所得` | 三件事：`ViewMode::default() == Wysiwyg`；落盘文本里有 `view_mode = "split"`；**没写这一项的老设置文件**（`toml::from_str("ui_style = \"macos\"\n")`）读出 `Wysiwyg`。⚠️ 专盯"改了不会编译错、只会静默变行为"的那类——默认值错了的症状是"老用户升级后打开文件发现进了源码模式" |
 
 ---
 
-## `src-tauri/src/document/mod.rs`（390 行）
+## `src-tauri/src/document/mod.rs`（639 行）
 
 文档模型与文档仓库，本仓最核心的一份文件。
 
@@ -533,14 +655,17 @@ pub struct DocumentStore {
     active: Option<DocId>,
     next_id: u64,
     untitled_count: u64,
+    /// 严格模式（`Settings::strict_markdown` 的镜像）。
+    strict_markdown: bool,
 }
 ```
 
-打开的文档集合。字段全私有，只能通过下面的方法动。`new()` 就是 `Self::default()`。
+打开的文档集合。字段全私有，只能通过下面的方法动。
+⚠️ `new()` 收**一个参数**（标题口径），不是 `Self::default()` 的别名——理由见下表。
 
 | 方法 | 签名 | 行为 / 失败 |
 |---|---|---|
-| `new` | `pub fn new() -> Self` | 空仓库 |
+| `new` | `pub fn new(strict_markdown: bool) -> Self` | 空仓库，**建仓时就把标题口径定下来**。⚠️ 它是参数而不是「建完再调一次 `set_strict_markdown`」，因为后者忘得掉、忘了不报错（2026-09-24 修的就是这个：会传它的那个构造函数没人调用，见 `state.rs` 顶上那段）。不关心口径的测试显式写 `LAX` |
 | `alloc_id`（私有） | `fn alloc_id(&mut self) -> DocId` | `next_id += 1` 后返回。**不重用** |
 | `create_untitled` | `pub fn create_untitled(&mut self) -> DocId` | `untitled_count += 1`，建一份 `path: None`、`text: ""`、标题 `未命名 {n}`、`dirty: false`、`revision: 0` 的文档，**push 进列表并设为活动** |
 | `open` | `pub fn open(&mut self, path: &Path) -> Result<DocId>` | 若已有**同一路径**的文档，**复用那一份**（把活动切过去，不改内容、不重读盘）。否则 `read_to_string`（失败 → `Read{path, source}`），标题走 `derive_title(&text, Some(path), 0)`，`dirty: false`、`revision: 0` |
@@ -554,16 +679,20 @@ pub struct DocumentStore {
 | `active_id` | `pub fn active_id(&self) -> Option<DocId>` | 活动文档的 id。**插件那侧全靠它** |
 | `set_active` | `pub fn set_active(&mut self, id: DocId) -> Result<()>` | id 不存在 → `Err(other(format!("没有这份文档：{id:?}")))`。⚠️ 注意消息里是 `{id:?}`（Debug，会打出 `DocId(3)`），而 `commands::document.rs` 里同样的意思写的是 `{}` + `id.0`（打出 `3`）。两处不一致，是消息层面的小瑕疵 |
 | `list` | `pub fn list(&self) -> &[Document]` | 全部文档，**按创建/打开顺序**（`Vec` 的顺序 = 标签栏顺序） |
+| `set_strict_markdown` | `pub fn set_strict_markdown(&mut self, strict: bool)` | 跟上开关，**并立刻重算所有已打开文档的标题**（标题是从正文猜的，两种口径看法不同）。值没变就早退。⚠️ 之后只有 `commands::settings::nota_settings_set` 调它 |
 | `has_unsaved` | `pub fn has_unsaved(&self) -> bool` | 任一份 `dirty` 就 `true` |
 
-### 测试（9）
+### 测试（10）
 
 | 测试名 | 钉住什么 |
 |---|---|
 | `标题优先取_front_matter` | front matter 的 `title:` 压过正文里的 `#` 标题 |
 | `没有_front_matter_时取第一个标题` | 取第一个 ATX 标题，且**收尾的 `##` 要去掉**（`## 小节标题 ##` → `小节标题`） |
 | `代码块里的井号不算标题` | 围栏代码块里的 `# 这是注释不是标题` 不算，取的是块外的 `# 真标题` |
-| `井号后没空格不是标题` | `#标签 不是标题` → 回退到 `未命名 7` |
+| `井号后没空格严格模式不算标题` | ⚠️ 一条**按两种口径各断一次**：严格下 `#标签` → 回退到 `未命名 7`，宽松（默认）下它是标题。同一段文本、两个结论 |
+| `井号后有空格两种模式都算标题` | 两条口径的**交点**：`# 你好` 在两边都是标题 |
+| `建仓时就把标题口径定下来` | ⚠️ **2026-09-24 那个真缺陷的回归锁**：`DocumentStore::new(STRICT)` 建出来的仓里 `#标签` 不是标题，`new(LAX)` 建出来的是。它钉的是**构造函数那个参数真的起作用**——「开机时设置到不了文档仓」正是从这里漏过去的 |
+| `切换严格模式会重算标题` | 改了开关要**当场**重算已打开文档的标题（标签页上的名字不能等下次 `sync`） |
 | `取不到就回退到文件名或未命名` | 有路径时取 stem（`/tmp/我的文档.md` → `我的文档`），没路径时 `未命名 3` |
 | `同步相同内容不动_revision` | `sync` 同内容返回原 `revision`；不同内容 `+1` 且 `dirty` 为真 |
 | `同一路径只打开一份` | 同路径 `open` 两次拿到同一个 `DocId`，列表长度 1 |
@@ -575,9 +704,10 @@ pub struct DocumentStore {
 
 ---
 
-## `src-tauri/src/commands/mod.rs`（13 行）
+## `src-tauri/src/commands/mod.rs`（17 行）
 
-只有四个 `pub mod` 声明，加一段分工说明：**这一层的职责只有三件**——取锁、调下层、
+只有八个 `pub mod` 声明（document / export / menu / plugin / settings / slidev / theme /
+workspace），加一段分工说明：**这一层的职责只有三件**——取锁、调下层、
 把错误转成人话。**业务逻辑不许写在这里**，命令函数应当短到能一眼看完。
 命名约定：命令一律 `nota_` 前缀（它不是装饰，它让前端代码里一眼分得清哪些是跨进程调用）。
 
@@ -585,7 +715,7 @@ pub struct DocumentStore {
 
 ---
 
-## `src-tauri/src/commands/document.rs`（92 行）
+## `src-tauri/src/commands/document.rs`（103 行）
 
 `nota_doc_*` 十个命令。**每个都是"锁 `documents` → 调 `DocumentStore` → 返回"**，
 没有一个函数超过 10 行。
@@ -656,8 +786,11 @@ pub struct TreeNode {
 
 `depth` 是递归层数上限，前端按侧栏展开状态分段请求（先 1 层，展开某个目录时再要那一支）。
 **不做整棵树一次拉完**——大仓库（几万个文件）那样会卡住界面。
-⚠️ 前端今天**只请求 `depth = 1`，而且目录节点不可展开**（`Sidebar` 里目录只渲染一个
-`<span>`）。所以 `depth > 1` 那条递归分支**今天没有调用者**，它的测试是唯一的使用者。
+⚠️ 前端每次**都只请求 `depth = 1`**（2026-09-24 起才算真的用上）：目录节点**可以展开**
+（`ui/Sidebar.tsx` 的 `FileTree.toggle`），展开时对**那个子目录**再发一次 `depth = 1`，
+把结果缓存在 `Sidebar` 本地的 `kids` 里（不回写 App 那棵树）。所以 `depth > 1` 那条
+递归分支**仍然没有调用者**（`sub_path` 那条路是硬要走通的路，不是递归），
+它的测试是唯一的使用者。
 
 ### `fn read_dir_sorted(dir: &Path, rel: &Path, depth: u32) -> Vec<TreeNode>`（私有）
 
@@ -693,7 +826,7 @@ pub struct TreeNode {
 
 ---
 
-## `src-tauri/src/commands/settings.rs`（33 行）
+## `src-tauri/src/commands/settings.rs`（46 行）
 
 | 签名 | 行为 / 失败 |
 |---|---|
@@ -717,91 +850,88 @@ pub struct TreeNode {
 
 ---
 
-## `src-tauri/src/themes.rs`（366 行）
+## `src-tauri/src/themes.rs`（349 行）
 
-**Typora 主题兼容的后端那一半**：发现有哪些主题、把文件读出来。
-⚠️ 改造（收拢到 `#write`、展开 `@import`、内联 url）**不在后端**，在前端
-`src/styles/typora-theme.ts`——后端只负责"把文本交出去"。
-这条分工的理由写在那个文件顶上：改造要用**浏览器的 CSS 解析器**，而后端没有。
+**文档主题的后端那一半**：发现有哪些主题、把某个主题的 CSS 读出来。
+⚠️ **限域（把选择器收到 `.editor-pane` 之下）不在后端**，在前端 `src/styles/doc-theme.ts`——
+后端只负责"把文本交出去"。这条分工的理由写在那个文件顶上：改造要用**浏览器的 CSS 解析器**，
+而后端没有。
 
-### 文件头那段"为什么字体也不走 asset 协议"（**实测判据，改之前必读**）
+⛔ **文件头写着三件事，改之前必读**：三条外观轴的分工表、「不兼容也不内置 Typora 主题」的版权红线、
+以及 `check_id` 那道安全边界。
 
-按原设计，主题里 `url('./x.woff2')` 换成 `convertFileSrc()` 的 asset 协议地址。
-实测**取不回字体**：`document.fonts.load()` 抛 `NetworkError`。
-根因在 `wry 0.55.1`——它注册自定义协议时调了 `register_uri_scheme_as_secure`，
-**没调** `register_uri_scheme_as_cors_enabled`，而 `@font-face` 发的是 **CORS 模式**的请求。
-所以 `nota_theme_asset` 改成**读盘 + base64 内联成 data: URL** 返回。
+### `pub struct DocThemeInfo`
 
-⚠️ 验证时踩过一个坑，别重蹈：拿 `github.css` 验**测不出区别**，因为它的第一条
-`@font-face` 写的是 `local('Open Sans Regular')`，而容器里装着 Open Sans，
-**字体压根不会被请求**。要验得用一个去掉 `local()` 的探针主题。
+⚠️ 字段与 `src/bridge/ipc.ts` 的 `DocThemeInfo` **手抄两份**，改一边必须同批改另一边。
+只有三个字段：`id`（键）、`name`（**显示名，可以是中文**）、`builtin`（是不是内置那六套）。
 
-### `pub struct ThemeInfo`
+⚠️ **`id` 和 `name` 是两码事**：`id` 是文件名去掉 `.css`，受 `check_id` 的形状约束，
+**只能是 ASCII 字母数字与 `-` `_`**；`name` 是给人看的。内置那六套两者不同
+（`paper` ↔ 素纸）；用户自己丢的文件两者相同。文件头里有中文文件名的取舍说明。
 
-⚠️ 字段与 `src/bridge/ipc.ts` 的 `ThemeInfo` **手抄两份**，改一边必须同批改另一边。
-`name`（文件名去掉 `.css`）既是显示名也是唯一键；`source` ∈ `nota` / `typora` / `typora-flatpak`；
-`css` 是该文件的绝对路径；`dir` 是它所在目录；`has_assets` 表示有没有同名资源目录。
+### `pub fn discover() -> Vec<DocThemeInfo>`
 
-### `pub fn discover() -> Vec<ThemeInfo>`
+**内置六套按 `BUILTIN` 表的顺序排在最前**（用 `include_str!` 编进二进制，所以新装的机器上
+主题菜单不是空的，而且**一份第三方 CSS 都不带**），后面接用户目录里多出来的，按 id 排序。
 
-扫 `paths::theme_dirs()` 三条目录。⚠️ **目录不存在不是错**——不装 Typora 的机器就是这种情况，
-返回空表。同名主题**以靠前的来源为准**（后面的直接跳过），所以用户自己的那份能盖掉 Typora 的。
+⚠️ 用户文件与内置**同名时不是删掉内置再追加**——是**就地翻掉 `builtin` 标记**。
+这样那一条还留在菜单原来的位置上，不会因为"我改了一下素纸"就跳到列表末尾。
 
-### `pub fn read_css(path: &Path) -> Result<String>` / `pub fn read_asset(path: &Path) -> Result<String>`
+⚠️ **目录不存在不是错**（`user_ids()` 里 `read_dir` 失败一律当空表），`*.css` 之外的后缀一律不看。
 
-两个都是「先 `check_scope` 再 `check_size` 再读」。差别只有一个：
-`read_asset` 把字节 **base64（STANDARD 字母表）** 编码，拼成 `data:{mime};base64,{…}`。
+### `pub fn css_of(id: &str) -> Result<String>`
 
-⚠️ 两个上限常量是有意的：`MAX_CSS_BYTES` = **2 MiB**、`MAX_ASSET_BYTES` = **4 MiB**。
-挡的是"用户往主题目录里丢了个大文件，读进来把内存吃光"——资源那档比 CSS 宽，
-是因为字体动辄 200 KB、图片可能上 MB，**但不能不设**：内联成 data: URL 之后
-这些东西要整个过一遍 IPC 并在内存里多留一份（base64 还要涨 1/3），
-没有上限就等于把一个"读任意大文件"的口子开在了主题菜单上。
-`mime_of()` 按扩展名给 MIME，认不出的一律 `application/octet-stream`。
+先 `check_id`，再「用户文件存在就用它，否则查 `BUILTIN`」，**两边都没有就报错**。
+⚠️ **报错而不是给空串**：给空串的话界面会安静地变成"没样式的裸 HTML"，
+用户根本不知道是自己把文件删了。有一条用例专门钉这个。
 
-### `fn check_scope(path: &Path) -> Result<()>`（私有）
+⚠️ 读用户文件前要过 `check_size`，上限 `MAX_CSS_BYTES` = **2 MiB**。挡的是"往主题目录里
+丢了个大文件，读进来把内存吃光"——这份文本要整个过一遍 IPC。
 
-把路径与 `paths::theme_dirs()` 的每一条逐个 `starts_with` 比对，都不中就是
-`NotaError::other("… 不在任何主题目录里，拒绝读取")`。**这是主题功能的唯一一道围栏**——
-`nota_theme_read` / `nota_theme_asset` 都能读任意文件，全靠这里挡住。
-⚠️ `starts_with` 是**按路径分量**比的（不是字符串前缀），所以 `.../themes-evil/` 这种
-"前缀像主题目录的兄弟目录"不算数——有一条用例专门钉它。
+### `fn check_id(id: &str) -> Result<()>`（私有）
+
+**这是文档主题唯一的围栏。** 只放行 **ASCII 字母数字与 `-` `_`**（长度 1..=64），
+因为路径是拿它拼出来的（`<主题目录>/<id>.css`）。
+
+⚠️ **白名单而不是黑名单**："过滤掉 `..`"那种写法要考虑分隔符、编码、大小写各种花样，
+白名单是"不在表里的一个都不放行"，**结构上更难绕过**。
+⚠️ 代价是**中文文件名用不了**，这是有意的取舍——显示名在文件里写着，文件名只是个键。
+⚠️ 这个做法比上一版的"传路径 + 目录前缀检查"**更强**：那版没有漏洞，但这一版
+前端**根本没有**"让后端读任意文件"的能力，是结构上不可能出错。
 
 ### `pub fn user_themes_dir() -> Result<String>`
 
-转发 `paths::user_themes_dir()` 再 `ensure_dir`——「打开主题文件夹」这个动作
-要求目录真的存在。**返回 `String` 而不是 `PathBuf`**：它的唯一去处是要交给前端/opener 的。
+转发 `paths::user_themes_dir()` 再 `ensure_dir`——「打开主题文件夹」这个动作要求目录真的存在。
+**返回 `String` 而不是 `PathBuf`**：它的唯一去处是要交给前端/opener 的。
 
-### 测试（7）
+### 测试（6）
 
 | 用例 | 钉住什么 |
 |---|---|
-| `扫出_css_并认出同名资源目录` | 只认 `.css`；同名目录存在时 `has_assets = true` |
-| `靠前的目录覆盖同名的` | `theme_dirs()` 的优先级真的生效 |
-| `目录不存在时返回空表而不是报错` | ⚠️ **"扫不到"不是错**——不装 Typora 的机器就是这种情况 |
-| `拒绝读主题目录之外的文件` | `check_scope` 挡住 `/etc/…` 之类 |
-| `拒绝读主题目录之外的资源` | 同上，走 `read_asset` 那条路 |
-| `前缀像主题目录的兄弟目录不算数` | ⚠️ 钉的是"按**路径分量**比不是按字符串前缀比" |
-| `资源读成_data_url_而不是路径` | `mime_of` 的映射（含**大写扩展名** `.PNG` → `image/png`、认不出的 → octet-stream）+ base64 的字母表口径（`STANDARD.encode([0,1,2,253]) == "AAEC/Q=="`——⚠️ **这条钉的是"`+` `/` 用得上"**，换成 URL-safe 字母表会得到另一个答案） |
+| `内置主题的_id_与文件名一一对应` | ⚠️ `BUILTIN` 表里的 `id` 真能在 `src/styles/themes/` 下找到同名文件 |
+| `内置主题不碰界面变量` | ⚠️⚠️ **本仓库最重要的一条主题用例**。逐份扫内置 CSS，不许出现 `--ui-font-size` / `--font-ui` / `--sidebar-width` / `--dock-width` / `--toolbar-height` / `--statusbar-height` / `--shadow` / `--nota-bridge`。**它就是「文档主题碰不到外壳」这条线的机器判据**——没有它，哪天有人图省事在主题里加一条界面变量，谁都不会发现 |
+| `内置主题都带自己的一套代码高亮` | 每份都要有 `--code-*`。⚠️ 代码块底色是主题挑的，缺了会"深底配深字" |
+| `拒绝形状不对的_id` | `check_id` 挡住 `../x`、`a/b`、空串、超长、中文 |
+| `取一份不存在的主题要报错而不是给空串` | ⚠️ 静默降级成裸 HTML 是这里最坏的结果 |
+| `目录不存在时清单只剩内置的` | ⚠️ 没装过任何主题的机器就是这种情况，**不是错** |
 
 ---
 
-## `src-tauri/src/commands/theme.rs`（37 行）
+## `src-tauri/src/commands/theme.rs`（36 行）
 
-四条命令，对应界面上四个动作。**都是薄壳**，逻辑全在 `themes.rs`。
+三条命令，对应界面上三个动作。**都是薄壳**，逻辑全在 `themes.rs`。
 
 | 签名 | 行为 / 失败 |
 |---|---|
-| `pub fn nota_themes_list() -> Vec<ThemeInfo>` | `themes::discover()`。⚠️ **返回 `Vec` 不是 `Result`**——扫不到主题不是错 |
-| `pub fn nota_theme_read(path: String) -> Result<String>` | `themes::read_css()`。返回**文本**不是渲染结果，改造在前端做 |
-| `pub fn nota_theme_asset(path: String) -> Result<String>` | `themes::read_asset()`。返回 **data: URL**。⚠️ 调用方要把它**原样塞进 `url("…")`**，别当路径处理 |
-| `pub fn nota_themes_dir() -> Result<String>` | `themes::user_themes_dir()`，**建好**再返回，给「打开主题文件夹」用。⚠️ 返回 `String` 是因为要给前端/opener 插件 |
+| `pub fn nota_doc_themes() -> Vec<DocThemeInfo>` | `themes::discover()`。⚠️ **返回 `Vec` 不是 `Result`**——扫不到主题不是错 |
+| `pub fn nota_doc_theme_css(id: String) -> Result<String>` | `themes::css_of(&id)`。返回**文本**不是渲染结果，限域在前端做。⚠️ **入参是 id 不是路径** |
+| `pub fn nota_doc_themes_dir() -> Result<String>` | `themes::user_themes_dir()`，**建好**再返回，给「打开主题文件夹」用。⚠️ 返回 `String` 是因为要给前端/opener 插件 |
 
 无测试（逻辑都在 `themes.rs`，测试也在那边）。
 
 ---
 
-## `src-tauri/src/commands/plugin.rs`（96 行）
+## `src-tauri/src/commands/plugin.rs`（133 行）
 
 | 签名 | 行为 / 失败 |
 |---|---|
@@ -841,7 +971,237 @@ pub struct TreeNode {
 
 ---
 
-## `src-tauri/src/plugin/mod.rs`（356 行）
+## `src-tauri/src/commands/menu.rs`（24 行）
+
+一个命令，把前端推来的原生菜单树交给 `native_menu::apply()`。
+
+### `nota_native_menu_apply(app, nodes: Vec<NativeMenuNode>) -> Result<bool, String>`
+
+返回 `bool` 而不是 `()`：**前端要靠这个返回值决定要不要隐藏自绘菜单栏**。
+`ok == false` 表示"没挂上"（非 macOS，或者 Tauri 那边报错），
+前端就继续用自绘的那套——**而不是变成"一个菜单都没有"**。
+
+---
+
+## `src-tauri/src/commands/export.rs`（184 行）
+
+导出与打印的**落盘那一步**。两个命令，都是薄的：
+
+| 命令 | 干什么 |
+|---|---|
+| `nota_export_write(path, content) -> Result<String>` | 把前端生成好的 HTML 写到用户选的路径，返回**真实写出去的路径** |
+| `nota_export_print(app, doc_path, title, content) -> Result<String>` | 写到落点，再 `opener` 交给系统默认程序。返回那个落点 |
+
+### ⚠️ 为什么 HTML 不在这里生成
+
+生成要跑一遍 Markdown → DOM。后端要做，就只能另写一个序列化器，或者拉起一个
+无头 webview——两条都是**第二套渲染路径**，和屏幕上那份迟早不一样。所以这里
+只收字符串、只落盘。
+
+### `fn 打印落点(doc_path: Option<&str>, title: &str) -> PathBuf`（私有）
+
+| 情况 | 落点 |
+|---|---|
+| 有文档路径 | **文档自己那个目录**下的 `.nota-print.html` |
+| 没有（未保存的新文档） | `<系统临时目录>/nota-print-<洗干净的标题>.html` |
+
+⚠️ **落在文档目录是有意的，不是图省事**：正文里 `![](./img.png)` 是相对路径，
+换个目录图片就全丢了。代价是会在用户目录里留下一个点开头的隐藏文件——和 Slidev 的
+`.nota-slidev-<id>.md` 是同一类取舍：**名字带点、不污染目录列表**。
+
+### `fn 清文件名(title: &str) -> String`（私有）
+
+把 `/ \ : * ? " < > |` 换成 `-`。⚠️ **洗成空串、或者只剩横杠时给「未命名」**：
+不这样的话 `title = "/"` 会造出一个叫 `-`（或 `nota-print-.html`）的文件——一个
+既有隐藏属性、名字里又没有任何信息的东西。
+
+### 测试（5）
+
+覆盖：落点跟文档目录走 / 没文档路径就落临时目录 / 标题里的分隔符被换掉（不会
+拼出子目录）/ 洗成空串或只剩横杠不留下无信息文件 / **写出去的字节与给进来的一模一样**。
+最后一条是打印之外那一类"只要透明"的接口该有的底线。
+
+---
+
+## `src-tauri/src/slidev.rs`（638 行）
+
+Slidev 预览服务器的**生命周期**。文件头讲了四件事：为什么是「起服务器 + 开窗口」而不是自己画幻灯片、
+同步为什么不靠消息而靠 Slidev 自己盯文件、**四条实测结论**（2026-09-23 跑真 Slidev 53.0.0 跑出来的）、
+以及锁只有一把、且不能带过 `close()` 那条规矩。
+⚠️ 2026-09-24 起**「装没装」那半不在这个文件里了**（`slidev_probe.rs`）；两边共用的只有
+`command_from_env()` / `split_command()` / `kill_group()` 三件小事（`pub(crate)`）。
+
+### 公开接口
+
+| 函数 | 签名 | 说明 |
+|---|---|---|
+| `SlidevState` | `pub struct SlidevState(pub Mutex<Option<Server>>)` | Tauri 的托管状态。⚠️ **不放进 `AppState`**——那四个句柄的锁序不变量是给文档/插件用的，这个是子进程 |
+| `SlidevInfo` | `{ port: u16, url: String, entry: String, doc_id: DocId }` | 给前端的快照。⚠️ `url` 是 `http://localhost:{port}/`（**不是** `127.0.0.1`，见下） |
+| `start` | `(state, entry_dir: Option<PathBuf>, doc_id, markdown: &str) -> Result<SlidevInfo>` | 挑端口 → 写入口 → 起进程。**不等端口** |
+| `sync` | `(state, markdown: &str) -> Result<()>` | 整份重写入口文件。⚠️ **没在跑时是空操作 `Ok(())`**，不是错误——前端不需要先查状态 |
+| `probe` | `(state) -> bool` | 端口通了没有。⚠️ 带 **300ms** 超时，前端每 500ms 调一次，所以它必须快 |
+| `log_tail` | `(state) -> String` | 进程输出最后 30 行。**启动失败时前端整段端给用户**——缺主题、端口被占这类病因只有 Slidev 自己说得准 |
+| `stop` | `(state)` | 杀进程组 + 删入口 + 清状态。⚠️ 先 `take()` 再**在锁外** drop（`Drop` 里要杀进程，不该占着锁） |
+| `status` | `(state) -> Option<SlidevInfo>` | 当前会话。前端热重载后靠它把界面状态接回来 |
+
+### 内部
+
+| 函数 | 做什么 |
+|---|---|
+| `pick_port()` | 绑 `[::1]:0` 问内核要一个，放开，再确认 v4 上也是空的（⚠️ 两套栈都要试，因为 Slidev 只绑 v6 而别的工具可能只占 v4） |
+| `probe_addrs(port)` | 探活地址表：`localhost` 解析结果 + 显式 `::1` + `127.0.0.1` |
+| `choose_entry(dir, doc_id, markdown)` | 入口路径。**文档目录优先**，写不进去（未存盘 / 只读目录）退回 `~/.local/share/nota/slidev/` |
+| `entry_name(doc_id)` | `.nota-slidev-<id>.md`。⚠️ 点开头：文件管理器默认不显示，也不容易和用户的 `slides.md` 撞名 |
+| `spawn_with(cmd, entry, port)` | 真正起进程的那段（可测）。`--port` `--no-open`、`BROWSER=none`、`NO_COLOR=1`、`process_group(0)`、两根管道都抽干。⚠️ 命令串经 `split_command` 拆，命令本身来自 `command_from_env()`（`NOTA_SLIDEV_CMD` 或 `DEFAULT_CMD`） |
+| `kill_tree(child)` | 杀**整个进程组**。⚠️ 进程链是三层（`sh` → `npm exec` → `node`），只杀 child 会留下 node 继续占着端口 |
+
+### ⚠️ 两个容易写错的地方
+
+- **`--no-open` 不是 `--open false`**：后者那个 `false` 是个**非空字符串**，会被 Slidev 当成"要打开的路径"。
+- **只绑 `[::1]`**：`ss -ltnp` 显示 `[::1]:4123`，`curl 127.0.0.1:4123` 不通、`curl localhost:4123` 通。给窗口的 URL 因此写 `localhost`（`127.0.0.1` 在某些机器上会连不上）。
+
+### 测试（10 条）
+
+挑端口（两套栈都得空）· 入口名是点文件 · 未存盘退回数据目录 · 入口名跟着文档走（不互相覆盖）·
+同步是**整份替换**不是追加 · 没在跑时同步是空操作 · 日志环只留最后几行 ·
+杀的是进程组不是那个壳 · 收摊之后进程真没了 · 命令不存在时报人话。
+⚠️ 最后那条**探测那半**的用例留在这儿（它验的是 `start` 这条路）；
+探测自己的 10 条在 `slidev_probe.rs`。
+
+---
+
+## `src-tauri/src/slidev_probe.rs`（461 行）
+
+**「本机装没装 Slidev」**——点「视图 → Slidev 预览」之后那个面板背后的一次探测。
+2026-09-24 从 `slidev.rs` 拆出来（那时那边 1023 行、超了 1000，见 `docs/09` §4）。
+拆的判据是**职责**：`slidev.rs` 管「起一个预览会话」，这里管「**现在这一下能不能起**」——
+只在点菜单那一刻跑一次，不起服务器、不碰会话状态。
+
+### 它回答的是什么，以及为什么不能换个便宜的问法
+
+要回答的是**「现在这一下能不能跑起来」**，不是「npm 上有没有这个包」。
+后者一定会下几百 MB，而用户只是点了一下菜单。所以做法是**跑 `start` 会跑的那条同一条命令**
+（`NOTA_SLIDEV_CMD` 或 `DEFAULT_CMD`）、**同一个 cwd**（文档所在目录），末尾加 `--version`，
+并给 npm 上 `npm_config_offline=true`（cache mode = `only-if-cached`）。
+⚠️ **两条路都不碰网络**，实测：缓存命中 **1.296 秒** → 吐 `53.0.0`；没命中 **0.256 秒** → `npm error code ENOTCACHED`。
+
+⚠️ **判据是两条同时成立**（这是 2026-09-24 踩出来的第二道闸）：CLI 离线拿得到 **且**
+文档目录**向上逐层**找得到 `node_modules/@slidev/theme-*`。
+因为 `@slidev/cli` **不依赖** `@slidev/theme-default`（官方脚手架模板才依赖），
+空目录里起它**立刻退出**：`The theme "@slidev/theme-default" was not found…`。
+向上找是必须的——Node 解析 `node_modules` 就是这么走的。
+
+### 接口
+
+| 名字 | 签名 | 说明 |
+|---|---|---|
+| `SlidevProbe` | `{ state, command, version, message, detail, project_dir }` | 给面板的报告。⚠️ **判定的话全在 `message`（中文，后端写的）**，前端只按 `state` 摆按钮 |
+| `ProbeState` | `Ready` \| `Missing` \| `Unknown` | `serde(rename_all = "kebab-case")`。⚠️ `Unknown` **不等于没装**（自定义命令挂住之类），文案要说清 |
+| `probe_install` | `(Option<&Path>) -> SlidevProbe` | 唯一入口，**纯函数式**：不改任何状态、不起服务器 |
+| `theme_installed` | `(dir: &Path) -> bool` | 向上逐层找 `node_modules/@slidev/theme-*` |
+| `run_version` | `(program, args, cwd, timeout) -> Check` | 起进程 + 限时。⚠️ 不用 `wait_timeout`：`process_group(0)` 起、拿 `pid`、`recv_timeout(20s)`，超了 `kill_group(pid)` **杀整个组**（自定义命令可能是 `npm run dev` 那种壳） |
+| `last_line` / `tail_of` | `(&str) -> Option<String>` / `String` | 取输出的最后一行 / 末尾 8 行（每行截到 200 列）。多了面板撑爆，少了看不出病因 |
+
+### 测试（10 条）
+
+默认命令不再自动装包（⚠️ `--yes` 一旦回来，"没装"就变成一次几百 MB 的下载）· 拆命令按空白分词 ·
+主题装没装看的是项目里的 `node_modules` · 主题在**上一层**父目录里也一样算 ·
+没装 node 时探测点名 node · 命令能报版本但文档没存盘时仍然拦住 ·
+命令和主题都在才说可以打开 · 光有命令没有主题也拦住且说清缺什么 ·
+自定义命令挂住时**超时**而不是一直等 · 报错时留的是**末尾几行**而不是整篇。
+
+⚠️ 这些是**真起进程**（`printf` 当假 CLI、`sleep` 当挂住的自定义命令），没有 mock——
+探测的全部风险就在"真程序在真系统上怎么反应"。
+
+---
+
+## `src-tauri/src/commands/slidev.rs`（192 行）
+
+八条命令，**只有接线**：取锁、问文档目录、开/关窗口。真正的活在 `slidev.rs` 与 `slidev_probe.rs` 里。
+⚠️ 命令层要真跑就得起一个 Tauri 应用实例，测不出什么——所以这里**故意没有测试**，
+而那十条有意义的都在 `slidev.rs`。
+
+| 命令 | 签名 | 说明 |
+|---|---|---|
+| `nota_slidev_start` | `(SlidevState, AppState, doc_id: DocId, markdown: String) -> Result<SlidevInfo>` | 先从 `documents` 里问出文档的父目录（只对**已存盘**的文档有值），再交给 `slidev::start` |
+| `nota_slidev_probe_install` | `(AppHandle, DocId) -> Result<SlidevProbe>` | ⚠️ **唯一异步的一条**：探测要起进程、最长 20 秒，所以走 `tauri::async_runtime::spawn_blocking`（在主线程上等就是冻界面，同 `start` 那条口径）。**不改任何状态** |
+| `nota_slidev_probe` | `(SlidevState) -> bool` | 端口通了没有。直接转发 |
+| `nota_slidev_log` | `(SlidevState) -> String` | 直接转发 |
+| `nota_slidev_status` | `(SlidevState) -> Option<SlidevInfo>` | 直接转发 |
+| `nota_slidev_open_window` | `(AppHandle, SlidevState) -> Result<()>` | 开预览窗（已开则 `set_focus`）。⚠️ 窗口**开在 Rust 这边**是因为位置要读主窗口几何，而且"窗口和服务器同生共死"就不必跨进程传 |
+| `nota_slidev_sync` | `(SlidevState, markdown: String) -> Result<()>` | 直接转发 |
+| `nota_slidev_stop` | `(AppHandle, SlidevState) -> Result<()>` | `slidev::stop` **然后** `close_window`。⚠️ **顺序不能反**：关窗口会同步触发 `Destroyed`，那个回调**也要**这把锁，反了就是同线程重入 |
+
+### ⚠️ 两个常量必须和三处对齐
+
+`WINDOW = "slidev"`：这个 label 出现在**三个地方**——这里、`lib.rs` 里
+`Destroyed` 分支认的字符串、前端的口头约定。改成别的**不会报错**，只会让
+"关预览窗 → 收服务器"那条链静默断掉（服务器留着，菜单还勾着）。
+
+`MAIN = "main"`：取自 `tauri.conf.json` 的 `app.windows[0].label`。
+
+### 三个私有函数
+
+- `entry_dir(app, doc_id) -> Option<PathBuf>`：从 `documents` 里问出文档的父目录（只对**已存盘**的文档有值）。
+  ⚠️ **`start` 和 `probe_install` 必须走同一份**——两边各自去问的话，探测说的"目录"和真起进程用的目录
+  就可能不是同一个，那这个面板还不如不做。
+
+
+- `open_window(app, url)`：已有窗口就 `set_focus` 不开第二个（多开会出现"两个窗口跟着同一份文件变"的怪相）。
+- `right_of_main(app) -> (f64, f64)`：贴主窗口右边，留 8 像素。⚠️ **单位是逻辑像素**——`position()` 吃逻辑值，而 `outer_position()` / `outer_size()` 给的是物理值，中间必须过一遍 `scale_factor`，否则 2 倍屏上窗口跑到两倍远。问不到几何时返回 `(0, 0)` 而**不报错**：窗口出现在哪儿是小事，因为定位失败就让整场预览起不来才是大事。
+
+---
+
+## `src-tauri/src/native_menu.rs`（492 行）
+
+**原生菜单（macOS 兜底）。** 用户 2026-09-23 拍板「两套都要：自绘为主，
+加原生菜单兜底」。形状与自绘菜单同源（同一份 `MENUS`），见 `docs/04` §2.1c。
+
+### ⚠️ 用 `cfg!` 不用 `#[cfg]`
+
+```rust
+if !cfg!(target_os = "macos") { return Ok(false); }
+```
+
+这样**这份代码在 Linux 开发机上也照样过类型检查**。写成 `#[cfg(target_os)]`
+的话，macOS 专属的代码在开发机上从来没被编译过，等到打包那天一次性爆一堆错。
+
+### ⚠️ 加速器转换是最容易出错的一环
+
+| 输入（`commands.ts`） | 输出（muda） | 为什么 |
+|---|---|---|
+| `Ctrl+S` | `CmdOrCtrl+S` | muda 的 `CTRL` 在 macOS 上是**真的 Control 键**，用户按的是 ⌘ |
+| `Alt+↑` | `Alt+Up` | 箭头**只认 Code 名**（`UP`/`ARROWUP`），**不认 `↑` 这个字形**；`native_key()` 负责把字形折成名字 |
+| `Ctrl+Shift+1`…`9` | `CmdOrCtrl+Shift+1` | 数字收字面量，也收 `Digit1` |
+| 认不出的写法 | `None` | **返回 `None` 而不是瞎猜**，并 `eprintln!` 记一笔 |
+
+⚠️ **灰掉的项一律不带快捷键**（`leaf_accel()` 对禁用项返回 `None`）。
+这不是省事：**AppKit 连禁用的项也参与快捷键匹配**——灰着的 `⌘C` 会把系统复制
+吃掉，灰着的 `⌥↑/⌥↓` 会把段落导航吃掉。
+
+### macOS 上多一个应用菜单
+
+`build()` 在最前面插一个 app 子菜单（关于 / 服务 / 隐藏 / 隐藏其他 / 显示全部 /
+退出）——那是 macOS 的规矩，缺了它「关于」和「退出」就没有落脚处。
+**只在 macOS 插**，别的平台插了会多出一栏莫名其妙的东西。
+
+### 测试（6 个）
+
+| 测试 | 盯什么 |
+|---|---|
+| `全部键位都转得出来` | 50 对**手抄**的 `accel → muda 串`，一条都不许漏。⚠️ 抄的源是 `grep -c "accel:" src/ui/commands.ts`（2026-09-23 三种编辑模式让这个数从 48 变 50） |
+| `手抄的表和_commands_ts_一样多` | 上面那张表与 `commands.ts` 的条数一致——**加了菜单项忘了补测试会在这里响** |
+| `ctrl_转成_cmdorctrl_而不是真的_control` | 上面那条 macOS 陷阱 |
+| `拿不准的一律不放行` | 认不出的写法必须返回 `None` |
+| `灰掉的项不带快捷键` | AppKit 那条陷阱 |
+| `分隔线不看别的字段` | `"sep"` 只出分隔线 |
+
+⚠️ 断言 `!"CmdOrCtrl+S".contains("Ctrl+")` 这种**是错的**——`"CmdOrCtrl+S"`
+里**真的有** `Ctrl+` 这个子串。测试里为这条留了注释。
+
+---
+
+## `src-tauri/src/plugin/mod.rs`（434 行）
 
 插件宿主：**发现 → 加载 → 派发 → 卸载**。
 
@@ -884,6 +1244,45 @@ pub struct PluginInfo {
 ⚠️ `state` 是 `String` 不是枚举。前端 `ipc.ts` 那边写成联合类型
 `"loaded" | "failed" | "disabled"`，两边的字面量必须一致——加一个状态要改两处。
 
+### `pub struct PluginPanel` / `PluginMenuItem` / `PluginPrompt`
+
+三个都是**给前端看的只读快照**（`Serialize`），字段名与 `ipc.ts` 那边一一对应，
+⚠️ **两份手抄的定义**。
+
+```rust
+pub struct PluginPanel {
+    pub plugin: String, pub id: String, pub title: String,
+    pub icon: Option<String>,
+    /// `right`（默认）/ `left`。认不出的值前端当地址用，宿主不拦。
+    pub location: String,
+}
+
+pub struct PluginMenuItem {
+    pub plugin: String, pub label: String,
+    /// 点下去要调的**命令名**，前端拿去配 `nota_plugin_call(plugin, command)`
+    pub command: String,
+    pub menu: String,                        // plugins / file / format …
+    pub accelerator: Option<String>,
+    pub prompt: Option<PluginPrompt>,        // None = 直接跑
+}
+
+pub struct PluginPrompt {
+    pub arg: String,                         // 填的值放进 args 的哪个键
+    pub label: String, pub placeholder: String, pub hint: String,
+    pub secret: bool,                        // 画成密码框；⚠️ 只遮屏幕
+}
+```
+
+⚠️ `PluginPanel` 里**没有 `render`**——`render` 是函数，只活在 registry 里。
+清单回答"有哪些面板"，内容回答"这个面板现在长什么样"，**两个问题两条路**
+（[docs/12](12-plugin-runtime.md) §4.6）。
+
+⚠️⚠️ **`PluginPrompt` 有两份实现，字段名必须一样**：菜单项那一份在**本文件**
+（`读提示`，因为 registry 里存的是一张原表，过不了 `Serialize`）；面板按钮那一份在
+**前端**（`ui/panel-nodes.ts::提示`）——面板内容走 `剥成_json`，那边只保证"是 JSON、
+有上限"，**不认形状**。两条路最后都汇进 `ui/plugin-prompt.ts::问参数`，
+所以字段名或默认值不一致的话，**同一个 `prompt` 写在菜单里和写在面板上会是两种表现**。
+
 ### `pub struct PluginHost`
 
 ```rust
@@ -906,7 +1305,8 @@ pub struct PluginHost {
 | `call_command` | `pub fn call_command(&self, plugin_id: &str, command: &str, args: mlua::Value) -> Result<mlua::Value>` | 没有插件 → `Err(other)`；在 `disabled` 里 → `Err(other("插件 {plugin_id} 已被禁用"))`；`Loaded` → 交给 `LuaPlugin::call_command`；`Failed(e)` → `Err(other("插件 {plugin_id} 加载失败，无法执行命令：{e}"))`；`Disabled` → `Err(other("插件 {plugin_id} 已被禁用"))` |
 | `find_command_owner` | `pub fn find_command_owner(&self, command: &str) -> Option<&str>` | 在**正在生效**的插件里找**第一个**注册了该命令的。实现是读 registry 的 `nota_commands` 表再 `contains_key`。⚠️ 取不到 registry 时 `unwrap_or(false)` 当"没有"——所以加载失败的插件不会误报 |
 | `panels` | `pub fn panels(&self) -> Vec<PluginPanel>` | 所有生效插件声明的面板。逐个调 `读面板(&p.lua, id)` 再摊平。**这是 BUG-13 的修法**：前端挂载后**拉**它，不是等事件推 |
-| `menus` | `pub fn menus(&self) -> Vec<PluginMenuItem>` | 同上，菜单项。⚠️ 前端**拉了但还没用**——菜单栏本体已建（backlog 第 40 项结清），缺的是把这几条挂进对应栏（第 42 项） |
+| `menus` | `pub fn menus(&self) -> Vec<PluginMenuItem>` | 同上，菜单项。📌 **2026-09-24 起前端真的用上了**（backlog 第 42 项）：插件那一列插在 `help` 之前，命令 id 是合成出来的 `__plugin:<plugin>:<command>` |
+| `panel_content` | `pub fn panel_content(&self, plugin_id: &str, panel_id: &str) -> Result<serde_json::Value>` | **现调**那个面板的 `render`，拿到它**此刻**的内容。⚠️ 它**会跑插件的 Lua**，所以调用方必须放到阻塞线程上（`commands/plugin.rs` 那条 `spawn_blocking`）——`render` 里常常要起 git 子进程，跑在主线程上就是**冻界面** |
 | `count` | `pub fn count(&self) -> usize` | 插件**条目**数（含失败的），`lib.rs` 启动日志用它 |
 | `unload_all` | `pub fn unload_all(&mut self) -> ()` | 逐个 `LuaPlugin::unload()`。窗口销毁时调 |
 
@@ -916,9 +1316,11 @@ pub struct PluginHost {
 |---|---|---|
 | `生效的` | `fn 生效的(&self) -> impl Iterator<Item = &LuaPlugin>` | **加载成功 且 用户没禁用**。命令、面板、菜单三处**共用同一条判据**——各自写一遍的话，改一处忘一处就会出现"禁用了还列在面板里"这种半生效状态 |
 | `读面板` | `pub(crate) fn 读面板(lua: &Lua, plugin_id: &str) -> Vec<PluginPanel>` | 从 registry 的 `nota_panels` 读。⚠️ 收 `&Lua` 而不是 `&LuaPlugin`，**是为了能被用例钉住**：BUG-13 的病灶正是写的一侧和读的一侧对不上，而 `LuaPlugin` 要先 `load`（要真的 `AppHandle`）才拿得到 |
-| `读菜单` | `pub(crate) fn 读菜单(lua: &Lua, plugin_id: &str) -> Vec<PluginMenuItem>` | 同上 |
+| `读菜单` | `pub(crate) fn 读菜单(lua: &Lua, plugin_id: &str) -> Vec<PluginMenuItem>` | 同上。⚠️ 菜单项里的 `prompt` **只在这里收形状**（menu 那一条是个原表，过不了 `PluginPrompt` 的 `Serialize`），面板按钮的那一份在前端收——**两份字段名必须一样**，见 `PluginPrompt` |
+| `读提示` | `fn 读提示(t: &mlua::Table) -> Option<PluginPrompt>` | ⚠️ **`arg` 缺了或为空 ⇒ 返回 `None`，整条 `prompt` 当没写**——问了也送不出去，不如不问。`label` 空 → `"请输入"`；`placeholder` / `hint` 空 → `""`；`secret` 缺 → `false` |
 | `声明的` | `fn 声明的(lua: &Lua, reg: &str) -> Vec<mlua::Table>` | 读某个 registry 名下的数组。**没这个键就静默返回空表**——插件没申请能力、或 `on_load` 半路失败，都不是异常 |
-| `REG_PANELS` / `REG_MENUS` | `pub const REG_PANELS: &str = "nota_panels"` | registry 名，**只此一处定义**。写的一侧（`lua/api/ui.rs`）和读的一侧必须说同一个字符串，拆成两处字面量就是又造一对"两处相乘" |
+| `可调用的` | `fn 可调用的(&self, plugin_id: &str) -> Result<&LuaPlugin>` | **存在 / 没被禁用 / 加载成功** 三道闸，**派发命令与取面板内容共用**。⚠️ 抽出来正是为了不"两处相乘"：各写一遍的话，改一处忘一处就会出现"禁用了还能拉面板"这种半生效状态。⚠️ **用户禁用先于加载状态判**——禁用是用户的显式动作，说"已被禁用"比说"加载失败"更接近用户看到的事实 |
+| `REG_PANELS` / `REG_MENUS` / `EVENT_PANEL_DIRTY` | `pub const REG_PANELS: &str = "nota_panels"`；`EVENT_PANEL_DIRTY = "nota:plugin-panel"` | **只此一处定义**。写的一侧（`lua/api/ui.rs`）和读的一侧必须说同一个字符串，拆成两处字面量就是又造一对"两处相乘"。⚠️ `EVENT_PANEL_DIRTY` 是**事件**（"变了"这个动作），三处说同一个字符串：发射侧 `ui.rs::刷新表`、`ipc.ts::events.pluginPanel`、`ui/PluginDock.tsx` 的订阅 |
 
 ⚠️ `find_command_owner` 的注释说明了它只做第一个匹配：真出现两个插件抢同一个命令名时再说——
 与其现在造一套优先级规则没人用，不如等真有需求时按那时的实际情况定。
@@ -969,7 +1371,7 @@ plugins.sort_by(id)                                   // 稳定顺序让界面�
 
 ---
 
-## `src-tauri/src/plugin/manifest.rs`（386 行）
+## `src-tauri/src/plugin/manifest.rs`（393 行）
 
 插件清单（`plugin.toml`）的解析与校验。文件头带着一份完整的清单样例与各栏的含义。
 
@@ -1017,11 +1419,11 @@ pub enum Capability {
 | `FsRead` | `fs.read` | 读工作区内的文件 |
 | `FsWrite` | `fs.write` | 写/删工作区内的文件 |
 | `ProcessGit` | `process.git` | 起 `git` 子进程。**只放行 git 这一个命令**，不是通用 subprocess |
-| `NetworkHttp` | `network.http` | 发 HTTP 请求。⚠️ **宿主侧尚未实现**，装出来的是"会明说没实现"的表 |
+| `NetworkHttp` | `network.http` | 发 HTTP 请求。装了才给 `nota.http`，实现见 `lua/api/http.rs`（[docs/13](13-lua-api.md) §9） |
 | `UiNotify` | `ui.notify` | 弹通知 |
 | `UiPanel` | `ui.panel` | 注册侧栏面板 |
 | `UiMenu` | `ui.menu` | 往菜单里加条目。⚠️ **单独申请它不会装 `nota.ui`**，见 `lua/api/mod.rs` |
-| `SettingsOwn` | `settings.own` | 读写插件自己的设置段。⚠️ **宿主侧尚未实现** |
+| `SettingsOwn` | `settings.own` | 读写插件自己的设置段。装了才给 `nota.settings`，实现见 `lua/api/settings.rs`（[docs/13](13-lua-api.md) §10） |
 
 ### `Capability::parse`
 
@@ -1143,7 +1545,7 @@ pub struct Manifest {
 
 ---
 
-## `src-tauri/src/lua/mod.rs`（255 行）
+## `src-tauri/src/lua/mod.rs`（516 行）
 
 Lua 插件运行时。**一插件一状态。**
 
@@ -1336,7 +1738,7 @@ pub fn call_command(&self, name: &str, args: mlua::Value) -> Result<mlua::Value>
 
 ---
 
-## `src-tauri/src/lua/api/mod.rs`（240 行）
+## `src-tauri/src/lua/api/mod.rs`（386 行）
 
 注入给插件的 `nota.*` 表。
 
@@ -1375,8 +1777,8 @@ pub fn lua_err(e: NotaError) -> mlua::Error
 | `fs` | `fs.read` **或** `fs.write` | 见 `fs.rs` |
 | `git` | `process.git` | 见 `git.rs` |
 | `ui` | `ui.notify` **或** `ui.panel` **或** `ui.menu` | 见 `ui.rs` |
-| `http` | `network.http` | `not_implemented(lua, "网络请求", "docs/07 第 12 项")` ⚠️ |
-| `settings` | `settings.own` | `not_implemented(lua, "插件设置", "docs/07 第 13 项")` ⚠️ |
+| `http` | `network.http` | 见 `http.rs`（`get`/`post`/`request`） |
+| `settings` | `settings.own` | 见 `settings.rs`（`get`/`set`/`all`） |
 
 📌 **更正（2026-09-22）**：本行曾写"`ui.menu` 单独存在不会装 `nota.ui`"——那在
 当时是**真的**（判据漏了 `ui.menu`，见 `docs/07` BUG-8），但**已修**。现在三条能力
@@ -1395,9 +1797,12 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 发事件**。这是刻意的（它们是插件跟宿主说话的基本手段，不碰敏感资源），
 但要知道"没有能力"不等于"插件什么都不能做"。
 
-`nota.http` / `nota.settings` 这份"诚实"是有用的：插件作者写 `nota.http.get(...)` 会立刻
-拿到一句"尚未实现（docs/07 第 12 项）"，而不是 `attempt to index a nil value`——
-后者会让人以为是自己的能力没申请对，白查半天。
+📌 **更正（2026-09-24）**：`nota.http` 与 `nota.settings` 这两张表**曾经是空壳**——
+装的是 `not_implemented(...)`，调用一律返回一句"尚未实现（见 docs/07 第 N 项）"。
+那份诚实当时有用（总比 `attempt to index a nil value` 强，后者会让人以为是自己
+能力没申请对，白查半天），但空壳终究是空壳：AI 插件因此只能预览、**存不住密钥**。
+本轮（`docs/07` 第 12、13 项）两样都真做出来了，`not_implemented` 这个函数
+**已经从代码里删除**（`api/mod.rs` 只剩这条历史注释）。
 
 ### `fn command_table(lua: &Lua, plugin_id: &str) -> Result<Table, NotaError>`（私有）
 
@@ -1428,16 +1833,11 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
   `RuntimeError("发事件 {channel} 失败：{e}")`
 - ⚠️ 没有监听者时 `emit` **静默成功**——插件发了一条没人收的事件，日志里一点痕迹都没有
 
-### `fn not_implemented(lua: &Lua, what: &str, where_: &str) -> Result<Table, NotaError>`（私有）
+### `fn 装_ui吗(manifest: &Manifest) -> bool`（私有）
 
-造一张"这个能力还没实现"的表。消息是 `format!("{what}尚未实现（见 {where_}）")`。
-
-用 `__index` 元表兜住**任意**方法名：`nota.http.get` / `nota.http.post` 都能答上，
-不用逐个列。**给的是线索不是哑弹**——带着文档条目号，插件作者能直接翻到 backlog 那一项。
-
-⚠️ 因为用的是 `__index`，`nota.http` 上**任何**字段访问——包括读一个不存在的属性
-（`nota.http.timeout`）——都返回同一个错误函数，而不是 `nil`。
-用 `pairs` 遍历这张表会得到空表。
+`ui.notify` / `ui.panel` / `ui.menu` 任一条就算数（`const UI能力`）。
+⚠️ 单独拎出来的理由是 **BUG-8**：`build()` 要真的 `AppHandle`，用例里构造不出来，
+而这条判断是纯的、又正是最该被用例钉住的那一条。详见 `lua/api/ui.rs` 那一节。
 
 ### `fn set(r: mlua::Result<()>, _lua: &Lua) -> Result<(), NotaError>`（私有）
 
@@ -1491,9 +1891,20 @@ Table 的判定：**是数组还是字典？Lua 里只有 table，靠"有没有 
 3. `raw_len` 只在序列**没有洞**时准。`{[1]="a", [3]="c"}` 的 `raw_len` 是 1 还是 3 是
    未定义区间（Lua 的边界行为），别依赖它。
 
-### 测试
+⚠️ **与 `ui.rs::剥成_json` 的关系**：两处是**两份实现**（一个发事件、一个喂面板），
+在 `Table` 判定上必须同口径（都看 `raw_len()`），但在"过不了 JSON 的值怎么办"上
+**故意不同**——这里变成一句 `Debug` 字符串（事件是调试用的，看得见东西比看得见 `null` 强），
+面板那边变成 `null`（面板是给人看的界面，一句 `Function(0x…)` 没有意义）。
+**改动其中一处时要记得另一处的存在。**
 
-无。
+### 测试（4）
+
+| 测试名 | 钉住什么 |
+|---|---|
+| `每一条_ui_能力都能单独装出_nota_ui` | **BUG-8 的回归用例**：`UI能力` 数组里**每一条**单独拿去问 `装_ui吗`，都得是真 |
+| `没申请_ui_能力就不装_nota_ui` | 按能力装表、不装空壳 |
+| `ui_能力清单要和_ui_rs_对得上` | ⚠️ **数出来的**：`include_str!("ui.rs")` 里 `Capability::Ui…` 的出现次数要和 `UI能力` 数组的长度一致。漏了 `||` 一处、或者加了一条能力忘进数组，都是这条测试先炸 |
+| `能力的_serde_名字与_parse_说同一套话` | 清单里的写法（`network.http`）与 `Capability::parse` 认的是同一套名字——两份定义会漂 |
 
 ---
 
@@ -1861,7 +2272,7 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 
 ---
 
-## `src-tauri/src/lua/api/ui.rs`（288 行）
+## `src-tauri/src/lua/api/ui.rs`（704 行）
 
 `nota.ui` —— 插件往外壳里放东西。
 
@@ -1881,9 +2292,20 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 修法**不是**"发两遍"或"起来后重放"，而是**根本不要发**。
 完整理由（含"重放方案为什么是错的"）见 `plugin/mod.rs::panels` 与 `docs/07` BUG-13。
 
-⚠️ 面板**内容**仍由插件自己推事件填（`nota.event.emit`），宿主不解析 HTML。
-这样做在安全上是干净的（前端只渲染我们自己认识的组件），但插件作者得写点前端代码。
-纯 Lua 声明式的面板 DSL 排在后面轮次（`docs/07` 第 15 项）——**在那之前面板框里是空的**。
+📌 **更正（2026-09-24）**：这一段曾写"面板**内容**仍由插件自己推事件填
+（`nota.event.emit`），纯 Lua 声明式的面板 DSL 排在后面轮次（`docs/07` 第 15 项）
+——在那之前面板框里是空的"。**第 15 项已经落地**，而落地的形态**不是**"推内容"：
+
+`register_panel` 多收一个 `render` 函数，它返回一串**内容块**；前端按白名单渲染
+（见下面的「面板内容」一节与 [docs/13](13-lua-api.md) §8.5）。**内容也是拉，不是推**——
+理由是"现在有哪些改动"这件事本身就是**状态**，不是"发生的事"，和面板清单同理。
+插件只在**自己知道内容变了**的时候喊一声 `nota.ui.refresh(id)`，
+而那一声**只是提示**：丢了也不影响正确性（插件刷新时面板可能还没打开，事件没人收，
+但用户打开面板时一定会拉一次）。**判据**：把 `nota.ui.refresh` 那一条事件整个删掉，
+打开面板仍然该看到正确内容。做不到就是内容被当成事件在传了。
+
+⚠️ 插件仍然写不出 HTML、写不出脚本：认不出的 `kind` 前端如实显示"不认识"，
+**不**退化成 `dangerouslySetInnerHTML`。
 
 ### `pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Table>`
 
@@ -1893,7 +2315,12 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 |---|---|---|---|
 | `notify` | `ui.notify` | `(msg: string, level: string?) -> ()` | 事件 `nota:notify`（**推**） |
 | `register_panel` | `ui.panel` | `(spec: table) -> ()` | registry `nota_panels`（**拉**） |
+| `refresh` | `ui.panel` | `(id: string?) -> ()` | 事件 `nota:plugin-panel`（**推**，只是"去重拉"的提示） |
 | `register_menu` | `ui.menu` | `(spec: table) -> ()` | registry `nota_menus`（**拉**） |
+
+⚠️ `refresh` 与 `register_panel` **同一条能力**（`ui.panel`）管着——它俩是"面板这件事"
+的两头（声明 / 内容变了），拆成两条能力只会让人申请一条忘了另一条。不传 `id`
+表示"我这个插件的所有面板都该重拉"。
 
 两个 `register_*` 各自剥成了**不含 `ctx` 的纯函数**（`面板表` / `菜单表`），
 理由与 `api/mod.rs::装_ui吗` 同一条：`build()` 要真的 `AppHandle`，用例里构造不出来，
@@ -1917,6 +2344,15 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 | `title` | 否 | `id` 的值 | |
 | `icon` | 否 | `nil` | 载荷里是 `null` |
 | `location` | 否 | **`"right"`** | `right` = 右侧插件栏、`left` = 左侧栏。前端 `ipc.ts` 的类型是 `string`（不是联合）——宿主不拦认不出的值，前端按地址用 |
+| `render` | 否 | `nil` | **函数**，返回内容块数组。⚠️ 只在 registry 里活着，**不进 `PluginPanel` 那份快照**——前端拿到的清单里没有它，也不需要 |
+
+⚠️ `render` 写了个**不是函数**的东西（表、字符串）**当场报错**
+（`"插件 {id} 的面板 `{panel}`：`render` 必须是一个函数"`）。拖到用户打开面板才报的话，
+报错的地方（前端一次渲染失败）离病因（`render` 写成了表）已经很远了。
+
+⚠️ 声明了面板却**没给** `render` **不算错**——一个插件可以只声明面板占个位。
+宿主这边如实说"没有提供 `render`，所以没有内容可显示"（`面板内容` 的报错），
+前端显示一句解释，不是一片空白。
 
 ⚠️ 默认值 2026-09-22 从 `"sidebar"` 改成了 `"right"`：用户定了「插件的话我的想法是右侧边栏」，
 而左侧栏那一页已经搬到右边。**改默认值的同时必须改两个内置插件**——
@@ -1932,7 +2368,8 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 | `label` | **是** | — | 缺 → `RuntimeError("register_menu 需要 `label` 字段")` |
 | `command` | **是** | — | 缺 → `RuntimeError("register_menu 需要 `command` 字段")`。**必须**是插件自己注册过的命令名，前端点下去时按这个名回调宿主 |
 | `menu` | 否 | `"plugins"` | 挂到哪个菜单 |
-| `accelerator` | 否 | `nil` | 载荷里是 `null` |
+| `accelerator` | 否 | `nil` | 载荷里是 `null`。⚠️ 撞车判据是**先到先得**，插件那一列排在 `help` 之前 ⇒ **内置快捷键永远赢**，见 `docs/13` §8.3 |
+| `prompt` | 否 | `nil` | 「点之前先问一句」的声明，见下 |
 
 ⚠️ `register_menu` **不校验 `command` 真的注册过**。写错了要到用户点下去才发现
 （错误是"插件 X 没有注册命令 `y`"）。有 `nota_plugin_find_command` 可以事后对账。
@@ -1940,15 +2377,68 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 ⚠️ 重名（同一个插件里两条菜单同 `label`）也**报错**——同一个菜单里两条同名项，
 用户分不出该点哪个。
 
+**`prompt` 子表的字段**（`plugin/mod.rs::PluginPrompt`，读的一侧是 `读提示`）：
+
+| 字段 | 必填 | 默认 | 说明 |
+|---|---|---|---|
+| `arg` | **是** | — | 用户填的值放进 `args` 的哪个键。**缺了整条 `prompt` 当没写**（问了也送不出去） |
+| `label` | 否 | `command` 的值 | 对话框上那句话 |
+| `placeholder` | 否 | `""` | |
+| `hint` | 否 | `""` | 输入框下面那行小字 |
+| `secret` | 否 | `false` | 输入框画成密码框。⚠️ 遮的只是**屏幕**，值本身原样存进插件设置文件（**明文**，见 `docs/12` §4.5） |
+
+⚠️⚠️ **同一个 `prompt` 有两份实现，字段名必须一样**：菜单项这一份在**本文件**
+（registry 里存的是一张原表，由 `读提示` 收形状），面板按钮那一份在**前端**
+（`ui/panel-nodes.ts::提示`）——因为面板内容走的是 `剥成_json`，那边只保证
+"是 JSON、有上限"，不认形状。两条路最后都汇进 `ui/plugin-prompt.ts::问参数`，
+所以字段名或默认值不一致的话，**同一个 `prompt` 写在菜单里和写在面板上会是两种表现**。
+
 ⚠️ **`notify` 那条事件名是硬编码的字符串**，与前端 `ipc.ts` 的 `events` 表是两份手抄的常量。
-（面板与菜单**已经不走事件了**，所以这一对常量今天只剩 `notify` 一处要同步。）
+（面板**清单**与菜单**已经不走事件了**，所以这一对常量今天只剩 `notify` 一处要同步。）
 改一边必须改另一边，而且**编译器不会告诉你**。
+⚠️ 面板那条 `refresh` 走的事件名（`nota:plugin-panel`）**不是**硬编码的，
+它是 `plugin/mod.rs::EVENT_PANEL_DIRTY`——发射侧（本文件）和收侧（`ipc.ts` 的
+`events.pluginPanel` **加 `ui/PluginDock.tsx` 的订阅**）都引它。**三处说同一个字符串**，
+所以只定义一次。
 
 ### registry 的名字只定义一处
 
-`REG_PANELS` / `REG_MENUS` 两个 `pub const` 在 `plugin/mod.rs` 里，**写的一侧
-（本文件）和读的一侧（`plugin/mod.rs::读面板`/`读菜单`）都引它**。
+`REG_PANELS` / `REG_MENUS` / `EVENT_PANEL_DIRTY` 三个 `pub const` 在 `plugin/mod.rs` 里，
+**写的一侧（本文件）和读的一侧（`plugin/mod.rs::读面板`/`读菜单`、前端事件订阅）都引它**。
 ⚠️ 别在两边各写一遍字面量——那就是又造一对"两处相乘"，症状是界面永远空着且不报错（BUG-13）。
+
+### 面板内容的剥法：`面板内容` 与 `剥成_json`
+
+```rust
+pub(crate) fn 面板内容(lua: &Lua, plugin_id: &str, panel_id: &str) -> NotaResult<serde_json::Value>
+fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value  // 私有，递归
+```
+
+从 registry 找到那个面板 → **现调**它的 `render` → 把返回值剥成 JSON。
+⏱️ **每次读都重新跑一遍 `render`**，不做缓存。做成"注册时跑一次存起来"的话，
+界面上会一直显示应用刚启动那一刻的改动，而且**看着像是对的**（有用例钉着）。
+
+三道闸，**每一条都是上限，不是格式转换**：
+
+| 限制 | 值 | 挡的是 |
+|---|---|---|
+| 文本长度 | `面板文本上限` = 4000 **字符** | 一个插件把一整个文件塞进 `text`。截断从尾巴上截、留一个 `…`，⚠️ **按字符不按字节**，别把汉字劈成半个 |
+| 一层里的项数 | `面板节点上限` = 200 | 一次渲染出几千行，前端卡死。**不是为了防坏人，是为了防手滑** |
+| 嵌套层数 | `面板层数上限` = 6 | 自引用/超深表把栈打穿。超了那一层是 `null`，**不是报错** |
+| 值类型 | 只留 nil/bool/number/string/table | 函数、userdata 过不了 JSON，一律变 `null`（**不是**变成一句假字符串） |
+
+⚠️ **表格当数组还是字典，判据是"有没有连续整数键"**——与 `api/mod.rs::lua_to_json`
+同口径（`raw_len() > 0` 就是数组）。两处必须同口径，否则同一个 Lua 表在事件里
+是一种形状、在面板里是另一种形状，而插件作者只会看见"有时候不灵"。
+
+三种报错各说各的病因，**都不退化成空内容**：
+
+| 场合 | 报的错 |
+|---|---|
+| 插件根本没申请 `ui.panel` | `插件 {id} 没有申请 `ui.panel` 能力` |
+| 没声明过这个面板 | `插件 {id} 没有声明面板 `{panel}``（**不是给个空数组**——空数组会被读成"这个面板现在没内容"） |
+| 声明了但没有 `render` | `插件 {id} 的面板 `{panel}` 没有提供 `render`，所以没有内容可显示` |
+| `render` 跑起来抛错 | `NotaError::Lua { plugin, message: "面板 `{panel}` 渲染失败：{e}" }` ——**带插件 id**，前端能说清是谁的错 |
 
 ### `fn normalise_level(level: Option<&str>) -> &'static str`（私有）
 
@@ -1963,7 +2453,7 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 认不出的一律当 `info`——**别把插件的笔误变成一次报错**，那会让人为了一个无关紧要的通知
 层级去读栈。
 
-### 测试（1）
+### 测试（18）
 
 | 测试名 | 钉住什么 |
 |---|---|
@@ -1973,8 +2463,174 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 | `面板重名要报错` | 报错文案含「重复注册面板」，且报错后**不留半条**（读回来还是一个） |
 | `没声明过就读回空表` | 没申请能力的插件：两个读函数都返回空表，**不是报错**——报错会让"装了但不带 UI 的插件"看起来像坏了 |
 | `注册的菜单项读得回来` | 同面板那条，外加不写 `menu` 时默认 `plugins` |
+| `菜单项的_prompt_读得回来` | `prompt` 的五个字段收得进来 |
+| `没有_arg_的_prompt_当没写` | ⚠️ 缺 `arg` **整条当没有**（问出来的答案无处可送），不是"给个空的 arg" |
+| `面板渲染出来的内容读得回来` | 内容块真的走完了「Lua 源码 → 注册 → 现跑 `render` → JSON」这一整条路。⚠️ 用例里的 `render` 是**用真的 Lua 源码拼出来的**（`lua.load(...)`），不是在 Rust 里 `create_function` 手搭——手搭就绕过了"插件作者写的是源码"这一步 |
+| `每次读都重新跑一遍_render` | 内容**不是快照**：连读三次得到"第 1/2/3 次" |
+| `渲染抛错时报的是插件自己的错` | 文案里同时有插件那句 `磁盘满了` 和 `渲染失败`（说清是**哪一步**出的错） |
+| `没有_render_的面板如实说没有` | 见上表最后一条 |
+| `没有的面板要报出来而不是给空` | 见上表 |
+| `render_不是函数当场就报` | 注册时就报，不拖到打开面板 |
+| `超长文本截断且不劈开汉字` | 截断后长度正好是上限 +1（那个 `…`），且**每个字符都还是 `汉`**——按字节截会把汉字劈成半个 |
+| `过不了_json_的值变成_null` | 函数 → `null`，且同一个表里的别的字段不受影响 |
+| `自引用的表不会打穿栈` | `t.me = t` 这种能停下来 |
+| `一层的项数有上限` | 超出 `面板节点上限` 的项被砍掉，不是全部渲染出去 |
+
+⚠️ **单条能力单测**（每个方法的"装不装"）在 `api/mod.rs` 那边，别在两张表里各测一遍。
 
 ⚠️ **前四条故意让写的一侧和读的一侧都参与**——只测一头永远测不出 BUG-13 那一类。
+
+---
+
+## `src-tauri/src/lua/api/http.rs`（540 行）
+
+`nota.http` —— 让插件发 HTTP 请求。**2026-09-24 落地**（`docs/07` 第 12 项；
+在那之前这张表是 `not_implemented` 空壳）。面向插件作者的用法见
+[docs/13](13-lua-api.md) §9，这一节讲**宿主这侧为什么要这么写**。
+
+### 文件头的"为什么"要点
+
+- **这块是"外网"的口子，也是这台机器上唯一一条主动往外连的通道。** 插件写的地址
+  就是它连的地址，所以**地址本身要过一道闸**（`检查地址`）。
+- **没有 `ctx`**：`build(lua)` 只收 `Lua`，不碰文档也不碰设置。⚠️ 这是**刻意**的——
+  一个能发 HTTP 的插件顺手能读全文，等于给这条口子加一个没必要的放大器。
+- **阻塞**：底下是 `ureq`（同步）。所以调用它的宿主命令在
+  `tauri::async_runtime::spawn_blocking` 里跑，**不占住主线程**；
+  但**插件命令是串行的**（全程持 `plugins` 锁，见 `commands/plugin.rs`），
+  一个慢请求会挡住别的插件的命令。
+
+### 四个上限（都是"别让插件把宿主拖死"）
+
+| 常量 | 值 | 挡的是 |
+|---|---|---|
+| `默认超时` | 30 s | 不传 `timeout_ms` |
+| `最长超时` | 180 s | ⚠️ **超了截到上限，不报错**——插件写 `timeout_ms = 600000` 的意图是"这请求可能很慢"，不是"我要一个非法值"。**没上限的话一个插件写个 1 小时，就有一个后台线程被占住一小时**，界面上表现为"这个插件点了没反应" |
+| `响应上限` | 2 MiB | ⚠️ 超了**报错**（不是截断）——半个 JSON 一定解析失败，而"解析失败"这条错会把病因指错地方 |
+| `请求上限` | 1 MiB | 插件自己拼的请求体（多半是拼错了） |
+| `最大重定向` | 5 | 重定向环 |
+
+方法是个**封闭集合**（`允许的方法`）：`GET` / `POST` / `PUT` / `PATCH` / `DELETE` / `HEAD`，
+**认不出就报错**（不是拒绝，是"这个方法我不认识"）。
+
+### `fn 检查地址(url: &str) -> NotaResult<()>`（私有）
+
+只放行 **https**，以及**回环地址上的 http**。判据是**主机名**，不是字符串前缀
+（`取主机` 从 `主机[:端口]/路径?查询#片段` 里取主机名：小写、去端口、去 userinfo）：
+
+| 放行的 http 主机 | 不放行 |
+|---|---|
+| `localhost` / `127.0.0.1` / `::1` | 其余一律要 https |
+
+⚠️ **只认这三个**，因为"回环"是个很容易写得比看上去更宽的东西：`127.0.0.2` 也是回环、
+`[::ffff:127.0.0.1]` 也是回环、`localhost.` 还是回环。**宽在安全判据上不是优点。**
+本地服务（Ollama 那类）想被插件连上，用这三个之一就够。
+
+### `fn 写了_content_type(headers: &Table) -> bool`（私有）
+
+⚠️ **存在的理由是一个修过的 bug。** 表体（`body = {…}`）会被自动补一个
+`content-type: application/json`，而 `Request::builder().header()` 是**追加**
+不是覆盖——插件自己写过的话，补的那一下就成了**第二个 content-type 头**。
+重复头各服务器处理不一致（有的直接 400，有的只认第一个，而插件写的那个
+**排在后面**），所以补之前必须真的问一句，而不是在注释里许愿。
+头名**不区分大小写**（HTTP 的规定）。有用例钉着（`认得插件自己写的_content_type`）。
+
+### `fn 收口(lua: &Lua, r: NotaResult<回包>) -> mlua::Result<Table>`（私有）
+
+`get` / `post` / `request` 三条路**都从这一处出去**，所以**返回值的形状只有一处定义**：
+
+| 键 | 什么时候有 |
+|---|---|
+| `code` | 永远。HTTP 状态码 |
+| `text` | 永远。原样的响应体 |
+| `json` | **只有能解析时**才有这个键 |
+
+⚠️ `json` 解析不了**不当错误**。响应是 HTML 错误页、是纯文本、是空体的场合多得很
+（4xx 的正文常常就是一整页 HTML），那时插件该看到的是 `text` 里那段话，
+而不是一个"JSON 解析失败"——后者会把病因指到错的地方，**而且掩盖了"服务器其实回了一句话"**。
+有了 `json`，插件读 OpenAI 那种 `choices[1].message.content` 才不用自己写 JSON 解析器
+（Lua 里没有；用模式匹配去抠字符串会在 `\n` 这种转义上出错）。
+
+⚠️ **4xx / 5xx 不是错误**：`http_status_as_error(false)`，状态码原样进 `code`，
+正文原样进 `text`。理由同上——错误页里那句话往往正是用户需要看到的。
+
+### 测试（9）
+
+| 测试名 | 钉住什么 |
+|---|---|
+| `只放行_https_和回环的_http` | ⚠️ **这个模块里最该在的一条**：明文 http 会把插件的 API key 和文档内容一起发在裸链路上；唯一的例外是本机回环（给 Ollama / LM Studio 那类留的口子，流量根本不出这台机器）。用例里连 `file:///etc/passwd` 这种也一起试 |
+| `取主机要能拆出端口和_userinfo` | `主机[:端口]` 与 `user@主机` 都要拆对 |
+| `主机名骗不过回环判定` | ⚠️ **安全判据不能靠字符串前缀**——`127.0.0.1.evil.com` 这类必须被拦下 |
+| `方法只有那六个` | 封闭集合，认不出就报错 |
+| `超时截到上限` | 写一个很大的数 → **截到 180 s**，不是报错（见上表） |
+| `两种写法都归一化` | `get("url")` 与 `get{url=…}` 归一到同一张规格表 |
+| `认得插件自己写的_content_type` | 空表 / 只写了 authorization / `Content-Type` / `content-type` 四种都要认出来 |
+| `响应是_json就拆好放进去` | ⚠️ 顺手钉住**下标从 1 起**：写成 0 起的话数组第一个元素会静默丢掉（`#t` 也对不上），而插件那边看到的是"模型没给出回答" |
+| `不是_json就没有_json这个键` | HTML 错误页 / 空体：**没有 `json` 这个键**，`text` 照旧 |
+
+⚠️ 这几条**都不真连网**——测的是"入参怎么校验、出参怎么折"，不是"网通不通"。
+真连网的那一半只能靠 GUI 跑（`docs/10` §10 第 3 项）。
+
+---
+
+## `src-tauri/src/lua/api/settings.rs`（377 行）
+
+`nota.settings` —— 插件存自己那点配置。**2026-09-24 落地**（`docs/07` 第 13 项）。
+面向插件作者的用法见 [docs/13](13-lua-api.md) §10；「**为什么不加密**」那件事
+在 [docs/12](12-plugin-runtime.md) §4.5，**别在这里重说一遍**。
+
+### 落点与权限
+
+- 一份**明文 TOML**，路径 `~/.config/nota/plugin-settings/<安全文件名(id)>.toml`
+- 目录 **0700**、文件 **0600**（`写` 里设；`收紧目录权限` 在非 unix 上是空实现）
+- ⚠️ 目录权限**收不上就算了**——`收紧目录权限` 明确**不是一条能让存盘失败的错**。
+  为了一个权限位把"存设置"变成"存不了"，是把次要的失败升级成了主要的失败
+- 文件头有一行注释（`文件头` 常量），用户手改时先看到它，知道这是什么、权限为什么是这样
+
+### 读：坏文件当空的用，不挡住插件
+
+`fn 读(路径: &Path) -> BTreeMap<String, toml::Value>`：读不出来（文件不在 / 语法错）
+→ **空表，不报错**。⚠️ 一份被用户手改坏的 TOML 应该表现为"设置回到默认值"，
+而不是"这个插件坏了用不了"——与 `Settings::load` 在 `lib.rs` 里那条口径一致
+（坏掉的配置不该让人连界面都进不去）。
+
+⚠️ **但坏的读法有两种，不能混**：
+
+| 坏法 | 结果 |
+|---|---|
+| 读失败（文件不在 / 语法错） | 空 |
+| 读到了、但某个键的**类型不认识**（用户写了数组） | 那个键**照样留着**，只是返回给插件时变成一串文本（`toml转lua`）——**不是 `nil`** |
+
+### 键的规矩：`fn 键合法吗(key: &str) -> mlua::Result<()>`（私有）
+
+键必须是"**不含点的 ASCII 词**"。⚠️ 挡点号不是洁癖：TOML 里 `a.b = 1` 与
+`a = { b = 1 }` 是**同一个东西**。允许键里带点的话，插件写 `set("a.b", 1)`，
+读回来 `all()` 得到的是一个**嵌套表**，而 `get("a.b")` 又查不到——
+一个**自己跟自己对不上**的设置文件。
+
+### 值：只收三种标量
+
+`fn 值转toml(v: &Value) -> mlua::Result<Option<toml::Value>>` —— `Ok(None)` 表示
+**删掉这个键**（所以 `set(k, nil)` 是删除，不是存一个 nil）。只收 bool / number / string；
+表、函数一律报错。反向的 `toml转lua` 遇到复合值给的是**文本**（见上表），不是 `nil`。
+
+### `fn 锁坏了<E: Display>(e: E) -> mlua::Error`（私有）
+
+`Mutex` 中毒了。**几乎到不了**（临界区里没有会 panic 的代码），但 `.unwrap()` 在这里是错的：
+中毒之后那把锁里的数据可能是**半截的**，而"设置读不出来"该是一句人话，不是一次 panic。
+
+### 测试（7）
+
+| 测试名 | 钉住什么 |
+|---|---|
+| `写下去的值读得回来` | 走完整来回 |
+| `文件头那段注释不影响读` | 头注释是能解析的 TOML 注释，不是把文件变成语法错 |
+| `设置文件是_0600` | ⚠️ 权限位。**这条只在 unix 上有意义** |
+| `坏文件当空的用而不是报错` | 见上：坏掉的设置不该让插件用不了 |
+| `键里不许有点和怪字符` | 见上：带点的键会让 `all()` 与 `get()` 自相矛盾 |
+| `只收三种标量` | 表 / 函数报错 |
+| `手改出来的复合值读回来是文本不是_nil` | 见上"坏的读法有两种"——这条正是那个区分 |
+
+⚠️ 用例都走 `临时目录()`（每个用例一个自己的目录），**没有一个碰真的 `~/.config`**。
 
 ---
 
@@ -1987,14 +2643,16 @@ Lua 数组 → `Vec<String>`。用 `sequence_values::<Value>()` 只走序列部�
 
 ---
 
-## `src/main.tsx`（23 行）
+## `src/main.tsx`（61 行）
 
 React 入口，四件事：
 
 1. `installErrorHooks()` —— 趁早装上（见 `ui/ErrorBoundary.tsx`）
 2. `document.getElementById("root")`，找不到直接 `throw new Error("找不到 #root 挂载点；index.html 被改坏了？")`
 3. `ReactDOM.createRoot(root).render(<React.StrictMode><App /></React.StrictMode>)`
-4. `import "./styles/theme.css"` 与 `"./styles/app.css"`（顺序有意义：主题变量先，应用样式后）
+4. `import "./styles/theme.css"` 与 `"./styles/app.css"`（顺序有意义：主题变量先，应用样式后）；
+   接着 `"./styles/sidebar.css"`（左侧栏）与 `"./styles/bars.css"`（编辑区上方的横条）
+   等，**一律排在 `app.css` 之后**——它们的选择器与 `app.css` 有重叠，靠顺序压过去
 
 ⚠️ `React.StrictMode` 在开发模式下会**把 effect 跑两遍**。`EditorPane` 里那个
 `disposed` 判断就是为它写的。
@@ -2003,14 +2661,31 @@ React 入口，四件事：
 
 ---
 
-## `src/App.tsx`（816 行）
+## `src/App.tsx`（918 行）
 
 应用外壳：状态编排 + 布局。文件头写明这一层只做三件事——**取数据、派事件、拼布局**；
 编辑器的活全在 `ui/EditorPane.tsx`，文件树的活在 `ui/Sidebar.tsx`，别往这里堆。
 
 `export default function App()`，无 props。
 
-### 十四个 state + 三个 ref（`grep useState` / `grep useRef` 数出来的）
+⚠️ **2026-09-24 沿职责搬走了五块**（从 1118 行起，一路顶着 §0.4 那条 1000 行硬线）：
+菜单的三条判据 + 快捷键分发 + 原生菜单那两条 effect → `ui/useMenus.ts`；
+两个对话框的"谁在等答案" → `ui/useDialogs.ts`；
+导出与打印 → `ui/useExport.ts`；
+文档主题的应用/切换/打开目录 → `ui/useDocTheme.ts`；
+"把一条菜单命令送进编辑器" → `ui/useEditorCommands.ts`。
+五块都是**和外壳布局无关**的东西，搬走之后这个文件回到"骨架 + 各功能模块的接线员"这个位置。
+
+⚠️ **别把"搬了五块"直接当成"变小了"**：头两次搬完它反而还在 916 行——同一批里又
+往它加了格式工具栏与查找条的接线，搬走的和加进去的正好抵掉。**"拆了"和"变小了"不是
+同一件事**，看行数要重数，不能推。
+
+### 十八个 state + 两个 ref（`grep` 数出来的，2026-09-24 重数）
+
+📌 **2026-09-24 起 `plugins` / `panels` 两个 state 不在这里了**，连同插件菜单项与
+"跑一条插件命令"一起搬进了 `ui/usePlugins.ts`（本文件只解构出
+`plugins` / `panels` / `menus` / `handlers` / `调` 五个名字用）。
+下面这份表是**搬完之后重数的**。
 
 | 名字 | 类型 | 说明 |
 |---|---|---|
@@ -2019,38 +2694,53 @@ React 入口，四件事：
 | `settings` | `useState<Settings \| null>(null)` | `null` = 还没拉到 |
 | `workspace` | `useState<string \| null>(null)` | 规范化后的绝对路径 |
 | `tree` | `useState<TreeNode[]>([])` | 只有一层（`depth = 1`） |
-| `plugins` | `useState<PluginInfo[]>([])` | 插件**清单**（名称/版本/能力/报错） |
-| `panels` | `useState<PluginPanel[]>([])` | 插件**声明**的面板。⚠️ 与 `plugins` 是两个来源：清单走 `plugin.list()`，面板走 `plugin.panels()`，**都是启动时一起拉的** |
-| `themes` | `useState<ThemeInfo[]>([])` | 扫到的主题，喂给菜单栏「主题」那一栏。**启动时拉一次** |
+| `themes` | `useState<DocThemeInfo[]>([])` | 扫到的**文档主题**，喂给菜单栏「主题」那一栏。**启动时拉一次** |
+| `settingsOpen` | `useState(false)` | 偏好设置框开不开。入口是菜单「文件 → 偏好设置」（`file.preferences`） |
 | `toasts` | `useState<Toast[]>([])` | |
 | `dockOpen` | `useState(true)` | 右侧插件栏 |
-| `sidebarOpen` | `useState(true)` | 左侧栏 |
+| `sidebarOpen` | `useState(true)` | 左侧栏。⚠️ **三个入口调同一个 setter**：菜单「视图 → 显示/隐藏侧边栏」（`Ctrl+Shift+L`）、栏内右上角那颗 ×（`Sidebar.onClose`）、菜单打勾。**不是三份状态** |
 | `sidebarTab` | `useState<SidebarTab>("tree")` | 左栏当前哪一页 |
 | `statusBarOpen` | `useState(true)` | 状态栏 |
-| `confirmReq` | `useState<{…} \| null>(null)` | 自绘确认框的受控状态（`title` / `message` / `confirmLabel` / `danger` / `hideCancel`） |
+| `formatBarOpen` | `useState(true)` | 格式工具栏（2026-09-24 加，`docs/07` 第 2 项） |
+| `focusMode` | `useState(false)` | **专注模式**。⚠️ **明确不进 `settings`**：和 `dockOpen` 同类，是"看的时候的状态" |
+| `typewriter` | `useState(false)` | **打字机模式**。同上 |
+| `findOpen` | `useState(false)` | 查找条开不开（`docs/07` 第 4 项） |
+| `findStatus` | `useState<FindStatus>(空查找状态)` | **编辑器报上来的**命中情况，App 不自己算 |
+| `commandState` | `useState<CommandState \| null>(null)` | **编辑器报上来的**光标状态。⚠️ 源码模式与没有文档时是 `null`（"读不出来"），不是一份空状态 |
 
-三个 ref（⚠️ `MenuBar.tsx` 内部另有自己的 `barRef`，不算这里的）：
+两个 ref（⚠️ `MenuBar.tsx` 内部另有自己的 `barRef`，`ui/useSlidev.ts` 里两个，都不算这里的）：
 
 | 名字 | 说明 |
 |---|---|
 | `editorRef` | `useRef<EditorPaneHandle>(null)`，App 伸手进编辑器的唯一通道 |
-| `confirmResolve` | `useRef<((ok: boolean) => void) \| null>(null)`，存 `askConfirm()` 那个 Promise 的 resolve |
 | `activeIdRef` | `useRef<DocId \| null>(null)`，让**只跑一次**的事件订阅 effect 也能读到最新的活动文档 |
 
-⚠️ **后三个界面开关 + `sidebarTab` 都是受控的**：状态在 `App.tsx`，
-`Sidebar` / `PluginDock` / `StatusBar` 自己不持有。这正是**菜单栏能切它们**的原因——
+⚠️ **后四个界面开关 + `sidebarTab` 都是受控的**：状态在 `App.tsx`，
+`Sidebar` / `StatusBar` 自己不持有。这正是**菜单栏能切它们**的原因——
 菜单在 `App.tsx` 里渲染，够不着子组件的局部状态（`Sidebar` 的 `tab` 2026-09-23 就是
-为这件事从 `useState` 改过来的）。
+为这件事从 `useState` 改过来的）。⚠️ `formatBarOpen` / `focusMode` / `typewriter`
+看起来像"子组件的局部状态"，其实不是：它们**在菜单里各有一条可勾项**，所以必须住在这里。
 
-### `askConfirm()` / `answerConfirm()`：自绘确认框怎么用
+⚠️ **`PluginDock` 是个例外**：`plugins` / `panels` 受控，但**面板内容**由它自己持
+（`useState<Record<string, 面板状态>>` ＋ 一个请求序号 ref）。
+内容是"这一刻从插件拉回来的东西"，没有第二个人要用，也就不该往上面抬。
+**别照着"受控"那条把面板内容也搬进 `App.tsx`。**
+
+### `askConfirm()` / `answerConfirm()` / `askPrompt()`：两个自绘对话框怎么用
+
+⚠️ **2026-09-24 起这对状态与它那两个 ref 都不在本文件里**，在 `ui/useDialogs.ts`
+（`docs/04` §2.6b/§2.6d）。本文件只解构出 `confirmReq` / `askConfirm` / `answerConfirm` /
+`promptReq` / `askPrompt` / `answerPrompt` 六个名字用。
 
 `askConfirm({title, message, confirmLabel?, danger?, hideCancel?}) -> Promise<boolean>`：
 把一坨状态塞进 `confirmReq`，同时**把 Promise 的 resolve 存进 `confirmResolve`**；
 `answerConfirm(ok)` 取出 resolve、清空 ref、`setConfirmReq(null)` 并兑现它。
+`askPrompt(...) -> Promise<{value, second} | null>` 同理。
 
-⚠️ `confirmResolve` 是**单个 ref 不是队列**——一次只可能有一个确认框。
-⚠️ 取代的是原生 `window.confirm`（`docs/07` 第 29 项，已修）：后者**阻塞 WebView**，
+⚠️ 两个 resolve 都是**单个 ref 不是队列**——一次只可能有一个框。
+⚠️ 确认框取代的是原生 `window.confirm`（`docs/07` 第 29 项，已修）：后者**阻塞 WebView**，
 会把中文输入法的组合态打断，和 `Toasts.tsx` 明确避开 `alert` 是同一条理由。
+⚠️ 输入框取代的是 `window.prompt`——它在 **WebKitGTK 上默认被关掉，调用静默返回 `null`**。
 
 ### 三个 `useCallback` 工具
 
@@ -2060,7 +2750,7 @@ React 入口，四件事：
 | `refreshDocs() -> Promise<Document[]>` | `api.doc.list()` → `setDocs(list)` → **返回 list**（`closeDoc` 要靠返回值取新活动标签） |
 | `refreshTree() -> Promise<void>` | 没有 `workspace` 就 `setTree([])` 并返回；否则 `api.workspace.tree(undefined, 1)`，失败 `toast(String(e), "error")` |
 
-### 七个 `useEffect`
+### 五个 `useEffect`（另附两段已搬走的）
 
 **① 启动**（依赖 `[refreshDocs, toast]`）
 
@@ -2081,6 +2771,8 @@ Promise.all([api.settings.get(), api.workspace.get(),
 
 ⚠️ **主题只在这里拉一次**（`api.theme.list()`）。所以用户点「打开主题文件夹…」丢进去一份
 新主题之后**菜单里不会出现**，得重启——欠账记在 `docs/07` 第 41 项。
+⚠️ 拉回来的是 `DocThemeInfo[]`，**全是文档主题，一条界面主题都没有**。
+界面那两条轴（风格、明暗）的入口在 `ui/settings/`，不在菜单里。
 
 **② 事件订阅**（依赖 `[toast, refreshDocs]`）
 
@@ -2131,14 +2823,22 @@ if (settings) return applyTheme(settings);
 不接返回值就等于每次 `settings` 变化都再挂一个、旧的从不移除。
 ⚠️ `settings` 为 `null`（还没拉到）时**不能**把主题刷成默认值——那会让首屏闪一下再跳回来。
 
-**⑤ 文档主题**（依赖 `[settings?.document_theme, themes]`）
+**⑤ 文档主题 —— ⚠️ 2026-09-24 起搬去了 `ui/useDocTheme.ts`**
 
-找到同名主题就 `applyDocTheme({css: info.css})`，空名/找不到就 `applyDocTheme(null)`。
+搬走的那一份：
 
-⚠️ **与 ④ 分开是有意的**：主题 CSS 要**读文件 + 改造**才能注入，是异步的，
-跟 `applyTheme` 那种纯写属性的事不是一个节奏，塞在一起会让 ④ 也变成异步。
-⚠️ **找不到对应的主题文件时安静地退回内置默认，不弹错**——settings 里记着一个名字、
-而用户的主题文件被删了，这是很平常的事（换机器、清理磁盘），不是需要打断用户的错误。
+```text
+id = settings?.document_theme
+css = id ? await api.theme.css(id) : null
+if (alive) applyDocTheme(css)
+```
+
+搬走之后**依赖数组变了**：`[themeId, themes]`（原来这里只有 id）。多出来的 `themes`
+是**故意留的将来接口**——清单重扫之后要能重取一次 CSS（`docs/07` 第 41 项），今天清单
+只在启动时拉、这条依赖暂时不会响。
+搬走的理由不只是行数：这三件事（应用 / 切换 / 打开目录）共用同一个前提——**文档主题
+只作用于编辑区**，摆在一起那条约束才有落点。那里的文件头把其余几条（拿 id 不拿路径、
+与 ④ 分开的节奏、取不到 CSS 时安静退回）都写了，不在这里重复。
 
 **⑥ 重取文件树**（依赖 `[refreshTree]`）
 
@@ -2148,48 +2848,89 @@ void refreshTree();
 
 注释：`refreshTree` 已经依赖 `workspace`，这里不必再列一遍。
 
-**⑦ 快捷键**（依赖一大串回调）
+**⑦ 快捷键 —— ⚠️ 2026-09-24 起搬去了 `ui/useMenus.ts`**
 
-在 `window` 上听 `keydown`：
+**2026-09-23 起不再手写按键分支**，改成查表：
 
-| 键 | 条件 | 动作 |
-|---|---|---|
-| `F11` | **先判，不带 mod** | `toggleFullscreen()` |
-| `mod = e.ctrlKey \|\| e.metaKey` | **没有 mod 直接 return** | — |
-| Ctrl+S | `activeId !== null` | `e.preventDefault()` + `saveDoc(activeId, e.shiftKey)` —— **Ctrl+Shift+S 就是另存为**（`shiftKey` 传成 `forceDialog`） |
-| Ctrl+N | — | `newDoc()` |
-| Ctrl+O | — | `openViaDialog()` |
-| Ctrl+W | `activeId !== null` | `closeDoc(activeId)` |
-| Ctrl+Shift+C | `key === "c" && shiftKey` | `copyAsMarkdown()`。⚠️ **只在有 Shift 时接**——不带 Shift 的 Ctrl+C 是系统的复制，抢过来会让编辑器里选不中的东西复制不了 |
-| Ctrl+Shift+L | `key === "l" && shiftKey` | 开关侧栏 |
-| Ctrl+Shift+1 | `e.shiftKey && e.code === "Digit1"` | 开侧栏 + 切大纲页 |
-| Ctrl+Shift+3 | `e.shiftKey && e.code === "Digit3"` | 开侧栏 + 切文件树页 |
-| Ctrl+1..6 | `!e.shiftKey && key >= "1" && key <= "6"` | `runCommand(h1..h6)` 切标题级别 |
-| Ctrl+0 | `!e.shiftKey && key === "0"` | `runCommand("text")` 正文段落 |
+```ts
+const accelIndex = useMemo(() => buildAccelIndex(MENUS), []);
+useEffect(() => {
+  const onKey = (e: KeyboardEvent) => {
+    if (e.isComposing || e.keyCode === 229) return;          // ① 组字中，一个都不抢
+    const id = accelIndex.get(accelSig(eventAccel(e)));      // ② 查表
+    if (!id) return;                                         //    查不到 → 放行
+    if (isOutsideEditor(e.target)) return;                   // ③ 焦点在输入框里
+    if (disabledCommands.has(id)) return;                    // ④ 灰掉的项
+    const handler = menuHandlers[id];
+    if (!handler) return;                                    // ⑤ 没实现
+    e.preventDefault();
+    handler();
+  };
+  window.addEventListener("keydown", onKey);
+  return () => window.removeEventListener("keydown", onKey);
+}, [accelIndex, menuHandlers, disabledCommands]);
+```
 
-⚠️⚠️ **`Ctrl+Shift+1/3` 判的是 `e.code` 不是 `e.key`**，这是踩出来的：
-按着 Shift 敲数字排，`e.key` 拿到的是**上档字符**——Shift+1 是 `"!"`、Shift+3 是 `"#"`，
-所以 `key === "1"` **永远不成立**，那两条曾是**按了没反应**的死代码。
-`e.code` 是物理键位，不随 Shift 变。
+**表本身不在这里，在 `ui/commands.ts` 的 `accel` 字段里**——这里只是它的消费者。
+完整的键位清单、以及哪几条能按哪几条按不动，写在 `docs/04` §4。
 
-⚠️ **`Ctrl+1..6` 必须不带 Shift**：Shift 那两条已经被侧栏页占走了，两者不能混。
-ProseMirror 自己的标题快捷键是 Ctrl+Alt+1..6，所以也不冲突。
+⚠️ **整段（含 `accelIndex` 那条 `useMemo` 与这个 effect）2026-09-24 搬去了
+`ui/useMenus.ts`**——理由和 `menuHandlers` / `disabledCommands` / `menuChecks`
+那几张派生表一样：**它们和外壳布局无关**，住在这里只会让本文件越来越长。
+本文件现在只把 `menuHandlers` 当参数交给 `useMenus()`，拿回
+`{ disabledCommands, menuChecks, usingNativeMenu }` 三个值。
+⚠️ 判据本身一条没变，下面那四条注意事项仍然有效——只是**改它们要去
+`ui/useMenus.ts` 改**。
 
-键名用 `e.key.toLowerCase()` 比，所以大小写不敏感。`return` 里移除监听。
+⚠️ **②「查不到就放行」是必须的**：`Ctrl+C/V/X` 归系统（`Ctrl+B/I/Z` 现在
+**查得到**，走我们自己的 `runCommand`，见 `docs/04` §4）。
+**别改成"有修饰键就吞"**——那会把系统剪贴板做坏。
 
-⚠️ 没有 Ctrl+F、Ctrl+H（查找/替换，`docs/07` 第 4 项）、也没有 Ctrl+Z 之类的
-编辑器内快捷键（那些由 ProseMirror 自己处理，`history` 插件）。
+⚠️ **④ 意味着"灰 = 快捷键也失效"**。这不是缺陷而是唯一说得通的口径，
+理由见 `docs/04` §4。
 
-### 菜单栏那三张派生表
+⚠️ **不判焦点是不行的**（③）：设置面板里的输入框按 `Ctrl+N` 不该新建文档。
+但 `isOutsideEditor` 必须放过**编辑器内部**的 `contenteditable`——
+ProseMirror 那棵树也是 `contenteditable`，不放过的话编辑器里一个快捷键都用不了。
+
+### 菜单栏那几张派生表
+
+⚠️ **2026-09-24 起这四张表全在 `ui/useMenus.ts` 里**（`menuHandlers` 那张仍在
+本文件——它才是"有没有实现"的真源）。见那一节。
 
 | 表 | 怎么算出来 | 用途 |
 |---|---|---|
-| `menuHandlers` | `useMemo`，**手写**的 `Record<string, () => void>`，键就是 `commands.ts` 里的条目 id | 点菜单项的落点。**没有键 = 这一项没实现** |
-| `disabledCommands` | 遍历 `MENUS`，`!menuHandlers[entry.id]`（没实现）**或** `entry.needsDoc && activeId === null`（没文档）就进集合 | 喂给 `MenuBar` 的 `disabled` |
-| `menuChecks` | 手写的 `Record<string, boolean>`：`view.toggleSidebar` / `view.outline` / `view.fileTree` / `view.toggleDock` / `view.statusBar` | 喂给 `MenuBar` 的 `checks`，画那个 `✓` |
+| `menuHandlers` | **手写**的 `Record<string, () => void>`，键就是 `commands.ts` 里的条目 id | 点菜单项的落点。**没有键 = 这一项没实现** |
+| `disabledCommands` | 遍历 `MENUS`（含子菜单），三条判据任一成立就进集合：没实现 / `needsDoc && activeId === null` / `光标条件` 不满足 | 喂给 `MenuBar` 的 `disabled`、原生菜单的 `enabled`、快捷键那步 ④ |
+| `menuChecks` | 手写的 `Record<string, boolean>`：`view.toggleSidebar` / `view.outline` / `view.fileTree` / `view.toggleDock` / `view.formatBar` / `view.statusBar` / `view.modeWysiwyg` / `view.modeSource` / `view.modeSplit` / `view.slidev` / `view.focusMode` / `view.typewriter` | 喂给 `MenuBar` 的 `checks`，画那个 `✓` |
+| `accelIndex` | `buildAccelIndex(MENUS)`（`ui/accel.ts`），**从 `accel` 字段推** | 快捷键派发。同一份 `MENUS` 也喂给 `buildNativeTree`（`ui/nativeMenu.ts`）推原生菜单 |
+
+⚠️ **2026-09-24 新加了三个键**：`file.exportHtmlPlain` / `file.exportHtmlStyled` /
+`file.print`（落点都是 `ui/useExport.ts`）。同栏里 PDF / Word / ODT / LaTeX / Epub /
+图片**故意还是灰的**——`commands.ts` 里有条目、`menuHandlers` 里没有键，于是
+`disabledCommands` 把它们收走。**不是漏了，是这一批没做**。
+⚠️ 打印那一条**不是"在应用里打印"**：它是"导出含样式的那份 + 交给系统默认程序"，
+所以提示里得把两步都说清楚，别让用户以为点完就出纸了。
 
 ⚠️ **`menuHandlers` 是"这一项能不能兑现"的唯一判据**（见 `ui/commands.ts` 顶上那段）。
 往里加一个键，菜单里对应那项就亮了——**这是有意的单点**，别在别处再写一份标志位。
+⚠️ **它只是第一条判据**：第二条是 `ui/useMenus.ts` 的 `光标条件`（"光标这一刻在不在
+合适的位置"，表格那十条要求 `inTable`），第三条是 `needsDoc`。⚠️ 三条都**只有一个
+出口**（`disabledCommands`），派生出三个消费者——各写一份的症状是"菜单灰着、
+快捷键却照跑"，不报错也不崩，只让用户觉得这个应用一会儿一个脾气。
+
+⚠️ **编辑模式那三条是"三选一"，而且来源是设置不是 `useState`。**
+`App.tsx` 里有 `const viewMode = settings?.view_mode ?? "wysiwyg";`，它同时喂给
+三处——`menuChecks` 里那三个 `✓`、`<EditorPane mode={viewMode}>`、以及
+`menuHandlers` 里写回 `updateSettings({ view_mode })`。**三处必须同源**：
+各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。
+⚠️ 兜底值 `"wysiwyg"` 必须和 Rust 侧 `ViewMode::default()` 一致。
+⚠️ 它们与别的 `view.*` 条目有个区别：**要落盘**。侧栏开合、状态栏那些是会话内的
+临时开关，编辑模式是"下次打开还是这样"的偏好——所以走 `updateSettings`
+（先改内存再写后端，失败会回滚），而不是 `setXxx`。
+
+⚠️ **主题那栏的 `✓` 不在 `menuChecks` 里**，在 `MenuBar.tsx` 里由 `themeChecks()`
+现算并在渲染时合并（条目的 id 来自后端，抄不进静态表）。见 `docs/04` §3.3。
 
 ### 业务函数（都是 `useCallback`）
 
@@ -2203,8 +2944,8 @@ ProseMirror 自己的标题快捷键是 Ctrl+Alt+1..6，所以也不冲突。
 | `openFolder` | `() => Promise<void>` | `openDialog({title:"打开文件夹", directory:true})` → `api.workspace.open(picked)` → `setWorkspace(canonical)` → `api.workspace.tree(undefined, 1)` 直接 `setTree`（**没走 `refreshTree`**） |
 | `closeDoc` | `(id: DocId) => Promise<void>` | 见下 |
 | `updateSettings` | `(patch: Partial<Settings>) => Promise<void>` | **先改内存**（主题、字号要立刻见效果）→ `api.settings.set(next)`；失败**回滚成 `previous`** 并 toast。免得"界面上是新的、重开又变回去" |
-| `pickTheme` | `(name: string) => void` | `updateSettings({document_theme: name})` + 一句 toast。空串 = 回内置默认 |
-| `openThemesDir` | `() => Promise<void>` | `openWithSystem(await api.theme.dir())`。⚠️ 后端会把目录**建出来**再返回——首次使用时它多半还不存在，直接打开一个不存在的路径会被文件管理器拒掉 |
+| ~~`pickTheme`~~ | — | **2026-09-24 搬去了 `ui/useDocTheme.ts`**（连同它下面那条） |
+| ~~`openThemesDir`~~ | — | 同上 |
 | `copyAsMarkdown` | `() => Promise<void>` | `editorRef.getMarkdown()` → `navigator.clipboard.writeText()` |
 | `toggleFullscreen` | `() => Promise<void>` | `getCurrentWindow()` → `setFullscreen(!await isFullscreen())` |
 | `showAbout` | `() => Promise<void>` | `getVersion()`（**取不到也照样弹**，那正是用户来查版本的地方）→ `askConfirm`，`hideCancel: true` |
@@ -2253,10 +2994,17 @@ ProseMirror 自己的标题快捷键是 Ctrl+Alt+1..6，所以也不冲突。
     <div className="app-body">
       {sidebarOpen && (
         <Sidebar workspace tree docText={activeDoc?.text ?? ""}
-                 tab={sidebarTab} onTab={setSidebarTab} onOpenFile={openPath} />
+                 strict={settings?.strict_markdown ?? false}
+                 tab={sidebarTab} onTab={setSidebarTab} onOpenFile={openPath}
+                 loadDir={loadDir}
+                 onClose={() => setSidebarOpen(false)}
+                 onOpenFolder={() => void openFolder()} />
       )}
       <main className="app-main">
         {activeDoc ? <EditorPane ref={editorRef} key={activeDoc.id} doc={activeDoc}
+                                 mode={viewMode}
+                                 strict={settings?.strict_markdown ?? false}
+                                 physics={settings?.enable_physics ?? false}
                                  contentWidth={settings?.content_width ?? 760}
                                  onToast={toast} onDocsChanged={refreshDocs} />
                    : <Home plugins onNew onOpen onOpenFolder />}
@@ -2266,7 +3014,10 @@ ProseMirror 自己的标题快捷键是 Ctrl+Alt+1..6，所以也不冲突。
       )}
     </div>
     {docs.length > 0 && <TabBar docs activeId onSelect={setActiveId} onClose={closeDoc} />}
-    {statusBarOpen && <StatusBar doc={activeDoc} />}
+    {statusBarOpen && (
+      <StatusBar doc={activeDoc} mode={viewMode}
+                 strict={settings?.strict_markdown ?? false} />
+    )}
     <Toasts items={toasts} onDismiss={…} />
     {confirmReq && <ConfirmDialog … onAnswer={answerConfirm} />}
   </div>
@@ -2281,13 +3032,13 @@ ProseMirror 自己的标题快捷键是 Ctrl+Alt+1..6，所以也不冲突。
 `StatusBar` 外面套了 `statusBarOpen`、`PluginDock` 外面套了 `dockOpen`——
 菜单栏本身**没有开关**（Typora 也没有"藏起菜单栏"这一项），标签栏则只看有没有文档。
 
-### 两个同文件内的子组件
+### 两个子组件（2026-09-23 起在各自文件里，不在本文件）
 
 | 组件 | props | 行为 |
 |---|---|---|
 | `TopBar` | `{disabled, checks, themes, currentTheme, onCommand, onTheme, onOpenThemesDir, dockOpen, onToggleDock}` | `<header className="toolbar">`：品牌名「Nota」+ `<MenuBar>` + 右侧的插件栏开关按钮 |
 | `TabBar` | `{docs: Document[], activeId, onSelect, onClose}` | `role="tablist"`。每个标签是一个 `role="tab"` 的 div，内含两个 button：标签名（点击 `onSelect`）与 `×`（点击 `onClose`）。`d.dirty` 时渲染 `<span className="tab-dot" title="有未保存的改动" />` |
-| `EditorPane` / `Home` / `MenuBar` / … | — | 在别的文件里 |
+| `EditorPane` / `Home` / `MenuBar` / `TopBar` / `TabBar` / … | — | 在别的文件里 |
 
 ⚠️⚠️ **四个工具条按钮（新建/打开/打开文件夹/保存）2026-09-23 撤掉了**——
 它们各是「文件」菜单里的一项，留着就是同一件事的两个入口，而 **Typora 顶栏上并没有
@@ -2300,7 +3051,26 @@ ProseMirror 自己的标题快捷键是 Ctrl+Alt+1..6，所以也不冲突。
 
 ---
 
-## `src/bridge/ipc.ts`（247 行）
+## `src/ui/TopBar.tsx`（74 行）· `src/ui/TabBar.tsx`（43 行）
+
+2026-09-23 从 `App.tsx` 拆出来的两支**纯展示**组件——拆的理由就一条：
+`App.tsx` 当时 921 行、贴着 1000 行上限，而这两块的 props 全是显式的，
+搬走零风险。下一步（Slidev 右侧面板）还要往 `App.tsx` 加状态。
+
+| 文件 | props | 渲染什么 |
+|---|---|---|
+| `ui/TopBar.tsx` | `disabled` · `checks` · `themes` · `currentTheme` · `onCommand` · `onTheme` · `onOpenThemesDir` · `dockOpen` · `onToggleDock` · `hideMenuBar` | `<header className="toolbar">`：菜单栏（`hideMenuBar` 为真时**不渲染**）+ 最右那个「插件」按钮 |
+| `ui/TabBar.tsx` | `docs` · `activeId` · `onSelect` · `onClose` | `role="tablist"`，每个标签是两个 button（标签名 / ×），`d.dirty` 时多一个小圆点 |
+
+⚠️ 两支都**不持有任何 state**，也**不 import 任何 `api.*`**——这是"拆得干净"的判据，
+下次再想搬东西就照这条来：**只画不决策的，搬走**。
+
+⚠️ 拆完之后 `App.tsx` 的组件树**一行没变**（`<TopBar …/>` / `<TabBar …/>` 还是那两个调用点），
+所以 `docs/04` §1 那棵树照旧成立——只是括号里的「(App.tsx 内联)」换成了文件名。
+
+---
+
+## `src/bridge/ipc.ts`（529 行）
 
 IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖：命令名是字符串，散在组件里
 改一次要全仓搜；集中在这里还能顺手把返回值的形状标出来（`invoke` 本身是 `any`，
@@ -2317,15 +3087,18 @@ IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖�
 | `DocId` | `type DocId = number` | `DocId(u64)` |
 | `Document` | `{id, path: string\|null, title, text, dirty, revision}` | `document::Document` |
 | `TreeNode` | `{name, path, is_dir, children: TreeNode[]\|null}` | `commands::workspace::TreeNode` |
-| `UiStyle` | `"auto" \| "adwaita" \| "macos" \| "yaru" \| "windows"` | `settings::UiStyle` |
+| `UiStyle` | `"auto" \| "adwaita" \| "ghub" \| "macos" \| "plasma" \| "windows" \| "yaru"` | `settings::UiStyle`。⚠️ **七个**，与 `ui/settings/panes.tsx` 的 `STYLES` 表一一对应（那张表写成 `Record<UiStyle, …>`，所以加值时漏不掉） |
 | `UiMode` | `"auto" \| "light" \| "dark"` | `settings::UiMode` |
-| `Settings` | `{ui_style, ui_mode, document_theme, ui_font_size, content_width, confirm_unsaved, autosave_seconds}` | `settings::Settings` |
+| `ViewMode` | `"wysiwyg" \| "source" \| "split"` | `settings::ViewMode`。⚠️ **不是外观轴**，见 `docs/05` §3.1 |
+| `Settings` | `{ui_style, ui_mode, document_theme, view_mode, ui_font_size, content_width, confirm_unsaved, autosave_seconds}` | `settings::Settings` |
 | `PluginInfo` | `{id, name, version, description, authors, license, capabilities, entry, dir, state: "loaded"\|"failed"\|"disabled", error: string\|null}` | `plugin::PluginInfo` |
 | `NotifyPayload` | `{plugin, message, level: "info"\|"warn"\|"error"\|"success"}` | `nota:notify` 的载荷 |
 | `DocumentChangedPayload` | `{id: DocId, text: string, origin?: string}` | `nota:document-changed` 的载荷 |
 | `PluginPanel` | `{plugin, id, title, icon: string\|null, location: string}` | `nota_plugin_panels` 的返回（**命令，不是事件**）。⚠️ `location` **不收窄成联合类型**——不认识的据点会被 `PluginDock` 放进「没有落脚处」那组，收窄了反而要把不认识的丢掉 |
-| `PluginMenuItem` | `{plugin, label, command, menu, accelerator: string\|null}` | `nota_plugin_menus` 的返回（同上） |
-| `ThemeInfo` | `{name, source, css, dir, has_assets}` | `themes::ThemeInfo`。⚠️ 它是一**对**东西：`<name>.css` ＋ 同名目录 `<name>/`。`css` 是那个文件的绝对路径，`dir` 是**相对 url 的基准** |
+| `PluginMenuItem` | `{plugin, label, command, menu, accelerator: string\|null, prompt: PluginPrompt\|null}` | `nota_plugin_menus` 的返回（同上） |
+| `PluginPrompt` | `{arg, label, placeholder, hint, secret: boolean}` | `plugin/mod.rs::PluginPrompt`。⚠️ **只有一个 `arg`**：要问两样东西目前做不到（真需要时再加，别先造一个通用表单结构没人用）。⚠️ `secret` **遮的只是屏幕**，值本身明文落盘 |
+| `PanelDirtyPayload` | `{plugin, id: string\|null}` | `nota:plugin-panel` 的载荷。⚠️ `id` 为 `null` = **那个插件的所有面板**都该重拉。⚠️ 事件里**一个字节的内容都没有** |
+| `DocThemeInfo` | `{id, name, builtin}` | `themes::DocThemeInfo`。⚠️ **`id` 是键、`name` 是显示名**，两者可以不同（内置那六套就是）；`id` 只会是 ASCII 字母数字与 `-` `_`。`builtin` 为真表示"内置那六套之一（且没被用户覆盖）" |
 
 ⚠️ 改 Rust 侧字段时**必须同批改这里**。两边不一致时 `invoke` 不会报错，只会给你一个
 少了字段的对象，然后在某个 `.map` 上炸掉。
@@ -2336,7 +3109,7 @@ Rust 侧它是 `Option<PathBuf>`，所以前端一定可能拿到 `null`——**
 
 ### `export const api`
 
-一个对象，**五组**方法（`doc` / `workspace` / `settings` / `theme` / `plugin`）+ 一个握手。
+一个对象，**六组**方法（`doc` / `workspace` / `settings` / `theme` / `plugin` / `export`）+ 一个握手。
 **全部返回 `Promise`**（`invoke` 的返回值）。
 
 | 组 | 方法 | 对应命令 | 参数映射 |
@@ -2358,16 +3131,18 @@ Rust 侧它是 `Option<PathBuf>`，所以前端一定可能拿到 `null`——**
 | | `tree(subPath?, depth?)` | `nota_workspace_tree` | `{subPath: subPath ?? null, depth: depth ?? 1}`，**默认 depth 是 1** |
 | `settings` | `get()` | `nota_settings_get` | |
 | | `set(settings)` | `nota_settings_set` | ⚠️ 调用者只有 `App.tsx` 的 `updateSettings`（**整份替换**，不是逐项 patch） |
-| `theme` | `list()` | `nota_themes_list` | **`App.tsx` 启动时拉一次**（同一个 `Promise.all`）。⚠️ 不重扫，见 `docs/07` 第 41 项 |
-| | `read(path)` | `nota_theme_read` | 返回**文本**。改造在前端做，见 `styles/typora-theme.ts` |
-| | `asset(path)` | `nota_theme_asset` | 返回 **data: URL**，不是路径。⚠️ 读不动时调用方退回 `convertFileSrc`（`absolutize` 里的 `catch`） |
-| | `dir()` | `nota_themes_dir` | 给「打开主题文件夹…」用。⚠️ 后端**会把目录建出来**再返回 |
+| `theme` | `list()` | `nota_doc_themes` | **`App.tsx` 启动时拉一次**（同一个 `Promise.all`）。⚠️ 不重扫，见 `docs/07` 第 41 项 |
+| | `css(id)` | `nota_doc_theme_css` | 返回**文本**。限域在前端做，见 `styles/doc-theme.ts`。⚠️ **入参是 id 不是路径** |
+| | `dir()` | `nota_doc_themes_dir` | 给「打开主题文件夹…」用。⚠️ 后端**会把目录建出来**再返回 |
+| `export` | `write(path, content)` | `nota_export_write` | `{path, content}`，返回**真实写出去的路径**。⚠️ 调用者是 `ui/useExport.ts` |
+| | `print(docPath, title, content)` | `nota_export_print` | `{docPath, title, content}`，返回落点。⚠️ `docPath` 允许 `null`（新文档还没存过）——那时落点变成系统临时目录 |
 | `plugin` | `list()` | `nota_plugins_list` | |
 | | `setEnabled(id, enabled)` | `nota_plugin_set_enabled` | ⚠️ 没有调用者 |
-| | `call(plugin, command, args?)` | `nota_plugin_call` | `{plugin, command, args: args ?? null}`。⚠️ 没有调用者——要等第 42 项 |
+| | `call(plugin, command, args?)` | `nota_plugin_call` | `{plugin, command, args: args ?? null}`。📌 **2026-09-24 起有调用者了**：`ui/usePlugins.ts::调`（面板按钮与插件菜单项两条路都走它） |
 | | `findCommand(command)` | `nota_plugin_find_command` | ⚠️ 没有调用者 |
-| | `panels()` | `nota_plugin_panels` | **`App.tsx` 启动时拉一次**（与 `list()` 同一个 `Promise.all`）。⚠️ 别改成等事件，见 BUG-13 |
-| | `menus()` | `nota_plugin_menus` | ⚠️ **仍然**没有调用者——菜单栏有了（第 40 项已结），但还没接这根线（第 42 项） |
+| | `panels()` | `nota_plugin_panels` | 启动时拉一次（与 `list()` 同一个 `Promise.all`）。⚠️ 别改成等事件，见 BUG-13 |
+| | `panelContent(plugin, id)` | `nota_plugin_panel_content` | ⚠️ **返回类型是 `unknown[]`，这是刻意的**：宿主只保证"是 JSON、有上限"，**不保证形状**——标成 `PanelNode[]` 等于对宿主许下一个它没打算兑现的承诺（插件写错一个 `kind`，类型系统一声不吭）。形状由 `ui/panel-nodes.ts::normalise` 一处校验并补齐 |
+| | `menus()` | `nota_plugin_menus` | 📌 **2026-09-24 起有调用者了**（`ui/usePlugins.ts`，与 `list()` / `panels()` 同一个 `Promise.all`） |
 | （顶层） | `frontendReady()` | `nota_frontend_ready` | 启动时调一次 |
 
 ⚠️ **参数名是"按名字对上号"的，写错就是静默收到 `None`**，不会报错。
@@ -2414,7 +3189,7 @@ export const events = {
 
 ---
 
-## `src/editor/create.ts`（301 行）
+## `src/editor/create.ts`（575 行）
 
 编辑器内核：Milkdown（ProseMirror + remark）的封装。
 
@@ -2436,6 +3211,7 @@ export interface EditorHandle {
   getMarkdown: () => string;
   setMarkdown: (markdown: string) => void;
   focus: () => void;
+  runCommand: (name: EditorCommand) => void;
   destroy: () => void;
 }
 ```
@@ -2445,11 +3221,16 @@ export interface EditorHandle {
 | `getMarkdown()` | 用 `serializerCtx` 把 `view.state.doc` 序列化成 markdown 字符串 |
 | `setMarkdown(markdown)` | `editor.action(replaceAll(markdown))` —— **整篇替换**。用于打开文件、插件改了文档、放弃修改重载 |
 | `focus()` | `ctx.get(editorViewCtx).focus()` |
+| `runCommand(name)` | 按 `EditorCommand` 派命令（`h1`~`h6` 走 `wrapInHeadingCommand` 带层数，其余查 `COMMANDS` 表）。⚠️ **跑完必定 `focus()` 一次**——命令是从菜单按钮上点下去的，那一刻焦点在按钮上，不交回去用户会觉得"菜单点完就卡住了" |
 | `destroy()` | `editor.destroy()`。⚠️ 组件卸载时**必须**调，否则 ProseMirror 的 DOM 监听会留着 |
 
 ⚠️ `setMarkdown` 是 `replaceAll`，**不保证失败会报错**：一个语法坏掉的 markdown 不会
 报错，remark 会按它的理解尽力解析，结果是"一段看起来对但不完全对的内容"。
 所以进编辑器的文本要先过 `parseMarkdown()`（见下）。
+
+⚠️ 源码模式那份句柄叫 `SourceHandle`（`editor/source.ts`），**五个方法同名同义**，
+所以 `EditorPane` 里一个 `handleRef` 能装两种实例。差别只有两处（`runCommand`
+返回 `boolean`、`getMarkdown` 真同步），见 `src/editor/source.ts` 那一节。
 
 ### `export interface CreateOptions`
 
@@ -2458,10 +3239,17 @@ export interface CreateOptions {
   root: HTMLElement;
   initialMarkdown: string;
   onChange?: (markdown: string) => void;
+  readOnly?: boolean;             // ← 分屏右侧那个预览窗格
 }
 ```
 
 `onChange` 的注释说明它**已经在 Milkdown 的 `updated` 钩子里**——调用方拿到后仍要做去抖。
+
+⚠️ **`readOnly` 要两件事同时成立才算只读**，缺一件就是"看着只读、其实在偷偷改文档"：
+`editorViewOptionsCtx` 里 `editable: () => !readOnly`（管 DOM 能不能编辑），
+以及 listener 里 `if (readOnly) return`（**只读实例一律不报变化**）。
+第 2 条别省：预览的文本是别人推给它的，它报变化会让调用方以为"用户改了文档"，
+进而把预览的规范化结果当成正文回写。完整理由见 `docs/05` §3.1 / §4。
 
 ### `export async function createEditor(options: CreateOptions): Promise<EditorHandle>`
 
@@ -2472,6 +3260,7 @@ export interface CreateOptions {
 
 ```ts
 ctx.get(listenerCtx).markdownUpdated((_ctx, markdown, prev) => {
+  if (readOnly) return;                     // ← 只读实例一律不报变化（分屏预览）
   if (markdown !== prev) onChange?.(markdown);
 });
 ```
@@ -2479,6 +3268,13 @@ ctx.get(listenerCtx).markdownUpdated((_ctx, markdown, prev) => {
 ⚠️ **这里不做去抖**：去抖是调用方的事，因为"多快算太快"取决于它拿这个回调干什么
 （存草稿 vs 推给后端 vs 更新字数，三种节奏不一样）。真正做去抖的是 `EditorPane.tsx`
 （300ms）。
+
+`config` 里还有一处 `editorViewOptionsCtx` 的更新，给正文区挂 `id="write"`，
+并设 `editable: () => !readOnly`。**`#write` 已经不是限域机制了**（限域由
+`styles/doc-theme.ts` 机械地收到 `.editor-pane` 之下完成），它现在是
+**给用户自己写的主题留的钩子**——Typora 主题里大量使用 `#write h1` 这种写法，
+留着这个 id，那些选择器被限域之后仍然命中；删掉的话它们会静默失效。
+⚠️ **别顺手删。** 见 `create.ts` 里那段注释。
 
 `use` 的插件清单（**有什么和没有什么一样重要**）：
 
@@ -2533,7 +3329,7 @@ export function parseMarkdown(editor: Editor, markdown: string): unknown {
 
 ---
 
-## `src/editor/instant-render.ts`（142 行）
+## `src/editor/instant-render.ts`（154 行）
 
 「光标所在块的 Markdown 标记**半透明显示**」那个 ProseMirror 插件。
 
@@ -2574,29 +3370,118 @@ DOM 节点里"的映射，而块首那种位置是有歧义的）。
 
 ---
 
-## `src/styles/applyTheme.ts`（84 行）
+## `src/editor/atx.ts`（84 行）
 
-把设置里的**三条外观轴**落到 DOM 上：
+**「什么算标题」这件事的唯一判据。** 两种模式的正则都在这里，别处一律往这儿问。
+
+| 名字 | 是什么 |
+|---|---|
+| `宽松标题层数(text)` | 这段文本算几级标题——`#标签` 返回 `1`，`# 标签` 也返回 `1`，普通正文返回 `0`。**宽松模式那个装饰只用这一个函数** |
+| `atxTextRe(strict)` | 把一行拆成「井号 + 内容」的正则：严格是 `^(#{1,6})\s+(.*)$`（井号后必须有空格），宽松是 `^(#{1,6})\s*(.*)$` |
+| `atxPrefixRe(strict)` | 行首前缀那段（用来剥掉井号取标题文字）：严格 `^#{1,6} +`，宽松 `^#{1,6} ?` |
+
+⚠️ **三个调用点，都得从这儿进**：
+
+| 调用点 | 用途 |
+|---|---|
+| `editor/lax-heading.ts` | 宽松模式下"这一段该不该按标题排版、排几级" |
+| `editor/source.ts` | 源码模式的标题高亮 |
+| `ui/outline.ts` | 大纲与字数 |
+
+⚠️ **还有一份同构的实现在 Rust 侧**：`src-tauri/src/document/mod.rs::strip_atx()`——
+标签页标题是**后端**按当前口径从正文算出来的（`first_heading`），不是前端传上去的。
+两边判据必须一起改：只改一边的症状是"正文里是标题、标签页却显示「未命名」"（或反过来）。
+
+⚠️ **`宽松标题层数` 的判据是 `#{1,6}` 后面紧跟一个非空白字符**，也就是"CommonMark
+永远当不成 ATX 标题"的那种写法——宽松之所以能**一个字节都不改**，靠的就是
+"解析器怎么看它都只是一段普通文本"（见下一节）。
+
+---
+
+## `src/editor/lax-heading.ts`（174 行）
+
+宽松模式（默认，`Settings.strict_markdown = false`）认 `#你好` 是标题，而**不改用户写的一个字节**。
+两件事各占一半，缺一条都会变成"自动修复"：
+
+| 导出 | 层次 | 干什么 |
+|---|---|---|
+| `宽松标题显示` | 显示 | `$prose` 插件：给**段落**挂一个 `Decoration.node`，`nodeName` 是 `h1`~`h6`。文档树里它**还是段落**，只是 DOM 上被包了一层 `<h1 class="nota-lax-heading"><p>#你好</p></h1>` |
+| `不转义行首井号(原文)` | 序列化 | 包一层 remark 的 `text` 处理器，把 `\#标签` 里那个**多余的反斜杠**去掉 |
+
+### ⚠️ 为什么不是"解析前先把文本补成 `# 你好`"
+
+第一版就是这么干的，被用户否了：**所见即所得那一侧是整篇重新序列化**的，
+文本一旦被补过，存盘存下去的就是带空格那份——用户写的字被改了。
+现在的分工是**结构性**的：从"段落"到"文件"那条路上没有任何一步会改字。
+
+⚠️ 这条规矩的原话是「**如果关闭，存盘不要自动修复。**」（2026-09-24），
+它现在是这个文件头上的第一条不变量。想在这里加"顺手补个空格"的念头，先读文件头。
+
+### ⚠️ 为什么是 `Decoration.node` + `nodeName`
+
+- 文档树里是段落 ⇒ 存盘必然存回原文；
+- DOM 上要**真是一个 `h1`** ⇒ 文档主题里写的是 `h1 { font-size: … }`
+  （`src/styles/themes/*.css`），换成真标签，**内置六套和用户自己写的主题**
+  才一视同仁地生效。反过来"加个 class、让每套主题各补一条同款规则"要逐个补漏。
+
+⚠️ `nodeName` 是**包一层**不是替换标签（`prosemirror-view` 的 `computeOuterDeco` 行为）。
+包一层在这里正好：主题里写着 `p { margin: 0 }`，不会叠出双份外边距。
+
+### ⚠️ 为什么这个装饰能缓存，`instant-render.ts` 那个不能
+
+同一节上面写着"装饰故意不做缓存"，**那是另一个插件的结论**，判据不同：
+
+| 插件 | 装饰取决于 | 缓存 |
+|---|---|---|
+| `instant-render.ts` | 文档 **+ 光标位置** | ❌ 不缓存（判"这次变化影响不影响结果"会判错） |
+| `lax-heading.ts` | **只有文档** | ✅ 按"`state.doc` 还是不是同一个对象"缓存——纯光标移动不必全篇重走 |
+
+文档一改对象就换了，缓存自然失效，**不需要自己判断"这次变化影响不影响结果"**。
+
+### 第二半：`不转义行首井号`
+
+`#标签` 在文档树里是段落，而 markdown 序列化器有个保守习惯：段落里**行首**的 `#`
+一律转义成 `\#`（`mdast-util-to-markdown` 的 unsafe 表里那条
+`{atBreak: true, character: '#'}`）。于是存盘会写出用户没打过的反斜杠——那也是"自动修复"。
+
+⚠️ 那条转义**只在"井号后面有空白"时才有用**，而那种写法我们一个字都不碰，
+所以规则可以收得很紧（`/(^|\n)\\(#{1,6})(?=[^\s#])/g`：**必须**是 `#{1,6}` 后面紧跟
+非空白非井号），也所以**两种模式都改**——用户看到的规律才是一句话
+「**Nota 不会往你写的井号上加反斜杠**」。
+
+⚠️ **已知的一处残留改字**：用户**手打**的 `\#标签` 会丢掉那个反斜杠。
+转义井号和裸井号在文档树里是同一个东西（都是文本 `#标签`），要区分只能记住源码。
+差别只在字节上，两边的解析结果与显示完全一样——记在 `docs/03` §5.5。
+
+---
+
+## `src/styles/applyTheme.ts`（102 行）
+
+把设置里的**两条界面轴**落到 DOM 上：
 
 ```text
-<html data-ui-style="macos" data-ui-mode="dark" data-doc-theme="github">
+<html data-ui-style="macos" data-ui-mode="dark">
 ```
 
 | 轴 | 属性 | 管什么 |
 |---|---|---|
 | 界面风格 | `data-ui-style` | 一整套设计语言：控件形状、圆角、间距、动效、字体栈 |
 | 明暗 | `data-ui-mode` | 亮/暗。**任何风格下都成立** |
-| 文档主题 | `data-doc-theme` | 只管正文。不动外壳一分 |
 
 所以 CSS 的组织方式是 `[data-ui-style="x"]` 定形状、`[data-ui-mode="y"]` 定颜色，
 **两者相乘**。写新风格时不要图省事把颜色也塞进 style 里——那样它就没法配暗色了。
+
+⚠️ **第三条轴（文档主题）不在这里，而且没有 DOM 属性。** 2026-09-23 之前它也在这张表上
+（`data-doc-theme`），那正是"换个文档主题、整个应用跟着变色"的来源。现在它是一份
+注进 `<head>` 的 `<style id="nota-doc-theme">`，只对 `.editor-pane` 之下生效——
+见 `styles/doc-theme.ts`。**别把它加回 `<html>` 上。**
 
 ### 私有辅助
 
 | 函数 | 行为 |
 |---|---|
 | `systemPrefersDark() -> boolean` | `window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false` |
-| `detectStyle() -> Exclude<UiStyle, "auto">` | 探"自动"风格该落到哪个具体风格。把 `navigator.userAgent` 与 `guessDesktop()` 拼起来小写后判：含 `kde`/`plasma` → `adwaita`；含 `ubuntu` → `yaru`；**其余一律 `adwaita`**（它是 GNOME 的原生语言，也是 WebKitGTK 下最不出错的一档） |
+| `detectStyle() -> Exclude<UiStyle, "auto">` | 探"自动"风格该落到哪个具体风格。把 `navigator.userAgent` 与 `guessDesktop()` 拼起来小写后判：含 `kde`/`plasma` → `plasma`；含 `ubuntu`/`yaru` → `yaru`；含 `windows` → `windows`；含 `mac`/`darwin` → `macos`；**其余一律 `adwaita`**（它是 GNOME 的原生语言，也是 WebKitGTK 下最不出错的一档） |
 | `guessDesktop() -> string` | ⚠️ **恒返回空串**（注释：WebKitGTK 不会把桌面环境告诉 JS，没有可靠的同步 API；等接上 XDG portal 的 `color-scheme` 后换掉）。所以 `detectStyle()` 实际上**永远返回 `adwaita`** |
 | `resolveMode(mode) -> "light" \| "dark"` | `auto` → 跟 `systemPrefersDark()`；否则原样 |
 | `resolveStyle(style) -> string` | `auto` → `detectStyle()`；否则原样 |
@@ -2636,80 +3521,105 @@ SSR）下它可能不存在。
 
 ---
 
-## `src/styles/typora-theme.ts`（389 行）
+## `src/styles/doc-theme.ts`（231 行）
 
-**"兼容 Typora 主题"整件事的核心文件。** 把一份**给整个应用写的** Typora 主题 CSS，
-改造成**只作用于正文**的样式。
+**「文档主题碰不到外壳」这条线的全部实现。** 把一份**按普通文档 CSS 写**的主题
+（内置六套在 `src/styles/themes/*.css`，用户自己写的也一样）改造成**只作用于正文**
+的样式。
 
 ### 为什么不能直接把主题 CSS 塞进 `<style>`
 
-实测真实主题（github / night / newsprint / pixyll / whitey）里，
-**每套有 21–59 条裸元素规则**——`h1 { font-size: 2.25em }`、`body { color: … }`、
-`a { color: … }`，**全都没有前缀**。原样注入的后果是应用外壳的标题、链接、按钮一起被改，
-侧栏和菜单栏当场散架。所以要先**把它们关进 `#write` 里**——`#write` 是 Typora 给正文区的
-id，我们把它挂到 ProseMirror 那一层上（见 `src/editor/create.ts`），
-于是主题规则只作用于正文，外壳一根头发都不动。
+一份文档主题里写的是 `h1 { font-size: 2.2em }`、`body { color: … }`、`a { color: … }`，
+**全都没有前缀**——不这么写就没人写得动主题。原样注入的后果是应用外壳的标题、链接、
+按钮一起被改，侧栏和菜单栏当场散架。所以要先**把它们关进 `.editor-pane` 里**。
 
-### 改造四步（顺序不能换）
+⚠️ **`scopeDocThemeCss` 有两个调用点**：屏幕上的 `applyDocTheme`（注入 `<style>`），
+以及**导出**（`editor/export.ts` 把限域后的文本嵌进导出文件）。导出那一份**同样必须限域**——
+不限域的后果和界面上一样（主题里那句 `body { … }` 会落到导出文件的页面上）。
 
-| 步 | 函数 | 干什么 |
+⚠️ **这份改造是机械的**，不靠写主题时自觉。主题文件里写漏了也漏不到外壳上去——
+这是下面那条"`check_id` 是安全边界"之外**第二条**边界，管的是"样式别越界"而不是"文件别越界"。
+
+⚠️ **上一版（已删）这里的做法不一样，别再照着旧的想。** 上一版兼容 Typora 主题，
+四步是：展开 `@import` → 把 `url()` 内联成 `data:` URL → 解析 → 收拢到 `#write`
+**并把 `:root` 变量提升到全局**。最后那半句正是"换个文档主题、整个应用跟着变色"的来源
+（`theme.css` 末尾有一排 `var(--nota-bridge-X, default)` 在消费它们）。
+用户 2026-09-23 说「这是文档风格，不是界面风格，不应该影响到UI主题」，**桥和提升都拆了**。
+
+### 管线
+
+```text
+loadDocTheme(id)  →  api.theme.css(id)  取回**文本**
+                  →  scopeDocThemeCss()  解析 + 改写选择器
+                  →  <style id="nota-doc-theme"> 追加进 <head>
+```
+
+### `export function scopeDocThemeCss(css: string): string`
+
+用**浏览器的 `CSSStyleSheet`** 解析（`replaceSync`），**不用正则**。
+⚠️ 理由：正则切 CSS 是经典翻车现场（注释里的花括号、`content: "}"`、嵌套 `@media`）。
+浏览器自己的解析器是最准的那个，而且免费。
+⚠️ 解析失败（语法坏到浏览器都不认）时**返回空串而不是抛**——换主题失败不该带崩编辑器。
+
+### 六条限域规则（顺序不能换）
+
+| # | 情况 | 怎么办 |
 |---|---|---|
-| 1 | `loadThemeCss()` → `inline()` | 展开 `@import`（**异步**，所以排在解析之前）。真实主题会跨文件引：`night.css` 里 import 了 `night/mermaid.dark.css` |
-| 2 | `absolutize()` | 把 `url()` 换成可用的绝对地址。⚠️ **换成的是 data: URL，不是 asset 协议**——见下 |
-| 3 | `scopeThemeCss()` | 用**浏览器的 `CSSStyleSheet`** 解析，**不用正则** |
-| 4 | `walk()` / `emitStyleRule()` / `scopeSelector()` | 选择器收拢到 `#write`，同时把 `:root` 上的自定义属性**提升到全局** |
+| 1 | 已经含 `.editor-pane` | **原样放过**。再套一层会变成 `.editor-pane .editor-pane h1`，永远命不中（**这是最容易犯的错**） |
+| 2 | `:root` / `html` / `body` **单独出现** | **改写成** `.editor-pane`（**不是加前缀**）——它们指的就是"正文那棵树的根" |
+| 3 | 前导 `html` / `body` 链（`html body` / `body > p`） | 整条前缀**摘掉**，剩下的照第 4 条办 |
+| 4 | 其余一切 | 加 `.editor-pane ` 前缀，**包括我们根本没有的那些选择器**（`#typora-sidebar` 之类）。给它们加前缀等于让它们安全地失效：不报错、不起作用、也不污染外壳 |
+| 5 | `@media` / `@supports` | **下钻**——里面的选择器同样要收拢 |
+| 6 | `@font-face` / `@keyframes` / `@page` | **原样放过**（内容不是选择器，套上前缀会当场失效）。`@import` / `@charset` 与不认识的 at 规则**丢掉** |
 
-⚠️ **第 2 步在合并前按"每个文件自己所在的目录"改写**：主题用相对路径引用自己旁边的字体
-（`url('./github/xxx.woff2')`），注入文档之后相对基准会变成**应用的 URL**，字体全丢。
+⚠️ **规则 2 是这次修 bug 的关键，别为了让某个主题"能改外壳"把它改回去。**
+上一版把 `:root` 的变量**提升到全局**供外壳消费，这一版把它**改写到编辑区**，变量再也出不去。
 
-⚠️ **第 3 步为什么不用正则**：正则切 CSS 是经典翻车现场（注释里的花括号、
-`content: "}"`、嵌套 `@media`）。浏览器自己的解析器是最准的那个，而且免费。
+⚠️ `splitTop()` 按**顶层**逗号切选择器——`:is(a, b) h1` 里那个逗号不是分隔符。
+引号与 `()`/`[]` 的深度都要照顾到。
 
-### `scopeSelector()` 的三条规矩（顺序不能换）
+### `export function applyDocTheme(css: string | null): void`
 
-1. 已经含 `#write` 的**原样放过**——主题自己写了 `#write p`，再套一层会变成
-   `#write #write p`，永远命不中（**这是最容易犯的错**）；
-2. `:root` / `html` / `body` 单独出现时**换成** `#write`（不是加前缀）——
-   它们指的就是"正文那棵树的根"；
-3. 其余一律加 `#write ` 前缀，**包括我们根本没有的那些选择器**（`#typora-sidebar` 之类）。
-   给它们加前缀等于让它们安全地失效，正是我们要的：不报错、不起作用、也不污染外壳。
+传 `null` = **撤掉主题**。
 
-⚠️ 连续的前导 `html`/`body`（`html body`、`body > p`）要一并换成 `#write`；
-`splitTop()` 按**顶层**逗号切选择器，`:is(a, b) h1` 里那个逗号不是分隔符。
-
-### `emitStyleRule()`：变量提升的判据
-
-一条规则拆成**最多两条**：自定义属性（`--x`）与普通声明分开。
-**只有选择器里出现 `:root` / `html` / `body` 时，变量才提升到全局**——
-别的选择器上的自定义属性是**局部**变量，跟着它自己走。
-提升上去的变量由 `theme.css` 末尾那段桥接块消费，于是换主题时侧栏、强调色也跟着变。
-
-⚠️ `@font-face` / `@keyframes` / `@supports` / `@page` **原样放过**——它们的关键帧/描述符
-不是选择器，套上 `#write` 会当场失效。
-
-### 边界：兼容不了什么
-
-Typora 主题里有大量按**它自己的 DOM** 写的选择器（`#typora-sidebar` / `.megamenu` /
-`#top-titlebar` / `#typora-source` / `.md-toc` / `.md-math` / `.md-image`），我们没有那些元素，
-这些规则会变成**永远不会命中的死规则**——不报错，也不起作用。
-**这不是 bug 是边界**：我们没有和它一样的 DOM 契约，就不该假装有。
-能拿到的部分是"**正文版式 + 配色**"，而那正是主题的主要价值。
-
-### `export async function applyDocTheme(theme: { css: string } | null)`
-
-换主题。传 `null` / 空串表示"用内置默认"，会把主题样式整个撤掉。
+⚠️ **`null` 是"删掉那个 `<style>` 元素"，不是"注入一段空 CSS"**——所以回到的是
+**我们自己的样式**（`editor.css` 那份），不是"没有样式的裸 HTML"。这个区别很要紧：
+`editor.css` 里的排版是按 token 写的，token 有默认值，删掉主题照样是一份能读的文档。
 
 ⚠️ 用**一个固定的 `<style id="nota-doc-theme">`** 做替换，而不是每次 append 一个新的：
 后者在用户来回切主题时会原地堆出一串 `<style>`，而且旧的那份仍然生效，
 最后谁都说不清当前是哪套主题。
 
-⚠️ 解析失败（语法坏到浏览器都不认）时**返回空串而不是抛**——换主题失败不该带崩编辑器。
+⚠️ 末尾还拼了一条 `::selection` 规则（`SELECTION_RULE`），用
+`var(--select-text-bg-color, highlight)` / `var(--select-text-font-color, highlighttext)`
+取色。**`highlight` / `highlighttext` 这两个 fallback 不能省**：
+`background: var(--x)` 在 `--x` 不存在时整条声明失效、回落到 `unset`（也就是 `transparent`），
+症状是**选中了看不见**。
 
-无测试（前端没有测试运行器）。
+### 边界：主题能改什么
+
+主题由两部分组成，**也只有这两部分**：
+
+1. 在 `:root` 里**改 token**（`--doc-bg` / `--doc-fg` / `--border` / `--bg-subtle` /
+   `--radius` / `--code-*` / `--select-text-*` / `--font-doc` / `--doc-font-size` /
+   `--doc-line-height`）。⚠️ 编辑区骨架的样式在 `editor.css` 里是**用 token 写的**，
+   所以改 token 就能连代码块底、边框、圆角一起换，**不用去跟 `editor.css` 抢选择器权重**
+   （抢不过：那边是 `.editor-mount .ProseMirror`，两条选择器）；
+2. 写 `editor.css` **没有覆盖过**的那部分排版：标题、链接、引用、表格、分隔线、列表。
+
+⚠️ 按**它自己的 DOM** 写的选择器（`#typora-sidebar` / `.megamenu` / `#top-titlebar` /
+`#typora-source` / `.md-toc` / `.md-math` / `.md-image`）在我们这里会变成
+**永远不会命中的死规则**——不报错，也不起作用。**这不是 bug 是边界**：
+我们没有和 Typora 一样的 DOM 契约，就不该假装有。
+
+无测试（前端没有测试运行器）。⚠️ **但限域本身在 Rust 那侧有一条回归测试兜底**：
+`themes.rs::内置主题不碰界面变量` 逐份扫内置 CSS，不许出现界面变量名——
+确保"哪天有人图省事在主题里加一条界面变量"会被测试抓住。**限域逻辑（`scopeDocThemeCss`）
+本身仍然没有机器判据**，只能靠人看版式。
 
 ---
 
-## `src/ui/MenuBar.tsx`（205 行）
+## `src/ui/MenuBar.tsx`（185 行）
 
 菜单栏。**这是"模仿 Typora 界面布局"里最主要的一块。**
 
@@ -2722,10 +3632,10 @@ Typora 主题里有大量按**它自己的 DOM** 写的选择器（`#typora-side
 |---|---|---|
 | `disabled` | `Set<string>` | 当前**用不了**的命令 id。没实现、或缺活动文档，都进这个集合 |
 | `checks` | `Record<string, boolean>` | 可勾选项的当前状态 |
-| `themes` | `ThemeInfo[]` | 已经扫到的主题 |
-| `currentTheme` | `string` | 当前文档主题名。空串 = 内置默认 |
+| `themes` | `DocThemeInfo[]` | 已经扫到的**文档主题** |
+| `currentTheme` | `string` | 当前文档主题的 **id**。空串 = 无主题 |
 | `onCommand` | `(id: string) => void` | 点了一个普通条目 |
-| `onTheme` | `(name: string) => void` | 选了某个主题（空串 = 无主题） |
+| `onTheme` | `(id: string) => void` | 选了某个主题（空串 = 无主题）。⚠️ **传的是 id 不是显示名** |
 | `onOpenThemesDir` | `() => void` | 点了「打开主题文件夹…」 |
 
 内部只有一个 state：`const [open, setOpen] = useState<string | null>(null)`（哪一栏开着，
@@ -2754,17 +3664,19 @@ Typora 主题里有大量按**它自己的 DOM** 写的选择器（`#typora-side
 内容由 `themeEntries()` 现算：一条「无主题（内置）」+ 每个主题一条 + 末尾一条
 「打开主题文件夹…」。⚠️ 这两条**不在 `commands.ts` 里**，因为它们只属于这一栏。
 
-主题条目的 id 是合成的：`__theme-none` 与 `__theme:<名字>`（前缀常量 `THEME_PREFIX`），
+主题条目的 id 是合成的：`__theme-none` 与 `__theme:<id>`（前缀常量 `THEME_PREFIX`），
 `pick()` 按前缀分流到 `onTheme`，其余走 `onCommand`。
 
-出处标在名字后面（`（Typora）` / `（Typora flatpak）`，我们自己的不标）。
-不标的话"我明明删了那个文件它怎么还在"会变成一个查不动的问题——**三个目录都扫**，
-得让人看出是哪一份。没有同名资源目录的主题后面跟一个「　无字体」。
-⚠️ 全角空格开头是**对齐用的**，别改成半角。
+显示名用 `t.name`（**内置那六套是中文**：素纸/蓝图/晨雾/报刊/墨色/松林），
+被用户覆盖过的那几条（`builtin === false` 但 id 与内置同名）后面跟一个「（已自定义）」。
+
+⚠️ **这一栏装的全是文档主题，一条界面主题都没有**，也没有落点能改外壳。
+界面那两条轴（风格、明暗）的入口在 `ui/settings/`。
+用户 2026-09-23 明确要求两者分开，**别为了"方便"把它们并回来**。
 
 ---
 
-## `src/ui/commands.ts`（195 行）
+## `src/ui/commands.ts`（415 行）
 
 菜单栏的**骨架**：菜单怎么排、每一项叫什么、有没有快捷键。
 逐条抄自 Typora 的菜单（用户 2026-09-22 截了 6 张图，抄录在 `docs/10` §11.1）。
@@ -2777,7 +3689,21 @@ Typora 主题里有大量按**它自己的 DOM** 写的选择器（`#typora-side
 | `MenuEntry` | `MenuItemSpec \| "sep"` |
 | `MenuSpec` | `{ id, label, items: MenuEntry[], dynamic?: "themes" }` |
 
-`export const MENUS: MenuSpec[]` —— 七栏：文件 / 编辑 / 段落 / 格式 / 视图 / 主题 / 帮助。
+`export const MENUS: MenuSpec[]` —— **七栏**：文件 / 编辑 / 段落 / 格式 / 视图 / 主题 / 帮助。
+
+⚠️📌 **这一份是"内置的那七栏"，不是菜单栏最终的样子。** 插件声明的那一栏由
+`ui/pluginMenus.ts::带插件栏(MENUS, 菜单项们)` **拼在「帮助」前面**，
+拼的结果在 `ui/usePlugins.ts::menus`（`useMemo`）里。所以：
+**要拿"菜单栏现在长什么样"请用 `usePlugins().menus`，不是 `MENUS`。**
+⚠️ **消费者分两拨，别搞混**：
+
+| 消费者 | 用的是哪一份 |
+|---|---|
+| `ui/MenuBar.tsx`（画出来的菜单栏）、`ui/nativeMenu.ts`（原生菜单）、`ui/accel.ts::buildAccelIndex`（快捷键派发） | **拼过的**（`usePlugins().menus`）。漏掉哪一处，插件那一栏就只在那一个消费者看得见 |
+| `src/ui/settings/ShortcutsPane.tsx` | ⚠️ **仍然是常量 `MENUS`**——所以**插件的快捷键不出现在「快捷键」那一页**。这不是漏改，是没做：那一页的分组**在模块级算一次**（`const GROUPS`），要带上插件项就得改成受控的。今天唯一的后果是"插件快捷键查不到"，**没记进 backlog 是因为它还没被人抱怨过**——真要改时别只加一个 import |
+
+⚠️ `ui/FormatBar.tsx` 也读常量 `MENUS`，但那是拿**内置命令的快捷键文本**
+（格式工具栏的 tooltip），**跟插件无关**，不用改。
 
 ### ⚠️ 「能不能兑现」不是这里说了算
 
@@ -2789,9 +3715,24 @@ Typora 主题里有大量按**它自己的 DOM** 写的选择器（`#typora-side
 它就不可能不一致：**界面永远不会声称一个它做不到的能力**。
 派生表在 `App.tsx` 的 `menuHandlers` 上（`disabledCommands` 由它算出来）。
 
-⚠️ `accel` **只是显示**——真正的按键绑定在 `App.tsx` 的 `keydown` 里。
-两处不一致时以那边为准（这边写错了用户按下去没反应，不会报错），
-所以**改了那边记得回来对一眼**。
+### ✅ `accel` 是**快捷键的唯一真源**（2026-09-23 起）
+
+这条曾经是反的（「`accel` 只是显示，真绑定在 `App.tsx` 手写」），现在正过来了：
+
+```text
+commands.ts 的 accel ──> ui/accel.ts::buildAccelIndex ──> App.tsx 查表派发
+                     └──> ui/nativeMenu.ts ──────────> 原生菜单（macOS）
+                     └──> ui/MenuPopup.tsx::formatAccel ──> 菜单上显示的那几个字
+```
+
+**三个消费者，一个源**。所以"菜单上显示 `Ctrl+P`"和"按 `Ctrl+P`"再也不可能
+各说各话——这正是重做的目的。代价是**写错 `accel` 会静默换键**（显示的那个键
+不灵、另一个键开始干这件事），为此 `buildAccelIndex` 在构建时对
+**重复键位**和**muda 认不出的写法**都 `console.warn`。
+
+⚠️ `accel` 里的 `Ctrl` 在 macOS 上是 **⌘**（`formatAccel` 出 `⇧⌘S`，
+`native_menu.rs` 翻成 `CmdOrCtrl+`）。muda 的 `CTRL` 在 macOS 上是**真的
+Control 键**，直接用会让用户按 ⌘ 没反应。
 
 ### 为什么界面串一律中文
 
@@ -2804,11 +3745,212 @@ Typora 自己的菜单是**中英混杂**的（"帮助"整栏除最后三行外�
 「What's New / Quick Start / Markdown Reference…」全是外链，我们离线优先，
 外链既打不开也不该假装能打开。
 
+### 菜单树里的三种形状
+
+```ts
+"sep"                          // 分隔线
+{ id, label, accel?, … }       // 叶子项；有 accel 就会同时进快捷键索引
+{ id, label, submenu: [...] }  // 父项；⚠️ **不带 enabled/accel**，只负责飞出来
+```
+
+⚠️ **父项不该有 `accel`**：它没有动作可绑，写了只会让快捷键索引里多一条
+指向"打开一个子菜单"的伪命令。`native_menu.rs` 那边也照这个口径
+（父项不带 `enabled`，因为枚举型的原生菜单项没有这个概念）。
+
 ---
 
-## `src/ui/EditorPane.tsx`（145 行）
+## `src/ui/MenuPopup.tsx`（336 行）
 
-编辑区：把 Milkdown 实例接进 React 生命周期。
+一栏的弹层 + 它飞出来的子菜单。从 `MenuBar.tsx` 拆出来的：**菜单栏负责
+"哪一栏开着"，这里负责"开着的那一栏里有什么、怎么走"**，
+两者共用的只有 `disabled` / `checks` 两张表。
+
+### ⚠️ 只支持**一层**子菜单
+
+不是省事。VMark 那边最深也就是一层，Typora 也一样——两层以上在桌面软件里
+几乎见不到，因为鼠标要走的对角线越来越长、越容易半路误触。内部 `SubMenu`
+**自己不认 `submenu` 字段**，所以第二层会静默变成一个点不动的项。
+真要加，先想清楚是不是该把那一组拆成两个平面菜单。
+
+### ⚠️ 子菜单为什么走 portal ＋ `position: fixed`
+
+两个坑，都踩过：
+
+1. **父弹层要能滚**（菜单太长时 `overflow-y: auto`），而 **CSS 里一个轴设成
+   `auto`，另一个轴的 `visible` 会被算成 `auto`**——子菜单一飞出右边缘就被裁掉，
+   症状是只剩一条几像素的竖条。
+2. `fixed` 到视口上才不受滚动容器裁剪，但那样坐标就得**自己量**（`subAnchor`
+   那段）。portal 到 `body` 是为了顺带躲开弹层那条 `transform` 动画——
+   动画期间它会变成 `fixed` 后代的**包含块**，又把人拽回裁剪里。
+
+⚠️ **DOM 顺序反了不要紧，`z-index` 也不该靠它**——portal 出去之后弹层和
+主弹层是兄弟关系。
+
+### 方向键的归属
+
+`←` `→` 的去向是这一层和外面**约定好**的，不靠事件冒泡
+（主弹层里 `→` 展开子菜单、子菜单里 `→` 什么都不做、`←` 收起自己）。
+⚠️ 子菜单的 `onKeyDown` **必须 `stopPropagation`**，否则同一个键会冒泡到
+父弹层再被解释一遍——症状是按一下 `↓` 跳两格。
+
+---
+
+## `src/ui/accel.ts`（353 行）
+
+**快捷键的解析、显示与派发。** 这是 "菜单上写着的键" 和 "按下去真的响的键"
+合成一件事的那一环，见 §`commands.ts`。
+
+### 导出
+
+| 名字 | 干什么 |
+|---|---|
+| `parseAccel(text)` | `"Ctrl+Shift+S"` → `{ ctrl, shift, alt, key }`。⚠️ `split_key_and_modifiers` 式的 `rfind('+')`，所以 `Ctrl++` 这种要留意 |
+| `accelSig(a)` | 规范化成签名串（`"ctrl+shift+s"`），**比较只认签名**，不认原始写法 |
+| `eventAccel(e)` | 从 `KeyboardEvent` 反推签名。⚠️ **优先 `CODE_TO_KEY[e.code]`**，退回 `e.key.toLowerCase()` |
+| `formatAccel(text, mac?)` | 显示用。macOS 上出 `⇧⌘S`，其余出 `Ctrl+Shift+S` |
+| `buildAccelIndex(menus)` | 走遍 `MENUS`（含子菜单）建 `Map<签名, 命令 id>`，重复键位与认不出的写法都 `console.warn` |
+| `isOutsideEditor(target)` | 焦点在 `input`/`textarea`/`select`/`contenteditable` **且不在 `.editor-pane` 里** |
+
+### ⚠️ 为什么判 `e.code` 不判 `e.key`
+
+按着 Shift 敲数字排，`e.key` 拿到的是**上档字符**（Shift+1 是 `"!"`），
+所以 `Ctrl+Shift+1` 用 `e.key` **永远查不到**。这曾经是两条按了没反应的死代码，
+而静态读代码完全看不出来。`CODE_TO_KEY` 把物理键位映射成不带修饰的名字。
+
+⚠️ **这张表漏过一次，而且是静默的**：少了 `Digit1`…`Digit9` 之后代码退回
+`e.key`，而**不带 Shift 时 `e.key` 恰好就是 `"1"`**——`Ctrl+1` 照样能用，
+窟窿被盖住，只有 `Ctrl+Shift+1` 会露馅。现在由试验台的 `#accel` 场景
+（30 条键位 + 9 条显示）盯着。
+
+### ⚠️ `MOD_ALIASES` 把 ⌘ 折进 `ctrl` 那一维
+
+`cmd` / `command` / `meta` / `super` / `win` 全算 `ctrl`。这是**跨平台口径**：
+`commands.ts` 里写的 `Ctrl+S` 在 macOS 上就是 ⌘S，不是真的 Control。
+显示与原生菜单转换都按这个口径走。
+
+---
+
+## `src/ui/nativeMenu.ts`（90 行）
+
+把同一份 `MENUS` 翻译成**后端要的形状**（`NativeMenuNode[]`），
+`api.nativeMenu.apply()` 送过去。**这里不碰 `muda` 的语法**——
+加速器字符串怎么转是纯 Rust 那边的事（`src-tauri/src/native_menu.rs`）。
+
+| 输入 | 输出 |
+|---|---|
+| `"sep"` | `{ sep: true }` |
+| 有 `submenu` 的项 | `{ id, label, children }`，**不带 `enabled` / `accel`** |
+| 叶子项 | `{ id, label, accel, enabled, checked }`，`checked` 只在 `checkable` 时才给 |
+| `dynamic: "themes"` 那一栏 | 用 `themeEntries(themes)` 现算，勾选态由 `themeChecks` 给 |
+
+⚠️ **主题那栏的 id 是合成的**（`__theme:<id>` / `__theme-none` / `__theme-dir`），
+原生菜单事件回来之后要经 `resolvePick(id)` 分流——**不能让后端去认这些前缀**，
+它只负责把 id 原样送回来。
+
+---
+
+## `src/ui/useSlidev.ts`（290 行）
+
+Slidev 预览的全部编排。2026-09-23 从 `App.tsx` 搬出来（那时那边 992 行、贴着 1000 上限）。
+搬的判据和 `TopBar`/`TabBar` 那次不同——那两支是「只画不决策」，这一支恰恰全是决策；
+它搬走是因为**能整块独立存在**：只认「文档列表 + 现在编辑器里的正文」，不碰布局也不碰菜单表，
+`App.tsx` 那边只剩三行接线。
+
+```ts
+useSlidev({ docs, toast, getMarkdown })
+  -> { session, toggle, onStopped, gate, gateActions }
+```
+
+| 返回值 | 说明 |
+|---|---|
+| `session` | `SlidevSession \| null`。`null` = 没开（菜单不勾）。`phase` 有 `"starting"`（进程起了、端口还没通）与 `"on"`（能看了，开始同步）两档 |
+| `toggle(activeId)` | 开着就关、关着就开。`activeId === null` 是空操作（菜单那边也已经灰了）。⚠️ **`starting` 也算开着**——那段时间进程已经在跑，让勾消失、用户再点一下就会起第二个服务器。⚠️ 2026-09-24 起**不直接 `start`**：先 `check(docId)` 出面板 |
+| `onStopped()` | 后端报「预览停了」（用户叉了预览窗）→ 跟上，把勾去掉 |
+| `gate` | `SlidevGate \| null`（`{ docId, probe }`）。`null` = 面板没开；`probe === null` = 还在检测 |
+| `gateActions` | 面板上的四个动作：`onOpen`（收面板 + `start`）/ `onGuide`（`openUrl(GUIDE_URL)`）/ `onRecheck` / `onClose`。⚠️ 名字**照 `SlidevPanel` 的 props 取**，点开那个文件就能对上 |
+
+一次预览是**四步**（2026-09-24 起前面多一道闸）：**问装没装 → 起进程 → 轮询到端口通 → 开窗口**。
+
+```text
+点菜单 ──> check(docId)：一个异步命令，最长 20 秒 ──> 面板（装/没装/说不准）
+                                                      ├── missing → 去官网（系统浏览器），到此为止
+                                                      └── ready / 用户硬闯 → start
+start ──> 每 500ms probe 一次（最多 180 秒）──> openWindow ──> 每 1350ms（去抖）sync
+   └── 超时：把 Slidev 自己的输出端给用户 + 收摊
+```
+
+⚠️ **探测和起进程是两个动作，不是一个**：探测失败**不改变任何状态**（`check` 只 `setGate`），
+用户看完关掉面板就什么都不该发生。所以它是 `gate` 而不是 `session` 的一部分。
+
+### ⚠️ `gate` 与 `gateRun`（和 `run` 同一套道理）
+
+`gateRun.current` 也是每次开面板/重检都 +1，**晚到的报告不许把面板重新打开**：
+用户可能在检测还没回来的时候就把面板关了，或者又点了一次菜单（那是另一次检测）。
+⚠️ IPC 自己失败时**不报成 `missing`**，而是拼一份 `state: "unknown"` 的报告——
+探测自己没跑起来 ≠ 没装，替用户断言「你没装」是不诚实的。
+
+### ⚠️ `GUIDE_URL` 与它是怎么核出来的
+
+`https://sli.dev/guide/`。⚠️ **核过的，不是凭印象写的**：`https://sli.dev/hashmap.json`
+（VitePress 的页面表）里有 `guide_index.md`（Getting Started，正文就是 `npm init slidev@latest`），
+**没有 `guide/install`**。⚠️ 而**看状态码核不出来**：那站是 SPA，随便什么路径都回 200 和同一个外壳
+（实测乱编的路径也是 200、20438 字节、逐字节相同）。
+
+⚠️ **中间那步不能挪到后端**：第一次跑要下几百 MB 的 Slidev，等几分钟都可能，
+而后端的同步命令跑在主线程上——在后端等就是冻界面。等待由这里的循环承担
+（`probe` 本身带 300ms 超时，所以最坏每轮 800ms，界面全程有响应）。
+
+### ⚠️ 三个不显然的地方
+
+- **`run.current` 那个计数器**：每次开始/停止都 +1，在途的轮询靠它判断「我这一轮还算数吗」。
+  少了它，「等端口的时候又点了一次菜单」会在停掉之后凭空开出一个窗口，而且**没人关得掉**
+  （那时 `session` 已经是 `null` 了）。
+- **会话状态不落盘**：不进 `settings`，因为它和 `dockOpen` 同类——是「现在开着的东西」。
+  下次开应用时那个子进程早就没了，把 `true` 记进设置只会让菜单勾着一个不存在的会话。
+  真正的存活状态在 Rust 那边，前端靠 `api.slidev.status()` 在挂载时**拉**一次接回来
+  （改前端代码存盘会只热重载前端，Rust 侧没重启）。
+- **开窗失败不判整场失败**：退回系统浏览器（`openUrl`），预览照样能看。
+  窗口开不出来多半是环境的事（没有窗口管理器、WebView 起不来），不该把「能看到幻灯片」一起带走。
+
+---
+
+## `src/ui/SlidevPanel.tsx`（164 行）
+
+「视图 → Slidev 预览」点下去**先看见的那个面板**（2026-09-24）。
+
+### 它认识的东西很少
+
+一份 `SlidevProbe`（后端给的报告）＋ 四个回调。**判定的话全在 `message` 里，中文，后端写的**——
+那边才知道为什么（离线拿不到包 / 目录里没主题 / 文档没存过盘）。这里只按 `state` 决定按钮怎么摆，
+**一个字都不重写**。
+
+| 状态 | 符号 | 主按钮 | 左边那组 |
+|---|---|---|---|
+| 检测中（`probe === null`） | 转圈 | 「检测中…」（**禁用**） | 「重新检测」（禁用） |
+| `ready` | 绿 ✓ | 「打开预览」 | 「重新检测」 |
+| `missing` | 橘 `!` | 「去官网看安装指南」 | 「重新检测」＋**「仍然打开预览」** |
+| `unknown` | 灰 `?` | 「仍然打开预览」 | 「重新检测」 |
+
+另有一块 `<dl>` 显示**命令**与**目录**（`probe.command !== ""` 时才画）——
+用户拿着它俩能自己判断（比如「查的是另一个目录」）。
+
+### ⚠️ 三个不显然的地方
+
+- **它不是一堵墙**：`missing` 时主按钮是「去官网」，但旁边仍留「仍然打开预览」。
+  探测是**有根据的猜测**，不是证明（主题可能装在更上面的某层，我们没料到），
+  判定错了的时候用户得能自己走下去。
+- **不用 `window.confirm`/`alert`**：它们会阻塞 WebView、把中文输入法的组合态打断（同 `ConfirmDialog`）。
+  壳也是借确认框那套（`.confirm-backdrop` + `.confirm-dialog`），样式在 `styles/slidev.css`。
+- **焦点与键盘**：结论出来后焦点给主按钮（回车即"开"），Esc 关掉。⚠️ 监听绑在 `window` 上
+  （捕获阶段）而不是框里——焦点可能还没落进来。⚠️ 焦点那个 effect 的依赖里带 `primary.label`：
+  `missing` 和 `ready` 的主按钮是**两颗不同的按钮**，换过去时焦点得跟着换。
+
+---
+
+## `src/ui/EditorPane.tsx`（399 行）
+
+编辑区：把编辑器实例接进 React 生命周期，并按**模式**摆一到两个窗格。
+架构与三条模式口径写在 `docs/05-editor-bridge.md` §3 / §3.1，这里只讲落地细节。
 
 ### 文件头的"为什么"要点
 
@@ -2819,7 +3961,9 @@ React 只负责"什么时候挂上去、什么时候拆掉"。想让 React 去 d
 这条命令式通道。
 
 挂载点在 App 里带 `key={doc.id}`：换文档时整个组件重挂，省得去写"把 A 文档的撤销栈换成
-B 的"这种活——重挂就是最干净的换法。
+B 的"这种活——重挂就是最干净的换法。**换模式也走同一个 effect 重挂**（依赖数组是
+`[doc.id, mode]`），理由同：两家的撤销栈不是一回事，硬接只会得到一个"撤销会跳到
+另一个编辑器历史里"的怪物。
 
 ### `export interface EditorPaneHandle`
 
@@ -2827,18 +3971,22 @@ B 的"这种活——重挂就是最干净的换法。
 export interface EditorPaneHandle {
   getMarkdown: () => string | undefined;
   setMarkdown: (markdown: string) => void;
+  runCommand: (name: EditorCommand) => void;
 }
 ```
 
-**只有两个方法**（比 `EditorHandle` 少了 `focus` / `destroy`——那两个是内部生命周期的事）。
+比 `EditorHandle` 少了 `focus` / `destroy`——那两个是内部生命周期的事。
 ⚠️ `getMarkdown` 返回 `string | undefined`：编辑器还没建好时是 `undefined`。
 调用方（`App.tsx::saveDoc`）必须处理这个 `undefined`（它就是靠这个判"还没准备好"）。
+⚠️ `runCommand` 是 2026-09-23 加的：菜单栏与快捷键要能派命令，而它们够不着
+`handleRef.current`（编辑器实例），只够得着这个 ref。
 
 ### `interface Props`
 
 ```ts
 interface Props {
   doc: Document;
+  mode: ViewMode;                    // ← 三种编辑模式，来自 settings.view_mode
   contentWidth: number;
   onToast: (message: string, level?: "info" | "warn" | "error" | "success") => void;
   onDocsChanged: () => Promise<unknown>;
@@ -2849,75 +3997,182 @@ interface Props {
 ⚠️ `ref` 是**普通 prop**（React 19 的写法，不需要 `forwardRef`）。
 `onDocsChanged` 的返回类型是 `Promise<unknown>`（宽松的写法，因为 `refreshDocs`
 返回的是 `Promise<Document[]>`）。
+⚠️ `mode` 由 `App.tsx` 从 `settings.view_mode` 取（兜底 `"wysiwyg"`），**和菜单里那三个
+✓ 同源**——各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。
 
-### `const SYNC_DEBOUNCE_MS = 300;`
+### 两个去抖常量
 
-推给后端的去抖间隔。模块级常量，文件里唯一一个可调的数。
+| 常量 | 值 | 推给谁 |
+|---|---|---|
+| `SYNC_DEBOUNCE_MS` | `300` | 后端（`api.doc.sync`）。见 `docs/03` §9.1 |
+| `PREVIEW_DEBOUNCE_MS` | `150` | **分屏右边那个预览窗格**。本地的、不跨 IPC，比 300 短——够挡住"每个字符都重解析整篇文档"就行 |
 
-### `export function EditorPane({ doc, contentWidth, onToast, onDocsChanged, ref }: Props)`
+### `export function EditorPane({ doc, mode, contentWidth, onToast, onDocsChanged, ref }: Props)`
 
-四个 ref：`mountRef`（挂载 div）、`handleRef`（编辑器句柄）、`timerRef`（去抖定时器）、
-`ready`（state，控制"正在准备编辑器…"那行字）。
+ref 有六项：`mountRef`（左窗格挂载 div）、`previewRef`（分屏时右窗格）、
+`handleRef`（权威编辑器句柄，**两种类型都可能**：`EditorHandle | SourceHandle`）、
+`previewHandleRef`（预览那份 Milkdown）、`timerRef` / `previewTimerRef`（两个去抖），
+外加 `latestRef`（**最后一次知道的文本**）和 `ready`（state）。
 
-**`useImperativeHandle(ref, () => ({ getMarkdown, setMarkdown }), [])`** ——
-把 handle 暴露给 App，两个方法都是"转发给 `handleRef.current`，没有就什么都不做"。
-依赖数组是空的（`handleRef` 是 ref，不需要进依赖）。
+**`latestRef` 是切模式时文本不丢的关键**，两条规则合起来才完整：
 
-**主 effect（依赖 `[doc.id]`）**：
+1. `onChange` 里更新它——但 `onChange` 本身被 300ms 去抖拖着，
+   用户打完最后一个字**立刻**切模式，那一下还没进 `latestRef`；
+2. 所以清理函数里**再从活着的实例同步读一次**（`handleRef.current?.getMarkdown()`）。
+
+⚠️ 少了第 2 条，症状是"切模式丢掉最后几个字"——而且只在手快时复现。
+
+**`useImperativeHandle`** 暴露三个方法给 App，都是"转发给 `handleRef.current`，
+没有就什么都不做"。⚠️ `setMarkdown` 转发给**两个**句柄（权威那个 + 预览那个）：
+插件改文档时整篇替换要两边一起换，只换一边会留下一个显示旧内容的预览。
+
+**主 effect（依赖 `[doc.id, mode]`）的骨架**：
 
 ```text
 mount = mountRef.current，没有就 return
-handle = await createEditor({
-  root: mount,
-  initialMarkdown: doc.text,
-  onChange: (markdown) => {
-    清掉旧 timer；timerRef.current = setTimeout(async () => {
-      timerRef.current = null;
-      try { await api.doc.sync(doc.id, markdown); await onDocsChanged(); }
-      catch (e) { onToast(`同步到后端失败：${e}`, "error"); }
-    }, 300)
-  },
-})
-if (disposed) { handle.destroy(); return; }   // StrictMode 双跑：第一遍的实例要拆掉
+initial = latestRef.current            // ⚠️ 不是 doc.text，见上
+if (mode === "wysiwyg") handle = await createEditor({root, initial, onChange})
+else                    handle = createSourceEditor({root, initial, onChange})
+      // onChange 里：更新 latestRef → （split 时）pushPreview() → 300ms 后 sync
+if (disposed) { handle.destroy(); return; }        // StrictMode 双跑：第一遍的实例要拆掉
 handleRef.current = handle; setReady(true); handle.focus();
+if (mode === "split" && previewRef.current)        // 右窗格：只读、不接 onChange、不 settle、不 focus
+  preview = await createEditor({root: previewRef.current, initialMarkdown: initial, readOnly: true})
+const settled = handle.getMarkdown(); latestRef.current = settled;
+if (mode === "wysiwyg" && settled !== doc.text) await api.doc.settle(doc.id, settled);
 catch → onToast(`编辑器启动失败：${e}`, "error")
 ```
 
-`return`（清理函数）：`disposed = true`、清 timer、`handleRef.current = null`、
-`handle?.destroy()`、`setReady(false)`。
-
-⚠️ 四个要点：
+⚠️ 六个要点：
 - **`if (disposed) { handle.destroy(); return; }` 是 StrictMode 的补丁**。effect 跑两遍时
-  第一遍的实例如果已经建好了，这一遍就得把它拆掉，不然页面上会有两个 ProseMirror
-- **依赖刻意为 `[doc.id]`，不含 `doc.text`**：`doc.text` 是**初始值**，不是要跟随的状态。
+  第一遍的实例如果已经建好了，这一遍就得把它拆掉，不然页面上会有两个编辑器。
+  预览那份有**同样的第二道**（`preview.destroy()` + 清 `previewHandleRef`）
+- **依赖是 `[doc.id, mode]`，不含 `doc.text`**：`doc.text` 是**初始值**，不是要跟随的状态。
   跟随它是另一回事（那会变成"每 300ms 重挂一次编辑器"）。有一条
   `// eslint-disable-next-line react-hooks/exhaustive-deps` 把这个意图写在代码里
+- **`settle` 只走所见即所得**（`mode === "wysiwyg" && settled !== doc.text`）。
+  CodeMirror 不做规范化，源码模式下这一步没有意义。⚠️ 而且它**在 `focus()` 之后**——
+  `focus()` 自己会派发一笔事务，要认领就认领最后一次事务之后的结果（BUG-12）
+- **`createSourceEditor` 是同步的**（不像 `createEditor` 要 `await`）。它没有异步的
+  装配过程，所以左边那个 `await` 的分支差异是这个原因，不是笔误
 - `setTimeout` 的回调**在组件卸载后仍可能触发**（清理函数清了 timer，所以不会；
   但 `finally` 里没有 `disposed` 检查——真跑到的话 `onDocsChanged` 会对已卸载的组件
   `setState`，React 18+ 不报错，只是白做一次请求）
-- **去抖只在 `onChange` 里**。`getMarkdown()` 那条路（存盘前的强制同步）**不去抖**，
-  直接调
+- **去抖只在 `onChange` 里**。`getMarkdown()` 那条路（存盘前的强制同步）**不去抖**，直接调
+
+**渲染时的那个 `lastDocIdRef` 兜底**（写在渲染里、不是 effect 里）：
+
+```ts
+const lastDocIdRef = useRef(doc.id);
+if (lastDocIdRef.current !== doc.id) { lastDocIdRef.current = doc.id; latestRef.current = doc.text; }
+```
+
+**真正管"换文档要换文本"的是 App 上那个 `key={doc.id}`**（整个组件重挂，连 `latestRef`
+都是新的）。这几行是**兜底**：哪天有人把那个 key 去掉，症状会是"切到另一份文档、
+里面是上一份的内容"，而且看起来像后端的锅。⚠️ 判断写在渲染里是为了**赶在上面那个
+effect 之前**生效——放 effect 里就晚了。
 
 **渲染**：
 
 ```jsx
-<div className="editor-pane">
+<div className={`editor-pane editor-pane-${mode}`}>
   {!ready && <div className="editor-loading">正在准备编辑器…</div>}
   <div ref={mountRef} className="editor-mount"
        style={{ ["--content-width" as string]: `${contentWidth}px` }} />
+  {mode === "split" && (
+    <div ref={previewRef} className="editor-mount editor-preview" aria-readonly="true" />
+  )}
 </div>
 ```
 
 ⚠️ `style` 里那个 `["--content-width" as string]` 的写法是为了让 TS 接受自定义 CSS 变量
 （`CSSProperties` 不认 `--` 开头的键）。挂载 div 上**不渲染任何 children**——
 "React 永不往里渲染"这条纪律就体现在这里。
+⚠️ 预览那块**不给 `--content-width`**：那一半本来就窄，再限宽会剩一条缝。
+`aria-readonly` 是**如实告知**——它真的改不了。
 
 ⚠️ `EditorPane` 里**没有调用 `api.doc.setActive`**——切标签时后端不知道。
 见 `docs/01-architecture.md` 的前端遗留项。
 
 ---
 
-## `src/ui/Sidebar.tsx`（144 行）
+## `src/editor/source.ts`（742 行）
+
+**源码模式**的编辑器：CodeMirror 6 的封装。对标 Typora 的 Source Code Mode。
+⚠️ 它与 `editor/create.ts` 是**并列**的两条路，不是"谁包了谁"——两者只共用
+`EditorCommand` 那个联合类型。
+
+### 文件头的"为什么"要点
+
+⚠️ **不是「不要模仿 VMark 的手感」的反例**。用户说的那句针对的是**对标对象 VMark**
+（它的编辑手感很差），不是"不许用 CodeMirror"。选 CM 的理由是它是"能编辑文本 +
+有语法高亮 + 撤销栈可控"里最省事的一个。
+
+⚠️ **不用 `<textarea>`**，它给不了两样这里必须要的东西：
+**语法高亮**（源码模式的全部价值就是"看清 Markdown 结构"）、以及
+**撤销栈与文档模型的分离**（`<textarea>` 的撤销是浏览器按"整块替换"记的，
+我们每次 `setMarkdown` 都会冲掉它）。
+
+⚠️ **立场分工**：分屏里只有源码这一侧是权威，预览只读、从不回写。完整理由
+（往返会改字、BUG-12）见 `docs/05-editor-bridge.md` §3.1。
+
+### `export interface SourceHandle`
+
+五个方法，**形状与 `EditorHandle` 对齐**，`EditorPane` 才能一个 `handleRef` 装两种实例：
+
+| 方法 | 与 `EditorHandle` 的差别 |
+|---|---|
+| `getMarkdown()` | **同步**取值。⚠️ 存盘前那次强制同步靠它，不能是 Promise |
+| `setMarkdown(md)` | ⚠️ **同样的文本不碰**——否则每次推预览都白冲一次撤销栈 |
+| `focus()` | 同 |
+| `runCommand(name)` | **返回 `boolean`**：认不出这条命令时返回 `false`（Milkdown 那边是 `void`，它没有这个信号） |
+| `destroy()` | 同 |
+
+### `export interface CreateSourceOptions`
+
+```ts
+{ root: HTMLElement; initialMarkdown: string; onChange?: (markdown: string) => void; readOnly?: boolean }
+```
+
+⚠️ `onChange` **不去抖**，与 `createEditor` 同口径：去抖是调用方的事。
+`readOnly` 今天是**备而不用**的（分屏右侧那份预览仍是 Milkdown，因为预览要的是
+"渲染结果"而不是"原文"）——留着它是因为"哪天预览改用 CM"是个合理的下一步。
+
+### `notaHighlight` / `notaTheme`：**一个色值都不写死**
+
+高亮与主题全部走已有变量（`--accent`、`--doc-fg`、`--doc-bg`、`--code-*`、
+`--font-mono`、`--bg-active`……）。所以换文档主题、换界面明暗，源码模式都跟着变。
+⚠️ **这里不新增任何一个颜色常量**——新增了就等于又开了一条会漂移的口径。
+⚠️ 唯一的"灰色"用法是 `t.processingInstruction` / `t.contentSeparator` 走
+`var(--fg-faint)`。
+
+### 命令：`applyCommand()` 覆盖**全部 19 个** `EditorCommand`
+
+全是**文本操作**：加粗 = 选区两侧插 `**`；引用 = 每行加 `> `；表格 = 插一张空表
+（`| 列 1 | 列 2 |\n| --- | --- |\n| $0 |  |`，`$0` 是光标落点标记）……
+
+⚠️ **"做全"是设计决定，不是顺手多做**。只要有一个模式不支持某条命令，就得维护一份
+"哪个模式支持哪些命令"的清单，而那种表必然在下次加命令时忘掉一半——做全了，
+那张表就不需要存在。认不出的字符串返回 `false`（`switch` 的 default 分支）。
+
+三个内部小工具（都不导出）：
+
+| 工具 | 干什么 |
+|---|---|
+| `selectedLines()` | 取选区覆盖的行区间。⚠️ 有一堆"选区在行中间/空文档"的边界，收在一处 |
+| `setLinePrefix(view, family, prefix \| null)` | 按行加/去前缀，家族表是 `LINE_PREFIXES`（`heading` / `quote` / `bullet` / `ordered`，各自一条正则） |
+| `wrapSelection(view, before, after, placeholder)` · `insertBlock(view, text)` | 行内包裹 / 插入一段块（`$0` 标光标位置） |
+
+⚠️ **两处刻意的不对称**（别当 bug 修）：
+
+- **加前缀跳过空行，清前缀不跳**。给含空行的选区加 `> ` 会让空行变成 `> `——
+  "看起来什么都没变、存盘却多了一堆 `> `"比少做一点更难解释；清的时候必须连空行
+  一起扫，否则残留下半截。
+- **`setMarkdown` 文本相同时直接返回**。否则每次推预览都会派一笔事务、把撤销栈冲掉。
+
+---
+
+## `src/ui/Sidebar.tsx`（420 行）
 
 左侧栏：**文件树 / 大纲** 两页。对标 Typora 的侧栏（它的快捷键是 Ctrl+Shift+1/2/3
 切文件树/文档列表/大纲）。"文档列表"（最近打开的文档）排在后面。
@@ -2925,27 +4180,56 @@ catch → onToast(`编辑器启动失败：${e}`, "error")
 ⚠️ **原本这里是三页，第三页「插件」2026-09-22 搬到了右边**（`ui/PluginDock.tsx`）——
 这一栏只管**文档导航**，工具面板不跟它挤。所以 `Tab` 也从三个值收成两个。
 
+### 2026-09-24 这一轮的三件事
+
+用户原话是两笔：「**侧边栏的标题应当可以折叠**」和「**那个侧边栏不能通过一个叉关掉**」。
+两句话在这一栏里落了**三处**：
+
+| 补的什么 | 在哪儿 | 折/关的是 |
+|---|---|---|
+| 折**目录** | 文件页 | 那一层子节点（按需向后端要，见下） |
+| 折**标题** | 大纲页 | 它下面那些更深的标题（H1–H6 是扁平的，父子靠"下一个更深"推） |
+| 右上角那颗 **×** | `.sidebar-head` 里 | 整条栏（`App.sidebarOpen`） |
+
+⚠️ **两处的折叠状态都住在本地 `useState` 里，不进 `Settings`。** 它是"这一眼怎么看"，
+不是"这个应用怎么配"；写进设置就要跟着落盘、跟着同步，而"上次折了哪几个标题"
+几乎没有价值。
+
+⚠️ **× 只是同一个开关的第二个入口，不是第二份状态。** 开合状态住在 `App.tsx` 的
+`sidebarOpen`，菜单项 / `Ctrl+Shift+L` / 这颗 × 三条路调同一个 setter；在这里自己
+`useState` 一份的症状是"用 × 关掉、菜单里那一项还勾着"。
+它的值照抄右侧 `PluginDock` 的 `.dock-close`（同族的面板一颗有叉一颗没有，本身
+就是个说不通的地方）。⚠️ 关掉之后**不留"怎么再打开"的提示**：菜单里那一项带着勾、
+写着快捷键，它才是权威入口。
+
+⚠️ **× 在 `role="tablist"` 外面**：tablist 的子元素按规矩只能是 tab，塞进去
+读屏会把"关闭"念成一个页签。所以外面套了一条 `.sidebar-head`（`styles/sidebar.css`）。
+
 ### `export type SidebarTab = "tree" | "outline";`（**导出了**，`App.tsx` 要用）
 
-### `export function Sidebar({ workspace, tree, docText, tab, onTab, onOpenFile }: Props)`
+### `export function Sidebar({ workspace, tree, docText, strict, tab, onTab, onOpenFile, loadDir, onClose, onOpenFolder }: Props)`
 
 props：
 
 | prop | 类型 | 用途 |
 |---|---|---|
-| `workspace` | `string \| null` | `null` → 文件树页显示"还没打开文件夹" |
-| `tree` | `TreeNode[]` | **只有一层**（App 只请求 `depth = 1`） |
+| `workspace` | `string \| null` | `null` → 文件树页显示空态（一句话 + 一颗「打开文件夹…」按钮） |
+| `tree` | `TreeNode[]` | 打开工作区那一次的**一层**快照 |
 | `docText` | `string` | 当前文档正文，用来抽大纲 |
+| `strict` | `boolean` | `Settings.strict_markdown`。大纲是**从正文猜**的，`#你好` 算不算标题取决于它——不传就会"侧栏和正文各说各的" |
 | `tab` | `SidebarTab` | 当前是哪一页。**由 App 持有** |
 | `onTab` | `(t: SidebarTab) => void` | 切页 |
 | `onOpenFile` | `(path: string) => void` | 接的是 `App.openPath`，传的是**绝对路径** |
+| `loadDir` | `(path: string) => Promise<TreeNode[]>` | 展开子目录时按需取那一层 |
+| `onClose` | `() => void` | 收起这一栏。**只收不切**（点 × 却把它点开，那种手感没人受得了） |
+| `onOpenFolder` | `() => void` | 空态那颗按钮，接的是 `App.openFolder`——**和「文件 → 打开文件夹…」同一个回调**，不是另开一条通路 |
 
 ⚠️ **`plugins` 这个 prop 2026-09-22 拿掉了**——插件那一页搬去了右边的 `PluginDock`。
 
-内部只有 `const outline = useMemo(() => extractOutline(docText), [docText])`。
+内部只有 `const outline = useMemo(() => extractOutline(docText, strict), [docText, strict])`。
 
-渲染结构：`<aside className="sidebar">` 里一个 `role="tablist"` 的 nav（两个 `TabButton`）
-+ `<div className="sidebar-body">`（按 `tab` 二选一）。
+渲染结构：`<aside className="sidebar">` → `div.sidebar-head`（一个 `role="tablist"` 的
+nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 `tab` 二选一）。
 
 ⚠️ **`tab` 2026-09-23 从组件内 `useState` 改成受控**。理由是「视图 → 大纲 / 文件树」
 那两个菜单项要能切它，而**菜单栏在 `App.tsx` 里，够不着这里的局部状态**。
@@ -2956,23 +4240,43 @@ props：
 
 | 组件 | props | 行为 |
 |---|---|---|
-| `TabButton` | `{id: Tab, current: Tab, onSelect, label}` | `role="tab"` 的 button，`aria-selected` 与 `className` 按 `current === id` 定 |
-| `FileTree` | `{nodes: TreeNode[], workspace: string, onOpenFile}` | 空时显示"这个文件夹里没有 Markdown 文件。"，否则 `<ul className="tree">` + 每项一个 `TreeNodeRow` |
-| `TreeNodeRow` | `{node, workspace, onOpenFile}` | 见下 |
+| `TabButton` | `{id, current, onSelect, label}` | `role="tab"` 的 button，`aria-selected` 与 `className` 按 `current === id` 定 |
+| `Outline` | `{items: OutlineItem[]}` | 大纲整页（见下）。空时显示"这份文档还没有标题。" |
+| `FileTree` | `{nodes, workspace, onOpenFile, loadDir}` | 空时显示"这个文件夹里没有 Markdown 文件。"，否则 `<ul className="tree">` + 每项一个 `TreeRow` |
+| `TreeRow` | `{node, workspace, depth, open, kids, errors, onToggleDir, onOpenFile}` | 递归，见下 |
 
-**`TreeNodeRow`** —— 目录与文件两条完全不同的路：
+**`Outline`** —— 折的是**标题**：
 
-- **目录**：`<li className="tree-dir"><span className="tree-dir-name">{node.name}</span></li>`
-  ⚠️ 就是一行不可点的文字。注释写着"本轮只列一层；展开时按需再取"——
-  也就是说**目录展开这件功能今天没有**，`nota_workspace_tree` 的 `depth > 1` 也没有调用者
-- **文件**：`<button title={\`${workspace}/${node.path}\`} onClick={() => onOpenFile(\`${workspace}/${node.path}\`)}>`
-  ⚠️ **前端自己拼绝对路径**（`workspace + "/" + node.path`），不用 `path.join`、
-  也不做规范化。`node.path` 是后端保证的 `/` 分隔相对路径，所以拼出来能用；
-  但这是一个"两份路径规则"的地方——后端用 `Path::join`，前端用字符串相加
+- 折哪个标题用**行号**（`OutlineItem.line`）记。⚠️ 不用数组下标：正文一改索引会整体
+  平移，"我明明折的是'三'，它把'四'折了"。行号只在**上面插了几行**时才失效。
+- 一行看不看得见，要往上找**整条祖先链**（外层的折着、内层也被折过，展开外层就会
+  连带把内层那棵也露出来）——只检查"最近的那一个祖先"是不够的。
+- 有子标题的才画 `outline-twisty`（`aria-expanded`）；叶子留一个**同宽的空占位**
+  （不留的话叶子与父标题的文字起点差 14px，扫一列标题时像缩进乱了）。
+- 折起来时后面挂一个 `outline-folded-count`（那一节有多少个子标题）。
+- ⚠️ 那颗标题**还不可点**（点了不跳转）——见 `docs/07` 第 48 项，`docs/04` §2.2 有标记。
+
+**`FileTree` / `TreeRow`** —— 折的是**目录**：
+
+- `kids`（相对路径 → 那一层节点）/ `open` / `errors` 三份本地 state。
+  ⚠️ 取回来的子目录**不回写 App 那棵树**：`tree` 是"打开工作区那一次快照"，
+  要合并就得在 App 里养一棵可变的树，而展开状态本来就是这一栏自己的事。
+- ⚠️ **先展开再取**：目录是空的还是"正在取"在界面上没有区别，而等回来再展开会让
+  点击有一拍延迟（本地目录看不出来，网络盘看得出来）。
+- ⚠️ 读不了就**如实写在那一行下面**（`tree-error`），不要静默成"这个目录是空的"——
+  那会让"权限不够"看起来像"文件夹里没东西"。
+- **目录**画 `<button className="tree-dir-btn">`（三角 `tree-twisty` + 名字，
+  `aria-expanded`），展开时递归渲染一层 `<ul className="tree">`；
+  **文件**画 `<button className="tree-file-btn">`。
+- ⚠️ 绝对路径**只拼一次、只在一处**（`FileTree.openFile` = `${workspace}/${rel}`）。
+  早先是每个行组件自己拼，于是"谁拼路径"散在渲染树里，展开子目录时很容易漏掉——
+  子节点存的也是**相对工作区**的路径，不是相对父目录。前端不用 `path.join`、
+  也不做规范化，靠后端保证的 `/` 分隔相对路径；这是"两份路径规则"的地方
+  （后端 `Path::join`，前端字符串相加）。
 
 ---
 
-## `src/ui/PluginDock.tsx`（121 行）
+## `src/ui/PluginDock.tsx`（264 行）
 
 **右侧插件栏**。用户 2026-09-22 定的：「插件的话我的想法是右侧边栏。」
 
@@ -2987,19 +4291,45 @@ props：
 | `plugins` | `PluginInfo[]` | 「已装插件」那一组的内容 |
 | `panels` | `PluginPanel[]` | 插件**声明**的面板，`App.tsx` 启动时拉一次 |
 | `onClose` | `() => void` | 接的是 `App.setDockOpen(false)` |
+| `onCall` | `(plugin, command, args?) => Promise<void>` | 跑一条插件命令。错误由 `App.tsx` 那边 toast，**这一栏不管** |
+| `askPrompt` | `(req: PromptRequest) => Promise<…\|null>` | 「点之前先问一句」的入口（面板按钮的 `prompt` 走它） |
 
 渲染结构：`<aside className="plugin-dock">` → `nav.dock-head`（标题「插件」+ `×`）
 + `div.dock-body`，里面**三组**（顺序就是这个顺序）：
 
 | 组 | 选择器 | 内容 |
 |---|---|---|
-| 面板 | `section.dock-panels` → `article.panel` | `location === "right"` 的面板，每张一个标题栏 + 面板体 |
+| 面板 | `section.dock-panels` → `article.panel` | `location === "right"` 的面板，每张一个标题栏 + 一个 `<PanelBody>` |
 | 没有落脚处 | `section.dock-orphans` | `location` 不是 `right` 的面板，逐条列出并标出它声明的 `location` |
 | 已装插件 | `h4.dock-subtitle` + `ul.plugins` | 原有的插件清单（名称/版本/能力/报错） |
 
-⚠️ **面板体里今天是「面板内容尚未接入。」这一行字，不是假界面。**
-面板**内容**机制还没有（要等 `docs/07` 第 15 项的声明式 DSL），所以如实写出来——
-**做一个看着能用、点下去没反应的假面板，比空着更糟**。
+📌 **更正（2026-09-24）**：面板体里曾经是「面板内容尚未接入。」这一行字——
+当时面板**内容**机制还没有（要等 `docs/07` 第 15 项）。现在那行字**已经换成了
+真正的 `<PanelBody>`**（本轮）。那条"**做一个看着能用、点下去没反应的假面板，
+比空着更糟**"的判断依然成立，只是现在不再是那个场合了。
+
+### 本文件**自己有状态**（与 `TopBar` / `TabBar` 那条"纯展示"的印象不同）
+
+`plugins` / `panels` 是受控的，但**内容**不是：`PluginDock` 自己拿着
+`useState<Record<string, 面板状态>>`，每个面板一份，三态 `loading` / `ok` / `error`。
+⚠️ **`loading` 只在第一次出现**——重拉时**保留旧内容**，否则每按一次「刷新」
+面板就闪一下白。
+
+⚠️ **还有一个 `序号` ref**（每个面板一个请求序号），**这不是过度设计**：
+`nota.ui.refresh` 是会连着来的（提交完先刷状态、插件自己再刷一次），两个请求同时在飞时
+**先发的后回来**就会把新内容盖成旧的——症状是"提交完列表还是旧的，再点一次刷新才对"，
+**而且它只在慢的时候出现**。所以每次设状态前先对一下序号，过期的那次直接丢弃。
+
+⚠️ 两个 effect 的依赖都是**拼出来的字符串** `键串`，不是 `右侧的` 那个数组：
+数组每次渲染都是新身份，拿它当依赖会让 effect **每渲染一次都重拉一遍所有面板**。
+（这两处都挂了 `eslint-disable exhaustive-deps`，别当成可以随手删的噪声。）
+
+### 面板上按钮的 `busy`
+
+`跑()` 先把这个面板标成 `busy: command`（那颗按钮因此灰着），跑完**在 `finally` 里**
+重拉一次。⚠️ **`finally` 而不是"成功才刷"**：命令失败时那句错误提示常常也要改面板
+（比如 git 报错后分支行要变），而且**卡在 busy 上会让所有按钮永远灰着**——
+那个状态只能靠重开面板才能解开。
 
 ⚠️ **「没有落脚处」那一组是刻意加的，不是凑数。** 它保证"插件声明了的东西不会
 静默消失"。**它是当场就收回成本的**：接上面板后界面上立刻多出一组
@@ -3012,6 +4342,224 @@ props：
 ⚠️ **没有启用/禁用开关**：`api.plugin.setEnabled` 有命令有桥接，但界面上依然没有入口。
 ⚠️ 开关一旦做出来，**禁用/启用之后要重拉 `panels()`**——`PluginHost::生效的()` 是按
 "加载成功且没被禁用"筛的，禁用之后那家的面板该从清单里消失（`ipc.ts` 里也留了这句）。
+
+---
+
+## `src/ui/PanelBody.tsx`（149 行）
+
+一串 `PanelNode` → 一串 DOM。**面板内容的渲染层。**
+
+### ⚠️ 这里没有一条路能把字符串变成 HTML
+
+每一块都是**具名 JSX**：文本走 `{text}`（React 自己转义），属性只有 `className` /
+`title` / `disabled` 这类**我们自己写的字面量**。插件给的字符串**只**出现在子节点位置。
+
+⚠️ 所以"插件往面板里塞一段 `<script>`"这件事**在结构上做不到**，
+而不是"我们在某处过滤了它"。真发生过的教训（Folio 那边的 `use-markup` 默认开）
+说明：靠"记得转义"是不行的，**得让"忘了转义"这件事没有落点**。
+⚠️ 这里**没有**（也永远不该有）`dangerouslySetInnerHTML`。
+
+### 两条"别静默"的规矩
+
+| 场合 | 怎么办 |
+|---|---|
+| `kind` 认不出 | 画一句「不认识这种内容块（kind = …）」**给插件作者看**。静默丢掉的话，他看到的是"我的面板少了一块"，然后去怀疑是宿主没实现还是自己拼错了字段名，而界面上一点线索都没有 |
+| 按钮没写 `command` | **画成灰的**，不消失。它摆在那儿本身就是给插件作者看的信号（"我这里少写了一根线"），`title` 里写着原因 |
+
+### 两个细节
+
+- ⚠️ **`key` 用下标是对的**：这一串**没有任何身份**——插件每次渲染给的都是
+  一份全新的列表（`render` 每次重跑）。用内容当 key 反而会在两行文字恰好相同时撞车，
+  而用下标最坏也只是重挂一次 DOM。**别看到"index as key"就当坏味道改掉。**
+- `busy !== null` 时**所有**按钮一起灰（防连点）；`b.label || b.command`——
+  只写了命令名没写标签时，拿命令名顶上。
+
+`prompt` 那一步（以及"取消就什么都不做"这条规矩）**不在这里**，
+在 `ui/plugin-prompt.ts`，与插件菜单项那条路共用同一份实现。
+
+---
+
+## `src/ui/panel-nodes.ts`（192 行）
+
+**面板内容的形状判据**：宿主发来的那一坨 JSON 在这里被收成 `PanelNode[]`。
+
+### ⚠️ 为什么校验在这一层，不在宿主
+
+宿主（`lua/api/ui.rs::面板内容`）保证两件事：**是 JSON**、**有大小上限**。
+它**不校验形状**，也不知道 `kind` 有哪些取值。这么分是刻意的：
+**形状的真相源只能在渲染这一侧**——最终决定"这个 `kind` 画成什么"的代码就在这儿。
+宿主也存一份枚举的话，两边就是又一对"改一处忘一处"，而症状是
+**内容静默地不显示**（认不出的 kind 被宿主扔掉），比在这儿看得见地画一句
+"不认识这种内容块"难查得多。
+
+### 三条规矩
+
+1. **认不出的 `kind` 如实显示**（`{kind: "unknown", raw}`），不静默丢掉，更不猜它是哪种
+2. **字段类型不对就用默认值**（`text` 是数字 → 空串）。⚠️ 缺一个字段让整块消失是
+   **最糟**的处理：用户看到的界面和插件作者以为的对不上
+3. **只产出这里定义的字段**——插件塞的别的键一概**不往 DOM 上带**。这条是"不许注入"的落点
+
+⚠️ 不认识的**顶层项**（不是表的）**丢掉**——它连 `kind` 都没有，没有任何可说的。
+这一条与上面第 1 条**不矛盾**：有 `kind` 才有话可说。
+
+### 七种 `kind` 与它们的字段
+
+| `kind` | 字段 | 备注 |
+|---|---|---|
+| `heading` | `text` | |
+| `text` | `text`, `tone` | |
+| `fields` | `items[{label, value, tone}]` | 画成 `<dl>` |
+| `list` | `items[{title, subtitle, badge, tone}]` | |
+| `buttons` | `items[{label, command, args, prompt, style, disabled}]` | ⚠️ `args` **原样带着**：形状由插件和它自己的命令约定，宿主和这里都不解析 |
+| `empty` | `text` | |
+| `separator` | — | |
+| `unknown` | `raw` | 认不出的 |
+
+**`tone`** = `normal` / `muted` / `success` / `warn` / `danger`，
+⚠️ **外加三个别名**：`info` → `normal`、`error` → `danger`、`warning` → `warn`。
+收别名是因为宿主的通知层级用的是 `info`/`error`/`warning`（`ui.rs::normalise_level`），
+插件作者很容易顺手抄过来——**一个 `tone = "info"` 变成静默的 `normal` 是没人查得出来的**。
+
+**`style`** 只认 `primary` / `danger`，其余一律 `normal`。
+**`disabled`** 只认严格的 `true`。
+
+⚠️ 本文件还各设了一道 `每块上限` = 200 与 `文本上限` = 4000——
+**和宿主的 `面板节点上限` / `面板文本上限` 同量级，但各自把关**：
+宿主那道防的是"插件写坏"，这一道防的是"数据被动过"。
+
+---
+
+## `src/ui/pluginMenus.ts`（104 行）
+
+**插件菜单 → 菜单栏里那一栏「插件」。**
+
+### 为什么是**合成**一栏，不是往已有的几栏里插
+
+`register_menu` 收一个 `menu` 字段（`file` / `format` / `plugins`…），
+但**目前只有 `plugins` 是认的**。往「文件」里插两条第三方条目这件事，一旦做出来，
+用户就分不清哪些项是 Nota 自己的、哪些是插件塞进来的——出问题时连"该去找谁"都不知道。
+单独一栏把这件事摆明了。
+
+⚠️ 写别的 `menu` 值的条目**不静默丢掉**：照样出现在这一栏里，标签后面写明
+「（想挂到「X」栏，暂不支持）」，而且是**灰的**——判据是"`App.tsx` 的 `menuHandlers`
+里有没有它的 id"（没有就灰）。静默丢掉的话，插件作者看到的是"我注册的菜单项不见了"，
+而界面上没有任何线索。
+
+### id 是**合成**的，走 `resolvePick` 那条老路
+
+| 前缀 | 用在哪 |
+|---|---|
+| `__plugin:` | 认得的（`menu === "plugins"`），`__plugin:<插件 id>:<命令名>` |
+| `__plugin-unplaced:` | 无处安放的：`__plugin-unplaced:<插件>:<menu>:<命令>` |
+
+⚠️ 两个前缀**故意不一样**：同一个插件的同一条命令，若同时以两种 `menu` 值声明
+（合法的——去重看的是标签），用同一个 id 就是 React 的重复 key，
+也是 `disabledCommands` 那张集合里两条打架。加上这一截就永远不会撞。
+
+⚠️ 认得的那些看着**像个命令 id，这也正是要点**：点下去之后走的是既有的那条链
+（`resolvePick` → `menuHandlers[id]`），**没有为插件单开一条分支**。
+少一条分支就少一处"插件项和普通项行为不一样"。
+
+⚠️ 插件 id 里不会有 `:`（清单校验的允许集合是字母数字和 `.` `-` `_`），
+所以"第一个冒号"就是插件 id 的结尾。但**这里不需要拆回来**——处理函数是闭包，
+它自己知道是哪个插件。
+
+### 两个导出
+
+| 函数 | 行为 |
+|---|---|
+| `插件菜单栏(items)` | 合成那一栏。**一条插件菜单都没有时返回 `null`**——那时不该出现一栏空的「插件」。一条都没有"无处安放的"时**不摆分隔线**（一栏里只有一条分隔线看着像坏了） |
+| `带插件栏(menus, items)` | 插在**「帮助」前面**——最后那一栏是"关于这个应用"，按惯例待在末尾。找不到「帮助」（`commands.ts` 里改了 id）就接在最后，**不静默丢掉**：一栏菜单凭空消失比位置不对难查得多 |
+
+⚠️ 调用方**必须**把它包在 `useMemo` 里：返回值每次都是新数组，而它下游牵着三条
+`useMemo`／`useEffect`（`ui/useMenus.ts` 顶上那张表），其中最后一条会
+**每渲染重推一次原生菜单**（一次 IPC ＋ 一次重建）。这件事在
+`usePlugins.ts::menus` 那里做的。
+
+---
+
+## `src/ui/plugin-prompt.ts`（71 行）
+
+**「点了之后先问一句」的那一步。插件面板的按钮和插件的菜单项共用它。**
+
+### 为什么值得单独一个文件
+
+两条路都要做同一件事：拿插件声明的 `prompt` 去弹宿主的输入框，把用户填的值塞进 `args`。
+这件事里有一条**容易写错、错了还不报错**的规矩——**用户取消时什么都别做**，
+绝不能退化成"把空串当参数发出去"（git 会收到一条空提交信息；AI 那边会拿空串当提问发到网上）。
+
+规矩写两遍就会漂：一边改了、另一边没改。所以收在这里一处，两条路都调它。
+（与 `commands.ts::resolvePick`、`commands.ts::themeEntries` 处理同一类问题的办法一样：
+**判据只有一处**。）
+
+### `问参数(o)` 的返回形状
+
+```ts
+async function 问参数(o: 问参数入参): Promise<{ args: unknown } | null>
+```
+
+| 返回 | 意思 |
+|---|---|
+| `{ args }` | 可以发了 |
+| `null` | **用户取消了，调用方什么都别做** |
+
+⚠️ 包一层对象而不是直接返回 `args`：`args` 本身可以是 `undefined`
+（"这条命令没有参数"是合法的），**不包的话"取消"和"没有参数"就分不开**。
+
+⚠️ `prompt` 是 `null` 时**直接原样返回 `args`**，不弹框。
+
+### 面板**没有自己的输入控件**
+
+面板的内容是一份"只读的 JSON"（见 `ui/panel-nodes.ts`），里面没有任何控件状态。
+要输入就借宿主的 `PromptDialog`（和「格式 → 超链接」用的是同一个），
+于是"面板里能不能输入"这件事**不引入第二套实现**。
+
+⚠️ 用户填的值与插件自己写的 `args` **合并，同名时用户填的赢**——他就是来改这个键的。
+⚠️ `args` 不是对象（数组、字符串、`undefined`）时**当没有**，不硬往里塞：
+那样得到的 `args` 形状是插件没约好的。
+
+⚠️ 对话框标题默认取 `prompt.label`；按钮那一路传按钮上的字（「提交…」），
+于是框里是"标题＝提交…、字段＝提交信息"；菜单那一路没有"按钮上的字"可传，
+标题和字段就是同一句。
+
+---
+
+## `src/ui/usePlugins.ts`（143 行）
+
+**插件在界面上的那一整块**：已装清单、声明的面板、声明的菜单项，
+以及"跑一条插件命令"这件事本身。（2026-09-24 从 `App.tsx` 搬出，理由同
+`useMenus.ts` / `useDialogs.ts` 那两次：这一块**和外壳骨架无关**。）
+
+### ⚠️ 三条都靠**拉**，不是靠事件（BUG-13）
+
+`list` / `panels` / `menus` 都是**状态**：注册发生在插件加载时（`setup()`），
+早于前端挂载，等事件必漏且漏得安静。范式是**声明是状态 → 拉；发生是事件 → 推**。
+
+⚠️ 面板的**内容**是个例外中的例外（它有"变了"的事件），但那件事由
+`PluginDock.tsx` 自己管——**这一层只负责清单**。
+
+⚠️ 三样**一起拉**（`Promise.all`）——它们回答的是同一个问题（"现在装了什么"），
+分开三次只会让"读了插件清单但菜单还没到"这种中间态多出几种。
+⚠️ 失败时**不该拦住别的**（设置、工作区、主题照常），但也**不能不响**：
+界面上少了一整栏，用户得知道是为什么 ⇒ 一条 toast。
+
+### 返回值
+
+| 字段 | 用途 |
+|---|---|
+| `plugins` / `panels` | 交给 `Home` 与 `PluginDock` |
+| `menus` | `MENUS` ＋ 插件那一栏。⚠️ 身份**稳定**（`useMemo`），下游牵着"每渲染重推一次原生菜单"那条 effect |
+| `handlers` | 插件菜单项 → 实现，键是合成的 id。**直接并进 `App.tsx` 的 `menuHandlers`**，于是"灰不灰"的判据对插件项和普通项是**同一条** |
+| `调` | 跑一条插件命令 |
+
+⚠️ `handlers` **只给"认得的那一栏"建处理函数**——`menu` 写了别的值的条目没有实现，
+于是按同一条判据自动变灰。这与 `ui/pluginMenus.ts` 里"照样摆出来"**必须一致**：
+那儿摆出条目、这儿不接，缺一边就变成"看着能点、点了没反应"。
+
+⚠️ `调` **把错误说给用户听，不再往外抛**：调用方（`PanelBody` 的 `void 点按钮(b)`、
+菜单的 `() => void 调(...)`）都是"点了就跑"的场合，往外抛就是一个**没人接的 Promise**，
+症状是控制台一行红字、**界面上什么都没有**。toast 里带插件 id 与命令名——
+插件多了之后"哪一条没跑成"正是用户要看的。
 
 ---
 
@@ -3046,13 +4594,27 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 
 ---
 
-## `src/ui/StatusBar.tsx`（38 行）
+## `src/ui/StatusBar.tsx`（86 行）
 
 状态栏。对标 Typora 底栏：左侧文件信息，右侧字数统计。
 
-### `export function StatusBar({ doc }: { doc: Document | null })`
+### `export function StatusBar({ doc, mode, strict }: Props)`
 
 `const counts = useMemo(() => countText(doc?.text ?? ""), [doc?.text])`。
+
+| prop | 类型 | 用途 |
+|---|---|---|
+| `doc` | `Document \| null` | `null` → 只渲染一行"就绪" |
+| `mode` | `ViewMode` | 当前编辑模式。名字从 `ui/view-modes.ts` 取（`VIEW_MODE_LABELS[mode].short`） |
+| `strict` | `boolean` | `Settings.strict_markdown`。**开着才显示**那个「严格」小标 |
+
+⚠️ **右侧末尾这两个小标是 2026-09-24 补的，而且是"只读的手电筒，不是开关"**——
+点不动，作用是把"现在是哪个模式、严格开没开"从菜单里搬到看得见的地方。
+两条规矩：**模式恒显**（它是"你现在在哪"，藏起来就会出现"我打的东西怎么不渲染"），
+**严格只在开时显**（它是个少数派状态，恒显一个"不严格"是噪音）。
+
+⚠️ 模式那两个字是 `short`、菜单与设置里是 `full`（`源码` / `源码模式`），
+**两列出自同一份 `VIEW_MODE_LABELS`**——原来是两处各硬写一遍，迟早会对不上。
 
 - `doc === null` → 只渲染一行"就绪"
 - 否则：左侧是**路径**（`title` 属性上也是路径，未保存时是"尚未保存"），`doc.dirty` 时
@@ -3068,7 +4630,7 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 
 ---
 
-## `src/ui/Toasts.tsx`（39 行）
+## `src/ui/Toasts.tsx`（42 行）
 
 右下角的临时提示。
 
@@ -3154,7 +4716,121 @@ export function installErrorHooks() {
 
 ---
 
-## `src/ui/outline.ts`（128 行）
+## `src/ui/settings/`（四个文件）
+
+**偏好设置。这是界面那两条轴唯一的切换入口**（轴三在菜单栏「主题」里，见 `MenuBar.tsx`）。
+
+| 文件 | 管什么 |
+|---|---|
+| `SettingsDialog.tsx` | 壳：遮罩 + 左栏（搜索 / 五节 / 「完成」）+ 右栏 + `Esc` 与点遮罩关闭 |
+| `primitives.tsx` | 行、组、四个控件、搜索上下文、四枚图标 |
+| `panes.tsx` | 外观 / 文档主题 / 编辑器 / Markdown 四节的内容（快捷键那节在隔壁文件） |
+| `ShortcutsPane.tsx` | 快捷键一览（只读） |
+
+### 版式：照 VMark 的偏好面板抄
+
+用户 2026-09-23 的要求：「你将那个偏好列表搞得和 Vmark 一样的布局」。
+参考源码在旁边 `../vmark-ref/src/pages/settings/`（ISC，见 `docs/10` §11.4）。
+**抄的是结构**——左栏分节清单 + 右栏「左标签右控件」的行，不是像素：
+
+```text
+┌──────────────┬────────────────────────────────────┐
+│ [搜索设置…]  │  主题                              │
+│ ▸ 外观       │  界面风格            [下拉 ▾]      │
+│   文档主题   │  明暗               [浅][深]       │
+│   编辑器     │  跟随系统偏好          ( ●—)       │
+│   快捷键     │                                    │
+│ [ 完成 ]     │  界面              ──●────  15px    │
+└──────────────┴────────────────────────────────────┘
+```
+
+| 节 | 行 | 落进哪个设置 |
+|---|---|---|
+| **外观** | 界面风格（下拉，`STYLES` 表，选中的那套带一句中文说明） | `ui_style`。⚠️ 与 `settings.rs` 的 `UiStyle` **一一对应** |
+| | 明暗（两张**缩略图**：浅色 / 深色） | `ui_mode` |
+| | 跟随系统偏好（开关） | `ui_mode = "auto"` |
+| | 界面字号（滑杆 12–20px + 读数） | `ui_font_size`。⚠️ **文档字号不在这里**，那是文档主题的事 |
+| **文档主题** | 当前主题（只读）、打开主题文件夹… | ⚠️ **换主题不在这里**，见下 |
+| **编辑器** | 编辑模式（下拉） | `view_mode`。和「视图」菜单那三条是同一个开关 |
+| | 正文宽度（滑杆 480–1200px） | `content_width` |
+| | 自动保存（下拉：关闭 / 30 秒 / 1 分钟 / 5 分钟） | `autosave_seconds`。⚠️ 值是**秒** |
+| | 关闭前先问我（开关） | `confirm_unsaved` |
+| **快捷键** | 只读一览，按菜单分组 | — |
+
+### ⚠️ 明暗那两张缩略图是**真 token**，不是画上去的颜色
+
+每张缩略图自带 `data-ui-style` / `data-ui-mode` 两个属性，而 `theme.css` 里那两段是
+**裸属性选择器**，于是它取到的是**真正的那一套变量**（连该风格的识别色都对）。
+写死色值的话，换风格时缩略图就成了唯一没跟着变的地方——而那正是用户拿来做判断的东西。
+判据来自 `applyTheme.ts` 新导出的 `resolveAppearance()`，**和真实外观同一套**
+（自己再写一遍 `matchMedia` 的话，「跟随系统」那一格会和真实外观不一致）。
+
+### ⚠️ 搜索是就地过滤，不是另建索引
+
+查询非空时**五节全部叠着渲染**，每一行自己拿标签+说明去比，比不中的**返回 `null` 不进 DOM**；
+某一组一行都没留下时，CSS 的 `.stg-group:not(:has(.stg-row))` 把整组也收掉。
+索引方案（另写一份"查什么 → 在哪一节"的表）看着更"正经"，但那是**第二份真相源**：
+加了控件忘了加索引，症状是"搜得到但点不过去"——不报错的那种。
+
+⚠️ 代价：`SettingRow` **必须**包在 `QueryProvider` 里（`SettingsDialog.tsx` 负责）。
+漏了不炸，只会让搜索框失灵。
+
+⚠️ 一行能"被比"的字有**三档**：`label`、`description`（两样都画出来）、
+以及 `searchText`——**只参与过滤、不画**。最后一档是给"每行挂一遍会变成噪音、
+可用户真会搜"的字准备的：快捷键那一节的**菜单名**（组标题已经写着「文件」了）
+和**原始 accel** 都在这一档。搜的是 `Ctrl+S` 那种原始写法而不是屏幕上那串——
+macOS 上显示成 `⌘S`，照屏幕抄反而搜不到。
+
+### ⚠️ 搜索框那颗「×」是自己画的
+
+`<input type="search">` 在 WebKitGTK 下**自带**一颗清除按钮，但它**点了不派发
+`input` 事件**——它会抹掉输入框的 DOM 值、也会让输入框失焦，而 React 那边的
+`value` 一尘不染，下一次渲染又把旧字写回去。实测（Xvfb，2026-09-23）：点它 →
+蓝框消失、字还在。所以 CSS 里把原生那颗 `display: none` 掉，
+`SearchField` 自己画一颗并显式 `onChange("")`。
+⚠️ 别改成 `appearance: none`——那是 Blink 的写法，WebKit 下**不生效**
+（两种都试过，`display: none` 才管用）。
+
+### ⚠️ `htmlFor` 只给可标注的控件
+
+`SettingRow` 会把 `id` 塞给子控件，标签用 `<label htmlFor>` 指过去——**但只在那是个
+可标注控件时**。指向 `<button>` 是两重错：`htmlFor` 悬空，而且**点标签文字会真的
+触发那个动作**（「打开主题文件夹」这种一次性按钮上属于纯粹的惊吓）。
+所以只有 `Toggle` / `Select` / `Range` 和 `input`/`select`/`textarea` 走 `<label>`，
+其余（`<kbd>`、包一小组按钮的 `<div>`、按钮）退化成 `<span>` + `aria-labelledby`。
+
+### 改了立刻生效，**没有「确定」也没有「取消」**
+
+外观这种东西必须边看边调——弹一个框、点确定、发现不对、再弹一次，那是让人放弃调整的做法。
+所以每次改动都直接落进 `App.tsx` 的 `updateSettings`（**先改内存再写盘**），
+这个框只是个"面板"。唯一的按钮是「完成」，作用等于关掉。
+
+⚠️ **不要**给它加「取消」。既然改动是即时生效的，一个「取消」要么是撒谎
+（撤销不了已经写盘的东西），要么就得再做一套"暂存-回滚"，为了一行没有价值的按钮不值得。
+
+⚠️ **文档主题那一栏故意只读**。放个下拉在这儿，它和菜单栏「主题」就变成**两个真相源**——
+两边都能改同一份状态，用户在哪儿改的、为什么另一个地方没跟着变，都会变成查不动的问题。
+所以这里只回答"现在是哪套"和"去哪儿换"。
+
+### 关掉的三种方式
+
+`Esc`（⚠️ `keydown` 用**捕获**阶段，`addEventListener(..., true)`）、点遮罩、点「完成」。
+点遮罩用的是 **`mousedown` 不是 `click`**——与 `MenuBar` / `ConfirmDialog` 同源：
+`click` 要等鼠标抬起，中间那段时间弹层还开着，看起来像"点了一下没关掉"。
+
+⚠️ 面板自己要 `stopPropagation`，否则点框内部也会被遮罩那层收走。
+
+### 快捷键那一节是**读出来的**
+
+条目来自 `MENUS`（`walkMenuItems` 走**深度优先**，所以子菜单里的 `Ctrl+Shift+C`
+一条都不会漏），键位过一遍 `formatAccel`——macOS 上显示 `⌘⇧C` 而不是 `Ctrl+Shift+C`。
+抄一份静态表短期更省事，但那是第二份真相源：`commands.ts` 里改了键位这里不跟着变，
+而"菜单上写着 A、这里写着 B"不会报错。⚠️ 只列**有快捷键**的条目，也**不标**
+哪条实现了哪条没实现——那个判据在 `App.tsx` 的 `menuHandlers` 上。
+
+---
+
+## `src/ui/outline.ts`（134 行）
 
 大纲与字数的**纯函数**。没有 React、没有副作用，是前端唯一适合做单元测试的文件
 （⚠️ 但今天**没有测试**）。
@@ -3247,6 +4923,311 @@ export interface Counts {
 - 行数按 `\n` 切，所以**末尾的换行会多算一行**（`"a\n"` → 2 行）
 - 词数对纯中文的文档约等于字数（每个汉字一个词）——这正是注释里"中英混排下最贴近
   直觉的口径"的意思
+
+---
+
+## `src/editor/command-state.ts`（205 行）
+
+**光标状态的只读观察者**：一条 `$prose` 插件 + 一个 `CommandState` 接口，
+把"光标此刻在哪儿"报给外壳。`docs/07` 第 2 项（工具栏）与"菜单第二条判据"
+都靠它。
+
+```ts
+export interface CommandState {
+  bold: boolean; italic: boolean; strike: boolean; inlineCode: boolean;  // 行内标记，可同时成立
+  block: BlockKind;       // 所在块（text / h1…h6 / quote / ul / ol / codeBlock / table）
+  inTable: boolean;       // 光标在表格里 → 表格那十条才亮
+  hasSelection: boolean;  // 有选区 → 「清除样式」才亮
+}
+```
+
+⚠️ **它是只读观察者**（和 `find.ts` / `writing-modes.ts` 同一族）：
+`view.update` 恒返回 `false`，只通过 `onCommandState` 回调往外报。
+说 `true` 会让 ProseMirror 白白重读一遍视图。
+
+⚠️ **报的是"签名串"，比对之后才回调**：`CommandState` 每次事务都是新对象，
+直接回调等于**每次光标动一下都让 React 重渲染一次**。所以算出状态后先拼一个
+签名串，和上一次相同就直接返回。
+
+⚠️ **源码模式与"还没有文档"报 `null`**，不是一份空状态——两者含义不同：
+`null` 是"这条通路读不出来"，空状态是"读出来了，光标在普通段落上"。
+`FormatBar` 对这两种情况的反应不一样（前者不画任何高亮）。理由写在
+`ui/EditorPane.tsx` 的 props 注释里。
+
+## `src/editor/insert.ts`（163 行）
+
+`fmt.link` / `fmt.image` 的**节点构造**：给一个地址（和可选的替代文字），
+在光标处插一个链接 / 一张图片。⚠️ **它不问地址**——"弹个框问一句"是
+`ui/PromptDialog.tsx` 那半，两者刻意分开：这一半是纯的、可测的，那一半是界面。
+
+⚠️ **链接是"有选区就套在选区上、没选区就插入文字"**；两种走向都在这里，
+调用方不必分情况。
+
+## `src/editor/find.ts`（364 行）
+
+查找与替换的**全部逻辑**。分层如下（详见 `docs/05` §4.3）：
+
+| 层 | 导出 | 说明 |
+|---|---|---|
+| 纯匹配 | `在文本里找匹配(text, query, opts)` | **唯一一份**匹配语义：大小写 / 全词 / 正则 |
+| PM 适配 | `算匹配(doc, query, opts)` | `doc.descendants` 逐文本节点调上面那个，把节点偏移换成文档绝对位置 |
+| 装饰 | `查找插件(onStatus)` | 命中走 `Decoration.inline`（`nota-find-hit` / `nota-find-current`） |
+| 命令 | `设查询` / `走` / `清除` / `替换当前` / `全部替换` | 全部走**事务元**（`设置查询元` / `走动元` / `清除元`） |
+
+⚠️ **装饰不是文档改动**：它们不进文档、不进撤销栈——Ctrl+Z 撤的是用户真改过的字，
+不是高亮。⚠️ 但**替换是文档改动**（真写进文档、真进撤销栈），所以它派事务。
+
+⚠️ **`在文本里找匹配` 是唯一真源**，源码模式也是调它——各写一份的症状是
+"同一个词在两种模式里命中数不一样"，而用户在界面上**没有任何办法判断哪边对**。
+
+## `src/editor/writing-modes.ts`（185 行）
+
+专注模式 + 打字机模式（`docs/07` 第 6 项）。两个开关**都是"看的时候的状态"**，
+不进设置、不落盘（同 `FormatBar`）。
+
+- `算压暗(state)`：从光标那层往上，**每一层把同层的块级兄弟压暗**。
+  ⚠️ 另一种写法（"所有块压暗、当前块加亮 class"）**嵌套就错了**——`opacity`
+  不会因为子元素又亮回来而恢复，父块 0.32、里面的当前块最多也只能 0.32。
+- `找滚动容器(el)` / `滚到正中(容器, 上, 下)`：**两个编辑器共用**。
+  ⚠️ 容器**不写死选择器**：所见即所得那边滚的是 React 那个空 div，源码那边是
+  CodeMirror 自己的 `scrollDOM`。写死一个，另一种模式就会静默不滚。
+- `写作模式插件(初始)`：`$prose` 插件，state 走 `写作模式元` 这个事务元。
+- `设写作模式(view, 模式)`：拨开关走它，**不重建实例**——重建会丢撤销栈和光标，
+  而这两个开关恰恰是"写到一半才想去拨"的东西。
+
+⚠️ **源码模式那边的装饰只有一颗**（`Decoration.line`）：CodeMirror 里内容是
+**平的行**，没有块级父子，所以那边改成"根节点挂 `nota-focus`、当前行挂
+`nota-focus-on`"，压暗交给 CSS 的 `:not()`——装饰数**不随文档长度增长**。
+
+## `src/ui/FormatBar.tsx`（202 行）
+
+格式工具栏（`docs/07` 第 2 项）：一排按钮，加粗/斜体/行内代码/删除线、
+标题族、引用/列表/代码块/表格/分割线、链接/图片/清除样式。
+
+⚠️ **它没有自己的状态**：高亮读 `commandState`（`data-on`），点击走
+`onCommand(name)` → `App.tsx` → `runCommand`。**"亮着"不等于"能用"**——
+亮的是"光标现在处在这个标记里"。
+
+⚠️ **每个按钮都 `onMouseDown={(e) => e.preventDefault()}`**：不拦的话按钮会把
+焦点从编辑区抢走，跑完命令焦点还在按钮上，用户接着打字是**白打**。
+
+⚠️ **源码模式下整条不画高亮**（`commandState === null`）——那一侧没有文档树，
+读不出"光标在什么标记里"。⚠️ 那十条表格命令在源码模式下按下去会 toast 一句
+「当前编辑模式下还没有这个操作」（`runCommand` 返回 `false`），**不是静默无反应**。
+
+## `src/ui/FindBar.tsx`（211 行）
+
+查找与替换条（`docs/07` 第 4 项）。⚠️ **它是显示端 + 输入端，不是查找的实现**：
+命中数一律是编辑器报上来的 `status`，本地算一份的话两边迟早算出不一样的数。
+详见 `docs/05` §4.3。
+
+⚠️ 三条要记住的：
+
+- **Esc 收在条子自己身上**（不是 `window`），并且带 `isComposing` 判据——
+  中文用户选字时按 Esc 是"取消候选"，抢过来会把整个条子关掉。
+- **查询上报走 ref 读**，不进那个 effect 的依赖：`onQuery` 是 `App` 每次渲染
+  新建的函数，进依赖就等于"每渲染一次重设一次查询"，而设查询会把光标搬到
+  第一个命中上。
+- ⚠️ **挂载时也报一次**（空串 = 清空高亮）：编辑器可能是刚建出来的（换文档、
+  切模式），它手里没有任何查找状态。
+
+⚠️ 它在 `App.tsx` 里带 `key={activeDoc.id}`：**换文档 = 换条子**（查询跟着清），
+否则会出现"计数器显示 3 / 12、界面上一个高亮都没有"。
+
+## `src/ui/PromptDialog.tsx`（164 行）
+
+自绘的单行输入框，替掉 `window.prompt`。⚠️ **理由是硬的**：`window.prompt`
+在 **WebKitGTK 上默认被关掉，调用静默返回 `null`**——「格式 → 超链接」点下去
+什么都不发生，看起来就是那个菜单项坏了。
+
+壳复用确认框那套（`.confirm-backdrop` + `.confirm-dialog.prompt-dialog`），
+输入框**挂载即聚焦**，`Enter` = 确定、`Esc` = 取消。给了 `secondLabel` 才画第二个
+字段（图片的「替代文字」）。**受控**：开、答案都在 `ui/useDialogs.ts`。
+
+📌 **2026-09-24 起它也是插件面板/菜单项那条「先问一句」的框**
+（`ui/plugin-prompt.ts::问参数` 走的就是它），多了一个 `secret?`：
+
+| prop | 用途 |
+|---|---|
+| `secret` | 主输入框画成**密码框**（圆点）。给插件要 API key 的场合用 |
+| `hint` | 输入框**下面**那行小字。插件 `prompt.hint` 落在这儿 |
+
+⚠️ `secret` **遮的只是屏幕**：值本身照旧原样交出去、原样存进插件设置文件
+（**明文**，见 `lua/api/settings.rs` 顶上那段与 [docs/12](12-plugin-runtime.md) §4.5）。
+这一条不是为了"加密"，是为了别让人从肩膀上把 key 看走。**别在界面上说它"安全"。**
+
+⚠️ 带 `secret` 时 `autoComplete="off"` **是必须的**：WebView 的密码管理器会跳出来问
+"要不要记住"，而这里填的是 **API key**，不是登录密码——那个弹窗一出现，
+用户就得先弄明白"这算不算我的账号密码"。
+
+⚠️ **焦点全选**（`focus()` + `select()`）在插件那条路上同样是关键：Ctrl+K 编已有链接时
+直接打字就替换了。**别把 `select()` 删了。**
+
+⚠️ `Enter` / `Esc` 收在**输入框自己**身上，**不绑 `window`**（与 `ConfirmDialog` 不同）：
+输入框里按 `Esc` **应该是**"把输入法候选框收掉"，绑到 `window` 上抢 `keydown`
+会把那一下吃掉——中文用户按 Esc 想取消选字，结果整个框没了。
+
+⚠️ **主字段为空 = 当作取消**（`value.trim() === "" → null`），不是"发一个空串"。
+一个 `[文字]()` 在正文里看不出坏、点上去没反应；而"我改主意了、把框清空再点确定"
+是个很自然的取消姿势。**插件那条路靠的正是这一条**——它同时挡住了
+"git 收到一条空提交信息"和"AI 拿空串当提问发到网上"。
+
+## `src/ui/useMenus.ts`（310 行）
+
+**菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出，那边当时 1118 行）。
+入参 `MenuWiring`，出参 `{ disabledCommands, menuChecks, usingNativeMenu }`。
+
+⚠️📌 **`MenuWiring.menus` 必须是"拼过的那一份"**（`ui/usePlugins.ts::menus`，
+即 `MENUS` ＋ 插件那一栏），**不是常量 `MENUS`**。原因与上面那条"真相源只有一处"
+同型：这份 `menus` 派生出**三个**消费者——画出来的菜单栏、推给 Rust 的原生菜单、
+快捷键索引（`accel.ts::buildAccelIndex`）。**任何一处漏用它去读常量 `MENUS`，
+插件那一栏就会只在那一个消费者看得见**，症状是"菜单里有、`Alt` 键按不出来"。
+
+⚠️ `buildAccelIndex` 的撞车判据是**先到先得**：插件那一栏拼在 `help` 之前、
+也就是**所有内置栏之后**，所以**内置的快捷键永远赢**，撞车时 `console.warn`
+一声（`docs/13` §8.3）。
+
+三条判据、一个出口：
+
+| 判据 | 回答的问题 | 来源 |
+|---|---|---|
+| 有没有处理函数 | 这个功能做了没有 | `App.tsx` 的 `menuHandlers` |
+| `needsDoc` | 现在有没有一份文档可作用 | `activeId` |
+| `光标条件` | 光标这一刻在不在合适的位置 | `commandState` |
+
+⚠️ **"能不能点"的真相源只有一处**，而它派生出三个消费者：自绘菜单的 `disabled`、
+原生菜单的 `enabled`、键盘的"这条键位接不接"。各写一份的症状是
+**"菜单灰着、快捷键却照跑"**——不报错、不崩，只让用户觉得这个应用一会儿一个脾气。
+
+⚠️ **`光标条件` 表里没有的 id 一律不受状态约束**（默认可用）。写成"默认不可用"
+的话，每加一条命令都得记得来这儿登记，漏了就是一个永远灰着的菜单项。
+
+⚠️ **`menuChecks` 的依赖是一串布尔，不是一个对象**：对象字面量每次渲染都是新身份，
+拿它当 `useMemo` 的依赖会让那两个原生菜单的 effect **每渲染一次都重推一遍菜单**
+（一次 IPC + 一次重建原生菜单）。
+
+## `src/ui/useDialogs.ts`（106 行）
+
+两个自绘对话框的"谁在等答案"：`{ confirmReq, askConfirm, answerConfirm,
+promptReq, askPrompt, answerPrompt }`。
+
+⚠️ **每个框后面是单个 ref，不是队列**：今天所有调用点都是用户动作直接触发的，
+不存在并发；真要并发弹两个，后来者会把前一个的 Promise 永远挂着——那时再改成队列。
+
+⚠️ 它**不知道谁在问**（关文档、退出、填链接地址）——这正是它能被搬出去的原因：
+它只是一对"问一句、等回答"的 Promise 拼接器。
+
+---
+
+## `src/editor/export.ts`（186 行）
+
+**把 Markdown 变成一份完整的 HTML 文件**（`docs/07` 第 1 项能当场做完的那一半）。
+
+### 怎么渲染：同一条路，不另找库
+
+⚠️ **不是**再找一个 Markdown 库：那样"屏幕上什么样"和"导出什么样"就成了两套实现，
+各自都"对"，漂移了也没人会发现。这里走的是**编辑器自己那条路**——起一个**屏外只读**
+的 Milkdown 实例，解析 + 渲染，再把那块 DOM 摘下来。
+
+⚠️ 摘的是**渲染后的 DOM**，不是文档树。文档树那条路（`DOMSerializer`）更干净，
+但会丢掉两样用户看得见的东西：① 宽松模式下 `#标签` 显示成标题（那是
+`Decoration.node` 的 `nodeName`，**装饰不在文档树里**）；② 任务项的方框、代码块的容器结构。
+导出对不上屏幕，用户只会觉得"导出的东西坏了"。
+
+| 导出项 | 里面有什么 | 用在哪 |
+|---|---|---|
+| HTML（不含样式） | 只有语义标签，**一条 CSS 都没有**，连 class 都不带 | 贴进别的系统再加工 |
+| HTML（含样式） | 嵌 `editor.css`（`?inline` = **同一份字节**）＋ 限域后的文档主题 | 直接打开看、打印、发给人 |
+
+⚠️ 「含样式」那份外面**必须照着编辑区的 DOM 摆 class**（`.editor-pane` >
+`.editor-mount` > `.milkdown` > `.ProseMirror`）。这不是巧合，是那份 CSS 的作用域要求
+——摆错了的症状是"CSS 在、但哪条都没命中"。
+
+### `async function 摘正文(markdown, strict): Promise<string>`（私有）
+
+建离屏实例 → 在**还挂着的 DOM 上**摘零件 → `pm.innerHTML` → `handle.destroy()`。
+
+| 摘什么 | 判据 |
+|---|---|
+| 类名 | **`nota-` 开头的一律不算内容**（`我们的类`）。收成一条规则是为了耐腐蚀：将来再加一个 `nota-xxx` 零件时自动生效，不必回来登记 |
+| 属性 | `data-srcmark` / `contenteditable` / `spellcheck` / `translate`——全是"编辑时才成立"的 |
+| 整块元素 | `.nota-code-bar`（代码块的语言选择器/复制按钮；它是容器，不是正文） |
+
+⚠️ **在 DOM 上摘，不是把 HTML 拼出来再用正则洗**：正则会被正文里恰好出现
+`contenteditable` 这几个字这类意外绊倒，而遍历 DOM 只认真正的元素和真正的属性。
+⚠️ 离屏节点用 `left: -99999px` + `visibility: hidden`，**不是 `display: none`**：
+ProseMirror 建实例时要量 DOM（行高、`coordsAtPos`），`display: none` 下量出来全是 0。
+⚠️ `root.remove()` 放在 `finally` 里：中途抛错也必须收走，否则每导出一次就在页面上
+留一个看不见的、DOM 监听还活着的编辑器。
+
+### `export async function 导出HTML(markdown, opts): Promise<string>`
+
+`opts: 导出选项 = { strict, styled, themeCss?, title }`。
+`strict` **必须和屏幕上一致**，否则同一段 `#标签` 两边长得不一样。
+
+⚠️ 主题 CSS 进来时是**原始文本**（`api.theme.css` 的返回值），**在这里限域**——
+调用点（`ui/useExport.ts`）不做这件事，只有一个地方做才不会漏。
+
+### `export function 默认导出名(title, ext): string`
+
+**只换后缀**（`md` / `markdown` / `mdx` / `mdown` / `mkd` / `txt` → 新后缀），保留原文件名
+——用户认得自己那份文档叫什么。洗空了给「未命名」。
+
+---
+
+## `src/ui/useExport.ts`（124 行）
+
+**导出与打印的接线**：取正文 → 取主题 → 生成 HTML → 问落点 / 交给系统 → 报结果。
+
+⚠️ **正文必须从编辑器拿**（`getMarkdown()`），**不是 `doc.text`**：后者是 300ms 去抖之后
+的镜像（backlog 第 32 项），用户刚敲的字不在里面。"屏幕上和导出里不一致"是最容易被
+当成"导出坏了"的那种 bug。
+
+⚠️ **主题取不到不算失败**（`取主题CSS` 吃掉异常、返回 `undefined`）：settings 里记着一个
+id、而那份 `.css` 被删了是很平常的事，为它中断一次导出不值。只在控制台留一句。
+
+⚠️ **两档导出故意合成一条路**（一个 `styled` 布尔）：分成两个函数的话，
+"另一种也顺手改一下"迟早会漏一次。
+
+⚠️ **打印不是"在应用里打印"**：它 = 导出含样式的那份 + 交给系统默认程序打开，
+提示里**两步都要说**（`已用系统默认程序打开，在那边按 Ctrl+P 打印（文件在 …）`）。
+假装在应用里完成才是撒谎；理由写在 `commands/export.rs` 文件头。
+⚠️ `print` 的落点由**后端按 `doc.path` 的父目录**决定——正文里 `![](./img.png)` 是相对路径，
+换个目录图片就全没了。
+
+---
+
+## `src/ui/useDocTheme.ts`（99 行）
+
+文档主题的三件事：**应用**（`useEffect`）、**切换**（`pickTheme`）、**打开主题文件夹**
+（`openThemesDir`）。
+
+⚠️ **从 `App.tsx` 搬出来的不只是行数**：这三件事共用同一个前提——**文档主题只作用于
+编辑区**。摆在一起，那条约束才有一个看得见的落点。
+
+⚠️ **与界面主题的 `applyTheme` 分家是有意的**：界面主题是**纯写属性**（同步改 `data-*`），
+文档主题要**取回来 + 限域**才能注入，是异步的。节奏不一样就不塞进同一个 effect——
+塞在一起的话，改一次界面主题会顺手重取一次文档主题的 CSS。
+
+⚠️ **`alive` 标志必须有**：快速连点两套主题时，先发出去的 IPC 可能后回来，
+不挡住就会用**旧的那份** CSS 覆盖新的——而且看起来像"点错了"。
+
+⚠️ 提示里用**显示名**（中文），存进设置的是 **id**。混了就变成"提示里说换成「素纸」、
+设置里存着一个 `paper`"。
+
+---
+
+## `src/ui/useEditorCommands.ts`（86 行）
+
+**把一条菜单命令送进编辑器**：`run(c, payload?)` 直接转交；「插入链接」「插入图像」
+先问出参数再一起交过去。
+
+⚠️ **转交时必须看返回值**：`runCommand` 的返回值与"改了没有"无关——`false` 说的是
+**这条命令在当前的编辑模式下没有对应的实现**（源码模式下表格那十条、以及没填地址的
+链接/图片）。不看返回值，用户看到的是"点了没反应"，而原因（这个模式做不到）看不出来。
+
+⚠️ 「插入链接」在**已经是一条链接**时再点一次，语义是**去掉链接**（命令本身是 toggle）。
+Typora 那一下是"弹框改地址"，我们这一版不是——**如实记在 `docs/07` 里，别当成没做完**。
 
 ---
 

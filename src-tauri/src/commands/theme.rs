@@ -1,37 +1,36 @@
-//! 主题相关命令。
+//! 文档主题相关命令。
 //!
-//! 四条命令对应界面上四个动作：**列出来**（主题菜单/设置面板）、
-//! **读一份**（选中时把 CSS 文本交给前端去改造）、**读一份资源**
-//! （字体/图片，读成 data: URL 内联进 CSS）、**打开文件夹**（让用户能放自己的主题）。
-
-use std::path::Path;
+//! 三条命令对应界面上三个动作：**列出来**（主题菜单）、**取一份的 CSS**
+//! （选中时把文本交给前端去限域注入）、**打开文件夹**（让用户能放自己的主题）。
+//!
+//! ⚠️ 入参是 **id 不是路径**。路径由 `themes.rs` 自己拼（`<主题目录>/<id>.css`），
+//! 前端拿不到"让后端读任意文件"的能力。上一版是传路径 + 一道目录前缀检查，
+//! 那一版没有漏洞，但"传 id"是**结构上不可能出错**，比"检查得对"更强。
+//!
+//! 也**没有**"读一份资源"那条命令了：那是给 Typora 主题内联字体用的，
+//! 那一整条兼容链已经按用户要求拆掉（见 `themes.rs` 文件头）。
 
 use crate::error::Result;
-use crate::themes::{self, ThemeInfo};
+use crate::themes::{self, DocThemeInfo};
 
-/// 列出所有可用主题。目录不存在不算错，返回空表。
+/// 列出所有可用的文档主题。用户目录不存在不算错，内置那几套照样在。
 #[tauri::command]
-pub fn nota_themes_list() -> Vec<ThemeInfo> {
+pub fn nota_doc_themes() -> Vec<DocThemeInfo> {
     themes::discover()
 }
 
-/// 读一份主题 CSS 的**文本**（不是渲染结果）。见 `themes.rs` 顶上那段。
-#[tauri::command]
-pub fn nota_theme_read(path: String) -> Result<String> {
-    themes::read_css(Path::new(&path))
-}
-
-/// 读一份主题资源（字体/图片），返回可直接写进 CSS 的 **data: URL**。
+/// 取一份文档主题的 **CSS 文本**（不是渲染结果）。
 ///
-/// 为什么不返回路径让前端用 asset 协议：见 `themes.rs` 顶上
-/// "为什么字体也不走 asset 协议"——WebKitGTK 那边取不回来。
+/// 限域（把每条选择器挂到编辑区之下）在前端做，所以这里要的是文本。
+/// 为什么不直接用 asset 协议 `<link>` 进来：那样拿不到文本，也就没法限域，
+/// 文档主题立刻会渗进界面外壳——见 `themes.rs` 文件头。
 #[tauri::command]
-pub fn nota_theme_asset(path: String) -> Result<String> {
-    themes::read_asset(Path::new(&path))
+pub fn nota_doc_theme_css(id: String) -> Result<String> {
+    themes::css_of(&id)
 }
 
 /// 建好并返回我们自己的主题目录，供「打开主题文件夹」用。
 #[tauri::command]
-pub fn nota_themes_dir() -> Result<String> {
+pub fn nota_doc_themes_dir() -> Result<String> {
     themes::user_themes_dir()
 }

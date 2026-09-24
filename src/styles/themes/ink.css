@@ -1,0 +1,170 @@
+/*
+ * 「墨色」—— 深灰纸面、低对比。夜里长时间写东西用。
+ *
+ * ⚠️ 写法约定见 `paper.css` 顶上那段：按普通文档 CSS 写，不带作用域前缀，
+ * 由 `src/styles/doc-theme.ts` 统一挂到编辑区之下。
+ *
+ * 这一套刻意**不用纯黑**（#000 配白字在 LCD 上晕得厉害），正文也压到
+ * 不用纯白——对比度低一档，看两小时不累是它存在的理由。
+ */
+
+:root {
+  /* ── 纸面 ── */
+  --doc-bg: #1f2124;
+  --doc-fg: #c3c8ce;
+  --fg: #c3c8ce;
+  --fg-muted: #8b939d;
+  --fg-faint: #5d646d;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.2);
+  --bg-subtle: #17191c; /* 代码块比纸面**更深**：深色下"抬高"靠压暗 */
+  --bg-raised: #262a2e;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --radius: 10px;
+  --radius-sm: 4px;
+  --accent: #7fb2e8;
+  --accent-fg: #12181f;
+
+  /* ── 排版 ── */
+  --font-doc: "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif;
+  --doc-font-size: 1.04em;
+  --doc-line-height: 1.85;
+
+  /* ── 选中文字 ── */
+  --select-text-bg-color: rgba(127, 178, 232, 0.3);
+  --select-text-font-color: #e8eef5;
+
+  /* ── 代码高亮：低饱和，别在暗底上烧眼睛 ── */
+  --code-comment: #6b7480;
+  --code-keyword: #e08fa8;
+  --code-string: #97c98a;
+  --code-number: #e0b070;
+  --code-function: #b79ce8;
+  --code-attr: #e0b070;
+  --code-tag: #7fc2d6;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  line-height: 1.35;
+  color: #eef1f4;
+}
+
+h1 {
+  font-size: 1.7em;
+  margin-top: 1.6em;
+  padding-bottom: 0.28em;
+  border-bottom: 1px solid var(--border);
+}
+
+h2 {
+  font-size: 1.4em;
+  margin-top: 1.5em;
+}
+
+h3 {
+  font-size: 1.2em;
+  margin-top: 1.35em;
+}
+
+h4 {
+  font-size: 1.07em;
+}
+h5 {
+  font-size: 1em;
+}
+h6 {
+  font-size: 0.94em;
+  color: var(--fg-muted);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(127, 178, 232, 0.35);
+}
+
+a:hover {
+  border-bottom-color: var(--accent);
+}
+
+strong {
+  font-weight: 600;
+  color: #eef1f4;
+}
+
+del {
+  color: var(--fg-muted);
+}
+
+code {
+  padding: 0.12em 0.36em;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.07);
+  color: #f0b37e;
+  font-size: 0.92em;
+}
+
+blockquote {
+  padding: 0.5em 1em;
+  border-left: 3px solid rgba(127, 178, 232, 0.45);
+  background: rgba(255, 255, 255, 0.035);
+  color: #9aa3ad;
+}
+
+blockquote > :first-child {
+  margin-top: 0;
+}
+
+ul,
+ol {
+  padding-left: 1.5em;
+}
+
+li::marker {
+  color: var(--fg-faint);
+}
+
+hr {
+  height: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.96em;
+}
+
+th,
+td {
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+th {
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+}
+
+tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+img {
+  border-radius: var(--radius-sm);
+  max-width: 100%;
+}

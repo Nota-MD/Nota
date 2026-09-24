@@ -17,14 +17,41 @@
 //! 前端挂载后调 `nota_plugin_panels` / `nota_plugin_menus` 拉一次。
 //! 仓库里 `nota_commands` 一直是这个范式。完整理由见 `plugin/mod.rs::panels`。
 //!
-//! ⚠️ 面板**内容**仍由插件自己推事件填（`nota.event.emit`），宿主不解析 HTML。
-//! 这样做在安全上是干净的（前端只渲染我们自己认识的组件），代价是插件作者得写点前端代码。
-//! 纯 Lua 声明式的面板 DSL 排在后面轮次（`docs/07` 第 15 项）。
+//! # 面板**内容**：声明式 DSL，2026-09-24 落地（`docs/07` 第 15 项）
+//!
+//! `register_panel` 多收一个 `render` 函数；它返回一串**内容块**，前端按白名单渲染：
+//!
+//! ```lua
+//! nota.ui.register_panel({
+//!   id = "git", title = "Git",
+//!   render = function()
+//!     return {
+//!       { kind = "heading", text = "main" },
+//!       { kind = "list", items = { { title = "a.md", badge = "已修改" } } },
+//!       { kind = "buttons", items = { { label = "刷新", command = "refresh" } } },
+//!     }
+//!   end,
+//! })
+//! ```
+//!
+//! ⚠️ **内容仍然只由宿主和插件两方共同认识的形状构成**，插件写不出 HTML、
+//! 也写不出脚本。前端那边是白名单渲染：认不出的 `kind` 如实显示"不认识"，
+//! **不**退化成 `dangerouslySetInnerHTML`。理由见 `docs/12` §面板内容。
+//!
+//! ## 为什么内容要**拉**、而不是让插件把内容 emit 出来
+//!
+//! 同下面那条判据：面板内容是**状态**（"现在有哪些改动"），不是**发生的事**。
+//! 所以前端打开面板时拉一次（`nota_plugin_panel_content`），插件只在
+//! **自己知道内容变了**的时候喊一声 `nota.ui.refresh(id)`。
+//!
+//! ⚠️ 那一声**只是提示，丢了不影响正确性**：插件刷新时面板可能还没被打开，
+//! 事件没人收；但用户打开面板时一定会拉一次，拉到的就是当时的内容。
+//! 这条与 BUG-13 的教训一致，而不是它的例外。
 
 use mlua::{Lua, Table};
 
 use super::mlua_to_nota;
-use crate::error::Result as NotaResult;
+use crate::error::{NotaError, Result as NotaResult};
 use crate::lua::HostContext;
 use crate::plugin::manifest::{Capability, Manifest};
 use crate::plugin::{REG_MENUS, REG_PANELS};
@@ -56,6 +83,10 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
     if manifest.has(Capability::UiPanel) {
         let 注册 = 面板表(lua, &manifest.meta.id).map_err(mlua_to_nota)?;
         t.set("register_panel", 注册).map_err(mlua_to_nota)?;
+        // `nota.ui.refresh()` —— **"我这边的面板内容变了"**，前端收到就重拉。
+        // 与 `register_panel` 同属"面板"这件事，所以同一条能力管着它。
+        let 刷新 = 刷新表(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
+        t.set("refresh", 刷新).map_err(mlua_to_nota)?;
     }
 
     if manifest.has(Capability::UiMenu) {
@@ -104,11 +135,175 @@ pub(crate) fn 面板表(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Functi
                     .unwrap_or_else(|| "right".to_owned()),
             )?;
 
+            // `render` 是**函数**，不是数据——所以它只活在 registry 里，
+            // 由 `面板内容()` 现调现取，**不进 `PluginPanel` 那个快照**。
+            // ⚠️ 前端拿到的面板清单里**没有**它，也不需要：清单回答"有哪些面板"，
+            // 内容回答"这个面板现在长什么样"，两个问题两条路（`docs/12` §面板内容）。
+            match spec.get::<mlua::Value>("render") {
+                Ok(mlua::Value::Nil) => {}
+                Ok(mlua::Value::Function(f)) => entry.set("render", f)?,
+                // 写错了要当场说，别等到用户打开面板时才发现——
+                // 那时报错的地方离病因（插件里 `render` 写成了表）已经很远了。
+                Ok(_) => {
+                    return Err(mlua::Error::RuntimeError(format!(
+                        "插件 {plugin_id} 的面板 `{id}`：`render` 必须是一个函数"
+                    )))
+                }
+                Err(_) => {}
+            }
+
             追加声明(lua, REG_PANELS, "id", &id, &entry, &format!("插件 {plugin_id} 重复注册面板"))?;
             Ok(())
         })?;
 
     Ok(register)
+}
+
+/// `nota.ui.refresh([id])` —— 喊一声"我这边的面板内容变了"。
+///
+/// 不传 `id` 表示**这个插件的所有面板都该重拉**；传了就只重拉那一个。
+///
+/// ⚠️ **这是一条"发生了一件事"的事件，所以推是对的**（BUG-13 的判据）。
+/// 它推的是"变了"这个**动作**，不是内容本身——内容仍然由前端去拉。
+/// 这样即使这一枪没人听到（面板还没打开），用户打开时拉到的东西照样是对的。
+///
+/// 收在 `ctx.app` 上：`刷新表` 是本文件里少见的**需要 `AppHandle`** 的注册函数
+/// （另一个是 `notify`）。所以它没能像 `面板表` / `菜单表` 那样剥成只收 `Lua`
+/// 的纯函数，用例也钉不了它的发送侧——**发送侧的形状由 `ipc.ts` 的
+/// `events.pluginPanel` 与 `ui/PluginDock.tsx` 的订阅两端对齐**，别只改一边。
+pub(crate) fn 刷新表(
+    lua: &Lua,
+    plugin_id: &str,
+    app: tauri::AppHandle,
+) -> mlua::Result<mlua::Function> {
+    let plugin_id = plugin_id.to_owned();
+
+    lua.create_function(move |_, id: Option<String>| {
+        use tauri::Emitter;
+        app.emit(
+            crate::plugin::EVENT_PANEL_DIRTY,
+            serde_json::json!({ "plugin": plugin_id, "id": id }),
+        )
+        .map_err(|e| mlua::Error::RuntimeError(format!("发面板刷新事件失败：{e}")))?;
+        Ok(())
+    })
+}
+
+/// 现调一个面板的 `render`，把结果剥成 JSON 交给前端。
+///
+/// # 剥的规矩（每一条都是**上限**，不是格式转换）
+///
+/// | 限制 | 值 | 挡的是 |
+/// |---|---|---|
+/// | 文本长度 | [`面板文本上限`] 字符 | 一个插件把一整个文件塞进 `text` |
+/// | 一层里的项数 | [`面板节点上限`] | 一次渲染出几千行，前端卡死 |
+/// | 嵌套层数 | [`面板层数上限`] | 自引用/超深表把栈打穿 |
+/// | 值类型 | 只留 nil/bool/number/string/table | 函数、userdata 过不了 JSON |
+///
+/// ⚠️ **表格当数组还是字典，判据是"有没有连续整数键"**（同 `api/mod.rs::lua_to_json`）。
+/// 两处必须同口径，否则同一个 Lua 表在事件里是一种形状、在面板里是另一种形状，
+/// 而插件作者只会看见"有时候不灵"。
+pub(crate) fn 面板内容(lua: &Lua, plugin_id: &str, panel_id: &str) -> NotaResult<serde_json::Value> {
+    let list: Table = lua
+        .named_registry_value(REG_PANELS)
+        .map_err(|_| NotaError::other(format!("插件 {plugin_id} 没有申请 `ui.panel` 能力")))?;
+
+    for i in 1..=list.raw_len() {
+        let Ok(条目) = list.raw_get::<Table>(i) else {
+            continue;
+        };
+        if !matches!(条目.get::<String>("id"), Ok(v) if v == panel_id) {
+            continue;
+        }
+
+        let Ok(mlua::Value::Function(render)) = 条目.get::<mlua::Value>("render") else {
+            // 声明了面板但没给 `render`。**这不算错**——一个插件可以只声明面板
+            // 占个位（早期的 `register_panel` 就只有 id/title）。如实说清楚。
+            return Err(NotaError::other(format!(
+                "插件 {plugin_id} 的面板 `{panel_id}` 没有提供 `render`，所以没有内容可显示"
+            )));
+        };
+
+        let 值 = render.call::<mlua::Value>(()).map_err(|e| NotaError::Lua {
+            plugin: plugin_id.to_owned(),
+            message: format!("面板 `{panel_id}` 渲染失败：{e}"),
+        })?;
+
+        return Ok(剥成_json(&值, 0));
+    }
+
+    Err(NotaError::other(format!(
+        "插件 {plugin_id} 没有声明面板 `{panel_id}`"
+    )))
+}
+
+/// 一条文本最多这么长（字符，不是字节）。超了从尾巴上截，并留一个 `…`。
+const 面板文本上限: usize = 4000;
+
+/// 一个数组最多这么多项，一个字典最多这么多键。
+const 面板节点上限: usize = 200;
+
+/// 最多往下走这么多层。
+const 面板层数上限: usize = 6;
+
+/// Lua 值 → JSON，**带上限**。递归。
+fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value {
+    use serde_json::Value as J;
+
+    if 层 > 面板层数上限 {
+        return J::Null;
+    }
+
+    match v {
+        mlua::Value::Nil => J::Null,
+        mlua::Value::Boolean(b) => J::Bool(*b),
+        mlua::Value::Integer(i) => J::Number((*i).into()),
+        mlua::Value::Number(n) => serde_json::Number::from_f64(*n)
+            .map(J::Number)
+            .unwrap_or(J::Null),
+        mlua::Value::String(s) => J::String(截断(&s.to_string_lossy())),
+        mlua::Value::Table(t) => {
+            let len = t.raw_len();
+            if len > 0 {
+                let mut arr = Vec::with_capacity(len.min(面板节点上限));
+                for i in 1..=len.min(面板节点上限) {
+                    if let Ok(x) = t.raw_get::<mlua::Value>(i) {
+                        arr.push(剥成_json(&x, 层 + 1));
+                    }
+                }
+                J::Array(arr)
+            } else {
+                let mut map = serde_json::Map::new();
+                for pair in t.pairs::<mlua::Value, mlua::Value>() {
+                    let Ok((k, val)) = pair else { continue };
+                    // 键只认字符串。数字键的表会被上面那条 `raw_len()` 当成数组，
+                    // 走到这里来的表本来就该是"字符串键的字典"。
+                    if let mlua::Value::String(ks) = k {
+                        map.insert(截断(&ks.to_string_lossy()), 剥成_json(&val, 层 + 1));
+                    }
+                    if map.len() >= 面板节点上限 {
+                        break;
+                    }
+                }
+                J::Object(map)
+            }
+        }
+        // 函数 / userdata / thread / error：**一律不发出去**。
+        // 前端拿到 `null` 会当成"这块没内容"，比把一个函数序列化成
+        // `"<function: 0x…>"` 那种假字符串诚实。
+        _ => J::Null,
+    }
+}
+
+/// 按**字符**截断（不是字节）——按字节截会把一个汉字劈成半个，
+/// 前端拿到的是乱码，而且那种乱码看起来像是我们这边编码出了错。
+fn 截断(s: &str) -> String {
+    if s.chars().count() <= 面板文本上限 {
+        return s.to_owned();
+    }
+    let mut out: String = s.chars().take(面板文本上限).collect();
+    out.push('…');
+    out
 }
 
 /// `nota.ui.register_menu`，**不含 `ctx`**。理由同 `面板表`。
@@ -138,6 +333,12 @@ pub(crate) fn 菜单表(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Functi
             entry.set("menu", menu)?;
             if let Ok(Some(acc)) = spec.get::<Option<String>>("accelerator") {
                 entry.set("accelerator", acc)?;
+            }
+            // `prompt`：点之前先问一句（「提交…」要的就是这个）。**原样存**，
+            // 形状由读的一侧收（`plugin::读菜单::读提示`）——与 `icon` /
+            // `accelerator` 同一个分工：注册函数只管收下来。
+            if let Ok(Some(p)) = spec.get::<Option<Table>>("prompt") {
+                entry.set("prompt", p)?;
             }
 
             // 去重键是 label：同一个菜单里两条同名项，用户分不出该点哪个。
@@ -284,5 +485,220 @@ mod tests {
         assert_eq!(got[0].menu, "plugins", "不写 `menu` 默认挂在 plugins 下");
         assert_eq!(got[0].command, "commit");
         assert_eq!(got[0].accelerator, None);
+        assert!(got[0].prompt.is_none(), "没写 `prompt` 就是直接跑，不该问");
+    }
+
+    /// 「提交…」要的就是这个：点了先弹框问提交信息，答完才跑命令。
+    ///
+    /// ⚠️ 走真的 Lua 源码（`lua.load(...)`）而不是手搭 `mlua::Table`：
+    /// 插件作者写的是源码，两条路之间差着 Lua 自己的表构造。
+    #[test]
+    fn 菜单项的_prompt_读得回来() {
+        let lua = Lua::new();
+        let register = 菜单表(&lua, "nota.t").unwrap();
+        let spec: Table = lua
+            .load(
+                r#"return {
+                     label = "提交…", command = "commit",
+                     prompt = { arg = "message", label = "提交信息", placeholder = "一句话说清这次改了什么" },
+                   }"#,
+            )
+            .eval()
+            .unwrap();
+        register.call::<()>(spec).unwrap();
+
+        let got = crate::plugin::读菜单(&lua, "nota.t");
+        let p = got[0].prompt.as_ref().expect("`prompt` 该跟着回来");
+        assert_eq!(p.arg, "message", "没有 `arg` 的话用户填的值没有地方放");
+        assert_eq!(p.label, "提交信息");
+        assert_eq!(p.placeholder, "一句话说清这次改了什么");
+        assert!(!p.secret, "不写 `secret` 就是明文显示");
+        assert_eq!(p.hint, "", "没写的字段给空串，不是 panic");
+    }
+
+    /// 没有 `arg` 的 `prompt` **当没写**：问了也送不出去，那就别问。
+    #[test]
+    fn 没有_arg_的_prompt_当没写() {
+        let lua = Lua::new();
+        let register = 菜单表(&lua, "nota.t").unwrap();
+        let spec: Table = lua
+            .load(r#"return { label = "提交…", command = "commit", prompt = { label = "提交信息" } }"#)
+            .eval()
+            .unwrap();
+        register.call::<()>(spec).unwrap();
+
+        assert!(crate::plugin::读菜单(&lua, "nota.t")[0].prompt.is_none());
+    }
+
+    // ── 面板内容（`render`）的来回 ────────────────────────────────────────
+    // 这里同样是"写的一侧 → 读的一侧"整条走一遍：`register_panel` 把 `render`
+    // 存进 registry，`面板内容` 现调它、剥成 JSON。只测一头测不出
+    // "存进去时丢了 render" 这种病。
+
+    /// 装一个带 `render` 的面板，返回 `(lua, 面板 id)`。
+    fn 带渲染的面板(body: &str) -> Lua {
+        let lua = Lua::new();
+        let register = 面板表(&lua, "nota.t").unwrap();
+
+        // 用真的 Lua 源码拼 `render`，而不是在 Rust 里 `create_function`——
+        // 插件作者写的是源码，读回来的是它**跑出来的**东西，中间经过
+        // Lua 的表构造。手搭一个 `mlua::Table` 就绕过了这一步。
+        let code = format!(
+            "return {{ id = 'p', title = 'P', render = function() {body} end }}"
+        );
+        let spec: Table = lua.load(&code).eval().unwrap();
+        register.call::<()>(spec).unwrap();
+        lua
+    }
+
+    #[test]
+    fn 面板渲染出来的内容读得回来() {
+        let lua = 带渲染的面板(
+            r#"return {
+                 { kind = "heading", text = "main" },
+                 { kind = "list", items = { { title = "a.md", badge = "已修改" } } },
+                 { kind = "buttons", items = { { label = "刷新", command = "refresh" } } },
+               }"#,
+        );
+
+        let v = 面板内容(&lua, "nota.t", "p").unwrap();
+        let arr = v.as_array().expect("该是一个数组");
+        assert_eq!(arr.len(), 3);
+        assert_eq!(arr[0]["kind"], "heading");
+        assert_eq!(arr[0]["text"], "main");
+        assert_eq!(arr[1]["items"][0]["badge"], "已修改");
+        assert_eq!(arr[2]["items"][0]["command"], "refresh");
+    }
+
+    /// ⚠️ **这条钉的是"内容每次都是现跑的"。**
+    ///
+    /// 面板内容不是快照——git 的改动列表每次都得现问 git。做成"注册时跑一次存起来"
+    /// 的话，界面上会一直显示应用刚启动那一刻的改动，而且**看着像是对的**。
+    #[test]
+    fn 每次读都重新跑一遍_render() {
+        let lua = Lua::new();
+        let register = 面板表(&lua, "nota.t").unwrap();
+        let spec: Table = lua
+            .load(
+                r#"
+                local n = 0
+                return { id = "p", render = function()
+                    n = n + 1
+                    return { { kind = "text", text = "第 " .. n .. " 次" } }
+                end }
+                "#,
+            )
+            .eval()
+            .unwrap();
+        register.call::<()>(spec).unwrap();
+
+        for 期望 in ["第 1 次", "第 2 次", "第 3 次"] {
+            let v = 面板内容(&lua, "nota.t", "p").unwrap();
+            assert_eq!(v[0]["text"], 期望, "render 没有每次现跑");
+        }
+    }
+
+    /// `render` 里抛错 → **一句人话**，不是一个裸的 Lua 栈。
+    #[test]
+    fn 渲染抛错时报的是插件自己的错() {
+        let lua = 带渲染的面板(r#"error("磁盘满了")"#);
+        let err = 面板内容(&lua, "nota.t", "p").unwrap_err().to_string();
+        assert!(err.contains("磁盘满了"), "实际报的是：{err}");
+        assert!(err.contains("渲染失败"), "该说清是渲染这一步出的错：{err}");
+    }
+
+    #[test]
+    fn 没有_render_的面板如实说没有() {
+        let lua = Lua::new();
+        let register = 面板表(&lua, "nota.t").unwrap();
+        let spec = lua.create_table().unwrap();
+        spec.set("id", "bare").unwrap();
+        register.call::<()>(spec).unwrap();
+
+        let err = 面板内容(&lua, "nota.t", "bare").unwrap_err().to_string();
+        assert!(err.contains("没有提供 `render`"), "实际报的是：{err}");
+    }
+
+    #[test]
+    fn 没有的面板要报出来而不是给空() {
+        let lua = 带渲染的面板("return {}");
+        let err = 面板内容(&lua, "nota.t", "不存在").unwrap_err().to_string();
+        assert!(err.contains("没有声明面板"), "实际报的是：{err}");
+    }
+
+    /// `render` 写的不是函数 → **注册时就报**。
+    ///
+    /// 拖到用户打开面板才报的话，报错的地方（前端一个渲染失败）离病因
+    /// （插件里把 `render` 写成了表）已经很远了。
+    #[test]
+    fn render_不是函数当场就报() {
+        let lua = Lua::new();
+        let register = 面板表(&lua, "nota.t").unwrap();
+        let spec: Table = lua
+            .load(r#"return { id = "p", render = { "我是一张表" } }"#)
+            .eval()
+            .unwrap();
+        let err = register.call::<()>(spec).unwrap_err().to_string();
+        assert!(err.contains("必须是一个函数"), "实际报的是：{err}");
+    }
+
+    /// 超长文本按**字符**截，且一个汉字不该被劈成半个。
+    #[test]
+    fn 超长文本截断且不劈开汉字() {
+        let lua = 带渲染的面板(&format!(
+            r#"return {{ {{ kind = "text", text = string.rep("汉", {}) }} }}"#,
+            面板文本上限 + 500
+        ));
+        let v = 面板内容(&lua, "nota.t", "p").unwrap();
+        let text = v[0]["text"].as_str().unwrap();
+        assert_eq!(text.chars().count(), 面板文本上限 + 1, "截断长度不对（+1 是那个省略号）");
+        assert!(text.ends_with('…'), "截断该留个记号：{}", &text[..10]);
+        assert!(text.chars().all(|c| c == '汉' || c == '…'), "汉字被劈开了");
+    }
+
+    /// 函数、userdata 这些过不了 JSON 的值，**替换成 null 而不是变成假字符串**。
+    ///
+    /// ⚠️ 键名只能是 ASCII——Lua 的标识符不含汉字（`回调 = …` 是**语法错**，
+    /// 不是"能跑但取不到"）。这一条我实测踩过，别改回来。
+    #[test]
+    fn 过不了_json_的值变成_null() {
+        let lua = 带渲染的面板(
+            r#"return { { kind = "text", text = "x", cb = function() end } }"#,
+        );
+        let v = 面板内容(&lua, "nota.t", "p").unwrap();
+        assert!(v[0]["cb"].is_null(), "函数该变成 null，实际是 {}", v[0]["cb"]);
+        assert_eq!(v[0]["text"], "x", "同一个表里别的字段不该受影响");
+    }
+
+    /// 自引用的表不能把栈打穿——层数上限兜住。
+    #[test]
+    fn 自引用的表不会打穿栈() {
+        let lua = 带渲染的面板(
+            r#"local t = { kind = "text" }; t.me = t; return { t }"#,
+        );
+        let v = 面板内容(&lua, "nota.t", "p").unwrap();
+        // 走到层数上限就停：一路是 `me`，最后一层是 null。
+        let mut cur = &v[0]["me"];
+        let mut 层 = 0;
+        while !cur.is_null() {
+            cur = &cur["me"];
+            层 += 1;
+            assert!(层 <= 面板层数上限 + 2, "递归没有停下来");
+        }
+        assert!(层 > 1, "至少该往下走几层才对");
+    }
+
+    /// 一个数组里的项数有上限。**不是为了防坏人，是为了防手滑**：
+    /// 一个插件把整个目录树铺进面板，前端会卡死。
+    #[test]
+    fn 一层的项数有上限() {
+        let lua = 带渲染的面板(&format!(
+            r#"local items = {{}}
+               for i = 1, {} do items[i] = {{ title = "x" }} end
+               return {{ {{ kind = "list", items = items }} }}"#,
+            面板节点上限 + 50
+        ));
+        let v = 面板内容(&lua, "nota.t", "p").unwrap();
+        assert_eq!(v[0]["items"].as_array().unwrap().len(), 面板节点上限);
     }
 }

@@ -3,7 +3,7 @@ name = "nota"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.85"
-description = "Nota — 对标 Typora 的所见即所得 Markdown 编辑器"
+description = "Nota — 所见即所得的 Markdown 编辑器，带 Lua 插件系统"
 authors = ["Nota contributors"]
 license = "BSD-2-Clause"
 repository = "https://github.com/nota/nota"
@@ -29,8 +29,8 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
-# 主题资源内联成 data: URL 要用。见 `src/themes.rs` 顶上"为什么字体也不走 asset 协议"。
-base64 = "0.22"
+# ⚠️ 曾经有个 `base64`，是给 Typora 主题把字体内联成 data: URL 用的。
+# 那条兼容链已按用户要求整个拆掉（版权，见 `src/themes.rs` 文件头），依赖一起删。
 
 # ── Lua 插件运行时 ────────────────────────────────────────────────────────
 # vendored：把 Lua 5.4 源码一起编进来，不依赖系统 liblua（容器里也没有）。
@@ -49,3 +49,16 @@ dirs = "6"
 notify = "8"          # 文件树 / 外部改动监视
 similar = "3"         # AI 插件的 diff、Git 插件的变更预览
 shlex = "1"           # Git 插件拼命令行时的转义
+
+# ── 网络 ──────────────────────────────────────────────────────────────────
+# 只给 `nota.http`（`src/lua/api/http.rs`）用，也就是**只给插件**用。
+#
+# 为什么是 ureq 而不是 reqwest：ureq 是**同步**的。插件那一侧本来就是
+# 一条阻塞的 Lua 调用，宿主把它放进 `spawn_blocking` 就完事；换成
+# reqwest 得把 async 一路引到 Lua 桥的每一层，换来的是这里根本用不上的并发。
+#
+# 默认 feature 就带 `rustls` + `webpki-roots`（不依赖系统 OpenSSL，
+# 容器里也不用装 libssl-dev），另有 `flate2` 解 gzip。
+# ⚠️ 默认**不**带 `native-tls`——别顺手开，那会把系统库拖回来。
+[dependencies.ureq]
+version = "3"

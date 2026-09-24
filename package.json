@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Nota — 一款对标 Typora 的所见即所得 Markdown 编辑器（Tauri + ProseMirror）",
+  "description": "Nota — 一款所见即所得的 Markdown 编辑器，带 Lua 插件系统（Tauri + ProseMirror）",
   "license": "BSD-2-Clause",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@lezer/highlight": "^1.2.3",
     "@milkdown/kit": "^7.22.1",
     "@milkdown/plugin-diagram": "^7.7.0",
     "@milkdown/plugin-math": "^7.5.9",

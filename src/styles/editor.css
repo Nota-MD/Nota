@@ -14,6 +14,10 @@
  *
  * 加载顺序仍然是 `theme.css` → `app.css` → 本文件（`main.tsx`），
  * 跟拆之前完全一样，所以选择器权重和覆盖关系没有任何变化。
+ *
+ * 2026-09-23 加了**分屏**（`.editor-pane-split`，见下面那一段）。它虽然
+ * 也算"排版"，但作用于 `.editor-pane` 自己——而 `.editor-pane` 在这里，
+ * 拆去 `app.css` 会让"编辑区长什么样"散在两个文件里，所以留在本文件。
  */
 
 /* ── 编辑区 ───────────────────────────────────────────────────────────── */
@@ -35,6 +39,44 @@
   pointer-events: none;
 }
 
+/* ── 分屏（`mode="split"`）─────────────────────────────────────────────── */
+
+/* 左右两个窗格。**滚动条从"整块编辑区"挪到"每一格自己"**——这一条是分屏
+ * 唯一的结构性改动，理由：两个窗格的正文长度不一样（原文里有 `##`、`|`、
+ * 空行，渲染出来是另一份长度），共用一个滚动条的必然结果是**一边到底了
+ * 另一边还没完**，而用户没法把它们对齐。各滚各的之后，左右各自滚到哪儿
+ * 是独立的，跟 Typora 的"源码 + 预览"、以及所有分栏编辑器一致。
+ *
+ * ⚠️ `overflow: hidden` 是**必须**的（覆盖上面 `.editor-pane` 的 `auto`）：
+ * 留着 `auto` 的话，两个子元素各有各的横向滚动，外层又再出一个，
+ * 而且外层那个滚动条永远只有几像素的行程——纯噪声。
+ *
+ * ⚠️ 标记（`##` 那些）在预览格里**画得出来但会被裁**：预览只用只读的
+ * Milkdown，`instant-render` 那个插件仍在，用户在预览里点一下（会落一个
+ * 光标）标记就出来了，而那一格的左边距仍是 56px。本来想给预览抹掉标记，
+ * 但那样要按 `readOnly` 分叉插件清单——**而插件清单是"三种模式共用一套
+ * 编辑器内核"这句话的实体**，为一点观感把它拆开不值。 */
+.editor-pane-split {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* 两个窗格等宽。⚠️ `min-width: 0` 不能省：flex 子项的默认 `min-width: auto`
+ * 会让它**被内容撑开**（预览里一张宽表格就能把左边挤没），而 `overflow: auto`
+ * 修不了这个——撑开发生在滚动之前。 */
+.editor-pane-split > .editor-mount {
+  flex: 1 1 50%;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* 右侧预览。分隔线走 `border-left` 而不是再插一个 div：面板的 rect 要能被
+ * 测量，插一个元素会让"哪一块是编辑区"变得有歧义。 */
+.editor-pane-split > .editor-preview {
+  border-left: 1px solid var(--border);
+}
+
 /* 正文容器。**宽度上限**是 Typora 的"正文宽度"设置。
  *
  * ⚠️ **左右各 56px，不是 32px**，而且**两边必须一样**。左边那一条是给块标记
@@ -47,19 +89,80 @@
  * 症状很有迷惑性：**代码块的围栏只剩尾巴**（` ```rust ` 只剩一个「st」），
  * 因为它是最长的一个标记；`##` 这种两三个字符的在同样宽度下刚好还在。
  * 判据：只要正文列左边距 < 最宽标记的宽度 + `pre` 那 15px，就会开始裁。 */
+/* ⚠️ **正文那一列要长到整格高**（2026-09-24，BUG-15 的后半段）。
+ *
+ * 只有那 120px 的下内边距是不够的：`.ProseMirror` 的盒子**长度跟着正文走**，
+ * 所以一篇短文档在屏幕上只占顶上两三百像素，**下面那一大片根本不属于它**——
+ * 点在那儿落在 `.editor-mount` 上，不聚焦、不报错、什么都不发生（实测
+ * y=350 能落光标、y=500 不能，分界线正是那个盒子的下沿）。
+ *
+ * 让 `.editor-mount` 和正文列都吃满整格高之后，那片空白才**落在
+ * contenteditable 自己的盒子里**，ProseMirror 会把光标放到离点击处最近的位置
+ * ——也就是文末，和 Typora 一致。`height` 一路给到 `.ProseMirror`（而不是
+ * `min-height`）：百分比高度只在父级高度**确定**时才解析得出来，中间断一环
+ * 就会被当成 0（等于没写）。
+ *
+ * ⚠️ **只给所见即所得这一系**（`.editor-pane-source` 排除在外）：源码模式那一
+ * 格装的是 CodeMirror，它自己有一套高度口径，不该被这里的 flex 改道。
+ * ⚠️ 分屏的两个格子都吃这条（`> .editor-mount` 那条 `overflow: auto` 仍在，
+ * 所以长文档还是各滚各的）。 */
+.editor-pane:not(.editor-pane-source) .editor-mount {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .editor-mount .milkdown {
   max-width: var(--content-width, 760px);
   margin: 0 auto;
-  padding: 48px 56px 120px;
+  /* 见上面那条：正文列自己也要吃满，否则 `height: 100%` 到 `.ProseMirror`
+     那一环就断了。`flex: 1` 之外还要 `min-height: 0`，不然长文档时
+     flex 子项的 `min-height: auto` 会把它撑成内容高度、再顶出滚动条。 */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  /* ⚠️ **只有左右**。纵向那两条（上 48 / 下 120）搬到了 `.ProseMirror` 上——
+     见下面那条，以及 BUG-15：**内边距属于哪一层，决定了点它算不算"点进正文"**。
+     点击落在 `.milkdown` 的内边距上时，光标不会进编辑区（那一层不是 contenteditable），
+     于是"点正文下方的空白接着打字"什么都不会发生。左右那两条**必须留在这一层**：
+     它们是块标记的装订线（见本文件顶上那条 56px 的来历），而标记是相对**块自己**
+     定位的，挂在 contenteditable 上会让整块正文跟着缩进。 */
+  padding: 0 56px;
 }
 
-/* ProseMirror 本体：颜色走文档主题那条轴（见文件末尾）。 */
+/* ProseMirror 本体。
+ *
+ * ⚠️ 字号与行高**走 token 不给死值**：文档主题要能改它们（衬线主题要更松的
+ * 行高、报刊要更紧的），而主题规则是 `.editor-pane` 一条选择器，权重比这里
+ * 的 `.editor-mount .ProseMirror` 低，直接改是改不动的。给成 token 之后，
+ * 主题只改 var 的值就行，**不用来这边抢选择器权重**——这也是本文件里
+ * 所有"可以被文档主题改的东西"的统一姿势（`--doc-bg`、`--border`、
+ * `--radius`、`--code-*` 都是这么处理的）。
+ *
+ * 逗号后面是"无文档主题"时的中性值，跟拆分之前一模一样。 */
 .editor-mount .ProseMirror {
   outline: none;
   font-family: var(--font-doc);
   color: var(--doc-fg);
-  line-height: 1.75;
-  font-size: 1.02em;
+  line-height: var(--doc-line-height, 1.75);
+  font-size: var(--doc-font-size, 1.02em);
+  /* ⚠️ **纵向留白挂在这一层，不是 `.milkdown` 那一层**（2026-09-24，BUG-15）。
+     这一条是内容可编辑区本身，点它的内边距**等于点在正文里**——ProseMirror 会把
+     光标落到离点击处最近的位置，于是"点正文下面那片空白 → 接着打字"能work，
+     和 Typora 一致。挂在外层（原来的写法）时那片留白是**外层的盒子**，
+     点它什么都不会发生，而且不报错。
+
+     ⚠️ 别把左右那两条也搬过来：那是装订线（`##`、`>`、` ``` ` 画在正文列左外侧），
+     见上面 `.milkdown` 那条。
+     ⚠️ 上下不对称是**有意的**：上面 48px 是文档开头的呼吸，下面 120px 是
+     "滚到底还能往里写"的余地（Typora 也是下大上小）。
+
+     `flex: 1` 是接上面那条"吃满整格高"的：它让这个盒子**至少**占满整格
+     （短文档也点得进），而 `min-height` 兜底在 `auto` 上，所以**长文档时
+     它照样长到内容那么高**、由外层滚动条去滚。 */
+  flex: 1;
+  padding: 48px 0 120px;
 }
 
 .editor-mount .ProseMirror > * + * {
@@ -367,4 +470,29 @@
 .editor-mount .ProseMirror li[data-checked="true"] > p:first-child {
   color: var(--fg-faint);
   text-decoration: line-through;
+}
+
+/* ── 写作模式（专注 / 打字机）────────────────────────────────────────────
+ *
+ * 两条都在 `editor/writing-modes.ts` 里算，这里只定**长什么样**。
+ * ⚠️ 两个编辑器的做法不同（那边的文件头写了为什么），所以这里是两条选择器：
+ * 所见即所得压的是**兄弟块**（ProseMirror 给的装饰 class，只加在被压的那些
+ * 块上），源码压的是**除当前行以外的行**（根节点一个 class + 当前行一颗
+ * 装饰，压暗交给下面的 `:not()`）。
+ */
+
+.nota-dim {
+  /* ⚠️ 只改透明度，**不动字色**：正文的颜色属于文档主题，专注模式跑去改
+   * 它，会让"换了个文档主题之后这一块变得看不清"。 */
+  opacity: 0.32;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.cm-editor.nota-focus .cm-line:not(.nota-focus-on) {
+  opacity: 0.32;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.nota-focus-on {
+  opacity: 1;
 }

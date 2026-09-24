@@ -1,0 +1,205 @@
+/**
+ * 「光标现在处在什么状态」——格式化工具栏的高亮、以及**菜单项的可用性**
+ * 都要问它。
+ *
+ * # 为什么需要它
+ *
+ * 在它之前，菜单栏只有一种判据：`App.tsx` 里有没有这条命令的处理函数
+ * （`ui/commands.ts` 顶上那段）。那个判据回答的是"这个功能做了没有"，
+ * **回答不了"现在这一刻能不能用"**——比如「删除行」在光标不在表格里时
+ * 按下去什么都没有，而菜单上它是亮的。同一句"界面不该撒谎"的口径，
+ * 在这里要求第二层判据。
+ *
+ * # 它从哪儿读
+ *
+ * 一个 ProseMirror 插件（`$prose`），在**每一次视图更新**时读一遍当前
+ * state，变了才通知外面（用一整条签名字符串比对，见 `签名`）。不比对的话，
+ * 每敲一个字都会 `setState` 一次，`App` 整棵树跟着重渲染——那是会让
+ * 打字变钝的写法。
+ *
+ * ⚠️ **只读，不写**。这里不派任何事务、不加装饰——它在"改文档"这件事上
+ * 是个纯粹的观察者。工具栏的高亮是它的**唯一**产物。
+ *
+ * # ⚠️ 它只描述**所见即所得**那一侧
+ *
+ * 源码模式（CodeMirror）没有文档树，`**加粗**` 在它那里就是四个字符
+ * 加两个星号，谈不上"当前选区是不是粗体"。所以源码模式下这份状态是
+ * **缺的**（调用方传 `null`），工具栏相应地**一颗都不高亮**——那比如实
+ * 多、比猜一个强。这一条写在 `ui/FormatBar.tsx` 顶上，别以为是漏了。
+ */
+
+import { Plugin } from "@milkdown/kit/prose/state";
+import type { EditorState } from "@milkdown/kit/prose/state";
+import { $prose } from "@milkdown/kit/utils";
+
+/**
+ * 光标所在块属于哪一族。**同一时刻只有一个**——工具栏那一排块级按钮
+ * （标题 / 引用 / 列表 / 代码块）是互斥的，用 `BlockKind` 一个字段就能表达，
+ * 不必给每一族各开一个布尔（那样会出现"既要又要"的非法组合）。
+ */
+export type BlockKind =
+  | "text"
+  | "h1"
+  | "h2"
+  | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
+  | "quote"
+  | "ul"
+  | "ol"
+  | "task"
+  | "codeBlock";
+
+export interface CommandState {
+  /** 行内标记。可以同时成立（比如粗体 + 斜体），所以是四个布尔。 */
+  bold: boolean;
+  italic: boolean;
+  strike: boolean;
+  inlineCode: boolean;
+  /** 所在块。见 `BlockKind`。 */
+  block: BlockKind;
+  /**
+   * 光标在表格里。
+   *
+   * ⚠️ 表格那十条命令（插行/插列/删行/删列/删表/对齐）**只有这一条判据**：
+   * 不在表格里时它们点了没反应（`prosemirror-tables` 的裸函数找不到格子就
+   * 直接返回），所以菜单必须据此变灰，否则就是让用户白点。
+   */
+  inTable: boolean;
+  /** 有选区（选中了东西）。「清除样式」据此变灰。 */
+  hasSelection: boolean;
+}
+
+/** 什么都没有的初始值。编辑器还没建好时用它。 */
+export const 空状态: CommandState = {
+  bold: false,
+  italic: false,
+  strike: false,
+  inlineCode: false,
+  block: "text",
+  inTable: false,
+  hasSelection: false,
+};
+
+/** 从文档树里读块族。`inTable` 单独一条路径（它和中途遇到的块无关）。 */
+function 读块(state: EditorState): { block: BlockKind; inTable: boolean } {
+  const { $from } = state.selection;
+  let block: BlockKind = "text";
+  let inTable = false;
+  let 定过 = false;
+
+  // ⚠️ **从光标往上走**，不是只看 `$from.node(1)`：块可以嵌在任何深度
+  // （引用里的段落、列表项里的第二段、表格单元格里的段落……），
+  // 只看顶层的话，光标在 `<引用><段落>` 里时读出来是"text"——
+  // 工具栏上「引用」那颗不亮，而它明明就是当前这一块。
+  for (let d = $from.depth; d > 0; d--) {
+    const node = $from.node(d);
+    const name = node.type.name;
+
+    // 表格只是"在不在里面"，不参与块族的判定——单元格里的块才是。
+    if (name === "table_cell" || name === "table_header") inTable = true;
+
+    if (定过) continue;
+    switch (name) {
+      case "code_block":
+        block = "codeBlock";
+        定过 = true;
+        break;
+      case "blockquote":
+        block = "quote";
+        定过 = true;
+        break;
+      case "heading":
+        // `level` 是 schema 里的属性，理论上可能是 1–6 之外的数（自定义
+        // schema 能改），越界就老实当正文，不要 `as` 出一个不存在的层级。
+        block = (node.attrs.level >= 1 && node.attrs.level <= 6
+          ? `h${node.attrs.level}`
+          : "text") as BlockKind;
+        定过 = true;
+        break;
+      case "list_item": {
+        // ⚠️ 有序/无序要从**父节点**认（列表项自己不带这个信息），
+        // 而父节点正好在上面一层（`d - 1`）。
+        const 父 = d > 1 ? $from.node(d - 1).type.name : "";
+        // `checked != null` = 任务项（`null` 是普通项，见 `insert.ts` 里那段）。
+        block =
+          node.attrs.checked != null ? "task" : 父 === "ordered_list" ? "ol" : "ul";
+        定过 = true;
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  return { block, inTable };
+}
+
+/** 读一份完整的状态。导出来是为了让用例/别的调用点能直接问，不必建插件。 */
+export function 读状态(state: EditorState): CommandState {
+  const { $from, empty } = state.selection;
+  // ⚠️ `storedMarks` 优先：光标刚落在某个位置、用户还没打字时，选区位置上的
+  // marks 是**空的**，而下一次输入会用什么 mark 存在 `storedMarks` 里。
+  // 只看 `$from.marks()` 的话，"按了 Ctrl+B 还没打字"这段时间工具栏不亮。
+  const marks = state.storedMarks ?? (empty ? [] : $from.marks());
+  const 有 = (name: string) => marks.some((m) => m.type.name === name);
+  const { block, inTable } = 读块(state);
+
+  return {
+    bold: 有("strong"),
+    italic: 有("emphasis"),
+    strike: 有("strike_through"),
+    inlineCode: 有("inlineCode"),
+    block,
+    inTable,
+    hasSelection: !empty,
+  };
+}
+
+/**
+ * 一条签名。**只用来比对"变了没有"**，不参与任何判断。
+ *
+ * ⚠️ 顺序必须与 `读状态` 一一对应；加字段时**两边一起加**，漏了的话症状是
+ * "某一项的高亮永远不更新"——因为签名没变，通知就没发出去。
+ */
+function 签名(s: CommandState): string {
+  return `${s.bold ? 1 : 0}${s.italic ? 1 : 0}${s.strike ? 1 : 0}${s.inlineCode ? 1 : 0}|${s.block}|${
+    s.inTable ? 1 : 0
+  }${s.hasSelection ? 1 : 0}`;
+}
+
+/**
+ * 建那条"盯着光标看"的插件。
+ *
+ * `onChange` 在**建实例时**就会被调一次（`view` 钩子在挂载时跑），
+ * 所以调用方不需要自己再读一遍初始值。
+ */
+export function 光标状态插件(onChange: (state: CommandState) => void) {
+  return $prose(() => {
+    let 上次 = "";
+    const 报 = (state: EditorState) => {
+      const now = 读状态(state);
+      const sig = 签名(now);
+      if (sig === 上次) return;
+      上次 = sig;
+      onChange(now);
+    };
+    return new Plugin({
+      view: (view) => {
+        // ⚠️ **挂载那一刻先报一次**。只挂 `update` 的话，初值要等到用户
+        // 第一次敲键/点鼠标才会送到界面——那之前工具栏是"全灭"的，
+        // 而用户看到的第一眼恰恰是那一段时间。
+        报(view.state);
+        return {
+          update: (view) => {
+            报(view.state);
+            // ⚠️ **一律返回 `false`**：这个插件不改 DOM。返回 `true` 会让
+            // ProseMirror 以为视图需要重读，每次事务都多一轮无谓的工作。
+            return false;
+          },
+        };
+      },
+    });
+  });
+}

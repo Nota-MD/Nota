@@ -1,14 +1,16 @@
 # AI 助手插件（内置）。
 #
-# ⚠️ **本轮（第一轮）只有本地那半是真的**：收集上下文、拼提示词、把结果写回文档。
-# `network.http` 已经申请了，但宿主那一侧的 `nota.http` 目前是一张
-# 「尚未实现」的表，调用会返回一句明确的错误。见 docs/07 第 12 项。
+# 走**任何 OpenAI 兼容的接口**：官方 API、中转站、以及跑在自己机器上的
+# Ollama / LM Studio 都是同一条路。地址、模型、密钥由用户在面板里自己填。
 #
-# 为什么还把它装出来：这条链路（命令 → 收集上下文 → 发请求 → 落回文档）
-# 是插件体系最复杂的一条，早一点让骨架跑通，比等所有零件齐了再拼要稳。
+# ⚠️ **密钥是明文存的**，在 `~/.config/nota/plugin-settings/nota.ai.toml`
+# （文件 0600、目录 0700）。为什么不做加密、以及它到底挡得住谁，
+# 见 `docs/12` §插件设置为什么不加密。一句话：挡的是同机器上的其他用户，
+# 挡不住能读你这个账号文件的人——那本来也挡不住。
 #
-# 申请 `document.write` 是因为"把 AI 的回答插入文档"是这个插件的主用法。
-# 但**写之前一定要让用户看见要写什么**——见 main.lua 里 apply 那条命令的注释。
+# 申请 `document.write` 是因为"把 AI 的回答写进文档"是这个插件的主用法。
+# 但**写之前一定要让用户看见要写什么**——见 main.lua 顶部那条设计原则，
+# 以及 `apply` 命令的注释：内容先落在预览里，用户点了确认才动文档。
 
 [plugin]
 id          = "nota.ai"
@@ -22,11 +24,11 @@ authors     = ["Nota contributors"]
 entry       = "main.lua"
 
 capabilities = [
-  "document.read",
-  "document.write",
-  "network.http",   # ⚠️ 宿主侧尚未实现，见本文件顶部
-  "ui.notify",
-  "ui.panel",
-  "ui.menu",
-  "settings.own",   # ⚠️ 同上，宿主侧尚未实现
+  "document.read",   # 把正文送给模型当上下文
+  "document.write",  # 用户确认后把结果写回文档
+  "network.http",    # 请求 {base_url}/chat/completions；只发给用户填的那个地址
+  "settings.own",    # 存 api_key / base_url / model（只这一个插件自己的文件）
+  "ui.notify",       # 生成好了、写完了、失败了都要说一声
+  "ui.panel",        # 右侧那块面板：设置、预设按钮、生成结果预览
+  "ui.menu",         # 「插件」菜单里那五个预设
 ]

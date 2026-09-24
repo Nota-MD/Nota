@@ -1,0 +1,63 @@
+/**
+ * 那一套从 Folio 搬来的图标怎么画。**只有两条规则**，
+ * 复杂的东西在 `ui/Icon.tsx` 里说过了（为什么是遮罩、颜色怎么跟着走）。
+ *
+ * 单独一份而不是塞进 `app.css`：那份已经 850 行贴着 900 的 WARN 线
+ * （`AGENTS.md` §0.4），而这些规则**不属于外壳骨架**——谁用图标谁碰这里。
+ */
+
+/**
+ * ⚠️ `-webkit-` 前缀**两条都要留**：Linux 上跑的是 WebKitGTK（认 `-webkit-mask-*`），
+ * 而 `tools/menu-harness` 用的是 Chrome（两个都认）。只写不带前缀的那份，
+ * 在真窗口里图标会变成**一个个实心方块**——形状没被遮罩切掉，整块 `currentColor`。
+ */
+.icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  /* 图标是 inline-block，默认坐在文字**基线上**——那会让它比同一行的文字
+   * 低一点点（`×`、`B` 这些字形看着就比图标高半格）。`middle` 把它拉回中线。 */
+  vertical-align: middle;
+  /* ⚠️ 颜色走 `currentColor`：按钮 `:hover`、`data-on` 只改自己的 `color`，
+   * 图标就跟着变。**不要在这里写色值**，写一个就少支持一种组合。 */
+  background-color: currentColor;
+  -webkit-mask-image: var(--icon);
+  mask-image: var(--icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  /* `contain` 而不是 `100% 100%`：`size` 属性万一把宽高给成不一样的数，
+   * 图标会按比例缩，不会被拉扁。 */
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/**
+ * 名字对不上文件时（`Icon.tsx` 里那张表**加载时**会报，这里是让它在**界面**上也
+ * 看得出来）：画一个虚线框。空着的话，工具栏上就是"这块地方什么都没有"，
+ * 看着像设计如此；虚线圈出来才像坏了。
+ */
+.icon-missing {
+  border: 1px dashed var(--border);
+  border-radius: 2px;
+}
+
+/**
+ * 「图标 + 文字」的按钮（目前只有侧边栏空态那颗「打开文件夹…」）。
+ *
+ * ⚠️ 要有 `gap`：`.btn` 原来是"只有文字"的按钮，图标与文字是**裸挨着**的，
+ * 中间那点缝得由 `gap` 给。挤在一起比没有图标更像坏了。
+ * 为什么不用 `&nbsp;`：那个连读屏都会念出"空格"。
+ */
+.btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/**
+ * ⚠️ 这里**没有** `.sr-only`（"只给读屏看的文字"）：图标按钮的可读名字
+ * 用的是 `aria-label`，不塞隐藏文本。理由：`aria-label` 是**一个属性**，
+ * 不会进 DOM、不会被布局、也不会像隐藏文本那样在某些读屏里被当成正文念第二遍；
+ * 而它和 `title` 能写成同一句（见 `FormatBar.tsx` 里那颗按钮）。
+ */

@@ -36,8 +36,8 @@
 ┌─ Rust 进程 ───────────────────────────────┐   ┌─ WebView 里的 JS 运行时 ──────────┐
 │                                           │   │                                   │
 │  Tauri 外壳 + #[tauri::command] 命令层     │   │  App.tsx（状态编排 + 布局）        │
-│  AppState（四把锁）                        │   │  EditorPane（Milkdown 实例）       │
-│  DocumentStore（文档镜像）                 │◄─►│  **ProseMirror 文档树 = 文本真相** │
+│  AppState（四把锁）                        │   │  EditorPane（Milkdown/CodeMirror）│
+│  DocumentStore（文档镜像）                 │◄─►│  **编辑器里的文本 = 真相**（注¹）  │
 │  Settings（设置）                          │   │  Sidebar / StatusBar / Toasts      │
 │  PluginHost → LuaPlugin → Lua 状态         │   │                                   │
 │  磁盘、`git` 子进程                        │   │                                   │
@@ -81,8 +81,8 @@ worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost
   CORS 模式的请求，结果是 `document.fonts.load()` 抛 `NetworkError`、字体静默退回
   系统字体。判据与实测过程记在 `src-tauri/src/themes.rs` 顶上。
   ⚠️ 所以**别为了"统一"把 `font-src` 加回 `asset:`**——那一条是死的。
-- **`style-src` 里的 `'unsafe-inline'`** 是主题功能的**前提**：主题 CSS 是运行时
-  拼出来再注入 `<style>` 的（`styles/typora-theme.ts`），没有它主题一律不生效。
+- **`style-src` 里的 `'unsafe-inline'`** 是文档主题的**前提**：主题 CSS 是运行时
+  注入 `<style id="nota-doc-theme">` 的（`styles/doc-theme.ts`），没有它主题一律不生效。
 
 ---
 
@@ -96,11 +96,20 @@ tauri::Builder::default()
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_opener::init())
     .setup(|app| { /* ② 载设置 → 建共享状态 → 发现并加载插件 → manage */ })
-    .invoke_handler(tauri::generate_handler![ …21 个命令… ])   // ③
-    .on_window_event(|window, event| { /* ④ 窗口销毁时 unload_all */ })
+    .invoke_handler(tauri::generate_handler![ …38 项… ])          // ③
+    .on_window_event(|window, event| { /* ④ 窗口销毁时按 label 分派 */ })
     .run(tauri::generate_context!())
     .expect("Nota 启动失败");                                  // ⑤
 ```
+
+⚠️ **`.setup()` 之前还有一步，不在上面那张图里**：`兜住_webkit_的_dmabuf_渲染器()`
+（`lib.rs`，2026-09-24）。它在 `tauri::Builder` 建起来之前**给环境设一个默认值**
+`WEBKIT_DISABLE_DMABUF_RENDERER=1`（**只在 Linux 上、只在用户没自己设过时**），
+为的是绕开 WebKitGTK 那个**随机退出**：进程活着、退出码 0、日志里一句
+`VM … received NeedDebuggerBreak trap`，没有 core——加变量之后不再复现。
+⚠️ 它是**绕开不是优化**，所以：① 用户自己设了任何值就一律不覆盖（想验 DMABUF 那条路、
+或者将来 WebKit 修了想回去，都靠这一点）；② 容器目检那套配方（`docs/06` §5）**另外**
+还开着 `WEBKIT_DISABLE_COMPOSITING_MODE`，别把两者混成一条。
 
 ### ② `setup()` 里的三步
 
@@ -108,15 +117,20 @@ tauri::Builder::default()
 |---|---|---|
 | ① 载设置 | `Settings::load()` | 插件可能要读设置，得先有 |
 | ② 建共享状态 + 加载插件 | 三个 `Arc<Mutex<_>>` → 拼 `HostContext` → `PluginHost::discover(resource_dir, &base)` | 插件的 `nota.ui.*` 要发事件给前端，那需要 `AppHandle`——所以**必须在 Tauri 起来之后** |
-| ③ 托管 | `app.manage(AppState { documents, settings, workspace, plugins: Mutex::new(plugins) })` | 命令层与 `unload_all` 都从托管状态里取句柄，必须最后做 |
+| ③ 托管 | `app.manage(AppState { documents, settings, workspace, plugins: Mutex::new(plugins) })` | 命令层与 `unload_all` 都从托管状态里取句柄，必须最后做。⚠️ `AppState` 是**手写字面量**——它**没有构造函数**（2026-09-24 删了那个没人调用的 `AppState::new`，理由见 `docs/02`） |
 
 三者的顺序在代码里就是字面的先后；`documents` 的 `Arc` 同时被 `AppState` 和
 `HostContext` 拿着——**是同一个 `Arc`，不是两份拷贝**（插件闭包要长期持有它，
 生命周期比任何一次命令调用都长，所以要 `Arc`）。
 
-⚠️ `lib.rs` 里是**手写 `AppState { … }` 字面量**，没有调 `state.rs` 的
-`AppState::new()`。那个构造函数今天没人调用（详见 `docs/02-modules.md`）。
-两者字段一致，所以不构成 bug，但改 `AppState` 字段时别只看其中一个。
+⚠️ `lib.rs` 里是**手写 `AppState { … }` 字面量**：`state.rs` 那个结构体**没有构造函数**
+（2026-09-24 删掉了没人调用的 `AppState::new`。它当时是全仓唯一一处把开机时的
+`strict_markdown` 传给文档仓的地方，而它没人调用 ⇒ **设置开机时到不了文档仓**，
+标签页标题会按错的口径算。详见 `docs/02-modules.md` 的 `state.rs` 那一节）。
+
+⚠️ 第 ② 步里 `DocumentStore::new(settings.strict_markdown)` 那个**参数别漏**：
+标签页标题是文档仓**自己**从正文算的（`derive_title`），严格与宽松对
+「这一行算不算标题」看法不同。
 
 ### 每一步失败会怎样
 
@@ -128,8 +142,39 @@ tauri::Builder::default()
 | 单个插件加载失败 | `LuaPlugin::load` **不返回 `Err`**：留下一条 `Failed(原因)`，界面上照常列出并标红。理由很实在——插件是用户自己装的第三方代码，让一个写错的 Lua 脚本变成"应用打不开"，用户连去禁用它的界面都进不去 |
 | 清单都读不了的插件 | 只在 `discover()` 里 `eprintln!` 一行，**界面上看不见**（连 `id` 都不知道，没地方挂）⚠️ |
 | 事件通道撞名 | 后到的那个插件被判 `Failed(原因)`，原因里写明是谁占了通道（见下面"插件分层"） |
-| 窗口销毁时 `unload_all` | 单个插件的 `on_unload` 出错只 `eprintln!`，不向上抛——卸载流程不该被一个插件的残骸卡住 |
+| 窗口销毁时 `unload_all` | ⚠️ **只对 `main` 那个窗口**（`window.label()` 分派，2026-09-23 起）。单个插件的 `on_unload` 出错只 `eprintln!`，不向上抛——卸载流程不该被一个插件的残骸卡住 |
 | `.run(...)` 本身 | `.expect("Nota 启动失败")`，这是唯一会让进程直接死掉的地方 |
+
+---
+
+## 第二个窗口（Slidev 预览）
+
+**这是全仓唯一一个不是 `main` 的窗口**（2026-09-23 起）。它装的是 **Slidev 自己的**
+开发服务器页面——Nota 不管幻灯片怎么渲染，只负责起服务器、探活、开窗、把正文同步过去。
+机制细节在 `docs/04` §2.8 与 `docs/02` 的 `slidev.rs` / `slidev_probe.rs` 两节，
+这里只讲**结构上的三件事**：
+
+**① `WindowEvent::Destroyed` 必须按 `window.label()` 分派。**
+那个回调原先是「窗口销毁 → `unload_all()`」，而 `unload_all` 卸的是**全部插件**。
+第二个窗口一出现，这个写法就变成「**关掉预览窗 = 把插件全卸了**」——
+而且**一点动静都没有**（卸载只记日志），是那种"看起来只是插件面板空了"的静默失效。
+现在字符串 `"slidev"` 出现在**三个地方**（`commands/slidev.rs` 的常量、`lib.rs` 这里、前端的口头约定），
+**改成别的不会报错**，只会让「关预览窗 → 收服务器」那条链断掉——服务器留着、菜单还勾着。
+
+**② `SlidevState` 不进 `AppState`。**
+`AppState` 那四个句柄的锁序不变量（见下一节）是给文档与插件用的，而这里只是一个子进程。
+它单独 `manage`，锁也只有一把。
+
+**③ 点菜单**先问一句「装没装」，问完才起进程**（2026-09-24 起）。
+`view.slidev` 的处理函数是 `useSlidev.toggle()`，它现在**不直接 `start`**：先出一个面板
+（`ui/SlidevPanel.tsx`），面板上的结论来自 `slidev_probe.rs` 的一次探测——**不联网、不起服务器，
+最长 20 秒**（跑 `start` 会跑的同一条命令 + `--version`，npm 上 `--offline`）。
+⚠️ **它的位置在"结构"这一层是有意义的**：探测**不改任何状态**（不碰 `SlidevState`），
+所以它是**一次问话**，不是"预览的某个阶段"——这就是为什么它没被塞进 `SlidevState` 里。
+
+⚠️ **两个窗口共享同一个 WebView 数据目录、但不共享 JS 上下文**：预览窗里跑的是
+Slidev 的页面，**不是 Nota 的前端**，它俩之间没有任何直接通道——唯一的接口是**磁盘上的入口文件**
+（`slidev.rs::sync` 整份重写它，Slidev 自己的 Vite 热更新再把它读走）。
 
 ---
 
@@ -189,12 +234,21 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 
 ### 通道 A：前端 → 后端（`invoke` 命令）
 
-注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 28 个**。
+注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 38 项**：
+`commands::*` 下的 **37 条命令** + `lib.rs` 自己那条握手 `nota_frontend_ready`。
 所有调用的唯一出口是 `src/bridge/ipc.ts`——组件里不许直接 `invoke()`。
 
-⚠️ **这个数是数出来的**（`sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs | grep -c nota_`），
-改过注册表就重数一遍。它已经错过一次：BUG-13 那批加了 `nota_plugin_panels` /
-`nota_plugin_menus` 两条、之后又加了 `nota_doc_settle`，而表里一直写着 21。
+⚠️ **这个数是数出来的**，改过注册表就重数一遍：
+
+```sh
+sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
+  grep -o 'commands::[a-z]*::nota_[a-z_]*' | sort | uniq -c   # 分组小计
+sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs | grep -c nota_   # 总数
+```
+
+⚠️ **它已经错过两次**：BUG-13 那批加了 `nota_plugin_panels` / `nota_plugin_menus`
+两条、之后又加了 `nota_doc_settle`，而表里一直写着 28（顺带一提，那两次和
+2026-09-24 加导出那两条时，本节连 **slidev 八条、原生菜单一条**都整组漏着没写）。
 **加命令时最容易漏的就是这个总数和它上面那个分组小标题。**
 
 **文档（11 个）**
@@ -229,18 +283,21 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 | `nota_settings_get` | `() -> Settings` |
 | `nota_settings_set` | `(settings: Settings)`，**整份替换**并落盘，落盘失败回滚内存 |
 
-**主题（4 个）**
+**主题（3 个）**
 
 | 命令 | 签名要点 |
 |---|---|
-| `nota_themes_list` | `() -> Vec<ThemeInfo>`，扫遍所有主题目录；**一个都没装也不算错**，返回空表 |
-| `nota_theme_read` | `(path) -> String`，一份主题 CSS 的**文本**。⚠️ 返回文本而不是渲染结果——改造（收拢到 `#write`、内联 url）在**前端**做，见 `05` |
-| `nota_theme_asset` | `(path) -> String`，读字体/图片，还回来的是 **data: URL 不是路径**。理由是 WebKitGTK 上 asset 协议取不回字体（`themes.rs` 顶上那段实测）。⚠️ 调用方要把它**原样塞进 `url("…")`**，别当路径处理 |
-| `nota_themes_dir` | `() -> String`，**建好**（不存在就建）并返回我们自己的主题目录，给「打开主题文件夹」用 |
+| `nota_doc_themes` | `() -> Vec<DocThemeInfo>`，内置六套（编进二进制）＋ 用户目录里多出来的；**用户目录空的也算正常** |
+| `nota_doc_theme_css` | `(id) -> String`，一份主题 CSS 的**文本**。⚠️ 返回文本而不是渲染结果——限域（把选择器收到 `.editor-pane` 之下）在**前端**做，见 `05` |
+| `nota_doc_themes_dir` | `() -> String`，**建好**（不存在就建）并返回我们自己的主题目录，给「打开主题文件夹」用 |
 
-⚠️ 这四条都**只认主题目录里的路径**——`themes.rs::check_scope()` 会拿
-`paths::theme_dirs()` 逐个 `starts_with` 比对，读主题目录之外的文件一律拒绝。
-改 `theme_dirs()` 等于同时改了这道围栏。
+⚠️⚠️ **入参是 id 不是路径**（`nota_doc_theme_css(id)`），所以前端**根本没有**
+"让后端读任意文件"的能力。上一版是传路径 + 一道目录前缀检查（`check_scope` 拿
+`paths::theme_dirs()` 逐个 `starts_with` 比对）——那一版没有漏洞，但这一版是
+**结构上不可能出错**：`themes.rs::check_id` 只放行 ASCII 字母数字与 `-` `_`，
+路径由后端自己拼。
+⛔ 同时**不兼容也不内置 Typora 主题**（版权，用户 2026-09-23 定的），
+所以 Typora 的那两个主题目录连同 `theme_dirs()` 一起删了。
 
 **插件（6 个）**
 
@@ -252,6 +309,30 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 | `nota_plugin_find_command` | `(command: String) -> Option<String>`，某个命令是哪个插件注册的 |
 | `nota_plugin_panels` | `() -> Vec<PanelInfo>`，**拉**面板清单（BUG-13 之后改走这里，不再发事件） |
 | `nota_plugin_menus` | `() -> Vec<MenuInfo>`，**拉**菜单清单，同上 |
+
+**导出（2 个）**
+
+| 命令 | 签名要点 |
+|---|---|
+| `nota_export_write` | `(path: String, content: String) -> String`，把前端生成好的 HTML 落盘，返回**真实写出去的路径** |
+| `nota_export_print` | `(app, doc_path: Option<String>, title: String, content: String) -> String`，写到落点再交给系统默认程序。⚠️ **HTML 由前端生成**（`editor/export.ts`），后端只做 IO——生成放后端就要有第二套渲染实现，见 `05` §4.5 |
+
+**Slidev（8 个）**
+
+| 命令 | 签名要点 |
+|---|---|
+| `nota_slidev_start` | 起预览服务器。⚠️ **不等端口**（等待在前端的轮询里），所以它是短命令 |
+| `nota_slidev_probe_install` | 探测"装没装"，**最长 20 秒**，所以是**异步**命令、走 `spawn_blocking` |
+| `nota_slidev_probe` / `log` / `status` | 探活 / 取日志 / 查状态 |
+| `nota_slidev_open_window` | 开预览窗口（label 是 `slidev`，销毁时按 label 分派，见下） |
+| `nota_slidev_sync` | 正文一变就重写入口文件 |
+| `nota_slidev_stop` | 收摊 |
+
+**原生菜单（1 个）**
+
+| 命令 | 签名要点 |
+|---|---|
+| `nota_native_menu_apply` | `(app, nodes: Vec<MenuNode>) -> Result<bool, String>`。返回 `bool` 而不是 `()`：**前端要靠它决定要不要隐藏自绘菜单栏**，`false` = 没挂上（非 macOS 或 Tauri 报错），那就继续用自绘的那套 |
 
 **握手（1 个）**
 
@@ -273,7 +354,9 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 ⚠️ **这个名单会烂，看之前先数一遍**（`grep -rn "api\." src --include=*.tsx`）。
 本批就抓出两处过期：`api.doc.setActive` **已经有人调了**（BUG-6 修完之后
 `App.tsx` 里那个只依赖 `activeId` 的 effect），`api.plugin.panels` 也是
-（BUG-13 那批接上的）。**"声明了没人调"这个判断和"某某不存在"一样，
+（BUG-13 那批接上的）。
+⚠️ **2026-09-24 又加了一组已经有人调的**：`api.export.write` / `api.export.print`
+（调用点都在 `ui/useExport.ts`），**别把它们抄进上面那份名单里**。**"声明了没人调"这个判断和"某某不存在"一样，
 是要靠 grep 复核的否定命题**——别照着上一版抄。
 ⚠️ 名单里 `api.plugin.menus` 的"没人调"**是暂时的、不是漏**：菜单栏还没做
 （`docs/07` backlog 第 40 项），拉回来的清单眼下没处可放。
@@ -373,8 +456,8 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
   ├─ fs.read | fs.write             → nota.fs
   ├─ process.git                    → nota.git
   ├─ ui.notify | ui.panel | ui.menu → nota.ui
-  ├─ network.http                   → nota.http = not_implemented(...)   ⚠️ 空壳，但会明说没实现
-  └─ settings.own                   → nota.settings = not_implemented(...) ⚠️ 同上
+  ├─ network.http                   → nota.http      （ureq，阻塞，走 spawn_blocking）
+  └─ settings.own                   → nota.settings  （一个插件一份明文 TOML）
 ```
 
 ### 三条贯穿这个层次的设计判断
@@ -382,9 +465,13 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 1. **按能力装表，不装空壳。** 没申请 `document.read`，`nota.document` 就是 `nil`——
    不是"存在但调用时报错"。理由：前者让插件作者**在开发期**就发现问题，后者写完才炸；
    也让"权限"变成一道结构上的墙，而不是一句运行时的客气话。
-   两个例外：`nota.http` / `nota.settings` 因为能力**已经声明了但功能还没做**，
-   装的是"会明说没实现"的表——为的是让插件作者拿到一句"尚未实现（docs/07 第 12 项）"，
-   而不是 `attempt to index a nil value`（后者会让人白查半天"是不是我能力没申请对"）。
+
+   📌 **历史（已结清）**：`nota.http` / `nota.settings` 曾经是唯一的例外——
+   能力声明了、功能还没做，于是装一张"会明说没实现"的表，为的是让插件作者拿到
+   一句"尚未实现（docs/07 第 12 项）"而不是 `attempt to index a nil value`。
+   **2026-09-24 两张表都落地了**（`lua/api/http.rs` / `lua/api/settings.rs`，
+   见 `docs/07` 第 12/13 项），所以现在**没有例外**：`nil` 就是"没申请或没实现"，
+   两种情况的区别由能力清单本身回答。`装_ui吗()` 下面那种"假表"路径一并删掉了。
    ⚠️ **顺带一个坑（曾经的缺陷，2026-09-22 已修，见 `docs/07` BUG-8）**：
    `nota.ui` 这张表**本身**也有判据——表**里面**三个方法各自判一次
    （`ui.rs` 第 22 / 43 / 81 行，分别对应 `ui.notify` / `ui.panel` / `ui.menu`），
@@ -467,17 +554,24 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 `App.tsx` 是**外壳与全部状态**。它只做三件事——**取数据、派事件、拼布局**；
 编辑器的活全在 `ui/EditorPane.tsx`，文件树的活在 `ui/Sidebar.tsx`。
 
+⚠️ 注¹：2026-09-23 起"真相"**不再恒指 ProseMirror 文档树**。`EditorPane` 按
+`settings.view_mode` 分派三种模式——`wysiwyg` 装 Milkdown（ProseMirror 树是真相）、
+`source` / `split` 装 CodeMirror（**它的 `Text` 是真相**，`split` 右边那份 Milkdown
+只是只读投影）。所以那条不变的规矩要改写成：**同一时刻只有一份权威文本**，
+它由 `mode` 决定；分屏里**永远只往右流**，预览不回写（理由见 `05` §3.1）。
+
 ### `App.tsx` 持有的 state
 
 | state | 类型 | 谁在用 |
 |---|---|---|
 | `docs` | `Document[]` | 标签栏、状态栏、`activeDoc` 的推算 |
 | `activeId` | `DocId \| null` | 决定渲染 `EditorPane` 还是 `Home` |
-| `settings` | `Settings \| null` | 外观三轴、`content_width`、`confirm_unsaved`、`document_theme` |
+| `settings` | `Settings \| null` | 外观两条界面轴 + `document_theme`（文档主题 id）、`content_width`、`confirm_unsaved`、`view_mode`（⚠️ **编辑模式偏好，不是第三条外观轴**，见 `03`） |
 | `workspace` | `string \| null` | 侧栏文件树、`refreshTree` 的开关 |
 | `tree` | `TreeNode[]` | 侧栏文件树 |
 | `plugins` / `panels` | `PluginInfo[]` / `PluginPanel[]` | 侧栏「插件」页、`Home` 的插件状态列、右侧插件栏 |
-| `themes` | `ThemeInfo[]` | 菜单栏「主题」那一栏。**启动时拉一次** |
+| `themes` | `DocThemeInfo[]` | 菜单栏「主题」那一栏（**全是文档主题**）。**启动时拉一次** |
+| `settingsOpen` | `boolean` | 偏好设置框开不开（`ui/SettingsDialog.tsx`）。入口是菜单「文件 → 偏好设置」 |
 | `toasts` | `Toast[]` | `Toasts` 组件 |
 | `dockOpen` / `sidebarOpen` / `sidebarTab` / `statusBarOpen` | `bool` / `bool` / `SidebarTab` / `bool` | 界面三块的开合，以及左栏当前是哪一页 |
 | `confirmReq` | `{…} \| null` | 自绘确认框的受控状态（`ui/ConfirmDialog.tsx`），配一个 `confirmResolve` ref 存 Promise 的 resolve |
@@ -501,7 +595,8 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 | 外观 | `[settings]` | `settings` 有值就 `applyTheme(settings)` |
 | 文档主题 | `[settings?.document_theme, themes]` | 找到同名主题就 `applyDocTheme()`，空名/找不到就撤掉样式 |
 | 重取文件树 | `[refreshTree]` | 而 `refreshTree` 依赖 `workspace`，所以工作区一变就重取 |
-| 快捷键 | `[...回调]` | `window` 上听 `keydown`：Ctrl+N 新建、Ctrl+O 打开、Ctrl+S 保存、Ctrl+Shift+S 另存为、Ctrl+W 关标签，以及 §快捷键表里的那些编辑命令 |
+| 快捷键 | `[accelIndex, menuHandlers, disabledCommands]` | `window` 上听 `keydown`，**查表派发**（不再逐个判键）：键位签名 → 命令 id → `menuHandlers[id]`。表由 `ui/accel.ts::buildAccelIndex(MENUS)` 从 `commands.ts` 的 `accel` 字段推出来，**唯一真源**。完整口径见 `04` §4 |
+| 原生菜单 | `[disabledCommands, menuChecks, themes, settings?.document_theme]` | `api.nativeMenu.apply(buildNativeTree(...))` 推一份给 macOS（返回 `false` 就继续用自绘的）；另一个 effect 订 `nota:native-menu`，收到 id 走 `resolvePick` 分流。见 `04` §2.1c |
 
 ### 三条主链路
 
@@ -536,9 +631,8 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 | 位置 | 现象 | 原因 |
 |---|---|---|
 | `applyTheme` 的 `detectStyle()` | `guessDesktop()` 恒返回空串，所以 `ui_style = auto` **永远落到 Adwaita** | WebKitGTK 不把桌面环境告诉 JS；等接上 XDG portal 的 `color-scheme` 再换 |
-| 设置入口 | 只有 CSS 与设置项，**还没有一个"设置"面板**（`docs/07` 第 10/11 项） | 菜单栏「文件 → 偏好设置…」占着位置但是**灰的**（`App.tsx` 的 `menuHandlers` 里没有 `file.preferences`）。设置项存在，改它得手改 `settings.toml` |
 | 打开对话框的后缀 | `openViaDialog` 的过滤器是 `md/markdown/mdown/mkd/txt`，**没有 `mdx`**；而后端 `is_markdown()` 认 `.mdx` | 能打开（可以把 mdx 文件拖进来或从文件树点），只是对话框里筛不出来。这两张表该对齐 |
-| 主题文件的 own 目录 | 主题**来源**标出来了（`nota` / `typora` / `typora-flatpak`），但 `~/.config/nota/themes` 里放的主题**没有单独的来源标记** | 三种来源里前两种是"别人的"，最后一种是我们自己的，界面上暂时没必要区分 |
+| 主题清单不重扫 | 往主题目录里丢一份新 `.css`，**菜单里不会出现** | 清单只在启动时拉一次（`docs/07` 第 41 项）。⚠️ 别改成轮询——主题是"用户偶尔动一次"的东西 |
 | 点正文下方空白不聚焦 | 空文档里 ProseMirror 只有一行高，点到下面那片内边距上**编辑器不聚焦**，接着打字什么都不会发生 | `.editor-mount .milkdown` 的 `padding: 48px 56px 120px` 是拖到 `.milkdown` 上的，而可编辑区在它内层。要修得把命中区域撑到整片，见 BUG-15 |
 
 ---

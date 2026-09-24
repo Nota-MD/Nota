@@ -6,8 +6,28 @@
 -- 设计口径（与 Folio 的 git 扩展一致）：**不做 git 的替代品**。
 -- 只做"写文档时最常用的那几下"——看改动、比差异、提交。
 -- 分支管理、rebase、交互式暂存这些，用户去终端做比在我们这儿点强。
+--
+-- ── 面板内容（2026-09-24 落地）────────────────────────────────────────────
+--
+-- `render` 是**每次拉都现跑一遍**的（宿主那侧有用例钉着这条），所以它里面
+-- 直接问 git 要状态就对了——**不要**在 `on_load` 里算一次存起来：那样界面上
+-- 会一直显示"应用刚启动那一刻"的改动，而且看着像是对的。
+--
+-- ⚠️ 声明（`register_panel` / `register_menu`）与内容是**两条路**：
+-- 前者只在加载时跑一次、宿主按需读；后者每次读现调。混起来就是 BUG-13。
+--
+-- ⚠️⚠️ **变量名一律用 ASCII，中文只许出现在注释和字符串里。**
+-- Lua 的标识符只认 `[A-Za-z_][A-Za-z0-9_]*`（`lislalpha` 用的是 C 的 `isalpha`，
+-- `local 分支 = 1` 里那几个 UTF-8 字节在任何 locale 下都不算字母），
+-- 所以那是**语法错误**：整份插件加载失败，面板和菜单一起消失，
+-- 而 Lua 报的话是 `<name> expected near '<\233>'`。
+-- `src-tauri/src/lua/mod.rs` 里有一条用例把这条钉住了（`内置插件都能被_lua_编译`）。
 
 local M = {}
+
+-- ⚠️ 这里**刻意不存任何状态**。早先有个"最近一次状态"的缓存，
+-- 结果是"面板显示的是几分钟前的东西"的来源——每次要什么就现问 git，
+-- 它本来就是个很快的命令行程序（见 `panel_content` 那段的注释）。
 
 -- ── 小工具 ────────────────────────────────────────────────────────────────
 
@@ -88,6 +108,7 @@ local function refresh(nota, silent)
       nota.ui.notify("这里不是 git 仓库：" .. r.stderr, "warn")
     end
     nota.event.emit("git:status", { is_repo = false, branch = "", entries = {} })
+    nota.ui.refresh("git")
     return
   end
 
@@ -96,7 +117,98 @@ local function refresh(nota, silent)
     e.describe = describe(e)
   end
   parsed.is_repo = true
+
+  -- 广播给**别的插件**（`docs/11` §插件之间怎么协作）。这条与下面那句
+  -- `nota.ui.refresh` 是两件事：这一条是给插件的（比如 AI 插件要把改动当上下文），
+  -- 那一条是给界面的。⚠️ 一码归一码，别指望界面去收这个。
   nota.event.emit("git:status", parsed)
+
+  -- 告诉界面"我这边变了，去重拉一次"。⚠️ 这一句**只是提示**，不是内容：
+  -- 面板没打开时没人收，用户打开时照样会拉到当时的状态（见 docs/12 §面板内容）。
+  -- 面板上那颗「刷新」按钮点下去本来也会重拉，但菜单里的「刷新改动」不会——
+  -- 少了这一句，从菜单刷新就得手动再点一下面板才看得到变化。
+  nota.ui.refresh("git")
+end
+
+-- ── 面板内容 ──────────────────────────────────────────────────────────────
+--
+-- 返回一串**内容块**（docs/13 §面板 DSL）。宿主只认下面这七种 `kind`；
+-- 认不出的会被前端如实画成"不认识这种内容块"——所以别写没在文档里的名字。
+
+--- 一条改动该用什么语气。**未跟踪是灰的**（它还不是这个仓库的一部分），
+--- 已暂存的用成功色，剩下的（改了但没暂存）用警示色——它们是最容易被提交漏掉的。
+local function tone_of(e)
+  if e.index == "?" and e.work == "?" then
+    return "muted"
+  end
+  if e.index ~= " " and e.work == " " then
+    return "success"
+  end
+  return "warn"
+end
+
+--- 面板此刻该显示什么。**每次读都现跑**（见文件头）。
+local function panel_content(nota)
+  local r = nota.git.status()
+
+  -- 不是仓库：**如实说**，而且给一条能往下走的按钮。空着的话用户看到的是
+  -- 一个空白面板，而原因（没 git init）和出路（去终端 init）都看不出来。
+  if r.code ~= 0 then
+    return {
+      { kind = "text", tone = "muted", text = "这里不是 git 仓库。" },
+      { kind = "text", tone = "muted", text = "在文档所在目录跑一次 `git init` 就会出现在这里。" },
+      { kind = "buttons", items = { { label = "再试一次", command = "refresh" } } },
+    }
+  end
+
+  local parsed = parse_status(r.raw)
+  local blocks = {}
+
+  local branch = parsed.branch
+  if branch == "" then
+    branch = "（git 没说当前分支）"
+  end
+  blocks[#blocks + 1] = { kind = "heading", text = branch }
+
+  if #parsed.entries == 0 then
+    -- **空的不是错误**：干净的工作区是正常状态，画一个空列表会让人以为没读出来。
+    blocks[#blocks + 1] = { kind = "empty", text = "没有未提交的改动。" }
+  else
+    local items = {}
+    for _, e in ipairs(parsed.entries) do
+      items[#items + 1] = {
+        title = e.path,
+        badge = describe(e),
+        -- 重命名/复制的原名写在副标题里：只看新名字看不出"这是从哪儿来的"。
+        subtitle = e.orig and ("原名：" .. e.orig) or "",
+        tone = tone_of(e),
+      }
+    end
+    blocks[#blocks + 1] = { kind = "list", items = items }
+  end
+
+  blocks[#blocks + 1] = {
+    kind = "buttons",
+    items = {
+      { label = "刷新", command = "refresh" },
+      {
+        label = "提交…",
+        command = "commit",
+        style = "primary",
+        -- ⚠️ `prompt` = 点之前先弹宿主的输入框问一句（`docs/13` §prompt）。
+        -- **不要**改成"先提交再让用户改信息"：提交信息是提交的一部分，
+        -- 事后改要 amend，那已经不是"写文档时最常用的那几下"了。
+        prompt = {
+          arg = "message",
+          label = "提交信息",
+          placeholder = "一句话说清这次改了什么",
+          hint = "会把所有改动 add 之后一起提交",
+        },
+      },
+    },
+  }
+
+  return blocks
 end
 
 --- 提交全部改动。
@@ -167,12 +279,26 @@ function M.on_load(nota)
     id = "git",
     title = "Git",
     location = "right",
+    -- ⚠️ `render` **每次拉都现跑一遍**，所以它里面必须是"现在怎么样"，
+    -- 不能是"加载时怎么样"。写成闭包捕获一份快照就是最坏的那种错
+    --（界面看着是对的，只是永远是几分钟前的）。
+    render = function()
+      return panel_content(nota)
+    end,
   })
 
   nota.ui.register_menu({
     label = "提交…",
     command = "commit",
     menu = "plugins",
+    -- 与面板上那颗「提交…」同一个 `prompt`：两条路上的问法必须一样，
+    -- 否则同一个功能在菜单里和在面板里表现不同。
+    prompt = {
+      arg = "message",
+      label = "提交信息",
+      placeholder = "一句话说清这次改了什么",
+      hint = "会把所有改动 add 之后一起提交",
+    },
   })
 
   nota.ui.register_menu({

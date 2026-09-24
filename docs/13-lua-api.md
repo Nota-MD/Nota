@@ -1,20 +1,24 @@
 # 13 · Lua API 参考
 
-> 最后同步：2026-09-22
+> 最后同步：2026-09-24
 >
 > **这份是参考手册**：逐表逐函数——签名、参数、返回值、**失败时到底发生什么**。
 >
 > - 「怎么写一个插件 / 能力表 / 清单字段」= **`docs/11-writing-a-plugin.md`**
 > - 「为什么这么设计 / 沙箱边界画在哪」= **`docs/12-plugin-runtime.md`**
 > - 实现 = **`src-tauri/src/lua/api/`**（`mod.rs` 是 `nota` 表本体，
->   `document.rs` / `fs.rs` / `git.rs` / `ui.rs` 是四张子表）
+>   `document.rs` / `fs.rs` / `git.rs` / `ui.rs` / `http.rs` / `settings.rs` 是六张子表）
 >
 > 凡签名、常量值、错误原文，都是**从代码逐字抄的**，并给了 `file:line`。
-> 两份活样例见 §10（`plugins/git/main.lua` 与 `plugins/ai/main.lua`）。
+> 两份活样例见 §11（`plugins/git/main.lua` 与 `plugins/ai/main.lua`）。
+>
+> ⚠️ **2026-09-24 之前只有四张子表是真的**：`nota.http` 与 `nota.settings`
+> 各是一张「调用必抛"尚未实现"」的空壳。现在六张都是真的（§9 §10），
+> 空壳那套 `not_implemented()` 与它的元表已经删掉了。
 
 ---
 
-## 0. 读之前：五条通则
+## 0. 读之前：六条通则
 
 ### 0.1 调用约定
 
@@ -73,10 +77,40 @@
    `Function(0x7f…)` 的字符串发到前端，等到前端渲染时才出怪事。
 2. **一张同时有数组部分和字典部分的表**走数组那条路，**字典那半会丢**。
    `{ is_repo = true, entries = {...} }` 这种表 `raw_len()` 是 0（没有 `[1]`），
-   所以走对象分支——`plugins/git/main.lua:90` 与 `:98-99` 正是这个形状，没问题。
+   所以走对象分支——`plugins/git/main.lua:110` 与 `:119`（`is_repo` 那两处）
+   正是这个形状，没问题。
 
 ⚠️ 还有一条不在这个转换里、但同样要记住的：**没有异步、没有 `require`、没有协程 API**。
 一次 `nota.*` 调用是同步阻塞的；想拆多文件也做不到（`docs/12` §5.7 记了这条取舍）。
+
+### 0.6 ⚠️⚠️ 变量名一律 ASCII，中文只许出现在注释和字符串里
+
+**这不是风格建议，是"插件能不能加载"的分界线。**
+
+Lua 的标识符只认 `[A-Za-z_][A-Za-z0-9_]*`：词法分析里那个 `lislalpha` 用的是 C 的
+`isalpha`，而 `键` 的 UTF-8 字节（`0xE9 …`）在**任何 locale 下都不算字母**。
+所以 `local 键_密钥 = "api_key"` 是**语法错误**：
+
+```lua
+local 键 = 1     -- ✗ 语法错误，整份插件加载失败
+local key = 1    -- ✓
+local 说明 = "密钥"  -- ✓ 字符串里的中文随便写
+-- 注释里的中文也随便写 ✓
+```
+
+**代价是不对称的**：Lua 报的是 `<name> expected near '<\233>'`，
+看到这句话很难想到"是我用了中文变量名"，而症状是**面板和菜单一起消失**
+（`on_load` 根本没跑到）。我们自己在 2026-09-24 撞过这一次——
+两份内置插件的**每一行**都没执行过，代码却是"写完"的样子。
+
+**怎么不靠记性**：`src-tauri/src/lua/mod.rs` 里有一条用例
+（`内置插件都能被_lua_编译`）会把 `plugins/*/main.lua` 逐个编译一遍。
+自己写的插件在仓库外，就用 `luac -p your-plugin/main.lua` 过一下——
+`lua -e "assert(loadfile('main.lua'))"` 也一样，一条命令的事。
+
+⚠️ 这条**只**管名字。中文的注释、字符串、字段名（`{ label = "提交信息" }`，
+键是 `label` 那个 ASCII 词）全都不受影响——Lua 的字段名是字符串，不是标识符。
+⚠️ 用 `t.中文键` 这种写法同样不行：那是语法糖，`t.名字` 里的 `名字` 也是标识符。
 
 ---
 
@@ -535,7 +569,10 @@ nota.fs.read("a.md")
 ### 8.2 `nota.ui.register_panel(spec)` —— 需 `ui.panel`
 
 ```lua
-nota.ui.register_panel({ id = "git", title = "Git", location = "right" })
+nota.ui.register_panel({
+  id = "git", title = "Git", location = "right",
+  render = function() return { { kind = "text", text = "现在是这样" } } end,
+})
 ```
 
 | `spec` 字段 | 必填？ | 默认 | 说明 |
@@ -544,6 +581,13 @@ nota.ui.register_panel({ id = "git", title = "Git", location = "right" })
 | `title` | 可选 | **`id`** | 侧栏上显示的名字 |
 | `icon` | 可选 | `nil` | |
 | `location` | 可选 | **`"right"`** | `"right"` = 右侧插件栏；**别的值不会报错**，但那块面板会落进右栏的「没有落脚处」那一组（用来把"你声明的面板没人要"摆出来） |
+| `render` | 可选 | `nil` | **不写就是一块空面板**。写了就是一个**每次拉都现调**的函数，返回一串内容块（§8.5） |
+
+⚠️ **`render` 是"现跑"，不是"加载时算一次"**——它是个函数，不是一张表，
+宿主每次要面板内容都重调一遍（`ui.rs` 的 `面板内容()`，有用例钉着这条）。
+所以里面必须是**此刻**的状态：该问 git 就问 git，该读设置就读设置。
+把结果缓存到一个 `local` 里再返回它，症状是"面板显示的是几分钟前的东西，
+而且看着像是对的"——两份内置插件都在文件头把这条写死了。
 
 **返回值**：无。**失败**：缺 `id` → 抛（上表）；**`id` 与本插件已声明的重名 → 抛**
 `插件 {id} 重复注册面板 \`{id}\``。
@@ -574,8 +618,9 @@ nota.ui.register_menu({ label = "提交…", command = "commit", menu = "plugins
 |---|---|---|---|
 | `label` | **必填** | — | 缺 → 抛 `register_menu 需要 \`label\` 字段`。**也是重名的判据**（同一个 `label` 注册两次 → 抛） |
 | `command` | **必填** | — | 缺 → 抛 `register_menu 需要 \`command\` 字段`。**必须是你自己注册过的命令名**——前端点下去时按这个名回调宿主，宿主再找插件要 |
-| `menu` | 可选 | **`"plugins"`** | 放到哪个菜单下 |
-| `accelerator` | 可选 | `nil` | 快捷键 |
+| `menu` | 可选 | **`"plugins"`** | 放到哪个菜单下。⚠️ **目前只认 `"plugins"`**，见下 |
+| `accelerator` | 可选 | `nil` | 快捷键，写法同内置菜单（`"Ctrl+Shift+K"`） |
+| `prompt` | 可选 | `nil` | 点之前先问一句，同 §8.5 那张表（**字段完全一样**） |
 
 **返回值**：无。**失败**：缺字段 → 抛（上表）；`label` 重复 → 抛
 `插件 {id} 重复注册菜单 \`{label}\``。
@@ -583,9 +628,21 @@ nota.ui.register_menu({ label = "提交…", command = "commit", menu = "plugins
 **和 `register_panel` 一样写 registry —— 不发事件（BUG-13）**，
 落在 `nota_menus`，由 `nota_plugin_menus` 拉。
 
-⚠️ **菜单栏 2026-09-23 建好了，但注册的菜单项还挂不上去**（`docs/07` 第 42 项）——
-前端已经会 `nota_plugin_menus` 把它拉回来，缺的只是"塞进哪一栏"这一步。
-写侧和拉侧都是通的，缺的是最后一根线。
+**✅ 2026-09-24 接进菜单栏了**（`docs/07` 第 42 项）：拉回来的条目合成
+**一栏「插件」**，插在「帮助」前面。合成与摆放的规则在
+`src/ui/pluginMenus.ts`（含"`menu` 写别的值怎么办"），要点三条：
+
+| 事 | 规矩 |
+|---|---|
+| `menu = "plugins"` | 进「插件」栏 |
+| `menu` 写别的值 | **不静默丢掉**：照样摆进「插件」栏，标签后缀「（想挂到「X」栏，暂不支持）」，**而且是灰的** |
+| 灰不灰的判据 | 就一条：`App.tsx` 的 `menuHandlers` 里有没有它的 id。**没有 = 灰**——不为插件单开第二条判据 |
+
+⚠️ **键位撞车怎么办**：`accelerator` 走的是内置菜单**同一条**索引
+（`ui/accel.ts::buildAccelIndex`，因为它拿到的就是同一份菜单数组），
+规则因此也是同一条：**先到先得**，撞了在 `console.warn` 里点名两条命令、
+**前一条生效**。「插件」栏排在「帮助」之前、也就是排在所有内置栏之后，
+所以**内置键位永远赢**——插件想抢 `Ctrl+B` 是抢不走的，它只会拿到一条警告。
 
 ⚠️ `command` 那个字段**不做校验**：写一个没注册过的名字不会当场报错，
 点了才得到 `插件 {id} 没有注册命令 \`{name}\``。**注册菜单前先把命令注册了。**
@@ -637,80 +694,189 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 往 `ui.rs` 加判据 → 对不上 → 用例红 → 去 `UI能力` 补一项 → 外面那层自动带上。
 `docs/08` §6 讲新增能力那类改动时也是这条路子。
 
----
+### 8.5 面板 DSL：`render` 返回什么
 
-## 9. `nota.http` / `nota.settings` —— **尚未实现**的表
+一块内容是一个表，`kind` 字段决定它是哪一种。**只有下面七种**
+（`src/ui/panel-nodes.ts::normalise` 是真相源）：
 
-| 表 | 需哪个能力 | 调用任何方法的后果 |
+| `kind` | 字段 | 画成 |
 |---|---|---|
-| `nota.http` | `network.http` | 抛 `网络请求尚未实现（见 docs/07 第 12 项）` |
-| `nota.settings` | `settings.own` | 抛 `插件设置尚未实现（见 docs/07 第 13 项）` |
+| `heading` | `text` | 一小行加粗的标题 |
+| `text` | `text`，`tone` | 一段正文，按 `tone` 上色 |
+| `fields` | `items = { { label, value, tone } … }` | 左标签右值的几行（设置、状态） |
+| `list` | `items = { { title, subtitle, badge, tone } … }` | 一列条目，`subtitle` / `badge` 可省 |
+| `buttons` | `items = { { label, command, args, prompt, style, disabled } … }` | 一排按钮，点了调 `command` |
+| `empty` | `text` | 居中的一句"这里没有东西" |
+| `separator` | — | 一条分隔线 |
 
-原文出自 `api/mod.rs:98-104` 的两处 `not_implemented(lua, "网络请求", "docs/07 第 12 项")`
-与 `not_implemented(lua, "插件设置", "docs/07 第 13 项")`；
-`not_implemented()`（`api/mod.rs:174-190`）用 `__index` 元表兜住**任意方法名**，
-所以 `nota.http.get` / `nota.http.post` / `nota.settings.get` / 甚至拼错的名字
-都会得到同一句话——`__index` 被触发时**不检查名字**。
+`tone` 取 `normal` / `muted` / `success` / `warn` / `danger`（`info` `error`
+`warning` 是别名，见下）。`style` 取 `normal` / `primary` / `danger`。
 
-⚠️ **它们不是"表不存在"，是"表在、调用必抛"**。这是刻意的（`api/mod.rs:94-97`）：
-插件作者写 `nota.http.get(...)` 会立刻拿到一句带条目号的"尚未实现"，
-而不是 `attempt to index a nil value`——后者会让人**误以为是自己的能力没申请对**，白查半天。
+⚠️ **认不出的 `kind` 会如实画成"不认识这种内容块"**，不静默丢掉，
+也不猜它是哪一种——所以别写没在上表里的名字（别指望它长得像谁）。
+字段类型不对则**退回默认值**（`text` 是数字 → 空串），不会让整块消失。
 
-**插件该怎么对付它们**：`pcall` 兜住，把宿主那句错误当成"这半还没接通"的
-**正常状态**来报告。两份活样例：
+**三条硬规矩**（`panel-nodes.ts` 文件头有完整理由）：
 
-| 位置 | 做法 |
-|---|---|
-| `plugins/ai/main.lua:57-68` | `pcall` 包住 `nota.http.post{...}`，失败就把 `tostring(response)` 当 `error` 返回给前端 |
-| `plugins/ai/main.lua:122-131` | `status` 命令**专门去探一次**（`pcall` 一个必然失败的请求），把 `http_ready = probe_ok` 报给界面——界面据此显示"联网那半还没接通" |
+1. **没有任何一条路能把字符串变成 HTML 或属性。** 全文没有
+   `dangerouslySetInnerHTML`，插件塞的额外键**一概不往 DOM 上带**。
+   面板里的富文本不是"以后再说"，是**不做**——要表达力就给新 `kind`。
+2. **`args` 原样带着，宿主不解析**：它的形状是你和自己的命令之间的约定。
+3. **上限是两侧各自把关**：宿主截大小（文本 4000 字符、每块 200 项、嵌套 6 层），
+   前端再截一刀（防手改过的数据）。超了是**截断不是报错**。
 
-📌 **这是"宿主功能还没落地时插件该怎么写"的范例**：接线全通，等宿主那两个 API
-一落地，`plugins/ai/main.lua` 基本不用改就能跑（`main.lua:3-6` 的原话）。
+**`prompt`：点之前先问一句**（面板按钮和菜单项**共用**这一套字段）：
+
+| 字段 | 必填？ | 说明 |
+|---|---|---|
+| `arg` | **必填** | 答案放进 `args[arg]`。**缺了 `arg` 整个 `prompt` 当没写**——问了也送不出去，不如不弹 |
+| `label` | 可选 | 输入框上面那行字，默认 `"请输入"` |
+| `placeholder` / `hint` | 可选 | 占位符 / 底下那句解释 |
+| `secret` | 可选 | `true` → 输入框遮屏（`type=password`）。**遮的是旁人的眼睛，不是存盘**——`nota.settings` 是明文的 |
+
+⚠️ **用户取消时你的命令根本不会被调用**，不是"收到一个空值"。
+所以命令里不用处理"他没填"这种情况——**除非**这个命令还能被别处调。
+（这一条只有一个实现：`src/ui/plugin-prompt.ts::问参数`，面板和菜单都走它，
+免得同一个"取消"在两处有两种解释。）
+
+⚠️ **面板按钮的 `prompt` 在前端归一化，菜单项的 `prompt` 在宿主归一化**
+（菜单那条路不经过前端白名单）。**两边的字段名必须一样**，因为它们最后
+都进同一个 `问参数`——改一处忘了另一处，症状是"菜单里问得出、面板里问不出"。
 
 ---
 
-## 10. 两个活样例（按行号）
+## 9. `nota.http` —— 需 `network.http`
+
+```lua
+local r = nota.http.post({
+  url = "https://api.example.com/v1/chat/completions",
+  headers = { authorization = "Bearer " .. key },
+  body = { model = "gpt-4o-mini", messages = { { role = "user", content = "你好" } } },
+  timeout_ms = 120000,
+})
+```
+
+| 规格字段 | 默认 | 说明 |
+|---|---|---|
+| `url` | **必填** | 缺 → 抛。见下面的地址围栏 |
+| `method` | 看调用名 | `get` / `post` 会自动填上；`request` 不填就是 `GET` |
+| `headers` | 空 | 值只收**文本/数字/布尔**，收到表 → 抛（早报早清楚） |
+| `body` | 空 | 字符串 = 原样发；**表 = 当 JSON 发**，并自动补 `content-type: application/json` |
+| `timeout_ms` | 30 000 | **上限 180 000**，超了**截到上限**不报错（写一个很大的数意图是"可能很慢"）；`0` → 抛 |
+
+三个调用名：`nota.http.request(spec)`、`nota.http.get(url或spec)`、`nota.http.post(url或spec)`。
+**返回一张表**：
+
+| 键 | 说明 |
+|---|---|
+| `code` | HTTP 状态码（integer） |
+| `text` | **原样**的响应体字符串 |
+| `json` | ⚠️ **响应体能解析成 JSON 时才有这个键**：拆好的表，数组下标**从 1 起** |
+
+⚠️ **4xx/5xx 不是错误。** 宿主关掉了 ureq 的 `http_status_as_error`，
+所以配额用完、密钥不对这类话会**原样**回到 `code` + `text` / `json` 里，
+由你去读、去显示。只有"连不上 / 超时 / 地址不合法"才抛。
+
+⚠️ **`json` 解析不了就不给这个键，也不当错误**——4xx 常常回一整页 HTML，
+那时你该看的是 `text` 里那段话，而不是一个把病因指错地方的"JSON 解析失败"。
+**有了它才不用在 Lua 里抠 JSON**：Lua 没有 JSON 库，用模式匹配去取
+`\n` 这类转义一定会错（AI 插件读 `r.json.choices[1].message.content` 靠的就是它）。
+
+**两道围栏**：
+
+| 围栏 | 规矩 |
+|---|---|
+| 地址 | `https://` 随便；`http://` **只放行回环**（`127.0.0.1` / `localhost` / `::1`，给本机大模型服务用），别的明文地址**直接拒绝**。⚠️ 判定按**主机名**做，`127.0.0.1.evil.com` 不算本机 |
+| 大小 | 请求体 1 MiB、响应体 2 MiB（**超了算失败**，不是截断）；重定向最多 5 跳 |
+
+⚠️ **它是阻塞的**：调用发生在 `spawn_blocking` 的线程里（`mlua` 的 `send` 特性），
+所以界面不会冻住——但一次调用要等到对方回话为止，**没有流式**。
+长文生成建议把 `timeout_ms` 提到十几万（`plugins/ai/main.lua` 用的是 120 000）。
+
+⚠️ **`nota.http` 拿不到 `ctx`**（不碰文档、不碰设置）。一个能发 HTTP 的插件
+顺手能读全文，等于给这条口子加了个没必要的放大器（`http.rs::build` 的注释）。
+
+---
+
+## 10. `nota.settings` —— 需 `settings.own`
+
+```lua
+local key = nota.settings.get("api_key")      -- 没设过 → nil
+nota.settings.set("api_key", "sk-…")          -- 立刻落盘
+nota.settings.set("api_key", nil)             -- 删掉这一项（不报错）
+local 全部 = nota.settings.all()              -- 一张普通表
+```
+
+**一个插件一个文件**：`~/.config/nota/plugin-settings/<安全化后的 id>.toml`
+（`nota.ai` → `nota.ai.toml`），**文件 0600、目录 0700**。
+
+| 规矩 | 说明 |
+|---|---|
+| 键名 | **只认 ASCII 字母数字和下划线**，且**不含点**。`a.b` 在 TOML 里是嵌套表，读回来形状就变了 → 抛 |
+| 值的类型 | 文本 / 数字 / 布尔。**表不行**（要存结构就自己序列化成文本） |
+| 落盘时机 | **每次 `set` 立刻写**。没有"退出时统一保存"，也就没有"崩了丢设置" |
+| 越界 | 只能碰**自己那个文件**——`build()` 拿的是本插件的 id，别的插件的设置你够不着 |
+
+⚠️ **明文，没有加密。** 这不是偷懒：密钥要和插件的运行环境放在一起，
+而这个环境能读的东西我们也都能读——加密只能把钥匙藏在同一台机器上，
+挡不住真能读你文件的人。**它挡的是"这台机器上的其他用户"**（靠 0600），
+以及"设置被不小心贴进 issue"（靠 UI 遮屏）。完整理由见 `docs/12` §插件设置。
+
+⚠️ **`set(k, nil)` 是"删掉"，不是"存一个 nil"**——TOML 里没有 `nil` 这种东西。
+删掉之后 `get` 回到 `nil`，插件那边通常该回落到自己的默认值。
+
+---
+
+## 11. 两个活样例（按行号）
 
 > ⚠️ 行号会随文件改动漂移。对不上时**按函数名找**。
 
-### 10.1 `plugins/git/main.lua`（201 行）—— "一个插件到底怎么写"
+### 11.1 `plugins/git/main.lua`（327 行）—— "一个插件到底怎么写"
 
 | 行 | 内容 | 值得学的地方 |
 |---|---|---|
-| `14-59` | `parse_status(raw)` | 按 NUL（`%z`）切分；⚠️ 重命名/复制（`X`/`Y` 是 `R`/`C`）**多跟一个路径**，不处理会整个列表错位 |
-| `62-73` | `describe(entry)` | 把 `XY` 两个状态字符变成一句人话 |
-| `81-100` | `refresh(nota, silent)` | **`silent` 参数**：`on_load` 时用户还没开文件夹，"不是 git 仓库"是理所当然的，**不该弹警告** |
-| `83, 111, 116, 142` | 用 `r.code ~= 0` 判失败 | 全程没用 `r.ok`——§7.4 那个坑没被踩 |
-| `88` | `nota.ui.notify("这里不是 git 仓库：" .. r.stderr, "warn")` | 把 git 的原始报错**接着自己的话**给出去 |
-| `99` | `nota.event.emit("git:status", parsed)` | ⚠️ 通道真名是 `plugin:nota-git:git:status`；⚠️ 今天**后端没人听**（§4.2） |
-| `103-127` | `M.commit(nota, message)` | 先 `add -A` 再 `commit -m`；⚠️ `"nothing to commit"` 单独识别成"没有改动需要提交"，**不是错误** |
-| `133-161` | 注册四个命令 `refresh` / `diff` / `commit` / `repo_root` | **返回表**的写法：`{ ok = ..., text = ..., error = ... }` |
-| `139-143` | `diff` 命令 | `args.staged` → `nota.git.diff(staged)` → 把 `r.code == 0` 折成 `ok` |
-| `166-170` | `register_panel` | 一个插件一个面板，`id = "git"`。⚠️ `location = "right"` 写的是**默认值**，写出来只为可读——它原先写 `"sidebar"`，那一页搬走后就成了 BUG-14（面板哪儿都不出现） |
-| `172-182` | 两次 `register_menu` | ⚠️ 两个菜单项分别指向**已经注册过的**命令 `commit` / `refresh` |
-| **`184-194`** | **`pcall(refresh, nota, true)` + `nota.log.warn`** | **全文件最该抄的一段**：`on_load` 末尾的调用一定要兜底，否则"环境不具备"会变成"插件加载失败"（§7.3）。⚠️ 也正因为 `refresh` 会走到 `notify`，而 `on_load` 时前端还没起来——见 §8.1 那条推/拉的提醒 |
-| `197-199` | 空的 `on_unload` | 没有要落盘的状态——**空着是对的**，不用硬写点什么 |
+| `39-80` | `parse_status(raw)` | 按 NUL（`%z`）切分；⚠️ 重命名/复制（`X`/`Y` 是 `R`/`C`）**多跟一个路径**，不处理会整个列表错位 |
+| `82-93` | `describe(entry)` | 把 `XY` 两个状态字符变成一句人话 |
+| `101-131` | `refresh(nota, silent)` | **`silent` 参数**：`on_load` 时用户还没开文件夹，"不是 git 仓库"是理所当然的，**不该弹警告** |
+| `104, 151-157` | 用 `r.code ~= 0` 判失败 | 全程没用 `r.ok`——§7.4 那个坑没被踩 |
+| `106` | `nota.ui.notify("这里不是 git 仓库：" .. r.stderr, "warn")` | 把 git 的原始报错**接着自己的话**给出去 |
+| `124` | `nota.event.emit("git:status", parsed)` | ⚠️ 通道真名是 `plugin:nota-git:git:status`；⚠️ 今天**后端没人听**（§4.2） |
+| `130` | `nota.ui.refresh("git")` | 推给**界面**的那一句。与上一行是两件事：`event` 给插件、`refresh` 给界面 |
+| `140-149` | `tone_of(e)` | 未跟踪→灰、已暂存→绿、剩下→黄。**"没暂存"是最容易被提交漏掉的**，所以要显眼 |
+| `151-213` | `panel_content(nota)` | 每次读都现跑；不是仓库时**给一条能往下走的路**（去 `git init`），不是一片空白 |
+| `215-239` | `M.commit(nota, message)` | 先 `add -A` 再 `commit -m`；⚠️ `"nothing to commit"` 单独识别成"没有改动需要提交"，**不是错误** |
+| `243-321` | 注册四个命令 `refresh` / `diff` / `commit` / `repo_root` | **返回表**的写法：`{ ok = ..., text = ..., error = ... }` |
+| `250-253` | `diff` 命令 | `args.staged` → `nota.git.diff(staged)` → 把 `r.code == 0` 折成 `ok` |
+| `278-288` | `register_panel` | 一个插件一个面板，`id = "git"`，`render = function() … end`。⚠️ `location = "right"` 写的是**默认值**，写出来只为可读——它原先写 `"sidebar"`，那一页搬走后就成了 BUG-14（面板哪儿都不出现） |
+| `290-311` | 两次 `register_menu` | ⚠️ 两个菜单项分别指向**已经注册过的**命令 `commit` / `refresh`；「提交…」带 `prompt`，**和面板上那颗按钮是同一份** |
+| **`317-320`** | **`pcall(refresh, nota, true)` + `nota.log.warn`** | **全文件最该抄的一段**：`on_load` 末尾的调用一定要兜底，否则"环境不具备"会变成"插件加载失败"（§7.3）。⚠️ 也正因为 `refresh` 会走到 `notify`，而 `on_load` 时前端还没起来——见 §8.1 那条推/拉的提醒 |
+| `323-325` | 空的 `on_unload` | 没有要落盘的状态——**空着是对的**，不用硬写点什么 |
 
-### 10.2 `plugins/ai/main.lua`（148 行）—— "宿主那半还没实现时怎么写"
+### 11.2 `plugins/ai/main.lua`（418 行）—— "联网插件怎么写"
 
 | 行 | 内容 | 值得学的地方 |
 |---|---|---|
-| `3-6` | 文件头 | 明说"**本地那半是真的，联网那半是占位的**"——插件自己的状态也要写在最显眼处 |
-| `8-10` | 一条设计原则 | **AI 的输出不许直接落进文档**，一律先"预览并确认"。理由：模型会犯错，而"文档被悄悄改掉、用户按了 Ctrl+Z 才发现"是最坏的一种错 |
-| `14-20` | `PROMPTS` 五个预设 | 提示词是常量 |
-| `26-39` | `gather(nota, scope)` | `scope = "diff"` 那条**本轮直接返回 `nil`** + 一句原因（§4.2 的现状） |
-| `42-71` | `ask(nota, key, scope)` | **`pcall` 包住 `nota.http.post`**，把宿主的"尚未实现"折成 `{ ok = false, error = ... }` |
-| `56` | 注释 | ⚠️ 记了"将来要换成流式的"——一次性请求对长文体验很差 |
-| `78-96` | 循环注册五个命令 | **用循环而不是抄五遍**——注释说得很实在：抄五遍的版本一定会有一处名字写错，而那种错只有点下去才发现（`local captured = key` 是经典闭包陷阱的解法） |
-| `90-93` | `nota.event.emit("ai:preview", …)` | 只发预览，**不改文档** |
-| `102-120` | `apply` 命令 | 真正写文档的那一处。⚠️ 注释明确要求**只能由界面上的确认按钮调用** |
-| `111-113` | 追加模式 | 自己拼分隔空行：`current` 末字符不是 `\n` 就补两个（§5.2 的"整篇替换语义"） |
-| `123-131` | `status` 命令 | 主动探一次 `nota.http` 的可用性并报给界面（§9） |
-| `134-136` / `138-140` | 面板 + 三个菜单 | ⚠️ 它申请了 `ui.panel`，所以 `nota.ui` 那层判据没问题。`location = "right"` 也是默认值（BUG-14 的另一处） |
+| `1-26` | 文件头 | 三条：走任何 OpenAI 兼容接口、**密钥是明文存的**、**变量名不许用中文**（§0.6） |
+| `12-15` | 一条设计原则 | **AI 的输出不许直接落进文档**，一律先"预览并确认"。理由：模型会犯错，而"文档被悄悄改掉、用户按了 Ctrl+Z 才发现"是最坏的一种错 |
+| `37-39` | `PRESET_ORDER` + `PRESETS` | ⚠️ 顺序**另写一张数组**而不是 `pairs` 遍历：`pairs` 顺序不保证，界面上那排按钮会每次重开都换位置，而且不报错 |
+| `79-87` | `read_setting(nota, key, fallback)` | 把"没填 / 填错类型"折成同一个兜底值 |
+| `108-121` | `gather(nota, scope)` | `scope = "diff"` 那条**如实说够不着**（§4.2 的现状），**不偷偷回退成全文**——那会让用户拿到"用整篇文档写出来的提交信息" |
+| `130-199` | `send_request(nota, body_text)` | **`pcall` 包住 `nota.http.post`**；`r.code ~= 200` 时先取 `r.json.error.message`，取不到就把 `r.text` 前 300 字端出来（§9 的两条） |
+| `163-168` | 4xx 的处理 | 配额、密钥这类病因**写在响应体里**，宿主不替我们判——所以这里必须自己读 |
+| `177-186` | 200 但没有 `choices[1].message.content` | 形状对不上时**说清是哪儿对不上**，别只说"生成失败" |
+| `201-223` | `run_preset` | 生成完**只存进 `preview`**，然后 `nota.ui.refresh("ai")` 让面板重拉 |
+| `228-310` | `panel_content(nota)` | 三种按钮（设置）＋ 预览或五个预设。⚠️ `secret = true` 那一条遮的是**旁人的眼睛**，不是存盘（§10） |
+| `335` | `local captured = id` | **经典闭包陷阱的解法**：不 `local` 一份的话，五个命令会全部指向最后一个预设——不报错，只是"点润色出来的是翻译" |
+| `341-350` | `set_key` / `set_base` / `set_model` | 三件套共用 `save_setting`；**空串 = 清掉回到默认值** |
+| `357-383` | `apply` 命令 | 真正写文档的那一处。⚠️ 注释明确要求**只能由界面上的确认按钮调用**；内容取自 `preview` 而不是 `args.text` |
+| `368-370` | 追加模式 | 自己拼分隔空行：`current` 末字符不是 `\n` 就补两个（§5.2 的"整篇替换语义"） |
+| `396-403` | `register_panel` | `render = function() return panel_content(nota) end`（§8.2 那条"现跑"） |
+| `407-409` | 五个菜单 | 循环注册。⚠️ **菜单和面板上的按钮要对得上**——只在面板里放两个、菜单里放三个，用户就得记住"哪个功能在哪儿" |
+| `412-417` | `on_unload` | ⚠️ **密钥故意不删**：卸载插件不该把用户填的东西一起扔了 |
 
 ---
 
-## 11. 速查：能力 → 函数
+## 12. 速查：能力 → 函数
 
 | 能力（清单里的字面量） | 解锁 |
 |---|---|
@@ -720,11 +886,11 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 | `fs.read` | `nota.fs.read` / `exists` / `list` |
 | `fs.write` | `nota.fs.write` / `remove` |
 | `process.git` | `nota.git.run` / `status` / `diff` / `repo_root` |
-| `network.http` | `nota.http.*` —— ⚠️ **尚未实现**（§9） |
+| `network.http` | `nota.http.request` / `get` / `post` （§9） |
 | `ui.notify` | `nota.ui.notify` |
-| `ui.panel` | `nota.ui.register_panel` |
-| `ui.menu` | `nota.ui.register_menu` |
-| `settings.own` | `nota.settings.*` —— ⚠️ **尚未实现**（§9） |
+| `ui.panel` | `nota.ui.register_panel` （+ `render` 面板 DSL，§8.5） |
+| `ui.menu` | `nota.ui.register_menu` （+ `prompt`） |
+| `settings.own` | `nota.settings.get` / `set` / `all` （§10） |
 
 ⚠️ 表的**存在性**与表里**成员的存在性**是两层，见 `docs/11` §3.4 与本文 §8.4。
 ⚠️ 这张表描述的是**宿主 API 的可见性**，不是"插件能做的事的上限"——

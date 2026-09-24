@@ -26,6 +26,7 @@ import {
   editorViewOptionsCtx,
   serializerCtx,
   parserCtx,
+  remarkStringifyOptionsCtx,
 } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
 import { gfm } from "@milkdown/kit/preset/gfm";
@@ -40,7 +41,7 @@ import { replaceAll } from "@milkdown/kit/utils";
 // 前两个是 kit 的依赖（间接装上了），plugin-prism 不是——所以它在 package.json
 // 里必须显式列出来，漏了就是一句 "Cannot find module"。
 import { prism } from "@milkdown/plugin-prism";
-import { math } from "@milkdown/plugin-math";
+import { katexOptionsCtx, math } from "@milkdown/plugin-math";
 import { diagram } from "@milkdown/plugin-diagram";
 
 // 菜单栏要用的编辑命令。**只从这里进**——别处不许自己去摸 `editorViewCtx`
@@ -56,10 +57,24 @@ import {
   wrapInOrderedListCommand,
   createCodeBlockCommand,
   insertHrCommand,
+  insertImageCommand,
+  toggleLinkCommand,
 } from "@milkdown/kit/preset/commonmark";
-import { toggleStrikethroughCommand, insertTableCommand } from "@milkdown/kit/preset/gfm";
+import {
+  toggleStrikethroughCommand,
+  insertTableCommand,
+  addRowBeforeCommand,
+  addRowAfterCommand,
+  addColBeforeCommand,
+  addColAfterCommand,
+  setAlignCommand,
+} from "@milkdown/kit/preset/gfm";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import { callCommand } from "@milkdown/kit/utils";
+
+// 需要"先看一眼光标在哪、再一笔事务里改两处"的那几条，实现放在这里。
+// ⚠️ 本文件是它**唯一**的调用点（理由见那份文件头）。
+import { 转成任务列表, 清除格式, 表格删行, 表格删列, 表格删表 } from "./insert";
 
 // ⚠️ 副作用导入，**不是多余的**：把 refractor 的语言表从 36 种补到 400 个
 // （297 种语言 + 别名，比如 ts→typescript、sh→bash）。
@@ -88,6 +103,30 @@ import { taskList } from "./task-list";
 // 代码块的右下角那一条：语言选择器 / 复制 / 折叠。这是**唯一**一处用 NodeView
 // 的地方（别处要么改 schema、要么用 Decoration），理由写在它自己的文件头上。
 import { codeBlockView } from "./code-block";
+// 宽松模式下"把 `#标题` 按标题排版、但一个字都不改"的那个装饰。
+// ⚠️ 判据在 `atx.ts`，这里只负责挂不挂——别在这再写一份正则。
+import { 不转义行首井号, 宽松标题显示 } from "./lax-heading";
+// ⚠️ **不许删**：没有它，**不带 title 的图片会在装载时被整节点丢掉**
+// （打开含图文档 → 存盘 → 图片从文件里消失）。上游 schema 的毛病、
+// 症状与实测记录都在它自己的文件头上。
+import { 补全图片属性 } from "./image-attrs";
+import { katexOptionsFor } from "./math-macros";
+// 「光标现在在什么状态」。格式化工具栏的高亮与菜单那十条表格命令的灰/亮
+// 都问它——**只读不写**，见它自己的文件头。
+import { 光标状态插件, type CommandState } from "./command-state";
+import { 写作模式插件, 滚到当前行, 设写作模式, type 写作模式 } from "./writing-modes";
+// 查找与替换。**匹配逻辑在那边**，这里只把它的命令接到句柄上；
+// 源码模式那一侧共用同一个纯函数（见那个文件头）。
+import {
+  查找插件,
+  设查询,
+  走,
+  清除,
+  替换当前,
+  全部替换,
+  type FindOptions,
+  type FindStatus,
+} from "./find";
 
 /**
  * 菜单栏能派发的编辑命令。
@@ -116,9 +155,39 @@ export type EditorCommand =
   | "quote"
   | "ul"
   | "ol"
+  | "task"
   | "codeBlock"
   | "hr"
-  | "table";
+  | "table"
+  | "link"
+  | "image"
+  | "clearFormat"
+  | "tableRowAbove"
+  | "tableRowBelow"
+  | "tableColLeft"
+  | "tableColRight"
+  | "tableDelRow"
+  | "tableDelCol"
+  | "tableDel"
+  | "tableAlignLeft"
+  | "tableAlignCenter"
+  | "tableAlignRight";
+
+/**
+ * 命令可以带的参数。目前只有两条用得上（超链接的地址、图片的路径）。
+ *
+ * ⚠️ 它**不是**一个"什么都能塞"的口袋：字段少、全是可选，是因为命令名本身
+ * 已经说明了要干什么，参数只是那件事的原料。真出现第三种原料时再往这里加，
+ * 别提前把 `Record<string, unknown>` 那类东西开出来——那种类型等于没有类型。
+ */
+export interface CommandPayload {
+  /** 超链接的目标地址。 */
+  href?: string;
+  /** 图片地址（相对文档目录的路径，或 http(s)/data: 开头的地址）。 */
+  src?: string;
+  /** 图片的替代文字。 */
+  alt?: string;
+}
 
 /** 编辑器句柄。调用方只通过这些方法跟编辑器打交道。 */
 export interface EditorHandle {
@@ -128,14 +197,37 @@ export interface EditorHandle {
   setMarkdown: (markdown: string) => void;
   /** 把焦点交给编辑区。 */
   focus: () => void;
+  /** 拨专注/打字机模式。**随时可拨，不重建实例**（见 `writing-modes.ts`）。 */
+  setWritingModes: (模式: 写作模式) => void;
   /**
    * 跑一条编辑命令。菜单栏和快捷键都走这里，**不认识 ProseMirror**。
    *
-   * 命令不认识时静默无操作（返回 `false`）——界面那边本来就该保证
-   * 只派发 `EditorCommand` 里的值，真走到 default 分支是代码写错了，
-   * 而"按一下没反应"比"抛个异常打断编辑"更不打扰人。
+   * ⚠️ **返回值是"这条命令在这条通路上有没有对应的实现"**，不是"改了没有"。
+   * 所见即所得这一侧永远有（`COMMANDS` 是白名单，覆盖全部 `EditorCommand`），
+   * 于是它恒为 `true`；**源码模式那一侧会真的返回 `false`**（CodeMirror 没有
+   * 文档树，表格那几条就没有对应的文本操作）。调用方（`ui/EditorPane.tsx`）
+   * 据此提示用户，而不是让按钮按下去毫无反应。
    */
-  runCommand: (name: EditorCommand) => void;
+  runCommand: (name: EditorCommand, payload?: CommandPayload) => boolean;
+
+  /* ── 查找与替换（`editor/find.ts`）────────────────────────────────────
+   *
+   * ⚠️ **这几条不进 `EditorCommand`**。那个联合类型是**编辑动作**的白名单
+   * （作用在文档上、会进撤销栈），而查找是**视图层的状态**（高亮是装饰，
+   * 不进文档、不进撤销栈）。混在一起的话，"查找下一个"会出现在命令表的
+   * 遍历里，而它根本不是那一类东西。
+   */
+
+  /** 设查询与三个开关。**空串 = 关掉查找的高亮**（不清光标）。 */
+  setFind: (query: string, options: FindOptions) => void;
+  /** 跳到下一个（`1`）或上一个（`-1`）命中。 */
+  findStep: (方向: 1 | -1) => void;
+  /** 清掉查找状态与全部高亮。关查找条时调。 */
+  clearFind: () => void;
+  /** 替换当前命中。**没停在任何命中上时返回 `false`**（调用方据此提示）。 */
+  replaceCurrent: (text: string) => boolean;
+  /** 全部替换，返回换了几个。 */
+  replaceAll: (text: string) => number;
   /** 销毁。组件卸载时**必须**调，否则 ProseMirror 的 DOM 监听会留着。 */
   destroy: () => void;
 }
@@ -150,6 +242,56 @@ export interface CreateOptions {
    * 调用方拿到后仍要做去抖（见 `docs/03` §真相在哪）。
    */
   onChange?: (markdown: string) => void;
+  /**
+   * 只读（分屏模式右侧那个预览窗格用）。
+   *
+   * ⚠️ 只读时**必须同时不接 `onChange`**——见 `EditorPane.tsx` 里那段
+   * "谁的话算数"，只读窗格改不了文本，报变化只会制造回声。
+   */
+  readOnly?: boolean;
+  /**
+   * **严格模式**（`Settings.strict_markdown`，默认 `false`）。
+   *
+   * `false`（宽松）时 `#标题` 也算标题——但**只是显示上算**：文档树里它还是
+   * 普通段落，存盘存回原文（用户定的死规矩「如果关闭，存盘不要自动修复」，
+   * 见 `atx.ts` 文件头）。挂的插件是 `宽松标题显示`。`true` 时一切照
+   * CommonMark——也就是 Nota 2026-09-24 之前一直的行为。
+   *
+   * ⚠️ 改这个值等于**换了挂哪些插件**，所以它进了 `EditorPane` 那个 effect
+   * 的依赖：换模式 = 把编辑器整个重建（不然手里这份还挂着旧模式的插件）。
+   */
+  strict?: boolean;
+  /**
+   * **数学公式里的 physics 宏包**（`Settings.enable_physics`，默认 `false`）。
+   *
+   * ⚠️ KaTeX **官方没有 physics**，所以这一档不是"加载一个扩展"，而是把
+   * `math-macros.ts` 里那套**我们自己写的宏定义**塞进 `katexOptionsCtx`
+   * （`@milkdown/plugin-math` 渲染时会 `ctx.get()` 它交给 `katex.render`）。
+   *
+   * ⚠️ 改这个值要**重建编辑器**：KaTeX 的宏是渲染那一刻查表的，
+   * 已经画出来的公式不会自己回头重画。所以它和 `strict` 一样进了
+   * `EditorPane` 那个 effect 的依赖。
+   */
+  physics?: boolean;
+  /**
+   * 光标状态变化的通知（工具栏高亮、菜单里表格那十条的灰/亮）。
+   *
+   * ⚠️ **不传就不挂那条插件**。只读那一侧（分屏的预览窗格）不需要它，
+   * 传了也只是白算——预览窗格没有光标可言。
+   */
+  onCommandState?: (state: CommandState) => void;
+  /**
+   * 查找状态变化的通知（命中数、当前第几个）。**同样不传就不挂那条插件。**
+   */
+  onFindStatus?: (status: FindStatus) => void;
+  /**
+   * 建实例时两个写作开关（专注 / 打字机）的状态。**默认两个都关**。
+   *
+   * ⚠️ 它**不进** `EditorPane` 那个 effect 的依赖：拨开关走
+   * `setWritingModes`，**不重建实例**——重建会丢撤销栈和光标，而这两个
+   * 开关恰恰是写到一半才会想去拨的。这里只是"切编辑模式时新实例的初值"。
+   */
+  writingModes?: 写作模式;
 }
 
 /**
@@ -161,23 +303,81 @@ export interface CreateOptions {
  *   先装它们会让我们在还没确定自己交互口径时就被它们的默认行为绑住。
  */
 export async function createEditor(options: CreateOptions): Promise<EditorHandle> {
-  const { root, initialMarkdown, onChange } = options;
+  const { root, initialMarkdown, onChange, readOnly = false, strict = false, physics = false } = options;
+  // ⚠️ 单独取出来而不是解构：它可选，而 `.use([])` 与 `.use([插件])` 这两种
+  // 写法在 Milkdown 里都是合法的——不传时给空数组，比给一个"什么都不做的
+  // 插件"干净（后者每次事务都要跑一趟）。
 
   const editor = await Editor.make()
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, initialMarkdown);
 
-      // 正文区挂上 Typora 的 `#write`。**这一步是主题兼容的支点**：
-      // 改造主题 CSS 时，所有裸元素规则（`h1`、`body`、`a`…）都被收拢到
-      // `#write` 之下（见 `styles/typora-theme.ts`），没有这个 id，主题一条都命不中。
-      // 反过来，正因为有它，主题的规则才**只**作用于正文、碰不到外壳。
+      // 序列化时**不要把行首的井号转义掉**（`#标签` 存成 `\#标签` 也是
+      // "自动修复"，只不过换副面孔，用户没打那个反斜杠）。理由、边界与残留
+      // 见 `lax-heading.ts` 第二段那个长注释。
+      //
+      // ⚠️ **两种模式都改**，不是只管宽松：那条转义只在"井号后面有空白"时
+      // 才是有用的，而那种写法我们一个字都不碰（正则收得很紧）。两种模式都
+      // 不改，用户看到的规律才简单——"**Nota 不会往你写的井号上加反斜杠**"。
+      //
+      // ⚠️ 得在 `.config()` 里改：这一份在 Init 阶段被拿去建 remark 处理器，
+      // 建完了再改就没用了。
+      ctx.update(remarkStringifyOptionsCtx, (prev) => ({
+        ...prev,
+        // 列表记号与分隔线用哪个字符**照用户写的那个存回去**。
+        //
+        // ⚠️ 这是**用户定的死规矩**（「如果关闭，存盘不要自动修复」，宽松档是默认）
+        // 的一个落点，2026-09-24 补的。remark 的默认是 `*`，于是
+        // `- 甲` 存盘变成 `* 甲`、`---` 变成 `***`——**一个字都没改的文档，
+        // 打开再存一次，diff 里全是这种行**。用户看不到任何变化，却要为一堆
+        // 自己没写过的字符背书。
+        //
+        // ⚠️ 这两个值是 remark-stringify 的**唯一写法**（`-` 就是 `-`），
+        // 不是"我们随便挑的"。要支持混用（有人爱写 `* 甲`）得自己写序列化器，
+        // 那是另一件事——现在这条只能保证"**我们不会主动换掉它**"。
+        //
+        // ⚠️ `as const` 是**给类型的**，值没有变：`bullet` 在类型里是个联合
+        // （`"-" | "*" | "+" | null | undefined`），而对象字面量里的 `"-"`
+        // 会被**拓宽**成 `string`——不加这两个字，`tsc` 报两行
+        // 「Type 'string' is not assignable to ...」。这一点在 2026-09-24 的
+        // 一次 `tsc --noEmit` 里露出来了：**当时以为类型是过的，其实没过**。
+        bullet: "-" as const,
+        rule: "-" as const,
+        handlers: { ...prev.handlers, text: 不转义行首井号(prev.handlers?.text) },
+      }));
+
+      // 数学公式：把宏表交给 KaTeX。**两档都设置**（不开 physics 时也设一份
+      // 空的），这样"开关关掉"是一条明确的动作，而不是"没人设过 Ctx"——
+      // 后者在调试时看不出区别，而它们的后果完全不同。
+      // ⚠️ 传的是 `katexOptionsCtx.key` 而不是 `katexOptionsCtx` 本身：
+      // 前者是那片 slice，后者是个插件对象（`$Ctx` = 插件 + `key`）。传错编译不过，
+      // 这条正好被类型挡住了。
+      ctx.set(katexOptionsCtx.key, katexOptionsFor(physics));
+
+      // 正文区挂一个 `#write`。
+      //
+      // ⚠️ **它已经不是限域机制了**（2026-09-23 改的口径）。限域由
+      // `styles/doc-theme.ts` 在注入前**机械地**把每条选择器收到 `.editor-pane`
+      // 之下完成——不靠正文区里有什么 id。上一版确实靠这个 id：那时叫
+      // `typora-theme.ts`，把裸元素规则收进 `#write`。那个文件和整个
+      // "兼容 Typora 主题"的链条已经被用户否掉并删掉了（版权，见 `docs/07` §4）。
+      //
+      // 那还留着它做什么：**给用户自己写的主题留一个钩子**。Typora 主题里
+      // 大量使用 `#write h1` 这种写法，抄过来的人会带着它。留着这个 id，
+      // 那些选择器被限域成 `.editor-pane #write h1` 之后仍然**命中**；
+      // 删掉的话它们会静默失效——用户只会看到"我的主题一半没生效"。
+      // ⚠️ 所以这不是死代码，**别顺手删**。
       //
       // ⚠️ 走 `editorViewOptionsCtx` 而不是建完之后去改 DOM：ProseMirror 重建 view
       // 时只会重放这里的属性，手动改的那一下会丢。
       // ⚠️ `attributes` 的类型允许是函数，这里只可能是对象形式，所以先归一化再展开。
       ctx.update(editorViewOptionsCtx, (prev) => ({
         ...prev,
+        // 只读：分屏里的预览窗格。⚠️ 用 ProseMirror 的 `editable`（它管的是
+        // **能不能编辑**），不是 `editable` 之外的什么"禁用"。禁用会让内容变灰、
+        // 还会吞掉选择与复制——而预览窗格恰恰要能选中、复制。
+        editable: () => !readOnly,
         attributes: {
           ...(typeof prev.attributes === "function" ? {} : prev.attributes),
           id: "write",
@@ -188,11 +388,20 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       // ⚠️ 这里**不做去抖**：去抖是调用方的事，因为"多快算太快"取决于
       // 它拿这个回调干什么（存草稿 vs 推给后端 vs 更新字数，三种节奏不一样）。
       ctx.get(listenerCtx).markdownUpdated((_ctx, markdown, prev) => {
+        // ⚠️ 只读实例**一律不报变化**。预览窗格的文本是**别人推给它的**，
+        // 报回来只会让调用方以为"用户改了文档"，进而把预览的规范化结果
+        // 当成正文回写——那正是 `source.ts` 文件头里说的那个往返改字。
+        if (readOnly) return;
         if (markdown !== prev) onChange?.(markdown);
       });
     })
     .use(commonmark)
     .use(gfm)
+    // ⚠️ 在 `commonmark` 之后即可（它只是往 mdast 上多挂一个变换），
+    // 但**必须在 `.create()` 之前**：mdast → ProseMirror 那一步发生在建实例时，
+    // 建完了再挂就等于没挂。**只读的那一份也要挂**（分屏预览、导出），
+    // 那两处同样会把 markdown 变成文档。
+    .use(补全图片属性)
     .use(history)
     .use(listener)
     .use(cursor)
@@ -205,7 +414,27 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     .use(prism)
     .use(math)
     .use(diagram)
+    // 宽松模式才挂这个装饰（严格模式的定义就是"井号后必须有空格"，那时
+    // `#你好` 就该是一段普通正文）。它只改显示、**不动文档**——理由见
+    // `lax-heading.ts` 文件头。
+    .use(strict ? [] : [宽松标题显示])
+    // 盯着光标那一条。**只读**，见 `command-state.ts`。
+    .use(options.onCommandState ? [光标状态插件(options.onCommandState)] : [])
+    // 查找。⚠️ **和上面那条一样是可选的**：分屏右侧那个只读预览窗格
+    // 不挂（它没有光标、也不会被查找），不传就少一条插件。
+    .use(options.onFindStatus ? [查找插件(options.onFindStatus)] : [])
+    // 专注 / 打字机。**恒挂**（可编辑那一份）：两个开关随时可能被拨，
+    // 而"挂不挂插件"一旦绑进 `EditorPane` 的依赖，拨一下就得重建实例。
+    // 只读的预览窗格不挂——那边没有光标，也没有"正在写的那一段"。
+    .use(readOnly ? [] : [写作模式插件(options.writingModes)])
     .create();
+
+  // 实例建好时如果打字机模式已经开着，先把当前行摆正再交给调用方——
+  // 插件那个 `view.update` 在"建好那一刻"不会跑（没有事务），不补这一下
+  // 的话用户得先打个字才看得到居中效果。
+  if (!readOnly && options.writingModes?.typewriter) {
+    editor.action((ctx) => 滚到当前行(ctx.get(editorViewCtx)));
+  }
 
   const 聚焦 = () =>
     editor.action((ctx) => {
@@ -221,16 +450,34 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       }),
 
     setMarkdown: (markdown: string) => {
+      // ⚠️ **原样**装进去：外来的文本（换文档、插件改文档、分屏推给预览）
+      // 一个字符都不能被顺手改掉——存盘存的是编辑器序列化出来的东西。
+      // 宽松模式认标题靠的是显示层的装饰，不是"先把文本补好"（见 `atx.ts`）。
       editor.action(replaceAll(markdown));
     },
 
     focus: 聚焦,
 
-    runCommand: (name: EditorCommand) => {
+    setWritingModes: (模式: 写作模式) =>
+      editor.action((ctx) => 设写作模式(ctx.get(editorViewCtx), 模式)),
+
+    // ── 查找与替换。每条就是"拿到 view，交给 `find.ts` 里的函数"──────
+    // ⚠️ 不在这里写任何匹配逻辑：口径只有 `find.ts` 一份（见它的文件头）。
+    setFind: (query: string, options: FindOptions) =>
+      editor.action((ctx) => 设查询(ctx.get(editorViewCtx), query, options)),
+    findStep: (方向: 1 | -1) =>
+      editor.action((ctx) => 走(ctx.get(editorViewCtx), 方向)),
+    clearFind: () => editor.action((ctx) => 清除(ctx.get(editorViewCtx))),
+    replaceCurrent: (text: string) =>
+      editor.action((ctx) => 替换当前(ctx.get(editorViewCtx), text)),
+    replaceAll: (text: string) =>
+      editor.action((ctx) => 全部替换(ctx.get(editorViewCtx), text)),
+
+    runCommand: (name: EditorCommand, payload?: CommandPayload) => {
       if (isHeading(name)) {
         editor.action(callCommand(wrapInHeadingCommand.key, Number(HEADING_RE.exec(name)![1])));
       } else {
-        COMMANDS[name](editor);
+        COMMANDS[name](editor, payload);
       }
 
       // ⚠️ 跑完必须把焦点交回编辑区。命令是从**菜单按钮**上点下去的，
@@ -239,6 +486,9 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       // 自己回到正文**——用户点完「加粗」接着打字，字会打到一个没有焦点的
       // 编辑区里，看起来就是"菜单点完就卡住了"。
       聚焦();
+
+      // 这一侧恒为 `true`（见 `EditorHandle.runCommand` 那段）。
+      return true;
     },
 
     destroy: () => {
@@ -270,7 +520,7 @@ function isHeading(name: EditorCommand): name is HeadingCommand {
  *（`$Command<T>` 是个带 `run`/`key` 的插件对象，不是 `CmdKey`）。
  * 包成"吃一个 editor"的闭包之后，调用点也不必再碰 Milkdown 的类型。
  */
-const COMMANDS: Record<BlockCommand, (editor: Editor) => void> = {
+const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) => void> = {
   undo: (e) => e.action(callCommand(undoCommand.key)),
   redo: (e) => e.action(callCommand(redoCommand.key)),
   bold: (e) => e.action(callCommand(toggleStrongCommand.key)),
@@ -281,9 +531,33 @@ const COMMANDS: Record<BlockCommand, (editor: Editor) => void> = {
   quote: (e) => e.action(callCommand(wrapInBlockquoteCommand.key)),
   ul: (e) => e.action(callCommand(wrapInBulletListCommand.key)),
   ol: (e) => e.action(callCommand(wrapInOrderedListCommand.key)),
+  task: (e) => 转成任务列表(e),
   codeBlock: (e) => e.action(callCommand(createCodeBlockCommand.key)),
   hr: (e) => e.action(callCommand(insertHrCommand.key)),
-  table: (e) => e.action(callCommand(insertTableCommand.key)),
+
+  // ⚠️ **表格插的是 3 × 3**，不是 Typora 那种"先弹个框问行列数"。
+  // `insertTableCommand` 的 `row`/`col` 缺省也能用，但缺省值不写出来就成了
+  // 一个说不出所以然的数；菜单上那一项的标签也照这个数写了，两处一致。
+  table: (e) => e.action(callCommand(insertTableCommand.key, { row: 3, col: 3 })),
+  tableRowAbove: (e) => e.action(callCommand(addRowBeforeCommand.key)),
+  tableRowBelow: (e) => e.action(callCommand(addRowAfterCommand.key)),
+  tableColLeft: (e) => e.action(callCommand(addColBeforeCommand.key)),
+  tableColRight: (e) => e.action(callCommand(addColAfterCommand.key)),
+  tableDelRow: (e) => 表格删行(e),
+  tableDelCol: (e) => 表格删列(e),
+  tableDel: (e) => 表格删表(e),
+  tableAlignLeft: (e) => e.action(callCommand(setAlignCommand.key, "left")),
+  tableAlignCenter: (e) => e.action(callCommand(setAlignCommand.key, "center")),
+  tableAlignRight: (e) => e.action(callCommand(setAlignCommand.key, "right")),
+
+  // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/PromptDialog.tsx`）。
+  // 缺省值给空串而不是"不执行"——空串的语义是"插一个还没填地址的链接/图片"，
+  // 而那正是用户点完之后马上要补的东西。
+  link: (e, p) => e.action(callCommand(toggleLinkCommand.key, { href: p?.href ?? "" })),
+  image: (e, p) =>
+    e.action(callCommand(insertImageCommand.key, { src: p?.src ?? "", alt: p?.alt ?? "" })),
+
+  clearFormat: (e) => 清除格式(e),
 };
 
 /**

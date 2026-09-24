@@ -16,6 +16,8 @@
 pub mod document;
 pub mod fs;
 pub mod git;
+pub mod http;
+pub mod settings;
 pub mod ui;
 
 use mlua::{Lua, Table, Value};
@@ -91,16 +93,18 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
         set(nota.set("ui", ui::build(lua, manifest, ctx)?), lua)?;
     }
 
-    // ── 声明了但本轮还没实现的，装一张**会明说没实现**的表 ───────────────
-    // 这份诚实是有用的：插件作者写 `nota.http.get(...)` 会立刻拿到一句
-    // "尚未实现（docs/07 第 12 项）"，而不是 `attempt to index a nil value`
-    // ——后者会让人以为是自己的能力没申请对，白查半天。
+    // ⚠️ 这两张表**曾经是空壳**：`network.http` 与 `settings.own` 在 2026-09-24 之前
+    // 装的是「会明说尚未实现」的假表（那个 `not_implemented()` 辅助函数已经删了）。
+    // 那份诚实是有用的（总比 `attempt to index a nil value` 强，后者会让人以为
+    // 自己能力没申请对，白查半天），但**空壳终究是空壳**——AI 插件因此只能预览、
+    // 存不住密钥。本轮（`docs/07` 第 12、13 项）两样都真做出来了，
+    // 所以**本文件里再没有"装了但不能用"的表**：`nil` 只意味着"没申请"。
     if manifest.has(Capability::NetworkHttp) {
-        set(nota.set("http", not_implemented(lua, "网络请求", "docs/07 第 12 项")?), lua)?;
+        set(nota.set("http", http::build(lua)?), lua)?;
     }
 
     if manifest.has(Capability::SettingsOwn) {
-        set(nota.set("settings", not_implemented(lua, "插件设置", "docs/07 第 13 项")?), lua)?;
+        set(nota.set("settings", settings::build(lua, &manifest.meta.id)?), lua)?;
     }
 
     Ok(nota)
@@ -167,28 +171,6 @@ fn event_table(lua: &Lua, ctx: &HostContext) -> Result<Table, NotaError> {
     Ok(t)
 }
 
-/// 造一张"这个能力还没实现"的表。
-///
-/// 表里每个方法都返回同一个明确的错误。**给的是线索不是哑弹**——
-/// 带着文档条目号，插件作者能直接翻到 backlog 那一项。
-fn not_implemented(lua: &Lua, what: &str, where_: &str) -> Result<Table, NotaError> {
-    let t = lua.create_table().map_err(mlua_to_nota)?;
-    let msg = format!("{what}尚未实现（见 {where_}）");
-
-    // 用 __index 元表兜住任意方法名：`nota.http.get` / `nota.http.post` 都能答上，
-    // 不用逐个列。
-    let meta = lua.create_table().map_err(mlua_to_nota)?;
-    let f = lua
-        .create_function(move |_, _: mlua::MultiValue| -> mlua::Result<()> {
-            Err(mlua::Error::RuntimeError(msg.clone()))
-        })
-        .map_err(mlua_to_nota)?;
-    set(meta.set("__index", f), lua)?;
-    set(t.set_metatable(Some(meta)), lua)?;
-
-    Ok(t)
-}
-
 // ── 小工具 ────────────────────────────────────────────────────────────────
 
 /// `Table::set` 返回 `Result<()>`，串起来写会很难看。这个把 `mlua::Error`
@@ -244,6 +226,48 @@ pub fn lua_to_json(lua: &Lua, v: Value) -> mlua::Result<serde_json::Value> {
             }
         }
         other => serde_json::Value::String(format!("{other:?}")),
+    })
+}
+
+/// JSON → Lua 值。**`lua_to_json` 的逆**，目前只有一处用得上：
+/// `nota.http` 把响应体顺手拆开（见 `http.rs::收口`）。
+///
+/// ⚠️ **没有给插件一张 `nota.json` 表，这是有意的。** 现在只有"读 HTTP 响应"
+/// 这一处需要解析 JSON，而多一张表就多一份要维护、要写文档、要进能力申请的
+/// API 面。等真出现第二个需要它的地方再抽出去——那时这条注释就是判断的依据。
+///
+/// ⚠️ `null` 映射成 `nil`，于是 JSON 里值为 `null` 的键在 Lua 表里**不存在**。
+/// 这是 Lua 的固有性质（表里存不了 nil），不是我们的选择：插件那边读不到
+/// 某个键时不能假定"上游一定给了非空值"。
+///
+/// ⚠️ 不自己限嵌套层数：`serde_json::from_str` 有 128 层的解析上限
+/// （默认开着），能走到这里的结构就不可能更深，递归深度跟着它封顶。
+pub fn json_to_lua(lua: &Lua, v: &serde_json::Value) -> mlua::Result<Value> {
+    Ok(match v {
+        serde_json::Value::Null => Value::Nil,
+        serde_json::Value::Bool(b) => Value::Boolean(*b),
+        serde_json::Value::Number(n) => match n.as_i64() {
+            Some(i) => Value::Integer(i),
+            // 小数、以及超出 i64 的大整数，走浮点。
+            None => Value::Number(n.as_f64().unwrap_or(0.0)),
+        },
+        serde_json::Value::String(s) => Value::String(lua.create_string(s)?),
+        serde_json::Value::Array(a) => {
+            let t = lua.create_table()?;
+            // ⚠️ 从 **1** 开始：Lua 的数组下标从 1 起，`t.raw_len()` 也按这个算。
+            // 写成 0 起的话，`#json.choices` 会少一个，而第一个元素被静默丢掉。
+            for (i, item) in a.iter().enumerate() {
+                t.raw_set(i + 1, json_to_lua(lua, item)?)?;
+            }
+            Value::Table(t)
+        }
+        serde_json::Value::Object(o) => {
+            let t = lua.create_table()?;
+            for (k, val) in o {
+                t.raw_set(k.as_str(), json_to_lua(lua, val)?)?;
+            }
+            Value::Table(t)
+        }
     })
 }
 

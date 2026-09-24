@@ -134,9 +134,13 @@ plugins  →  documents  →  settings
 | `workspace` | `Arc<Mutex<Option<PathBuf>>>` | 当前工作区根目录。`None` = 没开文件夹（Typora 的"单文件模式"） |
 | `plugins` | `Mutex<PluginHost>` | 插件宿主。锁在最外层 |
 
-`AppState::new(settings, plugins)` 的签名里**只有这两样**：`documents` 与 `workspace`
-在构造函数里就建成空的（`DocumentStore::new()` / `None`），因为它们是运行期才有的东西；
-设置与插件宿主则必须在 `setup()` 里先建好才能传进来（插件加载要用 `HostContext`）。
+⚠️ **这个结构体没有构造函数**：`lib.rs` 在 `setup()` 里手写 `AppState { … }` 字面量
+（2026-09-24 删掉了那个没人调用的 `AppState::new`——它当时是全仓唯一一处把开机时的
+`strict_markdown` 传给文档仓的地方，而它没人调用 ⇒ 设置开机时到不了文档仓）。
+`documents` 与 `workspace` 在那儿建成空的（`DocumentStore::new(settings.strict_markdown)` / `None`），
+设置与插件宿主则必须先建好才能传进来（插件加载要用 `HostContext`）。
+⚠️ 那个 `strict_markdown` 参数**不是可有可无**：标签页标题是文档仓自己算的，
+漏了就是"设置里写着严格、名字按宽松算"——不报错，`docs/02` 的 `state.rs` 一节记了这件事。
 
 ⚠️ `workspace` **不只是 UI 状态**：它同时是 `nota.fs` 与 `nota.git` 的**围栏**——
 插件能碰的文件范围、能跑 git 的目录都由它决定。所以设置工作区走的是**规范化后的
@@ -195,11 +199,14 @@ pub struct DocId(pub u64);
 | `active` | `Option<DocId>` | 活动文档 |
 | `next_id` | `u64` | `alloc_id()` 用它自增发号 |
 | `untitled_count` | `u64` | 只用来生成"未命名 N" |
+| `strict_markdown` | `bool` | **严格模式的镜像**（默认 `false` = 宽松）。建仓时由 `new(strict_markdown)` 定下，之后只有 `nota_settings_set` 改它。⚠️ 它影响的是**标题怎么猜**（`derive_title`），所以两处都得跟：建仓参数 + 改设置时的重算 |
 
 方法表：
 
 | 方法 | 行为 |
 |---|---|
+| `new(strict_markdown)` | 建空仓，**建仓时就把标题口径定下来**。⚠️ 参数忘不掉（编译错），这正是它存在的理由——2026-09-24 之前那句 `set_strict_markdown` 挂在一个没人调用的构造函数上，于是开机时设置到不了文档仓 |
+| `set_strict_markdown(strict)` | 跟上开关，**并立刻重算所有已打开文档的标题**（值没变则早退）。⚠️ 只有命令层调它 |
 | `create_untitled()` | 建一份空文档，把当时的 `untitled_count` **抄进 `untitled_index`**，`untitled_count += 1`，**设为活动** |
 | `open(path)` | 已在集合里则**复用那一份**（不重复开标签）并设为活动；否则读盘、派生标题 |
 | `reload(id)` | 从磁盘重读，`dirty = false`，`revision += 1`。没有路径时报 `NoActiveDocument` |
@@ -249,11 +256,14 @@ pub struct Settings { … }
 |---|---|---|---|
 | `ui_style` | `UiStyle` | `UiStyle::Auto` | **轴一**：界面风格（设计语言） |
 | `ui_mode` | `UiMode` | `UiMode::Auto` | **轴二**：明暗 |
-| `document_theme` | `String` | `""` | **轴三**：文档主题名（**就是 `.css` 的文件名去掉后缀**，如 `night`）；**空串 = 内置默认**。⚠️ 名字是**扫出来的**不是约定的——`paths::theme_dirs()` 那三个目录里扫到哪个就有哪个，所以换机器可能"这个主题没了"（见 §9.4） |
+| `document_theme` | `String` | `""` | **轴三**：文档主题的 **id**（**就是 `.css` 的文件名去掉后缀**，如 `paper`）；**空串 = 无主题**。⚠️ 它是**键不是显示名**——内置六套的显示名是中文（`paper` ↔ 素纸），两者的对应关系在 `themes.rs` 的 `BUILTIN` 表里。⚠️ **只在 `~/.config/nota/themes/` 里扫**（见 §9.4），所以换机器、或者文件被删了，就可能"这个主题没了" |
+| `view_mode` | `ViewMode` | `ViewMode::Wysiwyg` | ⚠️ **不是第四条外观轴**（见 §5.2 末段）：`Wysiwyg` / `Source` / `Split`，决定编辑区摆几个窗格、谁的话算数 |
 | `ui_font_size` | `u32` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
 | `content_width` | `u32` | `760` | 内容区宽度上限（px）。Typora 的"正文宽度" |
 | `confirm_unsaved` | `bool` | `true` | 关闭有未保存改动的文档时是否询问 |
-| `autosave_seconds` | `u32` | `0` | 自动保存间隔（秒）。**0 = 关闭自动保存** |
+| `autosave_seconds` | `u32` | `0` | 自动保存间隔（秒）。**0 = 关闭自动保存**。⚠️ **目前是个死设置**：字段能存能读，**全仓没有任何消费者**（见 §7 第 4 条与 `docs/07` 第 20 项）。2026-09-24 起**界面上如实标了**——偏好设置那一行下面挂着一句「目前还没接上」；**接线之后把 UI 那处和本文档这两处标注一起删** |
+| `strict_markdown` | `bool` | `false` | **严格模式**（`docs/10` §11.3 那一页）。`false` = 宽松，`#标题`（井号后没空格）**也算标题**——只是**显示上**算，正文树里它是普通段落，存盘存回原文（见 §5.5）。⚠️ 它不是外观轴，改它=**换挂哪些插件**，前端那边等于把编辑器重建 |
+| `enable_physics` | `bool` | `false` | **数学公式里的 physics 宏包**（`docs/10` §12）。⚠️ 数学渲染走 KaTeX，而 **KaTeX 官方没有 physics**——所以它**不是"装载一个扩展"**，而是把 `src/editor/math-macros.ts` 里那套**我们自己写的宏定义**交给 KaTeX（`macros` 选项）。开着时 `\qty` / `\dv` / `\braket` / `\comm` 这些命令才有定义，并且会**重定义 `\div`、`\Re`、`\Im`**（physics 原版就那么干，所以默认关）。⚠️ 它不是外观轴，改它 = **换一份 KaTeX 选项**，前端那边等于把编辑器重建（已渲染的节点不会自己回头重画） |
 
 `#[serde(default)]` 在**结构体上**，所以老配置文件缺哪个字段就用哪个字段的默认值；
 `load_from` 只在**文件存在但解析不了**时报错（静默回默认会让人以为设置被吞了），
@@ -263,38 +273,76 @@ pub struct Settings { … }
 
 ⚠️ 用户 2026-09-22 明确要求，别混成一条。三条**互相独立**：
 
+⚠️ 用户 2026-09-23 又说了一句更狠的：「这是文档风格，不是界面风格，不应该影响到UI主题」。
+所以下面这张表要分成**两半**看——**前两条是"界面轴"（同一类东西），第三条不是**：
+
 | 轴 | 设置字段 | DOM 属性 | 管什么 |
 |---|---|---|---|
-| 界面风格 | `ui_style` | `data-ui-style` | **一整套设计语言**（macOS / Yaru / Adwaita / Windows）：换的不只是颜色，还包括控件形状、圆角、间距、动效、字体栈。⚠️ 它**不是**"主题"的同义词 |
+| 界面风格 | `ui_style` | `data-ui-style` | **一整套设计语言**（Adwaita / GitHub / macOS / Plasma / Windows / Yaru，共 6 套）：换的不只是颜色，还包括控件形状、圆角、间距、动效、字体栈。⚠️ 它**不是**"主题"的同义词 |
 | 明暗 | `ui_mode` | `data-ui-mode` | 亮/暗。`auto` 时跟随系统。**这条轴在任何风格下都成立** |
-| 文档主题 | `document_theme` | `data-doc-theme` | **只管正文那一块**（Typora 的 Themes 菜单）。纯 CSS，用**用户的 Typora 主题**（也能放自己的 `.css`），**不动应用外壳一分**。⚠️ 但主题里的 `:root` 变量会**被提升到全局**给外壳桥接用（`theme.css` 末尾那段），所以严格说是"只动正文 + 供出几个颜色给外壳" |
+| 文档主题 | `document_theme` | **（没有）** | **只管正文那一块**。纯 CSS，**只扫我们自己的主题目录**，**不动应用外壳一分** |
+
+⚠️⚠️ **第三条轴没有 DOM 属性，这一点是刻意的，别加回去。** 它是一份注进 `<head>` 的
+`<style id="nota-doc-theme">`，选择器被机械地收到 `.editor-pane` 之下
+（见 `styles/doc-theme.ts`）。2026-09-23 之前它挂在 `<html data-doc-theme>` 上，
+主题里的 `:root` 变量会被**提升到全局**、由 `theme.css` 末尾那排
+`var(--nota-bridge-X, default)` 桥给外壳——**那正是"换个文档主题、整个应用跟着变色"的来源**，
+用户的原话是「现在深色浅色都有，很混乱」。桥和提升都拆了。
+
+⚠️ 两条界面轴的 DOM 属性在 `<html>` 上，文档主题的作用域在 `.editor-pane` 上——
+**两棵不同的树**，一个变量都不共用。这条线有回归测试兜底
+（`themes.rs::内置主题不碰界面变量`）。
 
 把"形状"和"颜色"合成一条的后果很具体：想做"macOS 风格 + 暗色"时发现颜色写死在
 风格里了，于是只能再加一套 `macos-dark`——轴数就从 3 变成了排列组合。所以 CSS 的
-组织方式是**二维相乘**（见 `docs/04-ui-map.md` §外观）。
+组织方式是**二维相乘**（见 `docs/04-ui-map.md` §3）。
 
-`UiStyle` 的取值：`Auto`（跟随当前桌面环境，探不到就用 Adwaita）、`Adwaita`、
-`Macos`、`Yaru`、`Windows`。
+⚠️ **`view_mode` 不是第四条轴**（2026-09-23 加的）。它管的是"**怎么编辑**"
+（编辑区摆一个窗格还是两个、哪一侧可写），而那三条管的是"**长什么样**"。
+两者之间没有任何耦合：任何模式 × 任何外观都成立。⚠️ 别把它写进 `theme.css`
+那种地方，也别把它算进下面这张"轴"表。
+
+| 取值 | 编辑区 | 谁的话算数 |
+|---|---|---|
+| `Wysiwyg`（默认） | 所见即所得（Milkdown） | Milkdown |
+| `Source` | Markdown 原文（CodeMirror） | CodeMirror |
+| `Split` | 左原文（可编辑） + 右预览（**只读**） | CodeMirror |
+
+（三条口径与"为什么分屏只朝一个方向"见 `docs/05` §3.1。）
+
+`UiStyle` 的取值（**七个**）：`Auto`（跟随当前桌面环境，探不到就用 Adwaita）、
+`Adwaita`、`Ghub`、`Macos`、`Plasma`、`Windows`、`Yaru`。
 `UiMode` 的取值：`Auto`、`Light`、`Dark`。
+`ViewMode` 的取值：`Wysiwyg`、`Source`、`Split`。
 
 ### 5.3 "存法即接口"：kebab-case 落盘
 
-两个枚举都带 `#[serde(rename_all = "kebab-case")]`，所以文件里写的是：
+三个枚举都带 `#[serde(rename_all = "kebab-case")]`，所以文件里写的是：
 
 ```toml
 ui_style = "macos"
 ui_mode = "dark"
+view_mode = "split"
 ```
 
-而**不是** `"Macos"` / `"Dark"`。这条不是审美问题：
+而**不是** `"Macos"` / `"Dark"` / `"Split"`。这条不是审美问题：
 
 - 这串字符串**就是接口**——用户手改 `settings.toml` 时要能猜到怎么写；
-- 前端的类型也是同一批串：`export type UiStyle = "auto" | "adwaita" | "macos" | "yaru" | "windows";`
+- 前端的类型也是同一批串：
+  `export type UiStyle = "auto" | "adwaita" | "ghub" | "macos" | "plasma" | "windows" | "yaru";`
   `export type UiMode = "auto" | "light" | "dark";`
+  `export type ViewMode = "wysiwyg" | "source" | "split";`
   （`src/bridge/ipc.ts`），改一处就要改另一处。
 
 加一条新轴上的新值时，**三处缺一不可**：`settings.rs` 的枚举、`src/styles/theme.css`
 （以及 `applyTheme.ts` 需要的解析分支）、`docs/04-ui-map.md` 的外观一节。
+⚠️ `view_mode` 加值时是**另一组三处**：`settings.rs`、`src/bridge/ipc.ts`、
+`src/ui/commands.ts` 的「视图」栏（外加 `docs/04`）。
+
+⚠️ **默认值也要三处一致**：Rust 的 `impl Default`、前端 `App.tsx` 里的兜底
+（`settings?.view_mode ?? "wysiwyg"`）、以及那条用例
+（`编辑模式也走_kebab_而且默认是所见即所得`）。默认值错了的症状是"老用户升级后
+打开文件发现进了别的模式"——而他的设置文件里根本没有这一项。
 
 ### 5.4 读写口径
 
@@ -305,6 +353,35 @@ ui_mode = "dark"
   "没给的字段恢复默认"）会变成一个新的、没人想要的理解负担。
 - 启动时读失败**不回滚启动**：一份坏掉的 `settings.toml` 不该让人连界面都进不去，
   退回默认值 + 在控制台说明（`lib.rs::run`）。
+
+⚠️ `nota_settings_set` **改了 `strict_markdown` 之后要顺手做两件事**（`commands/settings.rs`）：
+调 `set_strict_markdown()` 把文档表里所有文档的**推导标题重算一遍**（标签页标题是后端
+按当前口径从正文算的），并把 `settings` 锁**先放下**再动 `documents`——锁序是
+`plugins → documents → settings`，反着拿会死锁。
+
+### 5.5 ⚠️ 严格模式：关着的时候**一个字节都不改**
+
+用户 2026-09-24 定的死规矩，原话「**注意应用中不应出现"同typora"这种。如果关闭，
+存盘不要自动修复。**」两条都要读：
+
+1. 应用里（用户看得见的字符串）**不许出现"对标 Typora"这类话**——那是给开发看的
+   口径，写在 `docs/10` 里；
+2. **宽松模式（默认）存盘不许改用户的字**。`#你好` 存下去还是 `#你好`：不许补成
+   `# 你好`，也不许加上 `\#` 转义。
+
+第 2 条的落地方式见 `docs/02` 的 `lax-heading.ts` 那一节：**文档树里它就是个段落**
+（所以序列化必然原样吐回来），标题的样子来自**显示层的装饰**。⚠️ 这是一条
+**结构性**的保证，不是"小心一点"——从这里到文件那条路上没有一步会改字。
+
+**存盘字节是唯一判据**：改完要拿一份 `#标签` 的文件开窗，Ctrl+S，比对 md5
+（两种模式都要比，见 `docs/06` §5）。⚠️ 只看"屏幕上显示对不对"证明不了这条——
+第一版就是因为只看了显示，存盘时被序列化器加了个反斜杠，用户看到的是"我写的字被改了"。
+
+**已知的一处残留改字**（登记在案，不打算修）：用户**手打**的 `\#标签`，
+存盘会变成 `#标签`——反斜杠没了。原因是转义井号和裸井号在文档树里**是同一个东西**
+（都是文本 `#标签`），要区分就只能记住源码（那要改 schema，是另一个量级的工程）。
+⚠️ **差别只在字节上**：两者的解析结果、以及 Nota 里的显示**完全一样**。
+它属于 `docs/05` §3.1「往返会改字」那一族，不是新的破口。
 
 ---
 
@@ -500,12 +577,29 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 1;
 | `$XDG_CONFIG_HOME/nota/settings.toml` | 用户设置 | `paths::settings_file()` |
 | `$XDG_DATA_HOME/nota/plugins/` | 用户自装插件（**覆盖内置同名**） | `paths::user_plugins_dir()` |
 | 资源目录的 `plugins/`，debug 构建额外加仓库根的 `plugins/` | 内置插件 | `paths::builtin_plugins_dirs()` |
-| `$XDG_CONFIG_HOME/nota/themes/` | **用户主题**（点「打开主题文件夹…」时才 `create_dir_all`） | `paths::user_themes_dir()` |
-| `~/.config/typora/themes/`、`~/.var/app/io.typora.Typora/config/Typora/themes/` | **Typora 自己装的主题**（含 flatpak 落点），我们只读 | `paths::theme_dirs()` |
+| `$XDG_CONFIG_HOME/nota/themes/<id>.css` | **用户文档主题**（点「打开主题文件夹…」时才 `create_dir_all`）。⚠️ **同名覆盖内置**，想改哪套就复制出去改，升级不会冲掉 | `paths::user_themes_dir()` |
+| `$XDG_CONFIG_HOME/nota/plugin-settings/<安全文件名(id)>.toml` | **插件自己的设置**（`nota.settings`）。一个插件一个文件，**明文**、文件 `0600`、目录 `0700`。⚠️ 文件名是**归一小过的**：插件 id 来自插件清单（也就是插件自带的一份文件），所以这里是一道**安全边界**——少了它 `nota.settings.set` 就是任意路径写入，见 `paths::安全文件名` 与 `docs/13` §10 | `paths::plugin_settings_file()` |
 
-⚠️ **`theme_dirs()` 的顺序就是优先级**：`nota` 那份在最前，所以**同名主题用户自己的赢**。
-后两个目录是"借"来的——**我们既不发布也不修改它们**（版权，见 `themes.rs` 文件头）。
-三个目录**一个都没有也算正常**（不装 Typora 的机器就是这样），返回空表而不是报错。
+⚠️ **`安全文件名` 只钉三条结果**：不含路径分隔符、不是空名、不是纯点的名字
+（`..` 指向上级目录）。⚠️ 它**不保证"里面没有 `..`"**——`nota/../../etc/passwd`
+会被归一成 `nota_.._.._etc_passwd`，那两个点这时只是普通字符了。
+判据的完整理由写在 `paths.rs` 那两条用例上（`docs/06` §6.1），
+**改这个函数之前先读那两条**，别看着"还有 `..`"就以为漏了。
+
+⚠️ **那条 `0600` 是"创建时就带上"的**（`OpenOptions::mode`），**不是"写完再 chmod"**——
+后者中间有一个窗口，此刻任何进程都能读到刚写下去的明文密钥。目录的 `0700`
+倒是"事后收"（`set_permissions`），而且**收不上就算了**（不算存盘失败）：
+目录权限是加固，不是正确性。见 `settings.rs::写` / `收紧目录权限`。
+
+⚠️ **主题目录只有这一个。** 2026-09-23 之前还有 `~/.config/typora/themes/` 与
+`~/.var/app/io.typora.Typora/config/Typora/themes/`（Typora 自己装的主题，我们只读），
+连同 `paths::theme_dirs()` 一起**删了**——用户说「请不要内置typora主题。会侵权。」
+「typora主题先不用兼容。」，那版整个作废。
+
+⚠️ **目录里一个文件都没有也算正常**（内置六套是 `include_str!` 编进二进制的，
+菜单不是空的），`discover()` 返回的还是那六条，不是空表也不是报错。
+⚠️ 只看 `.css` 后缀，别的后缀一律不看；文件名（也就是 id）的形状由
+`themes.rs::check_id` 把关——**只放行 ASCII 字母数字与 `-` `_`**，因为路径是拿它拼的。
 
 应用名常量：`pub const APP_DIR: &str = "nota";`
 
@@ -533,7 +627,7 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 1;
 | `document::Document` | `export interface Document` | `path: Option<PathBuf>` → `path: string \| null` |
 | `workspace::TreeNode` | `export interface TreeNode` | `path` 是**相对工作区根、`/` 分隔**；`children: Option<Vec<_>>` → `TreeNode[] \| null` |
 | `settings::Settings` | `export interface Settings` | 枚举字段 → 字符串联合类型（§5.3） |
-| `settings::UiStyle` / `UiMode` | `export type UiStyle` / `UiMode` | kebab-case 串 |
+| `settings::UiStyle` / `UiMode` / `ViewMode` | `export type UiStyle` / `UiMode` / `ViewMode` | kebab-case 串。⚠️ `ViewMode` **不是外观轴**，见 §5.2 |
 | `plugin::PluginInfo` | `export interface PluginInfo` | `state` 是 `"loaded" \| "failed" \| "disabled"` 字符串 |
 | `plugin::PluginPanel` | `export interface PluginPanel` | 插件声明的面板（`nota_plugin_panels` 的返回）。`icon` 是 `Option<String>` → `string \| null`，`location` 是**普通字符串**不是联合类型——见下 |
 | `plugin::PluginMenuItem` | `export interface PluginMenuItem` | 插件声明的菜单项（`nota_plugin_menus` 的返回）。`accelerator` 同上 |
@@ -555,14 +649,15 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 1;
 下面的编号只用于区分本表内的条目；**逐项状态与排期一律以 `docs/07-feature-status.md`
 为准**（代码注释里出现的"docs/07 第 N 项 / BUG-N"用的是那份文档的编号，这里不重编）。
 
-⚠️ **下面 6 条里有 4 条已经修掉了**（保留行、改写结论——编号在本表内有效，
-但**跨文档引用一律用 `docs/07` 的 BUG-N / 第 N 项**）。
+⚠️ **下面 6 条里有 5 条已经修掉了**（保留行、改写结论——编号在本表内有效，
+但**跨文档引用一律用 `docs/07` 的 BUG-N / 第 N 项**）。⚠️ 这个数**要跟着条目一起改**：
+早先它写的是 4，2026-09-23 第 5 条结清之后就变成 5 了——**数会骗人，逐行看**。
 
 | # | 现象 | 原因 | 影响 |
 |---|---|---|---|
 | 1 | ~~活动文档的后端副本可能与前端不一致~~ **✅ 已修（BUG-6）** | 原先是 `api.doc.setActive` **从未被调用**。现在 `App.tsx` 有一段盯 `activeId` 的 effect 去喊它，`open` / `new` / `close` 几条路一起兜住 | 当时的影响：插件读的是**后端 active**，用户点了别的标签后插件可能读错文档。现在不会再分叉了 |
 | 2 | ~~插件改了**非活动**文档时，改动会丢~~ **✅ 已修（backlog 第 33 项）** | 原先是 `nota:document-changed` 的处理器见 `p.id !== activeId` **直接丢弃**。现在非活动那份走 `refreshDocs()` 把 state 拉齐 | 当时的影响：下一次去抖 sync 会把旧文本推回后端、覆盖插件的改动 |
 | 3 | ⬜ **`parseMarkdown()` 没有调用点** | `create.ts` 导出了它，但全仓没有模块用它（`grep` 过） | 目前所有进编辑器的文本都走裸 `replaceAll`，"语法坏掉的串"只能靠肉眼发现（见 `docs/05` §整篇替换） |
-| 4 | ⬜ **`autosave_seconds` 是死设置** | 字段能存能读，**没有任何代码读它** | 用户改了它不会有任何效果。接上它排在 `docs/07` 第 20 项 |
-| 5 | ~~三条外观轴都只有设置项与 CSS~~ **🟡 只结清三分之一** | `document_theme` 现在有切换界面（菜单栏「主题」），`api.settings.set` 也有调用者了（`updateSettings`）。**`ui_style` / `ui_mode` 仍然没有**（要等设置对话框，`docs/07` 第 10/11 项） | 明暗与界面风格还是只能手改 `settings.toml` 再重启 |
+| 4 | ⬜ **`autosave_seconds` 是死设置** | 字段能存能读，**没有任何代码读它**（`grep autosave`：只有 `settings.rs` 的字段、`ipc.ts` 的类型、`panes.tsx` 的下拉与文案，**零消费者**） | 用户改了它不会有任何效果。接上它排在 `docs/07` 第 20 项。⚠️ **界面从 2026-09-24 起不再假装它能用**：偏好设置那一行下面挂了一句「目前还没接上」（`panes.tsx`）——**那条标注与该行表里那两条，接线时要一起删** |
+| 5 | ~~三条外观轴都只有设置项与 CSS~~ **✅ 已结清（2026-09-23）** | 三条轴现在都有入口：`document_theme` 走菜单栏「主题」，`ui_style` / `ui_mode` 走偏好设置 → 外观（`docs/07` 第 10/11 项已做）。`api.settings.set` 的调用者是 `updateSettings` | 当时的影响：明暗与界面风格只能手改 `settings.toml` 再重启 |
 | 6 | ~~`applyTheme()` 返回的退订函数被丢掉~~ **✅ 已修（BUG-7）** | 现在写的是 `if (settings) return applyTheme(settings);`——**退订函数交出去了** | 当时的影响：`ui_mode = "auto"` 时每次 `settings` 变化都会**再挂一个** `prefers-color-scheme` 监听器，旧监听器闭包里是旧设置。⚠️ 这条已经**不只是理论**了：主题切换会改 `settings`，所以那种情形现在已经会真发生 |

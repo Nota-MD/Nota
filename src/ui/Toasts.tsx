@@ -5,6 +5,8 @@
  * 在编辑器里打字打到一半弹一个 alert，输入法组合态会被打断。
  */
 
+import { Icon } from "@/ui/Icon";
+
 export interface Toast {
   id: string;
   message: string;
@@ -28,9 +30,10 @@ export function Toasts({ items, onDismiss }: Props) {
             type="button"
             className="toast-close"
             title="关掉"
+            aria-label="关掉这条提示"
             onClick={() => onDismiss(t.id)}
           >
-            ×
+            <Icon name="folio-close-symbolic" />
           </button>
         </div>
       ))}

@@ -1,0 +1,120 @@
+/**
+ * 界面图标：**从 Folio 搬来的那一套**（`src/assets/icons/`，96 个文件）。
+ *
+ * # 为什么是 Folio 的那一套
+ *
+ * 用户 2026-09-24 定：「算了，将 folio 的非项目图标用上。」
+ * 那一套的来路查过，见 `THIRD-PARTY.md` §5：Folio 自己重绘的（2026-09-12），
+ * 与 Nota 同为 **BSD-2-Clause、同一作者**，搬进来不欠谁的。
+ * ⚠️ **只搬 `actions/` 里的"动作图标"，不搬应用图标**——`folio-*.svg` 那几枚
+ * 是 Folio 自己的脸，Nota 用 `src-tauri/icons/nota.svg`。
+ *
+ * # 为什么不是内联 SVG，也不是图标库
+ *
+ * 一个 16 格的描边图标，内联进来要 1~3 KB 的 `<path>` 文本；
+ * 96 个全内联就是这个数乘 96 进 JS 包。**用遮罩（mask）**把 SVG 当图片用：
+ * 文件由 Vite 当**资源**发出去（`?url`），JS 里只留一行网址，
+ * 而**颜色由 CSS 给**——`.icon` 的 `background-color: currentColor`。
+ *
+ * 于是原文件里那 355 处写死的 `fill="#2e3436"`（GTK 的深灰）**一个字都不用改**：
+ * 遮罩只取形状，颜色是我们在外面刷的。深色主题、`--accent-fg` 反色，
+ * 全都自动跟着 `color` 走，不需要"深色版图标"。
+ *
+ * ⚠️ 这也是**为什么不改那些文件里的 `fill`**：改了就不再是逐字节的搬运，
+ * "搬来的东西一个字节没动"这句话就失效了——而那句话是这套图标能一眼核对的前提。
+ *
+ * # 名字表为什么手写，还要在加载时核对一遍
+ *
+ * `import.meta.glob` 的键是**字符串**，`keyof` 一个 `Record<string, string>`
+ * 得到的是 `string`——写错一个字母（`folio-close` 写成 `folio-closed`）
+ * 类型检查**一句话不说**，界面上只是**少了一个图标**：空按钮、点得动、
+ * 只是什么都不显示。这是本仓最讨厌的那种"看着好好的"。
+ *
+ * 所以：名字的联合类型从这张 `名字表` 推出来（调用处写错**编译期就红**），
+ * 而表里的名字在**模块加载时**逐个核对有没有对应的文件（文件被删/改名**当场报**）。
+ * 加图标就走这两步：拷文件 → 往 `名字表` 加一行。
+ *
+ * ⚠️ 表里**只列用到的**。96 个文件都在仓库里（谁要用谁加），
+ * 但"Nota 用了哪几枚"这件事得能从这一张表读出来。
+ */
+
+import type { CSSProperties } from "react";
+
+/**
+ * `?url` + `eager`：拿到的是 `{ 相对路径: 网址 }`，
+ * 网址指向**构建后**的文件（dev 下是 `/src/assets/icons/xxx.svg`）。
+ *
+ * ⚠️ `eager: true` 会把 96 个文件**全部**发到 `dist/`（共约 724 KB），
+ * 但**不进 JS 包**——JS 里只有 96 行网址。浏览器只在真画到某个图标时
+ * 才去取那一个文件（遮罩图是懒加载的），所以多发的那些文件不花运行时的钱。
+ * 724 KB 对一个桌面应用是可忽略的；换来的是"想用哪枚就写哪枚名字"。
+ */
+const 网址表: Record<string, string> = import.meta.glob("../assets/icons/*.svg", {
+  query: "?url",
+  eager: true,
+  import: "default",
+});
+
+/** glob 的键是相对本文件的路径（`../assets/icons/folio-close-symbolic.svg`）。 */
+const 图标网址: Record<string, string> = {};
+for (const [路径, 网址] of Object.entries(网址表)) {
+  图标网址[路径.slice(路径.lastIndexOf("/") + 1).replace(/\.svg$/, "")] = 网址;
+}
+
+/**
+ * Nota 实际用到的那几枚。名字**与文件名逐字符相同**（含 `-symbolic` 后缀）——
+ * 这样从调用处能直接找到文件，不需要第二张"别名 → 文件"的表。
+ */
+const 名字表 = [
+  // 格式化工具栏（`ui/FormatBar.tsx`）
+  "folio-format-text-bold-symbolic",
+  "folio-format-text-italic-symbolic",
+  "folio-format-text-strikethrough-symbolic",
+  "folio-insert-code-symbolic",
+  "folio-insert-link-symbolic",
+  "folio-insert-image-symbolic",
+  "folio-view-list-bullet-symbolic",
+  "folio-view-list-ordered-symbolic",
+  "folio-eraser-symbolic",
+  // 各处"收起/关闭"的 ×（侧边栏、插件栏、标签页、查找条、提示气泡）
+  "folio-close-symbolic",
+  // 侧边栏空态里那颗「打开文件夹…」
+  "folio-document-open-symbolic",
+] as const;
+
+export type 图标名 = (typeof 名字表)[number];
+
+for (const 名 of 名字表) {
+  if (!图标网址[名]) {
+    console.error(
+      `[图标] 名字表里的 "${名}" 在 src/assets/icons/ 里没有对应文件。` +
+        `界面上那颗按钮会是空的——要么补文件，要么把这一行删掉。`,
+    );
+  }
+}
+
+/**
+ * 一枚图标。**总是 `aria-hidden`**：图标是装饰，按钮的可读名字得由按钮自己给
+ * （`aria-label`，见 `FormatBar.tsx`）。⚠️ 别在这里加 `aria-label`——
+ * 一个 `aria-hidden` 的元素上的 `aria-label` 谁也读不到，只会让下一个人以为
+ * 无障碍那件事已经办完了。
+ *
+ * `size` 默认 16：原文件就是 16 格画的，缩放到别的尺寸会糊。
+ * 真要变，**成对改宽高**（写成两处的话，一颗图标会被拉成长方形）。
+ */
+export function Icon({ name, size = 16 }: { name: 图标名; size?: number }) {
+  const 网址 = 图标网址[name];
+  return (
+    <span
+      className={网址 ? "icon" : "icon icon-missing"}
+      aria-hidden="true"
+      style={
+        {
+          "--icon": 网址 ? `url("${网址}")` : "none",
+          width: size,
+          height: size,
+        } as CSSProperties
+      }
+    />
+  );
+}

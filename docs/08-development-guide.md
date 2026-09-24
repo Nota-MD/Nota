@@ -27,7 +27,8 @@
 
 ⚠️ 两边**有差异是刻意的**：脚本多扫 `.css` 与 `.sh`，是"顺手拦一道"；
 而 `.css` 这一类**没有逻辑可拆**，真到了 1000 行是**按职责分文件**，
-不是切一半（`docs/09` §4 对 `src/styles/app.css` 专门写了口径）。
+不是切一半（`docs/09` §4 对 `src/styles/app.css` 专门写了口径；
+`sidebar.css` / `bars.css` / `editor.css` 都是照那条口径拆出来的）。
 
 #### 什么时候动手
 
@@ -56,7 +57,7 @@
 
 #### 当前值（不用你操心，但改完顺手看一眼）
 
-**没有超限文件。** 当前最大值：`src/styles/app.css` 786 行、
+**没有超限文件。** 当前最大值：`src/styles/app.css` 827 行、
 `src/App.tsx` 396 行、后端最大 `src-tauri/src/document/mod.rs` 390 行。
 （与 `docs/09` §4 记的是同一组数——那两处一起改。）
 
@@ -289,15 +290,18 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);  // appl
 | 纪律 | 为什么 |
 |---|---|
 | **`applyTheme` 返回退订函数，调用方必须接** | `ui_mode = "auto"` 要跟着系统变，它挂了 `matchMedia` 监听（`applyTheme.ts:77-81`）。不接返回值 = 监听器累积，就是 BUG-7 |
-| **形状进 `[data-ui-style]`、颜色进 `[data-ui-mode]`，两者相乘** | `theme.css:3-7`。把颜色写进 style 段就毁掉了那个风格的暗色版本 |
+| **形状进 `[data-ui-style]`、颜色进 `[data-ui-mode]`，两者相乘** | `theme.css:1-30`（文件头那段）。把颜色写进 style 段就毁掉了那个风格的暗色版本 |
+| ⚠️ **文档主题的变量不许塞进 `theme.css`** | `--find-hit` / `--find-current`（2026-09-24 为查找高亮加的）是**外壳**的变量，**不是**文档主题的——高亮要盖在正文上，两者在暗色下的合适值差得很远，所以单独两个变量而不是复用 `--accent` |
 | ⚠️ **别把"布局常量"塞进这一套** | `theme.css` 里还有一组**不跟任何设置项走**的尺寸常量（`--sidebar-width` / `--dock-width` / `--toolbar-height` / `--statusbar-height`）。它们**不随风格变、不该被 `applyTheme` 碰**，写死在 `:root`。加它们的记录在 `docs/04` §3.1b，**不在这里** |
+| ⚠️ **`--font-ui` 不许出现衬线** | 用户 2026-09-24 的原话：「绝对不要用衬线字体做UI字体。」`tools/doc-sync-check.sh` 的第 ⑥ 项在查这个（含绕道 `var(--font-doc)` 那条）。中文那几项**必须是黑体**。⚠️ 唯一的例外是 `--font-doc` 本身——它是**文档**正文字体，可以是衬线，但只许 `editor.css` 的正文引它 |
+| ⚠️ **改"默认那一格"要先想清楚改的是谁** | `ui_style = auto` 在本机落到 **adwaita**（`guessDesktop()` 恒返回空串），所以"默认长相 = adwaita + 跟随系统"。2026-09-24 的「轻快一点」改的就是这一格（浅色三条 + 深色四条 + adwaita 形状五条），**没有新加风格**——加风格的话已经存着 `auto` 的人看不到变化。逐条旧值→新值在 `docs/04` §3.2b，`theme.css` 原地也留着原值 |
 
-### 第 4 步 · 每处都写到了吗：三处文档 + 一个命令口径
+### 第 5 步 · 每处都写到了吗：三处文档 + 一个命令口径
 
 | 要改的 | 改什么 |
 |---|---|
 | `docs/03-data-structures.md` | `Settings` 的字段表 |
-| `docs/04-ui-map.md` | 设置项在界面上怎么呈现（**现在还没有设置对话框**，见 backlog 第 10 项） |
+| `docs/04-ui-map.md` | 设置项在界面上怎么呈现（✅ 设置对话框 2026-09-23 已做，外观那一格在 §3.4） |
 | `docs/10-typora-parity.md` | 如果这一项对应 Typora 的某个功能，状态格与 §1 的计数一起改 |
 
 （映射依据：`docs/09` §2.1 的 `settings.rs → 03,04,10`。）
@@ -319,17 +323,21 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);  // appl
 | **明暗** | `ui_mode` | 亮/暗。**任何风格下都成立** |
 | **文档主题** | `document_theme` | 只管正文那一块，不动外壳一分 |
 
-**加一个新风格**（比如再加一个 `gnome` / `elementary`）要动**三处**：
+**加一个新风格**（比如再加一个 `gnome` / `elementary`）要动**四处**：
 
 ### 第 1 步 · `src-tauri/src/settings.rs` 的 `UiStyle` 枚举
 
 ```rust
 #[serde(rename_all = "kebab-case")]
-pub enum UiStyle { Auto, Adwaita, Macos, Yaru, Windows }   // settings.rs:26-33
+pub enum UiStyle { Auto, Adwaita, Ghub, Macos, Plasma, Windows, Yaru }  // settings.rs:35-48
 ```
 
 加一个变体。⚠️ 这个枚举是**落盘格式**的一部分（`ui_style = "yaru"`），
 变体名换成 kebab-case 就是用户配置文件里的值。
+
+⚠️ **本文件里的 `theme.css:NN` 全是软引用**（2026-09-24 刚重校过一次）。
+往 `theme.css` 里加一段，后面所有行号都会挪——**要对账就跑一遍
+`grep -n` 找那一段的注释标题**，别信这里的数字。
 
 ### 第 2 步 · `src/styles/theme.css` 加一个风格块
 
@@ -342,94 +350,158 @@ pub enum UiStyle { Auto, Adwaita, Macos, Yaru, Windows }   // settings.rs:26-33
   --spacing: 9px;
   --toolbar-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
   --btn-font-weight: 500;
-}                                        /* theme.css:109-117 */
+}                                        /* theme.css:212-220 */
 ```
 
 ⚠️ **只写形状，不写颜色。** 颜色一律由 `[data-ui-mode]` 那两段给
-（`theme.css:37-78`）。把颜色写进 style 段，那个风格**就没法配暗色了**——
-而"我要 macOS 风格 + 暗色"是必然会出现的需求（`theme.css:10-11`）。
+（`theme.css:65-145`：`:root` + 浅色一段、深色一段）。把颜色写进 style 段，
+那个风格**就没法配暗色了**——而"我要 macOS 风格 + 暗色"是必然会出现的需求
+（`theme.css:8-11` 那段文件头）。
 
-唯一的例外写在 Yaru 那段注释里（`theme.css:106-108`）：**风格的识别性颜色**可以单独覆盖
-`--accent`，但只换明度不换色相。加例外时**要在 CSS 里写明理由**，别默默破例。
+**确有色识别性的风格**（GitHub 的冷灰蓝、Yaru 的橙）不在这两段里破例，
+而是另起一段**两属性**选择器（`theme.css:222` 起，那段注释底下从 236 行开始）：
 
-### 第 3 步 · `docs/04-ui-map.md` 的外观一节
+```css
+[data-ui-style="adwaita"][data-ui-mode="light"] { --accent: #3584e4; --accent-fg: #fff; }
+[data-ui-style="adwaita"][data-ui-mode="dark"]  { --accent: #78aeed; --accent-fg: #10131a; }
+```
+
+⚠️ **两属性比单属性更具体，所以它稳定压过上面两段**，不用 `!important`。
+⚠️ **强调色必须连 `--accent-fg`（它上面的字）一起给**——浅色强调色配白字会看不清。
+加一段时**要在 CSS 里写明理由**，别默默破例。
+
+### 第 3 步 · `src/styles/applyTheme.ts` 的探测表
+
+`ui_style === "auto"` 时靠桌面环境变量猜（`XDG_CURRENT_DESKTOP` / `DESKTOP_SESSION`），
+那张表在 `applyTheme.ts:42-46`。**新风格如果对应某个桌面，这里要加一行**；
+两者都没有的风格（比如纯自定义的）不用加，它只能手动选。
+
+### 第 4 步 · `docs/04-ui-map.md` 的外观一节
 
 那里是三条轴的权威表（也是 `docs/09` §2.2 里 `theme.css → 04,08` 的落点）。
 
 ### ⚠️ 还有一处机械同步：`ipc.ts` 的联合类型
 
-`src/bridge/ipc.ts:38` 手写了一份同形状的联合类型：
+`src/bridge/ipc.ts` 手写了一份同形状的联合类型：
 
 ```ts
-export type UiStyle = "auto" | "adwaita" | "macos" | "yaru" | "windows";
+export type UiStyle =
+  | "auto" | "adwaita" | "ghub" | "macos" | "plasma" | "windows" | "yaru";
 ```
 
 **不加这个，前端就构造不出带新值的 `Settings`**（TS 会报类型不匹配）。
 它与 Rust 枚举**没有自动生成的关联**，只能靠人记得。
 
+**第四处（界面上得有得选）**：`ui/SettingsDialog.tsx` 里的 `STYLES` 表——
+一个风格一条（`value` / 中文 `label` / 一行 `hint`）。⚠️ 漏了这一处，
+新风格在 Rust 和 TS 里都存在，**但用户点不到它**。
+
 ### 顺带：让 `auto` 能探到新风格
 
-`auto` 的落点由 `detectStyle()` 决定（`applyTheme.ts:34-40`），
-它现在从桌面环境名猜（KDE→adwaita、Ubuntu→yaru、其余→adwaita）。
-⚠️ **`guessDesktop()` 目前恒返回空串**（`applyTheme.ts:43-47`），
-所以 `auto` 实际上**永远落 Adwaita**。这让 XDG portal 的 `color-scheme`
-接上之后才好使——那是 backlog 第 11 项的一部分。
+`auto` 的落点由 `detectStyle()` 决定（`applyTheme.ts`），
+它现在从桌面环境名猜：`kde`/`plasma` → `plasma`，`ubuntu`/`yaru` → `yaru`，
+`windows` → `windows`，`mac`/`darwin` → `macos`，**其余一律 `adwaita`**。
+⚠️ **`guessDesktop()` 目前恒返回空串**，所以 `auto` 实际上**只靠 userAgent**。
+这让 XDG portal 的 `color-scheme` 接上之后才好使——那是 backlog 第 11 项的一部分。
 **加新风格时不必顺手修这个**，但要知道"我加了风格，`auto` 探不到它"。
 
 ---
 
-## 5b. 加一份文档主题（Typora 格式）
+## 5b. 写一份文档主题（**只管正文**）
 
-⚠️ **和 §5 完全不是一回事**：§5 加的是**我们自己写的**一套外观风格（要动 Rust 枚举、
-CSS 变量、TS 联合类型三处）；这一节加的是**用户那边的一份 CSS 文件**——
-**一行代码都不用改**。
+⚠️ **和 §5 完全不是一回事**：§5 加的是**界面风格**（要动 Rust 枚举、CSS 变量、
+TS 联合类型三处）；这一节写的是**文档主题**——一份 CSS 文件，
+**一行代码都不用改**（要把它变成内置的才要改 `themes.rs`，见本节末）。
+
+⚠️ **先记住那条线**（用户 2026-09-23 原话「这是文档风格，不是界面风格，不应该影响到UI主题」）：
+
+| 你写的是 | 影响范围 | 改的是 |
+|---|---|---|
+| 界面风格（§5） | **整个应用** | `styles/theme.css` 的变量 |
+| 文档主题（本节） | **只有编辑区** | `<编辑区>` 里的排版与配色 |
+
+⛔ **不兼容也不内置 Typora 主题**（版权）。别去扫 `~/.config/Typora/themes/`，
+也别把 Typora 自带的主题抄进来。
 
 ### 放哪儿
 
-三个目录，**按顺序**（靠前的盖掉同名的）：
+**只有一个目录**：`~/.config/nota/themes/`（**按 XDG 算**，`~/.config` 只是默认值）。
+文件名就是主题的 **id**：`paper.css` → id `paper`。
 
-| 目录 | 谁的 |
-|---|---|
-| `~/.config/nota/themes/` | **用户自己的**（菜单栏「主题 → 打开主题文件夹…」会建出来） |
-| `~/.config/Typora/themes/` | Typora 装的 |
-| `~/.var/app/io.typora.Typora/config/Typora/themes/` | Typora flatpak 的 |
+⚠️ **id 的形状有硬约束**：只放行 ASCII 字母数字与 `-` `_`（长度 1–64），
+因为后端是拿它拼路径的（`<主题目录>/<id>.css`）。**中文文件名用不了**——
+这是有意的取舍，显示名写在文件里，文件名只是个键。
+⚠️ 同名**覆盖内置**（想改素纸就复制一份出来改，升级不会冲掉）。
+⚠️ 菜单栏「主题 → 打开主题文件夹…」会把目录建出来。
+⚠️ **改了之后要重启**：主题清单只在启动时拉一次（`docs/07` 第 41 项）。
 
-### 长什么样（就是 Typora 的形状）
+### 长什么样
 
+**按普通文档 CSS 写，不要加任何作用域前缀**：
+
+```css
+:root {
+  --doc-bg: #fbf7ef;
+  --doc-fg: #33302b;
+  --code-comment: #9a8f7a;
+  /* … */
+}
+h1 { font-size: 1.9em; }
+blockquote { border-left: 3px solid var(--border); }
 ```
-themes/
-├── night.css
-└── night/               # 同名目录：字体、图片
-    ├── open-sans.woff2
-    └── bg.png
-```
 
-`night.css` 里按 **相对** 路径引用：`url('./night/open-sans.woff2')`。
-也支持 `@import`（最多 8 层，防环）。
+⚠️ **`h1 { … }` 就是 `h1`**。收拢到编辑区那一步是**机械执行**的
+（`styles/doc-theme.ts` 把每条选择器改写成 `.editor-pane h1`），
+**不需要也不允许**你自己写 `.editor-pane`——已经带了锚点的选择器会被原样放过，
+再套一层就是 `.editor-pane .editor-pane h1`，永远命不中。
 
-⚠️ **`@include-when-export` 会被删掉**：那段是"导出时才生效"的规则，我们还没有导出，
-留着它会污染正文，所以 `typora-theme.ts` 用一条正则把它整条去掉（`INCLUDE_WHEN_EXPORT_RE`）。
-⚠️ 同理，**解析器不认识的 at 规则一律丢掉**（`@charset` 之类）——
-只有 `@media`（下钻）、`@font-face` / `@keyframes` / `@supports` / `@page`（原样保留）
-这几种是过的。
+⚠️ **`:root` / `html` / `body` 是被"改写"成 `.editor-pane` 的，不是加前缀**——
+它们指的就是"正文那棵树的根"。所以往 `:root` 里放变量是对的写法。
 
-### 为什么不用改代码
+### 一套主题由两部分组成
 
-`typora-theme.ts` 那四步（展开 `@import` → `url()` 换成 `data:` → 浏览器解析 →
-收拢进 `#write`）是**通用的**，它不认识任何具体主题名。所以：
-丢一个 `.css` 进去 → **重启 Nota** → 菜单栏「主题」里就有了。
-⚠️ **必须重启**：主题清单只在启动时拉一次（`docs/07` 第 41 项）。
+1. **在 `:root` 里改 token**：`--doc-bg` / `--doc-fg` / `--border` / `--bg-subtle` /
+   `--radius` / `--code-*` / `--select-text-*` / `--font-doc` / `--doc-font-size` /
+   `--doc-line-height`。
+   ⚠️ 编辑区骨架的样式在 `editor.css` 里是**用 token 写的**，所以改 token 就能连
+   代码块底、边框、圆角一起换，**不用去跟 `editor.css` 抢选择器权重**
+   （抢不过：那边是 `.editor-mount .ProseMirror`，两条选择器）。
+2. **写 `editor.css` 没有覆盖过的**那部分排版：标题、链接、引用、表格、分隔线、列表。
+
+⚠️ **`--code-*` 必须自带一整套。** 代码块底色是你挑的，沿用界面那套会出现"深底配深字"。
+⚠️ **`--select-text-*` 的 fallback 别省**（`var(--x, highlight)`）——
+`background: var(--x)` 在 `--x` 不存在时整条声明失效、落到 `transparent`，
+症状是**选中了看不见**。
+
+### 参考现成的
+
+内置那六套（`src/styles/themes/`：素纸 / 蓝图 / 晨雾 / 报刊 / 墨色 / 松林）
+就是照这个约定写的，**抄一份改最省事**。每个文件头都指着 `paper.css` 说约定。
+
+### 什么改不了（边界，不是 bug）
+
+- **外壳**：侧栏、顶栏、标签栏，**一个变量都不共用**。写 `body { background: … }`
+  只会改到编辑区，不会改到整个窗口——这是设计，不是失效。
+- **按 Typora 自己的 DOM 写的选择器**（`#typora-sidebar` / `.megamenu` / `#top-titlebar` /
+  `.md-toc`…）：我们没有那些元素，这些规则是**永远不会命中的死规则**。
+  不报错，也不起作用。**别去"修"它。**
 
 ### 要验什么（这一步别人替不了）
 
 | 看什么 | 怎么看 |
 |---|---|
 | 版式对不对 | 拿一份**有标题、列表、引用、代码块、表格**的文档过一遍 |
-| 字体真的加载了 | ⚠️ **别拿 `github` 验**——它的第一条 `@font-face` 是 `local('Open Sans Regular')`，容器里装着 Open Sans，字体压根不会被请求。要验就用**去掉了 `local()` 的探针主题** |
-| 外壳有没有被带歪 | 换完主题看侧栏/顶栏/标签栏——它们只该跟着**提升上来的那几个变量**变（`theme.css` 末尾那段桥接），不该散架 |
+| 选中看得见吗 | 全选一段——**看不见文字说明 `--select-text-*` 那条 fallback 丢了** |
+| 代码块对不对 | 深色主题尤其要看：底色是主题挑的，**字色和底色要能分开** |
+| 外壳有没有被带歪 | 换完主题看侧栏/顶栏/标签栏——它们**一点都不该变**。变了就是越界，是 bug |
 
-⚠️ **主题里给我们没有的 DOM 写的规则是死规则**（`#typora-sidebar`、`.md-toc`…），
-不报错、不生效——那是**边界**不是 bug，别去"修"它。
+### 想把它变成**内置**的
+
+三条一起改：
+
+1. 把 `.css` 放进 `src/styles/themes/`；
+2. 在 `themes.rs` 的 `BUILTIN` 表里加一行（`id` + 中文显示名 + `include_str!`）；
+3. 确认它**不带界面变量**——`cargo test` 里那条 `内置主题不碰界面变量` 会替你查。
 
 ---
 

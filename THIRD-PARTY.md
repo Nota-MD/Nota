@@ -34,6 +34,27 @@
 | `notify` | 8.2.0 | **CC0-1.0** | ⚠️ **目前没用到**，见 §4 |
 | `similar` | 3.2.0 | **Apache-2.0** | ⚠️ **目前没用到**，见 §4 |
 | `shlex` | 2.0.1 | MIT OR Apache-2.0 | ⚠️ **目前没用到**，见 §4 |
+| `ureq` | 3.4.0 | MIT OR Apache-2.0 | **`nota.http`，也就是只给插件发请求用**（2026-09-24）。默认 feature 就带下面那套 TLS，**不依赖系统 OpenSSL** |
+
+### 随 `ureq` 一起编进来的 TLS 栈
+
+这几条**不是**直接依赖，是 `ureq` 默认 feature 拉进来的。之所以单列，
+是因为 `ring` 的许可证是**两个都要满足**（`AND` 不是 `OR`），而且它里面
+有一份 BoringSSL 的血统——这是本项目里唯一一个这么写的依赖，别让它被忽略。
+
+| crate | 版本 | 许可证 | 说明 |
+|---|---|---|---|
+| `rustls` | 0.23.43 | Apache-2.0 OR ISC OR MIT | TLS 实现（纯 Rust） |
+| `ring` | 0.17.14 | **Apache-2.0 AND ISC** | 密码学原语。⚠️ 源码里另有 `LICENSE-BoringSSL` 与 `LICENSE-other-bits` 两份文件，都已随源码保留 |
+| `rustls-webpki` | 0.103.14 | ISC | 证书链校验 |
+| `rustls-pki-types` | 1.15.1 | MIT OR Apache-2.0 | |
+| `webpki-roots` | 1.0.9 | **CDLA-Permissive-2.0** | 打包好的根证书。⚠️ **不是** MIT/Apache——一个"数据许可"，要求保留出处 |
+| `flate2` | 1.1.10 | MIT OR Apache-2.0 | 解 gzip 响应体 |
+
+⚠️ **为什么不开 `native-tls`**：那会把系统 OpenSSL 拖回来（容器里就得多装
+`libssl-dev`），而 `rustls` 这半边**一个系统库都不需要**。见 `docs/06` §「依赖」表。
+⚠️ 这几条的版本号取自 `Cargo.lock`，**改依赖后要重新核一遍**——
+`webpki-roots` 那条尤其容易记错（它看着像个 MIT 的小包，其实是 CDLA）。
 
 ### 随二进制一起编进去的 Lua
 
@@ -109,3 +130,32 @@
 ⚠️ 删的时候要同时改 `Cargo.toml` **和 `docs/06` 的依赖清单**（`docs/09` §2 的映射表钉着这一条）。
 **本条是待办，不是已完成**——记在这里是因为它正是一份"第三方组件清单"该说的事：
 *我们拉了哪些东西、哪些其实白拉了。*
+
+## 5. 界面图标：从 Folio 搬来的那一套（`src/assets/icons/`）
+
+界面上的图标（工具栏、侧栏/插件栏/标签页的 ×、侧栏空态那颗按钮）
+用的是 **Folio 的 `actions/` 图标**，96 个文件**逐字节复制**进来
+（`src/assets/icons/`，2026-09-24，`diff -r` 校过）。
+
+| 项 | 说明 |
+|---|---|
+| 来源 | Folio 仓库 `data/icons/hicolor/scalable/actions/*.svg`（**不是** `apps/` 那几枚应用图标） |
+| 作者 | Folio contributors（**与 Nota 同一个作者**） |
+| 许可 | **BSD-2-Clause** —— 与 Nota 的 `LICENSE` 同一份，不引入新义务 |
+| 搬运方式 | `cp`（一个字节没改），核对手段见 `docs/04` 的"图标"一节 |
+
+**为什么可以搬**：Folio 自己的 `THIRD-PARTY.md` §2.2 记着，这套图标的早期版本
+**71/72 与上游 WebkitWord（GPL-3.0）逐字节相同**，而 Folio 在 2026-09-12
+**把整套重绘了一遍**——图标属于受版权保护的"图形表达"，重绘之后它们就是
+Folio 自绘的作品，按 BSD-2-Clause 分发。⚠️ **要搬的是重绘后那一份**；
+如果有人"顺手"从上游 WebkitWord 或旧 `icons-old/` 里拿，那就是把 GPL 的东西
+搬进 BSD-2 的仓库，性质完全不同。
+
+⚠️ **只搬"动作"图标，不搬应用图标**：`folio-*.svg` 那一套是 Folio 自己的脸，
+Nota 的图标是用户设计、逆向成 `src-tauri/icons/nota.svg` 的那一份。
+
+⚠️ 搬进来的文件**不许改**——包括里面那 355 处写死的 `fill="#2e3436"`
+（GTK 的深灰）。颜色是**用 CSS 遮罩在外面刷**的（`styles/icons.css` 里
+`.icon` 的 `background-color: currentColor` + `mask-image`），
+所以那些 `fill` 根本不参与渲染。改一个字节，"搬来的东西一个字节没动"
+这句话就失效了，而这正是这套图标能被一眼核对的前提。

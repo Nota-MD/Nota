@@ -10,7 +10,13 @@
  * ⚠️ 这是**启发式**，不是真解析。它认不出 HTML 块里的 `#`、也认不出
  * 缩进代码块（四空格那种）里的 `#`。真解析要过 remark，而为一个侧栏列表
  * 引入完整 AST 不划算。已知误差见 `docs/07`；真出问题时再换 remark。
+ *
+ * ⚠️ `strict` 是**严格模式**（`Settings.strict_markdown`，默认 `false`）：
+ * 宽松（默认）时 `#你好` 也算标题。判据不在本文件里，见 `editor/atx.ts`
+ * 的 `atxTextRe`——那份判据要和解析、打字、后端挑标题**一模一样**。
  */
+
+import { atxTextRe } from "@/editor/atx";
 
 export interface OutlineItem {
   level: number;
@@ -19,7 +25,7 @@ export interface OutlineItem {
   line: number;
 }
 
-export function extractOutline(markdown: string): OutlineItem[] {
+export function extractOutline(markdown: string, strict = false): OutlineItem[] {
   const out: OutlineItem[] = [];
   let inFence = false;
   let inFrontMatter = false;
@@ -48,7 +54,7 @@ export function extractOutline(markdown: string): OutlineItem[] {
     if (inFence) continue;
 
     // ── ATX 标题 ────────────────────────────────────────────────────────
-    const m = /^(#{1,6})\s+(.*)$/.exec(trimmed);
+    const m = atxTextRe(strict).exec(trimmed);
     if (!m) continue;
 
     const text = m[2]!.trim().replace(/\s*#+\s*$/, "").trim();

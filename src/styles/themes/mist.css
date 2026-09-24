@@ -1,0 +1,170 @@
+/*
+ * 「晨雾」—— 浅靛紫、大圆角、柔和。轻一点的浅色主题。
+ *
+ * ⚠️ 写法约定见 `paper.css` 顶上那段：按普通文档 CSS 写，不带作用域前缀，
+ * 由 `src/styles/doc-theme.ts` 统一挂到编辑区之下。
+ *
+ * 与「蓝图」同为浅色无衬线，区别在色温：蓝图往蓝走（技术感），
+ * 晨雾往紫走、圆角放大一档（读起来松）。
+ */
+
+:root {
+  /* ── 纸面 ── */
+  --doc-bg: #faf9fc;
+  --doc-fg: #3b3946;
+  --fg: #3b3946;
+  --fg-muted: #6f6b80;
+  --fg-faint: #b0abc4;
+  --border: #e2ddf2;
+  --border-strong: #c5bcdf;
+  --bg-subtle: #f5f3fb;
+  --bg-raised: #ece8f6;
+  --bg-hover: rgba(107, 91, 210, 0.07);
+  --bg-active: rgba(107, 91, 210, 0.12);
+  --radius: 12px;
+  --radius-sm: 6px;
+  --accent: #6b5bd2;
+  --accent-fg: #ffffff;
+
+  /* ── 排版 ── */
+  --font-doc: "Noto Sans CJK SC", "Source Han Sans SC", system-ui, sans-serif;
+  --doc-font-size: 1.04em;
+  --doc-line-height: 1.8;
+
+  /* ── 选中文字 ── */
+  --select-text-bg-color: #ddd6f7;
+  --select-text-font-color: #322f42;
+
+  /* ── 代码高亮 ── */
+  --code-comment: #8a86a0;
+  --code-keyword: #b5459a;
+  --code-string: #2f7d63;
+  --code-number: #3a6ea5;
+  --code-function: #7a4bb5;
+  --code-attr: #a35a1f;
+  --code-tag: #2f7d63;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  line-height: 1.35;
+  color: #2e2b3d;
+}
+
+h1 {
+  font-size: 1.8em;
+  margin-top: 1.6em;
+  color: #4a3f8f;
+}
+
+h2 {
+  font-size: 1.42em;
+  margin-top: 1.5em;
+  color: #4a3f8f;
+}
+
+h3 {
+  font-size: 1.2em;
+  margin-top: 1.35em;
+}
+
+h4 {
+  font-size: 1.07em;
+}
+h5 {
+  font-size: 1em;
+}
+h6 {
+  font-size: 0.94em;
+  color: var(--fg-muted);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(107, 91, 210, 0.3);
+}
+
+a:hover {
+  border-bottom-color: var(--accent);
+}
+
+strong {
+  font-weight: 600;
+  color: #2e2b3d;
+}
+
+del {
+  color: var(--fg-muted);
+}
+
+code {
+  padding: 0.12em 0.36em;
+  border-radius: var(--radius-sm);
+  background: #f0edf9;
+  color: #7a4bb5;
+  font-size: 0.92em;
+}
+
+blockquote {
+  padding: 0.5em 1em;
+  border-left: 3px solid #d6d0f0;
+  background: #f4f1fb;
+  color: #5c5871;
+}
+
+blockquote > :first-child {
+  margin-top: 0;
+}
+
+ul,
+ol {
+  padding-left: 1.5em;
+}
+
+li::marker {
+  color: var(--fg-faint);
+}
+
+hr {
+  height: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.96em;
+}
+
+th,
+td {
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+th {
+  background: #f4f1fb;
+  font-weight: 600;
+}
+
+tbody tr:nth-child(even) {
+  background: rgba(107, 91, 210, 0.03);
+}
+
+img {
+  border-radius: var(--radius);
+  max-width: 100%;
+}

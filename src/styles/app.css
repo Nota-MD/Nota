@@ -1,9 +1,14 @@
 /**
- * 外壳的样式：窗口骨架、工具条、按钮、侧栏、插件栏、文件树、大纲、
- * 标签栏、状态栏、主页，以及确认框。
+ * 外壳的样式：窗口骨架、工具条、菜单栏、按钮、标签栏、状态栏、主页，
+ * 以及确认框。
  *
  * ⚠️ **正文编辑区不在这里**，在 `editor.css` —— 2026-09-22 因为撞上 1000 行
  * 上限按职责拆的，那条线怎么划见 `editor.css` 的文件头。
+ * ⚠️ **左侧栏也不在这里**（栏本身 + 文件树 + 大纲），在 `sidebar.css`
+ * —— 2026-09-24 同样的理由拆的。那条线怎么划见 `sidebar.css` 的文件头。
+ * ⚠️ **右侧插件栏也不在这里**（栏本身 + 面板内容 + 已装清单），在 `dock.css`
+ * —— 2026-09-24 同样的理由拆的。它是**最后**拆走的一块，拆完之后本文件
+ * 离上限还有三百多行的余量。
  *
  * 颜色与尺寸**一律走变量**（见 `theme.css`），本文件里不该出现写死的色值或圆角
  * ——写死一个就少支持一种风格组合。
@@ -74,12 +79,10 @@ button {
   z-index: 30;
 }
 
-.toolbar-brand {
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--fg-muted);
-  padding-right: 2px;
-}
+/* ⚠️ 这里曾经有一个 `.toolbar-brand`（工具条最左边那两个字 "Nota"）。
+   用户 2026-09-23 说「工具栏最左边的纯文字 Nota 可以删掉了」——删掉了。
+   **别再"顺手加回去"**：窗口标题栏上本来就有应用名，工具条那一份是重复的，
+   而且它挤在菜单前面，看着像菜单的一部分。 */
 
 /* ── 菜单栏 ───────────────────────────────────────────────────────────── */
 
@@ -109,7 +112,9 @@ button {
   background: var(--bg-hover);
 }
 
-/* 菜单开着时那一栏保持高亮——不然鼠标移开就不知道自己刚才点的是哪个。 */
+/* 菜单开着时那一栏保持高亮——不然鼠标移开就不知道自己刚才点的是哪个。
+   ⚠️ 用 `--bg-active` 而不是 `--bg-hover`：悬停和"这一栏开着"是两种状态，
+   画成一样的话，鼠标停在别的栏上时会有两栏同时亮着，看不出哪个是开的。 */
 .menu-title-open {
   background: var(--bg-active);
 }
@@ -118,15 +123,39 @@ button {
   position: absolute;
   top: calc(100% + 5px);
   left: 0;
-  z-index: 40;
-  min-width: 208px;
+  z-index: var(--z-popup);
+  min-width: 224px;
   max-height: 70vh;
   overflow-y: auto;
-  padding: 4px;
+  padding: 5px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   background: var(--bg-raised);
-  box-shadow: var(--shadow);
+  box-shadow: var(--popup-shadow);
+  /* 弹出。⚠️ `transform-origin` 钉在左上角，让它**从菜单栏那一栏长出来**，
+     而不是从正中间胀开——后者看着像弹窗，不像菜单。 */
+  transform-origin: top left;
+  animation: menu-popup-in var(--duration-fast) var(--ease-out);
+}
+
+@keyframes menu-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ⚠️ 系统开了"减少动态效果"就**不要动画**。不是为了省事：这类用户里有一部分
+   是前庭功能敏感，位移类动画会真的让人不舒服。 */
+@media (prefers-reduced-motion: reduce) {
+  .menu-popup,
+  .menu-sub {
+    animation: none;
+  }
 }
 
 .menu-item {
@@ -134,7 +163,7 @@ button {
   align-items: center;
   gap: 6px;
   width: 100%;
-  height: 26px;
+  height: 28px;
   padding: 0 8px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -148,6 +177,13 @@ button {
 
 .menu-item:hover:not(:disabled) {
   background: var(--bg-hover);
+}
+
+/* 键盘走到哪一项、以及哪一项的子菜单开着。
+   ⚠️ 和 `:hover` **画同一种底色**是刻意的：鼠标和键盘共用一套高亮，
+   用户才不会看到两个亮点。 */
+.menu-item-open:not(:disabled) {
+  background: var(--bg-active);
 }
 
 .menu-item:disabled {
@@ -182,6 +218,46 @@ button {
   opacity: 0.65;
 }
 
+/* 带子菜单那一项末尾的小箭头。**没子菜单的项也留这个宽度**——
+   不留的话，同一列里有箭头和没箭头的文字右边缘会参差不齐。 */
+.menu-arrow {
+  flex: none;
+  width: 10px;
+  font-size: 10px;
+  line-height: 1;
+  color: var(--fg-faint);
+  text-align: center;
+}
+
+/* 子菜单：从父项右侧飞出。
+   ⚠️ `position: fixed` **不是随便选的**，是被逼的：
+   父弹层 `.menu-popup` 有 `overflow-y: auto`（菜单太高时要能滚），而 CSS 里
+   **一个轴设成 auto，另一个轴的 `visible` 会被算成 auto**——于是子菜单
+   一飞出弹层的右边缘就被**裁掉**，症状是只剩一条几像素的竖条。
+   试过"把弹层的 overflow 改 visible"，但那样长菜单就没法滚了。
+   `fixed` 定位到视口上，才彻底不受滚动容器裁剪。
+   ⚠️ 代价：坐标得**自己量**（见 `MenuPopup.tsx` 里 `subAnchor` 那段），
+   CSS 再也说不出"在父项右边"这句话。 */
+.menu-sub {
+  position: fixed;
+  z-index: var(--z-popup);
+  min-width: 208px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: var(--popup-shadow);
+  transform-origin: top left;
+  animation: menu-popup-in var(--duration-fast) var(--ease-out);
+}
+
+/* 带子菜单的项，弹层定位的基准是**这一项**，不是整栏。 */
+.menu-item-root {
+  position: relative;
+}
+
 .menu-sep {
   height: 1px;
   margin: 4px 6px;
@@ -201,327 +277,25 @@ button {
   transition: background 90ms ease;
 }
 
-.btn:hover:not(:disabled) {
+/* ⚠️ 灰底那两条**必须把 `.btn-primary` / `.btn-danger` 排除掉**。
+   这两条的选择器权重是 (0,3,0)，而 `.btn-primary` 只有 (0,1,0)——
+   于是"悬停变灰"会把强调色/危险色**整个盖掉**，字色却还是 `--accent-fg`：
+   亮色下就是白字白底。2026-09-23 在偏好设置那个「完成」上实测到的
+   （蓝 #3584E4 一悬停变 #EBECEE），但它先于那次改动就存在，
+   确认框里的「保存」「丢弃并关闭」是同一份。
+   这两种按钮的悬停改成 `filter: brightness()`：跟着底色走，
+   任何风格的强调色都对，不用为每个风格再开一个色号。 */
+.btn:hover:not(:disabled):not(.btn-primary):not(.btn-danger) {
   background: var(--bg-hover);
 }
 
-.btn:active:not(:disabled) {
+.btn:active:not(:disabled):not(.btn-primary):not(.btn-danger) {
   background: var(--bg-active);
 }
 
 .btn:disabled {
   color: var(--fg-faint);
   cursor: default;
-}
-
-/* ── 侧栏 ─────────────────────────────────────────────────────────────── */
-
-.sidebar {
-  width: var(--sidebar-width);
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--border);
-  background: var(--bg-subtle);
-  min-height: 0;
-}
-
-.sidebar-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-  flex: none;
-}
-
-.sidebar-tab {
-  flex: 1;
-  height: 32px;
-  border: 0;
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-  font-size: 0.92em;
-  border-bottom: 2px solid transparent;
-}
-
-.sidebar-tab:hover {
-  background: var(--bg-hover);
-}
-
-.sidebar-tab-active {
-  color: var(--fg);
-  border-bottom-color: var(--accent);
-}
-
-.sidebar-body {
-  flex: 1;
-  overflow: auto;
-  padding: var(--spacing) 0;
-  min-height: 0;
-}
-
-.sidebar-empty {
-  padding: 0 var(--spacing);
-  color: var(--fg-faint);
-  font-size: 0.9em;
-  line-height: 1.6;
-}
-
-/* ── 右侧插件栏 ───────────────────────────────────────────────────────────
-   为什么插件在右边见 `ui/PluginDock.tsx` 的文件头。这里只记样式上的两条：
-
-   ① 它**不是 `.sidebar` 加一个 `flex-direction: row-reverse`**。左右两侧
-      边框、圆角、将来要加的折叠动效方向都相反，共用一套类名只会让每条规则
-      都要写 `:first/last` 的特例。**是两套独立的类。**
-   ② 宽度走 `--dock-width`，与 `--sidebar-width` 分开——见 theme.css 那句。 */
-
-.plugin-dock {
-  width: var(--dock-width);
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  border-left: 1px solid var(--border);
-  background: var(--bg-subtle);
-  min-height: 0;
-}
-
-.dock-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 32px;
-  padding-left: calc(var(--spacing) * 1.5);
-  border-bottom: 1px solid var(--border);
-  flex: none;
-}
-
-.dock-title {
-  font-weight: 600;
-  font-size: 0.92em;
-  color: var(--fg-muted);
-}
-
-.dock-close {
-  border: 0;
-  background: transparent;
-  padding: 0 calc(var(--spacing) * 1.25);
-  cursor: pointer;
-  color: var(--fg-faint);
-  height: 100%;
-}
-
-.dock-close:hover {
-  color: var(--fg);
-  background: var(--bg-hover);
-}
-
-.dock-body {
-  flex: 1;
-  overflow: auto;
-  padding: var(--spacing) 0;
-  min-height: 0;
-}
-
-/* ── 栏内分区：插件声明的面板 / 没落脚处的 / 已装插件 ──────────────────────
-
-   面板在上（那是这一栏的理由），清单在下（诊断用）。分区标题用 `.dock-subtitle`，
-   与 `.dock-title`（栏标题）**分开**：栏标题要盖过内容，分区标题是内容的注脚，
-   两者字重和色阶不同，共用一个类就得在每处写覆盖。 */
-
-.dock-subtitle {
-  margin: var(--spacing) 0 calc(var(--spacing) * 0.75);
-  padding: 0 calc(var(--spacing) * 1.5);
-  font-size: 0.78em;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--fg-faint);
-  text-transform: none;
-}
-
-.dock-subtitle:first-child {
-  margin-top: 0;
-}
-
-.panel {
-  margin: 0 calc(var(--spacing) * 0.75) var(--spacing);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  overflow: hidden;
-}
-
-.panel-head {
-  padding: calc(var(--spacing) * 0.5) calc(var(--spacing) * 1.25);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
-}
-
-.panel-title {
-  font-weight: 600;
-  font-size: 0.9em;
-}
-
-.panel-body {
-  padding: var(--spacing) calc(var(--spacing) * 1.25);
-}
-
-/* 「内容尚未接入」这句。**故意做得显眼但不刺眼**——它是句实话，
-   不是错误；做成红色会让人以为插件坏了。 */
-.panel-pending {
-  margin: 0;
-  font-size: 0.85em;
-  color: var(--fg-faint);
-}
-
-.dock-hint {
-  margin: 0 calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.5);
-  font-size: 0.85em;
-  color: var(--fg-faint);
-}
-
-.dock-orphan {
-  margin: 0 calc(var(--spacing) * 1.5) calc(var(--spacing) * 0.25);
-  font-size: 0.9em;
-}
-
-.dock-orphan-where {
-  margin-left: calc(var(--spacing) * 0.5);
-  padding: 0 0.4em;
-  border-radius: 3px;
-  background: var(--bg-active);
-  color: var(--fg-muted);
-  font-size: 0.85em;
-}
-
-/* 工具条上那个开关。推到最右靠 `auto` 外边距，不靠 spacer 元素。 */
-.toolbar-dock-toggle {
-  margin-left: auto;
-}
-
-/* 开关处于「开着」的状态。⚠️ 用的是 `bg-active` 而不是 `accent` 底：
-   accent 在这一栏里已经表示"有未保存改动"（`.tab-dot`/`.status-dirty`），
-   同一个色再表示一次"面板开着"，两个意思就糊了。 */
-.btn-on {
-  background: var(--bg-active);
-}
-
-/* ── 文件树 ───────────────────────────────────────────────────────────── */
-
-.tree,
-.outline,
-.plugins,
-.home-plugins {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.tree-dir-name {
-  display: block;
-  padding: 3px var(--spacing);
-  color: var(--fg-muted);
-  font-weight: 600;
-  font-size: 0.88em;
-}
-
-.tree-file-btn {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 3px calc(var(--spacing) * 2);
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tree-file-btn:hover {
-  background: var(--bg-hover);
-}
-
-/* ── 大纲 ─────────────────────────────────────────────────────────────── */
-
-.outline-item {
-  padding: 3px 8px;
-  color: var(--fg-muted);
-  cursor: default;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.outline-item:hover {
-  background: var(--bg-hover);
-  color: var(--fg);
-}
-
-/* ── 插件列表 ─────────────────────────────────────────────────────────── */
-
-.plugin {
-  padding: var(--spacing) calc(var(--spacing) * 1.5);
-  border-bottom: 1px solid var(--border);
-}
-
-.plugin-failed {
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-}
-
-.plugin-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.plugin-name {
-  font-weight: 600;
-}
-
-.plugin-version {
-  color: var(--fg-faint);
-  font-size: 0.82em;
-  font-family: var(--font-mono);
-}
-
-.plugin-id {
-  font-family: var(--font-mono);
-  font-size: 0.76em;
-  color: var(--fg-faint);
-  margin-top: 2px;
-}
-
-.plugin-desc {
-  margin: 5px 0 0;
-  font-size: 0.87em;
-  color: var(--fg-muted);
-  line-height: 1.5;
-}
-
-.plugin-error {
-  margin: 5px 0 0;
-  font-size: 0.82em;
-  color: var(--danger);
-  line-height: 1.5;
-  word-break: break-word;
-}
-
-.plugin-caps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-top: 6px;
-}
-
-.cap {
-  font-family: var(--font-mono);
-  font-size: 0.72em;
-  padding: 1px 5px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--fg-faint);
 }
 
 /* ── 标签栏 ───────────────────────────────────────────────────────────── */
@@ -615,6 +389,26 @@ button {
   display: flex;
   gap: 14px;
   flex: none;
+}
+
+/* 模式名与「严格」徽标：这一组里**不是字数统计**的那两格，是应用自己的状态。
+   加这道框就是为了把它们和右边那四个数字分开——不加的话，一行七个词
+   读起来像一串并列的统计。
+   ⚠️ 模式恒显、严格只在开着时出现，理由见 `ui/StatusBar.tsx` 文件头。 */
+.status-mode,
+.status-strict {
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg-faint);
+  line-height: 1.45;
+}
+
+/* 严格模式会改正文的解析结果（`#标题` 算不算标题），所以给它强调色——
+   这不是一个可以忽略的显示项，它换的是"你现在看到的是哪份文本"。 */
+.status-strict {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ── 主页 ─────────────────────────────────────────────────────────────── */
@@ -768,6 +562,55 @@ button {
   gap: 8px;
 }
 
+/* ── 输入框（`ui/PromptDialog.tsx`）────────────────────────────────────────
+   替掉 `window.prompt` 的那个。⚠️ 它的理由比确认框还硬：`prompt` 在
+   WebKitGTK 上默认被关掉，调用会**静默返回 null**——菜单点下去什么都不发生。
+
+   ⚠️ 它借的是上面那层壳（`.confirm-backdrop` / `.confirm-dialog`）：两个框
+   长得一样、行为也一样（Esc = 取消、点遮罩 = 取消），样式不该有两套。 */
+
+.prompt-dialog {
+  /* 比确认框宽一点：它要装一整个 URL，440px 下长地址要横向滚。 */
+  min-width: 420px;
+}
+
+.prompt-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+/* 第二个字段的标签要跟上一个输入框拉开距离，否则两行会粘在一起。 */
+.prompt-input + .prompt-label,
+.prompt-input + .prompt-hint {
+  margin-top: 12px;
+}
+
+.prompt-input {
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+}
+
+.prompt-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.prompt-hint {
+  margin: 10px 0 16px;
+  color: var(--fg-faint);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
 /* 危险动作（丢改动、删东西）：确认键画红，别让它长得跟"确定保存"一样。 */
 .btn-danger {
   border-color: var(--danger);
@@ -779,4 +622,25 @@ button {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-fg);
+}
+
+/* 这两种按钮的悬停/按下**不用灰底**（理由见 `.btn:hover` 上面那条）。
+   `filter` 不需要知道底色是什么，所以七套界面风格共用这一条。 */
+.btn-primary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+.btn-primary:active:not(:disabled),
+.btn-danger:active:not(:disabled) {
+  filter: brightness(0.88);
+}
+
+/* ⚠️ 禁用态的强调色按钮要**褪回普通按钮的样子**：底色还留着强调色的话，它看起来
+   仍然是"能按的"，只是字淡了——而按下去什么都不会发生。第一次撞见它的是 Slidev
+   面板里那颗「检测中…」（`ui/SlidevPanel.tsx`）。字色由上面的 `.btn:disabled` 管。 */
+.btn-primary:disabled,
+.btn-danger:disabled {
+  border-color: var(--border);
+  background: var(--bg-raised);
 }

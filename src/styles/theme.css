@@ -1,18 +1,30 @@
 /**
- * 外观的三条轴。
- *
- * 组织形式是**两层相乘**，不是三选一：
+ * 外观的两条轴，**相乘**。
  *
  *   [data-ui-style="…"]  定**形状**：圆角、间距、控件比例、字体栈、阴影
  *   [data-ui-mode="…"]   定**颜色**：前景/背景/边框/强调色
- *   [data-doc-theme="…"] 定**正文**：只作用于 .editor-mount 里面
  *
- * ⚠️ 写新风格时**别把颜色写进 style 那一段**。颜色一旦在 style 里写死，
+ * 两条轴都作用于**整个应用外壳**，二者相乘就是 7 风格 × 2 模式 = 14 种外观，
+ * 每一种都必须是能看的（用户 2026-09-23 点着名要的就是这个：
+ * 「ghub(light&dark) yaru(light&dark) plasma(light&dark) adwaita(light&dark)
+ * macos(light&dark) windows(light&dark)」）。
+ *
+ * ⚠️ **写新风格时别把颜色写进 style 那一段**。颜色一旦在 style 里写死，
  * 这个风格就没法配暗色了——而"我要 macOS 风格 + 暗色"是必然会出现的需求。
  * 反过来也一样：mode 那一段只管颜色，不许改圆角和行为性尺寸。
+ * 确有识别色的风格（GitHub 的冷灰蓝边框、Yaru 的橙）写成
+ * `[data-ui-style="x"][data-ui-mode="y"]` 这种**两属性**选择器，
+ * 放在最后那一段——它比单属性选择器更具体，稳定压过上面两段。
+ *
+ * ⛔ **文档主题不在这条链上，一个变量都不许经这里中转。**
+ * 之前有过一版：文档主题把配色写进 `--nota-bridge-*`，再由本节的颜色块
+ * `var(--nota-bridge-x, 默认值)` 消费——于是选一个浅色文档主题，侧栏、
+ * 菜单、插件栏跟着一起变亮，整个应用一半亮一半暗（用户截图报的 bug）。
+ * 那一整套桥接已拆干净。文档主题现在只作用在 `.editor-pane` 之下，
+ * 由 `doc-theme.ts` 强制限域，**结构性碰不到这里任何一个变量**。
  *
  * 加一条新轴上的新值时，要改的地方：本文件、`src-tauri/src/settings.rs` 的枚举、
- * `docs/04-ui-map.md` 的外观一节。三处缺一不可。
+ * `src/styles/applyTheme.ts` 的探测表、`docs/04-ui-map.md` 的外观一节。四处缺一不可。
  */
 
 /* ── 基础：与风格无关的公共量 ─────────────────────────────────────────── */
@@ -20,10 +32,25 @@
 :root {
   --ui-font-size: 15px;
 
+  /* ⛔ **界面字体里不许出现衬线**（用户 2026-09-24 的原话：「绝对不要用衬线
+   * 字体做UI字体」）。这条是硬规矩，`tools/doc-sync-check.sh` 会查：
+   * `src/styles/` 下（`themes/` 除外）任何 `font-family` 只要出现
+   * `serif` 而不带 `sans-`，就算 FAIL。
+   *
+   * ⚠️ 改这一条时**别把 `sans-serif` 那个兜底删掉**：真机上第一个能用的字体
+   * 往往不在我们这张表里，兜底就是最后一个能救场的；而写 `serif` 兜底等于
+   * "字体没装就悄悄给用户换成宋体"。
+   * ⚠️ 中文那几项**必须是黑体**（Noto Sans / Source Han Sans / PingFang SC /
+   * Microsoft YaHei）——上一条规矩漏掉中文时最容易翻车的就是这里。 */
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans CJK SC",
     "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas,
     "Noto Sans Mono CJK SC", monospace;
+  /* 文档正文字体。**归文档主题管**——这里给的是"无主题"时的中性值。
+     任何一套文档主题都会在自己的作用域里覆盖它（见 `styles/themes/*.css`）。
+     ⚠️ 这一条**可以是衬线**（纸感是文档的事，不是界面的事），但它只有一个
+     合法去处：`.editor-pane` 之下的正文。界面里任何地方引它都算越界——
+     2026-09-24 就抓到一个（工具栏那个斜体字形，见 `bars.css`）。 */
   --font-doc: "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman",
     "Songti SC", serif;
 
@@ -33,36 +60,66 @@
   --dock-width: 260px;
   --toolbar-height: 38px;
   --statusbar-height: 26px;
+
+  /* 弹层（菜单、子菜单、上下文菜单）的公共量。
+     ⚠️ 这三条**与风格无关**——它们是"弹出"这件事本身的性质，不是某个
+     风格的长相。所以既不归轴一（形状）也不归轴二（颜色），放这儿。 */
+  --duration-fast: 120ms;
+  /* 快出慢收的那条曲线（VMark 用的也是它）。**别换成 ease**——
+     ease 起步有一下明显的加速，短距离的弹出会"抖"一下。 */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* 弹层的层级。**只有一处定义**：菜单、子菜单、将来的右键菜单都引它，
+     不然"右键菜单被下拉菜单盖住"这类问题会变成逐个比数字。 */
+  --z-popup: 40;
 }
 
 /* ── 轴二：明暗（任何风格下都成立）────────────────────────────────────── */
 
 :root,
 [data-ui-mode="light"] {
-  /* ⚠️ 每个颜色都写成 `var(--nota-bridge-X, 默认值)` 的形状。
-     有 Typora 主题时桥接值接管（末尾那一节），没有时用逗号后面这个默认值。
-     **别把默认值删掉**——`--nota-bridge-*` 平时根本没定义，删了就全白。 */
-  --bg: var(--nota-bridge-bg, #ffffff);
-  --bg-subtle: var(--nota-bridge-sidebar, #f6f7f9);
-  --bg-raised: var(--nota-bridge-bg, #ffffff);
-  --bg-hover: var(--nota-bridge-hover, rgba(0, 0, 0, 0.045));
-  --bg-active: var(--nota-bridge-active, rgba(0, 0, 0, 0.075));
-  --fg: var(--nota-bridge-fg, #1d1d1f);
-  --fg-muted: var(--nota-bridge-muted, #6b6f76);
+  --bg: #ffffff;
+  /* ── 2026-09-24：浅色那套调"轻快" ──
+   * 用户的活：「默认风格可以改的轻快一点。」
+   * 动的只有三处，都是"看着沉"的来源，**不是**重画一套配色：
+   *   ① `--bg-subtle` 从 #f6f7f9 挪到 #f7f9fc —— 工具栏/状态栏那几条横条的底
+   *      色比正文还灰，整条看着像凹进去的。
+   *   ② `--border` 从 0.11 压到 0.08 —— 满屏 1px 的线是"沉"的主要来源，
+   *      淡一档之后分层还在，压迫感没了。
+   *   ③ `--accent` 从 #2a5e9e 提到 #2f6fd0 —— 原来那个是深海军蓝，
+   *      做控件色太重；换亮一档之后配白字仍有 4.9:1（AA 门槛 4.5）。
+   * ⚠️ 别再往下压 `--border`：低于 0.06 在 100% 缩放的普通屏上就看不见了，
+   * "看不清边界"比"有点沉"更难用。 */
+  --bg-subtle: #f7f9fc;
+  --bg-raised: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.045);
+  --bg-active: rgba(0, 0, 0, 0.075);
+  --fg: #1d1d1f;
+  --fg-muted: #6b6f76;
   --fg-faint: #9aa0a6;
-  --border: var(--nota-bridge-border, rgba(0, 0, 0, 0.11));
-  --border-strong: rgba(0, 0, 0, 0.2);
-  --accent: #2a5e9e;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.18);
+  --accent: #2f6fd0;
   --accent-fg: #ffffff;
+  /* 查找命中。⚠️ 单独两个变量而不是复用 `--accent`：高亮要盖在**正文**
+     上（正文有自己的底色和字色），而 `--accent` 是控件色——两者在暗色
+     主题下的合适值差得很远。当前那一个更重，因为它是"回车就会替换掉的那个"。 */
+  --find-hit: #ffe9a8;
+  --find-current: #ffc76b;
   --danger: #c0392b;
   --warn: #b7791f;
   --success: #2f855a;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  --doc-bg: var(--nota-bridge-bg, #ffffff);
-  --doc-fg: var(--nota-bridge-fg, #23272e);
+  /* 弹层阴影：**两层**，环境光那层铺大、投影那层收紧。
+     一层阴影要么糊（全靠大模糊）要么硬（全靠小偏移），两层才像浮起来。
+     ⚠️ 明暗各一份——深色壳上直接用浅色那份会**看不见**（黑底上的黑阴影）。 */
+  --popup-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+  /* 无文档主题时的正文配色。有主题时被主题在自己的作用域里盖掉。 */
+  --doc-bg: #ffffff;
+  --doc-fg: #23272e;
 
   /* 代码高亮的 token 色。**归 mode 管，不归 style 管**——底色和前景是一套的，
-     只换一半会得到一个"浅底配浅字"读不了的代码块。 */
+     只换一半会得到一个"浅底配浅字"读不了的代码块。
+     （文档主题会自带一整套覆盖它，因为它连底色一起换。） */
   --code-comment: #6a737d;
   --code-keyword: #cf222e;
   --code-string: #0a3069;
@@ -73,24 +130,39 @@
 }
 
 [data-ui-mode="dark"] {
-  --bg: var(--nota-bridge-bg, #1b1d21);
-  --bg-subtle: var(--nota-bridge-sidebar, #23262b);
-  --bg-raised: var(--nota-bridge-bg, #2a2e34);
-  --bg-hover: var(--nota-bridge-hover, rgba(255, 255, 255, 0.06));
-  --bg-active: var(--nota-bridge-active, rgba(255, 255, 255, 0.1));
-  --fg: var(--nota-bridge-fg, #e6e8eb);
-  --fg-muted: var(--nota-bridge-muted, #a3a9b3);
+  /* ── 2026-09-24：深色那套同一件事 ──
+   * 深色里的"沉"不是线，是**底色太黑**：#1b1d21 已经接近纯黑，面板之间
+   * 只能靠亮线分层，而亮线一多就花。三处一起挪亮一档：底色、次底色、
+   * 抬起来那层，各 +3~5 个亮度，线反而可以退回去（0.12 → 0.10）。
+   * ⚠️ 别挪到 #2a2e34 以上：再上去就和 `--bg-raised` 撞了，
+   * "浮起来"的那一层看不出来。 */
+  --bg: #1e2126;
+  --bg-subtle: #262a31;
+  --bg-raised: #2d323a;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --fg: #e6e8eb;
+  --fg-muted: #a3a9b3;
   --fg-faint: #767d88;
-  --border: var(--nota-bridge-border, rgba(255, 255, 255, 0.12));
+  --border: rgba(255, 255, 255, 0.1);
   --border-strong: rgba(255, 255, 255, 0.22);
   --accent: #5b9bd5;
   --accent-fg: #10131a;
+  /* 同上的暗色一份。⚠️ 暗色下不能拿亮色那两个直接用：亮黄底配浅灰字
+     是完全读不出来的。 */
+  --find-hit: #55491c;
+  --find-current: #8a6d1f;
   --danger: #e57373;
   --warn: #e0b04a;
   --success: #6ec08a;
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
-  --doc-bg: var(--nota-bridge-bg, #1b1d21);
-  --doc-fg: var(--nota-bridge-fg, #dfe3e8);
+  /* 深色那份。⚠️ **比浅色那份更重**：深色壳上阴影本来就吃不住，
+     不加重的话弹层和背景糊成一片，"浮起来"的感觉全没了。 */
+  --popup-shadow: 0 10px 34px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0, 0, 0, 0.45);
+  /* ⚠️ 跟着 `--bg` 走（同一次"轻快"调整）：这两条是**无文档主题**时正文的
+   * 底与字，跟外壳差一档的话，编辑区会在深色下显出一个色块边界。 */
+  --doc-bg: #1e2126;
+  --doc-fg: #dfe3e8;
 
   /* 同上的暗色一份。⚠️ 暗色下**不能靠调透明度**去压暗注释——
      代码块底色本来就和页面底色接近，透明度一变就成了糊的。 */
@@ -105,15 +177,42 @@
 
 /* ── 轴一：界面风格（只定形状，不定颜色）──────────────────────────────── */
 
-/* Adwaita（GNOME 原生）：中等圆角、紧凑、无明显阴影 */
+/* Adwaita（GNOME 原生）：中等圆角、紧凑、无明显阴影
+ *
+ * ⚠️ **这一档 2026-09-24 按用户的「轻快一点」调过**，比 GNOME 自己那一版松：
+ * 圆角各 +1~2px（4/6/10 → 5/8/12）、控件高 30 → 32、间距 8 → 10。
+ *
+ * 为什么调的是它：**`ui_style = auto` 在这台机器上就落在这里**（GNOME），
+ * 也就是"默认长相"就是它（`applyTheme.ts` 里探不出来时兜底的也是它）。
+ * 用户要的是默认那一档轻快，不是要新加一个风格——加风格的话，
+ * **已经存过 auto 的人一点变化都看不到**，等于没改。
+ *
+ * ⚠️ 所以这里和 GNOME 的真实取值**不再逐值相同**。原值是
+ * `--radius-sm: 4px` / `--radius: 6px` / `--radius-lg: 10px` /
+ * `--control-height: 30px` / `--spacing: 8px`（git 历史里也在）。
+ * 改回去之前先想清楚：默认那一档是给"没选过风格的人"看的，
+ * 不是给 GNOME 用户对照用的。 */
 [data-ui-style="adwaita"] {
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --control-height: 32px;
+  --spacing: 10px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 500;
+}
+
+/* GitHub：紧凑、直角感强、无阴影，靠 1px 边框分层 */
+[data-ui-style="ghub"] {
   --radius-sm: 4px;
   --radius: 6px;
-  --radius-lg: 10px;
-  --control-height: 30px;
+  --radius-lg: 12px;
+  --control-height: 28px;
   --spacing: 8px;
   --toolbar-shadow: none;
   --btn-font-weight: 500;
+  --font-ui: -apple-system, "Segoe UI", "Noto Sans", "Noto Sans CJK SC", Helvetica,
+    Arial, sans-serif;
 }
 
 /* macOS：大圆角、控件偏矮、层次靠阴影 */
@@ -129,10 +228,37 @@
     "Noto Sans CJK SC", sans-serif;
 }
 
-/* Yaru（Ubuntu）：圆角更大、控件更高、强调色偏橙（颜色部分在 mode 那段之外
-   单独覆盖 accent —— 这是**允许的例外**，因为 Yaru 的橙是它的识别特征，
-   不该随明暗换色相，只换明度） */
-[data-ui-style="yaru"] {
+/* KDE Plasma（Breeze）：方正偏圆、控件偏高、有淡淡的一道分隔线 */
+[data-ui-style="plasma"] {
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --control-height: 30px;
+  --spacing: 8px;
+  --toolbar-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  --btn-font-weight: 500;
+  --font-ui: "Noto Sans", "Noto Sans CJK SC", "Source Han Sans SC", system-ui,
+    sans-serif;
+}
+
+/* Windows 11：小圆角、直角感、无阴影 */
+[data-ui-style="windows"] {
+  --radius-sm: 3px;
+  --radius: 5px;
+  --radius-lg: 8px;
+  --control-height: 30px;
+  --spacing: 7px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 400;
+  --font-ui: "Segoe UI Variable", "Segoe UI", system-ui, "Noto Sans CJK SC",
+    "Microsoft YaHei", sans-serif;
+}
+
+/* Yaru（Ubuntu）：圆角更大、控件更高。
+   ⚠️ `yaru-blue` **共用这一块**——它就是同一套设计语言，只换强调色。
+   复制一份形状的话，以后改圆角就会只改到其中一半。 */
+[data-ui-style="yaru"],
+[data-ui-style="yaru-blue"] {
   --radius-sm: 6px;
   --radius: 9px;
   --radius-lg: 14px;
@@ -142,46 +268,127 @@
   --btn-font-weight: 500;
 }
 
-[data-ui-style="windows"] {
-  --radius-sm: 3px;
-  --radius: 5px;
-  --radius-lg: 8px;
-  --control-height: 30px;
-  --spacing: 7px;
-  --toolbar-shadow: none;
-  --btn-font-weight: 400;
-}
-
-/* ── 轴三 → 外壳的桥接（Typora 主题变量）──────────────────────────────────
+/* ── 轴一 × 轴二：确有识别色的风格 ────────────────────────────────────────
  *
- * Typora 主题把配色定义成一组自定义属性（`--bg-color`、`--text-color`…），
- * 定义在 `:root` 上。`styles/typora-theme.ts` 在改造主题时会把这些**变量**
- * 提升到全局（其余规则一律收拢进 `#write`），于是这里就能消费它们——
- * 换主题时侧栏、边框、正文底色跟着一起变，而不是只有正文变、外壳还是原来那套。
+ * 只有"这个风格长什么样一眼能认出来"的那些才写在这里。判据是**色相**
+ * 而不是明暗：Yaru 的橙、GitHub 的冷灰蓝、Plasma 的天蓝都是品牌的一部分，
+ * 换成我们那套中性蓝就等于把这个风格抹平了。
  *
- * ⚠️ **只桥接"成对"的变量。** 背景和前景都是同一套主题挑的，对比度天然成立；
- * 而 `--accent`（强调色）**故意不桥接**：Typora 拿它当链接色，我们拿它当按钮底色，
- * 用法不同。硬桥过来的后果是"浅底配浅字"这种读不了的组合，而且没有任何
- * 纯 CSS 手段能在运行时判对比度（`color-contrast()` 至今没有实现）。
- * 强调色留在我们自己的明暗两套里，是更安全的选择。
+ * ⚠️ 每一条都必须**明暗各写一份**。只写一份的后果是"那个风格配另一半
+ * 就是个没法看的组合"——而这 14 格是承诺，不是尽力而为。
  *
- * ⚠️ `--nota-bridge-*` 平时**根本不定义**——只有 `html[data-doc-theme]` 存在时才有值。
- * 上面那两个颜色块里的 `var(--某桥接值, 默认值)` 就是靠这一点在两种状态间切换的。
+ * ⚠️ 强调色要连 `--accent-fg`（它上面的字）一起给。浅色强调色配白字
+ * 会读不出来，那是这 14 格里最容易踩的一脚。
  */
-html[data-doc-theme] {
-  --nota-bridge-bg: var(--bg-color);
-  --nota-bridge-fg: var(--text-color);
-  --nota-bridge-sidebar: var(--side-bar-bg-color);
-  --nota-bridge-muted: var(--control-text-color);
-  --nota-bridge-border: var(--window-border);
-  --nota-bridge-hover: var(--item-hover-bg-color);
-  --nota-bridge-active: var(--active-file-bg-color);
+
+/* Adwaita：GNOME 蓝。暗色下换成亮一档的 #78aeed，字转深色。 */
+[data-ui-style="adwaita"][data-ui-mode="light"] {
+  --accent: #3584e4;
+  --accent-fg: #ffffff;
+}
+[data-ui-style="adwaita"][data-ui-mode="dark"] {
+  --accent: #78aeed;
+  --accent-fg: #10131a;
 }
 
-/* 选中文字的底色。**故意不给 fallback**：`var()` 取不到值时整条声明会失效，
-   于是浏览器默认的选中色保留下来。给个 `transparent` 反而会让选中**看不见**。 */
-html[data-doc-theme] .editor-mount .ProseMirror::selection,
-html[data-doc-theme] .editor-mount .ProseMirror *::selection {
-  background: var(--select-text-bg-color);
-  color: var(--select-text-font-color);
+/* GitHub：冷灰蓝的边框是它的招牌，连底色一起换（它的暗色画布比我们的更深）。 */
+[data-ui-style="ghub"][data-ui-mode="light"] {
+  --bg-subtle: #f6f8fa;
+  --border: #d0d7de;
+  --border-strong: #afb8c1;
+  --bg-hover: rgba(208, 215, 222, 0.4);
+  --bg-active: rgba(208, 215, 222, 0.65);
+  --accent: #0969da;
+  --accent-fg: #ffffff;
+}
+[data-ui-style="ghub"][data-ui-mode="dark"] {
+  --bg: #0d1117;
+  --bg-subtle: #161b22;
+  --bg-raised: #1c2128;
+  --bg-hover: rgba(177, 186, 196, 0.12);
+  --bg-active: rgba(177, 186, 196, 0.2);
+  --fg: #c9d1d9;
+  --fg-muted: #8b949e;
+  --border: #30363d;
+  --border-strong: #484f58;
+  --accent: #2f81f7;
+  --accent-fg: #ffffff;
+  --shadow: 0 3px 14px rgba(0, 0, 0, 0.6);
+  --doc-bg: #0d1117;
+  --doc-fg: #c9d1d9;
+}
+
+/* macOS：系统蓝。浅色那份的次要底色用 Apple 的 #f5f5f7。 */
+[data-ui-style="macos"][data-ui-mode="light"] {
+  --bg-subtle: #f5f5f7;
+  --border: rgba(0, 0, 0, 0.1);
+  --accent: #007aff;
+  --accent-fg: #ffffff;
+}
+[data-ui-style="macos"][data-ui-mode="dark"] {
+  --bg: #1e1e20;
+  --bg-subtle: #28282a;
+  --bg-raised: #2f2f31;
+  --accent: #0a84ff;
+  --accent-fg: #ffffff;
+}
+
+/* Plasma：Breeze 的天蓝。⚠️ #3daee9 直接配白字读不出来（对比度 2.2:1），
+   所以浅色那份压深一档到 #1d7fb8，暗色那份才用原来的天蓝、字转深色。 */
+[data-ui-style="plasma"][data-ui-mode="light"] {
+  --bg-subtle: #eff0f1;
+  --border: rgba(0, 0, 0, 0.14);
+  --accent: #1d7fb8;
+  --accent-fg: #ffffff;
+}
+[data-ui-style="plasma"][data-ui-mode="dark"] {
+  --bg: #1b1e20;
+  --bg-subtle: #232629;
+  --bg-raised: #2a2e31;
+  --accent: #3daee9;
+  --accent-fg: #08202e;
+}
+
+/* Windows 11：系统蓝。 */
+[data-ui-style="windows"][data-ui-mode="light"] {
+  --accent: #0067c0;
+  --accent-fg: #ffffff;
+}
+[data-ui-style="windows"][data-ui-mode="dark"] {
+  --accent: #4cc2ff;
+  --accent-fg: #06202e;
+}
+
+/* Yaru：Ubuntu 的橙。⚠️ 白字配 #e95420 的对比度只有 3.1:1，是这 14 格里
+   最低的一格，但**这就是 Ubuntu 自己的用法**（它的默认按钮就这么画），
+   改了就不是 Yaru 了。留着并在 `docs/04` 里记一笔。 */
+[data-ui-style="yaru"][data-ui-mode="light"] {
+  --bg-subtle: #f7f7f7;
+  --accent: #e95420;
+  --accent-fg: #ffffff;
+}
+[data-ui-style="yaru"][data-ui-mode="dark"] {
+  --bg: #2d2d2d;
+  --bg-subtle: #353535;
+  --bg-raised: #3d3d3d;
+  --accent: #f3732e;
+  --accent-fg: #24100a;
+}
+
+/* Yaru 蓝：**同一套 Yaru 的蓝色档**（Ubuntu 的 `index.theme` 里写着
+   `X-Yaru-Accent-Color=#0073E5`，Yaru 的调色板里它就是 blue-700）。
+   ⚠️ 这**不是我们配的色**，是从 Ubuntu 那边抄来的；暗色那份用的是它
+   给对比度优化的那一档 `#2a95ff`（`#0073e5` 放在 #2d2d2d 上偏沉）。
+   形状跟 Yaru 完全一样，所以这里只覆盖颜色那几个变量。 */
+[data-ui-style="yaru-blue"][data-ui-mode="light"] {
+  --bg-subtle: #f7f7f7;
+  --accent: #0073e5;
+  --accent-fg: #ffffff;
+}
+[data-ui-style="yaru-blue"][data-ui-mode="dark"] {
+  --bg: #2d2d2d;
+  --bg-subtle: #353535;
+  --bg-raised: #3d3d3d;
+  --accent: #2a95ff;
+  --accent-fg: #06203a;
 }

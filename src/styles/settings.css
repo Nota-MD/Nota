@@ -1,0 +1,472 @@
+/**
+ * 偏好设置那个框的样式。
+ *
+ * # 版式
+ *
+ * **左栏分节 + 右栏内容**，照 VMark 的偏好面板（用户 2026-09-23 的要求：
+ * 「你将那个偏好列表搞得和 Vmark 一样的布局」）。右栏里一**行** = 左边
+ * 标签（可带一行小字）+ 右边控件，控件靠右定宽；若干行归一组。
+ *
+ * # 为什么单独一个文件
+ *
+ * 它**不是**从 `app.css` 按行数就近砍下来的（那是 1000 行规矩的反面教材）。
+ * 切法是按职责：`app.css` 管应用骨架，这个框是一个**自成一体的覆盖层**——
+ * 它有自己的分节、自己的行、自己的选择控件，一条都不跟骨架共用。
+ *
+ * ⚠️ 加载顺序：本文件在 `app.css` **之后**（见 `main.tsx`）。遮罩
+ * `.confirm-backdrop` 的底子还在 `app.css` 里（确认框用同一层），
+ * 本文件只做宽度和内容。⚠️ 框体**不再复用** `.confirm-dialog` 了——
+ * 那套底子是给 320–440px 的窄框写的（居中一堆按钮），
+ * 而这个框要撑到 880px 并分成两栏，共用只会让两边都别扭。
+ *
+ * ⚠️ 颜色尺寸一律走变量（见 `theme.css`），**一个写死的色值都不许有**——
+ * 写死一个就少支持一种"风格 × 明暗"的组合，而这个框恰恰是用户用来
+ * **挑**那 12 种组合的地方。
+ */
+
+/* ── 框体 ──────────────────────────────────────────────────────────────── */
+
+.settings-shell {
+  display: flex;
+  width: min(880px, 92vw);
+  /* 高度**给死**，不让它随内容长短跳：切分节时框忽高忽低，眼睛得重新找位置。
+     内容超出由右栏自己滚（见 `.settings-content`）。 */
+  height: min(620px, 86vh);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: var(--popup-shadow);
+  overflow: hidden;
+  outline: none;
+}
+
+/* ── 左栏 ──────────────────────────────────────────────────────────────── */
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 208px;
+  /* 一条竖分隔线，而不是给右栏加边框：这样右栏的内容可以贴着边滚。 */
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.settings-nav-search {
+  padding: 12px 10px 6px;
+}
+
+.stg-search-wrap {
+  position: relative;
+  display: block;
+}
+
+.stg-search {
+  width: 100%;
+  height: var(--control-height);
+  /* 右边留一颗「×」的位子——它压在输入框上，所以得把字挤进来。 */
+  padding: 0 28px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.92em;
+}
+
+/* ⚠️ WebKit 自带那颗「×」必须藏掉：它点了不派发 `input`，
+   于是 React 的 `value` 不会变（见 `primitives.tsx::SearchField`）。 */
+.stg-search::-webkit-search-cancel-button {
+  display: none;
+}
+
+.stg-search::placeholder {
+  color: var(--fg-faint);
+}
+
+.stg-search:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.stg-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: 1.05em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stg-search-clear:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.stg-search-clear:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.settings-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 10px 10px;
+}
+
+.stg-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 0.94em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stg-nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* 选中的那一节。⚠️ 用 `--bg-active` + `--fg`，**不用**强调色当底色：
+   这个仓库里"强调色底"那条词表是留给危险/主操作按钮的（`.btn-primary`），
+   侧栏这种"当前在哪一节"的地方一律是 `--bg-active`（同 `.btn-on`、
+   `.sidebar-tab-active`）。 */
+.stg-nav-item[data-active="true"] {
+  background: var(--bg-active);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.stg-nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.stg-nav-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  opacity: 0.85;
+}
+
+.settings-nav-foot {
+  padding: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.settings-nav-foot .btn {
+  width: 100%;
+}
+
+/* ── 右栏 ──────────────────────────────────────────────────────────────── */
+
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+}
+
+/* 组。⚠️ 下面那条 `:has()` 是**搜索的一部分**：一行都没留下时整组收掉
+   （判据见 `primitives.tsx` 顶上那段）。非搜索态下它恒不命中——
+   每一组至少有一行。 */
+.stg-group {
+  margin-bottom: 26px;
+}
+
+.stg-group:last-child {
+  margin-bottom: 0;
+}
+
+.stg-group:not(:has(.stg-row)) {
+  display: none;
+}
+
+.stg-group-title {
+  margin: 0 0 4px;
+  font-size: 0.98em;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.stg-note {
+  margin: 8px 0 0;
+  font-size: 0.85em;
+  line-height: 1.55;
+  color: var(--fg-muted);
+}
+
+/* ── 一行 ──────────────────────────────────────────────────────────────── */
+
+.stg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.stg-row:last-child {
+  border-bottom: 0;
+}
+
+/* 左边：标签 + 一行小字。**让它能被压扁**——没有 `min-width: 0` 的话，
+   一行长说明会把右边的控件挤出框外（flex 项的默认最小宽度是内容的宽度）。 */
+.stg-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stg-row-label {
+  font-size: 0.94em;
+  color: var(--fg);
+}
+
+.stg-row-desc {
+  font-size: 0.84em;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.stg-row-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stg-value {
+  font-size: 0.92em;
+  color: var(--fg-muted);
+}
+
+/* ── 控件 ──────────────────────────────────────────────────────────────── */
+
+/* 下拉。⚠️ 外层那个 span 必须存在：`appearance: none` 去掉了原生箭头，
+   而 `<select>` 上挂不住可靠的伪元素，所以箭头画在包裹层上。 */
+.stg-select {
+  position: relative;
+  display: inline-flex;
+}
+
+.stg-select-native {
+  appearance: none;
+  min-width: 150px;
+  height: var(--control-height);
+  /* 右边留出箭头的位子。 */
+  padding: 0 26px 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.92em;
+  cursor: pointer;
+}
+
+.stg-select-native:hover {
+  background: var(--bg-hover);
+}
+
+.stg-select-native:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* 箭头用两层 border 转 45° 画出来（一条 V 形），**不用字符也不用图片**：
+   字符会跟着字体变形，图片会把颜色写死。 */
+.stg-select::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  margin-top: -4px;
+  border-right: 1.5px solid var(--fg-muted);
+  border-bottom: 1.5px solid var(--fg-muted);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* 开关：iOS 那种胶囊，36×20。 */
+.stg-switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg-active);
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
+}
+
+.stg-switch[aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.stg-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  transition: left var(--duration-fast) var(--ease-out);
+}
+
+.stg-switch[aria-checked="true"] .stg-switch-knob {
+  left: 18px;
+}
+
+.stg-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 滑杆 + 读数。读数定宽，数字变宽变窄时滑杆不抖。 */
+.stg-range {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stg-range input[type="range"] {
+  width: 170px;
+  accent-color: var(--accent);
+}
+
+.stg-range input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.stg-range-value {
+  /* `ch` 而不是 `px`：读数带 `px` 后缀，定宽要按**字符数**给才不会被截。 */
+  min-width: 5ch;
+  font-size: 0.88em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  text-align: right;
+}
+
+/* ── 明暗缩略图 ────────────────────────────────────────────────────────────
+ *
+ * 一张缩略图 = **一页缩小版的界面**：底色 + 一个「Aa」样本 + 一道强调色横杠。
+ * 光有两个色块的话，"浅色"和"深色"看着像两个按钮；画成一小页，它才读得出
+ * "选它之后应用长这样"。
+ *
+ * ⚠️ 里面的颜色**一个都不是写死的**：`.stg-swatch-page` 自带
+ * `data-ui-style` / `data-ui-mode`，`theme.css` 里那两段是裸属性选择器，
+ * 于是它取到的是**真正的那套 token**（连该风格的识别色都对）。
+ * 写死色值的话，换风格时缩略图就是唯一没跟着变的地方——而那正是用户
+ * 拿来做判断的东西。 */
+.stg-swatches {
+  display: flex;
+  gap: 10px;
+}
+
+.stg-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+}
+
+.stg-swatch:hover {
+  background: var(--bg-hover);
+}
+
+/* 选中的那张用**强调色描边**——比底色深浅可靠，深色壳上也看得见。 */
+.stg-swatch[data-active="true"] {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.stg-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stg-swatch-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 56px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.stg-swatch-ink {
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+.stg-swatch-rule {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.stg-swatch-name {
+  line-height: 1;
+}
+
+/* 快捷键的键帽。 */
+.stg-kbd {
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  white-space: nowrap;
+}

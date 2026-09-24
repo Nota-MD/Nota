@@ -409,6 +409,58 @@ mod tests {
         assert!(dbg.is_nil(), "`debug` 不该在 `Lua::new()` 里");
     }
 
+    /// ⚠️ **内置插件至少得能被 Lua 编译过去。**
+    ///
+    /// 为什么值得单独钉一条：`plugins/` 里的 Lua **只有应用启动那一刻才会被
+    /// 编译**，单元测试从来没碰过它们。所以那里写错一个字母，代价是"用户一开
+    /// 应用发现插件没了"，而我在提交前看不到任何红。
+    ///
+    /// ⚠️ **变量名不能写中文**：Lua 的标识符只认 `[A-Za-z_][A-Za-z0-9_]*`
+    ///（`lislalpha` 用的是 C 的 `isalpha`，而 `local 键 = 1` 里的 UTF-8 字节在
+    /// 任何 locale 下都不算字母），所以那是**语法错误**，整份插件加载失败。
+    /// 注释和字符串里的中文不受影响——只有**名字**不行。
+    ///
+    /// 这条用例就是替 Lua 把这句话说清楚：它自己报的是
+    /// `'<name>' expected near '<\233>'`，看到那句很难想到"是我用了中文变量名"。
+    #[test]
+    fn 内置插件都能被_lua_编译() {
+        let lua = 硬化的_lua().expect("沙箱该建得起来");
+        let mut 编译过几个 = 0;
+
+        for dir in crate::paths::builtin_plugins_dirs(None) {
+            let Ok(条目们) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for 条目 in 条目们.flatten() {
+                let 清单路径 = 条目.path().join("plugin.toml");
+                if !清单路径.is_file() {
+                    continue;
+                }
+
+                let m = crate::plugin::manifest::Manifest::load(&清单路径)
+                    .unwrap_or_else(|e| panic!("`{}` 读不出来：{e}", 清单路径.display()));
+                let 入口 = m.dir.join(&m.meta.entry);
+                let code = std::fs::read_to_string(&入口)
+                    .unwrap_or_else(|e| panic!("`{}` 读不出来：{e}", 入口.display()));
+
+                // `into_function()` = **只编译不执行**。我们要的正是这一层：
+                // 语法错在这里现形，而 `on_load` 那类要宿主环境的东西不掺进来。
+                lua.load(&code)
+                    .set_name(入口.to_string_lossy().as_ref())
+                    .into_function()
+                    .unwrap_or_else(|e| panic!("`{}` 编译不过：{e}", 入口.display()));
+
+                编译过几个 += 1;
+            }
+        }
+
+        assert!(
+            编译过几个 >= 2,
+            "一个内置插件都没扫到（扫到 {编译过几个} 个）——`plugins/` 是挪走了，\
+             还是 `builtin_plugins_dirs` 改了？测试要跟着改，别把这条删了"
+        );
+    }
+
     /// `插件标准库()` 本身不能含 `io`/`os`/`package`/`debug`。
     ///
     /// 前一条钉的是"结果"，这条钉的是"输入"——**两处都可能出错**：

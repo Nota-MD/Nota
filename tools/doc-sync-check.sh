@@ -4,15 +4,18 @@
 #
 # 规则与判据写在 docs/09-doc-sync-policy.md §3。**改这里之前先改那里。**
 #
-# 查五件事：
+# 查六件事：
 #   ① 行数上限   任何 .rs/.ts/.tsx/.lua/.css/.sh 不得 >= 1000 行
 #   ② 文档新鲜度 §2 映射表里的源文件改了、映射到的文档没跟
 #   ③ 引用存在性 代码/AGENTS.md 里 docs/NN-*.md 的引用必须指到真文件
 #   ④ 编号存在性 代码里「docs/07 第 N 项」与「BUG-N」的编号必须在 docs/07 里存在
 #   ⑤ 文件已登记 每个源文件都要在 AGENTS.md §2 或 docs/09 §2 里出现过
+#   ⑥ 界面无衬线 界面那几份 .css 与 index.html 里不许出现衬线字体栈
 #
-# 为什么用 mtime 而不是 git diff：**本仓库当前不是 git 仓库**，
-# `git status` 直接失败。mtime 是近似，拉取/检出/touch 都会让它误报——
+# 为什么用 mtime 而不是 git diff：原先是「本仓库不是 git 仓库」——**那句话已过期**
+# （2026-09-24 起仓库有提交了，`git status` 正常）。暂时仍用 mtime，理由与换法写在
+# docs/09-doc-sync-policy.md §3 的「② 用 mtime 而不是 git」那一节，**改这里之前先改那里**。
+# mtime 是近似，拉取/检出/touch 都会让它误报——
 # 误报了别改脚本消掉，要么真去更新文档，要么往 docs/07 §4 记一笔。
 #
 # 退出码：0 = 全过；1 = 有 FAIL；0 但打 WARN = 过但有可疑项。
@@ -59,40 +62,97 @@ PAIRS=(
   "src-tauri/src/commands/workspace.rs            02,04"
   "src-tauri/src/commands/settings.rs             02,04"
   "src-tauri/src/commands/plugin.rs               02,04"
+  "src-tauri/src/commands/menu.rs                 02,04"
+  "src-tauri/src/slidev.rs 02,06,07"
+  "src-tauri/src/commands/slidev.rs 01,02,04"
   "src-tauri/src/commands/theme.rs                02,04,10"
+  "src-tauri/src/commands/export.rs            02,04,05"
+  "src-tauri/src/native_menu.rs                   01,02,04"
   "src-tauri/src/themes.rs                        02,03,08"
   "src-tauri/src/plugin/mod.rs                    01,02,11"
   "src-tauri/src/plugin/manifest.rs               03,11,12"
+  "src-tauri/src/slidev_probe.rs                  02,06,07"
   "src-tauri/src/lua/mod.rs                       01,12"
   "src-tauri/src/lua/api/mod.rs                   12,13"
   "src-tauri/src/lua/api/document.rs              13,05"
   "src-tauri/src/lua/api/fs.rs                    13"
   "src-tauri/src/lua/api/git.rs                   13,11"
   "src-tauri/src/lua/api/ui.rs                    13,04"
+  "src-tauri/src/lua/api/http.rs                  13,12,02,06"
+  "src-tauri/src/lua/api/settings.rs              13,12,07"
   # 前端
   "src/main.tsx                                   06"
   "src/App.tsx                                    02,04"
   "src/bridge/ipc.ts                              02,05"
   "src/editor/create.ts                           05"
+  "src/editor/atx.ts                              05,03,10"
+  "src/editor/lax-heading.ts                      05,03,07"
+  "src/editor/command-state.ts                    05,04"
+  "src/editor/insert.ts                           05"
+  "src/editor/find.ts                             05,04"
+  "src/editor/writing-modes.ts                    05,04"
+  "src/editor/image-attrs.ts                      05,04"
+  "src/editor/math-macros.ts                      05,10,04"
+  "src/editor/source.ts                           05,04,10"
   "src/editor/instant-render.ts                   05,04,10"
   "src/editor/task-list.ts                        05,04,10"
   "src/editor/code-block.ts                       05,04,10"
   "src/ui/EditorPane.tsx                          05"
+  "src/ui/FormatBar.tsx                           04,05"
+  "src/ui/Icon.tsx                                02,04"
+  "src/ui/FindBar.tsx                             04,05"
+  "src/ui/PromptDialog.tsx                        04,02"
+  "src/ui/useMenus.ts                             04,02"
+  "src/ui/useDialogs.ts                           04,02"
   "src/ui/Sidebar.tsx                             04"
   "src/ui/MenuBar.tsx                             04,10"
+  "src/ui/TopBar.tsx                              04,02"
+  "src/ui/TabBar.tsx                              04,02"
+  "src/ui/MenuPopup.tsx                           04"
+  "src/ui/useMenuRovingFocus.ts                   04"
+  "src/ui/useSlidev.ts 02,04,10"
+  "src/ui/useExport.ts 02,04,10"
+  "src/ui/useDocTheme.ts 02,04,10"
+  "src/ui/useEditorCommands.ts 02,04,05"
+  "src/editor/export.ts 05,10"
+  "src/ui/nativeMenu.ts                           04"
+  "src/ui/accel.ts                                04,05"
   "src/ui/commands.ts                             04,05"
   "src/ui/PluginDock.tsx                          04,10,02"
+  "src/ui/PanelBody.tsx                           04,11"
+  "src/ui/panel-nodes.ts                          11,13"
+  "src/ui/pluginMenus.ts                          04,13"
+  "src/ui/plugin-prompt.ts                        04,13"
+  "src/ui/usePlugins.ts                           02,04"
+  "src/ui/SlidevPanel.tsx                         04,02"
   "src/ui/ConfirmDialog.tsx                       04,02"
   "src/ui/Home.tsx                                04,10"
   "src/ui/StatusBar.tsx                           04"
   "src/ui/Toasts.tsx                              04"
   "src/ui/ErrorBoundary.tsx                       04"
+  "src/ui/settings/SettingsDialog.tsx             04"
+  "src/ui/settings/primitives.tsx                 04"
+  "src/ui/settings/panes.tsx                      04"
+  "src/ui/settings/ShortcutsPane.tsx              04"
   "src/ui/outline.ts                              05"
+  "src/ui/view-modes.ts                           04"
   "src/styles/theme.css                           04,08"
+  "src/styles/icons.css                           04"
   "src/styles/applyTheme.ts                       04"
-  "src/styles/typora-theme.ts                     04,05,08"
+  "src/styles/doc-theme.ts                        04,05,08"
+  "src/styles/settings.css                        04"
   "src/styles/app.css                             04"
+  "src/styles/sidebar.css                         04"
   "src/styles/editor.css                          04"
+  "src/styles/bars.css                            04"
+  "src/styles/dock.css                            04"
+  "src/styles/slidev.css                          04"
+  "src/styles/themes/paper.css                    04"
+  "src/styles/themes/blueprint.css                04"
+  "src/styles/themes/mist.css                     04"
+  "src/styles/themes/print.css                    04"
+  "src/styles/themes/ink.css                      04"
+  "src/styles/themes/pine.css                     04"
   # 插件与工程
   "plugins/git/plugin.toml                        11"
   "plugins/ai/plugin.toml                         11"
@@ -220,6 +280,66 @@ while IFS= read -r f; do
   fi
 done < <(find src-tauri/src src -type f \( -name '*.rs' -o -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) 2>/dev/null | sort)
 [ "$UNREG" -eq 0 ] && ok "每个源文件都能在文档里找到"
+
+# ── ⑥ 界面字体里不许出现衬线 ─────────────────────────────────────────────
+# 用户 2026-09-24：「绝对不要用衬线字体做UI字体。」——原话就是这么绝对。
+#
+# 判据（是启发式，别当编译器）：`src/styles/` 下 `*.css`（**不含 `themes/`
+# 那个子目录**）与 `index.html`，只要出现 `serif` 而不带 `sans-`，就算 FAIL。
+#   · `themes/` 是**文档**主题，衬线是它的正当选择（`paper`、`pine` 要的就是纸感）；
+#   · 注释行（`*` / `/*` / `//` 开头）跳过——解释这条规矩的文字里必然会
+#     出现 `serif` 这个词，不跳过的话这条检查会被自己的说明文字绊倒；
+#   · `sans-serif` 里含 `serif`，所以要一起判，不能只 grep `serif`；
+#   · **定义 `--font-doc` 的那一整条声明**跳过（它折了两行，见下面的 awk）。
+#
+# ⚠️ 这条只管字面上的字体栈。`font-family: var(--font-doc)` 这种**间接**引用
+# 查不出来（`editor.css` 那一处是正当的：那是正文）。间接的越界靠人看——
+# 2026-09-24 就漏过一次：工具栏的斜体字形引了 `--font-doc`，
+# 于是界面上的一个字母是宋体画的。
+head_ "⑥ 界面字体里有没有衬线"
+
+# ⚠️ **`--font-doc` 那条声明是折成两行的**，所以"把含 `--font-doc` 的那一行免掉"
+# 这种做法会漏：第二行 `"Songti SC", serif;` 上根本没有 `--font-doc`，
+# 于是**定义文档字体的那一行自己**被报成越界（2026-09-24 真发生了）。
+# 这里用 awk 从含 `--font-doc` 那行起、跳过整条声明（到以 `;` 收尾那行为止）。
+# 输出保留 `文件:行号:` 前缀，报错时对得上原文。
+scan_serif() {
+  awk '
+    skip { if ($0 ~ /;/) skip = 0; next }
+    /--font-doc/ { if ($0 !~ /;/) skip = 1; next }
+    /serif/ && !/sans-serif/ && $0 !~ /^[[:space:]]*(\/\*|\*)/ {
+      printf "%s:%d:%s\n", FILENAME, FNR, $0
+    }
+  ' "$@"
+}
+
+BAD_FONT=$(scan_serif src/styles/*.css index.html 2>/dev/null || true)
+if [ -n "$BAD_FONT" ]; then
+  while IFS= read -r line; do
+    [ -n "$line" ] && fail "界面样式里出现衬线：$line"
+  done <<< "$BAD_FONT"
+else
+  ok "界面那几份样式里没有衬线字体（themes/ 与 --font-doc 不在此列）"
+fi
+
+# ⑥之二：**间接**引用也要挡。`font-family: var(--font-doc)` 一个字面
+# `serif` 都不含，上面那条查不到——而 2026-09-24 踩的正是这一脚。
+# 合法的去处只有三个：定义它的 `theme.css`、消费它的 `editor.css`（正文）、
+# 以及 `themes/` 自己。别的文件引它 = 拿文档字体画界面。
+# ⚠️ **注释行跳过**（`grep -vE ':[0-9]+:[[:space:]]*(/\*|\*)'`）：说清楚
+# "这里为什么不能引 `--font-doc`"的那段说明本身就会写着这个名字，
+# 不跳过的话这条检查会被自己的解释绊倒——`bars.css` 里那条 ⛔ 注释就是。
+# ⚠️ 代价是"把引用写在注释里"查不出来，这是启发式，认了。
+DOCFONT=$(grep -rn 'font-doc' src/styles --exclude-dir=themes 2>/dev/null \
+  | grep -vE ':[0-9]+:[[:space:]]*(/\*|\*)' \
+  | cut -d: -f1 | sort -u | grep -vE '/(theme|editor)\.css$' || true)
+if [ -n "$DOCFONT" ]; then
+  while IFS= read -r f; do
+    [ -n "$f" ] && fail "$f 引了 --font-doc（文档字体），界面里只能用它画正文"
+  done <<< "$DOCFONT"
+else
+  ok "--font-doc 只在 theme.css / editor.css / themes 里出现"
+fi
 
 # ── 汇总 ─────────────────────────────────────────────────────────────────
 printf '\n%s── 汇总%s\n' "$B" "$N"

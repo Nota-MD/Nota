@@ -1,0 +1,227 @@
+/**
+ * 编辑区**上面/旁边那几条横条**的样式：格式化工具栏、查找替换条。
+ *
+ * ⚠️ 单独一份而不是塞进 `app.css`：那份已经 880 多行，贴着 1000 行上限
+ * （`AGENTS.md` §0.4）。这几条横条和外壳骨架也不是一回事——它们贴着编辑区，
+ * 跟着编辑区的模式（所见即所得 / 源码）走，`app.css` 里那些东西不跟。
+ *
+ * 颜色与尺寸**一律走变量**（`theme.css`），这里不该出现写死的色值——
+ * 写死一个就少支持一种「界面风格 × 明暗」的组合。
+ */
+
+/* ── 格式化工具栏 ──────────────────────────────────────────────────────── */
+
+.format-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 1px;
+  /* ⚠️ 横向能滚。窄窗口下这十几颗按钮一定会超宽，不滚的话最后那几颗
+   * （清除样式、代码块）会被裁掉——而它们恰恰是别人不会去找的那些。 */
+  overflow-x: auto;
+  padding: 3px 6px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+  /* 滚动条在 Linux 上会占掉一条高度，把按钮挤矮。这条横条本来就矮，
+   * 藏掉滚动条比留着好看，滚轮/触控板照样能滚。 */
+  scrollbar-width: none;
+}
+
+.format-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.format-btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  /* ⚠️ `user-select: none`：连点几下「加粗」时手会拖到，被选中之后
+   * 按钮上的字会出现一条高亮，看起来像坏了。 */
+  user-select: none;
+}
+
+.format-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.format-btn:active {
+  background: var(--bg-active);
+}
+
+/* 亮着的（当前光标所在的行内标记 / 块族）。 */
+.format-btn[data-on="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.format-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+.format-glyph {
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* 三颗行内标记按钮各自的长相。⚠️ 只有**字形**是这里定的，颜色一律跟
+ * 按钮的 `color` 走（`:hover` 与 `data-on` 都只改 `color`）——在这里
+ * 各写一个色值，亮起来的时候就会有两个颜色打架。 */
+.format-glyph-bold {
+  font-weight: 700;
+}
+
+/* ⛔ `.format-glyph-italic` 原来在这里，它写着 `font-family: var(--font-doc)`
+ * ——**文档的字体（衬线）被拿来画界面上的一个字形**，这正是用户
+ * 2026-09-24 那句「绝对不要用衬线字体做UI字体」要挡掉的东西。
+ *
+ * 2026-09-24 起斜体那颗按钮改用图标（Folio 那套，见 `ui/Icon.tsx`），
+ * 这个 class 已经没有元素用它了，所以**整条删掉**而不是"留着但改字体"：
+ * 留着一条没人用的规则，下一个人只会以为斜体还是字形。 */
+
+.format-glyph-strike {
+  text-decoration: line-through;
+}
+
+.format-glyph-inlineCode,
+.format-glyph-codeBlock {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* 导航键的**焦点圈**。⚠️ 只在键盘走到时画（`:focus-visible`），鼠标点过
+ * 之后不留一圈——那是很多人以为"按钮卡住了"的来源。 */
+.format-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ── 查找与替换条 ─────────────────────────────────────────────────────── */
+
+.find-bar {
+  display: flex;
+  flex: 0 0 auto;
+  /* ⚠️ **靠右对齐**：它是一块浮在编辑区上方的操作面板（像大多数编辑器），
+   * 不是第二条工具栏。铺满整行的话，正文区域会被这两行矮条压得很闷。 */
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 4px 8px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+
+.find-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: min(100%, 560px);
+}
+
+.find-input {
+  /* ⚠️ `min-width: 0`：flex 子项默认不肯缩到内容宽度以下，不写的话
+   * 窄窗口里输入框会把后面那排按钮顶出去（而不是自己变窄）。 */
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.find-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.find-count {
+  flex: 0 0 auto;
+  /* 固定宽度 + 等宽数字：命中数变长变短时右边那排按钮不会左右跳。 */
+  min-width: 58px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+
+.find-toggle,
+.find-btn {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  font: inherit;
+  font-size: 11px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.find-toggle:hover,
+.find-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.find-toggle:active,
+.find-btn:active {
+  background: var(--bg-active);
+}
+
+.find-toggle[data-on="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+
+.find-toggle:focus-visible,
+.find-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.find-btn-wide {
+  padding: 0 8px;
+  border-color: var(--border);
+}
+
+/* ── 命中的高亮 ───────────────────────────────────────────────────────────
+ *
+ * ⚠️ 这两个 class 是**两个编辑器共用**的：所见即所得那边是 ProseMirror 的
+ * `Decoration.inline`（`find.ts`），源码那边是 CodeMirror 的 `Decoration.mark`
+ * （`source.ts`）。同名同色，用户在两种模式里看到的是同一件事。
+ *
+ * ⚠️ 它们**只改背景**，不动字色：文档的字色由文档主题定，查找高亮跑到
+ * 文档主题上面去改字色，会让"换了个主题之后查找高亮把字盖住了"。
+ */
+
+.nota-find-hit {
+  background: var(--find-hit);
+}
+
+.nota-find-current {
+  background: var(--find-current);
+}

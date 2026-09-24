@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 表格边框：仅内部竖线 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<path fill="#2e3436" fill-rule="nonzero" d="M8.75 2.80L8.75 13.20L7.25 13.20L7.25 2.80ZM8.75 2.80L8.65 3.17L8.38 3.45L8.00 3.55L7.62 3.45L7.35 3.17L7.25 2.80L7.35 2.42L7.62 2.15L8.00 2.05L8.38 2.15L8.65 2.42ZM8.75 13.20L8.65 13.57L8.38 13.85L8.00 13.95L7.62 13.85L7.35 13.57L7.25 13.20L7.35 12.82L7.62 12.55L8.00 12.45L8.38 12.55L8.65 12.82Z"/>
+<path fill="#2e3436" fill-rule="nonzero" d="M3.10 2.42L12.90 2.42L12.90 3.17L3.10 3.17Z"/>
+<path fill="#2e3436" fill-rule="nonzero" d="M3.10 12.82L12.90 12.82L12.90 13.57L3.10 13.57Z"/>
+<path fill="#2e3436" fill-rule="nonzero" d="M2.17 4.10L2.17 11.90L1.43 11.90L1.43 4.10Z"/>
+<path fill="#2e3436" fill-rule="nonzero" d="M14.58 4.10L14.58 11.90L13.83 11.90L13.83 4.10Z"/>
+<path fill="#2e3436" fill-rule="nonzero" d="M1.80 7.62L14.20 7.62L14.20 8.38L1.80 8.38Z"/>
+</svg>

@@ -296,17 +296,18 @@
 其余 Rust 文件没有测试。
 
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
-见 `docs/06` §6.3）：`tests/` 下 **二十二份、共 566 条**（2026-09-27 深夜现数）——
+见 `docs/06` §6.3）：`tests/` 下 **二十三份、共 574 条**（2026-09-27 深夜现数）——
 `keymap.test.ts` **54** · `slash.test.ts` **49** · `share-card.test.ts` **46** ·
 `math-view.test.ts` **41** · `focus-summary.test.ts` **34** · `smart-punctuation.test.ts` **32** ·
 `emoji.test.ts` **32** · `footnote.test.ts` **30** · `math-delim.test.ts` **23** · `toc.test.ts` **22** ·
 `inline-marks.test.ts` **21** · `heatmap.test.ts` **20** · `auto-correct.test.ts` **20** ·
 `math-input.test.ts` **19** · `atom-space.test.ts` **19** · `mark-hint.test.ts` **18** ·
 `accent.test.ts` **18** · `instant-render.test.ts` **17** · `lang-icons.test.ts` **14** ·
-`html-block.test.ts` **14** · `chart-ticks.test.ts` **12** · `doc-typography.test.ts` **11**。
+`html-block.test.ts` **14** · `chart-ticks.test.ts` **12** · `doc-typography.test.ts` **11** ·
+`empty-doc-save.test.ts` **8**。
 ⚠️ 跑法两档：`share-card.test.ts` 要 `--loader:.svg=text`（它 import 了 `.svg`），
 `share-card.test.ts` / `heatmap.test.ts` / `focus-summary.test.ts` / `keymap.test.ts`
-要 `--alias:@=./src`（都走 `@/…` 路径），其余 **十八份**两条都不要——**别照着一份的命令去跑另一份**。
+要 `--alias:@=./src`（都走 `@/…` 路径），其余 **十九份**两条都不要——**别照着一份的命令去跑另一份**。
 📌 **本节这一格 2026-09-27 现数时发现它落后了两批**：原写"十八份、共 418 条"，
 而那时 `slash.test.ts`（49 条）已经存在、只是没进这份清单（418 ＋ 49 ＝ 467，
 正是 `docs/06` §6.3 当时的数）。**同一个数在两份文档里差 49**——那一批一并补齐并改成
@@ -319,6 +320,7 @@
 它和 `chart-ticks.test.ts`、`instant-render.test.ts` 一样属于
 **"写好之后从没进过任何名册"**的第三例，而且**当时连 `docs/06` §6.3 那个 `for`
 循环都没进**，所以"每天跑一遍"从来没跑到过它。
+📌 **2026-09-27 晚再补一份**（566 → 574）：`empty-doc-save.test.ts`（**8 条**，空文档存盘必须 0 字节，见 `docs/06` §5.31 ④）。⚠️ 这一份是**给一条已有判据配的测试**，不是新功能——它挡的那条路（"保镖"占位符的值漏进文件）此前一直是 7 字节，而且是**开窗时从状态栏那个字符数**上看出来的。
 ⚠️ 教训仍旧是同一条：**加一份测试要跟着改四处**（`docs/06` §6.3 的名册与 `for` 循环、
 `AGENTS.md`、`docs/09`、本节），**闸门一处都扫不到**，只能靠人记。
 ⚠️ `accent.test.ts` 有个**别处没有的做法**：

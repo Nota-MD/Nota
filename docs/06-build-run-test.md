@@ -5,7 +5,7 @@
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
 > 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 505 条各钉住了什么。
 >
-> ⚠️ **测试数只在本文记数（Rust 当前 505 ／ 前端当前 566）**，别处一律写"见 `docs/06`"。
+> ⚠️ **测试数只在本文记数（Rust 当前 505 ／ 前端当前 574）**，别处一律写"见 `docs/06`"。
 > ⚠️ **这个数别照抄——以现跑为准**（`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l`
 > 与 `cargo test --lib` 报的 `N passed` 两半互证）。同一目录可能有别的会话在改，
 > 本文这段 2026-09-27 当天就落后过两次（见 §6.2 那段"当前 N 条"）。
@@ -2765,7 +2765,7 @@ podman exec -u 0 tauri-dev sh -c \
 
 **当前 505 条，全过**（2026-09-27 现跑，`cargo test --lib` 报 `505 passed; 0 failed`，
 `grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 也是 505 —— **两半互证**）。⚠️ 这个数是
-**只算 Rust 那一半**——前端另有 **566** 条（二十二份）、跑法完全不同，见 §6.3。⚠️ **它一天里涨了
+**只算 Rust 那一半**——前端另有 **574** 条（二十三份）、跑法完全不同，见 §6.3。⚠️ **它一天里涨了
 五次**：317 → 397（09-26 晚，80 条里只有 4 条是「主题色」那批的）→ 428（09-27
 白天，其中 6 条是「英文按词统计」那批）→ **490**（文件移动那批 19 条 ＋ 同时段别的会话 ~43 条）
 → **492**（同时段别的会话，不是那批加的）→ **501** → **505**。
@@ -2876,13 +2876,13 @@ podman exec -u 0 tauri-dev sh -c \
 `src/main.rs`（只是个壳）与 Doc-tests（`nota_lib` 没有文档测试）。
 `tests/` 目录下**没有一个 Rust 集成测试**（`tests/fixtures/` 仍然是空的），
 所以下面这 505 条**全部是单元测试**。
-⚠️ **2026-09-26 起前端有可运行的测试了**：`tests/` 下 **二十二份、共 566 条**
+⚠️ **2026-09-26 起前端有可运行的测试了**：`tests/` 下 **二十三份、共 574 条**
 （2026-09-27 数，逐份跑出来过，清单与跑法见 **§6.3**）＋ `tests/fake-dom.ts`
 （只够跑逻辑的假 DOM）。它**不在这 505 条里**（那是 `cargo test` 的数），也不是
 "前端有测试框架了"——`package.json` 里**仍然没有**测试框架、也没有测试脚本，
 跑法是 `npx esbuild` ＋ `node` 两条命令（**§6.3**）。
 
-> ⚠️ 记数只在本文记（Rust 505 ／ 前端 566）。别处提到测试数一律写"见 `docs/06`"。
+> ⚠️ 记数只在本文记（Rust 505 ／ 前端 574）。别处提到测试数一律写"见 `docs/06`"。
 > 核实：`podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test --lib`。
 
 ### 6.1 逐条
@@ -3357,7 +3357,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography; do
+for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3408,14 +3408,14 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**二十二份、共 566 条**（2026-09-27 数）：`keymap` **54** · `slash` **49** ·
+**二十三份、共 574 条**（2026-09-27 数）：`keymap` **54** · `slash` **49** ·
 `share-card` **46** · `math-view` **41** · `focus-summary` **34** ·
 `smart-punctuation` **32** · `emoji` **32** · `footnote` **30** · `math-delim` **23** ·
 `toc` **22** · `inline-marks` **21** · `heatmap` **20** · `auto-correct` **20** ·
 `math-input` **19** · `atom-space` **19** · `mark-hint` **18** · `accent` **18** ·
 `instant-render` **17** · `lang-icons` **14** · `html-block` **14** ·
-`chart-ticks` **12** · `doc-typography` **11**。
-⚠️ 这二十二份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
+`chart-ticks` **12** · `doc-typography` **11** · `empty-doc-save` **8**。
+⚠️ 这二十三份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
 2026-09-27 这一遍 `share-card` 35→46、`accent` 14→18、`chart-ticks` 11→12、
 `math-input` 16→19（`$$` 那三组新用例），另加新的两份 `math-delim` 23、
 `inline-marks` 21（高亮/上标/下标/下划线）与 `html-block` 14（块级裸 HTML ＋ 注释），
@@ -3436,6 +3436,17 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 所以一点提示都没有。补进来之后上一版的"二十份 501 条"对不上差 **11** 条，
 正是它。⚠️ 所以现在这个数（22 份 566 条）与上一版之间那 **+65** 里，
 **11 条不是新写的**，是补数。
+
+📌 **2026-09-27 晚（空文档存盘那一条，新建 `empty-doc-save.test.ts` 8 条，566→574）**：
+这一份是**给一条判据配的测试**，不是给新功能配的——"空文档存盘要 0 字节"（用户当晚
+拍板）从前**没有任何自动化的东西看着**，而它恰好有**两种形状**（见 §5.31 ④），
+其中一种一直在往用户文件里写 7 个字节。⚠️ 它进的是**主循环**（不需要 `--alias`
+也不需要 `--loader:.svg=text`：它只 import `@milkdown/*` 与 `../src/editor/empty-paragraph`）。
+⚠️ **写这份测试时踩了一个坑，记在这儿省得下次再踩**：`preset-commonmark` 的
+`paragraphSchema` 是 `$nodeSchema` 那个**元组**（`.node(ctx)()` 才跑得起来），
+而 **`docSchema` 不是**——它是 `$node` 的产物，**它自己就是插件函数**
+（`docSchema.ctx(...)` 当场 `is not a function`）。见 `tests/empty-doc-save.test.ts` 里
+`跑元组插件` / `跑裸插件` 两个小助手。
 
 ⚠️ **加了新的一份要跟着改四处**：本节这个数、`AGENTS.md` §2 的 `tests/` 那一行、
 `docs/09` §2 的 `tests/*` 登记行、`docs/02`（⑤ 那个闸**不扫根目录的 `tests/`**，
@@ -3657,6 +3668,35 @@ od -c <文件>          # 期望 甲\n\n乙\n —— 出现 <br /> 就是没生�
 - 再敲一个字、删掉、`Ctrl+S`：文件应当是 **0 字节**（不是 `<br />`）。
 
 **③ A/B 的正确做法**（这一批踩过两次坑）：
+
+摘 `.use(X)` 时**必须同时摘掉 `X` 的 `import`**，否则 `tsc --noEmit` 报 TS6133
+把整条构建拦下，`dist/` 不动，A/B 两侧变成同一份代码（详见 §5.30）。
+**每次改完先看 `dist/assets/index-*.js` 的时间戳变了没有**，再启动。
+
+**④ ⚠️⚠️ 「空文档存盘」有**两种形状**，②里那条判据只管住了其中一种（2026-09-27）**
+
+用户 2026-09-27 拍板：**空文档存盘要落 0 字节**。而 ② 那句"敲一个字、删掉、`Ctrl+S`
+应当是 0 字节"只覆盖了下面第一条路，另一条一直是 **7 字节**：
+
+| 空文档长什么样 | 走到哪条 | 从前落盘 | 现在 |
+|---|---|---|---|
+| 段落**自己就没有孩子**（**新建文档**就长这样，或整篇只有一个空行） | `empty-paragraph.ts` 那个"保镖"占位 | **`<br />`＋换行＝7 字节** | **0 字节** |
+| 段落里有一颗**空文本节点**（敲了字又退格删掉） | 正常那条 `state.next()`（段落被跳过） | 0 字节 | 0 字节 |
+
+⚠️ **7 字节会露在界面上**：状态栏因此读「1 words **7** characters 2 lines」
+（字符数是按正文算的，说明它真的进了文档）。2026-09-27 开窗那一轮就是这么发现
+`docs/07` 里挂着的那条待拍板项的。**修法一个字符**：占位节点的值 `"<br />"` → `""`
+（`empty-paragraph.ts`，那里写着为什么不能改成"什么都不加"——那样当场抛
+`Cannot read properties of undefined (reading 'some')`）。
+
+**这么验**（两条腿，都要走）：
+
+```sh
+# ① 不开窗：新增的 tests/empty-doc-save.test.ts（8 条，跑法见 §6.3）
+#    两种形状 + "一个 <br /> 都不许漏出来" + "空文档序列化不抛错" 都钉在里面
+# ② 开窗：新建文档 → 直接 Ctrl+S → od -c 那个文件 → 期望空（0 字节）
+#    再看状态栏：不该再出现「1 words 7 characters」
+```
 
 摘 `.use(X)` 时**必须同时摘掉 `X` 的 `import`**，否则 `tsc --noEmit` 报 TS6133
 把整条构建拦下，`dist/` 不动，A/B 两侧变成同一份代码（详见 §5.30）。
@@ -4065,6 +4105,9 @@ BadMatch；按键要落在 webview 上得让指针停在它上面）、GTK 窗�
 **顺带又看见一条老现象**（不是新缺陷）：**空白文档存盘落的是字面 `<br />` ＋ 换行**
 （7 字节）——所以状态栏读「1 words 7 characters 2 lines」。这正是 §5.31 与 `docs/07`
 里挂着的那条**待拍板项**（§5.31 那条判据写的是"应当是 0 字节"），证据这次补在这里。
+📌 **2026-09-27 晚已按用户拍板结清**（"改成存 0 字节"）：根因是"保镖"占位符的值
+漏到了文件里，改法、两种形状的对照表、两条腿的验法都写在 §5.31 ④，测试钉在
+`tests/empty-doc-save.test.ts`（8 条）。
 
 ⚠️ **单子上没被这一段点到的条目，当成"还没量"**——例如 C-6 的后半（右键时**菜单栏那份
 菜单**会不会也跟着弹）、A-2 里 macOS 的 `⌘⇧C` 显示（这台机器没有 macOS）。

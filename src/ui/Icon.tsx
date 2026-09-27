@@ -93,7 +93,7 @@ const 名字表 = [
   "folio-close-symbolic",
   // 侧边栏空态里那颗「打开文件夹…」
   "folio-document-open-symbolic",
-  // 偏好设置左栏那九页（`ui/settings/SettingsDialog.tsx`）。
+  // 偏好设置左栏那十一页（`ui/settings/SettingsDialog.tsx`）。
   // ⚠️ 在这一批之前，设置左栏用的是 `settings/primitives.tsx` 里**手写的五枚
   // 24 格细线图标**——那是第二套画风，和工具栏、侧栏、菜单里这 96 枚摆在一起
   // 看得出不一样（描边粗细、格数、圆角都对不上）。现在全应用一副面孔。
@@ -115,6 +115,7 @@ const 名字表 = [
   "folio-window-symbolic", // 外观（整个应用的样子）
   "nota-doc-theme-symbolic", // 文档主题（框里的 Aa）
   "nota-keys-symbolic", // 快捷键
+  "nota-plugin-symbolic", // 拓展（拼图块）
   "folio-configure-symbolic", // 通用（齿轮）
   // ⚠️ 这一枚是 **Nota 自己画的**（`nota-` 前缀，2026-09-26），同上面那三枚的
   // 来路。为什么不用现成的：那一套里**没有**秒表/时钟/盾牌这一类，而最接近的

@@ -746,6 +746,14 @@ button {
   min-width: 0;
   /* 长提示（一个路径加一句原因）要能换行，但不能**不换行**把条子撑出屏幕。 */
   overflow-wrap: anywhere;
+  /* ⚠️ 提示条**可以有好几段**，靠 `\n` 分段（导出那个提示就是三段：写到哪儿了、
+     几个文件多大、签名带没带上）。少了这一条，`\n` 按 HTML 的老规矩被折成一个
+     空格，三段会连成一句没有标点的长话——「…stats.nota-plugin 15 个文件，
+     1.2 MB 这个插件本来就没有签名。」，是 2026-09-27 开窗目检时看出来的。
+     ⚠️ 同一条名字在 `ConfirmDialog` 的 `.confirm-message` 上早就有（`useAbout`
+     / `useFocusIntro` 那两段多行说明就靠它），提示条这一支当时漏了。
+     `pre-line` 对**单段**的提示没有任何影响（它只保留换行，不保留空格）。 */
+  white-space: pre-line;
 }
 
 .toast-close {

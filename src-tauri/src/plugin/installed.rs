@@ -158,7 +158,7 @@ impl Installed {
             plugins: self.map.clone(),
         };
         toml::to_string_pretty(&存档).map_err(|e| {
-            NotaError::other(format!("插件状态写不成 TOML（这是个 bug，请上报）：{e}"))
+            NotaError::other(format!("拓展状态写不成 TOML（这是个 bug，请上报）：{e}"))
         })
     }
 
@@ -262,7 +262,7 @@ enabled = false
             true, // 调试档也照样关着——用户显式关过的不能被默认值顶回来
         );
         assert!(!s.is_enabled("nota.git"));
-        assert!(s.is_enabled("nota.ai"), "别的插件照旧走默认值");
+        assert!(s.is_enabled("nota.ai"), "别的拓展照旧走默认值");
     }
 
     /// ⚠️ 这条是**安全用例**：`key_id` 由公钥算出来，不许被文件里那一栏带跑。

@@ -15,6 +15,8 @@
 //! 界面上照常列出并标红。理由很实在：插件是用户自己装的第三方代码，
 //! 让一个写错的 Lua 脚本变成"应用打不开"，用户连去禁用它的界面都进不去。
 
+/// 导出（2026-09-27 加）：把一个已装的插件收成一个 `.nota-plugin` 包。
+pub mod export;
 pub mod installed;
 /// 装 / 卸 / 停用 / 信任（2026-09-25 从本文件拆出，见那边的模块注释）。
 mod install;
@@ -381,7 +383,7 @@ impl PluginHost {
                 if let Some(holder) = channels.insert(channel.clone(), manifest.meta.id.clone()) {
                     let reason = format!(
                         "事件通道 `plugin:{channel}:…` 已被 `{holder}` 占用：\
-                         插件 id 里的 `.` 在事件名里写作 `-`，换一个 id"
+                         拓展 id 里的 `.` 在事件名里写作 `-`，换一个 id"
                     );
                     errors.push(format!("{}：{reason}", manifest.meta.id));
                     plugins.push(LuaPlugin::rejected(manifest, reason, &base.应用语言));
@@ -407,7 +409,7 @@ impl PluginHost {
         for e in errors {
             // 单个插件清单坏了不该拖住启动（其余插件照常加载），所以这里只记不抛。
             // 界面上"少了一个插件"未必看得出来 → 开发者的线索，走调试闸门。
-            crate::日志!("[nota] 插件清单读不了：{e}");
+            crate::日志!("[nota] 拓展清单读不了：{e}");
         }
 
         plugins.sort_by(|a, b| a.manifest.meta.id.cmp(&b.manifest.meta.id));
@@ -442,7 +444,9 @@ impl PluginHost {
                     // 账本全靠它）。理由见 `lua/api/i18n.rs::语言包::名字`。
                     name: p.语言.名字().unwrap_or(&m.name).to_owned(),
                     version: m.version.clone(),
-                    description: m.description.clone(),
+                    // ⚠️ 简介与名字同一条规矩（保留键 `description` 盖掉清单里的）。
+                    // 清单里写**英语**（主语言），中文那一份在 `lang/zh-CN.toml`。
+                    description: p.语言.描述().unwrap_or(&m.description).to_owned(),
                     authors: m.authors.clone(),
                     license: m.license.clone(),
                     capabilities: m.capabilities.clone(),
@@ -506,7 +510,7 @@ impl PluginHost {
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<()> {
         let i = self
             .位置(id)
-            .ok_or_else(|| NotaError::other(format!("没有这个插件：{id}")))?;
+            .ok_or_else(|| NotaError::other(format!("没有这个拓展：{id}")))?;
 
         if enabled {
             self.installed.set_enabled(id, true)?;
@@ -522,32 +526,48 @@ impl PluginHost {
             if self.plugins[i].state == PluginState::Loaded {
                 self.plugins[i].unload(); // 给它一次 on_unload
             }
-            // ⚠️ **宿主得替它把开发服务器收掉**（2026-09-25 加）。
-            // 那个进程挂在**插件 id** 上（`DevServerState` 是一张 `id → Server` 的表），
-            // 而插件一停用，它的面板和菜单跟着消失——用户再也没有地方点
-            // 「停止预览」了，那个进程会一直占着端口跑到 Nota 退出为止。
-            //
-            // ⚠️ 指望不上 `on_unload`：宿主调它时**不传 `nota`**
-            // （`lua/mod.rs::unload` 是 `f.call::<()>(())`），插件那边拿不到
-            // `nota.devserver`。所以这条责任只能在宿主这一侧。
-            crate::devserver::stop(
-                &self.base.app.state::<crate::devserver::DevServerState>(),
-                id,
-            );
-            // ⚠️ 编辑区里摊着的那块也得收（2026-09-25 加，同一条理由）：
-            // 插件一停用，它的面板就没了，而编辑区那块是**照着面板内容画的**——
-            // 留着的话用户看到的是一块刷不动、按钮点了没反应的死内容，
-            // 或者干脆是一句"插件没有声明面板 X"。同理指望不上 `on_unload`。
-            {
-                use tauri::Emitter;
-                let review = self.base.app.state::<ReviewState>();
-                review.set(id, None);
-                let _ = self.base.app.emit(EVENT_REVIEW, serde_json::json!({}));
-            }
+            self.收摊(id);
             let manifest = self.plugins[i].manifest.clone();
             self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.应用语言);
         }
         Ok(())
+    }
+
+    /// 把一个插件留在宿主里的**外部痕迹**收掉：它开的开发服务器、编辑区里
+    /// 摊着的那一块。
+    ///
+    /// # 为什么要在两个地方（停用 / 卸载）都做，所以抽成一个
+    ///
+    /// 停用与卸载都会让"它的面板和菜单跟着消失"，于是用户**再也没有地方**点
+    /// 「停止预览」——那个 `git` / 静态服务器进程会一直占着端口跑到 Nota 退出为止。
+    ///
+    /// ⚠️ **卸载那条路上原来漏了这一步**（2026-09-27 修）：`卸` 只做了
+    /// "删磁盘、忘账本"，开发服务器照旧在跑，而插件已经不在清单里了——
+    /// 连"去停用它一下"这条退路都没有（`DeviceServerState` 是按 id 收的，
+    /// 但界面上已经没有那一行了）。抽成这一个函数就是为了**只写一份**：
+    /// 两处各抄一遍的话，第三处（将来可能有的"升级失败回滚"）必然再漏一次。
+    ///
+    /// ⚠️ 指望不上插件的 `on_unload`：宿主调它时**不传 `nota`**
+    /// （`lua/mod.rs::unload` 是 `f.call::<()>(())`），插件那边拿不到
+    /// `nota.devserver`。所以这条责任只能在宿主这一侧。
+    ///
+    /// ⚠️ 调它的地方都**还握着 `plugins` 锁**（两个调用者都是 `&mut self` 的方法）。
+    /// 它转手去拿 devserver / review 那两把锁，锁序与 `set_enabled` 里原来那段
+    /// 完全一样（见 `docs/03` 的不变量），没有新增一条嵌套。
+    fn 收摊(&self, id: &str) {
+        crate::devserver::stop(
+            &self.base.app.state::<crate::devserver::DevServerState>(),
+            id,
+        );
+        // ⚠️ 编辑区里摊着的那块也得收（同一条理由）：那块是**照着面板内容画的**——
+        // 留着的话用户看到的是一块刷不动、按钮点了没反应的死内容，
+        // 或者干脆是一句"插件没有声明面板 X"。
+        {
+            use tauri::Emitter;
+            let review = self.base.app.state::<ReviewState>();
+            review.set(id, None);
+            let _ = self.base.app.emit(EVENT_REVIEW, serde_json::json!({}));
+        }
     }
 
     /// 取一个**现在能跑代码**的插件，取不到就说清楚为什么。
@@ -558,19 +578,19 @@ impl PluginHost {
     fn 可调用的(&self, plugin_id: &str) -> Result<&LuaPlugin> {
         let plugin = self
             .get(plugin_id)
-            .ok_or_else(|| NotaError::other(format!("没有这个插件：{plugin_id}")))?;
+            .ok_or_else(|| NotaError::other(format!("没有这个拓展：{plugin_id}")))?;
 
         match &plugin.state {
             // 用户停用**先于**加载状态判：停用是用户的显式动作，
             // 说"已被停用"比说"加载失败"更接近用户看到的事实。
             _ if !self.is_enabled(plugin_id) => {
-                Err(NotaError::other(format!("插件 {plugin_id} 已被停用")))
+                Err(NotaError::other(format!("拓展 {plugin_id} 已被停用")))
             }
             PluginState::Loaded => Ok(plugin),
             PluginState::Failed(e) => Err(NotaError::other(format!(
-                "插件 {plugin_id} 加载失败，无法执行命令：{e}"
+                "拓展 {plugin_id} 加载失败，无法执行命令：{e}"
             ))),
-            PluginState::Disabled => Err(NotaError::other(format!("插件 {plugin_id} 已被停用"))),
+            PluginState::Disabled => Err(NotaError::other(format!("拓展 {plugin_id} 已被停用"))),
         }
     }
 

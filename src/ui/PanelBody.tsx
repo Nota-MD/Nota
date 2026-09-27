@@ -278,7 +278,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                 // 浏览器那头还有 CSP 的 `frame-src` 兜一层。
                 src={node.url}
                 style={{ height: `${node.height}px` }}
-                title={t("插件预览")}
+                title={t("拓展预览")}
               />
             ) : (
               <p key={i} className="panel-empty">
@@ -292,7 +292,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
             return (
               <p key={i} className="panel-unknown">
                 {t("不认识这种内容块（kind={0}）", node.raw)}{" "}
-                {t("这一块的插件版本可能比 Nota 新，或者 `kind` 拼错了。")}
+                {t("这一块的拓展版本可能比 Nota 新，或者 `kind` 拼错了。")}
               </p>
             );
         }

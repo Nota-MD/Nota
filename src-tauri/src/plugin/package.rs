@@ -109,11 +109,11 @@ impl 包 {
     /// 从一个 `.nota-plugin`（或任何 zip）的字节解开。
     pub fn 从zip(bytes: &[u8]) -> Result<Self> {
         let mut ar = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-            .map_err(|e| NotaError::other(format!("这不是一个能读的插件包：{e}")))?;
+            .map_err(|e| NotaError::other(format!("这不是一个能读的拓展包：{e}")))?;
 
         if ar.len() > 条目上限 {
             return Err(NotaError::other(format!(
-                "包里条目太多（{} 条，上限 {条目上限}）——多半不是插件包",
+                "包里条目太多（{} 条，上限 {条目上限}）——多半不是拓展包",
                 ar.len()
             )));
         }
@@ -296,7 +296,7 @@ fn 收目录(root: &Path, dir: &Path, out: &mut Vec<包文件>, 总: &mut u64) -
 
         let 相对 = path
             .strip_prefix(root)
-            .map_err(|_| NotaError::other(format!("{} 不在插件目录里", path.display())))?;
+            .map_err(|_| NotaError::other(format!("{} 不在拓展目录里", path.display())))?;
         let 名 = 相对.to_string_lossy().replace('\\', "/");
         let 路径 = 路径合法吗(&名)?;
 
@@ -312,7 +312,7 @@ fn 收目录(root: &Path, dir: &Path, out: &mut Vec<包文件>, 总: &mut u64) -
         *总 += 内容.len() as u64;
         if *总 > 总上限 {
             return Err(NotaError::other(format!(
-                "插件目录总共超过 {总上限} 字节——不装了"
+                "拓展目录总共超过 {总上限} 字节——不装了"
             )));
         }
         out.push(包文件 { 路径, 内容 });
@@ -817,7 +817,7 @@ mod tests {
         let err = 包::从zip("这是一段普通文本，不是 zip".as_bytes())
             .unwrap_err()
             .to_string();
-        assert!(err.contains("插件包"), "实际：{err}");
+        assert!(err.contains("拓展包"), "实际：{err}");
     }
 
     /// 坏掉的信任库当空表——它不该让应用打不开。

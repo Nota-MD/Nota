@@ -942,6 +942,13 @@ export default function App() {
             onResetSettings={() => void resetSettings()}
             onClearRecent={() => void 清空最近()}
             menus={菜单}
+            // 「拓展」那一页要的三样（⚠️ **不是** `...` 铺一份 `插件`：那一页只
+            // 吃这三样，别的字段铺过去只会让人以为它也读面板 / 读菜单）。
+            // 与右侧插件栏给的是**同一份**（同一个 `usePlugins`），所以两边
+            // 不会出现"这一栏说装好了、那一页还没有"。
+            plugins={plugins}
+            插件信任={信任表}
+            插件动作={插件动作}
           />
         )}
 

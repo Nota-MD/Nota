@@ -18,11 +18,11 @@
 
 [plugin]
 id          = "nota.git"
-name        = "Git 版本控制"
+name        = "Git version control"
 version     = "0.1.0"
 api         = 2
 
-description = "查看改动、比较差异、提交。走系统 git 命令，尊重你的 gitconfig 与 hook。"
+description = "See changes, compare diffs and commit. Uses the system git command and respects your gitconfig and hooks."
 license     = "BSD-2-Clause"
 authors     = ["Nota contributors"]
 entry       = "main.lua"

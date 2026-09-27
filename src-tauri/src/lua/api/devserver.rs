@@ -302,7 +302,7 @@ pub fn build(
     // （见 `plugin/manifest.rs`），所以这里取不出来只能是我们自己的 bug。
     let spec = manifest.devserver.clone().ok_or_else(|| {
         NotaError::other(format!(
-            "插件 {} 申请了 `process.devserver` 却没有 `[devserver]` 段",
+            "拓展 {} 申请了 `process.devserver` 却没有 `[devserver]` 段",
             manifest.meta.id
         ))
     })?;
@@ -590,7 +590,7 @@ mod tests {
         map.remove("alive");
         map.insert("url".to_owned(), serde_json::Value::Null);
         map.insert("alive".to_owned(), serde_json::Value::Bool(false));
-        assert_eq!(v["url"], serde_json::Value::Null, "插件写的地址必须被抹掉");
+        assert_eq!(v["url"], serde_json::Value::Null, "拓展写的地址必须被抹掉");
         assert_eq!(v["alive"], serde_json::Value::Bool(false));
         // 别的字段要原样留着（`height` 是插件的排版意图）。
         assert_eq!(v["height"], 520);
@@ -693,7 +693,7 @@ mod tests {
         assert_eq!(t.get::<String>("root").unwrap(), "/tmp/项目");
         assert!(
             t.get::<Value>("marker_found").unwrap().is_nil(),
-            "还没看就说「没找到」，等于替插件下了结论"
+            "还没看就说「没找到」，等于替拓展下了结论"
         );
         assert!(t.get::<Value>("version").unwrap().is_nil());
         assert!(t.get::<Value>("detail").unwrap().is_nil());

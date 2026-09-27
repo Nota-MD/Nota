@@ -33,6 +33,12 @@
 //! 1. 表可以**只写要翻译的那些键**：`lang/en.toml` 里是
 //!    `"停止预览" = "Stop preview"`。作者的原文是什么语言，那一份表就几乎是空的
 //!    （中文作者 => `zh-CN.toml` 只需要写个 `name`）；
+//!
+//! ⚠️ **保留键**（不是插件自己的文案，宿主认得的）现在是两个：`name`
+//! 和 `description`——它们分别盖掉清单里的 `name` / `description`（见
+//! [`语言包::名字`] / [`语言包::描述`]）。2026-09-27 加的 `description`：
+//! 那天用户报「拓展语言混杂」，根因是**列表里那一行简介只有中文**——
+//! 名字会随语言变、简介不会，一句话里两种语言。
 //! 2. "表里漏了这条键"、"语言文件写坏了"、"压根没声明 `langs`"三种情况退化成
 //!    同一个行为：**看见作者的原文**，而不是看见 `panel.title` 或一片空白。
 //!    这比"宿主替它兜底"结实——兜底得有东西可兜，而宿主不认识插件的键；
@@ -66,7 +72,8 @@ pub struct 语言包 {
     /// 命中了吗。`false` + [`Self::声明`] = 界面上要说那句
     /// 「此插件不支持您的语言」（现在给的是英语那份）。
     pub ok: bool,
-    /// 表里的文案。**含保留键 `name`**（插件在这个语言下叫什么名字）。
+    /// 表里的文案。**含两个保留键**：`name`、`description`
+    /// （插件在这个语言下叫什么名字、那一行简介怎么写）。
     pub 表: HashMap<String, String>,
 }
 
@@ -96,6 +103,23 @@ impl 语言包 {
     /// 事件通道、命令名、账本全靠它，一个字都不能随语言变。
     pub fn 名字(&self) -> Option<&str> {
         self.表.get("name").map(String::as_str)
+    }
+
+    /// 插件在这个语言下的**简介**（保留键 `description`）。没写就没有。
+    ///
+    /// ⚠️ 它**覆盖清单里的 `description`**（插件列表那一行的小字），理由与
+    /// [`Self::名字`] 同一条：清单是静态的，而"这句话该怎么写"随语言变。
+    ///
+    /// ⚠️ 2026-09-27 补的。在此之前**只有名字**能随语言变，于是界面上出现
+    /// 一句话里两种语言：标题 `AI assistant`（英语）、下面那行简介还是中文。
+    /// 用户当天报的就是这个（「拓展语言混杂」）。
+    ///
+    /// ⚠️ **主语言是英语**（用户 2026-09-27 定）：清单里的 `name` / `description`
+    /// 一律写英语，中文这一份是**翻译**，写在 `lang/zh-CN.toml` 里。
+    /// 这条与 [`crate::lang::插件兜底`]（英语是所有插件都必须给的那一门）是同一条
+    /// 规矩的两半：**给不出英语的插件，别人就没有能兜住的那一份**。
+    pub fn 描述(&self) -> Option<&str> {
+        self.表.get("description").map(String::as_str)
     }
 
     /// 取一条文案。查不到给 `None`（插件的 `or "英文原文"` 接住）。
@@ -234,7 +258,7 @@ mod tests {
         let 包 = 装(&清单(dir.clone(), &[]), "zh-CN");
         assert!(!包.声明);
         assert_eq!(包.lang, None);
-        assert!(包.ok, "没声明 `langs` 的插件不该被判成「不支持你的语言」");
+        assert!(包.ok, "没声明 `langs` 的拓展不该被判成「不支持你的语言」");
         assert!(包.表.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -242,19 +266,23 @@ mod tests {
     #[test]
     fn 命中的语言用那一份_没命中就用英语并说一句() {
         let dir = 临时目录("命中");
-        建(&dir, "zh-CN", "name = \"中文名\"\nhint = \"你好\"\n");
+        建(&dir, "zh-CN", "name = \"中文名\"\ndescription = \"中文简介\"\nhint = \"你好\"\n");
         建(&dir, "en", "name = \"English name\"\nhint = \"hi\"\n");
 
         let 中文 = 装(&清单(dir.clone(), &["zh-CN", "en"]), "zh-CN");
         assert!(中文.ok);
         assert_eq!(中文.lang.as_deref(), Some("zh-CN"));
         assert_eq!(中文.名字(), Some("中文名"));
+        assert_eq!(中文.描述(), Some("中文简介"));
         assert_eq!(中文.取("hint"), Some("你好"));
 
         let 英文 = 装(&清单(dir.clone(), &["zh-CN", "en"]), "ja-JP");
         assert!(!英文.ok, "日语不在 langs 里 → 说「不支持你的语言」");
         assert_eq!(英文.lang.as_deref(), Some("en"));
         assert_eq!(英文.名字(), Some("English name"));
+        // ⚠️ 英语那份表里没写 `description` → 给 `None`，由调用方退回清单里那一句
+        // （主语言是英语，清单里写的**就是**英语，所以"没写"是常态，不是缺陷）。
+        assert_eq!(英文.描述(), None, "表里没写就退回清单，别凭空造一句");
 
         // 前缀命中：应用 zh-CN、插件只有 zh。
         let dir2 = 临时目录("前缀");
@@ -277,7 +305,7 @@ mod tests {
         let 包 = 装(&清单(dir.clone(), &["zh-CN", "en"]), "zh-CN");
         assert!(包.ok, "清单里有 zh-CN，就不该说「不支持你的语言」");
         assert_eq!(包.lang.as_deref(), Some("zh-CN"));
-        assert!(包.表.is_empty(), "表空了，交给插件的 `or 原文` 兜底");
+        assert!(包.表.is_empty(), "表空了，交给拓展的 `or 原文` 兜底");
         assert_eq!(包.名字(), None);
 
         // 英语源的插件：只声明 en、不带任何表——同样不算"不支持"。
@@ -317,7 +345,7 @@ mod tests {
         assert_eq!(
             t.get::<Option<String>>("app_lang").unwrap().as_deref(),
             Some("zh-CN"),
-            "应用在说哪种语言，插件永远读得到"
+            "应用在说哪种语言，拓展永远读得到"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

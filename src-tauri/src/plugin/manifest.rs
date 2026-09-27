@@ -368,7 +368,7 @@ impl Manifest {
         if meta.entry.contains("..") || Path::new(&meta.entry).is_absolute() {
             return Err(NotaError::Manifest {
                 file: file.to_path_buf(),
-                reason: format!("entry `{}` 必须是插件目录内的相对路径", meta.entry),
+                reason: format!("entry `{}` 必须是拓展目录内的相对路径", meta.entry),
             });
         }
 
@@ -393,7 +393,7 @@ impl Manifest {
                 file: file.to_path_buf(),
                 reason: format!(
                     "`langs` 里没有 `en`（现在写的是 {:?}）——英语是必须有的兜底：\
-                     应用的语言不在这个表里时，插件一律用英语显示（用户 2026-09-25 定的）",
+                     应用的语言不在这个表里时，拓展一律用英语显示（用户 2026-09-25 定的）",
                     meta.langs
                 ),
             });

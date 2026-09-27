@@ -43,7 +43,7 @@
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { columnResizingPluginKey } from "@milkdown/kit/prose/tables";
+import { columnResizing, columnResizingPluginKey } from "@milkdown/kit/prose/tables";
 import { $prose } from "@milkdown/kit/utils";
 
 /**
@@ -221,6 +221,41 @@ export function 应用列宽(view: EditorView, 记着: Record<string, number[]>)
 
   if (改了) view.dispatch(tr.setMeta("addToHistory", false));
 }
+/**
+ * **拖列宽的插件本体**（2026-09-27 起由本仓自己造，不再用 `gfm` 导出的那一个）。
+ *
+ * # 为什么要自己造一个：`defaultCellMinWidth`
+ *
+ * `prosemirror-tables` 的 `columnResizing` 有个选项 `defaultCellMinWidth`
+ * （默认 **100**）。它的作用**不是**"每列至少 100px"，而是**给整张表算一个
+ * `min-width`**：`TableView` 每次更新都按"每一列各自的宽度，没有宽度的列按这个
+ * 数补"求和，把结果写成表格上的**行内** `min-width`（库里 `updateColumnsOnResize`
+ * 最后那两行）。于是列一多，表格就先被钉死在 `列数 × 100px` 上：**8 列 = 800px**，
+ * 比正文列（`--content-width`，默认 760px）还宽，`.tableWrapper` 自带的
+ * `overflow-x: auto` 顺手给出一条横向滚动条——用户报的
+ * 「表格全宽度是钉死的」正是这一条。
+ *
+ * ⚠️ **"钉死"不是 CSS 写的**（`styles/editor.css` 里一条 `width` 都没有），
+ * 是这段 JS 每次更新算出来写进去的；所以在 CSS 那边加多少选择器、多少
+ * `!important` 都改不动它，只能从这个选项下手。
+ *
+ * 给 **0** 就是"没拖过的列不预留宽度"：行内 `min-width` 变成 `0px`、`width`
+ * 留空，库自带的 `table-layout: fixed; width: 100%` 于是说了算——**表格跟着
+ * 正文列走，没有列宽的列等分**，与 Typora 的观感一致。
+ *
+ * ⚠️ **拖过列宽的表不受影响**：那些列有 `colwidth`，求和照旧；每一列都被拖过
+ * 时 `TableView` 还会把 `width` 也写死成那个和，那正是"用户点了名要这么宽"，
+ * 该留着（列数多到挤不下时才会再出滚动条，而那一次是用户自己拖出来的）。
+ *
+ * ⚠️ **单元格的最小宽度不归这个选项管**，它归 CSS：库里那条
+ * `min-width: var(--default-cell-min-width)` 读的是表格上的**行内变量**
+ * （`TableView` 建实例时把选项原样写进去），所以那边得用 `!important`
+ * 才按得住——那一段连同"为什么"在 `styles/editor.css` 里。
+ */
+export const 列宽拖动插件 = $prose(() =>
+  columnResizing({ defaultCellMinWidth: 0 }),
+);
+
 /**
  * 盯着"用户刚拖完一次列宽"的那个插件。
  *

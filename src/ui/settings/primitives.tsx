@@ -27,7 +27,7 @@
  *
  * # ⚠️ 搜索是"就地过滤"，不是"另建索引"
  *
- * 查询非空时**九个分节全部叠着渲染**，每一行自己拿标签、说明、**所属组的标题**
+ * 查询非空时**十一个分节全部叠着渲染**，每一行自己拿标签、说明、**所属组的标题**
  * 去比，比不中的返回 `null` 不进 DOM；某一组一行都没留下时，CSS 的 `:has()`
  * 把整组也收掉（`settings.css` 里的 `.stg-group:not(:has(.stg-row))`）。
  *
@@ -398,17 +398,26 @@ export function ActionButton({
   onClick,
   disabled,
   title,
+  danger,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   /** 悬停提示。没做的按钮在这儿写清楚"为什么没做"。 */
   title?: string;
+  /**
+   * 危险动作（**不可逆**的那一类，现在是「拓展」页的「卸载」）。
+   *
+   * ⚠️ 用它的时候确认框**必须**先问一句——颜色只让人多看一眼，拦不住手快的人。
+   * 用法与 `ui/useDialogs.ts::askConfirm` 的 `danger: true` 是同一件事的两半
+   * （那一半管框，这一半管按钮）。
+   */
+  danger?: boolean;
 }) {
   return (
     <button
       type="button"
-      className="btn stg-action"
+      className={danger ? "btn stg-action stg-action-danger" : "btn stg-action"}
       onClick={onClick}
       disabled={disabled}
       title={title}

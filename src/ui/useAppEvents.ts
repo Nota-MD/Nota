@@ -70,11 +70,16 @@ export function useAppEvents(w: 事件接线): void {
       const subs = await Promise.all([
         on<NotifyPayload>(events.notify, (p) => toast(p.message, p.level)),
 
-        // 插件改了文档 → 让编辑器整篇换掉。
+        // 插件**或 MCP 客户端**改了文档 → 让编辑器整篇换掉。
         // ⚠️ 这里**不去比 revision**，直接覆盖：能走到这条分支就说明
         // 改动不是本编辑器发起的（自己发起的不会绕一圈回来）。
+        //
+        // ⚠️ `"mcp"` 是 2026-09-27 加的（MCP 那一格）：AI 客户端通过
+        // `nota_write` 改文档，走的是与插件**同一个**事件、同一段载荷，
+        // 差别只有 `origin` 这个字。所以这里放行两种来源，而不是另开一条事件——
+        // 另开一条就要在这一段旁边再抄一遍"改的不是当前这份该怎么办"。
         on<DocumentChangedPayload>(events.documentChanged, (p) => {
-          if (p.origin !== "plugin") return;
+          if (p.origin !== "plugin" && p.origin !== "mcp") return;
 
           if (p.id === activeIdRef.current) {
             editorRef.current?.setMarkdown(p.text);

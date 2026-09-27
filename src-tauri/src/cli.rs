@@ -32,6 +32,14 @@
 //!
 //! ⚠️ **本模块一个选项都不解析**（`首个要打开的文件` 见到 `-` 开头的一律跳过），
 //! 所以这两件事天然不打架：`nota --new-window 笔记.md` 里那个路径照样选得出来。
+//!
+//! # 2026-09-27 加：`--mcp`（**这个选项是"给 AI 客户端当 MCP 服务器"的意思**）
+//!
+//! 同一个家族的第三个标记：AI 客户端（Claude Code / Desktop 之类）拿
+//! `nota --mcp` 起一个进程，把 stdio 当 MCP 的传输。⚠️ 它**与 `--new-window`
+//! 在单实例上正好相反**：没有在跑的 Nota 时，这一份就是那一份（照常抢位置）；
+//! 有在跑的 Nota 时，`lib.rs` 在更早的一步就把这一份转接走了。这条差别
+//! 由 `mcp` 模块负责，这里只管"认出这个选项"。
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
@@ -39,6 +47,14 @@ use std::path::PathBuf;
 /// 「开一个新窗口」那个选项的**唯一**写法。⚠️ 只有这一处定义：
 /// `nota_window_open_new` 拼命令时用它，`要开新窗口` 认它，两边必须是同一个串。
 pub const 新窗口选项: &str = "--new-window";
+
+/// 「给 AI 客户端当 MCP 服务器」那个选项的**唯一**写法（2026-09-27 加）。
+///
+/// ⚠️ 与 `--new-window` 一样是**程序自己的标记**，不是"要打开的文件"：
+/// `首个要打开的文件` 见到 `-` 开头的一律跳过，所以这两件事不打架。
+/// 判据与含义在 `mcp` 模块头上（那份进程要么转接给已经在跑的 Nota、
+/// 要么自己就是那一份）。
+pub const MCP选项: &str = "--mcp";
 
 /// 从参数表里挑出"要打开的文件"，没有就是 `None`。
 ///
@@ -70,6 +86,22 @@ pub fn 要开新窗口(args: impl IntoIterator<Item = OsString>) -> bool {
     args.into_iter()
         .skip(1)
         .any(|a| a.as_os_str() == OsStr::new(新窗口选项))
+}
+
+/// 这次启动是不是**要给 AI 客户端当 MCP 服务器**（`nota --mcp`）。
+///
+/// ⚠️ 判法、零号参数的规矩、以及"要整串相等"这三条与 `要开新窗口` **完全一样**
+/// （那三条的理由见它顶上那段）：这是同一个"程序自己的标记"家族，别在这里
+/// 单独发明一套。
+///
+/// ⚠️ 它**不禁用单实例**——与 `--new-window` 那一条正好相反，理由写在
+/// `mcp` 模块头上：没有在跑的 Nota 时，这一份就是那一份（照常抢位置），
+/// 而**有**在跑的 Nota 时，这一份在 `lib.rs` 里更早就转接走了、根本走不到
+/// 抢占那一步。
+pub fn 要开_mcp(args: impl IntoIterator<Item = OsString>) -> bool {
+    args.into_iter()
+        .skip(1)
+        .any(|a| a.as_os_str() == OsStr::new(MCP选项))
 }
 
 /// 一个参数**当什么用**：`nota://` 链接要先把里面的路径解出来，别的原样当路径。
@@ -362,6 +394,45 @@ mod tests {
     fn 新窗口选项不妨碍挑出要打开的文件() {
         assert_eq!(
             首个要打开的文件(参数表(&["/usr/bin/nota", "--new-window", "/tmp/笔记.md"])),
+            Some(PathBuf::from("/tmp/笔记.md"))
+        );
+    }
+
+    // ── `--mcp`（2026-09-27）──────────────────────────────────────────────
+
+    /// 认出这个选项（位置不拘）——与 `--new-window` 同一个家族。
+    #[test]
+    fn mcp那个选项认得出来() {
+        assert!(要开_mcp(参数表(&["nota", "--mcp"])));
+        assert!(要开_mcp(参数表(&["/usr/bin/nota", "--mcp", "/tmp/笔记.md"])));
+        assert!(要开_mcp(参数表(&["/usr/bin/nota", "/tmp/笔记.md", "--mcp"])));
+    }
+
+    /// ⚠️ 零号参数不算（同一个理由：程序自己的路径不是选项）。
+    #[test]
+    fn mcp的程序自己的路径不算选项() {
+        assert!(!要开_mcp(参数表(&["--mcp"])));
+        assert!(!要开_mcp(Vec::new()));
+    }
+
+    /// 普通启动不是 MCP；多半截也不算（要整串相等）。
+    #[test]
+    fn 普通启动不是mcp() {
+        assert!(!要开_mcp(参数表(&["nota"])));
+        assert!(!要开_mcp(参数表(&["nota", "/tmp/笔记.md"])));
+        assert!(!要开_mcp(参数表(&["nota", "--mcpx", "/tmp/a.md"])));
+        assert!(
+            !要开_mcp(参数表(&["nota", "--new-window"])),
+            "两个选项各认各的"
+        );
+    }
+
+    /// ⚠️ 与 `--new-window` 同一条：选项被跳过，而它后面那个路径照样选得出来
+    /// （`nota --mcp /tmp/a.md` 在"一份都没跑"的形态下要打开这一份）。
+    #[test]
+    fn mcp选项不妨碍挑出要打开的文件() {
+        assert_eq!(
+            首个要打开的文件(参数表(&["/usr/bin/nota", "--mcp", "/tmp/笔记.md"])),
             Some(PathBuf::from("/tmp/笔记.md"))
         );
     }

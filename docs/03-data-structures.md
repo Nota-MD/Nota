@@ -775,6 +775,7 @@ view_mode = "split"
 | `capabilities` | `Vec<String>` | | `[]` | 逐个过 `Capability::parse`；**空 = 纯声明式插件**（只贡献菜单/面板，不碰文档与磁盘） |
 
 必填项缺失 = TOML 解析失败 → `NotaError::Manifest`。
+⚠️ **`name` / `description` 这两栏可以被插件的语言表改写**（**保留键**，2026-09-27 起是两个）：`lang/<tag>.toml` 里同名的两条分别盖掉清单里的值（`lua/api/i18n.rs` 的 `语言包::名字` / `语言包::描述`，落点是 `plugin/mod.rs` 拼 `PluginInfo` 那两处）。⚠️ **主语言是英语**（用户 2026-09-27 定：「英文才是主语言，中文才是翻译包」）——所以清单里这两行写英语、中文挪进 `lang/zh-CN.toml`。⚠️ **`id` 不在可改写之列**：它是身份，签名、信任表、设置段全按它索引（§7.3 第一条）。口径在 `docs/11` §2.4 ②。
 
 ### 7.2 `Manifest`：解析好、校验过的清单
 

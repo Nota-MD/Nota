@@ -33,17 +33,17 @@ pub enum NotaError {
     #[error("配置读写失败：{0}")]
     Config(String),
 
-    #[error("插件清单有误（{file}）：{reason}")]
+    #[error("拓展清单有误（{file}）：{reason}")]
     Manifest { file: PathBuf, reason: String },
 
-    #[error("插件 {id} 需要 API 版本 {wanted}，宿主是 {have}")]
+    #[error("拓展 {id} 需要 API 版本 {wanted}，宿主是 {have}")]
     PluginApiMismatch {
         id: String,
         wanted: u32,
         have: u32,
     },
 
-    #[error("Lua 出错（插件 {plugin}）：{message}")]
+    #[error("Lua 出错（拓展 {plugin}）：{message}")]
     Lua { plugin: String, message: String },
 
     #[error("没有活动文档")]

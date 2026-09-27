@@ -12,10 +12,10 @@
 # ⚠️ 句子里的 `%s` / `%d` 是占位符，译文里的**个数和顺序必须与原句一致**
 # （走 `string.format`）；真要写一个百分号，写成 `%%`。
 #
-# ⚠️ `name` 是**保留键**：插件显示名（覆盖 `plugin.toml` 里的 `name`）。
-# 它不必出现在代码里，只影响插件栏/面板标题上那个名字。
-
-name = "Slidev Slides"
+# ⚠️ `name` / `description` 是**保留键**：清单里那两行（插件显示名、列表里那一行
+# 简介）在**本语言**下怎么写。它们不必出现在代码里。
+# ⚠️ **主语言是英语**（2026-09-27 用户定的）：清单里 `name` / `description` 一律写
+# 英语，所以**这份英语表通常不必写这两条**——只有要换一种英语说法时才写。
 
 "Slidev 拿入口文件所在的目录当项目根（`![](./图.png)` 这类相对路径也指望它），新建的文档还没有目录可用。先存一下盘再试。" = "Slidev takes the entry file's directory as the project root (relative paths such as `![](./img.png)` rely on it), and a brand-new document has no directory yet. Save it first, then try again."
 "Slidev%s 是装了的，但 `%s` 还不是一个 Slidev 项目。" = "Slidev%s is installed, but `%s` is not a Slidev project yet."

@@ -82,7 +82,7 @@ export function 插件菜单栏(items: PluginMenuItem[]): MenuSpec | null {
     id: "plugins",
     // ⚠️ 这里用的是**模块级的 `t`**：这个函数是"渲染期间被组件调用的纯函数"
     // （`ui/usePlugins.ts` 的 `useMemo`），不是模块级常量。
-    label: t("插件"),
+    label: t("拓展"),
     // 一条都没有就**不摆分隔线**——一栏里只有一条分隔线看着像坏了。
     items: 认得.length && 无处.length ? [...认得, "sep", ...无处] : [...认得, ...无处],
   };

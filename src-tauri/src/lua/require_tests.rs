@@ -27,7 +27,7 @@ fn 插件目录(名: &str) -> std::path::PathBuf {
         "nota-require-{名}-{}-{唯一}",
         std::process::id()
     ));
-    std::fs::create_dir_all(&目录).expect("建临时插件目录");
+    std::fs::create_dir_all(&目录).expect("建临时拓展目录");
     目录
 }
 
@@ -214,8 +214,8 @@ fn require_找不到时话里有线索() {
     assert!(话.contains("missing.lua"), "该说出试过哪个文件名：{话}");
     assert!(话.contains("init.lua"), "两种写法都该提到：{话}");
     assert!(
-        话.contains("只在本插件自己的目录里找"),
-        "该说清搜索范围（不然插件作者会去翻 `package.path`）：{话}"
+        话.contains("只在本拓展自己的目录里找"),
+        "该说清搜索范围（不然拓展作者会去翻 `package.path`）：{话}"
     );
 
     // ⚠️ **只认 `.lua`**：`.so` 是绕过整个沙箱的一条路（C 扩展里什么都能干），

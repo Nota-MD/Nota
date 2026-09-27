@@ -241,6 +241,13 @@ def 读表(路径: str) -> set[str]:
 欠账: dict[str, list[str]] = {}
 插件对 = 0
 
+# **保留键**：宿主认得、不必出现在代码里的那两条——它们盖掉清单里的
+# `name` / `description`（见 `src-tauri/src/lua/api/i18n.rs::语言包`）。
+# ⚠️ 2026-09-27 从只有 `name` 变成两条：那天用户报「拓展语言混杂」，
+# 根因是简介不能随语言变（标题英语、简介中文）。加键时**这里要同批加**，
+# 不然它会以"代码里找不到这句原文"的样子报出来（那正是它该报的形状）。
+保留键 = {"name", "description"}
+
 for 目录 in sorted(glob.glob("plugins/*")):
     清单 = f"{目录}/plugin.toml"
     if not os.path.isfile(清单):
@@ -269,8 +276,8 @@ for 目录 in sorted(glob.glob("plugins/*")):
     表们 = sorted(glob.glob(目录 + "/lang/*.toml"))
     for toml in 表们:
         键们 = 读表(toml)
-        插件对 += len(键们 - {"name"})
-        for 键 in sorted(键们 - {"name"} - 用的键):
+        插件对 += len(键们 - 保留键)
+        for 键 in sorted(键们 - 保留键 - 用的键):
             废插件键.append(f"{toml} · {键}")
     声明 = re.search(r"^\s*langs\s*=", open(清单, encoding="utf-8").read(), re.M)
     if 声明:

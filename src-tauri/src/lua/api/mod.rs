@@ -204,7 +204,7 @@ fn command_table(lua: &Lua, plugin_id: &str) -> Result<Table, NotaError> {
             // "怎么点下去跑的是另一个函数"查到天亮。
             if let Ok(Value::Function(_)) = commands.get::<Value>(name.as_str()) {
                 return Err(mlua::Error::RuntimeError(format!(
-                    "插件 {id} 重复注册命令 `{name}`"
+                    "拓展 {id} 重复注册命令 `{name}`"
                 )));
             }
             commands.set(name, f)?;
@@ -413,7 +413,7 @@ mod tests {
             let m = 造清单(&format!("u{i}"), &[*c]);
             assert!(
                 装_ui吗(&m),
-                "只申请 `{}` 也应该装出 nota.ui —— 漏了它，插件会拿到 nil 并报 \
+                "只申请 `{}` 也应该装出 nota.ui —— 漏了它，拓展会拿到 nil 并报 \
                  `attempt to index a nil value`（BUG-8）",
                 能力名(*c)
             );
@@ -425,7 +425,7 @@ mod tests {
         // 按能力装表、不装空壳：没申请就是 nil，不是"存在但调用时报错"。
         // ⚠️ 目录名只能是 ASCII——清单的 id 过校验，`nota.空` 这种会被 `load` 拦下。
         let m = 造清单("empty", &[Capability::ProcessGit, Capability::DocumentRead]);
-        assert!(!装_ui吗(&m), "没申请任何 ui.* 的插件不该拿到 nota.ui");
+        assert!(!装_ui吗(&m), "没申请任何 ui.* 的拓展不该拿到 nota.ui");
     }
 
     /// ⚠️ **`UI能力` 与 `ui.rs` 里实际的判据必须一一对应。**

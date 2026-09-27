@@ -38,8 +38,9 @@ export interface PanelDirtyPayload {
 export interface DocumentChangedPayload {
   id: DocId;
   text: string;
-  /** `"plugin"` 表示改动来自插件，前端要**照单全收**覆盖编辑器；
-   *  宿主自身的改动前端本来就知道，不会走这条。 */
+  /** 谁改的：`"plugin"`（Lua 插件的 `document.write`）或 `"mcp"`
+   *  （AI 客户端经 `nota_write`，2026-09-27 加）。两者前端都**照单全收**
+   *  覆盖编辑器；宿主自身的改动前端本来就知道，不会走这条。 */
   origin?: string;
 }
 

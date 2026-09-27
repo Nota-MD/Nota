@@ -37,11 +37,11 @@
 
 [plugin]
 id          = "nota.stats"
-name        = "写作统计"
+name        = "Writing Stats"
 version     = "0.5.0"
 api         = 2
 
-description = "像运动手表那样记一轮写作：开始、暂停、终止，一个大号数字显示每分钟打了多少字，下面一条随时间起伏的曲线。写完可以做成一张分享图（本轮或者今天）。"
+description = "Track a writing session like a sports watch: start, pause, stop. A big number shows words per minute, with a curve below that rises and falls over time. When you are done you can turn the session (or the day) into a share card."
 license     = "BSD-2-Clause"
 authors     = ["Nota contributors"]
 entry       = "main.lua"

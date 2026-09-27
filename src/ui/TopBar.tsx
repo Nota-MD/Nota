@@ -68,10 +68,10 @@ export function TopBar(props: {
         type="button"
         className={`btn toolbar-dock-toggle ${props.dockOpen ? "btn-on" : ""}`}
         onClick={props.onToggleDock}
-        title={props.dockOpen ? t("收起插件栏") : t("展开插件栏")}
+        title={props.dockOpen ? t("收起拓展栏") : t("展开拓展栏")}
         aria-pressed={props.dockOpen}
       >
-        {t("插件")}
+        {t("拓展")}
       </button>
     </header>
   );

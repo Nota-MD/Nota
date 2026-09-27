@@ -60,7 +60,7 @@ pub(crate) fn 预览表(
         if let Some(panel) = id.as_deref() {
             if !super::ui::有面板吗(lua, panel) {
                 return Err(mlua::Error::RuntimeError(format!(
-                    "插件 {plugin_id} 没有声明面板 `{panel}`，摊不到编辑区"
+                    "拓展 {plugin_id} 没有声明面板 `{panel}`，摊不到编辑区"
                 )));
             }
         }

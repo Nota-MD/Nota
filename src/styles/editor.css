@@ -759,17 +759,24 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
  * 不写字面颜色：主题换了底色而这里钉死灰色的话，深色主题下就会看到一块亮边框。
  * `themes/paper.css` 那份是形状参考（同一套属性、同样的量级），不是抄来的配色。
  *
- * # ⚠️ `width: 100%` 在这里**不起作用**（2026-09-25 查过，别再试了）
+ * # ⚠️ 表格的宽**不在这里定**（2026-09-27 改了口径，之前那版注释记的是旧结论）
  *
- * 表格的宽是 `prosemirror-tables` 的 `TableView` 定的——它在建 DOM 时把
- * `table.style.width` / `minWidth` 写成**行内样式**（按各列的 `colwidth` 求和，
- * 没有 `colwidth` 时按每列内容算）。行内样式压过本文件里任何选择器，所以
- * 不管这里的权重写到多高、加不加 `!important` 之外的修饰，表格都是**按内容
- * 缩着**的（短内容的表看起来就是窄窄一小块）。
+ * 宽度有**两个**来源，都不是本文件：
  *
- * 这**不是**这一段的缺陷："看得见"要的是边框和内边距，那些是这儿的活；
- * "多宽"是 `TableView` 的活，它还得让用户拖列宽。想强行拉满就得和它抢行内
- * 样式（`!important`），代价是列宽拖动跟着变形——那是另一件事，没做。
+ * 1. **库的 CSS**：`prosemirror-tables/style/tables.css` 那条
+ *    `.ProseMirror table { table-layout: fixed; width: 100% }`（`main.tsx` 引的）。
+ *    **这一条才是"表格跟着正文列走"的那一半**——它 2026-09-26 才被引进来，
+ *    在那之前表格确实是按内容缩着的（"短内容的表看起来窄窄一小块"）。
+ * 2. **库的 JS**：`TableView` 每次更新把 `table.style.width` / `minWidth` 写成
+ *    **行内样式**——按各列的 `colwidth` 求和，**没有 `colwidth` 的列按
+ *    `defaultCellMinWidth` 补**（那个数的默认值是 **100**）。行内样式压过本文件
+ *    里任何选择器，所以"表格比正文列还宽、底下多出一条横向滚动条"是**它算出来的**，
+ *    2026-09-27 起把那个选项改成 0（`table-width.ts::列宽拖动插件`），症状消失。
+ *
+ * ⚠️ 记住这个分工：**"多宽"归库（选项 + 行内样式），"看得见"归这里**
+ * （边框、内边距、表头底色）。在 CSS 这边跟行内样式抢宽度是白费力气——
+ * 唯一的例外是下面那条 `--default-cell-min-width`，它抢的是**单元格的最小宽度**，
+ * 而且必须 `!important` 才按得住（理由写在那一条上）。
  */
 :where(.editor-mount .ProseMirror table) {
   border-collapse: collapse;
@@ -815,12 +822,26 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
  * **只在编辑区生效**（导出、打印那些离屏实例里没有拖动手柄）。
  */
 
-/* ⚠️ 库那份 CSS 用了这个变量却没定义过它（`min-width: var(--default-cell-min-width)`）。
- * 不定义的话 `min-width` 是**非法值**，等于没有——"没拖过的列至少这么宽"
- * 这条规矩就此消失，短内容的表格每列都会被挤成一条。给一个**相对量**（em）
- * 而不是像素：文档主题会改正文字号，`em` 跟着走，像素不会。 */
-.editor-mount .ProseMirror {
-  --default-cell-min-width: 3em;
+/* ⚠️ 这个变量**必须写在表格上、而且必须 `!important`**——两个都省不得。
+ *
+ * 库那份 CSS 用 `min-width: var(--default-cell-min-width)` 给"没拖过的列"留一个
+ * 最小宽度，但**它自己不定义这个变量**：得有人给值，不给就是非法值、等于没有，
+ * 短内容的表格每列会被挤成一条线。
+ *
+ * ⚠️ 而**这个"有人"不能是 `.editor-mount .ProseMirror` 那一层**（2026-09-27 改）：
+ * `TableView` 建实例时会把它拿到的那个选项**原样写成表格上的行内变量**
+ * （`prosemirror-tables/dist/index.js:2289` 那句 `this.table.style.setProperty`，
+ * 值就是 `列宽拖动插件` 传进去的 `defaultCellMinWidth`）。自定义属性是**继承**的、
+ * 且**离得近的赢**，所以写在外层会被表格自己的行内值整个遮住——外层那条规则
+ * 会变成一条**永远不生效的死规则**，而症状是"这条规则像没写一样"。
+ *
+ * ⚠️ 表上写了还不够：行内声明的优先级**高于本文件里任何普通选择器**，
+ * 只有作者样式表里的 `!important` 能压过它（这是 CSS 层叠里少数几个
+ * "`!important` 是唯一办法"的位置之一，不是偷懒）。
+ *
+ * ⚠️ 值给**相对量**（em）而不是像素：文档主题会改正文字号，`em` 跟着走，像素不会。 */
+.editor-mount .ProseMirror table {
+  --default-cell-min-width: 3em !important;
 }
 
 /* 手柄颜色。库那份写死了 `#adf`（浅蓝）——深色主题下它是一道刺眼的白线，

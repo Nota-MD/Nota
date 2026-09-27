@@ -61,7 +61,7 @@ impl PluginHost {
         // ⚠️ 用临时目录里那一份 `plugin.toml` 走**真的** `Manifest::load`，
         // 不另写一个"从字节解清单"的解析器——校验规则只能有一份，两份迟早对不上。
         let 清单文本 = 包.找(清单文件).ok_or_else(|| {
-            NotaError::other("这个包里没有 `plugin.toml`——它不是一个插件包".to_owned())
+            NotaError::other("这个包里没有 `plugin.toml`——它不是一个拓展包".to_owned())
         })?;
 
         let 用户目录 = crate::paths::user_plugins_dir()?;
@@ -109,7 +109,7 @@ impl PluginHost {
         if let Some(占) = self.频道被占(&id) {
             return Err(NotaError::other(format!(
                 "`{id}` 与已经装着的 `{占}` 抢同一个事件频道\
-                 （插件 id 里的 `.` 在事件名里写作 `-`）——换一个 id 再装"
+                 （拓展 id 里的 `.` 在事件名里写作 `-`）——换一个 id 再装"
             )));
         }
 
@@ -168,19 +168,28 @@ impl PluginHost {
     ///
     /// ⚠️ **先删磁盘、再改内存**：删不掉就如实报错、状态原样不动。
     /// 反过来的话会出现"界面上没了、文件还在"，下次启动它又回来了。
+    ///
+    /// ⚠️ 顺序上还有一条（2026-09-27 补）：**先 `unload` 与 [`Self::收摊`]、
+    /// 再删目录**。`收摊` 收的是它开的开发服务器和编辑区里摊着的那一块，
+    /// 而那两件事都要按插件 id 去查状态——目录先删掉不碍事，但**内存里那一条
+    /// 记录**（`self.plugins[i]`）得还在，否则 `收摊` 的调用点就成了
+    /// "对一个已经不存在的插件收摊"。现在这个次序两边都满足。
     pub fn 卸(&mut self, id: &str) -> Result<()> {
         let i = self
             .位置(id)
-            .ok_or_else(|| NotaError::other(format!("没有这个插件：{id}")))?;
+            .ok_or_else(|| NotaError::other(format!("没有这个拓展：{id}")))?;
         let dir = self.plugins[i].manifest.dir.clone();
         if !在用户目录里(&dir) {
             return Err(NotaError::other(format!(
-                "`{id}` 是内置插件（{}），卸不掉——它在安装包里，删了下次启动还会回来。\
+                "`{id}` 是内置拓展（{}），卸不掉——它在安装包里，删了下次启动还会回来。\
                  要让它不起作用，用「停用」",
                 dir.display()
             )));
         }
         self.plugins[i].unload();
+        // ⚠️ 原来这里漏了这一步（2026-09-27 修）：卸载之后插件不在清单里了，
+        // 界面上再没有那一行可以点「停止预览」，它开的那个进程会一直占着端口。
+        self.收摊(id);
         std::fs::remove_dir_all(&dir)
             .map_err(|e| NotaError::other(format!("删不掉 `{}`：{e}", dir.display())))?;
         self.plugins.remove(i);
@@ -192,7 +201,7 @@ impl PluginHost {
     pub fn 信(&mut self, id: &str) -> Result<()> {
         let (key_id, 公钥, 名字) = {
             let r = self.installed.record(id).ok_or_else(|| {
-                NotaError::other(format!("没有 `{id}` 的来路记录——它多半是内置插件"))
+                NotaError::other(format!("没有 `{id}` 的来路记录——它多半是内置拓展"))
             })?;
             let 名字 = self
                 .get(id)
@@ -387,7 +396,7 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(落点.join("plugin.toml")).unwrap(),
             "旧的",
-            "回滚没做：原来那个插件被弄没了"
+            "回滚没做：原来那个拓展被弄没了"
         );
 
         let _ = std::fs::remove_dir_all(&根);

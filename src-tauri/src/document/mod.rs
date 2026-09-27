@@ -289,7 +289,7 @@ impl DocumentStore {
         let strict = self.strict_markdown;
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
         if doc.text == text {
-            return Ok(doc.revision); // 内容没变时 revision 不动，插件靠它判新旧
+            return Ok(doc.revision); // 内容没变时 revision 不动，拓展靠它判新旧
         }
         doc.text = text;
         doc.dirty = doc.text != doc.clean_text;

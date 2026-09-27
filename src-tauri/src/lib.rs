@@ -28,6 +28,7 @@ pub mod image;
 pub mod lang;
 pub mod log;
 pub mod lua;
+pub mod mcp;
 pub mod native_menu;
 pub mod pandoc;
 pub mod pandoc_format;
@@ -115,6 +116,31 @@ pub fn run() {
     // ⚠️ 挑"要打开哪个"仍然只走 `cli.rs` 那一份规则（这里挑出来的东西还要
     // 转交给已经在跑的那一份，它那边也调同一个函数）。
     let 这次要开的 = cli::首个要打开的文件(std::env::args_os());
+
+    // ── ⓿''' `--mcp`：AI 客户端连上来的入口（2026-09-27）────────────────────
+    // 形态一（**最常见的那一种**）：已经有一份 Nota 在跑 → 这一份进程**不开窗、
+    // 不当主人**，只把自己变成一根管子，把 stdio 接到那一份的 socket 上。
+    // AI 于是够到的是用户**此刻正在编辑的那份文档**（那正是这条功能的意义）。
+    //
+    // 形态二：一份都没跑（或者转接失败）→ **照常往下走**，这一份就是那一份
+    // Nota，并在 `setup` 里就地服务 MCP（见那一节 ⑨）。
+    //
+    // ⚠️ 所以 `--mcp` **不禁用单实例**——与隔壁 `--new-window` 正好相反。
+    // 理由：形态二里这一份必须占住那个位置，否则用户在它开窗之后双击一个
+    // .md，会凭空多出第三个 Nota 进程。
+    //
+    // ⚠️ 代理跑完就 `exit(0)`：那时 AI 客户端已经关掉了 stdin，这一份进程
+    // **什么都没建**（没建窗、没加载插件、没抢位置），跟隔壁"已转交"那条
+    // 一模一样，没有清理可做。
+    let 要开_mcp = cli::要开_mcp(std::env::args_os());
+    if 要开_mcp {
+        match mcp::接上() {
+            Ok(()) => std::process::exit(0),
+            Err(e) => crate::日志!(
+                "[nota] --mcp：没找到在跑的 Nota（{e}），这一份自己开窗并服务 MCP"
+            ),
+        }
+    }
 
     // ── ⓿' `--new-window`：**这一份进程不参与单实例**（2026-09-27）──────────
     // 标签页右键那一条「在新窗口中打开」就是靠它：Nota `spawn` 一份自己、
@@ -214,7 +240,7 @@ pub fn run() {
                 应用语言: 应用语言.clone(),
             };
             let plugins = PluginHost::discover(resource_dir, &base);
-            crate::日志!("[nota] 载入 {} 个插件", plugins.count());
+            crate::日志!("[nota] 载入 {} 个拓展", plugins.count());
 
             // ── ③ 交给 Tauri 托管 ─────────────────────────────────────────
             app.manage(AppState {
@@ -277,6 +303,19 @@ pub fn run() {
             //    注册不上就是"点链接打不开"，那不该让应用起不来。
             //    ⚠️ 它**只在需要时**才动盘，见那个文件头（"幂等，而且只在必要时才动"）。
             url_scheme::注册();
+            // ⑨ MCP 服务器（2026-09-27 加）。⚠️ **只在这一份进程"就是那个 Nota"
+            //    的时候才起**（`--mcp` 且 ⓿''' 那一步没转接出去）——别的启动
+            //    方式下 stdin/stdout 是终端，服务它没有意义，还会把用户终端
+            //    上打的字当成 JSON-RPC 吃进去。
+            //    ⚠️ 起的是**一条线程**（`mcp::起` 里 spawn），不是在这里阻塞读：
+            //    `setup` 是建窗之前跑的，在这儿读 stdin 窗口永远出不来。
+            //    ⚠️ 这里**又算了一遍** `cli::要开MCP`（它是个纯函数，不碰 IO），
+            //    而不是把上面那个 bool 借进来：这个闭包要活到 `'static`，
+            //    借一个局部变量过不了编译。
+            if cli::要开_mcp(std::env::args_os()) {
+                mcp::起(app.handle().clone());
+                crate::日志!("[nota] MCP：这一份进程服务 stdio（名册见 mcp/tools.rs）");
+            }
 
             Ok(())
         })
@@ -365,6 +404,9 @@ pub fn run() {
             commands::plugin::nota_plugin_uninstall,
             commands::plugin::nota_plugin_trust,
             commands::plugin::nota_plugin_trust_list,
+            commands::plugin::nota_plugin_export,
+            commands::plugin::nota_plugin_export_name,
+            commands::plugin::nota_plugins_open_dir,
             commands::menu::nota_native_menu_apply,
             nota_frontend_ready,
             nota_startup_file,

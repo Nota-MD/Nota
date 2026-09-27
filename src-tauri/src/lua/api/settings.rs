@@ -115,7 +115,7 @@ pub fn build(lua: &Lua, plugin_id: &str) -> NotaResult<Table> {
 /// 但 `.unwrap()` 在这里是错的：中毒之后那把锁里的数据可能是半截的，
 /// 而"设置读不出来"该是一句人话，不是一次 panic。
 fn 锁坏了<E: std::fmt::Display>(e: E) -> mlua::Error {
-    mlua::Error::RuntimeError(format!("插件设置状态坏了：{e}"))
+    mlua::Error::RuntimeError(format!("拓展设置状态坏了：{e}"))
 }
 
 /// 一个插件的设置格：一份内存里的值 ＋ 它的落点。
@@ -140,7 +140,7 @@ fn 读(路径: &Path) -> BTreeMap<String, toml::Value> {
     match toml::from_str::<BTreeMap<String, toml::Value>>(&text) {
         Ok(m) => m,
         Err(e) => {
-            crate::日志!("[nota] 插件设置文件读不了（本次当空的用）：{}：{e}", 路径.display());
+            crate::日志!("[nota] 拓展设置文件读不了（本次当空的用）：{}：{e}", 路径.display());
             BTreeMap::new()
         }
     }
@@ -148,8 +148,8 @@ fn 读(路径: &Path) -> BTreeMap<String, toml::Value> {
 
 /// 文件头。用户手改时先看到它，知道这是什么、权限为什么是这样。
 const 文件头: &str = "\
-# 这个文件是 Nota 插件的设置。可以直接用编辑器改，改完存盘即生效。
-# ⚠️ 里面可能有明文密钥（比如 AI 插件的 API key）。文件权限是 0600
+# 这个文件是 Nota 拓展的设置。可以直接用编辑器改，改完存盘即生效。
+# ⚠️ 里面可能有明文密钥（比如 AI 拓展的 API key）。文件权限是 0600
 #    （只有你自己读得到），别把它提交进任何仓库。
 ";
 
@@ -161,7 +161,7 @@ fn 写(路径: &Path, 值们: &BTreeMap<String, toml::Value>) -> NotaResult<()> 
     }
 
     let body = toml::to_string(值们)
-        .map_err(|e| NotaError::other(format!("插件设置序列化失败：{e}")))?;
+        .map_err(|e| NotaError::other(format!("拓展设置序列化失败：{e}")))?;
     let text = format!("{文件头}{body}");
 
     // ⚠️ 用 `OpenOptions` 带上创建时的 mode，**不是**"写完了再 chmod"——
@@ -234,7 +234,7 @@ fn 值转toml(v: &Value) -> mlua::Result<Option<toml::Value>> {
         Value::String(s) => Some(toml::Value::String(s.to_string_lossy().to_string())),
         other => {
             return Err(mlua::Error::RuntimeError(format!(
-                "插件设置只支持文本、数字、布尔（写 `nil` 表示删掉这个键），\
+                "拓展设置只支持文本、数字、布尔（写 `nil` 表示删掉这个键），\
                  不支持{}——要存结构化的东西请自己拼成文本",
                 类型名(other)
             )))
@@ -316,7 +316,7 @@ mod tests {
         let 路径 = 临时目录("mode").join("t.toml");
         写(&路径, &BTreeMap::new()).unwrap();
         let mode = std::fs::metadata(&路径).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o600, "插件设置文件权限成了 {mode:o}，里面可能有密钥");
+        assert_eq!(mode, 0o600, "拓展设置文件权限成了 {mode:o}，里面可能有密钥");
 
         // 覆盖写也还是 0600（`truncate(true)` 不会改 mode，但这条钉住它）。
         写(&路径, &BTreeMap::new()).unwrap();
@@ -331,7 +331,7 @@ mod tests {
         std::fs::write(&路径, "这不是 = = toml").unwrap();
         assert!(
             读(&路径).is_empty(),
-            "一份手改坏的设置该表现为「回到默认值」，不该让插件加载失败"
+            "一份手改坏的设置该表现为「回到默认值」，不该让拓展加载失败"
         );
     }
 
@@ -371,7 +371,7 @@ mod tests {
         let lua = Lua::new();
         let arr = toml::Value::Array(vec![toml::Value::Integer(1)]);
         let v = toml转lua(&lua, &arr).unwrap();
-        assert!(!v.is_nil(), "复合值读回来变成了 nil，插件会把用户的设置覆盖掉");
+        assert!(!v.is_nil(), "复合值读回来变成了 nil，拓展会把用户的设置覆盖掉");
         assert!(matches!(v, Value::String(_)), "该给它一串文本");
     }
 }

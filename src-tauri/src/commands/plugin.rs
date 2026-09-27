@@ -35,7 +35,7 @@ pub async fn nota_plugin_set_enabled(
         host.set_enabled(&id, enabled)
     })
     .await
-    .map_err(|e| NotaError::other(format!("插件启用/停用的执行线程挂了：{e}")))?
+    .map_err(|e| NotaError::other(format!("拓展启用/停用的执行线程挂了：{e}")))?
 }
 
 /// 从一个插件包（`.nota-plugin` / `.zip`）或目录装一个插件。返回它的 id。
@@ -56,7 +56,7 @@ pub async fn nota_plugin_install(app: tauri::AppHandle, path: String) -> Result<
         host.装(std::path::Path::new(&path))
     })
     .await
-    .map_err(|e| NotaError::other(format!("安装插件的执行线程挂了：{e}")))?
+    .map_err(|e| NotaError::other(format!("安装拓展的执行线程挂了：{e}")))?
 }
 
 /// 卸掉一个插件：**磁盘上删掉、内存里拿掉、账本上忘掉**。
@@ -71,7 +71,7 @@ pub async fn nota_plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<
         host.卸(&id)
     })
     .await
-    .map_err(|e| NotaError::other(format!("卸载插件的执行线程挂了：{e}")))?
+    .map_err(|e| NotaError::other(format!("卸载拓展的执行线程挂了：{e}")))?
 }
 
 /// 信任一个插件的签名者（TOFU + 显式信任）。见 `plugin::PluginHost::信`。
@@ -79,6 +79,67 @@ pub async fn nota_plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<
 pub fn nota_plugin_trust(state: State<'_, AppState>, id: String) -> Result<()> {
     let mut host = state.plugins.lock().unwrap();
     host.信(&id)
+}
+
+/// 把一个已装的插件导出成一个 `.nota-plugin` 包（2026-09-27 加）。
+///
+/// ⚠️ `path` 由前端用**保存对话框**问出来（`@tauri-apps/plugin-dialog` 的 `save`），
+/// 宿主不自己弹框——与 [`nota_plugin_install`] 那条完全同源的理由。
+///
+/// ⚠️ 这个动作**只读**：它不碰插件自己、不碰设置、不签名。签名带不带由
+/// `plugin::export` 按"载荷还是不是签的那一份"判（那一份文件头有两行表）。
+///
+/// ⚠️ 与安装对称，这条也走 `spawn_blocking`：包里可能有几十 MB 的图标与模板，
+/// 在主线程上压一遍就是一次**冻界面**。
+#[tauri::command]
+pub async fn nota_plugin_export(
+    app: tauri::AppHandle,
+    id: String,
+    path: String,
+) -> Result<crate::plugin::export::导出报告> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let host = state.plugins.lock().unwrap();
+        host.导出(&id, std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("导出拓展的执行线程挂了：{e}")))?
+}
+
+/// 保存对话框里那个**默认文件名**（`<名字>-<版本>.nota-plugin`）。
+///
+/// ⚠️ 为什么不让前端自己拼：清单里的 `name` 是**作者写的**，可以带斜杠、
+/// 可以是 `../../x`。拼路径这件事在本仓一律在宿主（`paths.rs` 的文件头写着理由），
+/// 而这里还多一层——`安全文件名` 的规则只该有一份实现。
+///
+/// ⚠️ 这是一次**纯查询**（不落盘、不改状态），所以留在同步命令里。
+#[tauri::command]
+pub fn nota_plugin_export_name(state: State<'_, AppState>, id: String) -> Result<String> {
+    let host = state.plugins.lock().unwrap();
+    host.导出默认名(&id)
+}
+
+/// 在系统的文件管理器里打开用户插件目录（`~/.local/share/nota/plugins`），
+/// 返回打开的是哪个路径。
+///
+/// ⚠️ **"打开"这一步在宿主**：理由与 `nota_settings_open_dir` 那段完全同源
+/// （Tauri 的 ACL 要 path scope、scope 跟着 `$APPCONFIG` 走、与本仓 `paths.rs`
+/// 的 XDG 口径不一定同一个目录）——BUG-27 那一条。这边不重复那一段。
+///
+/// ⚠️ 目录可能还不存在（一个插件都没装过），所以要**先建出来**再开：
+/// 文件管理器打不开一个不存在的路径。同 `nota_doc_themes_open_dir`。
+#[tauri::command]
+pub fn nota_plugins_open_dir(app: tauri::AppHandle) -> Result<String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = crate::paths::user_plugins_dir()?;
+    if !dir.is_dir() {
+        crate::paths::ensure_dir(&dir)?;
+    }
+    let shown = crate::paths::path_to_string(&dir)?;
+    app.opener()
+        .open_path(shown.clone(), None::<&str>)
+        .map_err(|e| NotaError::other(format!("调用系统打开器失败：{e}——目录是 {shown}")))?;
+    Ok(shown)
 }
 
 /// 信任库里现在有哪几把钥匙。
@@ -122,7 +183,7 @@ pub async fn nota_plugin_call(
 
         let plug = host
             .get(&plugin)
-            .ok_or_else(|| NotaError::other(format!("没有这个插件：{plugin}")))?;
+            .ok_or_else(|| NotaError::other(format!("没有这个拓展：{plugin}")))?;
 
         // 先把 JSON 转成 Lua 值。这一步在插件自己的 Lua 状态上做，
         // 因为 mlua 的 `to_value` 需要那个状态的分配器。
@@ -141,7 +202,7 @@ pub async fn nota_plugin_call(
             .map_err(|e| NotaError::other(format!("返回值转 JSON 失败：{e}")))
     })
     .await
-    .map_err(|e| NotaError::other(format!("插件命令的执行线程挂了：{e}")))?
+    .map_err(|e| NotaError::other(format!("拓展命令的执行线程挂了：{e}")))?
 }
 
 /// 一个面板**此刻**的内容。

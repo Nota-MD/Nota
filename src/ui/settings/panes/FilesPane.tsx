@@ -123,7 +123,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         >
           <ActionButton
             disabled
-            title={t("尚未实现：这一项要在写盘之前**另外留一份底**，而现在的自动保存是直接往原文件写——写成了就没有草稿可言了。现状见本组末尾的说明。")}
+            title={t("尚未实现：这一项要在写盘之前另外留一份底，而现在的自动保存是直接往原文件写——写成了就没有草稿可言了。现状见本组末尾的说明。")}
           >
             {t("恢复草稿")}
           </ActionButton>

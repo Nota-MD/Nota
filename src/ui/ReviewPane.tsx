@@ -223,7 +223,7 @@ export function ReviewPane({
 
       <div className="review-body">
         {/* 插件语言对不上就在这儿说一句——用户正看着这个插件的字。 */}
-        {语言对不上 && <p className="panel-lang">{t("此插件不支持您的语言")}</p>}
+        {语言对不上 && <p className="panel-lang">{t("此拓展不支持您的语言")}</p>}
         {内容.state === "loading" && <p className="panel-empty">{t("正在读取…")}</p>}
         {内容.state === "error" && (
           <p className="panel-msg panel-msg-error">{内容.message}</p>

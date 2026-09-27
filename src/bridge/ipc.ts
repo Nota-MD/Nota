@@ -20,8 +20,8 @@ import type {
   AppLang, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
-  PluginPanel, PluginReview, Settings, TreeNode, UiStyleInfo, 信任记录, 会话,
-  路径种类,
+  PluginPanel, PluginReview, Settings, TreeNode, UiStyleInfo, 信任记录, 导出报告,
+  会话, 路径种类,
 } from "./types";
 
 export * from "./types";
@@ -442,6 +442,35 @@ export const api = {
      * ⚠️ 内置插件卸不掉（后端会报错让你改用停用）。
      */
     uninstall: (id: string) => invoke<void>("nota_plugin_uninstall", { id }),
+
+    /**
+     * 把一个已装的插件导出成一个 `.nota-plugin` 包（2026-09-27 加）。
+     *
+     * `path` 由前端用**保存对话框**问出来（`@tauri-apps/plugin-dialog` 的 `save`），
+     * 默认值拿 [`exportName`]；宿主不自己弹框——与 `install` 是同一个分工。
+     *
+     * ⚠️ 它**只读**：不碰插件、不碰设置、**不签名**。包里带不带那个签名块由后端按
+     * "载荷还是不是签的那一份"判（`plugin/export.rs` 的文件头有两行表）——
+     * 用户改过文件的话签名会被**摘掉**，因为带着一个对不上的签名会让收到的人
+     * 装不上，而且报的是"这个包被改过"。
+     */
+    export: (id: string, path: string) =>
+      invoke<导出报告>("nota_plugin_export", { id, path }),
+
+    /**
+     * 保存对话框里那个默认文件名（`<名字>-<版本>.nota-plugin`）。
+     *
+     * ⚠️ **别在前端用 `name + version` 自己拼**：清单里的 `name` 是作者写的，
+     * 可以带斜杠、可以是个相对路径；拼路径的规则在本仓只该有一份实现
+     * （`paths::安全文件名`，后端那条命令里）。
+     */
+    exportName: (id: string) => invoke<string>("nota_plugin_export_name", { id }),
+
+    /**
+     * 建好用户插件目录（`~/.local/share/nota/plugins`）并在文件管理器里打开它。
+     * 一个插件都没装过时这个目录还不存在，所以后端会先建。
+     */
+    openDir: () => invoke<string>("nota_plugins_open_dir"),
 
     /** 信任这个插件的签名者（TOFU + 显式信任）。见 `plugin/package.rs` 那张表。 */
     trust: (id: string) => invoke<void>("nota_plugin_trust", { id }),

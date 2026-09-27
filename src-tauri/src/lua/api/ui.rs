@@ -225,13 +225,13 @@ pub(crate) fn 面板表(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Functi
                 // 那时报错的地方离病因（插件里 `render` 写成了表）已经很远了。
                 Ok(_) => {
                     return Err(mlua::Error::RuntimeError(format!(
-                        "插件 {plugin_id} 的面板 `{id}`：`render` 必须是一个函数"
+                        "拓展 {plugin_id} 的面板 `{id}`：`render` 必须是一个函数"
                     )))
                 }
                 Err(_) => {}
             }
 
-            追加声明(lua, REG_PANELS, "id", &id, &entry, &format!("插件 {plugin_id} 重复注册面板"))?;
+            追加声明(lua, REG_PANELS, "id", &id, &entry, &format!("拓展 {plugin_id} 重复注册面板"))?;
             Ok(())
         })?;
 
@@ -304,7 +304,7 @@ pub(crate) fn 有面板吗(lua: &Lua, id: &str) -> bool {
 pub(crate) fn 面板内容(lua: &Lua, plugin_id: &str, panel_id: &str) -> NotaResult<serde_json::Value> {
     let list: Table = lua
         .named_registry_value(REG_PANELS)
-        .map_err(|_| NotaError::other(format!("插件 {plugin_id} 没有申请 `ui.panel` 能力")))?;
+        .map_err(|_| NotaError::other(format!("拓展 {plugin_id} 没有申请 `ui.panel` 能力")))?;
 
     for i in 1..=list.raw_len() {
         let Ok(条目) = list.raw_get::<Table>(i) else {
@@ -318,7 +318,7 @@ pub(crate) fn 面板内容(lua: &Lua, plugin_id: &str, panel_id: &str) -> NotaRe
             // 声明了面板但没给 `render`。**这不算错**——一个插件可以只声明面板
             // 占个位（早期的 `register_panel` 就只有 id/title）。如实说清楚。
             return Err(NotaError::other(format!(
-                "插件 {plugin_id} 的面板 `{panel_id}` 没有提供 `render`，所以没有内容可显示"
+                "拓展 {plugin_id} 的面板 `{panel_id}` 没有提供 `render`，所以没有内容可显示"
             )));
         };
 
@@ -331,7 +331,7 @@ pub(crate) fn 面板内容(lua: &Lua, plugin_id: &str, panel_id: &str) -> NotaRe
     }
 
     Err(NotaError::other(format!(
-        "插件 {plugin_id} 没有声明面板 `{panel_id}`"
+        "拓展 {plugin_id} 没有声明面板 `{panel_id}`"
     )))
 }
 
@@ -446,7 +446,7 @@ pub(crate) fn 菜单表(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Functi
             }
 
             // 去重键是 label：同一个菜单里两条同名项，用户分不出该点哪个。
-            追加声明(lua, REG_MENUS, "label", &label, &entry, &format!("插件 {plugin_id} 重复注册菜单项"))?;
+            追加声明(lua, REG_MENUS, "label", &label, &entry, &format!("拓展 {plugin_id} 重复注册菜单项"))?;
             Ok(())
         })?;
 
@@ -535,7 +535,7 @@ mod tests {
         assert_eq!(got[0].title, "Git");
         assert_eq!(
             got[0].location, "right",
-            "不写 `location` 该默认到右侧插件栏——默认值 `sidebar` 是左栏还兼职装插件时的事"
+            "不写 `location` 该默认到右侧拓展栏——默认值 `sidebar` 是左栏还兼职装拓展时的事"
         );
     }
 

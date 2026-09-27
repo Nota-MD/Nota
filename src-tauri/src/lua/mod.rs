@@ -231,8 +231,8 @@ fn 装require(lua: &Lua, 根: &Path) -> Result<()> {
             }
 
             Err(mlua::Error::RuntimeError(format!(
-                "找不到模块 `{名}`：在插件目录里试过 `{相对}.lua` 与 `{相对}/init.lua`\
-                 （只在本插件自己的目录里找，不许跳到外面）。{末尾错误}"
+                "找不到模块 `{名}`：在拓展目录里试过 `{相对}.lua` 与 `{相对}/init.lua`\
+                 （只在本拓展自己的目录里找，不许跳到外面）。{末尾错误}"
             )))
         })
         .map_err(mlua_err)?;
@@ -244,7 +244,7 @@ fn 装require(lua: &Lua, 根: &Path) -> Result<()> {
 
 /// `mlua::Error` → 本仓的 `NotaError`。装 `require` 那几步只可能出这类错。
 fn mlua_err(e: mlua::Error) -> NotaError {
-    NotaError::other(format!("装插件模块系统失败：{e}"))
+    NotaError::other(format!("装拓展模块系统失败：{e}"))
 }
 
 /// 插件能用的标准库：**只有这五个**。
@@ -356,7 +356,7 @@ impl LuaPlugin {
                     manifest,
                     lua: Lua::new(),
                     语言,
-                    state: PluginState::Failed(format!("{e}（沙箱建不起来，插件未加载）")),
+                    state: PluginState::Failed(format!("{e}（沙箱建不起来，拓展未加载）")),
                     has_unload: false,
                 }
             }
@@ -514,7 +514,7 @@ impl LuaPlugin {
             // ⚠️ 它的去处于是只剩调试闸门——卸载出错的插件在界面上就是"没反应"，
             // 用户不会知道该做什么。想看就 `NOTA_DEBUG=1`（见 `crate::log`）。
             if let Err(e) = f.call::<()>(()) {
-                crate::日志!("[nota] 插件 {} 的 on_unload 出错：{e}", self.manifest.meta.id);
+                crate::日志!("[nota] 拓展 {} 的 on_unload 出错：{e}", self.manifest.meta.id);
             }
         }
     }
@@ -535,7 +535,7 @@ impl LuaPlugin {
 
         let f: mlua::Function = commands.get(name).map_err(|_| {
             NotaError::other(format!(
-                "插件 {} 没有注册命令 `{name}`",
+                "拓展 {} 没有注册命令 `{name}`",
                 self.manifest.meta.id
             ))
         })?;
@@ -565,8 +565,8 @@ mod tests {
             let v: mlua::Value = lua.globals().get(name).unwrap();
             assert!(
                 v.is_nil(),
-                "`{name}` 不该在插件的 Lua 里存在。它一旦存在，能力围栏就能被绕过去——\
-                 一个只申请 `ui.notify` 的插件可以 `os.execute(\"rm -rf ~\")` \
+                "`{name}` 不该在拓展的 Lua 里存在。它一旦存在，能力围栏就能被绕过去——\
+                 一个只申请 `ui.notify` 的拓展可以 `os.execute(\"rm -rf ~\")` \
                  或 `io.open(\"/etc/shadow\")`（BUG-10）"
             );
         }
@@ -644,7 +644,7 @@ mod tests {
 
         assert!(
             编译过几个 >= 2,
-            "一个内置插件都没扫到（扫到 {编译过几个} 个）——`plugins/` 是挪走了，\
+            "一个内置拓展都没扫到（扫到 {编译过几个} 个）——`plugins/` 是挪走了，\
              还是 `builtin_plugins_dirs` 改了？测试要跟着改，别把这条删了"
         );
     }
@@ -678,7 +678,7 @@ mod tests {
     #[test]
     fn slidev_认得文档要的是哪个主题包() {
         let lua = 硬化的_lua().expect("沙箱该建得起来");
-        let 源 = 内置插件源码("slidev").expect("内置插件里该有一份 slidev/main.lua");
+        let 源 = 内置插件源码("slidev").expect("内置拓展里该有一份 slidev/main.lua");
 
         let 尾 = "return M";
         let 剪掉 = 源.trim_end();
@@ -866,7 +866,7 @@ mod tests {
         ] {
             assert!(
                 !libs.contains(flag),
-                "`插件标准库()` 里不该含 `{name}`——它正是要挡的东西（BUG-10）"
+                "`拓展标准库()` 里不该含 `{name}`——它正是要挡的东西（BUG-10）"
             );
         }
         // 反过来：这几个是插件该有的，别哪天顺手删了。
@@ -876,7 +876,7 @@ mod tests {
             ("string", mlua::StdLib::STRING),
             ("math", mlua::StdLib::MATH),
         ] {
-            assert!(libs.contains(flag), "`{name}` 该留着，插件日常要用");
+            assert!(libs.contains(flag), "`{name}` 该留着，拓展日常要用");
         }
     }
 

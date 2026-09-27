@@ -3,7 +3,7 @@
  *
  * # 版式：**两栏 + 一列控件**
  *
- * 左栏是九个分页，右栏是当前那一页的内容。右栏里：
+ * 左栏是十一个分页，右栏是当前那一页的内容。右栏里：
  *
  * ```text
  * ┌───────────────────┬──────────────────┬───────────────────────────┐
@@ -190,7 +190,8 @@
    这里只补一条透明度——让它在未选中时比文字略轻一点。
 
    ⚠️ 在这之前这里是 `.stg-nav-icon`，配的是 `primitives.tsx` 里**手写的五枚
-   24 格细线图标**。2026-09-24 换成应用那套 Folio 图标（96 枚里挑了九枚），
+   24 格细线图标**。2026-09-24 换成应用那套 Folio 图标（96 枚里挑了十一枚，
+   其中「拓展」那枚拼图是 Nota 自己画的），
    于是这条规则改成给 `.icon` 用——那套的画法在 `icons.css` 里，
    颜色靠 `currentColor` + 遮罩，所以下面 `.stg-nav-item[data-active]` 改
    `color` 时图标自己会跟着变，这里不需要（也不许）写色值。 */
@@ -444,6 +445,24 @@
 .stg-warn {
   font-size: 0.92em;
   color: var(--danger);
+}
+
+/* 「拓展」那一页里，一行插件下面那几行小字（id / 描述 / 语言提示 / 报错 / 能力）。
+ *
+ * ⚠️ 它们的样子**整体来自 `dock.css` 的 `.plugin-*`**（与右侧插件栏是同一个东西
+ * 的两种摆法，理由写在 `panes/ExtensionsPane.tsx::拓展说明` 上）——这里只补
+ * "一行一行摞起来"这一条：那几条在插件栏里是按 `<div>` / `<p>` 写的（天然块级），
+ * 而这里落在 `SettingRow` 的 `description` 槽里，那是个 `<span>`，
+ * 不写的话所有东西会挤成一行连成一句读不断的话。
+ *
+ * ⚠️ 用**子选择器**圈定范围：`.stg-row-desc` 里出现这几个类名只可能是这一页
+ *（别的页不穿 `.plugin-*`），写宽了等于给以后埋一个"某页突然变块级"的坑。 */
+.stg-row-desc > .plugin-id,
+.stg-row-desc > .plugin-desc,
+.stg-row-desc > .plugin-lang,
+.stg-row-desc > .plugin-error,
+.stg-row-desc > .plugin-caps {
+  display: block;
 }
 
 /* ── 控件 ──────────────────────────────────────────────────────────────── */
@@ -700,6 +719,13 @@
 .stg-action {
   font-size: 0.9em;
   white-space: nowrap;
+}
+
+/* 「卸载」是不可逆的那一颗：用 danger 色描边，别和"停用""导出"长得一样
+ * （同右侧插件栏的 `.plugin-action-danger`，两处是同一颗按钮的两个落点）。 */
+.stg-action-danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
 /* ⚠️ **灰着的控件要说得出为什么**。这些控件的 `disabled` 不是占位，是

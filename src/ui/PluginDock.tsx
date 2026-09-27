@@ -72,10 +72,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { api, events, on, type PanelDirtyPayload, type PluginInfo, type PluginPanel, type 信任记录 } from "@/bridge/ipc";
-import { t, useT } from "@/i18n";
+import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 import { PanelBody } from "@/ui/PanelBody";
 import { normalise, type PanelNode } from "@/ui/panel-nodes";
+import { 位置名, 能力名, 来源说明, 语言标签名, 语言对不上, 语言提示 } from "@/ui/pluginText";
 import type { PromptRequest } from "@/ui/useDialogs";
 import type { 插件动作 } from "@/ui/usePlugins";
 
@@ -124,42 +125,11 @@ function 坐标(p: PluginPanel): string {
 }
 
 /**
- * 一行插件右上角那句"它从哪儿来、签没签"。
- *
- * ⚠️ 词与后端 `plugin/installed.rs::Signature::说明` 是**同一套**
- * （已验证 / 未知签名者 / 未签名）：两处不一致的话，同一个状态在插件行上
- * 和在后端日志里会是两种说法。
+ * ⚠️ 「来源 / 签名」「语言对不对得上」「能力叫什么」「面板摆在哪儿」这四句人话
+ * **2026-09-27 搬去了 `ui/pluginText.ts`**：加了「拓展」设置页之后，同样的话
+ * 要在两个界面上出现（这一栏与那一页），留在本地就是两份要同时改的副本。
+ * 搬走的理由与那张表该怎么写，见那份文件头。
  */
-function 来源说明(p: PluginInfo): string {
-  const 来路 = p.origin === "user" ? t("自装") : t("内置");
-  switch (p.signature) {
-    case "verified":
-      return `${来路} · ${t("已验证")}`;
-    case "unknown":
-      return `${来路} · ${t("未知签名者")}`;
-    case "unsigned":
-      return `${来路} · ${t("未签名")}`;
-    default:
-      return 来路;
-  }
-}
-
-/**
- * 这个插件**语言对不上**吗？对不上的话要显示那句「此插件不支持您的语言」。
- *
- * ⚠️ 判据是宿主算好的 `langs` + `lang_ok` 两格，**不在前端按 `lang` 猜一遍**：
- * "声明了 zh-CN 但少了那个文件"这种事只有宿主知道（见
- * `src-tauri/src/lua/api/i18n.rs`）。没声明 `langs` 的插件（`langs` 空）
- * 不参与协商，也就没有这句话——它是"只用一种语言写的"，不是"不支持你"。
- */
-function 语言对不上(p: PluginInfo): boolean {
-  return p.langs.length > 0 && !p.lang_ok;
-}
-
-/** 那句提示。**一模一样的一句话**在三个地方（插件行、面板、编辑区预览）。 */
-export function 语言提示(): string {
-  return t("此插件不支持您的语言");
-}
 
 export function PluginDock({
   plugins,
@@ -183,43 +153,9 @@ export function PluginDock({
   // 现在过一层映射：**认得出就说中文，认不出就照原样摆出来**——认不出时宁可
   // 露出 `ui.whatever`，也不要瞎编一个中文名（那是"猜"而不是"翻译"）。
   //
-  // ⚠️ 三张表**必须在组件里现建**，不能提到模块级当常量，两个理由：
-  //
-  // 1. 模块级求值时 `t` 还是模块那个**没订阅**的版本（首帧画的是兜底语言，
-  //    而且之后没有任何东西会通知它重画，见 `i18n/index.ts` 顶上那段）；
-  // 2. `tools/i18n-check.sh` 数的是**源码里字面写出来的 `t("…")`**。表要是写成
-  //    模块级常量、把中文名当**数据**存着（`t(表[c])` 那种变量的用法），这些键
-  //    就不算"被调用"，而 `en.ts` 里那几条又会算"废键"——**闸门直接 FAIL**。
-  //    写成 `t("读文档")` 字面量，两边才对得上。
-  const 能力名: Record<string, string> = {
-    "document.read": t("读当前文档"),
-    "document.write": t("改当前文档"),
-    "fs.read": t("读工作区文件"),
-    "fs.write": t("写工作区文件"),
-    "process.git": t("调 git"),
-    "process.devserver": t("起开发服务器"),
-    "network.http": t("发网络请求"),
-    "ui.notify": t("弹通知"),
-    "ui.open_url": t("打开浏览器"),
-    "ui.panel": t("加侧栏面板"),
-    "ui.menu": t("加菜单条目"),
-    "settings.own": t("读写自己的设置"),
-  };
-  // 面板位置：`right` 是常规落脚处（这一栏本身），`main` 摊在编辑区。
-  // 别的取值（`left` 之类）**还没有对应的地方**——见下面「没有落脚处」那一段，
-  // 那里也走这张表，认不出就照原样显示那个值。
-  const 位置名: Record<string, string> = {
-    right: t("右栏"),
-    main: t("编辑区"),
-  };
-  // 语言标记（`en` / `zh-CN`）。⚠️ 只认这两门**应用自己支持的**语言，
-  // 别的插件语言（`ja`、`pt-BR`）照原样露出来——那是插件的语言标记，
-  // 我们不该替它编一个中文名（见 `src-tauri/src/lang.rs::语言名` 那段：
-  // 语言名要**用它自己那门语言写**，那件事只有插件的语言文件知道）。
-  const 语言标签名: Record<string, string> = {
-    en: t("英语"),
-    "zh-CN": t("中文（简体）"),
-  };
+  // ⚠️ 三张表**2026-09-27 搬去了 `ui/pluginText.ts`**（那边是函数，不是模块级
+  // 常量）。搬的原因是「拓展」设置页要用同样三张表；那一份文件头写着为什么
+  // 必须是函数、为什么里面非得是字面量 `t("…")`（这两条在这里时也一样成立）。
 
   // 右侧的进这一栏，**一个一页**。另外两类各有各的去处，见下。
   const 右侧的 = useMemo(() => panels.filter((p) => p.location === "right"), [panels]);
@@ -362,7 +298,7 @@ export function PluginDock({
         <section className="dock-orphans">
           <h4 className="dock-subtitle">{t("编辑区面板")}</h4>
           <p className="dock-hint">
-            {t("这些面板摊在正文那一块，由插件在需要时打开（比如 AI 提了改动之后的「在编辑区看」）。")}
+            {t("这些面板摊在正文那一块，由拓展在需要时打开（比如 AI 提了改动之后的「在编辑区看」）。")}
           </p>
           {编辑区的.map((p) => (
             <p key={坐标(p)} className="dock-orphan">
@@ -384,21 +320,21 @@ export function PluginDock({
               {p.title || p.id}
               {/* ⚠️ 认不出的位置**照原样显示**（`left` 之类）。上面那段话已经说了
                   "还没有对应的地方"，这里露出原始值正好是给作者看的线索。 */}
-              <span className="dock-orphan-where">{位置名[p.location] ?? p.location}</span>
+              <span className="dock-orphan-where">{位置名(p.location) ?? p.location}</span>
             </p>
           ))}
         </section>
       )}
 
       <h4 className="dock-subtitle dock-subtitle-row">
-        {t("已装插件")}
+        {t("已装拓展")}
         {/* 「安装」在这一栏的**标题行**上：它是这一栏唯一的"加东西"动作，
             混在某一颗插件行里会让人以为那是那个插件的一部分。 */}
         <button
           type="button"
           className="plugin-install"
           disabled={动作.忙 !== null}
-          title={t("从一个插件包（.nota-plugin）安装")}
+          title={t("从一个拓展包（.nota-plugin）安装")}
           onClick={() => void 动作.装()}
         >
           {动作.忙 === "装" ? t("正在安装…") : t("从文件安装…")}
@@ -426,7 +362,7 @@ export function PluginDock({
                 <p className="plugin-lang">
                   {语言提示()}
                   <span className="plugin-lang-now">
-                    {语言标签名[p.lang ?? "en"] ?? (p.lang ?? "en")}
+                    {语言标签名(p.lang ?? "en") ?? (p.lang ?? "en")}
                   </span>
                 </p>
               )}
@@ -437,7 +373,7 @@ export function PluginDock({
                     // ⚠️ `title` 留着**原始 id**：中文名是给用户看的，id 是给
                     // 写清单的人对照 `docs/11` 那张能力表用的，两个都要在。
                     <span key={c} className="cap" title={c}>
-                      {能力名[c] ?? c}
+                      {能力名(c) ?? c}
                     </span>
                   ))}
                 </div>
@@ -485,7 +421,7 @@ export function PluginDock({
         </ul>
       ) : (
         <p className="sidebar-empty">
-          {t("没有装插件。用上面的「从文件安装…」装一个。")}
+          {t("没有装拓展。用上面的「从文件安装…」装一个。")}
         </p>
       )}
 
@@ -548,7 +484,7 @@ export function PluginDock({
               (态.nodes.length === 0 ? (
                 // 空的**不是错误**：插件这一刻没有内容可显示（没开文件夹、
                 // 没有改动）。如实说，别画一个空框让人以为坏了。
-                <p className="panel-empty">{t("插件没有给出内容。")}</p>
+                <p className="panel-empty">{t("拓展没有给出内容。")}</p>
               ) : (
                 <PanelBody
                   plugin={活动面板.plugin}
@@ -578,13 +514,13 @@ export function PluginDock({
     >
       <nav className="dock-head">
         <span className="dock-title">
-          {活动面板 ? 活动面板.title || 活动面板.id : t("插件")}
+          {活动面板 ? 活动面板.title || 活动面板.id : t("拓展")}
         </span>
         <button
           type="button"
           className="dock-close"
-          title={t("收起插件栏")}
-          aria-label={t("收起插件栏")}
+          title={t("收起拓展栏")}
+          aria-label={t("收起拓展栏")}
           onClick={onClose}
         >
           <Icon name="folio-close-symbolic" />
@@ -594,7 +530,7 @@ export function PluginDock({
       {/* 页签：每个右侧面板一页 ＋ 「插件」页（清单）。
           ⚠️ 页签**永远都在**，哪怕只有一个面板：它是"这里还有别的东西"的
           唯一线索，藏起来的话用户会以为这一栏就叫这个名字。 */}
-      <nav className="dock-tabs" role="tablist" aria-label={t("插件面板")}>
+      <nav className="dock-tabs" role="tablist" aria-label={t("拓展面板")}>
         {右侧的.map((p) => {
           const 键 = 坐标(p);
           return (
@@ -605,7 +541,7 @@ export function PluginDock({
               className="dock-tab"
               data-active={键 === 活动}
               aria-selected={键 === 活动}
-              title={t("由插件 {0} 提供", p.plugin)}
+              title={t("由拓展 {0} 提供", p.plugin)}
               onClick={() => 切到(键)}
             >
               {p.title || p.id}
@@ -618,10 +554,10 @@ export function PluginDock({
           className="dock-tab dock-tab-plugins"
           data-active={活动 === null}
           aria-selected={活动 === null}
-          title={t("已装插件清单（出问题时看这里）")}
+          title={t("已装拓展清单（出问题时看这里）")}
           onClick={() => 切到(null)}
         >
-          {t("插件")}
+          {t("拓展")}
         </button>
       </nav>
 

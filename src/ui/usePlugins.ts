@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 
 import {
   api,
@@ -38,11 +38,13 @@ import {
   type PluginPanel,
   type PluginReview,
   type 信任记录,
+  type 导出报告,
 } from "@/bridge/ipc";
 import { t, use语言 } from "@/i18n";
 import { MENUS, type MenuSpec } from "@/ui/commands";
 import { 认识的菜单, 带插件栏, 插件项id } from "@/ui/pluginMenus";
 import { 问参数 } from "@/ui/plugin-prompt";
+import { 签名说明 } from "@/ui/pluginText";
 import type { Toast } from "@/ui/Toasts";
 import type { ConfirmAnswer, ConfirmRequest, PromptRequest } from "@/ui/useDialogs";
 
@@ -62,8 +64,25 @@ export interface PluginsWiring {
 export interface 插件动作 {
   /** 弹文件框挑一个插件包，然后装。用户取消就什么都不做。 */
   装: () => Promise<void>;
+  /**
+   * 弹保存框，把这个插件导成一个 `.nota-plugin` 包（2026-09-27 加）。
+   *
+   * ⚠️ 默认文件名**由后端算**（`api.plugin.exportName`），不在这儿用
+   * `name + version` 拼：清单里的 `name` 是作者写的，可以带斜杠。
+   *
+   * ⚠️ 导出**不改任何状态**，所以不会弹确认框；取消保存框就什么都不做。
+   */
+  导出: (id: string) => Promise<void>;
   /** 卸掉（**不可逆**，先问一句）。 */
   卸: (id: string) => Promise<void>;
+  /**
+   * 在系统的文件管理器里打开用户插件目录（`~/.local/share/nota/plugins`）。
+   *
+   * ⚠️ 为什么要经过这一层而不是让设置页自己调 `api`：**失败要说给人听**
+   * （文件管理器调不起来是可能的），而 toast 只有这一层有。「拓展」那一页是
+   * 纯展示的（同 `PluginDock`）。
+   */
+  打开目录: () => Promise<void>;
   启停: (id: string, enabled: boolean) => Promise<void>;
   /**
    * 信任这个插件的签名者（TOFU + 显式信任）。
@@ -183,7 +202,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       } catch (e) {
         // 插件读不出来**不该拦住别的**（设置、工作区、主题照常），
         // 但也不能不响：界面上少了一整栏，用户得知道是为什么。
-        toast(t("读取插件状态失败：{0}", String(e)), "error");
+        toast(t("读取拓展状态失败：{0}", String(e)), "error");
       }
     })();
   }, [重拉, toast]);
@@ -247,7 +266,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
         await api.plugin.call(plugin, command, args);
       } catch (e) {
         // 带上插件 id 与命令名：插件多了之后"哪一条没跑成"正是用户要看的。
-        toast(t("插件 {0} 的「{1}」没跑成：{2}", plugin, command, String(e)), "error");
+        toast(t("拓展 {0} 的「{1}」没跑成：{2}", plugin, command, String(e)), "error");
       }
     },
     [toast],
@@ -339,7 +358,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
           "\n\n" +
           t("信任之后，凡是这把钥匙签的包都会当成「已验证」。") +
           "\n" +
-          t("信任是按**指纹**记的——请对着作者公布的那一份核对，别只看名字。"),
+          t("信任是按指纹记的——请对着作者公布的那一份核对，别只看名字。"),
         confirmLabel: t("信任"),
       });
       if (答 !== "confirm") return;
@@ -355,7 +374,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     const 选 = await openDialog({
       multiple: false,
       directory: false,
-      filters: [{ name: t("插件包"), extensions: ["nota-plugin", "zip"] }],
+      filters: [{ name: t("拓展包"), extensions: ["nota-plugin", "zip"] }],
     }).catch(() => null);
     if (typeof 选 !== "string") return; // 用户取消 / 平台没给路径
 
@@ -377,17 +396,59 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     if (p.signature === "unknown") await 信任它(p.id, p.key_id);
   }, [跑, 信任它, toast]);
 
+  const 导它 = useCallback(
+    async (id: string) => {
+      // ⚠️ 默认名**问后端要**（`paths::安全文件名` 的规则只该有一份实现）。
+      // 拿不到就退回 `id + 后缀`：这一条路只在"插件刚好在这两步之间被卸掉了"
+      // 时走到，那时保存框里写个 id 也比什么都不写好。
+      const 默认 = await api.plugin.exportName(id).catch(() => `${id}.nota-plugin`);
+      const 选 = await saveDialog({
+        defaultPath: 默认,
+        filters: [{ name: t("拓展包"), extensions: ["nota-plugin"] }],
+      }).catch(() => null);
+      if (typeof 选 !== "string") return; // 用户取消 / 平台没给路径
+
+      // ⚠️ 只补"压根没有后缀"的那一种（`backup` → `backup.nota-plugin`）。
+      // 用户自己写了后缀就**一个字节都不动**：他要是打了 `backup.zip`，
+      // 说明他知道自己在干什么，硬接一个 `.nota-plugin` 会变成
+      // `backup.zip.nota-plugin`——难看到像出了故障。
+      const 路径 = 有后缀吗(选) ? 选 : `${选}.nota-plugin`;
+
+      // ⚠️ 这里**沿用 `跑`**（它跑完会重拉一次清单）：导出不改任何状态，
+      // 那一次重拉是多余的。留着它是因为"忙态 + 失败 toast + 收尾清忙"
+      // 这三件事只该有一份实现——为省四个只读调用再抄一遍 try/catch，
+      // 抄坏的那一次症状是"按钮永远转着圈"。
+      const 报告 = await 跑(id, () => api.plugin.export(id, 路径));
+      if (!报告) return; // 失败了，`跑` 已经 toast 过
+      toast(
+        [
+          t("导出了 {0}", 报告.path),
+          t("{0} 个文件，{1}", String(报告.files), 大小说明(报告.bytes)),
+          签名去向说明(报告.signature),
+        ].join("\n"),
+        "info",
+      );
+    },
+    [跑, toast],
+  );
+
+  const 打开目录它 = useCallback(async () => {
+    // 成功那一下也说一句：文件管理器可能在**另一个**窗口/工作区里弹出来，
+    // 用户不一定看得见它。顺带把路径带上——找不到的人可以照着路径自己走。
+    await 跑("目录", () => api.plugin.openDir(), t("已在文件管理器里打开拓展文件夹"));
+  }, [跑]);
+
   const 卸它 = useCallback(
     async (id: string) => {
       // ⚠️ 这一下**不可逆**（插件目录真的删掉），所以必须先问一句。
       // 文案里明说"设置文件留着"——用户最担心的正是"我的 API key 会不会没了"。
       const 答 = await askConfirm({
-        title: t("卸载这个插件？"),
+        title: t("卸载这个拓展？"),
         // 拆法同上面「信任」那张框（换行是分段，不进键）。
         message:
-          t("「{0}」的插件目录会被删掉，它带来的面板、菜单项、命令都会消失。", id) +
+          t("「{0}」的拓展目录会被删掉，它带来的面板、菜单项、命令都会消失。", id) +
           "\n\n" +
-          t("它自己的设置文件（比如 AI 插件的 API key）会留着，重装同一个 id 时还在。"),
+          t("它自己的设置文件（比如 AI 拓展的 API key）会留着，重装同一个 id 时还在。"),
         confirmLabel: t("卸载"),
         danger: true,
       });
@@ -418,33 +479,54 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     () => ({
       忙,
       装: 装它,
+      导出: 导它,
       卸: 卸它,
+      打开目录: 打开目录它,
       启停: 启停它,
       信任: 信任它,
     }),
-    [忙, 装它, 卸它, 启停它, 信任它],
+    [忙, 装它, 导它, 卸它, 打开目录它, 启停它, 信任它],
   );
 
   return { plugins, panels, 信任: 信任表, menus, handlers, 调, 动作, review, 收预览 };
 }
 
 /**
- * 签名结论的一句话。⚠️ 与后端 `installed::Signature::说明` **说的是同一套词**
- * （已验证 / 未知签名者 / 未签名）——两处不一致的话，同一个状态在 toast 里
- * 和在插件行上会是两种说法。
- *
- * ⚠️ 这里用的是**模块级的 `t`**：它是"渲染期间被调用的纯函数"那一类，调用点
- * 就在下面几个动作里（**不是**模块级常量里现算），那一下读到的就是当前语言。
+ * ⚠️ `签名说明` **2026-09-27 搬去了 `ui/pluginText.ts`**（本地那份和插件栏那份
+ * 是同一句话的两个副本，而「拓展」设置页又要用第三遍）。`t("已验证")` 那几条
+ * 键跟着搬走，`tools/i18n-check.sh` 扫的是全 `src/`，不受影响。
  */
-function 签名说明(s: PluginInfo["signature"]): string {
-  switch (s) {
-    case "verified":
-      return t("已验证");
-    case "unknown":
-      return t("未知签名者");
-    case "unsigned":
-      return t("未签名");
+
+/**
+ * 导出报告里那个"签名块带没带上"的一句话。
+ *
+ * ⚠️ 这三句**必须说清楚**，不能只报"导出成功"：`dropped` 那一档的意思是
+ * "你改过插件文件，所以这个包**没有签名**了"——收到包的人在界面上看到的
+ * 会是「未签名」，而发的人以为发的是一份"已验证"的包。这件事只有这一句话
+ * 能告诉他（`bridge/types.ts::导出报告::signature` 写着同一件事）。
+ */
+function 签名去向说明(去向: 导出报告["signature"]): string {
+  switch (去向) {
+    case "kept":
+      return t("签名原样带上了——这份包在别人那里还是「已验证」（如果他信任那把钥匙）。");
+    case "dropped":
+      return t("⚠️ 这个拓展被改过，签名对不上，所以包里没有签名——别人装得上，但会看到「未签名」。");
     default:
-      return t("来路没记过");
+      return t("这个拓展本来就没有签名。");
   }
+}
+
+/** 这个路径有没有后缀（最后一个路径分隔符之后还有没有点）。见 [`导它`]。 */
+function 有后缀吗(路径: string): boolean {
+  const 名 = 路径.slice(路径.lastIndexOf("/") + 1);
+  // ⚠️ 点开头的隐藏文件（`.bashrc`）算**没有**后缀：那个点是"隐藏"的意思，
+  // 不是"后缀"。判据取最后那个点是不是在开头之后。
+  return 名.lastIndexOf(".") > 0;
+}
+
+/** 给人看的字节数。单位**不进 i18n**：KB / MB 两门语言写出来一样。 */
+function 大小说明(字节: number): string {
+  if (字节 < 1024) return `${字节} B`;
+  if (字节 < 1024 * 1024) return `${(字节 / 1024).toFixed(1)} KB`;
+  return `${(字节 / 1024 / 1024).toFixed(1)} MB`;
 }

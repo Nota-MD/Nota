@@ -80,9 +80,9 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
       </div>
 
       <aside className="home-side">
-        <h2 className="home-side-title">{t("插件")}</h2>
+        <h2 className="home-side-title">{t("拓展")}</h2>
         {plugins.length === 0 ? (
-          <p className="home-hint">{t("没有发现插件。")}</p>
+          <p className="home-hint">{t("没有发现拓展。")}</p>
         ) : (
           <ul className="home-plugins">
             {plugins.map((p) => (
@@ -104,7 +104,7 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
             用户会去怀疑自己装错了，而不是来看这里。 */}
         {failed.length > 0 && (
           <p className="home-warn">
-            {t("有 {0} 个插件没能加载，详情见右侧「插件」栏。", failed.length)}
+            {t("有 {0} 个拓展没能加载，详情见右侧「拓展」栏。", failed.length)}
           </p>
         )}
       </aside>

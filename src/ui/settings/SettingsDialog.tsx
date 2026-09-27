@@ -13,28 +13,32 @@
  * │   文档主题   │                                    │
  * │   快捷键     │                                    │
  * │   强制专注   │                                    │
+ * │   拓展       │                                    │
  * │   通用       │                                    │
  * │ [ 完成 ]     │                                    │
  * └──────────────┴────────────────────────────────────┘
  * ```
  *
- * # 十页是怎么来的
+ * # 十一页是怎么来的
  *
  * 前七页（文件 / 编辑器 / 图像 / Markdown / 导出 / 外观 / 通用）是一组通用分节，
- * **中间三页是 Nota 自己的**：
+ * **中间四页是 Nota 自己的**：
  *
  * - **文档主题**——单独成页，不并在「外观」里：2026-09-23 划的线
  *   （「这是文档风格，不是界面风格」），并排摆着才和那条线一致；
  * - **快捷键**——不从「通用」页上放一个链接进去，而是独立一整页
  *   （从菜单里读出来的，见 `panes/ShortcutsPane.tsx`）；
  * - **强制专注**——用户 2026-09-26 明说「在拓展自己的设置页面进行设置」，
- *   即这块功能的旋钮**归这一页**（`panes/FocusPane.tsx`）。
+ *   即这块功能的旋钮**归这一页**（`panes/FocusPane.tsx`）；
+ * - **拓展**——用户 2026-09-27：「完全没有拓展管理面板。做一个。可以导入，
+ *   导出和卸载拓展」。在此之前装/卸只能从右侧插件栏点，**导出根本不存在**
+ *   （`panes/ExtensionsPane.tsx` 顶上写着这一页与那一栏的分工）。
  *
- * 顺序按前七页的排列，Nota 自有的三页插在各自该在的位置。
+ * 顺序按前七页的排列，Nota 自有的四页插在各自该在的位置。
  *
  * # 三件事的分工（都别改）
  *
- * 1. **左栏搜索是就地过滤**，不是跳转：查询非空时十页**叠着**渲染，
+ * 1. **左栏搜索是就地过滤**，不是跳转：查询非空时十一页**叠着**渲染，
  *    每行自己比标签、说明和**所属组的标题**（见 `primitives.tsx` 顶上那段）。
  *    所以搜索态下左栏不高亮任何一页——`data-active` 那一行是 `!searching && …`。
  * 2. **改动即时生效**，唯一那个按钮是「完成」（= 关掉）。⚠️ 不要加「取消」，
@@ -53,15 +57,17 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { DocThemeInfo, Settings, UiStyleInfo } from "@/bridge/ipc";
+import type { DocThemeInfo, PluginInfo, Settings, UiStyleInfo, 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { MenuSpec } from "@/ui/commands";
 import { Icon, type 图标名 } from "@/ui/Icon";
+import type { 插件动作 } from "@/ui/usePlugins";
 import { QueryProvider, SearchField } from "./primitives";
 import { AppearancePane } from "./panes/AppearancePane";
 import { DocThemePane } from "./panes/DocThemePane";
 import { EditorPane } from "./panes/EditorPane";
 import { ExportPane } from "./panes/ExportPane";
+import { ExtensionsPane } from "./panes/ExtensionsPane";
 import { FilesPane } from "./panes/FilesPane";
 import { FocusPane } from "./panes/FocusPane";
 import { GeneralPane } from "./panes/GeneralPane";
@@ -80,21 +86,26 @@ type SectionId =
   | "docTheme"
   | "shortcuts"
   | "focus"
+  | "extensions"
   | "general";
 
 /**
- * 左栏的十页。
+ * 左栏的十一页。
  *
- * ⚠️ 图标**全部来自 `ui/Icon.tsx` 那 96 枚 Folio 图标**，不是自己画的。
+ * ⚠️ 图标来自 `ui/Icon.tsx` 那张 `名字表`：**十一枚里七枚是 Folio 那 96 枚里的，
+ * 四枚（Markdown / 文档主题 / 强制专注 / 拓展）是 Nota 自己画的**——Folio 那一套里
+ * 没有"框里的 MD""框里的 Aa""秒表""拼图块"这几个形状，而最接近的那几枚都指错了
+ * 东西（每一枚的理由写在下面 `SECTIONS` 上）。
  * 在这之前左栏用的是 `primitives.tsx` 里手写的五枚 24 格细线图标——那是
  * **第二套画风**，和工具栏、侧栏、菜单里那 96 枚摆在一起就看得出不一样。
- * 现在全应用一套。加一页 = 挑一枚已有的 + 往 `名字表` 加一行（如果还没加）。
+ * 现在全应用一套（同一套 16 格填充画法）。加一页 = 挑一枚已有的 + 往 `名字表`
+ * 加一行（如果还没加）。
  *
  * ⚠️ 写成 `Record`：加一页时漏了下面那条 `ORDER`，症状是"这一页点不到"
  * ——不报错。两处都在同一个文件里，改一处时看得见另一处。
  */
 const SECTIONS: Record<SectionId, 图标名> = {
-  // ⚠️ 这里**只有图标**。十页的**名字**是界面文案，挪到组件体里的 `页名` 表去了
+  // ⚠️ 这里**只有图标**。十一页的**名字**是界面文案，挪到组件体里的 `页名` 表去了
   // （模块级求值时 `t` 还没订阅，而且 `tools/i18n-check.sh` 只认源码里的字面量
   // `t("…")`——那一对理由写在 `页名` 上面）。别把名字搬回这张表。
   // 文件页管的是启动、文件树、拖放 —— 一枚「打开的文件夹」
@@ -107,6 +118,11 @@ const SECTIONS: Record<SectionId, 图标名> = {
   export: "folio-document-export-symbolic",
   // 一枚窗口 = 整个应用的样子（外观页管外壳，不管正文）
   appearance: "folio-window-symbolic",
+  // 一枚"拼图"= 拓展那一页（装 / 导出 / 卸载）。⚠️ 这一枚是 **Nota 自己画的**
+  // （`nota-` 前缀，同「Markdown」「文档主题」那几枚的来路）：Folio 那 96 枚里
+  // **没有拼图块**，而"拓展"这件事的形状就是拼图——用别的（齿轮、方块）都会
+  // 指到别的意思上去（齿轮已经是「通用」那一页了）。
+  extensions: "nota-plugin-symbolic",
   // 框里的 Aa = 正文的字与色（这一页只管正文，不管外壳）。
   // ⚠️ 原先是"页面 + 分页参考线"，那说的是打印/页码（2026-09-25 换）。
   docTheme: "nota-doc-theme-symbolic",
@@ -118,7 +134,7 @@ const SECTIONS: Record<SectionId, 图标名> = {
 };
 
 /**
- * 显示顺序（Nota 那三页插在各自该在的位置）。
+ * 显示顺序（Nota 那四页插在各自该在的位置）。
  * 第一节不是打开时的默认——默认是「外观」，见下面 `useState`。
  *
  * ⚠️ 「强制专注」放在「通用」**前面**：通用那页是"别的都归不到一起的东西"，
@@ -134,6 +150,7 @@ const ORDER: SectionId[] = [
   "docTheme",
   "shortcuts",
   "focus",
+  "extensions",
   "general",
 ];
 
@@ -166,6 +183,20 @@ interface Props {
    * 见 `panes/props.ts` 里同名字段那一段。
    */
   menus: readonly MenuSpec[];
+  /**
+   * 已装插件清单，「拓展」那一页用。
+   *
+   * ⚠️ 下面这三样**不并进 `PaneProps`**：它们与设置项一个字节都不沾，整包铺给
+   * 十一页的话，别的页也会莫名其妙拿到一份插件清单（`panes/props.ts` 顶上那段
+   * 写着同一件事：一页该依赖什么，得能从它的入参一眼读出来）。
+   * 这三样是 `App.tsx` 里**同一个 `usePlugins`** 喂的——右侧插件栏吃的是
+   * 同一份，所以不会出现"那一栏说装好了、这一页还没有"。
+   */
+  plugins: PluginInfo[];
+  /** 信任库里那几把钥匙（指纹 + 名字）。⚠️ **要摆出来**：信任按指纹判，看不见的表等于没有表。 */
+  插件信任: 信任记录[];
+  /** 装 / 导出 / 卸 / 启停 / 信任那几颗按钮的实现。见 `ui/usePlugins.ts`。 */
+  插件动作: 插件动作;
 }
 
 export function SettingsDialog({
@@ -180,13 +211,16 @@ export function SettingsDialog({
   onResetSettings,
   onClearRecent,
   menus,
+  plugins,
+  插件信任,
+  插件动作,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
 
   /**
-   * 左栏十页的名字。
+   * 左栏十一页的名字。
    *
    * ⚠️ **必须写在组件里现建**，不能提到模块级当常量——理由与
    * `PluginDock.tsx::能力名` 那三张表完全相同：模块级求值时 `t` 还是
@@ -208,6 +242,10 @@ export function SettingsDialog({
     // （F8，收起外壳），和这一页是两件事。名字撞了的话，用户找"专注"会找到
     // 那一页去，然后觉得"怎么只有个界面开关"。（`ui/commands.ts` 那两条的注释）
     focus: t("强制专注"),
+    // ⚠️ 页名叫「拓展」而**不是「插件」**：右侧那一栏的清单页已经叫「插件」了
+    // （`PluginDock.tsx`），两处同名会让人以为点哪个都一样。这一页管的是
+    // **装 / 导出 / 卸载**（用户 2026-09-27 的原话就是"拓展管理面板"）。
+    extensions: t("拓展"),
     general: t("通用"),
   };
 
@@ -346,6 +384,10 @@ export function SettingsDialog({
         return <ShortcutsPane menus={menus} settings={settings} onChange={onChange} />;
       case "focus":
         return <FocusPane {...props} />;
+      // ⚠️ 拓展页**不吃 `{...props}`**（同「快捷键」那一条，理由也一样）：
+      // 它要的是插件清单、信任表、插件动作那三样，与设置项一个字节都不沾。
+      case "extensions":
+        return <ExtensionsPane plugins={plugins} 信任={插件信任} 动作={插件动作} />;
       case "general":
         return <GeneralPane {...props} />;
       default:

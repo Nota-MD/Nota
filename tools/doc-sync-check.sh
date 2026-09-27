@@ -98,6 +98,8 @@ PAIRS=(
   "src-tauri/src/plugin/install.rs                 02,11"
   "src-tauri/src/plugin/package.rs                 02,06,11"
   "src-tauri/src/plugin/installed.rs               02,03,11"
+  # 2026-09-27：用户点名的「导入 / 导出 / 卸载」里缺的那一件（导出＝把一个已装插件打回成包）。
+  "src-tauri/src/plugin/export.rs                  02,07,11"
   "src-tauri/src/proc.rs                          02,06,07"
   "src-tauri/src/pandoc.rs                        02,05,06,10"
   "src-tauri/src/pandoc_format.rs                 02,05,06,10"
@@ -109,6 +111,12 @@ PAIRS=(
   # 2026-09-27 拆出来的：`require` 那一组用例（`mod.rs` 加完 `装require` 之后
   # 顶破 1000 行，把"证明它装对了"的用例挪出去，只挪行数不挪内容）。
   "src-tauri/src/lua/require_tests.rs             01,12"
+  # 2026-09-27：MCP 三个文件一起落地（`nota --mcp`）。⚠️ 它们是**一个功能的三块**，拆开登记但别只改一块。
+  # ⚠️ `mod.rs` 原写 `01,02,12`——`12` 是**插件运行时**，而 MCP 连 Lua 都不碰，那是空指；
+  # 2026-09-27 更晚改成 `01,02,07,10`（启动三步在 `01` ⓿、状态在第 82 项、§9 有一行）。
+  "src-tauri/src/mcp/mod.rs                        01,02,07,10"
+  "src-tauri/src/mcp/host.rs                       02"
+  "src-tauri/src/mcp/tools.rs                      02,07,10"
   "src-tauri/src/lua/api/mod.rs                   12,13"
   "src-tauri/src/lua/api/document.rs              13,05"
   "src-tauri/src/lua/api/fs.rs                    13"
@@ -156,6 +164,8 @@ PAIRS=(
   "src/editor/code-block.ts                       05,04,10"
   "src/editor/heading-on-enter.ts                 05,04"
   "src/editor/table-input.ts                      05,04,10"
+  # 2026-09-27：行首那颗多余的反斜杠（`\| 1 | 2 |`）。⚠️ 它**不改表格那条路**——只动"物理上只能占一行"的普通段落。
+  "src/editor/table-pipe.ts                      05,07"
   "src/editor/diagram-view.ts                     05,04,10"
   "src/editor/math-view.ts                      05,04,10"
   "src/editor/math-input.ts                     05,04,10"
@@ -163,6 +173,8 @@ PAIRS=(
   "src/editor/math-delim.ts                     05,04,10"
   "src/editor/mark-hint.ts                      05,04,10"
   "src/editor/atom-space.ts                     05,04,10"
+  # 2026-09-27：那五层文本处理器的"谁在外层"（加第五层时 `create.ts` 顶破 1000 行，把这串拆了出去）。
+  "src/editor/text-handlers.ts                   05"
   "src/editor/lang-icons-real.ts                05,04,10"
   # 行内标记（高亮/上标/下标/下划线）与块级裸 HTML＋注释，2026-09-27 同批落地。
   "src/editor/inline-marks.ts                   05,04,10"
@@ -209,6 +221,8 @@ PAIRS=(
   "src/ui/accel.ts                                04,05"
   "src/ui/commands.ts                             04,05"
   "src/ui/PluginDock.tsx                          04,10,02"
+  # 2026-09-27：插件在两个界面上那几句人话（右侧栏 ＋ 设置里的「扩展」页）。
+  "src/ui/pluginText.ts                          04"
   "src/ui/PanelBody.tsx                           04,11"
   "src/ui/panel-nodes.ts                          11,13"
   # ⚠️ 2026-09-27 补的三行：写作统计分享图那一批（`docs/07` 第 65 项第三轮）。
@@ -239,6 +253,9 @@ PAIRS=(
   "src/ui/settings/panes/DocThemePane.tsx           04"
   "src/ui/settings/panes/ShortcutsPane.tsx          04"
   "src/ui/settings/panes/GeneralPane.tsx            04"
+  "src/ui/settings/panes/FocusPane.tsx               04"
+  # 2026-09-27：设置里的「扩展」页（装 / 导出 / 卸载）。
+  "src/ui/settings/panes/ExtensionsPane.tsx          04"
   "src/ui/settings/panes/props.ts                   04"
   "src/ui/outline.ts                              05"
   "src/ui/view-modes.ts                           04"
@@ -276,6 +293,8 @@ PAIRS=(
   "tests/auto-correct.test.ts                   02,06"
   "tests/emoji.test.ts                          02,06"
   "tests/footnote.test.ts                       02,06"
+  # 2026-09-27：`editor/table-pipe.ts` 那 24 条（含"不挂这一层就复现出病"的对照）。
+  "tests/table-pipe.test.ts                    02,06"
   "src/styles/dock.css                            04"
   # ⚠️ 2026-09-27 从 `app.css` 拆出来的浮层那一族（四个对话框 ＋ Emoji 补全面板）。
   "src/styles/overlay.css                         04"

@@ -498,6 +498,34 @@ export interface 信任记录 {
 }
 
 /**
+ * 导出完了的一份小结（`nota_plugin_export` 的返回值）。见 `plugin/export.rs`。
+ *
+ * ⚠️ 字段名跟着 Rust 那边走（`files` / `bytes` / `signature`），不汉化：
+ * 这是跨进程的线格式，两边同名才好对。
+ */
+export interface 导出报告 {
+  id: string;
+  /** 包里装了几个文件（**不含**签名块）。 */
+  files: number;
+  /** 这些文件一共多少字节（**未压缩**，也就是"解开之后有多大"）。 */
+  bytes: number;
+  /**
+   * 包里那个签名块的去向：
+   *
+   * - `kept`：原样带上了（载荷还是作者签的那一份，导出没有改动它）；
+   * - `dropped`：**验不过，摘掉了**——用户改过文件，带着一个对不上的签名会让
+   *   收到包的人**装不上**（那是硬拒路径），所以宁可不带；
+   * - `none`：这个插件本来就没签名。
+   *
+   * ⚠️ 这三档必须在界面上**如实说出来**：用户以为自己发的是一份"已验证"的包，
+   * 而它其实是未签名的，这件事只有这里能告诉他。
+   */
+  signature: "kept" | "dropped" | "none";
+  /** 实际写到哪儿了。 */
+  path: string;
+}
+
+/**
  * 插件声明的面板。**拉来的，不是事件推的**——见 `api.plugin.panels` 的说明。
  */
 export interface PluginPanel {

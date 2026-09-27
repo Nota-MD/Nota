@@ -56,7 +56,7 @@ export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettin
       <SettingsGroup
         title={t("界面语言")}
         help={t(
-          "⚠️ 重启后生效。理由：插件在启动时按这个语言读好了自己的文案表（lang/<tag>.toml），运行中换语言就得把所有插件重新装一遍（跑 on_unload / on_load，里面有 git、有 HTTP）。改完这里，重启一次。",
+          "⚠️ 重启后生效。理由：拓展在启动时按这个语言读好了自己的文案表（lang/<tag>.toml），运行中换语言就得把所有拓展重新装一遍（跑 on_unload / on_load，里面有 git、有 HTTP）。改完这里，重启一次。",
         )}
       >
         <SettingRow
@@ -90,7 +90,7 @@ export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettin
         <Note>
           {t("英文翻译")}
           <strong>{t("现在覆盖整个界面")}</strong>
-          {t("：菜单栏、设置、状态栏、侧边栏、对话框、插件栏都在里面。两半是**同一套规矩、同一批切换**的，所以宁可两边一起换。")}
+          {t("：菜单栏、设置、状态栏、侧边栏、对话框、拓展栏都在里面。两半是同一套规矩、同一批切换的，所以宁可两边一起换。")}
         </Note>
       </SettingsGroup>
 
@@ -114,7 +114,7 @@ export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettin
         <SettingRow
           label={t("设置文件")}
           help={t(
-            "改完存盘、重启 Nota 生效。⚠ 手动编辑时要注意：标量要写在所有 [表] 之前，写在表后面会被**悄悄忽略**（那一项照旧用默认值，不报错）。",
+            "改完存盘、重启 Nota 生效。⚠ 手动编辑时要注意：标量要写在所有 [表] 之前，写在表后面会被悄悄忽略（那一项照旧用默认值，不报错）。",
           )}
         >
           <ActionButton onClick={onOpenConfigDir}>{t("打开文件夹…")}</ActionButton>

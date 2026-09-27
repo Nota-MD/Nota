@@ -472,7 +472,7 @@ export const MENUS: MenuSpec[] = [
       { id: "view.docList", label: "文档列表", accel: "Ctrl+Shift+2", checkable: true },
       { id: "view.search", label: "搜索", accel: "Ctrl+Shift+F" },
       "sep",
-      { id: "view.toggleDock", label: "插件栏", checkable: true },
+      { id: "view.toggleDock", label: "拓展栏", checkable: true },
       // ── 格式化工具栏：**三档，一个子菜单**（2026-09-25）──
       //
       // 用户 2026-09-25 点名要的三档（「始终显示 / 鼠标悬停时显示 / 始终不显示」，

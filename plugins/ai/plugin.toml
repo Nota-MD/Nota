@@ -15,11 +15,11 @@
 
 [plugin]
 id          = "nota.ai"
-name        = "AI 助手"
+name        = "AI assistant"
 version     = "0.1.0"
 api         = 2
 
-description = "写作助手：润色、续写、总结、翻译。需要自备 API 密钥。"
+description = "Writing assistant: polish, continue, summarize, translate. Bring your own API key."
 license     = "BSD-2-Clause"
 authors     = ["Nota contributors"]
 entry       = "main.lua"

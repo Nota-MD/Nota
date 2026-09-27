@@ -127,12 +127,12 @@ export const 设置表: Record<string, string> = {
   "已覆盖": "overridden",
   "（找不到「{0}」）": "(“{0}” not found)",
   "打开风格文件夹失败：{0}": "Could not open the styles folder: {0}",
-  "编辑区上方那一栏按钮（加粗、斜体、标题……）。⚠ 默认「始终不显示」：同一批命令在菜单栏里按同一套分组摆着，那一栏平时只是占地方。⚠ 选「鼠标悬停时显示」之后，鼠标移到编辑区顶端它才露出来、移开就收回去，而且**它露面时正文会往下让一条**——工具栏在文档流里，不是浮层。⚠ 三档在菜单「视图 → 格式化工具栏」里也能选，改的是同一个值。":
+  "编辑区上方那一栏按钮（加粗、斜体、标题……）。⚠ 默认「始终不显示」：同一批命令在菜单栏里按同一套分组摆着，那一栏平时只是占地方。⚠ 选「鼠标悬停时显示」之后，鼠标移到编辑区顶端它才露出来、移开就收回去，而且它露面时正文会往下让一条——工具栏在文档流里，不是浮层。⚠ 三档在菜单「视图 → 格式化工具栏」里也能选，改的是同一个值。":
     "The row of buttons above the editing area (bold, italic, headings…). " +
     "⚠ Default is Never Show: the same commands sit in the menu bar under the same " +
     "grouping, so that row is usually just in the way. " +
     "⚠ With Show on Hover the row only appears when the mouse reaches the top of the " +
-    "editing area, and **it pushes the document down when it appears** — the toolbar " +
+    "editing area, and it pushes the document down when it appears — the toolbar " +
     "is in the flow, not an overlay. " +
     "⚠ All three settings are also under View → Formatting Toolbar; both change the same value.",
 
@@ -236,7 +236,7 @@ export const 设置表: Record<string, string> = {
     "page and defaults to 4. The two are independent preferences and are not merged.",
   "让光标始终停在屏幕中间": "Keep the cursor in the middle of the screen",
   段首缩进: "First-line indent",
-  "正文段落的第一行空出几个字符，中文排版里说的「段首空两格」。⚠ 它只是**看着**缩进，一个空格都不会写进文件——源码模式、别的编辑器、导出拿到的都还是原来那些字。":
+  "正文段落的第一行空出几个字符，中文排版里说的「段首空两格」。⚠ 它只是看着缩进，一个空格都不会写进文件——源码模式、别的编辑器、导出拿到的都还是原来那些字。":
     "Indents the first line of a body paragraph by a few characters — “leave two " +
     "spaces at the start of a paragraph” in Chinese typography. ⚠ It is display only: " +
     "not one space is written into the file, so source mode, other editors and exports " +
@@ -349,8 +349,8 @@ export const 设置表: Record<string, string> = {
   "清除记录": "Clear records",
   "清掉「最近打开」那一份列表。只清记录，不碰文件本身。":
     "Clear the “recent files” list. Only the records — the files themselves are untouched.",
-  "尚未实现：这一项要在写盘之前**另外留一份底**，而现在的自动保存是直接往原文件写——写成了就没有草稿可言了。现状见本组末尾的说明。":
-    "Not implemented yet: this needs a **separate copy** made before writing to disk, " +
+  "尚未实现：这一项要在写盘之前另外留一份底，而现在的自动保存是直接往原文件写——写成了就没有草稿可言了。现状见本组末尾的说明。":
+    "Not implemented yet: this needs a separate copy made before writing to disk, " +
     "while Auto Save currently writes straight to the original file — once written " +
     "there is no draft left. See the note at the end of this group.",
   "记录历史文件和文件夹": "Remember recent files and folders",
@@ -392,10 +392,10 @@ export const 设置表: Record<string, string> = {
   // ── 「通用」页（`panes/GeneralPane.tsx`）───────────────────────────────
   界面语言: "Interface language",
   语言: "Language",
-  "⚠️ 重启后生效。理由：插件在启动时按这个语言读好了自己的文案表（lang/<tag>.toml），运行中换语言就得把所有插件重新装一遍（跑 on_unload / on_load，里面有 git、有 HTTP）。改完这里，重启一次。":
-    "⚠️ Takes effect after a restart. Because plugins read their own text tables " +
+  "⚠️ 重启后生效。理由：拓展在启动时按这个语言读好了自己的文案表（lang/<tag>.toml），运行中换语言就得把所有拓展重新装一遍（跑 on_unload / on_load，里面有 git、有 HTTP）。改完这里，重启一次。":
+    "⚠️ Takes effect after a restart. Because extensions read their own text tables " +
     "(lang/<tag>.toml) at startup, switching language while running would mean " +
-    "reinstalling every plugin (running on_unload / on_load, some of which do git " +
+    "reinstalling every extension (running on_unload / on_load, some of which do git " +
     "and HTTP). Change this, then restart once.",
   "「自动」= 跟系统走（看 LC_ALL / LC_MESSAGES / LANG）。⚠ 系统语言不在支持列表里时落到英语。":
     "“Automatic” follows the system (LC_ALL / LC_MESSAGES / LANG). ⚠ A system " +
@@ -408,8 +408,8 @@ export const 设置表: Record<string, string> = {
   // "只覆盖插件那一面"），键也就跟着变了——旧的两条键在 `en.ts` 里已经删掉。
   英文翻译: "The English translation",
   现在覆盖整个界面: "now covers the whole interface",
-  "：菜单栏、设置、状态栏、侧边栏、对话框、插件栏都在里面。两半是**同一套规矩、同一批切换**的，所以宁可两边一起换。":
-    ": the menu bar, settings, status bar, sidebar, dialogs and the plugin dock are " +
+  "：菜单栏、设置、状态栏、侧边栏、对话框、拓展栏都在里面。两半是同一套规矩、同一批切换的，所以宁可两边一起换。":
+    ": the menu bar, settings, status bar, sidebar, dialogs and the extension dock are " +
     "all included. Both halves follow the same rules and switch together, so they " +
     "are always changed as a pair.",
   调试模式: "Debug mode",
@@ -430,10 +430,10 @@ export const 设置表: Record<string, string> = {
   "把所有设置项一次性恢复为默认值。⚠ 只修改设置，不改动文档——正文、文件、主题 CSS 都不受影响。":
     "Reset every setting to its default at once. ⚠ Settings only — documents are " +
     "untouched, including their content, files and theme CSS.",
-  "改完存盘、重启 Nota 生效。⚠ 手动编辑时要注意：标量要写在所有 [表] 之前，写在表后面会被**悄悄忽略**（那一项照旧用默认值，不报错）。":
+  "改完存盘、重启 Nota 生效。⚠ 手动编辑时要注意：标量要写在所有 [表] 之前，写在表后面会被悄悄忽略（那一项照旧用默认值，不报错）。":
     "Save the file and restart Nota for changes to take effect. ⚠ When editing by " +
     "hand: scalars must come before all [tables]. A scalar placed after a table is " +
-    "**silently ignored** (the default is used instead, with no error).",
+    "silently ignored (the default is used instead, with no error).",
   许可证: "License",
   "完整的第三方组件清单、各自的版本与许可证在仓库根目录的":
     "The complete list of third-party components, with versions and licenses, is in",
@@ -487,23 +487,23 @@ export const 设置表: Record<string, string> = {
   复制到指定路径: "Copy to a custom path",
   指定路径: "Custom path",
   "例如 /home/我/图片，或 ./img": "e.g. /home/me/Pictures, or ./img",
-  "绝对路径照用；相对路径按**文档所在的目录**算（不是应用的工作目录）。⚠ 目录不存在会建出来。":
-    "An absolute path is used as-is; a relative path is resolved against **the folder " +
-    "the document is in** (not the app's working directory). ⚠ A missing folder is created.",
+  "绝对路径照用；相对路径按文档所在的目录算（不是应用的工作目录）。⚠ 目录不存在会建出来。":
+    "An absolute path is used as-is; a relative path is resolved against the folder " +
+    "the document is in (not the app's working directory). ⚠ A missing folder is created.",
   "上面那条规则对哪些图片生效": "Which images the rule above applies to",
   "本地位置的图片": "Images from local paths",
   "网络位置的图片": "Images from web URLs",
-  "默认不勾选：网络图片通常是有意引用原始地址（换一台机器打开也应当可见）。⚠ 勾上之后，插入网络图片时 Nota 会**联网把它下载下来**再放到上面那个目录——这是本应用替你去取一个你已经写在文档里的地址，但它是联网动作，所以默认关着。":
+  "默认不勾选：网络图片通常是有意引用原始地址（换一台机器打开也应当可见）。⚠ 勾上之后，插入网络图片时 Nota 会联网把它下载下来再放到上面那个目录——这是本应用替你去取一个你已经写在文档里的地址，但它是联网动作，所以默认关着。":
     "Off by default: a remote image usually means the original URL on purpose (so it is " +
     "still there on another machine). ⚠ When on, inserting a remote image makes Nota " +
-    "**download it over the network** into the folder above — the app fetching an address " +
+    "download it over the network into the folder above — the app fetching an address " +
     "you already wrote in the document. It is a network action, so the default is off.",
   图片语法偏好: "Image syntax preferences",
   优先写相对路径: "Prefer relative paths",
-  "⚠ 只朝一个方向动：你给的是一条**绝对**路径时，换算成相对文档目录的写法。本来就是相对的地址原样保留；Nota 自己复制/下载出来的那一份**总是**相对路径，不看这一项。":
-    "⚠ It only goes one way: an **absolute** path you give is rewritten relative to the " +
+  "⚠ 只朝一个方向动：你给的是一条绝对路径时，换算成相对文档目录的写法。本来就是相对的地址原样保留；Nota 自己复制/下载出来的那一份总是相对路径，不看这一项。":
+    "⚠ It only goes one way: an absolute path you give is rewritten relative to the " +
     "document's folder. Addresses that are already relative are kept as they are; the " +
-    "copy Nota makes or downloads itself is **always** relative and ignores this setting.",
+    "copy Nota makes or downloads itself is always relative and ignores this setting.",
   "为相对路径添加 ./": "Add ./ to relative paths",
   "⚠ 只在最终写出来的是相对路径时才有意义（已经是 ./ 或 ../ 开头的不再加）。":
     "⚠ Only meaningful when the result is a relative path (one already starting with " +

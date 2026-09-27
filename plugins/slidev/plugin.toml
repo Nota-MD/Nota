@@ -20,11 +20,11 @@
 
 [plugin]
 id          = "nota.slidev"
-name        = "Slidev 演示"
+name        = "Slidev Slides"
 version     = "0.1.0"
 api         = 2
 
-description = "把当前 Markdown 当幻灯片放出来看。走本机的 Slidev，预览嵌在右侧面板里。"
+description = "Play the current Markdown as slides. Runs your local Slidev and embeds the preview in the side panel."
 license     = "BSD-2-Clause"
 authors     = ["Nota contributors"]
 entry       = "main.lua"

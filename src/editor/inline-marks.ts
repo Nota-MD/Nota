@@ -59,6 +59,10 @@
  *    内容外）。放宽了的话 `a == b == c` 会被从中间切走一段。
  * 4. **`~x~` 与删除线 `~~x~~` 的分界靠"邻居不是波浪号"**，且本文件的输入规则
  *    **必须排在 `gfm` 前面**——理由写在 `行内标记输入规则` 那一格。
+ *    ⚠️ **光靠顺序只够管"打字"那条路**（BUG-48，2026-09-27 补）：`gfm` 的
+ *    `singleTilde` 默认把单个波浪号也当删除线，而"打开/存盘"走的是 micromark
+ *    分词，抢不过顺序 ⇒ 打的时候是下标、存下去变成 `~~下~~`。那一半由本文件
+ *    末尾的 `GFM选项`（交给解析）＋ `不转义孤立波浪号`（管序列化）治。
  *
  * # 输出给谁
  *
@@ -67,11 +71,16 @@
  * - `行内标记解析(开关)` 一条 `$remark` → 排在 `gfm` **后面**；
  * - `行内标记处理器()` 返回四条序列化 handler → 写进 `create.ts` 的
  *   `remarkStringifyOptionsCtx.handlers`（与 `行内公式处理器()` 同一处）；
+ * - `GFM选项` 与 `不转义孤立波浪号` → **不给 `preset/gfm` 用，是把 `gfm` 拉回本仓
+ *   语义的两件东西**（关掉单波浪号删除线；正文里的孤立 `\~` 不加反斜杠）。
+ *   两处都在 `create.ts` 的 `.config()` 里，见那一节；
  * - `行内标记命令` 四条 toggle 命令 → `create.ts` 的 `COMMANDS` 表按
  *   `命令名表` 派发。
  */
 
 import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
+import type { Ctx } from "@milkdown/kit/ctx";
+import { remarkGFMPlugin } from "@milkdown/kit/preset/gfm";
 import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 import { $command, $inputRule, $markSchema, $remark } from "@milkdown/kit/utils";
 import { markRule } from "@milkdown/kit/prose";
@@ -363,8 +372,41 @@ function 纯文字(节: MarkdownNode): string {
  *
  * ⚠️ 配对失败（只有 `<u>` 没有 `</u>`，或者中间隔着块级节点）时**原样留下**，
  * 什么都不做——半截 `<u>` 保持它作为裸 HTML 的本来面目，比把它吃掉强。
- * 中途夹着容器型节点也一律不配（那是"用户真的在写 HTML"，不是打错了）。
+ * 中途夹着块级节点也一律不配（那是"用户真的在写 HTML"，不是打错了）。
+ *
+ * ⚠️⚠️ **"隔着块级节点"的判据曾经写成"有 `children`"，那是个真缺陷**
+ *（2026-09-27 量出来并修掉，属于 BUG-48 那一族）。原因是**行内节点也带
+ * `children`**：`emphasis`（`*斜*`）、`strong`（`**粗**`）、`link`，以及本仓
+ * 自造的 `notaHighlight` / `notaSuperscript` / `notaSubscript` 全都算。于是
+ * `<u>下==高==下</u>` 这种"下划线里夹一层标记"**配不成**，`<u>` 与 `</u>`
+ * 退回成两颗裸 HTML 节点、原样显示在编辑器里，真下划线 mark 一颗都没有。
+ * 而**本仓自己就会写出这种源文**——下划线＋高亮是完全合法的组合，序列化那
+ * 一侧吐出来的就是 `<u>下==高==下</u>`（见 `tests/inline-marks.test.ts` 第五组），
+ * 于是"自己写的文件自己读不回来"：字节还在（那两颗 html atom 被原样保着，
+ * 所以"打开再存字节不变"那条判据**照样绿**），丢的是 **WYSIWYG 的那一层**。
+ * 换成 `块级节点` 这张表之后，行内节点（哪怕带 children）不再算边界。
+ *
+ * ⚠️ 表里**故意没有 `html`**：行内 `<u>` / `<br>` 本身就是 `html` 类型，
+ * 列进去会把 `<u>a<br>b</u>` 也当跨界。块级 html 在块级位置上，与这一段
+ * 文字不在同一个 `children` 里（`html-block.ts` 那张 `块级容器` 表管的就是它）。
  */
+/** mdast 里**确定是块级**的节点名。见 `并下划线` 里那段注释。 */
+const 块级节点: ReadonlySet<string> = new Set([
+  "paragraph",
+  "heading",
+  "blockquote",
+  "list",
+  "listItem",
+  "code",
+  "thematicBreak",
+  "table",
+  "tableRow",
+  "tableCell",
+  "footnoteDefinition",
+  "definition",
+  "yaml",
+]);
+
 function 并下划线(孩子: MarkdownNode[]): MarkdownNode[] {
   const 出: MarkdownNode[] = [];
   let i = 0;
@@ -379,9 +421,8 @@ function 并下划线(孩子: MarkdownNode[]): MarkdownNode[] {
           找着 = j;
           break;
         }
-        // 只允许行内的那几种夹在中间；碰到容器型（段落、标题、列表……）就
-        // 放弃这一次配对。
-        if (是容器(一)) break;
+        // ⚠️ **判据是"块级"而不是"有 `children`"**（2026-09-27 修，见下面那段）。
+        if (块级节点.has(一.type)) break;
       }
       if (找着 > i + 1) {
         const 中 = 孩子.slice(i + 1, 找着);
@@ -677,6 +718,182 @@ export function 不转义行首等号(原文?: 文本处理器): 文本处理器
   return (node, parent, state, info) => {
     if (!原文) return node.value ?? "";
     return 原文(node, parent, state, info).replace(被转义的行首等号, "$1$2");
+  };
+}
+
+/* ── 第六格：`gfm` 那条删除线不许抢 `~x~`（BUG-48 的波浪号那一半）─────── */
+
+/**
+ * 喂给上游那条 `gfm` remark 插件的选项：**关掉"单个波浪号也算删除线"**。
+ *
+ * # 病灶（2026-09-27 量出来的，`tests/inline-marks.test.ts` 里钉着）
+ *
+ * GFM 的删除线默认**两头都收**：`~~x~~` 与 `~x~~`…更确切地说，`remark-gfm`
+ * 的 `singleTilde` 默认是 **true**，于是 `~下~` 在 micromark 那一层就成了
+ * **删除线**——而本仓的设置页从第一天起就写着「下标 `` `H~2~O` ``」。两者
+ * 撞在同一个字符上，谁先谁赢：
+ *
+ * | 走的哪条路 | 谁先看见 `~下~` | 结果 |
+ * |---|---|---|
+ * | **打字**（输入规则） | 本仓的规则（`.use()` 排在 `gfm` 前，先中者赢） | 下标 ✓ |
+ * | **打开/存盘**（micromark 分词） | `gfm` 的删除线 | **`~~下~~`** ✗ |
+ *
+ * 所以症状是**用户看着好好的、存盘之后文件里多了一个波浪号**：打开再存一次，
+ * `H~2~O` 变成 `H~~2~~O`、`张~2~` 变成 `张~~2~~`（中文更早暴露，因为 gfm 那条
+ * 的 `\w` 不含中文，`张~~三~~` 连删除线都不算，只是两个波浪号）。**这是数据被改了，
+ * 不只是显示不对**——`docs/05` 里"自动修复换了副面孔"那一族里最隐蔽的一条：
+ * 打的时候一切正常。
+ *
+ * # 关掉它之后本仓的语义（与 Typora 一致）
+ *
+ * | 写法 | 意思 |
+ * |---|---|
+ * | `~x~` | **下标**（本仓的 `notaSubscript`） |
+ * | `~~x~~` | 删除线（`gfm` 的 `delete`，照旧是 `gfm` 的） |
+ *
+ * 两侧不冲突：`singleTilde:false` 只要求删除线**必须成双**，`~~x~~` 一个字都没变。
+ * 边界那四条（下标正则的 `(?<!~)` / `(?!~)`）本来就是照这个语义写的，现在解析
+ * 那一侧终于与它对齐了。
+ *
+ * # 怎么送到位（**不用换插件，也不用重新注册**）
+ *
+ * `remarkGFMPlugin` 是 `$remark('remarkGFM', () => remarkGFM)`，它的选项存在
+ * **自己那个 ctx 切片**里（`@milkdown/utils/lib/index.js:371-378`：
+ * `const options = $ctx(initialOptions ?? {}, id)`，跑插件时
+ * `options: ctx.get(options.key)`）。而真正喂给 unified 的是
+ * `@milkdown/core/lib/index.js:139` 那一行：
+ *
+ * ```js
+ * ctx.get(remarkPluginsCtx).reduce((acc, plug) => acc.use(plug.plugin, plug.options), remark)
+ * ```
+ *
+ * 也就是说**上游本来就把选项当 `unified().use(plugin, options)` 的第二个参数用**，
+ * 而 `remark-gfm` 正是靠这个参数把 `singleTilde` 交给 micromark 的
+ * （`remark-gfm/lib/index.js` 里 `this.use(gfm, options)`，读它的是
+ * `micromark-extension-gfm-strikethrough/lib/syntax.js:20` 的 `options_.singleTilde`）。
+ * 所以 `create.ts` 的 `.config()` 里改这个切片就够——不必像
+ * `wrapInHeadingInputRule` 那样先 `filter` 掉再自己注册一条同名的。
+ *
+ * ⚠️ **顺序无所谓但时机有所谓**：`.config()` 跑在 Init 之前，而那个插件体是
+ * `await ctx.wait(InitReady)` 之后才 `ctx.get(options.key)` 的，所以只要写在
+ * `.config()` 里就一定赶得上（写在 `.use()` 之后反而可能赶不上）。
+ *
+ * ⚠️ **测试那边要拿这同一个常量**（`tests/inline-marks.test.ts` 的
+ * `造处理机` 用它 `.use(remarkGfm, GFM选项)`）——两边各写一份字面量的话，
+ * 改了产品没改测试，或者反过来，都会让这份测试变成假的。
+ */
+export const GFM选项 = { singleTilde: false };
+
+/**
+ * 把 `GFM选项` 落到编辑器上（`create.ts` 的 `.config()` 里那一行调的就是它）。
+ *
+ * ⚠️ **为什么要包成函数而不是让 `create.ts` 自己写**：`create.ts` 已经贴着
+ * 1000 行那条线（`docs/09` §4 的闸门），而这件事的解释有一整段长注释——
+ * 放在那边等于为别人的上限花钱。这里本来就是这个决定的文档所在地，顺路。
+ *
+ * ⚠️ **时机**：`.config()` 那一批跑在 Init 之前，而这个切片的读者是
+ * `remarkGFMPlugin` 自己（`await ctx.wait(InitReady)` 之后才读），所以
+ * 在 `.config()` 里调一定赶得上；**写在 `.use()` 之后反而可能赶不上**。
+ *
+ * ⚠️ `prev ?? {}` 不是防御性编程：那个切片的类型是 `Options | null | undefined`
+ * （见 `preset-gfm/lib/plugin/remark-gfm-plugin.d.ts`），直接展开一个可能是
+ * `null` 的值，`tsc` 报 TS2698「Spread types may only be created from object types」。
+ */
+export function 关掉单波浪号删除线(ctx: Ctx): void {
+  // ⚠️ 是 `.options.key` 而不是 `.options`（`$Ctx` = 插件 ＋ 钥匙，不是切片；
+  // 同 `create.ts` 里 katex 那条）。少一个 `.key` 就是 TS2345。
+  ctx.update(remarkGFMPlugin.options.key, (prev) => ({ ...(prev ?? {}), ...GFM选项 }));
+}
+
+/**
+ * 下标那一条正则的**非 sticky** 版（`切文本` 用 `lastIndex` 逐位扫，这里只问
+ * "整颗文本节点里有没有能当下标的写法"，所以把 `y` 去掉照 `source` 重建一条）。
+ * ⚠️ 在 `标记表` **之后**求值——`标记表` 是本模块顶部的 `const`，早于它会拿到
+ * `undefined`（症状是这条恒不命中，于是转义照旧留着，看着像"补丁没生效"）。
+ */
+const 下标语法 = new RegExp(标记表[2]!.正则.source);
+
+/** 文本节点的**兄弟**里，有没有会自己吐出一个裸 `~` 的那种（现在只有下标）。 */
+function 贴边有波浪号定界符(parent: unknown, node: MarkdownNode, 取前一个: boolean): boolean {
+  const 孩子们 = (parent as 有孩子 | undefined)?.children;
+  if (!Array.isArray(孩子们)) return false;
+  const i = 孩子们.indexOf(node);
+  if (i < 0) return false;
+  const 邻 = 孩子们[取前一个 ? i - 1 : i + 1];
+  return 邻?.type === 标记表[2]!.mdast;
+}
+
+/** 这一颗文本节点**就是下标的内容**吗（那样它的两头直接贴着自己那个定界符）。 */
+function 父是波浪号标记(parent: unknown): boolean {
+  return (parent as MarkdownNode | undefined)?.type === 标记表[2]!.mdast;
+}
+
+/**
+ * 包一层：把**孤立的** `\~` 去掉（`甲 ~ 乙` 存盘不该变成 `甲 \~ 乙`）。
+ *
+ * # 病灶
+ *
+ * `mdast-util-gfm-strikethrough` 的 `gfmStrikethroughToMarkdown()` 往序列化器的
+ * unsafe 表里加了一条 `{character: '~', inConstruct: 'phrasing'}`，于是**正文里
+ * 每一个波浪号**都转义——用户打的是"甲 ～ 乙"，存下去文件里多了两个反斜杠。
+ * 与 `不转义行首等号` / `不转义行首井号` 是同一个病。
+ *
+ * ⚠️ 那条 unsafe 与 `singleTilde` **无关**（`mdast-util-gfm/lib/index.js:37,58`
+ * 调 `gfmStrikethroughToMarkdown()` 时**没传参数**），所以关掉单波浪号删除线
+ * 之后它照样在——两件事要分开做，别以为上面那个 `GFM选项` 顺手把它也治了。
+ *
+ * # 为什么不能"凡是 `\~` 都去掉"
+ *
+ * 因为这个反斜杠**有时候是有用的**。今天（含转义）这几条都是对的：
+ *
+ * | 文本节点的值 | 存出来 | 重开之后 |
+ * |---|---|---|
+ * | `甲 ~ 乙` | `甲 \~ 乙` | 同左 ✓（**这条是噪音，本节要治的**） |
+ * | `~~甲~~` | `\~\~甲\~\~` | 同左 ✓（字面两个波浪号，不该变删除线） |
+ * | `~甲~` | `\~甲\~` | 同左 ✓（下标关掉时它是普通文字；开着时它是"用户打的反斜杠"） |
+ * | `甲~` ＋ 下标`乙` | `甲\~~乙~` | 同左 ✓（**这颗 `\` 是关键**：去掉就与下标那个定界符并成 `~~`） |
+ *
+ * 去掉了任何一条，波浪号就会与邻居**拼成一个标记**，重开时文字被吃掉或意思变了。
+ * 所以这里不做大赦，只做**逐颗文本节点**的判断：把这一颗里所有 `\~` 都当去掉，
+ * 然后拿三条判据问"去掉之后重新解析会变成别的东西吗"，任一命中就**整颗保持原样**
+ * （宁可留着噪音，不许改数据）：
+ *
+ * 1. 出现 `~~` → 会变删除线；
+ * 2. 命中**下标**那条正则（`下标语法`）→ 会变下标（`甲 ~乙~ 丙` 这种）；
+ * 3. 这一颗的一头是个 `~`，而那一头**另有定界符**——"另有"指这两种：
+ *    · **贴着**一颗下标兄弟（上表最后一行那种拼接）；
+ *    · **自己就是下标的内容**（`父是波浪号标记`：那颗文本节点的两头直接贴着自己
+ *      那个定界符，内容 `~` 会写成 `~~~`）。
+ *
+ * 判据 3 只看**下标**：别的兄弟节点要么吐的是多字符定界符（`==`、`<u>`、`~~`），
+ * 要么它自己也被这条规则管着（相邻的**文本**节点只要以 `~` 收尾，按判据 2/3 的
+ * 同一条口径它自己就留着转义，不会吐出一个裸 `~` 来跟我拼）。
+ *
+ * ⚠️ **过了这三条才去掉**，所以 `甲 ~ 乙` 通（一个波浪号不挨着谁、不成对），
+ * 而上面那些行一条都不会动。
+ *
+ * ⚠️ 判据 3 拦不住的那一类是**内容本身就是定界符**（`~` 当内容 → `~~~`，`=`
+ * 当高亮内容 → `=====`）：那是 `inline-marks.ts` 文件头**边界 3**（"内容里不能再
+ * 出现同一个符号"）的直接后果——本仓那颗正则压根不认识反斜杠转义，所以这种写法
+ * **本来就不往返**，与本节无关（`tests/inline-marks.test.ts` 里如实钉着现状）。
+ *
+ * # 挂在哪
+ *
+ * `create.ts` 的 `.config()` 里，**最外层**——与 `不转义行首等号` 同一个理由：
+ * 它要看这一颗文本节点**最终**写出什么，得等里面那几条（`原子后的空格` 会把
+ * U+00A0 换成普通空格）都改完。
+ */
+export function 不转义孤立波浪号(原文?: 文本处理器): 文本处理器 {
+  return (node, parent, state, info) => {
+    if (!原文) return node.value ?? "";
+    const 出 = 原文(node, parent, state, info);
+    if (!出.includes("\\~")) return 出;
+    const 无转义 = 出.replace(/\\~/g, "~");
+    if (无转义.includes("~~") || 下标语法.test(无转义)) return 出;
+    const 两头另有定界符 = 父是波浪号标记(parent);
+    if (无转义.startsWith("~") && (两头另有定界符 || 贴边有波浪号定界符(parent, node, true))) return 出;
+    if (无转义.endsWith("~") && (两头另有定界符 || 贴边有波浪号定界符(parent, node, false))) return 出;
+    return 无转义;
   };
 }
 

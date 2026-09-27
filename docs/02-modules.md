@@ -107,7 +107,7 @@
 | `editor/math-view.ts` | **公式能就地改 ＋ `$` / `$$` 半透明**（2026-09-26）：上游那两个节点是 `atom`、**一个视图都没有**，所以敲进去的字会被 `toMarkdown` 静默丢掉（源码在两处：`math_inline` 在**内容**里、`math_block` 在 **`attrs.value`** 里——写错哪一边不报错、只丢字；⚠️ 2026-09-27 起 `math_inline` **有** `attrs` 了，但那只是为了记「用了几个 `$`」，**源码仍在内容里**，见 `editor/math-delim.ts`）。⚠️ **不改上游 schema**；只读实例画上游 `toDOM` 那棵树。⚠️ 用例 **41** 条在 `tests/math-view.test.ts`（跑法见 `docs/06` §6.3）；2026-09-26 起那个文件也盖 `insert.ts` 的 `插公式块`；⚠️ 原第七组盖的是 `lax-heading.ts` 的**显示层**装饰，那天显示层删掉后**整组换成了 `不转义行首井号`**（38 → 41）——照旧是喂**伪造的**原始文本处理器，所以只钉住这个函数的判定，**不钉上游行为** |
 | `editor/math-input.ts` | **行内公式的打字规则**（153 行，2026-09-26；⚠️ **2026-09-27 起"敲的就是存的"**——两条规则各多带一个 `dollars` 参数，`$$x$$` 存盘还是 `$$x$$`，机制在 `math-delim.ts`，用例 **19** 条）：`$$x$$` 与 `$x$` 各一条，敲完当场变一颗 `math_inline`。⚠️ **上游那条 `mathInlineInputRule` 被按引用滤掉了**（`create.ts`，和标题的 `wrapInHeadingInputRule` 同一个手法）：它的正则认不出 `$$…$$`，用户敲到 `A$$bb$` 那一下尾巴就够匹配、当场变出「文本 `A$` ＋ 公式 `bb`」——**"行内 `$$…$$` 打不出来"的根因在这儿，跟解析器无关**（解析器本来就认）。⚠️ `$…$` 那条多一条守卫：前面紧挨着**还是 `$`** 就让开。用例 16 条在 `tests/math-input.test.ts` |
 | `editor/math-delim.ts` | **行内公式用几个 `$`，存盘照原样写回去**（279 行，2026-09-27，用户拍「保留 `$$`」）：`$$x$$` 存盘**还是 `$$x$$`**。⭐ **三处缺一不可、缺哪一处都静默失效**（不报错、屏幕上看不出变化）：解析那趟一个 `$remark` 插件照**源码偏移**数出开头几个 `$` → `math_inline` 规格**多一个 `dollars` 属性**（默认 1）＋ 两个 `runner` 搬它 → 序列化按这个数**选一条上游现成的处理器**。⚠️⚠️ **别拿 `mathInlineSchema.extendSchema` 改规格**（`plugin-math@7.5.9` 自带一份 `@milkdown/utils@7.5.9`，那份 `extendSchema` 会把节点**挪到 `nodesCtx` 末尾**，而它改的和顶层那份是**同一个 `nodesCtx`**），这里用顶层 `$nodeSchema` 重建。⚠️ 打字那条路**不走第一步**（`math-input.ts` 当场盖章），粘贴/拖拽落到默认 1（有意）。用例 **23** 条在 `tests/math-delim.test.ts` |
-| `editor/inline-marks.ts` | **高亮 / 上标 / 下标 / 下划线**四种行内标记的整套（662 行，2026-09-27）：四颗 `$markSchema` ＋ `$remark` 解析标注 ＋ 各自的 `toMarkdown` ＋ 输入规则 ＋ 存盘那侧的 `handlers.text`。⚠️ 这四种在现代 markdown 里**都没有原生语法**（`==高亮==` 是扩展，另三个是 HTML 标签），所以**四层缺一层都静默失败**。⚠️ `标记规格` 里 **`标签`（PM mark 名／`CommandState` 的键）与 `html标签`（编辑区真正渲染的元素名）是两个东西**——原来一位两用会让编辑区渲染出 `<highlight>` 这种自造元素、并丢掉 `<sup>`/`<sub>` 自带排版（2026-09-27 拆开）。⚠️ 开关只有三个（`highlight`/`superscript`/`subscript`，来自 `MarkdownSettings`），**下划线没有开关**（有意）。判据 `tests/inline-marks.test.ts` **21** 条 |
+| `editor/inline-marks.ts` | **高亮 / 上标 / 下标 / 下划线**四种行内标记的整套（901 行，2026-09-27）：四颗 `$markSchema` ＋ `$remark` 解析标注 ＋ 各自的 `toMarkdown` ＋ 输入规则 ＋ 存盘那侧的 `handlers.text`。⚠️ 这四种在现代 markdown 里**都没有原生语法**（`==高亮==` 是扩展，另三个是 HTML 标签），所以**四层缺一层都静默失败**。⚠️ `标记规格` 里 **`标签`（PM mark 名／`CommandState` 的键）与 `html标签`（编辑区真正渲染的元素名）是两个东西**——原来一位两用会让编辑区渲染出 `<highlight>` 这种自造元素、并丢掉 `<sup>`/`<sub>` 自带排版（2026-09-27 拆开）。⚠️ 开关只有三个（`highlight`/`superscript`/`subscript`，来自 `MarkdownSettings`），**下划线没有开关**（有意）。判据 `tests/inline-marks.test.ts` **37** 条 |
 | `editor/html-block.ts` | **块级裸 HTML 与 HTML 注释**（240 行，2026-09-27）：独占一行的 `<div>x</div>` / `<!-- 注 -->` 给一颗 `group:"block"` 的原子节点。⭐ **修的是真缺陷：整篇文档打不开**——`remark-parse` 把独占一行的 HTML 产成 root 的直属孩子，而 preset 的 `htmlSchema` 是行内节点（`preset-commonmark/lib/index.js:1510`）、`doc.content` 是 `"block+"`（`:414`）。**文件以一行裸 HTML 开头**就够了。⚠️ 行内的一个字节都不动（判据是"父节点在 `块级容器`（四种，穷举）里"）；⚠️ 编辑区**显示成源码**、不是渲染后的 HTML（真渲染要先重写 HTML 解析器，且编辑区是活文档、渲染等于让 `<script>` 跑起来）；**导出与打印不受影响**。判据 `tests/html-block.test.ts` **14** 条 |
 | `editor/footnote.ts` | **脚注**（约 190 行，2026-09-27）：`脚注事务(state)` —— 一笔事务里插 `[^N]` 的引用、在文末补 `[^N]: ` 的定义、把光标落进定义里。⚠️ **节点与解析/序列化都是 `preset-gfm` 给的**，这一格缺的从来只是「从零插一条」；⚠️ 编号取「**最小未用正整数**」（删过之后补洞，不留洞），**源码模式引的是同一个函数**；⚠️ 两条 `null` 出口：没挂 gfm、光标在代码块里。判据 `tests/footnote.test.ts` **30** 条 |
 | `editor/atom-space.ts` | **原子后面那颗空格**（2026-09-26，约 230 行）：WebKit 在**不可编辑的行内元素**（行内公式、图片、硬换行）后面插空格时会改用 **U+00A0 不换行空格**（怕被折叠），于是那颗 NBSP **成了文档里的字符**——不换行、看不见、用户没敲过。这里在**序列化**那一趟把它换回普通空格：包一层 **`handlers.text`**（`mdast-util-to-markdown` 的公开扩展点，`create.ts` 的 `.config()` 里与 `不转义行首井号` **套在同一份处理器上**）。⚠️⚠️ **前两版都是错的，都别重排**：① 拦在编辑器里（`handleTextInput`）会让那颗空格在**紧跟着的下一次编辑**里丢掉——单测全绿、真窗口丢字符；② 挂 `$remark` 插件是个**静默空操作**——unified 的 `stringify()` **不跑转换器**，而 Milkdown 的序列化器走的正是它。⚠️ 判据：**文本节点开头那颗 NBSP ＋ 前一个兄弟是行内原子**（`inlineMath` / `image` / **`break`**——⚠️ 硬换行是 `break` 不是 `html`），别处一律不动。⚠️ 代价：**编辑器里那颗字符仍然是 NBSP**（`Ctrl+F` 搜不到、复制带 NBSP），这是换来「空格不丢」付的钱。⚠️ **不是这次改动引入的**，是行内公式一直有的老毛病。用例 **19** 条在 `tests/atom-space.test.ts` |
@@ -296,11 +296,11 @@
 其余 Rust 文件没有测试。
 
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
-见 `docs/06` §6.3）：`tests/` 下 **二十三份、共 574 条**（2026-09-27 深夜现数）——
+见 `docs/06` §6.3）：`tests/` 下 **二十三份、共 590 条**（2026-09-27 深夜现数）——
 `keymap.test.ts` **54** · `slash.test.ts` **49** · `share-card.test.ts` **46** ·
 `math-view.test.ts` **41** · `focus-summary.test.ts` **34** · `smart-punctuation.test.ts` **32** ·
 `emoji.test.ts` **32** · `footnote.test.ts` **30** · `math-delim.test.ts` **23** · `toc.test.ts` **22** ·
-`inline-marks.test.ts` **21** · `heatmap.test.ts` **20** · `auto-correct.test.ts` **20** ·
+`inline-marks.test.ts` **37** · `heatmap.test.ts` **20** · `auto-correct.test.ts` **20** ·
 `math-input.test.ts` **19** · `atom-space.test.ts` **19** · `mark-hint.test.ts` **18** ·
 `accent.test.ts` **18** · `instant-render.test.ts` **17** · `lang-icons.test.ts` **14** ·
 `html-block.test.ts` **14** · `chart-ticks.test.ts` **12** · `doc-typography.test.ts` **11** ·
@@ -321,6 +321,7 @@
 **"写好之后从没进过任何名册"**的第三例，而且**当时连 `docs/06` §6.3 那个 `for`
 循环都没进**，所以"每天跑一遍"从来没跑到过它。
 📌 **2026-09-27 晚再补一份**（566 → 574）：`empty-doc-save.test.ts`（**8 条**，空文档存盘必须 0 字节，见 `docs/06` §5.31 ④）。⚠️ 这一份是**给一条已有判据配的测试**，不是新功能——它挡的那条路（"保镖"占位符的值漏进文件）此前一直是 7 字节，而且是**开窗时从状态栏那个字符数**上看出来的。
+📌 **2026-09-27 夜（BUG-48 那一条，`inline-marks` 21 → 37，574 → 590，**份数不变**）**：新增的 16 条全在 `tests/inline-marks.test.ts` 一份里，**没有新文件**，所以 `for` 循环与本文的份数都不用动——这也说明"加测试要改四处"那条规矩里，**"哪四处"是看有没有新文件**：只往里加用例时，要改的是条数（`docs/06` §6.3 那张表、本节的表、`AGENTS.md` 那一行、`docs/09` §2 那一行）。⚠️ 同批修掉一条**假绿**：那份测试的 `unified()` 链从来没 `.use(remarkGfm)`，而产品链有，于是三条"`~下~` 不许被改写成 `~~下~~`"的断言测的不是产品那条路（详见 `docs/06` §6.3 末条 📌）。
 ⚠️ 教训仍旧是同一条：**加一份测试要跟着改四处**（`docs/06` §6.3 的名册与 `for` 循环、
 `AGENTS.md`、`docs/09`、本节），**闸门一处都扫不到**，只能靠人记。
 ⚠️ `accent.test.ts` 有个**别处没有的做法**：

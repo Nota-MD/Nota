@@ -5,7 +5,7 @@
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
 > 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 505 条各钉住了什么。
 >
-> ⚠️ **测试数只在本文记数（Rust 当前 505 ／ 前端当前 574）**，别处一律写"见 `docs/06`"。
+> ⚠️ **测试数只在本文记数（Rust 当前 505 ／ 前端当前 590）**，别处一律写"见 `docs/06`"。
 > ⚠️ **这个数别照抄——以现跑为准**（`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l`
 > 与 `cargo test --lib` 报的 `N passed` 两半互证）。同一目录可能有别的会话在改，
 > 本文这段 2026-09-27 当天就落后过两次（见 §6.2 那段"当前 N 条"）。
@@ -2765,7 +2765,7 @@ podman exec -u 0 tauri-dev sh -c \
 
 **当前 505 条，全过**（2026-09-27 现跑，`cargo test --lib` 报 `505 passed; 0 failed`，
 `grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 也是 505 —— **两半互证**）。⚠️ 这个数是
-**只算 Rust 那一半**——前端另有 **574** 条（二十三份）、跑法完全不同，见 §6.3。⚠️ **它一天里涨了
+**只算 Rust 那一半**——前端另有 **590** 条（二十三份）、跑法完全不同，见 §6.3。⚠️ **它一天里涨了
 五次**：317 → 397（09-26 晚，80 条里只有 4 条是「主题色」那批的）→ 428（09-27
 白天，其中 6 条是「英文按词统计」那批）→ **490**（文件移动那批 19 条 ＋ 同时段别的会话 ~43 条）
 → **492**（同时段别的会话，不是那批加的）→ **501** → **505**。
@@ -2876,13 +2876,13 @@ podman exec -u 0 tauri-dev sh -c \
 `src/main.rs`（只是个壳）与 Doc-tests（`nota_lib` 没有文档测试）。
 `tests/` 目录下**没有一个 Rust 集成测试**（`tests/fixtures/` 仍然是空的），
 所以下面这 505 条**全部是单元测试**。
-⚠️ **2026-09-26 起前端有可运行的测试了**：`tests/` 下 **二十三份、共 574 条**
+⚠️ **2026-09-26 起前端有可运行的测试了**：`tests/` 下 **二十三份、共 590 条**
 （2026-09-27 数，逐份跑出来过，清单与跑法见 **§6.3**）＋ `tests/fake-dom.ts`
 （只够跑逻辑的假 DOM）。它**不在这 505 条里**（那是 `cargo test` 的数），也不是
 "前端有测试框架了"——`package.json` 里**仍然没有**测试框架、也没有测试脚本，
 跑法是 `npx esbuild` ＋ `node` 两条命令（**§6.3**）。
 
-> ⚠️ 记数只在本文记（Rust 505 ／ 前端 574）。别处提到测试数一律写"见 `docs/06`"。
+> ⚠️ 记数只在本文记（Rust 505 ／ 前端 590）。别处提到测试数一律写"见 `docs/06`"。
 > 核实：`podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test --lib`。
 
 ### 6.1 逐条
@@ -3408,17 +3408,17 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**二十三份、共 574 条**（2026-09-27 数）：`keymap` **54** · `slash` **49** ·
+**二十三份、共 590 条**（2026-09-27 数）：`keymap` **54** · `slash` **49** ·
 `share-card` **46** · `math-view` **41** · `focus-summary` **34** ·
 `smart-punctuation` **32** · `emoji` **32** · `footnote` **30** · `math-delim` **23** ·
-`toc` **22** · `inline-marks` **21** · `heatmap` **20** · `auto-correct` **20** ·
+`toc` **22** · `inline-marks` **37** · `heatmap` **20** · `auto-correct` **20** ·
 `math-input` **19** · `atom-space` **19** · `mark-hint` **18** · `accent` **18** ·
 `instant-render` **17** · `lang-icons` **14** · `html-block` **14** ·
 `chart-ticks` **12** · `doc-typography` **11** · `empty-doc-save` **8**。
 ⚠️ 这二十三份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
 2026-09-27 这一遍 `share-card` 35→46、`accent` 14→18、`chart-ticks` 11→12、
 `math-input` 16→19（`$$` 那三组新用例），另加新的两份 `math-delim` 23、
-`inline-marks` 21（高亮/上标/下标/下划线）与 `html-block` 14（块级裸 HTML ＋ 注释），
+`inline-marks` 21（高亮/上标/下标/下划线，**现已 37**，见本节末那条 📌）与 `html-block` 14（块级裸 HTML ＋ 注释），
 `heatmap` 20 是那一批建好之后**头一次**进这份清单；2026-09-27 的下一批又加了
 `smart-punctuation` 32（智能标点）与 `auto-correct` 20（自动更正）；再下一批加了
 `emoji` 32（短代码表 ＋ 补全面板）；再下一批加了 `footnote` 30（脚注的编号分配 ＋ 插入事务 ＋ 往返）；
@@ -3447,6 +3447,27 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 而 **`docSchema` 不是**——它是 `$node` 的产物，**它自己就是插件函数**
 （`docSchema.ctx(...)` 当场 `is not a function`）。见 `tests/empty-doc-save.test.ts` 里
 `跑元组插件` / `跑裸插件` 两个小助手。
+
+📌 **2026-09-27 夜（BUG-48 那一条，`inline-marks` 21→37，574→590；同批修掉一条
+"测试工装与产品链路不一致"的假绿）**：
+这 **+16** 条全加在 `tests/inline-marks.test.ts` 一份里，分三处：**第五组**（手工建的
+叠加文档，测"打字"那条路）8 条——那张矩阵里的嵌套组合 ＋ **半重叠**（高亮 `[0,2)` ＋
+上标 `[1,3)`，中间那个字两层都有；这是一种 markdown 表达不了的形状，三组都是
+"序列化器自己拆成相邻两组，且拆完稳定"）＋ 一条**如实钉住已知边界**的用例
+（内容本身就是定界符时不往返）；**第二组** 2 条（配对守卫：行内节点不算边界 ＋
+上游的 `strong` 也不算）；**第三组** 3 条（孤立波浪号不被转义、`~下~` 不被改写成
+`~~下~~`）＋ 第四组那张矩阵的几条补全。
+⚠️⚠️ **这一批最值得记的不是那 16 条断言，是它们起初为什么绿**：那份测试的
+`unified()` 链**从来没 `.use(remarkGfm)`**，而产品链有（`create.ts` 的 `.use(gfm)`）——
+于是三条"`~下~` 不许被改写成 `~~下~~`"的断言**测的根本不是产品那条路**，一直绿。
+补上 `.use(remarkGfm, GFM选项)` 之后当场变红。⚠️ **判据：工装里 `.use(remarkGfm, …)`
+喂的必须是产品那个导出常量 `GFM选项`**（`create.ts` 的 `.config()` 里
+`ctx.update(remarkGFMPlugin.options.key, …)` 喂的是同一个）——两边各写一份字面量的话，
+改了一边另一边不会跟着变，这份测试又成了自说自话。⚠️ 同族的前一例是 `html-block.ts`
+那批（工装少一句 `.use()`，见 `docs/05` §4.14 ④），**症状一样：全绿，而产品是坏的**。
+⚠️ 顺手记一条**反例**：`docs/05` §4.14 里那句"`tests/inline-marks.test.ts` **21** 条
+一直全绿"是**历史陈述**（BUG-46 那次绕过了 `.use()`），**不用跟着改成 37**——
+它说的是当时那个数。
 
 ⚠️ **加了新的一份要跟着改四处**：本节这个数、`AGENTS.md` §2 的 `tests/` 那一行、
 `docs/09` §2 的 `tests/*` 登记行、`docs/02`（⑤ 那个闸**不扫根目录的 `tests/`**，
@@ -4113,3 +4134,54 @@ BadMatch；按键要落在 webview 上得让指针停在它上面）、GTK 窗�
 菜单**会不会也跟着弹）、A-2 里 macOS 的 `⌘⇧C` 显示（这台机器没有 macOS）。
 ⚠️ 另：这一轮也顺手把 §5.30 那条**写错的**「直接跑二进制吃的是 `dist/`」更正了，
 判据（`ss` / `curl` / `strings`）就在那一节里。
+
+---
+
+### 5.35 验「行内标记的往返」（BUG-48 ＋ BUG-50，2026-09-27 夜，**两半都开窗量过**）
+
+这一轮是用户「**现在就做**」点名的那条（BUG-48），顺带量出并修掉 BUG-50。
+**两份判据各量了一半**：解析/存盘那一半（`甲.md` / `丙.md`）走"写好文件 → 打开 →
+`Ctrl+S` → 比字节"，打字那一半（`乙.md`）走"空文件 → 逐字敲 → `Ctrl+S` → 比字节"。
+
+**跑法**（我自己的 Xvfb `:93` ＋ 隔离 `XDG_*`，⚠️ 两条 env 是这一轮新踩出来的，见下面）：
+
+```sh
+podman exec -d -u 1000 -e DISPLAY=:93 -e GDK_BACKEND=x11 \
+  -e WAYLAND_DISPLAY=nonexistent-wayland -e WEBKIT_DISABLE_COMPOSITING_MODE=1 \
+  -e GTK_IM_MODULE=gtk-im-context-simple -e XMODIFIERS=@im=none \
+  -e XDG_CONFIG_HOME=/tmp/nota-93/cfg -e XDG_DATA_HOME=/tmp/nota-93/data \
+  -e XDG_CACHE_HOME=/tmp/nota-93/cache -w "$PWD/src-tauri" \
+  tauri-dev sh -c 'echo $$ > /tmp/nota-93/pid; exec ./target/debug/nota /tmp/nota-93/卷/甲.md > /tmp/nota-93/开.log 2>&1'
+# 存盘：podman exec -u 1000 -e DISPLAY=:93 tauri-dev sh -c 'xdotool key --clearmodifiers ctrl+s; sleep 3'
+```
+
+**这一轮的三份硬结果**：
+
+| 卷 | 量的是哪条路 | 内容 | 结果 |
+|---|---|---|---|
+| `甲.md` | 打开 → 存盘（BUG-48 的 ①②） | 63 字节，含 `==a^b^c==` / `H~2~O 和 a ~ b` / `F ~~d<u>u</u>d~~ F` | **63 字节不变**，md5 `8240779de0dfad20f0c23bff8c7a5f61` 存前存后一致（修前这一趟会写出 `H~~2~~O` 与 `a \~ b`） |
+| `乙.md` | **逐字敲** → 存盘（打字那半） | 空文件里敲五行：`==a^b^c==`、`H~2~O`、`a ~ b`、`==x==^y^`、`^a<u>b</u>a^`（每行之间两个回车） | **48 字节**，存回来的**逐字节就是敲进去的那五行**（没有 `~~` 重写、没有 `\~` 转义）；截图上五行各自渲染正确（高亮/下标/字面波浪号/上标/行内下划线） |
+| `丙.md` | 打开 → 存盘（**BUG-50**） | 51 字节：`<u>下==高==下</u>` ＋ `<u>纯下划线</u>` ＋ `==下==` | 界面上第一行是**真下划线**（`高` 带高亮底色）、**没有字面 `<u>`**；存盘后 **51 字节**、md5 `9d0751e2e278b69391341396571b035b` 存前存后一致 |
+
+⚠️ **`丙.md` 那一条要说清楚它为什么值得开窗**：BUG-50 的症状**只存在于渲染那一层**，
+"字节不变"这条判据在**修之前也是绿的**（两颗 `<u>` 是行内 HTML 原子节点，被原样保着）。
+所以判据只能是**截图上看有没有字面标签**——这正是 `docs/10` §1.4「看见 ≠ 验收」的
+反面用法：**这一条只能靠看见**。
+
+⚠️⚠️ **两个环境陷阱，都是这一轮真踩到的（可迁移）**：
+
+1. **容器里起窗必须显式 `-e GDK_BACKEND=x11`**（＋ `-e WAYLAND_DISPLAY=nonexistent-wayland`）。
+   漏了它，GDK 会挑中**宿主那套活着的 Wayland**，于是**窗口出现在用户真实的桌面上**，
+   而 `:93` 这个 Xvfb 上什么都没有（症状：进程在、`import -window root` 拍出来一片黑、
+   `xdotool search` 找不到顶层窗）。⚠️ 这一条尤其要紧：**同一个容器里跑着用户的真实
+   会话**，漏一个 env 就等于往人家屏幕上开窗。发现后当批 kill 掉重来。
+2. **要让 ASCII 不被输入法搅，得钉 `-e GTK_IM_MODULE=gtk-im-context-simple -e XMODIFIERS=@im=none`**。
+   漏了它的症状很怪：`xdotool type 'H~2~O'` 落进去的是 `啊~ b` 这种——**按键被中文
+   输入法吃掉了**。⚠️ 只加在自己起的进程上，不动宿主。⚠️ 另：`bash` **不认中文变量名**
+   （`卷=/tmp/…` 报「没有那个文件或目录」、`for 行 in …` 报 not a valid identifier），
+   脚本里一律用 ASCII 名——这一轮为此白跑了一趟。
+
+⚠️ **这一轮也顺手记下一条工装教训（"假绿"那一族的最新一例）**：`tests/inline-marks.test.ts`
+的 `unified()` 链**从来没挂 `remark-gfm`**，而产品挂了，于是三条"`~下~` 不许被改写成
+`~~下~~`"的断言**测的不是产品那条路**。修法是工装改用**产品同一个导出常量**
+（`.use(remarkGfm, GFM选项)`）。判据写在 §6.3 那条 📌 里。

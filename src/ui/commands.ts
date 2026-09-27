@@ -123,6 +123,55 @@ export function walkMenuItems(
   for (const menu of menus) walk(menu.items, menu);
 }
 
+/**
+ * 把用户改过的键位**叠到菜单表上**，返回一份新的表。纯函数。
+ *
+ * 整张键位表的真相源仍然是 `MENUS`（这份代码）；用户改过的只记**差量**
+ * （设置里的 `keys.overrides`，那一节的三种取值见 `src-tauri/src/settings/keys.rs`
+ * 头上那张表，这里只说叠法）：
+ *
+ * | 覆盖表里 | 叠法 |
+ * |---|---|
+ * | **没有这个 id** | 原样留着默认键位 |
+ * | 有，非空 | 换成它 |
+ * | 有，**空串** | **把 `accel` 整个摘掉**（这条命令不要快捷键） |
+ *
+ * ⚠️ **认不出的 id 静默丢弃**（覆盖表里可能留着一条已经被删掉的命令）。
+ * 不报错是有意的：用户升级之后那条命令本来就不在了，为它留一条警告，
+ * 他也没有任何可处理的动作。
+ *
+ * ⚠️ **没改过时原样返回入参**（保住引用）：`App.tsx` 那份菜单表是靠 `useMemo`
+ * 的身份去喂原生菜单栏和按键索引的，每次 render 换一个新数组会让它们白重算。
+ * 判据是"这一层 `if` 拿掉之后，`menus` 的引用还稳不稳"。
+ *
+ * ⚠️ 只按 `id` 查，**不区分顶层还是子菜单**——`walkMenuItems` 那种逐层下钻的
+ * 写法在这里不需要，因为查表本身就是按 id 的，子菜单里的项和顶层的项没有区别。
+ */
+export function 应用键位覆盖(
+  menus: readonly MenuSpec[],
+  overrides: Readonly<Record<string, string>>,
+): readonly MenuSpec[] {
+  if (!Object.keys(overrides).length) return menus;
+
+  const 叠一项 = (item: MenuItemSpec): MenuItemSpec => {
+    if (!(item.id in overrides)) return item;
+    const 值 = overrides[item.id];
+    if (值 === "") {
+      const 复制 = { ...item };
+      delete 复制.accel;
+      return 复制;
+    }
+    return { ...item, accel: 值 };
+  };
+
+  const 走一层 = (entries: readonly MenuEntry[]): MenuEntry[] =>
+    entries.map((e) =>
+      e === "sep" ? e : { ...叠一项(e), ...(e.submenu ? { submenu: 走一层(e.submenu) } : {}) },
+    );
+
+  return menus.map((m) => ({ ...m, items: 走一层(m.items) }));
+}
+
 /** 「无主题（内置）」那一项的 id。**不是命令**，是合成出来的。 */
 export const NO_THEME = "__theme-none";
 /** 主题项的 id 前缀，后面跟主题 **id**（不是显示名）。 */

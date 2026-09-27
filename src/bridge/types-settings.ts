@@ -30,8 +30,20 @@
 
 /* ── 分页设置：与 `src-tauri/src/settings/*.rs` 一一对应 ───────────────── */
 
-/** 启动时做什么。见 `settings/files.rs`。 */
-export type StartupAction = "new-file" | "last-file" | "folder";
+/**
+ * 启动时做什么。**三档是递进的**，见 `settings/files.rs::StartupAction`。
+ *
+ * ```text
+ * new-file      什么都不恢复，开一份空白文档      ← 默认
+ * last-file     恢复上次开着的那些标签
+ * last-session  恢复标签 **＋** 上次那个文件夹（左侧栏那棵树）
+ * ```
+ *
+ * ⚠️ 第三档 2026-09-27 从 `"folder"` 改名成 `"last-session"`——老名字说的是
+ * "只打开文件夹"，而这一档真正干的是"连文件带文件夹一起接上"。宿主那边留了
+ * serde 别名，老设置文件读得懂；**这一侧不用留**，前端不读老值。
+ */
+export type StartupAction = "new-file" | "last-file" | "last-session";
 
 /** 把东西拖进窗口时怎么办。 */
 export type DropAction = "open-in-app" | "open-in-file-manager" | "ignore";

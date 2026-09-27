@@ -479,6 +479,19 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // 规格要早于输入规则：输入规则命中的那一刻，`schema.marks` 里就得有那四种
     // mark 了，否则建出来的 mark 是 `undefined`。
     .use(行内标记规格插件)
+    // ⚠️⚠️ **这四条 toggle 命令必须挂**（2026-09-27 补，BUG-47）：`$command`
+    // 返回的是**一条插件**，`plugin.key` 是在**它的函数体里**才赋上的
+    //（`@milkdown/utils/lib/index.js` 的 `$command`：`(ctx) => async () => {
+    // plugin.key = cmdKey; … ctx.get(commandsCtx).create(cmdKey, command) }`）。
+    // 不挂 ⇒ 两件坏事同时发生：`行内标记命令[0]!.key` 是 `undefined`，
+    // 而管理器里也压根没有这条命令 ⇒ 菜单点「高亮」当场 `TypeError`
+    //（`callCommand(undefined)` → `manager.call` → `undefined.id`）。
+    // ⚠️ 症状与 BUG-46 不同：那一条是**编辑器起不来**，这一条是**编辑器好好的、
+    // 只有这四个动作点了没反应**——所以它躲过了那次修。四个动作是
+    // 高亮 / 上标 / 下标 / 下划线，菜单、格式化工具栏、快捷键三条路都走这张表。
+    // ⚠️ **不跟 `行内扩展` 开关走**（与 `COMMANDS` 表上那段注释同源）：
+    // 关掉的是"解析与输入"，不是这四条能力。
+    .use(行内标记命令)
     // 输入规则（`==x==` 敲完当场变高亮那类）。**只读实例也挂**——只读时
     // 压根没有输入，挂上去是零成本的死代码；分一个跟 `markHint` 那样的
     // 分支反而多一处"哪个模式装了哪个没装"要说清楚的东西。

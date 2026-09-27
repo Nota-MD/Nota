@@ -294,6 +294,56 @@ export function formatAccel(text: string, mac: boolean = IS_MAC): string {
   return out;
 }
 
+/** 写回设置时用的键名文本。查不到就走"原样大写"那一档（规矩同 `formatAccel`）。 */
+const KEY_TEXT: Record<string, string> = {
+  arrowup: "ArrowUp",
+  arrowdown: "ArrowDown",
+  arrowleft: "ArrowLeft",
+  arrowright: "ArrowRight",
+  escape: "Escape",
+  enter: "Enter",
+  backspace: "Backspace",
+  delete: "Delete",
+  tab: "Tab",
+  pageup: "PageUp",
+  pagedown: "PageDown",
+  home: "Home",
+  end: "End",
+};
+
+/**
+ * 一条快捷键**写回设置时**的文本形式（`Ctrl+Shift+S`）。
+ * 认不出 / 不该绑的返回 `null`，见下面三条。
+ *
+ * ⚠️ **和 `formatAccel`（显示用）是两件事，别合并。** 那个在 macOS 上要出
+ * `⇧⌘S`，而这个要出**哪台机器都读得回来**的 `Ctrl+Shift+S`——它是存进
+ * `settings.toml` 的：用户换台机器、把配置拷给别人、或者自己打开文件看一眼，
+ * 那串都得照样能认。存成 `⇧⌘S` 的话在 Linux 上 `parseAccel` 认不出，
+ * 这条快捷键会**静默失效**。
+ *
+ * ⚠️ 三种情况返回 `null`（调用方要当"这一下不算数、继续等"处理）：
+ *
+ * 1. **光按修饰键**（`Control` / `Shift` / `Alt` / `Meta` 自己）——
+ *    `eventKey` 给的就是 `"control"` 这种，它不是一个键位；
+ * 2. **写不回去的键名**：空格和加号。`parseAccel` 的词法是 `+` 分隔，
+ *    这两种字符在它那儿根本没有写法，收下来就是存一个下次认不出的值；
+ * 3. **不带修饰键的单个可见字符**（光一个 `a`、光一个 `1`）。那不是快捷键，
+ *    是地雷——打字就触发。⚠️ 这一条**不能**写成"必须带修饰键"：
+ *    全仓默认键位里有 `F8` / `F9` / `F11` 三条不带修饰的，那样写会把它们判死。
+ */
+export function accelToText(a: Accel): string | null {
+  if (["control", "shift", "alt", "meta", "os"].includes(a.key)) return null;
+  if (!a.key || /[+\s]/.test(a.key)) return null;
+  if (!a.ctrl && !a.shift && !a.alt && a.key.length === 1) return null;
+
+  let out = "";
+  if (a.ctrl) out += "Ctrl+";
+  if (a.shift) out += "Shift+";
+  if (a.alt) out += "Alt+";
+  out += KEY_TEXT[a.key] ?? a.key.toUpperCase();
+  return out;
+}
+
 /**
  * 键位签名 → 命令 id。**按键分发的全部依据。**
  *

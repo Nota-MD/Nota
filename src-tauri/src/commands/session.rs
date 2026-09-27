@@ -40,6 +40,8 @@ pub struct 会话视图 {
     pub recent: Vec<String>,
     /// 每份滚到哪儿（比例），只留现在还存在的。
     pub scroll: std::collections::BTreeMap<String, f64>,
+    /// 上次开着的那个文件夹（工作区根）。**现在还在的才有**，见下面那句过滤。
+    pub workspace: Option<String>,
     /// 侧车在哪。界面上那句"这些记忆存在哪"用它，**不暴露就算了**——
     /// 与「打开设置目录」那颗按钮同一条口径。
     pub file: Option<String>,
@@ -48,6 +50,14 @@ pub struct 会话视图 {
 /// 路径现在是不是一份**文件**（不是目录、不是坏链接）。
 fn 是文件(p: &str) -> bool {
     std::fs::metadata(p).map(|m| m.is_file()).unwrap_or(false)
+}
+
+/// 路径现在是不是一个**文件夹**。
+///
+/// ⚠️ 不能拿上面的 [`是文件`] 去判工作区：那一个是 `is_file()`，拿它判目录
+/// **永远为假**，症状是"工作区这一格永远是空的"——第三档静默失效。
+fn 是目录(p: &str) -> bool {
+    std::fs::metadata(p).map(|m| m.is_dir()).unwrap_or(false)
 }
 
 /// 取整份会话（死链已滤掉）。
@@ -60,6 +70,11 @@ pub fn nota_session_get() -> Result<会话视图> {
         active: 会话.active,
         recent: 会话.recent,
         scroll: 会话.scroll,
+        // ⚠️ 工作区**单独滤**，不在 `清掉不存在的` 里：那一条的判据是"还在不在"
+        // 由调用方给（这里是 [`是文件`]），而工作区要的是"是不是还存在的**目录**"。
+        // 塞进去的话就得让那个谓词同时回答两个问题——一个谓词两种含义，
+        // 下一个人改其中一半时另一半会静默跟着变。
+        workspace: 会话.workspace.filter(|p| 是目录(p)),
         file: session::落点().map(|p| p.to_string_lossy().into_owned()),
     })
 }
@@ -89,9 +104,20 @@ pub fn nota_session_forget_recent(path: String) -> Result<()> {
 ///
 /// ⚠️ **这是唯一一条会"删记忆"的命令**，所以文案上要如实说清它删的是什么：
 /// 不是删文件，只是把清单清空。
+///
+/// ⚠️ **工作区那一笔留着**（2026-09-27）：那颗按钮上写的是"忘掉最近打开的**文件**"，
+/// 用户点它是想清那份文件清单，不是想"下次启动别恢复我的文件夹"。抹掉的话症状是
+/// "清了记录，退出再开，左边那棵树没了"——和标签那笔账是同一个坑
+/// （前端 `ui/useSession.ts::清空最近` 里补写 `open` 就是为了同一件事，
+/// 只是工作区没法从前端补，前端手上没有那个路径的真相）。
 #[tauri::command]
 pub fn nota_session_clear() -> Result<()> {
-    session::写(&session::会话::default()).map_err(crate::error::NotaError::other)
+    let 工作区 = session::读().workspace;
+    session::写(&session::会话 {
+        workspace: 工作区,
+        ..Default::default()
+    })
+    .map_err(crate::error::NotaError::other)
 }
 
 /// 会话侧车的路径，给"打开所在目录"用（今天没有调用点，留着与另外三份一致）。

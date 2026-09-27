@@ -1372,12 +1372,52 @@ markdown**，原样的 `<div>` 交过去出来就是真的 HTML 元素——「�
 | `tests/inline-marks.test.ts` | **21** | `切文本` / `行内标记转换器` / 四颗规格的往返 |
 | `tests/html-block.test.ts` | **14** | `是注释` / `块HTML转换` / 真 `unified()` ＋ 真 `ParserState`/`SerializerState` 的往返 |
 
-⚠️⚠️ **两份都只到"纯逻辑 ＋ 手搓 schema"，一次窗都没开过**——所以 `docs/10` §3 那
-五格填的是 🟡 不是 ✅。⚠️ `html-block.test.ts` 的文件头里记着一条**踩过的工装坑**：
+✅ **2026-09-27 晚开窗点过了**——`docs/10` §3 那五格（高亮 / 上标·下标 / 下划线 /
+HTML 标签 / 注释）**从 🟡 翻成 ✅**：判据是**落盘的 markdown 字节差**（高亮 `+4`、
+下划线 `+7`、上标 `+2`、下标 `+2`，编辑区黄底 / 真下划线 / 升高 / 降低都画对了），
+一份含独占行 `<div>` 与独占行注释的文档也正常打开、按"灰底等宽源码"显示
+（截图 `B1-乙.md.png`）。⚠️⚠️ **但那两份测试当时是绿的，这两件事却都是坏的**——
+根因见下面 ④，**这是"纯逻辑判据全绿 ≠ 能用"最干净的一个例子**。
+⚠️ `html-block.test.ts` 的文件头里记着一条**踩过的工装坑**：
 `doc` 的 `toMarkdown` **不许自己 `closeNode()`**（`root` 那一层归
 `SerializerState.build()` 收），自己收一次会让每条往返都抛
 `Stack over flow, cannot pop on an empty stack.`，而**产品代码一点毛病都没有**。
 
+#### ④ ⚠️⚠️ 起窗才撞出来的两个注册陷阱（BUG-46 / BUG-47，2026-09-27 晚）
+
+**这两条都是"测试全绿、类型干净、界面全哑"**，写在这里是因为**动这一带的人一定会
+再踩一次**——修 bug 时加一行 `.use()`，很难看出少了什么。
+
+**① `$markSchema` / `$nodeSchema` 返回的是元组，两半都要 `.use()`**（BUG-46）：
+
+```ts
+const 规格 = $markSchema(标签, schema)   // 类型上像"一个插件"，其实是 [schemaCtx, plugin]
+```
+
+⚠️ **前半截那个 ctx 元素自己也是一个 `MilkdownPlugin`**（`$Ctx<T, N> = MilkdownPlugin
+& { key: SliceType<T, N> }`），而 `$markSchema` 内部要 `ctx.get(schemaCtx.key)(ctx)`——
+**只有把它也 `.use()` 进去，那个 key 才注进 ctx 容器**。只 `.use()` 后半截的后果是
+`editor.create()` 直接抛 `Context "highlight" not found, do you forget to inject it?`，
+**编辑器整块起不来**（界面上「正在准备编辑器…」永远不停 ＋ 一条「编辑器启动失败」）。
+上游是自己拍平的：`@milkdown/preset-commonmark/lib/index.js` 里 `[…].flat()`（约 :1597）。
+⚠️ 所以 `editor/inline-marks.ts` 与 `editor/html-block.ts` 里那两处
+`as unknown as MilkdownPlugin`（对元组拍平）**不能删**，理由写在各自文件头。
+⚠️ **它为什么藏得住**：类型检查过得去；`tests/inline-marks.test.ts` 是直接
+`一.ctx(ctx)` 调的，**绕过了 `.use()`**，所以那份 21 条一直全绿。
+
+**② `$command` 返回的是单插件，注册发生在它自己的 body 里**（BUG-47）：
+
+```ts
+const 插件 = $command(key, cmd)   // plugin.key = cmdKey 与 create(cmdKey, cmd) 都在 body 里
+```
+
+⚠️ 只有 `.use()` 过，那两句才跑；没 `.use()` 就 `plugin.key === undefined`，命令**从没
+注册进 `commandsCtx`**。于是点一下按钮 → `callCommand(undefined)` →
+`CommandManager.call` → `container.get(undefined)` → **`undefined.id` 的 TypeError**——
+而这声响落在 `editor.action` 里、**没有 try/catch**，所以**界面上什么都没有**。
+⚠️ 修法是补一句 `.use(行内标记命令)`；⚠️ 它**不受设置里「行内扩展」那颗开关管**
+（那颗管的是**解析**，这四条是**命令**，两件事）。
+⚠️ **两个陷阱的判据都不是读代码**：起窗、点一下、看**文件字节变没变**。
 
 ### 4.14 智能标点 ＋ 自动更正（`editor/smart-punctuation.ts` / `editor/auto-correct.ts`，2026-09-27）
 

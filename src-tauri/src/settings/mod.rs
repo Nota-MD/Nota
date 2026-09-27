@@ -34,7 +34,7 @@
 //! | 通用 | [`general`] |
 //! | 强制专注 | [`focus`] |
 //! | 文档主题 | [`document`] —— ⚠️ **表名与页名差一点**，理由见 [`document`] 顶上的文件头 |
-//! | 快捷键 | **没有文件，也没有字段**：快捷键表是 `src/bridge/` 那边的事，它不是一个标量开关 |
+//! | 快捷键 | [`keys`] —— ⚠️ 2026-09-27 起**有字段了**（`[keys.overrides]`）。此前这一行写的是"没有文件也没有字段，那是 `src/bridge/` 的事"，**两处都不对**：整张键位表在 `src/ui/commands.ts`，而"用户改过的那几条"需要落盘，否则重启就丢 |
 //!
 //! ⚠️⚠️ **老的那 10 个字段一个都没挪。** 它们还在这一层的顶层，包括
 //! `strict_markdown`（严格模式）和 `enable_physics`（physics 宏包）——
@@ -74,6 +74,7 @@ pub mod files;
 pub mod focus;
 pub mod general;
 pub mod image;
+pub mod keys;
 pub mod markdown;
 
 pub use appearance::Appearance;
@@ -84,6 +85,7 @@ pub use files::Files;
 pub use focus::Focus;
 pub use general::General;
 pub use image::Image;
+pub use keys::Keys;
 pub use markdown::Markdown;
 
 /// 界面风格的**默认值**（`ui_style` 那一格没写时用哪个）。
@@ -244,6 +246,12 @@ pub struct Settings {
     /// ⚠️ **"用哪一套主题"**（`document_theme`）在上面那堆顶层标量里，不在这里。
     /// 那一格是老字段，搬家会让老设置文件里的值静默丢回默认。
     pub document: Document,
+    /// 「快捷键」页里**用户改过的那几条**。见 [`keys`]。
+    ///
+    /// ⚠️ **存的是差量，不是整张键位表**：整张表的真相源是前端
+    /// `src/ui/commands.ts` 的 `MENUS`。理由（加新命令怎么办、改默认键位怎么办）
+    /// 写在 `keys.rs` 头上，动这个字段之前先看那一段。
+    pub keys: Keys,
 }
 
 impl Default for Settings {
@@ -271,6 +279,7 @@ impl Default for Settings {
             general: General::default(),
             focus: Focus::default(),
             document: Document::default(),
+            keys: Keys::default(),
         }
     }
 }
@@ -481,7 +490,7 @@ mod tests {
 
         let mut s = Settings::default();
         s.files.show_hidden = true;
-        s.files.startup = files::StartupAction::Folder;
+        s.files.startup = files::StartupAction::LastSession;
         s.editor.default_indent = 8;
         s.editor.line_ending = editor::LineEnding::Crlf;
         s.image.insert_action = image::InsertImageAction::CopyToAssets;
@@ -496,7 +505,7 @@ mod tests {
 
         let back = Settings::load_from(&path).unwrap();
         assert!(back.files.show_hidden);
-        assert_eq!(back.files.startup, files::StartupAction::Folder);
+        assert_eq!(back.files.startup, files::StartupAction::LastSession);
         assert_eq!(back.editor.default_indent, 8);
         assert_eq!(back.editor.line_ending, editor::LineEnding::Crlf);
         assert_eq!(back.image.insert_action, image::InsertImageAction::CopyToAssets);

@@ -21,6 +21,23 @@
  * - **界面语言**：也自带 `catch`。它决定界面上用中文还是英文（`src/i18n/`），
  *   拉不到就按兜底语言画——为它把整个启动掀翻是说不通的。
  *
+ * # ⚠️ 「启动时」那一档是从设置里读的（2026-09-27 起它真的生效了）
+ *
+ * `files.startup` 三档（`settings/files.rs::StartupAction`）：
+ *
+ * ```text
+ * new-file      什么都不恢复，开一份空白文档      ← 默认
+ * last-file     恢复上次开着的那些标签
+ * last-session  恢复标签 **＋** 上次那个文件夹
+ * ```
+ *
+ * ⚠️ **在这一天之前它是个摆设**：三档没有任何一处读它，而这一段无条件恢复标签
+ * 和工作区——也就是**永远按第三档办**。现在由这里读、当作入参递给 `接上会话`
+ * （为什么是入参而不是闭包捕获的值，见文件头最后一段）。
+ *
+ * ⚠️ 所以**默认行为变了**：从没动过这一项的人，启动时从"什么都有"变成"一张白纸"。
+ * 那是用户点名要的第一档，也是 `StartupAction::default()` 一直以来的值。
+ *
  * # ⚠️ 顺序上那两处刻意的安排（都留着原注释的理由）
  *
  * 1. `定语言` 必须在 `setSettings` **之前**：定了之后 `i18n` 会通知所有订阅者
@@ -39,7 +56,7 @@
 
 import { useEffect } from "react";
 
-import { api, type DocThemeInfo, type Settings } from "@/bridge/ipc";
+import { api, type DocThemeInfo, type Settings, type StartupAction } from "@/bridge/ipc";
 import { 定语言 } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
@@ -52,13 +69,18 @@ export interface 启动接线 {
   /** 打开一份文档（命令行给的那个也走它）。 */
   openPath: (path: string) => Promise<unknown>;
   /**
-   * **接上上次的会话**：读侧车，把上次开着的那几个标签开回来（`ui/useSession.ts`）。
+   * **接上上次的会话**：读侧车，按启动档把上次的样子接回来（`ui/useSession.ts`）。
    *
-   * ⚠️ 传的是**命令行给的那个文件**，不是"要不要恢复"这个布尔：判断在那边做
-   * （有命令行文件就只读列表、一个标签都不开——用户是**指名**要开某一份，
-   * 这时再把上次那堆标签拖出来，等于替他改了主意）。
+   * ⚠️ 第一个参数传的是**命令行给的那个文件**，不是"要不要恢复"这个布尔：
+   * 判断在那边做（有命令行文件就只读列表、一个标签都不开——用户是**指名**要开
+   * 某一份，这时再把上次那堆标签拖出来，等于替他改了主意）。
+   *
+   * ⚠️ 第二个参数是设置里那一档（`files.startup`）。**它是入参，不是这个接口的
+   * 字段**：写成字段的话它就是闭包捕获的值，而 `useStartup` 那条 effect 只该跑
+   * 一次（见文件头最后一段）——设置一改、`接上会话` 的身份跟着变，那条 effect
+   * 就会重跑，把命令行那份文件**再开一遍**。
    */
-  接上会话: (启动文件: string | null) => Promise<void>;
+  接上会话: (启动文件: string | null, 启动档: StartupAction) => Promise<void>;
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
 }
 
@@ -99,10 +121,17 @@ export function useStartup(w: 启动接线): void {
         // ⚠️ 在 `setSettings` 之前定语言（理由见文件头第 1 条）。
         if (界面语言) 定语言(界面语言.effective);
         setSettings(s);
+        // ⚠️ 这一枪**冷启动时永远是 `null`**：工作区在宿主进程里只是个
+        // `Mutex<Option<PathBuf>>`，新进程开出来必然是空的。这里照设不误是因为
+        // 它才是"这次进程现在的工作区"的真相；真正的"接上上次那个文件夹"在
+        // `接上会话` 里（第三档），而且要排在它**后面**才对得上。
         setWorkspace(ws);
         setThemes(themeList);
         // 不自动消失（`0`）：这是状态，不是一次操作的结果。见 `ui/useToasts.ts`。
         if (设置问题) toast(`设置读不出来了，这次按默认值启动。${设置问题}`, "error", 0);
+        // ⚠️ 那个 `?.` 是给**旧后端**留的（同上面那段）：真正缺了这一截时按第一档
+        // 办——那正是这一档的词义，也是 `StartupAction` 的 `Default`。
+        const 启动档: StartupAction = s.files?.startup ?? "new-file";
         await refreshDocs();
         // ⚠️ 放在 `refreshDocs()` **之后**（理由见文件头第 2 条）。
         if (启动文件) await openPath(启动文件);
@@ -113,7 +142,13 @@ export function useStartup(w: 启动接线): void {
         //
         // ⚠️ 它**自带 `catch`**（在 `useSession` 里）：侧车读不出来只该让标签
         // 不恢复，不该在启动时先给用户一条看不懂的错，更不该拖垮握手。
-        await 接上会话(启动文件 ?? null);
+        //
+        // ⚠️ **启动档在这里读、在这里传**（2026-09-27 起它真的生效了）。
+        // 在这一天之前 `files.startup` 是个**摆设**——三档没有任何一处读它，
+        // 而这一段无条件恢复标签和工作区，也就是永远按第三档办。
+        // 那个 `?.` 与 `App.tsx` 里 `keys?.` 那条同一个理由：跑起来的后端
+        // 可能是旧的，缺了这一截就是启动即白屏。
+        await 接上会话(启动文件 ?? null, 启动档);
       } catch (e) {
         toast(`启动时读取状态失败：${e}`, "error");
       }

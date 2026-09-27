@@ -30,7 +30,7 @@ import { ErrorBoundary } from "@/ui/ErrorBoundary";
 // 这边留着的是那个句柄类型（`editorRef` 要它）。写成 `import type` 免得再被
 // 当成"没用上的组件"清掉。
 import type { EditorPaneHandle } from "@/ui/EditorPane";
-import { resolvePick } from "@/ui/commands";
+import { resolvePick, 应用键位覆盖 } from "@/ui/commands";
 import { useT } from "@/i18n";
 import { PluginDock } from "@/ui/PluginDock";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
@@ -310,6 +310,13 @@ export default function App() {
     docs,
     activeId,
     openPath,
+    // ⚠️ 只有「启动时」**第一档**会用一次：那一档要的是"落到一张白纸上"，
+    // 见 `ui/useSession.ts::接上会话` 最后那一段。
+    新建文档: newDoc,
+    // ⚠️ 只有「启动时」第三档会用一次：侧车记着上次那个文件夹，接上它要**经过
+    // 宿主**（围栏在那边），回来的是规范化后的路径，得有地方放。见
+    // `ui/useSession.ts::接上会话` 里那一段。
+    setWorkspace,
     toast,
   });
   // ⚠️ `滚动位置` / `记滚动` 不在这儿——它们只喂给编辑区那个 `EditorPane`
@@ -328,8 +335,21 @@ export default function App() {
    * ⚠️ 下面**两处都改用这一份**（自绘菜单 `TopBar` 与 `useMenus`），漏掉一处
    * 的症状是"最近文件只出现在自绘菜单里"——macOS 那条系统菜单里没有，
    * 不报错，只是少一半。
+   *
+   * ⚠️ **2026-09-27 起在最后再叠一层用户改过的键位**（设置里的 `keys.overrides`）。
+   * 位置选在这里是有意的：`菜单` 是全应用**唯一**一份对外发出去的菜单表，
+   * 叠在这一处，菜单显示、按键分发（`buildAccelIndex`）、macOS 那条原生菜单栏、
+   * 设置里那张快捷键表**一起**跟着变——不用每个消费方各自记得去查一次覆盖表。
+   * ⚠️ 没改过时 `应用键位覆盖` 原样返回入参（保住引用），所以这个 `useMemo`
+   * 的依赖里多一个对象不会让 `菜单` 的身份抖动。
    */
-  const 菜单 = useMemo(() => 注入最近文件(全部菜单, 最近), [全部菜单, 最近]);
+  const 菜单 = useMemo(
+    // ⚠️ 那个多出来的 `?.` 不是啰嗦：`keys` 在类型上不是可选的，但**跑起来的
+    // 后端可能是旧的**（前端资源与二进制不是永远同步装着）。少一个 `?.`
+    // 就是启动即白屏，代价太大。
+    () => 应用键位覆盖(注入最近文件(全部菜单, 最近), settings?.keys?.overrides ?? {}),
+    [全部菜单, 最近, settings?.keys?.overrides],
+  );
 
   // ── 启动与事件订阅 ──────────────────────────────────────────────────────
   // 两块都搬走了（2026-09-26，本文件当时 1049 行、硬上限 1000）：
@@ -529,7 +549,7 @@ export default function App() {
 
   // 窗口自身那两件（置顶 / 开发者工具）。整块在 `ui/useWindowControls.ts`
   // ——连"置顶那个勾为什么要从窗口读回来"一起说清楚了，这里只接线。
-  const { 置顶, 切换置顶, 开开发者工具 } = useWindowControls({ toast });
+  const { 置顶, 切换置顶, 开开发者工具, 开新窗口 } = useWindowControls({ toast });
 
   // 文档主题那三件事（应用 / 切换 / 打开主题文件夹）搬去了
   // `ui/useDocTheme.ts`（2026-09-24，本文件顶着行数上限）。那边的文件头写着
@@ -885,6 +905,9 @@ export default function App() {
             // 自动保存」要赶在编辑器换人之前把上一份写盘（见 `切换文档`）。
             onSelect={(id) => void 切换文档(id)}
             onClose={closeDoc}
+            // 标签页右键那一条（2026-09-27）。⚠️ 传过去的是**路径**：新窗口是
+            // 另一个进程，它那边没有本进程的 `DocId`（判据见 `ui/TabBar.tsx`）。
+            onOpenInNewWindow={(path) => void 开新窗口(path)}
             // 预览期间锁掉（`inert`）：不然还能切文档、关标签——而预览画的
             // 是**这一份**文档的改动，换掉之后那幅画就没有意义了。
             inert={预览中}
@@ -918,6 +941,7 @@ export default function App() {
             onOpenConfigDir={() => void openConfigDir()}
             onResetSettings={() => void resetSettings()}
             onClearRecent={() => void 清空最近()}
+            menus={菜单}
           />
         )}
 

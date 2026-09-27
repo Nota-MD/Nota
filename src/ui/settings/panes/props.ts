@@ -19,6 +19,7 @@
  */
 
 import type { DocThemeInfo, Settings, UiStyleInfo } from "@/bridge/ipc";
+import type { MenuSpec } from "@/ui/commands";
 
 export interface PaneProps {
   settings: Settings;
@@ -48,6 +49,18 @@ export interface PaneProps {
    *（`~/.local/share/nota/session.toml`），与设置文件是两个地方。
    */
   onClearRecent: () => void;
+  /**
+   * 全应用那一份菜单表（`App.tsx` 里那个 `菜单`），**已经叠过用户的键位覆盖**
+   * （`ui/commands.ts::应用键位覆盖`）。2026-09-27 加，给「快捷键」那一页用。
+   *
+   * ⚠️ **必须用这一份，不能在那一页里 import 常量 `MENUS`**：常量那份是**出厂
+   * 键位**，用户改过之后它就不对了——表上写着 `Ctrl+S`、按下去却是别的命令，
+   * 而那正是「快捷键」这一页唯一要回答的问题。
+   *
+   * ⚠️ 也因此，「快捷键」那一页**不改键位时也要跟着菜单表重画**：改完一条，
+   * `App.tsx` 会算出新的一份 `menus`，这一页得拿到新的那份才显示得对。
+   */
+  menus: readonly MenuSpec[];
 }
 
 /**

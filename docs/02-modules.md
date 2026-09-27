@@ -23,7 +23,7 @@
 | `error.rs` | `NotaError`，中文 Display，自定义 `Serialize` 过 IPC |
 | `paths.rs` | XDG 目录、插件目录、**主题目录**的**唯一**算法所在地 |
 | `state.rs` | `AppState` 四个句柄 ＋ `settings_problem`（只读）＋ `app_lang`（**开机算一次，之后不变**）+ 锁序不变量。⚠️ `DevServerState` 与 `plugin::ReviewState` **故意不在这里**（见 `docs/01` §② 第 ⑤ 步） |
-| `settings/mod.rs` | `Settings` 与三条互相独立的外观轴，kebab-case 落盘；解析不了的原文件先备份成 `.bak`。⚠️ 2026-09-24 由单文件 `settings.rs` 拆成模块目录：`mod.rs` 留枚举与结构体本体，另**八个**文件按**界面上的页**各装一张表（`files` / `editor` / `image` / `markdown` / `export` / `appearance` / **`focus`** / `general`），逐文件见下 |
+| `settings/mod.rs` | `Settings` 与三条互相独立的外观轴，kebab-case 落盘；解析不了的原文件先备份成 `.bak`。⚠️ 2026-09-24 由单文件 `settings.rs` 拆成模块目录：`mod.rs` 留枚举与结构体本体，另**十个**文件按**界面上的页**各装一张表（`files` / `editor` / `image` / `markdown` / `export` / `appearance` / `focus` / `general` / **`document`** / **`keys`**），逐文件见下 |
 | `themes.rs` | **文档主题**的发现与读盘：`DocThemeInfo` / `discover()` / `css_of()` / `user_themes_dir()` / 围栏 `check_id()`。⛔ **不兼容也不内置外部编辑器的主题**（版权，用户 2026-09-23 定的）。⚠️ 入参是 **id 不是路径**。⚠️ 2026-09-26 起 `check_id` / `check_size` 是 `pub(crate)`——`ui_styles.rs` **复用**它们而**不是各写一份**（同一道安全边界两份实现，漂的是哪一份没人看得出来） |
 | `ui_styles.rs` | **界面风格**的发现与读盘（2026-09-26 新增），与 `themes.rs` **并行**：`UiStyleInfo { id, builtin }` / `discover()` / `css_of()` / `user_styles_dir()` / `BUILTIN_IDS`。⚠️ **与文档主题最大的差别是"不限域"**（界面风格要改的就是整个外壳），差别表写在文件头上，⛔ 别把两条机制合成一条。⚠️ 内置那八档**没有文件**，`css_of` 只认用户丢进 `~/.config/nota/ui-styles/` 的 |
 | `focus/mod.rs` | **强制专注的账本**（2026-09-26，657 行）：`阶段`（`专注` / `走神 { 起于 }` / `警报`，`名字()` 给前端分叉用）、`会话`、跨边界的 `快照`、`FocusState`，以及那个**一秒一拍的裸线程**（`起`）。⚠️ **它不是插件，是核心功能**（用户原话「注意啊，这不是插件。这是核心功能」）——它要窗口焦点、要开置顶窗、要出声，三样都在插件沙箱之外。三条不变量在文件头：**宽限期内不欠账** / **警报中账本冻结** / **冷却要攒回复活线**（`复活线最小` 10s ～ `复活线最大` 60s）。⚠️ `FocusState` **单独 `manage`、不进 `AppState`**（同 `Heartbeat` / `DevServerState` / `ReviewState` / `ProbeCache`），账本自己一把锁。⚠️ 发事件与开窗都在**放开锁之后**（锁序）。13 条用例 |
@@ -141,13 +141,13 @@
 | `ui/TabBar.tsx` | 标签栏：脏标记 + 关闭按钮。⚠️ **纯展示、零状态**，也**不管"关之前要不要存盘"**——`confirmReq` 在 `App.tsx` 手上 |
 | `ui/MenuBar.tsx` | 菜单栏（**七栏 ＋ 插件一栏**，见 `ui/pluginMenus.ts`）。⚠️ **只管「哪一栏开着」**，条目表在 `ui/commands.ts`，灰不灰由 `App.tsx` 的 `menuHandlers` 决定；弹层与子菜单在 `ui/MenuPopup.tsx`。⚠️ 「开着」还分**谁开的**（点开的 / 划过切过来的），两个文件各有一个 `点开的` ref——BUG-17 |
 | `ui/MenuPopup.tsx` | 一栏的弹层 + 它飞出来的子菜单。⚠️ 子菜单必须 **portal 到 `body` + `position: fixed`**（父弹层要能滚，`overflow-y: auto` 会把 `overflow-x` 也算成 `auto`，飞出右边缘的子菜单会被裁成一条竖线） |
-| `ui/commands.ts` | 菜单的**条目表**（逐条整理自用户 2026-09-22 提供的截图）+ **快捷键的唯一真源**（`accel` 字段）。⚠️ 里面**故意没有** `implemented` 标志位 |
-| `ui/accel.ts` | 快捷键的解析/显示/派发：`parseAccel` · `accelSig` · `eventAccel` · `formatAccel` · `buildAccelIndex` · `isOutsideEditor`。⚠️ 判 `e.code` 不判 `e.key`，理由见文件头 |
+| `ui/commands.ts` | 菜单的**条目表**（逐条整理自用户 2026-09-22 提供的截图）+ **快捷键的唯一真源**（`accel` 字段）。⚠️ 里面**故意没有** `implemented` 标志位。⚠️ **"唯一真源"这条 2026-09-27 之后要加一个限定**：用户改过的那几条存在 `settings.toml` 的 `[keys.overrides]` 里（差量），**有效键位 ＝ 这份表叠上那份差量**——叠的地方在 `App.tsx`（`菜单`），别在别处再叠一遍 |
+| `ui/accel.ts` | 快捷键的解析/显示/派发：`parseAccel` · `accelSig` · `eventAccel` · `formatAccel` · `buildAccelIndex` · `isOutsideEditor`，⚠️ 2026-09-27 又加了 **`accelToText`**（录制出来的那一下 → **写回设置**的文本）。⚠️ 判 `e.code` 不判 `e.key`，理由见文件头。⚠️ **`accelToText` 和 `formatAccel` 是两件事，别合并**：后者在 macOS 上要出 `⇧⌘S`（那是**给人看**的），前者要出**哪台机器都读得回来**的 `Ctrl+Shift+S`（它是**存进 `settings.toml`** 的——存成 `⇧⌘S`，换到 Linux 上 `parseAccel` 认不出，这条快捷键会**静默失效**）。⚠️ 三种情况返回 `null`（调用方当"这一下不算数、继续等"）：光按修饰键；空格与加号（`parseAccel` 的词法里没有它们的写法）；**不带修饰键的单个可见字符**——⚠️ 这一条**不能**写成"必须带修饰键"，全仓默认键位里有 `F8`/`F9`/`F11` 三条不带修饰的，那样写会把它们判死 |
 | `ui/nativeMenu.ts` | 把同一份 `MENUS` 翻译成后端要的原生菜单树（macOS 兜底）。⚠️ **不碰 `muda` 的语法**——那是纯 Rust 那边的事 |
 | `ui/settings/SettingsDialog.tsx` | 偏好设置的**壳**：左栏（搜索 + 十页 + 「完成」）+ 右栏内容。⚠️ 搜索是**就地过滤**（十页叠着渲染，每行自己筛），不是跳转。左栏十页的顺序在 `ORDER`，图标在 `SECTIONS`，名字在组件体里的 `页名` 表（三处都在同一个文件里，加一页漏了 `ORDER` 的症状是"这一页点不到"，不报错） |
 | `ui/settings/primitives.tsx` | 偏好设置的原语：`SettingRow` · `SettingsGroup` · `Select` · `Toggle` · `Radio` · `TextInput` · `NumberInput` · `Range` · `ActionButton` · `HelpDot` · `Value` · `Note` · `SearchField` · `QueryProvider` / `useQuery` / `hits()`。⚠️ 过滤只有一处判据：`SettingRow`（与 `Note`）拿 `query` 调 `hits()`，比不中返回 `null` 不进 DOM，没有第二份索引；⚠️ 图标自 2026-09-24 起全部来自 `ui/Icon.tsx`，原先这里手写的那几枚已删 |
 | `ui/settings/panes/` | **十页**内容，一页一个文件（2026-09-24 从单文件 `panes.tsx` 拆出）：`FilesPane` · `EditorPane` · `ImagePane` · `MarkdownPane` · `ExportPane` · `AppearancePane` · `DocThemePane` · `ShortcutsPane` · **`FocusPane`** · `GeneralPane`。⚠️ `FocusPane`（强制专注）是**核心功能的设置页，不是插件的**（用户 2026-09-26 原话「注意啊，这不是插件。这是核心功能」），顺序上插在「快捷键」与「通用」之间——通用那页是收尾的"别的都归不到一起"，而这一页是一整块有自己的账本的**有状态**功能，塞进收尾里不对。⚠️ 这一页**不显示会话状态**（余额、已响几次），那是每秒都在变的内存态，出口是状态栏那一格 `ui/FocusMeter.tsx`；设置页显示它会让整页每秒重画。`props.ts` 是十页共用的入参 `PaneProps` 与 `paneWriter`（`PageKey` 是手写的七张分页表名，不是 `keyof Settings`——理由见文件头）。⚠️ `STYLES` 表在 `AppearancePane.tsx`，写成 `Record<UiStyle, …>`，加风格时**编译期**就漏不掉。⚠️ 「保存 & 恢复」那一组下面那条**如实告知**的 `stg-note` 在 `FilesPane.tsx`：2026-09-25 起它**只标着「恢复未保存的草稿」与「清除历史文件记录」两条**（自动保存本身那天接的线，见 `docs/07` 第 20 项）——**别整段删、也别照抄成"三档全没接"**。⚠️ 那条 `Note` 必须留在**组内容区里**：`.stg-note` 落在组里才跨两栏对齐，摆到组外会变成整页宽、贴着最左边，看着像下一组的标题 |
-| `ui/settings/panes/ShortcutsPane.tsx` | 快捷键一览（只读）。⚠️ 条目**从 `MENUS` 读出来**（`walkMenuItems` 深度优先 + `formatAccel`），不是抄一份静态表 |
+| `ui/settings/panes/ShortcutsPane.tsx` | 快捷键一览，**2026-09-27 起可以在这一页改**（用户点名要的）。⚠️ 条目**从 `menus` 读出来**（`App.tsx` 那份、**已经叠过用户的覆盖**；`walkMenuItems` 深度优先 + `formatAccel`），不是抄一份静态表——**别改成 import 常量 `MENUS`**，那是出厂键位，用户改过之后它就不对了，而"这个键位现在是什么"正是这一页唯一要回答的问题。⚠️ **四条口径**：① 改的是**差量**（`keys.overrides`），整张表的真相源仍是 `ui/commands.ts`；② 冲突**拦在录制那一刻**（`buildAccelIndex` 那套"先到先得 ＋ 控制台警告"对写死的表够用，对这里不行——用户按下键被静默归了别人，他会以为改成功了，**界面在骗他**）；代价是**两条命令不能交换键位**（想换得先清一条），这是有意取舍；③ 列的**全部可绑定的命令**，不只是已经有键位的（否则没法给一条本来没键位的加键位），没键位的显示「未设置」；子菜单父项与合成条目（主题、最近文件）仍排除；④ 这一页**不标**哪条实现了哪条没实现，那个判据在 `App.tsx` 的 `menuHandlers` 上 |
 | `ui/EditorPane.tsx` | 编辑区：按 `mode` 摆一到两个窗格（所见即所得 / 源码 / 分屏），管两类编辑器的挂载与去抖同步。⚠️ **分屏是单向的**：源码 → 预览，预览只读且从不回写。⚠️ 「正在准备编辑器…」2026-09-26 包上了 `t(...)`（此前是英文界面下少有的硬编码中文，由 `tools/i18n-check.sh` 第 ④ 栏报出来） |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲）。⚠️ 开合与当前页都是 `App.tsx` 给的**受控**状态；**折叠状态**（哪个目录、哪个标题）反过来住在自己家里。2026-09-24 补了右上角的 × 与空态那颗「打开文件夹…」。⚠️ 2026-09-27 起「大纲」页的 `extractOutline` **从 `@/editor/headings` 取**（不是 `@/ui/outline`）——依赖方向没变，只是那一半搬了家 |
 | `ui/PluginDock.tsx` | 右侧插件栏：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
@@ -212,16 +212,15 @@
 
 | 有 `#[cfg(test)]` 的文件 | 测试数 |
 |---|---|
-| 有 `#[cfg(test)]` 的文件 | 测试数 |
-|---|---|
 | **`upload/tests.rs`** | 28 |
 | **`image/tests.rs`** | 26 |
 | `lua/api/ui.rs` | 20 |
 | `lua/api/git.rs` | 19 |
+| `session.rs` | 19 |
 | `document/mod.rs` | 18 |
 | `pandoc.rs` | 18 |
 | `lua/api/diff.rs` | 16 |
-| `session.rs` | 16 |
+| **`cli.rs`** | 16 |
 | **`diff.rs`** | 15 |
 | `plugin/package.rs` | 14 |
 | **`focus/mod.rs`** | 13 |
@@ -255,6 +254,7 @@
 | `devserver/probe.rs` | 5 |
 | `lua/api/data.rs` | 5 |
 | `lua/api/fs.rs` | 5 |
+| **`settings/keys.rs`** | 5 |
 | `settings/markdown.rs` | 5 |
 | `commands/image.rs` | 4 |
 | `commands/pandoc.rs` | 4 |
@@ -262,18 +262,22 @@
 | `lua/api/mod.rs` | 4 |
 | `lua/api/time.rs` | 4 |
 | `plugin/install.rs` | 4 |
+| `settings/files.rs` | 4 |
 | `settings/image.rs` | 4 |
 | **`watch.rs`** | 4 |
 | `commands/path_kind.rs` | 3 |
 | `paths.rs` | 3 |
-| `settings/files.rs` | 3 |
 | `settings/general.rs` | 3 |
 | `error.rs` | 2 |
+| **`focus/alarm.rs`** | 2 |
 | `settings/export.rs` | 2 |
 | `pandoc_format.rs` | 1 |
-合计 **490 个 Rust 单元测试**（2026-09-27 晚**现数**：`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` ＝ **490**，带用例的文件 **57** 个；`cargo test --lib` 同日跑，报 **490 passed; 0 failed**）。
-⚠️ **同一晚收盘前又跑了一次，两半都是 492**（`grep` ＝ 492、`cargo test --lib` 报 `492 passed; 0 failed`）。**下面这张逐文件表仍停在 490 那一版**——多的那 2 条来自同时段别的会话，**没有去认领是哪两个文件**，所以宁可让表和总数差 2，也不去猜着填。**要现值一律现跑 `grep`，别照抄这里。**
-⚠️ **这张表 2026-09-27 晚重排过一次**（428 → 490）：**本批只贡献 19 条**（`file_move.rs` 新增 12 · `document/mod.rs` 15 → **18** · `session.rs` 14 → **16** · `table_width.rs` 8 → **10**），另有一批来自同时段别的会话（`cli.rs` 4 → 12 · `url_scheme.rs` 新增 6 · `single_instance.rs` 新增 6 · `settings/document.rs` 新增 6 · `commands/path_kind.rs` 新增 3 …）。⚠️ **加行时按条数降序排**，插进去之后要重看一遍位置——本批就是重排了一遍才敢往上写数。
+合计 **505 个 Rust 单元测试**（2026-09-27 深夜**现数**：`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` ＝ **505**，带用例的文件 **59** 个；`cargo test --lib` 同一刻跑，报 **505 passed; 0 failed**）。
+⚠️ **这张逐文件表 2026-09-27 深夜按现数整表重生成过一次**（490 → 501），**两半这次是一致的**——上一版留下的"表 490 ／ 总数 492、多的 2 条没去认领"那处差额**就此结清**：那 2 条是同时段别的会话提上来的，重生成时已经含在里面，**不必再去追是哪两个文件**。
+⚠️ **同一批晚些时候又加了 4 条**（501 → **505**，`cli.rs` 12 → **16**）：「标签页右键 → 在新窗口中打开」那一条链给 `cli.rs` 补的四条用例——新窗口选项认得出来（位置不拘）／程序自己的路径不算选项（**零号参数不算**）／普通启动不是新窗口（`--new-windowish` 不算，要**整串**相等）／新窗口选项不妨碍挑出要打开的文件。⚠️ **带用例的文件数没变**（还是 59，加的是已有文件里的用例）。
+⚠️ **这一批（启动三档 ＋ 快捷键改键位 ＋ 标签页右键）合计贡献 13 条，全在表里标粗**：`settings/keys.rs` **新增 5** · `cli.rs` 12 → **16** · `session.rs` 16 → **19**（工作区那一笔的三条：记得住也读得回 ／ 老侧车没有它也能读 ／ 空的工作区当没有）· `settings/files.rs` 3 → **4**（`folder` 旧值还能读成第三档）。
+⚠️ **加行时按条数降序排**，插进去之后要重看一遍位置。
+⚠️ 本表**只认 `#[cfg(test)]` 里的 `#[test]`**，所以 `src-tauri/tests/` 那种集成测试**不在数里**（本仓到现在一条都没有，见本节末）。
 
 ⚠️ **这个数一天里涨了三次，三次不都是同一批活**：397 → 411（2026-09-27 白天，心电图分享图那批）→ 422（其中**只有 3 条是「段首缩进」那批加的**，`settings/editor.rs` 3 → 6）→ **428**（**6 条是「英文按词统计」那批加的**，`lua/api/document.rs` 0 → 6）。⚠️ **422 → 428 这一步里，`document.rs` 的 6 条是我加的，而「带用例的文件」从 49 涨到 51 → 另有一处来自同时段别的会话**——本仓同一目录可能多个会话在改，**这条数一律以仓库现数（`grep`/`cargo`）为准**，别照抄任何一处文档上的数。
 
@@ -292,21 +296,31 @@
 其余 Rust 文件没有测试。
 
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
-见 `docs/06` §6.3）：`tests/` 下 **二十份、共 501 条**（2026-09-27 现数）——`share-card.test.ts` **46** ·
+见 `docs/06` §6.3）：`tests/` 下 **二十二份、共 566 条**（2026-09-27 深夜现数）——
+`keymap.test.ts` **54** · `slash.test.ts` **49** · `share-card.test.ts` **46** ·
 `math-view.test.ts` **41** · `focus-summary.test.ts` **34** · `smart-punctuation.test.ts` **32** ·
 `emoji.test.ts` **32** · `footnote.test.ts` **30** · `math-delim.test.ts` **23** · `toc.test.ts` **22** ·
 `inline-marks.test.ts` **21** · `heatmap.test.ts` **20** · `auto-correct.test.ts` **20** ·
 `math-input.test.ts` **19** · `atom-space.test.ts` **19** · `mark-hint.test.ts` **18** ·
 `accent.test.ts` **18** · `instant-render.test.ts` **17** · `lang-icons.test.ts` **14** ·
-`html-block.test.ts` **14** · `chart-ticks.test.ts` **12** · `slash.test.ts` **49**。
+`html-block.test.ts` **14** · `chart-ticks.test.ts` **12** · `doc-typography.test.ts` **11**。
 ⚠️ 跑法两档：`share-card.test.ts` 要 `--loader:.svg=text`（它 import 了 `.svg`），
-`share-card.test.ts` / `heatmap.test.ts` / `focus-summary.test.ts` 要 `--alias:@=./src`
-（都走 `@/…` 路径），其余十七份两条都不要——**别照着一份的命令去跑另一份**。
+`share-card.test.ts` / `heatmap.test.ts` / `focus-summary.test.ts` / `keymap.test.ts`
+要 `--alias:@=./src`（都走 `@/…` 路径），其余 **十八份**两条都不要——**别照着一份的命令去跑另一份**。
 📌 **本节这一格 2026-09-27 现数时发现它落后了两批**：原写"十八份、共 418 条"，
 而那时 `slash.test.ts`（49 条）已经存在、只是没进这份清单（418 ＋ 49 ＝ 467，
-正是 `docs/06` §6.3 当时的数）。**同一个数在两份文档里差 49**——这一批一并补齐并改成
+正是 `docs/06` §6.3 当时的数）。**同一个数在两份文档里差 49**——那一批一并补齐并改成
 **二十份 501 条**（＋ `focus-summary.test.ts` 34）。⚠️ 这就是"加一份要跟着改四处"
 那条规矩为什么会漏：**`docs/02` 是第五处之外的地方，三道闸一条都不扫它**。
+📌 **同一天深夜又现数一次，发现又漏了两份**（501 → 566，共 ＋65）：
+`keymap.test.ts`（**54 条**，「快捷键」那一页的键位解析/冲突/序列化）与
+`doc-typography.test.ts`（**11 条**，段落排版判据）。⚠️ 这 ＋65 里
+**只有 54 条是这一批新写的**（`keymap`）；`doc-typography` 那 11 条是**旧账**——
+它和 `chart-ticks.test.ts`、`instant-render.test.ts` 一样属于
+**"写好之后从没进过任何名册"**的第三例，而且**当时连 `docs/06` §6.3 那个 `for`
+循环都没进**，所以"每天跑一遍"从来没跑到过它。
+⚠️ 教训仍旧是同一条：**加一份测试要跟着改四处**（`docs/06` §6.3 的名册与 `for` 循环、
+`AGENTS.md`、`docs/09`、本节），**闸门一处都扫不到**，只能靠人记。
 ⚠️ `accent.test.ts` 有个**别处没有的做法**：
 它 `readFileSync` 去读 `src/styles/theme/color.css`，把出厂那 15 对强调色的**前景色断言成**
 `accentFg()` 算出来的那个——所以换风格批次时它会当场响（2026-09-26 正是它逮住了第一版规则的
@@ -316,8 +330,8 @@ React 组件、编辑器生命周期、CSS 一条都没有。**加一份要跟�
 ⚠️ `tests/fixtures/` 仍是空的，Rust 集成测试**一条都没有**。
 
 ✅ **"grep 数 = cargo 数"这条自 2026-09-25 起重新成立**：
-`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` ＝ **490**，
-`cargo test --lib` 也报 **490 passed; 0 failed**（2026-09-27 晚现数，两半都是本批当场跑的——
+`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` ＝ **505**，
+`cargo test --lib` 也报 **505 passed; 0 failed**（2026-09-27 深夜现数，两半都是本批当场跑的——
 `grep` 在宿主、`cargo` 在 `tauri-dev` 容器；⚠️ 这一句此前手抄过 09-26 的 397、09-27 的 428，
 每一次"同一个小节里两个数对峙"都是加完用例忘了改这儿——**这一节的两半要么一起改、要么都别写**）。
 它是 2026-09-25 白天**假过一次**的——当时
@@ -536,13 +550,14 @@ lossy 串**：那会拼出一个不一样的路径，然后弹"路径不存在"�
 
 ### 测试
 
-无（挑参数的规则在 `cli.rs`，那边有 4 条）。
+无（挑参数的规则在 `cli.rs`，那边有 16 条）。
 
 ---
 
-## `src-tauri/src/cli.rs`（79 行）
+## `src-tauri/src/cli.rs`（368 行）
 
-命令行参数。今天只认一件事：**头一个不像选项的参数就是"要打开的文件"**。
+命令行参数。今天认两件事：**头一个不像选项的参数就是"要打开的文件"**，以及
+**有没有 `--new-window`**（2026-09-27 晚加的，见本节末）。
 `nota 笔记.md`、文件管理器的"用 Nota 打开"、把文件拖到图标上，三条路最后
 都是同一个 argv。⚠️ 2026-09-25 之前这里**什么都不认**：双击一个 `.md`
 （关联到 Nota）会开出一个空白编辑器，用户以为文件丢了。
@@ -572,7 +587,32 @@ pub fn 首个要打开的文件(args: impl IntoIterator<Item = OsString>) -> Opt
 ⚠️ 因此它是**纯函数**（没有 IO、没有 Tauri 类型），才测得了——4 条用例钉的是
 "跳过程序自己""选项跳过但后面那个还算数""不判存在性"。
 
-### 测试（4）
+### `pub const 新窗口选项: &str` ＋ `pub fn 要开新窗口(args) -> bool`（2026-09-27 晚）
+
+「标签页右键 → 在新窗口中打开」那一半：`commands/window.rs` 起新进程时**用这个常量
+拼命令**，`lib.rs` **用同一个常量**判"这一份进程整关跳过单实例"。所以那个串
+**只许在常量这一处写**——两处各写一份字面量，改一处忘一处，症状是"新窗口起得来、
+但第二份被第一份吃掉了"。
+
+```rust
+pub fn 要开新窗口(args: impl IntoIterator<Item = OsString>) -> bool {
+    args.into_iter()
+        .skip(1)                                    // 零号参数是程序自己
+        .any(|a| a.as_os_str() == OsStr::new(新窗口选项))
+}
+```
+
+⚠️ **判据是 `OsStr` 整串相等**，比较的是 `as_os_str()`。**不是** `to_string_lossy()`
+之后的 `contains`——后者会把 `--new-windowish` 也认成新窗口，而且"这个参数能不能被
+有损转换"本身就不该当判据（与 `single_instance.rs` 里路径按原始字节传同一条口径）。
+⚠️ **`.any` 不是 `.find`**：这个选项**位置不拘**（真拼出来的命令是 `--new-window <路径>`，
+但用户手敲 `nota --new-window`、或以后再加别的选项，都不该要求它排第几）。
+⚠️ **零号参数不算**：程序自己的路径理论上可能就叫 `--new-window`（少见但合法），
+与 `首个要打开的文件` 同一条规矩。
+⚠️ 它与 `首个要打开的文件` **不打架**（`--new-window` 以 `-` 开头，挑文件那条会跳过它），
+有用例专门钉这一条。
+
+### 测试（16）
 
 | 用例 | 钉的是什么 |
 |---|---|
@@ -580,6 +620,14 @@ pub fn 首个要打开的文件(args: impl IntoIterator<Item = OsString>) -> Opt
 | `第一个非选项参数就是要打开的文件` | 正常那条路 |
 | `选项被跳过而它后面那个路径仍然算数` | 见到选项不放弃，继续往后找 |
 | `不判存在性也不读文件` | 不存在的路径照样返回（报错是前端的事）；空串不算 |
+| `新窗口那个选项认得出来` | **位置不拘**：头一个、末一个、夹在中间都算 |
+| `程序自己的路径不算选项` | **零号参数不算** |
+| `普通启动不是新窗口` | `--new-windowish` 不算，要**整串**相等 |
+| `新窗口选项不妨碍挑出要打开的文件` | 与 `首个要打开的文件` 不打架 |
+
+（其余 8 条是 2026-09-27 白天 `nota://` 那批留下的，全在 `nota://` 的解析上：百分号
+解码／`nota:` 与 `nota://` 同解／协议名不分大小写／`+` 不当空格／`path` 那一段之外的
+参数不影响／解不出来一律 `None`／坏链接不静默丢掉／从参数表里挑出来时已经是路径。）
 
 ---
 
@@ -799,25 +847,36 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 
 ---
 
-## `src-tauri/src/settings/`（模块目录，九个文件）
+## `src-tauri/src/settings/`（模块目录，十一个文件）
 
 用户设置。**2026-09-24 从单文件 `settings.rs`（当时 298 行）拆成目录**——一次性加进来
 三十多个设置项，全塞进一个文件会超过 1000 行的上限，所以按**界面上的页**拆，一页一个文件。
 三个枚举、`Settings` 结构体本体、`load` / `save` 与那十个老字段都留在 `mod.rs`；
-拆出去的**八**个文件各装一张 `[页名]` 表：
+拆出去的**十**个文件各装一张表（见下表，其中 `document.rs` 装的是「文档主题」那一页、
+`keys.rs` 装的是「快捷键」那一页里**用户改过的那几条**）：
 
 | 文件 | 行数 | `#[test]` | 装什么 |
 |---|---|---|---|
-| `mod.rs` | 578 | 10 | 三条外观轴、`UiStyle`（**八个变体**，2026-09-26 加了 `Windows10`） / `UiMode` / `ViewMode`、`Settings` 本体、`load` / `load_from` / `save` / `save_to` |
-| `markdown.rs` | 461 | 5 | `[markdown]` 表：语法偏好 / 扩展语法 / 智能标点 / 代码块 / 公式 / 空格与换行（六组，十页里组数最多的一页） |
-| `files.rs` | 182 | 3 | `[files]` 表：启动选项 / 大纲折叠 / 默认扩展名 / 切换文件时自动保存 / 最近记录 / 拖放行为 / 文件树过滤 |
-| `editor.rs` | 175 | 6 | `[editor]` 表：缩进 / 自动配对 / Emoji 补全 / 显示当前块源码 / 复制行为 / 换行符 / 拼写检查 / 打字机模式**/ 段首缩进**。⚠️ **两条"缩进"不是一个字段**（`default_indent` 往文件里插空格、`paragraph_indent` 只改 `text-indent`），而且**默认值都是 2**——所以有一条用例专门把两个数设成不一样的值再落盘，防着"写串了看不出来" |
+| `mod.rs` | 585 | 10 | 三条外观轴、`UiStyle`（**八个变体**，2026-09-26 加了 `Windows10`） / `UiMode` / `ViewMode`、`Settings` 本体、`load` / `load_from` / `save` / `save_to` |
+| `markdown.rs` | 534 | 5 | `[markdown]` 表：语法偏好 / 扩展语法 / 智能标点 / 代码块 / 公式 / 空格与换行（六组，十页里组数最多的一页） |
+| `files.rs` | 225 | 4 | `[files]` 表：启动选项 / 大纲折叠 / 默认扩展名 / 切换文件时自动保存 / 最近记录 / 拖放行为 / 文件树过滤。⚠️ **`startup` 三档 2026-09-27 才真的生效**（在此之前没有任何一处读它，而前端无条件恢复一切——见 `StartupAction` 那一段）：`new-file`（默认，开一张白纸）/ `last-file`（恢复标签）/ `last-session`（标签 ＋ 上次那个文件夹）。⚠️ **第三档的枚举名改过**：原先叫 `Folder`，落盘字面量是 `"folder"`，现在叫 `LastSession`，落盘是 `"last-session"`——**`#[serde(alias = "folder")]` 那条别名不能删**，删了老设置文件整份读不出来，用户看到的是"偏好全没了" |
+| `editor.rs` | 179 | 6 | `[editor]` 表：缩进 / 自动配对 / Emoji 补全 / 显示当前块源码 / 复制行为 / 换行符 / 拼写检查 / 打字机模式**/ 段首缩进**。⚠️ **两条"缩进"不是一个字段**（`default_indent` 往文件里插空格、`paragraph_indent` 只改 `text-indent`），而且**默认值都是 2**——所以有一条用例专门把两个数设成不一样的值再落盘，防着"写串了看不出来" |
 | `appearance.rs` | 329 | 12 | `[appearance]` 表：自定义字号 / 缩放 / **Ctrl+滚轮（两格）** / 状态栏 / 字数统计 / 工具栏 / 深色独立主题。⚠️ 工具栏那一项是**三个词**（`ToolbarMode`），`appearance.rs` 里有一条测试专门钉「这是三个词」，另有一条钉「老设置文件里那个布尔被忽略而不是报错」；⚠️ 滚轮那两格也各有钉：**默认是字号**（不是照名字猜的"缩放"）、两档落盘是 `font_size` / `zoom`、老设置文件里没有目标那一格也读得进来。⚠️ **行数 329 是 2026-09-27 数的**（上一版写着 167，是旧数）；逐格说明见 `docs/03` §5.6b |
+| **`document.rs`** | 222 | 6 | **`[document]` 表**：正文的行距 / 段距 / 字体 / 字号（**2026-09-27 新增**，界面上的那一页叫「文档主题」）。⚠️ **表名和页名差一点是有意的**：顶层那个老字段 `document_theme` 管"用**哪一套**主题"，这张表管"那套主题给的默认值里**哪几项我不听它的**"——叫 `[doc_theme]` 会让人以为是同一个东西的两种写法。⚠️ **这四项不是第四条外观轴**（一个像素都不出编辑区），它们是**文档主题的覆盖值**；四项**都写成「开关 ＋ 值」两个字段**，因为默认必须是"跟随主题"——三套内置主题行距分别是 1.9 / 1.75 / 1.68，写死一个数就等于把主题之间的差别抹平了（同 `[editor]` 的段首缩进、`[appearance]` 的字号，别另发明一种姿势）。⚠️ `docs/02` 这张表此前**一直没有它这一行**（文件 2026-09-27 就有了），与 `keys.rs` 是同一种漏 |
 | `image.rs` | 190 | 4 | `[image]` 表：**插图动作（五档 `InsertImageAction`）** / `custom_dir`（「复制到指定路径」那条） / 适用范围（`apply_to_local` / `apply_to_remote`） / 图片语法偏好（`prefer_relative` / `add_dot_slash` / `escape_url`）。⚠️ 2026-09-26 之前是 2 条用例、`insert_action` 只有两档；那一批把动作补到五档并**把三个"存得下、不生效"的字段接上了行为**（`docs/07` 第 62 项）。⚠️ **仍然没有「上传服务」那一组，而且这一条现在是对的**：上传的设置（含令牌）**故意不在这张表里**，它在 `~/.config/nota/image-upload.toml`（0600），所以本文件末尾那条用例 `图片设置里不许出现上传与密钥` 盯的是「别把带令牌的那一组搬进 0644 的 `settings.toml`」——2026-09-26 第二批改的口径，见 `docs/10` §11.2 第二类 |
 | `export.rs` | 74 | 2 | `[export]` 表：默认导出文件夹 / 导出后打开所在目录（这一页只有两条）。⚠️ **没有「Pandoc 路径」那一格**，理由 2026-09-25 换过一次口径：不是「不做 Pandoc」（七种格式现在真借它转），而是**不存路径**——存下来的会过期（换机器、改 PATH、重装），每次现探 |
 | **`focus.rs`** | **250** | **10** | **`[focus]` 表**：强制专注的六个旋钮——`total_minutes`（总时长 ＝ 余额上限）/ `alarm_minutes`（起始余额）/ `gain_per_minute` / `drain_per_minute` / `grace_seconds` / `sound`，另加 `introduced`（首次说明弹过没有，**要落盘**）。⚠️ 余额在内存里是**整数毫秒**（浮点每秒累加会漂），设置里是分钟；`上限毫秒()` / `起始毫秒()`（起点夹到上限）/ `赚(拍毫秒)` / `赔(拍毫秒)` 就是那一层的换算。⚠️ 有一条用例专门钉「这里没有任何东西能去看别的程序」——用户要的「依据在开什么应用而判断」**不做**，那是读别人的窗口 |
+| **`keys.rs`** | 114 | 5 | **`[keys.overrides]` 表**（**2026-09-27 新增**，界面上的那一页是「快捷键」）：命令 id → 键位串，**只放用户动过的那些**。⚠️ **只存差量不存整张表**有两个理由：加了新命令时老用户的快照里没有它（缺的那条静默地没有快捷键）、改一个默认键位时所有用户被钉在旧值上。⚠️ 值是**空串**的含义是"这条命令**不要**快捷键"，与"表里没有这个 id"（＝回到默认）**必须能分开**，否则用户改不回默认。⚠️ **不清洗、不校验**（认不得的 id、认不出的键位串原样存原样取）：判据在前端（`ui/commands.ts`），在这儿重写一遍迟早两边不一致。⚠️ 用 `BTreeMap` 不用 `HashMap`，为的是**存盘字节稳定**（用户拿去 diff 不会满屏乱跳） |
 | `general.rs` | 92 | 3 | `[general]` 表：只有 `debug_mode` 一项（其余如实标"不做"） |
-| 合计 | **2150** | **48** | — |
+| 合计 | **2794** | **67** | — |
+
+⚠️ **上表的行数与用例数 2026-09-27 深夜按现数整表刷新过一次**（`wc -l` ＋ `grep -c '#\[test\]'`，
+合计 **2794 行 / 67 条**）：上一版写着 2150 / 48，而 `mod.rs`（578 → 585）、`markdown.rs`（461 → 534）、
+`files.rs`（182 → 225）、`editor.rs`（175 → 179）都在这一天里被**别的批次**改过；
+⚠️ 更要紧的是**上一版整张表漏了两个文件**——`document.rs` 与 `keys.rs`
+（前者 2026-09-27 早就有了，只是一直没进这份表；后者是本批新增）。
+**"文件在目录里"和"文件在这张表里"是两件事**，这一节没有闸门扫（同本节前面
+"漏了两份前端测试"那两笔，是同一类错）。
 
 ⚠️ **老的那十个顶层字段一个都没挪**（`ui_style` / `ui_mode` / `document_theme` / `view_mode` /
 `ui_font_size` / `content_width` / `confirm_unsaved` / `autosave_seconds` / `strict_markdown` /
@@ -1526,6 +1585,43 @@ pub struct TreeNode {
 返回 `bool` 而不是 `()`：**前端要靠这个返回值决定要不要隐藏自绘菜单栏**。
 `ok == false` 表示"没挂上"（非 macOS，或者 Tauri 那边报错），
 前端就继续用自绘的那套——**而不是变成"一个菜单都没有"**。
+
+---
+
+## `src-tauri/src/commands/window.rs`（77 行）
+
+**窗口自身的控制**两条（2026-09-27；开发者工具那条在前，晚些时候加了第二条）。
+⚠️ 这两条**不是我们划在一起的**：Tauri 的权限给两套命名空间（`core:window:*` 与
+`core:webview:*`，见 `capabilities/default.json`），开发者工具那条走 webview。
+⚠️ 「窗口置顶」**不在这里**——前端直接 `getCurrentWindow().setAlwaysOnTop()` 就够了，
+而菜单上那个勾的判据必须是"从窗口读回来的"（同全屏，见 `ui/useImmersive.ts`）。
+
+### `nota_window_open_new(path: String) -> Result<()>`
+
+「在新窗口中打开」——**再起一份进程**，不是 `WebviewWindowBuilder`。
+
+```rust
+std::process::Command::new(&程序)
+    .arg(crate::cli::新窗口选项)     // ⚠️ 常量，不是字面量
+    .arg(&path)
+    .spawn()
+```
+
+⚠️ **为什么是另一个进程**：同进程的两个窗口**共用 `AppState`**（文档表同一张、
+插件注册表同一份），那不是用户要的"新窗口"。代价写在 `lib.rs` 那一处——这一份
+**不持有 socket**，收不到 `nota:second-instance`（第三次普通启动仍然转交给第一份）；
+用户明说了「不用考虑拖回来的情况」，所以这个代价付得起。
+⚠️ **不 `wait()`**：等它退出等于把界面挂住。
+⚠️ **空路径在这里也判一次**（`NotaError::other`）——界面上那一条已经灰了，但命令是
+对外开着的一条路，别指望调用方都守规矩。
+⚠️ 程序自己那条路径用 `std::env::current_exe()` 取，**不缓存、也不从设置里读**：
+新窗口必须与当前这一份是同一个可执行文件。
+
+### 测试
+
+无（这条命令起进程、碰 `current_exe()`，不是纯函数）。挑参数那一半的规则在
+`cli.rs`，那边有 16 条；**常量必须是同一个串**这件事靠"两处都引同一个常量"保证，
+用例钉不住。
 
 ---
 
@@ -4245,7 +4341,16 @@ React 入口，四件事：
 
 ---
 
-## `src/App.tsx`（999 行）
+## `src/App.tsx`（963 行）
+
+⚠️ **2026-09-27 晚这一批往里加了两条接线**（都不是新组件，是"把设置里那个值递进去"）：
+① **键位覆盖的叠加**——`ui/commands.ts::应用键位覆盖` 把 `settings.keys.overrides`
+（差量表，见 `docs/03` §5.6f）叠到菜单表上，**叠加发生在这里**（出厂键位仍是 `commands.ts`
+的 `MENUS`）；② **启动档**——`ui/useStartup.ts` 读 `files.startup`，把它当入参递给
+`ui/useSession.ts::接上会话`（见 `docs/03` §5.6e）。⚠️ 两处的落点不一样：**键位覆盖**在
+本文件里读一次、`useMemo` 叠上去（依赖里带着 `settings?.keys?.overrides`）；**启动档**
+由 `ui/useStartup.ts` 自己读——它那一枪本来就要拉设置（六枪走同一个 `Promise.all`）。
+**别在子组件里再读一遍设置文件**。
 
 应用外壳：状态编排 + 布局。文件头写明这一层只做三件事——**取数据、派事件、拼布局**；
 编辑器的活全在 `ui/EditorPane.tsx`，文件树的活在 `ui/Sidebar.tsx`，本文件不承担这两类。

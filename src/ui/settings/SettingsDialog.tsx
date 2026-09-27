@@ -55,6 +55,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { DocThemeInfo, Settings, UiStyleInfo } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import type { MenuSpec } from "@/ui/commands";
 import { Icon, type 图标名 } from "@/ui/Icon";
 import { QueryProvider, SearchField } from "./primitives";
 import { AppearancePane } from "./panes/AppearancePane";
@@ -160,6 +161,11 @@ interface Props {
    *（`ui/useSession.ts::清空最近` 里写了为什么不弹）。
    */
   onClearRecent: () => void;
+  /**
+   * 全应用那一份菜单表（**已经叠过用户的键位覆盖**），「快捷键」那一页用。
+   * 见 `panes/props.ts` 里同名字段那一段。
+   */
+  menus: readonly MenuSpec[];
 }
 
 export function SettingsDialog({
@@ -173,6 +179,7 @@ export function SettingsDialog({
   onOpenConfigDir,
   onResetSettings,
   onClearRecent,
+  menus,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -316,6 +323,7 @@ export function SettingsDialog({
       onOpenConfigDir,
       onResetSettings,
       onClearRecent,
+      menus,
     };
     switch (id) {
       case "files":
@@ -330,10 +338,12 @@ export function SettingsDialog({
         return <ExportPane {...props} />;
       case "docTheme":
         return <DocThemePane {...props} />;
-      // ⚠️ 快捷键页**不吃 settings**：它是只读的，条目从菜单表里算出来。
-      // 传了 props 也不会有人用，但传了就会让"这一页能不能改设置"变得可疑。
+      // ⚠️ 快捷键页**不吃 `{...props}`**（2026-09-27 起它可编辑了，但吃的仍然只有
+      // 这三样）：条目从菜单表里算、改动只往 `keys` 那一节写。整包铺过去的话，
+      // 这一页会莫名其妙拿到 `docThemes` / `uiStyles` 那些和它无关的东西，
+      // 下次有人在这一页里用上其中一个，就再也说不清"它到底该依赖什么"了。
       case "shortcuts":
-        return <ShortcutsPane />;
+        return <ShortcutsPane menus={menus} settings={settings} onChange={onChange} />;
       case "focus":
         return <FocusPane {...props} />;
       case "general":

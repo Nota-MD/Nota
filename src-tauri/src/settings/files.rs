@@ -13,16 +13,38 @@
 
 use serde::{Deserialize, Serialize};
 
-/// 启动时做什么。
+/// 启动时做什么。**三档，一档比一档多恢复一样东西。**
+///
+/// ```text
+/// new-file      什么都不恢复，开一份空白文档      ← 默认
+/// last-file     恢复上次开着的那些文件（标签）
+/// last-session  恢复上次开着的文件 **＋** 上次那个文件夹
+/// ```
+///
+/// ⚠️ **老用户升级过来时，行为是变的**：2026-09-27 之前这三档是**摆设**——
+/// 没有任何一处读它，而前端无条件恢复标签和工作区（＝永远按第三档办）。
+/// 现在它真的生效了，于是"从没动过这一项"的人会从"恢复一切"变成"什么都不恢复"
+/// （默认档是第一档）。这是用户点名要的三档，而 `new-file` 本来就是
+/// [`Default`] 的值（见文件末尾那条测试）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum StartupAction {
     /// 开一个空白文档。**默认**——Nota 是编辑器，不是阅读器。
     NewFile,
-    /// 恢复上次打开的文件。
+    /// 恢复上次打开的文件（标签顺序、前台是哪一份都照旧）。
     LastFile,
-    /// 打开上次的文件夹（把整个目录当工作区）。
-    Folder,
+    /// 恢复上次打开的文件**和**上次那个文件夹。
+    ///
+    /// ⚠️ **落到 `"last-session"`，不是 `"folder"`**（2026-09-27 改的名）。
+    /// 老名字说的只是"打开文件夹"，而这一档真正干的是"连文件带文件夹一起接上"
+    /// ——按老名字去实现的话，第三档会比第二档**少**恢复标签。
+    ///
+    /// ⚠️ 那个 `alias = "folder"` **不能删**：用户 `settings.toml` 里可能已经存着
+    /// `startup = "folder"`（设置页那三档一直是可点的，只是点了没用）。删掉的话
+    /// 那一份设置**整份读不出来**，宿主会走"留一份备份 + 退回默认"，用户看到的
+    /// 是"我的偏好全没了"。留着它，老值读进来就是这一档。
+    #[serde(alias = "folder")]
+    LastSession,
 }
 
 impl Default for StartupAction {
@@ -144,12 +166,12 @@ mod tests {
         // 手写掉引号。所以枚举变体用名字（`dash`），渲染层再翻成符号。
         // 这条测试盯的是"哪天有人图省事改成裸符号"这种改动。
         let f = Files {
-            startup: StartupAction::Folder,
+            startup: StartupAction::LastSession,
             drop_folder: DropAction::OpenInFileManager,
             ..Default::default()
         };
         let text = toml::to_string_pretty(&f).unwrap();
-        assert!(text.contains(r#"startup = "folder""#), "实际是：\n{text}");
+        assert!(text.contains(r#"startup = "last-session""#), "实际是：\n{text}");
         assert!(
             text.contains(r#"drop_folder = "open-in-file-manager""#),
             "实际是：\n{text}"
@@ -169,6 +191,27 @@ mod tests {
         assert!(!d.autosave_on_switch);
         assert!(!d.show_hidden);
         assert_eq!(d.default_extension, "md");
+        // ⚠️ **这条是承重的**：默认档从 2026-09-27 起真的生效了，而它决定
+        // "第一次装上 Nota 的人开出来是什么样"。默认要是落到 `last-session`
+        // 去，新用户第一次启动就会撞见一份不知道从哪儿来的文件夹。
+        assert_eq!(d.startup, StartupAction::NewFile, "默认档必须是「开空白文档」");
+    }
+
+    /// ⚠️ **老设置文件里的 `startup = "folder"` 必须还读得懂**。
+    ///
+    /// 第三档 2026-09-27 从 `folder` 改名成 `last-session`（理由见枚举上那段）。
+    /// 用户 `settings.toml` 里可能已经存着老值——那条路是设置页的下拉写的，
+    /// 不是手改的。没有这个别名，`toml::from_str` 会在这一行上**整份失败**，
+    /// 宿主走"留备份 + 退回默认"，用户看到的是"我的偏好全没了"。
+    #[test]
+    fn 老取值_folder_还能读成第三档() {
+        let 老: Files = toml::from_str(r#"startup = "folder""#).unwrap();
+        assert_eq!(老.startup, StartupAction::LastSession);
+        // ⚠️ 反过来的那一半：写出去的**永远是**新名字。别名只进不出——
+        // 读进来 `folder`、写出去变成 `last-session`，下次启动就归一了。
+        let 新 = toml::to_string_pretty(&老).unwrap();
+        assert!(新.contains(r#"startup = "last-session""#), "实际是：\n{新}");
+        assert!(!新.contains(r#""folder""#), "老名字不该再被写出去：\n{新}");
     }
 
     #[test]

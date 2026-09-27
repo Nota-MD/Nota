@@ -299,10 +299,12 @@ export const 设置表: Record<string, string> = {
 
   // ── 「文件」页（`panes/FilesPane.tsx`）──────────────────────────────────
   启动选项: "Startup",
-  "启动 Nota 时先做什么。": "What to do first when Nota starts.",
+  "启动 Nota 时先做什么。三档是递进的：「文件夹」指的是左侧栏那棵文件树。":
+    "What Nota does first when it starts. The three settings build on each other; " +
+    "“folder” means the file tree in the left sidebar.",
   打开空白文档: "Open a blank document",
-  打开上次的文件夹: "Open the last folder",
   恢复上次打开的文件: "Restore the last open files",
+  恢复上次的文件和文件夹: "Restore the last files and folder",
   自动保存: "Auto Save",
   "保存 & 恢复": "Saving & Recovery",
   切换文件时自动保存: "Auto Save when switching files",
@@ -605,17 +607,54 @@ export const 设置表: Record<string, string> = {
 
   // ⚠️ 快捷键页那条 `Note` 在 JSX 里被 `<strong>` / `<code>` 切成了**四段**，
   // 按顺序拼起来读是：「This table is **read from the menu**, so it always
-  // matches what the menu says. Key bindings cannot be changed in the UI for
-  // now — to change one, edit the `src/ui/commands.ts` file.」
+  // matches what the menu says. Bindings you change are stored in the settings
+  // file; the ones you don't change follow the `src/ui/commands.ts` file — so if
+  // a default binding changes there later, the rows you never touched will
+  // follow it.」
   // ⚠️ 空格是**值的一部分**：第二段值里有个前导空格（接在 "is" 后面），
   // 第三段值**末尾**那个空格留给它后面的 `<code>`，第四段的前导空格留给
   // 它前面的 `<code>`。模板里没有 `{" "}` 可用，只能写进值里。
+  // ⚠️ 2026-09-27 这四段的后两段**换过一次**：从"界面上改不了键位"改成
+  // "改过的存设置文件、没改过的跟着代码走"。原文与英文必须同批改——
+  // 只改中文那边，这一页的英文会继续说着那句已经过期的话。
   "这张表是": "This table is",
   "从菜单里读出来的": " read from the menu",
-  "，所以它一定和菜单上写的一致。键位暂时不能在界面上修改——要改就动 ":
-    ", so it always matches what the menu says. Key bindings cannot be changed " +
-    "in the UI for now — to change one, edit the ",
-  " 这个文件。": " file.",
+  "，所以它一定和菜单上写的一致。改过的键位存在设置文件里，没改过的跟着 ":
+    ", so it always matches what the menu says. Bindings you change are stored " +
+    "in the settings file; the ones you don't change follow the ",
+  " 走——所以以后那个文件里调整了默认键位，你没动过的那几条会跟着变。":
+    " file — so if a default binding changes there later, the rows you never " +
+    "touched will follow it.",
+
+  // ── 快捷键页的**改键位**那一套（2026-09-27 加，用户点名「设置里加一块
+  //    「快捷键」」）────────────────────────────────────────────────────────
+  //
+  // ⚠️ 「改」故意**不译成 "Edit"**：这一颗按下去是"开始录一段新的键位"，
+  // 而 Edit 在设置里到处都是（编辑某个值）。用 Change 才说得出"换一个键位"。
+  // ⚠️ 「清除」和「恢复默认」是两个动作，英文也必须分得开：Clear ＝ 这条
+  // 不要键位，Reset ＝ 回到出厂那个（出厂可能本来就没有）。混成一个词，
+  // 用户就永远不知道自己按下去会发生哪一种。
+  改: "Change",
+  清除: "Clear",
+  未设置: "Not set",
+  // ⚠️ 带引号：`…` 不是合法的 JS 标识符字符，裸写这一条 ebuild 会当场报
+  // `Expected "}" but found "…"`（这条是**照原样写**踩出来的）。
+  "按下新的键位…": "Press the new keys…",
+  // ⚠️ **这条必须带引号**：`tools/i18n-check.sh` 取键的那个正则，不带引号那一支
+  // 是 `[^\s"'` + 反引号 + `:/]+`——**不含空格**。键里带了空格而不加引号，
+  // 脚本就当它没翻译过（报"还没翻译"，而它明明在表里）。
+  // 别去掉引号"统一风格"：这一条和旁边那些不一样，它里面有空格。
+  "按下你想用的键位；按 Esc 取消": "Press the keys you want to use; press Esc to cancel",
+  这条命令不要快捷键: "No shortcut for this command",
+  // ⚠️ 带引号：全角括号 `（）` 同样不是标识符字符。
+  "把这一条恢复成出厂键位（或出厂就没有键位）":
+    "Reset this one to its factory binding (or to none, if it never had one)",
+  已修改: "changed",
+  全部恢复默认: "Reset all",
+  "这个键位现在归「{0}」。要绑给这一条，就先把那一条清掉。":
+    "That binding belongs to “{0}”. Clear it there first if you want this command to have it.",
+  "改过 {0} 条。恢复之后全部按 commands.ts 里的出厂键位走。":
+    "{0} changed. After resetting, every binding follows the factory defaults in commands.ts.",
 
 
   // ── 「Markdown」页（`panes/MarkdownPane.tsx`）─────────────────────────────

@@ -110,9 +110,26 @@ const PANDOC_GUIDE = "https://pandoc.org/installing.html";
  * 切出来会是**空串**，而空串当目录用等于"往根目录旁边导"，不如老实说没有目录。
  * Windows 的 `C:\a.md` 同理（`cut === 2`，能过）。
  */
-function 所在目录(path: string): string | null {
+export function 所在目录(path: string): string | null {
   const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return cut <= 0 ? null : path.slice(0, cut);
+}
+
+/**
+ * 把「一层目录」和「一个文件名」拼成一个路径。
+ *
+ * ⚠️ **为什么在 `useExport.ts` 里导出、而不是各写一份**：这个函数和 `所在目录`
+ * 是一对（一个拆、一个拼），`useDocuments.ts` 的「另存为」现在也要用它
+ *（2026-09-27，用户点名「另存为」的落点要跟「上次用过的目录」走）。
+ * 抄第二份的话，`sep` 那条判据（下面）迟早有一边忘了改。
+ *
+ * ⚠️ 自己拼而不是引 `@tauri-apps/api/path` 的 `join`/`dirname`：那两个函数
+ * 要先问一次平台才知道分隔符，为拼一个字符串多一跳 IPC 不值。判据是"这个
+ * 路径长什么样"——含反斜杠且不含斜杠的就是 Windows 路径。
+ */
+export function 拼路径(dir: string, name: string): string {
+  const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
+  return dir.endsWith(sep) ? dir + name : dir + sep + name;
 }
 
 export function useExport(w: 导出接线): 导出出口 {
@@ -158,24 +175,20 @@ export function useExport(w: 导出接线): 导出出口 {
    * 2. 否则这份文档**已存过盘** → 用它自己那一层目录（导出到文档旁边）。
    * 3. 都没 → 只有一个文件名，交给对话框用它自己记着的目录。
    *
-   * ⚠️ **「导出」和「另存为」的落点是两回事**（用户 2026-09-25 点的）：
-   * 另存为换的是*这份文档自己*的路径，所以它必然以 `doc.path` 为准；
-   * 导出产出的是一份**别的文件**，落点只能算"猜一个用户多半想要的地方"——
-   * 所以设置能盖过它，而另存为那边没有这种设置。
+   * ⚠️ **「导出」和「另存为」的落点是两回事，但不再是"一边有设置一边没有"**：
+   * 另存为换的是*这份文档自己*的路径，所以它必然以 `doc.path` 为准；导出产出的
+   * 是一份**别的文件**，落点只能算"猜一个用户多半想要的地方"。
+   * ⚠️ 2026-09-27 用户点了「另存为」那一侧（原话："改成上次用过的目录或文档
+   * 目录"）——那一侧现在也有两档，但**记的不是设置而是一次进程内记住的
+   * 「上次另存到哪儿」**，见 `useDocuments.ts::另存落点`。两者别混。
    *
    * ⚠️ 第 2 档是**开窗量出来**的：不给的话对话框落在**进程的当前目录**里
    * （实测是 `src-tauri/`）——那是"从哪儿启动的"，不是"用户在编辑什么"。
-   *
-   * ⚠️ 自己拼而不是引 `@tauri-apps/api/path` 的 `join`/`dirname`：那两个函数
-   * 要先问一次平台才知道分隔符，为拼一个字符串多一跳 IPC 不值。判据是"这个
-   * 路径长什么样"——含反斜杠且不含斜杠的就是 Windows 路径。
    */
   const 默认落点 = useCallback(
     (name: string, docPath: string | null): string => {
       const dir = exportSettings.default_folder || (docPath ? 所在目录(docPath) : null);
-      if (!dir) return name;
-      const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
-      return dir.endsWith(sep) ? dir + name : dir + sep + name;
+      return dir ? 拼路径(dir, name) : name;
     },
     [exportSettings.default_folder],
   );

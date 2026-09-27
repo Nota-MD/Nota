@@ -33,10 +33,16 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
     { value: "300", label: t("5 分钟") },
   ];
 
+  // ⚠️ 三档是**递进**的（第三档 = 第二档 ＋ 那个文件夹），标签得让人一眼看出
+  // 这个关系。第二档那句 2026-09-27 补了「和目录」三个字：写"恢复上次打开的文件"
+  // 时，第三档的标签也写着"文件和文件夹"，两条读起来像同一个东西的两种说法。
+  // ⚠️ 第三档的 `value` 是 `"last-session"`，**不是** `"folder"`：老名字说的是
+  // "只打开文件夹"，而这一档实际连文件一起恢复。改名的理由和 serde 别名在
+  // `src-tauri/src/settings/files.rs::StartupAction` 上（老值还读得懂）。
   const STARTUP: Array<{ value: StartupAction; label: string }> = [
     { value: "new-file", label: t("打开空白文档") },
     { value: "last-file", label: t("恢复上次打开的文件") },
-    { value: "folder", label: t("打开上次的文件夹") },
+    { value: "last-session", label: t("恢复上次的文件和文件夹") },
   ];
 
   const DROP: Array<{ value: DropAction; label: string }> = [
@@ -65,7 +71,10 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
 
   return (
     <>
-      <SettingsGroup title={t("启动选项")} help={t("启动 Nota 时先做什么。")}>
+      <SettingsGroup
+        title={t("启动选项")}
+        help={t("启动 Nota 时先做什么。三档是递进的：「文件夹」指的是左侧栏那棵文件树。")}
+      >
         <SettingRow>
           <Select value={f.startup} options={STARTUP} onChange={(startup) => 写({ startup })} />
         </SettingRow>

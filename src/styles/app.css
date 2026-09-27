@@ -407,6 +407,19 @@ button {
   overflow-x: auto;
 }
 
+/* 标签页右键菜单的锚（2026-09-27）。
+   ⚠️ **尺寸必须是 0**：里面那个 `.menu-popup` 自己写着 `top: calc(100% + 5px)`，
+   那是"挂在菜单栏那一栏下面"的算法——容器有高度的话菜单会被推到鼠标下面
+   一整个容器身高的位置。0 高度 ＋ `fixed` 之后，它就落在光标下面 5px 处。
+   ⚠️ `z-index` 与弹层同层（弹层自己是 `--z-popup`）：这个锚是它的包含块，
+   比菜单栏那一层低就整条被压住。 */
+.tab-menu-anchor {
+  position: fixed;
+  width: 0;
+  height: 0;
+  z-index: var(--z-popup);
+}
+
 .tab {
   display: flex;
   align-items: center;

@@ -546,6 +546,10 @@ export const 界面表: Record<string, string> = {
 
   // ── 标签条（`ui/TabBar.tsx`）与提示条（`ui/Toasts.tsx`）────────────────
   关闭这个标签页: "Close this tab",
+  // ⚠️ 标签页右键那一条（2026-09-27，`ui/TabBar.tsx`）。下面那个 `标签页` 是
+  // 那个弹层的 `aria-label`（`MenuPopup` 的 `label`），屏幕阅读器会念它。
+  在新窗口中打开: "Open in New Window",
+  标签页: "Tab",
   有未保存的改动: "Has unsaved changes",
   关掉: "Dismiss",
   关掉这条提示: "Dismiss this notification",

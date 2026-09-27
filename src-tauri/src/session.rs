@@ -33,10 +33,18 @@
 //!
 //! [scroll]
 //! "/home/lqy/笔记/a.md" = 0.42
+//!
+//! workspace = "/home/lqy/笔记"
 //! ```
 //!
-//! 四样东西放一份文件、不拆四个：它们的**生命周期完全一样**（都是"上次用到哪儿"），
-//! 而且都是同一个时刻写出去（切标签、开关文档）。拆开只会多三次读盘、多三份文件头。
+//! 五样东西放一份文件、不拆五个：它们的**生命周期完全一样**（都是"上次用到哪儿"），
+//! 而且都是同一个时刻写出去（切标签、开关文档、开关文件夹）。拆开只会多几次读盘、
+//! 多几份文件头。
+//!
+//! ⚠️ `workspace` 是 2026-09-27 才进来的第四个形状（第五样东西）：在那之前
+//! 工作区**只在内存里**（`state.rs` 的 `Arc<Mutex<Option<PathBuf>>>`），
+//! 冷启动必是 `None`。设置里的「启动时」第三档要恢复上次的文件夹，就必须先有人
+//! 把它记下来——这一份侧车正是"上次用到哪儿"的落点。
 //!
 //! # ⚠️ 账一：路径是**字符串**，不是 `PathBuf`
 //!
@@ -106,6 +114,17 @@ pub struct 会话 {
     pub recent: Vec<String>,
     /// 每份文档上次滚到哪儿（`0.0`~`1.0` 的比例）。
     pub scroll: BTreeMap<String, f64>,
+    /// 上次开着的**那个文件夹**（工作区根）。
+    ///
+    /// ⚠️ 2026-09-27 加，为的是设置里「启动时」的第三档
+    /// （`settings/files.rs::StartupAction::LastSession`）。在那之前工作区
+    /// **只在内存里**（`state.rs` 那个 `Arc<Mutex<Option<PathBuf>>>`），
+    /// 于是每次冷启动 `nota_workspace_get` 都返回 `None`——"恢复上次的文件夹"
+    /// 根本无从谈起。
+    ///
+    /// ⚠️ **放这里、不放 `settings.toml`**：它是"上次用到哪儿"（一个路径），
+    /// 不是标量偏好；理由与 `open` / `recent` 完全相同，见文件头那段。
+    pub workspace: Option<String>,
 }
 
 /// 落盘形状。`toml` 要求顶层是一个表，所以包一层。
@@ -122,6 +141,8 @@ struct 存档 {
     recent: Vec<String>,
     #[serde(default)]
     scroll: BTreeMap<String, f64>,
+    #[serde(default)]
+    workspace: Option<String>,
 }
 
 /// 文件头。用户翻到这个文件时先看到它，知道这是什么、删了会怎样。
@@ -212,8 +233,10 @@ pub fn 修剪(会话: &mut 会话) {
 
 /// 落盘形状 → 会话。**唯一一处**做"读进来之后要修正什么"的地方。
 ///
-/// 修两处：
+/// 修三处：
 /// - `active` 是**空串**时当没有（手改文件、或某次写到一半留下的形状）；
+/// - **`workspace` 同理**：空串不是路径，当没有（多了它一个字段，判据与 `active`
+///   是同一条——省得某个手改出来的 `workspace = ""` 一路活到 `canonicalize`）；
 /// - 比例**再夹一遍**：这个文件用户能手改，`nan` 与 `-3` 都是合法 TOML，
 ///   不夹的话它会一路活到前端的 `scrollTo`。
 fn 从存档(档: 存档) -> 会话 {
@@ -226,6 +249,7 @@ fn 从存档(档: 存档) -> 会话 {
             .into_iter()
             .map(|(k, v)| (k, 夹比例(v)))
             .collect(),
+        workspace: 档.workspace.filter(|s| !s.is_empty()),
     }
 }
 
@@ -245,6 +269,7 @@ pub fn 到文本(会话: &会话) -> Result<String, String> {
         active: 会话.active,
         recent: 会话.recent,
         scroll: 会话.scroll,
+        workspace: 会话.workspace,
     };
     let body = toml::to_string_pretty(&档)
         .map_err(|e| format!("会话写不成 TOML（这是个 bug，请上报）：{e}"))?;
@@ -383,6 +408,19 @@ pub fn 记会话(open: Vec<String>, active: Option<String>) -> Result<(), String
     写(&会话)
 }
 
+/// 记下"上次开着的那个文件夹"。`None` = 用户把工作区关了，下次别再恢复。
+///
+/// ⚠️ 调用方是 `commands::workspace` 那两条命令（**开**和**关**），不用前端多调
+/// 一条 IPC：工作区变的那一刻只有它们知道，顺手记一笔最不容易漏。
+///
+/// ⚠️ **不碰 `open` / `recent`**：把工作区关掉不该抹掉"上次开着哪几个标签"
+/// （口径与 [`记会话`] 不碰 `recent` 是同一条）。
+pub fn 记工作区(路径: Option<&str>) -> Result<(), String> {
+    let mut 会话 = 读();
+    会话.workspace = 路径.map(str::to_string);
+    写(&会话)
+}
+
 /// 会话落点，给前端显示用（"这些记忆存在哪"）。
 pub fn 落点() -> Option<PathBuf> {
     paths::session_file().ok()
@@ -398,6 +436,7 @@ mod tests {
             active: open.first().map(|s| s.to_string()),
             recent: recent.iter().map(|s| s.to_string()).collect(),
             scroll: BTreeMap::new(),
+            workspace: None,
         }
     }
 
@@ -472,14 +511,46 @@ mod tests {
         assert_eq!(夹比例(f64::NEG_INFINITY), 0.0);
     }
 
-    /// 写出去再读回来，四样东西原样。
+    /// 写出去再读回来，五样东西原样。
     #[test]
     fn 存读一圈不丢东西() {
         let mut 会话 = 造(&["/a.md", "/b.md"], &["/b.md", "/a.md"]);
         会话.active = Some("/b.md".to_string());
         会话.scroll.insert("/a.md".to_string(), 0.25);
+        会话.workspace = Some("/笔记".to_string());
         let text = 到文本(&会话).expect("写得出来");
         assert_eq!(从文本(&text), 会话);
+    }
+
+    /// ⚠️ **工作区那一笔要单独钉一遍**：它是 2026-09-27 新加的第五样东西，
+    /// 而「启动时」第三档就靠它。落了盘但没写进 `到文本`（或没写进 `从存档`）
+    /// 的症状是"选了第三档，文件夹死活不恢复"——不报错、也不丢别的。
+    #[test]
+    fn 工作区记得住也读得回() {
+        let mut 会话 = 造(&["/a.md"], &["/a.md"]);
+        会话.workspace = Some("/home/lqy/笔记".to_string());
+        let text = 到文本(&会话).expect("写得出来");
+        assert!(
+            text.contains(r#"workspace = "/home/lqy/笔记""#),
+            "工作区得写进文件里（用户翻这份文件时该看得见）：\n{text}"
+        );
+        assert_eq!(从文本(&text).workspace.as_deref(), Some("/home/lqy/笔记"));
+    }
+
+    /// 老侧车（2026-09-27 之前写的）里没有 `workspace` 这一行——**要能读**，
+    /// 而且读出来是"没有工作区"，不是整份变成空的。
+    #[test]
+    fn 老侧车没有工作区那一行也能读() {
+        let 会 = 从文本("open = [\"/a.md\"]\nactive = \"/a.md\"\nrecent = [\"/a.md\"]\n");
+        assert_eq!(会.open, vec!["/a.md"], "别的字段一个都不能跟着丢");
+        assert_eq!(会.workspace, None);
+    }
+
+    /// ⚠️ 手改出来的 `workspace = ""` 当没有：空串不是路径，留着它会让前端
+    /// 拿一个空串去 `canonicalize`，报的是一句看不懂的错。判据与 `active` 那条同源。
+    #[test]
+    fn 空的工作区当没有() {
+        assert_eq!(从文本("workspace = \"\"\n").workspace, None);
     }
 
     /// 空会话写得出来、读得回来（首次启动那条路）。

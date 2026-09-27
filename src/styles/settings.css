@@ -884,3 +884,53 @@
   font-size: 0.82em;
   white-space: nowrap;
 }
+
+/* ── 「快捷键」那一页（2026-09-27 起键位可以改）───────────────────────────
+ *
+ * ⚠️ 这几个类都**只在这一页用**。加之前先看 `panes/ShortcutsPane.tsx` 头上
+ * 那四条说明——尤其是"冲突拦在录制那一刻"那条，`.stg-kbd-rec` 和
+ * `.stg-keys-clash` 是它的两半。 */
+
+/* 右边那一格：键位 ＋ 最多三颗按钮横排。
+   ⚠️ 用 `flex-wrap` 而不是 `nowrap`：设置框最窄是 `min(1080px, 94vw)`，
+   窄窗口下四个元素挤在一行会把键位本身压得看不清，换行比压扁好。 */
+.stg-keys-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 录制态。**虚框 ＋ 强调色**，和"就是这个键位"那个实框必须一眼分得开：
+   两者长在同一个格子里，分不开的话用户按完键不知道到底成没成。 */
+.stg-kbd-rec {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 「未设置」——这条命令现在没有快捷键。**不是灰掉的错误态**，
+   是一个正当状态（出厂就没键位的命令多得很）。 */
+.stg-keys-none {
+  color: var(--fg-faint);
+  font-size: 0.9em;
+}
+
+/* 撞车提示：挂在那一行的说明位（`SettingRow` 的 `description`），
+   所以这里只给颜色、不管字号——那一格的字号由 `stg-row-desc` 定。 */
+.stg-keys-clash {
+  color: var(--danger);
+}
+
+.stg-keys-reset-all {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--spacing);
+}
+
+.stg-keys-hint {
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}

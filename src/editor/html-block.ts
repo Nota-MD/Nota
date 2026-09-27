@@ -231,10 +231,22 @@ export const 块HTML规格 = $nodeSchema(块HTML节点名, () => ({
 }));
 
 /**
- * 这一颗节点的插件元组（`$nodeSchema` 返回 `[ctx, 插件]` 两元组，
- * 照 `inline-marks.ts` 的 `行内标记规格插件` 那样摊平）。
+ * 这一颗节点的插件元组。用法是 `.use(块HTML规格插件)`。
  *
- * ⚠️ 用法是 `.use(块HTML规格插件)`；`$nodeSchema` 的返回值**不是**
- * `MilkdownPlugin`，直接 `.use(块HTML规格)` 过不了类型。
+ * ⚠️⚠️ **`[ctx, 插件]` 两格都要，别只留第二格**（2026-09-27 修，BUG-46）。
+ * 与 `inline-marks.ts` 的 `行内标记规格插件` 是**同一个坑的两处**：
+ * `$nodeSchema(id, …)` 内部是 `ctx.get(schemaCtx.key)(ctx)`
+ *（`@milkdown/utils` 的 `lib/index.js`），第一格那个 `$Ctx` 就是一格
+ * `MilkdownPlugin`，登记它才把名字（`"notaHtmlBlock"`）挂进 ctx 容器。
+ * 少了它 ⇒ `Context "notaHtmlBlock" not found` ⇒ **`editor.create()` 整个失败**。
+ * ⚠️ 那一处修完，错误只是从这个名字换成另一个名字——**两条要一起改**。
+ *
+ * ⚠️ 为什么不能直接 `.use(块HTML规格)`：`$nodeSchema` 的返回值是个**数组**
+ *（两元组），不是 `MilkdownPlugin`，过不了类型；所以这里摊平成
+ * `[第一格, 第二格]`，与上游 `preset-commonmark/lib/index.js:1597` 那个
+ * `[…].flat()` 等效。
  */
-export const 块HTML规格插件: MilkdownPlugin[] = [块HTML规格[1]];
+export const 块HTML规格插件: MilkdownPlugin[] = [
+  块HTML规格.ctx as unknown as MilkdownPlugin,
+  块HTML规格[1],
+];

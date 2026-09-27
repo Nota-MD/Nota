@@ -2,7 +2,7 @@
  * **会话侧车的前端那一半**：最近打开过哪些文件、上次开着哪几个标签、
  * 每份文档滚到了哪儿。
  *
- * # 它管四件事，但**只有一份文件**
+ * # 它管五件事，但**只有一份文件**
  *
  * 「打开最近的文件」「恢复上次会话」「最近文件列表」「打开时恢复滚动位置」
  * 这四格（`docs/10` §2 / §5）在界面上的落点各不相同（文件菜单里的子菜单、
@@ -11,6 +11,13 @@
  * 的样子"），写入时刻也一致（都在切换 / 打开 / 滚动的那一刻）。拆成四个文件
  * 就要四次落盘、四份互相错位的真相。合成一份的账在宿主那边写着
  * （`src-tauri/src/session.rs` 文件头）。
+ *
+ * ⚠️ **第五件是 2026-09-27 进来的**：**上次那个文件夹**（工作区根），
+ * 为的是设置里「启动时」的第三档。它落的还是这份侧车、读的还是
+ * [`接上会话`]——判据和上面四条一样："用户上次退出时的样子"。
+ * 它比另外四条多一层：**写盘那一头不在这个文件里**，在宿主的
+ * `nota_workspace_open` / `nota_workspace_close` 上（工作区变的那一刻只有它们
+ * 知道）。这里只负责**读回来并接上**。
  *
  * # ⚠️ 三条会写坏东西的围栏
  *
@@ -34,7 +41,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { api, type DocId, type Document } from "@/bridge/ipc";
+import { api, type DocId, type Document, type StartupAction } from "@/bridge/ipc";
 import type { Toast } from "@/ui/Toasts";
 
 /**
@@ -64,6 +71,25 @@ export interface 会话接线 {
    * 从 2026-09-27 起给布尔值），失败时它自己已经弹过提示条了。
    */
   openPath: (path: string) => Promise<boolean>;
+  /**
+   * 新建一份空白文档（`ui/useDocuments.ts::newDoc`）。只被 [`接上会话`]
+   * 的**第一档**用一次，见那边——`new-file` 那一档要的是"落到一张白纸上"，
+   * 而不是主页那一屏。
+   *
+   * ⚠️ **必须是 `useCallback` 包稳的那个**：它是 [`接上会话`] 的依赖，
+   * 身份一抖，`ui/useStartup.ts` 里那条只该跑一次的 effect 就会重跑
+   *（那份文件头最后一段讲的就是这条约定）。
+   */
+  新建文档: () => Promise<void>;
+  /**
+   * 设工作区（左侧栏那棵树）。只被 [`接上会话`] 的第三档用一次，见那边。
+   *
+   * ⚠️ 宿主那两条真正的入口是 `nota_workspace_open` / `close`，走的是
+   * `ui/useDocuments.ts::openFolder`（用户点"打开文件夹"、拖一个目录进来）。
+   * 这里这个 `setWorkspace` 只是**把宿主已经设好的那个值搬进界面**——
+   * 它不碰宿主、也不碰会话侧车（侧车那一笔是 `nota_workspace_open` 顺手记的）。
+   */
+  setWorkspace: (w: string | null) => void;
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
@@ -76,12 +102,19 @@ export interface 会话出口 {
    */
   最近: readonly string[];
   /**
-   * 启动时接上会话：读侧车，**没有命令行文件时**把上次开着的标签逐个开回来。
+   * 启动时接上会话：读侧车，按设置里的启动档把上次的样子接回来。
    *
    * ⚠️ 必须**排在 `refreshDocs()` 之后**（`ui/useStartup.ts` 的那条顺序）。
    * 顺序反了的表现是"标签栏先空一下再长出来"，不报错。
+   *
+   * 两个入参：
+   * - `启动文件`：命令行带来的那个文件。非空时**一个标签都不开**（理由见
+   *   `ui/useStartup.ts` 里那个入参的注释），但「最近」那三格照样读；
+   * - `启动档`：设置里 `files.startup` 那一档，决定恢复多少。**它是入参、
+   *   不是闭包捕获的值**——这个回调的身份一抖，`useStartup` 那条只该跑一次
+   *   的 effect 就会重跑（见那边文件头最后一段）。
    */
-  接上会话: (启动文件: string | null) => Promise<void>;
+  接上会话: (启动文件: string | null, 启动档: StartupAction) => Promise<void>;
   /** 某份文档此刻该回到哪个比例。`undefined` = 没记过（那就不动它）。 */
   滚动位置: (路径: string | null | undefined) => number | undefined;
   /** 报一次"这份文档滚到这儿了"。**调用方不用去抖**，本 hook 自己收。 */
@@ -98,7 +131,7 @@ export function useSession(w: 会话接线): 会话出口 {
   // ⚠️ 这里**不订阅语言**（没有 `useT()`）：本 hook 一个字的文案都不产出
   // ——"打不开"那条提示是 `openPath` 弹的，路径名不进翻译表（它不是键）。
   // 订阅了反而会让整份会话在切语言时重建一遍。
-  const { docs, activeId, openPath, toast } = w;
+  const { docs, activeId, openPath, 新建文档, setWorkspace, toast } = w;
 
   const [最近, set最近] = useState<readonly string[]>([]);
   /**
@@ -128,12 +161,41 @@ export function useSession(w: 会话接线): 会话出口 {
   }, [docs, activeId]);
 
   const 接上会话 = useCallback(
-    async (启动文件: string | null) => {
+    async (启动文件: string | null, 启动档: StartupAction) => {
       try {
         const 会话 = await api.session.get();
         set最近(会话.recent);
         set滚动(会话.scroll);
-        if (!启动文件) {
+
+        // ── 工作区（只有第三档）────────────────────────────────────────────
+        //
+        // ⚠️ **走 `nota_workspace_open` 而不是直接 `setWorkspace`**：宿主那一侧
+        // 才是围栏的真相（`nota.fs` / `nota.git` 能用哪些路径由它决定）。
+        // 只设界面这一半的话，左侧栏树长得出来、插件却读写不了——那种"看着能用
+        // 其实不能用"的错最难查。它顺带会把路径再规范化一遍，返回值才是该显示的。
+        //
+        // ⚠️ **不跟着 `启动文件` 一起跳过**：命令行给了一个文件，说明用户是指名
+        // 要开那一份，所以标签一个都不开；但文件夹是**另一件事**——开文件夹
+        // 不会碰任何文档（`nota_workspace_close` 的注释：只清围栏，不关文档）。
+        // 第三档要的就是"连那棵树也接上"。
+        //
+        // ⚠️ **失败只记一笔**（口径见文件头"失败口径"）：那个文件夹可能已经被
+        // 删了/挪了。用户什么都没点，不该在启动时先挨一条错提示。
+        if (启动档 === "last-session" && 会话.workspace) {
+          try {
+            setWorkspace(await api.workspace.open(会话.workspace));
+          } catch (e) {
+            console.warn("[nota] 上次那个文件夹打不开了，这次不恢复它：", e);
+          }
+        }
+
+        // ── 标签（第二、三档）──────────────────────────────────────────────
+        //
+        // ⚠️ `new-file` 那一档**从这里就返回**，但它**不是**"什么都不干"：
+        // 上面那两行 `set最近` / `set滚动` 照做——「最近打开」是**另一个设置项**
+        // （`files.remember_recent`）管的功能，不该被"启动时开哪一档"连坐。
+        // 少了它的话，选第一档的用户会发现菜单里那个「最近文件」永远是空的。
+        if (!启动文件 && 启动档 !== "new-file") {
           // ⚠️ **前台那一份留到最后开**：`openPath` 会把活动标签切到刚打开的
           // 那一份（`nota_doc_open` 就是这么定的），所以"最后开的那个"自然
           // 成了前台——不必再写一条"切到某个路径"的路。
@@ -146,6 +208,22 @@ export function useSession(w: 会话接线): 会话出口 {
           // 文件才对得上。
           if (会话.open.length) set最近((await api.session.get()).recent);
         }
+
+        // ── 第一档：落到一张白纸上 ─────────────────────────────────────────
+        //
+        // ⚠️ **「不恢复」不等于「什么都不开」**。用户点名的三档原话是
+        // 「第一个打开后自动新建」——要的是**一份能直接打字的空白文档**，
+        // 不是主页那一屏。⚠️ 这一条 2026-09-27 补：在那之前第一档真的
+        // 什么都不开，界面上是主页（用户得再点一下「新建」），
+        // 而 `settings/files.rs` 与同目录的 `useStartup.ts` 两处文件头
+        // **都写着"开一份空白文档"**——代码与它自己的说明对不上。
+        //
+        // ⚠️ 主页**不能因此删掉**：它仍然是"一份文档都没有"时的画法
+        //（用户把标签一个个关掉之后就是那样），只是启动不再落在它上面。
+        //
+        // ⚠️ **有 `启动文件` 时不新建**：命令行指名了一份文件，那一条由
+        // `useStartup` 走 `openPath` 去开，这里再插一份空白文档就是多开一个标签。
+        if (!启动文件 && 启动档 === "new-file") await 新建文档();
       } catch (e) {
         // ⚠️ 读不出来就照"第一次启动"办，**绝不弹错**：这份侧车坏了只该让
         // 标签不恢复，不该在启动时先给用户一条看不懂的错。
@@ -156,7 +234,7 @@ export function useSession(w: 会话接线): 会话出口 {
         就绪.current = true;
       }
     },
-    [openPath],
+    [openPath, 新建文档, setWorkspace],
   );
 
   // ── 记「现在开着哪几份」 ───────────────────────────────────────────────

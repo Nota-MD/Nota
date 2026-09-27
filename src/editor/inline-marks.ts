@@ -498,13 +498,35 @@ export const 行内标记规格 = [高亮规格, 上标规格, 下标规格, 下
 /**
  * 交给 `create.ts` 的 `.use()` 那一份。
  *
- * ⚠️ **为什么要 `.map` 一道**：`$markSchema` 返回的是 `[schemaCtx, plugin]`
- * 这样一个**两元组**（`@milkdown/utils` 的 `$mark-schema.js:324`），
- * 直接把元组数组喂给 `.use()` 过不了类型（`$MarkSchema` 不是 `MilkdownPlugin`）。
- * 上游 `preset-commonmark` 是靠 `[…].flat()` 摊平的，本仓只有四条，
- * 取第二格更直白。
+ * ⚠️⚠️ **两元组要整份摊平，不能只取第二格**（2026-09-27 修，BUG-46）。
+ *
+ * `$markSchema(id, …)` 返回的是 `[schemaCtx, plugin]`（`@milkdown/utils` 的
+ * `lib/index.js:319-334`），里面**两样都得上**：
+ *
+ * - `plugin`（第二格）建那颗 mark；
+ * - `schemaCtx`（第一格）是一个 `$Ctx`——**它本身就是一个 `MilkdownPlugin`**
+ *   （`$Ctx<T, N> = MilkdownPlugin & { key: SliceType<T, N> }`，
+ *   同目录 `lib/composable/$ctx.d.ts`），登记它的唯一作用是把**名字**
+ *   （这里是 `"highlight"`）挂进 ctx 容器。
+ *
+ * 建 mark 那一步要按名字取回自己的规格：`$markSchema` 内部是
+ * `ctx.get(schemaCtx.key)(ctx)`。**少了第一格，`ctx.get("highlight")`
+ * 当场抛 `Context "highlight" not found, do you forget to inject it?`**
+ * ——`editor.create()` 整个失败，界面上是"正在准备编辑器…"永远不停
+ * ＋ 一条「编辑器启动失败」的提示条。⚠️ 本仓四条一次全中，因为这里原来写的是
+ * `行内标记规格.map((一) => 一[1])`：`一[1]` 正是 plugin、`一[0]` 被丢掉了。
+ *
+ * ⚠️ **为什么当时看不出错**：`.map` 那版**类型上是过的**（`$MarkSchema` 的
+ * 第二格确实是 `MilkdownPlugin`），测试也全绿——`tests/inline-marks.test.ts`
+ * 走的是 `一.ctx(ctx)`（直接调第一格），**根本不经过 `.use()`**。
+ * 所以这一条只有**真开一次窗**才暴露得出来（第 71 项当时如实标着"没开窗点过"）。
+ *
+ * ⚠️ `.flat()` 与上游同一个写法（`preset-commonmark/lib/index.js:1597`
+ * 那个 `[…schema 元组…].flat()`）。类型那一关过不去（`$MarkSchema` 是数组、
+ * 不是 `MilkdownPlugin`），所以这里显式 `as unknown as` ——**别把它当成
+ * 可疑的强转删掉**，上下游的元组类型本来就不是同一个。
  */
-export const 行内标记规格插件: MilkdownPlugin[] = 行内标记规格.map((一) => 一[1]);
+export const 行内标记规格插件 = 行内标记规格.flat() as unknown as MilkdownPlugin[];
 
 /** 四条 toggle 命令。名字与 `命令名表` 一一对应。 */
 export const 行内标记命令 = [

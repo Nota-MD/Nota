@@ -51,7 +51,7 @@ export interface TreeNode {
 /**
  * 会话与最近文件（`~/.local/share/nota/session.toml`）。
  *
- * ⚠️ 四样东西都**只是"上次用到哪儿"的记忆**，删掉那份侧车的后果只有"记忆没了"，
+ * ⚠️ 五样东西都**只是"上次用到哪儿"的记忆**，删掉那份侧车的后果只有"记忆没了"，
  * 文档正文一个字节都不受影响。形状与三条账见 `src-tauri/src/session.rs` 文件头。
  *
  * ⚠️ 宿主**读的时候会把已经不存在的路径滤掉**（但不顺手落盘，见
@@ -66,6 +66,14 @@ export interface 会话 {
   recent: string[];
   /** 每份滚到哪儿：**比例**（`0.0`~`1.0`），不是像素。理由见宿主那份文件头。 */
   scroll: Record<string, number>;
+  /**
+   * 上次开着的那个文件夹（工作区根），**只留现在还在的**（宿主按"是不是目录"滤）。
+   *
+   * ⚠️ 2026-09-27 加，唯一用途是「启动时」第三档（`last-session`）：
+   * `ui/useSession.ts::接上会话` 读到这里就把工作区接回去。在那之前工作区只在
+   * 宿主内存里，冷启动必是 `null`——第三档无从谈起。
+   */
+  workspace: string | null;
   /** 侧车在哪。界面上那句"这些记忆存在哪"用它；算不出来时是 `null`。 */
   file: string | null;
 }
@@ -255,7 +263,7 @@ export interface Settings {
    * 打开过的严格模式、装好的 physics，升级之后全没了，而他的配置文件
    * 一个字都没动。所以按"新字段进表、老字段不动"处理。
    *
-   * ⚠️ 这几张表（2026-09-27 起是**九张**）**与 Rust 侧一一对应**（`src-tauri/src/settings/` 下每页一个
+   * ⚠️ 这几张表（2026-09-27 起是**十张**，最后一张是 `keys`）**与 Rust 侧一一对应**（`src-tauri/src/settings/` 下每页一个
    * 文件，`mod.rs` 里 `pub mod` 一行一个）。字段名一律 snake_case、枚举取值
    * 一律 kebab-case，两边必须逐字相同——TS 这边写错一个字母**不会编译不过**，
    * 只会在运行时拿到 `undefined`，而 `undefined` 传回 Rust 会被 serde 当成
@@ -281,6 +289,30 @@ export interface Settings {
    * 默认值里，哪几项我不听它的"。
    */
   document: DocumentSettings;
+  /**
+   * 「快捷键」那一页里**用户改过的那几条**。见 `settings/keys.rs`。
+   *
+   * ⚠️ **这是差量，不是整张键位表**：整张表的真相源是 `ui/commands.ts` 的
+   * `MENUS`（那份是代码，跟着版本走）。没动过的命令**不会**出现在这里——
+   * 出现了就等于把当时的默认值钉死，以后改默认键位用户收不到。
+   */
+  keys: KeysSettings;
+}
+
+/**
+ * 「快捷键」那一页的设置。与 `src-tauri/src/settings/keys.rs` 逐字对应。
+ *
+ * ⚠️ 值的两种含义（这是这一节唯一的难点，`keys.rs` 头上有同一张表）：
+ * **不在表里** ＝ 用 `commands.ts` 里的默认；**在表里、值为空串** ＝ 这条命令
+ * 不要快捷键；**在表里、值非空** ＝ 用这个键位。
+ * 空串那一档不能省——省了用户就**改不回默认**了。
+ *
+ * ⚠️ 键是**命令 id**（`file.saveAs`），值是**键位串**（`Ctrl+Shift+S`），
+ * 语法与 `commands.ts` 里 `accel` 字段那一套完全相同（解析走
+ * `ui/accel.ts::parseAccel`）。
+ */
+export interface KeysSettings {
+  overrides: Record<string, string>;
 }
 
 /** 正文字体的档位。见 `settings/document.rs::DocFont`。 */

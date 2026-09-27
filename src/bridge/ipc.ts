@@ -576,6 +576,18 @@ export const api = {
   window: {
     /** 打开开发者工具。⚠️ 已经开着时是**调到前面**，不是关掉。 */
     openDevtools: () => invoke<void>("nota_window_open_devtools"),
+    /**
+     * 把一份文档**在新窗口里打开**（标签页右键那一条，2026-09-27）。
+     *
+     * ⚠️ **新窗口是另一个进程**，两边文档表 / 工作区 / 插件各自独立——
+     * 判据与代价写在 `src-tauri/src/commands/window.rs` 文件头。所以这条命令
+     * **不是"搬走一个标签"**：原来那份文档在旧窗口里照旧开着，两边各看各的，
+     * 之后谁存盘谁算（这一条**用户明确说了不用管**：「不用考虑拖回来的情况了」）。
+     *
+     * ⚠️ `path` **必需**：没有路径的标签（新建的、没存过盘的）新进程读不到它的
+     * 正文，界面上那一条是**灰的**（`ui/TabBar.tsx`）。
+     */
+    openNew: (path: string) => invoke<void>("nota_window_open_new", { path }),
   },
 };
 

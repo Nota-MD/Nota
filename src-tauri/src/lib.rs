@@ -115,14 +115,33 @@ pub fn run() {
     // ⚠️ 挑"要打开哪个"仍然只走 `cli.rs` 那一份规则（这里挑出来的东西还要
     // 转交给已经在跑的那一份，它那边也调同一个函数）。
     let 这次要开的 = cli::首个要打开的文件(std::env::args_os());
-    let 单实例 = match single_instance::抢占(这次要开的.as_deref().map(|p| p.as_os_str())) {
-        Ok(single_instance::决定::第一个(听)) => Some(听),
-        Ok(single_instance::决定::已转交) => std::process::exit(0),
-        // ⚠️ 起不来就**照常单开**，不拦启动：单实例是个便利，不是一个前提。
-        // 拿不到运行目录、socket 文件建不出来，都不该让人用不了 Nota。
-        Err(e) => {
-            crate::日志!("[nota] 单实例起不来（照常启动）：{e}");
-            None
+
+    // ── ⓿' `--new-window`：**这一份进程不参与单实例**（2026-09-27）──────────
+    // 标签页右键那一条「在新窗口中打开」就是靠它：Nota `spawn` 一份自己、
+    // 带上这个选项和路径。用户要的是**第二个窗口**，而单实例那一关的语义正好
+    // 相反（把参数转交给已经在跑的那一份、自己退出），所以这里**整关跳过**。
+    //
+    // ⚠️ **跳过的是"抢"，不是"收"**：这一份进程既不 `connect` 也不 `bind`，
+    // 于是 `nota.sock` 仍然归第一份所有——第三次普通启动照旧转交给**第一份**
+    // （不是最近开的这一份）。这是这个做法唯一的怪处，而它无害：转交那件事
+    // 回答的是"哪个进程能收下并抬窗"，第一份一直在。
+    //
+    // ⚠️ **代价如实记一笔**：新窗口这一份**收不到** `nota:second-instance`
+    // 事件（它没有 socket）。所以"把这个标签页送回原来那个窗口"这种操作
+    // 做不了——用户明确说了不用考虑拖回来（原话「不用考虑拖回来的情况了」）。
+    let 单实例 = if cli::要开新窗口(std::env::args_os()) {
+        crate::日志!("[nota] --new-window：跳过单实例，这一份自己开一个窗口");
+        None
+    } else {
+        match single_instance::抢占(这次要开的.as_deref().map(|p| p.as_os_str())) {
+            Ok(single_instance::决定::第一个(听)) => Some(听),
+            Ok(single_instance::决定::已转交) => std::process::exit(0),
+            // ⚠️ 起不来就**照常单开**，不拦启动：单实例是个便利，不是一个前提。
+            // 拿不到运行目录、socket 文件建不出来，都不该让人用不了 Nota。
+            Err(e) => {
+                crate::日志!("[nota] 单实例起不来（照常启动）：{e}");
+                None
+            }
         }
     };
 
@@ -305,6 +324,7 @@ pub fn run() {
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
             commands::window::nota_window_open_devtools,
+            commands::window::nota_window_open_new,
             // 拖放那条路要的「这条路径是什么」（`commands/paths.rs`）。
             commands::path_kind::nota_paths_kind,
             // 页面引擎身上的开关（`commands/webview.rs`）：拼写检查。

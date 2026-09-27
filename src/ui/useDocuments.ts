@@ -48,7 +48,60 @@ import { useT } from "@/i18n";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import { useAutosave } from "@/ui/useAutosave";
 import type { Dialogs } from "@/ui/useDialogs";
+import { 所在目录, 拼路径 } from "@/ui/useExport";
 import type { Toast } from "@/ui/Toasts";
+
+/**
+ * 「上一次另存到哪一层目录了」。
+ *
+ * ⚠️ **只在这一次进程里记，不落盘**（2026-09-27）。理由：落盘要往设置结构里加
+ * 一个字段，而那个结构是**跨版本读的**（老版本读到这个字段得能忽略、新版本读到
+ * 老文件得能兜底），为一个"新文档第一次存盘时对话框落在哪儿"的体验加一个
+ * 持久字段不划算。**一次会话里连存几份文件是常见场景**，那才是它要解决的；
+ * 「昨天存到哪儿了」跨进程还得记住，属于要动设置的事，等真有用户提再说。
+ *
+ * ⚠️ 它是**模块级**的，不是 `useRef`：`useDocuments` 只挂一次，但模块级更直白
+ * ——这个值和"哪个组件"无关，它是"这个进程干过什么"。
+ */
+let 上次另存目录: string | null = null;
+
+/**
+ * 「另存为」对话框的默认落点，**两档**：（用户 2026-09-27 点名，原话是
+ * "改成上次用过的目录或文档目录"）
+ *
+ * 1. 这份文档**已经存过盘** → **原样给 `doc.path`**（含旧文件名）。对话框自己
+ *    会用它的那一层目录 ＝ 用户说的"文档目录"。
+ *    ⚠️ **这一档刻意不动**：`doc.title` 和文件名不一定是同一个东西，改成
+ *    `所在目录(path) + title.md` 会在"文件名改过"的文档上换掉默认名——那是
+ *    谁都没要求的回归。
+ * 2. 否则（新建的、从没落过盘的）→ 用**上次另存到的那层目录**；
+ *    连这个都没有（这次启动还没存过任何文件）→ 退成光秃秃一个文件名。
+ *
+ * ⚠️ **第 2 档的兜底就是原来的行为，也是这次被用户看到的那一格**：不给目录
+ * 的话 Tauri 的对话框落在**进程的当前目录**里——从仓库里启动就落仓库根。
+ * 那是"从哪儿启动的"，不是"用户在编辑什么"。
+ *
+ * ⚠️ 别和 `useExport.ts::默认落点` 混：那个是**导出**用的，第一档是设置里
+ * 那个 `default_folder`（另存为**没有**这一档，它换的是文档自己的路径）。
+ * 两个函数共用 `拼路径`，就这一处是共用的。
+ */
+function 另存落点(doc: { path: string | null; title: string }): string {
+  if (doc.path) return doc.path;
+  const name = `${doc.title}.md`;
+  return 上次另存目录 ? 拼路径(上次另存目录, name) : name;
+}
+
+/**
+ * 用户**真选定了**一个路径之后才记账（从完整路径里切出目录那一层）。
+ *
+ * ⚠️ **不能记在 `另存落点` 里**：那个函数是在算"默认值"的时候跑的，而用户
+ * **取消掉**的那次选择不该变成下次的默认——那样一点「另存为」再点「取消」，
+ * 也会把落点挪到对话框自己打开的那个位置去。
+ */
+function 记另存目录(picked: string): void {
+  const dir = 所在目录(picked);
+  if (dir) 上次另存目录 = dir;
+}
 
 export interface 文档接线 {
   /** 打开的文档列表（`App.tsx` 的 `docs`）。**读的是当前这一份快照。** */
@@ -186,10 +239,12 @@ export function useDocuments(w: 文档接线): 文档出口 {
       if (forceDialog || !doc.path) {
         const picked = await saveDialog({
           title: t("保存为"),
-          defaultPath: doc.path ?? `${doc.title}.md`,
+          // ⚠️ 落点那两档见 `另存落点` 头上那段（用户 2026-09-27 点名改的）。
+          defaultPath: 另存落点(doc),
           filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdx"] }],
         });
         if (!picked) return false; // 用户取消了，不是错误——但确实没存上
+        记另存目录(picked);
         target = picked;
       }
 

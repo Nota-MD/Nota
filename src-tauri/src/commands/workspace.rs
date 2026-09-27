@@ -3,6 +3,17 @@
 //! 工作区这一栏不只是 UI 状态——它同时是 `nota.fs` 与 `nota.git` 的**围栏**：
 //! 插件能碰的文件范围、能跑 git 的目录，都由它决定。所以设工作区这个动作
 //! 走的是**规范化后的绝对路径**，不是用户点进来的那个可能带 `..` 的串。
+//!
+//! # ⚠️ 它有两份真相，分工必须清楚
+//!
+//! - **内存那一份**（`AppState::workspace`）是**这次**生效的东西，围栏读的是它。
+//!   进程一退就没了。
+//! - **会话侧车那一笔**（`crate::session::记工作区`）只是"上次开的是哪个文件夹"
+//!   这句记忆，唯一用途是启动时按设置里的第三档恢复（2026-09-27 加）。
+//!
+//! 所以写侧车**失败不算这条命令失败**：真正生效的那一份已经写进内存了。
+//! 反过来也成立——侧车里有、内存里没有（刚启动、还没恢复），**围栏就是没有**：
+//! `nota_workspace_get` 读的是内存，不会拿侧车里的旧路径去开围栏。
 
 use std::path::{Path, PathBuf};
 
@@ -27,6 +38,13 @@ pub struct TreeNode {
 }
 
 /// 打开一个文件夹作工作区。
+///
+/// ⚠️ 顺手把路径记进**会话侧车**（`crate::session::记工作区`）：设置里「启动时」
+/// 的第三档要"恢复上次的文件和文件夹"，而在这之前工作区只在内存里，冷启动必是空的。
+///
+/// ⚠️ **记不住不算失败**：内存里那一份才是这次真正生效的东西（也是插件围栏的来源），
+/// 侧车丢了只该让"下次启动不恢复文件夹"。所以这里**只记日志，不往上报错**——
+/// 口径与侧车本文件头那句"删掉它的后果只有记忆没了"一致。
 #[tauri::command]
 pub fn nota_workspace_open(state: State<'_, AppState>, path: String) -> Result<String> {
     let canonical = PathBuf::from(&path)
@@ -40,14 +58,24 @@ pub fn nota_workspace_open(state: State<'_, AppState>, path: String) -> Result<S
         return Err(NotaError::other(format!("{path} 不是文件夹")));
     }
 
+    let 标准串 = crate::paths::path_to_string(&canonical)?;
     *state.workspace.lock().unwrap() = Some(canonical.clone());
-    crate::paths::path_to_string(&canonical)
+    if let Err(e) = crate::session::记工作区(Some(&标准串)) {
+        crate::日志!("[nota] 工作区没记进会话（下次启动不会恢复它）：{e}");
+    }
+    Ok(标准串)
 }
 
 /// 关掉工作区。**只清围栏，不关文档**——用户开着的标签照旧。
+///
+/// ⚠️ 侧车里那一笔也**要跟着清掉**：用户是**主动**关掉这个文件夹的，
+/// 留着它的话下次启动第三档又会把它打开——那是"我关的东西自己回来了"。
 #[tauri::command]
 pub fn nota_workspace_close(state: State<'_, AppState>) -> Result<()> {
     *state.workspace.lock().unwrap() = None;
+    if let Err(e) = crate::session::记工作区(None) {
+        crate::日志!("[nota] 工作区关不掉（会话里那一笔没清干净）：{e}");
+    }
     Ok(())
 }
 

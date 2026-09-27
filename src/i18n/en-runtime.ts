@@ -29,6 +29,9 @@ export const 运行表: Record<string, string> = {
   // 的表）；这里两条是动作**失败**时的报错，所以是"冒号 + `{0}`"、不加句号。
   "切换窗口置顶失败：{0}": "Could not toggle Always on Top: {0}",
   "打开开发者工具失败：{0}": "Could not open the developer tools: {0}",
+  // ⚠️ 与上面两条同一个口径，但**不是同一个动作**：这一条是"再起一份进程"，
+  // 它能失败的地方是"可执行文件不见了 / 起不来"（见 `commands/window.rs`）。
+  "开不了新窗口：{0}": "Could not open a new window: {0}",
 
 // ── src/ui/useSpellcheck.ts（2026-09-27：把设置接到 WebKitGTK 上）────────
   "拼写检查没有改成你要的样子，引擎那边还停在原处":

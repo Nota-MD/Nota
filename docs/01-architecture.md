@@ -328,23 +328,27 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 
 ### 通道 A：前端 → 后端（`invoke` 命令）
 
-注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 77 项**：
-`commands::*` 下的 **75 条命令** + `lib.rs` 自己那两条（前端就绪握手 `nota_frontend_ready`、
+注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 78 项**：
+`commands::*` 下的 **76 条命令** + `lib.rs` 自己那两条（前端就绪握手 `nota_frontend_ready`、
 启动参数 `nota_startup_file`）。
 ⚠️ **数的历史（每一遍都是有人重数才发现的）**：2026-09-26 加完**强制专注那六条**
 （`nota_focus_*`）之后有人重数过一次，数出的是 **64**——⚠️ **那个 64 本身也是错的**
 （只抬了总数、没重数分项，于是同一个句子里还并排放着「62 项分项 + 2 = 64」这种加不起来的
-算式），第九遍才数出当时的真值 **65**；**第十遍是 2026-09-27 晚**，真值 **77**。
+算式），第九遍才数出当时的真值 **65**；**第十遍是 2026-09-27 晚**，真值 **77**，
+**同一天又加了 1 条**（`nota_window_open_new`，「在新窗口中打开」），真值 **78**。
 ⚠️ 数的时候模式要写 `commands::[a-z_]*::`——**少一个下划线就会漏掉 `image_upload` / `table_width` /
 `ui_style` 三个模块**（我自己就漏过一次，53 对 62）。⚠️ 数之前**先去注释**：`generate_handler!`
 里有一条被注释掉的示例，不去注释会多切出假条目。
-⚠️ **第十遍（2026-09-27 晚）：77 项 = `commands::*` 75 ＋ `lib.rs` 2**，按模块是
+⚠️ **第十一遍（2026-09-27 晚些时候）：78 项 = `commands::*` 76 ＋ `lib.rs` 2**，按模块是
 文档 14 ＋ 工作区 4 ＋ 设置 6 ＋ 主题 3 ＋ 插件 13 ＋ 导出 4 ＋ 借 pandoc 导出 2 ＋
 原生菜单 1 ＋ 插入图片 1 ＋ 上传图片 3 ＋ **焦点（强制专注）6** ＋ **表格宽度 3** ＋
 **差异 1** ＋ **外部改动 1** ＋ **界面风格 3** ＋ **会话 6** ＋ **路径判型 1** ＋
-**webview 2** ＋ **窗口 1**。
-⚠️ 从 65 到 77 这 **12 条不是同一批进来的**，要分开读：**2 条是本批**（「重命名 / 移动」的
-`nota_doc_rename` / `nota_doc_move`，见 `docs/02` 的 `commands/document.rs` 一节）；另外
+**webview 2** ＋ **窗口 2**。
+⚠️ **窗口那一组从 1 变 2 是同一天晚些时候加的**：`nota_window_open_new`（「在新窗口中打开」，
+逐条说明在 `docs/02` 的 `commands/window.rs` 一节）。
+⚠️ 从 65 到 78 这 **13 条不是同一批进来的**，要分开读：**2 条是本批**（「重命名 / 移动」的
+`nota_doc_rename` / `nota_doc_move`，见 `docs/02` 的 `commands/document.rs` 一节）、
+**1 条是同一天晚些时候的**（`nota_window_open_new`）；另外
 **10 条是别的会话在这之间落的**（会话 6 / 路径判型 1 / webview 2 / 窗口 1），本批只是
 **重数时把它们数进来了**——别把这 10 条读成"重命名顺带做的"。
 ⚠️⚠️ **后面那五组（粗体的）在下面没有逐条表**——它们是在这一节之外长出来的
@@ -371,7 +375,7 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 别只看总数。补齐后的账是：**本节十组（和 49）＋ 上表五组（14）＋ `lib.rs` 2 = 65**。
 ⚠️ **到第十遍（2026-09-27 晚）这个"补齐"又不够了**：上面那张表仍是**十五组**，而注册表现在
 是**十九组**——新进来的四组（会话 6 / 路径判型 1 / webview 2 / 窗口 1）**这一节里一条都没写**，
-逐条说明只在 `docs/02`。所以本节当前的分组表是 **49 / 75**（和总数 77 差着 26），
+逐条说明只在 `docs/02`。所以本节当前的分组表是 **49 / 76**（和总数 78 差着 27），
 **顶上那句话（"分组表只是全集的一部分"）依然成立并且差距更大了**。补齐这四组要单开一批
 （那是另外几个会话的改动），本批只把**总数与分项重数并写明**。
 
@@ -858,13 +862,13 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 
 | effect | 依赖 | 干什么 |
 |---|---|---|
-| 启动 | `[refreshDocs, toast]` | `Promise.all` 拉 settings / workspace / plugins / panels / themes / **`nota_settings_problem`** / **启动文件** / **`nota_app_lang`** → `refreshDocs()` → 调一次 `api.frontendReady()`（失败只 `console.warn`）。用 `alive` 标志挡住卸载后的 setState。⚠️ 后三枪**各自自带 `catch`**：它们坏掉不该把整个启动掀翻（设置问题那条退了就是少一个提示，语言那条退了就按兜底语言画）。⚠️ **`定语言(界面语言.effective)` 必须在 `setSettings` 之前**——定了之后 `i18n` 会通知订阅者重画，而那一批订阅者这一帧还没挂上 |
+| ~~启动~~ | — | ⚠️ **这一条 2026-09-26 搬去了 `ui/useStartup.ts`**（当时 `App.tsx` 1049 行），不在下面这张表里了：`Promise.all` 拉 settings / workspace / plugins / panels / themes / **`nota_settings_problem`** / **启动文件** / **`nota_app_lang`** → `refreshDocs()` → 调一次 `api.frontendReady()`（失败只 `console.warn`）。用 `alive` 标志挡住卸载后的 setState。⚠️ 后三枪**各自自带 `catch`**：它们坏掉不该把整个启动掀翻（设置问题那条退了就是少一个提示，语言那条退了就按兜底语言画）。⚠️ **`定语言(界面语言.effective)` 必须在 `setSettings` 之前**——定了之后 `i18n` 会通知订阅者重画，而那一批订阅者这一帧还没挂上。⚠️ **2026-09-27 起它还要读设置里的「启动时」那一档**并递给 `接上会话`（三档），那一档在 2026-09-27 之前是**摆设** |
 | 事件订阅 | `[toast, refreshDocs]` | 订 `nota:notify`（→ toast）与 `nota:document-changed`（→ 活动文档且 `origin === "plugin"` 时整篇覆盖编辑器；**改的不是当前那份**就退而 `refreshDocs()`，否则用户切回去时会拿旧文本重建、把插件的改动覆盖掉）。返回时逐个退订。⚠️ 依赖里**没有 `activeId`**——它在回调里读 `activeIdRef`，所以这个 effect 只跑一次。⚠️ `nota:plugin-panel` / `nota:plugin-review` 那两条**不在这里订**——它们归 `usePlugins` / `PluginDock`（谁用谁订） |
 | 活动文档上报 | `[activeId, toast]` | 写 `activeIdRef` 并 `api.doc.setActive(id)`，让后端的"活动文档"跟上用户真正在看的那个标签（BUG-6） |
 | 外观 | `[settings]` | `settings` 有值就 `applyTheme(settings)` |
 | 文档主题 | `[settings?.document_theme, themes]` | 找到同名主题就 `applyDocTheme()`，空名/找不到就撤掉样式 |
 | 重取文件树 | `[refreshTree]` | 而 `refreshTree` 依赖 `workspace`，所以工作区一变就重取 |
-| 快捷键 | `[accelIndex, menuHandlers, disabledCommands]` | `window` 上听 `keydown`，**查表派发**（不再逐个判键）：键位签名 → 命令 id → `menuHandlers[id]`。表由 `ui/accel.ts::buildAccelIndex(MENUS)` 从 `commands.ts` 的 `accel` 字段推出来，**唯一真源**。完整口径见 `04` §4 |
+| 快捷键 | `[accelIndex, menuHandlers, disabledCommands]` | `window` 上听 `keydown`，**查表派发**（不再逐个判键）：键位签名 → 命令 id → `menuHandlers[id]`。表由 `ui/accel.ts::buildAccelIndex(菜单)` 推出来，而 `菜单` 是 `App.tsx` 里 `应用键位覆盖(注入最近文件(全部菜单, 最近), settings?.keys?.overrides ?? {})` 那一份——**出厂键位在 `commands.ts` 的 `accel` 字段，用户改过的那些在 `settings.keys.overrides`**。完整口径见 `04` §4 |
 | 原生菜单 | `[disabledCommands, menuChecks, themes, settings?.document_theme]` | `api.nativeMenu.apply(buildNativeTree(...))` 推一份给 macOS（返回 `false` 就继续用自绘的）；另一个 effect 订 `nota:native-menu`，收到 id 走 `resolvePick` 分流。见 `04` §2.1c |
 
 ### 主链路（前三条 ＋ 下面第四条）

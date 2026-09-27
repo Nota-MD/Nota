@@ -1,0 +1,61 @@
+/* 分享图那一块在**面板里**的长相：一张缩小的预览 ＋ 两颗按钮 ＋ 一行结果。
+ *
+ * # 为什么单独一份文件
+ *
+ * 因为 `dock.css`（面板那套 `.panel-*`）已经 **961 行**，而本仓有一条硬规矩：
+ * 任何 `.css` 不许到 1000 行（`tools/doc-sync-check.sh` 第①条，超了就地拆）。
+ * 往里塞十几行是能塞，但那是**把拆分点往后推**：下一个加面板样式的人看到
+ * 985 行，就没法只加一条规则了。
+ *
+ * # ⚠️ 卡片自己的配色**不在这里**
+ *
+ * 卡片是画出来的一张 SVG（`src/ui/share-card.ts`），它的每一处颜色、字号、
+ * 间距都在那张图的坐标里写死——`dock.css` 里的变量（`--fg-muted` 之类）对它
+ * 是够不着的（SVG 进了 `<img>` 之后连继承都没有）。所以这里只管**框住它**：
+ * 圆角、边框、宽度。想改卡片长相请改 `share-card.ts` 的配色表，改这里没有用。
+ */
+
+.panel-share {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+}
+
+/* 预览。⚠️ `display: block` + `width: 100%`：卡片是 1080×1350（4:5），
+ * 让它按面板的宽度等比缩下来即可——高度由 `aspect-ratio` 之外的固有比例
+ * 决定（SVG 自带 `viewBox`），不必再写一个高度。 */
+.panel-share-img {
+  display: block;
+  width: 100%;
+  border-radius: 3px;
+  /* ⚠️ 图是浅色的、面板底色是深的（或者反过来）时，边界得看得见。
+   * 用一条内阴影而不是边框：边框会占掉宽度，让下面的按钮和图左右不对齐。 */
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.panel-share-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* ⚠️ `flex: 0 1 auto`：两颗按钮**按自己的字宽**排，谁也不许被拉长。
+ * `.panel-buttons` 那边是 `wrap` + 自然宽度，所以这里不写也长得一样；写出来是
+ * 为了把这条意图钉住——这一排只有两颗，而"保存"和"复制"是并列的两条路
+ *（一条存文件、一条进剪贴板），铺成等宽会让左边那颗看着更像"主要动作"。 */
+.panel-share-actions .panel-btn {
+  flex: 0 1 auto;
+}
+
+.panel-share-note {
+  margin: 6px 0 0;
+  font-size: 0.78em;
+  line-height: 1.4;
+  color: var(--fg-muted);
+  /* 路径可能很长（`/home/…/nota-ecg-day-2026-09-27.png`），不许把它撑破面板。
+   * `anywhere` 而不是 `break-all`：前者只在**真的放不下**时才断，中文那种
+   * 本来就随处可断的行不会被打散。 */
+  overflow-wrap: anywhere;
+}

@@ -29,7 +29,7 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
-# ⚠️ 曾经有个 `base64`，是给 Typora 主题把字体内联成 data: URL 用的。
+# ⚠️ 曾经有个 `base64`，是给外部编辑器主题把字体内联成 data: URL 用的。
 # 那条兼容链已按用户要求整个拆掉（版权，见 `src/themes.rs` 文件头），依赖一起删。
 
 # ── Lua 插件运行时 ────────────────────────────────────────────────────────
@@ -46,9 +46,55 @@ mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"]
 # ── 杂项 ──────────────────────────────────────────────────────────────────
 thiserror = "2"
 dirs = "6"
+# `chrono`：**本地日期与时间**（`src-tauri/src/lua/api/time.rs`）。
+#
+# ⚠️ 它本来就在依赖树里（`package.rs` 那段注释写过"为了一个给人看的栏去引
+# chrono 不值当"），本轮**提成直接依赖**的理由与上面 `sha2` 那条一模一样：
+# 借别人的传递依赖用是要不得的。
+#
+# ⚠️ 为什么这回**值当**了：心电图要算"今日"（`docs/07` 第 65 项第二轮的分享图），
+# 而插件沙箱里没有 `os`、没有 `date`，宿主也不给它时区——UTC 的"今天"在
+# 东八区凌晨 0 点到 8 点之间是**前一天**，一个会被用户看见并分享出去的
+# 日期错一天，就不是"注释级偏差"了（对比 `plugin/package.rs::今天()`：
+# 那一栏没人看，所以它至今仍是 UTC）。
+#
+# `default-features = false` + `clock` + `std`：`clock` 才是 `Local` 那一支
+#（它要 `iana-time-zone` 去读本机时区）；`wasmbind` 我们不在 wasm 里跑，
+# `serde` 不需要（这里只产出数字与字符串，不序列化 `DateTime`）。
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 notify = "8"          # 文件树 / 外部改动监视
 similar = "3"         # AI 插件的 diff、Git 插件的变更预览
 shlex = "1"           # Git 插件拼命令行时的转义
+
+# ── 插件包（zip）的读取与验签 ─────────────────────────────────────────────
+# 插件**分发**用的格式是 `.nota-plugin`（zip 基底），见 docs/11 §1.6。
+# ⚠️ 这一组是 2026-09-24 加的四条，理由各不相同：
+#
+# `zip`：只**读**不写（打包那半在 `tools/pack-plugin.py`）。
+#   `default-features = false` + `deflate`——默认那套会把 bzip2/zstd/lzma
+#   三家的解压实现全拖进来，而插件包里只会出现 deflate（别的格式
+#   `zip` 自己不写，这里也用不上）。
+#
+# `sha2`：包摘要（`docs/11` §1.6 那套"按路径排序算两遍"）。
+#   它本来就在依赖树里（`ureq` 的 rustls 那一支要它），这里只是把它
+#   提成**直接**依赖——⚠️ 借别人的传递依赖用是要不得的，上游哪天换了
+#   实现就会跟着变。
+#
+# `ed25519-dalek`：验签。选 Ed25519 而不是 RSA 的理由是**签名短、密钥短、
+#   没有参数可配错**（RSA 的 padding/曲线那一堆选项正是最容易配出
+#   "验得过但并不安全"的地方）。⚠️ 只用它的 `verify`——
+#   **签名那半在 `tools/pack-plugin.py` 里走 `openssl` 命令行**，
+#   宿主没有任何地方需要私钥，`Cargo.toml` 里也就不该出现 `sign` 那条路。
+#   ⚠️ `default-features = false` 会连 `rand_core` 一起关掉，那是签名用的；
+#   验证只要 `std`。
+#
+# `base64`：签名块里那两串（公钥、签名）是人能拿编辑器看的文本格式。
+#   ⚠️ 与上面那条注释里提到的那次删除**不冲突**：那次删的是"给外部编辑器主题
+#   内联字体"的用法，这条是插件包格式自己的需要。
+sha2 = "0.10"
+ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
+base64 = "0.22"
+zip = { version = "8", default-features = false, features = ["deflate"] }
 
 # ── 网络 ──────────────────────────────────────────────────────────────────
 # 只给 `nota.http`（`src/lua/api/http.rs`）用，也就是**只给插件**用。
@@ -59,6 +105,20 @@ shlex = "1"           # Git 插件拼命令行时的转义
 #
 # 默认 feature 就带 `rustls` + `webpki-roots`（不依赖系统 OpenSSL，
 # 容器里也不用装 libssl-dev），另有 `flate2` 解 gzip。
-# ⚠️ 默认**不**带 `native-tls`——别顺手开，那会把系统库拖回来。
+# ⚠️ 默认**不**带 `native-tls`——不要顺带开，那会把系统库拖回来。
 [dependencies.ureq]
 version = "3"
+
+# ── 只有 Linux 用到：PDF 那条兜底 ─────────────────────────────────────────
+# `src/pdf_print.rs`（WebKit 静默打印 → PDF）是**除 pandoc 之外**的那条路，
+# 用户 2026-09-25 定的"两条都留、pandoc 优先"。它是 WebKitGTK 的打印后端，
+# 别的平台上要走完全不同的 API（macOS `WKWebView.createPDF`、Windows
+# `WebView2.PrintToPdfAsync`），**没写也没验过**——所以只有 Linux 编。
+#
+# ⚠️ 版本必须和 tauri 拖进来的那一套**同一个大版本**（gtk 0.18 / webkit2gtk 2.0）：
+# 不一致时 GTK 会在同一个进程里被加载两份，那是"看着能编译、跑起来崩"的经典配方。
+# 这两个 crate 本来是传递依赖，这里只是把它们提成**直接**依赖——和 `sha2`
+# 那条注释同一个理由：借别人的传递依赖用是要不得的。
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+webkit2gtk = "2.0"

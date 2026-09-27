@@ -3,9 +3,10 @@
  *
  * # 素材来源
  *
- * 逐条抄自 Typora 的菜单（用户 2026-09-22 截了 6 张图，抄录在 `docs/10` §11.1）。
- * **故意把 Typora 有、我们还没有的条目也列上**——菜单栏不只是入口，
- * 它还是一张"对标进度表"，缺什么一眼看得见。
+ * 逐条整理自用户 2026-09-22 提供的 6 张界面截图（清单本身按版权要求不收入仓库）。
+ * 每一栏的文案、键位与顺序以本文件为唯一真相源，实际灰不灰由 `App.tsx` 的 `menuHandlers` 推。
+ * **故意把尚未实现的条目也列上**——菜单栏不只是入口，
+ * 它还是一张"实现进度表"，缺什么一眼看得见。
  *
  * # ⚠️ 「能不能兑现」不是这里说了算
  *
@@ -17,15 +18,32 @@
  * 它就不可能不一致：**界面永远不会声称一个它做不到的能力**。
  * 派生的判据在 `App.tsx` 的 `menuHandlers` 那张表上，见那里的注释。
  *
- * # 为什么界面串一律中文
+ * # ⚠️ 这里的 `label` 是**键**，不是最终文案（2026-09-26 起）
  *
- * Typora 自己的菜单是**中英混杂**的（"帮助"整栏除最后三行外全是英文），
- * 用户 2026-09-22 明确说过「注意不要像他一样中英混杂」。
- * 规矩：**菜单项、按钮、提示语一律中文**；`Markdown` / `LaTeX` / `Pandoc`
- * 这种**专有名词**照写原文（它们是名字不是词）。
+ * 这张表是**模块级常量**，import 的时候就求值了——那时语言还没定，而且求值完
+ * **没有任何东西会通知它重画**（理由与 `i18n/index.ts::useT` 顶上那段同一条）。
+ * 所以规矩是 **"表存键、渲染时翻"**：`label` 里写的是**中文原文**，它同时就是
+ * `i18n/en.ts` 那张英文表的键；真正显示时由渲染方各自翻一次——
+ * 自绘菜单在 `ui/MenuBar.tsx` / `ui/MenuPopup.tsx`，原生菜单在 `ui/nativeMenu.ts`，
+ * 快捷键一览在 `ui/settings/panes/ShortcutsPane.tsx`（都是 `t(menu.label)`）。
+ *
+ * ⚠️ **别在这里就地 `t("文件")`**：那样写出来的是一份"import 那一刻就定死、
+ * 之后再也不会变"的文案，切语言不会生效，而且不报错。
+ * `tools/i18n-check.sh` 认这一点：它把这个文件里**含中文的字面量都算成键**
+ *（"文案表文件"那条规则），所以上面那几处的 `t(` 变量 `)` 它数得到。
+ *
+ * # 为什么原文一律中文
+ *
+ * 菜单最初照一款外部编辑器的清单抄，那份清单**中英混杂**（"帮助"整栏除
+ * 最后三行外全是英文）。用户 2026-09-22 明确说过「注意不要像他一样中英混杂」。
+ * 规矩：**同一门语言里不许混**——中文界面全中文、英文界面全英文。
+ * 中文字面量当键只是这套写法的**入场费**（见 `i18n/en.ts` 顶上那段），
+ * 不代表界面只有中文；`Markdown` / `LaTeX` / `Pandoc` 这类**专有名词**
+ * 两种语言里都照写原文（它们是名字，不是词）。
  */
 
 import type { DocThemeInfo } from "@/bridge/ipc";
+import { t } from "@/i18n";
 
 export interface MenuItemSpec {
   /** 命令 id。与 `App.tsx` 里 `menuHandlers` 的键一一对应。 */
@@ -53,10 +71,9 @@ export interface MenuItemSpec {
   /**
    * 子菜单。有它就不是"点一下执行"，而是"往右飞出一层"。
    *
-   * ⚠️ 2026-09-23 重做菜单时按 VMark 的整理方式加的。判据是**这一组条目
-   * 是不是同一件事的不同参数**：导出成什么格式、复制成什么格式、表格怎么改，
-   * 这些铺在一个平面菜单里会让整栏长得没法看（Typora 的「段落」就有这个毛病，
-   * 二十来项一路排下来，找"删掉这一列"得从头扫）。
+   * ⚠️ 2026-09-23 重做菜单时加的。判据是**这一组条目是不是同一件事的不同
+   * 参数**：导出成什么格式、复制成什么格式、表格怎么改。这些铺在一个平面
+   * 菜单里会让整栏长得没法看——二十来项一路排下来，找"删掉这一列"得从头扫。
    *
    * ⚠️ **带子菜单的项自己不执行任何命令**：`id` 只是个键，不要求
    * `App.tsx` 里有对应处理函数，也不会因为这个 id 没实现而变灰
@@ -130,12 +147,17 @@ export function themeEntries(themes: readonly DocThemeInfo[]): MenuEntry[] {
 
   if (themes.length) {
     items.push("sep");
-    for (const t of themes) {
-      // 用户放的同名文件会**盖掉**内置那套。不标出来的话，"我改的文件怎么
-      // 没生效"和"我删的文件怎么还在"都会变成查不动的问题。
+    for (const th of themes) {
+      // 用户放的同名文件会**盖掉**内置那套。不标出来的话，"改过的文件怎么
+      // 没生效"和"删掉的文件怎么还在"都会变成查不动的问题。
+      //
+      // ⚠️ 后缀**在这里就翻**（`t("{0}（已自定义）", th.name)`），不能拼成一个
+      // 中文字符串丢给渲染方——那边拿到的是 `"我的主题（已自定义）"`，整串
+      // 不是表里的键，`（已自定义）` 这半句会原样留着。
+      // ⚠️ 循环变量叫 `th` 不叫 `t`：那个名字被 i18n 的 `t` 占了。
       items.push({
-        id: `${THEME_PREFIX}${t.id}`,
-        label: t.builtin ? t.name : `${t.name}（已自定义）`,
+        id: `${THEME_PREFIX}${th.id}`,
+        label: th.builtin ? th.name : t("{0}（已自定义）", th.name),
         checkable: true,
       });
     }
@@ -184,6 +206,20 @@ export function resolvePick(id: string): MenuPick {
   return { kind: "command", id };
 }
 
+/**
+ * 「最近文件」那一层子菜单**末尾那一条**（`ui/recentMenu.ts` 把它拼进去）。
+ *
+ * ⚠️ 它**住在这里，而不是住在合成它的那个文件里**，理由是 `tools/i18n-check.sh`：
+ * 那个脚本按**整个文件**认"这一份里含中文的字面量都是给人看的字"（它维护着
+ * 一张 `文案表文件` 名单，本文件在名单里）。把这条标签写在 `ui/recentMenu.ts`
+ * 里的话，它**数不到**，于是 `en-ui.ts` 里那条英文会被判成"废键"——一条明明
+ * 生效的翻译被当成垃圾，正是那条规则要防的失效。
+ *
+ * ⚠️ 它的 `id` 是**真命令**（`ui/useCommandTable.ts` 里有实现），与上面
+ * 「打开最近文件」那个占位项不同——那个是"表存键"的位置标记，没有实现。
+ */
+export const 清除最近项: MenuItemSpec = { id: "file.clearRecent", label: "清除最近记录" };
+
 export const MENUS: MenuSpec[] = [
   {
     id: "file",
@@ -202,13 +238,15 @@ export const MENUS: MenuSpec[] = [
       { id: "file.saveAs", label: "另存为…", accel: "Ctrl+Shift+S", needsDoc: true },
       { id: "file.saveAll", label: "保存全部打开的文件…" },
       "sep",
+      { id: "file.rename", label: "重命名…", needsDoc: true },
+      { id: "file.move", label: "移动…", needsDoc: true },
       { id: "file.revealInFolder", label: "打开文件位置…", needsDoc: true },
       { id: "file.showInSidebar", label: "在侧边栏中显示", needsDoc: true },
       { id: "file.delete", label: "删除…", needsDoc: true, danger: true },
       "sep",
       {
         // ⚠️ 这一项**自己不执行任何命令**，`file.import` 只是个键。
-        // Typora 那边是一整排「导入 Word (.docx) / RTF / LaTeX / Epub…」，
+        // 导入格式有一整排（Word (.docx) / RTF / LaTeX / Epub…），
         // 铺在「文件」里会把这一栏撑成一条长龙——收进飞出层。
         id: "file.import",
         label: "导入",
@@ -230,8 +268,10 @@ export const MENUS: MenuSpec[] = [
           "sep",
           { id: "file.exportDocx", label: "Word (.docx)…", needsDoc: true },
           { id: "file.exportOdt", label: "OpenOffice (.odt)…", needsDoc: true },
+          { id: "file.exportRtf", label: "RTF…", needsDoc: true },
           { id: "file.exportLatex", label: "LaTeX…", needsDoc: true },
           { id: "file.exportEpub", label: "Epub…", needsDoc: true },
+          { id: "file.exportOpml", label: "OPML…", needsDoc: true },
           "sep",
           { id: "file.exportImage", label: "图片…", needsDoc: true },
           { id: "file.exportOther", label: "其他格式…", needsDoc: true },
@@ -296,9 +336,9 @@ export const MENUS: MenuSpec[] = [
         id: "para.tableMenu",
         label: "表格",
         submenu: [
-          // ⚠️ 标签写死了 **3 × 3**，因为**不弹框问行列数**（Typora 会弹）。
+          // ⚠️ 标签写死了 **3 × 3**，因为**不弹框问行列数**。
           // 菜单上写「插入表格…」而点下去直接出来一张表，那个省略号就在撒谎：
-          // 它承诺后面还有一个"问你点什么"的步骤，而实际上没有。
+          // 它承诺后面还有一个"询问参数"的步骤，而实际上没有。
           // 行列数写在标签里，用户点之前就知道会得到什么。见 `create.ts` 里
           // `table` 那一条的注释。
           { id: "para.table", label: "插入表格（3 × 3）", needsDoc: true },
@@ -328,6 +368,11 @@ export const MENUS: MenuSpec[] = [
       "sep",
       { id: "para.hr", label: "水平分割线", needsDoc: true },
       { id: "para.toc", label: "内容目录", needsDoc: true },
+      // 脚注（`editor/footnote.ts`）。⚠️ **没有加速键**：它一次动两处（引用 ＋
+      // 文末的定义）并把光标带到文末，是"写完一段回头补注"这种动作，不在打字
+      // 流的手指上；随手编一个键位就会在别的应用里按出别的东西来（与
+      // `view.toolbar` 那三条同一条理由）。
+      { id: "para.footnote", label: "脚注", needsDoc: true },
       { id: "para.frontMatter", label: "YAML Front Matter", needsDoc: true },
     ],
   },
@@ -341,10 +386,26 @@ export const MENUS: MenuSpec[] = [
       { id: "fmt.code", label: "代码", accel: "Ctrl+Shift+`", needsDoc: true },
       "sep",
       { id: "fmt.strike", label: "删除线", accel: "Alt+Shift+5", needsDoc: true },
+      // 三种扩展语法（`editor/inline-marks.ts`）。⚠️ **它们照旧列在这儿，
+      // 与设置里那三个开关无关**：关掉的是"解析与输入"，不是这条能力，
+      // 所以这里没有 `checkable`、点了也不该灰。
+      //
+      // ⚠️ 键位是**新定的**（Typora 那边只有高亮有键位，上标/下标没有）：
+      //   高亮 `Ctrl+Shift+H`（H 就是 Highlight）；
+      //   上标 `Ctrl+.` / 下标 `Ctrl+Shift+.`——这一对取自 Google Docs
+      //   （那边是 `Ctrl+.` 与 `Ctrl+,`），本仓的 `Ctrl+,` 早被偏好设置占了，
+      //   所以下标让给 `Ctrl+Shift+.`。上下排在一起，记起来是一条。
+      { id: "fmt.highlight", label: "高亮", accel: "Ctrl+Shift+H", needsDoc: true },
+      { id: "fmt.superscript", label: "上标", accel: "Ctrl+.", needsDoc: true },
+      { id: "fmt.subscript", label: "下标", accel: "Ctrl+Shift+.", needsDoc: true },
       { id: "fmt.comment", label: "注释", needsDoc: true },
       "sep",
       { id: "fmt.link", label: "超链接", accel: "Ctrl+K", needsDoc: true },
       { id: "fmt.image", label: "图像", needsDoc: true },
+      // ⚠️ **没有加速键**：这一项开的是一个整屏的挑选框，打字流里用不上
+      // （打字时的入口是补全面板——打出 `:smi` 就弹，见 `editor/emoji.ts`）。
+      // 菜单里这一条是给"我知道要插个表情，但不知道该打哪个短代码"的人。
+      { id: "fmt.emoji", label: "插入 Emoji…", needsDoc: true },
       "sep",
       { id: "fmt.clear", label: "清除样式", accel: "Ctrl+\\", needsDoc: true },
     ],
@@ -356,28 +417,66 @@ export const MENUS: MenuSpec[] = [
       { id: "view.toggleSidebar", label: "显示/隐藏侧边栏", accel: "Ctrl+Shift+L", checkable: true },
       { id: "view.outline", label: "大纲", accel: "Ctrl+Shift+1", checkable: true },
       { id: "view.fileTree", label: "文件树", accel: "Ctrl+Shift+3", checkable: true },
-      { id: "view.docList", label: "文档列表", accel: "Ctrl+Shift+2" },
+      // ⚠️ `checkable` 是 2026-09-27 补的：旁边那两条（大纲 / 文件树）都有，
+      // 而它们是**同一组三选一**（侧栏的三页）。少这一个的症状是"切到文档
+      // 列表后，那一栏里三个勾一个都不亮"——用户看不出自己现在在哪一页。
+      { id: "view.docList", label: "文档列表", accel: "Ctrl+Shift+2", checkable: true },
       { id: "view.search", label: "搜索", accel: "Ctrl+Shift+F" },
       "sep",
       { id: "view.toggleDock", label: "插件栏", checkable: true },
-      // 格式化工具栏。⚠️ **没有快捷键**：Typora 也没有给它配键
-      // （它连工具栏本身都是要手动打开的选项），随手编一个就是让别人的手
-      // 在别的应用里按出别的东西来。同「Slidev 预览」那条的理由。
-      { id: "view.formatBar", label: "格式化工具栏", checkable: true },
-      // ── Slidev 预览（2026-09-23）──
+      // ── 格式化工具栏：**三档，一个子菜单**（2026-09-25）──
       //
-      // ⚠️ **刻意没有快捷键**：Typora 没有这个功能，也就没有"该配哪个键"的依据；
-      // 随手编一个，就是让别人的手在别的应用里按出别的东西来。
+      // 用户 2026-09-25 点名要的三档（「始终显示 / 鼠标悬停时显示 / 始终不显示」，
+      // 默认最后一档）。⚠️ **不能缩成一个可勾项**：中间那一档的两种状态
+      //（"平时藏着"和"鼠标到顶上时露出来"）属于同一个设置值，一个勾表达不了；
+      // 而做成"点一下循环到下一档"更糟——用户得按两下才知道自己在哪一档，
+      // 而且每一档的手感都不一样（有一档会让正文往下跳），试错的代价不齐。
       //
-      // ⚠️ `needsDoc` 是必须的：预览的是**某一份文档的正文**，没文档时无从预览，
-      // 这一项会自动灰掉（判据在 `App.tsx` 的 `disabledCommands`）。
-      { id: "view.slidev", label: "Slidev 预览", checkable: true, needsDoc: true },
+      // ⚠️ 收进子菜单而不是像「编辑模式」那样摊成三条：那三条是**三个功能**
+      //（摆几个窗格），这三条是**同一个设置的三个取值**——摊平会在「视图」栏里
+      // 一次占掉三行，而其中永远只有一行是勾着的。
+      //
+      // ⚠️ **没有快捷键**：没有一个"该配哪个键"的依据，随手编一个就是让别人的手
+      // 在别的应用里按出别的东西来。
+      {
+        id: "view.toolbar",
+        label: "格式化工具栏",
+        submenu: [
+          { id: "view.toolbarAlways", label: "始终显示", checkable: true },
+          { id: "view.toolbarHover", label: "鼠标悬停时显示", checkable: true },
+          { id: "view.toolbarNever", label: "始终不显示", checkable: true },
+        ],
+      },
+      // ⚠️ 这里原来有一项「Slidev 预览」（2026-09-23 加），**2026-09-25 删了**：
+      // Slidev 从那天起是一个**拓展**，它的菜单项由插件自己 `register_menu`
+      // 声明、落在「插件」那个菜单里（见 `plugins/slidev/main.lua`）。
+      // 「删掉拓展，这项功能就完全不复存在」——菜单项也是这项功能的一部分，
+      // 所以它跟着插件走，不留在宿主的视图菜单里。
+      //
+      // ── ⚠️ 这条分隔线是**用户点名要的**（2026-09-27）──
+      //
+      // 原话：「在菜单中格式化工具栏和所见即所得模式中间加一栏分割线，这样把不同
+      // 的功能分类分开」。所以这一条**不是**"这一栏太长了断一下"那种随手加的线，
+      // 它的判据是**分类**：它上面那一段（**插件栏 ＋ 格式化工具栏**，再往上的
+      // 「侧边栏」那一族和它们之间**已经有一条既有的线**）管的是「**外壳上画出
+      // 什么**」，下面那一段（三种编辑模式、只读模式）管的是「**正文那一块怎么
+      // 呈现**」——两组互不相干，之前贴在一起读起来像同一族。
+      //
+      // ⚠️ "上面那一段"具体从哪算起是**开窗量出来的**，不是照着代码想出来的：
+      // 第一版注释里把「侧边栏那一族」也算了进来，实际菜单上那一段自己有线
+      //（在「搜索」之后），这条新线只管「插件栏 ＋ 格式化工具栏 ｜ 编辑模式」
+      // 这一刀。**改这段注释之前先去 `docs/06` §5.4 那套坐标量的办法看一眼。**
+      //
+      // ⚠️ 往后在这个菜单里加东西时，**先想清楚它属于哪一组再决定插在哪一边**：
+      // 插错边会让这条线变成一条没有意义的横杠，而"线在这里是因为它上面和下面
+      // 是两类东西"这个意思，光看图是看不出来的。
+      "sep",
       // ── 三种**编辑模式**（互斥，可勾项画 ✓，同时只有一个勾）──
       //
       // ⚠️ 键位不是一族，**这是刻意的**：
-      // - 「源码模式」保留 Typora 的 `Ctrl+/`。那是对标基准里就有的键，
-      //   为了"三连号好看"把它改掉，等于明知故犯地让老用户的手感失效。
-      // - 另外两种 Typora **没有**，所以键位是我们自己排的：`Alt+1` / `Alt+2`
+      // - 「源码模式」用 `Ctrl+/`：这是既有的键位口径，
+      //   为了"三连号好看"把它改掉，等于明知故犯地让既有用户的使用习惯失效。
+      // - 另外两种是新增的，键位由本仓自己排：`Alt+1` / `Alt+2`
       //   只给"新增的那两个"。于是菜单上读起来是「Alt+1 / Ctrl+/ / Alt+2」——
       //   看着不齐，但每一个都有来路。
       //
@@ -393,8 +492,71 @@ export const MENUS: MenuSpec[] = [
       { id: "view.typewriter", label: "打字机模式", accel: "F9", checkable: true },
       { id: "view.statusBar", label: "状态栏", checkable: true },
       "sep",
-      { id: "view.fullscreen", label: "切换全屏", accel: "F11" },
+      // ── 缩放那三档（2026-09-27）──
+      //
+      // ⚠️ **键位是照浏览器 / 大多数编辑器的惯例排的**（`Ctrl+=` / `Ctrl+-` /
+      // `Ctrl+0`），不是本仓自己编的——这一族键位在用户手上是有肌肉记忆的，
+      // 换一个就是让他按错。三条**都是动作不是状态**，所以没有 `checkable`：
+      // 缩放值本身在设置里看得见，菜单上再挂个勾只是同一件事的第二处显示。
+      //
+      // ⚠️ 三条都**不带 `needsDoc`**：缩放是应用级的，一篇文档都没打开时
+      // 按 `Ctrl+=` 也该有用。
+      //
+      // ⚠️ **`Ctrl+=` 与 WebKitGTK 自带那条整页缩放撞不撞，见 `ui/useZoom.ts`
+      // 头上那一段**——结论是必须走这张表（接了的键位一律 `preventDefault`），
+      // 别自己再挂一个监听。⚠️ 也因此**别改这里的写法**去认 `Ctrl+Shift+=`：
+      // `accelSig` 把 Shift 当独立一维，多写一条只会撞车（`buildAccelIndex`
+      // 会 warn 并让先到的那条生效）。
+      //
+      // ⚠️⚠️ **「实际大小」的键位不是 `Ctrl+0`**，尽管浏览器里那才是复位缩放的
+      // 惯例键——本仓的 `Ctrl+0` **早就是「正文」**（段落那一族最后一条，
+      // `Ctrl+1`~`Ctrl+6` 是标题，Typora 的老排法）。这不是推理出来的，
+      // 是 `tools/menu-harness` 的 `#accel` 场第一次跑就报的：
+      //
+      //     构建时警告 1 条：[nota] 快捷键 "Ctrl+0" 同时给了 para.text 和
+      //     view.zoomReset，para.text 生效
+      //
+      // 两个选择：把「正文」挪开（动了用户手上的老键位），或者复位换一个键。
+      // 选了后者——「正文」用得比"复位缩放"多得多。离 `Ctrl+0` 最近、
+      // 而这一族里没被占的是 `Ctrl+Shift+0`。
+      { id: "view.zoomIn", label: "放大", accel: "Ctrl+=" },
+      { id: "view.zoomOut", label: "缩小", accel: "Ctrl+-" },
+      { id: "view.zoomReset", label: "实际大小", accel: "Ctrl+Shift+0" },
+      "sep",
+      // ⚠️ 2026-09-25 起它会**收起外壳**（和专注模式同一套，见 `styles/app.css`
+      // 那一节），所以标签从「切换全屏」改成「全屏」并加了勾：勾的是"窗口现在
+      // 全屏着"，而"全屏"这两个字现在描述的是**一种状态**，不是一次动作。
+      { id: "view.fullscreen", label: "全屏", accel: "F11", checkable: true },
+      // ⚠️ **有勾**，而且那个勾**是从窗口读回来的**（`isAlwaysOnTop()`，见
+      // `ui/useWindowControls.ts` 文件头）：用户完全可能在窗口管理器里给这个
+      // 窗勾上"总在最前"，那时内存里记一个 `false` 就会让菜单和窗口分叉——
+      // 症状是"窗口明明浮着、菜单里却没有勾"。与上面「全屏」同一条口径。
+      //
+      // ⚠️ **没有快捷键**：这一条归在"窗口怎么摆"里，而同族里已经有两族键位
+      //（缩放 `Ctrl+=` 那三条、沉浸 `F8`/`F9`/`F11`），再塞一个只会撞车。
+      // 这条的用法本来就是"打开之后一直开着"，不是高频动作。
+      { id: "view.alwaysOnTop", label: "窗口置顶", checkable: true },
+      // ⚠️ **没有勾**，理由是这一条**没有可读的状态**：「开发者工具开着没有」
+      // WebKitGTK 不给接口（见 `ui/useWindowControls.ts` 文件头）。硬记一个内存
+      // 状态一定会分叉，而分叉的症状是"菜单说开着、屏幕上没有"。所以它是动作。
       { id: "view.devtools", label: "开发者工具", accel: "Shift+F12" },
+      "sep",
+      // ⚠️⚠️ **这一条和上面那条「专注模式」是两件事，名字必须分得清。**
+      // 上面那条（`view.focusMode`，F8）是**收拾界面**的：把外壳收起来、眼睛
+      // 少看几个东西。这一条是**记你的账**的：切走就扣钱，扣光就弹红屏。
+      // 「专注」两个字一样，所以本条的标签里**不许省掉「强制」**——
+      // 省了之后菜单上并排两条「专注模式」和「专注」，谁也猜不出哪个是哪个。
+      //
+      // ⚠️ **没有快捷键**，这是刻意的：这个键会**开一个抢焦点的全屏窗**，
+      // 误触的代价比别的菜单项高一档。而且 `F8` 已经是上面那条的了，
+      // 随手挑一个（`F10`/`F12` 那一片）就是让用户的手在别处按出别的东西来
+      // （同 `view.toolbar` 那一族不给键位的理由）。
+      //
+      // ⚠️ 它归在「视图」栏里是妥协：这个功能不属于视图。但为它单开一栏
+      //（「专注」）会在菜单栏上多出一栏只放一条的，而这一栏里其他条目
+      //（状态栏、全屏）也都是"应用怎么摆"——勉强算同类。真要挪窝，
+      // 先看 `docs/07` 里这一项是怎么归的。
+      { id: "view.forceFocus", label: "强制专注", checkable: true },
     ],
   },
   {
@@ -407,8 +569,8 @@ export const MENUS: MenuSpec[] = [
     id: "help",
     label: "帮助",
     items: [
-      // Typora 那一栏「What's New / Quick Start / Markdown Reference…」全是外链，
-      // 我们离线优先，外链既打不开也不该假装能打开。只留真正能兑现的那条。
+      // 「新功能 / 快速上手 / Markdown 参考…」那一排都是外链，而本仓离线优先，
+      // 外链既打不开也不该假装能打开。只留真正能兑现的那条。
       { id: "help.about", label: "关于 Nota" },
     ],
   },

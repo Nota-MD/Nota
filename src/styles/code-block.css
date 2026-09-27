@@ -1,0 +1,437 @@
+/**
+ * 代码块上的**挂件**：折叠/复制那一条、语言图标、语言下拉。
+ *
+ * ⚠️ **2026-09-26 从 `editor.css` 里整段搬出来的**（原第 373–698 行），搬的
+ * 原因只有行数一个——那一份当时 961 行，离 1000 行硬上限只剩 39 行。
+ * **内容一个字节没改**。
+ *
+ * 顺序仍然要紧：这一份里那几条选择器要盖住 `editor.css` 里对 `pre` / `code`
+ * 的通用规则，所以 `main.tsx` 里**必须排在 `editor.css` 之后**。
+ */
+/* ── 代码块下面那条工具栏（`editor/code-block.ts`）────────────────────
+   折叠 / 复制。
+
+   ⚠️ **2026-09-26 从块内右下角搬到了块下沿之外**（原来是
+   `right: 6px; bottom: 4px`）。搬家的理由是一条连锁账：
+   用户那天说「代码块有点宽，上下距离太长」，根子在 `pre` 的上下内边距——
+   下边那 34px 当初就是给这条按钮条留的槽（`bottom: 4px` + 高 22px + 8px 气），
+   上面那 34px 又为了"上下一样"跟着抬起来，于是块内白白多出 68px。
+   搬出来之后那 68px 降到 36px（上下各 18），而这条槽改由 `pre` 的
+   `margin-bottom: 30px` 承担——它本来就在给块外的语言选择框留位子，
+   现在两者排在同一行：**左下角是它，右下角是语言框**。
+
+   ⚠️ 与 `.nota-code-lang-wrap` 一样是**绝对定位挂在 `pre` 上、落在块外**，
+   所以它也靠 `pre` 的 `overflow: visible` 才画得出来（那条为围栏标记留的）。
+   ⚠️ `:hover` 那两条选择器照旧管用：它仍是 `pre` 的后代，鼠标停在它上面时
+   `pre` 也处于 `:hover`（CSS 的 `:hover` 会向祖先传递），所以不必单写
+   `.nota-code-bar:hover`——语言框那条单写是因为它 `top: 100%` 之后常被误以为
+   要写，其实同理。 */
+.nota-code-bar {
+  position: absolute;
+  left: 6px;
+  /* 贴着下边框，**中间不留缝**（同语言框那条）：留了缝，鼠标从块里往下走会
+     经过一段"pre 也不 hover、它也不 hover"的空档，条子会先淡掉再亮回来。 */
+  top: 100%;
+  /* 盖住下面的正文——它不占文档流，所以悬停时会压在下一段第一行上。 */
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* 平时淡到几乎看不见，鼠标进代码块才亮起来，否则满屏都是按钮。 */
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+/* 设置里关掉「代码块工具栏」（`editor.code_toolbar`）。⚠️ 属性由
+   `ui/useCodeBlockPrefs.ts` 落在 `<html>` 上，只在**非默认值**时才写。 */
+html[data-code-toolbar="off"] .nota-code-bar {
+  display: none;
+}
+
+/* ⚠️ 两条选择器管的**不是**同一件事，没有哪一条是多余的：
+   - `:hover` 是主要那条：鼠标进代码块就亮；
+   - `:focus-within` 只在**键盘 Tab 到那条上的按钮**时才成立。
+     ⚠️ **光标在代码里打字时它是不成立的**——contenteditable 的焦点在
+     `.ProseMirror` 上，`<code>` 拿不到 `document.activeElement`，于是
+     `pre:focus-within` 永远是假。实际试一下会发现它像是没生效，
+     而它不是写错，是**管不着那件事**。真要让"光标在块里就亮"，得在 NodeView 里
+     监听选区——那是另一件事，没做。 */
+.editor-mount .ProseMirror pre:hover .nota-code-bar,
+.editor-mount .ProseMirror pre:focus-within .nota-code-bar {
+  opacity: 1;
+}
+
+.nota-code-btn,
+.nota-code-lang {
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nota-code-btn:hover,
+.nota-code-lang:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+
+/* ⚠️⚠️ `appearance: none` **不能省**。它的由来是原生 `<select>`（少了它，
+   深色模式下这个框整个画成纯白：WebKit 会把它交给 GTK 的原生 `menulist`
+   外观去画，而**原生外观盖得住 CSS**——上面那条 `background: var(--bg-raised)`
+   白写了。同一个坑在设置那边早就踩过，见 `settings.css` 的 `.stg-select`）。
+   ⚠️ **2026-09-25 这个框从 `<select>` 换成了 `<button>`**（理由见
+   `lang-picker.ts` 文件头：原生弹层里放不了图标），但这一条**留着**——
+   `<button>` 同样有原生外观，不给它的话边框和底色也不是这里写的这个样子。
+   📌 可迁移：**全仓每一个 `<select>`、`<button>` 只要自己画外观，都要
+   `appearance: none`**。 */
+.nota-code-lang {
+  appearance: none;
+  /* 图标 + 语言名横排。⚠️ `<button>` 默认是 `inline-block`，不给这一条
+     里面的图标和文字会按基线对齐、还带一截行高。 */
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* 右边给箭头留出位子（箭头在包裹层上，见下一条）。 */
+  padding-right: 18px;
+  /* 下限那一条是给**闭合状态**兜底的：里面的文字是语言名，短起来只有一个
+     `c`，而这条子整体是按内容收缩的（`position: absolute`），不兜底就会
+     缩成一个小方块。⚠️ 里面的文字由 `lang-picker.ts` 的 `画闭合()` 写。 */
+  min-width: 62px;
+  /* ⚠️ 上限要留够：语言名最长的有 `apacheconf`（10 个字符），加上图标和
+     箭头约 100px。原本是 140px，同时 `text-overflow` 挂在本条上——
+     **那是错的**：`text-overflow` 只对**块容器里溢出的行盒**生效，
+     而这里是个 flex 容器，它里面的文字在 `.nota-lang-name` 那条子自己身上。
+     所以省略号移到了下面 `.nota-lang-name` 里。 */
+  max-width: 150px;
+}
+
+/* 语言名。省略号挂在这一条上（理由见上）。 */
+.nota-lang-name {
+  /* ⚠️ `min-width: 0` 不能省：flex 子项默认 `min-width: auto`，
+     也就是"不小于内容的宽"，于是 `max-width` 到了它也不肯截，
+     整颗按钮会被语言名撑破。这是 flex 里做省略号的经典那一步。 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 语言图标（`editor/lang-icon.ts`）──────────────────────────────────
+   两种长相，共用一个 15px 的方框（下面那条是兜底徽章，再下面带 `--logo`
+   的那条是真图）：
+
+   ① **兜底徽章**：一颗圆角小方块，**底色**是该语言约定俗成的那个色，
+      **字**是 JS 按底色亮度算出来的对比色（`--nota-lang-on`）。没有图形、
+      没有厂商 logo，所以 400 个语言人人都有。
+   ② **真图**（`.nota-lang-icon--logo`）：vscode-icons 搬来的彩色 SVG，
+      走 `background-image` 的 data URI。只有热门语言有。
+
+   ⚠️ 底色和字色都从内联的 CSS 变量来，**这里不写任何具体色值**：
+   语言名一多，颜色表就只能待在一个地方（`lang-icon.ts` 的 `颜色表`），
+   两边各写一份必然对不上。
+
+   ⚠️ 两条路是**互斥的**，靠 `--logo` 这个修饰类分开，别把两条规则合并到
+   一条选择器里：它们决定的 `background-*` 是**互相矛盾的两套**
+   （"有底色、有字" vs "透明底、一张图"），合并之后谁赢就看属性书写顺序了
+   ——那种失败会在"真图的那个语言"上表现得最怪。改动前看 `math.css` 里
+   那段关于 `display` 的教训注释。 */
+.nota-lang-icon {
+  /* 不被压扁、不跟着 `max-width` 缩。 */
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  background: var(--nota-lang-color, #8a8a8a);
+  color: var(--nota-lang-on, #ffffff);
+  font-family: var(--font-ui, inherit);
+  /* 小字号 + 紧字距：`C#` / `JSX` 这种三字符缩写要挤进 15px。 */
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.2px;
+  /* 缩写本身没有语义（语言名就在旁边），别让读屏器念一遍。 */
+  user-select: none;
+}
+
+/* 真图那一路。
+   ⚠️ 那条 `background-color: transparent` 是**必须的**：上面 `.nota-lang-icon`
+   那条的 `background` 简写带一个底色，不盖掉的话"彩色 logo 压在一块色块上"，
+   而块色是 JS 按语言给的——于是真图那一堆里，凡是有约定色的语言（python 蓝、
+   rust 橙…）底下都垫着一块同色系的方块，看着像图没对齐。
+   ⚠️ 图本身走**元素的内联样式**（JS 设的 `style.backgroundImage`），不在这条
+   规则里写——那是 94 个 data URI，写进 CSS 等于把同一份数据在仓库里存两遍。
+
+   ⚠️ `background-size: contain` 而不是 `100% 100%`：这批图是 32×32 的
+   方形，但构图不都在正中（有的四周留白多、有的顶到边），拉满会让大小看着
+   参差不齐；`contain` 至少保证"整张图都看得见"这条底线。
+   ⚠️ **不加圆角、不加底色框**：它们本身就是完整的 logo，套一层框反而像个
+   徽章，和 ① 那一路在视觉上分不开。
+   ⚠️ **不要**在这里写 `mask-image`（那会把彩色 logo 刷成一片纯色，见
+   `lang-icon.ts` 文件头最后一条）。 */
+.nota-lang-icon--logo {
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+/* ── 展开的弹层（`editor/lang-picker.ts`）─────────────────────────────
+   ⚠️ 它挂在 `document.body` 上（理由见那个文件头），所以：
+   ① 上面这些 `var(--…)` 拿的不是文档主题、是**界面主题**——JS 在开场时
+      把按钮身上算好的值抄进来了（`继承的token`，改动请看那份表）；
+   ② 它**在编辑器 DOM 之外**，ProseMirror 的 `stopEvent` / `ignoreMutation`
+      看不到它，不必去扩 `code-block.ts` 里那条 `inChrome`；
+   ③ 没人替它收尾，NodeView 的 `destroy()` 里必须调 `销毁()`。 */
+.nota-lang-popup {
+  /* `fixed`：弹层要用视口坐标（JS 量的是 `getBoundingClientRect()`）。
+     用 `absolute` 的话它会跟着编辑器一起滚，量出来的坐标对不上。 */
+  position: fixed;
+  /* 跟其他下拉同一个层（`theme.css` 的 `--z-popup: 40`）。 */
+  z-index: var(--z-popup);
+  overflow-y: auto;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  /* 投影用写死的黑：它在浅色和深色下都成立，而拿主题色去做投影会在
+     深色主题下变成一圈看不见的灰。 */
+  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+/* 顶上那个"搜索或输入语言"的框（用户 2026-09-26 要的）。
+   ⚠️ `sticky`：列表滚起来之后它要**留在顶上**——它是筛列表的唯一入口，
+   滚没了用户就得先滚回顶才能改一个字。
+   ⚠️ 底色必须显式给（`--bg-raised`，与 `.nota-lang-popup` 同一个值）：
+   `sticky` 只是"停住"，它**不挡后面的内容**，不给底色的话底下的选项会
+   从它背后透出来。 */
+.nota-lang-search {
+  position: sticky;
+  top: 0;
+  /* ⚠️ 压在选项之上（选项的 hover 底色会盖住它）；`z-index` 要正整数，
+     因为 `.nota-lang-opt` 没有自己的层，`0` 也够，但写 `1` 更明确。 */
+  z-index: 1;
+  padding: 2px 2px 4px;
+  background: var(--bg-raised);
+}
+
+.nota-lang-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font: inherit;
+  /* ⚠️ `appearance: none` 与代码块那颗语言按钮同一条理由（2026-09-25 那笔
+     账）：WebKitGTK 会给原生输入框套上一层系统外观，深色主题下白得刺眼。 */
+  appearance: none;
+}
+
+.nota-lang-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.nota-lang-opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* 「自定义」那一行右边的小字。⚠️ `margin-left: auto` 把它顶到最右，
+   与左边那个语言名拉开——它是**说明**，不是名字的一部分。 */
+.nota-lang-custom-note {
+  margin-left: auto;
+  padding-left: 10px;
+  opacity: 0.65;
+  font-size: 10px;
+}
+
+/* ⚠️ 自定义那一行的图标也要占位（见 `lang-picker.ts::造一项` 那条注释：
+   空着会让整行往左缩一格）。它走的还是 `.nota-lang-icon` 那条徽章规则，
+   一颗灰底首字母——**不是**代表色，因为用户输的那串字不在颜色表里。 */
+
+.nota-lang-opt:hover {
+  background: var(--bg-subtle);
+}
+
+/* 当前选中的那一项。⚠️ 两条选择器都在：只写 `-on` 的话，鼠标划过选中项时
+   `:hover` 会把强调色盖成灰底，而那一项的 `color` 已经是 `--accent-fg`
+   （深色主题下那是深色字），压在灰底上就糊了。 */
+.nota-lang-opt-on,
+.nota-lang-opt-on:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* 包裹层只为画箭头存在，**没有别的职责**。
+   ⚠️ 为什么不能画在里面的控件上：原先是因为 `<select>` 是替换元素、伪元素
+   挂不住；现在换成了 `<button>`（挂得住），但**仍然画在这一层**——
+   按钮自己的 `::after` 会和它里面的图标/文字抢同一个盒子，
+   而这一层是纯定位盒子，画在它上面不影响里面。 */
+.nota-code-lang-wrap {
+  /* ⚠️ 这里从"bar 里的一个行内块"改成了"块外的绝对定位挂件"（2026-09-25）。
+     用户点名：「调整一下语言选择框的位置。是代码块右下方，下面」——即这个框
+     要落在代码块**下边框之外**的右侧，而折叠/复制那条照旧留在块**内部**右下角。
+     定位祖先是 `pre`（它自己有 `position: relative`），且 `pre` 的
+     `overflow` 必须是 `visible`（那条是为围栏标记留的，见代码块那一段），
+     否则 `top: 100%` 划出来的框会被裁掉。 */
+  position: absolute;
+  right: 6px;
+  /* 贴着下边框，**中间不留缝**：留了缝，鼠标从块里往下走会经过一段
+     "pre 也不 hover、它也不 hover"的空档，框会先淡掉再亮回来，看着闪。 */
+  top: 100%;
+  /* 盖住下面的正文——它不占文档流，所以悬停时会压在下一段第一行上。
+     ⚠️ 这是有意的：改成常驻占位，等于每个代码块下面都空出一截。 */
+  z-index: 3;
+  display: inline-flex;
+  min-width: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease-out;
+}
+
+/* 与 `.nota-code-bar` 同样两条、同样理由（见上面那段注释）：`:hover` 是主要那条，
+   `:focus-within` 只在键盘 Tab 到它上面时才成立。 */
+.editor-mount .ProseMirror pre:hover .nota-code-lang-wrap,
+.nota-code-lang-wrap:hover,
+.editor-mount .ProseMirror pre:focus-within .nota-code-lang-wrap {
+  opacity: 1;
+}
+
+/* ⚠️ 下拉开着的时候框必须一直亮着（2026-09-25 补）。弹层挂在 `body` 上，
+   鼠标从按钮往弹层里走会离开代码块，上面那两条就都不成立了——框淡出、
+   弹层还在，看起来像一块没有主的浮层。`nota-lang-open` 由 `lang-picker.ts`
+   在开/关时挂到那颗按钮上。
+   📌 用 `:has()` 是有先例的（`settings.css` 里那几处），本仓的 WebKitGTK
+   是认的；别为它改成"由 JS 去操作包裹层的 class"——那会把"按钮住在哪个
+   包裹层里"这条约定从 CSS 搬进 JS，两个文件都得知道。 */
+.nota-code-lang-wrap:has(.nota-lang-open) {
+  opacity: 1;
+}
+
+/* 设置里关掉「代码块语言选择框」（`editor.code_language_picker`）。
+   ⚠️ 关掉**不等于改不了语言**：语言仍是节点属性，源码模式里改围栏上那串字
+   一样生效，`code-block.ts` 的 `syncChrome` 会把闭合状态跟过去。
+   ⚠️ 属性由 `ui/useCodeBlockPrefs.ts` 落在 `<html>` 上，只在非默认值时才写。 */
+html[data-code-lang-picker="off"] .nota-code-lang-wrap {
+  display: none;
+}
+
+/* 箭头 = 一个 6×6 的方块只留右边和下边两条线，转 45°。
+   ⚠️ 与 `.stg-select::after` 同一套画法、同一组数值——**改一个就改另一个**，
+   否则同一个应用里两处下拉的箭头会不一样。 */
+.nota-code-lang-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  margin-top: -4px;
+  border-right: 1.5px solid var(--fg-muted);
+  border-bottom: 1.5px solid var(--fg-muted);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+/* 折叠：靠 `max-height` 收起来，**不是 `display: none`**。
+   理由见 `code-block.ts`：藏起来的 contentDOM 会让 ProseMirror 没法在里面
+   放光标。留一点高度（1.6em 约等于一行）当作"这儿有东西"的提示。 */
+.editor-mount .ProseMirror pre.nota-code-folded > code {
+  display: block;
+  max-height: 1.6em;
+  overflow: hidden;
+}
+
+/* ⚠️ 2026-09-26 **删掉了这里原来的 `padding-bottom: 34px`**：它的作用是
+   "折叠时把右下角那一条留在原地，用户得有地方点展开"——而那条（现在的
+   `.nota-code-bar`）已经搬到块外下沿了，块内不再需要给它留槽。
+   折叠时那条子照旧悬在块下面（`top: 100%`），位置与未折叠时**一模一样**，
+   反而是好事：展开 / 折叠不会让按钮跳位置。 */
+
+/* ── 行号装订线（`editor/code-block.ts`）───────────────────────────────
+   `<div class="nota-code-gutter">1\n2\n3</div>`，绝对定位在块的左内边距里。
+
+   ⚠️ **默认不显示**：显不显示只由 `<html data-code-line-numbers="on">` 决定
+   （设置里那一条 `editor.code_line_numbers`，默认关）。DOM **常驻生成**，
+   CSS 决定露不露——理由写在 `code-block.ts` 建这个元素那一段
+   （拨开关不重建编辑器）。
+
+   ⚠️ **几何是跟 `--nota-code-pad-l` 绑死的**，两边一起读那个变量：
+   | | 关了行号 | 开了行号 |
+   |---|---|---|
+   | `--nota-code-pad-l`（`editor.css`） | 14px | **54px** |
+   | 代码文字左边界 | 14px | 54px |
+   | 本元素宽 | （不显示） | 54px |
+   | 本元素内容区 | （不显示） | 14px → 46px（宽 32px，数字右对齐） |
+   即：数字右边界离代码文字 8px。改 `--nota-code-pad-l` 时不必动这里
+   （宽与左内边距都是从同一个变量/同一个数推出来的），但**改这两个数中任意一个
+   都要回来核一遍下表**。
+
+   ⚠️ 上下的 `padding: 18px` 与 `pre` 的上下内边距（`editor.css`）**必须相等**，
+   否则第一行行号会与第一行代码错开——这是本元素唯一会对不齐的地方，
+   而那正是行号最不能出的错。 */
+.nota-code-gutter {
+  display: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: var(--nota-code-pad-l, 14px);
+  padding: 18px 8px 18px 14px;
+  /* 行号逐行一个，**不能被折叠换行**（`pre` 的默认行为是保留空白，
+     但 `pre` 上那条 `white-space: pre-wrap` 会继承下来——必须显式改回去，
+     否则窄窗口下行号自己会折行、与代码彻底错位）。 */
+  white-space: pre;
+  text-align: right;
+  /* ⚠️ 三条都得跟着 `pre` 走：行号与代码"逐行对齐"全部押在行高上，
+     自己另立一套字号/行高 = 错位。 */
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--fg-muted);
+  /* 淡一点：它是参考刻度，不是内容。 */
+  opacity: 0.5;
+  /* 不许选中、不吃鼠标事件：它在代码左边的空位上，用户在那儿拖选文字时
+     不该把一串数字拖进去；点击穿透给 `pre`，PM 照常把光标放到行首。 */
+  user-select: none;
+  pointer-events: none;
+}
+
+html[data-code-line-numbers="on"] .editor-mount .ProseMirror pre {
+  /* ⚠️ 54 = 14（代码与装订线之间的气）＋ 32（数字区）＋ 8（数字与代码之间的气）。
+     它同时是"gutter 的宽"与"代码的左内边距"，见上面那张表。 */
+  --nota-code-pad-l: 54px;
+}
+
+html[data-code-line-numbers="on"] .nota-code-gutter {
+  display: block;
+}
+
+/* 折叠时行号跟着收起来。
+   ⚠️ **不是**给 gutter 也套一个 `max-height`：折叠状态下代码只露第一行，
+   底下露着 2、3、4… 一串行号会让人以为那些行还在。
+   ⚠️ 那条子（`.nota-code-bar`）不受影响——它在块外，位置与未折叠时一致。 */
+.editor-mount .ProseMirror pre.nota-code-folded .nota-code-gutter {
+  display: none;
+}

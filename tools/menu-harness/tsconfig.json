@@ -1,0 +1,22 @@
+{
+  // 试验台的**类型检查**配置。用法（在 `tauri-dev` 容器里）：
+  //
+  //     npx tsc --noEmit -p tools/menu-harness
+  //
+  // # 为什么单独有一份
+  //
+  // 根那份 `tsconfig.json` 的 `include` 只有 `["src", "vite.config.ts"]`，
+  // **不含 `tools/`**——而试验台 import 的是 `src/ui/` 里的真组件。于是产品
+  // 组件改一个必填 prop，试验台**编译得过、运行时白屏**（`vite build` 不做
+  // 类型检查）。2026-09-26 就是这么撞上的：`MenuBar` 从 2026-09-24 起要求
+  // `menus`，试验台没传，`props.menus.map` 当场抛，整页空白——而 README 上
+  // 写着"改产品代码时这个试验台会跟着一起新"，那句话当时是**假的**。
+  //
+  // 所以这份配置就一件事：把 `tools/` 也拉进类型检查。`extends` 根那份，
+  // `@/*` 别名照旧（`baseUrl` 由根那份定义，仍在仓库根）。
+  //
+  // ⚠️ 它**不进** `npm run typecheck`（那条命令是"产品代码干不干净"的闸门，
+  // 工装坏了不该把闸门染红）。跑不跑由人定，**改了产品组件的 props 就该跑**。
+  "extends": "../../tsconfig.json",
+  "include": ["."]
+}

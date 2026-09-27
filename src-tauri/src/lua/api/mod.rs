@@ -7,20 +7,27 @@
 //! 也让"权限"变成一句运行时的客气话而不是一道结构上的墙。
 //!
 //! 唯一的例外是本文件里那几个**永远可用**的东西（`log` / `command` / `event` /
-//! `diff` / `version` / `plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、
-//! 跟宿主说话用的，或者（`diff`）是**纯函数**——给它一段文本，它给一段文本。
+//! `diff` / `i18n` / `version` / `plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、
+//! 跟宿主说话用的，或者（`diff` / `i18n`）是**纯的**——前者一段文本进一段文本出，
+//! 后者只读插件自己目录里的 `lang/<tag>.toml`（理由见 `api/i18n.rs` 顶上那段）。
 //!
 //! # 加新成员时的判据
 //!
 //! 见 `plugin/manifest.rs` 顶上那段：**加成员不动 API 版本号，改语义/改名才动**。
 
+pub mod data;
+pub mod devserver;
 pub mod diff;
 pub mod document;
 pub mod fs;
 pub mod git;
 pub mod http;
+pub mod i18n;
+pub mod review;
 pub mod settings;
+pub mod time;
 pub mod ui;
+pub mod unified_diff;
 
 use mlua::{Lua, Table, Value};
 
@@ -34,7 +41,12 @@ pub fn lua_err(e: NotaError) -> mlua::Error {
 }
 
 /// 组装整张 `nota` 表。
-pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table, NotaError> {
+pub fn build(
+    lua: &Lua,
+    manifest: &Manifest,
+    ctx: &HostContext,
+    语言: &i18n::语言包,
+) -> Result<Table, NotaError> {
     let nota = lua.create_table().map_err(mlua_to_nota)?;
 
     // ── 永远可用：身份 ────────────────────────────────────────────────────
@@ -44,13 +56,18 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
 
     // ── 永远可用：日志 ────────────────────────────────────────────────────
     // 前缀统一加上插件 id，多插件同时刷输出时分得清是谁。
+    //
+    // ⚠️ 这一族**也走调试闸门**（2026-09-25）：默认一个插件日志都不打。
+    // 理由和宿主自己的日志一样——它只到 stderr，从图标启动的人永远看不到，
+    // 而看得到的人（终端里跑的开发者）会被刷屏。想看就 `NOTA_DEBUG=1`。
+    // ⚠️ 所以插件**别拿它当用户提示**：要对用户说话就走 `nota.ui.notify`。
     let prefix = format!("[nota:{}]", manifest.meta.id);
     let log = lua.create_table().map_err(mlua_to_nota)?;
     for (name, level) in [("info", "INFO"), ("warn", "WARN"), ("error", "ERROR")] {
         let p = prefix.clone();
         let f = lua
             .create_function(move |_, msg: Value| {
-                eprintln!("{p} {level} {}", value_to_text(&msg));
+                crate::日志!("{p} {level} {}", value_to_text(&msg));
                 Ok(())
             })
             .map_err(mlua_to_nota)?;
@@ -78,6 +95,29 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
     // 详见 `lua/api/diff.rs` 顶上那段。
     set(nota.set("diff", diff::build(lua)?), lua)?;
 
+    // ── 永远可用：插件自己的文案表（`nota.i18n`）──────────────────────────
+    //
+    // 2026-09-25 加，用户那句「插件也支持（多语言）。插件必须包含英语」。
+    // 判据与 `diff` 是同一条：**它只碰插件自己的东西**——表是宿主按清单里的
+    // `langs` 协商好、从插件目录里读出来的，插件拿它读不到清单之外的任何路径。
+    //
+    // ⚠️ 协商与读表在**加载时**就做完了（`i18n::装`，见 `lua/mod.rs::LuaPlugin::load`），
+    // 所以这里只是把结果装成一张表。换语言要重启，理由写在 `settings/general.rs`
+    // 的 `language` 字段注释里。
+    set(
+        nota.set("i18n", i18n::build(lua, 语言, ctx.应用语言.as_str())?),
+        lua,
+    )?;
+
+    // ── 永远可用：墙钟（`nota.time`）────────────────────────────────────────
+    //
+    // 2026-09-27 加，给"写作统计"的**今日**那一步（`docs/07` 第 65 项第二轮）。
+    // 判据与 `diff` / `i18n` 一致：**它不碰用户的任何数据**——只是把系统时钟
+    // 报一遍（连文档都不读）。⚠️ 沙箱里没有 `os`，插件手上唯一的另一个时间是
+    // `document.stats().clock_ms`，那是**单调钟**、回答不了"今天是哪一天"。
+    // 详情见 `api/time.rs` 顶上那段。
+    set(nota.set("time", time::build(lua)?), lua)?;
+
     // ── 按能力装 ──────────────────────────────────────────────────────────
     if manifest.has(Capability::DocumentRead) || manifest.has(Capability::DocumentWrite) {
         set(
@@ -92,6 +132,18 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
 
     if manifest.has(Capability::ProcessGit) {
         set(nota.set("git", git::build(lua, ctx)?), lua)?;
+    }
+
+    // `process.devserver`：宿主替插件起**清单里 `[devserver]` 声明的那一条命令**。
+    //
+    // ⚠️ 判据与 `process.git` 是同一条：能力放行的是**那一条命令**，不是"任意进程"。
+    // Lua 那边交不出第二个程序名来——`nota.devserver.start` 只收"哪份文档"。
+    // 细节与"为什么这套机制在宿主而不在插件里"见 `api/devserver.rs` 文件头。
+    if manifest.has(Capability::ProcessDevServer) {
+        set(
+            nota.set("devserver", devserver::build(lua, manifest, ctx)?),
+            lua,
+        )?;
     }
 
     // ⚠️ 三条能力**都要列上**。这里漏一个，申请了那个能力的插件就拿不到 `nota.ui`
@@ -118,6 +170,15 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
 
     if manifest.has(Capability::SettingsOwn) {
         set(nota.set("settings", settings::build(lua, &manifest.meta.id)?), lua)?;
+    }
+
+    // `data.own`：插件自己的数据目录（`api/data.rs`）。
+    //
+    // ⚠️ 与上面那条 `settings.own` 是**两件事**，别合并：设置是**用户该能改的
+    // 偏好**（放 `config`、0600、里面有明文密钥那一族），数据是**插件自己写的账**
+    // （放 `data`）。判据与"为什么另开一张表"写在 `api/data.rs` 文件头。
+    if manifest.has(Capability::DataOwn) {
+        set(nota.set("data", data::build(lua, &manifest.meta.id)?), lua)?;
     }
 
     Ok(nota)
@@ -250,7 +311,7 @@ pub fn lua_to_json(lua: &Lua, v: Value) -> mlua::Result<serde_json::Value> {
 /// API 面。等真出现第二个需要它的地方再抽出去——那时这条注释就是判断的依据。
 ///
 /// ⚠️ `null` 映射成 `nil`，于是 JSON 里值为 `null` 的键在 Lua 表里**不存在**。
-/// 这是 Lua 的固有性质（表里存不了 nil），不是我们的选择：插件那边读不到
+/// 这是 Lua 的固有性质（表里存不了 nil），不是设计上的选择：插件那边读不到
 /// 某个键时不能假定"上游一定给了非空值"。
 ///
 /// ⚠️ 不自己限嵌套层数：`serde_json::from_str` 有 128 层的解析上限
@@ -293,10 +354,11 @@ pub fn json_to_lua(lua: &Lua, v: &serde_json::Value) -> mlua::Result<Value> {
 ///
 /// 写成数组而不是一串 `||`，是为了让用例能**遍历它**（见下面的 `tests`）：
 /// 加能力时只要往数组里加一项，用例自动覆盖到。
-const UI能力: [Capability; 3] = [
+const UI能力: [Capability; 4] = [
     Capability::UiNotify,
     Capability::UiPanel,
     Capability::UiMenu,
+    Capability::UiOpenUrl,
 ];
 
 /// `nota.ui` 这张表装不装。**纯函数**，单独剥出来是为了能被用例钉住。
@@ -329,7 +391,11 @@ mod tests {
         std::fs::write(
             dir.join("plugin.toml"),
             format!(
-                "[plugin]\nid = \"nota.{名字}\"\nname = \"T\"\napi = 1\ncapabilities = [{caps}]\n"
+                // ⚠️ 版本号用**常量**插值：宿主升版本时这份夹具跟着走。
+                // 写死一个数的话，那条 API 版本精确匹配的规矩会让这里先红——
+                // 而红灯指的方向（"改夹具里的数字"）与真正要改的东西毫无关系。
+                "[plugin]\nid = \"nota.{名字}\"\nname = \"T\"\napi = {版本}\ncapabilities = [{caps}]\n",
+                版本 = NOTA_PLUGIN_API_VERSION
             ),
         )
         .unwrap();

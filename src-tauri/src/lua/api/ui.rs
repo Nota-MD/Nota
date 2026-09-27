@@ -87,6 +87,16 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
         // 与 `register_panel` 同属"面板"这件事，所以同一条能力管着它。
         let 刷新 = 刷新表(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
         t.set("refresh", 刷新).map_err(mlua_to_nota)?;
+        // `nota.ui.review(id)` —— 把**已经在册的这个面板**摊到编辑区里（`nil` 收起来）。
+        // 同属"面板"这件事，所以同一条能力管着它。
+        let 预览 =
+            super::review::预览表(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
+        t.set("review", 预览).map_err(mlua_to_nota)?;
+        // `nota.ui.review_diff{...}` —— 在编辑区里**原地**画一份改动（2026-09-26）。
+        // 与上面那条同一件事的另一种形态（都占"编辑区那一格"），所以同一条能力。
+        let 预览改动 = super::review::预览改动表(lua, &manifest.meta.id, ctx.app.clone())
+            .map_err(mlua_to_nota)?;
+        t.set("review_diff", 预览改动).map_err(mlua_to_nota)?;
     }
 
     if manifest.has(Capability::UiMenu) {
@@ -94,7 +104,54 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
         t.set("register_menu", 注册).map_err(mlua_to_nota)?;
     }
 
+    // `nota.ui.open_url` —— **在用户的默认浏览器里打开一个网页**。
+    //
+    // 与面板里那块 `kind = "frame"` 是两件事，别混：
+    //
+    // - `frame` 是**嵌在 Nota 里**看，而且地址由宿主填（只能指向插件自己那场
+    //   devserver 会话，见 `lua/api/devserver.rs`）；
+    // - `open_url` 是**跳出 Nota**，把页面交给用户的浏览器——从一个本地预览
+    //   跳去"在浏览器里打开"（能全屏演示、能用浏览器插件）走的是这条。
+    if manifest.has(Capability::UiOpenUrl) {
+        let 打开 = 打开网址表(lua, ctx.app.clone()).map_err(mlua_to_nota)?;
+        t.set("open_url", 打开).map_err(mlua_to_nota)?;
+    }
+
     Ok(t)
+}
+
+/// `nota.ui.open_url(url)` —— 交给系统默认浏览器。
+///
+/// # ⚠️ 只放行 `https`
+///
+/// 这一条的边界是**协议**，不是域名。判据：`open_url` 的风险不在"用户看到什么"，
+/// 而在"用户点开之后那个程序会去干什么"——而 `file://` 能开本机任意路径、
+/// `mailto:`/自注册的 scheme 能拉起别的程序、`javascript:` 之类在某些处理程序里
+/// 更是直接执行。只放 `https` 就一次把这些全关掉。
+///
+/// 为什么连 `http` 都不放：**这个能力是给"跳去某个正经页面"用的**（文档站、
+/// 编辑器主页、预览的"在浏览器里打开"），而这些今天都是 `https`。要放 `http`
+/// 得先有一个真的案例，而不是"万一有人要"。
+///
+/// ⚠️ 本机开发服务器的地址是 `http://localhost:…`，**故意不放行**：
+/// 那种地址该走面板里的 `frame` 块（宿主自己填、看得见、关得掉），
+/// 而不是把用户踢到浏览器里去。真要给，那是另一条能力、另一个决定。
+fn 打开网址表(lua: &Lua, app: tauri::AppHandle) -> mlua::Result<mlua::Function> {
+    use tauri_plugin_opener::OpenerExt;
+
+    lua.create_function(move |_, url: String| {
+        let trimmed = url.trim();
+        if !trimmed.starts_with("https://") {
+            return Err(mlua::Error::RuntimeError(format!(
+                "nota.ui.open_url 只接受 `https://` 开头的地址（收到的是 `{}`）",
+                trimmed.chars().take(40).collect::<String>()
+            )));
+        }
+        app.opener()
+            .open_url(trimmed, None::<&str>)
+            .map_err(|e| mlua::Error::RuntimeError(format!("打不开这个地址：{e}")))?;
+        Ok(())
+    })
 }
 
 /// `nota.ui.register_panel`，**不含 `ctx`**。
@@ -127,6 +184,14 @@ pub(crate) fn 面板表(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Functi
             }
             // 默认 `right`（右侧插件栏）——用户 2026-09-22 定的。
             // 旧的 `sidebar` 是左栏还兼职装插件时的事，那一页已经搬走了。
+            //
+            // ⚠️ 这里**不校验取值**（`left` 之类照样存下来）：认不出的位置前端
+            // 会如实列在「插件」页里（"没有落脚处"），那比"注册时就报错、
+            // 于是插件整块加载失败"好——位置写错的插件别的东西还能用。
+            //
+            // 目前约定俗成的三个值：`right`（右侧栏一页）、`main`（编辑区，
+            // 由插件喊 `nota.ui.review(id)` 摊开，见下面的 `预览表`）、
+            // 以及还没落脚处的 `left`。
             entry.set(
                 "location",
                 spec.get::<Option<String>>("location")
@@ -134,6 +199,20 @@ pub(crate) fn 面板表(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Functi
                     .flatten()
                     .unwrap_or_else(|| "right".to_owned()),
             )?;
+
+            // 要不要放宽（见 `plugin/mod.rs::PluginPanel::wide`）。
+            // 写成 `if true` 才存，是为了让"没写"和"写 false"在 registry 里
+            // 长得一样——读取侧于是只用一条 `unwrap_or(false)`。
+            if spec.get::<Option<bool>>("wide").ok().flatten() == Some(true) {
+                entry.set("wide", true)?;
+            }
+
+            // 要不要**跟着时间自己动**（见 `plugin/mod.rs::PluginPanel::live`）。
+            // 写成 `if true` 才存，理由同上面那条 `wide`——让"没写"和"写 false"
+            // 在 registry 里长得一样，读取侧于是只用一条 `unwrap_or(false)`。
+            if spec.get::<Option<bool>>("live").ok().flatten() == Some(true) {
+                entry.set("live", true)?;
+            }
 
             // `render` 是**函数**，不是数据——所以它只活在 registry 里，
             // 由 `面板内容()` 现调现取，**不进 `PluginPanel` 那个快照**。
@@ -186,6 +265,25 @@ pub(crate) fn 刷新表(
         )
         .map_err(|e| mlua::Error::RuntimeError(format!("发面板刷新事件失败：{e}")))?;
         Ok(())
+    })
+}
+
+// ⚠️ `nota.ui.review` / `nota.ui.review_diff` **不在这里**：它们放的是编辑区
+// 那一格，两种形态的差别是一整段能自己站住的话，2026-09-26 分到了
+// `api/review.rs`（`ui.rs` 这边只剩声明式的那三样：通知、面板、菜单）。
+
+/// 这个插件的 registry 里有没有 `id` 这个面板。
+///
+/// 只回答"在册与否"——不碰 `render`（那是 [`面板内容`] 的事）。
+///
+/// ⚠️ `pub(crate)`：`api/review.rs::预览表` 也要问这一句（摊开一个不存在的面板
+/// 要当场报，见那条的注释）。判据只有这一份，别在那边再写一遍。
+pub(crate) fn 有面板吗(lua: &Lua, id: &str) -> bool {
+    let Ok(list) = lua.named_registry_value::<Table>(REG_PANELS) else {
+        return false;
+    };
+    (1..=list.raw_len()).any(|i| {
+        matches!(list.raw_get::<Table>(i).and_then(|t| t.get::<String>("id")), Ok(v) if v == id)
     })
 }
 
@@ -302,7 +400,7 @@ fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value {
 }
 
 /// 按**字符**截断（不是字节）——按字节截会把一个汉字劈成半个，
-/// 前端拿到的是乱码，而且那种乱码看起来像是我们这边编码出了错。
+/// 前端拿到的是乱码，而且那种乱码看起来像是后端编码出了错。
 fn 截断(s: &str) -> String {
     if s.chars().count() <= 面板文本上限 {
         return s.to_owned();
@@ -534,6 +632,65 @@ mod tests {
         register.call::<()>(spec).unwrap();
 
         assert!(crate::plugin::读菜单(&lua, "nota.t")[0].prompt.is_none());
+    }
+
+    /// 第二个字段（Git 身份的"名字 + 邮箱"要的就是这个）。
+    ///
+    /// ⚠️ 字段名是 **camelCase**（`secondArg`/`secondLabel`/`secondPlaceholder`）：
+    /// 插件在 Lua 里写的、前端 TS 类型里读的、这里断言的，必须是同一套拼法。
+    /// 结构体上那行 `rename_all` 就是干这个的——要是有人把它删了，
+    /// 这个用例会红，而不是等到"弹框里第二行不见了"才发现。
+    #[test]
+    fn 两个字段的_prompt_读得回来() {
+        let lua = Lua::new();
+        let register = 菜单表(&lua, "nota.t").unwrap();
+        let spec: Table = lua
+            .load(
+                r#"return {
+                     label = "填身份…", command = "set_identity",
+                     prompt = { arg = "name", label = "Git 身份", placeholder = "名字，比如：张三",
+                                secondArg = "email", secondLabel = "邮箱",
+                                secondPlaceholder = "you@example.com" },
+                   }"#,
+            )
+            .eval()
+            .unwrap();
+        register.call::<()>(spec).unwrap();
+
+        let got = crate::plugin::读菜单(&lua, "nota.t");
+        let p = got[0].prompt.as_ref().expect("`prompt` 该跟着回来");
+        assert_eq!(p.arg, "name");
+        assert_eq!(p.second_arg, "email", "第二个值的键名");
+        assert_eq!(p.second_label, "邮箱");
+        assert_eq!(p.second_placeholder, "you@example.com");
+    }
+
+    /// 第二个字段**只给一半等于没给**。
+    ///
+    /// 判据与 `arg` 那条同源：缺了键名，用户填的值没有地方放。这里两个方向都试
+    /// （只给键名 / 只给标签），因为漏的可以是任一半。
+    #[test]
+    fn 第二个字段只给一半等于没给() {
+        for 半截 in [
+            r#"secondArg = "email""#,
+            r#"secondLabel = "邮箱", secondPlaceholder = "you@example.com""#,
+        ] {
+            let lua = Lua::new();
+            let register = 菜单表(&lua, "nota.t").unwrap();
+            let code = format!(
+                r#"return {{ label = "填身份…", command = "set_identity",
+                             prompt = {{ arg = "name", label = "Git 身份", {半截} }} }}"#
+            );
+            let spec: Table = lua.load(&code).eval().unwrap();
+            register.call::<()>(spec).unwrap();
+
+            let got = crate::plugin::读菜单(&lua, "nota.t");
+            let p = got[0].prompt.as_ref().expect("`prompt` 本身还在");
+            assert_eq!(p.arg, "name", "第一个字段不受影响");
+            assert_eq!(p.second_arg, "", "只给一半：{半截}");
+            assert_eq!(p.second_label, "");
+            assert_eq!(p.second_placeholder, "");
+        }
     }
 
     // ── 面板内容（`render`）的来回 ────────────────────────────────────────

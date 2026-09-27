@@ -21,6 +21,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useT } from "@/i18n";
+
 interface Props {
   title: string;
   /** 输入框**上面**那行说明。写清楚"这个框要的是什么"。 */
@@ -44,7 +46,7 @@ interface Props {
    *
    * ⚠️ 遮的只是**屏幕**：值本身照旧原样交出去、原样存进插件设置文件
    * （明文，见 `lua/api/settings.rs` 顶上那段）。这一条不是为了"加密"，
-   * 是为了别让人从肩膀上把 key 看走。
+   * 是为了避免旁人看到 key。
    */
   secret?: boolean;
   /** 用户回答。取消给 `null`，确定给 `[主值, 次值]`（次值可能是空串）。 */
@@ -64,13 +66,18 @@ export function PromptDialog({
   secret = false,
   onAnswer,
 }: Props) {
+  // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
+  // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
+  // ⚠️ `title` / `label` / `placeholder` / `hint` 那几样是**调用方翻好传进来的**，
+  // 这里一概不碰（它们已经是那句话本身了）。
+  const t = useT();
   const [value, setValue] = useState(initial);
   const [second, setSecond] = useState(secondInitial);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 打开就把光标放进输入框，并且**全选已有的值**——这一条是编辑已有链接时的
   // 关键：用户按 Ctrl+K 多半是想把地址换掉，全选之后直接打字就替换了；
-  // 不选中的话得先手动全选一次，那是白费的一步。
+  // 不选中的话得先手动全选一次，那是多余的一步。
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
@@ -84,7 +91,7 @@ export function PromptDialog({
   // ⚠️ **主字段为空 = 当作取消**，不是"插一个空地址的链接"。
   // 一个 `[文字]()` 在正文里看不出坏、点上去没反应，而用户会以为是自己
   // 哪一步做错了——不如干脆什么都不做。空地址的链接**没有任何用处**，
-  // 而"我改主意了、把框清空再点确定"是个很自然的取消姿势。
+  // 而"改主意了、把框清空再点确定"是个很自然的取消方式。
   const submit = () => onAnswer(value.trim() === "" ? null : value, second);
 
   return (
@@ -107,7 +114,7 @@ export function PromptDialog({
           // ⚠️ `type="password"` 只遮屏幕，值不变（见 `secret` 的注释）。
           // `autoComplete="off"` 是必须的：WebView 的密码管理器会跳出来问
           // "要不要记住"，而这里填的是**API key**，不是登录密码——
-          // 那个弹窗一出现，用户就得先弄明白"这算不算我的账号密码"。
+          // 那个弹窗一出现，用户就得先弄明白"这算不算账号密码"。
           type={secret ? "password" : "text"}
           autoComplete="off"
           value={value}
@@ -152,10 +159,10 @@ export function PromptDialog({
         {hint && <p className="prompt-hint">{hint}</p>}
         <div className="confirm-actions">
           <button type="button" className="btn" onClick={() => onAnswer(null)}>
-            取消
+            {t("取消")}
           </button>
           <button type="button" className="btn btn-primary" onClick={submit}>
-            {confirmLabel ?? "确定"}
+            {confirmLabel ?? t("确定")}
           </button>
         </div>
       </div>

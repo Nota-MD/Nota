@@ -1,6 +1,6 @@
 # 第三方组件
 
-> 最后核对：2026-09-22
+> 最后核对：2026-09-27
 >
 > Nota 自身以 **BSD-2-Clause** 发布（见 `LICENSE`）。本文列出它分发时携带的第三方组件。
 >
@@ -74,10 +74,12 @@
 | 包 | 版本 | 许可证 | 用来做什么 |
 |---|---|---|---|
 | `@milkdown/kit` | 7.22.1 | MIT | 编辑器内核（ProseMirror + remark 的封装） |
-| `@milkdown/plugin-diagram` | 7.7.0 | MIT | Mermaid 图表。⚠️ 依赖装了、**没有插入入口** |
-| `@milkdown/plugin-math` | 7.5.9 | MIT | 数学公式。⚠️ 同上 |
+| `@milkdown/plugin-diagram` | 7.7.0 | MIT | Mermaid 图表（` ```mermaid ` 围栏 → `diagram` 节点）。⚠️ 它**自己从不画图**（`toDOM` 只有一句 `dom.textContent = code`），画的那一半在 `src/editor/diagram-view.ts` |
+| `mermaid` | 10.9.8 | MIT | 图表渲染。⚠️ **显式列在 `package.json` 里**（不是蹭 `plugin-diagram` 的嵌套依赖）——理由写在 `src/editor/diagram-view.ts` 文件头：那个包的 `exports` 只声明了 `"."`，任何子路径 import 都会被 `tsc` 与 `vite` 双双拒掉 |
+| `@milkdown/plugin-math` | 7.5.9 | MIT | 数学公式。⚠️ 同上（渲染那一半在 `src/editor/…` 与 `katexOptionsCtx`） |
 | `@milkdown/plugin-prism` | 7.22.1 | MIT | 代码块语法高亮 |
 | `katex` | 0.16.47 | MIT | 公式渲染 |
+| `mdast-util-math` | 3.0.0 | MIT | 行内公式**用几个 `$`** 的序列化（2026-09-27 起显式列出）。⚠️ 它本来是 `remark-math` 的传递依赖，之所以写进 `package.json`，是因为 `src/editor/math-delim.ts` **直接 import 了它**（用 `mathToMarkdown({singleDollarTextMath:false})` 那条上游现成的处理器）。另一条路是自己抄一份 handler，那样会漏掉上游那两段边界处理——理由在那个文件头 |
 | `react` | 19.3.0 | MIT | 界面框架 |
 | `react-dom` | 19.3.0 | MIT | |
 | `@tauri-apps/api` | 2.11.1 | Apache-2.0 OR MIT | 前端调后端 |
@@ -154,8 +156,70 @@ Folio 自绘的作品，按 BSD-2-Clause 分发。⚠️ **要搬的是重绘后
 ⚠️ **只搬"动作"图标，不搬应用图标**：`folio-*.svg` 那一套是 Folio 自己的脸，
 Nota 的图标是用户设计、逆向成 `src-tauri/icons/nota.svg` 的那一份。
 
+⚠️ **`nota-` 前缀的那几枚不在这一节里**：它们是 Nota 自己画的（`nota-quote` /
+`nota-task` / `nota-keys`，以及 2026-09-25 换上去的 `nota-markdown` /
+`nota-doc-theme`），原文件只存在于本仓，**没有"上游那一份"可对照**。
+所以它们**不受下面的"一个字节都不许改"约束**——要调就调，
+调完不会动摇任何"搬来的"结论。⚠️ 但**不许把 Folio 的文件改名成 `nota-`**
+来躲开这条约束：那等于把搬来的东西记账成自研。
+
 ⚠️ 搬进来的文件**不许改**——包括里面那 355 处写死的 `fill="#2e3436"`
 （GTK 的深灰）。颜色是**用 CSS 遮罩在外面刷**的（`styles/icons.css` 里
 `.icon` 的 `background-color: currentColor` + `mask-image`），
 所以那些 `fill` 根本不参与渲染。改一个字节，"搬来的东西一个字节没动"
 这句话就失效了，而这正是这套图标能被一眼核对的前提。
+
+---
+
+## 6. 语言图标：vscode-icons（`src/assets/lang-icons/`）
+
+代码框语言切换那两颗地方（按钮上一颗小的、下拉里每行一颗）的**彩色语言
+logo**，93 个文件**逐字节**从 vscode-icons 搬来（2026-09-26）。
+
+| 项 | 说明 |
+|---|---|
+| 来源 | [vscode-icons/vscode-icons](https://github.com/vscode-icons/vscode-icons) 的 `icons/file_type_*.svg` |
+| 版本 | **tag `v12.19.0`**（`e6daaed43175c6c3f62b84f3ca30a4745df58b3e`） |
+| 作者 | Copyright (c) 2016 Roberto Huertas 及 vscode-icons contributors |
+| 许可 | **MIT** —— ⚠️ 与 Nota 自己的 BSD-2-Clause **不是同一份**，正文见下 |
+| 搬运方式 | `bash tools/fetch-lang-icons.sh`（固定 tag 抓取，写完 `SHA256SUMS`） |
+| 核对手段 | `bash tools/fetch-lang-icons.sh --verify`（拿 `SHA256SUMS` 逐个对 sha256） |
+| 用在哪 | `src/editor/lang-icons-real.ts` → `src/editor/lang-icon.ts` → `lang-picker.ts` |
+| 覆盖范围 | 93 颗图，罩住 `refractor` 400 个语言 id 里**热门的那些**；查不到的一律回落到本仓自绘的首字母徽章（那部分不涉及第三方） |
+
+⚠️ **搬进来的文件不许改**（和 §5 同一条规矩）——`--verify` 就是这条规矩的判据。
+要换图标就在 `lang-icons-real.ts` 那张表里换名字（换完那个语言会回落成徽章），
+或者先把新的图标补进 `tools/fetch-lang-icons.sh` 的 `NAMES` 里再抓一遍。
+
+⚠️ **只搬了"语言"图标，没搬 VS Code 自己的界面图标**（`default_*`、
+`file_type_vscode*` 那些）。这一节的范围就是"代码框旁边那颗小图"。
+
+⚠️ 这批图是**彩色**的，接进来时走 `background-image` 的 data URI，
+**没有**套 `mask-image`（§5 那套界面图标才走 mask）。所以它们**不跟主题变**——
+这是有意的，理由写在 `lang-icons-real.ts` 文件头。
+
+### MIT 许可正文（vscode-icons）
+
+```text
+The MIT License (MIT)
+
+Copyright (c) 2016 Roberto Huertas
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

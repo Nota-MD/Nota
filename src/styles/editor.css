@@ -1,5 +1,11 @@
 /**
- * 正文编辑区里的样式：编辑区外壳、即时渲染的块标记、代码块、任务列表。
+ * 正文编辑区里的样式：编辑区外壳、代码块、任务列表。
+ *
+ * ⚠️ **块标记与行内标记的长相不在这里**了（2026-09-26 搬去了
+ * `src/styles/marks.css`）：`.nota-srcmark`（块的 `##` / `>` / `1.`）、
+ * `.nota-markhint`（行内的 `**` / `*`）、`.nota-heading-pending`（待成块标题
+ * 的那一下加粗）。**但左边那条 56px 装订线仍然在本文件里**（它长在
+ * `.ProseMirror` 的内边距上），标记画进那条空位——改一边要看另一边。
  *
  * # 为什么从 `app.css` 拆出来（2026-09-22）
  *
@@ -39,13 +45,39 @@
   pointer-events: none;
 }
 
+/* 开头那段 front matter 的提示条（`EditorPane.tsx`）。
+ *
+ * ⚠️ 它存在的理由：front matter **不在文档树里**（`editor/front-matter.ts`），
+ * 所以所见即所得里看不见也改不了。不说明白的话，用户会以为开头那几行
+ * **丢了**——而"看着像丢了"和"真丢了"在他那边是一回事。
+ *
+ * ⚠️ `position: sticky`（不是 static）：这一条要**一直挂在视野里**。它是
+ * "你在看的这份文档不完整"的说明，跟着正文滚上去就等于没说。
+ * ⚠️ 只在所见即所得这一侧画（`EditorPane` 那边判模式）：源码模式里那几行
+ * 本来就在正文里，看得见也改得动，再挂一条提示就是噪声。
+ * ⚠️ `.editor-pane` 在所见即所得下不是 flex 容器（分屏才是），所以这一条
+ * 走正常文档流、占一行高度，不会把布局撑歪。 */
+.editor-frontmatter-note {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing);
+  padding: calc(var(--spacing) / 2) var(--spacing);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--fg-faint);
+  font-size: 0.85em;
+}
+
 /* ── 分屏（`mode="split"`）─────────────────────────────────────────────── */
 
 /* 左右两个窗格。**滚动条从"整块编辑区"挪到"每一格自己"**——这一条是分屏
  * 唯一的结构性改动，理由：两个窗格的正文长度不一样（原文里有 `##`、`|`、
  * 空行，渲染出来是另一份长度），共用一个滚动条的必然结果是**一边到底了
  * 另一边还没完**，而用户没法把它们对齐。各滚各的之后，左右各自滚到哪儿
- * 是独立的，跟 Typora 的"源码 + 预览"、以及所有分栏编辑器一致。
+ * 是独立的，这也正是分栏编辑器的通行做法。
  *
  * ⚠️ `overflow: hidden` 是**必须**的（覆盖上面 `.editor-pane` 的 `auto`）：
  * 留着 `auto` 的话，两个子元素各有各的横向滚动，外层又再出一个，
@@ -77,13 +109,20 @@
   border-left: 1px solid var(--border);
 }
 
-/* 正文容器。**宽度上限**是 Typora 的"正文宽度"设置。
+/* 正文容器。**宽度上限**对应偏好设置里的"正文宽度"。
  *
- * ⚠️ **左右各 56px，不是 32px**，而且**两边必须一样**。左边那一条是给块标记
- * 留的（`##`、`>`、`1.`、` ```lang ` 都画在正文列的左外侧，见下面"即时渲染"
- * 那一段），右边留同样宽只是为了正文仍然居中。
+ * ⚠️ **这一列是靠左的，不是居中的**（2026-09-25，用户要求）。原先写的是
+ * `margin: 0 auto`——限宽之后在格子里居中，照的是参照的编辑器；用户看到成品
+ * 问「为何默认到中间了，不是左对齐呒」。现在左边距 0、右边 `auto`：
+ * **列宽一个像素没变**（仍是 `--content-width`），只是整列贴到格子左边，
+ * 右边那一片空白归窗口。
  *
- * 📌 这一格是 **2026-09-22 实测抓出来的**，别改窄：原来写的是 32px，窗口
+ * ⚠️ **左右各 56px，不是 32px**。左边那一条是给块标记留的
+ * （`##`、`>`、`1.`、 ` ```lang ` 都画在正文列的左外侧，见
+ * `src/styles/marks.css`）；右边同样留 56px，**不居中之后它不再是为了"两边一样"**，
+ * 只是别让正文顶到列右缘——列宽与正文宽的关系没变，所以这条留着。
+ *
+ * 📌 这一格是 **2026-09-22 实测抓出来的**，改窄会裁掉标记：原来写的是 32px，窗口
  * 稍窄一点（正文列正好顶到 `--content-width`）时，标记会被 `.editor-pane` 的
  * `overflow: auto` **从左边裁掉**——左边溢出在 LTR 里是滚不到的，只能被裁。
  * 症状很有迷惑性：**代码块的围栏只剩尾巴**（` ```rust ` 只剩一个「st」），
@@ -98,7 +137,7 @@
  *
  * 让 `.editor-mount` 和正文列都吃满整格高之后，那片空白才**落在
  * contenteditable 自己的盒子里**，ProseMirror 会把光标放到离点击处最近的位置
- * ——也就是文末，和 Typora 一致。`height` 一路给到 `.ProseMirror`（而不是
+ * ——也就是文末。`height` 一路给到 `.ProseMirror`（而不是
  * `min-height`）：百分比高度只在父级高度**确定**时才解析得出来，中间断一环
  * 就会被当成 0（等于没写）。
  *
@@ -113,8 +152,17 @@
 }
 
 .editor-mount .milkdown {
-  max-width: var(--content-width, 760px);
-  margin: 0 auto;
+  /* ⚠️ **限宽不挂在这一层了**（2026-09-26）。原先写的是
+     `max-width: var(--content-width, 760px); margin: 0 auto 0 0`——正文列到
+     760px 就停，右边那一片空白**不属于任何元素**，于是 `hr`（分割线）画到列
+     右缘就断。用户 2026-09-26 的原话：「分割线 `---` 应该是全行而不是现在的
+     仅左侧」＋「分割线什么的分别不明显」。
+
+     现在这一层长满整格，**限宽下移到块级子元素上**（见下面
+     `.ProseMirror > *:not(hr)` 那条）：正文列宽一个像素没变、仍然靠左
+     （理由见上面那条注释），而 `hr` 这类"结构线"能跑满整格。
+     判据：改这里之前先量 `hr` 的左右端点，它应当**越出**正文列的右缘。 */
+  margin: 0;
   /* 见上面那条：正文列自己也要吃满，否则 `height: 100%` 到 `.ProseMirror`
      那一环就断了。`flex: 1` 之外还要 `min-height: 0`，不然长文档时
      flex 子项的 `min-height: auto` 会把它撑成内容高度、再顶出滚动条。 */
@@ -133,8 +181,8 @@
 
 /* ProseMirror 本体。
  *
- * ⚠️ 字号与行高**走 token 不给死值**：文档主题要能改它们（衬线主题要更松的
- * 行高、报刊要更紧的），而主题规则是 `.editor-pane` 一条选择器，权重比这里
+ * ⚠️ 字号与行高**走 token 不给死值**：文档主题要能改它们（「极简」要更松的
+ * 行高、LaTeX 那套要更紧的），而主题规则是 `.editor-pane` 一条选择器，权重比这里
  * 的 `.editor-mount .ProseMirror` 低，直接改是改不动的。给成 token 之后，
  * 主题只改 var 的值就行，**不用来这边抢选择器权重**——这也是本文件里
  * 所有"可以被文档主题改的东西"的统一姿势（`--doc-bg`、`--border`、
@@ -143,20 +191,27 @@
  * 逗号后面是"无文档主题"时的中性值，跟拆分之前一模一样。 */
 .editor-mount .ProseMirror {
   outline: none;
+  /* ⚠️ **光标颜色要显式给**（2026-09-26）。在这之前整个所见即所得这一侧
+     没有任何 `caret-color`，全靠浏览器默认——而源码模式那一半
+     （`src/editor/source.ts`）早就写了 `caretColor: "var(--accent)"`，
+     两边不一致。用户 2026-09-26 的原话：「闪烁的光标应该始终显示」。
+     ⚠️ 这里只解决**颜色**；"进入文档时看不见光标"是**选区落在哪儿**的问题，
+     代码在 `src/editor/create.ts` 的 `光标到开头` 与 `setMarkdown` 里。 */
+  caret-color: var(--accent);
   font-family: var(--font-doc);
   color: var(--doc-fg);
   line-height: var(--doc-line-height, 1.75);
   font-size: var(--doc-font-size, 1.02em);
   /* ⚠️ **纵向留白挂在这一层，不是 `.milkdown` 那一层**（2026-09-24，BUG-15）。
      这一条是内容可编辑区本身，点它的内边距**等于点在正文里**——ProseMirror 会把
-     光标落到离点击处最近的位置，于是"点正文下面那片空白 → 接着打字"能work，
-     和 Typora 一致。挂在外层（原来的写法）时那片留白是**外层的盒子**，
+     光标落到离点击处最近的位置，于是"点正文下面那片空白 → 接着打字"成立。
+     挂在外层（原来的写法）时那片留白是**外层的盒子**，
      点它什么都不会发生，而且不报错。
 
-     ⚠️ 别把左右那两条也搬过来：那是装订线（`##`、`>`、` ``` ` 画在正文列左外侧），
+     ⚠️ 左右那两条不能一并搬过来：那是装订线（`##`、`>`、` ``` ` 画在正文列左外侧），
      见上面 `.milkdown` 那条。
      ⚠️ 上下不对称是**有意的**：上面 48px 是文档开头的呼吸，下面 120px 是
-     "滚到底还能往里写"的余地（Typora 也是下大上小）。
+     "滚到底还能往里写"的余地。
 
      `flex: 1` 是接上面那条"吃满整格高"的：它让这个盒子**至少**占满整格
      （短文档也点得进），而 `min-height` 兜底在 `auto` 上，所以**长文档时
@@ -165,83 +220,300 @@
   padding: 48px 0 120px;
 }
 
+/* ⚠️ 段距**走 token 不给死值**（2026-09-27，「文档主题」那一页新加的那一项）：
+   用户可以把它改成 0（段落挨着）或更松。逗号后面那个 `0.85em` 是"无文档主题 +
+   用户没动过这一项"时的中性值——**它必须与 `settings/document.rs` 里
+   `Document::default().paragraph_gap`（85）一致**，否则用户一打开那个开关、
+   还没碰数字，正文就会跳一下。三处（这里、那个 Rust 默认值、`DocThemePane`
+   的 min/max）一起改，`tests/doc-typography.test.ts` 第二组钉着这件事。
+
+   ⚠️ 这一条管的是**块与块之间**那个距离，所以**吃它的是段落、引用、列表、
+   表格、脚注**这些"一段东西"。两种块不吃：
+   - **代码块**：下面 `.editor-mount .ProseMirror pre` 那条 `margin: 30px 0`
+     权重 (0,2,1) 高过这里，而那个 30px 是**框自己的留白**（见那条注释），
+     不是"离上一段多远"——调段距不该把框挤扁；
+   - **标题**：⚠️ **只在用着文档主题时**不吃（主题给 `.ProseMirror h1` 写了
+     边距，权重 (0,2,1) 压过这里）。**无文档主题时标题的上边距就是这一条**
+     ——中性样式里没有给 h1~h6 写边距，它们是从这里拿的。 */
 .editor-mount .ProseMirror > * + * {
-  margin-top: 0.85em;
+  margin-top: var(--doc-para-gap, 0.85em);
 }
 
-/* ── 即时渲染：块级标记的浅灰标注 ─────────────────────────────────────────
-   由 `src/editor/instant-render.ts` 用 `Decoration.node` 给块挂上
-   `.nota-srcmark` 和 `data-srcmark`（值就是该显示的文字：`##`、`>`、`1.`、
-   三个反引号）。**样式只此一处。**
-
-   ⚠️ 三条关键，动之前先读懂：
-
-   ① **标记走 `::before`，不认识第二个元素**。理由见那个插件的文件头：
-      用 widget 插 `<span>` 时，**列表项的标记会画到隔壁项上去**
-      （块边界上的 widget 落点不由我们说了算）。改成给块自己挂 class 之后，
-      "标记属于哪一块"就成了定义，不再是推断。
-
-   ② **定位祖先就是块自己**（下面那条 `position: relative`），所以
-      `right: 100%` 必定落在块的左外侧，而且**不占文档流**。这是手感的全部：
-      正文一个字都不许因为标记的出现或消失而左右挪。
-
-   ③ **列表项要多一条 `list-style: none`**：默认的圆点也画在 li 左外侧，
-      不关掉就会跟短横**叠在一起**。关掉之后恰好就是 Typora 的样子——
-      光标进列表项，圆点让位给 `-`；光标一走，圆点回来。 */
-
-.editor-mount .ProseMirror .nota-srcmark {
-  position: relative;
+/* 文档**最上面那一个块**是标题时，不吃它自己的上边距（2026-09-26，用户报的缺陷）。
+   ⚠️ 症状：空文档里打下 `# 你好`、再按回车（`heading-on-enter.ts` 把它换成真标题），
+   整块**当场往下跳 73px**。那一跳就是文档主题给 `h1` 的 `margin-top`
+   （`minimal` 是 2.4em，按 h1 自己的 1.9em 字号算 ≈ 73px）。
+   为什么会有这一跳：上边距是**"离上一段多远"**，而这段文字上面**没有**上一段；
+   成块之前它是个 `<p>`（不吃上边距），成块之后突然要"离上一段 2.4em"，
+   于是凭空多出一段空白。同一个毛病在"打开一份第一行就是标题的文档"上也成立。
+   ⚠️ **只排除标题**，不写成 `> :first-child { margin-top: 0 }`：代码块那 30px 上边距
+   是**它自己那个框的留白**（见上面那条注释），不是"离上一段的距离"，不该一起抹掉。
+   ⚠️ 权重 3 条 > 文档主题那 2 条，所以**主题改不掉它**——这是有意的：主题管
+   "标题长什么样"，不管"文档从哪儿开始"。
+   ⚠️ 只在**顶层**（`>`）：引用里、列表项里、表格格子里的第一个标题照样要有上边距。 */
+.editor-mount .ProseMirror > :is(h1, h2, h3, h4, h5, h6):first-child {
+  margin-top: 0;
 }
 
-.editor-mount .ProseMirror .nota-srcmark::before {
-  content: attr(data-srcmark);
-  position: absolute;
-  right: 100%;
-  padding-right: 0.5em;
+/* ── 正文列的宽度上限就落在这里 ──────────────────────────────────────────
+   把 `--content-width` 从 `.milkdown` 那一层挪到**块级子元素**上（2026-09-26，
+   见上面 `.milkdown` 那条的来历）。这样做只有一个目的：**`hr` 是唯一不受限的
+   块**，于是分割线从正文左缘一路画到整格右缘，而不是在正文列右缘断掉。
+
+   ⚠️ **`hr` 一定要排除在外**。给它也加上限宽，就等于把这条规则的意义整个抹掉，
+   而且症状会回到"只有左边半截横线"——那正是用户报的那个问题。
+
+   ⚠️ 限宽是**靠左**的（`margin-right: auto` 的等价效果由"块级元素默认不居中"
+   提供），不是居中：用户 2026-09-25 要求过正文列贴左边。 */
+.editor-mount .ProseMirror > *:not(hr) {
+  max-width: var(--content-width, 760px);
+}
+
+/* ── 段首缩进（2026-09-27）───────────────────────────────────────────────
+   `--para-indent` 由 `styles/applyTheme.ts` 写在 `<html>` 上（"设置 → 编辑器 →
+   段首缩进"），**关着时那个变量是被摘掉的**，所以这里必须给一个兜底值。
+
+   ⚠️ 单位是 `em`：用户填的是"几个字符宽"，1em = 一个汉字宽，正文字号/字体
+   一换缩进跟着变。⚠️ 变量在 `<html>` 上、消费者只有这一条规则——同
+   `--content-width`（写在编辑区那一层）：**只有正文用得到它**。
+
+   ⚠️⚠️ **只认顶层的 `p`**（`>` 这条）。引用里、列表项里、表格格子里、
+   代码块里的段落**一律不缩**：
+   · 中文排版的规矩是"段首空两格"针对**正文段落**，引用和列表项自己已经有
+     左边距，再缩两格是两层缩进；
+   · 表格格子里缩两格会把表格撑歪（格宽是按内容算的）；
+   · 代码块里更不用说——那些空格会让代码看起来像是被缩进过的。
+   ⚠️ 另一个写法 `p { text-indent: … }`（不加 `>`）在开窗目检时**看着也对**，
+   因为最常见的文档就是一堆顶层段落——别改回去。
+
+   ⚠️ **它只管编辑区**：导出/打印/分屏预览里那一份是**文件本身**，缩进是
+   "看起来"的属性、没写进文件，所以那边没有（与"正文宽度"同一条边界）。 */
+.editor-mount .ProseMirror > p {
+  text-indent: var(--para-indent, 0);
+}
+
+/* ── 块标记与行内标记的长相**搬走了**（2026-09-26）────────────────────
+   它们不再住在本文件里，去了 `src/styles/marks.css`（`.nota-srcmark` /
+   `.nota-markhint` / `.nota-heading-pending` 三样）。
+   搬家的理由只有一个：**行数**——本文件当时 928 行，离 1000 行只差 72 行，
+   而这三样加起来 166 行，是这里最独立的一段（只有它们给伪元素画标记）。
+   ⚠️ 那几条规则在 `marks.css` 里靠 `main.tsx` 的引入顺序排在**本文件之后**；
+   全仓没有第二个地方碰这三个类名，所以顺序不影响谁赢（改类名时先确认这一点）。
+   ⚠️ 本文件顶上那条「左边 56px 装订线」的来历仍然有效——那条内边距在这里，
+   而标记画在那条空位里，两件事分居两个文件，改一边要看另一边。 */
+
+
+/* ── 行内标记的长相（高亮 / 上标 / 下标 / 下划线，2026-09-27）────────────
+ *
+ * 这四种标记**本身**在 `editor/inline-marks.ts`（解析、命令、输入规则都在那儿），
+ * 这里只管它们长什么样。选择器写的是它们真正渲染出来的 HTML 标签：
+ * `<mark>` / `<sup>` / `<sub>` / `<u>`（见规格里的 `html标签` 那一段）。
+ *
+ * ⚠️ **这一段必须写在 `editor.css` 里，不能搬去 `marks.css`**。判据不在"哪个
+ * 文件更合适"，在**导出**：`editor/export.ts` 那份"带样式"的 HTML 只嵌三份
+ * CSS —— `theme/base.css`（变量）、本文件、`katex.min.css`。`marks.css` 整个
+ * **不在里面**（它里面全是挂在 `.nota-*` 上的编辑期辅助物，导出时连类名一起
+ * 摘掉）。搬过去的后果不是"少几条样式"，是**导出/打印出来高亮和白纸一样**，
+ * 而且这件事只有真去导出一次才看得见。
+ *
+ * ⚠️ 四条都用 `:where(.editor-mount .ProseMirror)` 包着：权重只剩标签本身
+ * （0,0,1），文档主题将来要改 `<mark>` 的色号时一条普通规则就压得过，不必来
+ * 这里比权重——同上面 `hr` / `blockquote` 那两条的理由。
+ * ⚠️ 但 `<sup>` / `<sub>` 那两条里**必须**写 `line-height: 0`（理由见下），
+ * 而 `:where()` 压不掉它自己写的属性，所以文档主题若也要改行高，得同样显式写。
+ *
+ * ⚠️ 编辑区里的 `<mark>` **不是**查找命中（那个是 `.nota-find-hit` 的装饰，
+ * 在 `bars.css` 里），两者底色是分开的两个变量，见 `theme/base.css` 里
+ * `--mark-bg` 那一段。 */
+:where(.editor-mount .ProseMirror) mark {
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  /* 圆角与一点点左右内边距：不留的话高亮的两端会贴着字的边，看着像错位。 */
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+:where(.editor-mount .ProseMirror) sup,
+:where(.editor-mount .ProseMirror) sub {
+  /* ⚠️ `font-size` 是相对**当前**字号算的（`em`），所以正文那档字号一改，
+     上下标跟着走，不需要在这里再写一遍 `--doc-font-size`。 */
+  font-size: 0.75em;
+  /* ⚠️⚠️ `line-height: 0` 是这两条里**唯一真正要紧**的一句：上下标会把行盒
+     撑高（`vertical-align` 一挪，行高就按挪出去之后的边界算），于是一行里有
+     上标的段落比别的段落高出一截——**同一个文档里行距会一段一段地跳**。
+     这正是这个项目最烦的那种"看着像坏了、又说不清哪儿坏了"。
+     浏览器的 UA 样式表给的就是 0，这里明写一遍是因为上面说了"主题可以覆盖"。 */
+  line-height: 0;
+}
+
+/* ⚠️ 上下标各自还要一句 `position: relative`——借用的是 UA 那两个默认值
+   （`super` / `sub`）。**别自己写 `vertical-align: 0.5em` 之类**：那个偏移量
+   是相对字号算的，字号一档一档地变时自己写的值迟早会飘。 */
+:where(.editor-mount .ProseMirror) sup {
+  vertical-align: super;
+}
+
+:where(.editor-mount .ProseMirror) sub {
+  vertical-align: sub;
+}
+
+:where(.editor-mount .ProseMirror) u {
+  /* ⚠️ 下划线本来就有 UA 的默认值，这条是为了**和上面三条摆在一起**：改的人
+     一眼看见"四种标记的长相都在这一段里"，不必去猜下划线是不是漏了。
+     ⚠️ `text-decoration-color` 跟 `--fg-faint` 走而不是跟字色：满行黑字下面
+     再画一条同色的线，中文这种笔画密的字会显得糊（同 `hr` 那条的思路）。 */
+  text-decoration: underline;
+  text-decoration-color: var(--fg-faint);
+}
+
+/* ── 裸 HTML 与注释（2026-09-27）────────────────────────────────────────
+ *
+ * 两种节点都由 `editor/html-block.ts` 产出（行内的 `<u>` 那类归 preset 的
+ * `htmlSchema`），这里只管它们长什么样。**画的是源码**，不是渲染出来的 HTML——
+ * 那条边界写在那个文件的文件头里（第 2 条：渲染等于把用户写的标签交给浏览器
+ * 执行）。所以两者都按"一段不该被当成正文读的源码"来画：等宽、小一号、
+ * 淡、左边一条竖线。
+ *
+ * ⚠️ 这两条**必须住在 `editor.css`**（理由同上面行内标记那一段：带样式的导出
+ * 只嵌 `theme/base.css` ＋ 本文件 ＋ `katex.min.css`）。⚠️ 不同的是，
+ * **块级那条根本不会出现在导出里**（导出走序列化后的 Markdown，那边出来的是
+ * 真的 HTML 元素），会出现的是**行内那条** —— `span[data-type="html"]` 是
+ * 编辑区的 DOM，导出时会跟着正文一起被抄下来。
+ *
+ * ⚠️ 注释那一格靠 `data-comment` **属性**选，不靠类名：类名带 `nota-` 前缀的话
+ * 导出时会被剥掉（`editor/export.ts` 那条前缀规则），而这里的块级节点虽然
+ * 不进导出，行内那一条是进的——两处用同一套属性判据，读的人少记一样东西。 */
+:where(.editor-mount .ProseMirror) div[data-type="html-block"] {
   font-family: var(--font-mono);
-  font-size: 0.78em;
-  font-weight: 400;
-  line-height: inherit;
-  white-space: nowrap;
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: var(--fg-muted);
+  background: var(--bg-subtle);
+  border-left: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.5em 0.75em;
+  margin: 0.8em 0;
+  /* ⚠️ `pre-wrap` 而不是 `pre`：用户写的一行 HTML 可能很长，`pre` 会让它
+     顶出正文列（水平滚动条长在整页上，不是长在这一块上）。`anywhere` 是给
+     `<div class="aaa-bbb-ccc">` 那种没有空格的串准备的。 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+:where(.editor-mount .ProseMirror) div[data-type="html-block"][data-comment="true"] {
+  /* 注释比普通 HTML 再淡一档、并加斜体：它是**写给自己看的**，不该和正文
+     抢注意力。⚠️ 只改颜色与字形，**不动字号与内边距**——动了的话，一段
+     注释插进正文会让上下两行的位置跳一下。 */
   color: var(--fg-faint);
-  opacity: 0.55;
-  user-select: none;
-  pointer-events: none;
-  /* 淡入。⚠️ **只有进入有过渡**：伪元素是跟着 class 一起被摘掉的，
-     没有机会播退场动画。别为此去搞"先淡出再删"——那要跟重绘抢时序，
-     抢输了就是标记赖在屏幕上不走，比没有动画糟得多。 */
-  animation: nota-srcmark-in 0.16s ease-out;
+  font-style: italic;
 }
 
-/* 列表项：圆点让位给短横（理由见上面 ③）。
-   ⚠️ 只去掉 marker，**不动 padding**——缩进必须保持原样，否则光标一进一出，
-   整行文字会横向跳一下。 */
-.editor-mount .ProseMirror li.nota-srcmark {
-  list-style: none;
+:where(.editor-mount .ProseMirror) span[data-type="html"] {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--fg-faint);
+  background: var(--bg-subtle);
+  border-radius: 2px;
+  padding: 0 2px;
 }
 
-/* 代码块：标记要多退一截。
-   ⚠️ 定位祖先是 `pre`，而 `pre` 的左边**不等于**代码块可见框的左边——
-   中间隔着它的 14px 内边距和 1px 边框。只写 `right: 100%` 的话，标记最右
-   那几个字符会**压在代码块的背景上**，看着像钻进框里去了。
-   15px = 14（padding）+ 1（border）；⚠️ **改 `pre` 的内边距时这里要跟着改**
-   （那条规则就在本文件代码块那一段，写着同样一句话）。
-   📌 补记：这条注释一直是对的，但它引用的"14px 内边距"在 2026-09-22 之前
-   **根本不存在**（全仓没有一条 `pre` 规则，浏览器默认内边距是 0）。
-   是补代码块样式时才把这个数坐实的——**注释里的数也要当场核**。 */
-.editor-mount .ProseMirror pre.nota-srcmark::before {
-  right: calc(100% + 15px);
+/* ── 脚注（2026-09-27）────────────────────────────────────────────────────
+ *
+ * 节点、解析、序列化**全部由 `preset-gfm` 提供**（`footnote_definition` ＋
+ * `footnote_reference`，见 `preset-gfm/lib/index.js:688-790`），本仓一行代码都
+ * 没写——缺的从来只是**长相**：不写这一段的话，脚注在编辑区里就是一个默认样式
+ * 的 `<dl>`（定义列表：标签顶格、正文缩进两格，和正文段落完全不像一路）。
+ *
+ * 长相取 Typora 的意思：**引用角标**是一个小小的上标方括号，**定义**排在正文
+ * 后面、字号小一档、左边一条竖线。
+ *
+ * ⚠️ `dl` / `dt` / `dd` 这三个标签是 preset 定的（`toDOM` 写死的），**别在
+ * CSS 里改标签名**——改了就等于样式和 DOM 对不上，而症状是"脚注完全没样式"
+ * 而不是报错。
+ *
+ * ⚠️ 定义是**块级节点**（`group: "block"`），所以它在正文流里排在哪儿就是哪儿
+ * ——用户在文档中间写 `[^1]: 说明` 的话，那块定义就出现在文档中间。这是
+ * Markdown 本身的形状（脚注定义可以在任意位置），不是本仓的排版选择。 */
+:where(.editor-mount .ProseMirror) sup[data-type="footnote_reference"] {
+  /* 角标本身。⚠️ `cursor: pointer` 只表示"这里能点"——**点它不会跳转**
+   *（跳转要一套"定义在哪"的索引，没做，见 `docs/10` §3 那一格的说明）。 */
+  color: var(--accent);
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
+  cursor: pointer;
 }
 
-@keyframes nota-srcmark-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 0.55;
-  }
+:where(.editor-mount .ProseMirror) sup[data-type="footnote_reference"]::before {
+  content: "[";
 }
 
+:where(.editor-mount .ProseMirror) sup[data-type="footnote_reference"]::after {
+  content: "]";
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] {
+  margin: 0.8em 0;
+  padding: 0.4em 0 0.4em 0.9em;
+  border-left: 2px solid var(--border);
+  font-size: 0.9em;
+  color: var(--fg-muted);
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dt {
+  /* 标签那一行（`1`）。⚠️ 用 `::before` 补回方括号对，与角标同一副长相——
+     两处对不上时，读者没法把角标和定义对上号。 */
+  font-weight: 600;
+  color: var(--accent);
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dt::before {
+  content: "[^";
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dt::after {
+  content: "]";
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dd {
+  /* ⚠️ 清掉 UA 那个 `margin-inline-start: 40px`：本仓的缩进由外层那条
+     左边线负责，两者叠在一起会缩进得莫名其妙。理由同上面 `blockquote` 那条。 */
+  margin: 0.2em 0 0;
+}
+
+/* ── 智能标点的「仅显示时转换」（2026-09-27）────────────────────────────────
+ *
+ * ⚠️ **只有「仅显示时转换」那一档用得上这一段**。另两档不需要 CSS：
+ * 「输入时转换」敲下去就是真的字符，「关闭」什么都不做。
+ *
+ * 做法是**一对**（`smart-punctuation.ts` 的 `算装饰` 两半都挂，缺一不可）：
+ *
+ * | 类名 | 是什么 | 干什么 |
+ * |---|---|---|
+ * | `.nota-smart-hide` | `Decoration.inline`，套在**原文**上 | 把原文压成 0 宽 |
+ * | `.nota-smart-show` | `Decoration.widget`，紧挨着前面 | 画出转换后的那个字符 |
+ *
+ * ⚠️ **`font-size: 0` 而不是 `display: none`**：`display: none` 会让那一段
+ * **完全不占位**，而 ProseMirror 的光标是按 DOM 里的文本节点走的——整段宽度
+ * 归零之后，光标停在原文中间时屏幕上找不到插入点（"光标不见了"）。
+ * `font-size: 0` 同样把宽度压成 0，但文本节点还在，PM 的坐标换算不会错位；
+ * 代价是**原文那两颗字符的位置上仍然看不见光标**，这一条如实记着。
+ *
+ * ⚠️ 组件那一侧的 `contenteditable="false"` 与 `ProseMirror-widget` 这个类
+ * **由 ProseMirror 自己加**（`prosemirror-view` 的 `WidgetViewDesc` 里那三行），
+ * 不需要本仓写——所以这里只管长相。
+ *
+ * ⚠️ **`.nota-smart-show` 故意不写任何字体声明**：它要跟周围正文一模一样
+ * （继承即可）。写死字号会在文档主题改了正文字号之后和上下文对不上。
+ *
+ * ⚠️ **这一段必须住在 `editor.css`**（与上面行内标记、裸 HTML 那两段同一条
+ * 理由）：带样式的导出只嵌三份 CSS，`marks.css` 那一族整个不在里面。
+ * ⚠️ 不过 `Render` 档**根本走不到导出**（`create-types.ts` 的 `标点` 那一格
+ * 明写着导出那条路不许传它）——所以这条理由在这里只是"跟着这一族放"，
+ * 真正的依据在上面那两段。 */
+:where(.editor-mount .ProseMirror) .nota-smart-hide {
+  font-size: 0;
+}
 
 /* ── 代码块 ───────────────────────────────────────────────────────────────
    ⚠️ **这一段是补的**。`theme.css` 里那七个 `--code-*` 变量早就定义了，
@@ -254,25 +526,84 @@
 
 .editor-mount .ProseMirror pre {
   position: relative;
-  /* ⚠️ **内边距是 14px，别改**。`instant-render.ts` 把代码块的围栏标记画在
-     `pre` 左外侧，偏移量写死成 `calc(100% + 15px)` = 14（padding）+ 1（border）。
-     改这里就得同批改那一条——两个文件里的同一个数，最容易改漏一个。 */
-  padding: 14px;
-  /* 浏览器给 `pre` 的默认 `margin: 1em 0` 会和 `.ProseMirror > * + *` 叠起来。 */
-  margin: 0;
+  /* ⚠️ **代码区左边的内边距从一个变量来**，不再是写死的 14：
+     开了行号（设置里那一条 `editor.code_line_numbers`）之后它要变成 54px，
+     好给左边那条行号装订线（40px）腾出位子。
+     ⚠️ `marks.css` 里 `.nota-srcmark` 那条围栏标记的 `right: calc(100% + …)`
+     读的是**同一个变量**（`--nota-code-pad-l`）——它要退到 `pre` 的边框外面去，
+     退多少正好等于"左边内边距 + 1px 边框"。以前两边各写一份写死的 14，注释里
+     互相提醒"改的时候要一起改"；换成变量之后那件事由 CSS 自己保证了。
+     ⚠️ **上下那两条不参与**：这里管的是左右。 */
+  --nota-code-pad-l: 14px;
+  /* ⚠️ **上下都是 18px**（2026-09-26 从 34 降下来的）。用户原话：
+     「还有就是代码块有点宽，上下距离太长」。
+     原来那 34 有两个来历，**两个都已经不成立**，所以一起降：
+     1. **下面那 34 是给右下角那条按钮条留的槽**（2026-09-25 补，用户体验评估
+        抓出来的）。在那之前是 `padding: 14px`，而 `.nota-code-bar` 就
+        `position: absolute` 地挂在右下角（`bottom: 4px` + 高 `22px`），于是它
+        **直接压在代码最后一行的尾巴上**——用户鼠标一进代码块，最后两个字符就被
+        「折叠 / 复制」盖掉。
+        ⚠️ 2026-09-26 那条按钮条**搬到了块外**（`.nota-code-bar` 现在 `top: 100%`，
+        与语言框排在同一行、一个靠左一个靠右），那个槽从此由 `margin-bottom`
+        独自承担（见下面），内边距里这一截就不需要了。
+     2. **上面那 34 是 2026-09-26 补的，为的是"上下一样"**——只留下面的时候，
+        一行代码看着是"贴着上边框、下面空一大截"（量出来是上 19px 对下 39px；
+        那 5px 是行高 1.6 的半个行距，两边都有），块越矮越明显。
+        ⚠️ **这条理由现在仍然成立**：上下还是相等的（都是 18）。别只看到
+        "上面那个 34 被砍了"就以为是回退——砍的是**两边一起**。
+     为什么落在 18 而不是回到 14：14 时上下比正文段落之间的间距（0.85em ≈ 13.6px）
+     还紧，一行代码在块里就不像"块"了；18 是"比段落松、但不空"的那一档。
+     ⚠️ 行号装订线那 40px 是加在**左**边（`--nota-code-pad-l`），上下不受影响。 */
+  padding: 18px var(--nota-code-pad-l);
+  /* ⚠️ **上下都是 30px**（2026-09-26 改的，原来是 `0 0 30px`）。
+     用户原话：「代码框不论上下，和其他文本的间距。Typora 是那样的」——
+     也就是**上下要一样**：在这之前上面只有兄弟规则那条 `margin-top: 0.85em`
+     （约 13.6px，和"两段之间"一个数），下面 30px，于是代码块看起来是
+     "贴着上一段、甩开下一段"，而且上一段越短越明显。
+
+     这两个 30 各有来历，**别只看到一个**：
+     - **下面那个 30** 不只是留白，它是给块外那条挂件留的槽。**2026-09-26 起
+       这条槽里住着两颗**：左边是工具栏（`.nota-code-bar`，折叠 / 复制），
+       右边是语言选择框（`.nota-code-lang-wrap`）——两颗都是 22px 高、
+       `top: 100%` 贴着下边框，所以 30 = 22（条子高）＋ 8（留给下一段的气）。
+       由来：2026-09-25 用户要求「增大一下代码框和下面的另外的其他东西的间隔，
+       这样才能保证那个语言选择框能塞得下」。
+       ⚠️ 改那两颗的高（`.nota-code-btn` 那条 `height`）时这个数要回来算。
+     - **上面那个 30** 是照下面那个写的，就为了对上 Typora 的"上下一样"。
+       它比"两段之间"（0.85em）大得多，这是**有意的**：Typora 里代码块
+       本来就比段落间距更"隔离"。
+
+     ⚠️ 折叠：这个 `margin-bottom` 和下个块那条 `margin-top: 0.85em` 会**折叠**，
+     取大的那个，所以实际是 30px 而不是两者相加，别按"再加一个 0.85em"去算。
+     ⚠️ 左右内边距那笔账见上面那条注释（现在是 `--nota-code-pad-l` 这个变量，
+     上下那两个数不参与）。 */
+  margin: 30px 0;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-subtle);
   font-family: var(--font-mono);
   font-size: 0.88em;
   line-height: 1.6;
-  /* ⚠️ `overflow` 必须留 `visible`：`instant-render.ts` 把围栏标记
-     （```rust）画在 `pre` 的**左外侧**，`overflow-x: auto` 会把它裁掉。
-     代价是长行不横向滚动 —— 改成自动换行，这也正是 Typora 的默认值
-     （它「代码块自动换行」本来就是勾上的）。 */
+  /* ⚠️ `overflow` 必须留 `visible`，**这一条不会因为任何设置而变**：
+     画在 `pre` **外侧**的东西有三样——围栏标记（`instant-render.ts`，左外侧）、
+     代码块下面那条工具栏和语言选择框（`code-block.css`，下沿之外）。
+     `overflow-x: auto` 会同时把它们裁掉（而且 CSS 规定：一个方向不是
+     `visible` 时，另一个方向的 `visible` 会被算成 `auto`，所以只写 `-x` 也一样）。
+     代价是长行不横向滚动 —— 所以默认改成自动换行（见下面 `code_wrap` 那条）。 */
   overflow: visible;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* 设置里关掉「代码块 → 自动换行」（`markdown.code_wrap`，默认开）。
+   ⚠️ **不改成 `overflow-x: auto`**，理由见上面那条：那会把块外那三样挂件
+   一起裁掉。所以长行是**溢出**出去的，横向滚动条落在更外面那一层
+   （`.editor-mount` 的 `overflow: auto`）上。
+   ⚠️ 关掉之后，一个长行只能靠拖外面的滚动条看见右半截——这是拿"看得见块外
+   挂件"换来的，两条不能都要。 */
+html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
+  white-space: pre;
+  overflow-wrap: normal;
 }
 
 .editor-mount .ProseMirror pre code {
@@ -329,73 +660,6 @@
   color: var(--fg-muted);
 }
 
-/* ── 代码块右下角那一条（`editor/code-block.ts`）─────────────────────────
-   语言选择器 / 复制 / 折叠。 */
-
-.nota-code-bar {
-  position: absolute;
-  right: 6px;
-  bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  /* 平时淡到几乎看不见，鼠标进代码块才亮起来——Typora 也是这么收着的，
-     否则满屏都是按钮。 */
-  opacity: 0;
-  transition: opacity 0.12s ease-out;
-}
-
-/* ⚠️ 两条选择器管的**不是**同一件事，别以为有一条是多余的：
-   - `:hover` 是主要那条：鼠标进代码块就亮（Typora 的手感）；
-   - `:focus-within` 只在**键盘 Tab 到那条上的按钮**时才成立。
-     ⚠️ **光标在代码里打字时它是不成立的**——contenteditable 的焦点在
-     `.ProseMirror` 上，`<code>` 拿不到 `document.activeElement`，于是
-     `pre:focus-within` 永远是假。写代码的时候顺手一试很容易以为这条写错了，
-     它不是写错，是**管不着那件事**。真要让"光标在块里就亮"，得在 NodeView 里
-     监听选区——那是另一件事，没做。 */
-.editor-mount .ProseMirror pre:hover .nota-code-bar,
-.editor-mount .ProseMirror pre:focus-within .nota-code-bar {
-  opacity: 1;
-}
-
-.nota-code-btn,
-.nota-code-lang {
-  height: 22px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-raised);
-  color: var(--fg-muted);
-  font-family: var(--font-ui, inherit);
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.nota-code-btn:hover,
-.nota-code-lang:hover {
-  color: var(--fg);
-  border-color: var(--border-strong);
-}
-
-.nota-code-lang {
-  max-width: 140px;
-}
-
-/* 折叠：靠 `max-height` 收起来，**不是 `display: none`**。
-   理由见 `code-block.ts`：藏起来的 contentDOM 会让 ProseMirror 没法在里面
-   放光标。留一点高度（1.6em 约等于一行）当作"这儿有东西"的提示。 */
-.editor-mount .ProseMirror pre.nota-code-folded > code {
-  display: block;
-  max-height: 1.6em;
-  overflow: hidden;
-}
-
-.editor-mount .ProseMirror pre.nota-code-folded {
-  /* 折叠时把右下角那一条留在原地，用户得有地方点"展开"。 */
-  padding-bottom: 16px;
-}
-
 /* ── 任务列表的复选框 ─────────────────────────────────────────────────────
    `- [x] 做完了` 渲染成 `li[data-item-type="task"][data-checked]`——钩子是
    `@milkdown/preset-gfm` 给的，**这份 CSS 才是第 36 项真正缺的那一半**。
@@ -403,7 +667,7 @@
    ⚠️ 四条关键：
 
    ① **圆点必须无条件去掉**。普通列表项是靠 `.nota-srcmark` 那条规则临时去掉的
-      （光标进列表项，圆点让位给 `-`），任务项不行——它的方框是**一直在**的，
+      （在 `marks.css` 里；光标进列表项，圆点让位给 `-`），任务项不行——它的方框是**一直在**的，
       圆点也一直在，就会画成 `• ☐ 文字`。
 
    ② **装订线宽度只定义在这里**（`--task-check-gutter`）。`task-list.ts` 判"这一击
@@ -465,16 +729,178 @@
   pointer-events: none;
 }
 
-/* 勾上的那一项，正文跟着淡一点（Typora 也是这么标的）。
+/* 勾上的那一项，正文跟着淡一点。
    ⚠️ 只淡第一段：任务项下面还可以挂子列表，整条 `li` 一起淡化会把子项也带上。 */
 .editor-mount .ProseMirror li[data-checked="true"] > p:first-child {
   color: var(--fg-faint);
   text-decoration: line-through;
 }
 
+/* ── 表格（**只在没有文档主题时**显形的那一份）────────────────────────────
+ *
+ * # 为什么这里非要有这一条
+ *
+ * 表格的边框、内边距、表头底色**全都写在文档主题里**（六个主题各一份）。于是
+ * "无主题"（`document_theme` 为空串，也就是默认状态）下表格是**一堆没有线的
+ * 字**——列对不齐、看不出哪是表头，看起来就是"插入表格这个功能坏了"。
+ * 浏览器自带的表格默认样子又太粗糙（没有内边距、表头不加粗），拿它当兜底
+ * 等于把界面交给 UA 样式表。
+ *
+ * # ⚠️ 整段必须包在 `:where()` 里 —— 这是**特异性**问题，不是风格问题
+ *
+ * 文档主题由 `ui/doc-theme.ts` 把 `.editor-pane` 那一层加上主题类，选择器
+ * 算下来是 (0,1,1)；本文件里普通写法的选择器（`.editor-mount .ProseMirror table`）
+ * 是 (0,2,1)，**比主题高**。不包 `:where()` 的话，这一段会把**所有**主题的
+ * 表格样式盖掉——症状是"换了主题只有表格不变"，而这种"只有一个部件不跟随"
+ * 的毛病最难被认出来是 CSS 层级的锅。`:where()` 的权重恒为 0，于是本段变成
+ * (0,1,1) 里最弱的一档：主题只要碰了同一批属性就赢。
+ *
+ * ⚠️ 所以**只用 token**（`--border` / `--fg-muted` / `--bg-subtle` / `--radius`），
+ * 不写字面颜色：主题换了底色而这里钉死灰色的话，深色主题下就会看到一块亮边框。
+ * `themes/paper.css` 那份是形状参考（同一套属性、同样的量级），不是抄来的配色。
+ *
+ * # ⚠️ `width: 100%` 在这里**不起作用**（2026-09-25 查过，别再试了）
+ *
+ * 表格的宽是 `prosemirror-tables` 的 `TableView` 定的——它在建 DOM 时把
+ * `table.style.width` / `minWidth` 写成**行内样式**（按各列的 `colwidth` 求和，
+ * 没有 `colwidth` 时按每列内容算）。行内样式压过本文件里任何选择器，所以
+ * 不管这里的权重写到多高、加不加 `!important` 之外的修饰，表格都是**按内容
+ * 缩着**的（短内容的表看起来就是窄窄一小块）。
+ *
+ * 这**不是**这一段的缺陷："看得见"要的是边框和内边距，那些是这儿的活；
+ * "多宽"是 `TableView` 的活，它还得让用户拖列宽。想强行拉满就得和它抢行内
+ * 样式（`!important`），代价是列宽拖动跟着变形——那是另一件事，没做。
+ */
+:where(.editor-mount .ProseMirror table) {
+  border-collapse: collapse;
+  font-size: 0.96em;
+}
+
+:where(.editor-mount .ProseMirror th, .editor-mount .ProseMirror td) {
+  padding: 0.5em 0.75em;
+  /* ⚠️ 用 `--border-strong` 而不是 `--border`（2026-09-26 改）：浅色下
+     `--border` 只有 8% 的黑，画成 1px 的格线在白纸上基本看不见——
+     用户抱怨的「分别不明显」里就有表格这一项。`--border-strong`（18%）
+     刚好落在 GitHub 那类表格线的亮度上：看得出格子，又不抢正文。 */
+  border: 1px solid var(--border-strong);
+  text-align: left;
+}
+
+/* 表头：底色 + 加粗。⚠️ `--fg` 而不是 `--fg-muted`——表头是**列的名字**，
+   不是注释，比正文淡就对不起了。 */
+:where(.editor-mount .ProseMirror th) {
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* 隔行浅底，长表格横向不容易看串行。
+   ⚠️ 用 `:nth-child(even)` 而不是 `:nth-child(odd)`：表头占掉第一行，
+   从偶数行起步才不会让第一行数据跟表头同色。 */
+:where(.editor-mount .ProseMirror tbody tr:nth-child(even)) {
+  background: var(--bg-subtle);
+}
+
+/* ── 拖列宽那根手柄（`prosemirror-tables` 自带样式的一份覆盖）──────────────
+ *
+ * 用户 2026-09-26：「还有就是表格，允许拖动改变大小」。那份样式已经由
+ * `main.tsx` 引了（`@milkdown/kit/prose/tables/style/tables.css`，MIT），
+ * 那一条 import 的注释里写着"少了它的症状是什么"。这里只补**它跟不了主题**
+ * 的几处——它是通用库，不认识本仓的 token。
+ *
+ * ⚠️ 下面这两条**故意不用 `:where()`**（与上面那一段的规矩相反）：拖动手柄是
+ * **编辑器自己的界面**，不是文档内容，所以文档主题**不该**管它。用 `:where()`
+ * 把权重压到 0 的话，任何一份主题里一条沾边的手柄规则都能把它顶掉——而那种
+ * "只有拖动时的颜色不对" nobody 会报成 bug。包在 `.editor-mount` 里是为了
+ * **只在编辑区生效**（导出、打印那些离屏实例里没有拖动手柄）。
+ */
+
+/* ⚠️ 库那份 CSS 用了这个变量却没定义过它（`min-width: var(--default-cell-min-width)`）。
+ * 不定义的话 `min-width` 是**非法值**，等于没有——"没拖过的列至少这么宽"
+ * 这条规矩就此消失，短内容的表格每列都会被挤成一条。给一个**相对量**（em）
+ * 而不是像素：文档主题会改正文字号，`em` 跟着走，像素不会。 */
+.editor-mount .ProseMirror {
+  --default-cell-min-width: 3em;
+}
+
+/* 手柄颜色。库那份写死了 `#adf`（浅蓝）——深色主题下它是一道刺眼的白线，
+ * 而它出现的位置又恰好是用户正盯着的地方。用强调色，亮暗两档都自洽。 */
+.editor-mount .ProseMirror .column-resize-handle {
+  background-color: var(--accent);
+}
+
+/* 拖拽那一刻，**正在拖的那一格**加一层浅浅的强调色，比"只有那根 4px 的线
+ * 跟着跑"更容易看出"我正在拖这一列"。
+ *
+ * ⚠️ 这个 class **挂在单元格上**（`td.column-resize-dragging`），不是挂在
+ * 编辑器根上——那是库里的 `Decoration.node(…, { class: "column-resize-dragging" })`，
+ * 包的是被拖那一列的那个 cell。挂在根上写（`.ProseMirror.column-resize-dragging`）
+ * 是**永远不会匹配**的写法，而它的症状是"这条规则像没写一样"。
+ * ⚠️ 与它容易混的 `resize-cursor` 才是挂在根上的（`attributes` 那一条）。
+ *
+ * ⚠️ 用 `--accent` 兑出来的半透明，别写字面色。 */
+.editor-mount .ProseMirror td.column-resize-dragging,
+.editor-mount .ProseMirror th.column-resize-dragging {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ── 分隔线与引用（**同样只在没有文档主题时**显形的那一份）────────────────
+ *
+ * # 为什么非要补这一段
+ *
+ * 与上面表格那一段是同一个理由：`hr` 与 `blockquote` 的颜色、边框**全都写在
+ * 文档主题里**（`themes/minimal.css` / `adwaita.css` / `latex.css` 各一份），
+ * 于是 `document_theme = ""`（**默认状态**）下这两样回落到浏览器自己的样子：
+ * `hr` 是一条 3D 凹槽线，`blockquote` 只是一段缩进 40px 的字——两者都
+ * 没有"我是一条结构线"的意思。用户 2026-09-26 说的「分割线什么的分别不明显」
+ * 正是这一档上的观感：默认状态没有主题，而默认状态恰恰是所有人第一眼看到的。
+ *
+ * # ⚠️ 整段同样包在 `:where()` 里
+ *
+ * 理由与表格那一段**一模一样**（那是特异性问题，不是风格问题）：
+ * `:where()` 的权重恒为 0，主题只要碰了同一批属性就赢。
+ *
+ * ⚠️ 颜色**只用 token**，而且**不用 `--border`**：浅色下它只有 8% 的黑
+ * （`theme.css` 里那条"别再往下压"的注释写着），画成线根本看不见——
+ * 那正是"分别不明显"的来源。这里用 `--fg-faint`（4.57:1，是"最淡但还
+ * 读得清"的那一档）与 `--bg-subtle`，深浅两种明暗下都成立。
+ *
+ * ⚠️ `hr` **不写 `width`**：它是块级元素，本来就占满整行；写死宽度反而在
+ * 正文列宽变化时对不上（用户报过"只画了左边一小截"，成因还没查到，
+ * 所以这里不拿 `width` 去猜）。`display: block` 是明写的，同时也是对那个
+ * 怪毛病的一层保险。
+ *
+ * ⚠️ 两条规则里都写了 `margin`，那是**有用**的（详见下面 `blockquote` 那段
+ * 里的注释）：`hr` 的外边距是"让分隔线两边留够气"，`blockquote` 的外边距是
+ * "清掉 UA 那 40px 的左右缩进"。 */
+
+:where(.editor-mount .ProseMirror hr) {
+  display: block;
+  height: 0;
+  border: 0;
+  border-top: 2px solid var(--fg-faint);
+  margin: 2.2em 0;
+}
+
+:where(.editor-mount .ProseMirror blockquote) {
+  /* ⚠️ `margin` 写在这一段里是**有用**的（别以为 `:where()` 写了也白写）：
+     用户代理给 `blockquote` 的是 `margin: 1em 40px`，而**作者样式无论权重多低
+     都压过 UA 样式表**——所以这 40px 的左右缩进会被这条清掉，改由左边线
+     承担"这是一段引用"的表达，左边线也才能和正文、和 `hr` 对齐在同一条
+     左边缘上（上边距那半边仍归 `> * + *` 管，那条权重 (0,2,0)，这条管不着）。 */
+  margin: 1.2em 0;
+  padding: 0.5em 1em;
+  border-left: 2px solid var(--fg-faint);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+}
+
 /* ── 写作模式（专注 / 打字机）────────────────────────────────────────────
  *
  * 两条都在 `editor/writing-modes.ts` 里算，这里只定**长什么样**。
+ * ⚠️ 专注模式**还有另一半**——把外壳（菜单栏/侧栏/插件栏/标签栏/状态栏）收起来，
+ * 那一条在 `app.css` 的「沉浸模式」那一节。这里只管正文。
+ *
  * ⚠️ 两个编辑器的做法不同（那边的文件头写了为什么），所以这里是两条选择器：
  * 所见即所得压的是**兄弟块**（ProseMirror 给的装饰 class，只加在被压的那些
  * 块上），源码压的是**除当前行以外的行**（根节点一个 class + 当前行一颗

@@ -17,9 +17,24 @@
  * ⚠️ 带子菜单的项**不推 `enabled` / `accel`**：它自己不执行命令（见 `commands.ts`），
  * 推过去只会让 Rust 那边多一处要判断的东西。Rust 侧遇到 `submenu` 非空的节点
  * 也是直接建成一层飞出，不看这两个字段。
+ *
+ * # ⚠️ 这里的 `label` 要**翻一次**
+ *
+ * `commands.ts` 那张表里存的是**键**（中文原文），原生菜单是**另一条渲染路**
+ *（自绘那条在 `MenuBar.tsx` / `MenuPopup.tsx`），它也得自己翻——不翻的话
+ * macOS 上整条菜单栏是中文、窗口里是英文（那是用户报过的 BUG-38 的翻版）。
+ *
+ * ⚠️ 用的是**模块级**那个 `t`（不是 `useT()`）：这个文件不是组件，是一串纯函数，
+ * 只在推送那一刻跑一次。它的代价说在明处：**语言换了它不会自己重推**。
+ *
+ * ⚠️ 那笔欠账**2026-09-26 已经结清**：`ui/useMenus.ts` 那个推菜单的 effect
+ * 依赖里加了 `use语言()`。今天语言还要重启才生效，所以那条依赖**此刻**推不出
+ * 差别——它挡的是"以后热切语言"（届时不加就是"窗口里换了、原生菜单栏还停在
+ * 旧语言"）。**删它之前先想清楚这一条。**
  */
 
 import type { DocThemeInfo, NativeMenuNode } from "@/bridge/ipc";
+import { t } from "@/i18n";
 import {
   isMenuItem,
   themeChecks,
@@ -56,7 +71,7 @@ export function buildNativeTree(
 
     return {
       id: menu.id,
-      label: menu.label,
+      label: t(menu.label),
       submenu: items.map((entry) => toNode(entry, disabled, merged)),
     };
   });
@@ -72,14 +87,20 @@ function toNode(
   if (entry.submenu) {
     return {
       id: entry.id,
-      label: entry.label,
+      label: t(entry.label),
       submenu: entry.submenu.map((child) => toNode(child, disabled, checks)),
     };
   }
 
   return {
     id: entry.id,
-    label: entry.label,
+    label: t(entry.label),
+    // ⚠️ 灰掉的项**照样把 accel 推过去**，这边的树是"菜单长什么样"的完整描述。
+    // "灰掉的不带快捷键"那条规矩由 **Rust 侧**执行（`native_menu.rs` 的
+    // `leaf_accel()`），不在这里再做一遍：那是 macOS 的硬约束（AppKit 连禁用项
+    // 的键位一起匹配，灰着的 ⌘C 会把复制粘贴吃掉），必须在**真正建菜单的那一层**
+    // 守住。这边再判一次就等于同一句话两个地方各写一份，迟早漂。
+    // 自绘菜单那一侧没有这个约束，所以由 `MenuPopup.tsx` 自己判（2026-09-25）。
     accel: entry.accel,
     enabled: !disabled.has(entry.id),
     // ⚠️ `false` 和 `undefined` **不是一回事**：前者是"可勾选项，此刻没勾"

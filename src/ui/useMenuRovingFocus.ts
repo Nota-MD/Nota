@@ -6,7 +6,7 @@
  * 本该是"关掉菜单、继续走页面"，不是"走下一项"。这两件事混在一起，
  * 键盘用户既走不动也关不掉。
  *
- * 做法照 VMark 的 `useMenuRovingFocus`（见 `/tmp/vmark/src/hooks/`）：
+ * 做法走标准的 roving tabindex：
  *
  * - 焦点在项之间**漫游**：当前项 `tabIndex=0`，其余 `-1`。整个菜单在
  *   Tab 顺序里只算**一个**落点，这既是 WAI-ARIA 对 `menu` 的要求，
@@ -120,7 +120,7 @@ export interface UseMenuRovingFocusResult {
    * 那时 state 没变、React 不重渲染、跟着 `focusedIndex` 走的那条 effect
    * **根本不会跑**，于是什么都不会发生。子菜单收起、焦点要还回父项时
    * 恰好就是这种情况（按 `→` 展开子菜单之前，焦点本来就停在那个父项上），
-   * 结果焦点掉到 `<body>`，父菜单的 Esc 跟着失灵。**这个坑踩过一次。**
+   * 结果焦点掉到 `<body>`，父菜单的 Esc 跟着失灵。**这个问题实际发生过一次。**
    * 所以这条路径必须自己去 focus，不能指望 effect。
    */
   focusItem: (index: number) => void;

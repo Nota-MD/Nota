@@ -1,0 +1,89 @@
+# 「AI 助手」插件的文案表（en（英语））。
+#
+# # 这张表怎么来的
+#
+# 键 = **`main.lua` 里 `T("…")` 写下的那句原文**，一字不差（含标点）。查不到
+# 这条键就用原文——所以这份表里**只需要放要翻译的那些**。
+# 规矩与前端那套同源，见 `src-tauri/src/lua/api/i18n.rs` 文件头。
+#
+# ⚠️ 改了 `main.lua` 里的中文原文 = 改了一个键，这里的对应条目会**静默失效**
+# （表现是那句退回中文，不报错）。`bash tools/i18n-check.sh` 会把废键揪出来。
+#
+# ⚠️ 句子里的 `%s` / `%d` 是占位符，译文里的**个数和顺序必须与原句一致**
+# （走 `string.format`）；真要写一个百分号，写成 `%%`。
+#
+# ⚠️ `name` 是**保留键**：插件显示名（覆盖 `plugin.toml` 里的 `name`）。
+# 它不必出现在代码里，只影响插件栏/面板标题上那个名字。
+
+name = "AI assistant"
+
+# ── 预设的名字（面板上那排按钮 ＋ 「插件」菜单里的同名项）────────────────────
+#
+# ⚠️ 这五条的原文**不在** `T("…")` 里。它们在 `PRESETS` 表里当 `label` 存着，
+# 到画面板 / 注册菜单时才 `T(PRESETS[id].label)` —— 模块级求值时 `T` 还是占位符
+# （见 `main.lua` 的 `local T`），所以那里**不能**写成 `T("润色")`。
+# ⚠️ `tools/i18n-check.sh` 认这一类靠的是 `label = "…"` 这个写法，改键名就说不上话了。
+
+"润色" = "Polish"
+"总结" = "Summarize"
+"续写" = "Continue writing"
+"译成英文" = "Translate to English"
+"译成中文" = "Translate to Chinese"
+
+"%s已保存" = "%s saved"
+"%s已恢复默认" = "%s restored to its default"
+"AI 的回复里带了改动，确认后才会写进文档。" = "The AI's reply contains changes; they are written to the document only after you confirm."
+"API 密钥" = "API key"
+"Ctrl+Enter 发送 · 回车换行" = "Ctrl+Enter to send · Enter for a new line"
+"OpenAI 兼容的地址（含 /v1）。本机服务可以填 http://127.0.0.1:11434/v1" = "An OpenAI-compatible URL (including /v1). For a local service you can use http://127.0.0.1:11434/v1"
+"…（后面还有内容，面板放不下）" = "… (there is more; the panel cannot fit it)"
+"「%s」的回答在右侧 AI 面板里。" = "The answer to “%s” is in the AI panel on the right."
+"不认识的预设：%s" = "Unknown preset: %s"
+"先点上面的「设置密钥…」填好，这里才会出现输入框。" = "Press “Set key…” above first; the input box appears once that is filled in."
+"删除这个对话" = "Delete this chat"
+"发送" = "Send"
+"只发给上面那个地址。本机模型（Ollama / LM Studio）通常不要密钥，随便填一个即可。" = "It is sent only to the address above. Local models (Ollama / LM Studio) usually need no key — any value will do."
+"在编辑区看" = "View in editor"
+"地址" = "URL"
+"填服务商文档里那个名字" = "The name from your provider's documentation"
+"密钥" = "Key"
+"对当前文档" = "On the current document"
+"对话最多同时留 %d 个，先删掉几个。" = "At most %d chats can be kept at once; delete a few first."
+"对话（第 %d / %d 个）" = "Chats (%d of %d)"
+"已删除这个对话" = "Deleted this chat"
+"已清空这个对话" = "Cleared this chat"
+"已配置" = "configured"
+"应用改动" = "Apply changes"
+"待应用的改动（还没写进文档）" = "Changes waiting to be applied (not yet written to the document)"
+"换密钥…" = "Change key…"
+"接口回了 200，但里面没有 choices[1].message.content。" = "The endpoint returned 200 but there is no choices[1].message.content in it."
+"接口地址" = "Endpoint URL"
+"接口没回 JSON（HTTP %s）：%s" = "The endpoint did not return JSON (HTTP %s): %s"
+"接口返回 %d：%s" = "The endpoint returned %d: %s"
+"改动块里有 %d 行既不 - 也不 +，忽略掉了。" = "%d lines in the change block are neither - nor +; they were ignored."
+"改动已写入文档，Ctrl+Z 可以撤销" = "The changes have been written to the document; Ctrl+Z undoes them"
+"改动没能应用：%s" = "The changes could not be applied: %s"
+"改动预览" = "Change preview"
+"改地址…" = "Change URL…"
+"改模型…" = "Change model…"
+"放弃改动" = "Discard changes"
+"新对话" = "New chat"
+"模型" = "Model"
+"模型名" = "Model name"
+"没写要发的内容" = "Nothing to send"
+"没有待应用的改动" = "There are no changes waiting to be applied"
+"第 %d 处" = "Change %d"
+"设置密钥…" = "Set key…"
+"请求没发出去：%s" = "The request was not sent: %s"
+"还没填" = "not set"
+"还没填 API 密钥：面板上点「设置密钥…」。" = "No API key yet: press “Set key…” in the panel."
+"还没说话。在下面打字，或者点一个预设。" = "Nothing said yet. Type below, or press a preset."
+"那个对话已经不在了" = "That chat is gone"
+"问点什么，或者让它改文档…" = "Ask something, or have it edit the document…"
+"（一共 %d 行，这里只画了前 %d 行；点「应用改动」写进去的是完整的那份）" = "(%d lines in total; only the first %d are drawn here — “Apply changes” writes the complete set.)"
+"（只列最近 5 个；这个对话前面还有 %d 个）" = "(Only the latest 5 are listed; %d more come before this chat.)"
+"（只显示最近 %d 条；这个对话一共 %d 条）" = "(Only the latest %d are shown; this chat has %d in total.)"
+"（已应用这次改动。）" = "(These changes have been applied.)"
+"（这一轮只有改动块，没有别的话。）" = "(This round had only a change block and nothing else.)"
+"（这次的改动作废了。）" = "(These changes were discarded.)"
+"＋ 新对话" = "＋ New chat"

@@ -1,0 +1,83 @@
+/* 面板里那块**热力图**（`kind = "heatmap"`，写作统计的长期记录，2026-09-27）。
+ *
+ * ⚠️ **为什么单独一份文件**：这份样式本该进 `dock.css`（面板的样式全在那儿），
+ * 但那一份当时已经 971 行、顶着本仓 1000 行那条硬上限。理由与写法与 `share.css`
+ * 完全相同——从大文件里分出来，而不是把大文件撑过线。
+ *
+ * # 这一块长什么样
+ *
+ * 一列一周（周一到周日，7 行），一列一天。**列宽是弹性的**（`flex: 1`）：面板
+ * 那一栏可以从 260px 拖到很宽，格子跟着一起长——写死像素的话，拖宽之后整块图
+ * 会缩在左上角。
+ *
+ * ⚠️ 格子的**深浅走 `color-mix` 兑透明**，不写死五个颜色（同 `dock.css` 里
+ * `.pg-row.is-picked` 那条：兑透明才不会被底色的深浅两套吃掉）。四档都从
+ * `--accent` 出来，于是这一块跟着用户自己的主题色走——与分享卡同一个道理。
+ *
+ * ⚠️ `0` 档（那天一个字都没写）**用 `--border`**，不用兑到 8% 的强调色：它要
+ * 读成"这里什么都没有"，而不是"这里有一点点"。热力图上"没写"与"写得少"是
+ * 两个不同的问题，颜色上也不能混。
+ */
+
+.panel-heat {
+  margin: 10px 0 12px;
+}
+
+.panel-heat-title {
+  margin-bottom: 6px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+/* ⚠️ 用 `flex` 而不是 grid：列数由插件说了算（8~53），而 `grid-template-columns`
+   要先把列数写进样式里——那等于把插件的数据抄进 CSS。 */
+.panel-heat-grid {
+  display: flex;
+  gap: 2px;
+}
+
+.heat-col {
+  /* `min-width: 0` 是必须的：flex 项的默认最小宽度是"内容宽度"，而这一列的
+     内容（月份那几个字）会比格子宽，于是它会拒绝再缩——53 列的时候整排会
+     溢出面板。 */
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 月份那格**每一列都占位**（没有月份就是空的）：只在有月份的那几列画，那几列
+   会比别的列高一截，整排格子就参差了。 */
+.heat-month {
+  height: 12px;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: 9px;
+  line-height: 12px;
+  white-space: nowrap;
+}
+
+.heat-cell {
+  width: 100%;
+  /* 方格：高度跟着列宽走，列少了格子就大。⚠️ 但**封一个顶**（12px）：面板拖到
+     很宽时，一列 40px 的方块就不再是"一格一天"那种小格子了，整块图会占掉大半
+     屏。封顶之后格子变成扁的——仍然一眼一格。 */
+  aspect-ratio: 1;
+  max-height: 12px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.heat-1 {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.heat-2 {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.heat-3 {
+  background: color-mix(in srgb, var(--accent) 68%, transparent);
+}
+.heat-4 {
+  background: var(--accent);
+}

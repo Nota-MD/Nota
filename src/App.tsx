@@ -4,68 +4,77 @@
  * 这一层只做三件事——**取数据、派事件、拼布局**。编辑器的活全在
  * `ui/EditorPane.tsx`，文件树的活在 `ui/Sidebar.tsx`，别往这里堆。
  *
- * 2026-09-23：`TopBar` 与 `TabBar` 两支**纯展示**组件搬去了同名文件（当时本文件
- * 921 行、贴着 1000 行上限）。再有"只画不决策"的一块，照这个办法搬走。
+ * ⚠️ 本文件**常年在行数上限附近**，所以从 2026-09-23 起一直在把两类块往外搬：
+ * "只画不决策"的（`TopBar` / `TabBar`）和"判据/状态"的（`ui/useMenus.ts`、
+ * `useDialogs` / `useExport` / `useDocTheme` / `useEditorCommands` / `usePlugins` /
+ * `useChromeVisibility` / `useDocuments` / `useClipboard` / `useImmersive`）。
+ * 搬走的清单与各自的日期见 `docs/09` §2。判据是**和外壳骨架无关**：那块东西
+ * 自己有一份完整的理由可写，留在本文件里只会把上面那三件事淹掉。
  *
- * 2026-09-24：又搬走**六块**，都是**判据/状态**而不是布局——
- * `ui/useMenus.ts`（菜单灰不灰、勾没勾、键位接不接、原生菜单推什么）、
- * `ui/useDialogs.ts`（两个自绘对话框"谁在等答案"）、
- * `ui/useExport.ts`（导出与打印）、`ui/useDocTheme.ts`（文档主题的应用/切换）、
- * `ui/useEditorCommands.ts`（把一条菜单命令送进编辑器）、
- * `ui/usePlugins.ts`（插件清单/面板/菜单项三样 ＋ 跑一条插件命令）。
- * 搬的判据都是**和外壳骨架无关**的那一类：它们各自有一份完整的理由可写，
- * 留在本文件里只会把"取数据、派事件、拼布局"这三件事淹掉。
- * 再有同样的一块，照这个办法搬走。
- *
- * ⚠️ **"搬了"和"变小了"不是同一件事**：头两次搬完它反而还在 916 行——
- * 同一批里又往里加了格式工具栏与查找条的接线，搬走的和加进来的正好抵掉。
- * 看行数要重数，不能推。
+ * ⚠️ 搬完要**重数**行数：头两次搬完它反而还在 916 行——同一批里又往里加了
+ * 格式工具栏与查找条的接线，搬走的和加进来的正好抵掉。数出来的才算数。
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getVersion } from "@tauri-apps/api/app";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 
 import {
   api,
-  on,
-  events,
   type DocId,
   type Document,
   type Settings,
   type DocThemeInfo,
   type TreeNode,
-  type NotifyPayload,
-  type DocumentChangedPayload,
 } from "@/bridge/ipc";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
-import { EditorPane, type EditorPaneHandle } from "@/ui/EditorPane";
-import { FindBar } from "@/ui/FindBar";
-import { FormatBar } from "@/ui/FormatBar";
-import { Home } from "@/ui/Home";
-import { PromptDialog } from "@/ui/PromptDialog";
+// ⚠️ 只要类型：`EditorPane` 这个组件本身已经搬到 `ui/EditorArea.tsx` 里去画了，
+// 这边留着的是那个句柄类型（`editorRef` 要它）。写成 `import type` 免得再被
+// 当成"没用上的组件"清掉。
+import type { EditorPaneHandle } from "@/ui/EditorPane";
 import { resolvePick } from "@/ui/commands";
+import { useT } from "@/i18n";
 import { PluginDock } from "@/ui/PluginDock";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
 import { SettingsDialog } from "@/ui/settings/SettingsDialog";
-import { SlidevPanel } from "@/ui/SlidevPanel";
 import { StatusBar } from "@/ui/StatusBar";
-import { Toasts, type Toast } from "@/ui/Toasts";
+import { Toasts } from "@/ui/Toasts";
+import { useToasts } from "@/ui/useToasts";
+import { useAbout } from "@/ui/useAbout";
 import { TabBar } from "@/ui/TabBar";
 import { TopBar } from "@/ui/TopBar";
 import { useDialogs } from "@/ui/useDialogs";
 import { useEditorCommands } from "@/ui/useEditorCommands";
+import { AppDialogs } from "@/ui/AppDialogs";
+import { useFileDrop } from "@/ui/useFileDrop";
+import { useSpellcheck } from "@/ui/useSpellcheck";
+import { useImageInsert } from "@/ui/useImageInsert";
+import { useDocuments } from "@/ui/useDocuments";
+import { useExternalChanges } from "@/ui/useExternalChanges";
+import { useClipboard } from "@/ui/useClipboard";
+import { useFindBar } from "@/ui/useFindBar";
+import { useForceFocus } from "@/ui/useForceFocus";
+import { useFocusTrace } from "@/ui/useFocusTrace";
+import { useFocusAlarmSound, 预热音频 } from "@/ui/useFocusAlarmSound";
+import { useFocusIntro } from "@/ui/useFocusIntro";
 import { useMenus } from "@/ui/useMenus";
-import { useSlidev } from "@/ui/useSlidev";
-import { applyTheme } from "@/styles/applyTheme";
 import type { CommandState } from "@/editor/command-state";
-import { 空查找状态, type FindStatus } from "@/editor/find";
-import { useDocTheme } from "@/ui/useDocTheme";
+import { useDocTheme, useDocThemeSlot } from "@/ui/useDocTheme";
+import { useUiStyles } from "@/ui/useUiStyles";
+import { useSettingsFile } from "@/ui/useSettingsFile";
+import { useChromeVisibility } from "@/ui/useChromeVisibility";
+import { useImmersive } from "@/ui/useImmersive";
+import { useWindowControls } from "@/ui/useWindowControls";
+import { EditorArea } from "@/ui/EditorArea";
+import { useWindowTitle } from "@/ui/useWindowTitle";
 import { useExport } from "@/ui/useExport";
+import { useCommandTable } from "@/ui/useCommandTable";
 import { usePlugins } from "@/ui/usePlugins";
-
+import { useAppearance } from "@/ui/useAppearance";
+import { useCodeBlockPrefs } from "@/ui/useCodeBlockPrefs";
+import { useStartup } from "@/ui/useStartup";
+import { useAppEvents } from "@/ui/useAppEvents";
+import { useSession } from "@/ui/useSession";
+import { useReviewView } from "@/ui/useReviewView";
+import { 注入最近文件 } from "@/ui/recentMenu";
 
 export default function App() {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -73,7 +82,6 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
-  const [toasts, setToasts] = useState<Toast[]>([]);
   // 右侧插件栏开着没有。**默认关**。
   // ⚠️ 2026-09-24 用户改的口径，原话：「**默认打开应用不要展开两个菜单**」——
   // 此前这里是 `true`，理由是"用户点名要的就是插件在右侧边栏，默认藏起来等于没做"。
@@ -93,30 +101,23 @@ export default function App() {
   // `view.showOutline` / `view.showTree`）照旧能把它开出来。
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("tree");
-  const [statusBarOpen, setStatusBarOpen] = useState(true);
+  // ⚠️ 状态栏**不在这里**（2026-09-25 起）：它以设置文件为准，见下面
+  // `updateSettings` 之后那两条派生值。
 
   // 偏好设置开着没有。**只在内存里**：它是一次交互，不是设置项本身。
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // 格式化工具栏开着没有。**默认开**——用户要的就是"看得见的按钮"，
-  // 默认藏在菜单里等于没做（backlog 第 2 项原话：「现在只有 Markdown 语法，
-  // 没有按钮」）。同「插件栏」的道理，只在内存里，不进设置。
-  const [formatBarOpen, setFormatBarOpen] = useState(true);
+  // ⚠️ 格式化工具栏**也不在这里**了（2026-09-25 起），理由同上一行；它比状态栏
+  // 多一层：**是三档**（始终显示 / 鼠标悬停时显示 / 始终不显示），默认最后那一档。
+  // 三档和悬停的判据都在 `ui/useChromeVisibility.ts` 的文件头。
 
-  // 查找条开着没有，以及编辑器报上来的**命中情况**（几个、现在第几个）。
-  //
-  // ⚠️ 命中数**不在这里算**：它由编辑器报上来（`find.ts` / `source.ts` 两条
-  // 通路各报各的）。本地再算一份的话，源码模式下的正则、跨节点口径这些
-  // 迟早会算出和编辑器不一样的数——那种差异没人查得动（见 `find.ts` 文件头）。
-  //
-  // ⚠️ 只在内存里，和「格式化工具栏」同理：它是**看的时候的状态**，不是设置。
-  const [findOpen, setFindOpen] = useState(false);
-  const [findStatus, setFindStatus] = useState<FindStatus>(空查找状态);
+  // 查找条的状态与四个动作在 `ui/useFindBar.ts`（2026-09-27 从本文件搬走）。
+  // ⚠️ **命中数不在这里算**，由编辑器报上来——理由见那份文件头。
 
-  // 专注模式 / 打字机模式。两个都**只在内存里**，同「格式化工具栏」：
-  // 它们是"写这一篇时想不想这样"的临时状态，不是"以后都这样"的偏好。
-  // 真实现（压暗哪些块、往哪儿滚）在 `editor/writing-modes.ts`。
-  const [focusMode, setFocusMode] = useState(false);
+  // 打字机模式。**只在内存里**，同「格式化工具栏」：它是"写这一篇时想不想这样"
+  // 的临时状态，不是"以后都这样"的偏好。真实现（往哪儿滚）在
+  // `editor/writing-modes.ts`。⚠️ 和它成对的**专注模式不在这里**（2026-09-25
+  // 起）：专注与全屏共用一套外壳规则，整块在 `ui/useImmersive.ts`。
   const [typewriter, setTypewriter] = useState(false);
 
   /**
@@ -129,7 +130,7 @@ export default function App() {
   const [commandState, setCommandState] = useState<CommandState | null>(null);
 
   // 扫到的文档主题。启动时拉一次——它是**状态不是事件**，同 `panels` 的道理（BUG-13）：
-  // 用户在应用运行期间往主题目录里丢文件不会通知我们，想让新主题出现就重开应用。
+  // 用户在应用运行期间往主题目录里丢文件不会触发通知，想让新主题出现就重开应用。
   // ⚠️ 这里**没有**界面主题——那两条轴在 `settings` 里，由 `applyTheme` 落进
   // `<html>` 的属性，不经过这份清单。
   const [themes, setThemes] = useState<DocThemeInfo[]>([]);
@@ -143,15 +144,15 @@ export default function App() {
 
 
   // ── 提示 ────────────────────────────────────────────────────────────────
-  const toast = useCallback((message: string, level: Toast["level"] = "info") => {
-    const id = Math.random().toString(36).slice(2);
-    setToasts((prev) => [...prev, { id, message, level }]);
-    // 自动消失。错误留久一点——用户多半要读完再决定怎么办。
-    const ttl = level === "error" ? 8000 : 3200;
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, ttl);
-  }, []);
+  // ⚠️ 这一摊（`toasts` 数组 / `toast` / `dismiss`）2026-09-25 搬去了
+  // `ui/useToasts.ts`——本文件当时 958 行、软上限 900。搬的是"什么时候消失"，
+  // 文案照旧由这里给。那条 `ttlMs === 0` 的分支（不自动消失）见那个文件。
+  const { toasts, toast, dismiss } = useToasts();
+
+  // ⚠️ 本文件里**只剩这一处**要翻的界面串（下面「替换」那条提示）。别的地方
+  // 该翻的都翻在各自的组件里了——这里留一份订阅，是因为提示语是在**回调**里
+  // 现取的（`useToasts` 那一摊不是组件，拿不到 context）。
+  const t = useT();
 
   const refreshDocs = useCallback(async () => {
     const list = await api.doc.list();
@@ -159,38 +160,68 @@ export default function App() {
     return list;
   }, []);
 
-  // Slidev 预览。整块编排在 `ui/useSlidev.ts` 里——这里只接线：把**文档列表**和
-  // "编辑器里现在的正文"两份数据给它，换回一个会话状态和两个动作。
-  // ⚠️ `getMarkdown` 包一层 `useCallback`：内联箭头每次渲染都是新函数，会把
-  // `useSlidev` 里那几条回调的依赖搅得每帧都变，进而让下面的菜单表整张重建。
+  // "编辑器里现在的正文"。导出、打印、借 pandoc 那些都用它。
+  //
+  // ⚠️ 包一层 `useCallback` 是有代价意识的做法：内联箭头每次渲染都是新函数，
+  // 会把 `useExport` 里那几条回调的依赖搅得每帧都变，进而让下面的菜单表整张重建
+  // （那条链在 `ui/useMenus.ts` 顶上）。
+  //
+  // ⚠️ 这里原来还有一条 `useSlidev(...)`（预览的整块编排），2026-09-25 删掉了：
+  // Slidev 成了**拓展**，它要正文走的是 `nota.document.get_text`（那条 API
+  // 本来就是给插件读当前文档的），整个生命周期都在插件那一侧，宿主这边一行不留。
   const getEditorMarkdown = useCallback(() => editorRef.current?.getMarkdown(), []);
-  const slidev = useSlidev({ docs, toast, getMarkdown: getEditorMarkdown });
 
   // 两个自绘对话框——确认框与输入框。整块在 `ui/useDialogs.ts`：
   // 「谁在等答案」的 Promise 拼接和外壳骨架不是一回事，搬走之后本文件
   // 只剩"往哪儿接"。
-  const {
-    confirmReq,
-    askConfirm,
-    answerConfirm,
-    promptReq,
-    askPrompt,
-    answerPrompt,
-  } = useDialogs();
+  //
+  // ⚠️ **那份对象本身要留着**（`对话框`）：下面 `<AppDialogs>` 收的是它，
+  // 不是十来个函数——四个框的 `answerXxx` 全在它身上，摊开传的下场是漏一个
+  // 就有一个框永远关不掉（见 `ui/AppDialogs.tsx` 的文件头）。
+  const 对话框 = useDialogs();
+  // ⚠️ 这里**只解构本文件还用的那几个**：四个 `answerXxx` 由 `AppDialogs`
+  // 直接从对象上取，本文件不再碰（`confirmReq` / `promptReq` / `imageReq` /
+  // `emojiOpen` 还要用——下面那个 `有浮层` 判据要数它们）。
+  const { confirmReq, promptReq, imageReq, emojiOpen } = 对话框;
+  const { askConfirm, askPrompt, askImage, askEmoji } = 对话框;
 
   // 插件那一整块：已装清单、声明的面板、声明的菜单项、以及"跑一条插件命令"。
   // 整块在 `ui/usePlugins.ts`——取数据、合成菜单栏、建处理函数三件事都在那边，
   // 这边只把结果接到 `Home` / 菜单栏 / `PluginDock` 上。
   //
   // ⚠️ 位置**必须在 `useDialogs` 之后**：菜单项上声明的"先问一句"要借
-  // `askPrompt`，而那个函数是上面那个 hook 产出的。
+  // `askPrompt`，而那个函数是上面那个 hook 产出的；装/卸插件之前那句
+  // "确定吗"同理（`askConfirm`，宿主自己画的框，不是 `window.confirm`）。
+  const 插件 = usePlugins({ toast, askPrompt, askConfirm });
   const {
     plugins,
     panels,
+    信任: 信任表,
+    // 编辑区里此刻摊着的插件面板（`nota.ui.review` 放进去的那一格）＋收起它。
+    // ⚠️ **归宿主**（`plugin::ReviewState`），不是这里的一份 `useState`：
+    // 刷新一次界面 / 热重载一次，"我正在看 AI 提的那份改动"不该就这么没了。
+    review: 预览,
+    收预览,
     menus: 全部菜单,
     handlers: 插件处理,
     调: 调插件,
-  } = usePlugins({ toast, askPrompt });
+    动作: 插件动作,
+  } = 插件;
+
+
+  // ── 编辑区那一格的两种形态与"看哪一面"（2026-09-27 搬到 `ui/useReviewView.ts`）
+  //
+  // 搬走的是一整块：**分派形态 / 记住看法 / `Esc` 之后干什么**，三件事挂的是
+  // 同一份数据（宿主推来的那一份预览）。三条围栏（分派只做一次、看法归共同
+  // 的父层、`Esc` 优先走插件的「放弃」）都写在那个文件头里。
+  const 预览出口 = useReviewView({
+    预览,
+    调插件,
+    收预览,
+  });
+  // ⚠️ 这里**不再拆字段**：整份 `预览出口` 交给 `ui/EditorArea.tsx` 去了
+  //（那边要用 `活跃预览` / `面板预览` / `看法` / `退出预览` 好几样），拆一半
+  // 留一半只会多一份"哪几个在这边有用"的账。
 
   const refreshTree = useCallback(async () => {
     if (!workspace) {
@@ -204,231 +235,123 @@ export default function App() {
     }
   }, [workspace, toast]);
 
-  // ── 启动 ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      try {
-        // ⚠️ 插件那三样（清单 / 面板 / 菜单项）**不在这里拉**了，
-        // 搬去了 `ui/usePlugins.ts`（2026-09-24）——它们在那边有自己的一整套
-        // 拉取与派生（合成菜单栏、建处理函数）。**别搬回来**：
-        // 拉的地方和用它的地方分开，就又要靠 props 一层层传。
-        const [s, ws, themeList] = await Promise.all([
-          api.settings.get(),
-          api.workspace.get(),
-          // 主题扫目录。目录不存在、一个主题都没有都是**正常结果**（返回空表），
-          // 不是错误——不装 Typora 的机器就是这种情况。
-          api.theme.list(),
-        ]);
-        if (!alive) return;
-        setSettings(s);
-        setWorkspace(ws);
-        setThemes(themeList);
-        await refreshDocs();
-      } catch (e) {
-        toast(`启动时读取状态失败：${e}`, "error");
-      }
-
-      // 握手（见 lib.rs 里那段"为什么需要"）。失败不影响使用，只记一笔。
-      try {
-        await api.frontendReady();
-      } catch (e) {
-        console.warn("[nota] frontendReady 失败：", e);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [refreshDocs, toast]);
-
-  // ── 事件订阅 ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const unlisteners: Array<() => void> = [];
-    let alive = true;
-
-    (async () => {
-      const subs = await Promise.all([
-        on<NotifyPayload>(events.notify, (p) => toast(p.message, p.level)),
-
-        // 插件改了文档 → 让编辑器整篇换掉。
-        // ⚠️ 这里**不去比 revision**，直接覆盖：能走到这条分支就说明
-        // 改动不是本编辑器发起的（自己发起的不会绕一圈回来）。
-        on<DocumentChangedPayload>(events.documentChanged, (p) => {
-          if (p.origin !== "plugin") return;
-
-          if (p.id === activeIdRef.current) {
-            editorRef.current?.setMarkdown(p.text);
-            return;
-          }
-
-          // ⚠️ 改的不是当前这份：`setMarkdown` 无处可放（编辑器就挂着一个），
-          // 但**必须让 state 跟上**——否则那份文档在 React 里还是旧文本，
-          // 用户切回去时 `EditorPane` 用旧的 `doc.text` 重建，下一次去抖 sync
-          // 就把插件的改动**覆盖掉了**（backlog 第 33 项）。
-          void refreshDocs();
-        }),
-
-        // 预览停了（用户点菜单、或把预览窗叉了）→ 把菜单上的勾去掉。
-        // ⚠️ 这件事**只报"发生了"**（`docs/06` §3.2 那条：事件不带状态），
-        // 说明状态由 `useSlidev` 自己维护。
-        on<null>(events.slidevStopped, () => slidev.onStopped()),
-      ]);
-
-      if (alive) unlisteners.push(...subs);
-      else subs.forEach((u) => u());
-    })();
-
-    return () => {
-      alive = false;
-      unlisteners.forEach((u) => u());
-    };
-    // `refreshDocs` 与 `toast` 都是空依赖的 useCallback，这个 effect 只跑一次。
-  }, [toast, refreshDocs]);
-
-  // 活动文档变了就告诉后端。
+  // ── 文档的生命周期 ──────────────────────────────────────────────────────
+  // 打开 / 新建 / 存盘 / 关闭 / 重载整块搬去了 `ui/useDocuments.ts`（2026-09-25，
+  // 本文件当时 998 行，离 `.tsx` 的硬上限只剩两行）。
   //
-  // ⚠️ 后端只记得"最后一次新建/打开的那份"。不在这里统一同步的话，用户点了标签 A
-  // 在看 A，插件调 `nota.document.get_text()` 拿到的却是 B——AI 助手插件按这个
-  // 路径写回就会**改错文档**（BUG-6）。放在 effect 里而不是只补在 `onSelect` 上，
-  // 是为了把 `open` / `new` / `close` 那几条路径也一起兜住（多喊一次无害）。
-  useEffect(() => {
-    activeIdRef.current = activeId;
-    if (activeId === null) return;
-    void api.doc.setActive(activeId).catch((e) => {
-      toast(`切换活动文档失败：${e}`, "error");
-    });
-  }, [activeId, toast]);
+  // ⚠️ **调用位置不能往下挪**：下面"启动"那个 effect 的依赖里有 `openPath`，
+  // 而 `useCallback` 的依赖数组是在**渲染时**求值的——把这段放到启动那段
+  // 后面就是 `Cannot access 'openPath' before initialization`，整个界面白屏。
+  const 文档出口 = useDocuments({
+    docs,
+    setActiveId,
+    activeIdRef,
+    refreshDocs,
+    setWorkspace,
+    setTree,
+    editorRef,
+    settings,
+    toast,
+    askConfirm,
+    askPrompt,
+  });
+  const {
+    openPath,
+    newDoc,
+    openViaDialog,
+    openFolder,
+    loadDir,
+    saveDoc,
+    切换文档,
+    closeDoc,
+    reloadDoc,
+    renameDoc,
+    moveDoc,
+  } = 文档出口;
 
-  // ── 主题 ────────────────────────────────────────────────────────
-  useEffect(() => {
-    // ⚠️ 必须把 `applyTheme` 返回的退订函数交出去。`ui_mode = "auto"` 时它挂了一个
-    // `matchMedia` 监听，不接返回值就等于每次 settings 变化都再挂一个、旧的从不移除
-    //（BUG-7）。`paint()` 幂等所以症状不明显，只是监听器越积越多。
-    if (settings) return applyTheme(settings);
-  }, [settings]);
+  // ── 外部改动（别的程序动了磁盘上那份文件）──────────────────────────────
+  //
+  // 用户 2026-09-26 点的（「此乃非插件」）。发现那一半在宿主（`watch.rs`），
+  // 三个动作与那块对照在这一块。⚠️ **位置在 `useDocuments` 之后**：它要
+  // `reloadDoc`（「重新载入」那颗按钮走的正是既有的重载，包括未保存确认那一道）。
+  const 改动出口 = useExternalChanges({ docs, activeIdRef, editorRef, reloadDoc, toast });
+  // ⚠️ 只拿「对照」：另外四项（改动 / 忽略 / 重新载入 / 查看修改 / 关对照）
+  // 全是 `ui/ExternalChangeBar.tsx` 和那块对照界面在使，而它们都搬进
+  // `ui/EditorArea.tsx` 了。这边留「对照」是因为下面那个"摊着预览吗"的判据
+  // 要它（外部对照同样把正文顶掉）。
+  const { 对照: 外部对照 } = 改动出口;
 
-  // ── 打开 / 新建 / 保存 ──────────────────────────────────────────────────
-  const openPath = useCallback(
-    async (path: string) => {
-      try {
-        const id = await api.doc.open(path);
-        await refreshDocs();
-        setActiveId(id);
-      } catch (e) {
-        toast(String(e), "error");
-      }
-    },
-    [refreshDocs, toast],
-  );
 
   /**
-   * 侧栏展开某个子目录时**按需**取它那一层（`depth = 1`）。
+   * 摊着预览吗。**两种形态都算**——用户 2026-09-26 说「最好当预览的时候禁止
+   * 操作」，那句话不挑形态。
    *
-   * ⚠️ 传的是**相对工作区**的路径——后端 `sub_path` 就是这个口径，而且它
-   * 会再过一遍 `resolve_in` 的围栏（那个参数从前端来，不假定干净）。
-   * ⚠️ 不要把 `depth` 调大去"一次多取几层"：几万个文件的仓库那样会在
-   * 打开工作区时卡住界面，`commands/workspace.rs` 顶上写着这条取舍。
+   * ⚠️ **外部改动那份对照也算**（2026-09-26）：它同样把正文顶掉了（`data-review`
+   * 那一支），正文看不见却还能按 `Ctrl+S`、还能点「插入表格」，那是同一个
+   * "点下去不知道在看哪儿"的毛病。⚠️ 但**提示条那三颗按钮不受影响**：它们在
+   * 下面那三块 `inert` 之外（见 `ExternalChangeBar`），所以对照摊着的时候
+   * 用户照样能点「重新载入」「忽略」——那正是他要做的事。
+   *
+   * 它喂两个地方，缺一处就漏一条路：
+   * 1. `useCommandTable`（菜单全灰 ＋ 快捷键全不接，见那边的 `预览中`）；
+   * 2. 下面三块界面上的 `inert`（左栏 / 右侧栏 / 页签）——它们**不走那张表**，
+   *    各自有自己的按钮（打开文件、插件的按钮、关标签）。
    */
-  const loadDir = useCallback((subPath: string) => api.workspace.tree(subPath, 1), []);
+  const 预览中 = 预览 !== null || 外部对照 !== null;
 
-  const newDoc = useCallback(async () => {
-    try {
-      const id = await api.doc.create();
-      await refreshDocs();
-      setActiveId(id);
-    } catch (e) {
-      toast(String(e), "error");
-    }
-  }, [refreshDocs, toast]);
+  /**
+   * **会话侧车**：最近打开过哪些文件、上次开着哪几个标签、每份文档滚到哪儿
+   *（整块在 `ui/useSession.ts`，四格的账都在那个文件头里）。
+   *
+   * ⚠️ **位置**：必须在 `useDocuments` 之后（要它的 `openPath`），且必须在
+   * `useStartup` 之前（启动那一枪要用 `接上会话`）。
+   */
+  const 会话出口 = useSession({
+    docs,
+    activeId,
+    openPath,
+    toast,
+  });
+  // ⚠️ `滚动位置` / `记滚动` 不在这儿——它们只喂给编辑区那个 `EditorPane`
+  //（搬进 `ui/EditorArea.tsx` 了）。这边要的是"最近打开"那一族（侧栏/主页/菜单）
+  // 和 `接上会话`。
+  const { 最近, 接上会话, 打开最近, 忘掉最近, 清空最近 } = 会话出口;
 
-  const saveDoc = useCallback(
-    async (id: DocId, forceDialog = false) => {
-      const doc = docs.find((d) => d.id === id);
-      if (!doc) return;
+  /**
+   * 菜单栏（含插件那一栏）**＋ 运行时合成的「最近文件」那一层**。
+   *
+   * ⚠️ 必须 `useMemo`，而且**依赖就是这两个**：菜单表的身份是给原生菜单栏用的
+   *（`ui/useMenus.ts` 顶上那条链），每帧重建就等于每帧往系统菜单推一遍。
+   * `全部菜单` 是 `usePlugins` 里 `useMemo` 出来的、`最近` 是个 state 数组，
+   * 两个都稳。
+   *
+   * ⚠️ 下面**两处都改用这一份**（自绘菜单 `TopBar` 与 `useMenus`），漏掉一处
+   * 的症状是"最近文件只出现在自绘菜单里"——macOS 那条系统菜单里没有，
+   * 不报错，只是少一半。
+   */
+  const 菜单 = useMemo(() => 注入最近文件(全部菜单, 最近), [全部菜单, 最近]);
 
-      let target: string | undefined;
-      if (forceDialog || !doc.path) {
-        const picked = await saveDialog({
-          title: "保存为",
-          defaultPath: doc.path ?? `${doc.title}.md`,
-          filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdx"] }],
-        });
-        if (!picked) return; // 用户取消了，不是错误
-        target = picked;
-      }
+  // ── 启动与事件订阅 ──────────────────────────────────────────────────────
+  // 两块都搬走了（2026-09-26，本文件当时 1049 行、硬上限 1000）：
+  // 「启动那一枪」在 `ui/useStartup.ts`，「宿主推来的事件 + 活动文档同步」在
+  // `ui/useAppEvents.ts`。判据是老规矩（见文件头）：各自有一份完整的理由可写。
+  //
+  // ⚠️ **`useStartup` 必须在 `useDocuments` 之后**：它要 `openPath`（命令行给的
+  // 文件走的就是那条路）。⚠️ 这两个 hook 里那几条 effect 都**只跑一次**，
+  // 而那是**约定不是观察**——上游回调用 `useCallback` 包稳的规矩在
+  // `ui/useStartup.ts` 文件头最后一段里，改那边之前先读那一段。
+  useStartup({ setSettings, setWorkspace, setThemes, refreshDocs, openPath, 接上会话, toast });
+  useAppEvents({ toast, refreshDocs, openPath, activeId, activeIdRef, editorRef });
+  // ── 主题 ────────────────────────────────────────────────────────
+  // ⚠️ 界面主题与缩放搬去了 `ui/useAppearance.ts`（2026-09-25，本文件顶着行数
+  // 上限）。它**不在这个位置**——要等下面 `updateSettings` 存在，调用处在那里。
 
-      try {
-        // 存盘前**强制同步一次**——镜像可能还差最后几次击键
-        //（见 document/mod.rs 顶上那段"代价与对策"）。
-        const text = editorRef.current?.getMarkdown();
-        if (text !== undefined) await api.doc.sync(id, text);
-
-        const written = await api.doc.save(id, target);
-        await refreshDocs();
-        toast(`已保存到 ${written}`, "success");
-      } catch (e) {
-        toast(String(e), "error");
-      }
-    },
-    [docs, refreshDocs, toast],
-  );
-
-  const openViaDialog = useCallback(async () => {
-    const picked = await openDialog({
-      title: "打开",
-      multiple: false,
-      // ⚠️ 这张表要和后端 `is_markdown()` 对齐。它认 `.mdx`，这里漏掉的话
-      // 文件其实**打得开**（拖进来、从文件树点），只是在对话框里筛不出来，
-      // 用户会以为打不开（backlog 第 28 项）。
-      filters: [
-        { name: "Markdown", extensions: ["md", "markdown", "mdx", "mdown", "mkd", "txt"] },
-      ],
-    });
-    if (typeof picked === "string") await openPath(picked);
-  }, [openPath]);
-
-  const openFolder = useCallback(async () => {
-    const picked = await openDialog({ title: "打开文件夹", directory: true });
-    if (typeof picked !== "string") return;
-    try {
-      const canonical = await api.workspace.open(picked);
-      setWorkspace(canonical);
-      setTree(await api.workspace.tree(undefined, 1));
-    } catch (e) {
-      toast(String(e), "error");
-    }
-  }, [toast]);
-
-  // 工作区一变就重取文件树。
+  // 工作区一变就重取文件树。⚠️ 这条留在本文件里：它挂在 `refreshTree` 上，
+  // 而 `refreshTree` 依赖 `workspace` 这个 state（见上面那段）。
   useEffect(() => {
     void refreshTree();
     // refreshTree 已经依赖 workspace，这里不必再列一遍。
   }, [refreshTree]);
-
-  const closeDoc = useCallback(
-    async (id: DocId) => {
-      const doc = docs.find((d) => d.id === id);
-      if (doc?.dirty && settings?.confirm_unsaved) {
-        const ok = await askConfirm({
-          title: "有未保存的改动",
-          message: `「${doc.title}」还没存盘，关掉这份改动就没了。`,
-          confirmLabel: "丢弃并关闭",
-          danger: true,
-        });
-        if (!ok) return;
-      }
-      try {
-        await api.doc.close(id);
-        const list = await refreshDocs();
-        setActiveId(list.length ? list[list.length - 1]!.id : null);
-      } catch (e) {
-        toast(String(e), "error");
-      }
-    },
-    [docs, settings, refreshDocs, toast, askConfirm],
-  );
 
   // ── 菜单命令 ────────────────────────────────────────────────────────────
 
@@ -454,91 +377,183 @@ export default function App() {
     [settings, toast, refreshDocs],
   );
 
+  // 文档主题：**现在生效的是哪一套**，以及换主题该写哪个槽。
+  //
+  // ⚠️ 2026-09-25 之前这里处处直接读 `settings.document_theme`。那天「外观 →
+  // 深色模式」里那两档真的接上了线（`appearance.dark_theme_separate` ＋
+  // `dark_document_theme`）——深色下生效的可能是**另一份**，所以"读哪个字段"
+  // 这件事必须只有一个答案，就是这里的 `槽.id`。下面三处消费者（导出内联的
+  // 主题 CSS、主题菜单的勾、`useDocTheme` 取哪份 CSS）用的是同一个值。
+  //
+  // ⚠️ 位置**必须在 `updateSettings` 之后**：它拿那个函数当入参。
+  const 槽 = useDocThemeSlot(settings, updateSettings);
+
+  // 界面主题（落进 `<html>`）＋ 缩放（落到 webview）。位置约束与"文档主题不在
+  // 这儿"都写在 `ui/useAppearance.ts` 的文件头。
+  // ⚠️ 返回值是缩放那三档的动作，交给 `useCommandTable` 接菜单与快捷键（`useMemo` 过，可当依赖）。
+  const 缩放动作 = useAppearance(settings, updateSettings);
+
+  // 代码块那三条挂件的显隐（行号 / 工具栏 / 语言框），同样落进 `<html>`。
+  // ⚠️ 与上面那条是**两个 hook**、不是同一份：那一条管的是界面外观那两条轴
+  //（`appearance` 表），这一条管 `editor` 表里三条纯显示开关。理由写在
+  // `ui/useCodeBlockPrefs.ts` 的文件头。
+  useCodeBlockPrefs(settings);
+
+  // 导出与打印。整块编排在 `ui/useExport.ts`（HTML 两档、打印、借 pandoc 那七种）。
+  // ⚠️ 正文走 `getEditorMarkdown`——**身份稳定**的那个 `useCallback`。现写一个箭头
+  // 函数的话每渲染换一次身份，`导出` → `menuHandlers` → `disabledCommands` 一路
+  // 跟着换，于是**原生菜单每渲染重推一遍**（这条链在 `ui/useMenus.ts` 顶上）。
+  // ⚠️ 位置**必须在 `useImmersive` 之前**：下面那个 `有浮层` 要数进 `pandocGate`。
+  // 这就是它没跟其余"设置消费方"一起摆在文件后面的原因。
+  //
+  // ⚠️ `themeId` 给的是**生效的那一套**，不是 `settings.document_theme`：这个值
+  // 用来把主题 CSS 内联进导出的 HTML／PDF，口径就是"导出的东西和屏幕上一样"。
+  // 给存储的那一份的话，深色下导出会是一份配色完全不同的文件。
+  const { 导出, 打印, 导出为, pandocGate, pandocGateActions } = useExport({
+    activeId,
+    docs,
+    getMarkdown: getEditorMarkdown,
+    themeId: 槽.id,
+    // ⚠️ 这里原来还给 `useExport` 传了 `strict`（`settings.strict_markdown`），
+    // 2026-09-26 删掉了：导出走的是**编辑器自己那条渲染路径**，而那条路现在
+    // 两种模式一模一样（宽松标题的显示层装饰已删，见 `atx.ts` 文件头）。
+    exportSettings: settings?.export ?? { default_folder: "", open_after_export: false },
+    toast,
+  });
+
+  // 状态栏 / 格式化工具栏：**以设置文件为准**，搬去了 `ui/useChromeVisibility.ts`
+  // （2026-09-25，本文件顶着行数上限；那个文件的头儿写着为什么这俩不再是
+  // 内存 state——原来是"菜单里关掉重启又回来、设置里关掉什么都不发生"）。
+  //
+  // ⚠️ 两个 ref 是给**悬停那一档**量位置用的（工具栏什么时候画、鼠标还在不在
+  // 它下沿以上），理由在那边文件头那张表里。别的地方别拿它们做事。
+  const mainRef = useRef<HTMLElement | null>(null);
+  const formatBarRef = useRef<HTMLDivElement | null>(null);
+  const { statusBarOpen, formatBarOpen, toolbarMode, setChrome } = useChromeVisibility(
+    settings,
+    updateSettings,
+    { 主区: mainRef, 工具栏: formatBarRef },
+  );
+
+  // ── 强制专注（核心功能，不是插件）──────────────────────────────────────
+  //
+  // ⚠️⚠️ **它和下面那个 `切换专注` / `focusMode` 毫无关系**，尽管名字像。
+  // 那个是"把外壳收起来"（沉浸，`ui/useImmersive.ts`）；这个是**记账**：
+  // 人在写就涨、切走就扣、扣光就弹一块红屏。用户 2026-09-26 定的模型，
+  // 全部账目逻辑在宿主的 `src-tauri/src/focus/`，前端只是**读 + 转发**。
+  //
+  // 四块分工：
+  // - `useForceFocus`  —— 订阅状态 + 四条命令（主窗和警报窗共用）；
+  // - `useFocusAlarmSound` —— 挂"该响了"那条频道。⚠️ **只在主窗挂**
+  //   （警报窗也挂就是同一段警报响两遍，理由在那个文件头）；
+  // - `useFocusIntro`  —— 第一次打开时那段说明。用户点名要的；
+  // - `useFocusTrace`  —— 攒这一轮的轨迹，结束时交出一份**总结**（用户点名的
+  //   "专注模式结束后的总结"，2026-09-27）。
+  //
+  // ⚠️ **位置必须在 `updateSettings` 与 `askConfirm` 之后**：这两个都是它的入参。
+  //
+  // ⚠️ **也必须在 `useImmersive` 之前**（2026-09-27 从下面搬上来的）：下面那个
+  // `有浮层` 要数进 `专注总结`——总结框开着的时候 `Esc` 该归它，不该顺手把沉浸
+  // 模式也退掉。`有浮层` 那条口径要求**逐个列在调用处**（见 `ui/useImmersive.ts`
+  // 那一格自己的注释），所以被数列的那个值只能先算出来。
+  const { state: 专注状态, start: 开始专注, stop: 停止专注 } = useForceFocus();
+  useFocusAlarmSound();
+  const 先说明再专注 = useFocusIntro(askConfirm, settings, updateSettings);
+
+  // ⚠️ 传进去的是**每秒都在变**的那个对象，但这个 hook 只在"这一轮结束"那一下
+  // 往 state 里写东西（中间那几百拍的曲线存在 ref 里）——所以它不会让本文件多出
+  // 一次重画。理由逐条写在 `ui/useFocusTrace.ts` 的文件头。
+  const { 结算: 专注结算, 结算于: 专注结算于, 收起: 收起专注结算 } =
+    useFocusTrace(专注状态);
+
+  /**
+   * 总结框要的两样东西合成**一个** prop。
+   *
+   * ⚠️ 不拆成两个传：那样 `AppDialogs` 的签名里就会出现"总有了、时刻还没有"
+   * 这个中间态，而它在界面上没有意义（一张没有时间戳的卡）。合成一个
+   * `null` / 非 `null` 之后，那个框只有"显示"和"不显示"两种。
+   */
+  const 专注总结 = useMemo(
+    () => (专注结算 && 专注结算于 ? { 总: 专注结算, 现在: 专注结算于 } : null),
+    [专注结算, 专注结算于],
+  );
+
+  /**
+   * 「视图 → 强制专注」：**一颗按钮两态**（在跑就停、没跑就开）。
+   *
+   * ⚠️ 身份的稳定性在这里是**硬要求**（这张表要喂给原生菜单栏，见下面那段）：
+   * `专注状态` 每秒都在变，所以**不能**把它写进依赖数组——那样这张表每秒
+   * 重建一次，原生菜单栏就每秒重推一遍。判据改成读一个 ref 之外没有别的办法，
+   * 但更简单的是：**"在不在跑"由 `useMenus` 的勾去表达**，
+   * 而这里只做"点了就反过来"，反转的判据用 `setState` 的函数式写法拿不到
+   * ——所以下面这个 `useCallback` 依赖 `专注运行中`（一个布尔），
+   * 它一秒最多翻一次，而翻的那一次本来就该让菜单重推。
+   */
+  const 专注运行中 = 专注状态?.running ?? false;
+  const 切换强制专注 = useCallback(() => {
+    if (专注运行中) {
+      void 停止专注();
+      return;
+    }
+    // ⚠️ **预热必须在这一行的位置**（`click` 的同步段里），不能挪进下面那个
+    // 回调：那里已经跨过 `await`，用户手势过期了，`AudioContext` 会永远是
+    // `suspended`，警报响的时候一声都没有。理由在 `ui/useFocusAlarmSound.ts`。
+    //
+    // ⚠️ 它排在说明弹窗**前面**：说明是**异步**的（用户可能看半天才点），
+    // 而手势只在 `click` 那一瞬间有效。用户在说明里点「取消」的话，这里多建的
+    // 那个 `AudioContext` 什么也不做——它不出声、不占资源，下次点还复用它
+    //（`取音频` 里那个模块级变量），所以这一枪白打也不要紧。
+    预热音频();
+    void 先说明再专注(async () => {
+      await 开始专注();
+    });
+  }, [专注运行中, 停止专注, 开始专注, 先说明再专注]);
+
+  // 沉浸模式（专注 / 全屏）。整块在 `ui/useImmersive.ts`——连"`有浮层` 为什么
+  // 要传"一起说清楚了，这里只接线。
+  //
+  // ⚠️ `专注总结 !== null` 那一条（2026-09-27 加的）：强制专注的总结框开着时
+  // `Esc` 该归它（`ui/FocusSummaryDialog.tsx` 自己接了一个），不该顺手把沉浸模式
+  // 也退掉——两个都关掉的话，用户只是想把报告收起来，却连外壳一起被拆了。
+  const { 沉浸, focusMode, 切换专注, fullscreen, 切换全屏 } = useImmersive({
+    有浮层:
+      settingsOpen ||
+      confirmReq !== null ||
+      promptReq !== null ||
+      imageReq !== null ||
+      emojiOpen ||
+      pandocGate !== null ||
+      专注总结 !== null,
+    toast,
+  });
+
+  // 窗口自身那两件（置顶 / 开发者工具）。整块在 `ui/useWindowControls.ts`
+  // ——连"置顶那个勾为什么要从窗口读回来"一起说清楚了，这里只接线。
+  const { 置顶, 切换置顶, 开开发者工具 } = useWindowControls({ toast });
+
   // 文档主题那三件事（应用 / 切换 / 打开主题文件夹）搬去了
   // `ui/useDocTheme.ts`（2026-09-24，本文件顶着行数上限）。那边的文件头写着
   // "为什么和 `applyTheme` 分家"、以及"只作用于编辑区"那道限域保证的来历。
   //
-  // ⚠️ 位置**必须在 `updateSettings` 之后**：它拿那个函数当入参。
+  // ⚠️ `themeId` 与 `写主题` **两样都从 `槽` 来**（定义在上面、`updateSettings`
+  // 之后）：用哪一份、换哪一份，必须是同一个判据，否则会出现"取的 CSS 是浅色
+  // 那份、点一下写进深色那份"——屏幕不动，提示却说换好了。
   const { pickTheme, openThemesDir } = useDocTheme({
-    themeId: settings?.document_theme ?? "",
+    themeId: 槽.id,
+    写主题: 槽.写,
     themes,
-    updateSettings,
     toast,
   });
 
-  const copyAsMarkdown = useCallback(async () => {
-    const text = editorRef.current?.getMarkdown();
-    if (text === undefined) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      toast("已复制 Markdown 源码", "success");
-    } catch (e) {
-      toast(`复制失败：${e}`, "error");
-    }
-  }, [toast]);
+  // 用户**导入的**界面风格（取 CSS 注入 / 打开风格文件夹）在
+  // `ui/useUiStyles.ts`（2026-09-26）。⚠️ 与上面那条不是一伙的：文档主题只管
+  // 编辑区、它管整个外壳，注入方式还正好相反——细节在那边文件头。
+  const { styles: uiStyles, openStylesDir } = useUiStyles(settings, toast);
 
-  /**
-   * 导出与打印。⚠️ 正文走 `getEditorMarkdown`——那是**身份稳定**的一个
-   * `useCallback`，不是这里现写的箭头函数。现写的话每渲染一个新身份，
-   * `导出`/`打印` 跟着换，`menuHandlers` 跟着换，`disabledCommands` 重算，
-   * 于是**原生菜单每渲染重推一遍**（一次 IPC + 一次重建）。这条链在
-   * `ui/useMenus.ts` 顶上写着，别在中间任何一环上破坏它。
-   */
-  const { 导出, 打印 } = useExport({
-    activeId,
-    docs,
-    getMarkdown: getEditorMarkdown,
-    themeId: settings?.document_theme ?? "",
-    strict: settings?.strict_markdown ?? false,
-    toast,
-  });
+  // 「复制为 Markdown」（`edit.copyAsMarkdown`）也搬去了 `ui/useClipboard.ts`
+  // （2026-09-25），理由在那个文件的文件头；接线在下面 `剪贴板` 那一行。
 
-  const toggleFullscreen = useCallback(async () => {
-    const win = getCurrentWindow();
-    try {
-      await win.setFullscreen(!(await win.isFullscreen()));
-    } catch (e) {
-      toast(`切换全屏失败：${e}`, "error");
-    }
-  }, [toast]);
-
-  const showAbout = useCallback(async () => {
-    let version = "未知";
-    try {
-      version = await getVersion();
-    } catch {
-      // 版本号取不到不该让「关于」打不开——那正是用户来查版本的地方。
-    }
-    await askConfirm({
-      title: "关于 Nota",
-      message: `Nota ${version}\n一款所见即所得的 Markdown 编辑器，带 Lua 插件系统。`,
-      confirmLabel: "好",
-      hideCancel: true,
-    });
-  }, [askConfirm]);
-
-  const reloadDoc = useCallback(
-    async (id: DocId) => {
-      if (docs.find((d) => d.id === id)?.dirty) {
-        const ok = await askConfirm({
-          title: "有未保存的改动",
-          message: "从磁盘重新加载会丢掉当前的改动。",
-          confirmLabel: "丢弃并重新加载",
-          danger: true,
-        });
-        if (!ok) return;
-      }
-      try {
-        const fresh = await api.doc.reload(id);
-        // 只有它正显示着才需要动编辑器——编辑器一次只挂一份（见 App 的 key）。
-        if (id === activeIdRef.current) editorRef.current?.setMarkdown(fresh.text);
-        await refreshDocs();
-      } catch (e) {
-        toast(String(e), "error");
-      }
-    },
-    [docs, askConfirm, refreshDocs, toast],
-  );
+  const showAbout = useAbout(askConfirm);
 
   // 「跑一条编辑命令」与两个"先问参数、再插进去"的命令搬去了
   // `ui/useEditorCommands.ts`（2026-09-24，本文件顶着行数上限）。那边一并讲了
@@ -546,183 +561,146 @@ export default function App() {
   //
   // ⚠️ 传的是 `editorRef` **本体**（身份稳定），不是 `editorRef.current`——
   // 后者每次渲染都可能是个新值，会让 `run` 每帧换身份。
-  const { run, 插入链接, 插入图像 } = useEditorCommands({ editorRef, askPrompt, toast });
+  const { run, 插入链接 } = useEditorCommands({ editorRef, askPrompt, toast });
 
-  /** 关掉查找条：清高亮、清命中数，并把焦点还给编辑区。 */
-  const 关查找 = useCallback(() => {
-    setFindOpen(false);
-    setFindStatus(空查找状态);
-    editorRef.current?.clearFind();
-    // ⚠️ 焦点还给编辑区：不还的话用户关掉条子接着打字，字会打在**已经
-    // 不显示**的输入框里（浏览器的焦点还在那个被卸载的元素上时是 body，
-    // 于是字全丢了）。这不是锦上添花，是"关了之后还能不能接着写"。
-    editorRef.current?.focus();
-  }, []);
+  // 「插入图像」那一条（含**粘贴**，`ui/useImageInsert.ts`，2026-09-26）。
+  // ⚠️ **必须在 `run` 之后**：它把宿主落好盘的地址通过 `run("image", …)` 插进正文。
+  // ⚠️ 也要在 `useDialogs` 之后（`askImage` / `imageReq` 是那边产出的）。
+  const { 插入图像, 落一张 } = useImageInsert({
+    run,
+    docId: activeId,
+    // ⚠️ 用 `docs` 现查而不是 `activeDoc`：那个常量在本文件**下面**才算出来，
+    // 而 hook 的调用顺序不能往后挪。
+    docSaved: (docs.find((d) => d.id === activeId)?.path ?? null) !== null,
+    askImage,
+    toast,
+  });
 
-  /** 「查找和替换…」——开、再点一次关。 */
-  const 切查找 = useCallback(() => {
-    if (findOpen) 关查找();
-    else setFindOpen(true);
-  }, [findOpen, 关查找]);
+  // **拼写检查那个开关接到引擎上**（`ui/useSpellcheck.ts`，2026-09-27）。
+  // ⚠️ 它是个 hook 而不是"设置页里顺手调一下"：那个开关**不属于设置页**——
+  // 用户在菜单里改、设置文件被别的程序改了，都该跟着动（`settings` 是这个 hook
+  // 唯一的输入）。⚠️ 位置放在这儿是因为它只依赖 `settings` 与 `toast`。
+  useSpellcheck({
+    // ⚠️ 用 `?? null` 而不是 `?.` 链到底：设置还没读回来时给 `null`（"还不知道"），
+    // 不是 `false`（"关着"）——那两件事在 hook 里走的是不同的路。
+    开: settings?.editor.spellcheck ?? null,
+    toast,
+  });
+
+  // **拖进窗口的东西该干什么**（`ui/useFileDrop.ts`，2026-09-27）。
+  // ⚠️ 窗口级拖放的**唯一订阅者**——图片那一支也在这里分派回 `落一张`
+  //（两条订阅一起跑的话，拖一张图会插两张，见那份文件头）。
+  useFileDrop({
+    openPath,
+    openFolder,
+    落一张,
+    files: settings?.files ?? null,
+    hasDoc: activeId !== null,
+    toast,
+  });
 
   /**
-   * 「替换」：换掉**当前那个**命中。⚠️ 没有当前命中时如实说一句——
-   * 不提示的话用户看到的是"点了没反应"，而原因（还没按过「下一个」）
-   * 是看不出来的。
+   * 「格式 → 插入 Emoji…」那一条（`ui/EmojiDialog.tsx`）。
+   *
+   * ⚠️ **就地问一句、拿回一个字符、交给 `run("insertText", …)`**——框本身
+   * 不碰编辑器（与 `ImageDialog` 同一条口径：往哪儿插是调用方的事）。
+   * ⚠️ 取消（`null`）时**什么都不做**，连提示都不弹：用户主动改主意不是错误。
+   * ⚠️ 必须 `useCallback`：它进 `useCommandTable`，而那张表的身份决定菜单栏
+   * 要不要重推一遍（见 `ui/useMenus.ts`）。
    */
-  const 替换当前 = useCallback(
-    (text: string) => {
-      if (!editorRef.current?.replaceCurrent(text)) {
-        toast("光标没停在命中上，先按「下一个」", "info");
-      }
-    },
-    [toast],
-  );
+  const 插入Emoji = useCallback(async () => {
+    const 字符 = await askEmoji();
+    if (字符 !== null) run("insertText", { text: 字符 });
+  }, [askEmoji, run]);
 
-  /** 「全部替换」：报个数——换了多少是用户唯一能核对的凭据。 */
-  const 全部替换 = useCallback(
-    (text: string) => {
-      const n = editorRef.current?.replaceAll(text) ?? 0;
-      toast(n === 0 ? "没有可替换的内容" : `替换了 ${n} 处`, n === 0 ? "info" : "success");
-    },
-    [toast],
-  );
+  // 剪贴板四件（`ui/useClipboard.ts`，2026-09-25）。⚠️ **在 `run` 之后**取：
+  // 它内部用 `run` 把文本落到文档上。
+  const 剪贴板 = useClipboard({ editorRef, run, toast });
+
+  // ⚠️ 传的是 `editorRef` **本体**（身份稳定），不是 `editorRef.current`。
+  const 查找条 = useFindBar({
+    editorRef,
+    toast,
+    t,
+  });
+  // ⚠️ 条子自己要的那几样（开着/命中/回报/关/替换）全在 `ui/EditorArea.tsx`
+  // 里读；这边留的 `切查找` 是菜单那条 `edit.find`（它要开/关来回切）。
+  const { 切查找 } = 查找条;
+
 
   /**
    * 命令 id → 实现。**这张表就是"菜单项能不能点"的唯一真相源。**
    *
-   * ⚠️ 表里没有的 id，菜单里就是灰的（见 `disabled` 与 `ui/commands.ts` 顶上那段）。
-   * 所以**不要**为了让某个条目"看着能用"而在这里塞一个只弹提示的空实现——
-   * 那等于让界面撒谎。做不到的就让它灰着，那是如实。
+   * ⚠️ 表本身 2026-09-26 搬去了 `ui/useCommandTable.ts`（本文件当时一千行
+   * 出头，`docs/09` §4 的上限），连同"今天灰着的那批都有哪些、为什么"那段
+   * 一起。搬走之后顺带**修掉了一个依赖漏项**：「视图 → 显示状态栏」读的
+   * `statusBarOpen` 原先不在依赖数组里，连着点两次「显示状态栏」，第二次
+   * 用的是上一帧捕获的值——关掉之后再也开不回来。那个文件的文件头写着这一类
+   * 漏项现在为什么不可能再发生。
    *
-   * 今天灰着的那批，都有确切的理由：
-   * - 「开发者工具」：Tauri 2 的 JS API **没有**打开 devtools 的方法
-   *   （`@tauri-apps/api` 只暴露创建时的 `devtools` 布尔选项）；
-   * - 「导出/打印」：没做，且多半要靠 Pandoc（`docs/10` §6 那个待拍板问题）；
-   * - 「新建窗口」：要动 Tauri 的窗口配置，不是菜单层的事。
+   * ⚠️ 喂进去的每一个值都必须是**身份稳定**的（`useCallback` 包过的函数、
+   * `useState` 的 setter、基本类型）：这张表的身份是给原生菜单栏用的，输入
+   * 一抖它就重建，而重建就意味着菜单栏重推一遍（那条链在 `ui/useMenus.ts` 顶上）。
+   * 现写箭头函数、或者把 `剪贴板` 那种每次渲染都新的对象整个塞进去，都会踩这条。
    */
-  const menuHandlers = useMemo<Record<string, () => void>>(() => {
-    return {
-      // 插件那些条目（`ui/pluginMenus.ts` 合成的栏）。**并进同一张表**，
-      // 于是"灰不灰"的判据对插件项和普通项是同一条——没有为插件单开的分支。
-      ...插件处理,
-
-      "file.new": () => void newDoc(),
-      "file.open": () => void openViaDialog(),
-      "file.openFolder": () => void openFolder(),
-      "file.reload": () => activeId !== null && void reloadDoc(activeId),
-      "file.save": () => activeId !== null && void saveDoc(activeId),
-      "file.saveAs": () => activeId !== null && void saveDoc(activeId, true),
-      "file.close": () => activeId !== null && void closeDoc(activeId),
-      "file.preferences": () => setSettingsOpen(true),
-
-      // 导出两档 + 打印。⚠️ 子菜单里其余那些（PDF / Word / ODT / LaTeX /
-      // Epub / 图片 / 其他格式）**故意不接**：它们要么得自带 Pandoc、
-      // 要么得再拉一个渲染器，是 `docs/10` §6 那个"打包体积"待拍板问题。
-      // 不接就是灰的——那是如实，比接一个只弹提示的空实现强。
-      "file.exportHtmlPlain": () => void 导出(false),
-      "file.exportHtmlStyled": () => void 导出(true),
-      "file.print": () => void 打印(),
-
-      "edit.undo": () => run("undo"),
-      "edit.redo": () => run("redo"),
-      "edit.copyAsMarkdown": () => void copyAsMarkdown(),
-      "edit.findReplace": () => 切查找(),
-
-      "para.h1": () => run("h1"),
-      "para.h2": () => run("h2"),
-      "para.h3": () => run("h3"),
-      "para.h4": () => run("h4"),
-      "para.h5": () => run("h5"),
-      "para.h6": () => run("h6"),
-      "para.text": () => run("text"),
-      "para.table": () => run("table"),
-      "para.tableRowAbove": () => run("tableRowAbove"),
-      "para.tableRowBelow": () => run("tableRowBelow"),
-      "para.tableColLeft": () => run("tableColLeft"),
-      "para.tableColRight": () => run("tableColRight"),
-      "para.tableDelRow": () => run("tableDelRow"),
-      "para.tableDelCol": () => run("tableDelCol"),
-      "para.tableDel": () => run("tableDel"),
-      "para.tableAlignLeft": () => run("tableAlignLeft"),
-      "para.tableAlignCenter": () => run("tableAlignCenter"),
-      "para.tableAlignRight": () => run("tableAlignRight"),
-      "para.codeBlock": () => run("codeBlock"),
-      "para.quote": () => run("quote"),
-      "para.ol": () => run("ol"),
-      "para.ul": () => run("ul"),
-      "para.task": () => run("task"),
-      "para.hr": () => run("hr"),
-
-      "fmt.bold": () => run("bold"),
-      "fmt.italic": () => run("italic"),
-      "fmt.code": () => run("inlineCode"),
-      "fmt.strike": () => run("strike"),
-      "fmt.link": () => void 插入链接(),
-      "fmt.image": () => void 插入图像(),
-      "fmt.clear": () => run("clearFormat"),
-
-      "view.toggleSidebar": () => setSidebarOpen((v) => !v),
-      "view.outline": () => {
-        setSidebarOpen(true);
-        setSidebarTab("outline");
-      },
-      "view.fileTree": () => {
-        setSidebarOpen(true);
-        setSidebarTab("tree");
-      },
-      "view.toggleDock": () => setDockOpen((v) => !v),
-      "view.formatBar": () => setFormatBarOpen((v) => !v),
-      "view.statusBar": () => setStatusBarOpen((v) => !v),
-      "view.focusMode": () => setFocusMode((v) => !v),
-      "view.typewriter": () => setTypewriter((v) => !v),
-
-      // Slidev 预览：点一下开、再点一下关。⚠️ **勾的是"这场会话开着"**，
-      // 不是"设置里开着"——所以它不进 `updateSettings`，和下面那三种模式正相反。
-      "view.slidev": () => slidev.toggle(activeId),
-
-      // 三种编辑模式。⚠️ 它们和上面那些 `setXxx` 不一样：**要落盘**。
-      // 模式是"下次打开还是这样"的偏好，不是本次会话的临时开关——用户切到源码
-      // 模式之后关掉再开，原地回到所见即所得会让他以为设置没生效。
-      // 落盘一律走 `updateSettings`（它自己先改内存再写后端，失败会回滚）。
-      "view.modeWysiwyg": () => void updateSettings({ view_mode: "wysiwyg" }),
-      "view.modeSource": () => void updateSettings({ view_mode: "source" }),
-      "view.modeSplit": () => void updateSettings({ view_mode: "split" }),
-
-      "view.fullscreen": () => void toggleFullscreen(),
-
-      "help.about": () => void showAbout(),
-    };
-  }, [
-    // ⚠️ 插件那几条也要在内：`插件处理` 换了身份（插件菜单晚一刻拉到、
-    // 或某个插件的 `prompt` 变了），这张表就得跟着换，否则菜单上的条目
-    // 会停在"拉之前"的灰/亮状态上。
+  const menuHandlers = useCommandTable({
+    // ⚠️ 摊着预览时这一项为真 → 那张表整个变空（菜单全灰、快捷键全不接）。
+    // 两种预览形态都算：改动预览（`活跃预览`）与插件面板摊在编辑区（`面板预览`）
+    // ——用户说的「预览的时候禁止操作」不挑形态。
+    预览中: 预览 !== null,
     插件处理,
-    newDoc,
-    openViaDialog,
-    openFolder,
-    reloadDoc,
-    saveDoc,
-    closeDoc,
-    copyAsMarkdown,
+    新建文档: newDoc,
+    打开文件: openViaDialog,
+    打开文件夹: openFolder,
+    // 最近文件那一层（子菜单 + 「清除最近记录」）。⚠️ 这个数组进的是
+    // `Object.values(输入)`，所以它一变这张表就重建 —— 那是**该重建**：
+    // 列表内容变了，条目的处理函数本来就得跟着换。
+    最近,
+    打开最近,
+    清空最近,
+    重载文档: reloadDoc,
+    重命名文档: renameDoc,
+    移动文档: moveDoc,
+    保存文档: saveDoc,
+    关闭文档: closeDoc,
+    活动文档: activeId,
+    打开设置页: setSettingsOpen,
+    导出,
+    导出为,
+    打印,
+    运行: run,
     切查找,
-    updateSettings,
-    toggleFullscreen,
-    showAbout,
-    run,
     插入链接,
     插入图像,
-    导出,
-    打印,
-    activeId,
-    slidev,
-  ]);
+    插入Emoji,
+    // ⚠️ 四条各自列出来（而不是列 `剪贴板` 那个对象）：那个包装对象每次渲染
+    // 都是新的，进去等于这张表每帧重建。
+    剪贴板剪切: 剪贴板.剪切,
+    剪贴板复制: 剪贴板.复制,
+    剪贴板粘贴: 剪贴板.粘贴,
+    剪贴板复制为Markdown: 剪贴板.复制为Markdown,
+    缩放动作, // ⚠️ 整只交出去（不是三个函数各列一行）：它已经是 `useMemo` 出来的。
+    设侧栏打开: setSidebarOpen,
+    设侧栏页: setSidebarTab,
+    设右栏打开: setDockOpen,
+    设打字机: setTypewriter,
+    设界面: setChrome,
+    状态栏开着: statusBarOpen,
+    严格模式: settings?.strict_markdown ?? false,
+    切换专注,
+    切换强制专注,
+    切换全屏,
+    切换置顶,
+    开开发者工具,
+    改设置: updateSettings,
+    关于: showAbout,
+  });
 
   /**
    * 编辑模式。⚠️ 三条**三选一**，来源是 `settings.view_mode` 而不是某个
    * `useState`——它就是编辑区的 `mode` 属性，两处**必须同源**（各存一份的
    * 症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"）。默认值**必须**与 Rust 侧
-   * `ViewMode::default()` 一致（`wysiwyg`），见 `settings.rs` 那条测试。
+   * `ViewMode::default()` 一致（`wysiwyg`），见 `settings/mod.rs` 那条测试。
    */
   const viewMode = settings?.view_mode ?? "wysiwyg";
 
@@ -747,10 +725,11 @@ export default function App() {
   // ⚠️ 整块搬去了 `ui/useMenus.ts`（本文件 2026-09-24 顶着 1000 行上限，
   // 见 `AGENTS.md` §0.4）。那边有那三条判据的完整理由。
   const { disabledCommands, menuChecks, usingNativeMenu } = useMenus({
-    // ⚠️ `全部菜单`（含插件那一栏）**必须**传进去：灰不灰、键位归谁、
-    // 原生菜单推什么，三条判据都走这一份。传成常量 `MENUS` 的话，
-    // 插件那几条会**只画在自绘菜单里**，而快捷键和 macOS 系统菜单都没有。
-    menus: 全部菜单,
+    // ⚠️ `菜单`（含插件那一栏 **和最近文件那一层**）**必须**传进去：灰不灰、
+    // 键位归谁、原生菜单推什么，三条判据都走这一份。传成常量 `MENUS` 的话，
+    // 插件那几条会**只画在自绘菜单里**，而快捷键和 macOS 系统菜单都没有；
+    // 最近文件那一层同理（`ui/recentMenu.ts`）。
+    menus: 菜单,
     menuHandlers,
     activeId,
     commandState,
@@ -758,118 +737,142 @@ export default function App() {
       sidebarOpen,
       sidebarTab,
       dockOpen,
-      formatBarOpen,
+      toolbarMode,
       statusBarOpen,
       viewMode,
-      slidevOpen: slidev.session !== null,
       focusMode,
+      // ⚠️ 它是**从宿主读回来的**（`专注状态`），不是本文件里某个 `useState`
+      // ——和上面那两个（`focusMode` / `typewriter`）**不是一类东西**。
+      forceFocus: 专注运行中,
       typewriter,
+      // ⚠️ 全屏的勾**读窗口**（`fullscreen` 那个镜像），不是读我们自己的意图：
+      // 用户用 WM 的快捷键进的全屏，菜单里也得是勾上的。
+      fullscreen,
+      // ⚠️ 置顶那条同理，而且**更必须**：它没有快捷键，用户手上唯一的开关
+      // 就在窗口管理器里（"总在最前"），读窗口是唯一说得通的做法。
+      alwaysOnTop: 置顶,
     },
     themes,
-    documentTheme: settings?.document_theme ?? "",
+    // ⚠️ 勾在**你此刻看着的**那一套上（`槽.id`），不是 `settings.document_theme`：
+    // 这个勾就是"现在用的是这套"，而菜单里选一套改的也正是这套（见上面 `槽`）。
+    documentTheme: 槽.id,
     onNativePick,
   });
 
   const activeDoc = docs.find((d) => d.id === activeId) ?? null;
 
+  // 窗口标题跟着**当前文档**走（第 51 项）：任务栏里几份文档要分得出来，
+  // 也要看得出哪一份有未保存的改动。⚠️ 改的是原生窗口标题
+  // （`getCurrentWindow().setTitle`），不是 `document.title`——后者传不出去，
+  // 理由写在 `ui/useWindowTitle.ts` 顶上那段。
+  useWindowTitle(activeDoc?.title ?? null, activeDoc?.dirty ?? false);
+
+  // 设置文件的两件事（打开所在目录 / 恢复默认）搬去了
+  // `ui/useSettingsFile.ts`（2026-09-24，本文件顶着行数上限）。
+  // 那边的文件头写着"为什么恢复默认必须用后端返回的那一份"。
+  const { openConfigDir, resetSettings } = useSettingsFile({ setSettings, toast });
+
   return (
     <ErrorBoundary>
-      <div className="app">
-        <TopBar
-          menus={全部菜单}
-          disabled={disabledCommands}
-          checks={menuChecks}
-          themes={themes}
-          currentTheme={settings?.document_theme ?? ""}
-          onCommand={(id) => menuHandlers[id]?.()}
-          onTheme={pickTheme}
-          onOpenThemesDir={() => void openThemesDir()}
-          dockOpen={dockOpen}
-          onToggleDock={() => setDockOpen((v) => !v)}
-          hideMenuBar={usingNativeMenu}
-        />
+      {/* ⚠️ `data-zen` 只在沉浸时为真（`undefined` = 这个属性不出现），判据与
+          收起哪些东西在 `styles/app.css` 里那一节。 */}
+      <div className="app" data-zen={沉浸 || undefined}>
+        {/* ⚠️ 这层壳只为沉浸模式存在：它给顶栏一个**只有 6px 高的定位容器**，
+            让顶栏能滑到窗口外面、再由鼠标碰那 6px 唤回来（见 app.css 那一节）。
+            平时它是 `display: block` 的一层透明壳，布局上和没有它一样。 */}
+        <div className="zen-top">
+          <TopBar
+            menus={菜单}
+            disabled={disabledCommands}
+            checks={menuChecks}
+            themes={themes}
+            currentTheme={槽.id}
+            onCommand={(id) => menuHandlers[id]?.()}
+            onTheme={pickTheme}
+            onOpenThemesDir={() => void openThemesDir()}
+            dockOpen={dockOpen}
+            onToggleDock={() => setDockOpen((v) => !v)}
+            hideMenuBar={usingNativeMenu}
+          />
+        </div>
 
         <div className="app-body">
           {sidebarOpen && (
             <Sidebar
               workspace={workspace}
               tree={tree}
+              // ⚠️ 「文档列表」那一页（最近打开的文件）。三条都是现成的：
+              // 列表来自 `useSession`，打开与摘掉也都在那边（含"打不开就
+              // 顺手摘掉"那条判据，见 `ui/useSession.ts`）。
+              最近={最近}
+              onOpenRecent={(p) => void 打开最近(p)}
+              onForgetRecent={(p) => void 忘掉最近(p)}
               docText={activeDoc?.text ?? ""}
               strict={settings?.strict_markdown ?? false}
               tab={sidebarTab}
               onTab={setSidebarTab}
               onOpenFile={openPath}
+              // 点大纲里的标题跳过去（第 48 项）。⚠️ 编辑器可能还没建好
+              // （换文档的那一瞬间），`EditorPane` 那边对这种情况给的是
+              // "什么都不做"，不是抛错——见它 `useImperativeHandle` 里那段。
+              onJumpOutline={(目标) => editorRef.current?.跳到标题(目标)}
               loadDir={loadDir}
               // 右上角那个 × 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`
               // 是**同一个开关的三个入口**，共用下面这一个 setter。
               onClose={() => setSidebarOpen(false)}
               // 空态里那颗按钮走的是「文件 → 打开文件夹…」那条路，同一个函数。
               onOpenFolder={() => void openFolder()}
+              // 预览期间锁掉（`inert`）。理由见 `预览中` 那一段。
+              inert={预览中}
             />
           )}
 
-          <main className="app-main">
-            {activeDoc && findOpen && (
-              // ⚠️ `key={activeDoc.id}`：查找条里的查询是**组件自己的状态**，
-              // 换文档时它得跟着归零。不归零的话，B 文档那个编辑器手里没有
-              // 任何查找状态（新实例），而条子里还写着 A 文档的查询——
-              // 条子上的"3 / 12"和正文里一个高亮都没有，两边对不上。
-              //
-              // ⚠️ 两条查找回调**不包 `useCallback`**：`FindBar` 把它们存进
-              // ref 读（见那边的注释），身份抖不抖它不受影响；而这里包一层
-              // 反而多两行噪声。
-              <FindBar
-                key={activeDoc.id}
-                status={findStatus}
-                onQuery={(q, o) => editorRef.current?.setFind(q, o)}
-                onStep={(d) => editorRef.current?.findStep(d)}
-                onReplace={替换当前}
-                onReplaceAll={全部替换}
-                onClose={关查找}
-              />
-            )}
-            {activeDoc && formatBarOpen && (
-              // ⚠️ **只在有文档时画**。没文档时它是一排按不动的按钮
-              //（命令全都没有活动文档可作用），那比不画更让人困惑。
-              //
-              // ⚠️ `onCommand` 传的是 `run` **本身**，不包一层箭头：
-              // 包了的话每次 `App` 重渲染都是一个新函数身份，`FormatBar`
-              // 那十几颗按钮就整排重画一遍。
-              <FormatBar state={commandState} onCommand={run} />
-            )}
-            {activeDoc ? (
-              <EditorPane
-                ref={editorRef}
-                key={activeDoc.id}
-                doc={activeDoc}
-                mode={viewMode}
-                strict={settings?.strict_markdown ?? false}
-                physics={settings?.enable_physics ?? false}
-                focusMode={focusMode}
-                typewriter={typewriter}
-                contentWidth={settings?.content_width ?? 760}
-                onCommandState={setCommandState}
-                onFindStatus={setFindStatus}
-                onToast={toast}
-                onDocsChanged={refreshDocs}
-              />
-            ) : (
-              <Home
-                plugins={plugins}
-                onNew={newDoc}
-                onOpen={openViaDialog}
-                onOpenFolder={openFolder}
-              />
-            )}
-          </main>
+          {/* ⚠️ `data-review` 是给 CSS 的开关（`styles/review.css`）：
+              `"true"` = 面板形态，正文**只是藏起来，不卸载**（`.editor-pane`
+              里那个 CodeMirror 带着撤销栈和光标，卸载一次就全没了）；
+              `"inline"` = 改动预览，正文留在原地，改动画在它身上。 */}
+          <EditorArea
+            接线={{
+              主区: mainRef,
+              格式化栏: formatBarRef,
+              编辑器: editorRef,
+              activeDoc,
+              settings,
+              viewMode,
+              focusMode,
+              typewriter,
+              格式化栏开着: formatBarOpen,
+              命令状态: commandState,
+              设命令状态: setCommandState,
+              跑命令: run,
+              文档出口,
+              查找条,
+              预览出口,
+              改动出口,
+              会话出口,
+              插件,
+              对话框,
+              refreshDocs,
+              toast,
+            }}
+          />
 
           {dockOpen && (
             <PluginDock
               plugins={plugins}
               panels={panels}
+              信任={信任表}
+              // ⚠️ 这里原来还给 `PluginDock` 塞一份 `slidev={…}`（预览那一页的
+              // 接线）。2026-09-25 删了：预览现在是**插件自己的一个面板**，
+              // 走的是通用那条路（`nota.ui.register_panel` ＋ `kind = "frame"`），
+              // 宿主这边不再有任何一条为它开的口子。
               onClose={() => setDockOpen(false)}
               onCall={调插件}
               askPrompt={askPrompt}
+              动作={插件动作}
+              // 预览期间锁掉（`inert`）。⚠️ 这一栏里是**插件的按钮**，不走
+              // 菜单那张命令表——菜单全灰挡不住它们，必须单独锁。
+              inert={预览中}
             />
           )}
         </div>
@@ -878,8 +881,13 @@ export default function App() {
           <TabBar
             docs={docs}
             activeId={activeId}
-            onSelect={setActiveId}
+            // ⚠️ **不是 `setActiveId`**：点标签是一次真正的"切页"，「切换文件时
+            // 自动保存」要赶在编辑器换人之前把上一份写盘（见 `切换文档`）。
+            onSelect={(id) => void 切换文档(id)}
             onClose={closeDoc}
+            // 预览期间锁掉（`inert`）：不然还能切文档、关标签——而预览画的
+            // 是**这一份**文档的改动，换掉之后那幅画就没有意义了。
+            inert={预览中}
           />
         )}
 
@@ -889,10 +897,14 @@ export default function App() {
             doc={activeDoc}
             mode={viewMode}
             strict={settings?.strict_markdown ?? false}
+            // 「约几分钟读完」那一格用哪个除数，由设置里那一项说了算。
+            readingSpeed={settings?.appearance.reading_speed ?? 382}
+            // 强制专注的余额。**没在跑时那一格不画**（见 `ui/FocusMeter.tsx`）。
+            focus={专注状态}
           />
         )}
 
-        <Toasts items={toasts} onDismiss={(id) => setToasts((p) => p.filter((t) => t.id !== id))} />
+        <Toasts items={toasts} onDismiss={dismiss} />
 
         {settingsOpen && settings && (
           <SettingsDialog
@@ -901,25 +913,26 @@ export default function App() {
             onClose={() => setSettingsOpen(false)}
             docThemes={themes}
             onOpenThemesDir={() => void openThemesDir()}
+            uiStyles={uiStyles}
+            onOpenStylesDir={() => void openStylesDir()}
+            onOpenConfigDir={() => void openConfigDir()}
+            onResetSettings={() => void resetSettings()}
+            onClearRecent={() => void 清空最近()}
           />
         )}
 
-        {slidev.gate && (
-          <SlidevPanel probe={slidev.gate.probe} {...slidev.gateActions} />
-        )}
-
-        {confirmReq && (
-          <ConfirmDialog
-            title={confirmReq.title}
-            message={confirmReq.message}
-            confirmLabel={confirmReq.confirmLabel}
-            danger={confirmReq.danger}
-            hideCancel={confirmReq.hideCancel}
-            onAnswer={answerConfirm}
-          />
-        )}
-
-        {promptReq && <PromptDialog {...promptReq} onAnswer={answerPrompt} />}
+        {/* 浮层那一族（pandoc 面板 ＋ 四个对话框 ＋ 专注总结）。⚠️ 整块 2026-09-27
+            搬去了 `ui/AppDialogs.tsx`——本文件当时 1024 行，顶破了 1000 行硬线。
+            ⚠️ 那里收的是**一个 `对话框` 对象**（不是十来个函数），理由见那份文件头。
+            ⚠️ `专注总结` 走的是**另一条路**（`useFocusTrace` 给的，不是 `askXxx`）：
+            它不问任何事，是一份看完就关的报告，理由在 `ui/FocusSummaryDialog.tsx`。 */}
+        <AppDialogs
+          对话框={对话框}
+          pandocGate={pandocGate}
+          pandocGateActions={pandocGateActions}
+          专注总结={专注总结}
+          关掉专注总结={收起专注结算}
+        />
       </div>
     </ErrorBoundary>
   );

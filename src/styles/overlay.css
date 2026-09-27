@@ -1,0 +1,359 @@
+/**
+ * 界面上的**浮层那一族**：四个对话框（确认 / 输入 / 插入图像 / Emoji 选择，
+ * 共用同一个壳）＋ 打字时跟着光标弹的 Emoji 补全面板。
+ *
+ * # 为什么从 `app.css` 里拆出来（2026-09-27）
+ *
+ * ⚠️ **只为 1000 行那条硬线**（`tools/doc-sync-check.sh` ①）：`app.css` 加了
+ * Emoji 选择框那一段之后 1040 行、超了。拆出来的这一份是**按职责切的**
+ * ——"浮在与正文无关的一层上的东西"与"骨架／工具条／状态栏"不是一回事。
+ *
+ * ⚠️ **四段用的是同一层壳**（`.confirm-backdrop` ＋ `.confirm-dialog`）：
+ * 它们长得一样、行为也一样（Esc = 取消、点遮罩 = 取消），这一条从第一个框
+ * 立下起就没变过。所以它们**必须待在同一个文件里**——分开放的结果是
+ * 某一天有人只改了其中一个框的宽度，而"看着不一样"要等到用户报上来
+ *（与 `docs/03` 那条"同一个东西只能有一处定义"同一条道理）。
+ *
+ * ⚠️ **导入顺序**：`main.tsx` 里紧跟 `app.css`。搬出来之前这些规则就在
+ * `app.css` 中间、在 `.btn` 那一段**之后**（`.emoji-cat` 靠"后来居上"盖掉
+ * `.btn` 的内边距），所以这里也必须排在 `app.css` 之后——顺序反了，
+ * Emoji 选择框里那排分类按钮会静默变回全尺寸。
+ */
+
+/* ── 确认框（`ui/ConfirmDialog.tsx`）───────────────────────────────────────
+   替掉 `window.confirm` 的那个。它阻塞 WebView、会打断输入法组合态，
+   而"关一份没存盘的文档"随时会发生。 */
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 32%);
+}
+
+.confirm-dialog {
+  min-width: 320px;
+  max-width: 440px;
+  padding: 20px 22px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  /* 用 `--bg-raised` 那一层：它在亮色下是纯白、暗色下比 `--bg` 高一档，
+     正好是"浮在正文上面"该有的关系。 */
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
+}
+
+.confirm-title {
+  margin: 0 0 8px;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+.confirm-message {
+  margin: 0 0 18px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  /* 长文件名/长路径不要撑破框 */
+  overflow-wrap: anywhere;
+  /* 消息里的换行要**真的换行**。它是个 `<p>`，默认会把 `\n` 折成空格——
+     「关于 Nota」那条消息就是靠换行分行的。 */
+  white-space: pre-line;
+  /* ⚠️ 「关于 Nota」那条消息现在有二十来行（系统权限清单，用户点名要的），
+     在 440px 宽的框里会折成四五十行、**比屏幕还高**——框是居中的，
+     上下两头会被切在屏幕外，按钮也跟着看不见。给它一个上限、让它自己滚。
+     ⚠️ 55vh + 标题和按钮那约 130px 得留在 100vh 里，50~60 是安全区间；
+     写成 70vh 之类的，矮屏上照样切。 */
+  max-height: 55vh;
+  overflow-y: auto;
+  /* 滚到底/滚到顶时不要把滚动传给背后的正文（正文是可编辑的，
+     一条滚动手势漏过去就是"我明明在滚这个框，文档却动了"）。 */
+  overscroll-behavior: contain;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── 输入框（`ui/PromptDialog.tsx`）────────────────────────────────────────
+   替掉 `window.prompt` 的那个。⚠️ 它的理由比确认框还硬：`prompt` 在
+   WebKitGTK 上默认被关掉，调用会**静默返回 null**——菜单点下去什么都不发生。
+
+   ⚠️ 它借的是上面那层壳（`.confirm-backdrop` / `.confirm-dialog`）：两个框
+   长得一样、行为也一样（Esc = 取消、点遮罩 = 取消），样式不该有两套。 */
+
+.prompt-dialog {
+  /* 比确认框宽一点：它要装一整个 URL，440px 下长地址要横向滚。 */
+  min-width: 420px;
+}
+
+.prompt-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+/* 第二个字段的标签要跟上一个输入框拉开距离，否则两行会粘在一起。 */
+.prompt-input + .prompt-label,
+.prompt-input + .prompt-hint {
+  margin-top: 12px;
+}
+
+.prompt-input {
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+}
+
+.prompt-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.prompt-hint {
+  margin: 10px 0 16px;
+  color: var(--fg-faint);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+/* ── 插入图像框（`ui/ImageDialog.tsx`）─────────────────────────────────────
+   ⚠️ 它和输入框借同一层壳（`.confirm-backdrop` / `.confirm-dialog` /
+   `.prompt-dialog`），只是多了一排"来源"页签和一颗「浏览…」。 */
+
+.image-src-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+/* 地址输入框与「浏览…」同一行：按钮跟着输入框走，不另起一行——另起一行的话
+   它离它要影响的那个框太远，看起来像页面级的动作。 */
+.image-src-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.image-src-row .prompt-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.image-src-row .btn {
+  flex: none;
+}
+
+/* 「插入后上传」那个勾选框（2026-09-26 加）。
+   ⚠️ 它是一个 `<label>` 包着 `<input type=checkbox>`，所以整行文字都可点——
+   那一行字比那颗小方块宽得多，不加这个的话用户得瞄着方块点。
+   `.prompt-input + .prompt-hint` 那条间距规则管不到它（它不是 `.prompt-input`），
+   所以上下留白在这儿自己给。 */
+.image-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 12px;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+
+.image-upload-row input[type="checkbox"] {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* ── Emoji 选择框（`ui/EmojiDialog.tsx`）───────────────────────────────────
+   ⚠️ 同样借 `.confirm-backdrop` / `.confirm-dialog` / `.prompt-input` /
+   `.btn` 那几层壳：四个框长得一样、行为也一样（Esc = 取消、点遮罩 = 取消）。
+   这里只加它独有的三样：分类那排小按钮、网格、每格的"字 ＋ 短代码"。 */
+
+.emoji-dialog {
+  /* 比输入框宽：网格要按 84px 一列排，太窄一列就装不下两三个。 */
+  min-width: 460px;
+  max-width: 560px;
+}
+
+.emoji-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  /* ⚠️ 上面那条留白是给搜索框和它拉开的（`.prompt-input + .emoji-cats`
+     在 `prompt-input` 那一段的间距规则之外，所以这儿自己给）。 */
+  margin: 12px 0;
+}
+
+/* 分类按钮比普通按钮矮一档：十一个挤在一行里，用全高会占掉半屏。 */
+.emoji-cat {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 0.85em;
+}
+
+/* ⚠️ 网格自己滚（`max-height` ＋ `overflow`），**不是整个框滚**：搜索框与
+   分类那排要一直停在原地——滚下去之后看不见分类、也改不了搜索词，那个框
+   就只剩"翻"一条路了。 */
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 4px;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+.emoji-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+/* ⚠️ 悬停**不能只靠底色**（`--bg-hover` 在某些界面风格里几乎和 `--bg` 一样）：
+   再加一道框，两种都看得见。 */
+.emoji-cell:hover {
+  border-color: var(--border);
+  background: var(--bg-hover);
+}
+
+/* ⚠️ 字号大是这一格的主角——用户是**看图**在挑，短代码只是"顺手看一眼"。 */
+.emoji-glyph {
+  font-size: 1.6em;
+  line-height: 1.1;
+}
+
+/* ⚠️ 短代码会超出一格（`:thumbsdown:` 这种），截断比换行好：换行会让每一格
+   高度不一，网格看起来像坏的。完整短代码在 `title` 里（鼠标停一下就有）。 */
+.emoji-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--fg-faint);
+  font-size: 0.7em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Emoji 补全面板（`editor/emoji.ts` 的 `emoji补全`）─────────────────────
+   ⚠️ 它和上面那个**选择框**是两样东西：那个整屏、要用户主动叫；这个是
+   打字时跟着光标弹的一小条（打 `:smi` 就出来）。
+   ⚠️ 它挂在 `document.body` 上（`position: fixed`，与 `editor/lang-picker.ts`
+   同一条路子），所以这份样式**进不了导出那条路**（导出只嵌
+   `theme/base.css` ＋ `editor.css` ＋ `katex.min.css`）——这正是要的：
+   面板是屏幕上的东西，不该出现在导出的 HTML 里。
+   ⚠️ 因为它落在 `body` 下、不在编辑器 DOM 里，那些 `var(--…)` 拿的是
+   **界面主题**（`body` 上的值），拿不到文档主题——与 `lang-picker` 那边的
+   处境一样，但这里不需要抄 token：面板本来就该跟着界面主题走。 */
+
+.nota-emoji-pop {
+  position: fixed;
+  z-index: var(--z-popup);
+  overflow-y: auto;
+  max-height: 220px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  /* 投影用写死的黑：它在浅色和深色下都成立（同 `.nota-lang-popup`）。 */
+  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.nota-emoji-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* 高亮的那一条（上下键换的就是它）。
+   ⚠️ 底色 ＋ 一道强调色内边**两样都给**：`--bg-active` 在某些界面风格里
+   淡到看不出来，而"当前选的是哪条"是这一块唯一要传达的信息。 */
+.nota-emoji-item.is-on {
+  background: var(--bg-active);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.nota-emoji-item:hover:not(.is-on) {
+  background: var(--bg-hover);
+}
+
+/* 字符是主角（用户是看图在挑），短代码是陪衬。 */
+.nota-emoji-glyph {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.nota-emoji-name {
+  color: var(--fg-muted);
+}
+
+/* ── 斜杠菜单（`editor/slash.ts` 的 `斜杠菜单`）────────────────────────────
+   ⚠️ 与上面那块 emoji 补全面板是**同一族**（`position: fixed`、挂在
+   `document.body` 上、不上导出那条路），但两处不同：
+   ① **行是整行文字**，没有 emoji 那种"一个字符当主角"的层级，所以字号
+      按界面正文走、不加粗；
+   ② **给每一行一个最小宽度**——名字最长的是「内容目录」四个字，而`replaceChildren`
+      重画时面板宽度会跟着当前筛出来的那几条变，鼠标没动、面板却在脚下变宽变窄
+      很难看。`min-width` 把它钉住。
+   ⚠️ 同样的：挂在 `body` 下 ⇒ 那些 `var(--…)` 拿的是**界面主题**，
+   与文档主题无关（这正是要的）。 */
+
+.nota-slash-pop {
+  position: fixed;
+  z-index: var(--z-popup);
+  overflow-y: auto;
+  max-height: 260px;
+  min-width: 132px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
+  font-family: var(--font-ui, inherit);
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.nota-slash-item {
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* 高亮那一条。⚠️ 与 emoji 面板同一条理由：底色在某些界面风格里淡到看不出来，
+   所以**底色 ＋ 一道强调色内边**两样都给——"当前选的是哪条"是这块浮层里
+   唯一要传达的状态。 */
+.nota-slash-item.is-on {
+  background: var(--bg-active);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.nota-slash-item:hover:not(.is-on) {
+  background: var(--bg-hover);
+}

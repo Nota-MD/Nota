@@ -16,7 +16,7 @@
 //!
 //! # ⚠️ 这个文件里会有明文密钥
 //!
-//! AI 插件的 API key 就存在这儿（用户 2026-09-24 拍板：**不做密钥链**）。
+//! AI 插件的 API key 就存在这儿（用户 2026-09-24 定下：**不做密钥链**）。
 //! 所以：
 //!
 //! - 文件按 **0600** 建（`OpenOptions::mode`，不是"先建再 chmod"——那中间有窗口）；
@@ -140,7 +140,7 @@ fn 读(路径: &Path) -> BTreeMap<String, toml::Value> {
     match toml::from_str::<BTreeMap<String, toml::Value>>(&text) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("[nota] 插件设置文件读不了（本次当空的用）：{}：{e}", 路径.display());
+            crate::日志!("[nota] 插件设置文件读不了（本次当空的用）：{}：{e}", 路径.display());
             BTreeMap::new()
         }
     }
@@ -249,7 +249,7 @@ fn toml转lua(lua: &Lua, v: &toml::Value) -> mlua::Result<Value> {
         toml::Value::Integer(i) => Value::Integer(*i),
         toml::Value::Float(f) => Value::Number(*f),
         toml::Value::Boolean(b) => Value::Boolean(*b),
-        // 读到了但类型不在我们支持的那三种里——**用户手改过文件**（塞了个数组
+        // 读到了但类型不在支持的那三种里——**用户手改过文件**（塞了个数组
         // 或嵌套表）。给它一串文本，**不给 nil**：nil 会让插件以为"这个键没设过"，
         // 于是它写回自己的默认值，把用户手写的东西悄悄盖掉。
         other => Value::String(lua.create_string(other.to_string())?),
@@ -298,7 +298,7 @@ mod tests {
     }
 
     /// 文件头是注释，**不能影响读回来**——这句话看着理所当然，
-    /// 但它就是"我们往 TOML 里塞了一段自己写的东西"的那条边界。
+    /// 但它就是"Nota 往 TOML 里塞了一段自己写的东西"的那条边界。
     #[test]
     fn 文件头那段注释不影响读() {
         let 路径 = 临时目录("header").join("t.toml");
@@ -343,7 +343,7 @@ mod tests {
         let err = 键合法吗("a.b").unwrap_err().to_string();
         assert!(err.contains("不合法"), "实际报的是：{err}");
         assert!(键合法吗("").is_err(), "空键要报错");
-        assert!(键合法吗("模型").is_err(), "非 ASCII 键要报错（我们自己拼的键都是 ASCII）");
+        assert!(键合法吗("模型").is_err(), "非 ASCII 键要报错（本仓自行拼接的键均为 ASCII）");
     }
 
     #[test]

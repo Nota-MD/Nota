@@ -1,9 +1,10 @@
 /**
  * 编辑区**上面/旁边那几条横条**的样式：格式化工具栏、查找替换条。
  *
- * ⚠️ 单独一份而不是塞进 `app.css`：那份已经 880 多行，贴着 1000 行上限
- * （`AGENTS.md` §0.4）。这几条横条和外壳骨架也不是一回事——它们贴着编辑区，
- * 跟着编辑区的模式（所见即所得 / 源码）走，`app.css` 里那些东西不跟。
+ * ⚠️ 单独一份而不是塞进 `app.css`：那份的行数一直很紧（上限见 `AGENTS.md` §0.4，
+ * 这里**不写具体数字**——数字会过期，"很紧"不会）。这几条横条和外壳骨架也不是
+ * 一回事——它们贴着编辑区，跟着编辑区的模式（所见即所得 / 源码）走，`app.css`
+ * 里那些东西不跟。
  *
  * 颜色与尺寸**一律走变量**（`theme.css`），这里不该出现写死的色值——
  * 写死一个就少支持一种「界面风格 × 明暗」的组合。
@@ -17,7 +18,7 @@
   align-items: center;
   gap: 1px;
   /* ⚠️ 横向能滚。窄窗口下这十几颗按钮一定会超宽，不滚的话最后那几颗
-   * （清除样式、代码块）会被裁掉——而它们恰恰是别人不会去找的那些。 */
+   * （清除样式、代码块）会被裁掉——而它们正是别人不会去找的那些。 */
   overflow-x: auto;
   padding: 3px 6px;
   background: var(--bg-subtle);
@@ -78,27 +79,22 @@
   white-space: nowrap;
 }
 
-/* 三颗行内标记按钮各自的长相。⚠️ 只有**字形**是这里定的，颜色一律跟
- * 按钮的 `color` 走（`:hover` 与 `data-on` 都只改 `color`）——在这里
- * 各写一个色值，亮起来的时候就会有两个颜色打架。 */
-.format-glyph-bold {
-  font-weight: 700;
-}
-
-/* ⛔ `.format-glyph-italic` 原来在这里，它写着 `font-family: var(--font-doc)`
- * ——**文档的字体（衬线）被拿来画界面上的一个字形**，这正是用户
+/* ⛔ `.format-glyph-bold` / `-strike` 原来在这里（`font-weight: 700` 和
+ * `text-decoration: line-through`）。粗体和删除线改用图标之后就没人用了，
+ * 一起删掉——留着一条没人用的规则，下一个人只会以为那颗按钮还是字形。
+ *
+ * ⛔ `.format-glyph-italic` 更早还在这儿，它写着 `font-family: var(--font-doc)`
+ * ——**文档的字体（衬线）被拿来画界面上的一个字形**，正是用户
  * 2026-09-24 那句「绝对不要用衬线字体做UI字体」要挡掉的东西。
  *
- * 2026-09-24 起斜体那颗按钮改用图标（Folio 那套，见 `ui/Icon.tsx`），
- * 这个 class 已经没有元素用它了，所以**整条删掉**而不是"留着但改字体"：
- * 留着一条没人用的规则，下一个人只会以为斜体还是字形。 */
-
-.format-glyph-strike {
-  text-decoration: line-through;
-}
-
-.format-glyph-inlineCode,
-.format-glyph-codeBlock {
+ * 现在还剩两个用 `.format-glyph` 的：`H1`/`H2`/`H3`（只要基类那 12px，
+ * 拉丁字母缩到 16px 也认得清）和 `</>`（下面这个等宽体）。
+ * 引用和任务列表原先也是字形（汉字「引」「任」），2026-09-24 起改成
+ * `nota-quote-symbolic` / `nota-task-symbolic`——汉字笔画密，16px 下是一团黑。
+ *
+ * ⚠️ 字形按钮的颜色一律跟按钮的 `color` 走（`:hover` 与 `data-on` 都只改
+ * `color`）——在这里各写一个色值，亮起来的时候就会有两个颜色打架。 */
+.format-glyph-inlineCode {
   font-family: var(--font-mono);
   font-size: 11px;
 }
@@ -224,4 +220,58 @@
 
 .nota-find-current {
   background: var(--find-current);
+}
+
+/* ── 外部改动提示条 ──────────────────────────────────────────────────────
+ *
+ * 「别的程序改了磁盘上这份文件」（`ui/ExternalChangeBar.tsx`）。它和上面那两条
+ * 横条是同一族：贴在 `.app-main` 里的编辑区上方、跟着编辑区走。
+ *
+ * ⚠️ **颜色走 `--warn` 那一族**，不是 `--danger`：这不是错误，是一件需要用户
+ * 拿主意的事（继续编还是拉进来）。红底会让"别人格式化了一下我的文件"看起来
+ * 像出了事故，而用户的第一反应是去关掉它。
+ *
+ * ⚠️ 底色用 `color-mix` 兑出来、**不新增一个色号**：多一个色号就多要一份
+ * 「界面风格 × 明暗」的维护，而这条横条在所有风格里都该是"同一种黄"。
+ * 兑的是 `--warn`，所以暗色下它自己会变深。
+ */
+
+.external-change-bar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px var(--spacing);
+  background: color-mix(in srgb, var(--warn) 14%, var(--bg-subtle));
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92em;
+}
+
+.external-change-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+/* 文件名**自己省略号**，不许把右边那三颗按钮挤出屏幕：
+   窄窗口下"重新载入"够不着，这条提示就成了一个只能看着的东西。 */
+.external-change-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.external-change-spacer {
+  flex: 1;
+}
+
+/* ⚠️ 比 `.btn` 矮一档：`.btn` 是 `--control-height`（对话框、工具栏那个尺度），
+   摆在一条 24px 高的提示条里会把条子撑高，而这条子出现得很突然
+   （外部程序存一次盘就冒出来）——条子一高，正文就跟着往下跳一次。 */
+.external-change-btn {
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  font-size: 0.92em;
 }

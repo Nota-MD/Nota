@@ -1,10 +1,10 @@
 /**
- * 菜单栏。**这是"模仿 Typora 界面布局"里最主要的那一块。**
+ * 菜单栏。**这是界面布局里最主要的那一块。**
  *
  * 在这之前 Nota 只有一条工具条 + 四个按钮（新建/打开/打开文件夹/保存），
- * 而 Typora 单是「段落」一栏就有二十来项。`docs/07` 第 40 项记的就是这个缺口。
+ * 单是「段落」一栏就有二十来项要补。`docs/07` 第 40 项记的就是这个缺口。
  *
- * # 灰掉的项不是省事，是**如实**
+ * # 灰掉的项是**如实**，不是省事
  *
  * 菜单里会出现一些灰的条目（比如「查找和替换」「导出 PDF」）。它们不是占位符，
  * 也不是"以后会做"的许诺——它们是**当前确实做不到**的能力，摆在那里是为了
@@ -22,16 +22,21 @@
  *
  * - 菜单开着时**鼠标划过另一栏就切过去**——不用先点开再点另一栏；
  * - 点空白处、按 Esc 都关；
+ * - **点某一栏的第一下永远是"打开它"**，哪怕它已经被划过切过来了（BUG-17）：
+ *   "开着"和"用户点开的"不是一回事，混起来就会出现"从别的栏点过来，
+ *   第一下把菜单关掉了"。判据在 `点开的` 那个 ref 上，这一条同样管着
+ *   `MenuPopup` 里的子菜单（那边文件头也记着同一条）；
  * - `←` `→` 在栏间移动（走到头就停住，不绕回——这是 macOS 的惯例，
- *   绕回在栏多的时候会让人分不清"我绕了一圈"还是"没动"）；
+ *   绕回在栏多的时候会让人分不清"绕了一圈"还是"没动"）；
  * - Esc 关掉之后焦点回到那一栏的按钮上（不然键盘用户会掉到页面里）。
  *
- * 这几条是原生的手感。不这么做的话，用惯桌面软件的人会觉得"这个菜单是假的"。
+ * 这几条是原生菜单的行为。不这么做的话，用惯桌面软件的人会觉得"这个菜单是假的"。
  */
 
 import { useEffect, useRef, useState } from "react";
 
 import type { DocThemeInfo } from "@/bridge/ipc";
+import { useT } from "@/i18n";
 import { resolvePick, themeChecks, themeEntries, type MenuSpec } from "@/ui/commands";
 import { MenuPopup } from "@/ui/MenuPopup";
 
@@ -61,17 +66,52 @@ interface Props {
 }
 
 export function MenuBar(props: Props) {
+  /**
+   * ⚠️ 菜单里的字**在这里才翻**，`ui/commands.ts` 那张表里存的是**键**
+   *（中文原文），不是译文。2026-09-26 起整个菜单栏都过这一层。
+   *
+   * 为什么不在 `commands.ts` 里就地 `t("文件")`：那张表是**模块级常量**，
+   * import 时就求值——那时语言还没定，而且求值完**没有任何东西会通知它重画**
+   *（理由与 `i18n/index.ts::useT` 顶上那段同一条）。所以规矩是
+   * **"表存键、渲染时翻"**，`tools/i18n-check.sh` 那边也照这条认账
+   *（它把这几个"文案表文件"里含中文的字面量都算成键）。
+   */
+  const t = useT();
+
   // 哪一栏开着。`null` = 全关。
   const [open, setOpen] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 现在开着的那一栏是**点开的**（记 id），还是**鼠标划过 / 方向键切过来的**（`null`）。
+   *
+   * ⚠️ 与 `MenuPopup.tsx` 里 `点开的` 那个 ref 是**同一类东西、同一个 bug**
+   *（BUG-17）：菜单开着时，鼠标划过另一栏会把它切过来（`onMouseEnter`），
+   * 于是"点这一栏"那一刻看到的永远是"它已经开着"；按"开着就收起"处理的话，
+   * 从别的栏点过来的人**第一下把菜单整个关掉**了，得再点一下。所以只有点开的
+   * 才被点击收起，划开的算**确认**（顺带记成点开的，这样再点一下才关）。
+   */
+  const 点开的 = useRef<string | null>(null);
 
   /** 把焦点还给某一栏的按钮。 */
   const focusTitle = (menuId: string) => {
     barRef.current?.querySelector<HTMLElement>(`[data-menu="${menuId}"]`)?.focus();
   };
 
+  /** 关掉菜单，并把"这一栏是点开的"一并清掉。**每个关闭路径都要走这里。** */
+  const 关栏 = () => {
+    点开的.current = null;
+    setOpen(null);
+  };
+
+  /** 开一栏。`来源` 决定"再点一下"是收起还是确认，见上面 `点开的`。 */
+  const 开栏 = (id: string, 来源: "点" | "划" | "键") => {
+    点开的.current = 来源 === "点" ? id : null;
+    setOpen(id);
+  };
+
   // 点别处关掉。⚠️ 用 `mousedown` 不是 `click`：`click` 要等鼠标抬起，
-  // 期间菜单还开着，点到的东西会被菜单挡住——手感是"点了两下才关掉"。
+  // 期间菜单还开着，点到的东西会被菜单挡住——表现是"点了两下才关掉"。
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -82,7 +122,7 @@ export function MenuBar(props: Props) {
       // 于是 mouseup / click 落在一个已经被卸载的按钮上——
       // **子菜单里的项永远点不动**，而键盘走得通，看着像"鼠标坏了"。
       if (t?.closest?.(".menu-sub")) return;
-      setOpen(null);
+      关栏();
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -96,7 +136,7 @@ export function MenuBar(props: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
-      setOpen(null);
+      关栏();
       // 焦点还给那一栏的按钮。不还的话键盘用户在菜单关掉后
       // 就没有落点了，下一次 Tab 会从页面开头重新数。
       focusTitle(open);
@@ -116,12 +156,14 @@ export function MenuBar(props: Props) {
     // 新弹层自己会播种焦点（`useMenuRovingFocus` 的 `useLayoutEffect`），
     // 所以这里**不**去 focus 按钮——那样反而把焦点从弹层里拽出来，
     // 方向键就断在切栏这一步了。
-    setOpen(next.id);
+    // ⚠️ 来源记"键"：方向键切过来的那一栏，鼠标点一下算"确认"不是"收起"，
+    // 理由同上面 `点开的` 那段——它不是点出来的。
+    开栏(next.id, "键");
   };
 
   /** 点一项：主题那几条走 `onTheme`，其余走 `onCommand`。两条路都关菜单。 */
   const pick = (id: string) => {
-    setOpen(null);
+    关栏();
     // ⚠️ "这个 id 是命令还是主题那三条"只有 `resolvePick` 一处判据，
     // 原生菜单那条路也走它。见 `commands.ts` 里那段。
     const p = resolvePick(id);
@@ -152,26 +194,34 @@ export function MenuBar(props: Props) {
               aria-haspopup="menu"
               aria-expanded={isOpen}
               // 点这一栏：关着就开，开着就关（再点一次收起是桌面惯例）。
-              onClick={() => setOpen(isOpen ? null : menu.id)}
+              onClick={() => {
+                // ⚠️ 开着的那一栏点一下收起——但**只有"点开的"才算数**：
+                // 划过另一栏会把它切过来，那一刻它已经开着了，而用户这一下的
+                // 本意是"打开这一栏"。不区分的话第一下点击会把菜单整个关掉
+                //（从别的栏点过来的人看到的正是这个），得点两下才开（BUG-17）。
+                if (!isOpen) 开栏(menu.id, "点");
+                else if (点开的.current === menu.id) 关栏();
+                else 开栏(menu.id, "点");
+              }}
               // 已经有菜单开着时，划过就切过去——不用先点开再点另一栏。
-              onMouseEnter={() => open && open !== menu.id && setOpen(menu.id)}
+              onMouseEnter={() => open && open !== menu.id && 开栏(menu.id, "划")}
             >
-              {menu.label}
+              {t(menu.label)}
             </button>
 
             {isOpen && (
               // ⚠️ `key` 是必需的：切栏时若不换 key，React 会**复用**同一个
               // `MenuPopup` 实例，漫游焦点和子菜单开关都留在上一栏的状态里，
-              // 新一栏打开时焦点会落在错误的位置（或干脆没有焦点）。
+              // 新一栏打开时焦点会落在错误的位置（或完全没有焦点）。
               <MenuPopup
                 key={menu.id}
-                label={menu.label}
+                label={t(menu.label)}
                 entries={entries}
                 disabled={props.disabled}
                 checks={checks}
                 onPick={pick}
                 onDismiss={() => {
-                  setOpen(null);
+                  关栏();
                   focusTitle(menu.id);
                 }}
                 onArrowOut={arrowAcross}

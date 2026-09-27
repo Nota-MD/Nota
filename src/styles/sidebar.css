@@ -177,6 +177,90 @@
   font-size: 0.85em;
 }
 
+/* ── 文档列表（最近打开的文件，2026-09-27）─────────────────────────────── */
+
+.sidebar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* 一行 = 「文件名 — 上一层目录」那颗按钮 + 右边一颗 ×。
+   ⚠️ 用 `flex` 而不是让 × 绝对定位：那一行本来就窄（侧栏只有两百来像素），
+   绝对定位得给它留一段空白 padding，而文件名多长都不该被那段空白吃掉。 */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-item-open {
+  flex: 1;
+  min-width: 0; /* flex 子项默认不收缩，不加这句文件名长的那一行会把 × 挤出去 */
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+  padding: 4px var(--spacing);
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.sidebar-item-open:hover {
+  background: var(--bg-hover);
+}
+
+/* 两行都按省略号截断。⚠️ `overflow: hidden` 与 `white-space: nowrap` 一起写：
+   少前者的话长文件名会**溢出到侧栏外面**（而不是被截断），看起来像排版坏了。 */
+.sidebar-item-name,
+.sidebar-item-dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-item-name {
+  font-size: 0.92em;
+}
+
+.sidebar-item-dir {
+  color: var(--fg-faint);
+  font-size: 0.8em;
+}
+
+/* 那一颗 ×。⚠️ **平时不显形**（`opacity: 0`），划过这一行才出来：
+   每一行都挂一颗常亮的叉，整页看起来像"这些都是待删除的东西"。
+   ⚠️ 键盘走到它时也要显形（`:focus-visible`），不然焦点是个看不见的地方。 */
+.sidebar-item-x {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-faint);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+}
+
+.sidebar-item:hover .sidebar-item-x,
+.sidebar-item-x:focus-visible {
+  opacity: 1;
+}
+
+.sidebar-item-x:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
 /* ── 大纲 ─────────────────────────────────────────────────────────────── */
 
 /* 一行 = 三角 + 标题（+ 折起来的条数）。⚠️ 缩进在下发时按层级算好写在
@@ -206,11 +290,19 @@
   flex: 1;
   padding: 3px 8px;
   color: var(--fg-muted);
-  cursor: default;
   border-radius: var(--radius-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* ⚠️ 2026-09-25 起这一条是 **`<button>`** 而不是 `<span>`（第 48 项：
+     点了要能跳过去，键盘也得够得着）。所以先把按钮那套默认样子抹平——
+     不抹的话会出现一圈系统边框、字号也不跟侧栏走，和旁边的三角挤在一起
+     看着像两个控件。 */
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .outline-row:hover .outline-item {

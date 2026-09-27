@@ -91,14 +91,29 @@ pub fn nota_workspace_tree(
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
 
-    Ok(read_dir_sorted(&base, &base_rel, depth.unwrap_or(1)))
+    read_dir_sorted(&base, &base_rel, depth.unwrap_or(1))
 }
 
 /// 读一层目录，排好序，按 `depth` 决定要不要递归下去。
-fn read_dir_sorted(dir: &Path, rel: &Path, depth: u32) -> Vec<TreeNode> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
+///
+/// ⚠️⚠️ **读不动的那一层要报错，不能返回空数组**（2026-09-25 改）。
+/// 原来自作主张：`let Ok(entries) = … else { return Vec::new() }`。后果是
+/// "这个文件夹我没有权限"和"这个文件夹是空的"在界面上长得**一模一样**
+/// ——展开之后一片空白，用户以为自己记错了。
+///
+/// ⚠️ 前端其实早就备好了那条路：`Sidebar.tsx` 里是
+/// `loadDir(...).then(...).catch(e => setErrors(...))`，注释写着这一行的用处。
+/// **是后端从来不 reject，那条 catch 一次也没跑到过。**
+///
+/// ⚠️ 只有**被请求的那一层**抛（就是下面函数签名里这个 `Result`）：递归下去的
+/// 子目录仍然吞掉（调用处 `unwrap_or_default`）。一个子目录读不动，
+/// 不该让整棵已经读得出来的树跟着失败；而前端本来就是一层层按需要的，
+/// 等轮到它自己那一层时，它会照常报出来。
+fn read_dir_sorted(dir: &Path, rel: &Path, depth: u32) -> Result<Vec<TreeNode>> {
+    let entries = std::fs::read_dir(dir).map_err(|source| NotaError::Read {
+        path: dir.to_path_buf(),
+        source,
+    })?;
 
     let mut dirs: Vec<TreeNode> = Vec::new();
     let mut files: Vec<TreeNode> = Vec::new();
@@ -130,14 +145,18 @@ fn read_dir_sorted(dir: &Path, rel: &Path, depth: u32) -> Vec<TreeNode> {
                 path: rel_str,
                 is_dir: true,
                 children: if depth > 1 {
-                    Some(read_dir_sorted(&entry.path(), &child_rel, depth - 1))
+                    // 子目录读不动就当作空的（见函数头那段）：只有被直接请求的
+                    // 那一层才值得让整个请求失败。
+                    Some(
+                        read_dir_sorted(&entry.path(), &child_rel, depth - 1)
+                            .unwrap_or_default(),
+                    )
                 } else {
                     None
                 },
             });
         } else if is_markdown(&name) {
-            // 文件树**只列 markdown**——这是对标 Typora 的口径。
-            // 要列全部文件的那天再放宽，见 `docs/07`。
+            // 文件树**只列 markdown**。要列全部文件的那天再放宽，见 `docs/07`。
             files.push(TreeNode {
                 name,
                 path: rel_str,
@@ -159,7 +178,7 @@ fn read_dir_sorted(dir: &Path, rel: &Path, depth: u32) -> Vec<TreeNode> {
     files.sort_by(by_name);
 
     dirs.extend(files);
-    dirs
+    Ok(dirs)
 }
 
 /// 哪些后缀算 markdown。与 `docs/03` 里认领的后缀表**必须一致**。
@@ -192,7 +211,7 @@ mod tests {
         std::fs::write(root.join("a.md"), "# a").unwrap();
         std::fs::write(root.join("b.png"), "x").unwrap();
 
-        let tree = read_dir_sorted(&root, Path::new(""), 1);
+        let tree = read_dir_sorted(&root, Path::new(""), 1).unwrap();
         let names: Vec<&str> = tree.iter().map(|n| n.name.as_str()).collect();
         assert_eq!(names, vec!["zeta", "a.md"], "目录在前、只留 md、跳过点开头");
 
@@ -206,12 +225,30 @@ mod tests {
         std::fs::create_dir_all(root.join("d")).unwrap();
         std::fs::write(root.join("d/inner.md"), "# x").unwrap();
 
-        let tree = read_dir_sorted(&root, Path::new(""), 1);
+        let tree = read_dir_sorted(&root, Path::new(""), 1).unwrap();
         assert!(tree[0].children.is_none());
 
-        let tree = read_dir_sorted(&root, Path::new(""), 2);
+        let tree = read_dir_sorted(&root, Path::new(""), 2).unwrap();
         assert_eq!(tree[0].children.as_ref().unwrap().len(), 1);
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// ⚠️ **读不动要报 Err，不能是"空目录"**（2026-09-25 改的行为，见函数头那段）。
+    ///
+    /// 用的是**不存在的目录**而不是 `chmod 000` 的目录：后者在 root 下跑测试时
+    /// 权限位根本拦不住（root 照样读得进去），那样这条用例会时灵时不灵。
+    /// 不存在是**所有用户下都成立**的读不动。
+    #[test]
+    fn 目录读不动时报错而不是给空数组() {
+        let 没有这个目录 = std::env::temp_dir().join("nota-tree-绝对不存在-20260925");
+        let _ = std::fs::remove_dir_all(&没有这个目录);
+
+        let r = read_dir_sorted(&没有这个目录, Path::new(""), 1);
+        assert!(r.is_err(), "读不动必须是 Err——吞成空数组就是 BUG-24");
+        assert!(
+            r.unwrap_err().to_string().contains("读文件失败"),
+            "错误要是那句能给人看的文案"
+        );
     }
 }

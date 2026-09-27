@@ -1,26 +1,44 @@
 /**
  * 偏好设置那个框的样式。
  *
- * # 版式
+ * # 版式：**两栏 + 一列控件**
  *
- * **左栏分节 + 右栏内容**，照 VMark 的偏好面板（用户 2026-09-23 的要求：
- * 「你将那个偏好列表搞得和 Vmark 一样的布局」）。右栏里一**行** = 左边
- * 标签（可带一行小字）+ 右边控件，控件靠右定宽；若干行归一组。
+ * 左栏是九个分页，右栏是当前那一页的内容。右栏里：
+ *
+ * ```text
+ * ┌───────────────────┬──────────────────┬───────────────────────────┐
+ * │ 组标题（左栏，粗）│ 子标签（细）     │ 控件                      │
+ * ├───────────────────┼──────────────────┼───────────────────────────┤
+ * │ 启动选项          │                  │ [下拉 ▾]                  │
+ * │ 保存 & 恢复       │ 自动保存         │ ( ●—)                     │
+ * │                   │ 切换文件时       │ ( ●—)                     │
+ * └───────────────────┴──────────────────┴───────────────────────────┘
+ * ```
+ *
+ * 这是 **2026-09-24 换的**。在这之前用的是"标签在上、控件在下、靠右定宽"
+ * 的两段式（用户 2026-09-23 的要求）。换的理由：用户给了一份七页偏好设置的
+ * 参照截图，要求「每一栏都或多或少抄过来」——加了三十多项之后，
+ * 「标签在上」的排法会让每一页都变成一条长长的竖列表，**扫不动**。
+ * 三栏排法一屏能看见的项数是它的两三倍。
+ *
+ * ⚠️ 关键在于"**没有子标签的行，控件顶到中间那一栏**"：组标题在两种情况下
+ * 含义不同——组里有多行时它是分类名，只有一行时它就是那一行的标签。
+ * 靠 `.stg-row[data-flat="true"]` 那个属性分流（见 `primitives.tsx`）。
  *
  * # 为什么单独一个文件
  *
  * 它**不是**从 `app.css` 按行数就近砍下来的（那是 1000 行规矩的反面教材）。
  * 切法是按职责：`app.css` 管应用骨架，这个框是一个**自成一体的覆盖层**——
- * 它有自己的分节、自己的行、自己的选择控件，一条都不跟骨架共用。
+ * 它有自己的分页、自己的行、自己的选择控件，一条都不跟骨架共用。
  *
  * ⚠️ 加载顺序：本文件在 `app.css` **之后**（见 `main.tsx`）。遮罩
  * `.confirm-backdrop` 的底子还在 `app.css` 里（确认框用同一层），
  * 本文件只做宽度和内容。⚠️ 框体**不再复用** `.confirm-dialog` 了——
  * 那套底子是给 320–440px 的窄框写的（居中一堆按钮），
- * 而这个框要撑到 880px 并分成两栏，共用只会让两边都别扭。
+ * 而这个框要撑到 1080px 并分成两栏，共用只会让两边都别扭。
  *
  * ⚠️ 颜色尺寸一律走变量（见 `theme.css`），**一个写死的色值都不许有**——
- * 写死一个就少支持一种"风格 × 明暗"的组合，而这个框恰恰是用户用来
+ * 写死一个就少支持一种"风格 × 明暗"的组合，而这个框是用户用来
  * **挑**那 12 种组合的地方。
  */
 
@@ -28,7 +46,9 @@
 
 .settings-shell {
   display: flex;
-  width: min(880px, 92vw);
+  /* 宽了 200px：右栏从"标签 / 控件"两段变成三栏，每栏都得分到地方。
+     见文件头那段版式说明。 */
+  width: min(1080px, 94vw);
   /* 高度**给死**，不让它随内容长短跳：切分节时框忽高忽低，眼睛得重新找位置。
      内容超出由右栏自己滚（见 `.settings-content`）。 */
   height: min(620px, 86vh);
@@ -166,10 +186,15 @@
   outline-offset: -2px;
 }
 
-.stg-nav-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
+/* 分页图标。尺寸由 `Icon` 组件的 `size` 定（内联宽高，默认 16），
+   这里只补一条透明度——让它在未选中时比文字略轻一点。
+
+   ⚠️ 在这之前这里是 `.stg-nav-icon`，配的是 `primitives.tsx` 里**手写的五枚
+   24 格细线图标**。2026-09-24 换成应用那套 Folio 图标（96 枚里挑了九枚），
+   于是这条规则改成给 `.icon` 用——那套的画法在 `icons.css` 里，
+   颜色靠 `currentColor` + 遮罩，所以下面 `.stg-nav-item[data-active]` 改
+   `color` 时图标自己会跟着变，这里不需要（也不许）写色值。 */
+.stg-nav-item .icon {
   opacity: 0.85;
 }
 
@@ -188,13 +213,27 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 20px 24px 24px;
+  padding: 20px 26px 26px;
+
+  /* 三栏的宽度。这两个数是整页版式的唯一来源——散成一堆写死的 px，
+     就会出现"改窄一点要翻八个地方"那种代码。 */
+  --stg-col-title: 200px; /* 组标题 */
+  --stg-col-label: 190px; /* 子标签 */
 }
 
-/* 组。⚠️ 下面那条 `:has()` 是**搜索的一部分**：一行都没留下时整组收掉
-   （判据见 `primitives.tsx` 顶上那段）。非搜索态下它恒不命中——
-   每一组至少有一行。 */
+/* ── 一组 ────────────────────────────────────────────────────────────────
+ *
+ * 版式见文件头。三条要一起读：
+ *
+ * 1. 组是**两栏**的 grid（标题 / 内容）；
+ * 2. `.stg-group-body` 自己又是一个**两列**的 grid（子标签 / 控件），
+ *    所以全页的控件左边线是**一根**，不会每行各算各的；
+ * 3. ⚠️ 组里**有**子标签时，内容整体往下挪一行（`grid-row-start: 2`），
+ *    让"标题"独占一行；组里**没有**子标签时（截图里「启动选项」那种），
+ *    控件就和标题同一行。纯 CSS 的 `:has()`，不需要在 JSX 里数孩子。 */
 .stg-group {
+  display: grid;
+  grid-template-columns: var(--stg-col-title) 1fr;
   margin-bottom: 26px;
 }
 
@@ -202,47 +241,141 @@
   margin-bottom: 0;
 }
 
+/* ⚠️ 这条 `:has()` 是**搜索的一部分**：一行都没留下时整组收掉
+   （判据见 `primitives.tsx` 顶上那段）。
+   ⚠️ 特异性比上面那条 `.stg-group` 高（`:has` 里的类也算数），
+   所以它能盖掉 `display: grid`，不靠源码顺序。
+   ⚠️ 2026-09-25：原先这里写着"非搜索态下它恒不命中——每一组至少有一行"，
+   **那句话是错的**。`DocThemePane` 里那个「⚠️ 深色下用的是另一套」组当时
+   只有一个 `<Note>`，于是非搜索态下它照样恒命中，整组**无声无息**地不画，
+   控制台一个字都不报（查了很久才找到这里）。
+   现在那一组挂了一行 `SettingRow`（那行本身也有用，见该文件文件头）。
+   所以：**"每一组至少有一行"是这个布局的前提，不是它的保证**——
+   新写一个只放 `<Note>` 的组，就会重演这一幕。 */
 .stg-group:not(:has(.stg-row)) {
   display: none;
 }
 
+/* 标题那一格。`?` 紧跟其后、在这一格内部靠右——**不是**整个框的最右边。
+   放到整个框的最右（离标题一千多像素）反而看不出它在说哪一项。 */
+.stg-group-head {
+  grid-area: 1 / 1 / 2 / 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 8px; /* 与 `.stg-row-*` 的上下 padding 对齐，让标题和控件齐平 */
+}
+
 .stg-group-title {
-  margin: 0 0 4px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   font-size: 0.98em;
   font-weight: 600;
   color: var(--fg);
 }
 
-.stg-note {
-  margin: 8px 0 0;
-  font-size: 0.85em;
+/* 组说明。落在左栏标题下面，**不占中间那栏的宽度**（那是子标签的位置）。 */
+.stg-group-desc {
+  grid-area: 2 / 1 / 3 / 2;
+  margin: 4px 14px 0 0;
+  font-size: 0.84em;
   line-height: 1.55;
   color: var(--fg-muted);
 }
 
-/* ── 一行 ──────────────────────────────────────────────────────────────── */
+.stg-group-body {
+  grid-area: 1 / 2 / 4 / 3;
+  display: grid;
+  grid-template-columns: var(--stg-col-label) 1fr;
+  align-content: start;
+}
 
+/* 有子标签的组：内容整体下移一行，标题独占一行。见上面第 3 条。 */
+.stg-group:has(.stg-row:not([data-flat="true"])) .stg-group-body {
+  grid-row-start: 2;
+}
+
+/* 组下面那段注记要**跨两栏**（它是整组的说明，不是某一行的子标签）。
+   ⚠️ 组说明（`.stg-group-desc`）**不在这里**——它留在左栏标题下面，
+   见上面那条 `grid-area`。两者位置不同，别合并成一条。 */
+.stg-group-body > .stg-note {
+  grid-column: 1 / -1;
+}
+
+.stg-note {
+  margin: 10px 0 0;
+  font-size: 0.85em;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.stg-note code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-active);
+  font-family: var(--font-mono);
+  font-size: 0.94em;
+}
+
+.stg-note strong {
+  color: var(--fg);
+}
+
+/* ── 一行 ────────────────────────────────────────────────────────────────
+ *
+ * ⚠️ `.stg-row` 是 `display: contents`：它自己**不参与布局**，两个孩子直接
+ * 掉进组内容区那个 grid 里。不这么做的话，每一行都是一个独立的 grid，
+ * 列宽各算各的——左边那排子标签就全对不齐了。
+ *
+ * 代价是**行上没法画边框**（一个不参与布局的元素画不了线），所以分隔线画在
+ * 两个孩子身上；两栏之间不留 `column-gap`，那条线才是连续的一根。 */
 .stg-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 9px 0;
+  display: contents;
+}
+
+/* ⚠️ 没有子标签的行：`.stg-row-text` 整个收掉，控件顶到第一栏
+   （截图里「启动选项」那种：组标题就是这一行的标签）。
+   收掉之后 `aria-labelledby` 会指到一个空元素，所以 `primitives.tsx` 在
+   这种情况下改用 `aria-label`（名字直接取组标题）——删掉这条，
+   那一行的控件就没有可读名字了。 */
+.stg-row[data-flat="true"] .stg-row-text {
+  display: none;
+}
+
+.stg-row-text,
+.stg-row-control {
+  min-width: 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
 
-.stg-row:last-child {
-  border-bottom: 0;
+.stg-row-text {
+  grid-column: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-right: 14px;
 }
 
-/* 左边：标签 + 一行小字。**让它能被压扁**——没有 `min-width: 0` 的话，
-   一行长说明会把右边的控件挤出框外（flex 项的默认最小宽度是内容的宽度）。 */
-.stg-row-text {
-  flex: 1;
-  min-width: 0;
+.stg-row-control {
+  grid-column: 2;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 8px;
+}
+
+.stg-row[data-flat="true"] .stg-row-control {
+  grid-column: 1 / -1;
+}
+
+/* 一组的最后一行不画线。⚠️ `>` 走的是 **DOM** 父子关系，`display: contents`
+   不影响它——所以这条能选中行里的那两个孩子。 */
+.stg-group-body > .stg-row:last-child > .stg-row-text,
+.stg-group-body > .stg-row:last-child > .stg-row-control {
+  border-bottom: 0;
 }
 
 .stg-row-label {
@@ -250,22 +383,67 @@
   color: var(--fg);
 }
 
+/* ⚠️ 行里的小字**排在标签后面同一行**，
+   长了会自动折到下一行——`.stg-row-text` 上有 `flex-wrap`。
+   `flex-basis: 100%` 是不让它去挤标签：折行时它独占一整行。 */
 .stg-row-desc {
+  flex: 0 0 100%;
   font-size: 0.84em;
   line-height: 1.5;
   color: var(--fg-muted);
 }
 
-.stg-row-control {
-  flex: none;
+.stg-value {
+  font-size: 0.92em;
+  color: var(--fg-muted);
+}
+
+/* 一行里并排两个控件（输入框 + 「选择…」、下拉 + 「主题文件夹…」）。 */
+.stg-inline {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .stg-value {
   font-size: 0.92em;
   color: var(--fg-muted);
+}
+
+/* 「主题色」那一格的原生取色器。
+ *
+ * ⚠️ 那个 `<input type="color">` 的内部（色块、边框）**各浏览器画法不同**，
+ * 这里只压尺寸和外观，不试图把它剥成一个纯色块——`appearance: none` 在某些
+ * WebKitGTK 版本上会让它**整块消失**（点不着也看不见），而一个消失的取色器
+ * 比一个长得不太一样的取色器坏得多。
+ *
+ * ⚠️ `--radius-sm` 而不是 `--radius`：它是**控件**，跟随当前风格那一档的圆角，
+ * 于是换成 macOS 会变圆、换成 Windows 10 会变方——这正是"主题只管样式"那句话
+ * 在界面上的体现。 */
+.stg-color {
+  width: 44px;
+  height: 26px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  cursor: pointer;
+}
+
+.stg-color:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 控件旁边那句"这个值我没认出来"（2026-09-26，「主题色」那一格先用的）。
+ *
+ * ⚠️ 用 `--danger` 而不是 `.stg-value` 那种灰字：它不是"补充说明"，是
+ * **"你填的东西没生效"**。灰字会被当成装饰划过去，而这一句的全部意义就是
+ * 让人**不用悬停**就看见它（塞进 `help` 的那一版目检当场证明看不见）。 */
+.stg-warn {
+  font-size: 0.92em;
+  color: var(--danger);
 }
 
 /* ── 控件 ──────────────────────────────────────────────────────────────── */
@@ -318,39 +496,48 @@
 }
 
 /* 开关：iOS 那种胶囊，36×20。 */
+/* ⚠️ 开关的尺寸与颜色走**专用变量**（`--switch-*`，默认值在 `theme.css`
+   的 `:root`，逐字等于改之前那套 iOS 胶囊 36×20/14）。
+   理由同 `.btn`：几份设计稿逐个给了开关的宽高与滑块直径（macOS 48×28、
+   Breeze 44×22、Windows 40×20、Yaru 42×22、Adwaita 44×22），
+   借通用变量就得连别的控件一起改。
+   ⚠️ 滑块的位置**不能用 `left: 18px` 写死**：宽度一变就跑出去了。起点仍是
+   2px，终点 = `2px + --switch-travel`，而 `--switch-travel` 是按
+   `外壳宽 − 2×边框 − 滑块 − 两端各 2px` 算出来的（公式在 `theme.css` 的
+   `:root` 里，每一档都重算过一次）。 */
 .stg-switch {
   position: relative;
   flex: none;
-  width: 36px;
-  height: 20px;
+  width: var(--switch-w);
+  height: var(--switch-h);
   padding: 0;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
-  background: var(--bg-active);
+  background: var(--switch-off);
   cursor: pointer;
   transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease;
 }
 
 .stg-switch[aria-checked="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--switch-on);
+  background: var(--switch-on);
 }
 
 .stg-switch-knob {
   position: absolute;
   top: 50%;
   left: 2px;
-  width: 14px;
-  height: 14px;
-  margin-top: -7px;
+  width: var(--switch-knob);
+  height: var(--switch-knob);
+  margin-top: calc(var(--switch-knob) / -2);
   border-radius: 50%;
-  background: var(--bg);
+  background: var(--switch-knob-bg);
   box-shadow: var(--shadow);
   transition: left var(--duration-fast) var(--ease-out);
 }
 
 .stg-switch[aria-checked="true"] .stg-switch-knob {
-  left: 18px;
+  left: calc(2px + var(--switch-travel));
 }
 
 .stg-switch:focus-visible {
@@ -382,6 +569,233 @@
   font-variant-numeric: tabular-nums;
   color: var(--fg-muted);
   text-align: right;
+}
+
+/* 单选。⚠️ 这里用的是**原生** `<input type="radio">`，不像搜索框那颗自己的
+   「×」——原生单选框在 WebKitGTK 里行为是对的（点得动、`change` 照发、
+   方向键能在一组里上下走）。只有"点了不派发事件"的东西才需要自己画。 */
+.stg-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.stg-radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.92em;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.stg-radio-item input[type="radio"] {
+  /* 默认尺寸跟不上一行 0.92em 的字；给个整数让它和字高对得上。 */
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* 单行文本 / 数字。宽度**按语义分档**，不写死像素——写死的那个数换一套
+   界面风格（字号不一样）就不对了。 */
+.stg-input {
+  height: var(--control-height);
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.92em;
+  min-width: 0;
+}
+
+.stg-input:hover {
+  background: var(--bg-hover);
+}
+
+.stg-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.stg-input::placeholder {
+  color: var(--fg-muted);
+}
+
+.stg-input-sm {
+  width: 7ch;
+}
+
+.stg-input-md {
+  width: 20ch;
+}
+
+.stg-input-lg {
+  /* 路径要能看见尾巴。`flex: 1` 让它吃掉「选择…」按钮之外剩下的地方，
+     `max-width` 挡住窗口很宽时它拉成一条。 */
+  flex: 1;
+  width: 34ch;
+  max-width: 46ch;
+}
+
+.stg-input-num {
+  width: 8ch;
+}
+
+/* 多行文本（`TextArea`）。⚠️ `.stg-input` 那一套里有 `height`（控件的固定
+   高度），对多行框是错的——必须用 `auto` 把它救回来，否则只看得见一行。
+   宽度按 `lg` 那一档的语义（"要能看见内容"），但不吃 `flex: 1`：
+   它站在 `.stg-row-control` 那一格里，而那一格不是 flex 容器。 */
+.stg-textarea {
+  height: auto;
+  min-height: calc(var(--control-height) * 2);
+  padding: 7px 9px;
+  width: 34ch;
+  max-width: 46ch;
+  line-height: 1.5;
+  /* ⚠️ 只让纵向拖：横向拖出滚动条之后，行尾就看不见了，而这一栏
+     恰恰是"一行一条"，看不见行尾等于看不出自己写错没有。 */
+  resize: vertical;
+}
+
+.stg-textarea-mono {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+}
+
+/* 数字框里面跟的单位（`%`）。用绝对定位压在右边，免得它跟着数字宽度跑。 */
+.stg-number {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.stg-number-suffix {
+  position: absolute;
+  right: 9px;
+  font-size: 0.86em;
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+
+.stg-number .stg-input-num {
+  padding-right: 24px;
+  /* 原生那对上下小箭头在深色主题下是两团黑点，去掉。 */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.stg-number .stg-input-num::-webkit-inner-spin-button,
+.stg-number .stg-input-num::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/* 动作按钮。⚠️ 它的底子是 `.btn`（`app.css`），这里只做"在这张框里"的微调：
+   字号跟着设置框的缩放走，而不是跟外壳。 */
+.stg-action {
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+/* ⚠️ **灰着的控件要说得出为什么**。这些控件的 `disabled` 不是占位，是
+   "这一条现在不成立"（没勾父项、或功能还没做）——所以标题上都有 `help` 或
+   `title` 解释。鼠标指针也要跟着变，不然用户会一直点。 */
+.stg-switch:disabled,
+.stg-select-native:disabled,
+.stg-input:disabled,
+.stg-range input[type="range"]:disabled,
+.stg-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.stg-radio-item:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── 「?」气泡 ────────────────────────────────────────────────────────────
+ *
+ * 一颗小圆点，悬停或键盘聚焦时弹出长解释（见 `primitives.tsx` 的 `HelpDot`）。
+ *
+ * ⚠️ 气泡是**绝对定位**的，而内容区是 `overflow-y: auto`（`overflow-x` 跟着
+ * 变成 `auto`）——超出内容区的那部分会被**裁掉**。所以它长哪边是**分情况**的：
+ *
+ * - 行里那颗（`.stg-row-text` 里）：贴着一行的左端，往左有整栏空地 → `right: 0`；
+ * - 组标题那颗（`.stg-group-head`，在左栏的右端，离框左沿只有
+ *   `--stg-col-title` 那 200px）：往左长**会被裁掉小半个字**（2026-09-24
+ *   目检抓到，气泡左边几个字缺了一角）→ 改成 `left: 0` 往右长。
+ *
+ * 两边不能一刀切："一律居中"会把两种情况的裁切各留一半。
+ *
+ * ⚠️ 用 `:focus-within` 而不是只在 `:hover` 上：键盘 Tab 到那颗按钮时也要能看，
+ * 否则"这条设置到底什么意思"就成了只有用鼠标的人才知道的事。 */
+.stg-help {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.stg-help-dot {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 0.66em;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.stg-help-dot:hover,
+.stg-help-dot:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.stg-help-dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stg-help-pop {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: 34ch;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  box-shadow: var(--popup-shadow);
+  font-size: 0.85em;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: left;
+  white-space: normal;
+}
+
+/* 组标题那颗往右长。见上面那段 ⚠️——它是**唯一**的例外。 */
+.stg-group-head .stg-help-pop {
+  right: auto;
+  left: 0;
+}
+
+.stg-help:hover .stg-help-pop,
+.stg-help:focus-within .stg-help-pop {
+  display: block;
 }
 
 /* ── 明暗缩略图 ────────────────────────────────────────────────────────────

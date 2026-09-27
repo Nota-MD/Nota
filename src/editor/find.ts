@@ -27,7 +27,7 @@
  * # 命中的高亮是**装饰**，不是文档
  *
  * 所有命中都走 `Decoration.inline`（只改 DOM 的 class），一个字节都不进文档。
- * 所以：查找不会弄脏文档、不会进撤销栈、关掉查找条之后一个字都不留。
+ * 所以：查找不会改动文档、不会进撤销栈、关掉查找条之后一个字都不留。
  */
 
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
@@ -36,6 +36,10 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { $prose } from "@milkdown/kit/utils";
+
+// ⚠️ 命中的滚动是自己算的（`滚动到可见`），不用事务上的 `scrollIntoView`：
+// 理由写在那边文件头，以及 `选中` 里那段。
+import { 滚动到可见 } from "./scroll-into-view";
 
 /** 查找开关。三个布尔，界面上就是查找条里那三颗可以拨的开关。 */
 export interface FindOptions {
@@ -200,9 +204,14 @@ function 就近命中(s: 插件状态, pos: number): number {
  */
 function 选中(view: EditorView, m: 文本命中): void {
   const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, m.start, m.end));
-  // ⚠️ `scrollIntoView` 走事务而不是 `view.dispatch` 之后手动滚：让
-  // ProseMirror 自己算是最稳的，它知道 DOM 的那个元素在哪。
-  view.dispatch(tr.scrollIntoView());
+  view.dispatch(tr);
+  // ⚠️ 事务上原本挂了 `.scrollIntoView()`，**但它在这条路上不生效**：点查找
+  // 那一刻焦点在查找条的输入框里，ProseMirror 算"该滚到哪"是去读浏览器当前
+  // 选区的，选区不在编辑器里它就整段跳过（机理写在 `scroll-into-view.ts` 顶上）。
+  // 表现是命中明明选了、视图却一动不动——长文档里等于看不见结果。
+  // 改成自己滚，且**只要能看见就够**（查找是连续动作，每敲一个字都重设一次
+  // 查询，顶到最上面会让正文跟着每个字乱跳）。
+  滚动到可见(view, m.start, m.end);
 }
 
 function 应用(tr: Transaction, prev: 插件状态, 新state: EditorState): 插件状态 {

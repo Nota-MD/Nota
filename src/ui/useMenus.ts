@@ -30,8 +30,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { api, on, events, type DocId, type DocThemeInfo, type ViewMode } from "@/bridge/ipc";
+import {
+  api,
+  on,
+  events,
+  type DocId,
+  type DocThemeInfo,
+  type ToolbarMode,
+  type ViewMode,
+} from "@/bridge/ipc";
 import type { CommandState } from "@/editor/command-state";
+import { use语言 } from "@/i18n";
 import { accelSig, buildAccelIndex, eventAccel, isOutsideEditor } from "@/ui/accel";
 import { walkMenuItems, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
 import { buildNativeTree } from "@/ui/nativeMenu";
@@ -62,12 +71,33 @@ export interface MenuWiring {
     sidebarOpen: boolean;
     sidebarTab: string;
     dockOpen: boolean;
-    formatBarOpen: boolean;
+    /** 格式工具栏那三档的当前取值（见 `ui/useChromeVisibility.ts`）。 */
+    toolbarMode: ToolbarMode;
     statusBarOpen: boolean;
     viewMode: ViewMode;
-    slidevOpen: boolean;
+    /** 沉浸（收起外壳）。⚠️ 与下面那个 `forceFocus` **不是一回事**，见 `commands.ts`。 */
     focusMode: boolean;
+    /**
+     * 强制专注开着吗（`焦点` 那一套会话）。
+     *
+     * ⚠️ **不能和 `focusMode` 合并**：那个是"界面收起来了没有"（一个
+     * `useState`，随时可翻），这个是"账本上这一轮在不在跑"（真相源在宿主，
+     * 前端只是读它）。合成一个的话，用户在警报弹出来之后按一下 F8，
+     * 菜单里的勾会跟着变——而账本一动没动。
+     */
+    forceFocus: boolean;
     typewriter: boolean;
+    /**
+     * 窗口现在是不是全屏。⚠️ 这是**从窗口读回来的镜像**，不是"我们想不想全屏"
+     * ——所以它的勾跟着窗口的快捷键、WM 的平铺规则一起变（见 `App.tsx`）。
+     */
+    fullscreen: boolean;
+    /**
+     * 窗口现在是不是**置顶**（2026-09-27）。⚠️ 同上面那条：**从窗口读回来**
+     * （`isAlwaysOnTop()`，`ui/useWindowControls.ts`）——用户可能在窗口管理器里
+     * 给它勾了"总在最前"，那时内存里记一个 `false` 就会让菜单和窗口分叉。
+     */
+    alwaysOnTop: boolean;
   };
   themes: DocThemeInfo[];
   documentTheme: string;
@@ -117,6 +147,11 @@ const 光标条件: Record<string, (s: CommandState) => boolean> = {
   "para.tableAlignRight": (s) => s.inTable,
   // 「清除样式」清的是**选区里的**行内标记，没有选区就没有可清的。
   "fmt.clear": (s) => s.hasSelection,
+  // 「内容目录」要拿标题当原料：一篇一个标题都没有的文档，插一份空目录没有
+  // 意义（`editor/toc.ts::算目录块` 那时给 `null`，命令本身什么都不做）。
+  // ⚠️ 判据在 `editor/command-state.ts`，**不在**命令里——命令里再判一次的话，
+  // 菜单会亮着而点下去没反应，正是这张表要根治的那种撒谎。
+  "para.toc": (s) => s.hasHeadings,
 };
 
 export function useMenus(w: MenuWiring): MenuState {
@@ -125,12 +160,14 @@ export function useMenus(w: MenuWiring): MenuState {
     sidebarOpen,
     sidebarTab,
     dockOpen,
-    formatBarOpen,
+    toolbarMode,
     statusBarOpen,
     viewMode,
-    slidevOpen,
     focusMode,
+    forceFocus,
     typewriter,
+    fullscreen,
+    alwaysOnTop,
   } = w.view;
 
   /** 灰掉的命令。没实现、缺活动文档、光标不在合适的位置，都进这里。 */
@@ -143,7 +180,7 @@ export function useMenus(w: MenuWiring): MenuState {
         // ⚠️ 带子菜单的项**自己不执行命令**，所以不能拿它自己的 id 去查
         // `menuHandlers`（查不到，会永远灰着，子菜单也就永远打不开）。
         // 判据是子菜单里**所有**条目都不能用——全灰才灰，
-        // 否则点开一层全是灰的，等于让用户白跑一趟。
+        // 否则点开一层全是灰的，等于让用户做一次无效操作。
         return item.submenu.every((child) => child === "sep" || isOff(child));
       }
       if (!menuHandlers[item.id]) return true;
@@ -171,35 +208,46 @@ export function useMenus(w: MenuWiring): MenuState {
    * `useState`：它就是编辑区的 `mode` 属性，两处**必须同源**——各存一份的
    * 症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。默认值也**必须**和
    * Rust 侧 `ViewMode::default()` 一致（`wysiwyg`），见
-   * `settings.rs` 那条测试。
+   * `settings/mod.rs` 那条测试。
    */
   const menuChecks = useMemo<Record<string, boolean>>(
     () => ({
       "view.toggleSidebar": sidebarOpen,
       "view.outline": sidebarOpen && sidebarTab === "outline",
       "view.fileTree": sidebarOpen && sidebarTab === "tree",
+      // 侧栏第三页（最近打开的文件）。⚠️ **它是 `checkable` 的**（见
+      // `commands.ts` 里那一条），所以少这一行不只是"勾不对"——那一栏的
+      // 三个勾会变成"只有两个会亮"，用户看不出第三页是当前页。
+      "view.docList": sidebarOpen && sidebarTab === "docs",
       "view.toggleDock": dockOpen,
-      "view.formatBar": formatBarOpen,
+      // ⚠️ 三档**各自一条**（`commands.ts` 里是一个子菜单的三条）。
+      // 写成 `Record` 而不是三元表达式是照抄「编辑模式」那三条的形状：
+      // 一眼能看出"这三个 id 是互斥的一组"。
+      "view.toolbarAlways": toolbarMode === "always",
+      "view.toolbarHover": toolbarMode === "hover",
+      "view.toolbarNever": toolbarMode === "never",
       "view.statusBar": statusBarOpen,
       "view.modeWysiwyg": viewMode === "wysiwyg",
       "view.modeSource": viewMode === "source",
       "view.modeSplit": viewMode === "split",
-      // ⚠️ 勾的是"现在这场预览开着"。`starting` 也算开着——那段时间进程已经在跑，
-      // 这时候让勾消失、用户再点一下，就会起第二个服务器。
-      "view.slidev": slidevOpen,
       "view.focusMode": focusMode,
+      "view.forceFocus": forceFocus,
       "view.typewriter": typewriter,
+      "view.fullscreen": fullscreen,
+      "view.alwaysOnTop": alwaysOnTop,
     }),
     [
       sidebarOpen,
       sidebarTab,
       dockOpen,
-      formatBarOpen,
+      toolbarMode,
       statusBarOpen,
       viewMode,
-      slidevOpen,
       focusMode,
+      forceFocus,
       typewriter,
+      fullscreen,
+      alwaysOnTop,
     ],
   );
 
@@ -215,7 +263,7 @@ export function useMenus(w: MenuWiring): MenuState {
    * ⚠️ 2026-09-24 起入参是 `menus`（含插件那一栏），**不再是常量 `MENUS`**：
    * 插件可以在 `register_menu` 里写 `accelerator`，那条键位必须真的接得上，
    * 否则菜单上写着 `Ctrl+Alt+G` 而按下去没反应——正是这个文件要消灭的那种
-   * 撒谎。`buildAccelIndex` 对"认不出来"和"撞车"都会当场 `console.warn`。
+   * 名不副实。`buildAccelIndex` 对"认不出来"和"撞车"都会当场 `console.warn`。
    *
    * ⚠️ 依赖**必须**是 `menus`：`App.tsx` 那份是 `useMemo` 出来的，
    * 插件菜单拉到之前和之后是**两个身份**，插件的那几条键位要等它换了才进得来。
@@ -240,7 +288,7 @@ export function useMenus(w: MenuWiring): MenuState {
       // ⚠️ 灰掉的命令不接。`disabledCommands` 已经把"没实现"和"没有活动文档"
       // （`needsDoc`）两种情况都算进去了，所以没有文档时 Ctrl+W 不会误关、
       // Ctrl+S 不会误存、Ctrl+1 不会误切标题——这三条以前是靠链上逐个
-      // `activeId !== null` 兜的，漏一个就是一个静默的坑。
+      // `activeId !== null` 兜的，漏一个就是一个静默的缺陷。
       if (disabledCommands.has(id)) return;
 
       const handler = menuHandlers[id];
@@ -250,7 +298,7 @@ export function useMenus(w: MenuWiring): MenuState {
 
       // ⚠️ **只在真要执行时才 `preventDefault`**。没接的键位一律放行，
       // 否则会连 ProseMirror 自己的 Ctrl+B/I/Z 和系统的复制粘贴一起抢掉——
-      // 那些键位不在 `menuHandlers` 里，压根走不到这一行。
+      // 那些键位不在 `menuHandlers` 里，走不到这一行。
       e.preventDefault();
       handler();
     };
@@ -268,6 +316,18 @@ export function useMenus(w: MenuWiring): MenuState {
    * 原生那个又没建出来，用户面前就是**一条菜单都没有**。
    */
   const [usingNativeMenu, setUsingNativeMenu] = useState(false);
+
+  /**
+   * 当前语言。**只用来当依赖**（不是画字），所以拿 `use语言` 而不是 `useT`。
+   *
+   * ⚠️ 这条依赖是**欠账，今天补上的**：`nativeMenu.ts` 用的是模块级的 `t`
+   * （它不是组件，是一串纯函数），文件头那条注释写着"**语言换了它不会自己
+   * 重推**——所以 `ui/useMenus.ts` 那个 effect 的依赖里得有语言"。今天语言
+   * 还要重启才生效，所以这条依赖**此刻**推不出差别；它挡的是**以后**：哪天
+   * 热切语言做了，漏掉它的症状是**原生菜单栏还停在旧语言**（窗口里已经换了）
+   * ——那种地方没人会想到去查依赖数组。
+   */
+  const 语 = use语言();
 
   // 把菜单推给原生那一侧。菜单内容有变化（灰的变了、勾变了、主题清单变了）就重推。
   useEffect(() => {
@@ -287,7 +347,9 @@ export function useMenus(w: MenuWiring): MenuState {
     };
     // ⚠️ `menus` 在内：插件菜单是**启动之后**才拉到的，那一栏晚一刻出现，
     // 原生菜单得跟着重推一次，否则 macOS 的菜单栏里永远没有「插件」。
-  }, [menus, disabledCommands, menuChecks, themes, documentTheme]);
+    // ⚠️ `语` 在内：树里的 `label` 是在 `nativeMenu.ts` 里翻好的（那边用的是
+    // 模块级 `t`），不重推就还是旧语言——理由见上面 `语` 那段。
+  }, [menus, disabledCommands, menuChecks, themes, documentTheme, 语]);
 
   // 原生菜单被点了 → 交回 `App.tsx`（那边走 `resolvePick` 判去向），
   // 于是"点菜单"这件事只有一条实现。

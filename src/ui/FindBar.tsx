@@ -13,7 +13,7 @@
  *
  * # 为什么不做"边打字边跳"
  *
- * 每次查询变化都报一次（`onQuery`），编辑器那侧会**顺手选中第一个命中**。
+ * 每次查询变化都报一次（`onQuery`），编辑器那侧会**一并选中第一个命中**。
  * 不过滤、不去抖：查找是这个条子的**全部目的**，慢一拍的代价是用户在
  * 一个空条子前面等。
  *
@@ -28,6 +28,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as 键盘事件 } from "react";
 
 import { 默认查找选项, type FindOptions, type FindStatus } from "@/editor/find";
+import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 
 interface Props {
@@ -45,14 +46,24 @@ interface Props {
   onClose: () => void;
 }
 
-/** 三个开关按钮。`on` 是它在 `FindOptions` 里的字段名。 */
-const 开关组: { key: keyof FindOptions; label: string; title: string }[] = [
-  { key: "caseSensitive", label: "Aa", title: "区分大小写" },
-  { key: "wholeWord", label: "全词", title: "全字匹配：命中的两侧不能是词里的字符" },
-  { key: "regex", label: ".*", title: "正则表达式（写坏了不算错，只是这一次查不到）" },
-];
-
 export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onClose }: Props) {
+  // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
+  // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
+  const t = useT();
+
+  // 三个开关按钮。`key` 是它在 `FindOptions` 里的字段名（**不翻**，它是取值用的）。
+  //
+  // ⚠️ 这张表**必须建在组件里**，不能提回模块级（2026-09-26 从模块级搬进来）：
+  // 模块级求值时 `t` 是那个**没订阅**的版本（首帧画的是兜底语言，之后再没人通知
+  // 它重画），而且 `tools/i18n-check.sh` 数的是源码里字面写出来的 `t("…")`——
+  // 存成模块级常量就等于把这几句中文当数据，那些键会算"没被调用"。同
+  // `ui/PluginDock.tsx` 里那三张表。
+  // `label` 里 `Aa` / `.*` 是**符号**（两种语言下都一样），所以只有「全词」要翻。
+  const 开关组: { key: keyof FindOptions; label: string; title: string }[] = [
+    { key: "caseSensitive", label: "Aa", title: t("区分大小写") },
+    { key: "wholeWord", label: t("全词"), title: t("全字匹配：命中的两侧不能是词里的字符") },
+    { key: "regex", label: ".*", title: t("正则表达式（写坏了不算错，只是这一次查不到）") },
+  ];
   const [query, setQuery] = useState("");
   const [替换成, set替换成] = useState("");
   const [options, setOptions] = useState<FindOptions>(默认查找选项);
@@ -85,7 +96,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
     status.query === ""
       ? ""
       : status.total === 0
-        ? "无结果"
+        ? t("无结果")
         : `${status.current} / ${status.total}`;
 
   /** 组字期间一概不接（理由见文件头）。 */
@@ -96,7 +107,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
     <div
       className="find-bar"
       role="search"
-      aria-label="查找和替换"
+      aria-label={t("查找和替换")}
       // ⚠️ 收在条子自己身上，不绑 `window`：绑了的话，焦点在编辑区里
       // 按 Esc 也会把条子关掉——而那时用户多半是想收输入法的候选框。
       onKeyDown={(e) => {
@@ -113,9 +124,9 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           className="find-input"
           type="text"
           value={query}
-          placeholder="查找"
+          placeholder={t("查找")}
           spellCheck={false}
-          aria-label="查找内容"
+          aria-label={t("查找内容")}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (组字中(e)) return;
@@ -148,8 +159,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
         <button
           type="button"
           className="find-btn"
-          title="上一个"
-          aria-label="上一个"
+          title={t("上一个")}
+          aria-label={t("上一个")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onStep(-1)}
         >
@@ -158,8 +169,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
         <button
           type="button"
           className="find-btn"
-          title="下一个"
-          aria-label="下一个"
+          title={t("下一个")}
+          aria-label={t("下一个")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onStep(1)}
         >
@@ -168,8 +179,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
         <button
           type="button"
           className="find-btn"
-          title="关闭（Esc）"
-          aria-label="关闭查找"
+          title={t("关闭（Esc）")}
+          aria-label={t("关闭查找")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={onClose}
         >
@@ -182,9 +193,9 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           className="find-input"
           type="text"
           value={替换成}
-          placeholder="替换为"
+          placeholder={t("替换为")}
           spellCheck={false}
-          aria-label="替换内容"
+          aria-label={t("替换内容")}
           onChange={(e) => set替换成(e.target.value)}
         />
         <button
@@ -195,7 +206,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onReplace(替换成)}
         >
-          替换
+          {t("替换")}
         </button>
         <button
           type="button"
@@ -203,7 +214,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onReplaceAll(替换成)}
         >
-          全部替换
+          {t("全部替换")}
         </button>
       </div>
     </div>

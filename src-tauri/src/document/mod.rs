@@ -71,7 +71,7 @@ impl Document {
 
 /// 从正文里猜标题。
 ///
-/// 顺序（对齐 Typora 的窗口标题行为）：
+/// 取值顺序：
 /// 1. YAML front matter 里的 `title:`；
 /// 2. 第一个 ATX 标题（`# ` ~ `###### `）；
 /// 3. 文件名的 stem；
@@ -102,7 +102,7 @@ pub fn derive_title(
 }
 
 /// 取 YAML front matter 里的 `title:`。front matter 必须**在文件最开头**，
-/// 首行是 `---`，到下一个 `---` 或 `...` 结束（与 Typora / Jekyll 一致）。
+/// 首行是 `---`，到下一个 `---` 或 `...` 结束（与 Jekyll 一致）。
 fn front_matter_title(text: &str) -> Option<String> {
     let mut lines = text.lines();
     if lines.next()?.trim_end() != "---" {
@@ -147,9 +147,9 @@ fn first_heading(text: &str, strict: bool) -> Option<String> {
 /// 若这一行是 ATX 标题，返回标题文本（去掉 `#` 与可选的收尾 `#`）。
 ///
 /// ⚠️ **严格与宽松只差一句**：井号后面没空格时（`#foo`），严格模式不认，
-/// 宽松模式认。宽松是**默认**——对标 Typora 的默认行为（Typora 的「严格模式」
-/// 默认也是关的）。⚠️ 前端有一份**同构**的判据（`src/editor/atx.ts`），
-/// 两边一起改。
+/// 宽松模式认。宽松是**默认**：`#foo` 这种写法在文档里很常见，
+/// 关着才不会把它们降级成普通段落。⚠️ 前端有一份**同构**的判据
+/// （`src/editor/atx.ts`），两边一起改。
 ///
 /// ⚠️ 这里**只读不写**：宽松模式把 `#foo` 认成标题，但**正文一个字都不改**
 /// ——前端那边也只是按标题排版（`src/editor/lax-heading.ts`），存盘存回
@@ -196,7 +196,7 @@ impl DocumentStore {
     /// （`lib.rs` 手写字面量），于是开机时那份设置**从来没到达文档仓**。
     ///
     /// ⚠️ 测试里也一样：不关心口径的用例显式写 `LAX`（见 `mod tests` 里那两个常量），
-    /// 别用 `..Default::default()` 绕过去——那样等于把这个参数又变成可忘的。
+    /// 用 `..Default::default()` 绕过去，就等于把这个参数又变成可忘的。
     pub fn new(strict_markdown: bool) -> Self {
         Self {
             strict_markdown,
@@ -289,7 +289,7 @@ impl DocumentStore {
         let strict = self.strict_markdown;
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
         if doc.text == text {
-            return Ok(doc.revision); // 内容没变就别动 revision，插件靠它判新旧
+            return Ok(doc.revision); // 内容没变时 revision 不动，插件靠它判新旧
         }
         doc.text = text;
         doc.dirty = doc.text != doc.clean_text;
@@ -328,7 +328,7 @@ impl DocumentStore {
 
         // ⚠️ **不能早退**。编辑器那次规范化可能已经先走 `sync` 把文本推上来了，
         // 于是走到这里时 `text` 与 `doc.text` 已经相等，可脏标记还立着——
-        // 早退就等于这一步白做（这条是被用例逮住的，别改回去）。
+        // 早退就等于这一步白做（这条是被用例逮住的，改回去会红）。
         doc.clean_text = text;
         doc.dirty = false;
         Ok(doc.revision)
@@ -362,6 +362,40 @@ impl DocumentStore {
         doc.title = derive_title(&doc.text, Some(&path), idx, strict);
         doc.revision += 1;
         Ok(path)
+    }
+
+    /// 把这份文档**挪到另一个路径**（重命名 / 移动，`docs/10` §2 那一格）。
+    ///
+    /// 干两件事，而且**顺序不能反**：先让 `file_move::移动` 真的把盘上的文件挪走，
+    /// 成功了再改这份文档记着的路径。反过来的话，"挪失败"会留下一份指向
+    /// 不存在路径的文档——它看起来一切正常，下一次存盘才会把文件写回来
+    /// （**在旧名字旁边凭空多出一份**）。
+    ///
+    /// ⚠️ **没有路径的文档（新建、还没存过盘）挪不了**：它压根没有文件可挪。
+    /// 这里如实报一句，让界面去提示「先保存为」——**不要**顺手替用户存一份
+    /// 到他没选过的位置，那是另一个动作。
+    ///
+    /// ⚠️ **不碰 `text` / `clean_text` / `dirty`**：挪的是文件，不是内容。
+    /// 内存里那份未保存的改动照旧挂着，下一次存盘写到新路径上（这正是用户
+    /// 期望的：改完名字继续写）。所以这里**只**动 `path` / `title` / `revision`。
+    ///
+    /// ⚠️ `revision` 要 +1：插件与前端靠它判断"我手里这份是不是旧的"，
+    /// 而路径变了确实是它们该知道的一件事（面板上显示路径的那些）。
+    pub fn 移到(&mut self, id: DocId, 目标: PathBuf) -> Result<PathBuf> {
+        let strict = self.strict_markdown;
+        let 老 = self
+            .get(id)
+            .and_then(|d| d.path.clone())
+            .ok_or_else(|| NotaError::other("这份文档还没存过盘，先用「保存为」给它一个位置"))?;
+
+        crate::file_move::移动(&老, &目标)?;
+
+        let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
+        doc.path = Some(目标.clone());
+        let idx = doc.untitled_index;
+        doc.title = derive_title(&doc.text, Some(&目标), idx, strict);
+        doc.revision += 1;
+        Ok(目标)
     }
 
     pub fn close(&mut self, id: DocId) {
@@ -428,7 +462,7 @@ impl DocumentStore {
 mod tests {
     use super::*;
 
-    /// 两种模式在断言里的读法（⚠️ **默认是宽松**，别把 `LAX` 当成"旧行为"）。
+    /// 两种模式在断言里的读法（⚠️ **默认是宽松**，`LAX` 不是"旧行为"）。
     const LAX: bool = false;
     const STRICT: bool = true;
 
@@ -456,7 +490,7 @@ mod tests {
     fn 井号后没空格严格模式不算标题() {
         let text = "#标签 不是标题\n";
         assert_eq!(derive_title(text, None, 7, STRICT), "未命名 7");
-        // 宽松（默认）时它就是标题——对标 Typora 的默认行为。
+        // 宽松（默认）时它就是标题。
         assert_eq!(derive_title(text, None, 7, LAX), "标签 不是标题");
     }
 
@@ -564,6 +598,88 @@ mod tests {
         assert_eq!(s.get(id).unwrap().path.as_deref(), Some(target.as_path()));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 挪过之后：盘上的文件换了名字、文档记着的路径跟着换、**没保存的改动照旧挂着**。
+    ///
+    /// ⚠️ 最后那一条是这一格里最容易做错的地方：挪的是**文件**，不是内容。
+    /// 顺手把 `dirty` 清掉（"都挪过去了嘛"）等于让用户丢掉刚打的那几段——
+    /// 而且不报错，只是下一次关窗口时不问他了。
+    #[test]
+    fn 挪过之后路径与标题跟着换而改动不动() {
+        let dir = std::env::temp_dir().join("nota-docstore-move");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let 老 = dir.join("老名字.md");
+        std::fs::write(&老, "盘上的旧内容\n").unwrap();
+
+        let mut s = DocumentStore::new(LAX);
+        let id = s.open(&老).unwrap();
+        // 用户改了但**还没存**——挪完这两段字必须还在
+        s.sync(id, "盘上的旧内容\n\n新写的一段\n".to_owned()).unwrap();
+        let 挪前版本 = s.get(id).unwrap().revision;
+        assert!(s.get(id).unwrap().dirty);
+
+        let 新 = dir.join("新名字.md");
+        let 落点 = s.移到(id, 新.clone()).unwrap();
+
+        assert_eq!(落点, 新);
+        assert!(!老.exists(), "盘上那份要跟着改名");
+        assert_eq!(
+            std::fs::read_to_string(&新).unwrap(),
+            "盘上的旧内容\n",
+            "盘上留的是**上一次存过的**内容，未保存的改动还在内存里"
+        );
+        let doc = s.get(id).unwrap();
+        assert_eq!(doc.path.as_deref(), Some(新.as_path()));
+        assert_eq!(doc.title, "新名字", "标题取自文件名，改了名就该换");
+        assert!(doc.dirty, "未保存的改动不许被这一次挪动抹掉");
+        assert_eq!(doc.text, "盘上的旧内容\n\n新写的一段\n");
+        assert!(doc.revision > 挪前版本, "路径变了也是一次该让插件知道的变化");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// ⚠️ 挪失败（目标被占）时**文档的路径一个字节都不许变**——
+    /// 否则这份文档就指向一个不存在的路径，下次存盘会**在旧名字旁边
+    /// 凭空写出一份新的**，而用户以为文件挪走了。
+    #[test]
+    fn 挪失败时文档还指着老路径() {
+        let dir = std::env::temp_dir().join("nota-docstore-move-fail");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let 老 = dir.join("甲.md");
+        std::fs::write(&老, "甲的正文\n").unwrap();
+        let 占了 = dir.join("乙.md");
+        std::fs::write(&占了, "乙的正文\n").unwrap();
+
+        let mut s = DocumentStore::new(LAX);
+        let id = s.open(&老).unwrap();
+        let 挪前版本 = s.get(id).unwrap().revision;
+
+        assert!(s.移到(id, 占了.clone()).is_err());
+
+        let doc = s.get(id).unwrap();
+        assert_eq!(doc.path.as_deref(), Some(老.as_path()));
+        assert_eq!(doc.title, "甲");
+        assert_eq!(doc.revision, 挪前版本, "没挪成就什么都没变");
+        assert_eq!(std::fs::read_to_string(&占了).unwrap(), "乙的正文\n");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 还没存过盘的新文档没有文件可挪——如实报错，**不许顺手替它存一份**。
+    #[test]
+    fn 没存过盘的文档挪不了() {
+        let mut s = DocumentStore::new(LAX);
+        let id = s.create_untitled();
+        let 到 = std::env::temp_dir().join("nota-不该出现的.md");
+        let 错 = s.移到(id, 到.clone()).unwrap_err().to_string();
+
+        assert!(错.contains("保存为"), "要告诉用户下一步该干什么：{错}");
+        assert!(!到.exists(), "不许在用户没选过的地方留下一份文件");
     }
 
     #[test]

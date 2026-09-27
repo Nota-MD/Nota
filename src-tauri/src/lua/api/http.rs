@@ -99,7 +99,7 @@ pub fn build(lua: &Lua) -> NotaResult<Table> {
 /// ⚠️ `json` **解析不了就不给这个键**，不当错误。响应是 HTML 错误页、是纯文本、
 /// 是空体的场合多得很（4xx 的正文常常就是一整页 HTML），那时插件该看到的是
 /// `text` 里那段话，而不是一个"JSON 解析失败"——后者会把病因指到错的地方，
-/// 而且掩盖了"服务器其实回了一句话"。
+/// 而且掩盖了"服务器确实回了话"这一事实。
 ///
 /// 有了它，插件读 OpenAI 那种 `choices[1].message.content` 才不用自己写
 /// JSON 解析器（Lua 里没有，用模式匹配去抠字符串会在 `\n` 这种转义上出错）。
@@ -181,7 +181,7 @@ fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<回包> {
         .method(方法.as_str())
         .uri(&url);
 
-    // 头。**默认 UA 换成我们自己的**：出问题时对方的日志里能看出是 Nota 发的，
+    // 头。**默认 UA 换成 Nota 自己的**：出问题时对方的日志里能看出是 Nota 发的，
     // 而 ureq 默认的 `ureq/3.x` 会让人以为这是某个爬虫。
     req = req.header("user-agent", format!("Nota/{}", env!("CARGO_PKG_VERSION")));
 
@@ -391,7 +391,7 @@ mod tests {
         assert_eq!(取主机("[::1]:8080/x"), "::1");
         assert_eq!(取主机("Example.COM"), "example.com");
         // ⚠️ 这条是安全用例：`127.0.0.1@evil.com` 的主机是 `evil.com`，
-        // 不是 `127.0.0.1`。判反了就是一个"看着像回环其实是外网"的口子。
+        // 不是 `127.0.0.1`。判反了就是一个"看着像回环、实际指向外网"的口子。
         assert_eq!(取主机("127.0.0.1@evil.com/x"), "evil.com");
     }
 

@@ -6,11 +6,19 @@
  *
  * # 只支持**一层**子菜单
  *
- * 这不是省事。VMark 那边最深也就是一层（`insert_submenus` / `format_submenus`
- * 都是往平面菜单里塞一层飞出），Typora 也一样。两层以上在桌面软件里几乎见不到，
- * 因为鼠标要走的对角线越来越长、越容易半路误触别的项。
- * 真要加第二层时，这里的 `submenu` 分支要改成递归——**但先想清楚是不是
- * 该把那一组条目拆成两个平面菜单**。
+ * 两层以上在桌面软件里几乎见不到——鼠标要走的对角线越来越长、
+ * 越容易半路误触别的项。真要加第二层时，这里的 `submenu` 分支要改成递归
+ * ——**但先想清楚是不是该把那一组条目拆成两个平面菜单**。
+ *
+ * # 父项有两条打开路径，而它们会撞在一起（BUG-17）
+ *
+ * 带子菜单的父项，**划过**就展开、**点一下**也是展开。麻烦在于鼠标点下去之前
+ * 一定先划过——所以"点"那一刻看到的永远是"它已经开着"。早先的写法是
+ * "开着就收起"（`onActivate` 那套切换语义），于是用户的第一下点击**把刚划开的
+ * 那个收掉了**：弹层闪一下、什么都没发生，得点第二下。修法是记下"这个子菜单是
+ * 谁开的"（`点开的` 那个 ref），只有点开的才被点击收起；划过开的，那一击算
+ * **确认**。⚠️ 教训：**"状态是开的"和"这个状态是用户点出来的"不是一回事**，
+ * 凡是"划过/点"两条路都能设置同一个状态的地方，都要问一句"那点的第一下呢"。
  *
  * # 子菜单为什么走 portal ＋ `position: fixed`
  *
@@ -19,7 +27,7 @@
  * 就被裁掉，症状是只剩一条几像素的竖条。`fixed` 到视口上才不受滚动容器裁剪，
  * 但那样坐标就得**自己量**（`subAnchor` 那段），CSS 再也说不出"在父项右边"。
  * portal 到 `body` 是为了顺带躲开弹层那条 `transform` 动画——动画期间它会
- * 变成 `fixed` 后代的包含块，又把人拽回裁剪里。**两个坑都踩过。**
+ * 变成 `fixed` 后代的包含块，又把人拽回裁剪里。**这两个裁剪问题都实际发生过。**
  *
  * # 方向键的归属
  *
@@ -33,7 +41,7 @@
  *
  * ⚠️ 为什么不靠冒泡：子菜单是套在父弹层里的（改 portal 之前），两层的
  * `onKeyDown` 都会收到同一个按键。子菜单里按 `←` 要是让它冒上去，父层会
- * **再处理一遍**、顺手把整个菜单切到左边那一栏。所以每一层都把键**吃完**
+ * **再处理一遍**、一并把整个菜单切到左边那一栏。所以每一层都把键**吃完**
  * （`stopPropagation`，见 `useMenuRovingFocus` 里 `handled()` 那段），
  * 主弹层该切栏时直接**回调** `onArrowOut`，链路是显式的。
  */
@@ -41,6 +49,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useT } from "@/i18n";
 import { formatAccel } from "@/ui/accel";
 import { isMenuItem, type MenuEntry, type MenuItemSpec } from "@/ui/commands";
 import { useMenuRovingFocus } from "@/ui/useMenuRovingFocus";
@@ -101,12 +110,32 @@ interface PopupProps {
 export function MenuPopup(props: PopupProps) {
   const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label } = props;
 
+  // ⚠️ 条目文字**在这里才翻**：`ui/commands.ts` 那张表里存的是**键**（中文原文）。
+  // 规矩与理由写在 `ui/MenuBar.tsx::useT` 那一段，`SubMenu` 那边同样要一份。
+  const t = useT();
+
   const { lines, items } = useMemo(() => layout(entries), [entries]);
 
   // 哪一项的子菜单开着（漫游下标）。`null` = 没开。
   const [subOpen, setSubOpen] = useState<number | null>(null);
   // 那一层飞出的位置（视口坐标）。和 `subOpen` 同生共死。
   const [subAnchor, setSubAnchor] = useState<{ top: number; left: number } | null>(null);
+
+  /**
+   * 现在开着的子菜单是**点父项开的**（记下标），还是**鼠标划过父项开的**（`null`）。
+   *
+   * ⚠️ 这一格是 BUG-17 的修法，**不是可有可无的状态**。父项有两条打开路径
+   * （`onMouseEnter` 和 `onClick`），而鼠标点下去之前**一定先划过**——于是
+   * "点一下"看到的是"它已经开着"，如果这一下按的是无脑切换，就会把刚刚划开的
+   * 那个**收掉**：用户看到弹层闪一下、以为没反应，得再点一次才开。
+   * 实测（2026-09-25，无头 X）：停在同一行上，划过时子菜单在、单击一次后
+   * 整块消失（两帧差 **43068.9 px**）。
+   *
+   * 判据因此是**"是谁开的"**：划过开的，点一下是**确认**（保持开着，并记成
+   * 点开的）；点开的，再点一下才收起。桌面软件就是这个手感——鼠标划开子菜单
+   * 之后，点父项不会把它关掉。
+   */
+  const 点开的 = useRef<number | null>(null);
 
   // 父项的 DOM 节点。漫游钩子内部也存了一份，但那份不外借——
   // 展开子菜单时要拿它量坐标，所以这里自己再记一份。
@@ -120,8 +149,10 @@ export function MenuPopup(props: PopupProps) {
       if (entry.submenu) {
         // 有子菜单的项：回车是"展开"，不是"执行"。而且**开着就收起**——
         // 桌面软件里回车在这一项上是切换，不是只能打开。
+        // ⚠️ 键盘这条路**不做**"谁开的"那个区分（鼠标才需要）：Enter 是明确的
+        // 一次操作，不存在"划过"这个前因，所以记成"键"——点开的只认鼠标那一下。
         if (subOpen === index) closeSub(index);
-        else openSub(index);
+        else openSub(index, "键");
         return;
       }
       if (!disabled.has(entry.id)) onPick(entry.id);
@@ -130,7 +161,7 @@ export function MenuPopup(props: PopupProps) {
     onRight: (_item, index) => {
       const entry = items[index];
       if (entry?.submenu) {
-        openSub(index);
+        openSub(index, "键");
         return;
       }
       // 这一项没有下一层，那就"往右走出这一栏"。
@@ -147,8 +178,8 @@ export function MenuPopup(props: PopupProps) {
     registerItem(row, node);
   };
 
-  /** 展开第 `row` 项的子菜单，并记下它**右边沿**的坐标。 */
-  function openSub(row: number) {
+  /** 展开第 `row` 项的子菜单，并记下它**右边沿**的坐标。`来源` 见上面 `点开的`。 */
+  function openSub(row: number, 来源: "点" | "划" | "键") {
     const el = rowRefs.current[row];
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -156,11 +187,13 @@ export function MenuPopup(props: PopupProps) {
     // 子菜单的路上会经过一条"谁都不属于"的带子，鼠标一进那条带子
     // 父项就不是 hover 了，菜单自己关掉。
     setSubAnchor({ top: r.top, left: r.right - 4 });
+    点开的.current = 来源 === "点" ? row : null;
     setSubOpen(row);
   }
 
   /** 收起子菜单，**并把焦点还给父项**。 */
   function closeSub(row: number) {
+    点开的.current = null;
     setSubOpen(null);
     setSubAnchor(null);
     // ⚠️ 用 `focusItem` 不是 `setFocusedIndex`——按 `→` 展开子菜单之前，
@@ -201,23 +234,37 @@ export function MenuPopup(props: PopupProps) {
               onMouseEnter={() => {
                 // 鼠标划过：焦点跟过去，并按有没有子菜单决定开还是收。
                 p.onMouseEnter();
-                if (entry.submenu) openSub(row);
-                else setSubOpen(null);
+                if (entry.submenu) openSub(row, "划");
+                else {
+                  点开的.current = null;
+                  setSubOpen(null);
+                }
               }}
               onClick={() => {
                 if (entry.submenu) {
-                  if (isSubOpen) closeSub(row);
-                  else openSub(row);
+                  // ⚠️ **"原来就开着"不等于"用户点开的"**（BUG-17）：鼠标点下来
+                  // 之前一定先划过这一行，而划过那一下已经把子菜单打开了。
+                  // 那时候按"开着就收起"处理，用户的第一下点击是**把它关掉**，
+                  // 于是弹层闪一下、什么都没发生，得点第二下才开。
+                  // 所以只有"点开的那个"才被这一下收起。
+                  if (isSubOpen && 点开的.current === row) closeSub(row);
+                  else openSub(row, "点");
                   return;
                 }
                 onPick(entry.id);
               }}
             >
               <span className="menu-check">{entry.checkable && checks[entry.id] ? "✓" : ""}</span>
-              <span className="menu-label">{entry.label}</span>
+              <span className="menu-label">{t(entry.label)}</span>
               {/* ⚠️ 走 `formatAccel`：macOS 上要显示成 `⇧⌘S` 而不是 `Ctrl+Shift+S`，
                   那边按 Control 是不会响应的。见 `ui/accel.ts`。 */}
-              {entry.accel && <span className="menu-accel">{formatAccel(entry.accel)}</span>}
+              {/* ⚠️ **灰掉的项不印快捷键**（2026-09-25）。以前印：结果是菜单上
+                  明明白白写着 `Ctrl+Shift+C`、那一项却是灰的——而"灰"在用户
+                  心里就是"按了也没用"。两句话互相拆台，用户只能猜哪个才算数。
+                  改成不印之后，这一栏的规矩是一句话：**看得见快捷键 = 按得动**。 */}
+              {entry.accel && !disabled.has(entry.id) && (
+                <span className="menu-accel">{formatAccel(entry.accel)}</span>
+              )}
               {/* 没子菜单的项也占这个宽度——不然同一列里有箭头和没箭头的
                   文字右边缘会参差不齐。 */}
               <span className="menu-arrow">{entry.submenu ? "▸" : ""}</span>
@@ -259,6 +306,10 @@ interface SubMenuProps {
 /** 子菜单。**不支持再往下开一层**（见文件头）。 */
 function SubMenu(props: SubMenuProps) {
   const { entries, disabled, checks, onPick, onDismiss, onClose, anchor } = props;
+
+  // ⚠️ 子菜单是**另一个组件**，所以自己取一份 `t`（不是从 `MenuPopup` 传下来的）。
+  // 理由同 `MenuPopup` 那一处。
+  const t = useT();
 
   const { lines, items } = useMemo(() => layout(entries), [entries]);
 
@@ -326,8 +377,11 @@ function SubMenu(props: SubMenuProps) {
             }}
           >
             <span className="menu-check">{entry.checkable && checks[entry.id] ? "✓" : ""}</span>
-            <span className="menu-label">{entry.label}</span>
-            {entry.accel && <span className="menu-accel">{formatAccel(entry.accel)}</span>}
+            <span className="menu-label">{t(entry.label)}</span>
+            {/* 灰掉的不印快捷键。理由同上面那一处（子菜单里也得守同一条规矩）。 */}
+            {entry.accel && !disabled.has(entry.id) && (
+              <span className="menu-accel">{formatAccel(entry.accel)}</span>
+            )}
           </button>
         );
       })}

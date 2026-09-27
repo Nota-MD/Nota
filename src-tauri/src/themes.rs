@@ -10,24 +10,29 @@
 //! | 明暗 `ui_mode` | 跟随系统 / 浅色 / 深色 | 整个应用外壳 |
 //! | 文档主题 `document_theme` | 本模块列出的那些 | **只有编辑区** |
 //!
-//! 前两条相乘 = 我们对外承诺的界面外观；第三条**一根头发都不许碰到外壳**。
+//! 前两条相乘 = 对外承诺的界面外观；第三条**不许影响外壳**。
 //! 之前那版把文档主题的配色桥接进 UI 变量（`--nota-bridge-*`），结果是
-//! 选一个浅色文档主题、界面跟着变亮，整个应用一半亮一半暗——用户截图报了
-//! 这个 bug，那一整套桥接已经拆干净。守住这条线的机制在
-//! `src/styles/doc-theme.ts`：注入前把每条选择器统一挂到编辑区之下，
-//! **不靠写主题时自觉**。
+//! 选一个浅色文档主题、界面跟着变亮，整个应用一半亮一半暗。那一整套桥接
+//! 已经拆干净，守住这条线的机制在 `src/styles/doc-theme.ts`——注入前把每条
+//! 选择器统一挂到编辑区之下，**不靠写主题时自觉**。
 //!
-//! # ⛔ 不兼容 Typora 主题，一个都不内置
+//! # ⛔ 不内置任何第三方主题
 //!
-//! Typora 自带的那几套（github / night / newsprint / pixyll / whitey）
-//! **版权是 Typora 的，随包发就是侵权**。用户 2026-09-23 明确说了
-//! 「请不要内置typora主题。会侵权。」并且「typora主题先不用兼容」。
-//! 所以：既不扫描 Typora 的安装目录，也不带 Typora 主题的解析器
+//! 第三方主题文件的**版权归各自的作者**，随包分发属于侵权，
+//! 用户 2026-09-23 明确划了这条线。
+//! 所以：既不扫描外部的主题安装目录，也不带第三方主题的解析器
 //! （那套 `@import` 展开 ＋ `url()` 内联成 data: URL 的机器一起删了，
 //! 见 `docs/07` §4 的记录）。
 //!
-//! 内置的这几套是**我们自己写的**（`src/styles/themes/*.css`），
+//! 内置的这几套是**自己写的**（`src/styles/themes/*.css`），
 //! 用 `include_str!` 编进二进制，所以新装的机器上主题菜单不是空的。
+//!
+//! ⚠️ 「自己写的」这条对**名字里有别人招牌**的那一套同样成立：
+//! `adwaita.css` 是照 GNOME 那套主题的**风格取向**自己配的，
+//! `latex.css` 是照 LaTeX 的**排版规则**自己写的——**两份都没有复制
+//! 任何第三方 CSS 或色值**，也没有内嵌任何字体文件（那两件事都各自
+//! 撞一条许可证）。判据是"文件里的每一行都是本仓写的"，不是"名字眼熟
+//! 就算侵权"；改这两套时也请守住同一条线。
 //!
 //! # 用户主题放哪儿
 //!
@@ -59,7 +64,14 @@ struct Builtin {
     css: &'static str,
 }
 
-/// 内置主题清单。**顺序就是菜单里的顺序**：浅色四套在前，深色两套在后。
+/// 内置主题清单。**顺序就是菜单里的顺序**。
+///
+/// 2026-09-26 换成现在这三套（用户点名的：极简 / Adwaita / LaTeX），
+/// 之前那六套（素纸 / 蓝图 / 晨雾 / 报刊 / 墨色 / 松林）连同它们的 `.css`
+/// 一起删掉了。**三套都是浅色**——用户没要深色，而三套摆在一起时深浅一致
+/// 才好对比；也正因为如此，原来那句"浅色几套在前、深色几套在后"的排序
+/// 规矩现在没有意义了，**顺序就是想要的第一印象**：「极简」放第一个
+/// （它最像"默认"），Adwaita 次之，LaTeX 最后。
 ///
 /// ⚠️ 这些文件在仓库的 `src/styles/themes/` 下，不在 `src-tauri/` 里。
 /// 改完主题 CSS 后 `cargo build` 会跟着重编（`include_str!` 的依赖会进
@@ -68,36 +80,23 @@ struct Builtin {
 ///
 /// ⚠️ 文件名是 ASCII、显示名是中文，**故意分开的**：中文文件名在
 /// Windows 交叉编译和 zip 打包时都是麻烦，而菜单里要显示中文。
+/// 唯一的例外是 `adwaita`：那是个专有名词（GNOME 的主题名），
+/// 中文里也是照原名写的，所以显示名就写 `Adwaita`。
 const BUILTIN: &[Builtin] = &[
     Builtin {
-        id: "paper",
-        name: "素纸",
-        css: include_str!("../../src/styles/themes/paper.css"),
+        id: "minimal",
+        name: "极简",
+        css: include_str!("../../src/styles/themes/minimal.css"),
     },
     Builtin {
-        id: "blueprint",
-        name: "蓝图",
-        css: include_str!("../../src/styles/themes/blueprint.css"),
+        id: "adwaita",
+        name: "Adwaita",
+        css: include_str!("../../src/styles/themes/adwaita.css"),
     },
     Builtin {
-        id: "mist",
-        name: "晨雾",
-        css: include_str!("../../src/styles/themes/mist.css"),
-    },
-    Builtin {
-        id: "print",
-        name: "报刊",
-        css: include_str!("../../src/styles/themes/print.css"),
-    },
-    Builtin {
-        id: "ink",
-        name: "墨色",
-        css: include_str!("../../src/styles/themes/ink.css"),
-    },
-    Builtin {
-        id: "pine",
-        name: "松林",
-        css: include_str!("../../src/styles/themes/pine.css"),
+        id: "latex",
+        name: "LaTeX",
+        css: include_str!("../../src/styles/themes/latex.css"),
     },
 ];
 
@@ -173,10 +172,15 @@ pub fn css_of(id: &str) -> Result<String> {
 /// id 的形状检查。**这是本模块的安全边界**，见文件头那段。
 ///
 /// 白名单而不是黑名单：只放行 ASCII 字母、数字、`-`、`_`，长度 1–64。
-/// 中文文件名（`素纸.css`）因此用不了——**这是有意的取舍**：主题的显示名
+/// 中文文件名（`极简.css`）因此用不了——**这是有意的取舍**：主题的显示名
 /// 在文件里写着（菜单显示中文），文件名只是个键，用 ASCII 键换掉一整类
 /// 路径穿越问题，划算。
-fn check_id(id: &str) -> Result<()> {
+///
+/// ⚠️ **`pub(crate)` 是给 `ui_styles.rs` 用的**（界面风格，同一套"用户往目录里
+/// 丢 CSS"的机制）。那条边界**只有这一份**——两份实现会漂，而漂的那一份
+/// 正好是安全边界时没人看得出来。那边的测试 `界面风格的_id_判据与文档主题同一套`
+/// 钉着"改这里，那边也得跟着成立"。
+pub(crate) fn check_id(id: &str) -> Result<()> {
     let ok = !id.is_empty()
         && id.len() <= 64
         && id
@@ -217,8 +221,8 @@ fn user_ids() -> Vec<String> {
     out
 }
 
-/// 体积闸。
-fn check_size(path: &Path, limit: u64) -> Result<()> {
+/// 体积闸。⚠️ 与 `check_id` 一样是 `pub(crate)` 给 `ui_styles.rs` 复用的。
+pub(crate) fn check_size(path: &Path, limit: u64) -> Result<()> {
     let meta = std::fs::metadata(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
         source,
@@ -234,7 +238,7 @@ fn check_size(path: &Path, limit: u64) -> Result<()> {
     Ok(())
 }
 
-/// 我们自己的主题目录，**用到时才建**。返回它的绝对路径。
+/// 用户主题目录，**用到时才建**。返回它的绝对路径。
 ///
 /// 「打开主题文件夹」菜单项要能把它建出来再打开——首次使用时它多半还不存在。
 pub fn user_themes_dir() -> Result<String> {
@@ -278,7 +282,8 @@ mod tests {
         // 界面独有的那几个变量名一旦出现在主题文件里，就说明有人又开始
         // 往"让文档主题改外壳"那条路上走了。
         const UI_ONLY: &[&str] = &["--ui-font-size", "--font-ui", "--sidebar-width",
-            "--dock-width", "--toolbar-height", "--statusbar-height", "--shadow"];
+            "--dock-width", "--toolbar-height", "--statusbar-height", "--zen-peek",
+            "--shadow"];
         for b in BUILTIN {
             for bad in UI_ONLY {
                 assert!(

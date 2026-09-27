@@ -1,0 +1,158 @@
+/* ── ④ 变量表达不了的那几件事（带组件选择器的一段）＿＿＿＿＿＿＿＿＿＿＿＿
+ *
+ * ⚠️ **这是整个外观系统里唯一带组件选择器的地方。** 破例的理由在下面原文里：
+ * 有几处长相当**不落在任何一个变量上**——弹出层是一块**材料**（半透明 +
+ * 背景模糊）、菜单高亮是**整条系统蓝**、按下是**即刻的缩小**。它们说的是
+ * "作用在哪个元素上"，不是"值是多少"，所以只能用选择器写。
+ *
+ * ⚠️ **加载顺序**：最后一份。它里面的规则权重不低，但要盖住的正是前面
+ * 几份定下来的变量值。
+ *
+ * ⚠️ 从 `theme.css` 里拆出来的（2026-09-26）。
+ */
+
+/* ── macos 专属：变量表达不了的那三件事 ──────────────────────────────────
+ *
+ * ⚠️ **本文件里唯一带组件选择器的一段。** 破例的理由：轴一定义的是"这个
+ * 风格长什么样"，而 macOS 有三处长相当**不落在任何一个变量上**——
+ * 弹出层是一块**材料**（半透明 + 背景模糊）、菜单高亮是**整条系统蓝**、
+ * 按下是**即刻的缩小**。它们说的是"作用在哪个元素上"，不是"值是多少"，
+ * 所以只能用选择器写。
+ *
+ * ⚠️ 每一行都带 `[data-ui-style="macos"]` 前缀：**另外 15 格一个字节都不动**
+ *（唯一的例外是 ① 材料与最后那条「减少透明度」，见那一小条自己的注释）。
+ * ⛔ 往这里加东西前先问一句：这件事能不能用变量表达？能就写回上面那两段，
+ * 别把风格的值散成一堆散装选择器。
+ */
+
+/* ① 材料：弹出的层是半透明 + 背景模糊，底下的正文透出一点光。
+ *    ⚠️ 这一节的名字原本叫「macos 专属」，2026-09-26 之后不是了——
+ *    下面 ②③⑤⑥⑦ 仍然只作用于 macOS（菜单整条蓝、按下缩放、字距、
+ *    等宽数字都是 macOS 那一档的样子），但 ①（材料）和最后那条
+ *    「减少透明度」是**四档共用**的。看这一节时先看清每小条自己的选择器。
+ *
+ * ⚠️ **外面这层 `@supports` 不能省**：不支持背景模糊时，半透明的底会把底下
+ * 的正文透出来（字压字，直接读不了）。那种平台就老老实实用不透明的
+ * `--bg-raised`——`.menu-popup` 自己的那一条规则还留着，这里不写就自然生效。
+ * ⚠️ 只给**弹出层**用：工具栏与侧栏在布局上是并排的兄弟，身后没有东西，
+ * 给它加模糊等于白算一遍（什么也糊不到），那种"看不出来的开销"别加。
+ *
+ * ⚠️⚠️ **2026-09-26 从"只有 macOS"扩成四档**（macOS / Breeze /
+ * Windows 11 / Windows 10），因为用户给的这四份稿子里，窗口面板都是**材料**
+ * （亚克力 / Mica / 模糊 6）。三件事必须一起成立，少一件就别往这张表里加：
+ *   ① 那一档自己声明了 `--material-blur` 和 `--material-bg`（颜色块里）；
+ *   ② 它没说"不透明、不做模糊"——**Yaru 那两份稿子明说了"不做模糊"**，
+ *      所以 Yaru/Yaru Blue 故意不在表里，它俩的弹出层仍然用不透明的
+ *      `--bg-raised`（那是 `.menu-popup` 自己的规则）；
+ *   ③ 它的 `--material-bg` 透明度够高（见下面那条 0.97 下限）。
+ *
+ * ⚠️ **窗口本身那层材料我们画不出来。** 稿子说"窗口背景面板是亚克力/Mica"，
+ * 而本仓的窗口是 `decorations: true`（边框、圆角、外面的阴影都归窗口管理器，
+ * 见 `docs/04`），应用只能在**自己画得出来的东西**上落材料——也就是弹出层。
+ * 所以这里能做的是"菜单/下拉变成那片玻璃"，不是"整个窗口变成毛玻璃"。 */
+@supports ((-webkit-backdrop-filter: blur(4px)) or (backdrop-filter: blur(4px))) {
+  [data-ui-style="macos"] .menu-popup,
+  [data-ui-style="macos"] .menu-sub,
+  [data-ui-style="plasma"] .menu-popup,
+  [data-ui-style="plasma"] .menu-sub,
+  [data-ui-style="windows"] .menu-popup,
+  [data-ui-style="windows"] .menu-sub,
+  [data-ui-style="windows10"] .menu-popup,
+  [data-ui-style="windows10"] .menu-sub {
+    background: var(--material-bg);
+    -webkit-backdrop-filter: blur(var(--material-blur))
+      saturate(var(--material-saturate));
+    backdrop-filter: blur(var(--material-blur)) saturate(var(--material-saturate));
+  }
+}
+
+/* ② 菜单高亮：macOS 是**整条系统蓝 + 白字**，不是一层灰底。
+ *    这是 macOS 一眼能认出来的地方，也是这一格里最该像的地方。 */
+[data-ui-style="macos"] .menu-item:hover:not(:disabled),
+[data-ui-style="macos"] .menu-item-open:not(:disabled) {
+  background: var(--menu-fill);
+  color: var(--menu-fill-fg);
+}
+
+/* ⚠️ 那一行里还有三样**自带颜色**的次级元素（勾选列 `--accent`、快捷键与
+   箭头 `--fg-faint`）。不一起改的话，蓝底上压蓝勾、压灰字，全读不出来——
+   "改了底色忘了改上面的字"是这类高亮最容易漏的一步。 */
+[data-ui-style="macos"] .menu-item:hover:not(:disabled) :is(.menu-check, .menu-accel, .menu-arrow),
+[data-ui-style="macos"] .menu-item-open:not(:disabled) :is(.menu-check, .menu-accel, .menu-arrow) {
+  color: inherit;
+}
+
+/* ④ 按下就缩小：反馈发生在**按下去**那一刻，不用等松手看背景色。
+    ⚠️ `.btn` 原本只过渡背景色，不加这条 transform 的过渡它"缩不动"
+   （会瞬移）。 */
+[data-ui-style="macos"] .btn {
+  transition: background 90ms ease, transform 110ms var(--ease-out);
+}
+[data-ui-style="macos"] .btn:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+/* ⑤ 弹出层的出场：macOS 的菜单是**在原地长出来的**（放大 + 淡入），不是从
+   上面滑下来。`transform-origin` 已经被钉在左上角（`app.css` 那条注释写的
+   就是这件事），所以它长得对方向——从触发它的那一项那里长出来。 */
+[data-ui-style="macos"] .menu-popup,
+[data-ui-style="macos"] .menu-sub {
+  animation: menu-in-macos var(--duration-fast) var(--ease-out);
+}
+@keyframes menu-in-macos {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ⑥ 字：西文按 Apple 的字距表走——**字越大越收紧**（同一个字距放在大字上
+   读起来是散的）。
+   ⚠️ **只给标题**，而且这条主要是给西文字的：中文是方块字，字距一动整行就散，
+   所以正文与界面小字一律保持 0，正数也不给。
+   ⚠️ **`.home-side-title` 是明确的例外**：它是"小号 + 全大写"的标签，
+   `app.css` 给它写的是**正的** 0.06em——全大写得放开字距，跟"大字收紧"是同
+   一条道理的两头。不排除它的话，这一行（带属性前缀，权重更高）会把它那条
+   压掉，症状是首页右边那个「插件」标题挤成一团——而且看不出是这里改坏的。
+   ⚠️ `:is()` / `:not()` 带复杂参数是 Selectors 4；这不是新依赖，
+   `app.css` 里的 `.btn:active:not(:disabled):not(.btn-primary)` 早就在用。 */
+[data-ui-style="macos"] :is(h1, h2, h3, h4):not(.home-side-title) {
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+/* ⑦ 状态栏那四个统计数字用**等宽数字**：字数从 999 变 1000 时，后面的字符
+   不会跟着左右跳一下。 */
+[data-ui-style="macos"] .statusbar {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ⚠️ 系统开了"减少动态效果"就不要位移与缩放。`app.css` 里那条 `animation: none`
+   是按**选择器**写的（`.menu-popup, .menu-sub`），换了关键帧的名字也不会漏掉它；
+   这里要补的只有按下那一下缩放。 */
+@media (prefers-reduced-motion: reduce) {
+  [data-ui-style="macos"] .btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* ⚠️ 系统开了"减少透明度"就把玻璃换成不透明的——这类用户里有一部分是**对比度**
+   需要，半透明的底会让正文透上来。 */
+@media (prefers-reduced-transparency: reduce) {
+  [data-ui-style="macos"] .menu-popup,
+  [data-ui-style="macos"] .menu-sub,
+  [data-ui-style="plasma"] .menu-popup,
+  [data-ui-style="plasma"] .menu-sub,
+  [data-ui-style="windows"] .menu-popup,
+  [data-ui-style="windows"] .menu-sub,
+  [data-ui-style="windows10"] .menu-popup,
+  [data-ui-style="windows10"] .menu-sub {
+    background: var(--bg-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

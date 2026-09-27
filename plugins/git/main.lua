@@ -5,7 +5,7 @@
 --
 -- 设计口径（与 Folio 的 git 扩展一致）：**不做 git 的替代品**。
 -- 只做"写文档时最常用的那几下"——看改动、比差异、提交。
--- 分支管理、rebase、交互式暂存这些，用户去终端做比在我们这儿点强。
+-- 分支管理、rebase、交互式暂存这些，用户去终端做比在 Nota 里点强。
 --
 -- ── 面板内容（2026-09-24 落地）────────────────────────────────────────────
 --
@@ -16,80 +16,76 @@
 -- ⚠️ 声明（`register_panel` / `register_menu`）与内容是**两条路**：
 -- 前者只在加载时跑一次、宿主按需读；后者每次读现调。混起来就是 BUG-13。
 --
--- ⚠️⚠️ **变量名一律用 ASCII，中文只许出现在注释和字符串里。**
--- Lua 的标识符只认 `[A-Za-z_][A-Za-z0-9_]*`（`lislalpha` 用的是 C 的 `isalpha`，
--- `local 分支 = 1` 里那几个 UTF-8 字节在任何 locale 下都不算字母），
--- 所以那是**语法错误**：整份插件加载失败，面板和菜单一起消失，
--- 而 Lua 报的话是 `<name> expected near '<\233>'`。
--- `src-tauri/src/lua/mod.rs` 里有一条用例把这条钉住了（`内置插件都能被_lua_编译`）。
+-- ── 差异预览（2026-09-25 落地）────────────────────────────────────────────
+--
+-- 「标红/绿，标出删了哪几行、加了哪几行」。**红绿是宿主画的**
+--（`kind = "diff"`，`.panel-diff-del` / `.panel-diff-add`，见 `styles/dock.css`），
+-- 这个插件只负责把 git 的输出翻成那个形状——翻译本身在宿主的
+-- `nota.diff.parse_unified` 里（`src-tauri/src/lua/api/unified_diff.rs`）。
+-- 判据与踩过的坑都在下面「差异预览」那一段。
+--
+-- ⚠️⚠️ **变量名一律用 ASCII，中文只许出现在注释和字符串里。** 非 ASCII 的标识符
+-- 是**语法错误**（Lua 不认那些字节），症状是整份插件加载失败、面板和菜单一起消失。
+-- 规矩与那条回归用例见 `docs/11` §变量名。
 
 local M = {}
 
--- ⚠️ 这里**刻意不存任何状态**。早先有个"最近一次状态"的缓存，
+-- ── 文案 ──────────────────────────────────────────────────────────────────
+--
+-- `T("原文")` 取一句界面文案：宿主按**应用语言**在 `plugin.toml` 的 `langs` 里
+-- 挑一份 `lang/<tag>.toml`（`nota.i18n`），表里没有这条就用原文。**键就是原文**，
+-- 翻译只写进 `lang/en.toml`——这套规矩见 `docs/13` §nota.i18n。
+--
+-- ⚠️ `T` 在 `on_load` 里**重新绑一次**：`nota` 要到那时才到手（在那之前调它
+-- 只会拿到原文，这是对的——模块级的字符串本来就不该等到 `nota`）。
+-- ⚠️ 译文里要用到 `%` 得写成 `%%`（`T` 走的是 `string.format`）。
+local T = function(s) return s end
+
+-- ⚠️ 这里**刻意不缓存任何 git 数据**。早先有个"最近一次状态"的缓存，
 -- 结果是"面板显示的是几分钟前的东西"的来源——每次要什么就现问 git，
 -- 它本来就是个很快的命令行程序（见 `panel_content` 那段的注释）。
+-- 模块级变量只有四个，**全是显示状态**（`show_diff` / `show_graph` /
+-- `picked` / `compared`），一个字节的 git 输出都没存：差异和树每次都现问。
+-- 它们各自在自己那一段里解释。
 
 -- ── 小工具 ────────────────────────────────────────────────────────────────
 
---- 把 `git status --porcelain=v1 -z -b` 的输出切成结构。
---
--- -z 的格式（**注意 NUL 而不是换行**，这是为了路径里能有空格和换行）：
---   "## 分支...上游 [ahead 1]" NUL "XY 路径" NUL ["XY 新路径" NUL "旧路径" NUL]
--- 重命名/复制（X 或 Y 是 R/C）时**多跟一个路径**，不处理它整个列表会错位。
-local function parse_status(raw)
-  local out = { branch = "", entries = {} }
+-- ⚠️ `git status` 那份格式的解析（NUL 分隔、重命名要多读一段、分支名后面挂着
+-- `[ahead 1]`）2026-09-26 **搬进宿主**了：`nota.git.parse_status`
+--（`src-tauri/src/lua/api/git.rs` 里那一节）。搬的理由两条：它与
+-- `nota.diff.parse_unified` 同属"画给用户看之前必须读准的格式"，挨着放好一起改；
+-- 而且那边有用例按得住。调用点一律写 `nota.git.parse_status(r.raw)`。
 
-  -- 先按 NUL 切。Lua 的 string.gmatch 用 %z 匹配 NUL。
-  local parts = {}
-  for piece in string.gmatch(raw .. "\0", "([^%z]*)%z") do
-    parts[#parts + 1] = piece
-  end
+--- 状态 → 「给人看的一行字」与「给界面看的语气」。**判据只有这一处**。
+---
+--- `state` 由宿主归类（`nota.git.parse_status`，取值就这四种，见 `docs/13` §nota.git）。
+--- ⚠️ 两样写在一张表里：从前"哪句人话"和"什么语气"各写一套 `if`，改一处忘一处就会
+--- 出现"列表里写着已暂存、颜色却是警示色"——同一件事在界面上自相矛盾。
+---
+--- ⚠️ `label` **同时是数据**：`refresh` 把它塞进 `e.describe` 广播出去（AI 插件拿它
+--- 当上下文）。翻译它 = 别的插件读到的也是译文，这是**有意的**：那句话本来就是
+--- 写给人看的，而一个界面只该有一种语言。
+local STATES = {
+  untracked = { label = "未跟踪", tone = "muted" },
+  staged = { label = "已暂存", tone = "success" },
+  ["staged-dirty"] = { label = "已暂存且有新改动", tone = "warn" },
+  modified = { label = "已修改", tone = "warn" },
+}
 
-  local i = 1
-  if parts[1] and string.sub(parts[1], 1, 2) == "##" then
-    out.branch = string.sub(parts[1], 4)
-    i = 2
-  end
-
-  while i <= #parts do
-    local line = parts[i]
-    if line == "" then
-      i = i + 1
-    else
-      local xy = string.sub(line, 1, 2)
-      local path = string.sub(line, 4)
-      local entry = {
-        index = string.sub(xy, 1, 1),  -- 暂存区的状态
-        work = string.sub(xy, 2, 2),   -- 工作区的状态
-        path = path,
-      }
-      -- 重命名/复制多一个字段：下一个 part 是原路径。
-      local st = entry.index .. entry.work
-      if string.find(st, "[RC]") then
-        entry.orig = parts[i + 1]
-        i = i + 2
-      else
-        i = i + 1
-      end
-      out.entries[#out.entries + 1] = entry
-    end
-  end
-
-  return out
+local function describe(entry)
+  return T((STATES[entry.state] or STATES.modified).label)
 end
 
---- 给状态字符配一句人话。前两位分别是暂存区与工作区。
-local function describe(entry)
-  if entry.index == "?" and entry.work == "?" then
-    return "未跟踪"
+--- 未跟踪的文件有几个。**它们不在 `git diff HEAD` 里**（git 还不认识它们），
+--- 所以底下要单独说一句，否则"有个新文件、差异里找不到"像个 bug。
+local function count_untracked(entries)
+  local n = 0
+  for _, e in ipairs(entries) do
+    if e.state == "untracked" then
+      n = n + 1
+    end
   end
-  if entry.index ~= " " and entry.work ~= " " then
-    return "已暂存且有新改动"
-  end
-  if entry.index ~= " " then
-    return "已暂存"
-  end
-  return "已修改"
+  return n
 end
 
 -- ── 命令 ──────────────────────────────────────────────────────────────────
@@ -103,16 +99,16 @@ local function refresh(nota, silent)
   if r.code ~= 0 then
     -- 最常见的失败是"这个目录不是 git 仓库"。**要把这句话说清楚**——
     -- 原样显示 git 的报错（"fatal: not a git repository..."）用户未必看得懂
-    -- 是我们没能定位到仓库，还是他自己忘了 git init。
+    -- 是 Nota 没能定位到仓库，还是他自己忘了 git init。
     if not silent then
-      nota.ui.notify("这里不是 git 仓库：" .. r.stderr, "warn")
+      nota.ui.notify(T("这里不是 git 仓库：%s", r.stderr), "warn")
     end
     nota.event.emit("git:status", { is_repo = false, branch = "", entries = {} })
-    nota.ui.refresh("git")
+    nota.ui.refresh()
     return
   end
 
-  local parsed = parse_status(r.raw)
+  local parsed = nota.git.parse_status(r.raw)
   for _, e in ipairs(parsed.entries) do
     e.describe = describe(e)
   end
@@ -127,7 +123,7 @@ local function refresh(nota, silent)
   -- 面板没打开时没人收，用户打开时照样会拉到当时的状态（见 docs/12 §面板内容）。
   -- 面板上那颗「刷新」按钮点下去本来也会重拉，但菜单里的「刷新改动」不会——
   -- 少了这一句，从菜单刷新就得手动再点一下面板才看得到变化。
-  nota.ui.refresh("git")
+  nota.ui.refresh()
 end
 
 -- ── 面板内容 ──────────────────────────────────────────────────────────────
@@ -135,44 +131,477 @@ end
 -- 返回一串**内容块**（docs/13 §面板 DSL）。宿主只认下面这七种 `kind`；
 -- 认不出的会被前端如实画成"不认识这种内容块"——所以别写没在文档里的名字。
 
---- 一条改动该用什么语气。**未跟踪是灰的**（它还不是这个仓库的一部分），
---- 已暂存的用成功色，剩下的（改了但没暂存）用警示色——它们是最容易被提交漏掉的。
+--- 一条改动该用什么语气。⚠️ 判据在 `STATES` 那张表里，**不在这里重写一遍**：
+--- 从前这里是一套自己的 `if`，与 `describe` 各判各的，改一处就会出现自相矛盾的界面。
 local function tone_of(e)
-  if e.index == "?" and e.work == "?" then
-    return "muted"
+  return (STATES[e.state] or STATES.modified).tone
+end
+
+-- ── 差异预览（2026-09-25 加，2026-09-26 补齐上下文）─────────────────────
+--
+-- 用户要的是「**标红/绿文本来标记是删除还是添加**」（2026-09-25），
+-- 2026-09-26 又点名「**照 Folio 那个 Git 拓展的形状来**」——每一行分档上色
+--（加 / 删 / `@@` 段头 / 文件信息），上下文行不上色
+--（`extensions/git/fo-git-panel-diff.c`）。所以取的是**完整的** unified diff：
+-- 文件头、`@@`、上下文、增删，一屏里读起来跟终端里那份一样。
+--
+-- 红绿由宿主画（`kind = "diff"` + 行上的 `op`），翻译在 `nota.diff.parse_unified`
+--（宿主）——那边跟"哪一行是文件头、哪一行是被删掉的内容"较劲（一份真 diff 里会
+-- 长出 `--- 分隔线` 这种看着像文件头的正文行），有用例按着，见 `docs/13` §8.5。
+--
+-- ⚠️ `show_diff` 是**模块级**的显示开关，不是数据：上面那条"刻意不缓存任何 git
+-- 数据"说的是别存 git 的输出（存了就会显示几分钟前的改动），而"要不要画差异"
+-- 关了面板再打开还保持着，正是用户期望的。
+
+local show_diff = true
+
+-- ── 提交树（2026-09-26 加）────────────────────────────────────────────────
+--
+-- 用户要的是「树状图，并且两个不同提交之间那根键可以点开看差异」。
+--
+-- 图**不是我们自己算的**：`git log --graph` 已经把车道画好了，宿主把它切成
+-- "左边那截图线 / 右边那个提交"（`nota.git.log_graph`）。于是每行有**两颗**能点的
+-- 东西（宿主为它新加 `kind = "graph"` 的全部理由：`buttons` 表达不了
+-- "一行的两头是两件事"）：
+--
+--   * 左截 = **键**：这一次提交与**它父提交**之间的差异（`git diff 父 它`，
+--     根提交走 `git show`）。"两个不同提交之间"在树上就是这条。
+--   * 右串 = **选中这个提交**：选两个就成了"A 到 B 之间"（可以不相邻）。
+--
+-- ⚠️ 纯连接线行（`|\`、`| |`）**归它上面那个提交**：这是**就近**的读法，不是 git
+-- 的语义。还是给它挂了动作——鼠标停上去会说清是哪两个提交（`title` 里带哈希），
+-- 最坏是"点的位置不那么准"，不会出现"点了个不知道是什么的东西"。
+
+local show_graph = false
+
+--- 已选中的提交哈希（最多两个）。⚠️ 存的是**哈希**不是差异文本（差异每次现问
+--- git），所以这不违反「刻意不缓存任何 git 数据」——它是"用户点了哪两行"。
+local picked = {}
+
+--- 现在正在看的那一对：`{ a = 旧的, b = 新的 }`。`nil` = 没在看历史。
+--- `a == ""` = 根提交（没有父），那条路走 `git show`。
+local compared = nil
+
+--- 一块差异最多画几行（每份文件 / 全部加起来）。
+--
+-- 三个理由：面板只有 260px 宽（画多了就是一片红绿墙，用户照样得滚）、宿主给一层
+-- 内容块的上限是 200 项（`ui.rs::面板节点上限`）、以及**上下文行也占额度**——
+-- git 默认每个改动前后各带 3 行（我们显式写 `-U3`），一个小改动就是十来行，
+-- 额度得按**画出来的行**算，不能再按"红绿行"算。每份文件一块这个切法本身
+-- 也保证了不会撞宿主那道上限。
+local MAX_PER_FILE = 80
+local MAX_TOTAL = 200
+
+--- git 调用失败时该显示的那句话。`what` 是那条命令的名字（"git diff"）。
+--
+-- ⚠️ 别写成 `r.stderr ~= "" and r.stderr or "…"`：Lua 里空串是**真**，
+-- 那个写法在 stderr 为空时会返回空串，等于把原因吞了。（踩过一次，
+-- 这条注释就留在这儿别挪。）
+local function why_of(r, what)
+  if r.stderr == nil or r.stderr == "" then
+    return T("%s 非零退出", what)
   end
-  if e.index ~= " " and e.work == " " then
-    return "success"
+  return r.stderr
+end
+
+--- 跑一条 git（差异那条路上的公共部分）：成功给文本，失败给 `(nil, 原因)`。
+--
+-- ⚠️ `--no-color` 和 `-U3` 是**每一条差异命令都要带的**，所以直接写在这儿：
+-- `-U3` 是 git 的默认上下文行数，写出来是因为**界面上看到的东西取决于它**
+--（改了哪几行紧挨着的是谁），而默认值有机会被 `diff.context` 之类的配置改掉
+-- ——那样"面板里显示几行上下文"就成了"看用户 git 配置"，
+-- 两个人打开同一份仓库看到的不一样。
+--
+-- ⚠️ 路径转义那件事（`core.quotePath`）宿主已经在 `run_git` 里统一处理了，
+-- 这里不用管——不处理的话中文文件名在差异里是一串 `\344\270\255`。
+local function run_diff(nota, argv)
+  local full = { argv[1], "--no-color", "-U3" }
+  for i = 2, #argv do
+    full[#full + 1] = argv[i]
   end
-  return "warn"
+  local r = nota.git.run(full)
+  if r.ok then
+    return r.stdout
+  end
+  return nil, why_of(r, "git diff")
+end
+
+--- 取一次「工作区 vs 最后一次提交」的差异。返回 `(文本, 错因)`。
+--
+-- ⚠️ 用 `HEAD`，不用裸的 `diff`：裸 `git diff` 是"工作区 vs 暂存区"，而这个
+-- 面板上那颗「提交…」会先 `add -A`——一旦暂存过，裸 diff 就是空的，
+-- 用户看到的是"改动列表里明明有东西、差异里却什么都没有"。
+-- `HEAD` 把已暂存的和没暂存的一起算进来。
+-- 仓库还没有第一次提交时 `HEAD` 不存在（git 报"有歧义的参数 'HEAD'"），
+-- 那就退回裸 diff——那时候暂存区里也不可能有东西，两者等价。
+--
+-- ⚠️ **不要**改写成 `nota.git.diff(false)`：那个 helper 的 argv 写死在
+-- `lua/api/git.rs` 里（只有 `--no-color` 和可选的 `--cached`），给不了 `HEAD`。
+local function get_diff(nota)
+  local text = run_diff(nota, { "diff", "HEAD" })
+  if text then
+    return text
+  end
+  return run_diff(nota, { "diff" })
+end
+
+--- 差异那几块：每份文件一条标题 + 一整块 unified diff（含上下文与文件头）。
+--
+-- `text` 是**已经取回来的**差异文本（取的那一步在 `get_diff` / `run_diff`
+-- 那一侧，这里只负责翻译成内容块）。
+-- `cmd` = "要看全的话在终端跑哪一句"。它进的是底下那两句截断提示——
+-- ⚠️ 2026-09-26 起它是**参数**而不是写死的 `git diff HEAD`：提交树上点出来的
+-- 那一对得说 `git diff 甲 乙`，否则照着提示敲会得到另一样东西。
+-- `untracked` = 改动列表里未跟踪的文件有几个。**它们不在 `git diff HEAD` 里**
+--（git 还不认识它们），不说一句的话，"列表里有个新文件、差异里找不到"
+-- 看着就像个 bug。历史差异没有这个问题（传 0）。
+local function diff_blocks(nota, text, cmd, untracked)
+  local files = nota.diff.parse_unified(text)
+  local blocks = {}
+
+  -- 总行数先数出来：中途 break 掉之后再数就不全了，而"一共多少行"正是
+  -- 用户判断"要不要去终端看"的依据。
+  local total = 0
+  for _, f in ipairs(files) do
+    total = total + #f.lines
+  end
+
+  local drawn, skipped = 0, 0
+  for i, f in ipairs(files) do
+    -- ⚠️ 全局额度用完了就**不再往下开**。一开始是"继续开、只是不画行"，
+    -- 结果一个改动多的仓库（Nota 自己就是）后面四十份文件全变成
+    -- 一条标题 + 一句"还有 N 行没画"——那片桩子比一句话还长，而且没有用。
+    if drawn >= MAX_TOTAL then
+      skipped = #files - i + 1
+      break
+    end
+
+    local title = f.path
+    if f.added then
+      title = title .. T("（新文件）")
+    elseif f.deleted then
+      title = title .. T("（已删除）")
+    end
+    blocks[#blocks + 1] = { kind = "heading", text = title }
+
+    -- ⚠️ 2026-09-26 起**没有"没有行可画"那一档了**。从前二进制文件与只改了
+    -- 文件模式的那种在这里画一句"没有行可画"；现在它们也有三行可看
+    --（`diff --git` / `index` / `Binary files … differ`），而"这份没法按行比"
+    -- 正是 git 自己那句话说的——它比我们再写一句中文准，也不用翻译。
+    local items, per = {}, 0
+    for _, line in ipairs(f.lines) do
+      if drawn < MAX_TOTAL and per < MAX_PER_FILE then
+        items[#items + 1] = { op = line.op, text = line.text }
+        drawn, per = drawn + 1, per + 1
+      end
+    end
+    if #items > 0 then
+      blocks[#blocks + 1] = { kind = "diff", items = items }
+    end
+    if per < #f.lines then
+      blocks[#blocks + 1] = {
+        kind = "text",
+        tone = "muted",
+        text = T("（这份还有 %d 行没画）", #f.lines - per),
+      }
+    end
+  end
+
+  if #files == 0 then
+    blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("没有可显示的差异。") }
+  elseif skipped > 0 then
+    blocks[#blocks + 1] = {
+      kind = "text",
+      tone = "muted",
+      text = T(
+        "（差异太长：一共 %d 行，这里画了前 %d 行，剩下 %d 个文件没画。要看全的在终端跑 `%s`。）",
+        total,
+        drawn,
+        skipped,
+        cmd
+      ),
+    }
+  elseif total > drawn then
+    blocks[#blocks + 1] = {
+      kind = "text",
+      tone = "muted",
+      text = T(
+        "（一共 %d 行差异，这里画了前 %d 行。要看全的在终端跑 `%s`。）",
+        total,
+        drawn,
+        cmd
+      ),
+    }
+  end
+
+  if untracked > 0 then
+    blocks[#blocks + 1] = {
+      kind = "text",
+      tone = "muted",
+      text = T(
+        "另有 %d 个未跟踪的文件不在差异里——git 的 diff 只谈已跟踪的文件，提交一次之后它们就进来了。",
+        untracked
+      ),
+    }
+  end
+
+  return blocks
+end
+
+--- 一段"带标题的差异"：标题 + 颜色说明 + 那一份差异。
+---
+--- 三处地方要画同一套排版（工作区那一份、历史那一对、编辑区那一份），所以只写
+--- 一遍。⚠️ 那句颜色说明**每次都要说**：换了一对提交之后看到的还是同一套红绿蓝
+--- 灰，而界面上别的地方没有解释过它们。
+---
+--- ⚠️ **必须在 `diff_blocks` 之后**：那个是 `local function`，写在它前面的话这里的
+--- `diff_blocks(...)` 会被编译成**全局**查找——加载照样成功，一画差异就报
+--- "attempt to call a nil value"。2026-09-26 拿假宿主跑真代码时撞出来的。
+local function diff_section(nota, title, text, why, cmd, untracked)
+  local out = {
+    { kind = "heading", text = title },
+    { kind = "text", tone = "muted", text = T("（红 = 删，绿 = 增，蓝 = 位置，灰 = 文件信息）") },
+  }
+  if not text then
+    out[#out + 1] = { kind = "text", tone = "warn", text = T("取差异失败：%s", why) }
+  else
+    for _, b in ipairs(diff_blocks(nota, text, cmd, untracked)) do
+      out[#out + 1] = b
+    end
+  end
+  return out
+end
+
+-- ── 提交树 ────────────────────────────────────────────────────────────────
+-- 来由与两条点击路径写在上面那段（`show_graph` 那儿）；这里只有实现。
+
+--- 提交树最多画几行（**含纯连接线行**）。60 = "最近这些提交"的量，再多就成了
+--- 一个得滚很久的东西。⚠️ 它**只管树**，与差异那份额度（`MAX_TOTAL`）各算各的。
+local MAX_GRAPH = 60
+
+--- 树上一行右边那串字：短哈希 + 分支标签 + 标题。
+---
+--- ⚠️ 分支标签**不能省**：没有它，"哪一行是 main 的头"在图上看不出来，而这正是
+--- 提交树最有用的那一眼（挤不下时截掉的是标题，哈希和分支名留在左边）。
+---（标签两头的括号和空格宿主已经去掉了——那是 `%d` 那一段的事。）
+local function row_text(hash, refs, subject)
+  if refs == "" then
+    return hash .. "  " .. subject
+  end
+  return hash .. "  " .. refs .. " · " .. subject
+end
+
+--- 这个哈希是不是已经选中了。
+local function is_picked(hash)
+  for _, h in ipairs(picked) do
+    if h == hash then
+      return true
+    end
+  end
+  return false
+end
+
+--- 左边那截图线（键）要挂的动作。根提交（`parent == ""`）**也有**键可点，
+--- 只是那条键通向"空树"（`compared_blocks` 里走 `git show`），照样给一颗。
+local function bond_action(hash, parent)
+  local title = T("看 %s 与它父提交 %s 之间的差异", hash, parent)
+  if parent == "" then
+    title = T("看第一次提交 %s 都放了什么（它没有父提交可比）", hash)
+  end
+  return { command = "bond_diff", args = { hash = hash, parent = parent }, title = title }
+end
+
+--- 提交树那一块。**没有提交时也画一句人话**，不是空面板。
+---
+--- ⚠️ "图线怎么切、合并提交的父算哪个、连接线行怎么认"**全是宿主的事**
+---（`nota.git.log_graph`：格式串与解析在同一处，那边有用例按着）。这里只做两件：
+--- 这一行该说哪句话、点了跑哪条命令。
+local function graph_blocks(nota)
+  local r = nota.git.log_graph(MAX_GRAPH)
+  if not r.ok then
+    -- 还没有第一次提交时 `git log` 也会失败，但那是**正常状态**，不是错误。
+    -- 判据用 `rev-parse --verify HEAD` 的退出码，**不去认 git 那句英文**——那句话
+    -- 会随版本和语言变，认它等于把一句译文当协议。
+    if nota.git.run({ "rev-parse", "--verify", "-q", "HEAD" }).code ~= 0 then
+      return {
+        { kind = "text", tone = "muted", text = T("还没有第一次提交。提交之后这里就长出提交树了。") },
+      }
+    end
+    return { { kind = "text", tone = "warn", text = T("取提交树失败：%s", why_of(r, "git log")) } }
+  end
+
+  local rows, last = {}, nil
+  for _, row in ipairs(r.rows) do
+    if row.hash then
+      local parent = row.parent or ""
+      last = { hash = row.hash, parent = parent }
+      rows[#rows + 1] = {
+        art = row.art,
+        text = row_text(row.hash, row.refs or "", row.subject or ""),
+        tone = "normal",
+        picked = is_picked(row.hash),
+        bond = bond_action(row.hash, parent),
+        pick = {
+          command = "pick_commit",
+          args = { hash = row.hash },
+          title = T("选中 %s（再选一个就能比两者之间）", row.hash),
+        },
+      }
+    else
+      -- 纯连接线行：**归它上面那个提交**（顶上那段写了这条读法的边界）。
+      rows[#rows + 1] = {
+        art = row.art,
+        text = "",
+        tone = "muted",
+        bond = last and bond_action(last.hash, last.parent) or nil,
+      }
+    end
+  end
+
+  if #rows == 0 then
+    return { { kind = "text", tone = "muted", text = T("提交树是空的。") } }
+  end
+  return { { kind = "graph", items = rows } }
+end
+
+--- 显示状态变了：让**两处**界面都重拉一次。
+--
+-- ⚠️ 光靠前端自己重拉是不够的：右栏那颗按钮跑完只会重拉它自己那一页
+--（`PluginDock.tsx::跑`），编辑区摊着的那一份收不到——症状是"在面板里换了
+-- 一对提交，编辑区还画着上一对"。这一句是广播（`id = nil` = "这个插件的
+-- 面板都算变了"），两处都会重拉。
+local function redraw(nota)
+  nota.ui.refresh()
+end
+
+--- 定下一对要看的提交，并把**方向理正**（早的那个在 `a`）。
+---
+--- ⚠️ 这不是洁癖：`git diff 新 旧` 的正负号是反的，而界面上写着「红 = 删」——
+--- 方向不理正，那句话就有一半时候是假的。判据是 `merge-base --is-ancestor`
+---（退出码 0 = 前者是后者的祖先 = 更早）。两条**不在一条线上**的提交（比如两个
+--- 分支的尖端）谁也不是谁的祖先，那就按点击顺序来——标题里写的就是实际跑的那条
+--- 命令，所以那种情况下它照样是准的。
+local function set_compared(nota, a, b)
+  if a ~= "" and nota.git.run({ "merge-base", "--is-ancestor", b, a }).code == 0 then
+    a, b = b, a
+  end
+  compared = { a = a, b = b }
+end
+
+--- 「现在正在看的那一对」那几块（点了树上的键、或选中两个提交之后）。
+--- ⚠️ 两处界面（右栏面板、编辑区）**共用这一份**——同一对提交在两处必须长得一样。
+local function compared_blocks(nota)
+  if not compared then
+    return {}
+  end
+  local a, b = compared.a, compared.b
+  local cmd, title, text, why
+
+  if a == "" then
+    -- 根提交没有父可以比：`git show` 对它画的正好是"跟空树比"——所有文件都算
+    -- 新加的，正是要看的东西。
+    cmd = "git show " .. b
+    title = T("第一次提交 %s（全部内容都算新加的）", b)
+    text, why = run_diff(nota, { "show", "--format=", b })
+  else
+    cmd = "git diff " .. a .. " " .. b
+    title = T("%s → %s 之间", a, b)
+    text, why = run_diff(nota, { "diff", a, b })
+  end
+
+  local blocks = diff_section(nota, title, text, why, cmd, 0)
+  blocks[#blocks + 1] = {
+    kind = "buttons",
+    items = { { label = T("清空选择"), command = "clear_pick" } },
+  }
+  return blocks
+end
+
+--- 「这里不是 git 仓库」那一屏。**右栏和编辑区共用这一份。**
+---
+--- ⚠️ 从前这里写的是"去终端跑一次 `git init`"——那等于把功能砍了一半（用户
+--- 2026-09-26 点名「界面要允许 git init」）。那颗按钮就在**文档所在目录**跑。
+local function not_repo_blocks()
+  return {
+    { kind = "heading", text = T("这里不是 git 仓库") },
+    { kind = "text", tone = "muted", text = T("在文档所在目录建一个仓库，就能在这里看改动、比差异、提交了。") },
+    {
+      kind = "buttons",
+      items = {
+        { label = T("初始化仓库"), command = "init_repo", style = "primary" },
+        -- 「再试一次」留着：仓库也可能是在**别处**建好的（用户在终端里 init 了、
+        -- 或者切到了另一个文档目录），这条路得能重新发现它。
+        { label = T("再试一次"), command = "refresh" },
+      },
+    },
+  }
+end
+
+--- 这个仓库算不算得出 Git 身份（`user.name` / `user.email`）——算不出就提交不了。
+---
+--- ⚠️ 判据是 `git var GIT_AUTHOR_IDENT` 的**退出码**，不是去认 git 那句话：git 的
+--- 报错是**本地化**的（中文 git 说的是「作者身份未知」），认它等于把一句译文当协议。
+---（身份配在全局还是这个仓库里都一样——这里问的是"现在算不算得出"。）
+local function has_identity(nota)
+  return nota.git.run({ "var", "GIT_AUTHOR_IDENT" }).code == 0
+end
+
+--- 编辑区那一份：**只画差异**。
+--
+-- 用户 2026-09-25：「要求允许直接在Markdown编辑区域进行预览。」理由是右侧那
+-- 260px 里一份 diff 一行的两头都看不全，而**差异恰恰是要横着读的**。
+-- ⚠️ 2026-09-26 起两处都**不折行**了（`diff.css` 里那一行 `white-space: pre`
+-- ＋ 横向滚动），所以"看不全"从"折成一团"变成了"要横着滚"——这一颗
+-- 「在编辑区看」还是有用的（宽处一屏能读下整行），但理由换了一个。
+--
+-- ⚠️ 画的**就是面板里那一份 `diff_blocks`**（`panel_content` 的「看差异」那一
+-- 段也是它）：同一次改动在两处必须长得一样，不然用户会以为是两回事。
+local function review_blocks(nota)
+  local r = nota.git.status()
+  if r.code ~= 0 then
+    -- 不是仓库时**照实说**：编辑区那么大一块地方，摊开一句"这里不是 git 仓库"
+    -- 比摊开一片空白强（空白看着像坏了）。这一屏与右栏**共用一份**
+    --（`not_repo_blocks`）——两边各写一遍的话，加一颗按钮就得记得加两处。
+    return not_repo_blocks()
+  end
+
+  local untracked = count_untracked(nota.git.parse_status(r.raw).entries)
+
+  -- ⚠️ 用户点了树上的键之后，编辑区摊着的是**当前这一对的差异**，不是工作区
+  -- 那一份（用户 2026-09-25 要的是"在编辑区直接预览"，那就得是此刻在看的东西；
+  -- 而"此刻在看什么"是 `compared` 说了算，与下面那块 `show_diff` 无关）。
+  -- 想回到工作区那一份 = 点「清空选择」（那正是那颗按钮的另一半用处）。
+  if compared then
+    return compared_blocks(nota)
+  end
+
+  local text, why = get_diff(nota)
+  return diff_section(nota, T("差异"), text, why, "git diff HEAD", untracked)
 end
 
 --- 面板此刻该显示什么。**每次读都现跑**（见文件头）。
 local function panel_content(nota)
   local r = nota.git.status()
 
-  -- 不是仓库：**如实说**，而且给一条能往下走的按钮。空着的话用户看到的是
-  -- 一个空白面板，而原因（没 git init）和出路（去终端 init）都看不出来。
+  -- 不是仓库：**如实说，并且就地给一条出路**（那一屏里那颗「初始化仓库」）。
+  -- 空着的话用户看到的是一个空白面板，而原因（没 git init）和出路都看不出来。
   if r.code ~= 0 then
-    return {
-      { kind = "text", tone = "muted", text = "这里不是 git 仓库。" },
-      { kind = "text", tone = "muted", text = "在文档所在目录跑一次 `git init` 就会出现在这里。" },
-      { kind = "buttons", items = { { label = "再试一次", command = "refresh" } } },
-    }
+    return not_repo_blocks()
   end
 
-  local parsed = parse_status(r.raw)
+  local parsed = nota.git.parse_status(r.raw)
   local blocks = {}
+  local untracked = count_untracked(parsed.entries)
 
   local branch = parsed.branch
   if branch == "" then
-    branch = "（git 没说当前分支）"
+    branch = T("（git 没说当前分支）")
   end
   blocks[#blocks + 1] = { kind = "heading", text = branch }
 
   if #parsed.entries == 0 then
     -- **空的不是错误**：干净的工作区是正常状态，画一个空列表会让人以为没读出来。
-    blocks[#blocks + 1] = { kind = "empty", text = "没有未提交的改动。" }
+    blocks[#blocks + 1] = { kind = "empty", text = T("没有未提交的改动。") }
   else
     local items = {}
     for _, e in ipairs(parsed.entries) do
@@ -180,19 +609,51 @@ local function panel_content(nota)
         title = e.path,
         badge = describe(e),
         -- 重命名/复制的原名写在副标题里：只看新名字看不出"这是从哪儿来的"。
-        subtitle = e.orig and ("原名：" .. e.orig) or "",
+        subtitle = e.orig and T("原名：%s", e.orig) or "",
         tone = tone_of(e),
       }
     end
     blocks[#blocks + 1] = { kind = "list", items = items }
   end
 
+  -- Git 身份没配的话**现在就说**：git 会拒绝提交，而它自己那句报错又长又是译文。
+  -- ⚠️ 不能等到提交失败才说——那是用户在这台机器上第一次提交唯一会卡住的地方，
+  -- 到时候他已经在想"这功能是不是坏的"了。
+  if not has_identity(nota) then
+    blocks[#blocks + 1] = {
+      kind = "text",
+      tone = "warn",
+      text = T("这个仓库还没设 Git 身份（名字和邮箱），git 会拒绝提交。"),
+    }
+    blocks[#blocks + 1] = {
+      kind = "buttons",
+      items = {
+        {
+          label = T("填身份…"),
+          command = "set_identity",
+          style = "primary",
+          -- 两个字段（`secondArg`）——判据与「提交…」那颗是同一套 `prompt`，
+          -- 多出来的那个字段见 `docs/13` §prompt。
+          prompt = {
+            arg = "name",
+            label = T("Git 身份"),
+            placeholder = T("名字，比如：张三"),
+            hint = T("git 拿它给每次提交署名"),
+            secondArg = "email",
+            secondLabel = T("邮箱"),
+            secondPlaceholder = T("you@example.com"),
+          },
+        },
+      },
+    }
+  end
+
   blocks[#blocks + 1] = {
     kind = "buttons",
     items = {
-      { label = "刷新", command = "refresh" },
+      { label = T("刷新"), command = "refresh" },
       {
-        label = "提交…",
+        label = T("提交…"),
         command = "commit",
         style = "primary",
         -- ⚠️ `prompt` = 点之前先弹宿主的输入框问一句（`docs/13` §prompt）。
@@ -200,13 +661,70 @@ local function panel_content(nota)
         -- 事后改要 amend，那已经不是"写文档时最常用的那几下"了。
         prompt = {
           arg = "message",
-          label = "提交信息",
-          placeholder = "一句话说清这次改了什么",
-          hint = "会把所有改动 add 之后一起提交",
+          label = T("提交信息"),
+          placeholder = T("一句话说清这次改了什么"),
+          hint = T("会把所有改动 add 之后一起提交"),
         },
       },
+      -- ⚠️ 按钮在差异**上面**：差异可以很长（最多 200 行），摆在按钮后面的话，
+      -- 用户每次都得先滚过一整片红绿才够得着「提交…」。
+      {
+        label = show_diff and T("收起差异") or T("看差异"),
+        command = "toggle_diff",
+      },
+      -- ⚠️ 「看差异」是**在这一栏里**看（窄，长行要横着滚），「在编辑区看」是
+      -- 换到正文那么宽去看。两颗按钮不是重复：同一份 diff，一屏能读下多少
+      -- 差得远，而 diff 是要横着读的。
+      --
+      -- ⚠️ 「在编辑区看」**只有这一颗**，看的是"此刻在看的那一份"（编辑区那边
+      -- 由 `compared` 决定画工作区那一份还是历史那一对）。**不要**在下面那块
+      -- 历史差异旁边再放一颗同名的：同一件事在同一页上有两颗按钮，用户会
+      -- 以为它们打开的不是同一个东西。
+      { label = T("在编辑区看"), command = "review_diff" },
+      -- 提交树默认**不摊开**：它一摊开就是几十行，而这个面板的第一件事是
+      -- "有没有东西要提交"。想看见树的人会看见这颗按钮。
+      { label = show_graph and T("收起提交树") or T("提交树"), command = "toggle_graph" },
     },
   }
+
+  -- ── 提交树（默认收着，`show_graph` 那个开关说了算）───────────────────────
+  if show_graph then
+    blocks[#blocks + 1] = { kind = "separator" }
+    blocks[#blocks + 1] = { kind = "heading", text = T("提交树") }
+    blocks[#blocks + 1] = {
+      kind = "text",
+      tone = "muted",
+      text = T("点左边的图线 = 这一次提交改了什么；点右边的字 = 选中它（选两个就能比两者之间）。"),
+    }
+    if #picked > 0 then
+      -- 选中的那两个要**写出来**：树一长，用户滚回去看自己点了哪两行很费劲，
+      -- 而"我比的是哪两个"这件事错了，下面那份差异就白看了。
+      blocks[#blocks + 1] = {
+        kind = "text",
+        tone = "success",
+        text = T("已选：%s", table.concat(picked, "、")),
+      }
+    end
+    for _, b in ipairs(graph_blocks(nota)) do
+      blocks[#blocks + 1] = b
+    end
+  end
+
+  -- ── 正在看的那一对（点了树上的键、或选中了两个提交）─────────────────────
+  if compared then
+    blocks[#blocks + 1] = { kind = "separator" }
+    for _, b in ipairs(compared_blocks(nota)) do
+      blocks[#blocks + 1] = b
+    end
+  end
+
+  if show_diff then
+    blocks[#blocks + 1] = { kind = "separator" }
+    local text, why = get_diff(nota)
+    for _, b in ipairs(diff_section(nota, T("差异"), text, why, "git diff HEAD", untracked)) do
+      blocks[#blocks + 1] = b
+    end
+  end
 
   return blocks
 end
@@ -214,14 +732,21 @@ end
 --- 提交全部改动。
 function M.commit(nota, message)
   if not message or message == "" then
-    return { ok = false, error = "提交信息不能为空" }
+    return { ok = false, error = T("提交信息不能为空") }
   end
 
   -- 先 add -A。**只提交已跟踪文件的改动**是更保守的做法，但写文档的人
   -- 更常见的意图是"把这一轮的所有改动存下来"，所以默认全加。
   local added = nota.git.run({ "add", "-A" })
   if added.code ~= 0 then
-    return { ok = false, error = "git add 失败：" .. added.stderr }
+    return { ok = false, error = T("git add 失败：%s", added.stderr) }
+  end
+
+  -- 身份没配就停在这儿，**不去跑那条注定失败的 commit**。
+  -- ⚠️ 位置在 `add` **之后**：`add` 都不成功说明这儿根本不是仓库（或另有毛病），
+  -- 那时说"先填身份"是答非所问。
+  if not has_identity(nota) then
+    return { ok = false, error = T("先填一下 Git 身份（名字和邮箱），git 才肯提交。") }
   end
 
   local committed = nota.git.run({ "commit", "-m", message })
@@ -230,9 +755,9 @@ function M.commit(nota, message)
     -- 否则用户会以为自己哪儿操作错了。
     local nothing = string.find(committed.stdout .. committed.stderr, "nothing to commit")
     if nothing then
-      return { ok = false, error = "没有改动需要提交" }
+      return { ok = false, error = T("没有改动需要提交") }
     end
-    return { ok = false, error = "git commit 失败：" .. committed.stderr }
+    return { ok = false, error = T("git commit 失败：%s", committed.stderr) }
   end
 
   return { ok = true, output = committed.stdout }
@@ -241,8 +766,61 @@ end
 -- ── 生命周期 ──────────────────────────────────────────────────────────────
 
 function M.on_load(nota)
+  -- ⚠️ **第一件事**:把文案取用器接到宿主给的这份表上（上面 `local T` 那段）。
+  -- ⚠️ 局部名一律 ASCII：**Lua 的标识符不许有非 ASCII 字符**（文件头那条）。
+  T = function(fmt, ...)
+    local s = nota.i18n and nota.i18n.text(fmt) or nil
+    s = s or fmt
+    if select("#", ...) > 0 then
+      return string.format(s, ...)
+    end
+    return s
+  end
+
   -- 刷状态。
   nota.command.register("refresh", function()
+    refresh(nota)
+    return { ok = true }
+  end)
+
+  -- 建仓库。**"全在界面里做完"的第一步**：没有它，用户得先开一个终端。
+  --
+  -- ⚠️ 跑在**活动文档所在目录**（cwd 由宿主定，见 `lua/api/git.rs` 文件头）。
+  -- ⚠️ 分支名**不写死**：`git init` 自己会听 `init.defaultBranch`，那是用户的配置。
+  nota.command.register("init_repo", function()
+    local r = nota.git.run({ "init" })
+    if r.code ~= 0 then
+      local why = why_of(r, "git init")
+      nota.ui.notify(T("git init 失败：%s", why), "error")
+      return { ok = false, error = why }
+    end
+    nota.ui.notify(T("仓库建好了"), "success")
+    refresh(nota)
+    return { ok = true, output = r.stdout }
+  end)
+
+  -- 填 Git 身份（`user.name` / `user.email`）。
+  --
+  -- ⚠️ 写进**这个仓库**的 `.git/config`（`git config` **不带 `--global`**），不碰
+  -- `~/.gitconfig`：全局配置是用户机器上的公共资源，一个编辑器插件替他改不合适
+  --（`docs/11` 的能力表把"能改全局配置"记成挡不住的已知边界——我们主动不越界）。
+  -- 代价是每建一个新仓库要再填一次。
+  nota.command.register("set_identity", function(args)
+    local name = args and args.name or ""
+    local email = args and args.email or ""
+    -- 两个都要：只设一半的话 `git var` 照样算不出来，而用户会以为自己填过了。
+    if name == "" or email == "" then
+      return { ok = false, error = T("名字和邮箱都要填") }
+    end
+    for _, kv in ipairs({ { "user.name", name }, { "user.email", email } }) do
+      local r = nota.git.run({ "config", kv[1], kv[2] })
+      if r.code ~= 0 then
+        local why = why_of(r, "git config")
+        nota.ui.notify(T("填身份失败：%s", why), "error")
+        return { ok = false, error = why }
+      end
+    end
+    nota.ui.notify(T("Git 身份已记在这个仓库里"), "success")
     refresh(nota)
     return { ok = true }
   end)
@@ -254,17 +832,96 @@ function M.on_load(nota)
     return { ok = r.code == 0, text = r.text, error = r.stderr }
   end)
 
+  -- 折叠 / 展开差异。**只改显示，不碰 git**（不 add、不改文件）。
+  nota.command.register("toggle_diff", function()
+    show_diff = not show_diff
+    refresh(nota)
+    return { ok = true }
+  end)
+
+  -- 收起 / 摊开提交树。和 `toggle_diff` 同一个性质：**只改显示，不碰 git**。
+  nota.command.register("toggle_graph", function()
+    show_graph = not show_graph
+    redraw(nota)
+    return { ok = true }
+  end)
+
+  -- 点树上一行的右边那截：选中 / 取消 / 挤掉最早那个。
+  --
+  -- ⚠️ 满了两个之后再点一个 = **把最早那个挤出去**（不是"从头再来"）：想比第 1
+  -- 个和第 3 个时，点第 3 个再点第 1 个就到了。选它是因为**每次点击的效果都
+  -- 一样**（加自己、去掉最早的），没有"这一次是清空"这种例外。
+  nota.command.register("pick_commit", function(args)
+    local hash = args and args.hash or ""
+    if hash == "" then
+      return { ok = false, error = T("这一行没有提交，选不了。") }
+    end
+
+    for i, h in ipairs(picked) do
+      if h == hash then
+        table.remove(picked, i)
+        -- 取消一个之后就不成对了：正在看的那一对也收掉，否则界面上会出现
+        -- "只选了一个、底下还画着一对"这种自相矛盾的样子。
+        compared = nil
+        redraw(nota)
+        return { ok = true }
+      end
+    end
+
+    picked[#picked + 1] = hash
+    if #picked > 2 then
+      table.remove(picked, 1)
+    end
+    if #picked == 2 then
+      set_compared(nota, picked[1], picked[2])
+    else
+      compared = nil
+    end
+    redraw(nota)
+    return { ok = true }
+  end)
+
+  -- 点树上一行的左边那截（键）：看这一次提交与它父提交之间的差异。
+  nota.command.register("bond_diff", function(args)
+    local hash = args and args.hash or ""
+    if hash == "" then
+      return { ok = false, error = T("这一行没有提交，点不了。") }
+    end
+    set_compared(nota, args.parent or "", hash)
+    redraw(nota)
+    return { ok = true }
+  end)
+
+  -- 清空选择：退回"工作区 vs 最后一次提交"那一份。
+  nota.command.register("clear_pick", function()
+    picked = {}
+    compared = nil
+    redraw(nota)
+    return { ok = true }
+  end)
+
   -- 提交。
   nota.command.register("commit", function(args)
     local message = args and args.message or ""
     local result = M.commit(nota, message)
     if result.ok then
-      nota.ui.notify("已提交", "success")
+      nota.ui.notify(T("已提交"), "success")
+      -- 提交完差异就空了，编辑区那一份摊着没意义（还容易让人以为"怎么什么都不剩"）。
+      nota.ui.review(nil)
       refresh(nota)
     else
       nota.ui.notify(result.error, "error")
     end
     return result
+  end)
+
+  -- 把差异摊到编辑区（面板上那颗「在编辑区看」）。
+  --
+  -- ⚠️ 用户点「回到正文」**不经过这里**：收起来是前端直接做的
+  -- （`bridge/ipc.ts::reviewClose`）——git 子进程正跑着的时候也得退得出来。
+  nota.command.register("review_diff", function()
+    nota.ui.review("review")
+    return { ok = true }
   end)
 
   -- 仓库根目录。
@@ -287,22 +944,37 @@ function M.on_load(nota)
     end,
   })
 
+  -- 编辑区里的那一份（`location = "main"`）。
+  --
+  -- ⚠️ `location` 声明的是"这一块属于哪儿"，**不是**"现在就摊开"：摊开是上面
+  -- 那条 `review_diff` 命令调 `nota.ui.review("review")` 的结果。所以它不会在
+  -- 右侧栏多占一页（那一栏只收 `location = "right"` 的），而是在「插件」页的
+  -- 清单里挂个名——那儿能看见它属于编辑区。
+  nota.ui.register_panel({
+    id = "review",
+    title = T("差异"),
+    location = "main",
+    render = function()
+      return review_blocks(nota)
+    end,
+  })
+
   nota.ui.register_menu({
-    label = "提交…",
+    label = T("提交…"),
     command = "commit",
     menu = "plugins",
     -- 与面板上那颗「提交…」同一个 `prompt`：两条路上的问法必须一样，
     -- 否则同一个功能在菜单里和在面板里表现不同。
     prompt = {
       arg = "message",
-      label = "提交信息",
-      placeholder = "一句话说清这次改了什么",
-      hint = "会把所有改动 add 之后一起提交",
+      label = T("提交信息"),
+      placeholder = T("一句话说清这次改了什么"),
+      hint = T("会把所有改动 add 之后一起提交"),
     },
   })
 
   nota.ui.register_menu({
-    label = "刷新改动",
+    label = T("刷新改动"),
     command = "refresh",
     menu = "plugins",
   })

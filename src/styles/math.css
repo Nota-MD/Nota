@@ -1,0 +1,345 @@
+/**
+ * 数学公式（`src/editor/math-view.ts` 那棵树）的长相。
+ *
+ * # 位置
+ *
+ * 在 `main.tsx` 里**紧跟 `diagram.css` 之后**引（正文区的样式在 `editor.css`
+ * 里，这里是正文里一种块的长相，靠后引才能盖住通用的 `pre` / `.ProseMirror > *`
+ * 那几条）。
+ *
+ * # ⚠️⚠️ 这一版的主题是"**没有框**"（2026-09-26 改）
+ *
+ * 用户原话：「应该是**行内直接渲染，而不是搞一个框框**。是**输入时仍然正常
+ * 文本**，`$` 用**灰色渲染（类似 `#`）**，下方有一个**悬浮框用来实时预览**。」
+ *
+ * 上一版这里有几条线，**全部删掉了**，一条都不许加回来：
+ *
+ * | 上一版有的 | 现在 | 为什么 |
+ * |---|---|---|
+ * | 块公式的 `border` + `background` + `padding`（一张卡片） | **没有** | 那就是用户说的"框框"：公式是正文，不是外来内容的容器 |
+ * | 源码框（`<input>` / `<textarea>`）的 `border` + `background` + 等宽字体 | **没有**（`border: none` / `transparent` / `font: inherit`） | 编辑时用户看到的应该**就是正文**，只是 `$` 淡了一点 |
+ * | 面板 `display: flex`（行内那颗会把段落劈成三行） | 行内 `inline`、块 `block` | 上一版点一下行内公式，那一段会当场裂成"前文 / 框 / 后文"三行 |
+ *
+ * ⚠️ 加回其中任何一条之前，先读上面那段用户原话。**这一份文件里"少了几条
+ * 线"是设计，不是漏了。**
+ *
+ * # 颜色只用变量，一个写死的都不许有
+ *
+ * 三套新主题在并行做，而公式的颜色跟着**文档主题**走（`--fg` / `--bg` /
+ * `--border` / `--fg-faint` 都由主题在自己的作用域里覆盖）。这里写死一个
+ * `#333` 的字、或者 `#f6f7f9` 的底，深色纸面上当场瞎掉。
+ *
+ * # KaTeX 自己的那棵树**不归本文件管**
+ *
+ * 分数线画在哪、上下标缩到多大，全在 `katex/dist/katex.min.css` 里
+ * （`main.tsx` 里引的那一行，注释写着为什么只能从那儿引）。本文件只管
+ * **我们这棵树**：分隔符、源码框、悬浮预览、卡片，以及"编辑时谁显谁隐"。
+ * ⚠️ 别在这里覆盖 `.katex` 的排版（那等于把上游的排版抄一份改改，
+ * 上游一升级就跟不上了）；要改就去改那个包的版本。
+ *
+ * # 分隔符是这张表里唯一"抄来"的配方
+ *
+ * `$` / `$$` 那两颗走的是 `marks.css` 里 `.nota-srcmark` 那张配方
+ * （`--fg-faint` + 等宽 + `0.85` 字号 + `line-height: 1` + 不可选中 +
+ * 不吃鼠标事件 + 进场淡入），用户 2026-09-22 对标记的原话是
+ * "只半透明哦，不是消失"。
+ * ⚠️ **不许再乘一个 `opacity`**：淡到什么程度是**文档主题**定的事
+ * （改 `--fg-faint`，全仓一处），乘一个数就等于把主题的选择砍掉一半
+ * ——`.nota-srcmark` 那边 2026-09-25 正是为这个删过一条 `opacity`。
+ */
+
+/* ── 定位祖先 ─────────────────────────────────────────────────────────── */
+
+/* 悬浮预览用的是"挂在这一块下面"的定位（`top: 100%`），所以这一层必须是
+   定位祖先。⚠️ `position: relative` 加在**行内**元素上也是安全的：它不让
+   这一截脱离文档流，前后文字不受影响（同 `editor.css` 里 `pre` 那条，
+   只是那条是块）。 */
+.editor-mount .ProseMirror .nota-math {
+  position: relative;
+}
+
+/* ⚠️ 块公式**没有任何框**（见文件头那张表）。这里只留"一行"的语义。 */
+.editor-mount .ProseMirror .nota-math-block {
+  display: block;
+}
+
+/* 被选中（点了一下公式）时**只换底色**，不加描边。
+   ⚠️ 描边会占位：行内公式夹在文字中间，多一个像素的盒子就等于推着整行文字
+   重排（那条判据在 `.nota-srcmark` 那边写着）。块公式同理——上一版它有边框，
+   所以能靠改 `border-color` 报"选中了"，现在没有边框了，只剩底色这一条路。 */
+.editor-mount .ProseMirror .nota-math.ProseMirror-selectednode {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* ── 面板（分隔符 + 源码框 + 尺子）────────────────────────────────────── */
+
+/* 平时**不显示**：开合走根上的 `nota-math-editing` 类（`math-view.ts` 的
+   `同步面板`），不用 `hidden` 属性——同 `diagram.css` 那条：`hidden` 只是 UA
+   的一条 `display: none`，与这里的 `display: inline` 会打架，两处都写得出效果，
+   将来必然改岔。 */
+.editor-mount .ProseMirror .nota-math-panel {
+  display: none;
+}
+
+/* ⚠️⚠️ 「开」的那两条**必须**比上面那条（0,3,0）更具体，而且**必须**把
+   `nota-math-editing` 写进选择器里。
+   2026-09-26 无头目检抓到的 bug：上一版这里写的是
+   `.nota-math-block .nota-math-panel { display: block }`（0,4,0）、**不带
+   `.nota-math-editing`**，于是块公式的源码面板**永远显示**——非编辑态下正文里
+   同时摆着渲染好的公式**和**那一对 `$$` + 源码框（截图见 `docs/06` §5.10）。
+   行内那半当时是对的（`display: inline` 排在 `block` 那条前面才侥幸没露出来）。
+   改这一块时记住：**同一个元素的 `display` 不许由两条互相不知道对方存在的规则
+   一起决定**，要么写成 `:not(.nota-math-editing)` 互斥，要么两条都带
+   `nota-math-editing`。 */
+.editor-mount .ProseMirror .nota-math-editing .nota-math-panel {
+  display: inline;
+}
+
+/* 行内：`$` 要和源码**对齐基线**（`vertical-align` 交给行内盒子的默认行为即可，
+   这里一条都不用写）。块：那一对 `$$` **各占一行**——照的就是 markdown 原文的
+   样子（`$$` / 公式 / `$$`），也正好把整条公式的边界说出来。 */
+.editor-mount .ProseMirror .nota-math-editing.nota-math-block .nota-math-panel {
+  display: block;
+}
+
+/* 分隔符：`.nota-srcmark` 那张配方（见文件头）。 */
+.editor-mount .ProseMirror .nota-math-delim {
+  font-size: calc(var(--ui-font-size, 15px) * 0.85);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--fg-faint);
+  user-select: none;
+  /* 不吃鼠标事件：这样点它等于点面板本身（`math-view.ts` 那条 `mousedown`
+     会把光标排进源码框），而不是命中一颗"看着能点、其实没有行为"的元素。 */
+  pointer-events: none;
+  /* 淡入。⚠️ **只有进入有过渡**：面板是跟着 class 一起被摘掉的，没有机会播
+     退场动画（理由同 `.nota-srcmark` 那条）。 */
+  animation: nota-math-delim-in 0.16s ease-out;
+}
+
+.editor-mount .ProseMirror .nota-math-block .nota-math-delim {
+  display: block;
+}
+
+@keyframes nota-math-delim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 0.55;
+  }
+}
+
+/* ── 源码框（⚠️ 它不是"框"，是**看起来像正文**的一颗控件）──────────────── */
+
+.editor-mount .ProseMirror .nota-math-source {
+  /* ⚠️⚠️ 这四条是这一版的核心：**不许**有边框、底色、内边距，字体字号
+     跟着正文。改掉任何一条，编辑公式就会变回"点开了一个输入框"。 */
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: var(--fg);
+  /* 源码是**代码**：换行与连续空格要照原文显示，不能折叠。 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* 宽度/高度由 JS 按源码量（`math-view.ts` 的 `跟源码改尺寸`）。滚动条
+     是"这是个控件"最明显的信号，而这一版要的正是"它就是正文"。 */
+  overflow: hidden;
+  /* ⚠️ 原生外观要自己关掉（同 `editor.css` 里 `<select>` / `<button>` 那条、
+     以及 `diagram.css` 的源码框）：WebKit 会把表单控件的绘制交给 GTK 的原生
+     外观，而**原生外观盖得住 CSS**——不关的话上面那四条全被画成一颗真输入框。 */
+  appearance: none;
+  /* ⚠️ 2026-09-26 无头目检抓到：`appearance: none` 管不住 WebKitGTK 给
+     `<textarea>` 画的那颗"右下角可以拖大"的抓手——非编辑态下面板本该整块不显示，
+     但那一格当时露在正文里，抓手就在源码行右端画着一个小记号。抓手是"这是个
+     控件"的信号里最刺眼的一条，明确关掉。 */
+  resize: none;
+}
+
+.editor-mount .ProseMirror .nota-math-source:focus-visible {
+  outline: none;
+}
+
+/* 空源码时的提示语。它只能用 `--fg-faint`（正文里那种"这里还没写"的语气），
+   ⚠️ 不要给它加边框或底色——那又回到"框框"上了。 */
+.editor-mount .ProseMirror .nota-math-source::placeholder {
+  color: var(--fg-faint);
+}
+
+/* 行内那颗是 `<input>`：它**不能换行**（`<input>` 本来就不行），宽度由 JS
+   按源码量（`跟源码改尺寸`）。下限留给空框一个能点的面积（那时量的是
+   placeholder，实际宽度不会真等于这个值，这条是兜底）。 */
+.editor-mount .ProseMirror .nota-math-inline .nota-math-source {
+  min-width: 2ch;
+}
+
+/* 块那颗是 `<textarea>`：**宽度铺满正文列**（高度才由 JS 按源码量）。
+   ⚠️ 不写这条的话它用浏览器给的默认宽度（`cols=20` 那一档，约 20 个字符），
+   `\sum_{i=1}^{n} i = \frac{n(n+1)}{2}` 这种会被折成两行——而下面那个 `$$`
+   还在原地，整块看着就像"一行源码被塞进一个小盒子里"（2026-09-26 无头目检
+   实测到的样子）。`box-sizing` 一起写上：不写的话 `width: 100%` 在有的主题下
+   会因为边框/内边距多出几个像素而横向溢出。
+   ⚠️ 行内那颗**不许**铺满（它在段落中间，铺满会把后面的字全挤到下一行），
+   所以这条只认 `.nota-math-block`。 */
+.editor-mount .ProseMirror .nota-math-block .nota-math-source {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 量宽度用的隐藏尺子。
+   ⚠️ 三个条件缺一不可：**不在视口里**（`visibility: hidden` 仍占布局，
+   `display: none` 量出来是 0——所以必须用前者）、**不换行**（换行了量到的
+   是折行后的最大行宽，不是整串的宽度）、**字体字号与源码框完全一致**
+   （不一样就白量了；`inherit` 在这里拿到的正是源码框那一份，因为它们是
+   兄弟节点、同一个父元素）。 */
+.editor-mount .ProseMirror .nota-math-ruler {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  font-family: inherit;
+  font-size: inherit;
+  pointer-events: none;
+}
+
+/* ── 渲染区 ───────────────────────────────────────────────────────────── */
+
+/* 块公式要独占一行（KaTeX 在非 `displayMode` 下给的是行内盒，不写这条
+   它会和相邻的行内内容挤在一起）。
+   ⚠️ 条件里那个 `:not(.nota-math-editing)` 不是装饰：下面那条"编辑态不显示"
+   与本条**特异度相同**，只靠先后顺序决胜负——今天侥幸是对的，将来谁把两条
+   调个个儿就会当场复发（上面面板那块正是这么栽的）。写成互斥就没有顺序问题。 */
+.editor-mount .ProseMirror .nota-math-block:not(.nota-math-editing) .nota-math-render {
+  display: block;
+  /* 窄窗格里让公式自己横向滚，而不是把正文列顶宽（同 `.nota-diagram-preview`）。
+     ⚠️ 只给块：行内是段落里的一截，套一层滚动容器会把那一截变成 `overflow`
+     上下文，前后的文字排版行为跟着变。 */
+  overflow-x: auto;
+}
+
+/* ⚠️ **编辑态下正文那一格一律不显示**（行内与块都是）：那时正文里显示的是
+   源码（面板顶上来），渲染结果在下面的悬浮预览里。两边都画的话——行内公式
+   夹在文字里会凭空长出一截、后面的字全得重排；块公式会上下各摆一遍。
+   ⚠️ `display: none` 只是不显示，那棵 KaTeX 树还在 DOM 里（`update` 时会被
+   `重画` 清掉重画，不需要任何补救）。 */
+.editor-mount .ProseMirror .nota-math-editing .nota-math-render {
+  display: none;
+}
+
+/* 空块那张占位卡不能是一张薄片，得有正文里"一块"的高度。
+   ⚠️ 只在**非编辑态**下要（编辑态下那块归源码框与悬浮预览占）。 */
+.editor-mount .ProseMirror .nota-math-block:not(.nota-math-editing) .nota-math-render[data-state="empty"] {
+  min-height: 46px;
+}
+
+/* 渲染真出错时（`data-state="error"`，`math-view.ts` 里那条兜底）：把原文按
+   等宽字排出来、别折行折到看不出是报错。⚠️ `throwOnError: false` 时 KaTeX
+   自己会把错处画成红的（更好看），走到这里的是它连渲染都进不去的那种错。 */
+.editor-mount .ProseMirror .nota-math-render[data-state="error"],
+.editor-mount .ProseMirror .nota-math-preview[data-state="error"] {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ── 悬浮预览（编辑时才在）─────────────────────────────────────────────── */
+
+.editor-mount .ProseMirror .nota-math-preview {
+  display: none;
+}
+
+/* ⚠️ 定位抄 `editor.css` 的 `.nota-code-lang-wrap`（那颗语言选择器）：同样是
+   "挂在块下面、压在正文上、不占文档流"的挂件，所以 `top: 100%` + `z-index: 3`
+   这两个值跟那边保持一致——同一个界面里两处"贴在块下面的浮层"不该有两个层高。 */
+.editor-mount .ProseMirror .nota-math-editing .nota-math-preview {
+  display: block;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 3;
+  /* ⚠️ **不吃鼠标事件**：它压在下文上面，能点的话鼠标底下一块就成了点不透的
+     透明玻璃（用户点不到底下的字，却看不出为什么）。它也没有交互——要改就回
+     源码框里改。 */
+  pointer-events: none;
+  /* ⚠️⚠️ **宽度必须自己给**，这就是 `width: max-content` 那一条的全部理由。
+     绝对定位元素不写宽度时，浏览器按"可用宽度"收缩包围（shrink-to-fit）——
+     而可用宽度是**定位祖先的宽度减 `left`**。行内公式的定位祖先是它自己那一截
+     （`$E=mc^2$` ≈ 60px 宽），于是预览被掐到 60px 宽、`E = mc²` 当场折成两行
+     （2026-09-26 无头目检抓到的样子）。`max-width` 拦不住这个：那是"上限"，
+     这里缺的是"下限以外的东西"。
+     ⚠️ 块那格的定位祖先是整块（整列宽），所以上一版没暴露这个问题。 */
+  width: max-content;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  /* 投影用写死的黑：它在浅色和深色下都成立，而拿主题色去做投影会在深色主题下
+     变成一圈看不见的灰（同 `.nota-lang-popup` 那条）。 */
+  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
+  /* 预览是**界面上的浮层**，用界面字体排"这里还没写"那类说明（同
+     `.nota-diagram-note`）；公式本身照旧是 KaTeX 自己那棵树，字体不归这里管。 */
+  font-family: var(--font-ui, inherit);
+  font-size: 0.9em;
+  line-height: 1.6;
+  color: var(--fg);
+  /* 预览里的公式**不折行**：折了就看不出上下标的相对位置了。
+     ⚠️ 块那格**故意不给 `max-width`**：给它封顶的话，宽公式的尾巴会从边框里
+     伸出去（一个框里装不下的公式比一个大一点的框难看得多）；加 `overflow` 又
+     没用——`pointer-events: none` 的浮层滚不动。所以块这格是"框跟着公式长"，
+     极端宽的公式会顶到窗口外面（少见，且它 `pointer-events: none`、收起来就没了）。
+     行内那格另说，它**必须**封顶（见下面那条）。 */
+  white-space: nowrap;
+  animation: nota-math-preview-in 0.12s ease-out;
+}
+
+@keyframes nota-math-preview-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ⚠️ 行内那一格的预览**允许折行**（块那格不折）。
+   理由：行内公式夹在段落中间，`left: 0` 是相对**这一截**算的，右边剩多少位置
+   完全看它排在第几个字——长公式的预览不折行就会**捅出正文列**（甚至出窗口）。
+   折行的代价只是"看不出一整行"，而块那格本来就独占一行、宽度够，所以不折。
+   ⚠️ 选择器把 `nota-math-editing` 也写进去了：上面那条基础规则（0,4,0）与本条
+   同特异度，只写 `.nota-math-inline` 就得靠先后顺序决胜负——那正是上面面板
+   栽过的坑，别再来一次。 */
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview {
+  white-space: normal;
+  /* `width: max-content`（基础那条）先让它按内容量到自己该有的宽，这一条再封顶。
+     46ch 是照 `editor.css` 里查找替换条那类浮层的宽度取的，别在这里改小
+     ——行内公式有 `\int_0^\infty` 这种，窄了会折得看不出结构。 */
+  max-width: min(46ch, 90vw);
+}
+
+/* ── 占位卡（空公式）────────────────────────────────────────────────────── */
+
+.editor-mount .ProseMirror .nota-math-note {
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg-muted);
+  /* 卡是**界面**不是正文：说清一件状态的事，用界面字体（同 `.nota-diagram-note`）。 */
+  font-family: var(--font-ui, inherit);
+  font-size: 0.9em;
+  line-height: 1.6;
+}
+
+/* ── 只读实例（分屏预览、导出）─────────────────────────────────────────── */
+
+/* `math-view.ts` 在只读实例里**压根不把面板与悬浮预览挂上树**，这里是第二道。
+   ⚠️ 两道是有意的：同一个 Editor 换 `editable` 时才轮到这一条把它们按住。 */
+.editor-mount .ProseMirror .nota-math-readonly .nota-math-panel,
+.editor-mount .ProseMirror .nota-math-readonly .nota-math-preview {
+  display: none;
+}

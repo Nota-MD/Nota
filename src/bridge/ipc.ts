@@ -3,268 +3,28 @@
  *
  * 别处一律 `import { api } from "@/bridge/ipc"` 再调 `api.doc.save(...)`。
  * 理由不是洁癖：命令名是字符串，散在组件里改一次要全仓搜；集中在这里
- * 还能顺手把返回值的形状标出来（`invoke` 本身是 `any`，等于把类型安全丢在边界上）。
+ * 还能一并把返回值的形状标出来（`invoke` 本身是 `any`，等于把类型安全丢在边界上）。
  *
  * 命名对应关系：`api.docSave` ↔ Rust 侧 `nota_doc_save` ↔ `commands::document::nota_doc_save`。
+ *
+ * ⚠️ **形状不在本文件**（2026-09-26 起）：所有 `interface` / `type` 搬去了
+ * `bridge/types.ts`（那次是这边 1035 行顶破了硬线）。本文件只管**通道**——
+ * `api` 那些 `invoke` 调用、`on` 订阅、`events` 频道名。下面那行 `export *`
+ * 让所有类型照旧能从 `@/bridge/ipc` 引到，所以调用点一处都没改。
  */
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
-// ── 类型（与 Rust 侧的结构体一一对应）──────────────────────────────────────
-//
-// ⚠️ 改 Rust 侧字段时**必须同批改这里**。两边不一致时 `invoke` 不会报错，
-// 只会给你一个少了字段的对象，然后在某个 `.map` 上炸掉。
+import type {
+  AppLang, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
+  ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
+  NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
+  PluginPanel, PluginReview, Settings, TreeNode, UiStyleInfo, 信任记录, 会话,
+  路径种类,
+} from "./types";
 
-export type DocId = number;
-
-export interface Document {
-  id: DocId;
-  path: string | null;
-  title: string;
-  text: string;
-  dirty: boolean;
-  revision: number;
-}
-
-export interface TreeNode {
-  name: string;
-  /** 相对工作区根、以 `/` 分隔。可直接喂给 `nota.fs.read`。 */
-  path: string;
-  is_dir: boolean;
-  children: TreeNode[] | null;
-}
-
-/**
- * 界面风格。**这是外壳的设计语言**，与文档主题是两回事。
- *
- * ⚠️ 七个具体风格**每一个都要在浅色和深色下成立**（7 × 2 = 14 格）。
- * 加值时同时改：`styles/theme.css`、`src-tauri/src/settings.rs`、
- * `styles/applyTheme.ts` 的探测表、`docs/04-ui-map.md`。
- */
-export type UiStyle =
-  | "auto"
-  | "adwaita"
-  | "ghub"
-  | "macos"
-  | "plasma"
-  | "windows"
-  | "yaru"
-  | "yaru-blue";
-export type UiMode = "auto" | "light" | "dark";
-
-/**
- * 编辑模式。**不是外观轴**——它变的是"编辑区里摆几个窗格"，
- * 与 `ui_style` / `ui_mode` / `document_theme` 三条外观轴无关。
- *
- * | 值 | 左边 | 右边 |
- * |---|---|---|
- * | `wysiwyg` | 所见即所得（Milkdown） | — |
- * | `source` | Markdown 原文（CodeMirror） | — |
- * | `split` | 原文（可编辑） | 预览（**只读**） |
- *
- * ⚠️ 加值时同时改：`src-tauri/src/settings.rs` 的枚举、这里、
- * `src/ui/commands.ts` 的「视图」栏条目、`docs/04-ui-map.md`。
- */
-export type ViewMode = "wysiwyg" | "source" | "split";
-
-/**
- * 一次 Slidev 预览会话。
- *
- * ⚠️ 与 Rust 侧 `slidev::SlidevInfo` **一一对应**。那边加字段这里要跟着加，
- * 不然前端拿到的是一个少了字段的对象，然后在某个 `.url` 上炸掉。
- */
-export interface SlidevInfo {
-  port: number;
-  /**
-   * ⚠️ 是 `localhost` 而**不是** `127.0.0.1`：实测 Slidev 只绑 `[::1]`，
-   * 换成一个写死的 v4 地址窗口会打不开。
-   */
-  url: string;
-  /**
-   * 我们写出来的**影子入口**（绝对路径）。它通常就写在**文档所在目录**下
-   * （`.nota-slidev-<id>.md`），停止预览时删掉——写在那儿是为了让
-   * `![](./img.png)` 这类相对路径照旧成立。
-   */
-  entry: string;
-  /** 预览跟着哪份文档走。前端靠它决定"切到别的文档了还要不要继续同步"。 */
-  doc_id: DocId;
-}
-
-/**
- * 「本机装没装 Slidev」的结论。
- *
- * ⚠️ 它**只决定按钮怎么摆**，具体的话在 `message` 里——判定依据（离线能不能
- * 拿到包、目录里有没有主题、存没存过盘）全在 Rust 侧，翻成枚举让这边拼句子
- * 只会把同一件事写成两份。见 `src-tauri/src/slidev.rs` 的 `ProbeState`。
- */
-export type SlidevProbeState =
-  /** 现在这一下能跑起来。 */
-  | "ready"
-  /** 差东西（差什么看 `message`）：给一条去官网安装指南的路。 */
-  | "missing"
-  /** 探测自己没问出结果（自定义命令超时之类）。**不等于没装**。 */
-  | "unknown";
-
-/**
- * 一份探测报告。
- *
- * ⚠️ 与 Rust 侧 `slidev::SlidevProbe` **一一对应**。
- */
-export interface SlidevProbe {
-  state: SlidevProbeState;
-  /** 我们问的是哪条命令（`NOTA_SLIDEV_CMD` 或默认值），原样显示给用户。 */
-  command: string;
-  /** `--version` 吐出来的那行（拿到了才有）。 */
-  version: string | null;
-  /** 一句话结论。中文，后端写的。 */
-  message: string;
-  /** 支撑结论的原文（命令自己的输出）。可能为空。 */
-  detail: string;
-  /** 拿哪个目录当 Slidev 项目根。`null` = 文档还没存过盘。 */
-  project_dir: string | null;
-}
-
-export interface Settings {
-  ui_style: UiStyle;
-  ui_mode: UiMode;
-  document_theme: string;
-  view_mode: ViewMode;
-  ui_font_size: number;
-  content_width: number;
-  confirm_unsaved: boolean;
-  autosave_seconds: number;
-  /**
-   * **严格模式**：ATX 标题的井号后面必须有空格（`# 标题` 才算，`#标题` 不算）。
-   * **默认 `false`**（宽松），对标 Typora 的默认值。
-   *
-   * ⚠️ 这一项**影响正文怎么解析**，不是一条外观轴：改了之后 `EditorPane` 会把
-   * 编辑器整个重建，后端也会重算已打开文档的标题。判据见 `editor/atx.ts`。
-   */
-  strict_markdown: boolean;
-  /**
-   * **数学公式里的 physics 宏包**（`\qty` / `\dv` / `\braket` …）。**默认 `false`**。
-   *
-   * ⚠️ KaTeX **官方没有 physics**，所以这一档不是"加载一个扩展"，而是把
-   * `editor/math-macros.ts` 里那套我们自己的宏定义交给 KaTeX（`macros` 选项）。
-   * 开着时它会**重定义 `\div` / `\Re` / `\Im`**——这正是 physics 本身的行为，
-   * 也是它默认关着的原因。
-   *
-   * ⚠️ 它**影响正文怎么渲染**，和 `strict_markdown` 同类：改了之后
-   * `EditorPane` 会重建编辑器（KaTeX 的宏是在渲染那一刻查表的，已渲染的节点
-   * 不会自己回头重画）。
-   */
-  enable_physics: boolean;
-}
-
-export interface PluginInfo {
-  id: string;
-  name: string;
-  version: string;
-  description: string;
-  authors: string[];
-  license: string;
-  capabilities: string[];
-  entry: string;
-  dir: string;
-  state: "loaded" | "failed" | "disabled";
-  error: string | null;
-}
-
-/**
- * 插件声明的面板。**拉来的，不是事件推的**——见 `api.plugin.panels` 的说明。
- */
-export interface PluginPanel {
-  /** 声明它的插件 id。 */
-  plugin: string;
-  /** 插件内部的 id。**加上 `plugin` 才是全局唯一的键。** */
-  id: string;
-  title: string;
-  icon: string | null;
-  /** `right`（右侧插件栏，默认）/ `left`（左侧栏）。 */
-  location: string;
-}
-
-/**
- * 插件声明的菜单项。
- *
- * ⚠️ **`menu` 字段目前只有 `plugins` 一种去处**（2026-09-24 起菜单栏里多了一栏
- * 「插件」，见 `ui/pluginMenus.ts`）。插件写别的值我们**不拦也不认**——
- * 那一条会出现在界面上并标出它想去哪儿，而不是静默消失。
- */
-export interface PluginMenuItem {
-  plugin: string;
-  label: string;
-  /** 点下去要调的**命令名**，配 `plugin.call(plugin, command)` 用。 */
-  command: string;
-  menu: string;
-  accelerator: string | null;
-  /**
-   * 点之前先问一句？给了就在这里写清问什么。
-   *
-   * ⚠️ 用它是为了避免插件**自己**弹一个问句——插件在宿主里没有输入框，
-   * 它只能靠通知说"请自己调 commit 命令"，那是把活儿推给用户。
-   * 声明式的问句走宿主自己的输入框（`ui/PromptDialog.tsx`），与
-   * 「格式 → 超链接」用的是同一个。
-   */
-  prompt: PluginPrompt | null;
-}
-
-/**
- * 一个「点之前先问一句」的声明。菜单元和面板按钮共用这一种。
- *
- * ⚠️ 只有**一个字段**。要问两样东西（比如"名字 + 描述"）目前做不到——
- * 真需要时再加，别先造一个通用的表单结构出来没人用。
- */
-export interface PluginPrompt {
-  /** 用户填的值放进 `args` 的哪个键。 */
-  arg: string;
-  /** 输入框上面那行说明。 */
-  label: string;
-  placeholder: string;
-  hint: string;
-  /**
-   * 输入框遮不遮。**给密钥用**。
-   *
-   * ⚠️ 遮住只是不让人从屏幕上读走（截图、旁边有人）。它**不加密**任何东西：
-   * 值最终存在 `plugin-settings/<id>.toml` 里，明文（见 `docs/13`）。
-   */
-  secret: boolean;
-}
-
-/**
- * 一份**文档主题**。对应 Rust 侧 `themes::DocThemeInfo`。
- *
- * ⚠️ 文档主题**只管编辑区**，与界面主题（`ui_style` / `ui_mode`）没有关系。
- * 用户 2026-09-23 划的线，见 `styles/doc-theme.ts` 顶上那段。
- */
-export interface DocThemeInfo {
-  /** 唯一键。存进 `settings.document_theme` 的就是它，取 CSS 也用它。 */
-  id: string;
-  /** 显示名（中文）。改了不影响设置——设置里存的是 id。 */
-  name: string;
-  /** 是不是我们内置的那几套。false 有两种：用户新加的、或用户覆盖了内置的。 */
-  builtin: boolean;
-}
-
-/**
- * 原生菜单里的一项。字段与 Rust 侧 `native_menu::MenuNode` 一一对应。
- *
- * ⚠️ 改这里必须同批改 `src-tauri/src/native_menu.rs`。两边不一致时 `invoke` 不报错，
- * 只会让 Rust 那边用 `#[serde(default)]` 的值——菜单会**少东西**，不会报错。
- */
-export interface NativeMenuNode {
-  /** 分隔线。为真时其余字段一律忽略。 */
-  sep?: boolean;
-  id?: string;
-  label?: string;
-  /** **显示写法**（`"Ctrl+Shift+S"`）。转成原生写法是 Rust 那边的事。 */
-  accel?: string;
-  enabled?: boolean;
-  /** `true`/`false` 才建可勾选项；`undefined` 是普通项。 */
-  checked?: boolean;
-  submenu?: NativeMenuNode[];
-}
+export * from "./types";
 
 // ── 文档 ──────────────────────────────────────────────────────────────────
 export const api = {
@@ -280,14 +40,61 @@ export const api = {
     settle: (id: DocId, text: string) => invoke<number>("nota_doc_settle", { id, text }),
     save: (id: DocId, path?: string) =>
       invoke<string>("nota_doc_save", { id, path: path ?? null }),
+    /**
+     * **重命名 / 移动**（2026-09-27，`docs/10` §2 那一格）。
+     *
+     * ⚠️ 两个传的都**不是整条路径**：`rename` 收的是**新名字那一段**
+     * （`Nota.md`），`move` 收的是**目标目录**。整条路径由宿主从它自己
+     * 记着的那份上拼出来——前端手里那个 `path` 是**有损**的
+     *（`path_string()`），拿它拼会把非 UTF-8 的目录名拼成 `?` 开头的
+     * 另一个目录。理由与 `cli.rs` / `single_instance.rs` 那两处同一条。
+     *
+     * ⚠️ 返回值是**落点**（给提示条用）。挪失败会抛错，**抛错时盘上什么都
+     * 没动**（目标已存在、源不在了、跨设备复制中途失败都会抛）。
+     */
+    rename: (id: DocId, name: string) =>
+      invoke<string>("nota_doc_rename", { id, name }),
+    move: (id: DocId, dir: string) => invoke<string>("nota_doc_move", { id, dir }),
     close: (id: DocId) => invoke<void>("nota_doc_close", { id }),
     setActive: (id: DocId) => invoke<void>("nota_doc_set_active", { id }),
     get: (id: DocId) => invoke<Document>("nota_doc_get", { id }),
     list: () => invoke<Document[]>("nota_doc_list"),
     reload: (id: DocId) => invoke<Document>("nota_doc_reload", { id }),
+    /**
+     * 读**磁盘上**那一份，**不改任何状态**（外部改动提示条的「查看修改」用）。
+     *
+     * ⚠️ 与 `reload` 是两件事：`reload` 会把内存里那份也换掉，那是「重新载入」
+     * 那个按钮干的事。这里只读一眼。
+     */
+    diskText: (id: DocId) => invoke<string>("nota_doc_disk_text", { id }),
     hasUnsaved: () => invoke<boolean>("nota_doc_has_unsaved"),
   },
 
+  /**
+   * **页面引擎（webview）身上的开关**：目前只有拼写检查。
+   *
+   * ⚠️ 这一对是 `async` 命令（`commands/webview.rs`）：它们要过一次主线程去
+   * 问 WebKitGTK，而同步命令**本身就在主线程上**——那样会自己等自己。
+   * 前端看不出差别，但改那条命令时要记得别把 `async` 去掉。
+   *
+   * ⚠️ `set` 返回的是**引擎读回来的值**，不是"我们请求的那个值"（本仓的老口径：
+   * 状态从被改的那个东西身上读回来）。两者不一致时界面要如实说一句。
+   */
+  webview: {
+    /** 拼写检查现在开着没有。 */
+    spellcheckGet: () => invoke<boolean>("nota_webview_spellcheck_get"),
+    /** 打开 / 关掉拼写检查，返回**改完之后引擎说的值**。 */
+    spellcheckSet: (on: boolean) => invoke<boolean>("nota_webview_spellcheck_set", { on }),
+  },
+  /**
+   * 路径**是什么**（拖放那条路用，`ui/useFileDrop.ts`）。
+   *
+   * ⚠️ 返回值与入参**一一对应**（同长度、同顺序）：前端是按下标把"是什么"
+   * 对回"哪一条路径"的。少一条或者挪一位的症状是**拖进来的名字和打开的东西
+   * 对不上**，而那种错没有人会往这个方向查。
+   */
+  pathKind: (paths: string[]) =>
+    invoke<路径种类[]>("nota_paths_kind", { paths }),
   workspace: {
     open: (path: string) => invoke<string>("nota_workspace_open", { path }),
     close: () => invoke<void>("nota_workspace_close"),
@@ -299,9 +106,45 @@ export const api = {
       }),
   },
 
+  /**
+   * 界面语言。**启动时拉一次**（`App.tsx`），拿到就 `定语言(effective)`
+   * （`src/i18n/index.ts`）。
+   *
+   * ⚠️ `effective` 是**启动时算好的那个**，不是现算的：用户改了设置还没重启
+   * 的那段时间里，插件用的仍是旧的那份文案，这里就必须说旧的。
+   */
+  appLang: () => invoke<AppLang>("nota_app_lang"),
+
   settings: {
     get: () => invoke<Settings>("nota_settings_get"),
     set: (settings: Settings) => invoke<void>("nota_settings_set", { settings }),
+    /**
+     * 在系统的文件管理器里打开设置文件所在的那个目录（一般是
+     * `~/.config/nota`），返回打开的是哪个路径。
+     *
+     * ⚠️ **"打开"这一步也在后端**（前端只负责说话）。前端拿路径再用
+     * plugin-opener 的 `openPath` 去开是**另一条路**，那条要过 Tauri 的 ACL、
+     * 得配 path scope，而 scope 跟 `$APPCONFIG` 走、与本仓 `paths.rs` 的口径
+     * 不一定同一个目录——2026-09-25 的 BUG-27 就是踩了这个。命令自己取路径
+     * 自己开则没有这个错位，也顺带让"前端拼 `~/.config/nota`"变得不可能。
+     */
+    openDir: () => invoke<string>("nota_settings_open_dir"),
+    /**
+     * 开机读设置时出的问题，读成功是 `null`。
+     *
+     * ⚠️ 拉它的地方在 `App.tsx` 启动那一段，拿到非空值就弹一条 error toast。
+     * 它的意义只有一个：解析不了 `settings.toml` 时宿主会退回默认值继续跑
+     * （这是对的，一份坏文件不该拦着人进界面），**但用户得知道眼前这份
+     * 是默认值**——不然就是"我的设置自己变回默认了"。
+     */
+    problem: () => invoke<string | null>("nota_settings_problem"),
+    /**
+     * 恢复出厂默认，**返回新的那一份**。
+     *
+     * ⚠️ 拿返回值去 `setSettings`，别自己再 `get` 一次：中间那一小段窗口里
+     * 界面还是旧的，"恢复默认之后有几行没跟着变回去"最不让人信任设置。
+     */
+    reset: () => invoke<Settings>("nota_settings_reset"),
   },
 
   /**
@@ -319,13 +162,23 @@ export const api = {
    *
    * ⚠️ **HTML 是前端生成的**（`editor/export.ts`：那边才有文档树、文档主题
    * 和 `editor.css`）。这里两条命令只干 IO——"把这段文本写到这个路径"和
-   * "写一份临时文件交给系统默认程序"。别把渲染挪到后端去，那会变成第二套
+   * "写一份临时文件交给系统默认程序"。渲染不挪到后端去——那会变成第二套
    * 渲染实现。
    */
   export: {
     /** 写到用户选的路径。返回真实写出去的路径（对话框可能改了它）。 */
     write: (path: string, content: string) =>
       invoke<string>("nota_export_write", { path, content }),
+    /**
+     * 写**二进制**（分享图的 PNG）。`base64` 是标准 base64（带不留白的 `=` 补位）。
+     *
+     * ⚠️ 走 base64 而不是把字节直接塞进 JSON：IPC 那条路是 JSON，字节数组会被
+     * 逐个数成十进制再逐个数读回来（一张 1080×1350 的图要几百万个数字），
+     * 而 base64 只长 33%，而且两端都有现成的编解码器。前端那头是
+     * `share-card.ts::转base64`（用 canvas 的 `toDataURL`，不手写编码）。
+     */
+    writeBytes: (path: string, base64: string) =>
+      invoke<string>("nota_export_write_bytes", { path, base64 }),
     /**
      * 打印：写成 HTML → 交给系统默认程序（浏览器）打开 → 用户在那边按 `Ctrl+P`。
      *
@@ -335,6 +188,173 @@ export const api = {
      */
     print: (docPath: string | null, title: string, content: string) =>
       invoke<string>("nota_export_print", { docPath, title, content }),
+    /**
+     * 在文件管理器里**定位**一个文件（选中它，不是打开它）。
+     *
+     * 导出设置里那条「导出后打开所在目录」用它。**是定位不是打开**：打开会把
+     * PDF 塞进某个看图程序里，而用户此刻多半是想把文件拖到别处去。
+     */
+    reveal: (path: string) => invoke<string>("nota_export_reveal", { path }),
+  },
+
+  /**
+   * 插入图片：把一张图搬到该去的地方，拿回该写进文档的那条地址。
+   *
+   * ⚠️ **算式全在宿主**（`src-tauri/src/image.rs`）：五个插入动作、两个适用范围
+   * 开关、三个语法偏好都由它一处算出来。前端**不自己拼路径**——拼的话，
+   * 复制到 `./assets` 的路径规则就会有两份实现（对话框一份、粘贴一份），
+   * 而它们迟早不一样。
+   *
+   * ⚠️ 这条命令**会碰磁盘、也可能联网**（规则里对网络图片开着时会下载，
+   * 最长 30 秒），所以界面上该有个"忙"态。开了自动上传时它还会**多发一次
+   * 上传**（最长 60 秒，见 `upload/net.rs`），返回值里的 `upload` 说明那一步
+   * 成没成。
+   */
+  image: {
+    place: (docId: DocId | null, source: ImageSourceArg) =>
+      invoke<ImagePlaced>("nota_image_place", { docId, source }),
+    /**
+     * 上传服务器设置（读 / 写 / 手动传一张）。
+     *
+     * ⚠️ **不走 `settings` 那一套**：它不在 `settings.toml` 里，而是自己一份
+     * 0600 的 `~/.config/nota/image-upload.toml`（理由见 `types.ts` 里
+     * `ImageSettings` 那条注释的下半段）。所以设置页上这一组是**自己读自己写**
+     * 的，不走 `paneWriter`。
+     *
+     * ⚠️ `get` 要 `docId`：返回值里那个 `willAutoUpload` 是"**这份文档**里插图
+     * 会不会自动传"，跟前件有关。`one` 那条**只回地址、不碰文档**
+     * （写进去是前端的事，这样撤销栈仍然只有一条路）。
+     */
+    uploadGet: (docId: DocId | null) =>
+      invoke<ImageUploadSnapshot>("nota_image_upload_get", { docId }),
+    uploadSet: (settings: ImageUploadSettings) =>
+      invoke<void>("nota_image_upload_set", { settings }),
+    uploadOne: (docId: DocId | null, source: ImageSourceArg) =>
+      invoke<ImageUploaded>("nota_image_upload_one", { docId, source }),
+  },
+
+  /**
+   * 借**系统里那个 pandoc** 导出（PDF / Word / RTF / EPUB / LaTeX / ODF / OPML）。
+   *
+   * ⚠️ Nota **不自带** pandoc、也**不下载**它：这里只是探测系统里有没有，
+   * 有就借来用。理由与"为什么设置里没有 pandoc 路径"见 `docs/10` §6 与
+   * `src-tauri/src/pandoc.rs` 文件头。
+   */
+  pandoc: {
+    /**
+     * 本机装没装。⚠️ 它要起一个进程问版本（毫秒级），所以别在渲染里调。
+     */
+    probe: () => invoke<PandocProbe>("nota_pandoc_probe"),
+    /**
+     * 导出一次。
+     *
+     * ⚠️ `docPath` 的**父目录**是相对路径（`![](./img.png)`）的基准：pandoc 要靠它
+     * 找到图片，和打印那条路同一个理由。
+     *
+     * ⚠️ `html` **只有 PDF 用得上**：pandoc 那条路走不通时，后端拿它走 Nota 自带
+     * 的排版（WebKit 打印）。返回值里的 `route` 会说明这次到底走了哪条。
+     */
+    export: (args: {
+      format: string;
+      markdown: string;
+      target: string;
+      docPath: string | null;
+      html: string | null;
+    }) =>
+      invoke<PandocExport>("nota_pandoc_export", {
+        format: args.format,
+        markdown: args.markdown,
+        target: args.target,
+        docPath: args.docPath,
+        html: args.html,
+      }),
+  },
+
+  /**
+   * **两段文本的逐行差异**（统一格式，`src-tauri/src/diff.rs`）。
+   *
+   * 用户 2026-09-26 点的：「**将 diff 预览加入核心库调用吧。调用率挺高**」。
+   * 在此之前这件事只有插件能要（`nota.diff.make`），核心自己反而拿不到。
+   *
+   * ⚠️ 与 `editor/review.ts` 那份前端 LCS **不是一回事**，两边都别想合并：
+   * 这一份是**行级**的，产出是"给人看的统一格式"；那一份是**单元级**的
+   *（源码模式按行、所见即所得按块，而一个块可以是多行的表格），产出是
+   * "装饰该挂在哪儿"。边界写在 `commands/diff.rs` 文件头那张表里。
+   */
+  diff: {
+    /**
+     * @param context 每段改动前后**各**露几行没变的（`git diff -U n` 的那个 n）。
+     *                不给就是 3（与 `nota.diff.make` 同一个默认值）。
+     *
+     * ⚠️ 形参是 `before` / `after`，**不是 `old` / `new`**：`new` 是 JS 保留字，
+     * 写成形参当场编译不过（TS1359，2026-09-26 踩过）。宿主那边也叫这个名字，
+     * 两边一致，中间不必再翻译一次。
+     */
+    texts: (before: string, after: string, context?: number) =>
+      invoke<DiffLine[]>("nota_diff_texts", { before, after, context: context ?? null }),
+  },
+
+  /**
+   * 表格的**列宽**（用户拖出来的那些）。
+   *
+   * ⚠️ 它**不写进 Markdown 正文**：列宽是给人看的排版偏好，不是文档内容。
+   * 落点是宿主那边的一份侧车文件（`~/.local/share/nota/table-widths.toml`，
+   * 形状与理由见 `src-tauri/src/table_width.rs`）。
+   *
+   * ⚠️ **指纹由前端算**（`editor/table-width.ts`）——宿主只当它是个字符串，
+   * 不解释格式。改指纹算法不该动 Rust。
+   */
+  tableWidths: {
+    /** 一份文档里所有表格的列宽，键是指纹。**没拖过就是空对象，不是错误。** */
+    get: (path: string) => invoke<Record<string, number[]>>("nota_table_widths_get", { path }),
+    /** 记一个表格的列宽。`widths` 给空数组 = 删掉这条记录（拖回自动那档）。 */
+    set: (path: string, fingerprint: string, widths: number[]) =>
+      invoke<void>("nota_table_widths_set", { path, fingerprint, widths }),
+  },
+
+  /**
+   * 会话与最近文件：上次开着哪几份、最近打开过哪些、每份滚到哪儿。
+   *
+   * ⚠️ 全部是**记忆**，不是文档内容：删掉那份侧车（`~/.local/share/nota/session.toml`）
+   * 只会让标签不恢复、最近列表空掉、滚动回到顶上，正文一个字节都不动。
+   *
+   * ⚠️ 宿主**读的时候会滤掉已经不存在的路径**：`recent` 里拿到的都是现在
+   * 点得动的。点了一条已经没有的文件时，除了报错那条提示，还要调
+   * `forgetRecent` 把它忘掉——不然它永远点不动、也永远赖在列表里。
+   */
+  session: {
+    /** 取整份会话。**文件不在是正常的**（第一次启动），返回的是空的那一份。 */
+    get: () => invoke<会话>("nota_session_get"),
+    /**
+     * 记下"现在开着哪几份、前台是哪一份"。
+     *
+     * ⚠️ 前端**去抖**调它（切标签、关标签、开文件之后各一次），与 `doc.sync`
+     * 那条 300ms 去抖同理：落盘是整体重写。
+     */
+    setOpen: (open: string[], active: string | null) =>
+      invoke<void>("nota_session_set_open", { open, active }),
+    /** 记一份文档的滚动位置。`ratio` 是 **0~1 的比例**，不是像素。 */
+    setScroll: (path: string, ratio: number) =>
+      invoke<void>("nota_session_set_scroll", { path, ratio }),
+    /** 把一条「最近」忘掉（点了一条已经不存在的文件之后）。 */
+    forgetRecent: (path: string) => invoke<void>("nota_session_forget_recent", { path }),
+    /** 清空整份会话（设置页那颗"忘掉最近打开的文件"）。**不删任何文件。** */
+    clear: () => invoke<void>("nota_session_clear"),
+    /** 侧车路径（设置页显示"存在哪"）。 */
+    file: () => invoke<string | null>("nota_session_file"),
+  },
+
+  /**
+   * 外部改动监视：**报一遍"现在打开着哪些文件"**。
+   *
+   * ⚠️ 是**整份报**、不是增删两条（见 `src-tauri/src/watch.rs` 里那段）。
+   * 调用点只有一个：文档列表（或它们的路径）变了的时候，`ui/useExternalChanges.ts`。
+   *
+   * ⚠️ 没存过盘的新文档（没有 `path`）**不要传**——没有文件可盯。
+   */
+  watch: {
+    sync: (docs: Array<{ id: DocId; path: string }>) =>
+      invoke<void>("nota_watch_sync", { docs }),
   },
 
   /**
@@ -351,14 +371,84 @@ export const api = {
      * ⚠️ 入参是 **id 不是路径**：路径由后端自己拼，前端拿不到"读任意文件"的能力。
      */
     css: (id: string) => invoke<string>("nota_doc_theme_css", { id }),
-    /** 建好并返回我们自己的主题目录，供「打开主题文件夹」用。 */
-    dir: () => invoke<string>("nota_doc_themes_dir"),
+    /**
+     * 建好用户主题目录并在系统的文件管理器里打开它，返回打开的是哪个路径。
+     *
+     * ⚠️ 与 `settings.openDir()` 同源（BUG-27）：**"打开"这一步在后端**，
+     * 不让前端拿路径去调 plugin-opener。
+     */
+    openDir: () => invoke<string>("nota_doc_themes_open_dir"),
+  },
+
+  /**
+   * 界面风格里**用户导入的那一半**（内置那八档由打包好的 CSS 负责）。
+   *
+   * ⚠️ 与 `theme` 是一对，但**注入方式正好相反**：文档主题取回来的 CSS 必须
+   * 限域（只作用编辑区），界面风格取回来的**原样注入**——它要改的就是外壳。
+   * 那条差别写在 `styles/ui-style.ts` 顶上。
+   */
+  uiStyle: {
+    /**
+     * 列出所有可用的界面风格（内置的 ＋ 用户目录里的）。
+     * 目录不存在不算错，内置那八档照样在。
+     */
+    list: () => invoke<UiStyleInfo[]>("nota_ui_styles"),
+    /**
+     * 取一份**用户导入的**界面风格的 CSS 文本。
+     *
+     * ⚠️ **内置那几档没有文件**，对它们调这条会报错——只在 `list()` 报
+     * `builtin: false` 时才该调它。
+     * ⚠️ 入参是 **id 不是路径**：路径由后端自己拼，前端拿不到"读任意文件"的能力。
+     */
+    css: (id: string) => invoke<string>("nota_ui_style_css", { id }),
+    /** 建好用户风格目录（`~/.config/nota/ui-styles`）并在文件管理器里打开它。 */
+    openDir: () => invoke<string>("nota_ui_styles_open_dir"),
   },
 
   plugin: {
     list: () => invoke<PluginInfo[]>("nota_plugins_list"),
+    /**
+     * 启用 / 停用一个插件。
+     *
+     * ⚠️ **两个方向都是真的装卸**：停用会把它的 Lua 状态整个丢掉、启用会重跑一遍
+     * `on_load`（见 `plugin/mod.rs::set_enabled`）。所以调完之后**必须重拉三样**
+     * （`list` / `panels` / `menus`）——被停用的插件声明的面板和菜单项都该消失。
+     *
+     * ⚠️ 它**会跑插件代码**（`on_load` 里可能有 git、HTTP），所以后端放在阻塞
+     * 线程上、返回可能要等一会儿。按钮该有个"忙"态。
+     */
     setEnabled: (id: string, enabled: boolean) =>
       invoke<void>("nota_plugin_set_enabled", { id, enabled }),
+
+    /**
+     * 从一个插件包（`.nota-plugin` / `.zip`）或一个目录装一个插件。返回它的 id。
+     *
+     * `path` 由前端用文件对话框问出来（`@tauri-apps/plugin-dialog` 的 `open`）：
+     * 宿主不自己弹框——那是界面的事，而且宿主弹框在无头测试里没法验。
+     *
+     * ⚠️ **只有 `path` 一个参数。** 这里曾经多一个 `trust`，但宿主那条命令根本
+     * 没声明它——Tauri 会把多余的字段静静丢掉，所以那个参数从头到尾没起过作用，
+     * 只是让读代码的人以为"装的时候能一并信任"。信任是**装完之后**的另一个动作
+     * （`trust(id)`，界面上是插件行上那颗「信任」）。
+     */
+    install: (path: string) => invoke<string>("nota_plugin_install", { path }),
+
+    /**
+     * 卸掉一个插件：磁盘上删掉、内存里拿掉、账本上忘掉。
+     *
+     * ⚠️ **不可逆**（插件目录真的没了），调用方**必须先问一句**。
+     * ⚠️ 插件自己的设置文件（`plugin-settings/<id>.toml`，AI 的 API key 在那里）
+     * **不删**——那是用户的东西。
+     * ⚠️ 内置插件卸不掉（后端会报错让你改用停用）。
+     */
+    uninstall: (id: string) => invoke<void>("nota_plugin_uninstall", { id }),
+
+    /** 信任这个插件的签名者（TOFU + 显式信任）。见 `plugin/package.rs` 那张表。 */
+    trust: (id: string) => invoke<void>("nota_plugin_trust", { id }),
+
+    /** 信任库里现在有哪几把钥匙。 */
+    trustList: () => invoke<信任记录[]>("nota_plugin_trust_list"),
+
     /**
      * 调插件命令。`plugin` **必须**是注册者自己的 id——
      * 别凭命令名去猜（见 `commands/plugin.rs` 里的告诫）。
@@ -372,14 +462,14 @@ export const api = {
      * 插件声明的面板。**挂载后主动拉一次。**
      *
      * ⚠️ 早先这里配的是 `nota:plugin-panel` 事件，前端一个订阅者都没有，
-     * 于是面板永远进不了界面（BUG-13）。**别把这条改回事件**：
+     * 于是面板永远进不了界面（BUG-13）。**改回事件就会重现这个问题**：
      * `register_panel` 是在**插件加载时**（`setup()` 阶段）跑的，
      * 那时前端还没挂载，事件发出去没人收而且不报错——必漏，且漏得安静。
      *
-     * ⚠️ 什么时候需要重拉：面板清单只在**插件加载**时定，而加载只发生在启动
-     * （启用/禁用**不重跑** `on_load`）。所以现在启动拉一次就够。
-     * **哪天界面上有了启用/禁用开关，记得在那里也重拉**——`PluginHost::生效的()`
-     * 是按"加载成功且没被禁用"筛的，禁用之后面板该从清单里消失。
+     * ⚠️ 什么时候需要重拉（2026-09-25 起）：**启用 / 停用 / 装 / 卸之后都要**。
+     * 面板清单只在**插件加载**时定，而这四件事都会真的加载或卸载
+     * （见 `plugin/mod.rs::set_enabled`——停用是真的把 Lua 状态丢掉）。
+     * 实现放在 `ui/usePlugins.ts::动作` 里，那四个动作跑完一律重拉。
      */
     panels: () => invoke<PluginPanel[]>("nota_plugin_panels"),
 
@@ -399,74 +489,98 @@ export const api = {
     panelContent: (plugin: string, id: string) =>
       invoke<unknown[]>("nota_plugin_panel_content", { plugin, id }),
 
+    /**
+     * 编辑区里此刻摊着哪一块（没有就是 `null`）。**挂载后主动拉一次。**
+     *
+     * ⚠️ 这里是**宿主的状态，不是插件的**：插件只是喊了一句
+     * `nota.ui.review(id)`，宿主记下"现在摊这一格"。所以它**不经过插件代码**——
+     * 插件正卡在一次慢调用里（宿主还抱着 `plugins` 锁）时，这个命令照样秒回，
+     * 「回到正文」那颗按钮也照样能按。
+     */
+    review: () => invoke<PluginReview | null>("nota_plugin_review"),
+
+    /**
+     * 把编辑区里那一块收起来，切回正文。
+     *
+     * ⚠️ **前端可以直接收**（不必再调插件一条"关掉预览"的命令）：用户点了
+     * 「回到正文」，那一下就该立刻生效。绕道插件的后果是——插件正忙 / 插件
+     * 崩了 / 插件根本没写那条命令，三种情况都会让按钮点了没反应。
+     *
+     * ⚠️ `plugin` 传的是**当前摊着的那个插件**（`review().plugin`）：收起来只收
+     * 它自己那一格，别把别的插件的摊子顺手端了（宿主那边 `ReviewState::set` 写明）。
+     */
+    reviewClose: (plugin: string) => invoke<void>("nota_plugin_review_close", { plugin }),
+
     /** 插件声明的菜单项。范式同 `panels()`。 */
     menus: () => invoke<PluginMenuItem[]>("nota_plugin_menus"),
   },
 
-  /**
-   * Slidev 预览。
-   *
-   * 模型是 **Nota 管生命周期、Slidev 自己画**：它是个前端工具链（Vite 开发服务器
-   * ＋主题），我们起它、把它那个 localhost 开成一个窗口、把正文写进它的入口文件，
-   * 剩下的（渲染、翻页、热更新）都是它自己的事。
-   *
-   * ⚠️ `start` **不等端口通**。第一次会下载 Slidev（几百 MB），等几分钟都有可能，
-   * 而同步命令跑在主线程上——在后端等就是冻界面。所以拆成
-   * `start`（微秒级返回）＋ 前端轮询 `probe`（每次 ≤300ms），见 `App.tsx::openSlidev`。
-   */
-  slidev: {
-    start: (docId: DocId, markdown: string) =>
-      invoke<SlidevInfo>("nota_slidev_start", { docId, markdown }),
-    /**
-     * **本机装没装 Slidev**。点菜单先出面板，就是靠它把话说清楚。
-     *
-     * ⚠️ 它**不联网**（npm 走 `--offline`）、不改变任何状态，最慢 20 秒
-     * （那是"自定义命令挂住了"的上限，正常一两秒）。见 `commands/slidev.rs`。
-     */
-    probeInstall: (docId: DocId) => invoke<SlidevProbe>("nota_slidev_probe_install", { docId }),
-    /** 端口通了没有。**探活两套栈都试**（Slidev 只绑 IPv6 那一条）。 */
-    probe: () => invoke<boolean>("nota_slidev_probe"),
-    /**
-     * 进程输出的最后几行（stdout+stderr 混在一起，只留最后 30 行）。
-     * ⚠️ **启动失败时把它整段端给用户**：真正的病因（没装主题、端口被占、
-     * node 太老）就写在里面，我们编不出比它更准的话。
-     */
-    log: () => invoke<string>("nota_slidev_log"),
-    /** 当前会话。前端热重载之后靠它把界面状态接回来（服务器还在跑，前端却清零了）。 */
-    status: () => invoke<SlidevInfo | null>("nota_slidev_status"),
-    /** 把预览窗口开在主窗口右边。已经开着就顶到前面，不会开第二个。 */
-    openWindow: () => invoke<void>("nota_slidev_open_window"),
-    /** 把正文整份写进入口文件。Slidev 盯到变化就热更新自己。 */
-    sync: (markdown: string) => invoke<void>("nota_slidev_sync", { markdown }),
-    /** 收摊：杀进程组 + 删入口 + 关窗口。 */
-    stop: () => invoke<void>("nota_slidev_stop"),
-  },
-
   /** 前端就绪握手。见 `lib.rs::nota_frontend_ready` 里那段"为什么需要"。 */
   frontendReady: () => invoke<void>("nota_frontend_ready"),
+
+  /**
+   * 启动时命令行带的文件（`nota 笔记.md` / 文件管理器的"用 Nota 打开"）。
+   *
+   * ⚠️ 宿主**只是把参数转告过来**，打开动作走前端那条既有的 `openPath`
+   * （选中标签、报错弹提示条都在那边）。为什么不由宿主直接打开，见
+   * `lib.rs::nota_startup_file`。
+   *
+   * ⚠️ 它**会 reject**（2026-09-25 起）：文件名不是合法 UTF-8 时宿主如实报错，
+   * 不会再静默给个 `null`。调用方要自带 `catch`——启动那一段是包在
+   * `Promise.all` 里的，一个打不开的文件不该把设置和主题一起掀掉。
+   */
+  startupFile: () => invoke<string | null>("nota_startup_file"),
+
+  /**
+   * **强制专注**（核心功能，不是插件）。
+   *
+   * ⚠️ 这四条命令**都不做判断**，只是转给宿主那个计时线程、然后广播新状态
+   *（`commands/focus.rs` 文件头）。所以界面**不要**拿返回值去更新余额——
+   * 以 `events.focusState` 那条事件为准：余额每秒都在变，命令返回的那一份
+   * 到手时可能已经过时了。
+   */
+  focus: {
+    /** 此刻的余额与阶段。⚠️ 挂载时拉一次（窗口可能在会话开始之后才建）。 */
+    get: () => invoke<FocusState>("nota_focus_get"),
+    /** 开始一轮。⚠️ 已经在跑时**不重置**余额（连点两下不会把攒的清掉）。 */
+    start: () => invoke<FocusState>("nota_focus_start"),
+    /** 停掉这一轮。**不问确认**——这是个"我想停下来"的按钮。 */
+    stop: () => invoke<FocusState>("nota_focus_stop"),
+    /**
+     * 警报上那颗「我回来了」。
+     *
+     * 关掉警报、回到专注、余额留在 0、带冷却。为什么不留"启动资金"见
+     * `focus/mod.rs::确认`——留了就是一个能反复刷的漏洞。
+     */
+    ack: () => invoke<FocusState>("nota_focus_ack"),
+    /**
+     * 宿主兜底音。**前端合成不出声音时**才调这一条。
+     *
+     * ⚠️ 它**不是**"再响一次"的按钮：前端 Web Audio 才是主路径（音色可控），
+     * 这条只在 WebKit 的 autoplay 策略把 `AudioContext` 摁住时兜底。
+     */
+    beep: () => invoke<void>("nota_focus_beep"),
+    /** 关掉警报窗（如果有）。⚠️ **不是**"停止专注"，那件事是 `stop`。 */
+    closeAlarm: () => invoke<void>("nota_focus_close_alarm"),
+  },
+
+  /**
+   * 窗口自身的控制（2026-09-27）。**目前只有一条**。
+   *
+   * ⚠️ 「窗口置顶」**故意不在这里**：它前端直接用 Tauri 的 JS API
+   * （`getCurrentWindow().setAlwaysOnTop()` / `isAlwaysOnTop()`），
+   * 与全屏那条路一模一样（见 `ui/useImmersive.ts`）——状态要从**窗口**读回来，
+   * 绕一趟 IPC 只多一层转发。而这条没有 JS API 可用：
+   * `devtools` feature 只给了 Rust 侧一个 `open_devtools()`。
+   */
+  window: {
+    /** 打开开发者工具。⚠️ 已经开着时是**调到前面**，不是关掉。 */
+    openDevtools: () => invoke<void>("nota_window_open_devtools"),
+  },
 };
 
 // ── 事件 ──────────────────────────────────────────────────────────────────
 
-export interface NotifyPayload {
-  plugin: string;
-  message: string;
-  level: "info" | "warn" | "error" | "success";
-}
-
-/** `events.pluginPanel` 的载荷。`id` 为 `null` = 那个插件的面板都该重拉。 */
-export interface PanelDirtyPayload {
-  plugin: string;
-  id: string | null;
-}
-
-export interface DocumentChangedPayload {
-  id: DocId;
-  text: string;
-  /** `"plugin"` 表示改动来自插件，前端要**照单全收**覆盖编辑器；
-   *  宿主自身的改动前端本来就知道，不会走这条。 */
-  origin?: string;
-}
 
 /**
  * 订阅一个宿主事件。返回退订函数——**组件卸载时一定要调**，
@@ -489,6 +603,32 @@ export function on<T>(event: string, handler: (payload: T) => void): Promise<Unl
  * 日志里连痕迹都没有。见 BUG-13。
  */
 export const events = {
+  /**
+   * **强制专注的状态变了**（2026-09-26 加，核心功能，不是插件）。
+   *
+   * ⚠️ 这是**"发生了一件事"**（余额又过了一秒），不是"声明"——所以走事件是对的
+   *（BUG-13 那条判据管的是后者）。载荷是完整的一份 `FocusState`。
+   *
+   * ⚠️ **它每秒一发**，所以里面的东西要么是绝对量、要么是已经算好的值，
+   * **前端不要拿它去累加**（丢一拍就永久错位）。宿主那边就是这么设计的
+   *（`focus/mod.rs::快照` 顶上那段）。
+   *
+   * ⚠️ 频道名在 Rust 侧是 `focus/mod.rs::EVENT_FOCUS`。两处必须是同一个字符串，
+   * 改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
+   */
+  focusState: "nota:focus-state",
+  /**
+   * **该出声了**（警报触发）。载荷是空的。
+   *
+   * ⚠️ 声音为什么不在宿主做：音色、节奏、渐强这些东西在 Web Audio 里
+   * 几行就写完了，而在 Rust 里要先合成一个 WAV、写盘、再找个播放器
+   *（`focus/alarm.rs::系统提示音` 那条兜底路就是这么走的，它是备用方案）。
+   *
+   * ⚠️ 与 `focusState` 分工：**状态**走那条（每秒都有），**事件**走这条
+   *（只在响的那一下）。别把"该响了"塞进状态里让前端去比——那样一轮里
+   * 重连、重放、多窗口都会各响一遍。
+   */
+  focusBeep: "nota:focus-beep",
   notify: "nota:notify",
   documentChanged: "nota:document-changed",
   /**
@@ -498,7 +638,7 @@ export const events = {
    * **"此刻变了"这个动作**，不是"面板长什么样"那份状态。收到它的反应是
    * **去重拉**（`api.plugin.panelContent`），事件里一个字节的内容都没有。
    *
-   * ⚠️ 因此它**丢了也不影响正确性**：面板还没打开时这一枪本来就没人收，
+   * ⚠️ 因此它**丢了也不影响正确性**：面板还没打开时这一次本来就没人收，
    * 而用户打开面板时一定会拉一次。它只是个省一次往返的提示。
    *
    * ⚠️ 频道名在 Rust 侧是 `plugin/mod.rs::EVENT_PANEL_DIRTY`。**两处必须
@@ -506,6 +646,18 @@ export const events = {
    * 监听者的频道 emit 是静默成功的）。
    */
   pluginPanel: "nota:plugin-panel",
+  /**
+   * 编辑区里摊的那一块**换了**（插件喊了 `nota.ui.review`，或者用户按了
+   * 「回到正文」）。载荷是空的——**收到就重拉**（`api.plugin.review()`）。
+   *
+   * ⚠️ 同一件事有"拉"和"推"两条路，它们分工不同，别只留一条：
+   * **拉**是初始状态（挂载时、切文档回来时都对），**推**是"此刻变了"那一瞬间
+   * （插件提了改动，用户正看着编辑区，得当场换成预览）。
+   *
+   * ⚠️ 频道名在 Rust 侧是 `plugin/mod.rs::EVENT_REVIEW`。两处必须是同一个
+   * 字符串，改一边不报错、只是收不到。
+   */
+  pluginReview: "nota:plugin-review",
   /**
    * 原生菜单被点了，载荷是命令 **id**。
    *
@@ -516,14 +668,39 @@ export const events = {
    */
   nativeMenu: "nota:native-menu",
   /**
-   * Slidev 预览停下了，载荷是空。
+   * **磁盘上那份文件被别的程序改了**（2026-09-26 加，非插件）。
    *
-   * 三种停下都会发：用户在菜单里点了「Slidev 预览」（命令层发的）、
-   * 用户把预览窗口叉掉了（`lib.rs` 的窗口事件里发的）、以及起不来被收掉时。
-   * 前端收到的意思只有一句：**把菜单上那个勾去掉**。
+   * ⚠️ 这是**"发生了一件事"**，不是"声明"——所以它走事件是对的（BUG-13 那条
+   * 判据管的是后者）。载荷只有 `{id, path, hash}`，磁盘正文要用的时候现拉
+   *（`api.doc.diskText`）。
    *
-   * ⚠️ 它是"发生了一件事"，所以走事件；而"预览现在是什么状态"是**状态**，
-   * 走 `api.slidev.status()` 拉（BUG-13 那个判据）。
+   * ⚠️ **宿主那边的"忽略"是零动作**：点过「忽略」之后，宿主手里那个摘要
+   * 基准已经挪到磁盘上这一份了，所以**不会**为同一次改动再报一遍。前端不必
+   * 记"这个 hash 我忽略过了"——真那样做，两份账本一旦不同步就是"提示再也不
+   * 出现"，而那种 bug 没有人会报（安安静静地不工作）。
+   *
+   * ⚠️ 频道名在 Rust 侧是 `watch.rs::EVENT_FILE_CHANGED`。**两处必须说同一个
+   * 字符串**，改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
    */
-  slidevStopped: "nota:slidev-stopped",
+  fileChanged: "nota:file-changed",
+  /**
+   * **用户又启动了一次 Nota**（2026-09-27，单实例那一格）。
+   *
+   * 第二份进程把"要打开什么"转交给已经在跑的这份（`single_instance.rs`），
+   * 宿主收到之后**先把主窗抬起来**（`unminimize` ＋ `set_focus`），再发这条。
+   * 所以前端要做的事只剩一件：带路径就照常开一份文档，没带就什么都不做。
+   *
+   * ⚠️ 这是**"发生了一件事"**（有别的进程来敲过门），不是"声明"——走事件是对的
+   *（BUG-13 那条判据管的是后者）。⚠️ 它**丢了也不影响正确性**：窗口已经被
+   * 宿主抬起来了，丢的只是"顺手把那份文件也打开"。
+   *
+   * ⚠️ 频道名在 Rust 侧是 `single_instance.rs::事件`。**两处必须说同一个字符串**，
+   * 改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
+   */
+  secondInstance: "nota:second-instance",
+  // ⚠️ 这里曾经有两条和"预览窗"绑在一起的事件（`slidevStopped` 等），
+  // 2026-09-25 **都删掉了**：预览不再单开窗口，它成了插件面板里的一块
+  // `kind = "frame"`（见 `ui/panel-nodes.ts`），而插件和前端之间的往来
+  // 走的是**通用**的那两条（`plugin:…` 事件 + `nota_plugin_call` 命令）。
+  // 留一条永远不会来的订阅，比没有它更难查。
 } as const;

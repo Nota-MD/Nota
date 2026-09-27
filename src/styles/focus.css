@@ -1,0 +1,275 @@
+/*
+ * 强制专注的三块：**状态栏那一格**、**警报窗那一整棵树**、**结束后的总结框**。
+ *
+ * ⚠️ 三块不共享任何选择器，理由与"为什么它在 `main.tsx` 那串 import 里的
+ * 位置无所谓"写在 `main.tsx` 引这一份的那段注释里。简短版：
+ *
+ * - `.status-focus*` 借 `app.css` 里状态栏那套（字号、间距、`.status-right` 的
+ *   排布），所以它必须在 `app.css` 之后；
+ * - `.alarm-*` 画在**另一个窗口**里，那边没有主窗的外壳，也没有人和它争优先级；
+ * - `.focus-summary*` 借 `overlay.css` 那层框壳（`.confirm-backdrop` /
+ *   `.confirm-dialog`），所以本文件必须在 `overlay.css` **之后**导入
+ *   （`main.tsx`：16 行 vs 93 行）。⚠️ 宽度那条覆盖仍然写成
+ *   `.confirm-dialog.focus-summary` 两个类，不靠顺序——见那一格自己的注释。
+ *
+ * ⚠️ 颜色一律走 `theme.css` 的变量，**只有警报窗那一块例外**（见下面那段）。
+ */
+
+/* ── 状态栏那一格 ───────────────────────────────────────────────────────── */
+
+.status-focus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  /* ⚠️ 不抢眼：它是"背景信息"，不是提示。用户正在写字的时候，这一格
+     每秒都会跳一下数字——用强调色的话那是个一直在闪的东西。 */
+  color: var(--fg-muted);
+}
+
+/*
+ * ⚠️ 走神中要**看得出来**，因为这一刻余额真的在掉。用 `--warn`（黄）而不是
+ * `--danger`（红）：红是"已经出事了"（警报），黄是"正在往那边走"。
+ * 两档同色的话，用户看不出"我还有救"和"已经响了"的分别。
+ */
+.status-focus-away {
+  color: var(--warn);
+}
+
+/* 警报中。⚠️ 这时整块屏幕已经被警报窗盖住了，这一格是背景。 */
+.status-focus-alarm {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.status-focus-bar {
+  /* 一条 34px 的小进度条。⚠️ 它的宽度是**固定的**，变的只有里面那一段
+     ——不然余额变化会让整条状态栏的布局跟着抖，而右边还挤着四个统计数字。 */
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  overflow: hidden;
+}
+
+.status-focus-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  /* ⚠️ 走宽度用 `transition`，因为它一秒跳一格。不加的话那是一秒一次的硬跳。 */
+  transition: width var(--duration-fast) linear;
+}
+
+.status-focus-num {
+  /* 等宽数字：跳秒的时候宽度不变，右边那几格就不会跟着抖。 */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 警报窗 ─────────────────────────────────────────────────────────────── */
+
+/*
+ * ⚠️⚠️ **这一块是故意的例外：它不用 `theme.css` 的变量，写死红与白。**
+ *
+ * 理由：这个窗的全部任务是"让一个正盯着别的屏幕的人抬起头来"。它必须
+ * **不管用户选了哪套主题、哪套文档主题**都是同一块尖锐的红——跟着主题走的话，
+ * 浅色主题下它会变成一块温和的浅红，那就白弹了。
+ *
+ * ⚠️ 但有个代价要认：深色主题下它刺眼得厉害。**那是这个功能的意图，不是缺陷。**
+ */
+
+.alarm-root {
+  /* ⚠️ **这一格是「那块大字多大」的唯一出处**，`.alarm-title` 用它当字号、
+     `.alarm-card` 用它量宽度。两处各写一遍 `clamp(...)` 的话，改一处漏一处
+     就是"标题缩了、卡片没缩"——而那正是下面 `.alarm-card` 那条注释记的故障。
+     取 `clamp` 而不是固定 px：全屏窗在小笔记本上是 1366 宽、在外接屏上是 3840，
+     写死一个字号在其中一个上必然失衡。 */
+  --alarm-title-size: clamp(2.5rem, 9vw, 7rem);
+  /* ⚠️ `100vh` 而不是 `100%`：这一棵树的父级只有 `#root`，而那个元素的高度
+     是靠内容撑的。用 `100%` 会得到 0 高——整块红屏都不见，只剩几行字。 */
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* ⚠️ 左右那点呼吸位**由这一层出**，不是卡片自己的 `padding`——理由写在
+     下面 `.alarm-card` 那条注释里。`box-sizing` 是全仓统一的 `border-box`
+     （`app.css` 的 `*`），所以 `100vw` 减掉这两条边正好是可用宽度。 */
+  padding: 0 5vw;
+  /* ⚠️ 不要 `cursor: default` 之外的花样：这个窗里唯一个能点的东西是那颗按钮，
+     它自己会变成手型。 */
+  overflow: hidden;
+  /* 红得刺眼但不刺瞎：中间亮、四周暗，视线自然落在字上。 */
+  background: radial-gradient(circle at 50% 42%, #c62828 0%, #8e1616 55%, #4a0b0b 100%);
+  color: #fff;
+  /* ⚠️ 字体栈照抄 `theme.css` 的 `--font-ui`：警报窗里如果掉进衬线兜底，
+     那块红屏会显得像一封讣告。 */
+  font-family: var(--font-ui);
+  /* ⚠️ 这一句是给"警报响的时候用户正在别的程序里打字"准备的：他不该能
+     在那个窗口里继续打字（那些键会落到这里来，什么也不会发生，但视觉上
+     光标不见了会让人以为卡住了）。 */
+  user-select: none;
+}
+
+.alarm-card {
+  /* ⚠️⚠️ **宽度按「那一行大字」量，不是按正文字号量。** 这一条栽过一次
+     （2026-09-27 开窗实测，1440×900 与 800×600 两档都塌）：原来写的是
+     `max-width: 22ch`，而 `ch` 量的是**这张卡片自己的**字号——卡片继承 `body`
+     的 `--ui-font-size`（15px 上下），22ch 只有 160px 出头；标题却是
+     `clamp(2.5rem, 9vw, 7rem)`（800 宽的屏上就是 72px）。再叠上卡片自己那条
+     `padding: 0 5vw`（`box-sizing: border-box` 之下它是**从 max-width 里扣**
+     的，宽屏上 5vw×2 就有 144px），留给字的宽度只剩几十像素：
+     标题一行一个字竖着排下来（英文更惨，`Back` / `to` / `Writing` 三行）、
+     按钮被挤出视口。判据就是这条 max-width 与它的单位。
+
+     ⚠️ 所以现在两头都跟着 `--alarm-title-size` 走：`9em`≈"六个中文字 + 字距"
+     再多留一点余量（英文标题 `Back to Writing` 更长，15 个字符约 7.5em）。
+     字号变大时卡片跟着变宽，窄屏上它自然缩到 `100%` 换行——两种屏都不用再猜。 */
+  max-width: calc(var(--alarm-title-size) * 9);
+  text-align: center;
+}
+
+.alarm-title {
+  /* ⚠️ 字号与卡片宽度**同一个出处**（`.alarm-root` 上那一格），别在这里
+     再写一个 `clamp`——两处各写一遍，改一处漏一处就是标题缩了卡片没缩。 */
+  font-size: var(--alarm-title-size);
+  line-height: 1.05;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin: 0 0 1.6rem;
+  /* 字重已经够猛了，阴影只用来把它从渐变的亮心上面"抬"起来一点。 */
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+.alarm-sub {
+  font-size: clamp(1rem, 2.2vw, 1.5rem);
+  margin: 0 0 0.6rem;
+  /* ⚠️ 纯白太抢：它要读得到，但不能和那一行大字争。 */
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.alarm-hint {
+  font-size: clamp(0.85rem, 1.6vw, 1.05rem);
+  margin: 0 0 2.4rem;
+  /* ⚠️ 这是三行里最不重要的一行（"钱怎么回来"），所以最淡。
+     但**不能省**：不写它，用户点完按钮发现余额还是 0 会以为算错了
+     （理由写在 `ui/FocusAlarmWindow.tsx` 那条注释里）。 */
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.alarm-btn {
+  /*
+   * ⚠️ 反白：红底上最显眼的是白块黑字。用 `theme.css` 那套 `.btn` 的
+   * "浅灰底深字"在这块红屏上是糊的（对比度不够）。
+   */
+  background: #fff;
+  color: #8e1616;
+  border: none;
+  font-size: clamp(1rem, 2vw, 1.35rem);
+  font-weight: 700;
+  padding: 0.75em 2.2em;
+  border-radius: 999px;
+  cursor: pointer;
+  /* 让它在红底上"浮"起来，成为这个屏上唯一像按钮的东西。 */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.alarm-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.alarm-btn:disabled {
+  /* ⚠️ 点过之后**要看得出来点过了**（宿主那边阶段翻过来最多要 1 秒）。
+     不置灰的话，用户会以为没点上而连点——那几枪都会打到同一条命令上。 */
+  opacity: 0.65;
+  cursor: default;
+}
+
+/* ⚠️ 键盘可达性：这颗按钮是这个窗唯一的出口，焦点环必须看得见。
+   红底上默认的环是蓝色的，糊；给一个白环。 */
+.alarm-btn:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+/* ── 结束后的总结框（`ui/FocusSummaryDialog.tsx`）────────────────────────── */
+
+/*
+ * ⚠️⚠️ **两个类一起写，不是 `.focus-summary` 一个。** `gate.css` 那边的
+ * `.gate-panel` 是靠"文件顺序在后面"盖掉 `.confirm-dialog` 那个 `max-width:
+ * 440px` 的（两边都是单个类选择器、权重一样），那条路能用，但它把正确性押在
+ * `main.tsx` 的 import 顺序上——哪天有人挪一下这行 import，这个框就静默变回
+ * 440px 宽，而 440px 装不下"四格数 ＋ 一张 4:5 的卡"。
+ *
+ * 写成两个类（权重 0,2,0 > 0,1,0）之后，**顺序随便挪都不会塌**。
+ * 这不是风格偏好：这一条的失效方式是不报错的。
+ */
+.confirm-dialog.focus-summary {
+  min-width: 460px;
+  max-width: 620px;
+}
+
+.focus-summary-body {
+  display: flex;
+  align-items: flex-start;
+  /* 窄下来时卡片整块掉到数字下面，而不是被压成一条 */
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.focus-summary-stats {
+  /* 数字那一列吃掉剩下的宽度；卡片那一列是固定宽（见下）。 */
+  flex: 1 1 220px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.focus-summary-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  /* ⚠️ `--bg-subtle` 与面板里那些格子同一档：这一块是**读数**，不是按钮，
+     不该比框本身更亮。 */
+  background: var(--bg-subtle);
+}
+
+.focus-summary-k {
+  font-size: 0.78em;
+  color: var(--fg-muted);
+}
+
+.focus-summary-v {
+  font-size: 1.12em;
+  font-weight: 600;
+  /* 等宽数字：五个格子里的时长宽度不一会让整块看着像没对齐，而这个框里
+     相邻两格的数字是**要拿来比**的（专注 vs 离开）。 */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ⚠️ 固定宽而不是 `flex: 1`：这张卡是 1080×1350（4:5），跟着框宽涨会让它
+   比左边那五格高出一大截，而框的高度是全靠内容撑的——`max-width` 一变，
+   整个框的观感就跟着变。定死 200px 之后，"框有多高"是可预期的。 */
+.focus-summary-card {
+  flex: 0 0 200px;
+}
+
+.focus-summary-img {
+  display: block;
+  width: 100%;
+  border-radius: 3px;
+  /* ⚠️ 同 `.panel-share-img`：卡片是浅色、框底是深的（或者反过来）时边界得
+     看得见。用内阴影而不是边框——边框会占掉宽度，让卡片和左边那几格不齐。 */
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+/* 存/复制的结果那一行。⚠️ 复用 `.panel-share-note` 的字号与折行口径
+   （`share.css`），这里只补它在这个框里的上下留白。 */
+.focus-summary-note {
+  margin: 0 0 10px;
+}

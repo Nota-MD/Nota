@@ -1,6 +1,6 @@
 //! 应用全局状态。
 //!
-//! ⚠️ **锁序不变量（全仓统一，别破）**：
+//! ⚠️ **锁序不变量（全仓统一）**：
 //!
 //! ```text
 //! plugins  →  documents  →  settings
@@ -39,8 +39,31 @@ use crate::settings::Settings;
 pub struct AppState {
     pub documents: Arc<Mutex<DocumentStore>>,
     pub settings: Arc<Mutex<Settings>>,
-    /// 当前工作区根目录。`None` = 没开文件夹（Typora 的"单文件模式"）。
+    /// 当前工作区根目录。`None` = 没开文件夹（单文件模式）。
     pub workspace: Arc<Mutex<Option<PathBuf>>>,
     /// 插件宿主。锁在**最外层**（见上面的锁序）。
     pub plugins: Mutex<PluginHost>,
+    /// 开机读设置时出的问题，读成功是 `None`。
+    ///
+    /// ⚠️ **只写一次、此后只读**，所以不是 `Mutex`——它在 `setup` 里定下来，
+    /// 之后谁都不改。前端启动时拉一次，非空就弹一条 toast。
+    ///
+    /// ⚠️ 为什么要有这个字段（2026-09-25）：以前解析失败只往 stderr 写一行，
+    /// 用户从界面上**完全看不出来**——看到的是一份出厂设置，于是"我的设置
+    /// 自己变回默认了"。控制台那句话对双击图标的用户不存在。
+    /// （那行 stderr 现在归调试闸门管，`NOTA_DEBUG=1` 才出，见 `log.rs`——
+    /// 所以**更**不能拿它当提示了：默认连开发者之外的终端都是干净的。）
+    pub settings_problem: Option<String>,
+    /// **宿主此刻在说哪种语言**（`crate::lang::有效语言` 算出来的那个）。
+    ///
+    /// ⚠️ 与 `settings_problem` 同一条规矩：**启动时算一次，此后只读**。
+    /// 它和插件加载时拿到的是**同一个值**（`lib.rs` 里算完，给 `HostContext`
+    /// 一份、给这里一份），所以前端问"现在是什么语言"，得到的答案与插件
+    /// 文案表的口径必然一致。
+    ///
+    /// ⚠️ 所以**别在命令里拿设置重算一遍**：用户改了设置但还没重启的那段时间里，
+    /// 那样算出来的是"下次启动才会生效的语言"，而插件用的还是旧的那份——
+    /// 前端会照着新语言去给插件挑提示语，说的却是插件没在做的事。
+    /// 「重启后生效」这件事的落点就是这一格（理由见 `settings/general.rs`）。
+    pub app_lang: String,
 }

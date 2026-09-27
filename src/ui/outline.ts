@@ -1,75 +1,15 @@
 /**
- * 从 markdown 正文抽大纲。
- *
- * # 为什么在前端用正则扫，而不是问后端要
- *
- * 后端也有 markdown（镜像），但**镜像是去抖的**——打字时它会慢 300ms。
- * 大纲要跟着光标附近的标题实时跳，用那份数据会看到明显的一顿一顿。
- * 前端手里就是最新的文本，扫一遍是 O(行数)，几千行的文档也就微秒级。
- *
- * ⚠️ 这是**启发式**，不是真解析。它认不出 HTML 块里的 `#`、也认不出
- * 缩进代码块（四空格那种）里的 `#`。真解析要过 remark，而为一个侧栏列表
- * 引入完整 AST 不划算。已知误差见 `docs/07`；真出问题时再换 remark。
- *
- * ⚠️ `strict` 是**严格模式**（`Settings.strict_markdown`，默认 `false`）：
- * 宽松（默认）时 `#你好` 也算标题。判据不在本文件里，见 `editor/atx.ts`
- * 的 `atxTextRe`——那份判据要和解析、打字、后端挑标题**一模一样**。
- */
-
-import { atxTextRe } from "@/editor/atx";
-
-export interface OutlineItem {
-  level: number;
-  text: string;
-  /** 在正文里的行号（0 起），将来做"点了跳过去"要用。 */
-  line: number;
-}
-
-export function extractOutline(markdown: string, strict = false): OutlineItem[] {
-  const out: OutlineItem[] = [];
-  let inFence = false;
-  let inFrontMatter = false;
-
-  const lines = markdown.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
-
-    // ── front matter：只在文件最开头才算，跳过整段 ──────────────────────
-    if (i === 0 && line.trimEnd() === "---") {
-      inFrontMatter = true;
-      continue;
-    }
-    if (inFrontMatter) {
-      const t = line.trimEnd();
-      if (t === "---" || t === "...") inFrontMatter = false;
-      continue;
-    }
-
-    // ── 围栏代码块：里面的 `#` 是注释，不是标题 ─────────────────────────
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-
-    // ── ATX 标题 ────────────────────────────────────────────────────────
-    const m = atxTextRe(strict).exec(trimmed);
-    if (!m) continue;
-
-    const text = m[2]!.trim().replace(/\s*#+\s*$/, "").trim();
-    if (!text) continue;
-
-    out.push({ level: m[1]!.length, text, line: i });
-  }
-
-  return out;
-}
-
-/**
  * 数字数。
  *
- * 口径（对齐 Typora 的状态栏）：
+ * ⚠️ 本文件**原来还有另一半**：`extractOutline`（扫标题）与 `OutlineItem`。
+ * 2026-09-27 搬去了 `editor/headings.ts`，理由写在那边文件头——一句话是
+ * **依赖方向**：`docs/10` §1 的「目录（TOC）」那条命令也要同一份判据，
+ * 而它在编辑器那一侧，`src/editor/` 里从不 import `@/ui/`。
+ * 只剩数数之后这里确实"名不副实"了一点，但 `outline` 这个名字还与侧栏
+ * 那一页（`Sidebar.tsx`）对得上，改名要连带动 `docs/02` / `docs/09` 两张
+ * 登记表，不值当。
+ *
+ * 口径：
  * - **字符数**按**码点**算，不是 UTF-16 码元——否则一个 emoji 会被算成 2，
  *   一个字的中文倒是对的（1）。混排时两种算法的差会让人对不上数。
  * - **词数**：CJK 字符**逐字算一个词**，其余按空白切。这是中英混排下最贴近
@@ -79,7 +19,7 @@ export interface Counts {
   characters: number;
   words: number;
   lines: number;
-  /** 预计阅读分钟数，至少 1。 */
+  /** 预计阅读分钟数，至少 1。⚠️ 按调用者给的**阅读速度**算（`countText` 的第二个参数）。 */
   readingMinutes: number;
 }
 
@@ -95,7 +35,7 @@ function isCjk(cp: number): boolean {
   );
 }
 
-export function countText(markdown: string): Counts {
+export function countText(markdown: string, readingSpeed: number): Counts {
   const characters = [...markdown].length;
 
   let words = 0;
@@ -126,9 +66,16 @@ export function countText(markdown: string): Counts {
   }
 
   const lines = markdown === "" ? 0 : markdown.split("\n").length;
-  // 200 词/分钟是英文的常见估算；中文按字算的话 300 更接近。
-  // 这里不细分语种，取 250 作为折中，**只当作粗略参考**。
-  const readingMinutes = Math.max(1, Math.round(words / 250));
+  // ⚠️ 这个除数**曾经是写死的 250**（"200 是英文、300 更贴中文，取折中"）。
+  // 2026-09-25 起改用设置里的「阅读速度」（`appearance.reading_speed`，
+  // 默认 382——中文常见取值）：那一条自己的说明写着"只用于把总字数换算成
+  // 状态栏里的「约几分钟读完」"，而它当时**没有任何读取者**，界面上显示的
+  // 是按 250 算的。现在两边是同一个数。
+  //
+  // ⚠️ 兜底：手改过设置文件的人可能写一个 0 进来（除以 0 会得到 Infinity，
+  // 状态栏上就是「约 Infinity 分钟」）。低于 1 一律按默认值算。
+  const 速度 = Number.isFinite(readingSpeed) && readingSpeed >= 1 ? readingSpeed : 382;
+  const readingMinutes = Math.max(1, Math.round(words / 速度));
 
   return { characters, words, lines, readingMinutes };
 }

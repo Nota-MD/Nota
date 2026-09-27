@@ -1,0 +1,75 @@
+/* 差异里那一行的长相（**五类**：加 / 删 / 位置 / 文件信息 / 上下文）。
+ *
+ * # 为什么单独一份文件
+ *
+ * 同一行改动会在**两个地方**画出来：右侧插件栏里那块 `kind = "diff"`
+ * 内容块（`src/ui/PanelBody.tsx`），和编辑区里那份"改动预览"
+ * （`src/ui/ReviewPane.tsx`，它内部画的还是同一个 `PanelBody`）。
+ * 两处的尺寸、底色、装饰**必须一模一样**——用户看到的是同一次改动，
+ * 一处画成红底删除线、另一处画成灰字，他会以为那是两种东西。
+ *
+ * 所以颜色和装饰只有这一份，两个调用方自己只负责外层的排版
+ * （面板那边是 `<pre class="panel-diff">`，编辑区那边是 `<div class="review-body">`）。
+ *
+ * ⚠️ 底色是**实色变量**（`--diff-del-bg` / `--diff-add-bg`，写在 `theme.css`
+ * 明暗两套里），不是在这里用 `color-mix` 兑出来的：兑出来的那版在深色壳里
+ * 浅到看不见，而那正是 2026-09-25 之前的样子。
+ *
+ * ⚠️ 装饰是**两种**，不是一种：删除是删除线（这行要没了），加入是下划线
+ * （这行是新的）。只靠底色的话，红绿色觉障碍的用户就分不出哪边是哪边——
+ * 文字本身也带着这个信息，才不是"只有颜色能读"。行首那一列 `-`/`+`/空格
+ * 也是同一个道理（`PanelBody.tsx` 里补的）。
+ *
+ * # 2026-09-26：从"两种行"变成"五种行"
+ *
+ * 用户点名要对齐 Folio 那个 Git 拓展的差异视图（`extensions/git/fo-git-panel-diff.c`：
+ * 加 / 删 / hunk / 元信息四档 `GtkTextTag`，上下文行**不上色**）。所以：
+ *
+ * | 类 | 哪儿来的 | 长相 |
+ * |---|---|---|
+ * | `.diff-add` | 解析器给的 `add` | 绿底 + 下划线 |
+ * | `.diff-del` | `del` | 红底 + 删除线 |
+ * | `.diff-hunk` | `hunk`（`@@ -1,4 +1,4 @@`） | 只有字色（蓝），**没有底色** |
+ * | `.diff-meta` | `meta`（`diff --git` / `index` / `---` / `+++` / `\ No newline`） | 只有字色（灰） |
+ * | `.diff-ctx` | `ctx`（hunk 里没变的那部分） | **一条规则都没有**，见下 |
+ *
+ * 后两类的字色取自 `theme.css` 的 `--diff-hunk-fg` / `--diff-meta-fg`，
+ * 明暗各一套，取值**和 Folio 的色板逐位相同**（照 git 自己的默认配色）。
+ */
+
+.diff-line {
+  display: block;
+  padding: 0 8px;
+  border-radius: 2px;
+  /* ⚠️ `pre`：差异是**横着读**的东西，折下来的第二行会让人以为那是新起的一行。
+     长行交给外层（`.panel-diff`）的横向滚动。
+     ⚠️ 所以这里**没有**悬挂缩进——不折行就用不上它，而且行首那一列
+     `-`/`+`/空格本来就对齐了（每行都从同一条边起）。 */
+  white-space: pre;
+}
+
+.diff-del {
+  background: var(--diff-del-bg);
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.diff-add {
+  background: var(--diff-add-bg);
+  color: var(--success);
+  text-decoration: underline;
+}
+
+.diff-hunk {
+  color: var(--diff-hunk-fg);
+}
+
+.diff-meta {
+  color: var(--diff-meta-fg);
+}
+
+/* ⚠️ 上下文行（`.diff-ctx`）**故意没有规则**（2026-09-26 写下这句是为了
+   让下一个人知道那是刻意的，不是漏了）。它是"没变的那部分"——保持正文色
+   就是它该有的样子；跟改动抢眼的话，"哪几行动了"就被淹了。Folio 那边
+   同样是"回一个 NULL、不上 tag"。类名仍然要发出去：它是这份契约的一部分，
+   少一个类名就等于"这一类行在样式表里没有落点"。 */

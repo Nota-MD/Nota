@@ -1,0 +1,234 @@
+/**
+ * 改动预览的两种形态（`ui/ReviewPane.tsx` 的面板形态、`editor/review.ts` 的
+ * 就地形态），以及"它摊开的时候正文让位"这一条。
+ *
+ * # 为什么单独一个文件
+ *
+ * 面板形态里面画的**内容块**（`.panel-*`）规 `dock.css` 管——它们在右侧栏和
+ * 这里必须长一样。这个文件只管**这两块地方本身**：面板顶上那条标题栏与滚动区、
+ * 就地形态那条细条与画在正文上的装饰，以及"谁摊开时谁让位"。
+ *
+ * ⚠️ 下面那些"正文让位"的规则写在这里、不写在 `app.css`，是有意的：
+ * 它们讲的是**预览摊开时的编辑区**，和这个文件里别的东西是同一件事。
+ * 拆到两个文件里去的话，改 `.app-main` 的人不会知道还有这些条在别处。
+ *
+ * # 两种形态的差别（2026-09-26）
+ *
+ * | 形态 | `data-review` | 画在哪儿 |
+ * |---|---|---|
+ * | 面板（`nota.ui.review(面板)`） | `"true"` | 顶掉正文：另开一块地方摊面板 |
+ * | 就地（`nota.ui.review_diff`） | `"inline"` | **画在正文身上**：正文一个字不动 |
+ *
+ * 后者是用户 2026-09-26 点名的做法（「直接作用于编辑区域，而不是开一个独立
+ * 界面」），两种看法的切换全在下面那几条装饰规则里——**换看法只换根节点上
+ * 一个 class**，不重算、不派事务（`editor/review.ts::设看法`）。
+ */
+
+/* ── 那一块地方 ───────────────────────────────────────────────────────── */
+
+/* `.app-main` 是 flex 列，正文（`.editor-pane`）是 `flex: 1`。
+   所以这里也一样：谁摊开谁占满剩下的高度，不用算像素。 */
+.review-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--doc-bg);
+}
+
+.review-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing);
+  flex: none;
+  height: var(--toolbar-height);
+  padding: 0 var(--spacing);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+/* 标题**可以很长**（"AI 助手 · 改动预览"这种），而右边那颗按钮必须一直
+   够得着：所以标题自己省略号，不许把按钮挤出去。 */
+.review-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-spacer {
+  flex: 1;
+}
+
+.review-back {
+  flex: none;
+}
+
+.review-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* ⚠️ 内边距比右侧栏宽一点：这里是**看 diff 的地方**，左右各留一点，
+     行的色块才不会顶到窗口边上（贴着边看久了很累）。 */
+  padding: var(--spacing) calc(var(--spacing) * 2);
+}
+
+/* ── 就地形态：顶上那条细条 ───────────────────────────────────────────── */
+
+/**
+ * ⚠️ 它比面板那条矮一点、也**不需要底边框**吗？需要——但理由不同：面板那条
+ * 下面接着的是另一块内容区，边界靠它划；这条下面紧接着就是正文的顶边距
+ * （`.cm-content` 的 `padding-top: 24px`），一条边框正好把"这是加在正文上的
+ * 一条东西"和"这是正文"分开。所以留着，颜色淡一档。
+ *
+ * ⚠️ **高度不写死**：`title` 与按钮的措辞都来自插件（i18n 之后可能变长），
+ * 写死 `--toolbar-height` 会在英文串变长时把按钮挤出去。所以这里用
+ * `min-height` + 允许换行（`flex-wrap`），高度自己撑。
+ */
+.review-bar-inline {
+  height: auto;
+  min-height: var(--toolbar-height);
+  flex-wrap: wrap;
+  padding: 4px var(--spacing);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+
+/* 两种看法的开关。⚠️ 选中态靠 `aria-pressed`，不另开一个 `is-on` 类：
+   状态只有一处（那个属性），样式跟着它走，就没有"类和属性说岔了"的可能。 */
+.review-views {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+
+.review-view {
+  font-size: 0.92em;
+}
+
+.review-view[aria-pressed="true"] {
+  background: var(--bg-active);
+  font-weight: 600;
+}
+
+.review-hint {
+  flex: none;
+  color: var(--fg-faint);
+  font-size: 0.9em;
+}
+
+/* ── 就地形态：画在正文上的装饰 ─────────────────────────────────────────── */
+
+/**
+ * 颜色与装饰**和差异面板逐条相同**（`diff.css` 的 `.diff-del` / `.diff-add`：
+ * 红底删除线、绿底下划线，底色取同一对实色变量）。用户看到的必须是**同一次
+ * 改动的同一种说法**——一处红底划掉、另一处变成灰字，他会以为那是两种东西。
+ * 这里只是**多一条**：`result` 看法下被删的要整个藏掉（差异面板没有这一面）。
+ */
+.nota-review-diff .nota-review-del {
+  background: var(--diff-del-bg);
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+/**
+ * 改后（`result`）看法：**剩下的正好就是目标文本**。
+ *
+ * ⚠️ 这里是整个方案里唯一一处"看起来像在改文档"的地方：`display:none` 把被删
+ * 的那些从画面上拿掉，加上下面新增的那些留下来，屏幕上剩下的就是应用之后的
+ * 样子。**文档一个字没动**——藏起来的是装饰，撤销栈里也没有这一段。
+ *
+ * ⚠️ 在 CodeMirror 里，行装饰加的 class 落在 `.cm-line` 上，而 CM 的行高是
+ * 逐行量出来的（`display:none` 的行量到 0 高）——这正是我们要的：藏掉的行不该
+ * 占高度，剩下的行照原位量。所以滚动条长度、光标位置在换看法之后**不用重算**
+ * （换看法本来也不派事务）。
+ */
+.nota-review-result .nota-review-del {
+  display: none;
+}
+
+/**
+ * 新增的那一串：一个**块级 widget** 的外框（`editor/review.ts::造增框`）。
+ *
+ * ⚠️ 它是**画在正文流里的覆层**，不是在文档里真插了一块：左边那条竖线就是
+ * 给这件事留的记号（"这一段还没进去"）。所以下面 `result` 看法里**只留竖线、
+ * 不留底色**——正是这个道理，绿底留着的话"改后的效果"就变成了"改后的效果
+ * 外加一块绿"，而用户要看的是效果本身。
+ */
+.nota-review-add {
+  border-left: 3px solid var(--success);
+  padding-left: 6px;
+  margin: 2px 0;
+  border-radius: 2px;
+}
+
+.nota-review-diff .nota-review-add {
+  background: var(--diff-add-bg);
+}
+
+/* 新增块里的单行。⚠️ 所见即所得那边一格 `条` 里装的是**渲染好的块 DOM**
+   （可能是 `<p>`、`<pre>`、`<ul>`），源码模式那边装的是纯文本——两种情况
+   都要"这一格自己占一行"，所以 `> *` 也得管住外边距，不然段落的上下边距会
+   在框里叠成一大块空白。 */
+.nota-review-add-line {
+  display: block;
+}
+
+.nota-review-add-line > *:first-child {
+  margin-top: 0;
+}
+
+.nota-review-add-line > *:last-child {
+  margin-bottom: 0;
+}
+
+/* ── 摊开的时候，正文让位 ───────────────────────────────────────────────── */
+
+/**
+ * ⚠️ **两种形态让位的范围不一样**：
+ *
+ * | | 正文 | 查找 / 格式化那两条 |
+ * |---|---|---|
+ * | `"true"`（面板） | 藏起来 | 藏起来 |
+ * | `"inline"`（就地） | **留着**——它就是要画在正文上 | 藏起来 |
+ *
+ * ⚠️ **只是藏起来，不是卸载**（`App.tsx` 那边的注释写着理由）：
+ * `.editor-pane` 里那个 CodeMirror 实例带着**撤销栈和光标**，
+ * 卸载一次就全没了——用户看完 diff 回到正文，发现撤销不了刚才那几步，
+ * 会以为"预览把我的东西弄坏了"。
+ *
+ * ⚠️ 这里**逐个点名**，别写成 `> *:not(.review-pane)` 那种一律排除的写法：
+ * 以后往 `.app-main` 里再加一块（比如某个提示条），一律排除会让它
+ * **默认消失**，而没人会去查一条 CSS 才知道它为什么不显示。
+ * 同一个道理写在 `app.css` 的 `.app[data-zen]` 那一段。
+ */
+.app-main[data-review="true"] > .editor-pane,
+.app-main[data-review="true"] > .home,
+/* 查找 / 格式化那两条作用于**正文**：正文都藏起来了，它们留着只会让人按了
+   不知道该看哪儿（按下去其实还在动正文，看不见而已——比不画更让人困惑）。 */
+.app-main[data-review="true"] > .find-bar,
+.app-main[data-review="true"] > .format-bar,
+/* 就地形态：正文留着，但这两条还是要藏——预览期间文档是**只读**的
+   （`filterTransaction` / `readOnly` 舱），按钮按下去一个字都不会变，
+   比不画更让人困惑（"怎么点不动"）。 */
+.app-main[data-review="inline"] > .find-bar,
+.app-main[data-review="inline"] > .format-bar {
+  display: none;
+}
+
+/* ── 预览期间，除了那条细条以外都不许动 ─────────────────────────────────── */
+
+/**
+ * 用户 2026-09-26：「最好当预览的时候禁止操作」。
+ *
+ * ⚠️ **"不许动"是 `inert` 干的，不是这条 CSS**：那个属性让整块点不动、
+ * 聚焦不了、读屏也跳过（`App.tsx` 给左栏 / 右侧栏 / 页签三块加上去，
+ * 菜单与快捷键走 `ui/useCommandTable.ts` 那张空表）。这里只管**让人看得见**
+ * ——不压暗的话，用户点上去没反应，只会以为界面卡了。
+ *
+ * ⚠️ 别在这里补 `pointer-events: none`：那是 `inert` 已经管了的事，
+ * 两处各管一半，日后谁改错了都不会报错。
+ */
+.app [inert] {
+  opacity: 0.5;
+}

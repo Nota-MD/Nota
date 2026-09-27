@@ -1,13 +1,22 @@
 /**
  * 写作模式：**专注模式**与**打字机模式**（`docs/07` backlog 第 6 项）。
  *
+ * # ⚠️ 专注模式只有一半在这里（2026-09-25 改）
+ *
+ * 这个文件管的是它**作用在正文上的那一半**——压暗非当前段落。另一半是
+ * "把外壳收起来"（菜单栏、侧栏、插件栏、标签栏、状态栏），那一条在
+ * `App.tsx`（`沉浸 = 专注 ∨ 全屏`）与 `styles/app.css` 里。
+ *
+ * 两边合起来才是用户按 `F8` 看到的那个东西。改这一半时**别去猜那一半**：
+ * 各自的判据都写在各自那里，而这里对"外壳还在不在"一无所知。
+ *
  * # 它们为什么放一起
  *
  * 两条都是**视图层的写作辅助**：不改文档、不进撤销栈、不影响存盘的字节。
  * 而且它们共享同一件事——"光标现在在哪儿"。分成两个文件的话，那段
  * "从光标往上找祖先链"的代码要写两遍，两边一定会有一天算出不一样的块。
  *
- * # 专注模式：压暗的是**兄弟**，不是"除了我以外的所有块"
+ * # 专注模式：压暗的是**兄弟**，不是"除当前块以外的所有块"
  *
  * 从光标那一层往上走，每一层把**同层的兄弟**压暗，所在的那一条链一律不压。
  *
@@ -21,7 +30,8 @@
  *
  * # 打字机模式：把光标那一行滚到**容器正中**
  *
- * ⚠️ 容器**不写死选择器**（`找滚动容器`）：所见即所得那边是 React 的空 div
+ * ⚠️ 容器**不写死选择器**（`找滚动容器`，2026-09-25 起住在
+ * `scroll-into-view.ts`——那份滚动逻辑要用同一份判据）：所见即所得那边是 React 的空 div
  * （`.editor-mount`）在滚，源码那边是 CodeMirror 自己的 `scrollDOM`。写死
  * 一个，另一种模式就会静默不滚——而"不滚"看起来跟"没做这个功能"一样。
  *
@@ -34,6 +44,9 @@ import type { EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
+// ⚠️ `找滚动容器` 2026-09-25 搬去了 `scroll-into-view.ts`（那份滚动逻辑同样要用它，
+// 两份判据已经开始漂）——这里改成引进来，**别在本地再写一份**。
+import { 找滚动容器 } from "./scroll-into-view";
 
 /** 两个开关。**都是"看的时候的状态"**，不进设置、不落盘（同 `FormatBar`）。 */
 export interface 写作模式 {
@@ -61,24 +74,6 @@ export const 专注类 = "nota-focus";
 export const 亮行类 = "nota-focus-on";
 
 /* ── 两个编辑器共用的 DOM 小工具 ───────────────────────────────────────── */
-
-/**
- * 从某个元素往上找一个**真能滚**的祖先。找不到就给 `null`（那说明是整页在滚）。
- *
- * 判据是"overflow 允许滚 **且** 内容真的比框高"，不是"选择器叫这个名字"：
- * 两个编辑器的挂载方式不一样，而这一个函数要同时伺候两边。
- */
-export function 找滚动容器(el: HTMLElement | null): HTMLElement | null {
-  let p = el?.parentElement ?? null;
-  while (p) {
-    const 样式 = getComputedStyle(p);
-    if (/(auto|scroll)/.test(样式.overflowY) && p.scrollHeight > p.clientHeight + 1) {
-      return p;
-    }
-    p = p.parentElement;
-  }
-  return null;
-}
 
 /**
  * 把一段纵向区间（视口坐标）滚到容器的**正中**。
@@ -114,13 +109,13 @@ function 算压暗(state: EditorState): DecorationSet {
 
   for (let d = $from.depth; d >= 1; d--) {
     const 父 = $from.node(d - 1);
-    const 我在第几 = $from.index(d - 1);
+    const 当前子下标 = $from.index(d - 1);
     // 父节点的第一个子节点的起点。⚠️ 用 `$from.start(d - 1)` 而不是
     // `$from.before(d - 1) + 1`：两者等价，但前者在子节点是叶子时也成立。
     const 起点 = $from.start(d - 1);
     父.forEach((子, 偏移, 下标) => {
       // 只压块级兄弟——理由见文件头。
-      if (下标 === 我在第几 || 子.isText || 子.isInline) return;
+      if (下标 === 当前子下标 || 子.isText || 子.isInline) return;
       装饰.push(
         Decoration.node(起点 + 偏移, 起点 + 偏移 + 子.nodeSize, { class: 压暗类 }),
       );

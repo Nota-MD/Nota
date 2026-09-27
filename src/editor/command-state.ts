@@ -52,11 +52,24 @@ export type BlockKind =
   | "codeBlock";
 
 export interface CommandState {
-  /** 行内标记。可以同时成立（比如粗体 + 斜体），所以是四个布尔。 */
+  /** 行内标记。可以同时成立（比如粗体 + 斜体），所以是一串布尔。 */
   bold: boolean;
   italic: boolean;
   strike: boolean;
   inlineCode: boolean;
+  /**
+   * 三种**扩展**行内标记（`editor/inline-marks.ts`）。
+   *
+   * ⚠️ 名字是 **schema 里 mark 的 id**，与设置页那三个开关**同名但不是
+   * 同一个东西**：那边是"解不解析这种写法"，这边是"光标现在在不在这个
+   * 标记里"。关掉高亮的用户打开一份老文件，光标落在 `==x==` 上时这一项
+   * 照旧是 `true`——因为那颗 mark **真的在文档里**。
+   */
+  highlight: boolean;
+  superscript: boolean;
+  subscript: boolean;
+  /** 下划线没有设置开关，恒有（写法是裸 HTML `<u>x</u>`）。 */
+  underline: boolean;
   /** 所在块。见 `BlockKind`。 */
   block: BlockKind;
   /**
@@ -69,6 +82,18 @@ export interface CommandState {
   inTable: boolean;
   /** 有选区（选中了东西）。「清除样式」据此变灰。 */
   hasSelection: boolean;
+  /**
+   * 这篇文档里**至少有一个标题**。「内容目录」据此变灰。
+   *
+   * ⚠️ 这是本表里唯一一处**看整篇文档**而不是看光标附近的判据，所以它只扫
+   * **顶层**节点（`doc.forEach`，不是 `descendants`）——与 `editor/headings.ts`
+   * 的 [`extractOutline`] 同一片视野：那份正则也认不出引用块里的 `#`。
+   * 两边只要有一边放宽，这里就会出现"菜单亮着、点下去目录是空的"。
+   *
+   * 代价是每敲一个字多走一遍顶层块（几十次比较），换来的是菜单项不撒谎
+   * （`docs/10` §1「内容目录」那一格：一个标题都没有时插一份空目录没有意义）。
+   */
+  hasHeadings: boolean;
 }
 
 /** 什么都没有的初始值。编辑器还没建好时用它。 */
@@ -77,9 +102,14 @@ export const 空状态: CommandState = {
   italic: false,
   strike: false,
   inlineCode: false,
+  highlight: false,
+  superscript: false,
+  subscript: false,
+  underline: false,
   block: "text",
   inTable: false,
   hasSelection: false,
+  hasHeadings: false,
 };
 
 /** 从文档树里读块族。`inTable` 单独一条路径（它和中途遇到的块无关）。 */
@@ -146,14 +176,26 @@ export function 读状态(state: EditorState): CommandState {
   const 有 = (name: string) => marks.some((m) => m.type.name === name);
   const { block, inTable } = 读块(state);
 
+  // 「内容目录」那一项：整篇里有没有标题。⚠️ 只走**顶层**，理由见
+  // `CommandState.hasHeadings` 那段（要与 `extractOutline` 同一片视野）。
+  let hasHeadings = false;
+  state.doc.forEach((节点) => {
+    if (节点.type.name === "heading") hasHeadings = true;
+  });
+
   return {
     bold: 有("strong"),
     italic: 有("emphasis"),
     strike: 有("strike_through"),
     inlineCode: 有("inlineCode"),
+    highlight: 有("highlight"),
+    superscript: 有("superscript"),
+    subscript: 有("subscript"),
+    underline: 有("underline"),
     block,
     inTable,
     hasSelection: !empty,
+    hasHeadings,
   };
 }
 
@@ -164,9 +206,9 @@ export function 读状态(state: EditorState): CommandState {
  * "某一项的高亮永远不更新"——因为签名没变，通知就没发出去。
  */
 function 签名(s: CommandState): string {
-  return `${s.bold ? 1 : 0}${s.italic ? 1 : 0}${s.strike ? 1 : 0}${s.inlineCode ? 1 : 0}|${s.block}|${
-    s.inTable ? 1 : 0
-  }${s.hasSelection ? 1 : 0}`;
+  return `${s.bold ? 1 : 0}${s.italic ? 1 : 0}${s.strike ? 1 : 0}${s.inlineCode ? 1 : 0}` +
+    `${s.highlight ? 1 : 0}${s.superscript ? 1 : 0}${s.subscript ? 1 : 0}${s.underline ? 1 : 0}` +
+    `|${s.block}|${s.inTable ? 1 : 0}${s.hasSelection ? 1 : 0}${s.hasHeadings ? 1 : 0}`;
 }
 
 /**
@@ -189,7 +231,7 @@ export function 光标状态插件(onChange: (state: CommandState) => void) {
       view: (view) => {
         // ⚠️ **挂载那一刻先报一次**。只挂 `update` 的话，初值要等到用户
         // 第一次敲键/点鼠标才会送到界面——那之前工具栏是"全灭"的，
-        // 而用户看到的第一眼恰恰是那一段时间。
+        // 而用户看到的第一眼正是那一段时间。
         报(view.state);
         return {
           update: (view) => {

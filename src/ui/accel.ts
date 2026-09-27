@@ -24,7 +24,7 @@
  *
  * # 平台：`Ctrl` 在 macOS 上指的是 ⌘
  *
- * 标签一律写 `Ctrl`（跟 Typora 一样），但它在 macOS 上必须是 ⌘——那不是"额外的
+ * 标签一律写 `Ctrl`，但它在 macOS 上必须是 ⌘——那不是"额外的
  * 兼容"，是那边的**唯一**命令键。`Cmd` / `Meta` / `Super` 这几个写法一律**归到
  * `ctrl` 这一维**，不另立一维：它们在 mac 上本来就是同一个键，分成两维的话
  * `Ctrl+X` 和 `Meta+X` 会变成两条互不相干的绑定。
@@ -60,8 +60,8 @@ export const IS_MAC = detectMac();
 /**
  * 键名的别名表。左边是**怎么写都行**的写法（小写后比对），右边是规范化键名。
  *
- * ⚠️ 箭头键要认**字形**（`↑`）：`commands.ts` 里写的就是 `Alt+↑`，
- * 抄 Typora 的样子。而浏览器给的是 `e.key === "ArrowUp"`，
+ * ⚠️ 箭头键要认**字形**（`↑`）：`commands.ts` 里写的就是 `Alt+↑`。
+ * 而浏览器给的是 `e.key === "ArrowUp"`，
  * 不折一道的话这两条永远配不上。
  */
 const KEY_ALIASES: Record<string, string> = {
@@ -137,8 +137,8 @@ function normalizeKey(token: string): string {
  */
 export function parseAccel(text: string): Accel | null {
   // ⚠️ 字面的加号键写不出来（`"Ctrl++"` 会被切成 `["Ctrl","",""]`）。
-  // 要用它请写 `Plus`——上面别名表里 `plus` 和 `equal` 都指向 `=`。
-  // 这不是偷懒：真让 `"Ctrl++"` 成立就得写一套带引号的词法，
+  // 要用它得写 `Plus`——上面别名表里 `plus` 和 `equal` 都指向 `=`。
+  // 不改词法：真让 `"Ctrl++"` 成立就得写一套带引号的词法，
   // 而全仓库一条这样的键位都没有。
   const parts = text
     .split("+")
@@ -172,7 +172,7 @@ export function accelSig(a: Accel): string {
 
 /**
  * 物理键位 → 规范键名。浏览器给 `e.code`，但它的拼法（`KeyS` / `Digit1`）
- * 和我们的规范键名不是一回事，所以要一张对照表。
+ * 和本仓的规范键名不是一回事，所以要一张对照表。
  */
 const CODE_TO_KEY: Record<string, string> = {
   Minus: "-",
@@ -344,6 +344,12 @@ export function buildAccelIndex(menus: readonly MenuSpec[]): Map<string, string>
  *
  * ⚠️ 编辑器本身也是 `contenteditable`，所以要**先**把它排除掉，
  * 否则文档里一条快捷键都用不了。
+ *
+ * ⚠️ **别把"编辑器里的 `input` / `textarea`"也塞进这一档**（2026-09-26 试过、
+ * 当天撤销）：公式源码框与图表源码框都在 `.editor-pane` 里，让它们"算外面"
+ * 之后，源码框里的 **`Ctrl+S` 会一起失效**——在框里改完公式按保存，文件根本
+ * 没写下去（无头窗口实测：状态栏停在"已修改"、磁盘字节不变）。
+ * 编辑器内的 `Ctrl+A` 另有其人（见 `docs/07` §2 BUG-37），不归这里管。
  */
 export function isOutsideEditor(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;

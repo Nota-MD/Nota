@@ -58,13 +58,13 @@ AGENTS.md                → 硬性规则、代码地图、踩过的坑
 | 01 | [`01-architecture.md`](01-architecture.md) | 运行时架构：两进程边界、启动顺序、事件流、锁顺序 |
 | 02 | [`02-modules.md`](02-modules.md) | **逐文件接口参考**。公开函数签名以它为准 |
 | 03 | [`03-data-structures.md`](03-data-structures.md) | `AppState` / `Document` / `Settings` / `Manifest` 的字段与常量 |
-| 04 | [`04-ui-map.md`](04-ui-map.md) | 控件树 + 每个按钮的回调/当前状态/目标行为，含三条外观轴 |
+| 04 | [`04-ui-map.md`](04-ui-map.md) | 控件树 + 每个按钮的回调/当前状态/目标行为，含界面外观那三条轴（文档主题第四条另算） |
 | 05 | [`05-editor-bridge.md`](05-editor-bridge.md) | Milkdown 装配、前后端两条通道、去抖与整篇替换语义 |
 | 06 | [`06-build-run-test.md`](06-build-run-test.md) | 依赖、构建、运行、调试旋钮、**无头目检**、测试清单 |
 | 07 | [`07-feature-status.md`](07-feature-status.md) | ⚠️ **"现在到底能干什么"的唯一权威** + 缺陷编号 + 编号 backlog |
 | 08 | [`08-development-guide.md`](08-development-guide.md) | 如何新增按钮 / 命令 / 事件 / 插件 / 设置项 |
 | 09 | [`09-doc-sync-policy.md`](09-doc-sync-policy.md) | ⚠️ **文档同步政策与代码→文档映射表（强制）** |
-| 10 | [`10-typora-parity.md`](10-typora-parity.md) | ⚠️ **对标 Typora 的 97 项对照矩阵**（"100% 对标"的唯一权威） |
+| 10 | [`10-feature-matrix.md`](10-feature-matrix.md) | ⚠️ **Markdown 编辑器功能对照矩阵（120 项）**（"该有哪些功能、有了哪些"的唯一权威） |
 | 11 | [`11-writing-a-plugin.md`](11-writing-a-plugin.md) | 怎么写一个插件：目录、清单、能力表、生命周期、构建接线 |
 | 12 | [`12-plugin-runtime.md`](12-plugin-runtime.md) | 插件**运行时**：为什么是 Lua + 独立状态、沙箱画在哪 |
 | 13 | [`13-lua-api.md`](13-lua-api.md) | **Lua API 参考**：`nota.*` 每个表每个函数 |
@@ -77,7 +77,7 @@ AGENTS.md                → 硬性规则、代码地图、踩过的坑
 | 文档 | 它专治 |
 |---|---|
 | **07** | 「这功能不是写完了吗？」——不，写了没接线。`07` 只认"有人在界面上点过" |
-| **10** | 「对标 Typora 不是差不多了吗？」——97 项里 65 项 `⬜`。数字在那儿 |
+| **10** | 「功能不是差不多了吗？」——120 项里 32 项 `⬜`。数字在那儿 |
 | **09** | 「代码改完了，收工」——文档没同步 = 没做完，脚本会拦你 |
 
 ## 约定

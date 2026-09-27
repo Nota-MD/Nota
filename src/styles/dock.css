@@ -380,27 +380,278 @@
   font-family: var(--font-mono);
   font-size: 0.82em;
   line-height: 1.45;
-  /* `pre` 默认 `pre`：长行会顶宽这一栏。这里改成折行。 */
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  /* ⚠️ 2026-09-26 起**不折行**（此前是 `pre-wrap` + `overflow-wrap: anywhere`）：
+     差异是横着读的，折下来的第二行看着像新起的一行。长行交给这里的横向滚动。
+     这一条**两个地方共用**（这一栏 260px 与编辑区那一大块），所以两边行为
+     一样：在窄栏里也得横着滚——正是「在编辑区看」那颗按钮存在的理由。
+     ⚠️ 代价写在 `plugins/git/main.lua` 那段注释里：窄栏里一行只见小半截。 */
+  white-space: pre;
+  overflow-x: auto;
 }
 
-.panel-diff-line {
-  display: block;
-  /* 折下来的第二行缩进到内容的左边界，不跟 `-`/`+` 对齐——否则
-     "哪一行是新起的"就看不出来了（悬挂缩进的标准写法）。 */
-  padding: 0 8px 0 20px;
-  text-indent: -12px;
+/* ⚠️ 每一行的长相（底色、删除线、下划线）**不在这份文件里**——
+   编辑区里那份改动预览也要画同样的行，两处必须一样，所以只在
+   `src/styles/diff.css` 里写一遍（`.diff-line` / `.diff-del` / `.diff-add`）。
+   这里只留外层的 `<pre>`：等宽字体、折行、那一圈边框。 */
+
+/* ── 提交树（面板里的 `kind = "graph"` 块，2026-09-26 加）─────────────────
+ *
+ * 一棵用 git 自己画的图（`git log --graph`）拼出来的树，每一行**两头各是一颗
+ * 可点的东西**：左边那截图线是"键"（通向某个提交），右边那串字是提交本身。
+ * 结构那边的理由见 `PanelBody.tsx::GraphRow`。
+ *
+ * ⚠️ 这里**没有横向滚动**（和上面 `.panel-diff` 相反）：图线宽度是 git 按
+ * "这个窗口最多几条车道"补齐的，本来就不长；而提交标题挤不下时**截断**
+ * （`.pg-text` 的 `text-overflow`）比横滚强——这一栏里横向滚动是没法用的
+ * （文件头那条）。截掉的是右边的标题，左边那截哈希和分支名还在。
+ *
+ * ⚠️ 底色用 `--bg-subtle`（和 `.panel-diff` 同一档）：两块都是"引用来的
+ * 外部内容"，长得像一家人；而**选中行**用的强调色是这一块里唯一一处
+ * 表达"我点过它"的地方。 */
+/* ── 数字与曲线（`kind = "chart"`，写作心电图，2026-09-26 加）────────────
+ *
+ * ⚠️ 那个红是**用户点名的**（原话「**大红字**数字/分钟」）。颜色只写在这里，
+ * `PanelBody.tsx` 里一处都没有——想换色改这一段就够。
+ *
+ * ⚠️ 数字用 `tabular-nums`（等宽数字）：它一秒变一次，比例数字会让整块宽度
+ * 跟着数字的形状一跳一跳的，在 260px 那一栏里非常显眼。
+ *
+ * ⚠️ 曲线那两层是**同一份路径**叠出来的（`PanelBody.tsx` 里的 `折线` 与 `面积`）：
+ * 线在上、填在下。填色用 `opacity` 而不是 `color-mix()`——后者是 CSS Color 5，
+ * 这个仓要照顾的 WebKitGTK 版本不一定认，而不认的表现是整块没有底色（不报错）。
+ */
+.panel-chart {
+  /* 纵轴刻度那条边栏的宽度。
+   *
+   * ⚠️ 这一个数**三处共用**：图的左内边距（`.panel-chart-plot-wrap`）、横轴标签
+   * 那一行的左**外**边距（`.panel-chart-xticks`，⚠️ 是 margin 不是 padding，
+   * 理由见那一节）、以及刻度文字自己的宽度。改一处忘一处的话，横轴标签会整体
+   * 偏出去一条边栏的宽度，而症状是"标签和曲线对不上"——很难一眼看出是边栏没对齐。
+   * ⚠️ 34px 是给面板那条 260px 宽的一栏定的（最大能写"1245"这种四位数）。 */
+  --chart-gutter: 34px;
+  margin: 0 0 10px;
+  padding: 8px 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
 }
 
-.panel-diff-del {
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
+.panel-chart-label {
+  font-size: 0.78em;
+  color: var(--fg-muted);
+  margin-bottom: 2px;
+}
+
+.panel-chart-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.panel-chart-number {
+  font-family: var(--font-mono);
+  font-size: 2.4em;
+  font-weight: 700;
+  line-height: 1.1;
   color: var(--danger);
+  font-variant-numeric: tabular-nums;
 }
 
-.panel-diff-add {
-  background: color-mix(in srgb, var(--success) 12%, transparent);
-  color: var(--success);
+.panel-chart-unit {
+  font-size: 0.8em;
+  color: var(--fg-muted);
+}
+
+.panel-chart-plot-wrap {
+  position: relative;
+  padding-left: var(--chart-gutter);
+  margin-top: 4px;
+}
+
+.panel-chart-plot {
+  display: block;
+  width: 100%;
+  /* ⚠️ 高度写死在这一层、不交给 `viewBox` 的宽高比（同 `PanelBody.tsx` 那条
+   * `preserveAspectRatio="none"`）：这块图要撑满一整栏宽，等比的话曲线只会
+   * 挤在中间一条里。 */
+  height: 64px;
+}
+
+/* ── 刻度（2026-09-27 加，用户：「横纵坐标的刻度要标」）────────────────── */
+
+/* 纵轴那几档数字。⚠️ 是 HTML 不是 SVG 的 `<text>`：这块 svg 横竖不等比，
+ * 里面的字会被横向拉扁（同 `PanelBody.tsx` 里那条注释）。 */
+.panel-chart-yticks {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--chart-gutter);
+  pointer-events: none;
+}
+
+.panel-chart-ytick {
+  position: absolute;
+  right: 4px;
+  font-size: 0.68em;
+  line-height: 1;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* 默认按"这条线的位置"垂直居中；首末两档贴住上下边，不然会被切掉一半。 */
+  transform: translateY(-50%);
+}
+
+.panel-chart-ytick.is-top {
+  transform: none;
+}
+
+.panel-chart-ytick.is-bottom {
+  transform: translateY(-100%);
+}
+
+/* 刻度的横线。虚线 ＋ 低透明度：它是**参考线**，不该比曲线还显眼。 */
+.panel-chart-grid {
+  stroke: var(--fg-faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.35;
+}
+
+/* 横轴那几档（时间）。⚠️ 与图左右对齐：同样让开纵轴那条边栏。
+ *
+ * ⚠️⚠️ 让开边栏这里**必须用 `margin-left`，不能用 `padding-left`**：
+ * 下面那些标签是 `position:absolute` 的，而绝对定位元素的包含块是父元素的
+ * **内边距盒**——`left:0` 落在**内边距的外沿**，`padding-left` 对它们一点用都没有。
+ * 2026-09-27 开窗目检时撞见的原样：图让开了 34px、标签没让，于是「-4 秒」比曲线
+ * 的起点偏左整整一条边栏，中间那档偏左半条（`at:50%` 只错一半）。而 `.panel-chart-plot-wrap`
+ * 那边是 `padding-left` ＋ 一个**静态**子元素，那条 padding 是有效的——所以两行
+ * 一边对一个不对。`margin-left` 挪的是盒子本身，绝对定位的子元素跟着盒子走。
+ */
+.panel-chart-xticks {
+  position: relative;
+  height: 12px;
+  margin-top: 2px;
+  margin-left: var(--chart-gutter);
+}
+
+.panel-chart-xtick {
+  position: absolute;
+  font-size: 0.68em;
+  line-height: 1;
+  color: var(--fg-faint);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* 最左/最右那两档：按中心摆会各自探出去半截（第一个超出左边界、最后一个
+ * 超出右边界），所以一个左对齐、一个右对齐。 */
+.panel-chart-xtick.is-start {
+  transform: none;
+}
+
+.panel-chart-xtick.is-end {
+  transform: translateX(-100%);
+}
+
+.panel-chart-area {
+  fill: var(--danger);
+  opacity: 0.12;
+}
+
+.panel-chart-line {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.panel-chart-caption {
+  font-size: 0.75em;
+  color: var(--fg-faint);
+  margin-top: 2px;
+}
+
+.panel-graph {
+  margin: 0 0 8px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.pg-row {
+  display: flex;
+  align-items: baseline;
+}
+
+/* 选中的提交：整行加一层底色。⚠️ 用 `color-mix` 兑**透明**的强调色，而不是
+   直接铺 `--accent`：铺实色会把 `.tone-*` 给的字色压掉（浅底深底两套里
+   总有一样看不清）。 */
+.pg-row.is-picked {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* 两颗（以及它们退化成的那两个 `<span>`）**长一样**：把 `<button>` 的默认
+   长相全部抹掉。⚠️ 少抹一样（比如 `padding`）就会看到"有键的那几行比别的行
+   往右挪了一点"——同一个文件里同一种东西两种排版，看着就是个 bug。 */
+.pg-art,
+.pg-text {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  margin: 0;
+}
+
+.pg-art {
+  /* ⚠️ `pre`：图线里那几列空格是**画的一部分**（`| ` 与 `  ` 不同），
+     折叠掉整棵树就散了。 */
+  white-space: pre;
+  flex: none;
+  padding-right: 5px;
+  color: var(--fg-muted);
+}
+
+.pg-text {
+  /* ⚠️ `min-width: 0` 是必需的：flex 项的最小宽度默认是内容宽度，少了它
+     `text-overflow` 永远不触发，长标题会把这一栏顶出去。 */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 只有"点得动的那一头"才有指针和悬停反馈——纯文字那一头没有任何反应，
+   正是要让用户一眼看出"这半截不能点"。 */
+button.pg-art,
+button.pg-text {
+  cursor: pointer;
+}
+
+button.pg-art:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+button.pg-text:hover {
+  color: var(--accent);
+}
+
+/* 键盘走到的那一颗也要看得见（`<button>` 能 Tab 到，这是它的好处之一）。 */
+button.pg-art:focus-visible,
+button.pg-text:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .panel-input {
@@ -575,4 +826,146 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--fg-faint);
+}
+
+/* 标题右边带一颗按钮的那种分区标题（现在是「从文件安装…」）。
+   ⚠️ 单独一个类而不是把 `.dock-subtitle` 改成 flex：别的分区标题不需要撑成一行，
+   改了它们的外边距和基线都会跟着变（那几行是纯文字注脚）。 */
+.dock-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing);
+}
+
+/* 「从文件安装…」。`margin-left: auto` 把自己推到行尾（配上面那条 flex）。 */
+.plugin-install {
+  margin-left: auto;
+  font-size: 0.8em;
+  padding: 2px 8px;
+}
+
+/* 插件行上"自装/内置 · 验没验过"。与 id 同一行，所以左边空一格。 */
+.plugin-origin {
+  margin-left: 8px;
+  color: var(--fg-faint);
+}
+
+/* 语言对不上那一句（「此插件不支持您的语言」）——**插件行**上的一小行。
+   用警告色而不是错误色：这不是故障，是"这个插件没有你那门语言的文案"。
+   ⚠️ 与面板里那块 `.panel-lang` 是**同一句话的两种摆法**：这里是清单，
+   那儿是用户正看着内容的地方。 */
+.plugin-lang {
+  margin: 5px 0 0;
+  font-size: 0.8em;
+  color: var(--warn);
+  line-height: 1.5;
+}
+
+/* 那句提示后面跟的是"这次在用哪一份文案"（`en`）。
+   摆成一个小标签，省得跟前面那句话连成一句读不通的话。 */
+.plugin-lang-now {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg-faint);
+}
+
+/* 面板顶上那一句（摊在内容上面，所以带下边框）。 */
+.panel-lang {
+  margin: 0 0 var(--spacing);
+  padding: 4px 6px;
+  font-size: 0.82em;
+  color: var(--warn);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+/* 一行按钮：停用/启用、卸载、信任。推到行的右下角，和上面那几栏对齐。 */
+.plugin-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.plugin-action {
+  font-size: 0.8em;
+  padding: 2px 9px;
+}
+
+/* 「卸载」是不可逆的那一颗：用 danger 色描边，别和"停用"长得一样。 */
+.plugin-action-danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+/* 停用之后整行压暗：一眼能看出"这一条现在不生效"。
+   ⚠️ 只压不藏——藏起来用户就找不到重新启用的入口了。 */
+.plugin-disabled .plugin-name,
+.plugin-disabled .plugin-desc {
+  opacity: 0.55;
+}
+
+/* 「已信任的签名者」那一段。⚠️ 指纹用**等宽**：它是拿眼睛一段一段比对的，
+   比例字体里 `0`/`O`、`1`/`l` 分不清，核对就变成了猜。 */
+.dock-trust {
+  margin-top: calc(var(--spacing) * 2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--spacing);
+}
+
+.trust-row {
+  display: flex;
+  gap: 8px;
+  margin: 0 calc(var(--spacing) * 1.5) 2px;
+  font-size: 0.85em;
+}
+
+.trust-key {
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+}
+
+.trust-name {
+  color: var(--fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 嵌进来的画面（面板里的 `kind = "frame"` 块）─────────────────────────
+ *
+ * 2026-09-25 加。这一块是**通用**的：任何插件都能在自己的 `render` 里放一块
+ * `{ kind = "frame", height = 520 }`，宿主填上地址（只指向**它自己**那场开发
+ * 服务器会话），前端在这儿把 iframe 摆出来。
+ *
+ * ⚠️ 高度**由那一块自己声明**（`panel-nodes.ts` 里夹在 120–2000 之间），
+ * 不是"撑满剩下的高度"。这是和以前那个内置预览页最大的区别：那时的规则是
+ * "这一页要撑满"，于是 `.dock-body` 得停止滚动、去掉内边距，多出 `data-fill`
+ * 那一套；现在画面只是面板里的**一个块**，面板照旧"内容多高就多高、超出滚动"。
+ * 一条滚动规则，不再分两种。
+ */
+.panel-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  /* ⚠️ 底色**故意留浅底而不是 `#fff`**：给纯白的话，深色界面里每次重载都闪
+     一块白；留浅底，载入完成前看着就是"还没内容"，比闪一下白诚实。 */
+}
+
+/* 画布类的面板把这一栏**加宽**（`register_panel{ wide = true }`）。
+   ⚠️ 260px（`theme.css` 的 `--dock-width`）是给普通插件面板定的：那些面板全是
+   一列字段＋按钮，窄才对。而幻灯片是 16:9 的一整页，缩到 260px 里只是个
+   缩略图——看得出"渲染出来没有"，看不出内容。所以由**面板自己**声明要宽，
+   切回别的页就缩回去（宽度是页签的函数，没有多存一份状态）。
+   ⚠️ 上限 `45vw`：不能让预览把正文挤到没法写。
+   ⚠️ 这个判据以前是 `活动 === "@slidev"`——**把一个插件的名字焊在外壳里**，
+   插件一改名就静默失灵（不报错，只是变窄）。现在读的是面板清单里的 `wide`。 */
+.plugin-dock[data-wide="true"] {
+  width: min(560px, 45vw);
 }

@@ -1,10 +1,14 @@
-//! 导出与打印那两条命令的 **IO 那半**。
+//! 导出与打印那几条命令的 **IO 那半**：写文件、交给系统打开、在文件管理器里定位。
 //!
-//! ⚠️ **这一层不认识 Markdown，也不认识 HTML**：它只干两件事——"把一段文本
-//! 写到某个路径"和"把某个文件交给系统默认程序"。HTML 怎么生成是前端的事
+//! ⚠️ **这一层不认识 Markdown，也不认识 HTML**：它只干"把一段文本写到某个路径"
+//! 和"把某个文件交给系统"这两件。HTML 怎么生成是前端的事
 //!（`src/editor/export.ts`：那边才有文档树、文档主题和 `editor.css`）。
 //! 把"生成"也搬进来，就等于把渲染引擎在 Rust 里再实现一遍，两边一定会有一天
 //! 长得不一样。
+//!
+//! ⚠️ 借 pandoc 转的那七种格式**不在这里**，在 `commands/pandoc.rs`：
+//! 那一路要起外部进程、要探测、PDF 还有第二条路，和这里"写一段文本"不是一回事。
+//! 两边共用的只有"文档目录当基准"这条判断（理由见下面打印那一段）。
 //!
 //! # 为什么打印是"写个文件交给系统"而不是 `window.print()`
 //!
@@ -15,7 +19,7 @@
 //! 所以这里选的是**看得见、走得到、用户能核对**的那条路：写成一份带样式的
 //! HTML → 交给系统默认程序（浏览器）打开 → 在那边按 `Ctrl+P`。
 //! ⚠️ 代价如实写在提示语里（`App.tsx` 的 toast）：多一步、附带一个临时文件。
-//! **不假装我们在应用里打印。**
+//! **不在应用里假装能打印。**
 //!
 //! # 临时文件为什么落在文档自己的目录里
 //!
@@ -25,10 +29,12 @@
 //!
 //! ⚠️ 这是**对用户目录的一次写入**，所以三条约束：文件名以 `.` 开头（文件管理器
 //! 里默认隐藏）、固定一个名字（不堆文件，每次覆盖）、**名字在下面那格注释里
-//! 写死并说明来历**。和 Slidev 那个 `.nota-slidev-<id>.md` 入口文件是同一类交易。
+//! 写死并说明来历**。和"往用户目录里写一个影子入口文件"是同一类交易：那不算
+//! 用户自己写的东西，所以名字要能一眼看出是 Nota 放的、也要能一眼被忽略。
 
 use std::path::{Path, PathBuf};
 
+use base64::Engine;
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
@@ -38,7 +44,7 @@ use crate::paths::path_to_string;
 /// 打印临时文件的固定名字。**点号开头** = 在文件管理器里默认隐藏。
 ///
 /// ⚠️ 固定（而不是带时间戳）是**故意的**：带时间戳就会在用户的文档目录里
-/// 一次堆一个，而我们没有任何时机去清理它们。覆盖同一个文件则最多留一份。
+/// 一次堆一个，而清理它们的时机并不存在。覆盖同一个文件则最多留一份。
 const PRINT_FILE: &str = ".nota-print.html";
 
 /// 没有文档路径时（新建的、还没存盘的文档）落到系统临时目录里的名字前缀。
@@ -52,6 +58,36 @@ const PRINT_FILE_TMP: &str = "nota-print";
 pub fn nota_export_write(path: String, content: String) -> Result<String> {
     let target = PathBuf::from(&path);
     std::fs::write(&target, content.as_bytes()).map_err(|source| NotaError::Write {
+        path: target.clone(),
+        source,
+    })?;
+    path_to_string(&target)
+}
+
+/// 把一段 **base64** 解出来的字节写到 `path`。分享图的 PNG 走这条。
+///
+/// # 为什么要与上面那条分开，而不是让 `write` 接字节
+///
+/// 因为 IPC 那条路是 **JSON**。`write` 收的是 `String`（导出的是 HTML，本来就
+/// 是文本）；二进制如果也走它，要么在前端把字节拼成一个字符串（那会在遇到高位
+/// 字节时被 UTF-8 编码成两个字节，写出去的文件就废了），要么传一个几十万长的
+/// 数字数组（JSON 里每个数字一个逗号，比 base64 长三倍，而且 Rust 侧还得先收
+/// 一个 `Vec<u8>` 再拼）。base64 只长 33%，两端都有现成的编解码器。
+///
+/// ⚠️ 解不开就**报错，不写半个文件**：`decode` 在 `fs::write` 之前，
+/// 所以不存在"写到一半发现数据是坏的"。文件系统上留下一个半截的 PNG
+/// 比什么都不留下更糟——用户会以为导出成功了。
+///
+/// ⚠️ 只认**标准** base64（`+` `/` `=`），不认 URL 安全那种。前端用的是
+/// `btoa`（`share-card.ts::转base64`），出来的就是标准那套。
+#[tauri::command]
+pub fn nota_export_write_bytes(path: String, base64: String) -> Result<String> {
+    let 字节 = base64::engine::general_purpose::STANDARD
+        .decode(base64.as_bytes())
+        .map_err(|e| NotaError::other(format!("这段数据不是合法的 base64，写不出去：{e}")))?;
+
+    let target = PathBuf::from(&path);
+    std::fs::write(&target, &字节).map_err(|source| NotaError::Write {
         path: target.clone(),
         source,
     })?;
@@ -87,6 +123,21 @@ pub fn nota_export_print(
             ))
         })?;
 
+    Ok(shown)
+}
+
+/// 在文件管理器里**定位**一个文件（选中它，不是打开它）。
+///
+/// 导出设置里那条「导出后打开所在目录」用它（`settings/export.rs` 的
+/// `open_after_export`，2026-09-25 接上线）。⚠️ 是"定位"不是"打开"：
+/// 打开会把 PDF 塞进某个看图程序里，而用户此刻多半是想把文件拖到别处去。
+#[tauri::command]
+pub fn nota_export_reveal(app: AppHandle, path: String) -> Result<String> {
+    let target = PathBuf::from(&path);
+    let shown = path_to_string(&target)?;
+    app.opener()
+        .reveal_item_in_dir(&target)
+        .map_err(|e| NotaError::other(format!("在文件管理器里定位 {shown} 失败：{e}")))?;
     Ok(shown)
 }
 
@@ -179,6 +230,37 @@ mod tests {
         nota_export_write(target.to_string_lossy().to_string(), body.to_string()).unwrap();
         let back = std::fs::read_to_string(&target).unwrap();
         assert_eq!(back, body);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn base64_写出来的字节与编码前一模一样() {
+        let dir = std::env::temp_dir().join("nota-export-bytes-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("out.png");
+
+        // ⚠️ 掺进 PNG 那 8 字节魔数和几个 **高位字节**（`\x89`、`\xff`、`\x00`）：
+        // 高位字节正是"前端把字节拼成字符串再传"那条错路会坏掉的地方——
+        // 传进来的是 `String`，那些字节会被换成 UTF-8 的两个字节，长度就变了。
+        let 原 = [0x89u8, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0x80];
+        let 编码 = base64::engine::general_purpose::STANDARD.encode(原);
+        nota_export_write_bytes(target.to_string_lossy().to_string(), 编码).unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), 原);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 坏掉的base64报错而且不留下半个文件() {
+        let dir = std::env::temp_dir().join("nota-export-bad-b64-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("out.png");
+        // `!!!!` 不是 base64 的字母表里的东西。
+        let r = nota_export_write_bytes(target.to_string_lossy().to_string(), "!!!!".into());
+        assert!(r.is_err(), "{r:?}");
+        // ⚠️ 这条是**重点**：文件系统上不能留下一个半截的 PNG——那种文件打不开，
+        // 而用户看到"文件在"会以为导出成功了。
+        assert!(!target.exists(), "解不开的时候不该写出文件");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -17,7 +17,7 @@
  * 而**颜色由 CSS 给**——`.icon` 的 `background-color: currentColor`。
  *
  * 于是原文件里那 355 处写死的 `fill="#2e3436"`（GTK 的深灰）**一个字都不用改**：
- * 遮罩只取形状，颜色是我们在外面刷的。深色主题、`--accent-fg` 反色，
+ * 遮罩只取形状，颜色由外面刷。深色主题、`--accent-fg` 反色，
  * 全都自动跟着 `color` 走，不需要"深色版图标"。
  *
  * ⚠️ 这也是**为什么不改那些文件里的 `fill`**：改了就不再是逐字节的搬运，
@@ -70,16 +70,58 @@ const 名字表 = [
   "folio-format-text-bold-symbolic",
   "folio-format-text-italic-symbolic",
   "folio-format-text-strikethrough-symbolic",
+  // 扩展语法的三条（高亮 / 上标 / 下标）＋ 下划线。四枚都是 Folio 那 96 枚里
+  // 现成的：`folio-marker-symbolic` 的文件头就写着"标记（高亮）：记号笔 +
+  // 底部高亮色条"，正是高亮那一枚。
+  "folio-marker-symbolic",
+  "folio-format-text-superscript-symbolic",
+  "folio-format-text-subscript-symbolic",
+  "folio-format-text-underline-symbolic",
   "folio-insert-code-symbolic",
   "folio-insert-link-symbolic",
   "folio-insert-image-symbolic",
   "folio-view-list-bullet-symbolic",
   "folio-view-list-ordered-symbolic",
   "folio-eraser-symbolic",
+  // 上面那套（Folio）里凑不出来的两枚，**是 Nota 自己画的**（`nota-` 前缀）。
+  // 引用和任务列表原先拿汉字「引」「任」当图标——汉字笔画多，缩到 16px
+  // 就是一团糊，而且和左右两边真正的图形混在一起看着像错位。见
+  // `ui/FormatBar.tsx` 里那段说明。
+  "nota-quote-symbolic",
+  "nota-task-symbolic",
   // 各处"收起/关闭"的 ×（侧边栏、插件栏、标签页、查找条、提示气泡）
   "folio-close-symbolic",
   // 侧边栏空态里那颗「打开文件夹…」
   "folio-document-open-symbolic",
+  // 偏好设置左栏那九页（`ui/settings/SettingsDialog.tsx`）。
+  // ⚠️ 在这一批之前，设置左栏用的是 `settings/primitives.tsx` 里**手写的五枚
+  // 24 格细线图标**——那是第二套画风，和工具栏、侧栏、菜单里这 96 枚摆在一起
+  // 看得出不一样（描边粗细、格数、圆角都对不上）。现在全应用一副面孔。
+  // 挑法写在 `SettingsDialog.tsx` 的 `SECTIONS` 上，一枚一枚都有理由。
+  // ⚠️「文件」那一页复用上面的 `folio-document-open-symbolic`（一枚文件夹
+  // 同时表示"打开"和"文件"，本来就是一回事），所以这里没有第六个重复项。
+  // ⚠️ **「Markdown」与「文档主题」这两页是 Nota 自己画的**（`nota-` 前缀，
+  // 2026-09-25 换）：用户当天看完成品说「markdown 左侧的图标你可以画一个 MD，
+  // 用一个框框框起来」「文档主题你也不要用这个啊」。原来那两枚（`¶` 段落符、
+  // 页面 + 分页参考线）说的分别是"显示编辑标记"和"参考线"，都不是那两页在讲的
+  // 事——**图标画得再好看，指错了东西也没用**。现在这两枚是同一个模子：
+  // 一个圆角框 + 两个字母（MD / Aa），一眼能读，也不欠谁的。
+  // ⛔ 框里**不放汉字**：汉字笔画多，缩到 16px 是一团糊，用户 2026-09-24
+  // 就为此退掉过一次「引」「任」当图标（见上面那两枚 `nota-quote` / `nota-task`）。
+  "folio-edit-symbolic", // 编辑器
+  "folio-insert-image-symbolic", // 图像
+  "nota-markdown-symbolic", // Markdown（框里的 MD）
+  "folio-document-export-symbolic", // 导出
+  "folio-window-symbolic", // 外观（整个应用的样子）
+  "nota-doc-theme-symbolic", // 文档主题（框里的 Aa）
+  "nota-keys-symbolic", // 快捷键
+  "folio-configure-symbolic", // 通用（齿轮）
+  // ⚠️ 这一枚是 **Nota 自己画的**（`nota-` 前缀，2026-09-26），同上面那三枚的
+  // 来路。为什么不用现成的：那一套里**没有**秒表/时钟/盾牌这一类，而最接近的
+  // 两枚都指错了东西——`folio-today-symbolic` 是日历（说的是"哪一天"），
+  // `folio-dialog-warning-symbolic` 是警告三角（说的是"出错了"）。
+  // 「强制专注」讲的是**一段时间在走**，形状取秒表。
+  "nota-force-focus-symbolic", // 强制专注（秒表）
 ] as const;
 
 export type 图标名 = (typeof 名字表)[number];

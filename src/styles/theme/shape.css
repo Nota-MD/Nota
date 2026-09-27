@@ -1,0 +1,250 @@
+/* ── ② 轴一：界面风格（只定形状，不定颜色）＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+ *
+ * 八档风格各一段：圆角、控件高、间距、字体栈、开关尺寸、材料参数。
+ * ⚠️ **这里一条颜色都不许有**——理由写在下面那段原文里（颜色进了风格块，
+ * 这个风格就没法配暗色了）。对应的颜色在 `color.css`。
+ *
+ * ⚠️ **加载顺序**：在 `base.css` 之后、`color.css` 之前。
+ *
+ * ⚠️ 从 `theme.css` 里拆出来的（2026-09-26）。拆的界线就是那条原文注释：
+ * 轴一只管形状，轴一×轴二才管颜色。
+ */
+
+/* ── 轴一：界面风格（只定形状，不定颜色）──────────────────────────────── */
+
+/* Adwaita（GNOME 42+ / LibAdwaita 原生）：极简、层级靠阴影不靠边框。
+ *
+ * ⚠️⚠️ **这一档的来历要连着读**，它被改过两轮，方向是相反的：
+ *
+ * ① 2026-09-24：用户说「默认风格可以改的轻快一点」，于是把它**放松**了
+ *    （圆角 4/6/10 → 5/8/12、控件高 30 → 32、间距 8 → 10）。
+ * ② 2026-09-26：用户给了**一份 LibAdwaita 的走查稿**，于是按稿子重取：
+ *    控件高 32 → 36、`--radius-lg` 12 → 15（浮动窗口的圆角）、顶栏 38 → 44、
+ *    开关 36×20 → 44×22。**`--radius`(8px) 和 `--radius-sm` 没动**——
+ *    稿子给的就是 8px，和 ① 那次调的正好一样。
+ *
+ * 为什么两轮都盯的是它：**`ui_style = auto` 在这台机器上就落在这里**（GNOME），
+ * 也就是"默认长相"就是它（`applyTheme.ts` 里探不出来时兜底的也是它）。
+ * 改这一档 = 改没选过风格的人看到的东西，**不是**改"GNOME 用户对照用的样本"。
+ *
+ * ⚠️ 所以这里和 GNOME 的真实取值**不再逐值相同**（GNOME 自己的原值是
+ * 4/6/10 + 控件高 30 + 间距 8，git 历史里也在）。改之前先想清楚上面那句话。 */
+[data-ui-style="adwaita"] {
+  --radius-sm: 5px;
+  /* ⚠️ 稿子：普通按钮圆角 8px —— **和 2026-09-24 那次调的正好一样**，没动。 */
+  --radius: 8px;
+  /* 稿子：浮动窗口圆角 15px。落在这里（`--radius-lg`）是因为本仓拿它画的是
+     对话框/弹出层——那正好是"浮动窗口"这个角色（真正的窗口边框归窗口管理器）。 */
+  --radius-lg: 15px;
+  /* 稿子：普通按钮高 36px。原来是 32。 */
+  --control-height: 36px;
+  --spacing: 10px;
+  /* ⚠️ 顶栏高度 38 → 44（稿子：headerbar 44px）。
+     **这是那几份稿子里唯一一档照用了"标题栏高度"的**，理由：稿子给的
+     44px 比我们现在的 38px **大**，控件 36px 放进去上下各留 4px、正合适；
+     而 Breeze(32) / Win11(32) / Win10(30) 那三份给的都比 38 小，
+     照用会把我们自己的按钮挤出去（Win11 那档控件本身就 32px，等于零余量），
+     所以那三档**只取控件尺寸、不取标题栏高度**。macOS 那份给的正好是 38px，
+     不用动。 */
+  --toolbar-height: 44px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 500;
+
+  /* 开关：44×22、滑块 18（稿子的取值）。行走 20px = 44 − 2 − 18 − 4。 */
+  --switch-w: 44px;
+  --switch-h: 22px;
+  --switch-knob: 18px;
+  --switch-travel: 20px;
+}
+
+/* GitHub：紧凑、直角感强、无阴影，靠 1px 边框分层 */
+[data-ui-style="ghub"] {
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 12px;
+  --control-height: 28px;
+  --spacing: 8px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 500;
+  --font-ui: -apple-system, "Segoe UI", "Noto Sans", "Noto Sans CJK SC", Helvetica,
+    Arial, sans-serif;
+}
+
+/* macOS：尺寸回到 Apple 的 8pt 栅格，层次靠材料与阴影，不靠 1px 的线。
+ *
+ * ⚠️ **这一格 2026-09-25 按 Apple 自己的设计口径重画过一次**（用户给的那份
+ * 设计稿整理）。四处改动，每一处都能在界面上看出来：
+ *
+ * ① **尺寸回到 8pt 栅格**：间距一律 8 的倍数（9 是"手感值"，8 才是 Apple
+ *    的基数）；控件高 26 → 28（Apple 的常规控件是 22pt，但那配的是 13pt
+ *    字号，本仓界面字号是 15px，按比例取 28）；圆角 5/8/14 → 6/8/12
+ *    （14 是 sheet 的量级，弹出层在 macOS 上更接近 12）。
+ * ② **线淡下去**：macOS 的外壳几乎不用 1px 的线分层，靠的是材料与阴影。
+ *    所以 `--border` 压到 0.07——⚠️ 这已经贴着本文件顶上那条"低于 0.06
+ *    就看不见"的底线，**不要再往下压**；分层交给 `--popup-shadow`。
+ *    工具栏那道投影直接去掉（`--toolbar-shadow: none`）：macOS 的工具栏
+ *    是一块材料，底下只有一道极淡的分界，没有"浮起来"的投影。
+ * ③ **字体栈照旧 Apple 优先**，但**本机没有 SF**——那是 Apple 的私有字体，
+ *    不能随包发。所以这台机器上它会落到 Noto Sans CJK，看到的不是真旧金山。
+ *    在真 Mac 上这一行不用改；在别的机器上"像 macOS"是字体授权的事，
+ *    不是这一格能解决的（⛔ 别去下载 SF 塞进包里）。
+ * ④ **形状之外还有两件事变量表达不了**（材料与按压），写在文件末尾的
+ *    「macos 专属」那一节——那是本文件里唯一带组件选择器的地方。
+ */
+[data-ui-style="macos"] {
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --control-height: 28px;
+  --spacing: 8px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 500;
+  --font-ui: -apple-system, "SF Pro Text", "Helvetica Neue", "PingFang SC",
+    "Noto Sans CJK SC", sans-serif;
+
+  /* 材料：弹出层的模糊半径与饱和度。⚠️ **颜色不在这儿**——玻璃的底色随
+     明暗走，写在下面对应的那两段两属性选择器里。
+     ⚠️ 2026-09-26 照用户那份 macOS 稿改成 18px / 95%（原来是 24px / 180%）。
+     **这一改在本机看不出任何变化**：本文件末尾那节记着，WebKitGTK 上
+     `backdrop-filter` 是**静默失效**的。改它只是为了"哪天模糊真能用上时，
+     数值和设计稿一致"，别指望截图能验它。 */
+  --material-blur: 18px;
+  /* 稿子说"饱和度轻微降低"——所以是 95% 而不是 180%。 */
+  --material-saturate: 95%;
+  /* 按下时缩多少。⚠️ 小到几乎看不出来才对；0.95 就不是"按下"是"弹一下"了。 */
+  --press-scale: 0.97;
+
+  /* 开关：48×28、滑块 24（设计稿的取值）。原来那 36×20 是 iOS 的尺寸，
+     macOS 自家的开关比 iOS 大一档。
+     行走 18px = 48 − 2 − 24 − 4（公式在根上那条注释里）。 */
+  --switch-w: 48px;
+  --switch-h: 28px;
+  --switch-knob: 24px;
+  --switch-travel: 18px;
+}
+
+/* Breeze（KDE Plasma 的原生语言）：方正偏圆、控件偏高、有淡淡的一道分隔线。
+ *
+ * ⚠️ **2026-09-26 按用户那份 Breeze 稿子重取过一轮形状。**（键名仍叫
+ * `plasma`，见下面那条注释。）
+ * 圆角 4/6/10 → 3/4/8（稿子：控件 4px、窗口 8px），控件高 30 → 26
+ * （稿子的 26px），开关 36×20 → 44×22。
+ *
+ * ⚠️ **`--toolbar-height` 不动。** 稿子里那个「标题栏 32px」说的是**系统画的
+ * 那道标题栏**，而本仓的窗口是 `decorations: true`——那道栏是窗口管理器画的，
+ * 我们画不出来（见 `docs/04` 外观一节）。我们的顶栏是**内容行**，
+ * 把它压到 32px 只会挤自己的按钮，换不来"更像 Breeze"。 */
+[data-ui-style="plasma"] {
+  --radius-sm: 3px;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --control-height: 26px;
+  --spacing: 8px;
+  --toolbar-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  --btn-font-weight: 500;
+  --font-ui: "Noto Sans", "Noto Sans CJK SC", "Source Han Sans SC", system-ui,
+    sans-serif;
+
+  /* 开关：44×22、滑块 18（稿子的取值）。行走 20px = 44 − 2 − 18 − 4
+     （公式在根上那条注释里）。 */
+  --switch-w: 44px;
+  --switch-h: 22px;
+  --switch-knob: 18px;
+  --switch-travel: 20px;
+
+  /* 材料：Breeze 的面板是模糊 6、不降饱和。⚠️ **本机上这层模糊是失效的**
+     （理由写在 `--material-blur` 根默认值那条注释里），所以用户实际看到的是
+     `--material-bg` 那个不透明的底。 */
+  --material-blur: 6px;
+  --material-saturate: 100%;
+}
+
+/* Windows 11 原生（Mica）：小圆角、直角感、无阴影。
+ * ⚠️ 2026-09-26 按用户那份 Win11 Mica 稿子重取过：圆角 5 → 4（稿子：控件 4px、
+ * 窗口 8px），控件高 30 → 32（稿子的 32px），开关 36×20 → 40×20。 */
+[data-ui-style="windows"] {
+  --radius-sm: 3px;
+  --radius: 4px;
+  --radius-lg: 8px;
+  --control-height: 32px;
+  --spacing: 7px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 400;
+  /* ⚠️ 稿子说标题栏用 Segoe UI Variable。**没有把那个名字加进来**——
+     用户 2026-09-26 明确说了字体是专有字体、不要直接拿来用。这一条里
+     `"Segoe UI"` 是**原来就有的**（只是"机器上装了就用"的兜底，仓库里
+     一个字体文件都不带），"Segoe UI Variable" 是这次要新加的，所以不加。 */
+  --font-ui: "Segoe UI", system-ui, "Noto Sans CJK SC",
+    "Microsoft YaHei", sans-serif;
+
+  /* 开关：40×20、滑块 16（稿子的取值）。行走 18px = 40 − 2 − 16 − 4。 */
+  --switch-w: 40px;
+  --switch-h: 20px;
+  --switch-knob: 16px;
+  --switch-travel: 18px;
+
+  /* 材料：Mica 的模糊 4、不降饱和。 */
+  --material-blur: 4px;
+  --material-saturate: 100%;
+}
+
+/* Windows 10 原生（Acrylic）：**比 Win11 更方**——窗口是直角，只有小控件带
+ * 一点微圆角；稿子点名说「不是 Mica，是亚克力」。
+ *
+ * ⚠️ **为什么是另加一档而不是改上面那格**：两套是**并存的两代**长相
+ * （Win10 直角 + 亚克力、Win11 小圆角 + Mica），用户 2026-09-26 先后给了两份
+ * 稿子，后一份自己写明「不是 Mica」。合成一档等于把先给的那份丢掉。
+ * ⚠️ 加了这一档之后，「界面风格」下拉里就是 **8 档**（× 明暗 2 = 16 种外观），
+ * `docs/04` 与 `src-tauri/src/settings/mod.rs` 的枚举要一起是 8。
+ *
+ * ⚠️ 稿子里的「窗口圆角 0px」**我们做不到**：窗口边框归窗口管理器
+ * （`decorations: true`），`--radius-sm: 2px` 管的是我们自己画的小控件。 */
+[data-ui-style="windows10"] {
+  --radius-sm: 2px;
+  --radius: 2px;
+  --radius-lg: 4px;
+  --control-height: 32px;
+  --spacing: 6px;
+  --toolbar-shadow: none;
+  --btn-font-weight: 400;
+  --font-ui: "Segoe UI", system-ui, "Noto Sans CJK SC",
+    "Microsoft YaHei", sans-serif;
+
+  /* 开关：40×20、滑块 16（和 Win11 同尺寸，稿子两代给的一样）。 */
+  --switch-w: 40px;
+  --switch-h: 20px;
+  --switch-knob: 16px;
+  --switch-travel: 18px;
+
+  /* 材料：亚克力的模糊 3、不降饱和（稿子：高斯模糊半径 3）。 */
+  --material-blur: 3px;
+  --material-saturate: 100%;
+}
+
+/* Yaru（Ubuntu）：GNOME Adwaita 的底子 + Yaru 的品牌色。
+ * ⚠️ `yaru-blue` **共用这一块**——它就是同一套设计语言，只换强调色。
+ * 复制一份形状的话，以后改圆角就会只改到其中一半。
+ *
+ * ⚠️ 2026-09-26 按用户那份 Yaru 稿子重取：圆角 6/9/14 → 4/4/6
+ * （稿子：控件 4px、窗口 6px），间距 9 → 8（稿子里的 8px 是它自己的栅格）。
+ * 原来那组大圆角是"Yaru 圆角更大"这个印象来的，稿子给的不是那个数——
+ * 稿子新，按稿子走。 */
+[data-ui-style="yaru"],
+[data-ui-style="yaru-blue"] {
+  --radius-sm: 4px;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --control-height: 32px;
+  /* 稿子：headerbar 40px。比我们的 38 大 2px，控件 32px 放进去有 8px 余量，
+     所以照用（判据见 adwaita 那块里 `--toolbar-height` 的注释）。 */
+  --toolbar-height: 40px;
+  --spacing: 8px;
+  --toolbar-shadow: 0 1px 2px rgba(0, 0, 0, 0.14);
+  --btn-font-weight: 500;
+
+  /* 开关：42×22、滑块 18（稿子的取值）。行走 18px = 42 − 2 − 18 − 4。 */
+  --switch-w: 42px;
+  --switch-h: 22px;
+  --switch-knob: 18px;
+  --switch-travel: 18px;
+}

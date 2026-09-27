@@ -1,0 +1,283 @@
+/**
+ * **编辑区里画什么**（2026-09-27 从 `App.tsx` 搬出，那边 995 行、硬上限 1000）。
+ *
+ * # 搬的是哪一块、判据是什么
+ *
+ * 就是 `<main class="app-main">` 里面那一整棵：外部改动提示条 · 查找替换条 ·
+ * 格式化工具栏 · 改动预览那条细条 · **正文**（没文档时是主页）· 插件面板 ·
+ * 外部改动对照。判据是老规矩（见 `App.tsx` 文件头）：**这一块自己有一份完整的
+ * 理由可写**——它回答的是同一个问题："此刻这一格该画什么"。
+ *
+ * ⚠️ **不是"顺手重构"**：搬之前 `App.tsx` 995 行，再往上加任何一件新功能都会
+ * 顶破那条线。搬的时候**一行逻辑没改**，只是把外面那些局部名换成了 `接线.xxx`。
+ *
+ * # 为什么收**一个对象**而不是四十来个 props
+ *
+ * 同 `ui/AppDialogs.tsx` 的判据：这一块要的东西跨了七八个 hook 的出口，摊成
+ * 四十来个 props 之后，"哪一件来自谁"就散了——而漏掉一件的症状是**那块界面
+ * 安静地不工作**（不报错）。收成一个对象，来源在 `App.tsx` 那一个字面量里一眼看得全。
+ *
+ * ⚠️ 里面那几个 `xxx出口` 字段是**整个 hook 返回值**，不是挑出来的几项：
+ * 那些对象要么是 `useMemo` 出来的、要么每帧重建（反正本组件随 `App` 重渲染），
+ * 挑字段只会多一层"这里要哪个"的账，而那份账在别处已经有一份了。
+ *
+ * # ⚠️ `data-review` 是**推导**出来的，不再读那个原始对象
+ *
+ * 搬之前写的是 `预览 ? (预览.kind === "diff" ? "inline" : "true") : undefined`。
+ * 现在 `预览` 这个原始值就在 [`预览出口`] 里（`活跃预览` / `面板预览` 是它的
+ * 两个分派结果，一个 `kind` 只可能命中一边），所以这里写成"先看 `外部对照`、
+ * 再看是哪一种预览"。⚠️ **判据一个字没变**——它给的是同一个字符串。
+ * 留着读原始对象也行，但那要多传一个字段，而多传的每一个字段都是一处会分叉的账。
+ */
+
+import type { Dispatch, RefObject, SetStateAction } from "react";
+
+import type { CommandState } from "@/editor/command-state";
+import type { Document } from "@/bridge/ipc";
+import type { Settings } from "@/bridge/types";
+import type { Toast } from "@/ui/Toasts";
+import { EditorPane, type EditorPaneHandle } from "@/ui/EditorPane";
+import { ExternalChangeBar } from "@/ui/ExternalChangeBar";
+import { ExternalDiffPane } from "@/ui/ExternalDiffPane";
+import { FindBar } from "@/ui/FindBar";
+import { FormatBar } from "@/ui/FormatBar";
+import { Home } from "@/ui/Home";
+import { ReviewBar } from "@/ui/ReviewBar";
+import { ReviewPane } from "@/ui/ReviewPane";
+import type { Dialogs } from "@/ui/useDialogs";
+import type { 文档出口 } from "@/ui/useDocuments";
+import type { 命令出口 } from "@/ui/useEditorCommands";
+import type { 外部改动出口 } from "@/ui/useExternalChanges";
+import type { 查找条 } from "@/ui/useFindBar";
+import type { PluginsState } from "@/ui/usePlugins";
+import type { 预览看法出口 } from "@/ui/useReviewView";
+import type { 会话出口 } from "@/ui/useSession";
+
+/** 这一格要的全部东西。见文件头「为什么收一个对象」。 */
+export interface 编辑区接线 {
+  /** `<main>` 自己那个挂载点。⚠️ 「悬停显形」那段量鼠标位置的窥视带要它。 */
+  主区: RefObject<HTMLElement | null>;
+  /** 格式化工具栏那排按钮的挂载点（同一段窥视带也要它）。 */
+  格式化栏: RefObject<HTMLDivElement | null>;
+  /** 编辑器句柄：大纲跳转、查找、菜单命令都往它身上送。 */
+  编辑器: RefObject<EditorPaneHandle | null>;
+  /** 此刻前台那份文档。`null` = 一份都没开，主区画主页。 */
+  activeDoc: Document | null;
+  settings: Settings | null;
+  /** 三种编辑模式（所见即所得 / 源码 / 分屏）。 */
+  viewMode: Settings["view_mode"];
+  focusMode: boolean;
+  typewriter: boolean;
+  /** 格式化工具栏此刻该不该画（三档里由 `ui/useChromeVisibility.ts` 算出来）。 */
+  格式化栏开着: boolean;
+  /** 光标那儿的格式状态（工具栏那排按钮亮不亮）。 */
+  命令状态: CommandState | null;
+  设命令状态: Dispatch<SetStateAction<CommandState | null>>;
+  /** 转交一条编辑命令（`ui/useEditorCommands.ts`）。 */
+  跑命令: 命令出口["run"];
+  /** 几个 hook 的出口。⚠️ 整个给，不挑字段（见文件头）。 */
+  文档出口: 文档出口;
+  查找条: 查找条;
+  预览出口: 预览看法出口;
+  改动出口: 外部改动出口;
+  会话出口: 会话出口;
+  插件: PluginsState;
+  /** 自绘对话框那一套（`ui/useDialogs.ts`）：面板里那颗按钮要问参数。 */
+  对话框: Dialogs;
+  /**
+   * 从磁盘重读一次文档列表（编辑器那边存/另存之后要刷新标签栏）。
+   * ⚠️ 返回 `Promise<unknown>` 而不是 `Promise<void>`：它给的是重读之后的整份
+   * 列表，而这里只关心"刷完了没有"。口径与 `EditorPane` 的 `onDocsChanged`
+   * 一模一样——那一边也是这么写的，两边别分叉。
+   */
+  refreshDocs: () => Promise<unknown>;
+  toast: (message: string, level?: Toast["level"]) => void;
+}
+
+/**
+ * ⚠️ 形参是**一个叫 `接线` 的 prop**（`{ 接线 }` 解构），不是把接口摊成 props
+ * ——调用处因此写成 `<EditorArea 接线={{ … }} />`，那一整个字面量是**一处**看得完的账。
+ */
+export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
+  const { 主区, 格式化栏, 编辑器, activeDoc, settings, viewMode, focusMode, typewriter } = 接线;
+  const { 格式化栏开着, 命令状态, 设命令状态, 跑命令, refreshDocs, toast } = 接线;
+  const { 文档出口, 查找条, 预览出口, 改动出口, 会话出口, 插件, 对话框 } = 接线;
+
+  const { newDoc, openViaDialog, openFolder, 记活动 } = 文档出口;
+  const { 查找开着, 命中情况, 报命中, 关查找, 替换当前, 全部替换 } = 查找条;
+  const { 活跃预览, 面板预览, 看法, set看法, 退出预览 } = 预览出口;
+  const { 改动: 外部改动, 忽略: 忽略外部改动, 重新载入: 重新载入外部, 查看修改, 对照: 外部对照, 关对照 } = 改动出口;
+  const { 最近, 打开最近, 滚动位置, 记滚动 } = 会话出口;
+
+  return (
+    // ⚠️ `data-review` 是给 CSS 的开关（`styles/review.css`）：
+    // `"true"` = 面板形态，正文**只是藏起来，不卸载**（`.editor-pane`
+    // 里那个 CodeMirror 带着撤销栈和光标，卸载一次就全没了）；
+    // `"inline"` = 改动预览，正文留在原地，改动画在它身上。
+    <main
+      className="app-main"
+      ref={主区}
+      data-review={
+        外部对照
+          ? // 外部改动那份对照是**块**（占编辑区，正文让位），不是画在正文
+            // 身上的装饰——它跟插件面板同一形态，所以走 `"true"` 那一支。
+            "true"
+          : 活跃预览
+            ? "inline"
+            : 面板预览
+              ? "true"
+              : undefined
+      }
+    >
+      {/* 外部改动提示条（`ui/ExternalChangeBar.tsx`）。⚠️ **排在编辑区那两块
+          之前**，因为它必须在**任何模式、任何预览形态**下都看得见——
+          磁盘上那份被改了这件事，不会因为用户此刻开着预览就不算数。 */}
+      <ExternalChangeBar
+        改动={外部改动}
+        忽略={忽略外部改动}
+        重新载入={重新载入外部}
+        查看修改={(id) => void 查看修改(id)}
+        正在看={外部对照?.id ?? null}
+        关对照={关对照}
+      />
+      {activeDoc && 查找开着 && (
+        // ⚠️ key 要归零（换文档时清掉查询——理由见下），但**必须带前缀**：
+        // 这个键值不能和下面 `EditorPane` 那个撞。同层兄弟键值相撞会让
+        // React 把该删的旧 fiber 既不复用也不删，**被关掉的条子永远
+        // 留在 `.app-main` 里**（BUG-33，2026-09-25）。整条机理见
+        // `docs/04` 的「查找和替换条」一节，别把前缀省掉。
+        //
+        // ⚠️ 换文档为什么要归零：查找条里的查询是**组件自己的状态**，
+        // 不归零的话，B 文档那个编辑器手里没有任何查找状态（新实例），
+        // 而条子里还写着 A 文档的查询——条子上的"3 / 12"和正文里
+        // 一个高亮都没有，两边对不上。
+        //
+        // ⚠️ 两条查找回调**不包 `useCallback`**：`FindBar` 把它们存进
+        // ref 读（见那边的注释），身份抖不抖它不受影响；而这里包一层
+        // 反而多两行噪声。
+        <FindBar
+          key={`find-${activeDoc.id}`}
+          status={命中情况}
+          onQuery={(q, o) => 编辑器.current?.setFind(q, o)}
+          onStep={(d) => 编辑器.current?.findStep(d)}
+          onReplace={替换当前}
+          onReplaceAll={全部替换}
+          onClose={关查找}
+        />
+      )}
+      {activeDoc && 格式化栏开着 && (
+        // ⚠️ **只在有文档时画**。没文档时它是一排按不动的按钮
+        //（命令全都没有活动文档可作用），那比不画更让人困惑。
+        //
+        // ⚠️ `onCommand` 传的是 `run` **本身**，不包一层箭头：
+        // 包了的话每次 `App` 重渲染都是一个新函数身份，`FormatBar`
+        // 那十几颗按钮就整排重画一遍。
+        <FormatBar ref={格式化栏} state={命令状态} onCommand={跑命令} />
+      )}
+      {活跃预览 && (
+        // 改动预览顶上那一条细条。⚠️ **排在编辑区前面**（同一个 flex
+        // 列里的上一行），不是编辑区的子节点——分屏那两个窗格是横向
+        // flex，塞进去会把它们挤下去（理由写在 `ui/ReviewBar.tsx` 顶上）。
+        <ReviewBar
+          review={活跃预览}
+          看法={看法}
+          on看法={set看法}
+          // ⚠️ 包一层：`调插件` 要插件 id（`命令` 只在插件内部唯一），
+          // 而按钮给的只是命令名。插件 id 在这一份预览里，闭包里取。
+          onCall={(命令) => void 插件.调(活跃预览.plugin, 命令)}
+          onClose={() => void 插件.收预览()}
+          // ⚠️ 与 `EditorPane` 那条 `onReviewEscape` **同一个函数**：焦点
+          // 在正文里还是在这条工具栏上，按 `Esc` 应当做同一件事。
+          onEscape={退出预览}
+        />
+      )}
+      {activeDoc ? (
+        <EditorPane
+          ref={编辑器}
+          key={activeDoc.id}
+          doc={activeDoc}
+          mode={viewMode}
+          strict={settings?.strict_markdown ?? false}
+          physics={settings?.enable_physics ?? false}
+          // Emoji 输入辅助（短代码替换 ＋ 补全面板）。⚠️ 这里是**一个**
+          // 布尔而不是整整一页设置：`EditorPane` 只把它原样喂给 `createEditor`
+          // 的 `emoji` 那一格（理由见 `create-types.ts`）。
+          emoji={settings?.editor?.emoji_autocomplete ?? false}
+          // 整整一页 Markdown 设置。⚠️ 只有 `editor/inline-marks.ts` 那三个
+          // 开关用得上（高亮/上标/下标），挑字段与记忆化都在 `EditorPane`
+          // 里做——`App.tsx` 在 1000 行硬线上，这里只给一行。
+          markdown={settings?.markdown}
+          focusMode={focusMode}
+          typewriter={typewriter}
+          contentWidth={settings?.content_width ?? 760}
+          // 正文排版那四项（行距 / 段距 / 字体 / 字号，文档主题那一页）。
+          // ⚠️ 整份给，不挑字段（同 `markdown` 那一格的判据）：它在
+          // `EditorPane` 里要被一起算成 CSS 变量、写在同一处。
+          // `undefined` = 设置还没读回来，那时一个变量都不写。
+          文档排版={settings?.document}
+          // 滚动位置（第 76 项那两格：记住 + 恢复）。
+          // ⚠️ `初始滚动` 是**编辑器实例建出来那一刻读一次**的值
+          //（`EditorPane` 里那句注释），所以这里给 `undefined` 表示
+          // "没记过、别动它"——不能给 `0`，那是"滚到顶上"这个有意义的
+          // 位置（比例 0 是短文档的正常值）。
+          // ⚠️ `onScroll` 现写箭头函数**没问题**：那边把它存进 ref 读，
+          // 身份抖不抖它不受影响（见 `EditorPane` 的 `滚动回调Ref`）。
+          初始滚动={滚动位置(activeDoc.path)}
+          onScroll={(比例) => {
+            if (activeDoc.path) 记滚动(activeDoc.path, 比例);
+          }}
+          onCommandState={设命令状态}
+          onFindStatus={报命中}
+          onToast={toast}
+          onDocsChanged={refreshDocs}
+          onActivity={记活动}
+          // 改动预览按**两种形态**分派：`diff` 这一形态的图画在编辑区
+          // 自己身上，所以那一份要交给它；`panel` 形态跟它无关（那是
+          // 下面那个 `ReviewPane` 的事）。
+          review={活跃预览}
+          预览看法={看法}
+          onReviewEscape={退出预览}
+        />
+      ) : (
+        <Home
+          plugins={插件.plugins}
+          onNew={newDoc}
+          onOpen={openViaDialog}
+          onOpenFolder={openFolder}
+          最近={最近}
+          onOpenRecent={(p) => void 打开最近(p)}
+        />
+      )}
+
+      {面板预览 && (
+        // 编辑区里的**插件面板**（用户 2026-09-25 要的"直接在 Markdown
+        // 编辑区域预览"）。⚠️ 它排在正文**后面**，靠 CSS
+        // （`.app-main[data-review="true"]`）让正文让位——不是"二选一渲染"：
+        // 正文那一块不能卸载，理由见上面 `data-review` 那段。
+        <ReviewPane
+          plugin={面板预览.plugin}
+          panel={面板预览.panel}
+          // 标题与那句语言提示的合成都在 `ReviewPane` 那边（要拿插件清单
+          // 和面板清单两张表查名字/查语言）。放这边的唯一理由是这个文件
+          // 贴着 1000 行上限（`AGENTS.md` §0.4），多一行都是负担。
+          plugins={插件.plugins}
+          panels={插件.panels}
+          onClose={() => void 插件.收预览()}
+          onCall={插件.调}
+          askPrompt={对话框.askPrompt}
+        />
+      )}
+
+      {外部对照 && (
+        // **磁盘上那份和编辑器里这份**的对照（用户点了提示条上的
+        // 「查看修改」）。⚠️ 它是**只读**的、一个可点节点都没有——理由
+        //（以及"为什么不给它一颗接受按钮"）写在 `ui/ExternalDiffPane.tsx` 顶上。
+        //
+        // ⚠️ 它和上面那块插件面板**可以同时摊着**（各占一半）。罕见，
+        // 但不必为它加优先级：两块都是用户自己点开的，替他把其中一块
+        // 藏起来，他会以为是刚点的那下没生效。
+        <ExternalDiffPane 对照={外部对照} onClose={关对照} />
+      )}
+    </main>
+  );
+}

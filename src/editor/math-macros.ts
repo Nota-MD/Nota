@@ -1,7 +1,7 @@
 /**
  * 数学公式的**宏表**：physics 宏包那一套命令（`\qty`、`\dv`、`\braket`…）。
  *
- * # 为什么是"我们自己写的宏"而不是"装个扩展"
+ * # 为什么是手工宏表，而不是引一个扩展
  *
  * 数学渲染走 KaTeX，而 **KaTeX 官方只有四个扩展**（auto-render / copy-tex /
  * mathtex-script-type / mhchem），**没有 physics**（`katex.org/docs/libs` 那张
@@ -11,8 +11,8 @@
  * 依赖不该进公式这条路。
  *
  * 所以这一份是**照着 physics 的语义自己写的宏定义**（命令名对齐、行为对齐），
- * 不是它的移植。⚠️ 没覆盖到的命令逐条列在 `docs/10` §12——**别在这里偷偷
- * 少写一条**：这张表是"我能用哪些命令"的唯一真相。
+ * 不是它的移植。⚠️ 没覆盖到的命令逐条列在 `docs/10` §11.1——这张表是
+ * "能用哪些命令"的唯一真相，**一条都不能漏**。
  *
  * # 三条实现上的硬约束（改之前先读）
  *
@@ -20,7 +20,7 @@
  *    在 KaTeX 的宏里做不到——字符串宏吃不到"下一个 token 是什么"。
  *    所以 `\qty{x}` 固定展开成圆括号，方括号/花括号那些写法用等价的
  *    `\bqty{}` / `\Bqty{}`。physics 文档自己也把 `\pqty` 那套写成
- *    "robust and more LaTeX-friendly" 的推荐写法，我们是照着推荐写法做的。
+ *    "robust and more LaTeX-friendly" 的推荐写法，本仓照这个写法做。
  * 2. **可选参数只能走 `\renewcommand{\x}[n][默认]{}`**。这是试出来的：
  *    `\newcommand` 会报 "attempting to redefine"（KaTeX 里这些名字已经存在），
  *    直接用 `\def` 风格的可选参会掉进 "Too many expansions"。
@@ -30,20 +30,19 @@
  * # 和 KaTeX 内置命令打架的两条
  *
  * `\div` 与 `\Re` / `\Im` **KaTeX 本来就有定义**（除号、实部 ℜ、虚部 ℑ）。
- * physics 会重定义它们，我们也照做——**但这一档默认是关的**
- * （`Settings.enable_physics`），理由见 `settings.rs` 里那个字段的注释：
+ * physics 会重定义它们，本仓照做——**但这一档默认是关的**
+ * （`Settings.enable_physics`），理由见 `settings/mod.rs` 里那个字段的注释：
  * 一开就改了别人既有公式的意思，这种事不该默认发生。
  * 关着时 `\div` 还是除号，开着时才是散度算子。
  */
 
 /**
- * ⚠️ **这一行是副作用导入，别删**：它把 KaTeX 官方的 mhchem 扩展挂上，
- * 「化学式」的 `\ce{H2O}` 与 `\pu{123 kJ}` 才有定义。
+ * ⚠️ **这一行是副作用导入**：它把 KaTeX 官方的 mhchem 扩展挂上，
+ * 「化学式」的 `\ce{H2O}` 与 `\pu{123 kJ}` 才有定义——少这一行这两条命令没有定义。
  *
  * 它和 physics 那一档**无关**（不跟着那个开关走）：KaTeX 官方清单里
- * mhchem 就是它自带的四个扩展之一，而 Typora 那边 `\ce` 也是**内置**的
- * ——两边都不需要用户拨开关。实测它**不碰任何既有命令**（`\div` 引它之后
- * 还是除号），所以"一直开着"是安全的。
+ * mhchem 就是它自带的四个扩展之一，`\ce` 属于内置命令，不需要用户拨开关。
+ * 实测它**不碰任何既有命令**（`\div` 引它之后还是除号），所以"一直开着"是安全的。
  *
  * ⚠️ 只在**这一个文件**里引：它改的是 katex 那个模块实例，引两遍是无害的
  * 重复，但"到底谁把它打开的"会变得没人说得清。
@@ -96,7 +95,7 @@ export const PHYSICS_MACROS = {
   //
   // 所以一律回到"**参数写成花括号、不带可选参**"这一档：`\dv{f}{x}` → `df/dx`。
   // ⚠️ 代价：`\dv[2]{f}{x}`（二阶导）**做不到**了，那条写不进这张表——
-  // 用户要二阶导就手写 `\frac{d^{2}f}{dx^{2}}`。这一条记在 `docs/10` §12.1。
+  // 用户要二阶导就手写 `\frac{d^{2}f}{dx^{2}}`。这一条记在 `docs/10` §11.1。
   // ⚠️ 判据不能只是"能不能渲染"：上面那两条**都能渲染**，只是画错了。
   // 试验台 `#math` 里那张 `PHYSICS_EQUIVALENTS` 是专门盯这个的（见文件末尾）。
   "\\differential": "\\mathrm{d}",
@@ -130,7 +129,7 @@ export const PHYSICS_MACROS = {
   "\\crossproduct": "\\boldsymbol{\\times}",
   "\\cross": "\\boldsymbol{\\times}",
   "\\cp": "\\boldsymbol{\\times}",
-  // 向量算子。physics 的「长形式」（`\grad{\Psi}` 自动加括号）我们没有——
+  // 向量算子。physics 的「长形式」（`\grad{\Psi}` 自动加括号）本仓没有——
   // 这几个定义成**零参**，于是 `\div\vb{a}` 这种写法自然就是 `∇·a`。
   "\\gradient": "\\boldsymbol{\\nabla}",
   "\\grad": "\\boldsymbol{\\nabla}",
@@ -142,7 +141,7 @@ export const PHYSICS_MACROS = {
 
   // ── 算子名 ──────────────────────────────────────────────────────────
   // physics §2.3。⚠️ physics 还会把三角函数族重定义成"自动加括号 + 可选幂"
-  // （`\sin(x)`、`\sin[2](x)`），**我们不做**——那要动 KaTeX 内置的 `\sin` 一大家子，
+  // （`\sin(x)`、`\sin[2](x)`），**本仓不做**——那要动 KaTeX 内置的 `\sin` 一大家子，
   // 收益小、踩坏的地方多。要幂就直接写 `\sin^{2}(x)`。
   "\\trace": "\\operatorname{tr}",
   "\\tr": "\\operatorname{tr}",
@@ -160,15 +159,15 @@ export const PHYSICS_MACROS = {
 
   // ── Dirac 记法 ──────────────────────────────────────────────────────
   // physics §2.6。⚠️ physics 的 `\bra{\phi}\ket{\psi}` 会自动收缩成 ⟨φ|ψ⟩，
-  // 我们**不做**——收缩要宏能回头看前一个 token，KaTeX 的宏语法表达不了。
+  // 本仓**不做**——收缩要宏能回头看前一个 token，KaTeX 的宏语法表达不了。
   // 想要收缩的样子就打 `\braket{\phi}{\psi}`（下一条），那正是它的用途。
   "\\ket": "\\left|#1\\right\\rangle",
   "\\bra": "\\left\\langle #1\\right|",
   // ⚠️⚠️ **这一条改了 KaTeX 内置命令的"参数量"**，是整张表里唯一一处会让人
   // 迷惑的覆盖：KaTeX 自己就有 `\braket`，但它吃的是一参、竖线写在里面
   // （`\braket{a|b}` → ⟨a|b⟩）；physics 写的是两参（`\braket{a}{b}`）。
-  // 开着 physics 时按 physics 来——**一参那个写法请改用 `\Braket{a|b}`**
-  // （KaTeX 的另一个名字，我们没覆盖它；试验台里实测过它照常工作）。
+  // 开着 physics 时按 physics 来——一参的写法对应 `\Braket{a|b}`
+  // （KaTeX 的另一个名字，本仓没覆盖它；试验台里实测过它照常工作）。
   // ⚠️ `\ket` / `\bra` 也覆盖了内置的，但那两条**渲染结果更好**：内置的分隔符
   // 是固定尺寸，physics 这一套是自动尺寸（试验台量的 HTML 差 45% 的字节数）。
   "\\innerproduct": "\\left\\langle #1\\middle|#2\\right\\rangle",
@@ -179,7 +178,7 @@ export const PHYSICS_MACROS = {
   "\\ketbra": "\\left|#1\\right\\rangle\\left\\langle #2\\right|",
   "\\op": "\\left|#1\\right\\rangle\\left\\langle #2\\right|",
   // 期望值：**只做一参**（⟨A⟩）。physics 的两参形式（显式写态）用 `\mel` 代替，
-  // 见下一条与 `docs/10` §12。
+  // 见下一条与 `docs/10` §11.1。
   "\\expectationvalue": "\\left\\langle #1\\right\\rangle",
   "\\expval": "\\left\\langle #1\\right\\rangle",
   "\\ev": "\\left\\langle #1\\right\\rangle",
@@ -192,7 +191,7 @@ export const PHYSICS_MACROS = {
   // 收进来（`&` 与 `\\` 在展开之后才落到 matrix 环境里，所以是对的）。
   // ⚠️ **生成元素的那一半不做**（`\dmat` / `\imat` / `\xmat` / `\zmat` /
   // `\pmat` / `\admat`）：那几个要按参数拼出 n 行 n 列，宏语法拼不出来。
-  // 逐条写在 `docs/10` §12。
+  // 逐条写在 `docs/10` §11.1。
   "\\matrixquantity": "\\begin{matrix}#1\\end{matrix}",
   "\\mqty": "\\begin{matrix}#1\\end{matrix}",
   "\\pmqty": "\\left(\\begin{matrix}#1\\end{matrix}\\right)",
@@ -238,7 +237,7 @@ export const PHYSICS_MACROS = {
  * 每条命令的**用例**，给试验台的 `#math` 场景用（那条场景把每一条都真渲染一遍）。
  *
  * ⚠️ 写成 `Record<keyof typeof PHYSICS_MACROS, string>` 是故意的：宏表里加了
- * 一条而这里没给用例**编译不过**。理由和 `panes.tsx` 里 `Record<UiStyle, …>`
+ * 一条而这里没给用例**编译不过**。理由和 `panes/AppearancePane.tsx` 里 `Record<UiStyle, …>`
  * 那份一样——宏表写错不会在编译期报出来，只会在用户打出来的时候炸，
  * 所以"想漏都漏不掉"这件事得靠类型。
  */
@@ -364,7 +363,7 @@ export const PHYSICS_SAMPLES: Record<keyof typeof PHYSICS_MACROS, string> = {
  * 所以判据改成：**宏写法的渲染结果 == 手写 TeX 的渲染结果**（比 KaTeX 输出里
  * 那段可见文本，不比整段 HTML——`\frac` 的 DOM 有随机 id 之类的东西，比不得）。
  *
- * ⚠️ 加新宏时**顺手加一条对照**，尤其是"展开成好几个 token"的那类；
+ * ⚠️ 加新宏时**一并加一条对照**，尤其是"展开成好几个 token"的那类；
  * 只加进 `PHYSICS_SAMPLES` 是不够的——那只证明它不炸。
  */
 export const PHYSICS_EQUIVALENTS: Record<string, string> = {
@@ -392,11 +391,11 @@ export const PHYSICS_EQUIVALENTS: Record<string, string> = {
  * 交给 KaTeX 的选项。**两档都返回一份**（关着时给空宏表），
  * 这样"开关关掉"是一条明确的动作，而不是"没人设过"。
  *
- * ⚠️ `throwOnError: false` 是我们**特意盖掉**的：KaTeX 的默认是 `true`，
+ * ⚠️ `throwOnError: false` 是本仓**特意盖掉**的：KaTeX 的默认是 `true`，
  * 而 `@milkdown/plugin-math` 传进去的是一份**空选项**——于是用户打到一半的
  * `$x^{` 会在 `toDOM` 里抛出去（那是在 Prosemirror 的渲染路径上，抛出去
  * 不是"画个红字"那么客气）。`false` 时 KaTeX 把错误渲染成红字提示，
- * 公式变成一个能看见的错误块——正是 MathJax 那边的做法。
+ * 公式变成一个能看见的错误块。
  *
  * ⚠️ 每次**新建一份宏表**（不是把 `PHYSICS_MACROS` 直接递过去）：
  * KaTeX 会往它拿到的那个对象里塞定义，同一份被多个实例共用会互相串。

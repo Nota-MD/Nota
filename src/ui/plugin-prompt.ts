@@ -57,6 +57,10 @@ export async function 问参数(o: 问参数入参): Promise<{ args: unknown } |
     placeholder: prompt.placeholder || undefined,
     hint: prompt.hint || undefined,
     secret: prompt.secret,
+    // 第二个字段：空串就是"没这一行"。`secondArg` 有值而标签没有的情况
+    // 到不了这里——`提示()` 已经把它们一起清空了（两处判据一致）。
+    secondLabel: prompt.secondLabel || undefined,
+    secondPlaceholder: prompt.secondPlaceholder || undefined,
   });
 
   // ⚠️ 取消就**到此为止**。`PromptDialog` 把"填了空白再确定"也当取消
@@ -67,5 +71,9 @@ export async function 问参数(o: 问参数入参): Promise<{ args: unknown } |
   // 他就是来改这个键的。不是对象（数组、字符串、`undefined`）就当没有，
   // 不硬往里塞：那样得到的 `args` 形状是插件没约好的。
   const 底 = typeof args === "object" && args !== null && !Array.isArray(args) ? args : {};
-  return { args: { ...(底 as Record<string, unknown>), [prompt.arg]: 答.value } };
+  const 出: Record<string, unknown> = { ...(底 as Record<string, unknown>), [prompt.arg]: 答.value };
+  // 第二个值只在**真问了**的时候才放：`secondArg` 空着而这里硬塞一个空串，
+  // 会让插件收到一个它没要的键（Git 那条会把邮箱写成空串）。
+  if (prompt.secondArg) 出[prompt.secondArg] = 答.second;
+  return { args: 出 };
 }

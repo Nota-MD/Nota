@@ -27,6 +27,19 @@
 //! 所以：**格式的定义只有这一份**（本文件），插件那一侧只有一句
 //! `nota.diff.apply(文档, nota.diff.parse(回答).hunks)`。
 //!
+//! ⚠️ 而且**"写"这一半也在宿主里**（2026-09-26 补上）：`nota.diff.make`，
+//! 两段文本进、一份统一格式的逐行差异出，实现在 `src-tauri/src/diff.rs`。
+//! 在此之前宿主两个 diff 模块**只会解析**，前端要看"改前/改后"就自己手写了
+//! 一份 LCS（`src/editor/review.ts`）——那正是上面那条"一份格式两处实现迟早
+//! 会漂"要挡的事。生成与解析是一对：**读**在 `unified_diff.rs`、**写**在
+//! `diff.rs`，两边共用同一套 `{ op, text }` 字面量。
+//!
+//! ⚠️ 这张表下面还有第二个函数：`parse_unified`（git 那种 `---`/`+++`/`@@`）。
+//! 它**不是**这个格式，实现和理由都在隔壁 `unified_diff.rs`，只是共用了
+//! `nota.diff` 这个名字和"`{ op, text }` 进去画成 `kind = "diff"`"这个出口。
+//! `make` 走的是**同一个出口**（也是 `{ op, text }`），所以一份刚 `make` 出来的
+//! diff 直接丢给界面那块渲染就行，不必再绕一圈。
+//!
 //! # 三条规矩（`docs/13-lua-api.md` §「AI 改动块」有同一张表）
 //!
 //! 1. **失败必须是"什么都没做"**：`应用` 要么给出新全文，要么给一句原因，
@@ -251,6 +264,14 @@ fn 掐短(s: &str, 上限: usize) -> String {
 
 // ── 装进 Lua ──────────────────────────────────────────────────────────────
 
+/// `nota.diff.make` 省略上下文时露几行。
+///
+/// 3 是 `diff -u` / `git diff` 的默认（`-U3`），也是用户看惯的那个数：
+/// 一段改动上下各露三行，"这一改紧挨着谁"才看得出来。
+/// 默认值定在**调用方**（这里），不在生成器里——`统一差异` 只认参数
+///（见 `src-tauri/src/diff.rs`）。
+pub const 默认上下文: usize = 3;
+
 /// 装 `nota.diff`。
 ///
 /// ⚠️ **不需要任何能力**：全是纯函数，不碰文档、不碰磁盘、不碰网络。
@@ -287,6 +308,37 @@ pub fn build(lua: &Lua) -> Result<Table, NotaError> {
         })
         .map_err(mlua_to_nota)?;
     set(t.set("apply", apply), lua)?;
+
+    // 「unified diff」那套（git `diff -u` 吐的 `---`/`+++`/`@@`）挂在同一个表下面：
+    // 插件作者只需要记 `nota.diff` 一个名字。**实现在隔壁 `unified_diff.rs`**，
+    // 因为它跟本文件这套「改动块」是两个格式，认法与出错的样子都不同
+    //（那边文件头有理由）。
+    set(t.set("parse_unified", super::unified_diff::build(lua)?), lua)?;
+
+    // 生成那一半：两段文本 → 一份统一格式的逐行差异。**出口形状和
+    // `parse_unified` 一模一样**（`{ op, text }` 的数组），只是方向相反——
+    // 那边读一份现成的 diff，这边现写一份出来。前端"改前/改后"的预览、
+    // 插件"我建议这么改"都用它，省得各自再手写一遍 LCS。
+    //
+    // ⚠️ 也是**不要能力**的：纯函数，一段文本进、一张表出（理由同 `build` 顶上那段）。
+    let make = lua
+        .create_function(|lua, (旧, 新, 上下文): (String, String, Option<usize>)| {
+            let 差异 = crate::diff::统一差异(&旧, &新, 上下文.unwrap_or(默认上下文));
+            let 表 = lua.create_table()?;
+            for (i, 行) in 差异.iter().enumerate() {
+                let 行表 = lua.create_table()?;
+                // ⚠️ 这两个键名**必须和 `parse_unified` 给的一模一样**：
+                // 前端 `panel-nodes.ts` 按 `op` 那五个字面量上色，认不出的
+                // 一律当 `add`（画成绿的）。生成这一侧一个字面量打错，
+                // 症状就是"预览里整块都是绿的"。
+                行表.set("op", 行.op.as_str())?;
+                行表.set("text", 行.text.as_str())?;
+                表.set(i + 1, 行表)?;
+            }
+            Ok(表)
+        })
+        .map_err(mlua_to_nota)?;
+    set(t.set("make", make), lua)?;
 
     Ok(t)
 }
@@ -344,7 +396,7 @@ mod tests {
     /// ⚠️ **改动块的契约钉在这里。**
     ///
     /// 逐条对 `docs/13-lua-api.md` §「AI 改动块」那张表：**改那张表就要改这里**。
-    /// 用例里那些形状全是真实会撞见的（模型现编的文字，不是我们写的）——
+    /// 用例里那些形状全是真实会撞见的（模型现编的文字，不是手写的样例）——
     /// 少写收尾围栏、多打一个 `\r`、把顺序写反、引用一行文档里没有的话。
     #[test]
     fn 一段普通文本加末尾一块改动() {
@@ -483,5 +535,66 @@ mod tests {
         let r = 解析成("```nota-diff\n-\n```\n");
         assert_eq!(r.改动[0].删, vec![""], "`-` 单独一行 = 删一个空行");
         assert_eq!(应用("甲。\n\n乙。\n", &r.改动).unwrap(), "甲。\n乙。\n");
+    }
+
+    /// 装出 `nota.diff.make` 那颗函数（纯函数表，装不出错）。
+    fn make(lua: &Lua) -> mlua::Function {
+        let t = build(lua).expect("纯函数表不该装不上");
+        t.get("make").expect("`make` 要挂在 `nota.diff` 下面")
+    }
+
+    /// `nota.diff.make`：两段文本进，一份统一格式的逐行差异出。
+    ///
+    /// ⚠️ 断言盯的是**形状与字面量**（`{ op, text }` 的数组），不是"跟某份
+    /// 字符串逐字相同"：前端 `panel-nodes.ts` 认的就是这两个键的名字和
+    /// `op` 那几个值。Rust 那一侧的细节（段头、CRLF、上下文）在
+    /// `src-tauri/src/diff.rs` 的用例里，这里只钉"装进 Lua 之后还是那个东西"。
+    #[test]
+    fn make_给出统一格式的逐行差异() {
+        let lua = Lua::new();
+        let f = make(&lua);
+        let 行们: Table = f.call(("一\n三\n", "一\n二\n三\n")).expect("调用不该出错");
+        assert_eq!(行们.raw_len(), 4, "一段头 + 三行");
+
+        let 段头: Table = 行们.get(1).unwrap();
+        assert_eq!(段头.get::<String>("op").unwrap(), "hunk");
+        assert_eq!(段头.get::<String>("text").unwrap(), "@@ -1,2 +1,3 @@");
+
+        let 中间: Table = 行们.get(3).unwrap();
+        assert_eq!(中间.get::<String>("op").unwrap(), "add");
+        assert_eq!(中间.get::<String>("text").unwrap(), "二");
+    }
+
+    /// 上下文省略时用写明的那个默认值（3），给了就听给的。
+    #[test]
+    fn make_省略上下文时是默认值三() {
+        let lua = Lua::new();
+        let f = make(&lua);
+        let 旧 = "1\n2\n3\n4\n5\n";
+        let 新 = "1\n2\nX\n4\n5\n";
+
+        let 省略: Table = f.call((旧, 新)).expect("第三个参数可以不给");
+        let 给了: Table = f.call((旧, 新, 0usize)).expect("给了就用给的");
+        assert_eq!(省略.raw_len(), 7, "段头 + 上下各两行 + 一删一加");
+        assert_eq!(给了.raw_len(), 3, "上下文 0：只剩段头和一删一加");
+
+        let 段头 = |t: &Table| t.get::<Table>(1).unwrap().get::<String>("text").unwrap();
+        assert_eq!(
+            段头(&省略),
+            "@@ -1,5 +1,5 @@",
+            "默认那个 3 就是 `git diff -U3` 的那个 3"
+        );
+        assert_eq!(段头(&给了), "@@ -3 +3 @@", "行号跟着上下文变");
+    }
+
+    /// 没有改动、或者两边都是空 → **空数组**（不是 `nil`，也不是一个空段头）。
+    #[test]
+    fn make_没改动时给空表() {
+        let lua = Lua::new();
+        let f = make(&lua);
+        let 没改: Table = f.call(("甲\n", "甲\n")).expect("两边一样是正常结果，不是错误");
+        assert_eq!(没改.raw_len(), 0, "没改动就是空表");
+        let 都空: Table = f.call(("", "")).expect("空进空出");
+        assert_eq!(都空.raw_len(), 0, "不许凭空造一个空段头");
     }
 }

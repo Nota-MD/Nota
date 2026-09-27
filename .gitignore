@@ -22,3 +22,6 @@ build/
 
 # 运行时（插件安装目录不入库）
 plugins/*/dist/
+
+# 本机的开窗脚本（容器名 / 显示号 / Xauthority 取法都是这台机器的事，别入库）
+tools/open-window.sh

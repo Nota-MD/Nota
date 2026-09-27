@@ -26,9 +26,10 @@
  */
 
 import type { PluginMenuItem } from "@/bridge/ipc";
+import { t } from "@/i18n";
 import type { MenuEntry, MenuSpec } from "@/ui/commands";
 
-/** 我们认得的那一栏。**只有它**——`menu` 写别的值无处安放（见文件头）。 */
+/** 本仓认得的那一栏。**只有它**——`menu` 写别的值无处安放（见文件头）。 */
 export const 认识的菜单 = "plugins";
 
 /** 能跑的插件项的 id 前缀。 */
@@ -69,14 +70,19 @@ export function 插件菜单栏(items: PluginMenuItem[]): MenuSpec | null {
         // 用同一个 id 就是 React 的重复 key，也是 `disabledCommands`
         // 那张集合里两条打架。加上这一截就永远不会撞。
         id: `${无处安放前缀}${it.plugin}:${it.menu}:${it.command}`,
-        label: `${it.label}（想挂到「${it.menu}」栏，暂不支持）`,
+        // ⚠️ 括号里那半句**在这儿就翻**：它是拼出来的（`it.menu` 是插件自己写的
+        // 值），而下游 `MenuPopup` 那个 `t(entry.label)` 查的是**整条标签**——
+        // 拼进去的那一截它查不到。
+        label: `${it.label}${t("（想挂到「{0}」栏，暂不支持）", it.menu)}`,
       });
     }
   }
 
   return {
     id: "plugins",
-    label: "插件",
+    // ⚠️ 这里用的是**模块级的 `t`**：这个函数是"渲染期间被组件调用的纯函数"
+    // （`ui/usePlugins.ts` 的 `useMemo`），不是模块级常量。
+    label: t("插件"),
     // 一条都没有就**不摆分隔线**——一栏里只有一条分隔线看着像坏了。
     items: 认得.length && 无处.length ? [...认得, "sep", ...无处] : [...认得, ...无处],
   };

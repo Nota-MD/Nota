@@ -19,6 +19,9 @@ import { createRoot } from "react-dom/client";
 import "@/styles/theme.css";
 import "@/styles/app.css";
 import { MenuBar } from "@/ui/MenuBar";
+// front matter 那条场景（`#frontmatter`）：**真**编辑器＋**真**那两个纯函数。
+import { createEditor } from "@/editor/create";
+import { 拆前置块, 拼回前置块 } from "@/editor/front-matter";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
 import { accelSig, buildAccelIndex, eventAccel, formatAccel, parseAccel } from "@/ui/accel";
 import { MENUS, walkMenuItems, type MenuEntry } from "@/ui/commands";
@@ -92,12 +95,14 @@ function computeDisabled(hasDoc: boolean): Set<string> {
   return out;
 }
 
+// ⚠️ 这里是**模仿**后端返回的清单，不调真后端。2026-09-26 内置那批换过
+// （六套 → 三套），这里也要跟着换：条目数变了，下面两条断言里的数是**跟着
+// 这个数组算出来的**（4 条主题 + 无主题 + 打开主题文件夹 = 6 条真条目）。
 const THEMES = [
-  { id: "paper", name: "素纸", builtin: true },
-  { id: "blueprint", name: "蓝图", builtin: true },
-  { id: "mist", name: "晨雾", builtin: true },
-  { id: "ink", name: "墨色", builtin: true },
-  { id: "mine", name: "我改的素纸", builtin: false },
+  { id: "minimal", name: "极简", builtin: true },
+  { id: "adwaita", name: "Adwaita", builtin: true },
+  { id: "latex", name: "LaTeX", builtin: true },
+  { id: "mine", name: "我改的极简", builtin: false },
 ];
 
 const CHECKS: Record<string, boolean> = {
@@ -123,9 +128,17 @@ function waitFor<T extends Element>(sel: string, timeout = 3000): Promise<T> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** 按标签找菜单项按钮。 */
-function byLabel(label: string, within: ParentNode = document): HTMLElement | null {
-  for (const el of within.querySelectorAll<HTMLElement>(".menu-item")) {
+/**
+ * 按标签找菜单项按钮。
+ *
+ * ⚠️ 返回的是 `HTMLButtonElement`（`.menu-item` 在 `MenuPopup.tsx` 里就是
+ * `<button>`）——不是什么"顺手写的类型"：下面那一句 `exportBtn.disabled`
+ * 读的就是 **button 自己的 `disabled`**（灰掉的项要真的按不动，见那边的注释）。
+ * 写成 `HTMLElement` 的话 `.disabled` 是 `undefined`，`!undefined` 恒真——
+ * 那条断言会**永远报"能用"**，一条永远绿的断言比没有还坏。
+ */
+function byLabel(label: string, within: ParentNode = document): HTMLButtonElement | null {
+  for (const el of within.querySelectorAll<HTMLButtonElement>(".menu-item")) {
     if (el.querySelector(".menu-label")?.textContent === label) return el;
   }
   return null;
@@ -188,7 +201,7 @@ function mathScenario(log: string[]) {
     .map(([cmd]) => cmd);
   log.push(`关着 physics 也能渲染的（= 不靠这套宏） = ${本来就认.join(" ") || "无"}`);
 
-  // ③ \braket 的**参数量**被我们改成两参了（KaTeX 内置是一参、竖线写在里面）。
+  // ③ \braket 的**参数量**被 Nota 改成两参了（KaTeX 内置是一参、竖线写在里面）。
   //    这一条盯的是"这件事是知道的、不是踩出来的"：一参那个写法在开着 physics
   //    时应当失败、关着时应当能过——两个方向的证据都要。
   log.push(
@@ -196,7 +209,7 @@ function mathScenario(log: string[]) {
       `开着 = ${试("\\braket{a|b}", true).ok ? "⚠️ 也能（覆盖没生效？）" : "失败（一参写法换 \\Braket{a|b}）"}`
   );
   log.push(
-    `\\Braket{a|b}（我们没覆盖的那个名字）开着 = ${试("\\Braket{a|b}", true).ok ? "能渲染" : "⚠️ 不能"}`
+    `\\Braket{a|b}（Nota 没覆盖的那个名字）开着 = ${试("\\Braket{a|b}", true).ok ? "能渲染" : "⚠️ 不能"}`
   );
 
   // ③ 重定义：\div / \Re / \Im 两档下必须**画得不一样**（physics 原版就重定义它们）
@@ -209,7 +222,8 @@ function mathScenario(log: string[]) {
   }
 
   // ④ 化学式：`\ce` / `\pu` 来自 KaTeX **官方**的 mhchem 扩展（`math-macros.ts`
-  //    顶上那行副作用导入）。⚠️ 它不跟着 physics 开关走——Typora 那边也是内置。
+  //    顶上那行副作用导入）。⚠️ 它不跟着 physics 开关走：mhchem 是 KaTeX 自带的
+  //    扩展，不是本仓手写的宏，所以任何档位下都可用。
   log.push(`\\ce{H2O} = ${试("\\ce{H2O}", false).ok ? "能渲染" : "⚠️ 不能"}，\\pu{123 kJ} = ${试("\\pu{123 kJ}", false).ok ? "能渲染" : "⚠️ 不能"}`);
 
   // ⑤ **对照渲染**（2026-09-24 补，见 `PHYSICS_EQUIVALENTS` 的注释）。
@@ -236,7 +250,7 @@ function mathScenario(log: string[]) {
 
   // ⑥ 坏公式不该把渲染带炸：KaTeX 的默认是 throwOnError=true，而
   //    `@milkdown/plugin-math` 传的是一份空选项。这一条**故意用正式那份选项**
-  //    （不覆盖 throwOnError），盯的就是"我们有没有把它盖成 false"——
+  //    （不覆盖 throwOnError），盯的就是"Nota 有没有把它盖成 false"——
   //    没盖的话，用户打到一半的 `$x^{` 会在 toDOM 里抛出去。
   try {
     const html = katex.renderToString("x^{", katexOptionsFor(false));
@@ -266,9 +280,128 @@ function report(lines: string[]) {
 }
 
 /**
+ * `#frontmatter`：开头那段 YAML front matter「进→出」。
+ *
+ * 分两截，缺一不可：
+ *
+ * ① 两个纯函数（`editor/front-matter.ts`）：判据对不对、切下来的字节保不保真、
+ *    几种边界归哪一支；
+ * ② **真 `createEditor` 进→出**——这一截才是这条链的判据。理由是本仓记过的
+ *    教训（`docs/07` 第 56 项）：同一份样本，裸探针和真实例会给出**不一样的
+ *    结论**，只有后者算数。
+ *
+ * 为什么要验这件事：`---` 在 CommonMark 里是**分割线**，编辑器不认识 front
+ * matter，2026-09-26 实测「打开再存盘」会把它改写成正文（静默的数据损毁，
+ * 详情见 `front-matter.ts` 文件头）。这条场景就是把那个病钉住。
+ */
+async function frontmatterScenario(log: string[]): Promise<void> {
+  const 样本 = "---\ntheme: seriph\nlayout: cover\n---\n\n# 标题\n\n正文\n";
+  // ⚠️ 前置块**含围栏后面那些空行**（见 `front-matter.ts` 的 `拆分结果`）：
+  // 那几行不在这一侧留住，编辑器会把正文开头那个空行顺手删掉。
+  const 前置 = "---\ntheme: seriph\nlayout: cover\n---\n\n";
+  const 检查: [string, boolean][] = [];
+  const 加 = (名: string, 好: boolean) => 检查.push([名, 好]);
+
+  // ── ① 纯函数 ─────────────────────────────────────────────────────────
+  const 拆 = 拆前置块(样本);
+  加("切出了前置块（含后面那个空行）", 拆.前置块 === 前置);
+  加("正文开头不是空行", 拆.正文 === "# 标题\n\n正文\n");
+  加("拼回逐字节相同", 拼回前置块(拆.前置块, 拆.正文) === 样本);
+  // 围栏后面连几个空行也照留
+  const 多空行 = "---\ntheme: x\n---\n\n\n\n甲\n";
+  加("连着几个空行也留住", 拆前置块(多空行).前置块 === "---\ntheme: x\n---\n\n\n\n");
+  // 只有 front matter、后面什么都没有
+  加("只有 front matter 的文档", 拆前置块("---\ntheme: x\n---\n").正文 === "");
+
+  // CRLF / 行尾空格 / `...` 收尾：原文切片，所以一个字都不该动
+  const crlf = "---\r\ntheme: x\r\n---\r\n\r\n甲\r\n";
+  const 拆crlf = 拆前置块(crlf);
+  加("CRLF 也认，且拼回原样", 拼回前置块(拆crlf.前置块, 拆crlf.正文) === crlf);
+  const 点收 = 拆前置块("---\ntheme: x\n...\n甲\n");
+  加("`...` 也能收尾", 点收.前置块 === "---\ntheme: x\n...\n");
+  加("收尾行后没换行也认", 拆前置块("---\ntheme: x\n---").前置块 === "---\ntheme: x\n---");
+
+  // 不认的那几支：`---` 首先是分割线，拿不准就**原样还回去**
+  加("没有闭栏 → 不认", 拆前置块("---\n甲\n").前置块 === null);
+  加("空块 → 不认", 拆前置块("---\n---\n").前置块 === null);
+  加("首行不是第一行 → 不认", 拆前置块("\n---\ntheme: x\n---\n").前置块 === null);
+  加("没有 `---` 的普通文档 → 不认", 拆前置块("# 甲\n\n乙\n").前置块 === null);
+  加(
+    "列表型 YAML → 不认（已知边界）",
+    拆前置块("---\n- 甲\n- 乙\n---\n正文\n").前置块 === null,
+  );
+  // ⚠️ 这一条**钉的是一个已知的误伤**，不是"对"：头尾都是分割线、中间那几行
+  // 又**恰好全都**长成 `键: 值` 时，会被当成 front matter（所见即所得里那几行
+  // 看不见，源码模式里照旧）。判松的代价是"每开一次盘毁一段文档"，两害相权
+  // 取了这个。真改了判据，这条会红——那就连 `front-matter.ts` 文件头那段
+  // 边界说明一起改。
+  //
+  // ⚠️ 样本里**中间那几行必须行行像映射**：留一行普通散文（`甲`）就不认了，
+  // 那样这条断言验的是"不认"、跟上面那几条重复，一条永远绿的断言等于没写。
+  const 散文 = "---\n\n时间: 昨天\n地点: 家里\n\n---\n";
+  加(
+    "全是 `键: 值` 的散文被误认（已知边界）",
+    拆前置块(散文).前置块 === "---\n\n时间: 昨天\n地点: 家里\n\n---\n",
+  );
+
+  // ── ② 真编辑器进→出 ─────────────────────────────────────────────────
+  const 台 = document.createElement("div");
+  台.setAttribute(
+    "style",
+    "position:fixed;left:-99999px;top:0;width:800px;visibility:hidden;pointer-events:none",
+  );
+  document.body.appendChild(台);
+  try {
+    const 编辑器 = await createEditor({ root: 台, initialMarkdown: 样本 });
+    const 出去 = 编辑器.getMarkdown();
+    log.push(`出去 = ${JSON.stringify(出去)}`);
+    加("出去仍然以前置块开头（逐字节）", 出去.startsWith(前置));
+    加("正文里再没有 theme: 那一行", !出去.slice(前置.length).includes("theme:"));
+    // ⚠️ **逐字节相同**（含围栏后面那个空行）。这条曾经是红的——空行被正文
+    // 那一路规范化掉了，是"把空行也算进前置块"才补齐的（见 `拆分结果`）。
+    // 正文**自己**的规范化（尾段、标记写法那些）是另一件事，归 `docs/07`
+    // 第 56 项，这条样本恰好没碰到。
+    加("进→出逐字节相同", 出去 === 样本);
+    // 幂等：把结果再喂回去（这条路正是"切模式/换文档/插件改文档"走的
+    // `setMarkdown`），出来还得一样——不然每存一次盘就换一个样。
+    编辑器.setMarkdown(出去);
+    加("再进一次出来还是同一串（幂等）", 编辑器.getMarkdown() === 出去);
+    编辑器.destroy();
+  } finally {
+    台.remove();
+  }
+
+  // 只读那一份（分屏预览 / 导出）：front matter **不该画出来**
+  const 预览台 = document.createElement("div");
+  预览台.setAttribute("style", "position:fixed;left:-99999px;top:0;width:800px");
+  document.body.appendChild(预览台);
+  try {
+    const 只读 = await createEditor({ root: 预览台, initialMarkdown: 样本, readOnly: true });
+    const 画出来的 = 预览台.querySelector(".ProseMirror")?.textContent ?? "";
+    加("只读实例里没有 theme 那几个字", !画出来的.includes("theme"));
+    加("正文照画", 画出来的.includes("标题"));
+    只读.destroy();
+  } finally {
+    预览台.remove();
+  }
+
+  let 不符 = 0;
+  for (const [名, 好] of 检查) {
+    if (!好) 不符++;
+    log.push(`${好 ? "✓" : "✗"} ${名}`);
+  }
+  log.push(不符 ? `${不符} 条不符` : `front matter ${检查.length} 条全对`);
+}
+
+/**
  * 场景。用 `location.hash` 选——Chrome 无头截不同状态只需要换 URL。
  */
 async function scenario(hash: string, log: string[]): Promise<void> {
+  if (hash === "frontmatter") {
+    await frontmatterScenario(log);
+    return;
+  }
+
   if (hash === "accel") {
     accelScenario(log);
     return;
@@ -326,6 +459,15 @@ async function scenario(hash: string, log: string[]): Promise<void> {
     (document.querySelector(".outline-twisty") as HTMLElement).click();
     await sleep(60);
     log.push(`展开「一」之后 = ${titles()}`);
+
+    // 大纲点一下（`onJumpOutline`）。⚠️ 点的是**第二行**、不是第一行：
+    // 第一行的 `index` 恰好是 0，写成"没反应也算对"就分辨不出来了。
+    const 大纲行 = [...document.querySelectorAll<HTMLElement>(".outline-item")];
+    大纲行[1]?.click();
+    await sleep(60);
+    log.push(
+      `点第 2 行大纲 → 回调 ${跳大纲.length} 次，给的是 ${跳大纲.length ? JSON.stringify(跳大纲[跳大纲.length - 1]) : "(没有)"}`,
+    );
 
     // 文件树：先切到「文件」页（页签是**真组件**的，所以这条也顺带验了）
     const treeTab = [...document.querySelectorAll<HTMLElement>(".sidebar-tab")].find(
@@ -446,7 +588,7 @@ async function scenario(hash: string, log: string[]): Promise<void> {
  * （`"!"` / `"#"`），于是那两条**永远不成立**；`Ctrl+,` 则干脆没写进任何分支。
  *
  * 所以下面每一条都是"**按下去必须得出这个 id**"。表格里 `key` 那一栏
- * 故意照着真实浏览器给的值填（Shift+1 就是 `"!"`），不是照着我们的规范键名填。
+ * 故意照着真实浏览器给的值填（Shift+1 就是 `"!"`），不是照着本仓的规范键名填。
  */
 type AccelCase = [string, KeyboardEventInit, string | null, boolean?];
 
@@ -484,13 +626,25 @@ const ACCEL_CASES: AccelCase[] = [
   // ⚠️ 这三条是**新键族**，此前一条断言都没有：`Alt+数字` 与 `Ctrl+/`。
   // 之所以要现在补上，是因为"键族不统一"这件事本身就是风险——
   // `Ctrl+/` 用的是标点（走 `Slash`），`Alt+1/2` 用的是数字，
-  // 而数字那半边恰恰是栽过一次的地方（`Digit` 漏映射时 `e.key` 恰好兜住）。
+  // 而数字那半边正是栽过一次的地方（`Digit` 漏映射时 `e.key` 恰好兜住）。
   ["Alt+1（所见即所得）", { code: "Digit1", key: "1", altKey: true }, "view.modeWysiwyg"],
   ["Ctrl+/（源码模式）", { code: "Slash", key: "/", ctrlKey: true }, "view.modeSource"],
   ["Alt+2（分屏预览）", { code: "Digit2", key: "2", altKey: true }, "view.modeSplit"],
   // ⚠️ 这条是"**不再**被抢走"的证明：Ctrl+Shift+N 归「新建窗口」。
   // 以前那条手链里的 `key === "n"` 不看 Shift，会把它当成「新建」。
   ["Ctrl+Shift+N 归新建窗口", { code: "KeyN", key: "N", ctrlKey: true, shiftKey: true }, "file.newWindow"],
+  // ── 缩放那三档（2026-09-27，「视图 → 放大 / 缩小 / 实际大小」）────────
+  // ⚠️ `Ctrl+=` 那一条：`code` 是 `Equal`、`key` 是 `"="`。这也是"为什么不认
+  // `Ctrl+Shift+=`"的现场——Shift 之下 `key` 变成 `"+"`、`shiftKey` 为真，
+  // 算出来是**另一个签名**，`accelSig` 把它们当两个键位（那是有意的）。
+  ["Ctrl+=（放大）", { code: "Equal", key: "=", ctrlKey: true }, "view.zoomIn"],
+  ["Ctrl+-（缩小）", { code: "Minus", key: "-", ctrlKey: true }, "view.zoomOut"],
+  // ⚠️⚠️ **这一条是撞车留下的回归测试**：复位缩放本来要排 `Ctrl+0`（浏览器
+  // 里的惯例键），而 `Ctrl+0` 在本仓是「正文」（见上面那条）。这张表第一次
+  // 跑就报了撞车，于是复位改成 `Ctrl+Shift+0`。谁要把它挪回去，这里会红。
+  // ⚠️ `key` 填 `")"` 是**真浏览器给的值**（Shift+0 的上档字符）——这条同时
+  // 也在验"判键位靠 `e.code` 不靠 `e.key`"。
+  ["Ctrl+Shift+0（实际大小）", { code: "Digit0", key: ")", ctrlKey: true, shiftKey: true }, "view.zoomReset"],
 
   // ── 不该接的（放行给 ProseMirror / 系统）───────────────────────────
   ["Ctrl+Alt+1（ProseMirror 的标题键）", { code: "Digit1", key: "1", ctrlKey: true, altKey: true }, null],
@@ -570,7 +724,7 @@ function accelScenario(log: string[]): void {
  */
 function nativeScenario(log: string[]): void {
   const disabled = computeDisabled(true);
-  const tree = buildNativeTree(MENUS, disabled, CHECKS, THEMES, "paper");
+  const tree = buildNativeTree(MENUS, disabled, CHECKS, THEMES, "minimal");
 
   const find = (nodes: typeof tree, id: string): (typeof tree)[number] | undefined => {
     for (const n of nodes) {
@@ -584,17 +738,19 @@ function nativeScenario(log: string[]): void {
   const checks: Array<[string, boolean]> = [
     ["顶层栏数 = 8", tree.length === MENUS.length],
     // 「主题」那栏的内容是**合成**的，静态表里是空的——这里最容易推出去一个空菜单。
-    // ⚠️ 9 = 7 条真条目 + 2 条分隔线。**两个数分开断言**：
-    // 只说"7"的话，分隔线被吃掉（菜单挤成一坨）也在数里看不出来。
-    ["主题栏条目数 = 9（含 2 条分隔线）", (find(tree, "theme")?.submenu?.length ?? -1) === 9],
+    // ⚠️ 8 = 6 条真条目 + 2 条分隔线。**两个数分开断言**：
+    // 只说"6"的话，分隔线被吃掉（菜单挤成一坨）也在数里看不出来。
+    // ⚠️ 这两个数是跟着上面 `THEMES` 的条数算的（4 条主题 ＋ 无主题 ＋
+    // 「打开主题文件夹…」），**加一条 mock 主题就要同时改这里**。
+    ["主题栏条目数 = 8（含 2 条分隔线）", (find(tree, "theme")?.submenu?.length ?? -1) === 8],
     [
-      "主题栏真条目 = 7",
-      (find(tree, "theme")?.submenu ?? []).filter((n) => n.sep !== true).length === 7,
+      "主题栏真条目 = 6",
+      (find(tree, "theme")?.submenu ?? []).filter((n) => n.sep !== true).length === 6,
     ],
     ["主题栏里有分隔线", (find(tree, "theme")?.submenu ?? []).some((n) => n.sep === true)],
     // ⚠️ 当前主题必须**勾上**（这就是 `currentTheme` 那个 prop 以前没人用的毛病）。
-    ["素纸被勾上", find(tree, "__theme:paper")?.checked === true],
-    ["墨色没被勾", find(tree, "__theme:ink")?.checked === false],
+    ["极简被勾上", find(tree, "__theme:minimal")?.checked === true],
+    ["LaTeX 没被勾", find(tree, "__theme:latex")?.checked === false],
     ["无主题没被勾", find(tree, "__theme-none")?.checked === false],
     // ⚠️⚠️ 这两条是**同一件事的两面**：普通项必须是 `undefined`（不画勾），
     // 可勾项必须是真布尔（画一个空位）。判错的效果是整栏缩进不齐。
@@ -632,6 +788,9 @@ let 侧栏关闭次数 = 0;
 /** 「打开文件夹…」那颗按钮被点过几次（`#sidebar-empty` 场景）。 */
 let 打开文件夹次数 = 0;
 
+/** 大纲上点过的目标（`#sidebar`）。只记不用：见 `onJumpOutline` 那儿。 */
+const 跳大纲: { line: number; index: number }[] = [];
+
 function Harness() {
   const [disabled] = useState(() => computeDisabled(true));
   /** 侧栏夹具只在 `#sidebar` 场景里挂——试验台平时不放它。 */
@@ -656,7 +815,10 @@ function Harness() {
       // `#<场景>`、`#<场景>-<风格>-<明暗>`，比如 `#submenu-ghub-dark`。
       // 场景单独取第一段：`scenario()` 按它分支，外观那两段它不关心。
       const raw = location.hash.replace(/^#/, "");
-      const [scene, style, mode] = raw.split("-");
+      // ⚠️ `= ""` 不能省：`noUncheckedIndexedAccess` 下下标取出来是
+      // `string | undefined`，而 `scenario()` 要一个 `string`。
+      // 空 hash（直接打开页面）本来就该走默认那一支，给空串正好。
+      const [scene = "", style, mode] = raw.split("-");
       if (mode === "light" || mode === "dark") document.documentElement.dataset.uiMode = mode;
       if (style) document.documentElement.dataset.uiStyle = style;
 
@@ -685,10 +847,21 @@ function Harness() {
     <StrictMode>
       <div style={{ height: 38, display: "flex", alignItems: "center", padding: "0 8px", background: "var(--bg-subtle)" }}>
         <MenuBar
+          // ⚠️ `menus` 是 2026-09-24 起**必填**的 prop（插件的菜单项是运行时
+          // 才知道的，见 `MenuBar` 的 `Props`）。这里补上静态表那份——少了
+          // 它 `props.menus.map` 当场抛，整页白屏。
+          //
+          // ⚠️ 这一格漏了整整两天没被发现，原因是**试验台不在
+          // `npm run typecheck` 的范围内**（`tsconfig.include` 只有 `src`）：
+          // `vite build` 不做类型检查，`MenuBar` 多一个必填 prop 它照建不误，
+          // 只有真打开页面才白屏。改产品组件（`MenuBar` / `Sidebar`）的 props
+          // 时，**顺手 `npx tsc --noEmit -p tools/menu-harness` 一下**（那份
+          // 配置让整个 tools/ 也进检查）。
+          menus={MENUS}
           disabled={disabled}
           checks={CHECKS}
           themes={THEMES}
-          currentTheme="paper"
+          currentTheme="minimal"
           onCommand={(id) => console.log("command", id)}
           onTheme={(id) => console.log("theme", id)}
           onOpenThemesDir={() => console.log("themes-dir")}
@@ -704,11 +877,24 @@ function Harness() {
           <Sidebar
             workspace={sidebarEmpty ? null : "/tmp/夹具"}
             tree={TREE_FIXTURE}
+            // ⚠️ 第三页「文档列表」那三样（2026-09-27 补的夹具）：侧栏加了这
+            // 三个 props 之后，这一场一直缺着，工装闸也就一直红着——它不是
+            // 产品代码的问题，是**夹具没跟上**。夹具给两条，够验"列得出、点得动"。
+            最近={RECENT_FIXTURE}
+            onOpenRecent={(p) => console.log("recent-open", p)}
+            onForgetRecent={(p) => console.log("recent-forget", p)}
             docText={DOC_FIXTURE}
             strict={false}
             tab={sidebarTab}
             onTab={setSidebarTab}
             onOpenFile={(p) => console.log("open", p)}
+            // ⚠️ 大纲点一下要跳正文（`docs/07` 第 48 项）。这一场只把目标
+            // 记下来：真正"跳到第几个标题"由编辑器那一侧验，试验台这边
+            // 没有编辑器，验不了"跳没跳过去"。
+            onJumpOutline={(t) => {
+              跳大纲.push(t);
+              console.log("jump-outline", t);
+            }}
             loadDir={loadDirFixture}
             // ⚠️ 数一下回调次数，不在这儿真把栏子撤掉：试验台要验的是
             // "× 点得动、回调发得出去"，卸载归 `App.tsx` 管。
@@ -727,6 +913,15 @@ function Harness() {
 
 /** 侧栏夹具用的正文：三级层级 + 两个根标题，够验"折一层、再折一层"。 */
 const DOC_FIXTURE = ["# 一", "## 一甲", "### 一甲子", "## 一乙", "# 二", "## 二甲"].join("\n");
+
+/**
+ * 夹具「最近打开过」：两条。
+ *
+ * ⚠️ 两条**故意分居两个目录**（一条在夹具工作区里、一条在别处）：这一页要
+ * 说明的正是"它跟工作区无关"——合成一条的话，看缩略图的人会以为这一页是
+ * 文件树的一部分。
+ */
+const RECENT_FIXTURE = ["/tmp/夹具/读我.md", "/home/别人/随手一记.md"];
 
 /** 夹具树：一个目录（带一层子节点）+ 一个文件。 */
 const TREE_FIXTURE = [

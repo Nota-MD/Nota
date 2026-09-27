@@ -7,13 +7,57 @@
 //! id          = "nota.git"          # 全局唯一，点号分层；宿主用它做覆盖与依赖
 //! name        = "Git 版本控制"       # 给人看的名字
 //! version     = "0.1.0"             # 插件自己的版本，不代表 ABI
-//! api         = 1                   # 需要的宿主 API 版本，**精确匹配**
+//! api         = 2                   # 需要的宿主 API 版本，**精确匹配**
 //! entry       = "main.lua"          # 入口脚本，相对插件目录
 //! description = "…"
 //! authors     = ["…"]
 //! license     = "BSD-2-Clause"
 //! capabilities = ["document.read", "fs.read", "fs.write", "process.git"]
+//! langs       = ["zh-CN", "en"]     # 界面上有哪几种语言，**必须含 en**
 //! ```
+//!
+//! # 多语言（`langs` + `lang/<tag>.toml`）
+//!
+//! 声明了 `langs` 的插件，在**插件目录**下放 `lang/<tag>.toml` 文件，
+//! 一种语言一份，长的就是一张平表：
+//!
+//! ```toml
+//! # lang/en.toml
+//! name    = "Git"                # 保留键：这个语言下插件叫什么名字
+//! "刷新"  = "Refresh"            # 别的键都是插件自己的文案
+//! ```
+//!
+//! 插件里用 `nota.i18n.text("刷新")` 取——**键就是作者自己写下的那句原文**：
+//!
+//! ```lua
+//! local function T(s) return nota.i18n.text(s) or s end
+//! ```
+//!
+//! 取不到就原样用原文（表里没写、文件没带、压根没声明 `langs`，都是这一条），
+//! 所以译文表**只需要写要翻译的那些键**，作者原文那种语言的表几乎是空的。
+//! 详见 `lua/api/i18n.rs` 顶上那段。
+//!
+//! 协商规则（用户 2026-09-25 定的，与 `src/lang.rs` 里那份是同一套）：
+//! 应用的语言在 `langs` 里就用那个语言；不在就用 `en`，
+//! 并在界面上给这个插件挂一句「此插件不支持您的语言」。
+//! ⚠️ 判据**只看这张清单**，不看 `lang/` 下有没有那个文件（见下面 `langs` 那段）。
+//!
+//! ⚠️ **不写 `langs`** 的插件不参与协商（也不显示那句提示）：它是"只说自己
+//! 写死的那一种语言"的插件，宿主不去猜它说的是什么语言。
+//!
+//! # 想让宿主替你起一个开发服务器，就再写一段 `[devserver]`
+//!
+//! ```toml
+//! [devserver]
+//! cmd   = "npx @slidev/cli"          # 宿主只会起这一条命令
+//! # 启动参数：{port} 换成宿主挑的空闲端口，{entry} 换成入口文件路径
+//! args  = ["{entry}", "--port", "{port}", "--no-open"]
+//! entry = ".nota-slidev-{doc}.md"    # 入口文件名模板；宿主决定放在哪个目录
+//! ```
+//!
+//! 判据与 `process.git` 是同一条：**能力放行的是"这一条命令"，不是"任意命令"**。
+//! 命令写在清单里（清单是随插件一起安装、走签名校验的那份文件），Lua 那边
+//! 交不出第二个程序名来。细节见 `src-tauri/src/devserver.rs`。
 //!
 //! # 为什么 `api` 是精确匹配而不是 `>=`
 //!
@@ -27,14 +71,21 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{NotaError, Result};
+use crate::lang;
 
-/// 宿主 API 版本。**当前是 1**。
+/// 宿主 API 版本。**当前是 2**。
 ///
 /// 动它的判据（与 Folio 一致）：
 /// - 给 Lua 侧的 `nota.*` 表**增加**成员 —— 不动号（老插件照样跑）；
 /// - **改名**某个 `nota.*` 成员，或**改变它的语义** —— 动号（老插件会静默拿到别的东西）；
 /// - 增删 `capabilities` 里的取值，并让它影响放行 —— 动号。
-pub const NOTA_PLUGIN_API_VERSION: u32 = 1;
+///
+/// ⚠️ **1 → 2 就是第三条**（2026-09-25）：加了 `process.devserver` 与
+/// `ui.open_url` 两个取值。它们**不影响老插件**（老插件申请不到、也不会去申请），
+/// 但按上面那条判据还是动了号——理由和 `>=` 不用是同一条：**号是一个整体承诺**，
+/// 分成"有时严格有时宽松"之后，插件作者就得记住哪些改动会动号、哪些不会，
+/// 而记错的表现是**插件在别人的机器上静默换了行为**。两个内置插件同批改成 2。
+pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
 
 /// 插件可以申请的能力。宿主按此放行 Lua API——
 /// **没申请就用不了**，不是"申请了就随便用"。
@@ -56,12 +107,25 @@ pub enum Capability {
     /// 起 `git` 子进程。**只放行 git 这一个命令**，不是通用 subprocess。
     #[serde(rename = "process.git")]
     ProcessGit,
+    /// 起清单里 `[devserver]` 声明的那条开发服务器命令，并把它嵌进面板。
+    ///
+    /// ⚠️ 与 `process.git` 同一条判据：**放行的是"那一条命令"，不是"任意命令"**。
+    /// 没有 `[devserver]` 段就什么都起不来（`nota.devserver` 整张表是 `nil`）。
+    #[serde(rename = "process.devserver")]
+    ProcessDevServer,
     /// 发 HTTP 请求（AI 插件要用）。
     #[serde(rename = "network.http")]
     NetworkHttp,
     /// 弹通知。
     #[serde(rename = "ui.notify")]
     UiNotify,
+    /// 把用户的系统浏览器打开到某个 `https://` 地址。
+    ///
+    /// ⚠️ **只认 `https`**：这是唯一一个"插件能让用户跳出 Nota"的口子，
+    /// 放开 `http`/`file`/自定义 scheme 就等于给了一条把用户送到别处的路。
+    /// 插件要说的话仍然该在 `nota.ui.notify` 里说，这条只用于"去官网看文档"。
+    #[serde(rename = "ui.open_url")]
+    UiOpenUrl,
     /// 注册侧栏面板。
     #[serde(rename = "ui.panel")]
     UiPanel,
@@ -71,6 +135,17 @@ pub enum Capability {
     /// 读写插件自己的设置段。
     #[serde(rename = "settings.own")]
     SettingsOwn,
+    /// 读写插件**自己那份数据**（`$XDG_DATA_HOME/nota/plugin-data/<id>/` 里的一串文本文件）。
+    ///
+    /// ⚠️ 与 `settings.own` **不是一回事**，两个都申请才算"设置与账都能存"：
+    /// 那一份是**用户该能改的偏好**（`config` 下、可能含明文密钥），
+    /// 这一份是**插件自己写自己读的账**（写作统计按天记的那些数字）。
+    /// 判据与文件布局写在 `paths.rs::plugin_data_dir` 与 `lua/api/data.rs` 的文件头。
+    ///
+    /// ⚠️ 它**只**放行那一个目录：`fs.read` / `fs.write` 围的是用户的工作区，
+    /// 这一条围的是插件自己的角落，两条互不覆盖。
+    #[serde(rename = "data.own")]
+    DataOwn,
 }
 
 impl Capability {
@@ -83,11 +158,14 @@ impl Capability {
             "fs.read" => Self::FsRead,
             "fs.write" => Self::FsWrite,
             "process.git" => Self::ProcessGit,
+            "process.devserver" => Self::ProcessDevServer,
             "network.http" => Self::NetworkHttp,
             "ui.notify" => Self::UiNotify,
+            "ui.open_url" => Self::UiOpenUrl,
             "ui.panel" => Self::UiPanel,
             "ui.menu" => Self::UiMenu,
             "settings.own" => Self::SettingsOwn,
+            "data.own" => Self::DataOwn,
             other => {
                 return Err(NotaError::other(format!(
                     "不认识的能力 `{other}`（见 docs/11 的能力表）"
@@ -116,6 +194,26 @@ pub struct PluginMeta {
     /// 申请的能力。空 = 纯声明式插件（只贡献菜单/面板，不碰文档与磁盘）。
     #[serde(default)]
     pub capabilities: Vec<String>,
+    /// 这个插件的界面文案有哪几种语言（`lang/<tag>.toml` 一个文件一种）。
+    ///
+    /// ⚠️ **不写 = 不参与语言协商**：那个插件只说自己写死的那一种语言，
+    /// 界面不会给它显示「此插件不支持您的语言」。老插件因此照样能用——
+    /// 这一格是**自愿报名**，不是新门槛。
+    ///
+    /// ⚠️ **写了就必须含 `en`**（用户 2026-09-25：「插件必须包含英语」）：
+    /// 英语是唯一能要求所有作者都提供的兜底（理由见 `src/lang.rs` 的
+    /// [`crate::lang::插件兜底`]）。
+    /// 声明了却不给 = 契约坏掉，**加载时报错**而不是悄悄降级。
+    ///
+    /// ⚠️ 声明了某个语言但 `lang/<那个语言>.toml` 不在，**不报错、也不改 `ok`**：
+    /// 那份表空着，插件里的 `text("…") or "…"` 就退回**作者写下的原文**
+    /// （这套"缺键用原文"的写法见 `lua/api/i18n.rs` 顶上那段）。界面上那句
+    /// 「此插件不支持您的语言」只由**清单里有没有这门语言**决定——用户的原话就是
+    /// 「如果应用语言在插件语言列表内，则直接使用；否则…」，跟着文件在不在走，
+    /// 会把"只用英语写、不带任何表"的那种插件（最常见的一种）说反。
+    /// 要收走的是**契约层面**的谎（声明里没有 `en`），不是还没写完的活。
+    #[serde(default)]
+    pub langs: Vec<String>,
 }
 
 fn default_version() -> String {
@@ -126,9 +224,70 @@ fn default_entry() -> String {
     "main.lua".to_owned()
 }
 
+/// `[devserver]` 段：宿主替这个插件起哪个开发服务器。
+///
+/// ⚠️ **这是"能力"的一部分，不是配置**。`process.devserver` 放行的正是这一段里
+/// 写死的那条命令——Lua 那边**交不出第二个程序名来**（`nota.devserver.start`
+/// 不收 `cmd` 参数）。理由与 `process.git` 一样：能力该放行"这件事"，
+/// 而不是"这类事"。
+#[derive(Debug, Clone, Deserialize)]
+pub struct DevServerSpec {
+    /// 起哪个程序。和 `args` 一起交给 `proc::split_command` 那个口径拆。
+    pub cmd: String,
+    /// 调试旋钮：设了这个环境变量就换掉 `cmd`（整条命令，不是单个词）。
+    /// `docs/06` §3.4 那张旋钮表里原来叫 `NOTA_SLIDEV_CMD`。
+    #[serde(default)]
+    pub cmd_env: Option<String>,
+    /// 启动参数。两个占位符：`{port}` 换成宿主挑的空闲端口，`{entry}`
+    /// 换成入口文件的绝对路径。
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// 入口文件名模板（`{doc}` 换成文档 id），**只能是文件名**——
+    /// 带路径分隔符就是打包时的一处越界，校验挡在门口。
+    /// 不写 = 这个服务器不需要入口文件。
+    #[serde(default)]
+    pub entry: Option<String>,
+    /// 探"装没装"时的参数，默认 `["--version"]`。
+    #[serde(default)]
+    pub probe_args: Option<Vec<String>>,
+    /// 探"装没装"时要带的环境变量（比如 npm 的"不许联网"）。
+    #[serde(default)]
+    pub probe_env: Option<std::collections::BTreeMap<String, String>>,
+    /// 项目根的判据：根**或它的任一层父目录**里要有以它开头的目录。
+    /// `None` = 不看（探到命令能跑就算装好了）。
+    #[serde(default)]
+    pub project_marker: Option<String>,
+}
+
+impl DevServerSpec {
+    /// 现在该用哪条命令：调试旋钮优先，其次清单里那条。
+    pub fn command(&self) -> String {
+        match &self.cmd_env {
+            Some(var) => crate::proc::command_or_default(var, &self.cmd),
+            None => self.cmd.clone(),
+        }
+    }
+
+    /// 入口文件名（`{doc}` 已经换成 id）。没有 `entry` 就是 `None`。
+    ///
+    /// ⚠️ 参数收 `u64` 而不是 `DocId`：清单这一层不该认识"文档"是什么，
+    /// 它只认识"模板里有个洞要填"。
+    pub fn entry_name(&self, doc: u64) -> Option<String> {
+        self.entry.as_ref().map(|t| t.replace("{doc}", &doc.to_string()))
+    }
+
+    pub fn probe_args(&self) -> Vec<String> {
+        self.probe_args
+            .clone()
+            .unwrap_or_else(|| vec!["--version".to_owned()])
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct ManifestFile {
     plugin: PluginMeta,
+    #[serde(default)]
+    devserver: Option<DevServerSpec>,
 }
 
 /// 解析好、校验过的清单，附上它所在的目录。
@@ -138,6 +297,8 @@ pub struct Manifest {
     /// 插件根目录（`plugin.toml` 所在处）。
     pub dir: PathBuf,
     pub capabilities: Vec<Capability>,
+    /// `[devserver]` 段。`None` = 这个插件不起开发服务器。
+    pub devserver: Option<DevServerSpec>,
 }
 
 impl Manifest {
@@ -166,10 +327,15 @@ impl Manifest {
             })?
             .to_path_buf();
 
-        Self::from_meta(file.plugin, dir, path)
+        Self::from_meta(file.plugin, file.devserver, dir, path)
     }
 
-    fn from_meta(meta: PluginMeta, dir: PathBuf, file: &Path) -> Result<Self> {
+    fn from_meta(
+        meta: PluginMeta,
+        devserver: Option<DevServerSpec>,
+        dir: PathBuf,
+        file: &Path,
+    ) -> Result<Self> {
         // ── id：点号分层的小写标识 ───────────────────────────────────────
         if meta.id.is_empty() {
             return Err(NotaError::Manifest {
@@ -218,16 +384,105 @@ impl Manifest {
             }
         }
 
+        // ── langs ───────────────────────────────────────────────────────
+        // ⚠️ 报错而不是"补一个 en 上去"：补的话，插件作者永远不知道自己漏了
+        // 兜底语言，而用户会在某个语言下看到一片 `nil`（`nota.i18n.text` 取不到
+        // 就是 `nil`）。契约坏掉要当场说。
+        if !meta.langs.is_empty() && lang::匹配(lang::插件兜底, &meta.langs).is_none() {
+            return Err(NotaError::Manifest {
+                file: file.to_path_buf(),
+                reason: format!(
+                    "`langs` 里没有 `en`（现在写的是 {:?}）——英语是必须有的兜底：\
+                     应用的语言不在这个表里时，插件一律用英语显示（用户 2026-09-25 定的）",
+                    meta.langs
+                ),
+            });
+        }
+
+        // ── [devserver] ─────────────────────────────────────────────────
+        // ⚠️ 两条校验都是**越界**，不是"写错了"：
+        // ① `entry` 只能是文件名——它是宿主拼进"文档同目录"的一个片段，
+        //    带 `../` 或绝对路径就是让插件往任意地方写文件；
+        // ② 申请了 `process.devserver` 却没有 `[devserver]` 段 = 能力空转，
+        //    加载时报出来，别等到用户点了按钮才发现什么都起不来。
+        let devserver = check_devserver(devserver, &capabilities, file)?;
+
         Ok(Manifest {
             meta,
             dir,
             capabilities,
+            devserver,
         })
     }
 
     pub fn has(&self, cap: Capability) -> bool {
         self.capabilities.contains(&cap)
     }
+}
+
+/// 校验 `[devserver]` 段。两条都是**越界**，不是"写错了"：
+///
+/// 1. **`entry` 只能是文件名**——宿主会把它拼进"文档同目录"，`../` 或绝对路径
+///    就是让插件往任意位置写文件。这是整个清单里除 `entry` 之外第二处路径校验，
+///    口径与那条一样：**能挡在门口的就别留到运行时**。
+/// 2. **申请了 `process.devserver` 却没有 `[devserver]` 段** = 能力空转。
+///    加载时报出来，别等用户点了按钮才发现什么都起不来。
+///    反向（有 `[devserver]` 却没申请能力）也一样报：那份声明永远不会被读，
+///    留着只会让下一个读清单的人以为它生效。
+fn check_devserver(
+    spec: Option<DevServerSpec>,
+    capabilities: &[Capability],
+    file: &Path,
+) -> Result<Option<DevServerSpec>> {
+    let 申请了 = capabilities.contains(&Capability::ProcessDevServer);
+
+    let Some(spec) = spec else {
+        if 申请了 {
+            return Err(NotaError::Manifest {
+                file: file.to_path_buf(),
+                reason: "申请了 `process.devserver` 却没有 `[devserver]` 段——\
+                         那一格能力放行的就是段里那条命令，没有段就没有命令"
+                    .to_owned(),
+            });
+        }
+        return Ok(None);
+    };
+
+    if !申请了 {
+        return Err(NotaError::Manifest {
+            file: file.to_path_buf(),
+            reason: "写了 `[devserver]` 却没申请 `process.devserver` 能力——\
+                     那段声明永远不会生效"
+                .to_owned(),
+        });
+    }
+
+    if spec.cmd.trim().is_empty() {
+        return Err(NotaError::Manifest {
+            file: file.to_path_buf(),
+            reason: "`[devserver] cmd` 不能为空".to_owned(),
+        });
+    }
+
+    if let Some(name) = &spec.entry {
+        // ⚠️ 判据是「有没有路径成分」而不是「有没有 `..` 子串」：
+        // `/etc/passwd`、`a/b.md`、`a\b.md` 三种都要挡，而 `..x.md`
+        // 这种正经文件名不该被误伤。
+        let 越界 = Path::new(name)
+            .components()
+            .any(|c| !matches!(c, std::path::Component::Normal(_)));
+        if 越界 {
+            return Err(NotaError::Manifest {
+                file: file.to_path_buf(),
+                reason: format!(
+                    "`[devserver] entry` 只能是文件名（现在写的是 `{name}`）——\
+                     它由宿主决定落在哪个目录"
+                ),
+            });
+        }
+    }
+
+    Ok(Some(spec))
 }
 
 /// 插件 id 在**事件通道名**里的写法。
@@ -283,6 +538,19 @@ pub fn find_manifests(root: &Path) -> Vec<PathBuf> {
         return out;
     };
     for entry in entries.flatten() {
+        // ⚠️ **点开头的目录一律不看**：惯例上那是隐藏目录（`.git`、编辑器临时目录），
+        // 而且宿主自己也往里放东西——安装一个插件时先解到
+        // `.装到一半-<pid>/`（见 `plugin::PluginHost::装`），**半路死掉的那个**
+        // 正好留在这里。不跳的话它下次启动会被当成一个插件（而且因为路径排序
+        // 靠前，还会把真正那份挤掉），用户看到的是一个永远加载失败的幽灵插件。
+        if entry
+            .file_name()
+            .to_str()
+            .map(|n| n.starts_with('.'))
+            .unwrap_or(false)
+        {
+            continue;
+        }
         let candidate = entry.path().join("plugin.toml");
         if candidate.is_file() {
             out.push(candidate);
@@ -311,7 +579,7 @@ mod tests {
 [plugin]
 id = "nota.git"
 name = "Git"
-api = 1
+api = 2
 capabilities = ["document.read", "process.git"]
 "#,
         );
@@ -355,7 +623,10 @@ capabilities = ["document.read", "process.git"]
 
         let err = Manifest::load(&dir.join("plugin.toml")).unwrap_err();
         assert!(
-            matches!(err, NotaError::PluginApiMismatch { wanted: 99, have: 1, .. }),
+            // ⚠️ `have` 用常量而不是字面量：这条用例问的是"**版本不符会不会被拦**、
+            // 报的数对不对"，不是"宿主现在是第几版"。写死一个数的话，每次升版本
+            // 都会红一条**与它无关**的用例（2026-09-25 升 2 的时候就这样红过）。
+            matches!(err, NotaError::PluginApiMismatch { wanted: 99, have: NOTA_PLUGIN_API_VERSION, .. }),
             "实际：{err}"
         );
 
@@ -368,7 +639,7 @@ capabilities = ["document.read", "process.git"]
         let _ = std::fs::remove_dir_all(&dir);
         write_manifest(
             &dir,
-            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 1\nentry = \"../../evil.lua\"\n",
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 2\nentry = \"../../evil.lua\"\n",
         );
 
         assert!(Manifest::load(&dir.join("plugin.toml")).is_err());
@@ -382,11 +653,33 @@ capabilities = ["document.read", "process.git"]
         let _ = std::fs::remove_dir_all(&dir);
         write_manifest(
             &dir,
-            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 1\ncapabilities = [\"fs.everything\"]\n",
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 2\ncapabilities = [\"fs.everything\"]\n",
         );
 
         let err = Manifest::load(&dir.join("plugin.toml")).unwrap_err();
         assert!(err.to_string().contains("fs.everything"), "实际：{err}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// ⚠️ 点开头的目录**不是插件**。
+    ///
+    /// 钉的是这条具体的现象：安装插件时先解到 `.装到一半-<pid>/plugin.toml`，
+    /// 半路死掉就留在插件目录里了。不跳的话它下次启动会被当成一个插件——
+    /// 而且因为路径排序靠前（`.` 的字节序小于字母），它还会把真正那一份挤掉。
+    #[test]
+    fn 点开头的目录不当插件() {
+        let dir = std::env::temp_dir().join("nota-manifest-dotdir");
+        let _ = std::fs::remove_dir_all(&dir);
+        write_manifest(&dir.join("a.b"), "[plugin]\nid = \"a.b\"\nname = \"A\"\napi = 2\n");
+        write_manifest(
+            &dir.join(".装到一半-1"),
+            "[plugin]\nid = \"a.b\"\nname = \"A\"\napi = 2\n",
+        );
+
+        let 找到 = find_manifests(&dir);
+        assert_eq!(找到.len(), 1, "实际找到：{找到:?}");
+        assert!(找到[0].ends_with("a.b/plugin.toml"), "实际：{:?}", 找到[0]);
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -4,7 +4,7 @@
 //!
 //! 自绘菜单（`src/ui/MenuBar.tsx`）在 Windows / Linux 上是对的：菜单就长在窗口里。
 //! **macOS 不是**。那边菜单栏在屏幕顶端、属于应用而不是窗口，窗口里再画一条
-//! 是错的（Typora 在 macOS 上用的也是系统菜单栏）。所以那边挂原生菜单，
+//! 是错的——macOS 的菜单栏约定属于应用本身，任何应用都该挂系统菜单栏。
 //! 自绘那条让位。
 //!
 //! # 菜单内容是**前端推过来的**
@@ -99,7 +99,7 @@ fn build<R: Runtime>(app: &AppHandle<R>, nodes: &[MenuNode]) -> Result<Menu<R>, 
 
     // ── ① macOS 的第一栏必须是"应用菜单" ──────────────────────────────
     // 关于 / 服务 / 隐藏 / 退出标准四段。这几项**不用**前端推——
-    // 它们是操作系统规定的角色，不是我们这个应用的功能，抄进 `commands.ts`
+    // 它们是操作系统规定的角色，不是这个应用的功能，抄进 `commands.ts`
     // 反而会让人以为"少了一项就是没实现"。
     let about = PredefinedMenuItem::about(app, Some("关于 Nota"), None).map_err(estr)?;
     let services = PredefinedMenuItem::services(app, None).map_err(estr)?;
@@ -205,7 +205,9 @@ fn leaf_accel(node: &MenuNode) -> Option<String> {
     let native = to_native_accel(raw);
     if native.is_none() {
         // 放行不了只是**这一条没有快捷键**，绝不能让整个菜单建不出来。
-        eprintln!(
+        // 而"这一项没快捷键"用户在界面上是看不出异常的（菜单项照样能点），
+        // 所以这句只是开发者的线索，走调试闸门。
+        crate::日志!(
             "[nota] 原生菜单：菜单项 {} 的快捷键 \"{raw}\" 转不成原生写法，这一项不带快捷键",
             node.id
         );
@@ -213,7 +215,7 @@ fn leaf_accel(node: &MenuNode) -> Option<String> {
     native
 }
 
-/// 我们菜单里的写法 → muda 的加速键写法。**拿不准就返回 `None`。**
+/// 菜单里的写法 → muda 的加速键写法。**拿不准就返回 `None`。**
 ///
 /// 这套语法是查着 muda 源码里的 `parse_modifier` / `parse_code` 写的
 /// （`muda-0.19.3/src/accelerator.rs`），不是照着印象猜的：
@@ -234,7 +236,7 @@ pub fn to_native_accel(text: &str) -> Option<String> {
     let mut key: Option<String> = None;
 
     // ⚠️ 用 `split('+')` + 滤空，和 muda 那边用 `rfind('+')` 定位键名的做法
-    // 在**我们写得出的写法**上是等价的。字面的 `+` 键两边都表达不了，也不打算支持。
+    // 在**这套语法写得出的写法**上是等价的。字面的 `+` 键两边都表达不了，也不打算支持。
     for part in text.split('+').map(str::trim).filter(|s| !s.is_empty()) {
         match part.to_ascii_lowercase().as_str() {
             // `Cmd`/`Meta`/`Super` 和 `Ctrl` 一视同仁，理由同 `src/ui/accel.ts`：
@@ -435,7 +437,7 @@ mod tests {
         // ⚠️ 下面这个数是**抄 `commands.ts` 数出来的**，不是自己长出来的：
         // 2026-09-23 加三种编辑模式时它从 48 变成 50，而**测试当时是绿的**——
         // 因为表里那 48 条自洽、`assert_eq!` 也只是拿常量比常量。
-        // 这类"两处一起忘"的漂移，这条测试**挡不住**，别以为有这个 assert 就安全了：
+        // 这类"两处一起忘"的漂移这条测试**挡不住**，有这个 assert 不等于安全：
         // 真要同步，回去 `grep -c "accel:" src/ui/commands.ts`。
         assert_eq!(ALL_ACCELS.len(), 50, "accel 条数变了，请同步这张表");
     }

@@ -96,7 +96,7 @@
 | `editor/lang-picker.ts` | **代码块语言选择器**（341 行）：**自绘的下拉**，不是原生 `<select>`——HTML 规定 `<option>` 只能是纯文字，`<img>` / `background-image` 塞进去都不渲染，所以「连弹层里也要图标」这条要求**只能自己画**。⚠️ 代价是原生白送的键盘上下 / 打字跳转 / Escape / 点外关都得自己补，**并且 NodeView 销毁时必须把弹层摘掉**（挂在 `document.body` 上，不摘就一次留一个孤儿）。⚠️ 400 项**每次打开现建**，不常驻 |
 | `editor/lang-icon.ts` | **`languageIcon(lang)` 的唯一入口**（271 行）：「先问真图、问不到回落徽章」这件事收在这一个函数里。⚠️ 徽章＝圆角小方块 ＋ 字母缩写 ＋ 该语言的代表色，**400 个语言 id 人人都有**（兜底是主路径不是边角：任何图标集都盖不全）；真图在 `lang-icons-real.ts` |
 | `editor/lang-icons-real.ts` | **真图那一半**（276 行，2026-09-26）：93 颗彩色 logo，**逐字节**从 vscode-icons tag `v12.19.0` 搬来（MIT，`THIRD-PARTY.md` §6），抓取与核对在 `tools/fetch-lang-icons.sh`（`--verify` 拿 `SHA256SUMS` 对账）。⚠️ **那批 `.svg` 一个字节都不许改**（连"顺手调颜色"也不行），能一眼核对的前提就是这个。⚠️ 本文件少一个语言**不是错**——400 个 id 里绝大多数一辈子不会有人贴 |
-| `editor/smart-punctuation.ts` | **智能标点**（2026-09-27）：`--` → `–` / `---` → `—` / `...` → `…` / `"` → `“ ”`，三档 `off` / `render` / `input`（默认 `input`）。⚠️ 它是 `MarkdownSettings` 里那六个字段**从 2026-09-24 起就没有过的消费者**（同"存了值没人读"那一类账）。⚠️ `render` 档**一个字节都不写**：`.nota-smart-hide`（原文压成 0 宽）＋ 一颗 widget 画替身。⚠️⚠️ **改之前先读 `是行首的横线`**——没有它，敲 `---` 时第二颗减号就被换掉、分割线再也出不来。⚠️ **导出那条路不许传它**，分屏预览**要**传。判据 `tests/smart-punctuation.test.ts` **32** 条 |
+| `editor/smart-punctuation.ts` | **智能标点**（2026-09-27）：`--` → `–` / `---` → `—` / `...` → `…` / `"` → `“ ”`，三档 `off` / `render` / `input`（默认 `input`）。⚠️ 它是 `MarkdownSettings` 里那六个字段**从 2026-09-24 起就没有过的消费者**（同"存了值没人读"那一类账）。⚠️ `render` 档**一个字节都不写**：`.nota-smart-hide`（原文压成 0 宽）＋ 一颗 widget 画替身。⚠️⚠️ **改之前先读 `是横线骨架行`**——没有它，敲 `---` 时第二颗减号就被换掉、分割线再也出不来。⚠️ **导出那条路不许传它**，分屏预览**要**传。判据 `tests/smart-punctuation.test.ts` **32** 条 |
 | `editor/auto-correct.ts` | **自动更正**（2026-09-27）：一张固定的英文错拼表（四十来条）＋ 一条输入规则（只在词尾空格那一下动手）。⭐ 入表判据一条：**小写形式在英文里不是一个词**（所以 `cant`/`wont`/`wether`/`lets`/`its` 全不收）。⚠️ 不做语法检查、不做句首大写、不碰中文。判据 `tests/auto-correct.test.ts` **20** 条 |
 | `editor/headings.ts` | **大纲抽取**（2026-09-27 新建，约 100 行）：`extractOutline` ＋ `OutlineItem` 从 `ui/outline.ts` **整段搬来**。⚠️ 理由是**依赖方向**——`src/editor/` 从不 import `@/ui/`，而「内容目录」（`editor/toc.ts`）与侧栏「大纲」页要同一份判据。两个消费者：`ui/Sidebar.tsx` / `editor/toc.ts` |
 | `editor/toc.ts` | **内容目录（TOC）的纯文本那半**（2026-09-27 新建，约 200 行）：`生成目录` / `锚点` / `算目录块` / `找目录` / `替换目录` / `是目录标记`。⚠️ 形状是**一段普通 markdown 列表**、两头用注释标记（`<!-- nota:toc -->` / `<!-- /nota:toc -->`）夹住——不是粒子节点，不必动 schema，源码模式里也看得见。⚠️ **它是快照**（再点一次 = 原地更新，不是实时跟随；理由在文件头）。⚠️ 编辑区里点链接**不跳**，导出的 HTML 里能跳 |
@@ -296,9 +296,10 @@
 其余 Rust 文件没有测试。
 
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
-见 `docs/06` §6.3）：`tests/` 下 **二十三份、共 590 条**（2026-09-27 深夜现数）——
+见 `docs/06` §6.3）：`tests/` 下 **二十四份、共 633 条**（2026-09-27 深夜再数）——
 `keymap.test.ts` **54** · `slash.test.ts` **49** · `share-card.test.ts` **46** ·
-`math-view.test.ts` **41** · `focus-summary.test.ts` **34** · `smart-punctuation.test.ts` **32** ·
+`math-view.test.ts` **41** · `table-input.test.ts` **39** · `focus-summary.test.ts` **34** ·
+`smart-punctuation.test.ts` **36** ·
 `emoji.test.ts` **32** · `footnote.test.ts` **30** · `math-delim.test.ts` **23** · `toc.test.ts` **22** ·
 `inline-marks.test.ts` **37** · `heatmap.test.ts` **20** · `auto-correct.test.ts` **20** ·
 `math-input.test.ts` **19** · `atom-space.test.ts` **19** · `mark-hint.test.ts` **18** ·
@@ -307,7 +308,7 @@
 `empty-doc-save.test.ts` **8**。
 ⚠️ 跑法两档：`share-card.test.ts` 要 `--loader:.svg=text`（它 import 了 `.svg`），
 `share-card.test.ts` / `heatmap.test.ts` / `focus-summary.test.ts` / `keymap.test.ts`
-要 `--alias:@=./src`（都走 `@/…` 路径），其余 **十九份**两条都不要——**别照着一份的命令去跑另一份**。
+要 `--alias:@=./src`（都走 `@/…` 路径），其余 **二十份**两条都不要——**别照着一份的命令去跑另一份**。
 📌 **本节这一格 2026-09-27 现数时发现它落后了两批**：原写"十八份、共 418 条"，
 而那时 `slash.test.ts`（49 条）已经存在、只是没进这份清单（418 ＋ 49 ＝ 467，
 正是 `docs/06` §6.3 当时的数）。**同一个数在两份文档里差 49**——那一批一并补齐并改成
@@ -322,6 +323,7 @@
 循环都没进**，所以"每天跑一遍"从来没跑到过它。
 📌 **2026-09-27 晚再补一份**（566 → 574）：`empty-doc-save.test.ts`（**8 条**，空文档存盘必须 0 字节，见 `docs/06` §5.31 ④）。⚠️ 这一份是**给一条已有判据配的测试**，不是新功能——它挡的那条路（"保镖"占位符的值漏进文件）此前一直是 7 字节，而且是**开窗时从状态栏那个字符数**上看出来的。
 📌 **2026-09-27 夜（BUG-48 那一条，`inline-marks` 21 → 37，574 → 590，**份数不变**）**：新增的 16 条全在 `tests/inline-marks.test.ts` 一份里，**没有新文件**，所以 `for` 循环与本文的份数都不用动——这也说明"加测试要改四处"那条规矩里，**"哪四处"是看有没有新文件**：只往里加用例时，要改的是条数（`docs/06` §6.3 那张表、本节的表、`AGENTS.md` 那一行、`docs/09` §2 那一行）。⚠️ 同批修掉一条**假绿**：那份测试的 `unified()` 链从来没 `.use(remarkGfm)`，而产品链有，于是三条"`~下~` 不许被改写成 `~~下~~`"的断言测的不是产品那条路（详见 `docs/06` §6.3 末条 📌）。
+📌 **2026-09-27 深夜再补一份**（590 → 633，**份数 23 → 24**）：`table-input.test.ts`（**39 条**，BUG-51）——手打表格那一行在这边的判据下算不算表格行（拆单元格 ／ 判分隔行 ／ 判两行）＋ **NBSP 回归**（WebKit 在**行末**把空格存成 U+00A0，判据与输入规则都得把它当空白）＋ 那道「匹配盖住整段」的闸（`prosemirror-inputrules` 拿「文档文字 ＋ 刚敲进去那颗字符」拼匹配串，逐字比会在 NBSP↔竖线上翻车）＋ 输入规则那条正则。⚠️ 同批把 `smart-punctuation` 从 **32** 补到 **36**（横线骨架那道守卫的 4 条）。⚠️ 这一份是**新文件**，所以四处名册 ＋ `for` 循环都要动（`docs/06` §6.3 末条 📌 记着那「五处」）。
 ⚠️ 教训仍旧是同一条：**加一份测试要跟着改四处**（`docs/06` §6.3 的名册与 `for` 循环、
 `AGENTS.md`、`docs/09`、本节），**闸门一处都扫不到**，只能靠人记。
 ⚠️ `accent.test.ts` 有个**别处没有的做法**：

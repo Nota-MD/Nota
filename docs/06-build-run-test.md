@@ -5,7 +5,7 @@
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
 > 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 505 条各钉住了什么。
 >
-> ⚠️ **测试数只在本文记数（Rust 当前 505 ／ 前端当前 590）**，别处一律写"见 `docs/06`"。
+> ⚠️ **测试数只在本文记数（Rust 当前 505 ／ 前端当前 633）**，别处一律写"见 `docs/06`"。
 > ⚠️ **这个数别照抄——以现跑为准**（`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l`
 > 与 `cargo test --lib` 报的 `N passed` 两半互证）。同一目录可能有别的会话在改，
 > 本文这段 2026-09-27 当天就落后过两次（见 §6.2 那段"当前 N 条"）。
@@ -649,6 +649,7 @@ panicked at src/pandoc.rs:776:10: 应该成功:
 | 输出 | 说明 |
 |---|---|
 | `Gtk-Message: Failed to load module "canberra-gtk-module"` | 容器里没装 `libcanberra-gtk3`（事件音效）。**纯装饰**，与应用功能无关 |
+| `Gtk-Message: Failed to load module "pk-gtk-module"` | 同上一类，容器里没装 `PackageKit-gtk3-module`（软件包集成那一套）。**纯装饰**，2026-09-27 开窗时才见到这一条 |
 | `(!) Some chunks are larger than 500 kB after minification.` | 见下 |
 | `warning: unused ...`（若出现） | 目前 `cargo test` 是**零警告**；一旦有警告，先当真的处理 |
 
@@ -2765,7 +2766,7 @@ podman exec -u 0 tauri-dev sh -c \
 
 **当前 505 条，全过**（2026-09-27 现跑，`cargo test --lib` 报 `505 passed; 0 failed`，
 `grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 也是 505 —— **两半互证**）。⚠️ 这个数是
-**只算 Rust 那一半**——前端另有 **590** 条（二十三份）、跑法完全不同，见 §6.3。⚠️ **它一天里涨了
+**只算 Rust 那一半**——前端另有 **633** 条（二十四份）、跑法完全不同，见 §6.3。⚠️ **它一天里涨了
 五次**：317 → 397（09-26 晚，80 条里只有 4 条是「主题色」那批的）→ 428（09-27
 白天，其中 6 条是「英文按词统计」那批）→ **490**（文件移动那批 19 条 ＋ 同时段别的会话 ~43 条）
 → **492**（同时段别的会话，不是那批加的）→ **501** → **505**。
@@ -2876,13 +2877,13 @@ podman exec -u 0 tauri-dev sh -c \
 `src/main.rs`（只是个壳）与 Doc-tests（`nota_lib` 没有文档测试）。
 `tests/` 目录下**没有一个 Rust 集成测试**（`tests/fixtures/` 仍然是空的），
 所以下面这 505 条**全部是单元测试**。
-⚠️ **2026-09-26 起前端有可运行的测试了**：`tests/` 下 **二十三份、共 590 条**
+⚠️ **2026-09-26 起前端有可运行的测试了**：`tests/` 下 **二十四份、共 633 条**
 （2026-09-27 数，逐份跑出来过，清单与跑法见 **§6.3**）＋ `tests/fake-dom.ts`
 （只够跑逻辑的假 DOM）。它**不在这 505 条里**（那是 `cargo test` 的数），也不是
 "前端有测试框架了"——`package.json` 里**仍然没有**测试框架、也没有测试脚本，
 跑法是 `npx esbuild` ＋ `node` 两条命令（**§6.3**）。
 
-> ⚠️ 记数只在本文记（Rust 505 ／ 前端 590）。别处提到测试数一律写"见 `docs/06`"。
+> ⚠️ 记数只在本文记（Rust 505 ／ 前端 633）。别处提到测试数一律写"见 `docs/06`"。
 > 核实：`podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test --lib`。
 
 ### 6.1 逐条
@@ -3357,7 +3358,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save; do
+for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input slash doc-typography empty-doc-save; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3368,6 +3369,7 @@ done       # 全过退出码 0；有不过的列出名字并退 1
 （见本节末那条 📌）。**同一天又补进了 `doc-typography`**：它也是这个毛病
 （`tests/` 下有、`for` 里没有、本节那张条数表里也没有，见下面那条 📌）。
 加 `tests/*.test.ts` 时**顺手把它加进这个 `for`**。
+⚠️ **2026-09-27 深夜又补进四份**（`slash` 49 ／ `doc-typography` 11 ／ `empty-doc-save` 8 ／ `table-input` 39）：其中**前两份此前正文里写着「已经补进 `for`」，代码块里其实没有**——这一次是拿 `ls tests/*.test.ts` 逐个对出来的（二十四份，一个不差）。
 
 ⚠️ **不在上面那个循环里的有四份**，各有各的原因：
 
@@ -3408,14 +3410,14 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**二十三份、共 590 条**（2026-09-27 数）：`keymap` **54** · `slash` **49** ·
-`share-card` **46** · `math-view` **41** · `focus-summary` **34** ·
-`smart-punctuation` **32** · `emoji` **32** · `footnote` **30** · `math-delim` **23** ·
+**二十四份、共 633 条**（2026-09-27 深夜再数）：`keymap` **54** · `slash` **49** ·
+`share-card` **46** · `math-view` **41** · `table-input` **39** · `focus-summary` **34** ·
+`smart-punctuation` **36** · `emoji` **32** · `footnote` **30** · `math-delim` **23** ·
 `toc` **22** · `inline-marks` **37** · `heatmap` **20** · `auto-correct` **20** ·
 `math-input` **19** · `atom-space` **19** · `mark-hint` **18** · `accent` **18** ·
 `instant-render` **17** · `lang-icons` **14** · `html-block` **14** ·
 `chart-ticks` **12** · `doc-typography` **11** · `empty-doc-save` **8**。
-⚠️ 这二十三份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
+⚠️ 这二十四份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
 2026-09-27 这一遍 `share-card` 35→46、`accent` 14→18、`chart-ticks` 11→12、
 `math-input` 16→19（`$$` 那三组新用例），另加新的两份 `math-delim` 23、
 `inline-marks` 21（高亮/上标/下标/下划线，**现已 37**，见本节末那条 📌）与 `html-block` 14（块级裸 HTML ＋ 注释），
@@ -3426,7 +3428,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 （斜杠菜单：表的账 ＋ 筛项 ＋ 认查询 ＋ 采用 ＋ 插件那四条键）；**这一批加了
 `focus-summary` 34**（强制专注结束后的总结：记一笔 ／ 抽稀 ／ 总结与专注率 ／
 两个时刻 ／ 横刻度 ／ 造分享卡——⚠️ 它**不在上面那个 `for` 里**，跑法见本节前面对
-那四份的单列），那 **34** 是当场跑出来的。
+那四份的单列），那 **34** 是当场跑出来的；**2026-09-27 深夜这一批又加了 `table-input` 39**（BUG-51：手打表格那几行在这边算不算表格行 ＋ NBSP 回归 ＋ 那道「匹配盖住整段」的闸，见 §5.36），并把 `smart-punctuation` 从 **32** 补到 **36**（横线骨架那道守卫的 4 条）；**总数 590 → 633**。
 
 📌 **2026-09-27（设置里的「快捷键」那一批，新建 `keymap.test.ts` 54 条，512→566）**：
 这一批加**两样**东西——一份新测试 `keymap`（可写回的键位文本 ＋ 覆盖表怎么叠到
@@ -3581,6 +3583,13 @@ React 组件、编辑器生命周期、以及"半透明看起来对不对"这一
 卡片第三格是「**警报次数**」不是「警报」（`small` 是个裸字符串、**表达不了单复数**，
 英文那边会印出 `Alarm 1 times`——真印出来过，见 §5.28 那一批），以及三格的抬头
 **都是四字**（并列的三格，长短不一看着像没对齐）。
+
+📌 **2026-09-27 深夜（BUG-51 那一条：新文件 `table-input.test.ts` 39 条，590 → 633）**：
+**① 新文件要动五处**（本节那个 `for` 与它的条数表、`AGENTS.md`、`docs/09`、`docs/02`）。
+⚠️ 这一次拿 `ls tests/*.test.ts` 对了一遍，才发现**上面那个 `for` 少了四份**（`slash` / `doc-typography` / `empty-doc-save` / `table-input`），已补齐。
+**② 数条数不能只认一种收尾行**：二十四份里有十八份印 `通过 N 条`，`math-input` / `atom-space` / `empty-doc-save` 三份印 `N 过 / M 败`——本轮先用一种写法统计，**静默少算 46 条**（587 而不是 633），差点又写进文档。
+**③ 有几份必须在仓库根目录跑**：`atom-space.test.ts` 有一条断言是 `readFileSync` 去读 `src/editor/atom-space.ts` 的源码（「U+00A0 只许来自 `\u00a0`」），**cwd 一换就读不到文件、那条会显示成「失败」**（本轮在 `/tmp` 下跑过一次，白紧张一场）。
+**④ 这一份的判据只盖住「一行文字算不算表格行」**：真窗口里敲下去会不会建表是**另一条路**（`prosemirror-inputrules` 怎么拼匹配串），所以 §5.36 那半截目检省不得——BUG-51 本身就是「三十九条单测全绿、真窗口一动不动」。
 
 ---
 
@@ -4185,3 +4194,66 @@ podman exec -d -u 1000 -e DISPLAY=:93 -e GDK_BACKEND=x11 \
 的 `unified()` 链**从来没挂 `remark-gfm`**，而产品挂了，于是三条"`~下~` 不许被改写成
 `~~下~~`"的断言**测的不是产品那条路**。修法是工装改用**产品同一个导出常量**
 （`.use(remarkGfm, GFM选项)`）。判据写在 §6.3 那条 📌 里。
+
+---
+
+### 5.36 验「手打一张表」（BUG-51，2026-09-27 深夜，**开窗量过**）
+
+用户报的就是这一句：**手打一张表，最后那根收尾竖线敲下去什么都不发生**。
+
+**被测的是两条路**（它们走**完全不同的代码**，所以必须分开量）：
+
+- **路 1（坏的）**：打一行 `| 1 | 2 | 3 |`、回车，再打 `| --- | --- | --- |`——
+  最后那根 `|` 落下时由**输入规则**当场把这两行换成一张表。
+- **路 2（一直好的）**：同样打好两行，在**第二行末尾按回车**——这条走的是**回车规则**。
+  ⚠️ 用户说「能用」说的就是它，所以**走查时按回车建过一次表就以为全好了**，这一轮就这么放过了一次。
+
+**跑法**（我自己那台 Xvfb `:93` ＋ 隔离 `XDG_*`，与 §5.35 同一套）：
+
+```sh
+podman exec -d -u 1000 -e DISPLAY=:93 -e GDK_BACKEND=x11 -e WAYLAND_DISPLAY=nonexistent-wayland \
+  -e XDG_CONFIG_HOME=/tmp/nota-93/config -e XDG_DATA_HOME=/tmp/nota-93/data \
+  -e XDG_CACHE_HOME=/tmp/nota-93/cache -e XDG_RUNTIME_DIR=/tmp/nota-93/run \
+  -e GTK_IM_MODULE=gtk-im-context-simple -e XMODIFIERS=@im=none \
+  -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -e LIBGL_ALWAYS_SOFTWARE=1 \
+  -w …/Nota/src-tauri tauri-dev ./target/debug/nota /tmp/nota-93/e6.md
+podman exec -u 1000 -e DISPLAY=:93 -e XAUTHORITY= -e LANG=C.UTF-8 tauri-dev sh -c \
+  'xdotool mousemove 300 192 click 1; xdotool type --delay 90 -- "| 1 | 2 | 3 |"'
+```
+
+⚠️ `xdotool` 那一条 exec **必须**带 `-e DISPLAY` 与 `-e LANG`：不带前者是
+`DISPLAY environment variable is empty`，不带后者（打中文时）是
+`Invalid multi-byte sequence encountered`。
+
+**量到的三件事**：
+
+1. **落盘字节是纯 ASCII**（这是「文档没被改写」的硬证据）：**路 1** 建成的表 `Ctrl+S`
+   存下来就是三行 `| 1 | 2 | 3 |` ／ `| - | - | - |` ／ `|   |   |   |`，**42 字节、
+   0 颗** `302 240`（`/tmp/nota-93/e6.md`；**路 2** 存下来同样 42 字节，见 `biao.md`）。
+   ⚠️ **编辑态里那颗 U+00A0 确实存在**（探针实读到 `段=| ---\u00a0`），但它在**判据看到的那一份**里，
+   不在文档里。
+2. **老功能没被弄坏**（同一次开窗、同一份文件）：`e7.md` 里 `a--b` 仍是 `a–b`、
+   独占一行的 `---` 仍是分割线、下面那张 `| a | b |` 表照建——40 字节、0 颗 NBSP。
+   放宽判据认 NBSP **没有**把智能标点那道横线骨架守卫弄坏。
+3. **回读一致**：把存下来的文件用产品同一套 `unified()` ＋ `remark-gfm` 读一遍，
+   第一颗节点是 `table`（不是 `paragraph`）。
+
+**那一步探针**（⚠️ 只读不改文档）：在 `表格输入规则` 的 handler 里临时打一行
+`console.log(JSON.stringify({配, 段}))`，从窗口日志里读出来的是
+`配=| --- |`、`段=| ---\u00a0`——**同一颗位置上文档是不换行空格、匹配串是刚敲的竖线**，
+于是那道「匹配有没有盖住整段」的闸为假、规则静默退场。探针的原件备份在
+`/tmp/table-input.正式.ts`，量完照原样还原（`git diff` 里只剩判据那两处改动）。
+
+⚠️ **这一轮踩的两颗，都不是产品缺陷，但都会让「改完看着没生效」**：
+
+- **vite 的 transform 缓存**：改完 `src/editor/*.ts` 直接开窗，窗口里跑的**可能还是旧代码**
+  （前端是从开发服务器拉的，不是 `dist/`，见 §5.30）。做法：改完先
+  `curl -s http://localhost:5273/src/editor/table-input.ts | grep -c '匹配盖住整段'`，
+  看得见新名字再开窗。⚠️ 那个开发服务器是**别人起的、要复用**（pid 48404），**别重启它**。
+- **`for` 循环里数条数**：二十四份测试的收尾行**不是同一种写法**（见 §6.3 末条 📌），
+  只认一种会**静默少算**；另有三份必须在**仓库根目录**跑（`atom-space.test.ts` 会 `readFileSync`
+  读源码，cwd 一换那条就「失败」）。
+
+**闸门**（四条，本批跑完文档后）：`npx tsc --noEmit` **0** ／
+`npx tsc --noEmit -p tools/menu-harness` **0** ／ `bash tools/i18n-check.sh` **OK** ／
+`bash tools/doc-sync-check.sh` **0 FAIL**（警告见 §7）。

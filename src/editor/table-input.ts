@@ -86,6 +86,22 @@
  *    （`node_modules/prosemirror-view/dist/index.js:5692-5709`）。`task-list.ts` 里
  *    那条 `handleKeyDown` 走的就是同一条路。
  *
+ * # ⚠️ 判据把 U+00A0 当空白（BUG-51）
+ *
+ * 症状：手打一张表，最后那根收尾竖线敲下去**什么都不发生**。
+ *
+ * 来路：WebKit 在**行末**插空格时会改用不换行空格（U+00A0）。手打一行表格时，
+ * 每颗空格敲下去的那一刻都在行末——于是判据拿到的那一行里，空格**全是** NBSP。
+ * 而 markdown 里 NBSP 任何位置都不算空白（实测：分隔行末尾带一颗，remark 就
+ * 认不出表格了），所以 `[ \t]` 那套判据一颗都匹配不上。
+ *
+ * 口径：这里把 NBSP 当空白用，**只放宽判据**。建表时格子内容是从 `起点`/`终点`
+ * 之间取的（见 `拆单元格`），两侧那些 padding 连同 NBSP 一起丢掉——所以
+ * **NBSP 进不了文件**，落盘字节与 remark 那边完全一致（实测存盘 42 字节全 ASCII）。
+ * 反过来说：放宽判据**不会**造出"我认得出、remark 认不出"的表，因为认出来的那一
+ * 刻原文就被表格节点替换掉了。`atom-space.ts` 是同一族问题的另一份账（行内原子
+ * 后面那颗 NBSP，那边的结论是"文档里换不掉、只能存盘时换"）。
+ *
  * # 边界（不做的事）
  *
  * - **只认顶层块**（`depth === 1`）。列表项/引用里那两段**不转**：markdown 表达
@@ -124,6 +140,8 @@ import type { Node as PMNode, ResolvedPos, Schema } from "@milkdown/kit/prose/mo
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { $inputRule, $prose } from "@milkdown/kit/utils";
+// 全仓这个码点只在 `atom-space.ts` 写一次，要用就引这个名字（那个文件头的规矩）。
+import { 不换行空格 } from "./atom-space";
 
 /** 一列的对齐。这三个字符串就是 gfm 的 `alignment` attr 的取值域。 */
 export type 对齐值 = "left" | "center" | "right";
@@ -142,8 +160,31 @@ export type 格子 = { 文本: string; 起点: number; 终点: number };
 /** 判据成立时给出的东西：表头每格的内容，以及每列的对齐。 */
 export type 表格判据 = { 表头: 格子[]; 对齐: 列对齐[] };
 
+/**
+ * 表格行内算**空白**的字符。
+ *
+ * ⚠️ NBSP 必须算进来，@see 文件头那一节。这里只服务于**判据**：拆格子时两侧
+ * 用来 trim 的就是它，放宽之后 WebKit 塞的那一串 NBSP 才吃得掉。
+ */
 function 是空白(字符: string): boolean {
-  return 字符 === " " || 字符 === "\t";
+  return 字符 === " " || 字符 === "\t" || 字符 === 不换行空格;
+}
+
+/**
+ * 只在**比对"覆盖没覆盖整段"**时用的归一：把 NBSP 看成普通空格。
+ *
+ * ⚠️ 这不是"把 NBSP 当空白"的又一处——`是空白` 管的是拆格子，这里管的是一次
+ * 字符串比较。来路见 `表格输入规则` 里那道闸的注释（BUG-51 的真凶）。
+ */
+const 归一空白 = (文: string): string => 文.replaceAll(不换行空格, " ");
+
+/**
+ * 输入规则那道闸的判据：**匹配有没有盖住整段**（导出只为测试）。
+ *
+ * 为什么不是简单的 `匹配.startsWith(段文)`：见 `表格输入规则` 里那道闸的注释。
+ */
+export function 匹配盖住整段(匹配: string, 段文: string): boolean {
+  return 归一空白(匹配).startsWith(归一空白(段文));
 }
 
 /**
@@ -359,8 +400,14 @@ function 试换表格(state: EditorState, $分隔: ResolvedPos, 分隔行: strin
  * 守在这里只是为了让 `InputRule` 有条正则可用；判据的真相在 `判分隔行` 里
  * （正则只管"值不值得再看一眼"）。`[ \t]` 而不是 `\s`：段落里没有换行，
  * 但硬换行/原子节点会以 `￼` 的形式出现在匹配串里，`\s` 收不住它们。
+ *
+ * ⚠️ 那几个 `\u00a0` 就是 `atom-space.ts` 的 `不换行空格`——正则字面量里引不进
+ * 常量名，所以这里**破例**写码点。少了它这条规则在这台机器上根本不会响
+ * （手打的表格行里空格全是 NBSP，@see 文件头 BUG-51 那一节）。
+ *
+ * 导出只为测试（`tests/table-input.test.ts` 逐字对 NBSP 那几例）。
  */
-const 收尾的分隔行 = /^[ \t]*\|?[ \t]*(?::?-+:?[ \t]*\|[ \t]*)+$/;
+export const 收尾的分隔行 = /^[ \t\u00a0]*\|?[ \t\u00a0]*(?::?-+:?[ \t\u00a0]*\|[ \t\u00a0]*)+$/;
 
 /**
  * 路 1：分隔行敲完那一下（含输入法把 `|` 送进来的那条路）。
@@ -378,7 +425,14 @@ export const 表格输入规则 = $inputRule(
       const $分隔 = state.doc.resolve(end);
       if ($分隔.depth !== 1) return null;
       if ($分隔.parentOffset !== $分隔.parent.content.size) return null;
-      if (!match[0].startsWith($分隔.parent.textContent)) return null;
+      // ⚠️ **归一之后再比**：这一闸问的是"匹配有没有覆盖整段"，而 `match[0]` 是
+      //    `prosemirror-inputrules` 拿「文档文字 ＋ 刚敲进去那颗字符」拼出来的
+      //    （`dist/index.js` 的 `run()`）。手打的分隔行里，文档那一颗在**行末**
+      //    会是不换行空格、拼进去的这颗是普通字符——逐字比就会在**正当**的情况下
+      //    翻车，规则静默退场（BUG-51 的真凶：探针实测「段=`| ---\u00a0`、
+      //    配=`| --- |`」两个串只差这一颗）。归一之后它照样挡得住它本来要挡的
+      //    事：段落长过 500 字时窗口从中间截断，`match[0]` 只是尾巴，长度对不上。
+      if (!匹配盖住整段(match[0], $分隔.parent.textContent)) return null;
       return 试换表格(state, $分隔, match[0]);
     }),
 );

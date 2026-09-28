@@ -107,6 +107,38 @@ impl Default for FileFilter {
     }
 }
 
+/// 侧栏那棵树按什么排。
+///
+/// ⚠️ **只有"名"这一档是升序**（A→Z），两个时间档都是**新的在最上面**——
+/// 用户想看的是"我刚改过的那几份"，而按时间升序要点到列表另一头去。这条
+/// 取舍写在三档上，改之前先想清楚它是不是两档各说各话。
+///
+/// ⚠️ **目录永远排在文件前面**，三档都一样：树是靠缩进与层级读的，把目录
+/// 混进文件里按时间排，读起来是一堆不知道该不该展开的行。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TreeSort {
+    /// 按名字（不区分大小写）。**默认**——唯一一个"不看时间也知道顺序"的档。
+    Name,
+    /// 按**修改时间**，新的在前。
+    ///
+    /// 目录排的是它**自己**的修改时间（在里面加/删文件会更新它），不是
+    /// "里面最新的那一份"——后者要递归下去，展开一层就等于把整棵子树读一遍。
+    Modified,
+    /// 按**创建时间**，新的在前。
+    ///
+    /// ⚠️ 文件系统给不出创建时间时**退回修改时间**（`meta.created()` 在有些
+    /// 文件系统上直接报错，ext4 要有 statx 才有 btime）。退回而不是"排到最后"：
+    /// 排到最后的表现是"这一批文件不参与排序"，看起来像排序坏了。
+    Created,
+}
+
+impl Default for TreeSort {
+    fn default() -> Self {
+        TreeSort::Name
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Files {
@@ -133,6 +165,13 @@ pub struct Files {
     pub show_hidden: bool,
     /// 文件树显示哪些文件。
     pub tree_filter: FileFilter,
+    /// 文件树按什么排（2026-09-28 加）。
+    ///
+    /// ⚠️ 同一批还把 `show_hidden` 与 `tree_filter` **接上了线**：它们从
+    /// 2026-09-24 就摆在界面上，而 `commands/workspace.rs` 里那两个判断是
+    /// **写死**的（点开头的永远跳过、只列 markdown），拨了等于没拨。
+    /// 详见 `docs/07` §4。
+    pub tree_sort: TreeSort,
 }
 
 impl Default for Files {
@@ -151,6 +190,7 @@ impl Default for Files {
             drop_importable: ImportAction::default(),
             show_hidden: false,
             tree_filter: FileFilter::default(),
+            tree_sort: TreeSort::default(),
         }
     }
 }
@@ -191,6 +231,10 @@ mod tests {
         assert!(!d.autosave_on_switch);
         assert!(!d.show_hidden);
         assert_eq!(d.default_extension, "md");
+        // 默认按名字：它是唯一一个"不看时间也知道顺序"的档，而按时间排的
+        // 副作用是**老用户升级后发现树的样子变了**（顺序是这一栏的全部）。
+        assert_eq!(d.tree_sort, TreeSort::Name, "默认该是按名字");
+        assert_eq!(FileFilter::default(), FileFilter::Supported);
         // ⚠️ **这条是承重的**：默认档从 2026-09-27 起真的生效了，而它决定
         // "第一次装上 Nota 的人开出来是什么样"。默认要是落到 `last-session`
         // 去，新用户第一次启动就会撞见一份不知道从哪儿来的文件夹。
@@ -212,6 +256,24 @@ mod tests {
         let 新 = toml::to_string_pretty(&老).unwrap();
         assert!(新.contains(r#"startup = "last-session""#), "实际是：\n{新}");
         assert!(!新.contains(r#""folder""#), "老名字不该再被写出去：\n{新}");
+    }
+
+    /// ⚠️ **三档要落成名字，不是裸符号**（本文件那条约定）。
+    ///
+    /// 写成 `name` / `modified` / `created` 而不是 `0` / `1` / `2`：设置文件
+    /// 是给人看的，而"按修改时间"这件事光看一个 `2` 谁都认不出来。这条与
+    /// 上面那几个枚举同一条规矩。
+    #[test]
+    fn 排序档位落盘写的是名字() {
+        let mut f = Files::default();
+        f.tree_sort = TreeSort::Modified;
+        let 文 = toml::to_string_pretty(&f).unwrap();
+        assert!(文.contains(r#"tree_sort = "modified""#), "实际是：\n{文}");
+        let back: Files = toml::from_str(&文).unwrap();
+        assert_eq!(back.tree_sort, TreeSort::Modified);
+        // ⚠️ 反方向：老设置文件里没有这一项时补出默认，**不能让整份读失败**。
+        let 老: Files = toml::from_str("show_hidden = true\n").unwrap();
+        assert_eq!(老.tree_sort, TreeSort::Name);
     }
 
     #[test]

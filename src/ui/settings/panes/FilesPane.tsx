@@ -10,7 +10,7 @@
  * 挪的是**界面上的位置**，存的值一个字节没动，所以老设置文件不受影响。
  */
 
-import type { DropAction, FileFilter, ImportAction, StartupAction } from "@/bridge/ipc";
+import type { DropAction, FileFilter, ImportAction, StartupAction, TreeSort } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { ActionButton, Note, Select, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
@@ -64,6 +64,16 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
   const FILTER: Array<{ value: FileFilter; label: string }> = [
     { value: "supported", label: t("Show only Markdown and plain text") },
     { value: "all", label: t("Show all") },
+  ];
+
+  // ⚠️ 三档的**措辞要把"新的在前"写进去**：这一栏的标签如果只写"按修改时间"，
+  // 用户排出来是倒的（新的在最上面）时会以为排序坏了。宿主那边的取舍写在
+  // `src-tauri/src/settings/files.rs::TreeSort` 上。
+  // ⚠️ 「按名字」这一档也要说清是升序，否则三档读起来像同一个方向。
+  const SORT: Array<{ value: TreeSort; label: string }> = [
+    { value: "name", label: t("Name (A to Z)") },
+    { value: "modified", label: t("Recently modified first") },
+    { value: "created", label: t("Recently created first") },
   ];
 
   const 写 = paneWriter(settings, onChange, "files");
@@ -172,6 +182,17 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           help={t("With Show all, a single node_modules folder can fill the tree with irrelevant entries, so the default is Markdown and plain text only.")}
         >
           <Select value={f.tree_filter} options={FILTER} onChange={(tree_filter) => 写({ tree_filter })} />
+        </SettingRow>
+
+        {/* ⚠️ 2026-09-28 加的这一格是**真的接线**，不是摆样子：口径随每次取树
+            的请求一起递给宿主（`ui/tree-options.ts` 顶上写了为什么）。
+            同一批还把上面那两个开关接上了线——它们从 2026-09-24 起就在这一组里，
+            而宿主那两个判断是写死的，拨了等于没拨。 */}
+        <SettingRow
+          label={t("Sort order")}
+          help={t("Folders always come first, whichever order you pick. The two time-based orders put the newest on top.")}
+        >
+          <Select value={f.tree_sort} options={SORT} onChange={(tree_sort) => 写({ tree_sort })} />
         </SettingRow>
       </SettingsGroup>
 

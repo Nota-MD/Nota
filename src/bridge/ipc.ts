@@ -20,7 +20,7 @@ import type {
   AppLang, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
-  PluginPanel, PluginReview, Settings, TreeNode, UiStyleInfo, 信任记录, 导出报告,
+  PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
   会话, 路径种类,
 } from "./types";
 
@@ -99,10 +99,18 @@ export const api = {
     open: (path: string) => invoke<string>("nota_workspace_open", { path }),
     close: () => invoke<void>("nota_workspace_close"),
     get: () => invoke<string | null>("nota_workspace_get"),
-    tree: (subPath?: string, depth?: number) =>
+    /**
+     * 取一层（或 `depth` 层）文件树。
+     *
+     * `opts` 是**这一次**要用的口径（排序 / 过滤 / 隐藏文件），见
+     * `ui/tree-options.ts`：那边写了为什么它必须随请求带、而不是让宿主自己
+     * 去读设置。⚠️ **不传时宿主回落到 `[files]` 表**，所以这不是必填项。
+     */
+    tree: (subPath?: string, depth?: number, opts?: TreeOptions) =>
       invoke<TreeNode[]>("nota_workspace_tree", {
         subPath: subPath ?? null,
         depth: depth ?? 1,
+        opts: opts ?? null,
       }),
   },
 

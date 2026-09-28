@@ -40,12 +40,38 @@ export interface Document {
  */
 export type 路径种类 = "dir" | "file" | "missing";
 
+/**
+ * 文件树的一格。
+ *
+ * ⚠️ **它身上没有时间**（既没有 `mtime` 也没有 `ctime`）。"按修改时间排"
+ * 那一档完全在宿主那边做（`commands/workspace.rs::read_dir_sorted`）——
+ * 前端拿不到时刻，也就**排不了序**，排序逻辑只有宿主一份。
+ * 想在前端再排一次之前先想清楚：两份排序迟早会对不上，而对不上的表现是
+ * "点一下刷新，顺序变了"。
+ */
 export interface TreeNode {
   name: string;
   /** 相对工作区根、以 `/` 分隔。可直接喂给 `nota.fs.read`。 */
   path: string;
   is_dir: boolean;
   children: TreeNode[] | null;
+}
+
+/**
+ * 取文件树时跟着请求一起递过去的**口径**（`commands/workspace.rs::TreeOptions`）。
+ *
+ * ⚠️ **字段是 camelCase**（`showHidden`）：Tauri 只把命令自己的参数名转成
+ * snake_case，结构体里面的字段名 serde 原样用。写成 `show_hidden` 的话宿主
+ * 那边收到的是个不认识的键——被静默忽略，症状是"这个开关拨了没用"。
+ *
+ * ⚠️ **三格都是可选的，而且是逐格回落**：只填一格时另外两格照宿主的设置走。
+ * 别为了省事把设置抄一份全填上——抄的那一份会过期（`ui/tree-options.ts`
+ * 顶上写了为什么必须随请求带而不是让宿主自己读设置）。
+ */
+export interface TreeOptions {
+  sort?: TreeSort;
+  filter?: FileFilter;
+  showHidden?: boolean;
 }
 
 /**
@@ -218,10 +244,12 @@ import type {
   AppearanceSettings,
   EditorSettings,
   ExportSettings,
+  FileFilter,
   FilesSettings,
   GeneralSettings,
   ImageSettings,
   MarkdownSettings,
+  TreeSort,
 } from "./types-settings";
 
 export interface Settings {

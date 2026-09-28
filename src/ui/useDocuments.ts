@@ -46,6 +46,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { api, type DocId, type Document, type Settings, type TreeNode } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
+import { 口径键, 读口径 } from "@/ui/tree-options";
 import { useAutosave } from "@/ui/useAutosave";
 import type { Dialogs } from "@/ui/useDialogs";
 import { 所在目录, 拼路径 } from "@/ui/useExport";
@@ -330,7 +331,21 @@ export function useDocuments(w: 文档接线): 文档出口 {
    * ⚠️ 不要把 `depth` 调大去"一次多取几层"：几万个文件的仓库那样会在
    * 打开工作区时卡住界面，`commands/workspace.rs` 顶上写着这条取舍。
    */
-  const loadDir = useCallback((subPath: string) => api.workspace.tree(subPath, 1), []);
+  /**
+   * ⚠️ **单独拎成一个字符串再进依赖数组**，与上面 `所见即所得` 同一条理由：
+   * `settings` 每次刷新设置都换一个新对象，直接依赖它会让 `loadDir` 的身份跟着
+   * 抖。而这里要的只是那三格，三格没变就没必要换身份。
+   *
+   * ⚠️ 回调体里读的仍是**闭包里的 `settings`**（不是从指纹反解）——指纹只在
+   * 三格真的变了之后才换值，所以"闭包里的 `settings` 旧了"这件事**只可能发生在
+   * 三格没变的时候**，那时旧值与新值本来就是一回事。
+   */
+  const 树指纹 = 口径键(读口径(settings));
+  const loadDir = useCallback(
+    (subPath: string) => api.workspace.tree(subPath, 1, 读口径(settings)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上面那段（依赖的是指纹，不是整份 settings）
+    [树指纹],
+  );
 
   const newDoc = useCallback(async () => {
     try {
@@ -368,14 +383,16 @@ export function useDocuments(w: 文档接线): 文档出口 {
       try {
         const canonical = await api.workspace.open(picked);
         setWorkspace(canonical);
-        setTree(await api.workspace.tree(undefined, 1));
+        setTree(await api.workspace.tree(undefined, 1, 读口径(settings)));
       } catch (e) {
         // ⚠️ 消息里带上目录名：拖放那条路走的是**用户没挑过**的路径，
         // 只说"不是目录 / 没有权限"他不知道自己拖的是什么了。
         toast(String(e), "error");
       }
     },
-    [setTree, setWorkspace, t, toast],
+    // ⚠️ 依赖的是那个**指纹**，不是 `settings`：见 `loadDir` 上面那段。
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 同上
+    [setTree, setWorkspace, t, toast, 树指纹],
   );
 
   const closeDoc = useCallback(

@@ -54,6 +54,15 @@ export type ImportAction = "import-file" | "open-in-file-manager" | "ignore";
 /** 侧栏那棵文件树显示哪些文件。 */
 export type FileFilter = "supported" | "all";
 
+/**
+ * 侧栏那棵文件树按什么排。
+ *
+ * ⚠️ **两个时间档都是"新的在前"**，只有名字档是升序——取舍写在
+ * `settings/files.rs::TreeSort` 上（一句：用户想看的是自己刚改过的那几份）。
+ * ⚠️ **目录永远排在文件前面**，三档都一样。
+ */
+export type TreeSort = "name" | "modified" | "created";
+
 export interface FilesSettings {
   startup: StartupAction;
   outline_collapsible: boolean;
@@ -66,6 +75,13 @@ export interface FilesSettings {
   drop_importable: ImportAction;
   show_hidden: boolean;
   tree_filter: FileFilter;
+  /**
+   * 文件树按什么排（2026-09-28 加）。
+   *
+   * ⚠️ 这一批同时把 `show_hidden` 与 `tree_filter` **接上了线**：它们从
+   * 2026-09-24 起就摆在设置页上，而宿主那两个判断是写死的，拨了等于没拨。
+   */
+  tree_sort: TreeSort;
 }
 
 /** 新文件的默认换行符。⚠️ 只管**新文件**，老文件照它自己的换行符写回。 */

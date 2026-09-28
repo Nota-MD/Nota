@@ -37,7 +37,7 @@
 | `commands/image.rs` | `nota_image_place` 一条，**异步**（可能要下载网络图片、写磁盘，走 `spawn_blocking`；`docs/06` §3.1 那条"任何碰磁盘/网络的命令都不许跑在主线程上"）。⚠️ **规则与文档位置一律由宿主从 `Settings` 与 `DocumentStore` 现取，不信前端传进来的那份**——前端只给"哪份文档 / 图片来源 / 替代文字"，否则前端就成了第二份判据 |
 | `commands/image_upload.rs` | 「上传图片」那三条（`nota_image_upload_get` / `_set` / `_one`），**都是异步 ＋ `spawn_blocking`**（读盘、联网最长 60 秒）。⚠️ **手动与自动两条路共用同一次上传**，但方向相反：手动**先传、失败才落盘**，自动**先落盘、失败就保留本地地址**。⚠️ **三道闸缺一不可**（`enabled` / `auto` / 文档 YAML 里的 `nota-auto-upload`） |
 | `commands/document.rs` | `nota_doc_*` **十四个**命令（⚠️ **2026-09-27 晚第十遍重数**：十二 → 十四，新增 `nota_doc_rename` / `nota_doc_move` 两条；⚠️ 上一次第九遍把"十一"改成"十二"，多出来的是 `nota_doc_disk_text`，给外部改动提示条的「查看修改」用）。⚠️ **这一层收的是"名字一段"或"目录一条"，不是整条路径**——前端手里的 `path` 是有损的（非 UTF-8 目录名会变成 `?`），详见下面 `nota_doc_rename` 那一节 |
-| `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode` + 文件树遍历 |
+| `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode` + 文件树遍历。⚠️ 2026-09-28 起 `tree` 多收一个 `TreeOptions`（排序 / 过滤 / 隐藏文件），并把 `show_hidden` / `tree_filter` 那两个死开关接上了线 |
 | `commands/settings.rs` | `nota_settings_get/set/reset` ＋ `nota_settings_problem` ＋ `nota_settings_open_dir`（2026-09-25 由 `nota_settings_dir` 改名：**「打开」这一步也在宿主**，见 `docs/07` BUG-27）＋ `nota_app_lang`（2026-09-25 加：**前端 i18n 的唯一真相源**，返回 `AppLang { setting, effective, available }`——设置里那一格可能是 `auto`，前端要知道**实际生效**的是哪个；而 `available` **由宿主给**，前端不许自己列一份语言清单，那样多一门语言就要改两处） |
 | `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir`（2026-09-25 由 `nota_doc_themes_dir` 改名，同 BUG-27） |
 | `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir`（2026-09-26 新增）——**界面风格**那三条，与 `commands/theme.rs` 一一对应、同一套口径（id 不是路径；"打开"在宿主做；目录用到时才建） |
@@ -1310,7 +1310,7 @@ pub struct DocumentStore {
 
 ---
 
-## `src-tauri/src/commands/workspace.rs`（254 行）
+## `src-tauri/src/commands/workspace.rs`（640 行）
 
 工作区（打开的文件夹）相关命令。文件头讲了一条不显然的性质：**工作区不只是 UI 状态，
 它同时是 `nota.fs` 与 `nota.git` 的围栏**——插件能碰的文件范围、能跑 git 的目录都由它决定。
@@ -1342,7 +1342,7 @@ pub struct TreeNode {
 | `pub fn nota_workspace_open(state: State<'_, AppState>, path: String) -> Result<String>` | `PathBuf::from(path).canonicalize()`（失败 → `Read{path, source}`）→ 不是目录则 `Err(other("{path} 不是文件夹"))` → 写进 `state.workspace` → 返回规范化后的绝对路径字符串 |
 | `pub fn nota_workspace_close(state: State<'_, AppState>) -> Result<()>` | 置 `None`。**只清围栏，不关文档**——用户开着的标签照旧。永远 `Ok` |
 | `pub fn nota_workspace_get(state: State<'_, AppState>) -> Result<Option<String>>` | 有就返回字符串（`path_to_string`，非 UTF-8 会报错），没有就 `Ok(None)` |
-| `pub fn nota_workspace_tree(state: State<'_, AppState>, sub_path: Option<String>, depth: Option<u32>) -> Result<Vec<TreeNode>>` | 见下 |
+| `pub fn nota_workspace_tree(state: State<'_, AppState>, sub_path: Option<String>, depth: Option<u32>, opts: Option<TreeOptions>) -> Result<Vec<TreeNode>>` | 见下 |
 
 `nota_workspace_tree` 的流程：
 
@@ -1352,7 +1352,41 @@ pub struct TreeNode {
    没有就用 `root` 本身
 3. 不是目录 → `Err(other("{base} 不是文件夹"))`
 4. `base.strip_prefix(&root)` 得到相对路径（`unwrap_or_default()`，即 base 就在根时是空路径）
-5. `read_dir_sorted(&base, &base_rel, depth.unwrap_or(1))`
+5. 取口径：`口径解析(opts, &设.files)`——**三格逐格回落**（给了 `opts` 的那一格听 `opts`，
+   没给的听 `[files]` 表）。⚠️ 取完就放锁，读目录那一段**不持设置锁**（下面可能递归几层、
+   碰几千个文件；没必要把任何一把锁攥在磁盘 IO 上面）
+6. `read_dir_sorted(&base, &base_rel, depth.unwrap_or(1), 口径)`
+
+### `pub struct TreeOptions`（2026-09-28 加）
+
+```rust
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TreeOptions {
+    pub sort: Option<TreeSort>,
+    pub filter: Option<FileFilter>,
+    pub show_hidden: Option<bool>,
+}
+```
+
+⚠️ **为什么口径要从前端递进来，而不是让宿主自己去读设置**：设置页那一路是"先改内存、
+再写盘"（`ui/settings/panes/props.tsx::paneWriter`），时序上后端可能还拿着旧值——用户
+在下拉里换成"按修改时间"，紧接着那一次请求如果读的是后端手里的旧设置，树就**不换**。
+这种"拨了没反应、过一会儿自己好了"是最难报的一类 bug。前端把当前口径**跟着请求一起
+递过来**就没有这个时间差（`src/ui/tree-options.ts` 顶上写了同一段）。
+
+⚠️ **字段是 camelCase**（`showHidden`）：Tauri 只把**命令自己的**参数名从 camelCase 换算
+成 snake_case，**结构体里面的字段名 serde 原样用**。写成 `show_hidden` 的话前端发
+`showHidden` 会被当成未知字段忽略，症状正是"显示隐藏文件这个开关拨了没用"。
+
+⚠️ **[`TreeOptions`] 与 [`树口径`] 是两个类型**，这是刻意的：前者是"线上来的、可以缺格"
+的形状，后者是"干活用的、一定齐全"的形状。合成一个的话 `read_dir_sorted` 里每处判断都要
+写一次 `unwrap_or`，漏掉一处的症状是那一路**静默用错档**。
+
+### `fn 口径解析(opts: Option<TreeOptions>, 设: &Files) -> 树口径`（私有，纯函数）
+
+逐格回落：`opts.as_ref().and_then(|o| o.sort).unwrap_or(设.tree_sort)`，另外两格同理。
+⚠️ **不碰状态、不碰磁盘**，所以测试能直接喂它（`口径逐格回落` 那条）。
 
 `depth` 是递归层数上限，前端按侧栏展开状态分段请求（先 1 层，展开某个目录时再要那一支）。
 **不做整棵树一次拉完**——大仓库（几万个文件）那样会卡住界面。
@@ -1362,25 +1396,46 @@ pub struct TreeNode {
 递归分支**仍然没有调用者**（`sub_path` 那条路是硬要走通的路，不是递归），
 它的测试是唯一的使用者。
 
-### `fn read_dir_sorted(dir: &Path, rel: &Path, depth: u32) -> Vec<TreeNode>`（私有）
+### `fn read_dir_sorted(dir: &Path, rel: &Path, depth: u32, 口径: 树口径) -> Result<Vec<TreeNode>>`（私有）
 
-读一层目录，排好序，按 `depth` 决定要不要递归下去。
+读一层目录，排好序，按 `depth` 决定要不要递归下去，按 `口径` 决定列什么、怎么排。
+
+⚠️ **2026-09-28 之前这里有两条规则是写死的**（点开头的永远跳过、文件只列 markdown），
+而设置页上那两个开关（「显示隐藏文件」「显示哪些文件」）从 2026-09-24 就摆在那儿——
+**拨了等于没拨**。同一批接上了线，这是"还债"不是新功能。
 
 | 规则 | 细节 |
 |---|---|
-| 读不了就返回空 | `let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new(); }` —— **不报错**，界面上表现为"这是个空目录" |
-| 跳过点开头 | `name.starts_with('.')` → `.git`、`.obsidian` 这类元数据不列 |
-| 跳过 `node_modules` | 硬编码的名字 |
+| 读不了就**报错** | `std::fs::read_dir(dir).map_err(...)?`——见下面那段（原先是吞成空数组） |
+| 点开头 | 默认跳过；`口径.show_hidden` 拨开才列。⚠️ `.git`、`node_modules` **永远跳过**（见下） |
+| `node_modules` | 与点开头那句**分开写**。合起来写成 `name.starts_with('.') || name == "node_modules"` 就变成"拨开隐藏文件之后 node_modules 也冒出来了" |
 | 跳过符号链接 | `meta.file_type().is_symlink()` → **不跟**（跟了可能绕出工作区，也可能成环把内存吃光）。用的是 `DirEntry::metadata()`，它**不**跟随符号链接，所以这个判断是准的。⚠️ 副作用：一个**指向工作区内部的**符号链接 .md 文件也不会被列出 |
 | 取不到元数据 | `continue` |
-| 目录 | `TreeNode { is_dir: true, children: depth > 1 ? Some(read_dir_sorted(...)) : None }` |
-| 文件 | **只列 markdown**（`is_markdown(&name)`），`children: None`。要列全部文件的那天再放宽 |
-| 排序 | **目录在前、文件在后**，各自按名字排。比较用**不区分大小写**、大小写相同时再用原名兜底——混排大小写时（`README.md` 与 `apple.md`）区分大小写的结果看着是乱的 |
+| 目录 | `TreeNode { is_dir: true, children: depth > 1 ? Some(read_dir_sorted(...)) : None }`。**永远列**（过滤档只管文件） |
+| 文件 | `口径.filter == All` 时全列；`Supported`（默认）时只列 markdown（`is_markdown(&name)`），`children: None` |
+| 排序 | **目录在前、文件在后**（`dirs.into_iter().chain(files)`，三档都一样），各自排。🔹 `name` 档：不区分大小写、大小写相同时再用原名兜底（混排大小写时 `README.md` 与 `apple.md` 区分大小写的结果看着是乱的）。🔹 `modified` / `created` 档：**新的在前**（`b.时刻.cmp(&a.时刻)`），时刻比不出来时按名字兜底 |
 | `path` 的拼法 | `child_rel` 的每个 component 用 `/` 手工 `join`，所以是 `子目录/a.md` 这种跨平台稳定的相对路径 |
+
+**⚠️ 为什么 `.git` 与 `node_modules` 是"永远跳过"而不是跟着 `show_hidden` 走**：
+
+用户拨开隐藏文件是冲着 `.github` / `.env` / `.obsidian` 去的，而 `.git` 里是几千个
+哈希名（`.git/objects/ab/cdef…`）——露出来就等于这个开关**废了**：拨一次看到满屏
+`objects/`，从此再也不碰它。`node_modules` 同理，而且它**不是隐藏目录**，
+点开头那句挡不住它（`Show all` 那一档会把它整个摊开）——设置页那句帮助文案
+（`FilesPane.tsx`：「一个 node_modules 就能把树填满」）指的就是它，文案既然这么写了，
+代码里就得真跳。
+
+**⚠️ 时间档里"目录排的是它自己的时间"**，不是"里面最新的那一份"：后者要递归下去，
+展开一层就等于把整棵子树读一遍。「创建时间」给不出来时**退回修改时间**
+（`meta.created().ok().or_else(|| meta.modified().ok())`）——ext4 要有 statx 才有 btime。
+退回而不是"排到最后"：排到最后的表现是"这批文件不参与排序"，看起来像排序坏了。
+
+**⚠️ 时刻只在这一层用**：它**不跟着 `TreeNode` 发给前端**。前端拿不到时刻，也就排不了
+序——排序逻辑只有这一份（与 `find.ts` 那条"匹配逻辑只有一份"同一条规矩）。
 
 ### `fn is_markdown(name: &str) -> bool`（私有）
 
-### `fn read_dir_sorted(dir, rel, depth) -> Result<Vec<TreeNode>>`（私有）
+### 为什么返回 `Result`（2026-09-25 改的）
 
 ⚠️ **返回 `Result` 是 2026-09-25 改的**，原来返回 `Vec<TreeNode>` 并且把
 `read_dir` 的错吞成空数组（`let Ok(entries) = … else { return Vec::new() }`）。
@@ -1400,13 +1455,19 @@ pub struct TreeNode {
 ⚠️ 与前端的两处不一致：`App.tsx::openViaDialog` 的对话框过滤器**没有 `mdx`**；
 保存对话框只有 `md` / `markdown`。见 `docs/01-architecture.md` 的前端遗留项。
 
-### 测试（3）
+### 测试（9）
 
 | 测试名 | 钉住什么 |
 |---|---|
 | `认领的_markdown_后缀` | `a.md`、`A.MD`（大小写）、`b.markdown` 认；`c.rs`、`d.pd` 不认。⚠️ 注意 `d.pd` 这条是在测"`.pd` 不在表里"——它同时说明这个实现是纯后缀匹配，没有更细的判断 |
 | `文件树只列_markdown_并且目录在前` | 造 `zeta/`、`.git/`、`a.md`、`b.png`，断言结果是 `["zeta", "a.md"]`——目录在前、只留 md、跳过点开头 |
 | `depth_为_1_时不给子节点` | `depth = 1` 时目录的 `children` 是 `None`；`depth = 2` 时子节点 1 个 |
+| `目录读不动时报错而不是给空数组` | 喂一个**不存在**的目录，必须是 `Err`、且消息含"读文件失败"。⚠️ 用不存在的目录而不是 `chmod 000`：后者在 root 下跑测试时权限位拦不住，那条用例会时灵时不灵 |
+| `口径逐格回落` | 纯函数那三条：什么都不给照设置、只给一格时另外两格照设置、**显式 `false` 与"没给"是两回事**（`Option<bool>` 存在的意义就在这一格） |
+| `按修改时间排时新的在前` | 文件名取 `a-老` / `b-新`，让**字母序与时间序正好相反**——两种排法给的答案对着来，这条才证明得了东西。⚠️ 时间差用"写一份、`sleep(20ms)`、再写一份"造，不碰 `File::set_modified`（那个要 Rust 1.75，且各家文件系统精度不一） |
+| `时间档里目录仍在文件前面` | 目录比文件**旧**、按时间排本该在后面，但它必须在前面——树是靠缩进读的，目录跑到文件后面去，用户会以为那一层没有子目录 |
+| `显示隐藏文件但_git_与_node_modules_永不出现` | 造 `.env` / `.github/` / `.git/` / `node_modules/`：默认档一个都不列；**只拨隐藏、过滤仍是 `Supported`** 时 `.env` 仍不列（两个开关各自独立）；两个都开时 `.env` 与 `.github` 露面，而 `.git` 与 `node_modules` **永远不在** |
+| `过滤档_all_时列出非_markdown_文件` | 同一份目录跑两种档位再比：`Supported` 只给 `a.md`，`All` 给 `a.md` ＋ `b.png`。⚠️ 写成两句各自断言的话，"两档给出同一个结果"（＝根本没接线）照样能过 |
 
 ---
 
@@ -6205,7 +6266,7 @@ handler，菜单上一直是灰的）——摘了就是把唯一能用的那份�
 
 ---
 
-## `src/ui/Sidebar.tsx`（481 行）
+## `src/ui/Sidebar.tsx`（539 行）
 
 左侧栏：**文件树 / 大纲** 两页。`SidebarTab` 就两个值（`"tree"` / `"outline"`），
 菜单里那两条（`Ctrl+Shift+3` 文件树 / `Ctrl+Shift+1` 大纲）与这里是同一套。
@@ -6265,7 +6326,8 @@ props：
 | `tab` | `SidebarTab` | 当前是哪一页。**由 App 持有** |
 | `onTab` | `(t: SidebarTab) => void` | 切页 |
 | `onOpenFile` | `(path: string) => void` | 接的是 `App.openPath`，传的是**绝对路径** |
-| `loadDir` | `(path: string) => Promise<TreeNode[]>` | 展开子目录时按需取那一层 |
+| `loadDir` | `(path: string) => Promise<TreeNode[]>` | 展开子目录时按需取那一层。⚠️ 它已经带着当前口径（`ui/tree-options.ts`），这一层不用管 |
+| `口径键` | `string` | 当前口径的字符串指纹，**只用来判断"已经取回来的那几层过期了没有"**（见下面 `FileTree` 那段） |
 | `onClose` | `() => void` | 收起这一栏。**只收不切**（点 × 却把它点开，那种手感无法接受） |
 | `onOpenFolder` | `() => void` | 空态那颗按钮，接的是 `App.openFolder`——**和「文件 → 打开文件夹…」同一个回调**，不是另开一条通路 |
 
@@ -6287,7 +6349,7 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 |---|---|---|
 | `TabButton` | `{id, current, onSelect, label}` | `role="tab"` 的 button，`aria-selected` 与 `className` 按 `current === id` 定 |
 | `Outline` | `{items: OutlineItem[]}` | 大纲整页（见下）。空时显示"这份文档还没有标题。" |
-| `FileTree` | `{nodes, workspace, onOpenFile, loadDir}` | 空时显示"这个文件夹里没有 Markdown 文件。"，否则 `<ul className="tree">` + 每项一个 `TreeRow` |
+| `FileTree` | `{nodes, workspace, onOpenFile, loadDir, 口径键}` | 空时显示"这个文件夹里没有 Markdown 文件。"，否则 `<ul className="tree">` + 每项一个 `TreeRow` |
 | `TreeRow` | `{node, workspace, depth, open, kids, errors, onToggleDir, onOpenFile}` | 递归，见下 |
 
 **`Outline`** —— 折的是**标题**：
@@ -6310,6 +6372,20 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
   点击有一拍延迟（本地目录看不出来，网络盘看得出来）。
 - ⚠️ 读不了就**如实写在那一行下面**（`tree-error`），不要静默成"这个目录是空的"——
   那会让"权限不够"看起来像"文件夹里没东西"。
+- ⚠️ **口径一变，已经取回来的那几层就过期了**（2026-09-28 加）：换排序 / 换过滤 /
+  拨开隐藏文件之后，缓存里那份顺序与内容都是按**旧口径**取的。不清的话界面上会出现
+  "顶层已经按新规则排了，展开的目录还是旧顺序"——同一棵树里两种排法，看起来像排序坏了。
+  落地是一个盯 `口径键` 的 effect：**清掉 `kids` 与 `errors`，再对 `open` 里的每条路径
+  重取一次**。
+  - ⚠️ **不能只重取"已经在 `kids` 里"的那些**：过滤档从 `supported` 换成 `all` 时，
+    新露出来的那些**目录**本来就没有缓存，而无缓存的目录是**不展开**的（`TreeRow` 只在
+    `kids[path]` 有值时才往下画）——于是"展开着的目录一个都没重取，新目录一个都不出现"。
+  - ⚠️ **清缓存但不收回 `open`**：用户的展开状态与排序偏好无关，为了换个排序把树收回去，
+    等于每次改设置都要重新展开一遍。
+  - ⚠️ effect 的依赖数组里只有 `口径键`，**没有 `props.loadDir`**：`props` 每次渲染都是
+    新对象，而 `loadDir` 的身份也会跟着设置刷新而变——放进去的后果是**每一次设置写入**
+    （比如改个字号）之后都跑一遍，把已经展开的十几层目录重新读一次。要读最新那份就用
+    `loadDirRef`（那个 `取一层` 的 `useCallback` 只建一次）。
 - **目录**画 `<button className="tree-dir-btn">`（三角 `tree-twisty` + 名字，
   `aria-expanded`），展开时递归渲染一层 `<ul className="tree">`；
   **文件**画 `<button className="tree-file-btn">`。
@@ -7825,7 +7901,63 @@ state 就又多一个"要和设置对齐"的内存值，而"对齐"永远会被�
 
 ---
 
-## `src/ui/useDocuments.ts`（385 行）
+## `src/ui/tree-options.ts`（76 行）
+
+**文件树的口径**：排序档 / 过滤档 / 隐藏文件三格（2026-09-28 新建，用户原话
+「**文件树排序（名/创建/修改）**」）。
+
+```ts
+export interface 树口径 { sort: TreeSort; filter: FileFilter; showHidden: boolean }
+export const 缺省口径: 树口径;                    // 设置还没到时用
+export function 读口径(settings: Settings | null): 树口径;
+export function 口径键(口径: 树口径): string;      // 给依赖数组用的字符串指纹
+```
+
+都是**纯函数**（只读 `settings.files` 里那三格），所以 `tests/tree-options.test.ts`
+能直接喂它。
+
+### 为什么要单独一个文件
+
+这三格有**三个使用点**：`App.tsx`（换工作区要重取整棵树）、`ui/useDocuments.ts`
+（`loadDir` 展开子目录、`openFolder` 开文件夹）、`ui/Sidebar.tsx`（口径变了要让
+已经展开的那几层重取）。四处各写一遍"哪一格叫什么、缺省是什么"的话，迟早会有一个
+入口跟别的不一样——而那种错**用户得点两下才看得出来**（"在文件树里点开是好的，
+展开子目录顺序又变了"）。
+
+### ⚠️ 口径是"随请求带"的，不是"让宿主自己读设置"
+
+这是这个文件存在的**真正理由**。设成设置项的那一刻宿主当然读得到，但那一路是
+**先改内存、再落盘**（`ui/settings/panes/props.tsx::paneWriter`），而写盘是异步的：
+用户在下拉里换成"按修改时间"，紧接着发出的那一次 `tree` 请求完全可能赶在设置到达
+宿主**之前**——那时宿主手里的还是旧档，树**不换**，要等下一次别的原因刷新才换。
+这种"拨了没反应、过一会儿自己好了"是最难报的一类 bug。
+
+前端把当前口径**跟着请求一起递过去**（`api.workspace.tree(subPath, depth, opts)`），
+就没有这个时间差。这也是宿主那边 `TreeOptions` 存在的唯一理由。
+
+⚠️ **逐格回落**：只填自己关心的那一格是允许的（宿主那边一格一格回落到 `[files]` 表，
+见 `commands/workspace.rs::口径解析`）。
+
+### ⚠️ `口径键` 不是装饰
+
+`读口径` 每次返回**新对象**，所以它的身份每次渲染都变——直接拿它当 `useEffect` /
+`useCallback` 的依赖，等于"每次渲染都重取一遍已经展开的目录"（展开十几个目录之后，
+每次敲字都在重取）。`口径键` 把它压成一个**值比较**的字符串（`"name|supported|false"`），
+三格没变就是同一个键。⚠️ 所以 `refreshTree` / `loadDir` / `openFolder` 的依赖数组里
+放的**都是那个指纹**，不是 `settings`、也不是口径对象。
+
+### ⚠️ `缺省口径` 必须与宿主的默认值逐格一致
+
+启动那几百毫秒里 `settings` 还是 `null`，走的是这一份。不一致的表现是**树先按一种
+规则排、眨一下眼又按另一种重排**。所以 `tests/tree-options.test.ts` 第三组直接读
+`src-tauri/src/settings/files.rs`，把那两个枚举的**档位名与默认档**逐个对一遍
+（连 `rename_all = "kebab-case"` 有没有都查——少了它，线上取值会变成
+`"TreeSort.Name"`，而 `Option<TreeSort>` 那三格反序列化失败会让**整个文件树打不开**，
+症状与"排序"这个动作看不出关系）。
+
+---
+
+## `src/ui/useDocuments.ts`（632 行）
 
 **文档的生命周期**：打开 / 新建 / 存盘 / 关闭 / 从磁盘重载 / 切页与自动保存
 （2026-09-25 从 `App.tsx` 搬出；搬之前 `App.tsx` 已经 998 行，离硬上限只剩两行。
@@ -7855,6 +7987,10 @@ A/B 量到的 CPU 数在 `docs/07` §4。
 
 ⚠️ 步骤与失败口径（存盘前**强制**从编辑器同步一次、取消对话框**不算错误**、两张对话框的
 后缀表都含 `mdx`）见下面 App.tsx 那张表——那些描述仍然有效，只是现在的落点在这个文件里。
+
+⚠️ **2026-09-28 起 `loadDir` / `openFolder` 取树时带上当前口径**（`ui/tree-options.ts`），
+而依赖数组里放的是那个**字符串指纹**、不是 `settings`——与上面 `所见即所得` 同一条理由
+（`settings` 每次刷新设置都换新对象，`loadDir` 的身份会跟着抖）。
 
 ---
 

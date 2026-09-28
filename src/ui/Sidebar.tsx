@@ -55,7 +55,7 @@
  * 那条路比任何自造的把手稳。
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { TreeNode } from "@/bridge/ipc";
 import { useT } from "@/i18n";
@@ -97,6 +97,14 @@ interface Props {
   /** 展开某个子目录时按需取它那一层（`depth = 1`）。 */
   loadDir: (path: string) => Promise<TreeNode[]>;
   /**
+   * 当前树口径的**字符串指纹**（`ui/tree-options.ts::口径键`）。
+   *
+   * ⚠️ 传的是那个字符串，**不是口径对象**：对象每次渲染都是新的，拿它当依赖
+   * 等于每次渲染都重取一遍已经展开的目录。指纹只在"排序 / 过滤 / 隐藏文件"
+   * 真的变了之后才换一个值。
+   */
+  口径键: string;
+  /**
    * 收起这一栏（右上角那颗 ×）。
    *
    * ⚠️ **只收，不"切换"**：传进来的东西只管关。要做成开关的话，用户
@@ -132,6 +140,7 @@ export function Sidebar({
   onOpenFile,
   onJumpOutline,
   loadDir,
+  口径键,
   onClose,
   onOpenFolder,
   inert,
@@ -167,7 +176,13 @@ export function Sidebar({
       <div className="sidebar-body">
         {tab === "tree" &&
           (workspace ? (
-            <FileTree nodes={tree} workspace={workspace} onOpenFile={onOpenFile} loadDir={loadDir} />
+            <FileTree
+              nodes={tree}
+              workspace={workspace}
+              onOpenFile={onOpenFile}
+              loadDir={loadDir}
+              口径键={口径键}
+            />
           ) : (
             // ⚠️ 这一块**必须有那颗按钮**（2026-09-24 补）：只有一句话的话，
             // 用户盯着的就是这个死胡同——界面说"去打开一个文件夹"，
@@ -332,6 +347,7 @@ function FileTree(props: {
   workspace: string;
   onOpenFile: (path: string) => void;
   loadDir: (path: string) => Promise<TreeNode[]>;
+  口径键: string;
 }) {
   // 订阅语言（同 `Outline`：每个组件各自订阅一次）。
   const t = useT();
@@ -345,6 +361,55 @@ function FileTree(props: {
   const [kids, setKids] = useState<Record<string, TreeNode[]>>({});
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /**
+   * `loadDir` 的**最新一份**（ref 快照）。
+   *
+   * ⚠️ 下面那个"口径变了要重取"的 effect **不能把 `props.loadDir` 放进依赖
+   * 数组**：`props` 每次渲染都是新对象，而 `loadDir` 的身份也会跟着设置刷新而
+   * 变（它依赖口径）。放进去的后果是这个 effect 在**每一次设置写入**之后都跑一遍
+   * ——用户改个字号，侧栏把已经展开的十几层目录重新读一次。
+   * 用 ref 拿最新一份，依赖数组里就只剩那个指纹。
+   */
+  const loadDirRef = useRef(props.loadDir);
+  loadDirRef.current = props.loadDir;
+
+  /** 取一层子目录放进缓存。展开、以及"口径变了要重取"两条路共用。 */
+  const 取一层 = useCallback((path: string) => {
+    void loadDirRef
+      .current(path)
+      .then((nodes) => setKids((prev) => ({ ...prev, [path]: nodes })))
+      .catch((e: unknown) => {
+        // 读不了就**如实写在那一行下面**，不要静默成"这个目录是空的"——
+        // 那会让"权限不够"看起来像"文件夹里没东西"。
+        setErrors((prev) => ({ ...prev, [path]: String(e) }));
+      });
+  }, []);
+
+  /**
+   * ⚠️ **口径一变，已经取回来的那几层就过期了**（2026-09-28 加）。
+   *
+   * 换排序 / 换过滤 / 拨开隐藏文件之后，缓存里那份顺序与内容都是按**旧口径**
+   * 取的。不清的话，界面上会出现"顶层已经按新规则排了，展开的目录还是旧顺序"
+   * ——同一棵树里两种排法，看起来像排序坏了。
+   *
+   * ⚠️ **不能对 `open` 里的路径只重取"已经在 `kids` 里"的那些**：过滤档从
+   * `supported` 换成 `all` 时，新露出来的那些**目录**本来就没有缓存，而无缓存
+   * 的目录是**不展开**的（`TreeRow` 只在 `kids[path]` 有值时才往下画）——
+   * 于是"展开着的目录一个都没重取，新目录一个都不出现"。
+   *
+   * ⚠️ **清缓存、逐条重取，但不收回 `open`**：用户的展开状态与排序偏好无关，
+   * 为了换个排序把树收回去，等于每次改设置都要重新展开一遍。
+   */
+  const 上次口径 = useRef(props.口径键);
+  useEffect(() => {
+    if (上次口径.current === props.口径键) return;
+    上次口径.current = props.口径键;
+    const 还开着的 = [...open];
+    setKids({});
+    setErrors({});
+    for (const path of 还开着的) 取一层(path);
+  }, [props.口径键, open, 取一层]);
 
   const toggle = (path: string) => {
     if (open.has(path)) {
@@ -361,14 +426,7 @@ function FileTree(props: {
     setOpen((prev) => new Set(prev).add(path));
     if (kids[path]) return;
 
-    void props
-      .loadDir(path)
-      .then((nodes) => setKids((prev) => ({ ...prev, [path]: nodes })))
-      .catch((e: unknown) => {
-        // 读不了就**如实写在那一行下面**，不要静默成"这个目录是空的"——
-        // 那会让"权限不够"看起来像"文件夹里没东西"。
-        setErrors((prev) => ({ ...prev, [path]: String(e) }));
-      });
+    取一层(path);
   };
 
   if (!props.nodes.length) {

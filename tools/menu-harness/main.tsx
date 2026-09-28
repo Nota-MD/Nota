@@ -899,6 +899,10 @@ function Harness() {
               console.log("jump-outline", t);
             }}
             loadDir={loadDirFixture}
+            // ⚠️ 试验台里口径固定不变（这一场验的是侧栏长得对不对，不是
+            // 排序）——给个常量指纹就行。真换口径之后"已经展开的那几层要重取"
+            // 那一条归 `App.tsx` 那条路，这里验不了。
+            口径键="name|supported|false"
             // ⚠️ 数一下回调次数，不在这儿真把栏子撤掉：试验台要验的是
             // "× 点得动、回调发得出去"，卸载归 `App.tsx` 管。
             onClose={() => {

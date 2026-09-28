@@ -34,6 +34,7 @@ import { resolvePick, 应用键位覆盖 } from "@/ui/commands";
 import { useT } from "@/i18n";
 import { PluginDock } from "@/ui/PluginDock";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
+import { 口径键, 读口径 } from "@/ui/tree-options";
 import { SettingsDialog } from "@/ui/settings/SettingsDialog";
 import { StatusBar } from "@/ui/StatusBar";
 import { Toasts } from "@/ui/Toasts";
@@ -223,17 +224,24 @@ export default function App() {
   //（那边要用 `活跃预览` / `面板预览` / `看法` / `退出预览` 好几样），拆一半
   // 留一半只会多一份"哪几个在这边有用"的账。
 
+  // 口径指纹（`ui/tree-options.ts`）：换排序 / 换过滤 / 拨开隐藏文件之后树要
+  // 自己重取，靠的就是下面那个依赖。⚠️ 依赖它而不是口径对象——对象每次渲染
+  // 都换身份，那样 `refreshTree` 的身份会跟着抖，取树也会跟着每次都重跑。
+  const 树指纹 = 口径键(读口径(settings));
+
   const refreshTree = useCallback(async () => {
     if (!workspace) {
       setTree([]);
       return;
     }
     try {
-      setTree(await api.workspace.tree(undefined, 1));
+      setTree(await api.workspace.tree(undefined, 1, 读口径(settings)));
     } catch (e) {
       toast(String(e), "error");
     }
-  }, [workspace, toast]);
+    // ⚠️ 依赖的是那个**指纹**，不是 `settings`：见上面那段。
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 同上
+  }, [workspace, toast, 树指纹]);
 
   // ── 文档的生命周期 ──────────────────────────────────────────────────────
   // 打开 / 新建 / 存盘 / 关闭 / 重载整块搬去了 `ui/useDocuments.ts`（2026-09-25，
@@ -842,6 +850,9 @@ export default function App() {
               // "什么都不做"，不是抛错——见它 `useImperativeHandle` 里那段。
               onJumpOutline={(目标) => editorRef.current?.跳到标题(目标)}
               loadDir={loadDir}
+              // 口径指纹：换排序 / 换过滤 / 拨开隐藏文件之后，侧栏靠它知道
+              // "已经取回来的那几层过期了"（`ui/Sidebar.tsx::FileTree` 那个 effect）。
+              口径键={树指纹}
               // 右上角那个 × 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`
               // 是**同一个开关的三个入口**，共用下面这一个 setter。
               onClose={() => setSidebarOpen(false)}

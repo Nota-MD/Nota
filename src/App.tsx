@@ -40,7 +40,6 @@ import { SettingsDialog } from "@/ui/settings/SettingsDialog";
 import { StatusBar } from "@/ui/StatusBar";
 import { Toasts } from "@/ui/Toasts";
 import { useToasts } from "@/ui/useToasts";
-import { useAbout } from "@/ui/useAbout";
 import { TabBar } from "@/ui/TabBar";
 import { TopBar } from "@/ui/TopBar";
 import { useDialogs } from "@/ui/useDialogs";
@@ -53,10 +52,7 @@ import { useDocuments } from "@/ui/useDocuments";
 import { useExternalChanges } from "@/ui/useExternalChanges";
 import { useClipboard } from "@/ui/useClipboard";
 import { useFindBar } from "@/ui/useFindBar";
-import { useForceFocus } from "@/ui/useForceFocus";
-import { useFocusTrace } from "@/ui/useFocusTrace";
-import { useFocusAlarmSound, 预热音频 } from "@/ui/useFocusAlarmSound";
-import { useFocusIntro } from "@/ui/useFocusIntro";
+import { useFocusSession } from "@/ui/useFocusSession";
 import { useMenus } from "@/ui/useMenus";
 import type { CommandState } from "@/editor/command-state";
 import { useDocTheme, useDocThemeSlot } from "@/ui/useDocTheme";
@@ -478,77 +474,12 @@ export default function App() {
 
   // ── 强制专注（核心功能，不是插件）──────────────────────────────────────
   //
-  // ⚠️⚠️ **它和下面那个 `切换专注` / `focusMode` 毫无关系**，尽管名字像。
-  // 那个是"把外壳收起来"（沉浸，`ui/useImmersive.ts`）；这个是**记账**：
-  // 人在写就涨、切走就扣、扣光就弹一块红屏。用户 2026-09-26 定的模型，
-  // 全部账目逻辑在宿主的 `src-tauri/src/focus/`，前端只是**读 + 转发**。
-  //
-  // 四块分工：
-  // - `useForceFocus`  —— 订阅状态 + 四条命令（主窗和警报窗共用）；
-  // - `useFocusAlarmSound` —— 挂"该响了"那条频道。⚠️ **只在主窗挂**
-  //   （警报窗也挂就是同一段警报响两遍，理由在那个文件头）；
-  // - `useFocusIntro`  —— 第一次打开时那段说明。用户点名要的；
-  // - `useFocusTrace`  —— 攒这一轮的轨迹，结束时交出一份**总结**（用户点名的
-  //   "专注模式结束后的总结"，2026-09-27）。
-  //
-  // ⚠️ **位置必须在 `updateSettings` 与 `askConfirm` 之后**：这两个都是它的入参。
-  //
-  // ⚠️ **也必须在 `useImmersive` 之前**（2026-09-27 从下面搬上来的）：下面那个
-  // `有浮层` 要数进 `专注总结`——总结框开着的时候 `Esc` 该归它，不该顺手把沉浸
-  // 模式也退掉。`有浮层` 那条口径要求**逐个列在调用处**（见 `ui/useImmersive.ts`
-  // 那一格自己的注释），所以被数列的那个值只能先算出来。
-  const { state: 专注状态, start: 开始专注, stop: 停止专注 } = useForceFocus();
-  useFocusAlarmSound();
-  const 先说明再专注 = useFocusIntro(askConfirm, settings, updateSettings);
-
-  // ⚠️ 传进去的是**每秒都在变**的那个对象，但这个 hook 只在"这一轮结束"那一下
-  // 往 state 里写东西（中间那几百拍的曲线存在 ref 里）——所以它不会让本文件多出
-  // 一次重画。理由逐条写在 `ui/useFocusTrace.ts` 的文件头。
-  const { 结算: 专注结算, 结算于: 专注结算于, 收起: 收起专注结算 } =
-    useFocusTrace(专注状态);
-
-  /**
-   * 总结框要的两样东西合成**一个** prop。
-   *
-   * ⚠️ 不拆成两个传：那样 `AppDialogs` 的签名里就会出现"总有了、时刻还没有"
-   * 这个中间态，而它在界面上没有意义（一张没有时间戳的卡）。合成一个
-   * `null` / 非 `null` 之后，那个框只有"显示"和"不显示"两种。
-   */
-  const 专注总结 = useMemo(
-    () => (专注结算 && 专注结算于 ? { 总: 专注结算, 现在: 专注结算于 } : null),
-    [专注结算, 专注结算于],
-  );
-
-  /**
-   * 「视图 → 强制专注」：**一颗按钮两态**（在跑就停、没跑就开）。
-   *
-   * ⚠️ 身份的稳定性在这里是**硬要求**（这张表要喂给原生菜单栏，见下面那段）：
-   * `专注状态` 每秒都在变，所以**不能**把它写进依赖数组——那样这张表每秒
-   * 重建一次，原生菜单栏就每秒重推一遍。判据改成读一个 ref 之外没有别的办法，
-   * 但更简单的是：**"在不在跑"由 `useMenus` 的勾去表达**，
-   * 而这里只做"点了就反过来"，反转的判据用 `setState` 的函数式写法拿不到
-   * ——所以下面这个 `useCallback` 依赖 `专注运行中`（一个布尔），
-   * 它一秒最多翻一次，而翻的那一次本来就该让菜单重推。
-   */
-  const 专注运行中 = 专注状态?.running ?? false;
-  const 切换强制专注 = useCallback(() => {
-    if (专注运行中) {
-      void 停止专注();
-      return;
-    }
-    // ⚠️ **预热必须在这一行的位置**（`click` 的同步段里），不能挪进下面那个
-    // 回调：那里已经跨过 `await`，用户手势过期了，`AudioContext` 会永远是
-    // `suspended`，警报响的时候一声都没有。理由在 `ui/useFocusAlarmSound.ts`。
-    //
-    // ⚠️ 它排在说明弹窗**前面**：说明是**异步**的（用户可能看半天才点），
-    // 而手势只在 `click` 那一瞬间有效。用户在说明里点「取消」的话，这里多建的
-    // 那个 `AudioContext` 什么也不做——它不出声、不占资源，下次点还复用它
-    //（`取音频` 里那个模块级变量），所以这一枪白打也不要紧。
-    预热音频();
-    void 先说明再专注(async () => {
-      await 开始专注();
-    });
-  }, [专注运行中, 停止专注, 开始专注, 先说明再专注]);
+  // 整块在 `ui/useFocusSession.ts`（2026-09-28 从本文件搬走：本文件贴着
+  // `docs/09` §4 的 1000 行硬线）。⚠️ 搬走的是**一整档功能**——订阅状态、四条
+  // 命令、结束那份总结，四块的分工与两道位置约束都写在那个文件的头注释里。
+  // ⚠️ 它与下面 `useImmersive` 那个「专注」毫无关系（一个收外壳、一个记账）。
+  const { 专注状态, 专注运行中, 切换强制专注, 专注总结, 关掉专注总结 } =
+    useFocusSession({ askConfirm, settings, updateSettings });
 
   // 沉浸模式（专注 / 全屏）。整块在 `ui/useImmersive.ts`——连"`有浮层` 为什么
   // 要传"一起说清楚了，这里只接线。
@@ -563,6 +494,7 @@ export default function App() {
       promptReq !== null ||
       imageReq !== null ||
       emojiOpen ||
+      对话框.关于开着 || // 「关于」框（见 `ui/useDialogs.ts` 那一格）
       pandocGate !== null ||
       专注总结 !== null,
     toast,
@@ -593,8 +525,10 @@ export default function App() {
 
   // 「复制为 Markdown」（`edit.copyAsMarkdown`）也搬去了 `ui/useClipboard.ts`
   // （2026-09-25），理由在那个文件的文件头；接线在下面 `剪贴板` 那一行。
-
-  const showAbout = useAbout(askConfirm);
+  // 「关于 Nota」：框体在 `ui/AboutDialog.tsx`，开关在 `ui/useDialogs.ts`
+  // （2026-09-28 从 `ui/useAbout.ts` 并过去：那个文件当时只剩内容，而状态本来
+  // 就该和别的浮层待在一起。整段理由在 `ui/useDialogs.ts` 那一格的注释里）。
+  const showAbout = 对话框.开关于;
 
   // 「跑一条编辑命令」与两个"先问参数、再插进去"的命令搬去了
   // `ui/useEditorCommands.ts`（2026-09-24，本文件顶着行数上限）。那边一并讲了
@@ -990,7 +924,7 @@ export default function App() {
           pandocGate={pandocGate}
           pandocGateActions={pandocGateActions}
           专注总结={专注总结}
-          关掉专注总结={收起专注结算}
+          关掉专注总结={关掉专注总结}
         />
       </div>
     </ErrorBoundary>

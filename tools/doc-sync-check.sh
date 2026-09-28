@@ -104,6 +104,9 @@ PAIRS=(
   "src-tauri/src/pandoc.rs                        02,05,06,10"
   "src-tauri/src/pandoc_format.rs                 02,05,06,10"
   "src-tauri/src/pdf_print.rs                     02,05,06,10"
+  # 2026-09-28：和 `pdf_print.rs` 隔壁、同样"只有 Linux 编"的那一份 ——
+  # GTK 捕获阶段拦 `Ctrl+B`/`Ctrl+I`（BUG-49 的修法）。
+  "src-tauri/src/format_keys.rs                   01,02,04,06,07,10"
   "src-tauri/src/commands/pandoc.rs               02,04,05"
   "src-tauri/src/devserver.rs                     02,11,12"
   "src-tauri/src/devserver/probe.rs               02,11,12"
@@ -211,7 +214,10 @@ PAIRS=(
   "src/ui/useChromeVisibility.ts 02,04"
   "src/ui/useImmersive.ts 02,04,05,07,10"
   "src/ui/useToasts.ts 02,04"
-  "src/ui/useAbout.ts 02,04"
+  # 2026-09-28：`useAbout.ts` 拆成两份 —— 界面在 `AboutDialog.tsx`，
+  # 开关并进了 `useDialogs.ts`（那一行本来就有，不用再加）。
+  "src/ui/AboutDialog.tsx 02,04"
+  "src/ui/useFocusSession.ts 02,04"
   "src/ui/useDocuments.ts 02,04,07"
   "src/ui/useAutosave.ts 02,03,04,07,10"
   "src/ui/useClipboard.ts 02,04,05"

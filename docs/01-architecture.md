@@ -634,8 +634,15 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 
 ### 通道 B：后端 → 前端（Tauri 事件）
 
-**一共 5 个宿主事件名 + 1 条插件自定义的通道**（前端 `events` 表在
-`src/bridge/ipc.ts:924-968`，五个都在里面有常量）。
+**一共 10 个宿主事件名 + 1 条插件自定义的通道**（前端 `events` 表在
+`src/bridge/ipc.ts:654-772`，十个都在里面有常量）。
+
+⚠️ **2026-09-28 重数过一次，此前这里写的是「5 个」。** 那五个就是下面这张表的前五行；
+中间陆续补进来的**五条**（`focus-state` / `focus-beep` / `file-changed` /
+`second-instance` / `format-key`）**一条都没登记进这张「总表」**。
+⚠️ 三个真相源（`ipc.ts` 的 `events` 表、各文件里的 `EVENT_*` 常量、前端各自的 `on(...)`）
+一直是对的，**只有这张表停在原地**——**「一共 N 个」这种数要么现数、要么别写**，
+这句话本仓说过很多遍，这次又栽在同一个坑里。
 
 | 事件名 | 谁发 | 载荷 | 前端今天收不收 |
 |---|---|---|---|
@@ -644,6 +651,11 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 | `nota:plugin-panel` | `lua/api/ui.rs:249`（`nota.ui.refresh`） | **空**——"这个面板的内容变了，去重拉" | ✅ 订阅了 → `pluginPanelContent(…)` |
 | `nota:plugin-review` | `lua/api/ui.rs:300`（`nota.ui.review`）＋ `commands/plugin.rs:209` ＋ `plugin/mod.rs:456` | **空**——"编辑区摊的那一块换了" | ✅ 订阅了 → `api.plugin.review()` |
 | `nota:native-menu` | `lib.rs:243`（Tauri 的菜单回调） | 命令 **id** 字符串 | ✅ 订阅了 → 查 `menuHandlers` |
+| `nota:focus-state` | `focus/mod.rs:422`（那一拍的循环）＋ `commands/focus.rs:27`（`get` / `start` / `stop` 各先回一份） | `FocusState` 快照 | ✅ 订阅了 → `ui/useForceFocus.ts`（状态栏那一格） |
+| `nota:focus-beep` | `focus/alarm.rs:51` | **空**——「该响了」（**音色归前端**） | ✅ 订阅了 → `ui/useFocusAlarmSound.ts` |
+| `nota:file-changed` | `watch.rs:275`（发现那一半） | `{id, path, hash}`——**磁盘上那份文件被别的程序改了** | ✅ 订阅了 → `ui/useExternalChanges.ts` |
+| `nota:second-instance` | `single_instance.rs:307`（第二个进程递过来的那一路）＋ `mcp/host.rs:204`（复用同一名字） | 「抬窗」 / 「打开某个路径」 / 报错三种（见 `bridge/payloads.ts`） | ✅ 订阅了 → `ui/useAppEvents.ts` |
+| `nota:format-key` | `format_keys.rs:175`——⚠️ **GTK 捕获相位那一层，不是命令也不是 Lua**（2026-09-28，**BUG-49**） | 命令名（`bold` / `italic`） | ✅ 订阅了 → `ui/useMenus.ts`（走**和 `keydown` 一模一样**的判据） |
 | `plugin:<channel_id>:<name>` | `lua/api/mod.rs:217`（`nota.event.emit`） | 插件自定（Lua 值 → JSON） | ❌ 名字由插件决定，前端只能事后 `listen`；今天没人订 ⚠️ |
 
 ⚠️ **曾经还有 `nota:plugin-menu` 与 `nota:slidev-stopped` 两条，都删掉了。**
@@ -653,7 +665,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 **判据：声明是状态 → 拉；发生是事件 → 推。** 而 `plugin-panel` / `plugin-review`
 推的是**"此刻变了"这个动作**（载荷是空的，收到就去重拉），所以它们不违反这条判据。
 
-关于上表要说明的三件事：
+关于上表要说明的四件事：
 
 1. **`nota:document-changed` 今天的唯一发送者是插件那条路。** 注释里写"与宿主自己的
    `nota:document-changed` 一致"是一条**约定**（前端不必区分是谁改的），宿主自己发这条
@@ -663,7 +675,17 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
    只有插件的 id 那一节过 `channel_id()`。`name` 里若带 `.`，`emit` 会当场报错
    （`only alphanumeric, '-', '/', ':', '_' permitted`）。内置插件用的是 `git:status`、
    `ai:preview` 这种带冒号的名字，冒号在允许集合里，所以没问题。
-3. ⚠️ **插件 UI 的接收端已经接线（2026-09-22，BUG-13），但它走的是「拉」不是「推」。**
+3. ⚠️ **`nota:format-key` 是这张表里唯一一条「生产者既不是命令、也不是 Lua」的事件**
+   （2026-09-28，BUG-49）：它由 `src-tauri/src/format_keys.rs` 那个 **GTK 捕获相位**的
+   键盘控制器发出——WebKitGTK 在把按键派发给 DOM **之前**就把 `Ctrl+B` / `Ctrl+I`
+   当成自己的编辑命令吃掉了，DOM 那一层收不到，菜单加速键也在**冒泡末端**查、同样收不到；
+   捕获相位的 `GtkEventControllerKey` 一定早于 WebView，所以只有它能发这条。
+   ⚠️ **它凭什么是事件**——判据还是那句「**发生是事件 → 推**」：这里发生的是
+   「用户按下了 `Ctrl+B`」**这个动作**，不是一个可拉的状态（没有任何一本账记着「现在按没按」）。
+   ⚠️ 载荷**就是一个字符串**，`bridge/payloads.ts` 里**没有**它的类型壳，别再给人加一层。
+   ⚠️ **只在 Linux 上装**：macOS / Windows 上这两颗键本来就到得了 DOM，
+   装了会和那条 `keydown` 撞成执行两遍。整篇论证在 `format_keys.rs` 的文件头。
+4. ⚠️ **插件 UI 的接收端已经接线（2026-09-22，BUG-13），但它走的是「拉」不是「推」。**
    `register_panel` / `register_menu` 不再 `emit`，改为写进插件的 Lua registry
    （`nota_panels` / `nota_menus`），前端挂载后调 `nota_plugin_panels` /
    `nota_plugin_menus` **拉**一次。原来那两条事件名与 `ipc.ts` 里对应的

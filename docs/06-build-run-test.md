@@ -3434,11 +3434,11 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**三十二份、共 805 条**（2026-09-28 **当场一份一份跑出来的**，全 `0 失败`）：
+**三十二份、共 813 条**（2026-09-28 **当场一份一份跑出来的**，全 `0 失败`）：
 `keymap` **54** · `slash` **49** · `share-card` **46** · `math-view` **41** ·
 `table-input` **39** · `inline-marks` **37** · `smart-punctuation` **36** ·
 `focus-summary` **34** · `emoji` **32** · `lang-guess` **31** · `footnote` **30** ·
-`url-link` **29** · `auto-pair` **28** · `paste-clean` **25** · `table-pipe` **24** ·
+`url-link` **29** · `auto-pair` **36** · `paste-clean` **25** · `table-pipe` **24** ·
 `math-delim` **23** · `toc` **22** · `auto-correct` **20** · `heatmap` **20** ·
 `atom-space` **19** · `math-input` **19** · `accent` **18** · `mark-hint` **18** ·
 `instant-render` **17** · `file-kind` **14** · `html-block` **14** · `lang-icons` **14** ·
@@ -3466,6 +3466,13 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 命令会执行它们**。它们此前跑没跑过、跑绿过没有，**没有记录可查**——这一批是头一次
 把它们写进一个跑得出来的地方）。**同一天稍后又加了 `video-view` 12**——那一份是新写的、
 当批就进了名册（不是"漏了没进"那一类），12 条同样是当场跑出来的。
+
+📌 **2026-09-28（`*` 自配对那一批，`auto-pair` 28 → 36，总数 805 → 813）**：用户那天报了两件事，
+后半句是「写一个算法判断比如输入一个 `*` 自动补全另一个」。做法是在 `editor/auto-pair.ts` 里
+**单开一张 `自配对表`**（里面只有 `*`）＋ 一条 `要补标记()` 判据（补一对 / 升级 / 跳过），
+**没有并进 `配对表`**（并进去会让 `要跳过` / `要删成对` / `要跳` 三条同时匹配到它）。
+⚠️ 这一批**只动了 `auto-pair.ts`**，别的条数一个没变；32 份的**总数**因此从 805 走到 **813**，
+`docs/09` §2 / `docs/10` / `docs/05` §4.20b 同批跟着改了。
 
 📌 **2026-09-27（设置里的「快捷键」那一批，新建 `keymap.test.ts` 54 条，512→566）**：
 这一批加**两样**东西——一份新测试 `keymap`（可写回的键位文本 ＋ 覆盖表怎么叠到
@@ -4188,7 +4195,8 @@ BadMatch；按键要落在 webview 上得让指针停在它上面）、GTK 窗�
 | `Ctrl+Shift+H` / `Ctrl+U` / `Ctrl+.` / `Ctrl+Shift+.` | ✅ 都活（上面那四个字节增量） |
 | `Ctrl+Z` | ✅ 撤销有效 |
 | `Ctrl+=` / `Ctrl+-` / `Ctrl+Shift+0` | ✅ 缩放 **100 → 110 → 120 → 100**，界面跟着变，WebKit 那条自带的整页缩放**没有**叠上来 |
-| `Ctrl+B` / `Ctrl+I` | ❌ **WebKitGTK 在派发到 DOM 之前就吃掉了**（**BUG-49**）——`ui/useMenus.ts` 那条 `window.addEventListener("keydown", …)` 永远收不到；wry 不暴露 WebView 组件，GTK 那一层也拦不到。⚠️ **没有数据损坏**：存盘前后 `hello` 还是 `hello`（PM 的 DOM 观察者不吃 `<b>`） |
+| `Ctrl+B` / `Ctrl+I` | ✅ **2026-09-28 修好了**（**BUG-49**）。原来那一条是 ❌「WebKitGTK 在派发到 DOM 之前就吃掉了——`ui/useMenus.ts` 那条 `window.addEventListener("keydown", …)` 永远收不到；wry 不暴露 WebView 组件，GTK 那一层也拦不到」。⚠️ **当年那句「拦不到」只对了一半**：菜单加速键（冒泡末端查）确实拦不到，但**捕获阶段**的 `GtkEventControllerKey`（GTK 3.24 起）一定早于 WebView——修法就是它，见下面那条 📌 |
+| ↳ 那一行还留下一条没变的判据 | ⚠️ **没有数据损坏**：存盘前后 `hello` 还是 `hello`（PM 的 DOM 观察者不吃 `<b>`）。⚠️ 当年那个「`Ctrl+U` 有用」的对照是**假象**——那是 **WebKit 自己**执行了 `execCommand underline` 插了 `<u>`，而 PM 恰好认 `<u>`；`Ctrl+B` / `Ctrl+I` 输在 PM **不认** `<b>` / `<i>` |
 
 **顺带又看见一条老现象**（不是新缺陷）：**空白文档存盘落的是字面 `<br />` ＋ 换行**
 （7 字节）——所以状态栏读「1 words 7 characters 2 lines」。这正是 §5.31 与 `docs/07`

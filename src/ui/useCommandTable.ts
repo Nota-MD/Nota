@@ -168,7 +168,7 @@ export interface 命令表输入 {
   改设置: (patch: Partial<Settings>) => Promise<void>;
 
   // ── 帮助 ──────────────────────────────────────────────────────────────
-  关于: () => Promise<void>;
+  关于: () => void;
 }
 
 /**

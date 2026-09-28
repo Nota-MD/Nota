@@ -23,6 +23,7 @@ pub mod document;
 pub mod error;
 pub mod file_move;
 pub mod focus;
+pub mod format_keys;
 pub mod heartbeat;
 pub mod image;
 pub mod lang;
@@ -480,6 +481,25 @@ pub fn run() {
                     // 别的窗口被关掉：**什么都不做**，插件留着。
                     _ => {}
                 }
+            }
+        })
+        // ── `Ctrl+B` / `Ctrl+I`：在 GTK 捕获阶段把它们截下来 ────────────────
+        //
+        // ⚠️ **必须在这里挂，不能提前到 `setup`**：`setup` 跑的时候窗口还没建
+        //（`Builder::setup` 只是存个回调，建窗在 `build()` 里），那会儿拿不到
+        // `Webview`。这个钩子给的就是**已经建好的那个 webview 本身**，正是
+        // `format_keys::装上` 要的东西。
+        //
+        // ⚠️ 它每加载一轮页面跑一次（开发时 vite 热重载一次就是一枪），
+        // 幂等那一道闸在 `format_keys.rs` 里，别挪出来。
+        //
+        // ⚠️ 失败**只记日志、不拦启动**：这条修的是"快捷键不灵"，
+        // 而它挂了顶多是回到修复前的样子——绝不能因此让人进不去界面。
+        // 这正是 BUG-49 那一条的处境（`docs/07`）；BUG-49 的完整来龙去脉
+        // 写在 `format_keys.rs` 的文件头。
+        .on_page_load(|webview, _| {
+            if let Err(e) = format_keys::装上(webview) {
+                crate::日志!("[nota] 格式快捷键那一层没装上（Ctrl+B 会退回旧样）：{e}");
             }
         })
         .build(tauri::generate_context!())

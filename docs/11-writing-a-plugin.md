@@ -1115,7 +1115,14 @@ end
 | 路 | 现状 |
 |---|---|
 | **调别人的命令** | 宿主有 `find_command_owner()`（`plugin/mod.rs:307-316`，先做"第一个匹配"）。⚠️ 但前端调命令时**必须显式给 `plugin` 参数**（注册者的 id），不能凭命令名推测是哪个插件的——两个插件重名时猜错就是**静默调到另一个插件**（`commands/plugin.rs:36-38`） |
-| **订阅别人的事件** | ⚠️ **没有人在听插件频道**。前端的事件表只有**五个**宿主事件（`src/bridge/ipc.ts:924-968`：notify / document-changed / plugin-panel / plugin-review / native-menu），插件发的 `plugin:<id>:<名字>`（拼频道在 `lua/api/mod.rs:217`）全部**发出去就被丢掉** |
+| **订阅别人的事件** | ⚠️ **没有人在听插件频道**。前端的事件表里**十个**宿主事件（`src/bridge/ipc.ts:654-772`：notify / document-changed / plugin-panel / plugin-review / native-menu / focus-state / focus-beep / file-changed / second-instance / format-key），插件发的 `plugin:<id>:<名字>`（拼频道在 `lua/api/mod.rs:217`）全部**发出去就被丢掉** |
+
+⚠️ **那个数 2026-09-28 重数过一次**：本节原先写「五个」，而那五个是 2026-09-25
+那一遍数出来的；之后陆续补进来的**五条**（`focus-state` / `focus-beep` /
+`file-changed` / `second-instance` / `format-key`）**本节一条都没跟上**。
+⚠️ 它们**不影响本节的结论**（那五条全是宿主自己的频道，跟"插件发的没人听"这件事无关），
+但数错了就是数错了——**与 `docs/01` 通道 B 那张总表同一天、同一批对齐**，
+理由也是同一条：**「一共 N 个」这种数要么现数、要么别写**。
 
 ⚠️ **那"五个"是怎么来的（2026-09-25 数过）**：曾经是**六**个，
 第一条被删的是 `slidev-stopped`（`nota:slidev-stopped`）——它唯一的发法是 `lib.rs`

@@ -1,6 +1,6 @@
 /**
- * 界面上的**浮层那一族**：四个对话框（确认 / 输入 / 插入图像 / Emoji 选择，
- * 共用同一个壳）＋ 打字时跟着光标弹的 Emoji 补全面板。
+ * 界面上的**浮层那一族**：五个对话框（确认 / 输入 / 插入图像 / Emoji 选择 /
+ * 关于，共用同一个壳）＋ 打字时跟着光标弹的 Emoji 补全面板。
  *
  * # 为什么从 `app.css` 里拆出来（2026-09-27）
  *
@@ -8,7 +8,7 @@
  * Emoji 选择框那一段之后 1040 行、超了。拆出来的这一份是**按职责切的**
  * ——"浮在与正文无关的一层上的东西"与"骨架／工具条／状态栏"不是一回事。
  *
- * ⚠️ **四段用的是同一层壳**（`.confirm-backdrop` ＋ `.confirm-dialog`）：
+ * ⚠️ **五段用的是同一层壳**（`.confirm-backdrop` ＋ `.confirm-dialog`）：
  * 它们长得一样、行为也一样（Esc = 取消、点遮罩 = 取消），这一条从第一个框
  * 立下起就没变过。所以它们**必须待在同一个文件里**——分开放的结果是
  * 某一天有人只改了其中一个框的宽度，而"看着不一样"要等到用户报上来
@@ -60,11 +60,16 @@
   /* 长文件名/长路径不要撑破框 */
   overflow-wrap: anywhere;
   /* 消息里的换行要**真的换行**。它是个 `<p>`，默认会把 `\n` 折成空格——
-     「关于 Nota」那条消息就是靠换行分行的。 */
+     两条现成的消息就靠它分行：`ui/useFocusIntro.ts` 那段首次说明（一组
+     短句，空行分段），`ui/usePlugins.ts` 那段「信任这个签名吗」（指纹
+     一行、解释两行）。⚠️ **2026-09-28 起「关于 Nota」那条不再走这里**，
+     它整份搬去了 `.about-page-body`（下面那条同名的 55vh 就是跟着搬的）。 */
   white-space: pre-line;
-  /* ⚠️ 「关于 Nota」那条消息现在有二十来行（系统权限清单，用户点名要的），
-     在 440px 宽的框里会折成四五十行、**比屏幕还高**——框是居中的，
-     上下两头会被切在屏幕外，按钮也跟着看不见。给它一个上限、让它自己滚。
+  /* ⚠️ 上限这一条当年是为「关于 Nota」那条二十来行的权限清单加的（在
+     440px 宽的框里会折成四五十行、**比屏幕还高**——框是居中的，上下两头
+     会被切在屏幕外，按钮也跟着看不见）。那一页 2026-09-28 搬走了，这条
+     **照旧留着**：上面那两条现成的消息也不短（首次说明十来段），而且
+     `askConfirm` 是公开的一层——谁再喂一条长的进来，不该靠"记得改 CSS"。
      ⚠️ 55vh + 标题和按钮那约 130px 得留在 100vh 里，50~60 是安全区间；
      写成 70vh 之类的，矮屏上照样切。 */
   max-height: 55vh;
@@ -356,4 +361,208 @@
 
 .nota-slash-item:hover:not(.is-on) {
   background: var(--bg-hover);
+}
+
+
+/* ── 关于框（`ui/AboutDialog.tsx`）──────────────────────────────────────────
+   2026-09-28 按 GNOME 的关于窗重做（用户原话「关于界面这么做」＋一张截图）。
+   ⚠️ 它借的是上面那层壳（`.confirm-backdrop` / `.confirm-dialog`）：Esc 关、
+   点遮罩关，与前四个框一模一样，所以壳照旧共用。这里只加 `.about-*`。
+
+   ⚠️ **它比另外四个框宽、而且会很高**：故障排除那一页是二十来条权限说明。
+   所以正文区（`.about-page-body`）自己滚，标题行与返回键**不跟着滚**——
+   滚到一半还得能按返回，这一条是那一页能不能用的关键。 */
+
+.about-dialog {
+  /* 壳给的 320/440 是"一行话 ＋ 两颗按钮"的尺度，这里要装一节带小标题的
+     清单，两边各放一档。 */
+  min-width: 420px;
+  max-width: 560px;
+  /* ⚠️ 壳的 `padding: 20px 22px 16px` 留着，但 × 是**绝对定位**到右上角的，
+     那个 20px 正好当它的留白（见下面 `.about-close`）。 */
+  position: relative;
+}
+
+/* × 固定在右上角（截图里也在那儿）。⚠️ 它同时是"焦点第一颗"，
+   所以 `:focus-visible` 那一圈要画得看得见。 */
+.about-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.about-close:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+/* ── 首页：一列居中 ─────────────────────────────────────────────────────── */
+
+.about-home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 图标自己那张底衬只占画布 74%，所以看上去会比 128 小一圈——那是系统对话框
+   的样子（图标自带留白），不是尺寸写错了。 */
+.about-icon {
+  width: 128px;
+  height: 128px;
+}
+
+.about-name {
+  margin-top: 12px;
+  font-size: 1.6em;
+  font-weight: 600;
+}
+
+.about-developer {
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+/* 版本那颗药丸。⚠️ `tabular-nums`：版本号将来两位数时，宽度不该跟着抖。 */
+.about-version {
+  margin-top: 10px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--fg-muted);
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 两组行（外链那组 / 子页那组）────────────────────────────────────────── */
+
+.about-rows {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: 18px;
+}
+
+.about-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 与 `.emoji-cell` 同一条：悬停**不能只靠底色**（某些界面风格里 `--bg-hover`
+   几乎和 `--bg` 一样），所以再加一道内边。 */
+.about-row:hover {
+  background: var(--bg-hover);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.about-row-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* 助记键那对括号（`(W)`）。⚠️ 它是**陪衬**：小一号、灰一档，
+   看着像系统对话框里那一对，而不是标签的一部分。 */
+.about-row-key {
+  color: var(--fg-muted);
+  font-size: 0.85em;
+}
+
+/* 行尾那颗记号（外链 `↗` / 子页 `›`）。⚠️ 它是**文本字形**不是图标，
+   理由在 `ui/AboutDialog.tsx` 的文件头。 */
+.about-mark {
+  color: var(--fg-muted);
+}
+
+/* ── 子页（故障排除 / 鸣谢 / 法律信息）──────────────────────────────────── */
+
+.about-page {
+  display: flex;
+  flex-direction: column;
+  /* ⚠️ 这一条是下面 `.about-page-body` 能滚的前提：flex 子项默认
+     `min-height: auto`，不给它 0 的话那一块会把整个框撑高、永远不滚。 */
+  min-height: 0;
+}
+
+.about-page-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.about-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.about-back:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.about-page-title {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+/* ⚠️ 55vh + 标题行那约 40px 得留在 100vh 里（同 `.confirm-message` 那条）；
+   矮屏上写 70vh 照样把返回键顶出屏幕。 */
+.about-page-body {
+  overflow-y: auto;
+  max-height: 55vh;
+  /* 滚到两头时不要把滚动漏给背后的正文（那条理由同 `.confirm-message`）。 */
+  overscroll-behavior: contain;
+}
+
+.about-lead {
+  margin: 0 0 10px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+}
+
+.about-item {
+  margin-bottom: 14px;
+}
+
+.about-item-name {
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+
+.about-item-text {
+  color: var(--fg-muted);
+  line-height: 1.6;
+  /* 长路径 / 长能力名（`core:window:*`）不要撑破框。 */
+  overflow-wrap: anywhere;
 }

@@ -1,9 +1,16 @@
 /**
- * **两个自绘对话框的"谁在等答案"状态**：确认框与单行输入框。
+ * **浮层那一族的开关状态**：四个问答框（确认 / 输入 / 插入图像 / Emoji）＋
+ * 一个"看完就关"的报告框（关于）。
  *
  * 从 `App.tsx` 搬出来的（2026-09-24，那边顶着 1000 行上限，见 `AGENTS.md` §0.4）。
- * 搬的理由是这一块**和外壳骨架无关**：它是一对"问一句、等回答"的 Promise
+ * 搬的理由是这一块**和外壳骨架无关**：它是一族"问一句、等回答"的 Promise
  * 拼接器，谁在问（关文档、退出、填链接地址）它一概不知道。
+ *
+ * ⚠️ **"关于"是这一族里唯一的例外**：它不问任何事，所以既没有 `askXxx` 也没有
+ * `answerXxx`，只有三个字（开着 / 开 / 关）。它 2026-09-28 从 `ui/useAbout.ts`
+ * 并进来——那个文件当时只剩"内容"，而状态本来就该和别的浮层待在一起；并进来
+ * 之后 `ui/AppDialogs.tsx`（它已经拿着这个对象）能直接画那个框，`App.tsx`
+ * **一行都不用多**（那个文件 998 行，贴着 `docs/09` §4 的硬线）。
  *
  * # 为什么不用 `window.confirm` / `window.prompt`
  *
@@ -15,7 +22,7 @@
  *
  * # ⚠️ 一次只可能有一个
  *
- * 每个框后面是**单个** ref（不是队列）。今天所有调用点都是用户动作直接
+ * 每个**问答**框后面是**单个** ref（不是队列）。今天所有调用点都是用户动作直接
  * 触发的，不存在并发；真要并发弹两个，后来者会把前一个的 Promise 永远挂着
  * ——那时再改成队列。
  */
@@ -162,6 +169,23 @@ export interface Dialogs {
   askEmoji: () => Promise<string | null>;
   /** 用户回答了（`ui/EmojiDialog` 的 `onAnswer` 接这个）。 */
   answerEmoji: (字符: string | null) => void;
+
+  /**
+   * 「关于 Nota」框开着没有。
+   *
+   * ⚠️ 它**不是**上面那种"问一句、等一个答案"的框（`askXxx` 返回 Promise、
+   * `answerXxx` 兑现它）：它是一份**看完就关的报告**，没有任何答案要交回给谁。
+   * 所以它只有三个字：开着 / 开 / 关——和 `emojiOpen` 一样是个裸布尔。
+   * ⚠️ 它却**住在这个文件里**，理由有两条：① `ui/AppDialogs.tsx` 已经拿着
+   * `Dialogs` 那个对象了，加一个字进去，`App.tsx`（998 行，贴着硬线）一行都不用
+   * 多；② "现在有哪些浮层"这件事该有一个统一的答案——`App.tsx` 的 `有浮层`
+   * 要逐条列出来（见 `ui/useImmersive.ts` 那一格），多一个来源就多一处要记得改。
+   */
+  关于开着: boolean;
+  /** 打开它（菜单「帮助 → 关于 Nota」）。 */
+  开关于: () => void;
+  /** 关掉它（× 键、`Esc`、点遮罩）。 */
+  关关于: () => void;
 }
 
 export function useDialogs(): Dialogs {
@@ -235,6 +259,12 @@ export function useDialogs(): Dialogs {
     resolve?.(字符);
   }, []);
 
+  // 「关于」——见 `Dialogs.关于开着` 上那段：它不是问答框，所以没有 `resolve`，
+  // 也没有"谁在等答案"要接。
+  const [关于开着, set关于] = useState(false);
+  const 开关于 = useCallback(() => set关于(true), []);
+  const 关关于 = useCallback(() => set关于(false), []);
+
   return {
     confirmReq,
     askConfirm,
@@ -248,5 +278,8 @@ export function useDialogs(): Dialogs {
     emojiOpen,
     askEmoji,
     answerEmoji,
+    关于开着,
+    开关于,
+    关关于,
   };
 }

@@ -750,8 +750,10 @@ button {
      几个文件多大、签名带没带上）。少了这一条，`\n` 按 HTML 的老规矩被折成一个
      空格，三段会连成一句没有标点的长话——「…stats.nota-plugin 15 个文件，
      1.2 MB 这个插件本来就没有签名。」，是 2026-09-27 开窗目检时看出来的。
-     ⚠️ 同一条名字在 `ConfirmDialog` 的 `.confirm-message` 上早就有（`useAbout`
-     / `useFocusIntro` 那两段多行说明就靠它），提示条这一支当时漏了。
+     ⚠️ 同一条名字在 `ConfirmDialog` 的 `.confirm-message` 上早就有（`ui/useFocusIntro.ts`
+     那段首次说明、`ui/usePlugins.ts` 那段信任签名就靠它；⚠️ 2026-09-28 起「关于 Nota」
+     那条**不在那儿了**，它整份搬去了 `.about-page-body`，见 `overlay.css`），
+     提示条这一支当时漏了。
      `pre-line` 对**单段**的提示没有任何影响（它只保留换行，不保留空格）。 */
   white-space: pre-line;
 }

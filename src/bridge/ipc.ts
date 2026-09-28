@@ -747,6 +747,28 @@ export const events = {
    * 改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
    */
   secondInstance: "nota:second-instance",
+  /**
+   * **宿主从 GTK 捕获阶段截下了一颗格式快捷键**（2026-09-28，非插件）。
+   * 载荷是 `"bold"` / `"italic"`。
+   *
+   * ⚠️ 这条事件**不是**前端偷懒的产物，它是 BUG-49 唯一的出路：WebKitGTK 在
+   * 把按键派发给 DOM **之前**就把 `Ctrl+B` / `Ctrl+I` 当成自己的编辑命令吃掉了，
+   * 所以 `window` 上那条 `keydown`（`ui/useMenus.ts`）**一次都收不到**。
+   * 宿主于是在 `GtkEventControllerKey` 的捕获相位把它们拦下来，转成这条事件。
+   * 完整来龙去脉在 `src-tauri/src/format_keys.rs` 的文件头。
+   *
+   * ⚠️ **它和那条 keydown 是两条互补的路，不是一主一备**：
+   * - Linux：走这条（keydown 收不到那两颗键）；
+   * - macOS / Windows：走 keydown（`format_keys.rs` 在那些平台上**不装**，
+   *   装了会和 keydown 撞成"执行两遍"）。
+   *
+   * ⚠️ 既然是"发生了一件事"（有人按了一颗键），走事件是对的（BUG-13 那条判据
+   * 管的是"声明"类的东西）。
+   *
+   * ⚠️ 频道名在 Rust 侧是 `format_keys.rs::EVENT`。**两处必须说同一个字符串**，
+   * 改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
+   */
+  formatKey: "nota:format-key",
   // ⚠️ 这里曾经有两条和"预览窗"绑在一起的事件（`slidevStopped` 等），
   // 2026-09-25 **都删掉了**：预览不再单开窗口，它成了插件面板里的一块
   // `kind = "frame"`（见 `ui/panel-nodes.ts`），而插件和前端之间的往来

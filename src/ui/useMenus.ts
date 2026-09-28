@@ -30,6 +30,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import type { UnlistenFn } from "@tauri-apps/api/event";
+
 import {
   api,
   on,
@@ -44,6 +46,22 @@ import { use语言 } from "@/i18n";
 import { accelSig, buildAccelIndex, eventAccel, isOutsideEditor } from "@/ui/accel";
 import { walkMenuItems, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
 import { buildNativeTree } from "@/ui/nativeMenu";
+
+/**
+ * 宿主截下来的那两颗键 → 命令 id。
+ *
+ * ⚠️ 这一层映射放在**这里**，不在 Rust 里：宿主那一层知道的是"用户按了加粗键"
+ * （那是物理事实，是 GTK 唯一能告诉我们的事），而"加粗键对应哪条命令"是命令表
+ * 的事。在 `format_keys.rs` 里直接写 `fmt.bold` 就等于把菜单项的 id 抄了第二份。
+ *
+ * ⚠️ 键名必须和 `src-tauri/src/format_keys.rs::认键` 交出来的那几个字符串一致。
+ * 对不上时这里是 `undefined`，`on` 那个回调会安静地 return——**不报错**，
+ * 症状就是"按了没反应"，正好和这个 bug 本身撞脸。
+ */
+const 宿主格式键: Readonly<Record<string, string>> = {
+  bold: "fmt.bold",
+  italic: "fmt.italic",
+};
 
 export interface MenuWiring {
   /**
@@ -309,6 +327,48 @@ export function useMenus(w: MenuWiring): MenuState {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [accelIndex, menuHandlers, disabledCommands]);
+
+  /**
+   * **宿主在 GTK 捕获阶段截下来的那两颗键**（`Ctrl+B` / `Ctrl+I`）。
+   *
+   * ⚠️ 为什么上面那条 `keydown` 不够：WebKitGTK 在把按键派发给 DOM **之前**就
+   * 把这两颗键当成自己的编辑命令吃掉了，`window` 上一次都收不到——用户
+   * 2026-09-28 报的「Ctrl B没反应」就是这一条（BUG-49）。宿主于是在 GTK 的
+   * 捕获相位（**一定早于** WebView）把它们拦下来，转成 `events.formatKey`
+   * 发回这里。完整来龙去脉在 `src-tauri/src/format_keys.rs` 的文件头。
+   *
+   * ⚠️ **判据必须和上面那条一模一样**（外面/灰掉/没实现都不接）——两条路喂的是
+   * 同一张 `menuHandlers`，判据漏一条就会出现"菜单灰着、快捷键却照跑"，
+   * 正是这个文件头点名要消灭的那种不一致。
+   */
+  useEffect(() => {
+    let 已卸载 = false;
+    let 退订: UnlistenFn | null = null;
+
+    on<string>(events.formatKey, (名字) => {
+      const id = 宿主格式键[名字];
+      if (!id) return;
+      // ⚠️ 只能看 `document.activeElement`，看不了 `e.target`——这条路上**没有
+      // DOM 事件**，宿主那一层只知道"按了哪颗键"，不知道焦点在谁身上。
+      // 判据本身复用同一个 `isOutsideEditor`，所以"在设置文本框里按 Ctrl+B"
+      // 两边行为一致（都不接）。
+      if (isOutsideEditor(document.activeElement)) return;
+      if (disabledCommands.has(id)) return;
+      menuHandlers[id]?.();
+    }).then((f) => {
+      // 订阅是异步的，而组件可能在这中间就卸载了——那时退订函数没人接，
+      // 监听者永远留着（同 `ui/useFocusAlarmSound.ts` 里的写法）。
+      if (已卸载) f();
+      else 退订 = f;
+    });
+
+    return () => {
+      已卸载 = true;
+      退订?.();
+    };
+    // ⚠️ 依赖同上面那条 keydown：`menuHandlers` / `disabledCommands` 换了身份，
+    // 这个闭包读到的就还是旧的那一份。
+  }, [menuHandlers, disabledCommands]);
 
   // ── 原生菜单（macOS 兜底）──────────────────────────────────────────────
   /**

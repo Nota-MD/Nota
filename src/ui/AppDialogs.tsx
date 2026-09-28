@@ -20,6 +20,7 @@
  * 这一条只是别让人随手改动顺序时踩空。
  */
 
+import { AboutDialog } from "@/ui/AboutDialog";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { PromptDialog } from "@/ui/PromptDialog";
 import { ImageDialog } from "@/ui/ImageDialog";
@@ -56,6 +57,7 @@ export function AppDialogs({
 }) {
   const { confirmReq, answerConfirm, promptReq, answerPrompt } = 对话框;
   const { imageReq, answerImage, emojiOpen, answerEmoji } = 对话框;
+  const { 关于开着, 关关于 } = 对话框;
 
   return (
     <>
@@ -82,6 +84,11 @@ export function AppDialogs({
       {/* Emoji 选择器。⚠️ 它没有 `request` 可传（那个框不要任何前置信息），
           所以判的是 `emojiOpen` 那个布尔，不是某个请求对象。 */}
       {emojiOpen && <EmojiDialog onAnswer={answerEmoji} />}
+
+      {/* 「关于 Nota」。⚠️ 与 `专注总结` 一样是**另一条路**：它不问任何事，
+          是一份看完就关的报告（区别是它的开关住在 `useDialogs` 里，
+          所以从上面那个对象上取，不占 `App.tsx` 的 props）。 */}
+      {关于开着 && <AboutDialog onClose={关关于} />}
 
       {/* 强制专注这一轮的总结。⚠️ 排在最后＝**盖在最上面**：它是一份"你看完
           就关"的报告，不该被别的浮层压在下面（实际上它们不会同时出现，

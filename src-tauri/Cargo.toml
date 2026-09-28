@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota — 所见即所得的 Markdown 编辑器，带 Lua 插件系统"
@@ -119,6 +119,13 @@ version = "3"
 # 不一致时 GTK 会在同一个进程里被加载两份，那是"看着能编译、跑起来崩"的经典配方。
 # 这两个 crate 本来是传递依赖，这里只是把它们提成**直接**依赖——和 `sha2`
 # 那条注释同一个理由：借别人的传递依赖用是要不得的。
+#
+# ⚠️ `features = ["v3_24"]` 是**必需**的，不是顺手开的：`format_keys.rs` 要用的
+# `gtk::EventControllerKey`（捕获阶段拦 `Ctrl+B`/`Ctrl+I`，见那个文件头）
+# 整个模块被 `#[cfg(feature = "v3_24")]` 门控着，而这个 crate 的 `[features]`
+# 段里**没有 `default` 项**——不显式点名就根本没有那个类型，报的是
+# "cannot find `EventControllerKey` in `gtk`"，看着像版本不够，其实是 feature 没开。
+# GTK 3.24 是 2018 年的版本，本仓面向的 Fedora/Debian 现代发行版都远高于它。
 [target.'cfg(target_os = "linux")'.dependencies]
-gtk = "0.18"
+gtk = { version = "0.18", features = ["v3_24"] }
 webkit2gtk = "2.0"

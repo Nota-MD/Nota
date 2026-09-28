@@ -147,6 +147,21 @@ interface Props {
    */
   physics: boolean;
   /**
+   * **这一份不是 Markdown**（`editor/file-kind.ts::认文件类型`），源码模式
+   * 不该给它套 Markdown 文法与配色。
+   *
+   * ⚠️ **它由 App 算好递进来，这里不自己看路径**：判据在 `file-kind.ts`
+   * （名字 ＋ 大小两条）、受理在 `App.tsx`（用户手动切模式要解除），
+   * 这里只当一根管子。放进这个文件的话，"哪些文件被降级"就有了第二个答案。
+   *
+   * ⚠️ **只在源码那一侧起作用**（`createSourceEditor`）：降级之后模式一律是
+   * `source`（`实际模式`），所见即所得那一侧照常解析——真走到这一侧时说明
+   * 用户刚手动切了模式，那正是"我要按 Markdown 看它"的意思。
+   * 但它**仍要进下面那个 effect 的依赖**：文法与配色是建实例时挂上去的，
+   * 不重建的话这份文件得先切一次文档才换过来。
+   */
+  纯文本?: boolean;
+  /**
    * **Emoji 输入辅助**，来自 `settings.editor.emoji_autocomplete`。
    *
    * ⚠️ 与 `markdown` 那一格相反，这里**只收一个布尔**：它只喂给
@@ -283,6 +298,7 @@ export function EditorPane({
   mode,
   strict,
   physics,
+  纯文本 = false,
   emoji,
   markdown,
   focusMode,
@@ -583,6 +599,7 @@ export function EditorPane({
             root: mount,
             initialMarkdown: initial,
             strict,
+            纯文本,
             // ⚠️ 源码那一侧**没有 `physics`**：它是 CodeMirror，只显示 Markdown
             // 原文，一个字都不渲染，宏表跟它无关（`CreateSourceOptions` 里没这项，
             // 传了编译不过）。
@@ -738,9 +755,13 @@ export function EditorPane({
     // 标点 / 自动更正变 = 同上，而且**六项里任何一项变了都算**（哪怕只是换个
     // 引号字形）——为什么不细分见上面 `标点` 那个 `useMemo` 的注释。
     // emoji 变 = 同上（两条输入规则 ＋ 一条补全插件，都在那串链上）。
+    // 纯文本变 = 源码模式那串扩展里换了**两样**（`markdown()` 与配套配色），
+    // 同样是建实例时挂死的。⚠️ 它**只在降级与用户手动切模式时**会变，而后者
+    // 本来就会带着 mode 一起变——也就是说这一格平时纹丝不动，加进依赖不会让
+    // 任何人重建编辑器。
     // 刻意**不**依赖 doc.text：那是初始值，不是要跟随的状态。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, mode, strict, physics, 行内扩展, 标点, 自动更正, emoji]);
+  }, [doc.id, mode, strict, physics, 纯文本, 行内扩展, 标点, 自动更正, emoji]);
 
   // ── 记滚动位置 ──────────────────────────────────────────────────────
   // ⚠️ **监听挂在捕获阶段**：滚动事件不冒泡（`scroll` 只在自己那个元素上派），

@@ -206,6 +206,11 @@ export const 界面表: Record<string, string> = {
   "Save as image": "保存为图片",
   "Copy to clipboard": "复制到剪贴板",
   "Could not save: {0}": "保存失败：{0}",
+  // 两条"为什么它是源码模式"的提示（`ui/useFileKindMode.ts`，2026-09-28）。
+  // ⚠️ 文案里那两个是**弯引号**（`“ ”`），与代码里的键一个字都不能差——
+  // 差一个字符这条中文就废了（闸门第 ② 条会报出来）。
+  "“{0}” is not a Markdown file, so it opened in Source mode.": "「{0}」不是 Markdown 文件，已按源码模式打开。",
+  "“{0}” is very large ({1} characters), so it opened in Source mode to keep typing responsive.": "「{0}」太大了（{1} 个字符），已按源码模式打开，免得打字卡顿。",
   "This environment cannot put images on the clipboard": "这个环境不支持把图片放进剪贴板",
   "Could not write to the clipboard ({0}). Try “Save as image” instead.": "没能写进剪贴板（{0}）。可以改按「保存为图片」。",
   "Extension preview": "拓展预览",

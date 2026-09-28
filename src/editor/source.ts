@@ -181,10 +181,23 @@ export interface CreateSourceOptions {
    */
   strict?: boolean;
   /**
-   * 查找状态变化的通知（命中数、当前第几个）。不传就不挂那条字段——
+   * 查找状态变化的通知（命中数、当前第一个）。不传就不挂那条字段——
    * 分屏右侧的只读预览（今天仍走 Milkdown）与这里无关。
    */
   onFindStatus?: (status: FindStatus) => void;
+  /**
+   * **这不是一份 Markdown**（`editor/file-kind.ts::认文件类型`）。
+   *
+   * ⚠️ 它**只关掉 Markdown 文法与那套配色**，别的什么都不动：撤销栈、查找、
+   * 写作模式、命令、存盘那条路全是同一套（源码模式对一份 `.py` 的职责就是
+   * "能编辑、能存盘、一个字节不改"，`docs/07` 第 86 项）。
+   *
+   * ⚠️ **关掉是刻意的，不是"忘了给别的语言加文法"**：本仓只装了
+   * `@codemirror/lang-markdown` 一门（`package.json`），没有别的语言的
+   * CodeMirror 文法，也不许为这件事加依赖。拿 Markdown 去染一份 Python 比
+   * 不上色更糟——`# 注释` 会变成标题色、`*args` 会变成斜体，那是一幅**错的画**。
+   */
+  纯文本?: boolean;
 }
 
 /* ── 高亮 ────────────────────────────────────────────────────────────────
@@ -688,6 +701,7 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     readOnly = false,
     strict = false,
     onFindStatus,
+    纯文本 = false,
     writingModes = 默认写作模式,
     review = null,
     onReviewEscape,
@@ -720,8 +734,10 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
   const extensions: Extension[] = [
     history(),
     drawSelection(),
-    markdown(),
-    syntaxHighlighting(notaHighlight),
+    // ⚠️ 非 Markdown 的文件**两样都不挂**：文法与它配套的那套配色是**一对**
+    // ——只挂配色而不挂文法，`notaHighlight` 里那些 tag 一个都不会命中，
+    // 结果是"看起来生效了、其实什么都没变"，下次有人来查会白花时间。
+    ...(纯文本 ? [] : [markdown(), syntaxHighlighting(notaHighlight)]),
     notaTheme,
     // ⚠️ 那两个 `filter` 不是画蛇添足：CodeMirror 的默认键位会和本应用的
     // 快捷键**同时**触发（理由与逐条对照见上面 `撞车键位`），摘掉撞车的那些。

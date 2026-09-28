@@ -36,6 +36,7 @@ import type { CommandState } from "@/editor/command-state";
 import type { Document } from "@/bridge/ipc";
 import type { Settings } from "@/bridge/types";
 import type { Toast } from "@/ui/Toasts";
+import { 认文件类型 } from "@/editor/file-kind";
 import { EditorPane, type EditorPaneHandle } from "@/ui/EditorPane";
 import { ExternalChangeBar } from "@/ui/ExternalChangeBar";
 import { ExternalDiffPane } from "@/ui/ExternalDiffPane";
@@ -197,6 +198,12 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           key={activeDoc.id}
           doc={activeDoc}
           mode={viewMode}
+          // ⚠️ 非 Markdown 的文件在**源码模式**里不套 Markdown 文法与配色
+          //（理由见 `editor/file-kind.ts` 顶上那段：拿 `#` 去染一份 Python 是
+          // 一幅**错的画**）。这里**按路径现算**，不接 App 递下来的一份——
+          // 文件是不是 Markdown 是它的属性，而"降级"是这一次打开时的决定
+          //（用户手动切过模式之后降级就没了，可它**仍然**不是 Markdown）。
+          纯文本={activeDoc.path !== null && 认文件类型(activeDoc.path) === "text"}
           strict={settings?.strict_markdown ?? false}
           physics={settings?.enable_physics ?? false}
           // Emoji 输入辅助（短代码替换 ＋ 补全面板）。⚠️ 这里是**一个**

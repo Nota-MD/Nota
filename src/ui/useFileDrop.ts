@@ -55,6 +55,7 @@ import { api, type ImageSourceArg, type 路径种类 } from "@/bridge/ipc";
 import type { FilesSettings } from "@/bridge/types";
 import { t as 翻译, useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
+import { 是Markdown后缀 } from "@/editor/file-kind";
 import { 是图片文件 } from "@/ui/useImageInsert";
 
 /** 一次拖进来的文件最多处理几个。⚠️ 超出的会如实说一句（见文件头）。 */
@@ -80,11 +81,15 @@ const 文本后缀 = [
   "js", "jsx", "ts", "tsx", "css", "html", "htm", "xml", "sql", "lua",
 ];
 
-/** 这是**原生**的 Markdown 吗（`.md` 那一族，与"别的文本"分开是因为设置不同）。 */
-function 是_markdown(路径: string): boolean {
-  const 尾 = 路径.split(".").pop()?.toLowerCase() ?? "";
-  return ["md", "markdown", "mdown", "mkd", "mdx"].includes(尾);
-}
+/**
+ * ⚠️ **后缀单子不在这儿**：`是Markdown后缀` 是 `editor/file-kind.ts` 里
+ * {@link MARKDOWN后缀} 那**唯一一份**的一张表的用法（2026-09-28 收过去的）。
+ *
+ * ⚠️ 收之前这里自己写了一遍，而且**和别处不一致**：这份单子漏了 `.txt`，
+ * 于是拖一篇 `.txt` 进来会被归到"别的文件"、走 `drop_importable` 那条设置，
+ * 而同一份文件从「打开」对话框进去走的是 Markdown 那条。症状是
+ * "同一份 txt，两条路不一样"。
+ */
 
 /** 能当文本文档打开吗（没有后缀的也当能——那多半是一篇没有扩展名的笔记）。 */
 function 是文本文件(路径: string): boolean {
@@ -152,7 +157,7 @@ export function useFileDrop(w: 拖放接线): void {
         // ⚠️ **Markdown 与"别的文本"分开**：它们归两条不同的设置
         //（`drop_markdown` / `drop_importable`），而在"打开"这个动作上
         // 两者是一回事（见下面 `打开` 里那句）。
-        文档.push({ path: 路径, markdown: 是_markdown(路径) });
+        文档.push({ path: 路径, markdown: 是Markdown后缀(路径) });
       });
 
       // ── 不在了的那些：如实说，一次一句 ──────────────────────────────

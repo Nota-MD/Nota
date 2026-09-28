@@ -44,6 +44,7 @@ import type { RefObject } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 
 import { api, type DocId, type Document, type Settings, type TreeNode } from "@/bridge/ipc";
+import { MARKDOWN后缀 } from "@/editor/file-kind";
 import { useT } from "@/i18n";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import { 口径键, 读口径 } from "@/ui/tree-options";
@@ -361,12 +362,12 @@ export function useDocuments(w: 文档接线): 文档出口 {
     const picked = await openDialog({
       title: t("Open"),
       multiple: false,
-      // ⚠️ 这张表要和后端 `is_markdown()` 对齐。它认 `.mdx`，这里漏掉的话
-      // 文件**打得开**（拖进来、从文件树点），只是在对话框里筛不出来，
-      // 用户会以为打不开（backlog 第 28 项）。
-      filters: [
-        { name: "Markdown", extensions: ["md", "markdown", "mdx", "mdown", "mkd", "txt"] },
-      ],
+      // ⚠️ 这张表**不在这儿写**：`MARKDOWN后缀` 是唯一一份（2026-09-28 收过去的，
+      // `editor/file-kind.ts`），而它的真值源是后端 `commands/workspace.rs::is_markdown`
+      // ——`tests/file-kind.test.ts` 第一组读那份 Rust 源码逐个对。
+      // ⚠️ 以前这里抄了一份、漏掉过 `.mdx`：文件**打得开**（拖进来、从文件树点），
+      // 只是在对话框里筛不出来，用户会以为打不开（backlog 第 28 项）。
+      filters: [{ name: "Markdown", extensions: [...MARKDOWN后缀] }],
     });
     if (typeof picked === "string") await openPath(picked);
   }, [openPath]);

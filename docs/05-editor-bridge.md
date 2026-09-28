@@ -251,6 +251,17 @@ Prism 的 vue 语言在另一个包里，**全量注册不等于什么都有**�
 | `@codemirror/language` | `syntaxHighlighting` | 把 token 映射成样式（`notaHighlight`） |
 | `@lezer/highlight` | `tags` | `notaHighlight` 里认的那些 tag |
 
+**⚠️ 上面那两行（`markdown()` 与 `syntaxHighlighting(notaHighlight)`）是成对挂、也可以成对不挂的**
+（2026-09-28，`docs/07` 第 86 项）：`CreateSourceOptions` 里那个 `纯文本` 为真时
+**两样都不挂**——它由 `ui/EditorArea.tsx` 按 `activeDoc.path` 现算（判据在
+`editor/file-kind.ts`：后缀不属于 Markdown 那一族）。⚠️ **要挂一起挂**：只挂配色而
+不挂文法的话，`notaHighlight` 里那些 tag 一个都不会命中，结果是"看起来生效了、
+其实什么都没变"，下次有人来查会白花时间。⚠️ **关掉是刻意的**：本仓只装了
+`@codemirror/lang-markdown` **一门**文法（无网，不许为新功能加依赖），而拿
+CommonMark 去染一份 Python **比不上色更糟**——`# 注释` 会变成标题色、`*args`
+会变成斜体，那是一幅**错的画**。用户点的「按文件名推高亮语言」因此**没做成**，
+如实记在第 86 项 ⑥。
+
 **两条自制件，都只用 CSS 变量**（`notaHighlight` / `notaTheme`）：颜色一律
 `var(--accent)` / `var(--doc-fg)` / `var(--font-mono)` 这种，**不写死色值**。
 理由是那条老规矩——**文档主题要能改编辑区里的一切**，而写死的色值主题改不动。

@@ -26,6 +26,7 @@ import {
   type TreeNode,
 } from "@/bridge/ipc";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
+import { useFileKind } from "@/ui/useFileKindMode";
 // ⚠️ 只要类型：`EditorPane` 这个组件本身已经搬到 `ui/EditorArea.tsx` 里去画了，
 // 这边留着的是那个句柄类型（`editorRef` 要它）。写成 `import type` 免得再被
 // 当成"没用上的组件"清掉。
@@ -143,17 +144,21 @@ export default function App() {
 
   const editorRef = useRef<EditorPaneHandle>(null);
 
-
   // ── 提示 ────────────────────────────────────────────────────────────────
   // ⚠️ 这一摊（`toasts` 数组 / `toast` / `dismiss`）2026-09-25 搬去了
   // `ui/useToasts.ts`——本文件当时 958 行、软上限 900。搬的是"什么时候消失"，
   // 文案照旧由这里给。那条 `ttlMs === 0` 的分支（不自动消失）见那个文件。
   const { toasts, toast, dismiss } = useToasts();
 
-  // ⚠️ 本文件里**只剩这一处**要翻的界面串（下面「替换」那条提示）。别的地方
-  // 该翻的都翻在各自的组件里了——这里留一份订阅，是因为提示语是在**回调**里
-  // 现取的（`useToasts` 那一摊不是组件，拿不到 context）。
+  // ⚠️ 本文件里要翻的界面串只剩两处（下面「替换」那条提示、以及递给
+  // `useFileKind` 的那两条降级提示）：都是**回调里现取**的，而 `useToasts`
+  // 那一摊不是组件、拿不到 context，所以订阅留在这儿。
   const t = useT();
+
+  // 2026-09-28 那两条规则（按文件名认类型 ＋ 大文件自动降级源码模式）整块在
+  // `ui/useFileKindMode.ts`：判据是纯函数、有测试，那边只管"每份只判一次"与
+  // 提示条。⚠️ 出口对象每渲染一份新的，但**两个成员的身份都是稳的**。
+  const 文件类型 = useFileKind({ docs, activeId, settings, toast, t });
 
   const refreshDocs = useCallback(async () => {
     const list = await api.doc.list();
@@ -390,6 +395,9 @@ export default function App() {
   const updateSettings = useCallback(
     async (patch: Partial<Settings>) => {
       if (!settings) return;
+      // ⚠️ 用户**自己**选了一次模式就**解除这一份的降级**（那边的文件头讲了
+      // 为什么非有这条出口不可）。用 ref 读、不进依赖：那是整张菜单表的依赖。
+      if (patch.view_mode !== undefined) 文件类型.解除降级(activeIdRef.current);
       const previous = settings;
       const next = { ...settings, ...patch };
       setSettings(next); // 先改内存：主题、字号这些要立刻见效果
@@ -735,8 +743,12 @@ export default function App() {
    * `useState`——它就是编辑区的 `mode` 属性，两处**必须同源**（各存一份的
    * 症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"）。默认值**必须**与 Rust 侧
    * `ViewMode::default()` 一致（`wysiwyg`），见 `settings/mod.rs` 那条测试。
+   *
+   * ⚠️ 2026-09-28 起它**还过一道降级**（上面那个 hook）：用户设的是**偏好**，
+   * 那两条规则能把它压成 `source`。⚠️ **状态栏也吃这一条**，所以它显示的是
+   * **实际**模式——那不是"设置没生效"，正是它该显示的东西。
    */
-  const viewMode = settings?.view_mode ?? "wysiwyg";
+  const viewMode = 文件类型.模式;
 
   /**
    * 原生菜单被点了。**去向判据在这边**（主题 / 主题目录 / 命令三条路），

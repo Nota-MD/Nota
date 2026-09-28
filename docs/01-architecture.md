@@ -957,7 +957,7 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 | 位置 | 现象 | 原因 |
 |---|---|---|
 | `applyTheme` 的 `detectStyle()` | `guessDesktop()` 恒返回空串，所以 `ui_style = auto` **永远落到 Adwaita** | WebKitGTK 不把桌面环境告诉 JS；等接上 XDG portal 的 `color-scheme` 再换 |
-| 打开对话框的后缀 | `openViaDialog` 的过滤器是 `md/markdown/mdown/mkd/txt`，**没有 `mdx`**；而后端 `is_markdown()` 认 `.mdx` | 能打开（可以把 mdx 文件拖进来或从文件树点），只是对话框里筛不出来。这两张表该对齐 |
+| ~~打开对话框的后缀~~（**2026-09-28 已修**） | `openViaDialog` 的过滤器从前手抄一份 `md/markdown/mdown/mkd/txt`（**没有 `mdx`**），而后端 `is_markdown()` 认 `.mdx` | ⚠️ **这一条留着当记录，不要照它去改代码**：后缀单子 2026-09-28 收成了唯一一份（`editor/file-kind.ts` 的 `MARKDOWN后缀`），`open` 对话框直接展开它，`tests/file-kind.test.ts` 第一组读 Rust 源码盯着两边一致。⚠️ `save` 那张**仍然窄**（`md`/`markdown`/`mdx`），且是**有意的**——它回答的是「新文件写成什么」，不是「哪些归我读」 |
 | 主题清单不重扫 | 往主题目录里丢一份新 `.css`，**菜单里不会出现** | 清单只在启动时拉一次（`docs/07` 第 41 项）。⚠️ 改成轮询是错的——主题是"用户偶尔动一次"的东西 |
 | 点正文下方空白不聚焦 | 空文档里 ProseMirror 只有一行高，点到下面那片内边距上**编辑器不聚焦**，接着打字什么都不会发生 | `.editor-mount .milkdown` 的 `padding: 48px 56px 120px` 是拖到 `.milkdown` 上的，而可编辑区在它内层。要修得把命中区域撑到整片，见 BUG-15 |
 

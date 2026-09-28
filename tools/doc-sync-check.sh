@@ -356,6 +356,68 @@ PAIRS=(
   "tsconfig.json                                  06"
   "index.html                                     06"
   ".github/workflows/release.yml                  06"
+
+  # ⚠️⚠️ 2026-09-28 一次性补齐的一段。这张表自称是 `docs/09` §2 的机读副本，
+  # 可它**长期只是个手抄的片段**：`docs/09` §2 里已经按字面登记、而这里没有的行
+  # 有 37 条（后端 8 ＋ 前端 20 ＋ 测试 9），另有 6 份测试**两边都没有**。
+  # 后果不是报错，是**② 那条检查静默漏过一整片文件**——它们改了、映射到的文档
+  # 没跟，五道闸一道都不响。`tests/` 尤其危险：⑤ 只扫 `src-tauri/src` 与 `src`，
+  # **根本不看 `tests/`**，所以测试文件**只靠这张表**被管着（2026-09-27 那两份、
+  # 2026-09-28 这四份都是这么漏的，`docs/07` §4 记过两笔）。
+  #
+  # ⚠️ 为什么之前没补：补一行要**去 `docs/09` §2 查它映射到哪几号文档**，猜不得
+  #（猜错了症状是"改 A 文件却提示 B 文档过期"，比漏报更坏——它会教人忽略 WARN）。
+  # 所以这一段是**照抄 `docs/09` §2 已有的字面行**，一条新映射都没有。
+  #
+  # ⚠️ **仍然没进这张表的还有约五十个源文件**（`src-tauri/src/diff.rs`、
+  # `src/ui/useSession.ts` 那一批）：它们在 `AGENTS.md` §2 里登记着，所以 ⑤ 过，
+  # 但 ② 管不到。补齐它们要先在 `docs/09` §2 里定映射，不是这张表能单方面做完的
+  # ——登记在 `docs/07` §4。
+  # ── 后端（8）──────────────────────────────────────────────────────────
+  "src-tauri/src/single_instance.rs              01,02,06,10"
+  "src-tauri/src/url_scheme.rs                   01,02,06,10"
+  "src-tauri/src/file_move.rs                    02,04,07,10"
+  "src-tauri/src/heartbeat.rs                    02,11,12,13"
+  "src-tauri/src/focus/mod.rs                    01,02,06,07,10"
+  "src-tauri/src/focus/alarm.rs                  02,06,07"
+  "src-tauri/src/commands/focus.rs               02,04,10"
+  "src-tauri/src/commands/window.rs              02,04,10"
+  # ── 前端（20）────────────────────────────────────────────────────────
+  "src/editor/url-link.ts                        05,04,10"
+  "src/editor/auto-pair.ts                       05,04,10"
+  "src/editor/paste.ts                           05,04,10"
+  "src/editor/paste-clean.ts                     05,04,10"
+  "src/editor/lang-guess.ts                      05,04,10"
+  "src/editor/file-kind.ts                       05,04,10"
+  "src/editor/empty-paragraph.ts                 05,06"
+  "src/editor/headings.ts                        02,05,10"
+  "src/editor/toc.ts                             05,02,10"
+  "src/editor/slash.ts                           02,04,05,10"
+  "src/ui/tree-options.ts                        02,04,07,10"
+  "src/ui/useFileKindMode.ts                     04,07"
+  "src/ui/useWindowControls.ts                   02,04,10"
+  "src/ui/heatmap.ts                             02,04,06"
+  "src/ui/ShareCard.tsx                          02,04,06"
+  "src/ui/focus-summary.ts                       02,04,06,07"
+  "src/ui/useFocusTrace.ts                       02,04,07"
+  "src/styles/accent.ts                          04,08"
+  "src/styles/heatmap.css                        04"
+  # ── 测试（15）⚠️ 这一组最要紧：`tests/` 没有任何别的闸看着 ──────────────
+  "tests/accent.test.ts                          02,06"
+  "tests/doc-typography.test.ts                  02,06"
+  "tests/empty-doc-save.test.ts                  02,06"
+  "tests/focus-summary.test.ts                   06,07"
+  "tests/heatmap.test.ts                         02,06"
+  "tests/keymap.test.ts                          02,06"
+  "tests/slash.test.ts                           02,06"
+  "tests/table-input.test.ts                     02,06"
+  "tests/toc.test.ts                             02,06"
+  "tests/auto-pair.test.ts                       02,06"
+  "tests/lang-guess.test.ts                      02,06"
+  "tests/paste-clean.test.ts                     02,06"
+  "tests/url-link.test.ts                        02,06"
+  "tests/file-kind.test.ts                       02,06"
+  "tests/tree-options.test.ts                    02,06"
 )
 
 # 文档编号 → 文件。找不到就说明 docs/ 里缺了这份。

@@ -3361,7 +3361,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe; do
+for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3373,6 +3373,22 @@ done       # 全过退出码 0；有不过的列出名字并退 1
 （`tests/` 下有、`for` 里没有、本节那张条数表里也没有，见下面那条 📌）。
 加 `tests/*.test.ts` 时**顺手把它加进这个 `for`**。
 ⚠️ **2026-09-27 深夜又补进四份**（`slash` 49 ／ `doc-typography` 11 ／ `empty-doc-save` 8 ／ `table-input` 39）：其中**前两份此前正文里写着「已经补进 `for`」，代码块里其实没有**——这一次是拿 `ls tests/*.test.ts` 逐个对出来的（那一版是二十四份，一个不差）。⚠️ 同一条命令 2026-09-27 又对了一遍，多出 `table-pipe` 一份（二十五份）——**并且把那三条重名的尾巴（`slash` / `doc-typography` / `empty-doc-save` 各多写了一遍）清掉了**：重复写不报错、只是白跑一遍，而它正是"这一串是手抄的"的指纹。
+⚠️ **2026-09-28 又补进六份**（`auto-pair` 28 ／ `lang-guess` 31 ／ `paste-clean` 25 ／
+`url-link` 29 ／ `file-kind` 14 ／ `tree-options` 9）：**这六份是"建好了却从没进过
+名册"那一类里最大的一笔**——它们连 `docs/09` §2 都没登记（`docs/07` §4 记过两笔：
+2026-09-27 那两份、2026-09-28 的前四份），而 ⑤ 那个闸**只扫 `src-tauri/src` 与
+`src`、根本不看 `tests/`**，所以它们**没有任何一道闸看着**。这一次是拿
+`ls tests/*.test.ts` 与这个 `for` 逐个对出来的（对完是**三十一份**，一个不差）。
+⚠️ 同批做的一件事：把 `docs/09` §2 已有、而 `tools/doc-sync-check.sh` 的 `PAIRS`
+**没抄过去**的 43 行一次补齐（后端 8 ／ 前端 20 ／ 测试 15）——那张表自称是
+`docs/09` §2 的机读副本，实际长期只是手抄的片段，后果是 ② 那条检查**静默漏过
+一整片文件**。⚠️ 补的时候**一条新映射都没编**，全部照抄 `docs/09` §2 已有的字面行
+（猜映射的症状是"改 A 文件却提示 B 文档过期"，比漏报更坏——它会教人忽略 WARN）。
+⚠️ **仍然没进 `PAIRS` 的还有约五十个源文件**（`src-tauri/src/diff.rs`、
+`src/ui/useSession.ts` 那一批）：它们在 `AGENTS.md` §2 里登记着、⑤ 过，但 ② 管不到
+——补齐它们要先在 `docs/09` §2 里定映射，登记在 `docs/07` §4。
+⚠️ 这六份**都不用额外开关**（`--alias:@=./src` 也不必：esbuild 按 `tsconfig.json`
+的 `paths` 自己解 `@/…`）。
 
 ⚠️ **不在上面那个循环里的有四份**，各有各的原因：
 
@@ -3413,14 +3429,18 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**二十五份、共 657 条**（2026-09-27 再数）：`keymap` **54** · `slash` **49** ·
-`share-card` **46** · `math-view` **41** · `table-input` **39** · `focus-summary` **34** ·
-`smart-punctuation` **36** · `emoji` **32** · `footnote` **30** · `math-delim` **23** ·
-`toc` **22** · `inline-marks` **37** · `heatmap` **20** · `auto-correct` **20** ·
-`math-input` **19** · `atom-space` **19** · `mark-hint` **18** · `accent` **18** ·
-`instant-render` **17** · `lang-icons` **14** · `html-block` **14** ·
-`chart-ticks` **12** · `doc-typography` **11** · `empty-doc-save` **8** · `table-pipe` **24**。
-⚠️ 这二十五份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
+**三十一份、共 793 条**（2026-09-28 **当场一份一份跑出来的**，全 `0 失败`）：
+`keymap` **54** · `slash` **49** · `share-card` **46** · `math-view` **41** ·
+`table-input` **39** · `inline-marks` **37** · `smart-punctuation` **36** ·
+`focus-summary` **34** · `emoji` **32** · `lang-guess` **31** · `footnote` **30** ·
+`url-link` **29** · `auto-pair` **28** · `paste-clean` **25** · `table-pipe` **24** ·
+`math-delim` **23** · `toc` **22** · `auto-correct` **20** · `heatmap` **20** ·
+`atom-space` **19** · `math-input` **19** · `accent` **18** · `mark-hint` **18** ·
+`instant-render` **17** · `file-kind` **14** · `html-block` **14** · `lang-icons` **14** ·
+`chart-ticks` **12** · `doc-typography` **11** · `tree-options` **9** ·
+`empty-doc-save` **8** ——**657 → 793**，多出来的那 136 条全是这一批新进名册的六份
+（28+31+25+29+14+9=136）。
+⚠️ 这三十一份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
 2026-09-27 这一遍 `share-card` 35→46、`accent` 14→18、`chart-ticks` 11→12、
 `math-input` 16→19（`$$` 那三组新用例），另加新的两份 `math-delim` 23、
 `inline-marks` 21（高亮/上标/下标/下划线，**现已 37**，见本节末那条 📌）与 `html-block` 14（块级裸 HTML ＋ 注释），
@@ -3431,7 +3451,14 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 （斜杠菜单：表的账 ＋ 筛项 ＋ 认查询 ＋ 采用 ＋ 插件那四条键）；**这一批加了
 `focus-summary` 34**（强制专注结束后的总结：记一笔 ／ 抽稀 ／ 总结与专注率 ／
 两个时刻 ／ 横刻度 ／ 造分享卡——⚠️ 它**不在上面那个 `for` 里**，跑法见本节前面对
-那四份的单列），那 **34** 是当场跑出来的；**2026-09-27 深夜这一批又加了 `table-input` 39**（BUG-51：手打表格那几行在这边算不算表格行 ＋ NBSP 回归 ＋ 那道「匹配盖住整段」的闸，见 §5.36），并把 `smart-punctuation` 从 **32** 补到 **36**（横线骨架那道守卫的 4 条）——**总数 590 → 633**；**再下一批加了 `table-pipe` 24**（行首那颗多余的 `\|`，见本节末那条 📌），**总数 633 → 657**。
+那四份的单列），那 **34** 是当场跑出来的；**2026-09-27 深夜这一批又加了 `table-input` 39**（BUG-51：手打表格那几行在这边算不算表格行 ＋ NBSP 回归 ＋ 那道「匹配盖住整段」的闸，见 §5.36），并把 `smart-punctuation` 从 **32** 补到 **36**（横线骨架那道守卫的 4 条）——**总数 590 → 633**；**再下一批加了 `table-pipe` 24**（行首那颗多余的 `\|`，见本节末那条 📌），**总数 633 → 657**；
+**2026-09-28 这一批又加了六份**（`auto-pair` 28 ／ `lang-guess` 31 ／ `paste-clean` 25 ／ `url-link` 29 ／
+`file-kind` 14 ／ `tree-options` 9）——**总数 657 → 793**，六份的条数同样是当场跑出来的
+（⚠️ 六份的条数 **2026-09-28 当场跑出来是 `0 失败`**；但要说清一件事：**照本节
+这份文档跑，这六份此前一次都不会被跑到**——它们不在上面那个 `for` 里、不在本节这张
+表里、也不在 `docs/09` §2 里，而 ⑤ 那个闸不扫 `tests/`，所以**文档上没有任何一条
+命令会执行它们**。它们此前跑没跑过、跑绿过没有，**没有记录可查**——这一批是头一次
+把它们写进一个跑得出来的地方）。
 
 📌 **2026-09-27（设置里的「快捷键」那一批，新建 `keymap.test.ts` 54 条，512→566）**：
 这一批加**两样**东西——一份新测试 `keymap`（可写回的键位文本 ＋ 覆盖表怎么叠到

@@ -984,7 +984,7 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
 | toast 存活时间（error） | `8000` ms | 同上 | 错误留久一点——用户多半要读完再决定怎么办 |
 | 文件树请求深度 | `1` | `App.tsx::refreshTree` / `openFolder` | `api.workspace.tree(undefined, 1)`：**本轮只列一层** |
 | `save` 对话框过滤器 | `md`, `markdown`, `mdx` | `ui/useDocuments.ts::saveDoc` | |
-| `open` 对话框过滤器 | `md`, `markdown`, `mdown`, `mkd`, `txt` | `App.tsx::openViaDialog` | ⚠️ **没有 `mdx`**，见下 |
+| `open` 对话框过滤器 | `MARKDOWN后缀`（`md`, `markdown`, `mdown`, `mkd`, `mdx`, `txt`） | `ui/useDocuments.ts::openViaDialog` | ⚠️ **2026-09-28 起不再手抄**：直接展开 `editor/file-kind.ts` 那张唯一的表 |
 | 「插入图片」对话框的文件过滤器 | `png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, `bmp`, `avif` | `ui/ImageDialog.tsx` | 与宿主那张「认得的后缀」表是**两份手抄的常量**，加一种格式要一起改——见 §9.6 |
 
 ### 9.6 插图相关的常量（2026-09-26 加）
@@ -1040,9 +1040,10 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
 | `.mdx` | 同上 |
 | `.txt` | 同上 |
 
-⚠️ **前端对话框的过滤器与这张表不一致**：`open` 少一个 `mdx`，`save` 只给了
-`md`/`markdown`。过滤项只是对话框的默认筛选，用户仍可手打别的后缀，所以不是硬伤，
-但"文件树里看得到、对话框里选不到"会让人困惑。
+⚠️ **`open` 那张 2026-09-28 起与这张表一致了**（展开 `MARKDOWN后缀`，不再手抄）。
+`save` 那张**仍然窄**（`md`/`markdown`/`mdx`，写在 `ui/useDocuments.ts::saveDoc` 里）——
+⚠️ 这是**有意的**，两者回答的不是同一个问题：`open` 问"哪些文件归我读"，`save` 问
+"我该把新文件写成什么"。过滤项只是对话框的默认筛选，用户仍可手打别的后缀，所以不是硬伤。
 
 ⚠️ 文件树**只列 Markdown**（口径如此）。另外三类**整类跳过**：
 点开头的名字（`.git` / `.obsidian` 这类元数据）、`node_modules`、以及**符号链接本身**

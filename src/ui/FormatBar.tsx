@@ -98,7 +98,7 @@ function 提示(menu: string, 名字: string): string {
  *
  * ⚠️ 后四个（高亮 / 上标 / 下标 / 下划线）来自 `editor/inline-marks.ts`。
  * 它们的按钮**不受设置里那三个开关影响**：关掉的是"解析与输入"，不是这条
- * 能力（见 `create.ts` 的 `COMMANDS` 那四条注释）。
+ * 能力（见 `command-table.ts` 的 `COMMANDS` 那四条注释）。
  */
 type 行内位 =
   | "bold"

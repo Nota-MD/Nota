@@ -74,8 +74,8 @@
  * - `GFM选项` 与 `不转义孤立波浪号` → **不给 `preset/gfm` 用，是把 `gfm` 拉回本仓
  *   语义的两件东西**（关掉单波浪号删除线；正文里的孤立 `\~` 不加反斜杠）。
  *   两处都在 `create.ts` 的 `.config()` 里，见那一节；
- * - `行内标记命令` 四条 toggle 命令 → `create.ts` 的 `COMMANDS` 表按
- *   `命令名表` 派发。
+ * - `行内标记命令` 四条 toggle 命令 → `command-table.ts` 的 `COMMANDS` 表按
+ *   `命令名表` 派发（那张表 2026-09-28 从 `create.ts` 搬了出去）。
  */
 
 import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
@@ -577,7 +577,7 @@ export const 行内标记命令 = [
   $command("ToggleUnderline", (ctx) => () => toggleMark(下划线规格.type(ctx))),
 ];
 
-/** PM mark 名 → toggle 命令的名字。`create.ts` 的 `COMMANDS` 表按它派发。 */
+/** PM mark 名 → toggle 命令的名字。`command-table.ts` 的 `COMMANDS` 表按它派发。 */
 export const 命令名表: Record<string, string> = {
   highlight: "ToggleHighlight",
   superscript: "ToggleSuperscript",

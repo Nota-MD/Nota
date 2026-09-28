@@ -152,7 +152,8 @@ export function 脚注事务(state: EditorState): Transaction | null {
  * 菜单/快捷键那条命令的**唯一入口**。
  *
  * ⚠️ 与 `insert.ts` 里那几条同一条纪律：界面层不许自己 `ctx.get(editorViewCtx)`
- * 派事务，一律走 `create.ts` 的 `COMMANDS` 表派进来。
+ * 派事务，一律走 `command-table.ts` 的 `COMMANDS` 表派进来（那张表 2026-09-28 从
+ * `create.ts` 搬了出去，见那个文件的头）。
  */
 export function 插脚注(editor: Editor): void {
   editor.action((ctx) => {

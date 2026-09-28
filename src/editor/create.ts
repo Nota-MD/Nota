@@ -49,50 +49,20 @@ import { diagram } from "@milkdown/plugin-diagram";
 // 别处不许各自去切一刀（判据只有一份）。理由见它的文件头。
 import { 拆前置块, 拼回前置块 } from "@/editor/front-matter";
 
-// 菜单栏要用的编辑命令。**只从这里进**——别处不许自己去摸 `editorViewCtx`
-// 派事务（见本文件顶上那段"真相在哪"）。
-import {
-  toggleStrongCommand,
-  toggleEmphasisCommand,
-  toggleInlineCodeCommand,
-  wrapInHeadingCommand,
-  wrapInHeadingInputRule,
-  turnIntoTextCommand,
-  wrapInBlockquoteCommand,
-  wrapInBulletListCommand,
-  wrapInOrderedListCommand,
-  createCodeBlockCommand,
-  insertHrCommand,
-  insertImageCommand,
-  toggleLinkCommand,
-} from "@milkdown/kit/preset/commonmark";
-import {
-  // ⚠️ **拖列宽那条插件不在 `gfm` 的 `plugins` 数组里**（2026-09-26 查出来时反了
-  // 直觉：`@milkdown/preset-gfm/lib/index.js:1012` 那四个里没有它），得在这里自己
-  // `.use()`。症状正是用户报的那条（「表格，允许拖动改变大小」）：画得出、打得进、
-  // 不报错，**就是拖不动**——压根没有插件在监听鼠标。
-  //
-  // ⚠️ 2026-09-27 起**连它导出的那个都不用**，改用本仓包的 `列宽拖动插件`
-  // （只把它那个 `defaultCellMinWidth` 改成 0：默认 100 把表格宽钉死在
-  // "列数 × 100px"上，理由见那个常量）。和 `main.tsx` 引的 `tables.css`
-  // 是**两半，缺一不可**。
-  toggleStrikethroughCommand,
-  insertTableCommand,
-  addRowBeforeCommand,
-  addRowAfterCommand,
-  addColBeforeCommand,
-  addColAfterCommand,
-  setAlignCommand,
-} from "@milkdown/kit/preset/gfm";
+// ⚠️ **命令白名单那一串（`toggleStrongCommand` … `setAlignCommand`）2026-09-28
+// 整段搬去了 `./command-table`**——搬的原因只有行数一个（本文件当时 **1010** 行，
+// 越过 1000 行硬上限），内容一个字节没改；同 `create-types.ts` 那一次（1036 行，
+// 见下面"对外类型搬走了"那段）。这里只剩这一条：它**不是命令**，是一条输入
+// 规则，留着是为了把上游那条从 `commonmark` 里过滤掉
+//（见下面 `.use(commonmark.filter(...))`）。
+import { wrapInHeadingInputRule } from "@milkdown/kit/preset/commonmark";
 import { TextSelection } from "@milkdown/kit/prose/state";
-import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
-import { callCommand } from "@milkdown/kit/utils";
 
-// 需要"先看一眼光标在哪、再一笔事务里改两处"的那几条，实现放在这里。
-// ⚠️ 本文件是它**唯一**的调用点（理由见那份文件头）。
-import { 转成任务列表, 清除格式, 表格删行, 表格删列, 表格删表, 插公式块, 插目录 } from "./insert";
-// 脚注（gfm 的节点＋解析＋序列化都是现成的，缺的是"从零插一条"）。
-import { 插脚注 } from "./footnote";
+// ⚠️ 命令表里那几条"先看一眼光标在哪、再一笔事务里改两处"的实现
+//（`insert.ts` 的任务列表 / 清除格式 / 表格增删 / 公式块 / 目录，`footnote.ts`
+// 的插脚注）2026-09-28 **跟着表一起搬去了 `./command-table`**——这里不再直接
+// 引它们，本文件对 `insert.ts` 也不再是"唯一的调用点"了。
+import { 跑命令 } from "./command-table";
 import { 滚动到位置 } from "./scroll-into-view";
 // 就地改动预览（`nota.ui.review_diff`）。⚠️ 算法与两种看法在 `review.ts` 里，
 // 这里只用它那一侧的适配层，和 `writing-modes.ts` 的接线方式一样。
@@ -148,6 +118,11 @@ import { diagramView } from "./diagram-view";
 // 读的是 `attrs.value`）。这个文件把它们换成能就地改的视图，编辑时用半透明的
 // `$` / `$$` 标出输入位置。契约与取舍写在它自己的文件头上。
 import { mathView } from "./math-view";
+// 图片语法里的地址指向视频（`![](a.mp4)`）时画成播放器。⚠️ 上游那个
+// `imageSchema` 一个 NodeView 都没有，画什么全在 `toDOM` 里写死成 `<img>`
+// ——于是视频文件得到一颗破图标。判据（只看后缀）、为什么只改屏幕不改源码、
+// 以及两件没验的事都写在它自己的文件头上。
+import { 视频视图 } from "./video-view";
 // 行内公式的**打字**规则：`$x$` 与 `$$x$$`。上游那条认不出 `$$…$$`（敲到
 // `A$$bb$` 就把 `$bb$` 变成公式了），这里换掉它。正则、守卫、与解析器的
 // 实测对照表都在它自己的文件头上。
@@ -235,6 +210,14 @@ import { 补全图片属性 } from "./image-attrs";
 import { katexOptionsFor } from "./math-macros";
 // 表格列宽（拖动改大小那条路的下半截：记住 / 摆回来）。
 // ⚠️ 上半截是 CSS（`main.tsx` 引的那份 `tables.css`），缺了它"能拖"没有出口。
+// ⚠️ **还有第三半，在这儿一并说清**（2026-09-28 从上面那个 gfm 导入块搬来的）：
+// **拖列宽那条插件不在 `gfm` 的 `plugins` 数组里**（2026-09-26 查出来时反了
+// 直觉：`@milkdown/preset-gfm/lib/index.js:1012` 那四个里没有它），得在
+// `.use()` 里自己挂。症状正是用户报的那条（「表格，允许拖动改变大小」）：
+// 画得出、打得进、不报错，**就是拖不动**——压根没有插件在监听鼠标。
+// ⚠️ 2026-09-27 起**连它导出的那个都不用**，改用本仓包的 `列宽拖动插件`
+// （只把它那个 `defaultCellMinWidth` 改成 0：默认 100 把表格宽钉死在
+// "列数 × 100px"上，理由见那个常量）。
 import { 列宽插件, 列宽拖动插件, 应用列宽 } from "./table-width";
 // 「光标现在在什么状态」。格式化工具栏的高亮与菜单那十条表格命令的灰/亮
 // 都问它——**只读不写**，见它自己的文件头。
@@ -267,7 +250,7 @@ export type {
   EditorHandle,
   CreateOptions,
 } from "./create-types";
-// 本文件自己还要用这四样（`COMMANDS` 表的签名、`createEditor` 的签名与返回值）。
+// 本文件自己还要用这四样（`createEditor` 的签名与返回值、`跑一条命令` 的签名）。
 import type {
   EditorCommand,
   CommandPayload,
@@ -491,7 +474,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // ⚠️ 症状与 BUG-46 不同：那一条是**编辑器起不来**，这一条是**编辑器好好的、
     // 只有这四个动作点了没反应**——所以它躲过了那次修。四个动作是
     // 高亮 / 上标 / 下标 / 下划线，菜单、格式化工具栏、快捷键三条路都走这张表。
-    // ⚠️ **不跟 `行内扩展` 开关走**（与 `COMMANDS` 表上那段注释同源）：
+    // ⚠️ **不跟 `行内扩展` 开关走**（与 `command-table.ts` 表上那段注释同源）：
     // 关掉的是"解析与输入"，不是这四条能力。
     .use(行内标记命令)
     // 输入规则（`==x==` 敲完当场变高亮那类）。**只读实例也挂**——只读时
@@ -612,6 +595,15 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // ⚠️ `mathView` 是个**数组**（两条线：`$prose` 那条管"当前是哪一块"，
     // `$view` 那条管怎么画），`.use()` 收数组。
     .use(mathView)
+    // 图片语法里的地址指向视频时画成播放器（用户那句「图片语法指向 `.mp4`
+    // 当视频」）。⚠️ **只画屏幕，不动源码**：节点类型、解析、序列化一概没碰，
+    // 所以"打开再存字节不变"那条不变量与这一条无关（理由在文件头）。
+    // ⚠️ 它要排在 `imageSchema` 登记**之后**（也就是 `commonmark` 之后）——
+    // 反正整条链都在 `commonmark` 后面，这个位置满足。
+    // ⚠️ **三种实例都生效**（可编辑 / 分屏预览 / 导出用的离屏实例），
+    // 因为这个文件是**唯一建实例的地方**；只读那两处一样需要它，否则
+    // 分屏右边和导出文件里还是破图标。
+    .use(视频视图)
     // ⚠️ 宽松标题那条显示层装饰**2026-09-26 删掉了**（原位置就是这一行）。
     // 用户裁定 `#你好` 不许变位置变大小，所以两种模式下正文的长相现在
     // **完全一样**；严格模式只剩源码模式 / 大纲 / 标签页标题三处（见上面
@@ -705,11 +697,9 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
    * 到真正被调用时早已赋值，不存在暂时性死区那一类问题。
    */
   function 跑一条命令(name: EditorCommand, payload?: CommandPayload): void {
-    if (isHeading(name)) {
-      editor.action(callCommand(wrapInHeadingCommand.key, Number(HEADING_RE.exec(name)![1])));
-    } else {
-      COMMANDS[name](editor, payload);
-    }
+    // ⚠️ 表与派发逻辑 2026-09-28 搬去了 `./command-table`（行数），这里只剩
+    // 一层薄壳——两个用家（`runCommand` 与斜杠菜单）仍然走同一个入口。
+    跑命令(editor, name, payload);
   }
 
   /** 把插入点挪到文档最开头。⚠️ 只给"刚打开一篇文档"，见接口上那条长注释。 */
@@ -879,107 +869,6 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     },
   };
 }
-
-/** `h1`~`h6`。它们共用一条命令，只是层数不同，所以单独一族。 */
-type HeadingCommand = `h${1 | 2 | 3 | 4 | 5 | 6}`;
-type BlockCommand = Exclude<EditorCommand, HeadingCommand>;
-
-const HEADING_RE = /^h([1-6])$/;
-
-/**
- * ⚠️ 类型谓词而不是 `as`。写成 `HEADING_RE.test(name)` 的话 TS 收窄不了，
- * 后面查表就得 `as` 一下——而那个 `as` 会把"表里漏了一项"这种错误也一起放过去。
- * 写成谓词，两个分支各自拿到准确类型，漏项仍然是编译错。
- */
-function isHeading(name: EditorCommand): name is HeadingCommand {
-  return HEADING_RE.test(name);
-}
-
-/**
- * 命令白名单的**实体**。
- *
- * ⚠️ 存的是 `$Command` 的**回调**而不是 `$Command` 本身：Milkdown 的
- * `callCommand` 要的是 `slice.key`，直接传 `$Command` 过不了类型
- *（`$Command<T>` 是个带 `run`/`key` 的插件对象，不是 `CmdKey`）。
- * 包成"吃一个 editor"的闭包之后，调用点也不必再碰 Milkdown 的类型。
- */
-const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) => void> = {
-  undo: (e) => e.action(callCommand(undoCommand.key)),
-  redo: (e) => e.action(callCommand(redoCommand.key)),
-  bold: (e) => e.action(callCommand(toggleStrongCommand.key)),
-  italic: (e) => e.action(callCommand(toggleEmphasisCommand.key)),
-  inlineCode: (e) => e.action(callCommand(toggleInlineCodeCommand.key)),
-  strike: (e) => e.action(callCommand(toggleStrikethroughCommand.key)),
-  // 行内标记四条（高亮 / 上标 / 下标 / 下划线）。**不跟开关走**：命令表是
-  // 静态的，而"这条命令能不能跑"取决于开关的话，菜单项的灰/亮就得跟着设置变
-  // ——那是另一件事（`ui/commands.ts` 的 `命令能否用`）。关掉高亮的用户
-  // 从格式化工具栏点一下，读到的是"这条通路上没实现"，那是个谎。
-  // 真相是：**关掉的是解析与输入，不是这条能力**。
-  highlight: (e) => e.action(callCommand(行内标记命令[0]!.key)),
-  superscript: (e) => e.action(callCommand(行内标记命令[1]!.key)),
-  subscript: (e) => e.action(callCommand(行内标记命令[2]!.key)),
-  underline: (e) => e.action(callCommand(行内标记命令[3]!.key)),
-  text: (e) => e.action(callCommand(turnIntoTextCommand.key)),
-  quote: (e) => e.action(callCommand(wrapInBlockquoteCommand.key)),
-  ul: (e) => e.action(callCommand(wrapInBulletListCommand.key)),
-  ol: (e) => e.action(callCommand(wrapInOrderedListCommand.key)),
-  task: (e) => 转成任务列表(e),
-  codeBlock: (e) => e.action(callCommand(createCodeBlockCommand.key)),
-  hr: (e) => e.action(callCommand(insertHrCommand.key)),
-  // 公式块：`plugin-math` 没有插入命令，见 `insert.ts` 的 `插公式块`（2026-09-26）。
-  mathBlock: (e) => 插公式块(e),
-  // 内容目录：插一段普通 markdown 列表，两头用注释夹住；已有就原地更新。
-  // ⚠️ `strict` 由上面带进来（缺省 = 宽松），编辑器实例自己不知道这个设置——
-  // 理由写在 `create-types.ts::CommandPayload.strict`。
-  toc: (e, p) => 插目录(e, p?.strict ?? false),
-  // 脚注：gfm 给了节点与解析/序列化，缺"从零插一条"，见 `footnote.ts`（2026-09-27）。
-  footnote: (e) => 插脚注(e),
-
-  // ⚠️ **表格插的是 3 × 3**，而不是"先弹个框问行列数"。
-  // `insertTableCommand` 的 `row`/`col` 缺省也能用，但缺省值不写出来就成了
-  // 一个说不出所以然的数；菜单上那一项的标签也照这个数写了，两处一致。
-  table: (e) => e.action(callCommand(insertTableCommand.key, { row: 3, col: 3 })),
-  tableRowAbove: (e) => e.action(callCommand(addRowBeforeCommand.key)),
-  tableRowBelow: (e) => e.action(callCommand(addRowAfterCommand.key)),
-  tableColLeft: (e) => e.action(callCommand(addColBeforeCommand.key)),
-  tableColRight: (e) => e.action(callCommand(addColAfterCommand.key)),
-  tableDelRow: (e) => 表格删行(e),
-  tableDelCol: (e) => 表格删列(e),
-  tableDel: (e) => 表格删表(e),
-  tableAlignLeft: (e) => e.action(callCommand(setAlignCommand.key, "left")),
-  tableAlignCenter: (e) => e.action(callCommand(setAlignCommand.key, "center")),
-  tableAlignRight: (e) => e.action(callCommand(setAlignCommand.key, "right")),
-
-  // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/PromptDialog.tsx`）。
-  // 缺省值给空串而不是"不执行"——空串的语义是"插一个还没填地址的链接/图片"，
-  // 而那正是用户点完之后马上要补的东西。
-  link: (e, p) => e.action(callCommand(toggleLinkCommand.key, { href: p?.href ?? "" })),
-  image: (e, p) =>
-    e.action(callCommand(insertImageCommand.key, { src: p?.src ?? "", alt: p?.alt ?? "" })),
-
-  clearFormat: (e) => 清除格式(e),
-
-  /**
-   * 用文本替换当前选区（空串 = 删掉选区）。
-   *
-   * 两个用家：「粘贴」（`ui/useClipboard.ts` 读到剪贴板文本之后插进来）、
-   * 「剪切」（复制成功之后删掉选中的那段）。
-   *
-   * ⚠️ 非空那一支**走 ProseMirror 自己的 `pasteText`**，不自己拼事务：
-   * 多行文本要按行拆成多个段落、代码块和表格里不能塞段落——这些规矩 PM
-   * 那边有一份现成的。自己写一份的话，"菜单粘贴"和"按 Ctrl+V"插出来的
-   * 东西迟早不一样，而那种差别没人会想到去查。
-   */
-  insertText: (e, p) => {
-    const text = p?.text ?? "";
-    e.action((ctx) => {
-      const view = ctx.get(editorViewCtx);
-      view.focus();
-      if (text) view.pasteText(text);
-      else view.dispatch(view.state.tr.deleteSelection());
-    });
-  },
-};
 
 /**
  * 把 markdown 文本解析成 ProseMirror 文档（用于校验、或将来做"粘贴前预检"）。

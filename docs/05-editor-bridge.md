@@ -65,6 +65,7 @@ Nota 是 **WebKitGTK 4.1 里的 ProseMirror 文档树**（前端是真相）。�
 | `./table-input`（**本仓**） | `表格输入规则` / `表格输入` | 敲表头行 ＋ 分隔行 → 回车吃成一张真表格（此前只能用菜单插）。⚠️ 它和 `heading-on-enter` 都要处理"回车"，所以两边的守卫里各有一条绕开对方的地盘 |
 | `./diagram-view`（**本仓**） | `diagramView` | 图表块的 NodeView：把源码画成图，并且还能改源码。⚠️ **第二个 `$view`**（第一个是 `code-block.ts`） |
 | `./math-view`（**本仓**） | `mathView` ＋ `公式当前` | 公式那两个节点的视图：点一下就地改（半透明 `$` / `$$` 标出输入位置）。⚠️ **第三个 `$view`**，而且是**唯一一个 `.use()` 收数组的**（两条线：`公式当前` 管"当前是哪一块"、`mathView` 管怎么画）。见 §4.6b |
+| `./video-view`（**本仓**） | `视频视图` | **图片语法里的地址指向视频时画成播放器**（2026-09-28）：`![](a.mp4)` 不再是一颗破图标。⚠️ **第四个 `$view`**（前三个是 `code-block.ts` / `diagram-view.ts` / `math-view.ts`），判据只看**地址后缀**且复用 `editor/file-kind.ts` 的 `后缀()`。⚠️ 它**不改 schema**：源码与存盘那条路一个字节没动。⚠️ 尺寸那条 CSS 在**文档主题**里也有一份（导出会摘掉 `nota-` 类名），见 §4.8c |
 | `./math-input`（**本仓**） | `公式输入` | **行内公式的打字规则**（`:use()` 收数组，两条）：敲 `$$x$$` 或 `$x$` 当场变成一颗 `math_inline`。⚠️ 换掉了 `@milkdown/plugin-math` 那条 `mathInlineInputRule`——它**认不出 `$$…$$`**，用户敲到 `A$$bb$` 那一下尾巴就够匹配了，等他补最后一个 `$` 已经是另一段文字；所以 `create.ts` 把上游那条**按引用 `.filter()` 掉**（与标题那一条同一个手法）。见 §4.6c |
 | `./math-delim`（**本仓**） | `标美元数` ＋ `行内公式规格` ＋（`create.ts` 的 `.config()` 里那条）`inlineMath` 处理器 | **行内公式用几个 `$`，存盘照原样写回去**（2026-09-27）：敲几个存几个（用户拍的决定，见 §4.6c 那条 ⚠️⚠️）。⚠️ **三处缺一不可、缺哪一处都静默失效**：解析那趟一个 `$remark` 标注插件（照**源码偏移**数开头几个 `$` → mdast 的 `data`）、`math_inline` 规格**多一个 `dollars` 属性**＋两个 `runner` 搬它、序列化按这个数**选上游现成的那条处理器**（`mathToMarkdown({singleDollarTextMath:false})`）。⚠️ ⛔ **别拿 `mathInlineSchema.extendSchema` 去改那份规格**——`@milkdown/plugin-math@7.5.9` 自己嵌了一份 `@milkdown/utils@7.5.9`，那份 `extendSchema` 会把节点**挪到 `nodesCtx` 末尾**（顶层那份才是就地替换），所以这里用的是顶层 `$nodeSchema`。⚠️ 代价：`math_inline` 从此**有** `attrs` 了。判据在 `tests/math-delim.test.ts`（`tests/math-input.test.ts` 里也有三组） |
 | `./mark-hint`（**本仓**） | `markHint` | **行内标记的提示**：光标落在加粗/斜体里时，把那两个 `**` / `*` 半透明画在那段文字左右。⚠️ `Decoration.inline` ＋ `::before`/`::after`，**不插 widget**、不动 schema、一个字节都不写回。⚠️ **只给可编辑实例挂**（`readOnly ? [] : [markHint]`）——挂到只读实例上，分屏预览会多出 `**`、导出文件会被带进去。见 §4.11 |
@@ -84,7 +85,7 @@ Nota 是 **WebKitGTK 4.1 里的 ProseMirror 文档树**（前端是真相）。�
 | 路径 | 机制 | 什么时候用 |
 |---|---|---|
 | 只改**显示**、不加元素 | `Decoration`（`instant-render.ts` / `find.ts` / `writing-modes.ts`） | 加角标、背景、浮层、高亮、压暗——只要不指望它接事件 |
-| **这个节点由我来画** | `$view` NodeView（`code-block.ts`、`diagram-view.ts`、`math-view.ts`） | 要加 **`<select>` / `<button>` 这类真的会交互的元素**时。widget 是只读装饰，点它、让它持有焦点、让它开下拉都不是它的职责 |
+| **这个节点由我来画** | `$view` NodeView（`code-block.ts`、`diagram-view.ts`、`math-view.ts`、`video-view.ts`） | 要加 **`<select>` / `<button>` 这类真的会交互的元素**时。widget 是只读装饰，点它、让它持有焦点、让它开下拉都不是它的职责 |
 
 ⚠️ **NodeView 的三条契约**（`code-block.ts` 里全用上了，缺一条就出怪现象）：
 
@@ -460,8 +461,16 @@ export type EditorCommand =
 ⚠️ **不是"随便什么命令名都能传"**。任意的命令名字符串从菜单传进来，等于把一个 `any`
 形状的入口开给界面层——写错了不报错、只是没反应。列成联合类型，**写错就是编译错**。
 
-⚠️ `h1`~`h6` 走**同一族**命令（`wrapInHeadingCommand` 带层数参数），在 `runCommand`
-里拆开，所以这里列六个而不是一个 `heading` 加参数。
+⚠️ `h1`~`h6` 走**同一族**命令（`wrapInHeadingCommand` 带层数参数），在派发口
+（`command-table.ts::跑命令`）里拆开，所以这里列六个而不是一个 `heading` 加参数。
+
+⚠️⚠️ **2026-09-28：命令白名单（`COMMANDS` 表）整块从 `create.ts` 搬去了
+`src/editor/command-table.ts`**——搬的原因只有行数一个（那边到 **1010** 行、越过
+1000 行硬上限），**内容一个字节没改**。本文件里凡是说"某张表/某条命令在
+`create.ts`"的地方，现在指的都是那个新文件；⚠️ **`create.ts` 那边只剩一层薄壳**
+（`跑一条命令` → `跑命令(editor, name, payload)`），两个用家（菜单栏那条
+`runCommand` 与斜杠菜单）仍然走同一个入口，所以上面说的"焦点交回正文"那件事
+**位置没变**——它本来就在 `create.ts` 的 `runCommand` 里，不在表里。
 
 ⚠️ **命令不认识时静默无操作**（返回 `false`）。界面那边本来就该保证只派发白名单里的值，
 真走到 `default` 分支是代码写错了，而"按一下没反应"比"抛个异常打断编辑"更不打扰人。
@@ -469,7 +478,9 @@ export type EditorCommand =
 前者是"命令名不合法"，后者是"命令是合法的，源码模式的文本框里做不出来"。
 后者必须让用户看见一句提示（见 §4 那张表的注）。
 
-⚠️ 全仓**唯一**一处 `$view`（代码块 NodeView）不在这个通道上——它自己处理 DOM 事件。
+⚠️ **`$view`（NodeView）都不在这个通道上**——它们自己处理 DOM 事件（现在有四个：
+代码块、图表、公式、视频，清单在 §2.1b 那张表里；⚠️ 这一句原来写的是"全仓**唯一**一处"，
+2026-09-28 改对）。
 另外**行内标记**（`**`、反引号）也不在这里，那是 `docs/07` 第 39 项要动 schema 的事。
 
 ⚠️ **菜单栏里已经有不属于这张表的项了**：`ui/commands.ts` 是「菜单项 → 动作」的**全表**，
@@ -1057,6 +1068,40 @@ ProseMirror / CodeMirror 对"剪贴板里是图片"的处理是**把那坨二进
 ⚠️ **一次拖好几个文件时只插第一个图片**：同时插一串，用户还得一个个删。
 
 ---
+
+### 4.8c 「图片语法指向视频」是怎么接的（`editor/video-view.ts`，2026-09-28）
+
+用户原话（点名的一串小功能里的一条）：「**图片语法指向 `.mp4` 当视频**」。
+
+`![](a.mp4)` 今天渲染成 `<img src="a.mp4">`，浏览器画不出图，产物是一颗破图标
+＋ `alt` 那行字——**而 Markdown 源码是对的**。所以这一条**只改屏幕**。
+
+```text
+`![](a.mp4)`  ──解析/序列化──▶  还是那个 image 节点（一个字节没动）
+                     │
+                     ▼  NodeView 只决定"画成什么"
+      地址后缀命中 视频后缀 ？
+        ├ 是 → <span class="nota-video"><video src controls preload="metadata">
+        └ 否 → <img src alt title>   ← 与 preset 的 toDOM 逐条对齐
+```
+
+四条要紧的：
+
+1. **判据只有后缀**，而且**复用** `editor/file-kind.ts` 的 `后缀()`。⚠️ 先
+   `split(/[?#]/, 1)` 切掉查询串与片段——`a.mp4?t=3` / `a.mp4#t=3` 是常见写法，
+   不切就会读成 `mp4?t=3`，症状是"带时间戳的链接画不成播放器"。
+2. **`.mov` / `.mkv` / `.avi` 有意不认**：那些容器的编码不保证播得动，
+   认了就是一块**黑框**（比破图标更糟——破图至少写着 `alt`）。
+3. **不改 schema、不接解析与序列化**：走 `$view`，`![](…)` 的读写仍是上游那套，
+   所以"打开再存字节不变"与这一条无关。
+4. ⚠️ **导出那条路要靠文档主题里的 CSS**：`editor/export.ts` 摘的是渲染后的
+   `innerHTML`，而它会把 `nota-` 开头的类名**全摘掉**——`src/styles/video.css`
+   里那条选择器在导出的 HTML 里一个字都匹配不上。尺寸约束只能写成**元素选择器**，
+   也就是 `themes/*.css` 里那一句 `video`（三份都要有，`tests/video-view.test.ts`
+   第三组盯着）。
+
+⚠️ 三件没验的事（点播放按钮、拖进度条、全屏）见 `docs/07` 第 87 项与 §4——
+本仓的编辑器测试没有 DOM，只能开窗目检。
 
 ### 4.9 标题**回车才成块**（`editor/heading-on-enter.ts`，2026-09-26）
 

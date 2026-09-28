@@ -271,7 +271,12 @@ th {
   font-weight: 700;
 }
 
-img {
+/* ⚠️ `video` 和 `img` 并列（2026-09-28，图片语法指向视频那颗播放器）：
+   编辑区里那颗播放器的样式在 `src/styles/video.css`，而**导出**那条路会把
+   `nota-` 开头的类名全摘掉（`editor/export.ts`），那边的视频只认得元素选择器
+   ——所以尺寸这条必须在**文档主题**里也写一遍。三份主题都有这一条。 */
+img,
+video {
   border-radius: var(--radius-sm);
   max-width: 100%;
 }

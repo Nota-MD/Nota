@@ -5040,9 +5040,14 @@ export const events = {
 
 ---
 
-## `src/editor/create.ts`（801 行）
+## `src/editor/create.ts`（885 行）
 
 编辑器内核：Milkdown（ProseMirror + remark）的封装。
+
+⚠️ **2026-09-28：命令白名单那一串整块搬去了 `src/editor/command-table.ts`**——
+搬的原因只有行数一个（本文件当时 **1010** 行、越过硬线），`COMMANDS` 表与派发口
+一起走了，这里只剩 `跑一条命令` 那层薄壳（两个用家仍然走同一个入口）。
+⚠️ 同批本文件也**不再直接引 `insert.ts` / `footnote.ts`**（消费者跟着表一起搬走了）。
 
 ### 文件头的"为什么"要点
 
@@ -5072,7 +5077,7 @@ export interface EditorHandle {
 | `getMarkdown()` | 用 `serializerCtx` 把 `view.state.doc` 序列化成 markdown 字符串 |
 | `setMarkdown(markdown)` | `editor.action(replaceAll(markdown))` —— **整篇替换**。用于打开文件、插件改了文档、放弃修改重载 |
 | `focus()` | `ctx.get(editorViewCtx).focus()` |
-| `runCommand(name)` | 按 `EditorCommand` 派命令（`h1`~`h6` 走 `wrapInHeadingCommand` 带层数，其余查 `COMMANDS` 表）。⚠️ **跑完必定 `focus()` 一次**——命令是从菜单按钮上点下去的，那一刻焦点在按钮上，不交回去用户会觉得"菜单点完就卡住了" |
+| `runCommand(name)` | 按 `EditorCommand` 派命令（`h1`~`h6` 走 `wrapInHeadingCommand` 带层数，其余查 `command-table.ts` 的 `COMMANDS` 表）。⚠️ **跑完必定 `focus()` 一次**——命令是从菜单按钮上点下去的，那一刻焦点在按钮上，不交回去用户会觉得"菜单点完就卡住了" |
 | `destroy()` | `editor.destroy()`。⚠️ 组件卸载时**必须**调，否则 ProseMirror 的 DOM 监听会留着 |
 
 ⚠️ `setMarkdown` 是 `replaceAll`，**不保证失败会报错**：一个语法坏掉的 markdown 不会
@@ -5188,6 +5193,42 @@ export function parseMarkdown(editor: Editor, markdown: string): unknown {
 **这个函数今天没有任何调用者**，是给"粘贴前预检"预留的口子。
 
 ---
+
+## `src/editor/command-table.ts`（186 行）
+
+**命令白名单的实体**：`EditorCommand` 的每一项落到哪个 Milkdown 命令上。
+
+⚠️ **2026-09-28 从 `create.ts` 整段搬来**——搬的原因只有行数一个（那边到 **1010** 行、
+越过 1000 行硬上限），内容一个字节没改；同 2026-09-26 `create-types.ts` 那一次（1036 行）。
+⚠️ 挑中它是因为它**没有线头**：谁都不认识它、它也不认识谁（只吃一个 `editor` 与一个
+payload），搬走之后 `create.ts` 那边只剩一个 `跑命令` 的调用点。
+⚠️ 这是**同一份文件的第二次**（第三次是 `text-handlers.ts`）：`create.ts` 是本仓最容易
+再撞线的那个文件，见 `docs/09` §4 那一列。
+
+### 里面有什么
+
+| 名字 | 是什么 |
+|---|---|
+| `COMMANDS` | `Record<EditorCommand, (editor, payload?) => void>` 那张表：键是**编辑器命令**名（`bold` / `ul` / `tableRowBelow`…），值是"怎么把它派给 Milkdown"。⚠️ **`h1`~`h6` 不在表里**——它们共用 `wrapInHeadingCommand`、只是层数不同，先由下面那个分支摘出去 |
+| `跑命令(editor, name, payload?)` | 派发口。⚠️ **只管命令、不管焦点**——焦点那件事留在 `create.ts`：两个用家（菜单栏 / 斜杠菜单）的焦点处境正好相反，见 `docs/05` §3 |
+| `HeadingCommand` / `BlockCommand` / `HEADING_RE` / `isHeading` | 上面那个分支要用的类型与判据。`isHeading` 写成**类型谓词**而不是 `as`：写成 `as` 的话，"表里漏了一项"这种错误也会被一起放过去 |
+
+⚠️ 表里存的是 `$Command` 的**回调**而不是 `$Command` 本身：Milkdown 的 `callCommand`
+要的是 `slice.key`，而 `$Command<T>` 是个带 `run`/`key` 的插件对象、不是 `CmdKey`。
+包成"吃一个 editor"的闭包之后，调用点也不必再碰 Milkdown 的类型。
+
+⚠️ **加一条新命令要改两处**：`create-types.ts` 的 `EditorCommand`（类型）与这里的表
+（实现）——少改前者的症状是"命令根本传不进来"，少改后者的症状是**编译错**
+（`Record` 缺键，反而好办）。⚠️ 斜杠菜单那张表（`editor/slash.ts`）的 id 与这里的键
+**同名**，加命令时它也要看一眼（那一侧由类型兜着：`斜杠项.id` 是 `EditorCommand`）。
+
+⚠️ **别把这张表和 `ui/commands.ts` 弄混**：那是**界面命令**（菜单 / 快捷键那一层，
+id 形如 `format.bold`），两张表的桥在 `ui/useCommandTable.ts`，口径写在 `docs/05`。
+
+⚠️ **它仍然不是"唯一认识命令的地方"**：那几条做不到一行一条的实现（任务列表 /
+清除格式 / 表格增删 / 公式块 / 目录 / 脚注）在 `insert.ts` 与 `footnote.ts` 里，
+这里只是**唯一的调用点**——「别处不许自己摸 `editorViewCtx` 派事务」那条纪律说的是
+调用点，而调用点 2026-09-28 从 `create.ts` 挪到了这里。
 
 ## `src/editor/instant-render.ts`（154 行）
 
@@ -7444,11 +7485,12 @@ export interface CommandState {
 ## `src/editor/insert.ts`（217 行）
 
 「插进去 / 改结构」这一族里**不能用 `callCommand` 打发**的那几条：任务列表、
-清除格式、表格三删、公式块。⚠️ **入口只有 `create.ts` 一个**——本文件不许被
-界面层直接调用（"别处不许直接摸 `editorViewCtx` 派事务"那条纪律说的是**调用点**，
-而 `create.ts` 是那个唯一的调用点）。
+清除格式、表格三删、公式块。⚠️ **入口只有一个**——本文件不许被界面层直接调用
+（"别处不许直接摸 `editorViewCtx` 派事务"那条纪律说的是**调用点**）。
+⚠️ **那个调用点 2026-09-28 从 `create.ts` 挪到了 `command-table.ts`**（命令白名单
+整块搬过去，见上面那一节）；本文件本身一个字节没改。
 
-为什么这四条单开一个文件、不塞进 `create.ts`：那张 `COMMANDS` 表是"一行一条的
+为什么这四条单开一个文件、不塞进那张表：`command-table.ts` 的 `COMMANDS` 是"一行一条的
 **映射**"，读起来是一张清单；这四条要么要先看光标在哪、要么要在**一笔事务里改两处**、
 要么（公式块）得自己建节点并摆好选区。混进去，读的人就得在"清单"和"算法"之间来回切。
 
@@ -8456,6 +8498,74 @@ MCP 的**工具清单**：`nota_info` / `nota_documents` / `nota_read` / `nota_w
 所以不是靠一份排除名单做到的。改这个流程时别把这条性质弄丢。
 
 ---
+
+## `src/editor/video-view.ts`（193 行）
+
+**图片语法里的地址指向视频时，画成播放器**（2026-09-28 新建，用户原话
+「…**图片语法指向 `.mp4` 当视频**…都是简单的小功能」）。
+
+```ts
+export const 视频后缀: readonly string[];        // mp4 / m4v / webm / ogv
+export function 是视频地址(地址: string): boolean;
+export const 视频视图 = $view(imageSchema.node, …);  // 一个 NodeView
+```
+
+### 它解决的那个具体问题
+
+`![](a.mp4)` 今天渲染成 `<img src="a.mp4">`，浏览器画不出图，产物是一颗**破图标**
+＋ `alt` 那行字。**而 Markdown 源码是对的**——这个写法在别的编辑器里完全合法。
+坏的是屏幕，不是文件；所以这一份只改屏幕。
+
+### 判据只有一条：地址的后缀
+
+不看文件在不在、不看它多大、不嗅开头那几个字节。理由两条：① 编辑器里那个地址
+**可能根本不是本地路径**（`https://…`、`data:`、相对路径），"它存不存在"在这个
+位置没有可靠的答案；② 按后缀认类型这件事本仓已经有一处（`editor/file-kind.ts`），
+所以这里**复用**它的 `后缀()`，不自己再写一遍"取最后那个点后面的东西"。
+
+⚠️ **先 `split(/[?#]/, 1)` 切掉查询串与片段**再取后缀——`a.mp4?t=3` 与
+`a.mp4#t=3`（后者是 Media Fragments，浏览器自己认）都是常见写法，不切的话后缀
+会读成 `mp4?t=3`，判据当场失效，症状是"**带时间戳的那种链接画不成播放器**"，
+看着像视频支持时灵时不灵。
+
+⚠️ 那张单子**故意短**：`.mov` / `.mkv` / `.avi` 的**编码不保证** WebKitGTK 播得动
+（H.265、ProRes、各种音轨），认了之后的产物是**一块黑框**——比破图标更糟，
+破图至少还写着 `alt`。理由写在那个常量上，别顺手放宽。
+
+### ⚠️ 只改屏幕，不改源码
+
+走的是 NodeView（`$view(imageSchema.node, …)`），**不是**换节点类型。换类型要把
+**解析与序列化**一起接过来（同一个 `![](…)` 得能读能写），而那是 preset 的
+`imageSchema` 在管、`editor/image-attrs.ts` 又在上面补过属性。NodeView 只接手
+"画成什么"，源码一个字节都不动、**存盘那条路完全没碰**，所以"打开再存字节不变"
+那条不变量与这一项无关。
+
+- **图片那一支**返回的是**裸 `<img>`**，属性与 preset 的 `toDOM` **逐条对齐**
+  （`src` / `alt` / `title`，空串照写）——少写一个的症状是"加了视频支持之后某张图的
+  `title` 没了"，与视频八竿子打不着。
+- **视频那一支**包一层 `<span class="nota-video">`：选中高亮与 `draggable` 是挂在
+  节点视图**根**上的，让它们落在盒子上，就别去动视频自己那身原生控件。
+- `update` 在**类别变了**（图 ↔ 视频）时 `return false`，让 ProseMirror 重建——不写
+  这一条的话，用户把 `![](a.mp4)` 改成 `![](a.png)` 之后屏幕上**还是一块播放器**。
+
+### 三种实例都生效，但导出那条路要另写一条 CSS
+
+`editor/create.ts` 是**唯一建实例的地方**，所以可编辑 / 分屏预览 / 导出用的离屏
+实例三种都拿到这个视图。⚠️ 但 `editor/export.ts` 摘的是**渲染后的 `innerHTML`**，
+而它那一步会**把 `nota-` 开头的类名全摘掉**——于是 `src/styles/video.css` 里那条
+选择器在导出的 HTML 里一个字都匹配不上。尺寸约束只能靠**元素选择器**，也就是
+三份文档主题里那一句 `video`（导出会按当前主题把那份 CSS 嵌进去）。
+漏一份的症状是"某几套主题导出之后视频顶宽"，截图分享时才发现；
+`tests/video-view.test.ts` 第三组盯着这三处接线（`create.ts` 的 `.use()` /
+`main.tsx` 的 import / 三份主题里那条 `video`）。
+
+### ⚠️ 三件没验的事
+
+本仓的编辑器测试**没有 DOM**（无 jsdom、无头环境里也没有 WebKit 窗口），所以
+**点播放按钮播不播、拖进度条会不会被当成拖整颗节点、全屏之后什么形状**这三件
+只能开窗目检，账在 `docs/07` 第 87 项与 §4。⚠️ 万一"点了没反应"，一行就能换
+（给那个视图加 `stopEvent: () => true`），代价是**点一下不再选中这个节点**；
+默认不加是为了跟图片一致——图片点一下就是选中，视频没有理由是另一回事。
 
 ## `src/editor/text-handlers.ts`（70 行）
 

@@ -3361,7 +3361,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options; do
+for n in math-view mark-hint math-input lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3379,6 +3379,11 @@ done       # 全过退出码 0；有不过的列出名字并退 1
 2026-09-27 那两份、2026-09-28 的前四份），而 ⑤ 那个闸**只扫 `src-tauri/src` 与
 `src`、根本不看 `tests/`**，所以它们**没有任何一道闸看着**。这一次是拿
 `ls tests/*.test.ts` 与这个 `for` 逐个对出来的（对完是**三十一份**，一个不差）。
+⚠️ **2026-09-28 稍后又补进一份**（`video-view` **12**）：它是新写的、当批就进了名册
+（不是"漏了没进"那一类），所以这一次拿 `ls tests/*.test.ts` 对出来的结果是**三十二份**。
+⚠️ 这一份**只要 `--alias:@=./src`**（它 import 了 `@/editor/video-view`，而那个模块
+又拉进了 `@milkdown/kit/preset/commonmark`——这是本仓测试里**唯一**一份会把整个 preset
+打进 bundle 的，产物 800 多 kb，跑起来慢一点是正常的，不是卡住了）。
 ⚠️ 同批做的一件事：把 `docs/09` §2 已有、而 `tools/doc-sync-check.sh` 的 `PAIRS`
 **没抄过去**的 43 行一次补齐（后端 8 ／ 前端 20 ／ 测试 15）——那张表自称是
 `docs/09` §2 的机读副本，实际长期只是手抄的片段，后果是 ② 那条检查**静默漏过
@@ -3429,7 +3434,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**三十一份、共 793 条**（2026-09-28 **当场一份一份跑出来的**，全 `0 失败`）：
+**三十二份、共 805 条**（2026-09-28 **当场一份一份跑出来的**，全 `0 失败`）：
 `keymap` **54** · `slash` **49** · `share-card` **46** · `math-view` **41** ·
 `table-input` **39** · `inline-marks` **37** · `smart-punctuation` **36** ·
 `focus-summary` **34** · `emoji` **32** · `lang-guess` **31** · `footnote` **30** ·
@@ -3437,10 +3442,11 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 `math-delim` **23** · `toc` **22** · `auto-correct` **20** · `heatmap` **20** ·
 `atom-space` **19** · `math-input` **19** · `accent` **18** · `mark-hint` **18** ·
 `instant-render` **17** · `file-kind` **14** · `html-block` **14** · `lang-icons` **14** ·
-`chart-ticks` **12** · `doc-typography` **11** · `tree-options` **9** ·
-`empty-doc-save` **8** ——**657 → 793**，多出来的那 136 条全是这一批新进名册的六份
-（28+31+25+29+14+9=136）。
-⚠️ 这三十一份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
+`chart-ticks` **12** · `video-view` **12** · `doc-typography` **11** · `tree-options` **9** ·
+`empty-doc-save` **8** ——**657 → 793**，多出来的那 148 条
+＝ 这一批新进名册的六份
+（28+31+25+29+14+9=136）＋ 新写的 `video-view` **12** 条。
+⚠️ 这三十二份的条数**是当场一份一份跑出来的**（全 `0 失败`），不是照抄上一版的数：
 2026-09-27 这一遍 `share-card` 35→46、`accent` 14→18、`chart-ticks` 11→12、
 `math-input` 16→19（`$$` 那三组新用例），另加新的两份 `math-delim` 23、
 `inline-marks` 21（高亮/上标/下标/下划线，**现已 37**，见本节末那条 📌）与 `html-block` 14（块级裸 HTML ＋ 注释），
@@ -3453,12 +3459,13 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 两个时刻 ／ 横刻度 ／ 造分享卡——⚠️ 它**不在上面那个 `for` 里**，跑法见本节前面对
 那四份的单列），那 **34** 是当场跑出来的；**2026-09-27 深夜这一批又加了 `table-input` 39**（BUG-51：手打表格那几行在这边算不算表格行 ＋ NBSP 回归 ＋ 那道「匹配盖住整段」的闸，见 §5.36），并把 `smart-punctuation` 从 **32** 补到 **36**（横线骨架那道守卫的 4 条）——**总数 590 → 633**；**再下一批加了 `table-pipe` 24**（行首那颗多余的 `\|`，见本节末那条 📌），**总数 633 → 657**；
 **2026-09-28 这一批又加了六份**（`auto-pair` 28 ／ `lang-guess` 31 ／ `paste-clean` 25 ／ `url-link` 29 ／
-`file-kind` 14 ／ `tree-options` 9）——**总数 657 → 793**，六份的条数同样是当场跑出来的
+`file-kind` 14 ／ `tree-options` 9）——**总数 657 → 793**，六份的条数同样是当场跑出来的（**同一天稍后 793 → 805**，加的是新写的 `video-view` 12 条）
 （⚠️ 六份的条数 **2026-09-28 当场跑出来是 `0 失败`**；但要说清一件事：**照本节
 这份文档跑，这六份此前一次都不会被跑到**——它们不在上面那个 `for` 里、不在本节这张
 表里、也不在 `docs/09` §2 里，而 ⑤ 那个闸不扫 `tests/`，所以**文档上没有任何一条
 命令会执行它们**。它们此前跑没跑过、跑绿过没有，**没有记录可查**——这一批是头一次
-把它们写进一个跑得出来的地方）。
+把它们写进一个跑得出来的地方）。**同一天稍后又加了 `video-view` 12**——那一份是新写的、
+当批就进了名册（不是"漏了没进"那一类），12 条同样是当场跑出来的。
 
 📌 **2026-09-27（设置里的「快捷键」那一批，新建 `keymap.test.ts` 54 条，512→566）**：
 这一批加**两样**东西——一份新测试 `keymap`（可写回的键位文本 ＋ 覆盖表怎么叠到

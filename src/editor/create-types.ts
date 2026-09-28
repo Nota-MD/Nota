@@ -176,7 +176,8 @@ export interface EditorHandle {
    * 跑一条编辑命令。菜单栏和快捷键都走这里，**不认识 ProseMirror**。
    *
    * ⚠️ **返回值是"这条命令在这条通路上有没有对应的实现"**，不是"改了没有"。
-   * 所见即所得这一侧永远有（`COMMANDS` 是白名单，覆盖全部 `EditorCommand`），
+   * 所见即所得这一侧永远有（`command-table.ts` 那张 `COMMANDS` 是白名单、覆盖
+   * 全部 `EditorCommand`），
    * 于是它恒为 `true`；**源码模式那一侧会真的返回 `false`**（CodeMirror 没有
    * 文档树，表格那几条就没有对应的文本操作）。调用方（`ui/EditorPane.tsx`）
    * 据此提示用户，而不是让按钮按下去毫无反应。

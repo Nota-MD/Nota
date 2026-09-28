@@ -147,6 +147,8 @@ PAIRS=(
   "src/bridge/types.ts                            02,05"
   "src/bridge/payloads.ts                         02,05"
   "src/editor/create.ts                           05"
+  # 2026-09-28：命令白名单（COMMANDS 表）整块搬出 `create.ts`（那边到 1010 行、破了硬线）。
+  "src/editor/command-table.ts                    05"
   "src/editor/front-matter.ts                     05,07,10"
   "src/editor/atx.ts                              05,03,10"
   "src/editor/lax-heading.ts                      05,03,07"
@@ -280,6 +282,7 @@ PAIRS=(
   "src/styles/editor.css                          04"
   "src/styles/bars.css                            04"
   "tests/math-view.test.ts                      02,06"
+  "tests/video-view.test.ts                       02,06"
   "tests/fake-dom.ts                            02,06"
   "tests/mark-hint.test.ts                      02,06"
   "tests/math-input.test.ts                     02,06"
@@ -315,6 +318,8 @@ PAIRS=(
   "src/styles/themes/latex.css                   04"
   "src/styles/diagram.css                        04,05"
   "src/styles/math.css                          04,05"
+  "src/editor/video-view.ts                       05,04,10"
+  "src/styles/video.css                           04,05"
   "src/styles/marks.css                         04,05"
   # 插件与工程
   "plugins/git/plugin.toml                        11"

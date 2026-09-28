@@ -159,10 +159,10 @@ export function PromptDialog({
         {hint && <p className="prompt-hint">{hint}</p>}
         <div className="confirm-actions">
           <button type="button" className="btn" onClick={() => onAnswer(null)}>
-            {t("取消")}
+            {t("Cancel")}
           </button>
           <button type="button" className="btn btn-primary" onClick={submit}>
-            {confirmLabel ?? t("确定")}
+            {confirmLabel ?? t("OK")}
           </button>
         </div>
       </div>

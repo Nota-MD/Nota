@@ -118,7 +118,7 @@ export function useShareCard(spec: PanelShare): 分享图出口 {
     try {
       const 块 = await 光栅化(spec, 色);
       const 路径 = await saveDialog({
-        title: t("保存分享图"),
+        title: t("Save share image"),
         // ⚠️ 默认名用调用方给的那个（`nota-stats-day-2026-09-27.png`）——它认识
         // 这是哪一天、哪一轮。但**不能信**：那是插件（或总结）来的字符串，
         // `../` 或 `:` 在"另存为"里是真能写到别处去的（`share-card.ts::安全文件名`）。
@@ -127,9 +127,9 @@ export function useShareCard(spec: PanelShare): 分享图出口 {
       });
       if (!路径) return; // 用户取消了，不是错误
       const 写出 = await api.export.writeBytes(路径, await 转base64(块));
-      set结果(t("已保存到 {0}", 写出));
+      set结果(t("Saved to {0}", 写出));
     } catch (e) {
-      set结果(t("保存失败：{0}", String(e)));
+      set结果(t("Could not save: {0}", String(e)));
     } finally {
       set忙("");
     }
@@ -142,13 +142,13 @@ export function useShareCard(spec: PanelShare): 分享图出口 {
       // ⚠️ 能力先问后做：`ClipboardItem` 不存在时 `new` 会抛一个不认识的
       // `ReferenceError`，那句话给用户看没有意义。这里换成一句能懂的话。
       if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
-        throw new Error(t("这个环境不支持把图片放进剪贴板"));
+        throw new Error(t("This environment cannot put images on the clipboard"));
       }
       const 块 = await 光栅化(spec, 色);
       await navigator.clipboard.write([new ClipboardItem({ "image/png": 块 })]);
-      set结果(t("已复制到剪贴板"));
+      set结果(t("Copied to clipboard"));
     } catch (e) {
-      set结果(t("没能写进剪贴板（{0}）。可以改按「保存为图片」。", String(e)));
+      set结果(t("Could not write to the clipboard ({0}). Try “Save as image” instead.", String(e)));
     } finally {
       set忙("");
     }
@@ -179,7 +179,7 @@ export function ShareCardPreview({
       className={className}
       src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(图)}`}
       // 读屏软件读这句：卡片上那些数字对它是没有形状的（同 `PanelChartBlock`）。
-      alt={t("分享图预览：{0} {1}", spec.title || "", spec.value || "")}
+      alt={t("Share image preview: {0} {1}", spec.title || "", spec.value || "")}
     />
   );
 }
@@ -206,7 +206,7 @@ export function ShareCardBlock({ spec }: { spec: PanelShare }) {
           disabled={忙 !== ""}
           onClick={() => void 存为图片()}
         >
-          {t("保存为图片")}
+          {t("Save as image")}
         </button>
         <button
           type="button"
@@ -214,7 +214,7 @@ export function ShareCardBlock({ spec }: { spec: PanelShare }) {
           disabled={忙 !== ""}
           onClick={() => void 进剪贴板()}
         >
-          {t("复制到剪贴板")}
+          {t("Copy to clipboard")}
         </button>
       </div>
 

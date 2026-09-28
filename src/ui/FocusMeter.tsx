@@ -53,19 +53,19 @@ export function FocusMeter({ state }: { state: FocusState | null }) {
       : "status-focus";
 
   const 说明 = 警报中
-    ? t("强制专注：余额扣到零，警报已经响了。")
+    ? t("Force Focus: the balance hit zero and the alarm has sounded.")
     : 走神中
       ? state.away_ms < state.grace_ms
-        ? t("强制专注：你切走了，还在 {0} 秒的宽限里——这几秒不扣钱。", 说时长(state.grace_ms - state.away_ms))
-        : t("强制专注：正在扣余额。回到 Nota 就停止扣。")
-      : t("强制专注：你在写，余额在涨（上限 {0}）。起停走「视图 → 强制专注」。", 说时长(state.cap_ms));
+        ? t("Force Focus: you switched away, still inside the {0}-second grace period — these seconds are free.", 说时长(state.grace_ms - state.away_ms))
+        : t("Force Focus: the balance is being charged. Come back to Nota and the charge stops.")
+      : t("Force Focus: you are writing, the balance is rising (cap {0}). Start and stop it under View → Force Focus.", 说时长(state.cap_ms));
 
   return (
     <span className={类名} title={说明}>
       {/* ⚠️ 用「专注」两个字而不是「强制专注」：状态栏右边挤着四格统计，
           四个字会把整条顶宽（同 `StatusBar.tsx` 里模式名取 `short` 那一列的理由）。
           全名在 `title` 里。 */}
-      <span className="status-focus-name">{t("专注")}</span>
+      <span className="status-focus-name">{t("Focus")}</span>
       <span className="status-focus-bar" aria-hidden="true">
         <span className="status-focus-fill" style={{ width: `${比例 * 100}%` }} />
       </span>

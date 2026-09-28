@@ -60,7 +60,8 @@
 local M = {}
 
 -- ── 文案 ──────────────────────────────────────────────────────────────────
--- `T("原文")` 取译文（**键就是原文**，表在 `lang/`），规矩见 `lang/en.toml` 顶上那段。
+-- `T("原句")` 取译文（**键就是原文**，表在 `lang/`）。⚠️ **原文是英语**
+--（2026-09-28 起），译文进 `lang/zh-CN.toml`；规矩见 `docs/13` §nota.i18n。
 -- ⚠️ `T` 在 `on_load` 里重新绑一次（`nota` 到那时才到手）；译文里的 `%` 写成 `%%`。
 -- ⚠️ 这个文件贴着 1000 行上限（`AGENTS.md` §0.4），所以这段注释比另两个插件短。
 local T = function(s) return s end
@@ -105,23 +106,23 @@ local PRESET_ORDER = { "polish", "summarize", "continue_writing", "translate_en"
 -- 所以不能写成"给模型的命令"（那样用户看到的是"请只输出译文："这种半句话）。
 local PRESETS = {
   polish = {
-    label = "润色",
+    label = "Polish",
     ask = "帮我润色当前文档，保持原意和语气。改动用末尾的改动块给出。",
   },
   summarize = {
-    label = "总结",
+    label = "Summarize",
     ask = "用要点总结一下当前文档。只回答，不要改文档。",
   },
   continue_writing = {
-    label = "续写",
+    label = "Continue writing",
     ask = "顺着当前文档继续写下去，风格保持一致。新内容用只有 `+` 行的改动块追加到文末。",
   },
   translate_en = {
-    label = "译成英文",
+    label = "Translate to English",
     ask = "把当前文档整篇译成英文。改动用末尾的改动块给出（整段替换）。",
   },
   translate_zh = {
-    label = "译成中文",
+    label = "Translate to Chinese",
     ask = "把当前文档整篇译成中文。改动用末尾的改动块给出（整段替换）。",
   },
 }
@@ -197,7 +198,7 @@ local function clip(s, limit)
   if n <= limit then
     return s
   end
-  return string.sub(s, 1, utf8.offset(s, limit + 1) - 1) .. T("…（后面还有内容，面板放不下）")
+  return string.sub(s, 1, utf8.offset(s, limit + 1) - 1) .. T("… (there is more; the panel cannot fit it)")
 end
 
 --- 去掉首尾空白。`gsub` 返回两个值，外面那对括号是**必须**的。
@@ -326,7 +327,7 @@ end
 local function request(nota, messages)
   local key = read_setting(nota, KEY_API, "")
   if key == "" then
-    return { ok = false, error = T("还没填 API 密钥：面板上点「设置密钥…」。") }
+    return { ok = false, error = T("No API key yet: press “Set key…” in the panel.") }
   end
 
   local url = join_url(read_setting(nota, KEY_BASE, DEFAULT_BASE))
@@ -352,7 +353,7 @@ local function request(nota, messages)
   end)
 
   if not ok then
-    return { ok = false, error = T("请求没发出去：%s", clean_error(err)) }
+    return { ok = false, error = T("The request was not sent: %s", clean_error(err)) }
   end
 
   -- ⚠️ 4xx/5xx **不是**宿主层面的错误（宿主故意关掉了 `http_status_as_error`）：
@@ -367,13 +368,13 @@ local function request(nota, messages)
       -- Nota 编不出比它更准的话。
       detail = string.sub(r.text or "", 1, 300)
     end
-    return { ok = false, error = T("接口返回 %d：%s", r.code, detail) }
+    return { ok = false, error = T("The endpoint returned %d: %s", r.code, detail) }
   end
 
   if type(r.json) ~= "table" then
     return {
       ok = false,
-      error = T("接口没回 JSON（HTTP %s）：%s", r.code, string.sub(r.text or "", 1, 300)),
+      error = T("The endpoint did not return JSON (HTTP %s): %s", r.code, string.sub(r.text or "", 1, 300)),
     }
   end
 
@@ -385,7 +386,7 @@ local function request(nota, messages)
   if type(content) ~= "string" or content == "" then
     -- 形状对不上时**说清楚是哪儿对不上**：只报"生成失败"的话，用户和
     -- 插件作者都只能猜是网络问题还是接口换了。
-    return { ok = false, error = T("接口回了 200，但里面没有 choices[1].message.content。") }
+    return { ok = false, error = T("The endpoint returned 200 but there is no choices[1].message.content in it.") }
   end
 
   return { ok = true, text = content }
@@ -442,7 +443,7 @@ local function send_chat(nota, chat, text)
   local p = parse_reply(nota, r.text)
   if #p.hunks > 0 then
     chat.patch = { hunks = p.hunks, bad = p.bad }
-    nota.ui.notify(T("AI 的回复里带了改动，确认后才会写进文档。"), "info")
+    nota.ui.notify(T("The AI's reply contains changes; they are written to the document only after you confirm."), "info")
   else
     -- ⚠️ 新回复里没有改动块 → **上一处作废**。留着它的话，用户又聊了几轮之后
     -- 点「应用改动」，应用的是几轮之前那处已经过时的改动。
@@ -457,13 +458,13 @@ end
 local function run_preset(nota, id)
   local p = PRESETS[id]
   if not p then
-    return { ok = false, error = T("不认识的预设：%s", tostring(id)) }
+    return { ok = false, error = T("Unknown preset: %s", tostring(id)) }
   end
   local r = send_chat(nota, cur_chat(), p.ask)
   -- 从菜单点进来的时候用户未必看着右侧面板，说一句让他去那儿看。
   if r.ok then
     -- ⚠️ 预设名要**现取译文**：`PRESETS` 是模块级常量，求值时 `T` 还没接上宿主。
-    nota.ui.notify(T("「%s」的回答在右侧 AI 面板里。", T(p.label)), "success")
+    nota.ui.notify(T("The answer to “%s” is in the AI panel on the right.", T(p.label)), "success")
   end
   return r
 end
@@ -477,11 +478,11 @@ local function settings_blocks(nota, key)
   blocks[#blocks + 1] = {
     kind = "fields",
     items = {
-      { label = T("模型"), value = read_setting(nota, KEY_MODEL, DEFAULT_MODEL) },
-      { label = T("地址"), value = read_setting(nota, KEY_BASE, DEFAULT_BASE) },
+      { label = T("Model"), value = read_setting(nota, KEY_MODEL, DEFAULT_MODEL) },
+      { label = T("URL"), value = read_setting(nota, KEY_BASE, DEFAULT_BASE) },
       {
-        label = T("密钥"),
-        value = key ~= "" and T("已配置") or T("还没填"),
+        label = T("Key"),
+        value = key ~= "" and T("configured") or T("not set"),
         tone = key ~= "" and "success" or "warn",
       },
     },
@@ -491,37 +492,37 @@ local function settings_blocks(nota, key)
     kind = "buttons",
     items = {
       {
-        label = key == "" and T("设置密钥…") or T("换密钥…"),
+        label = key == "" and T("Set key…") or T("Change key…"),
         command = "set_key",
         style = key == "" and "primary" or "normal",
         prompt = {
           arg = "api_key",
-          label = T("API 密钥"),
+          label = T("API key"),
           placeholder = "sk-…",
           -- ⚠️ 遮屏。密钥会明文存进 `~/.config/nota/plugin-settings/`，
           -- 这一条挡的不是存盘，是**旁边的人从肩膀上看见**。
           secret = true,
-          hint = T("只发给上面那个地址。本机模型（Ollama / LM Studio）通常不要密钥，随便填一个即可。"),
+          hint = T("It is sent only to the address above. Local models (Ollama / LM Studio) usually need no key — any value will do."),
         },
       },
       {
-        label = T("改地址…"),
+        label = T("Change URL…"),
         command = "set_base",
         prompt = {
           arg = "base_url",
-          label = T("接口地址"),
+          label = T("Endpoint URL"),
           placeholder = DEFAULT_BASE,
-          hint = T("OpenAI 兼容的地址（含 /v1）。本机服务可以填 http://127.0.0.1:11434/v1"),
+          hint = T("An OpenAI-compatible URL (including /v1). For a local service you can use http://127.0.0.1:11434/v1"),
         },
       },
       {
-        label = T("改模型…"),
+        label = T("Change model…"),
         command = "set_model",
         prompt = {
           arg = "model",
-          label = T("模型名"),
+          label = T("Model name"),
           placeholder = DEFAULT_MODEL,
-          hint = T("填服务商文档里那个名字"),
+          hint = T("The name from your provider's documentation"),
         },
       },
     },
@@ -536,14 +537,14 @@ local function chats_blocks()
 
   blocks[#blocks + 1] = {
     kind = "heading",
-    text = T("对话（第 %d / %d 个）", cur, #chats),
+    text = T("Chats (%d of %d)", cur, #chats),
   }
 
-  local items = { { label = T("＋ 新对话"), command = "new_chat" } }
+  local items = { { label = T("＋ New chat"), command = "new_chat" } }
   if #chats > 1 then
     -- ⚠️ 红色：「删除」会把这个对话的聊天记录扔掉（记忆里的东西，没有撤销）。
     -- 只剩一个对话时不画它——那时的"删除"实际是"清空"，两件事不该共用一个按钮。
-    items[#items + 1] = { label = T("删除这个对话"), command = "del_chat", style = "danger" }
+    items[#items + 1] = { label = T("Delete this chat"), command = "del_chat", style = "danger" }
   end
 
   -- 只列最近 5 个：这一栏 260px 宽，二十颗按钮会把下面的对话全顶出屏幕。
@@ -564,7 +565,7 @@ local function chats_blocks()
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T("（只列最近 5 个；这个对话前面还有 %d 个）", start_i - 1),
+      text = T("(Only the latest 5 are listed; %d more come before this chat.)", start_i - 1),
     }
   end
 
@@ -579,7 +580,7 @@ local function messages_blocks(nota, chat)
   if #msgs == 0 then
     blocks[#blocks + 1] = {
       kind = "empty",
-      text = T("还没说话。在下面打字，或者点一个预设。"),
+      text = T("Nothing said yet. Type below, or press a preset."),
     }
     return blocks
   end
@@ -589,7 +590,7 @@ local function messages_blocks(nota, chat)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T("（只显示最近 %d 条；这个对话一共 %d 条）", SHOW_MSGS, #msgs),
+      text = T("(Only the latest %d are shown; this chat has %d in total.)", SHOW_MSGS, #msgs),
     }
   end
 
@@ -601,7 +602,7 @@ local function messages_blocks(nota, chat)
       local p = parse_reply(nota, m.text)
       local body = p.text
       if body == "" then
-        body = T("（这一轮只有改动块，没有别的话。）")
+        body = T("(This round had only a change block and nothing else.)")
       end
       -- ⚠️ 15000 这个数是**跟两头对齐过的**：宿主和前端对一条文本的兜底都是
       -- 20000 字（`ui.rs::面板文本上限` / `panel-nodes.ts::消息上限`），
@@ -637,13 +638,13 @@ local function patch_blocks(chat)
   end
 
   blocks[#blocks + 1] = { kind = "separator" }
-  blocks[#blocks + 1] = { kind = "heading", text = T("待应用的改动（还没写进文档）") }
+  blocks[#blocks + 1] = { kind = "heading", text = T("Changes waiting to be applied (not yet written to the document)") }
 
   if patch.bad and patch.bad > 0 then
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "warn",
-      text = T("改动块里有 %d 行既不 - 也不 +，忽略掉了。", patch.bad),
+      text = T("%d lines in the change block are neither - nor +; they were ignored.", patch.bad),
     }
   end
 
@@ -651,7 +652,7 @@ local function patch_blocks(chat)
   local drawn, total = 0, 0
   for i, h in ipairs(patch.hunks) do
     if many then
-      blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("第 %d 处", i) }
+      blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("Change %d", i) }
     end
     local items = {}
     for _, line in ipairs(h.del) do
@@ -675,8 +676,7 @@ local function patch_blocks(chat)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T(
-        "（一共 %d 行，这里只画了前 %d 行；点「应用改动」写进去的是完整的那份）",
+      text = T("(%d lines in total; only the first %d are drawn here — “Apply changes” writes the complete set.)",
         total,
         drawn
       ),
@@ -684,12 +684,12 @@ local function patch_blocks(chat)
   end
 
   local items = {
-    { label = T("应用改动"), command = "apply_patch", style = "primary" },
-    { label = T("放弃改动"), command = "discard_patch" },
+    { label = T("Apply changes"), command = "apply_patch", style = "primary" },
+    { label = T("Discard changes"), command = "discard_patch" },
     -- ⚠️ 右侧那 260px 里，这种 diff 只能挤出改动的那几行，而"这一改对不对"
     -- 恰恰要看上下文。所以给一条**换到正文那么宽去看**的路——它现在把改动
     -- 就地画在正文上（`review_patch`），正文一个字不动。
-    { label = T("在编辑区看"), command = "review_patch" },
+    { label = T("View in editor"), command = "review_patch" },
   }
   blocks[#blocks + 1] = { kind = "buttons", items = items }
 
@@ -711,7 +711,7 @@ end
 local function patched_text(nota)
   local chat = cur_chat()
   if not chat.patch then
-    return nil, T("没有待应用的改动")
+    return nil, T("There are no changes waiting to be applied")
   end
   local doc = nota.document.get_text() or ""
   return apply_changes(nota, doc, chat.patch.hunks)
@@ -739,7 +739,7 @@ local function panel_content(nota)
   end
 
   blocks[#blocks + 1] = { kind = "separator" }
-  blocks[#blocks + 1] = { kind = "heading", text = T("对当前文档") }
+  blocks[#blocks + 1] = { kind = "heading", text = T("On the current document") }
   local items = {}
   for _, id in ipairs(PRESET_ORDER) do
     -- ⚠️ 预设名**现取译文**（`PRESETS` 是模块级常量，求值时 `T` 还没接上宿主）。
@@ -753,17 +753,17 @@ local function panel_content(nota)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "warn",
-      text = T("先点上面的「设置密钥…」填好，这里才会出现输入框。"),
+      text = T("Press “Set key…” above first; the input box appears once that is filled in."),
     }
   else
     blocks[#blocks + 1] = {
       kind = "input",
       arg = "text",
       submit = "send",
-      submit_label = T("发送"),
-      placeholder = T("问点什么，或者让它改文档…"),
+      submit_label = T("Send"),
+      placeholder = T("Ask something, or have it edit the document…"),
       -- 多行框里回车是换行，发送是 Ctrl+Enter（前端 `PanelBody.tsx` 定的规矩）。
-      hint = T("Ctrl+Enter 发送 · 回车换行"),
+      hint = T("Ctrl+Enter to send · Enter for a new line"),
       multiline = true,
     }
   end
@@ -780,10 +780,10 @@ local function save_setting(nota, key, value, what)
     nota.settings.set(key, nil)
     -- `what` 由调用方给（"密钥"/"接口地址"/"模型"，见下面几条命令），
     -- 所以**里外都要过一次 `T`**：里面的键是那个词，外面的键带 `%s`。
-    nota.ui.notify(T("%s已恢复默认", T(what)), "info")
+    nota.ui.notify(T("%s restored to its default", T(what)), "info")
   else
     nota.settings.set(key, value)
-    nota.ui.notify(T("%s已保存", T(what)), "success")
+    nota.ui.notify(T("%s saved", T(what)), "success")
   end
   nota.ui.refresh()
   return { ok = true }
@@ -816,7 +816,7 @@ function M.on_load(nota)
   nota.command.register("send", function(args)
     local text = args and args.text
     if type(text) ~= "string" or trim(text) == "" then
-      return { ok = false, error = T("没写要发的内容") }
+      return { ok = false, error = T("Nothing to send") }
     end
     return send_chat(nota, cur_chat(), trim(text))
   end)
@@ -824,7 +824,7 @@ function M.on_load(nota)
   --- 开一个新对话，并切过去。
   nota.command.register("new_chat", function()
     if #chats >= MAX_CHATS then
-      local msg = T("对话最多同时留 %d 个，先删掉几个。", MAX_CHATS)
+      local msg = T("At most %d chats can be kept at once; delete a few first.", MAX_CHATS)
       nota.ui.notify(msg, "warn")
       return { ok = false, error = msg }
     end
@@ -840,7 +840,7 @@ function M.on_load(nota)
     local id = args and args.id
     local i = id and find_chat(id) or nil
     if not i then
-      return { ok = false, error = T("那个对话已经不在了") }
+      return { ok = false, error = T("That chat is gone") }
     end
     cur = i
     nota.ui.refresh()
@@ -855,13 +855,13 @@ function M.on_load(nota)
     if #chats <= 1 then
       local c = cur_chat()
       c.msgs, c.patch, c.title = {}, nil, "新对话"
-      nota.ui.notify(T("已清空这个对话"), "info")
+      nota.ui.notify(T("Cleared this chat"), "info")
     else
       table.remove(chats, cur)
       if cur > #chats then
         cur = #chats
       end
-      nota.ui.notify(T("已删除这个对话"), "info")
+      nota.ui.notify(T("Deleted this chat"), "info")
     end
     nota.ui.refresh()
     return { ok = true }
@@ -877,25 +877,25 @@ function M.on_load(nota)
   nota.command.register("apply_patch", function()
     local chat = cur_chat()
     if not chat.patch then
-      return { ok = false, error = T("没有待应用的改动") }
+      return { ok = false, error = T("There are no changes waiting to be applied") }
     end
 
     local doc = nota.document.get_text() or ""
     local new_text, err = apply_changes(nota, doc, chat.patch.hunks)
     if not new_text then
       -- **文档一个字都没动**（`apply_patch` 失败时不返回半截结果）。
-      nota.ui.notify(T("改动没能应用：%s", err), "error")
+      nota.ui.notify(T("The changes could not be applied: %s", err), "error")
       return { ok = false, error = err }
     end
 
     nota.document.set_text(new_text)
-    chat.msgs[#chat.msgs + 1] = { role = "note", text = T("（已应用这次改动。）") }
+    chat.msgs[#chat.msgs + 1] = { role = "note", text = T("(These changes have been applied.)") }
     chat.patch = nil
     -- ⚠️ 改动没了，编辑区那一份就**自己收起来**（宿主不收：它不知道
     -- 「应用改动」是什么意思，见 `lua/api/ui.rs::预览改动表`）。
     nota.ui.review_diff(nil)
     nota.ui.refresh()
-    nota.ui.notify(T("改动已写入文档，Ctrl+Z 可以撤销"), "success")
+    nota.ui.notify(T("The changes have been written to the document; Ctrl+Z undoes them"), "success")
     return { ok = true }
   end)
 
@@ -903,7 +903,7 @@ function M.on_load(nota)
   nota.command.register("discard_patch", function()
     local chat = cur_chat()
     if chat.patch then
-      chat.msgs[#chat.msgs + 1] = { role = "note", text = T("（这次的改动作废了。）") }
+      chat.msgs[#chat.msgs + 1] = { role = "note", text = T("(These changes were discarded.)") }
       chat.patch = nil
     end
     -- 同上：改动作废了，编辑区那一份收起来。
@@ -931,13 +931,13 @@ function M.on_load(nota)
       return { ok = false, error = err }
     end
     nota.ui.review_diff({
-      title = T("改动预览"),
+      title = T("Change preview"),
       text = text,
       -- 与右侧栏那两颗按钮**同两条命令**：接受就是 `apply_patch`（一笔编辑，
       -- Ctrl+Z 退得回来），放弃就是 `discard_patch`。两处的命令一样，就
       -- 不会出现"在这一处按接受和那一处按接受做的事不一样"。
-      accept = { label = T("应用改动"), command = "apply_patch" },
-      reject = { label = T("放弃改动"), command = "discard_patch" },
+      accept = { label = T("Apply changes"), command = "apply_patch" },
+      reject = { label = T("Discard changes"), command = "discard_patch" },
     })
     return { ok = true }
   end)
@@ -985,7 +985,7 @@ function M.on_load(nota)
   for _, id in ipairs(PRESET_ORDER) do
     nota.ui.register_menu({ label = T(PRESETS[id].label), command = id, menu = "plugins" })
   end
-  nota.ui.register_menu({ label = T("新对话"), command = "new_chat", menu = "plugins" })
+  nota.ui.register_menu({ label = T("New chat"), command = "new_chat", menu = "plugins" })
 end
 
 function M.on_unload()

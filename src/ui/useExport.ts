@@ -162,7 +162,7 @@ export function useExport(w: 导出接线): 导出出口 {
       try {
         await api.export.reveal(path);
       } catch (e) {
-        toast(t("文件已导出，但没能在文件管理器里定位它：{0}", String(e)), "warn");
+        toast(t("The file was exported, but could not be revealed in the file manager: {0}", String(e)), "warn");
       }
     },
     [exportSettings.open_after_export, toast],
@@ -205,7 +205,7 @@ export function useExport(w: 导出接线): 导出出口 {
 
       try {
         const picked = await saveDialog({
-          title: styled ? t("导出 HTML（含样式）") : t("导出 HTML（不含样式）"),
+          title: styled ? t("Export HTML (With Styles)") : t("Export HTML (No Styles)"),
           // ⚠️ 默认名**保留原文件名、只换后缀**：用户认得自己那份文档叫什么。
           defaultPath: 默认落点(默认导出名(doc.title, "html"), doc.path),
           filters: [{ name: "HTML", extensions: ["html", "htm"] }],
@@ -219,10 +219,10 @@ export function useExport(w: 导出接线): 导出出口 {
         });
         const written = await api.export.write(picked, html);
         // 报**真实写出去的路径**：对话框可能改了它（补后缀、换目录）。
-        toast(t("已导出到 {0}", written), "success");
+        toast(t("Exported to {0}", written), "success");
         await 可能要定位(written);
       } catch (e) {
-        toast(t("导出失败：{0}", String(e)), "error");
+        toast(t("Could not export: {0}", String(e)), "error");
       }
     },
     [activeId, docs, getMarkdown, 取主题CSS, toast, 默认落点, 可能要定位],
@@ -242,9 +242,9 @@ export function useExport(w: 导出接线): 导出出口 {
       // ⚠️ 落点由后端按 `doc.path` 的**父目录**决定，不是随便找个临时目录：
       // 正文里 `![](./img.png)` 是相对路径，换个目录图片就全没了。
       const path = await api.export.print(doc.path, doc.title, html);
-      toast(t("已用系统默认程序打开，在那边按 Ctrl+P 打印（文件在 {0}）", path), "info");
+      toast(t("Opened in the system default app — press Ctrl+P there to print (the file is at {0})", path), "info");
     } catch (e) {
-      toast(t("打印失败：{0}", String(e)), "error");
+      toast(t("Could not print: {0}", String(e)), "error");
     }
   }, [activeId, docs, getMarkdown, 取主题CSS, toast]);
 
@@ -259,7 +259,7 @@ export function useExport(w: 导出接线): 导出出口 {
       if (text === undefined) return;
       try {
         const picked = await saveDialog({
-          title: t("导出 {0}", format.name),
+          title: t("Export {0}", format.name),
           defaultPath: 默认落点(默认导出名(doc.title, format.extension), doc.path),
           filters: [{ name: format.name, extensions: [format.extension] }],
         });
@@ -286,10 +286,10 @@ export function useExport(w: 导出接线): 导出出口 {
         });
         // ⚠️ 把后端的 `note` 一起说出来：走的是 pandoc 还是 Nota 自己那套，
         // 用户必须有办法知道（同一份文档两次结果不同才不至于是玄学）。
-        toast(t("已导出到 {0}。{1}", 结果.path, 结果.note), "success");
+        toast(t("Exported to {0}. {1}", 结果.path, 结果.note), "success");
         await 可能要定位(结果.path);
       } catch (e) {
-        toast(t("导出失败：{0}", String(e)), "error");
+        toast(t("Could not export: {0}", String(e)), "error");
       }
     },
     [getMarkdown, 取主题CSS, toast, 默认落点, 可能要定位],
@@ -311,13 +311,13 @@ export function useExport(w: 导出接线): 导出出口 {
       try {
         probe = await api.pandoc.probe();
       } catch (e) {
-        toast(t("探测 pandoc 失败：{0}", String(e)), "error");
+        toast(t("Could not probe for pandoc: {0}", String(e)), "error");
         return;
       }
       // ⚠️ 表是后端给的：认不出的 id 要吭声，不要静默——静默会表现成"点了没反应"。
       const info = probe.formats.find((f) => f.id === format) ?? null;
       if (info === null) {
-        toast(t("不认识的导出格式：{0}", format), "error");
+        toast(t("Unrecognised export format: {0}", format), "error");
         return;
       }
 
@@ -349,7 +349,7 @@ export function useExport(w: 导出接线): 导出出口 {
             const probe = await api.pandoc.probe();
             setPandocGate((g) => (g === null ? g : { ...g, probe }));
           } catch (e) {
-            toast(t("探测 pandoc 失败：{0}", String(e)), "error");
+            toast(t("Could not probe for pandoc: {0}", String(e)), "error");
             setPandocGate(null);
           }
         })();
@@ -357,7 +357,7 @@ export function useExport(w: 导出接线): 导出出口 {
       onGuide: () => {
         // ⚠️ 失败要吭声：点"去官网"没反应会让人以为按钮坏了。
         void openUrl(PANDOC_GUIDE).catch((e: unknown) =>
-          toast(t("打不开浏览器：{0}", String(e)), "error"),
+          toast(t("Could not open the browser: {0}", String(e)), "error"),
         );
       },
       onClose: () => setPandocGate(null),

@@ -49,16 +49,16 @@ export function ExternalDiffPane({ 对照, onClose }: Props) {
     <div className="review-pane external-diff-pane">
       <div className="review-bar">
         <span className="review-title" title={对照.title}>
-          {t("磁盘上的改动")} · {对照.title}
+          {t("Changes on disk")} · {对照.title}
         </span>
         <span className="review-spacer" />
         <button
           type="button"
           className="btn review-back"
           onClick={onClose}
-          title={t("收起对照，回到正文（磁盘上那份不会被改动）")}
+          title={t("Hide the comparison and go back to the document (the file on disk is left alone)")}
         >
-          {t("回到正文")}
+          {t("Back to the document")}
         </button>
       </div>
 
@@ -68,7 +68,7 @@ export function ExternalDiffPane({ 对照, onClose }: Props) {
           // 手上一模一样的文件（或者我们刚存过、那边又原样写回）。这时候画一个
           // 空框子会让人以为界面上少了点东西，所以如实说一句。
           <p className="panel-empty">
-            {t("磁盘上那份和编辑器里这份没有差别。")}
+            {t("The file on disk and the editor match.")}
           </p>
         ) : (
           <PanelBody

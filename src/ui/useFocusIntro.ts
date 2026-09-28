@@ -64,26 +64,26 @@ export function useFocusIntro(
       if (!设置) return;
       if (!设置.focus.introduced) {
         const 答 = await askConfirm({
-          title: t("强制专注：先说清楚"),
+          title: t("Force Focus: Let Us Be Clear First"),
           message: [
             t(
-              "这是一笔注意力的账。你坐在编辑器前，余额就往上走；切到别处去，余额就往下掉。余额见底，它会用一整块红屏和一声尖响把你叫回来。",
+              "This is an account of attention. While you sit at the editor the balance goes up; when you switch elsewhere it goes down. When the balance runs out, it calls you back with a full red screen and a sharp sound.",
             ),
             "",
-            t("它要用到三样东西："),
-            t("① 知道 Nota 自己的窗口是不是当前窗口；"),
-            t("② 弹出一个置顶的、全屏的窗口——就是那块红屏；"),
-            t("③ 出声。"),
+            t("It needs three things:"),
+            t("① Whether Nota's own window is the active window;"),
+            t("② putting up an always-on-top, full-screen window — the red screen;"),
+            t("③ making a sound."),
             "",
             t(
-              "就这三样，只在它运行期间发生。它不读键盘、不截屏、不看你在别的程序里干什么，也不把你的任何东西发到任何地方。",
+              "Those three, only while it is running. It does not read the keyboard, take screenshots, watch what you do in other programs, or send anything of yours anywhere.",
             ),
             "",
             t(
-              "最后一件必须说清楚：这个模式你随时能停，也能拿系统工具绕开它——它不是锁，拦不住真想跑的人。可你要是绕了，当初设它也就没有意义了。所以，请好好对待自己给自己的这句话：决定了，就执行到底。",
+              "One last thing that has to be said plainly: you can stop this mode at any time, and you can bypass it with system tools — it is not a lock, and it will not hold anyone who really wants out. But if you bypass it, setting it up in the first place means nothing. So please take this promise you made to yourself seriously: once you decide, follow through.",
             ),
           ].join("\n"),
-          confirmLabel: t("我明白了，开始"),
+          confirmLabel: t("I Understand — Start"),
           // ⚠️ 「取消」**留着**，而且它就是"算了，不开了"（见文件头最后一段）。
           // 这里**不能**用 `hideCancel`：那会让"我知道了"和"我要开始"变成同一个
           // 答案，用户没有任何办法在看完之后反悔。

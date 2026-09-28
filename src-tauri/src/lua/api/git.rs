@@ -371,7 +371,7 @@ struct 改动条目 {
     orig: Option<String>,
     /// 归类用的一个词：`untracked` / `staged` / `staged-dirty` / `modified`。
     ///
-    /// ⚠️ **只归类，不措辞。** 那句话是插件写的（要过插件的 `lang/en.toml` 翻），
+    /// ⚠️ **只归类，不措辞。** 那句话是插件写的（要过插件的 `lang/zh-CN.toml` 翻），
     /// 而"哪两个字母算哪一类"是 git 的格式知识。混起来的话，往后每加一种状态
     /// 都得同时改插件和译文——而分类本身一个字都不用动。
     state: &'static str,

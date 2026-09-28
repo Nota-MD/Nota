@@ -164,14 +164,14 @@ export function useImageInsert(w: 插图接线): 插图出口 {
         try {
           const { url } = await api.image.uploadOne(docId, source);
           run("image", { src: url, alt });
-          toast(t("图片已上传到 {0}", url), "info");
+          toast(t("Image uploaded to {0}", url), "info");
           // ⚠️ **传成了就到此为止**：不再落地。代价是磁盘上不会多出一份
           // `assets/` 里的副本（不传的时候那份是给"文档换台机器也能看"用的，
           // 而地址已经是网址了，副本没有用处）。
           return;
         } catch (e) {
           // ⚠️ 传失败**不是插入失败**：下面照常落地，图照样进文档。
-          toast(t("上传失败，改成照常插入：{0}", String(e)), "error");
+          toast(t("Upload failed — inserting as usual: {0}", String(e)), "error");
         }
       }
       try {
@@ -182,10 +182,10 @@ export function useImageInsert(w: 插图接线): 插图出口 {
         // ⚠️ 这张表的**键**是宿主回的原始值（`r.did`），值才是给用户看的话——
         // 所以中文只出现在右边，而且必须在这一层（组件渲染期间）现翻。
         const 一句: Record<string, string> = {
-          copied: t("图片已复制到 {0}", r.src),
-          downloaded: t("图片已从网络下载到 {0}", r.src),
-          written: t("图片已存到 {0}", r.src),
-          existing: t("{0} 已经有这张图了，直接引用它（没有重复保存）", r.src),
+          copied: t("Image copied to {0}", r.src),
+          downloaded: t("Image downloaded from the web to {0}", r.src),
+          written: t("Image written to {0}", r.src),
+          existing: t("{0} already has this image, so it is referenced directly (nothing was saved twice).", r.src),
         };
         const 话 = 一句[r.did];
         if (话) toast(话, "info");
@@ -193,7 +193,7 @@ export function useImageInsert(w: 插图接线): 插图出口 {
         // 「复制到 ./assets」。这是全仓唯一一处"设置说的和做的不一样"，
         // 所以要说出来——不说的话，用户会以为设置没生效。
         if (r.action === "copy-to-assets" && r.did === "written") {
-          toast(t("剪贴板里的图片必须先存到磁盘，已按「复制到 ./assets」处理"), "info");
+          toast(t("An image from the clipboard has to be written to disk first — handled as “Copy to ./assets”."), "info");
         }
         // ── 自动上传那一步的结果 ────────────────────────────────────────
         // ⚠️ **两种情况都要说话**：自动上传是"把用户的字节发出去"，
@@ -203,18 +203,18 @@ export function useImageInsert(w: 插图接线): 插图出口 {
         if (r.upload?.kind === "ok") {
           toast(
             r.savedTo
-              ? t("图片已上传到 {0}，本地那份留在 {1}", r.upload.url, r.savedTo)
-              : t("图片已上传到 {0}", r.upload.url),
+              ? t("Image uploaded to {0}; the local copy stays at {1}", r.upload.url, r.savedTo)
+              : t("Image uploaded to {0}", r.upload.url),
             "info",
           );
         } else if (r.upload?.kind === "failed") {
           toast(
-            t("自动上传失败：{0}（图没有丢，正文里写的是本地地址）", r.upload.error),
+            t("Automatic upload failed: {0} (the image is not lost — the document holds the local path).", r.upload.error),
             "error",
           );
         }
       } catch (e) {
-        toast(t("插入图片失败：{0}", String(e)), "error");
+        toast(t("Could not insert the image: {0}", String(e)), "error");
       }
     },
     [docId, run, toast],
@@ -224,14 +224,14 @@ export function useImageInsert(w: 插图接线): 插图出口 {
   const 收下剪贴板 = useCallback(
     async (blob: Blob) => {
       if (!docId) {
-        toast(t("先打开一份文档再粘贴图片"), "info");
+        toast(t("Open a document before pasting an image."), "info");
         return;
       }
       try {
         const data = await 编成_base64(blob);
         await 落一张({ kind: "base64", data, ext: 从MIME取后缀(blob.type) }, "");
       } catch (e) {
-        toast(t("读剪贴板里的图片失败：{0}", String(e)), "error");
+        toast(t("Could not read the image from the clipboard: {0}", String(e)), "error");
       }
     },
     [docId, 落一张, toast],

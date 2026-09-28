@@ -105,7 +105,7 @@ export function useAppEvents(w: 事件接线): void {
         // 图标，看到"打不开"会以为是这一次点击坏了。多一句来源，他能对上号。
         on<SecondInstancePayload>(events.secondInstance, (p) => {
           if (p.error) {
-            toast(t("第二次启动 Nota 时带来的路径用不了：{0}", p.error), "error");
+            toast(t("The path from the second Nota launch is unusable: {0}", p.error), "error");
             return;
           }
           if (!p.path) return; // 只是把窗口抬起来
@@ -136,7 +136,7 @@ export function useAppEvents(w: 事件接线): void {
     activeIdRef.current = activeId;
     if (activeId === null) return;
     void api.doc.setActive(activeId).catch((e) => {
-      toast(`切换活动文档失败：${e}`, "error");
+      toast(t("Could not switch the active document: {0}", String(e)), "error");
     });
   }, [activeId, toast, activeIdRef]);
 }

@@ -65,7 +65,7 @@ export function PandocPanel({
   const busy = probe === null;
   const okRef = useRef<HTMLButtonElement>(null);
 
-  const 格式名 = format?.name ?? t("这份文件");
+  const 格式名 = format?.name ?? t("This file");
   // 这条路存不存在：PDF **且**这台机器上有自带那套（只有 Linux 有）。
   const 有自带PDF = probe?.fallback_pdf === true && format?.id === "pdf";
 
@@ -78,13 +78,13 @@ export function PandocPanel({
    */
   const primary =
     probe?.state === "ready"
-      ? { label: t("开始导出 {0}", 格式名), run: onExport }
+      ? { label: t("Exporting {0}", 格式名), run: onExport }
       : probe?.state === "missing"
         ? 有自带PDF
-          ? { label: t("用 Nota 自己排版导出"), run: onExport }
-          : { label: t("去官网看安装指南"), run: onGuide }
+          ? { label: t("Typeset and export with Nota itself"), run: onExport }
+          : { label: t("Install guide on the official site"), run: onGuide }
         : probe?.state === "unknown"
-          ? { label: t("仍然试一次"), run: onExport }
+          ? { label: t("Try Anyway"), run: onExport }
           : null;
 
   // 结论出来后把焦点交给主按钮——用户按回车就是"导"，不用先摸鼠标。
@@ -126,17 +126,17 @@ export function PandocPanel({
         className="confirm-dialog gate-panel"
         role="dialog"
         aria-modal="true"
-        aria-label={t("导出 {0}", 格式名)}
+        aria-label={t("Export {0}", 格式名)}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="confirm-title">{t("导出 {0}", 格式名)}</h2>
+        <h2 className="confirm-title">{t("Export {0}", 格式名)}</h2>
 
         <div className="gate-status">
           <span className={`gate-mark ${mark.className}`} aria-hidden="true">
             {mark.glyph}
           </span>
           <p className="gate-message">
-            {busy ? t("正在检查本机有没有 pandoc…") : probe.message}
+            {busy ? t("Looking for pandoc on this machine…") : probe.message}
           </p>
         </div>
 
@@ -150,20 +150,20 @@ export function PandocPanel({
             那这块就不画——空行比没有更难看。 */}
         {probe !== null && probe.command !== "" && (
           <dl className="gate-facts">
-            <dt>{t("命令")}</dt>
+            <dt>{t("Command")}</dt>
             <dd>{probe.command}</dd>
             {probe.version !== null && (
               <>
-                <dt>{t("版本")}</dt>
+                <dt>{t("Version")}</dt>
                 <dd>{probe.version}</dd>
               </>
             )}
             {format?.id === "pdf" && (
               <>
-                <dt>{t("排版引擎")}</dt>
+                <dt>{t("Typesetting engine")}</dt>
                 {/* ⚠️ 没找到**不等于**不能出 PDF（引擎可能在 PATH 之外），
                     所以这里的措辞是"没在 PATH 里找到"，不是"没有"。 */}
-                <dd>{probe.pdf_engine ?? t("没在 PATH 里找到")}</dd>
+                <dd>{probe.pdf_engine ?? t("Not found in PATH")}</dd>
               </>
             )}
           </dl>
@@ -173,18 +173,18 @@ export function PandocPanel({
           {/* 左边这组是"工具"：都不改变结论，只是重来一次或不信这个结论。 */}
           <div className="gate-side">
             <button type="button" className="btn" onClick={onRecheck} disabled={busy}>
-              {t("重新检测")}
+              {t("Check Again")}
             </button>
             {/* ⚠️ 探测是**有根据的猜测**，不是证明。判定错了的时候用户得能自己
                 走下去——所以除了主按钮那条路，**永远再留一条**。 */}
             {留一条路 && (
               <button type="button" className="btn" onClick={onExport}>
-                {t("仍然试一次")}
+                {t("Try Anyway")}
               </button>
             )}
           </div>
           <button type="button" className="btn" onClick={onClose}>
-            {t("取消")}
+            {t("Cancel")}
           </button>
           {primary !== null ? (
             <button
@@ -197,7 +197,7 @@ export function PandocPanel({
             </button>
           ) : (
             <button type="button" className="btn btn-primary" disabled>
-              {t("检测中…")}
+              {t("Checking…")}
             </button>
           )}
         </div>

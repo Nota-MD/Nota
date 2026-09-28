@@ -53,14 +53,14 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
   // 是源码里**字面写出来**的 `t("…")`，表留在模块级这些键就不算被调用。
   // 同一件事的先例见 `PluginDock.tsx::能力名` 那张表。
   const HEADING: Array<{ value: HeadingStyle; label: string }> = [
-    { value: "atx", label: t("ATX（## 标题）") },
-    { value: "setext", label: t("下划线式（标题 + ===/---）") },
+    { value: "atx", label: t("ATX (## Heading)") },
+    { value: "setext", label: t("Setext (heading + ===/---)") },
   ];
 
   const BULLET: Array<{ value: BulletMark; label: string }> = [
-    { value: "dash", label: t("- 连字符") },
-    { value: "star", label: t("* 星号") },
-    { value: "plus", label: t("+ 加号") },
+    { value: "dash", label: t("- Hyphen") },
+    { value: "star", label: t("* Asterisk") },
+    { value: "plus", label: t("+ Plus") },
   ];
 
   const ORDERED: Array<{ value: OrderedMark; label: string }> = [
@@ -69,29 +69,29 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
   ];
 
   const SMART: Array<{ value: SmartPunctuation; label: string }> = [
-    { value: "off", label: t("关闭") },
-    { value: "render", label: t("仅显示时转换（存盘内容不动）") },
-    { value: "input", label: t("输入时转换") },
+    { value: "off", label: t("Close") },
+    { value: "render", label: t("Convert for display only (file unchanged)") },
+    { value: "input", label: t("Convert as you type") },
   ];
 
   const QUOTE: Array<{ value: QuoteStyle; label: string }> = [
-    { value: "curly", label: t("弯引号 “ ” ‘ ’") },
-    { value: "straight", label: t("直引号 \" '") },
+    { value: "curly", label: t("Curly “ ” ‘ ’") },
+    { value: "straight", label: t("Straight \" '") },
   ];
 
   const DASH: Array<{ value: DashStyle; label: string }> = [
-    { value: "en-em", label: t("-- → –，--- → —") },
-    { value: "em", label: t("-- 和 --- 都 → —") },
+    { value: "en-em", label: t("-- → –, --- → —") },
+    { value: "em", label: t("-- and --- both → —") },
   ];
 
   const AUTO_LANG: Array<{ value: AutoLanguage; label: string }> = [
-    { value: "on-markdown-insert", label: t("写 ```语言 插入代码块时") },
-    { value: "never", label: t("从不") },
+    { value: "on-markdown-insert", label: t("When a ```language code block is inserted") },
+    { value: "never", label: t("Never") },
   ];
 
   const EQUATION: Array<{ value: EquationNumbering; label: string }> = [
-    { value: "none", label: t("不启用") },
-    { value: "ams", label: t("AMS 风格（只给 equation 环境编号）") },
+    { value: "none", label: t("Off") },
+    { value: "ams", label: t("AMS style (equation environments only)") },
   ];
 
   const MATH_OUT: Array<{ value: MathOutput; label: string }> = [
@@ -100,9 +100,9 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
   ];
 
   const WS: Array<{ value: WhitespaceMode; label: string }> = [
-    { value: "preserve", label: t("保留连续空格和单个换行") },
-    { value: "preserve-all", label: t("保留所有空格和换行") },
-    { value: "as-html", label: t("按 HTML 处理（折成单个空格）") },
+    { value: "preserve", label: t("Preserve consecutive spaces and single line breaks") },
+    { value: "preserve-all", label: t("Preserve all spaces and line breaks") },
+    { value: "as-html", label: t("Treat as HTML (collapse to a single space)") },
   ];
 
   const 写 = paneWriter(settings, onChange, "markdown");
@@ -112,12 +112,12 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
   return (
     <>
       <SettingsGroup
-        title={t("Markdown 语法偏好")}
-        description={t("只决定 Nota 生成 Markdown 时采用哪种写法，不改变已有文件中的写法。")}
+        title={t("Markdown syntax preferences")}
+        description={t("Only decides the form Nota writes when generating Markdown; files that already exist are never rewritten")}
       >
         <SettingRow
-          label={t("严格模式")}
-          help={t("开启后，标题的井号之后必须有空格，`# 标题` 才识别为标题。默认关闭。关闭时 `#标题` 也识别为标题：正文按标题排版，大纲与标签页同样认可，但不修改字符本身——文件中原为 `#标题`，保存后仍是 `#标题`。修改后立即重新解析当前文档，无需重启。")}
+          label={t("Strict mode")}
+          help={t("When on, a heading's hashes must be followed by a space for `# Heading` to count. Off by default. While off, `#Heading` counts too: the text is laid out as a heading and the outline and tabs agree, but the characters are untouched — a file that said `#Heading` still says `#Heading` after saving. The current document is re-parsed immediately; no restart needed")}
         >
           <Toggle
             checked={settings.strict_markdown}
@@ -126,8 +126,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("标题样式")}
-          help={t("⚠ 下划线式（Setext）仅有一级和二级，三级及以上没有对应写法，仍生成 `### 标题`。")}
+          label={t("Heading style")}
+          help={t("⚠ Setext covers only levels 1 and 2; from level 3 up there is no such form, so `### Heading` is still generated")}
         >
           <Select
             value={m.heading_style}
@@ -136,7 +136,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("无序列表标记")}>
+        <SettingRow label={t("Bullet list marker")}>
           <Select
             value={m.bullet_mark}
             options={BULLET}
@@ -144,7 +144,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("有序列表标记")}>
+        <SettingRow label={t("Ordered list marker")}>
           <Select
             value={m.ordered_mark}
             options={ORDERED}
@@ -154,49 +154,49 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("Markdown 扩展语法")}
-        help={t("关闭某一项后，对应的写法按普通文字显示；文件内容不发生变化，只是不再识别该语法。")}
+        title={t("Markdown extensions")}
+        help={t("Turning one off shows that syntax as ordinary text; the file is unchanged, the syntax is simply no longer recognized")}
       >
-        <SettingRow label={t("自动识别链接")} help={t("`https://…` 这种裸地址直接变成可点的链接。")}>
+        <SettingRow label={t("Autodetect links")} help={t("A bare address like `https://…` becomes a clickable link")}>
           <Toggle checked={m.autolink} onChange={(autolink) => 写({ autolink })} />
         </SettingRow>
 
-        <SettingRow label={t("内联公式")} help={t("`$LaTeX$`。⚠ 与下方「公式」组中的同一项共用开关。")}>
+        <SettingRow label={t("Inline math")} help={t("`$LaTeX$`. ⚠ Shares one switch with the same item in the Math group below")}>
           <Toggle checked={m.inline_math} onChange={(inline_math) => 写({ inline_math })} />
         </SettingRow>
 
-        <SettingRow label={t("下标")} help={t("`H~2~O`。")}>
+        <SettingRow label={t("Subscript")} help={t("`H~2~O`")}>
           <Toggle checked={m.subscript} onChange={(subscript) => 写({ subscript })} />
         </SettingRow>
 
-        <SettingRow label={t("上标")} help={t("`X^2^`。")}>
+        <SettingRow label={t("Superscript")} help={t("`X^2^`")}>
           <Toggle checked={m.superscript} onChange={(superscript) => 写({ superscript })} />
         </SettingRow>
 
-        <SettingRow label={t("高亮")} help={t("`==重点==`。")}>
+        <SettingRow label={t("Highlight")} help={t("`==highlighted==`")}>
           <Toggle checked={m.highlight} onChange={(highlight) => 写({ highlight })} />
         </SettingRow>
 
         <SettingRow
-          label={t("GitHub 警报框")}
-          help={t("`> [!NOTE]` / `> [!WARNING]` 这一套写法，渲染为带底色的提示框。⚠ 不属于 CommonMark：用其它 Markdown 编辑器打开时显示为普通引用块。")}
+          label={t("GitHub alerts")}
+          help={t("The `> [!NOTE]` / `> [!WARNING]` family, rendered as a tinted callout box. ⚠ Not part of CommonMark: other Markdown editors show it as an ordinary quote block")}
         >
           <Toggle checked={m.github_alerts} onChange={(github_alerts) => 写({ github_alerts })} />
         </SettingRow>
 
         <SettingRow
-          label={t("图表")}
-          help={t("序列图、流程图、Mermaid。⚠ 图形需即时渲染，正文很长时初次滚动会有轻微卡顿。")}
+          label={t("Diagrams")}
+          help={t("Sequence diagrams, flowcharts, Mermaid. ⚠ Diagrams render as you go, so the first scroll through a long document can stutter slightly")}
         >
           <Toggle checked={m.diagrams} onChange={(diagrams) => 写({ diagrams })} />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("智能标点")}
-        help={t("三个档位都不修改文档中已有的字符，区别只在何时转换：「仅显示时转换」不写入任何字节，保存后仍是 `--`；「输入时转换」只作用于正在输入的字符，效果等同于输入法的自动更正。打开旧文件并在保存时改写其中全部 `--` 的行为不在实现范围内。")}
+        title={t("Smart punctuation")}
+        help={t("None of the three changes characters already in the document; they differ only in when the conversion happens: Convert for display only writes no bytes at all, so `--` is still `--` after saving; Convert as you type applies only to what you are typing, like an input method's autocorrect. Rewriting every `--` in an old file on save is out of scope")}
       >
-        <SettingRow label={t("模式")}>
+        <SettingRow label={t("Mode")}>
           <Select
             value={m.smart_punctuation}
             options={SMART}
@@ -204,7 +204,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("智能引号")}>
+        <SettingRow label={t("Smart quotes")}>
           <Toggle
             checked={m.smart_quotes}
             onChange={(smart_quotes) => 写({ smart_quotes })}
@@ -212,8 +212,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("双引号的字形")}
-          help={t("⚠ 仅提供两档。其它语区（英文 / 法文 / 德文）的引号字形尚未实现，记在 `docs/10-feature-matrix.md` 的待办表中。")}
+          label={t("Double-quote glyph")}
+          help={t("⚠ Only two forms are offered. Quote glyphs for other locales (English / French / German) are not implemented yet and are listed in the to-do table in `docs/10-feature-matrix.md`")}
         >
           <Select
             value={m.smart_quotes_double}
@@ -222,7 +222,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("单引号的字形")}>
+        <SettingRow label={t("Single-quote glyph")}>
           <Select
             value={m.smart_quotes_single}
             options={QUOTE}
@@ -230,14 +230,14 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("智能破折号")}>
+        <SettingRow label={t("Smart dashes")}>
           <Toggle
             checked={m.smart_dashes}
             onChange={(smart_dashes) => 写({ smart_dashes })}
           />
         </SettingRow>
 
-        <SettingRow label={t("破折号的字形")}>
+        <SettingRow label={t("Dash glyph")}>
           <Select
             value={m.dash_style}
             options={DASH}
@@ -246,8 +246,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("允许转换 Unicode 标点")}
-          help={t("解析 Markdown 时，Unicode 的引号 / 破折号也识别为 Markdown 标记。⚠ 「模式」选「关闭」时本项不生效，因此呈灰色。")}
+          label={t("Allow converting Unicode punctuation")}
+          help={t("When parsing Markdown, Unicode quotes and dashes count as Markdown markup too. ⚠ Does nothing while Mode is Off, which is why it is greyed out")}
         >
           <Toggle
             checked={m.unicode_punctuation}
@@ -258,25 +258,25 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("自动更正")}
-        help={t("只认一张固定的英文错拼表（四十来条，如 `teh` → `the`），在敲下词尾空格那一下改正刚打完的那个词。⚠ 不做语法检查、不做句首自动大写、不碰中文；改正之后按一次 `Ctrl+Z` 就能退回原文。⚠ 已经写进文档的旧文字永远不改。")}
+        title={t("Auto-correct")}
+        help={t("Works from a single fixed table of about forty common English misspellings (`teh` → `the` and the like), fixing the word you just finished the moment you type the space after it. ⚠ It is not a grammar checker, it does not capitalise the start of sentences, and it never touches Chinese. One `Ctrl+Z` puts the original back. ⚠ Text already written into a document is never rewritten")}
       >
         <SettingRow
-          label={t("自动更正英文错拼")}
-          help={t("`teh` → `the`、`recieve` → `receive`、`dont` → `don't` 这一类。⚠ 触发字符只有空格与制表符，所以 `teh,` 要等你敲空格才更正。")}
+          label={t("Auto-correct misspelled English words")}
+          help={t("Things like `teh` → `the`, `recieve` → `receive`, `dont` → `don't`. ⚠ Only a space or a tab triggers it, so `teh,` waits until you type a space")}
         >
           <Toggle checked={m.auto_correct} onChange={(auto_correct) => 写({ auto_correct })} />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("代码块")}
-        help={t("这几条只管所见即所得里代码块的样子，不影响存进文件的内容，也不影响导出。")}
+        title={t("Code Block")}
+        help={t("These affect only how code blocks look in the WYSIWYG view. They do not change what is written to the file, and they do not affect export.")}
       >
         <SettingRow
-          label={t("显示行号")}
+          label={t("Show line numbers")}
           help={t(
-            "在代码块左边加一条行号装订线。⚠ 默认关闭：它会让代码文字整体右移约 40px，三五行的小代码块上不太划算。",
+            "Adds a line-number gutter to the left of a code block. ⚠ Off by default: it pushes the code text about 40px to the right, which is a poor trade on blocks only three or five lines long.",
           )}
         >
           <Toggle
@@ -286,17 +286,17 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("自动换行")}
+          label={t("Word wrap")}
           help={t(
-            "长行折到下一行显示。⚠ 关闭后长行不折、直接溢出到代码块外，得拖编辑区的横向滚动条才看得见后半截——Nota 把语言选择框画在代码块外面，块内横向滚动会把那个框裁掉，所以这里没有块内滚动。",
+            "Long lines fold onto the next line. ⚠ With this off, long lines do not fold — they spill out of the code block, and you have to drag the editing area's horizontal scrollbar to see the second half. Nota draws the language picker outside the code block, and an in-block horizontal scroll would clip it, so there is no in-block scrolling.",
           )}
         >
           <Toggle checked={m.code_wrap} onChange={(code_wrap) => 写({ code_wrap })} />
         </SettingRow>
 
         <SettingRow
-          label={t("显示工具栏")}
-          help={t("代码块下面那条「折叠 / 复制」。")}
+          label={t("Show toolbar")}
+          help={t("The “Collapse / Copy” strip below a code block.")}
         >
           <Toggle
             checked={m.code_toolbar}
@@ -305,8 +305,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("显示语言选择框")}
-          help={t("代码块下面那颗语言选择框。⚠ 关掉之后仍可在源码模式里改围栏上的语言。")}
+          label={t("Show language picker")}
+          help={t("The language picker below a code block. ⚠ You can still change the language by editing the fence in Source mode.")}
         >
           <Toggle
             checked={m.code_language_picker}
@@ -315,8 +315,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("用 Shift+Tab 调整所选代码的缩进")}
-          help={t("选中若干行代码后按 Shift+Tab，将整块减少一级缩进。⚠ 默认关闭：该键原本用于反向切换焦点，开启后会覆盖这一行为。")}
+          label={t("Use Shift+Tab to indent selected code")}
+          help={t("With a few lines of code selected, Shift+Tab removes one level of indentation from the whole block. ⚠ Off by default: that key normally moves focus backwards, and turning this on overrides it")}
         >
           <Toggle
             checked={m.code_shift_tab_indent}
@@ -325,8 +325,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("缩进宽度")}
-          help={t("⚠ 与「编辑器」页的「默认缩进」是两项独立设置：后者控制列表 / 引用自动生成的缩进（默认 2），本项控制代码块缩进（默认 4）。")}
+          label={t("Indent width")}
+          help={t("⚠ Separate from Default indent on the Editor page: that one controls the indent generated for lists and quotes (2 by default), this one controls code block indentation (4 by default)")}
         >
           <NumberInput
             value={m.code_indent}
@@ -337,18 +337,18 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("默认语言")}
-          help={t("新建代码块预填的语言，写入 ``` 之后。留空则不写，渲染时不带语法高亮。")}
+          label={t("Default language")}
+          help={t("The language pre-filled in a new code block, written after ```. Empty writes nothing, and the block renders without syntax highlighting")}
         >
           <TextInput
             value={m.code_default_language}
             width="md"
-            placeholder={t("留空 = 不写")}
+            placeholder={t("Empty = write nothing")}
             onChange={(code_default_language) => 写({ code_default_language })}
           />
         </SettingRow>
 
-        <SettingRow label={t("什么时候自动加语言")}>
+        <SettingRow label={t("When to add a language")}>
           <Select
             value={m.code_auto_language}
             options={AUTO_LANG}
@@ -357,14 +357,14 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("公式")}>
-        <SettingRow label={t("行内公式")} help={t("`$LaTeX$`。⚠ 与上方「扩展语法」组中的同一项共用开关。")}>
+      <SettingsGroup title={t("Math")}>
+        <SettingRow label={t("Inline math")} help={t("`$LaTeX$`. ⚠ Shares one switch with the same item in the Extensions group above")}>
           <Toggle checked={m.inline_math} onChange={(inline_math) => 写({ inline_math })} />
         </SettingRow>
 
         <SettingRow
-          label={t("认 \\\\( \\\\) 和 \\\\[ \\\\] 定界符")}
-          help={t("除 `$…$` 之外，`\\\\( … \\\\)`（行内）与 `\\\\[ … \\\\]`（独立成行）也识别为公式。旧文档中这种写法常见。")}
+          label={t("Recognize the \\\\( \\\\) and \\\\[ \\\\] delimiters")}
+          help={t("Besides `$…$`, `\\\\( … \\\\)` (inline) and `\\\\[ … \\\\]` (on its own line) also count as math. That form is common in older documents")}
         >
           <Toggle
             checked={m.latex_delimiters}
@@ -372,7 +372,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("```math 代码块当公式")}>
+        <SettingRow label={t("Treat ```math blocks as math")}>
           <Toggle
             checked={m.code_block_math}
             onChange={(code_block_math) => 写({ code_block_math })}
@@ -380,8 +380,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("physics 宏包")}
-          help={t("开启后可使用 `\\\\qty`、`\\\\dv`、`\\\\braket`、`\\\\comm` 等 physics 宏包的写法。⚠ 它会重定义 `\\\\div` / `\\\\Re` / `\\\\Im` 三个既有命令，这是 physics 宏包本身的行为，因此默认关闭。这些命令由 Nota 自行定义：数学渲染使用 KaTeX，其官方不含 physics。修改后立即重排当前文档。")}
+          label={t("physics package")}
+          help={t("Turns on `\\\\qty`, `\\\\dv`, `\\\\braket`, `\\\\comm` and the rest of the physics package. ⚠ It redefines the three existing commands `\\\\div` / `\\\\Re` / `\\\\Im` — behavior of the physics package itself, which is why it is off by default. These commands are defined by Nota: math rendering uses KaTeX, which does not ship physics. The current document is re-typeset immediately")}
         >
           <Toggle
             checked={settings.enable_physics}
@@ -390,8 +390,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("用旧版的行内公式解析")}
-          help={t("兼容模式。⚠ 默认关闭：旧解析在 `$` 与数字相邻时容易误判，`$5 和 $6` 会被当成一个公式。仅在需要打开旧文档时开启。")}
+          label={t("Use the legacy inline math parser")}
+          help={t("Compatibility mode. ⚠ Off by default: the old parser easily misreads a `$` next to a digit, so `$5 and $6` becomes one formula. Turn it on only to open old documents")}
         >
           <Toggle
             checked={m.legacy_inline_math}
@@ -400,8 +400,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("公式自动编号")}
-          help={t("⚠ 默认不启用：大多数文档不使用公式编号，默认开启会在每个公式右侧多出一个 (1)。")}
+          label={t("Number equations")}
+          help={t("⚠ Off by default: most documents do not number equations, and turning it on adds a (1) to the right of every one of them")}
         >
           <Select
             value={m.equation_numbering}
@@ -411,8 +411,8 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("复制 / 导出时给什么")}
-          help={t("复制为无格式 HTML 或导出时，公式采用哪种格式。SVG 不依赖接收方的字体，在任何环境下外观一致；MathML 是文本，可被读屏器与公式编辑器识别。")}
+          label={t("What to give when copying or exporting")}
+          help={t("Which format math takes when copying as plain HTML or exporting. SVG does not depend on the reader's fonts, so it looks the same everywhere; MathML is text and can be read by screen readers and formula editors")}
         >
           <Select
             value={m.math_output}
@@ -423,12 +423,12 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("空格与换行")}
-        help={t("「编辑时」与「导出与打印」是两项独立设置：这两种场合的需求常常相反，编辑时需看见已输入的空格，导出时需将其合并。")}
+        title={t("Spaces and line breaks")}
+        help={t("While editing and When exporting or printing are two separate settings: the two situations usually want opposite things — while editing you need to see the spaces you typed, while exporting they need collapsing")}
       >
         <SettingRow
-          label={t("首行缩进")}
-          help={t("中文排版习惯：每段第一行空两格。⚠ 仅为显示效果，不向正文写入空格，文件内容不发生变化。")}
+          label={t("First-line indent")}
+          help={t("The Chinese typographic convention: the first line of every paragraph starts two characters in. ⚠ Display only — no spaces are written into the text and the file is unchanged")}
         >
           <Toggle
             checked={m.first_line_indent}
@@ -436,11 +436,11 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("编辑时显示 <br/>")}>
+        <SettingRow label={t("Show <br/> while editing")}>
           <Toggle checked={m.show_br} onChange={(show_br) => 写({ show_br })} />
         </SettingRow>
 
-        <SettingRow label={t("编辑时")}>
+        <SettingRow label={t("While editing")}>
           <Select
             value={m.whitespace_editing}
             options={WS}
@@ -448,7 +448,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("导出与打印时")}>
+        <SettingRow label={t("When exporting or printing")}>
           <Select
             value={m.whitespace_export}
             options={WS}

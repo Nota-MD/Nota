@@ -72,7 +72,7 @@ function 可绑定(item: MenuItemSpec): boolean {
  * 空组（这一栏一条可绑定的命令都没有）**丢掉**：留一个空标题在表里，
  * 看着像「这一栏的内容没显示出来」，而它本来就没有。
  *
- * ⚠️ 这里存下来的 `label` 是**键**（中文原文），不是译文——翻译在下面渲染处做
+ * ⚠️ 这里存下来的 `label` 是**键**（英文原文），不是译文——翻译在下面渲染处做
  *（`t(menu.label)` / `t(s.label)`）。模块级常量里调 `t` 是禁止的，理由写在
  * `ui/MenuBar.tsx::useT` 那一段。
  */
@@ -168,7 +168,7 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
       if (撞 && 撞.id !== id) {
         set撞车({
           id,
-          文案: t("这个键位现在归「{0}」。要绑给这一条，就先把那一条清掉。", t(撞.label)),
+          文案: t("That binding belongs to “{0}”. Clear it there first if you want this command to have it.", t(撞.label)),
         });
         return;
       }
@@ -198,7 +198,7 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
               // 菜单名那部分不用管——`SettingsGroup` 会把组标题加进每一行的搜索面。
               // ⚠️ 搜的是**原始 accel**（`Ctrl+S`）而不是显示出来的那串：
               // macOS 上显示成 `⌘S`，用户照着屏幕上抄下来的字反而搜不到。
-              searchText={[s.accel, 改过(s.id) ? t("已修改") : ""].filter(Boolean).join(" ")}
+              searchText={[s.accel, 改过(s.id) ? t("changed") : ""].filter(Boolean).join(" ")}
               description={
                 撞车?.id === s.id ? <span className="stg-keys-clash">{撞车.文案}</span> : undefined
               }
@@ -207,27 +207,27 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
                 {录制中 === s.id ? (
                   // ⚠️ 录制态**画成一个 `<kbd>` 的样子**（不是提示条）：它就长在
                   // 原来那个键位的格子里，用户的眼睛不用换地方。
-                  <kbd className="stg-kbd stg-kbd-rec">{t("按下新的键位…")}</kbd>
+                  <kbd className="stg-kbd stg-kbd-rec">{t("Press the new keys…")}</kbd>
                 ) : s.accel ? (
                   <kbd className="stg-kbd">{formatAccel(s.accel)}</kbd>
                 ) : (
-                  <span className="stg-keys-none">{t("未设置")}</span>
+                  <span className="stg-keys-none">{t("Not set")}</span>
                 )}
                 <ActionButton
                   onClick={() => {
                     set撞车(null);
                     set录制中(录制中 === s.id ? null : s.id);
                   }}
-                  title={t("按下你想用的键位；按 Esc 取消")}
+                  title={t("Press the keys you want to use; press Esc to cancel")}
                 >
-                  {录制中 === s.id ? t("取消") : t("改")}
+                  {录制中 === s.id ? t("Cancel") : t("Change")}
                 </ActionButton>
                 {/* 「清除」只在**现在有键位**时出现：把这条设为"不要快捷键"。
                     ⚠️ 它和下面那颗「恢复默认」**不是一回事**，两句话都得看得见：
                     这一颗是"这条不要键位"，那一颗是"回到出厂那个键位"。 */}
                 {s.accel && (
-                  <ActionButton onClick={() => 写({ [s.id]: "" })} title={t("这条命令不要快捷键")}>
-                    {t("清除")}
+                  <ActionButton onClick={() => 写({ [s.id]: "" })} title={t("No shortcut for this command")}>
+                    {t("Clear")}
                   </ActionButton>
                 )}
                 {/* 「恢复默认」只在**用户动过它**时出现——没动过时它按下去什么都不会变，
@@ -239,9 +239,9 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
                       delete 新[s.id];
                       onChange({ keys: { overrides: 新 } });
                     }}
-                    title={t("把这一条恢复成出厂键位（或出厂就没有键位）")}
+                    title={t("Reset this one to its factory binding (or to none, if it never had one)")}
                   >
-                    {t("恢复默认")}
+                    {t("Reset")}
                   </ActionButton>
                 )}
               </span>
@@ -256,11 +256,11 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
           ⚠️ 别把切出来的碎片合并成一个键：那会把 `<strong>` / `<code>` 一起
           降级成纯文本，而这一段的重点恰恰是那个文件路径。 */}
       <Note>
-        {t("这张表是")}
-        <strong>{t("从菜单里读出来的")}</strong>
-        {t("，所以它一定和菜单上写的一致。改过的键位存在设置文件里，没改过的跟着 ")}
+        {t("This table is")}
+        <strong>{t(" read from the menu")}</strong>
+        {t(", so it always matches what the menu says. Bindings you change are stored in the settings file; the ones you don't change follow the ")}
         <code>src/ui/commands.ts</code>
-        {t(" 走——所以以后那个文件里调整了默认键位，你没动过的那几条会跟着变。")}
+        {t(" file — so if a default binding changes there later, the rows you never touched will follow it.")}
       </Note>
 
       {/* 「全部恢复默认」放在最后、而且**只在有改动时出现**：没有改动时它是个
@@ -268,10 +268,10 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
       {Object.keys(覆盖).length > 0 && (
         <div className="stg-keys-reset-all">
           <ActionButton onClick={() => onChange({ keys: { overrides: {} } })}>
-            {t("全部恢复默认")}
+            {t("Reset all")}
           </ActionButton>
           <span className="stg-keys-hint">
-            {t("改过 {0} 条。恢复之后全部按 commands.ts 里的出厂键位走。", Object.keys(覆盖).length)}
+            {t("{0} changed. After resetting, every binding follows the factory defaults in commands.ts.", Object.keys(覆盖).length)}
           </span>
         </div>
       )}

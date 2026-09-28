@@ -816,7 +816,10 @@ mod tests {
         assert_eq!(d.get::<String>("state").unwrap(), "notheme", "缺那个包该报 notheme");
         let 没写的话: String = d.get("message").unwrap();
         let 没写的细: String = d.get("detail").unwrap();
-        assert!(没写的话.contains("没写主题"), "没写 `theme:` 的文档该说「没写主题」：{没写的话}");
+        // ⚠️ 钉的是**英文原文**（2026-09-28 语言翻转：英语成了插件里的源语言，
+        //    中文进 `lang/zh-CN.toml`。这里量的是模板本身，`T` 是恒等函数，
+        //    所以只可能看见英文）。
+        assert!(没写的话.contains("names no theme"), "没写 `theme:` 的文档该说「没写主题」：{没写的话}");
         assert!(没写的细.contains("theme: none"), "该给「加三行 frontmatter」这条照着做得到的路：{没写的细}");
         assert!(没写的细.contains("npm i"), "装包那条路也得在：{没写的细}");
 
@@ -828,7 +831,7 @@ mod tests {
         assert_eq!(d.get::<String>("state").unwrap(), "notheme");
         let 写了的话: String = d.get("message").unwrap();
         let 写了_细: String = d.get("detail").unwrap();
-        assert!(!写了的话.contains("没写主题"), "写了 `theme:` 的文档不许说「没写主题」：{写了的话}");
+        assert!(!写了的话.contains("names no theme"), "写了 `theme:` 的文档不许说「没写主题」：{写了的话}");
         // 这一支才该讲"Slidev 按 `@slidev/theme-<名>`、`slidev-theme-<名>` 的顺序找"。
         assert!(写了_细.contains("slidev-theme-"), "写了主题的那支该讲解析顺序：{写了_细}");
         assert!(!没写的细.contains("slidev-theme-"), "没写主题的那支讲解析顺序是废话：{没写的细}");

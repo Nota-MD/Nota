@@ -71,7 +71,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
   /** 主题 id → 给人看的名字。**一处口径**：空串是「无主题（内置）」，
    *  清单里没有的 id（比如主题文件被删了）就照原样显示 id，不假装它没名字。 */
   const 显示名 = (id: string) => {
-    if (!id) return t("无主题（内置）");
+    if (!id) return t("No Theme (Built-in)");
     const 有 = docThemes.find((t) => t.id === id);
     if (有) return 有.name;
     // ⚠️ 认不出的 id **照原样显示**（原始 id 是线索），但后面要**说清它此刻没生效**。
@@ -83,32 +83,32 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     //
     // ⚠️ 但**不能**把它当成"没有主题"一笔抹掉：`.css` 是用户自己往
     // 「主题文件夹」里放的，文件一放回来这个 id 立刻就生效了。
-    return t("{0}（找不到这一套，现在按「无主题」显示）", id);
+    return t("{0} (theme not found — showing No Theme instead)", id);
   };
 
   return (
     <>
-    <SettingsGroup title={t("文档主题")}>
-      <SettingRow label={t("当前主题")} help={t("只作用在编辑区，不影响外壳的样子。")}>
+    <SettingsGroup title={t("Document Themes")}>
+      <SettingRow label={t("Current theme")} help={t("Affects the editing area only; the shell's appearance is unchanged.")}>
         <Value>{显示名(生效id)}</Value>
       </SettingRow>
 
       <SettingRow
-        label={t("主题文件夹")}
-        help={t("放入一份自定义 .css 即可使用；与内置主题重名时会覆盖内置的那一份。")}
+        label={t("Themes folder")}
+        help={t("Drop in a custom .css to use it; a name matching a built-in theme replaces the built-in one.")}
       >
         {/* ⚠️ 这一行故意**没有** `htmlFor`：`<button>` 不是可标注控件，
             点标签文字会意外触发一次「打开文件夹」（见 `primitives.tsx`）。 */}
-        <ActionButton onClick={onOpenThemesDir}>{t("打开…")}</ActionButton>
+        <ActionButton onClick={onOpenThemesDir}>{t("Open…")}</ActionButton>
       </SettingRow>
 
       <Note>
-        {t("换主题在")}
-        <strong>{t("「主题」菜单")}</strong>
-        {t("中，那是唯一的入口，本页不提供主题选择器。要自己写一套：打开上面的文件夹，放入一个")}
+        {t("Switch themes in")}
+        <strong>{t("the Theme menu")}</strong>
+        {t(" — that is the only place to switch; this page has no theme picker. To write your own: open the folder above and drop in a")}
         {" "}
         <code>.css</code>
-        {t("，重启后就会出现在菜单里。")}
+        {t(", and it will appear in the menu after a restart.")}
       </Note>
     </SettingsGroup>
 
@@ -121,8 +121,8 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         ⚠️ 底下那个 Note **必须留着**：改这里的东西看着像改了文档，
         而实际一个字节都不写盘——不说清会让人以为它跟导出有关。 */}
     <SettingsGroup
-      title={t("行距")}
-      help={t("正文一行与下一行之间的距离。默认跟随文档主题。")}
+      title={t("Line height")}
+      help={t("Distance from one line of body text to the next. Follows the document theme by default.")}
     >
       <SettingRow>
         <Toggle
@@ -131,8 +131,8 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         />
       </SettingRow>
       <SettingRow
-        label={t("行距倍数")}
-        help={t("175 就是 1.75 倍行距（Word 里那个「多倍行距 1.75」）。区间 100–300。")}
+        label={t("Line-height multiple")}
+        help={t("175 means 1.75× line spacing (Word's “Multiple 1.75”). Range 100–300.")}
       >
         <NumberInput
           value={d.line_height}
@@ -147,8 +147,8 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     </SettingsGroup>
 
     <SettingsGroup
-      title={t("段间距")}
-      help={t("段落与段落之间的距离（上一块的底到下一块的顶）。默认跟随文档主题。")}
+      title={t("Paragraph spacing")}
+      help={t("Distance between paragraphs, from the bottom of one block to the top of the next. Follows the document theme by default.")}
     >
       <SettingRow>
         <Toggle
@@ -157,9 +157,9 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         />
       </SettingRow>
       <SettingRow
-        label={t("段间距大小")}
+        label={t("Spacing size")}
         help={t(
-          "85 就是 0.85 个字号高。0 = 段落之间不留空。区间 0–300。⚠ 只管正文里的段落、引用、列表、表格；标题和代码块有自己的间距，不跟着这一项变。",
+          "85 means 0.85 of one character height. 0 leaves no gap between paragraphs. Range 0–300. ⚠ It covers only paragraphs, blockquotes, lists and tables in the body — headings and code blocks have spacing of their own and do not follow this.",
         )}
       >
         <NumberInput
@@ -175,24 +175,24 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     </SettingsGroup>
 
     <SettingsGroup
-      title={t("正文字体")}
-      help={t("默认跟随文档主题。")}
+      title={t("Body font")}
+      help={t("Follows the document theme by default.")}
     >
       <SettingRow>
         <Toggle checked={d.custom_font} onChange={(custom_font) => 写({ custom_font })} />
       </SettingRow>
       <SettingRow
-        label={t("字体档位")}
+        label={t("Font family")}
         help={t(
-          "只给三档，不给填字体名：字体名拼错时浏览器不报错、只是安静地换一个——那比没有这个设置更糟。⚠ Nota 不捆绑字体，这几档点的是这台机器上装了的那些。",
+          "Three choices only, no free-text font name: a misspelled name raises no error in the browser, it just quietly substitutes another font — worse than not having the setting at all. ⚠ Nota bundles no fonts; these choices name fonts installed on this machine.",
         )}
       >
         <Select
           value={d.font}
           options={[
-            { value: "sans", label: t("无衬线") },
-            { value: "serif", label: t("衬线") },
-            { value: "mono", label: t("等宽") },
+            { value: "sans", label: t("Sans-serif") },
+            { value: "serif", label: t("Serif") },
+            { value: "mono", label: t("Monospace") },
           ]}
           disabled={!d.custom_font}
           onChange={(font) => 写({ font })}
@@ -201,8 +201,8 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     </SettingsGroup>
 
     <SettingsGroup
-      title={t("正文字号")}
-      help={t("相对界面字号的大小。默认跟随文档主题。")}
+      title={t("Body font size")}
+      help={t("Size relative to the interface font size. Follows the document theme by default.")}
     >
       <SettingRow>
         <Toggle
@@ -211,9 +211,9 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         />
       </SettingRow>
       <SettingRow
-        label={t("字号倍数")}
+        label={t("Size multiple")}
         help={t(
-          "102 就是界面字号的 1.02 倍。区间 80–200。⚠ 它是相对值：在「外观」页调大界面字号，正文跟着变大——那是原本就有的行为，这一项只是另给一个覆盖值。",
+          "102 means 1.02× the interface font size. Range 80–200. ⚠ It is relative: raising the interface font size on the Appearance page already scales body text — that is pre-existing behaviour, and this item only provides a separate override.",
         )}
       >
         <NumberInput
@@ -232,36 +232,36 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         单独成组（而不是写进某一项的 `help`）是因为它同时管四项；而它必须挂
         一行 `.stg-row`/`Value`（就是本页「当前主题」那一行的写法），
         理由见本文件顶上那条 `:not(:has(.stg-row))` 的规矩。 */}
-    <SettingsGroup title={t("上面四项的作用范围")}>
+    <SettingsGroup title={t("Scope of the four items above")}>
       <SettingRow
-        label={t("作用范围")}
+        label={t("Scope")}
         help={t(
-          "它们只改编辑区里正文的样子，⚠ 一个字节都不会写进文件：源码模式、别的编辑器、导出拿到的都还是原来那些字。四项全关着时（默认）一切听文档主题的。",
+          "They change how body text looks in the editing area only. ⚠ Not one byte is written into the file: source mode, other editors and exports all still see the original text. With all four off (the default) everything follows the document theme.",
         )}
       >
-        <Value>{t("只改编辑区，不动文件")}</Value>
+        <Value>{t("Display only — the file is untouched")}</Value>
       </SettingRow>
     </SettingsGroup>
 
     {深色那一套在生效 && (
-      <SettingsGroup title={t("⚠ 深色下用的是另一套")}>
+      <SettingsGroup title={t("⚠ Dark mode uses a different set")}>
         {/* ⚠️ 这一行是这个组**画得出来的前提**，不是装饰：组里一行 `.stg-row`
             都没有时 `settings.css` 会把整组 `display: none` 掉（搜索那一套规则的
             副作用）。理由和实测经过见本文件顶上的文件头。 */}
         <SettingRow
-          label={t("浅色下用的是")}
-          help={t("深色这套生效时，切回浅色看到的是这一套——两套互不影响。")}
+          label={t("Light mode uses")}
+          help={t("While the dark set is in effect, switching back to light shows this one — the two are independent.")}
         >
           <Value>{显示名(settings.document_theme)}</Value>
         </SettingRow>
         <Note>
-          {t("上面显示的是")}
-          <strong>{t("深色专用的那一套")}</strong>
-          {t("：现在正好是深色模式，而「外观」那一页里开着「深色模式下单独用一套主题」。切回浅色，或者去「外观」把那条关掉，这一格就会变回浅色用的那一套。")}
+          {t("What is shown above is")}
+          <strong>{t("the dark-mode set")}</strong>
+          {t(": dark mode is on right now, and Appearance has “Use a separate set of document themes for dark mode” turned on. Switch back to light, or turn that off in Appearance, and this cell goes back to the light-mode set.")}
           <br />
-          {t("菜单里换主题，换的永远是")}
-          <strong>{t("你此刻看着的")}</strong>
-          {t("这一套——所以现在选一套，改的是深色下用的那份，浅色的不受影响。")}
+          {t("Switching themes from the menu always changes")}
+          <strong>{t("the set you are looking at")}</strong>
+          {t(" — so picking one now changes the dark-mode set; the light set is unaffected.")}
         </Note>
       </SettingsGroup>
     )}

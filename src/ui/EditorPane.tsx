@@ -569,7 +569,7 @@ export function EditorPane({
                   await api.doc.sync(doc.id, markdown);
                   await onDocsChanged();
                 } catch (e) {
-                  onToast(`同步到后端失败：${e}`, "error");
+                  onToast(t("Could not sync to the backend: {0}", String(e)), "error");
                 }
               }, SYNC_DEBOUNCE_MS);
             },
@@ -602,7 +602,7 @@ export function EditorPane({
                   await api.doc.sync(doc.id, markdown);
                   await onDocsChanged();
                 } catch (e) {
-                  onToast(`同步到后端失败：${e}`, "error");
+                  onToast(t("Could not sync to the backend: {0}", String(e)), "error");
                 }
               }, SYNC_DEBOUNCE_MS);
             },
@@ -697,7 +697,7 @@ export function EditorPane({
           }
         }
       } catch (e) {
-        onToast(`编辑器启动失败：${e}`, "error");
+        onToast(t("The editor failed to start: {0}", String(e)), "error");
       }
     })();
 
@@ -783,7 +783,7 @@ export function EditorPane({
     // 内联样式优先级高于任何选择器，所以这一层是"用户显式盖过主题"的唯一落点。
     // 理由与来历见 `styles/doc-typography.ts` 与 `settings/document.rs`。
     <div className={`editor-pane editor-pane-${mode}`} style={正文排版变量(文档排版) as CSSProperties}>
-      {!ready && <div className="editor-loading">{t("正在准备编辑器…")}</div>}
+      {!ready && <div className="editor-loading">{t("Preparing the editor…")}</div>}
       {/* front matter 不在文档树里（`editor/front-matter.ts`），所见即所得
           里看不见也改不了——这一条就是**如实说明**这件事，否则用户会以为
           自己开头那几行丢了。⚠️ 只说事实，不带按钮：要改就切源码模式，
@@ -791,7 +791,7 @@ export function EditorPane({
       {mode === "wysiwyg" && 有前置块 && (
         <div className="editor-frontmatter-note" role="note">
           {t(
-            "这篇文档开头有一段 front matter（`---` 包住的那几行）。所见即所得里不显示、也改不了，存盘时会原样保留——要改请切到源码模式。",
+            "This document starts with a block of front matter (the lines wrapped in `---`). It is neither shown nor editable here, and it is kept as-is when you save — switch to Source mode to change it.",
           )}
         </div>
       )}

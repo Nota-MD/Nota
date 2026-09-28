@@ -134,7 +134,7 @@ end
 --- 长期那句人话（面板上一行字、卡片页脚一处）。**两处共用一份**，免得说法不一致。
 function M.saying(st)
   return string.format(
-    T("最近 %d 周，你在 %d 天里写下了 %s 个字"),
+    T("The last %d weeks: %d days with writing, %s words"),
     st.weeks,
     st.days,
     ticks.group_text(st.total)
@@ -151,18 +151,18 @@ function M.card(days, st, tinfo)
     days = M.days_text(days, st),
     weeks = st.weeks,
     to = st.ymd,
-    less = T("少"),
-    more = T("多"),
-    title = T("写作统计"),
+    less = T("Less"),
+    more = T("More"),
+    title = T("Writing Stats"),
     subtitle = "Writing Stats",
     date = ticks.date_text(tinfo),
-    label = T("长期总字数"),
+    label = T("Total in this window"),
     value = ticks.group_text(st.total),
-    unit = T("字"),
+    unit = T("words"),
     stats = {
-      { k = T("有字的天数"), v = tostring(st.days), small = T("天") },
-      { k = T("日均"), v = ticks.group_text(st.avg), small = T("字/天") },
-      { k = T("单日最多"), v = ticks.group_text(st.max), small = T("字") },
+      { k = T("Days with writing"), v = tostring(st.days), small = T("days") },
+      { k = T("Daily average"), v = ticks.group_text(st.avg), small = T("words/day") },
+      { k = T("Busiest day"), v = ticks.group_text(st.max), small = T("words") },
     },
     foot = M.saying(st),
     file = "nota-stats-long-" .. st.ymd .. ".png",

@@ -60,21 +60,22 @@ export function FocusAlarmWindow() {
   return (
     <div className="alarm-root">
       <div className="alarm-card">
-        {/* ⚠️ 键是中文原文，英文表里给的是 `Back to Writing`（用户要的就是英文
-            那句原文，翻译只是"允许"）。这句是全屏上唯一的大字，别加修饰。 */}
-        <h1 className="alarm-title">{t("立刻回来写作")}</h1>
+        {/* ⚠️ 这句的原文就是英语（用户要的就是英文那句，翻译只是"允许"）：
+            2026-09-28 翻转**之前**它是先写中文、英文表里给 `Back to Writing`，
+            现在英语是原文，所以它的中文在 `zh-ui.ts` 里。这句是全屏上唯一的大字，别加修饰。 */}
+        <h1 className="alarm-title">{t("Back to Writing")}</h1>
 
         <p className="alarm-sub">
           {第几次 > 1
-            ? t("这一轮第 {0} 次响警报了。", 第几次)
-            : t("账户余额扣到零了。")}
+            ? t("This is alarm {0} of this session.", 第几次)
+            : t("The account balance has been charged to zero.")}
         </p>
 
         {/* ⚠️ 这一行说"钱怎么回来"，因为这是用户此刻唯一会问的问题：
             点了按钮余额是不是就补满了？答案是**不补**（`focus::确认` 的文档）。
             不写清楚的话，他点一下发现余额还是 0，会以为这软件算错了。 */}
         <p className="alarm-hint">
-          {t("点下面那颗按钮回去写字，余额重新从零开始攒。")}
+          {t("Press the button below to go back to writing; the balance starts again from zero.")}
         </p>
 
         <button
@@ -86,7 +87,7 @@ export function FocusAlarmWindow() {
             void ack();
           }}
         >
-          {按过了 ? t("这就回去…") : t("我回来了")}
+          {按过了 ? t("Going back…") : t("I'm Back")}
         </button>
       </div>
     </div>

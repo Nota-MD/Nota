@@ -87,7 +87,7 @@ export interface 斜杠项 {
    * 运行时会被整个擦掉。
    */
   id: EditorCommand;
-  /** 面板上显示的名字。⚠️ **存的是键**（中文原文），显示时才 `t()`。 */
+  /** 面板上显示的名字。⚠️ **存的是键**（英文原文，2026-09-28 起），显示时才 `t()`。 */
   名称: string;
   /**
    * 检索词，**ASCII**。
@@ -107,19 +107,19 @@ export interface 斜杠项 {
  * **这条命令是不是"往文档里插一块东西"**。
  */
 export const 斜杠表: 斜杠项[] = [
-  { id: "h1", 名称: "标题 1", 关键词: "h1 heading title biaoti" },
-  { id: "h2", 名称: "标题 2", 关键词: "h2 heading title biaoti" },
-  { id: "h3", 名称: "标题 3", 关键词: "h3 heading title biaoti" },
-  { id: "ul", 名称: "无序列表", 关键词: "ul bullet list liebiao" },
-  { id: "ol", 名称: "有序列表", 关键词: "ol ordered list liebiao" },
-  { id: "task", 名称: "任务列表", 关键词: "task todo checkbox renwu" },
-  { id: "quote", 名称: "引用", 关键词: "quote blockquote yinyong" },
-  { id: "codeBlock", 名称: "代码块", 关键词: "code fence daimakuai" },
-  { id: "mathBlock", 名称: "公式块", 关键词: "math formula latex gongshi" },
-  { id: "table", 名称: "表格", 关键词: "table grid biaoge" },
-  { id: "hr", 名称: "分割线", 关键词: "hr line divider fengexian" },
-  { id: "footnote", 名称: "脚注", 关键词: "footnote note jiaozhu" },
-  { id: "toc", 名称: "内容目录", 关键词: "toc outline contents mulu" },
+  { id: "h1", 名称: "Heading 1", 关键词: "h1 heading title biaoti" },
+  { id: "h2", 名称: "Heading 2", 关键词: "h2 heading title biaoti" },
+  { id: "h3", 名称: "Heading 3", 关键词: "h3 heading title biaoti" },
+  { id: "ul", 名称: "Bullet List", 关键词: "ul bullet list liebiao" },
+  { id: "ol", 名称: "Ordered List", 关键词: "ol ordered list liebiao" },
+  { id: "task", 名称: "Task List", 关键词: "task todo checkbox renwu" },
+  { id: "quote", 名称: "Blockquote", 关键词: "quote blockquote yinyong" },
+  { id: "codeBlock", 名称: "Code Block", 关键词: "code fence daimakuai" },
+  { id: "mathBlock", 名称: "Math Block", 关键词: "math formula latex gongshi" },
+  { id: "table", 名称: "Table", 关键词: "table grid biaoge" },
+  { id: "hr", 名称: "Divider", 关键词: "hr line divider fengexian" },
+  { id: "footnote", 名称: "Footnote", 关键词: "footnote note jiaozhu" },
+  { id: "toc", 名称: "Table of Contents", 关键词: "toc outline contents mulu" },
 ];
 
 /**

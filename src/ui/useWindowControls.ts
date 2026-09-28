@@ -99,7 +99,7 @@ export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
     try {
       await win.setAlwaysOnTop(!(await win.isAlwaysOnTop()));
     } catch (e) {
-      toast(t("切换窗口置顶失败：{0}", String(e)), "error");
+      toast(t("Could not toggle Always on Top: {0}", String(e)), "error");
     } finally {
       // ⚠️ **成败都要同步**（与全屏那条同理）：失败时窗口没动，同步一次是白做的；
       // 成功时这一下才是让勾跟上的那个。写成"成功才同步"要多一个分支，
@@ -112,7 +112,7 @@ export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
     try {
       await api.window.openDevtools();
     } catch (e) {
-      toast(t("打开开发者工具失败：{0}", String(e)), "error");
+      toast(t("Could not open the developer tools: {0}", String(e)), "error");
     }
   }, [toast, t]);
 
@@ -124,7 +124,7 @@ export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
         // ⚠️ **失败要说出来**，口径与上面那两条不同：这一条是用户点出来的
         // 一个明确动作，而它能失败的地方是"可执行文件不见了 / 起不来"——
         // 静默的话症状是"右键点了，什么都没发生"，那是最难查的一种。
-        toast(t("开不了新窗口：{0}", String(e)), "error");
+        toast(t("Could not open a new window: {0}", String(e)), "error");
       }
     },
     [toast, t],

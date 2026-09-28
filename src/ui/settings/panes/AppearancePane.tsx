@@ -182,19 +182,19 @@ export function AppearancePane({
    * 先例（键名从来就不是显示名）。
    *
    * ⚠️ **只写品牌名的不套 `t()`**（Adwaita / GitHub / Breeze / macOS /
-   * Windows 11 / Windows 10 / Yaru）：专有名词没有译文，套了只会在英文表里
+   * Windows 11 / Windows 10 / Yaru）：专有名词没有译文，套了只会在中文表里
    * 躺一条"A → A"的死键。带解释的那半句一律要 `t()`。
    */
   const STYLES: Record<BuiltinUiStyle, { label: string; hint: string }> = {
-    auto: { label: t("跟随系统"), hint: t("按当前桌面环境自动选一套") },
-    adwaita: { label: "Adwaita", hint: t("GNOME 原生，扁平、层级靠阴影") },
-    ghub: { label: "GitHub", hint: t("紧凑、冷灰蓝边框") },
-    plasma: { label: "Breeze", hint: t("KDE Plasma 的原生语言，方正偏圆") },
-    macos: { label: "macOS", hint: t("亚克力、大圆角，菜单高亮整条是蓝的") },
-    windows: { label: "Windows 11", hint: t("小圆角、Mica") },
-    windows10: { label: "Windows 10", hint: t("直角、亚克力，比 Windows 11 更方") },
-    yaru: { label: "Yaru", hint: t("Ubuntu，橙色强调") },
-    "yaru-blue": { label: t("Yaru 蓝"), hint: t("Ubuntu 的蓝色强调色档，其余同 Yaru") },
+    auto: { label: t("Follow the system"), hint: t("Pick one automatically for the current desktop environment") },
+    adwaita: { label: "Adwaita", hint: t("GNOME native — flat, depth from shadows") },
+    ghub: { label: "GitHub", hint: t("Tight, cool grey-blue borders") },
+    plasma: { label: "Breeze", hint: t("KDE Plasma's native look — square-ish with soft corners") },
+    macos: { label: "macOS", hint: t("Acrylic, large corner radius, a menu highlight that is a solid band of blue") },
+    windows: { label: "Windows 11", hint: t("Subtle corner radius, Mica") },
+    windows10: { label: "Windows 10", hint: t("Square corners, Acrylic — squarer than Windows 11") },
+    yaru: { label: "Yaru", hint: t("Ubuntu, orange accent") },
+    "yaru-blue": { label: t("Yaru Blue"), hint: t("Ubuntu's blue accent variant, otherwise the same as Yaru") },
   };
 
   const 写 = paneWriter(settings, onChange, "appearance");
@@ -229,7 +229,7 @@ export function AppearancePane({
   const 档名 = (s: UiStyleInfo) => {
     const 内置 = STYLES[s.id as BuiltinUiStyle];
     if (!内置) return s.id;
-    return s.builtin ? 内置.label : `${内置.label} · ${t("已覆盖")}`;
+    return s.builtin ? 内置.label : `${内置.label} · ${t("overridden")}`;
   };
 
   /**
@@ -256,7 +256,7 @@ export function AppearancePane({
    */
   const 选项 = [...清单];
   if (uiStyles.length > 0 && !选项.some((o) => o.value === settings.ui_style)) {
-    选项.push({ value: settings.ui_style, label: t("（找不到「{0}」）", settings.ui_style) });
+    选项.push({ value: settings.ui_style, label: t("(“{0}” not found)", settings.ui_style) });
   }
 
   const current = STYLES[settings.ui_style as BuiltinUiStyle];
@@ -264,36 +264,36 @@ export function AppearancePane({
   return (
     <>
       <SettingsGroup
-        title={t("界面风格")}
+        title={t("Interface style")}
         help={
           // ⚠️ 导入档没有 `hint`（那句话是我们给内置档写的），所以这里分两种说法：
           // 内置档报"当前 X：一句话"，导入档报"当前用的是你自己导入的 X"。
           // 硬拼成一句会在导入档上露出 `undefined`。
           current
-            ? t("当前 {0}：{1}。界面各处外观随之变化。", current.label, current.hint)
-            : t("当前用的是你导入的「{0}」，整个界面外壳随它变化。", settings.ui_style)
+            ? t("Current {0}: {1}. The appearance of the whole interface follows.", current.label, current.hint)
+            : t("Currently using “{0}”, the style you imported. The whole interface follows it.", settings.ui_style)
         }
       >
         {/* ⚠️ 这两格是**入口**，不是设置项：加一档风格的办法就是往那个目录里丢一个
             `<名字>.css`（用户 2026-09-26：「本来主题应该就是拆成多个文件的。
             加一个就是允许用户导入」）。没有这个按钮，那条路只存在于文档里——
             而"要读文档才发现"的入口等于没有。同「文档主题」那页的「主题文件夹…」。 */}
-        <SettingRow help={t("往这个文件夹里放一个 <名字>.css，重启应用后它就出现在上面的下拉里；放一个与内置同名的文件会覆盖内置那一档。")}>
+        <SettingRow help={t("Drop a <name>.css in this folder and it shows up in the list above after a restart. A file with the same name as a built-in style overrides that style.")}>
           <div className="stg-inline">
             <Select value={settings.ui_style} options={选项} onChange={(ui_style) => onChange({ ui_style })} />
-            <ActionButton onClick={onOpenStylesDir} title={t("打开风格文件夹。放一个 <名字>.css 进去即可多出一档。")}>
-              {t("风格文件夹…")}
+            <ActionButton onClick={onOpenStylesDir} title={t("Open the styles folder. Drop a <name>.css in it to add a style.")}>
+              {t("Styles folder…")}
             </ActionButton>
           </div>
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("明暗")} help={t("点选一张缩略图即可切换，改动立刻生效。")}>
+      <SettingsGroup title={t("Light/Dark")} help={t("Click a preview to switch; the change applies immediately.")}>
         <SettingRow>
           <div className="stg-swatches">
             <ModeSwatch
               mode="light"
-              label={t("浅色")}
+              label={t("Light")}
               style={style}
               accent={a.accent}
               active={!auto && settings.ui_mode === "light"}
@@ -301,7 +301,7 @@ export function AppearancePane({
             />
             <ModeSwatch
               mode="dark"
-              label={t("深色")}
+              label={t("Dark")}
               style={style}
               accent={a.accent}
               active={!auto && settings.ui_mode === "dark"}
@@ -316,11 +316,11 @@ export function AppearancePane({
           把它说成一条独立的轴（「这个主题只包含一个 UI 的设计样式……而不包含
           主题颜色」），摆在这儿才对得上那句话。 */}
       <SettingsGroup
-        title={t("主题色")}
-        help={t("留空即跟随当前风格——每档风格自带一个强调色（Yaru 是橙的、Adwaita 是蓝的）。选一个就覆盖它，强调色上的字用黑还是白由对比度自动决定。")}
+        title={t("Accent color")}
+        help={t("Leave it unset to follow the current style — each style ships its own accent (Yaru is orange, Adwaita is blue). Pick one to override it; whether the text on the accent is black or white is decided automatically by contrast.")}
       >
         <SettingRow
-          help={t("本项只改强调色一处，其余配色仍由上面的「明暗」决定。")}
+          help={t("This changes only the accent color; the rest of the palette still comes from Light/Dark above.")}
         >
           <div className="stg-inline">
             {/* ⚠️ 用原生 `<input type="color">`，**不自己写一个取色器**：系统取色器
@@ -329,7 +329,7 @@ export function AppearancePane({
             <input
               type="color"
               className="stg-color"
-              aria-label={t("主题色")}
+              aria-label={t("Accent color")}
               // ⚠️ `type="color"` **只认 `#rrggbb`**，给空串它自己会退回黑色——
               // 那会让"跟随风格"看起来像"用户选了黑"，所以这里退到此刻真正在用的
               // 那个色（`有效强调色`），让色块**始终显示当前生效的颜色**。
@@ -339,9 +339,9 @@ export function AppearancePane({
             <ActionButton
               onClick={() => 写({ accent: "" })}
               disabled={a.accent === ""}
-              title={t("回到当前风格自带的强调色。")}
+              title={t("Go back to the accent that the current style ships with.")}
             >
-              {t("跟随风格")}
+              {t("Follow the style")}
             </ActionButton>
             {/* ⚠️⚠️ 这句话**必须画在控件旁边**，不能塞进 `help`（那颗 `?` 的
                 悬停提示）。
@@ -352,14 +352,14 @@ export function AppearancePane({
                 "生效的是这个东西、而它没被认出来"，而不是让用户对着一个
                 看起来正常的色块猜。 */}
             {认不出 && (
-              <span className="stg-warn">{t("（认不出「{0}」，按跟随风格处理）", a.accent)}</span>
+              <span className="stg-warn">{t("(Unrecognized: {0} — falling back to following the style)", a.accent)}</span>
             )}
           </div>
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("跟随系统偏好")}>
-        <SettingRow help={t("勾选后，上面两张缩略图跟随系统的明暗设置；取消勾选则停在当前这套。")}>
+      <SettingsGroup title={t("Follow the system preference")}>
+        <SettingRow help={t("When checked, the two previews above follow the system's Light/Dark setting; when unchecked they stay on the current one.")}>
           {/* ⚠️ 取消勾选时落到**此刻正在看的这一套**（`当前明暗`），不是写死的
               浅色（2026-09-25 改，用户体验评估抓出来的）。原来写的是 `"light"`：
               用户先选了深色、再来取消"跟随系统"，界面会当场变浅——一个纯取消
@@ -369,23 +369,23 @@ export function AppearancePane({
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("字体大小")}
+        title={t("Font size")}
         help={t(
-          "只作用于外壳（菜单、侧栏、对话框、状态栏）。正文的字号由文档主题控制。⚠️ 它也能用 Ctrl+滚轮拨——拨的是字号还是缩放，在下面「缩放」那一组里选。",
+          "Affects the shell only (menus, sidebar, dialogs, status bar). The document's text size is controlled by the document theme. ⚠️ It can also be changed with Ctrl+scroll — which of the two the wheel turns is chosen under Zoom below.",
         )}
       >
         <SettingRow>
           <Radio
             value={a.custom_font_size ? "custom" : "auto"}
             options={[
-              { value: "auto", label: t("自动（推荐）") },
-              { value: "custom", label: t("自定义") },
+              { value: "auto", label: t("Automatic (Recommended)") },
+              { value: "custom", label: t("Custom") },
             ]}
             onChange={(v) => 写({ custom_font_size: v === "custom" })}
           />
         </SettingRow>
 
-        <SettingRow label={t("界面字号")}>
+        <SettingRow label={t("Interface font size")}>
           <Range
             value={settings.ui_font_size}
             min={12}
@@ -398,8 +398,8 @@ export function AppearancePane({
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("缩放")}
-        help={t("本项缩放整个界面（外壳与编辑区），而「字体大小」只缩放外壳的文字。两者相乘叠加，这是有意设计。")}
+        title={t("Zoom")}
+        help={t("This scales the whole interface (shell and editing area), while Font size scales only the shell's text. The two multiply — that is intentional.")}
       >
         <SettingRow>
           <NumberInput
@@ -413,8 +413,8 @@ export function AppearancePane({
         </SettingRow>
 
         <SettingRow
-          label={t("按住 Ctrl 时用滚轮")}
-          help={t("上面那两个数都能用滚轮拨，下面选滚轮拨哪一个。")}
+          label={t("Use the scroll wheel while holding Ctrl")}
+          help={t("Both numbers above can be turned with the wheel; pick which one below.")}
         >
           <Toggle
             checked={a.ctrl_wheel_zoom}
@@ -423,22 +423,22 @@ export function AppearancePane({
         </SettingRow>
 
         <SettingRow
-          label={t("滚轮改什么")}
-          help={t("改字号时，滚轮会顺手把上面「字体大小」那一组切到「自定义」——不然那个数不算数。")}
+          label={t("What the wheel changes")}
+          help={t("When it changes the font size, the wheel also switches the Font size group above to Custom — otherwise that number would have no effect.")}
         >
           <Radio
             value={a.ctrl_wheel_target}
             options={[
-              { value: "font_size", label: t("字体大小") },
-              { value: "zoom", label: t("界面缩放") },
+              { value: "font_size", label: t("Font size") },
+              { value: "zoom", label: t("Interface zoom") },
             ]}
             onChange={(ctrl_wheel_target) => 写({ ctrl_wheel_target })}
           />
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("显示状态栏")}>
-        <SettingRow help={t("底部显示字数 / 行列 / 时间的横条。")}>
+      <SettingsGroup title={t("Show status bar")}>
+        <SettingRow help={t("The bar at the bottom showing word count, lines/columns and the time.")}>
           <Toggle
             checked={a.show_status_bar}
             onChange={(show_status_bar) => 写({ show_status_bar })}
@@ -446,10 +446,10 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("字数统计")}>
+      <SettingsGroup title={t("Word count")}>
         <SettingRow
-          label={t("阅读速度")}
-          help={t("每分钟阅读的字数，只用于把总字数换算成状态栏里的「约几分钟读完」，不影响其它功能。382 是中文的常见取值。")}
+          label={t("Reading speed")}
+          help={t("Words read per minute. Used only to turn the total word count into the reading time in the status bar; nothing else is affected. 382 is a common value for Chinese.")}
         >
           <NumberInput
             value={a.reading_speed}
@@ -462,8 +462,8 @@ export function AppearancePane({
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("格式化工具栏")}
-        help={t("编辑区上方那一栏按钮（加粗、斜体、标题……）。⚠ 默认「始终不显示」：同一批命令在菜单栏里按同一套分组摆着，那一栏平时只是占地方。⚠ 选「鼠标悬停时显示」之后，鼠标移到编辑区顶端它才露出来、移开就收回去，而且它露面时正文会往下让一条——工具栏在文档流里，不是浮层。⚠ 三档在菜单「视图 → 格式化工具栏」里也能选，改的是同一个值。")}
+        title={t("Formatting Toolbar")}
+        help={t("The row of buttons above the editing area (bold, italic, headings…). ⚠ Default is Never Show: the same commands sit in the menu bar under the same grouping, so that row is usually just in the way. ⚠ With Show on Hover the row only appears when the mouse reaches the top of the editing area, and it pushes the document down when it appears — the toolbar is in the flow, not an overlay. ⚠ All three settings are also under View → Formatting Toolbar; both change the same value.")}
       >
         <SettingRow>
           {/* ⚠️ 三档用 `Radio`，**不用 `Toggle`**（2026-09-25 从布尔改成三档）：
@@ -472,9 +472,9 @@ export function AppearancePane({
           <Radio
             value={a.toolbar}
             options={[
-              { value: "always", label: t("始终显示") },
-              { value: "hover", label: t("鼠标悬停时显示") },
-              { value: "never", label: t("始终不显示") },
+              { value: "always", label: t("Always Show") },
+              { value: "hover", label: t("Show on Hover") },
+              { value: "never", label: t("Never Show") },
             ]}
             onChange={(toolbar) => 写({ toolbar })}
           />
@@ -482,30 +482,30 @@ export function AppearancePane({
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("深色模式")}
-        help={t("为深色模式单独指定一套文档主题。⚠ 本项只作用于文档主题这一条轴，与上面「明暗」（整个外壳的明暗）无关。")}
+        title={t("Dark mode")}
+        help={t("Use a separate set of document themes for dark mode. ⚠ This applies to the document-theme axis only, and has nothing to do with Light/Dark above (that one is the whole shell).")}
       >
-        <SettingRow label={t("用一套独立的文档主题")}>
+        <SettingRow label={t("Use a separate set of document themes")}>
           <Toggle
             checked={a.dark_theme_separate}
             onChange={(dark_theme_separate) => 写({ dark_theme_separate })}
           />
         </SettingRow>
 
-        <SettingRow label={t("深色下用哪套")}>
+        <SettingRow label={t("Which set to use in dark mode")}>
           <div className="stg-inline">
             <Select
               value={a.dark_document_theme}
               options={[
-                { value: "", label: t("跟随浅色主题") },
+                { value: "", label: t("Follow the light theme") },
                 // ⚠️ 回调参数**不能叫 `t`**：那是上面 `useT()` 的译文函数。
                 ...docThemes.map((主题) => ({ value: 主题.id, label: 主题.name })),
               ]}
               disabled={!a.dark_theme_separate}
               onChange={(dark_document_theme) => 写({ dark_document_theme })}
             />
-            <ActionButton onClick={onOpenThemesDir} title={t("打开主题文件夹。把 .css 文件放入其中即可选用。")}>
-              {t("主题文件夹…")}
+            <ActionButton onClick={onOpenThemesDir} title={t("Open the themes folder. Put a .css file in it and it becomes selectable.")}>
+              {t("Themes folder…")}
             </ActionButton>
           </div>
         </SettingRow>

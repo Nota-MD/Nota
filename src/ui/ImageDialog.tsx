@@ -71,7 +71,7 @@ export function ImageDialog({
     const 选的 = await 选文件({
       multiple: false,
       directory: false,
-      filters: [{ name: t("图片"), extensions: 图片后缀 }],
+      filters: [{ name: t("Images"), extensions: 图片后缀 }],
     });
     if (typeof 选的 !== "string") return; // 用户取消了，不是错误
     set来源("path");
@@ -111,12 +111,12 @@ export function ImageDialog({
         className="confirm-dialog prompt-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={t("插入图像")}
+        aria-label={t("Insert Image")}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="confirm-title">{t("插入图像")}</h2>
+        <h2 className="confirm-title">{t("Insert Image")}</h2>
 
-        <div className="image-src-tabs" role="tablist" aria-label={t("图片来自哪里")}>
+        <div className="image-src-tabs" role="tablist" aria-label={t("Where the image comes from")}>
           <button
             type="button"
             role="tab"
@@ -124,7 +124,7 @@ export function ImageDialog({
             className={`btn ${来源 === "path" ? "btn-primary" : ""}`}
             onClick={() => set来源("path")}
           >
-            {t("本地文件")}
+            {t("Local file")}
           </button>
           <button
             type="button"
@@ -133,12 +133,12 @@ export function ImageDialog({
             className={`btn ${来源 === "url" ? "btn-primary" : ""}`}
             onClick={() => set来源("url")}
           >
-            {t("网络地址")}
+            {t("Web address")}
           </button>
         </div>
 
         <label className="prompt-label" htmlFor="nota-image-src">
-          {来源 === "url" ? t("图片网址") : t("图片文件")}
+          {来源 === "url" ? t("Image URL") : t("Image file")}
         </label>
         <div className="image-src-row">
           <input
@@ -151,21 +151,21 @@ export function ImageDialog({
             value={地址}
             placeholder={
               来源 === "url"
-                ? t("https://example.com/图.png")
-                : t("文件的完整路径，或相对本文档目录的写法")
+                ? t("https://example.com/image.png")
+                : t("Full path to the file, or a path relative to this document's folder")
             }
             onChange={(e) => set地址(e.target.value)}
             onKeyDown={回车或退出}
           />
           {来源 === "path" && (
             <button type="button" className="btn" onClick={() => void 浏览()}>
-              {t("浏览…")}
+              {t("Browse…")}
             </button>
           )}
         </div>
 
         <label className="prompt-label" htmlFor="nota-image-alt">
-          {t("替代文字（可留空）")}
+          {t("Alt text (optional)")}
         </label>
         <input
           id="nota-image-alt"
@@ -173,7 +173,7 @@ export function ImageDialog({
           type="text"
           autoComplete="off"
           value={替代文字}
-          placeholder={t("图片加载不出来时会显示这段文字")}
+          placeholder={t("Shown when the image cannot be loaded")}
           onChange={(e) => set替代文字(e.target.value)}
           onKeyDown={回车或退出}
         />
@@ -184,7 +184,7 @@ export function ImageDialog({
           那时宿主会**报错**（不会猜一个目录），先说出来比让用户撞一次好。
         */}
         <p className="prompt-hint">
-          {t("插入后怎么落地，看「设置 → 图像 → 插入图片时」那一项。")}
+          {t("Where it lands after inserting depends on Settings → Image → When inserting an image.")}
           {!request.文档存过盘 && (
             <>
               <br />
@@ -194,7 +194,7 @@ export function ImageDialog({
                 里加英文时**别把这个空格抹掉**，抹掉就成了废键（`tools/i18n-check.sh`
                 会判 FAIL）。写成两截包是另一种做法，但那会把一句话拆成两个键。
               */}
-              {t("⚠️ 这份文档还没存过盘——「复制到…」那几个动作需要文档所在的目录， 先保存一次（Ctrl+S）再用它们。")}
+              {t("⚠️ This document has not been saved yet — the “Copy to…” actions need the document's folder. Save once (Ctrl+S) and try again.")}
             </>
           )}
         </p>
@@ -211,9 +211,9 @@ export function ImageDialog({
           <p className="prompt-hint">
             {/* ⚠️ 「写着」后面那个 `{" "}` 是**原来就在的**一个空格（JSX 文本在
                 `<code>` 前面留的空），拆成两截之后得显式补回来，不然会粘在一起。 */}
-            {t("⚠️ 这份文档的 YAML 里写着")}{" "}
+            {t("⚠️ This document's YAML sets")}{" "}
             <code>nota-auto-upload</code>
-            {t("，而且设置里允许自动上传——插入后这张图会直接传上去，正文里写的是传回来的那条网址（去掉这个行为就把 YAML 里那一行删掉）。")}
+            {t(", and settings allow automatic upload — the image is uploaded right after inserting and the document gets the returned URL (delete that line from the YAML to turn this off).")}
           </p>
         ) : (
           request.能上传 && (
@@ -223,22 +223,22 @@ export function ImageDialog({
                 checked={要上传}
                 onChange={(e) => set要上传(e.target.checked)}
               />
-              {t("插入后上传到上传服务器（正文里写传回来的网址）")}
+              {t("Upload after inserting (the document gets the returned URL)")}
             </label>
           )
         )}
         {!request.会自动上传 && request.能上传 && 要上传 && (
           <p className="prompt-hint">
-            {t("⚠️ 传失败时会照常插入，地址还是本地那条——图不会丢，失败原因另说一句。")}
+            {t("⚠️ If the upload fails, the image is inserted as usual with its local path — nothing is lost, and the failure is reported separately.")}
           </p>
         )}
 
         <div className="confirm-actions">
           <button type="button" className="btn" onClick={() => onAnswer(null)}>
-            {t("取消")}
+            {t("Cancel")}
           </button>
           <button type="button" className="btn btn-primary" onClick={提交}>
-            {t("插入")}
+            {t("Insert")}
           </button>
         </div>
       </div>

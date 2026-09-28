@@ -229,24 +229,24 @@ export function SettingsDialog({
    * 写成模块级的 `t(表[id])` 就不算调用，`en.ts` 里那几条会算"废键"→ 闸门 FAIL。
    */
   const 页名: Record<SectionId, string> = {
-    files: t("文件"),
-    editor: t("编辑器"),
-    image: t("图像"),
+    files: t("File"),
+    editor: t("Editor"),
+    image: t("Image"),
     // ⚠️ 这一条**不包 `t()`**：Markdown 是同一门语言的词，中英两版一模一样。
     markdown: "Markdown",
-    export: t("导出"),
-    appearance: t("外观"),
-    docTheme: t("文档主题"),
-    shortcuts: t("快捷键"),
+    export: t("Export"),
+    appearance: t("Appearance"),
+    docTheme: t("Document Themes"),
+    shortcuts: t("Shortcuts"),
     // ⚠️ 名字里**不能省掉「强制」**：上面「外观」上面那条菜单项叫「专注模式」
     // （F8，收起外壳），和这一页是两件事。名字撞了的话，用户找"专注"会找到
     // 那一页去，然后觉得"怎么只有个界面开关"。（`ui/commands.ts` 那两条的注释）
-    focus: t("强制专注"),
+    focus: t("Force Focus"),
     // ⚠️ 页名叫「拓展」而**不是「插件」**：右侧那一栏的清单页已经叫「插件」了
     // （`PluginDock.tsx`），两处同名会让人以为点哪个都一样。这一页管的是
     // **装 / 导出 / 卸载**（用户 2026-09-27 的原话就是"拓展管理面板"）。
-    extensions: t("拓展"),
-    general: t("通用"),
+    extensions: t("Extensions"),
+    general: t("General"),
   };
 
   const panelRef = useRef<HTMLDivElement>(null);
@@ -403,7 +403,7 @@ export function SettingsDialog({
         className="settings-shell"
         role="dialog"
         aria-modal="true"
-        aria-label={t("偏好设置")}
+        aria-label={t("Settings")}
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -412,7 +412,7 @@ export function SettingsDialog({
             <SearchField value={query} onChange={setQuery} />
           </div>
 
-          <nav className="settings-nav-list" aria-label={t("设置分页")}>
+          <nav className="settings-nav-list" aria-label={t("Settings sections")}>
             {ORDER.map((id) => (
               <button
                 key={id}
@@ -440,7 +440,7 @@ export function SettingsDialog({
 
           <div className="settings-nav-foot">
             <button type="button" className="btn btn-primary" onClick={onClose}>
-              {t("完成")}
+              {t("Done")}
             </button>
           </div>
         </aside>

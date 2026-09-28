@@ -155,18 +155,18 @@ export function Sidebar({
           所以 × 在 tablist **外面**，两个一起装进这条 `sidebar-head`。 */}
       <div className="sidebar-head">
         <nav className="sidebar-tabs" role="tablist">
-          <TabButton id="tree" current={tab} onSelect={onTab} label={t("文件")} />
+          <TabButton id="tree" current={tab} onSelect={onTab} label={t("File")} />
           {/* ⚠️ 顺序照「视图」菜单里那三条（`Ctrl+Shift+3` 文件树、
               `Ctrl+Shift+2` 文档列表、`Ctrl+Shift+1` 大纲）：菜单里从上往下
               是文件树 → 文档列表 → 大纲，这里也照这个次序排。 */}
-          <TabButton id="docs" current={tab} onSelect={onTab} label={t("文档列表")} />
-          <TabButton id="outline" current={tab} onSelect={onTab} label={t("大纲")} />
+          <TabButton id="docs" current={tab} onSelect={onTab} label={t("Document List")} />
+          <TabButton id="outline" current={tab} onSelect={onTab} label={t("Outline")} />
         </nav>
         <button
           type="button"
           className="sidebar-close"
-          title={t("收起侧边栏")}
-          aria-label={t("收起侧边栏")}
+          title={t("Hide the sidebar")}
+          aria-label={t("Hide the sidebar")}
           onClick={onClose}
         >
           <Icon name="folio-close-symbolic" />
@@ -183,11 +183,11 @@ export function Sidebar({
             // 而唯一的路藏在菜单里。
             <div className="sidebar-empty">
               <p className="sidebar-empty-lead">
-                {t("还没打开文件夹。打开一个文件夹后，这里会列出其中的 Markdown。")}
+                {t("No folder is open yet. Open a folder and its Markdown files will be listed here.")}
               </p>
               <button type="button" className="btn btn-with-icon" onClick={onOpenFolder}>
                 <Icon name="folio-document-open-symbolic" />
-                {t("打开文件夹…")}
+                {t("Open Folder…")}
               </button>
             </div>
           ))}
@@ -253,7 +253,7 @@ function RecentList({
     return (
       <div className="sidebar-empty">
         <p className="sidebar-empty-lead">
-          {t("还没有最近打开的文件。打开过的文件会列在这里。")}
+          {t("No recent files yet. Files you open will be listed here.")}
         </p>
       </div>
     );
@@ -277,8 +277,8 @@ function RecentList({
           <button
             type="button"
             className="sidebar-item-x"
-            title={t("从列表里去掉")}
-            aria-label={t("从列表里去掉")}
+            title={t("Remove from list")}
+            aria-label={t("Remove from list")}
             onClick={() => onForget(路径)}
           >
             <Icon name="folio-close-symbolic" />
@@ -349,7 +349,7 @@ function Outline({
     });
   }, [items, folded]);
 
-  if (!items.length) return <p className="sidebar-empty">{t("这份文档还没有标题。")}</p>;
+  if (!items.length) return <p className="sidebar-empty">{t("This document has no headings yet.")}</p>;
 
   const toggle = (line: number) =>
     setFolded((prev) => {
@@ -377,7 +377,7 @@ function Outline({
                 className="outline-twisty"
                 data-folded={folded.has(item.line)}
                 aria-expanded={!folded.has(item.line)}
-                title={folded.has(item.line) ? t("展开这一节") : t("折叠这一节")}
+                title={folded.has(item.line) ? t("Expand this section") : t("Collapse this section")}
                 onClick={() => toggle(item.line)}
               >
                 ▸
@@ -453,7 +453,7 @@ function FileTree(props: {
   };
 
   if (!props.nodes.length) {
-    return <p className="sidebar-empty">{t("这个文件夹里没有 Markdown 文件。")}</p>;
+    return <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>;
   }
 
   /**
@@ -539,7 +539,7 @@ function TreeRow(props: {
 
         {expanded && errors[node.path] && (
           <p className="tree-error" style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}>
-            {t("读不了这个文件夹：{0}", errors[node.path] ?? "")}
+            {t("Cannot read this folder: {0}", errors[node.path] ?? "")}
           </p>
         )}
       </li>

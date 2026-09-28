@@ -215,16 +215,16 @@ export function ReviewPane({
           onClick={onClose}
           // ⚠️ 这一下**不走插件**（见 `bridge/ipc.ts::reviewClose`）：
           // 插件正卡在一次慢调用里时，用户也得退得出来。
-          title={t("收起预览，回到正文（改动不会因此被应用）")}
+          title={t("Close the preview and go back to the document (this does not apply the changes)")}
         >
-          {t("回到正文")}
+          {t("Back to the document")}
         </button>
       </div>
 
       <div className="review-body">
         {/* 插件语言对不上就在这儿说一句——用户正看着这个插件的字。 */}
-        {语言对不上 && <p className="panel-lang">{t("此拓展不支持您的语言")}</p>}
-        {内容.state === "loading" && <p className="panel-empty">{t("正在读取…")}</p>}
+        {语言对不上 && <p className="panel-lang">{t("This extension does not support your language")}</p>}
+        {内容.state === "loading" && <p className="panel-empty">{t("Loading…")}</p>}
         {内容.state === "error" && (
           <p className="panel-msg panel-msg-error">{内容.message}</p>
         )}

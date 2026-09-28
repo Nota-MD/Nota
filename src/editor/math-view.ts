@@ -454,8 +454,8 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
       : document.createElement("textarea");
     输入.className = 源码类;
     输入.spellcheck = false;
-    输入.setAttribute("aria-label", t("公式源码（LaTeX）"));
-    输入.placeholder = 行内 ? t("例如 E=mc^2") : t("例如 \\frac{a}{b}");
+    输入.setAttribute("aria-label", t("Math Source (LaTeX)"));
+    输入.placeholder = 行内 ? t("e.g. E=mc^2") : t("e.g. \\frac{a}{b}");
     if (行内) (输入 as HTMLInputElement).type = "text";
     else (输入 as HTMLTextAreaElement).rows = 1;
 
@@ -498,7 +498,7 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
     function 造占位(): HTMLElement {
       const 卡 = document.createElement(行内 ? "span" : "div");
       卡.className = 占位类;
-      卡.textContent = 行内 ? t("空的行内公式") : t("空的公式块：点一下就能写 LaTeX");
+      卡.textContent = 行内 ? t("Empty inline math") : t("Empty math block — click to write LaTeX");
       return 卡;
     }
 

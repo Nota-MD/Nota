@@ -202,7 +202,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       } catch (e) {
         // 插件读不出来**不该拦住别的**（设置、工作区、主题照常），
         // 但也不能不响：界面上少了一整栏，用户得知道是为什么。
-        toast(t("读取拓展状态失败：{0}", String(e)), "error");
+        toast(t("Could not read extension status: {0}", String(e)), "error");
       }
     })();
   }, [重拉, toast]);
@@ -228,7 +228,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
         const 现在 = await api.plugin.review();
         if (还活着) setReview(现在);
       } catch (e) {
-        if (还活着) toast(t("读取编辑区预览状态失败：{0}", String(e)), "error");
+        if (还活着) toast(t("Could not read the in-editor preview status: {0}", String(e)), "error");
       }
     };
 
@@ -256,7 +256,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       setReview(null);
     } catch (e) {
       // ⚠️ 收不起来要说话：不说的话用户看到的是"按钮点了没反应"。
-      toast(t("收起预览失败：{0}", String(e)), "error");
+      toast(t("Could not close the preview: {0}", String(e)), "error");
     }
   }, [review, toast]);
 
@@ -266,7 +266,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
         await api.plugin.call(plugin, command, args);
       } catch (e) {
         // 带上插件 id 与命令名：插件多了之后"哪一条没跑成"正是用户要看的。
-        toast(t("拓展 {0} 的「{1}」没跑成：{2}", plugin, command, String(e)), "error");
+        toast(t("Could not run “{1}” from extension {0}: {2}", plugin, command, String(e)), "error");
       }
     },
     [toast],
@@ -350,19 +350,19 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       // 兜底那一次查只是为了老调用点，正常情况下上面那条 `??` 用不上。
       const 真指纹 = 指纹 ?? plugins.find((x) => x.id === id)?.key_id ?? null;
       const 答 = await askConfirm({
-        title: t("信任这个签名者？"),
+        title: t("Trust This Signer?"),
         // ⚠️ 拆成一句一条，而不是把三句拼成一个 `t("…")`：换行是**分段**，不是
-        // 句子的一部分——键里带上 `\n` 的话，英文表那边也得照着写转义。
+        // 句子的一部分——键里带上 `\n` 的话，中文表那边也得照着写转义。
         message:
-          t("指纹：{0}", 真指纹 ?? t("（未知）")) +
+          t("Fingerprint: {0}", 真指纹 ?? t("(unknown)")) +
           "\n\n" +
-          t("信任之后，凡是这把钥匙签的包都会当成「已验证」。") +
+          t("Once trusted, any package signed with this key counts as verified.") +
           "\n" +
-          t("信任是按指纹记的——请对着作者公布的那一份核对，别只看名字。"),
-        confirmLabel: t("信任"),
+          t("Trust is recorded by fingerprint — check it against the one the author publishes, not just the name."),
+        confirmLabel: t("Trust"),
       });
       if (答 !== "confirm") return;
-      await 跑(id, () => api.plugin.trust(id), t("信任了 {0}", 真指纹 ?? id));
+      await 跑(id, () => api.plugin.trust(id), t("Trusted {0}", 真指纹 ?? id));
     },
     [plugins, askConfirm, 跑],
   );
@@ -374,7 +374,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     const 选 = await openDialog({
       multiple: false,
       directory: false,
-      filters: [{ name: t("拓展包"), extensions: ["nota-plugin", "zip"] }],
+      filters: [{ name: t("Extension Package"), extensions: ["nota-plugin", "zip"] }],
     }).catch(() => null);
     if (typeof 选 !== "string") return; // 用户取消 / 平台没给路径
 
@@ -392,7 +392,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     const 清单 = await api.plugin.list().catch(() => []);
     const p = 清单.find((x) => x.id === id);
     if (!p) return;
-    toast(t("装好了：{0}（{1}）", p.name, 签名说明(p.signature)), "info");
+    toast(t("Installed: {0} ({1})", p.name, 签名说明(p.signature)), "info");
     if (p.signature === "unknown") await 信任它(p.id, p.key_id);
   }, [跑, 信任它, toast]);
 
@@ -404,7 +404,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       const 默认 = await api.plugin.exportName(id).catch(() => `${id}.nota-plugin`);
       const 选 = await saveDialog({
         defaultPath: 默认,
-        filters: [{ name: t("拓展包"), extensions: ["nota-plugin"] }],
+        filters: [{ name: t("Extension Package"), extensions: ["nota-plugin"] }],
       }).catch(() => null);
       if (typeof 选 !== "string") return; // 用户取消 / 平台没给路径
 
@@ -422,8 +422,8 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       if (!报告) return; // 失败了，`跑` 已经 toast 过
       toast(
         [
-          t("导出了 {0}", 报告.path),
-          t("{0} 个文件，{1}", String(报告.files), 大小说明(报告.bytes)),
+          t("Exported {0}", 报告.path),
+          t("{0} files, {1}", String(报告.files), 大小说明(报告.bytes)),
           签名去向说明(报告.signature),
         ].join("\n"),
         "info",
@@ -435,7 +435,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   const 打开目录它 = useCallback(async () => {
     // 成功那一下也说一句：文件管理器可能在**另一个**窗口/工作区里弹出来，
     // 用户不一定看得见它。顺带把路径带上——找不到的人可以照着路径自己走。
-    await 跑("目录", () => api.plugin.openDir(), t("已在文件管理器里打开拓展文件夹"));
+    await 跑("目录", () => api.plugin.openDir(), t("Opened the extension folder in your file manager"));
   }, [跑]);
 
   const 卸它 = useCallback(
@@ -443,17 +443,17 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       // ⚠️ 这一下**不可逆**（插件目录真的删掉），所以必须先问一句。
       // 文案里明说"设置文件留着"——用户最担心的正是"我的 API key 会不会没了"。
       const 答 = await askConfirm({
-        title: t("卸载这个拓展？"),
+        title: t("Uninstall This Extension?"),
         // 拆法同上面「信任」那张框（换行是分段，不进键）。
         message:
-          t("「{0}」的拓展目录会被删掉，它带来的面板、菜单项、命令都会消失。", id) +
+          t("The extension folder for “{0}” is deleted, along with the panels, menu items and commands it brings.", id) +
           "\n\n" +
-          t("它自己的设置文件（比如 AI 拓展的 API key）会留着，重装同一个 id 时还在。"),
-        confirmLabel: t("卸载"),
+          t("Its own settings file (the AI extension's API key, for example) is kept, and stays if you reinstall the same id."),
+        confirmLabel: t("Uninstall"),
         danger: true,
       });
       if (答 !== "confirm") return;
-      await 跑(id, () => api.plugin.uninstall(id), t("卸载了 {0}", id));
+      await 跑(id, () => api.plugin.uninstall(id), t("Uninstalled {0}", id));
     },
     [askConfirm, 跑],
   );
@@ -469,7 +469,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       await 跑(
         id,
         () => api.plugin.setEnabled(id, enabled),
-        enabled ? t("启用了 {0}", 名) : t("停用了 {0}", 名),
+        enabled ? t("Enabled {0}", 名) : t("Disabled {0}", 名),
       );
     },
     [plugins, 跑],
@@ -493,7 +493,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
 
 /**
  * ⚠️ `签名说明` **2026-09-27 搬去了 `ui/pluginText.ts`**（本地那份和插件栏那份
- * 是同一句话的两个副本，而「拓展」设置页又要用第三遍）。`t("已验证")` 那几条
+ * 是同一句话的两个副本，而「拓展」设置页又要用第三遍）。`t("verified")` 那几条
  * 键跟着搬走，`tools/i18n-check.sh` 扫的是全 `src/`，不受影响。
  */
 
@@ -508,11 +508,11 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
 function 签名去向说明(去向: 导出报告["signature"]): string {
   switch (去向) {
     case "kept":
-      return t("签名原样带上了——这份包在别人那里还是「已验证」（如果他信任那把钥匙）。");
+      return t("The signature was carried over — this package still counts as verified for whoever receives it (as long as they trust that key).");
     case "dropped":
-      return t("⚠️ 这个拓展被改过，签名对不上，所以包里没有签名——别人装得上，但会看到「未签名」。");
+      return t("⚠️ This extension was changed, so the signature no longer matches and the package carries none — others can still install it, but they will see “unsigned”.");
     default:
-      return t("这个拓展本来就没有签名。");
+      return t("This extension was never signed.");
   }
 }
 

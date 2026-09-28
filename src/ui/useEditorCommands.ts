@@ -56,7 +56,7 @@ export function useEditorCommands(w: 命令接线): 命令出口 {
   const run = useCallback(
     (c: EditorCommand, payload?: CommandPayload) => {
       if (!editorRef.current?.runCommand(c, payload)) {
-        toast(t("当前编辑模式下还没有这个操作"), "info");
+        toast(t("This action is not available in the current editing mode."), "info");
       }
     },
     [editorRef, toast],
@@ -68,9 +68,9 @@ export function useEditorCommands(w: 命令接线): 命令出口 {
    */
   const 插入链接 = useCallback(async () => {
     const r = await askPrompt({
-      title: t("超链接"),
-      label: t("链接地址"),
-      placeholder: t("https://example.com，或 #本页锚点"),
+      title: t("Link"),
+      label: t("Link URL"),
+      placeholder: t("https://example.com, or #anchor-on-this-page"),
     });
     if (!r) return; // 用户取消了，不是错误
     run("link", { href: r.value });

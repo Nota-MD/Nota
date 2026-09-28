@@ -67,8 +67,8 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
    */
   const 方法表: Array<{ value: ImageUploadMethod; label: string }> = [
     // ⚠️ 这一条也包了：句子里那个括号是**全角**的，英文界面上不该原样露出来。
-    { value: "post", label: t("POST（multipart/form-data）") },
-    { value: "put", label: t("PUT（裸字节）") },
+    { value: "post", label: t("POST (multipart/form-data)") },
+    { value: "put", label: t("PUT (raw bytes)") },
   ];
 
   // ⚠️ `null` = 还没读回来。读之前**什么都不画**：先画一份默认值再被真值替换，
@@ -130,7 +130,7 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
     // 路径里写。读成功但还没回来时什么都不画（见上面那条注释）。
     return 毛病 === null ? null : (
       <Note>
-        <strong>{t("上传设置读不出来：")}</strong>
+        <strong>{t("Could not read the upload settings: ")}</strong>
         {毛病}
       </Note>
     );
@@ -138,14 +138,14 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
 
   return (
     <SettingsGroup
-      title={t("上传服务器")}
+      title={t("Upload server")}
       help={t(
-        "把图片发到一台你自己的服务器上，正文里写传回来的那条网址。⚠ 默认关着；关着的时候插入图片一个字节都不会往外发。这一组存在 ~/.config/nota/image-upload.toml（权限 0600，因为它装着你的令牌），不在 settings.toml 里——所以「恢复出厂默认」不会动它。",
+        "Send images to a server of your own and put the returned URL in the document. ⚠ Off by default; while it is off, inserting an image sends nothing out. This group lives in ~/.config/nota/image-upload.toml (mode 0600, because it holds your token), not in settings.toml — so “Reset to Defaults” leaves it alone.",
       )}
     >
       <SettingRow
-        label={t("启用上传")}
-        description={t("关着的时候：插图框里不出现上传勾选框，文档的 YAML 里写什么都不传。")}
+        label={t("Enable upload")}
+        description={t("While off: no upload checkbox appears in the image dialog, and whatever the document's YAML says is ignored.")}
       >
         <Toggle checked={设置.enabled} onChange={(enabled) => 写({ enabled })} />
       </SettingRow>
@@ -153,23 +153,23 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
       {设置.enabled && (
         <>
           <SettingRow
-            label={t("服务器地址")}
+            label={t("Server URL")}
             description={t(
-              "只认 http / https。⚠ 图片的字节会原样发到这条地址上，填之前先确认它是你自己的服务器。",
+              "Only http / https. ⚠ The image's bytes are sent to this address as-is — make sure it is your own server before filling it in.",
             )}
           >
             <TextInput
               value={设置.url}
               width="lg"
-              placeholder={t("https://图床.example.com/upload")}
+              placeholder={t("https://images.example.com/upload")}
               onChange={(url) => 写({ url })}
             />
           </SettingRow>
 
           <SettingRow
-            label={t("上传方式")}
+            label={t("Upload method")}
             help={t(
-              "POST 把图当表单文件发（大多数图床这样）；PUT 直接把字节当请求体发。⚠ 网络图片只能用 POST（表单里才有地方放那条原地址），所以选了 PUT 时网络图片不会被上传。",
+              "POST sends the image as a form file (what most image hosts expect); PUT sends the raw bytes as the request body. ⚠ Remote images can only use POST (only a form has a place for the original URL), so with PUT selected they are not uploaded.",
             )}
           >
             <Select value={设置.method} options={方法表} onChange={(method) => 写({ method })} />
@@ -177,9 +177,9 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
 
           {设置.method === "post" && (
             <SettingRow
-              label={t("文件字段名")}
+              label={t("File field name")}
               description={t(
-                "图挂在表单的哪个字段上。各家叫法不同（file / smfile / image …），照服务方的文档填。",
+                "Which form field the image goes into. Hosts differ (file / smfile / image …) — check your provider's docs.",
               )}
             >
               <TextInput value={设置.field} onChange={(field) => 写({ field })} />
@@ -187,46 +187,46 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
           )}
 
           <SettingRow
-            label={t("请求头")}
+            label={t("Request headers")}
             description={
               <>
-                {t("一行一条")}
+                {t("One per line")}
                 {" "}
                 {/* ⚠️ 这一格是**示例的写法**（一行一条请求头长什么样），不是术语，
                     所以要翻：英文界面上留着「名字: 值」等于给了一个中文的例子。
                     判据是"用户在照着它写自己的东西"——`Authorization: Bearer …`
                     那一格是**真值示例**，所以它不翻（它是原样要抄进配置里的）。 */}
-                <code>{t("名字: 值")}</code>
-                {t("。令牌写这儿，例如")}
+                <code>{t("name: value")}</code>
+                {t(". Put the token here, for example")}
                 {" "}
                 <code>Authorization: Bearer …</code>
-                {t("。空行和")}
+                {t(". Blank lines and lines starting with")}
                 {" "}
                 <code>#</code>
                 {" "}
-                {t("开头的行忽略。")}
+                {t(" are ignored.")}
               </>
             }
             help={t(
-              "⚠ 值只允许 ASCII：出现中文会被 HTTP 客户端整条拒掉，而它报的是一句英文。⚠ Content-Type / Content-Length / User-Agent 这三个 Nota 自己会写，别在这儿重复填——填了会以你的为准，而长度拿不准的那种请求很多服务器不收。",
+              "⚠ Values must be ASCII: a non-ASCII character makes the HTTP client reject the whole request, and the error it reports is in English. ⚠ Nota writes Content-Type / Content-Length / User-Agent itself — do not repeat them here. Anything you put in wins, and many servers reject requests whose length is uncertain.",
             )}
           >
             <TextArea
               value={设置.headers}
               mono
               rows={4}
-              placeholder={t("Authorization: Bearer 你的令牌")}
+              placeholder={t("Authorization: Bearer your-token")}
               onChange={(headers) => 写({ headers })}
             />
           </SettingRow>
 
           <SettingRow
-            label={t("从回话里取地址")}
+            label={t("Read the URL from the response")}
             description={t(
-              "服务方回的那段 JSON 里，网址在哪条路径上。留空 = 整段回话本身就是网址（纯文本接口）。",
+              "Where the URL sits in the JSON the server returns. Empty = the whole response is the URL (a plain-text endpoint).",
             )}
             help={t(
-              "点路径，例：data.url / data.links.url / result.0.url（数组下标也认）。默认 data.url 是多数图床的形状。",
+              "Dot path, e.g. data.url / data.links.url / result.0.url (array indices work too). The default data.url matches most image hosts.",
             )}
           >
             <TextInput
@@ -238,12 +238,12 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
           </SettingRow>
 
           <SettingRow
-            label={t("网络图片的字段名")}
+            label={t("Field name for remote images")}
             description={t(
-              "插入一条网络图片时，把那条原地址当普通表单字段发过去，让服务器自己去取。留空 = 网络图片不上传（插入照旧，只是不传）。",
+              "When a remote image is inserted, send its original URL as an ordinary form field and let the server fetch it. Empty = remote images are not uploaded (they are still inserted, just not sent).",
             )}
             help={t(
-              "⚠ 默认空着，而且建议先空着：填了之后，勾一下「插入后上传」就等于替你去访问那个第三方，而你此刻的动作只是「往文档里写一条地址」。",
+              "⚠ Empty by default, and better left empty at first: once it is filled in, ticking “Upload after inserting” means visiting that third party on your behalf, when all you did was write an address into a document.",
             )}
           >
             <TextInput
@@ -254,18 +254,18 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
           </SettingRow>
 
           <SettingRow
-            label={t("允许根据 YAML 自动上传")}
+            label={t("Allow automatic upload via YAML")}
             description={
               <>
-                {t("文档自己的 front matter 里写着")}
+                {t("the document's own front matter contains")}
                 {" "}
                 <code>nota-auto-upload: true</code>
                 {" "}
-                {t("时，插入的本地图片直接传上去，正文里写传回来的网址。")}
+                {t(", local images are uploaded as soon as they are inserted and the document gets the returned URL.")}
               </>
             }
             help={t(
-              "⚠ 这是第二道闸，不是总开关：上面「启用上传」关着时它没有作用。⚠ 网络图片永远不自动上传（那等于替你去访问一个第三方），这一条没有开关。⚠ 每次自动上传都会弹一条提示，成功了也说——因为那是把字节送出去的动作。",
+              "⚠ This is a second gate, not the master switch: it does nothing while Enable upload above is off. ⚠ Remote images are never uploaded automatically (that would mean visiting a third party on your behalf) — there is no switch for it. ⚠ Every automatic upload shows a toast, successful ones included — it is the action that sends bytes out.",
             )}
           >
             <Toggle checked={设置.auto} onChange={(auto) => 写({ auto })} />
@@ -275,7 +275,7 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
 
       {毛病 !== null && (
         <Note>
-          <strong>{t("刚才那次没存成：")}</strong>
+          <strong>{t("That last save did not work: ")}</strong>
           {毛病}
         </Note>
       )}
@@ -283,18 +283,18 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
       <Note>
         {设置.enabled ? (
           <>
-            {t("这一组存在")}
+            {t("This group lives in")}
             {" "}
             <code>~/.config/nota/image-upload.toml</code>
             {" "}
             {t(
-              "（权限 0600，因为它装着你的令牌），也可以直接拿编辑器改那个文件——Nota 每次上传前都会重新读一遍，改完立刻生效。",
+              " (mode 0600, because it holds your token). You can also edit that file in any editor — Nota re-reads it before every upload, so changes take effect immediately.",
             )}
           </>
         ) : (
           <>
             {t(
-              "上传默认是关着的。打开它之前先确认你要把图片发到哪台服务器上：从那一刻起，插入图片就可能把字节送出这台机器。",
+              "Upload is off by default. Before turning it on, be sure which server you are sending images to: from that moment on, inserting an image can send bytes off this machine.",
             )}
           </>
         )}
@@ -302,8 +302,8 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
 
       {/* ⚠️ 这个按钮不存任何值，是"做一件事"（`ActionButton`）。给它的用途是：
           这一组里有一栏是"一行一条"，手改那个文件往往比在这个框里改省事。 */}
-      <SettingRow label={t("打开设置文件所在的目录")}>
-        <ActionButton onClick={onOpenConfigDir}>{t("在文件管理器里打开")}</ActionButton>
+      <SettingRow label={t("Open the folder holding the settings file")}>
+        <ActionButton onClick={onOpenConfigDir}>{t("Open in the file manager")}</ActionButton>
       </SettingRow>
     </SettingsGroup>
   );

@@ -110,7 +110,7 @@ interface PopupProps {
 export function MenuPopup(props: PopupProps) {
   const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label } = props;
 
-  // ⚠️ 条目文字**在这里才翻**：`ui/commands.ts` 那张表里存的是**键**（中文原文）。
+  // ⚠️ 条目文字**在这里才翻**：`ui/commands.ts` 那张表里存的是**键**（英文原文）。
   // 规矩与理由写在 `ui/MenuBar.tsx::useT` 那一段，`SubMenu` 那边同样要一份。
   const t = useT();
 

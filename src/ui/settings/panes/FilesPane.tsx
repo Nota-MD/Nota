@@ -27,10 +27,10 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
 
   /** 自动保存的档位（秒，0 = 关）。⚠️ 值是**秒数**，不是"档位编号"。 */
   const AUTOSAVE: Array<{ value: string; label: string }> = [
-    { value: "0", label: t("关闭") },
-    { value: "30", label: t("30 秒") },
-    { value: "60", label: t("1 分钟") },
-    { value: "300", label: t("5 分钟") },
+    { value: "0", label: t("Close") },
+    { value: "30", label: t("30 seconds") },
+    { value: "60", label: t("1 minute") },
+    { value: "300", label: t("5 minutes") },
   ];
 
   // ⚠️ 三档是**递进**的（第三档 = 第二档 ＋ 那个文件夹），标签得让人一眼看出
@@ -40,15 +40,15 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
   // "只打开文件夹"，而这一档实际连文件一起恢复。改名的理由和 serde 别名在
   // `src-tauri/src/settings/files.rs::StartupAction` 上（老值还读得懂）。
   const STARTUP: Array<{ value: StartupAction; label: string }> = [
-    { value: "new-file", label: t("打开空白文档") },
-    { value: "last-file", label: t("恢复上次打开的文件") },
-    { value: "last-session", label: t("恢复上次的文件和文件夹") },
+    { value: "new-file", label: t("Open a blank document") },
+    { value: "last-file", label: t("Restore the last open files") },
+    { value: "last-session", label: t("Restore the last files and folder") },
   ];
 
   const DROP: Array<{ value: DropAction; label: string }> = [
-    { value: "open-in-app", label: t("在窗口里打开") },
-    { value: "open-in-file-manager", label: t("在文件管理器里打开") },
-    { value: "ignore", label: t("什么也不做") },
+    { value: "open-in-app", label: t("Open in this window") },
+    { value: "open-in-file-manager", label: t("Open in the file manager") },
+    { value: "ignore", label: t("Do nothing") },
   ];
 
   // ⚠️ 这一格的标签 2026-09-27 从「导入为 Markdown」改成了「当文本文件打开」：
@@ -56,14 +56,14 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
   // 已在 `docs/10` §11.2 拍板不做。现在的行为是"文本文件照常打开、别的如实
   // 说一句打不开"，标签得说这件事（`ui/useFileDrop.ts`）。
   const IMPORT: Array<{ value: ImportAction; label: string }> = [
-    { value: "import-file", label: t("当文本文件打开") },
-    { value: "open-in-file-manager", label: t("在文件管理器里打开") },
-    { value: "ignore", label: t("什么也不做") },
+    { value: "import-file", label: t("Open as a text file") },
+    { value: "open-in-file-manager", label: t("Open in the file manager") },
+    { value: "ignore", label: t("Do nothing") },
   ];
 
   const FILTER: Array<{ value: FileFilter; label: string }> = [
-    { value: "supported", label: t("只显示 Markdown 和纯文本") },
-    { value: "all", label: t("全部显示") },
+    { value: "supported", label: t("Show only Markdown and plain text") },
+    { value: "all", label: t("Show all") },
   ];
 
   const 写 = paneWriter(settings, onChange, "files");
@@ -72,18 +72,18 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
   return (
     <>
       <SettingsGroup
-        title={t("启动选项")}
-        help={t("启动 Nota 时先做什么。三档是递进的：「文件夹」指的是左侧栏那棵文件树。")}
+        title={t("Startup")}
+        help={t("What Nota does first when it starts. The three settings build on each other; “folder” means the file tree in the left sidebar.")}
       >
         <SettingRow>
           <Select value={f.startup} options={STARTUP} onChange={(startup) => 写({ startup })} />
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("大纲")}>
+      <SettingsGroup title={t("Outline")}>
         <SettingRow
-          label={t("允许折叠和展开")}
-          help={t("侧栏大纲树中的标题能否折叠、展开。关闭后大纲树始终完全展开，条目较多时需连续滚动才能找到目标。")}
+          label={t("Allow collapsing and expanding")}
+          help={t("Whether headings in the sidebar outline can be collapsed and expanded. When off, the outline is always fully expanded and you have to scroll to find anything in a long list.")}
         >
           <Toggle
             checked={f.outline_collapsible}
@@ -93,12 +93,12 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("保存 & 恢复")}
-        help={t("「自动保存」只对存过盘的文档生效；没存过的新文档没有可写回去的地方，不在此列。")}
+        title={t("Saving & Recovery")}
+        help={t("“Autosave” applies only to documents that have been saved once; a new document has nowhere to write back to, so it is not covered")}
       >
         <SettingRow
-          label={t("自动保存")}
-          help={t("停止输入这么久之后，把改动写回原文件。⚠️ 落盘走的是和 Ctrl+S 同一条路（含「存盘前先强制同步一次编辑器」那一步），所以自动存出来的字节和手动存完全一样；写盘失败会照常弹提示条，只是成功那一下不弹（不然每半分钟打断一次）。")}
+          label={t("Auto Save")}
+          help={t("Write changes back to the file after this much idle typing. ⚠️ It goes to disk through the same path as Ctrl+S (including the “sync the editor first” step), so the bytes are identical to a manual save; a failed write still shows a toast — only the success case stays silent (otherwise it would interrupt every half minute).")}
         >
           <Select
             value={String(settings.autosave_seconds)}
@@ -108,8 +108,8 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("切换文件时自动保存")}
-          help={t("切到另一个标签页之前，先把这个文件的改动写盘。⚠️ 点标签、开文件、新建文档都算「切页」；关文档不算——那一条自己有「保存并关闭」，而且用户选的若是「丢弃并关闭」，这里再去存一次就是把他的选择反着做。")}
+          label={t("Auto Save when switching files")}
+          help={t("Write this file's changes to disk before switching to another tab. ⚠️ Clicking a tab, opening a file and creating a document all count as switching; closing a document does not — that one has its own “Save and Close”, and if the user chose “Discard and Close”, saving here would undo their choice.")}
         >
           <Toggle
             checked={f.autosave_on_switch}
@@ -118,25 +118,25 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("恢复未保存的草稿")}
-          help={t("把上一次异常退出时留下的、还没写盘的内容找回来。")}
+          label={t("Restore unsaved drafts")}
+          help={t("Bring back the content left over from a crash that never made it to disk.")}
         >
           <ActionButton
             disabled
-            title={t("尚未实现：这一项要在写盘之前另外留一份底，而现在的自动保存是直接往原文件写——写成了就没有草稿可言了。现状见本组末尾的说明。")}
+            title={t("Not implemented yet: this needs a separate copy made before writing to disk, while Auto Save currently writes straight to the original file — once written there is no draft left. See the note at the end of this group.")}
           >
-            {t("恢复草稿")}
+            {t("Restore drafts")}
           </ActionButton>
         </SettingRow>
 
         <SettingRow
-          label={t("清除历史文件记录")}
-          help={t("清掉「最近打开」那一份列表。只清记录，不碰文件本身。")}
+          label={t("Clear recent files history")}
+          help={t("Clear the “recent files” list. Only the records — the files themselves are untouched.")}
         >
           {/* ⚠️ 2026-09-27 接上：在这之前它是灰的，而那句 `title` 写着
               "目前没有「最近打开」列表"——那份列表现在在（侧栏「文档列表」页、
               文件菜单那一层、主页那一块），记录本身由 `ui/useSession.ts` 管。 */}
-          <ActionButton onClick={onClearRecent}>{t("清除记录")}</ActionButton>
+          <ActionButton onClick={onClearRecent}>{t("Clear records")}</ActionButton>
         </SettingRow>
 
         {/* ⚠️ 这段是**缩窄**过的，不是删掉重写的。2026-09-24 那版说的是
@@ -148,40 +148,40 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
             （`settings.css` 那条 `.stg-group-body > .stg-note`）；摆到组外面就变成
             整页宽、贴着最左边，看起来像下一组的标题。 */}
         <Note>
-          {t("上面两档自动保存")}
-          <strong>{t("是能用的")}</strong>
-          {t("：到点真的写盘（`Ctrl+S` 那条路）， 写不进去会报出来。")}
-          {t("「最近打开」那份列表也已经建起来了（侧栏「文档列表」页、文件菜单那一层、主页那一块都读它），所以「清除历史文件记录」现在真的清得掉。")}
+          {t("The two Auto Save settings above")}
+          <strong>{t("do work")}</strong>
+          {t(": it really writes to disk when the time comes (the Ctrl+S path), and a failed write is reported.")}
+          {t("The “recent files” list is in place too (the “Document List” page in the sidebar, the menu under File, and the block on the home screen all read it), so “Clear recent files history” really does clear it now.")}
           <br />
-          {t("还欠着的只剩这一条：")}
-          <strong>{t("「恢复未保存的草稿」")}</strong>
-          {t("要先有一份\"写盘之前留的底\" ——现在的自动保存是直接往原文件写，写成了就没有草稿可恢复。")}
+          {t("Only one item is still missing:")}
+          <strong>{t("“Restore unsaved drafts”")}</strong>
+          {t("needs a “copy kept before writing to disk” first — Auto Save currently writes straight to the original file, so once it is written there is no draft to restore.")}
         </Note>
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("文件树 / 文件库")}
-        help={t("只管侧栏那棵树显示什么，不改磁盘上的任何东西。")}
+        title={t("File tree / library")}
+        help={t("Only affects what the sidebar tree shows; nothing on disk is changed.")}
       >
-        <SettingRow label={t("显示隐藏文件")}>
+        <SettingRow label={t("Show hidden files")}>
           <Toggle checked={f.show_hidden} onChange={(show_hidden) => 写({ show_hidden })} />
         </SettingRow>
 
         <SettingRow
-          label={t("显示哪些文件")}
-          help={t("选「全部显示」时，一个 node_modules 目录即可让树中充满无关条目，因此默认只显示 Markdown 和纯文本。")}
+          label={t("Which files to show")}
+          help={t("With Show all, a single node_modules folder can fill the tree with irrelevant entries, so the default is Markdown and plain text only.")}
         >
           <Select value={f.tree_filter} options={FILTER} onChange={(tree_filter) => 写({ tree_filter })} />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("拖放")}
+        title={t("Drag and Drop")}
         help={t(
-          "把一个文件或文件夹拖到 Nota 窗口上时怎么办。⚠️ 图片不受这三档影响：拖一张图进来永远是插到正文的光标处。",
+          "What happens when you drag a file or folder onto the Nota window. ⚠️ Images are not affected by these three settings: dropping a picture always inserts it at the cursor.",
         )}
       >
-        <SettingRow label={t("当拖入文件夹时")}>
+        <SettingRow label={t("When a folder is dropped")}>
           <Select
             value={f.drop_folder}
             options={DROP}
@@ -189,7 +189,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("当拖入 Markdown 文件时")}>
+        <SettingRow label={t("When a Markdown file is dropped")}>
           <Select
             value={f.drop_markdown}
             options={DROP}
@@ -198,9 +198,9 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("当拖入可导入的文件时")}
+          label={t("When an importable file is dropped")}
           help={t(
-            "既不是 Markdown、也不是文本的文件（.docx / .epub / .pdf 这类）。⚠️ Nota 不做格式转换——这一档只决定文本文件要不要打开、别的文件要不要说一句。",
+            "Files that are neither Markdown nor plain text (.docx / .epub / .pdf and similar). ⚠️ Nota does not convert formats — this setting only decides whether text files get opened and whether the others get a word of explanation.",
           )}
         >
           <Select
@@ -212,8 +212,8 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("默认扩展名")}
-        help={t("新建文档存盘时使用的扩展名。⚠ 只影响新建的文档——已有文件名的文件保持其原有扩展名。")}
+        title={t("Default extension")}
+        help={t("Extension used when saving a new document. ⚠ Only affects new documents — files that already have a name keep their own extension.")}
       >
         <SettingRow>
           <TextInput
@@ -225,7 +225,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("记录历史文件和文件夹")}>
+      <SettingsGroup title={t("Remember recent files and folders")}>
         <SettingRow>
           <Toggle
             checked={f.remember_recent}
@@ -234,7 +234,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("关闭前先问我")}>
+      <SettingsGroup title={t("Ask me before closing")}>
         <SettingRow>
           <Toggle
             checked={settings.confirm_unsaved}

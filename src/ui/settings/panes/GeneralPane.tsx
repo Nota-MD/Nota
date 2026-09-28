@@ -54,27 +54,27 @@ export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettin
   return (
     <>
       <SettingsGroup
-        title={t("界面语言")}
+        title={t("Interface language")}
         help={t(
-          "⚠️ 重启后生效。理由：拓展在启动时按这个语言读好了自己的文案表（lang/<tag>.toml），运行中换语言就得把所有拓展重新装一遍（跑 on_unload / on_load，里面有 git、有 HTTP）。改完这里，重启一次。",
+          "⚠️ Takes effect after a restart. Because extensions read their own text tables (lang/<tag>.toml) at startup, switching language while running would mean reinstalling every extension (running on_unload / on_load, some of which do git and HTTP). Change this, then restart once.",
         )}
       >
         <SettingRow
-          label={t("语言")}
+          label={t("Language")}
           help={t(
-            "「自动」= 跟系统走（看 LC_ALL / LC_MESSAGES / LANG）。⚠ 系统语言不在支持列表里时落到英语。",
+            "“Automatic” follows the system (LC_ALL / LC_MESSAGES / LANG). ⚠ A system language that is not in the list falls back to English.",
           )}
           description={
             语言表
-              ? t("现在实际在用：{0}（这一格存的是设定，可能是「自动」）", 语言表.effective)
-              : t("正在读可选语言…")
+              ? t("In use right now: {0} (this cell stores the setting, which may be “Automatic”)", 语言表.effective)
+              : t("Reading available languages…")
           }
         >
           <Select
             value={settings.general.language}
             onChange={(language) => 写({ language })}
             options={[
-              { value: "auto", label: t("自动（跟系统走）") },
+              { value: "auto", label: t("Automatic (follow the system)") },
               // ⚠️ `l.label` **不包 `t()`**：那是宿主送来的数据（`nota_app_lang`
               // 的 `available`），语言名要用**它自己那门语言**写，见
               // `src-tauri/src/lang.rs::语言名`。
@@ -88,16 +88,16 @@ export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettin
             菜单、设置那些地方还是中文，于是根本不去试。这类"曾经为真"的说明句
             没有东西会提醒它过期，只能靠改语言这件事**同批**改掉。 */}
         <Note>
-          {t("英文翻译")}
-          <strong>{t("现在覆盖整个界面")}</strong>
-          {t("：菜单栏、设置、状态栏、侧边栏、对话框、拓展栏都在里面。两半是同一套规矩、同一批切换的，所以宁可两边一起换。")}
+          {t("The English translation")}
+          <strong>{t("now covers the whole interface")}</strong>
+          {t(": the menu bar, settings, status bar, sidebar, dialogs and the extension dock are all included. Both halves follow the same rules and switch together, so they are always changed as a pair.")}
         </Note>
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("调试模式")}
+        title={t("Debug mode")}
         help={t(
-          "把内部的诊断信息也输出到控制台（开发者工具的 Console）。⚠ 它只增加日志、不改变行为——任何「开着调试模式就换一套代码路径」的设计，都会让「我这里没问题」这类反馈失去可信度。默认关闭：绝大多数用户看不到控制台，只会觉得程序变卡。",
+          "Also print internal diagnostics to the console (Developer Tools → Console). ⚠ It only adds logging and changes no behaviour — any design where turning debug mode on switches to a different code path makes “works for me” reports worthless. Off by default: most users never open the console and would only notice the app feeling slower.",
         )}
       >
         <SettingRow>
@@ -106,75 +106,75 @@ export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettin
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("高级设置")}
+        title={t("Advanced")}
         help={t(
-          "Nota 的设置就是一份纯文本的 TOML，没有第二套界面。要改界面上没有的项，直接编辑那个文件；改坏之后用下面那颗按钮恢复出厂状态。",
+          "Nota's settings are a plain-text TOML file — there is no second interface. To change an option the UI does not expose, edit that file; if you break it, use the button below to restore the defaults.",
         )}
       >
         <SettingRow
-          label={t("设置文件")}
+          label={t("Settings file")}
           help={t(
-            "改完存盘、重启 Nota 生效。⚠ 手动编辑时要注意：标量要写在所有 [表] 之前，写在表后面会被悄悄忽略（那一项照旧用默认值，不报错）。",
+            "Save the file and restart Nota for changes to take effect. ⚠ When editing by hand: scalars must come before all [tables]. A scalar placed after a table is silently ignored (the default is used instead, with no error).",
           )}
         >
-          <ActionButton onClick={onOpenConfigDir}>{t("打开文件夹…")}</ActionButton>
+          <ActionButton onClick={onOpenConfigDir}>{t("Open Folder…")}</ActionButton>
         </SettingRow>
 
         <SettingRow
-          label={t("恢复出厂设置")}
+          label={t("Reset to Defaults")}
           help={t(
-            "把所有设置项一次性恢复为默认值。⚠ 只修改设置，不改动文档——正文、文件、主题 CSS 都不受影响。",
+            "Reset every setting to its default at once. ⚠ Settings only — documents are untouched, including their content, files and theme CSS.",
           )}
         >
-          <ActionButton onClick={onResetSettings}>{t("恢复默认")}</ActionButton>
+          <ActionButton onClick={onResetSettings}>{t("Reset")}</ActionButton>
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("许可证")}>
+      <SettingsGroup title={t("License")}>
         <SettingRow label="Nota">
           <Value>BSD-2-Clause</Value>
         </SettingRow>
-        <SettingRow label={t("界面图标")}>
-          <Value>{t("BSD-2-Clause（Folio，同一作者）")}</Value>
+        <SettingRow label={t("Interface icons")}>
+          <Value>{t("BSD-2-Clause (Folio, same author)")}</Value>
         </SettingRow>
 
         <Note>
-          {t("完整的第三方组件清单、各自的版本与许可证在仓库根目录的")}
+          {t("The complete list of third-party components, with versions and licenses, is in")}
           {" "}
           <code>THIRD-PARTY.md</code>
           {" "}
-          {t("里。Nota")}
+          {t("at the root of the repository. Nota")}
           {" "}
-          <strong>{t("不发任何网络请求")}</strong>
-          {t("，没有遥测，也没有激活。")}
+          <strong>{t("makes no network requests")}</strong>
+          {t(", has no telemetry, and needs no activation.")}
         </Note>
       </SettingsGroup>
 
-      <SettingsGroup title={t("对话框")}>
+      <SettingsGroup title={t("Dialogs")}>
         <Note>
           {t(
-            "这里没有「重置全部警告提示对话框」：那需要有「点过不再提示」的记录，而 Nota 目前还没有一个可静音的对话框。等真的出现可静音对话框之后再补，现在放一颗按了没反应的按钮，比没有更糟。",
+            "There is no “Reset all warning dialogs” here: that would need a record of “don't show again” choices, and Nota has no mutable dialog yet. It will be added once one exists — a button that does nothing is worse than no button.",
           )}
         </Note>
       </SettingsGroup>
 
-      <SettingsGroup title={t("快捷键")}>
+      <SettingsGroup title={t("Shortcuts")}>
         <Note>
-          {t("键位一览在左边的")}
-          <strong>{t("「快捷键」")}</strong>
-          {t("那一页——它是从菜单里读出来的，所以不会和菜单上写的对不上。")}
+          {t("The list of key bindings is on the")}
+          <strong>{t("Shortcuts")}</strong>
+          {t(" page on the left — it is read from the menu, so it cannot disagree with the menu.")}
         </Note>
       </SettingsGroup>
 
       <Note>
-        {t("这一页")}
-        <strong>{t("有意")}</strong>
-        {t("少了三项：许可证信息（见上面「许可证」那一组）、匿名使用数据（不做遥测）、在线服务器设置（Nota 不发任何网络请求）——理由逐条写在")}
+        {t("This page")}
+        <strong>{t("deliberately")}</strong>
+        {t("leaves out three items: license information (see the License group above), anonymous usage data (there is no telemetry), and online server settings (Nota makes no network requests) — each reason is written up in")}
         {" "}
         <code>docs/10-feature-matrix.md</code>
-        {t("和")}
+        {t("and")}
         <code>settings/general.rs</code>
-        {t("顶上。")}
+        {t(" at the top.")}
       </Note>
     </>
   );

@@ -62,7 +62,7 @@ export function EmojiDialog({
    * ⚠️ **十一条键逐个写成字面量**（不是 `t(一类)`）：`tools/i18n-check.sh`
    * 只认源码里的字面量，写成 `t(变量)` 的话那十一条英文会被算成"废键"
    * （判据 ②，FAIL——它把"这句原文没人用"当成"英文白翻了"）。
-   * ⚠️ 也不能把这十一个分类名当普通数据放进 `en-ui.ts` 那种表里蒙过去：
+   * ⚠️ 也不能把这十一个分类名当普通数据放进 `zh-ui.ts` 那种表里蒙过去：
    * 检查器只把 `ui/commands.ts` / `ui/view-modes.ts` 当"表存键"的文件，
    * 而 `editor/emoji.ts` **恰恰不能**进那个名单——那里的中文是**数据**
    * （分类名本身），进去会把 503 条表项全算成键。
@@ -73,27 +73,27 @@ export function EmojiDialog({
   const 分类文案 = (一类: string) => {
     switch (一类) {
       case "表情":
-        return t("表情");
+        return t("Smileys");
       case "手势":
-        return t("手势");
+        return t("Gestures");
       case "人物":
-        return t("人物");
+        return t("People");
       case "动物":
-        return t("动物");
+        return t("Animals");
       case "食物":
-        return t("食物");
+        return t("Food");
       case "活动":
-        return t("活动");
+        return t("Activities");
       case "旅行":
-        return t("旅行");
+        return t("Travel");
       case "自然":
-        return t("自然");
+        return t("Nature");
       case "物件":
-        return t("物件");
+        return t("Objects");
       case "符号":
-        return t("符号");
+        return t("Symbols");
       case "旗帜":
-        return t("旗帜");
+        return t("Flags");
       default:
         return 一类;
     }
@@ -123,10 +123,10 @@ export function EmojiDialog({
         className="confirm-dialog emoji-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={t("插入 Emoji")}
+        aria-label={t("Insert Emoji")}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="confirm-title">{t("插入 Emoji")}</h2>
+        <h2 className="confirm-title">{t("Insert Emoji")}</h2>
 
         <input
           id="nota-emoji-search"
@@ -136,14 +136,14 @@ export function EmojiDialog({
           autoComplete="off"
           spellCheck={false}
           value={搜索}
-          placeholder={t("搜索短代码，比如 smi 或 check")}
+          placeholder={t("Search shortcodes, e.g. smi or check")}
           onChange={(e) => set搜索(e.target.value)}
           onKeyDown={回车或退出}
         />
 
         {/* 分类筛选。⚠️ 「全部」在最前、`null` 表示它——不摆一个"全部"的话，
             用户进了某个分类就出不来了（只能关掉框重开）。 */}
-        <div className="emoji-cats" role="tablist" aria-label={t("Emoji 分类")}>
+        <div className="emoji-cats" role="tablist" aria-label={t("Emoji category")}>
           <button
             type="button"
             role="tab"
@@ -151,7 +151,7 @@ export function EmojiDialog({
             className={`btn emoji-cat ${分类 === null ? "btn-primary" : ""}`}
             onClick={() => set分类(null)}
           >
-            {t("全部")}
+            {t("All")}
           </button>
           {Emoji分类.map((一类) => (
             <button
@@ -168,7 +168,7 @@ export function EmojiDialog({
         </div>
 
         {结果.length === 0 ? (
-          <p className="prompt-hint">{t("没有匹配的 Emoji。")}</p>
+          <p className="prompt-hint">{t("No matching emoji.")}</p>
         ) : (
           <div className="emoji-grid">
             {结果.map((项) => (
@@ -190,7 +190,7 @@ export function EmojiDialog({
 
         <div className="confirm-actions">
           <button type="button" className="btn" onClick={() => onAnswer(null)}>
-            {t("取消")}
+            {t("Cancel")}
           </button>
         </div>
       </div>

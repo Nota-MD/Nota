@@ -76,14 +76,14 @@ export function FocusSummaryDialog({
 
   const 率 = 专注率(总);
   const 四格 = [
-    { k: t("本轮时长"), v: 说时长(总.时长秒 * 1000) },
-    { k: t("专注"), v: 说时长(总.专注秒 * 1000) },
-    { k: t("离开"), v: 说时长(总.离开秒 * 1000) },
+    { k: t("Session Length"), v: 说时长(总.时长秒 * 1000) },
+    { k: t("Focus"), v: 说时长(总.专注秒 * 1000) },
+    { k: t("Away"), v: 说时长(总.离开秒 * 1000) },
     // ⚠️ 这里**不补单位**（不写 `t("{0} 次")`）：格子上面那行小字已经写着「警报」
     // 了，再补一个量词是同一句话说两遍；而且英文那边 "1 times" 是错的，
     // 为了避开它还得再加一条单复数分支——不值。卡片上那一格不一样（那三个数
     // 并排、没有各自的抬头），所以那边**要**单位，见 `focus-summary.ts`。
-    { k: t("警报"), v: String(总.警报) },
+    { k: t("Alarm"), v: String(总.警报) },
   ];
 
   return (
@@ -93,11 +93,11 @@ export function FocusSummaryDialog({
         className="confirm-dialog focus-summary"
         role="dialog"
         aria-modal="true"
-        aria-label={t("这一轮专注结束了")}
+        aria-label={t("This Session Has Ended")}
         // 点在框里不该冒到遮罩上去，否则点标题也会把框关掉。
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="confirm-title">{t("这一轮专注结束了")}</h2>
+        <h2 className="confirm-title">{t("This Session Has Ended")}</h2>
 
         <div className="focus-summary-body">
           <div className="focus-summary-stats">
@@ -112,7 +112,7 @@ export function FocusSummaryDialog({
                 但它是这一轮最值得瞥一眼的那个数，所以摆在这里。
                 `null` 画破折号而不是 0%——理由见 `focus-summary.ts::专注率`。 */}
             <div className="focus-summary-cell">
-              <span className="focus-summary-k">{t("专注占比")}</span>
+              <span className="focus-summary-k">{t("Focus Share")}</span>
               <span className="focus-summary-v">
                 {率 === null ? t("—") : t("{0}%", 率)}
               </span>
@@ -140,7 +140,7 @@ export function FocusSummaryDialog({
             disabled={忙 !== ""}
             onClick={() => void 存为图片()}
           >
-            {t("保存分享图")}
+            {t("Save share image")}
           </button>
           <button
             type="button"
@@ -148,10 +148,10 @@ export function FocusSummaryDialog({
             disabled={忙 !== ""}
             onClick={() => void 进剪贴板()}
           >
-            {t("复制分享图")}
+            {t("Copy Share Image")}
           </button>
           <button ref={okRef} type="button" className="btn btn-primary" onClick={onClose}>
-            {t("知道了")}
+            {t("Got It")}
           </button>
         </div>
       </div>

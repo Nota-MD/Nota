@@ -120,7 +120,7 @@ export function TabBar(props: {
     };
   }, [菜单, 关菜单]);
 
-  const 条目: MenuEntry[] = [{ id: 新窗口项, label: t("在新窗口中打开") }];
+  const 条目: MenuEntry[] = [{ id: 新窗口项, label: t("Open in New Window") }];
   // ⚠️ 灰的判据就是"没有路径"，理由见文件头。
   const 灰的 = new Set(菜单?.path ? [] : [新窗口项]);
 
@@ -140,14 +140,14 @@ export function TabBar(props: {
           }}
         >
           <button type="button" className="tab-label" onClick={() => props.onSelect(d.id)}>
-            {d.dirty && <span className="tab-dot" title={t("有未保存的改动")} />}
+            {d.dirty && <span className="tab-dot" title={t("Has unsaved changes")} />}
             {d.title}
           </button>
           <button
             type="button"
             className="tab-close"
-            title={t("关闭")}
-            aria-label={t("关闭这个标签页")}
+            title={t("Close")}
+            aria-label={t("Close this tab")}
             onClick={() => props.onClose(d.id)}
           >
             <Icon name="folio-close-symbolic" />
@@ -158,7 +158,7 @@ export function TabBar(props: {
       {菜单 && (
         <div className="tab-menu-anchor" ref={锚} style={{ left: 菜单.x, top: 菜单.y }}>
           <MenuPopup
-            label={t("标签页")}
+            label={t("Tab")}
             entries={条目}
             disabled={灰的}
             checks={{}}

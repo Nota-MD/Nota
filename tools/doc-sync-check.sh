@@ -135,13 +135,14 @@ PAIRS=(
   "src/main.tsx                                   06"
   "src/App.tsx                                    02,04"
   "src/i18n/index.ts                              04,11"
-  "src/i18n/en.ts                                 04,11"
-  # ⚠️ 2026-09-26 补的三行。英文表当天拆成了四份（`en.ts` 是壳，三份分表在
-  # 它旁边），拆的时候**漏登记**了——闸门只盯 `en.ts`，那三份改了它不吭声。
-  # 症状是"英文文案改了、`docs/04` 没跟上"而①~⑤全绿。三份都跟着 `en.ts` 走。
-  "src/i18n/en-ui.ts                              04,11"
-  "src/i18n/en-settings.ts                        04,11"
-  "src/i18n/en-runtime.ts                         04,11"
+  "src/i18n/zh.ts                                 04,11"
+  # ⚠️ 2026-09-26 补的这三行（当时代替的是 `en-*.ts`，2026-09-28 跟着翻转改成
+  # `zh-*.ts`）。中文表拆成了四份（`zh.ts` 是壳，三份分表在它旁边），
+  # **拆的时候漏登记过一次**——闸门当时只盯 `zh.ts`，那三份改了它不吭声。
+  # 症状是"文案改了、`docs/04` 没跟上"而①~⑤全绿。三份都跟着 `zh.ts` 走。
+  "src/i18n/zh-ui.ts                              04,11"
+  "src/i18n/zh-settings.ts                        04,11"
+  "src/i18n/zh-runtime.ts                         04,11"
   "src/bridge/ipc.ts                              02,05"
   "src/bridge/types.ts                            02,05"
   "src/bridge/payloads.ts                         02,05"
@@ -159,6 +160,9 @@ PAIRS=(
   "src/editor/image-attrs.ts                      05,04"
   "src/editor/math-macros.ts                      05,10,04"
   "src/editor/source.ts                           05,04,10"
+  # ⚠️ 2026-09-28 新建：源码模式的查找那一整块（状态 / 三条效果 / 装饰），
+  # 从 `source.ts` 整块搬出来的——那天它顶到了 1001 行、撞①那条硬上限。
+  "src/editor/source-find.ts                      05,04"
   "src/editor/instant-render.ts                   05,04,10"
   "src/editor/task-list.ts                        05,04,10"
   "src/editor/code-block.ts                       05,04,10"
@@ -316,14 +320,14 @@ PAIRS=(
   "plugins/git/plugin.toml                        11"
   "plugins/ai/plugin.toml                         11"
   "plugins/slidev/plugin.toml                     11"
+  # ⚠️ 2026-09-28：四个插件各删了一份 `lang/en.toml`（英语成了**原文**，
+  #    那张表活着的每一天都只是在抄代码里的字）。这几行跟着删，
+  #    下一行的 `zh-CN.toml` 才是**译文表**。
   "plugins/git/main.lua                           11,13"
   "plugins/ai/main.lua                            11,13"
   "plugins/slidev/main.lua                        11,13"
-  "plugins/git/lang/en.toml                       11"
   "plugins/git/lang/zh-CN.toml                    11"
-  "plugins/ai/lang/en.toml                        11"
   "plugins/ai/lang/zh-CN.toml                     11"
-  "plugins/slidev/lang/en.toml                    11"
   "plugins/slidev/lang/zh-CN.toml                 11"
   # ⚠️ 2026-09-26 补的四行。写作统计（第 65 项）落地那天**漏登记**了——
   #    （插件 2026-09-27 改名「写作统计」、目录改 `plugins/stats/`、id 也从
@@ -344,7 +348,6 @@ PAIRS=(
   "plugins/stats/ticks.lua                   11,13"
   "plugins/stats/ledger.lua                  11,13"
   "plugins/stats/long.lua                    11,13"
-  "plugins/stats/lang/en.toml                11"
   "plugins/stats/lang/zh-CN.toml             11"
   "src-tauri/Cargo.toml                           06"
   "package.json                                   06"

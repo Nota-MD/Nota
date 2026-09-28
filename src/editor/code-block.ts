@@ -164,14 +164,14 @@ export const codeBlockView = $view(
       const foldBtn = document.createElement("button");
       foldBtn.type = "button";
       foldBtn.className = "nota-code-btn";
-      foldBtn.textContent = t("折叠");
-      foldBtn.title = t("折叠这一段代码");
+      foldBtn.textContent = t("Collapse");
+      foldBtn.title = t("Collapse this code block");
 
       const copyBtn = document.createElement("button");
       copyBtn.type = "button";
       copyBtn.className = "nota-code-btn";
-      copyBtn.textContent = t("复制");
-      copyBtn.title = t("复制代码");
+      copyBtn.textContent = t("Copy");
+      copyBtn.title = t("Copy Code");
 
       /** 改节点属性。高亮由 plugin-prism 读属性重算，不用本仓操心。 */
       const applyLanguage = (lang: string) => {
@@ -234,9 +234,9 @@ export const codeBlockView = $view(
       copyBtn.addEventListener("click", () => {
         void (async () => {
           const ok = await writeClipboard(code.textContent ?? "");
-          copyBtn.textContent = ok ? t("已复制") : t("复制失败");
+          copyBtn.textContent = ok ? t("Copied") : t("Copy Failed");
           window.setTimeout(() => {
-            copyBtn.textContent = t("复制");
+            copyBtn.textContent = t("Copy");
           }, COPY_FEEDBACK_MS);
         })();
       });
@@ -250,8 +250,8 @@ export const codeBlockView = $view(
       foldBtn.addEventListener("mousedown", (e) => e.preventDefault());
       foldBtn.addEventListener("click", () => {
         const folded = pre.classList.toggle("nota-code-folded");
-        foldBtn.textContent = folded ? t("展开") : t("折叠");
-        foldBtn.title = folded ? t("展开这一段代码") : t("折叠这一段代码");
+        foldBtn.textContent = folded ? t("Expand") : t("Collapse");
+        foldBtn.title = folded ? t("Expand this code block") : t("Collapse this code block");
       });
 
       // ── 与 ProseMirror 的边界 ─────────────────────────────────────────

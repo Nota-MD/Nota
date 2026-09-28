@@ -154,8 +154,8 @@ const 行内组: 按钮[] = [
 
 /** 链接与图片。它们要弹框问地址，所以没有"亮不亮"这一说。 */
 const 链接组: 按钮[] = [
-  { cmd: "link", menu: "fmt.link", label: "链", icon: "folio-insert-link-symbolic" },
-  { cmd: "image", menu: "fmt.image", label: "图", icon: "folio-insert-image-symbolic" },
+  { cmd: "link", menu: "fmt.link", label: "Link", icon: "folio-insert-link-symbolic" },
+  { cmd: "image", menu: "fmt.image", label: "Image", icon: "folio-insert-image-symbolic" },
 ];
 
 /**
@@ -170,12 +170,12 @@ const 块组: 按钮[] = [
   { cmd: "h1", menu: "para.h1", label: "H1", block: "h1" },
   { cmd: "h2", menu: "para.h2", label: "H2", block: "h2" },
   { cmd: "h3", menu: "para.h3", label: "H3", block: "h3" },
-  { cmd: "quote", menu: "para.quote", label: "引", icon: "nota-quote-symbolic", block: "quote" },
+  { cmd: "quote", menu: "para.quote", label: "Quote", icon: "nota-quote-symbolic", block: "quote" },
   { cmd: "ul", menu: "para.ul", label: "•", icon: "folio-view-list-bullet-symbolic", block: "ul" },
   { cmd: "ol", menu: "para.ol", label: "1.", icon: "folio-view-list-ordered-symbolic", block: "ol" },
-  { cmd: "task", menu: "para.task", label: "任", icon: "nota-task-symbolic", block: "task" },
+  { cmd: "task", menu: "para.task", label: "Task", icon: "nota-task-symbolic", block: "task" },
   { cmd: "codeBlock", menu: "para.codeBlock", label: "{ }", icon: "folio-insert-code-symbolic", block: "codeBlock" },
-  { cmd: "clearFormat", menu: "fmt.clear", label: "清", icon: "folio-eraser-symbolic" },
+  { cmd: "clearFormat", menu: "fmt.clear", label: "Clear", icon: "folio-eraser-symbolic" },
 ];
 
 export function FormatBar({ state, onCommand, ref }: Props) {
@@ -201,25 +201,25 @@ export function FormatBar({ state, onCommand, ref }: Props) {
    * 会叫两个名字。加新键之前先 `grep -rn 't("那句原文")' src/`。
    */
   const TITLES: Partial<Record<EditorCommand, string>> = {
-    bold: t("加粗"),
-    italic: t("斜体"),
-    strike: t("删除线"),
-    inlineCode: t("行内代码"),
-    highlight: t("高亮"),
-    superscript: t("上标"),
-    subscript: t("下标"),
-    underline: t("下划线"),
-    link: t("超链接"),
-    image: t("图像"),
-    h1: t("一级标题"),
-    h2: t("二级标题"),
-    h3: t("三级标题"),
-    quote: t("引用"),
-    ul: t("无序列表"),
-    ol: t("有序列表"),
-    task: t("任务列表"),
-    codeBlock: t("代码块"),
-    clearFormat: t("清除样式"),
+    bold: t("Bold"),
+    italic: t("Italic"),
+    strike: t("Strikethrough"),
+    inlineCode: t("Inline Code"),
+    highlight: t("Highlight"),
+    superscript: t("Superscript"),
+    subscript: t("Subscript"),
+    underline: t("Underline"),
+    link: t("Link"),
+    image: t("Image"),
+    h1: t("Heading 1"),
+    h2: t("Heading 2"),
+    h3: t("Heading 3"),
+    quote: t("Blockquote"),
+    ul: t("Bullet List"),
+    ol: t("Ordered List"),
+    task: t("Task List"),
+    codeBlock: t("Code Block"),
+    clearFormat: t("Clear Formatting"),
   };
 
   /** 一颗按钮。三组共用这一处渲染，免得三份 JSX 各自漂移。 */
@@ -257,7 +257,7 @@ export function FormatBar({ state, onCommand, ref }: Props) {
   };
 
   return (
-    <div className="format-bar" role="toolbar" aria-label={t("格式化")} ref={ref}>
+    <div className="format-bar" role="toolbar" aria-label={t("Formatting")} ref={ref}>
       {行内组.map(画)}
       <span className="format-sep" />
       {链接组.map(画)}

@@ -94,7 +94,7 @@ export function ReviewBar({ review, 看法, on看法, onCall, onClose, onEscape 
           aria-pressed={看法 === "diff"}
           onClick={() => on看法("diff")}
         >
-          {t("改动对比")}
+          {t("Diff")}
         </button>
         <button
           type="button"
@@ -102,7 +102,7 @@ export function ReviewBar({ review, 看法, on看法, onCall, onClose, onEscape 
           aria-pressed={看法 === "result"}
           onClick={() => on看法("result")}
         >
-          {t("改后效果")}
+          {t("Result")}
         </button>
       </div>
 
@@ -115,7 +115,7 @@ export function ReviewBar({ review, 看法, on看法, onCall, onClose, onEscape 
           到的正是这个：按 `Esc` 之后面板上写着「这次的改动作废了」，
           而条子上还挂着「Esc 收起」。插件没给放弃命令时退到"真收起"，
           那时才写「收起」。 */}
-      <span className="review-hint">{review.reject ? t("Esc 放弃") : t("Esc 收起")}</span>
+      <span className="review-hint">{review.reject ? t("Esc to discard") : t("Esc to close")}</span>
 
       {/* 放弃在前、接受在后：破坏性的那个不放在手指最后落下的地方。 */}
       {review.reject && (
@@ -139,10 +139,10 @@ export function ReviewBar({ review, 看法, on看法, onCall, onClose, onEscape 
       <button
         type="button"
         className="btn review-back"
-        title={t("收起预览，改动不会因此被应用")}
+        title={t("Close the preview (this does not apply the changes)")}
         onClick={onClose}
       >
-        {t("收起预览")}
+        {t("Close preview")}
       </button>
     </div>
   );

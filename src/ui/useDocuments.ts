@@ -238,7 +238,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
       let target: string | undefined;
       if (forceDialog || !doc.path) {
         const picked = await saveDialog({
-          title: t("保存为"),
+          title: t("Save As"),
           // ⚠️ 落点那两档见 `另存落点` 头上那段（用户 2026-09-27 点名改的）。
           defaultPath: 另存落点(doc),
           filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdx"] }],
@@ -260,7 +260,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
         // 一次成功存盘没什么可报的（用户没按过任何键），每 30 秒弹一次
         // 「已保存到 …」反而把别的提示挤掉。**失败那一条不静音**——
         // 存不上是必须当场知道的事。
-        if (!quiet) toast(t("已保存到 {0}", written), "success");
+        if (!quiet) toast(t("Saved to {0}", written), "success");
         return true;
       } catch (e) {
         toast(String(e), "error");
@@ -344,7 +344,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
 
   const openViaDialog = useCallback(async () => {
     const picked = await openDialog({
-      title: t("打开"),
+      title: t("Open"),
       multiple: false,
       // ⚠️ 这张表要和后端 `is_markdown()` 对齐。它认 `.mdx`，这里漏掉的话
       // 文件**打得开**（拖进来、从文件树点），只是在对话框里筛不出来，
@@ -361,7 +361,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
       // ⚠️ 有路径就直接开（拖放那条路），没路径才弹对话框（工具栏那条）。
       let picked = path;
       if (picked === undefined) {
-        const 选的 = await openDialog({ title: t("打开文件夹"), directory: true });
+        const 选的 = await openDialog({ title: t("Open Folder"), directory: true });
         if (typeof 选的 !== "string") return;
         picked = 选的;
       }
@@ -387,12 +387,12 @@ export function useDocuments(w: 文档接线): 文档出口 {
         // `"extra"` / `"confirm"` 三个**固定的值**，与那几句文案无关——所以文案
         // 翻不翻都不影响下面那两个比较。
         const answer = await askConfirm({
-          title: t("有未保存的改动"),
-          message: t("「{0}」还没存盘，关掉这份改动就没了。", doc.title),
+          title: t("Has unsaved changes"),
+          message: t("“{0}” has unsaved changes — closing it discards them.", doc.title),
           // 三条路：存了再关 / 不关 / 丢掉并关。中间那条是 2026-09-25 补的，
           // 之前用户只能自己先按一次 Ctrl+S 再回来关。
-          extraLabel: t("保存并关闭"),
-          confirmLabel: t("丢弃并关闭"),
+          extraLabel: t("Save and Close"),
+          confirmLabel: t("Discard and Close"),
           danger: true,
         });
         if (answer === "cancel") return;
@@ -454,9 +454,9 @@ export function useDocuments(w: 文档接线): 文档出口 {
         // ⚠️ 这里**不给** `extraLabel`：重载的语义就是"以磁盘上那份为准"，
         // "先存再重载"等于什么都没做（存下去的正是要丢掉的那份）。
         const answer = await askConfirm({
-          title: t("有未保存的改动"),
-          message: t("从磁盘重新加载会丢掉当前的改动。"),
-          confirmLabel: t("丢弃并重新加载"),
+          title: t("Has unsaved changes"),
+          message: t("Reloading from disk discards the current changes."),
+          confirmLabel: t("Discard and Reload"),
           danger: true,
         });
         if (answer !== "confirm") return;
@@ -523,15 +523,15 @@ export function useDocuments(w: 文档接线): 文档出口 {
       if (!doc) return;
       if (!doc.path) {
         // 与后端 `老路径` 那条错误同一句话——两条路（菜单/后端）说同一件事。
-        toast(t("这份文档还没存过盘，先用「保存为」给它一个位置"), "error");
+        toast(t("This document has not been saved yet — use Save As to give it a location first"), "error");
         return;
       }
       const 当前名 = doc.path.split("/").pop() ?? doc.path;
       const 答 = await askPrompt({
-        title: t("重命名"),
-        label: t("新名字"),
+        title: t("Rename"),
+        label: t("New name"),
         initial: 当前名,
-        confirmLabel: t("重命名"),
+        confirmLabel: t("Rename"),
       });
       if (!答) return; // 取消
       const 新名 = 答.value.trim();
@@ -545,7 +545,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
         // 文档"时按新路径去盘上读基准（见 `useExternalChanges` 与
         // `commands/document.rs::挪过去` 那段）。
         await refreshDocs();
-        toast(t("已重命名为「{0}」", 新名), "success");
+        toast(t("Renamed to “{0}”", 新名), "success");
       } catch (e) {
         toast(String(e), "error");
       }
@@ -565,15 +565,15 @@ export function useDocuments(w: 文档接线): 文档出口 {
       const doc = docsRef.current.find((d) => d.id === id);
       if (!doc) return;
       if (!doc.path) {
-        toast(t("这份文档还没存过盘，先用「保存为」给它一个位置"), "error");
+        toast(t("This document has not been saved yet — use Save As to give it a location first"), "error");
         return;
       }
-      const 选的 = await openDialog({ title: t("移动到…"), directory: true });
+      const 选的 = await openDialog({ title: t("Move to Folder…"), directory: true });
       if (typeof 选的 !== "string") return;
       try {
         await api.doc.move(id, 选的);
         await refreshDocs();
-        toast(t("已移动到「{0}」", 选的), "success");
+        toast(t("Moved to “{0}”", 选的), "success");
       } catch (e) {
         toast(String(e), "error");
       }

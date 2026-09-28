@@ -35,20 +35,20 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
     <div className="home">
       <div className="home-main">
         <h1 className="home-title">Nota</h1>
-        <p className="home-lead">{t("所见即所得的 Markdown 编辑器")}</p>
+        <p className="home-lead">{t("A WYSIWYG Markdown editor")}</p>
 
         <div className="home-actions">
           <button type="button" className="home-action" onClick={onNew}>
-            <span className="home-action-label">{t("新建文档")}</span>
+            <span className="home-action-label">{t("New Document")}</span>
             <span className="home-action-hint">Ctrl+N</span>
           </button>
           <button type="button" className="home-action" onClick={onOpen}>
-            <span className="home-action-label">{t("打开文件")}</span>
+            <span className="home-action-label">{t("Open File")}</span>
             <span className="home-action-hint">Ctrl+O</span>
           </button>
           <button type="button" className="home-action" onClick={onOpenFolder}>
-            <span className="home-action-label">{t("打开文件夹")}</span>
-            <span className="home-action-hint">{t("把一整个目录当工作区")}</span>
+            <span className="home-action-label">{t("Open Folder")}</span>
+            <span className="home-action-hint">{t("Use a whole folder as a workspace")}</span>
           </button>
         </div>
 
@@ -59,7 +59,7 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
             「文档列表」那一页的人本来就是来整理这份列表的。 */}
         {最近.length > 0 && (
           <section className="home-recent">
-            <h2 className="home-recent-title">{t("最近打开")}</h2>
+            <h2 className="home-recent-title">{t("Recently Opened")}</h2>
             <ul className="home-recent-list">
               {最近.map((路径) => (
                 <li key={路径}>
@@ -80,9 +80,9 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
       </div>
 
       <aside className="home-side">
-        <h2 className="home-side-title">{t("拓展")}</h2>
+        <h2 className="home-side-title">{t("Extensions")}</h2>
         {plugins.length === 0 ? (
-          <p className="home-hint">{t("没有发现拓展。")}</p>
+          <p className="home-hint">{t("No extensions found.")}</p>
         ) : (
           <ul className="home-plugins">
             {plugins.map((p) => (
@@ -90,10 +90,10 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
                 <span className="home-plugin-name">{p.name}</span>
                 <span className="home-plugin-state">
                   {p.state === "loaded"
-                    ? t("已加载")
+                    ? t("Loaded")
                     : p.state === "disabled"
-                      ? t("已禁用")
-                      : t("失败")}
+                      ? t("Disabled")
+                      : t("Failed")}
                 </span>
               </li>
             ))}
@@ -104,7 +104,7 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
             用户会去怀疑自己装错了，而不是来看这里。 */}
         {failed.length > 0 && (
           <p className="home-warn">
-            {t("有 {0} 个拓展没能加载，详情见右侧「拓展」栏。", failed.length)}
+            {t("{0} extensions failed to load. See the “Extensions” dock on the right for details.", failed.length)}
           </p>
         )}
       </aside>

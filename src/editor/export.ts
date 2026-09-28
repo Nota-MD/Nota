@@ -357,5 +357,5 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
 /** 导出文件的默认文件名。**只做后缀替换**——保留原文件名，用户认识它。 */
 export function 默认导出名(title: string, ext: string): string {
   const 底 = title.replace(/\.(md|markdown|mdx|mdown|mkd|txt)$/i, "");
-  return `${底 || t("未命名")}.${ext}`;
+  return `${底 || t("Untitled")}.${ext}`;
 }

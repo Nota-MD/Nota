@@ -28,33 +28,33 @@ export function ExportPane({ settings, onChange }: PaneProps) {
   return (
     <>
       <SettingsGroup
-        title={t("默认导出文件夹")}
-        help={t("留空表示自动，使用当前文档所在的目录。填入路径后，每次导出都写入该目录。")}
+        title={t("Default export folder")}
+        help={t("Empty means automatic — the folder of the current document. Once a path is set, every export writes there.")}
       >
         <SettingRow>
           <div className="stg-inline">
             <TextInput
               value={e.default_folder}
               width="lg"
-              placeholder={t("自动（跟当前文档所在的目录）")}
+              placeholder={t("Automatic (the current document's folder)")}
               onChange={(default_folder) => 写({ default_folder })}
             />
             {/* ⚠️ 灰着而不是藏起来：藏起来用户会以为是自己没找到。
                 `title` 里写明为什么——这是 Nota 对"没做完的东西"的一贯做法。 */}
             <ActionButton
               disabled
-              title={t("尚未实现：目录选择器未接通，暂时需在左侧手动填写路径。")}
+              title={t("Not implemented yet: the folder picker is not wired up, so type the path in by hand for now.")}
             >
-              {t("选择…")}
+              {t("Choose…")}
             </ActionButton>
           </div>
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("导出之后")}>
+      <SettingsGroup title={t("After exporting")}>
         <SettingRow
-          label={t("打开导出文件所在的目录")}
-          help={t("导出完成后，用系统文件管理器打开该目录。")}
+          label={t("Open the folder the exported file goes into")}
+          help={t("When the export finishes, open that folder in the system file manager.")}
         >
           <Toggle
             checked={e.open_after_export}
@@ -69,15 +69,15 @@ export function ExportPane({ settings, onChange }: PaneProps) {
             「PDF…」是**灰的**（`App.tsx` 没接那一条，打印才是 PDF 的实际出路）。
             如实变灰是个好习惯，但设置页这条 Note 把它说反了——用户会以为
             自己没找到路，而不是"这条路还没修"。*/}
-        {t("Nota 目前能导出")}
+        {t("Nota can currently export")}
         {" "}
         <strong>HTML</strong>
-        {t("（带样式和不带样式两种），上面这两条对它俩都生效。PDF 走「文件 → 打印」另存，")}
-        <strong>{t("不")}</strong>
-        {t("在导出这一支里。这里没有 Word / Epub / LaTeX 那些格式，也")}
-        <strong>{t("不会")}</strong>
+        {t("(with and without styles), and both settings above apply to both. PDF goes through File → Print and Save As, which is")}
+        <strong>{t("not")}</strong>
+        {t("part of this export branch. There are no Word / EPUB / LaTeX formats here either, and it")}
+        <strong>{t("does not")}</strong>
         {t(
-          "内置 Pandoc——一个背后没有 Pandoc 的「Pandoc 路径」输入框，只会让人以为该功能可用，而实际不起作用。",
+          "ship a built-in Pandoc — a “Pandoc path” box with no Pandoc behind it only makes people think the feature is available, while it does nothing.",
         )}
       </Note>
     </>

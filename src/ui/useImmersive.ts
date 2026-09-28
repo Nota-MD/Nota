@@ -111,7 +111,7 @@ export function useImmersive(w: 沉浸接线): 沉浸出口 {
     try {
       await win.setFullscreen(!(await win.isFullscreen()));
     } catch (e) {
-      toast(t("切换全屏失败：{0}", String(e)), "error");
+      toast(t("Could not toggle full screen: {0}", String(e)), "error");
     } finally {
       // ⚠️ **成败都要同步**：失败时窗口没动（同步一次是白做的），成功时窗口动了
       //（这一下才是让勾跟上）。写成"成功才同步"要多一个分支，而那个分支正好是
@@ -173,13 +173,13 @@ export function useImmersive(w: 沉浸接线): 沉浸出口 {
     上次沉浸.current = 沉浸;
     if (!沉浸) return;
     // 三条路里都有这一句，所以单拎出来当 `{0}` 传进去——它在三种情形下是同一句话。
-    const 路 = t("鼠标移到窗口最上面可唤回菜单栏");
+    const 路 = t("Move the mouse to the very top of the window to bring the menu bar back");
     toast(
       focusMode && fullscreen
-        ? t("专注 + 全屏：F8 / F11 / Esc 退出，{0}", 路)
+        ? t("Focus + full screen: press F8 / F11 / Esc to exit, {0}", 路)
         : fullscreen
-          ? t("全屏：F11 或 Esc 退出，{0}", 路)
-          : t("专注模式：F8 或 Esc 退出，{0}", 路),
+          ? t("Full screen: press F11 or Esc to exit, {0}", 路)
+          : t("Focus mode: press F8 or Esc to exit, {0}", 路),
       "info",
       6000,
     );

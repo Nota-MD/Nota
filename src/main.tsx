@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 
 import App from "./App";
 import { api } from "./bridge/ipc";
-import { 定语言 } from "./i18n";
+import { t, 定语言 } from "./i18n";
 import { installErrorHooks } from "./ui/ErrorBoundary";
 import { FocusAlarmWindow } from "./ui/FocusAlarmWindow";
 
@@ -136,7 +136,8 @@ installErrorHooks();
 
 const root = document.getElementById("root");
 if (!root) {
-  throw new Error("找不到 #root 挂载点；index.html 被改坏了？");
+  // ⚠️ 走 `t(...)`：这句话会出现在错误边界那张卡片上（用户看得见）。
+  throw new Error(t("No #root mount point; was index.html broken?"));
 }
 
 /**

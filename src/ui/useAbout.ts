@@ -76,18 +76,18 @@ export function useAbout(
      *（理由见 `ui/PluginDock.tsx::能力名` 与 `i18n/index.ts` 顶上那两段）。
      */
     const 致谢: readonly { 名: string; 用处: string }[] = [
-      { 名: "Tauri", 用处: t("桌面外壳与窗口") },
-      { 名: "React", 用处: t("界面") },
-      { 名: "Milkdown / ProseMirror", 用处: t("编辑器内核") },
-      { 名: "KaTeX", 用处: t("公式排版") },
-      { 名: "Mermaid", 用处: t("流程图") },
-      { 名: "mlua / Lua", 用处: t("拓展运行时") },
+      { 名: "Tauri", 用处: t("Desktop shell and windows") },
+      { 名: "React", 用处: t("Interface") },
+      { 名: "Milkdown / ProseMirror", 用处: t("Editor core") },
+      { 名: "KaTeX", 用处: t("Math typesetting") },
+      { 名: "Mermaid", 用处: t("Diagrams") },
+      { 名: "mlua / Lua", 用处: t("Extension runtime") },
       // ⚠️ 这一条是**语言图标**的出处（代码框旁边那颗小图）。它和上面那些
       //    不一样的地方在于：图标是**直接搬进仓库**的（`src/assets/lang-icons/`），
       //    不是"引了个依赖"——所以 MIT 要求的那份版权声明必须随源码走，
       //    正文在根目录 `THIRD-PARTY.md` §6。
-      { 名: "vscode-icons", 用处: t("代码框的语言图标") },
-      { 名: "Pandoc", 用处: t("导出（外部的，可选）") },
+      { 名: "vscode-icons", 用处: t("Language icons for code blocks") },
+      { 名: "Pandoc", 用处: t("Export (external, optional)") },
     ];
     /**
      * 向系统申请的权限，**一条不漏**。
@@ -112,61 +112,61 @@ export function useAbout(
      */
     const 权限: readonly { 名: string; 说明: string }[] = [
       {
-        名: t("管自己的窗口"),
+        名: t("Managing its own window"),
         说明: t(
-          "拖动窗口、改标题栏文字、全屏开关、页面缩放、打开开发者工具（capabilities/default.json 里的 core:window:* 与 core:webview:*）。这几条只作用于 Nota 自己这个窗口，碰不到别的应用。",
+          "Dragging the window, changing the title-bar text, the full-screen toggle, page zoom, and opening the developer tools (core:window:* and core:webview:* in capabilities/default.json). These apply only to Nota's own window; they cannot touch other applications.",
         ),
       },
       {
-        名: t("系统文件对话框"),
+        名: t("System file dialogs"),
         说明: t(
-          "打开文件、另存为、提示框、询问框（dialog:allow-open/save/message/ask）。走的是系统自己的对话框，选哪个文件由你决定。",
+          "Open files, Save As, message boxes, question boxes (dialog:allow-open/save/message/ask). These use the system's own dialogs, and you choose which file.",
         ),
       },
       {
-        名: t("用默认程序打开链接"),
+        名: t("Open links with the default application"),
         说明: t(
-          "正文里点到外部链接时交给系统（opener:allow-open-url），不在 Nota 内部打开任何网页。",
+          "Handing external links in the document to the system (opener:allow-open-url); no web page is ever opened inside Nota.",
         ),
       },
       {
-        名: t("读你主目录下的图片（只读）"),
+        名: t("Reading images under your home folder (read-only)"),
         说明: t(
-          "你的主目录、文档、桌面、下载这四个范围里的图片文件可以被读出来显示进正文（assetProtocol.scope）。⚠️ 注意：这个范围比「你打开的那个文件夹」大——因为图片可以是任意绝对路径，界面要能把它们显示出来。只当图片读，不写、不改、不传走。",
+          "Image files in your home, Documents, Desktop, and Downloads folders can be read and shown inside the document (assetProtocol.scope). ⚠️ Note: this range is wider than “the folder you opened” — an image can be any absolute path, and the interface has to be able to show it. They are read as images only: never written, never changed, never sent anywhere.",
         ),
       },
       {
-        名: t("界面层不能自己联网"),
+        名: t("The interface layer cannot go online on its own"),
         说明: t(
-          "内容安全策略里 connect-src 只放行自身和内部 IPC（tauri.conf.json 的 csp），所以就算界面代码被人塞了东西，它也发不出请求。",
+          "The content security policy allows connect-src only for itself and internal IPC (tauri.conf.json's csp), so even if someone slipped code into the interface, it could not send a request.",
         ),
       },
       {
-        名: t("读写你打开的文件和文件夹"),
+        名: t("Reading and writing the files and folders you open"),
         说明: t(
-          "打开、编辑、保存、另存为；工作区文件夹里还会监听文件变化（inotify），用来提示「这个文件在别处被改过了」。⚠️ 只监听你打开的那个文件夹。",
+          "Open, edit, save, Save As; inside a workspace folder it also watches for file changes (inotify), to tell you “this file was changed elsewhere”. ⚠️ It watches only the folder you opened.",
         ),
       },
       {
-        名: t("剪贴板"),
-        说明: t("复制、剪切、粘贴。"),
+        名: t("Clipboard"),
+        说明: t("Copy, cut, and paste."),
       },
       {
-        名: t("起外部进程"),
+        名: t("Starting external processes"),
         说明: t(
-          "导出的那几种格式会调 pandoc（外部程序，可选装）；git 拓展会调 git；强制专注响警报时会调系统提示音程序（canberra-gtk-play 或 aplay）。⚠️ 都是短命进程，用完就退，不常驻。",
+          "The export formats call pandoc (an external program, optional); the Git extension calls git; Force Focus calls the system bell program when the alarm sounds (canberra-gtk-play or aplay). ⚠️ All short-lived processes that exit when done; nothing stays resident.",
         ),
       },
       {
-        名: t("联网（只在你明确配置过的时候）"),
+        名: t("Networking (only when you have configured it)"),
         说明: t(
-          "只有你启用的拓展显式申请了 nota.http 能力、并且目标地址过了它自己的白名单，才会发出网络请求。核心功能自己不发任何请求。",
+          "Only an extension you have enabled that explicitly asks for the nota.http capability, and only to an address that passes its own allowlist, will make a network request. The core features themselves send nothing.",
         ),
       },
       {
-        名: t("强制专注用到的那三样"),
+        名: t("The three things Force Focus uses"),
         说明: t(
-          "①知道 Nota 自己这个窗口是不是当前窗口；②弹一个置顶的全屏窗口；③出声。⚠️ 就这三样，且只在你自己按下「视图 → 强制专注」之后才发生。它不读键盘、不截屏、不看别的应用。",
+          "① Knowing whether Nota's own window is the active window; ② putting up a full-screen always-on-top window; ③ making a sound. ⚠️ Those three, and only after you press View → Force Focus. It does not read the keyboard, take screenshots, or look at other applications.",
         ),
       },
     ];
@@ -180,21 +180,21 @@ export function useAbout(
      */
     const 没申请: readonly string[] = [
       t(
-        "看键盘输入：没有全局快捷键、没有键盘钩子——所有快捷键都只在 Nota 自己的窗口有焦点时才收得到",
+        "Reading keyboard input: no global shortcuts, no keyboard hooks — every shortcut is received only while Nota's own window has focus",
       ),
-      t("截屏、录屏、读摄像头或麦克风"),
-      t("读别的应用的窗口标题、进程列表、正在用的应用（强制专注也不看）"),
-      t("开机自启、装系统服务、退出后还留在后台"),
+      t("Taking screenshots or recordings, or reading the camera or microphone"),
+      t("Reading other applications' window titles, process lists, or which app is in use (Force Focus does not look either)"),
+      t("Starting at login, installing system services, or staying in the background after you quit"),
       t(
-        "借 Tauri 的文件插件直接读写任意路径：`tauri-plugin-fs` 虽然装了，但 `fs:*` 一条能力都没开，界面层调不动它——读写全走我们自己的命令",
+        "Reading and writing arbitrary paths through Tauri's file plugin: `tauri-plugin-fs` is installed, but no `fs:*` permission is granted, so the interface cannot call it — all reads and writes go through our own commands",
       ),
-      t("在没打开任何文件的时候去读你的盘（除了上面第 4 条那个只读的图片范围）"),
-      t("未经你配置就连网"),
+      t("Reading your disk while no file is open (apart from the read-only image range in item 4 above)"),
+      t("Going online without you having configured it"),
     ];
 
     // 版本号取不到时显示的占位。⚠️ 不写"未知版本"之类更像回事的词——如实说不知道。
     // ⚠️ 它和上面那张表一样是**现取的**，不是模块级常量（理由同上）。
-    let version = t("未知");
+    let version = t("Unknown");
     try {
       version = await getVersion();
     } catch {
@@ -206,25 +206,25 @@ export function useAbout(
     const 列 = (表: readonly { 名: string; 说明: string }[]) =>
       表.map(({ 名, 说明 }) => `· ${名}\n    ${说明}`).join("\n");
     await askConfirm({
-      title: t("关于 Nota"),
+      title: t("About Nota"),
       message: [
         `Nota ${version}`,
-        t("一款所见即所得的 Markdown 编辑器，带 Lua 拓展系统。"),
+        t("A WYSIWYG Markdown editor with a Luan extension system."),
         "",
-        t("许可证：{0}（随源码分发的 LICENSE）", 许可证),
-        t("致谢：{0}。", 名单),
-        t("完整清单（含各自许可证）见随源码分发的 THIRD-PARTY.md。"),
+        t("License: {0} (the LICENSE file shipped with the source).", 许可证),
+        t("Credits: {0}.", 名单),
+        t("The complete list, with each license, is in THIRD-PARTY.md, shipped with the source."),
         "",
-        t("── Nota 向系统申请的权限，一条不漏 ──"),
-        t("（每条后面是它的出处；想自己去核对，就打开那个文件）"),
+        t("── Every system permission Nota asks for ──"),
+        t("(Each one is followed by its source; open that file if you want to check for yourself)"),
         "",
         列(权限),
         "",
-        t("── 明确没有申请的 ──"),
+        t("── What it does not ask for ──"),
         "",
         没申请.map((一条) => `· ${一条}`).join("\n"),
       ].join("\n"),
-      confirmLabel: t("好"),
+      confirmLabel: t("OK"),
       hideCancel: true,
     });
   }, [askConfirm]);

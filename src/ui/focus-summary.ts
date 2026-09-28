@@ -174,7 +174,7 @@ export function 专注率(总: 总结): number | null {
 export function 说时刻(现在: Date): string {
   const 补 = (n: number) => String(n).padStart(2, "0");
   return t(
-    "{0}年{1}月{2}日 {3}",
+    "{0}-{1}-{2} {3}",
     String(现在.getFullYear()),
     String(现在.getMonth() + 1),
     String(现在.getDate()),
@@ -229,25 +229,25 @@ export function 造分享卡(总: 总结, 现在: Date): PanelShare {
 
   const 率 = 专注率(总);
   const 三格: PanelShareStat[] = [
-    { k: t("本轮时长"), v: 说时长(总.时长秒 * 1000), small: "" },
-    { k: t("专注占比"), v: 率 === null ? "" : String(率), small: 率 === null ? "" : "%" },
+    { k: t("Session Length"), v: 说时长(总.时长秒 * 1000), small: "" },
+    { k: t("Focus Share"), v: 率 === null ? "" : String(率), small: 率 === null ? "" : "%" },
     // ⚠️ 单位写进**抬头**（「警报次数」）而不是单独一格 `small`（原来是「次」）。
     // 理由只有一条，但它是硬的：`small` 是个裸字符串，**表达不了单复数**——
     // 英文那边会印出 `Alarm 1 times`（真印出来过，见 `docs/06` §5.28 那一批）。
     // 挪进抬头之后两边都成立：`Alarms 1` / `警报次数 1`。
     // ⚠️ 顺带把三格的抬头拉齐成四字（本轮时长 / 专注占比 / 警报次数），
     // 它们本来就是并列的三格。
-    { k: t("警报次数"), v: String(总.警报), small: "" },
+    { k: t("Alarms"), v: String(总.警报), small: "" },
   ];
 
   return {
-    title: t("强制专注"),
+    title: t("Force Focus"),
     // ⚠️ **不过 `t()`**：卡片上那行小字是英文的，与写作统计那张卡同一个口径
     //（`plugins/stats/main.lua` 里 `subtitle = "Writing Stats"` 是个字面量）。
     // 包一层 `t()` 会凭空多出一个"原文即译文"的键，那是给翻译表添噪音。
     subtitle: "Focus Session",
     date: 说时刻(现在),
-    label: t("这一轮专注了"),
+    label: t("You Focused For"),
     value: 说时长(总.专注秒 * 1000),
     unit: "",
     points: 点,
@@ -258,7 +258,7 @@ export function 造分享卡(总: 总结, 现在: Date): PanelShare {
     less: "",
     more: "",
     stats: 三格,
-    foot: t("这一轮，你离开了 {0}。", 说时长(总.离开秒 * 1000)),
+    foot: t("This session you were away for {0}.", 说时长(总.离开秒 * 1000)),
     file: `nota-focus-${文件时刻(现在)}.png`,
   };
 }

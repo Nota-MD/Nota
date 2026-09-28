@@ -383,10 +383,10 @@ end
 --- 一段时长说成人话。
 local function human_span(ms)
   if ms < 60000 then
-    return string.format(T("%d 秒"), math.floor(ms / 1000))
+    return string.format(T("%d s"), math.floor(ms / 1000))
   end
   return string.format(
-    T("%d 分 %d 秒"),
+    T("%d m %d s"),
     math.floor(ms / 60000),
     math.floor(ms % 60000 / 1000)
   )
@@ -398,27 +398,27 @@ end
 -- 就不出现——一颗"点了只得到一句空话"的按钮比灰按钮更坏。
 local BUTTONS = {
   idle = {
-    { label = "开始记录", command = "start", style = "primary" },
-    { label = "制作今日分享图", command = "share_day", needs = "day" },
-    { label = "制作长期分享图", command = "share_long", needs = "long" },
+    { label = "Start recording", command = "start", style = "primary" },
+    { label = "Make today's card", command = "share_day", needs = "day" },
+    { label = "Make the long-term card", command = "share_long", needs = "long" },
   },
   running = {
-    { label = "暂停", command = "pause" },
-    { label = "终止", command = "stop" },
+    { label = "Pause", command = "pause" },
+    { label = "Stop", command = "stop" },
   },
   paused = {
-    { label = "继续", command = "resume", style = "primary" },
-    { label = "终止", command = "stop" },
+    { label = "Resume", command = "resume", style = "primary" },
+    { label = "Stop", command = "stop" },
   },
   done = {
-    { label = "再来一轮", command = "start", style = "primary" },
-    { label = "制作本轮分享图", command = "share_round", needs = "round" },
-    { label = "制作今日分享图", command = "share_day", needs = "day" },
-    { label = "制作长期分享图", command = "share_long", needs = "long" },
+    { label = "Start another round", command = "start", style = "primary" },
+    { label = "Make this round's card", command = "share_round", needs = "round" },
+    { label = "Make today's card", command = "share_day", needs = "day" },
+    { label = "Make the long-term card", command = "share_long", needs = "long" },
   },
   -- 分享那一屏只有一颗「返回」：这一屏是**看**的，动作全在卡片下面（前端那两颗）。
   share = {
-    { label = "返回", command = "share_close" },
+    { label = "Back", command = "share_close" },
   },
 }
 
@@ -501,21 +501,21 @@ local function round_card()
   local series = spread(round_mins, 0, to_i)
   return {
     kind = "share",
-    title = T("写作统计"),
+    title = T("Writing Stats"),
     subtitle = "Writing Stats",
     date = date_text(nowinfo),
-    label = T("本轮平均速度"),
+    label = T("Round average"),
     value = num_text(round_rate()),
-    unit = T("字 / 分钟"),
+    unit = T("words / min"),
     points = series.pts,
     x_ticks = three_ticks(0, series.bucket, #series.pts, round_tick),
     x_minor = ticks.minor_per_gap(),
     stats = {
-      { k = T("总字数"), v = group_text(total_add), small = T("字") },
-      { k = T("时长"), v = clock_span(elapsed_ms), small = "" },
-      { k = T("峰值"), v = tostring(math.floor(peak_rate + 0.5)), small = T("字/分") },
+      { k = T("Total"), v = group_text(total_add), small = T("words") },
+      { k = T("Duration"), v = clock_span(elapsed_ms), small = "" },
+      { k = T("Peak"), v = tostring(math.floor(peak_rate + 0.5)), small = T("words/min") },
     },
-    foot = string.format(T("这一轮，你写下了 %s 个字"), group_text(total_add)),
+    foot = string.format(T("This round you wrote %s words"), group_text(total_add)),
     file = "nota-stats-round-" .. stamp_text(nowinfo) .. ".png",
   }
 end
@@ -535,21 +535,21 @@ local function day_card()
   end
   return {
     kind = "share",
-    title = T("写作统计"),
+    title = T("Writing Stats"),
     subtitle = "Writing Stats",
     date = date_text(nowinfo),
-    label = T("今日平均速度"),
+    label = T("Today's average"),
     value = num_text(day_rate()),
-    unit = T("字 / 分钟"),
+    unit = T("words / min"),
     points = series.pts,
     x_ticks = axis,
     x_minor = ticks.minor_per_gap(),
     stats = {
-      { k = T("今日写了"), v = group_text(r.words), small = T("字") },
-      { k = T("今日时长"), v = clock_span(r.ms), small = "" },
-      { k = T("今日峰值"), v = tostring(math.floor(r.peak + 0.5)), small = T("字/分") },
+      { k = T("Written today"), v = group_text(r.words), small = T("words") },
+      { k = T("Recorded today"), v = clock_span(r.ms), small = "" },
+      { k = T("Today's peak"), v = tostring(math.floor(r.peak + 0.5)), small = T("words/min") },
     },
-    foot = string.format(T("今天，你写下了 %s 个字"), group_text(r.words)),
+    foot = string.format(T("Today you wrote %s words"), group_text(r.words)),
     file = "nota-stats-day-" .. r.ymd .. ".png",
   }
 end
@@ -599,8 +599,8 @@ local function long_blocks()
     { kind = "separator" },
     {
       kind = "heatmap",
-      title = T("长期记录"),
-      unit = T("字"),
+      title = T("Long-term record"),
+      unit = T("words"),
       days = days_text(st),
       weeks = st.weeks,
       to = st.ymd,
@@ -642,7 +642,7 @@ local function panel_content(nota)
   local ok, st = pcall(nota.document.stats)
   if not ok or type(st) ~= "table" then
     return {
-      { kind = "empty", text = T("读不到当前文档的字数。") },
+      { kind = "empty", text = T("Can't read this document's length.") },
     }
   end
 
@@ -673,7 +673,7 @@ local function panel_content(nota)
     -- ⚠️ 拿不到日期时（`nota.time` 那一跳失败）**不留一块空白**：说一句为什么。
     if not card then
       return {
-        { kind = "text", text = T("拿不到今天的日期，长期那本账画不出来。") },
+        { kind = "text", text = T("Can't read today's date, so the long-term ledger can't be drawn.") },
         { kind = "buttons", items = buttons_for("share") },
       }
     end
@@ -683,7 +683,7 @@ local function panel_content(nota)
       {
         kind = "text",
         tone = "muted",
-        text = T("卡片下面那两颗按钮：存成 PNG，或者直接复制到剪贴板。"),
+        text = T("The two buttons under the card: save it as a PNG, or copy it to the clipboard."),
       },
     }
   end
@@ -692,19 +692,19 @@ local function panel_content(nota)
   -- ⚠️ 只摆一句说明 ＋ 一颗按钮，是**有意留白**——这一屏唯一该传达的事就是"按那颗按钮"。
   if phase == "idle" then
     local items = {
-      { label = T("整份文档"), value = string.format(T("%d 字"), words) },
+      { label = T("Whole document"), value = string.format(T("%d words"), words) },
     }
     -- 今天已经写过就给一行"今天"（没写过就不给：一行 `0 字 · 0 轮` 只是在占地方）。
     if day_row and day_row.words > 0 then
       items[#items + 1] = {
-        label = T("今天"),
-        value = string.format(T("%d 字 · %d 轮"), day_row.words, day_row.rounds),
+        label = T("Today"),
+        value = string.format(T("%d words · %d rounds"), day_row.words, day_row.rounds),
       }
     end
     local out = {
       {
         kind = "text",
-        text = T("还没开始。按「开始记录」，这一轮写了多少字、用了多久、什么速度，就都算起来了。"),
+        text = T("Not started yet. Press “Start” and this round will count how much you write, how long it takes, and how fast you go."),
       },
       { kind = "separator" },
       { kind = "fields", items = items },
@@ -714,7 +714,7 @@ local function panel_content(nota)
       table.insert(out, b)
     end
     out[#out + 1] = { kind = "buttons", items = buttons_for("idle") }
-    out[#out + 1] = { kind = "text", tone = "muted", text = T("只在面板开着的时候记录。") }
+    out[#out + 1] = { kind = "text", tone = "muted", text = T("Only recorded while this panel is open.") }
     return out
   end
 
@@ -737,16 +737,16 @@ local function panel_content(nota)
   local blocks = {
     {
       kind = "chart",
-      label = phase == "done" and T("本轮平均速度") or T("写作速度"),
+      label = phase == "done" and T("Round average") or T("Writing speed"),
       -- ⚠️ 空串 = "还没有结论"，渲染层会画一个破折号（`ui/PanelBody.tsx`）。这里**不能写 0**：那是另一个意思（有结论、就是没在打）。
       -- 
       value = shown and tostring(shown) or "",
-      unit = T("字/分钟"),
+      unit = T("words/min"),
       points = plot_points(),
       -- 横轴刻度：一块图没有横轴，"起伏"就读不出**什么时候**发生的（2026-09-27 加）。
       x_ticks = window_ticks(now),
       caption = string.format(
-        T("最近 %d 分钟的每次采样，从左到右"),
+        T("Each sample of the last %d minutes, oldest on the left"),
         math.floor(KEEP_MS / 60000)
       ),
     },
@@ -756,20 +756,20 @@ local function panel_content(nota)
 -- 四个数：跑了多少、多久、多快、整篇多大。⚠️ `done` 那一屏最后一项换成峰值——结算时
 -- "整份文档"不重要，"这一轮最快到过多少"才重要。
   local items = {
-    { label = T("本轮写了"), value = string.format(T("%d 字"), total_add) },
-    { label = T("记录时长"), value = human_span(elapsed_ms) },
+    { label = T("Written this round"), value = string.format(T("%d words"), total_add) },
+    { label = T("Recorded for"), value = human_span(elapsed_ms) },
     {
-      label = T("峰值速度"),
-      value = string.format(T("%d 字/分钟"), math.floor(peak_rate + 0.5)),
+      label = T("Peak speed"),
+      value = string.format(T("%d words/min"), math.floor(peak_rate + 0.5)),
     },
-    { label = T("整份文档"), value = string.format(T("%d 字"), words) },
+    { label = T("Whole document"), value = string.format(T("%d words"), words) },
   }
 -- 今天那一行（2026-09-27 加）。⚠️ 放最后、且**只在有账时出现**：它是"顺带看一眼"的
 -- 背景，主角永远是本轮那四个数。
   if day_row and day_row.words > 0 then
     items[#items + 1] = {
-      label = T("今天"),
-      value = string.format(T("%d 字 · %d 轮"), day_row.words, day_row.rounds),
+      label = T("Today"),
+      value = string.format(T("%d words · %d rounds"), day_row.words, day_row.rounds),
     }
   end
   blocks[#blocks + 1] = { kind = "fields", items = items }
@@ -779,14 +779,14 @@ local function panel_content(nota)
   if phase == "paused" then
     blocks[#blocks + 1] = {
       kind = "text",
-      text = T("已暂停。这期间打的字不算进这一轮——按「继续」接着算。"),
+      text = T("Paused. Anything you type now doesn't count toward this round — press “Resume” to continue."),
     }
   end
   if phase == "done" then
     blocks[#blocks + 1] = {
       kind = "text",
       text = string.format(
-        T("这一轮，你写下了 %s 个字。"),
+        T("This round you wrote %s words."),
         group_text(total_add)
       ),
     }
@@ -800,7 +800,7 @@ local function panel_content(nota)
 
 -- ⚠️ 这一行是**必要的诚实**：不写它，用户切走半小时再回来会看到一条空曲线，而面板上没
 -- 有任何东西解释那一段为什么是空的。
-  blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("只在面板开着的时候记录。") }
+  blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("Only recorded while this panel is open.") }
 
   return blocks
 end
@@ -914,7 +914,7 @@ function M.on_load(nota)
 
   nota.ui.register_panel({
     id = PANEL_ID,
-    title = T("写作统计"),
+    title = T("Writing Stats"),
     -- 右侧插件栏（默认值，写出来是为了让人一眼看到）。
     location = "right",
     -- ⚠️ **这一行就是"实时"的全部来源**：宿主看到它才会每秒喊一次"该重拉了"，删掉它这块

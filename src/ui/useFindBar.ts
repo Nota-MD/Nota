@@ -28,6 +28,8 @@
 
 import { useCallback, useState } from "react";
 import type { RefObject } from "react";
+
+import type { useT } from "@/i18n";
 import { 空查找状态, type FindStatus } from "@/editor/find";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import type { Toast } from "@/ui/Toasts";
@@ -36,7 +38,9 @@ export interface 查找条出入 {
   /** 编辑区句柄。⚠️ 传 `ref` **本体**（身份稳定），不是 `ref.current`。 */
   editorRef: RefObject<EditorPaneHandle | null>;
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
-  t: (s: string) => string;
+  /** ⚠️ 用 `i18n` 那个 `t` **本身**的类型（`useT()` 的返回值），别手写一个
+   *  更窄的——`{0}` 带参数那几条就调不动了（2026-09-28 撞上过）。 */
+  t: ReturnType<typeof useT>;
 }
 
 export interface 查找条 {
@@ -80,7 +84,7 @@ export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 
   const 替换当前 = useCallback(
     (text: string) => {
       if (!editorRef.current?.replaceCurrent(text)) {
-        toast(t("光标没停在命中上，先按「下一个」"), "info");
+        toast(t("The cursor is not on a match — press “Next” first."), "info");
       }
     },
     [editorRef, toast, t],
@@ -90,9 +94,12 @@ export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 
   const 全部替换 = useCallback(
     (text: string) => {
       const n = editorRef.current?.replaceAll(text) ?? 0;
-      toast(n === 0 ? "没有可替换的内容" : `替换了 ${n} 处`, n === 0 ? "info" : "success");
+      toast(
+        n === 0 ? t("Nothing to replace") : t("Replaced {0} occurrences", n),
+        n === 0 ? "info" : "success",
+      );
     },
-    [editorRef, toast],
+    [editorRef, toast, t],
   );
 
   return { 查找开着, 命中情况, 报命中, 关查找, 切查找, 替换当前, 全部替换 };

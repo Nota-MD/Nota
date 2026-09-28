@@ -60,9 +60,9 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
   // `ui/PluginDock.tsx` 里那三张表。
   // `label` 里 `Aa` / `.*` 是**符号**（两种语言下都一样），所以只有「全词」要翻。
   const 开关组: { key: keyof FindOptions; label: string; title: string }[] = [
-    { key: "caseSensitive", label: "Aa", title: t("区分大小写") },
-    { key: "wholeWord", label: t("全词"), title: t("全字匹配：命中的两侧不能是词里的字符") },
-    { key: "regex", label: ".*", title: t("正则表达式（写坏了不算错，只是这一次查不到）") },
+    { key: "caseSensitive", label: "Aa", title: t("Match Case") },
+    { key: "wholeWord", label: t("Word"), title: t("Match Whole Word: a match cannot be part of a longer word") },
+    { key: "regex", label: ".*", title: t("Regular Expression (a broken pattern is not an error — it just finds nothing this time)") },
   ];
   const [query, setQuery] = useState("");
   const [替换成, set替换成] = useState("");
@@ -96,7 +96,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
     status.query === ""
       ? ""
       : status.total === 0
-        ? t("无结果")
+        ? t("No results")
         : `${status.current} / ${status.total}`;
 
   /** 组字期间一概不接（理由见文件头）。 */
@@ -107,7 +107,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
     <div
       className="find-bar"
       role="search"
-      aria-label={t("查找和替换")}
+      aria-label={t("Find and Replace")}
       // ⚠️ 收在条子自己身上，不绑 `window`：绑了的话，焦点在编辑区里
       // 按 Esc 也会把条子关掉——而那时用户多半是想收输入法的候选框。
       onKeyDown={(e) => {
@@ -124,9 +124,9 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           className="find-input"
           type="text"
           value={query}
-          placeholder={t("查找")}
+          placeholder={t("Find")}
           spellCheck={false}
-          aria-label={t("查找内容")}
+          aria-label={t("Search text")}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (组字中(e)) return;
@@ -159,8 +159,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
         <button
           type="button"
           className="find-btn"
-          title={t("上一个")}
-          aria-label={t("上一个")}
+          title={t("Previous")}
+          aria-label={t("Previous")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onStep(-1)}
         >
@@ -169,8 +169,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
         <button
           type="button"
           className="find-btn"
-          title={t("下一个")}
-          aria-label={t("下一个")}
+          title={t("Next")}
+          aria-label={t("Next")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onStep(1)}
         >
@@ -179,8 +179,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
         <button
           type="button"
           className="find-btn"
-          title={t("关闭（Esc）")}
-          aria-label={t("关闭查找")}
+          title={t("Close (Esc)")}
+          aria-label={t("Close Find")}
           onMouseDown={(e) => e.preventDefault()}
           onClick={onClose}
         >
@@ -193,9 +193,9 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           className="find-input"
           type="text"
           value={替换成}
-          placeholder={t("替换为")}
+          placeholder={t("Replace with")}
           spellCheck={false}
-          aria-label={t("替换内容")}
+          aria-label={t("Replacement text")}
           onChange={(e) => set替换成(e.target.value)}
         />
         <button
@@ -206,7 +206,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onReplace(替换成)}
         >
-          {t("替换")}
+          {t("Replace")}
         </button>
         <button
           type="button"
@@ -214,7 +214,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onReplaceAll(替换成)}
         >
-          {t("全部替换")}
+          {t("Replace All")}
         </button>
       </div>
     </div>

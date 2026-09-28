@@ -29,7 +29,7 @@ export function Toasts({ items, onDismiss }: Props) {
   return (
     <div className="toasts" role="status" aria-live="polite">
       {/* ⚠️ 这个回调参数原来叫 `t`，现在和上面那个 `t` 撞名了——参数会把它盖住，
-          `t("关掉")` 会变成"拿一个 toast 对象当函数调"。所以改叫 `项`。
+          `t("Dismiss")` 会变成"拿一个 toast 对象当函数调"。所以改叫 `项`。
           ⚠️ `项.message` **不翻**：那句话是调用方**已经拼好**的（见 `useExport.ts`
           那几处 `toast(t("…"))`），这里再翻一次等于翻一条已经不认识的句子。 */}
       {items.map((项) => (
@@ -38,8 +38,8 @@ export function Toasts({ items, onDismiss }: Props) {
           <button
             type="button"
             className="toast-close"
-            title={t("关掉")}
-            aria-label={t("关掉这条提示")}
+            title={t("Dismiss")}
+            aria-label={t("Dismiss this notification")}
             onClick={() => onDismiss(项.id)}
           >
             <Icon name="folio-close-symbolic" />

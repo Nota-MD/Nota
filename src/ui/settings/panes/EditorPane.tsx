@@ -38,7 +38,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
    * （同「状态栏」那一格）。
    *
    * ⚠️ 表**在组件里现建**（2026-09-26 从模块级搬进来）：`view-modes.ts` 那张表
-   * 里存的也是**键**（中文原文，见那儿顶上的注释），所以这里必须翻一次——
+   * 里存的也是**键**（英文原文，见那儿顶上的注释），所以这里必须翻一次——
    * 而且必须在下拉**画出来那一刻**翻，不能在模块级求值时翻。
    */
   const VIEW_MODES: Array<{ value: ViewMode; label: string }> = VIEW_MODE_ORDER.map(
@@ -50,15 +50,15 @@ export function EditorPane({ settings, onChange }: PaneProps) {
    * 所以它也是键：留在模块级就没法翻，英文界面上会原样露出全角括号。
    */
   const LINE_ENDINGS: Array<{ value: LineEnding; label: string }> = [
-    { value: "lf", label: t("LF（\\n）") },
-    { value: "crlf", label: t("CRLF（\\r\\n）") },
+    { value: "lf", label: t("LF (\\n)") },
+    { value: "crlf", label: t("CRLF (\\r\\n)") },
   ];
 
   return (
     <>
       <SettingsGroup
-        title={t("编辑模式")}
-        help={t("和「视图」菜单里那三条是同一个开关，改哪边都一样。")}
+        title={t("Editing mode")}
+        help={t("The same switch as the three items in the View menu — changing either one is the same.")}
       >
         <SettingRow>
           <Select
@@ -70,8 +70,8 @@ export function EditorPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("正文宽度")}
-        help={t("编辑区正文栏的最大宽度。过宽时阅读容易串行，一行读完难以回到行首。")}
+        title={t("Text width")}
+        help={t("Maximum width of the text column in the editing area. Too wide and lines are easy to lose track of — you cannot find the start of the next line.")}
       >
         <SettingRow>
           <Range
@@ -86,9 +86,9 @@ export function EditorPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("默认缩进")}
+        title={t("Default indent")}
         help={t(
-          "⚠ 本项控制列表 / 引用 / 缩进块自动生成的缩进，不是代码块内的缩进——代码块缩进在「Markdown」页，默认 4。两者是相互独立的偏好，不合并。",
+          "⚠ This controls the indent generated for lists, blockquotes and indented blocks — not indentation inside code blocks. Code-block indentation lives on the Markdown page and defaults to 4. The two are independent preferences and are not merged.",
         )}
       >
         <SettingRow>
@@ -100,17 +100,17 @@ export function EditorPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
         <SettingRow
-          label={t("对齐缩进")}
-          help={t("子项的文字与父项首行对齐，而不是按固定宽度缩进。折行的长条目上差别很明显。")}
+          label={t("Aligned indent")}
+          help={t("Child items align with the first line of their parent instead of indenting by a fixed width. The difference is obvious on long entries that wrap.")}
         >
           <Toggle checked={e.align_indent} onChange={(align_indent) => 写({ align_indent })} />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("段首缩进")}
+        title={t("First-line indent")}
         help={t(
-          "正文段落的第一行空出几个字符，中文排版里说的「段首空两格」。⚠ 它只是看着缩进，一个空格都不会写进文件——源码模式、别的编辑器、导出拿到的都还是原来那些字。",
+          "Indents the first line of a body paragraph by a few characters — “leave two spaces at the start of a paragraph” in Chinese typography. ⚠ It is display only: not one space is written into the file, so source mode, other editors and exports all still see the original text.",
         )}
       >
         <SettingRow>
@@ -120,9 +120,9 @@ export function EditorPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
         <SettingRow
-          label={t("缩进宽度")}
+          label={t("Indent width")}
           help={t(
-            "以字符为单位（一个汉字宽算一个）。只作用于正文段落：引用、列表项、表格格子、代码块里的段落都不缩——那些块自己本来就有左边距。",
+            "Measured in characters (one full-width ideograph counts as one). Applies to body paragraphs only: paragraphs inside blockquotes, list items, table cells and code blocks are not indented — those blocks already have their own left margin.",
           )}
         >
           <NumberInput
@@ -135,7 +135,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("匹配括号和引号")}>
+      <SettingsGroup title={t("Match brackets and quotes")}>
         <SettingRow>
           <Toggle
             checked={e.match_brackets}
@@ -144,10 +144,10 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("匹配 Markdown 字符")}>
+      <SettingsGroup title={t("Match Markdown characters")}>
         <SettingRow
           help={t(
-            "输入 `**` 时自动补出后面的两个星号。⚠ 默认关闭：需要输入粗体的人要先删掉多出来的两个星号，比手动补齐多一步。",
+            "Typing `**` automatically adds the closing two asterisks. ⚠ Off by default: anyone who needs a literal `**` has to delete the extra pair first — one step more than typing it by hand.",
           )}
         >
           <Toggle
@@ -157,7 +157,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Emoji 自动补全")}>
+      <SettingsGroup title={t("Emoji autocomplete")}>
         <SettingRow>
           <Toggle
             checked={e.emoji_autocomplete}
@@ -166,7 +166,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("显示当前块的 Markdown 源码")}>
+      <SettingsGroup title={t("Show the Markdown source of the current block")}>
         <SettingRow>
           <Toggle
             checked={e.show_block_source}
@@ -175,7 +175,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("复制纯文本时复制 Markdown 源码")}>
+      <SettingsGroup title={t("Copy Markdown source when copying as plain text")}>
         <SettingRow>
           <Toggle
             checked={e.copy_markdown_source}
@@ -184,7 +184,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("没有选中文字时整行复制 / 剪切")}>
+      <SettingsGroup title={t("Copy/cut the whole line when nothing is selected")}>
         <SettingRow>
           <Toggle
             checked={e.copy_line_when_empty}
@@ -194,9 +194,9 @@ export function EditorPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("换行符")}
+        title={t("Line endings")}
         help={t(
-          "⚠ 只作用于新建的空文档。已经存在的文件按其原有的换行符写回——此处选 CRLF 不会使一个 LF 的旧文件整体改变（那会产生全文件级的 diff 噪音，并且改动了文件字节）。",
+          "⚠ Only affects new, empty documents. Existing files are written back with their own line endings — choosing CRLF here will not rewrite an LF file from end to end (that would produce whole-file diff noise and change the file's bytes).",
         )}
       >
         <SettingRow>
@@ -208,18 +208,18 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("拼写检查")}>
+      <SettingsGroup title={t("Spell check")}>
         <SettingRow
           help={t(
-            "拼写检查由 WebKitGTK 提供，检查所用语言跟随系统，Nota 不提供「选择语言」这一项，只有一个开关。",
+            "Spell check is provided by WebKitGTK and its language follows the system. Nota offers no language picker for it — only this switch.",
           )}
         >
           <Toggle checked={e.spellcheck} onChange={(spellcheck) => 写({ spellcheck })} />
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("打字机模式")}>
-        <SettingRow label={t("让光标始终停在屏幕中间")}>
+      <SettingsGroup title={t("Typewriter Mode")}>
+        <SettingRow label={t("Keep the cursor in the middle of the screen")}>
           <Toggle
             checked={e.typewriter_keep_caret_centered}
             onChange={(typewriter_keep_caret_centered) => 写({ typewriter_keep_caret_centered })}

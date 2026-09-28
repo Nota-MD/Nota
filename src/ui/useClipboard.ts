@@ -107,16 +107,16 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
     if (!内容) {
       // ⚠️ 空选区**不是错误**，是"还没选中东西"。给 `info` 而不是 `error`：
       // 用户只是少做了一步，没做错什么。
-      toast(t("先选中一段文字"), "info");
+      toast(t("Select some text first."), "info");
       return false;
     }
     if (await 写剪贴板(内容)) {
       // 和下面「复制为 Markdown」一样给一句回执：剪贴板是**看不见**的地方，
       // 不给回执的话用户只能靠"粘一下试试"来确认。
-      toast(t("已复制到剪贴板"), "success");
+      toast(t("Copied to clipboard"), "success");
       return true;
     }
-    toast(t("复制失败：系统没让这次操作写剪贴板"), "error");
+    toast(t("Could not copy: the system refused to write to the clipboard."), "error");
     return false;
   }, [editorRef, toast]);
 
@@ -136,11 +136,11 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
     try {
       text = await navigator.clipboard.readText();
     } catch {
-      toast(t("系统不允许从菜单读剪贴板，请按 Ctrl+V 粘贴"), "warn");
+      toast(t("The system does not allow reading the clipboard from the menu — press Ctrl+V to paste."), "warn");
       return;
     }
     if (!text) {
-      toast(t("剪贴板里没有文本"), "info");
+      toast(t("There is no text in the clipboard."), "info");
       return;
     }
     run("insertText", { text });
@@ -158,9 +158,9 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
     if (text === undefined) return;
     try {
       await navigator.clipboard.writeText(text);
-      toast(t("已复制 Markdown 源码"), "success");
+      toast(t("Copied the Markdown source."), "success");
     } catch (e) {
-      toast(t("复制失败：{0}", String(e)), "error");
+      toast(t("Could not copy: {0}", String(e)), "error");
     }
   }, [editorRef, toast]);
 

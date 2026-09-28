@@ -129,7 +129,7 @@ export function useFileDrop(w: 拖放接线): void {
         种类 = await api.pathKind(paths);
       } catch (e) {
         // ⚠️ 问不出来**不当成"什么都没有发生"**：那会让用户以为拖放坏了。
-        toast(t("拖进来的东西读不出来：{0}", String(e)), "error");
+        toast(t("Could not tell what was dropped in: {0}", String(e)), "error");
         return;
       }
       if (种类.length !== paths.length) {
@@ -167,8 +167,8 @@ export function useFileDrop(w: 拖放接线): void {
         const 名 = 头一条.split("/").pop() ?? 头一条;
         toast(
           丢了.length === 1
-            ? t("拖进来的「{0}」已经不在了（被移走或删掉了？）", 名)
-            : t("拖进来的 {0} 个东西已经不在了（第一个是「{1}」）", 丢了.length, 名),
+            ? t("The dropped “{0}” is gone (moved or deleted?)", 名)
+            : t("{0} of the dropped items are gone (starting with “{1}”)", 丢了.length, 名),
           "error",
         );
       }
@@ -177,13 +177,13 @@ export function useFileDrop(w: 拖放接线): void {
       const 首张 = 图片[0];
       if (首张) {
         if (!hasDoc) {
-          toast(t("先打开一份文档，图片才知道该插到哪里去"), "info");
+          toast(t("Open a document first so the picture has somewhere to go"), "info");
         } else {
           // ⚠️ 焦点判据保留（老口径，见文件头）：拖放事件没有"落点"，
           // 插入点只能是当前光标，而焦点不在正文里时那个光标是**上一次**
           // 停的地方——插进去的图会跑到用户没在看的那一段。
           if (!在编辑区里有焦点()) {
-            toast(t("把光标点进正文再拖图片进来，图才知道该插在哪里"), "info");
+            toast(t("Click into the text first, then drop the picture — otherwise there is no place to put it"), "info");
           }
           await 落一张({ kind: "path", path: 首张 }, "");
         }
@@ -196,7 +196,7 @@ export function useFileDrop(w: 拖放接线): void {
         if (选 === "open-in-app") {
           if (文件夹.length > 1) {
             toast(
-              t("一次只能开一个工作区，只开了「{0}」", 首个目录.split("/").pop() ?? 首个目录),
+              t("Only one workspace can be open at a time; opened “{0}”", 首个目录.split("/").pop() ?? 首个目录),
               "info",
             );
           }
@@ -211,7 +211,7 @@ export function useFileDrop(w: 拖放接线): void {
       const 开的 = 文档.slice(0, 一次最多);
       if (文档.length > 一次最多) {
         toast(
-          t("一次最多打开 {0} 个文件，这一次还剩 {1} 个没开", 一次最多, 文档.length - 一次最多),
+          t("At most {0} files are opened at once; {1} were left unopened this time", 一次最多, 文档.length - 一次最多),
           "info",
         );
       }
@@ -232,7 +232,7 @@ export function useFileDrop(w: 拖放接线): void {
           // 拖一个 .docx 进来会静默无事发生，而 `drop_importable` 那一格在设置页
           // 里明明写着「当普通文件导入（转成 Markdown）」。
           toast(
-            t("「{0}」不是文本文件，Nota 不做格式转换，打不开它", 一份.path.split("/").pop() ?? 一份.path),
+            t("“{0}” is not a text file, and Nota does not convert formats, so it cannot open it", 一份.path.split("/").pop() ?? 一份.path),
             "info",
           );
           continue;
@@ -288,7 +288,7 @@ async function 交给文件管理器(
   try {
     await api.export.reveal(路径);
   } catch (e) {
-    toast(t("在文件管理器里打开「{0}」失败：{1}", 路径.split("/").pop() ?? 路径, String(e)), "error");
+    toast(t("Could not open “{0}” in the file manager: {1}", 路径.split("/").pop() ?? 路径, String(e)), "error");
   }
 }
 

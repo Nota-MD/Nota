@@ -46,11 +46,11 @@ export function ImagePane(props: PaneProps) {
    * `t(表[i])` 就不算调用，`en.ts` 里那几条会算"废键"→ 闸门 FAIL。
    */
   const INSERT: Array<{ value: InsertImageAction; label: string }> = [
-    { value: "none", label: t("无特殊操作") },
-    { value: "copy-to-current-dir", label: t("复制到当前目录") },
-    { value: "copy-to-assets", label: t("复制到 ./assets") },
-    { value: "copy-to-doc-assets", label: t("复制到 ./$(filename).assets") },
-    { value: "copy-to-custom", label: t("复制到指定路径") },
+    { value: "none", label: t("Nothing special") },
+    { value: "copy-to-current-dir", label: t("Copy to the current folder") },
+    { value: "copy-to-assets", label: t("Copy to ./assets") },
+    { value: "copy-to-doc-assets", label: t("Copy to ./$(filename).assets") },
+    { value: "copy-to-custom", label: t("Copy to a custom path") },
   ];
 
   return (
@@ -61,23 +61,23 @@ export function ImagePane(props: PaneProps) {
         "看着像下一组的标题"）。
       */}
       <Note>
-        <strong>{t("这一页的两半存在两个文件里。")}</strong>
-        {t("上面那些（插入动作、适用范围、语法偏好）在")}
+        <strong>{t("This page's two halves live in two files.")}</strong>
+        {t("The settings above (insert action, scope, syntax preferences) are in")}
         {" "}
         <code>settings.toml</code>
-        {t("里，「通用 → 恢复出厂默认」会把它们重置；下面那一组上传设置在")}
+        {t(", and “General → Reset to Defaults” resets them; the upload group below is in")}
         {" "}
         <code>~/.config/nota/image-upload.toml</code>
         {" "}
-        {t("里（权限 0600，因为它装着令牌），")}
-        <strong>{t("不会被重置")}</strong>
-        {t("——把令牌一起清掉是那种点了一下才发现的损失。")}
+        {t(" (mode 0600, because it holds your token), and is")}
+        <strong>{t("not reset")}</strong>
+        {t(" — wiping the token along with everything else is the kind of loss you only notice after clicking.")}
       </Note>
 
       <SettingsGroup
-        title={t("插入图片时")}
+        title={t("When inserting an image")}
         help={t(
-          "⚠ 除「无特殊操作」外都会向磁盘额外写入一个文件（原图仍留在原处），因此必须显式选中，默认为「无特殊操作」。",
+          "⚠ Every option except Nothing special writes an extra file to disk (the original stays where it is), so this must be chosen explicitly — the default is Nothing special.",
         )}
       >
         <SettingRow>
@@ -90,23 +90,23 @@ export function ImagePane(props: PaneProps) {
 
         {i.insert_action === "copy-to-custom" && (
           <SettingRow
-            label={t("指定路径")}
+            label={t("Custom path")}
             help={t(
-              "绝对路径照用；相对路径按文档所在的目录算（不是应用的工作目录）。⚠ 目录不存在会建出来。",
+              "An absolute path is used as-is; a relative path is resolved against the folder the document is in (not the app's working directory). ⚠ A missing folder is created.",
             )}
           >
             <TextInput
               value={i.custom_dir}
               width="lg"
-              placeholder={t("例如 /home/我/图片，或 ./img")}
+              placeholder={t("e.g. /home/me/Pictures, or ./img")}
               onChange={(custom_dir) => 写({ custom_dir })}
             />
           </SettingRow>
         )}
       </SettingsGroup>
 
-      <SettingsGroup title={t("上面那条规则对哪些图片生效")}>
-        <SettingRow label={t("本地位置的图片")}>
+      <SettingsGroup title={t("Which images the rule above applies to")}>
+        <SettingRow label={t("Images from local paths")}>
           <Toggle
             checked={i.apply_to_local}
             onChange={(apply_to_local) => 写({ apply_to_local })}
@@ -114,9 +114,9 @@ export function ImagePane(props: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("网络位置的图片")}
+          label={t("Images from web URLs")}
           help={t(
-            "默认不勾选：网络图片通常是有意引用原始地址（换一台机器打开也应当可见）。⚠ 勾上之后，插入网络图片时 Nota 会联网把它下载下来再放到上面那个目录——这是本应用替你去取一个你已经写在文档里的地址，但它是联网动作，所以默认关着。",
+            "Off by default: a remote image usually means the original URL on purpose (so it is still there on another machine). ⚠ When on, inserting a remote image makes Nota download it over the network into the folder above — the app fetching an address you already wrote in the document. It is a network action, so the default is off.",
           )}
         >
           <Toggle
@@ -126,11 +126,11 @@ export function ImagePane(props: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("图片语法偏好")}>
+      <SettingsGroup title={t("Image syntax preferences")}>
         <SettingRow
-          label={t("优先写相对路径")}
+          label={t("Prefer relative paths")}
           help={t(
-            "⚠ 只朝一个方向动：你给的是一条绝对路径时，换算成相对文档目录的写法。本来就是相对的地址原样保留；Nota 自己复制/下载出来的那一份总是相对路径，不看这一项。",
+            "⚠ It only goes one way: an absolute path you give is rewritten relative to the document's folder. Addresses that are already relative are kept as they are; the copy Nota makes or downloads itself is always relative and ignores this setting.",
           )}
         >
           <Toggle
@@ -140,16 +140,16 @@ export function ImagePane(props: PaneProps) {
         </SettingRow>
 
         <SettingRow
-          label={t("为相对路径添加 ./")}
-          help={t("⚠ 只在最终写出来的是相对路径时才有意义（已经是 ./ 或 ../ 开头的不再加）。")}
+          label={t("Add ./ to relative paths")}
+          help={t("⚠ Only meaningful when the result is a relative path (one already starting with ./ or ../ gets nothing added).")}
         >
           <Toggle checked={i.add_dot_slash} onChange={(add_dot_slash) => 写({ add_dot_slash })} />
         </SettingRow>
 
         <SettingRow
-          label={t("插入时自动转义 URL")}
+          label={t("Escape URLs when inserting")}
           help={t(
-            "空格变成 %20、`?` 变成 %3F 这类。⚠ 中文等非 ASCII 字符不转（转了地址就没法看了）；网络地址里的 ? # % 也不转（它们是查询串和锚点，而且你贴进来的多半已经编码好了——再转一遍会把 %20 变成 %2520）。只在插入那一刻处理，不会回头去改文档里已经写着的地址。",
+            "Spaces become %20, `?` becomes %3F and so on. ⚠ Non-ASCII characters are left alone (an escaped URL is unreadable), and so are ? # % in web addresses (they mark query strings and anchors, and what you paste is usually already encoded — escaping again would turn %20 into %2520). Only applied at the moment of inserting; addresses already written in the document are never rewritten.",
           )}
         >
           <Toggle checked={i.escape_url} onChange={(escape_url) => 写({ escape_url })} />

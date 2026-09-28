@@ -396,7 +396,7 @@ export const diagramView = $view(
       源码框.className = "nota-diagram-source";
       源码框.spellcheck = false;
       源码框.rows = 6;
-      源码框.setAttribute("aria-label", t("图表源码（Mermaid）"));
+      源码框.setAttribute("aria-label", t("Diagram Source (Mermaid)"));
 
       const 预览 = document.createElement("div");
       预览.className = "nota-diagram-preview";
@@ -472,9 +472,9 @@ export const diagramView = $view(
           预览.dataset.state = "empty";
           预览.append(
             说明卡(
-              t("这里还没有图表源码"),
-              t("点右上角「编辑源码」写下 Mermaid，例如：\ngraph TD; A[开始] --> B[结束]"),
-              view.editable ? t("编辑源码") : null,
+              t("There is no diagram source here yet"),
+              t("Click “Edit Source” at the top right to write Mermaid, for example:\ngraph TD; A[Start] --> B[End]"),
+              view.editable ? t("Edit Source") : null,
             ),
           );
           return;
@@ -484,9 +484,9 @@ export const diagramView = $view(
           预览.dataset.state = "error";
           预览.append(
             说明卡(
-              t("图里有语法错误，现在画不出来（文档里是你的源码，没有被改过）"),
+              t("The diagram has a syntax error and cannot be drawn (your source is untouched in the document)."),
               结果.消息,
-              view.editable ? t("编辑源码") : null,
+              view.editable ? t("Edit Source") : null,
             ),
           );
           return;
@@ -520,7 +520,7 @@ export const diagramView = $view(
       /** 第一帧专用：还没画过任何东西时先摆一句，免得是个空盒子。 */
       function 画中(): void {
         预览.dataset.state = "loading";
-        预览.replaceChildren(说明卡(t("正在渲染图表…"), t("Mermaid 正在解析这份源码。"), null));
+        预览.replaceChildren(说明卡(t("Rendering the diagram…"), t("Mermaid is parsing this source."), null));
       }
 
       // ── 同步 ──────────────────────────────────────────────────────────
@@ -572,8 +572,8 @@ export const diagramView = $view(
 
         源码模式 = 要到源码;
         dom.classList.toggle("nota-diagram-editing", 源码模式);
-        切换.textContent = 源码模式 ? t("预览") : t("编辑源码");
-        切换.title = 源码模式 ? t("收起源码，看画出来的图") : t("改这个图的 Mermaid 源码");
+        切换.textContent = 源码模式 ? t("Preview") : t("Edit Source");
+        切换.title = 源码模式 ? t("Hide the source and show the rendered diagram") : t("Edit this diagram's Mermaid source");
         切换.setAttribute("aria-pressed", String(源码模式));
 
         if (源码模式) {

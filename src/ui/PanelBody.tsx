@@ -165,7 +165,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                       type="button"
                       className={`btn panel-btn${b.style === "normal" ? "" : ` btn-${b.style}`}`}
                       disabled={灰}
-                      title={b.command ? undefined : t("这个按钮没有写 `command`，点了也没事发生")}
+                      title={b.command ? undefined : t("This button has no `command`, so clicking it does nothing")}
                       onClick={() => void 点按钮(b)}
                     >
                       {b.label || b.command}
@@ -278,21 +278,21 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                 // 浏览器那头还有 CSP 的 `frame-src` 兜一层。
                 src={node.url}
                 style={{ height: `${node.height}px` }}
-                title={t("拓展预览")}
+                title={t("Extension preview")}
               />
             ) : (
               <p key={i} className="panel-empty">
                 {node.alive
-                  ? t("预览的地址不对，嵌不进来。")
-                  : t("预览没有在跑。「停止」之后再点一次「预览」试试。")}
+                  ? t("The preview URL is not acceptable, so it cannot be embedded.")
+                  : t("The preview is not running. Press “Stop”, then “Preview” again.")}
               </p>
             );
 
           case "unknown":
             return (
               <p key={i} className="panel-unknown">
-                {t("不认识这种内容块（kind={0}）", node.raw)}{" "}
-                {t("这一块的拓展版本可能比 Nota 新，或者 `kind` 拼错了。")}
+                {t("Unrecognised content block (kind={0})", node.raw)}{" "}
+                {t("This extension may target a newer Nota, or `kind` is misspelled.")}
               </p>
             );
         }
@@ -450,7 +450,7 @@ function PanelInput({
           type="button"
           className="btn btn-primary panel-input-send"
           disabled={灰 || !草稿.trim()}
-          title={灰 ? t("这个输入框没有写 `submit` / `arg`，点了也没事发生") : undefined}
+          title={灰 ? t("This input box has no `submit` / `arg`, so clicking it does nothing") : undefined}
           onClick={发}
         >
           {spec.submitLabel}
@@ -614,12 +614,12 @@ function PanelChartBlock({ spec }: { spec: PanelChart }) {
             aria-label={
               横刻度.length > 0
                 ? t(
-                    "曲线，共 {0} 个点，纵轴 {1} 到 {2}",
+                    "A curve with {0} points, vertical axis {1} to {2}",
                     点.length,
                     格式化数(上限),
                     格式化数(下限),
                   )
-                : t("曲线，共 {0} 个点", 点.length)
+                : t("A curve with {0} points", 点.length)
             }
           >
             {/* 刻度的横线：线用 `non-scaling-stroke`，不然竖着被压扁的那点

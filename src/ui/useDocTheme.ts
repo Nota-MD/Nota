@@ -155,7 +155,7 @@ export function useDocTheme(w: 主题接线): 主题出口 {
       // ⚠️ 提示里用**显示名**（中文），存进设置的是 id。两者别混——
       // 混了就变成"提示里说换成「极简」，设置里存着一个 `minimal`"。
       const name = id ? (themes.find((x) => x.id === id)?.name ?? id) : "";
-      toast(name ? t("文档主题已换成「{0}」", name) : t("文档主题已关闭"), "success");
+      toast(name ? t("Document theme switched to “{0}”", name) : t("Document theme turned off."), "success");
     },
     [写主题, toast, themes],
   );
@@ -168,7 +168,7 @@ export function useDocTheme(w: 主题接线): 主题出口 {
       // 拿路径去调 plugin-opener（Tauri 的 ACL，见 BUG-27）。
       await api.theme.openDir();
     } catch (e) {
-      toast(t("打开主题文件夹失败：{0}", String(e)), "error");
+      toast(t("Could not open the themes folder: {0}", String(e)), "error");
     }
   }, [toast]);
 

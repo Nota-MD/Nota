@@ -69,16 +69,22 @@ import { atxPrefixRe } from "@/editor/atx";
 // 两处各写一份的话，"最小未用数"这种规则迟早漂开。
 import { 下一个脚注标签, 扫源文标签 } from "@/editor/footnote";
 import type { CommandPayload, EditorCommand, 选区内容 } from "@/editor/create";
-// 查找：**匹配逻辑不在这里**，只借它那个纯函数（见 `find.ts` 文件头：
-// 一份匹配、两个适配器）。源码模式的偏移量就是文档偏移，所以这里不用
-// 再走一遍文档树。
+// 查找：这里只要**两个类型**（接口上的 `setFind` / `onFindStatus`）。
+// 匹配的纯函数、状态、装饰都在别处：前者在 `find.ts`（一份匹配、两个适配器，
+// 见它的文件头），后者在 `source-find.ts`。
+import { type FindOptions, type FindStatus } from "@/editor/find";
+// 查找的**机制**（状态 / 三条效果 / 装饰 / 两个小工具）。
+// ⚠️ 2026-09-28 整块搬去 `source-find.ts` 的，因为本文件那天顶到了 1001 行、
+// 撞上 `doc-sync-check.sh` 的 1000 行硬上限。名字与用法一字未改。
 import {
-  在文本里找匹配,
-  默认查找选项,
-  type FindOptions,
-  type FindStatus,
-  type 文本命中,
-} from "@/editor/find";
+  设查找效果,
+  清查找效果,
+  查找字段,
+  查找装饰,
+  查找状态,
+  源码选中,
+  走查找效果,
+} from "@/editor/source-find";
 // 写作模式（专注 / 打字机）。⚠️ 只借类型与两个 DOM 小工具，**装饰各写各的**
 // ——源码里是平的行，没有"块的兄弟"可言（见 `writing-modes.ts` 顶上）。
 import {
@@ -432,16 +438,16 @@ function applyCommand(
       redo(view);
       return true;
     case "bold":
-      wrapSelection(view, "**", "**", t("粗体"));
+      wrapSelection(view, "**", "**", t("Bold"));
       return true;
     case "italic":
-      wrapSelection(view, "*", "*", t("斜体"));
+      wrapSelection(view, "*", "*", t("Italic"));
       return true;
     case "strike":
-      wrapSelection(view, "~~", "~~", t("删除线"));
+      wrapSelection(view, "~~", "~~", t("Strikethrough"));
       return true;
     case "inlineCode":
-      wrapSelection(view, "`", "`", t("代码"));
+      wrapSelection(view, "`", "`", t("Code"));
       return true;
     // 三种**扩展**行内标记（`editor/inline-marks.ts`）。源码模式手里就是
     // Markdown 原文，所以"包一层符号"就是这条命令的全部——所见即所得那边
@@ -449,16 +455,16 @@ function applyCommand(
     // ⚠️ 下划线的写法是**裸 HTML** `<u>x</u>`，与 Typora 一致（没有 `__`
     // 那种歧义写法：`__` 在 CommonMark 里是加粗）。
     case "highlight":
-      wrapSelection(view, "==", "==", t("高亮"));
+      wrapSelection(view, "==", "==", t("Highlight"));
       return true;
     case "superscript":
-      wrapSelection(view, "^", "^", t("上标"));
+      wrapSelection(view, "^", "^", t("Superscript"));
       return true;
     case "subscript":
-      wrapSelection(view, "~", "~", t("下标"));
+      wrapSelection(view, "~", "~", t("Subscript"));
       return true;
     case "underline":
-      wrapSelection(view, "<u>", "</u>", t("下划线"));
+      wrapSelection(view, "<u>", "</u>", t("Underline"));
       return true;
     // 标题：`text` 是"正文段落"，也就是清掉标题标记。
     case "h1":
@@ -536,14 +542,17 @@ function applyCommand(
       // 与 `create.ts` 里 `insertTableCommand` 的 `{ row: 3, col: 3 }` 对齐）。
       // 两边不一致的话，同一条菜单在两种模式下插出来的东西不一样——
       // 而用户多半不会想到"表格形状还跟模式有关"。
-      insertBlock(view, "\n| 列 1 | 列 2 | 列 3 |\n| --- | --- | --- |\n| $0 |  |  |\n|  |  |  |\n");
+      insertBlock(
+        view,
+        t("\n| Column 1 | Column 2 | Column 3 |\n| --- | --- | --- |\n| $0 |  |  |\n|  |  |  |\n"),
+      );
       return true;
     // 链接与图片：地址**从外面进来**（界面先问用户，见 `ui/PromptDialog.tsx`）。
     // 真的没有地址时插一个空壳（`[文字]()`）没有意义，所以这里也放弃、返回
     // `false`——与下面那十条（表格）同一个出口。
     case "link": {
       if (!payload?.href) return false;
-      wrapSelection(view, "[", `](${payload.href})`, t("链接文字"));
+      wrapSelection(view, "[", `](${payload.href})`, t("Link Text"));
       return true;
     }
     case "image": {
@@ -578,94 +587,6 @@ function applyCommand(
     default:
       return false;
   }
-}
-
-/* ── 查找 ────────────────────────────────────────────────────────────────
- *
- * ⚠️ **自己写的，因为 `@codemirror/search` 不在 `node_modules` 里**
- * （`package.json` 没列，而这台机器上没有网——见 `find.ts` 文件头）。
- *
- * 结构上刻意与 `find.ts` 那套**同形**：一份状态（查询 + 命中表 + 当前下标）、
- * 一组效果（设/走/清）、一层装饰（只改 class，不进文档）。两个编辑器长得像，
- * 读的人就不用为"同一个功能"记两套心智模型。
- *
- * ⚠️ 唯一的实质差别：这里的偏移量**就是文档偏移**（整篇就是一条字符串），
- * 不必像 ProseMirror 那边逐节点换算。匹配本身仍然调 `在文本里找匹配`。
- */
-
-interface 源码查找状态 {
-  query: string;
-  options: FindOptions;
-  matches: 文本命中[];
-  index: number;
-}
-
-const 空查找: 源码查找状态 = { query: "", options: 默认查找选项, matches: [], index: -1 };
-
-const 设查找效果 = StateEffect.define<{ query: string; options: FindOptions }>();
-const 走查找效果 = StateEffect.define<1 | -1>();
-const 清查找效果 = StateEffect.define<null>();
-
-const 查找字段 = StateField.define<源码查找状态>({
-  create: () => 空查找,
-  update(value, tr) {
-    if (tr.effects.some((e) => e.is(清查找效果))) return 空查找;
-
-    const 设 = tr.effects.find((e) => e.is(设查找效果));
-    const 走 = tr.effects.find((e) => e.is(走查找效果));
-
-    const query = 设 ? 设.value.query : value.query;
-    const options = 设 ? 设.value.options : value.options;
-    const 要重算 = Boolean(设) || tr.docChanged;
-    const matches = 要重算 ? 在文本里找匹配(tr.state.doc.toString(), query, options) : value.matches;
-
-    let index = value.index;
-    if (matches.length === 0) index = -1;
-    else if (设) {
-      const hit = matches.findIndex((m) => m.start >= tr.state.selection.main.from);
-      index = hit === -1 ? 0 : hit;
-    } else if (走) {
-      const n = matches.length;
-      index = 走.value > 0 ? (index + 1 + n) % n : (index - 1 + n) % n;
-    } else if (要重算) {
-      index = Math.min(Math.max(index, 0), matches.length - 1);
-    }
-
-    return { query, options, matches, index };
-  },
-});
-
-/** 命中高亮的 class，与所见即所得那一侧**同名**（`find.ts` 里的常量）。 */
-const 命中类 = "nota-find-hit";
-const 当前类 = "nota-find-current";
-
-const 查找装饰 = EditorView.decorations.compute([查找字段], (state) => {
-  const s = state.field(查找字段);
-  if (s.matches.length === 0) return Decoration.none;
-  return Decoration.set(
-    s.matches.map((m, i) =>
-      Decoration.mark({
-        class: i === s.index ? `${命中类} ${当前类}` : 命中类,
-      }).range(m.start, m.end),
-    ),
-    // ⚠️ `sort: true`：`Decoration.set` 要求区间按位置排好，而命中表本身
-    // 就是有序的——写出来是防着以后有人改匹配顺序，那时不排会**抛异常**
-    //（不是画错，是直接崩）。
-    true,
-  );
-});
-
-/** 从状态算一份给界面看的东西。 */
-function 查找状态(s: 源码查找状态): FindStatus {
-  return { query: s.query, total: s.matches.length, current: s.index + 1 };
-}
-
-/** 把光标送到某个命中上，并滚动到可见。 */
-function 源码选中(view: EditorView, m: 文本命中): void {
-  view.dispatch({
-    selection: { anchor: m.start, head: m.end },
-    scrollIntoView: true,
-  });
 }
 
 /* ── 写作模式（专注 / 打字机）─────────────────────────────────────────────
@@ -846,7 +767,7 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     // 只读那两件。⚠️ 走舱，理由见 `只读舱` 那段。
     只读舱.of(只读扩展(readOnly)),
   ];
-  if (!readOnly) extensions.push(placeholder(t("在这里写 Markdown 原文…")));
+  if (!readOnly) extensions.push(placeholder(t("Write your Markdown here…")));
   // ⚠️ 查找那一套**只在可编辑的那一份上挂**：只读预览窗格没有查找可言，
   // 挂了也只是白算一遍匹配（同 `create.ts` 那边"不传就不挂"的口径）。
   if (!readOnly && onFindStatus) extensions.push(查找字段, 查找装饰);

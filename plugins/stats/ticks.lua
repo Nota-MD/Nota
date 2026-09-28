@@ -50,7 +50,7 @@ function M.date_text(tinfo)
   if not tinfo then
     return ""
   end
-  return string.format(T("%d年%d月%d日 %02d:%02d"), tinfo.y, tinfo.mo, tinfo.d, tinfo.hh, tinfo.mi)
+  return string.format(T("%d-%02d-%02d %02d:%02d"), tinfo.y, tinfo.mo, tinfo.d, tinfo.hh, tinfo.mi)
 end
 
 --- 文件名里的时刻：`20260927-2214`。**纯 ASCII**——它要进文件系统。
@@ -128,15 +128,15 @@ end
 -- 所以绝大多数时候这里就是「32 分」；真跑到了，"小时"这两个字就是这条轴上最大的字。
 function M.round_tick(mn, f)
   if f <= 0 then
-    return T("开始")
+    return T("Start")
   end
   if f >= 1 then
-    return T("结束")
+    return T("End")
   end
   if mn >= 60 and mn % 60 == 0 then
-    return { label = string.format(T("%d 小时"), mn / 60), big = true }
+    return { label = string.format(T("%d h"), mn / 60), big = true }
   end
-  return string.format(T("%d 分"), mn)
+  return string.format(T("%d min"), mn)
 end
 
 --- 今日图上的横轴标签：钟点（`09:12`）。这张图的横轴就是**墙上时间**。
@@ -211,11 +211,11 @@ function M.window_ticks(samples, now, max_points)
     local secs = math.floor((now - oldest) * (1 - f) / 1000 + 0.5)
     local label
     if f >= 1 then
-      label = T("现在")
+      label = T("now")
     elseif secs < 60 then
-      label = string.format(T("-%d 秒"), secs)
+      label = string.format(T("-%d s"), secs)
     else
-      label = string.format(T("-%d 分"), math.floor(secs / 60))
+      label = string.format(T("-%d min"), math.floor(secs / 60))
     end
     table.insert(out, { at = f, label = label })
   end

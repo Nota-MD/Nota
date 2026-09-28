@@ -296,14 +296,14 @@ export function PluginDock({
         // 不是开关——宿主点不开它们，因为"该不该摊"只有插件知道
         //（`lua/api/ui.rs::预览表` 的注释写着这条边界）。
         <section className="dock-orphans">
-          <h4 className="dock-subtitle">{t("编辑区面板")}</h4>
+          <h4 className="dock-subtitle">{t("In-editor panels")}</h4>
           <p className="dock-hint">
-            {t("这些面板摊在正文那一块，由拓展在需要时打开（比如 AI 提了改动之后的「在编辑区看」）。")}
+            {t("These panels are laid over the editing area; the extension opens one when it needs to (e.g. “View in editor” after the AI proposes a change).")}
           </p>
           {编辑区的.map((p) => (
             <p key={坐标(p)} className="dock-orphan">
               {p.title || p.id}
-              <span className="dock-orphan-where">{t("编辑区")}</span>
+              <span className="dock-orphan-where">{t("editing area")}</span>
             </p>
           ))}
         </section>
@@ -311,9 +311,9 @@ export function PluginDock({
 
       {没落脚处的.length > 0 && (
         <section className="dock-orphans">
-          <h4 className="dock-subtitle">{t("没有落脚处")}</h4>
+          <h4 className="dock-subtitle">{t("Nowhere to land")}</h4>
           <p className="dock-hint">
-            {t("这些面板声明的位置目前还没有对应的地方，所以哪儿都没显示。")}
+            {t("These panels declare a location that does not exist yet, so they are not shown anywhere.")}
           </p>
           {没落脚处的.map((p) => (
             <p key={坐标(p)} className="dock-orphan">
@@ -327,17 +327,17 @@ export function PluginDock({
       )}
 
       <h4 className="dock-subtitle dock-subtitle-row">
-        {t("已装拓展")}
+        {t("Installed extensions")}
         {/* 「安装」在这一栏的**标题行**上：它是这一栏唯一的"加东西"动作，
             混在某一颗插件行里会让人以为那是那个插件的一部分。 */}
         <button
           type="button"
           className="plugin-install"
           disabled={动作.忙 !== null}
-          title={t("从一个拓展包（.nota-plugin）安装")}
+          title={t("Install from an extension package (.nota-plugin)")}
           onClick={() => void 动作.装()}
         >
-          {动作.忙 === "装" ? t("正在安装…") : t("从文件安装…")}
+          {动作.忙 === "装" ? t("Installing…") : t("Install from file…")}
         </button>
       </h4>
       {plugins.length ? (
@@ -388,8 +388,8 @@ export function PluginDock({
                   {动作.忙 === p.id
                     ? "…"
                     : p.state === "disabled"
-                      ? t("启用")
-                      : t("停用")}
+                      ? t("Enable")
+                      : t("Disable")}
                 </button>
                 {/* ⚠️ 内置插件**不给**「卸载」：它在安装包里，删了下次启动又回来
                     （后端也会拒）。两种插件的差别只在这里显出来，
@@ -401,7 +401,7 @@ export function PluginDock({
                     disabled={动作.忙 !== null}
                     onClick={() => void 动作.卸(p.id)}
                   >
-                    {t("卸载")}
+                    {t("Uninstall")}
                   </button>
                 )}
                 {p.signature === "unknown" && (
@@ -409,10 +409,10 @@ export function PluginDock({
                     type="button"
                     className="plugin-action"
                     disabled={动作.忙 !== null}
-                    title={t("信任 {0}", p.key_id ?? t("这个签名者"))}
+                    title={t("Trust {0}", p.key_id ?? t("this signer"))}
                     onClick={() => void 动作.信任(p.id, p.key_id)}
                   >
-                    {t("信任")}
+                    {t("Trust")}
                   </button>
                 )}
               </div>
@@ -421,7 +421,7 @@ export function PluginDock({
         </ul>
       ) : (
         <p className="sidebar-empty">
-          {t("没有装拓展。用上面的「从文件安装…」装一个。")}
+          {t("No extensions installed. Use “Install from file…” above.")}
         </p>
       )}
 
@@ -431,11 +431,11 @@ export function PluginDock({
           不在这儿加一颗"删除"，免得用户以为那是"卸载这个插件"。 */}
       {信任.length > 0 && (
         <section className="dock-trust">
-          <h4 className="dock-subtitle">{t("已信任的签名者")}</h4>
+          <h4 className="dock-subtitle">{t("Trusted signers")}</h4>
           <p className="dock-hint">
-            {t("这些指纹签的包都当成「已验证」。核对不上的要去改")}
+            {t("Packages signed by these fingerprints count as verified. Edit ")}
             <code>trusted-keys.toml</code>
-            {t("。")}
+            {t(" to fix a mismatch.")}
           </p>
           {信任.map((k) => (
             <p key={k.key_id} className="trust-row">
@@ -474,7 +474,7 @@ export function PluginDock({
             <p className="panel-lang">{语言提示()}</p>
           )}
           <div className="panel-body">
-            {态.state === "loading" && <p className="panel-pending">{t("正在读取…")}</p>}
+            {态.state === "loading" && <p className="panel-pending">{t("Loading…")}</p>}
             {态.state === "error" && (
               <p className="panel-error" role="alert">
                 {态.message}
@@ -484,7 +484,7 @@ export function PluginDock({
               (态.nodes.length === 0 ? (
                 // 空的**不是错误**：插件这一刻没有内容可显示（没开文件夹、
                 // 没有改动）。如实说，别画一个空框让人以为坏了。
-                <p className="panel-empty">{t("拓展没有给出内容。")}</p>
+                <p className="panel-empty">{t("The extension has nothing to show.")}</p>
               ) : (
                 <PanelBody
                   plugin={活动面板.plugin}
@@ -514,13 +514,13 @@ export function PluginDock({
     >
       <nav className="dock-head">
         <span className="dock-title">
-          {活动面板 ? 活动面板.title || 活动面板.id : t("拓展")}
+          {活动面板 ? 活动面板.title || 活动面板.id : t("Extensions")}
         </span>
         <button
           type="button"
           className="dock-close"
-          title={t("收起拓展栏")}
-          aria-label={t("收起拓展栏")}
+          title={t("Hide the extension dock")}
+          aria-label={t("Hide the extension dock")}
           onClick={onClose}
         >
           <Icon name="folio-close-symbolic" />
@@ -530,7 +530,7 @@ export function PluginDock({
       {/* 页签：每个右侧面板一页 ＋ 「插件」页（清单）。
           ⚠️ 页签**永远都在**，哪怕只有一个面板：它是"这里还有别的东西"的
           唯一线索，藏起来的话用户会以为这一栏就叫这个名字。 */}
-      <nav className="dock-tabs" role="tablist" aria-label={t("拓展面板")}>
+      <nav className="dock-tabs" role="tablist" aria-label={t("Extension panels")}>
         {右侧的.map((p) => {
           const 键 = 坐标(p);
           return (
@@ -541,7 +541,7 @@ export function PluginDock({
               className="dock-tab"
               data-active={键 === 活动}
               aria-selected={键 === 活动}
-              title={t("由拓展 {0} 提供", p.plugin)}
+              title={t("Provided by extension {0}", p.plugin)}
               onClick={() => 切到(键)}
             >
               {p.title || p.id}
@@ -554,10 +554,10 @@ export function PluginDock({
           className="dock-tab dock-tab-plugins"
           data-active={活动 === null}
           aria-selected={活动 === null}
-          title={t("已装拓展清单（出问题时看这里）")}
+          title={t("Installed extensions (look here when something is wrong)")}
           onClick={() => 切到(null)}
         >
-          {t("拓展")}
+          {t("Extensions")}
         </button>
       </nav>
 

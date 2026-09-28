@@ -47,23 +47,23 @@ export class ErrorBoundary extends Component<Props, State> {
 
     return (
       <div className="crash">
-        <h1>{t("界面出了点问题")}</h1>
+        <h1>{t("Something went wrong in the interface")}</h1>
         <p className="crash-lead">
           {/* ⚠️ 这一条的键里**中间有一个空格**（「记下来，」与「然后重启」之间）——
               那是最初 JSX 换行渲染出来的那一个空格，原样带进键里，别在 `en.ts` 里
               抹掉（抹掉就成了废键）。 */}
-          {t("你正在编辑的内容还在后端存着，没有丢。可以先把下面这段信息记下来， 然后重启 Nota。")}
+          {t("What you were editing is still stored in the backend, so nothing is lost. Note down the information below, then restart Nota.")}
         </p>
         <pre className="crash-detail">
           {error.message}
-          {info?.componentStack ? `\n\n${t("组件栈：{0}", info.componentStack)}` : ""}
+          {info?.componentStack ? `\n\n${t("Component stack: {0}", info.componentStack)}` : ""}
         </pre>
         <button
           type="button"
           className="btn"
           onClick={() => this.setState({ error: null, info: null })}
         >
-          {t("试着继续")}
+          {t("Try to Continue")}
         </button>
       </div>
     );

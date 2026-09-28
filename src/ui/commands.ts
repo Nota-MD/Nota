@@ -22,19 +22,19 @@
  *
  * 这张表是**模块级常量**，import 的时候就求值了——那时语言还没定，而且求值完
  * **没有任何东西会通知它重画**（理由与 `i18n/index.ts::useT` 顶上那段同一条）。
- * 所以规矩是 **"表存键、渲染时翻"**：`label` 里写的是**中文原文**，它同时就是
- * `i18n/en.ts` 那张英文表的键；真正显示时由渲染方各自翻一次——
+ * 所以规矩是 **"表存键、渲染时翻"**：`label` 里写的是**英文原文**（2026-09-28 起
+ * 原文是英语，此前是中文），它同时就是 `i18n/zh-*.ts` 那张中文表的键；真正显示时由渲染方各自翻一次——
  * 自绘菜单在 `ui/MenuBar.tsx` / `ui/MenuPopup.tsx`，原生菜单在 `ui/nativeMenu.ts`，
  * 快捷键一览在 `ui/settings/panes/ShortcutsPane.tsx`（都是 `t(menu.label)`）。
  *
- * ⚠️ **别在这里就地 `t("文件")`**：那样写出来的是一份"import 那一刻就定死、
+ * ⚠️ **别在这里就地 `t("File")`**：那样写出来的是一份"import 那一刻就定死、
  * 之后再也不会变"的文案，切语言不会生效，而且不报错。
  * `tools/i18n-check.sh` 认这一点：它把这个文件里**含中文的字面量都算成键**
  *（"文案表文件"那条规则），所以上面那几处的 `t(` 变量 `)` 它数得到。
  *
  * # 为什么原文一律中文
  *
- * 菜单最初照一款外部编辑器的清单抄，那份清单**中英混杂**（"帮助"整栏除
+ * 菜单最初照一款外部编辑器的清单抄，那份清单**中英混杂**（"Help"整栏除
  * 最后三行外全是英文）。用户 2026-09-22 明确说过「注意不要像他一样中英混杂」。
  * 规矩：**同一门语言里不许混**——中文界面全中文、英文界面全英文。
  * 中文字面量当键只是这套写法的**入场费**（见 `i18n/en.ts` 顶上那段），
@@ -192,7 +192,7 @@ export const THEMES_DIR = "__theme-dir";
  * 而 id 一旦不一致，点了主题**什么都不发生**、还不报错。
  */
 export function themeEntries(themes: readonly DocThemeInfo[]): MenuEntry[] {
-  const items: MenuEntry[] = [{ id: NO_THEME, label: "无主题（内置）", checkable: true }];
+  const items: MenuEntry[] = [{ id: NO_THEME, label: "No Theme (Built-in)", checkable: true }];
 
   if (themes.length) {
     items.push("sep");
@@ -200,13 +200,13 @@ export function themeEntries(themes: readonly DocThemeInfo[]): MenuEntry[] {
       // 用户放的同名文件会**盖掉**内置那套。不标出来的话，"改过的文件怎么
       // 没生效"和"删掉的文件怎么还在"都会变成查不动的问题。
       //
-      // ⚠️ 后缀**在这里就翻**（`t("{0}（已自定义）", th.name)`），不能拼成一个
+      // ⚠️ 后缀**在这里就翻**（`t("{0} (customized)", th.name)`），不能拼成一个
       // 中文字符串丢给渲染方——那边拿到的是 `"我的主题（已自定义）"`，整串
       // 不是表里的键，`（已自定义）` 这半句会原样留着。
       // ⚠️ 循环变量叫 `th` 不叫 `t`：那个名字被 i18n 的 `t` 占了。
       items.push({
         id: `${THEME_PREFIX}${th.id}`,
-        label: th.builtin ? th.name : t("{0}（已自定义）", th.name),
+        label: th.builtin ? th.name : t("{0} (customized)", th.name),
         checkable: true,
       });
     }
@@ -214,7 +214,7 @@ export function themeEntries(themes: readonly DocThemeInfo[]): MenuEntry[] {
 
   // ⚠️ 这一条**编进 entries** 而不是单独渲染：那样它不参与漫游焦点，
   // 键盘用户按 End 到不了它、↑↓ 会从它头上跳过去。踩过。
-  items.push("sep", { id: THEMES_DIR, label: "打开主题文件夹…" });
+  items.push("sep", { id: THEMES_DIR, label: "Open Themes Folder…" });
   return items;
 }
 
@@ -261,121 +261,121 @@ export function resolvePick(id: string): MenuPick {
  * ⚠️ 它**住在这里，而不是住在合成它的那个文件里**，理由是 `tools/i18n-check.sh`：
  * 那个脚本按**整个文件**认"这一份里含中文的字面量都是给人看的字"（它维护着
  * 一张 `文案表文件` 名单，本文件在名单里）。把这条标签写在 `ui/recentMenu.ts`
- * 里的话，它**数不到**，于是 `en-ui.ts` 里那条英文会被判成"废键"——一条明明
+ * 里的话，它**数不到**，于是 `zh-ui.ts` 里那条中文会被判成"废键"——一条明明
  * 生效的翻译被当成垃圾，正是那条规则要防的失效。
  *
  * ⚠️ 它的 `id` 是**真命令**（`ui/useCommandTable.ts` 里有实现），与上面
  * 「打开最近文件」那个占位项不同——那个是"表存键"的位置标记，没有实现。
  */
-export const 清除最近项: MenuItemSpec = { id: "file.clearRecent", label: "清除最近记录" };
+export const 清除最近项: MenuItemSpec = { id: "file.clearRecent", label: "Clear Recent Files" };
 
 export const MENUS: MenuSpec[] = [
   {
     id: "file",
-    label: "文件",
+    label: "File",
     items: [
-      { id: "file.new", label: "新建", accel: "Ctrl+N" },
-      { id: "file.newWindow", label: "新建窗口", accel: "Ctrl+Shift+N" },
+      { id: "file.new", label: "New", accel: "Ctrl+N" },
+      { id: "file.newWindow", label: "New Window", accel: "Ctrl+Shift+N" },
       "sep",
-      { id: "file.open", label: "打开…", accel: "Ctrl+O" },
-      { id: "file.openFolder", label: "打开文件夹…" },
-      { id: "file.quickOpen", label: "快速打开…", accel: "Ctrl+P" },
-      { id: "file.recent", label: "打开最近文件" },
-      { id: "file.reload", label: "从磁盘重新加载", needsDoc: true },
+      { id: "file.open", label: "Open…", accel: "Ctrl+O" },
+      { id: "file.openFolder", label: "Open Folder…" },
+      { id: "file.quickOpen", label: "Quick Open…", accel: "Ctrl+P" },
+      { id: "file.recent", label: "Open Recent File" },
+      { id: "file.reload", label: "Reload from Disk", needsDoc: true },
       "sep",
-      { id: "file.save", label: "保存", accel: "Ctrl+S", needsDoc: true },
-      { id: "file.saveAs", label: "另存为…", accel: "Ctrl+Shift+S", needsDoc: true },
-      { id: "file.saveAll", label: "保存全部打开的文件…" },
+      { id: "file.save", label: "Save", accel: "Ctrl+S", needsDoc: true },
+      { id: "file.saveAs", label: "Save As…", accel: "Ctrl+Shift+S", needsDoc: true },
+      { id: "file.saveAll", label: "Save All Open Files…" },
       "sep",
-      { id: "file.rename", label: "重命名…", needsDoc: true },
-      { id: "file.move", label: "移动…", needsDoc: true },
-      { id: "file.revealInFolder", label: "打开文件位置…", needsDoc: true },
-      { id: "file.showInSidebar", label: "在侧边栏中显示", needsDoc: true },
-      { id: "file.delete", label: "删除…", needsDoc: true, danger: true },
+      { id: "file.rename", label: "Rename…", needsDoc: true },
+      { id: "file.move", label: "Move to…", needsDoc: true },
+      { id: "file.revealInFolder", label: "Open File Location…", needsDoc: true },
+      { id: "file.showInSidebar", label: "Reveal in Sidebar", needsDoc: true },
+      { id: "file.delete", label: "Delete…", needsDoc: true, danger: true },
       "sep",
       {
         // ⚠️ 这一项**自己不执行任何命令**，`file.import` 只是个键。
         // 导入格式有一整排（Word (.docx) / RTF / LaTeX / Epub…），
         // 铺在「文件」里会把这一栏撑成一条长龙——收进飞出层。
         id: "file.import",
-        label: "导入",
+        label: "Import",
         submenu: [
           { id: "file.importDocx", label: "Word (.docx)…" },
           { id: "file.importRtf", label: "RTF…" },
           { id: "file.importLatex", label: "LaTeX…" },
-          { id: "file.importEpub", label: "Epub…" },
-          { id: "file.importOdt", label: "OpenOffice (.odt)…" },
+          { id: "file.importEpub", label: "EPUB…" },
+          { id: "file.importOdt", label: "OpenDocument (.odt)…" },
         ],
       },
       {
         id: "file.export",
-        label: "导出",
+        label: "Export",
         submenu: [
           { id: "file.exportPdf", label: "PDF…", needsDoc: true },
-          { id: "file.exportHtmlPlain", label: "HTML（不含样式）…", needsDoc: true },
-          { id: "file.exportHtmlStyled", label: "HTML（含样式）…", needsDoc: true },
+          { id: "file.exportHtmlPlain", label: "HTML (No Styles)…", needsDoc: true },
+          { id: "file.exportHtmlStyled", label: "HTML (With Styles)…", needsDoc: true },
           "sep",
           { id: "file.exportDocx", label: "Word (.docx)…", needsDoc: true },
-          { id: "file.exportOdt", label: "OpenOffice (.odt)…", needsDoc: true },
+          { id: "file.exportOdt", label: "OpenDocument (.odt)…", needsDoc: true },
           { id: "file.exportRtf", label: "RTF…", needsDoc: true },
           { id: "file.exportLatex", label: "LaTeX…", needsDoc: true },
-          { id: "file.exportEpub", label: "Epub…", needsDoc: true },
+          { id: "file.exportEpub", label: "EPUB…", needsDoc: true },
           { id: "file.exportOpml", label: "OPML…", needsDoc: true },
           "sep",
-          { id: "file.exportImage", label: "图片…", needsDoc: true },
-          { id: "file.exportOther", label: "其他格式…", needsDoc: true },
+          { id: "file.exportImage", label: "Image…", needsDoc: true },
+          { id: "file.exportOther", label: "Other Formats…", needsDoc: true },
         ],
       },
-      { id: "file.print", label: "打印…", accel: "Alt+Shift+P", needsDoc: true },
+      { id: "file.print", label: "Print…", accel: "Alt+Shift+P", needsDoc: true },
       "sep",
-      { id: "file.preferences", label: "偏好设置…", accel: "Ctrl+," },
+      { id: "file.preferences", label: "Settings…", accel: "Ctrl+," },
       "sep",
-      { id: "file.close", label: "关闭", accel: "Ctrl+W", needsDoc: true },
+      { id: "file.close", label: "Close", accel: "Ctrl+W", needsDoc: true },
     ],
   },
   {
     id: "edit",
-    label: "编辑",
+    label: "Edit",
     items: [
-      { id: "edit.undo", label: "撤销", accel: "Ctrl+Z", needsDoc: true },
-      { id: "edit.redo", label: "重做", accel: "Ctrl+Y", needsDoc: true },
+      { id: "edit.undo", label: "Undo", accel: "Ctrl+Z", needsDoc: true },
+      { id: "edit.redo", label: "Redo", accel: "Ctrl+Y", needsDoc: true },
       "sep",
-      { id: "edit.cut", label: "剪切", accel: "Ctrl+X", needsDoc: true },
-      { id: "edit.copy", label: "复制", accel: "Ctrl+C", needsDoc: true },
-      { id: "edit.copyImage", label: "拷贝图片", needsDoc: true },
-      { id: "edit.paste", label: "粘贴", accel: "Ctrl+V", needsDoc: true },
+      { id: "edit.cut", label: "Cut", accel: "Ctrl+X", needsDoc: true },
+      { id: "edit.copy", label: "Copy", accel: "Ctrl+C", needsDoc: true },
+      { id: "edit.copyImage", label: "Copy Image", needsDoc: true },
+      { id: "edit.paste", label: "Paste", accel: "Ctrl+V", needsDoc: true },
       "sep",
       {
         // ⚠️ 「复制为 Markdown」那条 **id 没变**，只是从平面挪进了这里。
         // 挪动时最容易出的错是把 id 一起改了——`App.tsx` 那张表是按 id 认的，
         // 改了 id 就等于把已实现的功能重新变成灰的，而且不会报错。
         id: "edit.copyAs",
-        label: "复制为",
+        label: "Copy As",
         submenu: [
           { id: "edit.copyAsMarkdown", label: "Markdown", accel: "Ctrl+Shift+C", needsDoc: true },
-          { id: "edit.copyAsPlain", label: "纯文本", needsDoc: true },
-          { id: "edit.copyAsHtml", label: "HTML 代码", needsDoc: true },
+          { id: "edit.copyAsPlain", label: "Plain Text", needsDoc: true },
+          { id: "edit.copyAsHtml", label: "HTML Source", needsDoc: true },
         ],
       },
       "sep",
-      { id: "edit.select", label: "选择" },
-      { id: "edit.moveLineUp", label: "上移该行", accel: "Alt+↑", needsDoc: true },
-      { id: "edit.moveLineDown", label: "下移该行", accel: "Alt+↓", needsDoc: true },
+      { id: "edit.select", label: "Select" },
+      { id: "edit.moveLineUp", label: "Move Line Up", accel: "Alt+↑", needsDoc: true },
+      { id: "edit.moveLineDown", label: "Move Line Down", accel: "Alt+↓", needsDoc: true },
       "sep",
-      { id: "edit.findReplace", label: "查找和替换…", accel: "Ctrl+H", needsDoc: true },
+      { id: "edit.findReplace", label: "Find and Replace…", accel: "Ctrl+H", needsDoc: true },
     ],
   },
   {
     id: "paragraph",
-    label: "段落",
+    label: "Paragraph",
     items: [
-      { id: "para.h1", label: "一级标题", accel: "Ctrl+1", needsDoc: true },
-      { id: "para.h2", label: "二级标题", accel: "Ctrl+2", needsDoc: true },
-      { id: "para.h3", label: "三级标题", accel: "Ctrl+3", needsDoc: true },
-      { id: "para.h4", label: "四级标题", accel: "Ctrl+4", needsDoc: true },
-      { id: "para.h5", label: "五级标题", accel: "Ctrl+5", needsDoc: true },
-      { id: "para.h6", label: "六级标题", accel: "Ctrl+6", needsDoc: true },
-      { id: "para.text", label: "正文段落", accel: "Ctrl+0", needsDoc: true },
+      { id: "para.h1", label: "Heading 1", accel: "Ctrl+1", needsDoc: true },
+      { id: "para.h2", label: "Heading 2", accel: "Ctrl+2", needsDoc: true },
+      { id: "para.h3", label: "Heading 3", accel: "Ctrl+3", needsDoc: true },
+      { id: "para.h4", label: "Heading 4", accel: "Ctrl+4", needsDoc: true },
+      { id: "para.h5", label: "Heading 5", accel: "Ctrl+5", needsDoc: true },
+      { id: "para.h6", label: "Heading 6", accel: "Ctrl+6", needsDoc: true },
+      { id: "para.text", label: "Body text", accel: "Ctrl+0", needsDoc: true },
       "sep",
       {
         // ⚠️ 父项**换了新 id**（`para.table` → `para.tableMenu`），而原来那个
@@ -383,58 +383,58 @@ export const MENUS: MenuSpec[] = [
         // 它已经有实现（`App.tsx` 里 `run("table")`），当父项就点不动了，
         // 等于把做好的功能弄丢，而且不报错。
         id: "para.tableMenu",
-        label: "表格",
+        label: "Table",
         submenu: [
           // ⚠️ 标签写死了 **3 × 3**，因为**不弹框问行列数**。
           // 菜单上写「插入表格…」而点下去直接出来一张表，那个省略号就在撒谎：
           // 它承诺后面还有一个"询问参数"的步骤，而实际上没有。
           // 行列数写在标签里，用户点之前就知道会得到什么。见 `create.ts` 里
           // `table` 那一条的注释。
-          { id: "para.table", label: "插入表格（3 × 3）", needsDoc: true },
+          { id: "para.table", label: "Insert Table (3 × 3)", needsDoc: true },
           "sep",
-          { id: "para.tableRowAbove", label: "上方插入行", needsDoc: true },
-          { id: "para.tableRowBelow", label: "下方插入行", needsDoc: true },
-          { id: "para.tableColLeft", label: "左侧插入列", needsDoc: true },
-          { id: "para.tableColRight", label: "右侧插入列", needsDoc: true },
+          { id: "para.tableRowAbove", label: "Add Row Above", needsDoc: true },
+          { id: "para.tableRowBelow", label: "Add Row Below", needsDoc: true },
+          { id: "para.tableColLeft", label: "Add Column Before", needsDoc: true },
+          { id: "para.tableColRight", label: "Add Column After", needsDoc: true },
           "sep",
-          { id: "para.tableDelRow", label: "删除行", needsDoc: true },
-          { id: "para.tableDelCol", label: "删除列", needsDoc: true },
-          { id: "para.tableDel", label: "删除表格", needsDoc: true, danger: true },
+          { id: "para.tableDelRow", label: "Delete Row", needsDoc: true },
+          { id: "para.tableDelCol", label: "Delete Column", needsDoc: true },
+          { id: "para.tableDel", label: "Delete Table", needsDoc: true, danger: true },
           "sep",
-          { id: "para.tableAlignLeft", label: "左对齐", needsDoc: true },
-          { id: "para.tableAlignCenter", label: "居中对齐", needsDoc: true },
-          { id: "para.tableAlignRight", label: "右对齐", needsDoc: true },
+          { id: "para.tableAlignLeft", label: "Align Left", needsDoc: true },
+          { id: "para.tableAlignCenter", label: "Align Center", needsDoc: true },
+          { id: "para.tableAlignRight", label: "Align Right", needsDoc: true },
         ],
       },
-      { id: "para.mathBlock", label: "公式块", accel: "Ctrl+Shift+M", needsDoc: true },
-      { id: "para.codeBlock", label: "代码块", accel: "Ctrl+Shift+K", needsDoc: true },
+      { id: "para.mathBlock", label: "Math Block", accel: "Ctrl+Shift+M", needsDoc: true },
+      { id: "para.codeBlock", label: "Code Block", accel: "Ctrl+Shift+K", needsDoc: true },
       "sep",
-      { id: "para.quote", label: "引用", accel: "Ctrl+Shift+Q", needsDoc: true },
+      { id: "para.quote", label: "Blockquote", accel: "Ctrl+Shift+Q", needsDoc: true },
       "sep",
-      { id: "para.ol", label: "有序列表", accel: "Ctrl+Shift+[", needsDoc: true },
-      { id: "para.ul", label: "无序列表", accel: "Ctrl+Shift+]", needsDoc: true },
-      { id: "para.task", label: "任务列表", accel: "Ctrl+Shift+X", needsDoc: true },
+      { id: "para.ol", label: "Ordered List", accel: "Ctrl+Shift+[", needsDoc: true },
+      { id: "para.ul", label: "Bullet List", accel: "Ctrl+Shift+]", needsDoc: true },
+      { id: "para.task", label: "Task List", accel: "Ctrl+Shift+X", needsDoc: true },
       "sep",
-      { id: "para.hr", label: "水平分割线", needsDoc: true },
-      { id: "para.toc", label: "内容目录", needsDoc: true },
+      { id: "para.hr", label: "Horizontal Line", needsDoc: true },
+      { id: "para.toc", label: "Table of Contents", needsDoc: true },
       // 脚注（`editor/footnote.ts`）。⚠️ **没有加速键**：它一次动两处（引用 ＋
       // 文末的定义）并把光标带到文末，是"写完一段回头补注"这种动作，不在打字
       // 流的手指上；随手编一个键位就会在别的应用里按出别的东西来（与
       // `view.toolbar` 那三条同一条理由）。
-      { id: "para.footnote", label: "脚注", needsDoc: true },
+      { id: "para.footnote", label: "Footnote", needsDoc: true },
       { id: "para.frontMatter", label: "YAML Front Matter", needsDoc: true },
     ],
   },
   {
     id: "format",
-    label: "格式",
+    label: "Format",
     items: [
-      { id: "fmt.bold", label: "加粗", accel: "Ctrl+B", needsDoc: true },
-      { id: "fmt.italic", label: "斜体", accel: "Ctrl+I", needsDoc: true },
-      { id: "fmt.underline", label: "下划线", accel: "Ctrl+U", needsDoc: true },
-      { id: "fmt.code", label: "代码", accel: "Ctrl+Shift+`", needsDoc: true },
+      { id: "fmt.bold", label: "Bold", accel: "Ctrl+B", needsDoc: true },
+      { id: "fmt.italic", label: "Italic", accel: "Ctrl+I", needsDoc: true },
+      { id: "fmt.underline", label: "Underline", accel: "Ctrl+U", needsDoc: true },
+      { id: "fmt.code", label: "Code", accel: "Ctrl+Shift+`", needsDoc: true },
       "sep",
-      { id: "fmt.strike", label: "删除线", accel: "Alt+Shift+5", needsDoc: true },
+      { id: "fmt.strike", label: "Strikethrough", accel: "Alt+Shift+5", needsDoc: true },
       // 三种扩展语法（`editor/inline-marks.ts`）。⚠️ **它们照旧列在这儿，
       // 与设置里那三个开关无关**：关掉的是"解析与输入"，不是这条能力，
       // 所以这里没有 `checkable`、点了也不该灰。
@@ -444,35 +444,35 @@ export const MENUS: MenuSpec[] = [
       //   上标 `Ctrl+.` / 下标 `Ctrl+Shift+.`——这一对取自 Google Docs
       //   （那边是 `Ctrl+.` 与 `Ctrl+,`），本仓的 `Ctrl+,` 早被偏好设置占了，
       //   所以下标让给 `Ctrl+Shift+.`。上下排在一起，记起来是一条。
-      { id: "fmt.highlight", label: "高亮", accel: "Ctrl+Shift+H", needsDoc: true },
-      { id: "fmt.superscript", label: "上标", accel: "Ctrl+.", needsDoc: true },
-      { id: "fmt.subscript", label: "下标", accel: "Ctrl+Shift+.", needsDoc: true },
-      { id: "fmt.comment", label: "注释", needsDoc: true },
+      { id: "fmt.highlight", label: "Highlight", accel: "Ctrl+Shift+H", needsDoc: true },
+      { id: "fmt.superscript", label: "Superscript", accel: "Ctrl+.", needsDoc: true },
+      { id: "fmt.subscript", label: "Subscript", accel: "Ctrl+Shift+.", needsDoc: true },
+      { id: "fmt.comment", label: "Comment", needsDoc: true },
       "sep",
-      { id: "fmt.link", label: "超链接", accel: "Ctrl+K", needsDoc: true },
-      { id: "fmt.image", label: "图像", needsDoc: true },
+      { id: "fmt.link", label: "Link", accel: "Ctrl+K", needsDoc: true },
+      { id: "fmt.image", label: "Image", needsDoc: true },
       // ⚠️ **没有加速键**：这一项开的是一个整屏的挑选框，打字流里用不上
       // （打字时的入口是补全面板——打出 `:smi` 就弹，见 `editor/emoji.ts`）。
       // 菜单里这一条是给"我知道要插个表情，但不知道该打哪个短代码"的人。
-      { id: "fmt.emoji", label: "插入 Emoji…", needsDoc: true },
+      { id: "fmt.emoji", label: "Insert Emoji…", needsDoc: true },
       "sep",
-      { id: "fmt.clear", label: "清除样式", accel: "Ctrl+\\", needsDoc: true },
+      { id: "fmt.clear", label: "Clear Formatting", accel: "Ctrl+\\", needsDoc: true },
     ],
   },
   {
     id: "view",
-    label: "视图",
+    label: "View",
     items: [
-      { id: "view.toggleSidebar", label: "显示/隐藏侧边栏", accel: "Ctrl+Shift+L", checkable: true },
-      { id: "view.outline", label: "大纲", accel: "Ctrl+Shift+1", checkable: true },
-      { id: "view.fileTree", label: "文件树", accel: "Ctrl+Shift+3", checkable: true },
+      { id: "view.toggleSidebar", label: "Toggle Sidebar", accel: "Ctrl+Shift+L", checkable: true },
+      { id: "view.outline", label: "Outline", accel: "Ctrl+Shift+1", checkable: true },
+      { id: "view.fileTree", label: "File Tree", accel: "Ctrl+Shift+3", checkable: true },
       // ⚠️ `checkable` 是 2026-09-27 补的：旁边那两条（大纲 / 文件树）都有，
       // 而它们是**同一组三选一**（侧栏的三页）。少这一个的症状是"切到文档
       // 列表后，那一栏里三个勾一个都不亮"——用户看不出自己现在在哪一页。
-      { id: "view.docList", label: "文档列表", accel: "Ctrl+Shift+2", checkable: true },
-      { id: "view.search", label: "搜索", accel: "Ctrl+Shift+F" },
+      { id: "view.docList", label: "Document List", accel: "Ctrl+Shift+2", checkable: true },
+      { id: "view.search", label: "Search", accel: "Ctrl+Shift+F" },
       "sep",
-      { id: "view.toggleDock", label: "拓展栏", checkable: true },
+      { id: "view.toggleDock", label: "Extension Dock", checkable: true },
       // ── 格式化工具栏：**三档，一个子菜单**（2026-09-25）──
       //
       // 用户 2026-09-25 点名要的三档（「始终显示 / 鼠标悬停时显示 / 始终不显示」，
@@ -489,11 +489,11 @@ export const MENUS: MenuSpec[] = [
       // 在别的应用里按出别的东西来。
       {
         id: "view.toolbar",
-        label: "格式化工具栏",
+        label: "Formatting Toolbar",
         submenu: [
-          { id: "view.toolbarAlways", label: "始终显示", checkable: true },
-          { id: "view.toolbarHover", label: "鼠标悬停时显示", checkable: true },
-          { id: "view.toolbarNever", label: "始终不显示", checkable: true },
+          { id: "view.toolbarAlways", label: "Always Show", checkable: true },
+          { id: "view.toolbarHover", label: "Show on Hover", checkable: true },
+          { id: "view.toolbarNever", label: "Never Show", checkable: true },
         ],
       },
       // ⚠️ 这里原来有一项「Slidev 预览」（2026-09-23 加），**2026-09-25 删了**：
@@ -531,15 +531,15 @@ export const MENUS: MenuSpec[] = [
       //
       // ⚠️ 三个 id 都写在这里、由 `App.tsx` 的 `menuHandlers` 推 `disabled`——
       // 实现之前它们是灰的，不会假装能点。
-      { id: "view.modeWysiwyg", label: "所见即所得", accel: "Alt+1", checkable: true },
-      { id: "view.modeSource", label: "源码模式", accel: "Ctrl+/", checkable: true },
-      { id: "view.modeSplit", label: "分屏预览", accel: "Alt+2", checkable: true },
+      { id: "view.modeWysiwyg", label: "WYSIWYG", accel: "Alt+1", checkable: true },
+      { id: "view.modeSource", label: "Source Mode", accel: "Ctrl+/", checkable: true },
+      { id: "view.modeSplit", label: "Split Preview", accel: "Alt+2", checkable: true },
       "sep",
-      { id: "view.readOnly", label: "只读模式", checkable: true },
+      { id: "view.readOnly", label: "Read-Only Mode", checkable: true },
       "sep",
-      { id: "view.focusMode", label: "专注模式", accel: "F8", checkable: true },
-      { id: "view.typewriter", label: "打字机模式", accel: "F9", checkable: true },
-      { id: "view.statusBar", label: "状态栏", checkable: true },
+      { id: "view.focusMode", label: "Focus Mode", accel: "F8", checkable: true },
+      { id: "view.typewriter", label: "Typewriter Mode", accel: "F9", checkable: true },
+      { id: "view.statusBar", label: "Status Bar", checkable: true },
       "sep",
       // ── 缩放那三档（2026-09-27）──
       //
@@ -568,14 +568,14 @@ export const MENUS: MenuSpec[] = [
       // 两个选择：把「正文」挪开（动了用户手上的老键位），或者复位换一个键。
       // 选了后者——「正文」用得比"复位缩放"多得多。离 `Ctrl+0` 最近、
       // 而这一族里没被占的是 `Ctrl+Shift+0`。
-      { id: "view.zoomIn", label: "放大", accel: "Ctrl+=" },
-      { id: "view.zoomOut", label: "缩小", accel: "Ctrl+-" },
-      { id: "view.zoomReset", label: "实际大小", accel: "Ctrl+Shift+0" },
+      { id: "view.zoomIn", label: "Zoom In", accel: "Ctrl+=" },
+      { id: "view.zoomOut", label: "Zoom Out", accel: "Ctrl+-" },
+      { id: "view.zoomReset", label: "Reset Zoom", accel: "Ctrl+Shift+0" },
       "sep",
       // ⚠️ 2026-09-25 起它会**收起外壳**（和专注模式同一套，见 `styles/app.css`
       // 那一节），所以标签从「切换全屏」改成「全屏」并加了勾：勾的是"窗口现在
-      // 全屏着"，而"全屏"这两个字现在描述的是**一种状态**，不是一次动作。
-      { id: "view.fullscreen", label: "全屏", accel: "F11", checkable: true },
+      // 全屏着"，而"Full Screen"这两个字现在描述的是**一种状态**，不是一次动作。
+      { id: "view.fullscreen", label: "Full Screen", accel: "F11", checkable: true },
       // ⚠️ **有勾**，而且那个勾**是从窗口读回来的**（`isAlwaysOnTop()`，见
       // `ui/useWindowControls.ts` 文件头）：用户完全可能在窗口管理器里给这个
       // 窗勾上"总在最前"，那时内存里记一个 `false` 就会让菜单和窗口分叉——
@@ -584,11 +584,11 @@ export const MENUS: MenuSpec[] = [
       // ⚠️ **没有快捷键**：这一条归在"窗口怎么摆"里，而同族里已经有两族键位
       //（缩放 `Ctrl+=` 那三条、沉浸 `F8`/`F9`/`F11`），再塞一个只会撞车。
       // 这条的用法本来就是"打开之后一直开着"，不是高频动作。
-      { id: "view.alwaysOnTop", label: "窗口置顶", checkable: true },
+      { id: "view.alwaysOnTop", label: "Always on Top", checkable: true },
       // ⚠️ **没有勾**，理由是这一条**没有可读的状态**：「开发者工具开着没有」
       // WebKitGTK 不给接口（见 `ui/useWindowControls.ts` 文件头）。硬记一个内存
       // 状态一定会分叉，而分叉的症状是"菜单说开着、屏幕上没有"。所以它是动作。
-      { id: "view.devtools", label: "开发者工具", accel: "Shift+F12" },
+      { id: "view.devtools", label: "Developer Tools", accel: "Shift+F12" },
       "sep",
       // ⚠️⚠️ **这一条和上面那条「专注模式」是两件事，名字必须分得清。**
       // 上面那条（`view.focusMode`，F8）是**收拾界面**的：把外壳收起来、眼睛
@@ -605,22 +605,22 @@ export const MENUS: MenuSpec[] = [
       //（「专注」）会在菜单栏上多出一栏只放一条的，而这一栏里其他条目
       //（状态栏、全屏）也都是"应用怎么摆"——勉强算同类。真要挪窝，
       // 先看 `docs/07` 里这一项是怎么归的。
-      { id: "view.forceFocus", label: "强制专注", checkable: true },
+      { id: "view.forceFocus", label: "Force Focus", checkable: true },
     ],
   },
   {
     id: "theme",
-    label: "主题",
+    label: "Theme",
     items: [],
     dynamic: "themes",
   },
   {
     id: "help",
-    label: "帮助",
+    label: "Help",
     items: [
       // 「新功能 / 快速上手 / Markdown 参考…」那一排都是外链，而本仓离线优先，
       // 外链既打不开也不该假装能打开。只留真正能兑现的那条。
-      { id: "help.about", label: "关于 Nota" },
+      { id: "help.about", label: "About Nota" },
     ],
   },
 ];

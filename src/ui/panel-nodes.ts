@@ -509,7 +509,7 @@ function 提示(v: unknown): PluginPrompt | null {
   const 两个都给 = Boolean(secondArg && secondLabel);
   return {
     arg,
-    label: 文本(v.label) || t("请输入"),
+    label: 文本(v.label) || t("Enter a value"),
     placeholder: 文本(v.placeholder),
     hint: 文本(v.hint),
     secret: v.secret === true,
@@ -531,7 +531,7 @@ function 输入框(raw: Record<string, unknown>): PanelInput {
   return {
     arg: 文本(raw.arg),
     submit: 文本(raw.submit),
-    submitLabel: 文本(raw.submit_label) || t("提交"),
+    submitLabel: 文本(raw.submit_label) || t("Submit"),
     placeholder: 文本(raw.placeholder),
     hint: 文本(raw.hint),
     multiline: raw.multiline === true,
@@ -759,7 +759,7 @@ function 一块(raw: Record<string, unknown>): PanelNode {
         height: 高度(raw.height),
       };
     default: {
-      const 名 = kind || t("（没写 kind）");
+      const 名 = kind || t("(no kind)");
       return { kind: "unknown", raw: 名 };
     }
   }

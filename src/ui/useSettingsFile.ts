@@ -53,16 +53,16 @@ export function useSettingsFile(w: 设置文件接线): 设置文件出口 {
       // 那段——前端拿路径去调 plugin-opener 会撞 Tauri 的 ACL，BUG-27）。
       await api.settings.openDir();
     } catch (e) {
-      toast(t("打开设置文件夹失败：{0}", String(e)), "error");
+      toast(t("Could not open the settings folder: {0}", String(e)), "error");
     }
   }, [toast]);
 
   const resetSettings = useCallback(async () => {
     try {
       setSettings(await api.settings.reset());
-      toast(t("设置已恢复默认"), "success");
+      toast(t("Settings reset to defaults."), "success");
     } catch (e) {
-      toast(t("恢复默认失败：{0}", String(e)), "error");
+      toast(t("Could not reset to defaults: {0}", String(e)), "error");
     }
   }, [setSettings, toast]);
 

@@ -38,7 +38,7 @@ const NO_LANGUAGE = "";
 function 纯文本(): string {
   // ⚠️ 这里**不能**做成模块级常量：`t` 在 import 时就求值，那时语言还没定，
   // 而且之后没人通知它重画（见 `i18n/index.ts`）。字面量必须写在这儿。
-  return t("纯文本");
+  return t("Plain Text");
 }
 
 /** 弹层最多这么高，超了内部滚动。 */
@@ -90,7 +90,7 @@ export function 创建语言选择器(选项: {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "nota-code-lang";
-  btn.title = t("代码语言");
+  btn.title = t("Code Language");
   btn.setAttribute("aria-haspopup", "listbox");
   btn.setAttribute("aria-expanded", "false");
 
@@ -149,7 +149,7 @@ export function 创建语言选择器(选项: {
     if (是自定义) {
       const 尾 = document.createElement("span");
       尾.className = "nota-lang-custom-note";
-      尾.textContent = t("自定义");
+      尾.textContent = t("Custom");
       opt.appendChild(尾);
     }
     const 是空 = 选项.当前语言();
@@ -287,8 +287,8 @@ export function 创建语言选择器(选项: {
     const inp = document.createElement("input");
     inp.type = "text";
     inp.className = "nota-lang-input";
-    inp.placeholder = t("搜索或输入语言");
-    inp.setAttribute("aria-label", t("代码语言"));
+    inp.placeholder = t("Search or type a language");
+    inp.setAttribute("aria-label", t("Code Language"));
     // ⚠️ `autocomplete/spellcheck` 都关掉：语言名不是自然语言，浏览器的
     // 拼写红线与历史下拉在这里只会挡住列表。
     inp.autocomplete = "off";

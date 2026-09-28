@@ -103,7 +103,7 @@ export function ConfirmDialog({
         <div className="confirm-actions">
           {!hideCancel && (
             <button type="button" className="btn" onClick={() => onAnswer("cancel")}>
-              {t("取消")}
+              {t("Cancel")}
             </button>
           )}
           {/* ⚠️ 第三条路画在**中间**（取消和确认之间），而且用 `btn-primary`：
@@ -125,7 +125,7 @@ export function ConfirmDialog({
             className={`btn ${danger ? "btn-danger" : "btn-primary"}`}
             onClick={() => onAnswer("confirm")}
           >
-            {confirmLabel ?? t("确定")}
+            {confirmLabel ?? t("OK")}
           </button>
         </div>
       </div>

@@ -23,9 +23,9 @@ import type { ViewMode } from "@/bridge/ipc";
  * ⚠️ 写成 `Record` 而不是数组：`ViewMode` 加一个值这里就编译不过。
  */
 export const VIEW_MODE_LABELS: Record<ViewMode, { short: string; full: string }> = {
-  wysiwyg: { short: "所见即所得", full: "所见即所得" },
-  source: { short: "源码", full: "源码模式" },
-  split: { short: "分屏", full: "分屏预览" },
+  wysiwyg: { short: "WYSIWYG", full: "WYSIWYG" },
+  source: { short: "Source", full: "Source Mode" },
+  split: { short: "Split", full: "Split Preview" },
 };
 
 /** 下拉里的顺序（也是「视图」菜单里的顺序）。**常用程度**排的，不是字母序。 */

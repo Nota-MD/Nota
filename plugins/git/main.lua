@@ -32,9 +32,10 @@ local M = {}
 
 -- ── 文案 ──────────────────────────────────────────────────────────────────
 --
--- `T("原文")` 取一句界面文案：宿主按**应用语言**在 `plugin.toml` 的 `langs` 里
+-- `T("原句")` 取一句界面文案：宿主按**应用语言**在 `plugin.toml` 的 `langs` 里
 -- 挑一份 `lang/<tag>.toml`（`nota.i18n`），表里没有这条就用原文。**键就是原文**，
--- 翻译只写进 `lang/en.toml`——这套规矩见 `docs/13` §nota.i18n。
+-- ⚠️ **原文是英语**（2026-09-28 起），翻译只写进 `lang/zh-CN.toml`——
+-- 这套规矩见 `docs/13` §nota.i18n。
 --
 -- ⚠️ `T` 在 `on_load` 里**重新绑一次**：`nota` 要到那时才到手（在那之前调它
 -- 只会拿到原文，这是对的——模块级的字符串本来就不该等到 `nota`）。
@@ -66,10 +67,10 @@ local T = function(s) return s end
 --- 当上下文）。翻译它 = 别的插件读到的也是译文，这是**有意的**：那句话本来就是
 --- 写给人看的，而一个界面只该有一种语言。
 local STATES = {
-  untracked = { label = "未跟踪", tone = "muted" },
-  staged = { label = "已暂存", tone = "success" },
-  ["staged-dirty"] = { label = "已暂存且有新改动", tone = "warn" },
-  modified = { label = "已修改", tone = "warn" },
+  untracked = { label = "untracked", tone = "muted" },
+  staged = { label = "staged", tone = "success" },
+  ["staged-dirty"] = { label = "staged, with further changes", tone = "warn" },
+  modified = { label = "modified", tone = "warn" },
 }
 
 local function describe(entry)
@@ -101,7 +102,7 @@ local function refresh(nota, silent)
     -- 原样显示 git 的报错（"fatal: not a git repository..."）用户未必看得懂
     -- 是 Nota 没能定位到仓库，还是他自己忘了 git init。
     if not silent then
-      nota.ui.notify(T("这里不是 git 仓库：%s", r.stderr), "warn")
+      nota.ui.notify(T("This is not a git repository: %s", r.stderr), "warn")
     end
     nota.event.emit("git:status", { is_repo = false, branch = "", entries = {} })
     nota.ui.refresh()
@@ -199,7 +200,7 @@ local MAX_TOTAL = 200
 -- 这条注释就留在这儿别挪。）
 local function why_of(r, what)
   if r.stderr == nil or r.stderr == "" then
-    return T("%s 非零退出", what)
+    return T("%s exited with a non-zero status", what)
   end
   return r.stderr
 end
@@ -278,9 +279,9 @@ local function diff_blocks(nota, text, cmd, untracked)
 
     local title = f.path
     if f.added then
-      title = title .. T("（新文件）")
+      title = title .. T("(new file)")
     elseif f.deleted then
-      title = title .. T("（已删除）")
+      title = title .. T("(deleted)")
     end
     blocks[#blocks + 1] = { kind = "heading", text = title }
 
@@ -302,19 +303,18 @@ local function diff_blocks(nota, text, cmd, untracked)
       blocks[#blocks + 1] = {
         kind = "text",
         tone = "muted",
-        text = T("（这份还有 %d 行没画）", #f.lines - per),
+        text = T("(%d more lines from this file are not drawn)", #f.lines - per),
       }
     end
   end
 
   if #files == 0 then
-    blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("没有可显示的差异。") }
+    blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("There is no diff to show.") }
   elseif skipped > 0 then
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T(
-        "（差异太长：一共 %d 行，这里画了前 %d 行，剩下 %d 个文件没画。要看全的在终端跑 `%s`。）",
+      text = T("(The diff is too long: %d lines in total, the first %d are drawn here, and %d files are not drawn. Run `%s` in a terminal to see all of it.)",
         total,
         drawn,
         skipped,
@@ -325,8 +325,7 @@ local function diff_blocks(nota, text, cmd, untracked)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T(
-        "（一共 %d 行差异，这里画了前 %d 行。要看全的在终端跑 `%s`。）",
+      text = T("(%d diff lines in total; the first %d are drawn here. Run `%s` in a terminal to see all of them.)",
         total,
         drawn,
         cmd
@@ -338,8 +337,7 @@ local function diff_blocks(nota, text, cmd, untracked)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T(
-        "另有 %d 个未跟踪的文件不在差异里——git 的 diff 只谈已跟踪的文件，提交一次之后它们就进来了。",
+      text = T("%d more untracked files are not in the diff — git's diff only covers tracked files; once they are committed they will show up here.",
         untracked
       ),
     }
@@ -360,10 +358,10 @@ end
 local function diff_section(nota, title, text, why, cmd, untracked)
   local out = {
     { kind = "heading", text = title },
-    { kind = "text", tone = "muted", text = T("（红 = 删，绿 = 增，蓝 = 位置，灰 = 文件信息）") },
+    { kind = "text", tone = "muted", text = T("(red = removed, green = added, blue = where, grey = file info)") },
   }
   if not text then
-    out[#out + 1] = { kind = "text", tone = "warn", text = T("取差异失败：%s", why) }
+    out[#out + 1] = { kind = "text", tone = "warn", text = T("Could not get the diff: %s", why) }
   else
     for _, b in ipairs(diff_blocks(nota, text, cmd, untracked)) do
       out[#out + 1] = b
@@ -404,9 +402,9 @@ end
 --- 左边那截图线（键）要挂的动作。根提交（`parent == ""`）**也有**键可点，
 --- 只是那条键通向"空树"（`compared_blocks` 里走 `git show`），照样给一颗。
 local function bond_action(hash, parent)
-  local title = T("看 %s 与它父提交 %s 之间的差异", hash, parent)
+  local title = T("Diff %s against its parent %s", hash, parent)
   if parent == "" then
-    title = T("看第一次提交 %s 都放了什么（它没有父提交可比）", hash)
+    title = T("See what the very first commit %s put in (it has no parent to compare against)", hash)
   end
   return { command = "bond_diff", args = { hash = hash, parent = parent }, title = title }
 end
@@ -424,10 +422,10 @@ local function graph_blocks(nota)
     -- 会随版本和语言变，认它等于把一句译文当协议。
     if nota.git.run({ "rev-parse", "--verify", "-q", "HEAD" }).code ~= 0 then
       return {
-        { kind = "text", tone = "muted", text = T("还没有第一次提交。提交之后这里就长出提交树了。") },
+        { kind = "text", tone = "muted", text = T("There is no first commit yet. Once you commit, the tree will grow here.") },
       }
     end
-    return { { kind = "text", tone = "warn", text = T("取提交树失败：%s", why_of(r, "git log")) } }
+    return { { kind = "text", tone = "warn", text = T("Could not read the commit tree: %s", why_of(r, "git log")) } }
   end
 
   local rows, last = {}, nil
@@ -444,7 +442,7 @@ local function graph_blocks(nota)
         pick = {
           command = "pick_commit",
           args = { hash = row.hash },
-          title = T("选中 %s（再选一个就能比两者之间）", row.hash),
+          title = T("Select %s (pick one more to compare them)", row.hash),
         },
       }
     else
@@ -459,7 +457,7 @@ local function graph_blocks(nota)
   end
 
   if #rows == 0 then
-    return { { kind = "text", tone = "muted", text = T("提交树是空的。") } }
+    return { { kind = "text", tone = "muted", text = T("The commit tree is empty.") } }
   end
   return { { kind = "graph", items = rows } }
 end
@@ -501,18 +499,18 @@ local function compared_blocks(nota)
     -- 根提交没有父可以比：`git show` 对它画的正好是"跟空树比"——所有文件都算
     -- 新加的，正是要看的东西。
     cmd = "git show " .. b
-    title = T("第一次提交 %s（全部内容都算新加的）", b)
+    title = T("The first commit %s (everything counts as newly added)", b)
     text, why = run_diff(nota, { "show", "--format=", b })
   else
     cmd = "git diff " .. a .. " " .. b
-    title = T("%s → %s 之间", a, b)
+    title = T("Between %s → %s", a, b)
     text, why = run_diff(nota, { "diff", a, b })
   end
 
   local blocks = diff_section(nota, title, text, why, cmd, 0)
   blocks[#blocks + 1] = {
     kind = "buttons",
-    items = { { label = T("清空选择"), command = "clear_pick" } },
+    items = { { label = T("Clear selection"), command = "clear_pick" } },
   }
   return blocks
 end
@@ -523,15 +521,15 @@ end
 --- 2026-09-26 点名「界面要允许 git init」）。那颗按钮就在**文档所在目录**跑。
 local function not_repo_blocks()
   return {
-    { kind = "heading", text = T("这里不是 git 仓库") },
-    { kind = "text", tone = "muted", text = T("在文档所在目录建一个仓库，就能在这里看改动、比差异、提交了。") },
+    { kind = "heading", text = T("This is not a git repository") },
+    { kind = "text", tone = "muted", text = T("Create a repository in the document's directory and you can look at changes, compare diffs and commit right here.") },
     {
       kind = "buttons",
       items = {
-        { label = T("初始化仓库"), command = "init_repo", style = "primary" },
+        { label = T("Create a repository"), command = "init_repo", style = "primary" },
         -- 「再试一次」留着：仓库也可能是在**别处**建好的（用户在终端里 init 了、
         -- 或者切到了另一个文档目录），这条路得能重新发现它。
-        { label = T("再试一次"), command = "refresh" },
+        { label = T("Try again"), command = "refresh" },
       },
     },
   }
@@ -576,7 +574,7 @@ local function review_blocks(nota)
   end
 
   local text, why = get_diff(nota)
-  return diff_section(nota, T("差异"), text, why, "git diff HEAD", untracked)
+  return diff_section(nota, T("Diff"), text, why, "git diff HEAD", untracked)
 end
 
 --- 面板此刻该显示什么。**每次读都现跑**（见文件头）。
@@ -595,13 +593,13 @@ local function panel_content(nota)
 
   local branch = parsed.branch
   if branch == "" then
-    branch = T("（git 没说当前分支）")
+    branch = T("(git did not report a branch)")
   end
   blocks[#blocks + 1] = { kind = "heading", text = branch }
 
   if #parsed.entries == 0 then
     -- **空的不是错误**：干净的工作区是正常状态，画一个空列表会让人以为没读出来。
-    blocks[#blocks + 1] = { kind = "empty", text = T("没有未提交的改动。") }
+    blocks[#blocks + 1] = { kind = "empty", text = T("No uncommitted changes.") }
   else
     local items = {}
     for _, e in ipairs(parsed.entries) do
@@ -609,7 +607,7 @@ local function panel_content(nota)
         title = e.path,
         badge = describe(e),
         -- 重命名/复制的原名写在副标题里：只看新名字看不出"这是从哪儿来的"。
-        subtitle = e.orig and T("原名：%s", e.orig) or "",
+        subtitle = e.orig and T("formerly %s", e.orig) or "",
         tone = tone_of(e),
       }
     end
@@ -623,24 +621,24 @@ local function panel_content(nota)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "warn",
-      text = T("这个仓库还没设 Git 身份（名字和邮箱），git 会拒绝提交。"),
+      text = T("This repository has no Git identity (name and email) yet; git will refuse to commit."),
     }
     blocks[#blocks + 1] = {
       kind = "buttons",
       items = {
         {
-          label = T("填身份…"),
+          label = T("Set identity…"),
           command = "set_identity",
           style = "primary",
           -- 两个字段（`secondArg`）——判据与「提交…」那颗是同一套 `prompt`，
           -- 多出来的那个字段见 `docs/13` §prompt。
           prompt = {
             arg = "name",
-            label = T("Git 身份"),
-            placeholder = T("名字，比如：张三"),
-            hint = T("git 拿它给每次提交署名"),
+            label = T("Git identity"),
+            placeholder = T("Name, for example: Jane Doe"),
+            hint = T("git uses this to sign every commit"),
             secondArg = "email",
-            secondLabel = T("邮箱"),
+            secondLabel = T("Email"),
             secondPlaceholder = T("you@example.com"),
           },
         },
@@ -651,9 +649,9 @@ local function panel_content(nota)
   blocks[#blocks + 1] = {
     kind = "buttons",
     items = {
-      { label = T("刷新"), command = "refresh" },
+      { label = T("Refresh"), command = "refresh" },
       {
-        label = T("提交…"),
+        label = T("Commit…"),
         command = "commit",
         style = "primary",
         -- ⚠️ `prompt` = 点之前先弹宿主的输入框问一句（`docs/13` §prompt）。
@@ -661,15 +659,15 @@ local function panel_content(nota)
         -- 事后改要 amend，那已经不是"写文档时最常用的那几下"了。
         prompt = {
           arg = "message",
-          label = T("提交信息"),
-          placeholder = T("一句话说清这次改了什么"),
-          hint = T("会把所有改动 add 之后一起提交"),
+          label = T("Commit message"),
+          placeholder = T("One line saying what changed"),
+          hint = T("Stages every change with `add`, then commits them together"),
         },
       },
       -- ⚠️ 按钮在差异**上面**：差异可以很长（最多 200 行），摆在按钮后面的话，
       -- 用户每次都得先滚过一整片红绿才够得着「提交…」。
       {
-        label = show_diff and T("收起差异") or T("看差异"),
+        label = show_diff and T("Hide diff") or T("Show diff"),
         command = "toggle_diff",
       },
       -- ⚠️ 「看差异」是**在这一栏里**看（窄，长行要横着滚），「在编辑区看」是
@@ -680,21 +678,21 @@ local function panel_content(nota)
       -- 由 `compared` 决定画工作区那一份还是历史那一对）。**不要**在下面那块
       -- 历史差异旁边再放一颗同名的：同一件事在同一页上有两颗按钮，用户会
       -- 以为它们打开的不是同一个东西。
-      { label = T("在编辑区看"), command = "review_diff" },
+      { label = T("View in editor"), command = "review_diff" },
       -- 提交树默认**不摊开**：它一摊开就是几十行，而这个面板的第一件事是
       -- "有没有东西要提交"。想看见树的人会看见这颗按钮。
-      { label = show_graph and T("收起提交树") or T("提交树"), command = "toggle_graph" },
+      { label = show_graph and T("Hide the commit tree") or T("Commit tree"), command = "toggle_graph" },
     },
   }
 
   -- ── 提交树（默认收着，`show_graph` 那个开关说了算）───────────────────────
   if show_graph then
     blocks[#blocks + 1] = { kind = "separator" }
-    blocks[#blocks + 1] = { kind = "heading", text = T("提交树") }
+    blocks[#blocks + 1] = { kind = "heading", text = T("Commit tree") }
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T("点左边的图线 = 这一次提交改了什么；点右边的字 = 选中它（选两个就能比两者之间）。"),
+      text = T("Click the graph on the left for what this commit changed; click the text on the right to select it (select two to compare them)."),
     }
     if #picked > 0 then
       -- 选中的那两个要**写出来**：树一长，用户滚回去看自己点了哪两行很费劲，
@@ -702,7 +700,7 @@ local function panel_content(nota)
       blocks[#blocks + 1] = {
         kind = "text",
         tone = "success",
-        text = T("已选：%s", table.concat(picked, "、")),
+        text = T("Selected: %s", table.concat(picked, "、")),
       }
     end
     for _, b in ipairs(graph_blocks(nota)) do
@@ -721,7 +719,7 @@ local function panel_content(nota)
   if show_diff then
     blocks[#blocks + 1] = { kind = "separator" }
     local text, why = get_diff(nota)
-    for _, b in ipairs(diff_section(nota, T("差异"), text, why, "git diff HEAD", untracked)) do
+    for _, b in ipairs(diff_section(nota, T("Diff"), text, why, "git diff HEAD", untracked)) do
       blocks[#blocks + 1] = b
     end
   end
@@ -732,21 +730,21 @@ end
 --- 提交全部改动。
 function M.commit(nota, message)
   if not message or message == "" then
-    return { ok = false, error = T("提交信息不能为空") }
+    return { ok = false, error = T("The commit message cannot be empty") }
   end
 
   -- 先 add -A。**只提交已跟踪文件的改动**是更保守的做法，但写文档的人
   -- 更常见的意图是"把这一轮的所有改动存下来"，所以默认全加。
   local added = nota.git.run({ "add", "-A" })
   if added.code ~= 0 then
-    return { ok = false, error = T("git add 失败：%s", added.stderr) }
+    return { ok = false, error = T("git add failed: %s", added.stderr) }
   end
 
   -- 身份没配就停在这儿，**不去跑那条注定失败的 commit**。
   -- ⚠️ 位置在 `add` **之后**：`add` 都不成功说明这儿根本不是仓库（或另有毛病），
   -- 那时说"先填身份"是答非所问。
   if not has_identity(nota) then
-    return { ok = false, error = T("先填一下 Git 身份（名字和邮箱），git 才肯提交。") }
+    return { ok = false, error = T("Set the Git identity (name and email) first — git will not commit without it.") }
   end
 
   local committed = nota.git.run({ "commit", "-m", message })
@@ -755,9 +753,9 @@ function M.commit(nota, message)
     -- 否则用户会以为自己哪儿操作错了。
     local nothing = string.find(committed.stdout .. committed.stderr, "nothing to commit")
     if nothing then
-      return { ok = false, error = T("没有改动需要提交") }
+      return { ok = false, error = T("There is nothing to commit") }
     end
-    return { ok = false, error = T("git commit 失败：%s", committed.stderr) }
+    return { ok = false, error = T("git commit failed: %s", committed.stderr) }
   end
 
   return { ok = true, output = committed.stdout }
@@ -791,10 +789,10 @@ function M.on_load(nota)
     local r = nota.git.run({ "init" })
     if r.code ~= 0 then
       local why = why_of(r, "git init")
-      nota.ui.notify(T("git init 失败：%s", why), "error")
+      nota.ui.notify(T("git init failed: %s", why), "error")
       return { ok = false, error = why }
     end
-    nota.ui.notify(T("仓库建好了"), "success")
+    nota.ui.notify(T("The repository is ready"), "success")
     refresh(nota)
     return { ok = true, output = r.stdout }
   end)
@@ -810,17 +808,17 @@ function M.on_load(nota)
     local email = args and args.email or ""
     -- 两个都要：只设一半的话 `git var` 照样算不出来，而用户会以为自己填过了。
     if name == "" or email == "" then
-      return { ok = false, error = T("名字和邮箱都要填") }
+      return { ok = false, error = T("Both the name and the email are required") }
     end
     for _, kv in ipairs({ { "user.name", name }, { "user.email", email } }) do
       local r = nota.git.run({ "config", kv[1], kv[2] })
       if r.code ~= 0 then
         local why = why_of(r, "git config")
-        nota.ui.notify(T("填身份失败：%s", why), "error")
+        nota.ui.notify(T("Could not save the identity: %s", why), "error")
         return { ok = false, error = why }
       end
     end
-    nota.ui.notify(T("Git 身份已记在这个仓库里"), "success")
+    nota.ui.notify(T("The Git identity is saved in this repository"), "success")
     refresh(nota)
     return { ok = true }
   end)
@@ -854,7 +852,7 @@ function M.on_load(nota)
   nota.command.register("pick_commit", function(args)
     local hash = args and args.hash or ""
     if hash == "" then
-      return { ok = false, error = T("这一行没有提交，选不了。") }
+      return { ok = false, error = T("This line has no commit, so it cannot be selected.") }
     end
 
     for i, h in ipairs(picked) do
@@ -885,7 +883,7 @@ function M.on_load(nota)
   nota.command.register("bond_diff", function(args)
     local hash = args and args.hash or ""
     if hash == "" then
-      return { ok = false, error = T("这一行没有提交，点不了。") }
+      return { ok = false, error = T("This line has no commit, so there is nothing to open.") }
     end
     set_compared(nota, args.parent or "", hash)
     redraw(nota)
@@ -905,7 +903,7 @@ function M.on_load(nota)
     local message = args and args.message or ""
     local result = M.commit(nota, message)
     if result.ok then
-      nota.ui.notify(T("已提交"), "success")
+      nota.ui.notify(T("Committed"), "success")
       -- 提交完差异就空了，编辑区那一份摊着没意义（还容易让人以为"怎么什么都不剩"）。
       nota.ui.review(nil)
       refresh(nota)
@@ -952,7 +950,7 @@ function M.on_load(nota)
   -- 清单里挂个名——那儿能看见它属于编辑区。
   nota.ui.register_panel({
     id = "review",
-    title = T("差异"),
+    title = T("Diff"),
     location = "main",
     render = function()
       return review_blocks(nota)
@@ -960,21 +958,21 @@ function M.on_load(nota)
   })
 
   nota.ui.register_menu({
-    label = T("提交…"),
+    label = T("Commit…"),
     command = "commit",
     menu = "plugins",
     -- 与面板上那颗「提交…」同一个 `prompt`：两条路上的问法必须一样，
     -- 否则同一个功能在菜单里和在面板里表现不同。
     prompt = {
       arg = "message",
-      label = T("提交信息"),
-      placeholder = T("一句话说清这次改了什么"),
-      hint = T("会把所有改动 add 之后一起提交"),
+      label = T("Commit message"),
+      placeholder = T("One line saying what changed"),
+      hint = T("Stages every change with `add`, then commits them together"),
     },
   })
 
   nota.ui.register_menu({
-    label = T("刷新改动"),
+    label = T("Refresh changes"),
     command = "refresh",
     menu = "plugins",
   })

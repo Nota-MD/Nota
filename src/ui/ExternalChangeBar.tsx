@@ -63,7 +63,7 @@ export function ExternalChangeBar({
           {/* ⚠️ `title` 放完整路径：条上写的是文件名（窄），而"到底是哪一份"
               有时候得靠路径才分得清（两个目录下同名的 `README.md`）。 */}
           <span className="external-change-text" title={一.path}>
-            {t("「{0}」在磁盘上被别的程序改了。", 一.title)}
+            {t("“{0}” was changed on disk by another program.", 一.title)}
           </span>
           <span className="external-change-spacer" />
           <button
@@ -72,25 +72,25 @@ export function ExternalChangeBar({
             onClick={() =>
               正在看 === 一.id ? 关对照() : 查看修改(一.id)
             }
-            title={t("在编辑区里看磁盘上那份和编辑器里这份的差别")}
+            title={t("Show what differs between the file on disk and what is in the editor")}
           >
-            {正在看 === 一.id ? t("收起对照") : t("查看修改")}
+            {正在看 === 一.id ? t("Hide comparison") : t("View changes")}
           </button>
           <button
             type="button"
             className="btn external-change-btn"
             onClick={() => void 重新载入(一.id)}
-            title={t("用磁盘上那份替换编辑器里的（没存的改动会丢，会先问你一次）")}
+            title={t("Replace the editor contents with the file on disk (unsaved changes are lost — you are asked first)")}
           >
-            {t("重新载入")}
+            {t("Reload from disk")}
           </button>
           <button
             type="button"
             className="btn external-change-btn"
             onClick={() => 忽略(一.id)}
-            title={t("不管它：继续编辑，存盘时覆盖磁盘上那份")}
+            title={t("Leave it alone: keep editing, and overwrite the file on disk when you save")}
           >
-            {t("忽略")}
+            {t("Ignore")}
           </button>
         </div>
       ))}

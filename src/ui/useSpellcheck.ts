@@ -52,12 +52,12 @@ export function useSpellcheck(w: 拼写接线): void {
         const 实际 = await api.webview.spellcheckSet(开);
         // ⚠️ **只在不一致时说话**：一致是常态，每次都弹一条"已生效"就是噪音。
         if (算了 || 实际 === 开) return;
-        toast(t("拼写检查没有改成你要的样子，引擎那边还停在原处"), "error");
+        toast(t("Spell checking did not end up the way you asked; the engine stayed as it was"), "error");
       } catch (e) {
         if (算了) return;
         // 报错的原因是"这个平台没接口"或"等引擎回话超时"，两种都在这一句里
         // 说得过去（宿主那边回来的原文带着具体原因，原样接上）。
-        toast(t("拼写检查没能改成功：{0}", String(e)), "error");
+        toast(t("Could not change spell checking: {0}", String(e)), "error");
       }
     })();
 

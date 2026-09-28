@@ -65,31 +65,31 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
   return (
     <>
       <SettingsGroup
-        title={t("拓展")}
+        title={t("Extensions")}
         help={t(
-          "拓展是 Lua 写的：它可以给 Nota 加面板、加菜单项、读写文档。装上之后会当场加载（跑一遍它自己的 on_load），所以装完这一页的东西立刻就变。",
+          "Extensions are extensions written in Lua: they can add panels, menu items and document access to Nota. An extension is loaded on the spot when installed (its own on_load runs), so this page changes the moment the install finishes.",
         )}
       >
         <SettingRow
-          label={t("从文件安装…")}
+          label={t("Install from file…")}
           help={t(
-            "选一个拓展包（.nota-plugin 或 .zip）装上。⚠️ 只有「有签名但验不过」会被拒装——那意味着这个包在签完之后被改过。没签名的、签名者没见过的，都装得进来，只是行上会如实标出来。",
+            "Pick an extension package (.nota-plugin or .zip) and install it. ⚠️ The only packages refused are ones that are signed but fail verification — that means the package was changed after it was signed. Unsigned packages, and ones from a signer we have never seen, install just fine; the row says so.",
           )}
-          description={t("装进来的拓展放在用户拓展目录里，可以用下面那颗按钮打开它。")}
+          description={t("Installed extensions go into the user extension folder, which the button below opens.")}
         >
           <ActionButton disabled={灰} onClick={() => void 动作.装()}>
-            {忙 === "装" ? t("正在安装…") : t("选择拓展包…")}
+            {忙 === "装" ? t("Installing…") : t("Choose an extension package…")}
           </ActionButton>
         </SettingRow>
 
         <SettingRow
-          label={t("拓展文件夹")}
+          label={t("Extension folder")}
           help={t(
-            "用户自己装的拓展都在这里（一个拓展一个目录）。⚠️ 别在这里手改文件：宿主的内存里已经装着它们了，改完要重启 Nota 才生效。要改，用「导出」拿到一份再改。",
+            "Extensions you installed yourself live here, one folder each. ⚠️ Do not edit the files here by hand: the host already has them loaded in memory, and a change takes effect only after Nota restarts. To change one, export a copy and edit that.",
           )}
         >
           <ActionButton disabled={灰} onClick={() => void 动作.打开目录()}>
-            {t("打开文件夹…")}
+            {t("Open Folder…")}
           </ActionButton>
         </SettingRow>
       </SettingsGroup>
@@ -99,15 +99,15 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
           放进去的话，一个插件都没装时这一整段会**消失**，用户看不到任何解释。 */}
       {plugins.length === 0 ? (
         <Note>
-          {t("目前一个拓展都没有装。用上面那颗")}
-          <strong>{t("「选择拓展包…」")}</strong>
-          {t("装一个——拓展包自带 plugin.toml 与入口文件，装进来就能用。")}
+          {t("No extensions installed yet. Use ")}
+          <strong>{t("“Choose an extension package…”")}</strong>
+          {t(" above to install one — a package carries its own plugin.toml and entry file, and it works as soon as it is installed.")}
         </Note>
       ) : (
         <SettingsGroup
-          title={t("已装拓展")}
+          title={t("Installed extensions")}
           help={t(
-            "「停用」是真的把它卸下来（跑一遍 on_unload、丢掉它的 Lua 状态），只是磁盘上的文件留着；「卸载」才会删掉那些文件。⚠️ 卸载不可逆，所以会先问一句。",
+            "Disable really unloads it (its on_unload runs and its Lua state is dropped); the files on disk stay. Uninstall is what deletes those files. ⚠️ Uninstalling cannot be undone, so you are asked first.",
           )}
         >
           {plugins.map((p) => (
@@ -125,14 +125,14 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
                   disabled={灰}
                   onClick={() => void 动作.启停(p.id, p.state === "disabled")}
                 >
-                  {忙 === p.id ? t("处理中…") : p.state === "disabled" ? t("启用") : t("停用")}
+                  {忙 === p.id ? t("Working…") : p.state === "disabled" ? t("Enable") : t("Disable")}
                 </ActionButton>
                 <ActionButton
                   disabled={灰}
-                  title={t("存成一份 .nota-plugin 包，可以拿去给别人装、也可以当备份。")}
+                  title={t("Save as a .nota-plugin package — to hand to someone else to install, or as a backup.")}
                   onClick={() => void 动作.导出(p.id)}
                 >
-                  {t("导出…")}
+                  {t("Export…")}
                 </ActionButton>
                 {/* ⚠️ 内置插件**不给**「卸载」：它在安装包里（那个目录通常还是
                     只读的），删了下次启动又回来——后端也会拒。给一颗点了报错的
@@ -142,20 +142,20 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
                   <ActionButton
                     danger
                     disabled={灰}
-                    title={t("把这个拓展从磁盘上删掉。它的设置文件会留着。")}
+                    title={t("Delete this extension from disk. Its settings file is kept.")}
                     onClick={() => void 动作.卸(p.id)}
                   >
-                    {t("卸载")}
+                    {t("Uninstall")}
                   </ActionButton>
                 )}
                 {/* 只在"签名对上了但签名者没见过"时出现——正是用户该做决定的时候。 */}
                 {p.signature === "unknown" && (
                   <ActionButton
                     disabled={灰}
-                    title={t("信任 {0}", p.key_id ?? t("这个签名者"))}
+                    title={t("Trust {0}", p.key_id ?? t("this signer"))}
                     onClick={() => void 动作.信任(p.id, p.key_id)}
                   >
-                    {t("信任")}
+                    {t("Trust")}
                   </ActionButton>
                 )}
               </div>
@@ -170,16 +170,16 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
           "卸载这个插件"（右侧那一栏的同一条注释里写着同样的理由）。 */}
       {信任.length > 0 && (
         <SettingsGroup
-          title={t("已信任的签名者")}
+          title={t("Trusted signers")}
           help={t(
-            "信任是按指纹记的，不是按拓展名。要撤销信任，编辑 trusted-keys.toml（在设置文件夹里）。",
+            "Trust is recorded by fingerprint, not by extension name. To revoke it, edit trusted-keys.toml (in the settings folder).",
           )}
         >
           {信任.map((k) => (
             <SettingRow
               key={k.key_id}
               label={k.name}
-              description={t("这是记下这把钥匙时那个拓展的名字，只是给人看的——信任按右边那串指纹判。")}
+              description={t("This is the name of the extension that was installed when the key got recorded; it is there for people to read — trust is decided by the fingerprint on the right.")}
             >
               {/* ⚠️ 指纹用 `<code>`：它是一串十六进制，等宽才**对得齐**——
                   用户是拿着作者公布的那一份**逐位核**的，比例字体下核起来很累。 */}
@@ -192,16 +192,16 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
       )}
 
       <Note>
-        {t("这一页管的是")}
-        <strong>{t("装 / 导出 / 卸载")}</strong>
-        {t("。拓展本身的面板、它的设置、它的数据都不在这儿：面板在右侧那一栏（每个拓展一页），设置与数据在它自己的目录里——拓展写了什么、存在哪儿，由它自己在清单里声明。")}
+        {t("This page is about ")}
+        <strong>{t("install / export / uninstall")}</strong>
+        {t(". The extension's own panel, settings and data are not here: panels live in the dock on the right (one page per extension), and settings and data live in folders of their own — what an extension writes, and where, is declared in its own manifest.")}
       </Note>
 
       <Note>
-        {t("⚠️ 导出的包不含签名：Nota 的宿主机上没有作者那把私钥（也不该有，打包与签名是作者侧用")}
+        {t("⚠️ An exported package carries no signature: the host has no copy of the author's private key (nor should it — packing and signing are done on the author's side with ")}
         {" "}
         <code>tools/pack-plugin.py</code>
-        {t("做的）。拓展文件没被改过的话，作者原来那份签名会原样带上；改过就把签名摘掉——带着一个对不上的签名，别人是装不上的。")}
+        {t("). If the extension files are unchanged, the author's original signature is carried over as it is; if they were changed, the signature is dropped — with a signature that does not match, nobody can install the package.")}
       </Note>
     </>
   );
@@ -268,7 +268,7 @@ function 拓展说明({ p }: { p: PluginInfo }) {
         // 「不信这个插件」这件事的落点：它开了哪些口子，就写在这一行上。
         // ⚠️ 穿 `.plugin-desc` 是**有意的**：它占的就是描述那一格
         //（插件没写描述、也没申请能力，这一行说的就是"它什么都没要"）。
-        <span className="plugin-desc">{t("它没有申请任何能力。")}</span>
+        <span className="plugin-desc">{t("It asks for no capabilities.")}</span>
       )}
     </>
   );

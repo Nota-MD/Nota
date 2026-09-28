@@ -101,7 +101,7 @@ export function useUiStyles(
       // ——首次使用时它多半还不存在（`commands/ui_style.rs`）。
       await api.uiStyle.openDir();
     } catch (e) {
-      toast(t("打开风格文件夹失败：{0}", String(e)), "error");
+      toast(t("Could not open the styles folder: {0}", String(e)), "error");
     }
   }, [toast, t]);
 

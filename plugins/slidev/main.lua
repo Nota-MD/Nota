@@ -69,7 +69,8 @@ local M = {}
 ---
 --- 宿主按"应用语言"在清单的 `langs` 里挑一份表（`lang/<tag>.toml`）给这个插件
 ---（`nota.i18n`，见 `src-tauri/src/lua/api/i18n.rs`）。表里没有这条 → **用原文**。
---- 所以：平时照常写中文，要翻译的才进 `lang/en.toml`（键 = 这里的原文）；
+--- 所以：**原句写英语**（2026-09-28 起用户定的方向），要翻译的才进
+--- `lang/zh-CN.toml`（键 = 这里的原句；`lang/en.toml` 不写了——英语就是原文）；
 --- 表读不到、键写错、插件语言对不上，退化的样子都是**看见原文**，不报错。
 ---
 --- ⚠️ `T` 在 `on_load` 里**重新绑一次**：`nota` 要到那时才到手，而这之前
@@ -274,8 +275,8 @@ local function describe_probe(p, want)
     return {
       state = "checking",
       tone = "muted",
-      message = T("正在检查这台机器上有没有 Slidev…（最多 20 秒）"),
-      detail = T("查完这一页会自己更新。等不及就点下面那颗「立刻检测」。"),
+      message = T("Checking whether Slidev is available on this machine… (up to 20 seconds)"),
+      detail = T("This page updates itself once the check finishes. If you do not want to wait, press “Check now” below."),
     }
   end
 
@@ -287,22 +288,15 @@ local function describe_probe(p, want)
         return {
           state = "missing",
           tone = "warn",
-          message = T("Slidev%s 是装了的，但这份文档还没存过盘。", ver),
-          detail = T(
-            "Slidev 拿入口文件所在的目录当项目根（`![](./图.png)` 这类相对路径也指望它），"
-              .. "新建的文档还没有目录可用。先存一下盘再试。"
-          ),
+          message = T("Slidev%s is installed, but this document has not been saved to disk yet.", ver),
+          detail = T("Slidev takes the entry file's directory as the project root (relative paths such as `![](./img.png)` rely on it), and a brand-new document has no directory yet. Save it first, then try again."),
         }
       end
       return {
         state = "missing",
         tone = "warn",
-        message = T("Slidev%s 是装了的，但 `%s` 还不是一个 Slidev 项目。", ver, p.root),
-        detail = T(
-          "那个目录（以及它的各层父目录）里没有 `node_modules/@slidev/theme-*`。"
-            .. "Slidev 连默认主题都得从项目里找，找不到就直接退出——"
-            .. "官方指南里那条 `npm init slidev@latest` 就是在建这样一个项目。"
-        ),
+        message = T("Slidev%s is installed, but `%s` is not a Slidev project yet.", ver, p.root),
+        detail = T("Neither that directory nor any of its parents has `node_modules/@slidev/theme-*`. Slidev looks for even the default theme inside the project and exits when it cannot find one — the `npm init slidev@latest` line in the official guide is what creates such a project."),
       }
     end
     -- 这份文档要的那个**主题包**没装（`need_found == false`）。
@@ -325,13 +319,8 @@ local function describe_probe(p, want)
         return {
           state = "notheme",
           tone = "warn",
-          message = T("这份文档没写主题，Slidev 要的默认主题 `%s` 没装。", want.pkg),
-          detail = T(
-            "找过了 `%s`（连同各层父目录）。没写 `theme:` 的文档，Slidev 照样要去"
-              .. "项目里找那个默认主题包——53 起它不再随 `@slidev/cli` 一起装，"
-              .. "找不到就退出。三条出路：在 `%s` 里跑一次 `npm i %s`（有默认样式）；"
-              .. "或者在文档最前面加三行 `---`、`theme: none`、`---`（不用主题，"
-              .. "先把内容放出来）；或者写一个本机装过的主题名。",
+          message = T("This document names no theme, and the default theme `%s` Slidev asks for is not installed.", want.pkg),
+          detail = T("Looked for `%s` (and in every parent directory). Even a document that names no theme makes Slidev look for that default theme package inside the project — since 53 it no longer ships with `@slidev/cli` — and Slidev exits when it cannot find one. Three ways out: run `npm i %s` inside `%s` (that gives you the default look); or add three lines at the very top of the document — `---`, `theme: none`, `---` (no theme, just to get the content on screen); or write the name of a theme that is installed on this machine.",
             want.need,
             p.root,
             want.pkg
@@ -341,12 +330,8 @@ local function describe_probe(p, want)
       return {
         state = "notheme",
         tone = "warn",
-        message = T("这份文档要的主题 `%s` 没装。", want.pkg),
-        detail = T(
-          "找过了 `%s`（连同各层父目录）。Slidev 按 `@slidev/theme-<名>`、"
-            .. "`slidev-theme-<名>` 的顺序找主题，这里问的是头一个。"
-            .. "在 `%s` 里装一个就行：`npm i %s`；"
-            .. "或者把文档开头那行 `theme:` 改成 `none`（不用主题）或一个装过的主题名。",
+        message = T("The theme `%s` this document asks for is not installed.", want.pkg),
+        detail = T("Looked for `%s` (and in every parent directory). Slidev resolves a theme by trying `@slidev/theme-<name>` and then `slidev-theme-<name>`; this is the first of the two. Install one inside `%s`: `npm i %s`; or change the `theme:` line at the top of the document to `none` (no theme) or to the name of a theme that is installed.",
           want.need,
           p.root,
           want.pkg
@@ -357,7 +342,7 @@ local function describe_probe(p, want)
     return {
       state = "ready",
       tone = "success",
-      message = T("已检测到 Slidev%s，可以打开预览。", ver),
+      message = T("Detected Slidev%s — you can open the preview.", ver),
       detail = "",
     }
   end
@@ -368,12 +353,9 @@ local function describe_probe(p, want)
     -- 分出来是因为这两件事的出路不同：一个是去装 Node，一个是去装 Slidev。
     local msg
     if string.find(p.detail, "没找到", 1, true) then
-      msg = T(
-        "这台机器上没找到要跑的那条命令——多半是没装 Node.js。Slidev 是个前端工具，"
-          .. "得先有 node/npx。"
-      )
+      msg = T("The command to run was not found on this machine — most likely Node.js is not installed. Slidev is a front-end tool, so node/npx has to be there first.")
     else
-      msg = T("离线跑不通 `%s`，这台机器上应该还没装 Slidev。", p.command)
+      msg = T("`%s` cannot run offline, so Slidev is probably not installed on this machine yet.", p.command)
     end
     return { state = "missing", tone = "warn", message = msg, detail = p.detail }
   end
@@ -382,11 +364,8 @@ local function describe_probe(p, want)
   return {
     state = "unknown",
     tone = "muted",
-    message = T("探测没问出结果：`%s` 没在 20 秒内回话。这不代表没装。", p.command),
-    detail = T(
-      "自定义的启动命令可能不认 `--version`，或者本来就一直在跑、不打算退出。"
-        .. "想试就直接点「仍然试一次」。"
-    ),
+    message = T("The probe got no answer: `%s` did not reply within 20 seconds. That does not mean it is not installed.", p.command),
+    detail = T("A custom start command may not understand `--version`, or it may already be running and have no intention of exiting. If you want to try, press “Try anyway”."),
   }
 end
 
@@ -431,7 +410,7 @@ local function log_blocks(nota)
 
   local blocks = {
     { kind = "separator" },
-    { kind = "heading", text = T("进程输出（最后几行）") },
+    { kind = "heading", text = T("Process output (last few lines)") },
   }
   local first = #lines - LOG_LINES + 1
   if first < 1 then
@@ -448,7 +427,7 @@ local function log_blocks(nota)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "muted",
-      text = T("（前面还有 %d 行没画。）", first - 1),
+      text = T("(%d earlier lines not shown.)", first - 1),
     }
   end
   return blocks
@@ -468,29 +447,26 @@ end
 local function running_blocks(s)
   local title = preview_title
   if not title or title == "" then
-    title = T("当前文档")
+    title = T("Current document")
   end
 
   return {
-    { kind = "heading", text = T("正在预览") },
-    { kind = "text", tone = "muted", text = T("《%s》 · 端口 %d", title, s.port) },
+    { kind = "heading", text = T("Previewing") },
+    { kind = "text", tone = "muted", text = T("%s · port %d", title, s.port) },
     { kind = "frame", height = 520 },
     {
       kind = "buttons",
       items = {
-        { label = T("停止预览"), command = "stop" },
+        { label = T("Stop preview"), command = "stop" },
         -- 全屏演示、演讲者视图（双屏）只有真浏览器有，嵌在面板里的 iframe
         -- 两样都做不到。地址还是宿主填的那个（插件交不出别的）。
-        { label = T("用浏览器打开"), command = "open_browser" },
+        { label = T("Open in browser"), command = "open_browser" },
       },
     },
     {
       kind = "text",
       tone = "muted",
-      text = T(
-        "改文档会自动重新渲染（Slidev 自己的热更新）。这里只画一屏，"
-          .. "全屏讲的时候点「用浏览器打开」。"
-      ),
+      text = T("Edits re-render automatically (Slidev's own hot reload). Only one screen is drawn here; press “Open in browser” when you present full-screen."),
     },
   }
 end
@@ -508,7 +484,7 @@ local function idle_blocks(nota, s)
     blocks[#blocks + 1] = {
       kind = "text",
       tone = "danger",
-      text = T("预览进程已经退出了（端口 %s）。下面这段是它最后的输出。", s.port),
+      text = T("The preview process has exited (port %s). Below is its last output.", s.port),
     }
   end
 
@@ -518,7 +494,7 @@ local function idle_blocks(nota, s)
   end
 
   if last_error then
-    blocks[#blocks + 1] = { kind = "text", tone = "danger", text = T("上次启动没成：%s", last_error) }
+    blocks[#blocks + 1] = { kind = "text", tone = "danger", text = T("Last start failed: %s", last_error) }
   end
 
   -- 事实表：用户拿着它们能自己判断（比如"查的是另一个目录"、"装是装了但没主题"）。
@@ -526,25 +502,25 @@ local function idle_blocks(nota, s)
   -- ⚠️ `checking` 也不画：那一档手里**只有命令和根**（版本、主题都还没有），
   -- 摆半张表出来，用户会以为"主题：没找到"是结论。
   if d.state ~= "checking" and p.command and p.command ~= "" then
-    local items = { { label = T("命令"), value = p.command } }
+    local items = { { label = T("Command"), value = p.command } }
     if p.version then
-      items[#items + 1] = { label = T("版本"), value = p.version }
+      items[#items + 1] = { label = T("Version"), value = p.version }
     end
     if p.root then
-      items[#items + 1] = { label = T("项目根"), value = p.root }
+      items[#items + 1] = { label = T("Project root"), value = p.root }
     end
     -- ⚠️ 这一格有**两把尺子**，问过哪个就用哪个：
     --   · `need_found ~= nil` ⇒ 问的是**这份文档要的那一个包**（细）；
     --   · 否则 ⇒ 只问过"这里是不是个 Slidev 项目"（`marker_found`，粗）。
     -- 混着读会让用户以为"找到了"是指他要的那个包找到了——2026-09-26 那一场
     -- 就是这么被糊弄过去的（摆的是"主题：找到了"，跑起来却少包）。
-    local label, value, tone = T("主题"), nil, nil
+    local label, value, tone = T("Theme"), nil, nil
     if p.need_found ~= nil and want then
-      label = T("主题包")
-      value = p.need_found and T("找到了 `%s`", want.pkg) or T("没找到 `%s`", want.pkg)
+      label = T("Theme package")
+      value = p.need_found and T("found `%s`", want.pkg) or T("no `%s`", want.pkg)
       tone = p.need_found and "success" or "warn"
     else
-      value = p.marker_found and T("找到了") or T("没找到 `@slidev/theme-*`")
+      value = p.marker_found and T("found") or T("no `@slidev/theme-*`")
       tone = p.marker_found and "success" or "warn"
     end
     items[#items + 1] = { label = label, value = value, tone = tone }
@@ -567,7 +543,7 @@ local function idle_blocks(nota, s)
   if d.state == "checking" then
     blocks[#blocks + 1] = {
       kind = "buttons",
-      items = { { label = T("立刻检测"), command = "recheck", style = "primary" } },
+      items = { { label = T("Check now"), command = "recheck", style = "primary" } },
     }
     return blocks
   end
@@ -577,12 +553,12 @@ local function idle_blocks(nota, s)
     {
       -- 探不通时是「仍然试一次」：**探测是有根据的猜测，不是证明**
       --（主题可能装在别处、命令可能装在 PATH 之外），所以永远留一条硬闯的路。
-      label = force and T("仍然试一次") or T("开始预览"),
+      label = force and T("Try anyway") or T("Start preview"),
       command = "start",
       style = "primary",
       args = { force = force },
     },
-    { label = T("重新检测"), command = "recheck" },
+    { label = T("Re-check"), command = "recheck" },
   }
   -- 「没装」那两档上给一条去官网的路。
   -- ⚠️ 用户 2026-09-24 对面板的原话就是「**如果没有，导航到官网的下载指南**」，
@@ -590,7 +566,7 @@ local function idle_blocks(nota, s)
   -- ⚠️ **`unknown` 那档不给**：那时"装没装"还不知道，摆一颗"去装个吧"的按钮
   -- 就是把猜测当结论——描述那一档的注释里已经写死了这条口径。
   if d.state == "missing" then
-    items[#items + 1] = { label = T("去官网看安装指南"), command = "open_guide" }
+    items[#items + 1] = { label = T("Open the official install guide"), command = "open_guide" }
   end
   blocks[#blocks + 1] = { kind = "buttons", items = items }
 
@@ -632,7 +608,7 @@ local function do_start(nota, force)
   local ok, res = pcall(nota.devserver.start)
   if not ok then
     last_error = err_text(res)
-    nota.ui.notify(T("预览没起来：%s", last_error), "error")
+    nota.ui.notify(T("The preview did not start: %s", last_error), "error")
     -- ⚠️ 这一下**必须在 notify 之后**：面板上要能读到 `last_error` 和日志，
     -- 而前端收到刷新事件就会来拉一次。
     nota.ui.refresh("preview")
@@ -640,7 +616,7 @@ local function do_start(nota, force)
   end
 
   last_error = nil
-  nota.ui.notify(T("预览已启动（端口 %d）", res.port), "success")
+  nota.ui.notify(T("Preview started (port %d)", res.port), "success")
   nota.ui.refresh("preview")
   return { ok = true, port = res.port, url = res.url }
 end
@@ -652,11 +628,11 @@ local function do_stop(nota, silent)
   preview_title = nil
   if had then
     if not silent then
-      nota.ui.notify(T("预览已停止"), "info")
+      nota.ui.notify(T("Preview stopped"), "info")
     end
     nota.ui.refresh("preview")
   elseif not silent then
-    nota.ui.notify(T("预览没在跑"), "warn")
+    nota.ui.notify(T("The preview is not running"), "warn")
   end
 end
 
@@ -719,7 +695,7 @@ function M.on_load(nota)
   nota.command.register("open_guide", function()
     local ok, err = pcall(nota.ui.open_url, GUIDE_URL)
     if not ok then
-      nota.ui.notify(T("打不开浏览器：%s", tostring(err)), "warn")
+      nota.ui.notify(T("Could not open the browser: %s", tostring(err)), "warn")
       return { ok = false, error = tostring(err) }
     end
     return { ok = true }
@@ -741,13 +717,13 @@ function M.on_load(nota)
   })
 
   nota.ui.register_menu({
-    label = T("开始 Slidev 预览"),
+    label = T("Start Slidev preview"),
     command = "start",
     menu = "plugins",
   })
 
   nota.ui.register_menu({
-    label = T("停止 Slidev 预览"),
+    label = T("Stop Slidev preview"),
     command = "stop",
     menu = "plugins",
   })

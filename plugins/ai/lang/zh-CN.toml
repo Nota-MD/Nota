@@ -1,24 +1,87 @@
-# 「AI 助手」插件的文案表（en（英语））。
+# 「AI 助手」插件的中文（简体）文案表。
 #
 # # 这张表怎么来的
 #
 # 键 = **`main.lua` 里 `T("…")` 写下的那句原文**，一字不差（含标点）。查不到
 # 这条键就用原文——所以这份表里**只需要放要翻译的那些**。
-# 规矩与前端那套同源，见 `src-tauri/src/lua/api/i18n.rs` 文件头。
 #
-# ⚠️ 改了 `main.lua` 里的中文原文 = 改了一个键，这里的对应条目会**静默失效**
-# （表现是那句退回中文，不报错）。`bash tools/i18n-check.sh` 会把废键揪出来。
+# ⚠️ **主语言是英语**（2026-09-27 用户定的方向，2026-09-28 铺到这一层）：
+# 代码里写的是**英语原文**，中文是**翻译**，在这一份里。英语自己那份
+# （`lang/en.toml`）**没有了**——英语就是原文，一张空表而已。
+#
+# ⚠️ 改了 `main.lua` 里的英语原文 = 改了一个键，这里的对应条目会**静默失效**
+# （表现是那句退回英语，不报错）。`bash tools/i18n-check.sh` 会把废键揪出来。
 #
 # ⚠️ 句子里的 `%s` / `%d` 是占位符，译文里的**个数和顺序必须与原句一致**
 # （走 `string.format`）；真要写一个百分号，写成 `%%`。
 #
 # ⚠️ `name` / `description` 是**保留键**：清单里那两行（插件显示名、列表里那一行
-# 简介）在**本语言**下怎么写。它们不必出现在代码里。
-# ⚠️ **主语言是英语**（2026-09-27 用户定的）：清单里 `name` / `description` 写英语，
-# 中文是**翻译**——所以这两条在**这一份**里，不在英语那份里。
-
-# ⚠️ 除了上面两条保留键，这份表其余条目照旧按「键 = `main.lua` 里 `T("…")` 写下的
-# 那句原文」写。内置插件那批原文目前是中文，所以这份表通常只有那两条保留键。
-
+# 简介）在**本语言**下怎么写。它们不必出现在代码里。⚠️ 清单里写的是英语原文，
+# 所以要给中文用户看的名字与简介，都写在这里。
+# ── 保留键：中文下的显示名与简介 ──────────────────────────────────
 name = "AI 助手"
 description = "写作助手：润色、续写、总结、翻译。需要自备 API 密钥。"
+
+# ── 正文里的那些句子 ────────────────────────────────────────────────
+"Polish" = "润色"
+"Summarize" = "总结"
+"Continue writing" = "续写"
+"Translate to English" = "译成英文"
+"Translate to Chinese" = "译成中文"
+"%s saved" = "%s已保存"
+"%s restored to its default" = "%s已恢复默认"
+"The AI's reply contains changes; they are written to the document only after you confirm." = "AI 的回复里带了改动，确认后才会写进文档。"
+"API key" = "API 密钥"
+"Ctrl+Enter to send · Enter for a new line" = "Ctrl+Enter 发送 · 回车换行"
+"An OpenAI-compatible URL (including /v1). For a local service you can use http://127.0.0.1:11434/v1" = "OpenAI 兼容的地址（含 /v1）。本机服务可以填 http://127.0.0.1:11434/v1"
+"… (there is more; the panel cannot fit it)" = "…（后面还有内容，面板放不下）"
+"The answer to “%s” is in the AI panel on the right." = "「%s」的回答在右侧 AI 面板里。"
+"Unknown preset: %s" = "不认识的预设：%s"
+"Press “Set key…” above first; the input box appears once that is filled in." = "先点上面的「设置密钥…」填好，这里才会出现输入框。"
+"Delete this chat" = "删除这个对话"
+"Send" = "发送"
+"It is sent only to the address above. Local models (Ollama / LM Studio) usually need no key — any value will do." = "只发给上面那个地址。本机模型（Ollama / LM Studio）通常不要密钥，随便填一个即可。"
+"View in editor" = "在编辑区看"
+"URL" = "地址"
+"The name from your provider's documentation" = "填服务商文档里那个名字"
+"Key" = "密钥"
+"On the current document" = "对当前文档"
+"At most %d chats can be kept at once; delete a few first." = "对话最多同时留 %d 个，先删掉几个。"
+"Chats (%d of %d)" = "对话（第 %d / %d 个）"
+"Deleted this chat" = "已删除这个对话"
+"Cleared this chat" = "已清空这个对话"
+"configured" = "已配置"
+"Apply changes" = "应用改动"
+"Changes waiting to be applied (not yet written to the document)" = "待应用的改动（还没写进文档）"
+"Change key…" = "换密钥…"
+"The endpoint returned 200 but there is no choices[1].message.content in it." = "接口回了 200，但里面没有 choices[1].message.content。"
+"Endpoint URL" = "接口地址"
+"The endpoint did not return JSON (HTTP %s): %s" = "接口没回 JSON（HTTP %s）：%s"
+"The endpoint returned %d: %s" = "接口返回 %d：%s"
+"%d lines in the change block are neither - nor +; they were ignored." = "改动块里有 %d 行既不 - 也不 +，忽略掉了。"
+"The changes have been written to the document; Ctrl+Z undoes them" = "改动已写入文档，Ctrl+Z 可以撤销"
+"The changes could not be applied: %s" = "改动没能应用：%s"
+"Change preview" = "改动预览"
+"Change URL…" = "改地址…"
+"Change model…" = "改模型…"
+"Discard changes" = "放弃改动"
+"New chat" = "新对话"
+"Model" = "模型"
+"Model name" = "模型名"
+"Nothing to send" = "没写要发的内容"
+"There are no changes waiting to be applied" = "没有待应用的改动"
+"Change %d" = "第 %d 处"
+"Set key…" = "设置密钥…"
+"The request was not sent: %s" = "请求没发出去：%s"
+"not set" = "还没填"
+"No API key yet: press “Set key…” in the panel." = "还没填 API 密钥：面板上点「设置密钥…」。"
+"Nothing said yet. Type below, or press a preset." = "还没说话。在下面打字，或者点一个预设。"
+"That chat is gone" = "那个对话已经不在了"
+"Ask something, or have it edit the document…" = "问点什么，或者让它改文档…"
+"(%d lines in total; only the first %d are drawn here — “Apply changes” writes the complete set.)" = "（一共 %d 行，这里只画了前 %d 行；点「应用改动」写进去的是完整的那份）"
+"(Only the latest 5 are listed; %d more come before this chat.)" = "（只列最近 5 个；这个对话前面还有 %d 个）"
+"(Only the latest %d are shown; this chat has %d in total.)" = "（只显示最近 %d 条；这个对话一共 %d 条）"
+"(These changes have been applied.)" = "（已应用这次改动。）"
+"(This round had only a change block and nothing else.)" = "（这一轮只有改动块，没有别的话。）"
+"(These changes were discarded.)" = "（这次的改动作废了。）"
+"＋ New chat" = "＋ 新对话"

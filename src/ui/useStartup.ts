@@ -57,7 +57,7 @@
 import { useEffect } from "react";
 
 import { api, type DocThemeInfo, type Settings, type StartupAction } from "@/bridge/ipc";
-import { 定语言 } from "@/i18n";
+import { 定语言, t } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
 export interface 启动接线 {
@@ -111,7 +111,7 @@ export function useStartup(w: 启动接线): void {
           // 设置 / 主题 / 文档列表就**全都不会生效**——一个打不开的文件
           // 不该拖垮整个启动。报错本身还是要给用户看，所以就地弹一条。
           api.startupFile().catch((e) => {
-            toast(`命令行给的文件打不开：${e}`, "error");
+            toast(t("Could not open the file from the command line: {0}", String(e)), "error");
             return null;
           }),
           // 界面语言。⚠️ 同样是**自带 `catch`** 的一枪，理由见文件头。
@@ -128,7 +128,7 @@ export function useStartup(w: 启动接线): void {
         setWorkspace(ws);
         setThemes(themeList);
         // 不自动消失（`0`）：这是状态，不是一次操作的结果。见 `ui/useToasts.ts`。
-        if (设置问题) toast(`设置读不出来了，这次按默认值启动。${设置问题}`, "error", 0);
+        if (设置问题) toast(t("The settings could not be read; starting with defaults this time. {0}", String(设置问题)), "error", 0);
         // ⚠️ 那个 `?.` 是给**旧后端**留的（同上面那段）：真正缺了这一截时按第一档
         // 办——那正是这一档的词义，也是 `StartupAction` 的 `Default`。
         const 启动档: StartupAction = s.files?.startup ?? "new-file";
@@ -150,7 +150,7 @@ export function useStartup(w: 启动接线): void {
         // 可能是旧的，缺了这一截就是启动即白屏。
         await 接上会话(启动文件 ?? null, 启动档);
       } catch (e) {
-        toast(`启动时读取状态失败：${e}`, "error");
+        toast(t("Could not read the state at startup: {0}", String(e)), "error");
       }
 
       // 握手（见 `lib.rs` 里那段"为什么需要"）。失败不影响使用，只记一笔。

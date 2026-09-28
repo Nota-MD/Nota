@@ -35,15 +35,15 @@ import { t } from "@/i18n";
 export function 签名说明(s: PluginInfo["signature"]): string {
   switch (s) {
     case "verified":
-      return t("已验证");
+      return t("verified");
     case "unknown":
-      return t("未知签名者");
+      return t("unknown signer");
     case "unsigned":
-      return t("未签名");
+      return t("unsigned");
     default:
       // ⚠️ `null` 不是第四种签名结论，是"这笔账没记过"（内置插件、或者早于
       // 这套机制的记录）。说成「未签名」是**撒谎**：那些包里可能有签名。
-      return t("来路没记过");
+      return t("origin not recorded");
   }
 }
 
@@ -54,7 +54,7 @@ export function 签名说明(s: PluginInfo["signature"]): string {
  * 内置插件卸不掉，界面靠这一格决定给不给「卸载」那颗按钮。
  */
 export function 来源说明(p: PluginInfo): string {
-  const 来路 = p.origin === "user" ? t("自装") : t("内置");
+  const 来路 = p.origin === "user" ? t("user") : t("builtin");
   return `${来路} · ${签名说明(p.signature)}`;
 }
 
@@ -72,7 +72,7 @@ export function 语言对不上(p: PluginInfo): boolean {
 
 /** 那句提示。**一模一样的一句话**在三个地方（插件行、面板、编辑区预览）。 */
 export function 语言提示(): string {
-  return t("此拓展不支持您的语言");
+  return t("This extension does not support your language");
 }
 
 /**
@@ -85,8 +85,8 @@ export function 语言提示(): string {
  */
 export function 语言标签名(tag: string): string | undefined {
   const 表: Record<string, string> = {
-    en: t("英语"),
-    "zh-CN": t("中文（简体）"),
+    en: t("English"),
+    "zh-CN": t("Chinese (Simplified)"),
   };
   return 表[tag];
 }
@@ -101,22 +101,22 @@ export function 语言标签名(tag: string): string | undefined {
  */
 export function 能力名(tag: string): string | undefined {
   const 表: Record<string, string> = {
-    "document.read": t("读当前文档"),
-    "document.write": t("改当前文档"),
-    "fs.read": t("读工作区文件"),
-    "fs.write": t("写工作区文件"),
-    "process.git": t("调 git"),
-    "process.devserver": t("起开发服务器"),
-    "network.http": t("发网络请求"),
-    "ui.notify": t("弹通知"),
-    "ui.open_url": t("打开浏览器"),
-    "ui.panel": t("加侧栏面板"),
-    "ui.menu": t("加菜单条目"),
-    "settings.own": t("读写自己的设置"),
+    "document.read": t("Read the document"),
+    "document.write": t("Edit the document"),
+    "fs.read": t("Read workspace files"),
+    "fs.write": t("Write workspace files"),
+    "process.git": t("Run git"),
+    "process.devserver": t("Start a dev server"),
+    "network.http": t("Make network requests"),
+    "ui.notify": t("Show notifications"),
+    "ui.open_url": t("Open the browser"),
+    "ui.panel": t("Add sidebar panels"),
+    "ui.menu": t("Add menu entries"),
+    "settings.own": t("Read and write its own settings"),
     // ⚠️ `data.own` 与 `settings.own` **是两条**（见 `manifest.rs` 上那段）：
     // 设置是"用户该能改的偏好"，数据是"插件自己写的账"。原先这张表里漏了它，
     // 界面上只能看到一个生 id——2026-09-27 集中到本文件时补上。
-    "data.own": t("读写自己的数据"),
+    "data.own": t("Read/write its own data"),
   };
   return 表[tag];
 }
@@ -129,8 +129,8 @@ export function 能力名(tag: string): string | undefined {
  */
 export function 位置名(location: PluginPanel["location"]): string | undefined {
   const 表: Record<string, string> = {
-    right: t("右栏"),
-    main: t("编辑区"),
+    right: t("right dock"),
+    main: t("editing area"),
   };
   return 表[location];
 }

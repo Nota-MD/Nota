@@ -87,7 +87,7 @@ export function StatusBar({
     // 没文档时**不画模式**：那时候没有编辑区，说出"现在是源码模式"是句空话。
     return (
       <footer className="statusbar">
-        <span className="status-left">{t("就绪")}</span>
+        <span className="status-left">{t("Ready")}</span>
         {/* ⚠️ 余额那一格**要画**——理由见文件头「没文档那一支也得画强制专注的
             余额」。它跟的是"应用在记什么账"，不是"这份文档有多少字"。 */}
         <span className="status-right">
@@ -99,9 +99,9 @@ export function StatusBar({
 
   return (
     <footer className="statusbar">
-      <span className="status-left" title={doc.path ?? t("尚未保存")}>
-        {doc.path ?? t("未保存")}
-        {doc.dirty && <span className="status-dirty">{t("● 已修改")}</span>}
+      <span className="status-left" title={doc.path ?? t("Not saved yet")}>
+        {doc.path ?? t("Unsaved")}
+        {doc.dirty && <span className="status-dirty">{t("● Modified")}</span>}
       </span>
 
       <span className="status-right">
@@ -109,29 +109,29 @@ export function StatusBar({
             这两格是"应用现在怎么摆"，先应用后文档读起来才不串。 */}
         {/* ⚠️ 取 `short` 那一列，不是 `full`：这一格右边还挤着四个统计数字，
             写「分屏预览」会把状态栏顶宽。两份名字在同一张表里，见 `view-modes.ts`。
-            ⚠️ `VIEW_MODE_LABELS` 那张表里存的是**键**（中文原文），**渲染时才现翻**
+            ⚠️ `VIEW_MODE_LABELS` 那张表里存的是**键**（英文原文），**渲染时才现翻**
             ——所以这两个名字由本行包一层 `t(...)`，表本身一个字都不动。 */}
         <span
           className="status-mode"
-          title={t("编辑模式：{0}——在「视图」菜单里换", t(VIEW_MODE_LABELS[mode].full))}
+          title={t("Editing mode: {0} — switch it in the View menu", t(VIEW_MODE_LABELS[mode].full))}
         >
           {t(VIEW_MODE_LABELS[mode].short)}
         </span>
         {strict && (
           <span
             className="status-strict"
-            title={t("严格模式开着：井号后面必须有空格才算标题，「#标题」不算。")}
+            title={t("Strict mode is on: a heading needs a space after the hashes, so “#title” does not count.")}
           >
-            {t("严格")}
+            {t("Strict")}
           </span>
         )}
-        <span title={t("词数（中文按字计）")}>{t("{0} 词", counts.words)}</span>
-        <span title={t("字符数（按码点计）")}>{t("{0} 字符", counts.characters)}</span>
-        <span title={t("行数")}>{t("{0} 行", counts.lines)}</span>
+        <span title={t("Words (CJK counted per character)")}>{t("{0} words", counts.words)}</span>
+        <span title={t("Characters (by code point)")}>{t("{0} characters", counts.characters)}</span>
+        <span title={t("Lines")}>{t("{0} lines", counts.lines)}</span>
         {/* ⚠️ 提示里那个数是**从设置来的**，所以它必须跟着变——写死"每分钟 250 词"
             的话，用户把阅读速度改成 500，提示会当着面撒谎。 */}
-        <span title={t("按每分钟 {0} 词粗略估算（在「偏好设置 → 外观」里改）", readingSpeed)}>
-          {t("约 {0} 分钟", counts.readingMinutes)}
+        <span title={t("Rough estimate at {0} words per minute (change it in Settings → Appearance)", readingSpeed)}>
+          {t("about {0} min", counts.readingMinutes)}
         </span>
         {/* ⚠️ 摆在这一组**最后**：前面几格是"这份文档有多少字"，这一格是
             "应用现在在替你记什么账"——两种东西，别插在中间把它们切开。

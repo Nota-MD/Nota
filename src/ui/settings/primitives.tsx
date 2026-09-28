@@ -450,7 +450,7 @@ export function HelpDot({ text }: { text: ReactNode }) {
   const id = useId();
   return (
     <span className="stg-help">
-      <button type="button" className="stg-help-dot" aria-describedby={id} aria-label={t("说明")}>
+      <button type="button" className="stg-help-dot" aria-describedby={id} aria-label={t("Description")}>
         ?
       </button>
       <span id={id} role="tooltip" className="stg-help-pop">
@@ -638,15 +638,15 @@ export function SearchField({
         type="search"
         className="stg-search"
         value={value}
-        placeholder={t("搜索设置…")}
-        aria-label={t("搜索设置")}
+        placeholder={t("Search settings…")}
+        aria-label={t("Search settings")}
         onChange={(e) => onChange(e.target.value)}
       />
       {value !== "" && (
         <button
           type="button"
           className="stg-search-clear"
-          aria-label={t("清空搜索")}
+          aria-label={t("Clear the search")}
           onClick={() => onChange("")}
         >
           ×

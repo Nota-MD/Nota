@@ -40,62 +40,62 @@ export function FocusPane({ settings, onChange }: PaneProps) {
   return (
     <>
       <SettingsGroup
-        title={t("账户")}
+        title={t("Account")}
         help={t(
-          "把它想成一个账户：注意力在编辑器上时往里存，切到别处时从里扣。余额扣到零，警报就响。",
+          "Think of it as an account: while your attention is on the editor you pay in, and when you switch away it is charged out. When the balance reaches zero, the alarm sounds.",
         )}
       >
         <SettingRow
-          label={t("专注总时长")}
-          description={t("账户余额的上限（分钟）。存满就封顶，不能先攒两小时额度再摸两小时鱼。")}
+          label={t("Total focus time")}
+          description={t("The cap on the account balance, in minutes. It stops there once full — you cannot bank two hours of credit and then slack off for two hours.")}
         >
           <NumberInput
             value={f.total_minutes}
             min={1}
             max={600}
-            suffix={t("分钟")}
+            suffix={t("min")}
             onChange={(total_minutes) => 写({ total_minutes })}
           />
         </SettingRow>
 
         <SettingRow
-          label={t("警报时长")}
+          label={t("Alarm time")}
           description={t(
-            "开局给多少余额（分钟）。默认权重下，这就是「一直不写，多久会响」。调到比专注总时长还大，开局就是满的。",
+            "How much balance you start with, in minutes. At the default weights this is “how long you can stop writing before it goes off”. Set it above the total focus time and you start out full.",
           )}
         >
           <NumberInput
             value={f.alarm_minutes}
             min={1}
             max={600}
-            suffix={t("分钟")}
+            suffix={t("min")}
             onChange={(alarm_minutes) => 写({ alarm_minutes })}
           />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup
-        title={t("权重")}
-        help={t("一分钟专注值多少、一分钟走神赔多少。两边都是「分钟」，所以默认的 1 和 1 是等价的；把下面那条调大就是惩罚重于奖励。")}
+        title={t("Weights")}
+        help={t("What a minute of focus is worth, and what a minute away costs. Both are in minutes, so the default 1 and 1 are equivalent; raising the second one below makes the penalty outweigh the reward.")}
       >
         <SettingRow
-          label={t("专注 1 分钟加多少")}
-          description={t("默认 1，即写 1 分钟换 1 分钟额度。")}
+          label={t("Focus credit per minute")}
+          description={t("Default 1, meaning one minute of writing buys one minute of credit.")}
         >
           <NumberInput
             value={f.gain_per_minute}
             min={0}
             max={10}
             step={0.5}
-            suffix={t("分钟")}
+            suffix={t("min")}
             onChange={(gain_per_minute) => 写({ gain_per_minute })}
           />
         </SettingRow>
 
         <SettingRow
-          label={t("离开 1 分钟扣多少")}
+          label={t("Charge per minute away")}
           description={t(
-            "默认 1。调成 2 就是「写两分钟才够摸一分钟鱼」——要更狠该拧这一条，不是把警报时长调到很小。",
+            "Default 1. Set it to 2 and “two minutes of writing only cover one minute of slacking” — this is the knob to turn if you want it harsher, not a tiny alarm time.",
           )}
         >
           <NumberInput
@@ -103,24 +103,24 @@ export function FocusPane({ settings, onChange }: PaneProps) {
             min={0}
             max={10}
             step={0.5}
-            suffix={t("分钟")}
+            suffix={t("min")}
             onChange={(drain_per_minute) => 写({ drain_per_minute })}
           />
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("宽限")}>
+      <SettingsGroup title={t("Grace period")}>
         <SettingRow
-          label={t("刚切走多少秒不扣")}
+          label={t("Grace before charging")}
           description={t(
-            "默认 10 秒。切出去查个词、复制一行引用都要挨一刀的话，罚得太密就等于没罚。宽限期内不欠账：过了这 10 秒才从第 11 秒开始扣。填 0 就是一失焦就扣。",
+            "Default 10 seconds. If stepping out to look up a word or copy a line of quotation gets you nicked every time, a penalty that dense is no penalty at all. Nothing is owed during the grace period: the charge starts at second 11. Set it to 0 and the charge starts the instant you lose focus.",
           )}
         >
           <NumberInput
             value={f.grace_seconds}
             min={0}
             max={300}
-            suffix={t("秒")}
+            suffix={t("sec")}
             onChange={(grace_seconds) => 写({ grace_seconds })}
           />
         </SettingRow>
@@ -129,9 +129,9 @@ export function FocusPane({ settings, onChange }: PaneProps) {
             那一栏在别处写的是"怎么用这一项"（"一行一个应用名，比如…"），
             而这一项**没法用**。留着那种说明，用户会去找那个输入框。 */}
         <SettingRow
-          label={t("这些应用里不算摸鱼")}
+          label={t("These apps do not count as slacking")}
           help={t(
-            "这一条要读别的应用的名字（活动窗口的 WM_CLASS），而且只在 X11 上做得成。权衡之后没有做：这个功能的核心是「你离开没有」，不是「你去了哪儿」。",
+            "This one would have to read other applications' names (the active window's WM_CLASS), and it only works on X11. Weighed it and decided against: the point of this feature is “did you leave”, not “where did you go”.",
           )}
         >
           {/* ⚠️⚠️ **灰着的，而且这一格不是"还没做完"——是"决定不做"。**
@@ -142,16 +142,16 @@ export function FocusPane({ settings, onChange }: PaneProps) {
               ⚠️ 但那几处的 `title` 都以「尚未实现」开头，这一格**故意不跟**：
               那三格是会做的，这一格是不做的。写成一样的，用户会一直等它。
               为什么不做，写在 `focus/mod.rs` 模块头「它不做什么」那一段。 */}
-          <ActionButton disabled title={t("决定不做：它要读别的应用的活动窗口，为了这个功能不值得越过应用的边界。")}>
-            {t("未启用")}
+          <ActionButton disabled title={t("Decided against: it would have to read other applications' active window, and this feature is not worth crossing the application boundary for.")}>
+            {t("Not enabled")}
           </ActionButton>
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("警报")}>
+      <SettingsGroup title={t("Alarm")}>
         <SettingRow
-          label={t("响警报")}
-          description={t("在警报窗弹出的同时放一段尖锐的警报声。关掉它就是「只弹不响」——图书馆里有用。")}
+          label={t("Play the alarm")}
+          description={t("Plays a sharp alarm sound as the alarm window appears. Turning it off gives you “popup only, no sound” — useful in a library.")}
         >
           <Toggle checked={f.sound} onChange={(sound) => 写({ sound })} />
         </SettingRow>
@@ -163,17 +163,17 @@ export function FocusPane({ settings, onChange }: PaneProps) {
           这里是它**事后还能查**的那一份。两处措辞要一致，改一处要改两处。
           ⚠️ 完整的权限清单在**关于**页（用户点名要的另一个位置）。 */}
       <Note>
-        <strong>{t("它会用到什么")}</strong>
+        <strong>{t("What it uses")}</strong>
         <br />
         {t(
-          "① 知不知道 Nota 的窗口是不是当前窗口（不然没法判断你有没有走神）；② 弹出一个置顶的红色窗口（不然你已经切走了，看不见）；③ 出声。",
+          "① Whether Nota's window is the active window, or it cannot tell that you have wandered off; ② putting up a red always-on-top window, or you will not see it after switching away; ③ making a sound.",
         )}
         <br />
         {t(
-          "这三条只在强制专注运行期间发生，只针对 Nota 自己的窗口。Nota 不读键盘、不截屏、不碰别的程序，也不把你的任何数据发到任何地方。",
+          "Those three happen only while Force Focus is running, and only concern Nota's own window. Nota does not read the keyboard, take screenshots, touch other programs, or send any of your data anywhere.",
         )}
         <br />
-        {t("你能随时停掉它，也能用系统工具绕开它——但那样一来，你设这个模式也就没有意义了。")}
+        {t("You can stop it at any time, and you can bypass it with system tools — but then setting up this mode in the first place means nothing.")}
       </Note>
     </>
   );

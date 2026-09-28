@@ -391,7 +391,7 @@ export default function App() {
         void refreshDocs();
       } catch (e) {
         setSettings(previous);
-        toast(`保存设置失败：${e}`, "error");
+        toast(t("Could not save the settings: {0}", String(e)), "error");
       }
     },
     [settings, toast, refreshDocs],

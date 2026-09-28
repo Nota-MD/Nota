@@ -133,6 +133,13 @@ export interface 命令表输入 {
   /** 状态栏此刻显示着吗。⚠️ 它是 [`命令表输入`] 存在的理由之一，见文件头。 */
   状态栏开着: boolean;
   /**
+   * 菜单栏此刻显示着吗。**同上面那一条**——`view.menuBar` 那条命令是"取反再
+   * 写回"，读的必须是**这一帧**的值，不能靠闭包捕获（理由见文件头那段：
+   * 捕获上一帧的值会让"连着点两次"的第二次按同一个方向再来一次，于是关掉
+   * 之后再也开不回来）。
+   */
+  菜单栏开着: boolean;
+  /**
    * 严格模式（`Settings.strict_markdown`）。只有「内容目录」用得上。
    *
    * ⚠️ 它进这张表而不是进编辑器实例：编辑器**不知道**这个设置（`create.ts`
@@ -206,6 +213,7 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
     设打字机: setTypewriter,
     设界面: setChrome,
     状态栏开着: statusBarOpen,
+    菜单栏开着: menuBarOpen,
     严格模式: strictMarkdown,
     切换专注,
     切换强制专注,
@@ -355,6 +363,14 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "view.toolbarHover": () => setChrome({ toolbar: "hover" }),
       "view.toolbarNever": () => setChrome({ toolbar: "never" }),
       "view.statusBar": () => setChrome({ show_status_bar: !statusBarOpen }),
+      // 菜单栏（2026-09-28，用户点名：「也要允许用户隐藏上栏，也就是"文件"、
+      // "编辑"啥的」）。形式与上面那条一模一样——**取反再写回**。
+      //
+      // ⚠️ 藏下去时那条"怎么开回来"的提示**不在这里发**：它挂在
+      // `ui/useChromeVisibility.ts` 里盯着 `show_menu_bar` 的跳变。挂这儿的话，
+      // 从外观设置关掉（那里也有一个同名开关）就不会有提示了，而那条路
+      // 恰恰更需要知道 `Alt+M`。
+      "view.menuBar": () => setChrome({ show_menu_bar: !menuBarOpen }),
       // 沉浸那两条。⚠️ 直接引 `ui/useImmersive.ts` 的出口函数，不现写箭头
       // ——现写每帧换身份，这张表就每帧重建。
       "view.focusMode": 切换专注,

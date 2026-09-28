@@ -74,6 +74,8 @@ export interface MenuWiring {
     /** 格式工具栏那三档的当前取值（见 `ui/useChromeVisibility.ts`）。 */
     toolbarMode: ToolbarMode;
     statusBarOpen: boolean;
+    /** 菜单栏画不画（2026-09-28，见 `ui/useChromeVisibility.ts`）。 */
+    menuBarOpen: boolean;
     viewMode: ViewMode;
     /** 沉浸（收起外壳）。⚠️ 与下面那个 `forceFocus` **不是一回事**，见 `commands.ts`。 */
     focusMode: boolean;
@@ -162,6 +164,7 @@ export function useMenus(w: MenuWiring): MenuState {
     dockOpen,
     toolbarMode,
     statusBarOpen,
+    menuBarOpen,
     viewMode,
     focusMode,
     forceFocus,
@@ -225,6 +228,7 @@ export function useMenus(w: MenuWiring): MenuState {
       "view.toolbarHover": toolbarMode === "hover",
       "view.toolbarNever": toolbarMode === "never",
       "view.statusBar": statusBarOpen,
+      "view.menuBar": menuBarOpen,
       "view.modeWysiwyg": viewMode === "wysiwyg",
       "view.modeSource": viewMode === "source",
       "view.modeSplit": viewMode === "split",
@@ -240,6 +244,7 @@ export function useMenus(w: MenuWiring): MenuState {
       dockOpen,
       toolbarMode,
       statusBarOpen,
+      menuBarOpen,
       viewMode,
       focusMode,
       forceFocus,

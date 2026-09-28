@@ -383,6 +383,16 @@ export interface AppearanceSettings {
   /** Ctrl+滚轮改字号还是缩放。⚠️ 默认 `"font_size"`。 */
   ctrl_wheel_target: CtrlWheelTarget;
   show_status_bar: boolean;
+  /**
+   * 显示**菜单栏**（顶上那条「文件 / 编辑 / 视图 …」）。**默认 `true`**。
+   *
+   * ⚠️ 与下面的 `toolbar` **默认相反**，那是有意的：菜单栏是命令的总入口
+   * （最近打开、导出、插件管理只在它里面），工具栏上那几条在菜单里都找得到。
+   *
+   * ⚠️ 藏起来之后界面上就没有写着"怎么开回来"的东西了，所以
+   * `useChromeVisibility` 在藏下去的那一刻会发一条会自己走掉的提示。
+   */
+  show_menu_bar: boolean;
   /** 词每分钟，只用来把字数换算成"约几分几秒读完"。 */
   reading_speed: number;
   /** 格式工具栏什么时候露出来。⚠️ 默认 `"never"`（不显示）——见 Rust 侧 `ToolbarMode`。 */

@@ -437,6 +437,17 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
+      <SettingsGroup title={t("Show menu bar")}>
+        <SettingRow
+          help={t("The bar at the top (File, Edit, View…). ⚠ It is the way in to everything else — recent files, export, extension manager are only there. To get it back once it is hidden: press Alt+M, or come back to this switch.")}
+        >
+          <Toggle
+            checked={a.show_menu_bar}
+            onChange={(show_menu_bar) => 写({ show_menu_bar })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+
       <SettingsGroup title={t("Show status bar")}>
         <SettingRow help={t("The bar at the bottom showing word count, lines/columns and the time.")}>
           <Toggle

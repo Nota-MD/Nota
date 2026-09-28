@@ -1,5 +1,5 @@
 /**
- * 外壳上那两条"看得见 / 看不见"的开关：**状态栏**与**格式工具栏**。
+ * 外壳上那几条"看得见 / 看不见"的开关：**状态栏**、**格式工具栏**、**菜单栏**。
  *
  * # 为什么值得单独一个文件（2026-09-25）
  *
@@ -21,6 +21,25 @@
  * `settings.appearance`。菜单的勾、屏幕上那条状态栏、设置面板里那两个开关，
  * 读的是它，写的也是它（一律走 `updateSettings`——它先改内存再落盘、失败会
  * 把界面回滚）。
+ *
+ * # ⚠️⚠️ 菜单栏这一条有个**别处都没有**的问题（2026-09-28，用户点名要的）
+ *
+ * 用户原话：「也要允许用户隐藏上栏，也就是"文件"、"编辑"啥的」。
+ *
+ * 状态栏、工具栏藏了就藏了——它们是**冗余**的（状态栏那几个数在别处也算得出来，
+ * 工具栏上那几条命令菜单里都有）。**菜单栏不是**：它是命令的总入口
+ * （最近打开、导出、插件管理只在这里），而且它**自己就是"哪儿能改回来"的
+ * 唯一指示牌**。藏下去那一刻，界面上再没有任何一行字写着"菜单栏还能开回来"。
+ *
+ * 所以这里有一处别处没有的动作：**藏下去的那一刻发一条会自己走掉的提示**
+ * （照 `ui/useImmersive.ts` 进沉浸时那条的先例——同一个问题、同一种做法），
+ * 内容是两条路：`Alt+M`（见 `ui/commands.ts::view.menuBar`）或者
+ * 「设置 → 外观 → 显示菜单栏」（`Ctrl+,` 直达设置）。**两条都写**，因为
+ * 用户可能先把键位改了、或者压根记不住键位，而设置页那条路永远成立。
+ *
+ * ⚠️ 判据是"**从显示变成隐藏**"这一个跳变，不是"设置里是隐藏的"——后者会在
+ * 每次启动时弹一遍（设置是异步读进来的，见下面那个 effect 里的 `settings`
+ * 判断）。这一点与 `useImmersive` 那个 `上次沉浸` 完全相同。
  *
  * ⚠️ **这些值是派生出来的，不是 state**。再存一份 state 就又多出一个"要和
  * 设置对齐"的内存值，而"对齐"这件事永远会被某一条路径漏掉——上面那个 bug
@@ -62,6 +81,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import type { Settings, ToolbarMode } from "@/bridge/ipc";
+import { useT } from "@/i18n";
+import type { Toast } from "@/ui/Toasts";
 
 /** 触发带的高度（px）。见文件头"悬停那一档的判据"。 */
 const 顶部触发带 = 8;
@@ -77,6 +98,13 @@ export interface 外壳接线 {
    * 就是同一个数字存两处（同 `MenuPopup` 里量子菜单高度那段）。
    */
   工具栏: RefObject<HTMLElement | null>;
+  /**
+   * 发一条会自己走掉的提示。
+   *
+   * ⚠️ 这个 hook 只为一件事用它：**菜单栏被藏下去的那一刻**（见文件头）。
+   * 状态栏和工具栏不需要——它们不会把"怎么开回来"一起藏走。
+   */
+  toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
 }
 
 export function useChromeVisibility(
@@ -84,8 +112,18 @@ export function useChromeVisibility(
   updateSettings: (patch: Partial<Settings>) => Promise<void>,
   refs: 外壳接线,
 ) {
+  // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后那一条要重画，
+  // 见 `i18n/index.ts::useT`）。下面那条提示的文案是 `t(…)`。
+  const t = useT();
+  // ⚠️ 单拎出来当依赖：`refs` 是 `App.tsx` 里现写的对象字面量，**每帧都是新的**，
+  // 拿它当依赖等于那条 effect 每帧重跑（同 `useImmersive` 里那个 `toast`）。
+  const { toast } = refs;
   const statusBarOpen = settings?.appearance.show_status_bar ?? true;
   const toolbarMode: ToolbarMode = settings?.appearance.toolbar ?? "never";
+  // ⚠️ `?? true` 必须与 Rust 侧 `Appearance::default().show_menu_bar` 一致
+  // （那边和 `show_status_bar` 摆在一起）：不一致的话，设置还没读进来的那一小会儿
+  // 菜单栏会闪一下（默认显示 → 读到"隐藏"再收掉），而那正是用户最可能看错的时刻。
+  const menuBarOpen = settings?.appearance.show_menu_bar ?? true;
 
   // ⚠️ `peek` 只对 `hover` 那一档有意义：另外两档下它一直被按回 `false`
   //（见下面那个 effect 的第一个分支），所以"换成 never 之后工具栏还留着"
@@ -152,5 +190,36 @@ export function useChromeVisibility(
     [settings, updateSettings],
   );
 
-  return { statusBarOpen, formatBarOpen, toolbarMode, setChrome };
+  /**
+   * 菜单栏**刚被藏起来**的那一次，给一条怎么开回来的提示。
+   *
+   * ⚠️ 判据是**跳变**（`true → false`），不是"现在是不是隐藏的"。写成后者的话，
+   * 每次启动都会弹一遍——设置是异步读进来的，第一帧 `settings` 还是 `null`
+   * （那一会儿 `menuBarOpen` 只是默认的 `true`），读到落盘的 `false` 就成了
+   * 一次"跳变"。所以下面有两道闸：`settings` 还没到就直接返回（那一次不算数），
+   * 以及第一次真正看到值时也不报（`上次 === null`，那时用户什么都没动）。
+   *
+   * ⚠️ 这里**不看是谁改的**：菜单项、`Alt+M`、外观页那个开关，三条路都落到
+   * `appearance.show_menu_bar` 上，于是三条路都会发这条提示。这正是要的——
+   * 从设置页关掉的人**同样**需要知道 `Alt+M` 这条近路。
+   *
+   * ⚠️ ttl 给 6 秒（默认 3.2 秒）：这句话比"已保存"那种长，而它说的是**出路**，
+   * 多留两秒没有代价（同 `useImmersive` 那条）。
+   */
+  const 上次菜单栏 = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (!settings) return;
+    const 上次 = 上次菜单栏.current;
+    上次菜单栏.current = menuBarOpen;
+    if (上次 === null || 上次 === menuBarOpen || menuBarOpen) return;
+    toast(
+      t(
+        "Menu bar hidden. Press Alt+M or open Settings ▸ Appearance ▸ Show menu bar to bring it back.",
+      ),
+      "info",
+      6000,
+    );
+  }, [settings, menuBarOpen, toast, t]);
+
+  return { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome };
 }

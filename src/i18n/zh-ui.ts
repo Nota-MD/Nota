@@ -122,6 +122,12 @@ export const 界面表: Record<string, string> = {
   "Focus Mode": "专注模式",
   "Typewriter Mode": "打字机模式",
   "Status Bar": "状态栏",
+  "Menu Bar": "菜单栏",
+  "Show menu bar": "显示菜单栏",
+  "The bar at the top (File, Edit, View…). ⚠ It is the way in to everything else — recent files, export, extension manager are only there. To get it back once it is hidden: press Alt+M, or come back to this switch.":
+    "顶上那一条（文件、编辑、视图…）。⚠ 它是通往别处的总入口——最近打开、导出、拓展管理只在它里面。藏起来之后要开回来：按 Alt+M，或者回到这个开关。",
+  "Menu bar hidden. Press Alt+M or open Settings ▸ Appearance ▸ Show menu bar to bring it back.":
+    "菜单栏已隐藏。按 Alt+M，或到「设置 → 外观 → 显示菜单栏」开回来。",
   "Zoom In": "放大",
   "Zoom Out": "缩小",
   "Reset Zoom": "实际大小",

@@ -539,6 +539,20 @@ export const MENUS: MenuSpec[] = [
       { id: "view.focusMode", label: "Focus Mode", accel: "F8", checkable: true },
       { id: "view.typewriter", label: "Typewriter Mode", accel: "F9", checkable: true },
       { id: "view.statusBar", label: "Status Bar", checkable: true },
+      // ⚠️ 菜单栏（2026-09-28，用户点名要的）。**键位 `Alt+M` 是这一条的生路**：
+      // 菜单栏藏起来之后，界面上再没有任何一行字写着怎么开回来，所以必须有一个
+      // **不依赖菜单**的键位。`Alt+M` 在整张表里核过是空的（`Alt+1`/`Alt+2` 是
+      // 编辑模式，`Alt+↑/↓` 是移动行，没有别的 `Alt+字母`）。
+      //
+      // ⚠️ 与「状态栏」那条不同，这一条**有键位**正是上面那个原因：
+      // 状态栏藏了不影响任何别的入口，菜单栏藏了会带走"唯一写着自己怎么回来
+      // 的地方"。同一件事在 `ui/useChromeVisibility.ts` 里还有另一半——
+      // 藏下去的那一刻发一条会自己走掉的提示（那才是用户真正先看到的东西）。
+      //
+      // ⚠️ 藏起来之后**菜单里的这一条也就点不到了**（它自己就在那一条上），
+      // 这是这一条唯一"要用快捷键才回得来"的菜单项。别为此把菜单栏改成浮层：
+      // 用户要的就是"屏幕上少一行"，浮层还是那一行。
+      { id: "view.menuBar", label: "Menu Bar", accel: "Alt+M", checkable: true },
       "sep",
       // ── 缩放那三档（2026-09-27）──
       //

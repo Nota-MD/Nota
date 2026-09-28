@@ -645,6 +645,12 @@ const ACCEL_CASES: AccelCase[] = [
   // ⚠️ `key` 填 `")"` 是**真浏览器给的值**（Shift+0 的上档字符）——这条同时
   // 也在验"判键位靠 `e.code` 不靠 `e.key`"。
   ["Ctrl+Shift+0（实际大小）", { code: "Digit0", key: ")", ctrlKey: true, shiftKey: true }, "view.zoomReset"],
+  // ── 隐藏/显示菜单栏（2026-09-28，「视图 → 菜单栏」）─────────────────
+  // ⚠️ 这一条**比别的条目更该在这里**：菜单栏一藏，界面上就没有别的字写着
+  // 它怎么回来，`Alt+M` 是那条唯一的路（见 `ui/useChromeVisibility.ts` 文件头）。
+  // 键位算不出来 = 用户把菜单栏藏掉之后**再也开不回来**，而那种事故的症状
+  // 恰好是"按下去什么都不发生"——和"这功能还没做"长得一模一样。
+  ["Alt+M（菜单栏开关）", { code: "KeyM", key: "m", altKey: true }, "view.menuBar"],
 
   // ── 不该接的（放行给 ProseMirror / 系统）───────────────────────────
   ["Ctrl+Alt+1（ProseMirror 的标题键）", { code: "Digit1", key: "1", ctrlKey: true, altKey: true }, null],

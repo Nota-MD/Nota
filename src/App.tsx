@@ -443,18 +443,21 @@ export default function App() {
     toast,
   });
 
-  // 状态栏 / 格式化工具栏：**以设置文件为准**，搬去了 `ui/useChromeVisibility.ts`
-  // （2026-09-25，本文件顶着行数上限；那个文件的头儿写着为什么这俩不再是
-  // 内存 state——原来是"菜单里关掉重启又回来、设置里关掉什么都不发生"）。
+  // 状态栏 / 格式化工具栏 / 菜单栏：**以设置文件为准**，搬去了
+  // `ui/useChromeVisibility.ts`（2026-09-25，本文件顶着行数上限；那个文件的头儿
+  // 写着为什么前两条不再是内存 state——原来是"菜单里关掉重启又回来、设置里
+  // 关掉什么都不发生"。菜单栏是 2026-09-28 用户点名加进去的第三条，它比另外
+  // 两条多一件事：藏下去时要发一条"怎么开回来"的提示，理由在那边的文件头）。
   //
   // ⚠️ 两个 ref 是给**悬停那一档**量位置用的（工具栏什么时候画、鼠标还在不在
   // 它下沿以上），理由在那边文件头那张表里。别的地方别拿它们做事。
+  // ⚠️ `toast` 是给菜单栏那条提示用的（它身份稳定，`useToasts` 里包的 `useCallback`）。
   const mainRef = useRef<HTMLElement | null>(null);
   const formatBarRef = useRef<HTMLDivElement | null>(null);
-  const { statusBarOpen, formatBarOpen, toolbarMode, setChrome } = useChromeVisibility(
+  const { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome } = useChromeVisibility(
     settings,
     updateSettings,
-    { 主区: mainRef, 工具栏: formatBarRef },
+    { 主区: mainRef, 工具栏: formatBarRef, toast },
   );
 
   // ── 强制专注（核心功能，不是插件）──────────────────────────────────────
@@ -708,6 +711,7 @@ export default function App() {
     设打字机: setTypewriter,
     设界面: setChrome,
     状态栏开着: statusBarOpen,
+    菜单栏开着: menuBarOpen,
     严格模式: settings?.strict_markdown ?? false,
     切换专注,
     切换强制专注,
@@ -761,6 +765,7 @@ export default function App() {
       dockOpen,
       toolbarMode,
       statusBarOpen,
+      menuBarOpen,
       viewMode,
       focusMode,
       // ⚠️ 它是**从宿主读回来的**（`专注状态`），不是本文件里某个 `useState`
@@ -814,7 +819,11 @@ export default function App() {
             onOpenThemesDir={() => void openThemesDir()}
             dockOpen={dockOpen}
             onToggleDock={() => setDockOpen((v) => !v)}
-            hideMenuBar={usingNativeMenu}
+            // ⚠️ 两条理由都让菜单栏让位，**写法必须合成一个布尔**给 `TopBar`：
+            // 一是 macOS 上原生菜单已经挂在屏幕顶端（`usingNativeMenu`），
+            // 二是用户自己在外观设置里关掉了（`menuBarOpen`，2026-09-28）。
+            // `TopBar` 不需要知道是哪一条——它只知道"顶上那一条画不画"。
+            hideMenuBar={usingNativeMenu || !menuBarOpen}
           />
         </div>
 

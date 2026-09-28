@@ -106,6 +106,22 @@ pub struct Appearance {
     pub ctrl_wheel_target: CtrlWheelTarget,
     /// 显示状态栏（底部那条字数 / 行列 / 时间的横条）。
     pub show_status_bar: bool,
+    /// 显示**菜单栏**（顶上那条「文件 / 编辑 / 视图 …」）。
+    ///
+    /// ⚠️ 用户 2026-09-28 点名要的：「也要允许用户隐藏上栏，也就是"文件"、
+    /// "编辑"啥的」。默认 `true`——这一条与 `toolbar` 那条**默认相反**，
+    /// 理由是菜单栏是**命令的总入口**：工具栏上有的命令它都有，反过来不成立
+    /// （最近打开、导出、插件管理这些只在菜单里）。默认藏起来会让新用户
+    /// 找不到任何东西，而工具栏默认藏着只是因为那几条按钮在菜单里能找到。
+    ///
+    /// ⚠️ 它是**独立的第四条外壳开关**（状态栏 / 工具栏 / 侧栏 / 菜单栏），
+    /// 别和 `toolbar` 合成一个"显示顶栏"：两者的显示时机本来就不同
+    /// （`toolbar` 有"鼠标悬停"那一档），合并等于把三档压回布尔。
+    ///
+    /// ⚠️ 藏起来之后**界面上就没有写着"怎么开回来"的东西了**（唯一那一栏
+    /// 正在被藏），所以前端在藏下去的那一刻会发一条会自己走掉的提示，
+    /// 见 `src/ui/useChromeVisibility.ts`。
+    pub show_menu_bar: bool,
     /// 阅读速度（词每分钟），只用来把字数换算成"约几分几秒读完"。
     /// 中文常见取值 382。
     pub reading_speed: u32,
@@ -143,6 +159,9 @@ impl Default for Appearance {
             ctrl_wheel_zoom: false,
             ctrl_wheel_target: CtrlWheelTarget::FontSize,
             show_status_bar: true,
+            // ⚠️ 默认**显示**，与 `toolbar` 相反，理由见字段那段：菜单栏是命令的
+            // 总入口，默认藏了等于把界面清空。
+            show_menu_bar: true,
             reading_speed: 382,
             // ⚠️ 见 `ToolbarMode::Never` 那段：本项默认**不显示**，是刻意的取舍。
             toolbar: ToolbarMode::Never,
@@ -325,5 +344,48 @@ mod tests {
         assert_eq!(a.accent, "", "缺键该补成「跟随风格」");
         assert_eq!(a.zoom, 120, "同一张表里别的项不能受影响");
         assert_eq!(a.toolbar, ToolbarMode::Always);
+    }
+
+    #[test]
+    fn 菜单栏默认显示而工具栏默认不显示是两条不同的取舍() {
+        // ⚠️ 这两个默认值**故意相反**，所以钉在一条测试里一起看：
+        // 菜单栏是命令的总入口（最近打开 / 导出 / 插件管理只在它里面），
+        // 默认藏起来等于给新用户一个空界面；工具栏上那几条在菜单里找得到，
+        // 藏了不丢东西。哪天有人"统一一下默认值"，这里会红。
+        let a = Appearance::default();
+        assert!(a.show_menu_bar, "菜单栏默认该显示");
+        assert!(a.show_status_bar, "状态栏默认也是显示");
+        assert_eq!(a.toolbar, ToolbarMode::Never, "工具栏默认仍然是不显示");
+    }
+
+    #[test]
+    fn 菜单栏开关原样存取() {
+        // ⚠️ 只存不算没有缝，但**读回来是另一回事**：前端 `useChromeVisibility`
+        // 读的是 `appearance.show_menu_bar`，字段名一改，老设置文件里的那一格
+        // 会缺、按默认 `true` 补上，用户看到的是"我明明关了菜单栏，重启又冒出来"。
+        for 值 in [true, false] {
+            let text = toml::to_string_pretty(&Appearance {
+                show_menu_bar: 值,
+                ..Appearance::default()
+            })
+            .expect("序列化该成功");
+            assert!(
+                text.contains(&format!("show_menu_bar = {值}")),
+                "该落成 `show_menu_bar = {值}`，实际是：\n{text}"
+            );
+            let back: Appearance = toml::from_str(&text).expect("读得回来");
+            assert_eq!(back.show_menu_bar, 值);
+        }
+    }
+
+    #[test]
+    fn 老设置文件里没有菜单栏那一格就是显示() {
+        // ⚠️ 2026-09-28 之前存下来的设置文件里没有 `show_menu_bar`。
+        // 缺键补的默认值必须是 `true`——补成 `false` 的话，**所有老用户升级
+        // 之后菜单栏当场消失**，而他们从没碰过这个开关。
+        let 老表 = "zoom = 120\n";
+        let a: Appearance = toml::from_str(老表).expect("老表必须仍然能解析");
+        assert!(a.show_menu_bar, "缺键该补成「显示」，不能是「隐藏」");
+        assert_eq!(a.zoom, 120, "同一张表里别的项不能受影响");
     }
 }

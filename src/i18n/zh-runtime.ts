@@ -59,6 +59,7 @@ export const 运行表: Record<string, string> = {
   "Extension runtime": "拓展运行时",
   "Language icons for code blocks": "代码框的语言图标",
   "Export (external, optional)": "导出（外部的，可选）",
+  "Spell checking word lists": "拼写检查词表",
   "Unknown": "未知",
   "A WYSIWYG Markdown editor with a Luan extension system.": "一款所见即所得的 Markdown 编辑器，带 Lua 拓展系统。",
   "License: {0} (the LICENSE file shipped with the source).": "许可证：{0}（随源码分发的 LICENSE）",

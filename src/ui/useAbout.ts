@@ -88,6 +88,13 @@ export function useAbout(
       //    正文在根目录 `THIRD-PARTY.md` §6。
       { 名: "vscode-icons", 用处: t("Language icons for code blocks") },
       { 名: "Pandoc", 用处: t("Export (external, optional)") },
+      // ⚠️ 这一条是**拼写检查的词典**那一半（2026-09-28 加，用户点名：
+      //    「拼写检查找一个 BSD 开源的属个名」）。⚠️ **Nota 一个字典字节都不带**：
+      //    整条链子是「WebKitGTK → libenchant → hunspell → 系统装的字典」，
+      //    所以这一行的义务落点在**打包**那一侧（谁把字典打进安装包，谁得随包
+      //    附上那段声明）。BSD 的那一件是 SCOWL（Kevin Atkinson），正文在根目录
+      //    `THIRD-PARTY.md` §7。
+      { 名: "SCOWL", 用处: t("Spell checking word lists") },
     ];
     /**
      * 向系统申请的权限，**一条不漏**。

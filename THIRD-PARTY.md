@@ -223,3 +223,105 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+---
+
+## 7. 拼写检查：**一个字典字节都不带**，BSD 那一件是 SCOWL
+
+**2026-09-28 加**。用户点名：「拼写检查找一个 BSD 开源的属个名」。
+
+### 7.1 这条链子长什么样
+
+```text
+设置里的开关（`editor.spellcheck`）
+  → `ui/useSpellcheck.ts` → `commands/webview.rs::nota_webview_spellcheck_set`
+    → WebKitGTK 的内置拼写检查（`webkit_settings_set_enable_spell_checking`）
+      → libenchant-2 → hunspell → **系统装的字典**
+```
+
+⚠️ **Nota 自己不带字典、也不带引擎**：整条链子从 WebKitGTK 往下全是**系统库**，
+和 §3 那批系统依赖同一性质。所以本节的义务落点是**打包**那一侧——谁把这些
+打进 AppImage 或安装包**随包分发**，谁就得把下面的声明随包带上。
+
+⚠️ 也正因为这样，**不装字典的机器上这个开关是"开着也不划红线"**——
+`useSpellcheck.ts` 拿不到"引擎其实没有字典"这件事，WebKitGTK 的接口只回一个
+布尔。这是这一格至今填 🟡 的理由之一（`docs/10` §8）。
+
+### 7.2 BSD 的那一件：SCOWL
+
+`hunspell-en-US` 这类英文字典的**词表**由 **SCOWL**（Spell Checker Oriented
+Word Lists，Kevin Atkinson）构建；RPM 上标的是
+`LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause-Modification`，
+本机核对过（2026-09-28）：
+
+```sh
+rpm -q --qf '%{NAME} %{LICENSE}\n' hunspell-en-US
+# hunspell-en-US LGPL-2.1-or-later AND LGPL-2.1-only AND BSD-3-Clause-Modification
+```
+
+⚠️ **`BSD-3-Clause-Modification` 那个 SPDX 名就是 SCOWL 的许可**（它长得像
+三条款 BSD，但**没有**"不得用名字背书"那一条，所以不能直接写成 `BSD-3-Clause`）。
+⚠️ 那串 `LGPL-*` 指的是**别的部分**（字典文件里混着 Ispell 的 affix 文件），
+不是 SCOWL 词表本身。
+
+⚠️ 同一份声明在 Fedora 上是 `/usr/share/doc/hunspell-en-US/README_en_US.txt`，
+下面的正文逐字抄自它（**不是从网上抄的**——这台机器没有网）。
+
+### SCOWL 许可正文（SCOWL word lists，Kevin Atkinson）
+
+```text
+Copyright 2000-2026 by Kevin Atkinson
+
+Permission to use, copy, modify, distribute, and sell any part of SCOWLv2, or
+word lists created from it, is hereby granted without fee, provided that the
+above copyright notice appears in all copies and that both the above
+copyright notice and this notice appear in supporting documentation.  Kevin
+Atkinson makes no representations about the suitability of this database for
+any purpose.  It is provided "as is" without express or implied warranty.
+```
+
+### affix 文件许可正文（Geoff Kuenning 的 Ispell，BSD）
+
+⚠️ 字典的 `.aff` 那一半**不是 SCOWL 的**，是 Geoff Kuenning 那份 Ispell 的
+`english.aff` 改出来的。它按 BSD 要求**保留版权声明**，所以这里也抄一份。
+
+```text
+Copyright 1993, Geoff Kuenning, Granada Hills, CA
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+3. All modifications to the source code must be clearly marked as
+   such.  Binary redistributions based on modified source code
+   must be clearly marked as modified versions in the documentation
+   and/or other materials provided with the distribution.
+(clause 4 removed with permission from Geoff Kuenning)
+5. The name of Geoff Kuenning may not be used to endorse or promote
+   products derived from this software without specific prior
+   written permission.
+
+THIS SOFTWARE IS PROVIDED BY GEOFF KUENNING AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL GEOFF KUENNING OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+```
+
+### 7.3 「关于」框里那一行
+
+`src/ui/useAbout.ts` 的 `致谢` 表加了一行 **`SCOWL`（拼写检查词表）**——
+与 §5 / §6 那两批同一条规矩：**真的用了、而且是用户看得见的那种**才进那张表。
+完整的传递依赖闭包在**本文件**，那句话里指过来。

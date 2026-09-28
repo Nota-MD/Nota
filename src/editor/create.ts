@@ -211,6 +211,14 @@ import { 标点输入, 标点装饰, 默认标点设置 } from "./smart-punctuat
 // **自动更正**（英文错拼那一张固定表）。⚠️ 只有一条输入规则，**排在整串
 // `.use()` 的最后**——理由见那个文件的 `自动更正输入`。
 import { 自动更正输入 } from "./auto-correct";
+// **裸 URL**（打到词尾那一下把 `https://…` / `www.…` 变成链接）。
+// ⚠️ "粘贴一条网址"那半截也在那个文件里（`贴上网址事务`）——**判据只有一份**。
+import { 自动链接输入 } from "./url-link";
+// **粘贴那一路**（洗 HTML / 认语言的代码块）。⚠️ 必须排在 `clipboard` 前面。
+import { 粘贴处理 } from "./paste";
+// **自动配对 ＋ Tab 跳出右半边**（`(` ⇒ `()`，`Tab` 跨过右边那颗闭括号）。
+// ⚠️ 它也要抢 `Tab`，必须排在 `indent` 前面。
+import { 配对处理 } from "./auto-pair";
 // **Emoji**（`:smile:` → 😄 的短代码替换 ＋ 打 `:smi` 弹候选的补全面板）。
 // ⚠️ 两条都是"只动正在敲的那几个字符"：替换只在敲下词尾空白那一下发生，
 // 面板**只画不改**（`Plugin.view` ＋ 挂在 body 上的 fixed 浮层，文档树一个
@@ -500,6 +508,8 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // 都不抢同一段文本（那些要的分隔符是 `#` / `>` / `-` / 数字，不是字母），
     // 所以位置其实无关紧要；放在这里只是让"标点那一家"挨在一起。
     .use(自动更正输入(自动更正))
+    // 裸 URL（用户原话：「**裸 URL 自动识别成链接**」）。判据见 `url-link.ts`。
+    .use(自动链接输入())
     // Emoji：短代码替换（`:smile:` → 😄）与输入补全面板（打 `:smi` 弹候选）。
     // ⚠️ **两件事都由 `emoji` 一个开关管**（理由见 `create-types.ts` 那一格）。
     // ⚠️ 排在**最后**：短代码要以英文冒号起头、以冒号＋空白收尾，与上游那些
@@ -522,14 +532,8 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // ⚠️ **拖列宽那条插件要自己装**，用的是**本仓包的那一个**（`列宽拖动插件`）：
     // 表格宽因此不再被钉死在"列数 × 100px"上（用户报的「表格全宽度是钉死的」），
     // 为什么只能从那个选项下手写在 `table-width.ts::列宽拖动插件` 顶上。
-    //
-    // ⚠️ 它必须排在 `gfm` **之后**：`schema` 是 `gfm` 带进来的，
-    // 插件建实例时要按 schema 找 `table` / `table_cell` 那几个节点。
-    //
-    // ⚠️ **源码模式那一侧也装了**（它就是 `gfm` 的一部分，没按模式分家）——
-    // 分屏右侧那个只读预览不会响应它（`columnResizing` 自己判 `view.editable`），
-    // 可编辑的那一份装上是**故意的**：源码模式切回所见即所得是重建实例，
-    // 这里少装一次不会省下什么，反而多一个"哪个模式装了哪个没装"的分支。
+    // ⚠️ 必须排在 `gfm` **之后**（schema 是它带进来的）。⚠️ **源码模式那一侧也装**
+    // 是故意的：少装一次省不下什么，反而多一个"哪个模式装了哪个没装"的分支。
     .use(列宽拖动插件)
     // ⚠️ 在 `commonmark` 之后即可（它只是往 mdast 上多挂一个变换），
     // 但**必须在 `.create()` 之前**：mdast → ProseMirror 那一步发生在建实例时，
@@ -546,6 +550,10 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     .use(history)
     .use(listener)
     .use(cursor)
+    // ⚠️⚠️ **必须排在下面这条 `clipboard` 前面，不能挪**：PM 按插件顺序问
+    // `handlePaste`，第一个返回 `true` 的赢，而上游那条**总会**返回 `true`。
+    .use(粘贴处理())
+    .use(配对处理())
     .use(clipboard)
     .use(indent)
     .use(trailing)

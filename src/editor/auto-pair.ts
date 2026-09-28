@@ -1,0 +1,379 @@
+/**
+ * **自动配对**（打 `(` 当场补一颗 `)`）＋ **Tab 跳出右半边**。
+ * 2026-09-28 落地，用户原话：「Tab 跳出右半边，Tab 跳出右半边」（说了两遍，
+ * 意思很明确）。对标对象是 VMark 的 `src/plugins/autoPair/`（五个文件、约一千
+ * 一百行），本文件按 Nota 的口径重写——**三处刻意的差别**在第 4 节。
+ *
+ * # 1. 两件事，一张表
+ *
+ * | 什么时候 | 做什么 |
+ * |---|---|
+ * | 打一个**开括号** | 当场补上它那颗**闭括号**，光标落在中间（`(` ⇒ `()`，光标在 `(` 后面） |
+ * | 打一颗**闭括号**、而右边**正好就有一颗一样的** | **不插**，光标跳过它（用户在"把这一对写完"） |
+ * | 光标**夹在一对空的括号中间**按退格 | 两颗一起删（不然要按两次） |
+ * | 光标右边**紧挨着一颗闭括号**时按 `Tab` | 光标**跨过去**（"跳出右半边"），**不改字** |
+ * | 光标左边**紧挨着一颗开括号**时按 `Shift+Tab` | 光标**跨回去**（对称的那半边） |
+ *
+ * ⚠️ **后两条是"移动"不是"编辑"**：派出去的事务带 `addToHistory: false`，
+ * 所以 `Ctrl+Z` **不会**为"按了一次 Tab"回退一步——那是导航，不是改动。
+ *
+ * # 2. 表里收哪些、不收哪些（**这是本文件最要紧的一段**）
+ *
+ * 收：`(` `{` 与中文那一族 `（【「『《〈`。
+ *
+ * 不收的**每一个都有具体理由**，不是忘了：
+ *
+ * - **`[`** —— ⚠️⚠️ **Markdown 链接就是 `[文字](地址)`**。收了它的话，用户打
+ *   `[` 会得到 `[]`、光标在中间，接着打 `(文字)` … 最后那个 `]` **卡在地址前面**
+ *   （`[文字](https://a.com)` 变成 `[文字](https://a.com])` 之类的样子），
+ *   而"手写一条链接"是这份编辑器的常规操作（`url-link.ts` 文件头也是这么写的）。
+ *   ⚠️ 而且 Wiki 链接 `[[..]]` 更糟：打两次 `[` 会得到 `[][]`。
+ *   **这一条是"少一个便利"换"别把 Markdown 语法弄坏"，值。**
+ * - **`"` / `'`** —— 智能标点（`smart-punctuation.ts` 的输入规则）**已经管着**
+ *   这两颗字符：它按"前面那一个字符"决定弯成 `“` 还是 `”`。这里再补一颗，
+ *   同一颗按键就有两套规则，症状随"哪个插件排在前面"变——**不能这么干。**
+ * - **`` ` ``** —— ⚠️ 收了它反而会让**行内代码永远标不出来**：上游
+ *   `inlineCodeInputRule`（`preset-commonmark` 的 `/`([^`]+)`$/`）要的是
+ *   **用户亲手敲下闭引号那一下**才把中间那段标成 `inlineCode`；我们补的
+ *   那颗闭引号**不是"敲"进来的**，等用户打 `` ` `` 想收尾时，又会被本文件的
+ *   "跳过闭括号"吃掉——于是文档里是一串**没有标记的**反引号。得不偿失。
+ * - **`*` `_` `~` `=`** —— 全是 Markdown 的**标记字符**（粗体 / 斜体 / 删除线 /
+ *   高亮）。补一颗就等于替用户改了语法，理由与 `[` 那一条同源。
+ *
+ * # 3. 判据全是纯函数，落点只有一个
+ *
+ * {@link 读现场} 把 `EditorState` 收成一小份 {@link 现场}（前一个字符 / 后一个
+ * 字符 / 在不在代码里 / 选区空不空），{@link 要配对} 那四个**只吃这份现场**。
+ * 于是 `tests/auto-pair.test.ts` 不用建 `Editor` 实例就能把每一种边界钉住
+ * （`lang-guess.ts` / `url-link.ts` 同一套手法）。⚠️ 这也是**唯一的落点**：
+ * 插件那一层只负责"读现场 → 问判据 → 派事务"，一个判断都不多做。
+ *
+ * # 4. 与 VMark 的三处差别（**不是漏抄**）
+ *
+ * ① **配对表短得多**：VMark 收 `[` / 反引号 / 直引号（外加一个"反引号切换
+ *    行内代码"的独立模块 `backtickToggle.ts`）。本仓**一个都不收**，
+ *    理由在上一节。⚠️ 它们的代价是 VMark 那套要额外维护"IME 宽限期"、
+ *    "右双引号规范化"那一堆补丁——那些补丁本身就是在收拾这张长表的后果。
+ * ② **`Tab` 走 `handleKeyDown`，不走 `handleDOMEvents.keydown`**：VMark 那么写
+ *    是为了抢在 Tiptap 自己的键位表前面。Nota 这边 `handleKeyDown` 是
+ *    **本仓既有的口径**（`table-input.ts` 顶上明写过"必须是 `handleKeyDown`，
+ *    不能写成 `$useKeymap` 抢 priority"），而且 `.use()` 顺序足够让它排在
+ *    `indent` 前面。
+ * ③ **没有设置项**：VMark 有四个开关（`enabled` / `includeCJK` /
+ *    `includeCurlyQuotes` / `normalizeRightDoubleQuote`）。本文件**一个都不加**
+ *    ——理由与 `url-link.ts` 那条"不为它加一格没人会去拨的开关"逐字相同；
+ *    真要加也**不在这一批**（那要同时动 Rust 设置、界面控件、四份中文包和文档）。
+ *
+ * # 5. 已知边界（如实记着）
+ *
+ * - ⚠️ **中文输入法在组字时一律不动**（`view.composing`）：打 `（` 的过程里
+ *   有一次 composition，那期间插手会把候选框里的东西打乱。代价是
+ *   **中文全角括号常常配不上对**——它们多数是输入法直接上屏的，压根不走
+ *   `handleTextInput`。这是**有意**的取舍：宁可少配几次，不能干扰输入法。
+ * - ⚠️ **代码块与行内代码里不配对、也不跳 Tab**（`在代码里` 那道闸）：
+ *   代码里要的是原样字符，而 `Tab` 在那里该**缩进**（上游 `indent` 插件干这个）。
+ *   ⚠️ **但"跳过闭括号"与"退格删成对"在代码里**照常——那两条只作用于用户
+ *   自己敲出来的字符，且都是常规编辑器的做法。
+ * - ⚠️ **转义不配对**：光标前面紧挨着 `\` 时一律不动（用户写 `\(` 就是想要
+ *   一颗光秃秃的左括号）。**但不去判"这个反斜杠自己是不是被转义的"**
+ *   （`\\(` 那种）：多一层判断换来的场景太少。
+ * - ⚠️ **不补"配对之外"的东西**：不管引号朝向、不管 Markdown 标记、
+ *   不做"打 `]` 自动补 `(地址)`"那种 Smart Brackets。那些都是另一件事。
+ */
+
+import { $prose } from "@milkdown/kit/utils";
+import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
+import type { EditorState } from "@milkdown/kit/prose/state";
+import type { EditorView } from "@milkdown/kit/prose/view";
+
+/** 插件键。⚠️ 起了名字才好在上游那一串里认出自己（调试时 `state.plugins` 上看）。 */
+export const 配对键 = new PluginKey("notaAutoPair");
+
+/**
+ * **开括号 → 闭括号**。⚠️ 加项之前先读文件头第 2 节：**这张表只能变短不能变长**
+ * 的那几个字符（`[` / 引号 / 反引号 / Markdown 标记）各有一条具体理由。
+ */
+export const 配对表: Readonly<Record<string, string>> = {
+  "(": ")",
+  "{": "}",
+  /* 中文全角那一族。⚠️ 与 VMark 那份一致，唯独没抄它的 `（）` 之外的引号。 */
+  "（": "）",
+  "【": "】",
+  "「": "」",
+  "『": "』",
+  "《": "》",
+  "〈": "〉",
+};
+
+/**
+ * 反过来的那张（闭 → 开）。**从 {@link 配对表} 推出来**，不手写第二份
+ * （手写就会两边不同步，而那是"配对"这件事最不能出的错）。
+ */
+const 反表: Readonly<Record<string, string>> = (() => {
+  const 表: Record<string, string> = {};
+  for (const [开, 闭] of Object.entries(配对表)) 表[闭] = 开;
+  return 表;
+})();
+
+/** 这颗字是不是本文件认的开括号。 */
+export function 是开括号(字: string): boolean {
+  return 配对表[字] !== undefined;
+}
+
+/** 这颗字是不是本文件认的闭括号。 */
+export function 是闭括号(字: string): boolean {
+  return 反表[字] !== undefined;
+}
+
+/**
+ * 这颗开括号配哪颗闭括号；不是开括号给 `null`。
+ *
+ * ⚠️ 用 `?? null` 而不是 `配对表[字]` 直接返回：表里查不到给的是 `undefined`，
+ * 而调用方一律按 `null` 判（`if (!闭)` 那种写法两个都能过，但混着用迟早
+ * 会在 `===` 比较上翻车）。
+ */
+export function 闭括号(开: string): string | null {
+  return 配对表[开] ?? null;
+}
+
+/** 这颗闭括号配哪颗开括号；不是闭括号给 `null`。 */
+export function 开括号(闭: string): string | null {
+  return 反表[闭] ?? null;
+}
+
+/* ── 现场：把 EditorState 收成一小份，判据只吃它 ───────────────────────── */
+
+/**
+ * **判据要的全部上下文**。四格，一格不多。
+ *
+ * ⚠️ 刻意**不把 `EditorState` 传进判据**：那样测试就得造一个真 schema ＋
+ * 真实例，而本仓没有 jsdom、也不许为测试装包（`tests/` 那一族全是这个口径）。
+ */
+export interface 现场 {
+  /** 光标**左边**那一颗字符；行首（或前面是图片这类原子）给 `""`。 */
+  前: string;
+  /** 光标**右边**那一颗字符；行尾给 `""`。 */
+  后: string;
+  /** 光标落在代码块或行内代码里。 */
+  代码: boolean;
+  /** 选区是空的（没有选中任何东西）。 */
+  空选区: boolean;
+}
+
+/** 光标在某一段文字里的"前一颗 / 后一颗"。⚠️ 边界与原子节点一律给 `""`。 */
+function 取字符(state: EditorState, 位置: number, 偏移: -1 | 1): string {
+  const 尺寸 = state.doc.content.size;
+  if (位置 < 0 || 位置 > 尺寸) return "";
+  const $位 = state.doc.resolve(位置);
+  // ⚠️ 块级位置上（`parent` 不是行内容）取不到"字符"——那说明光标在
+  // 两段之间，不是"挨着一颗括号"。
+  if (!$位.parent.inlineContent) return "";
+  const 起 = $位.parentOffset + (偏移 === -1 ? -1 : 0);
+  const 止 = 起 + 1;
+  const 长 = $位.parent.content.size;
+  if (起 < 0 || 止 > 长) return "";
+  // ⚠️ `textBetween` 的 `leafText` 不传 ⇒ 图片、公式那类原子贡献 `""`
+  //（它们身上没有"字符"可配对），这正是想要的。
+  return $位.parent.textBetween(起, 止, "");
+}
+
+/** 光标在代码块 / 行内代码里吗。 */
+function 在代码里(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let 层 = $from.depth; 层 > 0; 层--) {
+    // ⚠️ 判 `spec.code` 而不是判名字：`code_block` 是上游起的名字，
+    // 而 `spec.code` 才是 schema 自己那份"这是个原样文本块"的声明。
+    if ($from.node(层).type.spec.code) return true;
+  }
+  // 行内代码是**标记**不是节点，得另问一次。
+  return $from.marks().some((标记) => 标记.type.spec.code);
+}
+
+/**
+ * 读一份 {@link 现场}。
+ *
+ * @param 位置 光标位置。⚠️ **必须显式传进来**：`handleTextInput` 给的
+ *   `from` / `to` 是**这次输入之前**的选区，与 `state.selection` 未必是同一个
+ *   （上游 `trailing` / `indent` 那几条都可能动过），拿 `state.selection.from`
+ *   去替代会让判据落在错的位置上。**位置只有一个来源：调用方给的那个。**
+ */
+export function 读现场(state: EditorState, 位置: number): 现场 {
+  const { from, to } = state.selection;
+  return {
+    前: 取字符(state, 位置, -1),
+    后: 取字符(state, 位置, 1),
+    代码: 在代码里(state),
+    空选区: from === to,
+  };
+}
+
+/* ── 四条判据（纯函数，`tests/auto-pair.test.ts` 只用这一层）────────────── */
+
+/**
+ * 打这颗开括号时，该补的闭括号是哪一颗；**不该补时给 `null`**。
+ *
+ * 四种"不该补"：
+ *
+ * ① 不是开括号（表外字符）；
+ * ② 在代码块 / 行内代码里；
+ * ③ 光标前面紧挨着 `\`（用户在转义）；
+ * ④ **光标右边已经就是那颗闭括号、而且没选中东西**——补了就成 `())`。
+ *    ⚠️ "没选中东西"这半句是**必须**的：选中一段再打 `(`，要的是**把它包起来**，
+ *    这时右边那颗闭括号正是我们想要的。
+ */
+export function 要配对(现场: 现场, 字: string): string | null {
+  const 闭 = 闭括号(字);
+  if (!闭) return null;
+  if (现场.代码) return null;
+  if (现场.前 === "\\") return null;
+  if (现场.空选区 && 现场.后 === 闭) return null;
+  return 闭;
+}
+
+/**
+ * 打这颗闭括号时，该不该"跳过"（不插字、光标右移一位）。
+ *
+ * ⚠️ **不判代码块**：配对在代码里是关的，但"跳过"作用于**用户自己敲出来的**
+ * 那颗闭括号，在代码里同样是常规做法。⚠️ 也**不判"左边那颗开括号是不是
+ * 我们补的"**——那要靠插件状态去记，而这里刻意无状态（记错了的症状是
+ * "有时候跳有时候不跳"，比统一不跳难查得多）。
+ */
+export function 要跳过(现场: 现场, 字: string): boolean {
+  if (!现场.空选区) return false;
+  if (!是闭括号(字)) return false;
+  return 现场.后 === 字;
+}
+
+/** 光标夹在一对**空的**括号中间时按退格：该不该两颗一起删。 */
+export function 要删成对(现场: 现场): boolean {
+  if (!现场.空选区) return false;
+  const 闭 = 闭括号(现场.前);
+  if (!闭) return false;
+  return 闭 === 现场.后;
+}
+
+/**
+ * 该不该"跨一位"。
+ *
+ * @param 方向 `1` = `Tab`（右边那颗闭括号，跳出去）；`-1` = `Shift+Tab`
+ *   （左边那颗开括号，跳回来）。
+ *
+ * ⚠️ **在代码里一律不跳**：那里 `Tab` 的职责是**缩进**（上游 `indent` 插件），
+ * 而"跨一位"会把缩进这件事废掉——两个都想抢同一颗按键时，让缩进赢。
+ */
+export function 要跳(现场: 现场, 方向: 1 | -1): boolean {
+  if (!现场.空选区) return false;
+  if (现场.代码) return false;
+  if (方向 === 1) return 是闭括号(现场.后);
+  return 是开括号(现场.前);
+}
+
+/* ── 落点：插件 ────────────────────────────────────────────────────────── */
+
+/** 光标右移 / 左移一位，**不计进撤销历史**（那是导航不是改动）。 */
+function 跨一位(view: EditorView, 步: 1 | -1): void {
+  const { state } = view;
+  const 到 = state.selection.from + 步;
+  view.dispatch(
+    state.tr.setSelection(TextSelection.create(state.doc, 到)).setMeta("addToHistory", false),
+  );
+}
+
+/**
+ * 补一对括号。
+ *
+ * ⚠️ **选中东西时是"把它包起来"**，两种插法的顺序有讲究：
+ *
+ * - 有选区：**先插闭括号（在 `到`）再插开括号（在 `从`）**——先插后面的，
+ *   前面那些位置才不会被顶偏。⚠️ 直接 `insertText` 包在选区**外面**，
+ *   **不是**拿 `textBetween` 拼一串再 `replaceWith`：后者会把选区里的
+ *   **标记、原子、跨块结构全部抹平**（VMark 那边踩过，注释里留着"会剥掉标记、
+ *   删掉原子"这句）。⚠️ 两端必须都在行内（`isTextblock`）：`Ctrl+A` 那种
+ *   整篇选区上插字符会造出两个**只含一颗括号的段落**，不如不插手。
+ * - 空选区：两颗一起插，光标落在中间。
+ */
+function 配对(view: EditorView, 从: number, 到: number, 开: string, 闭: string): boolean {
+  const { state } = view;
+  const 事务 = state.tr;
+  if (从 !== 到) {
+    const $从 = state.doc.resolve(从);
+    const $到 = state.doc.resolve(到);
+    if (!$从.parent.isTextblock || !$到.parent.isTextblock) return false;
+    事务.insertText(闭, 到, 到);
+    事务.insertText(开, 从, 从);
+    // 开括号插在 `从` ⇒ 原本 `[从, 到)` 的内容整体右移一位，闭括号现在落在
+    // `到 + 1`。光标摆到它前面 = 包住的那段之后。
+    事务.setSelection(TextSelection.create(事务.doc, 到 + 1));
+  } else {
+    事务.insertText(开 + 闭, 从);
+    事务.setSelection(TextSelection.create(事务.doc, 从 + 1));
+  }
+  view.dispatch(事务);
+  return true;
+}
+
+/**
+ * 键盘那一路。⚠️ **`Tab` 只在那一种情况下返回 `true`**，其余一律放行——
+ * 放行的意思是"让上游 `indent` 去缩进"，不是"什么都不做"。
+ */
+function 按键(view: EditorView, event: KeyboardEvent): boolean {
+  // ⚠️ 带修饰键的一概不碰：`Ctrl+Tab` / `Alt+Tab` 是窗口管理器的，
+  // `Cmd+Z` 是撤销的。Shift 不算修饰键（`Shift+Tab` 正是我们要的那一条）。
+  if (event.ctrlKey || event.altKey || event.metaKey) return false;
+  const { state } = view;
+  const 位置 = state.selection.from;
+  const 现场 = 读现场(state, 位置);
+  if (event.key === "Tab") {
+    const 方向 = event.shiftKey ? -1 : 1;
+    if (!要跳(现场, 方向)) return false;
+    跨一位(view, 方向);
+    return true;
+  }
+  if (event.key === "Backspace") {
+    if (!要删成对(现场)) return false;
+    view.dispatch(state.tr.delete(位置 - 1, 位置 + 1));
+    return true;
+  }
+  if (event.key.length === 1 && 要跳过(现场, event.key)) {
+    跨一位(view, 1);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * 挂进 `.use()` 的那一条。
+ *
+ * ⚠️ **位置：排在 `indent` 前面**——`Tab` 那颗键两边都想接，上游 `indent`
+ * （`@milkdown/plugin-indent`）绑的正是 `Tab`。ProseMirror 按
+ * `state.plugins` 顺序问 `handleKeyDown`，**第一个返回 `true` 的赢**；
+ * 排到它后面去，"跳出右半边"永远不会发生。⚠️ 反过来，**别的地方一律放行**，
+ * 所以缩进该发生的时候照旧发生。
+ *
+ * ⚠️ **组字期间（`view.composing`）一律不插手**：中文输入法打全角括号、
+ * 打引号时都有一次 composition，那期间动文档会把候选框里的东西打乱。
+ * 代价如实记在文件头第 5 节（全角括号常常配不上对）。
+ */
+export function 配对处理() {
+  return $prose(
+    () =>
+      new Plugin({
+        key: 配对键,
+        props: {
+          handleTextInput: (view, 从, 到, 文) => {
+            if (view.composing) return false;
+            // ⚠️ 一次只认一颗字符：粘贴、IME 提交、拖放都会带着一整串进来，
+            // 而那些都**不是"打了一颗开括号"**。
+            if (文.length !== 1) return false;
+            const 闭 = 要配对(读现场(view.state, 从), 文);
+            if (!闭) return false;
+            return 配对(view, 从, 到, 文, 闭);
+          },
+          handleKeyDown: (view, event) => {
+            if (view.composing) return false;
+            return 按键(view, event);
+          },
+        },
+      }),
+  );
+}

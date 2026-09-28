@@ -251,6 +251,10 @@ export function 应用列宽(view: EditorView, 记着: Record<string, number[]>)
  * `min-width: var(--default-cell-min-width)` 读的是表格上的**行内变量**
  * （`TableView` 建实例时把选项原样写进去），所以那边得用 `!important`
  * 才按得住——那一段连同"为什么"在 `styles/editor.css` 里。
+ *
+ * ⚠️ **只读的那一份挂着它也不会响应**（分屏右侧的预览、导出的离屏实例）：
+ * 库自己判 `view.editable`。所以"装的时候不必分模式"——那一句判断在库里，
+ * 不在 `create.ts`（2026-09-28 从那边搬过来的，理由：这条属于本插件的行为）。
  */
 export const 列宽拖动插件 = $prose(() =>
   columnResizing({ defaultCellMinWidth: 0 }),

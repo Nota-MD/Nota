@@ -320,9 +320,11 @@ export default function App() {
     toast,
   });
   // ⚠️ `滚动位置` / `记滚动` 不在这儿——它们只喂给编辑区那个 `EditorPane`
-  //（搬进 `ui/EditorArea.tsx` 了）。这边要的是"最近打开"那一族（侧栏/主页/菜单）
-  // 和 `接上会话`。
-  const { 最近, 接上会话, 打开最近, 忘掉最近, 清空最近 } = 会话出口;
+  //（搬进 `ui/EditorArea.tsx` 了）。这边要的是"最近打开"那一族（主页/菜单）
+  // 和 `接上会话`。⚠️ `忘掉最近` 也不在这儿：它只服务"从列表里摘掉一条"，
+  // 而那一颗 × 长在「文档列表」页里，2026-09-28 那一页删了（见 `ui/Sidebar.tsx`
+  // 文件头）；`useSession` 内部照旧用它（打不开的记录顺手摘掉）。
+  const { 最近, 接上会话, 打开最近, 清空最近 } = 会话出口;
 
   /**
    * 菜单栏（含插件那一栏）**＋ 运行时合成的「最近文件」那一层**。
@@ -821,12 +823,6 @@ export default function App() {
             <Sidebar
               workspace={workspace}
               tree={tree}
-              // ⚠️ 「文档列表」那一页（最近打开的文件）。三条都是现成的：
-              // 列表来自 `useSession`，打开与摘掉也都在那边（含"打不开就
-              // 顺手摘掉"那条判据，见 `ui/useSession.ts`）。
-              最近={最近}
-              onOpenRecent={(p) => void 打开最近(p)}
-              onForgetRecent={(p) => void 忘掉最近(p)}
               docText={activeDoc?.text ?? ""}
               strict={settings?.strict_markdown ?? false}
               tab={sidebarTab}

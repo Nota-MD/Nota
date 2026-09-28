@@ -466,10 +466,9 @@ export const MENUS: MenuSpec[] = [
       { id: "view.toggleSidebar", label: "Toggle Sidebar", accel: "Ctrl+Shift+L", checkable: true },
       { id: "view.outline", label: "Outline", accel: "Ctrl+Shift+1", checkable: true },
       { id: "view.fileTree", label: "File Tree", accel: "Ctrl+Shift+3", checkable: true },
-      // ⚠️ `checkable` 是 2026-09-27 补的：旁边那两条（大纲 / 文件树）都有，
-      // 而它们是**同一组三选一**（侧栏的三页）。少这一个的症状是"切到文档
-      // 列表后，那一栏里三个勾一个都不亮"——用户看不出自己现在在哪一页。
-      { id: "view.docList", label: "Document List", accel: "Ctrl+Shift+2", checkable: true },
+      // ⚠️ 这里原来还有一条 `view.docList`（「文档列表」，`Ctrl+Shift+2`）：
+      // 2026-09-28 用户点名把侧栏那一页删了，这一项与它那个键位一起删
+      // ——侧栏只剩两页（`ui/Sidebar.tsx` 文件头）。`Ctrl+Shift+2` 从此空着。
       { id: "view.search", label: "Search", accel: "Ctrl+Shift+F" },
       "sep",
       { id: "view.toggleDock", label: "Extension Dock", checkable: true },

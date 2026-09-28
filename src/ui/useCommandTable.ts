@@ -344,13 +344,9 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
         setSidebarOpen(true);
         setSidebarTab("tree");
       },
-      // 侧栏第三页：**最近打开过的文件**（`Ctrl+Shift+2`）。⚠️ 与上面两条
-      // 同一套动作：开栏 + 切页。它 2026-09-27 之前一直是灰的——菜单里写着
-      // 「文档列表」，而侧栏只有两页（见 `ui/Sidebar.tsx` 文件头）。
-      "view.docList": () => {
-        setSidebarOpen(true);
-        setSidebarTab("docs");
-      },
+      // ⚠️ 这里原来还有一条 `view.docList`（侧栏第三页「文档列表」＋
+      // `Ctrl+Shift+2`）。2026-09-28 用户点名删掉那一页，这条随之删除
+      // ——侧栏只有两页了（`ui/Sidebar.tsx` 文件头）。
       "view.toggleDock": () => setDockOpen((v) => !v),
       // 格式化工具栏那三档。⚠️ **不是切换，是三条各设各的**：菜单里那是一个
       // 子菜单的三条（见 `commands.ts`），点哪条就是哪档，没有"再点一下回去"

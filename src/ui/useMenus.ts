@@ -215,10 +215,8 @@ export function useMenus(w: MenuWiring): MenuState {
       "view.toggleSidebar": sidebarOpen,
       "view.outline": sidebarOpen && sidebarTab === "outline",
       "view.fileTree": sidebarOpen && sidebarTab === "tree",
-      // 侧栏第三页（最近打开的文件）。⚠️ **它是 `checkable` 的**（见
-      // `commands.ts` 里那一条），所以少这一行不只是"勾不对"——那一栏的
-      // 三个勾会变成"只有两个会亮"，用户看不出第三页是当前页。
-      "view.docList": sidebarOpen && sidebarTab === "docs",
+      // ⚠️ 这里原来还有一条 `view.docList`（侧栏第三页「文档列表」）：
+      // 2026-09-28 那一页删了，菜单项与这条勾一起删（`ui/Sidebar.tsx` 文件头）。
       "view.toggleDock": dockOpen,
       // ⚠️ 三档**各自一条**（`commands.ts` 里是一个子菜单的三条）。
       // 写成 `Record` 而不是三元表达式是照抄「编辑模式」那三条的形状：

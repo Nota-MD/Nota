@@ -104,7 +104,9 @@ export const 界面表: Record<string, string> = {
   "Toggle Sidebar": "显示/隐藏侧边栏",
   "Outline": "大纲",
   "File Tree": "文件树",
-  "Document List": "文档列表",
+  // ⚠️ 这里原来还有 `"Document List": "文档列表"`：2026-09-28 侧栏第三页
+  //（文档列表）与菜单里那一条一起删了，键随之删除（留着就是废键，
+  // `tools/i18n-check.sh` ③ 会 FAIL）。
   "Search": "搜索",
   "Extension Dock": "拓展栏",
   "Formatting Toolbar": "格式化工具栏",
@@ -320,8 +322,8 @@ export const 界面表: Record<string, string> = {
   "No folder is open yet. Open a folder and its Markdown files will be listed here.": "还没打开文件夹。打开一个文件夹后，这里会列出其中的 Markdown。",
   "This folder has no Markdown files.": "这个文件夹里没有 Markdown 文件。",
   "This document has no headings yet.": "这份文档还没有标题。",
-  "Remove from list": "从列表里去掉",
-  "No recent files yet. Files you open will be listed here.": "还没有最近打开的文件。打开过的文件会列在这里。",
+  // ⚠️ 这里原来还有 `"Remove from list"` 与 `"No recent files yet.…"` 两条：
+  // 它们只服务侧栏那一页，2026-09-28 随那一页一起删（同上）。
   "Ready": "就绪",
   "Unsaved": "未保存",
   "Not saved yet": "尚未保存",

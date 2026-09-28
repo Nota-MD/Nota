@@ -877,12 +877,9 @@ function Harness() {
           <Sidebar
             workspace={sidebarEmpty ? null : "/tmp/夹具"}
             tree={TREE_FIXTURE}
-            // ⚠️ 第三页「文档列表」那三样（2026-09-27 补的夹具）：侧栏加了这
-            // 三个 props 之后，这一场一直缺着，工装闸也就一直红着——它不是
-            // 产品代码的问题，是**夹具没跟上**。夹具给两条，够验"列得出、点得动"。
-            最近={RECENT_FIXTURE}
-            onOpenRecent={(p) => console.log("recent-open", p)}
-            onForgetRecent={(p) => console.log("recent-forget", p)}
+            // ⚠️ 这里原来给过第三页「文档列表」那三个 props（2026-09-27 加的
+            // 夹具）——2026-09-28 那一页删了，夹具也一起撤掉（`ui/Sidebar.tsx`
+            // 文件头）。
             docText={DOC_FIXTURE}
             strict={false}
             tab={sidebarTab}
@@ -913,15 +910,6 @@ function Harness() {
 
 /** 侧栏夹具用的正文：三级层级 + 两个根标题，够验"折一层、再折一层"。 */
 const DOC_FIXTURE = ["# 一", "## 一甲", "### 一甲子", "## 一乙", "# 二", "## 二甲"].join("\n");
-
-/**
- * 夹具「最近打开过」：两条。
- *
- * ⚠️ 两条**故意分居两个目录**（一条在夹具工作区里、一条在别处）：这一页要
- * 说明的正是"它跟工作区无关"——合成一条的话，看缩略图的人会以为这一页是
- * 文件树的一部分。
- */
-const RECENT_FIXTURE = ["/tmp/夹具/读我.md", "/home/别人/随手一记.md"];
 
 /** 夹具树：一个目录（带一层子节点）+ 一个文件。 */
 const TREE_FIXTURE = [

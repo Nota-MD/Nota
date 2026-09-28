@@ -1,12 +1,21 @@
 /**
- * 左侧栏：**文件树** / **文档列表** / **大纲** 三页。
+ * 左侧栏：**文件树** / **大纲** 两页。
  *
- * 快捷键 Ctrl+Shift+1/2/3 分别切大纲 / 文档列表 / 文件树（键位表在
+ * 快捷键 Ctrl+Shift+3 / Ctrl+Shift+1 分别切文件树 / 大纲（键位表在
  * `ui/commands.ts`，这里只是照它排页签的次序）。
  *
- * ⚠️ **「文档列表」是 2026-09-27 补上的**（在那之前菜单里写着这一项、它是灰的，
- * 而这一栏只有两页）。它列的是**最近打开过的文件**——内容与「文件」页那棵树
- * 完全无关（那棵树跟着工作区走），见 `RecentList` 的注释。
+ * ⚠️ **2026-09-27 到 2026-09-28 之间这里有过第三页「文档列表」**（列的是
+ * **最近打开过的文件**），2026-09-28 用户看图点名「**<文档列表>这一栏可以删了**」，
+ * 于是整页连同菜单里的「视图 → 文档列表」（`Ctrl+Shift+2`）一起删掉。
+ * ⚠️ **删的只是这一页，不是那份列表**：最近打开过的文件仍然在**「文件」菜单
+ * 那一层子菜单**和**主页那一块**上（`ui/recentMenu.ts`、`ui/Home.tsx`），
+ * 数据仍然由 `ui/useSession.ts` 从宿主那份侧车读回来。也就是说这一页**本来就
+ * 只是同一份数据的第三个入口**，删掉它没有任何东西失去落脚点。
+ *
+ * ⚠️ 「文档列表」这一页和「文件」页那棵树**从来就是两码事**：那棵树是**磁盘上
+ * 现在有什么**（跟着工作区走），那份列表是**用户最近碰过什么**（跟工作区无关）。
+ * 合成一页的话，换一次工作区就会把最近记录一起换掉——这是当初它们分成两页的
+ * 理由，也是现在"删掉一页不影响另一页"的理由。
  *
  * ⚠️ **「插件」那一页 2026-09-22 搬到了右边**，见 `ui/PluginDock.tsx`——
  * 这一栏只管**文档导航**，工具面板不跟它挤。
@@ -54,26 +63,12 @@ import { Icon } from "@/ui/Icon";
 // ⚠️ 2026-09-27 起在 `editor/headings.ts`（原来挂在 `ui/outline.ts`）：
 // 「内容目录」那条命令要**同一份判据**，见那份文件头。
 import { extractOutline, type OutlineItem } from "@/editor/headings";
-import { 父目录名, 文件名 } from "@/ui/useSession";
 
-export type SidebarTab = "tree" | "outline" | "docs";
+export type SidebarTab = "tree" | "outline";
 
 interface Props {
   workspace: string | null;
   tree: TreeNode[];
-  /**
-   * 最近打开过的文件（新的在前）。**第三页「文档列表」的内容**
-   *（`ui/useSession.ts` 从宿主那份侧车读回来的）。
-   *
-   * ⚠️ 它和「文件」页那棵树是两码事：那棵树是**磁盘上现在有什么**（跟着
-   * 工作区走），这一份是**用户最近碰过什么**（跟工作区无关，可以是任何一个
-   * 角落里的文件）。合成一页的话，换一次工作区就会把最近记录一起换掉。
-   */
-  最近: readonly string[];
-  /** 点一条最近记录 → 打开它（`ui/useSession.ts::打开最近`）。 */
-  onOpenRecent: (path: string) => void;
-  /** 把一条最近记录摘掉（那一行右边的 ×）。**只清记录，不删文件。** */
-  onForgetRecent: (path: string) => void;
   /** 当前文档正文，用来抽大纲。 */
   docText: string;
   /**
@@ -130,9 +125,6 @@ interface Props {
 export function Sidebar({
   workspace,
   tree,
-  最近,
-  onOpenRecent,
-  onForgetRecent,
   docText,
   strict,
   tab,
@@ -156,10 +148,9 @@ export function Sidebar({
       <div className="sidebar-head">
         <nav className="sidebar-tabs" role="tablist">
           <TabButton id="tree" current={tab} onSelect={onTab} label={t("File")} />
-          {/* ⚠️ 顺序照「视图」菜单里那三条（`Ctrl+Shift+3` 文件树、
-              `Ctrl+Shift+2` 文档列表、`Ctrl+Shift+1` 大纲）：菜单里从上往下
-              是文件树 → 文档列表 → 大纲，这里也照这个次序排。 */}
-          <TabButton id="docs" current={tab} onSelect={onTab} label={t("Document List")} />
+          {/* ⚠️ 顺序照「视图」菜单里那两条（`Ctrl+Shift+3` 文件树、
+              `Ctrl+Shift+1` 大纲）：菜单里从上往下是文件树 → 大纲，
+              这里也照这个次序排。 */}
           <TabButton id="outline" current={tab} onSelect={onTab} label={t("Outline")} />
         </nav>
         <button
@@ -192,10 +183,6 @@ export function Sidebar({
             </div>
           ))}
 
-        {tab === "docs" && (
-          <RecentList items={最近} onOpen={onOpenRecent} onForget={onForgetRecent} />
-        )}
-
         {tab === "outline" && <Outline items={outline} onJump={onJumpOutline} />}
       </div>
     </aside>
@@ -218,74 +205,6 @@ function TabButton(props: {
     >
       {props.label}
     </button>
-  );
-}
-
-/* ── 文档列表：最近打开过的文件 ─────────────────────────────────────────── */
-
-/**
- * 第三页：**最近打开过的文件**（`docs/10` §5「最近文件列表」「文章列表」两格）。
- *
- * ⚠️ **顺序由宿主决定，这里不排序**：侧车那份 `recent` 就是"新的在前"
- *（`session.rs::推入最近` 每开一次就把那条挪到最前）。在这里再排一次的话，
- * "最近"这个词就有了两个判据——而它们迟早会不一致（一边按时间、一边按名字）。
- *
- * ⚠️ **每一条右边那颗 × 只是"忘掉它"，不是"删掉文件"**。所以它**不弹确认框**：
- * 一句"确定要从列表里去掉吗"会把这件事说得比它重得多，而真按错了的代价只是
- * 下次再打开一次这个文件。危险动作才要确认，这条不是。
- *
- * ⚠️ 路径整个进 `title`，列表里只显示"文件名 — 上一层目录"：两个同名的
- * `笔记.md` 在这一页里必须分得开，而完整路径横着排会挤成一条看不清的乱码。
- */
-function RecentList({
-  items,
-  onOpen,
-  onForget,
-}: {
-  items: readonly string[];
-  onOpen: (path: string) => void;
-  onForget: (path: string) => void;
-}) {
-  // 订阅语言（同 `Outline`：这是另一个组件，`Sidebar` 里那个 `t` 它够不着）。
-  const t = useT();
-
-  if (items.length === 0) {
-    return (
-      <div className="sidebar-empty">
-        <p className="sidebar-empty-lead">
-          {t("No recent files yet. Files you open will be listed here.")}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <ul className="sidebar-list">
-      {items.map((路径) => (
-        <li key={路径} className="sidebar-item">
-          <button
-            type="button"
-            className="sidebar-item-open"
-            // ⚠️ 完整路径进 tooltip：列表里那一行是"文件名 — 上一层目录"，
-            // 两个不同目录下的同名文件靠它才分得开。
-            title={路径}
-            onClick={() => onOpen(路径)}
-          >
-            <span className="sidebar-item-name">{文件名(路径)}</span>
-            <span className="sidebar-item-dir">{父目录名(路径)}</span>
-          </button>
-          <button
-            type="button"
-            className="sidebar-item-x"
-            title={t("Remove from list")}
-            aria-label={t("Remove from list")}
-            onClick={() => onForget(路径)}
-          >
-            <Icon name="folio-close-symbolic" />
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }
 

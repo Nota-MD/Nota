@@ -298,6 +298,11 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   // ——理由见 `create-types.ts` 的 `emoji` 那一格。
   const emoji = options.emoji ?? true;
 
+  // 智能符号补全（`ui/EditorPane.tsx` 传进来，来自 `settings.editor.smart_symbols`）。
+  // ⚠️ `undefined` **不等于关**：Rust 那边的默认是 `true`（用户 2026-09-28
+  // 点名「默认为开」），这里跟着取 `true`——见 `create-types.ts` 的 `智能符号` 那一格。
+  const 智能符号 = options.智能符号 ?? true;
+
   // ── 开头那段 front matter：切下来存住，出去的时候原样拼回 ──────────────
   //
   // ⚠️ 编辑器**读不懂**它（CommonMark 里 `---` 是分割线），不切的话"打开再
@@ -536,7 +541,10 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // ⚠️⚠️ **必须排在下面这条 `clipboard` 前面，不能挪**：PM 按插件顺序问
     // `handlePaste`，第一个返回 `true` 的赢，而上游那条**总会**返回 `true`。
     .use(粘贴处理())
-    .use(配对处理())
+    // ⚠️ **智能符号补全那一条**（括号 / `[` / `*` 自配对 ＋ `Tab` 跳出右半边
+    // ＋ 空对退格）。关掉开关时它返回 `[]`（同 `标点输入` 那一条的做法），
+    // 也就是"这条插件不装"——`docs/05` §4.20c。
+    .use(配对处理(智能符号))
     .use(clipboard)
     .use(indent)
     .use(trailing)

@@ -101,8 +101,15 @@ export interface EditorSettings {
   paragraph_indent: boolean;
   /** 缩进宽度，单位是**字符**（`em`，不是像素）。实际生效值夹在 1~8。 */
   paragraph_indent_chars: number;
-  match_brackets: boolean;
-  match_markdown: boolean;
+  /**
+   * **智能符号补全**（用户 2026-09-28 点名要的那个开关，**默认开**）：打一颗
+   * 符号当场补上另一半，`Tab` 跳出右半边、夹在一对空括号里按退格两颗一起删。
+   *
+   * ⚠️ 它 2026-09-28 **取代了 `match_brackets` / `match_markdown` 两条死开关**
+   * （那两条存了值但从没有代码读过）。⚠️ 用户老设置文件里那两行还在，前端这边
+   * 读不到它们——**不必兼容**（`Settings` 那一侧也只认自己认识的键）。
+   */
+  smart_symbols: boolean;
   emoji_autocomplete: boolean;
   show_block_source: boolean;
   copy_markdown_source: boolean;

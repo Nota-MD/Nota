@@ -135,24 +135,16 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Match brackets and quotes")}>
+      <SettingsGroup
+        title={t("Smart symbol completion")}
+        help={t(
+          "Typing a symbol immediately inserts its other half: brackets and quotes (including `[`), a pair of `*`, Tab to step past the closing half, and Backspace between an empty pair deletes both. ⚠ One switch covers all four — they lean on each other, so turning it off means the whole thing is off, not “completes a little less”. ⚠ It replaces the two old switches “Match brackets and quotes” and “Match Markdown characters”: those saved a value that no code ever read, so flipping them did nothing at all.",
+        )}
+      >
         <SettingRow>
           <Toggle
-            checked={e.match_brackets}
-            onChange={(match_brackets) => 写({ match_brackets })}
-          />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Match Markdown characters")}>
-        <SettingRow
-          help={t(
-            "Typing `**` automatically adds the closing two asterisks. ⚠ Off by default: anyone who needs a literal `**` has to delete the extra pair first — one step more than typing it by hand.",
-          )}
-        >
-          <Toggle
-            checked={e.match_markdown}
-            onChange={(match_markdown) => 写({ match_markdown })}
+            checked={e.smart_symbols}
+            onChange={(smart_symbols) => 写({ smart_symbols })}
           />
         </SettingRow>
       </SettingsGroup>

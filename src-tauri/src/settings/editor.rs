@@ -1,8 +1,7 @@
 //! 「编辑器」那一页的设置。
 //!
-//! 本文件装 `[editor]` 表下的字段：缩进与对齐 / **段首缩进** / 括号与 Markdown
-//! 的自动配对 / Emoji 补全 / 显示当前块源码 / 复制行为 / 换行符 / 拼写检查 /
-//! 打字机模式。
+//! 本文件装 `[editor]` 表下的字段：缩进与对齐 / **段首缩进** / **智能符号补全** /
+//! Emoji 补全 / 显示当前块源码 / 复制行为 / 换行符 / 拼写检查 / 打字机模式。
 //!
 //! ⚠️ 这里头**有两族"缩进"**，别混：「默认缩进 / 对齐缩进」管**写进文件**的空格
 //! （列表 / 引用 / 缩进块），「段首缩进」只管**看起来**缩了几格、**不写文件**。
@@ -65,10 +64,25 @@ pub struct Editor {
     /// 别的字号/字体时缩进跟着变，这正是「几个字符宽」该有的行为。
     /// 实际生效值夹在 **1..=8**（`ui/settings/panes/EditorPane.tsx` 那格同区间）。
     pub paragraph_indent_chars: u32,
-    /// 匹配括号和引号（输入 `(` 自动补 `)` 之类）。
-    pub match_brackets: bool,
-    /// 匹配 Markdown 字符（输入 `**` 自动补 `**`）。
-    pub match_markdown: bool,
+    /// **智能符号补全**：打一颗符号，当场把配对的另一半补上。
+    ///
+    /// 用户 2026-09-28 原话：「自动补全 `*`、`[` 这种在设置中**搞一个选项**，
+    /// **智能符号补全**。**默认为开**。」
+    ///
+    /// ⚠️ **它管的是编辑器里那一条插件**（`src/editor/auto-pair.ts`，
+    /// 由 `ui/EditorPane.tsx` 传进 `createEditor`）：括号与引号那一族
+    /// （`(` `{` `（【「『《〈` 与 **`[`**）、**`*` 自配对**、`Tab` 跳出右半边、
+    /// 夹在一对空括号里按退格两颗一起删。**关掉它是"这条插件不装"**，
+    /// 不是"补得少一点"——四件事一起走，因为它们互相咬着（`Tab` 跳的那颗闭
+    /// 括号正是补出来的那一颗）。
+    ///
+    /// ⚠️⚠️ **它取代了原来的两条死开关 `match_brackets` / `match_markdown`**
+    /// （2026-09-28 删）：那两条**存了值，从来没有任何代码读过**——界面上摆着
+    /// 两颗能拨的开关、拨了什么都不发生，比没有那两颗更坏。用户这次要的是
+    /// **一个**选项，而它们本来就是一件事的两半（用户原话里 `*` 与 `[` 是并列
+    /// 举的两个例子）。⚠️ 老设置文件里那两行**留着也不报错**（`#[serde(default)]`
+    /// 只认自己认识的键，多余的键被忽略），下次保存时它们自然消失。
+    pub smart_symbols: bool,
     /// 开启 Emoji 自动补全（`:sm` → 候选面板）。
     pub emoji_autocomplete: bool,
     /// 显示当前块元素的 Markdown 源码（支持标题等块元素）。
@@ -97,11 +111,12 @@ impl Default for Editor {
             // 顶格，而且导出/别处都不跟这一条）。宽度先给中文惯例的 2。
             paragraph_indent: false,
             paragraph_indent_chars: 2,
-            // 这一对默认值是有意取反的：匹配括号和引号**开**，匹配 Markdown 字符**关**。
-            // ⚠️ 「匹配括号」是几乎所有人都想要的，
-            // 而自动补出 `**` 会在想打粗体时先多出两个星号，所以默认关。
-            match_brackets: true,
-            match_markdown: false,
+            // ⚠️ **默认开**（用户 2026-09-28 点名：「默认为开」）。这一条与它
+            // 取代的那两条不同（那时是"括号开、Markdown 字符关"）：用户要的是
+            // **一个**开关，而 `*` 自配对在 2026-09-28 已经补上了三条"不补"
+            // 的判据（段首 / 有选区 / 代码与转义），当年"默认关"的那条理由
+            //（"想打粗体时先多出两颗星"）已经不成立了。
+            smart_symbols: true,
             emoji_autocomplete: true,
             show_block_source: false,
             copy_markdown_source: true,
@@ -175,5 +190,19 @@ mod tests {
         let back: Editor = toml::from_str("emoji_autocomplete = false\n").unwrap();
         assert!(!back.emoji_autocomplete);
         assert_eq!(back.default_indent, 2);
+    }
+
+    /// ⚠️ **老设置文件里那两条死开关不该让整个设置读不出来**（2026-09-28）。
+    ///
+    /// `match_brackets` / `match_markdown` 已经被 `smart_symbols` 取代，
+    /// 而用户 `settings.toml` 里很可能还写着它们（那两条曾经在界面上摆着）。
+    /// `#[serde(default)]` 只认自己认识的键、多余的键**忽略**——这一条用例
+    /// 就是钉住这个行为：**不许有人后来加上 `deny_unknown_fields`**，
+    /// 那会让升级后的第一次启动直接掉进"设置读不出来"的兜底里。
+    #[test]
+    fn 老的两条配对开关留在文件里也不报错() {
+        let back: Editor =
+            toml::from_str("match_brackets = false\nmatch_markdown = true\n").unwrap();
+        assert!(back.smart_symbols, "缺项时该取默认（开）");
     }
 }

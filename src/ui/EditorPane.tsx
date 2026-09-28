@@ -174,6 +174,19 @@ interface Props {
    */
   emoji: boolean;
   /**
+   * **智能符号补全**，来自 `settings.editor.smart_symbols`（2026-09-28，**默认开**）。
+   *
+   * ⚠️ 同 `emoji` 那一格：只收一个布尔，原样喂给 `createEditor` 的
+   * `智能符号` 那一格——关掉是 `editor/auto-pair.ts` **整条插件不装**
+   * （补一对 / 跳过 / 空对退格 / `Tab` 跳出右半边四件事一起走，理由见
+   * `create-types.ts` 的 `智能符号` 那一格）。
+   *
+   * ⚠️ **必须进下面那个 effect 的依赖**：它换的是 `.use()` 链上的一条插件，
+   * 而那串链是建实例时定死的。不进依赖的话，用户拨了开关得先关掉这份文档
+   * 再打开才生效——"设置像没生效"。
+   */
+  智能符号: boolean;
+  /**
    * **整整一页 Markdown 设置**（`settings.markdown`），`undefined` = 设置还没
    * 从后端读回来。
    *
@@ -300,6 +313,8 @@ export function EditorPane({
   physics,
   纯文本 = false,
   emoji,
+  /* 说明书在 `Props` 上那一份 `智能符号` 里（这里不抄第二份）。 */
+  智能符号,
   markdown,
   focusMode,
   typewriter,
@@ -568,6 +583,11 @@ export function EditorPane({
             // ——它是只读的，补全面板在只读里弹出来只是噪声（`create.ts`
             // 里另有一道 `readOnly` 兜底）。
             emoji,
+            // **智能符号补全**（`settings.editor.smart_symbols`，默认开）。
+            // ⚠️ **所见即所得这一侧才传**（源码模式是 CodeMirror，它没有
+            // "打一颗字符顺手补另一半"这回事）；分屏预览那一侧**不传**——
+            // 它是只读的，补进来也只是噪声。
+            智能符号,
             writingModes: 写作模式Ref.current,
             // 预览那一份，理由见 `预览Ref`。
             review: 预览Ref.current,
@@ -761,7 +781,7 @@ export function EditorPane({
     // 任何人重建编辑器。
     // 刻意**不**依赖 doc.text：那是初始值，不是要跟随的状态。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, mode, strict, physics, 纯文本, 行内扩展, 标点, 自动更正, emoji]);
+  }, [doc.id, mode, strict, physics, 纯文本, 行内扩展, 标点, 自动更正, emoji, 智能符号]);
 
   // ── 记滚动位置 ──────────────────────────────────────────────────────
   // ⚠️ **监听挂在捕获阶段**：滚动事件不冒泡（`scroll` 只在自己那个元素上派），

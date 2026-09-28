@@ -3434,11 +3434,11 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**三十二份、共 813 条**（2026-09-28 **当场一份一份跑出来的**，全 `0 失败`）：
+**三十二份、共 820 条**（2026-09-28 **当场一份一份跑出来的**，全 `0 失败`；⚠️ 其中 `auto-pair` 那 7 条是当天第三批加的，见本节末那条 📌）：
 `keymap` **54** · `slash` **49** · `share-card` **46** · `math-view` **41** ·
 `table-input` **39** · `inline-marks` **37** · `smart-punctuation` **36** ·
 `focus-summary` **34** · `emoji` **32** · `lang-guess` **31** · `footnote` **30** ·
-`url-link` **29** · `auto-pair` **36** · `paste-clean` **25** · `table-pipe` **24** ·
+`url-link` **29** · `auto-pair` **43** · `paste-clean` **25** · `table-pipe` **24** ·
 `math-delim` **23** · `toc` **22** · `auto-correct` **20** · `heatmap` **20** ·
 `atom-space` **19** · `math-input` **19** · `accent` **18** · `mark-hint` **18** ·
 `instant-render` **17** · `file-kind` **14** · `html-block` **14** · `lang-icons` **14** ·
@@ -3466,6 +3466,8 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 命令会执行它们**。它们此前跑没跑过、跑绿过没有，**没有记录可查**——这一批是头一次
 把它们写进一个跑得出来的地方）。**同一天稍后又加了 `video-view` 12**——那一份是新写的、
 当批就进了名册（不是"漏了没进"那一类），12 条同样是当场跑出来的。
+
+📌 **2026-09-28（「智能符号补全」那一批，`auto-pair` 36 → 43，总数 813 → 820）**：用户原话「自动补全 `*`、`[` 这种在设置中搞一个选项，**智能符号补全**。**默认为开**」。三件事同批：① `[` **从「不收」改成「收」**（进 `配对表`，另加一张只有它的 `可升级表`——`[|]` 再敲一颗 ⇒ `[[|]]`，没有它 `[[页面]]` 打不出来）；② **一个开关管整条插件**（`Settings.editor.smart_symbols`，界面「智能符号补全」，**默认开**；关掉 = `配对处理()` 返回 `[]` = 这条插件不装），它**取代了 `match_brackets` / `match_markdown` 那两条死开关**（存了值从来没有代码读过）；③ 设置页那两组并成一组一格。⚠️ 这一批**只动 `auto-pair.ts` 这一份测试**（36 → 43：第七组 5 条 `[` ＋ 第十组 2 条开关），其余 31 份条数一个没变，总数 813 → **820**；`docs/09` §2 / `docs/10` / `docs/05` §4.20c / `docs/03` §5.6d / `docs/04` §3.5 / `AGENTS.md` §2 同批跟着改了。
 
 📌 **2026-09-28（`*` 自配对那一批，`auto-pair` 28 → 36，总数 805 → 813）**：用户那天报了两件事，
 后半句是「写一个算法判断比如输入一个 `*` 自动补全另一个」。做法是在 `editor/auto-pair.ts` 里

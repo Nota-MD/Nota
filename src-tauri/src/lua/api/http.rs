@@ -23,11 +23,25 @@
 //! | 请求体上限 1 MiB | 同上，方向反过来 |
 //! | 最多 5 次重定向，跨域**不带**认证头 | ureq 的默认就是 `Never`（实测 `config.rs:876`），这里只是把它钉住 |
 //!
-//! # 不做的两件事（说清楚，免得被当成漏了）
+//! # 流式：`nota.http.stream`（2026-10-04 加，`docs/07` 第 58 项）
 //!
-//! - **不做流式**。AI 生成时边出边显示体验好得多，但那要一路改到界面层
-//!   （前端订阅事件、逐块追加）。`docs/07` 单独记着这一项。
-//! - **不做上传/下载文件**。插件的 `body` 只能是文本或一张表（当 JSON 发）。
+//! `request` / `get` / `post` 是**一次性**的：函数返回时整份响应体已经在手里了。
+//! `stream` 不同——它**边收边把每一块交给 Lua 回调**，所以 AI 那类"几秒钟里
+//! 一个字一个字往外吐"的接口才能边出边显示。三件事在这里定死：
+//!
+//! | 问题 | 答案 | 为什么 |
+//! |---|---|---|
+//! | 一块有多大、切在哪儿 | **不保证**。可能是 3 个字节，也可能是一整行 | 底下是 TCP，`read` 返回多少由内核说了算。**任何"一块就是一行 / 一块就是一个 JSON"的假定都是错的**——拼行的活儿归调用方（`docs/13` §9.3 那段 SSE 例子） |
+//! | 切不切多字节字符 | **不切**。每块都是合法 UTF-8 | 切一半汉字出去，前端拿到的是"�"；块边界是**宿主**能控制的一件事，那就控制住（`切出完整段`） |
+//! | 回调返回值有什么用 | 返回 `false` = **别读了**，当场收工 | 这是**唯一的**取消手段。用户关掉面板、切走对话时插件靠它把一条在飞的请求掐掉（`docs/07` 第 58 项那条"中断怎么办"的落点） |
+//!
+//! ⚠️ **回调里不许做慢事**：它在读 socket 的那个线程上跑，回调不返回就没人读
+//! 数据，服务端那边的窗口会满。插件里该干的只有"往累加器里追加 ＋ 偶尔喊一声
+//! `nota.ui.refresh()`"。
+//!
+//! # 不做的一件事（说清楚，免得被当成漏了）
+//!
+//! - **不做上传/下载文件**。请求体只能是文本或一张表（当 JSON 发）。
 
 use std::time::Duration;
 
@@ -62,6 +76,42 @@ struct 回包 {
     text: String,
 }
 
+/// 一次请求的落定：**要么拿到回应，要么"环境不让你发"**。
+///
+/// # 为什么要分这两半（`docs/07` 第 60 项）
+///
+/// 从前这里只有 `回包`，而"连不上 / 超时 / 读断了"是**抛 Lua 错误**出去的。
+/// 于是每个插件都得自己 `pcall` ＋ 自己把 mlua 裹上来的 `stack traceback:`
+/// 掐掉（`plugins/ai/util.lua::clean_error` 就是干这个的）——一件**每个插件
+/// 都要重写一遍**的事，而且写漏了症状很难看：一次断网能把整块面板糊满。
+///
+/// 现在分成两条路，**界线不是"轻重"而是"这是谁的错"**：
+///
+/// | 走哪儿 | 什么情况 | 为什么 |
+/// |---|---|---|
+/// | `Err(…)`（照旧抛） | 地址不合法、方法不认识、头的值类型不对、体太大、超时值非法 | **插件作者写错了程序**。这种错该带着栈冒出来，而且它不会在用户手上发生——把栈洗掉反而让作者查不出问题 |
+/// | `落定::环境失败`（返回结果表） | 连不上、DNS 不通、TLS 失败、超时、连接中途断 | **环境不给力**。用户会正常遇到，插件能做的只有"把这句话显示出来"，所以它必须是**一个值**而不是一次抛出 |
+///
+/// ⚠️ 4xx/5xx **两条都不走**——那是 `回包`（`http_status_as_error(false)`），
+/// 因为服务器的报错正文就在响应体里，插件得读得到。
+enum 落定 {
+    回包(回包),
+    /// 流式收完了（`nota.http.stream`）：除了那份回包，还有"一共交出去几块"
+    /// 和"是不是被回调喊停的"。
+    ///
+    /// ⚠️ `块数` 是**证据**不是状态：一个不认 `stream` 的服务器会把整份 JSON
+    /// 一次吐完 ⇒ 这里多半是 1。插件那边的判据不该是它（见 `docs/13` §9.3：
+    /// 按"有没有 `data:` 行"判是不是真流式），它留在返回值里是为了让人能一眼
+    /// 看出"这次到底流没流"以及给单元测试一个抓手。
+    流完 {
+        包: 回包,
+        块数: usize,
+        中断: bool,
+    },
+    /// 环境类失败。⚠️ 里面这句话是**给人看的中文**，插件直接显示即可。
+    环境失败(String),
+}
+
 /// 装 `nota.http`。**只该在清单申请了 `network.http` 时调。**
 ///
 /// ⚠️ 没有用 `ctx`：网络请求不碰文档、不碰设置，也就不该看得到它们。
@@ -86,15 +136,37 @@ pub fn build(lua: &Lua) -> NotaResult<Table> {
         t.set(名, f).map_err(mlua_to_nota)?;
     }
 
+    // 流式（`docs/07` 第 58 项）。⚠️ **第二个参数是必填的**：没有回调就没有
+    // "边收边给"这回事，那时该用 `request`——少一个参数时报一句"要两个参数"，
+    // 比默默退化成一次性请求（用户看到的还是"憋完才出现"）清楚得多。
+    let stream = lua
+        .create_function(move |lua, (spec, 收到): (Table, mlua::Function)| {
+            收口(lua, 流式(lua, &spec, &收到))
+        })
+        .map_err(mlua_to_nota)?;
+    t.set("stream", stream).map_err(mlua_to_nota)?;
+
     Ok(t)
 }
 
-/// 把 `发一次` 的结果折成 Lua 表（或者把错误折成 Lua 错误）。
+/// 把 `发一次` 的结果折成 Lua 表（或者把"作者写错了"折成 Lua 错误）。
 ///
 /// `get` / `post` / `request` 三条路都从这里出去，所以**返回值的形状只有一处定义**。
 ///
-/// 三个字段：`code`（HTTP 状态码）、`text`（原样的响应体）、`json`（**能解析时**
-/// 才有的、拆好的表）。
+/// # 返回值的形状（`docs/07` 第 58 / 60 项）
+///
+/// | 形状 | 什么时候 |
+/// |---|---|
+/// | `{ ok = true, code = 200, text = "…", json = {…} }` | 请求发出去了、也收到了回应（**4xx/5xx 也算收到**） |
+/// | `{ ok = true, code = 200, text = "…", chunks = N, aborted = true }` | `stream` 收完了（`chunks` 交了 N 块；`aborted` **只在被回调喊停时**才有这个键） |
+/// | `{ ok = false, error = "请求失败：…" }` | **环境类失败**：连不上、超时、读断了。⚠️ 这一种**不抛错** |
+///
+/// ⚠️ `ok` 是**必须**先看的那一个字段——`code` 只在 `ok = true` 时才存在。
+/// 从前没有 `ok`，判"成功没有"靠的是 `pcall`，而那把"地址写错了"和"网断了"
+/// 混成了一件事（见 `落定` 那段）。
+///
+/// 成功那一侧三个字段：`code`（HTTP 状态码）、`text`（原样的响应体）、
+/// `json`（**能解析时**才有的、拆好的表）。
 ///
 /// ⚠️ `json` **解析不了就不给这个键**，不当错误。响应是 HTML 错误页、是纯文本、
 /// 是空体的场合多得很（4xx 的正文常常就是一整页 HTML），那时插件该看到的是
@@ -103,10 +175,30 @@ pub fn build(lua: &Lua) -> NotaResult<Table> {
 ///
 /// 有了它，插件读 OpenAI 那种 `choices[1].message.content` 才不用自己写
 /// JSON 解析器（Lua 里没有，用模式匹配去抠字符串会在 `\n` 这种转义上出错）。
-fn 收口(lua: &Lua, r: NotaResult<回包>) -> mlua::Result<Table> {
-    let 包 = r.map_err(lua_err)?;
+fn 收口(lua: &Lua, r: NotaResult<落定>) -> mlua::Result<Table> {
     let out = lua.create_table()?;
+    let (包, 流) = match r {
+        // 参数写错了：**照旧抛**（理由见 `落定` 那张表）。栈信息留给作者。
+        Err(e) => return Err(lua_err(e)),
+        Ok(落定::环境失败(为什么)) => {
+            out.set("ok", false)?;
+            out.set("error", 为什么)?;
+            return Ok(out);
+        }
+        Ok(落定::回包(包)) => (包, None),
+        Ok(落定::流完 { 包, 块数, 中断 }) => (包, Some((块数, 中断))),
+    };
+    out.set("ok", true)?;
     out.set("code", 包.code)?;
+    if let Some((块数, 中断)) = 流 {
+        out.set("chunks", 块数)?;
+        // ⚠️ `aborted` **只在真被喊停时才设**：写成 `false` 的话插件那边
+        // `if r.aborted then` 与 `if r.aborted ~= nil then` 是两种意思，
+        // 而"这个键在不在"本身就是要传的信息。
+        if 中断 {
+            out.set("aborted", true)?;
+        }
+    }
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&包.text) {
         out.set("json", super::json_to_lua(lua, &v)?)?;
     }
@@ -155,8 +247,12 @@ fn 写了_content_type(headers: &Table) -> bool {
         .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
 }
 
-/// 发一次请求。**这是唯一真正碰网络的地方。**
-fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<回包> {
+/// 把一张规格表拼成一个能发出去的请求。**读参数、查地址、拼头与体**都在这儿，
+/// 一次性请求与流式请求共用这一份（两处各写一遍的话，"表体当 JSON 发"或者
+/// "content-type 只补一次"这类规矩迟早有一边会漏）。
+///
+/// ⚠️ 这里**不设超时**：超时是 agent 上的东西（[`代理`] 管），请求本身没有。
+fn 拼请求(lua: &Lua, spec: &Table) -> NotaResult<ureq::http::Request<Vec<u8>>> {
     let url: String = spec
         .get("url")
         .map_err(|_| NotaError::other("nota.http 需要 `url` 字段"))?;
@@ -174,8 +270,6 @@ fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<回包> {
             允许的方法.join(" / ")
         )));
     }
-
-    let 时限 = 超时(spec)?;
 
     let mut req = ureq::http::Request::builder()
         .method(方法.as_str())
@@ -240,36 +334,184 @@ fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<回包> {
         req = req.header("content-type", "application/json");
     }
 
-    let 配置 = ureq::Agent::config_builder()
-        // 4xx/5xx **不是**错误：API 的报错正文（配额用完了、key 不对）
-        // 就在响应体里，插件要读得到那段话才能告诉用户出了什么事。
-        .http_status_as_error(false)
-        .max_redirects(最大重定向)
-        .timeout_global(Some(时限))
-        .user_agent(format!("Nota/{}", env!("CARGO_PKG_VERSION")))
-        .build();
-
     let 请求 = req
         .body(body)
         .map_err(|e| NotaError::other(format!("拼请求失败：{e}")))?;
+    Ok(请求)
+}
 
-    let mut resp = ureq::Agent::new_with_config(配置)
-        .run(请求)
-        .map_err(|e| NotaError::other(format!("请求失败：{e}")))?;
+/// 建一个这一趟用的 agent。**两类请求共用的第二份**：重定向次数、
+/// "4xx/5xx 不是错误"、UA、超时——这些规矩只有一处定义。
+fn 代理(spec: &Table) -> NotaResult<ureq::Agent> {
+    let 时限 = 超时(spec)?;
+    Ok(ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            // 4xx/5xx **不是**错误：API 的报错正文（配额用完了、key 不对）
+            // 就在响应体里，插件要读得到那段话才能告诉用户出了什么事。
+            .http_status_as_error(false)
+            .max_redirects(最大重定向)
+            .timeout_global(Some(时限))
+            .user_agent(format!("Nota/{}", env!("CARGO_PKG_VERSION")))
+            .build(),
+    ))
+}
+
+/// 发一次请求。**这是唯一真正碰网络的地方。**
+///
+/// 返回值里那两层是**故意的**（见 `落定`）：外层 `Err` = 插件参数写错了，
+/// 内层 `环境失败` = 网络不给力。折成 Lua 表的那一步在 [`收口`]。
+fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<落定> {
+    let 请求 = 拼请求(lua, spec)?;
+
+    // ⚠️ 从这里往下两条失败都是**环境类**（`落定::环境失败`）：连不上、超时、
+    // 读断了。用户会正常遇到，所以它们必须是**一个能显示的值**，不是一次抛出。
+    let mut resp = match 代理(spec)?.run(请求) {
+        Ok(r) => r,
+        Err(e) => return Ok(落定::环境失败(format!("请求失败：{e}"))),
+    };
 
     let code = resp.status().as_u16();
-    let text = resp
+    let text = match resp
         .body_mut()
         .with_config()
         .limit(响应上限)
         .read_to_string()
-        .map_err(|e| {
-            NotaError::other(format!(
+    {
+        Ok(t) => t,
+        Err(e) => {
+            return Ok(落定::环境失败(format!(
                 "读响应失败（响应体上限 {响应上限} 字节，超了也算失败）：{e}"
-            ))
-        })?;
+            )))
+        }
+    };
 
-    Ok(回包 { code, text })
+    Ok(落定::回包(回包 { code, text }))
+}
+
+/// 流式发一次：**边收边把每一块交给 `收到`**（`docs/07` 第 58 项）。
+///
+/// 三件事的定义在文件头那张表里（块边界不保证、不切多字节字符、返回 `false`
+/// 就是喊停）。这里只补两条实现上的：
+///
+/// 1. **回调抛错 = 整件事抛错**。错误是插件作者写的（回调里打了个 `nil`），
+///    不是环境问题，所以它走 `Err` 那条路、带着栈上去（与 `落定` 那张表一致）。
+/// 2. **全文照样攒着还给你**（`text` 字段）。⚠️ 攒的是**去掉无效字节之后的**
+///    版本（`切出完整段` 会把坏字节换成 `U+FFFD`），不是原始字节——这两者
+///    在正常响应里逐字相同，不一样的时候说明线路上本来就有坏字节。
+fn 流式(lua: &Lua, spec: &Table, 收到: &mlua::Function) -> NotaResult<落定> {
+    let 请求 = 拼请求(lua, spec)?;
+
+    let mut resp = match 代理(spec)?.run(请求) {
+        Ok(r) => r,
+        Err(e) => return Ok(落定::环境失败(format!("请求失败：{e}"))),
+    };
+
+    let code = resp.status().as_u16();
+    let mut 读 = resp.body_mut().with_config().limit(响应上限).reader();
+
+    let mut 全文 = String::new();
+    let mut 待续: Vec<u8> = Vec::new();
+    let mut 块数 = 0usize;
+    let mut 缓冲 = [0u8; 8192];
+
+    loop {
+        let n = match std::io::Read::read(&mut 读, &mut 缓冲) {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(e) => {
+                return Ok(落定::环境失败(format!(
+                    "读响应失败（响应体上限 {响应上限} 字节，超了也算失败）：{e}"
+                )))
+            }
+        };
+        待续.extend_from_slice(&缓冲[..n]);
+
+        while let Some(块) = 切出完整段(&mut 待续) {
+            块数 += 1;
+            全文.push_str(&块);
+            // ⚠️ 只有**字面上的 `false`** 是喊停。`nil` / 数字 / 什么也不返回
+            // 都继续——`return` 一个值出来是最容易顺手写下的"没什么要说"，
+            // 把它当成取消的话，插件作者写个 `return true` 都会把流掐断。
+            let 回话: Value = 收到.call(块).map_err(mlua_to_nota)?;
+            if matches!(回话, Value::Boolean(false)) {
+                return Ok(落定::流完 {
+                    包: 回包 { code, text: 全文 },
+                    块数,
+                    中断: true,
+                });
+            }
+        }
+    }
+
+    // 收尾：还剩几个字节就是"最后那个多字节字符被砍了一半"——线路上真断了。
+    // 换成 `U+FFFD` 交出去，别让它在缓冲区里永远沉默（不交的话，用户看到的是
+    // "少了几个字"，而没有任何地方报过错）。
+    if !待续.is_empty() {
+        let 尾 = String::from_utf8_lossy(&待续).into_owned();
+        块数 += 1;
+        全文.push_str(&尾);
+        let 回话: Value = 收到.call(尾).map_err(mlua_to_nota)?;
+        if matches!(回话, Value::Boolean(false)) {
+            return Ok(落定::流完 {
+                包: 回包 { code, text: 全文 },
+                块数,
+                中断: true,
+            });
+        }
+    }
+
+    Ok(落定::流完 {
+        包: 回包 { code, text: 全文 },
+        块数,
+        中断: false,
+    })
+}
+
+/// 从缓冲区里**切出一个合法的 UTF-8 片段**（能切多少切多少），剩下的留在里面。
+/// 切不出东西时给 `None`。
+///
+/// ⚠️ **这是流式唯一一处"必须自己写"的活儿。** socket 的块边界是按字节来的，
+/// 一个汉字（3 字节）被劈成两块是家常便饭；把半个汉字交给 Lua，前端拿到的是
+/// 一个 `U+FFFD`，而且**那个字永远补不回来**（下一块的字节已经在 `待续` 里被
+/// 当成新字符了）。
+///
+/// 三种落定：
+///
+/// | `from_utf8` 的结果 | 怎么办 |
+/// |---|---|
+/// | 整段合法 | 全交出去，缓冲清空 |
+/// | 前面好、尾巴是**没读完的**多字节字符（`error_len() == None`） | 好的交出去，尾巴留着等下一块。⚠️ 好的部分是空的就什么也不交——**等**，不是取巧 |
+/// | 中间有**真的坏字节**（`error_len()` 有值） | 好的交出去，坏的那几个换成 `U+FFFD` 一起交，**继续往后走**（不然这一块会卡住整个流） |
+fn 切出完整段(buf: &mut Vec<u8>) -> Option<String> {
+    if buf.is_empty() {
+        return None;
+    }
+    match std::str::from_utf8(buf) {
+        Ok(s) => {
+            let out = s.to_owned();
+            buf.clear();
+            Some(out)
+        }
+        Err(e) => {
+            let 好的 = e.valid_up_to();
+            match e.error_len() {
+                None => {
+                    if 好的 == 0 {
+                        return None;
+                    }
+                    let out = String::from_utf8_lossy(&buf[..好的]).into_owned();
+                    buf.drain(..好的);
+                    Some(out)
+                }
+                Some(坏) => {
+                    let mut out = String::from_utf8_lossy(&buf[..好的]).into_owned();
+                    out.push('\u{FFFD}');
+                    buf.drain(..好的 + 坏);
+                    Some(out)
+                }
+            }
+        }
+    }
 }
 
 /// 取超时设置。默认 [`默认超时`]，超过 [`最长超时`] 就**截到上限**而不是报错——
@@ -350,191 +592,4 @@ fn 类型名(v: &Value) -> &'static str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// ⚠️ **这条是这一整个模块里最该在的一条。**
-    ///
-    /// 明文 http 会把插件的 API key 和文档内容一起发在裸链路上。
-    /// 唯一的例外是本机回环——那是给 Ollama / LM Studio 这类
-    /// 跑在自己机器上的大模型服务留的口子，流量根本不出这台机器。
-    #[test]
-    fn 只放行_https_和回环的_http() {
-        for ok in [
-            "https://api.anthropic.com/v1/messages",
-            "https://example.com",
-            "http://127.0.0.1:11434/api/chat",
-            "http://localhost:1234/v1/chat/completions",
-            "http://[::1]:8080/x",
-            "http://LOCALHOST:1/x",
-        ] {
-            assert!(检查地址(ok).is_ok(), "`{ok}` 该放行，却被挡了");
-        }
-
-        for bad in [
-            "http://api.anthropic.com/v1/messages", // 明文发密钥
-            "http://192.168.1.10:8080/",            // 局域网，不是回环
-            "http://0.0.0.0:8080/",                 // 0.0.0.0 不是回环
-            "ftp://example.com/x",
-            "file:///etc/passwd",
-            "api.anthropic.com", // 没协议头
-        ] {
-            assert!(检查地址(bad).is_err(), "`{bad}` 该被挡，却放行了");
-        }
-    }
-
-    #[test]
-    fn 取主机要能拆出端口和_userinfo() {
-        assert_eq!(取主机("example.com/a/b?c#d"), "example.com");
-        assert_eq!(取主机("example.com:8443/a"), "example.com");
-        assert_eq!(取主机("user:pw@example.com/a"), "example.com");
-        assert_eq!(取主机("[::1]:8080/x"), "::1");
-        assert_eq!(取主机("Example.COM"), "example.com");
-        // ⚠️ 这条是安全用例：`127.0.0.1@evil.com` 的主机是 `evil.com`，
-        // 不是 `127.0.0.1`。判反了就是一个"看着像回环、实际指向外网"的口子。
-        assert_eq!(取主机("127.0.0.1@evil.com/x"), "evil.com");
-    }
-
-    #[test]
-    fn 主机名骗不过回环判定() {
-        // `127.0.0.1.evil.com` 与 `localhost.evil.com` 都不是本机。
-        for host in ["127.0.0.1.evil.com", "localhost.evil.com", "notlocalhost"] {
-            assert!(!是回环(host), "`{host}` 被当成了回环");
-        }
-        assert!(是回环("127.0.0.1"));
-        assert!(是回环("localhost"));
-        assert!(是回环("::1"));
-    }
-
-    #[test]
-    fn 方法只有那六个() {
-        assert!(允许的方法.contains(&"GET"));
-        assert!(允许的方法.contains(&"POST"));
-        assert!(!允许的方法.contains(&"CONNECT"));
-        assert!(!允许的方法.contains(&"TRACE"));
-    }
-
-    /// 超时要截到上限，不是报错——插件写一个很大的数，意思是"可能很慢"。
-    #[test]
-    fn 超时截到上限() {
-        let lua = Lua::new();
-        let t = lua.create_table().unwrap();
-        assert_eq!(超时(&t).unwrap(), 默认超时);
-
-        t.set("timeout_ms", 5_000u64).unwrap();
-        assert_eq!(超时(&t).unwrap(), Duration::from_secs(5));
-
-        t.set("timeout_ms", 600_000u64).unwrap();
-        assert_eq!(超时(&t).unwrap(), 最长超时, "超长的超时该被截到上限");
-
-        t.set("timeout_ms", 0u64).unwrap();
-        assert!(超时(&t).is_err(), "0 是没意义的超时，该报错");
-    }
-
-    /// `get("url")` 与 `get{url=…}` 两种写法都该归一化。
-    #[test]
-    fn 两种写法都归一化() {
-        let lua = Lua::new();
-
-        let t = 归一化(&lua, Value::String(lua.create_string("https://x/").unwrap()), "GET").unwrap();
-        assert_eq!(t.get::<String>("url").unwrap(), "https://x/");
-        assert_eq!(t.get::<String>("method").unwrap(), "GET");
-
-        // ⚠️ 传 `spec.clone()` 而不是 `spec`：归一化是**就地改**那张表，
-        // 所以放进去的那一份和外面这一份是同一个东西（这也正是它该有的行为）。
-        let spec = lua.create_table().unwrap();
-        spec.set("url", "https://y/").unwrap();
-        归一化(&lua, Value::Table(spec.clone()), "POST").unwrap();
-        assert_eq!(spec.get::<String>("method").unwrap(), "POST");
-
-        // 插件自己写的 method 不被覆盖。
-        let spec2 = lua.create_table().unwrap();
-        spec2.set("url", "https://z/").unwrap();
-        spec2.set("method", "PUT").unwrap();
-        let t = 归一化(&lua, Value::Table(spec2), "POST").unwrap();
-        assert_eq!(t.get::<String>("method").unwrap(), "PUT");
-
-        // 认不出的类型要报错，别静默当 GET 发出去。
-        assert!(归一化(&lua, Value::Integer(1), "GET").is_err());
-    }
-
-    /// 插件自己写了 content-type 就得认出来——不然表体那一下会补出
-    /// **第二个** content-type 头（`Request::builder().header()` 是追加）。
-    #[test]
-    fn 认得插件自己写的_content_type() {
-        let lua = Lua::new();
-
-        let 空 = lua.create_table().unwrap();
-        assert!(!写了_content_type(&空));
-
-        // 只有别的头时不算。
-        let 别的 = lua.create_table().unwrap();
-        别的.set("authorization", "Bearer sk-x").unwrap();
-        assert!(!写了_content_type(&别的));
-
-        // 大小写不同也是同一个头（HTTP 头名不区分大小写）。
-        let 大写 = lua.create_table().unwrap();
-        大写.set("Content-Type", "application/json; charset=utf-8").unwrap();
-        assert!(写了_content_type(&大写));
-
-        let 小写 = lua.create_table().unwrap();
-        小写.set("content-type", "text/plain").unwrap();
-        assert!(写了_content_type(&小写));
-    }
-
-    /// 响应是 JSON 就顺手拆好——AI 插件读 `choices[1].message.content` 靠它。
-    ///
-    /// ⚠️ 下标从 **1** 起那条要在这里钉住：写成 0 起的话数组第一个元素会
-    /// 静默丢掉（`#t` 也对不上），而插件那边看到的是"模型没给出回答"。
-    #[test]
-    fn 响应是_json就拆好放进去() {
-        let lua = Lua::new();
-        let t = 收口(
-            &lua,
-            Ok(回包 {
-                code: 200,
-                text: r#"{"choices":[{"message":{"content":"你好"}},{"message":{"content":"第二"}}],"ok":true}"#
-                    .to_owned(),
-            }),
-        )
-        .unwrap();
-
-        assert_eq!(t.get::<u16>("code").unwrap(), 200);
-        let json = t.get::<Table>("json").unwrap();
-        assert_eq!(json.get::<bool>("ok").unwrap(), true);
-        let choices = json.get::<Table>("choices").unwrap();
-        assert_eq!(choices.raw_len(), 2, "两个元素都该在，一个都不能少");
-        assert_eq!(
-            choices
-                .get::<Table>(1)
-                .unwrap()
-                .get::<Table>("message")
-                .unwrap()
-                .get::<String>("content")
-                .unwrap(),
-            "你好"
-        );
-    }
-
-    /// 不是 JSON（HTML 错误页、空体）时**没有 `json` 这个键**，`text` 照旧。
-    /// 这条是"别把解析失败当错误"那条注释的落点。
-    #[test]
-    fn 不是_json就没有_json这个键() {
-        let lua = Lua::new();
-        let t = 收口(
-            &lua,
-            Ok(回包 {
-                code: 502,
-                text: "<html>502 Bad Gateway</html>".to_owned(),
-            }),
-        )
-        .unwrap();
-
-        assert_eq!(t.get::<u16>("code").unwrap(), 502);
-        assert!(
-            matches!(t.get::<Value>("json").unwrap(), Value::Nil),
-            "HTML 不该被当成 JSON 解析出什么来"
-        );
-        assert_eq!(t.get::<String>("text").unwrap(), "<html>502 Bad Gateway</html>");
-    }
-}
+mod tests;

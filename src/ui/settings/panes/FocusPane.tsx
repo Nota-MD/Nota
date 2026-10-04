@@ -28,7 +28,7 @@
 
 import { useT } from "@/i18n";
 import {
-  ActionButton, Note, NumberInput, SettingRow, SettingsGroup, Toggle,
+  ActionButton, NumberInput, SettingRow, SettingsGroup, Toggle,
 } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
@@ -39,16 +39,8 @@ export function FocusPane({ settings, onChange }: PaneProps) {
 
   return (
     <>
-      <SettingsGroup
-        title={t("Account")}
-        help={t(
-          "Think of it as an account: while your attention is on the editor you pay in, and when you switch away it is charged out. When the balance reaches zero, the alarm sounds.",
-        )}
-      >
-        <SettingRow
-          label={t("Total focus time")}
-          description={t("The cap on the account balance, in minutes. It stops there once full — you cannot bank two hours of credit and then slack off for two hours.")}
-        >
+      <SettingsGroup title={t("Account")}>
+        <SettingRow label={t("Total focus time")}>
           <NumberInput
             value={f.total_minutes}
             min={1}
@@ -58,12 +50,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("Alarm time")}
-          description={t(
-            "How much balance you start with, in minutes. At the default weights this is “how long you can stop writing before it goes off”. Set it above the total focus time and you start out full.",
-          )}
-        >
+        <SettingRow label={t("Alarm time")}>
           <NumberInput
             value={f.alarm_minutes}
             min={1}
@@ -74,14 +61,8 @@ export function FocusPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Weights")}
-        help={t("What a minute of focus is worth, and what a minute away costs. Both are in minutes, so the default 1 and 1 are equivalent; raising the second one below makes the penalty outweigh the reward.")}
-      >
-        <SettingRow
-          label={t("Focus credit per minute")}
-          description={t("Default 1, meaning one minute of writing buys one minute of credit.")}
-        >
+      <SettingsGroup title={t("Weights")}>
+        <SettingRow label={t("Focus credit per minute")}>
           <NumberInput
             value={f.gain_per_minute}
             min={0}
@@ -92,12 +73,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("Charge per minute away")}
-          description={t(
-            "Default 1. Set it to 2 and “two minutes of writing only cover one minute of slacking” — this is the knob to turn if you want it harsher, not a tiny alarm time.",
-          )}
-        >
+        <SettingRow label={t("Charge per minute away")}>
           <NumberInput
             value={f.drain_per_minute}
             min={0}
@@ -110,12 +86,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup title={t("Grace period")}>
-        <SettingRow
-          label={t("Grace before charging")}
-          description={t(
-            "Default 10 seconds. If stepping out to look up a word or copy a line of quotation gets you nicked every time, a penalty that dense is no penalty at all. Nothing is owed during the grace period: the charge starts at second 11. Set it to 0 and the charge starts the instant you lose focus.",
-          )}
-        >
+        <SettingRow label={t("Grace before charging")}>
           <NumberInput
             value={f.grace_seconds}
             min={0}
@@ -128,12 +99,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
         {/* ⚠️ 这一格**没有 `description`**（别的格都有），是故意的：`description`
             那一栏在别处写的是"怎么用这一项"（"一行一个应用名，比如…"），
             而这一项**没法用**。留着那种说明，用户会去找那个输入框。 */}
-        <SettingRow
-          label={t("These apps do not count as slacking")}
-          help={t(
-            "This one would have to read other applications' names (the active window's WM_CLASS), and it only works on X11. Weighed it and decided against: the point of this feature is “did you leave”, not “where did you go”.",
-          )}
-        >
+        <SettingRow label={t("These apps do not count as slacking")}>
           {/* ⚠️⚠️ **灰着的，而且这一格不是"还没做完"——是"决定不做"。**
               用户 2026-09-26 明确砍掉了它（「宽限名单不用开了。把这个功能删掉吧，
               干脆」），字段已经从 `settings/focus.rs` 里删干净了。
@@ -149,10 +115,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup title={t("Alarm")}>
-        <SettingRow
-          label={t("Play the alarm")}
-          description={t("Plays a sharp alarm sound as the alarm window appears. Turning it off gives you “popup only, no sound” — useful in a library.")}
-        >
+        <SettingRow label={t("Play the alarm")}>
           <Toggle checked={f.sound} onChange={(sound) => 写({ sound })} />
         </SettingRow>
       </SettingsGroup>
@@ -162,19 +125,6 @@ export function FocusPane({ settings, onChange }: PaneProps) {
           首次进入时弹的那一次说明（`ui/useFocusIntro.ts`）说的是同一件事，
           这里是它**事后还能查**的那一份。两处措辞要一致，改一处要改两处。
           ⚠️ 完整的权限清单在**关于**页（用户点名要的另一个位置）。 */}
-      <Note>
-        <strong>{t("What it uses")}</strong>
-        <br />
-        {t(
-          "① Whether Nota's window is the active window, or it cannot tell that you have wandered off; ② putting up a red always-on-top window, or you will not see it after switching away; ③ making a sound.",
-        )}
-        <br />
-        {t(
-          "Those three happen only while Force Focus is running, and only concern Nota's own window. Nota does not read the keyboard, take screenshots, touch other programs, or send any of your data anywhere.",
-        )}
-        <br />
-        {t("You can stop it at any time, and you can bypass it with system tools — but then setting up this mode in the first place means nothing.")}
-      </Note>
     </>
   );
 }

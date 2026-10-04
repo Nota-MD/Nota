@@ -27,6 +27,18 @@
  * | 八 | **自配对字符 `*`**（2026-09-28 用户点名加的，见 `auto-pair.ts` 第 2.1 节）——三条动作 ＋ 五条"不插手"的边界 |
  * | 九 | 装配（只能证明"挂上去了"） |
  * | 十 | **开关**：`配对处理(false)` 返回 `[]`（= 这条插件不装） |
+ * | 十一 | **收尾那一下要落成真标记**（BUG-54，2026-09-29）：真 `Schema` ＋ 真 `Plugin` ＋ 一颗假视图，把 `*甲*` 走成 `emphasis` |
+ * | 十二 | **收尾的三个触发时机**（2026-09-30，用户第二次报同一件事）：段首那颗用户自己敲的收尾星、自动补全那一对"打完正文就完整"、以及**输入法上屏**那条路 |
+ *
+ * ⚠️ 第十一、十二组是**仅有的两组**用到真 `Schema` / 真 `Plugin` 的：
+ * {@link 收尾事务} 要 `state.schema.marks` 才落得下标记，纯函数那套够不着。
+ * 假视图只提供 `state` / `dispatch` / `composing` 三样（`补标记` 那个落点只用
+ * 得着前两样），**没有 DOM**。
+ *
+ * ⚠️⚠️ 第十二组那条**输入法上屏**测的是 `appendTransaction` 兜底，而
+ * `appendTransaction` 是 `EditorState.apply` 按 `state.config.plugins` 挨个问
+ * 的——**插件不进那份 `plugins` 数组，这一路压根不跑**，"测过了"就成了假话。
+ * 两组共用的那个 `造视图` 因此显式注册了 `收尾插件`。
  *
  * # ⚠️ 这份测试**证明不了**什么
  *
@@ -39,8 +51,18 @@
  * - ⚠️ **「组字期间不插手」（`view.composing`）没验**：那要真 view ＋ 真 IME。
  * - ⚠️ **「`addToHistory: false` 所以 `Ctrl+Z` 不回退一步」没验**：那是
  *   `prosemirror-history` 的事，要真 view。
+ * - ⚠️ **「收尾之后盘上写出来的是 `*甲*` 而不是 `\*甲\*`」没验**：那要真的
+ *   序列化流水线（`SerializerState` ＋ `mdast-util-to-markdown`）。这一组验到
+ *   **文档里落的是 `emphasis`** 为止——剩下的那一步（标记 → `*甲*`）在
+ *   `docs/02`／`docs/07` 里算**开窗目检**的事，别拿这一组当它。
  */
 
+import { prosePluginsCtx } from "@milkdown/kit/core";
+import { Container, Ctx } from "@milkdown/kit/ctx";
+import { Schema } from "@milkdown/kit/prose/model";
+import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
+import type { Plugin, Transaction } from "@milkdown/kit/prose/state";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import {
   配对表,
   闭括号,
@@ -86,6 +108,13 @@ function 等(实际: unknown, 期望: unknown, 说明: string): void {
   if (实际 !== 期望) {
     throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
   }
+}
+
+/** 逐颗比一串字符串（`等` 是 `!==`，内容一样的两串数组在它眼里永远不相等）。 */
+function 等列(实际: readonly string[], 期望: readonly string[], 说明: string): void {
+  const a = JSON.stringify(实际);
+  const b = JSON.stringify(期望);
+  if (a !== b) throw new Error(`${说明}：期望 ${b}，实际 ${a}`);
 }
 
 /** 造一份现场，只写要变的那几格。默认：行首、行尾、正文、没选东西。 */
@@ -428,6 +457,241 @@ function 动作(现场: Partial<现场>): 标记动作 | null {
   等(Array.isArray(开), false, "开着时给的不是空数组");
   const 默认 = 配对处理() as unknown as unknown[];
   等(Array.isArray(默认), false, "不传参数 = 开（默认值就是 `true`）");
+});
+
+/* ── 十一、收尾落标记（BUG-54）──────────────────────────────────────── */
+
+组("十一、收尾那一下：这一对星号要落成**真标记**（BUG-54，2026-09-29）");
+
+/**
+ * 第十一、十二组要**真 schema**：{@link 收尾事务} 落标记时要
+ * `state.schema.marks`。
+ *
+ * ⚠️ 两个 id 必须是 `emphasis` / `strong`（上游 `preset-commonmark` 起的名字），
+ * 本仓从前到后都写的是这两个（`command-state.ts` 的 `有("emphasis")`、
+ * `mark-hint.ts` 顶上那段）。**写错成 `em` / `b` 的症状是静默不落标记**。
+ */
+const 收尾schema = new Schema({
+  nodes: {
+    doc: { content: "block+" },
+    paragraph: { content: "inline*", group: "block", toDOM: () => ["p", 0] },
+    text: { group: "inline" },
+  },
+  marks: {
+    emphasis: { toDOM: () => ["em", 0] },
+    strong: { toDOM: () => ["strong", 0] },
+  },
+});
+
+/**
+ * 跑一遍插件体、把**真** `Plugin` 掏出来。
+ *
+ * ⚠️ `$prose` 返回的是一个**函数**（`plugin(ctx) => async () => 卸载`），
+ * 内层那个 `Plugin` 要等工厂体跑完才挂到 `plugin.plugin()` 上
+ *（`node_modules/@milkdown/utils/lib/index.js` 的 `$prose`）。本仓没有 milkdown
+ * 的启动时序，所以把 `ctx.wait` 换成立刻返回（`math-input.test.ts` 同一套）。
+ */
+const 收尾插件 = await (async () => {
+  const ctx = new Ctx(new Container(), {} as never);
+  (ctx as unknown as { wait: () => Promise<void> }).wait = async () => {};
+  // ⚠️ 插件体会 `ctx.update(prosePluginsCtx, …)`，那一片得先注入
+  //（`math-input.test.ts` 那边注的是 `inputRulesCtx`，同一个道理）。
+  ctx.inject(prosePluginsCtx);
+  // ⚠️ **不是数组**：开着的时候 `配对处理` 直接给那个 `$prose`（一个**函数**），
+  // 关着的时候才给 `[]`（第十组钉着这一条）。
+  const 工厂 = 配对处理(true) as unknown as ((ctx: unknown) => () => Promise<() => void>) & {
+    plugin: () => Plugin;
+  };
+  if (typeof 工厂 !== "function") throw new Error("配对处理(true) 没给出插件");
+  await 工厂(ctx)();
+  return 工厂.plugin();
+})();
+
+/** 一颗**只够跑逻辑**的假视图：`补标记` 那个落点只用 `state` 与 `dispatch`。 */
+interface 假视图 {
+  state: EditorState;
+  dispatch(tr: Transaction): void;
+  composing: boolean;
+}
+
+/** 造一份视图：一段文字，光标摆在段内第 `偏移` 颗字符处（默认段末）。 */
+function 造视图(初文 = "", 偏移?: number): 假视图 {
+  const 段 = 收尾schema.nodes.paragraph.create(null, 初文 ? 收尾schema.text(初文) : null);
+  const doc = 收尾schema.nodes.doc.create(null, 段);
+  const 视图: 假视图 = {
+    // ⚠️ **插件必须进 `state.plugins`**：第十二组那条兜底走的是
+    // `appendTransaction`，而那是 `EditorState.apply` 按 `state.config.plugins`
+    // 挨个问的——不注册它，兜底那一路在这份测试里**压根不会跑**，
+    // 而"测过了"就成了假话。
+    state: EditorState.create({ schema: 收尾schema, doc, plugins: [收尾插件] }),
+    composing: false,
+    dispatch(tr) {
+      视图.state = 视图.state.apply(tr);
+    },
+  };
+  // ⚠️ 这里**没有** `Math.max(1, …)`：初文是空串时段落里只有一个位置（1），
+  // 硬抬到 2 就跑到段落外面去了（`TextSelection endpoint not pointing into a
+  // node with inline content`）。空段落那条判据（第十二组 ①）就栽在这。
+  const 到 = Math.max(0, Math.min(偏移 ?? 初文.length, 初文.length));
+  视图.state = 视图.state.apply(
+    视图.state.tr.setSelection(TextSelection.create(视图.state.doc, 1 + 到)),
+  );
+  return 视图;
+}
+
+/**
+ * 在光标处敲一颗字符：走**真** `handleTextInput`；它不接就照 ProseMirror 的
+ * 口径插进去（`prosemirror-view` 的 `editHandlers.textInput` 那一路）。
+ */
+function 敲(视图: 假视图, 字符: string): boolean {
+  const 从 = 视图.state.selection.from;
+  const 接了 = 收尾插件.props.handleTextInput?.(视图 as unknown as EditorView, 从, 从, 字符);
+  if (!接了) 视图.state = 视图.state.apply(视图.state.tr.insertText(字符, 从, 从));
+  return 接了 === true;
+}
+
+/** 逐颗敲一串。 */
+function 敲一串(视图: 假视图, 文: string): void {
+  for (const 字 of 文) 敲(视图, 字);
+}
+
+/**
+ * **输入法上屏**：一串字直接落进文档，**不经过 `handleTextInput`**。
+ *
+ * ⚠️ 这不是"另一种敲法"，是**另一条真实的通路**：中文用拼音打进来时，
+ * 组字上屏那一段是 `prosemirror-view` 的 DOM 观察器直接派事务落进来的，
+ * `handleTextInput` 收不到。用户 2026-09-30 报的那对"`*你好*` 不渲染"就是
+ * 从这条路来的，所以它必须有一条自己的判据。
+ */
+function 上屏(视图: 假视图, 文: string): void {
+  const 从 = 视图.state.selection.from;
+  视图.state = 视图.state.apply(视图.state.tr.insertText(文, 从, 从));
+}
+
+/** 第一段的样子：`文(x)` / `文(abc)@emphasis`。 */
+function 长相(视图: 假视图): string[] {
+  const 段 = 视图.state.doc.firstChild;
+  if (!段) throw new Error("文档里没有第一段？");
+  return 段.content.content.map((n) => {
+    const 标 = n.marks.map((m) => `@${m.type.name}`).join("");
+    return `${n.isText ? "" : n.type.name}文(${n.text ?? ""})${标}`;
+  });
+}
+
+测("`x` ＋ `*abc*`（最后一颗是收尾）⇒ `abc` 落成 `emphasis`", () => {
+  const 视图 = 造视图("x");
+  敲一串(视图, "*abc*");
+  等列(长相(视图), ["文(x)", "文(abc)@emphasis"], "收尾那一下该把这一对星号换成标记");
+});
+
+测("`甲` ＋ `**abc*` ⇒ 落成 `strong`（「打一颗就变粗体」那一路）", () => {
+  // 现场：`甲*|*` 再敲一颗 ⇒ `甲**|**`（升级），打 `abc`，最后那颗是收尾。
+  const 视图 = 造视图("甲");
+  敲一串(视图, "**abc*");
+  等列(长相(视图), ["文(甲)", "文(abc)@strong"], "两颗对两颗该落 `strong`");
+});
+
+测("⚠️ 收尾之后接着打的那颗字是**平**的（不继承那套标记）", () => {
+  // 用户敲下那颗星号的意思是"斜体到这儿结束"，所以光标后面再打的字不该还是斜的。
+  // ⚠️ 靠的是 `收尾事务` 末尾那句 `setStoredMarks([])`：ProseMirror 默认会
+  // 拿前一颗字的标记接着用，少了那一句这条就会挂。
+  const 视图 = 造视图("x");
+  敲一串(视图, "*abc*");
+  敲(视图, "乙");
+  等列(
+    长相(视图),
+    ["文(x)", "文(abc)@emphasis", "文(乙)"],
+    "收尾之后接着打的字不该跟着斜",
+  );
+});
+
+测("⚠️ 内文两头是空白 ⇒ **不落标记**，只把光标跨过去", () => {
+  // `甲*|*` 里打进一颗空格，再敲一颗星号收尾：中间夹的是一颗空格。
+  // CommonMark 里 `* *` 那样的星号压根不构成强调，落了标记反而是替用户改意思。
+  const 视图 = 造视图("甲");
+  敲(视图, "*");
+  敲(视图, " ");
+  敲(视图, "*");
+  等列(长相(视图), ["文(甲* *)"], "空白内文只该跨位，一个字都不该动");
+});
+
+测("⚠️ 左边那颗不是星号（没有开定界符）⇒ **不落标记**", () => {
+  const 视图 = 造视图("甲*", 1);
+  敲(视图, "*");
+  等列(长相(视图), ["文(甲*)"], "左边配不上对就只跨位");
+});
+
+测("⚠️ 开闭颗数不配（一颗对两颗）⇒ **不落标记**", () => {
+  // ⚠️ 偏移是**"段内第几颗字符之后"**（内容坐标），与文档位置差 1：这里要的是
+  // "乙 之后、那两颗星之前"，所以是 `3` 而不是 `2`。
+  const 视图 = 造视图("甲*乙**", 3);
+  敲(视图, "*");
+  等列(长相(视图), ["文(甲*乙**)"], "一颗星配两颗星不是一对，不许落标记");
+});
+
+测("⚠️ 开定界符前面是 `\\`（用户在转义）⇒ **不落标记**", () => {
+  const 视图 = 造视图("\\*甲*", 3);
+  敲(视图, "*");
+  等列(长相(视图), ["文(\\*甲*)"], "转义那一颗星号不许被卷进标记里");
+});
+
+/* ── 十二、收尾的三个触发时机（2026-09-30）────────────────────────────── */
+
+组("十二、收尾的三个触发时机（2026-09-30，用户第二次报同一件事）");
+
+测("① 段首打 `*你好*`（收尾那颗是用户自己敲的）⇒ `你好` 落成 `emphasis`", () => {
+  // ⚠️ 段首那颗 `*` **不配对**（那是项目符号），所以闭星号也是用户敲的——
+  // 老代码把它当成了"再补一对"，于是屏幕上多出一颗用户没打过的星号（`*你好**`）。
+  const 视图 = 造视图("");
+  敲一串(视图, "*你好*");
+  等列(长相(视图), ["文(你好)@emphasis"], "收尾那颗该把这一对换成标记，不该再补一颗星");
+});
+
+测("③ 自动补全那一对：`x*你好`（不敲第三颗）⇒ `你好` 落成 `emphasis`", () => {
+  // 这是用户报的那张截图：闭星号是**我们补的**，他没有任何理由再敲一遍。
+  // ⚠️ 老代码要求"用户敲下收尾那颗"，而这一颗永远不会来。
+  const 视图 = 造视图("x");
+  敲一串(视图, "*你好");
+  等列(长相(视图), ["文(x)", "文(你好)@emphasis"], "打完正文这一对就该完整了");
+});
+
+测("③ 输入法上屏那条路（不走 handleTextInput）⇒ 一样落成 `emphasis`", () => {
+  // ⚠️ 中文的真实通路：拼音上屏不经过 `handleTextInput`，靠的是插件那条
+  // `appendTransaction` 兜底。少了它，中文写的 `*你好*` 永远不渲染。
+  const 视图 = 造视图("x");
+  敲(视图, "*");
+  上屏(视图, "你好");
+  等列(长相(视图), ["文(x)", "文(你好)@emphasis"], "上屏进来的字也该把这一对补成标记");
+});
+
+测("② 三颗键都敲（`x*你好*`）⇒ 第三颗**被吃掉**，不多出字面星号", () => {
+  // ⚠️ 这一条钉的是"到此为止"那一岔：落完标记之后用户再敲的那颗星号，
+  // 如果照旧插进文档，存盘会写成 `*你好*\*` —— 正是用户报的"自动插入斜杠"。
+  const 视图 = 造视图("x");
+  敲一串(视图, "*你好*");
+  等列(长相(视图), ["文(x)", "文(你好)@emphasis"], "多余的收尾星号不许落进文档");
+});
+
+测("⚠️ 已落成标记的尾巴上再敲一颗 `*` ⇒ 一个字都不加（到此为止）", () => {
+  const 视图 = 造视图("x");
+  敲一串(视图, "*你好");
+  敲(视图, "*");
+  等列(长相(视图), ["文(x)", "文(你好)@emphasis"], "这一颗星号是收笔，不是新字符");
+});
+
+测("⚠️ `* 项目`（星号后面是空白）⇒ **不落标记**，星号照旧是字面", () => {
+  // 与第十一组那条同源：内文两头有空白在 CommonMark 里压根不构成强调，
+  // 落了标记等于替用户改意思。（段首的项目符号也因此活得下来。）
+  const 视图 = 造视图("x");
+  敲一串(视图, "* 项目");
+  等列(长相(视图), ["文(x* 项目*)"], "空白内文不许落标记");
+});
+
+测("⚠️ `\\*甲*`（开定界符前面是反斜杠）⇒ **不落标记**", () => {
+  // ⚠️ 兜底那一路（`appendTransaction`）也要过同一份判据——它每来一次事务
+  // 就问一遍，漏了这一判，光标往那一放就会被落成标记。
+  const 视图 = 造视图("\\*甲*", 3);
+  等列(长相(视图), ["文(\\*甲*)"], "转义那一颗星号不许被卷进标记里");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

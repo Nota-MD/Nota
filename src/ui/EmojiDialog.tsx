@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
 import { useT } from "@/i18n";
 import { Emoji表, Emoji分类, 带冒号, type Emoji项 } from "@/editor/emoji";
+import { useTablistKeys } from "@/ui/useTablistKeys";
 
 export function EmojiDialog({
   onAnswer,
@@ -38,6 +39,9 @@ export function EmojiDialog({
   /** 当前分类，`null` = 全部。 */
   const [分类, set分类] = useState<string | null>(null);
   const 输入框 = useRef<HTMLInputElement>(null);
+  // 分类页签的方向键（第 50 项，2026-10-04）。
+  const 页签栏 = useRef<HTMLDivElement>(null);
+  useTablistKeys(页签栏);
 
   useEffect(() => {
     输入框.current?.focus();
@@ -143,7 +147,7 @@ export function EmojiDialog({
 
         {/* 分类筛选。⚠️ 「全部」在最前、`null` 表示它——不摆一个"全部"的话，
             用户进了某个分类就出不来了（只能关掉框重开）。 */}
-        <div className="emoji-cats" role="tablist" aria-label={t("Emoji category")}>
+        <div ref={页签栏} className="emoji-cats" role="tablist" aria-label={t("Emoji category")}>
           <button
             type="button"
             role="tab"

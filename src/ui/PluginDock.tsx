@@ -71,7 +71,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { api, events, on, type PanelDirtyPayload, type PluginInfo, type PluginPanel, type 信任记录 } from "@/bridge/ipc";
+import { useTablistKeys } from "@/ui/useTablistKeys";
+
+import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type PluginInfo, type PluginPanel, type 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 import { PanelBody } from "@/ui/PanelBody";
@@ -179,8 +181,24 @@ export function PluginDock({
   const [当前, set当前] = useState<页>(() => 键们[0] ?? null);
   const [内容表, set内容表] = useState<Record<string, 面板状态>>({});
 
+  /**
+   * **正在往外吐的那段字**，按插件 id 记（2026-10-04 加，`docs/07` 第 58 项）。
+   *
+   * ⚠️ 它和 `内容表` 是**两份完全不同的东西，别合并**：那边是面板的真内容
+   * （从 `panelContent` 拉来的），这边是**一份临时显示**，宿主每吐一小段就
+   * 推一次。它**不进任何一份状态**——正因为如此，收工之后必须靠一次真拉
+   * 把它擦掉（下面 `拉` 成功那条路会清），否则屏幕上会一直停在那半截上。
+   *
+   * ⚠️ 按**插件**记而不是按面板坐标记：宿主那边（`lua/api/ui.rs::实时表`）
+   * 只知道是哪个插件在吐字，不知道是哪个面板——载荷里根本没有 `id`。
+   */
+  const [实时表, set实时表] = useState<Record<string, string>>({});
+
   /** 用户**手动**点过页签。点过之后就不再替用户选（他点了「插件」页就该留在那儿）。 */
   const 手动选过 = useRef(false);
+  // ⚠️ 页签的方向键走 `useTablistKeys`（第 50 项，2026-10-04）：挪焦点不切换。
+  const 页签栏 = useRef<HTMLElement>(null);
+  useTablistKeys(页签栏);
   const 切到 = (页: 页) => {
     手动选过.current = true;
     set当前(页);
@@ -226,6 +244,11 @@ export function PluginDock({
       const nodes = normalise(await api.plugin.panelContent(plugin, id));
       if (序号.current[键] !== 这次) return; // 已经有更新的请求在飞了
       set内容表((m) => ({ ...m, [键]: { state: "ok", nodes, busy: null } }));
+      // ⚠️ 真内容到手了 ⇒ 把这一段临时的擦掉（`docs/07` 第 58 项）。
+      // 这里就是"收工"这件事的落点：插件吐完最后喊的那一声 `nota.ui.refresh`
+      // 会走到这儿来。放在**成功之后**（而不是发请求的时候）是有意的——
+      // 拉失败时那段字还留着，比屏幕上一片空白强。
+      set实时表((m) => (plugin in m ? { ...m, [plugin]: "" } : m));
     } catch (e) {
       if (序号.current[键] !== 这次) return;
       // **错误要看得见**：面板渲染失败（插件里 `render` 抛错）是插件作者
@@ -265,6 +288,34 @@ export function PluginDock({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [活动, 拉]);
+
+  // 插件正往外吐字（`nota.ui.stream`）→ 直接画，**一个字节都不去宿主那边取**。
+  //
+  // ⚠️ 上面那条 `pluginPanel` 是"收到就去重拉"，这条**不能**照那样写：跑命令
+  // 的时候宿主一直握着 `plugins` 锁，这时候去拉是**回不来**的——真去拉，
+  // 屏幕上会一直停在旧内容上直到那条命令整个跑完，也就是"边生成边显示"根本
+  // 没发生。来龙去脉在 `ipc.ts::events.pluginStream` 和
+  // `src-tauri/src/lua/api/ui.rs::实时表` 顶上。
+  //
+  // ⚠️ **不看哪一页是当前页**（与上面那条不同）：吐字是"此刻正在发生"的事，
+  // 收下它不花什么（就一个字符串），而漏掉它的表现是"切过去一看是空的"。
+  // 用户切走时这段字留着，切回来正好还在。
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let alive = true;
+
+    void on<PanelStreamPayload>(events.pluginStream, ({ plugin, text }) => {
+      set实时表((m) => ({ ...m, [plugin]: text }));
+    }).then((u) => {
+      if (alive) unlisten = u;
+      else u();
+    });
+
+    return () => {
+      alive = false;
+      unlisten?.();
+    };
+  }, []);
 
   /** 面板上的按钮：跑命令，跑完**自己**再拉一次。 */
   const 跑 = async (plugin: string, id: string, command: string, args?: unknown) => {
@@ -463,6 +514,24 @@ export function PluginDock({
     // 拿它当索引 TS 要报"不能用 null 当索引"。
     const 键 = 坐标(活动面板);
     const 态 = 内容表[键] ?? { state: "loading" as const };
+    // 插件正在吐的那段字（没有就是 `null`）。**拼在最后**：它是"此刻正在写的
+    // 东西"，位置就该在这一页的末尾。
+    //
+    // ⚠️ 走 `normalise` 而不是手搓一个 `PanelNode` 字面量：那边是**所有**节点
+    // 收窄（长度上限、字段名、缺省）的唯一落点，绕过它拼出来的东西不受那些
+    // 上限管——今天这个字符串本来就短，但"绕过唯一那道门"是会被照抄的习惯。
+    // 形状与 Lua 那份一模一样（`{kind="message", from="ai", text=…}`），所以
+    // 直接喂一个"原始节点"进去就行。
+    const 实时 = 实时表[活动面板.plugin] ?? "";
+    const 实时节点 =
+      态.state === "ok" && 实时 !== ""
+        ? (normalise([{ kind: "message", from: "ai", text: 实时 }])[0] ?? null)
+        : null;
+    // ⚠️ 先取出来再拼，别写成 `态.nodes` 直接展开：`态` 是联合类型，
+    // `nodes` 只在 `ok` 那一支上，不过一道 `state === "ok"` 的窄化 TS 要报。
+    const 面板节点们 = 态.state === "ok" ? 态.nodes : [];
+    const 节点们 = 实时节点 === null ? 面板节点们 : [...面板节点们, 实时节点];
+
     // 这一页的插件语言对不上吗？（那位用户看到的是英语的插件 + 一句话解释）
     const 这插件 = plugins.find((p) => p.id === 活动面板.plugin);
     return (
@@ -481,14 +550,14 @@ export function PluginDock({
               </p>
             )}
             {态.state === "ok" &&
-              (态.nodes.length === 0 ? (
+              (节点们.length === 0 ? (
                 // 空的**不是错误**：插件这一刻没有内容可显示（没开文件夹、
                 // 没有改动）。如实说，别画一个空框让人以为坏了。
                 <p className="panel-empty">{t("The extension has nothing to show.")}</p>
               ) : (
                 <PanelBody
                   plugin={活动面板.plugin}
-                  nodes={态.nodes}
+                  nodes={节点们}
                   busy={态.busy}
                   askPrompt={askPrompt}
                   onCall={(plugin, command, args) => 跑(plugin, 活动面板.id, command, args)}
@@ -530,7 +599,7 @@ export function PluginDock({
       {/* 页签：每个右侧面板一页 ＋ 「插件」页（清单）。
           ⚠️ 页签**永远都在**，哪怕只有一个面板：它是"这里还有别的东西"的
           唯一线索，藏起来的话用户会以为这一栏就叫这个名字。 */}
-      <nav className="dock-tabs" role="tablist" aria-label={t("Extension panels")}>
+      <nav ref={页签栏} className="dock-tabs" role="tablist" aria-label={t("Extension panels")}>
         {右侧的.map((p) => {
           const 键 = 坐标(p);
           return (

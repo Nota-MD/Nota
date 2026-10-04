@@ -61,6 +61,7 @@ import type { DocThemeInfo, PluginInfo, Settings, UiStyleInfo, 信任记录 } fr
 import { useT } from "@/i18n";
 import type { MenuSpec } from "@/ui/commands";
 import { Icon, type 图标名 } from "@/ui/Icon";
+import { useModalTrap } from "@/ui/useModalTrap";
 import type { 插件动作 } from "@/ui/usePlugins";
 import { QueryProvider, SearchField } from "./primitives";
 import { AppearancePane } from "./panes/AppearancePane";
@@ -266,88 +267,12 @@ export function SettingsDialog({
 
   // ── 键盘：Esc 关闭 ＋ **焦点陷阱** ──────────────────────────────────────
   //
-  // ⚠️ **焦点陷阱不是可选项**（2026-09-25，用户体验评估抓出来的）。这个面板
-  // 标着 `aria-modal="true"`，但在此之前只有 Escape 一个键盘处理：挂载时
-  // `panelRef.current.focus()` 把焦点接过来，之后**放任它跑出去**。一路按 Tab
-  // 焦点会落到面板背后那个可编辑的正文上，此后打的每个字都写进文档——而屏幕上
-  // 盖着设置面板，**用户看不见自己正在改文件**。实测：面板里按 208 次 Tab 再
-  // Esc，文档净增 271 个字符，状态栏变成"已修改"。
-  //
-  // 两道闸，缺一不可：
-  //   ① Tab / Shift+Tab 在面板内首尾相接，焦点**从不离开**；
-  //   ② `focusin` 兜住非键盘的出路（鼠标点、程序 focus），一旦落在面板外就拉回。
-  // 只留 ② 的话，焦点先跑出去再被拽回，Tab 的落点每次都重置到面板容器上、
-  // 键盘用户等于没法在面板里走动；只留 ① 的话，鼠标那条路还敞着。
-  //
-  // ⚠️ 面板里**没有 portal**（设置那套原语不弹 `MenuPopup`，只有菜单栏弹），
-  // 所以"在面板外"就是"该拉回来"，不必给谁留口子。以后要是有哪一页改成弹
-  // 浮层，这里有第二处要改。
-  useEffect(() => {
-    /** 面板里此刻真的能聚焦的格子。⚠️ 藏起来的不算：搜索态下每一页都渲染、
-     *  靠 CSS 藏行，不滤掉的话 Tab 会掉进看不见的格子里（`offsetParent`
-     *  为 `null` 就是 `display: none`）。 */
-    const 可聚焦 = (panel: HTMLElement) =>
-      Array.from(
-        panel.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]),' +
-            ' textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-        ),
-      ).filter((el) => el.offsetParent !== null);
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key !== "Tab") return;
-
-      const panel = panelRef.current;
-      if (!panel) return;
-      const list = 可聚焦(panel);
-      if (list.length === 0) {
-        e.preventDefault();
-        return;
-      }
-
-      const first = list[0];
-      const last = list[list.length - 1];
-      // 上面判过 `length === 0`，这里是给类型看的（`noUncheckedIndexedAccess`）。
-      if (!first || !last) {
-        e.preventDefault();
-        return;
-      }
-      const active = document.activeElement as HTMLElement | null;
-
-      // 焦点已经在外面（或还在面板容器自己身上）：Tab 一律拉回第一格／最后一格。
-      if (!active || !panel.contains(active) || active === panel) {
-        e.preventDefault();
-        (e.shiftKey ? last : first).focus();
-        return;
-      }
-      if (e.shiftKey && active === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    };
-
-    const onFocusIn = (e: FocusEvent) => {
-      const panel = panelRef.current;
-      const target = e.target as Node | null;
-      if (!panel || !target || panel.contains(target)) return;
-      panel.focus();
-    };
-
-    window.addEventListener("keydown", onKey, true);
-    document.addEventListener("focusin", onFocusIn, true);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("focusin", onFocusIn, true);
-    };
-  }, [onClose]);
+  // ⚠️ 这套两道闸的实现 2026-09-25 在本文件里落地、2026-10-04 抽去了
+  // `ui/useModalTrap.ts`（第 50 项把「设置 / 确认 / 输入」三个弹层共用一套）。
+  // **为什么必须有陷阱**的完整理由（208 次 Tab、净增 271 个字符那次实测）
+  // 跟着实现搬去了那边，本文件不再抄一份。⚠️ 面板里没有 portal 的前提
+  // 也没变：哪一页要改成弹浮层，得先去 `useModalTrap.ts` 开口子。
+  useModalTrap(panelRef, { onEscape: onClose });
 
   /** 某一页的内容。搜索态下**全上**，靠每一行自己过滤。 */
   const paneFor = (id: SectionId) => {

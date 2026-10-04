@@ -74,8 +74,7 @@
 | 包 | 版本 | 许可证 | 用来做什么 |
 |---|---|---|---|
 | `@milkdown/kit` | 7.22.1 | MIT | 编辑器内核（ProseMirror + remark 的封装） |
-| `@milkdown/plugin-diagram` | 7.7.0 | MIT | Mermaid 图表（` ```mermaid ` 围栏 → `diagram` 节点）。⚠️ 它**自己从不画图**（`toDOM` 只有一句 `dom.textContent = code`），画的那一半在 `src/editor/diagram-view.ts` |
-| `mermaid` | 10.9.8 | MIT | 图表渲染。⚠️ **显式列在 `package.json` 里**（不是蹭 `plugin-diagram` 的嵌套依赖）——理由写在 `src/editor/diagram-view.ts` 文件头：那个包的 `exports` 只声明了 `"."`，任何子路径 import 都会被 `tsc` 与 `vite` 双双拒掉 |
+| `mermaid` | 10.9.8 | MIT | 图表渲染。⚠️ **显式列在 `package.json` 里**（`src/editor/diagram-view.ts` 里动态 `import()`，只在真的出图时加载）。⚠️ 2026-10-04 起 `@milkdown/plugin-diagram`（7.7.0，MIT）**退役**：它只做"围栏→节点"那四件不含 mermaid 的小活，却把 mermaid 静态打进首屏——那四件如今是本仓自己的 `src/editor/diagram-node.ts`（判据逐条照抄，第 27 项） |
 | `@milkdown/plugin-math` | 7.5.9 | MIT | 数学公式。⚠️ 同上（渲染那一半在 `src/editor/…` 与 `katexOptionsCtx`） |
 | `@milkdown/plugin-prism` | 7.22.1 | MIT | 代码块语法高亮 |
 | `katex` | 0.16.47 | MIT | 公式渲染 |
@@ -157,8 +156,11 @@ Folio 自绘的作品，按 BSD-2-Clause 分发。⚠️ **要搬的是重绘后
 Nota 的图标是用户设计、逆向成 `src-tauri/icons/nota.svg` 的那一份。
 
 ⚠️ **`nota-` 前缀的那几枚不在这一节里**：它们是 Nota 自己画的（`nota-quote` /
-`nota-task` / `nota-keys`，以及 2026-09-25 换上去的 `nota-markdown` /
-`nota-doc-theme`），原文件只存在于本仓，**没有"上游那一份"可对照**。
+`nota-task` / `nota-keys`，2026-09-25 换上去的 `nota-markdown` /
+`nota-doc-theme`，以及后来陆续加的 `nota-force-focus` /
+`nota-sidebar-toggle` / `nota-sidebar-collapse`（2026-09-30 照 Typora 画的）/
+`nota-spellcheck` / `nota-unfold-more`（同日晚上，状态栏悬停才出现的那两颗）），
+原文件只存在于本仓，**没有"上游那一份"可对照**。
 所以它们**不受下面的"一个字节都不许改"约束**——要调就调，
 调完不会动摇任何"搬来的"结论。⚠️ 但**不许把 Folio 的文件改名成 `nota-`**
 来躲开这条约束：那等于把搬来的东西记账成自研。

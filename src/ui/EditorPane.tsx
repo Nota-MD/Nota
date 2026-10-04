@@ -66,9 +66,15 @@ import {
   type EditorHandle,
   type 选区内容,
 } from "@/editor/create";
-// ⚠️ 只有下面那条提示要用它（"这份文档有没有 front matter"）。切片、拼回、
-// 判据都在编辑器那一侧（`editor/create.ts` 的边界上），这里**只读一眼**。
-import { 拆前置块 } from "@/editor/front-matter";
+// 开头那段 front matter（上面那条横幅，`docs/07` 第 64 项）。⚠️ 切片、拼回、
+// 判据、模板都在 `front-matter.ts` 那一份里——这里只**读**它、**改**它，
+// 绝不自己再切一刀（判据两处各写一份的话，编辑器藏起来的那几行与横幅里
+// 显示的那几行迟早不是同一段）。
+import { 拆前置块, 拆前置块内文, 换前置块, 新建前置块模板 } from "@/editor/front-matter";
+// 选区快照的**类型**（`docs/07` 第 14 项）。⚠️ 只借类型：算法在编辑器那一侧
+// 的两份实现里（所见即所得 `caret-snapshot.ts`、源码 `source.ts` 的
+// `updateListener`），这里只负责"收下来、去抖、推给后端"。
+import type { 选区快照 } from "@/editor/caret-snapshot";
 import type { CommandState } from "@/editor/command-state";
 // 三种行内扩展的开关（`==高亮==` / `^上标^` / `~下标~`）。⚠️ 这里只挑出
 // `settings.markdown` 里那三个字段拼成编辑器要的形状——**为什么收整份、
@@ -117,6 +123,15 @@ export interface EditorPaneHandle {
    * 没选中东西给 `null`。
    */
   选区: () => 选区内容 | null;
+
+  /**
+   * **在光标处插一段**（替换选区）。给插件的 `nota.document.insert_at_cursor`
+   * 用（`docs/07` 第 14 项）。
+   *
+   * ⚠️ 与 `runCommand` 同一套契约：**返回值是"这一侧有没有实现"**，
+   * 没实现（只读实例）或编辑器还没建好时给 `false`，不抛错。
+   */
+  插入在光标处: (text: string) => boolean;
 
   /** 把焦点交回编辑区。关查找条、关菜单之后要用（焦点在别处时打的字是白打）。 */
   focus: () => void;
@@ -305,6 +320,28 @@ interface Props {
 const SYNC_DEBOUNCE_MS = 300;
 /** 分屏里把源码推给预览的去抖。比 sync 短——那是本地的，不跨 IPC。 */
 const PREVIEW_DEBOUNCE_MS = 150;
+/**
+ * 把**选区快照**推给后端的去抖（`docs/07` 第 14 项，2026-10-04）。
+ *
+ * ⚠️ **比 `SYNC_DEBOUNCE_MS` 短、比 `PREVIEW_DEBOUNCE_MS` 长**：它跨 IPC
+ * （所以要防抖），但它只是给插件看的一条旁路（所以拖久了没意义）。
+ * ⚠️ 编辑器那一侧已经先按"快照真的变了"去过一次重了（`caret-snapshot.ts`），
+ * 这里再压一道时间窗——只挪光标不改字的情形**不会**触发 `sync`，
+ * 那条路完全靠这一条。
+ */
+const CURSOR_DEBOUNCE_MS = 250;
+
+/**
+ * 横幅里那颗「删除」等第二下的时间窗（`docs/07` 第 64 项）。
+ *
+ * ⚠️ 它是**两击确认**，不是弹窗：那一段是文档内容、而且这份文档是自动保存的，
+ * 误点一下就没了太容易。为一行 YAML 把 `useDialogs` 那一套从 `App` 一路传进来
+ * 不值当，而"按钮自己变成『确认删除』、过几秒再变回去"这条路不需要任何新通道。
+ *
+ * ⚠️ 4 秒是**猜的**：短到不会让人对着一个已经变了意思的按钮发呆，长到够看清
+ * 那行字再点第二下。它与 `SYNC_DEBOUNCE_MS` 那几档没有关系（不是同一类时间）。
+ */
+const 删除确认毫秒 = 4000;
 
 export function EditorPane({
   doc,
@@ -342,14 +379,43 @@ export function EditorPane({
   const latestRef = useRef(doc.text);
   const [ready, setReady] = useState(false);
   /**
-   * 这份文档开头有没有 YAML front matter（有 = 所见即所得里要挂一条说明）。
+   * 这份文档开头有没有 YAML front matter（有 = 正文上方要挂那条横幅）。
    *
-   * ⚠️ 它是**建实例那一刻算一次**的，不是每敲一个字都算：所见即所得里
-   * front matter 不在文档树里、改不动，所以这个值只有三种情况会变——
-   * 换文档、切模式、插件整篇替换文本，前两种都是**重挂**（下面那个 effect
-   * 重跑），第三种本来就要走 `setMarkdown`。拿它当渲染条件就够了。
+   * ⚠️ 它**不是建实例那一刻算一次**的（2026-10-04 第 64 项起）：菜单里那条
+   * 「YAML Front Matter」能在文档开着的时候把这一段建出来、横幅里那颗「删除」
+   * 又能把它删掉——那是两个中途翻转的时刻，只算一次的话横幅要么不出现、
+   * 要么删完了还挂在那儿。现在它跟着**每一次报来的文本**重算（同值不引起重画）。
    */
   const [有前置块, set有前置块] = useState(false);
+  /**
+   * 横幅里那个 YAML 输入框的**内容**。
+   *
+   * ⚠️ 它是**受控**的，但**不跟着文档走**：编辑框里的字归用户所有。编辑器每次
+   * 报文本都无脑覆盖它的话，我们**自己提交出去的那一笔回声**会把用户正在打的
+   * 字顶掉——他打第三个字母的时候光标会当场跳一下（见 [`提交前置块`]）。
+   */
+  const [前置块内文, set前置块内文] = useState("");
+  const [前置块展开, set前置块展开] = useState(false);
+  /** 「删除」按了第一下，正等着第二下。4 秒后自己变回去，见 [`删除前置块`]。 */
+  const [删前置块待确认, set删前置块待确认] = useState(false);
+  const 前置块框Ref = useRef<HTMLTextAreaElement>(null);
+  /** 两击确认那个定时器。 */
+  const 待确认定时Ref = useRef<number | null>(null);
+  /**
+   * **文档里**那段 front matter 的内文（`null` = 没有这一段）。
+   *
+   * 它只有一个用处：认出"刚报回来的这一份就是我刚才写进去的那一笔"。不做这个
+   * 区分的话，每次提交都会绕回来覆盖一遍输入框——而规范化（内文末尾的空行）
+   * 会让那份覆盖**与用户手里那份差一个字节**，症状就是他正打着字、光标跳回行尾。
+   */
+  const 前置块基准Ref = useRef<string | null>(null);
+  /**
+   * 上一次**见到**的内文（含建实例那一刻那一份）。
+   *
+   * 用处也只有一个：认出"这一次是**从没有到有**"——那一定是菜单里刚点出来的
+   * 那一条，用户下一步准是去填它，所以顺手把输入框摊开。
+   */
+  const 上一次内文Ref = useRef<string | null>(null);
   const t = useT();
 
   // ⚠️ 光标状态那条回调**走 ref 读**，不进下面那个 effect 的依赖：
@@ -364,6 +430,14 @@ export function EditorPane({
   // 不该靠调用方去守——照上面两条走）。
   const 活动Ref = useRef(onActivity);
   活动Ref.current = onActivity;
+
+  /**
+   * 选区快照那条去抖的定时器。
+   *
+   * ⚠️ **与 `timerRef`（sync 那条）分开**：两条路的节奏与内容都不一样，
+   * 合用一个会让"改一个字"把"刚挪了光标"那次推送吞掉（或反过来）。
+   */
+  const 快照定时Ref = useRef<number | null>(null);
   // 滚动那两条同理（`初始滚动` 只在建实例那一刻读一次，见 `Props` 那条）。
   const 初始滚动Ref = useRef(初始滚动);
   初始滚动Ref.current = 初始滚动;
@@ -482,6 +556,8 @@ export function EditorPane({
       },
       runCommand: (name: EditorCommand, payload?: CommandPayload) =>
         handleRef.current?.runCommand(name, payload) ?? false,
+      // ⚠️ 没 handle 时给 `false`（"这一侧没做"），不是抛错——同 `runCommand`。
+      插入在光标处: (text: string) => handleRef.current?.插入在光标处(text) ?? false,
 
       // 查找五条**直接转发**给当前那个 handle。⚠️ 没有 handle 时（编辑器
       // 还没建好/已经拆了）给"什么都没做"的安全值，不是抛错——关查找条
@@ -503,6 +579,26 @@ export function EditorPane({
     [],
   );
 
+  /**
+   * 选区快照 → 后端镜像（`docs/07` 第 14 项）。
+   *
+   * ⚠️ **它在编辑器那一侧已经去过一次重**（所见即所得在 `caret-snapshot.ts`
+   * 的插件里、源码在 `source.ts` 的 `updateListener` 里），这里再压一道
+   * 时间窗——两条去重管的不是同一件事：那边的键是"快照变没变"，
+   * 这边的键是"多久没推过了"。
+   *
+   * ⚠️ **失败只吞掉**（不像 `sync` 那条要弹提示条）：这只是一条给插件看的
+   * 旁路，推失败（编辑器刚拆、文档刚关）的后果是"插件读到上一次的选区"，
+   * 而那在下一笔事务时自愈。为它弹一条"同步失败"是拿噪声换噪声。
+   */
+  const 记快照 = (快照: 选区快照) => {
+    if (快照定时Ref.current !== null) window.clearTimeout(快照定时Ref.current);
+    快照定时Ref.current = window.setTimeout(() => {
+      快照定时Ref.current = null;
+      void api.doc.cursor(doc.id, 快照).catch(() => {});
+    }, CURSOR_DEBOUNCE_MS);
+  };
+
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
@@ -520,15 +616,71 @@ export function EditorPane({
       }, PREVIEW_DEBOUNCE_MS);
     };
 
+    /**
+     * 把"编辑器手里这份文本"里那段 front matter 反映到横幅上
+     * （`docs/07` 第 64 项；两种模式共用，源码那一侧不画横幅但也得记着，
+     * 不然切回来时状态是旧的）。
+     *
+     * ⚠️ **它不管编辑框里正在打的那几个字**：底下那一段变了才覆盖输入框，
+     * 而我们自己提交出去的那一笔回声**不算变**（判据是 `前置块基准Ref`）。
+     * 不区分这两件事的话，用户每打一个字母都会被自己那一笔写回来的规范化结果
+     * 覆盖一次，光标当场跳到末尾。
+     */
+    const 同步前置块 = (markdown: string, 允许摊开 = true) => {
+      const 块 = 拆前置块(markdown).前置块;
+      const 内文 = 块 === null ? null : 拆前置块内文(块);
+      // "从没有到有"＝这一段是刚冒出来的。会这么干的只有两处：菜单里那条
+      //「YAML Front Matter」（建的是模板）和插件整篇替换文本。
+      const 刚冒出来 = 内文 !== null && 上一次内文Ref.current === null;
+      上一次内文Ref.current = 内文;
+      set有前置块(内文 !== null);
+      if (内文 === null) set前置块展开(false); // 删掉了（或插件拿掉了）就合上
+      if (内文 === 前置块基准Ref.current && !刚冒出来) return; // 自己那一笔回声
+      前置块基准Ref.current = 内文;
+      set前置块内文(内文 ?? "");
+      // 刚建出来的那一段是用户点"插入 YAML Front Matter"点出来的，下一步准是
+      // 去填它——顺手摊开（省掉一次"再点一下编辑"）。⚠️ 只认模板：插件塞进来的
+      // 那一段内容多半是它自己管的，把输入框弹出来只是噪声。
+      // ⚠️ 建实例那一次**不算**（`允许摊开` 传 `false`）：那一份本来就在盘上，
+      // 用户没点过任何东西。不挡的话，开头正好写着 `title: ` 的文档一打开就会
+      // 弹出一个输入框，看着像编辑器自己动了他的文件。
+      if (允许摊开 && 刚冒出来 && 内文 === 新建前置块模板) set前置块展开(true);
+    };
+
+    /**
+     * 编辑器报来"文本变了" → 认下来、跟前端说一声、并去抖推给后端。
+     *
+     * ⚠️ **两种模式共用这一份**（2026-10-04 合并）：原来所见即所得与源码各写
+     * 一遍，差别只在"分屏那一侧要不要推预览"——而那一条按 `mode` 判得出来。
+     * 两遍的代价是"往这条路里加一件事就得加两处"，第 64 项这一段正是第一件。
+     */
+    const 认改动 = (markdown: string) => {
+      latestRef.current = markdown;
+      活动Ref.current();
+      同步前置块(markdown);
+      if (mode === "split") pushPreview(markdown);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(async () => {
+        timerRef.current = null;
+        try {
+          await api.doc.sync(doc.id, markdown);
+          await onDocsChanged();
+        } catch (e) {
+          onToast(t("Could not sync to the backend: {0}", String(e)), "error");
+        }
+      }, SYNC_DEBOUNCE_MS);
+    };
+
     (async () => {
       try {
         // ── 权威那一侧 ────────────────────────────────────────────────
         // ⚠️ 初始文本取 `latestRef` 而不是 `doc.text`，理由见文件头第 1 条。
         const initial = latestRef.current;
-        // front matter 那条说明（见 `有前置块`）。⚠️ 只判所见即所得：源码模式
-        // 手里就是原文，那几行看得见也改得动。⚠️ 判的是**这一份**初始文本，
-        // 与 `createEditor` 里切的是同一串（同一个纯函数，判据只有一份）。
-        set有前置块(mode === "wysiwyg" && 拆前置块(initial).前置块 !== null);
+        // 这一段横幅的**初值**（见 `有前置块`、`前置块基准Ref`）。⚠️ 判的是
+        // **这一份**初始文本，与 `createEditor` 里切的是同一串（同一个纯函数，
+        // 判据只有一份）。⚠️ 基准与"上一次见到的"都要一起摆好：摆漏了的话，
+        // 编辑器报回来的第一笔就会被当成"文档里那一段变了"，把输入框重填一遍。
+        同步前置块(initial, false);
 
         if (mode === "wysiwyg") {
           // ── 表格列宽（侧车）─────────────────────────────────────────
@@ -566,9 +718,23 @@ export function EditorPane({
                   .catch((e) => console.warn("[nota] 记表格列宽失败：", e));
               }
             },
-            // ⚠️ **没有 `strict`**：所见即所得这一侧两种模式已经完全一样了
-            // （宽松标题那条显示层装饰 2026-09-26 删掉了，见 `create.ts` 里
-            // `readOnly` 下面那条注释）。
+            // **严格模式**。⚠️ 所见即所得这一侧**要传**：它换的是正文里
+            // "`#你好` 算不算标题的写法"（`heading-on-enter.ts`）。这里原来
+            // 写着"没有 `strict`，两种模式已经完全一样了"——那是 2026-09-26
+            // 删掉显示层之后的实情，**2026-09-29 又加回来了**（用户报"严格模式
+            // 关闭后 `#标题` 还是无法正常显示"），见 `atx.ts` 文件头。
+            //
+            // ⚠️ **2026-09-30 起它管的还是这一件事，长相却换了**：宽松档下
+            // `#你好` 与 `# 你好` 走**同一条路**——没按回车时都只加粗，按下
+            // 回车都变成标题块（字号这时才跳）。用户原话：「类似 `# 你好`。
+            // 就是不回车只是显示加粗，回车变成标题。」所以这一侧传 `strict`
+            // 现在的效果是：**严格档下 `#你好` 一个字节、一个像素都不动**
+            //（既不进装饰、也不成块），宽松档下它和 `# 你好` 完全一样。
+            //
+            // ⚠️ 反过来说：**只传这一侧**。导出那条路（`export.ts`）不传——
+            // 那里的 `nota-` 前缀规则会把这类装饰整个摘掉，导出结果与严格
+            // 与否无关，这是有意的（见 `导出选项` 那段注释）。
+            strict,
             physics,
             // 三种行内扩展的开关。⚠️ 所见即所得这一侧才传：源码模式是
             // CodeMirror，它只显示 Markdown 源码，没有"这条算不算标记"这回事。
@@ -595,20 +761,8 @@ export function EditorPane({
             // 光标状态只在这一侧读得出来（源码模式没有文档树）。
             onCommandState: (s) => commandStateRef.current(s),
             onFindStatus: (s) => findStatusRef.current(s),
-            onChange: (markdown) => {
-              latestRef.current = markdown;
-              活动Ref.current();
-              if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-              timerRef.current = window.setTimeout(async () => {
-                timerRef.current = null;
-                try {
-                  await api.doc.sync(doc.id, markdown);
-                  await onDocsChanged();
-                } catch (e) {
-                  onToast(t("Could not sync to the backend: {0}", String(e)), "error");
-                }
-              }, SYNC_DEBOUNCE_MS);
-            },
+            onSelection: 记快照,
+            onChange: 认改动,
           });
         } else {
           // source 与 split 的左侧是同一个东西，只是 split 多一个预览窗格。
@@ -628,21 +782,8 @@ export function EditorPane({
             review: 预览Ref.current,
             onReviewEscape: () => 退出Ref.current?.(),
             onFindStatus: (s) => findStatusRef.current(s),
-            onChange: (markdown) => {
-              latestRef.current = markdown;
-              活动Ref.current();
-              if (mode === "split") pushPreview(markdown);
-              if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-              timerRef.current = window.setTimeout(async () => {
-                timerRef.current = null;
-                try {
-                  await api.doc.sync(doc.id, markdown);
-                  await onDocsChanged();
-                } catch (e) {
-                  onToast(t("Could not sync to the backend: {0}", String(e)), "error");
-                }
-              }, SYNC_DEBOUNCE_MS);
-            },
+            onSelection: 记快照,
+            onChange: 认改动,
           });
         }
 
@@ -662,6 +803,12 @@ export function EditorPane({
           preview = await createEditor({
             root: previewRef.current,
             initialMarkdown: initial,
+            // ⚠️ **理由同 `inlineMarks`**：预览显示的就是左边那份文档，开关不
+            // 一样的话，`#标题` 在左侧正文里按标题排版、在右边是一条普通段落。
+            // ⚠️ 但**分屏左侧是源码模式**，那边 `#标题` 本来就是一行原文，所以
+            // 实际上"两边不一致"只在 `strict` 与源码模式无关这件事上自洽——
+            // 传它图的是"预览永远等于所见即所得那一档的渲染结果"。
+            strict,
             physics,
             // ⚠️ **要跟主编辑器一致**：预览显示的就是左边那份文档的渲染结果，
             // 开关不一样的话，`==甲==` 在左边是高亮、在右边是一条光秃秃的
@@ -748,6 +895,20 @@ export function EditorPane({
         window.clearTimeout(previewTimerRef.current);
         previewTimerRef.current = null;
       }
+      // ⚠️ 选区快照那条**只清定时器，不补推**：编辑器马上就没了，补推出去的
+      // 是一份"拆之前的选区"，对插件没有意义（它下次收到的是新文档的第一份）。
+      // ⚠️ 不清的话，这一笔会打在**已经换掉的那份文档**的 id 上——改的是
+      // 另一份文档的选区快照，看不出来坏在哪。
+      if (快照定时Ref.current !== null) {
+        window.clearTimeout(快照定时Ref.current);
+        快照定时Ref.current = null;
+      }
+      // 两击确认那个定时器同理（`删除前置块`）：它只是把按钮上的字变回去，
+      // 拆掉了还留着的话，那一下会打在**下一份文档**的输入框上。
+      if (待确认定时Ref.current !== null) {
+        window.clearTimeout(待确认定时Ref.current);
+        待确认定时Ref.current = null;
+      }
       // ⚠️ 拆之前**再从活着的实例读一次**：去抖窗口里那最后一截（用户打完字
       // 不到 300ms 就切了模式）还没推给后端，而它已经不在 `latestRef` 之外
       // 的任何地方了。丢掉它 = 用户亲眼看着自己刚打的字消失。
@@ -782,6 +943,102 @@ export function EditorPane({
     // 刻意**不**依赖 doc.text：那是初始值，不是要跟随的状态。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.id, mode, strict, physics, 纯文本, 行内扩展, 标点, 自动更正, emoji, 智能符号]);
+
+  /* ── 正文上方那条 front matter 横幅（`docs/07` 第 64 项）──────────────
+   *
+   * 读、改、删三件事都在下面这几个函数里。**改的路只有一条**：
+   * `runCommand("frontMatter", …)` —— 那段文本归编辑器那一侧持有
+   *（`create.ts` 里那个 `前置块` 变量），这里绝不自己拼一份存起来：两处各存
+   * 一份的话，插件整篇替换文本之后横幅里那份就成了旧的。
+   */
+
+  /** 从"最后一次知道的文本"里现取那段内文（`null` = 这份没有 front matter）。 */
+  const 现取内文 = (): string | null => {
+    const 块 = 拆前置块(latestRef.current).前置块;
+    return 块 === null ? null : 拆前置块内文(块);
+  };
+
+  /**
+   * 摊开输入框（「编辑」那一颗，以及刚建出那一段时自动摊开）。
+   *
+   * ⚠️ 读的是 `latestRef`（**编辑器最后报来的那一份**），不是 `doc.text`：
+   * 后者是属性传进来的初值，编辑器自己规范化过的结果不在里面。
+   */
+  const 打开前置块框 = () => {
+    const 内文 = 现取内文() ?? "";
+    // ⚠️ 基准**先摆好**：这一刻起输入框里那份就是"文档里那份"，接下来任何一次
+    // 报回来的相同内文都算回声，不会再把框重填一遍。
+    前置块基准Ref.current = 内文;
+    set前置块内文(内文);
+    set删前置块待确认(false);
+    set前置块展开(true);
+  };
+
+  /** 合上输入框。**不提交任何东西**——每一次按键都已经提交过了（见下）。 */
+  const 合上前置块框 = () => {
+    if (待确认定时Ref.current !== null) {
+      window.clearTimeout(待确认定时Ref.current);
+      待确认定时Ref.current = null;
+    }
+    set删前置块待确认(false);
+    set前置块展开(false);
+  };
+
+  /**
+   * 把输入框里那段 YAML 交给编辑器。**每一次按键都交，不做去抖。**
+   *
+   * ⚠️ 不去抖的理由有两条：① 这条路改的是文档树**之外**的一段文本，不重新
+   * 解析正文（见 `create.ts::写前置块`），比在正文里打一个字还便宜；② 底下推给
+   * 后端那一跳本来就有 300ms 去抖。少一层去抖也就少一个坑——"打完最后一个字
+   * 就关标签页，那一笔还在定时器里"。
+   */
+  const 提交前置块 = (内文: string) => {
+    // ⚠️ **清空不等于删除**：清掉一个输入框是极容易误触的动作，而这份文档是
+    // 自动保存的。空的就一个字都不写；要删那一段走「删除」（它还要按两下）。
+    if (内文.trim() === "") return;
+    const 原块 = 拆前置块(latestRef.current).前置块;
+    const 新块 = 换前置块(原块, 内文);
+    if (新块 === null || 新块 === 原块) return; // 一个字都不会变，别惊动编辑器
+    // 基准挪到**规范化之后**的那一份（内文末尾的空行会被收掉一个）：等会儿
+    // 编辑器报回来的回声要与它逐字相同，才认得出"这是我自己刚写的那一笔"。
+    前置块基准Ref.current = 拆前置块内文(新块);
+    handleRef.current?.runCommand("frontMatter", { frontMatter: 内文 });
+  };
+
+  /**
+   * 删掉那一段。**两击确认**（第一下只是把按钮上的字换成「确认删除」）。
+   *
+   * ⚠️ 为什么不弹窗：那一段是文档内容、而且会自动存回盘上，一次误点不该就没了
+   * ——但为一行 YAML 把 `useDialogs` 那一套从 `App` 一路传进来也不值当。
+   * 两击确认不需要任何新通道，代价是那行小字要写清楚（见 JSX 里的 `title`）。
+   */
+  const 删除前置块 = () => {
+    if (!删前置块待确认) {
+      if (待确认定时Ref.current !== null) window.clearTimeout(待确认定时Ref.current);
+      set删前置块待确认(true);
+      待确认定时Ref.current = window.setTimeout(() => {
+        待确认定时Ref.current = null;
+        set删前置块待确认(false);
+      }, 删除确认毫秒);
+      return;
+    }
+    合上前置块框();
+    // 基准**先**挪到 `null`：等会儿报回来的是"没有这一段"，与它相等 ⇒ 输入框
+    // 不会被重新填上（否则那一段刚删掉又出现在框里，看着像没删掉）。
+    前置块基准Ref.current = null;
+    handleRef.current?.runCommand("frontMatter", { frontMatter: null });
+  };
+
+  // 输入框摊开之后把焦点交进去、插入点落到末尾：这一段是用户刚点出来要填的
+  //（「编辑」或者菜单里那条「YAML Front Matter」），不接焦点的话他得再点一下；
+  // 光标落在末尾是因为新建出来的模板就一句 `title: `，紧接着要打的是值。
+  useEffect(() => {
+    if (!前置块展开) return;
+    const 框 = 前置块框Ref.current;
+    if (!框) return;
+    框.focus();
+    框.setSelectionRange(框.value.length, 框.value.length);
+  }, [前置块展开]);
 
   // ── 记滚动位置 ──────────────────────────────────────────────────────
   // ⚠️ **监听挂在捕获阶段**：滚动事件不冒泡（`scroll` 只在自己那个元素上派），
@@ -825,15 +1082,77 @@ export function EditorPane({
     // 理由与来历见 `styles/doc-typography.ts` 与 `settings/document.rs`。
     <div className={`editor-pane editor-pane-${mode}`} style={正文排版变量(文档排版) as CSSProperties}>
       {!ready && <div className="editor-loading">{t("Preparing the editor…")}</div>}
-      {/* front matter 不在文档树里（`editor/front-matter.ts`），所见即所得
-          里看不见也改不了——这一条就是**如实说明**这件事，否则用户会以为
-          自己开头那几行丢了。⚠️ 只说事实，不带按钮：要改就切源码模式，
-          那颗按钮在别处（视图菜单）。 */}
+      {/* front matter 不在文档树里（`editor/front-matter.ts`），所见即所得的
+          正文里看不见它——这一条横幅就是它的落点：既**如实说明**开头那几行
+          没丢，也让人就地能读能改（`docs/07` 第 64 项）。
+          ⚠️ 只在**有**这一段的时候出现。没有的时候不摆一条空横幅：那会变成
+          一块常驻的装饰，而"这里本来没有东西"不该占一行。要**加**那一段走
+          菜单里那条「YAML Front Matter」（`create.ts::写前置块` 里
+          `payload` 缺省的那一支）。 */}
       {mode === "wysiwyg" && 有前置块 && (
-        <div className="editor-frontmatter-note" role="note">
-          {t(
-            "This document starts with a block of front matter (the lines wrapped in `---`). It is neither shown nor editable here, and it is kept as-is when you save — switch to Source mode to change it.",
+        <div
+          className="editor-frontmatter"
+          role="region"
+          aria-label={t("Front matter")}
+        >
+          <div className="editor-frontmatter-head">
+            <span className="editor-frontmatter-title">{t("Front matter")}</span>
+            {前置块展开 ? (
+              <button type="button" className="editor-frontmatter-btn" onClick={合上前置块框}>
+                {t("Done")}
+              </button>
+            ) : (
+              <button type="button" className="editor-frontmatter-btn" onClick={打开前置块框}>
+                {t("Edit")}
+              </button>
+            )}
+            {/* ⚠️ 两击确认（见 [`删除前置块`]）。第二下之前那行字要**先说清楚
+                再按哪一下**，不然"确认删除"看着像已经删了。 */}
+            <button
+              type="button"
+              className="editor-frontmatter-btn editor-frontmatter-del"
+              data-arming={删前置块待确认 ? "true" : undefined}
+              title={t("The line itself goes away too — this one takes two clicks.")}
+              onClick={删除前置块}
+            >
+              {删前置块待确认 ? t("Confirm delete") : t("Delete")}
+            </button>
+          </div>
+          {前置块展开 && (
+            // ⚠️ **受控**输入框（`value` 绑在 `前置块内文` 上）：编辑器规范化过
+            // 的结果（末尾空行收掉一个）要能回填到框里，否则用户看到的与盘上的
+            // 差一行。回声识别在 [`提交前置块`] 与那个基准 ref 里。
+            // ⚠️ 打字**当场**提交，不按回车也不失焦才提交：关了标签页/切了文档
+            // 就跑掉的那一笔，是最难查的一类丢字。
+            <textarea
+              ref={前置块框Ref}
+              className="editor-frontmatter-text"
+              value={前置块内文}
+              spellCheck={false}
+              rows={Math.min(12, Math.max(2, 前置块内文.split("\n").length + 1))}
+              onChange={(e) => {
+                set前置块内文(e.target.value);
+                提交前置块(e.target.value);
+              }}
+              onKeyDown={(e) => {
+                // Esc 合上（不撤销——每一笔都已经进去了）。⚠️ 只在这里拦 Esc：
+                // 这个框是 `textarea`，别指望外层的快捷键还会轮到它。
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  合上前置块框();
+                }
+              }}
+            />
           )}
+          <div className="editor-frontmatter-hint">
+            {前置块展开
+              ? t(
+                  "Kept as-is at the very top of the file, outside the text you edit below — clearing this box will not delete it.",
+                )
+              : t(
+                  "The lines wrapped in `---` at the top of the file. They are not part of the text below, and they are kept as-is when you save.",
+                )}
+          </div>
         </div>
       )}
       {/* ⚠️ 这两块 div 的内容由编辑器独占，React 永不往里渲染。 */}

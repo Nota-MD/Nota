@@ -32,6 +32,7 @@ import {
   events,
   type DocId,
   type DocumentChangedPayload,
+  type DocumentEditPayload,
   type NotifyPayload,
   type SecondInstancePayload,
 } from "@/bridge/ipc";
@@ -91,6 +92,31 @@ export function useAppEvents(w: 事件接线): void {
           // 用户切回去时 `EditorPane` 用旧的 `doc.text` 重建，下一次去抖 sync
           // 就把插件的改动**覆盖掉了**（backlog 第 33 项）。
           void refreshDocs();
+        }),
+
+        // **插件要编辑器在光标处改一笔**（`docs/07` 第 14 项，2026-10-04 加）。
+        //
+        // ⚠️ 与上面 `documentChanged` 的分工：那条是"宿主已经把正文换好了、
+        // 你来贴上去"，这条是"宿主改不动、请你落一笔事务"。为什么宿主改不动
+        // ——"在光标处插一段"在 markdown 里没有偏移可言，块边界上按偏移拼会
+        // 把结构弄坏——量测见 `editor/caret-snapshot.ts` 顶上那张表。
+        //
+        // ⚠️ **瞄的不是当前活动文档时什么都不做**（连 `refreshDocs` 都不叫）：
+        // 编辑器只挂着一个，替另一份文档插一段无处可插。这与上面那条
+        // （非活动文档也要刷新 state）不一样，那条是"内容已经换了，账号要对上"，
+        // 这条是**一个请求**，请求没人接就是没做成——宿主那边也没改过任何东西。
+        on<DocumentEditPayload>(events.documentEdit, (p) => {
+          if (p.id !== activeIdRef.current) return;
+          // ⚠️ **不认识的 `op` 一律丢掉**，绝不能拿 `p.text` 当插入用。
+          // 今天只有 `"insert-at-cursor"` 一种，但将来加第二、第三种时
+          // （替换选区、包住选区……），老前端收到新 `op` 却照插不误，
+          // 就等于把"替换整块"执行成了"在开头插一段"——静默改错正文，
+          // 而用户存盘之后才发现。这一行的代价是一行，不写就是一个鬼故事。
+          if (p.op !== "insert-at-cursor") return;
+          // ⚠️ **不看返回值、也不弹提示**：插件发这条时用户可能正看着别处，
+          // 而"没做成"本来就是这条路允许的结果之一（见 `payloads.ts` 那条）。
+          // 拿一条 toast 告诉用户"插件没能替你插进去"只会让他莫名其妙。
+          editorRef.current?.插入在光标处(p.text);
         }),
 
         // **用户又启动了一次 Nota**（2026-09-27 加，单实例那一格）。

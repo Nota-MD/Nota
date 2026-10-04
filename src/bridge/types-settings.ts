@@ -396,6 +396,31 @@ export type ToolbarMode = "always" | "hover" | "never";
  */
 export type CtrlWheelTarget = "font_size" | "zoom";
 
+/**
+ * 状态栏右下角那一格**平时显示哪一个统计量**（2026-09-30 照 Typora 加的）。
+ *
+ * ⚠️ 四个数一直都在算（`ui/outline.ts::countText` 一次全给），这一格只决定
+ * **平时显示哪一个**——另外三个在鼠标移进去的那个小菜单里各自带着数值摆着。
+ *
+ * ⚠️ 值与 Rust 侧 `settings::appearance::StatusMetric` 逐字对应
+ * （那边是 `#[serde(rename_all = "snake_case")]`）：**改一边就得改另一边**，
+ * 名字对不上的表现是"菜单里选了没反应"（读回来落回默认），不报错。
+ */
+export type StatusMetric = "words" | "characters" | "lines" | "minutes";
+
+/**
+ * 专注模式下非聚焦内容压多暗（`settings.appearance.focus_mode_dim`，2026-10-04）。
+ *
+ * ⚠️ 与 Rust 侧 `settings::appearance::FocusDim` 逐字对应
+ * （那边是 `#[serde(rename_all = "snake_case")]`）：**改一边就得改另一边**，
+ * 名字对不上的表现是"单选框选了没反应"（读回来落回默认），不报错。
+ *
+ * ⚠️ **具体压到几成不在这里**，在 `styles/editor.css` 那几个 `--focus-dim`
+ * 声明里——理由写在 Rust 侧那个枚举上（"选了哪一档"是设置，"那一档长什么样"
+ * 是外观）。
+ */
+export type FocusModeDim = "standard" | "strong" | "stronger";
+
 export interface AppearanceSettings {
   /** 「自定义」界面字号。⚠️ 字号本身是顶层 `ui_font_size`，这个只是"算不算数"。 */
   custom_font_size: boolean;
@@ -406,6 +431,13 @@ export interface AppearanceSettings {
   /** Ctrl+滚轮改字号还是缩放。⚠️ 默认 `"font_size"`。 */
   ctrl_wheel_target: CtrlWheelTarget;
   show_status_bar: boolean;
+  /**
+   * 状态栏右下角那一格**平时显示哪一个统计量**。默认 `"words"`。
+   *
+   * ⚠️ 没有对应的设置页控件：改它的入口就是状态栏上那个小菜单
+   * （鼠标移进去才出现的那颗上下箭头），理由同 `sidebar_width`。
+   */
+  status_metric: StatusMetric;
   /**
    * 显示**菜单栏**（顶上那条「文件 / 编辑 / 视图 …」）。**默认 `true`**。
    *
@@ -435,6 +467,35 @@ export interface AppearanceSettings {
    * 当场算）。解析、换算、以及"认不出来怎么办"都在 `styles/accent.ts`。
    */
   accent: string;
+  /**
+   * 侧栏宽度（像素）。默认 240。
+   *
+   * ⚠️ 2026-09-30 加的，用户照 Typora 要的「侧边栏右侧可以自由拖动」——
+   * 拖动改的就是这一个数（`ui/SidebarResizer.tsx`），落盘在这里，
+   * 由 `styles/applyTheme.ts` 写回 `--sidebar-width`。**没有设置页控件**。
+   *
+   * ⚠️ 合法区间 180~480 那一刀在**前端夹**（`applyTheme.ts` 与
+   * `SidebarResizer.tsx` 同一个区间），Rust 侧原样存——理由写在
+   * `settings/appearance.rs` 那个字段上。
+   */
+  sidebar_width: number;
+  /**
+   * 专注模式下非聚焦内容压多暗。默认 `"standard"`。
+   *
+   * ⚠️ 它**不在 `[focus]` 表里**——那张表是「强制专注」（番茄钟那本账），
+   * 与 `F8` 那条写作模式是同名不同物的两件事，理由写在 Rust 侧 `FocusDim` 上。
+   *
+   * ⚠️ 三档的实际数值在 `styles/editor.css`（`--focus-dim`），不在这一层。
+   */
+  focus_mode_dim: FocusModeDim;
+  /**
+   * **窗口标题里带当前文档的名字**。**默认 `true`**。
+   *
+   * ⚠️ 默认必须是开着的：那是加这一项之前的样子，而"任务栏里几份文档分不出来"
+   * 正是第 51 项要治的病。消费者只有 `ui/useWindowTitle.ts` 一处，关掉**只影响
+   * 原生窗口标题**——标签栏上的页签、状态栏里的路径都不动。
+   */
+  show_filename_in_titlebar: boolean;
 }
 
 export interface GeneralSettings {

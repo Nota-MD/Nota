@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use tauri::State;
 
 use crate::devserver::{self, DevServerState};
-use crate::document::{DocId, Document};
+use crate::document::{DocId, Document, 选区快照};
 use crate::error::{NotaError, Result};
 use crate::state::AppState;
 use crate::watch::监视器;
@@ -99,6 +99,29 @@ pub fn nota_doc_settle(
     };
     推给预览(&dev, id, &text);
     Ok(revision)
+}
+
+/// 编辑器把**当前选区**报上来（第 14 项）。
+///
+/// ⚠️ 这条命令**什么都不改**：不动 `text`、不动 `revision`、不动 `dirty`，
+/// 只是把"用户现在选着哪段字"记进镜像的一个旁路字段（`Document::选区`），
+/// 好让 Lua 插件能问「用户选中了什么」。它进不了 undo、也进不了存盘。
+///
+/// ⚠️ 传的是 `text`＋`empty` 两个值，**不是偏移量**。原因见
+/// `src/editor/caret-snapshot.ts` 的文件头：Markdown 偏移量这个坐标系在块边界
+/// 上根本不存在，收偏移量的人一定会拿它去拼接、然后拼错。
+///
+/// 前端那边有 250ms 的防抖（`EditorPane` 的 `CURSOR_DEBOUNCE_MS`），
+/// 所以这条命令的调用频率上限是每秒四次，不是每次光标移动一次。
+#[tauri::command]
+pub fn nota_doc_cursor(
+    state: State<'_, AppState>,
+    id: DocId,
+    text: String,
+    empty: bool,
+) -> Result<()> {
+    let mut docs = state.documents.lock().unwrap();
+    docs.记选区(id, 选区快照 { text, empty })
 }
 
 /// 正文变了 → 让盯着这份文档的预览重新写入口文件。

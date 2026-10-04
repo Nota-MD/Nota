@@ -7,9 +7,11 @@
 //! 也让"权限"变成一句运行时的客气话而不是一道结构上的墙。
 //!
 //! 唯一的例外是本文件里那几个**永远可用**的东西（`log` / `command` / `event` /
-//! `diff` / `i18n` / `version` / `plugin_id`）：它们不碰文档也不碰磁盘，是插件跟自己、
-//! 跟宿主说话用的，或者（`diff` / `i18n`）是**纯的**——前者一段文本进一段文本出，
-//! 后者只读插件自己目录里的 `lang/<tag>.toml`（理由见 `api/i18n.rs` 顶上那段）。
+//! `diff` / `i18n` / `json` / `time` / `version` / `plugin_id`）：它们不碰文档也不碰磁盘，
+//! 是插件跟自己、跟宿主说话用的，或者（`diff` / `i18n` / `json` / `time`）是**纯的**——
+//! `diff` 一段文本进一段文本出，`i18n` 只读插件自己目录里的 `lang/<tag>.toml`
+//!（理由见 `api/i18n.rs` 顶上那段），`json` 一段文本进一个值出，
+//! `time` 只是把系统时钟报一遍。
 //!
 //! # 加新成员时的判据
 //!
@@ -23,6 +25,7 @@ pub mod fs;
 pub mod git;
 pub mod http;
 pub mod i18n;
+pub mod json;
 pub mod review;
 pub mod settings;
 pub mod time;
@@ -94,6 +97,16 @@ pub fn build(
     //（`src/ui/panel-nodes.ts` 的白名单），格式的定义放这边才不会两边各写一份。
     // 详见 `lua/api/diff.rs` 顶上那段。
     set(nota.set("diff", diff::build(lua)?), lua)?;
+
+    // ── 永远可用：拆 JSON（`nota.json`）──────────────────────────────────
+    //
+    // 2026-10-04 加，给 AI 插件的流式回答用（`docs/07` 第 58 项）：SSE 的每一行
+    // 都是一小段独立的 JSON，等不到"整份响应一次拆好"那条路。
+    //
+    // 判据与 `diff` / `i18n` / `time` 一致：**它是纯的**（一段文本进、一个值出），
+    // 不需要申请任何能力。⚠️ 这**正是** `json_to_lua` 顶上那条注释留的判断依据，
+    // 「第二个需要它的地方」到了——细节写在 `api/json.rs` 顶上那段。
+    set(nota.set("json", json::build(lua)?), lua)?;
 
     // ── 永远可用：插件自己的文案表（`nota.i18n`）──────────────────────────
     //
@@ -303,12 +316,13 @@ pub fn lua_to_json(lua: &Lua, v: Value) -> mlua::Result<serde_json::Value> {
     })
 }
 
-/// JSON → Lua 值。**`lua_to_json` 的逆**，目前只有一处用得上：
-/// `nota.http` 把响应体顺手拆开（见 `http.rs::收口`）。
+/// JSON → Lua 值。**`lua_to_json` 的逆**，两处用得上：
+/// `nota.http` 把响应体顺手拆开（见 `http.rs::收口`），以及 `nota.json.decode`
+/// 给插件自己拆（见 `api/json.rs`）。
 ///
-/// ⚠️ **没有给插件一张 `nota.json` 表，这是有意的。** 现在只有"读 HTTP 响应"
-/// 这一处需要解析 JSON，而多一张表就多一份要维护、要写文档、要进能力申请的
-/// API 面。等真出现第二个需要它的地方再抽出去——那时这条注释就是判断的依据。
+/// ⚠️ **那条"等第二个地方出现再抽出去"的判断依据已经交割了**（2026-10-04）：
+/// 第二个地方是 AI 插件的流式回答——SSE 的每一行都是一小段独立的 JSON。
+/// 抽出去的是**这一份实现本身**，所以两条路拆出来的形状一定一样。
 ///
 /// ⚠️ `null` 映射成 `nil`，于是 JSON 里值为 `null` 的键在 Lua 表里**不存在**。
 /// 这是 Lua 的固有性质（表里存不了 nil），不是设计上的选择：插件那边读不到

@@ -35,27 +35,19 @@
  *
  * # mermaid 从哪儿来（⚠️ 这里动过手，别改回去）
  *
- * mermaid 装在**嵌套位置**：`node_modules/@milkdown/plugin-diagram/node_modules/mermaid`
- * （10.9.8，MIT）。想直接 import 那个嵌套路径是**两条路都堵死**的：
+ * mermaid（10.9.8，MIT）是**顶层依赖**，`package.json` 里有一行——
+ * 理由是本仓惯例："直接 import 的包必须在 `package.json` 里显式列出来"。
  *
- * - `tsc`（`moduleResolution: "bundler"`）与 `vite` **都**读
- *   `@milkdown/plugin-diagram` 的 `exports`，而它只声明了 `"."` 一条 →
- *   任何子路径都报 `Missing "./node_modules/mermaid" specifier`。
- *   底下那句 `import mermaid from "mermaid"` 正是拿它实测出来的。
- * - 相对路径（`../../node_modules/…`）能绕过 `exports`，但它把"npm 怎么摆目录"
- *   写死进了源码：哪天 mermaid 被提升到顶层，这条路径当场断。
+ * ⚠️ **2026-10-04（第 27 项）两处变了，前史记在这里**：
  *
- * 所以按本仓既有惯例办——`create.ts` 顶上那段写着"直接 import 的包必须在
- * `package.json` 里显式列出来"（plugin-prism 就是这么进去的）。本文件要求
- * `package.json` 的 `dependencies` 里加一行：
- *
- * ```json
- * "mermaid": "^10.9.8"
- * ```
- *
- * ⚠️ 这一行的代价是**要跑一次 `npm install`**（在那之前 `tsc` 会报 TS2307）。
- * 装完之后 npm 会把它和 plugin 那份**去重成同一个实例**——这一点是对的：
- * mermaid 的主题是**全局配置**（见下面 `渲染`），两份实例会互相看不见。
+ * - 当年它装在**嵌套位置**（`node_modules/@milkdown/plugin-diagram/node_modules/mermaid`），
+ *   想直接 import 那个嵌套路径两条路都堵死（上游 `exports` 只声明 `"."`；
+ *   相对路径又把 npm 的目录摆法写死进源码）——所以它才被显式列进 `package.json`。
+ *   现在上游包整个退役、mermaid 就是顶层包，嵌套那一段成为历史。
+ * - 当年是**静态** `import mermaid from "mermaid"`（几 KB 的插件连带几百 KB
+ *   的 mermaid 一起进主包）。现在是 `渲染` 里的**动态 import**——全仓唯一
+ *   import 点，只有真出图时才加载；mermaid 的主题是**全局配置**（见下面 `渲染`），
+ *   ESM 的模块记录保证全进程还是同一个实例。
  *
  * # 缓存（性能）
  *
@@ -75,15 +67,19 @@
  * mermaid 的原文报错），右上角那颗「编辑源码」就在旁边，改完立刻重画。
  */
 
-import { diagramSchema } from "@milkdown/plugin-diagram";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
 
-// ⚠️ 这一行要 `package.json` 里那行显式依赖撑着，理由见文件头。
-import mermaid from "mermaid";
+// ⚠️ mermaid **不在这里静态 import**（2026-10-04，第 27 项）：全仓唯一
+// import 点在下面 `渲染` 里，是动态的——几百 KB 只有真出图时才加载。
+// 原先那条 `import mermaid from "mermaid"`（连同"必须在 package.json 里
+// 显式列出"的整段来路，见 git 历史）随 `@milkdown/plugin-diagram` 一起
+// 退役了；`package.json` 里那行依赖**留着**（动态 import 一样要它）。
 
 import { t } from "@/i18n";
+
+import { 图表规格 } from "@/editor/diagram-node";
 
 /** 节点名。与 plugin 里 `const id = "diagram"` 一致，判类型时要用。 */
 const 节点名 = "diagram";
@@ -155,12 +151,20 @@ function 排队<T>(任务: () => Promise<T>): Promise<T> {
  * "这一次用哪个主题"这个参数，只能先 `initialize` 再 `render`。两份主题不同的
  * 渲染并行跑，后 `initialize` 的那份会把先跑的那份的配色顶掉。所以上面那条链
  * 把"设主题 + 渲染"整段锁起来。
+ *
+ * ⚠️ **mermaid 是动态 import 的**（2026-10-04，第 27 项）：它几百 KB，
+ * 静态 import 会把它整个打进首屏——而多数文档一张图都没有。
+ * 这里是全仓**唯一**的 import 点，`Promise` 在飞的时候天然去重
+ * （ESM 的模块记录只有一份），连"加载中"的状态都不用画：
+ * 第一次出图晚一两秒，之后有缓存。
  */
 async function 渲染(源码: string, 主题: 明暗): Promise<渲染结果> {
   return 排队(async () => {
-    // `startOnLoad` 是 plugin 建 schema 时设过的，这里重申一遍：`initialize`
-    // 是"整个配置表覆盖一次"，少给一条就落回默认值（默认 `true` 会让 mermaid
-    // 自己去扫页面上的 `.mermaid` 节点，那是另一条我们不要的路）。
+    const mermaid = (await import("mermaid")).default;
+
+    // `startOnLoad` 这里重申一遍：`initialize` 是"整个配置表覆盖一次"，
+    // 少给一条就落回默认值（默认 `true` 会让 mermaid 自己去扫页面上的
+    // `.mermaid` 节点，那是另一条我们不要的路）。
     mermaid.initialize({
       startOnLoad: false,
       theme: 主题 === "dark" ? "dark" : "default",
@@ -361,7 +365,9 @@ function 取身份(node: PMNode): string {
 export const diagramView = $view(
   // ⚠️ 要的是 `$NodeSchema` 上的 `.node`，不是 `$NodeSchema` 本身——
   // `$view` 收的是 `$Node | $Mark`（同 `code-block.ts` 那句注）。
-  diagramSchema.node,
+  // 2026-10-04 起这颗 schema 是本仓自己的（`diagram-node.ts::图表规格`，
+  // 第 27 项替掉了 `@milkdown/plugin-diagram`），形状与上游逐字段一致。
+  图表规格.node,
   () =>
     (initialNode: PMNode, view: EditorView, getPos: () => number | undefined): NodeView => {
       // ── 骨架 ──────────────────────────────────────────────────────────

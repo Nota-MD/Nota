@@ -543,6 +543,11 @@
   max-height: 55vh;
   /* 滚到两头时不要把滚动漏给背后的正文（那条理由同 `.confirm-message`）。 */
   overscroll-behavior: contain;
+  /* ⚠️ **2026-10-04 目检抓出来的**：WebKitGTK 在这台机器上用的是**浮层滚动条**
+     （没有轨道、直接压在内容上）。不留这条 `padding-right`，最长的那一行
+     （权限表右列、「本机信息」里的 `rustc …`）**最后一个字就被那根条压住**。
+     `scrollbar-gutter` 管不了浮层滚动条，只能用留白。 */
+  padding-right: 12px;
 }
 
 .about-lead {
@@ -565,4 +570,132 @@
   line-height: 1.6;
   /* 长路径 / 长能力名（`core:window:*`）不要撑破框。 */
   overflow-wrap: anywhere;
+}
+
+/* ── 表格（2026-10-04）──────────────────────────────────────────────────────
+   故障排除那两张「项 ｜ 值」表、以及权限列表那张「权限说明 ｜ 备注」表。
+   用户原话：「用表格的形式展示权限说明和备注」。
+
+   ⚠️ 这里**不写 `border-collapse: separate` 那一套**：GNOME 的关于窗里这类
+   信息是**无框线**的，靠行距和颜色分栏。画满格线会让一页十来行变成一张格子纸，
+   而这个框里已经有足够的层次（小标题 / 灰字）了。 */
+
+.about-table {
+  width: 100%;
+  margin: 0 0 14px;
+  border-collapse: collapse;
+  /* 单元格之间的默认 2px 沟去掉，行高由 `td` 的 padding 定。 */
+  line-height: 1.55;
+}
+
+/* 小标题（「编译信息」「本机信息」）。⚠️ 比正文重、比页标题轻——它是**分组**，
+   不是新的一层。 */
+.about-sub {
+  margin: 0 0 6px;
+  color: var(--fg);
+  font-size: 0.92em;
+  font-weight: 600;
+}
+
+.about-table th,
+.about-table td {
+  padding: 3px 0;
+  text-align: left;
+  vertical-align: top;
+  /* 长值（`uname` 那一行、长路径）不要撑破框。 */
+  overflow-wrap: anywhere;
+}
+
+/* 「项 ｜ 值」那张表：左列是标签。⚠️ 不给固定宽度——`webkit2gtk` 那种长名字
+   该占多宽就占多宽，写死一个 px 反而会在窄字体下换行。 */
+.about-table th[scope="row"] {
+  padding-right: 14px;
+  color: var(--fg-muted);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* 「权限说明 ｜ 备注」那张表的表头。 */
+.about-table-2col thead th {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* ⚠️⚠️ **这两条是 2026-10-04 目检抓出来的，不是修饰。**
+   不写它们的时候这张表**挤成一坨**：上面那条 `overflow-wrap: anywhere` 把每个
+   单元格的 min-content 宽度压到**一个字**，`table-layout: auto` 于是把左列
+   压到四五个字宽，右列**紧贴着**左列排——两列的字看着像一句话，
+   「用默认程」后面直接接着「正文里点到…」。表本身是合法的，就是读不了。
+   `fixed` ＋ 给左列一个百分比，列宽就**不再由内容反推**，两列各占各的。 */
+.about-table-2col {
+  table-layout: fixed;
+}
+
+.about-table-2col thead th:first-child,
+.about-table-2col tbody td:first-child {
+  /* 名字都很短（中文最长一句十几个字），三成够放，也让右列那块长备注有地方摊开。 */
+  width: 32%;
+  padding-right: 16px;
+}
+
+/* 权限说明那一列（左边）。⚠️ 它比右列重：一眼扫的是**要了什么**，
+   备注是补话。 */
+.about-cell-name {
+  padding-right: 16px;
+  font-weight: 600;
+}
+
+/* 法律信息里那个许可证名。**画成链接的样子**（用户原话："用超链接显示"）——
+   所以它要点得出颜色差、并且有下划线，否则它会像一句普通的粗体字。 */
+.about-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.about-link:hover {
+  /* 悬停时**不要只靠颜色**（某些界面风格里 `--accent` 与正文对比不高）。 */
+  text-decoration-thickness: 2px;
+}
+
+.about-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── 许可证全文（`ui/LicenseDialog.tsx`）────────────────────────────────────
+   ⚠️ 它借的是确认框那层壳（`.confirm-backdrop` / `.confirm-dialog`），
+   只加这两条。 */
+
+.lic-dialog {
+  /* 正文是 30 来行的固定宽度文本，比确认框宽一档才不憋。 */
+  min-width: 480px;
+  max-width: 640px;
+}
+
+.lic-text {
+  margin: 0 0 18px;
+  /* ⚠️ 55vh + 标题行 + 按钮行得留在 100vh 里（同 `.about-page-body` 那条）；
+     矮屏上照样能滚到底下的「关闭」。 */
+  max-height: 55vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+  /* ⚠️ `pre-wrap` 而不是 `pre`：许可证正文是按 80 列排的，框比那窄时
+     （用户把界面字号调大就会）该折行，而不是横着滚出去。 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* ⚠️ 同 `.about-page-body` 那条：浮层滚动条会压住每行最后一个字。
+     许可证是**按 80 列定宽**的正文，最容易撞上这条。 */
+  padding-right: 12px;
 }

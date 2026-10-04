@@ -66,7 +66,22 @@ import type { CommandPayload, EditorCommand } from "./create-types";
 
 /** `h1`~`h6`。它们共用一条命令，只是层数不同，所以单独一族。 */
 type HeadingCommand = `h${1 | 2 | 3 | 4 | 5 | 6}`;
-type BlockCommand = Exclude<EditorCommand, HeadingCommand>;
+
+/**
+ * ⚠️ `frontMatter` 也**不在下面那张表里**（`docs/07` 第 64 项）：它换的是**文档树
+ * 之外**的那一段（`front-matter.ts`），而这张表的每一项只拿得到 `(editor, payload)`
+ * ——没有那段文本、也没有 `onChange`，写不出正确实现。它的实现落在
+ * `create.ts::跑一条命令` 里（`Exclude` 是**编译期**的保证：谁要把它塞进
+ * `COMMANDS`，这里当场报缺键/多键）。
+ */
+type BlockCommand = Exclude<EditorCommand, HeadingCommand | "frontMatter">;
+
+/**
+ * 下面那张表**吃得下**的命令名。`跑命令` 收这个，不收整个 `EditorCommand`：
+ * 调用方（`create.ts::跑一条命令`）先把 `frontMatter` 那一条拦走，剩下的才能
+ * 进来——这个类型让"拦没拦"在编译期就查得出来。
+ */
+export type 表内命令 = Exclude<EditorCommand, "frontMatter">;
 
 const HEADING_RE = /^h([1-6])$/;
 
@@ -177,7 +192,7 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
  * ⚠️ 类型谓词而不是 `as`（见 {@link isHeading}）——写成 `as` 的话，表里漏了
  * 一项这种错误也会被一起放过去。
  */
-export function 跑命令(editor: Editor, name: EditorCommand, payload?: CommandPayload): void {
+export function 跑命令(editor: Editor, name: 表内命令, payload?: CommandPayload): void {
   if (isHeading(name)) {
     editor.action(callCommand(wrapInHeadingCommand.key, Number(HEADING_RE.exec(name)![1])));
   } else {

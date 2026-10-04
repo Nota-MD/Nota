@@ -43,7 +43,7 @@ import { useT } from "@/i18n";
 import { accelSig, accelToText, eventAccel, formatAccel, parseAccel } from "@/ui/accel";
 import { walkMenuItems, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
 import { 是最近条目 } from "@/ui/recentMenu";
-import { ActionButton, Note, SettingRow, SettingsGroup } from "../primitives";
+import { ActionButton, SettingRow, SettingsGroup } from "../primitives";
 
 interface Props {
   /** 全应用那一份菜单表，**已经叠过用户的覆盖**（`App.tsx` 的 `菜单`）。 */
@@ -250,21 +250,16 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
         </SettingsGroup>
       ))}
 
-      {/* ⚠️ 这一段**夹了 `<strong>` 与 `<code>`**，所以只能按标签边界切成几段
-          分别翻——`t()` 返回的是字符串，塞不进元素。切的时候每一段自己得是
-          一句**说得通的话**（哪怕很短），不然英文那边拼不出句子。
-          ⚠️ 别把切出来的碎片合并成一个键：那会把 `<strong>` / `<code>` 一起
-          降级成纯文本，而这一段的重点恰恰是那个文件路径。 */}
-      <Note>
-        {t("This table is")}
-        <strong>{t(" read from the menu")}</strong>
-        {t(", so it always matches what the menu says. Bindings you change are stored in the settings file; the ones you don't change follow the ")}
-        <code>src/ui/commands.ts</code>
-        {t(" file — so if a default binding changes there later, the rows you never touched will follow it.")}
-      </Note>
-
+      {/* ⚠️ **2026-10-04：这里原本有一条 `<Note>`**，讲"改过的绑定存在哪儿"，
+          里面夹着 `<strong>` 与 `<code>`（那个文件路径），所以当时是按标签边界
+          切成几段分别翻的。按用户那一轮「全删」的口径整条删掉了，那几段碎片
+          也一并从 `src/i18n/zh-settings.ts` 里清了。
+          ⚠️ 那个手法本身**没作废**：这一页别处还有夹标签的句子要翻（上面
+          「{0} 变了…」那一句是另一种做法——整句一个键 ＋ `{0}` 占位）。
+          真要再写夹标签的长句，照旧按标签边界切，别把碎片合并成一个键：
+          合并会把 `<strong>` / `<code>` 一起降级成纯文本。 */}
       {/* 「全部恢复默认」放在最后、而且**只在有改动时出现**：没有改动时它是个
-          没有意义的按钮，而这一页的 Note 已经很长了，不该再压一颗永远灰着的。 */}
+          没有意义的按钮，不该在那儿压一颗永远灰着的。 */}
       {Object.keys(覆盖).length > 0 && (
         <div className="stg-keys-reset-all">
           <ActionButton onClick={() => onChange({ keys: { overrides: {} } })}>

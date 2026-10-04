@@ -17,17 +17,34 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
-  AppLang, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
+  AppLang, Diagnostics, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
   会话, 路径种类,
 } from "./types";
+// ⚠️ 这一条是**类型专线**：`选区快照` 的家在编辑器那一侧
+// （`editor/caret-snapshot.ts`，它的文件头就是这张表的设计说明），
+// 不搬进 `bridge/types.ts`——搬过去会让"桥"这个模块变成选区的定义者，
+// 而桥对这一格的全部职责只是**转手**（`text`／`empty` 两个字段照抄给 Rust）。
+// `import type` 编译后整行消失，所以不会把 ProseMirror 拖进桥里。
+import type { 选区快照 } from "@/editor/caret-snapshot";
 
 export * from "./types";
 
 // ── 文档 ──────────────────────────────────────────────────────────────────
 export const api = {
+  /**
+   * **诊断信息**（「关于 → 故障排除」那一页）。
+   *
+   * ⚠️ 它起子进程问 `uname` 一类的（见 `src-tauri/src/commands/diagnostics.rs`
+   * 那条 `spawn_blocking`），所以**别在渲染里调**——那一页是打开时才拉一次。
+   */
+  diagnostics: {
+    /** 采一份编译信息 ＋ 本机信息。取不到的格子是空串，不报错。 */
+    collect: () => invoke<Diagnostics>("nota_diagnostics"),
+  },
+
   doc: {
     create: () => invoke<DocId>("nota_doc_new"),
     open: (path: string) => invoke<DocId>("nota_doc_open", { path }),
@@ -38,6 +55,18 @@ export const api = {
      * 用户还没碰"**。与 `sync` 只差一个 `dirty` 的判法，别混用（BUG-12）。
      */
     settle: (id: DocId, text: string) => invoke<number>("nota_doc_settle", { id, text }),
+    /**
+     * **编辑器报上来的选区快照**（`docs/07` 第 14 项，2026-10-04 加）。
+     *
+     * ⚠️ 与 `sync` **不是一回事**：`sync` 推的是**正文**（"用户改了"），
+     * 这条推的是**光标**（"用户选了什么 / 光标在哪"）。两条路各走各的去抖——
+     * 只挪光标不改字的时候**只有这一条会响**。
+     *
+     * ⚠️ 它是**旁路**：宿主那份只是镜像的一份快照，推丢了不影响正文，
+     * 下一笔事务会补上（`ui/EditorPane.tsx` 的 `记快照` 里那条注解）。
+     */
+    cursor: (id: DocId, 快照: 选区快照) =>
+      invoke<void>("nota_doc_cursor", { id, text: 快照.text, empty: 快照.empty }),
     save: (id: DocId, path?: string) =>
       invoke<string>("nota_doc_save", { id, path: path ?? null }),
     /**
@@ -483,6 +512,22 @@ export const api = {
     /** 信任这个插件的签名者（TOFU + 显式信任）。见 `plugin/package.rs` 那张表。 */
     trust: (id: string) => invoke<void>("nota_plugin_trust", { id }),
 
+    /**
+     * 把插件声明的一格设置写下去（2026-10-04 加：「设置 → 拓展」那一页上的滑杆）。
+     *
+     * ⚠️ **只有清单里声明过的那几格能写**（`[[settings]]`）：宿主拿 `(plugin, key)`
+     * 去清单里对，对不上就拒。这是"前端能写什么"的唯一围栏——见
+     * `commands/plugin.rs::nota_plugin_setting_set`。
+     *
+     * ⚠️ 值由宿主**夹进范围**再写（`SettingDecl::夹紧`），前端传越界的数不会出错，
+     * 只是落到边界上。
+     *
+     * ⚠️ 写完宿主会发一条 `events.pluginPanel`（面板该重拉了）：插件那个面板
+     * 读的就是这一格。`live` 的面板本来每秒都拉，那一声是给**不是 live** 的面板的。
+     */
+    setSetting: (plugin: string, key: string, value: number) =>
+      invoke<void>("nota_plugin_setting_set", { plugin, key, value }),
+
     /** 信任库里现在有哪几把钥匙。 */
     trustList: () => invoke<信任记录[]>("nota_plugin_trust_list"),
 
@@ -681,6 +726,24 @@ export const events = {
   notify: "nota:notify",
   documentChanged: "nota:document-changed",
   /**
+   * **插件要在光标处改一笔**（`docs/07` 第 14 项，2026-10-04 加）。
+   *
+   * ⚠️ 与 `documentChanged` 的分工是这个设计的关键：那条是**"正文已经换了"**
+   * （宿主改完镜像再通知，前端整篇 `setMarkdown`），这条是**"请你替我改"**
+   * ——宿主**改不动**，因为"在光标处插一段"在 markdown 里**没有对应的偏移**
+   * （量测见 `editor/caret-snapshot.ts` 顶上那张表：块边界上按偏移拼会把
+   * 结构弄坏）。所以它只递一个**意图**，由编辑器落成一笔真事务。
+   *
+   * ⚠️ 因此这条事件**不保证被处理**：编辑区没挂载、那条意图瞄的不是当前
+   * 文档、或者当前实例是只读的，都会静默丢掉。这是**故意的**——另一条路
+   * （宿主按偏移拼字符串）是"看起来成功、存盘之后才发现结构坏了"。
+   *
+   * ⚠️ 频道名在 Rust 侧是 `lua/api/document.rs::EVENT_EDIT`。两处必须是同一个
+   * 字符串，改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默
+   * 成功的）。
+   */
+  documentEdit: "nota:document-edit",
+  /**
    * 某个面板的**内容**变了（插件喊了一声 `nota.ui.refresh`）。
    *
    * ⚠️ 这条**没有**违反"声明走拉、发生走推"那条判据（BUG-13），因为它是
@@ -707,6 +770,34 @@ export const events = {
    * 字符串，改一边不报错、只是收不到。
    */
   pluginReview: "nota:plugin-review",
+  /**
+   * **插件正在往外吐字，先画出来**（插件喊了 `nota.ui.stream(text)`，
+   * 2026-10-04 加，`docs/07` 第 58 项）。
+   *
+   * 载荷是 `{plugin, text}`——**这条事件带着内容**。
+   *
+   * ⚠️ **这是"声明走拉、发生走推"那条判据（BUG-13）唯一的例外，而且是不得不然**
+   * ——不是图省事。上面 `pluginPanel` 那条的收法是"收到就去重拉"，但那条路
+   * **在长命令跑着的时候根本回不来**：插件命令执行期间宿主一直握着 `plugins`
+   * 锁（`commands/plugin.rs::nota_plugin_call`），而 `nota_plugin_panel_content`
+   * 要的正是同一把锁。于是"边生成边显示"如果走拉，屏幕上会一直是旧的，
+   * 直到那次命令整个跑完——**拉到的东西永远是最终结果**。
+   * 完整推演在 `lua/api/ui.rs::实时表` 顶上，那边是这条设计的第一现场。
+   *
+   * ⚠️ 因此这条**只能装临时显示用的东西**，不许拿它当第二条状态通道：
+   * 内容不进面板的任何一份状态，`text` 为空表示**收工**（把这段撤掉）。
+   * 插件收工时**必须**另喊一次 `nota.ui.refresh` 去拉那份真内容——不然屏幕上
+   * 会一直停在那半截上。
+   *
+   * ⚠️ 丢了不影响正确性：它本来就只是"正在写的字"，收工之后那份完整内容
+   * 走的是拉。宿主那边还只带**最后 8000 个字符**（`ui.rs::实时上限`），
+   * 因为这条一秒要发好几次。
+   *
+   * ⚠️ 频道名在 Rust 侧是 `plugin/mod.rs::EVENT_PANEL_STREAM`。**两处必须说
+   * 同一个字符串**，改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit
+   * 是静默成功的）。
+   */
+  pluginStream: "nota:plugin-stream",
   /**
    * 原生菜单被点了，载荷是命令 **id**。
    *

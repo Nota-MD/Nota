@@ -24,6 +24,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{NotaError, Result};
 
+/// 「请你替我改一处正文」——宿主发给前端的**编辑意图**（第 14 项）。
+///
+/// ⚠️ 这条事件跟 `nota:document-changed` 的方向**正好相反**，别混：
+/// * `nota:document-changed` = 「正文已经换了」——宿主已经改完镜像，前端来拿新的；
+/// * `nota:document-edit`   = 「请你替我改」——宿主**改不了**，这是一条**意图**，
+///   要前端用一次真正的 ProseMirror 事务去落地（保住撤销栈、光标、滚动位置）。
+///
+/// 为什么宿主不自己改镜像了事：见 `选区快照` 那段和
+/// `src/editor/caret-snapshot.ts` 的文件头。宿主手里只有一段纯文本，块边界上
+/// 它**算不出**该往哪儿插。
+///
+/// ⚠️ 这条事件**允许被丢掉**：编辑器没挂着（比如正停在源码模式、或那条消息到的
+/// 时候用户已经切走了文档），意图就作废。它是"一次请求"，不是"一份状态"——
+/// 所以它**不走拉取**，也不进任何快照（对比 `focus` 那套：状态一律可拉）。
+pub const EVENT_EDIT: &str = "nota:document-edit";
+
 /// 文档句柄。进程内唯一、单调递增，**不重用**。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct DocId(pub u64);
@@ -56,6 +72,40 @@ pub struct Document {
     /// 打开 / 存盘 / 重载 / `settle` 时更新。
     #[serde(skip)]
     pub clean_text: String,
+    /// 编辑器报上来的选区快照（第 14 项）。**宿主只读、不动**。
+    ///
+    /// 这里存的**不是偏移量**，是选中的那段字。原因见
+    /// `src/editor/caret-snapshot.ts` 的文件头：Markdown 字符偏移这个坐标系
+    /// 在块边界上根本不存在（在列表项开头插字会多出 `- `，在段落之间插字
+    /// 会多出空行），所以拿偏移去做字符串拼接**必然**跟编辑器真实结果对不上。
+    /// 插件真要改正文，走 `insert_at_cursor` 把意图交回编辑器执行。
+    ///
+    /// 选区是"当下这一刻的界面状态"，不是文档内容：它不进 `dirty`、
+    /// 不进 `revision`、不落盘，`serde(skip)` 让它也别进任何序列化输出。
+    #[serde(skip)]
+    pub 选区: Option<选区快照>,
+}
+
+/// 编辑器报上来的选区快照。
+///
+/// `empty` 不能省：选中一个原子节点（图片、公式）时 `text` 是空的字符串，
+/// 但选区**不是**空的。靠 `text.is_empty()` 判断会把这两件事混成一件。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct 选区快照 {
+    pub text: String,
+    pub empty: bool,
+}
+
+// ⚠️ **手写**，不用 `derive(Default)`。派生出来的那一份是
+// `{ text: "", empty: false }`，读作"选着一段空的字"——那正是"选中了一个原子
+// 节点（图片、公式）"的样子，是一句**假话**：`Default` 该表示的是"什么都没选"，
+// 也就是 `empty: true`。这一格本身不会有人真的去 `default()` 取（
+// `Document::选区` 是 `Option`，没有值就是 `None`），但一个说谎的 `Default`
+// 迟早会被谁拿去当"空选区"用。
+impl Default for 选区快照 {
+    fn default() -> Self {
+        Self { text: String::new(), empty: true }
+    }
 }
 
 impl Document {
@@ -69,103 +119,11 @@ impl Document {
     }
 }
 
-/// 从正文里猜标题。
-///
-/// 取值顺序：
-/// 1. YAML front matter 里的 `title:`；
-/// 2. 第一个 ATX 标题（`# ` ~ `###### `）；
-/// 3. 文件名的 stem；
-/// 4. "未命名 N"。
-///
-/// `strict` = 严格模式（`Settings::strict_markdown`）：它只影响第 2 条认哪些行
-/// ——严格时井号后面**必须**有空格，宽松（默认）时 `#标题` 也算。见 `strip_atx`。
-pub fn derive_title(
-    text: &str,
-    path: Option<&Path>,
-    untitled_index: u64,
-    strict: bool,
-) -> String {
-    if let Some(t) = front_matter_title(text) {
-        return t;
-    }
-    if let Some(h) = first_heading(text, strict) {
-        return h;
-    }
-    if let Some(p) = path {
-        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-            if !stem.is_empty() {
-                return stem.to_owned();
-            }
-        }
-    }
-    format!("未命名 {untitled_index}")
-}
-
-/// 取 YAML front matter 里的 `title:`。front matter 必须**在文件最开头**，
-/// 首行是 `---`，到下一个 `---` 或 `...` 结束（与 Jekyll 一致）。
-fn front_matter_title(text: &str) -> Option<String> {
-    let mut lines = text.lines();
-    if lines.next()?.trim_end() != "---" {
-        return None;
-    }
-    for line in lines {
-        let trimmed = line.trim_end();
-        if trimmed == "---" || trimmed == "..." {
-            return None; // front matter 结束，里面没有 title
-        }
-        if let Some(rest) = trimmed.strip_prefix("title:") {
-            let value = rest.trim().trim_matches(|c| c == '"' || c == '\'');
-            if !value.is_empty() {
-                return Some(value.to_owned());
-            }
-        }
-    }
-    None
-}
-
-/// 第一个 ATX 标题的文本。跳过围栏代码块里的 `#`（那多半是 shell 注释）。
-fn first_heading(text: &str, strict: bool) -> Option<String> {
-    let mut in_fence = false;
-    for line in text.lines() {
-        let trimmed = line.trim_start();
-        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
-            in_fence = !in_fence;
-            continue;
-        }
-        if in_fence {
-            continue;
-        }
-        if let Some(rest) = strip_atx(trimmed, strict) {
-            if !rest.is_empty() {
-                return Some(rest.to_owned());
-            }
-        }
-    }
-    None
-}
-
-/// 若这一行是 ATX 标题，返回标题文本（去掉 `#` 与可选的收尾 `#`）。
-///
-/// ⚠️ **严格与宽松只差一句**：井号后面没空格时（`#foo`），严格模式不认，
-/// 宽松模式认。宽松是**默认**：`#foo` 这种写法在文档里很常见，
-/// 关着才不会把它们降级成普通段落。⚠️ 前端有一份**同构**的判据
-/// （`src/editor/atx.ts`），两边一起改。
-///
-/// ⚠️ 这里**只读不写**：宽松模式把 `#foo` 认成标题，但**正文一个字都不改**
-/// ——前端那边也只是按标题排版（`src/editor/lax-heading.ts`），存盘存回
-/// `#foo`（用户 2026-09-24 定的：「如果关闭，存盘不要自动修复」）。
-fn strip_atx(line: &str, strict: bool) -> Option<&str> {
-    let hashes = line.chars().take_while(|c| *c == '#').count();
-    if !(1..=6).contains(&hashes) {
-        return None;
-    }
-    let rest = &line[hashes..];
-    // `# foo` 两模式都算标题；`#foo` 只在宽松模式算。
-    if strict && !rest.starts_with(' ') && !rest.is_empty() {
-        return None;
-    }
-    Some(rest.trim().trim_end_matches('#').trim())
-}
+// 标题推导（`derive_title` 那一族）2026-10-04 拆去了 `document/title.rs`：
+// 那一块是**纯文本进、标题出**，不认识 `DocId`、不碰仓库、不取锁，是一条现成的缝。
+// 这一行 `pub use` 让 `crate::document::derive_title` 这个老路径照旧成立。
+mod title;
+pub use title::derive_title;
 
 /// 打开的文档集合。
 #[derive(Debug, Default)]
@@ -222,6 +180,7 @@ impl DocumentStore {
             revision: 0,
             untitled_index: self.untitled_count,
             clean_text: String::new(),
+            选区: None,
         };
         self.docs.push(doc);
         self.active = Some(id);
@@ -254,6 +213,7 @@ impl DocumentStore {
             // 所以不占号——`untitled_count` 是给新建文档排队的。
             untitled_index: 0,
             clean_text: clean,
+            选区: None,
         });
         self.active = Some(id);
         Ok(id)
@@ -431,6 +391,17 @@ impl DocumentStore {
 
     pub fn list(&self) -> &[Document] {
         &self.docs
+    }
+
+    /// 记下编辑器报上来的选区（第 14 项）。只影响 `选区` 这一个字段。
+    ///
+    /// ⚠️ **别在这里碰 `revision` 或 `dirty`**。选区是界面状态、不是内容，
+    /// 它每 250ms 就可能变一次；让它去撞 `revision`，插件会以为正文一直在变，
+    /// 让它去撞 `dirty`，用户光是点两下光标就会看见"未保存"的星号。
+    pub fn 记选区(&mut self, id: DocId, 选区: 选区快照) -> Result<()> {
+        let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
+        doc.选区 = Some(选区);
+        Ok(())
     }
 
     /// 跟上「严格模式」的开关，并**立刻重算所有已打开文档的标题**。
@@ -751,5 +722,59 @@ mod tests {
         s.sync(id, "有东西了".to_owned()).unwrap();
         assert!(!s.get(id).unwrap().dirty, "推回一模一样的内容不该变脏");
         let _ = std::fs::remove_file(&path);
+    }
+
+    /// 第 14 项：选区是**界面状态**，不是文档内容。
+    ///
+    /// ⚠️ 这条测的全部内容就是"它什么都碰不着"。选区每 250ms 就会变一次
+    /// （`EditorPane` 的 `CURSOR_DEBOUNCE_MS`），一旦它去撞 `revision`，
+    /// 插件会以为正文一直在被人改；去撞 `dirty`，用户光点两下光标就会
+    /// 看见"未保存"的星号。两者都是那种"看起来像别的 BUG"的鬼故事。
+    #[test]
+    fn 记选区不碰版本也不碰脏标记() {
+        let mut s = DocumentStore::new(LAX);
+        let id = s.create_untitled();
+
+        // 一开始是 `None`——"编辑器还没报过"，跟"我知道、没选东西"不是一回事。
+        assert!(s.get(id).unwrap().选区.is_none());
+
+        let 版本 = s.get(id).unwrap().revision;
+        s.记选区(
+            id,
+            选区快照 { text: "选中".to_owned(), empty: false },
+        )
+        .unwrap();
+
+        let d = s.get(id).unwrap();
+        assert_eq!(d.选区.as_ref().unwrap().text, "选中");
+        assert!(!d.选区.as_ref().unwrap().empty);
+        assert_eq!(d.revision, 版本, "选区不该撞 revision");
+        assert!(!d.dirty, "选区不该撞 dirty");
+        assert!(d.text.is_empty(), "选区不该改正文镜像");
+
+        // ⚠️ 空选区也得**记下来**（覆盖掉上一次）：光标从"选着字"移到
+        // "一个点"，插件下一次 `get_selection()` 要看见新的这一份。
+        s.记选区(id, 选区快照 { text: String::new(), empty: true })
+            .unwrap();
+        let d = s.get(id).unwrap();
+        assert!(d.选区.as_ref().unwrap().empty);
+        assert!(d.选区.as_ref().unwrap().text.is_empty());
+
+        // 不存在的文档：报错，不是静默。
+        let 假 = DocId(9999);
+        assert!(s.记选区(假, 选区快照::default()).is_err());
+    }
+
+    /// 选中一个**原子节点**（图片、公式）时 `text` 是空的，但选区不是空的。
+    ///
+    /// ⚠️ 这一条是 `empty` 那个字段**存在的唯一理由**。谁要是图省事把
+    /// `empty` 删了、让调用方用 `text.is_empty()` 代替，这条测试就红了。
+    #[test]
+    fn 选中原子时文本为空但选区不空() {
+        let 快照 = 选区快照 { text: String::new(), empty: false };
+        assert!(!快照.empty);
+        assert!(快照.text.is_empty());
+        // 反过来，`Default` 是"什么都没选"那一头（`None` 的前身）。
+        assert!(选区快照::default().empty);
     }
 }

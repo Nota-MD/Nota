@@ -102,11 +102,18 @@ export interface 主题接线 {
   /**
    * 主题清单。
    *
-   * ⚠️ **它进 effect 依赖是有意的**：清单重扫之后（第 41 项）要能重取一次 CSS，
-   * 否则"用户在主题文件夹里改了同名文件、回来一看没变"。今天清单只在启动时拉，
-   * 所以这条依赖暂时不会响——留着它是为了让那个动作将来接上时不必回来改这里。
+   * ⚠️ **它进 effect 依赖是有意的**：清单重扫之后（第 41 项，2026-10-04 接上）
+   * 要能重取一次 CSS，否则"用户在主题文件夹里改了同名文件、回来一看没变"。
+   * 重扫这个动作本身见下面 `重扫` 那条。
    */
   themes: DocThemeInfo[];
+  /**
+   * 重新扫一遍主题文件夹（第 41 项）：「打开主题文件夹…」**成功回来之后**调。
+   * 用户多半刚往里丢了一份新 `.css`，而菜单吃的还是启动时那份旧清单——
+   * 不重扫的话，新主题要重启应用才出现。
+   * ⚠️ **不做轮询**——主题是"用户偶尔动一次"的东西（`docs/07` 第 41 项的口径）。
+   */
+  重扫: () => void;
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
@@ -121,7 +128,7 @@ export function useDocTheme(w: 主题接线): 主题出口 {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const { themeId, 写主题, themes, toast } = w;
+  const { themeId, 写主题, themes, 重扫, toast } = w;
 
   useEffect(() => {
     let alive = true;
@@ -167,10 +174,14 @@ export function useDocTheme(w: 主题接线): 主题出口 {
       // 直接拒掉。前端既不该拼这个路径（`paths.rs` 的文件头），也不该自己
       // 拿路径去调 plugin-opener（Tauri 的 ACL，见 BUG-27）。
       await api.theme.openDir();
+      // ⚠️ 第 41 项：打开**成功**才重扫（失败时多半目录都没开成，白拉一把）。
+      // 只要把新清单拉回来就行——`themes` 进了上面那个 effect 的依赖，
+      // CSS 那一步会自己跟着重取，这里不用管。
+      重扫();
     } catch (e) {
       toast(t("Could not open the themes folder: {0}", String(e)), "error");
     }
-  }, [toast]);
+  }, [toast, 重扫]);
 
   return { pickTheme, openThemesDir };
 }

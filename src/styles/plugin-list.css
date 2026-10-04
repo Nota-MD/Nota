@@ -1,0 +1,176 @@
+/* **已装插件清单**（插件栏最右那一页「插件」）与它下面的「已信任的签名者」。
+ *
+ * 2026-09-29 从 `dock.css` 里按功能拆出来（那一份当时 971 行）。这一块与
+ * 面板内容分开，是因为它画的东西**不是插件给的 JSON**：`.plugin-*` 那几行是
+ * 宿主自己列的清单（名字、版本、能力、启停按钮），数据来自插件发现那条路。
+ *
+ * ⚠️ 偏好设置里的「拓展」那一页**穿的是同一套类名**（见
+ * `ui/settings/panes/ExtensionsPane.tsx` 的文件头）：同一个插件在两处必须长得
+ * 一样，所以这里改一次字号两处一起变——**别在这里写死只对插件栏成立的尺寸**。
+ *
+ * ⚠️ 「已信任的签名者」那一段的指纹用**等宽**：它是拿眼睛一段一段比对的，
+ * 比例字体里 `0`/`O`、`1`/`l` 分不清，核对就变成了猜。
+ */
+
+/* ── 插件列表 ─────────────────────────────────────────────────────────── */
+
+.plugin {
+  padding: var(--spacing) calc(var(--spacing) * 1.5);
+  border-bottom: 1px solid var(--border);
+}
+
+.plugin-failed {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.plugin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.plugin-name {
+  font-weight: 600;
+}
+
+.plugin-version {
+  color: var(--fg-faint);
+  font-size: 0.82em;
+  font-family: var(--font-mono);
+}
+
+.plugin-id {
+  font-family: var(--font-mono);
+  font-size: 0.76em;
+  color: var(--fg-faint);
+  margin-top: 2px;
+}
+
+.plugin-desc {
+  margin: 5px 0 0;
+  font-size: 0.87em;
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.plugin-error {
+  margin: 5px 0 0;
+  font-size: 0.82em;
+  color: var(--danger);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.plugin-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.cap {
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-faint);
+}
+
+/* 标题右边带一颗按钮的那种分区标题（现在是「从文件安装…」）。
+   ⚠️ 单独一个类而不是把 `.dock-subtitle` 改成 flex：别的分区标题不需要撑成一行，
+   改了它们的外边距和基线都会跟着变（那几行是纯文字注脚）。 */
+.dock-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing);
+}
+
+/* 「从文件安装…」。`margin-left: auto` 把自己推到行尾（配上面那条 flex）。 */
+.plugin-install {
+  margin-left: auto;
+  font-size: 0.8em;
+  padding: 2px 8px;
+}
+
+/* 插件行上"自装/内置 · 验没验过"。与 id 同一行，所以左边空一格。 */
+.plugin-origin {
+  margin-left: 8px;
+  color: var(--fg-faint);
+}
+
+/* 语言对不上那一句（「此插件不支持您的语言」）——**插件行**上的一小行。
+   用警告色而不是错误色：这不是故障，是"这个插件没有你那门语言的文案"。
+   ⚠️ 与面板里那块 `.panel-lang` 是**同一句话的两种摆法**：这里是清单，
+   那儿是用户正看着内容的地方。 */
+.plugin-lang {
+  margin: 5px 0 0;
+  font-size: 0.8em;
+  color: var(--warn);
+  line-height: 1.5;
+}
+
+/* 那句提示后面跟的是"这次在用哪一份文案"（`en`）。
+   摆成一个小标签，省得跟前面那句话连成一句读不通的话。 */
+.plugin-lang-now {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--fg-faint);
+}
+
+/* 一行按钮：停用/启用、卸载、信任。推到行的右下角，和上面那几栏对齐。 */
+.plugin-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.plugin-action {
+  font-size: 0.8em;
+  padding: 2px 9px;
+}
+
+/* 「卸载」是不可逆的那一颗：用 danger 色描边，别和"停用"长得一样。 */
+.plugin-action-danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+/* 停用之后整行压暗：一眼能看出"这一条现在不生效"。
+   ⚠️ 只压不藏——藏起来用户就找不到重新启用的入口了。 */
+.plugin-disabled .plugin-name,
+.plugin-disabled .plugin-desc {
+  opacity: 0.55;
+}
+
+/* 「已信任的签名者」那一段。⚠️ 指纹用**等宽**：它是拿眼睛一段一段比对的，
+   比例字体里 `0`/`O`、`1`/`l` 分不清，核对就变成了猜。 */
+.dock-trust {
+  margin-top: calc(var(--spacing) * 2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--spacing);
+}
+
+.trust-row {
+  display: flex;
+  gap: 8px;
+  margin: 0 calc(var(--spacing) * 1.5) 2px;
+  font-size: 0.85em;
+}
+
+.trust-key {
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+}
+
+.trust-name {
+  color: var(--fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

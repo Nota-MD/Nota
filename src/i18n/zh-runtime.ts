@@ -61,8 +61,6 @@ export const 运行表: Record<string, string> = {
   "Export (external, optional)": "导出（外部的，可选）",
   "Spell checking word lists": "拼写检查词表",
   "Unknown": "未知",
-  "License: {0}": "许可证：{0}",
-  "The complete list, with each license, is in THIRD-PARTY.md, shipped with the source.": "完整清单（含各自许可证）见随源码分发的 THIRD-PARTY.md。",
   "The file was exported, but could not be revealed in the file manager: {0}": "文件已导出，但没能在文件管理器里定位它：{0}",
   "Export HTML (With Styles)": "导出 HTML（含样式）",
   "Export HTML (No Styles)": "导出 HTML（不含样式）",

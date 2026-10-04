@@ -15,6 +15,7 @@
  * 语言）捆在一起，那是一次打包体积上的倒退。
  */
 
+import type { 选区快照 } from "./caret-snapshot";
 import type { CommandState } from "./command-state";
 import type { FindOptions, FindStatus } from "./find";
 import type { 行内扩展开关 } from "./inline-marks";
@@ -75,7 +76,18 @@ export type EditorCommand =
   | "tableAlignLeft"
   | "tableAlignCenter"
   | "tableAlignRight"
-  | "insertText";
+  | "insertText"
+  /**
+   * **开头那段 front matter**（`docs/07` 第 64 项，2026-10-04）。
+   *
+   * ⚠️ 它是这张白名单里**唯一一条改的不是文档树**的命令：那一段在编辑器
+   * 眼里根本不存在（见 `front-matter.ts` 文件头），所以它**不进撤销栈**、
+   * 也不在 `command-table.ts` 那张表里（那张表只吃 `(editor, payload)`，
+   * 手里没有那段文本）。它在这里，是因为"菜单点出来的一条编辑动作"只有
+   * 这一个入口（`ui/useCommandTable.ts` → `run`），另开一条通道就是两个真相。
+   * 实现落在 `create.ts::跑一条命令` 与 `source.ts` 的那个 `switch` 里。
+   */
+  | "frontMatter";
 
 /**
  * 命令可以带的参数。目前只有四条用得上（超链接的地址、图片的路径、要插的
@@ -105,14 +117,31 @@ export interface CommandPayload {
   /**
    * **严格模式**（`Settings.strict_markdown`，「内容目录」用）。
    *
-   * ⚠️ 编辑器实例**不知道这个设置**（`create.ts` 的选项里没有它，2026-09-26
-   * 删掉 `strict` 那一项时一并去掉了），而"扫标题"的判据要它：宽松档下
-   * `#标签`（井号后没空格）也算标题。侧栏「大纲」那一页拿的是设置里的真值，
-   * 目录必须**同源**——不然同一个界面上会出现"大纲 7 条、目录 6 条"。
+   * ⚠️ 这一格**不是**编辑器实例那一格（往下翻，`CreateOptions` 里另有一个
+   * 同名的）：那一个喂给 `createEditor`，这一个喂给"扫这一篇的标题"的纯函数。
+   * 两者都从 `Settings.strict_markdown` 来，但走的是两条路——`create.ts` 的
+   * 选项 2026-09-26 删过、09-29 又加回来（经过见下面那一格），而这里从来没
+   * 断过：扫标题的判据一直要它，宽松档下 `#标签`（井号后没空格）也算标题。
+   * 侧栏「大纲」那一页拿的是设置里的真值，目录必须**同源**——不然同一个界面上
+   * 会出现"大纲 7 条、目录 6 条"。
    *
    * 缺省 `false`（= 宽松，也是 `Settings` 的默认档）。
    */
   strict?: boolean;
+  /**
+   * 开头那段 front matter 的**新内文**（`frontMatter` 用，见那个命令）。
+   *
+   * 三种含义，缺一不可：
+   * - **不给**（`undefined`）：**确保有一段**——本来没有就建一段空模板
+   *   （`title: `），已经有的**一个字都不动**。菜单里那一条就是这个用法：
+   *   它拿不到"这篇现在长什么样"，所以不能带内容来。这也是它**不可能**
+   *   覆盖掉已有 front matter 的原因。
+   * - **给字符串**：把内文换成这一份（围栏与后面那几行空行留着）。
+   * - **`null` 或空白串**：**删掉这一段**。⚠️ 上面的编辑框**不会**送这个值
+   *   ——清空一个输入框是很容易误触的动作，而这份文档是自动保存的。删掉
+   *   那一步走界面上那颗明确的「删除」。
+   */
+  frontMatter?: string | null;
 }
 
 /**
@@ -183,6 +212,21 @@ export interface EditorHandle {
    * 据此提示用户，而不是让按钮按下去毫无反应。
    */
   runCommand: (name: EditorCommand, payload?: CommandPayload) => boolean;
+
+  /**
+   * **在光标处插一段**（替换当前选区）。给插件的
+   * `nota.document.insert_at_cursor` 用（`docs/07` 第 14 项）。
+   *
+   * ⚠️ **它落的是 ProseMirror 的一笔事务**，不是"换掉整篇文本"：
+   * 撤销栈、光标、滚动位置、表格列宽全都跟着走，用户看得见也撤得回。
+   * ⚠️ 之所以**不能**在宿主（Rust）那侧按字符偏移拼字符串，见
+   * `caret-snapshot.ts` 顶上那张量测表——在块边界上那么拼会**把结构弄坏**
+   * （两段粘成一段、列表项吃进正文）。
+   *
+   * ⚠️ **返回值是"这一侧有没有实现"**（同 `runCommand`）：只读实例
+   * （分屏右侧预览、导出用的离屏实例）返回 `false`。
+   */
+  插入在光标处: (text: string) => boolean;
 
   /* ── 查找与替换（`editor/find.ts`）────────────────────────────────────
    *
@@ -258,16 +302,25 @@ export interface CreateOptions {
    * "谁的话算数"，只读窗格改不了文本，报变化只会制造回声。
    */
   readOnly?: boolean;
-  // ⚠️ **这个实例曾经有一个 `strict` 选项，2026-09-26 删掉了。**
-  //
-  // 它原来按 `Settings.strict_markdown` 决定挂不挂 `宽松标题显示`——那个装饰
-  // 被用户否掉了（`#你好` 不许变位置变大小，理由与他原话见 `lax-heading.ts`
-  // 文件头），于是**所见即所得这一侧两种模式完全一样**，建实例时不再需要它。
-  //
-  // 严格模式还管着三处，都在别处：源码模式（`source.ts` 的 `atxPrefixRe`）、
-  // 大纲（`ui/outline.ts`）、标签页标题（后端 `strip_atx`）——判据仍是一处
-  // （`atx.ts`）。⚠️ 前两处是**建实例时捕获**的，所以 `EditorPane` 那个 effect
-  // 照旧把 `strict` 放进了依赖（切模式时编辑器仍会重建）。
+  /**
+   * **严格模式**（`Settings.strict_markdown`，默认 `false`）。
+   *
+   * ⚠️ **它 2026-09-26 删过一回、2026-09-29 又回来的**，两次都是因为"正文
+   * 该不该把 `#你好` 画成标题"这一件事。经过是：那层装饰先被用户否掉
+   *（`#你好` 不许变位置变大小），于是所见即所得这一侧两种模式变得完全一样、
+   * 这个选项没了用；接着用户 2026-09-29 又报「严格模式关闭后 `#标题` 还是
+   * 无法正常显示」——查下来是**大纲、源码模式、标签页标题三处都认宽松标题、
+   * 只有正文不认**。现在正文也认了（井号后面那段文字按该级标题的字号/字重
+   * 排，见 `heading-on-enter.ts`），于是这个选项又有了一个消费者。
+   *
+   * ⚠️ **只喂给 `标题回车成块` 那一处**（决定宽松那条加不加）。严格模式
+   * 另外还管着三处，都在别处：源码模式（`source.ts` 的 `atxPrefixRe`）、
+   * 大纲（`ui/outline.ts`）、标签页标题（后端 `strip_atx`）——判据仍是
+   * 一处（`atx.ts::atxTextRe`）。⚠️ 本文件这一处与源码模式那处都是
+   * **建实例时捕获**的，所以 `EditorPane` 那个 effect 必须把 `strict`
+   * 留在依赖里（切模式时编辑器要重建）。
+   */
+  strict?: boolean;
   /**
    * **数学公式里的 physics 宏包**（`Settings.enable_physics`，默认 `false`）。
    *
@@ -365,6 +418,17 @@ export interface CreateOptions {
    * 查找状态变化的通知（命中数、当前第几个）。**同样不传就不挂那条插件。**
    */
   onFindStatus?: (status: FindStatus) => void;
+  /**
+   * **选区变了**的通知（`caret-snapshot.ts`，2026-10-04 加，`docs/07` 第 14 项）。
+   *
+   * ⚠️ **不传就不挂那条插件**（同上面两条）。只读那一侧不挂——预览窗格没有
+   * 选区可言。
+   *
+   * ⚠️ 它**只报"真的变了"**（那支插件自己按快照去重）：ProseMirror 每敲一颗
+   * 字都会派一次事务，不去重的话这里就是"每敲一颗字跨一次 IPC"。
+   * 传进来的已经是**去重之后**的那些次。
+   */
+  onSelection?: (快照: 选区快照) => void;
   /**
    * 建实例时两个写作开关（专注 / 打字机）的状态。**默认两个都关**。
    *

@@ -1,0 +1,419 @@
+/* 面板里的**数据块**：提交树（`kind = "graph"`）与曲线刻度（`kind = "chart"`）
+ * 与记录卡（`kind = "cards"`，2026-10-04 加）。
+ *
+ * 2026-09-29 从 `dock.css` 里按功能拆出来（那一份当时 971 行）。它们俩能合成
+ * 一份，是因为同一条职责：**把插件递来的一串数字画成图**——一个是 git 的提交
+ * 关系，一个是写作速度的时间序列；两者都要在 260px 里活下来（截断、留边栏、
+ * 刻度文字用 HTML 而不是 SVG 的 `<text>`）。
+ *
+ * ⚠️ 与 `panel.css` 的分工：**那一份管"文字怎么排"，这一份管"图怎么画"**。
+ * 提交树的 `.panel-graph` 外壳（边框、等宽、底色）刻意和 `.panel-diff` 那一档
+ * 对齐（`--bg-subtle`），两块都是"引用来的外部内容"，长得像一家人。
+ */
+
+/* ── 提交树（面板里的 `kind = "graph"` 块，2026-09-26 加）─────────────────
+ *
+ * 一棵用 git 自己画的图（`git log --graph`）拼出来的树，每一行**两头各是一颗
+ * 可点的东西**：左边那截图线是"键"（通向某个提交），右边那串字是提交本身。
+ * 结构那边的理由见 `PanelBody.tsx::GraphRow`。
+ *
+ * ⚠️ 这里**没有横向滚动**（和上面 `.panel-diff` 相反）：图线宽度是 git 按
+ * "这个窗口最多几条车道"补齐的，本来就不长；而提交标题挤不下时**截断**
+ * （`.pg-text` 的 `text-overflow`）比横滚强——这一栏里横向滚动是没法用的
+ * （文件头那条）。截掉的是右边的标题，左边那截哈希和分支名还在。
+ *
+ * ⚠️ 底色用 `--bg-subtle`（和 `.panel-diff` 同一档）：两块都是"引用来的
+ * 外部内容"，长得像一家人；而**选中行**用的强调色是这一块里唯一一处
+ * 表达"我点过它"的地方。 */
+/* ── 数字与曲线（`kind = "chart"`，写作心电图，2026-09-26 加）────────────
+ *
+ * ⚠️ 那个红是**用户点名的**（原话「**大红字**数字/分钟」）。颜色只写在这里，
+ * `PanelBody.tsx` 里一处都没有——想换色改这一段就够。
+ *
+ * ⚠️ 数字用 `tabular-nums`（等宽数字）：它一秒变一次，比例数字会让整块宽度
+ * 跟着数字的形状一跳一跳的，在 260px 那一栏里非常显眼。
+ *
+ * ⚠️ 曲线那两层是**同一份路径**叠出来的（`PanelBody.tsx` 里的 `折线` 与 `面积`）：
+ * 线在上、填在下。填色用 `opacity` 而不是 `color-mix()`——后者是 CSS Color 5，
+ * 这个仓要照顾的 WebKitGTK 版本不一定认，而不认的表现是整块没有底色（不报错）。
+ */
+.panel-chart {
+  /* 纵轴刻度那条边栏的宽度。
+   *
+   * ⚠️ 这一个数**三处共用**：图的左内边距（`.panel-chart-plot-wrap`）、横轴标签
+   * 那一行的左**外**边距（`.panel-chart-xticks`，⚠️ 是 margin 不是 padding，
+   * 理由见那一节）、以及刻度文字自己的宽度。改一处忘一处的话，横轴标签会整体
+   * 偏出去一条边栏的宽度，而症状是"标签和曲线对不上"——很难一眼看出是边栏没对齐。
+   * ⚠️ 34px 是给面板那条 260px 宽的一栏定的（最大能写"1245"这种四位数）。 */
+  --chart-gutter: 34px;
+  margin: 0 0 10px;
+  padding: 8px 10px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+}
+
+.panel-chart-label {
+  font-size: 0.78em;
+  color: var(--fg-muted);
+  margin-bottom: 2px;
+}
+
+.panel-chart-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.panel-chart-number {
+  font-family: var(--font-mono);
+  font-size: 2.4em;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-chart-unit {
+  font-size: 0.8em;
+  color: var(--fg-muted);
+}
+
+.panel-chart-plot-wrap {
+  position: relative;
+  padding-left: var(--chart-gutter);
+  margin-top: 4px;
+}
+
+.panel-chart-plot {
+  display: block;
+  width: 100%;
+  /* ⚠️ 高度写死在这一层、不交给 `viewBox` 的宽高比（同 `PanelBody.tsx` 那条
+   * `preserveAspectRatio="none"`）：这块图要撑满一整栏宽，等比的话曲线只会
+   * 挤在中间一条里。 */
+  height: 64px;
+}
+
+/* ── 刻度（2026-09-27 加，用户：「横纵坐标的刻度要标」）────────────────── */
+
+/* 纵轴那几档数字。⚠️ 是 HTML 不是 SVG 的 `<text>`：这块 svg 横竖不等比，
+ * 里面的字会被横向拉扁（同 `PanelBody.tsx` 里那条注释）。 */
+.panel-chart-yticks {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--chart-gutter);
+  pointer-events: none;
+}
+
+.panel-chart-ytick {
+  position: absolute;
+  right: 4px;
+  font-size: 0.68em;
+  line-height: 1;
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* 默认按"这条线的位置"垂直居中；首末两档贴住上下边，不然会被切掉一半。 */
+  transform: translateY(-50%);
+}
+
+.panel-chart-ytick.is-top {
+  transform: none;
+}
+
+.panel-chart-ytick.is-bottom {
+  transform: translateY(-100%);
+}
+
+/* 刻度的横线。虚线 ＋ 低透明度：它是**参考线**，不该比曲线还显眼。 */
+.panel-chart-grid {
+  stroke: var(--fg-faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: 0.35;
+}
+
+/* 横轴那几档（时间）。⚠️ 与图左右对齐：同样让开纵轴那条边栏。
+ *
+ * ⚠️⚠️ 让开边栏这里**必须用 `margin-left`，不能用 `padding-left`**：
+ * 下面那些标签是 `position:absolute` 的，而绝对定位元素的包含块是父元素的
+ * **内边距盒**——`left:0` 落在**内边距的外沿**，`padding-left` 对它们一点用都没有。
+ * 2026-09-27 开窗目检时撞见的原样：图让开了 34px、标签没让，于是「-4 秒」比曲线
+ * 的起点偏左整整一条边栏，中间那档偏左半条（`at:50%` 只错一半）。而 `.panel-chart-plot-wrap`
+ * 那边是 `padding-left` ＋ 一个**静态**子元素，那条 padding 是有效的——所以两行
+ * 一边对一个不对。`margin-left` 挪的是盒子本身，绝对定位的子元素跟着盒子走。
+ */
+.panel-chart-xticks {
+  position: relative;
+  height: 12px;
+  margin-top: 2px;
+  margin-left: var(--chart-gutter);
+}
+
+.panel-chart-xtick {
+  position: absolute;
+  font-size: 0.68em;
+  line-height: 1;
+  color: var(--fg-faint);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* 最左/最右那两档：按中心摆会各自探出去半截（第一个超出左边界、最后一个
+ * 超出右边界），所以一个左对齐、一个右对齐。 */
+.panel-chart-xtick.is-start {
+  transform: none;
+}
+
+.panel-chart-xtick.is-end {
+  transform: translateX(-100%);
+}
+
+.panel-chart-area {
+  fill: var(--danger);
+  opacity: 0.12;
+}
+
+.panel-chart-line {
+  fill: none;
+  stroke: var(--danger);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.panel-chart-caption {
+  font-size: 0.75em;
+  color: var(--fg-faint);
+  margin-top: 2px;
+}
+
+.panel-graph {
+  margin: 0 0 8px;
+  padding: 4px 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+.pg-row {
+  display: flex;
+  align-items: baseline;
+}
+
+/* 选中的提交：整行加一层底色。⚠️ 用 `color-mix` 兑**透明**的强调色，而不是
+   直接铺 `--accent`：铺实色会把 `.tone-*` 给的字色压掉（浅底深底两套里
+   总有一样看不清）。 */
+.pg-row.is-picked {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* 两颗（以及它们退化成的那两个 `<span>`）**长一样**：把 `<button>` 的默认
+   长相全部抹掉。⚠️ 少抹一样（比如 `padding`）就会看到"有键的那几行比别的行
+   往右挪了一点"——同一个文件里同一种东西两种排版，看着就是个 bug。 */
+.pg-art,
+.pg-text {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  margin: 0;
+}
+
+.pg-art {
+  /* ⚠️ `pre`：图线里那几列空格是**画的一部分**（`| ` 与 `  ` 不同），
+     折叠掉整棵树就散了。 */
+  white-space: pre;
+  flex: none;
+  padding-right: 5px;
+  color: var(--fg-muted);
+}
+
+.pg-text {
+  /* ⚠️ `min-width: 0` 是必需的：flex 项的最小宽度默认是内容宽度，少了它
+     `text-overflow` 永远不触发，长标题会把这一栏顶出去。 */
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 只有"点得动的那一头"才有指针和悬停反馈——纯文字那一头没有任何反应，
+   正是要让用户一眼看出"这半截不能点"。 */
+button.pg-art,
+button.pg-text {
+  cursor: pointer;
+}
+
+button.pg-art:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+button.pg-text:hover {
+  color: var(--accent);
+}
+
+/* 键盘走到的那一颗也要看得见（`<button>` 能 Tab 到，这是它的好处之一）。 */
+button.pg-art:focus-visible,
+button.pg-text:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ── 记录卡（`kind = "cards"`，写作统计，2026-10-04 加）──────────────────
+ *
+ * 版式出处是用户给的两张运动手表截图（「运动记录」那两屏）：一条记录一个圆角
+ * 框，左边一颗圆图标，右边一个大数 ＋ 一行小字；框底下那行是**汇总**。
+ *
+ * ⚠️ 圆角比别处大（10px，`panel.css` 那几块大多是 4px）：参考图上那些框就是
+ * 圆角的，而"一条记录一块牌子"本来就该比"一行字"更立体一点。
+ * ⚠️ 图标那颗圆底用 `color-mix` 兑**透明**的强调色（同 `.pg-row.is-picked`）：
+ * 兑白/兑黑在深色与浅色两套主题下会有一头糊掉。
+ */
+
+.panel-cards {
+  margin: 0 0 10px;
+}
+
+/* 那一串框上面那行小标题（`写作记录`）。⚠️ 与 `.panel-chart-label` 同一档字号：
+   它是"这一块叫什么"，不是正文。 */
+.panel-cards-title {
+  font-size: 0.78em;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.panel-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-subtle);
+}
+
+/* 两条之间留一道缝。⚠️ 用 `+`（相邻兄弟）而不是给每条都加 margin：那样第一块
+   头上也会多出一截，和上面那行小标题之间空出一格。 */
+.panel-card + .panel-card {
+  margin-top: 5px;
+}
+
+.panel-card-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.panel-card-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* `min-width: 0` 是必须的：少了它，一长串大数字（`12345678`）会把这一格撑破
+   ——flex 项默认不肯缩到内容宽度以下，而面板那一栏只有 260px。 */
+.panel-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+/* 那个大字。⚠️ 等宽（同 `.panel-chart-number`）：面板每秒重画一次，比例字体下
+   数字一变宽窄，整块会跟着抖。 */
+/* ⚠️ **用强调色、字号也够大**：这一格接的是原来那块的「大红字数字/分钟」
+   （用户 2026-09-26 原话）——折进卡片之后它不该缩成一行普通的注记。
+   但**不是原来那个 2.4em 的红**（那是独立一块时的尺寸，一张卡里放不下）。 */
+.panel-card-value {
+  font-family: var(--font-mono);
+  font-size: 1.45em;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-card-unit,
+.panel-card-caption {
+  font-size: 0.78em;
+  color: var(--fg-muted);
+}
+
+/* 小字那行可以换行（`anywhere`）：本轮那句小字里带着时长和字数，窄栏里放不下
+   一行——不放宽的话它会把右边那截顶出去，而面板没有横向滚动条。 */
+.panel-card-caption {
+  margin-top: 1px;
+  overflow-wrap: anywhere;
+}
+
+/* 框里那条窄曲线。⚠️ 高度写死在这儿（SVG 自己的 18 是画布单位、不是像素，
+   见 `PanelBody.tsx::窄图宽`）：`preserveAspectRatio="none"` 会把它拉满这一格。
+   ⚠️ **36px 是有意留的**：这条线原来是面板上一块独立的图（`kind = "chart"`，
+   64px 高、另配大数字与两轴刻度），2026-10-04 折进记录卡里之后它矮了一截——
+   再矮（十几像素）就只剩一根抖动的线，"刚才那几分钟怎么起伏"反而读不出来了。 */
+.panel-card-spark {
+  display: block;
+  width: 100%;
+  height: 36px;
+  margin-top: 4px;
+}
+
+.panel-card-spark-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* 汇总那行（`总计 12345 字`）。⚠️ 它**不是一个框**（参考图上就没有框）：一条
+   上边框 ＋ 右对齐，读起来是"上面那些加起来是这个数"，而不是又一条记录。 */
+.panel-cards-total {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+/* 标签推到最左（`margin-right: auto`）：于是这一行是"左边一个词、右边一个数"，
+   像一张账单的最后一行。 */
+.panel-cards-total-label {
+  margin-right: auto;
+  font-size: 0.78em;
+  color: var(--fg-muted);
+}
+
+.panel-cards-total-value {
+  font-family: var(--font-mono);
+  font-size: 1.05em;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.panel-cards-total-unit {
+  font-size: 0.78em;
+  color: var(--fg-muted);
+}

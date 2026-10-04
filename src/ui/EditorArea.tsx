@@ -30,7 +30,7 @@
  * 留着读原始对象也行，但那要多传一个字段，而多传的每一个字段都是一处会分叉的账。
  */
 
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 
 import type { CommandState } from "@/editor/command-state";
 import type { Document } from "@/bridge/ipc";
@@ -71,6 +71,13 @@ export interface 编辑区接线 {
   typewriter: boolean;
   /** 格式化工具栏此刻该不该画（三档里由 `ui/useChromeVisibility.ts` 算出来）。 */
   格式化栏开着: boolean;
+  /**
+   * 收起格式工具栏（**它右端那颗 ×**，2026-10-04 补，`docs/07` 第 49 项）。
+   *
+   * ⚠️ 由 `App.tsx` 交下来，落点就是上面那个 `格式化栏开着` 的**同一个 setter**
+   * （`setChrome({ toolbar: "never" })`）——这里只负责把它接到那颗按钮上。
+   */
+  收起格式化栏: () => void;
   /** 光标那儿的格式状态（工具栏那排按钮亮不亮）。 */
   命令状态: CommandState | null;
   设命令状态: Dispatch<SetStateAction<CommandState | null>>;
@@ -93,6 +100,21 @@ export interface 编辑区接线 {
    */
   refreshDocs: () => Promise<unknown>;
   toast: (message: string, level?: Toast["level"]) => void;
+  /**
+   * 底部那一条（**标签栏 ＋ 状态栏**，2026-09-30）。
+   *
+   * ⚠️ **为什么是这里的一个槽位、而不是继续留在 `App.tsx` 的返回里**：
+   * 用户照 Typora 提的要求是「注意下方变化」——侧栏要一直通到窗口底。
+   * 这两条原来排在 `.app-body` 外面，横跨整个窗口宽，于是**侧栏底下那一段
+   * 被它们占了**。要让它只占中间这一栏，它们就得是 `.app-main` 的子节点，
+   * 而 `.app-main` 这根 `<main>` 是这个组件画的（`data-review`、`ref` 都在它身上，
+   * 挪不走）。
+   *
+   * ⚠️ **节点由 `App.tsx` 建好、这里只负责落位**：这一槽位里的东西要读
+   * `docs` / `activeId` / `专注状态` / `sidebarOpen` 那一批，全在 App 手里，
+   * 为了"让 EditorArea 自己建"再把它们搬一遍，等于给同一个状态开第二条路。
+   */
+  底部: ReactNode;
 }
 
 /**
@@ -101,7 +123,7 @@ export interface 编辑区接线 {
  */
 export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
   const { 主区, 格式化栏, 编辑器, activeDoc, settings, viewMode, focusMode, typewriter } = 接线;
-  const { 格式化栏开着, 命令状态, 设命令状态, 跑命令, refreshDocs, toast } = 接线;
+  const { 格式化栏开着, 收起格式化栏, 命令状态, 设命令状态, 跑命令, refreshDocs, toast } = 接线;
   const { 文档出口, 查找条, 预览出口, 改动出口, 会话出口, 插件, 对话框 } = 接线;
 
   const { newDoc, openViaDialog, openFolder, 记活动 } = 文档出口;
@@ -173,7 +195,12 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
         // ⚠️ `onCommand` 传的是 `run` **本身**，不包一层箭头：
         // 包了的话每次 `App` 重渲染都是一个新函数身份，`FormatBar`
         // 那十几颗按钮就整排重画一遍。
-        <FormatBar ref={格式化栏} state={命令状态} onCommand={跑命令} />
+        <FormatBar
+          ref={格式化栏}
+          state={命令状态}
+          onCommand={跑命令}
+          onHide={收起格式化栏}
+        />
       )}
       {活跃预览 && (
         // 改动预览顶上那一条细条。⚠️ **排在编辑区前面**（同一个 flex
@@ -291,6 +318,13 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
         // 藏起来，他会以为是刚点的那下没生效。
         <ExternalDiffPane 对照={外部对照} onClose={关对照} />
       )}
+
+      {/* 底部那一条（标签栏 ＋ 状态栏）。⚠️ **排在最后**：它俩是这一列的
+          收尾，前面那些面板摊开时也照旧贴在底下（标签栏与状态栏是"现在开着
+          哪几份文档 / 这一份多少字"，跟预览画什么无关）。
+          ⚠️ 上面那几个面板的让位规则（`styles/review.css`）**没有把它俩算进去**
+          ——那一份是"逐个排除"的写法，没点名的就留着。 */}
+      {接线.底部}
     </main>
   );
 }

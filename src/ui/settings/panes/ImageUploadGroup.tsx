@@ -74,10 +74,24 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
   // ⚠️ `null` = 还没读回来。读之前**什么都不画**：先画一份默认值再被真值替换，
   // 用户会看见"地址栏里的字闪了一下就没了"。
   const [设置, set设置] = useState<ImageUploadSettings | null>(null);
-  const [毛病, set毛病] = useState<string | null>(null);
   /** 与 `设置` 同一份值，但**读得到最新的**——写失败时要退回的是它。
    *  （不能靠 state 的闭包：`写` 是个稳定的 callback，闭包里的 `设置` 是旧的。） */
   const 当前 = useRef<ImageUploadSettings | null>(null);
+
+  /**
+   * 两条**报错**（2026-10-04）。
+   *
+   * ⚠️⚠️ **它们不是"说明文案"，是错误回执，谁都不许按"删掉大段描述"那一批删掉。**
+   * 这一组有一半的动作会失败（读文件、写文件、两样都碰磁盘），失败时如果只是
+   * 静默 `return null` 或者把值弹回去，用户看到的是"这一组不见了"或"我改的东西
+   * 自己弹回来了"——**两样都像 Nota 坏了，而不像一次可解释的失败**。
+   * （2026-10-04 那一批清理里这两条被误删过一次，`docs/06` §5.44 记着。）
+   *
+   * ⚠️ 存的是**原始错误串、不是翻译好的句子**：`t` 要在**渲染时**取，不然
+   * 用户中途换语言，这条已经算好的旧句子会留在屏幕上。
+   */
+  const [读错误, set读错误] = useState<string | null>(null);
+  const [写错误, set写错误] = useState<string | null>(null);
 
   useEffect(() => {
     let 拆了 = false;
@@ -91,8 +105,9 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
         当前.current = s.settings;
         set设置(s.settings);
       })
-      .catch((e) => {
-        if (!拆了) set毛病(String(e));
+      .catch((e: unknown) => {
+        if (拆了) return;
+        set读错误(String(e));
       });
     return () => {
       拆了 = true;
@@ -115,49 +130,36 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
     set设置(新);
     api.image
       .uploadSet(新)
-      .then(() => set毛病(null))
-      .catch((e) => {
+      .then(() => set写错误(null))
+      .catch((e: unknown) => {
         // 退回**上一个值**（不是默认值）：写失败只说明这一次没成，
         // 前面那几次改动还在盘上。
         当前.current = 旧;
         set设置(旧);
-        set毛病(String(e));
+        // ⚠️ **退回的同时必须说一句**（见上面 `写错误` 那段）：光弹回去，
+        // 用户看到的是"我改的东西自己变回来了"，查不出是权限、是盘满、还是坏了。
+        set写错误(String(e));
       });
   }, []);
 
   if (!设置) {
-    // 读失败时说一句。**不画**一组灰控件：那些控件按下去也是往一个读不出来的
-    // 路径里写。读成功但还没回来时什么都不画（见上面那条注释）。
-    return 毛病 === null ? null : (
-      <Note>
-        <strong>{t("Could not read the upload settings: ")}</strong>
-        {毛病}
-      </Note>
-    );
+    // ⚠️ 读失败时说一句，**不画**一组灰控件：那些控件按下去也是往一个读不出来的
+    // 路径里写。⚠️ 也**不能什么都不画**——那样这一组看起来就像"不在这台机器上"。
+    // 读成功但还没回来时什么都不画（见上面那条注释）。
+    if (读错误 === null) return null;
+    return <Note>{t("Could not read the upload settings: ") + 读错误}</Note>;
   }
 
   return (
-    <SettingsGroup
-      title={t("Upload server")}
-      help={t(
-        "Send images to a server of your own and put the returned URL in the document. ⚠ Off by default; while it is off, inserting an image sends nothing out. This group lives in ~/.config/nota/image-upload.toml (mode 0600, because it holds your token), not in settings.toml — so “Reset to Defaults” leaves it alone.",
-      )}
-    >
-      <SettingRow
-        label={t("Enable upload")}
-        description={t("While off: no upload checkbox appears in the image dialog, and whatever the document's YAML says is ignored.")}
-      >
+    <SettingsGroup title={t("Upload server")}>
+      {写错误 !== null && <Note>{t("That last save did not work: ") + 写错误}</Note>}
+      <SettingRow label={t("Enable upload")}>
         <Toggle checked={设置.enabled} onChange={(enabled) => 写({ enabled })} />
       </SettingRow>
 
       {设置.enabled && (
         <>
-          <SettingRow
-            label={t("Server URL")}
-            description={t(
-              "Only http / https. ⚠ The image's bytes are sent to this address as-is — make sure it is your own server before filling it in.",
-            )}
-          >
+          <SettingRow label={t("Server URL")}>
             <TextInput
               value={设置.url}
               width="lg"
@@ -166,51 +168,17 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
             />
           </SettingRow>
 
-          <SettingRow
-            label={t("Upload method")}
-            help={t(
-              "POST sends the image as a form file (what most image hosts expect); PUT sends the raw bytes as the request body. ⚠ Remote images can only use POST (only a form has a place for the original URL), so with PUT selected they are not uploaded.",
-            )}
-          >
+          <SettingRow label={t("Upload method")}>
             <Select value={设置.method} options={方法表} onChange={(method) => 写({ method })} />
           </SettingRow>
 
           {设置.method === "post" && (
-            <SettingRow
-              label={t("File field name")}
-              description={t(
-                "Which form field the image goes into. Hosts differ (file / smfile / image …) — check your provider's docs.",
-              )}
-            >
+            <SettingRow label={t("File field name")}>
               <TextInput value={设置.field} onChange={(field) => 写({ field })} />
             </SettingRow>
           )}
 
-          <SettingRow
-            label={t("Request headers")}
-            description={
-              <>
-                {t("One per line")}
-                {" "}
-                {/* ⚠️ 这一格是**示例的写法**（一行一条请求头长什么样），不是术语，
-                    所以要翻：英文界面上留着「名字: 值」等于给了一个中文的例子。
-                    判据是"用户在照着它写自己的东西"——`Authorization: Bearer …`
-                    那一格是**真值示例**，所以它不翻（它是原样要抄进配置里的）。 */}
-                <code>{t("name: value")}</code>
-                {t(". Put the token here, for example")}
-                {" "}
-                <code>Authorization: Bearer …</code>
-                {t(". Blank lines and lines starting with")}
-                {" "}
-                <code>#</code>
-                {" "}
-                {t(" are ignored.")}
-              </>
-            }
-            help={t(
-              "⚠ Values must be ASCII: a non-ASCII character makes the HTTP client reject the whole request, and the error it reports is in English. ⚠ Nota writes Content-Type / Content-Length / User-Agent itself — do not repeat them here. Anything you put in wins, and many servers reject requests whose length is uncertain.",
-            )}
-          >
+          <SettingRow label={t("Request headers")}>
             <TextArea
               value={设置.headers}
               mono
@@ -220,15 +188,7 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
             />
           </SettingRow>
 
-          <SettingRow
-            label={t("Read the URL from the response")}
-            description={t(
-              "Where the URL sits in the JSON the server returns. Empty = the whole response is the URL (a plain-text endpoint).",
-            )}
-            help={t(
-              "Dot path, e.g. data.url / data.links.url / result.0.url (array indices work too). The default data.url matches most image hosts.",
-            )}
-          >
+          <SettingRow label={t("Read the URL from the response")}>
             <TextInput
               value={设置.url_path}
               width="lg"
@@ -237,15 +197,7 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
             />
           </SettingRow>
 
-          <SettingRow
-            label={t("Field name for remote images")}
-            description={t(
-              "When a remote image is inserted, send its original URL as an ordinary form field and let the server fetch it. Empty = remote images are not uploaded (they are still inserted, just not sent).",
-            )}
-            help={t(
-              "⚠ Empty by default, and better left empty at first: once it is filled in, ticking “Upload after inserting” means visiting that third party on your behalf, when all you did was write an address into a document.",
-            )}
-          >
+          <SettingRow label={t("Field name for remote images")}>
             <TextInput
               value={设置.remote_field}
               placeholder="src"
@@ -253,52 +205,11 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
             />
           </SettingRow>
 
-          <SettingRow
-            label={t("Allow automatic upload via YAML")}
-            description={
-              <>
-                {t("the document's own front matter contains")}
-                {" "}
-                <code>nota-auto-upload: true</code>
-                {" "}
-                {t(", local images are uploaded as soon as they are inserted and the document gets the returned URL.")}
-              </>
-            }
-            help={t(
-              "⚠ This is a second gate, not the master switch: it does nothing while Enable upload above is off. ⚠ Remote images are never uploaded automatically (that would mean visiting a third party on your behalf) — there is no switch for it. ⚠ Every automatic upload shows a toast, successful ones included — it is the action that sends bytes out.",
-            )}
-          >
+          <SettingRow label={t("Allow automatic upload via YAML")}>
             <Toggle checked={设置.auto} onChange={(auto) => 写({ auto })} />
           </SettingRow>
         </>
       )}
-
-      {毛病 !== null && (
-        <Note>
-          <strong>{t("That last save did not work: ")}</strong>
-          {毛病}
-        </Note>
-      )}
-
-      <Note>
-        {设置.enabled ? (
-          <>
-            {t("This group lives in")}
-            {" "}
-            <code>~/.config/nota/image-upload.toml</code>
-            {" "}
-            {t(
-              " (mode 0600, because it holds your token). You can also edit that file in any editor — Nota re-reads it before every upload, so changes take effect immediately.",
-            )}
-          </>
-        ) : (
-          <>
-            {t(
-              "Upload is off by default. Before turning it on, be sure which server you are sending images to: from that moment on, inserting an image can send bytes off this machine.",
-            )}
-          </>
-        )}
-      </Note>
 
       {/* ⚠️ 这个按钮不存任何值，是"做一件事"（`ActionButton`）。给它的用途是：
           这一组里有一栏是"一行一条"，手改那个文件往往比在这个框里改省事。 */}

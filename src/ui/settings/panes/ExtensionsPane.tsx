@@ -2,6 +2,11 @@
  * 「拓展」那一页 —— 插件的**管理面板**（2026-09-27 加）。
  *
  * 用户 2026-09-27：「完全没有拓展管理面板。做一个。可以**导入，导出和卸载**拓展」。
+ * 2026-10-04 又加了一件事：**插件声明给宿主画的设置**就在这一页上
+ * （用户那天要的是一根"打字速度按几秒算"的滑杆，原话：「这个德尔塔t可以在拓展的
+ * 设置页面更改，默认为5秒。应该是一个托条，从1秒到1分钟可选」）。
+ * 形状由清单里的 `[[settings]]` 声明，这里**照着画**、不认插件 id
+ * （加这一块时一个 `if (p.id === "nota.stats")` 都不许有）。
  *
  * # 与右侧「插件」栏的分工
  *
@@ -12,6 +17,9 @@
  * 这一页是**管理用的**：装 / 导出 / 卸载三件事摆在一条行上，宽度够、能对着读完
  * 再决定。两边用的是**同一份数据、同一批动作**（`usePlugins` 的 `plugins` 与
  * `动作`），所以不会出现"这一栏说装好了、那一页还没有"这种两份真相源。
+ *
+ * ⚠️ **设置那几行只在这一页**（不在右侧那一栏）：栏宽 260px 放不下一根滑杆加
+ * 一句说明，而且那一栏是"看"的、这一页是"改"的——见上面那张分工。
  *
  * # ⚠️ 导入 / 导出 / 卸载三件事里，只有**导出**是这一轮新做的
  *
@@ -35,7 +43,7 @@ import type { PluginInfo, 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { 来源说明, 能力名, 语言对不上, 语言提示, 语言标签名 } from "@/ui/pluginText";
 import type { 插件动作 } from "@/ui/usePlugins";
-import { ActionButton, Note, SettingRow, SettingsGroup, Value } from "../primitives";
+import { ActionButton, Note, Range, SettingRow, SettingsGroup, Value } from "../primitives";
 
 /**
  * 这一页要的三样。
@@ -64,30 +72,14 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
 
   return (
     <>
-      <SettingsGroup
-        title={t("Extensions")}
-        help={t(
-          "Extensions are extensions written in Lua: they can add panels, menu items and document access to Nota. An extension is loaded on the spot when installed (its own on_load runs), so this page changes the moment the install finishes.",
-        )}
-      >
-        <SettingRow
-          label={t("Install from file…")}
-          help={t(
-            "Pick an extension package (.nota-plugin or .zip) and install it. ⚠️ The only packages refused are ones that are signed but fail verification — that means the package was changed after it was signed. Unsigned packages, and ones from a signer we have never seen, install just fine; the row says so.",
-          )}
-          description={t("Installed extensions go into the user extension folder, which the button below opens.")}
-        >
+      <SettingsGroup title={t("Extensions")}>
+        <SettingRow label={t("Install from file…")}>
           <ActionButton disabled={灰} onClick={() => void 动作.装()}>
             {忙 === "装" ? t("Installing…") : t("Choose an extension package…")}
           </ActionButton>
         </SettingRow>
 
-        <SettingRow
-          label={t("Extension folder")}
-          help={t(
-            "Extensions you installed yourself live here, one folder each. ⚠️ Do not edit the files here by hand: the host already has them loaded in memory, and a change takes effect only after Nota restarts. To change one, export a copy and edit that.",
-          )}
-        >
+        <SettingRow label={t("Extension folder")}>
           <ActionButton disabled={灰} onClick={() => void 动作.打开目录()}>
             {t("Open Folder…")}
           </ActionButton>
@@ -104,13 +96,8 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
           {t(" above to install one — a package carries its own plugin.toml and entry file, and it works as soon as it is installed.")}
         </Note>
       ) : (
-        <SettingsGroup
-          title={t("Installed extensions")}
-          help={t(
-            "Disable really unloads it (its on_unload runs and its Lua state is dropped); the files on disk stay. Uninstall is what deletes those files. ⚠️ Uninstalling cannot be undone, so you are asked first.",
-          )}
-        >
-          {plugins.map((p) => (
+        <SettingsGroup title={t("Installed extensions")}>
+          {plugins.flatMap((p) => [
             <SettingRow
               key={p.id}
               label={p.name}
@@ -159,8 +146,47 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
                   </ActionButton>
                 )}
               </div>
-            </SettingRow>
-          ))}
+            </SettingRow>,
+            // ── 这个插件声明给宿主画的设置（2026-10-04 加）────────────────
+            //
+            // ⚠️ **跟在这个插件那一行的后面**（而不是各占一段）：来回切两段读，
+            // 用户得自己把"这一格是谁的"接上。挨着放，加上小字里那句插件名，
+            // 一眼就是"上面那个拓展的设置"。
+            //
+            // ⚠️ **停用 / 加载失败的插件照样能改**：值在磁盘上（
+            // `plugin-settings/<id>.toml`），插件下次启用时读的就是它。
+            // 这里没有灰的理由——灰了用户只会在"先启用还是先设置"上卡一下。
+            ...p.settings.map((s) => (
+              <SettingRow
+                key={`${p.id}:${s.key}`}
+                label={s.label}
+                // 搜插件名、id 和设置键都能搜到这一行（同上面那行的理由）。
+                searchText={`${p.id} ${p.name} ${s.key}`}
+                description={
+                  <>
+                    {/* 这句插件名就是"这一格是谁的"那句话。穿 `.plugin-desc`
+                        是**有意的**：它是这一页里已经有的那一段小字（见
+                        `拓展说明` 顶上那段，同一条"别再造一套类名"）。 */}
+                    <span className="plugin-desc">{p.name}</span>
+                    {s.help && <span className="plugin-desc">{s.help}</span>}
+                  </>
+                }
+              >
+                {/* ⚠️ 现在只有 `range` 一种（清单校验挡掉了别的），所以这里
+                    不分派。加第二种控件时**改这一处 ＋ `docs/11` 那张表**——
+                    照 `kind` 分派的位置就是这里。 */}
+                <Range
+                  value={s.value}
+                  min={s.min}
+                  max={s.max}
+                  step={s.step}
+                  suffix={s.unit}
+                  title={s.help || undefined}
+                  onChange={(v) => void 动作.设置(p.id, s.key, v)}
+                />
+              </SettingRow>
+            )),
+          ])}
         </SettingsGroup>
       )}
 
@@ -169,18 +195,9 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
           撤销信任是改 `trusted-keys.toml` 的事，摆一颗"删除"在这儿会被当成
           "卸载这个插件"（右侧那一栏的同一条注释里写着同样的理由）。 */}
       {信任.length > 0 && (
-        <SettingsGroup
-          title={t("Trusted signers")}
-          help={t(
-            "Trust is recorded by fingerprint, not by extension name. To revoke it, edit trusted-keys.toml (in the settings folder).",
-          )}
-        >
+        <SettingsGroup title={t("Trusted signers")}>
           {信任.map((k) => (
-            <SettingRow
-              key={k.key_id}
-              label={k.name}
-              description={t("This is the name of the extension that was installed when the key got recorded; it is there for people to read — trust is decided by the fingerprint on the right.")}
-            >
+            <SettingRow key={k.key_id} label={k.name}>
               {/* ⚠️ 指纹用 `<code>`：它是一串十六进制，等宽才**对得齐**——
                   用户是拿着作者公布的那一份**逐位核**的，比例字体下核起来很累。 */}
               <Value>
@@ -190,19 +207,6 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
           ))}
         </SettingsGroup>
       )}
-
-      <Note>
-        {t("This page is about ")}
-        <strong>{t("install / export / uninstall")}</strong>
-        {t(". The extension's own panel, settings and data are not here: panels live in the dock on the right (one page per extension), and settings and data live in folders of their own — what an extension writes, and where, is declared in its own manifest.")}
-      </Note>
-
-      <Note>
-        {t("⚠️ An exported package carries no signature: the host has no copy of the author's private key (nor should it — packing and signing are done on the author's side with ")}
-        {" "}
-        <code>tools/pack-plugin.py</code>
-        {t("). If the extension files are unchanged, the author's original signature is carried over as it is; if they were changed, the signature is dropped — with a signature that does not match, nobody can install the package.")}
-      </Note>
     </>
   );
 }

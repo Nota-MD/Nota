@@ -27,11 +27,6 @@ import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
-
-// ⚠️ 和 `create.ts` 里那一行是**同一个模块**（都落到 `refractor/lib/core.js`
-// 那个单例上），所以重复 import 不会重复打包，但能让本文件不依赖
-// "别的文件先跑过那句副作用 import"这种隐形顺序。语言表从 36 涨到 400 就靠它。
-import "refractor/all";
 import { refractor } from "refractor";
 
 import { t } from "@/i18n";
@@ -47,6 +42,48 @@ const COPY_FEEDBACK_MS = 1200;
 
 /** 语言名算一次就够。400 个名字排一遍序是毫秒级，但没必要每个代码块排一次。 */
 let sortedLanguages: string[] | null = null;
+
+// ⚠️ 全量语言表（`refractor` 的 297 种）**异步加载**（2026-10-04，第 27 项）：
+// 那一份 `refractor/all` 是 ~500 kB，静态 import 会整个压进首屏，而首屏真正
+// 需要的高亮语言是 common 那 62 种（c / js / ts / py / rs / go / sh / sql …
+// ——上面 `import { refractor } from "refractor"` 已经把它们注册好了）。
+//
+// 为什么要自己加载：`@milkdown/plugin-prism` 内部也是
+// `import { refractor } from "refractor"`，两边是**同一个单例**
+// （都从 `refractor/lib/core.js` 拿那一个 `refractor`），而它读语言表是
+// **惰性**的（`getBlockDecorations(node, pos, refractor, languages = refractor.listLanguages())`
+// 里那是默认参数，每次重算都要现取），所以这里补注册的，它立刻看得见。
+//
+// ⚠️ 这条 `import()` **在本模块顶层就发出去**（模块一进来就发起请求）：
+// 首屏不阻塞，但长尾语言也尽早到。到了之后把下拉的缓存清掉，
+// 下次点开语言选择器就是全量表。
+//
+// ⚠️ **已知的一个时序**（如实记着，别当成"没这回事"）：开机时正开着一份
+// **长尾语言**（不在 common 62 里）的文档，那个代码块在**首次编辑代码块之前**
+// 可能显示为未高亮的纯文本——prism 的装饰只在 `docChanged` 时重算
+// （`plugin-prism/lib/index.js` 的 `apply` 第一行就判它，点一下不算）。
+// 编辑那个块、或改任何一个代码块，整篇的重算就发生了，高亮随即补上。
+// 判据：这个窗口只在"冷启动第一帧还没到 + 文档里正好有长尾语言块"时存在。
+let 全量表已到 = false;
+const 全量表到了 = import("refractor/all").then(() => {
+  全量表已到 = true;
+  // 下拉那份名字算过一次就缓存了（`sortedLanguages`），全量表到了要重算。
+  sortedLanguages = null;
+});
+
+/**
+ * 全量语言表到了没有。**给测试/诊断用**（界面不等它）。⚠️ 它 `true` 不代表
+ * 每个语言都注册成功——`refractor/all` 里个别语言的自注册是会抛的
+ * （上游就那样），这里只反映"那一整包代码跑过了"。
+ */
+export function 语言表就绪(): boolean {
+  return 全量表已到;
+}
+
+/** 等全量表加载完（测试用；界面里没有 await 它的地方）。 */
+export function 等语言表(): Promise<void> {
+  return 全量表到了.then(() => undefined);
+}
 
 /**
  * 下拉里**列出来**的语言：**只留有专属图标的那些**。

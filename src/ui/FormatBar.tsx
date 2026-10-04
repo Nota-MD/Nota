@@ -62,6 +62,20 @@ interface Props {
    * 现在就是一个普通 prop，不再需要 `forwardRef`（同 `ui/EditorPane.tsx`）。
    */
   ref?: Ref<HTMLDivElement>;
+  /**
+   * 收起这一条（**右端那颗 ×**，2026-10-04 补，`docs/07` 第 49 项）。
+   *
+   * ⚠️ **与「视图 → 格式化工具栏 → 始终不显示」是同一个 setter**
+   * （`App.tsx` 那颗传下来的是 `setChrome({ toolbar: "never" })`）：
+   * 三档那个设置仍然是唯一真相源，这颗 × **不是第二份状态**
+   * （同 `ui/Sidebar.tsx` 那颗 × 的口径，那边写着"自己 `useState` 一份的症状
+   * 是用 × 关掉、菜单里那一项还勾着"）。
+   *
+   * ⚠️ 收起来之后**这一条自己就没了**，"怎么再打开"在菜单里（视图 → 格式化
+   * 工具栏）与设置里（外观 → 工具栏）各有入口——所以这里**不发提示**，
+   * 与菜单栏那条不同（`ui/useChromeVisibility.ts` 头上写着为什么菜单栏必须发）。
+   */
+  onHide: () => void;
 }
 
 /** 菜单 id → 快捷键文本。**从 `MENUS` 派生，不手写**（见文件头）。 */
@@ -178,7 +192,7 @@ const 块组: 按钮[] = [
   { cmd: "clearFormat", menu: "fmt.clear", label: "Clear", icon: "folio-eraser-symbolic" },
 ];
 
-export function FormatBar({ state, onCommand, ref }: Props) {
+export function FormatBar({ state, onCommand, ref, onHide }: Props) {
   // 订阅语言：宿主报来语言之后这一条要重画（见 `i18n/index.ts::useT`）。
   const t = useT();
 
@@ -263,6 +277,22 @@ export function FormatBar({ state, onCommand, ref }: Props) {
       {链接组.map(画)}
       <span className="format-sep" />
       {块组.map(画)}
+      {/* 右端那颗 ×（2026-10-04，第 49 项）。
+          ⚠️ **在 `.format-bar` 里面**（不是外面另起一条）：这一条是
+          `overflow-x: auto` 的，而 `.format-bar-close` 靠 `position: sticky;
+          right: 0` 钉在右端——窄窗口下按钮超宽时，**正是这种时候最需要它**
+          （那时它要是跟着滚出去就白加了）。
+          ⚠️ 与那三颗开关按钮**不同**：它不走 `onCommand`（没有这条命令），
+          直接调 `onHide`。 */}
+      <button
+        type="button"
+        className="format-bar-close"
+        title={t("Hide the formatting toolbar")}
+        aria-label={t("Hide the formatting toolbar")}
+        onClick={onHide}
+      >
+        <Icon name="folio-close-symbolic" />
+      </button>
     </div>
   );
 }

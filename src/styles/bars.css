@@ -32,6 +32,34 @@
   display: none;
 }
 
+/* 收起这一条那颗 ×（2026-10-04，`docs/07` 第 49 项）。
+   ⚠️ `position: sticky` **是必需的、不是修饰**：这一条是 `overflow-x: auto`
+   的（上面那段），窄窗口下按钮一定超宽——× 跟着内容滚出去的话，**"按钮太多"
+   这种最需要它的时候它反而找不着**。
+   ⚠️ 底色**必须写成不透明的同一个值**（`--bg-subtle`）：粘住的元素要盖住从它
+   底下滚过去的按钮，透明的话那些按钮会与 × 叠在一起。
+   ⚠️ 长相与侧栏那颗（`sidebar.css` 的 `.sidebar-close`）、插件栏那颗
+   （`dock.css` 的 `.dock-close`）**同一套**：三颗并排站着，一颗有叉一颗没有、
+   或者三颗长得不一样，都像三个人做的。 */
+.format-bar-close {
+  position: sticky;
+  right: 0;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  height: 24px;
+  padding: 0 5px;
+  border: 0;
+  background: var(--bg-subtle);
+  color: var(--fg-faint);
+  cursor: pointer;
+}
+
+.format-bar-close:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
 .format-btn {
   flex: 0 0 auto;
   display: grid;

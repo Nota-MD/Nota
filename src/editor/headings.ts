@@ -3,9 +3,16 @@
  *
  * # 为什么在前端用正则扫，而不是问后端要
  *
- * 后端也有 markdown（镜像），但**镜像是去抖的**——打字时它会慢 300ms。
- * 大纲要跟着光标附近的标题实时跳，用那份数据会看到明显的一顿一顿。
- * 前端手里就是最新的文本，扫一遍是 O(行数)，几千行的文档也就微秒级。
+ * 扫描本身必须是 O(行数) 的轻活：几千行的文档也就微秒级，谁喂文本都不心疼。
+ * （后端也有 markdown 镜像，但**镜像是去抖的**——打字时它慢 300ms。）
+ *
+ * ⚠️ **2026-10-04 把这段理据改对**（`docs/07` 第 32 项）：上面原话是"前端手里
+ * 就是最新的文本……用后端那份会一顿一顿"，但**现实是消费者喂的就是去抖镜像**——
+ * `App.tsx` 传给侧栏的 `docText` 与状态栏的 `doc.text` 都是 `refreshDocs()` 刷过
+ * 的那份（300ms）。当时设想的"大纲跟着光标实时跳"后来并没有做，而真喂实时文本
+ * （`latestRef`）就得让整个外壳跟着每次按键重渲染，为一个侧栏列表不值得。
+ * **所以这是承认下来的取舍，不是 bug**：大纲与字数最多慢 300ms，换外壳不重渲染。
+ * 哪天真要实时，得走"编辑器直改 DOM"那条路，而不是往 React props 里塞实时的串。
  *
  * ⚠️ 这是**启发式**，不是真解析。它认不出 HTML 块里的 `#`、也认不出
  * 缩进代码块（四空格那种）里的 `#`。真解析要过 remark，而为一个侧栏列表
@@ -31,6 +38,7 @@
  */
 
 import { atxTextRe } from "@/editor/atx";
+import { 前置块行数 } from "@/editor/front-matter";
 
 export interface OutlineItem {
   level: number;
@@ -42,40 +50,19 @@ export interface OutlineItem {
 export function extractOutline(markdown: string, strict = false): OutlineItem[] {
   const out: OutlineItem[] = [];
   let inFence = false;
-  let inFrontMatter = false;
 
   const lines = markdown.split("\n");
-  for (let i = 0; i < lines.length; i++) {
+  // ── front matter：判据用 `front-matter.ts` 那份**严**的（第 63 项合并）────
+  // ⚠️ 以前这里自带一条松判据（"首行 `---`、遇空行/标题/闭栏即止"），与
+  // 存盘边界那份各判各的，同一份文件会出现"所见即所得里看不见、大纲却
+  // 当正文数"的对不上。合完之后**大纲藏的与编辑器藏的是同一段**；为什么
+  // 不用自己再兜"残缺文件"，见 `front-matter.ts` 文件头。跳过的是行**数**，
+  // `i` 仍是整篇文档的行号（`line` 字段的口径没有变）。
+  const 跳过 = 前置块行数(markdown);
+  for (let i = 跳过; i < lines.length; i++) {
     const line = lines[i]!;
 
-    // ── front matter：只在文件最开头才算，跳过整段 ──────────────────────
-    if (i === 0 && line.trimEnd() === "---") {
-      inFrontMatter = true;
-      continue;
-    }
     const trimmed = line.trimStart();
-    if (inFrontMatter) {
-      const t = line.trimEnd();
-      // 结束条件三条：
-      //   ① 收尾的 `---` / `...`（本来就有的那条）；
-      //   ② **空行**——YAML front matter 是一串连续的 `key: value`，里面不会
-      //      有空行；而"文件头一条 `---` 当分隔线、正文里还有一条 `---`"这种
-      //      文档中间是有空行的；
-      //   ③ **标题**——`---` 再也没闭合的残缺文件，不该把正文整个吃光。
-      // ⚠️ ② 是 **BUG-32** 的正主：原来只认 ①，于是"两条 `---` 之间"整个被当成
-      // front matter，正文里的第一个标题连同中间所有段落一条都进不了大纲。
-      // 现场是 `/tmp/nota-fixture/words.md`（第 1 行 `---`、第 5 行 `# 字数样张`、
-      // 第 11 行又一条 `---`）——大纲整个空着，而后端那边标题是算得出来的。
-      if (t === "---" || t === "...") {
-        inFrontMatter = false;
-        continue; // 收尾这一行本身不是标题
-      }
-      if (t !== "" && !atxTextRe(strict).test(trimmed)) continue; // 真 front matter 的行
-      // ⚠️ 走到这里说明是 ②/③：front matter 到此为止，而**这一行按普通行
-      // 继续往下走**（不能 `continue`——那样第 ③ 条里的那个标题正好被吃掉，
-      // 又回到 BUG-32 那个症状上）。
-      inFrontMatter = false;
-    }
 
     // ── 围栏代码块：里面的 `#` 是注释，不是标题 ─────────────────────────
     if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {

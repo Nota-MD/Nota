@@ -1,0 +1,165 @@
+/**
+ * **提示条**（`ui/Toasts.tsx`）：右下角那一条，几秒后自己走。
+ *
+ * 2026-09-29 从 `app.css` 里按功能拆出来（那一份当时 836 行）。它单独一份是因为
+ * 它**不属于任何一栏**：`position: fixed` 挂在窗口上，只在出错（或沉浸模式
+ * "怎么退出"）时出现。
+ *
+ * ⚠️ **层叠那三层的关系在下面 `z-index: 80` 那条注释里**：提示条在菜单弹层
+ * 之上、确认框之下。理由很实：提示说的可能正是"你刚点的那条菜单命令失败了"，
+ * 被菜单盖住就白说了；而确认框是要用户**回答**的，它必须在最上面。
+ * 改这里的数字之前先读 `--z-popup` 的定义处。
+ */
+
+/* ── 提示条（`ui/Toasts.tsx`）─────────────────────────────────────────────
+ *
+ * ⚠️ 这一节是**补上的**（2026-09-25）。那支组件和 `.toast` / `.toast-close`
+ * 三个类名一直在，而**样式一条都没写过**——于是提示条按 `div` 的默认长相
+ * 渲染：一条吃满窗口宽度的横杠贴在窗口最底下，右边那颗 × 是浏览器默认的
+ * 按钮（浅色方块）。一直没人发现，是因为提示只在出错时才出现几秒；
+ * 2026-09-25 起沉浸模式的"怎么退出"也走它，而那时屏幕上除了正文就只有它。
+ */
+
+.toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  /* 80：在菜单弹层（`--z-popup`）**之上**、确认框（200）之下。提示说的可能
+     正是"你刚点的那条菜单命令失败了"，被菜单盖住就白说了；而确认框是要用户
+     **回答**的，它必须在最上面。 */
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  /* ⚠️ 容器**不吃鼠标**：它是一条从窗口右下角往左铺满的空盒子，吃鼠标的话
+     底部那一整条就点不动了（状态栏、标签栏正在那附近）。吃鼠标的只有每条
+     提示自己。 */
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 360px;
+  padding: 9px 10px 9px 12px;
+  border: 1px solid var(--border);
+  /* 左边那道 3px 色带是**级别**。⚠️ 不靠文字颜色分级：暗色主题下红字黄字
+     在深底上对比度掉得厉害，而色带是形状，两种主题下都读得出来。 */
+  border-left: 3px solid var(--fg-faint);
+  border-radius: var(--radius-lg);
+  /* 和确认框同一层底色（浮在正文之上那一档）。 */
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+  font-size: 0.9em;
+  line-height: 1.5;
+  pointer-events: auto;
+  animation: toast-in var(--duration-fast) var(--ease-out);
+}
+
+.toast-warn {
+  border-left-color: var(--warn);
+}
+
+.toast-error {
+  border-left-color: var(--danger);
+}
+
+.toast-success {
+  border-left-color: var(--success);
+}
+
+.toast-message {
+  min-width: 0;
+  /* 长提示（一个路径加一句原因）要能换行，但不能**不换行**把条子撑出屏幕。 */
+  overflow-wrap: anywhere;
+  /* ⚠️ 提示条**可以有好几段**，靠 `\n` 分段（导出那个提示就是三段：写到哪儿了、
+     几个文件多大、签名带没带上）。少了这一条，`\n` 按 HTML 的老规矩被折成一个
+     空格，三段会连成一句没有标点的长话——「…stats.nota-plugin 15 个文件，
+     1.2 MB 这个插件本来就没有签名。」，是 2026-09-27 开窗目检时看出来的。
+     ⚠️ 同一条名字在 `ConfirmDialog` 的 `.confirm-message` 上早就有（`ui/useFocusIntro.ts`
+     那段首次说明、`ui/usePlugins.ts` 那段信任签名就靠它；⚠️ 2026-09-28 起「关于 Nota」
+     那条**不在那儿了**，它整份搬去了 `.about-page-body`，见 `overlay.css`），
+     提示条这一支当时漏了。
+     `pre-line` 对**单段**的提示没有任何影响（它只保留换行，不保留空格）。 */
+  white-space: pre-line;
+}
+
+.toast-close {
+  flex: none;
+  /* 和文字**首行**对齐，不是和整条的垂直中线：提示换行之后中线会跑到中间去。 */
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-faint);
+  cursor: pointer;
+}
+
+.toast-close:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ⚠️ 系统开了"减少动态效果"就**不要动画**（同菜单那一条：这类用户里有一部分
+   是前庭功能敏感，位移类动画会真的让人不舒服）。 */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+/* 危险动作（丢改动、删东西）：确认键画红，别让它长得跟"确定保存"一样。 */
+.btn-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+/* 这两种按钮的悬停/按下**不用灰底**（理由见 `.btn:hover` 上面那条）。
+   `filter` 不需要知道底色是什么，所以七套界面风格共用这一条。 */
+.btn-primary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+.btn-primary:active:not(:disabled),
+.btn-danger:active:not(:disabled) {
+  filter: brightness(0.88);
+}
+
+/* ⚠️ 禁用态的强调色按钮要**褪回普通按钮的样子**：底色还留着强调色的话，它看起来
+   仍然是"能按的"，只是字淡了——而按下去什么都不会发生。第一次撞见它的是探测
+   面板里那颗「检测中…」的按钮。字色由上面的 `.btn:disabled` 管。 */
+/* ⚠️ 这两条也走 `--btn-*`：不然 Adwaita 那档（普通按钮无框无底）里，
+   一颗灰着的强调按钮会**比别人多一道框**，而它恰恰是"看着最不能按"的那颗。 */
+.btn-primary:disabled,
+.btn-danger:disabled {
+  border-color: var(--btn-border);
+  background: var(--btn-bg);
+}

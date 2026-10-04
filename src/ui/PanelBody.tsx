@@ -30,6 +30,8 @@ import { ShareCardBlock } from "@/ui/ShareCard";
 import type { PromptRequest } from "@/ui/useDialogs";
 import type {
   PanelAction,
+  PanelCardIcon,
+  PanelCards,
   PanelChart,
   PanelDiffOp,
   PanelGraphLine,
@@ -231,6 +233,9 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
 
           case "heatmap":
             return <PanelHeatmapBlock key={i} spec={node.spec} />;
+
+          case "cards":
+            return <PanelCardsBlock key={i} spec={node.spec} />;
 
           case "share":
             // ⚠️ 卡片是**画出来**的（一张 SVG → `<img>`），不是拼成一堆 DOM：
@@ -668,3 +673,177 @@ function PanelChartBlock({ spec }: { spec: PanelChart }) {
     </div>
   );
 }
+
+/**
+ * 一串**记录卡**（`kind = "cards"`，2026-10-04 加，写作统计要的）。
+ *
+ * 版式出处是用户当天给的两张运动手表截图（「运动记录」那两屏）：一条记录一个
+ * 圆角框——左边一颗圆图标，右边一个大数 ＋ 一行小字；框底下那行是**汇总**。
+ *
+ * ⚠️ 一条都没有就**什么都不画**（返回 `null`）：「还没有记录」那句话该由插件按
+ * 自己的话讲，宿主编一句通用文案只会和插件自己想说的那句打架
+ * （`panel-nodes.ts::记录卡列表` 那段写着同一条）。
+ *
+ * ⚠️ 这里没有一条路能把字符串变成 HTML（本文件头那条）：`value` / `unit` /
+ * `caption` / `label` 全部落在子节点位置，图标是**本文件里的**几条 `<path>`，
+ * 插件给的只是一个走白名单的名字（`panel-nodes.ts::图标`）。
+ */
+function PanelCardsBlock({ spec }: { spec: PanelCards }) {
+  // ⚠️ 判据是"**两样都没有**"：只有汇总那行（`items` 空）是**合法**的一块——
+  // 写作统计"还没开始"那一屏就是这样，"整篇文档 1284 字"是那一屏唯一的一个数。
+  if (spec.items.length === 0 && !spec.total) return null;
+
+  return (
+    <div className="panel-cards">
+      {spec.title && <div className="panel-cards-title">{spec.title}</div>}
+
+      {spec.items.map((card, i) => (
+        // ⚠️ key 用下标（与上面那一串同一个理由）：这一串没有身份，插件每次给的
+        // 都是一份全新的列表，而用内容当 key 会在两条记录刚好相同时撞车。
+        <div key={i} className="panel-card">
+          <卡图标 name={card.icon} />
+          <div className="panel-card-body">
+            <div className="panel-card-head">
+              {/* 空串画破折号：那是"这一格现在没有数"，不是 0（同 `chart`）。 */}
+              <span className="panel-card-value">{card.value || "—"}</span>
+              {card.unit && <span className="panel-card-unit">{card.unit}</span>}
+            </div>
+            {card.caption && <div className="panel-card-caption">{card.caption}</div>}
+            <卡窄曲线 points={card.points} />
+          </div>
+        </div>
+      ))}
+
+      {spec.total && (
+        <div className="panel-cards-total">
+          {/* 标签靠左、数靠右（`margin-right: auto` 在 CSS 里）：汇总那行读起来
+              像一句"总账"，而不是又一条记录。 */}
+          {spec.total.label && (
+            <span className="panel-cards-total-label">{spec.total.label}</span>
+          )}
+          <span className="panel-cards-total-value">{spec.total.value || "—"}</span>
+          {spec.total.unit && <span className="panel-cards-total-unit">{spec.total.unit}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 记录卡左边那颗圆图标。
+ *
+ * ⚠️ **画出来的形状由本文件说了算**，插件只在 `panel-nodes.ts::图标名` 那张
+ * 白名单里报一个语义（"这一条是本轮 / 今天 / 长期 / 整篇"）。这样换一套图标
+ * 不用动任何插件——与 `share` 那条"插件说什么、宿主说怎么显示"同规矩。
+ * ⚠️ 认不出的名字在解析层就已经被换成 `"record"` 了，所以这里那个兜底
+ * 分支是"兜到底"，不是"日常会走到"。
+ */
+function 卡图标({ name }: { name: PanelCardIcon }) {
+  return (
+    <span className="panel-card-icon" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {name === "today" ? (
+          // 今天：一页日历。
+          <>
+            <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+            <path d="M3.5 9.75h17" />
+            <path d="M8 3v3.5M16 3v3.5" />
+          </>
+        ) : name === "long" ? (
+          // 长期：一格格的日子（就是热力图那个形状）。⚠️ 深浅不一，看着才像
+          // "有的天写得多、有的少"；全一样就成了一块砖。
+          <g fill="currentColor" stroke="none">
+            {[0, 1, 2].map((行) =>
+              [0, 1, 2].map((列) => (
+                <rect
+                  key={`${行}-${列}`}
+                  x={3.6 + 列 * 6}
+                  y={3.6 + 行 * 6}
+                  width={4.6}
+                  height={4.6}
+                  rx={1.2}
+                  opacity={0.32 + ((行 + 列) % 3) * 0.26}
+                />
+              )),
+            )}
+          </g>
+        ) : name === "doc" ? (
+          // 整篇：一张有折角的纸。
+          <>
+            <path d="M6.5 3.5h7l4.5 4.5v12.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
+            <path d="M13.5 3.5V8h4.5" />
+            <path d="M8.5 13h7M8.5 16.5h4.5" />
+          </>
+        ) : name === "record" ? (
+          // 兜底：一颗中性的圆点，不表态。
+          <circle cx="12" cy="12" r="7.5" />
+        ) : (
+          // 本轮：一块秒表（"按下开始到按下结束"的那一段）。
+          <>
+            <circle cx="12" cy="13.5" r="7" />
+            <path d="M12 10.5v3.2l2.2 1.4" />
+            <path d="M9.5 2.5h5" />
+            <path d="M12 2.5v3.4" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
+/**
+ * 记录卡框里那条**窄曲线**。
+ *
+ * ⚠️ 与 `PanelChartBlock` 那条曲线**共用同一套算法**（按这一段的极值归一化、
+ * 跨度为 0 时摆中线、少于两个点不画），但**不共用那个组件**：这一条只有 18px
+ * 高、没有刻度、没有大数字，硬塞进去会让那边多出一堆这里用不上的分支。
+ * ⚠️ 归一化取的是**这一段自己的**极值（不是从 0 起）——理由与 `PanelChartBlock`
+ * 那段一样：本轮分速可能一直在一万二到一万三之间，从 0 起画就是一条直线。
+ */
+function 卡窄曲线({ points }: { points: number[] }) {
+  const t = useT();
+  // 一个点画出来是"一条横贯的直线"，看着像"速度平稳"，而它其实是"只有一个采样"。
+  if (points.length < 2) return null;
+
+  const 上限 = Math.max(...points);
+  const 下限 = Math.min(...points);
+  const 跨度 = 上限 - 下限;
+  const 纵向 = (v: number) => (跨度 > 0 ? (上限 - v) / 跨度 : 0.5) * 窄图高;
+  const 横向 = (i: number) => (i / (points.length - 1)) * 窄图宽;
+
+  // ⚠️ 保留两位小数（同 `PanelChartBlock`）：不给的话每个坐标会带上十几位有效
+  // 数字，一条 200 点的 `d` 白白长出几千字符。
+  const 折线 = points
+    .map((v, i) => `${i === 0 ? "M" : "L"}${横向(i).toFixed(2)} ${纵向(v).toFixed(2)}`)
+    .join(" ");
+
+  return (
+    <svg
+      className="panel-card-spark"
+      viewBox={`0 0 ${窄图宽} ${窄图高}`}
+      // ⚠️ 横竖各自撑满（同上面那块图）：等比的话这条 18px 高的线会挤成中间一小段。
+      preserveAspectRatio="none"
+      role="img"
+      // 曲线对读屏是一团空气，这一句才是它能读出来的东西（与 `chart` 那块同一句话）。
+      aria-label={t("A curve with {0} points", points.length)}
+    >
+      <path className="panel-card-spark-line" d={折线} vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+/**
+ * 那条窄曲线的画布尺寸。
+ *
+ * ⚠️ 它**不是像素**：`preserveAspectRatio="none"` 会把这两个数拉成框的实际宽
+ * 和 18px 高（CSS 里那个高度）。写成 100×18 只是让路径指令里的数短一点。
+ */
+const 窄图宽 = 100;
+const 窄图高 = 18;

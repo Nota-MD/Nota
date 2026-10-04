@@ -42,16 +42,33 @@
  */
 
 import { Container, Ctx } from "@milkdown/kit/ctx";
-import { inputRulesCtx, schemaCtx } from "@milkdown/kit/core";
+import { inputRulesCtx, prosePluginsCtx, schemaCtx } from "@milkdown/kit/core";
 import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import { EditorState } from "@milkdown/kit/prose/state";
+import { EditorState, NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
+import type { Transaction } from "@milkdown/kit/prose/state";
 import type { InputRule } from "@milkdown/kit/prose/inputrules";
-import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "@milkdown/plugin-math";
+import type { EditorView } from "@milkdown/kit/prose/view";
+import {
+  katexOptionsCtx,
+  math,
+  mathBlockInputRule,
+  mathBlockSchema,
+  mathInlineInputRule,
+  mathInlineSchema,
+} from "@milkdown/plugin-math";
 import { unified } from "unified";
 import remarkStringify from "remark-stringify";
 import remarkMath from "remark-math";
-import { 公式输入, 单美元, 双美元, 该变公式 } from "../src/editor/math-input";
+import {
+  公式输入,
+  公式块回车,
+  单美元,
+  双美元,
+  该变公式,
+  回车成公式块,
+  空块头,
+} from "../src/editor/math-input";
 import { 行内公式处理器, 行内公式规格, 读美元数 } from "../src/editor/math-delim";
 
 /* ── 一支极小的测试工装（与 `math-view.test.ts` / `mark-hint.test.ts` 同一套长相）── */
@@ -101,6 +118,8 @@ const ctx = new Ctx(new Container(), {} as never);
 (ctx as unknown as { wait: () => Promise<void> }).wait = async () => {};
 // `$inputRule` 的插件体会 `ctx.update(inputRulesCtx, …)`，所以这一片得先注入。
 ctx.inject(inputRulesCtx);
+// 同理，`$prose` 那一份（块公式的回车）要 `prosePluginsCtx`。
+ctx.inject(prosePluginsCtx);
 katexOptionsCtx(ctx);
 mathInlineSchema.ctx(ctx);
 mathBlockSchema.ctx(ctx);
@@ -132,6 +151,18 @@ for (const 插件 of 公式输入) {
   //    一串 `undefined`（第一版就是这么错的）。
   await 插件(ctx)();
   规则.push(插件.inputRule);
+}
+
+/**
+ * ⚠️ **块公式那条也真的建一次**（同上面那两条输入规则）：`$prose` 要到工厂跑完
+ * 才把 `.plugin` / `.key` 挂上去，不 build 一次的话"插件挂上了没有"这句话
+ * 就**没有量过**（下面第四组最后一条要读 `公式块回车.key()`）。
+ */
+let 块插件炸了: unknown = null;
+try {
+  await 公式块回车(ctx)();
+} catch (e) {
+  块插件炸了 = e;
 }
 
 /* ── 打字模拟：照抄 `prosemirror-inputrules` 的 `run()` ──────────────── */
@@ -254,11 +285,23 @@ function 存成mdast(state: EditorState): Record<string, unknown>[] {
   等(双美元.source, "\\$\\$([^$]+)\\$\\$$", "双美元正则");
 });
 
-测("守卫：前面紧挨着 `$` 就让开；别的（含段落最前面）都放行", () => {
+测("守卫（只剩守卫一）：前面紧挨着 `$` 就让开；别的（含段落最前面）都放行", () => {
   等(该变公式("$"), false, "前面是 $ 要让开");
   等(该变公式(""), true, "段落最前面没有前一个字符 ⇒ 放行");
   等(该变公式("A"), true, "普通文字 ⇒ 放行");
-  等(该变公式(" "), true, "空格 ⇒ 放行");
+  等(该变公式(" "), true, "前面是空格也放行——⚠️ 值两端有没有空格**不归它管**");
+});
+
+测("⚠️ 守卫二**已撤回**（2026-10-04 当天加、当天撤）：值里带空格也照转", () => {
+  // 那一条曾经是"值两端紧挨着空白就不转"（照 Typora）。用户下午在分屏预览里
+  // 发现它把 `$ \LaTeX $` 这种带空格的常见写法也判成了普通文字，拍了「整条撤回」。
+  // ⚠️ **打字这条路与解析那条路是同一把尺子**：解析那一侧的第五格（
+  //    `math-delim.ts`）一起撤了，`tests/math-delim.test.ts` 第九组量的是撤回后的行为。
+  //    只撤一边的症状是"打字不转、打开文件又渲染成公式"——两边对不上。
+  //
+  // 这条测法很笨但够用：函数签名的第二个参数**已经没有了**，所以"值"根本进不来
+  // ——留下这几行是为了让下一个人**看见这里曾经有过什么**（以及为什么撤）。
+  等(该变公式("A"), true, "`$ a$` / `$a $` / `$ a $` 现在都照转（值不再参与判断）");
 });
 
 测("**上游那条为什么会坏**：`$$bb$` 在没收尾时就已经能匹配单美元那条", () => {
@@ -317,9 +360,20 @@ function 存成mdast(state: EditorState): Record<string, unknown>[] {
   等(state.doc.firstChild?.lastChild?.textContent, " B", "最后那个节点是正文");
 });
 
-测("`$ a$` / `$ $`：值里带空格也算公式（与解析器同一口径）", () => {
+测("`$ a$` / `$a $` / `$ $`：**照旧当场转**（守卫二 2026-10-04 当天撤回）", () => {
+  // ⚠️ 这一条**改过两回**，都是同一天：2026-10-04 早些时候按 Typora 改成"当场不转、
+  // 原样留在正文里"（守卫二），当天下午用户拍了「整条撤回」，于是又回到上游口径：
+  // 值里带空格也算公式。⚠️ 撤回的代价（值两端那两颗空格存盘会被 trim 掉）在
+  // `math-delim.ts` 文件头那段 ⚠️ 与 `tests/math-delim.test.ts` 第九组里。
   等列(长相(敲完("$ a$")), ['math_inline(" a")'], "前导空格");
+  等列(长相(敲完("$a $")), ['math_inline("a ")'], "收尾空格");
   等列(长相(敲完("$ $")), ['math_inline(" ")'], "只有空格");
+  // 中间的空格本来就不参与判断，跟上游同。
+  等列(长相(敲完("$a b$")), ['math_inline("a b")'], "中间的空格不算");
+  // ⚠️ **打字这条路不吃空格、解析那条路会 trim**——两条路在这一点上本来就
+  // 不一致（上游行为，2026-10-04 那道守卫想对齐、当天又撤了）。存盘走的是
+  // "值原样写出去"，所以敲出来的还是原来那几个字符。
+  等(存盘(敲完("$ a$")), "$ a$", "敲完就存：那两颗空格留着");
 });
 
 测("连着敲两次：`$$a$$ 和 $$b$$` ⇒ 两颗公式，中间是正文", () => {
@@ -365,6 +419,121 @@ function 存成mdast(state: EditorState): Record<string, unknown>[] {
   // 行为不该有任何变化。这一条是"换规格没把打字那半边弄坏"的回归哨。
   等列(长相(敲完("A$$bb$")), ['文("A$$bb$")'], "没收尾不许动它");
   等(读美元数(头一颗公式(敲完("$$ab$$"))!) , 2, "段首那颗也是两个 `$`");
+});
+
+/* ── 四、块公式：`$$` ＋回车（2026-10-04）────────────────────────────── */
+
+组("四、块公式：`$$` ＋回车才建块（换掉了上游那道「`$$` ＋空格」）");
+
+/**
+ * 一条够用的**假视图**：`回车成公式块` 只碰视图的三样东西
+ * （`editable` / `state` / `dispatch`），所以这三样给真货就够跑完整条逻辑。
+ *
+ * ⚠️ **它证明不了**：面板真的开了、输入框真的拿到焦点——那要真 DOM
+ * （`docs/06` 开窗目检那一节）。这里证明的是**判据与事务**：
+ * 什么时候认、产出的文档长什么样、选区落在哪。
+ */
+function 假视图(初始: EditorState, 可编辑 = true) {
+  const 盒 = {
+    state: 初始,
+    editable: 可编辑,
+    dispatch: (tr: Transaction) => {
+      盒.state = 盒.state.apply(tr);
+    },
+  };
+  return 盒 as unknown as EditorView & typeof 盒;
+}
+
+/** 一段文字 ＋ 光标在**末尾**（回车那一下一般就是这个位置）。 */
+function 段尾(text: string, 可编辑 = true) {
+  const 文档 = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text(text)));
+  const state = EditorState.create({
+    schema,
+    doc: 文档,
+    selection: TextSelection.near(文档.resolve(1 + text.length)),
+  });
+  return 假视图(state, 可编辑);
+}
+
+测("`$$` ＋回车 ⇒ 这一段**变成**一块空的 `math_block`，值空着", () => {
+  const view = 段尾("$$");
+  等(回车成公式块(view, schema.nodes.math_block), true, "认了这一下回车");
+  const 块 = view.state.doc.firstChild;
+  等(块?.type.name, "math_block", "块类型");
+  等(块?.attrs.value, "", "值是空的（等用户敲）");
+  等(view.state.doc.childCount, 1, "还是只有一块（不是又插了一块）");
+});
+
+测("⚠️ 建完块当场**整块选中**（`math-view.ts` 判「要不要开源码框」的唯一判据）", () => {
+  // 不设 NodeSelection 的话，选中的是"块里那个空位置"，那块装饰挂不上，
+  // 用户按下回车之后源码框**不开**——屏幕上就是一块空白，正是用户报的那个现象。
+  const view = 段尾("$$");
+  回车成公式块(view, schema.nodes.math_block);
+  const 选 = view.state.selection;
+  断言(选 instanceof NodeSelection, `选区该是 NodeSelection，实际是 ${选.constructor.name}`);
+  等((选 as NodeSelection).node.type.name, "math_block", "选中的就是那一块");
+});
+
+测("`$$ `（尾上多一颗空格）也认——顺着老写法的肌肉记忆", () => {
+  const view = 段尾("$$ ");
+  等(回车成公式块(view, schema.nodes.math_block), true, "认");
+  等(view.state.doc.firstChild?.type.name, "math_block", "块类型");
+});
+
+测("⚠️ 不该抢的那几种：一段里还有别的字、光标不在行尾、只读", () => {
+  等(回车成公式块(段尾("$$abc"), schema.nodes.math_block), false, "`$$abc` 不是空块头");
+  等(回车成公式块(段尾("甲$$"), schema.nodes.math_block), false, "前面还有字");
+  等(回车成公式块(段尾("$"), schema.nodes.math_block), false, "一颗 `$` 不算（行内那条管）");
+  等(
+    回车成公式块(段尾("$$", false), schema.nodes.math_block),
+    false,
+    "⚠️ 只读实例（分屏右边那个预览格）不许动文档",
+  );
+
+  // 光标不在行尾：那一下回车是**拆段**，不是建块（`$$` 后面还有字时同理，见上）。
+  const 文档 = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text("$$")));
+  const 停在开头 = EditorState.create({
+    schema,
+    doc: 文档,
+    selection: TextSelection.near(文档.resolve(1)),
+  });
+  等(回车成公式块(假视图(停在开头), schema.nodes.math_block), false, "光标在段首");
+});
+
+测("⚠️ 框选着东西按回车：不建块", () => {
+  const 文档 = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text("$$")));
+  const 选中 = EditorState.create({
+    schema,
+    doc: 文档,
+    selection: TextSelection.create(文档, 1, 3),
+  });
+  等(回车成公式块(假视图(选中), schema.nodes.math_block), false, "非空选区");
+});
+
+测("`空块头` 的正则：`$$` ＋任意空白（含没有、含制表符）", () => {
+  等(空块头.test("$$"), true, "光秃秃的");
+  等(空块头.test("$$ "), true, "一颗空格");
+  等(空块头.test("$$\t"), true, "制表符");
+  等(空块头.test("$$abc"), false, "后面有字");
+  等(空块头.test("甲$$"), false, "前面有字");
+  等(空块头.test("$"), false, "一颗");
+  等(空块头.test("$$$"), false, "三颗（micromark 也不当块读）");
+});
+
+测("⚠️ 回车那条插件真的建得起来，PluginKey 就是那一个", () => {
+  if (块插件炸了) throw new Error(`建插件时报错：${String(块插件炸了)}`);
+  // ⚠️ 尾巴上那颗 `$` 是 ProseMirror 自己加的（`new PluginKey(name)` 里
+  // `this.key = name + "$"`），不是笔误。
+  等(公式块回车.key().key, "nota-math-block-on-enter$", "PluginKey（改名会撞上上游，这里守住）");
+});
+
+测("⚠️ 我们滤的两条**真的在 `math` 里**（上游改名的话这里会红，不是静默失效）", () => {
+  // `create.ts` 里是 `math.filter((p) => p !== mathInlineInputRule && p !== mathBlockInputRule)`。
+  // 上游哪天把这两条换个名字/挪个地方（而不是删掉），那个 filter 会**静默失效**：
+  // 编译照过、测试照绿，而 `A$$bb$` 与「`$$` ＋空格建块」两个毛病一起回来。
+  // 这条守的就是那个时刻——引用的东西必须真的是 `math` 的成员。
+  断言(math.includes(mathInlineInputRule), "`mathInlineInputRule` 该是 `math` 的成员");
+  断言(math.includes(mathBlockInputRule), "`mathBlockInputRule` 该是 `math` 的成员");
 });
 
 /* ── 收尾 ───────────────────────────────────────────────────────────── */

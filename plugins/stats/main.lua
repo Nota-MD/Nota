@@ -65,12 +65,25 @@ local PANEL_ID = "stats"
 -- 历史和曲线留这么久（毫秒）。三分钟：260px 宽的一栏里每秒一个点就是 180 个。
 local KEEP_MS = 180000
 
--- 算"最近一分钟"那个大数字用的滑动窗口（毫秒）。
-local WINDOW_MS = 60000
+-- 算大数字那个滑动窗口的**边界**（秒）。⚠️ 窗口本身**不再是常数**：
+-- 用户 2026-10-04 要求"不要统计全局的，按最近 Δt 秒算"，而 Δt 由他在
+-- 「设置 → 拓展」那一页上拖（`plugin.toml` 的 `[[settings]]`，默认 5 秒）。
+-- 这里这两个数是**兜底**：插件不信任外面来的数（文件可能被手改坏、
+-- `nota.settings` 也读不到），与 `window_ms` 那段说明是同一件事的两半。
+local MIN_WINDOW_S = 1
+local MAX_WINDOW_S = 60
+local DEFAULT_WINDOW_S = 5
+
+-- 上面那三个数与清单里那条 `[[settings]]`（min / max / default）**必须一致**。
+-- ⚠️ 两处各写一遍是**有意的**：清单那份是给宿主画滑杆用的，这份是插件自己算数
+-- 用的。`docs/11`「给拓展做一格设置」里写着这条"两处都有"的规矩——
+-- 不一致的表现是"滑杆能拖到 60，而插件按 20 算"，界面上完全看不出来。
 
 -- 数据跨度短于这么久就**不给数字**（画一个破折号）。
 -- ⚠️ 不是"算不出来"，是**样本太少时那个数没有意义**：两秒钟打了三个字，乘出来是 90 字/分钟，而那不是任何人的写作速度，是一个除法。
--- ⚠️ `running`（最近一分钟）与 `done`（整轮）**两处都用它**。
+-- ⚠️ `done`（整轮）与今日那个平均速度用它；`running` 那一支用的是
+-- **"Δt 与它取小"**（见 `average_rate`）：窗口拖到 5 秒时，样本攒够 5 秒
+-- 就该出数了——拿 10 秒去卡的话，默认档位上大数字会白白空 5 秒。
 local MIN_SPAN_MS = 10000
 
 -- 两次采样隔得比这久 = 中间断档（面板没开着）。
@@ -339,18 +352,71 @@ local function take_sample(now, words, path, minute_of_day, day_row)
   end
 end
 
---- 最近一分钟的平均速度（字/分钟）。样本不够就返回 `nil`。
+--- 现在这个窗口有多长（毫秒）。
+--
+-- 用户 2026-10-04 要的就是这一格：**"统计某一个 Δt 内的打字数量"**，
+-- Δt 在「设置 → 拓展」那一页上拖（宿主画的滑杆），默认 5 秒、1–60 秒。
+--
+-- ⚠️ **每一枪现读**（不缓存）：宿主写完设置会发一条"面板该重拉了"
+-- （`commands/plugin.rs::nota_plugin_setting_set`），下一枪就该是新窗口——
+-- 缓存的话用户拖完滑杆得等重启，而"拖了没反应"正是这一格最不该有的表现。
+-- 读一次是一张 Lua 表里取一个键，比这一枪里画的那些东西便宜得多。
+--
+-- ⚠️ 外面来的数**一律不信**：设置文件用户可以直接拿编辑器改
+-- （`lua/api/settings.rs` 文件头就是这么说的），写进去 `0` / `"五秒"` / `999`
+-- 都不该让这一枪算出一个荒唐的除法。取不到就是默认 5 秒。
+--
+-- ⚠️ 用 `saved_nota` 而**不是** `panel_content` 那个参数：这一条要在 `card_ctx`
+-- 里也被调到，而那张表是**不带参数**搭的（同 `save_ledger` 那几处）。
+-- 老插件（api = 2 之前）没有 `nota.settings` 这一号对象，所以先问一句有没有。
+local function window_ms()
+  local n = nil
+  if saved_nota and saved_nota.settings then
+    n = saved_nota.settings.get("window_seconds")
+  end
+  if type(n) ~= "number" then
+    n = DEFAULT_WINDOW_S
+  end
+  n = math.floor(n + 0.5)
+  if n < MIN_WINDOW_S then
+    n = MIN_WINDOW_S
+  end
+  if n > MAX_WINDOW_S then
+    n = MAX_WINDOW_S
+  end
+  return n * 1000
+end
+
+--- 最近 Δt 秒的平均速度（字/分钟）。样本不够就返回 `nil`。
+--
+-- 口径：**把窗口里那几个采样点的字加起来、时长加起来，再折算成"每分钟多少字"**。
+-- 窗口 5 秒时那是"最近 5 秒里打了多少字 ×12"——数还是每分钟的那个数，
+-- 只是回看的这一段短得多、跳得多（用户要的就是这个：他要看**此刻**的手速，
+-- 不是整整一分钟的平均）。
+--
+-- ⚠️ 窗口是**滑动**的、不是"最近第几个点"：`from = now - 窗`。一次采样跨过
+-- 窗口边界时要么整段算进、要么整段不算，误差的上限是一个采样间隔（≈1 秒），
+-- 而窗口最小就是 1 秒——所以最短那一档上这两种取法差得出来（0 个字与 1 个点）。
+-- 不为此再做插值：**一个秒级的读数不值得为它发明一套半样本的算法**。
+--
 -- ⚠️ `nil` 与 0 是**两件事**：`nil` = "还没有结论"（画破折号），0 = "有结论、就是没在打"。
-local function average_rate(now)
+local function average_rate(now, win)
   local total, span = 0, 0
-  local from = now - WINDOW_MS
+  local from = now - win
   for _, s in ipairs(samples) do
     if s.t >= from then
       total = total + s.add
       span = span + s.dt
     end
   end
-  if span < MIN_SPAN_MS then
+  -- ⚠️ 够不够看**Δt 与 MIN_SPAN_MS 取小**：窗口比 10 秒短时，"攒够一整个窗口"
+  -- 就是**已经回看满 Δt 秒**了（那时折算出来的数正是用户要的那个）；
+  -- 拿 10 秒去卡的话，默认 5 秒档上大数字要空 10 秒才出数。
+  local need = win
+  if need > MIN_SPAN_MS then
+    need = MIN_SPAN_MS
+  end
+  if span < need then
     return nil
   end
   return math.floor(total / span * 60000 + 0.5)
@@ -392,167 +458,37 @@ local function human_span(ms)
   )
 end
 
--- 面板上那几颗按钮。**每个状态一组**，集中在这儿是为了让人一眼看全"一共能有哪几种"。
--- ⚠️ 「终止」在 `running` 与 `paused` 都出现、**都排最右**：它是唯一不可逆的动作，位置
--- 固定比好看重要。⚠️ `needs` 是**插件自己用的**（不发给前端）：没东西可分享时那颗按钮
--- 就不出现——一颗"点了只得到一句空话"的按钮比灰按钮更坏。
-local BUTTONS = {
-  idle = {
-    { label = "Start recording", command = "start", style = "primary" },
-    { label = "Make today's card", command = "share_day", needs = "day" },
-    { label = "Make the long-term card", command = "share_long", needs = "long" },
-  },
-  running = {
-    { label = "Pause", command = "pause" },
-    { label = "Stop", command = "stop" },
-  },
-  paused = {
-    { label = "Resume", command = "resume", style = "primary" },
-    { label = "Stop", command = "stop" },
-  },
-  done = {
-    { label = "Start another round", command = "start", style = "primary" },
-    { label = "Make this round's card", command = "share_round", needs = "round" },
-    { label = "Make today's card", command = "share_day", needs = "day" },
-    { label = "Make the long-term card", command = "share_long", needs = "long" },
-  },
-  -- 分享那一屏只有一颗「返回」：这一屏是**看**的，动作全在卡片下面（前端那两颗）。
-  share = {
-    { label = "Back", command = "share_close" },
-  },
-}
-
--- ⚠️ **前向声明**：`long_stats` 定义在下面（那一整段要用到 `ticks`，而它跟着分享图
--- 那一段走）。Lua 是"先声明后使用"，不先在这儿留个名字的话，`can_share` 里那个
--- 调用会解析成**全局变量**（值是 `nil`）——症状是点开面板就报"调用一个 nil 值"。
-local long_stats
-
---- 此刻有没有东西可分享。`round` = 刚跑完的那一轮；`day` = 今天有账；`long` = 长期那本账值得画。
-local function can_share(needs)
-  if needs == "round" then
-    return phase == "done" and total_add > 0
-  end
-  if needs == "long" then
-    -- ⚠️ 至少要**两天**有字：一天的账在半年那张图上就是孤零零一格，而"这颗按钮
-    -- 点下去得到一张像坏了的图"比"这颗按钮暂时不出现"更糟（同上面 `needs` 那条）。
-    local st = long_stats and long_stats() or nil
-    return st ~= nil and st.days >= 2
-  end
-  return today ~= nil and today.words > 0
-end
-
---- 那一组按钮（`T()` 要晚于模块加载，所以现译，不在表里写死）。
-local function buttons_for(now_phase)
-  local out = {}
-  for _, b in ipairs(BUTTONS[now_phase] or {}) do
-    if not b.needs or can_share(b.needs) then
-      table.insert(out, { label = T(b.label), command = b.command, style = b.style })
-    end
-  end
-  return out
-end
 
 -- ── 分享图与刻度 ─────────────────────────────────────────────────────────
 --
--- ⚠️ 这一段**只数数、只写字段**，一个像素都不画（画的是 `src/ui/share-card.ts`）。
--- 这里产出的东西就是 `kind = "share"` 那一块的全部内容。
---
--- ⚠️ **"数怎么写、刻度摆哪儿"这一半 2026-09-27 搬去了 `ticks.lua`**（`require`，插件
+-- ⚠️ **"数怎么写、刻度摆哪儿"那一半 2026-09-27 搬去了 `ticks.lua`**（`require`，插件
 -- 多文件）：那几个是整份插件里唯一**不碰状态**的一截，搬走只为把这份文件压回 1000 行
 -- 以内。下面几行是**转接**——名字和几十处调用点一个都没动，只是把"只有上家才知道"的
 -- 两个口径（`MAX_POINTS`、`samples`）当参数递进去。
+--
+-- ⚠️ **2026-10-04 又搬了一次**：钮扣那一段（那颗开关的相位表、做分享图那三颗）、
+-- 三张分享卡的字段、以及长期那块面板，一起去了 **`share.lua`**——理由同 `ticks.lua` /
+-- `cards.lua`：Δt 窗口那一批把这份文件顶到 1065 行（硬上限 1000，`docs/09` §4）。
+-- 它与 `cards.lua` 一样走**一张显式递进去的只读 `ctx` 表**（下面 `share_ctx`），
+-- 而不是上值：`require` 是单向的，反过来引就是一个环。
 
 local ticks = require("ticks")
 
-local num_text, clock_span = ticks.num_text, ticks.clock_span
 -- ⚠️ **卡片与面板上凡是"多少个字"都走 `group_text`**（带千位分隔）：这份图上最大的
 -- 那个数字和旁边三格小字如果一处带逗号、一处不带（`209,758` 与 `34225`），读起来像
 -- 两个不同地方印出来的数。`ticks.lua` 那边的注释里写着为什么倒着插逗号。
-local group_text = ticks.group_text
-local date_text, stamp_text = ticks.date_text, ticks.stamp_text
-local three_ticks, round_tick, clock_tick = ticks.three_ticks, ticks.round_tick, ticks.clock_tick
+local num_text, group_text = ticks.num_text, ticks.group_text
 
 --- 摊点/画刻度时要带上"一份图最多几个点"（那个口径在上家）。
 local function spread(mins, from_i, to_i)
   return ticks.spread(mins, from_i, to_i, MAX_POINTS)
 end
 
--- ⚠️ 采样序列同理：`ticks.lua` 不认识本轮，由这里递进去。
-local function window_ticks(now)
-  return ticks.window_ticks(samples, now, MAX_POINTS)
-end
+-- ⚠️ 这里原本还有一个 `window_ticks`（把采样序列递进 `ticks.window_ticks` 去
+-- 算横轴刻度），**2026-10-04 删了**：它唯一的用户是面板上那块独立的曲线
+-- （`kind = "chart"`），而那块在同一天折进了记录卡里——卡里那条窄曲线没有刻度
+-- （18px 的图上摆不下"第几分钟"）。`ticks.window_ticks` 也跟着一起删了。
 
---- 今日的平均速度（字/分钟）。太短就是 `nil`（理由同 `MIN_SPAN_MS`）。
-local function day_rate()
-  if not today or today.ms < MIN_SPAN_MS then
-    return nil
-  end
-  return math.floor(today.words / today.ms * 60000 + 0.5)
-end
-
---- 「这一轮」那张卡片的字段。
-local function round_card()
-  local to_i = 0
-  for mi in pairs(round_mins) do
-    if mi > to_i then
-      to_i = mi
-    end
-  end
-  local series = spread(round_mins, 0, to_i)
-  return {
-    kind = "share",
-    title = T("Writing Stats"),
-    subtitle = "Writing Stats",
-    date = date_text(nowinfo),
-    label = T("Round average"),
-    value = num_text(round_rate()),
-    unit = T("words / min"),
-    points = series.pts,
-    x_ticks = three_ticks(0, series.bucket, #series.pts, round_tick),
-    x_minor = ticks.minor_per_gap(),
-    stats = {
-      { k = T("Total"), v = group_text(total_add), small = T("words") },
-      { k = T("Duration"), v = clock_span(elapsed_ms), small = "" },
-      { k = T("Peak"), v = tostring(math.floor(peak_rate + 0.5)), small = T("words/min") },
-    },
-    foot = string.format(T("This round you wrote %s words"), group_text(total_add)),
-    file = "nota-stats-round-" .. stamp_text(nowinfo) .. ".png",
-  }
-end
-
---- 「今日」那张卡片的字段。今天没账就没这张卡（调用方会拦在前面）。
-local function day_card()
-  local r = today
-  local series = spread(r.mins, r.first or 0, r.last or 0)
-  -- ⚠️ 今日这张**不用三档**：它的横轴就是**钟点**，用户 2026-09-27 要的是「一个小时为一个
-  -- 单位的横坐标标尺」＋「到小时就用稍微大一点的字体」——`ticks.day_ticks` 按跨度自己挑
-  -- 1/2/3/4/6/8/12 小时一档，每一档都是整点、都放大一号。
-  -- ⚠️ **摆不满两档就退回三档钟点**（起/中/末）：今天只写了七八分钟的时候，整点标尺上
-  -- 只有一个"22:00"，比刻度还难读——那种跨度下"从几点到几点"才是这张图要说的。
-  local axis = ticks.day_ticks(r.first or 0, series.bucket, #series.pts)
-  if #axis < 2 then
-    axis = three_ticks(r.first or 0, series.bucket, #series.pts, clock_tick)
-  end
-  return {
-    kind = "share",
-    title = T("Writing Stats"),
-    subtitle = "Writing Stats",
-    date = date_text(nowinfo),
-    label = T("Today's average"),
-    value = num_text(day_rate()),
-    unit = T("words / min"),
-    points = series.pts,
-    x_ticks = axis,
-    x_minor = ticks.minor_per_gap(),
-    stats = {
-      { k = T("Written today"), v = group_text(r.words), small = T("words") },
-      { k = T("Recorded today"), v = clock_span(r.ms), small = "" },
-      { k = T("Today's peak"), v = tostring(math.floor(r.peak + 0.5)), small = T("words/min") },
-    },
-    foot = string.format(T("Today you wrote %s words"), group_text(r.words)),
-    file = "nota-stats-day-" .. r.ymd .. ".png",
-  }
-end
 
 -- ── 长期那本账（热力图，2026-09-27）──────────────────────────────────────
 --
@@ -561,53 +497,52 @@ end
 --
 -- ⚠️ **算的那一半在 `long.lua`**（`require`，插件多文件的第二个用户）：窗口怎么定、
 -- 哪些天算数、那个字符串怎么拼——那几条是纯算术，只是要有人把账本递进去。
--- 下面这四行是**转接**：把"只有上家才知道"的两样（`days` 那本账、这一拍的
--- `nowinfo`）当参数递进去，名字与调用点一个都没动。
+-- 这一行是**转接**：把"只有上家才知道"的两样（`days` 那本账、这一拍的 `nowinfo`）
+-- 当参数递进去，名字与调用点一个都没动。
 
 local long = require("long")
 
--- ⚠️ **没有 `local`**：这个名字在最上面已经前向声明过了（`can_share` 要用它，
--- 而它在文件里排在前面）。写成 `local function` 就是**另起一个同名的局部量**，
--- 前向那个仍然是 `nil`——症状是"点开面板就报调用 nil"。
-function long_stats()
+--- 这一拍那本长期账算出来的数（窗口、有字的天数、总字数…）。`long.lua` 一半的入口。
+local function long_stats()
   return long.stats(days, nowinfo)
 end
 
-local function long_card(st)
-  return long.card(days, st, nowinfo)
-end
+local share = require("share")
 
-local function days_text(st)
-  return long.days_text(days, st)
-end
-
-local function long_saying(st)
-  return long.saying(st)
-end
-
---- 面板上那一块**长期**（热力图 ＋ 一句人话）。**没有账就一个块都不给**。
--- ⚠️ 面板每秒重画一次，而这一块要拼一个几百字的字符串、前端那边要铺一千多个格子
--- （`ui/heatmap.ts` 把 182 天摊成 7×26 个 `<span>`）：没账的时候一个块都不发。
--- ⚠️ 那句人话是**必要的**：格子对读屏软件没有意义（前端那一块挂 `aria-hidden`），
--- "写了多少人少天"要有一句说得出来的话。
-local function long_blocks()
-  local st = long_stats()
-  if not st or st.days <= 0 then
-    return {}
-  end
+--- 一张"这一屏该摆什么"的表，给 `share.lua` 那几个函数读。
+-- ⚠️ 同 `card_ctx`：里面**全是取值**（外加几个纯函数），那边一个字段都不往回写。
+-- ⚠️ 每次要用现搭一张（面板一拍一张）：比一次 Lua 表构造的开销可以忽略，换来的是
+-- "那几个函数到底认识哪几样东西"写在下面这二十来行上。
+local function share_ctx()
   return {
-    { kind = "separator" },
-    {
-      kind = "heatmap",
-      title = T("Long-term record"),
-      unit = T("words"),
-      days = days_text(st),
-      weeks = st.weeks,
-      to = st.ymd,
-    },
-    { kind = "text", tone = "muted", text = long_saying(st) },
+    phase = phase,
+    total_add = total_add,
+    elapsed_ms = elapsed_ms,
+    peak_rate = peak_rate,
+    round_mins = round_mins,
+    today = today,
+    days = days,
+    nowinfo = nowinfo,
+    long = long,
+    long_stats = long_stats,
+    round_rate = round_rate,
+    spread = spread,
+    min_span_ms = MIN_SPAN_MS,
+    num_text = num_text,
+    group_text = group_text,
+    -- 刻度那一批：只有分享图那几个函数要用，主文件这边一个都不用了，所以**不再**
+    -- 在上头起别名，直接从 `ticks` 取（少一批只在两处之间转手的名字）。
+    clock_span = ticks.clock_span,
+    date_text = ticks.date_text,
+    stamp_text = ticks.stamp_text,
+    three_ticks = ticks.three_ticks,
+    round_tick = ticks.round_tick,
+    clock_tick = ticks.clock_tick,
+    day_ticks = ticks.day_ticks,
+    minor_per_gap = ticks.minor_per_gap,
   }
 end
+
 
 --- 此刻的**墙上时间**（本地时区）。拿不到就 `nil`。
 -- ⚠️ `nil` 时**整套"今日"都不出现**，而不是显示一个假日期：一个会写错日期的账本比没有
@@ -637,6 +572,61 @@ local function wall_clock(nota)
   }
 end
 
+-- ── ② 小字数据概览 与 ④ 记录卡（2026-10-04 加/改版）──────────────────────
+--
+-- 用户那天给了两张运动手表的截图当参考（「运动记录」那两屏），并定下版式：
+-- **一条记录一个框**——左边一颗圆图标，右边一个大数 ＋ 一行小字；框底下那行是
+-- 汇总。面板从那以后的四块是：
+--
+-- ```text
+--   ① 热力图（长期那本账）        ← share.long_blocks()
+--   ② 小字数据概览（本轮的细账）   ← cards.overview()
+--   ③ 按钮（一颗开关 ＋「终止」）   ← BUTTONS
+--   ④ 记录卡（本轮 / 今日 / 长期）  ← cards.record_cards() ＋ 底下那三颗分享按钮
+-- ```
+--
+-- ⚠️ **画成什么样不在这边**：这里只给字段，框的圆角、图标、窄曲线全在
+-- `src/ui/PanelBody.tsx`（`kind = "cards"`）——与分享图那条"插件说**什么**、
+-- 宿主说**怎么显示**"是同一条规矩。
+--
+-- ⚠️ **三条记录的大字各是一个不同的东西**，这是有意的：本轮那头是**速度**
+-- （用户第一句话就是「大红字数字/分钟」），今日与长期那两头是**字数**——它们是
+-- "账"，不是"此刻多快"。把本轮也改成字数的话，这块面板上就再也没有"现在多快"了。
+-- ⚠️ **这一段的内容 2026-10-04 搬去了 `cards.lua`**（`require`，同 `ticks.lua` /
+-- `long.lua`）：这一批改完这份文件顶到了 1055 行（硬上限 1000，`docs/09` §4），而
+-- "② 那三行小字 / ④ 那一串记录卡"是整份插件里唯一**不碰状态**的一截——搬它动不到
+-- 任何一条时间线。下面这几行是**转接**：名字和调用点都还在，只是"这几个函数认识
+-- 哪几样东西"换成了显式递进去的一张表（字段清单在 `cards.lua` 每个函数头上）。
+
+local cards = require("cards")
+
+--- 一张"这一拍怎么样"的表，给 `cards.lua` 那几个函数读。
+-- ⚠️ 里面**全是取值**（外加几个纯函数）。`cards.lua` 往回写的话就成了藏在参数里的
+-- 状态，那正是这一拆最不该引进来的东西——所以那边每个函数都是只读、只发字段。
+local function card_ctx()
+  return {
+    phase = phase,
+    round_words = total_add,
+    elapsed_ms = elapsed_ms,
+    peak_rate = peak_rate,
+    round_mins = round_mins,
+    spread = spread,
+    plot = plot_points,
+    -- ⚠️ 那个函数（在哪一分钟上）现在住在 `share.lua`：两边用的是**同一个**
+    -- 实现，各算一遍的话会出现两个对不上的"这一轮到哪儿了"。
+    last_minute = function() return share.round_last_minute(round_mins) end,
+    span_text = human_span,
+    num_text = num_text,
+    group_text = group_text,
+    long_stats = long_stats,
+    -- ⚠️ 窗口（2026-10-04 加）是**设置**，不是本轮的账，但它必须摆到面板上：
+    -- 用户在「设置 → 拓展」拖完那根滑杆，得**当场看得见生效了没有**——
+    -- 不然拖完回面板，大数字还是老样子（窗口只影响它怎么算），
+    -- 谁都会以为那颗滑杆坏了。摆在小字概览里当那个大数的旁注。
+    window_s = window_ms() / 1000,
+  }
+end
+
 --- 面板这一页此刻长什么样。**每次被拉都现跑一遍**，所以里面全是"现在怎么样"。
 local function panel_content(nota)
   local ok, st = pcall(nota.document.stats)
@@ -657,29 +647,33 @@ local function panel_content(nota)
   -- ⚠️ 先采这一枪再画面板：屏幕上那个数必须是**含此刻**的。
   take_sample(now, words, path, nowinfo and nowinfo.minute_of_day or nil, day_row)
 
+  -- `share.lua` 那几个函数要读的东西，这一拍搭一张（字段清单见 `share_ctx`）。
+  -- ⚠️ 摆在**分享那一屏之前**：那一屏也要用（三张卡与那几颗按钮都在 `share.lua`）。
+  local sx = share_ctx()
+
   -- 分享那一屏：**盖在 `phase` 上面**，`phase` 一动不动（`share_scope` 那段）。
   if share_scope then
     -- ⚠️ 落一次盘再画：卡片上的数是内存里那份（已经是最新的），但"关掉 Nota之前最后一眼看到的图"和"重启之后账上有的数"该是同一份。
     save_ledger(nota)
     local card
     if share_scope == "round" then
-      card = round_card()
+      card = share.round_card(sx)
     elseif share_scope == "day" then
-      card = day_card()
+      card = share.day_card(sx)
     else
       local st = long_stats()
-      card = st and long_card(st) or nil
+      card = st and share.long_card(sx, st) or nil
     end
     -- ⚠️ 拿不到日期时（`nota.time` 那一跳失败）**不留一块空白**：说一句为什么。
     if not card then
       return {
         { kind = "text", text = T("Can't read today's date, so the long-term ledger can't be drawn.") },
-        { kind = "buttons", items = buttons_for("share") },
+        { kind = "buttons", items = share.buttons_for(sx, "share") },
       }
     end
     return {
       card,
-      { kind = "buttons", items = buttons_for("share") },
+      { kind = "buttons", items = share.buttons_for(sx, "share") },
       {
         kind = "text",
         tone = "muted",
@@ -688,121 +682,78 @@ local function panel_content(nota)
     }
   end
 
-  -- 「还没开始」那一屏：一个数字都没有，所以不画曲线。
-  -- ⚠️ 只摆一句说明 ＋ 一颗按钮，是**有意留白**——这一屏唯一该传达的事就是"按那颗按钮"。
-  if phase == "idle" then
-    local items = {
-      { label = T("Whole document"), value = string.format(T("%d words"), words) },
-    }
-    -- 今天已经写过就给一行"今天"（没写过就不给：一行 `0 字 · 0 轮` 只是在占地方）。
-    if day_row and day_row.words > 0 then
-      items[#items + 1] = {
-        label = T("Today"),
-        value = string.format(T("%d words · %d rounds"), day_row.words, day_row.rounds),
-      }
-    end
-    local out = {
-      {
-        kind = "text",
-        text = T("Not started yet. Press “Start” and this round will count how much you write, how long it takes, and how fast you go."),
-      },
-      { kind = "separator" },
-      { kind = "fields", items = items },
-    }
-    -- 长期那一块（2026-09-27 加）。⚠️ 它排在按钮**前面**：动作永远在最下面。
-    for _, b in ipairs(long_blocks()) do
-      table.insert(out, b)
-    end
-    out[#out + 1] = { kind = "buttons", items = buttons_for("idle") }
-    out[#out + 1] = { kind = "text", tone = "muted", text = T("Only recorded while this panel is open.") }
-    return out
+  -- 面板的四块（顺序与出处见上面那段长注释）。⚠️ 每一块都**按需**：
+  -- 空的那一块一个块都不发，而不是发一块空的。
+  local out = {}
+
+  -- `cards.lua` 那几个函数要读的东西，这一拍搭一张（字段清单见 `card_ctx`）。
+  local cx = card_ctx()
+
+  -- ① 长期那本账（热力图 ＋ 一句人话）。**没有账就一个块都不给**。
+  for _, b in ipairs(share.long_blocks(sx)) do
+    table.insert(out, b)
   end
 
--- 大数字：跑着/暂停看"最近一分钟"，终止之后看"整轮"（表在文件头）。
--- ⚠️⚠️ **暂停那一支必须直接用 `frozen_rate`，不能再算一遍**——理由与实测见 `docs/13`
--- §14.4「冻结」：写成"算出来不是 nil 就用算的"等于没冻。
-  local shown
+  -- 这一拍那个速度读数（`record_cards` 要用，也是"冻结"那个口径唯一的算处）。
+  -- 大数字：跑着/暂停看"最近 Δt 秒"，终止之后看"整轮"（表在文件头）。
+  -- ⚠️⚠️ **暂停那一支必须直接用 `frozen_rate`，不能再算一遍**——理由与实测见
+  -- `docs/13` §14.4「冻结」：写成"算出来不是 nil 就用算的"等于没冻。
+  local shown = nil
   if phase == "done" then
     shown = round_rate()
   elseif phase == "paused" then
     shown = frozen_rate
-  else
-    local live = average_rate(now)
+  elseif phase == "running" then
+    -- ⚠️ 窗口**每一枪现读**（用户在设置页拖一下，这一枪就该按新窗口算）。
+    local live = average_rate(now, window_ms())
     if live then
       frozen_rate = live
     end
     shown = live or frozen_rate
   end
 
-  local blocks = {
-    {
-      kind = "chart",
-      label = phase == "done" and T("Round average") or T("Writing speed"),
-      -- ⚠️ 空串 = "还没有结论"，渲染层会画一个破折号（`ui/PanelBody.tsx`）。这里**不能写 0**：那是另一个意思（有结论、就是没在打）。
-      -- 
-      value = shown and tostring(shown) or "",
-      unit = T("words/min"),
-      points = plot_points(),
-      -- 横轴刻度：一块图没有横轴，"起伏"就读不出**什么时候**发生的（2026-09-27 加）。
-      x_ticks = window_ticks(now),
-      caption = string.format(
-        T("Each sample of the last %d minutes, oldest on the left"),
-        math.floor(KEEP_MS / 60000)
-      ),
-    },
-    { kind = "separator" },
-  }
-
--- 四个数：跑了多少、多久、多快、整篇多大。⚠️ `done` 那一屏最后一项换成峰值——结算时
--- "整份文档"不重要，"这一轮最快到过多少"才重要。
-  local items = {
-    { label = T("Written this round"), value = string.format(T("%d words"), total_add) },
-    { label = T("Recorded for"), value = human_span(elapsed_ms) },
-    {
-      label = T("Peak speed"),
-      value = string.format(T("%d words/min"), math.floor(peak_rate + 0.5)),
-    },
-    { label = T("Whole document"), value = string.format(T("%d words"), words) },
-  }
--- 今天那一行（2026-09-27 加）。⚠️ 放最后、且**只在有账时出现**：它是"顺带看一眼"的
--- 背景，主角永远是本轮那四个数。
-  if day_row and day_row.words > 0 then
-    items[#items + 1] = {
-      label = T("Today"),
-      value = string.format(T("%d words · %d rounds"), day_row.words, day_row.rounds),
-    }
-  end
-  blocks[#blocks + 1] = { kind = "fields", items = items }
-
--- ⚠️ 暂停那一句**只在"真暂停"时说**。自动暂停（换文档）也走这里，所以那句话要把两种来
--- 路都讲清楚，否则用户会以为自己没按过什么、怎么就停了。
-  if phase == "paused" then
-    blocks[#blocks + 1] = {
+  -- 「还没开始」那一屏：一个数字都没有，所以②那三行也不存在。
+  -- ⚠️ 只摆一句说明 ＋ 一颗按钮，是**有意留白**——这一屏唯一该传达的事就是"按那颗按钮"。
+  if phase == "idle" then
+    out[#out + 1] = {
       kind = "text",
-      text = T("Paused. Anything you type now doesn't count toward this round — press “Resume” to continue."),
+      text = T("Not started yet. Press “Start” and this round will count how much you write, how long it takes, and how fast you go."),
     }
+  else
+    -- ② 小字数据概览（本轮的细账）。
+    out[#out + 1] = { kind = "fields", items = cards.overview(cx) }
+
+    -- ⚠️ 暂停那一句**只在"真暂停"时说**。自动暂停（换文档）也走这里，所以那句话要把两种来
+    -- 路都讲清楚，否则用户会以为自己没按过什么、怎么就停了。
+    -- ⚠️ 结算那一句（原来那句"这一轮你写下了 N 字"）**2026-10-04 删了**：记录卡上
+    -- 本轮那条的小字里已经写着"本轮 · N 字 · 时长"，同一件事说两遍。
+    if phase == "paused" then
+      out[#out + 1] = {
+        kind = "text",
+        text = T("Paused. Anything you type now doesn't count toward this round — press “Resume” to continue."),
+      }
+    end
   end
-  if phase == "done" then
-    blocks[#blocks + 1] = {
-      kind = "text",
-      text = string.format(
-        T("This round you wrote %s words."),
-        group_text(total_add)
-      ),
-    }
+
+  -- ③ 按钮：一颗开关（开始/暂停/继续/再来一轮）＋ 那颗不可逆的「终止」。
+  out[#out + 1] = { kind = "buttons", items = share.buttons_for(sx, phase) }
+
+  -- ④ 记录卡（本轮 / 今日 / 长期）。⚠️ 一条都没有**就整块不发**——"还没有记录"
+  -- 那句话由上面 idle 那一句说明来讲，这里再编一句只会和它打架。
+  local record = cards.record_cards(cx, shown, words, day_row)
+  out[#out + 1] = record
+
+  -- 记录卡底下那三颗「做分享图」。⚠️ 一颗都发不出去（没东西可分享）就整块不发。
+  local shares = share.share_buttons(sx)
+  if #shares > 0 then
+    out[#out + 1] = { kind = "buttons", items = shares }
   end
 
-  for _, b in ipairs(long_blocks()) do
-    table.insert(blocks, b)
-  end
+  -- ⚠️ 这一行是**必要的诚实**：不写它，用户切走半小时再回来会看到一条空曲线，而面板上没
+  -- 有任何东西解释那一段为什么是空的。
+  out[#out + 1] = { kind = "text", tone = "muted", text = T("Only recorded while this panel is open.") }
 
-  blocks[#blocks + 1] = { kind = "buttons", items = buttons_for(phase) }
-
--- ⚠️ 这一行是**必要的诚实**：不写它，用户切走半小时再回来会看到一条空曲线，而面板上没
--- 有任何东西解释那一段为什么是空的。
-  blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("Only recorded while this panel is open.") }
-
-  return blocks
+  return out
 end
 
 --- 插件加载。
@@ -816,10 +767,12 @@ function M.on_load(nota)
     end
     return s
   end
-  -- ⚠️ **第二件事**：把同一个取用器交给 `ticks.lua` 与 `long.lua`（它们各自那份
-  -- `T` 还是个原样返回的桩）。
+  -- ⚠️ **第二件事**：把同一个取用器交给 `ticks.lua` / `long.lua` / `cards.lua` /
+  -- `share.lua`（它们各自那份 `T` 还是个原样返回的桩）。
   ticks.bind_text(T)
   long.bind_text(T)
+  cards.bind_text(T)
+  share.bind_text(T)
 
 -- 留一份 `nota` 给 `on_unload`（宿主调它时**不传参**），然后读回今日那本账。
 -- ⚠️ **今天那条记录不在这里建**：那要问一次 `nota.time`，而"现在几点"每一拍都会重新问
@@ -862,6 +815,14 @@ function M.on_load(nota)
       -- ⚠️ 这一句就是"暂停期间打的字不算"的落点——重新立基线用的是**那一刻**的 `words`，
       -- 暂停那一段的增量就此落在基线之外。
       last_t = nil
+      -- ⚠️⚠️ **旧的冻结值就地作废**（2026-10-04 开窗目检抓到的，见 `docs/06` §5.29b）。
+      -- `frozen_rate` 是**暂停那一屏**的东西；继续之后它属于上一段。
+      -- 不清的话：刚「继续」时样本还没攒够 `MIN_SPAN_MS`（10 秒），`average_rate` 返回
+      -- `nil`，而 `shown = live or frozen_rate` 会拿它兜底——于是**明明在打字**，卡上的
+      -- 大数却是暂停前那个读数（实测那天是 `0 字/分钟`，最误导的一种）。
+      -- ⚠️ 「开始」那一支靠 `reset_round()` 早就清了同一个值，**只有这里漏了**——
+      -- 两颗按钮通向同一个 `running` 屏，屏幕上的数就该是同一个来路。
+      frozen_rate = nil
     end
     nota.ui.refresh(PANEL_ID)
     return { ok = true, phase = phase }
@@ -883,7 +844,7 @@ function M.on_load(nota)
 -- ⚠️ 它们**不读账、也不算数**——那一屏要的字段在 `panel_content` 里每一拍现算，命令这一
 -- 侧只挪一下 `share_scope`：少一处"另一份结算"就少一处对不上的可能。
   nota.command.register("share_round", function()
-    if can_share("round") then
+    if share.can_share(share_ctx(), "round") then
       share_scope = "round"
     end
     nota.ui.refresh(PANEL_ID)
@@ -891,7 +852,7 @@ function M.on_load(nota)
   end)
 
   nota.command.register("share_day", function()
-    if can_share("day") then
+    if share.can_share(share_ctx(), "day") then
       share_scope = "day"
     end
     nota.ui.refresh(PANEL_ID)
@@ -899,7 +860,7 @@ function M.on_load(nota)
   end)
 
   nota.command.register("share_long", function()
-    if can_share("long") then
+    if share.can_share(share_ctx(), "long") then
       share_scope = "long"
     end
     nota.ui.refresh(PANEL_ID)

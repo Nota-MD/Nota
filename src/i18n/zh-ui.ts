@@ -102,6 +102,7 @@ export const 界面表: Record<string, string> = {
   "Image": "图像",
   "Clear Formatting": "清除样式",
   "Toggle Sidebar": "显示/隐藏侧边栏",
+  "Switch between source mode and WYSIWYG": "切换代码/所见即所得模式",
   "Outline": "大纲",
   "File Tree": "文件树",
   // ⚠️ 这里原来还有 `"Document List": "文档列表"`：2026-09-28 侧栏第三页
@@ -114,9 +115,12 @@ export const 界面表: Record<string, string> = {
   "Show on Hover": "鼠标悬停时显示",
   "Never Show": "始终不显示",
   "WYSIWYG": "所见即所得",
-  "Source": "源码",
+  // ⚠️ 这里原来还有 `"Source": "源码"` 与 `"Split": "分屏"` 两行——那是
+  // `view-modes.ts` 里**短名那一列**的中文。2026-09-30 状态栏改成一颗 `</>`
+  // 图标之后短名没有读者了，那一列随之删掉，这两条中文也就成了废键
+  //（`tools/i18n-check.sh` ③ 会 FAIL）。下面这两条是**长名**，设置里那个
+  // 下拉用的就是它们。
   "Source Mode": "源码模式",
-  "Split": "分屏",
   "Split Preview": "分屏预览",
   "Read-Only Mode": "只读模式",
   "Focus Mode": "专注模式",
@@ -124,8 +128,10 @@ export const 界面表: Record<string, string> = {
   "Status Bar": "状态栏",
   "Menu Bar": "菜单栏",
   "Show menu bar": "显示菜单栏",
-  "The bar at the top (File, Edit, View…). ⚠ It is the way in to everything else — recent files, export, extension manager are only there. To get it back once it is hidden: press Alt+M, or come back to this switch.":
-    "顶上那一条（文件、编辑、视图…）。⚠ 它是通往别处的总入口——最近打开、导出、拓展管理只在它里面。藏起来之后要开回来：按 Alt+M，或者回到这个开关。",
+  // ⚠️ 2026-10-04：「显示菜单栏」那条 `description` 的中文（"顶上那一条…总入口…"）
+  // 跟着那一批「全删」一起删了——代码里那条 `description` 去掉了，这条中文就
+  // 成了废键。⚠️ 底下这条**不是**废弃的：它是**藏起菜单栏之后弹的那句提示**，
+  // 属于运行期消息，留着。
   "Menu bar hidden. Press Alt+M or open Settings ▸ Appearance ▸ Show menu bar to bring it back.":
     "菜单栏已隐藏。按 Alt+M，或到「设置 → 外观 → 显示菜单栏」开回来。",
   "Zoom In": "放大",
@@ -141,15 +147,35 @@ export const 界面表: Record<string, string> = {
   "Website": "网站",
   "Report an Issue": "报告问题",
   "Troubleshooting": "故障排除",
+  "Permissions": "权限列表",
   "Credits": "鸣谢",
   "Legal": "法律信息",
   "Back": "返回",
   "Nota contributors": "Nota 贡献者",
-  "Every system permission Nota asks for, each followed by its source.": "Nota 向系统申请的权限，一条不漏，每条后面是它的出处。",
-  "What it does not ask for": "明确没有申请的",
-  "The full text is in the LICENSE file shipped with the source.": "正文在随源码分发的 LICENSE 文件里。",
+  // ── 「故障排除」那两张表（2026-10-04）────────────────────────────────────
+  // ⚠️ 左列里 `rustc` / `cargo` / `node` / `npm` / `tauri` / `webkit2gtk` /
+  // `gtk` / `mlua` 八个**故意不翻**（程序名与包名，翻了找不到），所以这里没有它们。
+  "Build information": "编译信息",
+  "This machine": "本机信息",
+  "Package version": "包版本",
+  "Build time": "编译时间",
+  "Build host": "编译主机",
+  "Build platform": "编译平台",
+  "Target triple": "目标三元组",
+  "Build profile": "构建档案",
+  "Operating system": "操作系统",
+  "Kernel": "内核",
+  "Architecture": "架构",
+  "GTK version": "GTK 版本",
+  "WebKitGTK version": "WebKitGTK 版本",
+  "Loading…": "正在读取…",
+  "Could not read the information.": "没读到这些信息。",
+  // ── 「权限列表」那张表的两列 ─────────────────────────────────────────────
+  "Permission": "权限说明",
+  "Notes": "备注",
+  // ── 「法律信息」──────────────────────────────────────────────────────────
+  "{0} License": "{0} 许可证",
   "Copyright (c) 2026, Nota contributors": "版权所有 (c) 2026，Nota 贡献者",
-  "Nota is free software; you may redistribute it under the terms of that license.": "Nota 是自由软件，你可以按那份许可证的条款再分发它。",
   "Extensions": "拓展",
   "Extension panels": "拓展面板",
   "Installed extensions": "已装拓展",
@@ -194,7 +220,6 @@ export const 界面表: Record<string, string> = {
   "right dock": "右栏",
   "English": "英语",
   "Chinese (Simplified)": "中文（简体）",
-  "Loading…": "正在读取…",
   "The extension has nothing to show.": "拓展没有给出内容。",
   "This extension does not support your language": "此拓展不支持您的语言",
   "Back to the document": "回到正文",
@@ -218,6 +243,7 @@ export const 界面表: Record<string, string> = {
   "Save as image": "保存为图片",
   "Copy to clipboard": "复制到剪贴板",
   "Could not save: {0}": "保存失败：{0}",
+  "Could not save a setting for extension {0}: {1}": "没能存下拓展 {0} 的设置：{1}",
   // 两条"为什么它是源码模式"的提示（`ui/useFileKindMode.ts`，2026-09-28）。
   // ⚠️ 文案里那两个是**弯引号**（`“ ”`），与代码里的键一个字都不能差——
   // 差一个字符这条中文就废了（闸门第 ② 条会报出来）。
@@ -228,7 +254,18 @@ export const 界面表: Record<string, string> = {
   "Extension preview": "拓展预览",
   "The preview URL is not acceptable, so it cannot be embedded.": "预览的地址不对，嵌不进来。",
   "The preview is not running. Press “Stop”, then “Preview” again.": "预览没有在跑。「停止」之后再点一次「预览」试试。",
-  "This document starts with a block of front matter (the lines wrapped in `---`). It is neither shown nor editable here, and it is kept as-is when you save — switch to Source mode to change it.": "这篇文档开头有一段 front matter（`---` 包住的那几行）。所见即所得里不显示、也改不了，存盘时会原样保留——要改请切到源码模式。",
+  // front matter 那条横幅（`ui/EditorPane.tsx`，`docs/07` 第 64 项，2026-10-04）。
+  // 老的那一条（"…switch to Source mode to change it."）随横幅改版作废了：
+  // 现在就地能改，再说"改不了"就是句谎。
+  // ⚠️ 「编辑」「完成」这两条**上面已经有了**（菜单名那一批），这里不再写一遍：
+  // 同一个对象字面量里重复的键是编译错。
+  "Front matter": "front matter",
+  "Delete": "删除",
+  "Confirm delete": "确认删除",
+  "YAML Front Matter": "YAML front matter",
+  "The line itself goes away too — this one takes two clicks.": "那几行也会一起删掉——所以这一颗要按两下。",
+  "Kept as-is at the very top of the file, outside the text you edit below — clearing this box will not delete it.": "它原样留在文件最开头，不在下面那段正文里——把这个框清空不会删掉它。",
+  "The lines wrapped in `---` at the top of the file. They are not part of the text below, and they are kept as-is when you save.": "文件最开头 `---` 包住的那几行。它不属于下面的正文，存盘时原样保留。",
   "Copy Code": "复制代码",
   "Copy Failed": "复制失败",
   "Copied": "已复制",
@@ -251,6 +288,8 @@ export const 界面表: Record<string, string> = {
   "Empty math block — click to write LaTeX": "空的公式块：点一下就能写 LaTeX",
   "e.g. E=mc^2": "例如 E=mc^2",
   "e.g. \\frac{a}{b}": "例如 \\frac{a}{b}",
+  "LaTeX commands": "LaTeX 命令",
+  "physics": "物理",
   "Code Language": "代码语言",
   "Search or type a language": "搜索或输入语言",
   "Write your Markdown here…": "在这里写 Markdown 原文…",
@@ -339,6 +378,14 @@ export const 界面表: Record<string, string> = {
   "Exporting {0}": "开始导出 {0}",
   "Esc to discard": "Esc 放弃",
   "Hide the sidebar": "收起侧边栏",
+  // 另外两条栏上那颗就地 ×（2026-10-04，第 49 项：每个可关的面板都有一颗）。
+  // ⚠️ 三条**必须同句式**（"收起…"）：它们是同一族按钮，其中一条写成"隐藏"、
+  // 一条写成"关闭"，读起来像三个人加的三颗。
+  "Hide the status bar": "收起状态栏",
+  "Hide the formatting toolbar": "收起格式工具栏",
+  // 侧栏右缘那条拖动把手（2026-09-30）。读屏用户看不到宽度、也没有键盘拖动
+  // 这条路，所以这句话要说清"拖它能干什么"，不是只念一声"分隔条"。
+  "Resize the sidebar": "拖动可以调整侧边栏宽度",
   "Expand this section": "展开这一节",
   "Collapse this section": "折叠这一节",
   "Cannot read this folder: {0}": "读不了这个文件夹：{0}",
@@ -347,21 +394,40 @@ export const 界面表: Record<string, string> = {
   "This document has no headings yet.": "这份文档还没有标题。",
   // ⚠️ 这里原来还有 `"Remove from list"` 与 `"No recent files yet.…"` 两条：
   // 它们只服务侧栏那一页，2026-09-28 随那一页一起删（同上）。
-  "Ready": "就绪",
-  "Unsaved": "未保存",
-  "Not saved yet": "尚未保存",
-  "● Modified": "● 已修改",
-  "{0} lines": "{0} 行",
+  // ⚠️ 这一段（2026-09-30 下栏重做之前是十三行）现在只剩两行。用户那天给了
+  // 三张 Typora 的图，答「其余全删」——文件路径、`● 已修改`、模式名、`严格`、
+  // 字符数、行数、「约几分钟」这些**显示**全走了。随之删掉的键：
+  // `Ready` / `Unsaved` / `Not saved yet` / `● Modified` / `Strict` /
+  // `Strict mode is on: …` / `Editing mode: {0} — …` / `Lines` /
+  // `{0} lines` / `{0} characters` / `about {0} min` /
+  // `Words (CJK counted per character)` / `Characters (by code point)` /
+  // `Rough estimate at {0} words per minute (…)`——**留着就是废键**，
+  // `tools/i18n-check.sh` 那一条会 FAIL（同上面侧栏那两段）。
+  //
+  // ⚠️ 它们说的那些数**一个都没少**，只是改成悬停才看：新的合成键是下面
+  // 那一条 `{0} words · {1} characters · …`。`{0} words` 仍然留着——
+  // 它是那一格上写着的那句话，悬停提示才是详细版。
+  //
+  // ⚠️ **2026-09-30 第二轮又把其中三个请回来了**（用户照 Typora 给的五张图）：
+  // 状态栏右下角那颗上下箭头点开一个「字数统计」小菜单，四项**各自带着自己
+  // 此刻的数值**排在里面（`≤1 分钟` / `1 行` / `0 词` / `0 字符`），选中的那项
+  // 平时显示在栏上。所以 `{0} lines` / `{0} characters` / `{0} minutes` 三条
+  // 从"废键"变回"正在用的键"——**删它们的理由没了**（那时没有任何地方显示
+  // 这三个数）。上面那一串里剩下的仍是废键，别一起搬回来。
   "{0} words": "{0} 词",
+  "{0} words · {1} characters · {2} lines · about {3} min": "{0} 词 · {1} 字符 · {2} 行 · 约 {3} 分钟",
   "{0} characters": "{0} 字符",
-  "Lines": "行数",
-  "Words (CJK counted per character)": "词数（中文按字计）",
-  "Characters (by code point)": "字符数（按码点计）",
-  "about {0} min": "约 {0} 分钟",
-  "Rough estimate at {0} words per minute (change it in Settings → Appearance)": "按每分钟 {0} 词粗略估算（在「偏好设置 → 外观」里改）",
-  "Strict": "严格",
-  "Strict mode is on: a heading needs a space after the hashes, so “#title” does not count.": "严格模式开着：井号后面必须有空格才算标题，「#标题」不算。",
-  "Editing mode: {0} — switch it in the View menu": "编辑模式：{0}——在「视图」菜单里换",
+  "{0} lines": "{0} 行",
+  "{0} minutes": "{0} 分钟",
+  // 那两颗粒子、以及弹出来的那个小菜单。
+  // ⚠️ 拼写那颗按钮的提示用**已有的** `"Spell check"`（在 `zh-settings.ts`
+  // 里，是设置页那一项）——**同一个东西两处两把键**的话，哪天改了原文就只改
+  // 一处，另一处静默退回英文（`index.ts` 文件头那条规矩）。这里不再抄一份：
+  // 三张表是 `...` 铺开的，重复的键是设置表赢，抄一份等于埋一个假的真相。
+  "Word Count": "字数统计",
+  "Which count the status bar shows": "状态栏显示哪一个统计量",
+  "Auto-detect language": "自动检测语言",
+  "Do not check spelling": "不使用拼写检查",
   "Rename": "重命名",
   "New name": "新名字",
   "Close this tab": "关闭这个标签页",
@@ -436,35 +502,16 @@ export const 界面表: Record<string, string> = {
   "Only an extension you have enabled that explicitly asks for the nota.http capability, and only to an address that passes its own allowlist, will make a network request. The core features themselves send nothing.": "只有你启用的拓展显式申请了 nota.http 能力、并且目标地址过了它自己的白名单，才会发出网络请求。核心功能自己不发任何请求。",
   "The three things Force Focus uses": "强制专注用到的那三样",
   "① Knowing whether Nota's own window is the active window; ② putting up a full-screen always-on-top window; ③ making a sound. ⚠️ Those three, and only after you press View → Force Focus. It does not read the keyboard, take screenshots, or look at other applications.": "①知道 Nota 自己这个窗口是不是当前窗口；②弹一个置顶的全屏窗口；③出声。⚠️ 就这三样，且只在你自己按下「视图 → 强制专注」之后才发生。它不读键盘、不截屏、不看别的应用。",
-  "Reading keyboard input: no global shortcuts, no keyboard hooks — every shortcut is received only while Nota's own window has focus": "看键盘输入：没有全局快捷键、没有键盘钩子——所有快捷键都只在 Nota 自己的窗口有焦点时才收得到",
-  "Taking screenshots or recordings, or reading the camera or microphone": "截屏、录屏、读摄像头或麦克风",
-  "Reading other applications' window titles, process lists, or which app is in use (Force Focus does not look either)": "读别的应用的窗口标题、进程列表、正在用的应用（强制专注也不看）",
-  "Starting at login, installing system services, or staying in the background after you quit": "开机自启、装系统服务、退出后还留在后台",
-  "Reading and writing arbitrary paths through Tauri's file plugin: `tauri-plugin-fs` is installed, but no `fs:*` permission is granted, so the interface cannot call it — all reads and writes go through our own commands": "借 Tauri 的文件插件直接读写任意路径：`tauri-plugin-fs` 虽然装了，但 `fs:*` 一条能力都没开，界面层调不动它——读写全走我们自己的命令",
-  "Reading your disk while no file is open (apart from the read-only image range in item 4 above)": "在没打开任何文件的时候去读你的盘（除了上面第 4 条那个只读的图片范围）",
-  "Going online without you having configured it": "未经你配置就连网",
-  "Extensions are extensions written in Lua: they can add panels, menu items and document access to Nota. An extension is loaded on the spot when installed (its own on_load runs), so this page changes the moment the install finishes.": "拓展是 Lua 写的：它可以给 Nota 加面板、加菜单项、读写文档。装上之后会当场加载（跑一遍它自己的 on_load），所以装完这一页的东西立刻就变。",
-  "Pick an extension package (.nota-plugin or .zip) and install it. ⚠️ The only packages refused are ones that are signed but fail verification — that means the package was changed after it was signed. Unsigned packages, and ones from a signer we have never seen, install just fine; the row says so.": "选一个拓展包（.nota-plugin 或 .zip）装上。⚠️ 只有「有签名但验不过」会被拒装——那意味着这个包在签完之后被改过。没签名的、签名者没见过的，都装得进来，只是行上会如实标出来。",
-  "Installed extensions go into the user extension folder, which the button below opens.": "装进来的拓展放在用户拓展目录里，可以用下面那颗按钮打开它。",
   "Extension folder": "拓展文件夹",
-  "Extensions you installed yourself live here, one folder each. ⚠️ Do not edit the files here by hand: the host already has them loaded in memory, and a change takes effect only after Nota restarts. To change one, export a copy and edit that.": "用户自己装的拓展都在这里（一个拓展一个目录）。⚠️ 别在这里手改文件：宿主的内存里已经装着它们了，改完要重启 Nota 才生效。要改，用「导出」拿到一份再改。",
   "Choose an extension package…": "选择拓展包…",
   "No extensions installed yet. Use ": "目前一个拓展都没有装。用上面那颗",
   "“Choose an extension package…”": "「选择拓展包…」",
   " above to install one — a package carries its own plugin.toml and entry file, and it works as soon as it is installed.": "装一个——拓展包自带 plugin.toml 与入口文件，装进来就能用。",
-  "Disable really unloads it (its on_unload runs and its Lua state is dropped); the files on disk stay. Uninstall is what deletes those files. ⚠️ Uninstalling cannot be undone, so you are asked first.": "「停用」是真的把它卸下来（跑一遍 on_unload、丢掉它的 Lua 状态），只是磁盘上的文件留着；「卸载」才会删掉那些文件。⚠️ 卸载不可逆，所以会先问一句。",
   "Export…": "导出…",
   "Working…": "处理中…",
   "Save as a .nota-plugin package — to hand to someone else to install, or as a backup.": "存成一份 .nota-plugin 包，可以拿去给别人装、也可以当备份。",
   "Delete this extension from disk. Its settings file is kept.": "把这个拓展从磁盘上删掉。它的设置文件会留着。",
   "It asks for no capabilities.": "它没有申请任何能力。",
-  "Trust is recorded by fingerprint, not by extension name. To revoke it, edit trusted-keys.toml (in the settings folder).": "信任是按指纹记的，不是按拓展名。要撤销信任，编辑 trusted-keys.toml（在设置文件夹里）。",
-  "This is the name of the extension that was installed when the key got recorded; it is there for people to read — trust is decided by the fingerprint on the right.": "这是记下这把钥匙时那个拓展的名字，只是给人看的——信任按右边那串指纹判。",
-  "This page is about ": "这一页管的是",
-  "install / export / uninstall": "装 / 导出 / 卸载",
-  ". The extension's own panel, settings and data are not here: panels live in the dock on the right (one page per extension), and settings and data live in folders of their own — what an extension writes, and where, is declared in its own manifest.": "。拓展本身的面板、它的设置、它的数据都不在这儿：面板在右侧那一栏（每个拓展一页），设置与数据在它自己的目录里——拓展写了什么、存在哪儿，由它自己在清单里声明。",
-  "⚠️ An exported package carries no signature: the host has no copy of the author's private key (nor should it — packing and signing are done on the author's side with ": "⚠️ 导出的包不含签名：Nota 的宿主机上没有作者那把私钥（也不该有，打包与签名是作者侧用",
-  "). If the extension files are unchanged, the author's original signature is carried over as it is; if they were changed, the signature is dropped — with a signature that does not match, nobody can install the package.": "做的）。拓展文件没被改过的话，作者原来那份签名会原样带上；改过就把签名摘掉——带着一个对不上的签名，别人是装不上的。",
   "Read/write its own data": "读写自己的数据",
   "Opened the extension folder in your file manager": "已在文件管理器里打开拓展文件夹",
   "Exported {0}": "导出了 {0}",

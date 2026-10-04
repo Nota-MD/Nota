@@ -299,6 +299,28 @@ export function useMenus(w: MenuWiring): MenuState {
       // 抢过来会让选字跳到别处去（同 `useMenuRovingFocus` 里那条判据）。
       if (e.isComposing || e.keyCode === 229) return;
 
+      // ⚠️ **编辑器自己已经处理过的键位不再接**（2026-09-29 加，BUG-49 的正主）。
+      //
+      // 判据用的是 DOM 的 `defaultPrevented`：ProseMirror 只要有一条
+      // `handleKeyDown` 返回 `true`，就会 `preventDefault()`
+      //（`prosemirror-view` 的 `editHandlers.keydown` 末尾那一句），而它的监听器
+      // 挂在**正文节点**上、比这里（`window`）早，所以事件冒到这一层时标记已经在了。
+      //
+      // ⚠️ 少这一条的症状**不是"多执行一遍"，是那颗键彻底失灵**：
+      // `@milkdown/preset-commonmark` 自己绑了 `Mod-b` / `Mod-i`
+      //（`strongKeymap` / `emphasisKeymap`），本仓菜单表也绑了同样两颗
+      //（`fmt.bold` / `fmt.italic`）——**两个主人，两条命令都是 toggle，
+      // 跑两遍正好抵消**，看起来就是"按了没反应"。用户 2026-09-28 报的
+      // 「Ctrl B 没反应」就是这个（`docs/07` 的 BUG-49）。
+      //
+      // ⚠️ 指纹是**同一个快捷键在两种模式下不同命**：源码模式那边 CodeMirror
+      // 没绑 `Mod-b`（见 `source.ts` 的 `撞车键位`），只跑一遍，所以一直好使；
+      // 所见即所得这边被 PM 抢了先，两遍抵消。查"快捷键不灵"时先看这一条。
+      //
+      // ⚠️ 只放行**不**执行命令，不 `preventDefault`：那颗键已经由编辑器自己
+      // 办完了，这里既不该再办一遍，也不该把它的结果撤掉。
+      if (e.defaultPrevented) return;
+
       const id = accelIndex.get(accelSig(eventAccel(e)));
       if (!id) return;
 
@@ -318,8 +340,13 @@ export function useMenus(w: MenuWiring): MenuState {
       if (!handler) return;
 
       // ⚠️ **只在真要执行时才 `preventDefault`**。没接的键位一律放行，
-      // 否则会连 ProseMirror 自己的 Ctrl+B/I/Z 和系统的复制粘贴一起抢掉——
-      // 那些键位不在 `menuHandlers` 里，走不到这一行。
+      // 否则会把系统的复制粘贴之类也一起抢掉。
+      //
+      // ⚠️ 这里**不是**"编辑器抢不走的那一道"——上面那条 `defaultPrevented`
+      // 才是。这一段以前写着"否则会连 ProseMirror 自己的 Ctrl+B/I/Z 一起抢掉，
+      // 那些键位不在 `menuHandlers` 里"，而 `Ctrl+B` / `Ctrl+I` **恰恰在表里**
+      //（`fmt.bold` / `fmt.italic`），于是它被抢了两次、抵消成"没反应"。
+      // 那句话是真的把人带沟里去了，2026-09-29 改掉。
       e.preventDefault();
       handler();
     };
@@ -331,11 +358,14 @@ export function useMenus(w: MenuWiring): MenuState {
   /**
    * **宿主在 GTK 捕获阶段截下来的那两颗键**（`Ctrl+B` / `Ctrl+I`）。
    *
-   * ⚠️ 为什么上面那条 `keydown` 不够：WebKitGTK 在把按键派发给 DOM **之前**就
-   * 把这两颗键当成自己的编辑命令吃掉了，`window` 上一次都收不到——用户
-   * 2026-09-28 报的「Ctrl B没反应」就是这一条（BUG-49）。宿主于是在 GTK 的
-   * 捕获相位（**一定早于** WebView）把它们拦下来，转成 `events.formatKey`
-   * 发回这里。完整来龙去脉在 `src-tauri/src/format_keys.rs` 的文件头。
+   * ⚠️⚠️ **2026-09-29 实测：这条路在真程序里一次都没响过**（宿主那一层装得上、
+   * 但拦不到键），留在这里是**备用**——上面的 `keydown` 那道闸今天才是正主，
+   * 理由见它那一段的 `defaultPrevented` 注释。`src-tauri/src/format_keys.rs`
+   * 的文件头把实测过程与"删还是留"写着；`docs/07` BUG-49 那一项挂着待拍板。
+   *
+   * ⚠️ 这一段原来的理由（"WebKitGTK 在派发给 DOM **之前**就把这两颗键吃掉了，
+   * `window` 上一次都收不到"）**是错的**：`Ctrl+B` 进得了 DOM，用户 2026-09-28
+   * 报的「Ctrl B 没反应」是**两颗键被绑了两次、互相抵消**（BUG-49）。
    *
    * ⚠️ **判据必须和上面那条一模一样**（外面/灰掉/没实现都不接）——两条路喂的是
    * 同一张 `menuHandlers`，判据漏一条就会出现"菜单灰着、快捷键却照跑"，

@@ -42,7 +42,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
    * 而且必须在下拉**画出来那一刻**翻，不能在模块级求值时翻。
    */
   const VIEW_MODES: Array<{ value: ViewMode; label: string }> = VIEW_MODE_ORDER.map(
-    (value) => ({ value, label: t(VIEW_MODE_LABELS[value].full) }),
+    (value) => ({ value, label: t(VIEW_MODE_LABELS[value]) }),
   );
 
   /**
@@ -56,10 +56,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
 
   return (
     <>
-      <SettingsGroup
-        title={t("Editing mode")}
-        help={t("The same switch as the three items in the View menu — changing either one is the same.")}
-      >
+      <SettingsGroup title={t("Editing mode")}>
         <SettingRow>
           <Select
             value={settings.view_mode}
@@ -69,10 +66,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Text width")}
-        help={t("Maximum width of the text column in the editing area. Too wide and lines are easy to lose track of — you cannot find the start of the next line.")}
-      >
+      <SettingsGroup title={t("Text width")}>
         <SettingRow>
           <Range
             value={settings.content_width}
@@ -85,12 +79,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Default indent")}
-        help={t(
-          "⚠ This controls the indent generated for lists, blockquotes and indented blocks — not indentation inside code blocks. Code-block indentation lives on the Markdown page and defaults to 4. The two are independent preferences and are not merged.",
-        )}
-      >
+      <SettingsGroup title={t("Default indent")}>
         <SettingRow>
           <NumberInput
             value={e.default_indent}
@@ -99,32 +88,19 @@ export function EditorPane({ settings, onChange }: PaneProps) {
             onChange={(default_indent) => 写({ default_indent })}
           />
         </SettingRow>
-        <SettingRow
-          label={t("Aligned indent")}
-          help={t("Child items align with the first line of their parent instead of indenting by a fixed width. The difference is obvious on long entries that wrap.")}
-        >
+        <SettingRow label={t("Aligned indent")}>
           <Toggle checked={e.align_indent} onChange={(align_indent) => 写({ align_indent })} />
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("First-line indent")}
-        help={t(
-          "Indents the first line of a body paragraph by a few characters — “leave two spaces at the start of a paragraph” in Chinese typography. ⚠ It is display only: not one space is written into the file, so source mode, other editors and exports all still see the original text.",
-        )}
-      >
+      <SettingsGroup title={t("First-line indent")}>
         <SettingRow>
           <Toggle
             checked={e.paragraph_indent}
             onChange={(paragraph_indent) => 写({ paragraph_indent })}
           />
         </SettingRow>
-        <SettingRow
-          label={t("Indent width")}
-          help={t(
-            "Measured in characters (one full-width ideograph counts as one). Applies to body paragraphs only: paragraphs inside blockquotes, list items, table cells and code blocks are not indented — those blocks already have their own left margin.",
-          )}
-        >
+        <SettingRow label={t("Indent width")}>
           <NumberInput
             value={e.paragraph_indent_chars}
             min={1}
@@ -135,12 +111,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Smart symbol completion")}
-        help={t(
-          "Typing a symbol immediately inserts its other half: brackets and quotes (including `[`), a pair of `*`, Tab to step past the closing half, and Backspace between an empty pair deletes both. ⚠ One switch covers all four — they lean on each other, so turning it off means the whole thing is off, not “completes a little less”. ⚠ It replaces the two old switches “Match brackets and quotes” and “Match Markdown characters”: those saved a value that no code ever read, so flipping them did nothing at all.",
-        )}
-      >
+      <SettingsGroup title={t("Smart symbol completion")}>
         <SettingRow>
           <Toggle
             checked={e.smart_symbols}
@@ -185,12 +156,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Line endings")}
-        help={t(
-          "⚠ Only affects new, empty documents. Existing files are written back with their own line endings — choosing CRLF here will not rewrite an LF file from end to end (that would produce whole-file diff noise and change the file's bytes).",
-        )}
-      >
+      <SettingsGroup title={t("Line endings")}>
         <SettingRow>
           <Radio
             value={e.line_ending}
@@ -201,11 +167,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup title={t("Spell check")}>
-        <SettingRow
-          help={t(
-            "Spell check is provided by WebKitGTK and its language follows the system. Nota offers no language picker for it — only this switch.",
-          )}
-        >
+        <SettingRow>
           <Toggle checked={e.spellcheck} onChange={(spellcheck) => 写({ spellcheck })} />
         </SettingRow>
       </SettingsGroup>

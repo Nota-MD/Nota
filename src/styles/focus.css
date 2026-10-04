@@ -4,8 +4,9 @@
  * ⚠️ 三块不共享任何选择器，理由与"为什么它在 `main.tsx` 那串 import 里的
  * 位置无所谓"写在 `main.tsx` 引这一份的那段注释里。简短版：
  *
- * - `.status-focus*` 借 `app.css` 里状态栏那套（字号、间距、`.status-right` 的
- *   排布），所以它必须在 `app.css` 之后；
+ * - `.status-focus*` 借状态栏那套（字号、间距、`.status-right` 的排布，
+ *   2026-09-29 起那两条横条的样式在 `tabs-status.css`），所以它必须在
+ *   那一份之后；
  * - `.alarm-*` 画在**另一个窗口**里，那边没有主窗的外壳，也没有人和它争优先级；
  * - `.focus-summary*` 借 `overlay.css` 那层框壳（`.confirm-backdrop` /
  *   `.confirm-dialog`），所以本文件必须在 `overlay.css` **之后**导入

@@ -142,6 +142,71 @@ pub fn nota_plugins_open_dir(app: tauri::AppHandle) -> Result<String> {
     Ok(shown)
 }
 
+/// 把「设置 → 拓展」那一页上的一格设置写下去（2026-10-04 加）。
+///
+/// # 这是宿主第一次**替插件写设置**
+///
+/// 在此之前只有插件自己写（`nota.settings.set`，AI 插件填 API key 那条路）。
+/// 用户在设置页拖的那根滑杆，值写进的是**同一个文件**、
+/// 甚至**同一格内存**（`lua/api/settings.rs::注册表`），所以拖完插件那边立刻读得到。
+///
+/// # 三个判断都在这里
+///
+/// 1. **这一格必须是清单里声明过的**（`[[settings]]`）——没声明的键一律拒
+///    （`NotaError::other` 那句话会说清是哪个插件、哪个键）。它是"前端能写什么"的
+///    唯一围栏：前端交上来的只有 `(plugin, key, value)` 三样，`key` 不受限的话，
+///    界面上一处笔误就能往别人的设置文件里塞东西。
+/// 2. **值要夹进范围**（`SettingDecl::夹紧`）。前端本来就是从这根滑杆上读到的数，
+///    正常不会越界；但"前端不会乱发"不是一个该被信任的前提，
+///    而且用户手改过设置文件之后，界面上的读数和文件里的值本来就可能对不上。
+/// 3. **写完喊一声**（`EVENT_PANEL_DIRTY`）：插件那个面板可能正开着，
+///    它读的就是这一格。⚠️ `live` 的面板（写作统计）本来每秒都会重拉一次，
+///    这一声是给**不是 live** 的面板的——它们平时"切过去才拉一次"。
+///
+/// ⚠️ 同步命令（不是 `spawn_blocking`）：它只写一个几百字节的文件，
+/// 与 `nota_plugin_trust` 同类。**别在它里面跑插件代码**——那才需要搬走。
+#[tauri::command]
+pub fn nota_plugin_setting_set(
+    app: tauri::AppHandle,
+    plugin: String,
+    key: String,
+    value: f64,
+) -> Result<()> {
+    use tauri::Emitter;
+
+    // ① 声明在不在（顺带把那把 `plugins` 锁的持有时间压到这一小段里）。
+    let 声明 = {
+        let state = app.state::<AppState>();
+        let host = state.plugins.lock().unwrap();
+        let p = host
+            .get(&plugin)
+            .ok_or_else(|| NotaError::other(format!("没有这个拓展：{plugin}")))?;
+        p.manifest
+            .settings
+            .iter()
+            .find(|s| s.key == key)
+            .cloned()
+            .ok_or_else(|| {
+                NotaError::other(format!(
+                    "拓展 {plugin} 的清单里没有声明过 `{key}` 这一格设置（见 docs/11 的 `[[settings]]`）"
+                ))
+            })?
+    };
+
+    // ② 夹紧 + 写。
+    let 收 = 声明.夹紧(value);
+    crate::lua::api::settings::宿主写一个(&plugin, &key, toml::Value::Float(收))?;
+
+    // ③ 面板该重拉了（见上面第 3 条）。
+    app.emit(
+        crate::plugin::EVENT_PANEL_DIRTY,
+        serde_json::json!({ "plugin": plugin, "id": serde_json::Value::Null }),
+    )
+    .map_err(|e| NotaError::other(format!("发面板刷新事件失败：{e}")))?;
+
+    Ok(())
+}
+
 /// 信任库里现在有哪几把钥匙。
 #[tauri::command]
 pub fn nota_plugin_trust_list(state: State<'_, AppState>) -> Result<Vec<crate::plugin::信任记录>> {

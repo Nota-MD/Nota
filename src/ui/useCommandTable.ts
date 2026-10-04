@@ -326,6 +326,13 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       // `光标条件`），所以这里不必再判一次。
       "para.toc": () => run("toc", { strict: strictMarkdown }),
       "para.footnote": () => run("footnote"),
+      // front matter（`docs/07` 第 64 项）。⚠️ **不带 payload**——那正是"确保
+      // 有一段"的意思（有就一个字不动，没有就建一段模板出来），判据写在
+      // `create-types.ts::CommandPayload.frontMatter`。
+      // ⚠️ 这一条以前是**灰的**（表里没有它），菜单上写着名字却按不动；现在
+      // 它是"从菜单里新建一段"的唯一入口——横幅只在**已经**有那一段时出现，
+      // 所以没有别的入口能把它加出来。
+      "para.frontMatter": () => run("frontMatter"),
 
       "fmt.bold": () => run("bold"),
       "fmt.italic": () => run("italic"),

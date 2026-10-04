@@ -29,6 +29,7 @@ import { open as 选文件 } from "@tauri-apps/plugin-dialog";
 
 import { useT } from "@/i18n";
 import type { ImageAnswer, ImageRequest } from "@/ui/useDialogs";
+import { useTablistKeys } from "@/ui/useTablistKeys";
 
 /** 文件对话框的过滤器。⚠️ 与 `src-tauri/src/image.rs` 的 `认得的后缀` 同一套。 */
 const 图片后缀 = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
@@ -61,6 +62,9 @@ export function ImageDialog({
    */
   const [要上传, set要上传] = useState(false);
   const 输入框 = useRef<HTMLInputElement>(null);
+  // 来源页签的方向键（第 50 项，2026-10-04）。
+  const 页签栏 = useRef<HTMLDivElement>(null);
+  useTablistKeys(页签栏);
 
   useEffect(() => {
     输入框.current?.focus();
@@ -116,7 +120,7 @@ export function ImageDialog({
       >
         <h2 className="confirm-title">{t("Insert Image")}</h2>
 
-        <div className="image-src-tabs" role="tablist" aria-label={t("Where the image comes from")}>
+        <div ref={页签栏} className="image-src-tabs" role="tablist" aria-label={t("Where the image comes from")}>
           <button
             type="button"
             role="tab"

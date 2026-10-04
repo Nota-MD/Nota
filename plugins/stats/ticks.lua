@@ -196,31 +196,11 @@ function M.day_ticks(from_i, bucket, count)
   return out
 end
 
---- 面板那条曲线的横轴刻度：左端是"最老那个点离现在多久"，右端是"现在"。
--- ⚠️ 左端取的是**画出来的第一个点**（`plot_points` 会切掉前面那些）——切掉的那一段不在
--- 图上，拿它当 0 会让整排刻度整体偏左。
--- ⚠️ `samples` 与 `max_points` 都由上家传：这一份不认识本轮状态。
-function M.window_ticks(samples, now, max_points)
-  if #samples < 2 then
-    return {}
-  end
-  local first_i = math.max(1, #samples - max_points + 1)
-  local oldest = samples[first_i].t
-  local out = {}
-  for _, f in ipairs({ 0, 0.5, 1 }) do
-    local secs = math.floor((now - oldest) * (1 - f) / 1000 + 0.5)
-    local label
-    if f >= 1 then
-      label = T("now")
-    elseif secs < 60 then
-      label = string.format(T("-%d s"), secs)
-    else
-      label = string.format(T("-%d min"), math.floor(secs / 60))
-    end
-    table.insert(out, { at = f, label = label })
-  end
-  return out
-end
+-- ⚠️ 这里原本还有一个 `M.window_ticks`（面板那条曲线"最老的点离现在多久"那排
+-- 横轴刻度），**2026-10-04 删了**：那块独立的曲线（`kind = "chart"`）折进了记录卡
+-- （`kind = "cards"`）里，而卡里那条窄曲线没有刻度——它只有 36px 高，摆不下
+-- "-2 分 / -1 分 / 现在"那一排。`main.lua` 那边转发它的那个局部函数一起删了。
+-- 哪天再要一块带刻度的曲线（比如把卡片里的图放大），这一段从 git 历史里拿回来就是。
 
 -- ── 长期那本账要的两个小工具（2026-09-27，热力图）──────────────────────────
 --

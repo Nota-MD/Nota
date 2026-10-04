@@ -278,7 +278,7 @@ export function AppearancePane({
             `<名字>.css`（用户 2026-09-26：「本来主题应该就是拆成多个文件的。
             加一个就是允许用户导入」）。没有这个按钮，那条路只存在于文档里——
             而"要读文档才发现"的入口等于没有。同「文档主题」那页的「主题文件夹…」。 */}
-        <SettingRow help={t("Drop a <name>.css in this folder and it shows up in the list above after a restart. A file with the same name as a built-in style overrides that style.")}>
+        <SettingRow>
           <div className="stg-inline">
             <Select value={settings.ui_style} options={选项} onChange={(ui_style) => onChange({ ui_style })} />
             <ActionButton onClick={onOpenStylesDir} title={t("Open the styles folder. Drop a <name>.css in it to add a style.")}>
@@ -288,7 +288,7 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Light/Dark")} help={t("Click a preview to switch; the change applies immediately.")}>
+      <SettingsGroup title={t("Light/Dark")}>
         <SettingRow>
           <div className="stg-swatches">
             <ModeSwatch
@@ -315,13 +315,8 @@ export function AppearancePane({
           "整个外壳长什么样"**，而下面那几组是排版与功能开关。用户 2026-09-26
           把它说成一条独立的轴（「这个主题只包含一个 UI 的设计样式……而不包含
           主题颜色」），摆在这儿才对得上那句话。 */}
-      <SettingsGroup
-        title={t("Accent color")}
-        help={t("Leave it unset to follow the current style — each style ships its own accent (Yaru is orange, Adwaita is blue). Pick one to override it; whether the text on the accent is black or white is decided automatically by contrast.")}
-      >
-        <SettingRow
-          help={t("This changes only the accent color; the rest of the palette still comes from Light/Dark above.")}
-        >
+      <SettingsGroup title={t("Accent color")}>
+        <SettingRow>
           <div className="stg-inline">
             {/* ⚠️ 用原生 `<input type="color">`，**不自己写一个取色器**：系统取色器
                 能吸屏幕上的颜色、能存色板、能在装了无障碍工具时被念出来，
@@ -359,7 +354,7 @@ export function AppearancePane({
       </SettingsGroup>
 
       <SettingsGroup title={t("Follow the system preference")}>
-        <SettingRow help={t("When checked, the two previews above follow the system's Light/Dark setting; when unchecked they stay on the current one.")}>
+        <SettingRow>
           {/* ⚠️ 取消勾选时落到**此刻正在看的这一套**（`当前明暗`），不是写死的
               浅色（2026-09-25 改，用户体验评估抓出来的）。原来写的是 `"light"`：
               用户先选了深色、再来取消"跟随系统"，界面会当场变浅——一个纯取消
@@ -368,12 +363,7 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Font size")}
-        help={t(
-          "Affects the shell only (menus, sidebar, dialogs, status bar). The document's text size is controlled by the document theme. ⚠️ It can also be changed with Ctrl+scroll — which of the two the wheel turns is chosen under Zoom below.",
-        )}
-      >
+      <SettingsGroup title={t("Font size")}>
         <SettingRow>
           <Radio
             value={a.custom_font_size ? "custom" : "auto"}
@@ -397,10 +387,7 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Zoom")}
-        help={t("This scales the whole interface (shell and editing area), while Font size scales only the shell's text. The two multiply — that is intentional.")}
-      >
+      <SettingsGroup title={t("Zoom")}>
         <SettingRow>
           <NumberInput
             value={a.zoom}
@@ -412,20 +399,14 @@ export function AppearancePane({
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("Use the scroll wheel while holding Ctrl")}
-          help={t("Both numbers above can be turned with the wheel; pick which one below.")}
-        >
+        <SettingRow label={t("Use the scroll wheel while holding Ctrl")}>
           <Toggle
             checked={a.ctrl_wheel_zoom}
             onChange={(ctrl_wheel_zoom) => 写({ ctrl_wheel_zoom })}
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("What the wheel changes")}
-          help={t("When it changes the font size, the wheel also switches the Font size group above to Custom — otherwise that number would have no effect.")}
-        >
+        <SettingRow label={t("What the wheel changes")}>
           <Radio
             value={a.ctrl_wheel_target}
             options={[
@@ -438,9 +419,7 @@ export function AppearancePane({
       </SettingsGroup>
 
       <SettingsGroup title={t("Show menu bar")}>
-        <SettingRow
-          help={t("The bar at the top (File, Edit, View…). ⚠ It is the way in to everything else — recent files, export, extension manager are only there. To get it back once it is hidden: press Alt+M, or come back to this switch.")}
-        >
+        <SettingRow>
           <Toggle
             checked={a.show_menu_bar}
             onChange={(show_menu_bar) => 写({ show_menu_bar })}
@@ -449,7 +428,7 @@ export function AppearancePane({
       </SettingsGroup>
 
       <SettingsGroup title={t("Show status bar")}>
-        <SettingRow help={t("The bar at the bottom showing word count, lines/columns and the time.")}>
+        <SettingRow>
           <Toggle
             checked={a.show_status_bar}
             onChange={(show_status_bar) => 写({ show_status_bar })}
@@ -457,11 +436,37 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
+      {/* 「窗口」那一组（2026-10-04，第 45 项，照 VMark 的窗口版加的）。
+          ⚠️ 这一格**只影响原生窗口标题**（`ui/useWindowTitle.ts`）——标签栏上
+          那几条页签、状态栏里那份路径都不动；那句 help 就是干这个的。 */}
+      <SettingsGroup title={t("Window")}>
+        <SettingRow label={t("Show the file name in the title bar")}>
+          <Toggle
+            checked={a.show_filename_in_titlebar}
+            onChange={(show_filename_in_titlebar) => 写({ show_filename_in_titlebar })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+
+      {/* 「专注模式」那一组。⚠️ 只管**压暗强度**——"把外壳收起来"是另一条
+          （`F8` 那条写作模式，见 `editor/writing-modes.ts` 的文件头）：
+          收不收外壳与"别处的字压多暗"互不影响，别在这一组的说明里混着讲。 */}
+      <SettingsGroup title={t("Focus Mode")}>
+        <SettingRow label={t("Dimming strength")}>
+          <Radio
+            value={a.focus_mode_dim}
+            options={[
+              { value: "standard", label: t("Standard") },
+              { value: "strong", label: t("Strong") },
+              { value: "stronger", label: t("Stronger") },
+            ]}
+            onChange={(focus_mode_dim) => 写({ focus_mode_dim })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+
       <SettingsGroup title={t("Word count")}>
-        <SettingRow
-          label={t("Reading speed")}
-          help={t("Words read per minute. Used only to turn the total word count into the reading time in the status bar; nothing else is affected. 382 is a common value for Chinese.")}
-        >
+        <SettingRow label={t("Reading speed")}>
           <NumberInput
             value={a.reading_speed}
             min={100}
@@ -472,10 +477,7 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Formatting Toolbar")}
-        help={t("The row of buttons above the editing area (bold, italic, headings…). ⚠ Default is Never Show: the same commands sit in the menu bar under the same grouping, so that row is usually just in the way. ⚠ With Show on Hover the row only appears when the mouse reaches the top of the editing area, and it pushes the document down when it appears — the toolbar is in the flow, not an overlay. ⚠ All three settings are also under View → Formatting Toolbar; both change the same value.")}
-      >
+      <SettingsGroup title={t("Formatting Toolbar")}>
         <SettingRow>
           {/* ⚠️ 三档用 `Radio`，**不用 `Toggle`**（2026-09-25 从布尔改成三档）：
               中间那档（悬停显示）的两种状态属于同一个设置值，一个勾表达不了。
@@ -492,10 +494,7 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Dark mode")}
-        help={t("Use a separate set of document themes for dark mode. ⚠ This applies to the document-theme axis only, and has nothing to do with Light/Dark above (that one is the whole shell).")}
-      >
+      <SettingsGroup title={t("Dark mode")}>
         <SettingRow label={t("Use a separate set of document themes")}>
           <Toggle
             checked={a.dark_theme_separate}
@@ -520,6 +519,11 @@ export function AppearancePane({
             </ActionButton>
           </div>
         </SettingRow>
+
+        {/* ⚠️ 第 43 项（2026-10-04）：「要改内置主题」这条路机制上是通的
+            （同名覆盖，`src-tauri/src/themes.rs` 文件头），但界面上一个字
+            都没提，用户多半以为内置的三套动不了。这一段只**说明**、不**代办**
+            ——不做成"点一下就悄悄写文件"，那是替用户做主。 */}
       </SettingsGroup>
     </>
   );

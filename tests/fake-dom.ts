@@ -34,6 +34,8 @@ export class 假元素 {
 
   className = "";
   contentEditable = "";
+  /** `hidden` —— 公式的命令候选弹窗靠它开合（`math-suggest.ts`）。 */
+  hidden = false;
   spellcheck = true;
   placeholder = "";
   rows = 0;
@@ -42,6 +44,18 @@ export class 假元素 {
   value = "";
   /** `setSelectionRange` 记下来的光标位置，供测试读。 */
   选区: [number, number] = [0, 0];
+
+  /**
+   * 表单控件的光标位置。⚠️ 真 DOM 里这两条是**只读**属性，所以这里写成
+   * getter（`math-view.ts` 的按键补全要读 `selectionStart` 才知道该在哪替换）。
+   */
+  get selectionStart(): number | null {
+    return this.选区[0];
+  }
+
+  get selectionEnd(): number | null {
+    return this.选区[1];
+  }
 
   readonly style: Record<string, string> & { setProperty: (k: string, v: string) => void } = (() => {
     const 表: Record<string, string> = {};

@@ -119,16 +119,22 @@ tauri::Builder::default()
 
 | 顺序 | 什么时候走 | 做什么 | 为什么在这个位置 |
 |---|---|---|---|
-| ⓿''' `--mcp` | AI 客户端（Claude Desktop / Cursor 那一类）用 `nota --mcp` 把 Nota 当**子进程**拉起来 | `mcp::接上()`：**已经有一份 Nota 在跑** → 把自己的 stdio 接到那一份的 socket 上（`exit(0)`，这一份什么都没建）；**一份都没跑（或转接失败）** → 记一句日志，**照常往下走**，由这一份自己开窗、并在 `setup` ⑨ 服务 MCP | ⚠️ 排在单实例**前面**：要先问"能不能转接"才知道这一份要不要当主人。⚠️ 它**不禁用**单实例（与隔壁 `--new-window` 正好相反）——形态二里这一份必须占住那个位置，否则用户在它开窗之后双击一个 `.md` 会凭空多出第三个进程 |
+| ⓿''' `--mcp` | AI 客户端（Claude Desktop / Cursor 那一类）用 `nota --mcp` 把 Nota 当**子进程**拉起来 | `mcp::接上()` → `结局`：**已经有一份 Nota 在跑** → 把自己的 stdio 接到那一份的 socket 上，跑完 `exit(0)`（这一份什么都没建）；**一份都没跑** → `stderr` 说一句"请先打开 Nota"、**退出码 2**；**会话中途断了** → **退出码 3**。⚠️ **三条路都在这里退出**（2026-09-29 改，见下） | ⚠️ 排在单实例**前面**：要先问"能不能转接"才知道这一份要不要当主人。⚠️ 它今天**既不建窗也不抢单实例的位置**（三条路全退出），所以"禁不禁用单实例"对它已经没有意义 |
 | ⓿' `--new-window` | 用户点了标签页右键的「在新窗口中打开」（`commands/window.rs` `spawn` 一份自己，带上路径与这个选项） | **整关跳过单实例**：这一份既不 `connect` 也不 `bind` | 单实例的语义是"第二份把参数转交给第一份、自己退出"，与"用户主动要再开一个窗口"正好相反。⚠️ 跳过的是**抢**不是**收**：`nota.sock` 仍归第一份，第三次普通启动照旧转交给**第一份**（不是最近开的这一份）。⚠️ 代价如实记：这一份**不持有 socket**，收不到 `nota:second-instance`——"把标签页送回原来那个窗口"做不了（用户说了不用考虑） |
 | ⓿ 单实例 | 每一次普通启动 | `single_instance::抢占(要打开的那个文件)` → `第一个(听)` 留着接收线程 / `已转交` 直接 `exit(0)` / `Err` **照常单开**（单实例是便利，不是前提） | ⚠️ **必须早于 `Builder::build()`**：晚了会先闪出一个空窗口再退出——用户看到的是"Nota 闪了一下就没了"，比没有单实例还糟。⚠️ 转交那条走 `std::process::exit` 而不是从 `run()` 里返回：这里什么都还没起，**没有清理可做**，不想让人误以为可以在这儿做清理。⚠️ 挑"要打开哪个"只走 `cli.rs` 那一份规则——挑出来的东西还要转交给已经在跑的那一份，那边也调同一个函数（第二个真相源会让两边看法不一致） |
 
 ⚠️ **三条判定都落在 `lib.rs`，不往 `single_instance.rs` 里搬**：那个文件的语义是
 「第二份转交给第一份」，"用户主动要再开一个窗口"不在它的职责里——`docs/09` §2
 那一行专门记了这条，别把例外搬进去。
-⚠️ `--mcp` 那条转接**失败不是错误**：AI 客户端那边会因此多起一份开窗的 Nota，
-可用户本来就得有一份 Nota 才有意义（形态 ① 的全部价值是够到**用户此刻正编辑的那一份**），
-所以照常启动是对的。
+⚠️ `--mcp` 那条转接**失败就是失败，不许"那就自己开一份"**（2026-09-29 改）：
+老口径是"转接失败照常启动"，代价是 **MCP 客户端每重启一次它的服务器进程，
+用户桌上就多一个他没要过的 Nota 窗口**（客户端见服务器没了会再起一个，
+而我们**故意不关窗**），用户报的原话就是「现在会不停新建窗口」——
+账在 `mcp` 模块头「为什么形态 2 不开窗」，编号 **BUG-55**（`docs/07` §2）。
+⚠️ 用户本来就得有一份 Nota 才有意义（形态 ① 的全部价值是够到**用户此刻正编辑
+的那一份**），所以"请先打开 Nota"是这句话的正确回答，不是错误。
+⚠️ 连带**删掉**了 `setup` ⑨ 那一格（`mcp::起`）：`--mcp` 今天走不到 `setup`，
+留着一个永远为假的分支会让人以为还存在"在进程里直接服务 MCP"那种形态。
 
 
 ### ② `setup()` 里的几步
@@ -143,7 +149,7 @@ tauri::Builder::default()
 | ⑥ 起两个**后台线程** | `heartbeat::起()`（面板心跳，每秒一拍）＋ `focus::起()`（强制专注的账本，每秒一拍） | ⚠️ **两个都是裸 `std::thread`，不是 `tokio::time`**（这个仓里没有一处 tokio 定时器）。⚠️ **起线程这一步只做一次**，没有「重启」这一说；心跳退出靠 `Heartbeat::stop()`（`RunEvent::Exit`，最多晚一拍），账本线程自己检查托管状态还在不在。⚠️ **强制专注不是插件**——用户原话「注意啊，这不是插件。这是核心功能」，它要窗口焦点、要开置顶窗、要出声，三样都在插件沙箱之外 |
 | ⑦ 单实例的**接收**那一半 | `app.manage(single_instance::落点::default())` ＋ 抢到位置时 `single_instance::起(app.handle().clone(), 听)` | ⚠️ **位置很要紧**：上面那一堆 `manage` / `起` 都已经注册完，接收线程第一条连接就是奔着"打开一份文档"来的，而它 emit 的那条事件收的是**前端**——所以这里只要把托管状态（退出时删 socket 要用的路径）先挂上。⚠️ 抢位置那一步在上面 ⓿，**这一格是"收"那一半** |
 | ⑧ 把 `nota://` 接到本程序上 | `url_scheme::注册()` | **解析**那一半在 `cli.rs`；⚠️ 失败**不拦启动**（注册不上就是"点链接打不开"），而且它**只在需要时才动盘**（幂等，见文件头）——所以正常启动是**不碰**用户桌面配置的 |
-| ⑨ MCP 服务器 | `cli::要开_mcp(...)` 为真才 `mcp::起(app.handle().clone())` | ⚠️ **只在这一份进程"就是那个 Nota"的时候才起**（`--mcp` 且 ⓿''' 那一步没转接出去）：别的启动方式下 stdin/stdout 是终端，服务它没有意义，还会把用户终端上打的字当成 JSON-RPC 吃进去。⚠️ 起的是**一条线程**（`mcp::起` 里 spawn）——`setup` 跑在**建窗之前**，在这儿阻塞读 stdin 窗口永远出不来。⚠️ 这里**又算了一遍** `cli::要开_mcp`（纯函数、不碰 IO）：闭包要活到 `'static`，借一个局部变量过不了编译 |
+| ⑨ ~~MCP 服务器~~ | ⚠️ **2026-09-29 删掉了**（原来这里是 `cli::要开_mcp(...)` 为真才 `mcp::起(...)`） | 它服务的是"这一份进程自己就是那个 Nota"那种形态，而那种形态的代价是**用户报的「不停新建窗口」（BUG-55）**：`--mcp` 今天在 ⓿''' 那一步三条路**全都退出**，走不到 `setup`。⚠️ 留一个永远为假的分支会让人以为还存在"在进程里直接服务 MCP"那种形态。⚠️ 想让 MCP 重新在进程里服务，要改的是 ⓿''' 那一段的口径，**两处必须一起改** |
 
 顺序在代码里就是字面的先后；`documents` 的 `Arc` 同时被 `AppState` 和
 `HostContext` 拿着——**是同一个 `Arc`，不是两份拷贝**（插件闭包要长期持有它，
@@ -170,7 +176,7 @@ tauri::Builder::default()
 | 事件通道撞名 | 后到的那个插件被判 `Failed(原因)`，原因里写明是谁占了通道（见下面"插件分层"） |
 | 窗口销毁时 `unload_all` | ⚠️ **只对 `main` 那个窗口**（`window.label()` 分派，2026-09-23 起）。单个插件的 `on_unload` 出错**只记不抛**（`log.rs`，默认不打），不向上抛——卸载流程不该被一个坏掉的插件挡住 |
 | `.run(...)` 本身 | `.expect("Nota 启动失败")`，这是唯一会让进程直接死掉的地方 |
-| `--mcp` 转接失败 | **不算错误**。记一句日志（`log.rs`，默认不打）后照常启动：这一份自己开窗并服务 MCP |
+| `--mcp` 接不上 / 会话断了 | ⚠️ **2026-09-29 改：不许"那就自己开一份"**（那正是 BUG-55 的不停开窗）。接不上 → `stderr` 一句"请先打开 Nota"＋退出码 **2**；会话中途断了 → 退出码 **3**。两条都**不建窗、不抢单实例的位置** |
 | 单实例起不来 | **照常单开、不拦启动**。拿不到运行目录、socket 文件建不出来，都不该让人用不了 Nota |
 | `nota://` 注册不上 | **不拦启动**：只是"点链接打不开" |
 | MCP 服务器 | **不拦启动、也不影响宿主那一侧**：`mcp::起` 是一条后台线程，stdin/stdout 断了只记一句日志（`log.rs`，默认不打）；工具跑了但没成，是结果里一个 `isError: true`（`tools.rs` 装好的），不是 panic |
@@ -648,6 +654,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 |---|---|---|---|
 | `nota:notify` | `lua/api/ui.rs:68`（`nota.ui.notify`） | `{plugin, message, level}`，`level ∈ info/warn/error/success` | ✅ 订阅了 → `toast()` |
 | `nota:document-changed` | `lua/api/document.rs:126`（`nota.document.set_text` / `append_text`） | `{id, text, origin: "plugin"}` | ✅ 订阅了 → `editorRef.setMarkdown` |
+| `nota:document-edit` | `lua/api/document.rs`（`nota.document.insert_at_cursor`，第 14 项，2026-10-04） | `{id, op: "insert-at-cursor", text}`——⚠️ **是一条「意图」，不是「发生」**：宿主**改不动**，请编辑器落一笔真事务 | ✅ 订阅了 → `ui/useAppEvents.ts` → `editorRef.插入在光标处`（⚠️ **允许丢掉**：编辑器没挂、或已切走那份文档就作废） |
 | `nota:plugin-panel` | `lua/api/ui.rs:249`（`nota.ui.refresh`） | **空**——"这个面板的内容变了，去重拉" | ✅ 订阅了 → `pluginPanelContent(…)` |
 | `nota:plugin-review` | `lua/api/ui.rs:300`（`nota.ui.review`）＋ `commands/plugin.rs:209` ＋ `plugin/mod.rs:456` | **空**——"编辑区摊的那一块换了" | ✅ 订阅了 → `api.plugin.review()` |
 | `nota:native-menu` | `lib.rs:243`（Tauri 的菜单回调） | 命令 **id** 字符串 | ✅ 订阅了 → 查 `menuHandlers` |
@@ -655,7 +662,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 | `nota:focus-beep` | `focus/alarm.rs:51` | **空**——「该响了」（**音色归前端**） | ✅ 订阅了 → `ui/useFocusAlarmSound.ts` |
 | `nota:file-changed` | `watch.rs:275`（发现那一半） | `{id, path, hash}`——**磁盘上那份文件被别的程序改了** | ✅ 订阅了 → `ui/useExternalChanges.ts` |
 | `nota:second-instance` | `single_instance.rs:307`（第二个进程递过来的那一路）＋ `mcp/host.rs:204`（复用同一名字） | 「抬窗」 / 「打开某个路径」 / 报错三种（见 `bridge/payloads.ts`） | ✅ 订阅了 → `ui/useAppEvents.ts` |
-| `nota:format-key` | `format_keys.rs:175`——⚠️ **GTK 捕获相位那一层，不是命令也不是 Lua**（2026-09-28，**BUG-49**） | 命令名（`bold` / `italic`） | ✅ 订阅了 → `ui/useMenus.ts`（走**和 `keydown` 一模一样**的判据） |
+| `nota:format-key` | `format_keys.rs:175`——⚠️ **GTK 捕获相位那一层，不是命令也不是 Lua**（2026-09-28，**BUG-49**） | 命令名（`bold` / `italic`） | ✅ 订阅了 → `ui/useMenus.ts`（走**和 `keydown` 一模一样**的判据）。⚠️⚠️ **2026-09-29 实测：这条事件在真程序里一次都没响过**（生产者在真程序里从不触发），前端那条订阅是**备用**，见下面第 3 条 |
 | `plugin:<channel_id>:<name>` | `lua/api/mod.rs:217`（`nota.event.emit`） | 插件自定（Lua 值 → JSON） | ❌ 名字由插件决定，前端只能事后 `listen`；今天没人订 ⚠️ |
 
 ⚠️ **曾经还有 `nota:plugin-menu` 与 `nota:slidev-stopped` 两条，都删掉了。**
@@ -677,14 +684,26 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
    `ai:preview` 这种带冒号的名字，冒号在允许集合里，所以没问题。
 3. ⚠️ **`nota:format-key` 是这张表里唯一一条「生产者既不是命令、也不是 Lua」的事件**
    （2026-09-28，BUG-49）：它由 `src-tauri/src/format_keys.rs` 那个 **GTK 捕获相位**的
-   键盘控制器发出——WebKitGTK 在把按键派发给 DOM **之前**就把 `Ctrl+B` / `Ctrl+I`
-   当成自己的编辑命令吃掉了，DOM 那一层收不到，菜单加速键也在**冒泡末端**查、同样收不到；
-   捕获相位的 `GtkEventControllerKey` 一定早于 WebView，所以只有它能发这条。
-   ⚠️ **它凭什么是事件**——判据还是那句「**发生是事件 → 推**」：这里发生的是
+   键盘控制器发出——**设计时**的理由是「WebKitGTK 在把按键派发给 DOM **之前**就把 `Ctrl+B` /
+   `Ctrl+I` 当成自己的编辑命令吃掉了，DOM 那一层收不到，菜单加速键也在**冒泡末端**查、
+   同样收不到；捕获相位的 `GtkEventControllerKey` 一定早于 WebView，所以只有它能发这条」。
+   ⚠️⚠️ **2026-09-29 实测：那个理由不成立，这条事件一次都没响过**——`NOTA_DEBUG=1` 下
+   4 次 `Ctrl+B` ＋ 1 次 `Ctrl+I`，日志里只有「已装上」、**0 条「拦到」**。把它推翻的两条实测是：
+   ① 最小复现里网页侧的 JS 收得到 `key=b ctrl=true`；② 真程序里那个 `window` 监听也收得到。
+   **BUG-49 / BUG-53 的真凶在别处**：`Mod-b` / `Mod-i` 被绑了**两次**（上游 `strongKeymap` /
+   `emphasisKeymap` ＋ 菜单表的 `fmt.bold` / `fmt.italic`），两条命令都是 **toggle、跑两遍正好
+   抵消**，看起来就是「按了没反应」；修法是 `ui/useMenus.ts` 那条 `window` 监听第一句加
+   `if (e.defaultPrevented) return;`（ProseMirror 的监听挂在 contenteditable 上、比 `window` 早）。
+   ⚠️ 因此这一行**今天描述的是一条死链路**：生产者在真程序里从不触发，前端那条订阅只是**备用**。
+   `format_keys.rs` 那一层**目前留着**，**「删还是留」是待拍板项**（删它要连着动 `lib.rs` 的
+   `on_page_load`、前端那条 `nota:format-key` 监听、`ipc.ts` 的频道名和几份文档；
+   账在 `docs/07` 的 BUG-49）。
+   ⚠️ **它凭什么还是"事件"**——判据依旧是那句「**发生是事件 → 推**」：设计意图里发生的是
    「用户按下了 `Ctrl+B`」**这个动作**，不是一个可拉的状态（没有任何一本账记着「现在按没按」）。
+   这条判据今天仍然对，只是**没有生产者**。
    ⚠️ 载荷**就是一个字符串**，`bridge/payloads.ts` 里**没有**它的类型壳，别再给人加一层。
    ⚠️ **只在 Linux 上装**：macOS / Windows 上这两颗键本来就到得了 DOM，
-   装了会和那条 `keydown` 撞成执行两遍。整篇论证在 `format_keys.rs` 的文件头。
+   装了会和那条 `keydown` 撞成执行两遍。文件头现在写着两面：**设计的那套论证 ＋ 实测把它推翻的经过**。
 4. ⚠️ **插件 UI 的接收端已经接线（2026-09-22，BUG-13），但它走的是「拉」不是「推」。**
    `register_panel` / `register_menu` 不再 `emit`，改为写进插件的 Lua registry
    （`nota_panels` / `nota_menus`），前端挂载后调 `nota_plugin_panels` /
@@ -696,7 +715,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
    今天这两条推的是**"去重拉"这个动作**（载荷是空的），收到就去拉，丢了也不影响正确性。
    📌 本项的三条尾巴（`api.plugin.call` 没有调用者、面板内容空着）**都已在
    2026-09-24 结清**：菜单栏做了（`docs/07` 第 40/42 项）、面板 DSL 落地（第 15 项，
-   十四种 `kind`，见 `docs/13` §8.5）。
+   十六种 `kind`，见 `docs/13` §8.5）。
 
 ### `nota_frontend_ready`：**有意的无操作**
 
@@ -941,15 +960,37 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
   → api.doc.save(id, target)         → 写盘、dirty 归零、revision+1
   → refreshDocs() + toast(已保存到 …)
 
-插件改文档
+插件改文档（**整篇替换**）
   Lua nota.document.set_text / append_text
   → DocumentStore::sync（改的是后端镜像）
   → 发 nota:document-changed {origin:"plugin"}
-  → App.tsx 的事件 effect → editorRef.setMarkdown(text)   ← 前端编辑器这才知道
+  → ui/useAppEvents.ts → editorRef.setMarkdown(text)   ← 前端编辑器这才知道
 ```
 
 第三条链是"前端是真相"这条口径的**代价**：插件改了后端镜像，前端不会自己知道，
 所以每次写完都必须发事件。漏发的表现是"编辑器里看到的和存盘的不是一份东西"。
+
+### 第三条半链路：插件请编辑器**替你改一笔**（`nota:document-edit`，第 14 项，2026-10-04）
+
+上面那条"整篇替换"的代价是**撤销栈断掉、光标跳走、表格列宽之类的排版状态全丢**，
+所以"在光标处插一句"不该用它。第二条第 14 项开的路**方向反过来**——
+宿主**不改镜像**，只把意图递回去：
+
+```text
+插件改文档（**只改一处**）
+  Lua nota.document.insert_at_cursor(text)      ← 一个字节的镜像都不动
+  → 发 nota:document-edit {id, op:"insert-at-cursor", text}
+  → ui/useAppEvents.ts → editorRef.插入在光标处(text)
+  → editor.create.ts 里落一笔**真 ProseMirror 事务**（view.dispatch(tr.insertText(...))）
+  → 正文变了 → 走上面那条 300ms 去抖 sync 回来 → revision 这时才动
+```
+
+⚠️ 为什么不由宿主自己拼字符串改镜像——**量过，做不到**：Markdown 字符偏移这个
+坐标系在块边界上不存在（列表项开头插字会多出 `- `、两段之间插字会多出空行），
+表在 `docs/05` §5.2b，量测钉在 `tests/caret-snapshot.test.ts` 第三组。
+⚠️ 所以插件**拿不到光标偏移量**（`get_selection()` 给的是**选中的那段字**）。
+⚠️ 这条意图**允许被丢掉**（编辑器没挂着、用户已经切走文档）——它不是"发生"，
+是"一次请求"，跟表里其余每一条的规矩都不一样。
 
 ### 第四条链路：插件把一块面板摊到编辑区（`nota.ui.review`，2026-09-24 加）
 

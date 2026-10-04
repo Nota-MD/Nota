@@ -1,21 +1,27 @@
 /**
  * 「导出」那一页。
  *
- * ⚠️⚠️ **本页只有两条设置，也就是 HTML / PDF 两种导出能共用的那两条。**
- * Nota 能导出的格式就是这两种，没有 PDF / HTML / Image / Word (.docx) /
- * OpenOffice / RTF / Epub / LaTeX / Media Wiki / reStructuredText / Textile /
- * OPML 那样一排子页面——那需要一整套可插拔的导出器框架，不是一个页面。
+ * ⚠️⚠️ **本页只有两条设置**，而且是**所有导出格式都共用的那两条**（默认目录、
+ * 导完之后开不开文件夹）——所以它一个格式一档都不列：格式本身在「文件 → 导出」
+ * 那张菜单上（`ui/commands.ts`），不在这儿重复一遍。
  *
- * ⚠️ 而且 `docs/10-feature-matrix.md` 的「不做的事与理由」表里已经写明：**不做 Pandoc**。
- * Word / OpenOffice / RTF / Epub / LaTeX / OPML 这些格式**全靠 Pandoc 转**，
- * 留一个「Pandoc 路径」选择框而不带 Pandoc，是个不起作用的控件。
+ * ⚠️ **本页也没有「Pandoc 路径」那一格**，这是**刻意的**：Nota **不自带、
+ * 也不下载** pandoc，只用系统里那个（七种格式全靠它转，见
+ * `src-tauri/src/pandoc.rs` 文件头）。留一个路径框而包不带 pandoc，
+ * 就是一个不起作用的控件。⚠️ 探测结果**不在这页上**——装没装是导出那一刻
+ * 由 `ui/PandocPanel.tsx` 现探现说的。
  *
- * ⚠️ 自定义导出器（增删改导出器那一排按钮）**也不做**：它要的是一个导出器插件
+ * ⚠️ 自定义导出器（增删改导出器那一排按钮）**不做**：它要的是一个导出器插件
  * 接口，而 Nota 的插件系统是 Lua 的、面向文档操作的，两者不是一回事。
+ *
+ * ⚠️ **2026-10-04**：这一页底下原有一段说明（讲"能导出哪两种"），
+ * 按用户那一轮「全删」的口径删掉了。它**当时就已经说过期了**——
+ * 2026-09-25 借 pandoc 导出七种格式之后，"只有 HTML / PDF 两种"这句话
+ * 就不再成立（见上面那条与 `docs/10` §6）。
  */
 
 import { useT } from "@/i18n";
-import { ActionButton, Note, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
+import { ActionButton, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
 export function ExportPane({ settings, onChange }: PaneProps) {
@@ -27,10 +33,7 @@ export function ExportPane({ settings, onChange }: PaneProps) {
 
   return (
     <>
-      <SettingsGroup
-        title={t("Default export folder")}
-        help={t("Empty means automatic — the folder of the current document. Once a path is set, every export writes there.")}
-      >
+      <SettingsGroup title={t("Default export folder")}>
         <SettingRow>
           <div className="stg-inline">
             <TextInput
@@ -52,34 +55,13 @@ export function ExportPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup title={t("After exporting")}>
-        <SettingRow
-          label={t("Open the folder the exported file goes into")}
-          help={t("When the export finishes, open that folder in the system file manager.")}
-        >
+        <SettingRow label={t("Open the folder the exported file goes into")}>
           <Toggle
             checked={e.open_after_export}
             onChange={(open_after_export) => 写({ open_after_export })}
           />
         </SettingRow>
       </SettingsGroup>
-
-      <Note>
-        {/* ⚠️ **这里只能说 HTML**（2026-09-25 改，用户体验评估抓出来的）。
-            原来写的是"能导出 HTML 和 PDF 两种"，而「文件 → 导出」里的
-            「PDF…」是**灰的**（`App.tsx` 没接那一条，打印才是 PDF 的实际出路）。
-            如实变灰是个好习惯，但设置页这条 Note 把它说反了——用户会以为
-            自己没找到路，而不是"这条路还没修"。*/}
-        {t("Nota can currently export")}
-        {" "}
-        <strong>HTML</strong>
-        {t("(with and without styles), and both settings above apply to both. PDF goes through File → Print and Save As, which is")}
-        <strong>{t("not")}</strong>
-        {t("part of this export branch. There are no Word / EPUB / LaTeX formats here either, and it")}
-        <strong>{t("does not")}</strong>
-        {t(
-          "ship a built-in Pandoc — a “Pandoc path” box with no Pandoc behind it only makes people think the feature is available, while it does nothing.",
-        )}
-      </Note>
     </>
   );
 }

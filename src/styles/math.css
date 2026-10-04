@@ -322,6 +322,133 @@
   max-width: min(46ch, 90vw);
 }
 
+/* ── 命令补全弹窗（`editor/math-suggest.ts`）──────────────────────────── */
+
+/* ⚠️ 定位抄上面那条悬浮预览（`top: 100%` + 相对 `.nota-math`），只有两点不同：
+   ① **层高更高（4）**——它要压在悬浮预览之上。用户在框里敲 `\fr` 时两样东西
+      同时挂在面板下面，补全列表是"现在要动的东西"，得在最上面；
+   ② 宽度**两头都封**（`max-content` 再 `min(…, 46ch)`）：不像预览那样可以顶
+      出去。理由与行内预览那条一样——它左边贴着这一截公式，长说明会捅出正文列。
+   ⚠️ `left: 0` 起手，行内公式那一截很窄时它自己往右伸；块公式那一格本来就宽。 */
+.editor-mount .ProseMirror .nota-math-suggest {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* ⚠️ **这里故意不写 `max-height`**（2026-10-04 目检后改的，见 `docs/07` BUG-63）。
+     起手写过一条 `220px`，注释里按"一条约 21px ⇒ 十条装得下"配的——
+     **真窗口里量出来一条是 24.7px**（一条 = 上下 padding 4 ＋ 预览那格的高度，
+     而预览那格的 `font-size: 12px` 是**写死的 px**，所以这个行高跟界面字号
+     基本无关）：220px 只装得下**九条**，第十条（常用里是 `\theta`）被切在框外，
+     而选中项移出视野时**列表不跟着滚** —— 按九下方向键就选到一条看不见的候补上，
+     再按回车就插进去一个用户没看见的命令。
+     行数上限本来就有两道：`math-commands.ts::候选上限`（有测试盯着它跟 `常用名`
+     的条数对齐）和「一次只弹十条」。**再叠一条按估算写的像素高度**，就是两个地方
+     各记一份同一个数——错的那个没人量。所以这里只留 `overflow-y: auto` 兜底
+     （真有超出就自己滚，不把面板下面撑开一屏），高度交给内容。
+     ⚠️ 将来 `候选上限` 真要放大（比如 30），回头看一眼这里：十条 ≈ 264px。 */
+  overflow-y: auto;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  /* 投影用写死的黑：它在浅色和深色下都成立（同 `.nota-lang-popup`）。 */
+  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
+  width: max-content;
+  max-width: min(46ch, 90vw);
+  /* 弹窗是**界面**不是正文：说清"有哪些命令、各是什么"用界面字体；
+     中间那段公式预览归 KaTeX 自己那棵树管，不受这条影响。 */
+  font-family: var(--font-ui, inherit);
+  font-size: 11px;
+  color: var(--fg);
+}
+
+/* ⚠️⚠️ 这一条**必须显式写**，不能指望浏览器默认表里那条 `[hidden]`：
+   上面给这个类写了 `display: flex`，作者样式**压得过**默认表——少了这条，
+   `关()` 把 `hidden` 置真之后弹窗**照样显示**（"关了还在"这种 bug 最难找，
+   因为它看着像状态没清干净，其实是 CSS 层高）。 */
+.editor-mount .ProseMirror .nota-math-suggest[hidden] {
+  display: none;
+}
+
+/* 行内公式那棵树里全是 `span`（非法嵌套要躲，见 `建建议框` 的 `行内` 选项），
+   `display` 由这两条给回来——`span` 默认是行内盒，不做这一步整列会横着排。 */
+.editor-mount .ProseMirror .nota-math-suggest-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.editor-mount .ProseMirror .nota-math-suggest-name {
+  /* 命令名是**要照着敲的东西**，用等宽字（与源码框同一族）。 */
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+
+.editor-mount .ProseMirror .nota-math-suggest-sample {
+  /* ⚠️ `flex: none`：预览不能被挤扁。它是一小段 KaTeX，宽度就该是它自己那么宽；
+     列表窄的时候该让**说明**去挤，不是让公式变形。 */
+  flex: none;
+  /* 样本行内排（KaTeX 给的是行内盒），而这一条在 flex 里——
+     不加这句那棵树会被当成一个块级盒子撑满整行。 */
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.editor-mount .ProseMirror .nota-math-suggest-desc {
+  /* `margin-left: auto` 把说明顶到最右，与左边那三段拉开——它是**说明**，
+     不是名字的一部分（同 `.nota-lang-custom-note`）。 */
+  margin-left: auto;
+  padding-left: 10px;
+  opacity: 0.65;
+  font-size: 10px;
+}
+
+/* physics 那个小角标（`enable_physics` 开着时才有的那几十条）。 */
+.editor-mount .ProseMirror .nota-math-suggest-tag {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.editor-mount .ProseMirror .nota-math-suggest-item:hover {
+  background: var(--bg-subtle);
+}
+
+/* 当前选中那一条。
+   ⚠️ 两条选择器都在（同 `.nota-lang-opt-on`）：只写 `-on` 的话，鼠标划过它时
+   `:hover` 会把强调色盖成灰底，而那一行的名字/角标已经是照强调底配的色，
+   压在灰底上就糊了。
+   ⚠️ 里面那三格**都要跟着翻色**（名字、角标），否则深色主题下强调底上
+   会出现一行读不出来的深色小字。 */
+.editor-mount .ProseMirror .nota-math-suggest-on,
+.editor-mount .ProseMirror .nota-math-suggest-on:hover {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.editor-mount .ProseMirror .nota-math-suggest-on .nota-math-suggest-name,
+.editor-mount .ProseMirror .nota-math-suggest-on .nota-math-suggest-tag {
+  color: inherit;
+}
+
+.editor-mount .ProseMirror .nota-math-suggest-on .nota-math-suggest-tag {
+  /* 角标的底色在强调底上会糊成一块，去掉（靠 `color: inherit` 的那圈字读）。 */
+  background: transparent;
+}
+
 /* ── 占位卡（空公式）────────────────────────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-math-note {

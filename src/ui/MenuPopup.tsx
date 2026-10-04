@@ -105,10 +105,20 @@ interface PopupProps {
   onArrowOut: (dir: 1 | -1) => void;
   /** `aria-label`。 */
   label: string;
+  /**
+   * 顶上那一行小标题（**可选**，目前只有状态栏那个「字数统计」菜单用）。
+   *
+   * ⚠️ 它是**键**（英文原文），由这一层翻——与 `entry.label` 同一条规矩
+   * （菜单栏那一套的键在 `ui/commands.ts`，理由见 `MenuBar.tsx::useT`）。
+   *
+   * ⚠️ 它**不是条目**：不占漫游下标、点不动、也不参与 `disabled` / `checks`。
+   * 别把它做成"能点的第一条"——那会让下面每个 `row` 都错开一位。
+   */
+  heading?: string;
 }
 
 export function MenuPopup(props: PopupProps) {
-  const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label } = props;
+  const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label, heading } = props;
 
   // ⚠️ 条目文字**在这里才翻**：`ui/commands.ts` 那张表里存的是**键**（英文原文）。
   // 规矩与理由写在 `ui/MenuBar.tsx::useT` 那一段，`SubMenu` 那边同样要一份。
@@ -205,6 +215,8 @@ export function MenuPopup(props: PopupProps) {
 
   return (
     <div className="menu-popup" role="menu" aria-label={label} onKeyDown={roving.handleKeyDown}>
+      {/* ⚠️ 在 `lines` **之外**：它不是条目，不占漫游下标（见 `heading` 那段）。 */}
+      {heading && <div className="menu-heading">{t(heading)}</div>}
       {lines.map((line) => {
         if (line.kind === "sep") {
           return <div className="menu-sep" key={line.key} role="separator" />;

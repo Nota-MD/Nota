@@ -92,6 +92,13 @@ export interface 插件动作 {
    * 新插件还不在快照里。实现里的注释有完整来龙去脉。
    */
   信任: (id: string, 指纹?: string | null) => Promise<void>;
+  /**
+   * 写插件声明的一格设置（2026-10-04 加：「设置 → 拓展」那一页上的滑杆）。
+   *
+   * ⚠️ **不走 `忙`**：滑杆拖一下就是一次调用，把它算进"正忙"会让旁边那几颗
+   * 按钮在拖动期间一直灰着（装 / 卸 / 启停共用 `忙`）。
+   */
+  设置: (id: string, key: string, value: number) => Promise<void>;
   /** 此刻正忙的那个：插件 id，或者 `"装"`（安装中）。按钮据此置灰。 */
   忙: string | null;
 }
@@ -475,6 +482,44 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     [plugins, 跑],
   );
 
+  /**
+   * 写插件声明的一格设置（「设置 → 拓展」那一页上拖滑杆）。见 [`插件动作::设置`]。
+   *
+   * # ⚠️ 三条口径
+   *
+   * 1. **先本地落一格，不等宿主回来**。滑杆是**受控**的
+   *    （`settings/primitives.tsx::Range` 画的就是传进去那个数），本地不跟着走的话，
+   *    手指拖到 30、滑杆当场弹回 5——一次都拖不动。拖完拉回来的那个数**不是**
+   *    新信息：宿主写下去的正是这个数（它只做夹紧，而范围就是这根滑杆的范围）。
+   * 2. **不重拉**。`重拉` 是四条 IPC（清单 ＋ 面板 ＋ 菜单 ＋ 信任表），
+   *    拖一下发一轮不值当；而那四条里**没有一条**会因为这一格设置而变。
+   * 3. **失败要说话 ＋ 拉回来**：本地那一格现在是写失败的那个数，
+   *    不拉回来的话界面上摆着一个没落盘的值——那正是这一页最不该有的东西。
+   */
+  const 写设置 = useCallback(
+    async (id: string, key: string, value: number) => {
+      setPlugins((ps) =>
+        ps.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                settings: p.settings.map((s) => (s.key === key ? { ...s, value } : s)),
+              }
+            : p,
+        ),
+      );
+      try {
+        await api.plugin.setSetting(id, key, value);
+      } catch (e) {
+        toast(t("Could not save a setting for extension {0}: {1}", id, String(e)), "error");
+        await 重拉().catch(() => {
+          /* 拉不回来也已经说过了，别再叠一条 toast */
+        });
+      }
+    },
+    [重拉, toast],
+  );
+
   const 动作 = useMemo<插件动作>(
     () => ({
       忙,
@@ -484,8 +529,9 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       打开目录: 打开目录它,
       启停: 启停它,
       信任: 信任它,
+      设置: 写设置,
     }),
-    [忙, 装它, 导它, 卸它, 打开目录它, 启停它, 信任它],
+    [忙, 装它, 导它, 卸它, 打开目录它, 启停它, 信任它, 写设置],
   );
 
   return { plugins, panels, 信任: 信任表, menus, handlers, 调, 动作, review, 收预览 };

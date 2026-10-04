@@ -221,5 +221,18 @@ export function useChromeVisibility(
     );
   }, [settings, menuBarOpen, toast, t]);
 
-  return { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome };
+  /**
+   * **格式工具栏右端那颗 ×**（2026-10-04 加，`docs/07` 第 49 项）。
+   *
+   * ⚠️ 它与「视图 → 格式化工具栏 → 始终不显示」走的是**同一个 `setChrome`
+   * 的同一格**（`toolbar: "never"`）——那颗 × 不是第四个档位，只是"直接拨到
+   * 最后一档"。⚠️ **落在这里**（而不是 `EditorArea.tsx` 里现写一句）：
+   * 三档这套值本来就归本文件，多一个写它的地方就多一次"改了一处漏一处"。
+   *
+   * ⚠️ 收起来之后**这一条自己就没了**，怎么再打开在菜单与设置里各有入口，
+   * 所以**不发提示**（与菜单栏那条不同，见文件头最后那一段）。
+   */
+  const 收起工具栏 = useCallback(() => setChrome({ toolbar: "never" }), [setChrome]);
+
+  return { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome, 收起工具栏 };
 }

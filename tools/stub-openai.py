@@ -50,16 +50,38 @@ EOF
 
 `STUB_PORT` 换端口。请求原文会写进 `STUB_LOG`（默认 `/tmp/stub-openai-last.json`），
 用来核"插件到底送了什么上去"。
+
+# 流式（`docs/07` 第 58 项，2026-10-04 加）
+
+`STUB_MODE=stream` 时**不管请求里写没写 `stream`**，都按 SSE 一段一段往外吐
+（一段 `data: {...}` ＋ 最后一行 `data: [DONE]`）。正文和围栏与 `replace` 那份
+一模一样，所以"边打边出完之后，改动块照样能应用"这一条一眼就能验。
+
+⚠️ **另外那些模式下，请求里带 `stream = true` 时桩照旧回一份整段 JSON**
+——那不是疏忽，那是**故意留的第二个用例**：现实的网关/自建服务里有一大批
+直接忽略这个字段。插件那边必须**自动退回整段收**（`chat.lua::ask`），
+界面上的表现是"没有边打边出，但回答照旧出来"，**不该**是一条报错。
+
+`STREAM_SLICE` 换每个 HTTP 分块写多少**字节**（默认 23）。⚠️ **按字节切是
+故意的**：23 不是任何东西的倍数，切下去必然会把某个汉字劈成两半落在两个
+TCP 分块上——宿主要保证的正是"**绝不把半个汉字交给插件**"（`http.rs::切出完整段`）。
+想要更碎的切法就把它调小，想要"一次到齐"就调大（比如 100000）。
 """
 
 import json
 import os
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 PORT = int(os.environ.get("STUB_PORT", "8731"))
 MODE = os.environ.get("STUB_MODE", "replace")
 LOG = os.environ.get("STUB_LOG", "/tmp/stub-openai-last.json")
+# 流式每一小片写多少**字节**，以及两片之间停多久（见文件头那张表底下那段）。
+SLICE = int(os.environ.get("STREAM_SLICE", "23"))
+SLICE_PAUSE = float(os.environ.get("STREAM_PAUSE", "0.03"))
+# 一个 `data:` 帧里塞几个**字符**的正文（越小，界面上"一个个字往外冒"越明显）。
+DELTA_CHARS = int(os.environ.get("STREAM_DELTA", "5"))
 
 # 插件把文档嵌在系统消息里，两头是这两句（见 plugins/ai/main.lua 的 build_messages）。
 开始 = "──── 当前文档全文开始 ────"
@@ -142,6 +164,36 @@ def 拼回答(正文: str, 围栏):
     return "\n\n".join(段)
 
 
+def 切帧(回答: str, 模型: str):
+    """把一段回答切成 SSE 的那些帧（字符串，**没有编码过**）。
+
+    每帧的形状照 OpenAI 的流式协议抄：`data: {"choices":[{"delta":{"content":"…"}}]}`。
+    ⚠️ 流式那边插件读的是 `choices[1].delta.content`，**不是**整段那条路的
+    `choices[1].message.content`——桩这边两边都得给对，不然测出来的是桩的错。
+    """
+    帧 = []
+    for i in range(0, len(回答), DELTA_CHARS):
+        片 = 回答[i:i + DELTA_CHARS]
+        体 = {
+            "id": "stub-1",
+            "object": "chat.completion.chunk",
+            "model": 模型,
+            "choices": [{"index": 0, "delta": {"content": 片}, "finish_reason": None}],
+        }
+        # ⚠️ 帧尾是**两个**换行（SSE 的规矩），最后一帧的 `[DONE]` 也是。
+        帧.append("data: " + json.dumps(体, ensure_ascii=False) + "\n\n")
+    # 收尾那两帧：一个空 delta＋finish_reason，一个 `[DONE]`。真服务也是这么发的。
+    尾 = {
+        "id": "stub-1",
+        "object": "chat.completion.chunk",
+        "model": 模型,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+    }
+    帧.append("data: " + json.dumps(尾, ensure_ascii=False) + "\n\n")
+    帧.append("data: [DONE]\n\n")
+    return "".join(帧)
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -154,6 +206,26 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("content-length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_stream(self, 整段: str):
+        """按 SSE 一段一段写出去，**按字节**切（见文件头那段）。"""
+        原始 = 整段.encode("utf-8")
+        self.send_response(200)
+        self.send_header("content-type", "text/event-stream")
+        self.send_header("cache-control", "no-cache")
+        # ⚠️ 分块传输，**不写 content-length**：长度这会儿还不知道（而且这正是
+        # 流式的全部意义）。写了 content-length 的话 ureq 会等够那么多字节，
+        # "边打边出"就退化成"一次到齐"——而那种退化在界面上的表现是
+        # "这个功能好像没生效"，很难一眼看出是桩写错了。
+        self.send_header("transfer-encoding", "chunked")
+        self.end_headers()
+        for i in range(0, len(原始), SLICE):
+            片 = 原始[i:i + SLICE]
+            self.wfile.write(b"%x\r\n" % len(片) + 片 + b"\r\n")
+            self.wfile.flush()
+            time.sleep(SLICE_PAUSE)
+        self.wfile.write(b"0\r\n\r\n")
+        self.wfile.flush()
 
     def do_GET(self):
         self._send(200, json.dumps({"object": "stub", "mode": MODE}).encode())
@@ -171,16 +243,22 @@ class Handler(BaseHTTPRequestHandler):
         文档 = 取文档(请求)
         正文, 围栏 = 造回答(文档)
         回答 = 拼回答(正文, 围栏)
+        模型 = 请求.get("model") or "stub"
+        流式 = MODE == "stream"
         print(
             f"[stub-openai] {self.path} mode={MODE} 文档 {len(文档)} 字 → 回答 {len(回答)} 字"
-            f"（围栏 {'有' if 围栏 is not None else '无'}）",
+            f"（围栏 {'有' if 围栏 is not None else '无'}；"
+            f"请求里 stream={请求.get('stream')!r} → {'SSE' if 流式 else '整段'}）",
             flush=True,
         )
+        if 流式:
+            self._send_stream(切帧(回答, 模型))
+            return
         # 形状照 OpenAI 抄（插件只读 choices[1].message.content，别的不看）。
         体 = {
             "id": "stub-1",
             "object": "chat.completion",
-            "model": 请求.get("model") or "stub",
+            "model": 模型,
             "choices": [
                 {"index": 0, "message": {"role": "assistant", "content": 回答}, "finish_reason": "stop"}
             ],
@@ -190,8 +268,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if MODE not in ("replace", "insert", "twohunks", "bad", "dirty", "nofence"):
+    if MODE not in ("replace", "insert", "twohunks", "bad", "dirty", "nofence", "stream"):
         print(f"不认识的 STUB_MODE：{MODE}", file=sys.stderr)
         sys.exit(2)
-    print(f"[stub-openai] 127.0.0.1:{PORT} mode={MODE} log={LOG}", flush=True)
+    print(
+        f"[stub-openai] 127.0.0.1:{PORT} mode={MODE} log={LOG}"
+        + (f"（每片 {SLICE} 字节 / 每帧 {DELTA_CHARS} 字）" if MODE == "stream" else ""),
+        flush=True,
+    )
     HTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

@@ -25,6 +25,15 @@
  *
  * ⚠️ **不截断**长标题：真按字数截会截在一个看不出是截断的地方（用户会以为
  * 标题本身就这么短）。窗口管理器自己会省略，那是它说了算的地方。
+ *
+ * # 2026-10-04：多一个开关（`appearance.show_filename_in_titlebar`）
+ *
+ * 关掉之后标题恒为 `Nota`（照 VMark 的窗口版加的，第 45 项）。⚠️ 默认
+ * **开着**——就是上面那套一直以来的行为，理由写在 `settings/appearance.rs`
+ * 那个字段上（"任务栏里几份文档分不出来"正是第 51 项要治的病）。
+ *
+ * ⚠️ 这里**只按标志位换一句话**，不另写一份"短标题"的拼法：两处各拼一份，
+ * 迟早会出现"开的时候是 `我的笔记 • — Nota`、关一次再开变成别的东西"。
  */
 
 import { useEffect } from "react";
@@ -37,9 +46,12 @@ export const 应用名 = "Nota";
  * 按标题与脏标志拼出该写的窗口标题。**纯函数**，好单独验
  * （`docs/06` 那一套无头流程里，`setTitle` 的结果在截图上读不到文字，
  * 只能靠这一层保证格式）。
+ *
+ * `带文件名` 为假时只有一个应用名——⚠️ **不拼一个"空标题的短版本"**：
+ * 那是另一句话，迟早会漂成 ` — Nota` 这种留着一个破折号的写法。
  */
-export function 窗口标题(标题: string | null, 脏: boolean): string {
-  if (!标题) return 应用名;
+export function 窗口标题(标题: string | null, 脏: boolean, 带文件名 = true): string {
+  if (!标题 || !带文件名) return 应用名;
   return `${标题}${脏 ? " •" : ""} — ${应用名}`;
 }
 
@@ -50,12 +62,16 @@ export function 窗口标题(标题: string | null, 脏: boolean): string {
  * （窗口还没建好、已经没了）时报错也无从补救，弹出来只是多一条关不掉的信息
  * ——和 `useImmersive.ts` 里 `同步全屏` 那条同一个口径。
  */
-export function useWindowTitle(标题: string | null, 脏: boolean): void {
+export function useWindowTitle(
+  标题: string | null,
+  脏: boolean,
+  带文件名 = true,
+): void {
   useEffect(() => {
     void getCurrentWindow()
-      .setTitle(窗口标题(标题, 脏))
+      .setTitle(窗口标题(标题, 脏, 带文件名))
       .catch(() => {
         // 见上面那段：静默。
       });
-  }, [标题, 脏]);
+  }, [标题, 脏, 带文件名]);
 }

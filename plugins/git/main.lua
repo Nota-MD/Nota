@@ -19,7 +19,8 @@
 -- ── 差异预览（2026-09-25 落地）────────────────────────────────────────────
 --
 -- 「标红/绿，标出删了哪几行、加了哪几行」。**红绿是宿主画的**
---（`kind = "diff"`，`.panel-diff-del` / `.panel-diff-add`，见 `styles/dock.css`），
+--（`kind = "diff"`，外层 `.panel-diff` 那几个 `<pre>` 里逐行的 `.diff-del` /
+-- `.diff-add`，见 `styles/diff.css`），
 -- 这个插件只负责把 git 的输出翻成那个形状——翻译本身在宿主的
 -- `nota.diff.parse_unified` 里（`src-tauri/src/lua/api/unified_diff.rs`）。
 -- 判据与踩过的坑都在下面「差异预览」那一段。
@@ -138,237 +139,23 @@ local function tone_of(e)
   return (STATES[e.state] or STATES.modified).tone
 end
 
--- ── 差异预览（2026-09-25 加，2026-09-26 补齐上下文）─────────────────────
+-- ── 差异预览（2026-09-25 落地）────────────────────────────────────────────
 --
--- 用户要的是「**标红/绿文本来标记是删除还是添加**」（2026-09-25），
--- 2026-09-26 又点名「**照 Folio 那个 Git 拓展的形状来**」——每一行分档上色
---（加 / 删 / `@@` 段头 / 文件信息），上下文行不上色
---（`extensions/git/fo-git-panel-diff.c`）。所以取的是**完整的** unified diff：
--- 文件头、`@@`、上下文、增删，一屏里读起来跟终端里那份一样。
+-- ⚠️ **实现整块 2026-09-29 搬去了 `diff.lua`**（`require`，插件多文件的第三个
+-- 用户；拆的理由与那条缝在哪儿写在那边文件头）——`main.lua` 当时 997 行，
+-- 离 1000 只剩三行。下面这行是**转接**：名字一个没改，几十处调用点全都不用动。
 --
--- 红绿由宿主画（`kind = "diff"` + 行上的 `op`），翻译在 `nota.diff.parse_unified`
---（宿主）——那边跟"哪一行是文件头、哪一行是被删掉的内容"较劲（一份真 diff 里会
--- 长出 `--- 分隔线` 这种看着像文件头的正文行），有用例按着，见 `docs/13` §8.5。
---
--- ⚠️ `show_diff` 是**模块级**的显示开关，不是数据：上面那条"刻意不缓存任何 git
--- 数据"说的是别存 git 的输出（存了就会显示几分钟前的改动），而"要不要画差异"
--- 关了面板再打开还保持着，正是用户期望的。
+-- 口径一句话：「标红/绿，标出删了哪几行、加了哪几行」。**红绿是宿主画的**
+--（`kind = "diff"`，外层 `.panel-diff` 那几个 `<pre>` 里逐行的 `.diff-del` /
+-- `.diff-add`，见 `styles/diff.css`），
+-- 这个插件只负责把 git 的输出翻成那个形状——翻译本身在宿主的
+-- `nota.diff.parse_unified` 里（`src-tauri/src/lua/api/unified_diff.rs`）。
 
-local show_diff = true
+local diff = require("diff")
 
--- ── 提交树（2026-09-26 加）────────────────────────────────────────────────
---
--- 用户要的是「树状图，并且两个不同提交之间那根键可以点开看差异」。
---
--- 图**不是我们自己算的**：`git log --graph` 已经把车道画好了，宿主把它切成
--- "左边那截图线 / 右边那个提交"（`nota.git.log_graph`）。于是每行有**两颗**能点的
--- 东西（宿主为它新加 `kind = "graph"` 的全部理由：`buttons` 表达不了
--- "一行的两头是两件事"）：
---
---   * 左截 = **键**：这一次提交与**它父提交**之间的差异（`git diff 父 它`，
---     根提交走 `git show`）。"两个不同提交之间"在树上就是这条。
---   * 右串 = **选中这个提交**：选两个就成了"A 到 B 之间"（可以不相邻）。
---
--- ⚠️ 纯连接线行（`|\`、`| |`）**归它上面那个提交**：这是**就近**的读法，不是 git
--- 的语义。还是给它挂了动作——鼠标停上去会说清是哪两个提交（`title` 里带哈希），
--- 最坏是"点的位置不那么准"，不会出现"点了个不知道是什么的东西"。
+local why_of, run_diff = diff.why_of, diff.run_diff
+local get_diff, diff_section = diff.get_diff, diff.diff_section
 
-local show_graph = false
-
---- 已选中的提交哈希（最多两个）。⚠️ 存的是**哈希**不是差异文本（差异每次现问
---- git），所以这不违反「刻意不缓存任何 git 数据」——它是"用户点了哪两行"。
-local picked = {}
-
---- 现在正在看的那一对：`{ a = 旧的, b = 新的 }`。`nil` = 没在看历史。
---- `a == ""` = 根提交（没有父），那条路走 `git show`。
-local compared = nil
-
---- 一块差异最多画几行（每份文件 / 全部加起来）。
---
--- 三个理由：面板只有 260px 宽（画多了就是一片红绿墙，用户照样得滚）、宿主给一层
--- 内容块的上限是 200 项（`ui.rs::面板节点上限`）、以及**上下文行也占额度**——
--- git 默认每个改动前后各带 3 行（我们显式写 `-U3`），一个小改动就是十来行，
--- 额度得按**画出来的行**算，不能再按"红绿行"算。每份文件一块这个切法本身
--- 也保证了不会撞宿主那道上限。
-local MAX_PER_FILE = 80
-local MAX_TOTAL = 200
-
---- git 调用失败时该显示的那句话。`what` 是那条命令的名字（"git diff"）。
---
--- ⚠️ 别写成 `r.stderr ~= "" and r.stderr or "…"`：Lua 里空串是**真**，
--- 那个写法在 stderr 为空时会返回空串，等于把原因吞了。（踩过一次，
--- 这条注释就留在这儿别挪。）
-local function why_of(r, what)
-  if r.stderr == nil or r.stderr == "" then
-    return T("%s exited with a non-zero status", what)
-  end
-  return r.stderr
-end
-
---- 跑一条 git（差异那条路上的公共部分）：成功给文本，失败给 `(nil, 原因)`。
---
--- ⚠️ `--no-color` 和 `-U3` 是**每一条差异命令都要带的**，所以直接写在这儿：
--- `-U3` 是 git 的默认上下文行数，写出来是因为**界面上看到的东西取决于它**
---（改了哪几行紧挨着的是谁），而默认值有机会被 `diff.context` 之类的配置改掉
--- ——那样"面板里显示几行上下文"就成了"看用户 git 配置"，
--- 两个人打开同一份仓库看到的不一样。
---
--- ⚠️ 路径转义那件事（`core.quotePath`）宿主已经在 `run_git` 里统一处理了，
--- 这里不用管——不处理的话中文文件名在差异里是一串 `\344\270\255`。
-local function run_diff(nota, argv)
-  local full = { argv[1], "--no-color", "-U3" }
-  for i = 2, #argv do
-    full[#full + 1] = argv[i]
-  end
-  local r = nota.git.run(full)
-  if r.ok then
-    return r.stdout
-  end
-  return nil, why_of(r, "git diff")
-end
-
---- 取一次「工作区 vs 最后一次提交」的差异。返回 `(文本, 错因)`。
---
--- ⚠️ 用 `HEAD`，不用裸的 `diff`：裸 `git diff` 是"工作区 vs 暂存区"，而这个
--- 面板上那颗「提交…」会先 `add -A`——一旦暂存过，裸 diff 就是空的，
--- 用户看到的是"改动列表里明明有东西、差异里却什么都没有"。
--- `HEAD` 把已暂存的和没暂存的一起算进来。
--- 仓库还没有第一次提交时 `HEAD` 不存在（git 报"有歧义的参数 'HEAD'"），
--- 那就退回裸 diff——那时候暂存区里也不可能有东西，两者等价。
---
--- ⚠️ **不要**改写成 `nota.git.diff(false)`：那个 helper 的 argv 写死在
--- `lua/api/git.rs` 里（只有 `--no-color` 和可选的 `--cached`），给不了 `HEAD`。
-local function get_diff(nota)
-  local text = run_diff(nota, { "diff", "HEAD" })
-  if text then
-    return text
-  end
-  return run_diff(nota, { "diff" })
-end
-
---- 差异那几块：每份文件一条标题 + 一整块 unified diff（含上下文与文件头）。
---
--- `text` 是**已经取回来的**差异文本（取的那一步在 `get_diff` / `run_diff`
--- 那一侧，这里只负责翻译成内容块）。
--- `cmd` = "要看全的话在终端跑哪一句"。它进的是底下那两句截断提示——
--- ⚠️ 2026-09-26 起它是**参数**而不是写死的 `git diff HEAD`：提交树上点出来的
--- 那一对得说 `git diff 甲 乙`，否则照着提示敲会得到另一样东西。
--- `untracked` = 改动列表里未跟踪的文件有几个。**它们不在 `git diff HEAD` 里**
---（git 还不认识它们），不说一句的话，"列表里有个新文件、差异里找不到"
--- 看着就像个 bug。历史差异没有这个问题（传 0）。
-local function diff_blocks(nota, text, cmd, untracked)
-  local files = nota.diff.parse_unified(text)
-  local blocks = {}
-
-  -- 总行数先数出来：中途 break 掉之后再数就不全了，而"一共多少行"正是
-  -- 用户判断"要不要去终端看"的依据。
-  local total = 0
-  for _, f in ipairs(files) do
-    total = total + #f.lines
-  end
-
-  local drawn, skipped = 0, 0
-  for i, f in ipairs(files) do
-    -- ⚠️ 全局额度用完了就**不再往下开**。一开始是"继续开、只是不画行"，
-    -- 结果一个改动多的仓库（Nota 自己就是）后面四十份文件全变成
-    -- 一条标题 + 一句"还有 N 行没画"——那片桩子比一句话还长，而且没有用。
-    if drawn >= MAX_TOTAL then
-      skipped = #files - i + 1
-      break
-    end
-
-    local title = f.path
-    if f.added then
-      title = title .. T("(new file)")
-    elseif f.deleted then
-      title = title .. T("(deleted)")
-    end
-    blocks[#blocks + 1] = { kind = "heading", text = title }
-
-    -- ⚠️ 2026-09-26 起**没有"没有行可画"那一档了**。从前二进制文件与只改了
-    -- 文件模式的那种在这里画一句"没有行可画"；现在它们也有三行可看
-    --（`diff --git` / `index` / `Binary files … differ`），而"这份没法按行比"
-    -- 正是 git 自己那句话说的——它比我们再写一句中文准，也不用翻译。
-    local items, per = {}, 0
-    for _, line in ipairs(f.lines) do
-      if drawn < MAX_TOTAL and per < MAX_PER_FILE then
-        items[#items + 1] = { op = line.op, text = line.text }
-        drawn, per = drawn + 1, per + 1
-      end
-    end
-    if #items > 0 then
-      blocks[#blocks + 1] = { kind = "diff", items = items }
-    end
-    if per < #f.lines then
-      blocks[#blocks + 1] = {
-        kind = "text",
-        tone = "muted",
-        text = T("(%d more lines from this file are not drawn)", #f.lines - per),
-      }
-    end
-  end
-
-  if #files == 0 then
-    blocks[#blocks + 1] = { kind = "text", tone = "muted", text = T("There is no diff to show.") }
-  elseif skipped > 0 then
-    blocks[#blocks + 1] = {
-      kind = "text",
-      tone = "muted",
-      text = T("(The diff is too long: %d lines in total, the first %d are drawn here, and %d files are not drawn. Run `%s` in a terminal to see all of it.)",
-        total,
-        drawn,
-        skipped,
-        cmd
-      ),
-    }
-  elseif total > drawn then
-    blocks[#blocks + 1] = {
-      kind = "text",
-      tone = "muted",
-      text = T("(%d diff lines in total; the first %d are drawn here. Run `%s` in a terminal to see all of them.)",
-        total,
-        drawn,
-        cmd
-      ),
-    }
-  end
-
-  if untracked > 0 then
-    blocks[#blocks + 1] = {
-      kind = "text",
-      tone = "muted",
-      text = T("%d more untracked files are not in the diff — git's diff only covers tracked files; once they are committed they will show up here.",
-        untracked
-      ),
-    }
-  end
-
-  return blocks
-end
-
---- 一段"带标题的差异"：标题 + 颜色说明 + 那一份差异。
----
---- 三处地方要画同一套排版（工作区那一份、历史那一对、编辑区那一份），所以只写
---- 一遍。⚠️ 那句颜色说明**每次都要说**：换了一对提交之后看到的还是同一套红绿蓝
---- 灰，而界面上别的地方没有解释过它们。
----
---- ⚠️ **必须在 `diff_blocks` 之后**：那个是 `local function`，写在它前面的话这里的
---- `diff_blocks(...)` 会被编译成**全局**查找——加载照样成功，一画差异就报
---- "attempt to call a nil value"。2026-09-26 拿假宿主跑真代码时撞出来的。
-local function diff_section(nota, title, text, why, cmd, untracked)
-  local out = {
-    { kind = "heading", text = title },
-    { kind = "text", tone = "muted", text = T("(red = removed, green = added, blue = where, grey = file info)") },
-  }
-  if not text then
-    out[#out + 1] = { kind = "text", tone = "warn", text = T("Could not get the diff: %s", why) }
-  else
-    for _, b in ipairs(diff_blocks(nota, text, cmd, untracked)) do
-      out[#out + 1] = b
-    end
-  end
-  return out
-end
 
 -- ── 提交树 ────────────────────────────────────────────────────────────────
 -- 来由与两条点击路径写在上面那段（`show_graph` 那儿）；这里只有实现。
@@ -667,7 +454,7 @@ local function panel_content(nota)
       -- ⚠️ 按钮在差异**上面**：差异可以很长（最多 200 行），摆在按钮后面的话，
       -- 用户每次都得先滚过一整片红绿才够得着「提交…」。
       {
-        label = show_diff and T("Hide diff") or T("Show diff"),
+        label = diff.show() and T("Hide diff") or T("Show diff"),
         command = "toggle_diff",
       },
       -- ⚠️ 「看差异」是**在这一栏里**看（窄，长行要横着滚），「在编辑区看」是
@@ -716,7 +503,7 @@ local function panel_content(nota)
     end
   end
 
-  if show_diff then
+  if diff.show() then
     blocks[#blocks + 1] = { kind = "separator" }
     local text, why = get_diff(nota)
     for _, b in ipairs(diff_section(nota, T("Diff"), text, why, "git diff HEAD", untracked)) do
@@ -775,6 +562,11 @@ function M.on_load(nota)
     return s
   end
 
+  -- ⚠️ 搬去 `diff.lua` 的那一半**也要拿到这一份**：它是个独立模块，自己那个 `T`
+  -- 还是"原样返回"的桩。少了这一句，差异那几块里的英文原文在中文界面上不会翻
+  -- ——而它**不报错**，只是界面上那几句始终是英语。
+  diff.bind_text(T)
+
   -- 刷状态。
   nota.command.register("refresh", function()
     refresh(nota)
@@ -832,7 +624,7 @@ function M.on_load(nota)
 
   -- 折叠 / 展开差异。**只改显示，不碰 git**（不 add、不改文件）。
   nota.command.register("toggle_diff", function()
-    show_diff = not show_diff
+    diff.toggle()
     refresh(nota)
     return { ok = true }
   end)

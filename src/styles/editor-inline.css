@@ -1,0 +1,226 @@
+/**
+ * 编辑区里的**行内那一层**：高亮 / 上标 / 下标 / 下划线这四种标记生效之后的长相、
+ * 裸 HTML 与注释、脚注、智能标点的"仅显示时转换"。
+ *
+ * 2026-09-29 从 `editor.css` 里按功能拆出来（那一份当时 945 行）。分家的线是
+ * 「**外壳 / 行内 / 块级**」：本文件里每一条规则的选择器都落在**一个行内节点**上
+ * （`span` / `code` / `sub` / `sup` / `mark` 那一类），没有一条在排版整块。
+ *
+ * ⚠️ 与 `marks.css` 不是一回事：`marks.css` 画的是**光标旁边的提示**（"这里有个 `**`"），
+ * 本文件画的是**标记真的生效之后的样子**。两处都改同一个视觉时，先想清楚用户
+ * 此刻是"在标记里"还是"在看结果"。
+ *
+ * ⚠️ 这四种标记**本身**（解析、命令、输入规则）在 `editor/inline-marks.ts`。
+ */
+
+/* ── 行内标记的长相（高亮 / 上标 / 下标 / 下划线，2026-09-27）────────────
+ *
+ * 这四种标记**本身**在 `editor/inline-marks.ts`（解析、命令、输入规则都在那儿），
+ * 这里只管它们长什么样。选择器写的是它们真正渲染出来的 HTML 标签：
+ * `<mark>` / `<sup>` / `<sub>` / `<u>`（见规格里的 `html标签` 那一段）。
+ *
+ * ⚠️ **这一段必须写在 `editor.css` 里，不能搬去 `marks.css`**。判据不在"哪个
+ * 文件更合适"，在**导出**：`editor/export.ts` 那份"带样式"的 HTML 只嵌三份
+ * CSS —— `theme/base.css`（变量）、本文件、`katex.min.css`。`marks.css` 整个
+ * **不在里面**（它里面全是挂在 `.nota-*` 上的编辑期辅助物，导出时连类名一起
+ * 摘掉）。搬过去的后果不是"少几条样式"，是**导出/打印出来高亮和白纸一样**，
+ * 而且这件事只有真去导出一次才看得见。
+ *
+ * ⚠️ 四条都用 `:where(.editor-mount .ProseMirror)` 包着：权重只剩标签本身
+ * （0,0,1），文档主题将来要改 `<mark>` 的色号时一条普通规则就压得过，不必来
+ * 这里比权重——同上面 `hr` / `blockquote` 那两条的理由。
+ * ⚠️ 但 `<sup>` / `<sub>` 那两条里**必须**写 `line-height: 0`（理由见下），
+ * 而 `:where()` 压不掉它自己写的属性，所以文档主题若也要改行高，得同样显式写。
+ *
+ * ⚠️ 编辑区里的 `<mark>` **不是**查找命中（那个是 `.nota-find-hit` 的装饰，
+ * 在 `bars.css` 里），两者底色是分开的两个变量，见 `theme/base.css` 里
+ * `--mark-bg` 那一段。 */
+:where(.editor-mount .ProseMirror) mark {
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  /* 圆角与一点点左右内边距：不留的话高亮的两端会贴着字的边，看着像错位。 */
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+:where(.editor-mount .ProseMirror) sup,
+:where(.editor-mount .ProseMirror) sub {
+  /* ⚠️ `font-size` 是相对**当前**字号算的（`em`），所以正文那档字号一改，
+     上下标跟着走，不需要在这里再写一遍 `--doc-font-size`。 */
+  font-size: 0.75em;
+  /* ⚠️⚠️ `line-height: 0` 是这两条里**唯一真正要紧**的一句：上下标会把行盒
+     撑高（`vertical-align` 一挪，行高就按挪出去之后的边界算），于是一行里有
+     上标的段落比别的段落高出一截——**同一个文档里行距会一段一段地跳**。
+     这正是这个项目最烦的那种"看着像坏了、又说不清哪儿坏了"。
+     浏览器的 UA 样式表给的就是 0，这里明写一遍是因为上面说了"主题可以覆盖"。 */
+  line-height: 0;
+}
+
+/* ⚠️ 上下标各自还要一句 `position: relative`——借用的是 UA 那两个默认值
+   （`super` / `sub`）。**别自己写 `vertical-align: 0.5em` 之类**：那个偏移量
+   是相对字号算的，字号一档一档地变时自己写的值迟早会飘。 */
+:where(.editor-mount .ProseMirror) sup {
+  vertical-align: super;
+}
+
+:where(.editor-mount .ProseMirror) sub {
+  vertical-align: sub;
+}
+
+:where(.editor-mount .ProseMirror) u {
+  /* ⚠️ 下划线本来就有 UA 的默认值，这条是为了**和上面三条摆在一起**：改的人
+     一眼看见"四种标记的长相都在这一段里"，不必去猜下划线是不是漏了。
+     ⚠️ `text-decoration-color` 跟 `--fg-faint` 走而不是跟字色：满行黑字下面
+     再画一条同色的线，中文这种笔画密的字会显得糊（同 `hr` 那条的思路）。 */
+  text-decoration: underline;
+  text-decoration-color: var(--fg-faint);
+}
+
+/* ── 裸 HTML 与注释（2026-09-27）────────────────────────────────────────
+ *
+ * 两种节点都由 `editor/html-block.ts` 产出（行内的 `<u>` 那类归 preset 的
+ * `htmlSchema`），这里只管它们长什么样。**画的是源码**，不是渲染出来的 HTML——
+ * 那条边界写在那个文件的文件头里（第 2 条：渲染等于把用户写的标签交给浏览器
+ * 执行）。所以两者都按"一段不该被当成正文读的源码"来画：等宽、小一号、
+ * 淡、左边一条竖线。
+ *
+ * ⚠️ 这两条**必须住在 `editor.css`**（理由同上面行内标记那一段：带样式的导出
+ * 只嵌 `theme/base.css` ＋ 本文件 ＋ `katex.min.css`）。⚠️ 不同的是，
+ * **块级那条根本不会出现在导出里**（导出走序列化后的 Markdown，那边出来的是
+ * 真的 HTML 元素），会出现的是**行内那条** —— `span[data-type="html"]` 是
+ * 编辑区的 DOM，导出时会跟着正文一起被抄下来。
+ *
+ * ⚠️ 注释那一格靠 `data-comment` **属性**选，不靠类名：类名带 `nota-` 前缀的话
+ * 导出时会被剥掉（`editor/export.ts` 那条前缀规则），而这里的块级节点虽然
+ * 不进导出，行内那一条是进的——两处用同一套属性判据，读的人少记一样东西。 */
+:where(.editor-mount .ProseMirror) div[data-type="html-block"] {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: var(--fg-muted);
+  background: var(--bg-subtle);
+  border-left: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0.5em 0.75em;
+  margin: 0.8em 0;
+  /* ⚠️ `pre-wrap` 而不是 `pre`：用户写的一行 HTML 可能很长，`pre` 会让它
+     顶出正文列（水平滚动条长在整页上，不是长在这一块上）。`anywhere` 是给
+     `<div class="aaa-bbb-ccc">` 那种没有空格的串准备的。 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+:where(.editor-mount .ProseMirror) div[data-type="html-block"][data-comment="true"] {
+  /* 注释比普通 HTML 再淡一档、并加斜体：它是**写给自己看的**，不该和正文
+     抢注意力。⚠️ 只改颜色与字形，**不动字号与内边距**——动了的话，一段
+     注释插进正文会让上下两行的位置跳一下。 */
+  color: var(--fg-faint);
+  font-style: italic;
+}
+
+:where(.editor-mount .ProseMirror) span[data-type="html"] {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  color: var(--fg-faint);
+  background: var(--bg-subtle);
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* ── 脚注（2026-09-27）────────────────────────────────────────────────────
+ *
+ * 节点、解析、序列化**全部由 `preset-gfm` 提供**（`footnote_definition` ＋
+ * `footnote_reference`，见 `preset-gfm/lib/index.js:688-790`），本仓一行代码都
+ * 没写——缺的从来只是**长相**：不写这一段的话，脚注在编辑区里就是一个默认样式
+ * 的 `<dl>`（定义列表：标签顶格、正文缩进两格，和正文段落完全不像一路）。
+ *
+ * 长相取 Typora 的意思：**引用角标**是一个小小的上标方括号，**定义**排在正文
+ * 后面、字号小一档、左边一条竖线。
+ *
+ * ⚠️ `dl` / `dt` / `dd` 这三个标签是 preset 定的（`toDOM` 写死的），**别在
+ * CSS 里改标签名**——改了就等于样式和 DOM 对不上，而症状是"脚注完全没样式"
+ * 而不是报错。
+ *
+ * ⚠️ 定义是**块级节点**（`group: "block"`），所以它在正文流里排在哪儿就是哪儿
+ * ——用户在文档中间写 `[^1]: 说明` 的话，那块定义就出现在文档中间。这是
+ * Markdown 本身的形状（脚注定义可以在任意位置），不是本仓的排版选择。 */
+:where(.editor-mount .ProseMirror) sup[data-type="footnote_reference"] {
+  /* 角标本身。⚠️ `cursor: pointer` 只表示"这里能点"——**点它不会跳转**
+   *（跳转要一套"定义在哪"的索引，没做，见 `docs/10` §3 那一格的说明）。 */
+  color: var(--accent);
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
+  cursor: pointer;
+}
+
+:where(.editor-mount .ProseMirror) sup[data-type="footnote_reference"]::before {
+  content: "[";
+}
+
+:where(.editor-mount .ProseMirror) sup[data-type="footnote_reference"]::after {
+  content: "]";
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] {
+  margin: 0.8em 0;
+  padding: 0.4em 0 0.4em 0.9em;
+  border-left: 2px solid var(--border);
+  font-size: 0.9em;
+  color: var(--fg-muted);
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dt {
+  /* 标签那一行（`1`）。⚠️ 用 `::before` 补回方括号对，与角标同一副长相——
+     两处对不上时，读者没法把角标和定义对上号。 */
+  font-weight: 600;
+  color: var(--accent);
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dt::before {
+  content: "[^";
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dt::after {
+  content: "]";
+}
+
+:where(.editor-mount .ProseMirror) dl[data-type="footnote_definition"] dd {
+  /* ⚠️ 清掉 UA 那个 `margin-inline-start: 40px`：本仓的缩进由外层那条
+     左边线负责，两者叠在一起会缩进得莫名其妙。理由同上面 `blockquote` 那条。 */
+  margin: 0.2em 0 0;
+}
+
+/* ── 智能标点的「仅显示时转换」（2026-09-27）────────────────────────────────
+ *
+ * ⚠️ **只有「仅显示时转换」那一档用得上这一段**。另两档不需要 CSS：
+ * 「输入时转换」敲下去就是真的字符，「关闭」什么都不做。
+ *
+ * 做法是**一对**（`smart-punctuation.ts` 的 `算装饰` 两半都挂，缺一不可）：
+ *
+ * | 类名 | 是什么 | 干什么 |
+ * |---|---|---|
+ * | `.nota-smart-hide` | `Decoration.inline`，套在**原文**上 | 把原文压成 0 宽 |
+ * | `.nota-smart-show` | `Decoration.widget`，紧挨着前面 | 画出转换后的那个字符 |
+ *
+ * ⚠️ **`font-size: 0` 而不是 `display: none`**：`display: none` 会让那一段
+ * **完全不占位**，而 ProseMirror 的光标是按 DOM 里的文本节点走的——整段宽度
+ * 归零之后，光标停在原文中间时屏幕上找不到插入点（"光标不见了"）。
+ * `font-size: 0` 同样把宽度压成 0，但文本节点还在，PM 的坐标换算不会错位；
+ * 代价是**原文那两颗字符的位置上仍然看不见光标**，这一条如实记着。
+ *
+ * ⚠️ 组件那一侧的 `contenteditable="false"` 与 `ProseMirror-widget` 这个类
+ * **由 ProseMirror 自己加**（`prosemirror-view` 的 `WidgetViewDesc` 里那三行），
+ * 不需要本仓写——所以这里只管长相。
+ *
+ * ⚠️ **`.nota-smart-show` 故意不写任何字体声明**：它要跟周围正文一模一样
+ * （继承即可）。写死字号会在文档主题改了正文字号之后和上下文对不上。
+ *
+ * ⚠️ **这一段必须住在 `editor.css`**（与上面行内标记、裸 HTML 那两段同一条
+ * 理由）：带样式的导出只嵌三份 CSS，`marks.css` 那一族整个不在里面。
+ * ⚠️ 不过 `Render` 档**根本走不到导出**（`create-types.ts` 的 `标点` 那一格
+ * 明写着导出那条路不许传它）——所以这条理由在这里只是"跟着这一族放"，
+ * 真正的依据在上面那两段。 */
+:where(.editor-mount .ProseMirror) .nota-smart-hide {
+  font-size: 0;
+}

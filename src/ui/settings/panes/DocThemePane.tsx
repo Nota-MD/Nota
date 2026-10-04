@@ -36,7 +36,6 @@
 import { useT } from "@/i18n";
 import {
   ActionButton,
-  Note,
   NumberInput,
   Select,
   SettingRow,
@@ -89,27 +88,15 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
   return (
     <>
     <SettingsGroup title={t("Document Themes")}>
-      <SettingRow label={t("Current theme")} help={t("Affects the editing area only; the shell's appearance is unchanged.")}>
+      <SettingRow label={t("Current theme")}>
         <Value>{显示名(生效id)}</Value>
       </SettingRow>
 
-      <SettingRow
-        label={t("Themes folder")}
-        help={t("Drop in a custom .css to use it; a name matching a built-in theme replaces the built-in one.")}
-      >
+      <SettingRow label={t("Themes folder")}>
         {/* ⚠️ 这一行故意**没有** `htmlFor`：`<button>` 不是可标注控件，
             点标签文字会意外触发一次「打开文件夹」（见 `primitives.tsx`）。 */}
         <ActionButton onClick={onOpenThemesDir}>{t("Open…")}</ActionButton>
       </SettingRow>
-
-      <Note>
-        {t("Switch themes in")}
-        <strong>{t("the Theme menu")}</strong>
-        {t(" — that is the only place to switch; this page has no theme picker. To write your own: open the folder above and drop in a")}
-        {" "}
-        <code>.css</code>
-        {t(", and it will appear in the menu after a restart.")}
-      </Note>
     </SettingsGroup>
 
     {/* ── 正文排版（四个可调项）────────────────────────────────────────────
@@ -118,22 +105,18 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         `disabled={!d.custom_xxx}`，让"这项现在听谁的"一眼看得出来。
         ⚠️ 四项各自成组（而不是挤成一组八行）：组标题就是那一项的名字，
         与「段首缩进」那一组的写法一致，搜索也能按组名搜到。
-        ⚠️ 底下那个 Note **必须留着**：改这里的东西看着像改了文档，
-        而实际一个字节都不写盘——不说清会让人以为它跟导出有关。 */}
-    <SettingsGroup
-      title={t("Line height")}
-      help={t("Distance from one line of body text to the next. Follows the document theme by default.")}
-    >
+        ⚠️ **2026-10-04**：这里原本还有一条 `<Note>`，讲"改这里的东西看着像
+        改了文档、实际一个字节都不写盘"。按用户那一轮「全删」的口径删掉了。
+        那件事现在由底下「四项作用范围」那一组回答（一行 `Value`，
+        用户点名「全删」时我按"一行事实、不是一段话"留了下来）。 */}
+    <SettingsGroup title={t("Line height")}>
       <SettingRow>
         <Toggle
           checked={d.custom_line_height}
           onChange={(custom_line_height) => 写({ custom_line_height })}
         />
       </SettingRow>
-      <SettingRow
-        label={t("Line-height multiple")}
-        help={t("175 means 1.75× line spacing (Word's “Multiple 1.75”). Range 100–300.")}
-      >
+      <SettingRow label={t("Line-height multiple")}>
         <NumberInput
           value={d.line_height}
           min={100}
@@ -146,22 +129,14 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
       </SettingRow>
     </SettingsGroup>
 
-    <SettingsGroup
-      title={t("Paragraph spacing")}
-      help={t("Distance between paragraphs, from the bottom of one block to the top of the next. Follows the document theme by default.")}
-    >
+    <SettingsGroup title={t("Paragraph spacing")}>
       <SettingRow>
         <Toggle
           checked={d.custom_paragraph_gap}
           onChange={(custom_paragraph_gap) => 写({ custom_paragraph_gap })}
         />
       </SettingRow>
-      <SettingRow
-        label={t("Spacing size")}
-        help={t(
-          "85 means 0.85 of one character height. 0 leaves no gap between paragraphs. Range 0–300. ⚠ It covers only paragraphs, blockquotes, lists and tables in the body — headings and code blocks have spacing of their own and do not follow this.",
-        )}
-      >
+      <SettingRow label={t("Spacing size")}>
         <NumberInput
           value={d.paragraph_gap}
           min={0}
@@ -174,19 +149,11 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
       </SettingRow>
     </SettingsGroup>
 
-    <SettingsGroup
-      title={t("Body font")}
-      help={t("Follows the document theme by default.")}
-    >
+    <SettingsGroup title={t("Body font")}>
       <SettingRow>
         <Toggle checked={d.custom_font} onChange={(custom_font) => 写({ custom_font })} />
       </SettingRow>
-      <SettingRow
-        label={t("Font family")}
-        help={t(
-          "Three choices only, no free-text font name: a misspelled name raises no error in the browser, it just quietly substitutes another font — worse than not having the setting at all. ⚠ Nota bundles no fonts; these choices name fonts installed on this machine.",
-        )}
-      >
+      <SettingRow label={t("Font family")}>
         <Select
           value={d.font}
           options={[
@@ -200,22 +167,14 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
       </SettingRow>
     </SettingsGroup>
 
-    <SettingsGroup
-      title={t("Body font size")}
-      help={t("Size relative to the interface font size. Follows the document theme by default.")}
-    >
+    <SettingsGroup title={t("Body font size")}>
       <SettingRow>
         <Toggle
           checked={d.custom_font_size}
           onChange={(custom_font_size) => 写({ custom_font_size })}
         />
       </SettingRow>
-      <SettingRow
-        label={t("Size multiple")}
-        help={t(
-          "102 means 1.02× the interface font size. Range 80–200. ⚠ It is relative: raising the interface font size on the Appearance page already scales body text — that is pre-existing behaviour, and this item only provides a separate override.",
-        )}
-      >
+      <SettingRow label={t("Size multiple")}>
         <NumberInput
           value={d.font_size}
           min={80}
@@ -229,16 +188,14 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     </SettingsGroup>
 
     {/* ⚠️ 这一组**没有任何控件**，它不是设置项，是上面四项**共用的那句实话**。
-        单独成组（而不是写进某一项的 `help`）是因为它同时管四项；而它必须挂
+        单独成组（而不是挂进某一项的 `help`）是因为它同时管四项；而它必须挂
         一行 `.stg-row`/`Value`（就是本页「当前主题」那一行的写法），
-        理由见本文件顶上那条 `:not(:has(.stg-row))` 的规矩。 */}
+        理由见本文件顶上那条 `:not(:has(.stg-row))` 的规矩。
+        ⚠️ **2026-10-04 它没跟着那批 `<Note>` 一起删**：它只有一行、说的是
+        "改这儿不动文件"这件后果最大的事（不是描述、不是推荐），所以留下。
+        本页的 `help` / `<Note>` 都已经没有了，这是唯一还在的一句。 */}
     <SettingsGroup title={t("Scope of the four items above")}>
-      <SettingRow
-        label={t("Scope")}
-        help={t(
-          "They change how body text looks in the editing area only. ⚠ Not one byte is written into the file: source mode, other editors and exports all still see the original text. With all four off (the default) everything follows the document theme.",
-        )}
-      >
+      <SettingRow label={t("Scope")}>
         <Value>{t("Display only — the file is untouched")}</Value>
       </SettingRow>
     </SettingsGroup>
@@ -248,21 +205,9 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         {/* ⚠️ 这一行是这个组**画得出来的前提**，不是装饰：组里一行 `.stg-row`
             都没有时 `settings.css` 会把整组 `display: none` 掉（搜索那一套规则的
             副作用）。理由和实测经过见本文件顶上的文件头。 */}
-        <SettingRow
-          label={t("Light mode uses")}
-          help={t("While the dark set is in effect, switching back to light shows this one — the two are independent.")}
-        >
+        <SettingRow label={t("Light mode uses")}>
           <Value>{显示名(settings.document_theme)}</Value>
         </SettingRow>
-        <Note>
-          {t("What is shown above is")}
-          <strong>{t("the dark-mode set")}</strong>
-          {t(": dark mode is on right now, and Appearance has “Use a separate set of document themes for dark mode” turned on. Switch back to light, or turn that off in Appearance, and this cell goes back to the light-mode set.")}
-          <br />
-          {t("Switching themes from the menu always changes")}
-          <strong>{t("the set you are looking at")}</strong>
-          {t(" — so picking one now changes the dark-mode set; the light set is unaffected.")}
-        </Note>
       </SettingsGroup>
     )}
     </>

@@ -24,7 +24,7 @@
 
 import type { InsertImageAction } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { Note, Select, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
+import { Select, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
 import { ImageUploadGroup } from "./ImageUploadGroup";
 import { paneWriter, type PaneProps } from "./props";
 
@@ -56,30 +56,16 @@ export function ImagePane(props: PaneProps) {
   return (
     <>
       {/*
-        ⚠️ 这一段说**整页**的事，所以摆在最外面、最前面（说某一组的注记要放进
-        那一组里，见 `primitives.tsx` 里 `Note` 那几条；摆错位置的症状是
-        "看着像下一组的标题"）。
-      */}
-      <Note>
-        <strong>{t("This page's two halves live in two files.")}</strong>
-        {t("The settings above (insert action, scope, syntax preferences) are in")}
-        {" "}
-        <code>settings.toml</code>
-        {t(", and “General → Reset to Defaults” resets them; the upload group below is in")}
-        {" "}
-        <code>~/.config/nota/image-upload.toml</code>
-        {" "}
-        {t(" (mode 0600, because it holds your token), and is")}
-        <strong>{t("not reset")}</strong>
-        {t(" — wiping the token along with everything else is the kind of loss you only notice after clicking.")}
-      </Note>
+        ⚠️ **2026-10-04：这里原本有一段说"整页"的 `<Note>`**（讲的是"上面那三个
+        开关只管插进来的那一下、不会回头改已经写进文档的地址"）。按用户那一轮
+        「删掉各种菜单下面大段大段的无用ai味描述」、尺度选「全删」的口径删掉了。
+        那一页现在只有设置名 ＋ 控件，`docs/06` §5.44 那组截图是这一条的证据。
 
-      <SettingsGroup
-        title={t("When inserting an image")}
-        help={t(
-          "⚠ Every option except Nothing special writes an extra file to disk (the original stays where it is), so this must be chosen explicitly — the default is Nothing special.",
-        )}
-      >
+        ⚠️ 摆位置的那条规矩**没变**：说整页的注记摆在最外面、最前面，说某一组的
+        注记要放进那一组里（见 `primitives.tsx` 里 `Note` 那几条；摆错位置的
+        症状是"看着像下一组的标题"）。
+      */}
+      <SettingsGroup title={t("When inserting an image")}>
         <SettingRow>
           <Select
             value={i.insert_action}
@@ -89,12 +75,7 @@ export function ImagePane(props: PaneProps) {
         </SettingRow>
 
         {i.insert_action === "copy-to-custom" && (
-          <SettingRow
-            label={t("Custom path")}
-            help={t(
-              "An absolute path is used as-is; a relative path is resolved against the folder the document is in (not the app's working directory). ⚠ A missing folder is created.",
-            )}
-          >
+          <SettingRow label={t("Custom path")}>
             <TextInput
               value={i.custom_dir}
               width="lg"
@@ -113,12 +94,7 @@ export function ImagePane(props: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("Images from web URLs")}
-          help={t(
-            "Off by default: a remote image usually means the original URL on purpose (so it is still there on another machine). ⚠ When on, inserting a remote image makes Nota download it over the network into the folder above — the app fetching an address you already wrote in the document. It is a network action, so the default is off.",
-          )}
-        >
+        <SettingRow label={t("Images from web URLs")}>
           <Toggle
             checked={i.apply_to_remote}
             onChange={(apply_to_remote) => 写({ apply_to_remote })}
@@ -127,31 +103,18 @@ export function ImagePane(props: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup title={t("Image syntax preferences")}>
-        <SettingRow
-          label={t("Prefer relative paths")}
-          help={t(
-            "⚠ It only goes one way: an absolute path you give is rewritten relative to the document's folder. Addresses that are already relative are kept as they are; the copy Nota makes or downloads itself is always relative and ignores this setting.",
-          )}
-        >
+        <SettingRow label={t("Prefer relative paths")}>
           <Toggle
             checked={i.prefer_relative}
             onChange={(prefer_relative) => 写({ prefer_relative })}
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("Add ./ to relative paths")}
-          help={t("⚠ Only meaningful when the result is a relative path (one already starting with ./ or ../ gets nothing added).")}
-        >
+        <SettingRow label={t("Add ./ to relative paths")}>
           <Toggle checked={i.add_dot_slash} onChange={(add_dot_slash) => 写({ add_dot_slash })} />
         </SettingRow>
 
-        <SettingRow
-          label={t("Escape URLs when inserting")}
-          help={t(
-            "Spaces become %20, `?` becomes %3F and so on. ⚠ Non-ASCII characters are left alone (an escaped URL is unreadable), and so are ? # % in web addresses (they mark query strings and anchors, and what you paste is usually already encoded — escaping again would turn %20 into %2520). Only applied at the moment of inserting; addresses already written in the document are never rewritten.",
-          )}
-        >
+        <SettingRow label={t("Escape URLs when inserting")}>
           <Toggle checked={i.escape_url} onChange={(escape_url) => 写({ escape_url })} />
         </SettingRow>
       </SettingsGroup>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 上下双箭头（Nota 自己画的）：状态栏右下角「这里能展开一个菜单」那个记号。
+     用户 2026-09-30 照 Typora 点名要的。⚠️ **上下两个箭头，不是一个**——
+     单个向下箭头在别处（`folio-move-down-symbolic`）的意思是"把这一项往下挪"，
+     而这里要说的是"可以往上弹出一层选择"。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<g fill="none" stroke="#2e3436" stroke-width="1.28" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4.40 6.40L8.00 2.80L11.60 6.40"/>
+<path d="M4.40 9.60L8.00 13.20L11.60 9.60"/>
+</g>
+</svg>

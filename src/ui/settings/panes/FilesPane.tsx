@@ -12,7 +12,7 @@
 
 import type { DropAction, FileFilter, ImportAction, StartupAction, TreeSort } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { ActionButton, Note, Select, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
+import { ActionButton, Select, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
 export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
@@ -81,20 +81,14 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
 
   return (
     <>
-      <SettingsGroup
-        title={t("Startup")}
-        help={t("What Nota does first when it starts. The three settings build on each other; “folder” means the file tree in the left sidebar.")}
-      >
+      <SettingsGroup title={t("Startup")}>
         <SettingRow>
           <Select value={f.startup} options={STARTUP} onChange={(startup) => 写({ startup })} />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Outline")}>
-        <SettingRow
-          label={t("Allow collapsing and expanding")}
-          help={t("Whether headings in the sidebar outline can be collapsed and expanded. When off, the outline is always fully expanded and you have to scroll to find anything in a long list.")}
-        >
+        <SettingRow label={t("Allow collapsing and expanding")}>
           <Toggle
             checked={f.outline_collapsible}
             onChange={(outline_collapsible) => 写({ outline_collapsible })}
@@ -102,14 +96,8 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Saving & Recovery")}
-        help={t("“Autosave” applies only to documents that have been saved once; a new document has nowhere to write back to, so it is not covered")}
-      >
-        <SettingRow
-          label={t("Auto Save")}
-          help={t("Write changes back to the file after this much idle typing. ⚠️ It goes to disk through the same path as Ctrl+S (including the “sync the editor first” step), so the bytes are identical to a manual save; a failed write still shows a toast — only the success case stays silent (otherwise it would interrupt every half minute).")}
-        >
+      <SettingsGroup title={t("Saving & Recovery")}>
+        <SettingRow label={t("Auto Save")}>
           <Select
             value={String(settings.autosave_seconds)}
             options={AUTOSAVE}
@@ -117,20 +105,14 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("Auto Save when switching files")}
-          help={t("Write this file's changes to disk before switching to another tab. ⚠️ Clicking a tab, opening a file and creating a document all count as switching; closing a document does not — that one has its own “Save and Close”, and if the user chose “Discard and Close”, saving here would undo their choice.")}
-        >
+        <SettingRow label={t("Auto Save when switching files")}>
           <Toggle
             checked={f.autosave_on_switch}
             onChange={(autosave_on_switch) => 写({ autosave_on_switch })}
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("Restore unsaved drafts")}
-          help={t("Bring back the content left over from a crash that never made it to disk.")}
-        >
+        <SettingRow label={t("Restore unsaved drafts")}>
           <ActionButton
             disabled
             title={t("Not implemented yet: this needs a separate copy made before writing to disk, while Auto Save currently writes straight to the original file — once written there is no draft left. See the note at the end of this group.")}
@@ -139,10 +121,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           </ActionButton>
         </SettingRow>
 
-        <SettingRow
-          label={t("Clear recent files history")}
-          help={t("Clear the “recent files” list. Only the records — the files themselves are untouched.")}
-        >
+        <SettingRow label={t("Clear recent files history")}>
           {/* ⚠️ 2026-09-27 接上：在这之前它是灰的，而那句 `title` 写着
               "目前没有「最近打开」列表"——那份列表现在在（侧栏「文档列表」页、
               文件菜单那一层、主页那一块），记录本身由 `ui/useSession.ts` 管。 */}
@@ -157,30 +136,14 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
             ⚠️ 它必须**留在这一组里面**：`.stg-note` 落在组内容区时才会跨两栏对齐
             （`settings.css` 那条 `.stg-group-body > .stg-note`）；摆到组外面就变成
             整页宽、贴着最左边，看起来像下一组的标题。 */}
-        <Note>
-          {t("The two Auto Save settings above")}
-          <strong>{t("do work")}</strong>
-          {t(": it really writes to disk when the time comes (the Ctrl+S path), and a failed write is reported.")}
-          {t("The “recent files” list is in place too (the “Document List” page in the sidebar, the menu under File, and the block on the home screen all read it), so “Clear recent files history” really does clear it now.")}
-          <br />
-          {t("Only one item is still missing:")}
-          <strong>{t("“Restore unsaved drafts”")}</strong>
-          {t("needs a “copy kept before writing to disk” first — Auto Save currently writes straight to the original file, so once it is written there is no draft to restore.")}
-        </Note>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("File tree / library")}
-        help={t("Only affects what the sidebar tree shows; nothing on disk is changed.")}
-      >
+      <SettingsGroup title={t("File tree / library")}>
         <SettingRow label={t("Show hidden files")}>
           <Toggle checked={f.show_hidden} onChange={(show_hidden) => 写({ show_hidden })} />
         </SettingRow>
 
-        <SettingRow
-          label={t("Which files to show")}
-          help={t("With Show all, a single node_modules folder can fill the tree with irrelevant entries, so the default is Markdown and plain text only.")}
-        >
+        <SettingRow label={t("Which files to show")}>
           <Select value={f.tree_filter} options={FILTER} onChange={(tree_filter) => 写({ tree_filter })} />
         </SettingRow>
 
@@ -188,20 +151,12 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
             的请求一起递给宿主（`ui/tree-options.ts` 顶上写了为什么）。
             同一批还把上面那两个开关接上了线——它们从 2026-09-24 起就在这一组里，
             而宿主那两个判断是写死的，拨了等于没拨。 */}
-        <SettingRow
-          label={t("Sort order")}
-          help={t("Folders always come first, whichever order you pick. The two time-based orders put the newest on top.")}
-        >
+        <SettingRow label={t("Sort order")}>
           <Select value={f.tree_sort} options={SORT} onChange={(tree_sort) => 写({ tree_sort })} />
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Drag and Drop")}
-        help={t(
-          "What happens when you drag a file or folder onto the Nota window. ⚠️ Images are not affected by these three settings: dropping a picture always inserts it at the cursor.",
-        )}
-      >
+      <SettingsGroup title={t("Drag and Drop")}>
         <SettingRow label={t("When a folder is dropped")}>
           <Select
             value={f.drop_folder}
@@ -218,12 +173,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow
-          label={t("When an importable file is dropped")}
-          help={t(
-            "Files that are neither Markdown nor plain text (.docx / .epub / .pdf and similar). ⚠️ Nota does not convert formats — this setting only decides whether text files get opened and whether the others get a word of explanation.",
-          )}
-        >
+        <SettingRow label={t("When an importable file is dropped")}>
           <Select
             value={f.drop_importable}
             options={IMPORT}
@@ -232,10 +182,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup
-        title={t("Default extension")}
-        help={t("Extension used when saving a new document. ⚠ Only affects new documents — files that already have a name keep their own extension.")}
-      >
+      <SettingsGroup title={t("Default extension")}>
         <SettingRow>
           <TextInput
             value={f.default_extension}

@@ -60,7 +60,7 @@ import {
   算装饰,
   认节点,
 } from "../src/editor/math-view";
-import { 假元素, 当前焦点, 清焦点, 装假document } from "./fake-dom";
+import { 假元素, 当前焦点, 清焦点, 装假document, type 假事件 } from "./fake-dom";
 import { 插公式块 } from "../src/editor/insert";
 import { 不转义行首井号 } from "../src/editor/lax-heading";
 
@@ -843,6 +843,176 @@ await 测("没有原文处理器时**原样返回**，不自己造一条", () =>
   const 处理 = 不转义行首井号(undefined);
   等(处理({ value: "#标签" } as never, null as never, null as never, null as never), "#标签");
 });
+
+组("八、命令补全弹窗的**接线**（`math-suggest.ts` 那一层自己测在 `math-suggest.test.ts`）");
+
+/**
+ * 在源码框里"敲"一串字：改 `value`、把光标放到末尾、派发一次 `input`。
+ *
+ * ⚠️ 这一串正是**浏览器**会做的事（`math-view.ts` 听的就是 `input`），
+ * 而不是直接喊内部函数——所以"接线断了"这种事测得出来。
+ */
+function 敲进(dom: 假元素, 源: string): 假元素 {
+  const 框 = 找(dom, "nota-math-source");
+  if (!框) throw new Error("没找到源码框");
+  框.value = 源;
+  框.setSelectionRange(源.length, 源.length);
+  框.派发("input");
+  return 框;
+}
+
+/** 按一个键（走源码框上那条 `keydown`）。 */
+function 按键(框: 假元素, 键: string): 假事件 {
+  return 框.派发("keydown", { key: 键 });
+}
+
+await 测("面板里挂着那一格弹窗；起手是藏着的", () => {
+  const { 视角 } = 建(块("E=mc^2"), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+
+  const 弹 = 找(dom, "nota-math-suggest");
+  断言(弹, "弹窗该在面板里");
+  等(弹?.hidden, true, "起手藏着");
+  // ⚠️ 挂**在面板里**（不是 `document.body`，像 `lang-picker.ts` 那样）：
+  //    两条理由写在 `math-suggest.ts` 的文件头，这里量的是结论那一半。
+  等(数(找(dom, "nota-math-panel") as 假元素, "nota-math-suggest"), 1, "在面板那棵树里");
+  // 块公式用 `div`（行内那档用 `span`，见下面那条）。
+  等(弹?.tagName, "DIV", "块那档的根元素");
+});
+
+await 测("⚠️ 只读实例连弹窗都不挂（同面板与悬浮预览那两条）", () => {
+  const { 视角 } = 建(块("E=mc^2"), 块位置, true);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+  等(找(dom, "nota-math-suggest"), null, "只读那棵树里不该有它");
+});
+
+await 测("行内公式那档：弹窗是 `span`（整棵 NodeView 活在一个 `<span>` 里）", () => {
+  const { 视角 } = 建(行内("x"), 行内位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+  const 弹 = 找(dom, "nota-math-suggest");
+  断言(弹, "该有弹窗");
+  等(弹?.tagName, "SPAN", "行内那档的根元素");
+});
+
+await 测("敲进 `\\fr`：弹窗自己开了，第一条是 `\\frac`", () => {
+  const { 视角 } = 建(块(""), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+
+  敲进(dom, "\\fr");
+  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
+  等(弹.hidden, false, "弹窗开了");
+  等(数(弹, "nota-math-suggest-item"), 1, "`\\fr` 只挑得到一条");
+  等待名字(弹, "\\frac");
+});
+
+await 测("⚠️ 光标不在命令里时它收起来（敲了别的字不该留着上一列）", () => {
+  const { 视角 } = 建(块(""), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+  敲进(dom, "\\fr");
+  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
+  等(弹.hidden, false, "先开着");
+  敲进(dom, "x+1");
+  等(弹.hidden, true, "没有当场了 → 收起来");
+});
+
+await 测("⚠️ 回车收下：写进文档的是替换后的源码，面板**留着**（不是退出编辑）", () => {
+  const { 视角, 取state } = 建(块(""), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+
+  const 框 = 敲进(dom, "\\fr");
+  按键(框, "Enter");
+
+  const 节点 = 取state().doc.nodeAt(块位置);
+  等(取源码(节点 as never), "\\frac{}{}", "文档里已经是插入体");
+  等(框.value, "\\frac{}{}", "源码框跟着变");
+  // `\frac{}{}`：0=\ 1=f 2=r 3=a 4=c 5={ 6=} … → 光标落在 6（第一个 `{}` 里面）
+  等(框.选区[0], 6, "光标落进第一个 `{}`");
+  断言(dom.classList.contains("nota-math-editing"), "面板还开着（收的是命令，不是退出编辑）");
+  等((找(dom, "nota-math-suggest") as 假元素).hidden, true, "弹窗自己收了");
+});
+
+await 测("⚠️ Esc 的第一下只收弹窗、第二下才退出编辑", () => {
+  const { 视角 } = 建(块(""), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+  const 框 = 敲进(dom, "\\fr");
+  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
+
+  按键(框, "Escape");
+  等(弹.hidden, true, "第一下：弹窗收了");
+  断言(dom.classList.contains("nota-math-editing"), "第一下面板还在（这是那条「只收候选」）");
+
+  按键(框, "Escape");
+  断言(!dom.classList.contains("nota-math-editing"), "第二下才退出编辑");
+});
+
+await 测("点一条候选：收下它（走的是同一个「写进源码框」的口子）", () => {
+  const { 视角, 取state } = 建(块(""), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+
+  const 框 = 敲进(dom, "\\i");
+  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
+  const 行 = (弹 as unknown as { childNodes: 假元素[] }).childNodes;
+  断言(行.length >= 2, "`\\i` 该挑出不止一条");
+  const 想要 = 行[1] as 假元素;
+  const 名字 = 想要.childNodes.find((c) =>
+    c.classList.contains("nota-math-suggest-name"),
+  )?.textContent;
+
+  想要.派发("mousedown");
+  等(取源码(取state().doc.nodeAt(块位置) as never), `\\int_{}^{}`, "文档里是第二条的插入体");
+  等(框.value.startsWith(名字 ?? "？"), true, `源码框里是 ${名字}`);
+  等(弹.hidden, true, "点完收起来");
+});
+
+await 测("⚠️ `aria-activedescendant` 写在**源码框**上（焦点一直在那儿）", () => {
+  const { 视角 } = 建(块(""), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+  const 框 = 敲进(dom, "\\i");
+  等(框.getAttribute("aria-activedescendant"), "nota-math-suggest-item-0", "开着时指着第一条");
+
+  按键(框, "ArrowDown");
+  等(框.getAttribute("aria-activedescendant"), "nota-math-suggest-item-1", "往下挪一格");
+
+  按键(框, "Escape");
+  等(框.getAttribute("aria-activedescendant"), null, "收起来之后这一笔要抹掉");
+});
+
+await 测("⚠️ 丢焦点：弹窗收起来（面板归**选区**管，那是另一条判据）", () => {
+  const { 视角 } = 建(块(""), 块位置);
+  const dom = 视角.视图?.dom;
+  if (!dom) throw new Error("没建出 dom");
+  const 框 = 敲进(dom, "\\fr");
+  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
+  等(弹.hidden, false, "先开着");
+
+  框.派发("blur");
+  等(弹.hidden, true, "丢了焦点就收");
+  // ⚠️ 面板**故意还开着**：`面板该开` 的两条判据是「装饰说当前」或「框里有焦点」，
+  //    这会儿装饰还是说当前的（选区没动）。这一条断言是**有意**写下来的——
+  //    它把"弹窗归焦点、面板归选区"这条分界钉住，将来改坏了当场看得见。
+  断言(dom.classList.contains("nota-math-editing"), "面板还在（装饰还说当前）");
+
+  // 真的离开这一块（退出编辑：选区搬走）之后，两条一起收。
+  按键(框, "Escape");
+  断言(!dom.classList.contains("nota-math-editing"), "退出编辑后面板收了");
+  等(弹.hidden, true, "弹窗当然也收着");
+});
+
+/** 断言弹窗第一条候选的名字是哪一个。 */
+function 等待名字(弹: 假元素, 期望: string): void {
+  const 行 = (弹 as unknown as { childNodes: 假元素[] }).childNodes[0];
+  const 名字 = 行?.childNodes.find((c) => c.classList.contains("nota-math-suggest-name"));
+  等(名字?.textContent, 期望, "第一条候选的名字");
+}
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 

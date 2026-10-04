@@ -188,6 +188,21 @@ export type PanelNode =
    */
   | { kind: "heatmap"; spec: PanelHeatmap }
   /**
+   * 一串**记录卡**（`kind = "cards"`，2026-10-04 加，写作统计要的）。
+   *
+   * 用户当天甩来两张运动手表的截图当参考（「运动记录」那两屏），一句「卡片是
+   * 说一个框框」定下了版式：**一条记录一个圆角框**——左边一颗圆图标，右边一个
+   * 大数 ＋ 一行小字，框底下那行是这些记录的**汇总**。
+   *
+   * ⚠️ 与 `fields` 的分工是**主次**：`fields` 是"一行一项、左标签右值"的**表**
+   * （用于概览），这里是"一条记录一块牌子"。两者都是小字，但一个平铺、一个立着。
+   * ⚠️ 与 `share` 的分工是**去处**：`share` 是"要**带走**的一张海报"（1080×1350，
+   * 自带品牌与页脚），这里是"面板上的一行"。同一份数据想两处都出，插件报两次。
+   * ⚠️ 框里那条窄曲线与 `chart` 是**同一份数据、两种去处**（"此刻这一屏"vs
+   * "这一条记录里"），不是两个真相源。
+   */
+  | { kind: "cards"; spec: PanelCards }
+  /**
    * 认不出的 `kind`。**带着原始 JSON 的简写**，画一句"不认识"——
    * 静默丢掉的话，插件作者看到的是"面板少了一块"，而没有任何线索。
    */
@@ -378,6 +393,62 @@ export interface PanelHeatmap {
   grid: 热力图;
 }
 
+/**
+ * 记录卡左边那颗圆图标画哪一个（`kind = "cards"` 的 `icon`）。
+ *
+ * ⚠️ **这是语义，不是名字**：插件报的是"这一条是什么"（本轮 / 今天 / 长期 /
+ * 整篇），画成什么样由宿主定（同 `PanelChart` 那条"插件说**什么**、宿主说**怎么
+ * 显示**"）。所以换图标＝改这里和 `PanelBody.tsx` 里那张表，插件一行都不用动。
+ * ⚠️ 认不出的值一律当 `"record"`：画一颗中性的圆点，而不是留一块空白——
+ * 空白看着像"这一条坏了"。
+ */
+export type PanelCardIcon = "round" | "today" | "long" | "doc" | "record";
+
+/** 记录卡列表里的一条（`kind = "cards"`）。 */
+export interface PanelCard {
+  /** 左边那颗圆图标画哪一个。 */
+  icon: PanelCardIcon;
+  /** 那个大字（`1240`）。⚠️ 字符串不是数（同 `PanelChart.value`）；空串画破折号。 */
+  value: string;
+  /** 大字后面那颗单位（`字`）。空串不画。 */
+  unit: string;
+  /** 下面那行小字（`本轮 · 时长 00:34:32`）。空串不画那一行。 */
+  caption: string;
+  /**
+   * 框里那条**窄曲线**。空数组 = 只画字、不画线（与 `PanelChart.points` 同规矩：
+   * 少于两个点不画、最多留最后 200 个）。
+   *
+   * ⚠️ 它是**这一条记录自己的**那条线（本轮＝这一轮的分速），不是"最近几分钟"
+   * ——那一条在 `chart` 那边。
+   */
+  points: number[];
+}
+
+/** 记录卡列表底下那行汇总（`总计 12345 字`）。 */
+export interface PanelCardsTotal {
+  /** 左边那个标签（`总计`）。空串就不画标签。 */
+  label: string;
+  /** 那个数。空串画破折号。 */
+  value: string;
+  /** 数后面那颗单位。空串不画。 */
+  unit: string;
+}
+
+/**
+ * 一串**记录卡**（`kind = "cards"`，2026-10-04 加，写作统计要的）。
+ *
+ * 出处见上面 `PanelNode` 里那一条（用户给的运动手表参考图）。这一层只有**数与字**
+ * ——框的圆角、图标、曲线怎么画全在 `PanelBody.tsx` 和 `styles/panel-data.css`。
+ */
+export interface PanelCards {
+  /** 那一串框上面那行小标题（`写作记录`）。空串不画。 */
+  title: string;
+  /** 这些框。空数组 = 这个块什么都不画（插件该在这一步之前就不发这一块）。 */
+  items: PanelCard[];
+  /** 底下那行汇总。`null` = 不画那一行（没有可汇总的东西时）。 */
+  total: PanelCardsTotal | null;
+}
+
 /** 一块内容最多这么多项（和宿主的 `面板节点上限` 同量级，但**各自把关**）。 */
 const 每块上限 = 200;
 
@@ -539,20 +610,29 @@ function 输入框(raw: Record<string, unknown>): PanelInput {
 }
 
 /**
- * `chart` 块（`kind = "chart"`）。
+ * 一条曲线上的点：**只收数，且只留最后 `每块上限` 个**。
  *
  * ⚠️ **`NaN` / `Infinity` 必须在这里滤掉，不能留给渲染层**：它们进了 SVG 的
  * 路径指令就变成 `M NaN 12`，浏览器要么整条线不画、要么画出一根穿过面板的
  * 怪线——而症状看着像"图画错了"，其实是数据里有一个坏点。
  * ⚠️ 顺带把非数字的项也滤掉（`"12"` 这种字符串不认）：曲线上的点只能是数，
  * 而"字符串能不能当数"这种判据放这儿一次就够了，别让渲染层再猜一遍。
+ * ⚠️ 切的是**前面**（最旧的），`slice(-n)` 留的是尾巴：图上最右边那段才是"刚才"。
+ *
+ * ⚠️ **三处共用**（`chart` / `share` / `cards`）：2026-10-04 加 `cards` 时那一段
+ * 是抄第三遍，抄的那两遍已经在各自注释里写着"同上面那条判据"——与其写三遍再
+ * 指望三处一起改，不如让它只有一处。
+ */
+function 曲线点(v: unknown): number[] {
+  const 原 = Array.isArray(v) ? v : [];
+  return 原.filter((n): n is number => typeof n === "number" && Number.isFinite(n)).slice(-每块上限);
+}
+
+/**
+ * `chart` 块（`kind = "chart"`）。
  */
 function 图块(raw: Record<string, unknown>): PanelChart {
-  const 原 = Array.isArray(raw.points) ? raw.points : [];
-  const points = 原
-    .filter((n): n is number => typeof n === "number" && Number.isFinite(n))
-    // ⚠️ 切的是**前面**（最旧的），`slice(-n)` 留的是尾巴——理由见 `PanelChart` 上那条。
-    .slice(-每块上限);
+  const points = 曲线点(raw.points);
   return {
     value: 文本(raw.value),
     unit: 文本(raw.unit),
@@ -570,17 +650,14 @@ function 图块(raw: Record<string, unknown>): PanelChart {
 /**
  * `share` 块（`kind = "share"`）。
  *
- * ⚠️ 与 `图块` 共用同一条"数字才收"的判据（`NaN` / `Infinity` / 字符串都滤掉）：
- * 一个坏点进了卡片的路径指令，整条曲线就不画了，而那一头看着像"数据是空的"。
+ * ⚠️ 与 `图块` 共用同一条"数字才收"的判据（`曲线点()`）：一个坏点进了卡片的
+ * 路径指令，整条曲线就不画了，而那一头看着像"数据是空的"。
  * ⚠️ 文案一律走 `文本()`（长度上限 ＋ 类型收窄），**一个字都不进 HTML 或属性**：
  * 它们最后会进 SVG 的 `<text>`，而 SVG 是**XML**——`&` 和 `<` 在里面是有含义的
  * （`ui/share-card.ts` 那边还会再转义一次，两道都在，谁漏了都不至于出洞）。
  */
 function 分享卡(raw: Record<string, unknown>): PanelShare {
-  const 原 = Array.isArray(raw.points) ? raw.points : [];
-  const points = 原
-    .filter((n): n is number => typeof n === "number" && Number.isFinite(n))
-    .slice(-每块上限);
+  const points = 曲线点(raw.points);
 
   const stats: PanelShareStat[] = [];
   if (Array.isArray(raw.stats)) {
@@ -623,6 +700,55 @@ function 分享卡(raw: Record<string, unknown>): PanelShare {
  * 分享卡横轴的主刻度最多几档。比面板那 8 档宽——理由见上面那一句。
  */
 const 卡刻度上限 = 13;
+
+/**
+ * 认得的图标名。**不在这里的名字一律当 `"record"`**（画一颗中性的圆点）。
+ *
+ * ⚠️ 白名单而不是"把插件给的字符串透给渲染层"：那个字符串最后要变成
+ * `<path d="…">` 之类的**结构**，而"插件给的字符串能不能变成结构"正是本仓
+ * 从头到尾在拆的那颗雷（`PanelBody.tsx` 文件头）。名字对不上顶多画错一颗图标，
+ * 透一个名字进去就可能是一段注入。
+ */
+const 图标名: PanelCardIcon[] = ["round", "today", "long", "doc", "record"];
+
+/** `raw.icon` → 白名单里的一个；认不出、或者压根没写，都给 `"record"`。 */
+function 图标(raw: unknown): PanelCardIcon {
+  const s = typeof raw === "string" ? raw : "";
+  return 图标名.includes(s as PanelCardIcon) ? (s as PanelCardIcon) : "record";
+}
+
+/**
+ * `cards` 块（`kind = "cards"`）。
+ *
+ * ⚠️ **一条都不给就什么都不画**（返回空 `items`，渲染层画一块空气）：这里不替
+ * 插件决定"那该说句什么"——"没有记录"那句话该由插件按自己的话讲
+ * （`plugins/stats/main.lua` 里那句 muted），而不是让宿主编一句通用文案。
+ */
+function 记录卡列表(raw: Record<string, unknown>): PanelCards {
+  const items: PanelCard[] = [];
+  for (const 项 of 表数组(raw.items)) {
+    items.push({
+      icon: 图标(项.icon),
+      value: 文本(项.value),
+      unit: 文本(项.unit),
+      caption: 文本(项.caption),
+      points: 曲线点(项.points),
+    });
+  }
+
+  // 汇总那行：`total` 不是一个表就当没有（`null`）。⚠️ 与 `items` 不同，这里
+  // **不判空**——一行"总计 0 字"是插件有意报的（今天真的一字没写），
+  // 而"少发一个 `total`"才是"这一块没有可汇总的"。
+  const total = 是表(raw.total)
+    ? {
+        label: 文本(raw.total.label),
+        value: 文本(raw.total.value),
+        unit: 文本(raw.total.unit),
+      }
+    : null;
+
+  return { title: 文本(raw.title), items, total };
+}
 
 /**
  * `x_minor` 读成一个 0~10 的整数。认不出来就是 0（= 不画小格）。
@@ -740,6 +866,8 @@ function 一块(raw: Record<string, unknown>): PanelNode {
       return { kind: "chart", spec: 图块(raw) };
     case "share":
       return { kind: "share", spec: 分享卡(raw) };
+    case "cards":
+      return { kind: "cards", spec: 记录卡列表(raw) };
     case "heatmap":
       return {
         kind: "heatmap",

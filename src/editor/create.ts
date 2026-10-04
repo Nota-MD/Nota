@@ -25,7 +25,6 @@ import {
   editorViewCtx,
   editorViewOptionsCtx,
   serializerCtx,
-  parserCtx,
   remarkStringifyOptionsCtx,
 } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
@@ -41,13 +40,13 @@ import { replaceAll } from "@milkdown/kit/utils";
 // 前两个是 kit 的依赖（间接装上了），plugin-prism 不是——所以它在 package.json
 // 里必须显式列出来，漏了就是一句 "Cannot find module"。
 import { prism } from "@milkdown/plugin-prism";
-// ⚠️ `mathInlineInputRule` 是**拿掉**的那一条，见下面 `.use(math.filter(...))`。
-import { katexOptionsCtx, math, mathInlineInputRule } from "@milkdown/plugin-math";
-import { diagram } from "@milkdown/plugin-diagram";
+// ⚠️ `mathInlineInputRule` / `mathBlockInputRule` 是**按引用拿掉**的那两条，
+// 见下面 `.use(math.filter(...))`。
+import { katexOptionsCtx, math, mathBlockInputRule, mathInlineInputRule } from "@milkdown/plugin-math";
 
-// 开头那段 YAML front matter 的拆分/拼回。**只在这个文件的边界上用**，
+// 开头那段 YAML front matter 的拆分/拼回/改写。**只在这个文件的边界上用**，
 // 别处不许各自去切一刀（判据只有一份）。理由见它的文件头。
-import { 拆前置块, 拼回前置块 } from "@/editor/front-matter";
+import { 拆前置块, 拼回前置块, 换前置块, 新建前置块模板 } from "@/editor/front-matter";
 
 // ⚠️ **命令白名单那一串（`toggleStrongCommand` … `setAlignCommand`）2026-09-28
 // 整段搬去了 `./command-table`**——搬的原因只有行数一个（本文件当时 **1010** 行，
@@ -69,23 +68,13 @@ import { 滚动到位置 } from "./scroll-into-view";
 import { 摘看法, 设看法, type 改动预览, type 预览看法 } from "./review";
 import { 预览中吗, 预览插件, 设预览 } from "./review-prose";
 
-// ⚠️ 副作用导入，**不是多余的**：把 refractor 的语言表从 36 种补到 400 个
-// （297 种语言 + 别名，比如 ts→typescript、sh→bash）。
-//
-// 为什么需要这一行：`@milkdown/plugin-prism` 内部是
-// `import { refractor } from "refractor"`，而 `refractor` 这个入口指向
-// `lib/common.js`——**里面只 register 了 36 种**（c / cpp / java / python /
-// js / ts / rust / go 那一批）。`lib/all.js` 才是全量那份 297 行的注册清单。
-//
-// ⚠️ 两边是**同一个单例**（都从 `refractor/lib/core.js` 拿那一个 `refractor`），
-// 所以这里注册的，plugin-prism 那边立刻看得见——它读语言表是**惰性**的
-// （`getBlockDecorations(node, pos, refractor, languages = refractor.listLanguages())`
-// 里那是默认参数，调用时才求值），只要这行 import 在 `Editor.make()` 之前跑完即可。
-//
-// 代价是打包体积。**这是有意的取舍**：桌面应用没有下载时间这一说，
-// 而"语言不在列表里"是插件和用户都会撞上的问题。真嫌大时再换成
-// 按需 import，但那时要自己维护依赖顺序（php 必须排在 markup-templating 后面）。
-import "refractor/all";
+// ⚠️ refractor 的全量语言表（297 种）**2026-10-04 起不在这个文件里加载了**
+// （第 27 项）：原先这里有一句 `import "refractor/all"` 的副作用导入，把
+// ~500 kB 压进首屏；现在那一包是 `code-block.ts` 里的**动态 import**，
+// 本文件不再需要它——`codeBlockView` 下面就从这个文件引进来，模块一进
+// 就发起请求，而且 `@milkdown/plugin-prism` 读语言表是惰性的、两边同一个
+// 单例，late 注册照样看得见（全部理由和新出现的那个时序窗口写在
+// `code-block.ts` 的加载块上）。
 
 // 光标所在块的 Markdown 标记（`##`、`>`、`-`……）浅灰画在块左边。
 // 这是"标记不消失、只淡化"的口径，理由写在它自己的文件头上。
@@ -108,10 +97,11 @@ import { 段落不写空行, 文档别导出空根 } from "./empty-paragraph";
 // 代码块的右下角那一条：语言选择器 / 复制 / 折叠。用 NodeView 的地方之一
 // （另一处是下面的图表块），理由写在它自己的文件头上。
 import { codeBlockView } from "./code-block";
-// 图表块（```mermaid）：把 `@milkdown/plugin-diagram` 那个只会把源码塞进
-// `<pre>` 的节点换成真图。⚠️ 上游插件**一处都没调过 `mermaid.render`**，
-// 渲染这件事只能宿主自己写——契约（`attrs.value` 是唯一真相、identity 不变）
-// 和取舍都写在它自己的文件头上。
+// 图表块（```mermaid）的**节点**（schema/remark 转换/输入规则）2026-10-04 起
+// 是本仓自己的（`diagram-node.ts`，第 27 项）：`@milkdown/plugin-diagram` 整个
+// 退役——它只做了这几件不含 mermaid 的小活，却把 mermaid 静态打进首屏。
+// 视图（真图、改源码）在 `diagram-view.ts`，mermaid 从那里**动态**加载。
+import { 图表解析, 图表规格插件, 图表输入规则 } from "./diagram-node";
 import { diagramView } from "./diagram-view";
 // 公式（`$x$` / `$$ … $$`）：上游那两个节点是 `atom`，却一个 NodeView 都没有
 // ——点一下只是整块选中，写进去的字还会被 `toMarkdown` 丢掉（源码在两处、
@@ -123,16 +113,21 @@ import { mathView } from "./math-view";
 // ——于是视频文件得到一颗破图标。判据（只看后缀）、为什么只改屏幕不改源码、
 // 以及两件没验的事都写在它自己的文件头上。
 import { 视频视图 } from "./video-view";
-// 行内公式的**打字**规则：`$x$` 与 `$$x$$`。上游那条认不出 `$$…$$`（敲到
-// `A$$bb$` 就把 `$bb$` 变成公式了），这里换掉它。正则、守卫、与解析器的
-// 实测对照表都在它自己的文件头上。
-import { 公式输入 } from "./math-input";
+// 公式的**打字**规则，三条：`$x$`、`$$x$$` 当场变行内公式；`$$` ＋**回车**建一块
+// 空块公式。上游那两条（行内、块）都被这里换掉了，理由与实测对照表在它自己的
+// 文件头上。
+import { 公式块回车, 公式输入 } from "./math-input";
 // 行内公式**用了几个 `$`**：用户敲两个就存两个（2026-09-27 用户拍板「保留」）。
 // ⚠️ 三件事在这个文件里：`math_inline` 的规格**加了一个 `dollars` 属性**（用官方的
 // `extendSchema`，不复制上游规格）、一个 `$remark` 插件把源码里那个数标进 mdast、
-// 以及一条按数选上游处理器的序列化 handler。少接一处就是**静默失效**（存盘悄悄
-// 变回 `$x$`），全貌与边界在它自己的文件头。
+// 一条按数选上游处理器的序列化 handler。少接一处就是**静默失效**（存盘悄悄变回
+// `$x$`），全貌与边界在它自己的文件头。
+// （2026-10-04 这天还接过第四件——`收严公式`，值紧挨空格的 `$…$` 还原成正文——
+// 用户当天拍了「整条撤回」，已经从这条链上摘掉了。）
 import { 标美元数, 行内公式处理器, 行内公式规格 } from "./math-delim";
+// ⚠️ `$` 当钱写的口径（第 54 项）：那条规则**包在分词器上**，不是 mdast 后处理，
+// 理由（要 micromark 自己重扫）见那个文件头。
+import { 收严美元 } from "./math-currency";
 // 敲在行内原子（公式、图片、硬换行）后面的那颗空格：WebKit 会把它换成不换行
 // 空格，于是存盘多出一个用户没敲过的字符（U+00A0，不换行）。⚠️ 修法是**在序列化
 // 那一步换回来**（`原子后的空格` 包一层 `handlers.text`），**不是**在编辑器里
@@ -194,6 +189,10 @@ import { 粘贴处理 } from "./paste";
 // **自动配对 ＋ Tab 跳出右半边**（`(` ⇒ `()`，`Tab` 跨过右边那颗闭括号）。
 // ⚠️ 它也要抢 `Tab`，必须排在 `indent` 前面。
 import { 配对处理 } from "./auto-pair";
+// **表格里的 `Tab` / `Shift+Tab`**（走到下一格 / 上一格；最后一格再按 `Tab`
+// 就加一行）。⚠️ 它抢的也是 `Tab`，所以**必须排在 `indent` 前面、`配对处理`
+// 后面**——理由与那张表在 `./table-tab` 的文件头。
+import { 表格Tab } from "./table-tab";
 // **Emoji**（`:smile:` → 😄 的短代码替换 ＋ 打 `:smi` 弹候选的补全面板）。
 // ⚠️ 两条都是"只动正在敲的那几个字符"：替换只在敲下词尾空白那一下发生，
 // 面板**只画不改**（`Plugin.view` ＋ 挂在 body 上的 fixed 浮层，文档树一个
@@ -221,6 +220,7 @@ import { katexOptionsFor } from "./math-macros";
 import { 列宽插件, 列宽拖动插件, 应用列宽 } from "./table-width";
 // 「光标现在在什么状态」。格式化工具栏的高亮与菜单那十条表格命令的灰/亮
 // 都问它——**只读不写**，见它自己的文件头。
+import { 选区快照插件 } from "./caret-snapshot";
 import { 光标状态插件 } from "./command-state";
 import { 写作模式插件, 滚到当前行, 设写作模式, type 写作模式 } from "./writing-modes";
 // 查找与替换。**匹配逻辑在那边**，这里只把它的命令接到句柄上；
@@ -274,7 +274,17 @@ import type {
  * `editor/slash.ts` 的文件头。
  */
 export async function createEditor(options: CreateOptions): Promise<EditorHandle> {
-  const { root, initialMarkdown, onChange, readOnly = false, physics = false } = options;
+  const {
+    root,
+    initialMarkdown,
+    onChange,
+    readOnly = false,
+    physics = false,
+    // ⚠️ 默认 `false` = **宽松档**，与 `Settings.strict_markdown` 的默认值一致
+    // （见 `atx.ts` 文件头那句"默认关意味着把 Nota 从来的行为放宽"）。
+    // 调用方忘了传的后果只是"`#你好` 在正文里也画成标题写法"，不会写坏任何东西。
+    strict = false,
+  } = options;
   // ⚠️ 单独取出来而不是解构：它可选，而 `.use([])` 与 `.use([插件])` 这两种
   // 写法在 Milkdown 里都是合法的——不传时给空数组，比给一个"什么都不做的
   // 插件"干净（后者每次事务都要跑一趟）。
@@ -546,13 +556,20 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // 也就是"这条插件不装"——`docs/05` §4.20c。
     .use(配对处理(智能符号))
     .use(clipboard)
+    // ⚠️ **必须排在下面那条 `indent` 前面**：`@milkdown/plugin-indent` 绑的
+    // 就是 `Tab`，而且它不认表格（不分位置地往格子里塞两颗空格，那两颗会写进
+    // 文件）。这一条只管"选区在表格某一行里"，其余一律放行——见 `./table-tab`。
+    .use(表格Tab())
     .use(indent)
     .use(trailing)
     .use(instantRender)
     .use(taskList)
     .use(表格输入规则)
     .use(表格输入)
-    .use(标题回车成块)
+    // ⚠️ **它是个工厂，要收 `strict`**（2026-09-29 起）：那份"标题写法"的
+    // 加粗提示在宽松档下要认 `#你好`、严格档下不认——判据一处
+    // （`atx.ts::atxPrefix`），四个消费者一起守。详见 `heading-on-enter.ts` 文件头。
+    .use(标题回车成块(strict))
     // ⚠️ **行首退格散标题**（2026-09-26 第二轮）：标题前按退格一次变回段落，
     // 不逐级降级。它是 `$shortcut`（走 keymap 的 `priority` 排序），
     // **不是**上面那条 `$prose`——为什么非得这样、为什么放在这个位置都
@@ -569,33 +586,55 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     .use(文档别导出空根)
     .use(codeBlockView)
     .use(prism)
-    // ⚠️ **摘掉一条输入规则**（2026-09-26，和上面标题那条同一个手法）：
-    // 上游那条行内公式规则（`mathInlineInputRule`，正则 `/(?:\$)([^$]+)(?:\$)$/`）
-    // 认不出 `$$…$$`——用户敲到 `A$$bb$` 那一下就把尾巴上的 `$bb$` 变成公式了，
-    // 等他把最后一个 `$` 补上，落进文档的已经不是公式。**"行内 `$$…$$`
-    // 打不出来"的根因就是它**。换成 `公式输入` 那两条（多一条守卫、多一条
-    // `$$` 规则），边界与实测表在 `math-input.ts` 文件头。
-    // ⚠️ `math` 也是**纯数组**（`plugin-math/lib/index.es.js` 尾部那个
-    // `[…].flat()`），所以按引用滤得掉。**块公式那条规则照旧**（`$$` ＋ 空格
-    // 起一块），摘的只有行内这一条。
-    .use(math.filter((p) => p !== mathInlineInputRule))
+    // ⚠️ **摘掉两条输入规则**（行内那条 2026-09-26，块那条 2026-10-04，
+    // 和上面标题那条同一个手法）：
+    //   · `mathInlineInputRule`（正则 `/(?:\$)([^$]+)(?:\$)$/`）认不出 `$$…$$`
+    //     ——用户敲到 `A$$bb$` 那一下就把尾巴上的 `$bb$` 变成公式了，等他补上
+    //     最后一个 `$`，落进文档的已经不是公式。**"行内 `$$…$$` 打不出来"的
+    //     根因就是它**。换成 `公式输入` 那两条。
+    //   · `mathBlockInputRule`（正则 `/^\$\$\s$/`）**一个空格就凭空建出一块空的
+    //     块公式**——用户想空一行/想打个空格，屏幕上多出一块空白。它自己的注释
+    //     写的是「press **enter**」，实现跟注释不符（2026-10-04 用户拿 Typora
+    //     截图点的就是这条）。换成 `公式块回车`——**回车**才建块。
+    // 两处的边界与实测表都在 `math-input.ts` 文件头。
+    // ⚠️ `math` 是**纯数组**（`plugin-math/lib/index.es.js` 尾部那个
+    // `[…].flat()`），所以按引用滤得掉，**摘一条不影响别的**。
+    .use(math.filter((p) => p !== mathInlineInputRule && p !== mathBlockInputRule))
     .use(公式输入)
+    // ⚠️ **块公式的回车**（2026-10-04）：`$$` 那一段按回车 → 一块空的
+    // `math_block`，源码框当场打开。放在这里只是为了挨着上面那两条（同一个
+    // 话题），**顺序上没有讲究**——上游那条挂在输入规则上，跟回车撞不上。
+    .use(公式块回车)
     // ⚠️ **必须是紧挨着的三条，而且顺序不能动**：
     //   ① `math` 那份（上面）先把上游的 `math_inline` 规格登记进去；
     //   ② `行内公式规格` 用 `extendSchema` 出一份**同 id** 的，登记时由
     //      `upsertById` **就地替换**（位置不变——`utils.ts:11-20` 那段注释说得很
     //      清楚：换位置会让 ProseMirror 的 content-match 走岔、然后无限递归）；
-    //   ③ `标美元数` 这个 remark 插件要排在 `math` 后面（转换器按注册顺序跑）。
-    // ② 与 ③ 谁先谁后无所谓，**但都不能排到 ① 前面**。
+    //   ③ `标美元数` 这个 remark 插件排在最后。
+    // ⚠️ 顺序上只有一处讲究：② 那一步是 schema 登记（跟 ①③ 不是一回事），
+    // 只要不排到 ① 前面。（2026-10-04 曾经在这两条中间夹过第四条 `收严公式`，
+    // 并对 ③ 有"必须排在它前面"的要求；那条当天就被用户拍了撤回，一起撤掉的。）
     .use(行内公式规格)
     .use(标美元数)
+    // ⚠️ **`$` 当钱写的时候不算公式**（`docs/07` 第 54 项，2026-10-04）：这一条
+    // **必须排在 `math` 后面**——它要做的第一件事是**从处理机上把 `remark-math`
+    // 挂的那条 tokenizer 取出来包一层**（`math-currency.ts` 的 `找上游美元`），
+    // 排到前面去表里还没有那条，这个插件就白挂了（**静默失效**，一声不响）。
+    // 判据、代价与"认不出的形状"全在那个文件头。
+    .use(收严美元)
     // ⚠️ 这里原来挂着 `原子后的空格`（`handleTextInput`，把 WebKit 塞进原子后面
     // 的那颗 NBSP 挡在文档之外）——**2026-09-26 开窗实测之后整个搬走了**：
     // 挡在编辑器里会让那颗空格在"紧接着再敲一个字符"时**从文档里消失**
     // （丢内容，比文件里多个不可见字符严重）。现在它挂在 **remark** 那一串上，
     // 只在写 Markdown 那一刻换字符，**编辑器里随 WebKit 去**。
     // 经过、三次实测与代价见 `atom-space.ts` 文件头。
-    .use(diagram)
+    // 图表块：节点与转换是 `diagram-node.ts` 那三件（第 27 项起本仓自造，
+    // 原先 `@milkdown/plugin-diagram` 那一坨的活），视图在 `diagram-view.ts`。
+    // ⚠️ `图表解析` 排在 `gfm` 之后（它改的是解析完的树）；`图表输入规则`
+    // 只是 `` ```mermaid `` 那一条，与 gfm 的表格规则不抢。
+    .use(图表规格插件)
+    .use(图表输入规则)
+    .use(图表解析())
     .use(diagramView)
     // 公式那两个节点（`$x$` / `$$ … $$`）：上游一个视图都没给，这里补上
     // 「点一下就地改」。不在编辑时行内直接渲染；编辑时正文就是源码（`$` 半透明）、
@@ -612,15 +651,24 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // 因为这个文件是**唯一建实例的地方**；只读那两处一样需要它，否则
     // 分屏右边和导出文件里还是破图标。
     .use(视频视图)
-    // ⚠️ 宽松标题那条显示层装饰**2026-09-26 删掉了**（原位置就是这一行）。
-    // 用户裁定 `#你好` 不许变位置变大小，所以两种模式下正文的长相现在
-    // **完全一样**；严格模式只剩源码模式 / 大纲 / 标签页标题三处（见上面
-    // `readOnly` 下面那条注释）。理由与用户原话在 `lax-heading.ts` 文件头。
+    // ⚠️ 宽松标题那条显示层装饰**2026-09-26 删掉过一次、2026-09-29 以另一个
+    // 形状回来了**（原位置就是这一行）。经过：先被用户否掉（`#你好` 不许变
+    // 位置变大小），后来他报「严格模式关闭后 `#标题` 还是无法正常显示」——
+    // 真问题是**大纲 / 源码模式 / 标签页标题三处都认宽松标题、只有正文不认**。
+    // 现在的形状是「**文字按标题排版、井号不动**」（用户 2026-09-29 选的长相）：
+    // 井号后面那段文字按该级标题的字号/字重排，井号一个字不碰。落在
+    // `heading-on-enter.ts` 那条装饰里（不在这一行，跟着 `标题回车成块` 走，
+    // 所以它**吃 `strict`**——严格档下 `#你好` 不是标题，不许这么画）。
     // 盯着光标那一条。**只读**，见 `command-state.ts`。
     .use(options.onCommandState ? [光标状态插件(options.onCommandState)] : [])
     // 查找。⚠️ **和上面那条一样是可选的**：分屏右侧那个只读预览窗格
     // 不挂（它没有光标、也不会被查找），不传就少一条插件。
     .use(options.onFindStatus ? [查找插件(options.onFindStatus)] : [])
+    // 选区变了就报一次（`docs/07` 第 14 项，2026-10-04 加）。⚠️ **同样可选**：
+    // 只有可编辑那一侧要报——预览窗格没有"用户选中了什么"可言，导出用的
+    // 离屏实例更是连用户都没有。理由与那一整套坐标怎么定，见
+    // `caret-snapshot.ts` 顶上那张量测表。
+    .use(options.onSelection ? [选区快照插件(options.onSelection)] : [])
     // 专注 / 打字机。**恒挂**（可编辑那一份）：两个开关随时可能被拨，
     // 而"挂不挂插件"一旦绑进 `EditorPane` 的依赖，拨一下就得重建实例。
     // 只读的预览窗格不挂——那边没有光标，也没有"正在写的那一段"。
@@ -705,9 +753,51 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
    * 到真正被调用时早已赋值，不存在暂时性死区那一类问题。
    */
   function 跑一条命令(name: EditorCommand, payload?: CommandPayload): void {
+    // ⚠️ **front matter 那一条在这一层拦下来**，不进 `command-table`：那张表
+    // 只吃 `(editor, payload)`，够不着这个闭包里的 `前置块`，也够不着
+    // `onChange`（见 `command-table.ts` 里 `Exclude` 那一段）。
+    if (name === "frontMatter") {
+      写前置块(payload?.frontMatter);
+      return;
+    }
     // ⚠️ 表与派发逻辑 2026-09-28 搬去了 `./command-table`（行数），这里只剩
     // 一层薄壳——两个用家（`runCommand` 与斜杠菜单）仍然走同一个入口。
     跑命令(editor, name, payload);
+  }
+
+  /**
+   * 换掉开头那段 front matter（`docs/07` 第 64 项）。`undefined` = **确保有一段**。
+   *
+   * 三条含义写在 `CommandPayload.frontMatter` 那一格上，这里只说三件实现上的事：
+   *
+   * ⚠️ **它绕过了 `markdownUpdated` 那条路，自己调 `onChange`**。改的是文档树
+   * **之外**的那一段，序列化出来的正文前后一模一样，上面那条
+   * `if (markdown !== prev)` 于是不会成立——不自己报的话，宿主根本不知道这段
+   * 变了：标签不脏、撤销栈里没有、**自动保存会把这次改动丢掉**。
+   *
+   * ⚠️ **编辑器看不见、撤销栈里也没有它**（它不在文档树里）。所以这里派不出
+   * 事务，也无从"撤销"——`Ctrl+Z` 撤的是正文，撤不回这一段。这是"不引
+   * `remark-frontmatter`"那条取舍的直接代价，如实写在 `docs/05` 与 `docs/07`。
+   *
+   * ⚠️ 只读实例（分屏右侧预览、导出用的离屏实例）**什么都不做**：那两份连
+   * `onChange` 都没有，改了也传不出去，只会在自己的闭包里留下一份假的文本。
+   */
+  function 写前置块(内文: string | null | undefined): void {
+    if (readOnly) return;
+    const 新块 =
+      内文 === undefined
+        ? 前置块 ?? 换前置块(null, 新建前置块模板)
+        : 换前置块(前置块, 内文 ?? ""); // `null` 与空白串一个意思：删掉这一段
+    if (新块 === 前置块) return; // 一个字都没变（含"本来就有、这次只是确保"）
+    前置块 = 新块;
+    // ⚠️ 报出去的是**整篇**（拼回前置块），与 `getMarkdown`、`markdownUpdated`
+    // 那两条路同一个口径——调用方手里那份文本永远要跟磁盘上那份对得上。
+    onChange?.(
+      拼回前置块(
+        前置块,
+        editor.action((ctx) => ctx.get(serializerCtx)(ctx.get(editorViewCtx).state.doc)),
+      ),
+    );
   }
 
   /** 把插入点挪到文档最开头。⚠️ 只给"刚打开一篇文档"，见接口上那条长注释。 */
@@ -777,6 +867,28 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
 
     focus: 聚焦,
     focusAtStart: 光标到开头,
+
+    // **在光标处插一段**（插件的 `nota.document.insert_at_cursor`，`docs/07`
+    // 第 14 项）。⚠️ 守卫与 `脚本里的插入` 同一个形状：少判 `readOnly` 会在
+    // 分屏右边那个只读预览格子里把文档改掉（`heading-on-enter.ts` 顶上那段
+    // 记着这条教训）。
+    //
+    // ⚠️ `tr.insertText(文本, from, to)`：**选区非空时是替换**，这正是
+    // "把选中的内容换成插件给的那段"该有的样子。光标落在插进去的内容**末尾**
+    //（ProseMirror 的默认行为），所以插件连着插两段是"后一段接在前一段后面"。
+    //
+    // ⚠️ 焦点不抢过来：这条路是**插件**发起的，用户可能正在别处（面板里）
+    // 点着，把焦点抢回正文会让他刚点的那一下白点。要抢的是"用户主动按了
+    // 某个按钮"那类动作，不在这一条里。
+    插入在光标处: (text: string) => {
+      if (readOnly) return false;
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        const { from, to } = view.state.selection;
+        view.dispatch(view.state.tr.insertText(text, from, to));
+      });
+      return true;
+    },
 
     setWritingModes: (模式: 写作模式) =>
       editor.action((ctx) => 设写作模式(ctx.get(editorViewCtx), 模式)),
@@ -866,7 +978,14 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       //（它自己的 selection 还在原处，所以命令能正确生效），但**光标不会
       // 自己回到正文**——用户点完「加粗」接着打字，字会打到一个没有焦点的
       // 编辑区里，看起来就是"菜单点完就卡住了"。
-      聚焦();
+      //
+      // ⚠️ **`frontMatter` 那一条不抢焦点**：它多半是从正文上方那个 YAML
+      // 编辑框里发出来的（`ui/EditorPane.tsx` 每次提交都发一条），每次提交
+      // 都把光标从输入框里拽回正文的话，用户根本没法在框里连着打第二个字。
+      // 理由与"斜杠菜单不走这一层"是同一条：**焦点本来就在该在的地方**。
+      // （从菜单栏点那一条进来的情形代价也小：焦点留在菜单上，用户点一下
+      // 编辑框就行——反过来"光标不知什么时候被夺走"要难查得多。）
+      if (name !== "frontMatter") 聚焦();
 
       // 这一侧恒为 `true`（见 `EditorHandle.runCommand` 那段）。
       return true;
@@ -878,16 +997,10 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   };
 }
 
-/**
- * 把 markdown 文本解析成 ProseMirror 文档（用于校验、或将来做"粘贴前预检"）。
- *
- * 单独导出来是因为 `docs/03` 里那条口径：**任何进编辑器的文本都要先过一遍解析**。
- * 直接 `replaceAll` 一个语法坏掉的串，remark 会按它的理解尽力解析——结果不是
- * "报错"而是"一段看起来对但不完全对的内容"，那种错最难发现。
- */
-export function parseMarkdown(editor: Editor, markdown: string): unknown {
-  return editor.action((ctx) => {
-    const parser = ctx.get(parserCtx);
-    return parser(markdown);
-  });
-}
+// ⚠️ 这里**曾经**导出一个 `parseMarkdown(editor, markdown)`（拿 `parserCtx` 把文本
+// 解析成 ProseMirror 文档然后返回），2026-10-04 删掉了，第 31 项就此结清。删的
+// 理由：它**没有任何调用点**，而且那条"进编辑器的文本要先过一遍解析"的口径
+// 靠它也落实不了——`replaceAll` 内部走的本来就是同一个解析器（remark 宽容、
+// 不抛错），先手动解析一遍再把结果扔掉，可观测的行为一个字节都不会变。
+// "语法坏掉的串只能靠肉眼发现"是真的，但它是 remark 的本性，不是一个
+// 没人调用的函数能治的。口径原文在 `docs/03` 的缺陷表里，那里已经同步结清。

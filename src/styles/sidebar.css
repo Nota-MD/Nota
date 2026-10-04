@@ -21,6 +21,102 @@
   border-right: 1px solid var(--border);
   background: var(--bg-subtle);
   min-height: 0;
+  /* ⚠️ 这两行是给右缘那条拖动把手（`ui/SidebarResizer.tsx`）定位用的：
+     它 `position: absolute; right: 0`，而它必须**相对这一栏**、不是相对
+     `.app-body`——挂错基准的话把手会跑到窗口最右边（插件栏那条边上）。 */
+  position: relative;
+  /* 开合那一下的小动画（2026-09-30，用户点名的「展开侧边栏加一个小动画，
+     不用很长，不要对使用产生影响」）。
+     ⚠️ **只动 `width`，不动 `transform`**：这一栏在 flex 行里，
+     `translateX` 滑出去的话编辑区**不会跟着变宽**，中间会留一条空的。
+     ⚠️ **160ms** 是"不用很长"那一句的落点——比它长就开始觉得"点完要等一下"。
+     ⚠️ `overflow: hidden` 是让内容被**裁掉**而不是被挤扁（见下面那条 `min-width`）。 */
+  overflow: hidden;
+  transition: width 160ms ease, border-right-width 160ms ease;
+}
+
+/* 收起来了（`ui/Sidebar.tsx` 的 `折叠`：**不卸载，只加这个类**）。
+   ⚠️ `border-right-width` 一起收，否则那一栏收成 0 宽之后**还留着一条 1px
+   的竖线**杵在编辑区最左边。 */
+.sidebar-collapsed {
+  width: 0;
+  border-right-width: 0;
+}
+
+/* ⚠️ 栏里那两块**必须保持原宽**：不写的话，动画那 160ms 里文件树与页签会
+   跟着容器一路重排（文字一行行跳），看着像抖；写了就是"整块往左挪出视野"，
+   这也正是用户要的那个观感。宽度交给外层 `overflow: hidden` 去裁。 */
+.sidebar-head,
+.sidebar-body {
+  min-width: var(--sidebar-width);
+}
+
+/* ⚠️ **拖动把手那一瞬间不能有动画**：`ui/SidebarResizer.tsx` 是逐像素直接写
+   `--sidebar-width` 的，带着 `transition` 拖起来会像抹了阻尼、慢半拍
+   （用户要的是"不影响使用"）。拖动期间那一栏本来就挂着 `body.resizing-col`
+   （同一个组件加的），借它把动画停掉即可。
+   ⚠️ 只停这一条，别写成 `transition: none` 打在 `:root` 或 `body` 上。 */
+body.resizing-col .sidebar {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}
+
+/* ── 右缘那条可以拖的把手（2026-09-30）──────────────────────────────────
+ *
+ * 用户照 Typora 点名：「侧边栏右侧可以自由拖动」。拖动本身的判据全在
+ * `ui/SidebarResizer.tsx` 里，这里只管三件事：**命中区比看得见的线宽**、
+ * **光标是 `col-resize`**、**只有悬停/拖动时才看得见**。
+ *
+ * ⚠️ 6px 而不是 1px：贴着边框边缘精确点中一条 1px 的线，指针稍微快一点就
+ * 滑开了（同 `tabs-status.css` 里 `.tab` 那条"命中区要够大"的道理）。
+ * 线本身还是 1px（`::after`），所以平时看着和原来那条边框一样。
+ *
+ * ⚠️ `z-index` 要压过 `.sidebar-body` 里那棵树：文件树的行铺满整栏，
+ * 不提升层级的话把手会被行盖住——**看着有、点不着**。
+ */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 5;
+  cursor: col-resize;
+  /* 别让它把点击吞掉之后又选中文字（拖动期间还挂了 `body.resizing-col`，
+     那一条管的是指针滑出这 6px 之后的情形）。 */
+  touch-action: none;
+}
+
+/* 悬停 / 拖动时那一条强调色的竖线。⚠️ 用 `::after` 而不是给把手本身
+   上底色：把手是 6px 的命中区，画成 6px 宽的色带太粗，看着像栏宽变了。 */
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.sidebar-resizer:hover::after,
+body.resizing-col .sidebar-resizer::after {
+  opacity: 1;
+}
+
+/* 拖动期间：整窗口都是 `col-resize`，而且不许选中任何东西。
+   ⚠️ 挂在 `body` 上而不是只在把手上：指针一快就滑出那 6px，
+   这时候光标变回箭头、文字被拖蓝，看着像那把拖动断了。 */
+body.resizing-col {
+  cursor: col-resize;
+  user-select: none;
 }
 
 /* 页签行 + 右上角那颗 ×。

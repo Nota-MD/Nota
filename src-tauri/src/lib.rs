@@ -18,6 +18,7 @@
 pub mod cli;
 pub mod commands;
 pub mod devserver;
+pub mod diagnostics;
 pub mod diff;
 pub mod document;
 pub mod error;
@@ -33,6 +34,8 @@ pub mod mcp;
 pub mod native_menu;
 pub mod pandoc;
 pub mod pandoc_format;
+/// pandoc 的**探测那一半**（2026-09-29 从 `pandoc.rs` 拆出，见那边的模块注释）。
+pub mod pandoc_probe;
 pub mod paths;
 pub mod pdf_print;
 pub mod plugin;
@@ -123,24 +126,35 @@ pub fn run() {
     // 不当主人**，只把自己变成一根管子，把 stdio 接到那一份的 socket 上。
     // AI 于是够到的是用户**此刻正在编辑的那份文档**（那正是这条功能的意义）。
     //
-    // 形态二：一份都没跑（或者转接失败）→ **照常往下走**，这一份就是那一份
-    // Nota，并在 `setup` 里就地服务 MCP（见那一节 ⑨）。
+    // ⚠️⚠️ **三种结局全都在这里退出，一种都不许"继续往下走"**（2026-09-29 改）。
+    // 原来"一份 Nota 都没跑"是**照常启动**（开窗、抢单实例的位置、就地服务
+    // MCP），代价是：MCP 客户端每次重启它那个服务器进程，**用户桌上就多一个
+    // 他没要过的 Nota 窗口**，而客户端走的时候我们**故意不关窗**（用户正在
+    // 编辑的东西不该被 AI 带走），于是窗口留下来 —— 用户报的原话就是
+    // 「现在会不停新建窗口」。完整账在 `mcp` 模块头「为什么形态 2 不开窗」。
     //
-    // ⚠️ 所以 `--mcp` **不禁用单实例**——与隔壁 `--new-window` 正好相反。
-    // 理由：形态二里这一份必须占住那个位置，否则用户在它开窗之后双击一个
-    // .md，会凭空多出第三个 Nota 进程。
+    // ⚠️ 所以 `--mcp` 今天**既不建窗也不抢单实例的位置**了：它只有"转接"这
+    // 一件事，转接不成就说一句人话退出。
     //
-    // ⚠️ 代理跑完就 `exit(0)`：那时 AI 客户端已经关掉了 stdin，这一份进程
-    // **什么都没建**（没建窗、没加载插件、没抢位置），跟隔壁"已转交"那条
-    // 一模一样，没有清理可做。
+    // ⚠️ 说给 **stderr**：stdout 是协议通道（虽然这会儿会话已经结束），
+    // 而 stderr 是 MCP 客户端会原样记进它自己日志的那一路——用户看不见我们的
+    // 界面，这句就是他能拿到的唯一一句解释。
     let 要开_mcp = cli::要开_mcp(std::env::args_os());
     if 要开_mcp {
-        match mcp::接上() {
-            Ok(()) => std::process::exit(0),
-            Err(e) => crate::日志!(
-                "[nota] --mcp：没找到在跑的 Nota（{e}），这一份自己开窗并服务 MCP"
+        let (码, 话) = match mcp::接上() {
+            // 会话跑完 = 这一份进程**什么都没建**（没建窗、没加载插件、没抢
+            // 位置），跟隔壁"已转交"那条一模一样，没有清理可做。
+            mcp::结局::会话跑完 => std::process::exit(0),
+            mcp::结局::没人听 => (
+                2,
+                "Nota 没在跑。请先打开 Nota——AI 客户端连上的是**它**手里的文档；\
+                 `nota --mcp` 只做转接，不会替你开一个窗口。"
+                    .to_string(),
             ),
-        }
+            mcp::结局::会话断了(e) => (3, format!("与 Nota 的会话断了：{e}")),
+        };
+        eprintln!("[nota] {话}");
+        std::process::exit(码);
     }
 
     // ── ⓿' `--new-window`：**这一份进程不参与单实例**（2026-09-27）──────────
@@ -304,27 +318,26 @@ pub fn run() {
             //    注册不上就是"点链接打不开"，那不该让应用起不来。
             //    ⚠️ 它**只在需要时**才动盘，见那个文件头（"幂等，而且只在必要时才动"）。
             url_scheme::注册();
-            // ⑨ MCP 服务器（2026-09-27 加）。⚠️ **只在这一份进程"就是那个 Nota"
-            //    的时候才起**（`--mcp` 且 ⓿''' 那一步没转接出去）——别的启动
-            //    方式下 stdin/stdout 是终端，服务它没有意义，还会把用户终端
-            //    上打的字当成 JSON-RPC 吃进去。
-            //    ⚠️ 起的是**一条线程**（`mcp::起` 里 spawn），不是在这里阻塞读：
-            //    `setup` 是建窗之前跑的，在这儿读 stdin 窗口永远出不来。
-            //    ⚠️ 这里**又算了一遍** `cli::要开MCP`（它是个纯函数，不碰 IO），
-            //    而不是把上面那个 bool 借进来：这个闭包要活到 `'static`，
-            //    借一个局部变量过不了编译。
-            if cli::要开_mcp(std::env::args_os()) {
-                mcp::起(app.handle().clone());
-                crate::日志!("[nota] MCP：这一份进程服务 stdio（名册见 mcp/tools.rs）");
-            }
+            // ⑨ ⚠️ **MCP 服务器那一格 2026-09-29 删掉了**，位置留在这里说明它
+            //    为什么不该回来：它原来是"这一份进程就是那个 Nota 时，在这个
+            //    进程里服务 MCP"（`mcp::起`）。今天 `--mcp` 在 ⓿''' 那一步
+            //    **三条路全都退出**（转接成功 / 没人在听 / 会话断了），根本走
+            //    不到 `setup`，所以那个分支永远为假。留着一个永远为假的分支，
+            //    读起来像"还存在一种在进程里直接服务 MCP 的形态"——而**那种
+            //    形态正是用户报的「不停新建窗口」**（完整账在 `mcp` 模块头
+            //    「为什么形态 2 不开窗」）。
+            //
+            // ⚠️ 真要让它回来，改的是 ⓿''' 那一段的口径，两处必须一起改。
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::diagnostics::nota_diagnostics,
             commands::document::nota_doc_new,
             commands::document::nota_doc_open,
             commands::document::nota_doc_sync,
             commands::document::nota_doc_settle,
+            commands::document::nota_doc_cursor,
             commands::document::nota_doc_save,
             commands::document::nota_doc_rename,
             commands::document::nota_doc_move,
@@ -404,6 +417,7 @@ pub fn run() {
             commands::plugin::nota_plugin_install,
             commands::plugin::nota_plugin_uninstall,
             commands::plugin::nota_plugin_trust,
+            commands::plugin::nota_plugin_setting_set,
             commands::plugin::nota_plugin_trust_list,
             commands::plugin::nota_plugin_export,
             commands::plugin::nota_plugin_export_name,

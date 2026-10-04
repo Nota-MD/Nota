@@ -8,7 +8,21 @@ import { installErrorHooks } from "./ui/ErrorBoundary";
 import { FocusAlarmWindow } from "./ui/FocusAlarmWindow";
 
 import "./styles/theme.css";
+// 外壳骨架：全局 reset、窗口骨架、沉浸模式、工具条、按钮原语。
+// ⚠️ **这一条必须是所有外壳样式里的第一个**——那一段 `*` / `html, body` 的 reset
+// 是别人的底子。⚠️ 2026-09-29 按功能拆成五份（那一份当时 836 行）：骨架（这一条）
+// ＋ **菜单栏**（`menubar.css`）＋ **标签栏与状态栏**（`tabs-status.css`）＋
+// **主页**（`home.css`）＋ **提示条**（`toast.css`）。下面四条彼此不承重，
+// 但都要在本条之后。
 import "./styles/app.css";
+// 菜单栏与它的弹层（`.menubar` / `.menu-popup`）。
+import "./styles/menubar.css";
+// 窗口上下那两条：标签栏与状态栏。
+import "./styles/tabs-status.css";
+// 主页（没有打开文档时那一屏，含「最近打开」）。
+import "./styles/home.css";
+// 提示条（`ui/Toasts.tsx`，固定在右下角那一层；层叠关系见它文件头）。
+import "./styles/toast.css";
 // 浮层那一族（四个对话框 ＋ Emoji 补全面板）。⚠️ **必须在 `app.css` 之后**——
 // `.emoji-cat` 要盖掉 `.btn` 的内边距，靠的就是"后来居上"；顺序反了，
 // 那排分类按钮会静默变回全尺寸。（2026-09-27 从 `app.css` 里按职责拆出来的，
@@ -17,21 +31,50 @@ import "./styles/overlay.css";
 // 左侧栏（栏本身 + 文件树 + 大纲）。⚠️ **必须在 `app.css` 之后**——折叠三角、
 // 缩进那几条比 `app.css` 里的通用行规则更具体，靠顺序而不是 `!important` 压过去。
 import "./styles/sidebar.css";
-// 右侧插件栏（栏本身 + 面板内容 + 已装清单）。⚠️ **必须在 `app.css` 之后**——
-// 它借了那边 `.btn` / `.btn-primary` / `.btn-danger` 那套按钮底子
-//（`.panel-btn` 是在上面收小一号、`.btn-on` 是换底色）。理由写在 `dock.css` 文件头。
+// 右侧插件栏的**骨架**（栏头、页签、栏内分区、面板容器、`frame` 块）。
+// ⚠️ **必须在 `app.css` 之后**——它借了那边 `.btn` / `.btn-primary` / `.btn-danger`
+// 那套按钮底子（`.panel-btn` 是在上面收小一号、`.btn-on` 是换底色）。
+// 理由写在 `dock.css` 文件头。
+// ⚠️ 2026-09-29 按功能拆成四份（那一份当时 971 行）：栏骨架（这一条）＋
+// **面板内容块**（`panel.css`）＋ **面板里的数据块**（`panel-data.css`）＋
+// **已装插件清单**（`plugin-list.css`）。**四条的顺序不承重**（各自的选择器
+// 不重叠），但四条都必须在 `app.css` 之后。下一条 import 上的注释同理。
 import "./styles/dock.css";
+// 面板内容块（`ui/PanelBody.tsx` 画的那一套：标题、字段、列表、对话、输入、错误）。
+// ⚠️ 同样借 `app.css` 的按钮底子（`.panel-btn`），所以也要排在它之后。
+import "./styles/panel.css";
+// 面板里的数据块：提交树（`kind = "graph"`）与曲线刻度（`kind = "chart"`）。
+import "./styles/panel-data.css";
+// 已装插件清单（插件栏最右那一页 ＋ 已信任的签名者）。
+// ⚠️ 偏好设置里的「拓展」页穿的是同一套 `.plugin-*`，改字号两处一起动。
+import "./styles/plugin-list.css";
 // 「差东西」面板（借 pandoc 导出时没探通的那一块）。⚠️ **必须在 `app.css`
 // 之后**——它借了确认框那层壳（`.confirm-backdrop`/`.confirm-dialog`），
 // 再靠顺序盖掉那个 440px 的宽度。
 import "./styles/gate.css";
-// 偏好设置那个框的样式。**必须在 `app.css` 之后**——它加宽的是 `app.css`
-// 里 `.confirm-dialog` 那套底子（确认框和设置框共用一层遮罩）。
+// 偏好设置那个框的样式：**框体与版式**。**必须在 `app.css` 之后**——它加宽的
+// 是 `app.css` 里 `.confirm-dialog` 那套底子（确认框和设置框共用一层遮罩）。
+// ⚠️ 2026-09-29 按功能拆成三份（那一份当时 962 行）：壳与版式（这一条）＋
+// **控件原语**（`settings-controls.css`）＋ **某一页专用的小件**
+// （`settings-widgets.css`，`?` 气泡 / 明暗缩略图 / 快捷键页）。三份的顺序不承重，
+// 但都要在 `app.css` 之后（前两份借那边的按钮底子）。
 import "./styles/settings.css";
-// ⚠️ **必须在 `app.css` 之后**。两份文件的选择器有重叠的部分（比如都碰过
-// `.ProseMirror` 那棵树），靠后者覆盖前者。顺序反过来，正文区的字号、行高、
-// 代码块底色就都会被外壳那几条盖掉。这条约束写在 `editor.css` 的文件头里。
+// 控件原语：下拉、开关、滑块、单选、输入框、按钮排、明暗缩略图。
+import "./styles/settings-controls.css";
+// 设置框里的三块专用小件：`?` 气泡、明暗缩略图、快捷键那一页。
+import "./styles/settings-widgets.css";
+// 正文编辑区的**外壳与版式**。⚠️ **必须在 `app.css` 之后**。两份文件的选择器有
+// 重叠的部分（比如都碰过 `.ProseMirror` 那棵树），靠后者覆盖前者。顺序反过来，
+// 正文区的字号、行高、代码块底色就都会被外壳那几条盖掉。这条约束写在
+// `editor.css` 的文件头里。
+// ⚠️ 2026-09-29 按功能拆成三份（那一份当时 945 行）：外壳与版式（这一条）＋
+// **行内那一层**（`editor-inline.css`）＋ **块级那一层**（`editor-blocks.css`）。
+// ⚠️ **下面 code-block.css / marks.css 那几条必须继续排在这三份之后**。
 import "./styles/editor.css";
+// 行内那一层：高亮 / 上标 / 下标 / 下划线、裸 HTML 与注释、脚注、智能标点的仅显示转换。
+import "./styles/editor-inline.css";
+// 块级那一层：代码块、任务列表复选框、表格与拖列宽手柄、分隔线与引用。
+import "./styles/editor-blocks.css";
 // 代码块上的**挂件**（折叠/复制条、语言图标、语言下拉）。⚠️ **必须在
 // `editor.css` 之后**：这一份里那几条选择器要盖住那边对 `pre` / `code` 的
 // 通用规则。2026-09-26 从 `editor.css` 里整段搬出来的，搬的原因只有行数一个

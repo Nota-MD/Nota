@@ -1,0 +1,416 @@
+/**
+ * 编辑区里的**块级那一层**：代码块、任务列表的复选框、表格与拖列宽手柄、
+ * 分隔线与引用。
+ *
+ * 2026-09-29 从 `editor.css` 里按功能拆出来（那一份当时 945 行）。分家的线是
+ * 「**外壳 / 行内 / 块级**」：本文件里每一条都作用在一个**块**上（`pre` / `table` /
+ * `li` / `hr` / `blockquote`）。
+ *
+ * ⚠️ **必须在 `editor.css` 之后加载**，而且**这几条要排在 `code-block.css` 前面**
+ * （那一份是从这里整段搬出去的延展，它盖住本文件对 `pre` / `code` 的通用规则，
+ * 见 `main.tsx` 的 import 顺序与 `code-block.css` 文件头）。
+ *
+ * ⚠️ 表格与分隔线那两段**只在没有文档主题时显形**（有条件的选择器）——理由写在那两节
+ * 自己的注释里，别把它们"顺手统一"成无条件规则。
+ */
+
+/* ── 代码块 ───────────────────────────────────────────────────────────────
+   ⚠️ **这一段是补的**。`theme.css` 里那七个 `--code-*` 变量早就定义了，
+   但全仓**没有一个选择器用过它们**，`pre` 连底色和内边距都没有——
+   所以代码块一直是"有 class、有语言、就是没颜色"。
+   和 backlog §4 里记的"配色已补"对不上，以代码为准。
+
+   着色由 `@milkdown/plugin-prism` 加的 `span.token.*` 承担（它读的是节点属性，
+   不是 DOM），所以下面这些选择器**只认 class**，不要去匹配语言。 */
+
+.editor-mount .ProseMirror pre {
+  position: relative;
+  /* ⚠️ **代码区左边的内边距从一个变量来**，不再是写死的 14：
+     开了行号（设置里那一条 `editor.code_line_numbers`）之后它要变成 54px，
+     好给左边那条行号装订线（40px）腾出位子。
+     ⚠️ `marks.css` 里 `.nota-srcmark` 那条围栏标记的 `right: calc(100% + …)`
+     读的是**同一个变量**（`--nota-code-pad-l`）——它要退到 `pre` 的边框外面去，
+     退多少正好等于"左边内边距 + 1px 边框"。以前两边各写一份写死的 14，注释里
+     互相提醒"改的时候要一起改"；换成变量之后那件事由 CSS 自己保证了。
+     ⚠️ **上下那两条不参与**：这里管的是左右。 */
+  --nota-code-pad-l: 14px;
+  /* ⚠️ **上下都是 18px**（2026-09-26 从 34 降下来的）。用户原话：
+     「还有就是代码块有点宽，上下距离太长」。
+     原来那 34 有两个来历，**两个都已经不成立**，所以一起降：
+     1. **下面那 34 是给右下角那条按钮条留的槽**（2026-09-25 补，用户体验评估
+        抓出来的）。在那之前是 `padding: 14px`，而 `.nota-code-bar` 就
+        `position: absolute` 地挂在右下角（`bottom: 4px` + 高 `22px`），于是它
+        **直接压在代码最后一行的尾巴上**——用户鼠标一进代码块，最后两个字符就被
+        「折叠 / 复制」盖掉。
+        ⚠️ 2026-09-26 那条按钮条**搬到了块外**（`.nota-code-bar` 现在 `top: 100%`，
+        与语言框排在同一行、一个靠左一个靠右），那个槽从此由 `margin-bottom`
+        独自承担（见下面），内边距里这一截就不需要了。
+     2. **上面那 34 是 2026-09-26 补的，为的是"上下一样"**——只留下面的时候，
+        一行代码看着是"贴着上边框、下面空一大截"（量出来是上 19px 对下 39px；
+        那 5px 是行高 1.6 的半个行距，两边都有），块越矮越明显。
+        ⚠️ **这条理由现在仍然成立**：上下还是相等的（都是 18）。别只看到
+        "上面那个 34 被砍了"就以为是回退——砍的是**两边一起**。
+     为什么落在 18 而不是回到 14：14 时上下比正文段落之间的间距（0.85em ≈ 13.6px）
+     还紧，一行代码在块里就不像"块"了；18 是"比段落松、但不空"的那一档。
+     ⚠️ 行号装订线那 40px 是加在**左**边（`--nota-code-pad-l`），上下不受影响。 */
+  padding: 18px var(--nota-code-pad-l);
+  /* ⚠️ **上下都是 30px**（2026-09-26 改的，原来是 `0 0 30px`）。
+     用户原话：「代码框不论上下，和其他文本的间距。Typora 是那样的」——
+     也就是**上下要一样**：在这之前上面只有兄弟规则那条 `margin-top: 0.85em`
+     （约 13.6px，和"两段之间"一个数），下面 30px，于是代码块看起来是
+     "贴着上一段、甩开下一段"，而且上一段越短越明显。
+
+     这两个 30 各有来历，**别只看到一个**：
+     - **下面那个 30** 不只是留白，它是给块外那条挂件留的槽。**2026-09-26 起
+       这条槽里住着两颗**：左边是工具栏（`.nota-code-bar`，折叠 / 复制），
+       右边是语言选择框（`.nota-code-lang-wrap`）——两颗都是 22px 高、
+       `top: 100%` 贴着下边框，所以 30 = 22（条子高）＋ 8（留给下一段的气）。
+       由来：2026-09-25 用户要求「增大一下代码框和下面的另外的其他东西的间隔，
+       这样才能保证那个语言选择框能塞得下」。
+       ⚠️ 改那两颗的高（`.nota-code-btn` 那条 `height`）时这个数要回来算。
+     - **上面那个 30** 是照下面那个写的，就为了对上 Typora 的"上下一样"。
+       它比"两段之间"（0.85em）大得多，这是**有意的**：Typora 里代码块
+       本来就比段落间距更"隔离"。
+
+     ⚠️ 折叠：这个 `margin-bottom` 和下个块那条 `margin-top: 0.85em` 会**折叠**，
+     取大的那个，所以实际是 30px 而不是两者相加，别按"再加一个 0.85em"去算。
+     ⚠️ 左右内边距那笔账见上面那条注释（现在是 `--nota-code-pad-l` 这个变量，
+     上下那两个数不参与）。 */
+  margin: 30px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  line-height: 1.6;
+  /* ⚠️ `overflow` 必须留 `visible`，**这一条不会因为任何设置而变**：
+     画在 `pre` **外侧**的东西有三样——围栏标记（`instant-render.ts`，左外侧）、
+     代码块下面那条工具栏和语言选择框（`code-block.css`，下沿之外）。
+     `overflow-x: auto` 会同时把它们裁掉（而且 CSS 规定：一个方向不是
+     `visible` 时，另一个方向的 `visible` 会被算成 `auto`，所以只写 `-x` 也一样）。
+     代价是长行不横向滚动 —— 所以默认改成自动换行（见下面 `code_wrap` 那条）。 */
+  overflow: visible;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 设置里关掉「代码块 → 自动换行」（`markdown.code_wrap`，默认开）。
+   ⚠️ **不改成 `overflow-x: auto`**，理由见上面那条：那会把块外那三样挂件
+   一起裁掉。所以长行是**溢出**出去的，横向滚动条落在更外面那一层
+   （`.editor-mount` 的 `overflow: auto`）上。
+   ⚠️ 关掉之后，一个长行只能靠拖外面的滚动条看见右半截——这是拿"看得见块外
+   挂件"换来的，两条不能都要。 */
+html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.editor-mount .ProseMirror pre code {
+  font-family: inherit;
+  background: none;
+  padding: 0;
+}
+
+/* token 配色。变量归 `data-ui-mode` 管（见 theme.css 那段注释）。 */
+.editor-mount .ProseMirror .token.comment,
+.editor-mount .ProseMirror .token.prolog,
+.editor-mount .ProseMirror .token.doctype,
+.editor-mount .ProseMirror .token.cdata {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.editor-mount .ProseMirror .token.keyword,
+.editor-mount .ProseMirror .token.atrule,
+.editor-mount .ProseMirror .token.rule,
+.editor-mount .ProseMirror .token.important {
+  color: var(--code-keyword);
+}
+.editor-mount .ProseMirror .token.string,
+.editor-mount .ProseMirror .token.char,
+.editor-mount .ProseMirror .token.attr-value,
+.editor-mount .ProseMirror .token.regex {
+  color: var(--code-string);
+}
+.editor-mount .ProseMirror .token.number,
+.editor-mount .ProseMirror .token.boolean,
+.editor-mount .ProseMirror .token.constant,
+.editor-mount .ProseMirror .token.symbol {
+  color: var(--code-number);
+}
+.editor-mount .ProseMirror .token.function,
+.editor-mount .ProseMirror .token.class-name,
+.editor-mount .ProseMirror .token.selector {
+  color: var(--code-function);
+}
+.editor-mount .ProseMirror .token.attr-name,
+.editor-mount .ProseMirror .token.property,
+.editor-mount .ProseMirror .token.variable,
+.editor-mount .ProseMirror .token.builtin {
+  color: var(--code-attr);
+}
+.editor-mount .ProseMirror .token.tag,
+.editor-mount .ProseMirror .token.deleted {
+  color: var(--code-tag);
+}
+.editor-mount .ProseMirror .token.operator,
+.editor-mount .ProseMirror .token.punctuation,
+.editor-mount .ProseMirror .token.entity,
+.editor-mount .ProseMirror .token.url {
+  color: var(--fg-muted);
+}
+
+/* ── 任务列表的复选框 ─────────────────────────────────────────────────────
+   `- [x] 做完了` 渲染成 `li[data-item-type="task"][data-checked]`——钩子是
+   `@milkdown/preset-gfm` 给的，**这份 CSS 才是第 36 项真正缺的那一半**。
+
+   ⚠️ 四条关键：
+
+   ① **圆点必须无条件去掉**。普通列表项是靠 `.nota-srcmark` 那条规则临时去掉的
+      （在 `marks.css` 里；光标进列表项，圆点让位给 `-`），任务项不行——它的方框是**一直在**的，
+      圆点也一直在，就会画成 `• ☐ 文字`。
+
+   ② **装订线宽度只定义在这里**（`--task-check-gutter`）。`task-list.ts` 判"这一击
+      落没落在方框上"时把这个变量读回去，所以两边不会各写一个数。
+
+   ③ **方框画在左外侧，不占文档流**。理由和块级标记一样：正文一个字都不许因为
+      勾没勾上而左右挪。
+
+   ④ **`vertical-align` 要对齐正文的第一行**，不是对 li 的盒子居中——任务项
+      折行之后盒子会变高，居中的方框会跑到两行中间去。 */
+.editor-mount .ProseMirror {
+  --task-check-gutter: 22px;
+}
+
+.editor-mount .ProseMirror li[data-item-type="task"] {
+  list-style: none;
+  position: relative;
+}
+
+.editor-mount .ProseMirror li[data-item-type="task"]::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  /* 22px 的格子里放 14px 的方框，两边各留 4px 的点击余量。 */
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  /* 对齐第一行正文：1.75 的行高下，正文的视觉中线在 0.62em 上下。 */
+  top: 0.42em;
+  border: 1.5px solid var(--fg-faint);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 勾上的样子：填色 + 一个用两条边框折出来的对勾（不引图标字体，
+   少一个网络/打包依赖）。 */
+.editor-mount .ProseMirror li[data-checked="true"]::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.editor-mount .ProseMirror li[data-checked="true"]::after {
+  content: "";
+  position: absolute;
+  right: 100%;
+  width: 4px;
+  height: 8px;
+  margin-right: 9px;
+  top: 0.55em;
+  /* 对勾的颜色跟着强调色上的前景色走——暗色主题下它是深色，
+     写死 `#fff` 会在暗色里糊成一团。 */
+  border: solid var(--accent-fg);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+  cursor: pointer;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* 勾上的那一项，正文跟着淡一点。
+   ⚠️ 只淡第一段：任务项下面还可以挂子列表，整条 `li` 一起淡化会把子项也带上。 */
+.editor-mount .ProseMirror li[data-checked="true"] > p:first-child {
+  color: var(--fg-faint);
+  text-decoration: line-through;
+}
+
+/* ── 表格（**只在没有文档主题时**显形的那一份）────────────────────────────
+ *
+ * # 为什么这里非要有这一条
+ *
+ * 表格的边框、内边距、表头底色**全都写在文档主题里**（六个主题各一份）。于是
+ * "无主题"（`document_theme` 为空串，也就是默认状态）下表格是**一堆没有线的
+ * 字**——列对不齐、看不出哪是表头，看起来就是"插入表格这个功能坏了"。
+ * 浏览器自带的表格默认样子又太粗糙（没有内边距、表头不加粗），拿它当兜底
+ * 等于把界面交给 UA 样式表。
+ *
+ * # ⚠️ 整段必须包在 `:where()` 里 —— 这是**特异性**问题，不是风格问题
+ *
+ * 文档主题由 `ui/doc-theme.ts` 把 `.editor-pane` 那一层加上主题类，选择器
+ * 算下来是 (0,1,1)；本文件里普通写法的选择器（`.editor-mount .ProseMirror table`）
+ * 是 (0,2,1)，**比主题高**。不包 `:where()` 的话，这一段会把**所有**主题的
+ * 表格样式盖掉——症状是"换了主题只有表格不变"，而这种"只有一个部件不跟随"
+ * 的毛病最难被认出来是 CSS 层级的锅。`:where()` 的权重恒为 0，于是本段变成
+ * (0,1,1) 里最弱的一档：主题只要碰了同一批属性就赢。
+ *
+ * ⚠️ 所以**只用 token**（`--border` / `--fg-muted` / `--bg-subtle` / `--radius`），
+ * 不写字面颜色：主题换了底色而这里钉死灰色的话，深色主题下就会看到一块亮边框。
+ * `themes/paper.css` 那份是形状参考（同一套属性、同样的量级），不是抄来的配色。
+ *
+ * # ⚠️ 表格的宽**不在这里定**（2026-09-27 改了口径，之前那版注释记的是旧结论）
+ *
+ * 宽度有**两个**来源，都不是本文件：
+ *
+ * 1. **库的 CSS**：`prosemirror-tables/style/tables.css` 那条
+ *    `.ProseMirror table { table-layout: fixed; width: 100% }`（`main.tsx` 引的）。
+ *    **这一条才是"表格跟着正文列走"的那一半**——它 2026-09-26 才被引进来，
+ *    在那之前表格确实是按内容缩着的（"短内容的表看起来窄窄一小块"）。
+ * 2. **库的 JS**：`TableView` 每次更新把 `table.style.width` / `minWidth` 写成
+ *    **行内样式**——按各列的 `colwidth` 求和，**没有 `colwidth` 的列按
+ *    `defaultCellMinWidth` 补**（那个数的默认值是 **100**）。行内样式压过本文件
+ *    里任何选择器，所以"表格比正文列还宽、底下多出一条横向滚动条"是**它算出来的**，
+ *    2026-09-27 起把那个选项改成 0（`table-width.ts::列宽拖动插件`），症状消失。
+ *
+ * ⚠️ 记住这个分工：**"多宽"归库（选项 + 行内样式），"看得见"归这里**
+ * （边框、内边距、表头底色）。在 CSS 这边跟行内样式抢宽度是白费力气——
+ * 唯一的例外是下面那条 `--default-cell-min-width`，它抢的是**单元格的最小宽度**，
+ * 而且必须 `!important` 才按得住（理由写在那一条上）。
+ */
+:where(.editor-mount .ProseMirror table) {
+  border-collapse: collapse;
+  font-size: 0.96em;
+}
+
+:where(.editor-mount .ProseMirror th, .editor-mount .ProseMirror td) {
+  padding: 0.5em 0.75em;
+  /* ⚠️ 用 `--border-strong` 而不是 `--border`（2026-09-26 改）：浅色下
+     `--border` 只有 8% 的黑，画成 1px 的格线在白纸上基本看不见——
+     用户抱怨的「分别不明显」里就有表格这一项。`--border-strong`（18%）
+     刚好落在 GitHub 那类表格线的亮度上：看得出格子，又不抢正文。 */
+  border: 1px solid var(--border-strong);
+  text-align: left;
+}
+
+/* 表头：底色 + 加粗。⚠️ `--fg` 而不是 `--fg-muted`——表头是**列的名字**，
+   不是注释，比正文淡就对不起了。 */
+:where(.editor-mount .ProseMirror th) {
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* 隔行浅底，长表格横向不容易看串行。
+   ⚠️ 用 `:nth-child(even)` 而不是 `:nth-child(odd)`：表头占掉第一行，
+   从偶数行起步才不会让第一行数据跟表头同色。 */
+:where(.editor-mount .ProseMirror tbody tr:nth-child(even)) {
+  background: var(--bg-subtle);
+}
+
+/* ── 拖列宽那根手柄（`prosemirror-tables` 自带样式的一份覆盖）──────────────
+ *
+ * 用户 2026-09-26：「还有就是表格，允许拖动改变大小」。那份样式已经由
+ * `main.tsx` 引了（`@milkdown/kit/prose/tables/style/tables.css`，MIT），
+ * 那一条 import 的注释里写着"少了它的症状是什么"。这里只补**它跟不了主题**
+ * 的几处——它是通用库，不认识本仓的 token。
+ *
+ * ⚠️ 下面这两条**故意不用 `:where()`**（与上面那一段的规矩相反）：拖动手柄是
+ * **编辑器自己的界面**，不是文档内容，所以文档主题**不该**管它。用 `:where()`
+ * 把权重压到 0 的话，任何一份主题里一条沾边的手柄规则都能把它顶掉——而那种
+ * "只有拖动时的颜色不对" nobody 会报成 bug。包在 `.editor-mount` 里是为了
+ * **只在编辑区生效**（导出、打印那些离屏实例里没有拖动手柄）。
+ */
+
+/* ⚠️ 这个变量**必须写在表格上、而且必须 `!important`**——两个都省不得。
+ *
+ * 库那份 CSS 用 `min-width: var(--default-cell-min-width)` 给"没拖过的列"留一个
+ * 最小宽度，但**它自己不定义这个变量**：得有人给值，不给就是非法值、等于没有，
+ * 短内容的表格每列会被挤成一条线。
+ *
+ * ⚠️ 而**这个"有人"不能是 `.editor-mount .ProseMirror` 那一层**（2026-09-27 改）：
+ * `TableView` 建实例时会把它拿到的那个选项**原样写成表格上的行内变量**
+ * （`prosemirror-tables/dist/index.js:2289` 那句 `this.table.style.setProperty`，
+ * 值就是 `列宽拖动插件` 传进去的 `defaultCellMinWidth`）。自定义属性是**继承**的、
+ * 且**离得近的赢**，所以写在外层会被表格自己的行内值整个遮住——外层那条规则
+ * 会变成一条**永远不生效的死规则**，而症状是"这条规则像没写一样"。
+ *
+ * ⚠️ 表上写了还不够：行内声明的优先级**高于本文件里任何普通选择器**，
+ * 只有作者样式表里的 `!important` 能压过它（这是 CSS 层叠里少数几个
+ * "`!important` 是唯一办法"的位置之一，不是偷懒）。
+ *
+ * ⚠️ 值给**相对量**（em）而不是像素：文档主题会改正文字号，`em` 跟着走，像素不会。 */
+.editor-mount .ProseMirror table {
+  --default-cell-min-width: 3em !important;
+}
+
+/* 手柄颜色。库那份写死了 `#adf`（浅蓝）——深色主题下它是一道刺眼的白线，
+ * 而它出现的位置又恰好是用户正盯着的地方。用强调色，亮暗两档都自洽。 */
+.editor-mount .ProseMirror .column-resize-handle {
+  background-color: var(--accent);
+}
+
+/* 拖拽那一刻，**正在拖的那一格**加一层浅浅的强调色，比"只有那根 4px 的线
+ * 跟着跑"更容易看出"我正在拖这一列"。
+ *
+ * ⚠️ 这个 class **挂在单元格上**（`td.column-resize-dragging`），不是挂在
+ * 编辑器根上——那是库里的 `Decoration.node(…, { class: "column-resize-dragging" })`，
+ * 包的是被拖那一列的那个 cell。挂在根上写（`.ProseMirror.column-resize-dragging`）
+ * 是**永远不会匹配**的写法，而它的症状是"这条规则像没写一样"。
+ * ⚠️ 与它容易混的 `resize-cursor` 才是挂在根上的（`attributes` 那一条）。
+ *
+ * ⚠️ 用 `--accent` 兑出来的半透明，别写字面色。 */
+.editor-mount .ProseMirror td.column-resize-dragging,
+.editor-mount .ProseMirror th.column-resize-dragging {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* ── 分隔线与引用（**同样只在没有文档主题时**显形的那一份）────────────────
+ *
+ * # 为什么非要补这一段
+ *
+ * 与上面表格那一段是同一个理由：`hr` 与 `blockquote` 的颜色、边框**全都写在
+ * 文档主题里**（`themes/minimal.css` / `adwaita.css` / `latex.css` 各一份），
+ * 于是 `document_theme = ""`（**默认状态**）下这两样回落到浏览器自己的样子：
+ * `hr` 是一条 3D 凹槽线，`blockquote` 只是一段缩进 40px 的字——两者都
+ * 没有"我是一条结构线"的意思。用户 2026-09-26 说的「分割线什么的分别不明显」
+ * 正是这一档上的观感：默认状态没有主题，而默认状态恰恰是所有人第一眼看到的。
+ *
+ * # ⚠️ 整段同样包在 `:where()` 里
+ *
+ * 理由与表格那一段**一模一样**（那是特异性问题，不是风格问题）：
+ * `:where()` 的权重恒为 0，主题只要碰了同一批属性就赢。
+ *
+ * ⚠️ 颜色**只用 token**，而且**不用 `--border`**：浅色下它只有 8% 的黑
+ * （`theme.css` 里那条"别再往下压"的注释写着），画成线根本看不见——
+ * 那正是"分别不明显"的来源。这里用 `--fg-faint`（4.57:1，是"最淡但还
+ * 读得清"的那一档）与 `--bg-subtle`，深浅两种明暗下都成立。
+ *
+ * ⚠️ `hr` **不写 `width`**：它是块级元素，本来就占满整行；写死宽度反而在
+ * 正文列宽变化时对不上（用户报过"只画了左边一小截"，成因还没查到，
+ * 所以这里不拿 `width` 去猜）。`display: block` 是明写的，同时也是对那个
+ * 怪毛病的一层保险。
+ *
+ * ⚠️ 两条规则里都写了 `margin`，那是**有用**的（详见下面 `blockquote` 那段
+ * 里的注释）：`hr` 的外边距是"让分隔线两边留够气"，`blockquote` 的外边距是
+ * "清掉 UA 那 40px 的左右缩进"。 */
+
+:where(.editor-mount .ProseMirror hr) {
+  display: block;
+  height: 0;
+  border: 0;
+  border-top: 2px solid var(--fg-faint);
+  margin: 2.2em 0;
+}
+
+:where(.editor-mount .ProseMirror blockquote) {
+  /* ⚠️ `margin` 写在这一段里是**有用**的（别以为 `:where()` 写了也白写）：
+     用户代理给 `blockquote` 的是 `margin: 1em 40px`，而**作者样式无论权重多低
+     都压过 UA 样式表**——所以这 40px 的左右缩进会被这条清掉，改由左边线
+     承担"这是一段引用"的表达，左边线也才能和正文、和 `hr` 对齐在同一条
+     左边缘上（上边距那半边仍归 `> * + *` 管，那条权重 (0,2,0)，这条管不着）。 */
+  margin: 1.2em 0;
+  padding: 0.5em 1em;
+  border-left: 2px solid var(--fg-faint);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+}

@@ -77,6 +77,77 @@ pub enum CtrlWheelTarget {
     Zoom,
 }
 
+/// **状态栏右下角平时显示哪一个统计量**（2026-09-30，用户照 Typora 点名要的）。
+///
+/// 用户原话：「平时如图1，当鼠标移到区域内时，如图2,3,4,5（**可以在"字数统计"
+/// 小菜单修改是显示哪一个统计量**）」。也就是**四选一**：那四项在菜单里全都
+/// 摆着（各自带着自己此刻的数值），选中的那一项平时就显示在栏上。
+///
+/// ⚠️ 四个数**一直都在算**（`ui/outline.ts::countText` 一次全给，状态栏那一格
+/// 与悬停提示用的本来就是同一份），这一项只决定**平时显示哪一个**，
+/// 不是"选谁才算谁"。所以换它不重扫正文，也不影响别的读者。
+///
+/// ⚠️ 存的是**哪一项**，不是"显示几项"：用户给的图里那一格永远是**一个**数。
+/// 想一行排开四个的话那是另一个需求，得先改界面再改这里。
+///
+/// ⚠️ 为什么这里可以做成**枚举**，而隔壁 `accent` 那段非要写成宽容的字符串：
+/// 判据是**这个值是谁写的**。`accent` 是用户自己在 `settings.toml` 里敲的
+/// （从剪贴板粘、手打色号都会），敲错一个字就让整份设置回默认是不可接受的；
+/// 而这一格**只有界面上那个小菜单会写**（四个名字都由我们给出），
+/// 用户手敲它的场景根本不存在。同一条判据下先例是 `ToolbarMode` /
+/// `CtrlWheelTarget`。**哪天有人给这一格加一个输入框，这条就作废了。**
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusMetric {
+    /// 词数。**默认**——用户给的参考图里平时显示的就是「0 词」，
+    /// 而且 `countText` 那个口径（CJK 按字、西文按词）最贴"这份文档有多少内容"。
+    #[default]
+    Words,
+    /// 字符数（按码点算，含标点与空白）。
+    Characters,
+    /// 行数。
+    Lines,
+    /// 约几分钟读完（按 `reading_speed` 折算，**至少 1**）。
+    Minutes,
+}
+
+/// **专注模式下非聚焦内容压多暗**（2026-10-04，照 VMark 的窗口版加的）。
+///
+/// 三档，默认**标准**。用户那三档的名字是「标准 / 强 / 更强」，对应
+/// `standard` / `strong` / `stronger`（`../vmark-ref/src/locales/zh-CN/settings.json`
+/// 里的 `appearance.focusModeDim.*`，用户 2026-09-23 给的就是这份截图的出处）。
+///
+/// ⚠️ **具体压到几成写在 CSS 里**（`src/styles/editor.css` 那几个 `--focus-dim`
+/// 声明），不在这里。理由与本仓别处的分工同源：这一项存的是"用户选了哪一档"，
+/// 而"那一档长什么样"是**外观**——三档的数值要跟着风格/对比度调的时候，
+/// 改一个 `.css` 就行，不必动设置结构、也不必让老设置文件里的值重新解释一遍。
+/// 后端这里只保证那个词**原样存、原样读**。
+///
+/// ⚠️ 它**不在 `[focus]` 表里**。那张表是「强制专注」（番茄钟/余额那套记账，
+/// `settings/focus.rs`），与"写作模式里的专注模式"（`F8`，`editor/writing-modes.ts`）
+/// **是两件同名不同物的事**：一个是计时与中断的账本，一个是把非当前段落压暗。
+/// 把压暗强度放进 `[focus]` 会让"改外观"去动一本账，读者一定会以为它们相关。
+///
+/// ⚠️ 与 `accent` 那条判据对照：这一格做成**枚举**是安全的，因为只有界面上那
+/// 个单选会写它（三个名字都由我们给出），用户手敲的场景不存在。同一条判据下
+/// 先例是 `ToolbarMode` / `CtrlWheelTarget` / `StatusMetric`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FocusDim {
+    /// 压到三成上下（`.nota-dim` 那条 `opacity` 原来的值）。**默认**。
+    ///
+    /// ⚠️ 默认选它而不是"最强"，是为了**不改变老用户看到的样子**：
+    /// 这一项加进来之前，专注模式的压暗就是这一个值；把默认设成 `Stronger`
+    /// 等于"升级之后你的专注模式突然变得更暗了"，而用户没做过这个选择。
+    #[default]
+    Standard,
+    /// 更暗一档。
+    Strong,
+    /// 最暗一档。⚠️ 仍然**看得见**（不是隐藏）——专注模式压暗的是"别处的字"，
+    /// 用户随时会想把光标挪过去，压到看不见就成了另一回事。
+    Stronger,
+}
+
 /// 文档主题在深色模式下是否换成**另一个**主题。
 ///
 /// ⚠️ 这一条只在**文档主题**这条轴上成立（`document_theme`），
@@ -106,6 +177,13 @@ pub struct Appearance {
     pub ctrl_wheel_target: CtrlWheelTarget,
     /// 显示状态栏（底部那条字数 / 行列 / 时间的横条）。
     pub show_status_bar: bool,
+    /// 显示状态栏时，右下角那一格**平时显示哪一个统计量**。
+    ///
+    /// ⚠️ 值域与判据见 `StatusMetric`。**没有对应的设置页控件**（2026-09-30
+    /// 起）：改它的入口就是状态栏上那个小菜单（鼠标移进去才出现的那颗
+    /// 上下箭头），与 `sidebar_width` 那条同源——**控件就在那个数身上**，
+    /// 再在设置里摆一份单选，两个入口改同一个数，多一处不同步的地方。
+    pub status_metric: StatusMetric,
     /// 显示**菜单栏**（顶上那条「文件 / 编辑 / 视图 …」）。
     ///
     /// ⚠️ 用户 2026-09-28 点名要的：「也要允许用户隐藏上栏，也就是"文件"、
@@ -149,6 +227,38 @@ pub struct Appearance {
     /// （黑白里挑更清楚的那个）。存下来的话，改一次主题色就可能留下一对
     /// "白字排在浅黄上"的组合，而那种组合在设置里怎么看都看不出来。
     pub accent: String,
+    /// 侧栏（左侧那条文件树 / 大纲）的宽度，**像素**。
+    ///
+    /// ⚠️ 2026-09-30 加的：用户照 Typora 要的「侧边栏右侧可以自由拖动」。
+    /// 拖动改的就是这一个数（`src/ui/SidebarResizer.tsx`），落盘在这里。
+    ///
+    /// ⚠️ **没有对应的设置页控件**：那条边本身就是控制器。再摆一个数字框，
+    /// 两个入口改同一个数，而其中一个（拖）没法显示"现在是多少"（拖的时候
+    /// 那个框不会跟着跳）——那种不同步比没有那个框更让人困惑。
+    ///
+    /// ⚠️ 夹在 **180 ~ 480** 之间那一刀在**前端**（`applyTheme.ts` 与
+    /// `SidebarResizer.tsx` 各夹一次，同一个区间）。这里**不夹**：这一项存的是
+    /// 用户拖出来的结果，而"手改 `settings.toml` 写了个 9999"那种情况，
+    /// 夹的活儿在真正用它画界面的那两处做更合适——**存下来的值原样保留**，
+    /// 用户手滑之后还能看出自己写了什么（同 `reading_speed` 那条的理由）。
+    pub sidebar_width: u32,
+    /// 专注模式下非聚焦内容压多暗。**默认标准**，三档见 [`FocusDim`]。
+    pub focus_mode_dim: FocusDim,
+    /// **窗口标题里带当前文档的名字**（2026-10-04，照 VMark 的窗口版加的）。
+    ///
+    /// 默认 `true`——也就是**加这一项之前的样子**（第 51 项起，标题一直是
+    /// `我的笔记 • — Nota`）。关掉之后窗口标题恒为 `Nota`，任务栏里几份文档就
+    /// 分不出来了，所以这一格默认必须是开着的：那条"分不出来"的毛病正是第 51 项
+    /// 要治的，而治它的东西不该默认关着。
+    ///
+    /// ⚠️ 关掉**只影响原生窗口标题**（`ui/useWindowTitle.ts`）：标签栏上那几条
+    /// 页签、状态栏里那份路径、"● 已修改"落在标题上这些**一个字都不动**。
+    /// 用户要的是"标题栏上别写文件名"，不是"把文档名从界面上抹掉"。
+    ///
+    /// ⚠️ 关掉之后**窗口标题里那个脏标志也看不见了**（那个 `•` 拼在标题里）。
+    /// 如实记在这里：未保存的另一处落点是标签页上那颗点（`ui/TabBar.tsx`
+    /// 的 `.tab-dot`），没有丢。
+    pub show_filename_in_titlebar: bool,
 }
 
 impl Default for Appearance {
@@ -159,6 +269,9 @@ impl Default for Appearance {
             ctrl_wheel_zoom: false,
             ctrl_wheel_target: CtrlWheelTarget::FontSize,
             show_status_bar: true,
+            // ⚠️ 默认**词数**：用户给的参考图里平时显示的就是「N 词」。
+            // 理由见 `StatusMetric::Words` 那段。
+            status_metric: StatusMetric::Words,
             // ⚠️ 默认**显示**，与 `toolbar` 相反，理由见字段那段：菜单栏是命令的
             // 总入口，默认藏了等于把界面清空。
             show_menu_bar: true,
@@ -170,6 +283,16 @@ impl Default for Appearance {
             // ⚠️ 空串 = 跟随当前风格，见字段那段。**不要在这里填一个颜色**：
             // 填了就变成"每档风格共用一个出厂色"，八档风格各自的辨识度当场没了。
             accent: String::new(),
+            // ⚠️ 与 `theme/base.css` 里 `--sidebar-width` 的出厂值、
+            // `SidebarResizer.tsx` 的 `侧栏宽默认` **必须同值**（三个 240）。
+            sidebar_width: 240,
+            // ⚠️ 默认标准，见 `FocusDim::Standard` 那段：这一项加进来之前，
+            // 专注模式的压暗就是这一个值，默认不该让老用户看到的东西变样。
+            focus_mode_dim: FocusDim::Standard,
+            // ⚠️ 默认**带文件名**，见字段那段：这是加这一项之前的样子，
+            // 而"任务栏里几份文档分不出来"正是第 51 项要治的病，
+            // 治它的东西不该默认关着。
+            show_filename_in_titlebar: true,
         }
     }
 }
@@ -288,6 +411,52 @@ mod tests {
     }
 
     #[test]
+    fn 状态栏统计量默认是词数_老表里没有这一格也读得进来() {
+        // ⚠️ 2026-09-30 才加的键，在那之前存下来的设置文件里没有它。
+        // 缺键要补成默认（结构体上那个 `#[serde(default)]` 管的就是这个），
+        // 而不是让整份设置读不进来。默认是**词数**——用户给的参考图里
+        // 平时显示的就是「N 词」。
+        let 老表 = "zoom = 120\nshow_status_bar = true\n";
+        let a: Appearance = toml::from_str(老表).expect("老表必须仍然能解析");
+        assert_eq!(a.status_metric, StatusMetric::Words);
+        assert_eq!(a.zoom, 120, "同一张表里别的项不能受影响");
+
+        // 那一格由界面上那个小菜单写，写下去的是 `snake_case` 那四个名字。
+        // ⚠️ 四个都要过一遍：少验一个的话，写错了名字的那一项在界面上
+        // 会表现为"选了没反应"（读回来是默认值），而它不报任何错。
+        for (文字, 期望) in [
+            ("words", StatusMetric::Words),
+            ("characters", StatusMetric::Characters),
+            ("lines", StatusMetric::Lines),
+            ("minutes", StatusMetric::Minutes),
+        ] {
+            let 表 = format!("status_metric = {文字:?}\n");
+            let b: Appearance =
+                toml::from_str(&表).unwrap_or_else(|e| panic!("`{文字}` 该能读：{e}"));
+            assert_eq!(b.status_metric, 期望, "`{文字}` 认错了项");
+        }
+    }
+
+    #[test]
+    fn 状态栏统计量存下去再读回来不变() {
+        // 前端那个菜单点一下就是"写一次设置"，所以这条链路要能往返。
+        for 值 in [
+            StatusMetric::Words,
+            StatusMetric::Characters,
+            StatusMetric::Lines,
+            StatusMetric::Minutes,
+        ] {
+            let text = toml::to_string_pretty(&Appearance {
+                status_metric: 值,
+                ..Appearance::default()
+            })
+            .expect("序列化该成功");
+            let back: Appearance = toml::from_str(&text).expect("读得回来");
+            assert_eq!(back.status_metric, 值);
+        }
+    }
+
+    #[test]
     fn 主题色默认跟随风格() {
         // ⚠️ 默认必须是**空串**（= 跟随当前风格），不能是个具体颜色。
         // 填一个的话，"每档风格自带一个出厂强调色"这件事当场没了：
@@ -387,5 +556,74 @@ mod tests {
         let a: Appearance = toml::from_str(老表).expect("老表必须仍然能解析");
         assert!(a.show_menu_bar, "缺键该补成「显示」，不能是「隐藏」");
         assert_eq!(a.zoom, 120, "同一张表里别的项不能受影响");
+    }
+
+    #[test]
+    fn 专注压暗默认标准而不是更强() {
+        // ⚠️ 默认值写成 `Stronger` 是"能编译、能过别的测试、只在界面上变了样"
+        // 的那类改动：升级之后用户的专注模式突然更暗了，而他从没碰过这一格。
+        // 这一项加进来之前压暗就是标准那一档（`styles/editor.css` 里那个
+        // `--focus-dim` 的原值），默认必须还是它。
+        assert_eq!(Appearance::default().focus_mode_dim, FocusDim::Standard);
+    }
+
+    #[test]
+    fn 专注压暗三档在设置文件里是这三个词() {
+        // ⚠️ 与 `工具栏三档在设置文件里是这三个词` 同一条理由：`rename_all` 一被
+        // 拿掉、或者有人手写成 `"Standard"`，设置文件里的词就换了，而那种改动
+        // **不报错**——只是老文件里那一档静默落回默认（用户看到"我选的更强，
+        // 重启又变回去了"）。三个字符串在这里钉死。
+        for (档, 词) in [
+            (FocusDim::Standard, "standard"),
+            (FocusDim::Strong, "strong"),
+            (FocusDim::Stronger, "stronger"),
+        ] {
+            let text = toml::to_string_pretty(&Appearance {
+                focus_mode_dim: 档,
+                ..Appearance::default()
+            })
+            .expect("序列化该成功");
+            assert!(
+                text.contains(&format!("focus_mode_dim = \"{词}\"")),
+                "`{档:?}` 该落成 `{词}`，实际是：\n{text}"
+            );
+            let back: Appearance = toml::from_str(&text).expect("读得回来");
+            assert_eq!(back.focus_mode_dim, 档);
+        }
+    }
+
+    #[test]
+    fn 老设置文件里没有专注压暗那一格也能读() {
+        // ⚠️ 2026-10-04 才加的键，在那之前存下来的设置文件里没有它。
+        // 缺键补默认（结构体上那个 `#[serde(default)]` 管的就是这个），
+        // 不能让整份设置读不进来。
+        let 老表 = "zoom = 120\nfocus_mode_dim = \"strong\"\n";
+        let a: Appearance = toml::from_str("zoom = 120\n").expect("老表必须仍然能解析");
+        assert_eq!(a.focus_mode_dim, FocusDim::Standard, "缺键补标准那一档");
+        assert_eq!(a.zoom, 120, "同一张表里别的项不能受影响");
+        // 写下去那一档也认得回来（前端那个单选框写的就是这个词）。
+        let b: Appearance = toml::from_str(老表).expect("读得回来");
+        assert_eq!(b.focus_mode_dim, FocusDim::Strong);
+    }
+
+    #[test]
+    fn 标题栏文件名默认带而这一格关得掉() {
+        // ⚠️ 默认 `true` 是**加这一项之前的样子**（第 51 项起标题一直是
+        // `我的笔记 • — Nota`）。默认写成 `false` 的话，所有老用户升级之后
+        // 任务栏里几份文档当场分不出来——那正是第 51 项要治的病。
+        assert!(Appearance::default().show_filename_in_titlebar);
+        for (值, 词) in [(true, "true"), (false, "false")] {
+            let text = toml::to_string_pretty(&Appearance {
+                show_filename_in_titlebar: 值,
+                ..Appearance::default()
+            })
+            .expect("序列化该成功");
+            assert!(
+                text.contains(&format!("show_filename_in_titlebar = {词}")),
+                "该落成 `show_filename_in_titlebar = {词}`，实际是：\n{text}"
+            );
+            let back: Appearance = toml::from_str(&text).expect("读得回来");
+            assert_eq!(back.show_filename_in_titlebar, 值);
+        }
     }
 }

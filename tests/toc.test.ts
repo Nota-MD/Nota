@@ -449,6 +449,45 @@ function 列表项(节点: PMNode): [number, string][] {
   真(算目录块("#标签\n", false) !== null, "宽松档下算一个标题");
 });
 
+/* ── 二½、front matter 判据合并（第 63 项，2026-10-04）────────────────── */
+
+组("二½、front matter：大纲与编辑器用同一份严判据");
+
+测("真 front matter（闭栏 ＋ 映射行）整个跳过，标题行号按整篇文档算", () => {
+  const 篇 = extractOutline("---\ntitle: 甲\n---\n\n# 正文\n", false);
+  等(篇.length, 1, "front matter 里的 `title:` 不是标题");
+  等(篇[0]!.line, 4, "行号是整篇文档的（含 front matter 那四行）");
+});
+
+测("`...` 收尾也算 front matter（YAML 的另一种闭栏）", () => {
+  const 篇 = extractOutline("---\ntitle: 甲\n...\n# 正文\n", false);
+  等(篇.length, 1, "正文标题还在");
+  等(篇[0]!.line, 3, "跳过的是三行");
+});
+
+测("BUG-32 现场：两条 `---` 夹着散文——不算 front matter，标题一个不丢", () => {
+  // 现场是 `/tmp/nota-fixture/words.md`（第 1 行 `---`、第 5 行 `# 字数样张`、
+  // 第 11 行又一条 `---`）：中间是普通段落与空行，不满足"看起来像 YAML 映射"。
+  const 篇 = extractOutline(
+    "---\n\n开头一段散文。\n\n# 字数样张\n\n中间又一页。\n\n---\n\n# 下一页\n",
+    false,
+  );
+  等(篇.length, 2, "两个标题都进大纲");
+  等(篇[0]!.text, "字数样张", "第一个标题没被吃掉");
+});
+
+测("`---` 没闭合的残缺文件：不当 front matter，正文照常扫", () => {
+  const 篇 = extractOutline("---\nkey: 只有半截\n\n# 正文\n", false);
+  等(篇.length, 1, "残缺文件里的标题还在");
+  等(篇[0]!.line, 3, "一行都没跳过——行号也如实");
+});
+
+测("闭合、中间像映射：与编辑器（`拆前置块`）同一份判定", () => {
+  // 编辑器那边会把这一段整个拿走（所见即所得里看不见），大纲也该看不见。
+  const 篇 = extractOutline("---\nlayout: cover\n---\n# 甲\n", false);
+  等(篇.length, 1, "front matter 里的行不进大纲");
+});
+
 /* ── 三、找 / 替换（纯文本）───────────────────────────────────────────── */
 
 组("三、找 / 替换");

@@ -31,6 +31,7 @@ import { useEffect, useRef } from "react";
 
 import { useT } from "@/i18n";
 import type { ConfirmAnswer } from "@/ui/useDialogs";
+import { useModalTrap } from "@/ui/useModalTrap";
 
 interface Props {
   title: string;
@@ -65,20 +66,27 @@ export function ConfirmDialog({
   const t = useT();
   const okRef = useRef<HTMLButtonElement>(null);
   const extraRef = useRef<HTMLButtonElement>(null);
+  // ⚠️ 第 50 项（2026-10-04）：焦点陷阱的落点。`useModalTrap` 的 `focusin`
+  // 兜底会把跑出框的焦点拉到这个容器上，它必须自己能接焦点（`tabIndex={-1}`）。
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // ⚠️ 默认焦点跟着"默认答案"走（见文件头）：有第三条路时焦点在它身上。
     (extraLabel ? extraRef : okRef).current?.focus();
   }, [extraLabel]);
 
-  // 键盘：Esc 取消、Enter 走**默认那条**。绑在 window 上而不是对话框上，
-  // 因为焦点可能还没落进来（用户在它出现前就把手放在键盘上了）。
+  // ── 键盘 ──────────────────────────────────────────────────────────────
+  //
+  // Esc 取消 ＋ 焦点陷阱走共用钩子 `useModalTrap`（第 50 项；为什么必须两道闸、
+  // 为什么绑 window 捕获，理由都在那个文件头）。Enter **留在本文件**：
+  // 它是这颗框自己的语义（走默认那条答案），不是"封闭"的一部分。
+  // ⚠️ 这两批监听都绑 window 而不是对话框上——焦点可能还没落进来
+  // （用户在它出现前就把手放在键盘上了）。
+  useModalTrap(dialogRef, { onEscape: () => onAnswer("cancel") });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onAnswer("cancel");
-      } else if (e.key === "Enter") {
+      if (e.key === "Enter") {
         e.preventDefault();
         onAnswer(extraLabel ? "extra" : "confirm");
       }
@@ -91,10 +99,13 @@ export function ConfirmDialog({
     // 点遮罩 = 取消。这是**约定**，不是随手加的——想取消的人会去点旁边。
     <div className="confirm-backdrop" onMouseDown={() => onAnswer("cancel")}>
       <div
+        ref={dialogRef}
         className="confirm-dialog"
         role="alertdialog"
         aria-modal="true"
         aria-label={title}
+        // `tabIndex={-1}`：焦点陷阱的 `focusin` 兜底要把跑出去的焦点拉回框上。
+        tabIndex={-1}
         // 点在框里不该冒到遮罩上去，否则点标题也会把框关掉。
         onMouseDown={(e) => e.stopPropagation()}
       >

@@ -22,7 +22,6 @@
     "@codemirror/view": "^6.43.13",
     "@lezer/highlight": "^1.2.3",
     "@milkdown/kit": "^7.22.1",
-    "@milkdown/plugin-diagram": "^7.7.0",
     "@milkdown/plugin-math": "^7.5.9",
     "@milkdown/plugin-prism": "^7.22.1",
     "@tauri-apps/api": "^2.11.1",

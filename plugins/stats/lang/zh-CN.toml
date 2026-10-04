@@ -25,18 +25,23 @@ description = "像运动手表那样记一轮写作：开始、暂停、终止�
 # ── 正文里的那些句子 ────────────────────────────────────────────────
 "Writing Stats" = "写作统计"
 "Can't read this document's length." = "读不到当前文档的字数。"
-"Writing speed" = "写作速度"
 "Round average" = "本轮平均速度"
 "words/min" = "字/分钟"
-"Each sample of the last %d minutes, oldest on the left" = "最近 %d 分钟的每次采样，从左到右"
 "Written this round" = "本轮写了"
 "Recorded for" = "记录时长"
 "Peak speed" = "峰值速度"
 "Whole document" = "整份文档"
+# ⚠️ 下面这两条 2026-10-04 加的：一条是**面板小字**里那行（大数字回看多久），
+# 一条是**设置页上那根滑杆**的名字与说明（`plugin.toml` 的 `[[settings]]`）。
+# 滑杆那两条的键是清单里写下的英语原文——与 `name` / `description` 同一条规矩
+# （宿主拿清单里那句原文去这张表里查，查不到就用原文）。两处用的是同一个键，
+# 所以"速度窗口"这个名字在面板和设置页上是同一句话。
+"Speed window" = "速度窗口"
+"last %d s" = "最近 %d 秒"
+"How many seconds the big number looks back over. 1–60 seconds; 5 by default." = "那个大数字往回看多少秒。1–60 秒，默认 5 秒。"
 "Only recorded while this panel is open." = "只在面板开着的时候记录。"
 "Not started yet. Press “Start” and this round will count how much you write, how long it takes, and how fast you go." = "还没开始。按「开始记录」，这一轮写了多少字、用了多久、什么速度，就都算起来了。"
 "Paused. Anything you type now doesn't count toward this round — press “Resume” to continue." = "已暂停。这期间打的字不算进这一轮——按「继续」接着算。"
-"This round you wrote %s words." = "这一轮，你写下了 %s 个字。"
 "Start recording" = "开始记录"
 "Pause" = "暂停"
 "Stop" = "终止"
@@ -46,8 +51,6 @@ description = "像运动手表那样记一轮写作：开始、暂停、终止�
 "%d s" = "%d 秒"
 "%d m %d s" = "%d 分 %d 秒"
 "%d words/min" = "%d 字/分钟"
-"Today" = "今天"
-"%d words · %d rounds" = "%d 字 · %d 轮"
 "Make this round's card" = "制作本轮分享图"
 "Make today's card" = "制作今日分享图"
 "Back" = "返回"
@@ -68,9 +71,6 @@ description = "像运动手表那样记一轮写作：开始、暂停、终止�
 "End" = "结束"
 "%d min" = "%d 分"
 "%d h" = "%d 小时"
-"now" = "现在"
-"-%d s" = "-%d 秒"
-"-%d min" = "-%d 分"
 "Less" = "少"
 "More" = "多"
 "Long-term record" = "长期记录"
@@ -83,3 +83,7 @@ description = "像运动手表那样记一轮写作：开始、暂停、终止�
 "The last %d weeks: %d days with writing, %s words" = "最近 %d 周，你在 %d 天里写下了 %s 个字"
 "Make the long-term card" = "制作长期分享图"
 "Can't read today's date, so the long-term ledger can't be drawn." = "拿不到今天的日期，长期那本账画不出来。"
+"Writing record" = "写作记录"
+"This round · %s words · %s" = "本轮 · %s 字 · %s"
+"Today · %d rounds" = "今天 · %d 轮"
+"The last %d weeks · %d days with writing" = "最近 %d 周 · %d 天有字"

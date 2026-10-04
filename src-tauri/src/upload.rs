@@ -678,7 +678,7 @@ fn 短(s: &str) -> String {
 
 /// 这份文档的 front matter 里写着允许自动上传吗。
 ///
-/// 规则与 `document::front_matter_title` **逐条一致**（两处不能各有一套）：
+/// 规则与 `document::title::front_matter_title` **逐条一致**（两处不能各有一套）：
 /// front matter 必须在**文件最开头**，首行是 `---`，到下一个 `---` 或 `...`
 /// 结束。区别只有一个：那边找 `title:`，这里找 [`自动上传键`]。
 pub fn 前件开着吗(正文: &str) -> bool {

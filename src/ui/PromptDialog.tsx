@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useT } from "@/i18n";
+import { useModalTrap } from "@/ui/useModalTrap";
 
 interface Props {
   title: string;
@@ -74,6 +75,9 @@ export function PromptDialog({
   const [value, setValue] = useState(initial);
   const [second, setSecond] = useState(secondInitial);
   const inputRef = useRef<HTMLInputElement>(null);
+  // ⚠️ 第 50 项（2026-10-04）：焦点陷阱的落点。框必须自己能接焦点
+  // （`tabIndex={-1}`），`useModalTrap` 的 `focusin` 兜底把跑出去的焦点拉到它上面。
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   // 打开就把光标放进输入框，并且**全选已有的值**——这一条是编辑已有链接时的
   // 关键：用户按 Ctrl+K 多半是想把地址换掉，全选之后直接打字就替换了；
@@ -82,6 +86,15 @@ export function PromptDialog({
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
+
+  // 焦点陷阱走共用钩子（第 50 项）。⚠️ Esc 在钩子里也有一条（组字期间不接，
+  // 见那边文件头），**这不是**把下面"Esc 绑输入框"那条作废：
+  // - 组字期间按 Esc：钩子不接、输入法收候选框——这一条正是当初不绑 window 的理由；
+  // - 焦点在按钮上按 Esc：输入框的 onKeyDown 接不到（焦点不在它身上），
+  //   钩子这条补的就是这个洞。
+  // 两处都通到 `onAnswer(null)`，重复调用是幂等的（`useDialogs` 那边就是
+  // 一次 `resolve`，第二次是空操作）。
+  useModalTrap(dialogRef, { onEscape: () => onAnswer(null) });
 
   // ⚠️ Enter 用 `onKeyDown` 收在**输入框自己**身上，**不绑 window**。
   // 跟 `ConfirmDialog` 那里不一样：那边没有输入控件，绑 window 是为了兜住
@@ -97,10 +110,12 @@ export function PromptDialog({
   return (
     <div className="confirm-backdrop" onMouseDown={() => onAnswer(null)}>
       <div
+        ref={dialogRef}
         className="confirm-dialog prompt-dialog"
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 className="confirm-title">{title}</h2>

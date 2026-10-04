@@ -65,9 +65,19 @@ import { Decoration, EditorView, drawSelection, keymap, placeholder } from "@cod
 import { tags } from "@lezer/highlight";
 
 import { atxPrefixRe } from "@/editor/atx";
+// 选区快照的**类型**（`docs/07` 第 14 项）。⚠️ 只借类型，实现在
+// `caret-snapshot.ts`——那边的算法吃的是 ProseMirror 的 `EditorState`，
+// 而这里手里是 CodeMirror 的文本，两边各算各的（见下面 `onSelection` 那条）。
+import type { 选区快照 } from "@/editor/caret-snapshot";
 // 脚注的**编号分配**与所见即所得那边共用一份（`editor/footnote.ts`）——
 // 两处各写一份的话，"最小未用数"这种规则迟早漂开。
 import { 下一个脚注标签, 扫源文标签 } from "@/editor/footnote";
+// 撞车的默认键位（那份名单 2026-10-04 搬去 `editor/key-conflicts.ts` 了，
+// 只为让**测试**读得到——BUG-58 就是漏了里面一条进来的，见那个文件头）。
+import { 撞车键位 } from "@/editor/key-conflicts";
+// 开头那段 front matter（`docs/07` 第 64 项）。⚠️ 与所见即所得那一侧**同一个
+// 判据文件**：两处各切一刀的话，"哪几行算 front matter"就有了两个答案。
+import { 拆前置块, 换前置块, 新建前置块模板 } from "@/editor/front-matter";
 import type { CommandPayload, EditorCommand, 选区内容 } from "@/editor/create";
 // 查找：这里只要**两个类型**（接口上的 `setFind` / `onFindStatus`）。
 // 匹配的纯函数、状态、装饰都在别处：前者在 `find.ts`（一份匹配、两个适配器，
@@ -85,6 +95,10 @@ import {
   源码选中,
   走查找效果,
 } from "@/editor/source-find";
+// 行内标记的**开关**判据（纯函数，2026-09-30 分出来的，BUG-57：选中的文字
+// 已经加粗时再按 Ctrl+B 应当**摘掉**，而原来是再包一层）。判据是纯字符串的
+// 事，与视图无关，所以单开一个文件好让 `tests/source-mark.test.ts` 直接测。
+import { 试摘定界符 } from "@/editor/source-mark";
 // 写作模式（专注 / 打字机）。⚠️ 只借类型与两个 DOM 小工具，**装饰各写各的**
 // ——源码里是平的行，没有"块的兄弟"可言（见 `writing-modes.ts` 顶上）。
 import {
@@ -131,6 +145,16 @@ export interface SourceHandle {
   setReview: (预览: 改动预览 | null, 看法: 预览看法) => void;
   /** 跑一条编辑命令。**没有对应文本操作的返回 `false`**（见下）。 */
   runCommand: (name: EditorCommand, payload?: CommandPayload) => boolean;
+  /**
+   * 在光标处插一段（替换选区）。形状同 `EditorHandle.插入在光标处`
+   * （`EditorPane` 才能两边通用）。
+   *
+   * ⚠️ 源码这一侧**直接就有**：CodeMirror 手里就是文本，`replaceSelection`
+   * 一句话。⚠️ 而所见即所得那一侧要绕一圈的理由（为什么不能在 Rust 里
+   * 按偏移拼字符串）**在那边**，见 `caret-snapshot.ts` 顶上那张表——
+   * 这里必须存在，是因为插件的 `insert_at_cursor` 在源码模式下也得能用。
+   */
+  插入在光标处: (text: string) => boolean;
   /* 查找五条，形状与 `EditorHandle` 那五条**完全一致**（`EditorPane` 才能
    * 两边通用）。⚠️ 同那边的理由：它们不进 `EditorCommand` 那套白名单。 */
   setFind: (query: string, options: FindOptions) => void;
@@ -157,6 +181,15 @@ export interface CreateSourceOptions {
   initialMarkdown: string;
   /** 文本变化回调。**不去抖**，与 `createEditor` 同口径：去抖是调用方的事。 */
   onChange?: (markdown: string) => void;
+  /**
+   * **选区变了**的通报（`docs/07` 第 14 项）。形状与 `CreateOptions.onSelection`
+   * 一致，但**那边给的是 ProseMirror 的 `EditorState`、这边是 CodeMirror 的文本**，
+   * 所以两边各算各的，只保证交出去的 `选区快照` 是同一个形状。
+   *
+   * ⚠️ 源码这一侧的 `text` 是**原文**（含 `**` 那些标记），所见即所得那一侧是
+   * 纯文本——⚠️ 这是两种编辑器本来就不同的地方，不是漏了转换。
+   */
+  onSelection?: (快照: 选区快照) => void;
   /** 建实例时两个写作开关的状态。**默认两个都关**。 */
   writingModes?: 写作模式;
   /**
@@ -350,6 +383,41 @@ function wrapSelection(
 }
 
 /**
+ * 行内标记的**开关**：选中的文字已经带着这一对定界符就**摘掉**，否则才包一层。
+ *
+ * ⚠️ 用户 2026-09-30 报的（BUG-57）：选中已经加粗的文字再按 `Ctrl+B`，原来是
+ * **再包一层**（`****甲****`），应当是**去掉**。理由、边界与那三种结果全在
+ * `source-mark.ts` 的文件头（判据在那儿，这里只管把结果派下去）——**两处不要
+ * 各讲一遍**，那是会漂的。一句话：`null` 去包一层、`"不动"`（嵌套认不出来）
+ * 一颗字都不改、其余按纯函数算好的改动与选区派发。
+ *
+ * ⚠️ 分栏模式（`Split`）与源码模式是**同一条路**（左窗格就是
+ * `createSourceEditor`），所以这一处一改两边一起好。
+ *
+ * ⚠️ 链接（`case "link"`）**不走这一条**：它的右定界符里带着地址
+ * （`](地址)`），"再插一次链接"该不该算开关得单独拍板，不是这里顺手决定的。
+ * 它仍旧走 `wrapSelection`。
+ */
+function 切换行内标记(
+  view: EditorView,
+  before: string,
+  after: string,
+  placeholderText: string,
+): void {
+  const { from, to } = view.state.selection.main;
+  const 摘 = 试摘定界符(view.state.doc.toString(), from, to, before, after);
+  if (摘 === null) {
+    // 没带着这一对 ⇒ 照旧包一层（空选区插占位词也在这一支里）。
+    wrapSelection(view, before, after, placeholderText);
+    return;
+  }
+  if (摘.结果 === "不动") return;
+  // 选区也在纯函数里算好了：摘掉之后要盖住**原来那段正文**，否则光标会落在
+  // 定界符原来的位置上，接着敲一个字就把刚摘干净的地方又弄脏。
+  view.dispatch({ changes: 摘.改动, selection: 摘.选区 });
+}
+
+/**
  * 把选区里的**行内标记**去掉，文字一个字不动（对应「格式 → 清除样式」）。
  *
  * ⚠️ 这是个**文本级**的近似，不是文档树级的操作（源码模式本来就没有文档树）。
@@ -450,17 +518,19 @@ function applyCommand(
     case "redo":
       redo(view);
       return true;
+    // ⚠️ 这四家与下面四种扩展标记走的都是 `切换行内标记`（**开关**，不是
+    // "只会包"）：选中的文字已经带着这一对就摘掉。理由与边界见它那段注释。
     case "bold":
-      wrapSelection(view, "**", "**", t("Bold"));
+      切换行内标记(view, "**", "**", t("Bold"));
       return true;
     case "italic":
-      wrapSelection(view, "*", "*", t("Italic"));
+      切换行内标记(view, "*", "*", t("Italic"));
       return true;
     case "strike":
-      wrapSelection(view, "~~", "~~", t("Strikethrough"));
+      切换行内标记(view, "~~", "~~", t("Strikethrough"));
       return true;
     case "inlineCode":
-      wrapSelection(view, "`", "`", t("Code"));
+      切换行内标记(view, "`", "`", t("Code"));
       return true;
     // 三种**扩展**行内标记（`editor/inline-marks.ts`）。源码模式手里就是
     // Markdown 原文，所以"包一层符号"就是这条命令的全部——所见即所得那边
@@ -468,16 +538,16 @@ function applyCommand(
     // ⚠️ 下划线的写法是**裸 HTML** `<u>x</u>`，与 Typora 一致（没有 `__`
     // 那种歧义写法：`__` 在 CommonMark 里是加粗）。
     case "highlight":
-      wrapSelection(view, "==", "==", t("Highlight"));
+      切换行内标记(view, "==", "==", t("Highlight"));
       return true;
     case "superscript":
-      wrapSelection(view, "^", "^", t("Superscript"));
+      切换行内标记(view, "^", "^", t("Superscript"));
       return true;
     case "subscript":
-      wrapSelection(view, "~", "~", t("Subscript"));
+      切换行内标记(view, "~", "~", t("Subscript"));
       return true;
     case "underline":
-      wrapSelection(view, "<u>", "</u>", t("Underline"));
+      切换行内标记(view, "<u>", "</u>", t("Underline"));
       return true;
     // 标题：`text` 是"正文段落"，也就是清掉标题标记。
     case "h1":
@@ -585,6 +655,29 @@ function applyCommand(
       view.dispatch(view.state.replaceSelection(payload?.text ?? ""));
       return true;
     }
+    // 开头那段 front matter（`docs/07` 第 64 项）。⚠️ **这一侧简单得多**：
+    // 源码模式手里就是 Markdown 原文，那几行本来就看得见也改得动，换掉开头
+    // 那几个字符就是一笔普通事务——撤销栈里**有**它，而所见即所得那边没有
+    //（那一段不在文档树里，见 `front-matter.ts` 文件头）。
+    //
+    // ⚠️ 判据、空模板、"空 = 删掉"这三样**与那边共用同一份**（同一个
+    // `front-matter.ts`）：菜单里点一下，两种模式放出来的东西要一样。
+    // ⚠️ 界面上的编辑框只在所见即所得那一侧有（源码模式自己就是编辑框），
+    // 所以这里实际只有菜单那一条路进来。
+    case "frontMatter": {
+      const 原块 = 拆前置块(view.state.doc.toString()).前置块;
+      const 要 = payload?.frontMatter;
+      const 新块 =
+        要 === undefined
+          ? 原块 ?? 换前置块(null, 新建前置块模板)
+          : 换前置块(原块, 要 ?? "");
+      if (新块 === 原块) return true; // 一个字都不会变，别派空事务
+      // ⚠️ 只换开头那一段，别处的字符一个都不动（`from: 0, to: 原块.length`）。
+      // 光标与滚动由 CodeMirror 自己按位置映射，这里不另设选区——设了反而会
+      // 把用户正在别处看的位置拽回来。
+      view.dispatch({ changes: { from: 0, to: 原块?.length ?? 0, insert: 新块 ?? "" } });
+      return true;
+    }
     // 表格那十条：见上面那段"语义对不上"。
     case "tableRowAbove":
     case "tableRowBelow":
@@ -647,50 +740,9 @@ function 写作模式扩展(初始: 写作模式): { 字段: StateField<写作�
  * 初值。**判据**：改动预览的代码只跟文档的**行**打交道，与源码模式其余部分
  * （查找、写作模式、发命令）之间没有共用状态，所以它能整块搬走。 */
 
-/**
- * CodeMirror 自带键位里，**与本应用快捷键撞车的那几条**——建编辑器时要摘掉。
- *
- * # 为什么会撞，以及为什么"两个都跑"了
- *
- * 本应用的快捷键**不是**在编辑器里发的，而是在 `window` 上收 `keydown`
- * （`ui/useMenus.ts`），**冒泡阶段**——CodeMirror 处理完自己那张表之后
- * 只调 `preventDefault()`，**不 `stopPropagation()`**（`@codemirror/view` 的
- * `runHandlers` 里只认键位自带的 `stopPropagation` 标志，默认那张表一条都没设）。
- * 于是同一次按键**两边都会执行**：CodeMirror 先做它那一件，应用再做自己那一件。
- *
- * ⚠️ **症状都不像"键位坏了"，像"功能自己乱动"**，所以很难被报上来
- * （2026-09-25 在无头 X 上实测到的四条，逐条都复现过）：
- *
- * | 按键 | CodeMirror 干的 | 应用干的 | 用户看到 |
- * |---|---|---|---|
- * | `Ctrl+/` | `toggleComment` | 切源码模式（已经是了，空操作） | 光标那行**被套上一对 `<!-- -->`** |
- * | `Ctrl+I` | `selectParentSyntax` | 斜体 | 选区**先被抢走**，斜体加在了别处 |
- * | `Ctrl+Shift+K` | `deleteLine` | 插入代码块 | **那一行被删掉**，换成一个空代码块 |
- * | `Ctrl+Z` / `Ctrl+Y` | `undo` / `redo` | 撤销 / 重做 | 一次按键**退两步** |
- *
- * 前三条里 `Ctrl+/` 最阴：`<!-- 文字 -->` 在所见即所得里**整段渲染成空**，
- * 于是"我按了个视图切换键，那段字不见了"。第四条最常被按到。
- *
- * # 为什么是"摘掉"而不是"改键位"
- *
- * 这四条在**应用侧**都是有来历的（`ui/commands.ts` 那张表：源码模式 / 斜体 /
- * 代码块 / 撤销重做，撤销重做还是通用的肌肉记忆），动不得；CodeMirror 那侧
- * 给的是它的通用默认值，本应用并不需要其中的这几条——
- * `toggleComment` 对 Markdown 更是**没有意义**（Markdown 没有注释语法，
- * 它套出来的是 HTML 注释，那不是"注释掉这一行"的语义）。
- *
- * # ⚠️ 故意**没有**摘的两条
- *
- * - `Alt-ArrowUp` / `Alt-ArrowDown`（CodeMirror 的 `moveLineUp` / `moveLineDown`）
- *   看起来和菜单里「编辑 → 上移该行 / 下移该行 `Alt+↑`」撞了，但**那两条在
- *   应用侧还没实现**（`App.tsx` 里没有它们的 handler，菜单上一直是灰的）。
- *   摘了就是**把唯一能用的那份拿掉**。
- *   📌 将来谁把 `edit.moveLineUp` / `edit.moveLineDown` 接上了，**必须回来
- *   把这两条加进下面这个集合**——否则那两条会一次移两行。
- * - `Escape`（`simplifySelection`）：应用侧的 `Esc` 不走这张表
- *   （沉浸模式是 `ui/useImmersive.ts` 自己收的），两边不冲突。
- */
-const 撞车键位 = new Set(["Mod-/", "Mod-i", "Shift-Mod-k", "Mod-z", "Mod-y"]);
+/* ⚠️ `撞车键位` 那份名单 2026-10-04 搬去了 `editor/key-conflicts.ts`——
+ * 理由只有一个：**让测试读得到**（BUG-58 就是漏了 `Mod-u` 那一条进来的，
+ * 见那个文件头）。这一边只剩"用它"：建实例时把撞车的默认键位滤掉。 */
 
 /** 建一个源码编辑器。**同步返回**——CodeMirror 不需要异步初始化。 */
 export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
@@ -698,6 +750,7 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     root,
     initialMarkdown,
     onChange,
+    onSelection,
     readOnly = false,
     strict = false,
     onFindStatus,
@@ -709,6 +762,14 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
 
   /** 上一次报出去的查找签名。**每个实例一份**（这个闭包在函数体里）。 */
   let 上次查找签名 = "";
+  /**
+   * 上一次报出去的选区快照的签名。
+   *
+   * ⚠️ 必须自己记：`updateListener` 每次按键、每次点鼠标都会走一遍，
+   * 不去重就是"光标每动一下跨一次 IPC"。所见即所得那一侧的去重在
+   * `caret-snapshot.ts` 的插件里（同一套写法，只是一边在插件里、一边在这里）。
+   */
+  let 上次快照签名 = "";
   /** 同上的写法：打字机模式要判"这次是不是刚打开的"。 */
   let 上次模式: 写作模式 = writingModes;
   const { 字段: 写作字段, 扩展: 写作扩展 } = 写作模式扩展(writingModes);
@@ -773,6 +834,20 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
         if (位) 滚到正中(u.view.scrollDOM, 位.top, 位.bottom);
       }
       上次模式 = 模式;
+
+      // 选区快照（`docs/07` 第 14 项）。⚠️ 也在 `if (!u.docChanged) return`
+      // **之前**：光挪光标不改文档，而"用户选中了什么"正是要靠这一条报出去。
+      // ⚠️ 本仓的 `选区快照` 是纯值比较，所以这里自己按签名去重——
+      // CodeMirror 每次按键/每次点鼠标都会走一遍 `updateListener`。
+      if (onSelection) {
+        const { from, to } = u.state.selection.main;
+        const text = from === to ? "" : u.state.sliceDoc(from, to);
+        const sig = `${from === to ? 1 : 0}|${text}`;
+        if (sig !== 上次快照签名) {
+          上次快照签名 = sig;
+          onSelection({ text, empty: from === to });
+        }
+      }
 
       if (!u.docChanged) return;
       // ⚠️ 不带 `userEvent` 的过滤：本文件里所有 `dispatch` 都是"用户意图"
@@ -853,6 +928,16 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     },
     runCommand: (name: EditorCommand, payload?: CommandPayload) =>
       applyCommand(view, name, strict, payload),
+
+    // ⚠️ `replaceSelection`：选区非空时是**替换**，空选区是插入——与
+    // `create.ts` 那一侧 `tr.insertText(text, from, to)` 同一个语义。
+    // ⚠️ 这一侧没有 `readOnly` 那回事：`createSourceEditor` 只给可编辑的
+    // 正文建（分屏右侧是所见即所得那一路的只读实例），所以恒 `true`。
+    插入在光标处: (text: string) => {
+      const { from, to } = view.state.selection.main;
+      view.dispatch({ changes: { from, to, insert: text } });
+      return true;
+    },
 
     // ⚠️ `html` 给空串，**不是**"把 markdown 原文包一层 `<pre>`"：源码模式
     // 手里只有文本，硬凑一份 HTML 会让"复制"粘到别处时看起来像富文本，

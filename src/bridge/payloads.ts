@@ -35,6 +35,26 @@ export interface PanelDirtyPayload {
   id: string | null;
 }
 
+/**
+ * `events.pluginStream` 的载荷（2026-10-04 加，`docs/07` 第 58 项）。
+ *
+ * ⚠️ **这一条带着内容**（`text`），是 `pluginPanel` 那条的例外，也是整个
+ * `events.*` 里唯一一条"推内容"的——理由在 `ipc.ts::events.pluginStream`
+ * 和 `src-tauri/src/lua/api/ui.rs::实时表` 顶上写着（跑命令时宿主握着
+ * `plugins` 锁，拉那条路回不来）。
+ *
+ * ⚠️ 只有 `plugin`、**没有 `id`**：宿主那边（`ui.rs::实时表`）只知道是哪个
+ * 插件在吐字。一个插件同时开两个面板一起吐字的话，这段字会落到**那个插件
+ * 当前显示的那一页**上。眼下只有 AI 一家用得上，真出现第二家再谈。
+ *
+ * ⚠️ `text` 为空 = **收工**（把这段撤掉）。它**从来不是**面板的真内容：
+ * 真内容永远来自 `api.plugin.panelContent` 那条拉的路。
+ */
+export interface PanelStreamPayload {
+  plugin: string;
+  text: string;
+}
+
 export interface DocumentChangedPayload {
   id: DocId;
   text: string;
@@ -42,6 +62,27 @@ export interface DocumentChangedPayload {
    *  （AI 客户端经 `nota_write`，2026-09-27 加）。两者前端都**照单全收**
    *  覆盖编辑器；宿主自身的改动前端本来就知道，不会走这条。 */
   origin?: string;
+}
+
+/**
+ * `events.documentEdit` 的载荷：**插件要编辑器在光标处改一笔**
+ * （`docs/07` 第 14 项，2026-10-04 加）。
+ *
+ * ⚠️ 与 `DocumentChangedPayload` 的分工是这个设计的全部内容：那条是
+ * **"正文已经换了"**（宿主改完镜像再通知，前端整篇 `setMarkdown`），
+ * 这条是**"请你替我改"**——宿主**改不动**，因为"在光标处插一段"在 markdown
+ * 里没有对应的偏移（量测见 `editor/caret-snapshot.ts` 顶上那张表）。
+ *
+ * ⚠️ 所以它**丢了就是丢了**（编辑区没挂载、瞄的不是当前文档、当前实例只读都会
+ * 静默丢掉）：宿主那条路做不到这件事，报错也没用。真正的代价只有一条——
+ * 插件发出的改动落了空，而文档一个字没动（比"结构被拼坏、存盘才发现"好）。
+ */
+export interface DocumentEditPayload {
+  id: DocId;
+  /** 这一笔要做什么。今天只有一种，留成字段是为了将来加（比如"替换整块"）。 */
+  op: "insert-at-cursor";
+  /** 要插入的文本。**非空**——空串在宿主那侧就被拒了。 */
+  text: string;
 }
 
 /**

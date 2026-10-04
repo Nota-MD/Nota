@@ -63,6 +63,9 @@ import { Icon } from "@/ui/Icon";
 // ⚠️ 2026-09-27 起在 `editor/headings.ts`（原来挂在 `ui/outline.ts`）：
 // 「内容目录」那条命令要**同一份判据**，见那份文件头。
 import { extractOutline, type OutlineItem } from "@/editor/headings";
+// 右缘那条可以拖的把手（2026-09-30）。⚠️ 它**渲染在这一栏里面**，理由见那边文件头。
+import { SidebarResizer } from "@/ui/SidebarResizer";
+import { useTablistKeys } from "@/ui/useTablistKeys";
 
 export type SidebarTab = "tree" | "outline";
 
@@ -128,6 +131,26 @@ interface Props {
    * 那处的症状是"预览开着还能从文件树里换掉文档"。
    */
   inert?: boolean;
+  /**
+   * 拖动右缘改宽度，**松手时**报一个最终值（2026-09-30）。
+   *
+   * ⚠️ 拖动过程本身**不走这里**：那是 `ui/SidebarResizer.tsx` 直接写
+   * `--sidebar-width` 那条变量，一秒几十次派发 `updateSettings` 会把设置
+   * 文件写穿。这里只接"拖完了，就这个数"。
+   */
+  onResize: (宽: number) => void;
+  /**
+   * 收起来了（用户点的「显示/隐藏侧边栏」那三个入口之一，2026-09-30 加）。
+   *
+   * ⚠️ **这一栏始终挂着，折叠只把宽度动画到 0**（`styles/sidebar.css` 里那条
+   * `transition`）：条件渲染的话元素是"凭空出现、凭空消失"的，没有加动画的
+   * 余地（元素一挂上就是终态）。所以这个 prop 只负责**加一个类 ＋ 让整栏
+   * `inert`**，不做卸载。
+   *
+   * ⚠️ **`inert` 不能省**：宽度归零之后里头那些按钮、树的行**还在 DOM 里**，
+   * 不加的话 Tab 键会走进一个看不见的侧栏里（读屏也会念它）。
+   */
+  折叠?: boolean;
 }
 
 export function Sidebar({
@@ -144,18 +167,29 @@ export function Sidebar({
   onClose,
   onOpenFolder,
   inert,
+  onResize,
+  折叠,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   const t = useT();
   const outline = useMemo(() => extractOutline(docText, strict), [docText, strict]);
+  // 页签的方向键（第 50 项，2026-10-04）。
+  const 页签栏 = useRef<HTMLElement>(null);
+  useTablistKeys(页签栏);
 
   return (
-    <aside className="sidebar" inert={inert || undefined}>
+    <aside
+      // ⚠️ 折叠**不卸载**，只加类（宽度动画到 0）——见 `折叠` 那个 prop 的注释。
+      className={折叠 ? "sidebar sidebar-collapsed" : "sidebar"}
+      inert={inert || 折叠 || undefined}
+    >
       {/* ⚠️ 页签与外层的 `role="tablist"` 之间**不能夹别的按钮**：tablist 的
           子元素按规矩只能是 tab，把 × 塞进去会让读屏把"关闭"念成一个页签。
           所以 × 在 tablist **外面**，两个一起装进这条 `sidebar-head`。 */}
       <div className="sidebar-head">
-        <nav className="sidebar-tabs" role="tablist">
+        {/* ⚠️ 方向键（←→/Home/End）走 `useTablistKeys`（第 50 项，2026-10-04）：
+            挪焦点不切换，Enter 由 `TabButton` 的 `<button>` 自己点。 */}
+        <nav ref={页签栏} className="sidebar-tabs" role="tablist">
           <TabButton id="tree" current={tab} onSelect={onTab} label={t("File")} />
           {/* ⚠️ 顺序照「视图」菜单里那两条（`Ctrl+Shift+3` 文件树、
               `Ctrl+Shift+1` 大纲）：菜单里从上往下是文件树 → 大纲，
@@ -200,6 +234,11 @@ export function Sidebar({
 
         {tab === "outline" && <Outline items={outline} onJump={onJumpOutline} />}
       </div>
+
+      {/* 右缘那条可以拖的把手（2026-09-30）。⚠️ **必须是 `.sidebar` 的最后一个
+          子元素**：它靠 `parentElement` 量这一栏的左缘（判据见
+          `ui/SidebarResizer.tsx` 文件头），换个位置量到的就是别人。 */}
+      <SidebarResizer onCommit={onResize} />
     </aside>
   );
 }

@@ -3,14 +3,26 @@
 //! 读的方法要 `document.read`，写的要 `document.write`；两者各自装表，
 //! 只申请了读的插件拿到的 `nota.document` 上**没有** `set_text` 这一格。
 //!
-//! # 写完之后发生了什么
+//! # 两条路：整篇换掉，和请编辑器替你改一处
 //!
-//! `set_text` / `insert_text` 改的是后端镜像，**前端编辑器不会自己知道**。
-//! 所以每次写完都往 `nota:document-changed` 发一条事件，前端收到就把编辑器内容
-//! 换掉、光标落到合理位置。这条链路见 `docs/05-editor-bridge.md`。
+//! **`set_text` / `append_text` 是"整篇替换"**：改的是后端镜像，
+//! **前端编辑器不会自己知道**。所以每次写完都往 `nota:document-changed` 发一条
+//! 事件，前端收到就把编辑器内容换掉、光标落到合理位置。这条链路见
+//! `docs/05-editor-bridge.md` §4.8。
 //!
-//! ⚠️ 写操作是**整篇替换**语义。插件想"在光标处插一段"目前只能拿到全文自己拼——
-//! 精细的选区/位置 API 排在后面的轮次（`docs/07` 第 14 项）。
+//! ⚠️ 整篇替换的代价：撤销栈断掉、光标跳走、表格列宽之类的排版状态全丢。
+//! 用它做"在光标处插一句"是拿大炮打蚊子。
+//!
+//! **`insert_at_cursor` 是"请编辑器替你改一处"**（第 14 项加）：宿主只往
+//! `nota:document-edit` 上发一条**意图**，由前端拿一次真正的 ProseMirror 事务
+//! 去落地——撤销栈、光标、滚动位置全都活着。
+//!
+//! ⚠️ **插件拿不到光标偏移量，这是故意的**。`get_selection` 给的是**选中的那段字**
+//! （`{ text, empty }`），不是 `{ from, to }`。原因在 `src/editor/caret-snapshot.ts`
+//! 的文件头，一句话：**"Markdown 字符偏移"这个坐标系在块边界上不存在**——
+//! 在列表项开头插字，Markdown 会多出一个 `- `；在两个段落之间插字，会多出一个空行。
+//! 收偏移量的插件一定会拿它去拼字符串，然后拼出一份跟编辑器真实结果**不一样**的
+//! 稿子。想改正文就用 [`insert_at_cursor`]，别自己拼。
 
 use mlua::{Lua, Table};
 
@@ -124,6 +136,36 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
             })
             .map_err(mlua_to_nota)?;
         t.set("stats", stats).map_err(mlua_to_nota)?;
+
+        // ── get_selection：用户现在选着哪段字（第 14 项，2026-10-04 加）───────
+        //
+        // ⚠️ 返回 `{ text, empty }`，**没有偏移量**——理由见文件头那一段，
+        // 简单说就是偏移量在块边界上不可换算，给了就一定会被拿去拼错。
+        //
+        // ⚠️ **没选区时返回 `nil`，不是空表**。这两件事不一样：
+        // * `nil` = "编辑器还没报过"（刚打开、或没挂编辑器）——"我不知道"；
+        // * `{ text = "", empty = true }` = "我知道，光标是个点、没选东西"。
+        // 让插件能分清"不知道"和"知道是空的"，它才能决定要不要退回
+        // `get_text()` 自己算。用空表代替 `nil` 就把这两种情况糊成一种了。
+        let docs = ctx.documents.clone();
+        let get_selection = lua
+            .create_function(move |lua, ()| {
+                let store = docs.lock().unwrap();
+                let Some(d) = store.active() else {
+                    return Ok(mlua::Value::Nil);
+                };
+                let Some(快照) = d.选区.as_ref() else {
+                    return Ok(mlua::Value::Nil);
+                };
+                let t = lua.create_table()?;
+                t.set("text", 快照.text.clone())?;
+                // ⚠️ `empty` 不能靠 `text == ""` 推：选中一张图片或一个公式时
+                // `text` 也是空的，但选区**不是**空的（见 `document::选区快照`）。
+                t.set("empty", 快照.empty)?;
+                Ok(mlua::Value::Table(t))
+            })
+            .map_err(mlua_to_nota)?;
+        t.set("get_selection", get_selection).map_err(mlua_to_nota)?;
     }
 
     // ── 写 ────────────────────────────────────────────────────────────────
@@ -163,6 +205,41 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
             })
             .map_err(mlua_to_nota)?;
         t.set("append_text", append_text).map_err(mlua_to_nota)?;
+
+        // ── insert_at_cursor：请编辑器在光标处插一段（第 14 项，2026-10-04 加）─
+        //
+        // ⚠️ 这里**一个字都不改镜像**。发出去的是一条**意图**（`nota:document-edit`），
+        // 落地的人是前端编辑器。所以：
+        // * 返回 `false` 不代表失败，代表"我发出去了"——真正插没插进去，
+        //   插件**这一瞬间无从知道**（编辑器可能没挂、可能用户已经切走了文档）。
+        //   想确认就下一次 `get_text()` 里找。
+        // * `text` 是空串时直接返回 `false`、连事件都不发：空插入在 PM 里是
+        //   一次空事务，前端那边会白跑一趟，不如这里挡掉。
+        //
+        // ⚠️ 跟 `set_text` 不同，**这里不碰 `revision`**。镜像没变，正文是编辑器
+        // 稍后通过 `nota_doc_sync` 推上来的那一份变的——到那时候 `revision` 才动。
+        let docs = ctx.documents.clone();
+        let app = ctx.app.clone();
+        let insert_at_cursor = lua
+            .create_function(move |_, text: String| {
+                if text.is_empty() {
+                    return Ok(false);
+                }
+                // ⚠️ 取完 `id` 就把锁放掉再发事件（同上面 `set_text` 的形状）：
+                // 发事件会走到前端，前端那边可能反过来再调一条要拿这把锁的命令。
+                let id = {
+                    let store = docs.lock().unwrap();
+                    match store.active_id() {
+                        Some(id) => id,
+                        None => return Ok(false),
+                    }
+                };
+                emit_edit(&app, id, &text);
+                Ok(true)
+            })
+            .map_err(mlua_to_nota)?;
+        t.set("insert_at_cursor", insert_at_cursor)
+            .map_err(mlua_to_nota)?;
     }
 
     Ok(t)
@@ -240,6 +317,27 @@ fn emit_changed(app: &tauri::AppHandle, id: crate::document::DocId, text: &str) 
             "id": id.0,
             "text": text,
             "origin": "plugin",
+        }),
+    );
+}
+
+/// 把"请替我在光标处插一段"这条**意图**告诉前端（第 14 项）。
+///
+/// ⚠️ 跟上面 [`emit_changed`] 是**反方向**的两件事，别照着这个改那个：
+/// `changed` 是"我已经改完了、这是新的"；本函数是"我改不了、你来"。
+/// 判据写在 `crate::document::EVENT_EDIT` 上。
+///
+/// ⚠️ `op` 这一格是留给以后的（替换选区、包围选区……）。现在只有
+/// `"insert-at-cursor"` 一种，但**不在前端按"只有一种"来写**：前端拿到不认识的
+/// `op` 要静默丢掉、而不是拿 `text` 硬当插入用。
+fn emit_edit(app: &tauri::AppHandle, id: crate::document::DocId, text: &str) {
+    use tauri::Emitter;
+    let _ = app.emit(
+        crate::document::EVENT_EDIT,
+        serde_json::json!({
+            "id": id.0,
+            "op": "insert-at-cursor",
+            "text": text,
         }),
     );
 }

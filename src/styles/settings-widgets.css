@@ -1,0 +1,234 @@
+/**
+ * 偏好设置那个框里的三块**专用小件**：`?` 气泡、明暗缩略图、快捷键那一页。
+ *
+ * 2026-09-29 从 `settings.css` 里按功能拆出来（那一份当时 962 行）。它们能合成
+ * 一份，是因为同一条性质：**都不属于 `.stg-*` 那套"每个页都在用"的原语**——
+ *
+ * | 类 | 谁在用 | 为什么单独说 |
+ * |---|---|---|
+ * | `.stg-help*` | 任何一行／组标题右边的 `?` | 它是**绝对定位的浮层**，长哪边要按"会不会被内容区裁掉"分情况 |
+ * | `.stg-swatch*` | 只有「外观」那一页的明暗选择器 | 一块缩略图 = **一页缩小版的界面**，不是普通色块 |
+ * | `.stg-keys*` / `.stg-kbd*` | 只有「快捷键」那一页 | 冲突提示与录制态是它的两半，见 `panes/ShortcutsPane.tsx` 头上那四条 |
+ *
+ * ⚠️ `?` 气泡那一条**改之前先读它上面的注释**：气泡被 `overflow` 裁掉小半个字
+ * 这件事是 2026-09-24 目检抓到的，一刀切（比如"一律居中"）会让两种情况的裁切
+ * 各留一半、两边都难看。
+ *
+ * ⚠️ 三份都必须在 `app.css` 之后加载（本文件借了那边的按钮底子与遮罩层级）。
+ */
+
+/* ── 「?」气泡 ────────────────────────────────────────────────────────────
+ *
+ * 一颗小圆点，悬停或键盘聚焦时弹出长解释（见 `primitives.tsx` 的 `HelpDot`）。
+ *
+ * ⚠️ 气泡是**绝对定位**的，而内容区是 `overflow-y: auto`（`overflow-x` 跟着
+ * 变成 `auto`）——超出内容区的那部分会被**裁掉**。所以它长哪边是**分情况**的：
+ *
+ * - 行里那颗（`.stg-row-text` 里）：贴着一行的左端，往左有整栏空地 → `right: 0`；
+ * - 组标题那颗（`.stg-group-head`，在左栏的右端，离框左沿只有
+ *   `--stg-col-title` 那 200px）：往左长**会被裁掉小半个字**（2026-09-24
+ *   目检抓到，气泡左边几个字缺了一角）→ 改成 `left: 0` 往右长。
+ *
+ * 两边不能一刀切："一律居中"会把两种情况的裁切各留一半。
+ *
+ * ⚠️ 用 `:focus-within` 而不是只在 `:hover` 上：键盘 Tab 到那颗按钮时也要能看，
+ * 否则"这条设置到底什么意思"就成了只有用鼠标的人才知道的事。 */
+.stg-help {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.stg-help-dot {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 0.66em;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.stg-help-dot:hover,
+.stg-help-dot:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.stg-help-dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stg-help-pop {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  width: max-content;
+  max-width: 34ch;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  box-shadow: var(--popup-shadow);
+  font-size: 0.85em;
+  font-weight: 400;
+  line-height: 1.6;
+  text-align: left;
+  white-space: normal;
+}
+
+/* 组标题那颗往右长。见上面那段 ⚠️——它是**唯一**的例外。 */
+.stg-group-head .stg-help-pop {
+  right: auto;
+  left: 0;
+}
+
+.stg-help:hover .stg-help-pop,
+.stg-help:focus-within .stg-help-pop {
+  display: block;
+}
+
+/* ── 明暗缩略图 ────────────────────────────────────────────────────────────
+ *
+ * 一张缩略图 = **一页缩小版的界面**：底色 + 一个「Aa」样本 + 一道强调色横杠。
+ * 光有两个色块的话，"浅色"和"深色"看着像两个按钮；画成一小页，它才读得出
+ * "选它之后应用长这样"。
+ *
+ * ⚠️ 里面的颜色**一个都不是写死的**：`.stg-swatch-page` 自带
+ * `data-ui-style` / `data-ui-mode`，`theme.css` 里那两段是裸属性选择器，
+ * 于是它取到的是**真正的那套 token**（连该风格的识别色都对）。
+ * 写死色值的话，换风格时缩略图就是唯一没跟着变的地方——而那正是用户
+ * 拿来做判断的东西。 */
+.stg-swatches {
+  display: flex;
+  gap: 10px;
+}
+
+.stg-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+}
+
+.stg-swatch:hover {
+  background: var(--bg-hover);
+}
+
+/* 选中的那张用**强调色描边**——比底色深浅可靠，深色壳上也看得见。 */
+.stg-swatch[data-active="true"] {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.stg-swatch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stg-swatch-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 56px;
+  height: 40px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.stg-swatch-ink {
+  font-size: 0.95em;
+  line-height: 1;
+}
+
+.stg-swatch-rule {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+.stg-swatch-name {
+  line-height: 1;
+}
+
+/* 快捷键的键帽。 */
+.stg-kbd {
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+
+/* ── 「快捷键」那一页（2026-09-27 起键位可以改）───────────────────────────
+ *
+ * ⚠️ 这几个类都**只在这一页用**。加之前先看 `panes/ShortcutsPane.tsx` 头上
+ * 那四条说明——尤其是"冲突拦在录制那一刻"那条，`.stg-kbd-rec` 和
+ * `.stg-keys-clash` 是它的两半。 */
+
+/* 右边那一格：键位 ＋ 最多三颗按钮横排。
+   ⚠️ 用 `flex-wrap` 而不是 `nowrap`：设置框最窄是 `min(1080px, 94vw)`，
+   窄窗口下四个元素挤在一行会把键位本身压得看不清，换行比压扁好。 */
+.stg-keys-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* 录制态。**虚框 ＋ 强调色**，和"就是这个键位"那个实框必须一眼分得开：
+   两者长在同一个格子里，分不开的话用户按完键不知道到底成没成。 */
+.stg-kbd-rec {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 「未设置」——这条命令现在没有快捷键。**不是灰掉的错误态**，
+   是一个正当状态（出厂就没键位的命令多得很）。 */
+.stg-keys-none {
+  color: var(--fg-faint);
+  font-size: 0.9em;
+}
+
+/* 撞车提示：挂在那一行的说明位（`SettingRow` 的 `description`），
+   所以这里只给颜色、不管字号——那一格的字号由 `stg-row-desc` 定。 */
+.stg-keys-clash {
+  color: var(--danger);
+}
+
+.stg-keys-reset-all {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: var(--spacing);
+}
+
+.stg-keys-hint {
+  color: var(--fg-muted);
+  font-size: 0.88em;
+}

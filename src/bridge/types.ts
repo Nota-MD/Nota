@@ -497,6 +497,46 @@ export interface PluginInfo {
    * "声明了 zh-CN 但少了那个文件"这种事只有宿主知道（`lua/api/i18n.rs`）。
    */
   lang_ok: boolean;
+  /**
+   * 这个插件**请宿主画的**那几格设置（清单里的 `[[settings]]`，2026-10-04 加）。
+   *
+   * ⚠️ 空数组有两种意思，界面上不用分：**没声明**、或者声明了但清单不给画
+   * （后者加载时就被挡下了，见 `plugin/manifest.rs::check_settings`）。
+   * 插件自己在面板里画设置界面那种（AI 插件）**本来就是一格都不声明**。
+   */
+  settings: PluginSetting[];
+}
+
+/**
+ * 插件声明的一格设置 ＋ **此刻的值**，画在「设置 → 拓展」那一页上。
+ *
+ * ⚠️ **值已经夹好、对齐好了**（Rust 侧的 `SettingDecl::夹紧`）：前端拿到的是
+ * "能直接摆到滑杆上的数"，**别在前端再夹一遍**——同一条规则两处实现，
+ * 迟早对不上，而对不上的表现是"滑杆显示 5、插件按 999 算"。
+ *
+ * ⚠️ 值**一定有**：用户还没拖过 = 文件里没这个键 = 宿主给的 `default`。
+ * 前端拿不到"没设过"这个中间态，也就不会画出第三种样子。
+ *
+ * ⚠️ 文案（`label` / `help`）**是宿主翻好的**：清单里写英语原文，译文在插件
+ * 自己的 `lang/<tag>.toml` 里（键就是原文）。前端**不要**拿它去查宿主那套
+ * i18n——那是两个词表（`pluginText.ts` 顶上那段讲着同一件事）。
+ */
+export interface PluginSetting {
+  /** 进插件设置文件的键。`api.plugin.setSetting` 要用它。 */
+  key: string;
+  /** 控件类型。现在只有 `"range"`（滑杆），前端按它分派。 */
+  kind: "range";
+  /** 这一格的名字（已翻译）。 */
+  label: string;
+  /** 名字下面那句小字（已翻译）。空串 = 不画。 */
+  help: string;
+  min: number;
+  max: number;
+  step: number;
+  /** 读数后面那个单位（`s`）。空串 = 不画。**它不进 i18n**（两门语言写出来一样）。 */
+  unit: string;
+  /** 此刻的值。 */
+  value: number;
 }
 
 /**
@@ -782,4 +822,49 @@ export interface DiffLine {
   op: "ctx" | "add" | "del" | "hunk";
   /** 行内容。加/删/上下文**不含行首那个标记**（界面自己补）；段头是整行原样。 */
   text: string;
+}
+
+/**
+ * 「关于 → 故障排除」要的那一份报告。⚠️ 与 Rust 侧 `diagnostics::诊断` 一一对应。
+ *
+ * ⚠️ **一律 snake_case，不转 camelCase**（本仓惯例）：两处名字不一样时的表现是
+ * "界面上一格永远空着"，而编译器一句话都不会说。加一格就得两边同批加。
+ *
+ * ⚠️ **值全是原始字符串，没有一句是翻译过的**：`rustc` 那几格本来就长那样，
+ * `build_host` 是主机名。标签（"rustc" 前面那个词）归前端，走 `t()`。
+ *
+ * ⚠️ **可能有空串**——取不到就是空串，不是 `null`（见 Rust 侧那条口径）。
+ * 前端统一画成「—」。
+ */
+export interface Diagnostics {
+  // ── 编译信息：这些说的是**打包这台二进制的那台机器**，不是你现在这台 ──
+  /** 包版本。与 `getVersion()` 同源，但这条在开发构建里也拿得到。 */
+  version: string;
+  /** 编译完成那一刻，**Unix 秒**。格式化交给前端（语言与时区在这儿）。 */
+  build_time: number;
+  build_host: string;
+  /** `uname -srm`：编译机器的内核与架构。 */
+  build_platform: string;
+  /** 目标三元组，比如 `x86_64-unknown-linux-gnu`。 */
+  target: string;
+  /** `debug` / `release`。 */
+  profile: string;
+  /** 四条工具链版本（`--version` 的第一行）。 */
+  rustc: string;
+  cargo: string;
+  node: string;
+  npm: string;
+  /** 编译时锁住的几个关键依赖版本（读自 `Cargo.lock`）。 */
+  tauri: string;
+  webkit_crate: string;
+  gtk_crate: string;
+  mlua: string;
+  // ── 本机信息：这些说的是**现在跑着它的这台机器** ──
+  /** `/etc/os-release` 的 `PRETTY_NAME`。 */
+  os_pretty: string;
+  kernel: string;
+  arch: string;
+  /** GTK 的**运行时**版本（链接进来的那个库），例如 `3.24.49`。 */
+  gtk_runtime: string;
+  webkit_runtime: string;
 }

@@ -28,7 +28,8 @@
  *
  * ⚠️ **界面缩放（`appearance.zoom`）也不在这里**，它要调 Tauri 的 webview 缩放，
  * 是异步的，走 `ui/useZoom.ts`（那边也管 Ctrl+滚轮那一档）。这里只落**同步写
- * 属性 / 内联变量**的那几样：两条轴 ＋ 界面字号 ＋ 主题色。
+ * 属性 / 内联变量**的那几样：两条轴 ＋ 界面字号 ＋ 主题色 ＋ 段首缩进 ＋
+ * 侧栏宽度（2026-09-30 加的最后一条，拖动那条路见 `ui/SidebarResizer.tsx`）。
  *
  * ⚠️ **`resolveStyle` / `resolveMode` 是导出的**：`ui/useUiMode.ts` 要在同一个
  * 口径上订阅系统明暗，偏好设置里那两张缩略图也要（判据必须和应用真长成什么样
@@ -122,15 +123,21 @@ export function applyTheme(settings: Settings): () => void {
     // ⚠️ 内联在 `<html>` 上的自定义属性**优先级高于**那 16 格
     // `[data-ui-style][data-ui-mode]` 选择器，所以 `theme/color.css` 一行都不用改。
     //
-    // ⚠️ **只写 `--accent` / `--accent-fg` 两个**，不碰其余颜色：配色协调由明暗那条
-    // 轴保证。前景色是 `accentFg()` 按对比度当场算的——**不存**，理由见
+    // ⚠️ **只写 `--accent` / `--accent-fg` / `--switch-on` 三个**（第三个是
+    // 2026-09-30 加的，用户那天报「右侧开关还是橙色的」，来龙去脉写在
+    // `accent.ts::accentVars` 那段），不碰其余颜色：配色协调由明暗那条轴保证。
+    // 前景色是 `accentFg()` 按对比度当场算的——**不存**，理由见
     // `settings/appearance.rs` 的 `accent` 那段。
     const 强调 = accentVars(settings.appearance.accent);
     if (强调) {
       for (const [变量, 值] of Object.entries(强调)) root.style.setProperty(变量, 值);
     } else {
+      // ⚠️ **这三个必须一起摘**。`--switch-on` 摘漏了的症状很隐蔽：用户点
+      // 「跟随风格」之后 `--accent` 回去了、开关**留在上一个主题色上**——
+      // 界面看着"确实变了"，但变的是一个本不该还在那儿的残留值。
       root.style.removeProperty("--accent");
       root.style.removeProperty("--accent-fg");
+      root.style.removeProperty("--switch-on");
     }
 
     // ⚠️ 「段首缩进」（2026-09-27）走的还是上面那一套"写 / 摘"：关掉时**把变量
@@ -148,6 +155,30 @@ export function applyTheme(settings: Settings): () => void {
     } else {
       root.style.removeProperty("--para-indent");
     }
+
+    // 侧栏宽度（2026-09-30）。用户拖右缘改的是它（`ui/SidebarResizer.tsx`），
+    // 这里负责"设置值 → CSS 变量"那一半。
+    //
+    // ⚠️ **拖动期间这一条不参与**：拖动是直接写同一个变量（`useZoom` 立下的
+    // 先例，见那边文件头），松手才落盘、才绕回这里。所以这里**每个值都写**、
+    // 不写"没变就跳过"那种优化——省不下什么，反倒多一条会分叉的判据。
+    //
+    // ⚠️ **夹一道**（与 `SidebarResizer.tsx` 里那份同一个区间）：手改
+    // `settings.toml` 写成 `9999` 的人，不该把正文挤没。⚠️ 两处的数和
+    // `theme/base.css` 里的出厂值**必须同值**，改一处要三处一起看。
+    //
+    // ⚠️ **不是数就退回出厂值**，与 `SidebarResizer.夹侧栏宽` 里那道
+    // `Number.isFinite` 同一条理由（那边注释详述了后果）。**少了它这一格
+    // 会连累 `theme/base.css`**：后端没给出这一格时这里算出的是 `NaN`，
+    // 而 `setProperty("--sidebar-width", "NaNpx")` 是**写进去了的**——
+    // 它把那格出厂值 240 顶掉、自己又不合法，于是 `width` 整条声明失效、
+    // 退回 `auto`，侧栏宽度改由内容（那句 "No folder is open yet…"）撑开。
+    // 看着既不像 240 也不像报错，只像"侧栏宽度不听使唤"。
+    const 原宽 = settings.appearance.sidebar_width;
+    const 侧栏宽 = Number.isFinite(原宽)
+      ? Math.min(480, Math.max(180, Math.round(原宽)))
+      : 240;
+    root.style.setProperty("--sidebar-width", `${侧栏宽}px`);
   };
 
   paint();

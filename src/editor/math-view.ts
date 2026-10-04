@@ -170,6 +170,8 @@ import katex from "katex";
 import type { KatexOptions } from "katex";
 
 import { t } from "@/i18n";
+import { 建命令表, type 收下 } from "./math-commands";
+import { 建建议框, 用选项画预览 } from "./math-suggest";
 
 /** 行内公式的节点名（与 plugin 里 `const c = "math_inline"` 一致）。 */
 const 行内名 = "math_inline";
@@ -398,6 +400,13 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
   const 行内 = 种类 === "inline";
   const 分隔文字 = 行内 ? "$" : "$$";
 
+  // ⚠️ 命令候选表**在这里建一次**（工厂那一层），不是每个 NodeView 建一次：
+  //    宏表（`选项.macros`）在编辑器装配时就定了，`enable_physics` 一开一关
+  //    要重启才生效（`math-macros.ts`），所以同一份表在整场会话里都成立。
+  //    判据就用"宏表空不空"——physics 那九十来条是**唯一**往 `macros` 里塞东西的
+  //    地方（`katexOptionsFor`），空表就意味着没开。
+  const 表 = 建命令表(Object.keys(选项.macros ?? {}).length > 0);
+
   return (
     初始: PMNode,
     view: EditorView,
@@ -413,6 +422,7 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
     //       <textarea .nota-math-source>          <input .nota-math-source>
     //       <span .nota-math-delim>$$</span>      <span .nota-math-delim>$</span>
     //       <span .nota-math-ruler>（隐藏）</span> <span .nota-math-ruler>（隐藏）</span>
+    //       <… .nota-math-suggest>（命令补全，绝对定位，闲着时 hidden）
     //     </div>                                  </span>
     //     <div .nota-math-preview>…katex…</div>   <span .nota-math-preview>…</span>
     //   </div>                                </span>
@@ -462,7 +472,42 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
     const 尺 = document.createElement("span");
     尺.className = 尺类;
     尺.setAttribute("aria-hidden", "true");
-    面板.append(造分隔(), 输入, 造分隔(), 尺);
+
+    // ── 命令补全弹窗 ──────────────────────────────────────────────────
+    /**
+     * 把一条补全结果落到源码框里。
+     *
+     * ⚠️ **两条路共用这一处**：鼠标点一条（弹窗的 `收下后` 回调）与键盘收下
+     * （下面 keydown 里那个 `果.收下`）。两处各写一遍的话，改其中一条时另一条
+     * 会悄悄留下旧行为。
+     * ⚠️ 写回文档的唯一口子是 `派发`（它维护 `最后派发` 那条"是不是我派的"）。
+     *    弹窗只给"源码框该换成什么"，一个字都不碰文档。
+     */
+    function 应用建议(果: 收下): void {
+      输入.value = 果.源;
+      输入.setSelectionRange(果.光标, 果.光标);
+      跟源码改尺寸();
+      派发(果.源);
+    }
+
+    // ⚠️ **挂在面板里**（不是 `document.body`，像 `lang-picker.ts` 那样）：
+    //    理由、白拿的三样、代价那一处，都写在 `math-suggest.ts` 的文件头。
+    const 建议 = 建建议框({
+      表,
+      行内,
+      // 预览用**同一份** KaTeX 选项：宏表跟着 `enable_physics` 走，弹窗里
+      // 画出来的 `\vb` 与正文里画出来的得是同一个东西。
+      画预览: 用选项画预览(选项),
+      收下后: 应用建议,
+      报活动: (id) => {
+        // 焦点始终在源码框里，所以 `aria-activedescendant` 得写在**它**上面
+        // （弹窗那一层碰不到这个元素，只能把 id 报回来）。
+        if (id) 输入.setAttribute("aria-activedescendant", id);
+        else 输入.removeAttribute("aria-activedescendant");
+      },
+    });
+
+    面板.append(造分隔(), 输入, 造分隔(), 尺, 建议.元素);
 
     dom.append(渲染);
     // ⚠️ 只读实例**不挂面板、也不挂悬浮预览**（连挂件都不给它）。元素照样
@@ -635,9 +680,14 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
       if (开) {
         跟源码改尺寸();
         if (要到焦点 && view.hasFocus()) 排聚焦();
-      } else if (输入.value !== 取源码(当前)) {
-        // 收起来时把框里的内容对齐文档（正常路径下两者本就一样，这条是兜底）。
-        输入.value = 取源码(当前);
+      } else {
+        // ⚠️ 面板一收，弹窗必须跟着收：它俩是**一棵树**，留着一个没有框的
+        //    候选列表，下一次开面板会看到上次那几条还挂在那儿。
+        建议.关();
+        if (输入.value !== 取源码(当前)) {
+          // 收起来时把框里的内容对齐文档（正常路径下两者本就一样，这条是兜底）。
+          输入.value = 取源码(当前);
+        }
       }
       重画();
     }
@@ -704,7 +754,13 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
 
     输入.addEventListener("input", () => {
       跟源码改尺寸();
+      // ⚠️ 光标位置要**在派发之前**读：`派发` 会同步跑一趟 `update`，
+      //    眼下那条路不会碰 `输入.value`，但把"读光标"压在它前面就不必
+      //    依赖那个前提（`?? 长度` 兜的是"框还没量过选区"那一帧）。
+      const 光标 = 输入.selectionStart ?? 输入.value.length;
       派发(输入.value);
+      // 补全跟着**正文**走：敲 `\` 弹、接着敲字母一条条筛、删到空就收。
+      建议.喂(输入.value, 光标);
     });
 
     输入.addEventListener("focus", () => {
@@ -714,6 +770,9 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
 
     输入.addEventListener("blur", () => {
       框里有焦点 = false;
+      // ⚠️ 先收弹窗再收面板：`同步面板` 里那条"关了就对齐内容"不该被
+      //    一个还开着的列表挡着（视觉上就是"框没了、候选还挂在半空"）。
+      建议.关();
       同步面板(false);
     });
 
@@ -721,6 +780,17 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
     //    类型：`输入` 是 `HTMLInputElement | HTMLTextAreaElement` 的联合，
     //    联合上按 `addEventListener` 的重载会退化成 `Event`，`e.key` 就没法读。
     (输入 as HTMLElement).addEventListener("keydown", (e) => {
+      // ⚠️ **弹窗优先于下面每一条**。开着的时候：`Escape` 是"收候选"而不是
+      //    "退出编辑"、`Enter` 是"收下这条命令"而不是（行内的）"退出编辑"。
+      //    顺序反过来的话这两个键全走偏——用户按 Enter 想补全，面板却关了。
+      // ⚠️ `按键` 自己不碰事件（它只认键名），`preventDefault` 归这里；
+      //    收下的那一条由 `收下后` 那一路落进源码框（见 `应用建议`）。
+      const 果 = 建议.按键(e.key);
+      if (果.吃了) {
+        e.preventDefault();
+        return;
+      }
+
       if (e.key === "Escape") {
         e.preventDefault();
         退出编辑();
@@ -845,6 +915,10 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
         // `Calls to EditorView.update are not allowed while an update is in progress`。
         // 不防抖（见文件头）正是为了不必在这里补救。
         框里有焦点 = false;
+        // 弹窗里没有定时器、也没有全局监听器（它只听自己那几行元素的
+        // mousedown，树一散就跟着没了），所以这里只把内容清掉——
+        // 免得一个正要被丢掉的行元素上还挂着闭包。
+        建议.关();
       },
     };
   };

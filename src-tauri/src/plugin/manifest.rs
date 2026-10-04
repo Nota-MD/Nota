@@ -59,6 +59,28 @@
 //! entry = ".nota-slidev-{doc}.md"    # 入口文件名模板；宿主决定放在哪个目录
 //! ```
 //!
+//! # 想让宿主替你在设置页画一格设置，就再写一段 `[[settings]]`
+//!
+//! ```toml
+//! [[settings]]                        # 顶层数组：一格一段，可以有多格
+//! key     = "window_seconds"          # 进插件设置文件的键（不含点的 ASCII 词）
+//! kind    = "range"                   # 现在只有滑杆这一种
+//! label   = "Speed window"            # 英语原文；译文进 lang/<tag>.toml
+//! help    = "How many seconds the big number looks back over."
+//! min     = 1
+//! max     = 60
+//! default = 5
+//! step    = 1                         # 不写就是 1
+//! unit    = "s"                       # 读数后面跟的符号，不进 i18n
+//! ```
+//!
+//! ⚠️ **申请了它就必须同时申请 `settings.own`**：宿主写的就是插件自己那份设置文件
+//! （`~/.config/nota/plugin-settings/<id>.toml`），理由与 `process.devserver` 那条
+//! 一模一样——**能力放行的是"这件事"，不是"这类事"**。
+//!
+//! ⚠️ 反方向**不报错**：只有 `settings.own`、什么都不声明的插件（设置界面是它自己
+//! 在面板里画的）是正常的一种，见 [`SettingDecl`] 顶上那张分工表。
+//!
 //! 判据与 `process.git` 是同一条：**能力放行的是"这一条命令"，不是"任意命令"**。
 //! 命令写在清单里（清单是随插件一起安装、走签名校验的那份文件），Lua 那边
 //! 交不出第二个程序名来。细节见 `src-tauri/src/devserver.rs`。
@@ -76,6 +98,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{NotaError, Result};
 use crate::lang;
+
+use super::settings_decl;
+// ⚠️ 老路径照旧：`[[settings]]` 那一格 2026-10-04 搬去了 `plugin::settings_decl`，
+// 但 `plugin::manifest::SettingDecl` 这个名字还留着（`plugin/mod.rs` 与
+// `commands/plugin.rs` 都在用）。
+pub use settings_decl::SettingDecl;
 
 /// 宿主 API 版本。**当前是 2**。
 ///
@@ -287,11 +315,16 @@ impl DevServerSpec {
     }
 }
 
+
 #[derive(Debug, Clone, Deserialize)]
 struct ManifestFile {
     plugin: PluginMeta,
     #[serde(default)]
     devserver: Option<DevServerSpec>,
+    /// `[[settings]]` 那一串（顶层数组，与 `[devserver]` 平级）。空 = 这个插件
+    /// 没有要宿主画的设置。
+    #[serde(default)]
+    settings: Vec<SettingDecl>,
 }
 
 /// 解析好、校验过的清单，附上它所在的目录。
@@ -303,6 +336,8 @@ pub struct Manifest {
     pub capabilities: Vec<Capability>,
     /// `[devserver]` 段。`None` = 这个插件不起开发服务器。
     pub devserver: Option<DevServerSpec>,
+    /// `[[settings]]` 段（已经校验过）。空 = 没有要宿主画的设置。
+    pub settings: Vec<SettingDecl>,
 }
 
 impl Manifest {
@@ -331,12 +366,13 @@ impl Manifest {
             })?
             .to_path_buf();
 
-        Self::from_meta(file.plugin, file.devserver, dir, path)
+        Self::from_meta(file.plugin, file.devserver, file.settings, dir, path)
     }
 
     fn from_meta(
         meta: PluginMeta,
         devserver: Option<DevServerSpec>,
+        settings: Vec<SettingDecl>,
         dir: PathBuf,
         file: &Path,
     ) -> Result<Self> {
@@ -411,11 +447,15 @@ impl Manifest {
         //    加载时报出来，别等到用户点了按钮才发现什么都起不来。
         let devserver = check_devserver(devserver, &capabilities, file)?;
 
+        // ── [[settings]] ────────────────────────────────────────────────
+        let settings = settings_decl::check_settings(settings, &capabilities, file)?;
+
         Ok(Manifest {
             meta,
             dir,
             capabilities,
             devserver,
+            settings,
         })
     }
 
@@ -488,6 +528,7 @@ fn check_devserver(
 
     Ok(Some(spec))
 }
+
 
 /// 插件 id 在**事件通道名**里的写法。
 ///
@@ -565,10 +606,14 @@ pub fn find_manifests(root: &Path) -> Vec<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
+// ⚠️ `pub(crate)` 而不是私有的：`plugin::settings_decl` 的测试要用下面那个
+// `write_manifest`（"写一份清单到临时目录再解析"这半截，两个模块都要）。给一个**只有
+// 测试编译时才存在**的模块开这么一道口子，比在那边再抄一份同形状的辅助函数好——
+// 抄一份之后，清单文件的形状（文件名、写哪儿）就有两个地方各说各话。
+pub(crate) mod tests {
     use super::*;
 
-    fn write_manifest(dir: &Path, body: &str) {
+    pub(crate) fn write_manifest(dir: &Path, body: &str) {
         std::fs::create_dir_all(dir).unwrap();
         std::fs::write(dir.join("plugin.toml"), body).unwrap();
     }
@@ -687,4 +732,5 @@ capabilities = ["document.read", "process.git"]
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+
 }

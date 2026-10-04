@@ -38,6 +38,7 @@ import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
 import { 口径键, 读口径 } from "@/ui/tree-options";
 import { SettingsDialog } from "@/ui/settings/SettingsDialog";
 import { StatusBar } from "@/ui/StatusBar";
+import { useStatusBar } from "@/ui/useStatusBar";
 import { Toasts } from "@/ui/Toasts";
 import { useToasts } from "@/ui/useToasts";
 import { TabBar } from "@/ui/TabBar";
@@ -68,6 +69,7 @@ import { useCommandTable } from "@/ui/useCommandTable";
 import { usePlugins } from "@/ui/usePlugins";
 import { useAppearance } from "@/ui/useAppearance";
 import { useCodeBlockPrefs } from "@/ui/useCodeBlockPrefs";
+import { useFocusDim } from "@/ui/useFocusDim";
 import { useStartup } from "@/ui/useStartup";
 import { useAppEvents } from "@/ui/useAppEvents";
 import { useSession } from "@/ui/useSession";
@@ -433,6 +435,12 @@ export default function App() {
   // `ui/useCodeBlockPrefs.ts` 的文件头。
   useCodeBlockPrefs(settings);
 
+  // 专注模式的压暗强度（`appearance.focus_mode_dim`，三档），同样落进 `<html>`。
+  // ⚠️ 它是**第三条**"拨了不重建编辑器"的显隐开关，与上面那两条分开住：
+  // 那两条管 `editor` / `markdown` 表，这一条管 `appearance` 表里的一档。
+  // 为什么不做成编辑器参数，写在 `ui/useFocusDim.ts` 的文件头。
+  useFocusDim(settings);
+
   // 导出与打印。整块编排在 `ui/useExport.ts`（HTML 两档、打印、借 pandoc 那七种）。
   // ⚠️ 正文走 `getEditorMarkdown`——**身份稳定**的那个 `useCallback`。现写一个箭头
   // 函数的话每渲染换一次身份，`导出` → `menuHandlers` → `disabledCommands` 一路
@@ -466,11 +474,8 @@ export default function App() {
   // ⚠️ `toast` 是给菜单栏那条提示用的（它身份稳定，`useToasts` 里包的 `useCallback`）。
   const mainRef = useRef<HTMLElement | null>(null);
   const formatBarRef = useRef<HTMLDivElement | null>(null);
-  const { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome } = useChromeVisibility(
-    settings,
-    updateSettings,
-    { 主区: mainRef, 工具栏: formatBarRef, toast },
-  );
+  const { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome, 收起工具栏 } =
+    useChromeVisibility(settings, updateSettings, { 主区: mainRef, 工具栏: formatBarRef, toast });
 
   // ── 强制专注（核心功能，不是插件）──────────────────────────────────────
   //
@@ -515,6 +520,9 @@ export default function App() {
     themeId: 槽.id,
     写主题: 槽.写,
     themes,
+    // ⚠️ 第 41 项（2026-10-04）：清单原来只在启动时拉（`useStartup`）一次，
+    // 现在打开主题文件夹回来会重拉一把。清单还是只有 `themes` 这一份状态。
+    重扫: () => void api.theme.list().then(setThemes),
     toast,
   });
 
@@ -742,11 +750,37 @@ export default function App() {
 
   const activeDoc = docs.find((d) => d.id === activeId) ?? null;
 
+  // 状态栏那一堆 props 的接线（2026-09-30 搬去 `ui/useStatusBar.ts`：本文件那天
+  // 因为状态栏新加的两颗按钮顶到了 1003 行，越过 `doc-sync-check` 那条 1000 行
+  // 硬线）。⚠️ **位置必须在 `activeDoc` 之后**——它要 `activeDoc`、`viewMode`、
+  // `专注状态`、`updateSettings` 四样都已存在。
+  const 状态栏接线 = useStatusBar({
+    settings,
+    updateSettings,
+    viewMode,
+    doc: activeDoc,
+    sidebarOpen,
+    setSidebarOpen,
+    focus: 专注状态,
+    // ⚠️ 收状态栏那颗 × 走的是**同一个 `setChrome`**（第 49 项那条口径：
+    // 菜单 / 快捷键 / × 三条入口汇到同一个 setter），所以这里把 setter 交出去，
+    // 不在 `useStatusBar` 里另写一份 `appearance` 的整表铺开。
+    设界面: setChrome,
+  });
+
   // 窗口标题跟着**当前文档**走（第 51 项）：任务栏里几份文档要分得出来，
   // 也要看得出哪一份有未保存的改动。⚠️ 改的是原生窗口标题
   // （`getCurrentWindow().setTitle`），不是 `document.title`——后者传不出去，
   // 理由写在 `ui/useWindowTitle.ts` 顶上那段。
-  useWindowTitle(activeDoc?.title ?? null, activeDoc?.dirty ?? false);
+  // ⚠️ 第三格 `?? true` 必须与 Rust 侧
+  // `Appearance::default().show_filename_in_titlebar` 一致（同
+  // `useChromeVisibility` 里 `?? true` 那条注释的理由）：设置还没读回来时
+  // 按默认走，读失败也不能把标题变成光秃秃一个 `Nota`。
+  useWindowTitle(
+    activeDoc?.title ?? null,
+    activeDoc?.dirty ?? false,
+    settings?.appearance.show_filename_in_titlebar ?? true,
+  );
 
   // 设置文件的两件事（打开所在目录 / 恢复默认）搬去了
   // `ui/useSettingsFile.ts`（2026-09-24，本文件顶着行数上限）。
@@ -782,32 +816,48 @@ export default function App() {
         </div>
 
         <div className="app-body">
-          {sidebarOpen && (
-            <Sidebar
-              workspace={workspace}
-              tree={tree}
-              docText={activeDoc?.text ?? ""}
-              strict={settings?.strict_markdown ?? false}
-              tab={sidebarTab}
-              onTab={setSidebarTab}
-              onOpenFile={openPath}
-              // 点大纲里的标题跳过去（第 48 项）。⚠️ 编辑器可能还没建好
-              // （换文档的那一瞬间），`EditorPane` 那边对这种情况给的是
-              // "什么都不做"，不是抛错——见它 `useImperativeHandle` 里那段。
-              onJumpOutline={(目标) => editorRef.current?.跳到标题(目标)}
-              loadDir={loadDir}
-              // 口径指纹：换排序 / 换过滤 / 拨开隐藏文件之后，侧栏靠它知道
-              // "已经取回来的那几层过期了"（`ui/Sidebar.tsx::FileTree` 那个 effect）。
-              口径键={树指纹}
-              // 右上角那个 × 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`
-              // 是**同一个开关的三个入口**，共用下面这一个 setter。
-              onClose={() => setSidebarOpen(false)}
-              // 空态里那颗按钮走的是「文件 → 打开文件夹…」那条路，同一个函数。
-              onOpenFolder={() => void openFolder()}
-              // 预览期间锁掉（`inert`）。理由见 `预览中` 那一段。
-              inert={预览中}
-            />
-          )}
+          {/* ⚠️ 侧栏**始终挂着**，开合靠 `折叠` 把宽度动画到 0（2026-09-30）：
+              条件渲染的话元素是"凭空出现、凭空消失"的，没有加动画的余地。
+              折叠期间它 `inert`（见 `ui/Sidebar.tsx` 那个 prop），所以里头的
+              树与按钮不会被 Tab 走进、也不会被点着。 */}
+          <Sidebar
+            workspace={workspace}
+            tree={tree}
+            docText={activeDoc?.text ?? ""}
+            strict={settings?.strict_markdown ?? false}
+            tab={sidebarTab}
+            onTab={setSidebarTab}
+            onOpenFile={openPath}
+            // 点大纲里的标题跳过去（第 48 项）。⚠️ 编辑器可能还没建好
+            // （换文档的那一瞬间），`EditorPane` 那边对这种情况给的是
+            // "什么都不做"，不是抛错——见它 `useImperativeHandle` 里那段。
+            onJumpOutline={(目标) => editorRef.current?.跳到标题(目标)}
+            loadDir={loadDir}
+            // 口径指纹：换排序 / 换过滤 / 拨开隐藏文件之后，侧栏靠它知道
+            // "已经取回来的那几层过期了"（`ui/Sidebar.tsx::FileTree` 那个 effect）。
+            口径键={树指纹}
+            // 右上角那个 × 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`
+            // 是**同一个开关的三个入口**，共用下面这一个 setter。
+            onClose={() => setSidebarOpen(false)}
+            // 收起状态（2026-09-30）：**不是卸载**，是把宽度动画到 0。
+            // ⚠️ 与上面那个 `sidebarOpen` 是同一个开关，别在这里另记一份状态。
+            折叠={!sidebarOpen}
+            // 右缘拖动改宽度（2026-09-30）：**松手才落盘**，拖动过程是
+            // `ui/SidebarResizer.tsx` 直接写 `--sidebar-width`。
+            // ⚠️ 落盘时要**整份 `appearance` 交上去**（`updateSettings` 的
+            // patch 只做浅合并，少一个字段就等于把它抹回默认值）。
+            onResize={(宽) => {
+              if (settings) {
+                void updateSettings({
+                  appearance: { ...settings.appearance, sidebar_width: 宽 },
+                });
+              }
+            }}
+            // 空态里那颗按钮走的是「文件 → 打开文件夹…」那条路，同一个函数。
+            onOpenFolder={() => void openFolder()}
+            // 预览期间锁掉（`inert`）。理由见 `预览中` 那一段。
+            inert={预览中}
+          />
 
           {/* ⚠️ `data-review` 是给 CSS 的开关（`styles/review.css`）：
               `"true"` = 面板形态，正文**只是藏起来，不卸载**（`.editor-pane`
@@ -824,6 +874,10 @@ export default function App() {
               focusMode,
               typewriter,
               格式化栏开着: formatBarOpen,
+              // 右端那颗 ×（2026-10-04，第 49 项）。⚠️ 给的是**同一个 setter
+              // 的同一格**（`setChrome({ toolbar: "never" })`，见
+              // `ui/useChromeVisibility.ts` 里那个回调），不是第四个档位。
+              收起格式化栏: 收起工具栏,
               命令状态: commandState,
               设命令状态: setCommandState,
               跑命令: run,
@@ -836,6 +890,48 @@ export default function App() {
               对话框,
               refreshDocs,
               toast,
+              // 底部那一条（标签栏 ＋ 状态栏）。⚠️ 2026-09-30 起它**画在
+              // `.app-main` 里面**，不再是 `.app` 的直接子项——这样侧栏和右侧
+              // 插件栏才通到窗口底（用户照 Typora 点的名：「注意下方变化」）。
+              // 判据与"为什么是个槽位"写在 `ui/EditorArea.tsx` 那个字段上。
+              底部: (
+                <>
+                  {/* ⚠️ 判据是 **≥2 条**（用户 2026-09-30：「下方如果只有一个标签页，
+                      默认不显示标签页列表。当标签页数≥2才显示。」）——只有一个文档时
+                      那一条白占 32px，而上面那个标签写的就是窗口标题里那个名字。
+                      ⚠️ **代价如实记着**：单标签时**标签页右键进不去**，于是
+                      「在新窗口中打开」也点不到——它是那条右键菜单里**唯一**一条。
+                      要再开一个窗口就走菜单栏（文件 → 新建窗口 / 最近打开）。
+                      ⚠️ 这里判的是 `docs` 的**条数**，不是"有没有文档"：0 条时
+                      这一条同样不画（那时画的是 `Home`），所以门槛从 `> 0` 抬到
+                      `>= 2` 顺带把 0 那条也仍然盖住了。 */}
+                  {docs.length >= 2 && (
+                    <TabBar
+                      docs={docs}
+                      activeId={activeId}
+                      // ⚠️ **不是 `setActiveId`**：点标签是一次真正的"切页"，「切换文件时
+                      // 自动保存」要赶在编辑器换人之前把上一份写盘（见 `切换文档`）。
+                      onSelect={(id) => void 切换文档(id)}
+                      onClose={closeDoc}
+                      // 标签页右键那一条（2026-09-27）。⚠️ 传过去的是**路径**：新窗口是
+                      // 另一个进程，它那边没有本进程的 `DocId`（判据见 `ui/TabBar.tsx`）。
+                      onOpenInNewWindow={(path) => void 开新窗口(path)}
+                      // 预览期间锁掉（`inert`）：不然还能切文档、关标签——而预览画的
+                      // 是**这一份**文档的改动，换掉之后那幅画就没有意义了。
+                      inert={预览中}
+                    />
+                  )}
+
+                  {statusBarOpen && (
+                    // 照 Typora 重做的下栏：左边两颗开关，右边一格统计 ＋
+                    // 鼠标移进来才出现的两颗（拼写、字数统计菜单）。
+                    // 判据、删掉了什么、为什么，全在 `ui/StatusBar.tsx` 文件头；
+                    // **这四个开关各自读写设置里的哪一格**在 `ui/useStatusBar.ts`
+                    // （2026-09-30 搬出去的那一块，本文件那天顶到了 1000 行）。
+                    <StatusBar {...状态栏接线} />
+                  )}
+                </>
+              ),
             }}
           />
 
@@ -858,36 +954,6 @@ export default function App() {
             />
           )}
         </div>
-
-        {docs.length > 0 && (
-          <TabBar
-            docs={docs}
-            activeId={activeId}
-            // ⚠️ **不是 `setActiveId`**：点标签是一次真正的"切页"，「切换文件时
-            // 自动保存」要赶在编辑器换人之前把上一份写盘（见 `切换文档`）。
-            onSelect={(id) => void 切换文档(id)}
-            onClose={closeDoc}
-            // 标签页右键那一条（2026-09-27）。⚠️ 传过去的是**路径**：新窗口是
-            // 另一个进程，它那边没有本进程的 `DocId`（判据见 `ui/TabBar.tsx`）。
-            onOpenInNewWindow={(path) => void 开新窗口(path)}
-            // 预览期间锁掉（`inert`）：不然还能切文档、关标签——而预览画的
-            // 是**这一份**文档的改动，换掉之后那幅画就没有意义了。
-            inert={预览中}
-          />
-        )}
-
-        {statusBarOpen && (
-          // 模式与严格模式只是**显示**，改它们走「视图」菜单 / 偏好设置。
-          <StatusBar
-            doc={activeDoc}
-            mode={viewMode}
-            strict={settings?.strict_markdown ?? false}
-            // 「约几分钟读完」那一格用哪个除数，由设置里那一项说了算。
-            readingSpeed={settings?.appearance.reading_speed ?? 382}
-            // 强制专注的余额。**没在跑时那一格不画**（见 `ui/FocusMeter.tsx`）。
-            focus={专注状态}
-          />
-        )}
 
         <Toasts items={toasts} onDismiss={dismiss} />
 

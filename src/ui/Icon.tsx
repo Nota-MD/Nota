@@ -123,6 +123,19 @@ const 名字表 = [
   // `folio-dialog-warning-symbolic` 是警告三角（说的是"出错了"）。
   // 「强制专注」讲的是**一段时间在走**，形状取秒表。
   "nota-force-focus-symbolic", // 强制专注（秒表）
+  // ⚠️ 这两枚也是 **Nota 自己画的**（2026-09-30），来路同上。状态栏左下角那
+  // 颗侧栏开关**开着和关着是两个形状**（用户 2026-09-30 照 Typora 点的名：
+  // 关着是空心圆圈、开着是左向折角），而那一套 96 枚里**没有折角/箭头**这一类
+  // ——最接近的 `folio-format-indent-less-symbolic` 是"减少缩进"（三角 + 正文行），
+  // 拿它当"收起侧栏"是把两件事画成一张脸。
+  "nota-sidebar-toggle-symbolic", // 侧栏关着（空心圆圈）
+  "nota-sidebar-collapse-symbolic", // 侧栏开着（左向折角）
+  // ⚠️ 这两枚也是 **Nota 自己画的**（2026-09-30），来路同上：状态栏右下角
+  // **鼠标移进去才出现**的那两颗（拼写检查、展开字数统计菜单）。105 枚里
+  // 没有"字母 + 对勾"这一类，而上下双箭头与"把这一项往下挪"（单个下箭头）
+  // 是两码事，见各自文件头上那两段。
+  "nota-spellcheck-symbolic", // 拼写检查（A + 对勾）
+  "nota-unfold-more-symbolic", // 能展开一个菜单（上下双箭头）
 ] as const;
 
 export type 图标名 = (typeof 名字表)[number];

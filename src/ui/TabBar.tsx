@@ -37,6 +37,7 @@ import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 import { MenuPopup } from "@/ui/MenuPopup";
 import type { MenuEntry } from "@/ui/commands";
+import { useTablistKeys } from "@/ui/useTablistKeys";
 
 /** 右键菜单里那一条的 id。**不是命令**——它不进 `commands.ts` 那张表（见下）。 */
 const 新窗口项 = "tab.openInNewWindow";
@@ -74,6 +75,11 @@ export function TabBar(props: {
    */
   const [菜单, set菜单] = useState<{ x: number; y: number; path: string | null } | null>(null);
   const 锚 = useRef<HTMLDivElement>(null);
+  // ⚠️ 方向键（←→/Home/End）走 `useTablistKeys`（第 50 项，2026-10-04）：
+  // 在页签之间**挪焦点不切换**——每切一次文档要重挂编辑器，方向键连切
+  // 三四个等于白挂三四个；Enter 由页签里那颗 `<button>` 自己点。
+  const 栏 = useRef<HTMLDivElement>(null);
+  useTablistKeys(栏);
 
   const 关菜单 = useCallback(() => set菜单(null), []);
 
@@ -125,7 +131,7 @@ export function TabBar(props: {
   const 灰的 = new Set(菜单?.path ? [] : [新窗口项]);
 
   return (
-    <div className="tabbar" role="tablist" inert={props.inert || undefined}>
+    <div ref={栏} className="tabbar" role="tablist" inert={props.inert || undefined}>
       {props.docs.map((d) => (
         <div
           key={d.id}

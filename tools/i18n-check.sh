@@ -285,6 +285,14 @@ for 目录 in sorted(glob.glob("plugins/*")):
     # 要在这里补，别去改插件把它掰成 `T("…")`。
     for m in re.finditer(r'\blabel\s*=\s*"((?:[^"\\]|\\.)*)"', 代码):
         用的键.add(解转义(m.group(1)))
+    # ⚠️ **清单里也有原文**（2026-10-04 补）：`[[settings]]` 那一段的 `label` 与
+    # `help` 是**给用户看的**，写法与别处一样是"英语原文 ＋ `lang/<tag>.toml` 里的
+    # 译文"（`docs/11` §2.5 那张表）。不认它们的话，那两句译文会以"废键"的样子
+    # 报出来——而它该报的形状是"**没翻**"（三处都要有，才是一条能用的设置）。
+    # ⚠️ 只认 `[[settings]]` 段里的：`[plugin]` 的 `name` / `description` 走保留键。
+    for m in re.finditer(r'\b(?:label|help)\s*=\s*"((?:[^"\\]|\\.)*)"',
+                          open(清单, encoding="utf-8").read()):
+        用的键.add(解转义(m.group(1)))
     表们 = sorted(glob.glob(目录 + "/lang/*.toml"))
     for toml in 表们:
         键们 = 读表(toml)

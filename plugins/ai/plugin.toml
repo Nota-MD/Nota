@@ -35,8 +35,10 @@ capabilities = [
   "document.read",   # 把正文送给模型当上下文
   "document.write",  # 用户确认后把结果写回文档
   "network.http",    # 请求 {base_url}/chat/completions；只发给用户填的那个地址
-  "settings.own",    # 存 api_key / base_url / model（只这一个插件自己的文件）
+  "settings.own",    # 存 api_key / base_url / model / 可读范围的上限（只这一个插件自己的文件）
+  "data.own",        # 2026-10-04 起：对话落盘（`~/.local/share/nota/plugin-data/nota.ai/chats.txt`）
+  "fs.read",         # 2026-10-04 起：「AI 可读的文件」那一栏要能列/读工作区里的 .md
   "ui.notify",       # 生成好了、写完了、失败了都要说一声
-  "ui.panel",        # 右侧那块面板：设置、对话清单、消息、待应用的改动、输入框
+  "ui.panel",        # 右侧那块面板：切换器、可读文件、消息、待应用的改动、输入框、设置
   "ui.menu",         # 「插件」菜单里那五个预设 ＋「新对话」
 ]

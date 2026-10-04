@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 拼写检查：字母 A 加一个对勾（Nota 自己画的，不是搬来的）。
+     用户 2026-09-30 照 Typora 点名要的：状态栏右下角**鼠标移进去才出现**的
+     那颗按钮，点开是拼写检查的菜单。那一套 105 枚里没有带字母的图标，
+     最接近的 `folio-format-text-*` 全是排版（B / I / U），拿它们当"拼写"
+     是把两件事画成一张脸。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<g fill="none" stroke="#2e3436" stroke-width="1.28" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4.90 3.20L1.60 12.60"/>
+<path d="M4.90 3.20L8.20 12.60"/>
+<path d="M2.85 9.40L6.95 9.40"/>
+<path d="M8.90 12.10L10.70 13.90L14.90 8.90"/>
+</g>
+</svg>

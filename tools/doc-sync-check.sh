@@ -5,7 +5,8 @@
 # 规则与判据写在 docs/09-doc-sync-policy.md §3。**改这里之前先改那里。**
 #
 # 查八件事：
-#   ① 行数上限   任何 .rs/.ts/.tsx/.lua/.css/.sh 不得 >= 1000 行
+#   ① 行数上限   任何 .rs/.ts/.tsx/.lua/.css/.sh 不得 >= 1000 行（>= 800 报 WARN，
+#                 2026-09-29 起从 900 收到 800：用户要的是 300–800，不是"贴着 1000"）
 #   ② 文档新鲜度 §2 映射表里的源文件改了、映射到的文档没跟
 #   ③ 引用存在性 代码/AGENTS.md 里 docs/NN-*.md 的引用必须指到真文件
 #   ④ 编号存在性 代码里「docs/07 第 N 项」与「BUG-N」的编号必须在 docs/07 里存在
@@ -69,6 +70,9 @@ PAIRS=(
   "src-tauri/src/settings/appearance.rs             03,04,10"
   "src-tauri/src/settings/general.rs                03,04,10"
   "src-tauri/src/document/mod.rs                  03,05"
+  # ⚠️ 2026-10-04 新建：`derive_title` 那一族从 `mod.rs` 拆出来的（那边过了 800 行）。
+  # 拆缝是「纯文本进、标题出」——不认识 `DocId`、不碰仓库、不取锁，谁都能调它。
+  "src-tauri/src/document/title.rs                03,05"
   "src-tauri/src/commands/mod.rs                 02"
   "src-tauri/src/commands/document.rs             02,04,10"
   "src-tauri/src/commands/workspace.rs            02,04"
@@ -94,13 +98,25 @@ PAIRS=(
   # `ui_styles.rs` 头上那张对照表里。⛔ 别把两份合成一份。
   "src-tauri/src/ui_styles.rs                     02,03,04,08"
   "src-tauri/src/plugin/mod.rs                    01,02,11"
+  # 2026-09-29：那一份当时 819 行，按"说给别人的形状 / 宿主自己的动作"拆出这一份。
+  "src-tauri/src/plugin/types.rs                  03,05,11"
   "src-tauri/src/plugin/manifest.rs               03,11,12"
+  # 2026-10-04：`[[settings]]` 那一格把 `manifest.rs` 顶到 1077 行，按"这一格自己的
+  # 全部（结构体 ＋ 夹紧 ＋ 校验）"拆出这一份。
+  "src-tauri/src/plugin/settings_decl.rs          03,11,12"
   "src-tauri/src/plugin/install.rs                 02,11"
   "src-tauri/src/plugin/package.rs                 02,06,11"
+  # 2026-09-29：那一份当时 875 行，按"包本身（对字节做的算术）／信谁（用户的一次表态）"拆出这一份。
+  "src-tauri/src/plugin/trust.rs                  02,03,11"
   "src-tauri/src/plugin/installed.rs               02,03,11"
   # 2026-09-27：用户点名的「导入 / 导出 / 卸载」里缺的那一件（导出＝把一个已装插件打回成包）。
   "src-tauri/src/plugin/export.rs                  02,07,11"
   "src-tauri/src/proc.rs                          02,06,07"
+  # 2026-10-04：「关于 → 故障排除」那一页要的编译信息 ＋ 本机信息（外加它那一条命令）。
+  "src-tauri/src/diagnostics.rs                   02,04"
+  "src-tauri/src/commands/diagnostics.rs          02,04"
+  # 2026-09-29：那一份当时 836 行，按"这台机器能不能用／真的去转一份文档"拆出这一份。
+  "src-tauri/src/pandoc_probe.rs                  02,05,06,10"
   "src-tauri/src/pandoc.rs                        02,05,06,10"
   "src-tauri/src/pandoc_format.rs                 02,05,06,10"
   "src-tauri/src/pdf_print.rs                     02,05,06,10"
@@ -126,6 +142,14 @@ PAIRS=(
   "src-tauri/src/lua/api/git.rs                   13,11"
   "src-tauri/src/lua/api/ui.rs                    13,04"
   "src-tauri/src/lua/api/http.rs                  13,12,02,06"
+  # ⚠️ 2026-10-04 补两行（第 58/60 项那一批）：
+  #  · `http/tests.rs`——`http.rs` 那套房子的**测试**，跟着主文件走（先例：`image/tests.rs`
+  #    记的是 `02`）。它钉的几条（每块都不切汉字、结果表的形状）在 `docs/13` §9 与
+  #    `docs/06` §5.13 的桩脚本配方里都写着。
+  #  · `json.rs`——`nota.json`（**不需要能力**的纯解码表）。记法与 `diff.rs` / `time.rs`
+  #    一样是 `13,11`：契约在 `docs/13`，插件作者怎么用（别自己写解码器）在 `docs/11`。
+  "src-tauri/src/lua/api/http/tests.rs           13,12,02,06"
+  "src-tauri/src/lua/api/json.rs                 13,11"
   "src-tauri/src/lua/api/settings.rs              13,12,07"
   "src-tauri/src/lua/api/i18n.rs                  13,11,12"
   "src-tauri/src/lua/api/devserver.rs             13,12,11"
@@ -153,6 +177,10 @@ PAIRS=(
   # 2026-09-28：命令白名单（COMMANDS 表）整块搬出 `create.ts`（那边到 1010 行、破了硬线）。
   "src/editor/command-table.ts                    05"
   "src/editor/front-matter.ts                     05,07,10"
+  # ⚠️ 2026-10-04 新建：编辑器把**选区**报给宿主那一半（`docs/07` 第 14 项）。
+  # 文件头是一张**量测表**：Markdown 偏移量在块边界上不存在，所以这条路只报
+  # 「选中的那段字」、不报偏移。改它之前先读那张表，别把偏移量加回来。
+  "src/editor/caret-snapshot.ts                  05,07"
   "src/editor/atx.ts                              05,03,10"
   "src/editor/lax-heading.ts                      05,03,07"
   "src/editor/command-state.ts                    05,04"
@@ -168,18 +196,38 @@ PAIRS=(
   # ⚠️ 2026-09-28 新建：源码模式的查找那一整块（状态 / 三条效果 / 装饰），
   # 从 `source.ts` 整块搬出来的——那天它顶到了 1001 行、撞①那条硬上限。
   "src/editor/source-find.ts                      05,04"
+  # ⚠️ 2026-09-30 新建：源码模式里"行内标记能不能摘掉"那个**纯函数**（BUG-57：
+  # 选中的文字已经加粗时再按 `Ctrl+B` 该摘掉、不是再包一层）。判据是纯字符串
+  # 的事，分出来是为了 `tests/source-mark.test.ts` 能直接测——那几条嵌套边界
+  # （`***甲***`）靠开窗手敲试不全，而它们最容易改坏。
+  "src/editor/source-mark.ts                      05,04,07"
   "src/editor/instant-render.ts                   05,04,10"
   "src/editor/task-list.ts                        05,04,10"
   "src/editor/code-block.ts                       05,04,10"
-  "src/editor/heading-on-enter.ts                 05,04"
+  "src/editor/heading-on-enter.ts                 05,04,02"
   "src/editor/table-input.ts                      05,04,10"
   # 2026-09-27：行首那颗多余的反斜杠（`\| 1 | 2 |`）。⚠️ 它**不改表格那条路**——只动"物理上只能占一行"的普通段落。
   "src/editor/table-pipe.ts                      05,07"
+  # 2026-10-04：表格里的 `Tab` / `Shift+Tab`（第 55 项 ②③）。⚠️ 上游 `preset-gfm` 的
+  # `tableKeymap` **已经绑了这两颗键**，本文件接的是上游那条命令**撂挑子**的两种现场：
+  # 最后一格 `Tab`（加一行）、第一格 `Shift+Tab`（吃掉——不吃焦点会静默飞出编辑器）。
+  # ⚠️ "认键"得看 `keyCode`：GTK/X11 把 `Shift+Tab` 送成 `ISO_Left_Tab`
+  # （`event.key` 是 `Unidentified`），只比 `event.key === "Tab"` 的那一版
+  # **单测全绿、真窗口却是坏的**（`docs/06` §5.48）。
+  "src/editor/table-tab.ts                       05,07,02"
   "src/editor/diagram-view.ts                     05,04,10"
   "src/editor/math-view.ts                      05,04,10"
   "src/editor/math-input.ts                     05,04,10"
   # 行内公式"用几个 `$`"那一套（2026-09-27）：解析标注 ＋ 规格加属性 ＋ 序列化选处理器。
   "src/editor/math-delim.ts                     05,04,10"
+  # `$` 当钱的时候不算公式（2026-10-04，backlog 第 54 项）：包的是分词器上那条 `mathText`。
+  "src/editor/math-currency.ts                  05,07,10"
+  # 行首 `[TOC]` / `[!NOTE]` 别被加反斜杠（2026-10-04，backlog 第 56 项那一族的收尾）：序列化第七层。
+  "src/editor/syntax-escape.ts                  05,07,02"
+  # 公式源码框里的命令补全（2026-10-04）：表与判据那一半 ＋ 弹窗那一半。
+  # ⚠️ 这两份**都进 `docs/02`**（模块清单里各占一行），所以 02 在这两行的单子里。
+  "src/editor/math-commands.ts                  05,02,10"
+  "src/editor/math-suggest.ts                   05,02,10"
   "src/editor/mark-hint.ts                      05,04,10"
   "src/editor/atom-space.ts                     05,04,10"
   # 2026-09-27：那五层文本处理器的"谁在外层"（加第五层时 `create.ts` 顶破 1000 行，把这串拆了出去）。
@@ -196,6 +244,13 @@ PAIRS=(
   "src/ui/EditorPane.tsx                          05"
   "src/ui/FormatBar.tsx                           04,05"
   "src/ui/Icon.tsx                                02,04"
+  # 2026-09-30：侧栏右缘那条可以拖的把手（不是"顺手重构"，是用户照 Typora 点名的）。
+  "src/ui/SidebarResizer.tsx                      04"
+  "src/assets/icons/nota-sidebar-toggle-symbolic.svg    02"
+  "src/assets/icons/nota-sidebar-collapse-symbolic.svg  02"
+  # 2026-09-30 晚：状态栏悬停才出现的那两颗（拼写检查开关、展开「字数统计」菜单）。
+  "src/assets/icons/nota-spellcheck-symbolic.svg        02"
+  "src/assets/icons/nota-unfold-more-symbolic.svg       02"
   "src/ui/FindBar.tsx                             04,05"
   "src/ui/PromptDialog.tsx                        04,02"
   "src/ui/useMenus.ts                             04,02"
@@ -208,15 +263,23 @@ PAIRS=(
   "src/ui/TabBar.tsx                              04,02"
   "src/ui/MenuPopup.tsx                           04"
   "src/ui/useMenuRovingFocus.ts                   04"
+  # 2026-10-04（第 50 / 27 项那批）：弹层封闭、页签方向键、图表节点三份新文件。
+  "src/ui/useModalTrap.ts 04"
+  "src/ui/useTablistKeys.ts 04"
+  "src/editor/diagram-node.ts 10"
   "src/ui/useExport.ts 02,04,10"
   "src/ui/useDocTheme.ts 02,04,10"
   "src/ui/useUiStyles.ts 02,04,08"
   "src/ui/useChromeVisibility.ts 02,04"
+  # 2026-09-30 晚：状态栏那一堆 props 的接线（App.tsx 破 1000 行时拆出来的）。
+  "src/ui/useStatusBar.ts 02,04"
   "src/ui/useImmersive.ts 02,04,05,07,10"
   "src/ui/useToasts.ts 02,04"
   # 2026-09-28：`useAbout.ts` 拆成两份 —— 界面在 `AboutDialog.tsx`，
   # 开关并进了 `useDialogs.ts`（那一行本来就有，不用再加）。
   "src/ui/AboutDialog.tsx 02,04"
+  # 2026-10-04：许可证全文那张框（法律信息里那个超链接开的）。
+  "src/ui/LicenseDialog.tsx 02,04"
   "src/ui/useFocusSession.ts 02,04"
   "src/ui/useDocuments.ts 02,04,07"
   "src/ui/useAutosave.ts 02,03,04,07,10"
@@ -227,6 +290,8 @@ PAIRS=(
   "src/ui/useAppearance.ts 02,04"
   "src/ui/useUiMode.ts 02,04"
   "src/ui/useWindowTitle.ts 02,04"
+  # 2026-10-04（第 45 项）：专注模式压暗三档那一条的接线。
+  "src/ui/useFocusDim.ts 02,04"
   "src/ui/useZoom.ts 02,04"
   "src/editor/export.ts 05,10"
   "src/ui/nativeMenu.ts                           04"
@@ -282,17 +347,38 @@ PAIRS=(
   "src/styles/icons.css                           04"
   "src/styles/applyTheme.ts                       04"
   "src/styles/doc-theme.ts                        04,05,08"
+  # ⚠️ 2026-09-29：`settings.css` 962 行，同样按功能拆成三份。
   "src/styles/settings.css                        04"
+  "src/styles/settings-controls.css               04"
+  "src/styles/settings-widgets.css                04"
+  # ⚠️ 2026-09-29：`app.css` 836 行，按功能拆成五份（骨架 / 菜单栏 / 两条 / 主页 / 提示条）。
   "src/styles/app.css                             04"
+  "src/styles/menubar.css                         04"
+  "src/styles/tabs-status.css                     04"
+  "src/styles/home.css                            04"
+  "src/styles/toast.css                           04"
   "src/styles/sidebar.css                         04"
+  # ⚠️ 2026-09-29：`editor.css` 945 行，按功能拆成三份（外壳 / 行内 / 块级）。
   "src/styles/editor.css                          04"
+  "src/styles/editor-inline.css                   04,05"
+  "src/styles/editor-blocks.css                   04,05"
   "src/styles/bars.css                            04"
   "tests/math-view.test.ts                      02,06"
+  "tests/math-commands.test.ts                  02,06"
+  "tests/math-suggest.test.ts                   02,06"
   "tests/video-view.test.ts                       02,06"
   "tests/fake-dom.ts                            02,06"
   "tests/mark-hint.test.ts                      02,06"
   "tests/math-input.test.ts                     02,06"
   "tests/math-delim.test.ts                     02,06"
+  "tests/math-currency.test.ts                  02,06"
+  "tests/panel-cards.test.ts                    02,06"
+  "tests/syntax-escape.test.ts                  02,06"
+  "tests/list-indent.test.ts                    02,06"
+  # 2026-10-04（第 64 / 45 项那批）。
+  "tests/front-matter.test.ts                   02,06"
+  "tests/focus-dim.test.ts                      02,06"
+  "tests/window-title.test.ts                   02,06"
   "tests/lang-icons.test.ts                     02,06"
   "tests/atom-space.test.ts                     02,06"
   "tests/share-card.test.ts                      02,06"
@@ -308,7 +394,40 @@ PAIRS=(
   "tests/footnote.test.ts                       02,06"
   # 2026-09-27：`editor/table-pipe.ts` 那 24 条（含"不挂这一层就复现出病"的对照）。
   "tests/table-pipe.test.ts                    02,06"
+  # 2026-10-04：`editor/table-tab.ts` 那 58 条（四种现场 ＋ 两道认键闸；⚠️ 真窗口那半见
+  # `docs/06` §5.48——这一份正是"单测全绿、真窗口却是坏的"那个故事的出处）。
+  "tests/table-tab.test.ts                     02,06"
+  # 2026-09-30：第 90 项「宽松标题输入时先不放大」。扫全篇段落算装饰范围 ＋
+  # 「正在写的那一段把宽松那条按住」。真窗口那半见 docs/06 §5.39。
+  "tests/heading-on-enter.test.ts               02,06"
+  # 2026-09-30：下栏照 Typora 重做那一批。夹侧栏宽 ＋ 三个 240（CSS/TS/Rust）
+  # 同值。真拖动那半见 docs/06 §5.40。
+  "tests/sidebar-resize.test.ts                 02,06"
+  # 2026-09-30：BUG-57 那一批。第④组读 `src/editor/source.ts` 的源码文本对账
+  # （数 `切换行内标记(view,` 出现几次、链接那一行还在不在 `wrapSelection` 上），
+  # 所以 `source.ts` 一改它就该被重看。真按键那半见 docs/06 §5.43。
+  "tests/source-mark.test.ts                    02,06"
+  # 2026-10-04（第 50 项那批）：焦点陷阱与页签方向键这两份新钩子的纯逻辑测试。
+  # 真 DOM 那半（Tab 的默认挪动、focusin 兜底）没验，账在 docs/06 §5.45。
+  "tests/modal-trap.test.ts                     02,06"
+  "tests/tablist-keys.test.ts                   02,06"
+  # 2026-10-04（第 49 项那批）：四栏那颗就地 × 的口径（长相一致 ＋ 汇到同一个 setter）
+  # ＋ 视图菜单里那一族挨着。⚠️ 它读的是**源码文本**与 `MENUS` 结构，不开窗——
+  # "点下去真的收起来了"那半没验（本仓没有 jsdom），账在 docs/06 §6.2。
+  # ⚠️ 这几份组件一改它就该被重看：`ui/Sidebar.tsx` / `ui/PluginDock.tsx` /
+  # `ui/FormatBar.tsx` / `ui/StatusBar.tsx`、那条链子上的 `ui/EditorArea.tsx` /
+  # `ui/useChromeVisibility.ts` / `ui/useStatusBar.ts` / `ui/useCommandTable.ts`，
+  # 以及 `ui/commands.ts` 里「视图」那一栏的分段。
+  "tests/bar-close.test.ts                      02,06"
+  # 2026-10-04 深夜（第 14 项那批）：选区上报那一份。⚠️ 第三组是**量测表**（按 markdown
+  # 偏移拼接重建不出光标处插入），它盯的是 `editor/caret-snapshot.ts` ＋ `document/mod.rs`
+  # ＋ `lua/api/document.rs` 这一条链的**前提**，两边任一侧改了口径它都该被重看。
+  "tests/caret-snapshot.test.ts                 02,06"
+  # ⚠️ 2026-09-29：`dock.css` 971 行，按用户的新尺子（300–800、按功能拆）分成四份。
   "src/styles/dock.css                            04"
+  "src/styles/panel.css                           04"
+  "src/styles/panel-data.css                      04"
+  "src/styles/plugin-list.css                     04"
   # ⚠️ 2026-09-27 从 `app.css` 拆出来的浮层那一族（四个对话框 ＋ Emoji 补全面板）。
   "src/styles/overlay.css                         04"
   "src/styles/gate.css                            04"
@@ -335,7 +454,25 @@ PAIRS=(
   #    那张表活着的每一天都只是在抄代码里的字）。这几行跟着删，
   #    下一行的 `zh-CN.toml` 才是**译文表**。
   "plugins/git/main.lua                           11,13"
+  # ⚠️ 2026-09-29 补一行：`plugins/git/` 也成了多文件插件（`require`，第五个用户）
+  #    ——差异预览那一整块搬去了 `diff.lua`（`main.lua` 当时 997 行）。理由与上面 stats
+  #    那几行**一模一样**：拆出去的文件也是插件的一部分，不进这张表，往后改它、
+  #    文档不动，五道闸一道都不会响（`docs/12` §5.9）。
+  "plugins/git/diff.lua                           11,13"
   "plugins/ai/main.lua                            11,13"
+  # ⚠️ 2026-09-29 补三行：`plugins/ai/` 也成了多文件插件（`require`，第六个用户）
+  #    ——`main.lua` 当时 997 行，按功能拆成四份：`util.lua`（公共词汇：设置键与
+  #    小工具）、`chat.lua`（对话状态 ＋ 请求 ＋ 改动块）、`panel.lua`（只读渲染）。
+  #    理由与上面 git / stats 那几组**一模一样**：拆出去的文件也是插件的一部分，
+  #    不进这张表，往后改它、文档不动，几道闸一道都不会响（`docs/12` §5.9）。
+  "plugins/ai/util.lua                            11,13"
+  # ⚠️ 2026-10-04 补一行：第 58 项（「边生成边显示」）把 `chat.lua` 从 744 行顶到 977 行
+  #    （离 1000 只剩 23），按「**会不会发 HTTP**」那条线拆出 `request.lua`
+  #    （整段/流式两条路、组规格、解回包）。`chat.lua` 剩下的那一半是"一个对话里有什么、
+  #    怎么存"。同一个理由，第七个用户。
+  "plugins/ai/request.lua                         11,13"
+  "plugins/ai/chat.lua                            11,13"
+  "plugins/ai/panel.lua                           11,13"
   "plugins/slidev/main.lua                        11,13"
   "plugins/git/lang/zh-CN.toml                    11"
   "plugins/ai/lang/zh-CN.toml                     11"
@@ -359,6 +496,15 @@ PAIRS=(
   "plugins/stats/ticks.lua                   11,13"
   "plugins/stats/ledger.lua                  11,13"
   "plugins/stats/long.lua                    11,13"
+  # ⚠️ 2026-10-04 再补一行：面板改成运动手表那套版式之后 `main.lua` 又顶到 1055 行，
+  #    于是拆出第五份 `cards.lua`（② 小字概览 ＋ ④ 记录卡）。⚠️ 这一次**是在"拆"的
+  #    那一步就补上的**——前两次（整个目录、`ledger`/`long`）都是"回头才想起来"，
+  #    `docs/12` §5.9 与 `docs/11` §1.3.1 把这两次当成反面例子记着。
+  "plugins/stats/cards.lua                   11,13"
+  # ⚠️ 2026-10-04 第二次拆（同一天）：Δt 窗口那一批又把 `main.lua` 顶到 1065 行，
+  #    于是第三份新文件 `share.lua`（③ 那颗开关 ＋ ④ 做分享图那三颗 ＋ 三张分享卡的
+  #    字段 ＋ 长期那块面板）。照 `docs/12` §5.9 那条规矩：**拆的那一步就补这一行**。
+  "plugins/stats/share.lua                   11,13"
   "plugins/stats/lang/zh-CN.toml             11"
   "src-tauri/Cargo.toml                           06"
   "package.json                                   06"
@@ -439,7 +585,7 @@ doc_file() {
 }
 
 # ── ① 行数上限 ───────────────────────────────────────────────────────────
-head_ "① 行数上限（1000 行）"
+head_ "① 行数上限（硬线 1000 行，> 800 报 WARN）"
 
 OVER=0
 while IFS= read -r f; do
@@ -447,8 +593,8 @@ while IFS= read -r f; do
   if [ "$n" -ge 1000 ]; then
     fail "$f 有 $n 行，超上限了 —— 就地按职责拆（docs/09 §4）"
     OVER=$((OVER + 1))
-  elif [ "$n" -ge 900 ]; then
-    warn "$f 有 $n 行，快到 1000 了，该想怎么拆"
+  elif [ "$n" -gt 800 ]; then
+    warn "$f 有 $n 行，过了 800（目标 300–800，docs/09 §4），按功能拆"
   fi
 done < <(find src-tauri/src src plugins tools -type f \
            \( -name '*.rs' -o -name '*.ts' -o -name '*.tsx' \

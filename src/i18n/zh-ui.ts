@@ -127,6 +127,10 @@ export const 界面表: Record<string, string> = {
   "Typewriter Mode": "打字机模式",
   "Status Bar": "状态栏",
   "Menu Bar": "菜单栏",
+  // 右键菜单那一层的可读名字（`ui/ContextMenu.tsx` 的 `aria-label`，2026-10-04）。
+  // ⚠️ 读屏念的是"右键菜单"，不是"上下文菜单"——界面上的说法以用户点的那一下
+  // 为准（同一个词，两个译法，用户得先翻译一遍才知道说的是哪儿）。
+  "Context Menu": "右键菜单",
   "Show menu bar": "显示菜单栏",
   // ⚠️ 2026-10-04：「显示菜单栏」那条 `description` 的中文（"顶上那一条…总入口…"）
   // 跟着那一批「全删」一起删了——代码里那条 `description` 去掉了，这条中文就

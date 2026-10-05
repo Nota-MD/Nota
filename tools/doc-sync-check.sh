@@ -267,6 +267,12 @@ PAIRS=(
   "src/ui/useModalTrap.ts 04"
   "src/ui/useTablistKeys.ts 04"
   "src/editor/diagram-node.ts 10"
+  # 2026-10-04（右键菜单那批）：整个接管 WebKitGTK 那份英文原生菜单。
+  # ⚠️ 三份都要列——少列一份就是那一份**从此不进任何闸门**（本仓反复踩过的坑）。
+  # `context-menu.ts` 多一份 `06`：它的单测与目检配方都在那。
+  "src/ui/context-menu.ts 02,04,06"
+  "src/ui/ContextMenu.tsx 02,04"
+  "src/ui/useMenuTable.ts 02,04"
   "src/ui/useExport.ts 02,04,10"
   "src/ui/useDocTheme.ts 02,04,10"
   "src/ui/useUiStyles.ts 02,04,08"

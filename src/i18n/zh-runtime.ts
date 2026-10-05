@@ -95,6 +95,10 @@ export const 运行表: Record<string, string> = {
   "Could not copy: the system refused to write to the clipboard.": "复制失败：系统没让这次操作写剪贴板",
   "The system does not allow reading the clipboard from the menu — press Ctrl+V to paste.": "系统不允许从菜单读剪贴板，请按 Ctrl+V 粘贴",
   "There is no text in the clipboard.": "剪贴板里没有文本",
+  // 右键菜单「复制为 → HTML」选中的那段里一个 HTML 标记都没有时说的
+  // （`ui/useClipboard.ts::复制为HTML`，2026-10-04）。⚠️ **不是错误**：纯文本
+  // 段落本来就没有标签，那只是一次"没什么可复制的"。
+  "That selection has no HTML to copy.": "选中的这段里没有可复制的 HTML",
   "Copied the Markdown source.": "已复制 Markdown 源码",
   "Could not copy: {0}": "复制失败：{0}",
   "Could not toggle full screen: {0}": "切换全屏失败：{0}",

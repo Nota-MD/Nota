@@ -114,6 +114,9 @@ export interface 命令表输入 {
   剪贴板复制: () => Promise<boolean>;
   剪贴板粘贴: () => Promise<void>;
   剪贴板复制为Markdown: () => Promise<void>;
+  /** 「复制为纯文本」/「复制为 HTML 源码」（2026-10-04 补，见 `ui/useClipboard.ts`）。 */
+  剪贴板复制为纯文本: () => Promise<void>;
+  剪贴板复制为HTML: () => Promise<void>;
 
   // ── 视图 ──────────────────────────────────────────────────────────────
   /**
@@ -206,6 +209,8 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
     剪贴板复制,
     剪贴板粘贴,
     剪贴板复制为Markdown,
+   剪贴板复制为纯文本,
+   剪贴板复制为HTML,
     缩放动作,
     设侧栏打开: setSidebarOpen,
     设侧栏页: setSidebarTab,
@@ -224,7 +229,14 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
     关于: showAbout,
   } = 输入;
   /** 剪贴板四件的**局部包装**：只为让下面那张表里的写法与搬来之前一致。 */
-  const 剪贴板 = { 剪切: 剪贴板剪切, 复制: 剪贴板复制, 粘贴: 剪贴板粘贴, 复制为Markdown: 剪贴板复制为Markdown };
+  const 剪贴板 = {
+    剪切: 剪贴板剪切,
+    复制: 剪贴板复制,
+    粘贴: 剪贴板粘贴,
+    复制为Markdown: 剪贴板复制为Markdown,
+    复制为纯文本: 剪贴板复制为纯文本,
+    复制为HTML: 剪贴板复制为HTML,
+  };
 
   return useMemo<Record<string, () => void>>(() => {
     // ⚠️ 预览期间**什么都不许动**（用户 2026-09-26：「最好当预览的时候禁止操作」）。
@@ -291,9 +303,21 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "edit.cut": () => void 剪贴板.剪切(),
       "edit.copy": () => void 剪贴板.复制(),
       "edit.paste": () => void 剪贴板.粘贴(),
+      // 「删除」＝ 把选区换成空串。**和「剪切」差的就是那一步写剪贴板**
+      // （见 `ui/useClipboard.ts` 的 `剪切`）——所以它没有自己的实现，
+      // 就是 `insertText` 传空串。右键菜单那排图标里的 🗑 走的也是这一条。
+      //
+      // ⚠️ 它**故意没有快捷键**（`edit.delete` 那条注明了两条理由之一）。
+      // 所以这里不必担心和 ProseMirror 自己那条 `Delete` 打架。
+      "edit.delete": () => run("insertText", { text: "" }),
       // ⚠️ 这一条不读选区，拿的是**整篇源码**——所以它和上面三件放在同一个
       // 文件里（同一个 hook 的出口），但不共用那条"先选中再说"的判据。
       "edit.copyAsMarkdown": () => void 剪贴板.复制为Markdown(),
+      // ⚠️ 这两条**2026-10-04 才补的实现**（在那之前它们在菜单栏里就是灰的）。
+      // 补的原因见 `ui/useClipboard.ts` 那一段：右键菜单照 Typora 抄了
+      // 「复制为」这一栏，不补就得画两条永久灰条。
+      "edit.copyAsPlain": () => void 剪贴板.复制为纯文本(),
+      "edit.copyAsHtml": () => void 剪贴板.复制为HTML(),
       "edit.findReplace": () => 切查找(),
 
       "para.h1": () => run("h1"),

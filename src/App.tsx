@@ -15,7 +15,7 @@
  * 格式工具栏与查找条的接线，搬走的和加进来的正好抵掉。数出来的才算数。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   api,
@@ -31,7 +31,7 @@ import { useFileKind } from "@/ui/useFileKindMode";
 // 这边留着的是那个句柄类型（`editorRef` 要它）。写成 `import type` 免得再被
 // 当成"没用上的组件"清掉。
 import type { EditorPaneHandle } from "@/ui/EditorPane";
-import { resolvePick, 应用键位覆盖 } from "@/ui/commands";
+import { resolvePick } from "@/ui/commands";
 import { useT } from "@/i18n";
 import { PluginDock } from "@/ui/PluginDock";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
@@ -74,7 +74,8 @@ import { useStartup } from "@/ui/useStartup";
 import { useAppEvents } from "@/ui/useAppEvents";
 import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
-import { 注入最近文件 } from "@/ui/recentMenu";
+import { useMenuTable } from "@/ui/useMenuTable";
+import { ContextMenu } from "@/ui/ContextMenu";
 
 export default function App() {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -337,32 +338,14 @@ export default function App() {
   // 文件头）；`useSession` 内部照旧用它（打不开的记录顺手摘掉）。
   const { 最近, 接上会话, 打开最近, 清空最近 } = 会话出口;
 
-  /**
-   * 菜单栏（含插件那一栏）**＋ 运行时合成的「最近文件」那一层**。
-   *
-   * ⚠️ 必须 `useMemo`，而且**依赖就是这两个**：菜单表的身份是给原生菜单栏用的
-   *（`ui/useMenus.ts` 顶上那条链），每帧重建就等于每帧往系统菜单推一遍。
-   * `全部菜单` 是 `usePlugins` 里 `useMemo` 出来的、`最近` 是个 state 数组，
-   * 两个都稳。
-   *
-   * ⚠️ 下面**两处都改用这一份**（自绘菜单 `TopBar` 与 `useMenus`），漏掉一处
-   * 的症状是"最近文件只出现在自绘菜单里"——macOS 那条系统菜单里没有，
-   * 不报错，只是少一半。
-   *
-   * ⚠️ **2026-09-27 起在最后再叠一层用户改过的键位**（设置里的 `keys.overrides`）。
-   * 位置选在这里是有意的：`菜单` 是全应用**唯一**一份对外发出去的菜单表，
-   * 叠在这一处，菜单显示、按键分发（`buildAccelIndex`）、macOS 那条原生菜单栏、
-   * 设置里那张快捷键表**一起**跟着变——不用每个消费方各自记得去查一次覆盖表。
-   * ⚠️ 没改过时 `应用键位覆盖` 原样返回入参（保住引用），所以这个 `useMemo`
-   * 的依赖里多一个对象不会让 `菜单` 的身份抖动。
-   */
-  const 菜单 = useMemo(
-    // ⚠️ 那个多出来的 `?.` 不是啰嗦：`keys` 在类型上不是可选的，但**跑起来的
-    // 后端可能是旧的**（前端资源与二进制不是永远同步装着）。少一个 `?.`
-    // 就是启动即白屏，代价太大。
-    () => 应用键位覆盖(注入最近文件(全部菜单, 最近), settings?.keys?.overrides ?? {}),
-    [全部菜单, 最近, settings?.keys?.overrides],
-  );
+  // ⚠️ 菜单表搬去了 `ui/useMenuTable.ts`（2026-10-04，本文件当时 998 行、
+  // 离硬上限只剩 2 行）。**它的理由（为什么要 `useMemo`、为什么只此一份、
+  // 为什么键位覆盖叠在这一处）全在那个文件头上**，改它之前先读那一段。
+  const 菜单 = useMenuTable({
+    全部菜单,
+    最近,
+    覆盖: settings?.keys?.overrides,
+  });
 
   // ── 启动与事件订阅 ──────────────────────────────────────────────────────
   // 两块都搬走了（2026-09-26，本文件当时 1049 行、硬上限 1000）：
@@ -656,12 +639,14 @@ export default function App() {
     插入链接,
     插入图像,
     插入Emoji,
-    // ⚠️ 四条各自列出来（而不是列 `剪贴板` 那个对象）：那个包装对象每次渲染
+    // ⚠️ 六条各自列出来（而不是列 `剪贴板` 那个对象）：那个包装对象每次渲染
     // 都是新的，进去等于这张表每帧重建。
     剪贴板剪切: 剪贴板.剪切,
     剪贴板复制: 剪贴板.复制,
     剪贴板粘贴: 剪贴板.粘贴,
     剪贴板复制为Markdown: 剪贴板.复制为Markdown,
+    剪贴板复制为纯文本: 剪贴板.复制为纯文本,
+    剪贴板复制为HTML: 剪贴板.复制为HTML,
     缩放动作, // ⚠️ 整只交出去（不是三个函数各列一行）：它已经是 `useMemo` 出来的。
     设侧栏打开: setSidebarOpen,
     设侧栏页: setSidebarTab,
@@ -786,6 +771,16 @@ export default function App() {
   // `ui/useSettingsFile.ts`（2026-09-24，本文件顶着行数上限）。
   // 那边的文件头写着"为什么恢复默认必须用后端返回的那一份"。
   const { openConfigDir, resetSettings } = useSettingsFile({ setSettings, toast });
+
+  // 右键菜单（2026-10-04）的接线。⚠️ 五样都**原样传下去**，一件也不在这里
+  // 加工：分类、形状、键盘路径全在 `ui/ContextMenu.tsx` 头上。
+  const 右键接线 = {
+    命令表: menuHandlers,
+    灰: disabledCommands,
+    勾: menuChecks,
+    光标: commandState,
+    toast,
+  };
 
   return (
     <ErrorBoundary>
@@ -992,6 +987,11 @@ export default function App() {
           专注总结={专注总结}
           关掉专注总结={关掉专注总结}
         />
+
+        {/* 右键菜单（2026-10-04）：接管 WebKit 那份英文原生菜单。和
+            `AppDialogs` 同属浮层那一族（portal 到 `document.body`、不占布局），
+            没开时返回 `null`。分摊的代价写在 `ui/ContextMenu.tsx` 头上。 */}
+        <ContextMenu {...右键接线} />
       </div>
     </ErrorBoundary>
   );

@@ -344,6 +344,16 @@ export const MENUS: MenuSpec[] = [
       { id: "edit.copy", label: "Copy", accel: "Ctrl+C", needsDoc: true },
       { id: "edit.copyImage", label: "Copy Image", needsDoc: true },
       { id: "edit.paste", label: "Paste", accel: "Ctrl+V", needsDoc: true },
+      // 2026-10-04 补（右键菜单那一排图标里的 🗑）。它**不是**为右键菜单
+      // 单开的暗路：编辑菜单里也看得见——Typora 的编辑菜单里同样有 Delete。
+      //
+      // ⚠️ **故意不给 `accel`**。`Delete` / `Backspace` 这两个键 ProseMirror
+      // 自己已经处理得很好（选中一段按 Delete 就是删掉它），再在 `MENUS` 里
+      // 绑一遍等于**同一条路两个实现**：命令表那条会先跑，于是"按 Delete 删
+      // 一个字"这种最基础的手感要由我们负责，而 ProseMirror 那套（合并相邻
+      // 段落、列表项降级、表格里删单元格…）才是真正对的那个。菜单里点得动
+      // 就够了，键位上让编辑器自己说了算。
+      { id: "edit.delete", label: "Delete", needsDoc: true },
       "sep",
       {
         // ⚠️ 「复制为 Markdown」那条 **id 没变**，只是从平面挪进了这里。
@@ -653,3 +663,99 @@ export const MENUS: MenuSpec[] = [
     ],
   },
 ];
+
+/**
+ * 全表 id → 条目，**模块级建一次**。
+ *
+ * ⚠️ 放在 `MENUS` **后面**：它扫的就是上面那张表，提前了会拿到一个空表。
+ * ⚠️ 用 `walkMenuItems` 而不是自己写两层 `for`——那正是那个函数存在的原因
+ * （子菜单里那一层最容易漏，见它的文档）。
+ */
+const 条目索引 = (() => {
+  const m = new Map<string, MenuItemSpec>();
+  walkMenuItems(MENUS, (item) => {
+    if (!m.has(item.id)) m.set(item.id, item);
+  });
+  return m;
+})();
+
+/** 按 id 取条目。取不到返回 `undefined`——**不抛**（调用方拿它建表，见 `摊条目`）。 */
+export function 取条目(id: string): MenuItemSpec | undefined {
+  return 条目索引.get(id);
+}
+
+/**
+ * 一串 id → 一份 `MenuEntry[]`。`"sep"` 是分隔线，原样留着。
+ *
+ * ⚠️ 取不到的 id **被跳过**，不报错——所以它必须配一道闸门：
+ * `tests/context-menu.test.ts` 会对账"这张表里写的 id 是不是都在 `MENUS` 里"。
+ * 少了那道测试，写错一个字符的症状是**那条永远灰着**，肉眼扫菜单很难发现。
+ *
+ * ⚠️ 返回的是**和 `MENUS` 里同一个对象**（不是拷贝）。这是有意的：
+ * 一份数据两处引用，改 `MENUS` 那边这里跟着变。⚠️ 所以调用方**不许改**它们。
+ */
+export function 摊条目(ids: readonly string[]): MenuEntry[] {
+  const out: MenuEntry[] = [];
+  for (const id of ids) {
+    if (id === "sep") {
+      out.push("sep");
+      continue;
+    }
+    const hit = 条目索引.get(id);
+    if (hit) out.push(hit);
+  }
+  return out;
+}
+
+/**
+ * 右键菜单独有的两栏（`ui/ContextMenu.tsx`）。
+ *
+ * ⚠️ **它们不在 `MENUS` 里**，因为菜单栏上**没有**「插入」这一栏——那份组合是
+ * 右键菜单特有的（用户 2026-10-04 拿 Typora 那份当参照定的形状）。所以它们
+ * 也不会出现在菜单栏上，`useMenus` 那张灰名单照样管得着它们**里面**的条目
+ * （子项和 `MENUS` 共用同一个对象，灰不灰按 id 算）。
+ *
+ * ⚠️ **`label` 必须住在这个文件里**：`tools/i18n-check.sh` 只在这几份文件里
+ * 认 `label:` 这种写法，搬去 `ui/context-menu.ts` 的话 `"Insert"` 会以
+ * "废键"的样子报 FAIL（表里有、代码里"没调用"）——`FormatBar.tsx::TITLES`
+ * 那段注释记着同一条坑。
+ */
+export const 右键段落项: MenuItemSpec = {
+  id: "ctx.paragraph",
+  label: "Paragraph",
+  submenu: 摊条目([
+    "para.h1",
+    "para.h2",
+    "para.h3",
+    "para.h4",
+    "para.h5",
+    "para.h6",
+    "para.text",
+    "sep",
+    "para.quote",
+    "para.ul",
+    "para.ol",
+    "para.task",
+    "sep",
+    "para.codeBlock",
+  ]),
+};
+
+/** 见 {@link 右键段落项}。 */
+export const 右键插入项: MenuItemSpec = {
+  id: "ctx.insert",
+  label: "Insert",
+  submenu: 摊条目([
+    "para.table",
+    "fmt.image",
+    "fmt.link",
+    "sep",
+    "para.mathBlock",
+    "para.codeBlock",
+    "sep",
+    "para.hr",
+    "para.toc",
+    "para.footnote",
+    "fmt.emoji",
+  ]),
+};

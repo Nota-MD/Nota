@@ -94,8 +94,12 @@ const 键位表 = (() => {
  * 这个函数是模块级的纯函数，拿不到也订阅不上语言。这里只有括号随语言变
  * ——中文界面上照旧是全角 `（Ctrl+B）`，英文界面上是半角 ` (Ctrl+B)`。
  * 那是**排版**，不是文案，所以不走表（表里没有"半个括号"这种东西）。
+ *
+ * ⚠️ **2026-10-04 起也导出给右键菜单用**（`ui/ContextMenu.tsx`）。那边图标
+ * 按钮的 `title` 和 `aria-label` 要的是**同一句话**；各自拼一份的话，中文界面
+ * 上会出现半角括号，而且是那种没人会当成 bug 报上来的不一致。
  */
-function 提示(menu: string, 名字: string): string {
+export function 提示(menu: string, 名字: string): string {
   const a = 键位表.get(menu);
   if (!a) return 名字;
   const 键 = formatAccel(a);
@@ -128,7 +132,7 @@ type 行内位 =
  * 一颗按钮。`menu` 是它在菜单表里的对应条目——**只用来取快捷键提示**，
  * 点了跑的还是 `cmd`。
  */
-interface 按钮 {
+export interface 按钮 {
   cmd: EditorCommand;
   menu: string;
   label: string;
@@ -192,6 +196,61 @@ const 块组: 按钮[] = [
   { cmd: "clearFormat", menu: "fmt.clear", label: "Clear", icon: "folio-eraser-symbolic" },
 ];
 
+/**
+ * 这一颗按钮现在亮不亮。**两处（工具栏、右键菜单）共用这一份**。
+ *
+ * ⚠️ 高亮的两种来源**互斥**：`on` 是行内标记（粗体 + 斜体可以同时亮），
+ * `block` 是块级（同一时刻只亮一颗）。一颗按钮只属于其中一组。
+ *
+ * ⚠️ `state` 为 `null`（源码模式 / 还没有文档）时**一颗都不亮**——那时候
+ * 「当前选区是不是粗体」这件事根本读不出来，见 `editor/command-state.ts`。
+ */
+export function 按钮亮着(b: 按钮, state: CommandState | null): boolean {
+  if (!state) return false;
+  return b.on ? state[b.on] === true : b.block ? state.block === b.block : false;
+}
+
+/** 菜单 id → 那一颗按钮。 */
+export const 按钮表: ReadonlyMap<string, 按钮> = (() => {
+  const m = new Map<string, 按钮>();
+  for (const b of [...行内组, ...链接组, ...块组]) m.set(b.menu, b);
+  return m;
+})();
+
+/**
+ * 没有图标时那个字形的 class。
+ *
+ * ⚠️ **抽出来是为了让右键菜单和工具栏逐字画成一样**：`</>` 的等宽体不在
+ * `.format-glyph` 上，而在 `format-glyph-${cmd}` 这个**修饰类**上
+ * （`styles/bars.css`）。两边各自拼一次的话，迟早有一边忘了带修饰类——
+ * 症状是同一个 `</>` 在菜单里是衬线体、在工具栏里是等宽体，而这种"两处长得
+ * 不太一样"没人会当成 bug 报上来。
+ *
+ * ⚠️ 这里读的是 `按钮.cmd`，但**只拿来拼 class 名**，不是拿去执行
+ * （执行那条禁令见 `按钮表` 上面那段）。
+ */
+export function 字形类(menu: string): string {
+  const b = 按钮表.get(menu);
+  return b ? `format-glyph format-glyph-${b.cmd}` : "format-glyph";
+}
+
+/**
+ * 上面那张表的**用法约定**，写给右键菜单那一侧（`ui/ContextMenu.tsx`）：
+ *
+ * ⚠️ **只准用它取 `icon` 和 `按钮亮着`**，**不许用它取 `cmd`**。
+ * 那边每一条命令都按 id 走 `menuHandlers`（`ui/context-menu.ts` 里写着为什么），
+ * 而 `cmd` 是"过 `onCommand` 直接喂 `EditorCommand`"那条路——两条路混在
+ * 一个文件里，早晚有人接错，而接错的症状是"点了没反应"或"点错了命令"。
+ *
+ * ⚠️ 导出整张表（而不只是图标名）是**为了让高亮只有一份判据**：
+ * 只导图标的话，"哪一条算粗体"这个映射就要在右键菜单那边再写一遍，
+ * 而那正是本文件头上骂的那种"两套真相源"——加一条新命令时只改一处，
+ * 另一处静默地不亮。
+ *
+ * ⚠️ `TITLES`（提示语里的名字）**没有**跟着导出，它必须留在组件体里，
+ * 理由见下面那一段。右键菜单要显示名字时**从 `MENUS` 按 id 取 `label`**
+ * （`ui/context-menu.ts` 的 `取条目`）——同一批键、同一份译文，不是第二份。
+ */
 export function FormatBar({ state, onCommand, ref, onHide }: Props) {
   // 订阅语言：宿主报来语言之后这一条要重画（见 `i18n/index.ts::useT`）。
   const t = useT();
@@ -238,9 +297,9 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
 
   /** 一颗按钮。三组共用这一处渲染，免得三份 JSX 各自漂移。 */
   const 画 = (b: 按钮) => {
-    // ⚠️ 高亮的两种来源**互斥**：`on` 是行内标记（粗体 + 斜体可以同时亮），
-    // `block` 是块级（同一时刻只亮一颗）。一颗按钮只属于其中一组。
-    const 亮 = b.on ? (state?.[b.on] ?? false) : b.block ? state?.block === b.block : false;
+    // ⚠️ 判据搬去了模块级的 `按钮亮着`（2026-10-04）：右键菜单那边也要问
+    // 同一个问题（"这一颗亮不亮"），留在组件体里它就只能是第二份。
+    const 亮 = 按钮亮着(b, state);
     const 可亮 = Boolean(b.on || b.block);
     // 提示语与可读名字同**一句**（拼一次，两处用）：名字先翻，括号由 `提示` 拼。
     const 提示语 = 提示(b.menu, TITLES[b.cmd] ?? b.label);
@@ -265,7 +324,7 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onCommand(b.cmd)}
       >
-        {b.icon ? <Icon name={b.icon} /> : <span className={`format-glyph format-glyph-${b.cmd}`}>{b.label}</span>}
+        {b.icon ? <Icon name={b.icon} /> : <span className={字形类(b.menu)}>{b.label}</span>}
       </button>
     );
   };

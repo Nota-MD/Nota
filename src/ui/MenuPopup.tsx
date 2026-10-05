@@ -224,6 +224,11 @@ export function MenuPopup(props: PopupProps) {
 
         const { entry, row } = line;
         const isSubOpen = subOpen === row;
+        // ⚠️ **键盘走到的那一项必须画出来**（2026-10-04 开窗口检补的，见
+        // `styles/menubar.css` 里 `.menu-item-open` 那条注释）：这里原先只认
+        // "子菜单开着"，于是 ↑↓ 是一套看不见的漫游——`Esc` 能关掉（说明键真到了）
+        // 但屏幕上一格高亮都没有。
+        const 是焦点 = roving.focusedIndex === row;
         const p = itemProps(row);
 
         return (
@@ -232,7 +237,7 @@ export function MenuPopup(props: PopupProps) {
               type="button"
               role="menuitem"
               className={`menu-item ${entry.danger ? "menu-item-danger" : ""} ${
-                isSubOpen ? "menu-item-open" : ""
+                isSubOpen || 是焦点 ? "menu-item-open" : ""
               }`}
               // ⚠️ 用 `disabled` 而不是"点了不做事"：灰掉的项要**看得出**灰，
               // 也要让键盘跳过去时不落在它上面。
@@ -304,7 +309,7 @@ export function MenuPopup(props: PopupProps) {
   );
 }
 
-interface SubMenuProps {
+export interface SubMenuProps {
   entries: MenuEntry[];
   disabled: Set<string>;
   checks: Record<string, boolean>;
@@ -313,11 +318,33 @@ interface SubMenuProps {
   onClose: () => void;
   /** 父项右边沿的位置（视口坐标），来自 `MenuPopup`。 */
   anchor: { top: number; left: number };
+  /**
+   * 多挂一个类名。**只有一个用处**：右键菜单那份要抬层级。
+   *
+   * ⚠️ 子菜单 portal 到 `document.body`，和调用方**没有 DOM 亲缘关系**，
+   * 继承不到父层那个 `z-index`——所以只能由调用方自己说一声。菜单栏那一份
+   * **不传**（它和菜单栏同层就够了），右键菜单传 `"context-sub"`。
+   * 判据见 `styles/menubar.css` 里 `.context-sub` 那条、以及
+   * `--z-context-menu` 的定义处。
+   */
+  className?: string;
 }
 
-/** 子菜单。**不支持再往下开一层**（见文件头）。 */
-function SubMenu(props: SubMenuProps) {
-  const { entries, disabled, checks, onPick, onDismiss, onClose, anchor } = props;
+/**
+ * 子菜单。**不支持再往下开一层**（见文件头）。
+ *
+ * ⚠️ **2026-10-04 起也导出给右键菜单用**（`ui/ContextMenu.tsx`）。那边三栏
+ * （「复制为」/「段落」/「插入」）和这里是**一模一样的东西**：一层条目、
+ * 从父项右边飞出来、自己量高度夹回视口里、`←` 收起还给父项焦点。
+ * 重写一份的话，BUG-17 那条"划过开的 vs 点开的"、坐标系那两条裁剪坑、
+ * `focusItem` 那个"state 没变所以 effect 不跑"的坑——**全都要再踩一遍**。
+ *
+ * ⚠️ 它自己**不认位置**：`anchor` 由调用方量好传进来（菜单栏那边量的是父项，
+ * 右键菜单那边量的是——顶层的每一行）。所以这里加进来一个新调用方**不需要
+ * 改它**，只要按同一个口径量 `anchor`。
+ */
+export function SubMenu(props: SubMenuProps) {
+  const { entries, disabled, checks, onPick, onDismiss, onClose, anchor, className } = props;
 
   // ⚠️ 子菜单是**另一个组件**，所以自己取一份 `t`（不是从 `MenuPopup` 传下来的）。
   // 理由同 `MenuPopup` 那一处。
@@ -360,7 +387,7 @@ function SubMenu(props: SubMenuProps) {
   return (
     <div
       ref={boxRef}
-      className="menu-sub"
+      className={className ? `menu-sub ${className}` : "menu-sub"}
       role="menu"
       style={{ top: pos.top, left: pos.left }}
       onKeyDown={roving.handleKeyDown}
@@ -371,12 +398,15 @@ function SubMenu(props: SubMenuProps) {
         }
         const { entry, row } = line;
         const p = itemProps(row);
+        // ⚠️ 同上：子菜单里也**只有**焦点那一行要亮。这里原先连 `menu-item-open`
+        // 都没有，键盘一路 `→` 飞进来之后整栏一个字都不亮（2026-10-04 目检）。
+        const 是焦点 = roving.focusedIndex === row;
 
         return (
           <button
             type="button"
             role="menuitem"
-            className={`menu-item ${entry.danger ? "menu-item-danger" : ""}`}
+            className={`menu-item ${entry.danger ? "menu-item-danger" : ""} ${是焦点 ? "menu-item-open" : ""}`}
             key={entry.id}
             disabled={disabled.has(entry.id)}
             aria-checked={entry.checkable ? !!checks[entry.id] : undefined}

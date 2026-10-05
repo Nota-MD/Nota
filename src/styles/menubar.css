@@ -123,9 +123,15 @@
   background: var(--bg-hover);
 }
 
-/* 键盘走到哪一项、以及哪一项的子菜单开着。
-   ⚠️ 和 `:hover` **画同一种底色**是刻意的：鼠标和键盘共用一套高亮，
-   用户才不会看到两个亮点。 */
+/* 键盘走到哪一项、以及哪一项的子菜单开着。**两件事共用一个类**。
+   ⚠️ 和 `:hover` 是**同一族**底色（`--bg-hover` 上一档的 `--bg-active`）：
+   鼠标和键盘共用一套高亮，用户才不会看到两个亮点。
+   ⚠️ **2026-10-04 开窗口检才发现：这句话一直只是句愿望。** 三处算这个类的地方
+   （`MenuPopup` 平铺项 / `MenuPopup::SubMenu` / `ContextMenu`）当时**只认
+   "子菜单开着"**，键盘焦点压根没算进去——于是菜单里按 `↑↓` 是一套看不见的
+   漫游（`Esc` 能关掉，说明键真的到了，但屏幕上一格都不亮；工具栏那颗图标按钮
+   同款，见下面 `.menu-icon-row .format-btn[data-current]` 那条）。三处一起补上，
+   顺手把这条注释改成"已经成立"的说法。 */
 .menu-item-open:not(:disabled) {
   background: var(--bg-active);
 }
@@ -206,4 +212,61 @@
   height: 1px;
   margin: 4px 6px;
   background: var(--border);
+}
+
+/* ── 右键菜单（2026-10-04，`ui/ContextMenu.tsx`）─────────────────────────
+ *
+ * ⚠️ 本体借的是 `.menu-sub`（`position: fixed` ＋ 坐标由 JS 量好塞进来），
+ * 所以下面只写它和菜单栏那份弹层**不一样**的地方。理由见
+ * `ui/ContextMenu.tsx` 文件头"为什么用 `.menu-sub` 那一套类名"。
+ */
+.context-menu {
+  /* ⚠️ `.menu-sub` 的 `min-width: 208px` 是照着"一列文字条目、末列带快捷键"
+     定的。右键菜单最宽的一排是四颗图标（4 × 26 ＋ 间距 ≈ 120），208 会在
+     右边留一大块空白。`max-content` 让宽度跟着内容走。 */
+  min-width: 0;
+  width: max-content;
+  /* ⚠️ **本体不滚**。`.menu-sub` 那份 `overflow-y: auto` 是给"几十条文字的
+     菜单"用的；这一份的子菜单是 `position: fixed` 出来的，本体一滚，`开子`
+     量到的锚点就停在原处，子菜单会和父项**分家**。条目本来就少，不会超高。 */
+  overflow: visible;
+  /* ⚠️ **比 `.menu-sub` 那份 `--z-popup`（40）高一档**，见 `--z-context-menu`
+     的定义处：右键菜单要能盖住模态遮罩（设置框、确认框）。 */
+  z-index: var(--z-context-menu);
+}
+
+/* 右键菜单飞出来的子菜单（「段落」/「插入」，`ui/MenuPopup.tsx::SubMenu`）。
+   ⚠️ **必须单独写一条**：子菜单 portal 到 `document.body`，与 `.context-menu`
+   没有 DOM 亲缘关系，**继承不到**它那个 `z-index`。不写的话，菜单本体在遮罩
+   之上、飞出来的那一栏在遮罩之下——看着像子菜单"打不开"。 */
+.context-sub {
+  z-index: var(--z-context-menu);
+}
+
+/* 图标行。整整一排算**一个**漫游落点（见 `ContextMenu.tsx` 文件头），
+   所以这里只负责摆齐，不参与焦点。 */
+.menu-icon-row {
+  display: flex;
+  align-items: center;
+  /* 2px 是"看得出是四颗、又不散架"的距离。再大就会让人以为它们各是各的。 */
+  gap: 2px;
+  /* 上下 2px：`.format-btn` 是 24px 高，加完正好和旁边 28px 的文字条目一样高
+     ——两排混在一列里时，行高对不齐比什么都显眼。 */
+  padding: 2px 4px;
+}
+
+/* 图标行里**当前那一颗**（整排只算一个漫游落点，所以"停在哪一格"得自己画，
+   属性由 `ContextMenu.tsx` 挂）。
+   ⚠️ **不能借 `bars.css` 给工具栏那条 `:focus-visible` 的焦点圈**：菜单一开是
+   我们用**脚本**把焦点放上去的，WebKit 不把脚本 focus 当"键盘操作"，那一圈
+   根本不画——2026-10-04 开窗放大 300% 量过，剪刀那颗干干净净，于是键盘走到
+   这一排上时屏幕上什么都没有（文字条目那边同一天量到同款毛病，见
+   `ContextMenu.tsx` 里 `.menu-item-open` 那一条）。
+   ⚠️ **画的是圈、不是底色**：这一颗可能同时是 `data-on`（光标正停在这个标记
+   上，那一家用的是 `--accent` 实底），改底色就会把"这个标记是亮的"盖掉。
+   圈也和工具栏那颗按钮的焦点圈**长得一样**（`bars.css` 那条同色同宽），
+   同一件事在同一个应用里不该有两种画法。 */
+.menu-icon-row .format-btn[data-current] {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }

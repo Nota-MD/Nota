@@ -136,6 +136,16 @@ const 名字表 = [
   // 是两码事，见各自文件头上那两段。
   "nota-spellcheck-symbolic", // 拼写检查（A + 对勾）
   "nota-unfold-more-symbolic", // 能展开一个菜单（上下双箭头）
+  // 右键菜单那一排剪贴板图标（`ui/ContextMenu.tsx`，2026-10-04）。
+  // ⚠️ 这四枚**本来就是 Folio 那 96 枚里的**（文件一直躺在仓库里），只是到这批
+  // 才有人用——所以是"拷文件"那一步早就完成了，"加一行"这一步现在才补。
+  // ⚠️ 「删除」挑的是**圆圈 + 叉**（文件头的原话：「与垃圾桶图标区分开」），
+  // 不是垃圾桶。这一排里它紧挨着剪切/复制/粘贴，垃圾桶形会让人以为
+  // "把这段扔了"＝"从剪贴板里扔掉"，而它其实只是删掉选中的字。
+  "folio-edit-cut-symbolic", // 剪切（剪刀）
+  "folio-edit-copy-symbolic", // 复制（前后两张纸）
+  "folio-edit-paste-symbolic", // 粘贴（写字板 + 夹子）
+  "folio-delete-symbolic", // 删除（圆圈 + 叉）
 ] as const;
 
 export type 图标名 = (typeof 名字表)[number];

@@ -20,14 +20,36 @@
  * 键盘用户等于没法在面板里走动；只留 ① 的话，鼠标那条路还敞着。
  *
  * ⚠️ **面板里没有 portal 的前提**（设置那套原语不弹 `MenuPopup`）：所以
- * "在面板外"就是"该拉回来"，不给谁留口子。哪天某个弹层里真弹了浮层，
- * 这里要跟着开一个口子。
+ * "在面板外"就是"该拉回来"，不给谁留口子。
+ * **2026-10-04 这个前提被打破了**（见下），口子已经开了。
+ *
+ * # 浮层例外（2026-10-04，右键菜单）
+ *
+ * `ui/ContextMenu.tsx` 是**从 `App` 挂上去、portal 到 `document.body`** 的，
+ * 和面板没有 DOM 亲缘关系，但它会**把 DOM 焦点抢到自己身上**
+ * （`useMenuRovingFocus` 那条播种的 effect）。于是上面两道闸都会和它打架：
+ *
+ * - `focusin` 那道看到"焦点在面板外"，立刻把焦点**从菜单里拽回面板**——
+ *   菜单还画在屏幕上，键盘却已经不在里面了；
+ * - `Esc` 那道在 window 捕获阶段就 `stopPropagation` 掉了，菜单自己的
+ *   `onDismiss`（React `onKeyDown`，在冒泡阶段）**永远收不到这个键**。
+ *
+ * 症状是 2026-10-04 开窗口检量到的：设置框里右键一个输入框，菜单弹出来、
+ * 按 `Esc` 菜单不关（也不该由它关对话框）。所以两道闸都加一条
+ * **"目标/焦点在浮层里就让路"**：焦点归菜单，`Esc`/`Tab` 归菜单自己处理。
+ *
+ * ⚠️ 判据是 `[data-context-menu]` 这个属性，**不是**谁的 `ref`：子菜单
+ * （`MenuPopup.tsx::SubMenu`）portal 到 `body`、和菜单本体也不是一家人，
+ * 只有这个属性是两层都挂着的（同 `ContextMenu.tsx` 里"点别处就关"那条）。
+ *
+ * ⚠️ 只让 `Esc`/`Tab` 这两种键（本钩子也只认这两种），没让别的。
  *
  * # 纯函数单独拎出来
  *
  * `陷阱落点` 是这套行为里唯一有分支的部分（和 `useMenuRovingFocus.ts` 把
  * `findNextEnabled` 拎出来是同一个理由），不碰 DOM、不碰 React，
- * `tests/modal-trap.test.ts` 钉它。
+ * `tests/modal-trap.test.ts` 钉它。`在浮层里` 也拎出来了（同一份测试里钉
+ * 它认哪个属性），但它是 DOM 查询，**只有真 DOM 能真验**。
  */
 
 import { useEffect, type RefObject } from "react";
@@ -45,6 +67,20 @@ export function 可聚焦(panel: HTMLElement): HTMLElement[] {
         ' textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
   ).filter((el) => el.offsetParent !== null);
+}
+
+/** 右键菜单挂在自己两层上的标记（`ui/ContextMenu.tsx`：本体与子菜单各一个）。 */
+const 浮层标记 = "[data-context-menu]";
+
+/**
+ * 这个节点是不是落在**浮层**（右键菜单，含它飞出来的子菜单）里面。
+ *
+ * ⚠️ 传进来的节点可能是 `document.activeElement`（`Element`）也可能是
+ * `focusin` 的 `e.target`（理论上可以是文本节点），所以 `closest` 要
+ * 可选调用一次——和 `ContextMenu.tsx` 里那条"点别处就关"同一个写法。
+ */
+export function 在浮层里(node: Node | null): boolean {
+  return !!(node as Element | null)?.closest?.(浮层标记);
 }
 
 /** `陷阱落点` 的判定结果。三种动作之外没有别的可能。 */
@@ -110,6 +146,11 @@ export function useModalTrap(
       // 抢了它们，中文用户按 Esc 会把整个框关掉。`keyCode === 229` 是老
       // WebView 唯一能给的信号，`isComposing` 是标准信号，两个都要看。
       if (e.isComposing || e.keyCode === 229) return;
+      // ⚠️ **焦点在浮层里就整个让路**（`Esc` 与 `Tab` 都让）：右键菜单开着时
+      // 它自己那套漫游在管焦点，`Esc` 该关的是菜单、`Tab` 该关掉菜单放行。
+      // 这里不 return 的话，`Esc` 会被下面那条 `stopPropagation` 掐死在捕获
+      // 阶段，菜单的 `onDismiss` 一辈子收不到（2026-10-04 目检量到的）。
+      if (在浮层里(document.activeElement)) return;
       if (e.key === "Escape") {
         if (!onEscape) return;
         e.preventDefault();
@@ -138,6 +179,9 @@ export function useModalTrap(
       const panel = panelRef.current;
       const target = e.target as Node | null;
       if (!panel || !target || panel.contains(target)) return;
+      // ⚠️ 浮层里的焦点**不拽回来**：菜单一开就把焦点播种到自己第一项上，
+      // 拽回来的话菜单画着、键盘却不在里面（`Esc`/方向键全失灵）。
+      if (在浮层里(target)) return;
       panel.focus();
     };
 

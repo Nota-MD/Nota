@@ -68,6 +68,10 @@ export interface 剪贴板出口 {
   粘贴: () => Promise<void>;
   /** 「复制为 Markdown」：整篇源码进剪贴板。见文件头最后那一节。 */
   复制为Markdown: () => Promise<void>;
+  /** 「复制为纯文本」：只要那几个字，不带任何格式。 */
+  复制为纯文本: () => Promise<void>;
+  /** 「复制为 HTML 源码」：选中那段渲染出来的 HTML。 */
+  复制为HTML: () => Promise<void>;
 }
 
 /**
@@ -164,5 +168,55 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
     }
   }, [editorRef, toast]);
 
-  return { 复制, 剪切, 粘贴, 复制为Markdown };
+  /**
+   * 「复制为纯文本」与「复制为 HTML 源码」（2026-10-04 补，右键菜单那一栏）。
+   *
+   * ⚠️ **补它们是因为不补就得画两条永久灰条**：`MENUS` 的「复制为」子菜单里
+   * 这三条一直都在（`edit.copyAsPlain` / `edit.copyAsHtml`），但**没有实现**，
+   * 所以菜单栏里那两条今天也是灰的。右键菜单那一栏照 Typora 抄过来之后，
+   * 灰色会从"一条没人看的路径"变成"右键就看得见的两条"，那比不抄更糟
+   * ——用户 2026-10-04 为侧栏那句"灰条看着像坏了"正是这么说的。
+   *
+   * ⚠️ 两条都走 `写剪贴板`（不是自己 `writeText`）：那是本文件里**唯一**一条
+   * 写剪贴板的路，「复制」和代码块那颗复制按钮都用它。另写一条的症状是
+   * "同一个动作两个结果"，而且极难被当成同一个 bug 报上来（`code-block.ts`
+   * 的 `writeClipboard` 头注写着这句）。
+   *
+   * ⚠️ 与「复制」的差别只有**给剪贴板什么**：那条给 `选区内容`（HTML + 纯文本
+   * 两份都带上，粘到富文本编辑器里还留着格式），这两条各给一份。
+   */
+  const 复制为纯文本 = useCallback(async () => {
+    const 内容 = editorRef.current?.选区() ?? null;
+    if (!内容) {
+      toast(t("Select some text first."), "info");
+      return;
+    }
+    const 成 = await writeClipboard(内容.text);
+    toast(
+      成 ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."),
+      成 ? "success" : "error",
+    );
+  }, [editorRef, toast]);
+
+  const 复制为HTML = useCallback(async () => {
+    const 内容 = editorRef.current?.选区() ?? null;
+    if (!内容) {
+      toast(t("Select some text first."), "info");
+      return;
+    }
+    // ⚠️ 源码模式下选区**没有 HTML**（CodeMirror 手里是文本，见 `选区内容`）。
+    // 那不是失败，所以给 `info` 说清楚，而不是拿纯文本顶替——顶替的话
+    // 用户拿到的东西和他点的那一条不是一个东西，而且看不出来。
+    if (!内容.html) {
+      toast(t("That selection has no HTML to copy."), "info");
+      return;
+    }
+    const 成 = await writeClipboard(内容.html);
+    toast(
+      成 ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."),
+      成 ? "success" : "error",
+    );
+  }, [editorRef, toast]);
+
+  return { 复制, 剪切, 粘贴, 复制为Markdown, 复制为纯文本, 复制为HTML };
 }

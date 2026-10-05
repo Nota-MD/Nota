@@ -377,6 +377,19 @@ export function 创建语言选择器(选项: {
    *  万一焦点跑到别处（比如用户点了别的地方又没触发关闭）也还接得住。 */
   function 全局按键(e: KeyboardEvent) {
     if (!弹层) return;
+    // ⚠️ **右键菜单开着时整个让路**（2026-10-04，见 `ui/ContextMenu.tsx`）。
+    //
+    // 本监听挂在 `document` 的**捕获**阶段，比菜单那一层（React，监听在根容器、
+    // 冒泡阶段）**先**收到按键。两者一起开着的时候（最常见的一处：在**这个**语言
+    // 搜索框里右键），同一个键会被两边各处理一次，量到过两个后果：
+    //   ① `Enter`：选择器先收下语言、`关闭()` 把输入框**卸载**掉，菜单那条
+    //      「全选」才轮到自己——焦点还不成，`execCommand("selectAll")` 于是选中
+    //      **整篇文档**（那是会毁文档的一条，`ui/ContextMenu.tsx::还焦` 里记着）；
+    //   ② `Escape`：选择器和菜单**一起关掉**（用户以为只关掉最上面那层）。
+    //
+    // 判据是 `data-context-menu`：那是这一族浮层的统一标记，`ui/useModalTrap.ts`
+    // 认的也是同一个（子菜单 portal 到 `body`，"这一层开着吗"只能靠属性问）。
+    if (document.querySelector("[data-context-menu]")) return;
     // ⚠️ **输入法组字当中一律不管**：那会儿的回车是"上屏"、方向键是"在
     // 候选词里挪"、退格是"改拼音"。放过它们，输入法才用得成。
     if (e.isComposing) return;

@@ -82,6 +82,14 @@ export function FindBar({
   const [query, setQuery] = useState("");
   const [替换成, set替换成] = useState("");
   const [options, setOptions] = useState<FindOptions>(默认查找选项);
+  /**
+   * 手动把替换那一行拉出来（2026-10-06，用户：「**无"替换"选项**」）。
+   *
+   * ⚠️ `Ctrl+F` 开的是"只找"（第 95 项），可**用了 Ctrl+F 的人根本不知道还有 Ctrl+H**
+   * ——在他眼里就是"这个查找条不能替换"。所以补一颗展开键：**不必知道快捷键**
+   * 也能把替换拉出来。`Ctrl+H` 照旧是"开出来就带替换"。
+   */
+  const [手动展开, 设手动展开] = useState(false);
   const 查询框 = useRef<HTMLInputElement>(null);
 
   // ⚠️ 查询上报走**ref 读**，不进下面那个 effect 的依赖：`onQuery` 是
@@ -215,6 +223,19 @@ export function FindBar({
         </button>
         <button
           type="button"
+          className="find-toggle"
+          data-on={显示替换 || 手动展开}
+          aria-expanded={显示替换 || 手动展开}
+          title={(显示替换 || 手动展开) ? t("Hide Replace") : t("Show Replace (Ctrl+H)")}
+          aria-label={(显示替换 || 手动展开) ? t("Hide Replace") : t("Show Replace")}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => 设手动展开((v) => !v)}
+        >
+          {/* ⚠️ 字形不是图标：Folio 那 96 枚里没有 chevron（docs/07 第 105 项记着这条）。 */}
+          {(显示替换 || 手动展开) ? "⌃" : "⌄"}
+        </button>
+        <button
+          type="button"
           className="find-btn"
           title={t("Close (Esc)")}
           aria-label={t("Close Find")}
@@ -224,7 +245,7 @@ export function FindBar({
           <Icon name="folio-close-symbolic" />
         </button>
       </div>
-      {显示替换 && (
+      {(显示替换 || 手动展开) && (
 
       <div className="find-row">
         <input

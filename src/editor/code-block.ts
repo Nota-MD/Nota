@@ -193,6 +193,23 @@ export const codeBlockView = $view(
       // - bar（折叠 / 复制）在块**下沿之外**的左侧（2026-09-26 从块内搬出来）；
       // - 语言框在块**下沿之外**的右侧。
       const pre = document.createElement("pre");
+      // ⚠️⚠️ **这一行是整件事的开关，删了它代码块就整个哑掉**（2026-10-06
+      // 一路开窗量出来的）。
+      //
+      // 浏览器只允许**一个**编辑宿主是 `document.activeElement`，而 WebKitGTK
+      // 在**嵌套** contenteditable 的情形下认的是**外层那个**（`.ProseMirror`）。
+      // 于是里面的 CodeMirror 永远拿不到 activeElement——它自己那句
+      // `hasFocus` 判的正是 `activeElement == .cm-content` → 恒为假，症状是：
+      // **光标画不出来、`Backspace` 一动不动、`Tab` 变成一个制表符、
+      // 回车按在行首**。而"能打字"这条假象最容易让人查错方向：打字是浏览器
+      // 直接写进 DOM 的，不经过任何键位表。
+      //
+      // `contenteditable="false"` 把这一段画成**非编辑孤岛**，里面的
+      // `.cm-content` 于是自成编辑宿主、拿得到 activeElement。
+      // ⚠️ 它与继承规则不冲突：显式 `true` 的后代在 `false` 的祖先里照样可编辑
+      //（这正是这里要的）。⚠️ 顺带把 PM 那条路也收干净了——它再也不会把那个
+      // 零尺寸的 contentDOM 当光标落点。
+      pre.contentEditable = "false";
       const code = document.createElement("code");
       code.className = "nota-code-text";
 

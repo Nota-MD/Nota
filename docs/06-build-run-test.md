@@ -5744,3 +5744,48 @@ Typora 那里是**照常显示**的，躲开不画不是它的做法。已回退
 ⚠️ **功能侧同时复核**：源码模式读到的是干净的 `*你好*`（一个反斜杠都没有）；
 在段尾打字落在斜体**外面**——与 `side:-1` 那句"插进去的内容落在 widget 后面"一致。
 ⚠️ **判据**：`tests/mark-hint.test.ts` **18 条**（边界口径回到原样后全过）。
+
+### 5.56 验「代码块里换成 CodeMirror 编辑」（第 101 项，2026-10-06，⚠️ **手感那半开窗量过，`Tab` 与 `Ctrl+Z` 两条没验成**）
+
+**起窗**（⚠️ 无头模式**不要**用 `tools/open-window.sh --headless`——那个分支把 Xvfb
+起在**宿主**上，而宿主这条链上没有 `Xvfb`；起在**容器里**就行）：
+
+```sh
+R=/home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
+podman exec -d -u 1000 tauri-dev sh -c 'Xvfb :95 -screen 0 1400x900x24 > /tmp/xvfb95.log 2>&1'
+podman exec -d -u 1000 -e DISPLAY=:95 -e GDK_BACKEND=x11 \
+  -e GTK_IM_MODULE=gtk-im-context-simple -e XMODIFIERS=@im=none \
+  -w "$R/src-tauri" tauri-dev ./target/debug/nota > /tmp/nota-headless.log 2>&1
+```
+
+⚠️⚠️ **两个操作要点，不遵守会得到一堆假结论**：
+
+① `xdotool windowfocus` 会把 DOM 焦点**打回外层的 `.ProseMirror`**，所以
+   **每一条动作序列都要重新点一次代码块**（`xdotool mousemove 580 215 click 1`）
+   把焦点交回 CodeMirror；否则你量到的是"ProseMirror 在打字"，而它看起来**一模一样**
+   （文本照样出现在代码块里）。
+② 裸 Xvfb 没有窗口管理器，`xdotool windowactivate` 会报
+   `windowmanager claims not to support _NET_ACTIVE_WINDOW`，**用 `windowfocus`**。
+
+**七格判据与实拍**（帧在 `/tmp/nota-cm-verify/`）：
+
+| # | 怎么按 | 应该 | 实拍 |
+|---|---|---|---|
+| ① | 代码块里敲 `f(` | 补成 `f()`，光标在两个括号之间 | ✅ `f()`（`40-pair.png`） |
+| ② | 代码块里敲一个反引号 | 补成一对 | ✅ 两个反引号 |
+| ③ | 上一行以左花括号结尾，回车 | 新行**缩进 4 格** | ✅ `41-full.png` 里那颗 `z` 在 4 格处 |
+| ④ | `Backspace` | 删掉前一个字符 | ✅ `42-bs.png` |
+| ⑤ | 切源码模式读 markdown | 读到代码块里那段原文 | ✅ `46-source.png` 读到 ``` ``` \n () \n ``` ``` |
+| ⑥ | 空行上按 `Tab` | 缩进一级 | ⚠️ **没看出来**（帧 `43-tab.png` 与按之前像素一致） |
+| ⑦ | `Ctrl+Z` | 只撤一步 | ⚠️ **没读出来撤的是哪一步**（状态确实变了：光标位置动了） |
+
+⚠️ **同一次量出来的一条最贵的坑**（它曾经让整个代码块哑掉，**症状是"能打字"**）：
+代码块的 `pre` 上**必须**自己写 `contentEditable = "false"`。不写时，WebKitGTK 在
+**嵌套 contenteditable** 下把外层 `.ProseMirror` 当作 `document.activeElement`，
+而 `@codemirror/view` 的 `get hasFocus()` 判的正是"activeElement 等于它自己的
+内容元素"——CodeMirror 于是**永远认为自己没焦点**：光标不画、`Backspace` 不动、
+`Tab` 插一个制表符、回车按在行首；**而打字照常**（那是浏览器直接写 DOM，
+不经过键位表），所以第一眼看上去像是别的毛病。
+**量法**：临时把 `EditorView.theme` 的 `"&.cm-focused"` 换成
+`outline: 3px solid red`，点一下代码块——有红框才是 CM 拿到了焦点。
+机制写在 `docs/05` §4.24，坑本身登记在 `docs/07` 第 101 项。

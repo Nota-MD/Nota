@@ -2959,6 +2959,22 @@ ProseMirror 的 `hasFocus()` 判的是 `activeElement == view.dom` → 假 →
 `<html data-code-wrap>` 的 `MutationObserver`。只写 CSS 的话那颗开关就是死的
 ——"拨了不生效的开关"是本仓点名过的老毛病（`docs/09` §2 那一类账）。
 
+⚠️⚠️ **最贵的一条坑在这里：代码块的 `pre` 必须自己写 `contentEditable = "false"`。**
+它不给的话代码块会**整个哑掉**，而症状极具误导性：**能打字**（字符会进到代码块里），
+但**光标不显示、`Backspace` 一动不动、`Tab` 插进去一个制表符、回车按在行首**。
+
+机制：浏览器只允许**一个**编辑宿主是 `document.activeElement`，而 **WebKitGTK 在
+嵌套 contenteditable 的情形下认的是外层那个**（`.ProseMirror`）；CodeMirror 的
+焦点判据恰恰是 `activeElement == .cm-content`（`@codemirror/view` 的
+`get hasFocus`）——于是它**永远认为自己没焦点**，键位表整条不执行。
+而"能打字"这条假象最容易把人带偏：打字是浏览器直接写进 DOM 的，**不经过键位表**。
+
+⚠️ `contenteditable="false"` 把这一段画成**非编辑孤岛**，里面的 `.cm-content` 于是
+自成编辑宿主、拿得到 activeElement（显式 `true` 的后代在 `false` 的祖先里照样可编辑）。
+📌 **量法**（这次就是这么定的案）：临时把 `EditorView.theme` 的 `"&.cm-focused"`
+换成 `outline: 3px solid red`，开窗点一下代码块——**有红框 = CM 拿到了焦点**，
+没有就是这条漏了。
+
 判据：`tests/code-block-editing.test.ts` **21 条**，钉的是三个纯函数
 （最小改动的字符边界、分色的区间能不能拼回原文、回车续行的三档光标落点）。
 ⚠️ **手感本身（配对、缩进、光标跳不跳）开窗目检才算数**，纯逻辑判据证明不了。

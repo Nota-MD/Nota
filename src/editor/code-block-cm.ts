@@ -287,8 +287,8 @@ const 分色插件 = ViewPlugin.fromClass(
  * 改在那边改。
  */
 const 主题 = EditorView.theme({
-  "&": { backgroundColor: "transparent", color: "inherit", height: "auto", outline: "3px solid lime" },
-  "&.cm-focused": { outline: "3px solid red" },
+  "&": { backgroundColor: "transparent", color: "inherit", height: "auto" },
+  "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
     fontFamily: "inherit",
     lineHeight: "inherit",

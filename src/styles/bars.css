@@ -147,7 +147,19 @@
   flex-direction: column;
   align-items: flex-end;
   align-self: flex-end;
-  margin: 8px 12px 4px auto;
+  /* ⚠️⚠️ **2026-10-06：从"流里的一块"改成"浮层"**。用户：「**搜索框会让文本下移**」——
+     它原来是 `.app-main` 这个 flex 列里的一项（`flex: 0 0 auto`），**开出来就占多高、
+     正文就被顶下去多少**。可查找条在别的编辑器里都是**盖在正文上**的：
+     开着查找的时候，正文的位置一个字都不该动（不然你正在读的那一行会跳走）。
+     改成绝对定位之后它不再参与布局；定位祖先是 `.app-main`（`app.css` 里加了
+     `position: relative`，就为这一条）。
+     ⚠️ `z-index` 借用 `--z-popup`（40）：**压着正文，但在模态遮罩（200）之下**
+     ——设置框开着时查找条不该浮在遮罩上面（那会是第二个 BUG-63 那类"画在遮罩底下/上面"的错）。 */
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: var(--z-popup);
+  margin: 0;
   width: fit-content;
   max-width: calc(100% - 24px);
   /* ⚠️ 2026-10-06（第 105 项，用户一句「不美观」）：两行之间原来只有 3px，

@@ -356,9 +356,21 @@ html[data-code-lang-picker="off"] .nota-code-lang-wrap {
 
 /* 折叠：靠 `max-height` 收起来，**不是 `display: none`**。
    理由见 `code-block.ts`：藏起来的 contentDOM 会让 ProseMirror 没法在里面
-   放光标。留一点高度（1.6em 约等于一行）当作"这儿有东西"的提示。 */
-.editor-mount .ProseMirror pre.nota-code-folded > code {
-  display: block;
+   放光标。留一点高度（1.6em 约等于一行）当作"这儿有东西"的提示。
+
+   ⚠️⚠️ **2026-10-06（第 101 项收尾）：这条选择器从 `> code` 改成 `> .cm-editor`**。
+   原来它收的是 `pre` 里那个 `<code>`——那时 `<code>` **就是用户看得见的那一层**，
+   收它等于收整块。第 101 项之后 `<code>` 换成了**零尺寸、藏起来的 ProseMirror
+   contentDOM**（上面那一条），于是这条规则收的是一个**本来就没有高度**的元素：
+   点「折叠」按钮状态确实翻了（按钮变成「展开」），**画面上一个像素都不动**。
+   真正该收的是 `.cm-editor`（CodeMirror 那一层，用户眼前的那一份）。
+
+   ⚠️ 原来那句 `display: block` **删掉了**：它是为 `<code>` 补的（`code` 是行内元素，
+   行内元素不吃 `max-height`）。`.cm-editor` 本来就是块级的，再写一次反而会跟
+   CodeMirror 自己那条 `display: flex; flex-direction: column` 打架。
+   ⚠️ `1.6em` 一个字没动：它的参照是 `pre` 的字号（0.88em），
+   而 CM 那一层的 `line-height` 是 `inherit`（1.6）——一个行高，正好一行。 */
+.editor-mount .ProseMirror pre.nota-code-folded > .cm-editor {
   max-height: 1.6em;
   overflow: hidden;
 }

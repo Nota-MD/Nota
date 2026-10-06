@@ -3,9 +3,9 @@
 > 最后同步：2026-09-27
 >
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
-> 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 562 条各钉住了什么。
+> 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 599 条各钉住了什么。
 >
-> ⚠️ **测试数只在本文记数（Rust 当前 562 ／ 前端当前 1047）**，别处一律写"见 `docs/06`"。
+> ⚠️ **测试数只在本文记数（Rust 当前 599 ／ 前端当前 1392）**，别处一律写"见 `docs/06`"。
 > ⚠️ **这个数别照抄——以现跑为准**（`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l`
 > 与 `cargo test --lib` 报的 `N passed` 两半互证）。同一目录可能有别的会话在改，
 > 本文这段 2026-09-27 当天就落后过两次（见 §6.2 那段"当前 N 条"）。
@@ -139,7 +139,7 @@ podman exec -u 0 -w "$PWD" tauri-dev chown -R 1000:1000 dist
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 
-# ① 只编译后端 + 跑单元测试（§6 那 562 条）
+# ① 只编译后端 + 跑单元测试（§6 那 599 条）
 podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test
 
 # ② 前端类型检查
@@ -2888,7 +2888,13 @@ podman exec -u 0 tauri-dev sh -c \
 真的代码缺陷不会有这种路径。⚠️ 顺带一句：**跑测试用 `-u 1000` 不只是「别弄脏 /tmp」**，
 它还是「同一批用例明天还能跑」的前提。
 
-**当前 562 条，全过**（2026-09-30 深夜现跑，`cargo test --lib` 报 `562 passed; 0 failed`，
+**当前 599 条，全过**（2026-10-06 深夜现跑，`cargo test --lib` 报 `599 passed; 0 failed`，
+`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 也是 599 —— **两半互证**）。
+⚠️ **这一遍是 `tests/find.test.ts`（BUG-67 那笔账）顺带重跑的**——那一批**只动 `.ts` 与文档，
+一条 Rust 用例都没加**；上一版写的 562（2026-09-30 深夜）与现在的 599 差 **37 条**，
+那 37 条来自这中间**别的批次**（本仓并行会话记在 `docs/07` §4 里），
+⚠️ **别读成"这一批加了 Rust 用例"**。
+⚠️ 再往前的账（**562 条**，2026-09-30 深夜现跑，`cargo test --lib` 报 `562 passed; 0 failed`，
 `grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` 也是 562 —— **两半互证**）。
 ⚠️ **这一遍是 BUG-57 那一批顺带重跑的**（那批**只动 `.ts`**，一条 Rust 用例都没加）：
 上一版写的 560 与现在的 562 差**两条**，那两条**不是本批写的**，是**同时段别的会话**
@@ -2903,7 +2909,8 @@ mtime 09-29 20:36，比那一版的记账晚）。⚠️ 所以这不是"本批�
 → **492**（同时段别的会话，不是那批加的）→ **501** → **505** → **547**（MCP 登记批）
 → **557**（同时段别的会话）→ **559**（2026-09-29，本批那两条「`--mcp` 连不上／会话断了」的用例）
 → **560**（2026-09-30 实测；那 +1 不是当天哪一批写的，见上）→ **562**（2026-09-30 深夜，
-BUG-57 那批顺带现跑；⚠️ 那 +2 **也不是那一批写的**——那批只动 `.ts`）。
+BUG-57 那批顺带现跑；⚠️ 那 +2 **也不是那一批写的**——那批只动 `.ts`）→ **599**（2026-10-06 深夜，
+`tests/find.test.ts` 那批顺带现跑；⚠️ 那 +37 **同样不是那一批写的**——那批只动 `.ts` 与文档）。
 ⚠️ **501 里那 9 条是两批**：**5 条是「快捷键」那批的**（`settings/keys.rs` 那五条：
 只存差量的形状、空串与"不在表里"是两件事、`[keys.overrides]` 写的是一层套一层、
 老设置文件没有这一节也能读、改过的键位能存能读）；**另外 4 条是「启动三档」那批的**
@@ -3013,13 +3020,13 @@ BUG-57 那批顺带现跑；⚠️ 那 +2 **也不是那一批写的**——那�
 另有**两个 test target 是 0 条**：
 `src/main.rs`（只是个壳）与 Doc-tests（`nota_lib` 没有文档测试）。
 `tests/` 目录下**没有一个 Rust 集成测试**（`tests/fixtures/` 仍然是空的），
-所以下面这 562 条**全部是单元测试**。
+所以下面这 599 条**全部是单元测试**。
 ⚠️ **2026-09-26 起前端有可运行的测试了**：`tests/` 下 **四十份、共 1047 条**（📌 **2026-10-04 深夜现数**，一份一份跑出来的；逐份见 §6.3）＋ `tests/fake-dom.ts`
-（只够跑逻辑的假 DOM）。它**不在这 562 条里**（那是 `cargo test` 的数），也不是
+（只够跑逻辑的假 DOM）。它**不在这 599 条里**（那是 `cargo test` 的数），也不是
 "前端有测试框架了"——`package.json` 里**仍然没有**测试框架、也没有测试脚本，
 跑法是 `npx esbuild` ＋ `node` 两条命令（**§6.3**）。
 
-> ⚠️ 记数只在本文记（Rust 562 ／ 前端 1047）。别处提到测试数一律写"见 `docs/06`"。
+> ⚠️ 记数只在本文记（Rust 599 ／ 前端 1392）。别处提到测试数一律写"见 `docs/06`"。
 > 核实：`podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test --lib`。
 
 ### 6.1 逐条
@@ -3494,7 +3501,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing; do
+for n in math-view math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3505,6 +3512,24 @@ done       # 全过退出码 0；有不过的列出名字并退 1
 （见本节末那条 📌）。**同一天又补进了 `doc-typography`**：它也是这个毛病
 （`tests/` 下有、`for` 里没有、本节那张条数表里也没有，见下面那条 📌）。
 加 `tests/*.test.ts` 时**顺手把它加进这个 `for`**。
+
+⚠️ **`tests/` 不在 `tsc` 的 `include` 里**（`tsconfig.json` 只有 `["src", "vite.config.ts"]`），
+而 `esbuild` 只剥类型、**不做检查**——所以**测试文件里的类型错，日常那三道闸一道都照不到**。
+新写一份时单独核一遍：
+
+```sh
+npx tsc --noEmit --strict --skipLibCheck --target es2022 --module esnext \
+  --moduleResolution bundler --lib es2022,dom,dom.iterable --types node \
+  --noUncheckedIndexedAccess tests/<那一份>.test.ts
+```
+
+⚠️ 三条注意：① `Cannot find module "@/…"` 是**假警**——命令行给不了 `paths` 映射
+（`tsconfig.json` 里那条 `@/*`），要核带 `@/…` 的测试得临时写一份 tsconfig；
+② **现存几份本来就带着类型错**（例如 `heading-on-enter.test.ts` 那句 `d.type`：
+`prosemirror-view` 的类型声明里 `Decoration.type` 是私有的，运行时才挂得上），
+所以它**不是闸**、也别拿它去当闸（一放上去就是一片红）；③ 它值当的地方是**新写的文件**：
+2026-10-06 `find.test.ts` 当场被它抓到两处（`props.decorations` 的 `this: Plugin`、
+返回类型是基类 `DecorationSource` 而没有 `.find()`）。
 ⚠️ **2026-10-04（右键菜单那批）补进一份**（`context-menu` **27 → 30**，`docs/04` §2.1d）：
 它是**当批写、当批进名册**那一类（不是"漏了没进"）；拿 `ls tests/*.test.ts` 对过一遍，
 一个不差。⚠️ 它**需要** `--alias:@=./src`、**不需要**任何 loader。⚠️ **它刻意不 import
@@ -3611,6 +3636,8 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
+**五十五份、共 1392 条**（📌 **2026-10-06 深夜（BUG-67 的账）当场把 55 份全跑了一遍**（`for` 里 51 份 ＋ 单列那 4 份各自的开关），**全部 0 失败**；本批**新加一份** `find` **42 条**（查找与替换的纯逻辑与偏移：`在文本里找匹配` 的字面量 ／ 大小写 ／ 整词（⚠️ 汉字算词字符，用的是 `\p{L}` 不是 `\w`）／ 正则与**零宽**（`^`、`a*` 一律丢，且不许卡死）＋ **`算匹配` 的文档偏移**——⚠️ **这一组就是 BUG-67 的判据**：判据一律写成 `doc.textBetween(命中.start, 命中.end)` **必须正好是用户查的那串字**（不写成"命中数等于几"：那个 off-by-one 只动"压在哪个格子上"，命中数照样对）；再往下是插件状态机（就近命中 ／ 环形走位 ／ 文档变了重算与下标夹回 ／ 清除）／ 装饰的区间与"当前"类 ／ 替换当前与全部替换（**从后往前换**那条 `reverse`）。⚠️ **对照组**：把 `算匹配` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条当场红**（含「区间必须是 `4-5`」与「`textBetween` 读出来正好是那颗字」）——所以这一份真能抓住那个 bug，不是"绿着好看"）。上一版是下面那一行「五十四份、共 1350 条」。
+
 **五十四份、共 1350 条**（📌 **2026-10-06（第 101 项「代码块换成 CodeMirror 编辑」那批）当场把 54 份全跑了一遍**（`for` 一遍 ＋ 单列那 4 份各自的开关），**全部 0 失败**；本批**新加一份** `code-block-editing` **21 条**（`算最小改动` 的字符边界——emoji 不许被切成半个 ／ `分色` 的区间拼回去要逐字等于原文 ／ `回车续行` 的三档落点与"空括号展开"；⚠️ 它当场抓到一个真坑：`"([{".indexOf("")` 回的是 `0`，于是"光标停在一行纯空白后面"那一格会被当成"上一行以 `(` 结尾"、凭空多进一级）；⚠️ **总数 1329 → 1350，份数 53 → 54**。⚠️ 这一遍是拿 `tests/*.test.ts` 逐个 bundle ＋ node 跑出来的，`share-card` 那一份加了 `--loader:.svg=text`）：
 
 **五十三份、共 1329 条**（📌 **2026-10-06（第 94 项「提示机制」那批）**新加 `hints` **10 条**；⚠️ 其余 52 份**没有逐份重跑**，读数沿用上一版。上一版：**五十二份、共 1319 条**（📌 **2026-10-04（右键菜单那批的**开窗口检**）只重跑了动过的那一份**：`context-menu` **27 → 30**（0 失败）——新增的「组五：这一档拿哪份灰名单」三条钉的正是目检抓出来的缺陷（**输入框那一档不该套菜单栏的 `disabledCommands`**，否则 `edit.select` 那条"有实现、点得动"的条目会被画成灰的，键盘 `End` 还会落到它的前一条上）；⚠️ **其余 51 份这一遍没有逐份重跑**，读数沿用上一版（**别把这一遍当成"整份名册又重跑过"**，本仓有过这个教训）；⚠️ **总数 1316 → 1319，份数 52 不变**；实拍账见 §5.54）：
@@ -3621,7 +3648,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 
 **五十份、共 1252 条**（📌 **2026-10-04（第 64 项 front matter 可编辑 ＋ 第 45 项外观那两格）当场把 50 份全跑了一遍**（`for` 里 46 份 ＋ 单列 4 份），**全部 0 失败**；本批**新加三份**：`front-matter` **32 条**（⭐ 它当场抓到一个老 off-by-one：文件正好停在闭栏那一行时 `前置块行数` 多数一行——`docs/07` 第 64 项）、`focus-dim` **15 条**（专注压暗那条轴的**五个名字**分居五个文件／三种语言，读源码对账）、`window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同）；⚠️ **总数 1197 → 1252，份数 47 → 50**；其余 47 份的读数**与下面那一遍逐份相同**（📌 **2026-10-04 深夜（第 14 项「选区上报」那一批）当场把 47 份全跑了一遍**（`for` 里 43 份 ＋ 单列 4 份），**全部 0 失败**；本批**只新加一份** `caret-snapshot` **10 条**（选区上报 —— 读快照 ／ 插件只报变了的 ／ **⚠️ 第三组是那张量测表**：按 markdown 偏移拼接**重建不出**光标处插入，四组真值逐条钉住）；⚠️ **总数 1187 → 1197，份数 46 → 47**；其余 46 份的读数**与下面那一遍逐份相同**（📌 **2026-10-04 晚（序列化第七层 `syntax-escape`）当场把 46 份全跑了一遍**（`for` 里 42 份 ＋ 单列 4 份），**全部 0 失败**；本批**新加一份**：`syntax-escape` **13 条**（行首 `[TOC]` / `[!NOTE]` 不被加反斜杠——分三组：该放回来的 ／ 名字不在册的一律照旧 ／ 判据的立足点「有配对定义时它根本是链接」；⚠️ **它同时把 `table-pipe` / `math-delim` / `atom-space` 三份重跑过一遍**，那条链加了一层）；⚠️ **总数 1174 → 1187，份数 45 → 46**；其余 45 份的读数**与下面那一遍逐份相同**（`for` 一遍把 41 份全跑了，0 失败）；📌 **2026-10-04 晚（第 54 项 `$` 判据 ＋ 第 47 项列表缩进那一批）当场把 45 份全跑了一遍**（`for` 里 41 份 ＋ 单列 4 份），**全部 0 失败**；本批**新加两份**：`math-currency` **23 条**（`$` 当钱不算公式——真值表 ／ 门槛 ／ Pandoc 那两条 ／ 与 `$ \LaTeX $` 不冲突 ／ "摘掉我们这一层就复现出病"的对照 ／ `create.ts` 里挂载顺序，⚠️ **它读源码文本**，不开窗）、`list-indent` **16 条**（列表缩进的五组量测——子列表那一档本来就严 ／ 缩进不是树里的量 ／ 序列化三档 3-4-5 格 ／ 逐字节往返 ／ `create.ts` 里 `strict` 没接进这条路）；⚠️ **总数 1135 → 1174，份数 43 → 45**；其余 43 份的读数**与下面那一遍逐份相同**（`for` 一遍把 41 份全跑了，0 失败）；📌 **2026-10-04（第 49 项「四栏那颗就地 ×」那一批）当场把 43 份全跑了一遍**（`for` 里 39 份 ＋ 单列 4 份），**全部 0 失败**；本批**只新加一份** `bar-close` **13 条**（四栏那颗 × 的口径——长相一致 ／ 汇到同一个 setter ／ 视图菜单里那一族挨着；⚠️ 它读**源码文本与 `MENUS` 结构**，不开窗）；⚠️ **总数 1122 → 1135，份数 42 → 43**；其余 42 份的读数**与下面那几遍逐份相同**（`for` 一遍把 39 份全跑了，0 失败）；📌 **2026-10-04（第 55 项 ②③「表格里的 `Tab`／`Shift+Tab`」那一批）当场把 42 份全跑了一遍**（`for` 里 38 份 ＋ 单列 4 份），**全部 0 失败**；本批**只新加一份** `table-tab` **58 条**（表格里的 `Tab` / `Shift+Tab`：四道闸 ／ 四种现场 ／ 加行那一段的坐标与节点类型 ／ 三种输入形状的认键——⚠️ **它同时是"单测全绿、真窗口却是坏的"那个故事的出处**，真窗口那半见 §5.48）；⚠️ **总数 1064 → 1122，份数 41 → 42**；其余 41 份的读数**与下面那几遍逐份相同**（`for` 一遍把 38 份全跑了）；📌 **2026-10-04 下午（「撤回第五格 ＋ BUG-58」那一批）当场把 41 份全跑了一遍**（`for` 里 37 份 ＋ 单列 4 份），**全部 0 失败**；本批动了 2 份、新加 1 份：`math-delim` **51 → 47**（第五格那三组撤掉，第九组改成"贴空格的 `$…$` 照旧是公式"）、`math-input` **28**（守卫二那几条改成"只剩一道守卫"，条数没变）、新增 `key-conflicts` **21**（名单 ↔ CodeMirror 那两张表对账，BUG-58）；⚠️ **总数 1047 → 1064，份数 40 → 41**；其余 38 份的读数与下面那几遍逐份相同——⚠️ **"其余 38 份沿用旧读数"这件事本批是逐份跑出来的，不是照抄**：`for` 那一遍把 37 份全跑了（0 失败）；📌 **2026-10-04 深夜（「照 Typora 改公式那三件事」那一批）当场把 40 份全跑了一遍**（`for` 里 36 份 ＋ 单列 4 份），**全部 0 失败**；本批动了 5 份、新加 2 份：`math-view` **41 → 51**（第八组：命令补全弹窗的接线）、`math-delim` **43 → 51**（第五格 `收严公式`，第九组）、`math-input` **19 → 28**（守卫二 ＋ 第四组「块公式回车才建」）、新增 `math-commands` **35**、`math-suggest` **27**；⚠️ **总数 958 → 1047，份数 38 → 40**；其余 35 份的读数与上一遍逐份相同；📌 **2026-10-04 晚（「还是会自动插入斜杠」第二报那一批）又当场把 38 份全跑了一遍**：`table-pipe` **24 → 39**、`math-delim` **23 → 43**，其余三十六份与下面那两遍的读数逐份相同；📌 **2026-10-04 这一批当场把 38 份全跑了一遍**（`for` 里 34 份 ＋ 单列 4 份），全部 0 失败；本批动了 3 份：`toc` **22 → 27**（front matter 判据合并的「二½」组 5 条）、新增 `modal-trap` **9**、`tablist-keys` **6**——其余 35 份沿用 2026-09-30 晚那一遍的数，**只有这三份是现跑的**；📌 **2026-09-30 晚当场一份一份跑出来的**；⚠️ 上一版是同一批早先那份「三十四份、855 条」，那一版把新增的 `status-metric` **10** 条算进去了，另有一笔**补账**：`heading-on-enter` 在名册里写着 **16**，现跑是 **19**——那一批 📌 自己写的是 19 条、表格里却停在 16，**两处对不上，以现跑的为准**；见本节末那几条 📌。⚠️ **2026-09-30 深夜里只有 `auto-pair` 那一份又跑了一遍**（BUG-54 二次结清，**50 → 57**），其余三十四份沿用上面那一次的数——**这一份要单独看，别当成"整份名册又重跑过"**；⚠️ **同一天再晚一些又只有 `source-mark` 这一份跑过**（BUG-57 新建，**28 条**），其余三十五份**照旧沿用上面那一次的数**——**这一份也要单独看**）：
 `keymap` **54** · `auto-pair` **57** · `slash` **49** · `share-card` **46** ·
-`math-view` **51** · `math-delim` **47** · `table-input` **39** · `inline-marks` **37** ·
+`math-view` **51** · `math-delim` **47** · `find` **42** · `table-input` **39** · `inline-marks` **37** ·
 `smart-punctuation` **36** · `focus-summary` **34** · `math-commands` **35** · `emoji` **32** · `front-matter` **32** ·
 `lang-guess` **31** · `footnote` **30** · `url-link` **29** · `paste-clean` **25** ·
 `table-pipe` **39** · `math-input` **28** · `source-mark` **28** · `toc` **27** ·
@@ -3647,6 +3674,11 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 ⚠️ **2026-10-04（右键菜单那一批）又加进 `context-menu` ⇒ 现数是 48 份**（⚠️ 它**要** `--alias:@=./src`、不要 loader，
 走的是 `for` 里那三十几份同样的路）；⚠️ **本批把 48 份逐个跑了一遍，0 失败**——上面那个"五十二份、共 1316 条"
 就是这一遍的数；
+⚠️ **2026-10-06 深夜（BUG-67 那批）又加进 `find` ⇒ 现数是 51 份**（它**不要** `--alias:@=./src`、也不要
+loader，走最普通那条路；⚠️ 与 `math-view` / `video-view` 一样会把 `@milkdown/kit` 打进 bundle，产物 760kb 是正常的）。
+⚠️ 这一次是拿 `ls tests/*.test.ts` 与这个 `for` **逐个比**出来的（`comm` 对一遍）：除那四份单列的以外**一个不差**——
+对完 `for` 里 51 份、`tests/` 下 55 份。⚠️ 同一条命令也确认了**没有重名的尾巴**（那串是手抄的，重复写不报错、
+只是白跑一遍，正是"手抄"的指纹）。
 下面这一段是**更早那一遍**的落点，留着当历史。
 ⚠️ **"0 失败"这一遍是那一次跑的三十五份全部成立**（**当时** `for` 里那 31 份 ＋ 四份单列的
 `share-card` 46 / `heatmap` 20 / `focus-summary` 34 / `keymap` 54）。⚠️ **加进 `source-mark`
@@ -4417,7 +4449,7 @@ stat -c '%d %n' /tmp /dev/shm   # 两个数不同 = 这条用例真的在验回�
 **① 无头（已跑，任何一次改这一带都要跑）**
 
 ```sh
-# Rust 那一半（§6 的 562 条）
+# Rust 那一半（§6 的 599 条）
 podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test --lib
 
 # 前端那一半：本批新建的 keymap 那一份（要别名，且只要别名）

@@ -417,6 +417,7 @@ PAIRS=(
   # 2026-09-30：BUG-57 那一批。第④组读 `src/editor/source.ts` 的源码文本对账
   # （数 `切换行内标记(view,` 出现几次、链接那一行还在不在 `wrapSelection` 上），
   # 所以 `source.ts` 一改它就该被重看。真按键那半见 docs/06 §5.43。
+  "tests/find.test.ts                          02,06"
   "tests/source-mark.test.ts                    02,06"
   # 2026-10-04（第 50 项那批）：焦点陷阱与页签方向键这两份新钩子的纯逻辑测试。
   # 真 DOM 那半（Tab 的默认挪动、focusin 兜底）没验，账在 docs/06 §5.45。

@@ -97,7 +97,7 @@
 | `editor/command-state.ts` | **光标状态**的只读观察者插件（`CommandState`）：在不在表格里、有没有选区、当前块是什么。⚠️ 喂给工具栏高亮与菜单的第二条判据。⚠️ **2026-09-27 起多一个 `hasHeadings`**：本表**唯一一处看整篇文档**的判据（话虽如此，只扫**顶层**，视野与 `extractOutline` 同一片），给「内容目录」那颗菜单项判亮不亮——判在命令里的话菜单会亮着、点下去没反应 |
 | `editor/insert.ts` | 几条**非命令式**的编辑动作：`转成任务列表` / `清除格式` / `表格删行删列删表` / `插公式块`（2026-09-26 加）/ **`插目录`（2026-09-27 加）**。⚠️ `插目录` 走的是 `算目录块`（`editor/toc.ts`）＋ `找目录段`（本文件私有，只走**顶层**节点）：已有标记就**原地替换中段**，没有就插在光标那一层块之后——⚠️ **两份内容一模一样时返回 `null`（不派事务）**，否则每次点菜单都会往撤销栈里塞一步空操作。⚠️ 前三条用 `prosemirror-tables` 的**裸函数**、`插公式块` 自己建 `math_block` 节点并摆选区——**都不是 `callCommand` 打发得了的**，理由在那个文件头上。⚠️ 这一格原来写的是"插链接 / 插图片的节点构造"，那是**陈旧的**（2026-09-26 改对）：链接与图片 2026-09-24 起走 `callCommand(toggleLinkCommand / insertImageCommand)` |
 | `editor/table-input.ts` | **表格的打字建表**（415 行）：敲出「表头行 ＋ 分隔行」当场变成真表格。⚠️ 上游 `@milkdown/preset-gfm` 那条输入规则**只认 `\|3x2\|` 这种速记**，标准 Markdown 表格语法一个都不认（敲出来是两行普通文字，`docs/07` 第 55 项 ①）——表格节点与存盘一直是好的，**缺的只有这条输入法**。⚠️ 判据照 `micromark` 的 GFM 表格扩展写，**与打开文件时用的是同一把尺子** |
-| `editor/find.ts` | **查找/替换**：纯匹配函数 `在文本里找匹配` + ProseMirror 适配器 + 装饰插件。⚠️ **只读观察者**，高亮不进文档、不进撤销栈 |
+| `editor/find.ts` | **查找/替换**：纯匹配函数 `在文本里找匹配` + ProseMirror 适配器 + 装饰插件。⚠️ **只读观察者**，高亮不进文档、不进撤销栈。判据 `tests/find.test.ts` **42 条**（2026-10-06 新建，BUG-67 那笔账） |
 | `editor/scroll-into-view.ts` | **把正文位置滚进视野**（2026-09-25，`07` 第 48 项）：`滚动到位置`（顶到视野顶部）/ `滚动到可见`（只求看得见）/ `找滚动容器`（**全仓唯一一份**，2026-09-25 从 `writing-modes.ts` 合并过来）。⚠️ **不用 `tr.scrollIntoView()`**——PM 读的是浏览器选区，点侧栏/查找条那一刻选区不在编辑器里，它会静默不滚（第一次点不动、第二次才动）。理由写在文件头 |
 | `editor/writing-modes.ts` | **专注模式 + 打字机模式**：装饰（压暗兄弟块 / 当前行）+ 就近滚动。⚠️ 同上只读；两个开关**随时可拨，不重建实例**。⚠️ **2026-09-25 起专注模式只有一半在这里**——另一半是"把外壳收起来"（菜单栏/侧栏/插件栏/标签栏/状态栏），在 `ui/useImmersive.ts` 与 `styles/app.css` 的「沉浸模式」一节，两边合起来才是用户按 `F8` 看到的东西 |
 | `editor/instant-render.ts` | 「光标所在块的 Markdown 标记淡化显示」那个 ProseMirror 插件 |
@@ -348,26 +348,26 @@
 其余 Rust 文件没有测试。
 
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
-见 `docs/06` §6.3）：`tests/` 下 **五十份、共 1252 条**（📌 **2026-10-04 现数**：一份一份跑出来的，50 份 0 失败——那份 `for` 里的**四十六份 1098 条** ＋ 另带开关的四份 **154 条**；本批新加 `front-matter` **32 条**（`docs/07` 第 64 项，⭐ 它当场抓到一个老 off-by-one）、`focus-dim` **15 条**（第 45 项那条轴的五个名字对账）与 `window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同）；⚠️ 上一版是四十七份、1197 条（📌 **2026-10-04 深夜现数**：一份一份跑出来的，47 份 0 失败——那份 `for` 里的**四十三份 1043 条** ＋ 另带开关的四份 **154 条**；本批新加 `caret-snapshot` **10 条**（`docs/07` 第 14 项）；⚠️ 上一版是四十六份、1187 条，再上一版是四十五份、1174 条——那份 `for` 里的**四十二份 1033 条** ＋ 另带开关的四份 **154 条**；本批新加 `math-currency` **23 条**（`docs/07` 第 54 项）、`list-indent` **16 条**（第 47 项）与 `syntax-escape` **13 条**（第 56 项那一族的收尾）；⚠️ 上一版是四十三份、1135 条，再上一版是四十二份、1122 条）：
+见 `docs/06` §6.3）：`tests/` 下 **五十五份、共 1392 条**（📌 **2026-10-06 深夜现数**：一份一份跑出来的，55 份 0 失败——那份 `for` 里的**五十一份 1238 条** ＋ 另带开关的四份 **154 条**；本批新加 `find` **42 条**（查找与替换：`在文本里找匹配` 的三个开关与零宽 ／ **`算匹配` 的文档偏移**——BUG-67 那条判据写成 `doc.textBetween(命中.start, 命中.end)` 必须正好是查询串，⚠️ 对照组把 `pos + m.start` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条红**）；⚠️ **现数时才发现本节这张表落后了五批**：`panel-cards` 37 ／ `context-menu` 30 ／ `code-block-editing` 21 ／ `caret-snapshot` 10 ／ `hints` 10 **都建好了却没进过这张表**（`docs/06` §6.3 的名册与 `for` 里一直有它们），连同 `find` 一起补进来了——⚠️ 这正是下面那条"加一份要跟着改四处、闸门一处都扫不到"的老毛病；⚠️ 上一版是五十份、1252 条（📌 **2026-10-04 现数**：一份一份跑出来的，50 份 0 失败——那份 `for` 里的**四十六份 1098 条** ＋ 另带开关的四份 **154 条**；本批新加 `front-matter` **32 条**（`docs/07` 第 64 项，⭐ 它当场抓到一个老 off-by-one）、`focus-dim` **15 条**（第 45 项那条轴的五个名字对账）与 `window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同）；⚠️ 上一版是四十七份、1197 条（📌 **2026-10-04 深夜现数**：一份一份跑出来的，47 份 0 失败——那份 `for` 里的**四十三份 1043 条** ＋ 另带开关的四份 **154 条**；本批新加 `caret-snapshot` **10 条**（`docs/07` 第 14 项）；⚠️ 上一版是四十六份、1187 条，再上一版是四十五份、1174 条——那份 `for` 里的**四十二份 1033 条** ＋ 另带开关的四份 **154 条**；本批新加 `math-currency` **23 条**（`docs/07` 第 54 项）、`list-indent` **16 条**（第 47 项）与 `syntax-escape` **13 条**（第 56 项那一族的收尾）；⚠️ 上一版是四十三份、1135 条，再上一版是四十二份、1122 条）：
 `table-tab.test.ts` **58** · `auto-pair.test.ts` **57** · `keymap.test.ts` **54** · `math-delim.test.ts` **51** ·
-`math-view.test.ts` **51** · `slash.test.ts` **49** · `share-card.test.ts` **46** ·
-`table-input.test.ts` **39** · `table-pipe.test.ts` **39** · `inline-marks.test.ts` **37** ·
+`math-view.test.ts` **51** · `slash.test.ts` **49** · `share-card.test.ts` **46** · `find.test.ts` **42** ·
+`table-input.test.ts` **39** · `table-pipe.test.ts` **39** · `inline-marks.test.ts` **37** · `panel-cards.test.ts` **37** ·
 `smart-punctuation.test.ts` **36** · `focus-summary.test.ts` **34** · `math-commands.test.ts` **35** ·
-`emoji.test.ts` **32** · `front-matter.test.ts` **32** · `lang-guess.test.ts` **31** · `footnote.test.ts` **30** ·
+`emoji.test.ts` **32** · `front-matter.test.ts` **32** · `lang-guess.test.ts` **31** · `footnote.test.ts` **30** · `context-menu.test.ts` **30** ·
 `url-link.test.ts` **29** · `math-input.test.ts` **28** · `source-mark.test.ts` **28** ·
 `toc.test.ts` **27** · `math-suggest.test.ts` **27** · `paste-clean.test.ts` **25** ·
 `math-currency.test.ts` **23** · `syntax-escape.test.ts` **13** ·
-`key-conflicts.test.ts` **21** ·
+`key-conflicts.test.ts` **21** · `code-block-editing.test.ts` **21** ·
 `heatmap.test.ts` **20** · `auto-correct.test.ts` **20** · `atom-space.test.ts` **19** ·
 `heading-on-enter.test.ts` **19** · `accent.test.ts` **18** · `mark-hint.test.ts` **18** ·
 `instant-render.test.ts` **17** · `list-indent.test.ts` **16** · `file-kind.test.ts` **14** · `lang-icons.test.ts` **14** ·
 `html-block.test.ts` **14** · `focus-dim.test.ts` **15** · `bar-close.test.ts` **13** · `chart-ticks.test.ts` **12** · `sidebar-resize.test.ts` **12** ·
-`video-view.test.ts` **12** · `doc-typography.test.ts` **11** · `status-metric.test.ts` **10** ·
+`video-view.test.ts` **12** · `doc-typography.test.ts` **11** · `status-metric.test.ts` **10** · `caret-snapshot.test.ts` **10** · `hints.test.ts` **10** ·
 `modal-trap.test.ts` **9** · `tree-options.test.ts` **9** · `empty-doc-save.test.ts` **8** · `window-title.test.ts` **8** ·
 `tablist-keys.test.ts` **6**。
 ⚠️ 跑法两档：`share-card.test.ts` 要 `--loader:.svg=text`（它 import 了 `.svg`），
 `share-card.test.ts` / `heatmap.test.ts` / `focus-summary.test.ts` / `keymap.test.ts`
-要 `--alias:@=./src`（都走 `@/…` 路径），其余 **四十六份**两条都不要——**别照着一份的命令去跑另一份**。
+要 `--alias:@=./src`（都走 `@/…` 路径），其余 **五十一份**两条都不要——**别照着一份的命令去跑另一份**。
 📌 **本节这一格 2026-09-27 现数时发现它落后了两批**：原写"十八份、共 418 条"，
 而那时 `slash.test.ts`（49 条）已经存在、只是没进这份清单（418 ＋ 49 ＝ 467，
 正是 `docs/06` §6.3 当时的数）。**同一个数在两份文档里差 49**——那一批一并补齐并改成
@@ -386,6 +386,12 @@
 📌 **2026-09-29（BUG-53 ＋ BUG-54 那一批，`auto-pair` 43 → 50，**份数不变**）**：新增的 7 条全在 `tests/auto-pair.test.ts` 一份里（第十一组「收尾落标记」），**没有新文件**，所以 `for` 循环与本文的份数都不用动。⚠️ **本节的绝对总数（657）已经旧了**——2026-09-27 之后又涨过几轮（MCP、表格那两处等），下一次现数时**以仓库为准**。⚠️ 同批前端那一遍**在容器里**（Node v22.23.1）有两份各挂 1 条（`heatmap` 20 挂 1、`share-card` 46 挂 1），挂的都是**月份标签**（期望 `8月` 得到 `Aug`）——根因是那份 Node 的 small-icu 里没有中文月份名。⚠️ **宿主上（Node v24.18.0）同一遍是全过的**，而两边 `icu_small` 都是 `true`，所以这一条要连 Node 版本一起看（两处实测的表在 `docs/06` §5.37）。与本批无关。
 ⚠️ 教训仍旧是同一条：**加一份测试要跟着改四处**（`docs/06` §6.3 的名册与 `for` 循环、
 `AGENTS.md`、`docs/09`、本节），**闸门一处都扫不到**，只能靠人记。
+⚠️ **同一类"照不到"的还有一处**（2026-10-06 现数时一并记下）：`tests/` **不在 `tsconfig.json`
+的 `include` 里**（那里只有 `["src", "vite.config.ts"]`），而 `esbuild` 只剥类型、不做检查——
+所以**测试文件里的类型错，既没有闸、也不影响跑起来**（`find.test.ts` 新写时当场被抓到两处：
+`props.decorations` 的 `this: Plugin`、它的返回类型是基类 `DecorationSource` 而没有 `.find()`）。
+单核一份的命令与三条注意写在 `docs/06` §6.3；⚠️ 它**不是闸**（现存几份本来就带着类型错），
+只在"新写一份"时跑一遍。
 📌 **2026-09-30（`heading-on-enter.test.ts` 16 条，**新文件**，份数 32 → 33，总数 820 → 836）**：
 第 90 项「输入时先不放大」那一批——测 `editor/heading-on-enter.ts` 的 `算装饰条目()`
 （全篇扫描：每行的 `段起`/`起`/`止`、待成块还是宽松、级数）与 `建装饰集()`

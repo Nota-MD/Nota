@@ -139,6 +139,17 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
   const [诊断炸了, 设诊断炸了] = useState(false);
   /** 许可证全文那张框开着没。 */
   const [显示许可证, 设显示许可证] = useState(false);
+  /**
+   * 打开外链**失败**时要说的话（2026-10-06 加）。
+   *
+   * ⚠️ 加它是因为我自己先犯了一次错：第一版只 `console.warn`，屏幕上一点反馈
+   * 都没有——用户只能说"点击打不开"，而**原因在 WebView 的 console 里，
+   * 进程日志里一个字都没有**。项目里那条硬口径「**报错不是文案**」说的就是
+   * 这件事：失败必须看得见。
+   * ⚠️ 文案里带上了 `e`（Tauri 那边抛出来的原因）——"打不开"三个字没法排查，
+   * "not allowed to open url" 才能。
+   */
+  const [链接错误, 设链接错误] = useState<string | null>(null);
 
   useEffect(() => {
     let 还在 = true;
@@ -214,25 +225,73 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
    *
    * ⚠️ 名字照各项目自己的写法（`Tauri` 不是 `tauri`、`KaTeX` 不是 `katex`）。
    */
-  const 致谢: readonly { 名: string; 用处: string }[] = [
-    { 名: "Tauri", 用处: t("Desktop shell and windows") },
-    { 名: "React", 用处: t("Interface") },
-    { 名: "Milkdown / ProseMirror", 用处: t("Editor core") },
-    { 名: "KaTeX", 用处: t("Math typesetting") },
-    { 名: "Mermaid", 用处: t("Diagrams") },
-    { 名: "mlua / Lua", 用处: t("Extension runtime") },
+  const 致谢: readonly { 名: string; 用处: string; 链接: string; 许可: string }[] = [
+    {
+      名: "Tauri",
+      用处: t("Desktop shell and windows"),
+      链接: "https://github.com/tauri-apps/tauri",
+      许可: "Apache-2.0 OR MIT",
+    },
+    {
+      名: "React",
+      用处: t("Interface"),
+      链接: "https://github.com/facebook/react",
+      许可: "MIT",
+    },
+    {
+      名: "Milkdown / ProseMirror",
+      用处: t("Editor core"),
+      链接: "https://github.com/Milkdown/milkdown",
+      许可: "MIT",
+    },
+    {
+      名: "KaTeX",
+      用处: t("Math typesetting"),
+      链接: "https://github.com/KaTeX/KaTeX",
+      许可: "MIT",
+    },
+    {
+      名: "Mermaid",
+      用处: t("Diagrams"),
+      链接: "https://github.com/mermaid-js/mermaid",
+      许可: "MIT",
+    },
+    {
+      名: "mlua / Lua",
+      用处: t("Extension runtime"),
+      链接: "https://github.com/mlua-rs/mlua",
+      许可: "MIT",
+    },
     // ⚠️ 这一条是**语言图标**的出处（代码框旁边那颗小图）。它和上面那些不一样
     // 的地方在于：图标是**直接搬进仓库**的（`src/assets/lang-icons/`），不是
     // "引了个依赖"——所以 MIT 要求的那份版权声明必须随源码走，正文在
     // `THIRD-PARTY.md` §6。
-    { 名: "vscode-icons", 用处: t("Language icons for code blocks") },
-    { 名: "Pandoc", 用处: t("Export (external, optional)") },
+    {
+      名: "vscode-icons",
+      用处: t("Language icons for code blocks"),
+      链接: "https://github.com/vscode-icons/vscode-icons",
+      许可: "MIT",
+    },
+    {
+      名: "Pandoc",
+      用处: t("Export (external, optional)"),
+      链接: "https://github.com/jgm/pandoc",
+      // ⚠️ Pandoc 是 **GPL-2.0-or-later**，而 Nota 是 BSD-2——两者能并存，是因为
+      //    **Nota 不分发它**：只在你机器上装着的时候调一次它的命令行。这一行
+      //    把"外部、可选、不分发"说清楚，别让人以为 GPL 传染进来了。
+      许可: t("GPL-2.0-or-later (external program — Nota does not bundle it)"),
+    },
     // ⚠️ 这一条是**拼写检查的词典**那一半（2026-09-28 加，用户点名：
     // 「拼写检查找一个 BSD 开源的属个名」）。⚠️ **Nota 一个字典字节都不带**：
     // 整条链子是「WebKitGTK → libenchant → hunspell → 系统装的字典」，所以这一行
     // 的义务落点在**打包**那一侧（谁把字典打进安装包，谁得随包附上那段声明）。
     // BSD 的那一件是 SCOWL（Kevin Atkinson），正文在 `THIRD-PARTY.md` §7。
-    { 名: "SCOWL", 用处: t("Spell checking word lists") },
+    {
+      名: "SCOWL",
+      用处: t("Spell checking word lists"),
+      链接: "http://wordlist.aspell.net/",
+      许可: "MIT-like (see THIRD-PARTY.md §7)",
+    },
   ];
 
   /**
@@ -275,7 +334,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     {
       名: t("Open links with the default application"),
       说明: t(
-        "Handing external links in the document to the system (opener:allow-open-url); no web page is ever opened inside Nota.",
+        "Handing external links in the document to the system (opener:allow-open-url ＋ opener:allow-default-urls, which only lets http, https, mailto and tel through); no web page is ever opened inside Nota.",
       ),
     },
     {
@@ -541,10 +600,38 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                 {页 === "鸣谢" &&
                   致谢.map((条) => (
                     <div className="about-item" key={条.名}>
-                      <div className="about-item-name">{条.名}</div>
+                      <div className="about-item-name">
+                        {/* ⚠️ 名字本身就是那颗外链（用户 2026-10-06：「这个里的链接和
+                            许可证公示」）——每一项都要能点回源头，并且写明许可。
+                            走现成的 `opener:allow-open-url`。⚠️ 与「法律信息」那一行
+                            的区别：那一条开的是**进程内的框**（不跳浏览器），这一条
+                            才是**真交给系统浏览器**。 */}
+                        <button
+                          type="button"
+                          className="about-link"
+                          title={条.链接}
+                          onClick={() => {
+                            // ⚠️ 先清上一次那行（点第二条时不该还挂着第一条的错）。
+                            设链接错误(null);
+                            void openUrl(条.链接).catch((e) => {
+                              // 失败**要说出来**，不许哑着（见 `链接错误` 那段注释）。
+                              设链接错误(t("Could not open the link: {0}", String(e)));
+                            });
+                          }}
+                        >
+                          {条.名}
+                        </button>
+                      </div>
                       <div className="about-item-text">{条.用处}</div>
+                      <div className="about-item-text about-item-license">{条.许可}</div>
                     </div>
                   ))}
+
+                {/* 外链打不开时**说一句**（2026-10-06）——见 `链接错误` 那段注释：
+                    失败哑着是查不出原因的，用户只能说"点了没反应"。 */}
+                {页 === "鸣谢" && 链接错误 && (
+                  <div className="about-item-text about-err">{链接错误}</div>
+                )}
 
                 {页 === "法律信息" && (
                   <div className="about-item">

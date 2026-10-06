@@ -1,6 +1,10 @@
 # 第三方组件
 
-> 最后核对：2026-09-27
+> 最后核对：**2026-10-06**
+>
+> ⚠️ **2026-10-06 那一次：每一项都补上了仓库/主页链接**（用户：「**鸣谢里加上各个项目的仓库**」，并贴了 Typora 的鸣谢页当参照）。
+> 链接**不是凭印象写的**：Rust 那半从 `cargo metadata` 里读每个 crate 的 `repository` 字段，前端那半读 `node_modules/<包>/package.json` 的 `repository`。
+> ⚠️ **同一次还补齐了两张表漏登记的直接依赖**（§1 的 `base64` / `chrono` / `ed25519-dalek` / `sha2` / `zip` / `gtk` / `webkit2gtk`，§2 的 `@codemirror/*` 五个 / `@lezer/highlight` / `refractor`）——它们早就在 `Cargo.toml` / `package.json` 里，只是这份文档没跟上。
 >
 > Nota 自身以 **BSD-2-Clause** 发布（见 `LICENSE`）。本文列出它分发时携带的第三方组件。
 >
@@ -20,21 +24,28 @@
 
 | crate | 版本 | 许可证 | 用来做什么 |
 |---|---|---|---|
-| `tauri` | 2.11.6 | Apache-2.0 OR MIT | 宿主框架（窗口、IPC、WebView） |
-| `tauri-build` | 2.6.3 | Apache-2.0 OR MIT | 构建期代码生成 |
-| `tauri-plugin-dialog` | 2.7.3 | Apache-2.0 OR MIT | 打开/保存文件对话框 |
-| `tauri-plugin-fs` | 2.5.2 | Apache-2.0 OR MIT | 前端读写文件 |
-| `tauri-plugin-opener` | 2.5.5 | Apache-2.0 OR MIT | 用系统默认程序打开链接 |
-| `serde` | 1.0.229 | MIT OR Apache-2.0 | 序列化 |
-| `serde_json` | 1.0.151 | MIT OR Apache-2.0 | JSON |
-| `toml` | 1.1.6 | MIT OR Apache-2.0 | 读插件清单与设置文件 |
-| `mlua` | 0.12.1 | MIT | Lua 插件运行时 |
-| `thiserror` | 2.0.20 | MIT OR Apache-2.0 | `NotaError` 的样板 |
-| `dirs` | 6.0.0 | MIT OR Apache-2.0 | XDG 目录 |
-| `notify` | 8.2.0 | **CC0-1.0** | ⚠️ **目前没用到**，见 §4 |
-| `similar` | 3.2.0 | **Apache-2.0** | ⚠️ **目前没用到**，见 §4 |
-| `shlex` | 2.0.1 | MIT OR Apache-2.0 | ⚠️ **目前没用到**，见 §4 |
-| `ureq` | 3.4.0 | MIT OR Apache-2.0 | **`nota.http`，也就是只给插件发请求用**（2026-09-24）。默认 feature 就带下面那套 TLS，**不依赖系统 OpenSSL** |
+| [`base64`](https://github.com/marshallpierce/rust-base64) | 0.22.1 | MIT OR Apache-2.0 | base64 编解码（图片的 data URL、导出、插件账本里那几处） |
+| [`chrono`](https://github.com/chronotope/chrono) | 0.4.45 | MIT OR Apache-2.0 | 日期与时间（`nota.time`、信任记录的时间戳） |
+| [`dirs`](https://github.com/soc/dirs-rs) | 6.0.0 | MIT OR Apache-2.0 | XDG 目录 |
+| [`ed25519-dalek`](https://github.com/dalek-cryptography/curve25519-dalek/tree/main/ed25519-dalek) | 2.2.0 | BSD-3-Clause | **插件签名验证**（`plugin/package.rs`：验签与公钥指纹） |
+| [`gtk`](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT | **Linux 那一侧的 GTK 绑定**。⚠️ 版本必须与 tauri 拖进来的同一大版本（0.18）；开 `v3_24` 是为了 `EventControllerKey`（捕获阶段拦 `Ctrl+B`/`Ctrl+I`，见 `format_keys.rs` 文件头） |
+| [`mlua`](https://github.com/mlua-rs/mlua) | 0.12.1 | MIT | Lua 插件运行时 |
+| [`notify`](https://github.com/notify-rs/notify) | 8.2.0 | CC0-1.0 | ⚠️ **目前没用到**，见 §4 |
+| [`serde`](https://github.com/serde-rs/serde) | 1.0.229 | MIT OR Apache-2.0 | 序列化 |
+| [`serde_json`](https://github.com/serde-rs/json) | 1.0.151 | MIT OR Apache-2.0 | JSON |
+| [`sha2`](https://github.com/RustCrypto/hashes) | 0.10.9 | MIT OR Apache-2.0 | 哈希（插件包摘要 / 公钥指纹 / 文件监视那一路） |
+| [`shlex`](https://github.com/comex/rust-shlex) | 1.3.0 | MIT OR Apache-2.0 | ⚠️ **目前没用到**，见 §4 |
+| [`similar`](https://github.com/mitsuhiko/similar) | 3.2.0 | Apache-2.0 | ⚠️ **目前没用到**，见 §4 |
+| [`tauri`](https://github.com/tauri-apps/tauri) | 2.11.6 | Apache-2.0 OR MIT | 宿主框架（窗口、IPC、WebView） |
+| [`tauri-build`](https://github.com/tauri-apps/tauri) | 2.6.3 | Apache-2.0 OR MIT | 构建期代码生成 |
+| [`tauri-plugin-dialog`](https://github.com/tauri-apps/plugins-workspace) | 2.7.3 | Apache-2.0 OR MIT | 打开/保存文件对话框 |
+| [`tauri-plugin-fs`](https://github.com/tauri-apps/plugins-workspace) | 2.5.2 | Apache-2.0 OR MIT | 前端读写文件 |
+| [`tauri-plugin-opener`](https://github.com/tauri-apps/plugins-workspace) | 2.5.5 | Apache-2.0 OR MIT | 用系统默认程序打开链接 |
+| [`thiserror`](https://github.com/dtolnay/thiserror) | 2.0.20 | MIT OR Apache-2.0 | `NotaError` 的样板 |
+| [`toml`](https://github.com/toml-rs/toml) | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 | 读插件清单与设置文件 |
+| [`ureq`](https://github.com/algesten/ureq) | 3.4.0 | MIT OR Apache-2.0 | **`nota.http`，也就是只给插件发请求用**（2026-09-24）。默认 feature 就带下面那套 TLS，**不依赖系统 OpenSSL** |
+| [`webkit2gtk`](https://github.com/tauri-apps/webkit2gtk-rs) | 2.0.2 | MIT | Tauri 在 Linux 上的 WebView 绑定（与 `gtk` 同属"tauri 已经拖进来、我们直接引用"那一类） |
+| [`zip`](https://github.com/zip-rs/zip2) | 8.6.0 | MIT | 读 zip 包（`.nota-plugin`、主题包之类的打包件） |
 
 ### 随 `ureq` 一起编进来的 TLS 栈
 
@@ -73,30 +84,37 @@
 
 | 包 | 版本 | 许可证 | 用来做什么 |
 |---|---|---|---|
-| `@milkdown/kit` | 7.22.1 | MIT | 编辑器内核（ProseMirror + remark 的封装） |
-| `mermaid` | 10.9.8 | MIT | 图表渲染。⚠️ **显式列在 `package.json` 里**（`src/editor/diagram-view.ts` 里动态 `import()`，只在真的出图时加载）。⚠️ 2026-10-04 起 `@milkdown/plugin-diagram`（7.7.0，MIT）**退役**：它只做"围栏→节点"那四件不含 mermaid 的小活，却把 mermaid 静态打进首屏——那四件如今是本仓自己的 `src/editor/diagram-node.ts`（判据逐条照抄，第 27 项） |
-| `@milkdown/plugin-math` | 7.5.9 | MIT | 数学公式。⚠️ 同上（渲染那一半在 `src/editor/…` 与 `katexOptionsCtx`） |
-| `@milkdown/plugin-prism` | 7.22.1 | MIT | 代码块语法高亮 |
-| `katex` | 0.16.47 | MIT | 公式渲染 |
-| `mdast-util-math` | 3.0.0 | MIT | 行内公式**用几个 `$`** 的序列化（2026-09-27 起显式列出）。⚠️ 它本来是 `remark-math` 的传递依赖，之所以写进 `package.json`，是因为 `src/editor/math-delim.ts` **直接 import 了它**（用 `mathToMarkdown({singleDollarTextMath:false})` 那条上游现成的处理器）。另一条路是自己抄一份 handler，那样会漏掉上游那两段边界处理——理由在那个文件头 |
-| `react` | 19.3.0 | MIT | 界面框架 |
-| `react-dom` | 19.3.0 | MIT | |
-| `@tauri-apps/api` | 2.11.1 | Apache-2.0 OR MIT | 前端调后端 |
-| `@tauri-apps/plugin-dialog` | 2.7.3 | MIT OR Apache-2.0 | |
-| `@tauri-apps/plugin-fs` | 2.5.2 | MIT OR Apache-2.0 | |
-| `@tauri-apps/plugin-opener` | 2.5.5 | MIT OR Apache-2.0 | |
+| [`@codemirror/commands`](https://code.haverbeke.berlin/codemirror/commands) | 6.11.1 | MIT | — |
+| [`@codemirror/lang-markdown`](https://code.haverbeke.berlin/codemirror/lang-markdown) | 6.5.2 | MIT | — |
+| [`@codemirror/language`](https://code.haverbeke.berlin/codemirror/language) | 6.12.4 | MIT | — |
+| [`@codemirror/state`](https://code.haverbeke.berlin/codemirror/state) | 6.7.6 | MIT | — |
+| [`@codemirror/view`](https://code.haverbeke.berlin/codemirror/view) | 6.43.13 | MIT | — |
+| [`@lezer/highlight`](https://github.com/lezer-parser/highlight) | 1.2.3 | MIT | — |
+| [`@milkdown/kit`](https://github.com/Milkdown/milkdown) | 7.22.1 | MIT | 编辑器内核（ProseMirror + remark 的封装） |
+| [`@milkdown/plugin-math`](https://github.com/Milkdown/milkdown) | 7.5.9 | MIT | 数学公式。⚠️ 同上（渲染那一半在 `src/editor/…` 与 `katexOptionsCtx`） |
+| [`@milkdown/plugin-prism`](https://github.com/Milkdown/milkdown) | 7.22.1 | MIT | 代码块语法高亮 |
+| [`@tauri-apps/api`](https://github.com/tauri-apps/tauri) | 2.11.1 | Apache-2.0 OR MIT | 前端调后端 |
+| [`@tauri-apps/plugin-dialog`](https://github.com/tauri-apps/plugins-workspace) | 2.7.3 | MIT OR Apache-2.0 | — |
+| [`@tauri-apps/plugin-fs`](https://github.com/tauri-apps/plugins-workspace) | 2.5.2 | MIT OR Apache-2.0 | — |
+| [`@tauri-apps/plugin-opener`](https://github.com/tauri-apps/plugins-workspace) | 2.5.5 | MIT OR Apache-2.0 | — |
+| [`katex`](https://github.com/KaTeX/KaTeX) | 0.16.47 | MIT | 公式渲染 |
+| [`mdast-util-math`](https://github.com/syntax-tree/mdast-util-math) | 3.0.0 | MIT | 行内公式**用几个 `$`** 的序列化（2026-09-27 起显式列出）。⚠️ 它本来是 `remark-math` 的传递依赖，之所以写进 `package.json`，是因为 `src/editor/math-delim.ts` **直接 import 了它**（用 `mathToMarkdown({singleDollarTextMath:false})` 那条上游现成的处理器）。另一条路是自己抄一份 handler，那样会漏掉上游那两段边界处理——理由在那个文件头 |
+| [`mermaid`](https://github.com/mermaid-js/mermaid) | 10.9.8 | MIT | 图表渲染。⚠️ **显式列在 `package.json` 里**（`src/editor/diagram-view.ts` 里动态 `import()`，只在真的出图时加载）。⚠️ 2026-10-04 起 `@milkdown/plugin-diagram`（7.7.0，MIT）**退役**：它只做"围栏→节点"那四件不含 mermaid 的小活，却把 mermaid 静态打进首屏——那四件如今是本仓自己的 `src/editor/diagram-node.ts`（判据逐条照抄，第 27 项） |
+| [`react`](https://github.com/react/react) | 19.3.0 | MIT | 界面框架 |
+| [`react-dom`](https://github.com/react/react) | 19.3.0 | MIT | — |
+| [`refractor`](https://github.com/wooorm/refractor) | 5.0.0 | MIT | — |
 
 ### 只在开发/构建时用的
 
 | 包 | 版本 | 许可证 |
 |---|---|---|
-| `@tauri-apps/cli` | 2.11.5 | Apache-2.0 OR MIT |
-| `@vitejs/plugin-react` | 5.2.0 | MIT |
-| `vite` | 7.3.6 | MIT |
-| `typescript` | 5.9.3 | Apache-2.0 |
-| `@types/node` | 26.6.2 | MIT |
-| `@types/react` | 19.3.0 | MIT |
-| `@types/react-dom` | 19.3.0 | MIT |
+| [`@tauri-apps/cli`](https://github.com/tauri-apps/tauri) | 2.11.5 | Apache-2.0 OR MIT | — |
+| [`@types/node`](https://github.com/DefinitelyTyped/DefinitelyTyped) | 26.6.2 | MIT | — |
+| [`@types/react`](https://github.com/DefinitelyTyped/DefinitelyTyped) | 19.3.0 | MIT | — |
+| [`@types/react-dom`](https://github.com/DefinitelyTyped/DefinitelyTyped) | 19.3.0 | MIT | — |
+| [`@vitejs/plugin-react`](https://github.com/vitejs/vite-plugin-react) | 5.2.0 | MIT | — |
+| [`typescript`](https://github.com/microsoft/TypeScript) | 5.9.3 | Apache-2.0 | — |
+| [`vite`](https://github.com/vitejs/vite) | 7.3.6 | MIT | — |
 
 ## 3. 系统依赖（Linux）
 

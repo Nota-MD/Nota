@@ -127,7 +127,7 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
   const { 文档出口, 查找条, 预览出口, 改动出口, 会话出口, 插件, 对话框 } = 接线;
 
   const { newDoc, openViaDialog, openFolder, 记活动 } = 文档出口;
-  const { 查找开着, 命中情况, 报命中, 关查找, 替换当前, 全部替换 } = 查找条;
+  const { 查找开着, 替换行, 命中情况, 报命中, 关查找, 替换当前, 全部替换 } = 查找条;
   const { 活跃预览, 面板预览, 看法, set看法, 退出预览 } = 预览出口;
   const { 改动: 外部改动, 忽略: 忽略外部改动, 重新载入: 重新载入外部, 查看修改, 对照: 外部对照, 关对照 } = 改动出口;
   const { 最近, 打开最近, 滚动位置, 记滚动 } = 会话出口;
@@ -186,6 +186,7 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           onReplace={替换当前}
           onReplaceAll={全部替换}
           onClose={关查找}
+          显示替换={替换行}
         />
       )}
       {activeDoc && 格式化栏开着 && (

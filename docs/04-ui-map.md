@@ -1234,7 +1234,7 @@ pandoc 那条路还在用（§2.6e），只是 CSS 类从那时的 `slidev-*` �
 | 首页那四**行** | 「故障排除 `(T)`」「权限列表 `(P)`」「鸣谢 `(C)`」「法律信息 `(L)`」，行尾 `›`，翻进子页 | ✅ 子页里顶上一行是「‹ 返回」，右上角那颗 × 一直在 |
 | 子页 · 故障排除 | **两张表**：**编译信息**（包版本 / 编译时间 / 编译主机 / 编译平台 / 目标三元组 / 构建档案 ＋ `rustc` `cargo` `node` `npm` `tauri` `webkit2gtk` `gtk` `mlua` 八行版本）与**本机信息**（操作系统 / 内核 / 架构 / GTK 版本 / WebKitGTK 版本） | ✅ 2026-10-04 换成这个（用户：「记录编译信息（比如编译时间戳，机器，各编译工具依赖）」＋「用于存放编译信息和本机信息」）。⚠️ 数据来自 `api.diagnostics.collect()`（`src-tauri/src/diagnostics.rs`），**翻到这一页时才拉**（进框就拉是白拉），拉过一次就不重拉。⚠️ **空串画成「—」**——这一页的存在理由是"出事时一次问清楚"，绝不能因为缺一条整页空白。⚠️ 左列那八个**程序名与包名故意不翻**。⚠️ 它以前装的是权限清单，**整块搬去「权限列表」了** |
 | 子页 · 权限列表 | **一张两列表**（**权限说明** ｜ **备注**），十条，口径与出处在表下面 | ✅ 2026-10-04 新开的一页（用户：「专门新开一栏叫做权限列表。用表格的形式展示权限说明和备注」）。⚠️ 以前它是"名字 ＋ 一段话"的清单，在故障排除里。⚠️⚠️ **这张表必须 `table-layout: fixed` ＋ 给左列 `width`**（`.about-table-2col`，`overlay.css`）：光靠默认的 auto 布局，那条共用的 `overflow-wrap: anywhere` 会把每格的 min-content 宽压到一个字，两列**挤成一坨、右列紧贴着左列**（2026-10-04 目检抓到的，现场记在 `docs/06` §5.49） |
-| 子页 · 鸣谢 | 一张**表**（Tauri / React / Milkdown·ProseMirror / KaTeX / Mermaid / mlua·Lua / vscode-icons / Pandoc / **SCOWL**） | ✅ ⚠️ 加一个在**那张表**里添一行，别去改拼装。⚠️ 只写**真的用了、而且是用户看得见的那种**，传递依赖闭包有几百个（清单在根目录 `THIRD-PARTY.md`）。⚠️ **2026-09-28 加了 SCOWL**（拼写检查的词表，用户点名「拼写检查找一个 BSD 开源的属个名」）——**Nota 一个字典字节都不带**，链子是 WebKitGTK → libenchant → hunspell → 系统字典，所以这一行的义务落点在打包那一侧；正文在 `THIRD-PARTY.md` §7。⚠️ **底下那句「完整清单见 THIRD-PARTY.md」2026-10-04 删了**（全删那批），要恢复就加回这里 |
+| 子页 · 鸣谢 | 一张**表**（Tauri / React / Milkdown·ProseMirror / KaTeX / Mermaid / mlua·Lua / vscode-icons / Pandoc / **SCOWL**） | ✅ ⚠️ 加一个在**那张表**里添一行，别去改拼装。⚠️ 只写**真的用了、而且是用户看得见的那种**，传递依赖闭包有几百个（清单在根目录 `THIRD-PARTY.md`）。⚠️ **2026-09-28 加了 SCOWL**（拼写检查的词表，用户点名「拼写检查找一个 BSD 开源的属个名」）——**Nota 一个字典字节都不带**，链子是 WebKitGTK → libenchant → hunspell → 系统字典，所以这一行的义务落点在打包那一侧；正文在 `THIRD-PARTY.md` §7。⚠️ **底下那句「完整清单见 THIRD-PARTY.md」2026-10-04 删了**（全删那批），要恢复就加回这里。📌 **2026-10-06：每一行都多了「项目主页」与「许可证」两样**（用户：「这个里的链接和许可证公示」）——名字成了外链（点开走系统浏览器），下面多一行许可（`.about-item-license`）。⚠️ 链接不是手写的：与根目录 `THIRD-PARTY.md` 那批同一次、同来源（`cargo metadata` / `package.json` 的 `repository`）。⚠️ 打开失败**要在这一页说一句**（`.about-err` 那行红字）——第一版只 `console.warn`，用户只能说"点了没反应"。 |
 | 子页 · 法律信息 | **一个超链接**：「BSD-2-Clause 许可证」，点它开 `ui/LicenseDialog.tsx`（**另一个框**，全文从仓库根 `LICENSE` 读）＋ 版权行 | ✅ 用户 2026-09-26 要求「版本号显示；许可证显示(BSD2)；致谢列表（预留）」；2026-10-04 改成超链接（用户：「用超链接显示"bsd2条款许可证"，点击打开窗口独立展示」，并明确选**「应用里的另一个框」**） |
 
 ⚠️⚠️ **「权限列表」那张表是「声明」，实现是另一处代码——两处对不上就是撒谎。**
@@ -1778,7 +1778,7 @@ Adwaita 的 headerbar 是 44px、Yaru 的是 40px。它现在**默认值仍在 `
 
 | 类别的变量 | 谁设 | 具体是什么 |
 |---|---|---|
-| 颜色 | `[data-ui-mode]`（含 `:root` 的 light 兜底） | `--bg` `--bg-subtle` `--bg-raised` `--bg-hover` `--bg-active` `--fg` `--fg-muted` `--fg-faint` `--border` `--border-strong` `--accent` `--accent-fg` `--danger` `--warn` `--success` `--shadow` `--doc-bg` `--doc-fg` `--code-comment` `--code-keyword` `--code-string` `--code-number` `--code-function` `--code-attr` `--code-tag` `--find-hit` `--find-current` |
+| 颜色 | `[data-ui-mode]`（含 `:root` 的 light 兜底） | `--bg` `--bg-subtle` `--bg-raised` `--bg-hover` `--bg-active` `--fg` `--fg-muted` `--fg-faint` `--border` `--border-strong` `--accent` `--accent-fg` **`--link`** `--danger` `--warn` `--success` `--shadow` `--doc-bg` `--doc-fg` `--code-comment` `--code-keyword` `--code-string` `--code-number` `--code-function` `--code-attr` `--code-tag` `--find-hit` `--find-current` | ⚠️ **`--link` 是 2026-10-06 加的**（BUG-66）：正文里链接的颜色，默认 `var(--accent)`。加它是因为**"无文档主题"那一档原来一条 `a` 规则都没有**，链接落回浏览器默认那个蓝（`#0000EE`）、深色下看不清；而三套文档主题各自写的是**裸 `a`**，所以默认那条规则在 `editor.css` 里用 `:where(…)` **压平了权重**，靠运行时注入的顺序让主题赢。⚠️ **下划线默认就有**（用户 2026-10-06 拍板）；照 VMark 抄的是"键盘 `:focus-visible` 时的描边圈"这一条。
 | 形状 | `[data-ui-style]` | `--radius-sm` `--radius` `--radius-lg` `--control-height` `--spacing` `--toolbar-height` `--toolbar-shadow` `--btn-font-weight` `--switch-w` `--switch-h` `--switch-knob` `--switch-travel` `--material-blur` `--material-saturate` `--press-scale`（`--press-scale` 只有 macos 给了值；`--material-*` 四个材质风格各给一份；macos / ghub / plasma / windows / windows10 另外换 `--font-ui` 字体栈——⚠️ **只写"Segoe UI"一类的通用名，不写 `Segoe UI Variable` 那种 Win11 专有字体名**，专有字体不随包分发，见 §3.2c） |
 | 颜色**（例外）** | `[data-ui-style="x"][data-ui-mode="y"]`（**两属性**，放在文件最后） | 确有识别色的风格：ghub 的冷灰蓝边框与 `#0d1117` 画布、plasma 的 Breeze 蓝、yaru 的橙、yaru-blue 的 Yaru 蓝、adwaita/macos/windows/windows10 的系统蓝。⚠️ 那 16 格还给出**按钮与开关**这两族（`--btn-bg` 三态 + `--btn-border`、`--switch-on` / `--switch-off` / `--switch-knob-bg`）——⚠️ 它们**不是**通用量，另有用途见 §3.2c。⚠️ macos 那两格还多给三样**只有选择器用得上**的：`--menu-fill` 与 `--menu-fill-fg`（菜单高亮与其上的字）、以及只有它给的 `--press-scale` 搭配值。⚠️ **明暗各写一份**，**八套风格 × 两种模式 = 16 格**，**一格都不许缺**。⚠️ `yaru` 与 `yaru-blue` **共用形状那一段**（并列两个选择器）——加同语言的强调色变体时照这个写法，不复制一遍圆角 |
 
@@ -1835,6 +1835,8 @@ Adwaita 的 headerbar 是 44px、Yaru 的是 40px。它现在**默认值仍在 `
 `.nota-srcmark`（块级/公式的 `#` `>` ` ``` ` `$`，**绝对定位浮标**、画在装订线里不吃宽度）
 ＋ `.nota-markhint`（**行内**加粗/斜体的 `**` `*`，`::before`/`::after` ＋
 `content: attr(data-markhint)`，⚠️ **占宽度**是有意的取舍，理由见 `docs/05` §4.11）。
+⚠️ **2026-10-05 起右符号不再用 `::after`、改走 `Decoration.widget(…, {side:-1})`**（`docs/07` BUG-65）——
+`::after` 会把光标挡在右符号**左边**；理由与 Typora 那两张图在 `docs/05` §4.11。
 ⚠️ 两条**共用同一张配方**（`--fg-faint` ＋ 0.16s 淡入 ＋ 不可选中 ＋ 不吃鼠标事件），
 ⚠️ **都不许再乘 `opacity`**（2026-09-25 从 `.nota-srcmark` 上删过，理由在那一条的注释里）；
 ⚠️ 符号**走属性不进 CSS**，加第三种提示别把字面量写进 `content`。
@@ -2411,7 +2413,8 @@ node -e 'const fs=require("fs");const re=/id:\s*"([^"]+)"((?:(?!id:)[\s\S])*?)ac
 | `Alt+Shift+P` | `file.print` | **打印**（2026-09-24 加）。⚠️ 它是"导出含样式的那份 HTML + 交给系统默认程序"，提示里会同时说清两步 |
 | `Ctrl+Z` / `Ctrl+Y` | `edit.undo` / `edit.redo` | 撤销 / 重做。⚠️ 两种模式各走各的历史（§4.2 末条） |
 | `Ctrl+Shift+C` | `edit.copyAsMarkdown` | 复制为 Markdown。⚠️ 快捷键在**子菜单**里：`edit.copy` 那一项飞出来的子菜单 |
-| `Ctrl+H` | `edit.findReplace` | **查找与替换**（2026-09-24 加）。⚠️ 只**开**条子，不切"开/关"——光标的焦点在条子里时这条键**接不到**（`isOutsideEditor` 那条判据），此时用 Esc 关 |
+| `Ctrl+F` | `edit.find` | **只查找**（2026-10-06 加，第 95 项）。⚠️ **在此之前这颗键根本没绑**——用户当天点名「记得搞一下 ctrl f 搜索。要支持正则表达式」，而**引擎与开关早就齐了**（`editor/find.ts` 的 `FindOptions.regex` ＋ 查找条上那颗 `.*`），缺的只是这颗键 |
+| `Ctrl+H` | `edit.findReplace` | **查找与替换**（2026-09-24 加）。⚠️ **2026-10-06 起两条键共用一个条子、差别只在"要不要画替换那一行"**：`Ctrl+F` 不画（`useFindBar` 的 `替换行`），`Ctrl+H` 画 |⚠️ 只**开**条子，不切"开/关"——光标的焦点在条子里时这条键**接不到**（`isOutsideEditor` 那条判据），此时用 Esc 关 | ⚠️ **2026-10-06（第 95／105 项）**：① `Ctrl+F` **新绑**（`edit.find`，只开 Find 那一行）、`Ctrl+H` 才带替换行（`useFindBar` 的 `替换行` ＋ `FindBar` 的 `显示替换`）；② 正则开着时**「全词」灰掉且值不参与**（`\b` 做的是同一件事）；③ 查找条的样子按用户那句「不美观」调过：**开关加了静止态**（原来是纯文字、看不出能点也看不出哪颗开着）、**聚焦圈从纯强调色改成淡版**（用 `box-shadow` 不用 border——border 一粗旁边那排开关会跟着挪）、两行间距 3→6px。⚠️ **卡片化（不铺满整行）那一半还没做**：牵动 `review.css` 的两条让位规则与窄窗口那一档，要开窗迭代。
 | `Ctrl+Shift+L` | `view.toggleSidebar` | 显示/隐藏侧栏（可勾项） |
 | `Ctrl+Shift+1` | `view.outline` | 开侧栏并切到**大纲**（可勾项） |
 | `Ctrl+Shift+3` | `view.fileTree` | 开侧栏并切到**文件树**（可勾项） |

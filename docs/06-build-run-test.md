@@ -3494,7 +3494,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu; do
+for n in math-view math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3611,7 +3611,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**五十二份、共 1319 条**（📌 **2026-10-04（右键菜单那批的**开窗口检**）只重跑了动过的那一份**：`context-menu` **27 → 30**（0 失败）——新增的「组五：这一档拿哪份灰名单」三条钉的正是目检抓出来的缺陷（**输入框那一档不该套菜单栏的 `disabledCommands`**，否则 `edit.select` 那条"有实现、点得动"的条目会被画成灰的，键盘 `End` 还会落到它的前一条上）；⚠️ **其余 51 份这一遍没有逐份重跑**，读数沿用上一版（**别把这一遍当成"整份名册又重跑过"**，本仓有过这个教训）；⚠️ **总数 1316 → 1319，份数 52 不变**；实拍账见 §5.54）：
+**五十三份、共 1329 条**（📌 **2026-10-06（第 94 项「提示机制」那批）**新加 `hints` **10 条**；⚠️ 其余 52 份**没有逐份重跑**，读数沿用上一版。上一版：**五十二份、共 1319 条**（📌 **2026-10-04（右键菜单那批的**开窗口检**）只重跑了动过的那一份**：`context-menu` **27 → 30**（0 失败）——新增的「组五：这一档拿哪份灰名单」三条钉的正是目检抓出来的缺陷（**输入框那一档不该套菜单栏的 `disabledCommands`**，否则 `edit.select` 那条"有实现、点得动"的条目会被画成灰的，键盘 `End` 还会落到它的前一条上）；⚠️ **其余 51 份这一遍没有逐份重跑**，读数沿用上一版（**别把这一遍当成"整份名册又重跑过"**，本仓有过这个教训）；⚠️ **总数 1316 → 1319，份数 52 不变**；实拍账见 §5.54）：
 
 **五十二份、共 1316 条**（📌 **2026-10-04（右键菜单那一批）当场把 52 份全跑了一遍**（`for` 里 48 份 ＋ 单列 4 份），**全部 0 失败**；本批**只新加一份** `context-menu` **27 条**（右键菜单那批的纯逻辑对账——四档分类 ／ **id 对账**（表里每一条 id 都查得到）／ **处理器对账**（点得动的每一条都有实现）／ 输入框那一档的实现住在哪 ／ 行内换格 ／ 整行灰 ／ `给行` 的形状；⚠️ 它**读两份源码文本**，不开窗、不建 DOM）；⚠️ **总数 1289 → 1316，份数 51 → 52**；其余 51 份的读数**是这一遍逐份跑出来的**、与上一版相同）：
 
@@ -5675,3 +5675,70 @@ podman exec -u 1000 tauri-dev magick /tmp/目检/x.png -crop WxH+X+Y +repage -sc
 
 ⚠️ **收工清单**（这一批漏过一次）：`kill` 掉自开的那份 Nota 实例 ＋ `Xvfb :98`，
 两样都**必须**杀干净（理由见第 2 步那条）。
+
+### 5.55 验「行内标记提示：右符号画在光标左边」（2026-10-05，✅ **开窗量过**，**BUG-65**）
+
+**用户试用时报的**（原话一字不改）：「**光标无法移动到右边 `*` 的右侧。因为这里 `*` 不是实体了**」
+——`*你好*` 落成真斜体之后，光标停在斜体**终点**时看起来卡在右 `*` 的左边。
+这一节是把它**量成三条判据**的过程；结论与修法写在 `docs/07` §2 的 **BUG-65** 那一行。
+
+**跑法**（自己的屏 ＋ 复用宿主那台 vite；⚠️ 别用用户在 `:0` 上的实例）：
+
+```sh
+# 1. 起一块自己的屏（挑一个空号，别抢别人的）
+podman exec -u 1000 tauri-dev bash -lc 'nohup Xvfb :90 -screen 0 1440x960x24 > /tmp/xvfb90.log 2>&1 &'
+
+# 2. 宿主上已经有 vite（端口 5273）——容器与宿主同网，直接用它，别另起一个占端口
+curl -sS -m 5 -o /dev/null -w "%{http_code}\n" http://localhost:5273/     # 要 200
+
+# 3. 开窗（⚠️ XDG 全隔离）
+B=/tmp/nota-光标; mkdir -p "$B/cfg" "$B/data" "$B/run" "$B/帧"
+podman exec -d -u 1000 -w <仓库>/src-tauri \
+  -e DISPLAY=:90 -e GDK_BACKEND=x11 -e WAYLAND_DISPLAY= \
+  -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 -e GTK_IM_MODULE=gtk-im-context-simple -e XMODIFIERS=@im=none \
+  -e XDG_CONFIG_HOME=$B/cfg -e XDG_DATA_HOME=$B/data -e XDG_RUNTIME_DIR=$B/run \
+  tauri-dev ./target/debug/nota <某个 .md>
+```
+
+**三条判据**（都跑在无头 `:90`，帧留在 `/tmp/nota-光标/帧/`）：
+
+| # | 动作 | 判据 | 结果 |
+|---|---|---|---|
+| ① | 新文档 → 打 `*你好*` → `End` → **连拍 6 帧**（`import`，间隔 ~0.13s） | 光标会闪，只有几帧抓得到；抓到的帧里看**它画在右 `*` 的哪一侧** | ⚠️ **在左边**——6 帧里 3 帧有光标，**每一帧都落在 `好` 与右 `*` 之间**（拼图 `/tmp/nota-光标/帧/连拍-拼.png`） |
+| ② | 新文档 → 打 `*你好*` → **点在右 `*` 右边一点** → 打 `Q` | 切源码模式 `Ctrl+A`/`Ctrl+C`，`od -c` 读字节：`Q` 在 `*你好*` 的**里**还是**外** | ✅ **在外**（`* 你好 * Q`）——所以**够得到**，不是"被挡住" |
+| ③ | 新文档 → 打 `*你好*` → `Home` → 连按 5 次 `→` → 打 `W` | 同上 | ✅ **在外**（`* 你好 * W`） |
+
+⚠️ **①②③ 合起来的结论**：**功能上光标够得到**（点、箭头、行尾直接打字，三条路打出来的字都在斜体外），
+**画得不对**——光标停在标记终点时被 `::after` 挡在左边。也就是说这一条**不是"刻不了字"，是"光标的位置在撒谎"**：
+屏幕上看着还在斜体里，打出来的字却落在外面。
+
+⚠️ **顺带撞见的一条旧账现形**：这一遍的标签栏标题写着 **`测试*你好*X`**——`*` 被带进了标签页标题，
+正是 `docs/07` §2 的 **BUG-56**（标题里的行内标记原样露进标签/大纲）。
+
+⚠️ **收工清理**：`kill` 掉自开的那份 Nota（**按 PID，绝不 `pkill -f`**——本轮就因为 `pkill -f` 匹配到自己那条命令行而自杀过一次）
+＋ 自己起的那块 `Xvfb :90`。宿主上那台 vite 是**给桌面上的实例**用的，**别杀**。
+
+#### 5.55b 修后复验（同一天，✅ 已修，**BUG-65**）
+
+口径由用户**拿 Typora 的两张图**当场定：**符号照常显示，光标要能在它两侧移动**——
+图 1 是 `*你好*|`（光标在右符号**右边**）、图 2 是 `*你好|*`（光标在右符号**左边**），
+**两张里两颗符号都在**；光标走开才消失。
+
+**落地是改画法，不是"躲开不画"**：左符号仍旧走 `::before`；**右符号改成
+`Decoration.widget(段.到, …, { side: -1 })`**——`prosemirror-view` 对 `side` 的定义是
+"**画在光标左边、在那里插进去的内容落在 widget 后面**"。
+
+⚠️⚠️ **中途翻过一次车，留在这里当反面**：当天**先**做的是"段尾那一格整个不画"
+（`扫一段` 收紧，注释写成"光标的位置在撒谎"）。**当天就被用户拿 Typora 的图推翻了**——
+Typora 那里是**照常显示**的，躲开不画不是它的做法。已回退，`扫一段` 的边界口径回到原样。
+
+**复验**（同一套配方，帧在 `/tmp/nota-光标3/帧/`，连拍拼图 `拼2.png`）：
+
+| # | 光标在哪 | 应该（照 Typora） | 实拍 |
+|---|---|---|---|
+| ① | **段尾**（刚打完 `*你好*` 那一格） | 两颗都画，光标在右符号**右边** | ✅ **`*你好*|`** |
+| ② | **段中**（`你` 与 `好` 之间） | 两颗都画，光标在符号之间 | ✅ **`*你|好*`** |
+
+⚠️ **功能侧同时复核**：源码模式读到的是干净的 `*你好*`（一个反斜杠都没有）；
+在段尾打字落在斜体**外面**——与 `side:-1` 那句"插进去的内容落在 widget 后面"一致。
+⚠️ **判据**：`tests/mark-hint.test.ts` **18 条**（边界口径回到原样后全过）。

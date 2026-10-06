@@ -143,8 +143,10 @@
    * 不是第二条工具栏。铺满整行的话，正文区域会被这两行矮条压得很闷。 */
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
-  padding: 4px 8px;
+  /* ⚠️ 2026-10-06（第 105 项，用户一句「不美观」）：两行之间原来只有 3px，
+     读起来像"一张两列的表"而不是"一条查找、一条替换"。6px 才分得开。 */
+  gap: 6px;
+  padding: 6px 10px;
   background: var(--bg-subtle);
   border-bottom: 1px solid var(--border);
 }
@@ -161,8 +163,8 @@
    * 窄窗口里输入框会把后面那排按钮顶出去（而不是自己变窄）。 */
   flex: 1 1 auto;
   min-width: 0;
-  height: 24px;
-  padding: 0 6px;
+  height: 26px;
+  padding: 0 8px;
   font: inherit;
   font-size: 12px;
   color: var(--fg);
@@ -174,6 +176,13 @@
 .find-input:focus {
   outline: none;
   border-color: var(--accent);
+  /* ⚠️⚠️ **别用纯强调色做整圈**（2026-10-06，第 105 项）：用户那套主题的强调色是
+     橙的，在深底上又亮又跳，一条查找条被它整个压下去（他截图里最扎眼的就是那一圈）。
+     改成**强调色的淡版**。⚠️ 写成 `box-shadow` 而不是再加一层 border，是为了
+     让输入框的**尺寸不变**（border 一粗，旁边那排开关会跟着挪一格）。
+     ⚠️ `color-mix` 不被支持时整条声明会被丢掉，上面的 `border-color` 照旧生效
+     ——那是可接受的降级（仍然是强调色，只是没有那圈柔光）。 */
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .find-count {
@@ -204,6 +213,15 @@
   user-select: none;
 }
 
+/* ⚠️ **开关静止时也要有"按钮"的样子**（2026-10-06，第 105 项）：原来背景是
+   透明的，那一排 `Aa` / `全词` / `.*` 在深底上读起来就是**一行说明文字**——
+   用户既看不出它能点，更看不出**哪颗正开着**（要等鼠标划上去才变）。
+   给它一个极轻的底与描边：不抢戏，但看得出是控件。 */
+.find-toggle {
+  background: var(--bg-raised);
+  border-color: var(--border);
+}
+
 .find-toggle:hover,
 .find-btn:hover {
   background: var(--bg-hover);
@@ -219,6 +237,16 @@
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-fg);
+}
+
+/* 「正则开着时全词失灵」那一档（2026-10-06，第 95 项）。
+   ⚠️ 它**不是"关着"**（`data-on` 那条管的是关着）——是"这一刻不适用"。
+   两者外观必须分得开，否则用户看到一颗暗淡的「全词」会以为**自己把它关了**，
+   然后开正则回来发现它又亮着，像是坏了。所以：关着 = 灰字透明底；
+   失灵 = 更淡一档 ＋ 不许点（`disabled` 在 `FindBar.tsx` 里）。 */
+.find-toggle[data-off]:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .find-toggle:focus-visible,

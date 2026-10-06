@@ -44,9 +44,24 @@ interface Props {
   onReplaceAll: (text: string) => void;
   /** 关掉查找条。关的动作（清高亮、把焦点还给编辑区）由调用方做。 */
   onClose: () => void;
+  /**
+   * 替换那一行画不画（2026-10-06，第 95 项）。
+   * ⚠️ `Ctrl+F` = `false`（只找）、`Ctrl+H` = `true`（找并替换）——**同一个条子**，
+   * 差别只在这一格。不画那一行时，**替换那两件事的入口就整个消失**，
+   * 这比"灰着"干净：没打开替换的人不需要看见两颗永远用不上的按钮。
+   */
+  显示替换: boolean;
 }
 
-export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onClose }: Props) {
+export function FindBar({
+  status,
+  onQuery,
+  onStep,
+  onReplace,
+  onReplaceAll,
+  onClose,
+  显示替换,
+}: Props) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -84,7 +99,14 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
   // 编辑器可能是**刚建出来的**（换文档、切模式），它手里没有任何查找状态，
   // 而条子看起来"已经写着上次那个词"——不报这一次，两边就对不上了。
   useEffect(() => {
-    上报.current(query, options);
+    // ⚠️ **正则开着时 `wholeWord` 不参与**（2026-10-06，第 95 项）：那颗按钮在上
+    // 面是灰的，值也必须在这里归零——不然界面上"关着"、行为上"开着"，
+    // 而用户看不见我们悄悄加的那道边界。⚠️ 归一化只发生在这**一次上报**上，
+    // `options` 本身不动：关掉正则之后那颗开关要原样回来。
+    上报.current(query, {
+      ...options,
+      wholeWord: options.regex ? false : options.wholeWord,
+    });
   }, [query, options]);
 
   /**
@@ -118,6 +140,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
         }
       }}
     >
+      {/* 替换那一行（2026-10-06，第 95 项）：⚠️ **只由 `显示替换` 管**。
+          ⚠️ 第一版把这一层套在了**上一行**上，于是 `Ctrl+F` 开出来跟 `Ctrl+H` 一模一样——`tsc` 照样过（JSX 是平衡的），**只有开窗看一眼才发现**。 */}
       <div className="find-row">
         <input
           ref={查询框}
@@ -141,13 +165,24 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           {计数}
         </span>
         {开关组.map((s) => (
+          // ⚠️ **正则开着时「全词」灰掉**（2026-10-06，第 95 项）：正则自己就有
+          //   `\b`，再叠一层"命中两侧不许是词字符"是**两把尺子量一件事**——
+          //   用户在正则里写的边界会被我们悄悄改掉，而屏幕上什么都看不出来。
+          //   ⚠️ 光灰掉不够：**值也必须真的不参与**（否则它仍留在 `options` 里
+          //   被上报上去，界面上"关着"、行为上"开着"，那就是撒谎）。
+          //   所以下面那个 `onClick` 与上报那一趟都用 `算得出` 归一化过。
+          (() => {
+            const 失灵 = s.key === "wholeWord" && options.regex;
+            return (
           <button
             key={s.key}
             type="button"
             className="find-toggle"
-            data-on={options[s.key]}
-            aria-pressed={options[s.key]}
-            title={s.title}
+            data-on={!失灵 && options[s.key]}
+            data-off={失灵 || undefined}
+            aria-pressed={!失灵 && options[s.key]}
+            disabled={失灵}
+            title={失灵 ? t("Not used while Regular Expression is on — \\b does the same job") : s.title}
             // 同 `FormatBar`：不拦的话按钮会把焦点从输入框抢走，
             // 用户点完开关得再点一次输入框才能接着打字。
             onMouseDown={(e) => e.preventDefault()}
@@ -155,6 +190,8 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           >
             {s.label}
           </button>
+            );
+          })()
         ))}
         <button
           type="button"
@@ -187,6 +224,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           <Icon name="folio-close-symbolic" />
         </button>
       </div>
+      {显示替换 && (
 
       <div className="find-row">
         <input
@@ -217,6 +255,7 @@ export function FindBar({ status, onQuery, onStep, onReplace, onReplaceAll, onCl
           {t("Replace All")}
         </button>
       </div>
+      )}
     </div>
   );
 }

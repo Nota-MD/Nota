@@ -255,6 +255,40 @@
   padding: 0 56px;
 }
 
+/* 正文里的链接。
+ *
+ * ⚠️⚠️ **权重必须压平**（2026-10-06）：三套内置文档主题（`themes/*.css`）写的是
+ * **裸 `a { color: … }`**（权重 0,0,1），而主题是**运行时注入 `<style>`** 的、
+ * 排在 `editor.css` 之后。这里要是写成 `.editor-mount .ProseMirror a`（0,2,1），
+ * 就会**反过来把那三套主题盖掉**——主题里挑好的链接色全废。
+ * `:where(…)` 把外层权重归零，于是这条与主题那条**同权重**、靠顺序分胜负：
+ * 主题在后面 ⇒ 主题赢。这也正是本文件里"可以被文档主题改的东西"的统一姿势
+ * （`--doc-bg` / `--radius` / `--code-*` 那条注释同一个道理）。
+ *
+ * ⚠️ 为什么非要有这一条：**"无文档主题"那一档原来没有任何 `a` 规则**，于是落回
+ * 浏览器默认那个蓝（`#0000EE`）——深色主题下几乎看不清（用户 2026-10-06 报的：
+ * 「超链接颜色不要用蓝色…依照主题决定吧」）。现在跟 `--link`（默认 = 强调色，
+ * 定义在 `theme/base.css`）走，明暗两边都读得出来。 */
+:where(.editor-mount .ProseMirror) a {
+  color: var(--link);
+  /* ⚠️ **下划线默认就有**（用户 2026-10-06 定的：「下划线默认有。其他一样。」）——
+     这一条**故意与 VMark 不同**：`../vmark-ref` 那份
+     （`src/components/Editor/editor.css` 标着 "Links" 那一段）是
+     `text-decoration: none` ＋ 悬停才加下划线；Nota 这边常驻。
+     从它那儿抄过来的是**颜色跟主题走**（`--primary-color` ↔ 本仓 `--accent`，
+     同一个角色）＋ 下面那条 `:focus-visible` 描边。 */
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+/* 键盘走到链接上时要有可见的落点（照 VMark 那条 `:focus-visible`）。 */
+:where(.editor-mount .ProseMirror) a:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* ProseMirror 本体。
  *
  * ⚠️ 字号与行高**走 token 不给死值**：文档主题要能改它们（「极简」要更松的

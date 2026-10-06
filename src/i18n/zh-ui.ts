@@ -491,7 +491,7 @@ export const 界面表: Record<string, string> = {
   "System file dialogs": "系统文件对话框",
   "Open files, Save As, message boxes, question boxes (dialog:allow-open/save/message/ask). These use the system's own dialogs, and you choose which file.": "打开文件、另存为、提示框、询问框（dialog:allow-open/save/message/ask）。走的是系统自己的对话框，选哪个文件由你决定。",
   "Open links with the default application": "用默认程序打开链接",
-  "Handing external links in the document to the system (opener:allow-open-url); no web page is ever opened inside Nota.": "正文里点到外部链接时交给系统（opener:allow-open-url），不在 Nota 内部打开任何网页。",
+  "Handing external links in the document to the system (opener:allow-open-url ＋ opener:allow-default-urls, which only lets http, https, mailto and tel through); no web page is ever opened inside Nota.": "正文里点到外部链接时交给系统（opener:allow-open-url），不在 Nota 内部打开任何网页。",
   "Reading images under your home folder (read-only)": "读你主目录下的图片（只读）",
   "Image files in your home, Documents, Desktop, and Downloads folders can be read and shown inside the document (assetProtocol.scope). ⚠️ Note: this range is wider than “the folder you opened” — an image can be any absolute path, and the interface has to be able to show it. They are read as images only: never written, never changed, never sent anywhere.": "你的主目录、文档、桌面、下载这四个范围里的图片文件可以被读出来显示进正文（assetProtocol.scope）。⚠️ 注意：这个范围比「你打开的那个文件夹」大——因为图片可以是任意绝对路径，界面要能把它们显示出来。只当图片读，不写、不改、不传走。",
   "The interface layer cannot go online on its own": "界面层不能自己联网",

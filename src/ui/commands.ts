@@ -372,6 +372,13 @@ export const MENUS: MenuSpec[] = [
       { id: "edit.moveLineUp", label: "Move Line Up", accel: "Alt+↑", needsDoc: true },
       { id: "edit.moveLineDown", label: "Move Line Down", accel: "Alt+↓", needsDoc: true },
       "sep",
+      // ⚠️ **两条命令、一个条子**（2026-10-06，第 95 项）：`Ctrl+F` 是"找"、
+      // `Ctrl+H` 是"找并替换"。⚠️ 在此之前 **`Ctrl+F` 根本没有绑定**——用户
+      // 2026-10-06 的原话：「记得搞一下 ctrl f 搜索。要支持正则表达式」，
+      // 而正则那半**引擎里早就有**（`editor/find.ts` 的 `FindOptions.regex` ＋
+      // `编译()`，连带零宽保护与整词判据；查找条上那颗 `.*` 开关也一直在）。
+      // 缺的**只是这颗键**。
+      { id: "edit.find", label: "Find…", accel: "Ctrl+F", needsDoc: true },
       { id: "edit.findReplace", label: "Find and Replace…", accel: "Ctrl+H", needsDoc: true },
     ],
   },

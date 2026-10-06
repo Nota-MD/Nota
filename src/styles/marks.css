@@ -176,12 +176,15 @@
    上头那份画在块左边的 56px 装订线里（`right: 100%`，不占正文宽度），
    行内没有装订线可用——绝对定位会压在前一个字上面，比"动两格"难看得多。
    取舍写在 `mark-hint.ts` 的文件头里。 */
+/* ⚠️⚠️ **两颗符号的画法不一样**（2026-10-05 起，BUG-65）：
+   左符号是 `::before`（挂在那段文字上），**右符号是 `mark-hint.ts` 插的 widget**
+   （class 就是下面这个 `-close`）。两边共用这一套配方。
+   ⚠️ **为什么右符号不能用 `::after`**：`::after` 画在那段文字**里面**，光标停在
+   标记**终点**时会被它挡在**左边**（`你好|*`），看着像"卡在斜体里出不去"；
+   而 widget ＋ `side:-1` 是"画在光标左边、插进去的字落在它后面" ⇒ `你好*|`。
+   来龙去脉（含 Typora 那两张图）在 `src/editor/mark-hint.ts` 的文件头。 */
 .editor-mount .ProseMirror .nota-markhint::before,
-.editor-mount .ProseMirror .nota-markhint::after {
-  /* 符号文字来自 `Decoration.inline` 挂的那个属性（`mark-hint.ts` 的 `提示属性`）。
-     左右两边**同一个符号**：加粗是 `**`、斜体是 `*`，正是 markdown 的写法。
-     ⚠️ 两边不能写成不同的东西——那样屏幕上就成了 `*粗**`，比不显示还糟。 */
-  content: attr(data-markhint);
+.editor-mount .ProseMirror .nota-markhint-close {
   font-family: var(--font-mono);
   /* ⚠️ 与 `.nota-srcmark::before` 同一个基准（`--ui-font-size` 而不是 `em`）：
      用 `em` 的话，加粗段落在标题里就是"标题字号的 0.85 倍"，同一对 `*`
@@ -200,6 +203,13 @@
   /* 淡入。⚠️ 只有进入有过渡——伪元素是跟着 class 一起被摘掉的，
      没有机会播退场动画（同 `.nota-srcmark::before`）。 */
   animation: nota-srcmark-in 0.16s ease-out;
+}
+
+/* 只有**左**符号的文字来自属性（`mark-hint.ts` 的 `提示属性`）。
+   右符号是 widget 元素，文字就是它自己的子节点，不走 `content`。
+   ⚠️ 两边**同一个符号**：加粗是 `**`、斜体是 `*`——写成不一样的就是 `*粗**`，比不显示还糟。 */
+.editor-mount .ProseMirror .nota-markhint::before {
+  content: attr(data-markhint);
 }
 
 /* 「待成块」的标题：段落行首敲了 `#` 加空格，**还**没按回车。

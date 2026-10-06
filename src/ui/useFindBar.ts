@@ -53,7 +53,9 @@ export interface 查找条 {
   /** 关掉：清高亮、清命中数，并把焦点还给编辑区。 */
   关查找: () => void;
   /** 「查找和替换…」——开、再点一次关。 */
-  切查找: () => void;
+  切查找: (带替换?: boolean) => void;
+  /** 替换那一行画不画。⚠️ `Ctrl+F` 开的是"只找"（不带替换行）、`Ctrl+H` 才带。 */
+  替换行: boolean;
   /** 「替换」：换掉**当前那个**命中。 */
   替换当前: (text: string) => void;
   /** 「全部替换」：报个数。 */
@@ -62,6 +64,10 @@ export interface 查找条 {
 
 export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 {
   const [查找开着, set查找开着] = useState(false);
+  // ⚠️ 2026-10-06：`Ctrl+F` 与 `Ctrl+H` 开的是**同一个条子**，差别只在
+  // 这一格——前者只画查找那一行。收工关掉时**不重置**它：下次按哪颗键
+  // 由 `带替换` 重新决定。
+  const [替换行, 设替换行] = useState(true);
   const [命中情况, 报命中] = useState<FindStatus>(空查找状态);
 
   const 关查找 = useCallback(() => {
@@ -71,10 +77,16 @@ export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 
     editorRef.current?.focus();
   }, [editorRef]);
 
-  const 切查找 = useCallback(() => {
-    if (查找开着) 关查找();
-    else set查找开着(true);
-  }, [查找开着, 关查找]);
+  const 切查找 = useCallback(
+    (带替换 = true) => {
+      if (查找开着) 关查找();
+      else {
+        设替换行(带替换);
+        set查找开着(true);
+      }
+    },
+    [查找开着, 关查找],
+  );
 
   /**
    * 「替换」：换掉**当前那个**命中。⚠️ 没有当前命中时如实说一句——
@@ -102,5 +114,5 @@ export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 
     [editorRef, toast, t],
   );
 
-  return { 查找开着, 命中情况, 报命中, 关查找, 切查找, 替换当前, 全部替换 };
+  return { 查找开着, 替换行, 命中情况, 报命中, 关查找, 切查找, 替换当前, 全部替换 };
 }

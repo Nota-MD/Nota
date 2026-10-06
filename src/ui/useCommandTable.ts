@@ -101,7 +101,8 @@ export interface 命令表输入 {
   // ── 编辑 ──────────────────────────────────────────────────────────────
   /** 转交一条编辑命令给编辑器（`ui/useEditorCommands.ts`）。 */
   运行: (c: EditorCommand, payload?: CommandPayload) => void;
-  切查找: () => void;
+  /** ⚠️ 收一个参数：`false` = 只找（`Ctrl+F`）、`true` = 带替换（`Ctrl+H`）。 */
+  切查找: (带替换?: boolean) => void;
   插入链接: () => Promise<void>;
   插入图像: () => Promise<void>;
   /** 打开 Emoji 选择器，选中的字符插到光标处（`ui/EmojiDialog.tsx`）。 */
@@ -318,7 +319,10 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       // 「复制为」这一栏，不补就得画两条永久灰条。
       "edit.copyAsPlain": () => void 剪贴板.复制为纯文本(),
       "edit.copyAsHtml": () => void 剪贴板.复制为HTML(),
-      "edit.findReplace": () => 切查找(),
+      // ⚠️ `Ctrl+F` 与 `Ctrl+H` 开的是**同一个条子**，差别在"要不要画替换那一行"
+      // （2026-10-06，第 95 项）。⚠️ 在此之前 `Ctrl+F` **根本没有绑定**。
+      "edit.find": () => 切查找(false),
+      "edit.findReplace": () => 切查找(true),
 
       "para.h1": () => run("h1"),
       "para.h2": () => run("h2"),

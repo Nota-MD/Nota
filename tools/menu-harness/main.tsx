@@ -890,6 +890,12 @@ function Harness() {
             strict={false}
             tab={sidebarTab}
             onTab={setSidebarTab}
+            // ⚠️ 2026-10-06 补：`Sidebar` 某批多了一个 `onResize`（侧栏右缘
+            // 可拖，第 91／88 项那批），**夹具没跟上**——于是这个工装
+            // `tsc -p tools/menu-harness` 一直报 TS2741，而**它不在四道闸里**
+            // （要单独跑），所以红着没人知道。试验台这边没有真的布局，
+            // 记下来就够了。
+            onResize={(宽) => console.log("sidebar-resize", 宽)}
             onOpenFile={(p) => console.log("open", p)}
             // ⚠️ 大纲点一下要跳正文（`docs/07` 第 48 项）。这一场只把目标
             // 记下来：真正"跳到第几个标题"由编辑器那一侧验，试验台这边

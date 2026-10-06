@@ -435,3 +435,33 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
 .editor-mount .ProseMirror pre.nota-code-folded .nota-code-gutter {
   display: none;
 }
+
+/* ── CodeMirror（backlog 第 101 项，2026-10-06）─────────────────────────
+   代码块里那一段现在是**两个 DOM 并排**（结构说明在 `editor/code-block.ts`
+   顶上那段注释里）：
+
+   - `.nota-code-text`：**ProseMirror 的 contentDOM**——文档树里那段文本住在
+     这儿，存盘、撤销、查找读的都是它，但**不给用户看**；
+   - `.cm-editor`：CodeMirror 的根，**用户真正看着、打着字的那一层**。
+
+   ⚠️ 隐藏那一层用的是"**收成零尺寸**"，**不是 `display: none`**：
+   ProseMirror 要按文本偏移往 contentDOM 里映射位置（`domFromPos` / 装饰），
+   一个不渲染的元素没有布局盒子，映射会失败。零尺寸的元素照样有盒子，
+   只是画不出东西来。
+
+   ⚠️ CM 那一侧的盒模型（内边距、行距、光标、选区色）**不写在这里**，
+   写在 `code-block-cm.ts` 的 `EditorView.theme` 里。理由：CM 的 baseTheme
+   是按"生成类名 + 后代选择器"出的，从本文件去压它要靠层层加码的选择器，
+   而 `EditorView.theme` 就是官方留给这件事的口子。 */
+.editor-mount .ProseMirror pre .nota-code-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  /* ⚠️ 它零尺寸、又正压在 `pre` 的左上内边距上，不给这一条的话那里会有
+     一小块"点了没反应"的死区——事件落进一个看不见的节点里。 */
+  pointer-events: none;
+}

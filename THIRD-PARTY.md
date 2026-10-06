@@ -84,6 +84,7 @@
 
 | 包 | 版本 | 许可证 | 用来做什么 |
 |---|---|---|---|
+| [`@codemirror/autocomplete`](https://code.haverbeke.berlin/codemirror/autocomplete) | 6.20.3 | MIT | 代码块编辑器的**括号配对**（`closeBrackets` / `closeBracketsKeymap`）——2026-10-06 起代码块由 CodeMirror 编辑（`src/editor/code-block-cm.ts`） |
 | [`@codemirror/commands`](https://code.haverbeke.berlin/codemirror/commands) | 6.11.1 | MIT | — |
 | [`@codemirror/lang-markdown`](https://code.haverbeke.berlin/codemirror/lang-markdown) | 6.5.2 | MIT | — |
 | [`@codemirror/language`](https://code.haverbeke.berlin/codemirror/language) | 6.12.4 | MIT | — |

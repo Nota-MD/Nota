@@ -141,8 +141,22 @@ export function 算匹配(doc: PMNode, query: string, opts: FindOptions): 文本
     // 于是"跨节点命中"又回来了（见文件头）。
     if (!node.isText || !node.text) return true;
     for (const m of 在文本里找匹配(node.text, query, opts)) {
-      // 文本节点的内容从 `pos + 1` 开始（`pos` 指向节点自身）。
-      out.push({ start: pos + 1 + m.start, end: pos + 1 + m.end });
+      // ⚠️⚠️ **文本节点里第 i 个字符就在 `pos + i`**——不是 `pos + 1 + i`。
+      //
+      // `pos` 是 `descendants` 给的"**节点之前**那个位置"，而对**文本节点**来说
+      // 那个位置**就是它第一个字符所在的位置**（`pos + 1` 是给**父节点**用的：
+      // 一个块的内容从它自己的 `pos + 1` 开始）。
+      //
+      // ⚠️ 这里原来写的是 `pos + 1 + m.start`，**整整多算一格**（2026-10-06 修，
+      // `docs/07` BUG-67）。用户的原话是「**实测搜索后高亮框向后位移一位**」——
+      // 症状正是这个：高亮画在命中的**右边一格**上，于是最后一个字符那一次命中
+      // 的区间跨出了文本节点、**什么都画不出来**（截图里 `ABCD` 查 `D`
+      // 那颗 D 上一点高亮都没有，像素读数是纯背景）。**选区与滚动同源地错**：
+      // "找下一个"选中的也是右移一格的那个字。
+      //
+      // 判据（探针，别靠记忆）：`doc.descendants` 给的 `pos` 上，
+      // `doc.textBetween(pos, pos + 1)` 就是**第一个字符**。
+      out.push({ start: pos + m.start, end: pos + m.end });
     }
     return true;
   });

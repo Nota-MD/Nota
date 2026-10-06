@@ -204,6 +204,11 @@ PAIRS=(
   "src/editor/instant-render.ts                   05,04,10"
   "src/editor/task-list.ts                        05,04,10"
   "src/editor/code-block.ts                       05,04,10"
+  # 2026-10-06（第 101 项：代码块换成 CodeMirror 编辑）。⚠️ 两份一起进——
+  # 那一份纯函数的判据就是下面那行测试，改了 `算最小改动` / `回车续行` 而不同步
+  # `docs/02` 与 `docs/06` 的话，这里会提醒。
+  "src/editor/code-block-cm.ts                    05,07,02"
+  "tests/code-block-editing.test.ts               02,06"
   "src/editor/heading-on-enter.ts                 05,04,02"
   "src/editor/table-input.ts                      05,04,10"
   # 2026-09-27：行首那颗多余的反斜杠（`\| 1 | 2 |`）。⚠️ 它**不改表格那条路**——只动"物理上只能占一行"的普通段落。

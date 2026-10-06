@@ -24,13 +24,17 @@
  */
 
 import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { redo, undo } from "@milkdown/kit/prose/history";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
+import type { Command } from "@milkdown/kit/prose/state";
+import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
 import { refractor } from "refractor";
 
 import { t } from "@/i18n";
 
+import { 创建代码块编辑器, 算最小改动 } from "./code-block-cm";
 import { 创建语言选择器 } from "./lang-picker";
 import { 有专属图标 } from "./lang-icon";
 
@@ -163,11 +167,26 @@ export const codeBlockView = $view(
     (initialNode: PMNode, view: EditorView, getPos: () => number | undefined): NodeView => {
       // ── 结构 ──────────────────────────────────────────────────────────
       // <pre data-language="rust">
-      //   <code>…</code>            ← contentDOM，ProseMirror 只管这一块
+      //   <code class="nota-code-text">…</code>  ← contentDOM：ProseMirror 的文本住这儿
+      //   <div class="cm-editor">…</div>        ← CodeMirror：用户看到/打字的那一层
       //   <div class="nota-code-gutter" contenteditable="false">1\n2\n3</div>
       //   <div class="nota-code-bar" contenteditable="false">…</div>
       //   <span class="nota-code-lang-wrap" contenteditable="false">…</span>
       // </pre>
+      //
+      // ⚠️ **2026-10-06（backlog 第 101 项）起，代码块有两层文本**，别把
+      // 任何一层当成"多余的那一层"删掉：
+      // - `code`（contentDOM）是 **ProseMirror 的那一份**——文档树、撤销栈、
+      //   存盘、查找，读的都是它。它**不给用户看**（CSS 把它收成零尺寸），
+      //   但它必须**存在且是 `pre` 的子元素**：ProseMirror 规定有内容的节点
+      //   必须有一个 contentDOM 来装它的文本。
+      // - `.cm-editor` 是**用户真正在用的那一个**（CodeMirror 实例，
+      //   见 `code-block-cm.ts`）。两边的文本由本文件那两把 `同步中` 锁收口。
+      //
+      // ⚠️ 为什么不让 CodeMirror 直接当 contentDOM：它的 DOM 结构是
+      // 「一行一个 `<div class="cm-line">`」，而 ProseMirror 要按**文本偏移**
+      // 往 contentDOM 里映射位置（`Decoration`、`domFromPos`）。两套坐标对不上，
+      // `@milkdown/plugin-prism` 那种按偏移挂的行内装饰会整片错位。
       // ⚠️ 后三个都是**绝对定位的挂件**，不占文档流、不进 contentDOM。
       // 区别只在于画在哪：
       // - gutter（行号）在块**内部**左侧那条装订线里，默认不显示；
@@ -175,7 +194,7 @@ export const codeBlockView = $view(
       // - 语言框在块**下沿之外**的右侧。
       const pre = document.createElement("pre");
       const code = document.createElement("code");
-      pre.appendChild(code);
+      code.className = "nota-code-text";
 
       // ⚠️ 行号这一条**常驻生成、由 CSS 决定显不显示**（`useCodeBlockPrefs.ts`
       // 那三条 `data-*`）。不在 JS 里判设置的理由有两条，都很要紧：
@@ -210,7 +229,15 @@ export const codeBlockView = $view(
       copyBtn.textContent = t("Copy");
       copyBtn.title = t("Copy Code");
 
-      /** 改节点属性。高亮由 plugin-prism 读属性重算，不用本仓操心。 */
+      /**
+       * 改节点属性（语言）。
+       *
+       * ⚠️ **2026-10-06 起代码块里的着色归 CodeMirror**（第 101 项）：
+       * 本函数只写节点属性，`syncChrome` 会把新语言转给 CM 那一侧重算。
+       * 原来的读者 `@milkdown/plugin-prism` **仍然在插件表里**（
+       * 源码模式、以及别的节点的着色它还管着），但代码块这一条已经不走它了
+       * ——代码块的 contentDOM 是零尺寸的，它挂的行内装饰画不出来。
+       */
       const applyLanguage = (lang: string) => {
         const pos = getPos();
         if (typeof pos !== "number") return;
@@ -261,8 +288,115 @@ export const codeBlockView = $view(
       });
       langWrap.appendChild(语言选择器.dom);
 
+      // ── CodeMirror：这一段的输入面 ─────────────────────────────────────
+      // ⚠️ **两把 `同步中` 锁**是本批最要紧的一处（`code-block-cm.ts` 文件头
+      // 那三个坑的第一个）：这一把管"PM 收到的改动是不是自己刚推出去的那一笔"，
+      // CM 那边同名的那一把管"CM 收到的改动是不是自己刚推回来的一笔"。
+      // 少任何一把，光标都会跳、撤销栈都会被拆碎。
+      let 同步中 = false;
+
+      /** 把一条 ProseMirror 命令当函数调。（撤销/重做要它。） */
+      const 走命令 = (命令: Command) => {
+        命令(view.state, view.dispatch, view);
+      };
+
+      // ⚠️ **撤销归 ProseMirror**（第 101 项点名的第二个坑）：CM 那一侧
+      // **刻意没装 `history()`**，代码块里的 Ctrl+Z 转给 PM 走。
+      // 装两套的话，两边各记一份、互相看不见对方——"在代码块里改一个字、
+      // 点到正文再按 Ctrl+Z"就会只撤销正文那一步，而用户以为撤销的是刚才那次编辑。
+      const 代码编辑器 = 创建代码块编辑器({
+        初始文本: initialNode.textContent,
+        初始语言: languageOf(initialNode),
+        文本变化: (新文) => 推回文档(新文),
+        聚焦: () => 认领选区(),
+        失焦: () => {},
+        撤销: () => 走命令(undo),
+        重做: () => 走命令(redo),
+      });
+
+      /**
+       * 把 CodeMirror 里的改动**推回文档**（一笔真事务）。
+       *
+       * ⚠️ 推的是 `算最小改动` 抠出来的那一段，**不是"整块换掉"**：
+       * 整块换的话每敲一个字都记一笔"整块替换"，撤销一下会把一整段一起吞掉。
+       *
+       * ⚠️ 推完**要把 PM 的选区跟到 CM 的光标上**。PM 的 DOM 选区不会动
+       *（CM 拿着焦点时 `selectionToDOM` 直接返回），动的是它 state 里那一份
+       * ——不跟的话，"在代码块里打字时按 Ctrl+B"这类命令会作用到别处去，
+       * 而那是一种**界面上看不出来**的错。
+       */
+      function 推回文档(新文: string) {
+        if (同步中) return;
+        const pos = getPos();
+        if (typeof pos !== "number") return;
+        const 旧文 = 当前节点.textContent;
+        if (旧文 === 新文) return;
+
+        const { 删起, 删到, 插入 } = 算最小改动(旧文, 新文);
+        if (删起 === 删到 && !插入) return;
+
+        const 基 = pos + 1;
+        let 事务 = view.state.tr;
+        if (删起 < 删到) {
+          事务 = 插入
+            ? 事务.replaceWith(基 + 删起, 基 + 删到, view.state.schema.text(插入))
+            : 事务.delete(基 + 删起, 基 + 删到);
+        } else {
+          事务 = 事务.insertText(插入, 基 + 删起);
+        }
+
+        try {
+          事务 = 事务.setSelection(TextSelection.create(事务.doc, 基 + 代码编辑器.取光标()));
+        } catch {
+          // 位置落不进去（极端情况）就只改文本。下一次按键选区会自己修正。
+        }
+
+        同步中 = true;
+        try {
+          view.dispatch(事务);
+        } finally {
+          同步中 = false;
+        }
+      }
+
+      /**
+       * CM 拿到焦点时，把 PM 的选区也挪进这个代码块。
+       *
+       * ⚠️ 这一步**不是可有可无的**：不挪，PM 的选区还停在用户上一次点的地方
+       *（可能在第 3 段），于是走 PM 的那些命令（`Ctrl+A`、格式、查找）会去动
+       * 那一段——用户在代码块里看着自己的光标，命令却作用在别处。
+       * ⚠️ `addToHistory: false`：这只是"光标挪了一下"，不该占一格撤销。
+       */
+      function 认领选区() {
+        const pos = getPos();
+        if (typeof pos !== "number") return;
+        try {
+          const 到 = pos + 1 + 代码编辑器.取光标();
+          view.dispatch(
+            view.state.tr
+              .setSelection(TextSelection.create(view.state.doc, 到))
+              .setMeta("addToHistory", false),
+          );
+        } catch {
+          // 同上：位置落不进去就只当没挪过。
+        }
+      }
+
       bar.append(foldBtn, copyBtn);
-      pre.append(gutter, bar, langWrap);
+      // ⚠️ 顺序：`code`（隐藏的 contentDOM）与 CM 的根一起放在最前，三个挂件随后。
+      // 挂件都是绝对定位，顺序上不敏感，但 contentDOM 必须是 `pre` 的子元素。
+      pre.append(code, 代码编辑器.视图.dom, gutter, bar, langWrap);
+
+      // 点在 `pre` 的**内边距**上（不在 CM 的内容里）时，把焦点交给 CM。
+      // ⚠️ 不这么做的话这一击被 `stopEvent` 拦下、谁也不管——用户会觉得
+      // "点了没反应"。⚠️ 只认 `pre` 与 `code` 两个目标：工具栏那几颗按钮
+      // 也是 `pre` 的后代，一律聚焦的话点「复制」会把焦点抢走。
+      pre.addEventListener("mousedown", (e) => {
+        const 目标 = e.target;
+        if (!(目标 instanceof Node)) return;
+        if (inChrome(目标)) return;
+        代码编辑器.聚焦();
+      }, true);
 
       // ── 复制 ──────────────────────────────────────────────────────────
       // `mousedown` 上 preventDefault：不这样做，点按钮会先让编辑区失焦、
@@ -270,7 +404,10 @@ export const codeBlockView = $view(
       copyBtn.addEventListener("mousedown", (e) => e.preventDefault());
       copyBtn.addEventListener("click", () => {
         void (async () => {
-          const ok = await writeClipboard(code.textContent ?? "");
+          // ⚠️ 取的是 **CodeMirror 那一份**，不是 `code.textContent`：
+          // 隐藏的 contentDOM 里还挂着一层 prism 的行内装饰（`<span class="token">`），
+          // 虽然 `textContent` 碰巧也是对的，但"复制"该走**用户眼前那一份**。
+          const ok = await writeClipboard(代码编辑器.取文本());
           copyBtn.textContent = ok ? t("Copied") : t("Copy Failed");
           window.setTimeout(() => {
             copyBtn.textContent = t("Copy");
@@ -308,6 +445,10 @@ export const codeBlockView = $view(
         // 围栏的语言改了、再切回所见即所得，走的就是这条路——
         // 少了它，框上写的还是旧语言。
         语言选择器.设语言(lang);
+        // ⚠️ 同一句话还要转给 CodeMirror：代码块里那一段的着色是它画的
+        // （见 `code-block-cm.ts` 的分色插件）。**语言没变时它自己会短路**，
+        // 所以这里不用先比一次。
+        代码编辑器.设语言(lang);
         // 行号要跟着**内容**走，而这个函数在 `update` 里每次都被调，正好是
         // 那条通路。⚠️ 判一下再写：`textContent` 的赋值会把整段文本重排一次，
         // 而上游的 `update` 是**每次光标移动、每次节点属性变化**都会来的
@@ -330,6 +471,19 @@ export const codeBlockView = $view(
           // `设语言()` 和之后任何一次 `当前语言()` 才读得到新节点。
           当前节点 = updated;
           syncChrome(updated);
+          // ⚠️ CodeMirror 那一侧也要跟上：源码模式里改这段、撤销、
+          // 后端整篇替换文档，进代码块的**只有这一条路**。
+          // ⚠️ `同步中` 在这里**必须判**——不判的话"CM 推给 PM、PM 又推回 CM"
+          // 就成环了（第 101 项点名的第一个坑）。
+          const 文 = updated.textContent;
+          if (!同步中 && 文 !== 代码编辑器.取文本()) {
+            同步中 = true;
+            try {
+              代码编辑器.设文本(文);
+            } finally {
+              同步中 = false;
+            }
+          }
           return true;
         },
 
@@ -338,15 +492,36 @@ export const codeBlockView = $view(
         // `ignoreMutation` 管的是已经发生的 DOM 变更要不要告诉 ProseMirror。
         // 少了后者，"复制"按钮把文字改成"已复制"这件事会被 PM 当成
         // "用户在编辑区里改了东西"，于是它去重解析——那一下光标就飞了。
-        stopEvent: (e) => inChrome(e.target),
+        //
+        // ⚠️ **2026-10-06 起判据放宽成整个 `pre` 子树**（原来是"三个挂件"）：
+        // 代码区里现在是 CodeMirror 的 DOM，它每一次按键/重绘都发生在这个子树里。
+        // 漏一条进去，PM 就会去重解析那一坨不属于它的 DOM——光标当场飞走。
+        stopEvent: (e) => e.target instanceof Node && pre.contains(e.target),
 
-        ignoreMutation: (m) => inChrome(m.target),
+        // ⚠️ 一律 `true`：这个节点里的 DOM 变化**没有一件**是 PM 该关心的
+        // ——文本的唯一入口是 `推回文档` 那条事务，不靠它从 DOM 里读。
+        ignoreMutation: () => true,
+
+        // ProseMirror 要把光标放进这个代码块时（从上面一段按 ↓ 进来、或者点它），
+        // 把光标交给 CodeMirror。⚠️ 坐标是**相对这个节点内容起点**的
+        //（PM 的 `ViewDesc` 逐层把节点起点减掉了），所以减 1 才是文本偏移。
+        setSelection: (锚, 头) => {
+          const 长 = 代码编辑器.取文本().length;
+          const 夹 = (n: number) => Math.max(0, Math.min(长, n - 1));
+          代码编辑器.设选区(夹(锚), 夹(头));
+          代码编辑器.聚焦();
+        },
 
         // ⚠️ **必须有**：语言下拉的弹层挂在 `document.body` 上（理由见
         // `lang-picker.ts` 的文件头），它**不归 ProseMirror 管**，
         // 所以没人会替我们收。不摘的话，每销毁一个代码块就留一个孤儿弹层在
         // `body` 上——文档一改就多一个，肉眼看不见但一直在那儿。
-        destroy: () => 语言选择器.销毁(),
+        // ⚠️ CodeMirror 实例同理：它的 DOM 随 `pre` 一起消失，但它的
+        // MutationObserver 与内部状态得显式收掉。
+        destroy: () => {
+          语言选择器.销毁();
+          代码编辑器.销毁();
+        },
       };
     },
 );

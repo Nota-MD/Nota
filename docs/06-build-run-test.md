@@ -3494,7 +3494,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints; do
+for n in math-view math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3610,6 +3610,8 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 现在是**四份**（`heatmap` / `focus-summary` / `keymap` 各要其中一样）。这句话留着
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
+
+**五十四份、共 1350 条**（📌 **2026-10-06（第 101 项「代码块换成 CodeMirror 编辑」那批）当场把 54 份全跑了一遍**（`for` 一遍 ＋ 单列那 4 份各自的开关），**全部 0 失败**；本批**新加一份** `code-block-editing` **21 条**（`算最小改动` 的字符边界——emoji 不许被切成半个 ／ `分色` 的区间拼回去要逐字等于原文 ／ `回车续行` 的三档落点与"空括号展开"；⚠️ 它当场抓到一个真坑：`"([{".indexOf("")` 回的是 `0`，于是"光标停在一行纯空白后面"那一格会被当成"上一行以 `(` 结尾"、凭空多进一级）；⚠️ **总数 1329 → 1350，份数 53 → 54**。⚠️ 这一遍是拿 `tests/*.test.ts` 逐个 bundle ＋ node 跑出来的，`share-card` 那一份加了 `--loader:.svg=text`）：
 
 **五十三份、共 1329 条**（📌 **2026-10-06（第 94 项「提示机制」那批）**新加 `hints` **10 条**；⚠️ 其余 52 份**没有逐份重跑**，读数沿用上一版。上一版：**五十二份、共 1319 条**（📌 **2026-10-04（右键菜单那批的**开窗口检**）只重跑了动过的那一份**：`context-menu` **27 → 30**（0 失败）——新增的「组五：这一档拿哪份灰名单」三条钉的正是目检抓出来的缺陷（**输入框那一档不该套菜单栏的 `disabledCommands`**，否则 `edit.select` 那条"有实现、点得动"的条目会被画成灰的，键盘 `End` 还会落到它的前一条上）；⚠️ **其余 51 份这一遍没有逐份重跑**，读数沿用上一版（**别把这一遍当成"整份名册又重跑过"**，本仓有过这个教训）；⚠️ **总数 1316 → 1319，份数 52 不变**；实拍账见 §5.54）：
 

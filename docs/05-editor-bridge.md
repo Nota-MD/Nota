@@ -53,7 +53,7 @@ Nota 是 **WebKitGTK 4.1 里的 ProseMirror 文档树**（前端是真相）。�
 | `@milkdown/kit/plugin/trailing` | `trailing` | 文末按 `trailingConfig.shouldAppend` 补一个节点（默认段落），保证末尾能落光标 |
 | `./instant-render`（**本仓**） | `instantRender` | 光标所在块的 Markdown 标记（`##`/`>`/`-`/围栏）淡化画在块左边。**这是本仓最早一个自己写的 ProseMirror 插件**（2026-09-24 起同族又多了 `find` 与 `writing-modes`，见下） |
 | `./task-list`（**本仓**） | `taskList` | 任务项的复选框：画方框 + 点它勾上 + **回车切出来的新项不继承勾**。⚠️ **不改 schema**——DOM 钩子（`data-checked`）是 `preset-gfm` 本来就给的 |
-| `./code-block`（**本仓**） | `codeBlockView` | 代码块那两处挂件：块**内部**右下角的「复制 / 折叠」，加**块下边框之外**右侧的语言下拉。⚠️ 走 `$view`（NodeView），**全仓第一个**（2026-09-26 起同族的还有 `diagram-view.ts`）——它要加的是真的会交互的元素，`Decoration` 那种只读装饰做不到。⚠️ 两个挂件在 DOM 里是 `pre` 的两个**兄弟子节点**（`.nota-code-bar` 与 `.nota-code-lang-wrap`），都不进 contentDOM；`stopEvent` / `ignoreMutation` 用一条 `inChrome` 把**两个都包住**（2026-09-25 语言框从 bar 里搬出去之后，只判 bar 会把点下拉当成"点了编辑区"）。⚠️ 那颗控件**外面套了一层 `span`**（`.nota-code-lang-wrap`）——它是箭头与弹层的**锚**，箭头画在包裹层上而不是控件自己身上。<br>⚠️ **控件 2026-09-25 从 `<select>` 换成了 `<button>`**，因为原生弹层里放不下图标（`<option>` 只能装纯文字）；下拉弹层改由 `editor/lang-picker.ts` **自绘**，挂在 `document.body` 上、**不在编辑器 DOM 里**，所以 PM 的 `stopEvent` / `ignoreMutation` 看不到它，`inChrome` 不必再扩。⚠️ 换来的两条义务：① `destroy()` 里必须 `销毁()`（没人替它收弹层）；② 送给它的"当前语言"要读**活的节点引用**，不能闭包 `initialNode`——否则闭合框会倒退回旧语言（2026-09-25 实测）。图标那半在 `editor/lang-icon.ts` |
+| `./code-block`（**本仓**） | `codeBlockView` | 代码块那两处挂件：块**内部**右下角的「复制 / 折叠」，加**块下边框之外**右侧的语言下拉。⚠️ 走 `$view`（NodeView），**全仓第一个**（2026-09-26 起同族的还有 `diagram-view.ts`）——它要加的是真的会交互的元素，`Decoration` 那种只读装饰做不到。⚠️ 两个挂件在 DOM 里是 `pre` 的两个**兄弟子节点**（`.nota-code-bar` 与 `.nota-code-lang-wrap`），都不进 contentDOM；`stopEvent` / `ignoreMutation` 用一条 `inChrome` 把**两个都包住**（2026-09-25 语言框从 bar 里搬出去之后，只判 bar 会把点下拉当成"点了编辑区"）。⚠️ 那颗控件**外面套了一层 `span`**（`.nota-code-lang-wrap`）——它是箭头与弹层的**锚**，箭头画在包裹层上而不是控件自己身上。<br>⚠️ **控件 2026-09-25 从 `<select>` 换成了 `<button>`**，因为原生弹层里放不下图标（`<option>` 只能装纯文字）；下拉弹层改由 `editor/lang-picker.ts` **自绘**，挂在 `document.body` 上、**不在编辑器 DOM 里**，所以 PM 的 `stopEvent` / `ignoreMutation` 看不到它，`inChrome` 不必再扩。⚠️ 换来的两条义务：① `destroy()` 里必须 `销毁()`（没人替它收弹层）；② 送给它的"当前语言"要读**活的节点引用**，不能闭包 `initialNode`——否则闭合框会倒退回旧语言（2026-09-25 实测）。图标那半在 `editor/lang-icon.ts`。<br>📌 **2026-10-06（第 101 项）：这一格多了一层——代码块里那段文本现在由 CodeMirror 编辑**（`editor/code-block-cm.ts`）。所以 `stopEvent` / `ignoreMutation` 的判据从"三个挂件"放宽成**整个 `pre` 子树**（`inChrome` 不再够用），并且多了一条 `setSelection` 把键盘进来的光标交给 CM；`destroy()` 还要连 CM 一起销毁。全貌见 **§4.24** |
 | `./find`（**本仓**） | `查找插件` | **查找/替换**的高亮与选中（`docs/07` 第 4 项）。⚠️ **只读观察者**：命中走 `Decoration.inline`、命令走事务元，**从不改文档** |
 | `./writing-modes`（**本仓**） | `写作模式插件` | **专注模式**（压暗兄弟块）+ **打字机模式**（把光标那行滚到正中）。同上只读：装饰 + 元，不进撤销栈。⚠️ **专注的外壳那一半不在编辑器里**（菜单栏/侧栏/插件栏/标签栏/状态栏那五条由 `ui/useImmersive.ts` ＋ `app.css` 收），见 §4.4 |
 | `./lax-heading`（**本仓**） | `不转义行首井号` | **序列化那一半**（两种模式都挂）：不往用户写的行首井号上加反斜杠。⚠️ **2026-09-26 显示层那一半（`宽松标题显示`）删掉了**——非严格模式下 `#你好` 就是普通正文，字号、行距、位置一个都不变（用户连着报两次，最后一句是「应该作为标识符的 `#` 不要变换位置和大小」）。见 §2.1c |
@@ -2906,6 +2906,62 @@ pointing into a node with inline content`）。空段落那条判据就栽在这
 有没有这一条"）——修法是输入框那一档**一个都不灰**，见 `ui/context-menu.ts::这一档的灰`；
 同一天还量到它**作用错对象会选中整篇正文**（焦点没还成时），所以那五条 `execCommand`
 现在都先问一句 `还焦()` 成没成（`docs/04` §2.1d）。
+
+### 4.24 代码块里那一段是 **CodeMirror 在编辑**（`editor/code-block-cm.ts`，2026-10-06 第 101 项）
+
+用户 2026-10-06 定的做法：「**引入开源项目：CodeMirror。解决代码框。**」
+——在此之前代码块是纯 ProseMirror 的 `code_block`，`auto-pair.ts` 只能给它补
+"配对"这一件，**缩进与 `Tab` 补不进去**（那两件要按行看上下文，是编辑器内核的事）。
+
+**`pre` 里现在是两层 DOM 并排**（`editor/code-block.ts` 顶上那段结构图是权威）：
+
+| 层 | 类名 | 谁在管 | 干什么 |
+|---|---|---|---|
+| 隐藏 | `.nota-code-text`（`<code>`） | ProseMirror | 就是 contentDOM。**文档树、撤销栈、存盘、查找读的是它**；零尺寸不是 `display: none`（PM 要按文本偏移往里映射位置，没有布局盒子的元素映射不了） |
+| 可见 | `.cm-editor` | CodeMirror | 用户看着、打着字的那一层 |
+
+⚠️ **为什么不让 CodeMirror 直接当 contentDOM**：CM 的 DOM 是"一行一个
+`<div class="cm-line">`"，而 ProseMirror 按**文本偏移**往 contentDOM 里映射位置
+（`domFromPos`、`Decoration`）。两套坐标对不上，`plugin-prism` 那种按偏移挂的
+行内装饰会整片错位。
+
+**同步是"一段一段推"，不是"整块换"**：CM 里按键 → `算最小改动` 算出真正变了的那一段
+→ 一笔 PM 事务只替换那一段，同时把 PM 的选区挪到 CM 光标那一格。反方向（源码模式里改、
+撤销、外部整篇替换）走 `update()`：把节点文本推进 CM。
+
+⚠️ **防回声靠两把锁**（一边一把，名字都叫 `同步中`）：CM 那一把管"CM 收到的
+改动是不是自己刚推回来的一笔"，PM 那一把管"PM 收到的改动是不是自己刚推出去的
+一笔"。**少任何一把**，光标都会跳、撤销栈都会被拆碎。
+⚠️ 推的是 `算最小改动` 抠出来的那一段——整块换的话，每敲一个字都记一笔"整块替换"，
+撤销一下会把一整段一起吞掉。
+
+⚠️ **撤销只有一套，归 ProseMirror**：CM 那一侧**刻意不装 `history()`**，
+`Ctrl+Z` / `Ctrl+Shift+Z` 由 `code-block-cm.ts` 的键位转回 PM 的 `undo` / `redo`。
+装两套的后果是"在代码块里改一个字 → 点到正文 → 按 `Ctrl+Z`"只撤销正文那一步，
+而用户以为撤销的是刚才那次编辑。
+
+⚠️ **`Ctrl+B` 这类编辑器级快捷键不再落到正文上**：CM 拿到焦点时
+`document.activeElement` 是 `.cm-content`（一个**嵌套的编辑宿主**），而
+ProseMirror 的 `hasFocus()` 判的是 `activeElement == view.dom` → 假 →
+`selectionToDOM` **直接返回**，PM 不会去抢选区。同一件事的另一面是
+`stopEvent` 判据放宽成**整个 `pre` 子树**（原来是"三个挂件"）：代码区里的
+每一次按键都算"这个节点内部的事"，漏一条进去 PM 就会去重解析不属于它的 DOM。
+
+⚠️ **着色仍然只有一个来源**：`refractor`。`分色()` 把它分词出来的叶子算成
+`{从, 到, 类}`，类名**逐字沿用** `token xxx`（`editor-blocks.css` 那一段配色照旧管用），
+再交给 CM 的 `Decoration.mark`。所以"换成 CM 之后变成两套高亮"这条没有发生
+——`plugin-prism` 那半仍然在插件表里（别的节点还用它），只是代码块这一格
+它的装饰画在零尺寸的 contentDOM 上、看不见。
+
+⚠️ **自动换行那颗开关在代码块里要是活的**：`pre` 上那条
+`html[data-code-wrap="off"] { white-space: pre }` **管不到 CM 内部**（`.cm-content`
+有自己的 `white-space`），所以这是一个 `Compartment` ＋ 一个盯
+`<html data-code-wrap>` 的 `MutationObserver`。只写 CSS 的话那颗开关就是死的
+——"拨了不生效的开关"是本仓点名过的老毛病（`docs/09` §2 那一类账）。
+
+判据：`tests/code-block-editing.test.ts` **21 条**，钉的是三个纯函数
+（最小改动的字符边界、分色的区间能不能拼回原文、回车续行的三档光标落点）。
+⚠️ **手感本身（配对、缩进、光标跳不跳）开窗目检才算数**，纯逻辑判据证明不了。
 
 ## 5. 双向通道
 

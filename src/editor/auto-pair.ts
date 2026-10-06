@@ -282,6 +282,15 @@ export interface 现场 {
   后二: string;
   /** 光标落在代码块或行内代码里。 */
   代码: boolean;
+  /**
+   * 光标在**代码块**里（`code_block` 那个节点里），而不是行内代码 `` `x` ``。
+   *
+   * ⚠️ 与上面那个布尔分开是 2026-10-06 加的：两者原先合成一个，于是
+   * 「代码里不配对」这条**把代码块也一起管了**——而代码块里打 `(` 补一个 `)`
+   * 恰恰是**任何编辑器都有的手感**（用户当天：「代码输入框没有类似真正编辑器的
+   * 手感（比如自动补全对半符号和缩进）」）。行内代码仍旧不配（那是正文里的一句话）。
+   */
+  代码块: boolean;
   /** 选区是空的（没有选中任何东西）。 */
   空选区: boolean;
 }
@@ -301,6 +310,15 @@ function 取字符(state: EditorState, 位置: number, 偏移: -1 | 1): string {
   // ⚠️ `textBetween` 的 `leafText` 不传 ⇒ 图片、公式那类原子贡献 `""`
   //（它们身上没有"字符"可配对），这正是想要的。
   return $位.parent.textBetween(起, 止, "");
+}
+
+/** 光标在**代码块**里吗（只看节点那一层，**不看行内代码那个 mark**）。 */
+function 在代码块里(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let 层 = $from.depth; 层 > 0; 层--) {
+    if ($from.node(层).type.spec.code) return true;
+  }
+  return false;
 }
 
 /** 光标在代码块 / 行内代码里吗。 */
@@ -331,6 +349,7 @@ export function 读现场(state: EditorState, 位置: number): 现场 {
     // ⚠️ "后第二颗" = 从**后一颗的位置**再往后看一颗（偏移仍是 `1`）。
     后二: 取字符(state, 位置 + 1, 1),
     代码: 在代码里(state),
+    代码块: 在代码块里(state),
     空选区: from === to,
   };
 }
@@ -352,7 +371,11 @@ export function 读现场(state: EditorState, 位置: number): 现场 {
 export function 要配对(现场: 现场, 字: string): string | null {
   const 闭 = 闭括号(字);
   if (!闭) return null;
-  if (现场.代码) return null;
+  // ⚠️ 行内代码里不配；**代码块里配**（2026-10-06 把这两个情况分开了）。
+  if (现场.代码 && !现场.代码块) return null;
+  // ⚠️ 代码块里**不配那几颗 Markdown 标记符号**（`*`）：代码里打 `*` 要的是
+  // 字面星号（乘法、指针、通配），补成一对是帮倒忙。括号那一族照配。
+  if (现场.代码块 && 字 === "*") return null;
   if (现场.前 === "\\") return null;
   if (现场.空选区 && 现场.后 === 闭) return null;
   return 闭;

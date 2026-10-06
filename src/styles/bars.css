@@ -139,23 +139,37 @@
 .find-bar {
   display: flex;
   flex: 0 0 auto;
-  /* ⚠️ **靠右对齐**：它是一块浮在编辑区上方的操作面板（像大多数编辑器），
-   * 不是第二条工具栏。铺满整行的话，正文区域会被这两行矮条压得很闷。 */
+  /* ⚠️⚠️ **2026-10-06（第 105 项 ①）：从"铺满整行的横带"改成"浮在编辑区右上角的
+     一张卡片"**。用户甩了张截图 ＋ 一句「不美观」，最扎眼的就是"左边一大片空、
+     内容全挤在右边"——横带铺满整行、内容却只有半截，读起来像没排完的表单。
+     ⚠️ 靠右走两条路：父级若是 flex 列，`align-self` 生效；不是的话，
+     `margin-left: auto` 兜底——**两条都写**，不赌父级的布局。 */
   flex-direction: column;
   align-items: flex-end;
+  align-self: flex-end;
+  margin: 8px 12px 4px auto;
+  width: fit-content;
+  max-width: calc(100% - 24px);
   /* ⚠️ 2026-10-06（第 105 项，用户一句「不美观」）：两行之间原来只有 3px，
      读起来像"一张两列的表"而不是"一条查找、一条替换"。6px 才分得开。 */
   gap: 6px;
-  padding: 6px 10px;
-  background: var(--bg-subtle);
-  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  /* ⚠️ 卡片面用 `--bg-raised`（比 `--bg-subtle` 高一档）：它现在是**浮起来的**
+     一块，不再是"编辑区顶上的一条底纹"。 */
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
 .find-row {
   display: flex;
   align-items: center;
   gap: 4px;
-  width: min(100%, 560px);
+  /* ⚠️ 写**定值**不写 `min(100%, …)`：外层现在是 `width: fit-content`，
+     里头再用百分比就绕回来了（浏览器只能按 max-content 估，结果不稳）。 */
+  width: 420px;
+  max-width: 100%;
 }
 
 .find-input {

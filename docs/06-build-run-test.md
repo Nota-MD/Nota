@@ -3505,7 +3505,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find select move-block; do
+for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find select move-block link-edit; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3640,6 +3640,19 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
+**五十九份、共 1485 条**（📌 **2026-10-07 当天最晚那一批（「链接」那个框）现数**：
+**59 份一份一份跑完**（`for` 里 55 份 ＋ 单列那 4 份各自的开关），**全部 exit=0 / 0 失败**。
+本批只有一笔：新加 `link-edit` **34 条**（链接那一族的纯判据——`链接落点` 的三条规则
+（名称空 → 用地址顶上 ／ 地址空与危险协议 → 落纯文字）／`源文链接区间` 的两端都算与
+「嵌套/含空格/跨行的一律不认」／PM 层那三个区间（代码块给 `null`、**同地址的两个节点
+合成一条**、行内原子占一格）／`建链接事务` 与 `摘链接事务` **真派一遍看那棵树**）。
+⚠️ **总数 1451 → 1485，份数 58 → 59**；其余 58 份的读数与上一版逐份相同——但这一遍
+**全部真跑过**（不是"沿用上一版读数"）。
+⚠️ **解析收尾行的写法要认五种，不止两种**：`通过 N 条` / `通过 N，` / `N 过 / M 败` /
+`过 N，败 M` / `N 条通过`——本仓的文档只提过前两种**语序**，本批按那个口径写统计脚本时
+**55 份里有 18 份解析不出、被静默当成"0 条"**（总数一度算成 965）。教训与 `docs/07` §4
+那条同族：**统计脚本先拿"每份都打印出条数"自检一遍**，别拿总数去反推。
+
 **五十八份、共 1451 条**（📌 **2026-10-07（「选择」那批 ＋ 代码块整行剪贴）现数**：
 **58 份一份一份跑完**（`for` 里 54 份 ＋ 单列那 4 份各自的开关），**全部 exit=0 / 0 失败**。
 本批的账**四处**：① 新加 `select` **25 条**（选词/选句那几组纯判据：光标贴词尾、
@@ -3679,9 +3692,12 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 `list-indent` **16** · `syntax-escape` **13** · `math-currency` **23** ·
 `table-tab` **58** · `bar-close` **13** · `caret-snapshot` **10** · `panel-cards` **37** ·
 `code-block-editing` **31** · `select` **25** · `move-block` **20** ·
+`link-edit` **34** ·
 `context-menu` **30**（⚠️ 2026-10-04 开窗口检那天从 **27** 长到 30，见本节顶上新加的那一条 📌）。
 ⚠️ `key-conflicts` **21 → 19**、`code-block-editing` **21 → 31**、`select` / `move-block` 是本批新增
 （📌 **2026-10-07**，见本节顶上那一条；⚠️ `code-block-editing` 此前**在 `for` 里、却漏在这张表里**，本批补上）。
+⚠️ `link-edit` **34** 是本批新增（📌 **2026-10-07 当天更晚那一批「链接」那个框**，见本节顶上
+那一条；⚠️ 跑法与 `for` 里那几十份相同——**不需要** `--alias:@=./src`、也不要任何 loader）。
 📌 **2026-10-07 现数：五十六份、共 1398 条**（一份一份跑，56 份 **exit=0**；`for` 里那份数是
 **五十二份**——`math-wiring` 刚加进去，它两条开关都不要）。**本批的账只有两处**：
 ① `tests/math-view.test.ts` 那一份 **1024 行**的测试**按职责切成两半**
@@ -5983,3 +5999,54 @@ magick 帧.png -crop 1400x1+0+Y +repage txt:- | tail -n +2 \  # 整行扫：报�
 Yaru 深色两档）；**别的 WebKit 版本**上选择层是不是也压在行背景底下（`z-index: -2` 是 CM
 按层序自己算的，理论上与浏览器无关，但只在本机 WebKitGTK 上看过）；以及
 **BUG-72**（切源码模式时撞上一次错误边界，四次没复现——现场与线索记在 `docs/07` 那一行）。
+
+---
+
+### 5.59 验「链接」那个框：插入 / 单击编辑 / 去掉 / 危险协议 / `Ctrl`＋单击 / 只读那一侧（2026-10-07，✅ **开窗按过**）
+
+用户 2026-10-07 20:0x 的原话：「超链接的逻辑更新一下：插入链接出现一个窗口："链接显示名称"
+和"链接内容"。如果单击链接则也显示这个窗口。」（`docs/07` 第 96 ＋ 102 项。）
+
+**起窗**（同 §5.56–§5.58 那一套）：容器里起 Xvfb（`1400x900x24 -nolisten tcp`）、
+用**用户那台已经在跑的 `npx vite`**（5273，⚠️ 别动它），
+`./target/debug/nota --new-window /tmp/nota-链接/样张.md`，环境变量带**隔离的 XDG**
+（`XDG_CONFIG_HOME` / `XDG_DATA_HOME` / `XDG_RUNTIME_DIR` 指到 `/tmp/nota-链接/{cfg,dat,run}`）
+——这样**永远不会碰到用户自己那份配置**。主窗 id 本次是 **2097156**（1100×760 @ 150,70）。
+
+样张（五段，正文里那条链接是**从盘上读进来**的，不是打出来的）：
+
+```markdown
+# 链接测试
+
+见 [Nota 官网](https://nota.app) 这一行。
+
+第二段：这里是一个普通段落，用来试「插入链接」。
+
+第三段：没有链接。
+```
+
+| # | 怎么按 | 应该 | 实拍 |
+|---|---|---|---|
+| ① | **单击**「Nota 官网」那四个字 | 弹框，**两个框里都是这条链接的现值**，多一颗「去掉链接」 | ✅ 帧 01：`Link` / `Link display name` = `Nota 官网`、`Link URL` = `https://nota.app`，**第一个框全选着**，按钮是 `Remove Link` / `Cancel` / `OK` |
+| ② | 框里按 `Esc` | 取消，**一个字都不动** | ✅ 帧 02；盘上那份文件与打开时逐字节相同 |
+| ③ | 单击 → 在第一个框里打字改名 → 点 `OK` → `Ctrl+S` | 正文里那几个字跟着变、**还是链接**；写回文档是**一笔真编辑** | ✅ 帧 04：`见 Nota 主页 这一行。`（蓝字带下划线）；盘上是 `见 [Nota 主页](https://nota.app) 这一行。` |
+| ④ | 上一步之后 `Ctrl+Z` | **一步**退回改名之前 | ✅ 帧 05：回到 `Nota 官网`（`Ctrl+Y` 重做，帧 06 存盘又变 `主页`） |
+| ⑤ | 单击 → 点「去掉链接」 | **文字留着、链接没了** | ✅ 帧 07：`见 Nota 主页 这一行。`（正文色、没有下划线），状态栏字数 **40 → 37**（地址不再算进字数）；`Ctrl+Z` 一步回来（帧 08） |
+| ⑥ | 第二段里**双击选中一个词** → `Ctrl+K` → 只填「链接内容」→ 点 `Insert` | 框里**显示名称预填着选中的那两个词**；落进正文是**真链接** | ✅ 帧 09（框里 `Link display name` = `这里`，URL 框空着、没有 `Remove Link` 那颗）；帧 10 正文里 `这里` 成了链接；存盘后盘上是 `第二段：[这里](<https://example.com/a b>)是一个普通段落…`（⚠️ 地址里有空格，序列化器写了 `<…>` 那种合法写法） |
+| ⑦ | 第三段末尾 `Ctrl+K` → 显示名称填「点我」、地址填 `javascript:alert(1)` → `Insert` | **不许写成链接**；用户填的字不许丢 | ✅ 帧 12：正文里是纯文字的「点我」（正文色、点不动）；盘上是 `第三段：没有链接。点我`——**一个链接标记都没有** |
+| ⑧ | `Ctrl`＋单击那条链接 | 不弹框、**窗口也不许跳走** | ✅ 帧 13：还是那份文档（⚠️ 那一行被 WebKit 自己选上了，是它 `Ctrl`＋单击的选择行为，不拦）；⚠️ **系统浏览器那一步在容器里量不出来**（`xdg-open` 是 `distrobox-host-exec` 的符号链接，自己返回 0、什么都不说）——只能验到"没跳走、没弹框" |
+| ⑨ | `Alt+2` 切分屏 → 在**右侧只读预览**里点那条链接 | **什么都不发生**（那儿改不了，也不该弹框） | ✅ 帧 15：没有框、没有跳转（左栏是源码模式，`[Nota 主页](https://nota.app)` 老老实实是字符） |
+| ⑩ | `LANG=zh_CN.UTF-8` 重开一扇窗，再点那条链接 | 中文界面下那几个新键要真的翻出来 | ✅ 帧 16：`超链接` / `链接显示名称` / `链接地址` / `去掉链接` / `取消` / `确定`；帧 17（新建那一路）：`显示在正文里的文字`（placeholder）/ `https://example.com，或 #本页锚点` / `插入` |
+| ⑪ | **格式化工具栏那颗 🔗**（⚠️ 它一直默认藏着，这一遍在隔离配置里写 `[appearance] toolbar = "always"` 把它显出来）：空光标处点它 | 弹**同一个框**、两个框都空着、按钮是「插入」 | ✅ 帧 21。⚠️ **这一格是本批最该单独验的一处**：那颗按钮走的是 `按钮.cmd`（即 `run("link")`），本批在 `ui/useEditorCommands.ts` 的 `run` 里把它**改道**到「插入链接」——不改道的话它照旧调上游那条 toggle，会给选中的文字挂上一条**空 `href`** 的链接 |
+| ⑫ | 在上一步的框里按 `Esc`，双击第二段里那两个字（光标落进一条已有的链接），再点那颗 🔗 | 框里是**这条链接的现值**、多一颗「去掉链接」 | ✅ 帧 22（`链接显示名称` = `这里`、`链接地址` = `https://example.com/a b`、按钮 `去掉链接` / `取消` / `确定`）——说明**工具栏这条路也读得到"光标处那条链接"**（它读的是 DOM 选区，与 PM 状态无关） |
+
+⚠️ **量法上的一条**：这一批的判据**全在"看见了什么"**上（框里填的是不是现值、正文里那几个字
+是不是蓝的、盘上那份 markdown 长什么样），**没有一条是取色**——所以帧之外的硬证据是
+**存盘之后 `cat` 出来的盘上原文**（第 ③⑥⑦ 帧各自对过）。
+
+⚠️ **本批没量到的**（不许当成已验）：**`Ctrl`＋单击真的叫起系统浏览器**（容器里 `xdg-open`
+没有宿主，见上）；**用户自己那份配置下的观感**（起的是隔离 `XDG`，所以第一次那扇窗是
+**英语界面**——中文那几张帧是另起一扇带 `LANG=zh_CN.UTF-8` 的窗拍的）；
+**菜单里那条「格式 → 超链接」**（⚠️ 它走的是 `ui/useCommandTable.ts` 那条路，与 ⑥ 的
+`Ctrl+K` **同一个 handler**（快捷键那一路本来就从 `menuHandlers` 派发），但**没有单独点过
+菜单项**）；以及**鼠标悬停在那条链接上有没有别的反应**（今天没有 hover 那层）。

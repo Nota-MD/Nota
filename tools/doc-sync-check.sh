@@ -207,6 +207,14 @@ PAIRS=(
   "src/editor/move-block.ts                      05,02,04,10"
   "tests/select.test.ts                          02,06"
   "tests/move-block.test.ts                      02,06"
+  # 2026-10-07（第 96 ＋ 102 项：「链接」那个框）：三份新源码 ＋ 一份新测试。
+  # ⚠️ `link-edit.ts` 是**纯函数优先**的那一份（判据两种模式共用），所以它进
+  # `05`（内部）、`02`（模块清单）、`04`（菜单与界面那一格）、`10`（功能矩阵）；
+  # `LinkDialog.tsx` / `useLinkClick.ts` 是界面那一层，只进 `04`／`02`。
+  "src/editor/link-edit.ts                      05,02,04,10"
+  "src/ui/LinkDialog.tsx                        04,02"
+  "src/ui/useLinkClick.ts                       04,02,05"
+  "tests/link-edit.test.ts                      02,06"
   # ⚠️ 2026-10-07 补：这一份**建好就一直在 `docs/09` §2 里、这里却没有**——
   # 与 2026-09-27 那两份（`chart-ticks` / `instant-render`）一模一样的漏法。
   # 它改了不会提醒 `02` 与 `06`（那一批 BUG-58 的账正是记在这两份文档里）。

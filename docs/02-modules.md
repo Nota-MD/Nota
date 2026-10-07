@@ -90,10 +90,12 @@
 | `bridge/types.ts` | **所有跨边界的形状**（2026-09-26 从 `ipc.ts` 拆出）：文档 / 设置 / 插件 / 导出 / 图像。⚠️ **纯类型文件**——不 import `@tauri-apps/api`、不写运行时值，所以谁都能引它而不背上副作用。⚠️ **2026-09-27 又拆了一次**（本文件 1009 行、① 行数闸 FAIL）：事件载荷那四个去了 `payloads.ts`，拆完 **967 行** |
 | `bridge/payloads.ts` | **事件载荷的形状**（2026-09-27 从 `types.ts` 拆出，69 行）：`NotifyPayload` / `PanelDirtyPayload` / `DocumentChangedPayload` / `FileChangedPayload`。⚠️ **拆的线**＝"命令的返回类型"（上面那份）vs"推过来的事件"（这份）——`events.*` 是**发生了一件事**，不是回答 |
 | `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 ⚠️ **2026-10-07 拆过（第 89 项）：1006 → 502 行**——「一次性把一切装上去」那一段整块搬去了 `editor/assemble.ts`（620 行），这边只留「实例建好之后怎么用」。 |
-| `editor/assemble.ts` | **「把一切装上去」那一段**（620 行，2026-10-07 从 `create.ts` 拆出，`docs/07` 第 89 项）：`.config()` ＋ 整条 `.use()` 插件链——ctx 初值、序列化器、输入规则、NodeView、各种可选插件。参数收**一个对象**（`装配参数`），不收一长串位置参数（同一条理由见 `ui/pane-editors.ts`）。⚠️ **顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问）：**搬的时候一字未改**，要动顺序先把那一条注释读完。⚠️ `取前置块` / `记账列宽` 两样必须走**回调**不能传值——前者要"这一刻"那一段（换文档、源码切回来都会换），后者要调用方手里**活的那张表** |
+| `editor/assemble.ts` | **「把一切装上去」那一段**（**635 行**，2026-10-07 从 `create.ts` 拆出，`docs/07` 第 89 项）：`.config()` ＋ 整条 `.use()` 插件链——ctx 初值、序列化器、输入规则、NodeView、各种可选插件。参数收**一个对象**（`装配参数`），不收一长串位置参数（同一条理由见 `ui/pane-editors.ts`）。⚠️ **顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问）：**搬的时候一字未改**，要动顺序先把那一条注释读完。⚠️ `取前置块` / `记账列宽` 两样必须走**回调**不能传值——前者要"这一刻"那一段（换文档、源码切回来都会换），后者要调用方手里**活的那张表**。📌 **2026-10-07 同日加 `移动键位`**（`.use(readOnly ? [] : [移动键位])`，`editor/move-block.ts`）：`Alt+↑/↓` 必须抢在 `baseKeymap` 的 `joinUp`/`joinDown` **前面**接（那条链里 `[...prosePlugins, …, createKeymap(…)]` 的顺序就是这条键位能生效的原因） |
 | `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十六条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化**。⚠️ 建编辑器时要**摘掉与界面快捷键撞车的 CodeMirror 默认键位**（`撞车键位`，2026-09-25；⚠️ **2026-10-04 那份名单搬去了 `editor/key-conflicts.ts`**，因为 BUG-58 正是"名单漏了一条"——搬出来才能被测试读到） ⚠️ **2026-10-07 又拆一次（第 89 项）：1048 → 637 行**——「一条命令落到文本上」那一块搬去了 `editor/source-commands.ts`（443 行），这边只留编辑器本身（扩展、主题、句柄、查找/写作模式接线）。⚠️ 两次拆的落点见 `tools/doc-sync-check.sh` 的 `PAIRS`。 |
-| `editor/source-commands.ts` | **源码模式的「命令落点」**（443 行，2026-10-07 从 `source.ts` 拆出）：一条 `EditorCommand` 落到 CodeMirror 文本上的那一下（`applyCommand` 那张 `switch` ＋ 七八个私房文本工具），**对外只有这一个名字**。⚠️ **本文件一句都不 import `source.ts`**（那边 import 本文件，反过来就是环）：它要的判据全是"纯文本"那一档，各自在 `atx.ts` / `source-mark.ts` / `footnote.ts` / `front-matter.ts` 里 |
-| `editor/key-conflicts.ts` | **CodeMirror 默认键位里与本应用撞车的那几条**（101 行，2026-10-04 从 `source.ts` 拆出）：`撞车键位`（摘掉：`Mod-/` `Mod-i` `Shift-Mod-k` `Mod-z` `Mod-y` **`Mod-u`**）＋ `故意不摘`（`Alt-ArrowUp` / `Alt-ArrowDown`，应用侧那两条 handler 还没写）。⭐ **拆出来的理由是 BUG-58**：原来的名单只有人眼在看，漏了一条 `Mod-u`（CM 的 `undoSelection`，还带 `preventDefault` ⇒ 应用被放行 ⇒ **什么都不发生**，症状与"功能没做"一模一样，躲了四个月）。⚠️ 它**纯**（不 import CM、不 import DOM），所以 `tests/key-conflicts.test.ts`（**21 条**）能反过来拿 CM 自己那张表查这份名单。判据与两类症状（"两边都跑" / "被放行"）在文件头与 `docs/06` §5.43 ⑩、§5.47 |
+| `editor/source-commands.ts` | **源码模式的「命令落点」**（**511 行**，2026-10-07 从 `source.ts` 拆出；同日又接上「选择」那族与 `Alt+↑/↓`）：一条 `EditorCommand` 落到 CodeMirror 文本上的那一下（`applyCommand` 那张 `switch` ＋ 七八个私房文本工具），**对外只有这一个名字**。⚠️ **本文件一句都不 import `source.ts`**（那边 import 本文件，反过来就是环）：它要的判据全是"纯文本"那一档，各自在 `atx.ts` / `source-mark.ts` / `footnote.ts` / `front-matter.ts` 里。📌 **`selectLine`/`selectWord`/`selectSentence`/`deleteWord` 调的是 `editor/select.ts` 那两个纯函数**（与所见即所得共用判据）；**选行用的是 CodeMirror 自己的 `selectLine`**，所以这边**含末尾那个换行**、所见即所得那边不含（"行"在两边本来就不是同一个东西）。`moveLineUp`/`moveLineDown` 直接用 CM 自己那两个函数 |
+| `editor/select.ts` | **「选择」那一族**（337 行，2026-10-07 新建）：选当前行 / 选当前词 / 选当前句 / 选词并删（`Ctrl+L` / `Ctrl+D` / `Ctrl+E` / `Ctrl+Shift+D`；菜单里是「编辑 → 选择 ▸」那四条）。**三层**：`选词区间`/`选句区间`（纯文本 ＋ 字符偏移）→ `行区间`/`词区间`/`句区间`（PM 文档 ＋ 位置）→ `选行`/`选词`/`选句`/`删词`（一个 `Editor`）。⚠️ **前两层两种模式共用**（源码那边调的是同一对函数），另写一份"哪个字算一个词"迟早变成"切一下模式，同一个词选得不一样"。⚠️ 分词交给 **`Intl.Segmenter`**（结果是**环境**给的，所以用例只钉 ASCII、中文只钉"包含关系"）。⚠️ 最常撞上的边界：光标**贴着词尾**时选的是**刚过去**那个词。⚠️ 代码块给 `null`（那一格归块里那颗 CodeMirror）。用例 **25 条**在 `tests/select.test.ts`；真按键那半在 `docs/06` §5.55 ④ |
+| `editor/move-block.ts` | **`Alt+↑` / `Alt+↓`：上移 / 下移光标所在的块**（235 行，2026-10-07 新建）：`算移动(doc, 位置, 方向)` 给一份"删哪儿、插哪儿、光标落哪"的计划（纯算术，用例 **20 条**），`移动块(editor, 方向)` 照着派一笔事务，`移动键位` 是挂进实例的那个插件。⚠️ 光标在**列表项**里搬那一个列表项（找**最深**那层列表），别处搬**顶层块**；⚠️ **表格里什么都不做**（没做行/列挪动，"整张表上移"才是最坏的）；⚠️ **到边就是不动**（不绕回去）。⚠️⚠️ **这两颗键必须自己接**：`baseKeymap` 已经把 `Alt-ArrowUp`/`Alt-ArrowDown` 绑给了 `joinUp`/`joinDown`（合并相邻两段）并 `preventDefault`，不接的话全局那条 accel 整颗放行、用户看到的是"两段被并成一段"（`docs/06` §5.55 ④）。⚠️ 只挂给**可编辑**实例 |
+| `editor/key-conflicts.ts` | **CodeMirror 默认键位里与本应用撞车的那几条**（101 行，2026-10-04 从 `source.ts` 拆出）：`撞车键位`（摘掉：`Mod-/` `Mod-i` `Shift-Mod-k` `Mod-z` `Mod-y` **`Mod-u`** ＋ **2026-10-07 挪进来的 `Alt-ArrowUp`/`Alt-ArrowDown`**）。⭐ **拆出来的理由是 BUG-58**：原来的名单只有人眼在看，漏了一条 `Mod-u`（CM 的 `undoSelection`，还带 `preventDefault` ⇒ 应用被放行 ⇒ **什么都不发生**，症状与"功能没做"一模一样，躲了四个月）。⚠️ **2026-10-07 起只剩这一份名单**（第二份 `故意不摘` 撤了：那两条 handler 接上了，照当时写下的约定挪进 `撞车键位`——**键位只能有一个主人**）。⚠️ 它**纯**（不 import CM、不 import DOM），所以 `tests/key-conflicts.test.ts`（**19 条**）能反过来拿 CM 自己那张表查这份名单。判据与两类症状（"两边都跑" / "被放行"）在文件头与 `docs/06` §5.43 ⑩、§5.47 |
 | `editor/source-mark.ts` | **源码模式里"行内标记能不能摘掉"那个纯字符串判据**（2026-09-30 新建，BUG-57）：选中的文字已经带着同一对定界符（`**甲**`）时给出"摘掉"的改动与选区，否则给 `null`。⚠️ **它是纯函数、不 import CodeMirror**（所以 `tests/source-mark.test.ts` 能直接测）；`source.ts` 的 `切换行内标记` 只负责把结果派下去。⚠️ 返回值**有三种**（`null` / `"不动"` / `"摘"`），合并哪两个都会改坏用户正文——理由在它文件头 |
 | `editor/caret-snapshot.ts` | **编辑器报给宿主的选区快照**（2026-10-04 新建，138 行，第 14 项）：`选区快照` 类型 ＋ 那支只读观察者插件（`选区快照插件(onSelection)`）。⚠️ **文件头那张量测表就是本文件存在的理由**：Markdown 字符偏移在块边界上**不存在**（列表项开头插字会多出 `- `、段落之间插字会多出空行），所以宿主拿不到"能拼字符串"的坐标系——插件能拿到的只有**选中的那段字**。⚠️ 插件自己**按快照去重**：PM 每敲一颗字都派事务，不去重就是每敲一颗字跨一次 IPC。⚠️ 类型**只借不给**：`bridge/ipc.ts` 是 `import type` 从这儿借的（搬进 `bridge/types.ts` 会让"桥"变成选区的定义者） |
 | `editor/command-state.ts` | **光标状态**的只读观察者插件（`CommandState`）：在不在表格里、有没有选区、当前块是什么。⚠️ 喂给工具栏高亮与菜单的第二条判据。⚠️ **2026-09-27 起多一个 `hasHeadings`**：本表**唯一一处看整篇文档**的判据（话虽如此，只扫**顶层**，视野与 `extractOutline` 同一片），给「内容目录」那颗菜单项判亮不亮——判在命令里的话菜单会亮着、点下去没反应 |
@@ -110,7 +112,7 @@
 | `editor/lax-heading.ts` | 宽松模式认的 `#标题` 在**序列化层**的处理：**不给井号加反斜杠**（不加的话 `#你好` 存盘会变成 `\#你好`，那就是"自动修复"）。⚠️ **2026-09-26 显示那半边被删过一次**（用户原话「应该作为标识符的 `#` 不要变换位置和大小」），📌 **2026-09-29 用户改口要它按标题排**，装饰于是回来了——**但搬进了 `heading-on-enter.ts`**；📌 **2026-09-30 那份长相又被推翻一次**（用户要的是"和 `# 你好` 一样，回车才成块"，"按该级字号排"当天删掉，见 `docs/05` §4.9c）。⚠️ **本文件只剩 `不转义行首井号` 一个导出**（`create.ts` 引它进序列化扩展，`tests/math-view.test.ts` 第七组盖它）。⚠️ 文件本身**不能删**，删了 `#你好` 存盘就会被加上反斜杠 |
 | `editor/task-list.ts` | 任务项复选框：`- [x]` 画方框、点它勾上、回车切出来的新项**不继承勾** |
 | `editor/code-block.ts` | 代码块的 NodeView（语言选择器 / 复制 / 折叠）。⚠️ **第一个 `$view`**（第二个是 `editor/diagram-view.ts`，2026-09-26）。⚠️ 2026-10-04 起 `refractor/all`（507 kB）是**异步加载**（本模块顶层发起 `import()`，第 27 项）：首屏只留 common 62 种语言，全量表到了清下拉缓存；那个“冷启动第一帧遇长尾语言块先显示纯文本”的时序窗口写在加载块上。⚠️ 语言选择器的**外观**＝`appearance: none` ＋ 自画箭头（`editor.css` 的 `.nota-code-lang-wrap`），少一条在深色下就是**纯白的原生框**。<br>📌 **2026-10-06（第 101 项）起本文件里的 `pre` 有两层文本**：`<code class="nota-code-text">`（**PM 的 contentDOM**，零尺寸藏起来，文档树/撤销/存盘读它）＋ `.cm-editor`（**CodeMirror**，用户打字那一层）。四条接线：① `stopEvent` / `ignoreMutation` 判据放宽成**整个 `pre` 子树**；② `setSelection(锚, 头)` 收的是**相对节点内容起点**的位置（减 1 得文本偏移），把光标交给 CM；③ `update()` 里把节点文本推进 CM（`同步中` 锁必须判）；④ `destroy()` 里连 CM 一起销毁 |
-| `editor/code-block-cm.ts` | **代码块里的 CodeMirror**（2026-10-06 新建，约 460 行）。三件导出给测试的纯函数：`算最小改动(旧文, 新文) → {删起, 删到, 插入}`（抠公共前后缀；⚠️ **两条边界要退到完整字符上**，否则 `"😀"→"😁"` 会被切成半个 emoji）· `分色(文本, 语言) → {从, 到, 类}[]`（拿 **refractor** 分词，类名逐字沿用 `token xxx`，所以配色 CSS 一个常量都没加；语言为空/不认得/分词抛 → 返回空数组，**不抛**）· `回车续行(前文, 后文, 单位) → {删多少, 插入, 光标}`（延续缩进 / 上一行 `{`（`[` 再进一级 / 夹在空括号里展开成三行 / 停在纯空白后面把那截空白并进新行）。⛔ **一个反例**：`"([{".indexOf("")` 回的是 `0`，所以"末字符为空"那一格必须先挡掉——这条是 `tests/code-block-editing.test.ts` 当场抓出来的。<br>`创建代码块编辑器(选项)` 返回 `{视图, 取文本, 取光标, 设文本, 设语言, 设选区, 聚焦, 有焦点, 销毁}`。装配：`closeBrackets()` ＋ `closeBracketsKeymap`（**新增依赖 `@codemirror/autocomplete` 只为它**）· 自定义回车（CM 自带的 `insertNewlineAndIndent` 在没有文法时**只照抄上一行缩进**，不会"再进一级"）· `indentWithTab`（`indentUnit = 4` 空格，本批自己定的数，见文件里那段注释）· `Ctrl+Z`/`Ctrl+Shift+Z` **转回 PM**（撤销只有一套）· 分色插件（`ViewPlugin` ＋ `Decoration.mark`）· `drawSelection()` · 换行 `Compartment`（盯 `<html data-code-wrap>`）· `EditorView.updateListener`（推文本 / 报焦点）。⚠️ 长尾语言表异步到货时用一条 `重算效果` 通知重算着色 |
+| `editor/code-block-cm.ts` | **代码块里的 CodeMirror**（2026-10-06 新建，**729 行**；2026-10-07 补上**整行剪贴板**那一层）。📌 那一层（`整行剪贴`/`落剪贴板` ＋ `记按键`）：没有选区时 `Ctrl+C`/`Ctrl+X` 按**整行**来（含末尾换行），有选区时才照常。⚠️ 它挂在 **Capture 段**（`handleDOMEvents.copy/cut` 之前），并且要**记一下这一下按的是哪颗键**——**WebKitGTK 会把 `copy`/`cut` 事件各派发两遍**（`paste` 只有一遍），照单全收会往剪贴板写两次、`cut` 更会删两遍。⚠️ 另有一个 `剪贴板键` 的放行口在 `ui/useMenus.ts`（见那条）。三件导出给测试的纯函数：`算最小改动(旧文, 新文) → {删起, 删到, 插入}`（抠公共前后缀；⚠️ **两条边界要退到完整字符上**，否则 `"😀"→"😁"` 会被切成半个 emoji）· `分色(文本, 语言) → {从, 到, 类}[]`（拿 **refractor** 分词，类名逐字沿用 `token xxx`，所以配色 CSS 一个常量都没加；语言为空/不认得/分词抛 → 返回空数组，**不抛**）· `回车续行(前文, 后文, 单位) → {删多少, 插入, 光标}`（延续缩进 / 上一行 `{`（`[` 再进一级 / 夹在空括号里展开成三行 / 停在纯空白后面把那截空白并进新行）。⛔ **一个反例**：`"([{".indexOf("")` 回的是 `0`，所以"末字符为空"那一格必须先挡掉——这条是 `tests/code-block-editing.test.ts` 当场抓出来的。<br>`创建代码块编辑器(选项)` 返回 `{视图, 取文本, 取光标, 设文本, 设语言, 设选区, 聚焦, 有焦点, 销毁}`。装配：`closeBrackets()` ＋ `closeBracketsKeymap`（**新增依赖 `@codemirror/autocomplete` 只为它**）· 自定义回车（CM 自带的 `insertNewlineAndIndent` 在没有文法时**只照抄上一行缩进**，不会"再进一级"）· `indentWithTab`（`indentUnit = 4` 空格，本批自己定的数，见文件里那段注释）· `Ctrl+Z`/`Ctrl+Shift+Z` **转回 PM**（撤销只有一套）· 分色插件（`ViewPlugin` ＋ `Decoration.mark`）· `drawSelection()` · 换行 `Compartment`（盯 `<html data-code-wrap>`）· `EditorView.updateListener`（推文本 / 报焦点）。⚠️ 长尾语言表异步到货时用一条 `重算效果` 通知重算着色 |
 | `editor/diagram-view.ts` | **图表块的 NodeView**（726 行，2026-09-26）：默认**看图**、点一下才切成源码输入框，源码写回 `attrs.value`（`diagram` 是 `atom`，**没有 contentDOM 可给**，所以只能 NodeView 自己摆控件）。⚠️ 上游 `@milkdown/plugin-diagram` 的 `toDOM` 只有一句 `dom.textContent = code`——**全包没有一处**调 `mermaid.render`，所以"画成图"从来是留给宿主的。⚠️ 它是本仓**第二个 `$view`**（第一个是 `code-block.ts`）。⚠️ **2026-10-04（第 27 项）**：那个上游包**整个退役**——schema 换成 `editor/diagram-node.ts`（`图表规格`），“要的是 `$NodeSchema` 上的 `.node`”那句注释还在；mermaid 改**动态 import**（全仓唯一 import 点在本文件的 `渲染` 里），首屏拆出 `mermaid.core-*.js` |
 | `editor/lang-picker.ts` | **代码块语言选择器**（341 行）：**自绘的下拉**，不是原生 `<select>`——HTML 规定 `<option>` 只能是纯文字，`<img>` / `background-image` 塞进去都不渲染，所以「连弹层里也要图标」这条要求**只能自己画**。⚠️ 代价是原生白送的键盘上下 / 打字跳转 / Escape / 点外关都得自己补，**并且 NodeView 销毁时必须把弹层摘掉**（挂在 `document.body` 上，不摘就一次留一个孤儿）。⚠️ 400 项**每次打开现建**，不常驻。⚠️ **2026-10-04 加了一道让路守卫**：`全局按键` 挂在 **`document` 的捕获阶段**，比右键菜单那一层（React，冒泡阶段）**先**收到键，于是 `Enter` 被它先收下（还顺手卸载了输入框）、`Esc` 把两层浮层一起关掉——现在开头一句 `if (document.querySelector("[data-context-menu]")) return;` 整个让开（实测帧与后果见 `docs/06` §5.54） |
 | `editor/lang-icon.ts` | **`languageIcon(lang)` 的唯一入口**（271 行）：「先问真图、问不到回落徽章」这件事收在这一个函数里。⚠️ 徽章＝圆角小方块 ＋ 字母缩写 ＋ 该语言的代表色，**400 个语言 id 人人都有**（兜底是主路径不是边角：任何图标集都盖不全）；真图在 `lang-icons-real.ts` |
@@ -179,11 +181,11 @@
 | `ui/TabBar.tsx` | 标签栏：脏标记 + 关闭按钮。⚠️ **纯展示、零状态**，也**不管"关之前要不要存盘"**——`confirmReq` 在 `App.tsx` 手上。⚠️ 2026-10-04 起 ←→/Home/End **挪焦点不切换**（`ui/useTablistKeys.ts`，第 50 项；切一次要重挂编辑器） |
 | `ui/MenuBar.tsx` | 菜单栏（**七栏 ＋ 插件一栏**，见 `ui/pluginMenus.ts`）。⚠️ **只管「哪一栏开着」**，条目表在 `ui/commands.ts`，灰不灰由 `App.tsx` 的 `menuHandlers` 决定；弹层与子菜单在 `ui/MenuPopup.tsx`。⚠️ 「开着」还分**谁开的**（点开的 / 划过切过来的），两个文件各有一个 `点开的` ref——BUG-17 |
 | `ui/MenuPopup.tsx` | 一栏的弹层 + 它飞出来的子菜单。⚠️ 子菜单必须 **portal 到 `body` + `position: fixed`**（父弹层要能滚，`overflow-y: auto` 会把 `overflow-x` 也算成 `auto`，飞出右边缘的子菜单会被裁成一条竖线）。⚠️ 2026-09-30 多了可选 `heading`（顶上那行小标题，**不是条目**、不占漫游序号），状态栏那个菜单用它 |
-| `ui/context-menu.ts` | **右键菜单的纯表与纯判据**（2026-10-04 新建，270 行）：`判落点`（四档：编辑器/输入框/外壳/不弹）＋ 三份 id 数组（`剪贴图标`/`行内图标`/`块图标`）＋ `给行(位置, 开发模式)`（把 id 变成可画的行）＋ `整行灰` / `行内下一格`（**不绕回**）/ `表里全部id`。⚠️ **它不 import React**——这是它值得单独存在的理由（`tests/context-menu.test.ts` 直接 import 它，不碰 DOM）。⚠️ 四档的**先后**不是随手排的：`不弹` 在最前（标签栏自己认领了）、`输入框` 必须在 `编辑器` 前（公式源码框/图表源码框/代码块语言框都是 `.editor-pane` 里的 `input`）。⚠️ **2026-10-04 开窗口检补进 `这一档的灰(位置, 灰)`**：**输入框那一档一个都不灰**——那六条不走命令表，套菜单栏的 `disabledCommands` 会把"有实现、点得动"的 `edit.select` 画成灰的（灰名单的判据与两种后果写在那个函数的文档注释里） |
+| `ui/context-menu.ts` | **右键菜单的纯表与纯判据**（2026-10-04 新建，**324 行**）：`判落点`（四档：编辑器/输入框/外壳/不弹）＋ 三份 id 数组（`剪贴图标`/`行内图标`/`块图标`）＋ `给行(位置, 开发模式)`（把 id 变成可画的行）＋ `整行灰` / `行内下一格`（**不绕回**）/ `表里全部id`。⚠️ **它不 import React**——这是它值得单独存在的理由（`tests/context-menu.test.ts` 直接 import 它，不碰 DOM）。⚠️ 四档的**先后**不是随手排的：`不弹` 在最前（标签栏自己认领了）、`输入框` 必须在 `编辑器` 前（公式源码框/图表源码框/代码块语言框都是 `.editor-pane` 里的 `input`）。⚠️ **2026-10-04 开窗口检补进 `这一档的灰(位置, 灰)`**：**输入框那一档一个都不灰**——那六条不走命令表，套菜单栏的 `disabledCommands` 会把"有实现、点得动"的 `edit.select` 画成灰的（灰名单的判据与两种后果写在那个函数的文档注释里）。📌 **2026-10-07：`edit.select` 长成了一个子菜单父项**（四个孩子），所以 `条目行` 多一个 `摊平` 参数——输入框那一行要的是**那四条本身**，不是一层点进去的子菜单（`条目行(输入框条目, "输入框", true)`） |
 | `ui/ContextMenu.tsx` | **右键菜单那一层**（2026-10-04 新建，710 行）：上半 `ContextMenu`（**一个** window **捕获相位**的 `contextmenu` 监听：分流、`preventDefault`、派发 `menuHandlers[id]?.()`），下半 `ContextMenuPanel`（画那一份）。⚠️ 它是个**组件不是 hook**——一开始想写成 `useContextMenu()` 让 `App.tsx` 连 JSX 都不用加，错了：hook 返回的元素不会自己进树。⚠️ 「不弹」那一档**不许** `preventDefault`（TabBar 在冒泡阶段拥有它，捕获相位先跑，拦了就把它饿死）。⚠️ 关掉靠 `mousedown`（不是 `click`）＋ `resize`/`scroll`（`capture: true`），且必须跳过 `[data-context-menu]`（子菜单 portal 到 `body`，不跳过就会把自己点关）。⛔ 外观复用的是菜单栏那一套（`.menu-sub` / `.format-btn` / `roving` / `SubMenu`），**没有第二套浮层**。⚠️ **2026-10-04 开窗口检修的四处**：① `开着` 多一个 `落点` 字段（不能靠"现场非空"推——输入框档没有现场）；② 渲染时按落点挑灰名单（`context-menu.ts::这一档的灰`）；③ `还焦` **改成返回布尔**——焦点没还回去时 `execCommand("selectAll")` 会选中**整篇正文**，所以 `undo`/`redo`/`select`/剪切/粘贴五处调用点都先问这一句；④ 收起时按 `isConnected` 守卫着把焦点还给**右键前那个元素**（`.context-menu` 的 `z-index` 与图标行焦点圈两处在 `styles/menubar.css`） |
 | `ui/useMenuTable.ts` | **菜单表 ＋ 运行时合成的「最近文件」那一层**（56 行，2026-10-04 从 `App.tsx` 搬出——那次是**为了腾行数**，`App.tsx` 当时 998 行顶着 1000 硬线）。⚠️ 它必须 `useMemo`：菜单表的**身份**是要交给原生菜单栏的，每帧重建就等于每帧往系统菜单推一遍。⚠️ `keys.overrides` 这一层**只叠在这一处**——它是全应用唯一一份对外发出去的菜单表，叠在这里，菜单显示 / 按键分发 / macOS 系统菜单 / 设置里那张快捷键表**一起**跟着变 |
 | `ui/hints.ts` | **功能提示的注册表**（2026-10-06 新建，约 150 行）：用户那天要的是"整理所有提示、看看哪些能加**不再显示**"，外加一条质量要求「**提示要确定**——什么情况下才显示」。所以是一张表：`id` / `类型`（**当场**｜**首次**）/ **一句话写死的触发条件** / 默认 / 文案，外加唯一的判定实现 `该显示吗`（上下文 ＋ 没静音 ＋ 首次型没看过）。⚠️ 展示（`ui/HintBar.tsx`）、静音（`[hints]`）、设置页「提示」三处**读同一张表**。⚠️ **报错类不进表**，「报错不是文案」。⚠️ 文案是函数 `() => t("…")`，别改成模块级 |
-| `ui/commands.ts` | 菜单的**条目表**（逐条整理自用户 2026-09-22 提供的截图）+ **快捷键的唯一真源**（`accel` 字段）。⚠️ 里面**故意没有** `implemented` 标志位。⚠️ **"唯一真源"这条 2026-09-27 之后要加一个限定**：用户改过的那几条存在 `settings.toml` 的 `[keys.overrides]` 里（差量），**有效键位 ＝ 这份表叠上那份差量**——叠的地方在 `App.tsx`（`菜单`），别在别处再叠一遍。⚠️ 「视图」那一栏**分两段**（2026-09-27 用户点名要的那条线：线上面"外壳上画出什么"、线下面"正文那一块怎么呈现"）；**2026-10-04（第 49 项）把 `view.statusBar` 与 `view.menuBar` 从下面那段挪了上来**（它们原来夹在「打字机模式」与「全屏」中间）。⚠️ 往这一栏加条目之前先想清楚它属于哪一组，`tests/bar-close.test.ts` 组三把这一段钉住了 |
+| `ui/commands.ts` | 菜单的**条目表**（逐条整理自用户 2026-09-22 提供的截图）+ **快捷键的唯一真源**（`accel` 字段）。⚠️ 里面**故意没有** `implemented` 标志位。⚠️ **"唯一真源"这条 2026-09-27 之后要加一个限定**：用户改过的那几条存在 `settings.toml` 的 `[keys.overrides]` 里（差量），**有效键位 ＝ 这份表叠上那份差量**——叠的地方在 `App.tsx`（`菜单`），别在别处再叠一遍。⚠️ 「视图」那一栏**分两段**（2026-09-27 用户点名要的那条线：线上面"外壳上画出什么"、线下面"正文那一块怎么呈现"）；**2026-10-04（第 49 项）把 `view.statusBar` 与 `view.menuBar` 从下面那段挪了上来**（它们原来夹在「打字机模式」与「全屏」中间）。⚠️ 往这一栏加条目之前先想清楚它属于哪一组，`tests/bar-close.test.ts` 组三把这一段钉住了。📌 **2026-10-07：799 行**（**离 800 WARN 线只剩 1**，下一批动它之前先看 `docs/07` 第 89 项那份拆分打算）——同日「编辑」栏多了 `edit.pastePlain`（`Ctrl+Shift+V`）与 `edit.select` 那四条（`edit.select` **从一条死的叶子变成子菜单父项**，父项自己**不在任何 handler 表里**、不许被点亮） |
 | `ui/accel.ts` | 快捷键的解析/显示/派发：`parseAccel` · `accelSig` · `eventAccel` · `formatAccel` · `buildAccelIndex` · `isOutsideEditor`，⚠️ 2026-09-27 又加了 **`accelToText`**（录制出来的那一下 → **写回设置**的文本）。⚠️ 判 `e.code` 不判 `e.key`，理由见文件头。⚠️ **`accelToText` 和 `formatAccel` 是两件事，别合并**：后者在 macOS 上要出 `⇧⌘S`（那是**给人看**的），前者要出**哪台机器都读得回来**的 `Ctrl+Shift+S`（它是**存进 `settings.toml`** 的——存成 `⇧⌘S`，换到 Linux 上 `parseAccel` 认不出，这条快捷键会**静默失效**）。⚠️ 三种情况返回 `null`（调用方当"这一下不算数、继续等"）：光按修饰键；空格与加号（`parseAccel` 的词法里没有它们的写法）；**不带修饰键的单个可见字符**——⚠️ 这一条**不能**写成"必须带修饰键"，全仓默认键位里有 `F8`/`F9`/`F11` 三条不带修饰的，那样写会把它们判死 |
 | `ui/nativeMenu.ts` | 把同一份 `MENUS` 翻译成后端要的原生菜单树（macOS 兜底）。⚠️ **不碰 `muda` 的语法**——那是纯 Rust 那边的事 |
 | `ui/settings/SettingsDialog.tsx` | 偏好设置的**壳**：左栏（搜索 + 十一页 + 「完成」）+ 右栏内容。⚠️ 搜索是**就地过滤**（十页叠着渲染，每行自己筛），不是跳转。左栏十页的顺序在 `ORDER`，图标在 `SECTIONS`，名字在组件体里的 `页名` 表（三处都在同一个文件里，加一页漏了 `ORDER` 的症状是"这一页点不到"，不报错） |
@@ -211,7 +213,7 @@
 | `ui/FindBar.tsx` | 查找与替换条（2026-09-24，`docs/07` 第 4 项）。⚠️ 它是**显示端 + 输入端**，不是查找的实现：命中数一律是编辑器报上来的 | ⚠️ **2026-10-06（第 95 项）**：多一个 `显示替换` prop——`Ctrl+F` 开的是"只找"（不画替换那一行）、`Ctrl+H` 才带；并且**正则开着时「全词」那颗按钮灰掉且值真的不参与**（`\b` 做的是同一件事，两把尺子量一件事必打架）。⚠️ 算选项那一趟做了归一化（`wholeWord: options.regex ? false : …`），只发生在**上报那一次**，关掉正则之后开关原样回来。
 | `ui/ConfirmDialog.tsx` | 自绘确认框（替掉 `window.confirm`）。**受控**：开与答案都由 `ui/useDialogs.ts` 给。⚠️ 2026-10-04 起**焦点夹在框里**（`ui/useModalTrap.ts`，第 50 项）——Tab/Shift+Tab 首尾互跳、`focusin` 兜底；Enter 走默认那条仍在本文件 |
 | `ui/PromptDialog.tsx` | 自绘单行输入框（2026-09-24，替掉 `window.prompt`——它在 WebKitGTK 上**默认被关掉且静默返回 `null`**）。⚠️ 挂载即聚焦。⚠️ 2026-10-04 起焦点陷阱走 `ui/useModalTrap.ts`（第 50 项），它的 Esc **组字期间不接**（`isComposing`/229）——"Esc 绑输入框不绑 window"那条老口径原样成立，新增的那条 Esc 补的是"焦点在按钮上时"那个洞 |
-| `ui/useMenus.ts` | **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出）：三条判据 → `disabledCommands` / `menuChecks` / `usingNativeMenu`。⚠️ **2026-09-29（BUG-53）多接了一条判据：编辑器自己已经处理过的不再接手**——那条 `window` keydown 监听的第一句是 `if (e.defaultPrevented) return;`（ProseMirror 只要有一条 `handleKeyDown` 返回 `true` 就会 `preventDefault()`，而它的监听挂在 contenteditable 上、比 `window` 早）。少了这一句，`Mod-b` / `Mod-i` 会被上下两处各跑一遍，而两条命令都是 toggle、正好抵消 = 「按了没反应」。⚠️ 推原生菜单那个 effect 的依赖里有**语言**（`use语言()`，2026-09-26 加） |
+| `ui/useMenus.ts` | **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出）：三条判据 → `disabledCommands` / `menuChecks` / `usingNativeMenu`。⚠️ **2026-09-29（BUG-53）多接了一条判据：编辑器自己已经处理过的不再接手**——那条 `window` keydown 监听的第一句是 `if (e.defaultPrevented) return;`（ProseMirror 只要有一条 `handleKeyDown` 返回 `true` 就会 `preventDefault()`，而它的监听挂在 contenteditable 上、比 `window` 早）。少了这一句，`Mod-b` / `Mod-i` 会被上下两处各跑一遍，而两条命令都是 toggle、正好抵消 = 「按了没反应」。⚠️ 推原生菜单那个 effect 的依赖里有**语言**（`use语言()`，2026-09-26 加）。📌 **2026-10-07（497 行）：剪贴板那四颗键多了一道放行口**——`剪贴板键 = {edit.copy, edit.cut, edit.paste, edit.pastePlain}`，目标是**块里那颗 CodeMirror**（`目标.closest(".nota-code-cm")`）时**不进全局那条路**（它有自己的整行剪贴板处理，见 `editor/code-block-cm.ts`） |
 | `ui/useDialogs.ts` | **两个自绘对话框的"谁在等答案"**（2026-09-24 从 `App.tsx` 搬出）：两个 `useState` + 两个 resolve ref |
 | `ui/useExport.ts` | **导出与打印的接线**（2026-09-24 从 `App.tsx` 搬出）：取正文 → 取主题 → 生成 HTML → 问落点/交给系统 → 报结果。⚠️ 正文**必须从编辑器拿**（`doc.text` 是 300ms 去抖后的镜像）；主题取不到**不算失败**。⚠️ 2026-09-25 起多了**借 pandoc 那七种**（`导出为(id)` + `pandocGate`）：**先探测再决定**，`ready` 直接进保存对话框、`missing`/`unknown` 才出面板；⚠️ 默认落点三档，且**与「另存为」不是一回事**（那个换的是这份文档自己的路径） |
 | `ui/useDocTheme.ts` | **文档主题的应用/切换/打开目录**（2026-09-24 从 `App.tsx` 搬出）。⚠️ 与界面主题的 `applyTheme` **分开**：那条是同步写属性，这条要取回来 + 限域，节奏不一样。⚠️ 2026-09-25 起多一层**槽**（`useDocThemeSlot`）：`appearance.dark_theme_separate` 打开后深色下生效的是 `dark_document_theme` 那份，于是「读哪份」与「写哪份」必须同源；两个纯函数导出给设置页显示用。⚠️ 2026-10-04（第 41 项）：`主题接线` 多一格 `重扫`，「打开主题文件夹…」**成功回来之后**调它（`App.tsx` 接 `api.theme.list().then(setThemes)`）——清单重扫后取 CSS 那个 effect 会跟着重跑（`themes` 本来就在依赖里）；**不做轮询** |
@@ -5608,7 +5610,7 @@ export interface 选区快照 {
 
 ---
 
-## `src/editor/command-table.ts`（186 行）
+## `src/editor/command-table.ts`（216 行）
 
 **命令白名单的实体**：`EditorCommand` 的每一项落到哪个 Milkdown 命令上。
 
@@ -5643,6 +5645,14 @@ id 形如 `format.bold`），两张表的桥在 `ui/useCommandTable.ts`，口径
 清除格式 / 表格增删 / 公式块 / 目录 / 脚注）在 `insert.ts` 与 `footnote.ts` 里，
 这里只是**唯一的调用点**——「别处不许自己摸 `editorViewCtx` 派事务」那条纪律说的是
 调用点，而调用点 2026-09-28 从 `create.ts` 挪到了这里。
+
+📌 **2026-10-07 新增六条**（186 → 216 行）：`selectLine` / `selectWord` /
+`selectSentence` / `deleteWord` / `moveLineUp` / `moveLineDown`。⚠️ 前四条的值是
+`(editor) => 选行(editor)` 这一层**薄壳**（实现全在 `editor/select.ts`，「是哪一段、
+算法是什么」那儿一行都不留）；后两条同理转给 `editor/move-block.ts` 的 `移动块`。
+⚠️ 类型那头 `create-types.ts` 的 `EditorCommand` 同批加了这六个成员（**两处必须一起改**，
+见上）。⚠️ 斜杠菜单那张表（`editor/slash.ts`）**没有**跟着加这六条——它们是从
+菜单/快捷键进来的命令，不是"在正文里敲斜杠时会想做的那几件事"。
 
 ## `src/editor/instant-render.ts`（154 行）
 
@@ -6100,10 +6110,12 @@ Nota 的 DOM 契约与外部编辑器不同，不应假装相同。
 
 ---
 
-## `src/ui/commands.ts`（436 行）
+## `src/ui/commands.ts`（799 行）
 
 菜单栏的**骨架**：菜单怎么排、每一项叫什么、有没有快捷键。
 逐条整理自用户 2026-09-22 提供的 6 张界面截图。
+⚠️ **2026-10-07：799 行，离 800 那条 WARN 线只剩 1**——下一批动它之前先看 `docs/07` 第 89 项
+那份拆分打算（**能拆的线**：`accelerator` 那一列是一张纯表，与菜单树不是同一个消费者）。
 
 ### 类型
 
@@ -6180,6 +6192,27 @@ Markdown Reference…」这类外链一条都没有——Nota 离线优先，
 ⚠️ **父项不该有 `accel`**：它没有动作可绑，写了只会让快捷键索引里多一条
 指向"打开一个子菜单"的伪命令。`native_menu.rs` 那边也照这个口径
 （父项不带 `enabled`，因为枚举型的原生菜单项没有这个概念）。
+
+### 📌 2026-10-07 那一批（「选择」子菜单 ＋ 粘贴为纯文本）
+
+| id | 标签 | `accel` | 说明 |
+|---|---|---|---|
+| `edit.pastePlain` | 粘贴为纯文本 | `Ctrl+Shift+V` | 走的是 `edit.paste` **同一条路**（`ui/useClipboard.ts` 的 `粘贴`）——本应用的粘贴本来就只进纯文本（Milkdown 的剪贴板插件没有 `clipboardParser`），留这一条是因为那颗键是肌肉记忆 |
+| `edit.select` | 选择 ▸ | — | ⚠️ **从一条死的叶子变成了子菜单父项**（这就是它此前在「编辑」栏里灰着、点不动的那一条） |
+| `edit.selectLine` | 选择当前行 | `Ctrl+L` | |
+| `edit.selectWord` | 选择当前词 | `Ctrl+D` | |
+| `edit.selectSentence` | 选择当前句 | `Ctrl+E` | |
+| `edit.deleteWord` | 删除当前词 | `Ctrl+Shift+D` | |
+| `edit.moveLineUp` | 上移该行 | `Alt+↑` | id 与 `accel` 早就在表里（**一直没实现**，是 `editor/key-conflicts.ts` 那份 `故意不摘` 名单等着的两条） |
+| `edit.moveLineDown` | 下移该行 | `Alt+↓` | 同上 |
+
+⚠️ **父项 `edit.select` 故意不出现在 `ui/useCommandTable.ts` 那张 handler 表里**：
+表里没它就永远是灰的、点不动，正是父项该有的样子（它只负责飞出来）。四个孩子
+各有一条 handler，落在 `editor/select.ts` 那族与 `editor/move-block.ts` 上。
+
+⚠️ 「粘贴为纯文本」那条**在 WebKitGTK 上会弹一句提示**（「系统不允许从菜单读剪贴板，
+请按 Ctrl+V 粘贴」）：那是环境自己把 `navigator.clipboard.readText()` 关了权限，
+**不是这一条没做**——写剪贴板那条路是通的（`docs/05` 记着这条环境事实）。
 
 ---
 
@@ -6301,7 +6334,7 @@ Markdown Reference…」这类外链一条都没有——Nota 离线优先，
 
 ---
 
-## `src/i18n/index.ts`（149 行）· `zh.ts`（31 行）· `zh-ui.ts`（459 行）· `zh-settings.ts`（454 行）· `zh-runtime.ts`（132 行）
+## `src/i18n/index.ts`（149 行）· `zh.ts`（31 行）· `zh-ui.ts`（544 行）· `zh-settings.ts`（454 行）· `zh-runtime.ts`（132 行）
 
 前端这一侧的界面语言（2026-09-25）。**一个模块级小 store ＋ 一份中文翻译表，不加任何依赖**——
 没有 `i18next`、没有 `react-intl`：今天只有两种语言、一个 `t()`，引一个框架进来
@@ -6377,7 +6410,7 @@ t("Plugins")   // 中文表里有 → "插件"；没有 → "Plugins"（原样�
 | 文件 | 管哪一片 | 导出 |
 |---|---|---|
 | `i18n/zh.ts`（31 行） | **文件头 ＋ 汇总**。那套"键就是原文"的规矩、语体口径都在这儿；末尾 `export const 中文表 = { ...界面表, ...设置表, ...运行表 }`——`index.ts` 只认 `中文表` 这一个名字 | `中文表` |
-| `i18n/zh-ui.ts`（459 行） | **界面骨架**：菜单栏、插件栏、编辑区预览、`src/editor/` 那一层、界面上那些小件 | `界面表` |
+| `i18n/zh-ui.ts`（**544 行**） | **界面骨架**：菜单栏、插件栏、编辑区预览、`src/editor/` 那一层、界面上那些小件。📌 **2026-10-07 加五条**（`Paste as Plain Text` / `Select Line` / `Select Word` / `Select Sentence` / `Delete Word`）：键就是英文原文，中文那一列才是条目。⚠️ 「选当前词」那条**不能**用 `"Word"` 当键——那一格已经被查找条占了（`t("Word")` 回的是查找范围里的「全词」，`zh-ui.ts` 第 327 行），复用等于两处显示成同一句话却各自期待不同的东西。所以四条都用 `Select …` 把话说全 | `界面表` |
 | `i18n/zh-settings.ts`（454 行） | **偏好设置那十一页**（`ui/settings/panes/`）。⚠️ 这一片九成是**说明句**（`help=` 那一栏、`Note` 那一段），正常断句、末尾不加句号；提示条 / 报错 / 空态反过来，一律完整句子、**加句号** | `设置表` |
 | `i18n/zh-runtime.ts`（132 行） | `ui/use*.ts` 那些**钩子**与它们弹出来的消息、报错、状态栏提示 | `运行表` |
 
@@ -8256,7 +8289,7 @@ export interface CommandState {
 是个很自然的取消姿势。**插件那条路靠的正是这一条**——它同时挡住了
 "git 收到一条空提交信息"和"AI 拿空串当提问发到网上"。
 
-## `src/ui/useMenus.ts`（465 行）
+## `src/ui/useMenus.ts`（497 行）
 
 **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出，那边当时 1118 行）。
 入参 `MenuWiring`，出参 `{ disabledCommands, menuChecks, usingNativeMenu }`。
@@ -8325,6 +8358,22 @@ ProseMirror 恰好认它；`<b>` / `<i>` 它不认，所以 `B` / `I` 两颗坏�
 
 ⚠️ 这条判据**不覆盖**宿主那条死链路：`nota:format-key` 那个事件今天一次都没响过
 （`docs/07` BUG-49），所以今天所有格式化键位都是**这一条监听**在管。
+
+### 📌 2026-10-07：剪贴板那四颗键的**放行口**（`剪贴板键` 那个 `Set`）
+
+那条 `window` 监听里多了一层分叉：`edit.copy` / `edit.cut` / `edit.paste` /
+`edit.pastePlain` 四颗键，**目标是块里那颗 CodeMirror**（`目标.closest(".nota-code-cm")`，
+`目标 = e.target`）时**不进全局那条路**。
+
+⚠️ 理由：代码块里那颗 CM 有**自己的**整行剪贴板（没有选区时 `Ctrl+C`/`Ctrl+X`
+按整行来，`editor/code-block-cm.ts`），两边都跑就是**剪两次 / 写两遍剪贴板**。
+⚠️ 这一层**只管这四颗键**——块里其余的键（`Ctrl+B`、`Ctrl+/`…）照常走全局那条，
+所以判据写成了按 id 查表，不是"在代码块里就整条让开"。⚠️ 判据按 **id 不按按键**：
+`Ctrl+Shift+V`（`edit.pastePlain`）也要一起放行——在代码块里它更该走 CodeMirror 那条。
+⚠️ 认的是类名 **`nota-code-cm`**（只有代码块里那颗挂，`code-block-cm.ts` 的
+`editorAttributes`）：源码模式也是 `.cm-editor`，按那个认会把源码模式一起放进来。
+⚠️ 取 `目标` 之后先用 `typeof 目标?.closest === "function"` 挡一下再调（`e.target`
+不保证是个元素：组字期间可能是文本节点），不挡就是中文输入法打字时抛一声。
 
 ## `src/ui/useDialogs.ts`（197 行）
 
@@ -9335,6 +9384,111 @@ export const 视频视图 = $view(imageSchema.node, …);  // 一个 NodeView
 它们进宿主就等于替一个插件写实现。搬走之后**宿主一行 Slidev 的字样都没有**，
 而下一个想做预览的插件（比如把导出的 HTML 拿浏览器看）走的是同一条路。
 完整理由与取舍见 `docs/01-architecture.md` 的「Slidev 预览」那一节。
+
+---
+
+## `src/editor/select.ts`（337 行）
+
+**「选择」那一族命令**（2026-10-07 新建）：选当前行 / 选当前词 / 选当前句 / 选词并删
+（`Ctrl+L` / `Ctrl+D` / `Ctrl+E` / `Ctrl+Shift+D`；菜单里是「编辑 → 选择 ▸」那四条）。
+用户原话是照着 Typora 的习惯要的这几颗键。
+
+⚠️ **单开一个文件的理由与 `insert.ts` 同一条**：`command-table.ts` 那张表是一行一条的
+**映射**，而这几条要先看一眼光标在哪一段、再把"段内偏移"换算成文档位置——塞进那张表
+就成了清单里夹着算法。入口仍然只有 `command-table.ts` 那一个。
+
+⚠️ **三层分法，是为了让判据能被测试**（本仓没有 jsdom，建不出真的 `EditorView`）：
+
+| 组 | 吃什么 | 谁能测 |
+|---|---|---|
+| `选词区间` / `选句区间` | 一段**纯文本** ＋ 一个字符偏移 | `tests/select.test.ts`（25 条） |
+| `行区间` / `词区间` / `句区间` | 一棵 **ProseMirror 文档** ＋ 一个位置 | 同上（一个 `Schema` 就够了） |
+| `选行` / `选词` / `选句` / `删词` | 一个 `Editor` | 开窗目检（`docs/06` §5.55） |
+
+第二组是**薄薄一层换算**，一行都不许多做（把块首那几个字符的差补上）。
+
+⚠️ **第一组两种模式共用**：源码模式手里就是 Markdown 原文，本可以直接用 CodeMirror 的
+`wordAt`，不用的理由是"同一颗键在两种模式下选出来的东西**必须一样**"——否则用户迟早
+撞上"切一下模式，同一个词选得不一样"那种说不清是谁的错的差别（同 `insertText` 那条）。
+源码那边调的是**同一对函数**（`source-commands.ts`），只是**把范围限在当前行**
+（源码模式的行就是文件里的一行）。⚠️ 两边的"行"因此**本来就不是同一个东西**：源码那边
+用的是 CM 自己的 `selectLine`，**含末尾那个换行**；所见即所得这边是一段，不含。
+
+⚠️ **行内原子要占一个字符**：图片、公式、硬换行这些**行内叶子**在文档里各占一个位置，
+而 `textBetween` 默认给它们空串——不补的话"段内偏移"整体错位。所以传一个 `leafText`：
+硬换行给 `"\n"`（句读扫描要认它），其余给 `U+FFFC`（一个是**词**也不是句读的字符）。
+
+⚠️ **代码块给 `null`**（`spec.code`）：代码块的光标与选区住在里层那颗 CodeMirror 上
+（`code-block.ts` 的 NodeView），PM 这边设一个"在代码块节点里"的选区**屏幕上什么都不亮**
+——用户按下去像键坏了。块里的这几颗键归 `code-block-cm.ts` 自己那套。
+
+⚠️ 两个最常撞上的边界，都是"用户指着刚弄完的那一个，命令却去了下一个"：
+- **光标贴着词尾**（`hello|`）→ 选的是**刚过去**那个词（半开区间 `[from, to)` 里 `位` 不在词内，
+  靠 `挑词` 第 2 条捞回来）。⚠️ 这条判据是 `<=` 不是 `===`：空白不止一格时 `===` 会漏。
+- **光标贴着句号**（`你好。|`）→ 收**刚过去那一句**、连它自己的句号一起（`往回一句`）。
+
+⚠️ **句读**：中文那几个 ＋ 半角 `! ? ;` ＋ `\n`；**逗号顿号不算**（那是短语的界，
+认了它"选句"就退化成"选到下一个逗号"）。半角 `.` 要**躲开小数点**（`3.14`；不做这条
+"选句"会在小数中间断掉，而那种错不报错、只是选短了）。⚠️ 缩写（`Fig. 1`）**不躲**——
+那需要一部缩写词典，本仓不做，认它当句尾是可接受的偏差。⚠️ 换行**不跟着选进去**
+（选进去的话选中之后一敲字，下一行就被并上来了）。
+
+⚠️ **分词交给 `Intl.Segmenter`**（按运行环境的默认语言，本应用没有"文档语言"这个概念），
+建不出来（个别 ICU 会抛）退回 `词正则`（`\p{L}\p{N}_` 连成一段——中文会**整段**连成
+一"词"）。⚠️ 正因为分词结果**是环境给的**，用例只钉 ASCII、中文只钉"包含关系"。
+`挑词` 收 `Iterable` 而不是数组：源码那边喂进来的是整篇文本，**挑到就该停**。
+
+⚠️ 空区间/`null` 一律**什么都不做**（空段落、纯空白）：派一笔空事务反而会把撤销栈搞脏。
+⚠️ `删词`（`Ctrl+Shift+D`）**已经有选区时删的是那个选区**，不再去找词——用户既然已经选好了，
+"再把选区挪到附近某个词上"只会让他按第二下时删错东西（菜单上那一条判据与键位一致）；
+光标落在**删掉的那一段的开头**（中文写作里删完接着敲的往往是新词，落原地比跳走稳）。
+
+---
+
+## `src/editor/move-block.ts`（235 行）
+
+**`Alt+↑` / `Alt+↓`：上移 / 下移光标所在的那一块**（2026-10-07 新建；此前这两颗键的
+handler 一直没接，`key-conflicts.ts` 里那份 `故意不摘` 名单就是给它留的位子）。
+
+⚠️ 光标在**列表项**里就搬那**一个列表项**（找**最深**那层列表），别处搬**顶层块**。
+列表那一格是**特意**的：列表项是最常上下调的东西，而"在列表里按 `Alt+↑` 结果**整个
+列表**跳走了"是那种用户想不明白的错（屏幕上明明只动了一行字）。
+
+⚠️ **表格里什么都不做**：`Alt+↑` 在表格里的常见语义是"把这一行往上挪"，本仓没做行/列
+挪动（要认单元格、要重排对齐那一行），这时**照做"整个表格上移"才是最坏的**——用户想挪
+一行，跳走的是整张表。所以认了 `table` 就返回，菜单里那一条点了没反应，与"这一格没做"
+如实对上（`docs/07` 记着这笔账）。
+
+⚠️ **两头到边就是不动**（不绕回去、也不报错）：绕回去会让"按住连按几下"把内容送到文档
+另一端，而用户看不出来是哪一下越过去的；列表第一项往上也不会**掉出列表**变成普通段落
+（那是"提升层级"，不是"上移"）。
+
+⚠️⚠️ **这两颗键必须自己接**（`建移动键位`），不能等 `ui/useMenus.ts` 那条全局 accel：
+**`baseKeymap` 已经把它们绑给了 `joinUp`/`joinDown`**（合并相邻两段，由 `@milkdown/core`
+的 `keymap` 内部插件装进来），它会先跑并 `preventDefault()`，于是全局那条
+`if (e.defaultPrevented) return`（BUG-49 的正主）把整颗键放行——用户看到的不是"没反应"，
+而是**两段被并成一段**，比没反应难查十倍（与 BUG-58 的 `Ctrl+U` 是同一族）。用
+`handleKeyDown` 而不是 `.use()` 链里的键位表：它在 props 顺序上天然排在合并键位表
+**前面**（同 `table-input.ts`），不必去抢 priority。⚠️ 有**两条"认下但不动"**的分支：
+`event.defaultPrevented`（块里那颗 CodeMirror 已处理）与**到边了/表格里**——放行的话
+`joinUp` 就会接管。⚠️ 组字期间（`view.composing`）一概不碰（同 `auto-pair.ts`）。
+
+⚠️ **为什么分两层**（`算移动` 纯算术 ＋ `移动块视图` 落地）：同 `select.ts` 的理由——
+`tests/move-block.test.ts`（20 条）拿 `Schema` 手搭一棵文档就能把每条边界钉住。
+⚠️ 计划里三个坐标**属于两个不同的时刻**：`删` 是原文档坐标，`插到`/`光标`是**删完之后**
+的坐标（`Transform` 一笔事务里 `delete` 之后再 `insert`，第二个位置的基准就是删完那棵树）。
+混起来用的症状是"往下移一格之后内容落到了隔着一块的地方"——不报错，只是位置不对。
+⚠️ 两头的插点都跟着**邻块的身高**走不是块自己的：往下搬时邻往前挪了整整一个块的身位，
+写成 `块.nodeSize` 的症状是**两块不等高时内容落进邻块里面**（段落翻过一个代码块那种）。
+⚠️ 只派**一笔**事务：分两笔的话按一次 `Ctrl+Z` 只会退掉半程。
+
+⚠️ 落选区的判据是"**落点**接不接文字光标"，不是"搬的那一块是不是文本块"：搬一个列表项
+若落成 `NodeSelection`（整项高亮），用户接着一敲字**一整项就没了**；另一头原子块
+（分隔线、整张表）的落点压根不接文字，`TextSelection.create` 会当场抛，所以判成
+`NodeSelection`。`tr.scrollIntoView()` 跟着搬出去的那一块滚。
+
+⚠️ 源码模式那颗键走的是**第三条路**：`source-commands.ts` 调 CodeMirror 自己的
+`moveLineUp`/`moveLineDown`（那边 CM 的表里本来就有，且不与 `joinUp` 打架）。
 
 ---
 

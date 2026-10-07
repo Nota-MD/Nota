@@ -3505,7 +3505,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find; do
+for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find select move-block; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3640,6 +3640,19 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
+**五十八份、共 1451 条**（📌 **2026-10-07（「选择」那批 ＋ 代码块整行剪贴）现数**：
+**58 份一份一份跑完**（`for` 里 54 份 ＋ 单列那 4 份各自的开关），**全部 exit=0 / 0 失败**。
+本批的账**四处**：① 新加 `select` **25 条**（选词/选句那几组纯判据：光标贴词尾、
+贴句号、小数点、换行不选进去、代码块给 `null`——⚠️ **中文那几条只钉"包含关系"**，
+因为分词结果**是环境给的**）；② 新加 `move-block` **20 条**（`算移动` 的计划——
+列表项那一格 ／ 表格里给 `null` ／ 到边给 `null` ／ **两块不等高**时插点跟着邻块走）；
+③ `key-conflicts` **21 → 19**（`故意不摘` 那份名单撤了、那两条挪进了 `撞车键位`，
+名单少了两个成员——**键位只能有一个主人**）；④ `code-block-editing` **21 → 31**
+（补上整行剪贴那十组：空选区按整行 ／ **末尾那一行删的是它前面那个换行** ／
+有选区时交回默认 ／ 多光标的判据）。⚠️ **总数 1398 → 1451，份数 56 → 58**；
+⚠️ 这一遍也顺手补了一处**名册漏记**：`code-block-editing` 从进名册起就没出现在下面
+那张逐份表里（`for` 里有它，表里没有）。
+
 **五十六份、共 1398 条**（📌 **2026-10-07 现数**：56 份一份一份跑完，**全部 exit=0**；本批的账见下面那条 📌——`math-view` 拆成 `math-view` 31 ＋ `math-wiring` 20，`find` 42 → 48。⚠️ 上一版：**五十五份、共 1392 条**（📌 **2026-10-06 深夜（BUG-67 的账）当场把 55 份全跑了一遍**（`for` 里 51 份 ＋ 单列那 4 份各自的开关），**全部 0 失败**；那一版**新加一份** `find` **42 条**（查找与替换的纯逻辑与偏移：`在文本里找匹配` 的字面量 ／ 大小写 ／ 整词（⚠️ 汉字算词字符，用的是 `\p{L}` 不是 `\w`）／ 正则与**零宽**（`^`、`a*` 一律丢，且不许卡死）＋ **`算匹配` 的文档偏移**——⚠️ **这一组就是 BUG-67 的判据**：判据一律写成 `doc.textBetween(命中.start, 命中.end)` **必须正好是用户查的那串字**（不写成"命中数等于几"：那个 off-by-one 只动"压在哪个格子上"，命中数照样对）；再往下是插件状态机（就近命中 ／ 环形走位 ／ 文档变了重算与下标夹回 ／ 清除）／ 装饰的区间与"当前"类 ／ 替换当前与全部替换（**从后往前换**那条 `reverse`）。⚠️ **对照组**：把 `算匹配` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条当场红**（含「区间必须是 `4-5`」与「`textBetween` 读出来正好是那颗字」）——所以这一份真能抓住那个 bug，不是"绿着好看"）。上一版是下面那一行「五十四份、共 1350 条」。
 
 **五十四份、共 1350 条**（📌 **2026-10-06（第 101 项「代码块换成 CodeMirror 编辑」那批）当场把 54 份全跑了一遍**（`for` 一遍 ＋ 单列那 4 份各自的开关），**全部 0 失败**；本批**新加一份** `code-block-editing` **21 条**（`算最小改动` 的字符边界——emoji 不许被切成半个 ／ `分色` 的区间拼回去要逐字等于原文 ／ `回车续行` 的三档落点与"空括号展开"；⚠️ 它当场抓到一个真坑：`"([{".indexOf("")` 回的是 `0`，于是"光标停在一行纯空白后面"那一格会被当成"上一行以 `(` 结尾"、凭空多进一级）；⚠️ **总数 1329 → 1350，份数 53 → 54**。⚠️ 这一遍是拿 `tests/*.test.ts` 逐个 bundle ＋ node 跑出来的，`share-card` 那一份加了 `--loader:.svg=text`）：
@@ -3662,10 +3675,13 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 `file-kind` **14** · `html-block` **14** · `lang-icons` **14** · `focus-dim` **15** ·
 `chart-ticks` **12** · `video-view` **12** · `sidebar-resize` **12** ·
 `doc-typography` **11** · `status-metric` **10** · `tree-options` **9** ·
-`empty-doc-save` **8** · `window-title` **8** · `modal-trap` **9** · `tablist-keys` **6** · `key-conflicts` **21** ·
+`empty-doc-save` **8** · `window-title` **8** · `modal-trap` **9** · `tablist-keys` **6** · `key-conflicts` **19** ·
 `list-indent` **16** · `syntax-escape` **13** · `math-currency` **23** ·
 `table-tab` **58** · `bar-close` **13** · `caret-snapshot` **10** · `panel-cards` **37** ·
+`code-block-editing` **31** · `select` **25** · `move-block` **20** ·
 `context-menu` **30**（⚠️ 2026-10-04 开窗口检那天从 **27** 长到 30，见本节顶上新加的那一条 📌）。
+⚠️ `key-conflicts` **21 → 19**、`code-block-editing` **21 → 31**、`select` / `move-block` 是本批新增
+（📌 **2026-10-07**，见本节顶上那一条；⚠️ `code-block-editing` 此前**在 `for` 里、却漏在这张表里**，本批补上）。
 📌 **2026-10-07 现数：五十六份、共 1398 条**（一份一份跑，56 份 **exit=0**；`for` 里那份数是
 **五十二份**——`math-wiring` 刚加进去，它两条开关都不要）。**本批的账只有两处**：
 ① `tests/math-view.test.ts` 那一份 **1024 行**的测试**按职责切成两半**
@@ -5867,3 +5883,50 @@ podman exec -d -u 1000 -e DISPLAY=:95 -e GDK_BACKEND=x11 \
 `rgba(0,0,0,0)`（**没有**盖住框）。亮/暗、带/不带
 `WEBKIT_DISABLE_COMPOSITING_MODE`、长行折行**四种组合框都在**。
 读数与"别在这个假设上瞎改"那条写在 `docs/07` 的 BUG-68 行里。
+
+### 5.57 验「选择那四条 ＋ `Alt+↑/↓` ＋ 代码块整行剪贴 ＋ 纯文本粘贴」（2026-10-07，✅ **开窗按过**）
+
+**起窗**（容器里那块 `:99` 常年留着，这份记录沿用 §5.56 那套；⚠️ 主窗 id 是 **2097155**，
+`xdotool search --name Nota` 会多回两个（一个是 GTK 的隐藏窗、一个是探针浮层那个），
+**认那个 2097155**）：
+
+```sh
+R=/home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
+# ⚠️ 调试版二进制连的是 devUrl（§5.30）：5273 上必须有 vite，否则白屏
+podman exec -d -u 1000 -e DISPLAY=:99 -e GDK_BACKEND=x11 \
+  -e WEBKIT_DISABLE_COMPOSITING_MODE=1 -w "$R/src-tauri" tauri-dev ./target/debug/nota
+# 截图 / 按键 / 剪贴板（⚠️ 剪贴板那条要 -e LANG/LC_ALL=C.UTF-8，中文才进得去）
+podman exec -u 1000 -e DISPLAY=:99 tauri-dev import -window root /tmp/shot.png
+podman exec -u 1000 -e DISPLAY=:99 tauri-dev xdotool key --clearmodifiers ctrl+l
+podman exec -u 1000 -e DISPLAY=:99 tauri-dev xclip -selection clipboard -o
+```
+
+**四组判据与实拍**：
+
+| # | 怎么按 | 应该 | 实拍 |
+|---|---|---|---|
+| ① | 光标停在一段中间，`Ctrl+L` | 整段选中 | ✅ 所见即所得与源码模式**都过**；⚠️ 源码那边**含末尾换行**（`selectLine` 的既有语义），所见即所得不含 |
+| ② | 光标**贴着词尾**，`Ctrl+D` | 选**刚过去**那个词 | ✅（这条是最常撞的落点）；源码模式同一颗键选的同一个词 |
+| ③ | 光标**贴着句号**，`Ctrl+E` | 收**刚过去那一句**、带句号 | ✅ 源码模式选到的是 `甲句一。`（含句号） |
+| ④ | `Ctrl+Shift+D` | 删掉那个词（有选区时删选区） | ✅ 两种模式各一遍；删完光标落在删掉那一段的**开头** |
+| ⑤ | `Alt+↓` 再 `Alt+↑` | 搬下去、搬回来，**邻居一个字节不动** | ✅ 一轮往返之后文档与剪贴板里的原文逐字相同（这是本批最要紧的一条：`baseKeymap` 的 `joinUp` 没抢到） |
+| ⑥ | 编辑菜单 | 看得见「粘贴为纯文本」「选择 ▸（选当前行/词/句/删除当前词）」「上移该行」「下移该行」 | ✅（`选择 ▸` 那一层能飞出四条） |
+| ⑦ | 代码块里 `Ctrl+D` / `Ctrl+Shift+D` | 由**块里那颗 CodeMirror** 接 | ✅（选区归它管；⚠️ **菜单里点那四条在代码块里不动**——如实记在 `docs/07`） |
+| ⑧ | 代码块里空选区 `Ctrl+C` / `Ctrl+X` | 整行进剪贴板（`Ctrl+X` 删掉那一行） | ✅ **剪贴板内容逐字节对过**；⚠️ `Ctrl+X` 只少**一行**（第二遍被 `记按键` 挡掉了） |
+| ⑨ | `Ctrl+V` | 照常粘贴 | ✅（本应用的粘贴本来就只进纯文本） |
+| ⑩ | 菜单里点「粘贴为纯文本」 | …… | ⚠️ **弹了提示**：「系统不允许从菜单读剪贴板，请按 Ctrl+V 粘贴」——**环境如此**（WebKitGTK 把 `navigator.clipboard.readText()` 关在权限后面），不是这一条没做；写剪贴板那条路是通的 |
+
+⚠️ **两条量法上的教训**（这一轮真踩到的）：
+
+- **状态栏那颗 ⟨⟩ 图标的横坐标会随侧栏开合变**（侧栏关着时 ≈108、开着时 ≈162/171，
+  量到的两个值只差几像素，所以点之前先拍一张确认）。第一次切换编辑模式就是**点空了**，
+  于是 `Ctrl+E` 在所见即所得里跑了一遍、看起来像"源码模式选句坏了"——**先确认模式真的换过去了**，
+  再判键位。切换的可靠路子是**菜单**（视图 → 源码模式 = `Ctrl+/`；所见即所得 = `Alt+1`），
+  别拿坐标点那颗图标。
+- **块里那颗 CodeMirror 拿到焦点时 `xdotool windowfocus` 会把焦点打回外层**（§5.56 ①）：
+  每一条动作序列之前**重新点一下那个代码块**。
+
+⚠️ **本批没量到的**（不许当成已验）：代码块里**右键菜单**那几条（走的是另一条路）；
+`Alt+↑/↓` 在**表格里**（设计上就是"不动"，但没在真窗口里按过）；以及
+**别的 WebKit 版本上 `copy`/`cut` 是不是也派发两遍**（`记按键` 那层是按"会重复"设计的，
+不重复时第一遍照常落——两种环境下都对，但只在 WebKitGTK 上实测过）。

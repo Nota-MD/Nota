@@ -57,6 +57,7 @@ import {
   EditorView,
   ViewPlugin,
   drawSelection,
+  highlightActiveLine,
   keymap,
   type Command,
   type DecorationSet,
@@ -303,12 +304,37 @@ const 主题 = EditorView.theme({
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
     backgroundColor: "var(--bg-active)",
   },
+  // 当前行那一层淡底。
+  //
+  // ⚠️ **不能照抄源码模式那条 `--bg-subtle`**：代码块自己的底**就是**
+  // `--bg-subtle`（`editor-blocks.css` 里 `pre` 那条 `background`），同一个色
+  // 兑上去是一条**隐身规则**——看着像生效了、屏幕上一个像素都不变。
+  //
+  // 所以这里用**正文色的半透明**兑：`--fg` 按定义就是与底反差最大的那一极
+  //（浅色近黑、深色近白），混出来的一层在明暗两套、各套文档主题下都成立，
+  // 不用为一个新色号去 `base.css` 那两处再添一个变量。
+  // ⚠️ 别改成 `var(--accent)`：强调色在代码块里会被语法配色抢掉，而且那个色
+  // 已经归"拖列宽"那条 12% 的规则用着，两处撞脸会让人以为是同一件事。
+  //
+  // ⚠️⚠️ **两条规则是一对，缺一条就出错**（2026-10-07 开窗量出来的）：
+  //
+  // - **上面那条（`transparent`）不是多余的**：CM 自己带一条出厂样式
+  //   `.cm-activeLine { background: #cceeff44 }`（淡蓝 27%），而**它不看焦点**。
+  //   只要装了 `highlightActiveLine()`，**每一个没聚焦的代码块也会被它涂上**
+  //   ——文档里几个代码块就亮几行第一行。上面那条按 (0,2,0) 把它压掉。
+  //   ⚠️ 这一条**当初是量出来的**：截图上带子是 `rgb(95,104,109)`，
+  //   `0.267×#cceeff + 0.733×#383838` 正好等于它——不是"看着像"。
+  // - **下面那条（有焦点）挂在 `&.cm-focused` 上**，按 (0,3,0) 压住上面那条。
+  //   焦点是判据：没聚焦时**根本没有任何一行是"当前行"**。
+  "& .cm-activeLine": { backgroundColor: "transparent" },
+  "&.cm-focused .cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--fg) 5%, transparent)" },
 });
 
 /** 配对表。⚠️ CM 出厂那份**没有反引号**，代码块里必须有（`` ` `` 是常用符号）。 */
 const 配对表 = EditorState.languageData.of(() => [
   { closeBrackets: { brackets: ["(", "[", "{", "'", '"', "`"], before: ")]}:;>`" } },
 ]);
+
 
 export type 代码块编辑器 = {
   /** CM 的根元素，加进 `pre` 里当可见的那一层。 */
@@ -402,6 +428,9 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
         语言字段.init(() => 选项.初始语言),
         分色插件,
         drawSelection(),
+        // 当前行那一层淡底（配色在同文件那条 `主题` 里，**与源码模式不是一个色**，
+        // 理由见那条注释）。
+        highlightActiveLine(),
         换行舱.of(要换行() ? EditorView.lineWrapping : []),
         主题,
         EditorView.updateListener.of((u) => {

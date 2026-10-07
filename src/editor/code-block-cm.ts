@@ -374,7 +374,10 @@ const 主题 = EditorView.theme({
   ".cm-content": { padding: "0", minHeight: "0", caretColor: "var(--accent)" },
   ".cm-line": { padding: "0" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)", borderLeftWidth: "2px" },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+  // ⚠️⚠️ **第一条选择器要照 CM 自己那条写全**（理由与 `source.ts` 那处一字不差，
+  // 2026-10-07 一起量出来的）：写短了权重压不过 CM 出厂的聚焦色，画出来是它的
+  // 淡紫而不是这里的 `--bg-active`，且聚焦紫、失焦灰两种色。
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
     backgroundColor: "var(--bg-active)",
   },
   // 当前行那一层淡底。

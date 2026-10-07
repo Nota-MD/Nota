@@ -278,7 +278,13 @@ const notaTheme = EditorView.theme({
   },
   "&.cm-focused": { outline: "none" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)" },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+  // ⚠️⚠️ **第一条选择器要照 CM 自己那条写全**
+  // (`&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground`，
+  // 2026-10-07 开检查器量出来的)：只写到 `.cm-selectionBackground` 权重压不过
+  // CM 出厂的那条聚焦色，**聚焦时画出来是它的淡紫 `#d7d4f0`**，不是这里的
+  // `--bg-active`；而失焦那条权重相等、主题后到，落的又是 `--bg-active`——
+  // 于是同一个选区"聚焦紫、失焦灰"。写全之后两条都归这里的色。
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, ::selection": {
     backgroundColor: "var(--bg-active)",
   },
   // ⚠️ 这条规则**只有在 `highlightActiveLine()` 装进 `extensions` 之后才会命中**
@@ -297,8 +303,17 @@ const notaTheme = EditorView.theme({
   // ——也就是"越改越花"。这条按 (0,2,0) 把它压掉，下面那条按 (0,3,0) 再压住它。
   // ⚠️ 代码块那边有一条一模一样的配对（`code-block-cm.ts` 的 `主题`），
   // 改这里时**两处一起改**，不然一个地方淡蓝、一个地方是自己的色。
+  // ⚠️⚠️ **底色必须是半透明的，不许写回 `var(--bg-subtle)`**（2026-10-07 开检查器
+  // 量出来的）：CM 把选择层压在**行背景底下**（`.cm-selectionLayer` 的 z-index 是
+  // 负的，CM 按层序自己算的），行背景一旦不透明，**落在光标那一行上的选区就被整条
+  // 盖掉**——而拖选的结果永远落在光标那一行，看着就是"源码模式里选不中字"
+  // （选区其实在：`Ctrl+C` 拿得到、检查器里 `.cm-selectionBackground` 也量得到，
+  // 只是看不见）。半透明之后三层次序才对：淡底 ＜ 选中带 ＜ 文字。
+  // ⚠️ 配方与代码块那边（`code-block-cm.ts` 的 `主题`）**一字不差**，改一起改。
   "& .cm-activeLine": { backgroundColor: "transparent" },
-  "&.cm-focused .cm-activeLine": { backgroundColor: "var(--bg-subtle)" },
+  "&.cm-focused .cm-activeLine": {
+    backgroundColor: "color-mix(in srgb, var(--fg) 5%, transparent)",
+  },
   ".cm-gutters": {
     backgroundColor: "transparent",
     color: "var(--fg-faint)",

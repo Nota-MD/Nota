@@ -450,7 +450,7 @@ function 造(order: number): PMNode {
 
 /* ── 五、结构性证据：`strict` 没有一处接到列表 / 缩进 ────────────────── */
 
-组("五、为什么没有第二个开关：`create.ts` 里 `strict` 就没往这一族接");
+组("五、为什么没有第二个开关：`assemble.ts` 里 `strict` 就没往这一族接");
 
 /**
  * ⚠️ 这一组量的是**源码文本**，不是把 `createEditor` 跑起来（那要建整个
@@ -459,13 +459,15 @@ function 造(order: number): PMNode {
  *
  * ⚠️ 与那条测试一样，这份测试跑之前**必须先 `cd <仓库>`**（`process.cwd()`）。
  */
-const create源 = readFileSync(resolve(process.cwd(), "src/editor/create.ts"), "utf8");
+// ⚠️ 2026-10-07：读的文件从 `create.ts` 换成了 `assemble.ts`——`.use(标题回车成块(strict))`
+//    那一整段装配搬去了那边（`docs/07` 第 89 项），判据跟着它走。
+const create源 = readFileSync(resolve(process.cwd(), "src/editor/assemble.ts"), "utf8");
 const 含strict的行 = create源
   .split("\n")
   .map((行, i) => [i + 1, 行] as const)
   .filter(([, 行]) => /strict/i.test(行));
 
-测("`strict` 确实在 `create.ts` 里被用着（不然这一组就是空转）", () => {
+测("`strict` 确实在 `assemble.ts` 里被用着（不然这一组就是空转）", () => {
   const 有标题的 = 含strict的行.filter(([, 行]) => 行.includes("标题回车成块"));
   if (有标题的.length === 0) {
     throw new Error("没找到 `.use(标题回车成块(strict))`——这一组的判据失效了，先修它");

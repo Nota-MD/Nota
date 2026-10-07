@@ -401,13 +401,16 @@ function 形(部分: Partial<形状>): 形状 {
 
 /* ── 六、挂法：顺序错一点就静默失效 ───────────────────────────────────── */
 
-组("六、挂法（读 `create.ts` 量登记顺序）");
+组("六、挂法（读 `assemble.ts` 量登记顺序）");
 
-测("`create.ts` 里：`.use(math…)` → `.use(标美元数)` → `.use(收严美元)`", () => {
+测("`assemble.ts` 里：`.use(math…)` → `.use(标美元数)` → `.use(收严美元)`", () => {
   // ⚠️ 用 `process.cwd()` 而不是 `import.meta.url`：这份测试**先被 esbuild 打成
   // 一个 `.mjs` 再跑**，那一步之后 `import.meta.url` 指的是 `/tmp` 里那个文件
   // （`lang-icons.test.ts` 的文件头记着同一件事）。跑法里写明了 `cd <仓库>`。
-  const 源 = readFileSync(resolve(process.cwd(), "src/editor/create.ts"), "utf8");
+  // ⚠️ 2026-10-07：读的文件从 `create.ts` 换成了 `assemble.ts`——整条 `.use()`
+  //    链搬去了那边（`docs/07` 第 89 项）。顺序的判据在哪儿都成立，但"哪一行
+  //    在哪一行前面"只有真挂着那条链的文件答得了。
+  const 源 = readFileSync(resolve(process.cwd(), "src/editor/assemble.ts"), "utf8");
   const 数学 = 源.indexOf(".use(math.filter(");
   const 标 = 源.indexOf(".use(标美元数)");
   const 收 = 源.indexOf(".use(收严美元)");

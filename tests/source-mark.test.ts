@@ -2,6 +2,9 @@
  * 源码模式里**行内标记的开关**（BUG-57）：选中的文字已经加粗时再按 Ctrl+B
  * 应当**摘掉**那两颗星，而不是再包一层。2026-09-30 与
  * `src/editor/source-mark.ts` ＋ `src/editor/source.ts` 同批落地。
+ * ⚠️ 2026-10-07：第四组读的那份源文件从 `source.ts` 换成了
+ * `source-commands.ts`（命令那一块整块搬去了那边，`docs/07` 第 89 项）——
+ * "八族都换、链接没换"这条断言管的是**命令落点**，跟着那一块走。
  *
  * # 跑法
  *
@@ -272,9 +275,9 @@ function 应没带(文: string, from: number, to: number, before: string, after:
 
 /* ── 四、接线：八族都换了、链接没换 ─────────────────────────────────── */
 
-组("四、`source.ts` 的接线");
+组("四、`source-commands.ts` 的接线（2026-10-07 从 `source.ts` 搬出来）");
 
-const source源 = readFileSync(join("src", "editor", "source.ts"), "utf8");
+const source源 = readFileSync(join("src", "editor", "source-commands.ts"), "utf8");
 
 测("八族行内标记走的都是 `切换行内标记`（开关）", () => {
   const 命中 = source源.match(/切换行内标记\(view,/g) ?? [];

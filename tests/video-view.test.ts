@@ -145,11 +145,13 @@ function 读(相对: string): string {
 
 组("三、⚠️ 三处接线（读源码）");
 
-测("`create.ts` 真的 `.use(视频视图)` 了", () => {
+测("`assemble.ts` 真的 `.use(视频视图)` 了", () => {
   // ⚠️ 写完不接的症状：`![](a.mp4)` 还画着破图标，而代码"看起来写完了"。
-  const 源 = 读("src/editor/create.ts");
-  if (!源.includes('from "./video-view"')) throw new Error("create.ts 没有引 video-view");
-  if (!源.includes(".use(视频视图)")) throw new Error("create.ts 引了但没 .use()");
+  // ⚠️ 2026-10-07：读的文件从 `create.ts` 换成了 `assemble.ts`——整条 `.use()`
+  //    链搬去了那边（`docs/07` 第 89 项），"挂了没有"这件事只有那边答得了。
+  const 源 = 读("src/editor/assemble.ts");
+  if (!源.includes('from "./video-view"')) throw new Error("assemble.ts 没有引 video-view");
+  if (!源.includes(".use(视频视图)")) throw new Error("assemble.ts 引了但没 .use()");
 });
 
 测("`main.tsx` 真的引了 `video.css`", () => {

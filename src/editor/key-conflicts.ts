@@ -54,16 +54,24 @@
  * `toggleComment` 对 Markdown 更是**没有意义**（Markdown 没有注释语法，
  * 它套出来的是 HTML 注释，那不是"注释掉这一行"的语义）。
  *
- * # ⚠️ 故意**没有**摘的两条
+ * # ⚠️ 曾经有第二份名单（`故意不摘`），2026-10-07 撤了
  *
- * - `Alt-ArrowUp` / `Alt-ArrowDown`（CodeMirror 的 `moveLineUp` / `moveLineDown`）
- *   看起来和菜单里「编辑 → 上移该行 / 下移该行 `Alt+↑`」撞了，但**那两条在
- *   应用侧还没实现**（`App.tsx` 里没有它们的 handler，菜单上一直是灰的）。
- *   摘了就是**把唯一能用的那份拿掉**。
- *   📌 将来谁把 `edit.moveLineUp` / `edit.moveLineDown` 接上了，**必须回来
- *   把这两条加进 `撞车键位`**——否则那两条会一次移两行。
- * - `Escape`（`simplifySelection`）：应用侧的 `Esc` 不走这张表
- *   （沉浸模式是 `ui/useImmersive.ts` 自己收的），两边不冲突。
+ * 在那之前这里还挂着一份 `故意不摘`，只装着 `Alt-ArrowUp` / `Alt-ArrowDown`
+ * （CodeMirror 的 `moveLineUp` / `moveLineDown`）：那两条与菜单里「编辑 →
+ * 上移该行 / 下移该行」（`Alt+↑` / `Alt+↓`）撞着，**但应用侧当时还没有实现**
+ * （`ui/useCommandTable.ts` 里没有那两条 handler，菜单上是灰的），摘了就是
+ * 把唯一能用的那份拿掉。
+ *
+ * 2026-10-07 那两条接上了（`editor/move-block.ts` ＋ `ui/commands.ts` 那个
+ * 子菜单），于是**按当时写下的约定挪进了下面这份名单**——源码模式的移动改由
+ * 应用侧那条命令来做（`source-commands.ts` 的 `moveLineUp` / `moveLineDown`
+ * 直接调 CodeMirror 自己那两个函数，**行为一模一样**，只是主人换了一个：
+ * 现在"预览中禁止操作"那种全局闸门也管得住它）。
+ *
+ * ⚠️ 于是**只剩一份名单，没有"例外"这一档**：往后凡是撞车的，一律摘掉——
+ * 摘不动就说明那颗键不该在菜单里绑。⚠️ `Escape`（`simplifySelection`）不算
+ * 撞车（菜单里没有 `Esc` 这个 accel，沉浸模式那份是 `ui/useImmersive.ts`
+ * 自己收的），留在这里只是为了提醒"别以为漏了"。
  *
  * ⚠️ 键位写法照抄 CodeMirror（`"Shift-Mod-k"`），**不是**菜单那套
  * （`"Ctrl+Shift+K"`）。摘的时候是拿它去 `!撞车键位.has(b.key ?? "")`
@@ -79,23 +87,15 @@ export const 撞车键位 = new Set([
   // `preventDefault: true` 而应用侧又用着同一个键位的，漏了它症状最轻
   //（什么都不发生），所以它躲了整整四个月。
   "Mod-u",
+  // `Alt+↑` / `Alt+↓`（2026-10-07 接上"上移/下移该行"那天从第二份名单挪进来的，
+  // 见上）。⚠️ 它俩**今天**摘与不摘看着差不多（应用侧那条命令调的就是
+  // CodeMirror 自己那两个函数），摘掉是因为**键位只能有一个主人**：
+  // 两条实现各自的边界判据（哪一下算"到边了"）哪天有一点点不一样，症状就是
+  // "同一个动作在菜单里和键上结果不同"——而 CodeMirror 那条还会按它自己的
+  // 时机 `preventDefault`，让应用侧连"这颗键我到底管没管"都说不清。
+  // ⚠️ 相比之下"只跑一遍"这件事**不是**理由：CodeMirror 那条跑成了会
+  // `preventDefault`，`ui/useMenus.ts` 那条闸就不放应用进去；跑不成（在最上头）
+  // 它不标记，应用侧接着跑——那一遍调的仍是同一个函数，白跑一趟而已。
+  "Alt-ArrowUp",
+  "Alt-ArrowDown",
 ]);
-
-/**
- * 撞了车、但**故意照原样留着**的那几条——"要不要摘"的另一种答案。
- *
- * 它俩单独列出来是为了让 `tests/key-conflicts.test.ts` 能把账做平：那份测试要
- * **每一处撞车都在某一份名单里**（见文件头那张表），否则"漏一条"就查不出来了。
- * 而漏一条的症状正好是 BUG-58 那种——静默失灵，没人看得见。所以宁可在这里写明
- * "这两条是**知道**它撞、**决定**留着"，也不让它们挂着一句不存在的理由。
- *
- * ⚠️ **这两条是临时的**：`App.tsx` 里还没有 `edit.moveLineUp` /
- * `edit.moveLineDown` 的 handler（菜单上是灰的），摘了就是**把唯一能用的那份
- * 拿掉**。谁把它们接上了，就得把这两条从这份名单**挪进 `撞车键位`**——那时
- * CodeMirror 与应用的移动会一次移两行。
- *
- * ⚠️ `Escape`（`simplifySelection`）**不在这份名单里**，因为它压根不算撞车：
- * 菜单里没有 `Esc` 这个 accel（沉浸模式那份是 `ui/useImmersive.ts` 自己收的，
- * 不走菜单表）。文件头记着它，只是提醒"别以为漏了"。
- */
-export const 故意不摘: ReadonlySet<string> = new Set(["Alt-ArrowUp", "Alt-ArrowDown"]);

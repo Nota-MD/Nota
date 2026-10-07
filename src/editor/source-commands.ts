@@ -24,7 +24,7 @@
  * 再讲一遍**，两处讲同一件事就是两处会漂。
  */
 
-import { redo, undo } from "@codemirror/commands";
+import { moveLineDown, moveLineUp, redo, selectLine, undo } from "@codemirror/commands";
 import type { EditorView } from "@codemirror/view";
 
 import { atxPrefixRe } from "@/editor/atx";
@@ -38,6 +38,9 @@ import { 拆前置块, 换前置块, 新建前置块模板 } from "@/editor/fron
 // 行内标记的**开关**判据（纯函数，2026-09-30 分出来的，BUG-57）。判据是纯
 // 字符串的事，与视图无关，所以单开一个文件好让 `tests/source-mark.test.ts` 直接测。
 import { 试摘定界符 } from "@/editor/source-mark";
+// 「选择」那一族（选行/词/句、选词并删）的**判据**。⚠️ 与所见即所得那边**同一个
+// 文件**：同一颗键在两种模式下选出来的东西必须一样，理由写在 `select.ts` 文件头。
+import { 选词区间, 选句区间 } from "@/editor/select";
 // 界面文案。⚠️ 源码模式里有几处**写进文档的占位词**（`t("Bold")` 那几串：
 // 空选区按下加粗时插进正文的就是它），见下面用到的那些行——
 // 用户自己的正文当然不进翻译。
@@ -393,6 +396,71 @@ export function applyCommand(
     case "clearFormat":
       清除行内标记(view);
       return true;
+    // 「选择」这一族（2026-10-07）。⚠️ **判据与所见即所得共用**（`select.ts`
+    // 第一组的两个纯函数）——同一颗键在两种模式下选出来的东西必须一样，
+    // 不然用户迟早撞上"切一下模式，同一个词选得不一样"（`select.ts` 文件头）。
+    //
+    // ⚠️ **选行用 CodeMirror 自己的**（它是 `StateCommand`，直接喂 `view`），
+    // 词/句用共用的判据：行是"一行"这个概念，CM 的 `selectLine` 在这里
+    // 恰好就是选中整行**连同末尾那个换行**；所见即所得那边选的是段落的
+    // 内容、**不含**它后面的分隔。这点差别留着（两边的"行"本来就不是同一个
+    // 东西：这边是文本行，那边是段落），如实记在这里。
+    case "selectLine": {
+      selectLine(view);
+      return true;
+    }
+    // ⚠️ 词/句**只在这一行里找**：所见即所得那边，判据的输入是"光标所在那个
+    // 文本块"（PM 树的边界天然把句子圈住了），源码模式里最贴近那个东西的
+    // 就是当前这一行。拿整篇去扫的话，一句跨行的话会一次选中好几行——而
+    // 那边的"块"到不了别的段落去。
+    case "selectWord":
+    case "selectSentence": {
+      const 头 = view.state.selection.main.head;
+      const 行 = view.state.doc.lineAt(头);
+      const 区 =
+        name === "selectWord"
+          ? 选词区间(行.text, 头 - 行.from)
+          : 选句区间(行.text, 头 - 行.from);
+      if (区 && 区.from < 区.to) {
+        const from = 行.from + 区.from;
+        const to = 行.from + 区.to;
+        view.dispatch({ selection: { anchor: from, head: to } });
+      }
+      return true;
+    }
+    // 选当前词并删（`Ctrl+Shift+D`）。⚠️ **已经有选区时删的是那个选区**，不再
+    // 去找词——与所见即所得那边同一条判据（`select.ts::删词`），理由写在那里。
+    case "deleteWord": {
+      const 选 = view.state.selection.main;
+      const 区 = 选.empty
+        ? (() => {
+            const 行 = view.state.doc.lineAt(选.head);
+            const 词 = 选词区间(行.text, 选.head - 行.from);
+            return 词 && { from: 行.from + 词.from, to: 行.from + 词.to };
+          })()
+        : { from: 选.from, to: 选.to };
+      // ⚠️ 光标落在删掉那一段的**开头**（不是结尾）：所见即所得那边同一条，
+      // 理由写在 `select.ts::删词`。
+      if (区 && 区.from < 区.to) {
+        view.dispatch({
+          changes: { from: 区.from, to: 区.to },
+          selection: { anchor: 区.from },
+        });
+      }
+      return true;
+    }
+    // `Alt+↑` / `Alt+↓`（2026-10-07）：**用 CodeMirror 自己那两条**。它们本来就
+    // 在 `defaultKeymap` 里（这边是纯文本，"把这一行挪上去"没有所见即所得那边
+    // 那些歧义——列表不列表、表格不表格，这里全是字符），所以键位也归它，
+    // 菜单那两条只是**补一条通路**（所见即所得那边键位得自己接，见 `move-block.ts`）。
+    case "moveLineUp": {
+      moveLineUp(view);
+      return true;
+    }
+    case "moveLineDown": {
+      moveLineDown(view);
+      return true;
+    }
     // 用文本替换选区（空串 = 删掉选区）。「粘贴」把剪贴板文本插进来、
     // 「剪切」复制成功之后删掉选中那段，都走这一条。
     // ⚠️ 这里是**纯文本**插入：源码模式手里就是 Markdown 原文，所以剪贴板里

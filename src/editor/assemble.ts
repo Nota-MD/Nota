@@ -168,6 +168,11 @@ import { 配对处理 } from "./auto-pair";
 // 就加一行）。⚠️ 它抢的也是 `Tab`，所以**必须排在 `indent` 前面、`配对处理`
 // 后面**——理由与那张表在 `./table-tab` 的文件头。
 import { 表格Tab } from "./table-tab";
+// **`Alt+↑` / `Alt+↓`：上移 / 下移光标所在的块**（2026-10-07 接上；菜单里那两条
+// `edit.moveLineUp` / `edit.moveLineDown` 走 `command-table.ts`，这里挂的是键位）。
+// ⚠️ 它抢的键 `baseKeymap` 也绑着（`joinUp` / `joinDown`），所以**必须自己接**
+// ——整条经过在那个文件的文件头与 `.use()` 那一段。⚠️ 只读实例不挂。
+import { 移动键位 } from "./move-block";
 // **Emoji**（`:smile:` → 😄 的短代码替换 ＋ 打 `:smi` 弹候选的补全面板）。
 // ⚠️ 两条都是"只动正在敲的那几个字符"：替换只在敲下词尾空白那一下发生，
 // 面板**只画不改**（`Plugin.view` ＋ 挂在 body 上的 fixed 浮层，文档树一个
@@ -474,6 +479,16 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // 就是 `Tab`，而且它不认表格（不分位置地往格子里塞两颗空格，那两颗会写进
     // 文件）。这一条只管"选区在表格某一行里"，其余一律放行——见 `./table-tab`。
     .use(表格Tab())
+    // **`Alt+↑` / `Alt+↓`：上移 / 下移光标所在的块**（2026-10-07）。
+    // ⚠️ **必须自己接这一颗**：`baseKeymap` 把这两颗绑给了 `joinUp` / `joinDown`
+    // （合并相邻两段），它会先跑、还 preventDefault，全局那条 accel
+    // （`ui/useMenus.ts` 的 `e.defaultPrevented` 闸）于是整颗放行——不接的话
+    // 用户按下去看到的是"两段被并成一段"。整条经过写在
+    // `move-block.ts::建移动键位` 的文件头。
+    // ⚠️ **只给可编辑实例**（与 `markHint` 同一条）：只读那两份（分屏预览、
+    // 导出用的离屏实例）没有"用户在按键盘"这回事，而且 PM 只读时本来也不发
+    // 这些键——挂上去只是让阅读的人多问一句"预览里也会搬吗"。
+    .use(readOnly ? [] : [移动键位])
     .use(indent)
     .use(trailing)
     .use(instantRender)

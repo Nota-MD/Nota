@@ -1,6 +1,6 @@
 # 01 · 运行时架构
 
-> 最后同步：2026-09-26
+> 最后同步：2026-10-07
 
 本文讲**运行时**：进程怎么起来、状态放在哪、两条通道各有什么、插件在哪一层被装配。
 逐文件的接口签名在 `docs/02-modules.md`，字段级的数据结构在 `docs/03-data-structures.md`。
@@ -889,10 +889,12 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 编辑器的活全在 `ui/EditorPane.tsx`，文件树的活在 `ui/Sidebar.tsx`。
 
 ⚠️ 注¹：2026-09-23 起"真相"**不再恒指 ProseMirror 文档树**。`EditorPane` 按
-`settings.view_mode` 分派三种模式——`wysiwyg` 装 Milkdown（ProseMirror 树是真相）、
+`viewMode` 分派三种模式——`wysiwyg` 装 Milkdown（ProseMirror 树是真相）、
 `source` / `split` 装 CodeMirror（**它的 `Text` 是真相**，`split` 右边那份 Milkdown
 只是只读投影）。所以那条不变的规矩要改写成：**同一时刻只有一份权威文本**，
 它由 `mode` 决定；分屏里**永远只往右流**，预览不回写（理由见 `05` §3.1）。
+⚠️ 那个值 2026-10-07 起来自 `ui/useFileKindMode.ts`（**会话内状态、不落盘**，
+默认每次启动都是 `wysiwyg`），不再是 `settings.view_mode`——理由见 `03` §5.2 末段。
 
 ### `App.tsx` 持有的 state
 
@@ -900,7 +902,7 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 |---|---|---|
 | `docs` | `Document[]` | 标签栏、状态栏、`activeDoc` 的推算 |
 | `activeId` | `DocId \| null` | 决定渲染 `EditorPane` 还是 `Home` |
-| `settings` | `Settings \| null` | 外观两条界面轴 + `document_theme`（文档主题 id）、`content_width`、`confirm_unsaved`、`view_mode`（⚠️ **编辑模式偏好，不是第三条外观轴**，见 `03`） |
+| `settings` | `Settings \| null` | 外观两条界面轴 + `document_theme`（文档主题 id）、`content_width`、`confirm_unsaved`……⚠️ **编辑模式不在这里**（2026-10-07 起是会话内状态，住在 `ui/useFileKindMode.ts`，见 `03` §5.2 末段） |
 | `workspace` | `string \| null` | 侧栏文件树、`refreshTree` 的开关 |
 | `tree` | `TreeNode[]` | 侧栏文件树 |
 | `plugins` / `panels` | `PluginInfo[]` / `PluginPanel[]` | 右侧插件栏的「插件」页签（清单）、`Home` 的插件状态列。⚠️ **当前是哪一页签、每页拉到什么内容**都不在这里——都在 `PluginDock` 内部（内容每页一份、还有请求序号），见 `docs/04` §状态 |

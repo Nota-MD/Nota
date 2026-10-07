@@ -1,6 +1,6 @@
 # 03 — 数据结构、常量与两条真相口径
 
-> 最后同步：2026-09-26
+> 最后同步：2026-10-07
 
 这份文件是下面这些东西的**唯一权威**：`AppState` 的锁序、文档模型（`Document` /
 `DocId` / `DocumentStore`）、`Settings` 与四条外观轴、插件清单
@@ -281,7 +281,6 @@ pub struct Settings { … }
 | `ui_style` | `String` | `"auto"` | **轴一**：界面风格的 **id**（设计语言）。⚠️⚠️ **2026-09-26 起是 `String` 不是枚举**（用户：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」）——取值**开放**，内置八档的 id 表在 `ui_styles.rs::BUILTIN_IDS`（`auto` / `adwaita` / `ghub` / `plasma` / `macos` / `windows` / `windows10` / `yaru` / `yaru-blue`），此外还能是用户自己起的文件名。⚠️ **与 `document_theme` 同一个口径**：认不出的 id **不退回默认档**，`<html>` 上照写，外壳落到 `:root` 默认样式——「外观」页把它补成 `（找不到「…」）` 选项，让这件事看得见。⚠️ 换成 `String` 的好处是**老设置文件里一个不认识的 id 不会让整份 `settings.toml` 读不进来**（枚举会），风险是**拼错再无拦截**。完整理由在 `settings/mod.rs::DEFAULT_UI_STYLE` |
 | `ui_mode` | `UiMode` | `UiMode::Auto` | **轴二**：明暗 |
 | `document_theme` | `String` | `""` | **轴三**：文档主题的 **id**（**就是 `.css` 的文件名去掉后缀**，如 `minimal`）；**空串 = 无主题**。⚠️ 它是**键不是显示名**——内置三套（`minimal` ↔ 极简 / `adwaita` ↔ Adwaita / `latex` ↔ LaTeX）的对应关系在 `themes.rs` 的 `BUILTIN` 表里。⚠️ **2026-09-26 内置那批换过**（六套 → 三套），所以老机器上这个字段可能是**悬空 id**：那时主题静默退回"无主题"，设置页会把 id 原样显示并注明它没生效。⚠️ 除内置外**只在 `~/.config/nota/themes/` 里扫**（见 §9.4），所以换机器、或者文件被删了，也可能"这个主题没了" |
-| `view_mode` | `ViewMode` | `ViewMode::Wysiwyg` | ⚠️ **不是第四条外观轴**（见 §5.2 末段）：`Wysiwyg` / `Source` / `Split`，决定编辑区摆几个窗格、谁的话算数 |
 | `ui_font_size` | `u32` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
 | `content_width` | `u32` | `760` | 内容区宽度上限（px），即「正文宽度」。⚠️ 它只管**宽度**，不管对齐——正文列靠左，见 `docs/04` 的编辑器一节 |
 | `confirm_unsaved` | `bool` | `true` | 关闭有未保存改动的文档时是否询问 |
@@ -292,6 +291,13 @@ pub struct Settings { … }
 `#[serde(default)]` 在**结构体上**，所以老配置文件缺哪个字段就用哪个字段的默认值；
 `load_from` 只在**文件存在但解析不了**时报错（静默回默认会让人以为设置丢失了），
 文件不存在**不算错误**——首次启动就是这种情况。
+
+⚠️ **`view_mode` 2026-10-07 从这张表里退休**（字段与 `ViewMode` 枚举一起从
+`settings/mod.rs` 删掉）：编辑模式改成**会话内状态**、不落盘（用户原话
+「请设置默认启动为 WYSIWYG」）——每次启动一律所见即所得，本次会话里切到
+源码/分屏照常，关掉重开回到所见即所得。老设置文件里残留的 `view_mode = "…"`
+**被 serde 忽略**（§5.3 有一条回归用例钉着这件事）。值本身没消失，但只活在
+前端类型里，见 §5.2 末段。
 
 
 ### 5.1b 界面语言：存的是**设定**，不是结果
@@ -393,9 +399,16 @@ pub struct Settings { … }
 两者之间没有任何耦合：任何模式 × 任何外观都成立。⚠️ 它不该写进 `theme.css`
 那种地方，也不算进下面这张"轴"表。
 
+⚠️⚠️ **2026-10-07 起它连"设置里的字段"都不是了**：`settings.view_mode` 已退休
+（用户原话「请设置默认启动为 WYSIWYG」），模式改成**会话内状态、不落盘**——
+每次启动一律 `wysiwyg`，Rust 侧**没有这个枚举了**，`src/bridge/types.ts` 那份
+`ViewMode` 是唯一一份。默认值只有一处：`ui/useFileKindMode.ts` 里那条
+`useState("wysiwyg")` 的初值（那条 hook 兼任"用户选的那一档"的家，见 `docs/02`）。
+切换的四条入口（菜单「视图」三条 ＋ 状态栏那颗 `</>`）都走它的 `设模式`。
+
 | 取值 | 编辑区 | 谁的话算数 |
 |---|---|---|
-| `Wysiwyg`（默认） | 所见即所得（Milkdown） | Milkdown |
+| `Wysiwyg`（默认，**每次启动都是它**） | 所见即所得（Milkdown） | Milkdown |
 | `Source` | Markdown 原文（CodeMirror） | CodeMirror |
 | `Split` | 左原文（可编辑） + 右预览（**只读**） | CodeMirror |
 
@@ -406,26 +419,29 @@ pub struct Settings { … }
 `Windows10`（Windows 10 原生，**只能手选**——Win10 与 Win11 的 UA 是同一串
 `Windows NT 10.0`，`auto` 探不出来）、`Yaru`、`YaruBlue`。
 `UiMode` 的取值：`Auto`、`Light`、`Dark`。
-`ViewMode` 的取值：`Wysiwyg`、`Source`、`Split`。
+`ViewMode` 的取值：`Wysiwyg`、`Source`、`Split`（⚠️ **只在前端**：
+2026-10-07 起它不是设置里的字段，见 §5.2 末段）。
 
 ### 5.3 "存法即接口"：kebab-case 落盘
 
-三个枚举都带 `#[serde(rename_all = "kebab-case")]`，所以文件里写的是：
+设置文件里带 `#[serde(rename_all = "kebab-case")]` 的枚举现在**只剩一个**
+（`UiMode`），所以文件里写的是：
 
 ```toml
 ui_style = "macos"
 ui_mode = "dark"
-view_mode = "split"
 ```
 
-而**不是** `"Macos"` / `"Dark"` / `"Split"`。这条不是审美问题：
+而**不是** `"Macos"` / `"Dark"`。这条不是审美问题：
 
 - 这串字符串**就是接口**——用户手改 `settings.toml` 时要能猜到怎么写；
 - 前端的类型也是同一批串：
   `export type UiStyle = "auto" | "adwaita" | "ghub" | "macos" | "plasma" | "windows" | "windows10" | "yaru" | "yaru-blue";`
   `export type UiMode = "auto" | "light" | "dark";`
   `export type ViewMode = "wysiwyg" | "source" | "split";`
-  （`src/bridge/types.ts`），改一处就要改另一处。
+  （`src/bridge/types.ts`），改一处就要改另一处。⚠️ `ViewMode` 那一条 2026-10-07
+  **只剩前端这一处**了（Rust 侧那份已删），但写法照旧——它落的是快捷键表、
+  菜单 id 那些**别的**字符串接口，不是设置文件。
 
 ⚠️⚠️ **这节的 `kebab-case` 不是全仓通例**（2026-09-27 补）：`settings/appearance.rs`
 里那**两个**枚举走的是 **`snake_case`（下划线）**——`ToolbarMode`（`always` / `hover` /
@@ -437,13 +453,16 @@ view_mode = "split"
 
 加一条新轴上的新值时，**三处缺一不可**：`settings/mod.rs` 的枚举、`src/styles/theme.css`
 （以及 `applyTheme.ts` 需要的解析分支）、`docs/04-ui-map.md` 的外观一节。
-⚠️ `view_mode` 加值时是**另一组三处**：`settings/mod.rs`、`src/bridge/ipc.ts`、
-`src/ui/commands.ts` 的「视图」栏（外加 `docs/04`）。
+⚠️ `view_mode` 加值时是**另一组、而且 2026-10-07 起全在前端**：`src/bridge/types.ts`
+的类型、`ui/view-modes.ts` 的表（`Record` 会当场报错，它是这条规矩剩下的唯一一处
+编译期保险）、`ui/commands.ts` 的「视图」栏三条（id / label / 快捷键）、
+`ui/useMenus.ts` 的 `menuChecks` 三条（外加 `docs/04`）。
 
-⚠️ **默认值也要三处一致**：Rust 的 `impl Default`、前端 `App.tsx` 里的兜底
-（`settings?.view_mode ?? "wysiwyg"`）、以及那条用例
-（`编辑模式也走_kebab_而且默认是所见即所得`）。默认值错了的症状是"老用户升级后
-打开文件发现进了别的模式"——而他的设置文件里根本没有这一项。
+⚠️ **默认值现在只有一处**（2026-10-07 改）：`ui/useFileKindMode.ts` 里那条
+`useState("wysiwyg")` 的初值——Rust 的 `impl Default` 与前端的兜底读写随
+`view_mode` 一起退休了。⚠️ 老设置文件里残留的 `view_mode = "…"` **必须继续
+被忽略**（那是"用户升上来发现进了别的模式"的另一条路），`settings/mod.rs` 那条
+`老设置文件里没有那七张表时全是默认值` 的用例故意在样例里留了这一行钉着它。
 
 ### 5.4 读写口径
 

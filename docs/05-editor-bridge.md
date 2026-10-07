@@ -1,6 +1,6 @@
 # 05 — 编辑器桥：Milkdown 装配、双向通道与大纲
 
-> 最后同步：2026-09-26
+> 最后同步：2026-10-07
 
 本文讲**编辑区那一半**：为什么是 ProseMirror 系、`src/editor/create.ts` 到底装了什么、
 **三种编辑模式**（所见即所得 / 源码 / 分屏，见 §3.1 与 §2.5）、React 与编辑器的边界画在哪、
@@ -369,10 +369,15 @@ Milkdown（ProseMirror）自己拥有那块 `contenteditable`；React 只负责"
 
 用户 2026-09-23 定的顺序是「先重做菜单，**然后三种编辑模式**，然后 slidev 插件」。
 ⚠️ 那三件**都已结清**（第三件 2026-09-25 搬成了插件，见 `docs/04` §2.8）。
-模式的取值落在 `settings.view_mode`（`ViewMode`，`docs/03` §设置），
+模式的取值是前端那一个 `ViewMode`（`docs/03` §5.2 末段），
 编辑区按它摆一到两个窗格：
 
-| `view_mode` | 左 | 右 | 谁的话算数 | 编辑器 |
+⚠️ **2026-10-07 起它不再是设置项**：原来落在 `settings.view_mode`，现在那条字段
+已退休（模式改成**会话内状态、不落盘**，每次启动一律 `wysiwyg`）。值是同一批，
+"谁的话算数"那几条口径一个字没变——变的只是它**住在哪**（`ui/useFileKindMode.ts`
+的 `useState`）与**能不能跨会话记住**（不能）。
+
+| 模式 | 左 | 右 | 谁的话算数 | 编辑器 |
 |---|---|---|---|---|
 | `wysiwyg`（默认） | 所见即所得 | — | Milkdown | `createEditor()` |
 | `source` | Markdown 原文 | — | CodeMirror | `createSourceEditor()` |

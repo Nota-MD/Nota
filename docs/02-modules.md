@@ -1,6 +1,6 @@
 # 02 · 逐文件接口参考
 
-> 最后同步：2026-09-26
+> 最后同步：2026-10-07
 
 **公开函数的签名以本文为准，本文与代码不一致时以代码为准并立即改本文。**
 本文只讲"这个函数做什么、参数什么意思、失败会怎样"，不讲为什么这样设计——
@@ -224,10 +224,10 @@
 | `ui/chart-ticks.ts` | **图上的刻度**（118 行，2026-09-27）：`读刻度` ＋ `推纵刻度` ＋ `格式化数`。⚠️ **两条轴分工不同**——纵轴只有数据知道上下界（`points` 自己归一化），横轴只有插件知道（序号对应哪一刻）。⚠️ 位置是 **0~1 的比例**不是像素。⚠️ 面板那边只能是 **HTML 覆盖层**、不能是 SVG `<text>`（`preserveAspectRatio="none"` 会把文字一起拉变形）。⚠️ `share-card.ts` 只从这里 import `格式化数` 与类型，**纵刻度的推法各写各的**。用例 **12** 条在 `tests/chart-ticks.test.ts`（钉着"`格式化数(109.5)` 曾经写成 `11`"那条**差十倍**的回归） |
 | `ui/heatmap.ts` | **长期记录的热力图**（256 行，2026-09-27）：Contribution Graph 那种一格一天的小方格（用户「类似 Contribution Graph 那样的热力图，记录长期数据。仅记录打字数」）。⚠️ **只算格子的位置，不画**（同 `chart-ticks.ts` 的分工：插件说数据、这里说版式、`PanelBody.tsx` 画），所以"哪一格是哪一天"能脱离 React 单独测。⚠️ 三条口径：**一列 = 一周、从周一起** · **最后一列到 `止` 那天为止、下面留空**（把未来几天画成"0 字"是编数据） · **缺的那些天当 0 不当"没有"**。⚠️ 它**不认识"今天"**（右端由插件给的 `止` 定）。⚠️ 月份标签走 `Intl`、**不写死「月」**。用例 **20** 条在 `tests/heatmap.test.ts` |
 | `ui/Home.tsx` | 没有文档时那一屏 |
-| `ui/StatusBar.tsx` | **下栏**（**412 行**；2026-09-30 照 Typora 重做，同日晚又按五张参考图补了悬停那半）：**左手两颗开关**（侧栏开合 ／ 源码-所见即所得）＋ **右手那一格统计量 ＋ 它两侧悬停才出现的两颗按钮**（`A✓` 拼写检查、`⌄` 字数统计菜单）＋ 强制专注余额那一格（只在跑着时出现）。⚠️ 原来那几格（文件路径、`● 已修改`、模式名、`严格`、字符数、行数、约几分钟）用户答「其余全删」——**数一个没少**，只是各自有落点（`● 已修改` 进了窗口标题、四个数进了那个小菜单）。⚠️ 四颗按钮**都不自己存状态**（`sidebarOpen` / `settings.view_mode` / `appearance.status_metric` / `editor.spellcheck`），只画形状、把点击原样交回去。⚠️ **图3 那个语言列表故意没做**（WebKitGTK 没有枚举词典的接口），那个菜单只有两项。⚠️ **2026-10-04 最右端补了第五颗：那颗 ×**（`.status-btn.statusbar-close`，第 49 项）——`onHide` prop，落点是 `useStatusBar` 递进来的 `设界面`（＝ `App.tsx` 那个 `setChrome`），**只关不开**（写 `!` 的话，× 不在屏幕上的那种状态下点它会**把栏打开**）。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`），也**不省**在没文档的时候（它说的是"这一栏画不画"）。⚠️ 位置必须**在 `.status-right` 里面**（`space-between` ＋ 第三个孩子会把字数挤到中间） |
-| `ui/useStatusBar.ts` | **状态栏那一堆 props 的接线**（**108 行**，2026-09-30 晚从 `App.tsx` 搬出——那次 `App.tsx` 1003 行越了 1000 行硬线）：四格值分别读 `settings.appearance.status_metric` / `settings.editor.spellcheck` / `settings.view_mode` / `sidebarOpen`，写回各给一条回调。⚠️ **它一个 `useState` 都没有**（"不要第三个真相"在这一层的落法）。⚠️ 两条 patch 都先把那张表铺开（`updateSettings` 只做顶层浅合并）。⚠️ 返回类型是 `ComponentProps<typeof StatusBar>`，**不手抄**。⚠️ **2026-10-04 多收一格 `设界面`**（第 49 项那颗 ×）：`App.tsx` 交给它的**就是那个 `setChrome`**，所以 × 与菜单「视图 → 状态栏」写的是同一格。⚠️ **故意让调用方把 setter 递进来、不在这儿铺一遍 `appearance`**——铺了就是同一个设置的第二条写路 |
+| `ui/StatusBar.tsx` | **下栏**（**412 行**；2026-09-30 照 Typora 重做，同日晚又按五张参考图补了悬停那半）：**左手两颗开关**（侧栏开合 ／ 源码-所见即所得）＋ **右手那一格统计量 ＋ 它两侧悬停才出现的两颗按钮**（`A✓` 拼写检查、`⌄` 字数统计菜单）＋ 强制专注余额那一格（只在跑着时出现）。⚠️ 原来那几格（文件路径、`● 已修改`、模式名、`严格`、字符数、行数、约几分钟）用户答「其余全删」——**数一个没少**，只是各自有落点（`● 已修改` 进了窗口标题、四个数进了那个小菜单）。⚠️ 四颗按钮**都不自己存状态**（`sidebarOpen` / `App.tsx`→`ui/useFileKindMode.ts` 的**会话内**模式 / `appearance.status_metric` / `editor.spellcheck`），只画形状、把点击原样交回去。⚠️ **图3 那个语言列表故意没做**（WebKitGTK 没有枚举词典的接口），那个菜单只有两项。⚠️ **2026-10-04 最右端补了第五颗：那颗 ×**（`.status-btn.statusbar-close`，第 49 项）——`onHide` prop，落点是 `useStatusBar` 递进来的 `设界面`（＝ `App.tsx` 那个 `setChrome`），**只关不开**（写 `!` 的话，× 不在屏幕上的那种状态下点它会**把栏打开**）。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`），也**不省**在没文档的时候（它说的是"这一栏画不画"）。⚠️ 位置必须**在 `.status-right` 里面**（`space-between` ＋ 第三个孩子会把字数挤到中间） |
+| `ui/useStatusBar.ts` | **状态栏那一堆 props 的接线**（**108 行**，2026-09-30 晚从 `App.tsx` 搬出——那次 `App.tsx` 1003 行越了 1000 行硬线）：四格值分别读 `settings.appearance.status_metric` / `settings.editor.spellcheck` / **模式（2026-10-07 起是 `ui/useFileKindMode.ts` 那份会话内状态，不再来自 `settings`）** / `sidebarOpen`，写回各给一条回调。⚠️ **它一个 `useState` 都没有**（"不要第三个真相"在这一层的落法）。⚠️ 两条 patch 都先把那张表铺开（`updateSettings` 只做顶层浅合并）。⚠️ 返回类型是 `ComponentProps<typeof StatusBar>`，**不手抄**。⚠️ **2026-10-04 多收一格 `设界面`**（第 49 项那颗 ×）：`App.tsx` 交给它的**就是那个 `setChrome`**，所以 × 与菜单「视图 → 状态栏」写的是同一格。⚠️ **故意让调用方把 setter 递进来、不在这儿铺一遍 `appearance`**——铺了就是同一个设置的第二条写路 |
 | `ui/SidebarResizer.tsx` | **侧栏右缘那条可以拖的把手**（**111 行**，2026-09-30 新建）：`侧栏宽默认` 240 ／ `侧栏宽最小` 180 ／ `侧栏宽最大` 480 ＋ 纯函数 `夹侧栏宽` ＋ 组件 `SidebarResizer({ onCommit })`。⚠️ 拖动期间直接写 `<html>` 上那条 `--sidebar-width`、**松手才落盘**（`ui/useZoom.ts` 立的先例）；⚠️ 组件渲染在 `.sidebar` **里面**（量 `parentElement` 的左缘）。⚠️ **只做这一条边**——右侧插件栏的宽度还是死的（用户点名的只有侧栏） |
-| `ui/view-modes.ts` | **三种编辑模式的名字**（2026-09-24，**38 行**）。⚠️ **2026-09-30 删掉了短名那一列**：原来是一长一短（`short` 给状态栏、`full` 给菜单与设置），状态栏改成一颗 `</>` 图标之后短名没有读者了；`zh-ui.ts` 里 `"Source"` / `"Split"` 两条中文随之删除（留着就是废键，`i18n-check` ③ 会 FAIL）。⚠️ **只是名字，没有切换逻辑**——切换在 `App.tsx` / `ui/commands.ts` |
+| `ui/view-modes.ts` | **三种编辑模式的名字**（2026-09-24，**45 行**）。⚠️ **2026-09-30 删掉了短名那一列**：原来是一长一短（`short` 给状态栏、`full` 给菜单与设置），状态栏改成一颗 `</>` 图标之后短名没有读者了；`zh-ui.ts` 里 `"Source"` / `"Split"` 两条中文随之删除（留着就是废键，`i18n-check` ③ 会 FAIL）。⚠️ **2026-10-07 起连 `VIEW_MODE_LABELS` 也没有读者了**（偏好设置里那个「编辑模式」下拉随"模式不再存盘"一起删掉）——这个文件**没删**，留着是因为那张 `Record<ViewMode, string>` 是"加第四种模式"时**唯一会当场编译不过的地方**（理由与"别看没人 import 就清掉"写在它文件头）。⚠️ **只是名字，没有切换逻辑**——切换在 `ui/useFileKindMode.ts` 的 `设模式` / `ui/commands.ts` |
 | `ui/Toasts.tsx` | 提示条（42 行，**纯展示 + 点叉关掉**；什么时候消失由 `ui/useToasts.ts` 定）。⚠️ **一行样式都没有**——外观全在 `styles/toast.css`（2026-09-29 从 `app.css` 拆出来的那一节）（那一节的表格见 `docs/04` §2.6） |
 | `ui/useToasts.ts` | **提示条的宿主**（47 行，2026-09-25 从 `App.tsx` 搬出，本文件当时 958 行）：`toasts` 数组 ＋ `toast(msg, level?, ttlMs?)` ＋ `dismiss`。⚠️ 文案照旧由调用方给，这里只管"什么时候消失"——那条规则有两条反直觉的分支：`error` 留 8 秒（其他 3.2 秒）、**`ttlMs === 0` 是不自动消失**（给"描述状态、不是描述刚做的那件事"的提示用，比如开机读设置失败） |
 | `ui/ErrorBoundary.tsx` | 渲染错误兜底 + 全局错误钩子 |
@@ -975,13 +975,14 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 
 用户设置。**2026-09-24 从单文件 `settings.rs`（当时 298 行）拆成目录**——一次性加进来
 三十多个设置项，全塞进一个文件会超过 1000 行的上限，所以按**界面上的页**拆，一页一个文件。
-三个枚举、`Settings` 结构体本体、`load` / `save` 与那十个老字段都留在 `mod.rs`；
+两个枚举（2026-10-07 前是三个）、`Settings` 结构体本体、`load` / `save` 与那九个老字段
+（2026-10-07 前是十个）都留在 `mod.rs`；
 拆出去的**十**个文件各装一张表（见下表，其中 `document.rs` 装的是「文档主题」那一页、
 `keys.rs` 装的是「快捷键」那一页里**用户改过的那几条**）：
 
 | 文件 | 行数 | `#[test]` | 装什么 |
 |---|---|---|---|
-| `mod.rs` | 585 | 10 | 三条外观轴、`UiStyle`（**八个变体**，2026-09-26 加了 `Windows10`） / `UiMode` / `ViewMode`、`Settings` 本体、`load` / `load_from` / `save` / `save_to` |
+| `mod.rs` | 550 | 9 | 三条外观轴、`UiStyle`（**八个变体**，2026-09-26 加了 `Windows10`） / `UiMode`、`Settings` 本体、`load` / `load_from` / `save` / `save_to`。⚠️ **2026-10-07 少了 35 行、1 条用例**：`ViewMode` 枚举与它那条 `编辑模式也走_kebab_而且默认是所见即所得` 随"模式不再存盘"一起删掉（行数 550 / 用例 9 是收工前数的，改前是 585 / 10） |
 | `markdown.rs` | 534 | 5 | `[markdown]` 表：语法偏好 / 扩展语法 / 智能标点 / 代码块 / 公式 / 空格与换行（六组，十页里组数最多的一页） |
 | `files.rs` | 225 | 4 | `[files]` 表：启动选项 / 大纲折叠 / 默认扩展名 / 切换文件时自动保存 / 最近记录 / 拖放行为 / 文件树过滤。⚠️ **`startup` 三档 2026-09-27 才真的生效**（在此之前没有任何一处读它，而前端无条件恢复一切——见 `StartupAction` 那一段）：`new-file`（默认，开一张白纸）/ `last-file`（恢复标签）/ `last-session`（标签 ＋ 上次那个文件夹）。⚠️ **第三档的枚举名改过**：原先叫 `Folder`，落盘字面量是 `"folder"`，现在叫 `LastSession`，落盘是 `"last-session"`——**`#[serde(alias = "folder")]` 那条别名不能删**，删了老设置文件整份读不出来，用户看到的是"偏好全没了" |
 | `editor.rs` | 208 | 7 | `[editor]` 表：缩进 / **智能符号补全** / Emoji 补全 / 显示当前块源码 / 复制行为 / 换行符 / 拼写检查 / 打字机模式**/ 段首缩进**。⚠️ **2026-09-28 把「自动配对」那一格改成了「智能符号补全」**（`smart_symbols`，默认开）：它**取代了 `match_brackets` / `match_markdown` 两条死开关**——那两条存了值、从来没有任何代码读过，拨了等于没拨；老设置文件里留着那两行不报错（`#[serde(default)]` 忽略未知键），另有一条用例专门钉住这件事。⚠️ **两条"缩进"不是一个字段**（`default_indent` 往文件里插空格、`paragraph_indent` 只改 `text-indent`），而且**默认值都是 2**——所以有一条用例专门把两个数设成不一样的值再落盘，防着"写串了看不出来" |
@@ -992,7 +993,7 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 | **`focus.rs`** | **250** | **10** | **`[focus]` 表**：强制专注的六个旋钮——`total_minutes`（总时长 ＝ 余额上限）/ `alarm_minutes`（起始余额）/ `gain_per_minute` / `drain_per_minute` / `grace_seconds` / `sound`，另加 `introduced`（首次说明弹过没有，**要落盘**）。⚠️ 余额在内存里是**整数毫秒**（浮点每秒累加会漂），设置里是分钟；`上限毫秒()` / `起始毫秒()`（起点夹到上限）/ `赚(拍毫秒)` / `赔(拍毫秒)` 就是那一层的换算。⚠️ 有一条用例专门钉「这里没有任何东西能去看别的程序」——用户要的「依据在开什么应用而判断」**不做**，那是读别人的窗口 |
 | **`keys.rs`** | 114 | 5 | **`[keys.overrides]` 表**（**2026-09-27 新增**，界面上的那一页是「快捷键」）：命令 id → 键位串，**只放用户动过的那些**。⚠️ **只存差量不存整张表**有两个理由：加了新命令时老用户的快照里没有它（缺的那条静默地没有快捷键）、改一个默认键位时所有用户被钉在旧值上。⚠️ 值是**空串**的含义是"这条命令**不要**快捷键"，与"表里没有这个 id"（＝回到默认）**必须能分开**，否则用户改不回默认。⚠️ **不清洗、不校验**（认不得的 id、认不出的键位串原样存原样取）：判据在前端（`ui/commands.ts`），在这儿重写一遍迟早两边不一致。⚠️ 用 `BTreeMap` 不用 `HashMap`，为的是**存盘字节稳定**（用户拿去 diff 不会满屏乱跳） |
 | `general.rs` | 92 | 3 | `[general]` 表：只有 `debug_mode` 一项（其余如实标"不做"） |
-| 合计 | **2794** | **67** | — |
+| 合计 | **2794** | **67** | ⚠️ **这是 2026-09-27 深夜那次数出来的**，本表只按 2026-10-07 的 `mod.rs` 改动减过一次：**2759 / 66**。⚠️ 另有**两行已经过期**（改动当天现数）：`files.rs` **287**、`appearance.rs` **629**（本表写着 225 / 329，都是 09-27 的旧数），合计按现数是 **3150 / 77**——整表重刷是**另一批**的事，别顺手改行数（那会把"哪一批动过什么"搅在一起） |
 
 ⚠️ **上表的行数与用例数 2026-09-27 深夜按现数整表刷新过一次**（`wc -l` ＋ `grep -c '#\[test\]'`，
 合计 **2794 行 / 67 条**）：上一版写着 2150 / 48，而 `mod.rs`（578 → 585）、`markdown.rs`（461 → 534）、
@@ -1002,9 +1003,9 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 **"文件在目录里"和"文件在这张表里"是两件事**，这一节没有闸门扫（同本节前面
 "漏了两份前端测试"那两笔，是同一类错）。
 
-⚠️ **老的那十个顶层字段一个都没挪**（`ui_style` / `ui_mode` / `document_theme` / `view_mode` /
+⚠️ **老的那十个顶层字段里，九个一个都没挪**（`ui_style` / `ui_mode` / `document_theme` /
 `ui_font_size` / `content_width` / `confirm_unsaved` / `autosave_seconds` / `strict_markdown` /
-`enable_physics`）。搬进对应的表看起来更整齐，但**搬家会让老设置文件里的值静默丢回默认**：
+`enable_physics`；第十个 `view_mode` **2026-10-07 已退休**，那是另一件事——见 `docs/03` §5.2 末段）。搬进对应的表看起来更整齐，但**搬家会让老设置文件里的值静默丢回默认**：
 用户开了 physics、升级之后公式全变成红字报错，而他的 `settings.toml` 一个字都没变。
 所以 `strict_markdown` 与 `enable_physics` 界面上画在 Markdown 那一页，字段却还在顶层
 （`mod.rs` 文件头写着这条取舍，`mod.rs` 的测试 `老设置文件里没有那七张表时全是默认值` 钉着它）。
@@ -1096,28 +1097,31 @@ pub enum UiMode { Auto, Light, Dark }
 
 `impl Default for UiMode` → `UiMode::Auto`。
 
-### `pub enum ViewMode`（同在 `settings/mod.rs`）
+### ~~`pub enum ViewMode`~~（**2026-10-07 已从 `settings/mod.rs` 删掉**）
 
-```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ViewMode { Wysiwyg, Source, Split }
+⚠️ **Rust 侧没有这个枚举了**：编辑模式改成**会话内状态、不落盘**（用户原话
+「请设置默认启动为 WYSIWYG」），`ViewMode` 现在只活在前端（`src/bridge/types.ts`），
+家（那条 `useState`）在 `ui/useFileKindMode.ts`，默认值只有那一处。值本身没变：
+
+```
+wysiwyg / source / split        （前端一个字面量联合类型，不再是 Rust 枚举）
 ```
 
-`impl Default for ViewMode` → `ViewMode::Wysiwyg`。
-
-⚠️ **它不是外观轴。** 四条外观轴（`ui_style` / `ui_mode` / `appearance.accent` /
+⚠️ **它仍然不是外观轴。** 四条外观轴（`ui_style` / `ui_mode` / `appearance.accent` /
 `document_theme`）管"长什么样"，这条管"**怎么编辑**"——编辑区里摆几个窗格、谁的话算数。
-两者之间没有任何耦合，`view_mode` 不该写进 `theme.css` 那种地方。
+两者之间没有任何耦合，模式那三个值不该写进 `theme.css` 那种地方。
 
-⚠️ 加值时同时要改四处：本枚举、`src/bridge/ipc.ts` 的 `ViewMode`、
-`src/ui/commands.ts` 的「视图」栏、`docs/04-ui-map.md`。
-**默认值必须和前端 `App.tsx` 的兜底值一致**（两处都写 `wysiwyg`），
-否则老设置文件（里面根本没有这一项）打开会进错模式——见下面那条测试的注释。
+⚠️ 加值时同时要改四处（2026-10-07 起全在前端）：`src/bridge/types.ts` 的 `ViewMode`、
+`ui/view-modes.ts` 的表（`Record` 会当场报错）、`src/ui/commands.ts` 的「视图」栏三条、
+`ui/useMenus.ts` 的 `menuChecks` 三条（外加 `docs/04-ui-map.md`）。
+⚠️ 老设置文件里残留的 `view_mode = "…"` **必须继续被忽略**——`settings/mod.rs` 那条
+`老设置文件里没有那七张表时全是默认值` 的样例里故意留着这行钉着它（原测试
+`编辑模式也走_kebab_而且默认是所见即所得` 已随枚举一起删）。
 
 ### `pub struct Settings`（同在 `settings/mod.rs`）
 
-下面只列那**十个顶层老字段**（拆目录时一个都没挪，理由见本节开头）。结构体后半段还有
+下面只列那**九个顶层老字段**（拆目录时一个都没挪，理由见本节开头；原来的第十个
+`view_mode` 2026-10-07 已退休，不是"挪走"是"没有这个字段了"）。结构体后半段还有
 七张按页分的表 `files` / `editor` / `image` / `markdown` / `export` / `appearance` / `general`，
 **表必须声明在这些标量之后**，逐张表见上表与各文件的文件头：
 
@@ -1128,7 +1132,6 @@ pub struct Settings {
     pub ui_style: UiStyle,
     pub ui_mode: UiMode,
     pub document_theme: String,
-    pub view_mode: ViewMode,
     pub ui_font_size: u32,
     pub content_width: u32,
     pub confirm_unsaved: bool,
@@ -1144,7 +1147,6 @@ pub struct Settings {
 | `ui_style` | `Auto` | 界面风格轴 |
 | `ui_mode` | `Auto` | 明暗轴 |
 | `document_theme` | `""` | 主题 **id**（不是显示名），对应 `themes/<id>.css`。⚠️ 存 id 不存名称：显示名是中文、随时可能改，改了不该让用户的设置失效。**空串表示"无主题"**，即 `editor.css` 那套中性样式 |
-| `view_mode` | `Wysiwyg` | **编辑模式**：所见即所得 / 源码 / 分屏。⚠️ 不是外观轴 |
 | `ui_font_size` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
 | `content_width` | `760` | 内容区宽度上限（px） |
 | `confirm_unsaved` | `true` | 关窗口时若有未保存改动是否询问 |
@@ -1195,7 +1197,7 @@ pub fn save_to(&self, path: &Path) -> Result<()>
 | `文件不存在时回默认而不是报错` | `load_from` 对一个不存在的路径返回 `Ok`，`ui_style == Auto` |
 | `枚举落盘用_kebab_风格` | 序列化出来的文本里有 `ui_style = "macos"`（不是 `"Macos"`）。注释：**存法即接口** |
 | `physics_默认是关的且能往返` | 默认值是 `false`，置 `true` 后能落盘、能读回。⚠️ 盯的是默认值：开着的话 `\div` 会被换成散度算子，用户文档里既有公式的意思就变了 |
-| `编辑模式也走_kebab_而且默认是所见即所得` | 三件事：`ViewMode::default() == Wysiwyg`；落盘文本里有 `view_mode = "split"`；**没写这一项的老设置文件**（`toml::from_str("ui_style = \"macos\"\n")`）读出 `Wysiwyg`。⚠️ 专盯"改了不会编译错、只会静默变行为"的那类——默认值错了的症状是"老用户升级后打开文件发现进了源码模式" |
+| ~~`编辑模式也走_kebab_而且默认是所见即所得`~~ | **2026-10-07 随 `ViewMode` 枚举一起删掉**（模式不再存盘，这条钉的三件事——枚举默认值、落盘文本、老文件的兜底——都没有对象了）。⚠️ 它盯的那类风险**没消失**，只是搬去了前端：现在的等价物是 `src/ui/useFileKindMode.ts` 那条 `useState<ViewMode>("wysiwyg")`（口径写在 `docs/06` §5.37 那一段：**任何实例起来都是所见即所得**，要进源码模式只能当场切、重启又回来）；老设置文件里残留的 `view_mode` 行由 `老设置文件里没有那七张表时全是默认值` 那条**顺带**钉住 |
 | `七页设置能整份往返` | 七张表各挑一项改成**非默认**值再存读一遍，逐项比对。只改一个字段的测试会漏掉"某张表压根没被序列化"这种错 |
 | `标量写在表前面否则_toml_会拒收` | ⚠️ 结构体**字段顺序的守门员**：TOML 要求标量在前、表在后，把某张表挪到 `ui_style` 前面会让 `save()` 在**写盘那一刻**报 `values must be emitted before tables`，而 `load()` 照样能读——一个只在保存路径上炸的缺陷，所以让它在测试里炸 |
 | `老设置文件里没有那七张表时全是默认值` | ⚠️ **整个拆分里最重要的一条**：2026-09-24 之前落盘的设置只有那十个顶层键，新版本读它时十条必须**原样认出来**，七张新表一律取默认（`strict_markdown` / `enable_physics` 被静默关掉就是这条要挡的事），而不是"解析失败 → 回默认 → 用户的偏好没了" |
@@ -5042,15 +5044,18 @@ ProseMirror 那棵树也是 `contenteditable`，不放过的话编辑器里一�
 出口**（`disabledCommands`），派生出三个消费者——各写一份的症状是"菜单灰着、
 快捷键却照跑"，不报错也不崩，只让用户觉得这个应用一会儿一个脾气。
 
-⚠️ **编辑模式那三条是"三选一"，而且来源是设置不是 `useState`。**
-`App.tsx` 里有 `const viewMode = settings?.view_mode ?? "wysiwyg";`，它同时喂给
-三处——`menuChecks` 里那三个 `✓`、`<EditorPane mode={viewMode}>`、以及
-`menuHandlers` 里写回 `updateSettings({ view_mode })`。**三处必须同源**：
-各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。
-⚠️ 兜底值 `"wysiwyg"` 必须和 Rust 侧 `ViewMode::default()` 一致。
-⚠️ 它们与别的 `view.*` 条目有个区别：**要落盘**。侧栏开合、状态栏那些是会话内的
-临时开关，编辑模式是"下次打开还是这样"的偏好——所以走 `updateSettings`
-（先改内存再写后端，失败会回滚），而不是 `setXxx`。
+⚠️ **编辑模式那三条是"三选一"，而 2026-10-07 起它们和别人一样是会话内状态。**
+唯一的家是 `ui/useFileKindMode.ts` 里那条 `useState<ViewMode>("wysiwyg")`（`App.tsx`
+调出来的 `文件类型.模式`）；它同时喂给三处——`menuChecks` 里那三个 `✓`、
+`<EditorPane mode={viewMode}>`、以及三条 handler 里的 `设模式(...)`。
+**三处必须同源**：各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。
+⚠️ 默认值 `"wysiwyg"` 也**只有那一处**（原先还要和 Rust 侧 `ViewMode::default()`
+对齐，那个枚举已经删了，见本节上面那段）。
+⚠️ **它们以前和别的 `view.*` 条目有个区别：要落盘**——那时是"下次打开还是这样"的
+偏好，走 `updateSettings`（先改内存再写后端，失败会回滚）。**这个区别没有了**：
+用户 2026-10-07 拍「默认启动为 WYSIWYG」，模式改成会话内状态、不落盘，
+三个 handler 走的是 `设模式`（`useCommandTable.ts`），`useCommandTable` 的入参里
+那个 `改设置` 也因此失去了最后一个读者、一并删掉。
 
 ⚠️ **主题那栏的 `✓` 不在 `menuChecks` 里**，在 `MenuBar.tsx` 里由 `themeChecks()`
 现算并在渲染时合并（条目的 id 来自后端，抄不进静态表）。见 `docs/04` §3.3。
@@ -5221,8 +5226,8 @@ IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖�
 | `TreeNode` | `{name, path, is_dir, children: TreeNode[]\|null}` | `commands::workspace::TreeNode` |
 | `UiStyle` | `"auto" \| "adwaita" \| "ghub" \| "macos" \| "plasma" \| "windows" \| "yaru" \| "yaru-blue"` | `settings::UiStyle`（定义在 `settings/mod.rs`）。⚠️ **八个**，与 `ui/settings/panes/AppearancePane.tsx` 的 `STYLES` 表一一对应（那张表写成 `Record<UiStyle, …>`，所以加值时漏不掉） |
 | `UiMode` | `"auto" \| "light" \| "dark"` | `settings::UiMode` |
-| `ViewMode` | `"wysiwyg" \| "source" \| "split"` | `settings::ViewMode`。⚠️ **不是外观轴**，见 `docs/05` §3.1 |
-| `Settings` | `{ui_style, ui_mode, document_theme, view_mode, ui_font_size, content_width, confirm_unsaved, autosave_seconds, strict_markdown, enable_physics, files, editor, image, markdown, export, appearance, general}` | `settings::Settings`。⚠️ **十个顶层老字段 + 七张分页表**（表名与 Rust 侧逐字相同）。⚠️ 这里写错一个字母**不会编译不过**，只会在运行时拿到 `undefined`，而它传回 Rust 会被 serde 当成"这一项没给"、落回默认值——症状是"改了一下，看着像没生效" |
+| `ViewMode` | `"wysiwyg" \| "source" \| "split"` | **没有 Rust 对应物**（2026-10-07 起）：模式是**会话内状态、不落盘**，`settings::ViewMode` 已随"模式不再存盘"删掉，家（那条 `useState`）在 `ui/useFileKindMode.ts`。⚠️ **不是外观轴**，见 `docs/05` §3.1 |
+| `Settings` | `{ui_style, ui_mode, document_theme, ui_font_size, content_width, confirm_unsaved, autosave_seconds, strict_markdown, enable_physics, files, editor, image, markdown, export, appearance, general}` | `settings::Settings`。⚠️ **九个顶层老字段 + 七张分页表**（表名与 Rust 侧逐字相同；2026-10-07 前是十个，少的那个是退休的 `view_mode`）。⚠️ 这里写错一个字母**不会编译不过**，只会在运行时拿到 `undefined`，而它传回 Rust 会被 serde 当成"这一项没给"、落回默认值——症状是"改了一下，看着像没生效" |
 | `PluginInfo` | `{id, name, version, description, authors, license, capabilities, entry, dir, state: "loaded"\|"failed"\|"disabled", error: string\|null, origin: "builtin"\|"user", signature: "verified"\|"unknown"\|"unsigned"\|null, key_id: string\|null, removable: boolean, langs: string[], lang: string\|null, lang_ok: boolean}` | `plugin::PluginInfo`。⚠️ `signature` 的 `null` 有两种意思（**内置插件** / 早于这套机制的老记录），界面上都表现为「没标」；`removable` ＝ `origin == "user"`，前端据此决定给不给「卸载」那颗按钮。⚠️ `langs` / `lang` / `lang_ok` 是语言那三格（2026-09-25），判据见 `plugin/mod.rs` 那一节 |
 | `AppLang` | `{setting, effective, available: {tag, label}[]}` | `commands/settings.rs::AppLang`。⚠️ 三个字段各有各的用处：`setting` 是设置页那一格的**原值**（可能是 `auto`）、`effective` 是**启动时算好的**（界面判断全用它）、`available` **由宿主给**（前端不许自己列一份语言表） |
 | `PluginReview` | `{plugin, panel}` | `plugin::PluginReview`（`nota_plugin_review` 的返回）。⚠️ **不回标题**——标题前端手里就有（插件名与面板标题两张清单都在它那儿） |
@@ -6535,7 +6540,7 @@ export interface EditorPaneHandle {
 ```ts
 interface Props {
   doc: Document;
-  mode: ViewMode;                    // ← 三种编辑模式，来自 settings.view_mode
+  mode: ViewMode;                    // ← 三种编辑模式，来自 ui/useFileKindMode.ts 的会话内状态
   contentWidth: number;
   onToast: (message: string, level?: "info" | "warn" | "error" | "success") => void;
   onDocsChanged: () => Promise<unknown>;
@@ -6546,8 +6551,9 @@ interface Props {
 ⚠️ `ref` 是**普通 prop**（React 19 的写法，不需要 `forwardRef`）。
 `onDocsChanged` 的返回类型是 `Promise<unknown>`（宽松的写法，因为 `refreshDocs`
 返回的是 `Promise<Document[]>`）。
-⚠️ `mode` 由 `App.tsx` 从 `settings.view_mode` 取（兜底 `"wysiwyg"`），**和菜单里那三个
-✓ 同源**——各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。
+⚠️ `mode` 由 `App.tsx` 从 `文件类型.模式` 取（**实际**模式，过完大文件降级那一道；
+2026-10-07 前取自 `settings.view_mode`，那个字段与它那条兜底 `?? "wysiwyg"` 都没了），
+**和菜单里那三个 ✓ 同源**——各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。
 
 ### 两个去抖常量
 
@@ -7629,9 +7635,10 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 「字数统计」菜单里。
 
 ⚠️ **它自己不存任何状态**（文件头那段"不要第三个真相"）：侧栏开合住在 `App.tsx` 的
-`sidebarOpen`、模式住在 `settings.view_mode`、显示哪一个统计量住在
-`appearance.status_metric`、拼写开关住在 `editor.spellcheck`，这里只画形状、
-把点击原样交出去。读写的接线全在 `ui/useStatusBar.ts`（它在 `App.tsx` 里调用一次，
+`sidebarOpen`、模式住在 `ui/useFileKindMode.ts` 那条 `useState`（2026-10-07 前是
+`settings.view_mode`）、显示哪一个统计量住在 `appearance.status_metric`、
+拼写开关住在 `editor.spellcheck`，这里只画形状、把点击原样交出去。
+读写的接线全在 `ui/useStatusBar.ts`（它在 `App.tsx` 里调用一次，
 `{...状态栏接线}` 铺进来）。
 
 ### props
@@ -7804,7 +7811,7 @@ export function installErrorHooks() {
 |---|---|
 | `SettingsDialog.tsx` | 壳：遮罩 + 左栏（搜索 / 十一页 / 「完成」）+ 右栏 + `Esc` 与点遮罩关闭。十一页的顺序在 `ORDER`，图标在 `SECTIONS`，名字在 `页名` |
 | `primitives.tsx` | 行、组、各个控件、搜索上下文（`QueryProvider` / `useQuery` / `hits()`）。⚠️ 图标不在这里——2026-09-24 起全部来自 `ui/Icon.tsx` |
-| `panes/` | 十一页内容，一页一个文件（2026-09-24 从单文件 `panes.tsx` 拆出）：`FilesPane` / `EditorPane` / `ImagePane` / `MarkdownPane` / `ExportPane` / `AppearancePane` / `DocThemePane` / `ShortcutsPane` / `GeneralPane` / `FocusPane`；另加 `ImageUploadGroup.tsx`（**不是一页**，是「图像」页里的一组）与 `props.ts`（十页共用的 `PaneProps` 与 `paneWriter`）。⚠️ `EditorPane.tsx`（设置那一页）里的 `VIEW_MODES` / `LINE_ENDINGS` 两张表 2026-09-26 **从模块级搬进了组件体**并逐条 `t(...)`——留在模块级时英文界面下那几个下拉项还是中文（模块级求值时语言还没定，而且没有东西会通知它重画）；`LF（\n）` / `CRLF（\r\n）` 这两个标签因此也成了**键** |
+| `panes/` | 十一页内容，一页一个文件（2026-09-24 从单文件 `panes.tsx` 拆出）：`FilesPane` / `EditorPane` / `ImagePane` / `MarkdownPane` / `ExportPane` / `AppearancePane` / `DocThemePane` / `ShortcutsPane` / `GeneralPane` / `FocusPane`；另加 `ImageUploadGroup.tsx`（**不是一页**，是「图像」页里的一组）与 `props.ts`（十页共用的 `PaneProps` 与 `paneWriter`）。⚠️ `EditorPane.tsx`（设置那一页）里的 `VIEW_MODES` / `LINE_ENDINGS` 两张表 2026-09-26 **从模块级搬进了组件体**并逐条 `t(...)`——留在模块级时英文界面下那几个下拉项还是中文（模块级求值时语言还没定，而且没有东西会通知它重画）；`LF（\n）` / `CRLF（\r\n）` 这两个标签因此也成了**键**。⚠️ **`VIEW_MODES` 那张表 2026-10-07 删了**（「编辑模式」下拉随"模式不再存盘"一起删，`LINE_ENDINGS` 还在） |
 | `panes/ShortcutsPane.tsx` | 快捷键一览（只读） |
 
 ### 版式：照 VMark 的偏好面板抄
@@ -7840,7 +7847,7 @@ export function installErrorHooks() {
 | | 界面字号（滑杆 12–20px + 读数） | `ui_font_size`。⚠️ **文档字号不在这里**，那是文档主题的事 |
 | | 自定义字号 / 缩放 / **Ctrl+滚轮（生不生效 ＋ 动哪一个数）** / 状态栏 / **菜单栏** / 字数统计 / 工具栏 / 深色独立主题 | `[appearance]` 表，逐项见 `settings/appearance.rs` 文件头与 `docs/03` §5.6b。⚠️ **工具栏那一项是三档下拉**（始终显示 / 鼠标悬停时显示 / 始终不显示），**默认始终不显示**；`show_status_bar` / `show_menu_bar` 与它都真的接上了（`ui/useChromeVisibility.ts`）。⚠️ **菜单栏那一格 2026-09-28 加**，默认**显示**（与工具栏相反，理由见 `docs/03` §5.6b 那一行），它比另外两条多一条"藏下去时发提示"的动作 |
 | **文档主题** | 当前主题（只读）、打开主题文件夹… | ⚠️ **换主题不在这里**，见下 |
-| **编辑器** | 编辑模式（下拉） | `view_mode`。和「视图」菜单那三条是同一个开关 |
+| **编辑器** | ~~编辑模式（下拉）~~ | **2026-10-07 删掉**：模式改成会话内状态、不落盘（用户原话「请设置默认启动为 WYSIWYG」），偏好设置里不再有这一格，切模式只走「视图」菜单那三条与下栏那颗 `</>`。⚠️ 设置页因此也没有"模式"这一格可读了——`EditorPane.tsx`（设置那一页）里的 `VIEW_MODES` 表随它一起删 |
 | | 正文宽度（滑杆 480–1200px） | `content_width` |
 | | 缩进 / **段首缩进** / 配对 / 换行符 / 拼写检查 / 打字机模式 | `[editor]` 表。⚠️ 换行符那两个选项的标签（`LF（\n）` / `CRLF（\r\n）`）2026-09-26 起是**键**——`LINE_ENDINGS` 那张表从模块级搬进了组件体。⚠️ **段首缩进那一组是两格**（开关 ＋ 宽度 1~8 字符），关着时宽度那格是灰的；⚠️ 它与上面「默认缩进」**不是一回事**（那条往文件里插空格、这条只改 `text-indent`），见 `docs/03` §5.6c |
 | **图像 / Markdown / 导出 / 通用** | 各自的分组与字段 | `[image]` / `[markdown]` / `[export]` / `[general]` 四张表 |
@@ -8665,18 +8672,28 @@ export function 实际模式(偏好: ViewMode, 缘由: 降级缘由 | null): Vie
 
 `split` 右侧那半是一份**只读的 Milkdown**，大文件在那上面一样卡；非 Markdown 的文件
 在那上面一样被解析错。所以降级之后一律 `source`，不是"把 split 的右半关掉"。
-⚠️ 合成本函数时**只管规则**——"用户手动切一次模式就解除降级"那一步在调用方
-（`App.tsx` 的 `updateSettings`，理由见下一节）。
+⚠️ 合成本函数时**只管规则**——"用户手动切一次模式就解除降级"那一步不在纯函数里，
+而且 2026-10-07 起也不再在 `App.tsx` 里：它和模式偏好一起住进了下一节那个 hook
+（`设模式`），理由见那一节。
 
 ---
 
-## `src/ui/useFileKindMode.ts`（约 195 行）
+## `src/ui/useFileKindMode.ts`（234 行）
 
 **这一份该用哪种模式打开**（2026-09-28 新建）：把上一节那两条纯规则接到 React 上。
+⚠️ **2026-10-07 起它也是"用户选的那一档模式"的家**（偏好不再存盘，见下）。
 
 ```ts
-export function useFileKind(输入): { 模式: ViewMode; 解除降级(id: DocId | null): void }
+export interface 出口 {
+  模式: ViewMode;                    // 实际该用的（过完降级）
+  偏好: ViewMode;                    // 用户自己选的那一档（没过降级）
+  设模式: (m: ViewMode) => void;     // 身份稳定；改偏好 ＋ 解除当前这一份的降级
+}
+export function useFileKind(输入: 输入): 出口
 ```
+
+⚠️ **两个"模式"不是一个东西，`ui/useDocuments.ts` 要的是 `偏好`**：它问
+"用户想要所见即所得吗"（决定自动配对之类），与"这一份眼下被降级了没有"无关。
 
 它只干两件在纯函数里干不了的事，**判据一条都不在这里**：
 
@@ -8704,10 +8721,17 @@ export function useFileKind(输入): { 模式: ViewMode; 解除降级(id: DocId 
 降级**压过**用户的设置，所以必须有这条出口，否则用户会遇到：菜单里「所见即所得」上带着
 ✓、我点「所见即所得」、**它纹丝不动**。那是把用户锁在外面——比"打开时选错了模式"糟得多。
 
-出口是 `解除降级`：`App.tsx` 的 `updateSettings` 收到 `view_mode` 那一次调用它，把这一份
-的降级**删掉**。删掉之后 `判过` 里还记着它，所以**不会再被判回来**——这正是"用户说了算"
-的形状。⚠️ 解除是**按份**的，不是全局关掉这条功能：用户手动切过 A 那份之后，再拖一份
+出口就是 `设模式`（`出口` 上那一格）：用户自己切模式的那几条入口——菜单「视图」那三条
+＋ 下栏那颗 `</>`——都汇到它，它一次做两件事：**改偏好** ＋ **把当前这一份的降级删掉**。
+⚠️ 2026-10-07 前这两件事是分开的（`App.tsx` 里 `updateSettings({ view_mode })` 写盘、
+`解除降级` 另一条路），现在既没有盘可写、两个动作也必须是同一下——分成两条路的症状是
+"切了模式，可这一份还在降级表里，下一帧又被按回去"。
+
+删掉之后 `判过` 里还记着它，所以**不会再被判回来**——这正是"用户说了算"的形状。
+⚠️ 解除是**按份**的，不是全局关掉这条功能：用户手动切过 A 那份之后，再拖一份
 `.py` 进来照样降级。
+⚠️ `设模式` 必须**身份稳定**（用 ref 读"当前这一份"、依赖数组空着）：它是 `App.tsx`
+整张菜单表的依赖之一，抖一次整张表重建一次。
 
 ### ⚠️ 四、"这一份是不是 Markdown"**不从这里出去**
 
@@ -8715,10 +8739,17 @@ export function useFileKind(输入): { 模式: ViewMode; 解除降级(id: DocId 
 现算。从这里出去的话，"用户手动解除降级之后它还算不算 Markdown"就成了第二个答案——而
 源码模式下一份 `.py` 该不该染 Markdown 色，跟"这次打开时降没降级"根本不是一回事。
 
-### ⚠️ 那个 `?? "wysiwyg"` 的兜底必须与三处一致
+### ⚠️ 默认那一档 `wysiwyg` 现在只有一处（原来要三处一致）
 
-`App.tsx` / `ui/useDocuments.ts` / Rust 侧 `ViewMode::default()`。不一致的话，启动那
-几百毫秒里会算出另一种模式，用户看到的是"打开先闪一下另一种样子"。
+2026-10-07 前模式存在 `settings.view_mode` 里，前端三处各有一个 `?? "wysiwyg"` 的兜底，
+还要和 Rust 侧 `ViewMode::default()` 对齐——不一致的症状是"启动那几百毫秒里算出另一种
+模式，用户看到开头闪一下"。
+
+现在那条 `useState<ViewMode>("wysiwyg")` 就在本文件里（`useFileKind` 的第一行），
+**没有第二处**：设置里没有这一格、Rust 侧没有这个字段、`useDocuments` 用 `偏好`
+不再自己兜底。⚠️ 也正因为如此，用户 2026-10-07 要的「**默认启动为 WYSIWYG**」
+是这条 `useState` 的初值一句话保证的——**每次启动都从它开始**，上次切到源码也不影响
+（模式根本不落盘）。手测在 `docs/06`（重启必须是所见即所得）。
 
 ---
 

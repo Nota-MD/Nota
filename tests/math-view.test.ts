@@ -1,6 +1,18 @@
 /**
  * `src/editor/math-view.ts`（LaTeX 能就地改 ＋ `$` / `$$` 半透明）的**可运行**测试集。
  *
+ * # 这份测什么、不测什么（2026-10-07 拆过一刀，`docs/07` 第 89 项）
+ *
+ * 这一份管**公式节点自己**：真插件规格（源码在哪、存盘读哪个字段）、取源码与写回、
+ * 用户报的那串 `$$␣`、真插件的两条线（装饰 ＋ `appendTransaction`）、NodeView 的
+ * 面板开合与写回——一～五组。
+ *
+ * ⚠️ **公式之外围**的那三组（插公式块那条命令、序列化不给行首井号加反斜杠、
+ * 命令补全弹窗的接线）拆去了 `tests/math-wiring.test.ts`；两份共用的地基
+ * （真 `Schema` ＋ 造假视图 ＋ `建`）在 `tests/math-fixture.ts`，`找` / `数`
+ * 两个小工具在 `tests/fake-dom.ts`。拆的理由是那份文件涨到 1024 行、
+ * 而 ① 闸的扫描面当时又不含 `tests/`（同样的东西拆完就得能被闸看见）。
+ *
  * # 跑法（不装任何包：`esbuild` 与 `node` 仓库里都现成）
  *
  * ```sh
@@ -20,7 +32,11 @@
  *   把**真插件自己那份节点规格**（`math_inline` / `math_block`）取出来，
  *   再用它建一颗**真的 ProseMirror `Schema`**。于是"源码在内容里还是在属性里"
  *   "存盘时 `toMarkdown` 读哪一个"这两条全是**真代码**在答（真 `toMarkdown.runner`）。
- * - NodeView 那一层喂 `tests/fake-dom.ts` 那颗假 DOM，配一颗假 `EditorView`。
+ * - NodeView 那一层喂 `tests/fake-dom.ts` 那颗假 DOM，配一颗假 `EditorView`
+ *   （两样都在 `tests/math-fixture.ts` 里装配好再交出来）。
+ * - ⚠️ 假 `document` 由 `math-fixture.ts` 在**模块顶层**装上（`装假document()`）：
+ *   本文件不再自己调——ESM 的 import 先于本文件任何一行执行，所以那一步一定
+ *   赶在下面那些 `await 测(...)` 之前。
  * - 「当前」这条信号走**真插件**（`公式当前.plugin()`，真 `appendTransaction`）。
  *
  * 几条从依赖里查出来、容易做错的约定（都已实测）：
@@ -30,7 +46,7 @@
  *   而 `.key` 才是 `SliceType`（`ctx.get(规格.key)` 取到的是**规格函数**，
  *   再 `(ctx)` 一次才是节点规格对象）。
  * - `$prose` / `$view` 的插件体都要 `await ctx.wait(SchemaReady)`，而 `Ctx.wait`
- *   是构造函数里挂上去的**自有属性**，所以这里换成 `async () => {}`：
+ *   是构造函数里挂上去的**自有属性**，所以 `math-fixture.ts` 里换成 `async () => {}`：
  *   本测试只要"注入 + 跑插件体"，不跑 milkdown 的启动时序。
  * - `DecorationSet.forChild(偏移, 父节点)` 交出来的子集合用的是**相对坐标**
  *   （`buildTree` 里 `moveSpans(..., -offset)`），`iterDeco` 正是这么往下走的。
@@ -42,29 +58,33 @@
  * 报告里那部分如实记着"没验"。
  */
 
-import { Container, Ctx } from "@milkdown/kit/ctx";
-import { editorViewCtx, nodeViewCtx, prosePluginsCtx, schemaCtx } from "@milkdown/kit/core";
-import { Schema } from "@milkdown/kit/prose/model";
-import type { Node as PMNode } from "@milkdown/kit/prose/model";
+
 import { EditorState, NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
-import type { Plugin, Transaction } from "@milkdown/kit/prose/state";
-import type { Decoration, DecorationSet, NodeView } from "@milkdown/kit/prose/view";
-import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "@milkdown/plugin-math";
+import type { Decoration, NodeView } from "@milkdown/kit/prose/view";
+import type { Node as PMNode } from "@milkdown/kit/prose/model";
+
 import {
   取源码,
-  公式块视图,
   公式当前,
-  公式行内视图,
   写入源码,
   归位选区,
   算装饰,
   认节点,
 } from "../src/editor/math-view";
-import { 假元素, 当前焦点, 清焦点, 装假document, type 假事件 } from "./fake-dom";
-import { 插公式块 } from "../src/editor/insert";
-import { 不转义行首井号 } from "../src/editor/lax-heading";
-
-装假document();
+import { 当前焦点, 找, 数 } from "./fake-dom";
+import {
+  存盘一笔,
+  块,
+  块位置,
+  块规格,
+  建,
+  段落,
+  行内,
+  行内位置,
+  行内规格,
+  ctx,
+  schema,
+} from "./math-fixture";
 
 /* ── 一支极小的测试工装 ───────────────────────────────────────────────── */
 
@@ -105,96 +125,7 @@ async function 冲刷(): Promise<void> {
   await new Promise((r) => setTimeout(r, 0));
 }
 
-/** 在假 DOM 树上按类名找一颗元素（假 DOM 没有 CSS 选择器）。 */
-function 找(根: 假元素, 类名: string): 假元素 | null {
-  if (根.classList.contains(类名)) return 根;
-  for (const 孩 of 根.childNodes) {
-    const 命中 = 找(孩, 类名);
-    if (命中) return 命中;
-  }
-  return null;
-}
 
-/** 数一数假 DOM 树上某个类名有几颗。 */
-function 数(根: 假元素, 类名: string): number {
-  let n = 根.classList.contains(类名) ? 1 : 0;
-  for (const 孩 of 根.childNodes) n += 数(孩, 类名);
-  return n;
-}
-
-/* ── 真规格 → 真 Schema（不建 Editor、不碰 DOM）──────────────────────── */
-
-const ctx = new Ctx(new Container(), {} as never);
-// ⚠️ 见文件头：本测试只要"注入 + 跑插件体"，不要 milkdown 的启动时序。
-(ctx as unknown as { wait: () => Promise<void> }).wait = async () => {};
-// 这几片得先注入（`$prose` / `$view` 的插件体会 `ctx.update(...)` 它们）。
-ctx.inject(prosePluginsCtx);
-ctx.inject(nodeViewCtx);
-katexOptionsCtx(ctx);
-mathInlineSchema.ctx(ctx);
-mathBlockSchema.ctx(ctx);
-
-/** 真插件自己那份 `math_inline` 规格。 */
-const 行内规格 = ctx.get(mathInlineSchema.key)(ctx);
-/** 真插件自己那份 `math_block` 规格。 */
-const 块规格 = ctx.get(mathBlockSchema.key)(ctx);
-
-const schema = new Schema({
-  nodes: {
-    doc: { content: "block+" },
-    paragraph: { content: "inline*", group: "block", toDOM: () => ["p", 0] },
-    text: { group: "inline" },
-    // 一个"能把段落装进去"的容器，只给下面「插公式块」那组当反例用
-    //（"光标在**嵌套**的空段落里时不许把外层整块换掉"）。别的组用不到它。
-    blockquote: { content: "block+", group: "block", toDOM: () => ["blockquote", 0] },
-    math_inline: 行内规格,
-    math_block: 块规格,
-  },
-});
-// ⚠️ `schemaCtx` 是**裸的 SliceType**（不是 `$ctx` 的产物），所以没有 `.key`：
-//    传它本身。
-ctx.inject(schemaCtx);
-ctx.set(schemaCtx, schema);
-
-/** 段落（给字符串就当文本，给节点就原样放；空串丢掉，`schema.text("")` 会抛）。 */
-const 段落 = (...内容: (PMNode | string)[]): PMNode =>
-  schema.nodes.paragraph.create(
-    null,
-    内容
-      .filter((x) => x !== "")
-      .map((x) => (typeof x === "string" ? schema.text(x) : x)),
-  );
-/** 块公式。 */
-const 块 = (值: string): PMNode => schema.nodes.math_block.create({ value: 值 });
-/** 行内公式（空串要走 `null`：`schema.text("")` 会抛）。 */
-const 行内 = (源: string): PMNode =>
-  schema.nodes.math_inline.create(null, 源 === "" ? null : schema.text(源));
-
-/** 第一个位置：前面那段"公式："之后的第一个位置（测试都用它当块的落点）。 */
-const 块位置 = 段落("公式：").nodeSize;
-/** 行内那颗落在第二个段落的内容起点上。 */
-const 行内位置 = 块位置 + 1;
-
-/**
- * 假序列化状态：只记下 `toMarkdown.runner` 交给 remark 的 `addNode` 三样。
- * ⚠️ 跑的是**插件自己那份真 runner**，所以"存盘读哪个字段"是它在答。
- */
-function 存盘一笔(节点: PMNode): { 名: string; 值: string | undefined }[] {
-  const 调用: { 名: string; 值: string | undefined }[] = [];
-  const state = {
-    addNode(名: string, _子: unknown, 值?: string) {
-      调用.push({ 名, 值 });
-      return state;
-    },
-  };
-  const 规格 = 节点.type.name === "math_block" ? 块规格 : 行内规格;
-  const runner = 规格.toMarkdown?.runner as
-    | ((s: unknown, n: PMNode, 父: unknown, 序: number) => void)
-    | undefined;
-  if (!runner) throw new Error("插件没给 toMarkdown.runner？");
-  runner(state, 节点, null, 0);
-  return 调用;
-}
 
 /* ── 一、真规格的地基：两处"源码在哪"确实不一样 ─────────────────────── */
 
@@ -427,69 +358,12 @@ await 测("算装饰：行内那条会落进**段落的子集**里（视图就�
 
 /* ── 五、NodeView：面板开合、写回、按键（假 DOM，只跑逻辑）─────────────── */
 
-await 公式行内视图(ctx)();
-await 公式块视图(ctx)();
-const 造行内视图 = 公式行内视图.view;
-const 造块视图 = 公式块视图.view;
+// ⚠️ 这一组用的工装——真插件那份 `$view` 构造器、假 `EditorView`、`建`——2026-10-07
+//    搬去了 `tests/math-fixture.ts`：本组与 `math-wiring.test.ts` 用的是**同一套**
+//    地基（复制一份的话两份 Schema 迟早分家，而且不会报错）。这里只 import。
 
 组("五、NodeView 的逻辑（⚠️ 假 DOM：证明不了视觉，只证明「写回哪、面板开不开」）");
 
-/**
- * 一颗假 `EditorView`：`state` 是真的，`dispatch` 真的把事务应用回去，
- * 然后照 ProseMirror 的做法（`CustomNodeViewDesc.update`）把新节点与新装饰
- * 交给 NodeView。
- */
-function 造假视图(doc: PMNode, 位置: number, 只读: boolean, 选中: boolean, 类: PMNode["type"]) {
-  let state = EditorState.create({
-    doc,
-    selection: 选中 ? NodeSelection.create(doc, 位置) : TextSelection.create(doc, 位置),
-  });
-  const 视角: { 视图: NodeView | null } = { 视图: null };
-  const 视图 = {
-    editable: !只读,
-    // ⚠️ 与真 PM 一致：`hasFocus()` = "焦点就在 `view.dom` 上"。这里用假 DOM 的
-    //    全局焦点代表它——源码框拿着焦点时，正文就不算拿着。
-    hasFocus: () => 当前焦点() === null,
-    focus: () => 当前焦点()?.blur(),
-    get state() {
-      return state;
-    },
-    dispatch: (tr: Transaction): void => {
-      state = state.apply(tr);
-      const 新节点 = state.doc.nodeAt(位置);
-      // ⚠️ 节点被删掉、或者位置上换成了**别的类型**时，真 ProseMirror 是把
-      //    这个视图 `destroy` 掉另建一个（`updateNextNode` 认的是同一个类型），
-      //    所以这里绝不能拿新节点去喂 `update`。
-      if (!新节点 || 新节点.type !== 类) return;
-      const 装饰 = 算装饰(state).find(位置, 位置 + 新节点.nodeSize) as readonly Decoration[];
-      视角.视图?.update?.(新节点, 装饰);
-    },
-  };
-  return { 视图, 视角, 取state: () => state };
-}
-
-/** 建一个 NodeView（真构造器，只是喂进去的 view 与 document 是假的）。 */
-function 建(节点: PMNode, 位置: number, 只读 = false, 选中 = true, 尾段 = true) {
-  清焦点();
-  // ⚠️ 默认在块后面留一段正文：`退出编辑` 把光标搬到"块后面"时，落在文本块里
-  //    才是常规情形（`尾段 = false` 用来试"公式块是文档最后一块"那条路）。
-  //    行内那颗在段落里，后面有没有别的段落都一样。
-  const doc = schema.topNodeType.create(
-    null,
-    节点.type.name === "math_block"
-      ? 尾段
-        ? [段落("公式："), 节点, 段落("后面")]
-        : [段落("公式："), 节点]
-      : [段落("公式："), 段落(节点), 段落("后面")],
-  );
-  const 真节点 = doc.nodeAt(位置);
-  if (!真节点) throw new Error(`位置 ${位置} 上没有节点`);
-  const { 视图, 视角, 取state } = 造假视图(doc, 位置, 只读, 选中, 真节点.type);
-  const 装饰 = 算装饰(取state()).find(位置, 位置 + 真节点.nodeSize) as readonly Decoration[];
-  const 构造 = 真节点.type.name === "math_block" ? 造块视图 : 造行内视图;
-  视角.视图 = 构造(真节点, 视图 as never, () => 位置, 装饰, null as never);
-  return { 视图, 视角, 取state, 位置 };
-}
 
 await 测("块：装饰说当前 → 面板开、两根 `$$`、源码框是 textarea、焦点排进框末尾", async () => {
   const { 视角, 取state } = 建(块("E=mc^2"), 块位置);
@@ -699,320 +573,6 @@ await 测("没被选中（装饰没来）时：进不了编辑态，也不抢焦
   等(当前焦点(), null, "没当前就不许抢焦点");
 });
 
-/* ── 命令：插一个空公式块（`insert.ts` 的 `插公式块`）─────────────────── */
-//
-// 这一组要的是"菜单里那一下到底改了什么"。工装只有两件：一颗真 `EditorState`
-// （真的是它算的位置与选区）＋一颗**只记 `dispatch` 的假 view**——
-// `插公式块` 用到的 view 只有 `state` 与 `dispatch` 两样。
-//
-// ⚠️ **没验的**：真浏览器里那块 KaTeX 排出来长什么样、面板有没有自动打开
-// （面板的判据是"整块被选中"，这里只验到**选区确实是 `NodeSelection`**——
-// 从它到"面板开了"那一步在下面第一组的 NodeView 测试里，两边合起来才算严丝合缝）。
-
-ctx.inject(editorViewCtx);
-
-/** 跑一次 `插公式块`，把光标放在 `光标`（必须是文本位置）。返回改完的 state。 */
-function 跑插公式块(文档: PMNode, 光标: number) {
-  const 视图 = {
-    state: EditorState.create({ doc: 文档, selection: TextSelection.create(文档, 光标) }),
-    dispatch(tr: Transaction) {
-      调用.push("dispatch");
-      视图.state = 视图.state.apply(tr);
-    },
-    // ⚠️ 只记顺序，不做真的聚焦（假 DOM 里没有焦点这回事）。
-    focus() {
-      调用.push("focus");
-    },
-  };
-  const 调用: string[] = [];
-  ctx.set(editorViewCtx, 视图 as never);
-  // `Editor` 那一层只用得上 `action`（它就是把 ctx 交回调）。
-  插公式块({ action: (体: (c: unknown) => void) => 体(ctx) } as never);
-  return { state: 视图.state, 调用 };
-}
-
-组("六、插公式块（`docs/07` 第 52 项那条菜单）");
-
-await 测("空段落里 → **就地**变成公式块（不留下一个空段落），并整个选中它", () => {
-  const 文档 = schema.topNodeType.create(null, [段落()]);
-  const { state: 改完 } = 跑插公式块(文档, 1);
-  等(改完.doc.childCount, 1, "还是只有一块（就地换，不是插一块新的）");
-  等(改完.doc.child(0).type.name, "math_block", "那一段自己变成了公式块");
-  等(改完.doc.child(0).attrs.value, "", "源码为空（用户马上要自己写）");
-  断言(改完.selection instanceof NodeSelection, "选区是 NodeSelection——这是『正在编辑』的判据");
-  等(改完.selection.from, 0, "选中的正是新块");
-});
-
-await 测("有字的段落里 → 插在**这一段之后**，那一段的字一个不动", () => {
-  const 文档 = schema.topNodeType.create(null, [段落("甲"), 段落("乙")]);
-  const { state: 改完 } = 跑插公式块(文档, 2);
-  等(改完.doc.childCount, 3, "多出来一块");
-  等(改完.doc.child(0).textContent, "甲", "原段落一个字不动（`setBlockType` 那条路会把这字吃掉）");
-  等(改完.doc.child(1).type.name, "math_block", "新块落在它后面");
-  等(改完.doc.child(2).textContent, "乙", "后面的段落也没被顶掉");
-  断言(改完.selection instanceof NodeSelection, "新块被选中");
-  等(改完.selection.from, 段落("甲").nodeSize, "选中的是新块的位置");
-});
-
-await 测("嵌套的空段落里（引用块内）→ 只插一块，**外层整块不许被换掉**", () => {
-  const 引用 = schema.nodes.blockquote.create(null, [段落()]);
-  const 文档 = schema.topNodeType.create(null, [引用, 段落("尾")]);
-  const { state: 改完 } = 跑插公式块(文档, 2);
-  等(改完.doc.childCount, 3, "引用块还在，只多出一块");
-  等(改完.doc.child(0).type.name, "blockquote", "⚠️ 外层引用块必须原样在（`$from.before(1)` 那个坑）");
-  等(改完.doc.child(0).childCount, 1, "引用块里的空段落也还在");
-  等(改完.doc.child(1).type.name, "math_block", "新块插在这一整个顶层块之后");
-  等(改完.doc.child(2).textContent, "尾", "后面的照旧");
-});
-
-await 测("插进去那块是**真能存盘**的（走插件自己那份 toMarkdown）", () => {
-  const { state: 改完 } = 跑插公式块(schema.topNodeType.create(null, [段落()]), 1);
-  等(JSON.stringify(存盘一笔(改完.doc.child(0))), JSON.stringify([{ 名: "math", 值: "" }]), "存盘读 attrs.value，落成一条 math");
-});
-
-await 测("**先聚焦、再派事务**（从菜单点下来时源码框才抢得到焦点）", () => {
-  const { 调用 } = 跑插公式块(schema.topNodeType.create(null, [段落()]), 1);
-  // ⚠️ 这条钉的是一个**无头窗口里才露头**的毛病（2026-09-26）：菜单点下来那一刻
-  //    DOM 焦点还在菜单按钮上，`math-view.ts::同步面板` 的判据 `view.hasFocus()`
-  //    为假 → 面板画出来却不把焦点给源码框 → 接着敲的字进了正文。
-  //    （走 `Ctrl+Shift+M` 时焦点本就在正文里，所以只在鼠标这条路上出问题。）
-  等(JSON.stringify(调用), JSON.stringify(["focus", "dispatch"]), "顺序：先 focus 再 dispatch");
-});
-
-/* ── 七、序列化时不给行首井号加反斜杠（`lax-heading.ts`）───────────────── */
-//
-// 这一组接的是第七组原来的位置：那一组钉的是 `宽松标题显示`（把 `#你好` 按
-// `h1` 排版的那个装饰），**2026-09-26 那条装饰被删掉了**——用户裁定
-// `#你好` 不许变位置变大小（他的原话与完整理由在 `lax-heading.ts` 文件头）。
-// 装饰没了就没什么可测的，于是这一格换成**同一个文件里剩下那一半**：
-// `不转义行首井号`——它原来**一条用例都没有**（判据只写在注释里）。
-//
-// ⚠️ 这一组**测不到 remark 真的会怎么转义**：那边是 `mdast-util-to-markdown`
-// 的内部行为，这里递进去的是一份**假的**原文处理器（`假转义`），所以钉的是
-// **本函数的判据**（哪几种能脱、哪几种一个字节都不许动），不是"上游行为没变"。
-// 上游行为要变，得靠端到端那条（`docs/06` §5.9 的"存前存后比字节"）。
-
-/**
- * 假装自己是 remark 那条文本处理器：把**行首**的井号转义掉。
- *
- * ⚠️ 只做这一件事，因为 `被转义的行首井号` 这条正则只认这一个形状。
- */
-function 假转义(值: string): string {
-  return 值.replace(/^(#{1,6})/, "\\$1");
-}
-
-/** 拿一个"原文处理器"：`脱` 是假的，用来验脱得对不对。 */
-function 假原文(值: string) {
-  return (() => 假转义(值)) as never;
-}
-
-/** 跑一遍：拿真函数包住假原文，喂一个假的 mdast 文本节点。 */
-function 串化(值: string): string {
-  const 处理 = 不转义行首井号(假原文(值));
-  return 处理({ value: 值 } as never, null as never, null as never, null as never);
-}
-
-组("七、序列化不给行首井号加反斜杠（`lax-heading.ts`）");
-
-await 测("`#标签`：反斜杠要脱掉（存盘存回用户写的那几个字符）", () => {
-  等(串化("#标签 不是标题"), "#标签 不是标题", "`\\#标签` 要变回 `#标签`");
-  等(串化("###三层"), "###三层", "一到六个井号都算");
-});
-
-await 测("⚠️ `# 有空格`：**一个字节都不许动**（它本来就得转义）", () => {
-  // 这是整条规则**最容易改错**的一处：CommonMark 里"井号 + 空格"是真标题，
-  // 那个反斜杠是**有用的**，脱掉之后重新打开就变成标题了。
-  等(串化("# 有空格"), "\\# 有空格", "井号后有空白 → 不许脱");
-  等(串化("#"), "\\#", "光一个井号 → 不许脱");
-  等(串化("##"), "\\##", "连着两个井号（后面什么都没）→ 不许脱");
-});
-
-await 测("`#` 不在行首（段中间、或行内代码里那种）→ 不许动", () => {
-  // 只有**行首**那个才有多余转义的问题；段中间的井号 remark 本来就不转义，
-  // 这里给的是"假原文已经转了"的输入，函数也不该去动它（判据里没有行首就返回原样）。
-  等(串化("甲#标签"), "甲#标签", "不在行首：原样返回");
-});
-
-await 测("多行文本：每一行的行首都算（`(^|\n)` 那一段）", () => {
-  等(串化("甲\n#标签"), "甲\n#标签", "第二行的行首也要脱");
-});
-
-await 测("没有原文处理器时**原样返回**，不自己造一条", () => {
-  // `create.ts` 传的是 `prev.handlers?.text`，它可能没有——那时宁可什么都不做，
-  // 也不能在这里自己拼一份转义规则出来（序列化器是核心路径）。
-  const 处理 = 不转义行首井号(undefined);
-  等(处理({ value: "#标签" } as never, null as never, null as never, null as never), "#标签");
-});
-
-组("八、命令补全弹窗的**接线**（`math-suggest.ts` 那一层自己测在 `math-suggest.test.ts`）");
-
-/**
- * 在源码框里"敲"一串字：改 `value`、把光标放到末尾、派发一次 `input`。
- *
- * ⚠️ 这一串正是**浏览器**会做的事（`math-view.ts` 听的就是 `input`），
- * 而不是直接喊内部函数——所以"接线断了"这种事测得出来。
- */
-function 敲进(dom: 假元素, 源: string): 假元素 {
-  const 框 = 找(dom, "nota-math-source");
-  if (!框) throw new Error("没找到源码框");
-  框.value = 源;
-  框.setSelectionRange(源.length, 源.length);
-  框.派发("input");
-  return 框;
-}
-
-/** 按一个键（走源码框上那条 `keydown`）。 */
-function 按键(框: 假元素, 键: string): 假事件 {
-  return 框.派发("keydown", { key: 键 });
-}
-
-await 测("面板里挂着那一格弹窗；起手是藏着的", () => {
-  const { 视角 } = 建(块("E=mc^2"), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-
-  const 弹 = 找(dom, "nota-math-suggest");
-  断言(弹, "弹窗该在面板里");
-  等(弹?.hidden, true, "起手藏着");
-  // ⚠️ 挂**在面板里**（不是 `document.body`，像 `lang-picker.ts` 那样）：
-  //    两条理由写在 `math-suggest.ts` 的文件头，这里量的是结论那一半。
-  等(数(找(dom, "nota-math-panel") as 假元素, "nota-math-suggest"), 1, "在面板那棵树里");
-  // 块公式用 `div`（行内那档用 `span`，见下面那条）。
-  等(弹?.tagName, "DIV", "块那档的根元素");
-});
-
-await 测("⚠️ 只读实例连弹窗都不挂（同面板与悬浮预览那两条）", () => {
-  const { 视角 } = 建(块("E=mc^2"), 块位置, true);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-  等(找(dom, "nota-math-suggest"), null, "只读那棵树里不该有它");
-});
-
-await 测("行内公式那档：弹窗是 `span`（整棵 NodeView 活在一个 `<span>` 里）", () => {
-  const { 视角 } = 建(行内("x"), 行内位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-  const 弹 = 找(dom, "nota-math-suggest");
-  断言(弹, "该有弹窗");
-  等(弹?.tagName, "SPAN", "行内那档的根元素");
-});
-
-await 测("敲进 `\\fr`：弹窗自己开了，第一条是 `\\frac`", () => {
-  const { 视角 } = 建(块(""), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-
-  敲进(dom, "\\fr");
-  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
-  等(弹.hidden, false, "弹窗开了");
-  等(数(弹, "nota-math-suggest-item"), 1, "`\\fr` 只挑得到一条");
-  等待名字(弹, "\\frac");
-});
-
-await 测("⚠️ 光标不在命令里时它收起来（敲了别的字不该留着上一列）", () => {
-  const { 视角 } = 建(块(""), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-  敲进(dom, "\\fr");
-  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
-  等(弹.hidden, false, "先开着");
-  敲进(dom, "x+1");
-  等(弹.hidden, true, "没有当场了 → 收起来");
-});
-
-await 测("⚠️ 回车收下：写进文档的是替换后的源码，面板**留着**（不是退出编辑）", () => {
-  const { 视角, 取state } = 建(块(""), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-
-  const 框 = 敲进(dom, "\\fr");
-  按键(框, "Enter");
-
-  const 节点 = 取state().doc.nodeAt(块位置);
-  等(取源码(节点 as never), "\\frac{}{}", "文档里已经是插入体");
-  等(框.value, "\\frac{}{}", "源码框跟着变");
-  // `\frac{}{}`：0=\ 1=f 2=r 3=a 4=c 5={ 6=} … → 光标落在 6（第一个 `{}` 里面）
-  等(框.选区[0], 6, "光标落进第一个 `{}`");
-  断言(dom.classList.contains("nota-math-editing"), "面板还开着（收的是命令，不是退出编辑）");
-  等((找(dom, "nota-math-suggest") as 假元素).hidden, true, "弹窗自己收了");
-});
-
-await 测("⚠️ Esc 的第一下只收弹窗、第二下才退出编辑", () => {
-  const { 视角 } = 建(块(""), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-  const 框 = 敲进(dom, "\\fr");
-  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
-
-  按键(框, "Escape");
-  等(弹.hidden, true, "第一下：弹窗收了");
-  断言(dom.classList.contains("nota-math-editing"), "第一下面板还在（这是那条「只收候选」）");
-
-  按键(框, "Escape");
-  断言(!dom.classList.contains("nota-math-editing"), "第二下才退出编辑");
-});
-
-await 测("点一条候选：收下它（走的是同一个「写进源码框」的口子）", () => {
-  const { 视角, 取state } = 建(块(""), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-
-  const 框 = 敲进(dom, "\\i");
-  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
-  const 行 = (弹 as unknown as { childNodes: 假元素[] }).childNodes;
-  断言(行.length >= 2, "`\\i` 该挑出不止一条");
-  const 想要 = 行[1] as 假元素;
-  const 名字 = 想要.childNodes.find((c) =>
-    c.classList.contains("nota-math-suggest-name"),
-  )?.textContent;
-
-  想要.派发("mousedown");
-  等(取源码(取state().doc.nodeAt(块位置) as never), `\\int_{}^{}`, "文档里是第二条的插入体");
-  等(框.value.startsWith(名字 ?? "？"), true, `源码框里是 ${名字}`);
-  等(弹.hidden, true, "点完收起来");
-});
-
-await 测("⚠️ `aria-activedescendant` 写在**源码框**上（焦点一直在那儿）", () => {
-  const { 视角 } = 建(块(""), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-  const 框 = 敲进(dom, "\\i");
-  等(框.getAttribute("aria-activedescendant"), "nota-math-suggest-item-0", "开着时指着第一条");
-
-  按键(框, "ArrowDown");
-  等(框.getAttribute("aria-activedescendant"), "nota-math-suggest-item-1", "往下挪一格");
-
-  按键(框, "Escape");
-  等(框.getAttribute("aria-activedescendant"), null, "收起来之后这一笔要抹掉");
-});
-
-await 测("⚠️ 丢焦点：弹窗收起来（面板归**选区**管，那是另一条判据）", () => {
-  const { 视角 } = 建(块(""), 块位置);
-  const dom = 视角.视图?.dom;
-  if (!dom) throw new Error("没建出 dom");
-  const 框 = 敲进(dom, "\\fr");
-  const 弹 = 找(dom, "nota-math-suggest") as 假元素;
-  等(弹.hidden, false, "先开着");
-
-  框.派发("blur");
-  等(弹.hidden, true, "丢了焦点就收");
-  // ⚠️ 面板**故意还开着**：`面板该开` 的两条判据是「装饰说当前」或「框里有焦点」，
-  //    这会儿装饰还是说当前的（选区没动）。这一条断言是**有意**写下来的——
-  //    它把"弹窗归焦点、面板归选区"这条分界钉住，将来改坏了当场看得见。
-  断言(dom.classList.contains("nota-math-editing"), "面板还在（装饰还说当前）");
-
-  // 真的离开这一块（退出编辑：选区搬走）之后，两条一起收。
-  按键(框, "Escape");
-  断言(!dom.classList.contains("nota-math-editing"), "退出编辑后面板收了");
-  等(弹.hidden, true, "弹窗当然也收着");
-});
-
-/** 断言弹窗第一条候选的名字是哪一个。 */
-function 等待名字(弹: 假元素, 期望: string): void {
-  const 行 = (弹 as unknown as { childNodes: 假元素[] }).childNodes[0];
-  const 名字 = 行?.childNodes.find((c) => c.classList.contains("nota-math-suggest-name"));
-  等(名字?.textContent, 期望, "第一条候选的名字");
-}
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 

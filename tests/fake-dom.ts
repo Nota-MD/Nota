@@ -1,5 +1,11 @@
 /**
- * 一颗**只够跑逻辑**的假 DOM，给 `tests/math-view.test.ts` 用。
+ * 一颗**只够跑逻辑**的假 DOM，给 `tests/math-view.test.ts` 与
+ * `tests/math-wiring.test.ts` 用（2026-10-07 之前只写着一份文件的名字——
+ * 那天 `math-view.test.ts` 拆成两份、工装抽去 `math-fixture.ts`，
+ * **假 DOM 是两份都用的那一层**，所以那两份的名字都得在这儿）。
+ *
+ * ⚠️ `math-fixture.ts`（真 Schema ＋ `建`）也建在这颗假 DOM 上，
+ * 而它是**第三个**消费者——所以别把本文件的"给谁用"读成"只有测试文件直接用"。
  *
  * # 为什么需要它
  *
@@ -272,4 +278,29 @@ export function 装假document(): void {
       return 节点;
     },
   };
+}
+
+/* ── 找一颗 / 数几颗（2026-10-07 从 `math-view.test.ts` 搬来）─────────────
+ *
+ * ⚠️ 搬家的理由：这份测试要拆成两份（`math-view.test.ts` 拆出
+ * `math-wiring.test.ts`），而这两个小工具**两份都要用**；它们走的又是
+ * `假元素` 的 `childNodes`／`classList`，与数学那一摊没有任何关系——
+ * 放在 `fake-dom.ts` 里才是它们该在的地方。
+ */
+
+/** 在假 DOM 树上按类名找一颗元素（假 DOM 没有 CSS 选择器）。 */
+export function 找(根: 假元素, 类名: string): 假元素 | null {
+  if (根.classList.contains(类名)) return 根;
+  for (const 孩 of 根.childNodes) {
+    const 命中 = 找(孩, 类名);
+    if (命中) return 命中;
+  }
+  return null;
+}
+
+/** 数一数假 DOM 树上某个类名有几颗。 */
+export function 数(根: 假元素, 类名: string): number {
+  let n = 根.classList.contains(类名) ? 1 : 0;
+  for (const 孩 of 根.childNodes) n += 数(孩, 类名);
+  return n;
 }

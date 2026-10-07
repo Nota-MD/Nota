@@ -33,6 +33,8 @@ import type { RefObject } from "react";
 import { 危险协议 } from "@/editor/url-link";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import type { Dialogs } from "@/ui/useDialogs";
+import type { Toast } from "@/ui/Toasts";
+import { useT } from "@/i18n";
 
 /** 一条 DOM 锚点上的链接：它显示的那几个字 ＋ 它的地址。 */
 export interface 链接目标 {
@@ -70,9 +72,14 @@ export interface 点链接接线 {
   askLink: Dialogs["askLink"];
   /** 转交一条编辑命令（`ui/useEditorCommands.ts` 的 `run`）。 */
   跑命令: (c: EditorCommand, payload?: CommandPayload) => void;
+  /** 「打不开浏览器」要说一句（见下面那条口径）。 */
+  toast: (message: string, level?: Toast["level"]) => void;
 }
 
-export function use点链接({ 主区, askLink, 跑命令 }: 点链接接线): void {
+export function use点链接({ 主区, askLink, 跑命令, toast }: 点链接接线): void {
+  // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
+  // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`。
+  const t = useT();
   // ⚠️ 依赖里放 `主区` 那个 **ref 对象**（建一次就不换）；监听挂在 DOM 元素上，
   // 所以每次动作前现读 `主区.current`。两个回调也进依赖——它们换了身份就重挂一次
   // （挂一个 `click` 是最便宜的那种活），换来的是一条硬保证：**监听里跑的永远是
@@ -91,7 +98,15 @@ export function use点链接({ 主区, askLink, 跑命令 }: 点链接接线): v
         // ⚠️ 危险协议一个都不许送到系统浏览器去（`url-link.ts` 那道闸，与本文档里
         // 那条"不写成链接"是同一个答案）。⚠️ 这里**一声不吭**：它是防御性的拒答，
         // 不是用户做错了什么——弹一条提示只会让人以为是自己按错了。
-        if (!危险协议(链.href)) void openUrl(链.href).catch(() => {});
+        if (危险协议(链.href)) return;
+        // ⚠️ **打不开要吭声**，与 `ui/useExport.ts` 那颗「去官网」同一条口径
+        //（"点下去没反应会让人以为按钮坏了"）。⛔ 别照 `AboutDialog` 那条"打不开
+        // 就算了"办——那是页脚里一行可有可无的外链，这里是用户刚刚做的一个动作。
+        // ⚠️ 这一条有实测背景：本机的开发容器里 `xdg-open` 曾经是坏的（静默退 127），
+        // 那时这一下**什么都不显示**，用户只会以为"Ctrl＋单击没做"。
+        void openUrl(链.href).catch((err: unknown) =>
+          toast(t("Could not open the browser: {0}", String(err)), "error"),
+        );
         return;
       }
 
@@ -105,5 +120,5 @@ export function use点链接({ 主区, askLink, 跑命令 }: 点链接接线): v
 
     宿主.addEventListener("click", 点击);
     return () => 宿主.removeEventListener("click", 点击);
-  }, [主区, askLink, 跑命令]);
+  }, [主区, askLink, 跑命令, toast, t]);
 }

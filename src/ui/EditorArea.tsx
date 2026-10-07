@@ -130,7 +130,7 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
   // 正文里点一下链接那件事（`docs/07` 第 96 项）：单击弹同一个「链接」框、
   // `Ctrl`＋单击交给系统浏览器。⚠️ 挂的是 `<main>` 上的一条 `click` 委托，
   // 判据（只认可编辑那一侧、地址危险不放行）写在 `ui/useLinkClick.ts` 文件头。
-  use点链接({ 主区, askLink: 对话框.askLink, 跑命令 });
+  use点链接({ 主区, askLink: 对话框.askLink, 跑命令, toast });
 
   const { newDoc, openViaDialog, openFolder, 记活动 } = 文档出口;
   const { 查找开着, 替换行, 命中情况, 报命中, 关查找, 替换当前, 全部替换 } = 查找条;

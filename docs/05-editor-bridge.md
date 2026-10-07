@@ -3173,6 +3173,11 @@ ProseMirror 的 `hasFocus()` 判的是 `activeElement == view.dom` → 假 →
 
 单击 → 弹**同一个框**（两个框里都是现值，`editing` 为真所以多一颗「去掉链接」）；
 `Ctrl`（或 `⌘`）＋单击 → 交给系统浏览器（`openUrl`，**危险协议一个都不放行**）。
+⚠️ **打不开要吭声**：`openUrl` 失败时给一条红提示（`ui/useLinkClick.ts`）——口径与
+`ui/useExport.ts` 那颗「去官网」**同一条**（"点下去没反应会让人以为按钮坏了"），
+而 `AboutDialog` 那种"打不开就算了"**不适用**：这里的链接是用户刚刚点的那一下。
+⚠️ 这一条有实测背景：本机的开发容器里 `xdg-open` 曾经是坏的（静默退 127，见 `docs/06` §5.59），
+那时这一下**屏幕上什么都不显示**。
 ⚠️ 那是一个真的 `<a href>`，所以**`preventDefault` 不能省**——不拦，WebView 自己就
 导航走了。⚠️ **只读那一侧不接线**：分屏右侧预览是同一套 Milkdown 建的、也会画真的
 `<a href>`，判据取 PM 自己那个属性（只读实例上 `contenteditable="false"`）——按窗格

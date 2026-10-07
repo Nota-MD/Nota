@@ -383,7 +383,13 @@ export function PluginDock({
             混在某一颗插件行里会让人以为那是那个插件的一部分。 */}
         <button
           type="button"
-          className="plugin-install"
+          // ⚠️ **`btn` 那个类不能省**（2026-10-07 修的）：这几颗以前只挂 `.plugin-install`，
+          // 而那个类只管字号与内边距——于是一颗**裸 `<button>`**，画出来的是 WebKitGTK
+          // 自己那套默认外观（浅色底）。浅色界面下看着"还行"，**深色界面里就成了
+          // 浅底 + 继承来的浅字**：整颗按钮一片白，字看不见（用户 2026-10-07 报的
+          // 「颜色异常。现在看不清按钮。」）。同族的 `.stg-action`（设置页）与
+          // `panel-btn`（面板 DSL）都老老实实挂着 `btn`，只有这一栏漏了。
+          className="btn plugin-install"
           disabled={动作.忙 !== null}
           title={t("Install from an extension package (.nota-plugin)")}
           onClick={() => void 动作.装()}
@@ -432,7 +438,7 @@ export function PluginDock({
               <div className="plugin-actions">
                 <button
                   type="button"
-                  className="plugin-action"
+                  className="btn plugin-action"
                   disabled={动作.忙 !== null}
                   onClick={() => void 动作.启停(p.id, p.state === "disabled")}
                 >
@@ -448,7 +454,7 @@ export function PluginDock({
                 {p.removable && (
                   <button
                     type="button"
-                    className="plugin-action plugin-action-danger"
+                    className="btn plugin-action plugin-action-danger"
                     disabled={动作.忙 !== null}
                     onClick={() => void 动作.卸(p.id)}
                   >
@@ -458,7 +464,7 @@ export function PluginDock({
                 {p.signature === "unknown" && (
                   <button
                     type="button"
-                    className="plugin-action"
+                    className="btn plugin-action"
                     disabled={动作.忙 !== null}
                     title={t("Trust {0}", p.key_id ?? t("this signer"))}
                     onClick={() => void 动作.信任(p.id, p.key_id)}

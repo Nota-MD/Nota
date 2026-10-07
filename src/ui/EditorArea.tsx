@@ -33,7 +33,7 @@
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 
 import type { CommandState } from "@/editor/command-state";
-import type { Document } from "@/bridge/ipc";
+import type { Document, ViewMode } from "@/bridge/ipc";
 import type { Settings } from "@/bridge/types";
 import type { Toast } from "@/ui/Toasts";
 import { 认文件类型 } from "@/editor/file-kind";
@@ -65,8 +65,8 @@ export interface 编辑区接线 {
   /** 此刻前台那份文档。`null` = 一份都没开，主区画主页。 */
   activeDoc: Document | null;
   settings: Settings | null;
-  /** 三种编辑模式（所见即所得 / 源码 / 分屏）。 */
-  viewMode: Settings["view_mode"];
+  /** 三种编辑模式（所见即所得 / 源码 / 分屏）。⚠️ `App.tsx` 的 `viewMode`：**实际**模式（过完降级）。 */
+  viewMode: ViewMode;
   focusMode: boolean;
   typewriter: boolean;
   /** 格式化工具栏此刻该不该画（三档里由 `ui/useChromeVisibility.ts` 算出来）。 */

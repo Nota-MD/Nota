@@ -225,11 +225,12 @@ export function useMenus(w: MenuWiring): MenuState {
   /**
    * 可勾选项的当前状态。
    *
-   * ⚠️ 编辑模式那三条**三选一**，来源是 `settings.view_mode` 而不是某个
-   * `useState`：它就是编辑区的 `mode` 属性，两处**必须同源**——各存一份的
-   * 症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。默认值也**必须**和
-   * Rust 侧 `ViewMode::default()` 一致（`wysiwyg`），见
-   * `settings/mod.rs` 那条测试。
+   * ⚠️ 编辑模式那三条**三选一**，来源是 `App.tsx` 递下来的 `viewMode`——
+   * 它是**实际**模式（过完大文件降级那一道），也是编辑区的 `mode` 属性，
+   * 两处**必须同源**：各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"。
+   * 默认值（`wysiwyg`）现在只有一处：`ui/useFileKindMode.ts` 里那条
+   * `useState<ViewMode>("wysiwyg")` 的初值——2026-10-07 起模式是会话内状态、
+   * 不落盘，`settings/mod.rs` 那边已经没有第二份了。
    */
   const menuChecks = useMemo<Record<string, boolean>>(
     () => ({

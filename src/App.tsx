@@ -157,7 +157,12 @@ export default function App() {
   // 2026-09-28 那两条规则（按文件名认类型 ＋ 大文件自动降级源码模式）整块在
   // `ui/useFileKindMode.ts`：判据是纯函数、有测试，那边只管"每份只判一次"与
   // 提示条。⚠️ 出口对象每渲染一份新的，但**两个成员的身份都是稳的**。
-  const 文件类型 = useFileKind({ docs, activeId, settings, toast, t });
+  //
+  // ⚠️ **2026-10-07 起编辑模式那两件（偏好 / 切模式的 `设模式`）也住那边**：
+  // "模式不再存盘"把它那条 `useState` 从本文件搬了过去（加完它是 1027 行、
+  // 越了 1000 硬线），落在那个 hook 是因为 `设模式` 要顺手解除降级、与那两条
+  // 规则同源。理由在那个文件头上。
+  const 文件类型 = useFileKind({ docs, activeId, toast, t });
 
   const refreshDocs = useCallback(async () => {
     const list = await api.doc.list();
@@ -263,6 +268,8 @@ export default function App() {
     setTree,
     editorRef,
     settings,
+    // ⚠️ 给 `偏好`（用户选的那一档）不给 `模式`：那边问"用户想要所见即所得吗"，与降级无关。
+    模式偏好: 文件类型.偏好,
     toast,
     askConfirm,
     askPrompt,
@@ -376,9 +383,6 @@ export default function App() {
   const updateSettings = useCallback(
     async (patch: Partial<Settings>) => {
       if (!settings) return;
-      // ⚠️ 用户**自己**选了一次模式就**解除这一份的降级**（那边的文件头讲了
-      // 为什么非有这条出口不可）。用 ref 读、不进依赖：那是整张菜单表的依赖。
-      if (patch.view_mode !== undefined) 文件类型.解除降级(activeIdRef.current);
       const previous = settings;
       const next = { ...settings, ...patch };
       setSettings(next); // 先改内存：主题、字号这些要立刻见效果
@@ -661,19 +665,15 @@ export default function App() {
     切换全屏,
     切换置顶,
     开开发者工具,
-    改设置: updateSettings,
+    设模式: 文件类型.设模式,
     关于: showAbout,
   });
 
   /**
-   * 编辑模式。⚠️ 三条**三选一**，来源是 `settings.view_mode` 而不是某个
-   * `useState`——它就是编辑区的 `mode` 属性，两处**必须同源**（各存一份的
-   * 症状是"菜单里的 ✓ 在 A 上、编辑区却是 B"）。默认值**必须**与 Rust 侧
-   * `ViewMode::default()` 一致（`wysiwyg`），见 `settings/mod.rs` 那条测试。
-   *
-   * ⚠️ 2026-09-28 起它**还过一道降级**（上面那个 hook）：用户设的是**偏好**，
-   * 那两条规则能把它压成 `source`。⚠️ **状态栏也吃这一条**，所以它显示的是
-   * **实际**模式——那不是"设置没生效"，正是它该显示的东西。
+   * 编辑模式，**实际**那一个（`wysiwyg` / `source` / `split`）。⚠️ 来源是
+   * `文件类型.模式`（上一节那个 hook）：用户设的只是偏好，还会被"大文件 /
+   * 非 Markdown 降级"压成 `source`。菜单的 ✓、状态栏那颗 `</>` 与编辑区都吃
+   * 这一条——**必须同源**，各存一份的症状是"菜单里的 ✓ 在 A 上、编辑区是 B"。
    */
   const viewMode = 文件类型.模式;
 
@@ -743,6 +743,7 @@ export default function App() {
     settings,
     updateSettings,
     viewMode,
+    设模式: 文件类型.设模式,
     doc: activeDoc,
     sidebarOpen,
     setSidebarOpen,

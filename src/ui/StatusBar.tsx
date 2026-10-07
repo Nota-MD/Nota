@@ -31,7 +31,7 @@
  * | 位置 | 是什么 | 谁管 |
  * |---|---|---|
  * | 左一 | 侧栏开关（关着＝空心圆圈，开着＝左向折角） | `App.tsx` 的 `sidebarOpen` |
- * | 左二 | 源码／所见即所得开关（`</>`，在源码模式时点亮） | `settings.view_mode` |
+ * | 左二 | 源码／所见即所得开关（`</>`，在源码模式时点亮） | `App.tsx` 的 `viewMode`（家在 `ui/useFileKindMode.ts`，会话内、**不落盘**） |
  * | 右一之左 | 强制专注余额（**只在跑着的时候出现**） | `ui/FocusMeter.tsx` |
  * | 右一 | 「N 词」，悬停给出词/字符/行/约几分钟 | 下面那个 `四个` 表 |
  * | 右一之右 | 展开「字数统计」菜单的那颗箭头（**悬停才出现**） | 同上 |
@@ -67,8 +67,10 @@
  * 别拿旧注释把它锁回去。
  *
  * ⚠️ 但"不要第三个真相"那半句照旧：**这一层一个状态都不存**——
- * 侧栏开合住在 `App.tsx` 的 `sidebarOpen` 里，模式住在 `settings.view_mode`
- * 里，显示哪个统计量住在 `settings.appearance.status_metric` 里，拼写开关
+ * 侧栏开合住在 `App.tsx` 的 `sidebarOpen` 里，模式住在 `ui/useFileKindMode.ts`
+ * 那条 `useState` 里（**会话内状态**，2026-10-07 起不落盘；`App.tsx` 把它们
+ * 递下来），显示哪个统计量住在
+ * `settings.appearance.status_metric` 里，拼写开关
  * 住在 `settings.editor.spellcheck` 里。这里只拿现成的值画个形状、把点击
  * 原样交出去（四个回调）。自己 `useState` 一份的症状是"菜单里选了，勾也动了，
  * 那一格还是旧数"。
@@ -139,7 +141,7 @@ export function StatusBar({
   onHide,
 }: {
   doc: Document | null;
-  /** 当前编辑模式（`settings.view_mode`）。**只用来点亮那颗 `</>`。** */
+  /** 当前**实际**编辑模式（`App.tsx` 的 `viewMode`：家在那条会话内 `useState`，这里已经过完降级）。**只用来点亮那颗 `</>`。** */
   mode: ViewMode;
   /** 侧栏此刻开着没有（`App.tsx` 的 `sidebarOpen`）。**决定左一是圆圈还是折角。** */
   sidebarOpen: boolean;
@@ -174,7 +176,7 @@ export function StatusBar({
   onSetSpellcheck: (on: boolean) => void;
   /** 显示/隐藏侧栏。**与「视图」菜单、`Ctrl+Shift+L`、侧栏那颗 × 同一个 setter。** */
   onToggleSidebar: () => void;
-  /** 切到源码模式／切回所见即所得。**在 App 那边落到 `updateSettings({ view_mode })`。** */
+  /** 切到源码模式／切回所见即所得。**在 App 那边落到 `设模式`**（会话内状态，不落盘）。 */
   onToggleSource: () => void;
   /**
    * 收起这一栏（**最右端那颗 ×**，2026-10-04 补，`docs/07` 第 49 项）。

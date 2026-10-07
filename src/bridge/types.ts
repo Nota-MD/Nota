@@ -170,8 +170,14 @@ export type UiMode = "auto" | "light" | "dark";
  * | `source` | Markdown 原文（CodeMirror） | — |
  * | `split` | 原文（可编辑） | 预览（**只读**） |
  *
- * ⚠️ 加值时同时改：`src-tauri/src/settings/mod.rs` 的枚举、这里、
- * `src/ui/commands.ts` 的「视图」栏条目、`docs/04-ui-map.md`。
+ * ⚠️ **2026-10-07 起它只活在前端、而且只是会话内状态**：不落设置文件，
+ * 每次启动从 `wysiwyg` 开始（用户原话「请设置默认启动为 WYSIWYG」）。
+ * 形状与理由在 `src/ui/useFileKindMode.ts`（那条 `useState` 就是家）。
+ *
+ * ⚠️ 加值时同时改：这里、`src/ui/view-modes.ts` 的表（`Record` 会当场报错，
+ * 它是这条规矩剩下的**唯一**一处编译期保险）、`src/ui/commands.ts` 的「视图」
+ * 栏三条（id / label / 快捷键）、`src/ui/useMenus.ts` 的 `menuChecks` 三条、
+ * `docs/04-ui-map.md`。
  */
 export type ViewMode = "wysiwyg" | "source" | "split";
 
@@ -256,7 +262,8 @@ export interface Settings {
   ui_style: UiStyle;
   ui_mode: UiMode;
   document_theme: string;
-  view_mode: ViewMode;
+  // ⚠️ `view_mode` 2026-10-07 退休：模式改成会话内状态（见 `ViewMode` 顶上那段），
+  // 后端结构体里那份也已经删掉——老设置文件里残留的键由 serde 忽略。
   ui_font_size: number;
   content_width: number;
   confirm_unsaved: boolean;

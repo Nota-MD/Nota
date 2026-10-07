@@ -43,7 +43,14 @@ import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 
-import { api, type DocId, type Document, type Settings, type TreeNode } from "@/bridge/ipc";
+import {
+  api,
+  type DocId,
+  type Document,
+  type Settings,
+  type TreeNode,
+  type ViewMode,
+} from "@/bridge/ipc";
 import { MARKDOWN后缀 } from "@/editor/file-kind";
 import { useT } from "@/i18n";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
@@ -119,6 +126,12 @@ export interface 文档接线 {
   editorRef: RefObject<EditorPaneHandle | null>;
   /** 当前设置。⚠️ 只有 `confirm_unsaved` 用得上（关文档前问不问）。 */
   settings: Settings | null;
+  /**
+   * 用户选的编辑模式（`App.tsx` 那份**会话内**状态；2026-10-07 起不落盘）。
+   * ⚠️ 这里只读它算下面那个 `所见即所得`——**实际**模式（过完降级的那一个）
+   * 是 `App.tsx` 的 `viewMode`，那是编辑区的事，不是这一份的。
+   */
+  模式偏好: ViewMode;
   toast: (message: string, level?: Toast["level"]) => void;
   /** ⚠️ 类型**从 `useDialogs` 借**，不在这里另写一份。 */
   askConfirm: Dialogs["askConfirm"];
@@ -190,6 +203,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
     setTree,
     editorRef,
     settings,
+    模式偏好,
     toast,
     askConfirm,
     askPrompt,
@@ -434,14 +448,18 @@ export function useDocuments(w: 文档接线): 文档出口 {
   );
 
   /**
-   * 现在是不是所见即所得那一档。⚠️ 与 `App.tsx` 那条 `viewMode` **同一个口径**
-   *（`?? "wysiwyg"` 那个兜底也一样）：认领只在这一档发生，见下面 `reloadDoc`。
+   * 现在是不是所见即所得那一档。⚠️ 它读的是**用户选的那一档**（`模式偏好`，
+   * 2026-10-07 前读的是 `settings.view_mode`——**同一个口径**，只是换了家），
+   * 不是过完降级的那个 `模式`。认领只在这一档发生，见下面 `reloadDoc`；
+   * 降级成源码的那一份在这里也按"所见即所得"算，但那一路 `getMarkdown()`
+   * 本来就等于 `fresh.text`，围栏 ② 就把它挡掉了（没有行为差别）。
    *
-   * ⚠️ 单独拎成一个布尔再进依赖数组，不是图好看：`settings` 每次刷新设置都换
-   * 一个新对象，直接依赖它会让 `reloadDoc` 的身份跟着抖（本文件头第 4 条讲的就是
-   * 这类抖动的代价）。
+   * ⚠️ 单独拎成一个布尔再进依赖数组，不是图好看：它进的是 `reloadDoc` 的依赖，
+   * 而布尔只在真的换档时才换值（本文件头第 4 条讲的就是这类抖动的代价）。
+   * ⚠️ 2026-10-07 起它读的是 `模式偏好`（会话内状态），不再从 `settings` 里取
+   * ——那一格已经退休。
    */
-  const 所见即所得 = (settings?.view_mode ?? "wysiwyg") === "wysiwyg";
+  const 所见即所得 = 模式偏好 === "wysiwyg";
 
   const reloadDoc = useCallback(
     async (id: DocId) => {

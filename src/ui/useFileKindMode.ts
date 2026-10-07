@@ -33,12 +33,26 @@
  * 用户会遇到：菜单里「所见即所得」上带着 ✓、我点「所见即所得」，**它纹丝不动**。
  * 那是把用户锁在外面——比"打开时选错了模式"糟得多。
  *
- * 出口就是 {@link 出口.解除降级}：`App.tsx` 的 `updateSettings` 收到
- * `view_mode` 那一次调用它，把这一份的降级**删掉**。删掉之后
+ * 出口就是 {@link 出口.设模式}：用户自己切模式的那几条入口（菜单「视图」
+ * 那三条 ＋ 状态栏那颗 `</>`）都汇到它，它把这一份的降级**删掉**。删掉之后
  * {@link 判过} 里还记着它，所以**不会再被判回来**——这正是"用户说了算"的形状。
  *
  * ⚠️ 解除是**按份**的，不是全局关掉这条功能：用户手动切过 A 那份之后，
  * 再拖一份 `.py` 进来照样降级。
+ *
+ * # ⚠️ 2026-10-07：用户选的那一档（`模式偏好`）也搬进了这里
+ *
+ * 它原本是 `App.tsx` 的一条 `useState`（再往前是设置文件里的 `view_mode`）。
+ * 那天两件事撞在一起：① 用户要「**请设置默认启动为 WYSIWYG**」，模式改成
+ * **会话内状态、不落盘**；② 那条 `useState` ＋ `设模式` 回调把 `App.tsx`
+ * 顶过了 1000 行硬线（那种账在 `src/App.tsx` 顶上一直记着）。搬到这里不是
+ * 权宜：**"哪一档"和"这一份该怎么打开"本来就是同一个问题的两半**，而
+ * "用户自己切模式"的全部效果（改偏好 ＋ 解除降级）也就地合成了一条
+ * {@link 出口.设模式}。
+ *
+ * ⚠️ 默认值 `wysiwyg` 从此**只有一处**：下面那条 `useState` 的初值。
+ * `settings/mod.rs` 那份已经删掉，老设置文件里残留的 `view_mode` 由 serde
+ * 忽略——**别再往设置里加回去**，那正是用户这次要拿掉的东西。
  *
  * ⚠️ **"这一份是不是 Markdown"不从这里出去**：那是文件的属性（`认文件类型`），
  * 由用它的地方（`ui/EditorArea.tsx`）按路径现算。从这里出去的话，"用户手动
@@ -54,7 +68,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { DocId, Document, Settings, ViewMode } from "@/bridge/ipc";
+import type { DocId, Document, ViewMode } from "@/bridge/ipc";
 import { 实际模式, 降级缘由, type 降级缘由 as 缘由 } from "@/editor/file-kind";
 import type { Toast } from "@/ui/Toasts";
 
@@ -64,8 +78,6 @@ export interface 输入 {
   docs: Document[];
   /** 前台是哪一份。`null` = 一份都没开。 */
   activeId: DocId | null;
-  /** 当前设置。⚠️ 只读 `view_mode` 那一格，`null` 时按 `wysiwyg`（与别处同源）。 */
-  settings: Settings | null;
   /** 提示条出口（`ui/useToasts.ts`）。 */
   toast: (message: string, level?: Toast["level"]) => void;
   /** 翻译（`useT()`）。⚠️ 传进来而不是在这里 `useT()`：调用方本来就有。 */
@@ -76,16 +88,43 @@ export interface 出口 {
   /** **实际该用的模式**。降级了就是 `source`，没降级就是用户设的那一档。 */
   模式: ViewMode;
   /**
-   * 用户**自己**选了模式，解除这一份的降级。
+   * 用户**自己**选的那一档（还没过降级的原始值）。
    *
-   * ⚠️ 身份是稳定的（`useCallback([])`）：`App.tsx` 那个 `updateSettings` 是
-   * 菜单表的依赖，把它搅抖一次就是整张菜单重建一次。
+   * ⚠️ `ui/useDocuments.ts` 要的是**这一个**而不是上面的 `模式`：它问的是
+   * "用户想要所见即所得吗"（决定自动配对之类的行为），与"这一份眼下被降级
+   * 了没有"无关。
    */
-  解除降级: (id: DocId | null) => void;
+  偏好: ViewMode;
+  /**
+   * 用户自己选了模式（菜单「视图」那三条 ＋ 状态栏那颗 `</>` 都汇到这里）。
+   *
+   * ⚠️ 两件事一起做：改偏好，再**解除当前这一份的降级**——降级压过用户的
+   * 选择，不解除的症状是"我点「所见即所得」，它纹丝不动"（见文件头）。
+   * 「当前这一份」用 ref 读、不进依赖：这个回调要**身份稳定**，它是
+   * `App.tsx` 整张菜单表的依赖之一，抖一次整张表重建一次。
+   */
+  设模式: (m: ViewMode) => void;
 }
 
 export function useFileKind(输入: 输入): 出口 {
-  const { docs, activeId, settings, toast, t } = 输入;
+  const { docs, activeId, toast, t } = 输入;
+
+  /**
+   * 用户**自己**选的那一档（**会话内状态**，不落盘，2026-10-07 起住这里）。
+   * 每次启动一律从这个初值开始——用户原话「请设置默认启动为 WYSIWYG」。
+   */
+  const [模式偏好, 设模式偏好] = useState<ViewMode>("wysiwyg");
+
+  /**
+   * `设模式` 要读"当前是哪一份"、又不许把它写进依赖（那个回调的身份要稳），
+   * 所以用 ref 转一手。⚠️ 同步那一下放在 effect 里，写法照抄
+   * `ui/useAppEvents.ts` 第 162 行那份 `activeIdRef`：切换永远发生在一次渲染
+   * 之后，读到的不会旧。
+   */
+  const activeIdRef = useRef(activeId);
+  useEffect(() => {
+    activeIdRef.current = activeId;
+  }, [activeId]);
 
   /**
    * 已经被降级的那些：id → 缘由。
@@ -173,13 +212,15 @@ export function useFileKind(输入: 输入): 出口 {
   const 这一份的缘由: 缘由 | null =
     activeId === null ? null : (降级表.get(activeId) ?? null);
 
-  // ⚠️ 那个 `?? "wysiwyg"` 的兜底**必须与 `App.tsx` / `ui/useDocuments.ts` /
-  // Rust 侧 `ViewMode::default()` 那一份一致**：不一致的话，启动那几百毫秒里
-  // 会算出另一种模式，用户看到的是"打开先闪一下另一种样子"。
-  const 模式 = 实际模式(settings?.view_mode ?? "wysiwyg", 这一份的缘由);
+  // ⚠️ 2026-10-07 起**不再有兜底值**：`模式偏好` 就是上面那条
+  // `useState("wysiwyg")` 的当前值，不存在"设置还没读回来"的那几百毫秒
+  // （那条窗口正是当初要三处兜底对齐的原因——现在那份默认值只有一处）。
+  const 模式 = 实际模式(模式偏好, 这一份的缘由);
 
-  // ── ④ 解除 ──────────────────────────────────────────────────────────
-  const 解除降级 = useCallback((id: DocId | null) => {
+  // ── ④ 切模式：改偏好 ＋ 解除这一份的降级 ─────────────────────────────
+  const 设模式 = useCallback((m: ViewMode) => {
+    设模式偏好(m);
+    const id = activeIdRef.current;
     if (id === null) return;
     set降级表((旧) => {
       if (!旧.has(id)) return 旧; // 没降级过就原样返回，别白重画一次
@@ -189,5 +230,5 @@ export function useFileKind(输入: 输入): 出口 {
     });
   }, []);
 
-  return { 模式, 解除降级 };
+  return { 模式, 偏好: 模式偏好, 设模式 };
 }

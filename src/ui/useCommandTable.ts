@@ -36,7 +36,7 @@
 import { useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import type { DocId, Settings } from "@/bridge/ipc";
+import type { DocId, Settings, ViewMode } from "@/bridge/ipc";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import { 清除最近项 } from "@/ui/commands";
 import { 最近条目id } from "@/ui/recentMenu";
@@ -168,8 +168,16 @@ export interface 命令表输入 {
    */
   切换置顶: () => Promise<void>;
   开开发者工具: () => Promise<void>;
-  /** 写设置（先改内存再落盘，失败回滚，见 `App.tsx` 那一段）。 */
-  改设置: (patch: Partial<Settings>) => Promise<void>;
+  /**
+   * 切编辑模式（`App.tsx` 的 `设模式`）。
+   *
+   * ⚠️ **2026-10-07 起它不再借 `改设置({ view_mode })` 那条路**：模式改成
+   * **会话内状态**、不落盘——每次启动一律所见即所得（用户原话「请设置默认
+   * 启动为 WYSIWYG」）。它顺手还要解除当前那一份的降级，理由见
+   * `ui/useFileKindMode.ts` 文件头。⚠️ 也正因为这一条，「改设置」那个输入
+   * 在这张表里**没有读者了**，同批删掉（写设置走 `设界面` 那一条）。
+   */
+  设模式: (m: ViewMode) => void;
 
   // ── 帮助 ──────────────────────────────────────────────────────────────
   关于: () => void;
@@ -226,7 +234,7 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
     切换全屏,
     切换置顶,
     开开发者工具,
-    改设置: updateSettings,
+    设模式,
     关于: showAbout,
   } = 输入;
   /** 剪贴板四件的**局部包装**：只为让下面那张表里的写法与搬来之前一致。 */
@@ -426,13 +434,13 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "view.zoomOut": 缩放动作.缩小,
       "view.zoomReset": 缩放动作.复位,
 
-      // 三种编辑模式。⚠️ 它们和上面那些 `setXxx` 不一样：**要落盘**。
-      // 模式是"下次打开还是这样"的偏好，不是本次会话的临时开关——用户切到源码
-      // 模式之后关掉再开，原地回到所见即所得会让他以为设置没生效。
-      // 落盘一律走 `updateSettings`（它自己先改内存再写后端，失败会回滚）。
-      "view.modeWysiwyg": () => void updateSettings({ view_mode: "wysiwyg" }),
-      "view.modeSource": () => void updateSettings({ view_mode: "source" }),
-      "view.modeSplit": () => void updateSettings({ view_mode: "split" }),
+      // 三种编辑模式。⚠️ **2026-10-07 起它们是会话内状态、不落盘**（以前走
+      // `updateSettings({ view_mode })`）：每次启动一律所见即所得——用户原话
+      // 「请设置默认启动为 WYSIWYG」，理由是停在源码模式退出再打开，
+      // 屏幕上是一片 Markdown 原文，看起来就像"代码块坏了"。
+      "view.modeWysiwyg": () => 设模式("wysiwyg"),
+      "view.modeSource": () => 设模式("source"),
+      "view.modeSplit": () => 设模式("split"),
 
       "help.about": () => void showAbout(),
     };

@@ -139,7 +139,7 @@ export interface EditorPaneHandle {
 
 interface Props {
   doc: Document;
-  /** 当前编辑模式，来自 `settings.view_mode`。 */
+  /** 当前**实际**编辑模式，来自 `App.tsx` 的 `viewMode`（家在那条会话内 `useState`，这里已经过完降级）。 */
   mode: ViewMode;
   /**
    * **严格模式**，来自 `settings.strict_markdown`。

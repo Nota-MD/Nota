@@ -47,8 +47,10 @@ export function useStatusBar(接线: {
   settings: Settings | null;
   /** 改设置并落盘（`App.tsx` 那个 `updateSettings`，**顶层浅合并**）。 */
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
-  /** 当前编辑模式（`settings.view_mode`）。 */
+  /** 当前**实际**编辑模式（`App.tsx` 的 `viewMode`：偏见过降级之后的那一个）。 */
   viewMode: ViewMode;
+  /** 切编辑模式（`App.tsx` 的 `设模式`）。⚠️ 会话内状态，不落盘。 */
+  设模式: (m: ViewMode) => void;
   /** 当前文档。没打开文档时是 `null`。 */
   doc: Document | null;
   /** 侧栏开合（`App.tsx` 的 `sidebarOpen`）。 */
@@ -67,7 +69,7 @@ export function useStatusBar(接线: {
    */
   设界面: (patch: Partial<Settings["appearance"]>) => void;
 }): 栏的props {
-  const { settings, updateSettings, viewMode, doc, sidebarOpen, setSidebarOpen, focus, 设界面 } =
+  const { settings, updateSettings, viewMode, 设模式, doc, sidebarOpen, setSidebarOpen, focus, 设界面 } =
     接线;
 
   return {
@@ -108,12 +110,14 @@ export function useStatusBar(接线: {
     // 是**同一个开关的第五个入口**，共用 `App.tsx` 那个 setter。
     onToggleSidebar: () => setSidebarOpen((v) => !v),
 
-    // 「切换代码/所见即所得」。⚠️ **改的是 `settings.view_mode` 本身**
-    // （不是另开一份"状态栏眼里的模式"）：那三个字是 `ui/view-modes.ts` 里
-    // 三选一的口径，各存一份的症状见 `App.tsx` 里 `viewMode` 那一段。
+    // 「切换代码/所见即所得」。⚠️ **改的是 `ui/useFileKindMode.ts` 那份 `模式偏好` 本身**
+    // （不是另开一份"状态栏眼里的模式"）：`ViewMode` 那三选一的口径在
+    // `bridge/types.ts`，各存一份的症状见 `App.tsx` 里 `viewMode` 那一段。
+    // ⚠️ 2026-10-07 起它**不落盘**（会话内状态，默认启动所见即所得），所以
+    // 这里走 `设模式` 而不是 `updateSettings`。
     // 分屏点它 → 进源码模式（那一颗的语义是"是不是源码"）。
     onToggleSource: () => {
-      void updateSettings({ view_mode: viewMode === "source" ? "wysiwyg" : "source" });
+      设模式(viewMode === "source" ? "wysiwyg" : "source");
     },
 
     // **最右端那颗 ×**（2026-10-04，第 49 项）。⚠️ **只收不切换**：菜单里那条

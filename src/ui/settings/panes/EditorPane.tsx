@@ -1,25 +1,27 @@
 /**
  * 「编辑器」那一页。
  *
- * 前两组（编辑模式、正文宽度）是 **Nota 自己的**：Nota 有「所见即所得 / 源码 /
- * 预览」三种模式可分，这两种偏好由此而来。
+ * 第一组（正文宽度）是 **Nota 自己的**：内容区多宽由这一格说了算。
+ *
+ * ⚠️ **「编辑模式」那一格 2026-10-07 已从这里删掉**：模式改成**会话内状态**、
+ * 不落盘（用户原话「请设置默认启动为 WYSIWYG」）——每次启动一律所见即所得，
+ * 切换走菜单「视图 → 所见即所得 / 源码 / 分屏」或状态栏那颗 `</>`。
+ * 那个设置项本身也已从 `Settings` 里退休（前后端一起）。
  *
  * ⚠️ 这一页里**没有**「字体大小」「缩放」（那是外壳的，在外观页）、
  * 也**没有**「自动保存」「关闭前先问我」（挪到文件页的「保存 & 恢复」组了）。
  * 两者在界面上位置相近，但不属于本页。
  *
- * ⚠️ 字段全在 `[editor]` 表里，**只有两个例外**：`view_mode` 和 `content_width`
- * ——它们是 2026-09-22 就在顶层的，搬进表里会让老设置文件的值静默丢回默认。
+ * ⚠️ 字段全在 `[editor]` 表里，**只有一个例外**：`content_width`——它是
+ * 2026-09-22 就在顶层的，搬进表里会让老设置文件的值静默丢回默认。
  */
 
-import type { LineEnding, ViewMode } from "@/bridge/ipc";
+import type { LineEnding } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { VIEW_MODE_LABELS, VIEW_MODE_ORDER } from "@/ui/view-modes";
 import {
   NumberInput,
   Radio,
   Range,
-  Select,
   SettingRow,
   SettingsGroup,
   Toggle,
@@ -34,18 +36,6 @@ export function EditorPane({ settings, onChange }: PaneProps) {
   const e = settings.editor;
 
   /**
-   * 编辑模式那三个名字。⚠️ **从 `ui/view-modes.ts` 取**，不在这儿另写一份
-   * （同「状态栏」那一格）。
-   *
-   * ⚠️ 表**在组件里现建**（2026-09-26 从模块级搬进来）：`view-modes.ts` 那张表
-   * 里存的也是**键**（英文原文，见那儿顶上的注释），所以这里必须翻一次——
-   * 而且必须在下拉**画出来那一刻**翻，不能在模块级求值时翻。
-   */
-  const VIEW_MODES: Array<{ value: ViewMode; label: string }> = VIEW_MODE_ORDER.map(
-    (value) => ({ value, label: t(VIEW_MODE_LABELS[value]) }),
-  );
-
-  /**
    * 换行符那两个名字。⚠️ **字面写在 .tsx 里**（`LF（\n）` 那种全角括号），
    * 所以它也是键：留在模块级就没法翻，英文界面上会原样露出全角括号。
    */
@@ -56,16 +46,6 @@ export function EditorPane({ settings, onChange }: PaneProps) {
 
   return (
     <>
-      <SettingsGroup title={t("Editing mode")}>
-        <SettingRow>
-          <Select
-            value={settings.view_mode}
-            options={VIEW_MODES}
-            onChange={(view_mode) => onChange({ view_mode })}
-          />
-        </SettingRow>
-      </SettingsGroup>
-
       <SettingsGroup title={t("Text width")}>
         <SettingRow>
           <Range

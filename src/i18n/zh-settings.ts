@@ -99,7 +99,10 @@ export const 设置表: Record<string, string> = {
   "⚠ Dark mode uses a different set": "⚠ 深色下用的是另一套",
   "Light mode uses": "浅色下用的是",
   "{0} (theme not found — showing No Theme instead)": "{0}（找不到这一套，现在按「无主题」显示）",
-  "Editing mode": "编辑模式",
+  // ⚠️ 这里原来还有 `"Editing mode": "编辑模式"`：那是「编辑器」页里那个
+  // 模式下拉的标题。2026-10-07 模式改成**会话内状态、不落盘**（用户原话
+  // 「请设置默认启动为 WYSIWYG」），那个下拉连同这一页那一组一起删了，
+  // 这条中文就成了废键（`tools/i18n-check.sh` ③ 会 FAIL）。
   "Line endings": "换行符",
   "Text width": "正文宽度",
   "Aligned indent": "对齐缩进",

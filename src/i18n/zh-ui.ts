@@ -118,8 +118,9 @@ export const 界面表: Record<string, string> = {
   // ⚠️ 这里原来还有 `"Source": "源码"` 与 `"Split": "分屏"` 两行——那是
   // `view-modes.ts` 里**短名那一列**的中文。2026-09-30 状态栏改成一颗 `</>`
   // 图标之后短名没有读者了，那一列随之删掉，这两条中文也就成了废键
-  //（`tools/i18n-check.sh` ③ 会 FAIL）。下面这两条是**长名**，设置里那个
-  // 下拉用的就是它们。
+  //（`tools/i18n-check.sh` ③ 会 FAIL）。下面这两条是**长名**，2026-10-07 之前
+  // 设置里那个下拉用的就是它们——那个下拉删了之后，读者只剩「视图」菜单
+  //（`ui/commands.ts` 那三条的字面量）。
   "Source Mode": "源码模式",
   "Split Preview": "分屏预览",
   "Read-Only Mode": "只读模式",

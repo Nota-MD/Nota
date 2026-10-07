@@ -58,7 +58,17 @@ export const 界面表: Record<string, string> = {
   "Copy As": "复制为",
   "Plain Text": "纯文本",
   "HTML Source": "HTML 代码",
+  "Paste as Plain Text": "粘贴为纯文本",
   "Select": "选择",
+  // ⚠️ 这四条**故意不自称"行/词/句"那种短词**：翻译表是**按英文原文当键**的
+  // （同名就是同一格），而 `"Word"` 已经被查找条占了（那是「全词」，第 327 行
+  // 那个），撞上去两边一起变味。所以这里用「当前」把话说全（`Select Line` →
+  // 选择当前行），顺便也把"选的是光标所在那一个"写进标签里——短词（`Line`）
+  // 在菜单里也说不清是"选这一行"还是"跳到这一行"。
+  "Select Line": "选择当前行",
+  "Select Word": "选择当前词",
+  "Select Sentence": "选择当前句",
+  "Delete Word": "删除当前词",
   "Move Line Up": "上移该行",
   "Move Line Down": "下移该行",
   "Find and Replace…": "查找和替换…",

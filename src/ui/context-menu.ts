@@ -182,7 +182,13 @@ export type 行 =
  */
 export function 给行(位置: 落点, 开发模式: boolean): 行[] {
   if (位置 === "输入框") {
-    return 条目行(输入框条目, "输入框");
+    // ⚠️ **摊平**（见 `条目行` 那第三个参数）：`edit.select` 在编辑菜单里
+    // 2026-10-07 起是一个**子菜单的壳**（选行/词/句那四条），但输入框这一档
+    // 要的是**全选**那一条（`ContextMenu.tsx::落到输入框` 里那个
+    // `document.execCommand("selectAll")`）。放着一层子菜单渲染出去的话，
+    // 输入框上右键会飞出一层"选当前词"这种**编辑区命令**——点了什么也不会
+    // 发生（那几个处理函数只认编辑区）。
+    return 条目行(输入框条目, "输入框", true);
   }
   if (位置 !== "编辑器") return []; // 外壳：只拦不弹（见文件头那张表）
 
@@ -205,8 +211,13 @@ export function 给行(位置: 落点, 开发模式: boolean): 行[] {
  *
  * ⚠️ 键（`key`）是 `名字 + 下标`，不是 id：同一个 id 在一份菜单里只会出现
  * 一次，但重复写它不会被 React 报错——只会让某一行认错身份。拼下标最省事。
+ *
+ * ⚠️ `摊平`（第三个参数）＝"**把子菜单的壳摘掉，只留它自己那一条**"。
+ * 目前只有输入框那一档用（那条的理由写在 `给行` 里）。⚠️ 标签与 id 仍然
+ * **从 `MENUS` 里取**（`取条目`）——摊平的是结构，不是名字：另起一条平行
+ * 的条目表就意味着同一个 "Select" 要写两遍、两处迟早会漂（这一段的上文）。
  */
-function 条目行(ids: readonly string[], 名字: string): 行[] {
+function 条目行(ids: readonly string[], 名字: string, 摊平 = false): 行[] {
   const out: 行[] = [];
   ids.forEach((id, i) => {
     if (id === "sep") {
@@ -214,7 +225,20 @@ function 条目行(ids: readonly string[], 名字: string): 行[] {
       return;
     }
     const spec = 取条目(id);
-    if (spec) out.push({ kind: "item", key: `${名字}-${id}`, spec });
+    if (!spec) return;
+    // 摘壳：只留"点一下执行"用得着的那几格（`accel` 留着——输入框那一档
+    // 虽然不吃快捷键，但显示出来是对的，用户按 Ctrl+Shift+V 会看到它）。
+    const 一条 = 摊平 && spec.submenu
+      ? {
+          id: spec.id,
+          label: spec.label,
+          accel: spec.accel,
+          needsDoc: spec.needsDoc,
+          checkable: spec.checkable,
+          danger: spec.danger,
+        }
+      : spec;
+    out.push({ kind: "item", key: `${名字}-${id}`, spec: 一条 });
   });
   return out;
 }

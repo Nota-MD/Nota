@@ -312,6 +312,13 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "edit.cut": () => void 剪贴板.剪切(),
       "edit.copy": () => void 剪贴板.复制(),
       "edit.paste": () => void 剪贴板.粘贴(),
+      // 「粘贴为纯文本」（`Ctrl+Shift+V`，2026-10-07）。⚠️ **与上面那条共用同一段
+      // 代码**：本仓的粘贴本来就是纯文本（`readText()` → `insertText` → PM 的
+      // `pasteText`，Milkdown 的剪贴板插件没有定义 `clipboardParser`）。
+      // 这不是省事——真另写一条"剥格式"的路，剥的是一个本来就不存在的东西；
+      // 留着这颗键是因为它到处都有（Word/VSCode/浏览器），按了没反应会被当成
+      // "不支持"。整段理由写在 `ui/commands.ts::edit.pastePlain` 那一条上。
+      "edit.pastePlain": () => void 剪贴板.粘贴(),
       // 「删除」＝ 把选区换成空串。**和「剪切」差的就是那一步写剪贴板**
       // （见 `ui/useClipboard.ts` 的 `剪切`）——所以它没有自己的实现，
       // 就是 `insertText` 传空串。右键菜单那排图标里的 🗑 走的也是这一条。
@@ -327,6 +334,20 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       // 「复制为」这一栏，不补就得画两条永久灰条。
       "edit.copyAsPlain": () => void 剪贴板.复制为纯文本(),
       "edit.copyAsHtml": () => void 剪贴板.复制为HTML(),
+      // 「选择」那一族（2026-10-07，`commands.ts` 里那个子菜单的四条）。
+      // ⚠️ 四条**共用一套判据**（`editor/select.ts` 第一组那几个纯函数），
+      // 源码模式也调它——所以这里只是转发，不带任何参数。
+      // ⚠️ 父项 `edit.select` **不在这里**（它是子菜单的壳）：那条测试
+      //（`tests/context-menu.test.ts`）钉着这一点，见 `commands.ts` 那一段。
+      "edit.selectLine": () => run("selectLine"),
+      "edit.selectWord": () => run("selectWord"),
+      "edit.selectSentence": () => run("selectSentence"),
+      "edit.deleteWord": () => run("deleteWord"),
+      // `Alt+↑` / `Alt+↓`（2026-10-07）。⚠️ **所见即所得那边键位也得自己接**
+      // （`baseKeymap` 把这两颗绑给了 `joinUp` / `joinDown`），那一段在
+      // `editor/move-block.ts`；源码模式直接用 CodeMirror 自己那两条。
+      "edit.moveLineUp": () => run("moveLineUp"),
+      "edit.moveLineDown": () => run("moveLineDown"),
       // ⚠️ `Ctrl+F` 与 `Ctrl+H` 开的是**同一个条子**，差别在"要不要画替换那一行"
       // （2026-10-06，第 95 项）。⚠️ 在此之前 `Ctrl+F` **根本没有绑定**。
       "edit.find": () => 切查找(false),

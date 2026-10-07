@@ -344,6 +344,16 @@ export const MENUS: MenuSpec[] = [
       { id: "edit.copy", label: "Copy", accel: "Ctrl+C", needsDoc: true },
       { id: "edit.copyImage", label: "Copy Image", needsDoc: true },
       { id: "edit.paste", label: "Paste", accel: "Ctrl+V", needsDoc: true },
+      // 「粘贴为纯文本」（`Ctrl+Shift+V`，2026-10-07）。⚠️ **本仓的粘贴本来就是
+      // 纯文本**：剪贴板那条路读的是 `readText()`，插进来的是
+      // `insertText` → PM 的 `pasteText`（`ui/useClipboard.ts`）；之所以
+      // "按 `Ctrl+V` 粘进来的是纯文本"，是因为 Milkdown 的剪贴板插件**没有**
+      // 定义 `clipboardParser`（只定义了 `handlePaste` 与序列化那一半）。
+      // 所以这一条与上面那条**走的是同一段代码**——不是偷懒，是如实：
+      // 真给 `Ctrl+Shift+V` 另写一条"剥格式"的路，剥的就是一个本来就不存在
+      // 的东西。⚠️ 留着它是因为**这颗键是肌肉记忆**（Word/VSCode/浏览器都
+      // 有），而用户按了没反应会当成"不支持粘贴纯文本"。
+      { id: "edit.pastePlain", label: "Paste as Plain Text", accel: "Ctrl+Shift+V", needsDoc: true },
       // 2026-10-04 补（右键菜单那一排图标里的 🗑）。它**不是**为右键菜单
       // 单开的暗路：编辑菜单里也看得见——Typora 的编辑菜单里同样有 Delete。
       //
@@ -368,7 +378,28 @@ export const MENUS: MenuSpec[] = [
         ],
       },
       "sep",
-      { id: "edit.select", label: "Select" },
+      {
+        // 「选择」这一族（2026-10-07）。⚠️ **这里原来是一条名字就叫 `Select` 的
+        // 灰条**（它从来没能点动过：`useCommandTable.ts` 那张表里没有它）。
+        // 现在它成了**子菜单的父项**——于是那四条各自有名字、各自有键位。
+        //
+        // ⚠️ 父项**不进 `useCommandTable.ts` 那张表**（它是子菜单的壳，不是命令），
+        // 那条测试（`tests/context-menu.test.ts`）钉着这一点。子菜单父项的亮/灰
+        // 由"有没有一条能点的孩子"决定（`ui/useMenus.ts`）。
+        //
+        // ⚠️ 四条 id 的名字**故意写全**（`edit.selectLine` 而不是 `edit.line`）：
+        // 右键菜单那档"输入框条目"会把这几条摊平来用（见 `ui/context-menu.ts`），
+        // 而那里 `edit.select` 这一条要的正是**全选**——名字含糊的那种
+        //（比如只写 `Line`）在别处还有用家，会撞。
+        id: "edit.select",
+        label: "Select",
+        submenu: [
+          { id: "edit.selectLine", label: "Select Line", accel: "Ctrl+L", needsDoc: true },
+          { id: "edit.selectWord", label: "Select Word", accel: "Ctrl+D", needsDoc: true },
+          { id: "edit.selectSentence", label: "Select Sentence", accel: "Ctrl+E", needsDoc: true },
+          { id: "edit.deleteWord", label: "Delete Word", accel: "Ctrl+Shift+D", needsDoc: true },
+        ],
+      },
       { id: "edit.moveLineUp", label: "Move Line Up", accel: "Alt+↑", needsDoc: true },
       { id: "edit.moveLineDown", label: "Move Line Down", accel: "Alt+↓", needsDoc: true },
       "sep",

@@ -232,7 +232,7 @@ export interface 行内扩展开关 {
 /**
  * 三项**默认全开**——与后端 `settings/markdown.rs` 里那三个字段的默认值
  * 一致（那边也是 `true`）。它只在"建实例时没拿到设置"时兜底
- *（`ui/EditorPane.tsx` 里 `settings` 还没读出来的第一帧）。
+ *（`ui/useEditorSettings.ts` 里 `settings` 还没读出来的第一帧，`useMemo` 的兜底那一支）。
  *
  * ⚠️ 下划线**不在这张表里**：它没有开关，恒开。理由见文件头那段
  *（与 Typora 一致，`<u>x</u>` 本来就是裸 HTML，关掉它等于关掉 HTML 标签）。

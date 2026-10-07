@@ -335,7 +335,7 @@ export interface CreateOptions {
   physics?: boolean;
   /**
    * 三种行内扩展语法开不开：**高亮** `==x==`、**上标** `^x^`、**下标** `~x~`
-   *（`Settings.markdown` 的那三项，`ui/EditorPane.tsx` 传进来）。
+   *（`Settings.markdown` 的那三项，`ui/pane-editors.ts` 传进来）。
    *
    * ⚠️ **下划线不在里面**：它没有开关，恒开（写法是裸 HTML `<u>x</u>`，
    * 与 Typora 一致）。口径与理由在 `inline-marks.ts` 文件头。

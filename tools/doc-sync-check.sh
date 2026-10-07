@@ -176,6 +176,9 @@ PAIRS=(
   "src/editor/create.ts                           05"
   # 2026-09-28：命令白名单（COMMANDS 表）整块搬出 `create.ts`（那边到 1010 行、破了硬线）。
   "src/editor/command-table.ts                    05"
+  # 2026-10-07：`createEditor` 那一长串**选项怎么装配**搬出去（`create.ts` 1006 → 502，
+  # 第 89 项）。⚠️ 它管的是"哪一格接哪一份、谁不许传谁"，改一处就要看 `docs/05`。
+  "src/editor/assemble.ts                         05"
   "src/editor/front-matter.ts                     05,07,10"
   # ⚠️ 2026-10-04 新建：编辑器把**选区**报给宿主那一半（`docs/07` 第 14 项）。
   # 文件头是一张**量测表**：Markdown 偏移量在块边界上不存在，所以这条路只报
@@ -193,6 +196,9 @@ PAIRS=(
   "src/editor/image-attrs.ts                      05,04"
   "src/editor/math-macros.ts                      05,10,04"
   "src/editor/source.ts                           05,04,10"
+  # 2026-10-07：源码模式的**编辑命令**那一块（行内标记 / 链接 / 缩进 / 表格那十条）
+  # 搬出去（`source.ts` 1048 → 637，第 89 项）。
+  "src/editor/source-commands.ts                  05,04"
   # ⚠️ 2026-09-28 新建：源码模式的查找那一整块（状态 / 三条效果 / 装饰），
   # 从 `source.ts` 整块搬出来的——那天它顶到了 1001 行、撞①那条硬上限。
   "src/editor/source-find.ts                      05,04"
@@ -247,6 +253,14 @@ PAIRS=(
   "src/editor/emoji.ts                          05,04,10"
   "src/editor/footnote.ts                       05,10"
   "src/ui/EditorPane.tsx                          05"
+  # 2026-10-07（第 89 项）：`EditorPane.tsx` 1171 → 800，搬出去的六份。
+  # ⚠️ 它们是**一件事一件**的，不是一个文件碎成六块——每份各自盯着的文档见下面那行注释。
+  "src/ui/FrontMatterBanner.tsx                   04,05"   # 正文上方那条 YAML 横幅（第 64 项）
+  "src/ui/pane-editors.ts                         05"      # 三个实例各传哪些选项
+  "src/ui/useEditorSettings.ts                    05,04"   # 设置 → 开关（哪几项要重建实例）
+  "src/ui/useEditorHandle.ts                      05"      # 十三条转发出去的命令
+  "src/ui/useCursorSnapshot.ts                    05,07"   # 选区快照推给后端（第 14 项）
+  "src/ui/table-widths.ts                         05,04"   # 表格列宽侧车的读写
   "src/ui/FormatBar.tsx                           04,05"
   "src/ui/Icon.tsx                                02,04"
   # 2026-09-30：侧栏右缘那条可以拖的把手（不是"顺手重构"，是用户照 Typora 点名的）。
@@ -374,7 +388,11 @@ PAIRS=(
   "src/styles/editor-inline.css                   04,05"
   "src/styles/editor-blocks.css                   04,05"
   "src/styles/bars.css                            04"
+  # 2026-10-07（第 89 项）：`math-view.test.ts` 涨到 1024 行（而 ① 当时扫不到
+  # `tests/`），按职责拆成两份，地基抽成 `math-fixture.ts`——三行一起在这儿。
   "tests/math-view.test.ts                      02,06"
+  "tests/math-wiring.test.ts                    02,06"
+  "tests/math-fixture.ts                        02,06"
   "tests/math-commands.test.ts                  02,06"
   "tests/math-suggest.test.ts                   02,06"
   "tests/video-view.test.ts                       02,06"
@@ -608,7 +626,10 @@ while IFS= read -r f; do
   elif [ "$n" -gt 800 ]; then
     warn "$f 有 $n 行，过了 800（目标 300–800，docs/09 §4），按功能拆"
   fi
-done < <(find src-tauri/src src plugins tools -type f \
+# ⚠️ `tests` 也要扫（2026-10-07 加上，`docs/07` 第 89 项）：在加它之前，
+#    `tests/` 是这条硬线**唯一没盖到的地方**——`math-view.test.ts` 就是这么
+#    涨到 1024 行、超线一整轮都没人报的。测试文件也是本仓的代码。
+done < <(find src-tauri/src src plugins tools tests -type f \
            \( -name '*.rs' -o -name '*.ts' -o -name '*.tsx' \
               -o -name '*.lua' -o -name '*.css' -o -name '*.sh' \) 2>/dev/null | sort)
 

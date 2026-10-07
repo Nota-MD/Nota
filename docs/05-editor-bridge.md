@@ -37,6 +37,15 @@ Nota 是 **WebKitGTK 4.1 里的 ProseMirror 文档树**（前端是真相）。�
 ## 2. 装了哪些、刻意没装哪些
 
 全部装配在 `src/editor/create.ts::createEditor()` 的 `Editor.make().use(…)` 链上。
+⚠️ **2026-10-07 起那条链搬去了 `src/editor/assemble.ts`**（第 89 项；`create.ts` **1006 → 502 行**）：
+对外的名字仍是 `createEditor`，但「一次性把一切装上去」那一段（`.config()` ＋ 整个 `.use()` 链、
+ctx 初值、序列化器、输入规则、NodeView）现在在 `assemble.ts::装配()` 里，收**一个参数对象**。
+⚠️ **顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问）——
+搬的时候一字未改，改顺序之前先把那一条注释读完。本节的表与下面的行号**仍按同一条链读**，只是落点换了文件。
+
+⚠️ **2026-10-07 同日**：`source.ts` **1048 → 637 行**——「一条命令落到文本上」那一块搬去了
+`src/editor/source-commands.ts`（对外只有 `applyCommand` 一个名字；**它一句都不 import `source.ts`**，
+反过来才是依赖，不然是环）。
 
 ### 2.1 装了的
 
@@ -2989,6 +2998,17 @@ ProseMirror 的 `hasFocus()` 判的是 `activeElement == view.dom` → 假 →
 
 判据：`tests/code-block-editing.test.ts` **21 条**，钉的是三个纯函数
 （最小改动的字符边界、分色的区间能不能拼回原文、回车续行的三档光标落点）。
+⚠️ **`Tab` 插几格是量过的（2026-10-07，第 101 项 ⑥）**：**4 个空格**，不是制表符、也不是 CM 出厂的 2 格。
+那个数在 `code-block-cm.ts::缩进宽度` 一处定义（`indentUnit.of(…)` ＋ `indentWithTab`，`Tab` / `Shift+Tab` /
+回车续行三条路都读它）。📌 当时的量法：开窗、在代码块里按一下 `Tab`、把原文抠出来看字节——
+落成 `    z`（四个空格 ＋ 字符），而**不是** `^I`；把那一行 `sed -n l` 出来确认没有制表符。
+⚠️ 写成 2 格或制表符都会**看着像对的**（缩进就是缩进），所以这一格按「量过」记，不按「应该是」记。
+
+⚠️ **代码块里的「当前行」淡底（BUG-70，2026-10-07 修）**：`highlightActiveLine` 这条扩展此前**从来没装过**
+（规则一直写在主题里，所以看着像「装过但不好用」）。装上时配了一条**只在聚焦时显色**的口径——
+`& .cm-activeLine { background: transparent }` ＋ `&.cm-focused .cm-activeLine { … }`：不聚焦时那一行
+不留色带（与源码模式同一套口径，见 `docs/07` BUG-70）。⚠️ 这一格的颜色用的是 `color-mix(… 5% …)`
+而不是台账里那个 `--bg-subtle`——**代码块自己的底色就是 `--bg-subtle`**，照抄等于没画。
 ⚠️ **手感本身（配对、缩进、光标跳不跳）开窗目检才算数**，纯逻辑判据证明不了。
 
 ## 5. 双向通道

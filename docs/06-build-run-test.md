@@ -3505,7 +3505,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find; do
+for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3640,7 +3640,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
-**五十五份、共 1392 条**（📌 **2026-10-06 深夜（BUG-67 的账）当场把 55 份全跑了一遍**（`for` 里 51 份 ＋ 单列那 4 份各自的开关），**全部 0 失败**；本批**新加一份** `find` **42 条**（查找与替换的纯逻辑与偏移：`在文本里找匹配` 的字面量 ／ 大小写 ／ 整词（⚠️ 汉字算词字符，用的是 `\p{L}` 不是 `\w`）／ 正则与**零宽**（`^`、`a*` 一律丢，且不许卡死）＋ **`算匹配` 的文档偏移**——⚠️ **这一组就是 BUG-67 的判据**：判据一律写成 `doc.textBetween(命中.start, 命中.end)` **必须正好是用户查的那串字**（不写成"命中数等于几"：那个 off-by-one 只动"压在哪个格子上"，命中数照样对）；再往下是插件状态机（就近命中 ／ 环形走位 ／ 文档变了重算与下标夹回 ／ 清除）／ 装饰的区间与"当前"类 ／ 替换当前与全部替换（**从后往前换**那条 `reverse`）。⚠️ **对照组**：把 `算匹配` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条当场红**（含「区间必须是 `4-5`」与「`textBetween` 读出来正好是那颗字」）——所以这一份真能抓住那个 bug，不是"绿着好看"）。上一版是下面那一行「五十四份、共 1350 条」。
+**五十六份、共 1398 条**（📌 **2026-10-07 现数**：56 份一份一份跑完，**全部 exit=0**；本批的账见下面那条 📌——`math-view` 拆成 `math-view` 31 ＋ `math-wiring` 20，`find` 42 → 48。⚠️ 上一版：**五十五份、共 1392 条**（📌 **2026-10-06 深夜（BUG-67 的账）当场把 55 份全跑了一遍**（`for` 里 51 份 ＋ 单列那 4 份各自的开关），**全部 0 失败**；那一版**新加一份** `find` **42 条**（查找与替换的纯逻辑与偏移：`在文本里找匹配` 的字面量 ／ 大小写 ／ 整词（⚠️ 汉字算词字符，用的是 `\p{L}` 不是 `\w`）／ 正则与**零宽**（`^`、`a*` 一律丢，且不许卡死）＋ **`算匹配` 的文档偏移**——⚠️ **这一组就是 BUG-67 的判据**：判据一律写成 `doc.textBetween(命中.start, 命中.end)` **必须正好是用户查的那串字**（不写成"命中数等于几"：那个 off-by-one 只动"压在哪个格子上"，命中数照样对）；再往下是插件状态机（就近命中 ／ 环形走位 ／ 文档变了重算与下标夹回 ／ 清除）／ 装饰的区间与"当前"类 ／ 替换当前与全部替换（**从后往前换**那条 `reverse`）。⚠️ **对照组**：把 `算匹配` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条当场红**（含「区间必须是 `4-5`」与「`textBetween` 读出来正好是那颗字」）——所以这一份真能抓住那个 bug，不是"绿着好看"）。上一版是下面那一行「五十四份、共 1350 条」。
 
 **五十四份、共 1350 条**（📌 **2026-10-06（第 101 项「代码块换成 CodeMirror 编辑」那批）当场把 54 份全跑了一遍**（`for` 一遍 ＋ 单列那 4 份各自的开关），**全部 0 失败**；本批**新加一份** `code-block-editing` **21 条**（`算最小改动` 的字符边界——emoji 不许被切成半个 ／ `分色` 的区间拼回去要逐字等于原文 ／ `回车续行` 的三档落点与"空括号展开"；⚠️ 它当场抓到一个真坑：`"([{".indexOf("")` 回的是 `0`，于是"光标停在一行纯空白后面"那一格会被当成"上一行以 `(` 结尾"、凭空多进一级）；⚠️ **总数 1329 → 1350，份数 53 → 54**。⚠️ 这一遍是拿 `tests/*.test.ts` 逐个 bundle ＋ node 跑出来的，`share-card` 那一份加了 `--loader:.svg=text`）：
 
@@ -3652,7 +3652,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 
 **五十份、共 1252 条**（📌 **2026-10-04（第 64 项 front matter 可编辑 ＋ 第 45 项外观那两格）当场把 50 份全跑了一遍**（`for` 里 46 份 ＋ 单列 4 份），**全部 0 失败**；本批**新加三份**：`front-matter` **32 条**（⭐ 它当场抓到一个老 off-by-one：文件正好停在闭栏那一行时 `前置块行数` 多数一行——`docs/07` 第 64 项）、`focus-dim` **15 条**（专注压暗那条轴的**五个名字**分居五个文件／三种语言，读源码对账）、`window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同）；⚠️ **总数 1197 → 1252，份数 47 → 50**；其余 47 份的读数**与下面那一遍逐份相同**（📌 **2026-10-04 深夜（第 14 项「选区上报」那一批）当场把 47 份全跑了一遍**（`for` 里 43 份 ＋ 单列 4 份），**全部 0 失败**；本批**只新加一份** `caret-snapshot` **10 条**（选区上报 —— 读快照 ／ 插件只报变了的 ／ **⚠️ 第三组是那张量测表**：按 markdown 偏移拼接**重建不出**光标处插入，四组真值逐条钉住）；⚠️ **总数 1187 → 1197，份数 46 → 47**；其余 46 份的读数**与下面那一遍逐份相同**（📌 **2026-10-04 晚（序列化第七层 `syntax-escape`）当场把 46 份全跑了一遍**（`for` 里 42 份 ＋ 单列 4 份），**全部 0 失败**；本批**新加一份**：`syntax-escape` **13 条**（行首 `[TOC]` / `[!NOTE]` 不被加反斜杠——分三组：该放回来的 ／ 名字不在册的一律照旧 ／ 判据的立足点「有配对定义时它根本是链接」；⚠️ **它同时把 `table-pipe` / `math-delim` / `atom-space` 三份重跑过一遍**，那条链加了一层）；⚠️ **总数 1174 → 1187，份数 45 → 46**；其余 45 份的读数**与下面那一遍逐份相同**（`for` 一遍把 41 份全跑了，0 失败）；📌 **2026-10-04 晚（第 54 项 `$` 判据 ＋ 第 47 项列表缩进那一批）当场把 45 份全跑了一遍**（`for` 里 41 份 ＋ 单列 4 份），**全部 0 失败**；本批**新加两份**：`math-currency` **23 条**（`$` 当钱不算公式——真值表 ／ 门槛 ／ Pandoc 那两条 ／ 与 `$ \LaTeX $` 不冲突 ／ "摘掉我们这一层就复现出病"的对照 ／ `create.ts` 里挂载顺序，⚠️ **它读源码文本**，不开窗）、`list-indent` **16 条**（列表缩进的五组量测——子列表那一档本来就严 ／ 缩进不是树里的量 ／ 序列化三档 3-4-5 格 ／ 逐字节往返 ／ `create.ts` 里 `strict` 没接进这条路）；⚠️ **总数 1135 → 1174，份数 43 → 45**；其余 43 份的读数**与下面那一遍逐份相同**（`for` 一遍把 41 份全跑了，0 失败）；📌 **2026-10-04（第 49 项「四栏那颗就地 ×」那一批）当场把 43 份全跑了一遍**（`for` 里 39 份 ＋ 单列 4 份），**全部 0 失败**；本批**只新加一份** `bar-close` **13 条**（四栏那颗 × 的口径——长相一致 ／ 汇到同一个 setter ／ 视图菜单里那一族挨着；⚠️ 它读**源码文本与 `MENUS` 结构**，不开窗）；⚠️ **总数 1122 → 1135，份数 42 → 43**；其余 42 份的读数**与下面那几遍逐份相同**（`for` 一遍把 39 份全跑了，0 失败）；📌 **2026-10-04（第 55 项 ②③「表格里的 `Tab`／`Shift+Tab`」那一批）当场把 42 份全跑了一遍**（`for` 里 38 份 ＋ 单列 4 份），**全部 0 失败**；本批**只新加一份** `table-tab` **58 条**（表格里的 `Tab` / `Shift+Tab`：四道闸 ／ 四种现场 ／ 加行那一段的坐标与节点类型 ／ 三种输入形状的认键——⚠️ **它同时是"单测全绿、真窗口却是坏的"那个故事的出处**，真窗口那半见 §5.48）；⚠️ **总数 1064 → 1122，份数 41 → 42**；其余 41 份的读数**与下面那几遍逐份相同**（`for` 一遍把 38 份全跑了）；📌 **2026-10-04 下午（「撤回第五格 ＋ BUG-58」那一批）当场把 41 份全跑了一遍**（`for` 里 37 份 ＋ 单列 4 份），**全部 0 失败**；本批动了 2 份、新加 1 份：`math-delim` **51 → 47**（第五格那三组撤掉，第九组改成"贴空格的 `$…$` 照旧是公式"）、`math-input` **28**（守卫二那几条改成"只剩一道守卫"，条数没变）、新增 `key-conflicts` **21**（名单 ↔ CodeMirror 那两张表对账，BUG-58）；⚠️ **总数 1047 → 1064，份数 40 → 41**；其余 38 份的读数与下面那几遍逐份相同——⚠️ **"其余 38 份沿用旧读数"这件事本批是逐份跑出来的，不是照抄**：`for` 那一遍把 37 份全跑了（0 失败）；📌 **2026-10-04 深夜（「照 Typora 改公式那三件事」那一批）当场把 40 份全跑了一遍**（`for` 里 36 份 ＋ 单列 4 份），**全部 0 失败**；本批动了 5 份、新加 2 份：`math-view` **41 → 51**（第八组：命令补全弹窗的接线）、`math-delim` **43 → 51**（第五格 `收严公式`，第九组）、`math-input` **19 → 28**（守卫二 ＋ 第四组「块公式回车才建」）、新增 `math-commands` **35**、`math-suggest` **27**；⚠️ **总数 958 → 1047，份数 38 → 40**；其余 35 份的读数与上一遍逐份相同；📌 **2026-10-04 晚（「还是会自动插入斜杠」第二报那一批）又当场把 38 份全跑了一遍**：`table-pipe` **24 → 39**、`math-delim` **23 → 43**，其余三十六份与下面那两遍的读数逐份相同；📌 **2026-10-04 这一批当场把 38 份全跑了一遍**（`for` 里 34 份 ＋ 单列 4 份），全部 0 失败；本批动了 3 份：`toc` **22 → 27**（front matter 判据合并的「二½」组 5 条）、新增 `modal-trap` **9**、`tablist-keys` **6**——其余 35 份沿用 2026-09-30 晚那一遍的数，**只有这三份是现跑的**；📌 **2026-09-30 晚当场一份一份跑出来的**；⚠️ 上一版是同一批早先那份「三十四份、855 条」，那一版把新增的 `status-metric` **10** 条算进去了，另有一笔**补账**：`heading-on-enter` 在名册里写着 **16**，现跑是 **19**——那一批 📌 自己写的是 19 条、表格里却停在 16，**两处对不上，以现跑的为准**；见本节末那几条 📌。⚠️ **2026-09-30 深夜里只有 `auto-pair` 那一份又跑了一遍**（BUG-54 二次结清，**50 → 57**），其余三十四份沿用上面那一次的数——**这一份要单独看，别当成"整份名册又重跑过"**；⚠️ **同一天再晚一些又只有 `source-mark` 这一份跑过**（BUG-57 新建，**28 条**），其余三十五份**照旧沿用上面那一次的数**——**这一份也要单独看**）：
 `keymap` **54** · `auto-pair` **57** · `slash` **49** · `share-card` **46** ·
-`math-view` **51** · `math-delim` **47** · `find` **42** · `table-input` **39** · `inline-marks` **37** ·
+`math-view` **31** · `math-wiring` **20** · `math-delim` **47** · `find` **48** · `table-input` **39** · `inline-marks` **37** ·
 `smart-punctuation` **36** · `focus-summary` **34** · `math-commands` **35** · `emoji` **32** · `front-matter` **32** ·
 `lang-guess` **31** · `footnote` **30** · `url-link` **29** · `paste-clean` **25** ·
 `table-pipe` **39** · `math-input` **28** · `source-mark` **28** · `toc` **27** ·
@@ -3666,6 +3666,20 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 `list-indent` **16** · `syntax-escape` **13** · `math-currency` **23** ·
 `table-tab` **58** · `bar-close` **13** · `caret-snapshot` **10** · `panel-cards` **37** ·
 `context-menu` **30**（⚠️ 2026-10-04 开窗口检那天从 **27** 长到 30，见本节顶上新加的那一条 📌）。
+📌 **2026-10-07 现数：五十六份、共 1398 条**（一份一份跑，56 份 **exit=0**；`for` 里那份数是
+**五十二份**——`math-wiring` 刚加进去，它两条开关都不要）。**本批的账只有两处**：
+① `tests/math-view.test.ts` 那一份 **1024 行**的测试**按职责切成两半**
+（第 89 项拆 `editor/math-view.ts` 时顺带拆的；⚠️ 触因是**行数**——1024 越了 1000 那条硬线，
+而它此前**一直被 ① 闸漏掉**：那时的 `find` 扫不到 `tests/`，同批把扫描面修了，它才露出来）：
+`math-view` 收 **31 条**（「公式节点自己」那五组：真插件规格 / 取源码与写回 / 用户报的
+那串 `$$␣` / 真插件的两条线 / NodeView 的逻辑）、新文件 `math-wiring` 收 **20 条**
+（「公式之外围」那三组：`插公式块` 命令 / 序列化不给行首井号加反斜杠 / 命令补全弹窗的接线），
+两份共用的地基抽成 `tests/math-fixture.ts`。⚠️ **两半加起来 51，与拆之前一条不差**
+（20 ＋ 31 ＝ 51），拆完两条路各自单独跑（⚠️ 不是为了提速：两份都还是 0.1 秒上下）。
+② `find` 42 → **48**（同批给 `正则写坏了` 那个新出口补的 6 条，
+见 `docs/07` 第 95 项）。⚠️ 现数时又抓到一处**旧数写错**：`docs/02` 那张表里
+`math-delim` 写着 **51**、现数是 **47**（不是本批动的），这一版按现数重排。
+⚠️ 上一版是五十五份、1392 条（📌 **2026-10-06 深夜**现数）。
 📌 **2026-10-04 下午起 `for` 里有 37 份**（历次 31 → 32 → 34 → 36 → **37**，这个数每次加文件都会变）；
 ⚠️ **同一天稍后（第 55 项 ②③ 那一批）又加进 `table-tab` ⇒ 38 份**（它不要 `--alias`
 也不要 loader，走最普通那条路）；

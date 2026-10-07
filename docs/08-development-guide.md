@@ -1,6 +1,6 @@
 # 08 · 开发指南：怎么加一样东西
 
-> 最后同步：2026-09-22
+> 最后同步：2026-10-07
 >
 > 本文不是"代码长什么样"（那是 `docs/02-modules.md`），而是**"要加一样东西，
 > 该动哪几个文件"**。每一条都是**清单式**的：照着一行一行走完即可。
@@ -64,17 +64,29 @@
 
 #### 当前值（改完核对一次）
 
-**没有超限文件，但已经有六份进了软上限 WARN 区**（2026-09-26 现数的，
-`find … | xargs wc -l | sort -rn | head`）：
+**没有超限文件，但已经有十三份进了软上限 WARN 区**（📌 **2026-10-07 现数**，
+`find src-tauri/src src plugins tools tests -type f \( -name '*.ts' -o … \) | xargs wc -l | sort -rn`）：
 
 | 文件 | 行数 | 备注 |
 |---|---|---|
-| `plugins/git/main.lua` | **999** | ⚠️ **离硬线 1 行**，动它之前先拆 |
-| `plugins/ai/main.lua` | 997 | 同上 |
-| `src/App.tsx` | 992 | 2026-09-26 「插入图片」那批涨上来的（**只涨不缩**），再动它要先想清楚搬哪块 |
-| `src/bridge/types.ts` | **985** | 2026-09-26 「主题色」那批涨的（`AppearanceSettings` 加一格），⚠️ 再涨就碰硬线 |
-| `src/editor/source.ts` | 936 | |
-| `src/styles/app.css` | 905 | |
+| `src/App.tsx` | **999** | ⚠️⚠️ **离硬线 1 行**——动它之前**先拆**，缝见 `docs/09` §2 里 `src/App.tsx` 那一行 |
+| `src/editor/math-view.ts` | 958 | 公式那一块；能搬的是**面板与悬浮预览那两格**（`docs/09` §4 2026-10-04 那条） |
+| `tools/menu-harness/main.tsx` | 949 | 菜单目检工装，不是产品代码 |
+| `src/editor/emoji.ts` | 924 | 503 条短代码那张表的体积摆在那儿 |
+| `src/editor/auto-pair.ts` | 912 | 缝写在 `docs/09` §4（括号配对那一族 / `*` 落标记那一族），**还没人真拆过** |
+| `src/ui/panel-nodes.ts` | 908 | |
+| `src/editor/inline-marks.ts` | 901 | |
+| `plugins/stats/main.lua` | 899 | |
+| `tools/doc-sync-check.sh` | 896 | ⚠️ **闸门自己也在名单上**，它没有给自己豁免 |
+| `tools/stats-state-test.lua` | 883 | |
+| `src/bridge/types.ts` | 877 | |
+| `src/bridge/ipc.ts` | 868 | |
+| `src/ui/PanelBody.tsx` | 849 | |
+
+⚠️ 上一版这一格是 **2026-09-26 的六份**（当时最大的 `plugins/git/main.lua` **999**——它 2026-09-29
+已经拆掉了；同批清掉的还有十份样式与 Rust，见 `docs/09` §4）；📌 **2026-10-07（第 89 项）**又清掉三份源码
+＋一份测试：`src/editor/create.ts` 1006 → **502** · `src/editor/source.ts` 1048 → **637** ·
+`src/ui/EditorPane.tsx` 1171 → **800** · `tests/math-view.test.ts` 1024 → **584**。
 
 ⚠️ **这一节的数字以前是手抄的，一抄就烂**（2026-09-23 一次核对抓出 13 处过期行号、
 本节自己也长期停在 "app.css 827 / App.tsx 396"，而那时 App.tsx 已经 900+）。

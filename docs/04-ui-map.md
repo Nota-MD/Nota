@@ -148,7 +148,9 @@ ErrorBoundary                       (ui/ErrorBoundary.tsx)  兜住渲染期崩�
    │     │  │                       撞键会让关掉的条子留在 DOM 里不消失（BUG-33，见 §2.2a 末）
    │     │  └─ div.find-bar[role=search]  > div.find-row × 2
    │     │     ├─ input.find-input    「查找」/「替换为」
-   │     │     ├─ span.find-count     「N / M」或「无结果」（空查询时不画）
+   │     │     ├─ span.find-count     「N / M」或「无结果」（空查询时不画）。⚠️ **2026-10-07（第 95 项）**：正则写坏了的时候
+   │     │     │                      这一格改成 **`Invalid regex`**（`.find-count[data-bad]`），输入框同时带 `data-bad`/`aria-invalid`
+   │     │     │                      ——**当场认出来**，不再等 `new RegExp` 抛（那个异常此前被 `try` 吞掉、屏幕上什么都不说）
    │     │     ├─ button.find-toggle  「Aa」「全词」「.*」，data-on 表示按下
    │     │     ├─ button.find-btn     「↑」「↓」「✕」
    │     │     └─ button.find-btn-wide 「替换」「全部替换」
@@ -861,6 +863,12 @@ Enter 执行、Esc 关、← 退回上一层子菜单。⚠️ 之所以要这�
 | 空态（`Home`） | 插件状态列表 + 失败计数 | 无 | ✅ 只读；失败**要显眼**是刻意的——静默失败会让人以为自己装错了 |
 
 ⚠️ `EditorPane` 由 `App.tsx` 用 `key={activeDoc.id}` 挂载：**换文档 = 整个组件重挂**。
+⚠️ **2026-10-07 拆过（第 89 项，1171 → 800 行）**：这一节讲的仍是「编辑区长什么样」，
+但其中六块搬去了自己的文件——`ui/FrontMatterBanner.tsx`（上面那条 front matter 横幅）·
+`ui/pane-editors.ts`（三个实例各传哪些选项）· `ui/useEditorSettings.ts`（设置 → 编辑器形状）·
+`ui/useEditorHandle.ts`（**外面那 13 条命令的转发**，即 `EditorPaneHandle` 本身）·
+`ui/useCursorSnapshot.ts`（选区快照推后端，第 14 项）· `ui/table-widths.ts`（列宽侧车）。
+⚠️ 逐项的职责与坑以 `docs/02` 那几行为准，这一节不重抄一份。
 这是刻意的（省得去写"把 A 文档的撤销栈换成 B 的"），见 `docs/05`。
 
 ### 2.3b 编辑区里的插件预览（`ui/ReviewPane.tsx`）—— 2026-09-25 起

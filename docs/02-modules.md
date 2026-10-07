@@ -89,8 +89,10 @@
 | `bridge/ipc.ts` | 调用后端的唯一出口 ＋ 事件名表（**只放"发生类"**）。⚠️ **类型定义 2026-09-26 搬去了 `bridge/types.ts`**（那天本文件 1035 行、顶破硬线），头部那行 `export * from "./types"` 让 16 个类型名照旧能从 `@/bridge/ipc` 引到，**调用点一处没改**。⚠️ 两个文件的分工是**"有没有副作用"**：`ipc.ts` 摸 `invoke` 与 `listen`，`types.ts` **一个 import 都没有**（纯形状） |
 | `bridge/types.ts` | **所有跨边界的形状**（2026-09-26 从 `ipc.ts` 拆出）：文档 / 设置 / 插件 / 导出 / 图像。⚠️ **纯类型文件**——不 import `@tauri-apps/api`、不写运行时值，所以谁都能引它而不背上副作用。⚠️ **2026-09-27 又拆了一次**（本文件 1009 行、① 行数闸 FAIL）：事件载荷那四个去了 `payloads.ts`，拆完 **967 行** |
 | `bridge/payloads.ts` | **事件载荷的形状**（2026-09-27 从 `types.ts` 拆出，69 行）：`NotifyPayload` / `PanelDirtyPayload` / `DocumentChangedPayload` / `FileChangedPayload`。⚠️ **拆的线**＝"命令的返回类型"（上面那份）vs"推过来的事件"（这份）——`events.*` 是**发生了一件事**，不是回答 |
-| `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 |
-| `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十六条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化**。⚠️ 建编辑器时要**摘掉与界面快捷键撞车的 CodeMirror 默认键位**（`撞车键位`，2026-09-25；⚠️ **2026-10-04 那份名单搬去了 `editor/key-conflicts.ts`**，因为 BUG-58 正是"名单漏了一条"——搬出来才能被测试读到） |
+| `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 ⚠️ **2026-10-07 拆过（第 89 项）：1006 → 502 行**——「一次性把一切装上去」那一段整块搬去了 `editor/assemble.ts`（620 行），这边只留「实例建好之后怎么用」。 |
+| `editor/assemble.ts` | **「把一切装上去」那一段**（620 行，2026-10-07 从 `create.ts` 拆出，`docs/07` 第 89 项）：`.config()` ＋ 整条 `.use()` 插件链——ctx 初值、序列化器、输入规则、NodeView、各种可选插件。参数收**一个对象**（`装配参数`），不收一长串位置参数（同一条理由见 `ui/pane-editors.ts`）。⚠️ **顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问）：**搬的时候一字未改**，要动顺序先把那一条注释读完。⚠️ `取前置块` / `记账列宽` 两样必须走**回调**不能传值——前者要"这一刻"那一段（换文档、源码切回来都会换），后者要调用方手里**活的那张表** |
+| `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十六条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化**。⚠️ 建编辑器时要**摘掉与界面快捷键撞车的 CodeMirror 默认键位**（`撞车键位`，2026-09-25；⚠️ **2026-10-04 那份名单搬去了 `editor/key-conflicts.ts`**，因为 BUG-58 正是"名单漏了一条"——搬出来才能被测试读到） ⚠️ **2026-10-07 又拆一次（第 89 项）：1048 → 637 行**——「一条命令落到文本上」那一块搬去了 `editor/source-commands.ts`（443 行），这边只留编辑器本身（扩展、主题、句柄、查找/写作模式接线）。⚠️ 两次拆的落点见 `tools/doc-sync-check.sh` 的 `PAIRS`。 |
+| `editor/source-commands.ts` | **源码模式的「命令落点」**（443 行，2026-10-07 从 `source.ts` 拆出）：一条 `EditorCommand` 落到 CodeMirror 文本上的那一下（`applyCommand` 那张 `switch` ＋ 七八个私房文本工具），**对外只有这一个名字**。⚠️ **本文件一句都不 import `source.ts`**（那边 import 本文件，反过来就是环）：它要的判据全是"纯文本"那一档，各自在 `atx.ts` / `source-mark.ts` / `footnote.ts` / `front-matter.ts` 里 |
 | `editor/key-conflicts.ts` | **CodeMirror 默认键位里与本应用撞车的那几条**（101 行，2026-10-04 从 `source.ts` 拆出）：`撞车键位`（摘掉：`Mod-/` `Mod-i` `Shift-Mod-k` `Mod-z` `Mod-y` **`Mod-u`**）＋ `故意不摘`（`Alt-ArrowUp` / `Alt-ArrowDown`，应用侧那两条 handler 还没写）。⭐ **拆出来的理由是 BUG-58**：原来的名单只有人眼在看，漏了一条 `Mod-u`（CM 的 `undoSelection`，还带 `preventDefault` ⇒ 应用被放行 ⇒ **什么都不发生**，症状与"功能没做"一模一样，躲了四个月）。⚠️ 它**纯**（不 import CM、不 import DOM），所以 `tests/key-conflicts.test.ts`（**21 条**）能反过来拿 CM 自己那张表查这份名单。判据与两类症状（"两边都跑" / "被放行"）在文件头与 `docs/06` §5.43 ⑩、§5.47 |
 | `editor/source-mark.ts` | **源码模式里"行内标记能不能摘掉"那个纯字符串判据**（2026-09-30 新建，BUG-57）：选中的文字已经带着同一对定界符（`**甲**`）时给出"摘掉"的改动与选区，否则给 `null`。⚠️ **它是纯函数、不 import CodeMirror**（所以 `tests/source-mark.test.ts` 能直接测）；`source.ts` 的 `切换行内标记` 只负责把结果派下去。⚠️ 返回值**有三种**（`null` / `"不动"` / `"摘"`），合并哪两个都会改坏用户正文——理由在它文件头 |
 | `editor/caret-snapshot.ts` | **编辑器报给宿主的选区快照**（2026-10-04 新建，138 行，第 14 项）：`选区快照` 类型 ＋ 那支只读观察者插件（`选区快照插件(onSelection)`）。⚠️ **文件头那张量测表就是本文件存在的理由**：Markdown 字符偏移在块边界上**不存在**（列表项开头插字会多出 `- `、段落之间插字会多出空行），所以宿主拿不到"能拼字符串"的坐标系——插件能拿到的只有**选中的那段字**。⚠️ 插件自己**按快照去重**：PM 每敲一颗字都派事务，不去重就是每敲一颗字跨一次 IPC。⚠️ 类型**只借不给**：`bridge/ipc.ts` 是 `import type` 从这儿借的（搬进 `bridge/types.ts` 会让"桥"变成选区的定义者） |
@@ -189,7 +191,13 @@
 | `ui/settings/panes/` | **十一页**内容，一页一个文件（2026-09-24 从单文件 `panes.tsx` 拆出）：⚠️ 2026-09-27 现数：多出「**拓展**」一页（`ExtensionsPane.tsx`，见下），所以「十页」那句要改成十一页（`docs/09` §2.2 同批改了）。列出的十个是：`FilesPane` · `EditorPane` · `ImagePane` · `MarkdownPane` · `ExportPane` · `AppearancePane` · `DocThemePane` · `ShortcutsPane` · **`FocusPane`** · `GeneralPane`。⚠️ `FocusPane`（强制专注）是**核心功能的设置页，不是插件的**（用户 2026-09-26 原话「注意啊，这不是插件。这是核心功能」），顺序上插在「快捷键」之后（2026-09-27 又多了「拓展」一页，排在它后面）——通用那页是收尾的"别的都归不到一起"，而这一页是一整块有自己的账本的**有状态**功能，塞进收尾里不对。⚠️ 这一页**不显示会话状态**（余额、已响几次），那是每秒都在变的内存态，出口是状态栏那一格 `ui/FocusMeter.tsx`；设置页显示它会让整页每秒重画。`props.ts` 是十页共用的入参 `PaneProps` 与 `paneWriter`（`PageKey` 是手写的七张分页表名，不是 `keyof Settings`——理由见文件头）。⚠️ `STYLES` 表在 `AppearancePane.tsx`，写成 `Record<UiStyle, …>`，加风格时**编译期**就漏不掉。⚠️ 「保存 & 恢复」那一组下面那条**如实告知**的 `stg-note` 在 `FilesPane.tsx`：2026-09-25 起它**只标着「恢复未保存的草稿」与「清除历史文件记录」两条**（自动保存本身那天接的线，见 `docs/07` 第 20 项）——**别整段删、也别照抄成"三档全没接"**。⚠️ 那条 `Note` 必须留在**组内容区里**：`.stg-note` 落在组里才跨两栏对齐，摆到组外会变成整页宽、贴着最左边，看着像下一组的标题 |
 | `ui/settings/panes/ExtensionsPane.tsx` | **「拓展」那一页**（2026-09-27 新建，275 行）：装 / 导出 / 卸载三件事一条行。⚠️ 与右侧「插件」栏的分工是**诊断 vs 管理**，两边共用 `usePlugins` 的同一份数据与动作（不然就是两份真相源）。⚠️ 三件事里只有**导出**是新做的，宿主那半在 `plugin/export.rs` |
 | `ui/settings/panes/ShortcutsPane.tsx` | 快捷键一览，**2026-09-27 起可以在这一页改**（用户点名要的）。⚠️ 条目**从 `menus` 读出来**（`App.tsx` 那份、**已经叠过用户的覆盖**；`walkMenuItems` 深度优先 + `formatAccel`），不是抄一份静态表——**别改成 import 常量 `MENUS`**，那是出厂键位，用户改过之后它就不对了，而"这个键位现在是什么"正是这一页唯一要回答的问题。⚠️ **四条口径**：① 改的是**差量**（`keys.overrides`），整张表的真相源仍是 `ui/commands.ts`；② 冲突**拦在录制那一刻**（`buildAccelIndex` 那套"先到先得 ＋ 控制台警告"对写死的表够用，对这里不行——用户按下键被静默归了别人，他会以为改成功了，**界面在骗他**）；代价是**两条命令不能交换键位**（想换得先清一条），这是有意取舍；③ 列的**全部可绑定的命令**，不只是已经有键位的（否则没法给一条本来没键位的加键位），没键位的显示「未设置」；子菜单父项与合成条目（主题、最近文件）仍排除；④ 这一页**不标**哪条实现了哪条没实现，那个判据在 `App.tsx` 的 `menuHandlers` 上 |
-| `ui/EditorPane.tsx` | 编辑区：按 `mode` 摆一到两个窗格（所见即所得 / 源码 / 分屏），管两类编辑器的挂载与去抖同步。⚠️ **分屏是单向的**：源码 → 预览，预览只读且从不回写。⚠️ 「正在准备编辑器…」2026-09-26 包上了 `t(...)`（此前是英文界面下少有的硬编码中文，由 `tools/i18n-check.sh` 第 ④ 栏报出来） |
+| `ui/EditorPane.tsx` | 编辑区：按 `mode` 摆一到两个窗格（所见即所得 / 源码 / 分屏），管两类编辑器的挂载与去抖同步。⚠️ **分屏是单向的**：源码 → 预览，预览只读且从不回写。⚠️ 「正在准备编辑器…」2026-09-26 包上了 `t(...)`（此前是英文界面下少有的硬编码中文，由 `tools/i18n-check.sh` 第 ④ 栏报出来） ⚠️ **2026-10-07 拆过（第 89 项）：1171 → 800 行**，搬出去六份：`ui/FrontMatterBanner.tsx`（那条横幅）· `ui/pane-editors.ts`（三个实例各传哪些选项）· `ui/useEditorSettings.ts`（设置拼成编辑器要的形状）· `ui/useEditorHandle.ts`（外面 13 条命令的转发）· `ui/useCursorSnapshot.ts`（选区快照推后端）· `ui/table-widths.ts`（列宽侧车）。⚠️ 都仍有 **800 行**——不是"拆干净了"，只是**过了"不许超 1000"那条线**；再往下拆要等下一次有理由动它（拆之前先读 `docs/09` §4） |
+| `ui/FrontMatterBanner.tsx` | 正文上方那条 **YAML front matter 横幅**（333 行，第 64 项；2026-10-04 加、2026-10-07 从 `ui/EditorPane.tsx` 拆出）：既如实说明开头那几行没丢，也让人就地能读能改。⚠️ **改的路只有一条** `runCommand("frontMatter", …)`——那段文本归编辑器那一侧持有，这里**绝不自己存一份**（存了的话插件整篇替换后横幅里就是旧的）。⚠️ 文本由外面**推**进来（`同步(markdown)`）而不是这里读：编辑器报的全文**不进 React 状态**；也因此**模式切成源码时它照样收**（`显示=false` 那一档），**别改成"源码模式下不渲染"**——那会把它的状态一起扔掉。⚠️ 输入框受控但**不跟着文档走**（无脑覆盖的话，自己提交出去的回声会把用户正在打的字顶掉） |
+| `ui/pane-editors.ts` | **编辑区那三个实例各传哪些选项**（239 行，2026-10-07 从 `ui/EditorPane.tsx` 拆出）：`建所见即所得编辑器` / `建源码编辑器` / `建预览编辑器`。⚠️ 只在这一份里的判断：哪一侧要 `physics`、哪一侧不传 `自动更正`、**预览那一份为什么必须跟主编辑器同口径**。⚠️ **造了不负责拆**——`destroy()` 的时机（`disposed` 那两道闸）仍是 `EditorPane` 的事 |
+| `ui/useEditorSettings.ts` | 把 `settings.markdown` **拼成编辑器要的那两个形状**（92 行，2026-10-07 拆出）：`行内扩展开关` ＋ `标点设置`，**记忆化留在这里**——依赖给**逐项**（三个布尔 / 六个字段），拿整个 `markdown` 当依赖会让"改字号"也顺手重建实例。⚠️ **六项里任何一项变了都要重建**（不做热更新：省下一次重建换来的是"改了字形、活着的实例闭包里还是旧的"这类**静默失效**），代价是写到一半拨标点会**丢撤销栈**，与 `physics` / `inlineMarks` 完全一样。⚠️ 设置还没回来时 `undefined` 一律落到**默认值**（自动更正落 **`true`**），不是落"关" |
+| `ui/useEditorHandle.ts` | `EditorPane` 那个 `useImperativeHandle`——**外面那 13 条命令怎么落到"当前活着的那两个实例"上**（98 行，2026-10-07 拆出）。⚠️ 每条都 `?.` 加兜底，读的给 `undefined`/`null`/`0`/`false`、写的什么都不做，**一律不抛错**：实例是异步建的，这些方法常正好压在"编辑器正在重建"上，抛出去的症状不是"命令没生效"而是**整棵 React 树被带下来**（白屏）。⚠️ `setMarkdown` 要**连 `最新文本Ref` 一起改**（不然紧接着切一次模式会把替换前那一份装回去），并**顺手推给预览那一格**（右格不接 `onChange`，不推就停在被替换之前） |
+| `ui/useCursorSnapshot.ts` | **选区快照 → 后端镜像**（103 行，第 14 项；2026-10-04 加、2026-10-07 从 `ui/EditorPane.tsx` 拆出）：编辑器每报一份选区，压一道 **250ms** 时间窗再 `api.doc.cursor(...)` 推给插件。⚠️ 编辑器那一侧的键是"快照变没变"、这里的键是"多久没推过了"——**只挪光标、不改字**不会触发 `sync`，没有这一条插件读到的选区会一直停在敲键盘之前。⚠️ 定时器与 `sync` 那条**分开**（合用一个会让"改一个字"吞掉"刚挪了光标"那次推送）；**推失败只吞掉**不弹提示条（旁路，下一笔事务自愈） |
+| `ui/table-widths.ts` | **表格列宽侧车**的读写（82 行，2026-10-07 拆出）：列宽不是文档内容，是一份按**路径**记的偏好（`nota_table_widths_get` / `nota_table_widths_set`），这一层管"哪一份文档、什么时候读、什么时候写"；**怎么算列宽、怎么认指纹**在 `editor/table-width.ts`。⚠️ **没有 `doc.path` 就一个字都不碰**——这也正是**为什么不把路径传进 `createEditor`**（"存到哪儿"是调用方的事）。⚠️ 读失败**不拦着建编辑器**（读不到就按自动排版显示）、写失败只 warn；拖了列宽但还没落盘的文档**不补记**（有意为之，记一份还不存在的路径就是一条永远对不上的垃圾记录） |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲）。⚠️ 开合与当前页都是 `App.tsx` 给的**受控**状态；**折叠状态**（哪个目录、哪个标题）反过来住在自己家里。2026-09-24 补了右上角的 × 与空态那颗「打开文件夹…」。⚠️ 2026-09-27 起「大纲」页的 `extractOutline` **从 `@/editor/headings` 取**（不是 `@/ui/outline`）——依赖方向没变，只是那一半搬了家。📌 **2026-09-30**：末尾多了那颗拖动把手（`ui/SidebarResizer.tsx`）＋ 一格 `onResize`（**只接「拖完了、就这个数」**，拖动过程不走它）。📌 **2026-09-30 深夜**：新增 `折叠?: boolean` 这个 prop——**不卸载、只加 `.sidebar-collapsed` 类**（原来 `App.tsx` 里是 `{sidebarOpen && <Sidebar/>}`，元素整个不在树上，没得动画），折叠时同时上 `inert`，免得 Tab 焦点与读屏跑进一条看不见的栏 |
 | `ui/PluginDock.tsx` | 右侧插件栏（⚠️ 2026-10-04 起页签有 ←→/Home/End，`useTablistKeys`，第 50 项）：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
 | `ui/pluginText.ts` | **插件在界面上那几句人话**（2026-09-27 新建，136 行）：来源 / 签名 / 语言 / 能力名 / 位置名。⚠️ 起因是同一句「自装 · 已验证」要在**两个界面**上出现（右侧插件栏 ＋ 设置里的「拓展」页），谁抄第二份，往后就是"改一处、另一处不动"，而那种不一致**不报错**。⚠️ **只有文案**（没有 JSX、没有状态、不碰 `api`）；⚠️ **全是函数不是模块级常量表**——模块级求值时 `t` 还没订阅，且 `tools/i18n-check.sh` 只数为字面量写出来的 `t(…)` |
@@ -261,69 +269,77 @@
 
 | 有 `#[cfg(test)]` 的文件 | 测试数 |
 |---|---|
-| **`upload/tests.rs`** | 28 |
-| **`image/tests.rs`** | 26 |
+| `upload/tests.rs` | 28 |
+| `image/tests.rs` | 26 |
 | `lua/api/ui/tests.rs` | 23 |
+| **`settings/appearance.rs`** | 21 |
+| **`cli.rs`** | 20 |
+| `document/mod.rs` | 20 |
+| **`mcp/mod.rs`** | 20 |
 | `lua/api/git.rs` | 19 |
 | `session.rs` | 19 |
-| `document/mod.rs` | 20 |
 | `pandoc.rs` | 18 |
+| `lua/api/http/tests.rs` | 17 |
 | `lua/api/diff.rs` | 16 |
-| **`cli.rs`** | 16 |
-| **`diff.rs`** | 15 |
+| `diff.rs` | 15 |
 | `plugin/package.rs` | 14 |
-| **`focus/mod.rs`** | 13 |
-| `cli.rs` | 12 |
+| `focus/mod.rs` | 13 |
+| **`mcp/tools.rs`** | 13 |
 | `file_move.rs` | 12 |
 | `lua/api/unified_diff.rs` | 12 |
-| `settings/appearance.rs` | 12 |
+| **`lua/api/settings.rs`** | 11 |
 | `devserver.rs` | 10 |
-| **`settings/focus.rs`** | 10 |
-| `settings/mod.rs` | 10 |
-| **`table_width.rs`** | 10 |
-| `lua/api/http/tests.rs` | 17 |
+| `settings/focus.rs` | 10 |
+| `table_width.rs` | 10 |
+| **`commands/workspace.rs`** | 9 |
+| **`plugin/settings_decl.rs`** | 9 |
 | `proc.rs` | 9 |
+| **`settings/mod.rs`** | 9 |
 | `lang.rs` | 8 |
 | `lua/api/devserver.rs` | 8 |
-| `lua/tests.rs` | 7 |
-| `lua/api/json.rs` | 4 |
 | `lua/require_tests.rs` | 8 |
 | `plugin/installed.rs` | 8 |
+| **`single_instance.rs`** | 8 |
 | `commands/export.rs` | 7 |
-| `lua/api/settings.rs` | 7 |
+| `lua/tests.rs` | 7 |
+| `settings/editor.rs` | 7 |
 | `lua/api/document.rs` | 6 |
 | `lua/api/i18n.rs` | 6 |
-| `lua/mod.rs` | 6 |
 | `native_menu.rs` | 6 |
 | `plugin/manifest.rs` | 6 |
 | `settings/document.rs` | 6 |
-| `settings/editor.rs` | 7 |
-| `single_instance.rs` | 6 |
 | `themes.rs` | 6 |
 | `ui_styles.rs` | 6 |
 | `url_scheme.rs` | 6 |
 | `devserver/probe.rs` | 5 |
 | `lua/api/data.rs` | 5 |
 | `lua/api/fs.rs` | 5 |
-| **`settings/keys.rs`** | 5 |
+| **`plugin/export.rs`** | 5 |
+| **`settings/files.rs`** | 5 |
+| `settings/keys.rs` | 5 |
 | `settings/markdown.rs` | 5 |
 | `commands/image.rs` | 4 |
 | `commands/pandoc.rs` | 4 |
-| `commands/workspace.rs` | 4 |
+| `lua/api/json.rs` | 4 |
 | `lua/api/mod.rs` | 4 |
 | `lua/api/time.rs` | 4 |
 | `plugin/install.rs` | 4 |
-| `settings/files.rs` | 4 |
 | `settings/image.rs` | 4 |
-| **`watch.rs`** | 4 |
+| `watch.rs` | 4 |
 | `commands/path_kind.rs` | 3 |
+| **`diagnostics.rs`** | 3 |
 | `paths.rs` | 3 |
 | `settings/general.rs` | 3 |
 | `error.rs` | 2 |
-| **`focus/alarm.rs`** | 2 |
+| `focus/alarm.rs` | 2 |
 | `settings/export.rs` | 2 |
 | `pandoc_format.rs` | 1 |
-合计 **505 个 Rust 单元测试**（⚠️ **这是 2026-09-27 深夜的快照，已经旧了**：2026-09-29 现数是 **559** 条、**2026-10-04 现数是 583 条** / **62** 个文件——本批只动了 `settings/editor.rs` 一处（6 → 7），其余差额是同时段别的会话提上来的。要报数就照上面那条 `grep` 现取，别抄这一行）（2026-09-27 深夜**现数**：`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` ＝ **505**，带用例的文件 **59** 个；`cargo test --lib` 同一刻跑，报 **505 passed; 0 failed**）。
+
+合计 **598 个 Rust 单元测试 / 65 个带用例的文件**（📌 **2026-10-07 整表重刷**：`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l` ＝ **598**，**逐文件现数**、按条数降序重排；`cargo test --lib` 同一刻跑，报 **598 passed; 0 failed**。⚠️ 上一版还是 2026-09-27 深夜的 **505 / 59**——中间 2026-09-29 到过 559、2026-10-04 到过 583，那两次都**只登记没重刷**，所以「表里的数」和「总数」之间差着好几批别的会话的活，这一版把两半**重新对齐**）
+
+⚠️ **上一版原文（2026-09-27 深夜快照，留着对照）**：合计 **505 个 Rust 单元测试**，带用例的文件 **59** 个，`cargo test --lib` 同一刻报 **505 passed; 0 failed**。⚠️ 那之后每次动 `src-tauri/src` 都该顺手现数一次，别拿旧数去减——**这张表没有闸门扫**。
+
+📌 **2026-10-07 重刷这一版，动了三类地方**（都是「表」自己的账，不是新写的代码）：① **补了 5 行此前根本没登过的文件**——`mcp/mod.rs`（20）与 `mcp/tools.rs`（13）**(整块 mcp 都漏了)**、`plugin/settings_decl.rs`（9，文件本身也是新的）、`plugin/export.rs`（5）、`diagnostics.rs`（3）；② **删了一行重复**：`lua/mod.rs | 6`——那 6 条早搬进 `src/lua/tests.rs` 了（`mod.rs` 里现在只剩 `#[cfg(test)] mod tests;` 这一句声明），与 2026-10-04 删 `lua/api/ui.rs` 那行是同一类错；**同时删掉**表里第二处 `cli.rs | 12`（同一个文件登了两遍，上一处已经是 16）。③ **改数**：`appearance.rs` 12 → **21** · `cli.rs` 16 → **20** · `lua/api/settings.rs` 7 → **11** · `commands/workspace.rs` 4 → **9** · `single_instance.rs` 6 → **8** · `settings/files.rs` 4 → **5** · `settings/mod.rs` 10 → **9**（这一处**是往下走的**）；另有 `lua/api/http/tests.rs` 17 那行原来插错位置 （夹在 10 那一段里），这次按降序归位。⚠️ 教训与 `settings` 那张表同一条：**「文件在目录里」和「文件在这张表里」是两件事**——这次一口气补出 5 个漏登的文件，说明「按批追加」的写法迟早会漏，重刷只能靠人记得做。
 ⚠️ **2026-10-04 又动过一次**（这几行都是第 58 项那一批的）：`lua/api/http.rs` 的用例**搬进了新文件 `lua/api/http/tests.rs`** 并长到 **17** 条（多出来的是 `stream` 那条路的：分块不劈汉字、结果表的形状）· **新文件 `lua/api/json.rs` 4 条**（`nota.json.decode`）· `lua/api/ui/tests.rs` 20 → **23**（`nota.ui.stream` 的尾巴截断三条）。⚠️ 同批**删掉了 `| lua/api/ui.rs | 20 |` 那一行**——它是一份重复：那 20 条 2026-09-29 就搬进 `ui/tests.rs` 了，当时补了新行却没删旧行。
 ⚠️ **这张逐文件表 2026-09-27 深夜按现数整表重生成过一次**（490 → 501），**两半这次是一致的**——上一版留下的"表 490 ／ 总数 492、多的 2 条没去认领"那处差额**就此结清**：那 2 条是同时段别的会话提上来的，重生成时已经含在里面，**不必再去追是哪两个文件**。
 ⚠️ **同一批晚些时候又加了 4 条**（501 → **505**，`cli.rs` 12 → **16**）：「标签页右键 → 在新窗口中打开」那一条链给 `cli.rs` 补的四条用例——新窗口选项认得出来（位置不拘）／程序自己的路径不算选项（**零号参数不算**）／普通启动不是新窗口（`--new-windowish` 不算，要**整串**相等）／新窗口选项不妨碍挑出要打开的文件。⚠️ **带用例的文件数没变**（还是 59，加的是已有文件里的用例）。
@@ -348,26 +364,30 @@
 其余 Rust 文件没有测试。
 
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
-见 `docs/06` §6.3）：`tests/` 下 **五十五份、共 1392 条**（📌 **2026-10-06 深夜现数**：一份一份跑出来的，55 份 0 失败——那份 `for` 里的**五十一份 1238 条** ＋ 另带开关的四份 **154 条**；本批新加 `find` **42 条**（查找与替换：`在文本里找匹配` 的三个开关与零宽 ／ **`算匹配` 的文档偏移**——BUG-67 那条判据写成 `doc.textBetween(命中.start, 命中.end)` 必须正好是查询串，⚠️ 对照组把 `pos + m.start` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条红**）；⚠️ **现数时才发现本节这张表落后了五批**：`panel-cards` 37 ／ `context-menu` 30 ／ `code-block-editing` 21 ／ `caret-snapshot` 10 ／ `hints` 10 **都建好了却没进过这张表**（`docs/06` §6.3 的名册与 `for` 里一直有它们），连同 `find` 一起补进来了——⚠️ 这正是下面那条"加一份要跟着改四处、闸门一处都扫不到"的老毛病；⚠️ 上一版是五十份、1252 条（📌 **2026-10-04 现数**：一份一份跑出来的，50 份 0 失败——那份 `for` 里的**四十六份 1098 条** ＋ 另带开关的四份 **154 条**；本批新加 `front-matter` **32 条**（`docs/07` 第 64 项，⭐ 它当场抓到一个老 off-by-one）、`focus-dim` **15 条**（第 45 项那条轴的五个名字对账）与 `window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同）；⚠️ 上一版是四十七份、1197 条（📌 **2026-10-04 深夜现数**：一份一份跑出来的，47 份 0 失败——那份 `for` 里的**四十三份 1043 条** ＋ 另带开关的四份 **154 条**；本批新加 `caret-snapshot` **10 条**（`docs/07` 第 14 项）；⚠️ 上一版是四十六份、1187 条，再上一版是四十五份、1174 条——那份 `for` 里的**四十二份 1033 条** ＋ 另带开关的四份 **154 条**；本批新加 `math-currency` **23 条**（`docs/07` 第 54 项）、`list-indent` **16 条**（第 47 项）与 `syntax-escape` **13 条**（第 56 项那一族的收尾）；⚠️ 上一版是四十三份、1135 条，再上一版是四十二份、1122 条）：
-`table-tab.test.ts` **58** · `auto-pair.test.ts` **57** · `keymap.test.ts` **54** · `math-delim.test.ts` **51** ·
-`math-view.test.ts` **51** · `slash.test.ts` **49** · `share-card.test.ts` **46** · `find.test.ts` **42** ·
-`table-input.test.ts` **39** · `table-pipe.test.ts` **39** · `inline-marks.test.ts` **37** · `panel-cards.test.ts` **37** ·
-`smart-punctuation.test.ts` **36** · `focus-summary.test.ts` **34** · `math-commands.test.ts` **35** ·
-`emoji.test.ts` **32** · `front-matter.test.ts` **32** · `lang-guess.test.ts` **31** · `footnote.test.ts` **30** · `context-menu.test.ts` **30** ·
-`url-link.test.ts` **29** · `math-input.test.ts` **28** · `source-mark.test.ts` **28** ·
-`toc.test.ts` **27** · `math-suggest.test.ts` **27** · `paste-clean.test.ts` **25** ·
-`math-currency.test.ts` **23** · `syntax-escape.test.ts` **13** ·
-`key-conflicts.test.ts` **21** · `code-block-editing.test.ts` **21** ·
-`heatmap.test.ts` **20** · `auto-correct.test.ts` **20** · `atom-space.test.ts` **19** ·
-`heading-on-enter.test.ts` **19** · `accent.test.ts` **18** · `mark-hint.test.ts` **18** ·
-`instant-render.test.ts` **17** · `list-indent.test.ts` **16** · `file-kind.test.ts` **14** · `lang-icons.test.ts` **14** ·
-`html-block.test.ts` **14** · `focus-dim.test.ts` **15** · `bar-close.test.ts` **13** · `chart-ticks.test.ts` **12** · `sidebar-resize.test.ts` **12** ·
-`video-view.test.ts` **12** · `doc-typography.test.ts` **11** · `status-metric.test.ts` **10** · `caret-snapshot.test.ts` **10** · `hints.test.ts` **10** ·
-`modal-trap.test.ts` **9** · `tree-options.test.ts` **9** · `empty-doc-save.test.ts` **8** · `window-title.test.ts` **8** ·
-`tablist-keys.test.ts` **6**。
+见 `docs/06` §6.3）：`tests/` 下 **五十六份、共 1398 条**（📌 **2026-10-07 现数**：一份一份跑出来的，56 份 **exit=0**、TOTAL **1398**；**本批的账只有两处**——① `math-view` 51 → **31**，另立 `math-wiring` **20 条**（第 89 项拆 `tests/math-view.test.ts`：那是一份 **1024 行**的测试，按**职责**切两半——这一份管「公式节点自己」的五组（真插件规格 / 取源码与写回 / 用户报的那串 `$$␣` / 真插件的两条线 / NodeView 的逻辑），`math-wiring` 管「公式之外围」的三组（插公式块那条命令 / 序列化不给行首井号加反斜杠 / 命令补全弹窗的接线）；两份共用的地基抽成 `math-fixture.ts`。⚠️ 拆的**触因是行数**不是速度：两条路都是 0.1 秒上下）；② `find` 42 → **48**（同批给 `正则写坏了` 那个新出口补的 6 条）。⚠️ 现数时又抓到一处**旧数写错**：`math-delim` 那份表里写着 **51**、现数是 **47**（不是本批动的，是更早某批之后没回头改），这一版一律按现数重排。⚠️ 上一版是五十五份、1392 条（📌 **2026-10-06 深夜现数**：一份一份跑出来的，55 份 0 失败——那份 `for` 里的**五十一份 1238 条** ＋ 另带开关的四份 **154 条**；本批新加 `find` **42 条**（查找与替换：`在文本里找匹配` 的三个开关与零宽 ／ **`算匹配` 的文档偏移**——BUG-67 那条判据写成 `doc.textBetween(命中.start, 命中.end)` 必须正好是查询串，⚠️ 对照组把 `pos + m.start` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条红**）；⚠️ **现数时才发现本节这张表落后了五批**：`panel-cards` 37 ／ `context-menu` 30 ／ `code-block-editing` 21 ／ `caret-snapshot` 10 ／ `hints` 10 **都建好了却没进过这张表**（`docs/06` §6.3 的名册与 `for` 里一直有它们），连同 `find` 一起补进来了——⚠️ 这正是下面那条"加一份要跟着改四处、闸门一处都扫不到"的老毛病；⚠️ 上一版是五十份、1252 条（📌 **2026-10-04 现数**：一份一份跑出来的，50 份 0 失败——那份 `for` 里的**四十六份 1098 条** ＋ 另带开关的四份 **154 条**；本批新加 `front-matter` **32 条**（`docs/07` 第 64 项，⭐ 它当场抓到一个老 off-by-one）、`focus-dim` **15 条**（第 45 项那条轴的五个名字对账）与 `window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同）；⚠️ 上一版是四十七份、1197 条（📌 **2026-10-04 深夜现数**：一份一份跑出来的，47 份 0 失败——那份 `for` 里的**四十三份 1043 条** ＋ 另带开关的四份 **154 条**；本批新加 `caret-snapshot` **10 条**（`docs/07` 第 14 项）；⚠️ 上一版是四十六份、1187 条，再上一版是四十五份、1174 条——那份 `for` 里的**四十二份 1033 条** ＋ 另带开关的四份 **154 条**；本批新加 `math-currency` **23 条**（`docs/07` 第 54 项）、`list-indent` **16 条**（第 47 项）与 `syntax-escape` **13 条**（第 56 项那一族的收尾）；⚠️ 上一版是四十三份、1135 条，再上一版是四十二份、1122 条）：
+`table-tab.test.ts` **58** · `auto-pair.test.ts` **57** · `keymap.test.ts` **54**
+`slash.test.ts` **49** · `find.test.ts` **48** · `math-delim.test.ts` **47**
+`share-card.test.ts` **46** · `table-input.test.ts` **39** · `table-pipe.test.ts` **39**
+`inline-marks.test.ts` **37** · `panel-cards.test.ts` **37**
+`smart-punctuation.test.ts` **36** · `math-commands.test.ts` **35**
+`focus-summary.test.ts` **34** · `emoji.test.ts` **32** · `front-matter.test.ts` **32**
+`lang-guess.test.ts` **31** · `math-view.test.ts` **31** · `context-menu.test.ts` **30**
+`footnote.test.ts` **30** · `url-link.test.ts` **29** · `math-input.test.ts` **28**
+`source-mark.test.ts` **28** · `math-suggest.test.ts` **27** · `toc.test.ts` **27**
+`paste-clean.test.ts` **25** · `math-currency.test.ts` **23**
+`code-block-editing.test.ts` **21** · `key-conflicts.test.ts` **21**
+`auto-correct.test.ts` **20** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20**
+`atom-space.test.ts` **19** · `heading-on-enter.test.ts` **19** · `accent.test.ts` **18**
+`mark-hint.test.ts` **18** · `instant-render.test.ts` **17** · `list-indent.test.ts` **16**
+`focus-dim.test.ts` **15** · `file-kind.test.ts` **14** · `html-block.test.ts` **14**
+`lang-icons.test.ts` **14** · `bar-close.test.ts` **13** · `syntax-escape.test.ts` **13**
+`chart-ticks.test.ts` **12** · `sidebar-resize.test.ts` **12** · `video-view.test.ts` **12**
+`doc-typography.test.ts` **11** · `caret-snapshot.test.ts` **10** · `hints.test.ts` **10**
+`status-metric.test.ts` **10** · `modal-trap.test.ts` **9** · `tree-options.test.ts` **9**
+`empty-doc-save.test.ts` **8** · `window-title.test.ts` **8** · `tablist-keys.test.ts` **6**。
 ⚠️ 跑法两档：`share-card.test.ts` 要 `--loader:.svg=text`（它 import 了 `.svg`），
 `share-card.test.ts` / `heatmap.test.ts` / `focus-summary.test.ts` / `keymap.test.ts`
-要 `--alias:@=./src`（都走 `@/…` 路径），其余 **五十一份**两条都不要——**别照着一份的命令去跑另一份**。
+要 `--alias:@=./src`（都走 `@/…` 路径），其余 **五十二份**两条都不要——**别照着一份的命令去跑另一份**。
 📌 **本节这一格 2026-09-27 现数时发现它落后了两批**：原写"十八份、共 418 条"，
 而那时 `slash.test.ts`（49 条）已经存在、只是没进这份清单（418 ＋ 49 ＝ 467，
 正是 `docs/06` §6.3 当时的数）。**同一个数在两份文档里差 49**——那一批一并补齐并改成
@@ -984,16 +1004,16 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 |---|---|---|---|
 | `mod.rs` | 550 | 9 | 三条外观轴、`UiStyle`（**八个变体**，2026-09-26 加了 `Windows10`） / `UiMode`、`Settings` 本体、`load` / `load_from` / `save` / `save_to`。⚠️ **2026-10-07 少了 35 行、1 条用例**：`ViewMode` 枚举与它那条 `编辑模式也走_kebab_而且默认是所见即所得` 随"模式不再存盘"一起删掉（行数 550 / 用例 9 是收工前数的，改前是 585 / 10） |
 | `markdown.rs` | 534 | 5 | `[markdown]` 表：语法偏好 / 扩展语法 / 智能标点 / 代码块 / 公式 / 空格与换行（六组，十页里组数最多的一页） |
-| `files.rs` | 225 | 4 | `[files]` 表：启动选项 / 大纲折叠 / 默认扩展名 / 切换文件时自动保存 / 最近记录 / 拖放行为 / 文件树过滤。⚠️ **`startup` 三档 2026-09-27 才真的生效**（在此之前没有任何一处读它，而前端无条件恢复一切——见 `StartupAction` 那一段）：`new-file`（默认，开一张白纸）/ `last-file`（恢复标签）/ `last-session`（标签 ＋ 上次那个文件夹）。⚠️ **第三档的枚举名改过**：原先叫 `Folder`，落盘字面量是 `"folder"`，现在叫 `LastSession`，落盘是 `"last-session"`——**`#[serde(alias = "folder")]` 那条别名不能删**，删了老设置文件整份读不出来，用户看到的是"偏好全没了" |
+| `files.rs` | 287 | 5 | `[files]` 表：启动选项 / 大纲折叠 / 默认扩展名 / 切换文件时自动保存 / 最近记录 / 拖放行为（三格：文件夹 / Markdown / 可导入的） / **文件树过滤 ＋ 显示隐藏文件 ＋ 排序**。⚠️ **`startup` 三档 2026-09-27 才真的生效**（在此之前没有任何一处读它，而前端无条件恢复一切——见 `StartupAction` 那一段）：`new-file`（默认，开一张白纸）/ `last-file`（恢复标签）/ `last-session`（标签 ＋ 上次那个文件夹）。⚠️ **第三档的枚举名改过**：原先叫 `Folder`，落盘字面量是 `"folder"`，现在叫 `LastSession`，落盘是 `"last-session"`——**`#[serde(alias = "folder")]` 那条别名不能删**，删了老设置文件整份读不出来，用户看到的是"偏好全没了"。⚠️ **2026-10-07 整表重刷：225 → 287 行、4 → 5 条用例**（上一版的行数是 09-27 的）。涨的是**三格后加的**：`show_hidden` 与 `tree_filter`（摆了四天才接线的那两个死开关，`docs/07` 第 85 项）、`tree_sort`（文件树排序，2026-10-04）——三格连同各自的默认值与用例一起落在 09-27 之后。 |
 | `editor.rs` | 208 | 7 | `[editor]` 表：缩进 / **智能符号补全** / Emoji 补全 / 显示当前块源码 / 复制行为 / 换行符 / 拼写检查 / 打字机模式**/ 段首缩进**。⚠️ **2026-09-28 把「自动配对」那一格改成了「智能符号补全」**（`smart_symbols`，默认开）：它**取代了 `match_brackets` / `match_markdown` 两条死开关**——那两条存了值、从来没有任何代码读过，拨了等于没拨；老设置文件里留着那两行不报错（`#[serde(default)]` 忽略未知键），另有一条用例专门钉住这件事。⚠️ **两条"缩进"不是一个字段**（`default_indent` 往文件里插空格、`paragraph_indent` 只改 `text-indent`），而且**默认值都是 2**——所以有一条用例专门把两个数设成不一样的值再落盘，防着"写串了看不出来" |
-| `appearance.rs` | 329 | 12 | `[appearance]` 表：自定义字号 / 缩放 / **Ctrl+滚轮（两格）** / 状态栏 / 字数统计 / 工具栏 / 深色独立主题。⚠️ 工具栏那一项是**三个词**（`ToolbarMode`），`appearance.rs` 里有一条测试专门钉「这是三个词」，另有一条钉「老设置文件里那个布尔被忽略而不是报错」；⚠️ 滚轮那两格也各有钉：**默认是字号**（不是照名字猜的"缩放"）、两档落盘是 `font_size` / `zoom`、老设置文件里没有目标那一格也读得进来。⚠️ **行数 329 是 2026-09-27 数的**（上一版写着 167，是旧数）；逐格说明见 `docs/03` §5.6b |
+| `appearance.rs` | 629 | 21 | `[appearance]` 表：自定义字号 / 缩放 / **Ctrl+滚轮（两格）** / 状态栏 / 字数统计 / **菜单栏** / 工具栏 / 深色独立主题 / **主题色（`accent`）** / **侧栏宽度** / **专注压暗（`focus_mode_dim`）** / **标题栏显示文件名**。⚠️ 工具栏那一项是**三个词**（`ToolbarMode`），这里有一条测试专门钉「这是三个词」，另有一条钉「老设置文件里那个布尔被忽略而不是报错」；⚠️ 滚轮那两格也各有钉：**默认是字号**（不是照名字猜的"缩放"）、两档落盘是 `font_size` / `zoom`、老设置文件里没有目标那一格也读得进来。⚠️⚠️ **2026-10-07 整表重刷：329 → 629 行、12 → 21 条用例**——**这一格是本表里漂得最狠的一个（差 300 行）**，而它漂的方式正是本节末尾那条告诫说的：**文件在目录里 ≠ 文件在这张表里**，一份 09-27 的数被引了十天。涨的有两块：① **后加的五格**（`show_menu_bar` 2026-09-28、`accent` 主题色 2026-09-26、`sidebar_width` 侧栏宽度 2026-09-30、`focus_mode_dim` 与 `show_filename_in_titlebar` 2026-10-04）；② **那五格各自的默认值、`Default` 实现、serde 别名与用例**——本仓每一格设置都要配一条"老文件读得进来"的钉，所以"加一格"从来不是加一行。逐格说明见 `docs/03` §5.6b。 |
 | **`document.rs`** | 222 | 6 | **`[document]` 表**：正文的行距 / 段距 / 字体 / 字号（**2026-09-27 新增**，界面上的那一页叫「文档主题」）。⚠️ **表名和页名差一点是有意的**：顶层那个老字段 `document_theme` 管"用**哪一套**主题"，这张表管"那套主题给的默认值里**哪几项我不听它的**"——叫 `[doc_theme]` 会让人以为是同一个东西的两种写法。⚠️ **这四项不是第四条外观轴**（一个像素都不出编辑区），它们是**文档主题的覆盖值**；四项**都写成「开关 ＋ 值」两个字段**，因为默认必须是"跟随主题"——三套内置主题行距分别是 1.9 / 1.75 / 1.68，写死一个数就等于把主题之间的差别抹平了（同 `[editor]` 的段首缩进、`[appearance]` 的字号，别另发明一种姿势）。⚠️ `docs/02` 这张表此前**一直没有它这一行**（文件 2026-09-27 就有了），与 `keys.rs` 是同一种漏 |
 | `image.rs` | 190 | 4 | `[image]` 表：**插图动作（五档 `InsertImageAction`）** / `custom_dir`（「复制到指定路径」那条） / 适用范围（`apply_to_local` / `apply_to_remote`） / 图片语法偏好（`prefer_relative` / `add_dot_slash` / `escape_url`）。⚠️ 2026-09-26 之前是 2 条用例、`insert_action` 只有两档；那一批把动作补到五档并**把三个"存得下、不生效"的字段接上了行为**（`docs/07` 第 62 项）。⚠️ **仍然没有「上传服务」那一组，而且这一条现在是对的**：上传的设置（含令牌）**故意不在这张表里**，它在 `~/.config/nota/image-upload.toml`（0600），所以本文件末尾那条用例 `图片设置里不许出现上传与密钥` 盯的是「别把带令牌的那一组搬进 0644 的 `settings.toml`」——2026-09-26 第二批改的口径，见 `docs/10` §11.2 第二类 |
 | `export.rs` | 74 | 2 | `[export]` 表：默认导出文件夹 / 导出后打开所在目录（这一页只有两条）。⚠️ **没有「Pandoc 路径」那一格**，理由 2026-09-25 换过一次口径：不是「不做 Pandoc」（七种格式现在真借它转），而是**不存路径**——存下来的会过期（换机器、改 PATH、重装），每次现探 |
 | **`focus.rs`** | **250** | **10** | **`[focus]` 表**：强制专注的六个旋钮——`total_minutes`（总时长 ＝ 余额上限）/ `alarm_minutes`（起始余额）/ `gain_per_minute` / `drain_per_minute` / `grace_seconds` / `sound`，另加 `introduced`（首次说明弹过没有，**要落盘**）。⚠️ 余额在内存里是**整数毫秒**（浮点每秒累加会漂），设置里是分钟；`上限毫秒()` / `起始毫秒()`（起点夹到上限）/ `赚(拍毫秒)` / `赔(拍毫秒)` 就是那一层的换算。⚠️ 有一条用例专门钉「这里没有任何东西能去看别的程序」——用户要的「依据在开什么应用而判断」**不做**，那是读别人的窗口 |
 | **`keys.rs`** | 114 | 5 | **`[keys.overrides]` 表**（**2026-09-27 新增**，界面上的那一页是「快捷键」）：命令 id → 键位串，**只放用户动过的那些**。⚠️ **只存差量不存整张表**有两个理由：加了新命令时老用户的快照里没有它（缺的那条静默地没有快捷键）、改一个默认键位时所有用户被钉在旧值上。⚠️ 值是**空串**的含义是"这条命令**不要**快捷键"，与"表里没有这个 id"（＝回到默认）**必须能分开**，否则用户改不回默认。⚠️ **不清洗、不校验**（认不得的 id、认不出的键位串原样存原样取）：判据在前端（`ui/commands.ts`），在这儿重写一遍迟早两边不一致。⚠️ 用 `BTreeMap` 不用 `HashMap`，为的是**存盘字节稳定**（用户拿去 diff 不会满屏乱跳） |
 | `general.rs` | 92 | 3 | `[general]` 表：只有 `debug_mode` 一项（其余如实标"不做"） |
-| 合计 | **2794** | **67** | ⚠️ **这是 2026-09-27 深夜那次数出来的**，本表只按 2026-10-07 的 `mod.rs` 改动减过一次：**2759 / 66**。⚠️ 另有**两行已经过期**（改动当天现数）：`files.rs` **287**、`appearance.rs` **629**（本表写着 225 / 329，都是 09-27 的旧数），合计按现数是 **3150 / 77**——整表重刷是**另一批**的事，别顺手改行数（那会把"哪一批动过什么"搅在一起） |
+| 合计 | **3150** | **77** | 📌 **2026-10-07 整表重刷：`wc -l` ＋ `grep -c '#\[test\]'` 逐份现数**，十一份文件一个不漏（含此前漏登过的 `document.rs` / `keys.rs`）。上一版是 2026-09-27 深夜的 **2794 / 67**，期间 `mod.rs`（585 → 550，2026-10-07 删掉 `ViewMode` 与 `settings.view_mode`）、`files.rs`（225 → **287**）、`appearance.rs`（329 → **629**）都被别的批次改过。⚠️ **这张表没有闸门扫**（`doc-sync-check.sh` 只管 `src/` 与 `src-tauri/src/` 下的**代码**文件，文档里的数字得靠人）——所以每次动 `settings/` 都**顺手现数一次**，别拿旧数去减。 |
 
 ⚠️ **上表的行数与用例数 2026-09-27 深夜按现数整表刷新过一次**（`wc -l` ＋ `grep -c '#\[test\]'`，
 合计 **2794 行 / 67 条**）：上一版写着 2150 / 48，而 `mod.rs`（578 → 585）、`markdown.rs`（461 → 534）、

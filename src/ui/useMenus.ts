@@ -63,6 +63,14 @@ const 宿主格式键: Readonly<Record<string, string>> = {
   italic: "fmt.italic",
 };
 
+/**
+ * 剪贴板那几键 —— 焦点在**代码块里那颗 CodeMirror** 时，它们归里层那个编辑器，
+ * 这条全局 accel 一律放行（理由与实测症状写在下面 `onKey` 那一段）。
+ *
+ * ⚠️ 四条都要在：少一条的症状是"在代码块里按它没反应，或者动的是外面那篇"。
+ */
+const 剪贴板键 = new Set(["edit.copy", "edit.cut", "edit.paste", "edit.pastePlain"]);
+
 export interface MenuWiring {
   /**
    * 菜单栏**此刻**摆着的那几栏。2026-09-24 起不再是常量 `MENUS`——
@@ -324,6 +332,29 @@ export function useMenus(w: MenuWiring): MenuState {
 
       const id = accelIndex.get(accelSig(eventAccel(e)));
       if (!id) return;
+
+      // ⚠️ **代码块里那颗 CodeMirror 是另一个编辑器**：剪贴板那几键归它自己
+      // （2026-10-07 开窗量出来的，`docs/06` §5.55）。
+      //
+      // 里层那颗的 `copy` / `cut` 由 `code-block-cm.ts` 自己接（空选区按一下
+      // 拿走整行——VS Code 那个手感），`paste` 由 CodeMirror 自己接（它认得
+      // 光标在哪一格里）。不放过的话，下面那句 `preventDefault()` 会把
+      // **浏览器的默认动作**一起按死：`copy` / `cut` / `paste` 这三个事件
+      // 根本发不出来，里层挂的 handler 一次都跑不到。
+      //
+      // 症状（实测）：在代码块里按 `Ctrl+C`，拿到的还是**上一次在外面复制的那
+      // 一篇**（外层 PM 的选区），界面上一点异常都看不出来。⚠️ 这与 BUG-49 /
+      // BUG-58 / `Alt+↑` 是同族的第四例：**编辑器抢先 + 全局这条 `preventDefault`**。
+      //
+      // ⚠️ 判据按 **id**（不是按按键）：`Ctrl+Shift+V`（`edit.pastePlain`）也要
+      // 一起放行——在代码块里它更该走 CodeMirror 那条。
+      // ⚠️ 类名 `nota-code-cm` 只有代码块那颗挂（`code-block-cm.ts` 里那个
+      // `editorAttributes`）：源码模式也是 `.cm-editor`，按那个认会把源码模式
+      // 一起放进来，而源码模式的这几颗键一直好用（CM 自己那份默认行为）。
+      if (剪贴板键.has(id)) {
+        const 目标 = e.target as HTMLElement | null;
+        if (typeof 目标?.closest === "function" && 目标.closest(".nota-code-cm")) return;
+      }
 
       // 焦点在**编辑器之外的输入框**里（设置对话框那个文本框、查找条）时不接。
       // 不拦的话，在文本框里按 Ctrl+Z 撤的是**文档**，不是刚打的字。

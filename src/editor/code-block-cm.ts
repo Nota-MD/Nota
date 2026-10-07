@@ -40,10 +40,26 @@
  *    `分色()` 拿 refractor 的分词结果算出区间，再交给 CM 的 `Decoration.mark`。
  *    ⚠️ 类名**逐字沿用** `token xxx`（`editor-blocks.css` 里那一整段
  *    `.token.keyword` 配色就是这么写的），所以配色**一个新常量都没加**。
+ *
+ * # 2026-10-07 补的两样：选择那几颗键 ＋ 空选区复制/剪切
+ *
+ * - **`Ctrl+L` / `Ctrl+D` / `Ctrl+Shift+D` 在这里自己接**（`selectLine` 与
+ *   `select.ts` 共用那两个判据）。⚠️ **不能指望应用那条路**：那三条命令
+ *   （`selectLine` / `selectWord` / `deleteWord`）在所见即所得那一侧**认了
+ *   代码块就返回**——代码块的选区归这颗实例管，PM 那边设一个"在代码块里"的
+ *   选区**屏幕上什么都不会亮**（那颗实例拿着 DOM 焦点时 PM 的
+ *   `editorOwnsSelection()` 就是假，`selectionToDOM` 直接返回回来，所以
+ *   NodeView 的 `setSelection` 根本不会被叫到）。见 `select.ts` 文件头。
+ *   ⚠️ 因此**菜单里那三条在代码块里点不动**（菜单走的是 PM 那条路），而键位
+ *   好用——不是撒谎，是"这一段文本的主人不是它"；这条边界记在 `docs/07`。
+ * - **空选区按复制/剪切＝整行**（编辑器里的 `lineWiseCopyCut` 那一条，
+ *   判据是 {@link 整行剪贴}）。⚠️ `Mod-e`（选句）**这里不接**：代码里没有
+ *   "句子"这个概念，拿句读去扫代码只会切出半截标识符。两头（这里与 PM 那条路）
+ *   都**不做**，于是没有"键位与菜单不一致"这回事。
  */
 
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-import { defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, indentWithTab, selectLine } from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
 import {
   Compartment,
@@ -61,9 +77,14 @@ import {
   keymap,
   type Command,
   type DecorationSet,
+  type KeyBinding,
   type ViewUpdate,
 } from "@codemirror/view";
 import { refractor } from "refractor";
+
+// ⚠️ 「哪个字算一个词」的判据**与所见即所得、源码模式是同一份**（`select.ts`
+// 第一组那几个纯函数）：同一颗 `Ctrl+D` 在三处选出来的东西必须一样。
+import { 选词区间, type 区间 } from "./select";
 
 /**
  * 一级缩进的宽度。
@@ -234,6 +255,58 @@ export function 回车续行(
   return { 删多少: 纯空白 ? 前文.length : 0, 插入: `\n${新缩进}`, 光标: 1 + 新缩进.length };
 }
 
+/**
+ * 一段文本里，`位置` 所在那一行的边界（`入` 含、`出` 不含，**都不含换行符**）。
+ *
+ * ⚠️ 位置**正好落在某个换行符后面**时算作下一行的行首（`lastIndexOf` 的起点
+ * 是 `位 - 1`，正好会捡到它前面那个 `\n`）——光标停在行首按 `Ctrl+C` 拿的
+ * 该是**光标后面那一行**，不是它上面那一行。
+ */
+export function 行界(文本: string, 位置: number): { 入: number; 出: number } {
+  const 位 = Math.max(0, Math.min(文本.length, 位置));
+  const 入 = 文本.lastIndexOf("\n", 位 - 1) + 1;
+  let 出 = 文本.indexOf("\n", 入);
+  if (出 < 0) 出 = 文本.length;
+  return { 入, 出 };
+}
+
+/**
+ * 「空选区按复制 / 剪切」该拿哪一段——编辑器里管这条叫 `lineWiseCopyCut`
+ * （VS Code、Typora 的代码块都有）。**纯字符串运算**，用例在
+ * `tests/code-block-editing.test.ts`。
+ *
+ * 三条口径：
+ *
+ * ① **带走那个换行符**：`Ctrl+C` 空选区拿到的是整行**连同它的换行**，粘到别处
+ *    就是一行，不会和上一行黏在一起。⚠️ **最后一行没有换行可带**（文档末尾），
+ *    那时只给这一行的字符——凭空补一个 `\n` 会让粘贴处多出一个空行。
+ * ② **剪切要连换行一起删**，但**末尾那一行删的是它前面那个换行**：不这么办的话
+ *    "删掉最后一行"会留下一个空行（屏幕上看着像删干净了、文档里还剩一个 `\n`）。
+ * ③ 只算**一行**（光标所在那一行）。多光标/"已经有选区"这两种情况**不在这条
+ *    命令的范围内**——{@link 落剪贴板} 见到就交回 CM 自己那份默认行为。
+ *
+ * 返回 `null` 表示"没算出来"（文档为空）——调用方照旧交回默认行为。
+ */
+export function 整行剪贴(
+  文本: string,
+  位置: number,
+  是剪切: boolean,
+): { 文本: string; 删: { from: number; to: number } | null; 光标: number } | null {
+  if (!文本) return null;
+  const { 入, 出 } = 行界(文本, 位置);
+  const 有下行 = 出 < 文本.length;
+  const 行文 = 文本.slice(入, 出);
+  const 删 = 是剪切
+    ? {
+        // ⚠️ 末尾那一行（`有下行` 为假）删的是前面那个换行；只有一段的文档
+        //（`入` 为 0）没有前面那个换行，就删它自己。
+        from: 有下行 ? 入 : Math.max(0, 入 - 1),
+        to: 有下行 ? 出 + 1 : 出,
+      }
+    : null;
+  return { 文本: 行文 + (有下行 ? "\n" : ""), 删, 光标: 删 ? 删.from : 入 };
+}
+
 /* ── CM 扩展 ──────────────────────────────────────────────────────────── */
 
 /** 语言靠一个 `StateField` 记着：代码块的 NodeView 改语言时发这条效果。 */
@@ -335,6 +408,102 @@ const 配对表 = EditorState.languageData.of(() => [
   { closeBrackets: { brackets: ["(", "[", "{", "'", '"', "`"], before: ")]}:;>`" } },
 ]);
 
+/**
+ * 空选区按复制 / 剪切时**整行进出**（`lineWiseCopyCut`，判据见 {@link 整行剪贴}）。
+ *
+ * ⚠️ **只做"空选区"这一格**，其余一律 `return false` 交回浏览器/CM 自己：
+ * 有选区时原生那套（复制选中那段、剪切掉它）就是对的，另写一份只会和它打架。
+ * 多光标同理（本仓虽然没开多光标插件，但 `defaultKeymap` 里那两条
+ * `Mod-Alt-ArrowUp/Down` 能加出多个选区来）——那时"哪一行"没有唯一答案。
+ *
+ * ⚠️ **`cut` 必须自己删**：`preventDefault()` 之后浏览器不会动 DOM，删是我们
+ * 这一笔 CM 事务的责任（它随后经 `文本变化` 推回 PM，所以撤销栈归 PM，
+ * 与文件头那条一致）。⚠️ 不用 `document.execCommand`——那条已经废弃，而且在
+ * WebKitGTK 上的行为还得另测。
+ *
+ * ⚠️ `clipboardData` 可能为空（个别环境不给）：那时**什么都不做**、放行原生
+ * 行为，而不是"标记成处理了却没写剪贴板"——后者会让用户按了 Ctrl+C 之后
+ * 剪贴板里还是上一次的东西，而界面看不出任何异常。
+ */
+/**
+ * 按过键、但那次按键的剪贴板事件**还没被消费掉**的实例。
+ *
+ * 判据的由来见 {@link 记按键}：WebKitGTK 对同一次按键会派发**两遍**
+ * `copy` / `cut`，所以要有一份"这一下按键办过没有"的账。
+ */
+const 按键没办 = new WeakSet<EditorView>();
+
+/**
+ * 剪贴板那两条键的"记账"键位（`Mod-c` / `Mod-x`）。
+ *
+ * ⚠️ **它什么都不做、也要 `return false`**：返回 `false` 才不会 `preventDefault()`
+ * 掉按键——`copy` / `cut` 那两个 DOM 事件正是浏览器对这颗键的**默认动作**，
+ * 拦了它们就永远发不出来（2026-10-07 开窗量到的第一课，见
+ * {@link 整行剪贴处理}）。
+ *
+ * 记这笔账是因为**同一次按键会派发两遍**：实测 WebKitGTK 按一下 `Ctrl+X`，
+ * `cut` 事件来两次（两次都是 `isTrusted`，中间没有任何 keydown；同一支里
+ * `paste` 只来一次），而 `Ctrl+C` 也来两次。复制挨两遍没关系，**剪切挨两遍
+ * 就是少两行**——第二遍的光标已经落到被删那一行的下一行，于是顺手再删一行。
+ * 症状（实测）：按一下 `Ctrl+X`，代码块里连着少两行，而剪贴板里只有一行。
+ *
+ * ⚠️ 判据用"有没有一次真的按键"，**不是**时间戳/防抖：那两种都是猜，而这种
+ * 错法的代价是**删掉用户的字**。⚠️ 账本按实例记（`WeakSet`）：一个文档里
+ * 可能有多个代码块，各挂各的 keymap。
+ */
+const 记按键: Command = (目标) => {
+  按键没办.add(目标);
+  return false;
+};
+
+function 落剪贴板(事件: ClipboardEvent, 视图: EditorView, 是剪切: boolean): boolean {
+  // ⚠️ **先认账**，再决定怎么办：不是新按键的那一遍直接咽掉——文档已经删过了、
+  // 剪贴板也写好了，再办一遍就是多删一行。咽的时候要 `preventDefault()`：
+  // 不拦的话浏览器会拿它自己那份（此时选区是空的）去动剪贴板与 DOM。
+  if (!按键没办.has(视图)) {
+    事件.preventDefault();
+    return true;
+  }
+  按键没办.delete(视图);
+
+  const 选区们 = 视图.state.selection.ranges;
+  if (选区们.length !== 1 || !选区们[0]!.empty) return false;
+  const 计划 = 整行剪贴(视图.state.doc.toString(), 选区们[0]!.head, 是剪切);
+  if (!计划) return false;
+  if (!事件.clipboardData) return false;
+  事件.clipboardData.setData("text/plain", 计划.文本);
+  事件.preventDefault();
+  if (计划.删) {
+    视图.dispatch({
+      changes: { from: 计划.删.from, to: 计划.删.to },
+      selection: EditorSelection.cursor(计划.光标),
+      scrollIntoView: true,
+    });
+  }
+  return true;
+}
+
+/**
+ * {@link 落剪贴板} 的两条挂载。⚠️ CM 自己**不管**复制/剪切（它靠浏览器默认），
+ * 所以**这一段就是它们的主人**——但 2026-10-07 开窗量出：光挂上还不够。
+ *
+ * ⚠️ **它跑不跑，取决于 `ui/useMenus.ts` 那条全局 accel 放不放行**：那条在
+ * `window` 上、`Ctrl+C` / `Ctrl+X` / `Ctrl+V` 都在它的表里，默认路径会
+ * `preventDefault()`——而 `preventDefault()` 按死的是**浏览器的默认动作**，
+ * 于是 `copy` / `cut` 这两个事件**根本不会发出来**，下面挂的 handler 一次都
+ * 跑不到（实测：空选区按 `Ctrl+C`，剪贴板里还是上一次在外面复制的那一篇）。
+ * 所以那个文件里有一条按 id 的放行（认的是这颗实例根元素上那个
+ * `nota-code-cm`）——两处注释互指，改一边要连着看另一边（`docs/06` §5.55）。
+ *
+ * ⚠️ **跑到了还会跑到两遍**：WebKitGTK 对同一次按键派发两遍 `copy` / `cut`
+ * （实测，两次都是 `isTrusted`，中间没有 keydown），于是 handler 里第一件事
+ * 是认 {@link 记按键} 记的那笔账——那一笔的由来与"少两行"的症状都写在那儿。
+ */
+const 整行剪贴处理 = EditorView.domEventHandlers({
+  copy: (事件, 视图) => 落剪贴板(事件, 视图, false),
+  cut: (事件, 视图) => 落剪贴板(事件, 视图, true),
+});
+
 
 export type 代码块编辑器 = {
   /** CM 的根元素，加进 `pre` 里当可见的那一层。 */
@@ -398,6 +567,60 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
     { key: "Mod-y", run: () => (选项.重做(), true) },
   ];
 
+  /**
+   * 光标那一行的**词区间**（`Ctrl+D` / `Ctrl+Shift+D` 共用）。
+   *
+   * ⚠️ 判据是 `select.ts` 里那个**与另两种模式共用**的 `选词区间`；⚠️ 只扫
+   * **光标所在这一行**（`行界` 那一套与 `source-commands.ts` 同一条口径）：
+   * 拿整块代码去扫的话，光标停在行首时会去选**上一行的最后一个词**。
+   */
+  const 光标处词 = (state: EditorState): 区间 | null => {
+    const 头 = state.selection.main.head;
+    const 行 = state.doc.lineAt(头);
+    const 词 = 选词区间(行.text, 头 - 行.from);
+    return 词 && { from: 行.from + 词.from, to: 行.from + 词.to };
+  };
+
+  /** 选当前词（`Ctrl+D`）。⚠️ 与所见即所得那条同判据，理由见文件头。 */
+  const 选词键: Command = ({ state, dispatch }) => {
+    const 区 = 光标处词(state);
+    if (!区) return false;
+    dispatch(state.update({ selection: EditorSelection.range(区.from, 区.to), scrollIntoView: true }));
+    return true;
+  };
+
+  /** 选当前词并删（`Ctrl+Shift+D`）。⚠️ 光标落在删掉那一段的**开头**（同 `select.ts::删词`）。 */
+  const 删词键: Command = ({ state, dispatch }) => {
+    const 区 = 光标处词(state);
+    if (!区) return false;
+    dispatch(
+      state.update({
+        changes: { from: 区.from, to: 区.to },
+        selection: EditorSelection.cursor(区.from),
+        scrollIntoView: true,
+      }),
+    );
+    return true;
+  };
+
+  const 选择键: KeyBinding[] = [
+    // ⚠️ `Mod-l` / `Mod-d` / `Mod-e` 在 CM 的 `defaultKeymap` 里**都没有**
+    //（`Ctrl-e` / `Ctrl-d` 那两条住在 `emacsStyleKeymap`，本仓没装那份），
+    // 所以这里不需要"压住谁"——写在这儿是因为**这一段文本的键位归这颗实例**。
+    {
+      key: "Mod-l",
+      run: (目标) => {
+        // 直接借 CodeMirror 自己那条（源码模式也用它）——"一行"这个概念在
+        // 文本上只有一个答案。⚠️ 它选中的是**整行连同末尾那个换行**，
+        // 与所见即所得那边（段落内容、不含分隔）不同，理由见 `select.ts` 那一段。
+        selectLine(目标);
+        return true;
+      },
+    },
+    { key: "Mod-d", run: 选词键 },
+    { key: "Mod-Shift-d", run: 删词键 },
+  ];
+
   // 自动换行那一格（设置 → 编辑器 → 「代码块 → 自动换行」，默认开）。
   // ⚠️ **必须走 CM 自己的开关，不能只靠 CSS**：`pre` 上那条
   // `html[data-code-wrap="off"] { white-space: pre }` 管不到 CM 内部
@@ -418,6 +641,11 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
           { key: "Shift-Enter", run: 回车带缩进 },
           撤销键,
           ...重做键,
+          ...选择键,
+          // ⚠️ 这两条**只记账、不办事**（`记按键` 里有整段理由）：`return false`
+          // 才能让浏览器照旧发出 `copy` / `cut`，那才是这两条键的正文。
+          { key: "Mod-c", run: 记按键 },
+          { key: "Mod-x", run: 记按键 },
           ...closeBracketsKeymap,
           ...defaultKeymap,
           indentWithTab,
@@ -428,6 +656,11 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
         语言字段.init(() => 选项.初始语言),
         分色插件,
         drawSelection(),
+        整行剪贴处理,
+        // ⚠️ 给这颗实例的根元素挂一个**只属于代码块**的类名：`ui/useMenus.ts`
+        // 那条全局 accel 要认它，才知道"剪贴板那几键归里层这个编辑器"
+        //（源码模式也是 `.cm-editor`，光按那个认会把源码模式一起放进去）。
+        EditorView.editorAttributes.of({ class: "nota-code-cm" }),
         // 当前行那一层淡底（配色在同文件那条 `主题` 里，**与源码模式不是一个色**，
         // 理由见那条注释）。
         highlightActiveLine(),

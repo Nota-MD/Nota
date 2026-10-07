@@ -410,10 +410,10 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 
 | 你的设置项是 | 落在 | 例子 |
 |---|---|---|
-| **离散的**（几档之一） | `root.dataset.<某个>`，CSS 里按 `[data-…]` 分块 | `ui_style` → 16 格；`ui_mode` → `[data-ui-mode]` |
+| **离散的**（几档之一） | `root.dataset.<某个>`，CSS 里按 `[data-…]` 分块 | `ui_style` → 14 格；`ui_mode` → `[data-ui-mode]` |
 | **连续的**（算不完的取值） | `root.style.setProperty("--x", …)` **内联** | 「主题色」`--accent` / `--accent-fg`（1600 万种颜色，没法做成选择器格子）、`--ui-font-size` |
 
-⚠️ **内联的优先级高于任何选择器**——这是它的威力（一行覆盖 16 格），也是它的陷阱：
+⚠️ **内联的优先级高于任何选择器**——这是它的威力（一行覆盖 14 格），也是它的陷阱：
 **换档时记得 `removeProperty` 把它摘掉**，只写不摘 = 上一档的残留永远盖着新的
 （`applyTheme` 里 `accentVars()` 返回 `null` 那条 `else` 分支就是干这个的）。⚠️ 内联的
 值**不能靠 `getComputedStyle` 反查自己写没写**——CSS 变量在 `[data-ui-mode]` 那一段
@@ -464,7 +464,7 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 「这个主题只包含一个 UI 的设计样式，比如说圆角的半径，而不包含主题颜色，这样用户
 可以根据自己的喜好来定制」）。落到写代码上就一句：**一档风格要有自己的默认配色
 （出厂值），但它只是个默认值，用户随时能覆盖**——`--accent` 由「主题色」那条轴
-以内联变量覆盖，比你那 16 格选择器优先级高，所以**加风格时不用为它做任何事**。
+以内联变量覆盖，比你那 14 格选择器优先级高，所以**加风格时不用为它做任何事**。
 
 ### ⚠️ 先问一句：这一档要不要**做成内置**？
 
@@ -477,7 +477,7 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 | 要随应用发给所有人、要在"外观"页里有个正经中文名 | **内置档**（第 1–4 步） |
 
 ⚠️ 两条路的**取舍**：内置档写的是 `theme/shape.css` + `theme/color.css` 那两份
-（轴一 / 轴二分开，所以它自动获得 16 格里的两格，且**与 `ui_mode` 正交**）；
+（轴一 / 轴二分开，所以它自动获得 14 格里的两格，且**与 `ui_mode` 正交**）；
 导入档是用户自己写一份**完整的** CSS，**不限域**，可以干出内置档干不了的事
 （改某个具体组件的长相），代价是那份文件得自己同时管好明暗两态、也没人替他测。
 
@@ -538,7 +538,7 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 ```rust
 pub const BUILTIN_IDS: &[&str] = &[
     "auto", "adwaita", "ghub", "plasma", "macos",
-    "windows", "windows10", "yaru", "yaru-blue",
+    "windows", "windows10", "yaru",
 ];
 ```
 
@@ -546,14 +546,15 @@ pub const BUILTIN_IDS: &[&str] = &[
 
 ⚠️ 清单现在共 **9 项**，数的时候把 `auto` 和风格分开：`auto` 是"跟随系统"，
 由 `applyTheme.ts` 的探测表落成下面某一个（不是一个风格本身）；要在明暗两态下
-各自成立的风格是**八个**（`theme.css` 那句「8 风格 × 2 模式 = 16 格」数的是这八个）
-——等一下，`auto` + 八个风格是九项，而 16 格数的是**八个**风格，两处数的不是同一件事，
+各自成立的风格是**七个**（`theme.css` 那句「7 风格 × 2 模式 = 14 格」数的是这七个）
+——等一下，`auto` + 七个风格是八项，而 14 格数的是**七个**风格，两处数的不是同一件事，
 别按 9 × 2 去算格子。
-`yaru-blue` 与 `yaru` **共用一套形状**，只换强调色。
+⚠️ **2026-10-07 之前这里举的例子是 `yaru-blue` 与 `yaru` 共用形状**（同一套语言换强调色）——
+那一档当天删了，但**写法本身留着当范例**：要加「同一套语言换强调色」的档时，形状段写成并列选择器。
 
 ⚠️ **加风格时顺手问一句"`auto` 探得到它吗"**。探得到的才往 `applyTheme.ts` 的探测表里加一行；
-`ghub` / `yaru-blue` / `windows10` 就是**故意的探不到**（GitHub 没说自己是什么桌面、
-Yaru 蓝要用户自己选、Win10 与 Win11 的 UA 是同一串 `Windows NT 10.0`）——它们只能手选。
+`ghub` / `windows10` 就是**故意的探不到**（GitHub 没说自己是什么桌面、
+Win10 与 Win11 的 UA 是同一串 `Windows NT 10.0`）——它们只能手选。
 
 ⚠️ **换成 `String` 的代价**：拼错的 id 不再有任何编译期或运行期拦截，前端
 `resolveStyle` **原样返回**（不退回默认档，与 `document_theme` 同一个口径），于是
@@ -570,8 +571,8 @@ Yaru 蓝要用户自己选、Win10 与 Win11 的 UA 是同一串 `Windows NT 10.
 | 文件 | 里面是什么 | 加风格时动不动它 |
 |---|---|---|
 | `styles/theme/base.css` | `:root` 的**风格无关**量 + 明暗两段的公共部分 + 新加的三族控件量的**默认值** | ❌ 一般不动 |
-| `styles/theme/shape.css` | 轴一：**八档风格的形状** | ✅ **第 2 步改这里** |
-| `styles/theme/color.css` | 轴一 × 轴二：**16 段**颜色块（含 `--btn-*` / `--switch-*` / `--material-*`） | ✅ **第 3 步改这里**（浅深各一段） |
+| `styles/theme/shape.css` | 轴一：**七档风格的形状** | ✅ **第 2 步改这里** |
+| `styles/theme/color.css` | 轴一 × 轴二：**14 段**颜色块（含 `--btn-*` / `--switch-*` / `--material-*`） | ✅ **第 3 步改这里**（浅深各一段） |
 | `styles/theme/extras.css` | 变量表达不了的：材质 `@supports`、动画、`prefers-*` | ❌ 基本不动（理由见下） |
 
 ⚠️ **顺序不能调**：`base` 必须在 `shape` 前（两处选择器权重都是 (0,1,0)，靠后来居上决胜），
@@ -581,7 +582,7 @@ Yaru 蓝要用户自己选、Win10 与 Win11 的 UA 是同一串 `Windows NT 10.
 
 ```css
 [data-ui-style="yaru"],
-[data-ui-style="yaru-blue"] {   /* 同一个语言的两个强调色档 = 并列两个选择器，形状只写一份 */
+[data-ui-style="别的档"] {   /* 同一套语言换强调色 = 并列两个选择器，形状只写一份 */
   --radius-sm: 4px;
   --radius: 4px;
   --radius-lg: 6px;
@@ -659,7 +660,7 @@ Yaru 蓝要用户自己选、Win10 与 Win11 的 UA 是同一串 `Windows NT 10.
 ```ts
 export type UiStyle =
   | "auto" | "adwaita" | "ghub" | "macos"
-  | "plasma" | "windows" | "yaru" | "yaru-blue";
+  | "plasma" | "windows" | "yaru";
 ```
 
 **不加这个，前端就构造不出带新值的 `Settings`**（TS 会报类型不匹配）。

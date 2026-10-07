@@ -1750,16 +1750,16 @@ grep -rn "docs/04" src/ src-tauri/src/ \
 |---|---|---|---|---|
 | **界面风格** | `ui_style` | `data-ui-style` | `<html>` | **一整套设计语言**：控件形状、圆角、间距、控件高度、阴影、字体栈。⚠️ 它**不是**"主题"的同义词 |
 | **明暗** | `ui_mode` | `data-ui-mode` | `<html>` | 亮/暗。`auto` 时跟随系统（`prefers-color-scheme`）。**任何风格下都成立** |
-| **主题色** | `appearance.accent` | （**没有 DOM 属性**） | `<html>` 的**内联** `--accent` / `--accent-fg` / `--switch-on` | **强调色一处**（2026-09-26 加）。空串 = 跟随当前风格自带的出厂色。⚠️ 它与前两条**不同源也不同落点**：不写 `data-*`，改的是内联 CSS 变量，所以**一行覆盖 16 格**。⚠️ **第三个变量 `--switch-on` 是 2026-09-30 加的**：用户报「右侧开关还是橙色的」——色块跟了、开关没跟（各风格在 `color.css` 里各写各的字面值，不引用 `--accent`），来龙去脉在 `styles/accent.ts::accentVars` 那段 |
+| **主题色** | `appearance.accent` | （**没有 DOM 属性**） | `<html>` 的**内联** `--accent` / `--accent-fg` / `--switch-on` | **强调色一处**（2026-09-26 加）。空串 = 跟随当前风格自带的出厂色。⚠️ 它与前两条**不同源也不同落点**：不写 `data-*`，改的是内联 CSS 变量，所以**一行覆盖 14 格**。⚠️ **第三个变量 `--switch-on` 是 2026-09-30 加的**：用户报「右侧开关还是橙色的」——色块跟了、开关没跟（各风格在 `color.css` 里各写各的字面值，不引用 `--accent`），来龙去脉在 `styles/accent.ts::accentVars` 那段 |
 | **文档主题** | `document_theme` | （**没有 DOM 属性**） | 一份注进 `<head>` 的 `<style>` | **只管正文**。见 §3.3——它**不是**第三条 CSS 变量轴，落法与前两条完全不同 |
 
 取值：
 
 | 轴 | 取值 | 落点 |
 |---|---|---|
-| `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru` / `yaru-blue` | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 与 `yaru-blue` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**（改了就认不出老设置文件，用户会被静默打回默认档） |
+| `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru` | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**（改了就认不出老设置文件，用户会被静默打回默认档） |
 | `data-ui-mode` | `auto` / `light` / `dark` | `auto` 由 `matchMedia("(prefers-color-scheme: dark)")` 解析 |
-| `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 16 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
+| `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 14 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
 | `document_theme`（设置项） | 内置三套的 id（`minimal` / `adwaita` / `latex`）＋ 用户目录里的文件名 | **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套" |
 
 前两条轴的写入动作在 `applyTheme(settings)`（`src/styles/applyTheme.ts`），由
@@ -1874,7 +1874,7 @@ Adwaita 的 headerbar 是 44px、Yaru 的是 40px。它现在**默认值仍在 `
 |---|---|---|
 | 颜色 | `[data-ui-mode]`（含 `:root` 的 light 兜底） | `--bg` `--bg-subtle` `--bg-raised` `--bg-hover` `--bg-active` `--fg` `--fg-muted` `--fg-faint` `--border` `--border-strong` `--accent` `--accent-fg` **`--link`** `--danger` `--warn` `--success` `--shadow` `--doc-bg` `--doc-fg` `--code-comment` `--code-keyword` `--code-string` `--code-number` `--code-function` `--code-attr` `--code-tag` `--find-hit` `--find-current` | ⚠️ **`--link` 是 2026-10-06 加的**（BUG-66）：正文里链接的颜色，默认 `var(--accent)`。加它是因为**"无文档主题"那一档原来一条 `a` 规则都没有**，链接落回浏览器默认那个蓝（`#0000EE`）、深色下看不清；而三套文档主题各自写的是**裸 `a`**，所以默认那条规则在 `editor.css` 里用 `:where(…)` **压平了权重**，靠运行时注入的顺序让主题赢。⚠️ **下划线默认就有**（用户 2026-10-06 拍板）；照 VMark 抄的是"键盘 `:focus-visible` 时的描边圈"这一条。
 | 形状 | `[data-ui-style]` | `--radius-sm` `--radius` `--radius-lg` `--control-height` `--spacing` `--toolbar-height` `--toolbar-shadow` `--btn-font-weight` `--switch-w` `--switch-h` `--switch-knob` `--switch-travel` `--material-blur` `--material-saturate` `--press-scale`（`--press-scale` 只有 macos 给了值；`--material-*` 四个材质风格各给一份；macos / ghub / plasma / windows / windows10 另外换 `--font-ui` 字体栈——⚠️ **只写"Segoe UI"一类的通用名，不写 `Segoe UI Variable` 那种 Win11 专有字体名**，专有字体不随包分发，见 §3.2c） |
-| 颜色**（例外）** | `[data-ui-style="x"][data-ui-mode="y"]`（**两属性**，放在文件最后） | 确有识别色的风格：ghub 的冷灰蓝边框与 `#0d1117` 画布、plasma 的 Breeze 蓝、yaru 的橙、yaru-blue 的 Yaru 蓝、adwaita/macos/windows/windows10 的系统蓝。⚠️ 那 16 格还给出**按钮与开关**这两族（`--btn-bg` 三态 + `--btn-border`、`--switch-on` / `--switch-off` / `--switch-knob-bg`）——⚠️ 它们**不是**通用量，另有用途见 §3.2c。⚠️ macos 那两格还多给三样**只有选择器用得上**的：`--menu-fill` 与 `--menu-fill-fg`（菜单高亮与其上的字）、以及只有它给的 `--press-scale` 搭配值。⚠️ **明暗各写一份**，**八套风格 × 两种模式 = 16 格**，**一格都不许缺**。⚠️ `yaru` 与 `yaru-blue` **共用形状那一段**（并列两个选择器）——加同语言的强调色变体时照这个写法，不复制一遍圆角 |
+| 颜色**（例外）** | `[data-ui-style="x"][data-ui-mode="y"]`（**两属性**，放在文件最后） | 确有识别色的风格：ghub 的冷灰蓝边框与 `#0d1117` 画布、plasma 的 Breeze 蓝、yaru 的橙、yaru-blue 的 Yaru 蓝、adwaita/macos/windows/windows10 的系统蓝。⚠️ 那 14 格还给出**按钮与开关**这两族（`--btn-bg` 三态 + `--btn-border`、`--switch-on` / `--switch-off` / `--switch-knob-bg`）——⚠️ 它们**不是**通用量，另有用途见 §3.2c。⚠️ macos 那两格还多给三样**只有选择器用得上**的：`--menu-fill` 与 `--menu-fill-fg`（菜单高亮与其上的字）、以及只有它给的 `--press-scale` 搭配值。⚠️ **明暗各写一份**，**七套风格 × 两种模式 = 14 格**，**一格都不许缺**（⚠️ 2026-10-07 之前是八套 16 格：那天用户说「只需要 Yaru，不需要 Yaru Blue 了」，`yaru-blue` 整档删了）。⚠️ **附**：形状段可以**并列两个选择器共用**（`yaru-blue` 当年就是这么写的）——加同语言的强调色变体时照这个写法，不复制一遍圆角 |
 
 ⚠️ **不许把颜色写进 `[data-ui-style]` 那一段**。颜色一旦在风格里写死，这个风格就
 没法配暗色了——而"我要 macOS 风格 + 暗色"是必然会出现的需求。反过来也一样：
@@ -1888,7 +1888,7 @@ Adwaita 的 headerbar 是 44px、Yaru 的是 40px。它现在**默认值仍在 `
 这是 14 格里最容易出错的一格。今天最低的一格是 **Yaru 浅色**（白字配 `#e95420`，
 对比度 3.1:1）——**故意留的**，因为 Ubuntu 自己的默认按钮就这么画，改了就不是 Yaru 了。
 
-⚠️ **`yaru-blue`（2026-09-24 加）不是 Nota 配的色**：Ubuntu 的 `index.theme` 里就写着
+⚠️ **那一档原来叫 Yaru 蓝（`yaru-blue`，2026-09-24 加／2026-10-07 删**，用户原话「只需要 Yaru，不需要 Yaru Blue 了」）——它**不是 Nota 配的色**：Ubuntu 的 `index.theme` 里就写着
 `X-Yaru-Accent-Name=blue` / `X-Yaru-Accent-Color=#0073E5`，暗色那份用它的
 对比度优化档 `#2a95ff`。用户点着名要过这一档（「比如yaru,yaru blue,macOS,windows,plasma等」）。
 ⚠️ 上一版这里写着"唯一预告过的例外还没写进 CSS"（指 yaru 的橙）。**现在写进去了**，
@@ -2042,10 +2042,10 @@ Windows 11 Mica / **Windows 10 Acrylic** / Ubuntu Yaru（橙、蓝两档）/ Adw
 
 #### ✅ 照收的
 
-形状与颜色（16 格）按稿子重取，逐档的值就在 `theme/shape.css` 与 `theme/color.css`
+形状与颜色（**14 格**——那天之后删了 Yaru 蓝一档，见下）按稿子重取，逐档的值就在 `theme/shape.css` 与 `theme/color.css`
 各自的注释里（那一行上面写着"稿子：…"）。三处**新增的槽位**：
 
-- **`windows10` 一整档**——具体风格由**七档变成八档**（连同"跟随系统"的 `auto`，
+- **`windows10` 一整档**——具体风格由**六档变成七档**（连同"跟随系统"的 `auto`，
   清单里共九项；⚠️ 十六格数的是这**八**档，不含 `auto`）。⚠️ 它是**并存的一代**，
   不是替换 `windows`：稿子专门写明"不是 Mica"，直角 + 亚克力，与 Win11 的小圆角 +
   Mica 确实不一样。⚠️ 2026-09-26 当天 `ui_style` 从枚举改成了 `String`（用户导入档
@@ -2059,9 +2059,9 @@ Windows 11 Mica / **Windows 10 Acrylic** / Ubuntu Yaru（橙、蓝两档）/ Adw
   （见 `base.css` 里 `--switch-travel` 上面那条公式）。⚠️ **2026-09-30 补**：这族里的
   `--switch-on` 是**各档各写一个**的（macOS 绿 `#34c759`、Yaru 橙 `#e95420`…），
   **不引用 `--accent`**——这正是当天用户报「右侧开关还是橙色的」的根因。处置办法是
-  用户**显式设了主题色时**由 `accent.ts::accentVars` 内联把它一起盖掉（那 16 格
+  用户**显式设了主题色时**由 `accent.ts::accentVars` 内联把它一起盖掉（那 14 格
   一行都没改，出厂长相各归各的）；`base.css` 的 `:root` 里那句
-  `--switch-on: var(--accent)` **优先级输给这 16 格**，只有没写这一格的风格
+  `--switch-on: var(--accent)` **优先级输给这 14 格**，只有没写这一格的风格
   （ghub 那种只写差异的）才轮到它。
 - **`--material-bg` / `--material-blur` / `--material-saturate`**：玻璃底色与模糊半径。
 
@@ -2079,7 +2079,7 @@ Windows 11 Mica / **Windows 10 Acrylic** / Ubuntu Yaru（橙、蓝两档）/ Adw
 | Breeze | `#586263`(5.61) / `#657171`(4.52) | `#aeb4ba`(5.66) / `#9fa6ad`(4.81·稿子原值) |
 | Windows 11 | `#606060`(5.67) / `#6e6e6e`(4.60·稿子原值) | `#a4a4a4`(5.60) / `#949494`(4.60·稿子原值) |
 | Windows 10 | `#606060`(5.62) / `#666666`(5.13·稿子原值) | `#a4a4a4`(5.60) / `#999999`(4.90·稿子原值) |
-| Yaru / Yaru 蓝 | `#5e6272`(5.66) / `#6b7183`(4.54) | `#b7bbc3`(5.64) / `#a4a9b4`(≈4.5) |
+| Yaru（⚠️ 原来还并列着「Yaru 蓝」，2026-10-07 随那一档删了） | `#5e6272`(5.66) / `#6b7183`(4.54) | `#b7bbc3`(5.64) / `#a4a9b4`(≈4.5) |
 | Adwaita | `#606061`(5.67) / `#6f6f70`(4.53) | `#b1b1b5`(5.63) / `#9e9ea3`(4.51) |
 
 ⚠️ **`--btn-bg` 不参与这条检查**：WCAG 1.4.3 把"不可用的控件"排除在外，
@@ -2094,15 +2094,15 @@ Windows 11 Mica / **Windows 10 Acrylic** / Ubuntu Yaru（橙、蓝两档）/ Adw
 | Yaru 橙 `#e95420` + 白字 = **3.1:1** | **照收，不换**（早就是这样，已登记） | Ubuntu 自己的默认按钮就是这么画的，改了就不是 Yaru 了 |
 | Breeze 浅色：稿子 `#3daee9` + 白 = 2.49:1 | **不用稿子那个**，留原来那档更深的 `#1d7fb8` | 2.49 太低了，不是"风格如此"能解释的 |
 | Win11 深色：稿子 `#4cc2ff` + 深字 | **换成稿子的另一个值 `#0078d4` + 白字**（4.53:1） | 同一份稿子里有能过的那一档 |
-| Yaru 蓝浅色：稿子 `#208fe9` + 白 = 3.40:1 | **用稿子自己的 hover 档 `#1979c7`** | 同一份稿子里的另一档，仍然是 Yaru 蓝 |
-| Yaru 蓝深色：稿子 `#208fe9` | **照收**，但 `--accent-fg` 用深色 `#06203a`（4.84:1） | 深色底上配深字才对；这一档是本仓少见的"深底 + 深字"组合，改 `--accent-fg` 前先算 |
+| ~~Yaru 蓝浅色：稿子 `#208fe9` + 白 = 3.40:1~~（2026-10-07 删档） | **用稿子自己的 hover 档 `#1979c7`** | 同一份稿子里的另一档，仍然是 Yaru 蓝 |
+| ~~Yaru 蓝深色：稿子 `#208fe9`~~（2026-10-07 删档） | **照收**，但 `--accent-fg` 用深色 `#06203a`（4.84:1） | 深色底上配深字才对；这一档是本仓少见的"深底 + 深字"组合，改 `--accent-fg` 前先算 |
 
 > ⚠️⚠️ **`--accent` 的 hover / 按下态没有token 化。** 稿子里有五档明确给了
 > hover / 按下的强调色，但本仓的 `.btn-primary:hover` / `:active` 用的是**一条与风格无关**的
 > `filter: brightness(0.94)` / `brightness(0.88)`。在**深色 + 深字**的那两档上，
-> 往更暗处压会**把字的对比度压垮**（算过：yaru-blue 深色 hover 到 `#1463a4` 只剩 2.63:1）。
+> 往更暗处压会**把字的对比度压垮**（算过：删掉的那档 Yaru 蓝，深色 hover 到 `#1463a4` 只剩 2.63:1）。
 > 所以那五组 hover/按下色**故意没有落地**——这是**欠账**，不是"已经做了"。
-> 要接的话得先把 hover/按下也变成 token（16 格 × 3 态），那是另一件事。
+> 要接的话得先把 hover/按下也变成 token（14 格 × 3 态），那是另一件事。
 
 **③ `--material-bg` 的透明度全部抬到 0.97。** 稿子给的是 0.90–0.98，但**本机的
 WebKitGTK 静默忽略 `backdrop-filter`**——实测：透明度 0.55 时后面的字"原样清晰可读"，
@@ -2131,7 +2131,7 @@ WebKitGTK 静默忽略 `backdrop-filter`**——实测：透明度 0.55 时后�
 ⚠️ 另外两条**结构性差异**，一并记在这里免得反复讨论：
 
 - **`--toolbar-height` 只能往上调不能往下调**（稿子 44 / 40 收，32 / 32 / 30 不收），理由见 §3.1b；
-- **Yaru / Yaru 蓝故意不在材质名单里**：它们那两份稿子写明"不透明、不做模糊"，
+- **Yaru 故意不在材质名单里**：它那份稿子写明"不透明、不做模糊"，
   所以 `theme/extras.css` 的两张名单（`@supports` 与 `prefers-reduced-transparency`）
   只列 macos / plasma / windows / windows10 四个。
 
@@ -2266,7 +2266,7 @@ WebKitGTK 静默忽略 `backdrop-filter`**——实测：透明度 0.55 时后�
 
 | 轴 | 切换界面 | 怎么改它 |
 |---|---|---|
-| 轴一（界面风格） | ✅ **有**：偏好设置 → 外观 → 界面风格（下拉）＋ 右侧「风格文件夹…」按钮 | `updateSettings({ui_style})`。**9 个选项打底**（自动 + 八档具体风格），**再加上用户导入的几档**；选中的那套下面带一句中文说明。⚠️ 2026-09-26 起用户能自己加档——往 `~/.config/nota/ui-styles/` 丢 `<id>.css`，重启后进下拉，同名则覆盖内置（那一档的选项后面带「已覆盖」）。⚠️ `settings.ui_style` 里是一个**清单里没有的 id** 时（文件被删、手改配置拼错），下拉里补一条 `（找不到「…」）`，**不静默换档**——理由见 `settings/mod.rs::DEFAULT_UI_STYLE` |
+| 轴一（界面风格） | ✅ **有**：偏好设置 → 外观 → 界面风格（下拉）＋ 右侧「风格文件夹…」按钮 | `updateSettings({ui_style})`。**8 个选项打底**（自动 + 七档具体风格），**再加上用户导入的几档**；选中的那套下面带一句中文说明。⚠️ 2026-09-26 起用户能自己加档——往 `~/.config/nota/ui-styles/` 丢 `<id>.css`，重启后进下拉，同名则覆盖内置（那一档的选项后面带「已覆盖」）。⚠️ `settings.ui_style` 里是一个**清单里没有的 id** 时（文件被删、手改配置拼错），下拉里补一条 `（找不到「…」）`，**不静默换档**——理由见 `settings/mod.rs::DEFAULT_UI_STYLE` |
 | 轴二（明暗） | ✅ **有**：偏好设置 → 外观 → 明暗（两张**缩略图**）+ 跟随系统偏好（开关） | `updateSettings({ui_mode})`。同时放在那一节的还有界面字号（滑杆） |
 | 轴三（主题色） | ✅ **有**：偏好设置 → 外观 → 主题色（一个 `<input type="color">` ＋「跟随风格」按钮） | `updateSettings({accent})`。⚠️ 「跟随风格」把值写回**空串**（不是写当前那个颜色）——写了颜色就"钉死"了，换风格时不会跟着变。⚠️ 认不出来的值**不静默吃**：输入框旁边直接一行红字「（认不出「…」，按跟随风格处理）」。⚠️ 这个颜色**只管强调色**（按钮/选中态/焦点圈），明暗那两条轴管的底色一点不动 |
 | 轴四（文档主题） | ✅ **有**：菜单栏「主题」栏 | `updateSettings({document_theme: id})`，⚠️ **2026-09-25 起是"写进当前生效的那个槽"**——深色下开着 `dark_theme_separate` 时写的是 `appearance.dark_document_theme`。菜单上的勾与设置页显示的都是**生效的那一套**，判据在 `ui/useDocTheme.ts` |

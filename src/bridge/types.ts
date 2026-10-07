@@ -125,8 +125,7 @@ export type BuiltinUiStyle =
   | "plasma"
   | "windows"
   | "windows10"
-  | "yaru"
-  | "yaru-blue";
+  | "yaru";
 
 /**
  * 界面风格。**这是外壳的设计语言**，与文档主题是两回事。

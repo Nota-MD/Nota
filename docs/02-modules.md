@@ -25,7 +25,7 @@
 | `state.rs` | `AppState` 四个句柄 ＋ `settings_problem`（只读）＋ `app_lang`（**开机算一次，之后不变**）+ 锁序不变量。⚠️ `DevServerState` 与 `plugin::ReviewState` **故意不在这里**（见 `docs/01` §② 第 ⑤ 步） |
 | `settings/mod.rs` | `Settings` 与三条互相独立的外观轴，kebab-case 落盘；解析不了的原文件先备份成 `.bak`。⚠️ 2026-09-24 由单文件 `settings.rs` 拆成模块目录：`mod.rs` 留枚举与结构体本体，另**十个**文件按**界面上的页**各装一张表（`files` / `editor` / `image` / `markdown` / `export` / `appearance` / `focus` / `general` / **`document`** / **`keys`**），逐文件见下 |
 | `themes.rs` | **文档主题**的发现与读盘：`DocThemeInfo` / `discover()` / `css_of()` / `user_themes_dir()` / 围栏 `check_id()`。⛔ **不兼容也不内置外部编辑器的主题**（版权，用户 2026-09-23 定的）。⚠️ 入参是 **id 不是路径**。⚠️ 2026-09-26 起 `check_id` / `check_size` 是 `pub(crate)`——`ui_styles.rs` **复用**它们而**不是各写一份**（同一道安全边界两份实现，漂的是哪一份没人看得出来） |
-| `ui_styles.rs` | **界面风格**的发现与读盘（2026-09-26 新增），与 `themes.rs` **并行**：`UiStyleInfo { id, builtin }` / `discover()` / `css_of()` / `user_styles_dir()` / `BUILTIN_IDS`。⚠️ **与文档主题最大的差别是"不限域"**（界面风格要改的就是整个外壳），差别表写在文件头上，⛔ 别把两条机制合成一条。⚠️ 内置那八档**没有文件**，`css_of` 只认用户丢进 `~/.config/nota/ui-styles/` 的 |
+| `ui_styles.rs` | **界面风格**的发现与读盘（2026-09-26 新增），与 `themes.rs` **并行**：`UiStyleInfo { id, builtin }` / `discover()` / `css_of()` / `user_styles_dir()` / `BUILTIN_IDS`。⚠️ **与文档主题最大的差别是"不限域"**（界面风格要改的就是整个外壳），差别表写在文件头上，⛔ 别把两条机制合成一条。⚠️ 内置那七档**没有文件**，`css_of` 只认用户丢进 `~/.config/nota/ui-styles/` 的 |
 | `focus/mod.rs` | **强制专注的账本**（2026-09-26，657 行）：`阶段`（`专注` / `走神 { 起于 }` / `警报`，`名字()` 给前端分叉用）、`会话`、跨边界的 `快照`、`FocusState`，以及那个**一秒一拍的裸线程**（`起`）。⚠️ **它不是插件，是核心功能**（用户原话「注意啊，这不是插件。这是核心功能」）——它要窗口焦点、要开置顶窗、要出声，三样都在插件沙箱之外。三条不变量在文件头：**宽限期内不欠账** / **警报中账本冻结** / **冷却要攒回复活线**（`复活线最小` 10s ～ `复活线最大` 60s）。⚠️ `FocusState` **单独 `manage`、不进 `AppState`**（同 `Heartbeat` / `DevServerState` / `ReviewState` / `ProbeCache`），账本自己一把锁。⚠️ 发事件与开窗都在**放开锁之后**（锁序）。13 条用例 |
 | `focus/alarm.rs` | **警报窗与那一声响**（2026-09-26，191 行）：`窗_LABEL = "focus-alarm"`（`lib.rs` 两处分派靠它）、`EVENT_BEEP`、`响` / `开窗` / `关窗` / **`对账`** / `系统提示音`。⚠️ 为什么必须是**另一个真窗口**（置顶 ＋ 全屏 ＋ 抢焦点）而不是主窗里盖一层红布：警报响时用户**已经切走了**，主窗在他背后。⚠️ **开与关都认 `阶段` 一个真相源**——计时线程每一拍 `对账` 一次；`关窗` 别在 `确认` 里再调一次。⚠️ `对账` 是 **BUG-41** 的修法：这一段设计原先只写在文件头里、计时线程里从没实现过，所以**改这里先去 `super::起` 数一眼调用点，别只读注释** |
 | `proc.rs` | **跑外部程序的那一层**（2026-09-25 从 `slidev.rs` 抽出来，判据是**依赖方向**——pandoc 导出要用同样三件，不该让 `pandoc.rs` → `slidev.rs`）：`split_command`（⚠️ **只按空白分词**、不认引号）· `command_or_default` · `kill_group` · `spawn_retrying`（⚠️ `ETXTBSY` 等一下再试，见本文件里那一节）· `run_capture(program, args, RunOpts)`（自成进程组、可选喂 stdin、带超时，超时**杀整个进程组**）· `Ran` 四档 |
@@ -140,12 +140,12 @@
 | `editor/table-pipe.ts` | **行首那颗多余的反斜杠**（2026-09-27 新建，**276 行**）：`| 1 | 2 | 3 |` 这样一行正文，切一次模式回来就被加上一颗 `\`。⚠️ 那颗来自上游 `mdast-util-gfm-table` 的 unsafe 表（序列化器一行一行地写，看不见下一行是不是分隔行，只好一律转义）。⚠️ **判据 2026-10-04 换过**：老判据问"这一段会不会跨行"（两行同段时永远不成立 ⇒ 病复发），新判据问"**下一行长什么样**"——只有"下一行像分隔行"才把转义留下；`tableCell` 里一律不动。⚠️ 用户那句「表格出不来」的后半截**不在这一层**（那颗转义会被分词器吃掉、表照样成形），这一层修的是"文件里多出一颗用户没打过的字符"。⚠️ **39 条**在 `tests/table-pipe.test.ts` |
 | `editor/text-handlers.ts` | **序列化时那一串套着的文本处理器**（2026-09-27 从 `create.ts` 拆出，75 行）：`文本处理器链(原文)` 把**七层**套起来——行首竖线 / **正文里的 `$`**（2026-10-04 加）/ 孤立波浪号 / **行首那两种不认识的语法**（2026-10-04 加，见下一行）/ 行首等号 / 原子后的空格 / 行首井号。⚠️ 拆的直接原因是加层之后 `create.ts` 到 1011 行、破了 1000 行硬线，但真正的理由是**这几层的理由、顺序的讲究、以及"只能挂 `handlers.text`、挂 `$remark` 是静默空操作"本来就是同一条知识**。⚠️ 测试里**必须自己把 `defaultHandlers.text` 传进来**——不传等于连上游的转义一起省了 |
 | `editor/syntax-escape.ts` | **行首 `[TOC]` / `[!NOTE]` 这类语法别被加反斜杠**（2026-10-04 新建，约 70 行，`docs/07` 第 56 项那一族的收尾）：上游 unsafe 表里有一条 `{character: '[', inConstruct: 'phrasing'}`——**文本节点里每一颗 `[` 都转义**（"它可能起一个链接"），于是 Typora 的 `[TOC]` 存成 `\[TOC]`、GitHub 的提示块存成 `> \[!NOTE]`，**用户没打过那颗反斜杠**（与 `\#标签`、`\==重点==` 同一个病）。⭐ **判据的立足点是"解析期就配过对了"**：文档里只要有 `[TOC]: http://…`，正文里的 `[TOC]` 打开时**就是一条链接**（`link` 节点），压根走不到文本处理器——所以"能看见这个文本节点"本身就证明了没有与之配对的定义。⚠️ **只认行首**（`(^|\n)`；这两种本来就是块首语法）**且只认名字在册的**（`TOC`/`toc` ＋ 五种 `[!TYPE]`），**不做「凡是 `[` 都不转义」那种大赦**（那会把真链接、脚注引用与用户自己的转义一起放过）。⚠️ 代价：用户**特意**写的 `\[TOC]` 会变回 `[TOC]`（那颗反斜杠本来就多余，与 `\==重点==` 那条同性质，知情接受）。判据 `tests/syntax-escape.test.ts` **13 条** |
-| `styles/applyTheme.ts` | 把**三条界面外观轴**写到 `<html>`。⚠️ **落点分两种，别记混**：`ui_style` / `ui_mode` 走 **`data-*`**（离散量，CSS 里按属性分块），`appearance.accent` 走**内联 `--accent` / `--accent-fg`**（连续量，1600 万色做不成选择器格子）——内联优先级高过那 16 格，所以一行覆盖全场；⚠️ **换档要 `removeProperty` 摘掉**，只写不摘会让上一档的残留一直盖着。⚠️ **文档主题不在这里，它连 DOM 属性都没有** |
+| `styles/applyTheme.ts` | 把**三条界面外观轴**写到 `<html>`。⚠️ **落点分两种，别记混**：`ui_style` / `ui_mode` 走 **`data-*`**（离散量，CSS 里按属性分块），`appearance.accent` 走**内联 `--accent` / `--accent-fg`**（连续量，1600 万色做不成选择器格子）——内联优先级高过那 14 格，所以一行覆盖全场；⚠️ **换档要 `removeProperty` 摘掉**，只写不摘会让上一档的残留一直盖着。⚠️ **文档主题不在这里，它连 DOM 属性都没有** |
 | `styles/accent.ts` | **「主题色」的纯逻辑**（2026-09-26，约 140 行）：`parseAccent`（认 `#rgb` / `#rrggbb`，`#` 可省、大小写随便；认不出返回 `null`）、`相对亮度`（WCAG 线性化 sRGB，权重 0.2126/0.7152/0.0722）、`对比度`、`accentFg`、`accentVars`。⚠️ **`accentFg` 是「够不够亮」的阈值判定（0.25），不是「挑对比度大的那个」**——后者会跟出厂配色表里的 **15 对里 7 对** 打架，连 Adwaita 那对旗舰 `#3584e4` 都在内；0.25 是从出厂值的两个极端（`#e95420` L=0.238 / `#208fe9` L=0.258）**反读出来**的。推导与那条「白字最低 3.65:1、低于 WCAG AA 正文线」的代价写在 `docs/03` §5.2b。⚠️ **它不认识的值一律当「跟随风格」**——不报错、落盘也不清洗（和 `ui_style` 同一个口径）。用例 **14** 条在 `tests/accent.test.ts` |
-| `styles/theme.css` | 两条界面轴的变量表（**8 风格 × 2 明暗 = 16 格**；`yaru-blue` 与 `yaru` 共用形状段）。⚠️ **只管外壳**；`--find-hit` / `--find-current` 是 2026-09-24 为查找高亮加的。⛔ `--font-ui` 不许有衬线、`--font-doc`（可以是衬线）只有正文能引——用户 2026-09-24：「绝对不要用衬线字体做UI字体」，机器判据在 `tools/doc-sync-check.sh` ⑥。⚠️⚠️ **2026-09-26 起这份文件本身只剩 51 行 `@import`**：它当时 1117 行、顶破 1000 行硬线，于是**就地按职责拆成四份**放在 `styles/theme/` 下。**名字没换**（`main.tsx` import 的还是它），所以全仓三十来处「见 `theme.css` 的某个变量」的注释都还成立；⚠️ **四份的加载顺序不能调**，理由在它自己的文件头 |
+| `styles/theme.css` | 两条界面轴的变量表（**7 风格 × 2 明暗 = 14 格**；⚠️ 2026-10-07 删掉了 `yaru-blue` 那一档——用户原话「只需要 Yaru，不需要 Yaru Blue 了」）。⚠️ **只管外壳**；`--find-hit` / `--find-current` 是 2026-09-24 为查找高亮加的。⛔ `--font-ui` 不许有衬线、`--font-doc`（可以是衬线）只有正文能引——用户 2026-09-24：「绝对不要用衬线字体做UI字体」，机器判据在 `tools/doc-sync-check.sh` ⑥。⚠️⚠️ **2026-09-26 起这份文件本身只剩 51 行 `@import`**：它当时 1117 行、顶破 1000 行硬线，于是**就地按职责拆成四份**放在 `styles/theme/` 下。**名字没换**（`main.tsx` import 的还是它），所以全仓三十来处「见 `theme.css` 的某个变量」的注释都还成立；⚠️ **四份的加载顺序不能调**，理由在它自己的文件头 |
 | `styles/theme/base.css` | 拆出来的第 ① 份（244 行）：`:root` 的**风格无关**量（字号、三套字体栈、栏宽、`--toolbar-height`、时长/缓动、`--z-popup`）＋ `:root, [data-ui-mode="light"]` ＋ `[data-ui-mode="dark"]`。⚠️ 新加的三族控件量也在这里，值是**逐字节等于**改动前的写死值（`--btn-bg` 三态 + `--btn-border`、`--switch-w/h/knob/travel/on/off/knob-bg`、`--material-bg/blur/saturate`）——所以另外七套风格的观感**一格都没动**。⚠️ `--switch-travel` 是**算出来的不是挑出来的**（公式写在那一行上面） |
-| `styles/theme/shape.css` | 拆出来的第 ② 份（250 行）：轴一，**八档风格的形状**——圆角三档、`--control-height`、`--spacing`、`--toolbar-height`、`--toolbar-shadow`、`--btn-font-weight`、开关四值、`--material-blur` / `--material-saturate`、`--press-scale`，以及换字体栈的三档。⚠️ **必须排在 `base.css` 之后**：两处的选择器权重都是 (0,1,0)，靠"后来居上"决胜，调换顺序会让**所有风格的圆角与控件高静默失效** |
-| `styles/theme/color.css` | 拆出来的第 ③ 份（485 行）：轴一 × 轴二，**16 段**两属性颜色块（8 风格 × 明暗），一格不缺。⚠️ `--btn-*` / `--switch-*` / `--material-bg` / `--shadow` 都在这 16 段里给值；每个暗色块还必须给 `--doc-bg` / `--doc-fg`（不给的话正文那一块会跟外壳裂出一道色缝） |
+| `styles/theme/shape.css` | 拆出来的第 ② 份（250 行）：轴一，**七档风格的形状**——圆角三档、`--control-height`、`--spacing`、`--toolbar-height`、`--toolbar-shadow`、`--btn-font-weight`、开关四值、`--material-blur` / `--material-saturate`、`--press-scale`，以及换字体栈的三档。⚠️ **必须排在 `base.css` 之后**：两处的选择器权重都是 (0,1,0)，靠"后来居上"决胜，调换顺序会让**所有风格的圆角与控件高静默失效** |
+| `styles/theme/color.css` | 拆出来的第 ③ 份（485 行）：轴一 × 轴二，**14 段**两属性颜色块（7 风格 × 明暗），一格不缺。⚠️ `--btn-*` / `--switch-*` / `--material-bg` / `--shadow` 都在这 14 段里给值；每个暗色块还必须给 `--doc-bg` / `--doc-fg`（不给的话正文那一块会跟外壳裂出一道色缝） |
 | `styles/theme/extras.css` | 拆出来的第 ④ 份（158 行）：**变量表达不了的那几件事**，全文唯一带组件选择器的一份——材质那一段 `@supports (backdrop-filter…)`、macOS 菜单蓝底与按下缩放、菜单进场动画、标题字距、`prefers-reduced-motion`、`prefers-reduced-transparency`。⚠️ **必须最后加载**（它要盖住的正是前三份定下来的值）。⚠️ 材质与"减少透明"两张名单 2026-09-26 从「只有 macos」扩到**四个材质风格**（macos / plasma / windows / windows10）；**Yaru 与 Yaru Blue 故意不在名单里**——它们那两份稿子写明"不透明、不做模糊" |
 | `styles/icons.css` | 搬来的图标（`src/assets/icons/`，96 个，来路见 `THIRD-PARTY.md` §5）怎么画：`.icon` 用 `mask-image` 取形状、`background-color: currentColor` 上色（所以 SVG 里写死的 `fill` 不参与渲染）、`.icon-missing` 画虚线框、`.btn-with-icon` 补图标与文字之间的 `gap` |
 | `styles/app.css` | **外壳骨架**（225 行）：全局 reset、窗口骨架、沉浸模式、工具条、按钮原语。⚠️ 2026-09-29 按功能拆成五份（骨架 / 菜单栏 / 两条 / 主页 / 提示条），**它必须是第一个加载的**（reset 是别人的底子） |
@@ -164,7 +164,7 @@
 | `styles/share.css` | **分享图那一块面板的皮**（61 行，2026-09-27）：`.panel-share` / `.panel-share-img` / `.panel-share-actions` / `.panel-share-note`。⚠️ **另开一份是因为 `dock.css` 当时 961 行、贴着 1000 行硬线**。⚠️ 卡片自己的配色**不在这里**——那张 SVG 塞在 `<img>` 里、继承不到任何 CSS 变量。⚠️ 要在 `dock.css` 之后加载（借那边的 `.panel-btn`） |
 | `styles/heatmap.css` | **热力图那一块的皮**（83 行，2026-09-27）。⚠️ **另开一份是因为 `dock.css` 当时 971 行、顶着硬线**（同 `share.css` / `marks.css` 那两次拆）。⚠️ **列宽是弹性的**（`flex: 1`）：面板那一栏能从 260px 拖宽，写死像素的话拖宽之后整块图缩在左上角。⚠️ 格子深浅走 **`color-mix` 兑透明**、不写死五个颜色（兑透明才不会被底色的深浅两套吃掉） |
 | `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26 新增）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反（界面风格要改的就是整个外壳）；于是"同名覆盖内置"的**全部实现就是文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验 |
-| `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增，按 `useDocTheme` 的先例单独一个 hook：要问后端、是异步的）。⚠️ 判据是**"这一档有没有文件"**而不是"是不是内置八档之一"——用户放一个 `adwaita.css` 就是覆盖内置，那时 `data-ui-style` 仍是 `adwaita` 但那份 CSS 得取回来。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
+| `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增，按 `useDocTheme` 的先例单独一个 hook：要问后端、是异步的）。⚠️ 判据是**"这一档有没有文件"**而不是"是不是内置七档之一"——用户放一个 `adwaita.css` 就是覆盖内置，那时 `data-ui-style` 仍是 `adwaita` 但那份 CSS 得取回来。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
 | `styles/themes/*.css` | 内置**三套**文档主题——`minimal`（极简）/ `adwaita`（Adwaita）/ `latex`（LaTeX）。⚠️ **2026-09-26 从六套换成这三套**（用户：「删掉所有默认主题」），旧 id（`paper`/`blueprint`/`mist`/`print`/`ink`/`pine`）在老机器上会**悬空**。⚠️ 按**普通文档 CSS** 写、**不带作用域前缀**，靠 `doc-theme.ts` 统一挂；每套必须自带一套 `--code-*` |
 | `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：源码框、渲染区、说明卡。⚠️ 渲染出来那张 `<svg>` 的宽度上限**主要不在 CSS 里**（`diagram-view.ts` 按 `viewBox` 自然宽取 `min(100%, 自然宽)`；只写 `max-width: 100%` 会让小图被容器宽度等比放大） |
 | `styles/math.css` | **公式那棵树**（2026-09-26）：面板 / 半透明分隔符 / 源码框 / 渲染区三种 `data-state` / 说明卡。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），别在 `.nota-math-panel` 上另写 `display: none`。⚠️ KaTeX 自己那份 `katex.min.css` 只管 `.katex` 那棵树 |
@@ -1007,7 +1007,7 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 
 | 文件 | 行数 | `#[test]` | 装什么 |
 |---|---|---|---|
-| `mod.rs` | 550 | 9 | 三条外观轴、`UiStyle`（**八个变体**，2026-09-26 加了 `Windows10`） / `UiMode`、`Settings` 本体、`load` / `load_from` / `save` / `save_to`。⚠️ **2026-10-07 少了 35 行、1 条用例**：`ViewMode` 枚举与它那条 `编辑模式也走_kebab_而且默认是所见即所得` 随"模式不再存盘"一起删掉（行数 550 / 用例 9 是收工前数的，改前是 585 / 10） |
+| `mod.rs` | 550 | 9 | 三条外观轴、`UiStyle`（**七个变体**，2026-09-26 加了 `Windows10`、2026-10-07 删了 `yaru-blue`） / `UiMode`、`Settings` 本体、`load` / `load_from` / `save` / `save_to`。⚠️ **2026-10-07 少了 35 行、1 条用例**：`ViewMode` 枚举与它那条 `编辑模式也走_kebab_而且默认是所见即所得` 随"模式不再存盘"一起删掉（行数 550 / 用例 9 是收工前数的，改前是 585 / 10） |
 | `markdown.rs` | 534 | 5 | `[markdown]` 表：语法偏好 / 扩展语法 / 智能标点 / 代码块 / 公式 / 空格与换行（六组，十页里组数最多的一页） |
 | `files.rs` | 287 | 5 | `[files]` 表：启动选项 / 大纲折叠 / 默认扩展名 / 切换文件时自动保存 / 最近记录 / 拖放行为（三格：文件夹 / Markdown / 可导入的） / **文件树过滤 ＋ 显示隐藏文件 ＋ 排序**。⚠️ **`startup` 三档 2026-09-27 才真的生效**（在此之前没有任何一处读它，而前端无条件恢复一切——见 `StartupAction` 那一段）：`new-file`（默认，开一张白纸）/ `last-file`（恢复标签）/ `last-session`（标签 ＋ 上次那个文件夹）。⚠️ **第三档的枚举名改过**：原先叫 `Folder`，落盘字面量是 `"folder"`，现在叫 `LastSession`，落盘是 `"last-session"`——**`#[serde(alias = "folder")]` 那条别名不能删**，删了老设置文件整份读不出来，用户看到的是"偏好全没了"。⚠️ **2026-10-07 整表重刷：225 → 287 行、4 → 5 条用例**（上一版的行数是 09-27 的）。涨的是**三格后加的**：`show_hidden` 与 `tree_filter`（摆了四天才接线的那两个死开关，`docs/07` 第 85 项）、`tree_sort`（文件树排序，2026-10-04）——三格连同各自的默认值与用例一起落在 09-27 之后。 |
 | `editor.rs` | 208 | 7 | `[editor]` 表：缩进 / **智能符号补全** / Emoji 补全 / 显示当前块源码 / 复制行为 / 换行符 / 拼写检查 / 打字机模式**/ 段首缩进**。⚠️ **2026-09-28 把「自动配对」那一格改成了「智能符号补全」**（`smart_symbols`，默认开）：它**取代了 `match_brackets` / `match_markdown` 两条死开关**——那两条存了值、从来没有任何代码读过，拨了等于没拨；老设置文件里留着那两行不报错（`#[serde(default)]` 忽略未知键），另有一条用例专门钉住这件事。⚠️ **两条"缩进"不是一个字段**（`default_indent` 往文件里插空格、`paragraph_indent` 只改 `text-indent`），而且**默认值都是 2**——所以有一条用例专门把两个数设成不一样的值再落盘，防着"写串了看不出来" |
@@ -1080,13 +1080,12 @@ pub const BUILTIN_IDS: &[&str] = &[
     "windows",   // Windows 11：小圆角、直角感、蓝色强调
     "windows10", // Windows 10 原生（Acrylic）：**比 Win11 更方**——窗口直角、材质是亚克力不是 Mica
     "yaru",      // Ubuntu Yaru：大圆角、控件更高、橙色强调
-    "yaru-blue", // Yaru 的**蓝色强调色**档，形状与 Yaru 完全一样，只有 --accent 不同
 ];
 ```
 
 `"auto"` 是"跟随当前桌面环境"，运行期由前端 `styles/applyTheme.ts::resolveStyle()`
 解析成某一种具体风格（探不到就落到 `adwaita`），所以真正要写的样式是
-**八种风格 × 2 种明暗 = 16 格**；`ghub`、`yaru-blue` **和 `windows10`** 只能手动选中，
+**七种风格 × 2 种明暗 = 14 格**；`ghub` **和 `windows10`** 只能手动选中，
 `auto` 探测的结果里没有它们。
 
 ⚠️ **`windows10` 与 `windows` 是并存的两代，不是替换关系**。两条理由：
@@ -1102,8 +1101,8 @@ pub const BUILTIN_IDS: &[&str] = &[
 没有的那个 id 补成一条 `（找不到「…」）` 选项，让"生效的是这个东西、而它找不到"看得见。
 理由与 `document_theme` 那条同源，写在 `DEFAULT_UI_STYLE` 那一段。
 
-⚠️ **`yaru-blue` 与 `yaru` 共用一套形状**（`theme/shape.css` 里形状段是两个选择器并列的），
-加第三档变体时照这个写法，不必把圆角复制一遍。
+⚠️ 加新风格时**形状可以共用**：`theme/shape.css` 里形状段写成并列选择器就行（2026-10-07 之前 `yaru-blue` 与 `yaru` 就是这么共用的——那一档当天删了，用户「只需要 Yaru，不需要 Yaru Blue 了」；写法本身留着当范例），
+只覆盖颜色那几个变量，不必把圆角复制一遍。
 ⚠️ 加新风格有**两条路**：①**用户导入**——往 `~/.config/nota/ui-styles/<id>.css` 里丢
 一份文件，**不用改任何源码**（这是给用户的路，格式与规则见 `docs/08`）；
 ②**做成内置**——那要改**五处**：`ui_styles.rs::BUILTIN_IDS`、
@@ -5249,7 +5248,7 @@ IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖�
 | `DocId` | `type DocId = number` | `DocId(u64)` |
 | `Document` | `{id, path: string\|null, title, text, dirty, revision}` | `document::Document` |
 | `TreeNode` | `{name, path, is_dir, children: TreeNode[]\|null}` | `commands::workspace::TreeNode` |
-| `UiStyle` | `"auto" \| "adwaita" \| "ghub" \| "macos" \| "plasma" \| "windows" \| "yaru" \| "yaru-blue"` | `settings::UiStyle`（定义在 `settings/mod.rs`）。⚠️ **八个**，与 `ui/settings/panes/AppearancePane.tsx` 的 `STYLES` 表一一对应（那张表写成 `Record<UiStyle, …>`，所以加值时漏不掉） |
+| `UiStyle` | `"auto" \| "adwaita" \| "ghub" \| "macos" \| "plasma" \| "windows" \| "yaru"` | `settings::UiStyle`（定义在 `settings/mod.rs`）。⚠️ **七个**，与 `ui/settings/panes/AppearancePane.tsx` 的 `STYLES` 表一一对应（那张表写成 `Record<UiStyle, …>`，所以加值时漏不掉） |
 | `UiMode` | `"auto" \| "light" \| "dark"` | `settings::UiMode` |
 | `ViewMode` | `"wysiwyg" \| "source" \| "split"` | **没有 Rust 对应物**（2026-10-07 起）：模式是**会话内状态、不落盘**，`settings::ViewMode` 已随"模式不再存盘"删掉，家（那条 `useState`）在 `ui/useFileKindMode.ts`。⚠️ **不是外观轴**，见 `docs/05` §3.1 |
 | `Settings` | `{ui_style, ui_mode, document_theme, ui_font_size, content_width, confirm_unsaved, autosave_seconds, strict_markdown, enable_physics, files, editor, image, markdown, export, appearance, general}` | `settings::Settings`。⚠️ **九个顶层老字段 + 七张分页表**（表名与 Rust 侧逐字相同；2026-10-07 前是十个，少的那个是退休的 `view_mode`）。⚠️ 这里写错一个字母**不会编译不过**，只会在运行时拿到 `undefined`，而它传回 Rust 会被 serde 当成"这一项没给"、落回默认值——症状是"改了一下，看着像没生效" |
@@ -5898,9 +5897,9 @@ DOM 节点里"的映射，而块首那种位置是有歧义的）。
 **两者相乘**。把颜色也塞进 style 里，它就没法配暗色了。
 
 ⚠️ **第三条轴为什么走内联、不走属性**（2026-09-26 加）：属性是**离散**的——一格一格
-写选择器，适合"八档风格 × 两态"这种数得清的；强调色有 **1600 万**种取值，
+写选择器，适合"七档风格 × 两态"这种数得清的；强调色有 **1600 万**种取值，
 做不成格子。内联的自定义属性**优先级高于任何选择器**，所以 `theme/color.css`
-那 16 段里的 `--accent` 一行都不用改：**用户选了就覆盖它，没选就让它露出来**。
+那 14 段里的 `--accent` 一行都不用改：**用户选了就覆盖它，没选就让它露出来**。
 ⚠️ 于是「跟随风格」= **把内联值摘掉**（`removeProperty`），不是"写一个当前的值"——
 写值就把这一项钉死了，换风格时它不会跟着变。口径与推导见 `docs/03` §5.2b。
 
@@ -7493,7 +7492,7 @@ Graph 那样的热力图，记录长期数据。仅记录打字数」——所�
 ⚠️ **列宽是弹性的**（`flex: 1`）：面板那一栏能从 260px 拖到 `wide`，写死像素的话
 拖宽之后整块图缩在左上角。⚠️ **格子深浅走 `color-mix` 兑透明、不写死五个颜色**——
 同 `dock.css` 的 `.pg-row.is-picked` 那条：兑透明才不会被"底色深浅"两套吃掉
-（界面有 8 风格 × 2 明暗）。
+（界面有 7 风格 × 2 明暗）。
 
 ---
 

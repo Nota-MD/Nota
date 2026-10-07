@@ -459,27 +459,16 @@
   --doc-fg: #f2f2f2;
 }
 
-/* Yaru 蓝：**同一套 Yaru 的蓝色档**（Yaru-Colors 那个变体）。
-   形状跟 Yaru 完全一样，所以这里只覆盖颜色那几个变量。
-   ⚠️ 2026-09-26 按稿子换过：稿子给的三支是 默认 #208fe9 / hover #1979c7 /
-   按下 #1463a4。
-   - **浅色那份用的是稿子里那支 hover 色 #1979c7**，不是它的默认色：
-     #208fe9 配白字只有 3.40:1，够不上 AA。
-   - **深色那份用稿子的默认色 #208fe9**——暗色这一档配的是深字
-     （4.84:1，过线），所以不用换。
-   原文那段「从 Ubuntu 的 `index.theme` 抄的 #0073E5」是这次换掉的旧值。 */
-[data-ui-style="yaru-blue"][data-ui-mode="light"] {
-  --bg-subtle: #f7f7f7;
-  --accent: #1979c7;
-  --accent-fg: #ffffff;
-  /* 开关**照稿子**用 #208fe9：轨道上没有字，不受上面"白字要过 AA"的约束。 */
-  --switch-on: #208fe9;
-}
-[data-ui-style="yaru-blue"][data-ui-mode="dark"] {
-  --bg: #2c2c2c;
-  --bg-subtle: #383838;
-  --bg-raised: #3d3d3d;
-  --accent: #208fe9;
-  --accent-fg: #06203a;
-  --switch-on: #208fe9;
-}
+/* ⚠️ 这里原来还有一档 **Yaru Blue**（选择器里那个 id 是 `yaru-blue`，同一套 Yaru
+   的蓝色强调档，浅色 `#1979c7` ／ 深色 `#208fe9`）。**2026-10-07 整档删掉**——
+   用户原话：「**只需要 Yaru，不需要 Yaru Blue 了**」。它和 Yaru 共用形状
+   （`shape.css` 里那两个选择器并列过），颜色只差 `--bg-subtle` / `--accent` /
+   `--accent-fg` / `--switch-on` 四个变量。
+   ⚠️ **删它的连带账**（都同批处理了）：三份 id 清单（本文件所在的 `color.css`
+   不算，另两份是 `ui_styles.rs::BUILTIN_IDS` 与 `AppearancePane.tsx::STYLE_ORDER`）、
+   `shape.css` 那个并列选择器、`zh-settings.ts` 的两条译文、`bridge/types.ts` 的
+   联合类型、以及 `tests/accent.test.ts` 盯着的"出厂强调色对"（**16 → 14 条**，
+   那条 `0.25` 分界线的两端极值也跟着换了一个数——见 `accent.ts` 那张表）。
+   ⚠️ **老设置文件里存着 `ui_style = "yaru-blue"` 的人**（本仓现在还没有别的用户）
+   会掉回中性底色，并看见设置页那句"这个风格认不出来"——**这是 `ui_style` 取开放集
+   的既定代价**（用户能自己导入风格，所以它一直是 `String` 不是枚举）。 */

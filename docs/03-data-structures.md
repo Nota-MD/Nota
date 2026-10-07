@@ -278,7 +278,7 @@ pub struct Settings { … }
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `ui_style` | `String` | `"auto"` | **轴一**：界面风格的 **id**（设计语言）。⚠️⚠️ **2026-09-26 起是 `String` 不是枚举**（用户：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」）——取值**开放**，内置八档的 id 表在 `ui_styles.rs::BUILTIN_IDS`（`auto` / `adwaita` / `ghub` / `plasma` / `macos` / `windows` / `windows10` / `yaru` / `yaru-blue`），此外还能是用户自己起的文件名。⚠️ **与 `document_theme` 同一个口径**：认不出的 id **不退回默认档**，`<html>` 上照写，外壳落到 `:root` 默认样式——「外观」页把它补成 `（找不到「…」）` 选项，让这件事看得见。⚠️ 换成 `String` 的好处是**老设置文件里一个不认识的 id 不会让整份 `settings.toml` 读不进来**（枚举会），风险是**拼错再无拦截**。完整理由在 `settings/mod.rs::DEFAULT_UI_STYLE` |
+| `ui_style` | `String` | `"auto"` | **轴一**：界面风格的 **id**（设计语言）。⚠️⚠️ **2026-09-26 起是 `String` 不是枚举**（用户：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」）——取值**开放**，内置七档的 id 表在 `ui_styles.rs::BUILTIN_IDS`（`auto` / `adwaita` / `ghub` / `plasma` / `macos` / `windows` / `windows10` / `yaru`），此外还能是用户自己起的文件名。⚠️ **与 `document_theme` 同一个口径**：认不出的 id **不退回默认档**，`<html>` 上照写，外壳落到 `:root` 默认样式——「外观」页把它补成 `（找不到「…」）` 选项，让这件事看得见。⚠️ 换成 `String` 的好处是**老设置文件里一个不认识的 id 不会让整份 `settings.toml` 读不进来**（枚举会），风险是**拼错再无拦截**。完整理由在 `settings/mod.rs::DEFAULT_UI_STYLE` |
 | `ui_mode` | `UiMode` | `UiMode::Auto` | **轴二**：明暗 |
 | `document_theme` | `String` | `""` | **轴三**：文档主题的 **id**（**就是 `.css` 的文件名去掉后缀**，如 `minimal`）；**空串 = 无主题**。⚠️ 它是**键不是显示名**——内置三套（`minimal` ↔ 极简 / `adwaita` ↔ Adwaita / `latex` ↔ LaTeX）的对应关系在 `themes.rs` 的 `BUILTIN` 表里。⚠️ **2026-09-26 内置那批换过**（六套 → 三套），所以老机器上这个字段可能是**悬空 id**：那时主题静默退回"无主题"，设置页会把 id 原样显示并注明它没生效。⚠️ 除内置外**只在 `~/.config/nota/themes/` 里扫**（见 §9.4），所以换机器、或者文件被删了，也可能"这个主题没了" |
 | `ui_font_size` | `u32` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
@@ -336,7 +336,7 @@ pub struct Settings { … }
 
 | 轴 | 设置字段 | DOM 属性 | 管什么 |
 |---|---|---|---|
-| 界面风格 | `ui_style` | `data-ui-style` | **一整套设计语言**（Adwaita / GitHub / macOS / Breeze / Windows 11 / Windows 10 / Yaru / Yaru 蓝，**共 8 套**，各配明暗两格 = 16 种外观）：换的不只是颜色，还包括控件形状、圆角、间距、动效、字体栈。⚠️ 它**不是**"主题"的同义词 |
+| 界面风格 | `ui_style` | `data-ui-style` | **一整套设计语言**（Adwaita / GitHub / macOS / Breeze / Windows 11 / Windows 10 / Yaru，**共 7 套**，各配明暗两格 = 14 种外观；⚠️ 2026-10-07 删掉了「Yaru 蓝」那一套）：换的不只是颜色，还包括控件形状、圆角、间距、动效、字体栈。⚠️ 它**不是**"主题"的同义词 |
 | 明暗 | `ui_mode` | `data-ui-mode` | 亮/暗。`auto` 时跟随系统。**这条轴在任何风格下都成立** |
 | **主题色** | `appearance.accent` | **内联 `--accent` / `--accent-fg` / `--switch-on`** | **2026-09-26 加的第四条**：强调色。**空串 = 跟随当前风格**（每档风格自带一个出厂色），填了就覆盖它。⚠️ **只覆盖这三个变量**（`--switch-on` 是 2026-09-30 加的，见 §5.2b），其余配色仍由「明暗」那条轴保证 |
 | 文档主题 | `document_theme` | **（没有）** | **只管正文那一块**。纯 CSS，**只扫 Nota 自己的主题目录**，**不动应用外壳一分** |
@@ -364,18 +364,18 @@ pub struct Settings { … }
 |---|---|---|
 | 落在哪 | `data-*` 属性（`<html>` 上） | **内联在 `<html>` 上的 `--accent` / `--accent-fg` / `--switch-on`** |
 | 取值空间 | **离散**：CSS 里得预先写好每一格 | **连续**：1677 万种颜色，写不成选择器格 |
-| 谁决定 | 我们（内置八档 + 用户导入的 `.css`） | **用户当场挑**（面板上一个原生取色器） |
+| 谁决定 | 我们（内置七档 + 用户导入的 `.css`） | **用户当场挑**（面板上一个原生取色器） |
 
-⚠️ 内联自定义属性的优先级高于 `[data-ui-style][data-ui-mode]` 那 16 格选择器，
+⚠️ 内联自定义属性的优先级高于 `[data-ui-style][data-ui-mode]` 那 14 格选择器，
 所以 `theme/color.css` **一行都不用改**——这也是"主题只管形状、颜色归用户"
 这句话在代码里最省事的那种落法。
 
 ⚠️ **但"一行都不用改"只对"我们真的内联写了的那几个变量"成立**，2026-09-30 撞过一次：
 `theme/base.css` 的 `:root` 里本来就有一句 `--switch-on: var(--accent)`（"开关跟强调色"
-这个意图的原文），可它**优先级输给那 16 格**——各风格都把 `--switch-on` **各写了一个
+这个意图的原文），可它**优先级输给那 14 格**——各风格都把 `--switch-on` **各写了一个
 字面值**（macOS 绿 `#34c759`、Yaru 橙 `#e95420`…），于是那句 `var(--accent)` 成了死代码。
 用户设了主题色之后，色块变了、**右侧那些开关没变**，他报的就是这条（「还是橙色的」）。
-处置：`accentVars` 把 `--switch-on` **也内联写一份**（内联优先于 16 格）；用户没设主题色时
+处置：`accentVars` 把 `--switch-on` **也内联写一份**（内联优先于 14 格）；用户没设主题色时
 **一个字都不写**，各风格的出厂长相（包括 macOS 那个绿）照旧。
 
 ⚠️ **前景色（强调色上面那行字）不存进设置**，由 `styles/accent.ts::accentFg` 按
@@ -436,7 +436,7 @@ ui_mode = "dark"
 
 - 这串字符串**就是接口**——用户手改 `settings.toml` 时要能猜到怎么写；
 - 前端的类型也是同一批串：
-  `export type UiStyle = "auto" | "adwaita" | "ghub" | "macos" | "plasma" | "windows" | "windows10" | "yaru" | "yaru-blue";`
+  `export type UiStyle = "auto" | "adwaita" | "ghub" | "macos" | "plasma" | "windows" | "windows10" | "yaru";`
   `export type UiMode = "auto" | "light" | "dark";`
   `export type ViewMode = "wysiwyg" | "source" | "split";`
   （`src/bridge/types.ts`），改一处就要改另一处。⚠️ `ViewMode` 那一条 2026-10-07

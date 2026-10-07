@@ -73,8 +73,9 @@ export const 设置表: Record<string, string> = {
   "Subtle corner radius, Mica": "小圆角、Mica",
   "Square corners, Acrylic — squarer than Windows 11": "直角、亚克力，比 Windows 11 更方",
   "Ubuntu, orange accent": "Ubuntu，橙色强调",
-  "Yaru Blue": "Yaru 蓝",
-  "Ubuntu's blue accent variant, otherwise the same as Yaru": "Ubuntu 的蓝色强调色档，其余同 Yaru",
+  // ⚠️ 这里原来还有「Yaru Blue」那两条译文。2026-10-07 用户说「只需要 Yaru，
+  // 不需要 Yaru Blue 了」，那一档连 id 一起从内置清单里删了——译文留着就是
+  // 废键（`tools/i18n-check.sh` ③ 会 FAIL），所以同批删掉。
   "Currently using “{0}”, the style you imported. The whole interface follows it.": "当前用的是你导入的「{0}」，整个界面外壳随它变化。",
   "Open the styles folder. Drop a <name>.css in it to add a style.": "打开风格文件夹。放一个 <名字>.css 进去即可多出一档。",
   "Styles folder…": "风格文件夹…",

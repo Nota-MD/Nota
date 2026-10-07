@@ -80,7 +80,6 @@ pub const BUILTIN_IDS: &[&str] = &[
     "windows",   // Windows 11：小圆角、Mica
     "windows10", // Windows 10 原生：直角、亚克力。⚠️ **只能手选**，见下
     "yaru",      // Ubuntu Yaru：橙色强调
-    "yaru-blue", // Yaru 的蓝色强调档，形状与 yaru 共用
 ];
 
 // ⚠️ **`windows10` 与 `windows` 是并存的两代，不是替换关系**，而且
@@ -88,8 +87,16 @@ pub const BUILTIN_IDS: &[&str] = &[
 // `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），
 // `applyTheme.ts` 里 `windows` 那个线索只有一个去处。所以它只能手选。
 //
-// ⚠️ 同理 `ghub` 与 `yaru-blue` 也没有对应的桌面——它们**根本不是"某个系统"**，
-// 是设计语言。三者的共同点：`auto` 的探测表里没有它们，也不该有。
+// ⚠️ 同理 `ghub` 也没有对应的桌面——它**根本不是"某个系统"**，是设计语言。
+// 两者的共同点：`auto` 的探测表里没有它们，也不该有。
+//
+// ⚠️ **2026-10-07 删掉了 `"yaru-blue"`**（Yaru 的蓝色强调档，形状与 yaru 共用）：
+// 用户原话「**只需要 Yaru，不需要 Yaru Blue 了**」。整档一起删——`color.css` 里那
+// 两段、`shape.css` 里并列的那个选择器、`zh-settings.ts` 的两条译文、
+// `bridge/types.ts` 的联合类型、以及 `AppearancePane.tsx::STYLE_ORDER`。
+// ⇒ 那几处**必须同批改**，否则 `doc-sync-check.sh` 的 ⑦（三份 id 清单一致）会红；
+// 而 ⑦ 是**按子串**比的，所以这个列表里"多一个/少一个"只有它自己那三条能钉住
+// （下面那条 `内置_id_逐条钉住` 用例就是逐字钉的，改这里必须改那里）。
 
 /// 设置里要列的一项。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -221,8 +228,7 @@ mod tests {
         assert_eq!(
             BUILTIN_IDS,
             &[
-                "auto", "adwaita", "ghub", "plasma", "macos", "windows", "windows10", "yaru",
-                "yaru-blue"
+                "auto", "adwaita", "ghub", "plasma", "macos", "windows", "windows10", "yaru"
             ]
         );
     }

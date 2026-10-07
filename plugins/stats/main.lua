@@ -712,34 +712,37 @@ local function panel_content(nota)
     shown = live or frozen_rate
   end
 
-  -- 「还没开始」那一屏：一个数字都没有，所以②那三行也不存在。
-  -- ⚠️ 只摆一句说明 ＋ 一颗按钮，是**有意留白**——这一屏唯一该传达的事就是"按那颗按钮"。
+  -- ② 小字数据概览（本轮的细账）。
+  -- ⚠️⚠️ **四个相位都摆**（2026-10-07 改）：用户原话「默认手表界面哦」——面板一打开
+  -- 就该是运动手表那块表盘的样子，只是"还没开始"时这些数全是 0。改之前这里是一个
+  -- `if phase == "idle"` 把这一整块跳过去（那一屏只有一句说明 ＋ 一颗按钮），
+  -- 屏幕上完全看不出这块面板是干什么的。
+  out[#out + 1] = { kind = "fields", items = cards.overview(cx) }
+
+  -- ⚠️ idle 那一句说明**留着**：这一屏唯一该传达的事仍然是"按那颗按钮"，而按钮就在
+  -- 下面一行。取消的是"看不出这块面板是干什么的"，不是"不用告诉用户怎么开始"。
   if phase == "idle" then
     out[#out + 1] = {
       kind = "text",
       text = T("Not started yet. Press “Start” and this round will count how much you write, how long it takes, and how fast you go."),
     }
-  else
-    -- ② 小字数据概览（本轮的细账）。
-    out[#out + 1] = { kind = "fields", items = cards.overview(cx) }
-
+  elseif phase == "paused" then
     -- ⚠️ 暂停那一句**只在"真暂停"时说**。自动暂停（换文档）也走这里，所以那句话要把两种来
     -- 路都讲清楚，否则用户会以为自己没按过什么、怎么就停了。
     -- ⚠️ 结算那一句（原来那句"这一轮你写下了 N 字"）**2026-10-04 删了**：记录卡上
     -- 本轮那条的小字里已经写着"本轮 · N 字 · 时长"，同一件事说两遍。
-    if phase == "paused" then
-      out[#out + 1] = {
-        kind = "text",
-        text = T("Paused. Anything you type now doesn't count toward this round — press “Resume” to continue."),
-      }
-    end
+    out[#out + 1] = {
+      kind = "text",
+      text = T("Paused. Anything you type now doesn't count toward this round — press “Resume” to continue."),
+    }
   end
 
   -- ③ 按钮：一颗开关（开始/暂停/继续/再来一轮）＋ 那颗不可逆的「终止」。
   out[#out + 1] = { kind = "buttons", items = share.buttons_for(sx, phase) }
 
-  -- ④ 记录卡（本轮 / 今日 / 长期）。⚠️ 一条都没有**就整块不发**——"还没有记录"
-  -- 那句话由上面 idle 那一句说明来讲，这里再编一句只会和它打架。
+  -- ④ 记录卡（本轮 / 今日 / 长期）。⚠️ **这一块永远发**（`cards.record_cards` 保证），
+  -- 因为底下那行汇总「整篇文档」在任何一屏都得在；**本轮那条也永远在**
+  -- （2026-10-07 起 idle 也画，见 `cards.lua` 里那段）。
   local record = cards.record_cards(cx, shown, words, day_row)
   out[#out + 1] = record
 

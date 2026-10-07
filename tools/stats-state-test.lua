@@ -83,7 +83,12 @@ local LANG = read_lang()
 package.path = HERE .. "/../plugins/stats/?.lua;" .. package.path
 
 local fails = 0
+-- ⚠️ 顺带数一下**真的跑过了几条**：`docs/06` §5.29b 一直写着"24 组 / N 条"，
+-- 而那个 N 以前是**人数的**（数法各不相同，改一次就得靠猜）。从 2026-10-07 起由
+-- 这里自己报——照着最后那行抄，不会再有第二种数法。
+local checks = 0
 local function eq(actual, want, what)
+  checks = checks + 1
   if actual == want then
     print("  ok   " .. what .. " = " .. tostring(actual))
   else
@@ -315,8 +320,16 @@ assert(panel.live == true, "live is not true")
 local s = step(box1, 0, 100)
 eq(buttons(s), "开始记录", "buttons (no time source -> nothing to share either)")
 eq(total(s), "100 字", "the summary row carries the whole document")
-eq(#cards(s).items, 0, "no records without a time source")
-eq(bignum(s), "(no round card)", "the round card only exists once a round does")
+-- ⚠️ **2026-10-07 起 idle 那一屏也画本轮卡**（用户原话「默认手表界面哦」）：
+-- 面板打开就该是运动手表那块表盘——大数字写 0、曲线是空的、小字写"本轮 · 0 字 · 0 秒"。
+-- 所以这里从 `(no round card)` 改成"有一条、而且是全 0 的那一条"。
+eq(#cards(s).items, 1, "the idle screen carries the round card (and only it, without a time source)")
+eq(
+  record(s, "round"),
+  "0 字 / 分钟（本轮 · 0 字 · 0 秒）",
+  "the idle round card reads zero, not a dash"
+)
+eq(bignum(s), "0", "bignum on the idle screen is 0 (a dash is for 'running but no sample yet')")
 
 print("-- (2) start -> sampling --")
 cmds.start()
@@ -684,10 +697,10 @@ eq(
 -- 面板 ④ 那一条**长期**记录卡（2026-10-04 加）。
 -- ⚠️ 门槛与分享按钮那条判据是**同一个**（`st.days >= 2`）：一处松一处紧的话会出现
 -- "卡上有长期、按钮里没有"或者反过来，而那种不一致在界面上看着像两件事。
--- ⚠️ 这一份实例**没按过开始**（phase 恒 idle），所以本轮/今日那两条卡都不该有
--- ——顺带把"没开过一轮就不画本轮卡"也钉住了。
+-- ⚠️ 这一份实例**没按过开始**（phase 恒 idle）：**本轮那条现在照画**（2026-10-07 起
+-- idle 也摆成表盘，全 0），今日那条仍然不该有（今天一个字都没写）。
 eq(record(s6, "long"), tk.group_text(want_total) .. " 字（最近 26 周 · 105 天有字）", "the long record card")
-eq(card(s6, "round"), nil, "no round card on the idle screen")
+eq(record(s6, "round"), "0 字 / 分钟（本轮 · 0 字 · 0 秒）", "the idle round card is there, at zero")
 eq(card(s6, "today"), nil, "no today card (today has nothing written yet)")
 eq(total(s6), "100 字", "…but the summary row is there (the whole document)")
 eq(buttons(s6), "开始记录 | 制作长期分享图", "③ the toggle, ④ the long card's share button")
@@ -723,8 +736,10 @@ eq(blk(s7, "heatmap") == nil, true, "a ledger with nothing written draws no heat
 eq(card(s7, "long"), nil, "…and no long record card either")
 eq(hasText(s7, "还没开始。按「开始记录」，这一轮写了多少字、用了多久、什么速度，就都算起来了。"), true, "the idle notice is still there")
 eq(total(s7), "100 字", "the summary row survives on an otherwise empty screen")
-eq(#cards(s7).items, 0, "…with no record cards above it")
-eq(cards(s7).title, "", "and no heading either (there is nothing for it to head)")
+-- ⚠️ 空账本 ＋ 没按过开始：**只剩本轮那条 0**（2026-10-07 起 idle 也画它），
+-- 所以标题也回来了（有框就得有标题）。今日/长期两条仍然一条都不画。
+eq(#cards(s7).items, 1, "…with only the idle round card above the summary")
+eq(cards(s7).title, "写作记录", "and the heading is back (there is a card to head)")
 box7.cmds.share_long() -- needs = "long" 不成立 → 不进那一屏
 s7 = box7.panel.render()
 eq(blk(s7, "share") == nil, true, "and the long card does not open")
@@ -876,7 +891,7 @@ eq(next(fields(s)) ~= nil, true, "小字那一块照发（不是整块消失）"
 
 print("")
 if fails == 0 then
-  print("ALL PASS")
+  print("ALL PASS（" .. checks .. " 条断言）")
 else
   print(fails .. " FAILED")
   os.exit(1)

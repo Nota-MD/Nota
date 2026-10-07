@@ -558,7 +558,7 @@ mtime 是近似：拉取代码、`touch`、检出旧版本都会让它误报。
 缝见 §2 里 `src/App.tsx` 那一行）· `src/editor/math-view.ts` **958** · `tools/menu-harness/main.tsx` **949** ·
 `src/editor/emoji.ts` **924** · `src/editor/auto-pair.ts` **912** · `src/ui/panel-nodes.ts` **908** ·
 `src/editor/inline-marks.ts` **901** · `plugins/stats/main.lua` **899** · `tools/doc-sync-check.sh` **896**
-（⚠️ **闸门自己也在名单上**，它没有给自己豁免）· `tools/stats-state-test.lua` **883** ·
+（⚠️ **闸门自己也在名单上**，它没有给自己豁免）· `tools/stats-state-test.lua` **898** ·
 `src/bridge/types.ts` **877** · `src/bridge/ipc.ts` **868** · `src/ui/PanelBody.tsx` **849**。
 ⚠️ 上一版（2026-10-04）记的是 **10 个**，多出来的三份**都不是本批涨的**（`panel-nodes` / `bridge/*` / `App.tsx`
 是别的批次推上去的）——这一格**没有闸门**，只能靠人现数。

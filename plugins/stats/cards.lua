@@ -76,26 +76,34 @@ end
 --
 -- ⚠️ 顺序是**新账在前**（本轮 → 今日 → 长期）。参考图上那三条是倒着排日期的
 -- （10/3、9/27、9/13），同一个意思：最近的那条在最上面。
--- ⚠️ **一条都没有也照发**（见下面那段）：汇总那行里的"整篇文档"是 idle 那一屏
--- 唯一的数。
+-- ⚠️ **一条都没有也照发**（见下面那段）：汇总那行里的"整篇文档"永远在。
+-- ⚠️ **2026-10-07 起 idle 那一屏也有本轮卡**（用户原话：「默认手表界面哦」）——
+-- 那一屏从"一句说明 ＋ 一颗按钮"变成"运动手表那块表盘，只是所有数都是 0"。
 --- `shown` 是这一拍那个速度读数（`panel_content` 已经按相位算好了，暂停时是
 --- 冻结值）——**不能在这儿再算一遍**，理由见 `docs/13` §14.4「冻结」。
 function M.record_cards(ctx, shown, words, day_row)
   local items = {}
 
-  if ctx.phase ~= "idle" then
-    items[#items + 1] = {
-      icon = "round",
-      value = ctx.num_text(shown),
-      unit = T("words / min"),
-      caption = string.format(
-        T("This round · %s words · %s"),
-        ctx.group_text(ctx.round_words),
-        ctx.span_text(ctx.elapsed_ms)
-      ),
-      points = M.round_points(ctx),
-    }
-  end
+  -- 本轮那条：**四个相位都发**。
+  -- ⚠️ 「还没开始」那一屏也发（2026-10-07，用户原话「默认手表界面哦」）：面板一打开
+  -- 就该是运动手表那个样子——一个大数字 ＋ 底下一条线，只是这一刻它老老实实写着 0
+  -- （真手表开机也是 00:00，这一屏不该靠"什么都没有"来表达"还没开始"）。
+  -- ⚠️ **idle 那个大字不能走 `num_text(shown)`**：idle 相位 `shown` 是 `nil`，
+  -- 而 `num_text(nil)` 给的是空串、渲染层会画成一根破折号——"还没开始"该显示 `0`，
+  -- 不是"没有读数"（那是 `running` 刚起步还不够采样时的样子，见 `bignum` 那条用例）。
+  items[#items + 1] = {
+    icon = "round",
+    value = ctx.phase == "idle" and "0" or ctx.num_text(shown),
+    unit = T("words / min"),
+    caption = string.format(
+      T("This round · %s words · %s"),
+      ctx.group_text(ctx.round_words),
+      ctx.span_text(ctx.elapsed_ms)
+    ),
+    -- ⚠️ idle 时 `plot()` 是空的（采样只在跑着的时候累加），所以这条线自然是空的
+    -- ——不必在这儿特判一个 `{}`。
+    points = M.round_points(ctx),
+  }
 
   local r = day_row
   if r and r.words > 0 then
@@ -126,8 +134,8 @@ function M.record_cards(ctx, shown, words, day_row)
     }
   end
 
-  -- ⚠️ **一条记录都没有也照发**：底下那行汇总（整篇文档）在"还没开始"那一屏上
-  -- 就是唯一的那个数，把它一起省掉的话那一屏就只剩一句说明和一颗按钮了。
+  -- ⚠️ **一条记录都没有也照发**：底下那行汇总（整篇文档）在任何一屏都在，
+  -- 把它一起省掉的话"还没有任何一条记录"的那一屏就只剩一句说明和一颗按钮了。
   -- 那种情况下不画那行小标题（没有框给它当标题）。
   return {
     kind = "cards",

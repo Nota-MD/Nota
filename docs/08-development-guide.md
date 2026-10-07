@@ -76,9 +76,9 @@
 | `src/editor/auto-pair.ts` | 912 | 缝写在 `docs/09` §4（括号配对那一族 / `*` 落标记那一族），**还没人真拆过** |
 | `src/ui/panel-nodes.ts` | 908 | |
 | `src/editor/inline-marks.ts` | 901 | |
-| `plugins/stats/main.lua` | 899 | |
-| `tools/doc-sync-check.sh` | 896 | ⚠️ **闸门自己也在名单上**，它没有给自己豁免 |
-| `tools/stats-state-test.lua` | 883 | |
+| `plugins/stats/main.lua` | 902 | |
+| `tools/doc-sync-check.sh` | 916 | ⚠️ **闸门自己也在名单上**，它没有给自己豁免（2026-10-07 补 `PAIRS` 那几行涨上来的） |
+| `tools/stats-state-test.lua` | 898 | |
 | `src/bridge/types.ts` | 877 | |
 | `src/bridge/ipc.ts` | 868 | |
 | `src/ui/PanelBody.tsx` | 849 | |

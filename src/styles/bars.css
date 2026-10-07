@@ -211,6 +211,26 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
+/* 「正则写坏了」那一档（2026-10-07，`docs/07` 第 95 项）。
+ *
+ * ⚠️⚠️ **它必须排在 `:focus` 那条之后**：两条选择器一样重（都是"一个类 ＋
+ * 一个词"），同重就比先后——写在前面的话，用户一聚焦红边就被上面那条强调色
+ * 盖掉（而查找框**几乎永远是聚焦的**，一打开就 `focus()`），等于"只在没人看
+ * 的时候才红"。加上 `[data-bad]:focus` 那一份是把这个意图写死，不赌文件顺序。
+ *
+ * ⚠️ 红走 `--danger`，不是 `--warn`：和 `.external-change-bar`（"要用户拿个
+ * 主意"）不一样，这是**用户刚敲进去的东西不成立**，属于"已经出事了"那一档。
+ *
+ * ⚠️ 光晕沿用上面 `:focus` 那条的写法与理由：`color-mix` 不被支持时整条声明
+ * 被丢掉，`border-color` 照旧生效——可接受的降级（还是红的，只是没有柔光）。
+ * 写成 `box-shadow` 而不是加粗 `border`，是为了**不挪旁边那排开关**（同上面）。
+ */
+.find-input[data-bad],
+.find-input[data-bad]:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 28%, transparent);
+}
+
 .find-count {
   flex: 0 0 auto;
   /* 固定宽度 + 等宽数字：命中数变长变短时右边那排按钮不会左右跳。 */
@@ -219,6 +239,20 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--fg-muted);
+}
+
+/* 「正则写坏了」时这一格写的**是原因**、不是命中数（2026-10-07，第 95 项）。
+ *
+ * ⚠️ 原因塞在计数格里、**不另起一行**：条子现在是一张浮在正文上的卡片，
+ * 让它临时高一行，底下替换那一行会跟着往下跳——而这一刻用户正盯着查询框
+ * 打字。塞进这一格，动的只有它自己的宽度：那一行里只有输入框是可缩的
+ * （`flex: 1 1 auto` ＋ `min-width: 0`），所以**输入框会让一点位**。
+ * ⚠️ 代价是英文原文不能长（`Invalid regex` 约 82px，比 `3 / 12` 那一档宽
+ * 二十来像素）——`FindBar.tsx` 里那句原文没写成 `Invalid regular expression`
+ * 就是因为这个，不是因为措辞偏好。
+ */
+.find-count[data-bad] {
+  color: var(--danger);
 }
 
 .find-toggle,

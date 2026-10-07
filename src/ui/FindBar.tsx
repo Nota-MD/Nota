@@ -27,7 +27,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent as 键盘事件 } from "react";
 
-import { 默认查找选项, type FindOptions, type FindStatus } from "@/editor/find";
+import { 正则写坏了, 默认查找选项, type FindOptions, type FindStatus } from "@/editor/find";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 
@@ -77,7 +77,11 @@ export function FindBar({
   const 开关组: { key: keyof FindOptions; label: string; title: string }[] = [
     { key: "caseSensitive", label: "Aa", title: t("Match Case") },
     { key: "wholeWord", label: t("Word"), title: t("Match Whole Word: a match cannot be part of a longer word") },
-    { key: "regex", label: ".*", title: t("Regular Expression (a broken pattern is not an error — it just finds nothing this time)") },
+    // ⚠️ 这把气泡 2026-10-07 改过口（第 95 项）：原来写的是"写坏了不算错，
+    // 只是这一次查不到"——那是**引擎**的口径，而这句话从今天起**不对了**：
+    // 引擎照旧静默，但界面会当场把红边和原因亮出来（见 `find.ts::正则写坏了`）。
+    // 气泡是给用户看的，得说界面上会发生什么。
+    { key: "regex", label: ".*", title: t("Regular Expression (a broken pattern is flagged right away)") },
   ];
   const [query, setQuery] = useState("");
   const [替换成, set替换成] = useState("");
@@ -118,16 +122,33 @@ export function FindBar({
   }, [query, options]);
 
   /**
-   * 命中数的说法。⚠️ **三种情况分开写**，因为它们的含义不同：
-   * 没查（空查询）/ 查了没有 / 查到了第几个。
-   * 合成一句的话，"0 / 0" 会同时表示后两种，而它们对用户的意义相反。
+   * 正则**写坏了**没有（2026-10-07，第 95 项）。
+   *
+   * ⚠️ 判据来自 `editor/find.ts` 的 [`正则写坏了`]——**和引擎同一个 `编译`**。
+   * 自己写一份 `try { new RegExp(...) }` 的话，两份判据迟早会分家，
+   * 而分家的那一天屏幕上会出现"框红着、结果却找得到"（理由写在那个函数上）。
+   */
+  const 写坏了 = 正则写坏了(query, options);
+
+  /**
+   * 命中数的说法。⚠️ **四种情况分开写**，因为它们的含义不同：
+   * 没查（空查询）/ 正则不成立 / 查了没有 / 查到了第几个。
+   * 合成一句的话，"0 / 0" 会同时表示它们，而它们对用户的意义相反。
+   *
+   * ⚠️ **写坏了压过命中数**（2026-10-07，第 95 项）：那一刻引擎照旧在
+   * **静默地**返回空表（它有意不抛，见 `find.ts::编译`），于是 `total` 是 0，
+   * 计数格会写「无结果」——那在这时候就是**界面在撒谎**：真正的原因在查询框里，
+   * 而"无结果"会把用户支到文档里去找一个根本不存在的词。所以这一档必须
+   * 排在 `No results` 前面，且说得出来的理由是**正则本身**。
    */
   const 计数 =
-    status.query === ""
-      ? ""
-      : status.total === 0
-        ? t("No results")
-        : `${status.current} / ${status.total}`;
+    写坏了
+      ? t("Invalid regex")
+      : status.query === ""
+        ? ""
+        : status.total === 0
+          ? t("No results")
+          : `${status.current} / ${status.total}`;
 
   /** 组字期间一概不接（理由见文件头）。 */
   const 组字中 = (e: 键盘事件) =>
@@ -159,6 +180,13 @@ export function FindBar({
           placeholder={t("Find")}
           spellCheck={false}
           aria-label={t("Search text")}
+          // 「写坏了」这一档（2026-10-07，第 95 项）：红边由 `bars.css` 里
+          // `.find-input[data-bad]` 画。⚠️ 传 `undefined` 而不是 `false`：
+          // 前者把属性整个摘掉，后者会渲染成 `data-bad="false"`——
+          // 属性在不在是 CSS 的判据，写个 `"false"` 等于永远为真。
+          data-bad={写坏了 || undefined}
+          // 给读屏的那一份：光有颜色不算"说出来"（红绿色盲、读屏用户都收不到）。
+          aria-invalid={写坏了 || undefined}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (组字中(e)) return;
@@ -169,7 +197,9 @@ export function FindBar({
             }
           }}
         />
-        <span className="find-count" aria-live="polite">
+        {/* ⚠️ `aria-live`:写坏了那一刻这一格会从"无结果"变成原因，读屏要念出来
+            （它同样收不到红边）。 */}
+        <span className="find-count" data-bad={写坏了 || undefined} aria-live="polite">
           {计数}
         </span>
         {开关组.map((s) => (

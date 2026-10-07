@@ -64,6 +64,7 @@ import { 转成任务列表, 清除格式, 表格删行, 表格删列, 表格删
 import { 插脚注 } from "./footnote";
 import { 选行, 选词, 选句, 删词 } from "./select";
 import { 移动块 } from "./move-block";
+import { 装链接, 摘链接 } from "./link-edit";
 import type { CommandPayload, EditorCommand } from "./create-types";
 
 /** `h1`~`h6`。它们共用一条命令，只是层数不同，所以单独一族。 */
@@ -151,12 +152,22 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   tableAlignCenter: (e) => e.action(callCommand(setAlignCommand.key, "center")),
   tableAlignRight: (e) => e.action(callCommand(setAlignCommand.key, "right")),
 
-  // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/PromptDialog.tsx`）。
+  // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/ImageDialog.tsx`）。
   // 缺省值给空串而不是"不执行"——空串的语义是"插一个还没填地址的链接/图片"，
   // 而那正是用户点完之后马上要补的东西。
+  //
+  // ⚠️ `link` 这条**界面今天一条路都不走**（菜单里那条走 `linkSet`，见下）。
+  // 留着是因为它是上游的 toggle 语义本身，删掉就等于把"再点一次去掉链接"
+  // 这条能力的**另一种形态**从白名单里抹掉；而 `docs/10` 的矩阵里那一条
+  // 说的正是"已经是一条链接时再点一次"。真要删，先想清楚谁来顶它。
   link: (e, p) => e.action(callCommand(toggleLinkCommand.key, { href: p?.href ?? "" })),
   image: (e, p) =>
     e.action(callCommand(insertImageCommand.key, { src: p?.src ?? "", alt: p?.alt ?? "" })),
+
+  // 「插入链接」与「去掉链接」那两条（`docs/07` 第 96 / 102 项，2026-10-07）。
+  // ⚠️ 实现全在 `link-edit.ts`（找光标处那条链接、把新文字拼出来），这里只挂名。
+  linkSet: (e, p) => 装链接(e, p),
+  linkRemove: (e) => 摘链接(e),
 
   clearFormat: (e) => 清除格式(e),
 

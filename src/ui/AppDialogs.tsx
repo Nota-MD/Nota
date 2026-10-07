@@ -1,6 +1,6 @@
 /**
- * 界面上的**浮层那一族**：导出缺依赖时那张 pandoc 面板，以及四个对话框
- * （确认 / 输入 / 插入图像 / Emoji 选择）。
+ * 界面上的**浮层那一族**：导出缺依赖时那张 pandoc 面板，以及五个对话框
+ * （确认 / 输入 / 插入图像 / 链接 / Emoji 选择）。
  *
  * # 为什么从 `App.tsx` 里搬出来（2026-09-27）
  *
@@ -24,6 +24,7 @@ import { AboutDialog } from "@/ui/AboutDialog";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { PromptDialog } from "@/ui/PromptDialog";
 import { ImageDialog } from "@/ui/ImageDialog";
+import { LinkDialog } from "@/ui/LinkDialog";
 import { EmojiDialog } from "@/ui/EmojiDialog";
 import { FocusSummaryDialog } from "@/ui/FocusSummaryDialog";
 import { PandocPanel } from "@/ui/PandocPanel";
@@ -56,7 +57,7 @@ export function AppDialogs({
   关掉专注总结: () => void;
 }) {
   const { confirmReq, answerConfirm, promptReq, answerPrompt } = 对话框;
-  const { imageReq, answerImage, emojiOpen, answerEmoji } = 对话框;
+  const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = 对话框;
   const { 关于开着, 关关于 } = 对话框;
 
   return (
@@ -80,6 +81,10 @@ export function AppDialogs({
       {promptReq && <PromptDialog {...promptReq} onAnswer={answerPrompt} />}
 
       {imageReq && <ImageDialog request={imageReq} onAnswer={answerImage} />}
+
+      {/* 「链接」框（第 96 ＋ 102 项）。⚠️ 排在插图框后面、「关于」前面：
+          它也是"问一句、等一个答案"那一族，与上面三个同一层。 */}
+      {linkReq && <LinkDialog request={linkReq} onAnswer={answerLink} />}
 
       {/* Emoji 选择器。⚠️ 它没有 `request` 可传（那个框不要任何前置信息），
           所以判的是 `emojiOpen` 那个布尔，不是某个请求对象。 */}

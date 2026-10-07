@@ -1,5 +1,5 @@
 /**
- * **浮层那一族的开关状态**：四个问答框（确认 / 输入 / 插入图像 / Emoji）＋
+ * **浮层那一族的开关状态**：五个问答框（确认 / 输入 / 插入图像 / 链接 / Emoji）＋
  * 一个"看完就关"的报告框（关于）。
  *
  * 从 `App.tsx` 搬出来的（2026-09-24，那边顶着 1000 行上限，见 `AGENTS.md` §0.4）。
@@ -121,6 +121,35 @@ export interface ImageRequest {
   会自动上传: boolean;
 }
 
+/**
+ * 「链接」那个框要问的话（`docs/07` 第 96 ＋ 102 项，2026-10-07）。
+ *
+ * ⚠️ **两个现值不是"默认值"，是"已有的那一条"**：用户单击正文里那条链接时，
+ * 框里填的必须是它**现在**的名称与地址，改一个词就是改一个词（与
+ * `PromptRequest.initial` 同一条口径）。新建那一路两个都传空串。
+ *
+ * ⚠️ `editing` 决定框里画不画那颗「去掉链接」——**不是**"有没有填东西"，
+ * 而是"本来就在一条链接上吗"（新建时把它摘掉是说不通的动作）。
+ */
+export interface LinkRequest {
+  /** 现在显示的那几个字（新建时是空串；有选区时是选中的那段）。 */
+  label: string;
+  /** 现在的地址（新建时是空串）。 */
+  href: string;
+  /** 本来就在一条链接上吗（只有这时才画「去掉链接」）。 */
+  editing: boolean;
+}
+
+/**
+ * 用户在链接框里回答了什么。取消给 `null`。
+ *
+ * ⚠️ 「去掉链接」是**第三条路**，与"取消"和"写一条新的"都不一样：取消是
+ * 一个字都不动，去掉是**把标记摘掉、文字留着**。用一个 `boolean` 表达不了三档。
+ */
+export type LinkAnswer =
+  | { kind: "set"; label: string; href: string }
+  | { kind: "remove" };
+
 /** 用户在插入图像框里回答了什么。取消给 `null`。 */
 export interface ImageAnswer {
   /** 哪张图。`path` = 磁盘上的文件，`url` = 一条网址。 */
@@ -154,6 +183,12 @@ export interface Dialogs {
   askImage: (req: ImageRequest) => Promise<ImageAnswer | null>;
   /** 用户回答了（`ui/ImageDialog` 的 `onAnswer` 接这个）。 */
   answerImage: (answer: ImageAnswer | null) => void;
+
+  linkReq: LinkRequest | null;
+  /** 弹链接框（插入 / 编辑链接），返回他填的那一对；取消给 `null`。 */
+  askLink: (req: LinkRequest) => Promise<LinkAnswer | null>;
+  /** 用户回答了（`ui/LinkDialog` 的 `onAnswer` 接这个）。 */
+  answerLink: (answer: LinkAnswer | null) => void;
 
   emojiOpen: boolean;
   /**
@@ -242,6 +277,23 @@ export function useDialogs(): Dialogs {
     resolve?.(answer);
   }, []);
 
+  const [linkReq, setLinkReq] = useState<LinkRequest | null>(null);
+  const linkResolve = useRef<((a: LinkAnswer | null) => void) | null>(null);
+
+  const askLink = useCallback((req: LinkRequest) => {
+    return new Promise<LinkAnswer | null>((resolve) => {
+      linkResolve.current = resolve;
+      setLinkReq(req);
+    });
+  }, []);
+
+  const answerLink = useCallback((answer: LinkAnswer | null) => {
+    setLinkReq(null);
+    const resolve = linkResolve.current;
+    linkResolve.current = null;
+    resolve?.(answer);
+  }, []);
+
   const [emojiOpen, setEmojiOpen] = useState(false);
   const emojiResolve = useRef<((字符: string | null) => void) | null>(null);
 
@@ -275,6 +327,9 @@ export function useDialogs(): Dialogs {
     imageReq,
     askImage,
     answerImage,
+    linkReq,
+    askLink,
+    answerLink,
     emojiOpen,
     askEmoji,
     answerEmoji,

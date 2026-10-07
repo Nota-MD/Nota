@@ -186,14 +186,14 @@ export default function App() {
   // 只剩"往哪儿接"。
   //
   // ⚠️ **那份对象本身要留着**（`对话框`）：下面 `<AppDialogs>` 收的是它，
-  // 不是十来个函数——四个框的 `answerXxx` 全在它身上，摊开传的下场是漏一个
+  // 不是十来个函数——五个框的 `answerXxx` 全在它身上，摊开传的下场是漏一个
   // 就有一个框永远关不掉（见 `ui/AppDialogs.tsx` 的文件头）。
   const 对话框 = useDialogs();
-  // ⚠️ 这里**只解构本文件还用的那几个**：四个 `answerXxx` 由 `AppDialogs`
+  // ⚠️ 这里**只解构本文件还用的那几个**：五个 `answerXxx` 由 `AppDialogs`
   // 直接从对象上取，本文件不再碰（`confirmReq` / `promptReq` / `imageReq` /
-  // `emojiOpen` 还要用——下面那个 `有浮层` 判据要数它们）。
-  const { confirmReq, promptReq, imageReq, emojiOpen } = 对话框;
-  const { askConfirm, askPrompt, askImage, askEmoji } = 对话框;
+  // `linkReq` / `emojiOpen` 还要用——下面那个 `有浮层` 判据要数它们）。
+  const { confirmReq, promptReq, imageReq, linkReq, emojiOpen } = 对话框;
+  const { askConfirm, askPrompt, askLink, askImage, askEmoji } = 对话框;
 
   // 插件那一整块：已装清单、声明的面板、声明的菜单项、以及"跑一条插件命令"。
   // 整块在 `ui/usePlugins.ts`——取数据、合成菜单栏、建处理函数三件事都在那边，
@@ -485,10 +485,10 @@ export default function App() {
       confirmReq !== null ||
       promptReq !== null ||
       imageReq !== null ||
+      linkReq !== null || // 「链接」框（第 96 ＋ 102 项）
       emojiOpen ||
       对话框.关于开着 || // 「关于」框（见 `ui/useDialogs.ts` 那一格）
-      pandocGate !== null ||
-      专注总结 !== null,
+      pandocGate !== null || 专注总结 !== null,
     toast,
   });
 
@@ -531,7 +531,7 @@ export default function App() {
   //
   // ⚠️ 传的是 `editorRef` **本体**（身份稳定），不是 `editorRef.current`——
   // 后者每次渲染都可能是个新值，会让 `run` 每帧换身份。
-  const { run, 插入链接 } = useEditorCommands({ editorRef, askPrompt, toast });
+  const { run, 插入链接 } = useEditorCommands({ editorRef, askLink, toast });
 
   // 「插入图像」那一条（含**粘贴**，`ui/useImageInsert.ts`，2026-09-26）。
   // ⚠️ **必须在 `run` 之后**：它把宿主落好盘的地址通过 `run("image", …)` 插进正文。

@@ -53,6 +53,7 @@ import type { 查找条 } from "@/ui/useFindBar";
 import type { PluginsState } from "@/ui/usePlugins";
 import type { 预览看法出口 } from "@/ui/useReviewView";
 import type { 会话出口 } from "@/ui/useSession";
+import { use点链接 } from "@/ui/useLinkClick";
 
 /** 这一格要的全部东西。见文件头「为什么收一个对象」。 */
 export interface 编辑区接线 {
@@ -125,6 +126,11 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
   const { 主区, 格式化栏, 编辑器, activeDoc, settings, viewMode, focusMode, typewriter } = 接线;
   const { 格式化栏开着, 收起格式化栏, 命令状态, 设命令状态, 跑命令, refreshDocs, toast } = 接线;
   const { 文档出口, 查找条, 预览出口, 改动出口, 会话出口, 插件, 对话框 } = 接线;
+
+  // 正文里点一下链接那件事（`docs/07` 第 96 项）：单击弹同一个「链接」框、
+  // `Ctrl`＋单击交给系统浏览器。⚠️ 挂的是 `<main>` 上的一条 `click` 委托，
+  // 判据（只认可编辑那一侧、地址危险不放行）写在 `ui/useLinkClick.ts` 文件头。
+  use点链接({ 主区, askLink: 对话框.askLink, 跑命令 });
 
   const { newDoc, openViaDialog, openFolder, 记活动 } = 文档出口;
   const { 查找开着, 替换行, 命中情况, 报命中, 关查找, 替换当前, 全部替换 } = 查找条;

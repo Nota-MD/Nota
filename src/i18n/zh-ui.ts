@@ -109,6 +109,12 @@ export const 界面表: Record<string, string> = {
   "Comment": "注释",
   "Link": "超链接",
   "Link Text": "链接文字",
+  // 「链接」那个框（第 96 ＋ 102 项）：两个字段的名字，以及那颗第三条路。
+  // ⚠️ 地址那一格的标签复用 `zh-runtime.ts` 的 `"Link URL"`（「链接地址」），
+  // 不在这里再写一条同义的新键——同一个东西两个键，将来只改一处就漂了。
+  "Link display name": "链接显示名称",
+  "Shown in the document": "显示在正文里的文字",
+  "Remove Link": "去掉链接",
   "Image": "图像",
   "Clear Formatting": "清除样式",
   "Toggle Sidebar": "显示/隐藏侧边栏",

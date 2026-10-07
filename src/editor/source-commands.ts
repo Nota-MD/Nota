@@ -41,6 +41,9 @@ import { 试摘定界符 } from "@/editor/source-mark";
 // 「选择」那一族（选行/词/句、选词并删）的**判据**。⚠️ 与所见即所得那边**同一个
 // 文件**：同一颗键在两种模式下选出来的东西必须一样，理由写在 `select.ts` 文件头。
 import { 选词区间, 选句区间 } from "@/editor/select";
+// 「链接」那两条的**纯文本判据**（`docs/07` 第 96 / 102 项）。⚠️ 同样与所见即所得
+// 那边共用一份"地址危险就只落文字"的口径（`link-edit.ts` 文件头那道闸）。
+import { 摘源文链接, 源文链接, 源文链接区间 } from "@/editor/link-edit";
 // 界面文案。⚠️ 源码模式里有几处**写进文档的占位词**（`t("Bold")` 那几串：
 // 空选区按下加粗时插进正文的就是它），见下面用到的那些行——
 // 用户自己的正文当然不进翻译。
@@ -386,6 +389,46 @@ export function applyCommand(
     case "link": {
       if (!payload?.href) return false;
       wrapSelection(view, "[", `](${payload.href})`, t("Link Text"));
+      return true;
+    }
+    // 写一条链接（`linkSet`，`docs/07` 第 96 / 102 项）。⚠️ 与上面那条 `link` 的
+    // 区别只有一处、但很要紧：这一条**把文字一起写进去**，而且名称与地址都是
+    // 用户在那两个框里填的（不是写死的 `Link Text`）。
+    //
+    // 三种落点，与所见即所得那边同一条判据（`link-edit.ts::目标区间`）：
+    // 光标处已经有一条 → **整条换掉**；有选区 → 换掉选区；空光标 → 插一条新的。
+    case "linkSet": {
+      const { from, to } = view.state.selection.main;
+      const 现 = from === to ? 源文链接区间(view.state.doc.toString(), from) : null;
+      const 区 = 现 ?? { from, to };
+      const 新 = 源文链接(payload?.label ?? "", payload?.href ?? "");
+      // ⚠️ 两头都空时**什么都不做**（不是插一对空括号）：框那边本来就把它当取消。
+      if (新 === "") return true;
+      view.dispatch({
+        changes: { from: 区.from, to: 区.to, insert: 新 },
+        // 光标落在新链接**之后**——与所见即所得那边派完事务的落点一致（PM 会把
+        // 落在被替换段里的光标映射到替换段的末尾）。
+        selection: { anchor: 区.from + 新.length },
+      });
+      return true;
+    }
+    // 去掉链接（`linkRemove`）：**文字一个字节不动**。两种现场——光标处正好是
+    // 一条 `[名称](地址)`（只摘那一对括号与地址），或者用户选了一段（把选区里
+    // 每一条都摘成纯文字，判据是 `link-edit.ts::摘源文链接`）。
+    case "linkRemove": {
+      const { from, to } = view.state.selection.main;
+      const 现 = from === to ? 源文链接区间(view.state.doc.toString(), from) : null;
+      if (现) {
+        view.dispatch({
+          changes: { from: 现.from, to: 现.to, insert: 现.label },
+          selection: { anchor: 现.from + 现.label.length },
+        });
+        return true;
+      }
+      if (from === to) return true; // 空光标、又不在链接里：没有可摘的
+      const 原 = view.state.sliceDoc(from, to);
+      const 净 = 摘源文链接(原);
+      if (净 !== 原) view.dispatch({ changes: { from, to, insert: 净 } });
       return true;
     }
     case "image": {

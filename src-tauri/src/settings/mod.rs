@@ -129,29 +129,13 @@ impl Default for UiMode {
     }
 }
 
-/// 编辑模式。**不是第四条外观轴**——它决定编辑区里摆几个窗格，与
-/// `ui_style` / `ui_mode` / `document_theme` 三条轴无关（那三条管"长什么样"，
-/// 这条管"怎么编辑"）。
-///
-/// ⚠️ 加值时同时要改：本枚举、`src/bridge/ipc.ts` 的 `ViewMode`、
-/// `src/ui/commands.ts` 的「视图」栏、`docs/04-ui-map.md`。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ViewMode {
-    /// 所见即所得（Milkdown）。默认。
-    Wysiwyg,
-    /// Markdown 原文，直接用 CodeMirror 编辑源码。
-    Source,
-    /// 左边原文可编辑、右边预览只读。⚠️ **单向**：预览从不回写，
-    /// 理由是编辑器往返会把文本规范化一遍（见 `src/editor/source.ts` 文件头）。
-    Split,
-}
-
-impl Default for ViewMode {
-    fn default() -> Self {
-        ViewMode::Wysiwyg
-    }
-}
+// ⚠️ 编辑模式（`wysiwyg` / `source` / `split`）**2026-10-07 起不在这里**：
+// 它是**会话内状态**、不落设置文件——每次启动一律所见即所得（用户原话：
+// 「请设置默认启动为 WYSIWYG」）。那条 `useState` 现在住在
+// `src/ui/useFileKindMode.ts`；`ViewMode` 这个类型只活在前端
+// （`src/bridge/types.ts`），Rust 侧没有对应物了。
+// 老设置文件里残留的 `view_mode = "…"` 一律**被忽略**（serde 的默认行为，
+// 由下面 `老设置文件里没有那七张表时全是默认值` 那条测试盯着）。
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -165,8 +149,6 @@ pub struct Settings {
     ///
     /// ⚠️ 存 id 不存名称：显示名是中文、随时可能改，改了不该让用户的设置失效。
     pub document_theme: String,
-    /// 编辑模式。见 `ViewMode`。
-    pub view_mode: ViewMode,
     /// 界面字号（px）。文档字号是文档主题的事，不在这里。
     pub ui_font_size: u32,
     /// 内容区宽度上限（px）。
@@ -260,7 +242,6 @@ impl Default for Settings {
             ui_style: DEFAULT_UI_STYLE.to_owned(),
             ui_mode: UiMode::default(),
             document_theme: String::new(),
-            view_mode: ViewMode::default(),
             ui_font_size: 15,
             content_width: 760,
             confirm_unsaved: true,
@@ -433,8 +414,8 @@ mod tests {
     fn 枚举落盘用_kebab_风格() {
         // 存法即接口：`ui_style = "macos"`，不是 `"Macos"`。
         // ⚠️ `ui_style` 2026-09-26 起是 `String`（用户能导入风格），但**内置那几档
-        // 的 id 仍然是 kebab-case 的**，所以这条口径没变；`ui_mode` / `view_mode`
-        // 两个枚举的 kebab-case 也由下面几行一起钉着。
+        // 的 id 仍然是 kebab-case 的**，所以这条口径没变；`ui_mode` 那个枚举的
+        // kebab-case 由下面几行钉着（`view_mode` 2026-10-07 已退休，见上面那段）。
         let s = Settings {
             ui_style: "macos".to_owned(),
             ..Default::default()
@@ -457,26 +438,6 @@ mod tests {
         assert!(text.contains("enable_physics = true"), "实际是：\n{text}");
         let back: Settings = toml::from_str(&text).unwrap();
         assert!(back.enable_physics);
-    }
-
-    #[test]
-    fn 编辑模式也走_kebab_而且默认是所见即所得() {
-        // ⚠️ 这一条盯两件事，都是"改了不会有编译错、只会静默变行为"的那类：
-        // 1. 落盘名是 `view_mode = "split"` 这种形状（加变体时最容易忘）；
-        // 2. **默认值如实是 `wysiwyg`**。默认值错了的症状是"老用户升级后
-        //    打开文件发现进了源码模式"——而他的设置文件里根本没有这一项。
-        assert_eq!(ViewMode::default(), ViewMode::Wysiwyg);
-
-        let s = Settings {
-            view_mode: ViewMode::Split,
-            ..Default::default()
-        };
-        let text = toml::to_string_pretty(&s).unwrap();
-        assert!(text.contains(r#"view_mode = "split""#), "实际是：\n{text}");
-
-        // 没写这一项的老设置文件里要能补出默认值（`#[serde(default)]` 在结构体上）。
-        let back: Settings = toml::from_str("ui_style = \"macos\"\n").unwrap();
-        assert_eq!(back.view_mode, ViewMode::Wysiwyg);
     }
 
     #[test]
@@ -548,8 +509,13 @@ mod tests {
     fn 老设置文件里没有那七张表时全是默认值() {
         // ⚠️⚠️ **这是整个拆分里最重要的一条：老文件不许被静默改掉。**
         // 用户在 `~/.config/nota/settings.toml` 里存的是 2026-09-24 之前的
-        // 形状（只有那十个顶层键）。新版本读它的时候，那十条必须**原样认出来**，
-        // 七张新表则一律取默认——而不是"解析失败 → 回默认 → 用户的偏好没了"。
+        // 形状（只有那十个顶层键）。新版本读它的时候，还认的那几条必须
+        // **原样认出来**，七张新表则一律取默认——而不是"解析失败 → 回默认 →
+        // 用户的偏好没了"。
+        //
+        // ⚠️ `view_mode` 2026-10-07 **退休**（模式改成会话内状态、不落盘），
+        // 它**故意留在这个样例里**：老文件里残留的那一行必须被**忽略而不是
+        // 报错**——这正是"老设置文件照旧能开"这条不变量现在盯的东西。
         let 老文件 = r#"
 ui_style = "ghub"
 ui_mode = "dark"
@@ -564,11 +530,10 @@ enable_physics = true
 "#;
         let s: Settings = toml::from_str(老文件).expect("老文件必须仍然能解析");
 
-        // 十条老的一个不少。
+        // 九条老的一个不少（第十条 `view_mode` 已退休，见上）。
         assert_eq!(s.ui_style, "ghub");
         assert_eq!(s.ui_mode, UiMode::Dark);
         assert_eq!(s.document_theme, "night");
-        assert_eq!(s.view_mode, ViewMode::Split);
         assert_eq!(s.ui_font_size, 17);
         assert_eq!(s.content_width, 900);
         assert!(!s.confirm_unsaved);

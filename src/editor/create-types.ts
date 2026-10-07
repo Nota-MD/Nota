@@ -78,6 +78,28 @@ export type EditorCommand =
   | "tableAlignRight"
   | "insertText"
   /**
+   * **选择这一族**（2026-10-07）：选当前行 / 选当前词 / 选当前句 / 选词并删。
+   *
+   * ⚠️ 四条一起进这里，是因为它们**共用同一套判据**（`select.ts` 第一组那几
+   * 个纯函数），菜单上也是同一个子菜单的四行。拆开列而不是一条带参数的，理由
+   * 与 `h1`~`h6` 那条一样：命令名自己说明要干什么，写错就是编译错。
+   * ⚠️ 源码模式那边**调的是同一套判据**（`source-commands.ts`），别在那里
+   * 另写一份"哪个字算词"——见 `select.ts` 文件头。
+   */
+  | "selectLine"
+  | "selectWord"
+  | "selectSentence"
+  | "deleteWord"
+  /**
+   * **上移 / 下移光标所在的块**（`Alt+↑` / `Alt+↓`，2026-10-07）。
+   *
+   * ⚠️ 名字沿用了菜单里那两条的既有 id（`edit.moveLineUp` / `edit.moveLineDown`，
+   * 早就摆在那儿但一直是灰的），这里对应的是它们真正干活的那一段——
+   * 搬什么、表格里为什么不搬、到边为什么不动，都写在 `move-block.ts` 文件头。
+   */
+  | "moveLineUp"
+  | "moveLineDown"
+  /**
    * **开头那段 front matter**（`docs/07` 第 64 项，2026-10-04）。
    *
    * ⚠️ 它是这张白名单里**唯一一条改的不是文档树**的命令：那一段在编辑器

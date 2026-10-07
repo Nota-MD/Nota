@@ -62,6 +62,8 @@ import { callCommand } from "@milkdown/kit/utils";
 import { 行内标记命令 } from "./inline-marks";
 import { 转成任务列表, 清除格式, 表格删行, 表格删列, 表格删表, 插公式块, 插目录 } from "./insert";
 import { 插脚注 } from "./footnote";
+import { 选行, 选词, 选句, 删词 } from "./select";
+import { 移动块 } from "./move-block";
 import type { CommandPayload, EditorCommand } from "./create-types";
 
 /** `h1`~`h6`。它们共用一条命令，只是层数不同，所以单独一族。 */
@@ -157,6 +159,19 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
     e.action(callCommand(insertImageCommand.key, { src: p?.src ?? "", alt: p?.alt ?? "" })),
 
   clearFormat: (e) => 清除格式(e),
+
+  // 「选择」这一族（2026-10-07）。⚠️ 四条共用 `select.ts` 第一组那几个纯函数
+  // （哪个字算一个词、哪一段算一句），**那边实现、这里只挂名**——判据塞进这张
+  // 表就成了"清单里夹着算法"（`select.ts` 文件头）。⚠️ 源码模式走的是**同一套
+  // 判据**（`source-commands.ts`），别在那里另写一份。
+  selectLine: (e) => 选行(e),
+  selectWord: (e) => 选词(e),
+  selectSentence: (e) => 选句(e),
+  deleteWord: (e) => 删词(e),
+  // `Alt+↑` / `Alt+↓`（2026-10-07）。⚠️ 搬的是**列表项**（光标在列表里时）或
+  // **顶层块**，表格里不做、到边不动——理由在 `move-block.ts` 文件头。
+  moveLineUp: (e) => 移动块(e, -1),
+  moveLineDown: (e) => 移动块(e, 1),
 
   /**
    * 用文本替换当前选区（空串 = 删掉选区）。

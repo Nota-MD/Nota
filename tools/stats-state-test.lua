@@ -725,15 +725,23 @@ eq(heat.file, "nota-stats-long-2026-09-27.png", "the file name carries today")
 --    所以档位是拿"有字那些天"的最大值分的——由宿主那边分档（`ui/heatmap.ts`）。
 eq(want_max > 0, true, "the fixture really does have writing")
 
-print("-- (22) 账本刚开张：窗口兜底 8 周；一个字没写就不画那一块 --")
+print("-- (22) 账本刚开张：窗口兜底 8 周；**空格子照画**（2026-10-07 改）--")
 local _, box7 = load({
   time = true,
   data = true,
   store = { ["days.txt"] = "v1\nd 2026-09-26 0 0 0 0\n" },
 })
 local s7 = box7.panel.render()
-eq(blk(s7, "heatmap") == nil, true, "a ledger with nothing written draws no heatmap")
-eq(card(s7, "long"), nil, "…and no long record card either")
+-- ⚠️ **2026-10-07 改了口径**（用户原话：「"长期记录"也要默认显示哦」）：以前"一个字没写"
+-- 连**那一块**都不发，刚装上的机器打开面板根本看不到「长期记录」这四个字。现在空账本
+-- **照画一整片空格子**，那句人话也照说（只是全是 0）——表盘上的格子本来就该一直在。
+local hv7 = blk(s7, "heatmap")
+eq(hv7 ~= nil, true, "an empty ledger still draws the long-term block")
+eq(hv7.title, "长期记录", "…with its title (that is the whole point of this change)")
+eq(hv7.weeks, 8, "…over the 8-week fallback window")
+eq(hasText(s7, "最近 8 周，你在 0 天里写下了 0 个字"), true, "…and the saying reads zero, not nothing")
+eq(card(s7, "long"), nil, "the long record card still needs two days of writing (it is tied to the share button)")
+eq(buttons(s7), "开始记录", "…so no long share button either")
 eq(hasText(s7, "还没开始。按「开始记录」，这一轮写了多少字、用了多久、什么速度，就都算起来了。"), true, "the idle notice is still there")
 eq(total(s7), "100 字", "the summary row survives on an otherwise empty screen")
 -- ⚠️ 空账本 ＋ 没按过开始：**只剩本轮那条 0**（2026-10-07 起 idle 也画它），

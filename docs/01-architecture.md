@@ -855,9 +855,9 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
   自然结果，不用额外判。
 - **按清单里的 `id` 去重，不按目录名。** 目录名是文件系统的事，用户可以随便改；
   `id` 是清单里声明的、插件之间互相引用的名字。用目录名去重会出现"改个文件夹名就多出
-  一份插件"这种事。debug 构建下 `builtin_plugins_dirs` 额外返回仓库根的 `plugins/`，
+  一份插件"这种事。debug 构建下 `builtin_plugins_dirs` 额外返回几档开发态目录（2026-10-09 起第一顺位是**同级插件仓库** `Nota-plugins/plugins`，见 `docs/11` §1.1），
   所以改完 Lua 存盘即生效，不用重编。
-- ⚠️ **打包后那个资源目录里的 `plugins/` 是 `bundle.resources` 拷进去的**，
+- ⚠️ **打包后那个资源目录里的 `plugins/` 是 `bundle.resources` 从 `../../Nota-plugins/plugins` 拷进去的**（键相对 `src-tauri/`），
   它**不是**自动的：`tauri.conf.json` 里那条 `{"../plugins": "plugins"}`
   必须**键写目录**（写 glob 会被拍平成一层文件，两个插件的 `main.lua` 互相盖掉）。
   这条只有**真拆开一个包**才验得了，开发期看不出来——完整经过见 `docs/06` §2.4。

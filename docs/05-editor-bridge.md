@@ -579,7 +579,7 @@ export type EditorCommand =
 只会让"这条命令到底改不改文档"变得说不清。同理 `file.*` / `theme.*` / `view.toggleSidebar` 那一批也都不在这儿。
 
 ⚠️ **原来这里举的例子是 `view.slidev`（Slidev 预览），那条命令 2026-09-25 删了**——
-预览整个搬进了插件，它的菜单项现在就走上面那条路（`plugins/slidev/main.lua` 的
+预览整个搬进了插件，它的菜单项现在就走上面那条路（**插件仓库** `Nota-plugins` 里 `plugins/slidev/main.lua` 的
 `register_menu`，见 `docs/04` §2.8 与 §2.2b）。
 
 #### 4.1b `CommandPayload`：命令的**可选参数**
@@ -3354,7 +3354,7 @@ Ctrl+W 确认关闭"这条路里，最后几次击键不进后端。
 | | 事实 |
 |---|---|
 | 谁发 | 插件调 `nota.ui.stream(text)`（`lua/api/ui.rs::实时表`）。**载荷 `{plugin, text}`——带着内容本身** |
-| 干什么 | 「边生成边显示」：模型一个字一个字往外吐，`plugins/ai/request.lua` 每 80 毫秒把**到此刻为止的全文**推一次；**空串 = 收工**（把那段临时的字撤掉） |
+| 干什么 | 「边生成边显示」：模型一个字一个字往外吐，**插件仓库**里 `plugins/ai/request.lua` 每 80 毫秒把**到此刻为止的全文**推一次；**空串 = 收工**（把那段临时的字撤掉） |
 | 收在哪儿 | `ui/PluginDock.tsx` 里那张 `实时表`（`Record<插件 id, string>`），画在**该面板那一列内容的末尾** |
 | 上限 | 宿主**只留最后 8000 个字符**（`实时上限`）。它是**临时的显示数据**，不是第二个"面板内容"口子 |
 

@@ -393,9 +393,7 @@
 
 | 源 | 必须同批更新 | 为什么 |
 |---|---|---|
-| `plugins/*/plugin.toml` | `11` | 清单逐栏说明在 `11`。⚠️ 2026-09-25 起多了 `langs`（语言协商，**必须含 `en`**）与 `[devserver]`（"跑什么"的唯一一处写死，含 `cmd` / `args` / `entry` / `probe_*` / `project_marker`）——两个字段都改清单就要改 `11` §2。⚠️ **2026-10-04 起又多了 `[[settings]]`**（插件点名要宿主画的设置，写作统计那根 Δt 滑杆是第一个；**它是顶层数组、与 `[devserver]` 平级**）——正文在 `11` §2.5，宿主那一半在 `plugin/settings_decl.rs`（上面 §2.1 那行），**改了要连带 `11` ＋ `03` 那张文件表 ＋ `13` §10.1（两个写者）** |
-| `plugins/*/main.lua` | `11` `13` | 内置插件是"活样例"，API 用法要与 `13` 对得上。⚠️ 文案那一层（`local T` 存根 + `on_load` 里重绑）的规矩在 `11` §2.4 。⚠️⚠️ **这三行是"通配符写法"，而 `tools/doc-sync-check.sh` 的 `PAIRS` 是"一个插件四条"逐条写的**（`plugin.toml` ／ `main.lua` ／ `lang/en.toml` ／ `lang/zh-CN.toml`）——**加一个新插件目录必须去那张表里补四行**，否则 ② 一点不响。写作统计（`plugins/stats`，2026-09-26）就这么漏过一次，补登记时才发现：⑤ 只扫 `src-tauri/src` 与 `src`，**根本不看 `plugins/`**，插件全指望 `PAIRS`。<br>⚠️⚠️ **2026-09-27 起多一条：`require` 拆出来的每个 `.lua` 也是一条**（`plugins/stats/` 2026-09-27 是 `main.lua` ＋ `ticks.lua` ＋ `ledger.lua` ＋ `long.lua` 四条；**2026-10-04 一天里又拆了两刀**，`cards.lua`（第五轮）与 `share.lua`（第六轮），所以今天是**六份 `.lua`**）。📌 **在"拆"的那一步就补**——一个插件目录里该有几个 `.lua`，闸门**没法自己知道**（`plugins/*/main.lua` 是通配符），所以这件事只能靠人。同一个插件上这个坑已经犯过两次：整个目录漏登记（09-26）＋ 拆出来的两个文件漏登记（09-27）；⚠️ 2026-10-04 那两刀**都是拆的当步就补的**（第五次与第六次没有重演），📌 判据就是上面那句：**拆完立刻去 `PAIRS` 添行** |<br>⚠️ **2026-09-29 第二个用户：`plugins/git/`**——差异预览那一整块搬去 `diff.lua`（`main.lua` 997 → 789 ＋ `diff.lua` 270），`PAIRS` 里已同步补 `plugins/git/diff.lua` 一行。📌 **这一条现在有「活样例」了**：拆 `require` 的时候照 `plugins/stats/`（2026-09-27）或 `plugins/git/`（2026-09-29）抄，**别只改 `main.lua` 就去跑闸门**——那四道闸全都不会响 |<br>⚠️ **2026-09-29 第三个用户：`plugins/ai/`**——997 行按功能拆成四份（`util.lua` 107 ＋ `chat.lua` 486 ＋ `panel.lua` 328 ＋ `main.lua` 271），`PAIRS` 里已同步补 `plugins/ai/util.lua` / `chat.lua` / `panel.lua` 三行。📌 **这一条现在有三个可抄的样例了**（`stats` / `git` / `ai`），三份的拆法各不相同：`stats` 按**算法边界**拆、`git` 按**一整块功能**拆、`ai` 按**「谁只读 / 谁碰网络」**拆——照自己那份的形状挑一个近的。<br>⚠️⚠️ **同一批还发现：光补 `PAIRS` 不够，因为闸门自己也漏。** `lua/tests.rs::内置插件都能被_lua_编译` 从前只读 `m.meta.entry`（= `main.lua`），`plugins/ai/chat.lua` 里一处 `end)`（本应是 `end`）它**全绿**——是手写的冒烟脚本炸出来的。当天改成按目录扫**每一份 `.lua`**。📌 教训写在这里：**`require` 的兄弟文件除了那一条用例，没有任何自动化检查看得见**（①~⑧ 不扫 `plugins/`，`cargo check` / `tsc` 更不认识 Lua），所以往后拆插件时，别以为「闸门绿了」就等于「拆对了」。<br>⚠️ **同一批踩到的一个假症状**：往 `PAIRS` 里补行时**少打一个收尾的 `"`**，症状不是「那一行不生效」，而是**整份脚本从那一行往后全崩**——bash 解析到那个没闭合的字符串，会一路把后面的 `)`、函数定义全吞进去，最后在一个毫不相干的地方报 `行 477: 未预期的记号 ">" 附近有语法错误`，同时前面已经跑起来的几道闸里冒出 `doc_file: 未找到命令`（那个函数明明定义在 470 行）。📌 判据：**改完先 `bash -n tools/doc-sync-check.sh`**，一行就验完，比对着「文档引用都不存在了」这种假 FAIL 查半天划算。
-| `plugins/*/lang/*.toml` | `11` | 插件的文案表：**键就是 `main.lua` 里那句原文**。⚠️ 对不上的由 `tools/i18n-check.sh` 查（表里有、代码里没有 = FAIL）；`name` 是保留键 |
+| ⚠️ `plugins/*`（**2026-10-09 起在插件仓库**） | —— | 插件源码与它的工装搬去了独立仓库 `Nota-plugins`（与主仓库同级、独立 git；那边自己的闸是 `tools/check.sh`，**按目录扫**所以不会漏登记）。⇒ 这三行原本的映射（清单/入口/文案表 ↔ `11`/`13`）**从本表删掉**：文件不在本仓库，`tools/doc-sync-check.sh` 的 ② 会静默跳过它们。⚠️ 插件改动与 `docs/11`–`13` 的同步从那天起**靠人**（那三份讲的是宿主给插件的 API，插件实现改动很少推翻它们） |
 | `src-tauri/Cargo.toml` / `package.json` | `06` `THIRD-PARTY.md` | 依赖与版本。⚠️ 加/删依赖就要同步第三方清单（它记了每个直接依赖的**许可证**） |
 | `src-tauri/tauri.conf.json` | `01` `06` | ⚠️ CSP 只在这儿写，见 `AGENTS.md` §4b |
 | `vite.config.ts` / `tsconfig.json` | `06` | ⚠️ `@/` 别名两处必须一致 |
@@ -558,7 +556,7 @@ mtime 是近似：拉取代码、`touch`、检出旧版本都会让它误报。
 缝见 §2 里 `src/App.tsx` 那一行）· `src/editor/math-view.ts` **958** · `tools/menu-harness/main.tsx` **949** ·
 `src/editor/emoji.ts` **924** · `src/editor/auto-pair.ts` **912** · `src/ui/panel-nodes.ts` **908** ·
 `src/editor/inline-marks.ts` **901** · `plugins/stats/main.lua` **899** · `tools/doc-sync-check.sh` **896**
-（⚠️ **闸门自己也在名单上**，它没有给自己豁免）· `tools/stats-state-test.lua` **898** ·
+（⚠️ **闸门自己也在名单上**，它没有给自己豁免）· ~~`tools/stats-state-test.lua` **898**~~（⚠️ 2026-10-09 搬去插件仓库，本表不再列）·
 `src/bridge/types.ts` **877** · `src/bridge/ipc.ts` **868** · `src/ui/PanelBody.tsx` **849**。
 ⚠️ 上一版（2026-10-04）记的是 **10 个**，多出来的三份**都不是本批涨的**（`panel-nodes` / `bridge/*` / `App.tsx`
 是别的批次推上去的）——这一格**没有闸门**，只能靠人现数。

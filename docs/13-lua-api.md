@@ -10,6 +10,10 @@
 >   `document.rs` / `fs.rs` / `git.rs` / `ui.rs` / `http.rs` / `settings.rs` /
 >   `diff.rs` / `unified_diff.rs` / `i18n.rs` / `devserver.rs` 是**十张子表**）
 >
+> ⚠️ **2026-10-09 起，那四个内置插件的源码在另一个仓库**（`Nota-plugins`，与主仓库同级）：
+> 本文件里凡是写 `plugins/<id>/…` 的地方（含 §14 那一整节拿写作统计当例子的部分），
+> 指的**都是那个仓库里的路径**，不是本仓库的。宿主怎么找到它们见 `docs/11` §1.1。
+>
 > 凡签名、常量值、错误原文，都是**从代码逐字抄的**，并给了 `file:line`。
 > 三份实际样例见 §14（`plugins/git/main.lua` / `plugins/ai/main.lua` / `plugins/slidev/main.lua`）。
 >

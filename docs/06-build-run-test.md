@@ -6,6 +6,12 @@
 > 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 599 条各钉住了什么。
 >
 > ⚠️ **测试数只在本文记数（Rust 当前 599 ／ 前端当前 1392）**，别处一律写"见 `docs/06`"。
+>
+> ⚠️⚠️ **2026-10-09：插件源码与它的工装搬去了独立仓库**（`Nota-plugins`，与主仓库
+> 同级）。⇒ 本文里凡是写 **`tools/pack-plugin.py` / `tools/stats-state-test.lua` /
+> `tools/ai-stream-test.lua` / `tools/stub-openai.py` / `tools/stub-slidev.py`** 的命令，
+> 都要在**那个仓库的根目录**跑（那几份文件 2026-10-09 起不在本仓库）。插件那边自己的
+> 闸是 `bash tools/check.sh`；宿主怎么找到插件见 `docs/11` §1.1。
 > ⚠️ **这个数别照抄——以现跑为准**（`grep -r '#\[test\]' src-tauri/src --include=*.rs | wc -l`
 > 与 `cargo test --lib` 报的 `N passed` 两半互证）。同一目录可能有别的会话在改，
 > 本文这段 2026-09-27 当天就落后过两次（见 §6.2 那段"当前 N 条"）。
@@ -247,9 +253,9 @@ glibc 是**向前兼容、不向后兼容**的，在新系统上编的二进制�
 
 #### 插件在打包后从哪儿扫（BUG-11，**已修**）
 
-打包后内置插件的落点变了：从**资源目录**的 `plugins/` 里扫，不再是仓库根的
-`plugins/`——这条分支在 `paths::builtin_plugins_dirs()`（`src-tauri/src/paths.rs:44`），
-展开见 `docs/11` §插件放哪。
+打包后内置插件的落点变了：从**资源目录**的 `plugins/` 里扫，不再是开发态那几个落点
+——这条分支在 `paths::builtin_plugins_dirs()`（`src-tauri/src/paths.rs`），展开见
+`docs/11` §1.1（⚠️ 2026-10-09 起开发态第一顺位是**同级插件仓库** `Nota-plugins`）。
 
 ⚠️ **2026-09-23 之前这里是坏的**：`bundle` 段**没有 `resources` 键**，
 那份 `plugins/` 根本不会被塞进包里，`resource_dir.join("plugins")` **永不命中**，
@@ -260,12 +266,12 @@ release 下也不走 `debug_assertions` 分支。**开发期看不出来**（走
 
 | 版本 | 写法 | 实际打出来什么 |
 |---|---|---|
-| ① 数组 | `["../plugins/**/*"]` | 目标路径由 `resource_relpath()` 算，它把 `..` **映射成 `_up_`** → `_up_/plugins/...`，`resource_dir.join("plugins")` 命不中 |
-| ② 映射 + glob | `{"../plugins/**/*": "plugins/"}` | **目录名对了、里面是错的**：`plugins/main.lua` + `plugins/plugin.toml` ——**只取文件名**，两个插件的 `main.lua` 互相盖掉一个。根因在 `tauri-utils` 的 `resources.rs`：glob 且 dest 非空时目标就是 `dest.join(path.file_name())`，树被**拍平**（源码注释自己写着 "preserving the file name as it is"） |
-| ③ **现行** | `{"../plugins": "plugins"}` | ✅ 走的是 `Walk` 分支：`dest.join(path.strip_prefix(pattern))`，**保留结构**。实测包里是 `usr/lib/Nota/plugins/ai/{plugin.toml,main.lua}` + `git/` 各自一份 |
+| ① 数组 | `["../../Nota-plugins/plugins/**/*"]`（独立仓库之前是 `"../plugins/**/*"`） | 目标路径由 `resource_relpath()` 算，它把 `..` **映射成 `_up_`** → `_up_/plugins/...`，`resource_dir.join("plugins")` 命不中 |
+| ② 映射 + glob | `{"../../Nota-plugins/plugins/**/*": "plugins/"}` | **目录名对了、里面是错的**：`plugins/main.lua` + `plugins/plugin.toml` ——**只取文件名**，两个插件的 `main.lua` 互相盖掉一个。根因在 `tauri-utils` 的 `resources.rs`：glob 且 dest 非空时目标就是 `dest.join(path.file_name())`，树被**拍平**（源码注释自己写着 "preserving the file name as it is"） |
+| ③ **现行** | `{"../../Nota-plugins/plugins": "plugins"}`（独立仓库之前写的是 `"../plugins"`；⚠️ 键相对 `src-tauri/`，所以是两级 `..`） | ✅ 走的是 `Walk` 分支：`dest.join(path.strip_prefix(pattern))`，**保留结构**。实测包里是 `usr/lib/Nota/plugins/ai/{plugin.toml,main.lua}` + `git/` 各自一份 |
 
 **判据：`**键要写成目录，不要写 glob**`。要吃"某几个文件"而不是"整棵目录"时，
-这条不成立——那时得逐条列出来（`{"../plugins/git/main.lua": "plugins/git/main.lua"}`），
+这条不成立——那时得逐条列出来（`{"../../Nota-plugins/plugins/git/main.lua": "plugins/git/main.lua"}`），
 因为 glob 那一支没有保留结构的能力。
 
 **验证方法**（三条缺一不可，只做第一条会漏掉上面的版本②）：
@@ -1518,12 +1524,17 @@ podman exec -u 1000 -w "$PWD" tauri-dev lua tools/ai-stream-test.lua
 每次请求的**原文**写在 `STUB_LOG`（默认 `/tmp/stub-openai-last.json`），
 "请求里到底发出去了什么"要看这个文件，不能靠猜。
 
-⚠️⚠️ **`cargo build` 会把 `plugins/` 拷进 `src-tauri/target/debug/plugins/`**，
-而 `paths::builtin_plugins_dirs()`（`src-tauri/src/paths.rs`）**先扫资源目录、再扫仓库**，
-去重是"先到先得"——所以**改完插件不重新 build，跑起来的还是 target 里那份旧的**。
-症状是"改了没生效"，很容易误判成"代码写错了"。⚠️ 这一批就被它误导过一次
-（改了 `title_from` 却没生效）。三条出路任选：重新 `cargo build`、
-跑之前清掉 `target/debug/plugins/`、或者认准"改 Lua 之后必须重编"。
+⚠️⚠️ **`cargo build` 会把插件源码拷一份进 `src-tauri/target/debug/plugins/`**
+（那是 `bundle.resources` 在 debug 下的副产物），而 `paths::builtin_plugins_dirs()`
+（`src-tauri/src/paths.rs`）里**开发态那几档排在它前面**（2026-09-25 修的顺序：
+先扫 `NOTA_PLUGINS_DIR` / 同级插件仓库 / 老落点，最后才是资源快照），去重是"先到先得"
+——所以**改完 Lua 存盘、重启应用就生效，不用重编**；`target/debug/plugins/` 那份快照
+是死代码，忽略它。
+⚠️ **本文这一段曾经写反过**（写成"先扫资源目录、再扫仓库"，那是 2026-09-25 之前那个
+坑的样子）：照那版理解，人会以为"改 Lua 必须重编"，而真相是**必须重启**（不重编）。
+顺带这一批当下也被它误导过一次（改了 `title_from` 没生效，其实是没重启）。
+⚠️ **2026-10-09 起源码在插件仓库**（`Nota-plugins`）：改的是那边的文件，宿主扫的还是
+那几档（同级仓库那一档），"存盘 ＋ 重启应用"这条不变。
 
 ### 5.14 验前端弹层的四条工装（2026-09-25，验代码块语言下拉那一批）
 

@@ -926,9 +926,17 @@ XDG 目录下的子目录名。
 
 内置插件目录，可能**两个都返回**：
 
-1. `resource_dir.map(|res| res.join("plugins"))` —— 打包后的落点（`resource_dir` 为 `None` 时跳过）
-2. `cfg!(debug_assertions)` 为真时，额外返回 `CARGO_MANIFEST_DIR`（= `src-tauri/`）的
-   **上一级** + `plugins/`，也就是仓库根的 `plugins/`。开发时改完 Lua 存盘即生效，不用重编
+1. **开发态那几档**（`cfg!(debug_assertions)` 为真时才在，顺序是承重的）：
+   设了 `$NOTA_PLUGINS_DIR` 就**只认它**（显式覆盖）；否则 **同级插件仓库**
+   `<主仓库>/../Nota-plugins/plugins` → 老落点 `<主仓库>/plugins`。
+   ⚠️ 2026-10-09 起插件独立成仓库，**同级那一档才是真相**；
+   老落点留着只是让老检出还能跑。开发时改完 Lua**存盘 ＋ 重启应用**即生效，不用重编
+2. `resource_dir.map(|res| res.join("plugins"))` —— 打包后的落点（`resource_dir` 为 `None` 时跳过），
+   内容由 `tauri.conf.json` 的 `bundle.resources` 拷进去
+
+⚠️ **顺序的来历**：开发态那几档必须排在资源快照前面——反过来的话，`cargo build` 拷进
+`target/debug/plugins/` 的那份旧快照会盖掉正在改的那份，症状是"我的改动没生效"
+（2026-09-25 踩过）。`paths.rs` 里有一条用例逐档钉着这个顺序。
 
 两个都存在时 `PluginHost::discover` 两个都扫，**用户自装的同名插件覆盖内置的**。
 

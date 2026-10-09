@@ -78,7 +78,7 @@
 | `src/editor/inline-marks.ts` | 901 | |
 | `plugins/stats/main.lua` | 902 | |
 | `tools/doc-sync-check.sh` | 916 | ⚠️ **闸门自己也在名单上**，它没有给自己豁免（2026-10-07 补 `PAIRS` 那几行涨上来的） |
-| `tools/stats-state-test.lua` | 898 | |
+| ~~`tools/stats-state-test.lua`~~ | —— | ⚠️ 2026-10-09 搬去插件仓库（`Nota-plugins/tools/`），本表不再列它 |
 | `src/bridge/types.ts` | 877 | |
 | `src/bridge/ipc.ts` | 868 | |
 | `src/ui/PanelBody.tsx` | 849 | |
@@ -821,13 +821,15 @@ plugins/<名字>/
 
 ### 第 3 步 · 构建接线：✅ 已接好（BUG-11，2026-09-23 修并验过）
 
-**开发态不用做任何事**：debug 构建会自动扫仓库根的 `plugins/`
-（`paths.rs:53-60`，`cfg!(debug_assertions)` 那条分支），
-所以放好目录、重启应用就能看到。
+**开发态不用做任何事**：debug 构建会自动扫那几档（`paths.rs` 的
+`cfg!(debug_assertions)` 分支），2026-10-09 起第一顺位是**同级插件仓库**
+`../Nota-plugins/plugins`（想指别处就设 `NOTA_PLUGINS_DIR`），所以放好目录、
+重启应用就能看到。
 
 **打包态**现在也通了：`bundle.resources` 里有一条
-`{"../plugins": "plugins"}`，bundler 会把整棵目录拷进资源目录的 `plugins/`
+`{"../../Nota-plugins/plugins": "plugins"}`（⚠️ 键相对 `src-tauri/`，所以是两级 `..`），bundler 会把整棵目录拷进资源目录的 `plugins/`
 （`resource_dir.join("plugins")` 就是 `paths::builtin_plugins_dirs()` 打包后看的地方）。
+⚠️ 删掉这条键 = 装出来的包**一个内置插件都没有**（`Folio-plugin` 那边走的就是这条路）。
 
 ⚠️⚠️ **这条之所以单列一段，是因为它改了三版才写对**（详见 `docs/06` §2.4）。
 要加**新的**资源目录时照抄这一条的形状，两条硬规矩：

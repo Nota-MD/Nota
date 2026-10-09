@@ -260,7 +260,14 @@ def 读表(路径: str) -> set[str]:
 # 不然它会以"代码里找不到这句原文"的样子报出来（那正是它该报的形状）。
 保留键 = {"name", "description"}
 
-for 目录 in sorted(glob.glob("plugins/*")):
+# ⚠️ 插件源码 2026-10-09 起在**另一个仓库**（`Nota-plugins`，与主仓库同级）——
+# 找不到目录时这一栏会"零个插件、零条硬伤"，那是**静默失效**（闸的盲区），
+# 所以这里跟 `paths.rs` 用同一套落点：环境变量 → 同级仓库 → 老落点。
+插件根 = os.environ.get("NOTA_PLUGINS_DIR") or next(
+    (p for p in ("../Nota-plugins/plugins", "plugins") if os.path.isdir(p)),
+    "plugins",
+)
+for 目录 in sorted(glob.glob(插件根 + "/*")):
     清单 = f"{目录}/plugin.toml"
     if not os.path.isfile(清单):
         continue

@@ -181,22 +181,40 @@ pub fn 安全文件名(plugin_id: &str) -> String {
 mod tests {
     use super::*;
 
-    /// 开发态下**仓库那份排前面**：同名插件先扫到的算数，所以顺序就是"谁生效"。
+    /// 开发态那几档的**顺序**：环境变量 → 同级插件仓库 → 老落点 → 资源快照。
     ///
-    /// 这条钉的是一个具体踩过的坑（见 `builtin_plugins_dirs` 的注释）：
-    /// 排在后面的时候，`cargo build` 拷进 `target/debug/plugins/` 的那份快照
-    /// 会盖掉仓库里正在改的那份，而**症状是"我的改动没生效"**——不报错，
-    /// 没有任何提示。修法就是这两行的顺序。
+    /// ⚠️ 同名插件**先扫到的算数**（`PluginHost::discover`），所以顺序就是"谁生效"。
+    /// 这条钉的是两个具体踩过的坑：
+    /// ① 资源快照（`cargo build` 拷进 `target/debug/plugins/` 的那份）排在前面时，
+    ///    会盖掉正在改的那份源码，症状是"我的改动没生效"——不报错、没提示；
+    /// ② 2026-10-09 插件独立成仓库之后，**同级那个 `Nota-plugins/` 才是真相**，
+    ///    主仓库里那个老落点如果还在（老检出），只能排在它后面。
     #[test]
-    fn 开发态下仓库那份排在资源快照前面() {
+    fn 开发态先看环境变量再看同级插件仓库再看老落点() {
         let 资源 = Path::new("/假资源目录");
         let 目录们 = builtin_plugins_dirs(Some(资源));
-        let 仓库 = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let 主仓库 = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .expect("src-tauri 的上一级")
-            .join("plugins");
-        assert_eq!(目录们.first(), Some(&仓库), "仓库那份必须是第一个：{目录们:?}");
-        assert_eq!(目录们.last(), Some(&资源.join("plugins")));
+            .expect("src-tauri 的上一级");
+        let 兄弟 = 主仓库.parent().expect("工作区那一级").join("Nota-plugins").join("plugins");
+        let 老落点 = 主仓库.join("plugins");
+        let i兄弟 = 目录们.iter().position(|p| p == &兄弟).expect("同级插件仓库那一档在");
+        let i老 = 目录们.iter().position(|p| p == &老落点).expect("老落点那一档在");
+        assert!(i兄弟 < i老, "同级插件仓库必须排在这个之前：{目录们:?}");
+        assert_eq!(目录们.last(), Some(&资源.join("plugins")), "资源快照永远垫底");
+
+        // 不设环境变量时的三档：同级插件仓库 → 老落点。
+        let 候选 = 开发态候选(None, 主仓库);
+        assert_eq!(
+            候选.first(),
+            Some(&兄弟),
+            "同级插件仓库必须是第一个：{候选:?}"
+        );
+        assert_eq!(候选.last(), Some(&老落点), "老落点垫底");
+
+        // 设了环境变量就**只认它**（显式覆盖：CI / 别的目录布局 / 想跑一份干净的）。
+        let 候选 = 开发态候选(Some(PathBuf::from("/别处/plugins")), 主仓库);
+        assert_eq!(候选, vec![PathBuf::from("/别处/plugins")], "设了就不许再兜底");
     }
 
     /// ⚠️ **这条是安全用例，不是格式用例。**
@@ -266,37 +284,55 @@ pub fn user_ui_styles_dir() -> Result<PathBuf> {
     Ok(config_dir()?.join("ui-styles"))
 }
 
-/// 内置插件目录。
+/// **开发态**那几档插件源码目录，按优先级（整张表在 [`builtin_plugins_dirs`] 上）。
 ///
-/// 开发时是仓库根的 `plugins/`（改完 Lua 存盘即生效，不用重编）；
-/// 打包后是资源目录里的 `plugins/`。两者都存在时**两个都扫**，
-/// 用户自装的同名插件覆盖内置的。
-/// ⚠️ **顺序是承重的，而且踩过一次**（2026-09-25）。
+/// ⚠️ `env` 是从外面递进来的（正式调用传 `NOTA_PLUGINS_DIR`），**不是在函数里读**：
+/// 环境变量是进程级的，测试里 `set_var` 会与别的用例互相踩（Rust 2024 起它本身也是
+/// `unsafe`）。递进来之后这条判据就是**纯函数**，测得住。
+fn 开发态候选(env: Option<PathBuf>, 主仓库: &Path) -> Vec<PathBuf> {
+    // ⚠️ **设了 `NOTA_PLUGINS_DIR` 就只认它**（显式覆盖，不再往后面兜）：
+    // 这是环境变量该有的语义——"这次就从这儿读"。兜底的话，"指到一个空目录"
+    // 与"指到一个坏路径"都会静默退回同级仓库，用户会以为自己指错了地方。
+    // ⚠️ 代价：路径写错就是**一个插件都没有**（面板空着），那是显式配置的账。
+    if let Some(e) = env {
+        return vec![e];
+    }
+    let mut out = Vec::new();
+    if let Some(工作区) = 主仓库.parent() {
+        out.push(工作区.join("Nota-plugins").join("plugins"));
+    }
+    out.push(主仓库.join("plugins"));
+    out
+}
+
+/// 内置插件目录，**按优先级**（`PluginHost::discover` 是"先扫到的算数"，
+/// 所以谁在前面谁生效；用户自装的同名插件覆盖前面这些）。
 ///
-/// `PluginHost::discover` 是"先扫到的算数"（同名插件后面的被跳过），所以
-/// **谁在前面谁生效**。开发态下两个落点都有货：仓库根的 `plugins/` 是**真的**，
-/// `resource_dir/plugins`（= `target/debug/plugins`）是 `cargo build` 按
-/// `bundle.resources` **拷进去的一份快照**。
+/// | 档 | 落点 | 什么时候在 |
+/// |---|---|---|
+/// | ① | `$NOTA_PLUGINS_DIR` | 想指哪儿指哪儿（CI、别的目录布局、想跑一份干净的）——**设了就只认它**，不再往后面兜 |
+/// | ② | `<主仓库>/../Nota-plugins/plugins` | **真相**：2026-10-09 起插件独立成仓库，与主仓库同级放着 |
+/// | ③ | `<主仓库>/plugins` | 老落点（独立之前主仓库自带的那份），留着只是让老检出还能跑 |
+/// | ④ | `<资源目录>/plugins` | 打包后（`cargo build` 按 `tauri.conf.json` 的 `bundle.resources` 拷进去的快照） |
 ///
-/// 一开始这里先推 `resource_dir`。后果很隐蔽：改完 `plugins/*.lua` 重启应用，
-/// 看到的还是**编那份快照时的旧行为**——不报错、不提示，看起来就像"我的改动没生效"，
-/// 而 `docs/01`/`docs/06`/`docs/11` 三处都写着"debug 下扫仓库那份，改完存盘即生效"。
-/// 这条曾经骗了整整一轮调试：差异预览的截断逻辑改了、重启两次都还是旧样子。
+/// ⚠️⚠️ **顺序是承重的，踩过两次**：
+/// - **2026-09-25**：先推资源目录时，改完 `plugins/*.lua` 重启看到的还是**编那份快照时
+///   的旧行为**——不报错、不提示，看起来就像"我的改动没生效"（而 `docs/01`/`06`/`11`
+///   三处都写着"debug 下扫仓库那份，改完存盘即生效"）。所以开发态那几档必须排在快照前面。
+/// - **2026-10-09**：插件搬去独立仓库（`Nota-plugins`）之后，**②才是真相**——老检出里
+///   如果还留着 ③ 的副本，它只能垫在 ② 后面（同名插件先扫到的算数）。
 ///
-/// 所以 debug 档**把仓库那份排前面**：开发期要的就是"存盘改的就是跑起来的"。
-/// 打包后不存在这个问题（`cfg!(debug_assertions)` 为假，只剩 resource 一个落点）。
+/// 打包后不存在这个问题（`cfg!(debug_assertions)` 为假，只剩 ④ 一个落点）。
 /// 顺带一提，快照那份照样在 `target/debug/plugins` 里躺着——**忽略它是对的**。
 pub fn builtin_plugins_dirs(resource_dir: Option<&Path>) -> Vec<PathBuf> {
     let mut out = Vec::new();
 
-    // 开发态落点：CARGO_MANIFEST_DIR 是 src-tauri/，往上一级就是仓库根。
+    // 开发态那几档：CARGO_MANIFEST_DIR 是 src-tauri/，往上一级是主仓库、再上一级是工作区。
     // ⚠️ 必须排在下面那个前面，理由见函数头。
     if cfg!(debug_assertions) {
-        let dev = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(|root| root.join("plugins"));
-        if let Some(dev) = dev {
-            out.push(dev);
+        if let Some(主仓库) = Path::new(env!("CARGO_MANIFEST_DIR")).parent() {
+            let env = std::env::var_os("NOTA_PLUGINS_DIR").map(PathBuf::from);
+            out.extend(开发态候选(env, 主仓库));
         }
     }
 

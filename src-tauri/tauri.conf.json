@@ -37,7 +37,7 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../plugins": "plugins"
+      "../../Nota-plugins/plugins": "plugins"
     },
     "icon": [
       "icons/32x32.png",

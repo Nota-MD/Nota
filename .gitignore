@@ -20,8 +20,8 @@ build/
 *.deb
 *.rpm
 
-# 运行时（插件安装目录不入库）
-plugins/*/dist/
+# ⚠️ 2026-10-09：这条原来挡的是 `plugins/*/dist/`（打出来的 `.nota-plugin` 包）——
+# 插件源码搬去独立仓库（`Nota-plugins`）之后，同一条规矩归那个仓库的 `.gitignore` 管。
 
 # 本机的开窗脚本（容器名 / 显示号 / Xauthority 取法都是这台机器的事，别入库）
 tools/open-window.sh

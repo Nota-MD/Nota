@@ -496,66 +496,13 @@ PAIRS=(
   "src/editor/video-view.ts                       05,04,10"
   "src/styles/video.css                           04,05"
   "src/styles/marks.css                         04,05"
+  # ⚠️ 2026-10-09：**插件源码搬去独立仓库了**（`Nota-plugins`，与主仓库同级），
+  #    所以这一段原来那十几行 `plugins/...` 的映射**整段删掉**——文件不在本仓库里，
+  #    留着的行只会是"指向不存在的文件"的死账（② 会静默跳过它们，谁也不知道）。
+  #    ⇒ 插件那几份自己的闸跟在插件仓库：`Nota-plugins/tools/check.sh`（行数 ＋ 两份
+  #    无头测试）；插件改动与 `docs/11`–`13` 的同步，从那天起**靠人**（那三份文档
+  #    讲的是宿主给插件的 API，插件自身的实现改动本来也很少推翻它们）。
   # 插件与工程
-  "plugins/git/plugin.toml                        11"
-  "plugins/ai/plugin.toml                         11"
-  "plugins/slidev/plugin.toml                     11"
-  # ⚠️ 2026-09-28：四个插件各删了一份 `lang/en.toml`（英语成了**原文**，
-  #    那张表活着的每一天都只是在抄代码里的字）。这几行跟着删，
-  #    下一行的 `zh-CN.toml` 才是**译文表**。
-  "plugins/git/main.lua                           11,13"
-  # ⚠️ 2026-09-29 补一行：`plugins/git/` 也成了多文件插件（`require`，第五个用户）
-  #    ——差异预览那一整块搬去了 `diff.lua`（`main.lua` 当时 997 行）。理由与上面 stats
-  #    那几行**一模一样**：拆出去的文件也是插件的一部分，不进这张表，往后改它、
-  #    文档不动，五道闸一道都不会响（`docs/12` §5.9）。
-  "plugins/git/diff.lua                           11,13"
-  "plugins/ai/main.lua                            11,13"
-  # ⚠️ 2026-09-29 补三行：`plugins/ai/` 也成了多文件插件（`require`，第六个用户）
-  #    ——`main.lua` 当时 997 行，按功能拆成四份：`util.lua`（公共词汇：设置键与
-  #    小工具）、`chat.lua`（对话状态 ＋ 请求 ＋ 改动块）、`panel.lua`（只读渲染）。
-  #    理由与上面 git / stats 那几组**一模一样**：拆出去的文件也是插件的一部分，
-  #    不进这张表，往后改它、文档不动，几道闸一道都不会响（`docs/12` §5.9）。
-  "plugins/ai/util.lua                            11,13"
-  # ⚠️ 2026-10-04 补一行：第 58 项（「边生成边显示」）把 `chat.lua` 从 744 行顶到 977 行
-  #    （离 1000 只剩 23），按「**会不会发 HTTP**」那条线拆出 `request.lua`
-  #    （整段/流式两条路、组规格、解回包）。`chat.lua` 剩下的那一半是"一个对话里有什么、
-  #    怎么存"。同一个理由，第七个用户。
-  "plugins/ai/request.lua                         11,13"
-  "plugins/ai/chat.lua                            11,13"
-  "plugins/ai/panel.lua                           11,13"
-  "plugins/slidev/main.lua                        11,13"
-  "plugins/git/lang/zh-CN.toml                    11"
-  "plugins/ai/lang/zh-CN.toml                     11"
-  "plugins/slidev/lang/zh-CN.toml                 11"
-  # ⚠️ 2026-09-26 补的四行。写作统计（第 65 项）落地那天**漏登记**了——
-  #    （插件 2026-09-27 改名「写作统计」、目录改 `plugins/stats/`、id 也从
-  #    `nota.heartbeat` 换成 `nota.stats`——这几行认的是**目录**，所以要跟着目录走。）
-  # 这张表里插件那几组是照当时已有的三个插件写的，新插件没跟着加。
-  # 症状与 `src/i18n/en-*.ts` 那次（上面那三行）一模一样：插件改了、
-  # `docs/11` `docs/13` 没跟上，而 ①~⑤ 全绿——因为 ⑤ 只扫
-  # `src-tauri/src` 与 `src`，**不扫 `plugins/`**，插件全靠这张表管。
-  # ⚠️ 2026-09-27 再补三行：多文件插件（`require`）落地，写作统计拆出了 `ticks.lua`
-  #    （刻度与"数怎么写"）、`ledger.lua`（`days.txt` 的文件格式那一半）、`long.lua`
-  #    （长期那本账的算法：窗口怎么定、日均怎么算）。**拆出去的文件也是插件的一部分**，
-  #    一样要进这张表——不然它往后改刻度、文档不动，五道闸一道都不会响。
-  #    ⚠️ 同一天这是**踩过两次的坑**：`ticks.lua` 那次只补了它自己，`ledger`/`long`
-  #    是同一天稍后拆的、**没人回来补**——所以这张表不该等"想起来"才补，**拆文件的
-  #    那一步就该补**（`docs/12` §5.9 那条"拆完顺手补 PAIRS"是这么来的）。
-  "plugins/stats/plugin.toml                 11"
-  "plugins/stats/main.lua                    11,13"
-  "plugins/stats/ticks.lua                   11,13"
-  "plugins/stats/ledger.lua                  11,13"
-  "plugins/stats/long.lua                    11,13"
-  # ⚠️ 2026-10-04 再补一行：面板改成运动手表那套版式之后 `main.lua` 又顶到 1055 行，
-  #    于是拆出第五份 `cards.lua`（② 小字概览 ＋ ④ 记录卡）。⚠️ 这一次**是在"拆"的
-  #    那一步就补上的**——前两次（整个目录、`ledger`/`long`）都是"回头才想起来"，
-  #    `docs/12` §5.9 与 `docs/11` §1.3.1 把这两次当成反面例子记着。
-  "plugins/stats/cards.lua                   11,13"
-  # ⚠️ 2026-10-04 第二次拆（同一天）：Δt 窗口那一批又把 `main.lua` 顶到 1065 行，
-  #    于是第三份新文件 `share.lua`（③ 那颗开关 ＋ ④ 做分享图那三颗 ＋ 三张分享卡的
-  #    字段 ＋ 长期那块面板）。照 `docs/12` §5.9 那条规矩：**拆的那一步就补这一行**。
-  "plugins/stats/share.lua                   11,13"
-  "plugins/stats/lang/zh-CN.toml             11"
   "src-tauri/Cargo.toml                           06"
   "package.json                                   06"
   "src-tauri/tauri.conf.json                      01,06"
@@ -649,7 +596,11 @@ while IFS= read -r f; do
 # ⚠️ `tests` 也要扫（2026-10-07 加上，`docs/07` 第 89 项）：在加它之前，
 #    `tests/` 是这条硬线**唯一没盖到的地方**——`math-view.test.ts` 就是这么
 #    涨到 1024 行、超线一整轮都没人报的。测试文件也是本仓的代码。
-done < <(find src-tauri/src src plugins tools tests -type f \
+# ⚠️ 2026-10-09：`plugins` 从这张扫描面上**去掉了**——插件源码搬去了独立仓库
+# （`Nota-plugins`），那一份自己的行数闸在 `Nota-plugins/tools/check.sh` 里
+# （同一把尺子：1000 硬线 / > 800 WARN）。⛔ 别为了"顺手扫一眼"把它加回来：
+# 它会静默扫不到（目录不在），而"扫不到的闸"比没有闸更坏——它看起来是绿的。
+done < <(find src-tauri/src src tools tests -type f \
            \( -name '*.rs' -o -name '*.ts' -o -name '*.tsx' \
               -o -name '*.lua' -o -name '*.css' -o -name '*.sh' \) 2>/dev/null | sort)
 

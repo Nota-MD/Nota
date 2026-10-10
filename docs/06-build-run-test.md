@@ -6124,7 +6124,19 @@ podman exec -u 1000 -e CARGO_TARGET_DIR=/tmp/nota-win-check \
 **"这一格明确没做"的桩**（细节与判据见 `docs/07` 第 110 项）。⚠️ **判据是那两条**：
 `cargo check --target x86_64-pc-windows-gnu` **0 error / 0 warning**，
 而 Linux 上 `cargo test --lib` 仍然 **612 passed / 0 failed**（分档不许弄坏主场）。
-⚠️ **没做的**：`cargo build`（真链接）、在 Windows 上跑、任何 Windows 特有的真机验证。
+⚠️ **当时没做的**：`cargo build`（真链接）、在 Windows 上跑。📌 **2026-10-10 晚补上了真链接那一半**
+（用户：「尝试编译编写版本exe测试用」）：`cargo build --release --target x86_64-pc-windows-gnu`
+**4 分 39 秒**出了 `nota.exe`（PE32+ GUI x86-64，35 MB）＋ 必须挨着它放的 `WebView2Loader.dll`。
+⚠️⚠️ **别漏了 `--features tauri/custom-protocol`**——这是第一次踩出来的坑：Tauri 判"dev 还是成品"
+的判据是 `tauri` 那个 crate 的 `custom-protocol` 特性（它自己 build.rs 里就一句
+`let dev = !custom_protocol;`），**只加 `--release` 不开它，仍然按 dev 编**：窗口去连
+`tauri.conf.json` 里的 `devUrl`（`http://localhost:5273`），在 Windows 上就是**一打开
+"localhost 拒绝连接"**（用户 2026-10-10 报的那一句）。判据是编完当场能核的一行：
+`target/<三元组>/release/build/tauri-*/output` 里的 `cargo:dev=`——`true` 是错的那版、
+`false` 才是成品（实测：21:36 那次 `true`、22:10 带特性那次 `false`）。
+⚠️ 另外两条：**前端要先在宿主上 `npx vite build`**（它被 `generate_context!` 在编译期嵌进 exe），
+而 `bundle.resources` 那份映射**只有 `tauri build` 的打包器会做**——纯 `cargo build` 出来的
+exe，插件得**手动把 `Nota-plugins/plugins` 拷到 exe 旁边**（运行期按 `resource_dir()` 找）。
 ### 5.61 验「跑着的时候关掉插件栏、再打开」（第 111 项，2026-10-10，⚠️ **一半验成、一半没验成**）
 
 **要验的是什么**：插件（这里用 AI）的一条命令正在跑的时候关掉右侧插件栏、再打开，
@@ -6158,4 +6170,3 @@ v2 用 HTTP/1.0 ＋ 不发长度 ＋ 说完关连接（应用把**整份正文**
 
 **收工时**：测试实例、假端点、Xvfb 都**按 PID** 杀掉（⚠️ 那台机器上还有用户自己的实例，
 `kill` 之前先 `tr '\0' '\n' < /proc/$p/environ | grep DISPLAY` 认一遍）。
-

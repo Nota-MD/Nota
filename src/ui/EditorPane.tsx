@@ -269,7 +269,19 @@ interface Props {
    * 所以调用方的函数身份换了也不会重建编辑器。
    */
   onScroll?: (比例: number) => void;
+  /**
+   * 「正文宽度」那一格（px，`settings.content_width`）。
+   * ⚠️ **它只在 `limitTextWidth` 开着时才写进 CSS**——见下面那个 prop。
+   */
   contentWidth: number;
+  /**
+   * **限制正文宽度**（`settings.limit_text_width`，2026-10-09）。默认 `false`。
+   *
+   * ⚠️ 关着时**不写 `--content-width`**，`editor.css` 那条 `max-width` 落到
+   * `none` ⇒ 正文列铺满编辑区（两侧各 56px 装订线）。开着时才用它，
+   * 而且**只卡块级子元素**——`hr` 永远铺满整行（用户 2026-09-26 要的）。
+   */
+  limitTextWidth: boolean;
   /**
    * 「文档主题」那一页那四个可调项（`settings.document`，2026-09-27）。
    * `undefined` = 设置还没从后端读回来——那时**一个变量都不写**，
@@ -357,6 +369,7 @@ export function EditorPane({
   初始滚动,
   onScroll,
   contentWidth,
+  limitTextWidth,
   文档排版,
   onCommandState,
   onFindStatus,
@@ -788,11 +801,16 @@ export function EditorPane({
       <div
         ref={mountRef}
         className="editor-mount"
-        style={{ ["--content-width" as string]: `${contentWidth}px` }}
+        // ⚠️ **只有开了「限制正文宽度」才写这个变量**（2026-10-09）。不写的时候
+        // `editor.css` 那条 `max-width: var(--content-width, none)` 落到 `none`，
+        // 正文列就铺满编辑区——用户报的"右边还有空隙"就是它。
+        style={
+          limitTextWidth ? { ["--content-width" as string]: `${contentWidth}px` } : undefined
+        }
       />
       {mode === "split" && (
         // 右侧预览。`aria-readonly` 是**如实告知**——它真的改不了。
-        // 预览不给 `--content-width`：那一半本来就窄，再限宽会剩一条缝。
+        // 预览**永远不给** `--content-width`：那一半本来就窄，再限宽会剩一条缝。
         <div ref={previewRef} className="editor-mount editor-preview" aria-readonly="true" />
       )}
     </div>

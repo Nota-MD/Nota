@@ -106,6 +106,9 @@ export const 设置表: Record<string, string> = {
   // 这条中文就成了废键（`tools/i18n-check.sh` ③ 会 FAIL）。
   "Line endings": "换行符",
   "Text width": "正文宽度",
+  // ⚠️ 2026-10-09 加的那一格：默认关着（关＝正文列铺满编辑区），开着才画下面
+  // 那根滑杆。见 `settings/mod.rs::limit_text_width` 那段。
+  "Limit text width": "限制正文宽度",
   "Aligned indent": "对齐缩进",
   "Default indent": "默认缩进",
   "Keep the cursor in the middle of the screen": "让光标始终停在屏幕中间",

@@ -167,7 +167,8 @@ ErrorBoundary                       (ui/ErrorBoundary.tsx)  兜住渲染期崩�
    │     │  │                       ⚠️ 外壳是 div.editor-pane-<mode>，三种模式摆的格子不同
    │     │  ├─ div.editor-loading    「正在准备编辑器…」（ready=false 时才有）
    │     │  ├─ div.editor-mount      **React 永不往里渲染**，Milkdown 或 CodeMirror 独占
-   │     │  │                        （内联 --content-width = 设置的正文宽度）
+   │     │  │                        （⚠️ **只在开了「限制正文宽度」时**才有内联 --content-width；
+   │     │  │                         默认不写 ⇒ 正文列铺满编辑区，2026-10-09）
    │     │  │                        wysiwyg → Milkdown ／ source、split → CodeMirror
    │     │  └─ div.editor-mount.editor-preview   **只有 split 才有**，只读的 Milkdown
    │     │                            ⚠️ 不给 --content-width（那一半本来就窄）；aria-readonly
@@ -1859,7 +1860,8 @@ Adwaita 的 headerbar 是 44px、Yaru 的是 40px。它现在**默认值仍在 `
 `editor.css` 的代码块那一段仍记着这一对的关系）；
 ② 右键插件栏的宽度变化会让正文区宽度变，`.milkdown` 的列宽
 （`--content-width`）依赖的就是这个——宽度改了、列宽没改，正文列照旧那么宽
-（2026-09-25 起靠左；在那之前是居中），所以**不会看出问题**。
+（2026-09-25 起靠左；在那之前是居中；**2026-10-09 起这个变量默认不写 = 铺满**，
+所以只有把「限制正文宽度」开着的人才会遇到这条）。⚠️ 无论哪一档都**不是居中**。
 这两条都是"错了也看不出来"的那类，改之前先扫一眼 `grep -rn "calc(100% + 15px)" src/styles/`。
 
 ### 3.2 二维相乘：`theme.css` 的组织约定

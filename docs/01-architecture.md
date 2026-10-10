@@ -902,7 +902,7 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 |---|---|---|
 | `docs` | `Document[]` | 标签栏、状态栏、`activeDoc` 的推算 |
 | `activeId` | `DocId \| null` | 决定渲染 `EditorPane` 还是 `Home` |
-| `settings` | `Settings \| null` | 外观两条界面轴 + `document_theme`（文档主题 id）、`content_width`、`confirm_unsaved`……⚠️ **编辑模式不在这里**（2026-10-07 起是会话内状态，住在 `ui/useFileKindMode.ts`，见 `03` §5.2 末段） |
+| `settings` | `Settings \| null` | 外观两条界面轴 + `document_theme`（文档主题 id）、`content_width` ＋ `limit_text_width`（正文宽度那一对，2026-10-09 起**开关默认关**＝正文列铺满）、`confirm_unsaved`……⚠️ **编辑模式不在这里**（2026-10-07 起是会话内状态，住在 `ui/useFileKindMode.ts`，见 `03` §5.2 末段） |
 | `workspace` | `string \| null` | 侧栏文件树、`refreshTree` 的开关 |
 | `tree` | `TreeNode[]` | 侧栏文件树 |
 | `plugins` / `panels` | `PluginInfo[]` / `PluginPanel[]` | 右侧插件栏的「插件」页签（清单）、`Home` 的插件状态列。⚠️ **当前是哪一页签、每页拉到什么内容**都不在这里——都在 `PluginDock` 内部（内容每页一份、还有请求序号），见 `docs/04` §状态 |

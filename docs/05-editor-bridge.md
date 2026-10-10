@@ -358,7 +358,7 @@ Milkdown（ProseMirror）自己拥有那块 `contenteditable`；React 只负责"
 
 | 做法 | 为什么 |
 |---|---|
-| 一个**从不重新渲染的空 `div.editor-mount`** 当挂载点 | React 只往里放属性（`--content-width`），不放子节点 |
+| 一个**从不重新渲染的空 `div.editor-mount`** 当挂载点 | React 只往里放属性（`--content-width`，⚠️ **2026-10-09 起只在开了「限制正文宽度」时才放**，不放子节点） |
 | 内容变化一律走 `setMarkdown()` 这条**命令式**通道 | 不经过 React 的状态流 |
 | `App.tsx` 给 `EditorPane` 带 `key={activeDoc.id}` | **换文档 = 整个组件重挂**，省得写"把 A 文档的撤销栈换成 B 的" |
 | effect 的依赖数组是 `[doc.id, mode, strict]`，**刻意不含 `doc.text`** | `doc.text` 是**初始值**，不是要跟随的状态（跟随它会每次同步都重建编辑器）；`mode` 变 = 换编辑器（§3.1）；`strict` 变 = 解析口径变了，手里这份还是按旧口径解析的（§2.1c）。⚠️ **两个写作开关刻意不在里面**——它们走 `setWritingModes`，拨开关不重建实例（§4.4） |

@@ -2,6 +2,9 @@
  * 「编辑器」那一页。
  *
  * 第一组（正文宽度）是 **Nota 自己的**：内容区多宽由这一格说了算。
+ * ⚠️ 2026-10-09 起它**默认关着**（`settings.limit_text_width`）——关着时正文列
+ * 铺满编辑区，滑杆不画。**开着才画滑杆**，理由写在 `settings/mod.rs` 那个字段上
+ * （用户报的"右侧还是有空隙……应该两边边距一样"）。
  *
  * ⚠️ **「编辑模式」那一格 2026-10-07 已从这里删掉**：模式改成**会话内状态**、
  * 不落盘（用户原话「请设置默认启动为 WYSIWYG」）——每次启动一律所见即所得，
@@ -12,8 +15,10 @@
  * 也**没有**「自动保存」「关闭前先问我」（挪到文件页的「保存 & 恢复」组了）。
  * 两者在界面上位置相近，但不属于本页。
  *
- * ⚠️ 字段全在 `[editor]` 表里，**只有一个例外**：`content_width`——它是
- * 2026-09-22 就在顶层的，搬进表里会让老设置文件的值静默丢回默认。
+ * ⚠️ 字段全在 `[editor]` 表里，**只有两个例外、都在顶层**：`content_width`
+ * （2026-09-22 就在那儿，搬进表里会让老设置文件的值静默丢回默认）与
+ * `limit_text_width`（2026-10-09 加的那颗开关——它与 `content_width` 是**一对**，
+ * 拆成"一个顶层一个表里"只会让人以为它们不是一件事）。
  */
 
 import type { LineEnding } from "@/bridge/ipc";
@@ -47,16 +52,26 @@ export function EditorPane({ settings, onChange }: PaneProps) {
   return (
     <>
       <SettingsGroup title={t("Text width")}>
-        <SettingRow>
-          <Range
-            value={settings.content_width}
-            min={480}
-            max={1200}
-            step={20}
-            suffix="px"
-            onChange={(content_width) => onChange({ content_width })}
+        <SettingRow label={t("Limit text width")}>
+          <Toggle
+            checked={settings.limit_text_width}
+            onChange={(limit_text_width) => onChange({ limit_text_width })}
           />
         </SettingRow>
+        {/* ⚠️ 关着时**不画滑杆**（不是画成灰的）：那一位的值这时候不生效，
+            画出来就得解释"为什么拖了没反应"。 */}
+        {settings.limit_text_width && (
+          <SettingRow>
+            <Range
+              value={settings.content_width}
+              min={480}
+              max={1200}
+              step={20}
+              suffix="px"
+              onChange={(content_width) => onChange({ content_width })}
+            />
+          </SettingRow>
+        )}
       </SettingsGroup>
 
       <SettingsGroup title={t("Default indent")}>

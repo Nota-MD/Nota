@@ -44,7 +44,12 @@
 //! 所以宁可在结构上留一点不一致，也不动它们。界面照旧把这两条画在 Markdown
 //! 那一页里，用户看不出区别。
 //!
-//! ⚠️ 新字段一律进 `[页名]` 表。落到用户机器上的形状是：
+//! ⚠️ 新字段一律进 `[页名]` 表。**只有两个例外**，都在顶层：
+//! `content_width`（2026-09-22 就在那儿）与它旁边那个 2026-10-09 新加的
+//! `limit_text_width`——⚠️ 后者是**新字段却故意留在顶层**的：它与
+//! `content_width` 是**一对**（开关 ＋ 上限），拆成"一个在顶层、一个在
+//! `[editor]` 里"只会让下一个读代码的人以为它们不是一件事。
+//! 落到用户机器上的形状是：
 //!
 //! ```toml
 //! ui_style = "macos"        # ← 老字段，留在顶层
@@ -151,8 +156,20 @@ pub struct Settings {
     pub document_theme: String,
     /// 界面字号（px）。文档字号是文档主题的事，不在这里。
     pub ui_font_size: u32,
-    /// 内容区宽度上限（px）。
+    /// 内容区宽度上限（px）。⚠️ **只有 [`Self::limit_text_width`] 开着时才生效**。
     pub content_width: u32,
+    /// **限制正文宽度**。默认**关**＝正文列铺满编辑区。
+    ///
+    /// ⚠️ 这一格是 2026-10-09 为一条用户报的观感加的（原话：「这个文字没有完全
+    /// 铺满屏幕。右侧还是有空隙。不应该有。应该两边边距一样。」）：在那之前
+    /// `content_width` 一直生效，而正文列是**贴左**的（用户 2026-09-25 明确要的
+    /// 「不是左对齐呒」），于是窗口一宽，右边就剩一条几十到几百像素的空档
+    /// ——左、右两边的留白一个 56px、一个几百 px，看着像坏了。
+    ///
+    /// ⚠️ **做成独立开关、而**不是**去改 `content_width` 的默认值**：老设置文件里
+    /// 躺着 `content_width = 760`（从前就是默认值），改默认值对它一点用都没有；
+    /// 而"关掉这个开关"是一条**不用碰用户文件**就能生效的路。
+    pub limit_text_width: bool,
     /// 关闭窗口时若有未保存改动，是否询问。
     pub confirm_unsaved: bool,
     /// 自动保存间隔（秒）。0 表示关闭自动保存。
@@ -244,6 +261,10 @@ impl Default for Settings {
             document_theme: String::new(),
             ui_font_size: 15,
             content_width: 760,
+            // ⚠️ **默认关**：关着时 `content_width` 不生效，正文列铺满编辑区
+            //（见字段上那段）。这一格是 2026-10-09 新加的，所以老设置文件里
+            // 那个 `content_width = 760` 不会把宽窗口右边留成一条空档。
+            limit_text_width: false,
             confirm_unsaved: true,
             autosave_seconds: 0,
             // ⚠️ 宽松是**默认**：`#标题` 是文档里最常见的写法，
@@ -399,6 +420,9 @@ mod tests {
         assert!(!back.enable_physics);
         assert_eq!(back.ui_mode, UiMode::Dark);
         assert_eq!(back.content_width, 760);
+        // ⚠️ 2026-10-09 新加的那一格：默认**关**（＝正文列铺满编辑区）。
+        // 老设置文件里没有它的时候也必须是 `false`（`#[serde(default)]`）。
+        assert!(!back.limit_text_width);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -536,6 +560,11 @@ enable_physics = true
         assert_eq!(s.document_theme, "night");
         assert_eq!(s.ui_font_size, 17);
         assert_eq!(s.content_width, 900);
+        assert!(
+            !s.limit_text_width,
+            "老文件里那个 900 是**旧默认生效时代**留下的值；新加的开关必须默认关，\
+             否则宽窗口右边那条空档照旧（用户 2026-10-09 报的就是它）"
+        );
         assert!(!s.confirm_unsaved);
         assert_eq!(s.autosave_seconds, 60);
         assert!(s.strict_markdown, "严格模式被静默关了就是这条要挡的事");

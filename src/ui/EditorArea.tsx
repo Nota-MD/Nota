@@ -256,7 +256,11 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           markdown={settings?.markdown}
           focusMode={focusMode}
           typewriter={typewriter}
+          // 正文列宽那一对（第 107 项，2026-10-09）：
+          // ⚠️ **开关默认 `false`**——不写这个变量时 `editor.css` 落到
+          // `max-width: none`，正文列铺满编辑区（两侧各 56px 装订线）。
           contentWidth={settings?.content_width ?? 760}
+          limitTextWidth={settings?.limit_text_width ?? false}
           // 正文排版那四项（行距 / 段距 / 字体 / 字号，文档主题那一页）。
           // ⚠️ 整份给，不挑字段（同 `markdown` 那一格的判据）：它在
           // `EditorPane` 里要被一起算成 CSS 变量、写在同一处。

@@ -1622,44 +1622,49 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 ## 14. 四个活样例（按行号）
 
 > ⚠️ 行号会随文件改动漂移。对不上时**按函数名找**。
+> ⚠️⚠️ **2026-10-09：源码在插件仓库 `Nota-plugins` 里**（与主仓库同级，见
+> §1 与 `docs/11` §1.1），本仓库的 `plugins/` 底下已经没有它了。
+> **下面这张表的行号是那天在那边现数的**——上一版对应的是 2026-09-29 拆 `diff.lua`
+> **之前**的文件，整片偏了两百来行（这张表一直没人重数过）。
 
-### 14.1 `plugins/git/main.lua`（999 行）—— "一个插件到底怎么写"
+### 14.1 `Nota-plugins/plugins/git/main.lua`（799 行 ＋ `diff.lua` 270 行）—— "一个插件到底怎么写"
 
-> ⚠️ 2026-09-26 这一份长得很快：加了提交树、`git init`、Git 身份。
-> 行数已经贴着 1000 那条线（`docs/07` 记着这笔账），
-> 所以**切文本的活儿都搬去了宿主**（§7.4 那张表）——见下面 `parse_status` 那几行。
+> ⚠️ 2026-09-26 这一份长得很快（提交树 / `git init` / Git 身份），2026-09-29 按
+> 行数规矩把**差异预览那一整块**搬去了同目录的 `diff.lua`（`docs/12` §5.9）。
+> 所以下表里带 `diff.lua` 的那几行，行号是**那个文件**的。
 
 | 行 | 内容 | 值得学的地方 |
 |---|---|---|
-| `59-73` | `STATES` 那张表 | **四种 `state` → 一句人话 ＋ 一种语气，判据只有这一处**。从前 `describe` 和 `tone_of` 各写一套 `if`，改一处忘一处就会出现"列表里写着已暂存、颜色却是警示色" |
-| `65-67` | `label` **同时是数据** | `refresh` 把它塞进 `e.describe` 广播给别的插件——翻译它 = 别的插件读到的也是译文，这是**有意的**（一个界面只该有一种语言） |
-| `75-89` | `describe(entry)` / `count_untracked(entries)` | ⚠️ 这两个都只查那张表，不自己判状态 |
-| `97-127` | `refresh(nota, silent)` | **`silent` 参数**：`on_load` 时用户还没开文件夹，"不是 git 仓库"是理所当然的，**不该弹警告** |
-| `99` | 用 `r.code ~= 0` 判失败 | §7.4 那个注意点——`status()` 的表里**没有 `ok`** |
-| `104` | `nota.ui.notify("这里不是 git 仓库：" .. r.stderr, "warn")` | 把 git 的原始报错**接着自己的话**给出去 |
-| `111` | `nota.git.parse_status(r.raw)` | ⚠️ **原来是 40 行手写的切分，2026-09-26 搬去宿主机**（§7.4） |
-| `120` | `nota.event.emit("git:status", parsed)` | ⚠️ 通道真名是 `plugin:nota-git:git:status`；⚠️ 今天**后端没人听**（§4.2） |
-| `126` | `nota.ui.refresh()` | 推给**界面**的那一句。与上一行是两件事：`event` 给插件、`refresh` 给界面 |
-| `217-236` | `run_diff(nota, argv)` | 跑一次 git 拿差异文本，`r.ok`（`run` 的表有这个键） |
-| `258-357` | `diff_blocks(nota, text, cmd, untracked)` | 五种 `op` 分档上色；⚠️ 未跟踪的文件数在这里单独说一句，否则"有个新文件、差异里找不到"像个 bug |
-| `360-377` | `diff_section(nota, …)` | ⚠️ **必须写在 `diff_blocks` 之后**：那是 `local function`，写在前面的话调用会被编译成**全局**查找——加载照样成功，一画差异就报 `attempt to call a nil value` |
-| `380` | `MAX_GRAPH = 60` | 树最多画 60 行；上限**另在宿主那边也夹一次**（`log_graph` 的 `n` 夹在 1–200） |
-| `387-412` | `row_text` / `is_picked` / `bond_action` | 树上一行**右边**那串字（短哈希 ＋ 分支标签 ＋ 标题）与**左边**那颗键。⚠️ 根提交（`parent == ""`）**也有键**，只是通向"空树"（`git show`） |
-| `419-465` | `graph_blocks(nota)` | ⚠️ 只做两件事：这一行该说哪句话、点了跑哪条命令。**图线怎么切、连接线行怎么认全是宿主的事**（§7.4） |
-| `425` | `rev-parse --verify -q HEAD` 判"还没有第一次提交" | **不认 git 那句英文**——那句话会随版本和语言变，认它等于把一句译文当协议 |
-| `484-491` | `set_compared(nota, a, b)` | ⚠️ **方向理正**：用 `merge-base --is-ancestor` 把早的排在前面，否则「红 = 删」有一半是假的（§7.4） |
-| `524-538` | `not_repo_blocks()` | **右栏和编辑区共用一份**（各写一遍的话，加一颗按钮就得记得加两处）。里面那颗「初始化仓库」就是"全在界面里做完"的第一步 |
-| `545-547` | `has_identity(nota)` | 判据是 `git var GIT_AUTHOR_IDENT` 的**退出码**，不是去认那句**本地化**的报错 |
-| `559-580` | `review_blocks(nota)` | 编辑区那一份：**只画差异**（用户 2026-09-25 要的"在编辑区直接预览"）；点了树上的键时摊开的是**那一对**，不是工作区那份 |
-| `583-731` | `panel_content(nota)` | 每次读都现跑。⚠️ 三块"要人动手"的地方各自给一条出路：不是仓库 →「初始化仓库」；身份没配 →「填身份…」；有改动 →「提交…」 |
-| `619-649` | 身份那一截 ＋ 两个字段的 `prompt` | 不能等提交失败才说（那时用户已经在想"这功能是不是坏的"）。两个字段的写法见 §8.5 |
-| `733-764` | `M.commit(nota, message)` | 先 `add -A` 再 `commit -m`；⚠️ 身份闸在 `add` **之后**（`add` 都不成功说明这儿根本不是仓库，那时说"先填身份"是答非所问）；⚠️ `"nothing to commit"` 单独识别成"没有改动需要提交"，**不是错误** |
-| `790-800` | `init_repo` 命令 | `nota.git.run({ "init" })`——⚠️ **分支名不写死**（`git init` 自己会听 `init.defaultBranch`，那是用户的配置） |
-| `808-826` | `set_identity` 命令 | 两个都要填；`git config` **不带 `--global`**（写进这个仓库的 `.git/config`，不碰 `~/.gitconfig`）——全局配置是用户机器上的公共资源，一个编辑器插件替他改不合适 |
-| `935-960` | 两次 `register_panel` | `id = "git"`（`location = "right"`）与 `id = "review"`（`location = "main"`）。⚠️ `location` 写的是**这一块属于哪儿**，不是"现在就摊开"——摊开是 `review_diff` 命令干的。⚠️ `"right"` 是默认值，写出来只为可读：它原先写 `"sidebar"`，那一页搬走后就成了 BUG-14（面板哪儿都不出现） |
-| `962-980` | 两次 `register_menu` | ⚠️ 两个菜单项分别指向**已经注册过的**命令 `commit` / `refresh`；「提交…」带 `prompt`，**和面板上那颗按钮是同一份** |
-| **`989-992`** | **`pcall(refresh, nota, true)` + `nota.log.warn`** | **全文件最值得套用的一段**：`on_load` 末尾的调用一定要兜底，否则"环境不具备"会变成"插件加载失败"（§7.3）。⚠️ 也正因为 `refresh` 会走到 `notify`，而 `on_load` 时前端还没起来——见 §8.1 那条推/拉的提醒 |
-| `995-999` | 空的 `on_unload` | 没有要落盘的状态——**空着是正确做法**，不需要刻意补内容 |
+| **`59-61`** | **三个显示状态：`show_graph` / `picked` / `compared`** | ⚠️⚠️ **全文件最该先读的一段**（2026-10-09）。这四个声明（含 `diff.lua` 那个 `show_diff`）一度挤在同一个块里，拆文件时被**整块**删掉了：没声明的名字**不是语法错误**、只是一次全局赋值，而一个插件一个 Lua 状态，名字撞不到别人——于是它**撑了十天**，直到用户点开提交树时 `#nil` 当场抛 `attempt to get length of a nil value (global 'picked')`。判据：`Nota-plugins/tools/git-panel-test.lua` ＋ `tools/undeclared-globals.lua` |
+| `80-85` | `STATES` 那张表 | **四种 `state` → 一句人话 ＋ 一种语气，判据只有这一处**。从前 `describe` 和 `tone_of` 各写一套 `if`，改一处忘一处就会出现"列表里写着已暂存、颜色却是警示色" |
+| `82-84` | `label` **同时是数据** | `refresh` 把它塞进 `e.describe` 广播给别的插件——翻译它 = 别的插件读到的也是译文，这是**有意的**（一个界面只该有一种语言） |
+| `87-101` | `describe(entry)` / `count_untracked(entries)` | ⚠️ 这两个都只查那张表，不自己判状态 |
+| `109-139` | `refresh(nota, silent)` | **`silent` 参数**：`on_load` 时用户还没开文件夹，"不是 git 仓库"是理所当然的，**不该弹警告** |
+| `110` | 用 `r.code ~= 0` 判失败 | §7.4 那个注意点——`status()` 的表里**没有 `ok`** |
+| `116` | `nota.ui.notify("这里不是 git 仓库：" .. r.stderr, "warn")` | 把 git 的原始报错**接着自己的话**给出去 |
+| `126` | `nota.git.parse_status(r.raw)` | ⚠️ **原来是 40 行手写的切分，2026-09-26 搬去宿主机**（§7.4） |
+| `136` | `nota.event.emit("git:status", parsed)` | ⚠️ 通道真名是 `plugin:nota-git:git:status`；⚠️ 今天**后端没人听**（§4.2） |
+| `139` | `nota.ui.refresh()` | 推给**界面**的那一句。与上一行是两件事：`event` 给插件、`refresh` 给界面 |
+| `102-123`（`diff.lua`） | `run_diff(nota, argv)` | 跑一次 git 拿差异文本，`r.ok`（`run` 的表有这个键） |
+| `143-241`（`diff.lua`） | `diff_blocks(nota, text, cmd, untracked)` | 五种 `op` 分档上色；⚠️ 未跟踪的文件数在这里单独说一句，否则"有个新文件、差异里找不到"像个 bug |
+| `242-255`（`diff.lua`） | `diff_section(nota, …)` | ⚠️ **必须写在 `diff_blocks` 之后**：那是 `local function`，写在前面的话调用会被编译成**全局**查找——加载照样成功，一画差异就报 `attempt to call a nil value` |
+| `175` | `MAX_GRAPH = 60` | 树最多画 60 行；上限**另在宿主那边也夹一次**（`log_graph` 的 `n` 夹在 1–200） |
+| `182-212` | `row_text` / `is_picked` / `bond_action` | 树上一行**右边**那串字（短哈希 ＋ 分支标签 ＋ 标题）与**左边**那颗键。⚠️ 根提交（`parent == ""`）**也有键**，只是通向"空树"（`git show`） |
+| `214-266` | `graph_blocks(nota)` | ⚠️ 只做两件事：这一行该说哪句话、点了跑哪条命令。**图线怎么切、连接线行怎么认全是宿主的事**（§7.4） |
+| `221` | `rev-parse --verify -q HEAD` 判"还没有第一次提交" | **不认 git 那句英文**——那句话会随版本和语言变，认它等于把一句译文当协议 |
+| `279-285` | `set_compared(nota, a, b)` | ⚠️ **方向理正**：用 `merge-base --is-ancestor` 把早的排在前面，否则「红 = 删」有一半是假的（§7.4） |
+| `319-338` | `not_repo_blocks()` | **右栏和编辑区共用一份**（各写一遍的话，加一颗按钮就得记得加两处）。里面那颗「初始化仓库」就是"全在界面里做完"的第一步 |
+| `340-352` | `has_identity(nota)` | 判据是 `git var GIT_AUTHOR_IDENT` 的**退出码**，不是去认那句**本地化**的报错 |
+| `354-376` | `review_blocks(nota)` | 编辑区那一份：**只画差异**（用户 2026-09-25 要的"在编辑区直接预览"）；点了树上的键时摊开的是**那一对**，不是工作区那份 |
+| `378-526` | `panel_content(nota)` | 每次读都现跑。⚠️ 三块"要人动手"的地方各自给一条出路：不是仓库 →「初始化仓库」；身份没配 →「填身份…」；有改动 →「提交…」 |
+| `417-460` | 身份那一截 ＋ 两个字段的 `prompt` | 不能等提交失败才说（那时用户已经在想"这功能是不是坏的"）。两个字段的写法见 §8.5 |
+| `528-559` | `M.commit(nota, message)` | 先 `add -A` 再 `commit -m`；⚠️ 身份闸在 `add` **之后**（`add` 都不成功说明这儿根本不是仓库，那时说"先填身份"是答非所问）；⚠️ `"nothing to commit"` 单独识别成"没有改动需要提交"，**不是错误** |
+| `590-606` | `init_repo` 命令 | `nota.git.run({ "init" })`——⚠️ **分支名不写死**（`git init` 自己会听 `init.defaultBranch`，那是用户的配置） |
+| `608-627` | `set_identity` 命令 | 两个都要填；`git config` **不带 `--global`**（写进这个仓库的 `.git/config`，不碰 `~/.gitconfig`）——全局配置是用户机器上的公共资源，一个编辑器插件替他改不合适 |
+| `735-760` | 两次 `register_panel` | `id = "git"`（`location = "right"`）与 `id = "review"`（`location = "main"`）。⚠️ `location` 写的是**这一块属于哪儿**，不是"现在就摊开"——摊开是 `review_diff` 命令干的。⚠️ `"right"` 是默认值，写出来只为可读：它原先写 `"sidebar"`，那一页搬走后就成了 BUG-14（面板哪儿都不出现） |
+| `762-787` | 两次 `register_menu` | ⚠️ 两个菜单项分别指向**已经注册过的**命令 `commit` / `refresh`；「提交…」带 `prompt`，**和面板上那颗按钮是同一份** |
+| **`789-792`** | **`pcall(refresh, nota, true)` + `nota.log.warn`** | **全文件最值得套用的一段**：`on_load` 末尾的调用一定要兜底，否则"环境不具备"会变成"插件加载失败"（§7.3）。⚠️ 也正因为 `refresh` 会走到 `notify`，而 `on_load` 时前端还没起来——见 §8.1 那条推/拉的提醒 |
+| `795-798` | 空的 `on_unload` | 没有要落盘的状态——**空着是正确做法**，不需要刻意补内容 |
 
 ### 14.2 `plugins/ai/`（`main.lua` 345 ＋ `chat.lua` 682 ＋ `panel.lua` 578 ＋ `request.lua` 353 ＋ `store.lua` 241 ＋ `util.lua` 184 ＋ `scope.lua` 175）—— "联网插件 ＋ 对话框怎么写"
 

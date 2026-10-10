@@ -1038,7 +1038,10 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 
 ⚠️ **老的那十个顶层字段里，九个一个都没挪**（`ui_style` / `ui_mode` / `document_theme` /
 `ui_font_size` / `content_width` / `confirm_unsaved` / `autosave_seconds` / `strict_markdown` /
-`enable_physics`；第十个 `view_mode` **2026-10-07 已退休**，那是另一件事——见 `docs/03` §5.2 末段）。搬进对应的表看起来更整齐，但**搬家会让老设置文件里的值静默丢回默认**：
+`enable_physics`；第十个 `view_mode` **2026-10-07 已退休**，那是另一件事——见 `docs/03` §5.2 末段）。
+📌 **2026-10-09 顶层多了一个新字段** `limit_text_width`（正文宽度那个开关，默认关）——
+⚠️ 它是**新加的、不是挪的**，所以老文件里没有它＝取 `false`：这正是当初不让
+`content_width` 那一格改默认值的原因（见 `docs/03` §5.1 那一行）。搬进对应的表看起来更整齐，但**搬家会让老设置文件里的值静默丢回默认**：
 用户开了 physics、升级之后公式全变成红字报错，而他的 `settings.toml` 一个字都没变。
 所以 `strict_markdown` 与 `enable_physics` 界面上画在 Markdown 那一页，字段却还在顶层
 （`mod.rs` 文件头写着这条取舍，`mod.rs` 的测试 `老设置文件里没有那七张表时全是默认值` 钉着它）。
@@ -1166,6 +1169,7 @@ pub struct Settings {
     pub document_theme: String,
     pub ui_font_size: u32,
     pub content_width: u32,
+    pub limit_text_width: bool,  // 正文宽度那个开关，默认 false（＝铺满）
     pub confirm_unsaved: bool,
     pub autosave_seconds: u32,
     pub strict_markdown: bool,   // 严格模式，默认 false
@@ -1180,7 +1184,8 @@ pub struct Settings {
 | `ui_mode` | `Auto` | 明暗轴 |
 | `document_theme` | `""` | 主题 **id**（不是显示名），对应 `themes/<id>.css`。⚠️ 存 id 不存名称：显示名是中文、随时可能改，改了不该让用户的设置失效。**空串表示"无主题"**，即 `editor.css` 那套中性样式 |
 | `ui_font_size` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
-| `content_width` | `760` | 内容区宽度上限（px） |
+| `content_width` | `760` | 内容区宽度上限（px）。⚠️ **只有 `limit_text_width` 开着时才生效** |
+| `limit_text_width` | `false` | **限制正文宽度**（2026-10-09 加）。默认**关**＝`content_width` 不生效、正文列铺满编辑区（左右各 56px 装订线）。理由见 `docs/03` §5.1 那一行 |
 | `confirm_unsaved` | `true` | 关窗口时若有未保存改动是否询问 |
 | `autosave_seconds` | `0` | 自动保存间隔（秒）。**0 表示关闭自动保存** |
 | `strict_markdown` | `false` | **严格模式**：按 CommonMark 严格要求 Markdown。今天只管一件事——ATX 标题的井号后面必须有空格。⚠️ 宽松时 `#标题` 只是"按标题显示"，正文与存盘的字节一个都不动 |
@@ -1225,7 +1230,7 @@ pub fn save_to(&self, path: &Path) -> Result<()>
 
 | 测试名 | 钉住什么 |
 |---|---|
-| `默认设置能往返序列化` | `save_to` → `load_from` 后 `ui_style`/`ui_mode` 保持，且**没显式设过的字段**（`content_width`）回到默认 760 |
+| `默认设置能往返序列化` | `save_to` → `load_from` 后 `ui_style`/`ui_mode` 保持，且**没显式设过的字段**（`content_width`）回到默认 760、`limit_text_width` 回到 `false` |
 | `文件不存在时回默认而不是报错` | `load_from` 对一个不存在的路径返回 `Ok`，`ui_style == Auto` |
 | `枚举落盘用_kebab_风格` | 序列化出来的文本里有 `ui_style = "macos"`（不是 `"Macos"`）。注释：**存法即接口** |
 | `physics_默认是关的且能往返` | 默认值是 `false`，置 `true` 后能落盘、能读回。⚠️ 盯的是默认值：开着的话 `\div` 会被换成散度算子，用户文档里既有公式的意思就变了 |
@@ -5172,6 +5177,7 @@ ProseMirror 那棵树也是 `contenteditable`，不放过的话编辑器里一�
                                  strict={settings?.strict_markdown ?? false}
                                  physics={settings?.enable_physics ?? false}
                                  contentWidth={settings?.content_width ?? 760}
+                                 limitTextWidth={settings?.limit_text_width ?? false}
                                  onToast={toast} onDocsChanged={refreshDocs} />
                    : <Home plugins onNew onOpen onOpenFolder />}
         {/* ⚠️ 2026-09-30 起**底部那一条画在这里**（标签栏 ＋ 状态栏）：
@@ -5259,7 +5265,7 @@ IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖�
 | `UiStyle` | `"auto" \| "adwaita" \| "ghub" \| "macos" \| "plasma" \| "windows" \| "yaru"` | `settings::UiStyle`（定义在 `settings/mod.rs`）。⚠️ **七个**，与 `ui/settings/panes/AppearancePane.tsx` 的 `STYLES` 表一一对应（那张表写成 `Record<UiStyle, …>`，所以加值时漏不掉） |
 | `UiMode` | `"auto" \| "light" \| "dark"` | `settings::UiMode` |
 | `ViewMode` | `"wysiwyg" \| "source" \| "split"` | **没有 Rust 对应物**（2026-10-07 起）：模式是**会话内状态、不落盘**，`settings::ViewMode` 已随"模式不再存盘"删掉，家（那条 `useState`）在 `ui/useFileKindMode.ts`。⚠️ **不是外观轴**，见 `docs/05` §3.1 |
-| `Settings` | `{ui_style, ui_mode, document_theme, ui_font_size, content_width, confirm_unsaved, autosave_seconds, strict_markdown, enable_physics, files, editor, image, markdown, export, appearance, general}` | `settings::Settings`。⚠️ **九个顶层老字段 + 七张分页表**（表名与 Rust 侧逐字相同；2026-10-07 前是十个，少的那个是退休的 `view_mode`）。⚠️ 这里写错一个字母**不会编译不过**，只会在运行时拿到 `undefined`，而它传回 Rust 会被 serde 当成"这一项没给"、落回默认值——症状是"改了一下，看着像没生效" |
+| `Settings` | `{ui_style, ui_mode, document_theme, ui_font_size, content_width, limit_text_width, confirm_unsaved, autosave_seconds, strict_markdown, enable_physics, files, editor, image, markdown, export, appearance, general}` | `settings::Settings`。⚠️ **九个顶层老字段 ＋ 一个新加的（`limit_text_width`，2026-10-09）＋ 七张分页表**（表名与 Rust 侧逐字相同；2026-10-07 前是十个，少的那个是退休的 `view_mode`）。⚠️ 这里写错一个字母**不会编译不过**，只会在运行时拿到 `undefined`，而它传回 Rust 会被 serde 当成"这一项没给"、落回默认值——症状是"改了一下，看着像没生效" |
 | `PluginInfo` | `{id, name, version, description, authors, license, capabilities, entry, dir, state: "loaded"\|"failed"\|"disabled", error: string\|null, origin: "builtin"\|"user", signature: "verified"\|"unknown"\|"unsigned"\|null, key_id: string\|null, removable: boolean, langs: string[], lang: string\|null, lang_ok: boolean}` | `plugin::PluginInfo`。⚠️ `signature` 的 `null` 有两种意思（**内置插件** / 早于这套机制的老记录），界面上都表现为「没标」；`removable` ＝ `origin == "user"`，前端据此决定给不给「卸载」那颗按钮。⚠️ `langs` / `lang` / `lang_ok` 是语言那三格（2026-09-25），判据见 `plugin/mod.rs` 那一节 |
 | `AppLang` | `{setting, effective, available: {tag, label}[]}` | `commands/settings.rs::AppLang`。⚠️ 三个字段各有各的用处：`setting` 是设置页那一格的**原值**（可能是 `auto`）、`effective` 是**启动时算好的**（界面判断全用它）、`available` **由宿主给**（前端不许自己列一份语言表） |
 | `PluginReview` | `{plugin, panel}` | `plugin::PluginReview`（`nota_plugin_review` 的返回）。⚠️ **不回标题**——标题前端手里就有（插件名与面板标题两张清单都在它那儿） |
@@ -7919,7 +7925,7 @@ export function installErrorHooks() {
 | | 自定义字号 / 缩放 / **Ctrl+滚轮（生不生效 ＋ 动哪一个数）** / 状态栏 / **菜单栏** / 字数统计 / 工具栏 / 深色独立主题 | `[appearance]` 表，逐项见 `settings/appearance.rs` 文件头与 `docs/03` §5.6b。⚠️ **工具栏那一项是三档下拉**（始终显示 / 鼠标悬停时显示 / 始终不显示），**默认始终不显示**；`show_status_bar` / `show_menu_bar` 与它都真的接上了（`ui/useChromeVisibility.ts`）。⚠️ **菜单栏那一格 2026-09-28 加**，默认**显示**（与工具栏相反，理由见 `docs/03` §5.6b 那一行），它比另外两条多一条"藏下去时发提示"的动作 |
 | **文档主题** | 当前主题（只读）、打开主题文件夹… | ⚠️ **换主题不在这里**，见下 |
 | **编辑器** | ~~编辑模式（下拉）~~ | **2026-10-07 删掉**：模式改成会话内状态、不落盘（用户原话「请设置默认启动为 WYSIWYG」），偏好设置里不再有这一格，切模式只走「视图」菜单那三条与下栏那颗 `</>`。⚠️ 设置页因此也没有"模式"这一格可读了——`EditorPane.tsx`（设置那一页）里的 `VIEW_MODES` 表随它一起删 |
-| | 正文宽度（滑杆 480–1200px） | `content_width` |
+| | **限制正文宽度**（开关，默认关）＋ 开着时的滑杆 480–1200px | `limit_text_width` ＋ `content_width`。⚠️ 2026-10-09 改的两格：关着时滑杆**不画**（不是画成灰的——那时那个值不生效，画出来就得解释"为什么拖了没反应"） |
 | | 缩进 / **段首缩进** / 配对 / 换行符 / 拼写检查 / 打字机模式 | `[editor]` 表。⚠️ 换行符那两个选项的标签（`LF（\n）` / `CRLF（\r\n）`）2026-09-26 起是**键**——`LINE_ENDINGS` 那张表从模块级搬进了组件体。⚠️ **段首缩进那一组是两格**（开关 ＋ 宽度 1~8 字符），关着时宽度那格是灰的；⚠️ 它与上面「默认缩进」**不是一回事**（那条往文件里插空格、这条只改 `text-indent`），见 `docs/03` §5.6c |
 | **图像 / Markdown / 导出 / 通用** | 各自的分组与字段 | `[image]` / `[markdown]` / `[export]` / `[general]` 四张表 |
 | **快捷键** | 只读一览，按菜单分组 | — |

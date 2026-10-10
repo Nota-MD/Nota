@@ -265,6 +265,14 @@ export interface Settings {
   // 后端结构体里那份也已经删掉——老设置文件里残留的键由 serde 忽略。
   ui_font_size: number;
   content_width: number;
+  /**
+   * **限制正文宽度**。默认 `false` ＝ 正文列铺满编辑区（两侧各留 56px 装订线）。
+   *
+   * ⚠️ 只有开着时 `content_width` 才生效。默认关是 2026-10-09 按用户那条
+   * 「文字没有完全铺满屏幕……应该两边边距一样」定的——在那之前正文列一律
+   * 被 `content_width` 卡住、而且是贴左的，宽窗口里右边会剩一大条空档。
+   */
+  limit_text_width: boolean;
   confirm_unsaved: boolean;
   autosave_seconds: number;
   /**

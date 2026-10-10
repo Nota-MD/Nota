@@ -33,7 +33,9 @@ use std::time::Duration;
 use serde::Serialize;
 
 use crate::error::{NotaError, Result};
-use crate::proc::{command_or_default, run_capture, split_command, Ran, RunOpts};
+// ⚠️ `split_command` 2026-10-10 起归 `pandoc_probe::解析` 用（命令名怎么落成一条
+// 能跑的命令，那一处是唯一的出口）——这一半不再直接分词。
+use crate::proc::{command_or_default, run_capture, Ran, RunOpts};
 
 // ⚠️ 七种格式的词汇表搬去了 `pandoc_format.rs`（那边有为什么拆的说明）。
 // **在这里接回原名**：`crate::pandoc::Format` 这类写法（`commands/pandoc.rs`、
@@ -44,13 +46,18 @@ pub(crate) use crate::pandoc_format::Format;
 // **在这里接回原名**：`crate::pandoc::{ProbeState, probe, find_engine}` 这类写法
 //（`commands/pandoc.rs` 走的就是它们）一个字都不用改。
 pub(crate) use super::pandoc_probe::{find_engine, probe, tail_of, PandocProbe, DETAIL_COL};
+// ⚠️ `解析` 是**探测与导出共用的那一处**（"到底跑哪一份 pandoc"）：两边各判一次
+// 的症状是"面板上说找到了、真导出又报没找到"。2026-10-10 加的。
+pub(crate) use super::pandoc_probe::解析;
 
 // ⚠️ 下面这几样**只有本文件的用例在用**：`mod tests` 里那句 `use super::*;`
 // 靠这些转出才看得见它们（`探测` / `找引擎` 两组用例仍留在这里——它们虽然测的是
 // 那边的东西，用的却是本文件造的假 `pandoc`，两半分家不如让它们留在原地）。
 // 加 `cfg(test)` 是免得 `cargo check`（不带 `--tests`）报一串"没用过的 import"。
 #[cfg(test)]
-pub(crate) use super::pandoc_probe::{find_in_path, probe_with, ENGINES, ProbeState};
+pub(crate) use super::pandoc_probe::{
+    find_in_path, probe_with, 宿主垫片, 在_path里, 可执行文件, 候选目录, ENGINES, ProbeState,
+};
 #[cfg(test)]
 use std::ffi::OsString;
 #[cfg(test)]
@@ -199,14 +206,20 @@ fn export_with(
     doc_dir: Option<&Path>,
     engine: Option<&str>,
 ) -> Result<String> {
-    let Some((program, args)) = split_command(command) else {
+    // ⚠️ 与探测**同一条**判断（`pandoc_probe::解析`）：PATH 里没有时它可能落到
+    // 绝对路径上，并捎回一组要给子进程补的环境（容器里跑宿主那一份的情形）。
+    let Some(落) = 解析(command) else {
         return Err(NotaError::other(format!("{ENV_CMD} 是空的，没有命令可跑")));
     };
-    let args = build_args(&args, format, target, doc_dir, engine);
+    let program = 落.program;
+    let args = build_args(&落.args, format, target, doc_dir, engine);
 
     let mut opts = RunOpts::timeout(EXPORT_TIMEOUT)
         .stdin(markdown.to_string())
         .env("NO_COLOR", "1");
+    for (k, v) in &落.env {
+        opts = opts.env(k, v);
+    }
     // ⚠️ 语言环境不是 UTF-8 时要补一个，否则**中文名的图片会被静默丢掉**
     //（理由见 `补语言环境` 那段）。
     if let Some((k, v)) = 补语言环境() {
@@ -608,5 +621,85 @@ mod tests {
         .unwrap_err();
         assert!(err.to_string().contains("没找到"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── 「到底跑哪一份 pandoc」（2026-10-10 加）────────────────────────────
+
+    #[test]
+    fn 解析_写死的路径与_path_里的名字都一个字不改() {
+        // ① 用户自己写了路径：`解析` 不许替他换成别的（他知道东西在哪）。
+        let 写死 = 解析("/opt/pandoc/bin/pandoc").expect("命令不是空的");
+        assert_eq!(写死.program, "/opt/pandoc/bin/pandoc");
+        assert!(写死.env.is_empty(), "普通路径不该给任何环境垫片");
+
+        // ② PATH 里就有：**交出去的还是那个名字本身**，不是绝对路径。
+        //    ⚠️ 这一条是"正常机器上行为与从前完全一样"的判据——落成绝对路径
+        //    之后报错里会出现一条用户没写过的路径，那是不必要的惊吓。
+        #[cfg(unix)]
+        {
+            let 在path = 解析("sh").expect("命令不是空的");
+            assert_eq!(在path.program, "sh");
+            assert_eq!(在path.来源, "PATH");
+        }
+    }
+
+    #[test]
+    fn 解析_空命令给_none_找不到的原样交回去() {
+        assert!(解析("   ").is_none(), "空命令该给 None");
+
+        // ③ 哪儿都没有：**原样交回去**（让 spawn 报它自己那句 No such file），
+        //    而不是我们替它编一句——那句话比任何转述都准。
+        let 没有 = 解析("nota-绝对没有这个命令").expect("命令不是空的");
+        assert_eq!(没有.program, "nota-绝对没有这个命令");
+        assert!(没有.env.is_empty());
+    }
+
+    #[test]
+    fn 解析_参数跟着命令一起搬过去() {
+        // `NOTA_PANDOC_CMD="/没有这个/pandoc --sandbox"`：参数一个不能丢。
+        let 落 = 解析("/没有这个/pandoc --sandbox").expect("命令不是空的");
+        assert_eq!(落.args, vec!["--sandbox".to_string()]);
+    }
+
+    #[test]
+    fn 宿主垫片里永远有_path_那条() {
+        // ⚠️ `PATH` 那一条**不看环境给不给**：找到了宿主那份 pandoc 之后，它自己
+        // 还得去找宿主的排版引擎（`--pdf-engine=xelatex` 那一路）。
+        let 垫 = 宿主垫片();
+        let path = 垫.iter().find(|(k, _)| k == "PATH").expect("必须有 PATH");
+        assert!(path.1.contains("/run/host/usr/bin"), "{}", path.1);
+    }
+
+    #[test]
+    fn 只有真挂着宿主根时才列宿主那几个目录() {
+        // ⚠️ 这条盯的是"候选目录不许无条件假设 `/run/host` 在"：普通机器上多了
+        // 两条永远落空的规则不算错，但那说明写的人以为大家都在容器里跑。
+        let 有 = 候选目录()
+            .iter()
+            .any(|c| c.dir.starts_with("/run/host"));
+        let 该有 = Path::new("/run/host/usr/bin").is_dir()
+            || Path::new("/run/host/usr/local/bin").is_dir();
+        assert_eq!(有, 该有);
+    }
+
+    /// ⚠️ 这条**只在"容器里跑、宿主装了 pandoc、而容器自己没装"的机器上真跑**
+    /// （2026-10-10 用户那台机器正是这样，也是这一条改动的由来）。别的机器上
+    /// 它安静地让开——写成"无条件断言"就会在普通机器上红。
+    #[test]
+    fn 容器里能落到宿主那一份_pandoc_上() {
+        let 宿主 = Path::new("/run/host/usr/bin/pandoc");
+        if !可执行文件(宿主) || 在_path里("pandoc") {
+            return;
+        }
+        let 落 = 解析("pandoc").expect("命令不是空的");
+        assert_eq!(落.program, 宿主.display().to_string());
+        assert!(
+            落.env.iter().any(|(k, _)| k == "LD_LIBRARY_PATH"),
+            "宿主那份要补动态库路径（liblua5.4）"
+        );
+        assert!(
+            落.env.iter().any(|(k, _)| k == "pandoc_datadir"),
+            "宿主那份的数据目录是编进二进制的，得靠这个变量指过去"
+        );
     }
 }

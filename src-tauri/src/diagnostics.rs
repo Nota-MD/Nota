@@ -65,6 +65,13 @@ fn 发行版() -> String {
 ///
 /// 注意这是**链接进来的那个库**的版本，不是 `Cargo.lock` 里那个 crate 的版本——
 /// 两者一般对得上，但对不上恰恰是最该看见的情况。
+///
+/// ⚠️ **只有 Linux 编得进来**（2026-10-10）：`gtk` / `webkit2gtk` 两个 crate
+/// 在 `Cargo.toml` 里就挂在 `[target.'cfg(target_os = "linux")'.dependencies]`
+/// 底下——别的平台上这两个名字压根不存在，不加 `cfg` 就是编译期报错
+/// （"cannot find module or crate `gtk`"）。别的平台给空串，
+/// 同上面"采不到就是空串"那条口径。
+#[cfg(target_os = "linux")]
 fn gtk_运行时() -> String {
     format!(
         "{}.{}.{}",
@@ -74,11 +81,18 @@ fn gtk_运行时() -> String {
     )
 }
 
+/// 别的平台：没有 GTK 这一层（见上面那条注释）。
+#[cfg(not(target_os = "linux"))]
+fn gtk_运行时() -> String {
+    String::new()
+}
+
 /// WebKitGTK 的运行时版本。
 ///
 /// ⚠️ `webkit2gtk` 这个 crate 没有给 `major_version()` 这类封装（gtk 那个有），
 /// 只能走 `ffi`。是 `unsafe`，但这三个函数**没有参数、也不碰任何对象**，
 /// 就是返回编译进去的常量，所以这里不存在真正的内存安全风险。
+#[cfg(target_os = "linux")]
 fn webkit_运行时() -> String {
     // SAFETY：见上——三个 getter 都是无参、无副作用的常量返回。
     unsafe {
@@ -89,6 +103,12 @@ fn webkit_运行时() -> String {
             webkit2gtk::ffi::webkit_get_micro_version()
         )
     }
+}
+
+/// 别的平台：没有 WebKitGTK（见 `gtk_运行时` 那条注释）。
+#[cfg(not(target_os = "linux"))]
+fn webkit_运行时() -> String {
+    String::new()
 }
 
 /// 送给界面的那一份报告。
@@ -163,11 +183,23 @@ mod tests {
         // 这几条**一定**取得到：前两条是编译期常量、后两条来自链接进来的库。
         assert!(!报告.version.is_empty(), "包版本不该为空");
         assert!(!报告.target.is_empty(), "目标三元组不该为空");
+        // ⚠️ **后两条只在 Linux 上成立**（2026-10-10）：GTK / WebKitGTK 那两个
+        // crate 是 Linux 专属依赖，别的平台上这两格按"采不到就是空串"给空串。
+        #[cfg(target_os = "linux")]
+        {
         assert_ne!(报告.gtk_runtime, "0.0.0", "GTK 运行时版本不该是 0.0.0");
         assert_ne!(
             报告.webkit_runtime, "0.0.0",
             "WebKitGTK 运行时版本不该是 0.0.0"
         );
+        }
+        // 别的平台那两格是空的——**也钉一条**，免得哪天有人给它们塞一个假的
+        // "0.0.0" 进去（那是"问到了但是零"，与"没问到"不是一回事）。
+        #[cfg(not(target_os = "linux"))]
+        {
+            assert!(报告.gtk_runtime.is_empty());
+            assert!(报告.webkit_runtime.is_empty());
+        }
     }
 
     #[test]

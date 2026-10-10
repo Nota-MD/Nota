@@ -29,6 +29,9 @@ export const 运行表: Record<string, string> = {
   "Could not open a new window: {0}": "开不了新窗口：{0}",
   "Spell checking did not end up the way you asked; the engine stayed as it was": "拼写检查没有改成你要的样子，引擎那边还停在原处",
   "Could not change spell checking: {0}": "拼写检查没能改成功：{0}",
+  "Could not change the spell-check language: {0}": "拼写检查的语言没能改成功：{0}",
+  "This machine has no {0} dictionary, so nothing will be checked while that language is chosen. Nota ships no dictionaries of its own.":
+    "这台机器上没有 {0} 的词典，选了这个语言之后什么都不会检查。Nota 自己不随附任何词典，得由系统装。",
   "Could not tell what was dropped in: {0}": "拖进来的东西读不出来：{0}",
   "The dropped “{0}” is gone (moved or deleted?)": "拖进来的「{0}」已经不在了（被移走或删掉了？）",
   "{0} of the dropped items are gone (starting with “{1}”)": "拖进来的 {0} 个东西已经不在了（第一个是「{1}」）",

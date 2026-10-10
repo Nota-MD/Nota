@@ -184,12 +184,39 @@ pub fn 从链接取路径(链接: &str) -> Option<PathBuf> {
     if !取到.starts_with(b"/") {
         return None;
     }
-    // ⚠️ 这里**不要求 UTF-8**：Linux 上的路径可以不是（同 `single_instance.rs`
-    // 文件头那段）。`OsString::from_vec` 收原始字节，不经过字符串。
-    // ⚠️ 先落到 `OsString` 再进 `PathBuf`：`PathBuf: From<_>` 的实现有好几份
-    // （glib / rfd / tauri 都塞了 impl 进来），直接 `from(Vec<u8>)` 推不出来。
+    路径从字节(取到)
+}
+
+/// URL 上那串字节 → `PathBuf`。
+///
+/// ⚠️ **两个平台两条路**（2026-10-10 做 Windows 编译尝试时拆开的，
+/// 原来那一行 `std::os::unix::…` 在 Windows 上编不过）：
+///
+/// - **Unix**：路径**可以不合法 UTF-8**，所以 `OsString::from_vec` 收原始字节、
+///   一个字都不解码（同 `single_instance.rs` 文件头那段）；
+/// - **别的平台**（Windows 那套路径是 UTF-16）：字节串先解成 UTF-8 字符串，
+///   解不出来就当这条链接没指到东西（`None`）——**不做 lossy**，lossy 出来的是
+///   另一个路径，而症状是"点链接打开的是一份别的文件"。
+///
+/// ⚠️ 先落到 `OsString` 再进 `PathBuf`：`PathBuf: From<_>` 的实现有好几份
+/// （glib / rfd / tauri 都塞了 impl 进来），直接 `from(Vec<u8>)` 推不出来。
+#[cfg(unix)]
+fn 路径从字节(取到: Vec<u8>) -> Option<PathBuf> {
     let 串: std::ffi::OsString = std::os::unix::ffi::OsStringExt::from_vec(取到);
     Some(PathBuf::from(串))
+}
+
+#[cfg(not(unix))]
+fn 路径从字节(取到: Vec<u8>) -> Option<PathBuf> {
+    let 字 = String::from_utf8(取到).ok()?;
+    // ⚠️ 文件 URL 那种 `/C:/…` 写法：真正的 Windows 路径**没有开头那个斜杠**
+    // （`Path::new("/C:/x")` 不是一个盘符路径）。URL 那一侧的规范就是那样写的，
+    // 所以在这儿剥掉，而不是要求调用方换一种写法。
+    let 字 = match 字.as_bytes() {
+        [b'/', 盘, b':', ..] if 盘.is_ascii_alphabetic() => 字[1..].to_string(),
+        _ => 字,
+    };
+    Some(PathBuf::from(字))
 }
 
 /// `%XX` 解码。⚠️ 出错一律 `None`（**含"解出来不是合法 UTF-8"以外的一切**）：

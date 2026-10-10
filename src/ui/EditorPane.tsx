@@ -275,6 +275,24 @@ interface Props {
    */
   contentWidth: number;
   /**
+   * 拼写检查用的语言（`settings.editor.spellcheck_lang`，enchant 那套 `zh_CN`）。
+   *
+   * ⚠️ 它只写正文那一层 `contenteditable` 的 **`lang` 属性**——而**挑词典的不是
+   * 它**：这一版 Linux 上真正决定用哪本词典的是 WebKitGTK 那个
+   * `spell-checking-languages`（`ui/useSpellcheck.ts` ＋ `commands/webview.rs`，
+   * 2026-10-10 读 WebKit 源码确认）。`lang` 是**文档语言的正当声明**
+   * （断词、朗读、别的内核），顺手补上而己。
+   *
+   * ⚠️ 写的是**连字符**形式（`zh_CN` → `zh-CN`）：`lang` 那条 HTML 属性按
+   * BCP-47 认，下划线那是 enchant 的写法，两者不是一回事。
+   *
+   * ⚠️ 它**不进下面那个 effect 的依赖**：改它只是重渲染一次那个 `<div>`
+   * （同 `contentWidth`），**不重建编辑器**——重建会丢撤销栈和光标。
+   *
+   * `undefined` = 设置还没读回来（那时不写这个属性）。
+   */
+  拼写语言?: string;
+  /**
    * **限制正文宽度**（`settings.limit_text_width`，2026-10-09）。默认 `false`。
    *
    * ⚠️ 关着时**不写 `--content-width`**，`editor.css` 那条 `max-width` 落到
@@ -370,6 +388,7 @@ export function EditorPane({
   onScroll,
   contentWidth,
   limitTextWidth,
+  拼写语言,
   文档排版,
   onCommandState,
   onFindStatus,
@@ -804,6 +823,10 @@ export function EditorPane({
         // ⚠️ **只有开了「限制正文宽度」才写这个变量**（2026-10-09）。不写的时候
         // `editor.css` 那条 `max-width: var(--content-width, none)` 落到 `none`，
         // 正文列就铺满编辑区——用户报的"右边还有空隙"就是它。
+        // ⚠️ `lang` 是**文档语言**（2026-10-10）。它写的是**连字符**形式：
+        // `spellcheck_lang` 里那个下划线是 enchant 的写法，`lang` 那条 HTML 属性
+        // 按 BCP-47 认（`zh-CN`）；两者的分工见 `Props` 上那一格。
+        lang={拼写语言 ? 拼写语言.replace(/_/g, "-") : undefined}
         style={
           limitTextWidth ? { ["--content-width" as string]: `${contentWidth}px` } : undefined
         }

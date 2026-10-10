@@ -123,6 +123,19 @@ const 摘掉的属性 = [
   "contenteditable",
   "spellcheck",
   "translate",
+  // ── 2026-10-10 补的三条（**本仓自己的记号**，别的工具不认识）────────────
+  //
+  // 它们挂在公式 / 图表 / 裸 HTML 那几种**节点视图**的外壳上，值是源码或状态
+  //（`data-value="\frac{1}{2}"`、`data-state="loading"`…）。留着的症状：导出的
+  // HTML 里那些 `<span>` / `<div>` 各带着一串自家属性，Pandoc 转 markdown 时
+  // 会原样写成 `[..]{data-type="math_inline" data-value="…"}`。
+  //
+  // ⚠️ **只列名，别写成"凡是 `data-` 开头的都摘"**：正文里可以有用户自己写的
+  // 裸 HTML（`html-block.ts` 那一路原样进导出），他写 `<div data-x="1">` 是他的
+  // 内容，不是我们的零件。摘掉的只能是这张名单上这几个**我们自己造的名字**。
+  "data-state",
+  "data-type",
+  "data-value",
 ];
 
 /**
@@ -291,6 +304,20 @@ async function 摘正文(markdown: string): Promise<string> {
       for (const n of pm.querySelectorAll('[data-type="html-block"]')) {
         if (是目录标记(n.getAttribute("data-value") ?? "")) n.remove();
       }
+
+      // ── 空段落里那颗占位 `<br>`（`ProseMirror-trailingBreak`，2026-10-10）──
+      //
+      // ⚠️ 它是 ProseMirror 塞给空文本块的**交互占位**（没有它，文档最后那个
+      // 空段落点不进去）。屏幕上它不可见，可**进了 HTML 就是一颗真 `<br>`**：
+      // Pandoc 拿它当一次换行，于是导出的 LaTeX 末尾多出一句 `\hfill\break`。
+      // 实测（2026-10-10，用真应用写出来的 `.nota-print.html`）：
+      //
+      //   `<p>a</p><p><br class="ProseMirror-trailingBreak"></p>` → `a` ＋ `\hfill\break`
+      //   `<p>a</p><p></p>`（那颗 br 拿掉之后）                  → 只有 `a`
+      //
+      // ⚠️ 只删这一类：`<br>` 本身是**正当内容**（Shift+Enter 换行就是它），
+      // 删整族会连用户的换行一起吃掉。
+      for (const br of pm.querySelectorAll("br.ProseMirror-trailingBreak")) br.remove();
 
       for (const n of [pm, ...pm.querySelectorAll("*")]) {
         const 留着 = [...n.classList].filter((c) => !nota类前缀.test(c));

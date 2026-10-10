@@ -66,6 +66,232 @@ pub(crate) const ENGINES: &[&str] = &[
     "pdfroff",
 ];
 
+// ── 「到底跑哪一份 pandoc」────────────────────────────────────────────────
+
+/// 一条**现在真能跑**的 pandoc：程序、要补的环境、以及这条是怎么找到的。
+///
+/// ⚠️ 探测与导出**必须用同一个答案**（`解析` 就是那个唯一的入口）：两边各判一次
+/// 的症状是"面板上说找到了，真导出又报没找到"——那种自相矛盾最难查。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct 落点 {
+    /// 交给 `Command::new` 的那个字符串。PATH 里找得到时**就是命令名本身**
+    /// （一个字都不改，正常机器上行为与从前完全一样）；找不到时才是绝对路径。
+    pub program: String,
+    /// 用户那串命令里的额外参数（`NOTA_PANDOC_CMD="pandoc --sandbox"` 那种）。
+    pub args: Vec<String>,
+    /// 要替这个子进程补的环境变量。普通机器上**永远是空的**。
+    pub env: Vec<(String, String)>,
+    /// 人话：这条是从哪儿找到的（`PATH` / `~/.local/bin` / 宿主挂进来的 `/run/host`）。
+    pub 来源: String,
+}
+
+/// 从设置里那串命令解析出一条**现在真能跑**的 pandoc。
+///
+/// 返回 `None` = 命令串本身是空的（用户把 `NOTA_PANDOC_CMD` 设成了空白）。
+///
+/// # 为什么要"找"，而不是照着命令名直接起进程（2026-10-10）
+///
+/// `Command::new("pandoc")` 只认**这个进程自己的 PATH**。而 PATH 在两种很常见的
+/// 机器上**指不到用户以为的那个地方**，症状都是"明明装了却报没装"：
+///
+/// 1. **macOS 上从 Dock / Finder 起 GUI**：GUI 进程的 PATH 是 launchd 那一份，
+///    `/opt/homebrew/bin` 根本不在里面（用户开个终端 `which pandoc` 却有）；
+/// 2. **在开发容器里跑**：宿主装的那份挂在 `/run/host` 底下——2026-10-10 这台机器
+///    正是这一种（宿主 `/usr/bin/pandoc` 是 3.11，`tauri-dev` 里一个都没有）。
+///
+/// ⚠️ 两种都不是"用户没装"，所以回一句"去装 pandoc"是**指错方向**。
+///
+/// # 顺序（前面的赢）
+///
+/// ① 命令里**写死了路径** → 一个字不改（用户自己知道在哪，找不到就该看见真报错）；
+/// ② `PATH` 里就有 → 也一个字不改（绝大多数机器走这条，**行为与从前完全一致**）；
+/// ③ PATH 没有 → 去 [`候选目录`] 那几个知名位置找，头一个能执行的赢；
+/// ④ 还是没有 → 把原来那条命令**原样**交出去，让 `spawn` 报它自己那句"没找到"
+///    （我们不替它编一句，那会把真实的 `No such file or directory` 盖掉）。
+pub(crate) fn 解析(command: &str) -> Option<落点> {
+    let (程序, args) = split_command(command)?;
+
+    // ① 写死了路径（`/opt/pandoc/bin/pandoc`、`./pandoc`、Windows 上 `C:\…`）。
+    if 程序.contains('/') || 程序.contains(std::path::MAIN_SEPARATOR) {
+        return Some(落点 {
+            program: 程序,
+            args,
+            env: Vec::new(),
+            来源: "命令里写死的路径".to_string(),
+        });
+    }
+
+    // ② PATH（正常机器）。
+    if 在_path里(&程序) {
+        return Some(落点 {
+            program: 程序,
+            args,
+            env: Vec::new(),
+            来源: "PATH".to_string(),
+        });
+    }
+
+    // ③ 几个知名位置。⚠️ 找到的是**绝对路径**，而且可能带一组环境垫片
+    //（`/run/host` 那一条要，见 [`宿主垫片`]）。
+    for 候选 in 候选目录() {
+        let 全 = 候选.dir.join(&程序);
+        if 可执行文件(&全) {
+            return Some(落点 {
+                program: 全.display().to_string(),
+                args,
+                env: 候选.env,
+                来源: 候选.来源,
+            });
+        }
+    }
+
+    // ④ 都没有：原样交出去。
+    Some(落点 {
+        program: 程序,
+        args,
+        env: Vec::new(),
+        来源: "PATH".to_string(),
+    })
+}
+
+/// `PATH` 里能不能找到这个名字。
+///
+/// ⚠️ `pub(crate)` 是给用例用的（"PATH 里有时一个字不改"那条要靠它判前提）。
+pub(crate) fn 在_path里(名字: &str) -> bool {
+    match std::env::var_os("PATH") {
+        Some(path) => find_in_path(&[名字], &path).is_some(),
+        None => false,
+    }
+}
+
+/// PATH 之外还去哪些目录找（**顺序即偏好**）。
+///
+/// ⚠️ 这一串**不是"猜"**：每一条都是某种真实安装方式的固定落点——brew
+///（`/opt/homebrew/bin` 与 `/usr/local/bin`）、`cargo install --root` 或用户自己
+/// 编的（`~/.local/bin`、`~/.cabal/bin`）、snap，以及 pandoc 官方那个 tarball
+///（解到哪儿都有可能，只能覆盖最常见的 `/opt/pandoc`）。
+pub(crate) fn 候选目录() -> Vec<候选> {
+    let mut 出 = Vec::new();
+    if let Some(家) = dirs::home_dir() {
+        出.push(候选::普通(家.join(".local/bin"), "~/.local/bin"));
+        出.push(候选::普通(家.join(".cabal/bin"), "~/.cabal/bin"));
+    }
+    出.push(候选::普通(PathBuf::from("/usr/local/bin"), "/usr/local/bin"));
+    出.push(候选::普通(PathBuf::from("/opt/homebrew/bin"), "/opt/homebrew/bin"));
+    出.push(候选::普通(PathBuf::from("/opt/pandoc"), "/opt/pandoc"));
+    出.push(候选::普通(PathBuf::from("/snap/bin"), "/snap/bin"));
+
+    // ⚠️ **容器里够得着宿主那一份**：distrobox / podman 把宿主根挂在 `/run/host`。
+    // 挂点不存在时这两条自然落空——普通机器上白判一次 `is_dir`，代价是零。
+    for 目录 in ["/run/host/usr/local/bin", "/run/host/usr/bin"] {
+        let dir = PathBuf::from(目录);
+        if dir.is_dir() {
+            出.push(候选 {
+                dir,
+                来源: format!("宿主挂进来的 {目录}"),
+                env: 宿主垫片(),
+            });
+        }
+    }
+    出
+}
+
+/// [`候选目录`] 里的一条。
+pub(crate) struct 候选 {
+    /// 目录本身。
+    pub(crate) dir: PathBuf,
+    /// 人话的来源（面板/日志上用的那一句）。
+    pub(crate) 来源: String,
+    /// 跑这个目录里的东西时要补的环境（见 [`宿主垫片`]）。
+    pub(crate) env: Vec<(String, String)>,
+}
+
+impl 候选 {
+    /// 一条普通目录：不补任何环境。
+    fn 普通(dir: PathBuf, 来源: &str) -> Self {
+        Self {
+            dir,
+            来源: 来源.to_string(),
+            env: Vec::new(),
+        }
+    }
+}
+
+/// 跑**宿主那一份**可执行文件时要补的环境。
+///
+/// 三样各有各的用处（2026-10-10 在 `tauri-dev` 里拿 `/run/host/usr/bin/pandoc`
+/// 一条条试出来的）：
+///
+/// | 补什么 | 不补的症状 |
+/// |---|---|
+/// | `LD_LIBRARY_PATH` = 宿主的库目录 | `error while loading shared libraries: liblua5.4.so.0`（容器里没这个库） |
+/// | `PATH` = 宿主的可执行目录 ＋ 原来的 PATH | pandoc 自己找不到宿主装的排版引擎（`--pdf-engine=xelatex` 那一路） |
+/// | `pandoc_datadir` = 宿主的 `/usr/share/pandoc` | `Could not find data file '/usr/share/pandoc/data/templates/default.openxml'`——宿主那份的**数据目录是编进二进制**的，容器里那个路径不存在 |
+///
+/// ⚠️ 最后那条**不认 `--data-dir`**（试过，还是报同一个错）：docx 那几个模板走的是
+/// "系统数据目录"那条硬路径，而 Cabal 生成的 `getDataDir` 认的正是 `pandoc_datadir`
+/// 这个环境变量。这一条是**实测**出来的，别照直觉改。
+pub(crate) fn 宿主垫片() -> Vec<(String, String)> {
+    let mut 出 = Vec::new();
+
+    let 库 = 宿主库目录();
+    if !库.is_empty() {
+        出.push(("LD_LIBRARY_PATH".to_string(), 库.join(":")));
+    }
+
+    let 路 = "/run/host/usr/local/bin:/run/host/usr/bin:/run/host/bin";
+    let 原 = std::env::var("PATH").unwrap_or_default();
+    出.push((
+        "PATH".to_string(),
+        if 原.is_empty() {
+            路.to_string()
+        } else {
+            format!("{路}:{原}")
+        },
+    ));
+
+    if Path::new("/run/host/usr/share/pandoc").is_dir() {
+        出.push((
+            "pandoc_datadir".to_string(),
+            "/run/host/usr/share/pandoc".to_string(),
+        ));
+    }
+    出
+}
+
+/// 宿主那份动态库在哪儿（`/run/host/lib/x86_64-linux-gnu` 这种）。
+///
+/// ⚠️ **不写死架构名**（`x86_64-linux-gnu` 与 `aarch64-linux-gnu` 都得认）：多架构
+/// 子目录按 `-linux-gnu` 这个尾巴去找，另外把 `lib64` 这种扁平目录也收上。
+fn 宿主库目录() -> Vec<String> {
+    let mut 出: Vec<String> = Vec::new();
+    for 父 in ["/run/host/usr/lib", "/run/host/lib"] {
+        let 父 = Path::new(父);
+        if !父.is_dir() {
+            continue;
+        }
+        出.push(父.display().to_string());
+        if let Ok(条目) = std::fs::read_dir(父) {
+            for 条 in 条目.flatten() {
+                let p = 条.path();
+                let 是多架构 = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().contains("-linux-gnu"))
+                    .unwrap_or(false);
+                if p.is_dir() && 是多架构 {
+                    出.push(p.display().to_string());
+                }
+            }
+        }
+    }
+    for 扁平 in ["/run/host/usr/lib64", "/run/host/lib64"] {
+        if Path::new(扁平).is_dir() {
+            出.push(扁平.to_string());
+        }
+    }
+    出
+}
+
 // ── 探测 ──────────────────────────────────────────────────────────────────
 
 /// 「装没装」的三种结论。⚠️ 这是**前后端之间的约定**：kebab-case 序列化，
@@ -129,19 +355,35 @@ pub(crate) fn probe_with(command: &str) -> PandocProbe {
         formats: 格式表(),
     };
 
-    let Some((program, mut args)) = split_command(command) else {
+    // ⚠️ 命令名交给 [`解析`] 去落成"现在真能跑的那一条"（PATH → 知名目录 →
+    // 容器里的宿主挂载）。**探测与导出共用这一个判断**，理由见那边的文件头。
+    let Some(落) = 解析(command) else {
         out.message = format!("{ENV_CMD} 是空的，没有命令可跑。");
         return out;
     };
+    // 面板上"命令"那一行说的是**真跑的那条**：外面找到的给绝对路径，
+    // PATH 里那条仍然就是命令名本身。
+    out.command = 落.program.clone();
+    let program = 落.program;
+    let mut args = 落.args;
     args.push(VERSION_FLAG.to_string());
 
     // ⚠️ `NO_COLOR`：有些工具会给输出加颜色，那些转义码进到面板里就是乱码。
-    let opts = RunOpts::timeout(CHECK_TIMEOUT).env("NO_COLOR", "1");
+    let mut opts = RunOpts::timeout(CHECK_TIMEOUT).env("NO_COLOR", "1");
+    for (k, v) in &落.env {
+        opts = opts.env(k, v);
+    }
     match run_capture(&program, &args, opts) {
         Ran::Done { ok: true, stdout, .. } => {
             out.state = ProbeState::Ready;
             out.version = first_line(&stdout);
             out.message = 装好了那句(&out);
+            // ⚠️ 不是 PATH 里那一条时**要说出来**（2026-10-10）：用户自己敲
+            // `which pandoc` 得到的答案与这里不一样，不说清楚就成了"两个事实"。
+            if 落.来源 != "PATH" {
+                out.message
+                    .push_str(&format!("（这一份不在 PATH 里，是从{}找到的。）", 落.来源));
+            }
         }
         Ran::Done {
             ok: false,
@@ -240,8 +482,29 @@ pub(crate) fn tail_of(text: &str) -> String {
 /// ⚠️ `pub(crate)` 是给命令层用的：导出成功后要告诉用户"这次排版引擎用的是谁"，
 /// 而那句话在 `commands/pandoc.rs` 里拼（它是给人看的措辞，不归这一层管）。
 pub(crate) fn find_engine() -> Option<String> {
-    let path = std::env::var_os("PATH")?;
-    find_in_path(ENGINES, &path)
+    if let Some(path) = std::env::var_os("PATH") {
+        if let Some(名) = find_in_path(ENGINES, &path) {
+            return Some(名);
+        }
+    }
+    // PATH 里没有（与 `解析` 的第 ③ 步同一种情形：macOS 上从 Dock 起 GUI、
+    // 在容器里跑……）：去那几个知名目录再找一遍。
+    //
+    // ⚠️ 返回的仍然是**名字**，不是绝对路径：它要作为 `--pdf-engine=名字` 交给
+    // pandoc，由 pandoc 在**它自己的** PATH 里去找。⚠️ 所以"引擎只在宿主那份里
+    // 有"时还得靠 `宿主垫片` 给 pandoc 补 PATH——两处是一件事的两半，别只改一边。
+    //
+    // ⚠️ 循环顺序是**引擎优先**（与 `find_in_path` 一致）：偏好顺序是
+    // `ENGINES` 那张表说了算，不是"哪个目录排在前面"。
+    let 目录: Vec<PathBuf> = 候选目录().into_iter().map(|c| c.dir).collect();
+    for name in ENGINES {
+        for dir in &目录 {
+            if 可执行文件(&dir.join(name)) {
+                return Some((*name).to_string());
+            }
+        }
+    }
+    None
 }
 
 /// `find_engine` 的本体：**PATH 从参数进来**，为的是能单测（造一个临时目录，
@@ -263,7 +526,7 @@ pub(crate) fn find_in_path(names: &[&str], path: &OsString) -> Option<String> {
 
 /// 这个路径上是不是一个**能执行**的文件。
 #[cfg(unix)]
-fn 可执行文件(path: &Path) -> bool {
+pub(crate) fn 可执行文件(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(path)
         .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
@@ -272,6 +535,6 @@ fn 可执行文件(path: &Path) -> bool {
 
 /// Windows：认 `.exe`（PATH 里的可执行文件都带后缀）。
 #[cfg(windows)]
-fn 可执行文件(path: &Path) -> bool {
+pub(crate) fn 可执行文件(path: &Path) -> bool {
     path.is_file() && path.extension().is_some_and(|e| e.eq_ignore_ascii_case("exe"))
 }

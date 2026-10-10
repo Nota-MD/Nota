@@ -62,7 +62,11 @@
 pub mod host;
 pub mod tools;
 
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, Write};
+// ⚠️ 这两个只有 Unix 那条 socket 转接用得上（2026-10-10，做 Windows 编译时
+// 量到的：别的平台上它们从没被读过）。
+#[cfg(unix)]
+use std::io::{BufReader, BufWriter};
 
 use serde_json::{json, Value};
 
@@ -259,6 +263,7 @@ pub fn 服务<R: BufRead, W: Write>(读: R, 写: &mut W, 宿主: &dyn 宿主) ->
 /// ⚠️ 由 `single_instance.rs` 的接收线程调——那一条连接里的暗号已经读掉了，
 /// 这里从暗号**之后**接着读。所以那个读法必须是"原样读 8 个字节"，
 /// **不许用 `BufReader`**（它会多吞一块缓冲，吞掉的就是这里的前几行）。
+#[cfg(unix)]
 pub fn 服务流(流: std::os::unix::net::UnixStream, app: tauri::AppHandle) {
     let 宿主 = host::应用宿主::新(app);
     let 写的那头 = match 流.try_clone() {
@@ -291,6 +296,23 @@ pub enum 结局 {
     /// Nota 之后自己重连（也可能不会，那不归我们管）。所以文案说的是
     /// **该做什么**（先把 Nota 打开），不是"出错了"。
     没人听,
+    /// **这个平台上还没有这条转接路**（2026-10-10 加，只有 Windows 那边会构造
+    /// 出来）。
+    ///
+    /// ⚠️ 它**不能并进「没人听」**：那一句是"先把 Nota 打开"，而在这个平台上
+    /// 打开了也没用——用户会照着做、然后发现还是不行。分开说才是实话。
+    平台不支持,
+}
+
+/// 别的平台（Windows 那一类）：**这一层转接还没做**。
+///
+/// ⚠️ 整条链子（Unix socket ＋ `single_instance.rs` 里那个接收线程）只有 Unix
+/// 上有实现。那边要换成命名管道一整套，**不是把 `#[cfg(unix)]` 换一个条件就
+/// 完事的**。这一段的作用与 `single_instance.rs` 文件尾那段同一个：先把
+/// "编不过"变成"编得过、而且这一格明确说了没做"。
+#[cfg(not(unix))]
+pub fn 接上() -> 结局 {
+    结局::平台不支持
 }
 
 /// 连上**已经在跑的那一份 Nota**，把自己变成一根管子（形态 1）。
@@ -299,6 +321,7 @@ pub enum 结局 {
 /// 调用方拿到的是一句处置结论，不是一个 `Result`——写成 `Result` 的历史版本
 /// 就是那个 bug 的温床（`Err` 分不清"没人听"和"会话断了"，于是两者都被
 /// 当成"那就自己开一份吧"）。
+#[cfg(unix)]
 pub fn 接上() -> 结局 {
     // ⚠️ socket 的位置都算不出来（拿不到运行目录、也退不回 data_dir）时，
     // 结论和"没人听"一样：够不到任何一份 Nota。
@@ -310,6 +333,7 @@ pub fn 接上() -> 结局 {
 
 /// [`接上`] 的本体：路径从外面传进来，**测试才碰得到自己的那一个 socket**
 /// （同 `single_instance.rs` 顶上那条并发纪律：不能碰用户真的那个）。
+#[cfg(unix)]
 fn 接上_到(路径: &std::path::Path) -> 结局 {
     // ⚠️ `connect` 失败 = **没人在听**（`ECONNREFUSED` / 文件早没了），
     // 这是这一整条路上最常见的一种，也是唯一该说"先打开 Nota"的那一种。
@@ -342,6 +366,7 @@ fn 接上_到(路径: &std::path::Path) -> 结局 {
 ///
 /// 收到 EOF 时**关掉自己这一半的写**（`shutdown(Write)`）：对面是 `read`
 /// 到 EOF 为判断依据的，不关的话它会一直等着这条永不结束的连接。
+#[cfg(unix)]
 pub fn 代理(流: std::os::unix::net::UnixStream) -> std::io::Result<()> {
     let 收的那头 = 流.try_clone()?;
 

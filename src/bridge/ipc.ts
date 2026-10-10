@@ -102,18 +102,28 @@ export const api = {
   /**
    * **页面引擎（webview）身上的开关**：目前只有拼写检查。
    *
-   * ⚠️ 这一对是 `async` 命令（`commands/webview.rs`）：它们要过一次主线程去
+   * ⚠️ 这三条是 `async` 命令（`commands/webview.rs`）：它们要过一次主线程去
    * 问 WebKitGTK，而同步命令**本身就在主线程上**——那样会自己等自己。
-   * 前端看不出差别，但改那条命令时要记得别把 `async` 去掉。
+   * 前端看不出差别，但改那几条命令时要记得别把 `async` 去掉。
    *
    * ⚠️ `set` 返回的是**引擎读回来的值**，不是"我们请求的那个值"（本仓的老口径：
    * 状态从被改的那个东西身上读回来）。两者不一致时界面要如实说一句。
    */
   webview: {
-    /** 拼写检查现在开着没有。 */
-    spellcheckGet: () => invoke<boolean>("nota_webview_spellcheck_get"),
+    /** 拼写检查现在开着没有、真加载着哪几本词典。⚠️ **目前没有调用方**（备用）。 */
+    spellcheckGet: () =>
+      invoke<{ on: boolean; languages: string[] }>("nota_webview_spellcheck_get"),
     /** 打开 / 关掉拼写检查，返回**改完之后引擎说的值**。 */
     spellcheckSet: (on: boolean) => invoke<boolean>("nota_webview_spellcheck_set", { on }),
+    /**
+     * 换拼写检查用的语言（`languages` 空数组 = **跟随系统**）。
+     *
+     * ⚠️ 返回的是**引擎真加载着的那几本词典**，不是我们请求的那几个：
+     * 请求了机器上没装的语言时回来的是空的（一本词典都没加载 ⇒ 一个字都不检查）。
+     * 前端拿它说那句"这个语言没有词表"。
+     */
+    spellcheckLanguagesSet: (languages: string[]) =>
+      invoke<string[]>("nota_webview_spellcheck_languages_set", { languages }),
   },
   /**
    * 路径**是什么**（拖放那条路用，`ui/useFileDrop.ts`）。

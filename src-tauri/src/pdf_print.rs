@@ -37,6 +37,9 @@
 //! 而不是假装能导。
 
 use std::path::Path;
+
+// ⚠️ 同 `PRINT_TIMEOUT`：只有 Linux 那一套真印用得上（2026-10-10）。
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 use tauri::AppHandle;
@@ -45,6 +48,9 @@ use crate::error::{NotaError, Result};
 
 /// 印一次最多等多久。超时**取消不了**那次印刷（WebKit 没给取消的口子），
 /// 只能把窗口收掉、把结论报成失败——所以这个值要留得够宽。
+// ⚠️ 只有 Linux 那一套真印用得上（`available()` 在别的平台上是 `false`，
+// 打印那半边整个编不进来）。2026-10-10 做 Windows 编译尝试时量到的。
+#[cfg(target_os = "linux")]
 pub(crate) const PRINT_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// 这台系统上有没有"Nota 自己那套 PDF"。

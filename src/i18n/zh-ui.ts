@@ -451,6 +451,9 @@ export const 界面表: Record<string, string> = {
   "Which count the status bar shows": "状态栏显示哪一个统计量",
   "Auto-detect language": "自动检测语言",
   "Do not check spelling": "不使用拼写检查",
+  // 配了具体语言时那一项改成说那个语言（2026-10-10）。`{0}` 是 `zh_CN` 这种标签，
+  // 是数据不是文案，原样夹在句子里（同 `"{0} 分钟"` 那一类）。
+  "Language: {0}": "语言：{0}",
   "Rename": "重命名",
   "New name": "新名字",
   "Close this tab": "关闭这个标签页",

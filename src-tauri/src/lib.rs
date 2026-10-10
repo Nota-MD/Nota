@@ -152,6 +152,16 @@ pub fn run() {
                     .to_string(),
             ),
             mcp::结局::会话断了(e) => (3, format!("与 Nota 的会话断了：{e}")),
+            // ⚠️ **只有别的平台走得到这一档**（`mcp/mod.rs` 里那个
+            // `#[cfg(not(unix))]` 的 `接上`）：Windows 上那条转接还没做。
+            // 如实说一句，别让它冒充"没人听"——那会把人引到"去开一份 Nota"，
+            // 而开了也没用。理由与欠账写在 `single_instance.rs` 文件尾。
+            mcp::结局::平台不支持 => (
+                4,
+                "这个平台上还没有 `--mcp` 转接：Nota 的 MCP 挂在单实例那个 Unix socket 上，\
+                 别的平台要另做一套（命名管道那一类）。"
+                    .to_string(),
+            ),
         };
         eprintln!("[nota] {话}");
         std::process::exit(码);
@@ -381,9 +391,10 @@ pub fn run() {
             // 拖放那条路要的「这条路径是什么」（`commands/paths.rs`）。
             commands::path_kind::nota_paths_kind,
             // 页面引擎身上的开关（`commands/webview.rs`）：拼写检查。
-            // ⚠️ 这两条是 `async`，理由见那个文件头（`with_webview` 走主线程）。
+            // ⚠️ 这三条是 `async`，理由见那个文件头（`with_webview` 走主线程）。
             commands::webview::nota_webview_spellcheck_get,
             commands::webview::nota_webview_spellcheck_set,
+            commands::webview::nota_webview_spellcheck_languages_set,
             commands::settings::nota_settings_open_dir,
             commands::settings::nota_settings_problem,
             commands::settings::nota_app_lang,

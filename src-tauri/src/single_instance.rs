@@ -39,15 +39,22 @@
 //!   那不是防谁，是防一个写坏的调用方把接收线程的缓冲撑爆。
 
 use std::ffi::{OsStr, OsString};
-use std::io::{Read, Write};
 use std::path::PathBuf;
 
-use crate::error::{NotaError, Result};
+use crate::error::Result;
+// ⚠️ 这两条只有 Unix 那一半用得上（2026-10-10 拆开，理由同文件尾那段）：
+// `Read`/`Write` 是 socket 上的读写，`NotaError` 是绑 socket 失败时那一条。
+#[cfg(unix)]
+use crate::error::NotaError;
+#[cfg(unix)]
+use std::io::{Read, Write};
 
 /// 一帧最多这么多个字节。⚠️ 见文件头最后一段：这是**防手滑**不是防攻击。
+#[cfg(unix)]
 const 最大帧: u64 = 64 * 1024;
 
 /// socket 的文件名。⚠️ 只有这一处定义——`抢占` 与 `收摊` 都用它。
+#[cfg(unix)]
 const 文件名: &str = "nota.sock";
 
 /// `抢占` 的结论。
@@ -80,6 +87,11 @@ pub enum 收到 {
     要打开(Option<OsString>),
     /// 一场 MCP 会话。⚠️ 这条连接的**读位置已经在暗号之后**了，直接交给
     /// `crate::mcp::服务流`（它从那儿接着读）。
+    ///
+    /// ⚠️ 只有 Unix 上有这一档（2026-10-10）：下面那个 `UnixStream` 就是这条
+    /// 连接本身，而**别的平台还没有一条对应的实现**（Windows 上得用命名管道，
+    /// 那是另一件事）。见文件尾那个 `别的平台` 模块。
+    #[cfg(unix)]
     会话(std::os::unix::net::UnixStream),
 }
 
@@ -87,6 +99,7 @@ pub enum 收到 {
 ///
 /// ⚠️ 一个字节都不许多读：多读的那些属于 MCP 那一路要用的流。这也是这里
 /// 不用 `BufReader`/`read_to_end` 的唯一理由。
+#[cfg(unix)]
 fn 读头(连接: &std::os::unix::net::UnixStream) -> std::io::Result<Vec<u8>> {
     let mut 头 = vec![0u8; MCP暗号.len()];
     let mut 已读 = 0;
@@ -107,11 +120,13 @@ fn 读头(连接: &std::os::unix::net::UnixStream) -> std::io::Result<Vec<u8>> {
 }
 
 /// 监听器 + 它落在盘上的那个路径（退出时要删）。
+#[cfg(unix)]
 pub struct 监听器 {
     socket: std::os::unix::net::UnixListener,
     路径: PathBuf,
 }
 
+#[cfg(unix)]
 impl 监听器 {
     /// socket 文件在盘上的位置。⚠️ 退出时删它，见 [`收摊`]。
     pub fn 路径(&self) -> &std::path::Path {
@@ -154,6 +169,7 @@ impl 监听器 {
 /// ⚠️ 拿不到运行目录（比如某些容器里没设 `XDG_RUNTIME_DIR`）时退回 `data_dir()`：
 /// 那份目录别处一直在用、一定建得出来，代价是退出时留下的 socket 文件
 /// 会被下一次启动的 `ECONNREFUSED` 那条路清掉——不会越攒越多。
+#[cfg(unix)]
 pub fn socket路径() -> Result<PathBuf> {
     let 底 = match dirs::runtime_dir() {
         Some(d) => d,
@@ -170,6 +186,7 @@ pub fn socket路径() -> Result<PathBuf> {
 /// ⚠️ **转交失败不报错，直接当自己是第一个**：那种情形只有一种——另一份
 /// Nota 正好在这一瞬间退出了（我们问"有人听吗"时它还在）。那不是异常，
 /// 是竞态；这时候老老实实自己起来当主人，比报一个用户看不懂的错强。
+#[cfg(unix)]
 pub fn 抢占(要打开的: Option<&OsStr>) -> Result<决定> {
     let 路径 = socket路径()?;
     if let Some(父) = 路径.parent() {
@@ -195,6 +212,7 @@ pub fn 抢占(要打开的: Option<&OsStr>) -> Result<决定> {
 ///
 /// ⚠️ 空帧也要发（`文件` 为 `None` 时）：**连上本身就是"我来了"这句话**，
 /// 对面收到之后会把窗口抬起来。不发的话第二次点图标什么都不会发生。
+#[cfg(unix)]
 fn 转交(路径: &std::path::Path, 文件: Option<&OsStr>) -> std::io::Result<()> {
     let mut 流 = std::os::unix::net::UnixStream::connect(路径)?;
     if let Some(f) = 文件 {
@@ -228,6 +246,8 @@ pub struct 载荷 {
     pub error: Option<String>,
 }
 
+// ⚠️ 只有 Unix 那一半构造得出这三个（`起` 里那条载荷装配）。
+#[cfg(unix)]
 impl 载荷 {
     fn 抬窗() -> Self {
         Self {
@@ -256,6 +276,7 @@ impl 载荷 {
 /// ⚠️ **抬窗这一步是本模块的一半价值**，别只当它是开文件的前置动作：
 /// 用户点第二次图标时最常见的意图就是"我这窗口找不着了"。少了它，第二次
 /// 启动的表现是"什么都没发生"——比两个窗口更难懂。
+#[cfg(unix)]
 pub fn 起(app: tauri::AppHandle, 听: 监听器) {
     use tauri::{Emitter, Manager};
 
@@ -313,11 +334,14 @@ pub fn 起(app: tauri::AppHandle, 听: 监听器) {
 ///
 /// ⚠️ 删不掉也**不算错**（退出路径上不该因为一个删文件失败而报什么），
 /// 而且真删不掉也有兜底：下一次启动会走到"连不上 → 删掉重绑"那条路清掉它。
+#[cfg(unix)]
 pub fn 收摊(路径: &std::path::Path) {
     let _ = std::fs::remove_file(路径);
 }
 
-#[cfg(test)]
+// ⚠️ `all(test, unix)`：这一组用例全程在用 `UnixStream` / `OsStrExt::as_bytes`
+// 那一套（文件头那段是它们的设计依据），别的平台上编都编不过。
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::os::unix::ffi::{OsStrExt, OsStringExt};
@@ -470,3 +494,57 @@ mod tests {
         );
     }
 }
+
+// ── 别的平台：**单实例这件事还没有实现**（2026-10-10）────────────────────
+//
+// 这一块是"做一次 Windows 编译尝试"逼出来的：上面那整套东西（`UnixListener` /
+// `OsStrExt::as_bytes` / `OsString::from_vec`）在 Windows 上一个名字都不存在，
+// 于是整个 crate 编不过——**不是这一格没做，是连编译都到不了**。
+//
+// ⚠️ 所以这里给的是**一份说得出话的空壳**，不是"Windows 上的单实例"：
+//
+// - `抢占` 永远回"我是第一个"——也就是**允许多开**（今天 Windows 上本来就
+//   一个能跑的构建都没有，谈不上回退）；
+// - `起` 什么都不做（没有 socket 可听）；
+// - `收摊` 什么都不删（没有文件可删）；
+// - `收到::会话` 那一档**不存在**（MCP 那条转接路跟着一起没有）。
+//
+// ⚠️ 真要支持 Windows，欠的是**一整条实现**（命名互斥量 ＋ 命名管道，或者
+// 一个本地 socket 的等价物），不是把上面那些 `#[cfg(unix)]` 换成别的条件——
+// 那只是让编译过，行为仍然是空的。这一段的作用是：**先把"编不过"变成
+// "编得过、但这一格在 Windows 上明确没做"**，免得下次谁再试一次还得从头查
+// 这 17 个编译错。
+/// 别的平台那个"监听器"：**没有 socket 可听**，只留一个路径占位。
+#[cfg(not(unix))]
+pub struct 监听器 {
+    路径: PathBuf,
+}
+
+#[cfg(not(unix))]
+impl 监听器 {
+    /// 同 Unix 那一版：退出时要删的那个文件（这边永远是空的）。
+    pub fn 路径(&self) -> &std::path::Path {
+        &self.路径
+    }
+
+    /// 没有连接可收——接收线程在这边**根本不会起**（`起` 是空函数）。
+    pub fn 收下(&self) -> Option<收到> {
+        None
+    }
+}
+
+/// 别的平台：**不来抢位置，直接当自己是第一个**（见上面那段）。
+#[cfg(not(unix))]
+pub fn 抢占(_要打开的: Option<&OsStr>) -> Result<决定> {
+    Ok(决定::第一个(监听器 {
+        路径: PathBuf::new(),
+    }))
+}
+
+/// 别的平台：没有接收线程可起。
+#[cfg(not(unix))]
+pub fn 起(_app: tauri::AppHandle, _听: 监听器) {}
+
+/// 别的平台：没有文件要删。
+#[cfg(not(unix))]
+pub fn 收摊(_路径: &std::path::Path) {}

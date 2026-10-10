@@ -115,8 +115,18 @@ export interface EditorSettings {
   copy_markdown_source: boolean;
   copy_line_when_empty: boolean;
   line_ending: LineEnding;
-  /** ⚠️ 只有开关，语言跟系统走（WebKitGTK 提供，选不了）。 */
+  /** 拼写检查总开关（WebKitGTK 提供）。 */
   spellcheck: boolean;
+  /**
+   * **拼写检查用哪种语言**（2026-10-10 加的）。写法是 enchant 那套
+   * **`语言_地区`**（`zh_CN` / `en_US`，**下划线**），**空串 = 跟随系统**。
+   *
+   * ⚠️ 三档要分清：`""` 是"跟随系统"（内核自己去拿系统的默认语言）、
+   * `"zh_CN"` 是"就要中文"，而**设置还没读回来**是 `undefined`（那是整份
+   * `Settings` 还没到，不是这一格的值）。前端 `ui/useSpellcheck.ts` 靠这个
+   * 区别决定"要不要去拨引擎"。
+   */
+  spellcheck_lang: string;
   typewriter_keep_caret_centered: boolean;
 }
 
@@ -515,4 +525,3 @@ export interface GeneralSettings {
   /* ⚠️ 这里**不会有**遥测、许可证、外部服务器。`settings/general.rs`
    * 里有一条测试盯着这些字符串。 */
 }
-

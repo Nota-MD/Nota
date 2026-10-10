@@ -102,6 +102,9 @@ pub const EVENT: &str = "nota:format-key";
 /// `#focus-alarm` 那条岔路，渲染的是 `FocusAlarmWindow`），所以定向发就够了。
 /// 定向而不是广播是为了**将来**：多一个跑完整 `App` 的窗口时，广播会让两个窗口
 /// 一起执行同一条命令。
+// ⚠️ 只有 Linux 那一半用得上（2026-10-10 做 Windows 编译尝试时量到的：
+// 别的平台上它是一条"从没被用过"的常量告警）。
+#[cfg(target_os = "linux")]
 const WINDOW: &str = "main";
 
 /// 认下来的两颗键 → 发给前端的名字。

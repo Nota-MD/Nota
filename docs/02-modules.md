@@ -78,7 +78,7 @@
 | `lua/api/i18n.rs` | `nota.i18n`（2026-09-25）：`{app_lang, lang, ok, text(s)}`。**不要能力**——路径由宿主用**插件自己的目录**拼（`lang/<tag>.toml`），插件只交**键**；**键就是作者写下的那句原文**，取不到返回 `nil`。⚠️ **协商在加载时就做完**（`i18n::装`，在 `on_load` 之前），所以改语言要重启。⚠️ **`ok` 只看清单、不看文件**：声明了 `zh-CN` 却没放文件照样 `ok = true`（缺文件只退回原文、不把话说过头）。⚠️ `langs` 缺 `en` 是**拒载**，判据在 `plugin/manifest.rs` |
 | `mcp/tools.rs` | 五个工具 `nota_info` / `nota_documents` / `nota_read` / `nota_write` / `nota_open`（2026-09-27，492 行）。判据只有一条：**这件事不经 MCP 做不到或很别扭**——AI 客户端自己就能读盘写盘，它做不到的是够到 **Nota 里正开着的那一份**。⚠️ 三个"想做但这一版没做"的（细粒度编辑那一类）如实写在它文件头 |
 | `mcp/host.rs` | MCP 要用到的那几件**宿主能力**收成一个 `宿主` trait（2026-09-27，212 行）。⚠️ 抽 trait **不是为了"将来接别的宿主"（那是猜），是为了测得到**：真实现要 `AppHandle`、单测里建不出来。⚠️ 于是有条纪律：**工具里不许出现第二条"直接问应用"的路**，想让工具多做一件事就给它加一个 trait 方法，绕过 trait 直接摸 `AppState` 会变成"单测跑得到、真机上没人跑过"那半边绿 |
-| `mcp/mod.rs` | **MCP 服务器**（2026-09-27，725 行）：stdio 上一行一条 JSON-RPC 2.0，四个方法 `initialize` / `ping` / `tools/list` / `tools/call`。⚠️ **三种下场一个命令**（`nota --mcp`，2026-09-29 改口径）：已经有 Nota 在跑 → 这一份只当管子（够到**用户正开着的那一份**）；一份都没跑 → **说一句"请先打开 Nota"、退出码 2**（⚠️ 原来这里是"自己开窗并服务 MCP"，那正是用户报的「不停新建窗口」，见 BUG-55）；别的进程连上来 → `single_instance.rs` 认出暗号（`MCP暗号`）交给 `服务流`。⚠️ 所以 `--mcp` 今天**不建窗也不抢单实例的位置**|
+| `mcp/mod.rs` | **MCP 服务器**（2026-09-27，**741 行**；2026-10-10 做 Windows 编译尝试时按 `#[cfg(unix)]` 分了档）：⚠️ `服务流` / `接上` / `代理` 只有 Unix 上有实现——别的平台给一个 `结局::平台不支持`（退出码 4）的桩，**不冒充「没人听」**（那句会把人引去开一份 Nota，而开了也没用）。⚠️ 分档是为了先把「编不过」变成「编得过、而且这一格明确说了没做」（那 17 个编译错里 3 个在这份文件）stdio 上一行一条 JSON-RPC 2.0，四个方法 `initialize` / `ping` / `tools/list` / `tools/call`。⚠️ **三种下场一个命令**（`nota --mcp`，2026-09-29 改口径）：已经有 Nota 在跑 → 这一份只当管子（够到**用户正开着的那一份**）；一份都没跑 → **说一句"请先打开 Nota"、退出码 2**（⚠️ 原来这里是"自己开窗并服务 MCP"，那正是用户报的「不停新建窗口」，见 BUG-55）；别的进程连上来 → `single_instance.rs` 认出暗号（`MCP暗号`）交给 `服务流`。⚠️ 所以 `--mcp` 今天**不建窗也不抢单实例的位置**|
 
 **前端 `src/`**
 
@@ -237,8 +237,8 @@
 | `ui/chart-ticks.ts` | **图上的刻度**（118 行，2026-09-27）：`读刻度` ＋ `推纵刻度` ＋ `格式化数`。⚠️ **两条轴分工不同**——纵轴只有数据知道上下界（`points` 自己归一化），横轴只有插件知道（序号对应哪一刻）。⚠️ 位置是 **0~1 的比例**不是像素。⚠️ 面板那边只能是 **HTML 覆盖层**、不能是 SVG `<text>`（`preserveAspectRatio="none"` 会把文字一起拉变形）。⚠️ `share-card.ts` 只从这里 import `格式化数` 与类型，**纵刻度的推法各写各的**。用例 **12** 条在 `tests/chart-ticks.test.ts`（钉着"`格式化数(109.5)` 曾经写成 `11`"那条**差十倍**的回归） |
 | `ui/heatmap.ts` | **长期记录的热力图**（256 行，2026-09-27）：Contribution Graph 那种一格一天的小方格（用户「类似 Contribution Graph 那样的热力图，记录长期数据。仅记录打字数」）。⚠️ **只算格子的位置，不画**（同 `chart-ticks.ts` 的分工：插件说数据、这里说版式、`PanelBody.tsx` 画），所以"哪一格是哪一天"能脱离 React 单独测。⚠️ 三条口径：**一列 = 一周、从周一起** · **最后一列到 `止` 那天为止、下面留空**（把未来几天画成"0 字"是编数据） · **缺的那些天当 0 不当"没有"**。⚠️ 它**不认识"今天"**（右端由插件给的 `止` 定）。⚠️ 月份标签走 `Intl`、**不写死「月」**。用例 **20** 条在 `tests/heatmap.test.ts` |
 | `ui/Home.tsx` | 没有文档时那一屏 |
-| `ui/StatusBar.tsx` | **下栏**（**412 行**；2026-09-30 照 Typora 重做，同日晚又按五张参考图补了悬停那半）：**左手两颗开关**（侧栏开合 ／ 源码-所见即所得）＋ **右手那一格统计量 ＋ 它两侧悬停才出现的两颗按钮**（`A✓` 拼写检查、`⌄` 字数统计菜单）＋ 强制专注余额那一格（只在跑着时出现）。⚠️ 原来那几格（文件路径、`● 已修改`、模式名、`严格`、字符数、行数、约几分钟）用户答「其余全删」——**数一个没少**，只是各自有落点（`● 已修改` 进了窗口标题、四个数进了那个小菜单）。⚠️ 四颗按钮**都不自己存状态**（`sidebarOpen` / `App.tsx`→`ui/useFileKindMode.ts` 的**会话内**模式 / `appearance.status_metric` / `editor.spellcheck`），只画形状、把点击原样交回去。⚠️ **图3 那个语言列表故意没做**（WebKitGTK 没有枚举词典的接口），那个菜单只有两项。⚠️ **2026-10-04 最右端补了第五颗：那颗 ×**（`.status-btn.statusbar-close`，第 49 项）——`onHide` prop，落点是 `useStatusBar` 递进来的 `设界面`（＝ `App.tsx` 那个 `setChrome`），**只关不开**（写 `!` 的话，× 不在屏幕上的那种状态下点它会**把栏打开**）。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`），也**不省**在没文档的时候（它说的是"这一栏画不画"）。⚠️ 位置必须**在 `.status-right` 里面**（`space-between` ＋ 第三个孩子会把字数挤到中间） |
-| `ui/useStatusBar.ts` | **状态栏那一堆 props 的接线**（**108 行**，2026-09-30 晚从 `App.tsx` 搬出——那次 `App.tsx` 1003 行越了 1000 行硬线）：四格值分别读 `settings.appearance.status_metric` / `settings.editor.spellcheck` / **模式（2026-10-07 起是 `ui/useFileKindMode.ts` 那份会话内状态，不再来自 `settings`）** / `sidebarOpen`，写回各给一条回调。⚠️ **它一个 `useState` 都没有**（"不要第三个真相"在这一层的落法）。⚠️ 两条 patch 都先把那张表铺开（`updateSettings` 只做顶层浅合并）。⚠️ 返回类型是 `ComponentProps<typeof StatusBar>`，**不手抄**。⚠️ **2026-10-04 多收一格 `设界面`**（第 49 项那颗 ×）：`App.tsx` 交给它的**就是那个 `setChrome`**，所以 × 与菜单「视图 → 状态栏」写的是同一格。⚠️ **故意让调用方把 setter 递进来、不在这儿铺一遍 `appearance`**——铺了就是同一个设置的第二条写路 |
+| `ui/StatusBar.tsx` | **下栏**（**464 行**；2026-09-30 照 Typora 重做，同日晚又按五张参考图补了悬停那半）：**左手两颗开关**（侧栏开合 ／ 源码-所见即所得）＋ **右手那一格统计量 ＋ 它两侧悬停才出现的两颗按钮**（`A✓` 拼写检查、`⌄` 字数统计菜单）＋ 强制专注余额那一格（只在跑着时出现）。⚠️ 原来那几格（文件路径、`● 已修改`、模式名、`严格`、字符数、行数、约几分钟）用户答「其余全删」——**数一个没少**，只是各自有落点（`● 已修改` 进了窗口标题、四个数进了那个小菜单）。⚠️ 四颗按钮**都不自己存状态**（`sidebarOpen` / `App.tsx`→`ui/useFileKindMode.ts` 的**会话内**模式 / `appearance.status_metric` / `editor.spellcheck`），只画形状、把点击原样交回去。⚠️ **图3 那个语言列表故意没做**（WebKitGTK 没有枚举词典的接口），那个菜单只有两项。⚠️ **2026-10-04 最右端补了第五颗：那颗 ×**（`.status-btn.statusbar-close`，第 49 项）——`onHide` prop，落点是 `useStatusBar` 递进来的 `设界面`（＝ `App.tsx` 那个 `setChrome`），**只关不开**（写 `!` 的话，× 不在屏幕上的那种状态下点它会**把栏打开**）。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`），也**不省**在没文档的时候（它说的是"这一栏画不画"）。⚠️ 位置必须**在 `.status-right` 里面**（`space-between` ＋ 第三个孩子会把字数挤到中间） |
+| `ui/useStatusBar.ts` | **状态栏那一堆 props 的接线**（**133 行**，2026-09-30 晚从 `App.tsx` 搬出——那次 `App.tsx` 1003 行越了 1000 行硬线）：四格值分别读 `settings.appearance.status_metric` / `settings.editor.spellcheck` / **模式（2026-10-07 起是 `ui/useFileKindMode.ts` 那份会话内状态，不再来自 `settings`）** / `sidebarOpen`，写回各给一条回调。⚠️ **它一个 `useState` 都没有**（"不要第三个真相"在这一层的落法）。⚠️ 两条 patch 都先把那张表铺开（`updateSettings` 只做顶层浅合并）。⚠️ 返回类型是 `ComponentProps<typeof StatusBar>`，**不手抄**。⚠️ **2026-10-04 多收一格 `设界面`**（第 49 项那颗 ×）：`App.tsx` 交给它的**就是那个 `setChrome`**，所以 × 与菜单「视图 → 状态栏」写的是同一格。⚠️ **故意让调用方把 setter 递进来、不在这儿铺一遍 `appearance`**——铺了就是同一个设置的第二条写路 |
 | `ui/SidebarResizer.tsx` | **侧栏右缘那条可以拖的把手**（**111 行**，2026-09-30 新建）：`侧栏宽默认` 240 ／ `侧栏宽最小` 180 ／ `侧栏宽最大` 480 ＋ 纯函数 `夹侧栏宽` ＋ 组件 `SidebarResizer({ onCommit })`。⚠️ 拖动期间直接写 `<html>` 上那条 `--sidebar-width`、**松手才落盘**（`ui/useZoom.ts` 立的先例）；⚠️ 组件渲染在 `.sidebar` **里面**（量 `parentElement` 的左缘）。⚠️ **只做这一条边**——右侧插件栏的宽度还是死的（用户点名的只有侧栏） |
 | `ui/view-modes.ts` | **三种编辑模式的名字**（2026-09-24，**45 行**）。⚠️ **2026-09-30 删掉了短名那一列**：原来是一长一短（`short` 给状态栏、`full` 给菜单与设置），状态栏改成一颗 `</>` 图标之后短名没有读者了；`zh-ui.ts` 里 `"Source"` / `"Split"` 两条中文随之删除（留着就是废键，`i18n-check` ③ 会 FAIL）。⚠️ **2026-10-07 起连 `VIEW_MODE_LABELS` 也没有读者了**（偏好设置里那个「编辑模式」下拉随"模式不再存盘"一起删掉）——这个文件**没删**，留着是因为那张 `Record<ViewMode, string>` 是"加第四种模式"时**唯一会当场编译不过的地方**（理由与"别看没人 import 就清掉"写在它文件头）。⚠️ **只是名字，没有切换逻辑**——切换在 `ui/useFileKindMode.ts` 的 `设模式` / `ui/commands.ts` |
 | `ui/Toasts.tsx` | 提示条（42 行，**纯展示 + 点叉关掉**；什么时候消失由 `ui/useToasts.ts` 定）。⚠️ **一行样式都没有**——外观全在 `styles/toast.css`（2026-09-29 从 `app.css` 拆出来的那一节）（那一节的表格见 `docs/04` §2.6） |
@@ -703,7 +703,13 @@ lossy 串**：那会拼出一个不一样的路径，然后弹"路径不存在"�
 
 ---
 
-## `src-tauri/src/cli.rs`（368 行）
+## `src-tauri/src/cli.rs`（471 行）
+
+⚠️ **2026-10-10 拆开一处平台差别**：`从url取路径` 里那句 `OsString::from_vec` 是
+`std::os::unix` 上的东西，Windows 上编不过（做 Windows 编译尝试时量的那 17 个错之一）。
+现在按 `#[cfg(unix)]` 分成两个小函数 `路径从字节`：Unix 收**原始字节**（路径可以不合法
+UTF-8），别的平台**先解 UTF-8**（解不出来就当这条链接没指到东西，不 lossy 出一个别的路径），
+并顺手剥掉文件 URL 那种 `/C:/…` 开头的斜杠。
 
 命令行参数。今天认两件事：**头一个不像选项的参数就是"要打开的文件"**，以及
 **有没有 `--new-window`**（2026-09-27 晚加的，见本节末）。
@@ -2125,7 +2131,7 @@ std::process::Command::new(&程序)
 
 ---
 
-## `src-tauri/src/pandoc_probe.rs`（277 行）
+## `src-tauri/src/pandoc_probe.rs`（540 行）
 
 **「这台机器现在能不能用」那一半**（2026-09-29 从 `pandoc.rs` 拆出，那一份当时 836 行）：
 跑一次 `--version` 看装没装、在 PATH 里找排版引擎、把结论说成人话。
@@ -2141,7 +2147,8 @@ std::process::Command::new(&程序)
 | `pub enum ProbeState` | `Ready` / `Missing` / `Unknown`。⚠️ `Unknown` 是"问了但说不准"（命令挂住、认不出版本旗子），**不是** `Missing` 的别名 |
 | `pub struct PandocProbe` | `{ state, command, version?, message, detail, pdf_engine?, fallback_pdf, formats }`。⚠️ `pdf_engine` 为 `None` **不是**"不能出 PDF"的宣判（引擎可能在非 PATH 的目录、或配在 pandoc 自己的 defaults 里），它只影响面板上那句话；`fallback_pdf` 是问 `pdf_print::available()` 要来的，**不在这里再写一遍平台名** |
 | `pub fn probe() -> PandocProbe` | 跑一次探测。⚠️ **不联网、不起服务器**，10 秒收手（`CHECK_TIMEOUT`） |
-| `pub(crate) fn find_engine() -> Option<String>` | 在 PATH 里按偏好顺序（`ENGINES`，`xelatex` 优先）找一个排版引擎 |
+| `pub(crate) fn 解析(command) -> Option<落点>` | **"到底跑哪一份 pandoc"**（2026-10-10 加，探测与导出**共用这一个判断**）：写死的路径 / PATH / 知名目录（`~/.local/bin`、`/opt/homebrew/bin`、**容器里挂进来的 `/run/host/usr/bin`**…）依次找，找到外面那份时**捎回一组要给子进程补的环境**（`LD_LIBRARY_PATH` / `PATH` / `pandoc_datadir`，三条都是拿 `/run/host/usr/bin/pandoc` 实测出来的） |
+| `pub(crate) fn find_engine() -> Option<String>` | 按偏好顺序（`ENGINES`，`xelatex` 优先）找一个排版引擎：**先 PATH，再去 `解析` 用的那份候选目录**。⚠️ 返回的是**名字**（要交给 `--pdf-engine=`），所以"引擎只在宿主那份里"时还得靠 `解析` 给 pandoc 补 PATH——两处是一件事的两半 |
 
 ⚠️ 这几个名字在 `pandoc.rs` 里**原样转出**，所以对 `commands/pandoc.rs` 而言路径没变。
 
@@ -7690,7 +7697,7 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 
 ---
 
-## `src/ui/StatusBar.tsx`（412 行）
+## `src/ui/StatusBar.tsx`（464 行）
 
 状态栏。**2026-09-30 照 Typora 整个重做过**（用户原话「修改下栏逻辑。这是 Typora。
 其中左边圆圈是显示/隐藏侧边栏；第二个是切换代码/所见即所得模式。右边一个极简的
@@ -7714,7 +7721,9 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 ⚠️ **它自己不存任何状态**（文件头那段"不要第三个真相"）：侧栏开合住在 `App.tsx` 的
 `sidebarOpen`、模式住在 `ui/useFileKindMode.ts` 那条 `useState`（2026-10-07 前是
 `settings.view_mode`）、显示哪一个统计量住在 `appearance.status_metric`、
-拼写开关住在 `editor.spellcheck`，这里只画形状、把点击原样交出去。
+拼写开关住在 `editor.spellcheck`、**拼写语言住在 `editor.spellcheck_lang`**（2026-10-10
+加；状态栏只拿它**把第一项的措辞说准**，不影响那两项的开关语义），
+这里只画形状、把点击原样交出去。
 读写的接线全在 `ui/useStatusBar.ts`（它在 `App.tsx` 里调用一次，
 `{...状态栏接线}` 铺进来）。
 
@@ -7729,6 +7738,7 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 | `readingSpeed` | `number` | 「约几分钟」那个除数（`appearance.reading_speed`），与设置页同一格 |
 | `metric` | `StatusMetric` | **那一格平时显示哪一个统计量**（`appearance.status_metric`） |
 | `spellcheck` | `boolean \| null` | 拼写检查开关的当前值。`null` = 设置还没读回来，菜单里两项都灰 |
+| `拼写语言` | `string \| null` | `editor.spellcheck_lang`。**空串 = 跟随系统**（有含义的一档）、`null` = 设置还没读回来。⚠️ **只用来说第一项的措辞**（配了 `zh_CN` 就不能再写"自动检测语言"），菜单里**不放语言列表**——选语言在设置页 |
 | `onPickMetric` / `onSetSpellcheck` / `onToggleSidebar` / `onToggleSource` | 回调 | 四个开关的写回，**实现全在 `ui/useStatusBar.ts`** |
 
 ### 那两份文案
@@ -7759,8 +7769,11 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 锚点量的是**底栏顶边**，`.menu-popup` 那条 `bottom: calc(100% + 5px)` 出来才是"这一栏的上面"。
 
 ⚠️ **「选择拼写检查语言」菜单里只有两项**（`自动检测语言` ＝ 开 / `不使用拼写检查` ＝ 关）：
-用户图3 是一个很长的语言列表，**那一份故意没做**——WebKitGTK 没有"枚举已安装词典"的
-接口（`commands/webview.rs` 只暴露开/关），摆一串点不动的语言名就是画饼。
+用户图3 是一个很长的语言列表，这个**小菜单**里仍然不做——**语言那一格在「设置 →
+编辑器 → 拼写检查」**（2026-10-10 加，能选十几个 ＋ 自定义标签），理由与做法见
+`commands/webview.rs` 与 `ui/useSpellcheck.ts` 两处的文件头。
+⚠️ **2026-10-10 改的只是措辞**：配了具体语言时那一项不再写"自动检测语言"（那是假话），
+改成 `语言：zh_CN` 这样的说法；开/关那两档的语义一个字没动，两项仍然互斥。
 ⚠️ 这个缺口与"要不要自己带一个拼写引擎"那条轴是同一件事，还在等用户拍板。
 
 ⚠️ 字数取自 `doc.text`，也就是**后端镜像**（300ms 滞后）。快速打字时状态栏的数字会比
@@ -7768,7 +7781,7 @@ props：`{plugins: PluginInfo[], onNew: () => void, onOpen: () => void, onOpenFo
 
 ---
 
-## `src/ui/useStatusBar.ts`（108 行）
+## `src/ui/useStatusBar.ts`（133 行）
 
 **状态栏那一堆 props 的接线**（2026-09-30 晚从 `App.tsx` 搬出）。那次不是因为"看着不顺眼"：
 加完那两颗按钮之后 `App.tsx` **1003 行**，越过了 `tools/doc-sync-check.sh` 那条 1000 行硬线；
@@ -8412,7 +8425,7 @@ promptReq, askPrompt, answerPrompt }`。
 
 ---
 
-## `src/editor/export.ts`（333 行）
+## `src/editor/export.ts`（450 行）
 
 **把 Markdown 变成一份完整的 HTML 文件**（`docs/07` 第 1 项能当场做完的那一半）。
 
@@ -8454,8 +8467,14 @@ promptReq, askPrompt, answerPrompt }`。
 | 摘什么 | 判据 |
 |---|---|
 | **装饰**（挂在正文元素上的类名） | **`nota-` 开头的一律不算内容**（`nota类前缀`）。收成一条规则是为了耐腐蚀：将来再加一个 `nota-xxx` 装饰时自动生效，不必回来登记 |
-| 属性 | `data-srcmark` / `contenteditable` / `spellcheck` / `translate`——全是"编辑时才成立"的 |
+| 属性 | `data-srcmark` / `contenteditable` / `spellcheck` / `translate`——全是"编辑时才成立"的。📌 **2026-10-10 又补三条：`data-state` / `data-type` / `data-value`**（公式 / 图表 / 裸 HTML 那几种**节点视图外壳**上的自家记号，留着会被 Pandoc 原样写成 `[..]{data-type="math_inline" data-value="…"}`）。⚠️ **只列名字，不写成"凡是 `data-` 开头的都摘"**：正文里可以有用户自己写的裸 HTML |
 | **容器**（自己就是一个元素的零件） | **`整块删掉` 名单**，逐个登记：`.nota-code-gutter`（行号） / `.nota-code-bar` / `.nota-code-lang-wrap`（语言选择器） / `.nota-math-panel` / `.nota-math-preview` / `.nota-diagram-bar` / `.nota-diagram-source` / `.nota-diagram-note-btn` |
+
+📌 **2026-10-10 还多了一条不算"零件"、但是编辑时产物的规则**：`br.ProseMirror-trailingBreak`
+（ProseMirror 给空文本块的**占位**，屏幕上不可见，进了 HTML 就是一颗真 `<br>`）**要删掉**。
+实测：`<p>a</p><p><br class="ProseMirror-trailingBreak"></p>` 经 Pandoc 会多出一句
+`\hfill\break`，去掉那颗 br 之后同一个空段落 `<p></p>` 什么都不产出。
+⚠️ **只删这一类**：`<br>` 本身是正当内容（Shift+Enter 就是它）。
 
 ⚠️ **两半的分界**：容器**摘掉类名之后元素还杵在原地**。原来名单里只有
 `.nota-code-bar` 一条，于是"复制 / 折叠"没漏、同一条路子上另外两件（行号、语言

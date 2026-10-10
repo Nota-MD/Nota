@@ -114,6 +114,11 @@ export const 设置表: Record<string, string> = {
   "Keep the cursor in the middle of the screen": "让光标始终停在屏幕中间",
   "First-line indent": "段首缩进",
   "Spell check": "拼写检查",
+  // 拼写检查那一页底下两行（2026-10-10 加的语言）。
+  // ⚠️ `"Language"` / `"Custom"` / `"Follow the system"` 三把键**上面已经有了**
+  // （别的页在用）——不在这儿抄第二份：同一条原文两处两把键，改一处另一处
+  // 就静默退回英文（`index.ts` 文件头那条规矩）。
+  "Language tag": "语言标签",
   "Smart symbol completion": "智能符号补全",
   "Show the Markdown source of the current block": "显示当前块的 Markdown 源码",
   "Copy/cut the whole line when nothing is selected": "没有选中文字时整行复制 / 剪切",

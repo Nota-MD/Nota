@@ -546,14 +546,14 @@ export default function App() {
     toast,
   });
 
-  // **拼写检查那个开关接到引擎上**（`ui/useSpellcheck.ts`，2026-09-27）。
-  // ⚠️ 它是个 hook 而不是"设置页里顺手调一下"：那个开关**不属于设置页**——
-  // 用户在菜单里改、设置文件被别的程序改了，都该跟着动（`settings` 是这个 hook
-  // 唯一的输入）。⚠️ 位置放在这儿是因为它只依赖 `settings` 与 `toast`。
+  // **拼写检查那两格接到引擎上**（`ui/useSpellcheck.ts`：开关 2026-09-27、语言
+  // 2026-10-10）。它是个 hook 而不是"设置页里顺手调一下"：这两格**不属于设置页**，
+  // 用户在菜单里改、设置文件被别的程序改了，都该跟着动（`settings` 是它唯一的输入）。
   useSpellcheck({
-    // ⚠️ 用 `?? null` 而不是 `?.` 链到底：设置还没读回来时给 `null`（"还不知道"），
-    // 不是 `false`（"关着"）——那两件事在 hook 里走的是不同的路。
+    // ⚠️ `?? null`（不是 `?.` 链到底）：没读回来是"还不知道"，不是"关着"。
     开: settings?.editor.spellcheck ?? null,
+    // ⚠️ 空串是"跟随系统"那一档的**正常值**，不能被 `?? null` 吃掉。
+    语言: settings === null ? null : settings.editor.spellcheck_lang,
     toast,
   });
 

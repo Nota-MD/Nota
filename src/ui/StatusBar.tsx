@@ -135,6 +135,7 @@ export function StatusBar({
   metric,
   onPickMetric,
   spellcheck,
+  拼写语言,
   onSetSpellcheck,
   onToggleSidebar,
   onToggleSource,
@@ -172,6 +173,16 @@ export function StatusBar({
    * `null` = 设置还没读回来（**两项都画灰**，别猜一个值出来）。
    */
   spellcheck: boolean | null;
+  /**
+   * 拼写检查配的语言（`settings.editor.spellcheck_lang`）。**空串 = 跟随系统**，
+   * `null` = 设置还没读回来。
+   *
+   * ⚠️ **只用来把菜单第一项的措辞说准**（2026-10-10 加的语言那一格）：配了
+   * 具体语言时，那一项再写「自动检测语言」就是一句假话——它实际用的是那个语言。
+   * 菜单里**不放语言列表**（那是一个十几项的列表，塞在这个小菜单里没法用；
+   * 选语言在「设置 → 编辑器 → 拼写检查」那一页）。
+   */
+  拼写语言: string | null;
   /** 用户在菜单里选了「自动检测语言 / 不使用拼写检查」。**落到 `settings.editor.spellcheck`。** */
   onSetSpellcheck: (on: boolean) => void;
   /** 显示/隐藏侧栏。**与「视图」菜单、`Ctrl+Shift+L`、侧栏那颗 × 同一个 setter。** */
@@ -293,11 +304,21 @@ export function StatusBar({
   for (const m of 菜单次序) 统计勾[统计前缀 + m] = m === metric;
 
   const 拼写条目: MenuEntry[] = [
-    { id: "spell.auto", label: t("Auto-detect language"), checkable: true },
+    {
+      id: "spell.auto",
+      // ⚠️ 配了具体语言时那一项就得说那个语言（2026-10-10）：菜单里只有
+      // 「开」和「关」两项，写"自动检测语言"而实际用的是 `zh_CN` 就是假话。
+      label: 拼写语言
+        ? t("Language: {0}", 拼写语言)
+        : t("Auto-detect language"),
+      checkable: true,
+    },
     { id: "spell.off", label: t("Do not check spelling"), checkable: true },
   ];
   // ⚠️ 两件事是**同一个布尔的两种说法**（后端只有"跟随系统"这一种语言状态，
   // 见文件头那段），所以两项互斥。`null`（设置没读回来）时**两项都灰**。
+  // ⚠️ 语言那一格**不进这两个勾**（它只说"用哪本词典"，开/关还是这个布尔）；
+  // 它只在上面那句措辞里露面。
   const 拼写勾: Record<string, boolean> = {
     "spell.auto": spellcheck === true,
     "spell.off": spellcheck === false,

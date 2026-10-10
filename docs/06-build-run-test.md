@@ -6086,3 +6086,38 @@ pandoc 面板那颗「去官网」——三个症状一模一样，都是"点了
 **菜单里那条「格式 → 超链接」**（⚠️ 它走的是 `ui/useCommandTable.ts` 那条路，与 ⑥ 的
 `Ctrl+K` **同一个 handler**（快捷键那一路本来就从 `menuHandlers` 派发），但**没有单独点过
 菜单项**）；以及**鼠标悬停在那条链接上有没有别的反应**（今天没有 hover 那层）。
+
+---
+
+### 5.60 交叉编译一次 Windows（第 110 项，2026-10-10，⚠️ **只到 `cargo check`**）
+
+**为什么有这一节**：用户 2026-10-10 追加了一句「另外，做Windows编译尝试」。这类事情
+**最容易变成"跑一遍、看它红了、然后忘掉"**，所以跑法与当时的下场都记在这儿，
+下次谁再试不必从零查。
+
+```sh
+# ① 目标 ＋ 一个 C 交叉编译器（⚠️ 依赖里有 `ring`，它的构建脚本要 x86_64-w64-mingw32-gcc）
+podman exec -u 1000 tauri-dev bash -lc 'rustup target add x86_64-pc-windows-gnu'
+podman exec -u 0    tauri-dev bash -lc 'dnf install -y mingw64-gcc'
+
+# ② 编译（⚠️ 换个 target 目录：别去抢用户那份 `target/` 的锁）
+podman exec -u 1000 -e CARGO_TARGET_DIR=/tmp/nota-win-check \
+  -w <仓库>/Nota/src-tauri tauri-dev \
+  bash -lc 'cargo check --target x86_64-pc-windows-gnu --message-format short'
+```
+
+⚠️ **为什么用 `-gnu` 而不是 `-msvc`**：这一步是在 Linux 上做的，而 MSVC 那套要
+`link.exe` 与一堆 Windows SDK 的东西；`-gnu` 只需要 mingw。**这不是"Windows 上真怎么编"的
+答案**——真要出安装包得在 Windows 上跑（或配一套完整的交叉链接环境）。
+
+**第一次的下场：17 个编译错，全在 `src-tauri/src` 自己身上**（依赖那层**一个错都没有**，
+也就是说树本身是可移植的）：`diagnostics.rs` 6 个（`gtk::` / `webkit2gtk::` 是
+`[target.'cfg(target_os = "linux")'.dependencies]` 底下的，代码没加 `cfg`）、
+`single_instance.rs` 8 个 ＋ `mcp/mod.rs` 3 个（`std::os::unix` 那一套）、
+`cli.rs` 1 个（`OsString::from_vec`）。
+
+**修法**：按 `#[cfg(unix)]` / `#[cfg(target_os = "linux")]` 分档，并给别的平台写
+**"这一格明确没做"的桩**（细节与判据见 `docs/07` 第 110 项）。⚠️ **判据是那两条**：
+`cargo check --target x86_64-pc-windows-gnu` **0 error / 0 warning**，
+而 Linux 上 `cargo test --lib` 仍然 **612 passed / 0 failed**（分档不许弄坏主场）。
+⚠️ **没做的**：`cargo build`（真链接）、在 Windows 上跑、任何 Windows 特有的真机验证。

@@ -1,4 +1,5 @@
-//! **页面引擎（webview）身上的开关**：目前只有拼写检查（2026-09-27）。
+//! **页面引擎（webview）身上的开关**：目前只有拼写检查（2026-09-27 开关、
+//! 2026-10-10 加语言）。
 //!
 //! # 为什么和 `commands/window.rs` 分开
 //!
@@ -18,9 +19,32 @@
 //! ⚠️ 设置里那个 `editor.spellcheck` 此前是一个**拨了不生效的死开关**
 //! （2026-09-26 就在界面上，全仓没有一处读它）。这一模块就是把它接上。
 //!
-//! ⚠️ **语言不可选、跟随系统**（`settings/editor.rs` 那条注释）：WebKitGTK 的
-//! 拼写语言列表默认是空的，空列表的含义就是"跟系统走"——所以我们**不去设它**，
-//! 设了反而等于把"跟随系统"钉死成一个值。
+//! # 语言那一格为什么也在这儿（2026-10-10）
+//!
+//! 用户要的是「**拼写检查允许设置不同语言**」。查过 WebKit 自己的源码之后，
+//! 落地的地方**只有这一条路**（`Source/WebCore/platform/text/enchant/TextCheckerEnchant.cpp`，
+//! 2026-10-10 读的 `main` 分支）：
+//!
+//! ```text
+//! updateSpellCheckingLanguages(列表)
+//!   ├─ 列表非空 → 逐个 `enchant_broker_dict_exists()`，**装着的那些**才加载
+//!   └─ 列表为空 → 拿系统默认语言；连它都没有词典 → 退到"装着的第一个词典"
+//! checkSpellingOfString(词) → 拿这个词去**加载着的那几本词典**里查
+//! ```
+//!
+//! 三条由此定下来：
+//!
+//! 1. **列表就是"用哪些语言"**。⚠️ 语言标签是 enchant/hunspell 那套
+//!    **`语言_地区`**（`zh_CN` / `en_US`，**下划线**），不是 BCP-47 的 `zh-CN`——
+//!    写成连字符时 `enchant_broker_dict_exists()` 认不出来，而症状是**一个字都不检查**。
+//! 2. **空列表不是"没有语言"，是"跟随系统"**——所以"跟随系统"这一档就是
+//!    **把空列表设回去**，不是"不去设它"。⚠️ 这条是 2026-10-10 改的口径：
+//!    从前这一格写"语言不可选"，理由是"设了等于把跟随系统钉死"——那个理由**站不住**，
+//!    空列表本身就是"跟随系统"那一档。
+//! 3. ⚠️ **元素的 `lang` 属性在这一版 Linux 上不参与挑词典**（当年那份交接单里
+//!    猜的是它挑，读了源码之后推翻：`checkSpellingOfString` 从头到尾没有语言参数，
+//!    拿的是全局那几本词典）。前端仍然把 `lang` 写在正文那一层上——那是文档语言的
+//!    正当声明（断词、朗读、以及将来换内核时有用），**但它不是语言这一格的落地方式**。
 //!
 //! # ⚠️ 只有 Linux 那一条是真的
 //!
@@ -36,6 +60,7 @@
 use std::sync::mpsc;
 use std::time::Duration;
 
+use serde::Serialize;
 use tauri::Manager;
 
 use crate::error::{NotaError, Result};
@@ -51,10 +76,39 @@ const 主窗口: &str = "main";
 /// ——那种卡死比"报一句读不到"难查得多。宁可如实报失败。
 const 等回话: Duration = Duration::from_millis(800);
 
-/// 读一眼拼写检查现在开着没有。
+/// 引擎那边拼写检查的现状。
+///
+/// ⚠️ **读回来的，不是我们请求的那个值**（本仓的老口径，见文件头）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct 拼写现状 {
+    /// 总开关。
+    pub on: bool,
+    /// **真加载着的那几本词典的标签**（`["en_US"]` 这种）。
+    /// 空 = 一本都没加载（⚠️ 那意味着**一个字都不会检查**，不是"没问题"）。
+    ///
+    /// ⚠️ 它与"我们请求的那几个语言"**不是一回事**：请求了 `["zh_CN"]`
+    /// 而机器上没这本词典时，这里回来的就是空的——前端靠这件事告诉用户
+    /// "这个语言没有词典"，理由见文件头第 3 条上面那段。
+    pub languages: Vec<String>,
+}
+
+/// 这一趟要改什么。`只读` 那一档就是"读一眼"。
+///
+/// ⚠️ 写成枚举而不是"两个 `Option` 参数"：`Option<bool>` + `Option<Vec<String>>`
+/// 能表达出"两个都设"这种**没有意义**的组合，而这里三种意图互斥。
+enum 改动 {
+    /// 什么都不改，只把现状读回来。
+    只读,
+    /// 开关。
+    开关(bool),
+    /// 语言列表。⚠️ **空列表是"跟随系统"那一档**（见文件头第 2 条）。
+    语言(Vec<String>),
+}
+
+/// 读一眼拼写检查现在是什么状态（开关 ＋ 真加载着的词典）。
 #[tauri::command]
-pub async fn nota_webview_spellcheck_get(app: tauri::AppHandle) -> Result<bool> {
-    问主线程(app, None).await
+pub async fn nota_webview_spellcheck_get(app: tauri::AppHandle) -> Result<拼写现状> {
+    问主线程(app, 改动::只读).await
 }
 
 /// 打开/关掉拼写检查。**返回改完之后从引擎读回来的值**。
@@ -64,26 +118,37 @@ pub async fn nota_webview_spellcheck_get(app: tauri::AppHandle) -> Result<bool> 
 /// 才是真的。
 #[tauri::command]
 pub async fn nota_webview_spellcheck_set(app: tauri::AppHandle, on: bool) -> Result<bool> {
-    问主线程(app, Some(on)).await
+    Ok(问主线程(app, 改动::开关(on)).await?.on)
 }
 
-/// 把活投给主线程：可选地**先设**，然后**无条件读一遍**回来。
+/// 换拼写检查用的语言。`languages` 空 = **跟随系统**。
 ///
-/// `要设` 是 `Option` 而不是"另写两个函数"：读那一段（`读一眼`）在两个命令里
-/// 是同一段，复制两份的话哪天读法改了就会只改一边——而症状是"设完的返回值和
+/// 返回**引擎真加载着的那几本词典**（可能不是你给的那几个，见 `拼写现状::languages`）。
+#[tauri::command]
+pub async fn nota_webview_spellcheck_languages_set(
+    app: tauri::AppHandle,
+    languages: Vec<String>,
+) -> Result<Vec<String>> {
+    Ok(问主线程(app, 改动::语言(languages)).await?.languages)
+}
+
+/// 把活投给主线程：可选地**先改**，然后**无条件读一遍**回来。
+///
+/// `改动` 是枚举而不是"另写几个函数"：读那一段（`读一眼`）在这几个命令里
+/// 是同一段，复制几份的话哪天读法改了就会只改一边——而症状是"改完的返回值和
 /// 单读的那个值不一样"，最难查的那一类。
-async fn 问主线程(app: tauri::AppHandle, 要设: Option<bool>) -> Result<bool> {
+async fn 问主线程(app: tauri::AppHandle, 要改: 改动) -> Result<拼写现状> {
     let 窗 = app
         .get_webview_window(主窗口)
         .ok_or_else(|| NotaError::other(format!("找不到窗口 `{主窗口}`")))?;
 
-    // ⚠️ **`mpsc` 而不是 `Arc<Mutex<Option<bool>>>`**：这里要的是"等一个值回来"，
+    // ⚠️ **`mpsc` 而不是 `Arc<Mutex<Option<拼写现状>>>`**：这里要的是"等一个值回来"，
     // 通道天然带着这个同步；共享变量还得自己配一个 Condvar 才等价。
-    let (发, 收) = mpsc::channel::<Option<bool>>();
+    let (发, 收) = mpsc::channel::<Option<拼写现状>>();
     窗.with_webview(move |w| {
         // ⚠️ 回不去就是回不去了（命令那边已经超时走人）——`let _ =` 是**有意的**，
         // 不是偷懒：这时候再 unwrap 会让主线程因为一个没人听的回复而 panic。
-        let _ = 发.send(读一眼(&w, 要设));
+        let _ = 发.send(读一眼(&w, 要改));
     })
     .map_err(|e| NotaError::other(format!("取窗口的页面句柄失败：{e}")))?;
 
@@ -100,9 +165,10 @@ async fn 问主线程(app: tauri::AppHandle, 要设: Option<bool>) -> Result<boo
 
 /// 真正落地的那一下。**只在主线程上跑**（由 `with_webview` 保证）。
 #[cfg(target_os = "linux")]
-fn 读一眼(w: &tauri::webview::PlatformWebview, 要设: Option<bool>) -> Option<bool> {
+fn 读一眼(w: &tauri::webview::PlatformWebview, 要改: 改动) -> Option<拼写现状> {
     // ⚠️ 这两个 trait 得点名引进来（这个 crate 没有 prelude）：`context()` 在
-    // `WebViewExt` 上、`set/is_spell_checking_enabled` 在 `WebContextExt` 上。
+    // `WebViewExt` 上、`set/is_spell_checking_enabled` 与那两个语言方法都在
+    // `WebContextExt` 上。
     // 不引入的话报的是"没有这个方法"（同 `pdf_print.rs` 里那条注释）。
     use webkit2gtk::{WebContextExt as _, WebViewExt as _};
 
@@ -112,10 +178,26 @@ fn 读一眼(w: &tauri::webview::PlatformWebview, 要设: Option<bool>) -> Optio
     // 写错的表现是**编译期**的"没有这个方法"（不是运行期静默失效），所以改的时候
     // 别照着老文档里的 `webkit_settings_*` 抄。
     let 上 = w.inner().context()?;
-    if let Some(开) = 要设 {
-        上.set_spell_checking_enabled(开);
+    match 要改 {
+        改动::只读 => {}
+        改动::开关(开) => 上.set_spell_checking_enabled(开),
+        改动::语言(语言) => {
+            // ⚠️ 空 `Vec` 要**照样调**（不能 `if !语言.is_empty()` 跳过）：
+            // 空列表是"跟随系统"那一档，跳过它就等于"上一个语言还留着"。
+            let 借用: Vec<&str> = 语言.iter().map(String::as_str).collect();
+            上.set_spell_checking_languages(&借用);
+        }
     }
-    Some(上.is_spell_checking_enabled())
+    Some(拼写现状 {
+        on: 上.is_spell_checking_enabled(),
+        // ⚠️ `GString` → `String` 转一手：`GString` 带的是 glib 的引用计数，
+        // 而这条值要跨线程回给命令那边（`mpsc`），非 `Send` 的类型过不去。
+        languages: 上
+            .spell_checking_languages()
+            .iter()
+            .map(|l| l.to_string())
+            .collect(),
+    })
 }
 
 /// 别的平台：接口在那儿，但底下没有实现。
@@ -124,6 +206,19 @@ fn 读一眼(w: &tauri::webview::PlatformWebview, 要设: Option<bool>) -> Optio
 /// 而这里的事实是"**没问到**"。混成一样的话，界面会显示一个它其实控制不了的
 /// 开关位置——那是本仓最忌讳的那类故障。
 #[cfg(not(target_os = "linux"))]
-fn 读一眼(_w: &tauri::webview::PlatformWebview, _要设: Option<bool>) -> Option<bool> {
+fn 读一眼(_w: &tauri::webview::PlatformWebview, 要改: 改动) -> Option<拼写现状> {
+    // ⚠️ 这里**把 `要改` 拆开、逐档 `let _` 掉**，不是随手写成 `_要改`：
+    // 那样这两个 payload 在这个平台上**从没被读过**，编译期会一直报
+    // `field 0 is never read`（做 Windows 编译尝试时量到的）。而那条告警本身
+    // 说的正是实话——**这个平台上这两格确实改不了**——所以这里把它挑明。
+    match 要改 {
+        改动::只读 => {}
+        改动::开关(开) => {
+            let _ = 开;
+        }
+        改动::语言(语言) => {
+            let _ = 语言;
+        }
+    }
     None
 }

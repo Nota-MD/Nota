@@ -347,6 +347,7 @@ PAIRS=(
   "src/ui/pluginText.ts                          04"
   "src/ui/PanelBody.tsx                           04,11"
   "src/ui/panel-nodes.ts                          11,13"
+  "src/ui/panel-data-nodes.ts                     13"
   # ⚠️ 2026-09-27 补的三行：写作统计分享图那一批（`docs/07` 第 65 项第三轮）。
   # ⑤ 只扫 `src-tauri/src` 与 `src`，所以下面这三个新文件是**靠这张表**被管的。
   "src/ui/share-card.ts                           02,04,06"

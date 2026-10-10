@@ -159,6 +159,9 @@ pub fn nota_plugins_open_dir(app: tauri::AppHandle) -> Result<String> {
 /// 2. **值要夹进范围**（`SettingDecl::夹紧`）。前端本来就是从这根滑杆上读到的数，
 ///    正常不会越界；但"前端不会乱发"不是一个该被信任的前提，
 ///    而且用户手改过设置文件之后，界面上的读数和文件里的值本来就可能对不上。
+///    ⚠️ **2026-10-10 起 `value` 是 JSON 而不是 `f64`**：那一格长什么样由插件
+///    自己在清单里声明（滑杆／文本／开关），所以"值是什么形状"只有
+///    `SettingDecl::收值` 知道——那一条判据也只有一处。
 /// 3. **写完喊一声**（`EVENT_PANEL_DIRTY`）：插件那个面板可能正开着，
 ///    它读的就是这一格。⚠️ `live` 的面板（写作统计）本来每秒都会重拉一次，
 ///    这一声是给**不是 live** 的面板的——它们平时"切过去才拉一次"。
@@ -170,7 +173,7 @@ pub fn nota_plugin_setting_set(
     app: tauri::AppHandle,
     plugin: String,
     key: String,
-    value: f64,
+    value: serde_json::Value,
 ) -> Result<()> {
     use tauri::Emitter;
 
@@ -193,9 +196,10 @@ pub fn nota_plugin_setting_set(
             })?
     };
 
-    // ② 夹紧 + 写。
-    let 收 = 声明.夹紧(value);
-    crate::lua::api::settings::宿主写一个(&plugin, &key, toml::Value::Float(收))?;
+    // ② 按档位收成 TOML ＋ 写。⚠️ 滑杆那档的"夹紧"就在 `收值` 里
+    //（`SettingDecl::收值`，三种档位共一处），这一边不再自己夹一遍。
+    let 收 = 声明.收值(&value)?;
+    crate::lua::api::settings::宿主写一个(&plugin, &key, 收)?;
 
     // ③ 面板该重拉了（见上面第 3 条）。
     app.emit(

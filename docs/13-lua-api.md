@@ -914,9 +914,11 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 | `buttons` | `items = { { label, command, args, prompt, style, disabled } … }` | 一排按钮，点了调 `command` |
 | `empty` | `text` | 居中的一句"这里没有东西" |
 | `separator` | — | 一条分隔线 |
-| `message` | `text`，`from` | 一问一答里的一条消息（2026-09-24，AI 对话框要的） |
+| `message` | `text`，`from`，`copy` | 一问一答里的一条消息（2026-09-24，AI 对话框要的）。⚠️ `copy = true` → 宿主在那一句底下画一颗「复制」（2026-10-10 加：插件那套 API 里没有剪贴板，而"把这段回答拿走"是现代对话框里最常用的一颗按钮） |
 | `diff` | `items = { { op, text } … }` | 一块增删对照（2026-09-24） |
-| `input` | `arg`，`submit`，`submit_label`，`placeholder`，`hint`，`multiline` | 输入框 ＋ 发送键（2026-09-24） |
+| `input` | `arg`，`submit`，`submit_label`，`placeholder`，`hint`，`multiline`，`chips` | 输入框 ＋ 发送键（2026-09-24）。⚠️ `chips`（2026-10-10 加）是卡片里那排小按钮，形状与 `buttons` 的 `items` 一模一样 |
+| `tabs` | `items = { { label, active, pick, close } … }`，`new = { command, args, title }` | **一排标签页**（2026-10-10 加，AI 插件的对话要的）：点字面切过去、点右边那颗小叉关掉它，末尾那颗「＋」是"再来一个"。⚠️ 一颗标签是**两件事**（切 / 关），所以它是一个 `kind`（同 `graph` 当初的理由）；`close = null` 就是**不画那颗叉** |
+| `hero` | `title`，`subtitle` | 空态那行**大字 ＋ 小字**（2026-10-10 加）：现代 AI 对话框在一句都没聊时画的就是这个。⚠️ 与 `empty` 的差别是**份量**：那个是"这里没有东西"的小灰字，这个是"这一屏现在就是让你开始" |
 | `frame` | `url`，`alive`，`height` | 嵌一块**本机开发服务器**的画面（2026-09-25，`nota.devserver` 要的，§13） |
 | `heatmap` | `title`，`unit`，`days`，`to`，`weeks` | 一格一天的**热力图**（2026-09-27，写作统计的长期那本账要的）：一列一周、从周一起，最后一列画到 `to` 那天为止。⚠️ `days` 是**一个字符串**，不是一天一项——宿主那个面板节点上限（200）装不下 26 周；形状见 `ui/heatmap.ts::读热力记录`。⚠️ 它**不认识“今天”**，右端由 `to` 定 |
 | `graph` | `items = { { art, text, tone, picked, bond, pick } … }` | 一棵**提交树**（2026-09-26，git 插件要的，见下） |
@@ -931,9 +933,9 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 
 | | 说明 |
 |---|---|
-| `message` | `from = "user"` 靠左、`from = "ai"` 靠右，**认不出的 `from` 当 `ai`**。文本**保留换行**（`white-space: pre-wrap`），长词硬折行。⚠️ 上限比别的块宽（20000 字，见下） |
+| `message` | ⚠️ **2026-10-10 换了左右**：`from = "user"` **靠右的一条气泡**（淡底色、圆角、最宽 88%），`from = "ai"` **靠左、不加气泡**（回答通常很长，套一层底色会让整栏变成一块大色斑）。**认不出的 `from` 当 `ai`**。文本**保留换行**（`white-space: pre-wrap`），长词硬折行。⚠️ 上限比别的块宽（20000 字，见下）。⚠️ `copy = true` 时底下多一颗「复制」（**宿主做**：`navigator.clipboard`） |
 | `diff` | 五种 `op`（见 §11.3 那张表）：`del` 红底 `-`、`add` 绿底 `+`、`ctx` 上下文（不上色）、`hunk` 蓝字、`meta` 灰字——**认不出的 `op` 当 `add`**。是 `<pre>`：**行首空格保留**、长了**不折行**（横向滚动，2026-09-26 起；编辑区那份同样）。⚠️ 它**只是一块显示**——不认识 `nota-diff` 那份格式，也不知道点了按钮会怎样 |
-| `input` | `arg` / `submit` **缺一个整块就不画**（跟 `prompt` 同一条规矩：问了也送不出去，不如不弹）。`multiline = true` → `textarea`（**回车换行、Ctrl/Cmd+Enter 发送**）；否则单行（**回车发送**）。发出去的动作就是"调 `submit` 命令，参数 `{ [arg] = 输入 }`"——**与按钮无区别**，只是值来自输入框 |
+| `input` | `arg` / `submit` **缺一个整块就不画**（跟 `prompt` 同一条规矩：问了也送不出去，不如不弹）。`multiline = true` → `textarea`（**回车换行、Ctrl/Cmd+Enter 发送**）；否则单行（**回车发送**）。发出去的动作就是"调 `submit` 命令，参数 `{ [arg] = 输入 }`"——**与按钮无区别**，只是值来自输入框。⚠️ **画成一张圆角卡片**（2026-10-10）：框、那排 `chips`、发送键装在同一个壳里（`.panel-input-wrap`），发送键是**一颗圆钮 ＋ 一个箭头**（`submit_label` 成了它的 `title` / `aria-label`）。⚠️ `chips` 里的每一颗**与 `buttons` 一样是"点了就跑一条命令"**，不是"开关这一轮的模式"——要那种效果得由插件自己记住状态并画成 `style = "primary"` |
 | `graph` | **唯一一种"一行的两头各是一颗可点的东西"**的块（2026-09-26 加，git 插件那棵提交树要的）：`art` 是左边那截图线（**等宽原样画，空格不折**）、`text` 是右边那串字、`picked = true` 的行加一层底色；`bond` / `pick` 是两颗动作，**各自可以为 `null`**（那一头就画成纯文字——⚠️ 与 `buttons` 那条"没写 `command` 也画成灰的"**故意不同**：树上"这一头没有动作"是正常状态，画成灰的会让整棵树布满灰块）。一颗动作是 `{ command, args, title }`：**没有 `prompt`**（树上的点击都是"看一眼"），**没有 `label`**（那串字是内容不是按钮名），`title` 只当鼠标提示。⚠️ 它**不是画布**：条目内容仍然全是插件给的字符串、由 React 转义，没有任何一条路能把它们变成 HTML 或属性 |
 | `frame` | **唯一一处"把外部内容嵌进 DOM"**，所以口子开在这儿、也只开到这么大。⚠️⚠️ **`url` 只能由宿主填**：插件在自己的 `render` 里写 `url` 没用——宿主会把它整个抹掉，再按"**这个插件自己那场 devserver 会话**"填上（`lua/api/devserver.rs::填_frame`）。所以"嵌别人的页面"这条路由**不存在**：没有会话就没有地址。⚠️ 前端还会再判一次（只认 `http://localhost:…` / `127.0.0.1`，别的当"没有地址"）——那不是用来防插件的，是因为这份 JSON 也可能来自别处（手改过的数据、测试）。⚠️ CSP 那边也钉着（`tauri.conf.json` 的 `frame-src` 只列了这两个主机）。⚠️ `alive = false` 表示会话已经收了；`height` 只认数字、夹在 120–2000 之间 |
 
@@ -1666,10 +1668,18 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 | **`789-792`** | **`pcall(refresh, nota, true)` + `nota.log.warn`** | **全文件最值得套用的一段**：`on_load` 末尾的调用一定要兜底，否则"环境不具备"会变成"插件加载失败"（§7.3）。⚠️ 也正因为 `refresh` 会走到 `notify`，而 `on_load` 时前端还没起来——见 §8.1 那条推/拉的提醒 |
 | `795-798` | 空的 `on_unload` | 没有要落盘的状态——**空着是正确做法**，不需要刻意补内容 |
 
-### 14.2 `plugins/ai/`（`main.lua` 345 ＋ `chat.lua` 682 ＋ `panel.lua` 578 ＋ `request.lua` 353 ＋ `store.lua` 241 ＋ `util.lua` 184 ＋ `scope.lua` 175）—— "联网插件 ＋ 对话框怎么写"
+### 14.2 `Nota-plugins/plugins/ai/`（`main.lua` 328 ＋ `chat.lua` 740 ＋ `panel.lua` 623 ＋ `request.lua` 356 ＋ `store.lua` 241 ＋ `util.lua` 210 ＋ `scope.lua` 175）—— "联网插件 ＋ 对话框怎么写"
 
 > 2026-09-24 大改：从"一问一答 ＋ 预览"改成**多对话对话框 ＋ 末尾附改动块**。
 > 改动块的**格式与实现搬去了 §11**，这一块里只剩两句转发。
+>
+> ⚠️ **2026-10-10 又一次改版**（用户：「修改AI插件……要让它更现代，类似这种」＋
+> 「**API等设置专门放一个窗口**」＋「**对话用标签页管理，在上方**」，参照的是工作区里
+> 那份 `markra-ref` 的 AI 面板）：面板换了形状（**上方的对话标签页** ＋ 空态的 `hero`
+> ＋ 圆角输入卡片里的预设小按钮与圆形发送键 ＋ 每条消息的「复制」＋ 最后一条回答底下
+> 的「重试」），**那五格设置整块搬去了「设置 → 拓展」**（宿主照 `plugin.toml` 底下
+> 五段 `[[settings]]` 画，见 `docs/11` §2.5）。⇒ 这个插件**成了"两种设置写法都用"的
+> 第一个样例**：今天它只**读**设置（`util.read_setting`），一个字节都不写。
 >
 > ⚠️ **2026-09-29 起它不是一个文件了**，2026-10-04 又拆了一次。现在有**七份**，
 > 拆的线是「**谁碰什么**」——这也是这一族最值得学的地方（`docs/12` §5.9）：
@@ -1693,16 +1703,14 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 > "一个对话里有什么、怎么存"。拆的**触发点**是 `docs/09` §4 那条 300–800 行——
 > 第 58 项那批代码把 `chat.lua` 从 744 顶到 977，离 1000 只剩 23 行。
 
-`main.lua`（345 行）逐块：
+`main.lua`（328 行）逐块：
 
 | 行 | 内容 | 值得学的地方 |
 |---|---|---|
-| `1-88` | 文件头 | 走任何 OpenAI 兼容接口（**密钥明文存**）、一次回答的两段结构、**AI 的输出不许直接落进文档**、多对话只在内存、**变量名不许用中文**（§0.6）——外加**那张"七份文件"表**（上面那张表就是从这儿抄的） |
-| `89-102` | 转接 | `local util/chat/panel/store/scope/request = require(...)`。⚠️ **拆完第一件事就是这个**：`chat` / `panel` / `request` / `scope` / `store` 各自有一份 `T`，`on_load` 里要**逐个 `bind_text`**——**漏一个不报错**，只是那块里的英文在中文界面上不翻 |
-| `103-110` | 文案 | `local T = nota.i18n.text`（⚠️ 这一份是 `on_load` **里面**的，与那几个模块的"先存根、后重绑"写法不同） |
-| `111-128` | `save_setting` | **空串 = 清掉回到默认值**（`nota.settings.set(k, nil)`），下面七个 `set_*` 共用 |
-| `129-336` | `on_load` | 依次：绑 `T`（六个模块逐个）→ `bind_text` → 注册十二个命令（`send` / 五个预设 / `new_chat` / `switch_chat` / `del_chat` / `apply_patch` / `discard_patch` / `set_key` / `set_base` / `set_model` / `toggle_scope` / `toggle_expanded` / **`toggle_stream`**）→ `register_panel`（`render = function() return panel.content(nota) end`，§8.2 那条"现跑"）→ 把五个预设＋「新对话」放进菜单。⚠️ **命令体全都只有两三行**（调 `chat.xxx` 再 `nota.ui.refresh("ai")`）：逻辑在模块里，外壳只接线 |
-| `337-345` | `on_unload` | ⚠️ **密钥故意不删**：卸载插件不该把用户填的东西一起扔掉（对话本来就在内存里，随进程走） |
+| `1-95` | 文件头 | 走任何 OpenAI 兼容接口（**密钥明文存**）、一次回答的两段结构、**AI 的输出不许直接落进文档**、多对话（2026-10-04 起**落盘**）、**变量名不许用中文**（§0.6）——外加**那张"七份文件"表**（上面那张表就是从这儿抄的） |
+| `96-118` | 转接与文案 | `local util/chat/panel/store/scope/request = require(...)`；⚠️ **拆完第一件事就是这个**：那几份各自有一份 `T`，`on_load` 里要**逐个 `bind_text`**——**漏一个不报错**，只是那块里的英文在中文界面上不翻。⚠️ 这里**从前还有一个 `save_setting`**（写 `api_key` / `base_url` / …）——五格设置搬去设置页之后**整块删掉了**，见下 |
+| `119-318` | `on_load` | 依次：绑 `T`（六个模块逐个）→ **`chat.load(nota)` 把上次的对话读回来**（顺序要紧：面板第一次拉内容时那份记录得已经在手里）→ 注册命令（五个预设 / `send` / `new_chat` / `switch_chat` / `close_chat` / `reopen_chat` / `del_chat` / `expand_msg` / `toggle_scope` / **`toggle_scope_view`** / **`toggle_closed_view`** / **`retry_last`** / `apply_patch` / `discard_patch` / `review_patch`）→ `register_panel`（`render = function() return panel.content(nota) end`，§8.2 那条"现跑"）→ 把五个预设＋「新对话」放进菜单。⚠️ **命令体全都只有两三行**（调 `chat.xxx` 或 `panel.xxx` 再 `nota.ui.refresh()`）：逻辑在模块里，外壳只接线 |
+| `319-328` | `on_unload` | ⚠️ **密钥与对话都故意不删**：卸载插件不该把用户填的东西、聊过的记录一起扔掉（设置与对话都已经在盘上） |
 
 `chat.lua` / `request.lua` / `panel.lua` 里最值得看的那几处：
 
@@ -1712,8 +1720,10 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 | `chat.lua 85-126` | `PRESET_ORDER` ＋ `PRESETS`。⚠️ 顺序**另写一张数组**而不是 `pairs` 遍历：`pairs` 顺序不保证，界面上那排按钮会每次重开都换位置，而且不报错。⚠️ 预设 `ask` 写的是**用户会说的那句话**——它要以用户消息的身份出现在对话里 |
 | `chat.lua 127-175` | `SYSTEM_PROMPT`：一个**完整的围栏样例** ＋ 六条编号规矩（末尾、逐字一致、连续、别加解释行、不改的地方不要抄进来…）。⚠️ **三处契约改一处要改三处**（`diff.rs` / 这里 / §11） |
 | `chat.lua 201-329` | 对话状态。⚠️ 身份用**编号**不用下标（删掉一个之后下标整体前移，而面板按钮里存的是编号）；下标越界**拉回第一个**不报错；⚠️ 身份还是**闭包干净**的（`chat_is_fresh` 换 `cur` 时要认 id，不然两个对话的"新鲜度"会互相污染） |
-| `chat.lua 415-489` | `M.send`——**所有走网络的路都收在这一个函数**（网络那一截现在只是 `request.ask` 一行）。失败也**留在对话里**（`role = "error"`），不是"面板闪一下、输入的内容也丢了"；⚠️ 新回复里**没有改动块 → 上一处作废**（留着它，几轮之后点的「应用」会是过时的那一处） |
-| `chat.lua 415-489` 里那三行 | **流式的收尾**：`request.ask(nota, messages, function(text) pushed = true; nota.ui.stream(text) end)`，返回后 `if pushed then nota.ui.stream("") end`（**收工那一声**），末尾照旧 `nota.ui.refresh("ai")`。⚠️ 半截回答（`r.partial`）**也落进对话**——见 §9.1 |
+| `chat.lua 421-495` | `M.send`——**所有走网络的路都收在这一个函数**（网络那一截现在只是 `request.ask` 一行）。失败也**留在对话里**（`role = "error"`），不是"面板闪一下、输入的内容也丢了"；⚠️ 新回复里**没有改动块 → 上一处作废**（留着它，几轮之后点的「应用」会是过时的那一处）。⚠️ 第四个参数 `again`（2026-10-10 加）＝"**不再往对话里追加一条用户消息**"，「重试」走的就是它——**不在 `retry_last` 里抄一份 `send`**：抄第二份就一定有一处会漂 |
+| `chat.lua 421-495` 里那三行 | **流式的收尾**：`request.ask(nota, messages, function(text) pushed = true; nota.ui.stream(text) end)`，返回后 `if pushed then nota.ui.stream("") end`（**收工那一声**），末尾照旧 `nota.ui.refresh("ai")`。⚠️ 半截回答（`r.partial`）**也落进对话**——见 §9.1 |
+| `chat.lua 510-539` | `M.retry_last`（2026-10-10 加）：把**最后一条回答**丢掉、拿上一条用户消息重发。⚠️ 判据是"**最后一条是 `assistant`**"——末尾是错误说明时不给（重试一次还是同样结果）；⚠️ 那条**待应用的改动一起作废**（它多半就是这条回答带出来的，而重试会带来新的一份） |
+| `panel.lua 502-` | `M.content`：整栏的次序（**标签页 → 模型那一行 → 消息/空态 → 待应用的改动 → 输入卡片 → 两张次要开关 → 摊开的那两块 → "设置在哪"**）。⚠️ 那两块（可读文件 / 已关掉的对话）**默认收着**，状态住在本模块（`show_scope` / `show_closed`，同 `diff.lua` 那份 `show_diff`）：摊开时各占半屏，而主视线只该有"消息 ＋ 输入框" |
 | `request.lua 56-79` | 段注释：**两条路一张表**（整段 / 流式各什么时候走）。⚠️ 两条路的**输出形状完全一样**，所以 `chat.lua::M.send` 不需要知道走的是哪条——判断只在 `M.ask` 里做一次 |
 | `request.lua 80-97` | `build_spec`。⚠️ ⚠️ **`stream = true` 只在流式那条路上写**：整段那条路写上它，某些服务会改回一份 SSE 正文，而那条路**没有一行行拆的代码**，整份当 JSON 解只会得到"不是 JSON"。少写一个键，两边都少一处能错的地方 |
 | `request.lua 104-126` | `preflight`：**两条路都要走的那两项检查**抽成一处——抄漏一处的表现是"流式那条路上地址少了 `https` 直接崩一个栈给用户看" |

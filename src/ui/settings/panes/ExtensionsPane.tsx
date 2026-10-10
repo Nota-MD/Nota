@@ -43,7 +43,16 @@ import type { PluginInfo, 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { 来源说明, 能力名, 语言对不上, 语言提示, 语言标签名 } from "@/ui/pluginText";
 import type { 插件动作 } from "@/ui/usePlugins";
-import { ActionButton, Note, Range, SettingRow, SettingsGroup, Value } from "../primitives";
+import {
+  ActionButton,
+  Note,
+  Range,
+  SettingRow,
+  SettingsGroup,
+  TextInput,
+  Toggle,
+  Value,
+} from "../primitives";
 
 /**
  * 这一页要的三样。
@@ -172,18 +181,35 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
                   </>
                 }
               >
-                {/* ⚠️ 现在只有 `range` 一种（清单校验挡掉了别的），所以这里
-                    不分派。加第二种控件时**改这一处 ＋ `docs/11` 那张表**——
-                    照 `kind` 分派的位置就是这里。 */}
-                <Range
-                  value={s.value}
-                  min={s.min}
-                  max={s.max}
-                  step={s.step}
-                  suffix={s.unit}
-                  title={s.help || undefined}
-                  onChange={(v) => void 动作.设置(p.id, s.key, v)}
-                />
+                {/* ⚠️ **照 `kind` 分派的位置就是这里**（三种：滑杆／文本／开关，
+                    2026-10-10 从一种加到三种——AI 插件那几格设置要搬进这个窗口）。
+                    每一种都直接读宿主收好的那个字段，**前端不夹值、不判形状**：
+                    "什么值合法"只有清单那边一处判据（`SettingDecl::收值`）。 */}
+                {s.kind === "range" ? (
+                  <Range
+                    value={s.value}
+                    min={s.min}
+                    max={s.max}
+                    step={s.step}
+                    suffix={s.unit}
+                    title={s.help || undefined}
+                    onChange={(v) => void 动作.设置(p.id, s.key, v)}
+                  />
+                ) : s.kind === "toggle" ? (
+                  <Toggle
+                    checked={s.on}
+                    onChange={(v) => void 动作.设置(p.id, s.key, v)}
+                  />
+                ) : (
+                  <TextInput
+                    value={s.text}
+                    secret={s.secret}
+                    width="lg"
+                    placeholder={s.placeholder || undefined}
+                    title={s.help || undefined}
+                    onChange={(v) => void 动作.设置(p.id, s.key, v)}
+                  />
+                )}
               </SettingRow>
             )),
           ])}

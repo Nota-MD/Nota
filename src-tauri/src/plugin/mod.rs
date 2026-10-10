@@ -509,15 +509,20 @@ impl PluginHost {
 ///
 /// # 三件事在这里一次性做完
 ///
-/// 1. **值**：插件设置文件里那个键（`lua/api/settings.rs::读全部`），**夹进范围**
-///    并按步长对齐（`SettingDecl::夹紧`）。文件里没这个键 = 用户还没拖过 =
-///    用清单里的 `default`。⚠️ 文件里那个值可能是用户手改的（`999`、`"五秒"`、
-///    一个数组），三种都不该让设置页画不出来——这正是"夹"而不是"拒"的理由。
+/// 1. **值**：插件设置文件里那个键（`lua/api/settings.rs::读全部`），按档位收成
+///    一种形状（`SettingDecl::求值`：滑杆那档夹进范围并按步长对齐）。
+///    文件里没这个键 = 用户还没设过 = 用清单里的默认值。⚠️ 文件里那个值可能是
+///    用户手改的（`999`、`"五秒"`、一个数组），三种都不该让设置页画不出来。
 /// 2. **文案**：`label` / `help` 是清单里那句**英语原文**，译文在插件自己的
 ///    `lang/<tag>.toml` 里（键就是原文）——与 [`PluginInfo::name`] / `description`
 ///    同一条规矩。取不到就用原文（`text() or 原文` 那条口径的宿主侧版本）。
 /// 3. **一个字段都不多的形状**：前端按 `kind` 分派，`range` 那三个数一定在
 ///    （清单校验保证了，见 `manifest.rs::check_settings`）。
+///
+/// ⚠️ **形状是平铺的，不是"哪个档位带哪几个键"**：三种档位共用同一个结构体，
+/// 用不上的字段填默认值（`0` / `""` / `false`）。这么做是为了让 IPC 两边那份
+/// 类型不必写成联合类型——`bridge/types.ts` 里那条 interface 一直是"字段名与
+/// Rust 这边一一对应"的形状，加一个联合类型会把两边的手抄成本翻一倍。
 fn 设置格(
     manifest: &Manifest,
     语言: &语言包,
@@ -535,13 +540,9 @@ fn 设置格(
         .settings
         .iter()
         .map(|s| {
-            // 只有数字能用（用户手改成字符串/数组的，按"没设过"处理）。
-            let 从文件 = match 文件里.get(&s.key) {
-                Some(toml::Value::Integer(i)) => Some(*i as f64),
-                Some(toml::Value::Float(f)) => Some(*f),
-                _ => None,
-            };
-            let value = s.夹紧(从文件.unwrap_or_else(|| s.default.unwrap_or(0.0)));
+            // 三种档位各一种形状，收在这里（`求值` 里那几条"手改过也不许白屏"的
+            // 口径都写在那儿）。
+            let 值 = s.求值(文件里.get(&s.key));
 
             PluginSetting {
                 key: s.key.clone(),
@@ -554,7 +555,17 @@ fn 设置格(
                 max: s.max.unwrap_or(0.0),
                 step: s.step(),
                 unit: s.unit.clone(),
-                value,
+                value: match 值 {
+                    crate::plugin::settings_decl::设置值::数(n) => n,
+                    _ => 0.0,
+                },
+                text: match &值 {
+                    crate::plugin::settings_decl::设置值::文(s) => s.clone(),
+                    _ => String::new(),
+                },
+                on: matches!(值, crate::plugin::settings_decl::设置值::开关(true)),
+                secret: s.secret,
+                placeholder: 译(语言, &s.placeholder),
             }
         })
         .collect()

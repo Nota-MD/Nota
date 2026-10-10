@@ -22,6 +22,16 @@ use serde::Deserialize;
 use crate::error::{NotaError, Result};
 
 use super::manifest::Capability;
+
+/// 一格设置**此刻的值**——三个档位各一种形状（`SettingDecl::求值` 收出来）。
+///
+/// ⚠️ 它只活在宿主里（`plugin/mod.rs` 把它摊进 `PluginSetting` 那几个平铺字段，
+/// 见那里的注释）：前端拿到的是"按 `kind` 分派之后能直接用"的那一份。
+pub enum 设置值 {
+    数(f64),
+    文(String),
+    开关(bool),
+}
 /// `[[settings]]` 段：插件声明"我有一格设置，请宿主画在「设置 → 拓展」那一页上"
 /// （2026-10-04 加）。
 ///
@@ -46,10 +56,18 @@ use super::manifest::Capability;
 /// ⚠️ 写了 `[[settings]]` **必须**同时申请 `settings.own`——宿主写的就是那个文件，
 /// 没申请却让宿主从旁边去写，等于绕过能力表开了一个口子。
 ///
-/// # 现在只有 `range` 一种控件
+/// # 三种控件：`range` / `text` / `toggle`
 ///
-/// 有真实需求才加下一种。加的时候要动的地方（宿主三处 ＋ 前端两处 ＋ 文档）写在
+/// ⚠️ **2026-10-10 从一种加到三种**，因为 AI 插件那一批要把自己面板上那几格设置
+/// （API 地址、模型、密钥）**挪进「设置 → 拓展」这个窗口**，而那三格里有两种不是滑杆：
+/// 地址与模型是文本，密钥是文本 ＋ 遮屏。用户当天的原话是「**API等设置专门放一个
+/// 窗口**」——多一种控件比"让插件自己在面板里画"更值得，因为那样设置就散在两个地方。
+/// 加下一种时该动的地方（宿主三处 ＋ 前端两处 ＋ 文档）写在
 /// `docs/11-writing-a-plugin.md` 的「给拓展做一格设置」那一节。
+///
+/// ⚠️ **每一档只认自己那几个字段**（`range` 不许写 `placeholder`，`toggle` 不许写
+/// `min`…）：写错了**在加载时就报**，而不是让用户看着一根"拖不动"或者"值不生效"的
+/// 控件猜。判据在 [`check_settings`] 的第 ③ 条。
 #[derive(Debug, Clone, Deserialize)]
 pub struct SettingDecl {
     /// 设置键。规则与 `lua/api/settings.rs::键合法吗` **逐字相同**：不含点的 ASCII 词。
@@ -80,6 +98,23 @@ pub struct SettingDecl {
     /// 两门语言写出来一个样（同 `ui/usePlugins.ts::大小说明` 那条）。
     #[serde(default)]
     pub unit: String,
+    /// `text`：输入框里那句灰字（占位符）。**要翻译**（写英语原文，译文进
+    /// 插件的 `lang/<tag>.toml`）——它是一句话，不是一个符号，与 `unit` 那条不同。
+    #[serde(default)]
+    pub placeholder: String,
+    /// `text`：是不是**密文**（`type = "password"`）。API key 那一格用。
+    ///
+    /// ⚠️ 它**只管显示**，不改存储方式：`plugin-settings/<id>.toml` 是明文的
+    /// （`docs/12` §插件设置为什么不加密）。写成 `true` 挡的是"别人从背后看一眼
+    /// 你的屏幕"，不是"读到了那个文件的人"——两件事别混。
+    #[serde(default)]
+    pub secret: bool,
+    /// `text` 的默认值（用户还没填过时框里显示什么）。不写就是空串。
+    #[serde(default)]
+    pub default_text: Option<String>,
+    /// `toggle` 的默认值。不写就是 `false`（关着）。
+    #[serde(default)]
+    pub default_on: Option<bool>,
 }
 
 fn default_setting_kind() -> String {
@@ -90,6 +125,79 @@ impl SettingDecl {
     /// 步长（不写就是 1）。
     pub fn step(&self) -> f64 {
         self.step.unwrap_or(1.0)
+    }
+
+    /// 这一格**此刻的值**（文件里那个键，按档位收成一种）。
+    ///
+    /// ⚠️ 口径与 [`Self::夹紧`] 同源：**用户手改过那份文件，什么形状都可能**——
+    /// 数的位置躺着 `"五秒"`、文字的位置躺着 `999`、开关的位置躺着 `"1"`
+    /// （老版本 AI 插件存的就是字符串 `"1"` / `"0"`）。三种都**按"没设过"处理**、
+    /// 退回清单里的默认值：一个设置页不该因为一行手改的值画不出来。
+    pub fn 求值(&self, 文件里: Option<&toml::Value>) -> 设置值 {
+        match self.kind.as_str() {
+            "text" => {
+                let 从文件 = match 文件里 {
+                    Some(toml::Value::String(s)) => Some(s.clone()),
+                    _ => None,
+                };
+                设置值::文(从文件.or_else(|| self.default_text.clone()).unwrap_or_default())
+            }
+            "toggle" => {
+                let 从文件 = match 文件里 {
+                    Some(toml::Value::Boolean(b)) => Some(*b),
+                    // ⚠️ 老 AI 插件把开关存成字符串（`"1"` / `"0"`），而这一格
+                    // 2026-10-10 才搬进设置页。认它一下，用户的旧设置就不会"看着
+                    // 被重置了"——只认这两个值，别的（`"yes"`）仍然当没设过。
+                    Some(toml::Value::String(s)) => match s.as_str() {
+                        "1" | "true" => Some(true),
+                        "0" | "false" => Some(false),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                设置值::开关(从文件.unwrap_or_else(|| self.default_on.unwrap_or(false)))
+            }
+            // `range` 与"认不出的档位"都走数：认不出的档位在加载时就被挡下了
+            //（见 `check_settings`），所以到这一步只可能是 `range`。
+            _ => {
+                let 从文件 = match 文件里 {
+                    Some(toml::Value::Integer(i)) => Some(*i as f64),
+                    Some(toml::Value::Float(f)) => Some(*f),
+                    _ => None,
+                };
+                设置值::数(self.夹紧(从文件.unwrap_or_else(|| self.default.unwrap_or(0.0))))
+            }
+        }
+    }
+
+    /// 把前端交上来的一个值收成 TOML 能存的那种，**按档位校验**。
+    ///
+    /// ⚠️ 前端本来就是照着这一格画的控件，正常不会送错形状；但"前端不会乱发"
+    /// 不是一个该被信任的前提（`commands/plugin.rs` 那段注释里说的是同一件事）。
+    /// 送错形状**报错**而不是静默丢弃：那是界面上的一根线接错了，不是用户的操作。
+    pub fn 收值(&self, v: &serde_json::Value) -> Result<toml::Value> {
+        let 不像 =
+            |要: &str| NotaError::other(format!("`{}` 这一格要的是{要}", self.key));
+        match self.kind.as_str() {
+            "text" => {
+                let s = v.as_str().ok_or_else(|| 不像("一段文本"))?;
+                // ⚠️ 上限 4000 字符：这一格存的是密钥/地址/模型名，而它每敲一键
+                // 就写一次盘（同 `ui/settings/primitives.tsx::TextInput` 那条）。
+                // 一段几万字的文本贴进来多半是贴错了框。
+                if s.chars().count() > 4000 {
+                    return Err(不像("不超过 4000 个字符的一段文本"));
+                }
+                Ok(toml::Value::String(s.to_owned()))
+            }
+            "toggle" => {
+                let b = v.as_bool().ok_or_else(|| 不像("开或关"))?;
+                Ok(toml::Value::Boolean(b))
+            }
+            _ => {
+                let n = v.as_f64().ok_or_else(|| 不像("一个数"))?;
+                Ok(toml::Value::Float(self.夹紧(n)))
+            }
+        }
     }
 
     /// 把用户（可能被手改）的值夹进 `[min, max]` 并按 `step` 对齐。
@@ -134,19 +242,21 @@ fn 小数位(step: f64) -> i32 {
 /// 校验 `[[settings]]` 那一串。
 ///
 /// 口径与 [`check_devserver`] 同源：**能挡在门口的就别留到运行时**。
-/// 五条，每条都是"写错了就该当场说，而不是等用户拖一根不会动的滑杆"：
+/// 六条，每条都是"写错了就该当场说，而不是等用户拖一根不会动的滑杆"：
 ///
 /// 1. **写了 `[[settings]]` 却没申请 `settings.own`** —— 宿主写的就是那份设置文件，
 ///    没申请却从旁边去写，等于绕过能力表开了一个口子。
-///    ⚠️ **反方向不报**：只有 `settings.own`、什么都不声明的插件（AI 那种，
-///    设置界面是它自己在面板里画的）是**正常**的，`docs/11` 那张分工表写着。
+///    ⚠️ **反方向不报**：只有 `settings.own`、什么都不声明的插件（git / slidev
+///    那种没有设置可填的）是**正常**的，`docs/11` 那张分工表写着。
 /// 2. **键不合法 / 重复** —— 键的规则与 `lua/api/settings.rs::键合法吗` 一字不差
 ///    （不含点的 ASCII 词，点号会让 TOML 把它当成嵌套表）。重复的键会让后一格
 ///    悄悄盖掉前一格。
 /// 3. **认不出的 `kind`** —— 静默降级的话，作者写的滑杆会在界面上变成别的东西。
-/// 4. **`range` 三件套缺一个** —— 没有范围的滑杆画不出来，没有默认值的滑杆
+/// 4. **档位与字段对不上**（2026-10-10 加）—— `toggle` 上写着 `min`、`text` 上写着
+///    `unit` 这种笔误的后果是那个字段**一声不响地不生效**，作者会以为它有用。
+/// 5. **`range` 三件套缺一个** —— 没有范围的滑杆画不出来，没有默认值的滑杆
 ///    在用户拖之前没有值可显示。
-/// 5. **`min >= max`、`default` 出界、`step <= 0`** —— 都是"这根滑杆拖不动"。
+/// 6. **`min >= max`、`default` 出界、`step <= 0`** —— 都是"这根滑杆拖不动"。
 pub(crate) fn check_settings(
     串: Vec<SettingDecl>,
     capabilities: &[Capability],
@@ -198,45 +308,96 @@ pub(crate) fn check_settings(
             return Err(报(format!("`[[settings]] {}` 没写 label", s.key)));
         }
 
-        // ② 控件类型
-        if s.kind != "range" {
+        // ② 控件类型：`range` / `text` / `toggle`（2026-10-10 从一种加到三种）。
+        if !matches!(s.kind.as_str(), "range" | "text" | "toggle") {
             return Err(报(format!(
-                "`[[settings]] {}` 的 kind `{}` 认不出：现在只有 `range`（滑杆）一种，\
-                 见 docs/11「给拓展做一格设置」",
+                "`[[settings]] {}` 的 kind `{}` 认不出：只有 `range`（滑杆）、\
+                 `text`（文本）与 `toggle`（开关）三种，见 docs/11「给拓展做一格设置」",
                 s.key, s.kind
             )));
         }
 
-        // ③ 范围三件套
-        let (Some(lo), Some(hi), Some(默认)) = (s.min, s.max, s.default) else {
-            return Err(报(format!(
-                "`[[settings]] {}` 是 `range`，min / max / default 三个都要给\
-                 （少了范围或者默认值的滑杆画不出来）",
-                s.key
-            )));
+        // ③ **每一档只认自己那几个字段**。
+        //
+        // ⚠️ 这一条是"能挡在门口的就别留到运行时"的直接后果：`toggle` 上写着
+        // `min = 1` 是很自然的一种笔误（从上面那格复制下来忘了删），而它的后果
+        // 是那个字段**一声不响地不生效**——作者会以为这根开关有范围限制。
+        let 不许 = |字段: &str, 为什么: &str| {
+            报(format!(
+                "`[[settings]] {}` 是 `{}`，不该写 `{字段}`（{为什么}）",
+                s.key, s.kind
+            ))
         };
-        if !lo.is_finite() || !hi.is_finite() || !默认.is_finite() {
-            return Err(报(format!("`[[settings]] {}` 的范围里有不是数的值", s.key)));
+        let 有数 = s.min.is_some() || s.max.is_some() || s.default.is_some() || s.step.is_some();
+        let 有文 = s.secret || !s.placeholder.is_empty() || s.default_text.is_some();
+        let 有开关默认 = s.default_on.is_some();
+        match s.kind.as_str() {
+            "range" => {
+                if 有文 {
+                    return Err(不许("secret / placeholder / default_text", "那是 `text` 的"));
+                }
+                if 有开关默认 {
+                    return Err(不许("default_on", "那是 `toggle` 的"));
+                }
+            }
+            "text" => {
+                if 有数 {
+                    return Err(不许("min / max / default / step", "那是 `range` 的；\
+                        文本没有范围，默认值写 `default_text`"));
+                }
+                if 有开关默认 {
+                    return Err(不许("default_on", "那是 `toggle` 的"));
+                }
+                if !s.unit.is_empty() {
+                    return Err(不许("unit", "文本读数后面没有单位"));
+                }
+            }
+            // `toggle`：只认 `default_on`（`unit` 也不给——开关没有读数）。
+            _ => {
+                if 有数 {
+                    return Err(不许("min / max / default / step", "那是 `range` 的"));
+                }
+                if 有文 {
+                    return Err(不许("secret / placeholder / default_text", "那是 `text` 的"));
+                }
+                if !s.unit.is_empty() {
+                    return Err(不许("unit", "开关没有读数"));
+                }
+            }
         }
-        if lo >= hi {
-            return Err(报(format!(
-                "`[[settings]] {}` 的 min ({lo}) 不小于 max ({hi})——这根滑杆拖不动",
-                s.key
-            )));
-        }
-        if 默认 < lo || 默认 > hi {
-            return Err(报(format!(
-                "`[[settings]] {}` 的 default ({默认}) 不在 {lo}..{hi} 里",
-                s.key
-            )));
-        }
-        if let Some(step) = s.step {
-            if !(step > 0.0) || !step.is_finite() || step > hi - lo {
+
+        // ④ `range` 的范围三件套 ＋ 那两个数得讲得通。
+        if s.kind == "range" {
+            let (Some(lo), Some(hi), Some(默认)) = (s.min, s.max, s.default) else {
                 return Err(报(format!(
-                    "`[[settings]] {}` 的 step ({step}) 不合法：要在 0 与 {:.0} 之间",
-                    s.key,
-                    hi - lo
+                    "`[[settings]] {}` 是 `range`，min / max / default 三个都要给\
+                     （少了范围或者默认值的滑杆画不出来）",
+                    s.key
                 )));
+            };
+            if !lo.is_finite() || !hi.is_finite() || !默认.is_finite() {
+                return Err(报(format!("`[[settings]] {}` 的范围里有不是数的值", s.key)));
+            }
+            if lo >= hi {
+                return Err(报(format!(
+                    "`[[settings]] {}` 的 min ({lo}) 不小于 max ({hi})——这根滑杆拖不动",
+                    s.key
+                )));
+            }
+            if 默认 < lo || 默认 > hi {
+                return Err(报(format!(
+                    "`[[settings]] {}` 的 default ({默认}) 不在 {lo}..{hi} 里",
+                    s.key
+                )));
+            }
+            if let Some(step) = s.step {
+                if !(step > 0.0) || !step.is_finite() || step > hi - lo {
+                    return Err(报(format!(
+                        "`[[settings]] {}` 的 step ({step}) 不合法：要在 0 与 {:.0} 之间",
+                        s.key,
+                        hi - lo
+                    )));
+                }
             }
         }
     }
@@ -386,5 +547,151 @@ unit = "s"
         )
         .unwrap_err();
         assert!(err.contains("不合法"), "实际：{err}");
+    }
+
+    // ── `text` / `toggle` 那两档（2026-10-10 加，AI 插件那几格设置要的）──────
+
+    const 文字与开关: &str = r#"
+[[settings]]
+key = "base_url"
+kind = "text"
+label = "Endpoint URL"
+placeholder = "https://api.openai.com/v1"
+
+[[settings]]
+key = "api_key"
+kind = "text"
+label = "API key"
+secret = true
+
+[[settings]]
+key = "stream"
+kind = "toggle"
+label = "Show answers as they are written"
+default_on = true
+"#;
+
+    #[test]
+    fn 文字与开关那两档解析得出来() {
+        let m = 带设置的清单("text-toggle", 文字与开关, "\"settings.own\"").unwrap();
+        assert_eq!(m.settings.len(), 3);
+        assert_eq!(m.settings[0].kind, "text");
+        assert_eq!(m.settings[0].placeholder, "https://api.openai.com/v1");
+        assert!(!m.settings[0].secret);
+        // 不写默认值 = 空串（框里什么都不显示），不是"这一格没有值"。
+        assert_eq!(m.settings[0].default_text, None);
+        assert!(m.settings[1].secret);
+        assert_eq!(m.settings[2].kind, "toggle");
+        assert_eq!(m.settings[2].default_on, Some(true));
+        // ⚠️ 不写 `default_on` 就是**关着**（同 `on` 那格的口径：开关的默认方向
+        // 一变，用户看到的是"我以为关掉了，它其实开着"）。
+        assert_eq!(
+            m.settings[0].default_on,
+            None,
+            "只有 toggle 那一档才认它"
+        );
+    }
+
+    /// ⚠️ **档位与字段对不上要在加载时报**：`toggle` 上写着 `min = 1` 是很自然的
+    /// 一种笔误（从上面那格复制下来忘了删），而它的后果是那个字段一声不响地不生效。
+    #[test]
+    fn 档位与字段对不上要报错() {
+        let err = 带设置的清单(
+            "toggle-min",
+            &文字与开关.replace("default_on = true", "default_on = true\nmin = 1"),
+            "\"settings.own\"",
+        )
+        .unwrap_err();
+        assert!(err.contains("不该写"), "实际：{err}");
+
+        let err = 带设置的清单(
+            "text-unit",
+            &文字与开关.replace("label = \"API key\"", "label = \"API key\"\nunit = \"px\""),
+            "\"settings.own\"",
+        )
+        .unwrap_err();
+        assert!(err.contains("不该写"), "实际：{err}");
+
+        // `range` 那一侧同样只认自己那几个：写法照抄上面那格的作者会当场看见。
+        let err = 带设置的清单(
+            "range-secret",
+            &好设置.replace("unit = \"s\"", "unit = \"s\"\nsecret = true"),
+            "\"settings.own\"",
+        )
+        .unwrap_err();
+        assert!(err.contains("不该写"), "实际：{err}");
+    }
+
+    /// 值是怎么读回来的：**按档位收**，而且用户手改过那份文件的形状也要认。
+    #[test]
+    fn 三档的值都读得回来() {
+        let m = 带设置的清单("values", &format!("{好设置}{文字与开关}"), "\"settings.own\"")
+            .unwrap();
+        let 字 = m.settings.iter().find(|s| s.key == "base_url").unwrap();
+        let 开关 = m.settings.iter().find(|s| s.key == "stream").unwrap();
+        let 滑杆 = m.settings.iter().find(|s| s.key == "window_seconds").unwrap();
+
+        // 文件里没有这个键 → 默认值。
+        assert!(matches!(
+            字.求值(None),
+            super::设置值::文(v) if v == ""
+        ));
+        assert!(matches!(开关.求值(None), super::设置值::开关(true)));
+        assert!(matches!(滑杆.求值(None), super::设置值::数(v) if v == 5.0));
+
+        // ⚠️ 老 AI 插件把那个开关存成字符串 `"1"` / `"0"`——这一格 2026-10-10 才
+        // 搬进设置页，认一下它，用户的旧设置才不会"看着被重置了"。
+        assert!(matches!(
+            开关.求值(Some(&toml::Value::String("1".into()))),
+            super::设置值::开关(true)
+        ));
+        assert!(matches!(
+            开关.求值(Some(&toml::Value::String("0".into()))),
+            super::设置值::开关(false)
+        ));
+        // 认不出的形状一律**退回默认**（不是报错、也不是悄悄当 false）。
+        assert!(matches!(
+            开关.求值(Some(&toml::Value::Integer(7))),
+            super::设置值::开关(true)
+        ));
+        assert!(matches!(
+            字.求值(Some(&toml::Value::Integer(9))),
+            super::设置值::文(v) if v == ""
+        ));
+        // 手改过的数照样夹进范围（滑杆那条口径没变）。
+        assert!(matches!(
+            滑杆.求值(Some(&toml::Value::Integer(999))),
+            super::设置值::数(v) if v == 60.0
+        ));
+    }
+
+    /// 前端交上来的值**按档位校验**（形状不对要报错，不是静默丢弃）。
+    #[test]
+    fn 收值按档位校验() {
+        let m = 带设置的清单("collect", &format!("{好设置}{文字与开关}"), "\"settings.own\"")
+            .unwrap();
+        let 字 = m.settings.iter().find(|s| s.key == "base_url").unwrap();
+        let 开关 = m.settings.iter().find(|s| s.key == "stream").unwrap();
+        let 滑杆 = m.settings.iter().find(|s| s.key == "window_seconds").unwrap();
+
+        assert_eq!(
+            字.收值(&serde_json::json!("https://x/v1")).unwrap(),
+            toml::Value::String("https://x/v1".into())
+        );
+        assert!(字.收值(&serde_json::json!(12)).is_err(), "文本那档不收数");
+        assert_eq!(
+            开关.收值(&serde_json::json!(true)).unwrap(),
+            toml::Value::Boolean(true)
+        );
+        assert!(开关.收值(&serde_json::json!("1")).is_err(), "开关那档不收字符串");
+        // ⚠️ 滑杆那档**夹紧**：前端本来就是从这根滑杆上读的数，但"前端不会乱发"
+        // 不是一个该被信任的前提。
+        assert_eq!(
+            滑杆.收值(&serde_json::json!(999)).unwrap(),
+            toml::Value::Float(60.0)
+        );
+        // ⚠️ 一段几万字的文本多半是贴错了框（这一格每敲一键就写一次盘）。
+        let 长 = "字".repeat(4001);
+        assert!(字.收值(&serde_json::json!(长)).is_err(), "过长的文本要拒");
     }
 }

@@ -538,8 +538,8 @@ export interface PluginInfo {
 export interface PluginSetting {
   /** 进插件设置文件的键。`api.plugin.setSetting` 要用它。 */
   key: string;
-  /** 控件类型。现在只有 `"range"`（滑杆），前端按它分派。 */
-  kind: "range";
+  /** 控件类型。前端按它分派（`ui/settings/panes/ExtensionsPane.tsx` 那一处）。 */
+  kind: "range" | "text" | "toggle";
   /** 这一格的名字（已翻译）。 */
   label: string;
   /** 名字下面那句小字（已翻译）。空串 = 不画。 */
@@ -549,8 +549,16 @@ export interface PluginSetting {
   step: number;
   /** 读数后面那个单位（`s`）。空串 = 不画。**它不进 i18n**（两门语言写出来一样）。 */
   unit: string;
-  /** 此刻的值。 */
+  /** `range` 此刻的值。⚠️ 别的档位这一格是 `0`（用不上的字段填默认值，见下）。 */
   value: number;
+  /** `text` 此刻的值。⚠️ **密钥也在这一个字段里**（`secret = true` 那档）。 */
+  text: string;
+  /** `toggle` 此刻的值。 */
+  on: boolean;
+  /** `text`：画成密码框（只管显示，不改存储方式——那份文件是明文的）。 */
+  secret: boolean;
+  /** `text`：输入框里那句灰字（**已经翻译好的**）。 */
+  placeholder: string;
 }
 
 /**

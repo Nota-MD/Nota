@@ -221,16 +221,24 @@ export function TextInput({
   value,
   onChange,
   width = "md",
+  secret = false,
   ...rest
 }: {
   value: string;
   onChange: (value: string) => void;
   width?: "sm" | "md" | "lg";
+  /**
+   * 画成密码框（`type = "password"`）。API key 那种"能看见就被人瞄走"的字段用。
+   *
+   * ⚠️ 它**只管显示**，不改存储方式：插件设置文件是明文的
+   * （`docs/12` §插件设置为什么不加密）。挡的是背后那双眼，不是能读文件的人。
+   */
+  secret?: boolean;
 } & Omit<ComponentPropsWithoutRef<"input">, "value" | "onChange" | "type" | "children">) {
   return (
     <input
       {...rest}
-      type="text"
+      type={secret ? "password" : "text"}
       className={`stg-input stg-input-${width}`}
       value={value}
       onChange={(e) => onChange(e.target.value)}

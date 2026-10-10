@@ -520,9 +520,12 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                 dangerouslySetInnerHTML={{ __html: 标识(0, 0, 1254, "about") }}
               />
               <div className="about-name">Nota</div>
-              {/* ⚠️ 名字取自 `LICENSE` / `Cargo.toml` 的 `authors`。改那一行就是
-                  改这里显示的那一行——三处要么一起改，要么别改。 */}
-              <div className="about-developer">{t("Nota contributors")}</div>
+              {/* ⚠️ **作者名 2026-10-10 起是 `Leo Lee`**（用户原话：「还有，软件作者叫
+                  Leo Lee。」），与 `LICENSE` / `Cargo.toml` 的 `authors` / 四个内置插件
+                  清单里的 `authors` **四处同源**——改一处就得四处一起改。
+                  ⚠️ 名字**不走 `t()`**：人名不是文案（`zh-ui.ts` 里那两条键同批删掉，
+                  留着它们会被 `tools/i18n-check.sh` ③ 报成废键）。 */}
+              <div className="about-developer">Leo Lee</div>
               <div className="about-version">{版本}</div>
 
               {/* 两组行。⚠️ 空数组时不画那一组（`外链行` 今天就是空的）。 */}
@@ -648,9 +651,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                         {t("{0} License", 许可证)}
                       </button>
                     </div>
-                    <div className="about-item-text">
-                      {t("Copyright (c) 2026, Nota contributors")}
-                    </div>
+                    <div className="about-item-text">Copyright (c) 2026, Leo Lee</div>
                   </div>
                 )}
               </div>

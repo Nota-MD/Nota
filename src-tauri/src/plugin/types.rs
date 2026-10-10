@@ -97,7 +97,8 @@ pub struct PluginInfo {
 pub struct PluginSetting {
     /// 进插件设置文件的键。
     pub key: String,
-    /// 控件类型。现在只有 `"range"`（滑杆），前端按它分派。
+    /// 控件类型：`"range"`（滑杆）／`"text"`（文本）／`"toggle"`（开关）。
+    /// 前端按它分派（`ui/settings/panes/ExtensionsPane.tsx` 那一处）。
     pub kind: String,
     /// 这一格的名字。**已经按插件自己的语言表翻好**（清单里写英语原文，
     /// `lang/<tag>.toml` 里那一条是译文——与 `PluginInfo::name` 同一条规矩）。
@@ -109,8 +110,21 @@ pub struct PluginSetting {
     pub step: f64,
     /// 读数后面那个单位（`s`）。空串 = 不画（**它不进 i18n**）。
     pub unit: String,
-    /// 此刻的值（文件里的，夹过；没有就用 `default`）。
+    /// `range` 此刻的值（文件里的，夹过；没有就用 `default`）。
     pub value: f64,
+    /// `text` 此刻的值（文件里的；没有就用 `default_text`）。
+    ///
+    /// ⚠️ **密钥也在这一个字段里**（`secret = true` 那一档）：它只是"画成密码框"，
+    /// **不是**"读不回来"——设置页要显示"现在填的是什么"（用户得能核对那一串
+    /// 开头的几个字符），而它能读这件事本来就是明文存储的直接后果
+    ///（`docs/12` §插件设置为什么不加密）。
+    pub text: String,
+    /// `toggle` 此刻的值（文件里的；没有就用 `default_on`）。
+    pub on: bool,
+    /// `text`：画成密码框。
+    pub secret: bool,
+    /// `text`：输入框里那句灰字（**已经翻译好的**）。
+    pub placeholder: String,
 }
 
 /// 给前端看的一条信任记录（`$XDG_CONFIG_HOME/nota/trusted-keys.toml` 里的钥匙）。

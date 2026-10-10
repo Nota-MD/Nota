@@ -27,9 +27,7 @@
 import { t } from "@/i18n";
 import type { PluginPrompt } from "@/bridge/ipc";
 import { 读刻度 } from "@/ui/chart-ticks";
-import type { 刻度 } from "@/ui/chart-ticks";
 import { 读热力记录, 算热力 } from "@/ui/heatmap";
-import type { 热力图 } from "@/ui/heatmap";
 
 /** 一块内容的语气。渲染层按它上色。 */
 export type PanelTone = "normal" | "muted" | "success" | "warn" | "danger";
@@ -108,25 +106,30 @@ export type PanelNode =
   | { kind: "separator" }
   /**
    * 对话框里的一条消息（2026-09-24 加，AI 插件那张「对话框」用的）。
-   *
-   * ⚠️ `from` **只认 `user` / `ai`**，别的一律当 `ai`：多出来的第三种
-   * 只会在样式表里没有落点（画出来跟 AI 一样），不如在类型上就说清楚。
+   * ⚠️ `from` **只认 `user` / `ai`**，别的一律当 `ai`。
+   * ⚠️ `copy = true`（2026-10-10 加）→ 底下画一颗「复制」。**复制是宿主做的一件事**
+   *（`navigator.clipboard`）：插件那套 API 里没有剪贴板，而它是现代对话框里最常用的一颗。
    */
-  | { kind: "message"; from: PanelFrom; text: string }
+  | { kind: "message"; from: PanelFrom; text: string; copy: boolean }
   /** 一块改动（见 `PanelDiffLine`）。**只画，不应用**——应用得插件自己去点。 */
   | { kind: "diff"; items: PanelDiffLine[] }
   /**
    * 一棵提交树（`kind = "graph"`，2026-09-26 加，git 插件要的）。
-   *
-   * 这是**唯一一种带交互位置**的内容块：别的块要么整块不能点（`text` /
-   * `list` / `diff`），要么整块就是一个按钮（`buttons`）。提交树上"一行的
-   * 左边是键、右边是提交"，两者得分开点（见 `PanelGraphLine`）。
-   *
-   * ⚠️ 它**不是画布**：条目的内容（图线、文字）全是插件给的字符串，由 React
-   * 转义后按等宽排版，没有任何一条路能把它们变成 HTML 或属性。这一点与
-   * 上面「三条硬规矩」的第 1 条完全一致——"有点击位置"不等于"能注入"。
+   * ⚠️ **唯一一种带交互位置**的块（一行的两头各是一颗可点的东西）。它不是画布：
+   * 条目内容全是插件给的字符串、由 React 转义。
    */
   | { kind: "graph"; items: PanelGraphLine[] }
+  /**
+   * 一排**标签页**（`kind = "tabs"`，2026-10-10 加，AI 插件的对话要的）。
+   * 用户原话是「**对话用标签页管理，在上方**」。⚠️ 一颗标签是**两件事**（点字面切过去、
+   * 点右边那颗小叉关掉），所以它得是一个新 `kind`；`close = null` = 不画那颗叉。
+   */
+  | { kind: "tabs"; items: PanelTab[]; act: PanelAction | null }
+  /**
+   * 空态那句**大字 ＋ 一行小字**（`kind = "hero"`，2026-10-10 加）。
+   * ⚠️ 与 `empty` 的差别是**份量**：那个是"这里没有东西"，这个是"现在就开始吧"。
+   */
+  | { kind: "hero"; title: string; subtitle: string }
   /** 一行输入框 ＋ 一个提交按钮。**面板里唯一能打字的地方。** */
   | { kind: "input"; spec: PanelInput }
   /**
@@ -252,202 +255,51 @@ export interface PanelInput {
   hint: string;
   /** 多行输入（默认单行）。谈话类用它。 */
   multiline: boolean;
+  /**
+   * 输入框里那排**小按钮**（2026-10-10 加，现代对话框里"深度思考"那个位置）。点了
+   * 就跑各自的命令，与 `buttons` 一样——只是摆在卡片里。⚠️ 给"一句话的快捷入口"用，
+   * **不是**"开关模式"：那种得由插件自己记状态并画成 `style = "primary"`。
+   */
+  chips: PanelButton[];
 }
 
 /**
- * 面板里的那块数字与曲线（`kind = "chart"`，写作统计要的）。
+ * 一颗标签页（`kind = "tabs"`）。
  *
- * ⚠️ **`value` 是字符串，不是数**：怎么格式化是插件的事（`"128"`、`"1.2k"`、
- * `"才刚开始"` 都合法）。收成数字的话，"小数点几位、要不要千分位"这些排版
- * 自由就得在这儿定死——而这儿是渲染层，不是插件作者那支笔。
- * 代价是它**不会被这里校验成"看起来像个数"**：那是故意的，插件要写什么写什么。
+ * ⚠️ `label` 是**给人看的那串字**（对话标题），不是按钮名——同 `graph` 那串提交
+ * 标题：内容由插件给，样式由宿主定（`title` 只当鼠标提示）。
  */
-export interface PanelChart {
-  /** 大号数字。**空串 = 这一格没数**（画个破折号，而不是画个 0）。 */
-  value: string;
-  /** 数字右边的小字（`字/分钟`）。空串就不画。 */
-  unit: string;
-  /** 数字上面那行小标题（`写作速度`）。空串不画那一行。 */
+export interface PanelTab {
   label: string;
-  /** 曲线下面那行小字（`最近 2 分钟`）。空串不画。 */
-  caption: string;
-  /**
-   * 曲线上的点，**按时间从早到晚**。空数组 = 只画数字、不画图。
-   *
-   * ⚠️ 这里只留**最后 `每块上限` 个**：插件把一整场写作的采样点全给过来也画得出，
-   * 但一块 260px 宽的面板里 200 个点已经比像素还密，再多是白给。
-   * 切掉的是**最旧**那一头——图上最右边那段才是"刚才"。
-   */
-  points: number[];
-  /**
-   * **横轴**的刻度（`{ { at = 0, label = "-3 分" }, … }`），**2026-09-27 加**。
-   *
-   * ⚠️ 横轴只有插件标得出来：曲线上一个点对应哪一刻，是插件自己定的
-   * （心电图一秒一个点、git 的图一次提交一个点）。不写就是**没有横轴刻度**，
-   * 那是正常状态，不是坏掉。
-   */
-  xTicks: 刻度[];
-  /**
-   * **纵轴**的刻度。**通常不用写**——不写时宿主按 `points` 的极值推三档
-   * （见 `ui/chart-ticks.ts` 文件头那张表）。写给那些"纵轴不是数据本身"的图。
-   */
-  yTicks: 刻度[];
+  /** 是不是当前这一个（选中的那面亮、其余暗）。 */
+  active: boolean;
+  /** 点这颗标签调哪条命令。⚠️ 没有的话这一颗**画成灰的**（同 `buttons`）。 */
+  pick: PanelAction | null;
+  /** 右边那颗小叉。`null` = 这颗标签不能关（连叉都不画）。 */
+  close: PanelAction | null;
 }
+// ── 四种**数据块**的形状搬去了 `ui/panel-data-nodes.ts`（2026-10-10）──────
+// ⚠️ **门牌没动**：下面那行把老路径原样转出，调用点一行没改。
+export type {
+  PanelCard,
+  PanelCardIcon,
+  PanelCards,
+  PanelCardsTotal,
+  PanelChart,
+  PanelHeatmap,
+  PanelShare,
+  PanelShareStat,
+} from "./panel-data-nodes";
+import type {
+  PanelCard,
+  PanelCardIcon,
+  PanelCards,
+  PanelChart,
+  PanelHeatmap,
+  PanelShare,
+  PanelShareStat,
+} from "./panel-data-nodes";
 
-/** 分享卡上那一格指标（`kind = "share"` 的 `stats`）。 */
-export interface PanelShareStat {
-  /** 上面那行小标题（`总字数`）。 */
-  k: string;
-  /** 那个数（`1284`）。⚠️ 字符串，不是数：怎么格式化是插件的事（同 `PanelChart.value`）。 */
-  v: string;
-  /** 数后面那个小单位（`字` / `字/分`）。空串不画。 */
-  small: string;
-}
-
-/**
- * 一张分享卡（`kind = "share"`，2026-09-27 加，写作统计要的）。
- *
- * ⚠️ 这里**只有文案与数**：版式、配色、品牌在 `ui/share-card.ts`（插件说
- * **什么**、宿主说**怎么显示**，理由同 `PanelChart` 上面那段）。
- *
- * ⚠️ 几个字段是**成对**用的，缺一个那一块就不画：`value` 空 → 画破折号、
- * `unit` 空 → 不画单位；`date` / `foot` 空 → 那两处不画（拿不到时间来源时
- * 就是这个样子，见 `plugins/stats/main.lua` 的 `date_text`）。
- */
-export interface PanelShare {
-  /** 卡片标题（`写作统计`）。 */
-  title: string;
-  /** 标题下面那行小字（`Writing Stats`）。 */
-  subtitle: string;
-  /** 右上角的日期时间（`2026年9月27日 22:07`）。空串不画。 */
-  date: string;
-  /** 大数字上面那行小标题（`本轮平均速度`）。 */
-  label: string;
-  /** 那个大数字。空串 = 这一格没数（画破折号，不画 0）。 */
-  value: string;
-  /** 大数字右边那颗单位（`字 / 分钟`）。 */
-  unit: string;
-  /** 曲线上的点（`字/分钟`）。与 `PanelChart.points` 同规矩：切掉最旧的、只留 200 个。 */
-  points: number[];
-  /** 横轴刻度。**卡片只有横轴刻度**：纵轴被幂函数压过（`ui/share-card.ts`），刻度位置由宿主自己推。 */
-  xTicks: 刻度[];
-  /**
-   * 横轴上相邻两档刻度之间**再分几小格**（没字的短线），`0` = 不分。**2026-09-27 加**。
-   *
-   * 用户当天要的是「温度计、弹簧测力计这样的测量仪器的标尺」——仪器上不是只有
-   * 几个有字的数，数之间还有一排小格。纵轴那一半由宿主自己分（范围是它推的），
-   * 横轴这一半只有插件知道"一格主刻度是几分钟"，所以让它报一句。
-   *
-   * ⚠️ **只在两档之间分，两头不补**：主刻度是插件摆的，往两头续就要求"主刻度
-   * 是等距的"，而"开始 / 峰值 / 结束"这种摆法并不等距。夹在 0~10。
-   */
-  xMinor: number;
-  /**
-   * 中间那块图画哪一种。**2026-09-27 加**（用户原话：「分享图包含热力图和写作图」）。
-   *
-   * - `"curve"`：**写作图**——这一轮/今天的速度曲线（`points` ＋ 两轴刻度）；
-   * - `"heat"`：**热力图**——长期那本账铺成的小方格（`heat` ＋ 下面那排标尺）。
-   *
-   * ⚠️ **两种形态共用一张卡的其余部分**（标题、大数字、三格指标、页脚），因为
-   * 它们是同一件事的两个尺度——"这次写了多快"和"这半年写得勤不勤"。各画一张
-   * 卡等于把品牌、页脚、配色抄两遍。
-   * ⚠️ 认不出的值一律当 `"curve"`：老插件（这个字段都没有）走的正是那条路。
-   */
-  shape: "curve" | "heat";
-  /**
-   * `shape === "heat"` 时那幅热力图（宿主按 `days` / `to` / `weeks` 现算）。
-   * 其它形态是 `null`——曲线那张卡没有格子。
-   *
-   * ⚠️ 与 `PanelHeatmap.grid` 是**同一份**算出来的：算的动作在 `ui/heatmap.ts`。
-   */
-  heat: 热力图 | null;
-  /** 热力图右下角那排深浅标尺两头的字（`少` / `多`）。空串不画。 */
-  less: string;
-  more: string;
-  /** 下面那三格指标。最多三格（多出来的丢掉——版式就是三格）。 */
-  stats: PanelShareStat[];
-  /** 页脚左边那句话（`这一轮，你写下了 1284 个字`）。空串不画。 */
-  foot: string;
-  /** 保存时的**建议**文件名（`nota-stats-day-2026-09-27.png`）。⚠️ 渲染层还要消毒一遍。 */
-  file: string;
-}
-
-/**
- * 一张热力图（`kind = "heatmap"`）。
- *
- * ⚠️ 插件给的是**两个字段**（`days` 字符串 ＋ `weeks` 列数），这里给渲染层的是
- * **算好的格子**（`grid`）：算的动作在 `ui/heatmap.ts`，一份纯函数、单独测
- * （`tests/heatmap.test.ts`）。面板拿到的那一份里，"哪一格是哪天"已经定死了。
- */
-export interface PanelHeatmap {
-  /** 块上面那行小标题（`长期记录`）。空串不画。 */
-  title: string;
-  /** 那行小字里的单位（`字`）。空串就不写单位。 */
-  unit: string;
-  /**
-   * 算好的格子。`grid.列` 是空数组 = **不画**（一条记录都没有）。
-   *
-   * ⚠️ 空图与"全是 0 档的图"是两件事：前者没数据、后者有数据但那几天没写，
-   * 渲染层按 `列.length` 判，不看 `总计`（总计 0 也可能是"窗口里正好没写字"）。
-   */
-  grid: 热力图;
-}
-
-/**
- * 记录卡左边那颗圆图标画哪一个（`kind = "cards"` 的 `icon`）。
- *
- * ⚠️ **这是语义，不是名字**：插件报的是"这一条是什么"（本轮 / 今天 / 长期 /
- * 整篇），画成什么样由宿主定（同 `PanelChart` 那条"插件说**什么**、宿主说**怎么
- * 显示**"）。所以换图标＝改这里和 `PanelBody.tsx` 里那张表，插件一行都不用动。
- * ⚠️ 认不出的值一律当 `"record"`：画一颗中性的圆点，而不是留一块空白——
- * 空白看着像"这一条坏了"。
- */
-export type PanelCardIcon = "round" | "today" | "long" | "doc" | "record";
-
-/** 记录卡列表里的一条（`kind = "cards"`）。 */
-export interface PanelCard {
-  /** 左边那颗圆图标画哪一个。 */
-  icon: PanelCardIcon;
-  /** 那个大字（`1240`）。⚠️ 字符串不是数（同 `PanelChart.value`）；空串画破折号。 */
-  value: string;
-  /** 大字后面那颗单位（`字`）。空串不画。 */
-  unit: string;
-  /** 下面那行小字（`本轮 · 时长 00:34:32`）。空串不画那一行。 */
-  caption: string;
-  /**
-   * 框里那条**窄曲线**。空数组 = 只画字、不画线（与 `PanelChart.points` 同规矩：
-   * 少于两个点不画、最多留最后 200 个）。
-   *
-   * ⚠️ 它是**这一条记录自己的**那条线（本轮＝这一轮的分速），不是"最近几分钟"
-   * ——那一条在 `chart` 那边。
-   */
-  points: number[];
-}
-
-/** 记录卡列表底下那行汇总（`总计 12345 字`）。 */
-export interface PanelCardsTotal {
-  /** 左边那个标签（`总计`）。空串就不画标签。 */
-  label: string;
-  /** 那个数。空串画破折号。 */
-  value: string;
-  /** 数后面那颗单位。空串不画。 */
-  unit: string;
-}
-
-/**
- * 一串**记录卡**（`kind = "cards"`，2026-10-04 加，写作统计要的）。
- *
- * 出处见上面 `PanelNode` 里那一条（用户给的运动手表参考图）。这一层只有**数与字**
- * ——框的圆角、图标、曲线怎么画全在 `PanelBody.tsx` 和 `styles/panel-data.css`。
- */
-export interface PanelCards {
-  /** 那一串框上面那行小标题（`写作记录`）。空串不画。 */
-  title: string;
-  /** 这些框。空数组 = 这个块什么都不画（插件该在这一步之前就不发这一块）。 */
-  items: PanelCard[];
-  /** 底下那行汇总。`null` = 不画那一行（没有可汇总的东西时）。 */
-  total: PanelCardsTotal | null;
-}
 
 /** 一块内容最多这么多项（和宿主的 `面板节点上限` 同量级，但**各自把关**）。 */
 const 每块上限 = 200;
@@ -606,6 +458,31 @@ function 输入框(raw: Record<string, unknown>): PanelInput {
     placeholder: 文本(raw.placeholder),
     hint: 文本(raw.hint),
     multiline: raw.multiline === true,
+    // ⚠️ 小按钮与 `buttons` 那一条**共用一份收窄**：它们是一模一样的动作形状，
+    // 只是摆的地方不同（这里在输入卡片里）。
+    chips: 表数组(raw.chips)
+      .slice(0, 每块上限)
+      .map((it) => ({
+        label: 文本(it.label),
+        command: 文本(it.command),
+        args: it.args,
+        prompt: 提示(it.prompt),
+        style: it.style === "primary" || it.style === "danger" ? it.style : "normal",
+        disabled: it.disabled === true,
+      })),
+  };
+}
+
+/**
+ * 一颗标签页（`kind = "tabs"`）。⚠️ 没有 `pick` 的**留着但画成灰的**（同 `buttons`）；
+ * `close` 缺了就是**不画那颗叉**——那是"这排标签只让看"的正常写法。
+ */
+function 标签(it: Record<string, unknown>): PanelTab {
+  return {
+    label: 文本(it.label),
+    active: it.active === true,
+    pick: 动作(it.pick),
+    close: 动作(it.close),
   };
 }
 
@@ -849,6 +726,7 @@ function 一块(raw: Record<string, unknown>): PanelNode {
         kind: "message",
         from: raw.from === "user" ? "user" : "ai",
         text: 文本(raw.text, 消息上限),
+        copy: raw.copy === true,
       };
     case "diff":
       return {
@@ -860,6 +738,20 @@ function 一块(raw: Record<string, unknown>): PanelNode {
       };
     case "graph":
       return { kind: "graph", items: 表数组(raw.items).map(图行) };
+    case "tabs":
+      return {
+        kind: "tabs",
+        items: 表数组(raw.items).slice(0, 每块上限).map(标签),
+        // ⚠️ 末尾那颗「＋」是**整排的一个动作**（不是第 N 颗标签），所以挂在块上：
+        // 标签页的次序在界面上就是"哪一颗在哪儿"，它只能落在最后。
+        act: 动作(raw.new),
+      };
+    case "hero":
+      return {
+        kind: "hero",
+        title: 文本(raw.title),
+        subtitle: 文本(raw.subtitle),
+      };
     case "input":
       return { kind: "input", spec: 输入框(raw) };
     case "chart":

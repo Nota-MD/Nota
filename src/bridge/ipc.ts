@@ -525,7 +525,14 @@ export const api = {
      * ⚠️ 写完宿主会发一条 `events.pluginPanel`（面板该重拉了）：插件那个面板
      * 读的就是这一格。`live` 的面板本来每秒都拉，那一声是给**不是 live** 的面板的。
      */
-    setSetting: (plugin: string, key: string, value: number) =>
+    /**
+     * 写一格**插件自己声明的设置**（清单里的 `[[settings]]`）。
+     *
+     * ⚠️ `value` 是三种形状之一（滑杆是数、文本是字符串、开关是布尔），
+     * 而**该是哪一种由插件在清单里声明**——宿主那边按 `SettingDecl::收值`
+     * 校验（形状不对会报错，不是静默丢弃）。
+     */
+    setSetting: (plugin: string, key: string, value: string | number | boolean) =>
       invoke<void>("nota_plugin_setting_set", { plugin, key, value }),
 
     /** 信任库里现在有哪几把钥匙。 */

@@ -187,17 +187,66 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
           case "separator":
             return <hr key={i} className="panel-sep" />;
 
-          case "message":
+          case "hero":
+            // 空态那一屏：一行大字 ＋ 一行小字（现代 AI 对话框开始的样子）。
+            // ⚠️ 两行都是 `{text}`——插件给什么画什么，这里不认 Markdown。
             return (
-              <div key={i} className={`panel-msg panel-msg-${node.from}`}>
-                {/* ⚠️ 说话人这两个字**不翻译**：「AI」本来就是缩写，「你」是
-                    第二人称——它跟界面语言无关，跟**对话里谁在说话**有关。 */}
-                <span className="panel-msg-who">{node.from === "user" ? "你" : "AI"}</span>
-                {/* 预格式：AI 的回答里换行是内容的一部分（列表、代码、改动块），
-                    当普通段落会被折叠成一行。仍然走 `{text}`——React 转义。 */}
-                <span className="panel-msg-text">{node.text}</span>
+              <div key={i} className="panel-hero">
+                <p className="panel-hero-title">{node.title}</p>
+                {node.subtitle && <p className="panel-hero-sub">{node.subtitle}</p>}
               </div>
             );
+
+          case "tabs":
+            // 上方的标签页（对话切换器）。⚠️ 一颗标签是**两颗按钮**：点文字切过去、
+            // 点右边那颗叉关掉——HTML 不许按钮套按钮，所以是"一排两个 button"，
+            // 用外框那个 div 把视觉拼成一颗。
+            return (
+              <div key={i} className="panel-tabs" role="tablist">
+                {node.items.map((tb, j) => (
+                  <span key={j} className={`panel-tab${tb.active ? " panel-tab-on" : ""}`}>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={tb.active}
+                      className="panel-tab-pick"
+                      disabled={busy !== null || !tb.pick}
+                      title={tb.pick?.title || undefined}
+                      onClick={() => tb.pick && 点动作(tb.pick)}
+                    >
+                      {tb.label}
+                    </button>
+                    {tb.close && (
+                      <button
+                        type="button"
+                        className="panel-tab-close"
+                        disabled={busy !== null}
+                        // ⚠️ 没有 `title` 时用宿主自己那句「关闭」：这颗叉是**宿主
+                        // 画的**，插件没给话就由宿主说一句，不是留个没有名字的按钮。
+                        title={tb.close.title || t("Close")}
+                        onClick={() => 点动作(tb.close!)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </span>
+                ))}
+                {node.act && (
+                  <button
+                    type="button"
+                    className="panel-tab-new"
+                    disabled={busy !== null}
+                    title={node.act.title || undefined}
+                    onClick={() => 点动作(node.act!)}
+                  >
+                    ＋
+                  </button>
+                )}
+              </div>
+            );
+
+          case "message":
+            return <PanelMessage key={i} node={node} />;
 
           case "diff":
             return (
@@ -253,6 +302,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                 spec={node.spec}
                 disabled={busy !== null}
                 onSubmit={(值) => onCall(plugin, node.spec.submit, { [node.spec.arg]: 值 })}
+                onCommand={(c, args) => void onCall(plugin, c, args)}
               />
             );
 
@@ -396,10 +446,13 @@ function PanelInput({
   spec,
   disabled,
   onSubmit,
+  onCommand,
 }: {
   spec: PanelInputSpec;
   disabled: boolean;
   onSubmit: (值: string) => Promise<void>;
+  /** 跑输入框里那排小按钮各自的命令（与 `buttons` 那条路同一件事）。 */
+  onCommand: (command: string, args?: unknown) => void;
 }) {
   // ⚠️ 这是**另一个组件**，`PanelBody` 里那个 `t` 它够不着，得自己订阅一次
   // （`useT` 是 hook，不能在两个组件之间借用）。
@@ -416,52 +469,129 @@ function PanelInput({
 
   return (
     <div className="panel-input">
-      {spec.multiline ? (
-        <textarea
-          className="panel-input-box"
-          rows={3}
-          value={草稿}
-          placeholder={spec.placeholder}
-          disabled={灰}
-          onChange={(e) => set草稿(e.target.value)}
-          // 多行框用 `Ctrl/Cmd+Enter` 发：回车在这个框里是**换行**，
-          // 否则一段话永远打不完（发出去的都是第一行）。
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              发();
-            }
-          }}
-        />
-      ) : (
-        <input
-          type="text"
-          className="panel-input-box"
-          value={草稿}
-          placeholder={spec.placeholder}
-          disabled={灰}
-          onChange={(e) => set草稿(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              发();
-            }
-          }}
-        />
-      )}
+      <div className="panel-input-wrap">
+        {spec.multiline ? (
+          <textarea
+            className="panel-input-box"
+            rows={3}
+            value={草稿}
+            placeholder={spec.placeholder}
+            disabled={灰}
+            onChange={(e) => set草稿(e.target.value)}
+            // 多行框用 `Ctrl/Cmd+Enter` 发：回车在这个框里是**换行**，
+            // 否则一段话永远打不完（发出去的都是第一行）。
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                发();
+              }
+            }}
+          />
+        ) : (
+          <input
+            type="text"
+            className="panel-input-box"
+            value={草稿}
+            placeholder={spec.placeholder}
+            disabled={灰}
+            onChange={(e) => set草稿(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                发();
+              }
+            }}
+          />
+        )}
 
-      <div className="panel-input-foot">
-        <button
-          type="button"
-          className="btn btn-primary panel-input-send"
-          disabled={灰 || !草稿.trim()}
-          title={灰 ? t("This input box has no `submit` / `arg`, so clicking it does nothing") : undefined}
-          onClick={发}
-        >
-          {spec.submitLabel}
-        </button>
-        {spec.hint && <span className="panel-input-hint">{spec.hint}</span>}
+        {/* 卡片里那一行：左边是小按钮（预设），右边是发送。
+            ⚠️ 这颗发送键**只有一颗**（主按钮），预设是"这一句话的几个快捷入口"
+            ——现代 AI 对话框（DeepSeek / ChatGPT）也是这个分工。 */}
+        <div className="panel-input-foot">
+          {spec.chips.length > 0 && (
+            <div className="panel-input-chips">
+              {spec.chips.map((b, j) => (
+                <button
+                  key={j}
+                  type="button"
+                  className={`btn panel-chip${b.style === "normal" ? "" : ` btn-${b.style}`}`}
+                  disabled={disabled || !b.command}
+                  onClick={() => void onCommand(b.command, b.args)}
+                >
+                  {b.label || b.command}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary panel-input-send"
+            disabled={灰 || !草稿.trim()}
+            // ⚠️ **只有一颗圆钮 ＋ 一个箭头**（现代 AI 对话框都是这个形状，
+            // Nota 参照的那份 Markra 源码里也是 `RoundIconButton` ＋ `ArrowUp`）。
+            // 「发送」那两个字没有丢：它成了 `aria-label` 与 `title`——
+            // 屏幕上不占位，读屏与悬停照样说得出这颗按钮是干什么的。
+            title={灰 ? t("This input box has no `submit` / `arg`, so clicking it does nothing") : spec.submitLabel}
+            aria-label={spec.submitLabel}
+            onClick={发}
+          >
+            ↑
+          </button>
+        </div>
       </div>
+      {spec.hint && <div className="panel-input-hint">{spec.hint}</div>}
+    </div>
+  );
+}
+
+/* ── 会话里的一条消息（`kind = "message"`）───────────────────────────── */
+
+/**
+ * 一条消息。**AI 靠左、用户靠右**，底下那一行是这一条的动作（目前只有「复制」）。
+ *
+ * ⚠️ 说话人那两个字**不翻译**：「AI」是缩写、「你」是第二人称，它们跟界面语言
+ * 无关、跟**对话里谁在说话**有关（这条口径从 2026-09-24 起没变）。
+ *
+ * ⚠️ **这里是面板里唯一一个有自己状态的组件**（`copied` 那 1.6 秒）：面板本身
+ * 每次拉都整块重画，而"复制成功没成功"总得当场说一声——那一句不能靠下次重画
+ * 才出现（那时用户早已移开视线）。这一点与 `PanelInput` 的草稿同一个性质。
+ */
+function PanelMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> }) {
+  const t = useT();
+  const [结果, set结果] = useState<"idle" | "ok" | "fail">("idle");
+
+  const 复制 = () => {
+    if (!node.text) return;
+    // ⚠️ **连属性访问都要包在 try 里**：不是安全上下文时 `navigator.clipboard`
+    // 整个不存在（`ui/ContextMenu.tsx` 那边踩过同一个坑）。
+    try {
+      void Promise.resolve(navigator.clipboard?.writeText?.(node.text)).then(
+        () => set结果("ok"),
+        () => set结果("fail"),
+      );
+    } catch {
+      set结果("fail");
+    }
+  };
+
+  return (
+    <div className={`panel-msg panel-msg-${node.from}`}>
+      <span className="panel-msg-who">{node.from === "user" ? "你" : "AI"}</span>
+      {/* 预格式：AI 的回答里换行是内容的一部分（列表、代码、改动块），
+          当普通段落会被折叠成一行。仍然走 `{text}`——React 转义。 */}
+      <span className="panel-msg-text">{node.text}</span>
+      {node.copy && node.text !== "" && (
+        <div className="panel-msg-actions">
+          <button type="button" className="panel-msg-action" onClick={复制}>
+            {结果 === "ok" ? t("Copied to clipboard") : t("Copy")}
+          </button>
+          {结果 === "fail" && (
+            <span className="panel-msg-action-fail">
+              {t("Could not copy: the system refused to write to the clipboard.")}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

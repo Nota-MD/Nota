@@ -172,7 +172,9 @@ export const 界面表: Record<string, string> = {
   "Credits": "鸣谢",
   "Legal": "法律信息",
   "Back": "返回",
-  "Nota contributors": "Nota 贡献者",
+  // ⚠️ 这两条（`Nota contributors` 与那句版权）2026-10-10 **删掉了**：作者名成了
+  // **`Leo Lee`**（用户点名），而人名不是文案——`AboutDialog.tsx` 里现在直接写字面量。
+  // 留着它们会被 `tools/i18n-check.sh` ③ 报成废键。
   // ── 「故障排除」那两张表（2026-10-04）────────────────────────────────────
   // ⚠️ 左列里 `rustc` / `cargo` / `node` / `npm` / `tauri` / `webkit2gtk` /
   // `gtk` / `mlua` 八个**故意不翻**（程序名与包名，翻了找不到），所以这里没有它们。
@@ -196,7 +198,6 @@ export const 界面表: Record<string, string> = {
   "Notes": "备注",
   // ── 「法律信息」──────────────────────────────────────────────────────────
   "{0} License": "{0} 许可证",
-  "Copyright (c) 2026, Nota contributors": "版权所有 (c) 2026，Nota 贡献者",
   "Extensions": "拓展",
   "Extension panels": "拓展面板",
   "Installed extensions": "已装拓展",

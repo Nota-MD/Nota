@@ -188,8 +188,13 @@
   line-height: 1.5;
 }
 
-/* 谁说的。**两边的名字都写出来**，不靠左右对齐区分：
-   这一栏只有 260px，左右对齐要靠边距，读起来反而更挤。 */
+/* 谁说的。
+   ⚠️ **2026-10-10 改了分工**：从前两边都写名字、都靠左（理由是"这一栏只有
+   260px，靠边距区分读起来更挤"）；现在改成**现代对话框那一套**——用户那一句
+   靠右、带一层淡底色，AI 那一句靠左、只有一个小标记。用户指着一张 DeepSeek 的
+   截图说「要让它更现代，类似这种」，所以这条取舍被推翻了。
+   ⚠️ 仍然**不靠颜色单独区分**：左右位置本身就是第二道冗余（色觉障碍也读得出
+   "这句是我说的"），AI 那一侧照样留着一个小标记。 */
 .panel-msg-who {
   display: block;
   margin-bottom: 2px;
@@ -198,16 +203,33 @@
   color: var(--fg-faint);
 }
 
-/* 用户那一句。左边一道竖线 ＋ 略微缩进：一眼能看出"这段是问题，
-   下面是回答"，而**不用底色**（tone 只上色的那条理由同样适用）。 */
+/* 用户那一句：靠右的一个气泡。⚠️ `width: fit-content` 不能省——块级元素
+   光写 `margin-left: auto` 还是会把整行占满（`width: auto` 先算成"填满"），
+   于是气泡的底色会横贯整栏、看着像一条横带而不是一句话。 */
 .panel-msg-user {
-  padding-left: 8px;
-  border-left: 2px solid var(--border-strong, var(--border));
-  color: var(--fg-muted);
+  width: fit-content;
+  max-width: 88%;
+  margin-left: auto;
+  padding: 5px 9px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--fg);
 }
 
+/* 气泡里**不再写"你"**：那一层底色 ＋ 靠右的位置已经说清了是谁说的，
+   再挂一个名字只是把气泡撑高一行（现代那几家都不写）。 */
 .panel-msg-user .panel-msg-who {
-  color: var(--fg-muted);
+  display: none;
+}
+
+/* AI 那一句：不加气泡。⚠️ 有意的**不对称**——回答通常很长，给它套一层底色
+   会让整栏变成一块大色斑；而"左边这个没有底色的长段落"正是现代那几家的读法。 */
+.panel-msg-ai {
+  max-width: 100%;
+}
+
+.panel-msg-ai .panel-msg-who {
+  color: var(--fg-faint);
 }
 
 /* ⚠️ `pre-wrap`：AI 的回答里换行是**内容的一部分**（列表、代码、改动块），
@@ -215,6 +237,155 @@
 .panel-msg-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* 一条消息底下那一行动作（目前只有「复制」）。
+   ⚠️ **跟着那一句对齐**：用户那一条靠右（它在气泡下面右对齐），AI 那一条靠左。
+   现代对话框（用户点名参照的那份 Markra 源码）也是这个位置。 */
+.panel-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.panel-msg-user .panel-msg-actions {
+  justify-content: flex-end;
+}
+
+/* 它是一颗**很轻**的文字按钮：悬停才显形（平时不抢正文的注意力），
+   但**不是隐藏**——看不见的按钮等于没有。 */
+.panel-msg-action {
+  padding: 1px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78em;
+  cursor: pointer;
+}
+
+.panel-msg-action:hover {
+  color: var(--accent);
+}
+
+.panel-msg-action-fail {
+  color: var(--danger);
+  font-size: 0.78em;
+}
+
+/* ── 上方的标签页（`kind = "tabs"`，2026-10-10 加）─────────────────────
+
+   对话切换器。用户原话是「**对话用标签页管理，在上方**」——形状照这一栏自己的
+   文档标签（`tabs-status.css`）：选中的那一颗有底色有描边、其余是灰字，
+   挤不下时这一条**横向滚**（标签多到放不下是常态，而纵向堆会顶掉消息）。 */
+
+.panel-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  margin: 0 0 10px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.panel-tab {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  max-width: 62%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+
+.panel-tab-on {
+  border-color: var(--border);
+  background: var(--bg-subtle);
+}
+
+.panel-tab-pick {
+  flex: none;
+  max-width: 11em;
+  overflow: hidden;
+  padding: 4px 7px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 0.85em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.panel-tab-on .panel-tab-pick {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+/* 右边那颗小叉。⚠️ **它是一颗独立的按钮**（HTML 不许按钮套按钮，见
+   `PanelBody.tsx` 那条注释），所以它自己也得有足够大的命中区——
+   2px 宽的一条线是点不着的。 */
+.panel-tab-close {
+  flex: none;
+  padding: 0 6px 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-faint);
+  font-size: 0.95em;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.panel-tab-close:hover {
+  color: var(--danger);
+}
+
+/* 末尾那颗「＋新对话」。虚线描边＝"这里还能再加一个"，与选中的标签区分开。 */
+.panel-tab-new {
+  flex: none;
+  align-self: center;
+  margin-left: 2px;
+  padding: 3px 9px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.panel-tab-new:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── 空态那一屏（`kind = "hero"`，2026-10-10 加）───────────────────────
+
+   一句话都没聊时画的那一行大字。⚠️ 与 `.panel-empty` 的差别是**份量**：
+   那个是"这里没有东西"的一句小灰字，这个是"这一屏现在就是让你开始"。 */
+
+.panel-hero {
+  margin: 22px 0 16px;
+  text-align: center;
+}
+
+.panel-hero-title {
+  margin: 0 0 6px;
+  color: var(--fg);
+  font-size: 1.12em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.panel-hero-sub {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: 0.85em;
+  line-height: 1.5;
 }
 
 .panel-diff {
@@ -244,16 +415,35 @@
   margin: 8px 0 2px;
 }
 
+/* 输入卡片那层壳（2026-10-10 加）。
+   ⚠️ **这一层是"现代对话框"那件事的落点**：输入框、预设小按钮、发送键三样
+   装在**同一个圆角卡片**里（DeepSeek / ChatGPT / Claude 都是这个形状），
+   而不是从前那样"一个方框 ＋ 底下一排按钮"——那个形状读起来像一张表单。 */
+.panel-input-wrap {
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-subtle);
+}
+
+/* ⚠️ 聚焦时**只亮外圈**（不是给里面那个框换边框）：焦点在整个卡片上，
+   换文字框自己的边框会在卡片里多出一圈线。 */
+.panel-input-wrap:focus-within {
+  border-color: var(--accent);
+}
+
 /* 输入框的底子和宿主的 `PromptDialog`（`.prompt-input`）**长一样**：
    同一个界面里两个输入框两副样子，用户会以为它们不是一回事。 */
 .panel-input-box {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  padding: 5px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
+  padding: 4px 5px;
+  /* ⚠️ 边框与底色**都交给外面那张卡片**（见上面 `.panel-input-wrap`）：
+     卡片里再套一个方框＝两层框，看着像"框里还有个框"。 */
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--fg);
   font-family: var(--font-ui);
   font-size: 0.87em;
@@ -263,23 +453,50 @@
 
 .panel-input-box:focus {
   outline: none;
-  border-color: var(--accent);
 }
 
 .panel-input-foot {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 4px;
+}
+
+/* 那一排预设：能折行、只占得到的地方（挤不下时往下折，不要把发送键顶出去）。 */
+.panel-input-chips {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+/* 一颗预设。**pill 形状**，比 `.panel-btn` 再小一号：它是"顺手点一下"，
+   不是这一屏的主按钮（主按钮只有发送那一颗）。 */
+.panel-chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 0.78em;
+  line-height: 1.5;
 }
 
 .panel-input-send {
   flex: none;
+  margin-left: auto;
+  /* ⚠️ 一颗**圆钮**（28×28）＋ 一个箭头，不是一颗写着「发送」的方按钮：
+     形状照现代 AI 对话框（用户点名的那份 Markra 源码里也是 `RoundIconButton`
+     ＋ `ArrowUp`）。⚠️ 字号要抬一点——`↑` 在这个字号下只有一半高。 */
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 1.05em;
+  line-height: 1;
 }
 
 .panel-input-hint {
-  flex: 1;
-  min-width: 0;
+  margin-top: 4px;
+  padding: 0 2px;
   color: var(--fg-faint);
   font-size: 0.8em;
   line-height: 1.35;

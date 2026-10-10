@@ -36,6 +36,7 @@ import {
   type PluginInfo,
   type PluginMenuItem,
   type PluginPanel,
+  type PluginSetting,
   type PluginReview,
   type 信任记录,
   type 导出报告,
@@ -98,7 +99,7 @@ export interface 插件动作 {
    * ⚠️ **不走 `忙`**：滑杆拖一下就是一次调用，把它算进"正忙"会让旁边那几颗
    * 按钮在拖动期间一直灰着（装 / 卸 / 启停共用 `忙`）。
    */
-  设置: (id: string, key: string, value: number) => Promise<void>;
+  设置: (id: string, key: string, value: string | number | boolean) => Promise<void>;
   /** 此刻正忙的那个：插件 id，或者 `"装"`（安装中）。按钮据此置灰。 */
   忙: string | null;
 }
@@ -483,27 +484,35 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   );
 
   /**
-   * 写插件声明的一格设置（「设置 → 拓展」那一页上拖滑杆）。见 [`插件动作::设置`]。
+   * 写插件声明的一格设置（「设置 → 拓展」那一页上的滑杆／文本框／开关）。
+   * 见 [`插件动作::设置`]。
    *
    * # ⚠️ 三条口径
    *
-   * 1. **先本地落一格，不等宿主回来**。滑杆是**受控**的
-   *    （`settings/primitives.tsx::Range` 画的就是传进去那个数），本地不跟着走的话，
-   *    手指拖到 30、滑杆当场弹回 5——一次都拖不动。拖完拉回来的那个数**不是**
-   *    新信息：宿主写下去的正是这个数（它只做夹紧，而范围就是这根滑杆的范围）。
+   * 1. **先本地落一格，不等宿主回来**。三种控件都是**受控**的
+   *    （`settings/primitives.tsx` 的 `Range` / `TextInput` / `Toggle` 画的都是传进去
+   *    那个值），本地不跟着走的话，手指拖到 30、滑杆当场弹回 5——一次都拖不动。
+   *    ⚠️ **按档位改对应的那个字段**（2026-10-10 起有三档）：一律改 `value` 的话，
+   *    文本框与开关在"宿主回来之前"看着毫无反应——而反馈正是这里唯一要的东西。
+   *    拖完拉回来的那个数**不是**新信息：宿主写下去的正是这个值（滑杆那边它只夹紧）。
    * 2. **不重拉**。`重拉` 是四条 IPC（清单 ＋ 面板 ＋ 菜单 ＋ 信任表），
    *    拖一下发一轮不值当；而那四条里**没有一条**会因为这一格设置而变。
    * 3. **失败要说话 ＋ 拉回来**：本地那一格现在是写失败的那个数，
    *    不拉回来的话界面上摆着一个没落盘的值——那正是这一页最不该有的东西。
    */
   const 写设置 = useCallback(
-    async (id: string, key: string, value: number) => {
+    async (id: string, key: string, value: string | number | boolean) => {
+      const 打补丁 = (s: PluginSetting): PluginSetting => {
+        if (s.kind === "range") return { ...s, value: Number(value) };
+        if (s.kind === "toggle") return { ...s, on: value === true };
+        return { ...s, text: String(value) };
+      };
       setPlugins((ps) =>
         ps.map((p) =>
           p.id === id
             ? {
                 ...p,
-                settings: p.settings.map((s) => (s.key === key ? { ...s, value } : s)),
+                settings: p.settings.map((s) => (s.key === key ? 打补丁(s) : s)),
               }
             : p,
         ),

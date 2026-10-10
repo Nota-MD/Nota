@@ -604,6 +604,11 @@ nota.ui.notify(T("Committed"))
 > **写作统计是第一个用户。** 用户 2026-10-04 要的是一根滑杆：「统计某一个德尔塔 t 内的
 > 打字数量。这个德尔塔 t 可以在**拓展的设置页面**更改，默认为 5 秒。应该是一个托条，
 > 从 1 秒到 1 分钟可选。」——于是宿主第一次有了"**替插件画一格设置**"这件事。
+>
+> ⚠️ **2026-10-10：从一种控件加到三种（`range` / `text` / `toggle`）。** 第二个用户是
+> AI 助手，用户那句是「**API等设置专门放一个窗口**」——它那五格设置（接口地址、模型名、
+> 密钥、可读上限、边生成边显示）从前挤在自己面板的最下面，那天整块搬到了这一页上。
+> 那五格里有两种不是滑杆：地址与模型是**文本**，密钥是**文本 ＋ 遮屏**，开关是**开关**。
 
 #### 形状
 
@@ -611,8 +616,23 @@ nota.ui.notify(T("Committed"))
 
 ```toml
 [[settings]]
+key     = "base_url"          # 必填。存进设置文件时用的键
+kind    = "text"              # range（滑杆，默认）／ text（文本）／ toggle（开关）
+label   = "Endpoint URL"      # 必填。给人看的名字（**写英语**，见下）
+help    = "An OpenAI-compatible URL …"   # 可选。名字下面那句小字
+placeholder = "https://…"     # text：输入框里那句灰字（要翻译）
+secret      = true            # text：画成密码框（只管显示，不改存储）
+default_text = "gpt-4o-mini"  # text：用户还没填过时框里显示什么
+
+[[settings]]
+key        = "stream"
+kind       = "toggle"
+label      = "Show answers as they are written"
+default_on = true             # toggle：不写就是关
+
+[[settings]]
 key     = "window_seconds"   # 必填。存进设置文件时用的键
-kind    = "range"            # 可选，默认 "range"。现在**只有**这一种
+kind    = "range"            # 可选，默认就是它
 label   = "Speed window"     # 必填。给人看的名字（**写英语**，见下）
 help    = "How many seconds …"  # 可选。名字下面那句小字
 min     = 1                  # range 必填
@@ -625,16 +645,22 @@ unit    = "s"                # 可选，读数后面跟的那个单位
 | 栏 | 必填？ | 默认值 | 校验规则 | 写错了会怎样 |
 |---|---|---|---|---|
 | `key` | **必填** | — | 非空；只允许 **ASCII 字母、数字、`-`、`_`**（**不许有点**，见下） | 空 → 「key 不能为空」；有点或怪字符 → 「key `X` 不合法……」；**同一条重复** → 「有两格用同一个 key」 |
-| `kind` | 可选 | `"range"` | 认得出才行（现在只有 `range`） | 别的值 → 「kind `X` 认不出：现在只有 `range`（滑杆）一种，见 docs/11「给拓展做一格设置」」 |
+| `kind` | 可选 | `"range"` | 认得出才行：`range`（滑杆）／`text`（文本）／`toggle`（开关） | 别的值 → 「kind `X` 认不出：只有 `range`（滑杆）、`text`（文本）与 `toggle`（开关）三种……」 |
 | `label` | **必填** | — | 去空白后非空 | 空 → 「`[[settings]] X` 没写 label」 |
 | `help` | 可选 | `""` | 无 | — |
-| `min` / `max` / `default` | **`range` 必填** | — | 三个都要有、都是有限数、`min < max`、`default` 落在区间里 | 缺一个 → 「……min / max / default 三个都要给（少了范围或者默认值的滑杆画不出来）」；出界或颠倒各有各的话 |
-| `step` | 可选 | `1` | 在 `(0, max-min]` 之间 | 违规 → 「step (X) 不合法：要在 0 与 N 之间」 |
-| `unit` | 可选 | `""` | 无 | —（⚠️ **不进 i18n**：`s` / `%` / `px` 两门语言写出来一个样） |
+| `min` / `max` / `default` | **只有 `range`** | — | 三个都要有、都是有限数、`min < max`、`default` 落在区间里 | 缺一个 → 「……min / max / default 三个都要给（少了范围或者默认值的滑杆画不出来）」；出界或颠倒各有各的话。⚠️ 写在别的档位上 → 「是 `text`，不该写 `min / max / default / step`（那是 `range` 的）」 |
+| `step` | 可选（`range`） | `1` | 在 `(0, max-min]` 之间 | 违规 → 「step (X) 不合法：要在 0 与 N 之间」 |
+| `unit` | 可选（`range`） | `""` | 无 | —（⚠️ **不进 i18n**：`s` / `%` / `px` 两门语言写出来一个样）。⚠️ `text` / `toggle` 上写它**报错**：那两档没有读数 |
+| `placeholder` | 可选（`text`） | `""` | 无 | —（⚠️ **要翻译**：它是一句话，与 `unit` 那条不同） |
+| `secret` | 可选（`text`） | `false` | 布尔 | —。⚠️ **只管显示**（`type = "password"`）：那份设置文件还是明文的 |
+| `default_text` | 可选（`text`） | `""` | 无 | — |
+| `default_on` | 可选（`toggle`） | `false` | 布尔 | — |
 
 校验在 `plugin/settings_decl.rs::check_settings()`（2026-10-04 从 `manifest.rs` 拆出，
-理由见那份文件头）。**五条罪状，每条都是"能挡在门口的就别留到运行时"**（与
+理由见那份文件头）。**六条罪状，每条都是"能挡在门口的就别留到运行时"**（与
 `check_devserver` 同源）——写错了就该当场说，而不是等用户去拖一根不会动的滑杆。
+⚠️ 第 ④ 条（2026-10-10 加）是**档位与字段对不上**：`toggle` 上写着 `min = 1` 是很自然
+的一种笔误（从上面那格复制下来忘了删），而它的后果是那个字段**一声不响地不生效**。
 
 #### ⚠️ 三条硬规矩
 
@@ -658,7 +684,7 @@ unit    = "s"                # 可选，读数后面跟的那个单位
 
 | | 界面谁画 | 值存在哪儿 | 谁写进去 |
 |---|---|---|---|
-| 有 `[[settings]]` | **宿主**（`设置 → 拓展`那一页） | 插件设置文件 | 用户拖滑杆 → 宿主的 `nota_plugin_setting_set` |
+| 有 `[[settings]]` | **宿主**（`设置 → 拓展`那一页） | 插件设置文件 | 用户拖滑杆 / 敲文本框 / 拨开关 → 宿主的 `nota_plugin_setting_set` |
 | 只有 `settings.own` | 插件自己（面板里那套） | **同一个文件** | 插件的 `nota.settings.set` |
 
 - 文件：`~/.config/nota/plugin-settings/<插件 id>.toml`，纯文本，目录 `0700` / 文件 `0600`。
@@ -673,15 +699,18 @@ unit    = "s"                # 可选，读数后面跟的那个单位
 
 #### 加一种新控件要动哪儿
 
-现在**只有 `range` 一种**，而认不出的 `kind` 是**报错**不是降级。要加第二种
-（`checkbox` / `select` / `text`…）时，一共六处，一处都不能漏：
+⚠️ **2026-10-10 走过一遍这条路**（`range` → 加上 `text` / `toggle`），下面是那次
+实际动过的六处——**再加第四种时照这条清单走，一处都不能漏**。认不出的 `kind` 是
+**报错**不是降级。
 
-1. `plugin/settings_decl.rs` —— `SettingDecl` 加字段、`check_settings` 加那一档的判据；
-2. `plugin/types.rs` —— `PluginSetting` 那个"发给前端的形状"跟着加；
-3. `plugin/mod.rs::设置格` —— 把新字段填进去（那里也是**夹紧**发生的地方）；
+1. `plugin/settings_decl.rs` —— `SettingDecl` 加字段、`check_settings` 加那一档的判据
+   （**连同"别的档位不该写这个字段"那一条**）、`求值` / `收值` 两个 match 各加一条；
+2. `plugin/types.rs` —— `PluginSetting` 那个"发给前端的形状"跟着加
+   （⚠️ 形状是**平铺**的，用不上的字段填默认值：IPC 两边那份类型就不必写成联合类型）；
+3. `plugin/mod.rs::设置格` —— 把新字段填进去（**值怎么读回来**就在那儿，`求值` 里）；
 4. `src/bridge/types.ts` 的 `PluginSetting` —— 前端要认得出这个 `kind`；
 5. `src/ui/settings/panes/ExtensionsPane.tsx` —— **按 `kind` 分派**画哪个控件
-   （现在那里不分派，只有一行 `<Range>`，注释里标着这一处）；
+   （那里现在是一个三岔的 `s.kind === …`，注释里标着这一处）；
 6. 本节这张表 ＋ `docs/13` 设置那一节。
 
 ⚠️ 前端**不许**出现 `if (p.id === "nota.stats")` 这类按插件 id 的特判：这一页画的是

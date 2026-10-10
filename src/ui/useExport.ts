@@ -283,6 +283,13 @@ export function useExport(w: 导出接线): 导出出口 {
           target: picked,
           docPath: doc.path,
           html,
+          // ⚠️ 文档主题**总是**取一份给后端（2026-10-10，`docs/07` 第 112 项）：
+          // 由后端的 `pandoc.rs::能带_CSS` 判"这一种格式吃不吃 CSS"，前端不判
+          // ——判据放两处就一定会有一天两边不一样，而症状是"这一种格式带主题、
+          // 那一种不带"，没人能说清为什么。
+          themeCss: (await 取主题CSS()) ?? "",
+          // 用户在「设置 → 导出」里写的那串额外参数（原样搬，前端不解析）。
+          pandocArgs: exportSettings.pandoc_args,
         });
         // ⚠️ 把后端的 `note` 一起说出来：走的是 pandoc 还是 Nota 自己那套，
         // 用户必须有办法知道（同一份文档两次结果不同才不至于是玄学）。
@@ -292,7 +299,7 @@ export function useExport(w: 导出接线): 导出出口 {
         toast(t("Could not export: {0}", String(e)), "error");
       }
     },
-    [getMarkdown, 取主题CSS, toast, 默认落点, 可能要定位],
+    [getMarkdown, 取主题CSS, exportSettings.pandoc_args, toast, 默认落点, 可能要定位],
   );
 
   /**

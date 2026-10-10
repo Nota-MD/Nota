@@ -9,7 +9,8 @@
 //! ⚠️ 这一页里**没有** 外观那一页的「字体大小 / 缩放」——那两条是外壳的，
 //! 归 `settings/appearance.rs`。两个字段在界面上挨得近，不代表归同一页。
 //!
-//! ⚠️ 「拼写检查」是**一对**：开关（`spellcheck`）＋ 语言（`spellcheck_lang`，2026-10-10）。
+//! ⚠️ 「拼写检查」是**一对**：开关（`spellcheck`）＋ 语言（`spellcheck_langs`，
+//! 2026-10-10 一格、当天晚些从"一门"改成"**可以同时挂多门**"）。
 //! Nota 的编辑区是 Milkdown/ProseMirror，**浏览器内核的拼写检查**由 WebKitGTK
 //! 提供，所以这两格都不是 Nota 自己实现的——它们要落到内核的两个地方上
 //! （语言列表 / 元素的语言），接线在 `commands/webview.rs` 与 `ui/useSpellcheck.ts`。
@@ -98,26 +99,38 @@ pub struct Editor {
     pub line_ending: LineEnding,
     /// 拼写检查开关。
     pub spellcheck: bool,
-    /// **拼写检查用哪种语言**（2026-10-10 用户要的："拼写检查允许设置不同语言"）。
+    /// **拼写检查同时挂哪几门语言**（2026-10-10 用户要的："拼写检查允许设置不同
+    /// 语言"，当天晚些又要"多语言拼写检查"）。
     ///
     /// 写法是 **enchant 那套 `语言_地区`**（`zh_CN` / `en_US` / `ja_JP`…，
     /// **下划线，不是 BCP-47 的连字符**）——`lang_COUNTRY` 正是 WebKitGTK 那个
     /// `spell-checking-languages` 接口要的形式（`commands/webview.rs` 的注释里有
     /// 出处）。写成连字符的 `zh-CN` 找不到词典，而症状是**静默不检查**。
     ///
-    /// ⚠️ **空串 = 跟随系统**（出厂值），而且这个"空"是**有含义的一手**、不是省事：
+    /// # ⚠️ 为什么是**一串**而不是一格
+    ///
+    /// 用户那句是「多语言拼写检查」——中文文档里夹英文是常态，只挂一门的时候
+    /// 另一门的那几个词全是"错词"（或者反过来，一个都不检查）。WebKitGTK 那个
+    /// 接口本来就收一**串**语言（`updateSpellCheckingLanguages(列表)`：逐个
+    /// `enchant_broker_dict_exists()`，**装着的那些全都加载**，查词时拿这几本
+    /// 一起查），所以"多门"不是我们发明的形状，是**内核本来就这么工作**。
+    ///
+    /// ⚠️ **空表 = 跟随系统**（出厂值），而且这个"空"是**有含义的一手**、不是省事：
     /// 语言列表为空时 WebKit 会自己去拿系统的默认语言，取不到才退到"装着的第一个
     /// 词典"。所以"跟随系统"不是"什么都不做"，是**把选择权交回给内核**
     /// （`Source/WebCore/platform/text/enchant/TextCheckerEnchant.cpp` 里那个
     /// `languages.isEmpty()` 那一支）。
     ///
+    /// ⚠️ **顺序有意义**（谁在前谁先）：界面上按"用户勾选的顺序"存，别在读写
+    /// 两头各自排一次序——那种"存进去的顺序和看到的不一样"是查不出来的。
+    ///
     /// ⚠️⚠️ **它不保证画得出红线**：真词典得机器上装过（enchant / hunspell），
     /// Nota 一个词典字节都不带（见 `THIRD-PARTY.md` §7 那条链子）。而"装了词典"
-    /// 与"这个语言有词典"是两件事——选了一个没装词典的语言，WebKit 会**一个词典
-    /// 都不加载**，于是那个语言下**干脆不划红线**（不是"设置没生效"）。
-    /// 前端拿"设完之后读回来的词典列表是不是空的"把这件事说出来（见
-    /// `ui/useSpellcheck.ts`）。
-    pub spellcheck_lang: String,
+    /// 与"这个语言有词典"是两件事——选了一个没装词典的语言，WebKit 会**跳过它**
+    /// （其余装着的照旧加载）。界面上的候选**分成两档**正是为了这件事：装着的
+    /// 那些来自 `src-tauri/src/spellcheck.rs` 现扫出来的清单，没装的那些也列着
+    /// （用户可以选，但旁边会说"这台机器上没有"）。
+    pub spellcheck_langs: Vec<String>,
     /// 打字机模式下让光标始终停在屏幕中间。
     pub typewriter_keep_caret_centered: bool,
 }
@@ -145,9 +158,9 @@ impl Default for Editor {
             copy_line_when_empty: false,
             line_ending: LineEnding::default(),
             spellcheck: true,
-            // ⚠️ 出厂**跟随系统**（空串）：给一个具体语言等于替所有人改了语言，
+            // ⚠️ 出厂**跟随系统**（空表）：给一个具体语言等于替所有人改了语言，
             // 而绝大多数人是单语的，系统语言就是他要的那个。
-            spellcheck_lang: String::new(),
+            spellcheck_langs: Vec::new(),
             typewriter_keep_caret_centered: true,
         }
     }
@@ -220,33 +233,54 @@ mod tests {
     /// ⚠️ 拼写检查**语言**这一格（2026-10-10 加）。
     ///
     /// 三条要一起钉住，因为这一格有三种"空"的含义会被写串：
-    /// **出厂是空串**（＝跟随系统）、**空串要能落盘再读回来还是一样的空串**
+    /// **出厂是空表**（＝跟随系统）、**空表要能落盘再读回来还是一样的空表**
     /// （不能读成某个默认语言）、**老设置文件里没有这一行也不该报错**。
     #[test]
-    fn 拼写语言出厂是空串_也就是跟随系统() {
-        assert_eq!(Editor::default().spellcheck_lang, "");
-        // ⚠️ 空串必须**原样**活过一个来回：读成 `zh-CN` 之类就等于替用户选了语言，
-        // 而它在界面上会显示成一个他从没选过的下拉项（本仓最忌讳的那种假状态）。
+    fn 拼写语言出厂是空表_也就是跟随系统() {
+        assert!(Editor::default().spellcheck_langs.is_empty());
+        // ⚠️ 空表必须**原样**活过一个来回：读成 `["zh_CN"]` 之类就等于替用户选了语言，
+        // 而它会在界面上显示成一个他从没勾过的语言（本仓最忌讳的那种假状态）。
         let e = Editor::default();
         let t = toml::to_string_pretty(&e).unwrap();
         let back: Editor = toml::from_str(&t).unwrap();
-        assert_eq!(back.spellcheck_lang, "");
-        assert!(t.contains(r#"spellcheck_lang = """#), "实际是：\n{t}");
+        assert!(back.spellcheck_langs.is_empty());
     }
 
+    /// ⚠️ **多门语言要按原样、按顺序**活过一个来回（2026-10-10 晚，"多语言"那一批）。
+    ///
+    /// 三条各自的理由：① "多门"这件事本身（中文文档夹英文，一门不够）；
+    /// ② **顺序**——它是用户勾选的顺序，而 `Vec` 落成 TOML 数组是有序的，
+    /// 谁在两头各自排一次序都会让"存进去的和看到的不一样"；
+    /// ③ `#[serde(default)]` 那一条：老文件里那一行叫 `spellcheck_lang`（**单数、
+    /// 字符串**），现在读进来会被**忽略**（它不在新字段里），落回空表＝跟随系统——
+    /// 这是有意的：本仓尚未发布，改键名不必兼容（`AGENTS.md` §0 第 5 条），
+    /// 而"读不出来"才是不能接受的。
     #[test]
-    fn 拼写语言能落盘且老的_editor_表读得进来() {
+    fn 拼写语言可以是多门_而且顺序不变() {
         let e = Editor {
-            spellcheck_lang: "zh_CN".to_string(),
+            spellcheck_langs: vec!["en_GB".to_string(), "zh_CN".to_string()],
             ..Default::default()
         };
         let t = toml::to_string_pretty(&e).unwrap();
-        assert!(t.contains(r#"spellcheck_lang = "zh_CN""#), "实际是：\n{t}");
-        assert_eq!(toml::from_str::<Editor>(&t).unwrap().spellcheck_lang, "zh_CN");
-        // 老文件里没有这一行：
-        let 老: Editor = toml::from_str("spellcheck = false\n").unwrap();
+        // ⚠️ 只断言"是那一格、是个数组"：`to_string_pretty` 会把两个以上元素的
+        // 数组**折成多行**（实测：`spellcheck_langs = [\n    "en_GB",\n…`），
+        // 所以拿整行字面量去比会红——而那句话本来也不是判据，**顺序**才是，
+        // 下面那句 `assert_eq!` 钉的正是它。
+        assert!(
+            t.contains("spellcheck_langs = ["),
+            "实际是：\n{t}"
+        );
+        let back: Editor = toml::from_str(&t).unwrap();
+        assert_eq!(back.spellcheck_langs, vec!["en_GB", "zh_CN"]);
+
+        // 老文件里没有这一行（以及还留着一格老的单数字段）：
+        let 老: Editor =
+            toml::from_str("spellcheck = false\nspellcheck_lang = \"zh_CN\"\n").unwrap();
         assert!(!老.spellcheck);
-        assert_eq!(老.spellcheck_lang, "");
+        assert!(
+            老.spellcheck_langs.is_empty(),
+            "旧的那一格单数键应当被忽略、落回空表（＝跟随系统），而不是让整个设置读不出来"
+        );
     }
 
     /// ⚠️ **老设置文件里那两条死开关不该让整个设置读不出来**（2026-09-28）。

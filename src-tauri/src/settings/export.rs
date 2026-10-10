@@ -1,6 +1,7 @@
 //! 「导出」那一页的设置。
 //!
-//! 本文件装两条字段：默认导出文件夹 / 导出后是否打开所在目录。
+//! 本文件装三条字段：默认导出文件夹 / 导出后是否打开所在目录 /
+//! **借 pandoc 时要捎的那串额外参数**（2026-10-10 加，见下）。
 //!
 //! ⚠️⚠️ **这一页只有两条设置。** 界面上的格式清单 2026-09-25 起是这样：
 //! ① HTML（两档）和 PDF **Nota 自己出**；② PDF / Word (.docx) / OpenOffice /
@@ -19,6 +20,23 @@
 //!
 //! ⚠️ 那排 `+ − ↑ ↓ ✎`（自定义导出器）**也不做**：它要的是一个导出器插件
 //! 接口，而 Nota 的插件系统是 Lua 的、面向文档操作的，两者不是一回事。
+//!
+//! # ⚠️ 2026-10-10：多了 `pandoc_args`（用户那句「文档主题没有影响到 Pandoc 的导出」）
+//!
+//! 用户原话：「**还有就是我的文档主题没有影响到 Pandoc 的导出。你可以参考 Markra。**」
+//!
+//! Markra 那边（`markra-ref`，用户在 10-10 点名参考的那份源码）对同一件事的办法
+//! 就是**一格"额外参数"**：`settings.export.pandocArgs`，说明写着"应用到 DOCX、
+//! EPUB 和 LaTeX 导出的额外 Pandoc 参数"。理由不难懂——pandoc 那几种格式各有各的
+//! 排版接口（DOCX 认 `--reference-doc=`、LaTeX/PDF 认 `-V` 变量与 `-H` 头文件、
+//! EPUB/HTML 认 `--css=`），而"写一本自己的 Word 模板"是用户自己的事，
+//! Nota 替不了他。CSS 那一种（EPUB）**Nota 自己会带上文档主题**（见
+//! `pandoc.rs::能带_CSS`），其余几种就在这一格留个出口。
+//!
+//! ⚠️ **这一格是本文件唯一一次改写"不存 pandoc 东西"那条口径**——改窄了：
+//! 从前那条测试名字叫 `没有_pandoc_这一项`，它真正要挡的是**存路径**
+//!（存下来的路径会过期，见上）。现在改成 `不存_pandoc_的路径`：挡的还是路径，
+//! 而"额外参数"是本机此刻就能用的东西，存下来不会过期。
 
 use serde::{Deserialize, Serialize};
 
@@ -33,6 +51,18 @@ pub struct Export {
     pub default_folder: String,
     /// 导出完成后，打开导出文件所在的目录。
     pub open_after_export: bool,
+    /// **追加给 pandoc 的额外参数**（借 pandoc 导那七种时用，2026-10-10 加）。
+    ///
+    /// 写法就是一条命令行上的那些参数，**空格分词、支持引号**（`shlex`，
+    /// 见 `pandoc.rs::分词`）——所以 `--metadata title="我的 书"` 里的空格不会被
+    /// 当成两个参数。空串 = 一个都不加（出厂值）。
+    ///
+    /// ⚠️ **它排在 Nota 自己那几行参数前面**（`--from` / `--to` / `-o` 那几行
+    /// 在后面）：用户写的是"额外"的东西，而 `--to` 那种由**导出格式**决定，
+    /// 不该被一格设置顶掉——真顶掉了症状是"我选了 Word、导出来是个 epub"。
+    /// 反过来说，用户**能**用它覆盖掉我们给的默认值之外的东西（比如
+    /// `--reference-doc=` `--css=` `-V mainfont=`），这正是这一格存在的理由。
+    pub pandoc_args: String,
 }
 
 impl Default for Export {
@@ -41,6 +71,8 @@ impl Default for Export {
             default_folder: String::new(),
             // 默认关：导出完成后不再多开一个文件管理器窗口。
             open_after_export: false,
+            // 默认不给：额外参数是"用户自己知道要什么"才写的东西。
+            pandoc_args: String::new(),
         }
     }
 }
@@ -60,15 +92,40 @@ mod tests {
     }
 
     #[test]
-    fn 没有_pandoc_这一项() {
+    fn 不存_pandoc_的路径() {
         // ⚠️ 同 `image.rs` 里那条：挡的是以后有人把 "Pandoc 路径" 加回来。
-        // ⚠️ **守的是"不存路径"，不是"不许出现 Pandoc 这个词"**（2026-09-25 改口径）：
-        // 七种格式现在真的借系统里那个 pandoc 转，探测也是允许的——但不存路径，
-        // 每次现探（存下来的会过期：换机器、改 PATH、重装）。理由见本文件头。
+        // ⚠️ **守的是"不存路径"，不是"不许出现 Pandoc 这个词"**（2026-09-25 改口径，
+        // 2026-10-10 又收窄了一次）：七种格式真的借系统里那个 pandoc 转，
+        // 探测是允许的，**额外参数那一格也是允许的**（用户 2026-10-10 点名的，
+        // 见文件头）——不许的只有**路径**：存下来的路径会过期（换机器、改 PATH、
+        // 重装），而额外参数不会。⚠️ 所以这条测试**盯的是键名 `pandoc_path`**，
+        // 不是"整份 TOML 里不许有 pandoc 这七个字母"。
         let text = toml::to_string_pretty(&Export::default()).unwrap();
         assert!(
-            !text.to_lowercase().contains("pandoc"),
-            "导出设置里不该出现 Pandoc：\n{text}"
+            !text.to_lowercase().contains("pandoc_path"),
+            "导出设置里不该存 pandoc 的路径：\n{text}"
         );
+        // 对照：真正该在的那一格在（`pandoc_args`）。少了它这条测试也会红——
+        // 一条只会"查没有"的测试，把那一格整个删掉它也是绿的。
+        assert!(
+            text.contains(r#"pandoc_args = """#),
+            "额外参数那一格必须在（哪怕它是空的）：\n{text}"
+        );
+    }
+
+    #[test]
+    fn 额外参数存得下也读得回来() {
+        // 用户会在这一格里写一条命令行那样的东西（含引号与空格）。
+        let e = Export {
+            pandoc_args: r#"--reference-doc=我的模板.docx --metadata title="我的 书""#.to_string(),
+            ..Export::default()
+        };
+        let text = toml::to_string_pretty(&e).unwrap();
+        let back: Export = toml::from_str(&text).unwrap();
+        assert_eq!(back.pandoc_args, e.pandoc_args);
+        // ⚠️ 老配置（这一格还没有的那些）读进来应当是"不给额外参数"，
+        // 不是"读不出整份设置"。serde 的 `default` 那一行管着这件事。
+        let 老: Export = toml::from_str("default_folder = \"\"\nopen_after_export = false\n").unwrap();
+        assert_eq!(老.pandoc_args, "");
     }
 }

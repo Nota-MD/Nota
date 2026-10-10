@@ -91,11 +91,13 @@ export function useStatusBar(接线: {
     // `ui/useSpellcheck.ts` 那条 effect 就把它拨到引擎上（真正干活的是那边）。
     // `null` = 设置还没读回来，菜单里两项都灰（别拿一个假设值去拨引擎）。
     spellcheck: settings?.editor.spellcheck ?? null,
-    // 那一格的语言（2026-10-10）。这里**只用来把菜单第一项的措辞说准**——
-    // 配了具体语言时它还写"自动检测语言"就是在骗人（`ui/StatusBar.tsx` 里那段）。
-    // ⚠️ 这一格必须**原样**递过去：空串是"跟随系统"那一档，`?? null` 会把空串
-    // 留成空串（`??` 只吃 `null` / `undefined`，正合用）。
-    拼写语言: settings?.editor.spellcheck_lang ?? null,
+    // 那几门语言（2026-10-10，当天晚些从"一门"改成"多门"）。这里**只用来把
+    // 菜单第一项的措辞说准**——配了具体语言时它还写"自动检测语言"就是在骗人
+    // （`ui/StatusBar.tsx` 里那段）。
+    // ⚠️ 这一格必须**原样**递过去：空数组是"跟随系统"那一档，而 `?? null` 只吃
+    // `null` / `undefined`，正合用（不许写成 `.length ? … : null`——那会把
+    // "跟随系统"和"还没读回来"变成同一件事）。
+    拼写语言: settings?.editor.spellcheck_langs ?? null,
 
     // ⚠️ 下面两条 patch 都**先把那张表铺开**：`updateSettings` 只做**顶层**
     // 浅合并，`{ appearance: { status_metric } }` 会把 appearance 里另外

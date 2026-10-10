@@ -3516,7 +3516,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find select move-block link-edit; do
+for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find select move-block link-edit panel-dock-state; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3651,6 +3651,10 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 是因为它当初对应的判断（"`?raw` 只有一处"）本身没错，**错的只是"只有一份测试
 会碰到别名"**。
 
+**六十份、共 1529 条**（📌 **2026-10-10（插件栏记忆 / pandoc 主题 / 鸣谢那批）现数**：
+**60 份一份一份跑完**（`files` 那个复算脚本：`ls tests/*.test.ts | wc -l` ＝ 60，`for` 里多加一份，`share-card` 要 `--loader:.svg=text`、`heatmap` / `focus-summary` / `keymap` 要 `--alias:@=./src`），**全部 exit=0 / 0 失败**。
+⚠️ 本批只加了一份：`panel-dock-state` **44 条**（插件栏那三份凭据的记忆 ＋ 「这一页该画什么」那个纯函数；⚠️ 它的第 ⑤ 组**读 `src/ui/PluginDock.tsx` 的源码文本**对账——本仓没有 jsdom，组件那一层只能这么钉，先例是 `context-menu` / `bar-close`）。⚠️ **总数 1485 → 1529，份数 59 → 60**。
+⚠️ 复算脚步见下面那条 📌 第 ⑤ 条的脚本（本轮用的就是它，逐份打印条数与 exit 码）。
 **五十九份、共 1485 条**（📌 **2026-10-07 当天最晚那一批（「链接」那个框）现数**：
 **59 份一份一份跑完**（`for` 里 55 份 ＋ 单列那 4 份各自的开关），**全部 exit=0 / 0 失败**。
 本批只有一笔：新加 `link-edit` **34 条**（链接那一族的纯判据——`链接落点` 的三条规则
@@ -6121,3 +6125,37 @@ podman exec -u 1000 -e CARGO_TARGET_DIR=/tmp/nota-win-check \
 `cargo check --target x86_64-pc-windows-gnu` **0 error / 0 warning**，
 而 Linux 上 `cargo test --lib` 仍然 **612 passed / 0 failed**（分档不许弄坏主场）。
 ⚠️ **没做的**：`cargo build`（真链接）、在 Windows 上跑、任何 Windows 特有的真机验证。
+### 5.61 验「跑着的时候关掉插件栏、再打开」（第 111 项，2026-10-10，⚠️ **一半验成、一半没验成**）
+
+**要验的是什么**：插件（这里用 AI）的一条命令正在跑的时候关掉右侧插件栏、再打开，
+那一栏**还认不认得出来**（用户原话：「AI插件运行中关掉插件面板再打开就找不到了」）。
+
+**配方**（都在容器里，⚠️ 隔离 `XDG_*`、按 PID 收工，别碰用户那台）：
+
+1. 造一个**慢慢回话的假 OpenAI 端点**（`/tmp/nota-验111/假API.py`）：**`content-length` ＋
+   一小块一 flush ＋ 每块之间 `sleep 0.7`**，一共 35 块（≈24 秒）。⚠️ **别用 chunked、
+   也别靠"说完关连接"**——那两种写法在应用这边都不是"边到边给"（见末段）。
+2. 配置：`XDG_CONFIG_HOME=/tmp/…/配置` 下 `nota/plugin-settings/nota.ai.toml` 写
+   `base_url = "http://127.0.0.1:8791/v1"` / `model` / `api_key` / **`stream = "0"`**
+   ——关掉流式，让那一轮就是**一个占住十几秒的整段请求**（这一条正是"锁被占着"的现场）。
+3. `Xvfb :99 -screen 0 1600x1000x24` ＋ `./target/debug/nota /tmp/…/文稿.md`（带
+   `WEBKIT_DISABLE_COMPOSITING_MODE=1`）。
+4. 点右上角 **Extensions** 开栏 → 点 AI 面板里那颗预设（**Summarize**，坐标当场从
+   `import -window root` 的截图里读，别照抄上一次的：面板一滚，那颗按钮就换位置了）。
+5. **+3 秒**点栏头那颗 **×** 关栏 → **+4 秒**再点 Extensions 开栏 → 立刻截图。
+
+**看到什么**：重开的那一帧里，面板**当场就是原来那份内容**（顶部那排对话标签、`Model:
+fake-slow` 那一行、输入卡片、下面那两句），**不是**一句「Loading…」。
+
+**⚠️ 没验成的那一半**：真·流式（`nota.ui.stream` 推文字）在这个假服务器上三次都没成
+——v1 用 `transfer-encoding: chunked`（curl 收得干干净净，应用那边**一整轮都没结束**）、
+v2 用 HTTP/1.0 ＋ 不发长度 ＋ 说完关连接（应用把**整份正文**当成"不认流式"的响应，
+插件就退到整段那条路去解 JSON，报「did not return JSON」）、v3 用 `content-length`
+＋ 小块 flush（**与宿主单测里那个桩服务器同一套写法**，可那一轮仍然走了"整段"那条路）。
+所以第 111 项里"**拉不回来时也要把正在吐的字画出来**"那一条，判据只有
+`tests/panel-dock-state.test.ts` 的第 ② 组（含一条明写的对照）。⚠️ 要接着查的话从
+`src-tauri/src/lua/api/http.rs::流式` 的 `切出完整段`（什么时候才把一块交给回调）查起。
+
+**收工时**：测试实例、假端点、Xvfb 都**按 PID** 杀掉（⚠️ 那台机器上还有用户自己的实例，
+`kill` 之前先 `tr '\0' '\n' < /proc/$p/environ | grep DISPLAY` 认一遍）。
+

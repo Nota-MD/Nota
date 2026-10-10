@@ -21,61 +21,18 @@
  * 拆成"一个顶层一个表里"只会让人以为它们不是一件事）。
  */
 
-import { useState } from "react";
-
 import type { LineEnding } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import {
   NumberInput,
   Radio,
   Range,
-  Select,
   SettingRow,
   SettingsGroup,
-  TextInput,
   Toggle,
 } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
-
-/**
- * 「自定义语言」那一档在下拉里用的记号。
- *
- * ⚠️ 它**不是**一个合法的语言标签（标签长 `en_US` 那样），所以撞不上真值。
- */
-const 自定义档 = "custom";
-
-/**
- * 拼写检查能给的那几个语言。
- *
- * ⚠️ 写法**必须是 enchant/hunspell 那套 `语言_地区`**（`zh_CN` 而不是 `zh-CN`）——
- * WebKitGTK 拿这些字符串去 `enchant_broker_dict_exists()` 查词典，写成连字符时
- * 查不到，而症状是**一个字都不检查**（理由与出处见 `commands/webview.rs` 文件头）。
- *
- * ⚠️ 这里**只是候选**，不是"这台机器上装着的词典"——WebKitGTK 没有枚举词典的接口
- * （`docs/10` 那一行记着）。表里没有的语言走「自定义」自己敲，比如 `ca_ES`。
- *
- * ⚠️ 名字**用英文**（不写汉语/日语那种本地写法）：界面文案的主语言是英语，
- * 而 `tools/i18n-check.sh` 第 ④ 栏不许代码里出现中文界面文字（见 `src/i18n/index.ts`
- * 文件头）。这些是专有名词，不进 `t()`。
- */
-const 语言候选: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "en_US", label: "English (US)" },
-  { value: "en_GB", label: "English (UK)" },
-  { value: "zh_CN", label: "Chinese (Simplified)" },
-  { value: "zh_TW", label: "Chinese (Traditional)" },
-  { value: "ja_JP", label: "Japanese" },
-  { value: "ko_KR", label: "Korean" },
-  { value: "fr_FR", label: "French" },
-  { value: "de_DE", label: "German" },
-  { value: "es_ES", label: "Spanish" },
-  { value: "pt_BR", label: "Portuguese (Brazil)" },
-  { value: "ru_RU", label: "Russian" },
-  { value: "it_IT", label: "Italian" },
-  { value: "nl_NL", label: "Dutch" },
-  { value: "pl_PL", label: "Polish" },
-  { value: "tr_TR", label: "Turkish" },
-  { value: "sv_SE", label: "Swedish" },
-];
+import { SpellLangPicker } from "./SpellLangPicker";
 
 export function EditorPane({ settings, onChange }: PaneProps) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
@@ -83,17 +40,6 @@ export function EditorPane({ settings, onChange }: PaneProps) {
   const t = useT();
   const 写 = paneWriter(settings, onChange, "editor");
   const e = settings.editor;
-  /**
-   * 用户是不是在下拉里挑了「自定义」。
-   *
-   * ⚠️ 光看"这个值在不在候选表里"不够：点了「自定义」那一刻值还没变
-   * （要等用户敲字），而那时输入框就得已经出现——所以除了下面那条**推导出来**的
-   * 判据，还需要这一格**记下来**的状态。
-   */
-  const [自定义, 设自定义] = useState(false);
-  const 不在候选里 =
-    e.spellcheck_lang !== "" && !语言候选.some((o) => o.value === e.spellcheck_lang);
-  const 用自定义 = 自定义 || 不在候选里;
 
   /**
    * 换行符那两个名字。⚠️ **字面写在 .tsx 里**（`LF（\n）` 那种全角括号），
@@ -223,33 +169,18 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         {/* ⚠️ 关着时**不画**下面这两行（同上面「正文宽度」那条滑杆的口径）：
             开关关着的时候语言不发生任何作用，摆在那儿就得解释"为什么选了没反应"。 */}
         {e.spellcheck && (
-          <SettingRow label={t("Language")}>
-            <Select
-              value={用自定义 ? 自定义档 : e.spellcheck_lang}
-              options={[
-                { value: "", label: t("Follow the system") },
-                ...语言候选,
-                { value: 自定义档, label: t("Custom") },
-              ]}
-              onChange={(值) => {
-                if (值 === 自定义档) {
-                  设自定义(true);
-                  return;
-                }
-                设自定义(false);
-                写({ spellcheck_lang: 值 });
-              }}
-            />
-          </SettingRow>
-        )}
-        {e.spellcheck && 用自定义 && (
-          <SettingRow label={t("Language tag")}>
-            {/* ⚠️ `placeholder` 里那个例子就是格式本身（`en_US`）：这一格填错了
-                不会报错，只会静默地什么也不检查，所以格式得当场看得见。 */}
-            <TextInput
-              value={e.spellcheck_lang}
-              placeholder="en_US"
-              onChange={(spellcheck_lang) => 写({ spellcheck_lang })}
+          // ⚠️ **可以同时勾几门**（2026-10-10 晚，"多语言"那一批）：控件与
+          // 它的两半候选表在 `./SpellLangPicker.tsx`（那边写着为什么候选分
+          // "这台机器装着的" 与 "写死的那张表" 两半）。
+          <SettingRow
+            label={t("Languages")}
+            description={t(
+              "More than one can be checked at once — words are checked against all of them. Nota ships no dictionaries; if a language has none on this machine, it will say so.",
+            )}
+          >
+            <SpellLangPicker
+              value={e.spellcheck_langs}
+              onChange={(spellcheck_langs) => 写({ spellcheck_langs })}
             />
           </SettingRow>
         )}

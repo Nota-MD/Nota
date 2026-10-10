@@ -47,6 +47,12 @@ pub async fn nota_pandoc_probe() -> Result<PandocProbe> {
 ///   pandoc 拿它当相对路径的基准，理由和打印那边一样（见 `commands/export.rs` 文件头）。
 /// - `html`：**只有 PDF 的兜底要用**，是前端拼好的带样式 HTML。不给也能导 PDF，
 ///   前提是 pandoc 那条路走得通。
+/// - `theme_css`：**当前文档主题的原始 CSS**（2026-10-10 加，`docs/07` 第 112 项）。
+///   空串＝无主题。⚠️ 只有 **epub** 真用得上它（`pandoc.rs::能带_CSS` 里那张表写着
+///   为什么 docx / latex / odt / rtf / opml 到不了）——别的格式给了也是白给，
+///   那种出口在「设置 → 导出」的额外参数那一格。
+/// - `pandoc_args`：用户在「设置 → 导出」里写的那串**额外参数**（空格分词、
+///   支持引号）。⚠️ 引号没配对时**当场报**（`pandoc.rs::分词`）。
 ///
 /// ⚠️ **不给 `target` 兜底**：这里不替用户决定文件名。保存对话框是用户亲手选的，
 /// 换一个落点写出去，就是把文件丢在他不知道的地方。
@@ -58,11 +64,20 @@ pub async fn nota_pandoc_export(
     target: String,
     doc_path: Option<String>,
     html: Option<String>,
+    theme_css: Option<String>,
+    pandoc_args: Option<String>,
 ) -> Result<PandocExport> {
     let kind = Format::from_id(&format)
         .ok_or_else(|| NotaError::other(format!("不认识的导出格式：{format}")))?;
     let target = PathBuf::from(&target);
     let doc_dir = 文档目录(doc_path.as_deref());
+    // ⚠️ 这两样在**这一刻**取（前端把值传过来，不在这儿读设置文件）：这一层
+    // 是"接线"，读设置与读主题 CSS 是前端那侧已经做好的事（`ui/useExport.ts`
+    // 里 `取主题CSS` 那一句），两边各读一次就是两份真相。
+    let 捎带 = pandoc::捎带的东西 {
+        theme_css: theme_css.unwrap_or_default(),
+        pandoc_args: pandoc_args.unwrap_or_default(),
+    };
 
     // ── 第一条路：pandoc ──────────────────────────────────────────────────
     // ⚠️ 阻塞的活儿（等外部进程，最长 180 秒）丢进阻塞池：命令体本身是异步的，
@@ -71,7 +86,7 @@ pub async fn nota_pandoc_export(
     let 目录 = doc_dir.clone();
     let 正文 = markdown.clone();
     let 结果 = tauri::async_runtime::spawn_blocking(move || {
-        pandoc::export_to(kind, &正文, &落点, 目录.as_deref())
+        pandoc::export_to(kind, &正文, &落点, 目录.as_deref(), &捎带)
     })
     .await
     .map_err(|e| NotaError::other(format!("导出任务没跑起来：{e}")))?;

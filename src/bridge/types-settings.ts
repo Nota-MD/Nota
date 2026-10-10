@@ -118,15 +118,19 @@ export interface EditorSettings {
   /** 拼写检查总开关（WebKitGTK 提供）。 */
   spellcheck: boolean;
   /**
-   * **拼写检查用哪种语言**（2026-10-10 加的）。写法是 enchant 那套
-   * **`语言_地区`**（`zh_CN` / `en_US`，**下划线**），**空串 = 跟随系统**。
+   * **拼写检查同时挂哪几门语言**（2026-10-10 加，当天晚些从"一门"改成"多门"）。
+   * 写法是 enchant 那套 **`语言_地区`**（`zh_CN` / `en_US`，**下划线**），
+   * **空数组 = 跟随系统**。
    *
-   * ⚠️ 三档要分清：`""` 是"跟随系统"（内核自己去拿系统的默认语言）、
-   * `"zh_CN"` 是"就要中文"，而**设置还没读回来**是 `undefined`（那是整份
-   * `Settings` 还没到，不是这一格的值）。前端 `ui/useSpellcheck.ts` 靠这个
-   * 区别决定"要不要去拨引擎"。
+   * ⚠️ 三档要分清：`[]` 是"跟随系统"（内核自己去拿系统的默认语言）、
+   * `["zh_CN"]` 是"就要中文"、`["en_GB", "zh_CN"]` 是"这两门一起查"
+   * （中文稿里夹英文是常态，只挂一门时另一门整篇都是"错词"）；而**设置还没
+   * 读回来**是 `undefined`（那是整份 `Settings` 还没到，不是这一格的值）。
+   * 前端 `ui/useSpellcheck.ts` 靠这个区别决定"要不要去拨引擎"。
+   *
+   * ⚠️ **顺序有意义**：它是用户勾选的顺序，别在读写两头各自排一次序。
    */
-  spellcheck_lang: string;
+  spellcheck_langs: string[];
   typewriter_keep_caret_centered: boolean;
 }
 
@@ -381,10 +385,24 @@ export interface ExportSettings {
   /** **空串 = 自动**（跟当前文档所在目录走）。 */
   default_folder: string;
   open_after_export: boolean;
+  /**
+   * **追加给 pandoc 的那串额外参数**（2026-10-10 加，`docs/07` 第 112 项）。
+   *
+   * 用户原话：「**我的文档主题没有影响到 Pandoc 的导出。你可以参考 Markra。**」
+   * ——Markra 那边对这一件事的办法就是这一格（它叫 `pandocArgs`，说明写着
+   * "应用到 DOCX、EPUB 和 LaTeX 导出的额外 Pandoc 参数"）。
+   *
+   * 写法与语义（空格分词、认引号、排在 Nota 自家参数前面）写在 Rust 侧
+   * `settings/export.rs::pandoc_args` 那段；**真正落地**在 `pandoc.rs::分词`。
+   * 空串＝一个都不加。⚠️ **前端只搬值，不解析它**——分词只有一处实现。
+   */
+  pandoc_args: string;
   /* ⚠️ **没有 Pandoc 路径**，而且不会有——但理由 2026-09-25 变了：
    * 以前是"不做 Pandoc"，现在是"**每次都现探**"。存下来的路径会过期
    *（换机器、重装、改 PATH），于是"明明装了却报没装"；现探永远是对的，
-   * 代价只是每次多起一个进程。`settings/export.rs` 里有测试盯着这一项。 */
+   * 代价只是每次多起一个进程。`settings/export.rs` 里有测试盯着这一项。
+   * ⚠️ 2026-10-10 起那条测试**收窄成"不存路径"**：`pandoc_args` 那一格是
+   * 允许的（它不会过期），路径仍然不许有。 */
 }
 
 /**

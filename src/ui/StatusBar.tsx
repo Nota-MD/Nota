@@ -174,15 +174,18 @@ export function StatusBar({
    */
   spellcheck: boolean | null;
   /**
-   * 拼写检查配的语言（`settings.editor.spellcheck_lang`）。**空串 = 跟随系统**，
-   * `null` = 设置还没读回来。
+   * 拼写检查配的那几门语言（`settings.editor.spellcheck_langs`）。
+   * **空数组 = 跟随系统**，`null` = 设置还没读回来。
    *
-   * ⚠️ **只用来把菜单第一项的措辞说准**（2026-10-10 加的语言那一格）：配了
-   * 具体语言时，那一项再写「自动检测语言」就是一句假话——它实际用的是那个语言。
+   * ⚠️ **只用来把菜单第一项的措辞说准**（2026-10-10 加的语言那一格，
+   * 当天晚些从"一门"改成"多门"）：配了具体语言时，那一项再写「自动检测语言」
+   * 就是一句假话——它实际用的是那几门。多门时**全都列出来**（用 `, ` 连），
+   * 不写"N 门"：用户勾的是 `en_GB` 还是 `en_US` 是他自己记得住的，而"N 门"
+   * 他得再点进设置页才知道是哪几门。
    * 菜单里**不放语言列表**（那是一个十几项的列表，塞在这个小菜单里没法用；
    * 选语言在「设置 → 编辑器 → 拼写检查」那一页）。
    */
-  拼写语言: string | null;
+  拼写语言: string[] | null;
   /** 用户在菜单里选了「自动检测语言 / 不使用拼写检查」。**落到 `settings.editor.spellcheck`。** */
   onSetSpellcheck: (on: boolean) => void;
   /** 显示/隐藏侧栏。**与「视图」菜单、`Ctrl+Shift+L`、侧栏那颗 × 同一个 setter。** */
@@ -306,11 +309,13 @@ export function StatusBar({
   const 拼写条目: MenuEntry[] = [
     {
       id: "spell.auto",
-      // ⚠️ 配了具体语言时那一项就得说那个语言（2026-10-10）：菜单里只有
-      // 「开」和「关」两项，写"自动检测语言"而实际用的是 `zh_CN` 就是假话。
-      label: 拼写语言
-        ? t("Language: {0}", 拼写语言)
-        : t("Auto-detect language"),
+      // ⚠️ 配了具体语言时那一项就得说那几门（2026-10-10，当天晚些支持多门）：
+      // 菜单里只有「开」和「关」两项，写"自动检测语言"而实际用的是 `en_GB`
+      // 就是假话。
+      label:
+        拼写语言 && 拼写语言.length > 0
+          ? t("Languages: {0}", 拼写语言.join(", "))
+          : t("Auto-detect language"),
       checkable: true,
     },
     { id: "spell.off", label: t("Do not check spelling"), checkable: true },

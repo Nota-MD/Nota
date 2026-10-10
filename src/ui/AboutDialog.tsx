@@ -66,6 +66,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { api } from "@/bridge/ipc";
+import { 致谢名单 } from "@/ui/credits";
 import type { Diagnostics } from "@/bridge/types";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
@@ -217,82 +218,13 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
   }, [页]);
 
   /**
-   * 致谢名单。
+   * 致谢名单。⚠️ **2026-10-10 搬去了 `ui/credits.ts` 并补全**（用户原话：
+   * 「将 Codemirror 等引入的 BSD/MIT 库写入"鸣谢"」）——那一份是"直接引的、
+   * 宽松许可的那些"，逐条对着 `THIRD-PARTY.md` 抄的，来龙去脉写在它的文件头。
    *
-   * ⚠️ **只写"真的用了、而且是用户看得见的那种"**。完整的传递依赖闭包有几百个
-   * （前端 + Rust 加起来），清单在根目录 `THIRD-PARTY.md`——这里放不下、
-   * 也没人读。
-   *
-   * ⚠️ 名字照各项目自己的写法（`Tauri` 不是 `tauri`、`KaTeX` 不是 `katex`）。
+   * ⚠️ 只在**渲染里**现取（`t()` 要等语言定下来，理由见文件头口径 ③）。
    */
-  const 致谢: readonly { 名: string; 用处: string; 链接: string; 许可: string }[] = [
-    {
-      名: "Tauri",
-      用处: t("Desktop shell and windows"),
-      链接: "https://github.com/tauri-apps/tauri",
-      许可: "Apache-2.0 OR MIT",
-    },
-    {
-      名: "React",
-      用处: t("Interface"),
-      链接: "https://github.com/facebook/react",
-      许可: "MIT",
-    },
-    {
-      名: "Milkdown / ProseMirror",
-      用处: t("Editor core"),
-      链接: "https://github.com/Milkdown/milkdown",
-      许可: "MIT",
-    },
-    {
-      名: "KaTeX",
-      用处: t("Math typesetting"),
-      链接: "https://github.com/KaTeX/KaTeX",
-      许可: "MIT",
-    },
-    {
-      名: "Mermaid",
-      用处: t("Diagrams"),
-      链接: "https://github.com/mermaid-js/mermaid",
-      许可: "MIT",
-    },
-    {
-      名: "mlua / Lua",
-      用处: t("Extension runtime"),
-      链接: "https://github.com/mlua-rs/mlua",
-      许可: "MIT",
-    },
-    // ⚠️ 这一条是**语言图标**的出处（代码框旁边那颗小图）。它和上面那些不一样
-    // 的地方在于：图标是**直接搬进仓库**的（`src/assets/lang-icons/`），不是
-    // "引了个依赖"——所以 MIT 要求的那份版权声明必须随源码走，正文在
-    // `THIRD-PARTY.md` §6。
-    {
-      名: "vscode-icons",
-      用处: t("Language icons for code blocks"),
-      链接: "https://github.com/vscode-icons/vscode-icons",
-      许可: "MIT",
-    },
-    {
-      名: "Pandoc",
-      用处: t("Export (external, optional)"),
-      链接: "https://github.com/jgm/pandoc",
-      // ⚠️ Pandoc 是 **GPL-2.0-or-later**，而 Nota 是 BSD-2——两者能并存，是因为
-      //    **Nota 不分发它**：只在你机器上装着的时候调一次它的命令行。这一行
-      //    把"外部、可选、不分发"说清楚，别让人以为 GPL 传染进来了。
-      许可: t("GPL-2.0-or-later (external program — Nota does not bundle it)"),
-    },
-    // ⚠️ 这一条是**拼写检查的词典**那一半（2026-09-28 加，用户点名：
-    // 「拼写检查找一个 BSD 开源的属个名」）。⚠️ **Nota 一个字典字节都不带**：
-    // 整条链子是「WebKitGTK → libenchant → hunspell → 系统装的字典」，所以这一行
-    // 的义务落点在**打包**那一侧（谁把字典打进安装包，谁得随包附上那段声明）。
-    // BSD 的那一件是 SCOWL（Kevin Atkinson），正文在 `THIRD-PARTY.md` §7。
-    {
-      名: "SCOWL",
-      用处: t("Spell checking word lists"),
-      链接: "http://wordlist.aspell.net/",
-      许可: "MIT-like (see THIRD-PARTY.md §7)",
-    },
-  ];
+  const 致谢 = 致谢名单(t);
 
   /**
    * 「权限列表」那张表的两列。`名` 进「权限说明」那一列，`说明` 进「备注」。

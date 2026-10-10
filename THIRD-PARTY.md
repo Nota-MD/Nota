@@ -34,7 +34,7 @@
 | [`serde`](https://github.com/serde-rs/serde) | 1.0.229 | MIT OR Apache-2.0 | 序列化 |
 | [`serde_json`](https://github.com/serde-rs/json) | 1.0.151 | MIT OR Apache-2.0 | JSON |
 | [`sha2`](https://github.com/RustCrypto/hashes) | 0.10.9 | MIT OR Apache-2.0 | 哈希（插件包摘要 / 公钥指纹 / 文件监视那一路） |
-| [`shlex`](https://github.com/comex/rust-shlex) | 1.3.0 | MIT OR Apache-2.0 | ⚠️ **目前没用到**，见 §4 |
+| [`shlex`](https://github.com/comex/rust-shlex) | 1.3.0 | MIT OR Apache-2.0 | **导出的额外参数怎么分词**（2026-10-10 起真的用上了，`pandoc.rs::分词`：用户在「设置 → 导出」写的那串 `--reference-doc=…` 要认引号——按空白切会把 `title="我的 书"` 切成两半，**不报错**，只是值变成半个） |
 | [`similar`](https://github.com/mitsuhiko/similar) | 3.2.0 | Apache-2.0 | ⚠️ **目前没用到**，见 §4 |
 | [`tauri`](https://github.com/tauri-apps/tauri) | 2.11.6 | Apache-2.0 OR MIT | 宿主框架（窗口、IPC、WebView） |
 | [`tauri-build`](https://github.com/tauri-apps/tauri) | 2.6.3 | Apache-2.0 OR MIT | 构建期代码生成 |
@@ -132,20 +132,18 @@
 ⚠️ WebKitGTK 本身是 **LGPL-2.1+ / BSD** 的双授权。因为它**是动态链接的系统库**，
 不随 Nota 分发，所以不改变 Nota 的许可证——**但打包成 AppImage / 自带 WebKit 分发时要重新审**。
 
-## 4. 三个声明了但没用上的依赖（欠账）
+## 4. 两个声明了但没用上的依赖（欠账）
 
-`Cargo.toml` 里有三个 crate **在 `src-tauri/src/` 下零处引用**（2026-09-22 核对）：
+`Cargo.toml` 里还有两个 crate **在 `src-tauri/src/` 下零处引用**（2026-09-22 起核对，2026-10-10 把 `shlex` 划掉了）：
 
 | crate | 当初为什么加 | 现状 |
 |---|---|---|
 | `notify` | "文件树 / 外部改动监视"——编辑器外改了文件，树要跟着刷新 | **没接**。`tree` 命令是现算的，没有 watcher |
 | `similar` | "AI 插件的 diff、Git 插件的变更预览" | **没接**。两个插件的 diff 走的是 `git diff` 的子进程输出 |
-| `shlex` | "Git 插件拼命令行时的转义" | **没接**。`git.rs` 用 `Command` 逐个传参数，**不过 shell，本来就不需要转义** |
 
 **留着还是删掉？**
-建议**删掉 `shlex`**（它的理由本来就是错的，`Command::arg` 不经 shell），
-`notify` 与 `similar` 等到真做对应功能时再加回来——
-现在留着它们只是让每次 `cargo build` 多编三个 crate。
+`shlex` **2026-10-10 起不是欠账了**（导出那串额外参数的分词，见 §1 那一行）。
+剩下这两个（`notify` / `similar`）等到真做对应功能时再说——现在留着它们只是让每次 `cargo build` 多编两个 crate。
 
 ⚠️ 删的时候要同时改 `Cargo.toml` **和 `docs/06` 的依赖清单**（`docs/09` §2 的映射表钉着这一条）。
 **本条是待办，不是已完成**——记在这里是因为它正是一份"第三方组件清单"该说的事：

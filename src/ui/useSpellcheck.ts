@@ -17,19 +17,24 @@
  * ⚠️ 平台差别也在这条上露出来：非 Linux 上命令**直接报错**（那边没接口），
  * 于是这里弹一句"这个平台上还改不了拼写检查"。**不假装成功**。
  *
- * # ⚠️⚠️ 语言那一格（2026-10-10）有一条**与开关相反**的规矩
+ * # ⚠️⚠️ 语言那一格（2026-10-10，当天晚些从"一门"改成"多门"）有一条**与开关相反**的规矩
  *
  * 开关那边"引擎说的 != 我请求的"就是要报的错。语言这边**不是**：
  *
- * - **空串 = 跟随系统**，这时引擎自己会挑一本（机器上装着的那个，比如 `en_US`），
+ * - **空数组 = 跟随系统**，这时引擎自己会挑一本（机器上装着的那个，比如 `en_US`），
  *   挑出来的**当然和我们请求的空列表不一样**——那是**正确结果**，不许当成不一致；
- * - 反过来，请求了一个具体语言而机器上**没这本词典**时，引擎会**一本都不加载**
+ * - 反过来，点名要了一门机器上**没这本词典**的语言时，引擎会**跳过它**
  *   （`TextCheckerEnchant::updateSpellCheckingLanguages` 里那个
- *   `enchant_broker_dict_exists()` 判不过就跳过），读回来是**空数组**。
- *   那时**一个字都不会被检查**——这件事必须说出来：用户会以为"我选了中文，
- *   它应该在检查中文"，而真相是"这台机器没有中文词典，现在什么也不检查"。
+ *   `enchant_broker_dict_exists()` 判不过就跳过），读回来的列表里没有它。
+ *   那一门**一个字都不会被检查**——这件事必须说出来：用户会以为"我勾了中文，
+ *   它应该在检查中文"，而真相是"这台机器没有中文词典，中文那一半没人看"。
  *   Nota 一个词典字节都不带（`THIRD-PARTY.md` §7 那条链子），所以这不是 bug，
  *   是**得让用户知道的一件事**。
+ *
+ * ⚠️ **多门时这条要逐门说**（2026-10-10 晚）：读回来的列表里少的那几门才是
+ * "没词典"的（`en_GB` 挂着而 `zh_CN` 没挂上 ⇒ 只说 `zh_CN` 那一句）。
+ * **不能**再拿"读回来是空的"当判据——那是单门时的写法，多门时会漏报
+ * （挂上了 `en_US` 就永远不空，于是中文那句永远不说）。
  *
  * # 两条各自只在**自己那一格变了**的时候跑一次
  *
@@ -47,10 +52,14 @@ export interface 拼写接线 {
   /** 设置里那个开关（`settings.editor.spellcheck`）。`null` = 设置还没读回来。 */
   开: boolean | null;
   /**
-   * 设置里那个语言（`settings.editor.spellcheck_lang`，enchant 那套 `zh_CN`）。
-   * **空串 = 跟随系统**（那是**有含义的一档**，见文件头）；`null` = 设置还没读回来。
+   * 设置里那几门语言（`settings.editor.spellcheck_langs`，enchant 那套 `zh_CN`）。
+   * **空数组 = 跟随系统**（那是**有含义的一档**，见文件头）；`null` = 设置还没读回来。
+   *
+   * ⚠️ 依赖是**这一串本身**，所以 `useSpellcheck` 的调用方要给它一个稳定的身份
+   * （`App.tsx` 直接传 `settings.editor.spellcheck_langs`，设置没变就是同一个数组）。
+   * 每帧现造一个 `["en_US"]` 会让下面那条 effect 每帧重跑一次（每次都过一遍主线程）。
    */
-  语言: string | null;
+  语言: string[] | null;
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
@@ -95,16 +104,19 @@ export function useSpellcheck(w: 拼写接线): void {
     let 算了 = false;
     void (async () => {
       try {
-        // ⚠️ 空串发的是**空数组**——那是"跟随系统"那一档（不是"不发"）。
-        const 实际 = await api.webview.spellcheckLanguagesSet(语言 ? [语言] : []);
+        // ⚠️ 空数组发过去就是"跟随系统"那一档（不是"不发"）。
+        const 实际 = await api.webview.spellcheckLanguagesSet([...语言]);
         if (算了) return;
-        // ⚠️ 只有"点名要了一个语言、而一本词典都没加载"才是要报的那件事
-        // （理由见文件头）。跟随系统那一档不管引擎挑了什么，都不说话。
-        if (语言 && 实际.length === 0) {
+        // ⚠️ **逐门比**：读回来的那串里没有的那几门才是"这台机器没这本词典"
+        // （理由见文件头那段）。⚠️ 拿"读回来是空的"当判据是**单门时的写法**——
+        // 多门时挂上了一门就永远不空，中文那句就永远不说了。
+        // 跟随系统那一档（`语言` 是空的）不管引擎挑了什么，都不说话。
+        const 没挂上的 = 语言.filter((l) => !实际.includes(l));
+        if (没挂上的.length > 0) {
           toast(
             t(
-              "This machine has no {0} dictionary, so nothing will be checked while that language is chosen. Nota ships no dictionaries of its own.",
-              语言,
+              "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own.",
+              没挂上的.join(", "),
             ),
             "error",
           );

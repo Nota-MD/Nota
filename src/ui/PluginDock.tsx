@@ -56,6 +56,18 @@
  * **切到那一页**时一定会拉一次。**内容不能塞进事件**——那就回到了 BUG-13 的形状：
  * 两份真相源，漏一次就静默分叉。
  *
+ * # ⚠️ 2026-10-10：这一栏的凭据住到了组件外面（第 111 项）
+ *
+ * 用户报的是「**AI插件运行中关掉插件面板再打开就找不到了**」。上面那句
+ * "切到那一页时一定会拉一次"**在那一种情形下是假的**：插件的一条命令正在跑的时候
+ * 宿主握着 `plugins` 锁，而 `nota_plugin_panel_content` 要的**正是同一把锁**，
+ * 于是那一次拉会一直等到命令跑完（AI 那一路是几十秒）。
+ *
+ * 所以"哪一页 / 每页拉回来的内容 / 正在吐的那段字"这三份凭据**搬去了
+ * `ui/panel-dock-state.ts`**（一份进程内的记忆，关掉这一栏不再丢），并且
+ * 拉不回来的时候**先把正在吐的那段字画出来**。那两份东西的判据、以及为什么
+ * 记下来的时候要抹掉 `busy`，都写在那个文件头上——这一栏只负责画。
+ *
  * # ⚠️ 2026-09-25：这里曾经有一个**内置页**（Slidev 预览），现在没有了
  *
  * 用户要求 Slidev 预览「**做成右侧插件栏里的一个面板（像 AI / Git）**」，
@@ -77,20 +89,19 @@ import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type 
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 import { PanelBody } from "@/ui/PanelBody";
-import { normalise, type PanelNode } from "@/ui/panel-nodes";
+import {
+  记忆,
+  记住内容表,
+  起始页,
+  这一页画什么,
+  type 页,
+  type 面板状态,
+} from "@/ui/panel-dock-state";
+// ⚠️ `normalise` 还留着：拉回来的那一路（`拉` 里）照样过这道门收窄。
+import { normalise } from "@/ui/panel-nodes";
 import { 位置名, 能力名, 来源说明, 语言标签名, 语言对不上, 语言提示 } from "@/ui/pluginText";
 import type { PromptRequest } from "@/ui/useDialogs";
 import type { 插件动作 } from "@/ui/usePlugins";
-
-/** 一个面板此刻的状态。`loading` 只在**第一次**拉的时候出现——
- *  重拉时保留旧内容，否则每按一次「刷新」面板就闪一下白。 */
-type 面板状态 =
-  | { state: "loading" }
-  | { state: "ok"; nodes: PanelNode[]; busy: string | null }
-  | { state: "error"; message: string; busy: string | null };
-
-/** 页签的坐标。`null` = 「插件」那一页（插件清单，不是插件声明的面板）。 */
-type 页 = string | null;
 
 interface Props {
   plugins: PluginInfo[];
@@ -178,8 +189,20 @@ export function PluginDock({
     [键串],
   );
 
-  const [当前, set当前] = useState<页>(() => 键们[0] ?? null);
-  const [内容表, set内容表] = useState<Record<string, 面板状态>>({});
+  /**
+   * ⚠️ **这三个都从 [`记忆`] 里捞回来**（2026-10-10，`docs/07` 第 111 项）。
+   *
+   * 关掉这一栏 = 这个组件被卸载（`App.tsx` 那句 `{dockOpen && …}`），组件里的
+   * state 全丢。从前那不要紧（切回来重拉一次就完了），但**插件的一条命令正在跑
+   * 的时候，宿主握着 `plugins` 锁，那次"重拉"根本回不来**——面板重开之后一直
+   * 空着。用户 2026-10-10 报的「AI插件运行中关掉插件面板再打开就找不到了」
+   * 就是这个形状；来龙去脉与两半修法写在 `ui/panel-dock-state.ts` 的文件头。
+   *
+   * ⚠️ `当前` 的兜底**不能写成 `??`**：`null` 是"用户自己停在「插件」那一页"
+   * （一个正经的选择），只有 `undefined`（从没选过）才该落回第一页。
+   */
+  const [当前, set当前] = useState<页>(() => 起始页(记忆.当前, 键们));
+  const [内容表, set内容表] = useState<Record<string, 面板状态>>(() => 记忆.内容表);
 
   /**
    * **正在往外吐的那段字**，按插件 id 记（2026-10-04 加，`docs/07` 第 58 项）。
@@ -192,7 +215,20 @@ export function PluginDock({
    * ⚠️ 按**插件**记而不是按面板坐标记：宿主那边（`lua/api/ui.rs::实时表`）
    * 只知道是哪个插件在吐字，不知道是哪个面板——载荷里根本没有 `id`。
    */
-  const [实时表, set实时表] = useState<Record<string, string>>({});
+  const [实时表, set实时表] = useState<Record<string, string>>(() => 记忆.实时表);
+
+  // 上面三个 state 每变一次就抄进记忆一份（那份记忆才是"关掉再打开时的起点"）。
+  // ⚠️ 内容表抄过去的时候要**抹掉 `busy`**（见 `记住内容表` 的注释：不抹的话
+  // 面板重开时会是一排永远解不开的灰按钮）。
+  useEffect(() => {
+    记忆.当前 = 当前;
+  }, [当前]);
+  useEffect(() => {
+    记忆.内容表 = 记住内容表(内容表);
+  }, [内容表]);
+  useEffect(() => {
+    记忆.实时表 = 实时表;
+  }, [实时表]);
 
   /** 用户**手动**点过页签。点过之后就不再替用户选（他点了「插件」页就该留在那儿）。 */
   const 手动选过 = useRef(false);
@@ -520,23 +556,12 @@ export function PluginDock({
     // 拿它当索引 TS 要报"不能用 null 当索引"。
     const 键 = 坐标(活动面板);
     const 态 = 内容表[键] ?? { state: "loading" as const };
-    // 插件正在吐的那段字（没有就是 `null`）。**拼在最后**：它是"此刻正在写的
-    // 东西"，位置就该在这一页的末尾。
-    //
-    // ⚠️ 走 `normalise` 而不是手搓一个 `PanelNode` 字面量：那边是**所有**节点
-    // 收窄（长度上限、字段名、缺省）的唯一落点，绕过它拼出来的东西不受那些
-    // 上限管——今天这个字符串本来就短，但"绕过唯一那道门"是会被照抄的习惯。
-    // 形状与 Lua 那份一模一样（`{kind="message", from="ai", text=…}`），所以
-    // 直接喂一个"原始节点"进去就行。
+    // 这一刻该画什么（内容 ＋ 插件正在吐的那段字）——判据全在
+    // `ui/panel-dock-state.ts::这一页画什么` 里（**纯函数**，单测是
+    // `tests/panel-dock-state.test.ts`）。那边有一条是这一栏的救命条款：
+    // **内容还拉不回来、但有流式文字时先把文字画出来**（第 111 项）。
     const 实时 = 实时表[活动面板.plugin] ?? "";
-    const 实时节点 =
-      态.state === "ok" && 实时 !== ""
-        ? (normalise([{ kind: "message", from: "ai", text: 实时 }])[0] ?? null)
-        : null;
-    // ⚠️ 先取出来再拼，别写成 `态.nodes` 直接展开：`态` 是联合类型，
-    // `nodes` 只在 `ok` 那一支上，不过一道 `state === "ok"` 的窄化 TS 要报。
-    const 面板节点们 = 态.state === "ok" ? 态.nodes : [];
-    const 节点们 = 实时节点 === null ? 面板节点们 : [...面板节点们, 实时节点];
+    const 画 = 这一页画什么(态, 实时);
 
     // 这一页的插件语言对不上吗？（那位用户看到的是英语的插件 + 一句话解释）
     const 这插件 = plugins.find((p) => p.id === 活动面板.plugin);
@@ -549,26 +574,26 @@ export function PluginDock({
             <p className="panel-lang">{语言提示()}</p>
           )}
           <div className="panel-body">
-            {态.state === "loading" && <p className="panel-pending">{t("Loading…")}</p>}
-            {态.state === "error" && (
+            {画.提示 === "载入" && <p className="panel-pending">{t("Loading…")}</p>}
+            {画.错误 !== null && (
               <p className="panel-error" role="alert">
-                {态.message}
+                {画.错误}
               </p>
             )}
-            {态.state === "ok" &&
-              (节点们.length === 0 ? (
-                // 空的**不是错误**：插件这一刻没有内容可显示（没开文件夹、
-                // 没有改动）。如实说，别画一个空框让人以为坏了。
-                <p className="panel-empty">{t("The extension has nothing to show.")}</p>
-              ) : (
-                <PanelBody
-                  plugin={活动面板.plugin}
-                  nodes={节点们}
-                  busy={态.busy}
-                  askPrompt={askPrompt}
-                  onCall={(plugin, command, args) => 跑(plugin, 活动面板.id, command, args)}
-                />
-              ))}
+            {
+              // 空的**不是错误**：插件这一刻没有内容可显示（没开文件夹、
+              // 没有改动）。如实说，别画一个空框让人以为坏了。
+              画.提示 === "空" && <p className="panel-empty">{t("The extension has nothing to show.")}</p>
+            }
+            {画.节点们.length > 0 && (
+              <PanelBody
+                plugin={活动面板.plugin}
+                nodes={画.节点们}
+                busy={画.busy}
+                askPrompt={askPrompt}
+                onCall={(plugin, command, args) => 跑(plugin, 活动面板.id, command, args)}
+              />
+            )}
           </div>
         </article>
       </section>

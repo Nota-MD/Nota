@@ -443,10 +443,8 @@ export default function App() {
     docs,
     getMarkdown: getEditorMarkdown,
     themeId: 槽.id,
-    // ⚠️ 这里原来还给 `useExport` 传了 `strict`（`settings.strict_markdown`），
-    // 2026-09-26 删掉了：导出走的是**编辑器自己那条渲染路径**，而那条路现在
-    // 两种模式一模一样（宽松标题的显示层装饰已删，见 `atx.ts` 文件头）。
-    exportSettings: settings?.export ?? { default_folder: "", open_after_export: false },
+    // ⚠️ 兜底那份**每一格都要写出来**（`pandoc_args` 是 2026-10-10 加的）。
+    exportSettings: settings?.export ?? { default_folder: "", open_after_export: false, pandoc_args: "" },
     toast,
   });
 
@@ -552,8 +550,10 @@ export default function App() {
   useSpellcheck({
     // ⚠️ `?? null`（不是 `?.` 链到底）：没读回来是"还不知道"，不是"关着"。
     开: settings?.editor.spellcheck ?? null,
-    // ⚠️ 空串是"跟随系统"那一档的**正常值**，不能被 `?? null` 吃掉。
-    语言: settings === null ? null : settings.editor.spellcheck_lang,
+    // ⚠️ 空数组是"跟随系统"那一档的**正常值**，不能被 `?? null` 吃掉。
+    // ⚠️ 这里传的是**设置里那一个数组本身**（不现造一个）：`useSpellcheck` 拿它
+    // 当依赖，每帧新造一个会让那条 effect 每帧重跑一遍（每次都要过一次主线程）。
+    语言: settings === null ? null : settings.editor.spellcheck_langs,
     toast,
   });
 

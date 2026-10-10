@@ -114,11 +114,16 @@ export const 设置表: Record<string, string> = {
   "Keep the cursor in the middle of the screen": "让光标始终停在屏幕中间",
   "First-line indent": "段首缩进",
   "Spell check": "拼写检查",
-  // 拼写检查那一页底下两行（2026-10-10 加的语言）。
-  // ⚠️ `"Language"` / `"Custom"` / `"Follow the system"` 三把键**上面已经有了**
-  // （别的页在用）——不在这儿抄第二份：同一条原文两处两把键，改一处另一处
-  // 就静默退回英文（`index.ts` 文件头那条规矩）。
-  "Language tag": "语言标签",
+  // 拼写检查那一页底下那一格（2026-10-10 加的语言，当天晚些从"一门"改成"多门"）。
+  // ⚠️ 那天白天这里还写着一把 `"Language tag"`（下拉 ＋ 自定义标签那两行），
+  // **这一版删了**：语言那一行现在是一个能勾多门的列表 ＋ 一格"添加自定义标签"，
+  // 没有"语言标签"这单独一行了（留着那把键就是 `i18n-check` 说的"废键"）。
+  // ⚠️ `"Follow the system"` 那把键**上面已经有了**（别的页在用）——不在这儿抄
+  // 第二份：同一条原文两处两把键，改一处另一处就静默退回英文（`index.ts` 文件头那条规矩）。
+  "Languages": "语言",
+  "More than one can be checked at once — words are checked against all of them. Nota ships no dictionaries; if a language has none on this machine, it will say so.":
+    "可以同时勾选多门——勾上的语言会一起用来查词。Nota 自己不随附词典；哪一门在这台机器上没有词典，它当场就会说一句。",
+  "Add": "添加",
   "Smart symbol completion": "智能符号补全",
   "Show the Markdown source of the current block": "显示当前块的 Markdown 源码",
   "Copy/cut the whole line when nothing is selected": "没有选中文字时整行复制 / 剪切",
@@ -130,6 +135,10 @@ export const 设置表: Record<string, string> = {
   "Not implemented yet: the folder picker is not wired up, so type the path in by hand for now.": "尚未实现：目录选择器未接通，暂时需在左侧手动填写路径。",
   "After exporting": "导出之后",
   "Open the folder the exported file goes into": "打开导出文件所在的目录",
+  "Pandoc extra arguments": "Pandoc 额外参数",
+  "Passed to pandoc when exporting with it": "借 pandoc 导出时捎上的参数",
+  "For PDF, Word, OpenOffice, RTF or LaTeX. Separate arguments with spaces; put quotes around anything that contains spaces. The document theme reaches EPUB on its own — for Word, point --reference-doc at your own .docx template.":
+    "给 PDF / Word / OpenOffice / RTF / LaTeX 用。多个参数用空格分开，参数里带空格就用引号括起来。文档主题自己会带上的是 EPUB；要 Word 也跟着变，用 --reference-doc 指向你自己的 .docx 模板。",
   "Startup": "启动选项",
   "Open a blank document": "打开空白文档",
   "Restore the last open files": "恢复上次打开的文件",

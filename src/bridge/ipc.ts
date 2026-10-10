@@ -300,6 +300,13 @@ export const api = {
      *
      * ⚠️ `html` **只有 PDF 用得上**：pandoc 那条路走不通时，后端拿它走 Nota 自带
      * 的排版（WebKit 打印）。返回值里的 `route` 会说明这次到底走了哪条。
+     *
+     * ⚠️ `themeCss`（2026-10-10 加，`docs/07` 第 112 项）是**当前文档主题的原始
+     * CSS**：后端只把它交给**吃得下 CSS 的格式**（今天只有 EPUB），其余几种
+     * 的出口是 `pandocArgs` 那一格。空串＝无主题。
+     *
+     * ⚠️ `pandocArgs` 是用户在「设置 → 导出」里写的**额外参数**（原样搬过去，
+     * **前端不解析**——分词只有后端一处实现，见 `pandoc.rs::分词`）。
      */
     export: (args: {
       format: string;
@@ -307,6 +314,8 @@ export const api = {
       target: string;
       docPath: string | null;
       html: string | null;
+      themeCss: string;
+      pandocArgs: string;
     }) =>
       invoke<PandocExport>("nota_pandoc_export", {
         format: args.format,
@@ -314,6 +323,8 @@ export const api = {
         target: args.target,
         docPath: args.docPath,
         html: args.html,
+        themeCss: args.themeCss,
+        pandocArgs: args.pandocArgs,
       }),
   },
 

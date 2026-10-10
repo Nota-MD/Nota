@@ -261,10 +261,14 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           // `max-width: none`，正文列铺满编辑区（两侧各 56px 装订线）。
           contentWidth={settings?.content_width ?? 760}
           limitTextWidth={settings?.limit_text_width ?? false}
-          // 拼写检查用的语言（2026-10-10）。⚠️ **空串 = 跟随系统**（一档正常值），
-          // `undefined` = 设置还没读回来——所以这里**不加兜底**：两种"空"要分开，
-          // 后者才是不写 `lang` 属性的那一档。
-          拼写语言={settings?.editor?.spellcheck_lang}
+          // 拼写检查用的语言（2026-10-10，当天晚些从"一门"改成"多门"）。
+          // ⚠️ **`lang` 这条 HTML 属性只放得下一门**，所以这里取**第一门**
+          // （用户勾的第一个）当作文档语言；多门的挑选本身在
+          // `settings.editor.spellcheck_langs`，落到引擎上由
+          // `ui/useSpellcheck.ts` 负责。⚠️ 空数组 → `undefined` = 不写这个属性
+          // （"跟随系统"那一档），而设置还没读回来也走同一个 `undefined`——
+          // 两种"空"在这里合流是**结果相同**（都不写属性），不是语义被抹平。
+          拼写语言={settings?.editor?.spellcheck_langs[0]}
           // 正文排版那四项（行距 / 段距 / 字体 / 字号，文档主题那一页）。
           // ⚠️ 整份给，不挑字段（同 `markdown` 那一格的判据）：它在
           // `EditorPane` 里要被一起算成 CSS 变量、写在同一处。

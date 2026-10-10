@@ -244,6 +244,42 @@ async function 摘正文(markdown: string): Promise<string> {
       // 而遍历 DOM 只认真正的元素和真正的属性。
       for (const sel of 整块删掉) pm.querySelectorAll(sel).forEach((n) => n.remove());
 
+      // ── 代码块：把编辑时那一层 DOM **换回** `<pre><code>` ──────────────
+      //
+      // ⚠️⚠️ 2026-10-06 代码块换成 CodeMirror 之后，一个 `pre` 里装的是：
+      //
+      //     <code class="nota-code-text">…</code>   ← ProseMirror 的 contentDOM（零尺寸藏着）
+      //     <div class="cm-editor">…</div>          ← CM 那一层，用户真正看着的
+      //     <div class="nota-code-gutter">…</div>   ← 行号
+      //     <div class="nota-code-bar">…</div>      ← 折叠 / 复制
+      //     <span class="nota-code-lang-wrap">…</span> ← 语言选择器
+      //
+      // 中间那三层零件由上面 `整块删掉` 收走，但**下面两件事它管不了**：
+      //
+      // ① `.cm-editor` 那一层是**内容**、不是零件，删不得；可它的 CSS
+      //    （`code-block.css`）**不在导出的那三份里**。于是导出的文件里那一段
+      //    是一堆没有样式的 `<div class="cm-line">`——**看着像纯文本，其实不是**。
+      // ② 更硬的一条：**`<pre>` 里装着 `<div>`**。别的工具读这份 HTML 时认出的是
+      //    "一个 pre、里面若干 div"，不是"一段代码"——用户 2026-10-10 那句
+      //    「**Pandoc不识别**」就是它（Pandoc 的 HTML 读入器按块级元素切，
+      //    切出来的是几段段落，代码块的围栏语言也丢了）。
+      //
+      // 所以这里**重建**：`pre` 只留那个 `<code>`（它本来就揣着文本，还带着
+      // prism 的行内 token span——那些 span 没有 CSS 也就是普通文字），
+      // 语言补成**标准写法** `class="language-xxx"`（Pandoc / GitHub / 各家
+      // 高亮器都认这个），`data-language` 那是本仓自己的记号，不给出去。
+      // ⚠️ 标准写法里**空语言不写 class**：`language-` 后面没东西是无效值。
+      for (const pre of pm.querySelectorAll("pre")) {
+        const 代码 = pre.querySelector("code");
+        if (!代码) continue;
+        const 语言 = pre.getAttribute("data-language") ?? "";
+        if (语言) 代码.setAttribute("class", `language-${语言}`);
+        pre.removeAttribute("data-language");
+        // ⚠️ `replaceChildren`：那一层 CM 的 DOM、行号、工具条、语言选择器
+        // **一起**出局——不用逐个删（逐个删就是再抄一遍上面那份名单）。
+        pre.replaceChildren(代码);
+      }
+
       // ── 「内容目录」那两颗标记（`editor/toc.ts`）────────────────────────
       // 它们**没法靠上面的前缀规则兜住**（不是 `nota-` 开头的类名，是自造节点
       // 画出来的一个 `<div data-type="html-block">`），而留着的话症状很显眼：

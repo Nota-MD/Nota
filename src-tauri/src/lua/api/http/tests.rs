@@ -353,6 +353,60 @@ fn 流式的每一块都不切半个汉字() {
     }
 }
 
+/// ⚠️⚠️ **用户 2026-10-10 报的那一条**（截图：`读响应失败（响应体上限 2097152
+/// 字节，超了也算失败）：timeout: global`）：一个**慢慢吐、但一直在吐**的长回答，
+/// 总时长超过了 `timeout_ms` —— 从前的"整件事一个总时限"会在半路把它掐掉，
+/// 而服务器每一步都没做错。
+///
+/// 这一条钉的是**分步计时**：桩服务器 30 块、每块之间歇 40ms（＝总时长约 1.2 秒），
+/// 而 `timeout_ms = 600`。⇒ 旧口径必红（≈0.6 秒那一刻 `timeout: global`），
+/// 新口径要**完整收下**（没有哪一次等待超过 600ms）。
+#[test]
+fn 慢慢吐的长回答不该被总时限掐掉() {
+    // ⚠️ 自己数时间，别写死平台差异：一条回合制流就是"来一块、歇一下"。
+    let 块 = 30;
+    let 体: String = (0..块).map(|i| format!("data: {{\"i\":{i}}}\n\n")).collect();
+    let 头 = format!(
+        "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\n\r\n",
+        体.len()
+    );
+    let 块们: Vec<Vec<u8>> = 体.as_bytes().chunks(体.len() / 块).map(|c| c.to_vec()).collect();
+    // 桩服务器每块之间歇 20ms（见它自己的实现），所以这里把块数拉够长。
+    let (地址, 把手) = 桩服务器(头, 块们);
+
+    let (筐, lua, f) = 收集块();
+    let spec = lua.create_table().unwrap();
+    spec.set("url", 地址).unwrap();
+    spec.set("method", "POST").unwrap();
+    // ⚠️ 比总时长小得多：**每一步**的时限，不是整件事的时限。
+    spec.set("timeout_ms", 600).unwrap();
+
+    let 起 = std::time::Instant::now();
+    let 落 = 流式(&lua, &spec, &f).unwrap();
+    let 用了 = 起.elapsed();
+    let (包, 块数, 中断) = match 落 {
+        super::落定::流完 { 包, 块数, 中断 } => (包, 块数, 中断),
+        super::落定::环境失败(话) => panic!("不该失败，实际：{话}"),
+        _ => panic!("该是流完"),
+    };
+    let _ = 把手.join();
+
+    assert_eq!(包.code, 200);
+    assert!(!中断, "没有任何一块该被掐掉");
+    assert_eq!(包.text, 体, "全文要逐字收齐");
+    assert_eq!(筐.lock().unwrap().concat(), 体);
+    assert!(
+        块数 >= 块,
+        "桩分了 {块} 段慢写，只拿到 {块数} 块——说明中途被掐了"
+    );
+    // ⚠️ 总时长**确实**超过了那个时限：不然这条用例证明不了什么
+    //（比如桩被优化成一口气写完，那它就退化成"没超时"，看着还是绿的）。
+    assert!(
+        用了 > Duration::from_millis(600),
+        "这条用例要的是「总时长超过时限」，实测只用了 {用了:?}——夹具太快了？"
+    );
+}
+
 /// 回调返回 `false` ⇒ **当场收工**，后面那几块一个都不许再交。
 ///
 /// ⚠️ 这是"用户关掉面板 / 切走对话时怎么收尾"那条（`docs/07` 第 58 项）。

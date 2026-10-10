@@ -18,7 +18,7 @@
 //! | **只允许 `https://`** | 明文请求会把 API key 和文档内容一起发在裸链路上 |
 //! | 例外：`http://` **只放行回环地址** | 本机跑的大模型服务（Ollama / LM Studio）没有 TLS，而流量根本不出这台机器 |
 //! | 方法只有 GET/POST/PUT/PATCH/DELETE/HEAD | 插件不需要 CONNECT/TRACE，而它们各有各的怪 |
-//! | 默认超时 30 秒，上限 180 秒 | 不让一个卡住的服务器拖着后台线程不放 |
+//! | 默认超时 30 秒，上限 180 秒 | 不让一个卡住的服务器拖着后台线程不放。⚠️ **2026-10-10 起它是"每一步"的时限，不是整件事的总时限**——见下面那条 |
 //! | 响应体上限 2 MiB | 一个坏掉的服务器不该能把内存吃光 |
 //! | 请求体上限 1 MiB | 同上，方向反过来 |
 //! | 最多 5 次重定向，跨域**不带**认证头 | ureq 的默认就是 `Never`（实测 `config.rs:876`），这里只是把它钉住 |
@@ -38,6 +38,30 @@
 //! ⚠️ **回调里不许做慢事**：它在读 socket 的那个线程上跑，回调不返回就没人读
 //! 数据，服务端那边的窗口会满。插件里该干的只有"往累加器里追加 ＋ 偶尔喊一声
 //! `nota.ui.refresh()`"。
+//!
+//! # ⚠️⚠️ 超时的口径（2026-10-10 改过，原因是用户报的一句「timeout: global」）
+//!
+//! 从前这里只设一个 **`timeout_global`**（＝整件事，从 DNS 到读完响应体）。
+//! 那对"一问一答"是合适的，对**流式**是错的：一个长回答边写边吐五分钟，
+//! 每一秒都有数据，可它照样会在第 N 秒被那个总时限掐掉——用户看到的就是
+//! `读响应失败（响应体上限 …）：timeout: global`，而**服务器什么都没做错**。
+//!
+//! 现在按 ureq 那套分步时限摆（`timeout_global` 关掉、`timeout_per_call` 关掉）：
+//!
+//! | 阶段 | 用哪个 | 意思是 |
+//! |---|---|---|
+//! | DNS | `timeout_resolve` | 解析主机名最多等这么久 |
+//! | 建连接（含 TLS 握手） | `timeout_connect` | 同上 |
+//! | 发完请求头到收到响应头 | `timeout_send_request` | **服务器最多多久不吭声**（⚠️ 见下，这里不能用 `timeout_recv_response`） |
+//! | 读响应体 | `timeout_recv_body` | **两次数据之间**最多安静这么久（⚠️ **不是**读完整份体一共只能花这么久） |
+//!
+//! ⚠️ **`timeout_recv_response` 故意留空**：ureq 会把"上一步开始的时间 ＋ 它那个时限"
+//! 也算进响应体每一次读的等待里（`timings.rs::next_timeout` 那个 `min`），于是
+//! 设了它就等于"整份响应体必须在 N 秒内读完"——那正是我们要摆脱的东西。
+//! 留空之后，"等响应头"这一步改由 `timeout_send_request` 兜底（它是它的前序步骤，
+//! 时限照样生效），而响应体那一段只剩"每次等数据最多 N 秒"这一条。
+//! ⚠️ 判据：`http/tests.rs::慢慢吐的长回答不该被总时限掐掉`——桩服务器慢慢吐 30 块、
+//! 总时长超过 `timeout_ms`，要**完整收下**；把总时限加回去它当场红（对照组跑过）。
 //!
 //! # 不做的一件事（说清楚，免得被当成漏了）
 //!
@@ -342,6 +366,10 @@ fn 拼请求(lua: &Lua, spec: &Table) -> NotaResult<ureq::http::Request<Vec<u8>>
 
 /// 建一个这一趟用的 agent。**两类请求共用的第二份**：重定向次数、
 /// "4xx/5xx 不是错误"、UA、超时——这些规矩只有一处定义。
+///
+/// ⚠️ **超时是**分步**的，不是"整件事一个总时限"**（2026-10-10 改，来由见文件头
+/// 那一节）：一个长回答边写边吐五分钟不该被杀，而"服务器一直不吭声"照样要被杀。
+/// 这两件事只有分开计时才分得开。
 fn 代理(spec: &Table) -> NotaResult<ureq::Agent> {
     let 时限 = 超时(spec)?;
     Ok(ureq::Agent::new_with_config(
@@ -350,7 +378,20 @@ fn 代理(spec: &Table) -> NotaResult<ureq::Agent> {
             // 就在响应体里，插件要读得到那段话才能告诉用户出了什么事。
             .http_status_as_error(false)
             .max_redirects(最大重定向)
-            .timeout_global(Some(时限))
+            // ⚠️ **总时限关掉**：开着它 = "整件事（含读完整份响应体）只能花 N 秒"，
+            // 而那正是 2026-10-10 那条 `timeout: global` 的病根（文件头那一节）。
+            .timeout_global(None)
+            .timeout_per_call(None)
+            .timeout_resolve(Some(时限))
+            .timeout_connect(Some(时限))
+            // ⚠️ 它管的是"发完请求头之后，服务器最多多久不吭声"。**不要**改成
+            // `timeout_recv_response`：ureq 会把它的时限一路算进响应体那一段的等待里，
+            // 于是整份响应体又被套回一个总时限（`timings.rs::next_timeout` 那个 `min`）。
+            .timeout_send_request(Some(时限))
+            .timeout_recv_response(None)
+            // ⚠️ 这一条是**两次数据之间**的等待上限（`next_timeout` 里它那一格的基准是
+            // `now`），不是"读完整份体一共只能花这么久"——流式那条命就靠它。
+            .timeout_recv_body(Some(时限))
             .user_agent(format!("Nota/{}", env!("CARGO_PKG_VERSION")))
             .build(),
     ))
@@ -362,6 +403,7 @@ fn 代理(spec: &Table) -> NotaResult<ureq::Agent> {
 /// 内层 `环境失败` = 网络不给力。折成 Lua 表的那一步在 [`收口`]。
 fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<落定> {
     let 请求 = 拼请求(lua, spec)?;
+    let 时限 = 超时(spec)?;
 
     // ⚠️ 从这里往下两条失败都是**环境类**（`落定::环境失败`）：连不上、超时、
     // 读断了。用户会正常遇到，所以它们必须是**一个能显示的值**，不是一次抛出。
@@ -378,14 +420,56 @@ fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<落定> {
         .read_to_string()
     {
         Ok(t) => t,
-        Err(e) => {
-            return Ok(落定::环境失败(format!(
-                "读响应失败（响应体上限 {响应上限} 字节，超了也算失败）：{e}"
-            )))
-        }
+        Err(e) => return Ok(落定::环境失败(读响应失败的话(&e, 时限))),
     };
 
     Ok(落定::回包(回包 { code, text }))
+}
+
+/// 「读响应失败」那句话——**按错误种类分开说**（2026-10-10 加）。
+///
+/// ⚠️ 从前无论哪种失败都套同一句「读响应失败（响应体上限 2 MiB，超了也算失败）：…」，
+/// 于是**超时**看起来像"响应太大了"：用户拿到
+/// `读响应失败（响应体上限 2097152 字节，超了也算失败）：timeout: global`，
+/// 而真正的原因是那个"整件事"的总时限（见文件头那一节）。三句分开之后，
+/// 每种失败各自说清是哪一档，插件作者也不用去猜。
+fn 读响应失败的话(e: &ureq::Error, 时限: Duration) -> String {
+    match e {
+        // ⚠️ 这一档才是"太长了"：`.limit(响应上限)` 撞线。
+        ureq::Error::BodyExceedsLimit(_) => format!(
+            "响应体超了上限（{响应上限} 字节，超了也算失败）：{e}"
+        ),
+        // ⚠️ 这一档是"对面不吭声"：**某一步**等太久了。说清是"多久没新数据"，
+        // 因为一个慢慢吐的长回答**不算**这里（只要数据还在来就不会撞它）。
+        ureq::Error::Timeout(_) => format!(
+            "读响应超时（{} 秒之内没有收到新数据）：{e}",
+            时限.as_secs()
+        ),
+        _ => format!("读响应失败：{e}"),
+    }
+}
+
+/// 同一个判据的 **`io::Error` 版**（流式那条路走的是 `std::io::Read`，
+/// ureq 把上面那两类错误折成 `io::Error` 抛出来：撞上限与超时各有各的 kind，
+/// 见 `ureq::Error::into_io`）。⚠️ 两处**都要**分开说，否则用户在流式那条路上
+/// 拿到的仍然是那句"响应体上限…"（用户 2026-10-10 报的就是这一句）。
+fn 读响应失败的话_io(e: &std::io::Error, 时限: Duration) -> String {
+    match e.kind() {
+        std::io::ErrorKind::TimedOut => {
+            format!("读响应超时（{} 秒之内没有收到新数据）：{e}", 时限.as_secs())
+        }
+        _ => {
+            // ⚠️ 撞上限那一档从 `into_io` 出来就是一个普通 `io::Error`，
+            // 判据只能看那句话里有没有 `limit`（ureq 给的原话是
+            // `BodyExceedsLimit`）——**认不到就按"读响应失败"说**，不猜。
+            let 原话 = e.to_string();
+            if 原话.contains("BodyExceedsLimit") || 原话.contains("limit") {
+                format!("响应体超了上限（{响应上限} 字节，超了也算失败）：{e}")
+            } else {
+                format!("读响应失败：{e}")
+            }
+        }
+    }
 }
 
 /// 流式发一次：**边收边把每一块交给 `收到`**（`docs/07` 第 58 项）。
@@ -400,6 +484,7 @@ fn 发一次(lua: &Lua, spec: &Table) -> NotaResult<落定> {
 ///    在正常响应里逐字相同，不一样的时候说明线路上本来就有坏字节。
 fn 流式(lua: &Lua, spec: &Table, 收到: &mlua::Function) -> NotaResult<落定> {
     let 请求 = 拼请求(lua, spec)?;
+    let 时限 = 超时(spec)?;
 
     let mut resp = match 代理(spec)?.run(请求) {
         Ok(r) => r,
@@ -418,11 +503,7 @@ fn 流式(lua: &Lua, spec: &Table, 收到: &mlua::Function) -> NotaResult<落定
         let n = match std::io::Read::read(&mut 读, &mut 缓冲) {
             Ok(0) => break,
             Ok(n) => n,
-            Err(e) => {
-                return Ok(落定::环境失败(format!(
-                    "读响应失败（响应体上限 {响应上限} 字节，超了也算失败）：{e}"
-                )))
-            }
+            Err(e) => return Ok(落定::环境失败(读响应失败的话_io(&e, 时限))),
         };
         待续.extend_from_slice(&缓冲[..n]);
 

@@ -84,6 +84,8 @@ use tauri::Manager;
 
 use crate::error::{NotaError, Result};
 
+#[cfg(target_os = "linux")] // ⚠️ 捏合那条钩子只在 Linux 那半边装（见 `读一眼`），
+                             // 别的平台上这个 static 没人碰、会报 `never used`。
 /// 「捏合那条钩子装过了」的闸。⚠️ 装两遍的后果是回调叠着跑（每捏一下按回去好几次），
 /// 不至于坏，但没必要。
 static 装过: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

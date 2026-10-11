@@ -271,7 +271,6 @@ use crate::error::{NotaError, Result};
 /// ⚠️ `async` ＋ `spawn_blocking`：要起外部进程（最长 10 秒），同步命令会冻住主线程。
 #[tauri::command]
 pub async fn nota_spell_check(app: tauri::AppHandle, lang: String, words: Vec<String>) -> Result<Vec<usize>> {
-    use tauri::Manager as _;
     let 词典目录 = 随包词典目录(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let Some(后端) = 挑后端(词典目录.as_deref()) else {
@@ -288,7 +287,6 @@ pub async fn nota_spell_check(app: tauri::AppHandle, lang: String, words: Vec<St
 /// **要建议**（界面上的「替换为…」那一列）。拿不到就给空表，不报错。
 #[tauri::command]
 pub async fn nota_spell_suggest(app: tauri::AppHandle, lang: String, word: String) -> Result<Vec<String>> {
-    use tauri::Manager as _;
     let 词典目录 = 随包词典目录(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let Some(后端) = 挑后端(词典目录.as_deref()) else {

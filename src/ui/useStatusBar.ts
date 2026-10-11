@@ -38,6 +38,7 @@ import type { Document, Settings, ViewMode } from "@/bridge/ipc";
 import type { FocusState } from "@/bridge/types";
 import type { StatusMetric } from "@/bridge/types-settings";
 import { StatusBar } from "@/ui/StatusBar";
+import { 请求设置页 } from "@/ui/settings/open-request";
 
 /** `StatusBar` 要的全部 props。**别手抄**，见文件头最后那段。 */
 type 栏的props = ComponentProps<typeof StatusBar>;
@@ -68,9 +69,27 @@ export function useStatusBar(接线: {
    * **四条入口（菜单 / 快捷键 / × / 设置页）汇到同一个 setter**。
    */
   设界面: (patch: Partial<Settings["appearance"]>) => void;
+  /**
+   * 打开设置窗（`App.tsx` 的 `setSettingsOpen`，2026-10-11 加）。
+   *
+   * ⚠️ 只有状态栏那个拼写菜单底下的「全局设置…」用它，而它**不是**"打开设置"
+   * 的第二条实现：真正开窗的仍然是 `App.tsx` 那一个 `setSettingsOpen`
+   * （与菜单那条、`Ctrl+,` 同一条路）。这一格只是把那个 setter 递下来。
+   */
+  打开设置页: () => void;
 }): 栏的props {
-  const { settings, updateSettings, viewMode, 设模式, doc, sidebarOpen, setSidebarOpen, focus, 设界面 } =
-    接线;
+  const {
+    settings,
+    updateSettings,
+    viewMode,
+    设模式,
+    doc,
+    sidebarOpen,
+    setSidebarOpen,
+    focus,
+    设界面,
+    打开设置页,
+  } = 接线;
 
   return {
     doc,
@@ -108,9 +127,37 @@ export function useStatusBar(接线: {
       if (!settings) return;
       void updateSettings({ appearance: { ...settings.appearance, status_metric: m } });
     },
-    onSetSpellcheck: (on: boolean) => {
+    /**
+     * 状态栏那个拼写菜单改设置**只走这一条路**（2026-10-11）。
+     *
+     * ⚠️⚠️ **它必须是"一次写入"**：那一层要改的东西有两样（开/关 ＋ 语言的
+     * 列表），而"勾一门语言"同时动这两样。早先拆成两个回调（`onSetSpellcheck`
+     * ＋ `onPickLanguages`），两个都从**同一份** `settings` 快照出发拼 patch，
+     * 于是后一次把前一次的改动**抹回去**——实测症状：在菜单里勾 `English (AG)`，
+     * 磁盘上 `spellcheck_langs` 仍是 `[]`（第二个 patch 的 `editor` 里带着旧的
+     * 那一格）。这不是"哪个回调写错了"，是"同一个字段两次写、各拿一份旧快照"
+     * 必然的结局。
+     *
+     * ⚠️ 所以这里收的是**一份补丁**（`{ 开?, 语言? }`），一次 `updateSettings`。
+     * 写的**就是设置页那两格**（`editor.spellcheck` / `editor.spellcheck_langs`）：
+     * 两处都是"空数组＝跟随系统 ＋ 能勾多门"，规则一个字都不许分岔。
+     */
+    onChangeSpell: (补: { 开?: boolean; 语言?: string[] }) => {
       if (!settings) return;
-      void updateSettings({ editor: { ...settings.editor, spellcheck: on } });
+      void updateSettings({
+        editor: {
+          ...settings.editor,
+          ...(补.开 === undefined ? {} : { spellcheck: 补.开 }),
+          ...(补.语言 === undefined ? {} : { spellcheck_langs: 补.语言 }),
+        },
+      });
+    },
+    // 菜单底下那条「全局设置…」：**先投一条"要去哪一页"的信**，再开窗
+    // （顺序不能反——`SettingsDialog` 是在挂载那一刻取那封信的，
+    // 见 `ui/settings/open-request.ts` 顶上那三条路）。
+    onOpenSettings: () => {
+      请求设置页("editor");
+      打开设置页();
     },
 
     // 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`、侧栏那颗 ×

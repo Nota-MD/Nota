@@ -455,10 +455,20 @@ export const 界面表: Record<string, string> = {
   "Which count the status bar shows": "状态栏显示哪一个统计量",
   "Auto-detect language": "自动检测语言",
   "Do not check spelling": "不使用拼写检查",
-  // 配了具体语言时那一项改成说那几门（2026-10-10，当天晚些支持多门，`{0}` 是
-  // `en_GB, zh_CN` 这种**用 `, ` 连起来的一串标签**）。它是数据不是文案，
-  // 原样夹在句子里（同 `"{0} 分钟"` 那一类）。
-  "Languages: {0}": "语言：{0}",
+  // ⚠️ 上面两句 2026-10-11 起住在一个**新组件**里（`ui/SpellMenu.tsx`，用户贴
+  // Typora 的截图点名要的那份菜单），键没变——**只有一个调用点**，不存在两处
+  // 各写一份的问题。同一天删掉的是 `"Languages: {0}"`：那一项从前靠"改写第一
+  // 项的措辞"来交代勾了哪几门，现在**那一列语言自己就在菜单里**（还带着勾），
+  // 再把它们拼进一句话里是同一个事实说两遍。
+  // 底下这两句是那份菜单独有的（顶上那行小标题与底下那条出口）。
+  // ⚠️ `"Select spell check language"` 既是 `aria-label` 也是那行小标题
+  //（`MenuPopup` 的 `heading` 收的是**键**、由它翻）——同一个东西两处两个名字的话，
+  // 改一处另一处静默退回英文。
+  "Select spell check language": "选择拼写检查语言",
+  "Global settings…": "全局设置…",
+  "No dictionaries on this machine": "这台机器上还没有词典",
+  // 搜索框里打了字、一门都没搜到（2026-10-11）。
+  "No matching languages": "没有匹配的语言",
   "Rename": "重命名",
   "New name": "新名字",
   "Close this tab": "关闭这个标签页",

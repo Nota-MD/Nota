@@ -46,7 +46,7 @@
  * 主弹层该切栏时直接**回调** `onArrowOut`，链路是显式的。
  */
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "@/i18n";
@@ -115,10 +115,38 @@ interface PopupProps {
    * 别把它做成"能点的第一条"——那会让下面每个 `row` 都错开一位。
    */
   heading?: string;
+  /**
+   * 弹层最顶上要画的那一块（**可选**，2026-10-11 加）。
+   *
+   * ⚠️ 目前只有状态栏那个「选择拼写检查语言」菜单用它——用户贴的 Typora 截图里，
+   * 最上面那个圆角框**不是标题、是搜索框**（他在收尾时又点名：「上面还应该有个
+   * 搜索框」）。所以这一格收的是**一颗现成的 React 元素**：`MenuPopup` 不认识
+   * "搜索"这件事，它只负责"顶上留一块地方"。
+   *
+   * ⚠️ 它**不是条目**（不占漫游下标、上下键走不到），与 `heading` 同一类。
+   * ⚠️ 所以那一块里**不能只放一个输入框就完事**：键盘用户得有路走进下面的列表
+   * （那一层由调用方负责，见 `ui/SpellMenu.tsx` 里输入框上那条 `onKeyDown`）。
+   */
+  top?: ReactNode;
+  /**
+   * **最后一条真条目钉在这一层底部**（`position: sticky`）。
+   *
+   * ⚠️ 2026-10-11 加，用它的目前只有状态栏那个「选择拼写检查语言」菜单：
+   * 用户贴的 Typora 截图里，语言那一长列**滚动**而底下那条「全局设置…」
+   * **一直看得见**——菜单开在窗口右下角，长列表里最下面那一条不给钉住就等于
+   * 藏着。
+   *
+   * ⚠️ **它仍然是一条正常条目**（占漫游下标、能点、能勾）：钉住的只是**画法**。
+   * 早先想过把"出口"做成 `heading` 那样的非条目——那样键盘用户就走不到它了
+   * （漫游只认条目），而"菜单里有一条键盘到不了的出口"比"它跟着列表滚"
+   * 坏得多。
+   */
+  stickyLast?: boolean;
 }
 
 export function MenuPopup(props: PopupProps) {
-  const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label, heading } = props;
+  const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label, heading, top, stickyLast } =
+    props;
 
   // ⚠️ 条目文字**在这里才翻**：`ui/commands.ts` 那张表里存的是**键**（英文原文）。
   // 规矩与理由写在 `ui/MenuBar.tsx::useT` 那一段，`SubMenu` 那边同样要一份。
@@ -153,6 +181,14 @@ export function MenuPopup(props: PopupProps) {
 
   const roving = useMenuRovingFocus<{ disabled?: boolean }>({
     items: items.map((it) => ({ disabled: disabled.has(it.id) })),
+    // ⚠️⚠️ **顶上有 `top` 那一块时不播种焦点**（2026-10-11）：`top` 装的是搜索框，
+    // 而"开菜单就把焦点按到第一条条目上"这条规矩会把用户刚打的第一个字送进条目
+    // （2026-10-11 实测两轮：effect 里 `focus()`、下一帧再 `focus()` 一次，**都抢不过
+    // 那个 layout 阶段播种的焦点**，症状是"搜索框里一个字符都没有、字也没进正文"）。
+    // 所以从**源头**上不播种：`enabled: false` 时那个钩子只把落点清成 -1、不碰 DOM。
+    // ⚠️ 键盘不会因此走不通：`top` 那一块的调用方（`ui/SpellMenu.tsx`）自己在输入框上
+    // 接了 ↑↓ → 把焦点交给第一颗按钮，而那之后整个漫游照旧。
+    enabled: !top,
     onActivate: (_item, index) => {
       const entry = items[index];
       if (!entry) return;
@@ -181,6 +217,22 @@ export function MenuPopup(props: PopupProps) {
   });
 
   const { itemProps, registerItem } = roving;
+
+  /**
+   * `stickyLast` 时把**最后一行**从滚动区里摘出来（`menu-popup-foot` 那一套）。
+   *
+   * ⚠️ 摘的是"最后一行"而不是"最后一条真条目"：这一层的调用方（状态栏那个拼写
+   * 菜单）把那条出口放在**末尾**、分隔线在它前面，所以两者是同一行。⚠️ 真要是
+   * 哪天末尾跟了一条分隔线，那条分隔线会被钉在底部——**看得出来**，不是静默错。
+   *
+   * ⚠️ 早先试过 `position: sticky; bottom: 0` 让最后一条自己钉住，**WebKit 上不
+   * 生效**（2026-10-11 开窗实测：滚到底也见不到那一行）。所以改成把弹层做成
+   * `flex` 列、只让中间那块滚。
+   */
+  const 分段 = useMemo(() => {
+    if (!stickyLast || lines.length < 2) return null;
+    return { 身: lines.slice(0, -1), 尾: lines[lines.length - 1]! };
+  }, [lines, stickyLast]);
 
   /** 登记父项按钮。**必须转一手**，不能把 `registerItem` 直接挂上去。 */
   const registerRow = (row: number, node: HTMLElement | null) => {
@@ -213,98 +265,135 @@ export function MenuPopup(props: PopupProps) {
     roving.focusItem(row);
   }
 
+  /**
+   * 画一行。⚠️ 提成函数而不是留在 JSX 里，是因为 `stickyLast` 要把**最后一条**
+   * 摘到滚动区外面（见下面 `分段`）——同一段 JSX 要按两处切片渲染，
+   * 复制一份 `.map` 回调就等于埋一份将来会漂的抄本。
+   */
+  const 画行 = (line: Line) => {
+      if (line.kind === "sep") {
+        return <div className="menu-sep" key={line.key} role="separator" />;
+      }
+
+      const { entry, row } = line;
+      const isSubOpen = subOpen === row;
+      // ⚠️ **键盘走到的那一项必须画出来**（2026-10-04 开窗口检补的，见
+      // `styles/menubar.css` 里 `.menu-item-open` 那条注释）：这里原先只认
+      // "子菜单开着"，于是 ↑↓ 是一套看不见的漫游——`Esc` 能关掉（说明键真到了）
+      // 但屏幕上一格高亮都没有。
+      const 是焦点 = roving.focusedIndex === row;
+      const p = itemProps(row);
+
+      return (
+        <div
+          // ⚠️ `row === items.length - 1` 是"最后一条**真条目**"（分隔线不在
+          // `items` 里，见上面 `layout` 那段），所以这一条给的是那条出口，
+          // 而不是列表末尾那条分隔线。
+          className={`menu-item-root ${
+            stickyLast && row === items.length - 1 ? "menu-item-sticky" : ""
+          }`}
+          key={entry.id}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={`menu-item ${entry.danger ? "menu-item-danger" : ""} ${
+              isSubOpen || 是焦点 ? "menu-item-open" : ""
+            }`}
+            // ⚠️ 用 `disabled` 而不是"点了不做事"：灰掉的项要**看得出**灰，
+            // 也要让键盘跳过去时不落在它上面。
+            disabled={disabled.has(entry.id)}
+            aria-checked={entry.checkable ? !!checks[entry.id] : undefined}
+            aria-haspopup={entry.submenu ? "menu" : undefined}
+            aria-expanded={entry.submenu ? isSubOpen : undefined}
+            tabIndex={p.tabIndex}
+            ref={(n) => registerRow(row, n)}
+            onFocus={p.onFocus}
+            onMouseEnter={() => {
+              // 鼠标划过：焦点跟过去，并按有没有子菜单决定开还是收。
+              p.onMouseEnter();
+              if (entry.submenu) openSub(row, "划");
+              else {
+                点开的.current = null;
+                setSubOpen(null);
+              }
+            }}
+            onClick={() => {
+              if (entry.submenu) {
+                // ⚠️ **"原来就开着"不等于"用户点开的"**（BUG-17）：鼠标点下来
+                // 之前一定先划过这一行，而划过那一下已经把子菜单打开了。
+                // 那时候按"开着就收起"处理，用户的第一下点击是**把它关掉**，
+                // 于是弹层闪一下、什么都没发生，得点第二下才开。
+                // 所以只有"点开的那个"才被这一下收起。
+                if (isSubOpen && 点开的.current === row) closeSub(row);
+                else openSub(row, "点");
+                return;
+              }
+              onPick(entry.id);
+            }}
+          >
+            <span className="menu-check">{entry.checkable && checks[entry.id] ? "✓" : ""}</span>
+            <span className="menu-label">{t(entry.label)}</span>
+            {/* ⚠️ 走 `formatAccel`：macOS 上要显示成 `⇧⌘S` 而不是 `Ctrl+Shift+S`，
+                那边按 Control 是不会响应的。见 `ui/accel.ts`。 */}
+            {/* ⚠️ **灰掉的项不印快捷键**（2026-09-25）。以前印：结果是菜单上
+                明明白白写着 `Ctrl+Shift+C`、那一项却是灰的——而"灰"在用户
+                心里就是"按了也没用"。两句话互相拆台，用户只能猜哪个才算数。
+                改成不印之后，这一栏的规矩是一句话：**看得见快捷键 = 按得动**。 */}
+            {entry.accel && !disabled.has(entry.id) && (
+              <span className="menu-accel">{formatAccel(entry.accel)}</span>
+            )}
+            {/* ⚠️ `right` 与 `accel` **占同一个位置**（`.menu-accel` 那一格），
+                所以 `accel` 优先——两个都写的时候只有快捷键印得出来。理由与
+                "为什么要有 `right`"写在 `commands.ts::MenuItemSpec.right`。
+                ⚠️ 它**不像快捷键那样在灰掉时隐藏**：语言的短码是"这一行是哪个
+                语言"的标识，不是"按得动"的承诺（那条规矩只管 `accel`）。 */}
+            {!entry.accel && entry.right && (
+              <span className="menu-accel">{entry.right}</span>
+            )}
+            {/* 没子菜单的项也占这个宽度——不然同一列里有箭头和没箭头的
+                文字右边缘会参差不齐。 */}
+            <span className="menu-arrow">{entry.submenu ? "▸" : ""}</span>
+          </button>
+
+          {entry.submenu &&
+            isSubOpen &&
+            subAnchor &&
+            createPortal(
+              <SubMenu
+                entries={entry.submenu}
+                disabled={disabled}
+                checks={checks}
+                onPick={onPick}
+                onDismiss={onDismiss}
+                onClose={() => closeSub(row)}
+                anchor={subAnchor}
+              />,
+              document.body,
+            )}
+        </div>
+      );
+  };
+
   return (
-    <div className="menu-popup" role="menu" aria-label={label} onKeyDown={roving.handleKeyDown}>
-      {/* ⚠️ 在 `lines` **之外**：它不是条目，不占漫游下标（见 `heading` 那段）。 */}
+    <div
+      className={`menu-popup ${分段 ? "menu-popup-foot" : ""}`}
+      role="menu"
+      aria-label={label}
+      onKeyDown={(e) => {
+        // ⚠️ 顶上那块（`top`）里如果是一个输入框，它里面的按键**归它自己**：
+        // 不放行的话 ↑↓ 会被漫游吃掉（输入框里的光标动不了）、
+        // Home/End 也会变成"跳到菜单两端"。Esc 照旧留给这一层。
+        const 目标 = e.target as HTMLElement | null;
+        if (e.key !== "Escape" && 目标 && 目标.tagName === "INPUT") return;
+        roving.handleKeyDown(e);
+      }}
+    >
+      {/* ⚠️ 两块都在 `lines` **之外**：它们不是条目，不占漫游下标（见 `heading` / `top` 那两段）。 */}
+      {top}
       {heading && <div className="menu-heading">{t(heading)}</div>}
-      {lines.map((line) => {
-        if (line.kind === "sep") {
-          return <div className="menu-sep" key={line.key} role="separator" />;
-        }
-
-        const { entry, row } = line;
-        const isSubOpen = subOpen === row;
-        // ⚠️ **键盘走到的那一项必须画出来**（2026-10-04 开窗口检补的，见
-        // `styles/menubar.css` 里 `.menu-item-open` 那条注释）：这里原先只认
-        // "子菜单开着"，于是 ↑↓ 是一套看不见的漫游——`Esc` 能关掉（说明键真到了）
-        // 但屏幕上一格高亮都没有。
-        const 是焦点 = roving.focusedIndex === row;
-        const p = itemProps(row);
-
-        return (
-          <div className="menu-item-root" key={entry.id}>
-            <button
-              type="button"
-              role="menuitem"
-              className={`menu-item ${entry.danger ? "menu-item-danger" : ""} ${
-                isSubOpen || 是焦点 ? "menu-item-open" : ""
-              }`}
-              // ⚠️ 用 `disabled` 而不是"点了不做事"：灰掉的项要**看得出**灰，
-              // 也要让键盘跳过去时不落在它上面。
-              disabled={disabled.has(entry.id)}
-              aria-checked={entry.checkable ? !!checks[entry.id] : undefined}
-              aria-haspopup={entry.submenu ? "menu" : undefined}
-              aria-expanded={entry.submenu ? isSubOpen : undefined}
-              tabIndex={p.tabIndex}
-              ref={(n) => registerRow(row, n)}
-              onFocus={p.onFocus}
-              onMouseEnter={() => {
-                // 鼠标划过：焦点跟过去，并按有没有子菜单决定开还是收。
-                p.onMouseEnter();
-                if (entry.submenu) openSub(row, "划");
-                else {
-                  点开的.current = null;
-                  setSubOpen(null);
-                }
-              }}
-              onClick={() => {
-                if (entry.submenu) {
-                  // ⚠️ **"原来就开着"不等于"用户点开的"**（BUG-17）：鼠标点下来
-                  // 之前一定先划过这一行，而划过那一下已经把子菜单打开了。
-                  // 那时候按"开着就收起"处理，用户的第一下点击是**把它关掉**，
-                  // 于是弹层闪一下、什么都没发生，得点第二下才开。
-                  // 所以只有"点开的那个"才被这一下收起。
-                  if (isSubOpen && 点开的.current === row) closeSub(row);
-                  else openSub(row, "点");
-                  return;
-                }
-                onPick(entry.id);
-              }}
-            >
-              <span className="menu-check">{entry.checkable && checks[entry.id] ? "✓" : ""}</span>
-              <span className="menu-label">{t(entry.label)}</span>
-              {/* ⚠️ 走 `formatAccel`：macOS 上要显示成 `⇧⌘S` 而不是 `Ctrl+Shift+S`，
-                  那边按 Control 是不会响应的。见 `ui/accel.ts`。 */}
-              {/* ⚠️ **灰掉的项不印快捷键**（2026-09-25）。以前印：结果是菜单上
-                  明明白白写着 `Ctrl+Shift+C`、那一项却是灰的——而"灰"在用户
-                  心里就是"按了也没用"。两句话互相拆台，用户只能猜哪个才算数。
-                  改成不印之后，这一栏的规矩是一句话：**看得见快捷键 = 按得动**。 */}
-              {entry.accel && !disabled.has(entry.id) && (
-                <span className="menu-accel">{formatAccel(entry.accel)}</span>
-              )}
-              {/* 没子菜单的项也占这个宽度——不然同一列里有箭头和没箭头的
-                  文字右边缘会参差不齐。 */}
-              <span className="menu-arrow">{entry.submenu ? "▸" : ""}</span>
-            </button>
-
-            {entry.submenu &&
-              isSubOpen &&
-              subAnchor &&
-              createPortal(
-                <SubMenu
-                  entries={entry.submenu}
-                  disabled={disabled}
-                  checks={checks}
-                  onPick={onPick}
-                  onDismiss={onDismiss}
-                  onClose={() => closeSub(row)}
-                  anchor={subAnchor}
-                />,
-                document.body,
-              )}
-          </div>
-        );
-      })}
+      {分段 ? <div className="menu-body">{分段.身.map(画行)}</div> : null}
+      {分段 ? 画行(分段.尾) : lines.map(画行)}
     </div>
   );
 }
@@ -383,6 +472,7 @@ export function SubMenu(props: SubMenuProps) {
   });
 
   const { itemProps, registerItem } = roving;
+
 
   return (
     <div

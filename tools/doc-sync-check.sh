@@ -128,6 +128,10 @@ PAIRS=(
   "src-tauri/src/spell/native.rs                 02,03,07,10"
   "src-tauri/src/spell/store.rs                  02,03,07,10"
   "src-tauri/src/spell/tests.rs                  02,06"
+  # 2026-10-11（照 Typora 重做状态栏那个拼写菜单）：三个新文件。
+  "src/ui/SpellMenu.tsx                          04,02"
+  "src/ui/spell-langs.ts                         04,02"
+  "src/ui/settings/open-request.ts               04,02"
   # 2026-09-28：和 `pdf_print.rs` 隔壁、同样"只有 Linux 编"的那一份 ——
   # GTK 捕获阶段拦 `Ctrl+B`/`Ctrl+I`（BUG-49 的修法）。
   "src-tauri/src/format_keys.rs                   01,02,04,06,07,10"

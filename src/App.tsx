@@ -752,6 +752,7 @@ export default function App() {
     // 菜单 / 快捷键 / × 三条入口汇到同一个 setter），所以这里把 setter 交出去，
     // 不在 `useStatusBar` 里另写一份 `appearance` 的整表铺开。
     设界面: setChrome,
+    打开设置页: () => setSettingsOpen(true),
   });
 
   // 窗口标题跟着**当前文档**走（第 51 项）：任务栏里几份文档要分得出来，

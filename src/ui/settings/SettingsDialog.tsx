@@ -75,9 +75,10 @@ import { GeneralPane } from "./panes/GeneralPane";
 import { ImagePane } from "./panes/ImagePane";
 import { MarkdownPane } from "./panes/MarkdownPane";
 import { ShortcutsPane } from "./panes/ShortcutsPane";
+import { 取设置页请求 } from "./open-request";
 import type { PaneProps } from "./panes/props";
 
-type SectionId =
+export type SectionId =
   | "files"
   | "editor"
   | "image"
@@ -251,9 +252,20 @@ export function SettingsDialog({
   };
 
   const panelRef = useRef<HTMLDivElement>(null);
-  // ⚠️ 默认开在「外观」而不是第一节「文件」：打开设置的人多半是要调样子或者
-  // 找 Markdown 那几档开关，而文件页那几条（启动选项、拖放）一辈子改一次。
-  const [section, setSection] = useState<SectionId>("appearance");
+  /**
+   * 开在哪一页。
+   *
+   * ⚠️ 默认「外观」而不是第一节「文件」：打开设置的人多半是要调样子或者找
+   * Markdown 那几档开关，而文件页那几条（启动选项、拖放）一辈子改一次。
+   *
+   * ⚠️ 2026-10-11 起**可以从外面指定**（状态栏那个拼写菜单底下的「全局设置…」，
+   * 见 `ui/settings/open-request.ts` 顶上那三条路）：取的是**一次性的信箱**，
+   * ⚠️ **只在挂载时取一次**（`useState` 的初值），所以切页那件交互仍然只归这一份
+   * `useState` 管——信箱管的是"这一次打开落在哪儿"，不是"这一页现在在哪"。
+   */
+  const [section, setSection] = useState<SectionId>(
+    () => 取设置页请求() ?? "appearance",
+  );
   const [query, setQuery] = useState("");
 
   // 查询先小写化再进 context：`hits()` 只做一次 `includes`，

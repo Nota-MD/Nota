@@ -110,6 +110,7 @@ import { useT } from "@/i18n";
 import { FocusMeter } from "@/ui/FocusMeter";
 import { Icon } from "@/ui/Icon";
 import { MenuPopup } from "@/ui/MenuPopup";
+import { SpellMenu } from "@/ui/SpellMenu";
 import type { MenuEntry } from "@/ui/commands";
 import { countText } from "@/ui/outline";
 
@@ -136,7 +137,8 @@ export function StatusBar({
   onPickMetric,
   spellcheck,
   拼写语言,
-  onSetSpellcheck,
+  onChangeSpell,
+  onOpenSettings,
   onToggleSidebar,
   onToggleSource,
   onHide,
@@ -177,17 +179,29 @@ export function StatusBar({
    * 拼写检查配的那几门语言（`settings.editor.spellcheck_langs`）。
    * **空数组 = 跟随系统**，`null` = 设置还没读回来。
    *
-   * ⚠️ **只用来把菜单第一项的措辞说准**（2026-10-10 加的语言那一格，
-   * 当天晚些从"一门"改成"多门"）：配了具体语言时，那一项再写「自动检测语言」
-   * 就是一句假话——它实际用的是那几门。多门时**全都列出来**（用 `, ` 连），
-   * 不写"N 门"：用户勾的是 `en_GB` 还是 `en_US` 是他自己记得住的，而"N 门"
-   * 他得再点进设置页才知道是哪几门。
-   * 菜单里**不放语言列表**（那是一个十几项的列表，塞在这个小菜单里没法用；
-   * 选语言在「设置 → 编辑器 → 拼写检查」那一页）。
+   * ⚠️ **2026-10-11 起这个菜单里真的有语言列表了**（用户贴了一张 Typora 的
+   * 「选择拼写检查语言」说「学学人家的菜单，你也这么做」）：一整列「本地语名字 ＋
+   * 短码」，能勾多门。⚠️ 当年那句"十几项塞不进这个小菜单"**不再成立**，因为那一天
+   * 之后引擎是我们自己的、"这台机器上有哪些词典"变成了**问得出来的一件事**
+   * （`nota_spell_dictionaries`），所以列表是**现拉的**、只列真有的那些。
+   * 菜单本身搬去了 `ui/SpellMenu.tsx`（它要自己问一次词典、拿一份 `useState`，
+   * 而这一份是"一个 `useState` 都没有"的纯展示）。
    */
   拼写语言: string[] | null;
-  /** 用户在菜单里选了「自动检测语言 / 不使用拼写检查」。**落到 `settings.editor.spellcheck`。** */
-  onSetSpellcheck: (on: boolean) => void;
+  /**
+   * 用户在拼写菜单里改了点什么。**一次写入**（2026-10-11）。
+   *
+   * ⚠️⚠️ **收一份补丁、只写一次**，不是"开一个回调、语言一个回调"：那一层要改的
+   * 两样（`spellcheck` / `spellcheck_langs`）在"勾一门语言"这一下里**同时**变，
+   * 拆成两次写、各拿一份旧快照的话，后一次会把前一次抹回去
+   * （实测症状与完整的因果写在 `ui/useStatusBar.ts::onChangeSpell`）。
+   *
+   * ⚠️ 写的**就是设置页那两格**（`ui/settings/panes/SpellLangPicker.tsx`）：
+   * 两处都是"空数组＝跟随系统 ＋ 能勾多门"，规则一个字都不许分岔。
+   */
+  onChangeSpell: (补: { 开?: boolean; 语言?: string[] }) => void;
+  /** 菜单底下那条「全局设置…」：打开设置窗并落在「编辑器」页。 */
+  onOpenSettings: () => void;
   /** 显示/隐藏侧栏。**与「视图」菜单、`Ctrl+Shift+L`、侧栏那颗 × 同一个 setter。** */
   onToggleSidebar: () => void;
   /** 切到源码模式／切回所见即所得。**在 App 那边落到 `设模式`**（会话内状态，不落盘）。 */
@@ -305,30 +319,6 @@ export function StatusBar({
 
   const 统计勾: Record<string, boolean> = {};
   for (const m of 菜单次序) 统计勾[统计前缀 + m] = m === metric;
-
-  const 拼写条目: MenuEntry[] = [
-    {
-      id: "spell.auto",
-      // ⚠️ 配了具体语言时那一项就得说那几门（2026-10-10，当天晚些支持多门）：
-      // 菜单里只有「开」和「关」两项，写"自动检测语言"而实际用的是 `en_GB`
-      // 就是假话。
-      label:
-        拼写语言 && 拼写语言.length > 0
-          ? t("Languages: {0}", 拼写语言.join(", "))
-          : t("Auto-detect language"),
-      checkable: true,
-    },
-    { id: "spell.off", label: t("Do not check spelling"), checkable: true },
-  ];
-  // ⚠️ 两件事是**同一个布尔的两种说法**（后端只有"跟随系统"这一种语言状态，
-  // 见文件头那段），所以两项互斥。`null`（设置没读回来）时**两项都灰**。
-  // ⚠️ 语言那一格**不进这两个勾**（它只说"用哪本词典"，开/关还是这个布尔）；
-  // 它只在上面那句措辞里露面。
-  const 拼写勾: Record<string, boolean> = {
-    "spell.auto": spellcheck === true,
-    "spell.off": spellcheck === false,
-  };
-  const 拼写灰 = new Set(spellcheck === null ? ["spell.auto", "spell.off"] : []);
 
   // 悬停才看得见的那一整份统计。⚠️ 用 ` · ` 拼成一行：`title` 属性里的换行
   // 在 WebKit 上不一定断行，多行提示会长得没法看。
@@ -449,17 +439,18 @@ export function StatusBar({
               onArrowOut={() => {}}
             />
           ) : (
-            <MenuPopup
-              label={t("Spell check")}
-              entries={拼写条目}
-              disabled={拼写灰}
-              checks={拼写勾}
-              onPick={(id) => {
+            // ⚠️ 拼写那一层**整块搬去了 `ui/SpellMenu.tsx`**（2026-10-11，用户
+            // 贴 Typora 的截图点名要那份菜单）：它要自己问一次词典、拿一份
+            // `useState`，而这一份是"一个 `useState` 都没有"的纯展示。
+            <SpellMenu
+              spellcheck={spellcheck}
+              语言={拼写语言}
+              onChangeSpell={onChangeSpell}
+              onOpenSettings={() => {
                 关菜单();
-                onSetSpellcheck(id === "spell.auto");
+                onOpenSettings();
               }}
               onDismiss={关菜单}
-              onArrowOut={() => {}}
             />
           )}
         </div>

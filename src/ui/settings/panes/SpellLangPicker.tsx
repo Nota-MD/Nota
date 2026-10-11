@@ -36,6 +36,7 @@ import { open as 选文件 } from "@tauri-apps/plugin-dialog";
 
 import { api, type 拼写词典 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { 语言名 } from "@/ui/spell-langs";
 
 import { TextInput } from "../primitives";
 
@@ -47,31 +48,28 @@ import { TextInput } from "../primitives";
  * hunspell 词典包的惯例（`en_US.dic`），而查找那一侧会把连字符与下划线归一
  * （两边都认，但**列出来/写进设置里的是下划线**那一套，省得用户以为自己写错了）。
  *
- * ⚠️ 名字**用英文**：界面文案的主语言是英语，而 `tools/i18n-check.sh` 第 ④ 栏
- * 不许代码里出现中文界面文字。这些是专有名词，不进 `t()`，所以它们在中文界面
- * 上也是英文——和 `en_US` 这个标签本身一样，属于"写下来的值"。
+ * ⚠️ 名字走 `ui/spell-langs.ts` 那张**本地语名字表**（`Deutsch` / `Čeština`），
+ * **不是英文、也不进 `t()`**——2026-10-11 改的：那一天状态栏那个菜单照 Typora
+ * 重做，两份界面（这一格与那份菜单）改成同一个口径。理由写在 `spell-langs.ts`
+ * 文件头：那一格要服务的是"只认得自己那门语言怎么写的人"。
  */
-const 常见语言: ReadonlyArray<{ value: string; label: string }> = [
-  { value: "zh_CN", label: "Chinese (Simplified)" },
-  { value: "zh_TW", label: "Chinese (Traditional)" },
-  { value: "en_GB", label: "English (UK)" },
-  { value: "ja_JP", label: "Japanese" },
-  { value: "ko_KR", label: "Korean" },
-  { value: "fr_FR", label: "French" },
-  { value: "de_DE", label: "German" },
-  { value: "es_ES", label: "Spanish" },
-  { value: "pt_BR", label: "Portuguese (Brazil)" },
-  { value: "ru_RU", label: "Russian" },
-  { value: "it_IT", label: "Italian" },
-  { value: "nl_NL", label: "Dutch" },
-  { value: "pl_PL", label: "Polish" },
-  { value: "tr_TR", label: "Turkish" },
-  { value: "sv_SE", label: "Swedish" },
+const 常见语言: readonly string[] = [
+  "zh_CN",
+  "zh_TW",
+  "en_GB",
+  "ja_JP",
+  "ko_KR",
+  "fr_FR",
+  "de_DE",
+  "es_ES",
+  "pt_BR",
+  "ru_RU",
+  "it_IT",
+  "nl_NL",
+  "pl_PL",
+  "tr_TR",
+  "sv_SE",
 ];
-
-const 名字: Record<string, string> = Object.fromEntries(
-  常见语言.map((o) => [o.value, o.label]),
-);
 
 /** `en-US` 与 `en_US` 是同一门（与 `spell/store.rs::归一` 一致）。 */
 function 归一(标签: string): string {
@@ -114,7 +112,7 @@ export function SpellLangPicker({
   // 第一档：这台机器上有的。第二档：常见表里**没装**的那些。
   // ⚠️ 顺序是"有的在前"——用户打开这一格最想知道的是"我现在能用什么"。
   const 候选: string[] = (装着 ?? []).map((d) => d.tag);
-  for (const o of 常见语言) if (!已装.has(归一(o.value))) 候选.push(o.value);
+  for (const tag of 常见语言) if (!已装.has(归一(tag))) 候选.push(tag);
   // 用户自己敲过的、以及设置里正勾着的，一个都不许从表里消失
   //（"我明明选了怎么不见了"是这一格最容易犯的错）。
   for (const v of value) if (!候选.some((c) => 归一(c) === 归一(v))) 候选.push(v);
@@ -174,7 +172,7 @@ export function SpellLangPicker({
             <label className="stg-lang" key={tag}>
               <input type="checkbox" checked={选中} onChange={() => 勾(tag)} />
               <span className="stg-lang-tag">{tag}</span>
-              {名字[归一(tag)] && <span className="stg-lang-name">{名字[归一(tag)]}</span>}
+              <span className="stg-lang-name">{语言名(tag)}</span>
               {!有 && <span className="stg-lang-missing">{t("not installed")}</span>}
             </label>
           );

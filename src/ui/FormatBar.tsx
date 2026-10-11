@@ -322,6 +322,17 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
         // 跑在一个已经塌掉的光标上——「加粗」会变成"在原地插两个星号"。
         // 菜单栏那边没这个问题（原生弹层不抢焦点），工具栏有。
         onMouseDown={(e) => e.preventDefault()}
+        // ⚠️⚠️ **要弹框的那两颗走 `menu`，不走 `cmd`**（2026-10-11 修，用户：
+        // 「现在工具栏没法插入图片」）。
+        //
+        // 根因：`onCommand` 是**编辑器命令**那条出口（`ui/useEditorCommands.ts::run`）。
+        // 「链接 / 图片」这两颗的 `cmd`（`link` / `image`）在命令表里确实有实现，
+        // 但它们要的是**参数**：`image` 那条会拿 `p?.src ?? ""` 去 `insertImageCommand`——
+        // 工具栏点下去**一个参数都不带**，于是插进去的是一张 `src=""` 的空图，
+        // 屏幕上看着就是"点了没反应"。它们真正的入口是菜单那条（`fmt.image` →
+        // `ui/useImageInsert.ts::插入图像`，弹框问地址/文件）。
+        // 所以：**有 `menu` 的走菜单那条路，没有的照旧走编辑器命令那条路**
+        //（`fmt.link` / `fmt.image` 那两条在 `useCommandTable` 里就是弹框）。
         onClick={() => onCommand(b.cmd)}
       >
         {b.icon ? <Icon name={b.icon} /> : <span className={字形类(b.menu)}>{b.label}</span>}

@@ -75,7 +75,9 @@ fn 假后端还真能跑一遍_查到词与建议() {
 
     // ⚠️ 用**路径**当程序名（`命令行后端` 的 `程序` 是 `&'static str`，测试里 leak 一下）
     let 程序: &'static str = Box::leak(假.display().to_string().into_boxed_str());
-    let 后端 = 命令行后端 { 程序 };
+    // ⚠️ 随包词典目录给 `None`：这条用例测的是"把系统词典当后端"那条路，
+    // 随包那份走的是 `词典参数` 里另一支（下面单有一条纯函数用例钉它）。
+    let 后端 = 命令行后端 { 程序, 随包词典目录: None };
     let 词们: Vec<String> = ["helo", "hello"].iter().map(|s| s.to_string()).collect();
     assert_eq!(后端.查("en_US", &词们), Some(vec![0]));
     assert_eq!(
@@ -86,4 +88,23 @@ fn 假后端还真能跑一遍_查到词与建议() {
             .collect::<Vec<String>>()
     );
     let _ = std::fs::remove_dir_all(&目录);
+}
+
+/// ⚠️ **随包词典那一支**（用户 2026-10-11：「字典随包分发」）：目录里真有
+/// `<语言>.dic` 时，`-d` 要给**路径**（去掉后缀）；没有就给语言名，让后端去系统里找。
+#[test]
+fn 随包词典在时给路径_不在时给语言名() {
+    let 临时 = std::env::temp_dir().join(format!("nota-dicts-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&临时);
+    std::fs::create_dir_all(&临时).unwrap();
+    std::fs::write(临时.join("en_US.dic"), b"2\nhello\nworld\n").unwrap();
+    std::fs::write(临时.join("en_US.aff"), b"SET UTF-8\n").unwrap();
+    let 带包 = 命令行后端 { 程序: "enchant-2", 随包词典目录: Some(临时.clone()) };
+    // 去掉 `.dic` 后缀（hunspell 的 `-d` 收的是词干路径）。
+    assert_eq!(带包.词典参数("en_US"), 临时.join("en_US").display().to_string());
+    // 包里没带的那门语言：照旧交给系统词典。
+    assert_eq!(带包.词典参数("zh_CN"), "zh_CN");
+    let 不带 = 命令行后端 { 程序: "enchant-2", 随包词典目录: None };
+    assert_eq!(不带.词典参数("en_US"), "en_US");
+    let _ = std::fs::remove_dir_all(&临时);
 }

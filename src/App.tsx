@@ -876,6 +876,7 @@ export default function App() {
               命令状态: commandState,
               设命令状态: setCommandState,
               跑命令: run,
+              插入图像,
               文档出口,
               查找条,
               预览出口,

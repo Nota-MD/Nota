@@ -26,6 +26,7 @@
     "@milkdown/plugin-math": "^7.5.9",
     "@milkdown/plugin-prism": "^7.22.1",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-clipboard-manager": "^2.4.2",
     "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-fs": "^2",
     "@tauri-apps/plugin-opener": "^2",

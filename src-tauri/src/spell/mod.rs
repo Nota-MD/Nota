@@ -65,11 +65,18 @@ pub trait Backend: Send + Sync {
 }
 
 /// 挑一个现在能用的后端。都不可用就给 `None`（界面照实说"这台机器上还没有拼写后端"）。
-pub fn 挑后端() -> Option<Box<dyn Backend>> {
+///
+/// `随包词典目录`：**安装包里自带的那份词典**在哪儿（`bundle.resources` 把
+/// `src-tauri/dicts` 放成了 `dicts/`，运行时就是 `resource_dir()/dicts`）。
+/// 查词时**先看这儿**——用户原话：「字典随包分发」。
+pub fn 挑后端(随包词典目录: Option<&std::path::Path>) -> Option<Box<dyn Backend>> {
     let 候选 = 候选程序();
     for 程序 in 候选 {
         if 在_path里(程序) {
-            return Some(Box::new(命令行后端 { 程序 }));
+            return Some(Box::new(命令行后端 {
+                程序,
+                随包词典目录: 随包词典目录.map(|p| p.to_path_buf()),
+            }));
         }
     }
     None
@@ -98,6 +105,29 @@ fn 在_path里(名字: &str) -> bool {
 /// （`剩下的` 那张计数表就是为它准备的）。
 pub struct 命令行后端 {
     pub 程序: &'static str,
+    /// **随包那份词典的目录**（`resource_dir()/dicts`）。`None` = 这份安装没带
+    /// （开发时直接 `cargo run` 就是这样），那就只用系统装的词典。
+    pub 随包词典目录: Option<std::path::PathBuf>,
+}
+
+impl 命令行后端 {
+    /// 这一门语言该用**哪个** `-d` 值：随包那份在，就给**路径**（hunspell / enchant
+    /// 都认"指向 `.dic` 的路径"，会自动找同目录同名的 `.aff`），否则给语言名
+    /// （让它们去系统词典里找）。
+    ///
+    /// ⚠️ 随包的只有 `en_US`（`src-tauri/dicts/`），别的语言照旧靠系统——
+    /// 包里塞十几种词典要几十 MB，而"用户自己要的那门"只有他知道。
+    fn 词典参数(&self, 语言: &str) -> String {
+        if let Some(目录) = &self.随包词典目录 {
+            let 候选 = 目录.join(format!("{语言}.dic"));
+            if 候选.is_file() {
+                // ⚠️ 去掉 `.dic` 后缀：hunspell 的 `-d` 收的是**词干路径**，
+                // 它自己会去拼 `.dic` / `.aff`（带上后缀在某些版本上反而不认）。
+                return 目录.join(语言).display().to_string();
+            }
+        }
+        语言.to_string()
+    }
 }
 
 impl Backend for 命令行后端 {
@@ -122,8 +152,8 @@ impl Backend for 命令行后端 {
             }
             s
         };
-        let 参数 = 拼参数(self.程序, 语言);
-        let 参数: Vec<String> = 参数.into_iter().map(str::to_string).collect();
+        let 词典 = self.词典参数(语言);
+        let 参数: Vec<String> = 拼参数(self.程序, &词典).into_iter().map(str::to_string).collect();
         let opts = RunOpts::timeout(超时)
             .stdin(输入)
             .env("NO_COLOR", "1")
@@ -142,8 +172,8 @@ impl Backend for 命令行后端 {
         // `& 原词 个数 偏移: 建议1, 建议2`。只认这一种，别的行一律忽略
         //（`#` / `+` / `-` / `*` / 空行都是它的其它状态）。
         let 输入 = format!("{词}\n");
-        let 参数 = 建议参数(self.程序, 语言);
-        let 参数: Vec<String> = 参数.into_iter().map(str::to_string).collect();
+        let 词典 = self.词典参数(语言);
+        let 参数: Vec<String> = 建议参数(self.程序, &词典).into_iter().map(str::to_string).collect();
         let opts = RunOpts::timeout(超时)
             .stdin(输入)
             .env("NO_COLOR", "1")
@@ -240,9 +270,11 @@ use crate::error::{NotaError, Result};
 ///
 /// ⚠️ `async` ＋ `spawn_blocking`：要起外部进程（最长 10 秒），同步命令会冻住主线程。
 #[tauri::command]
-pub async fn nota_spell_check(lang: String, words: Vec<String>) -> Result<Vec<usize>> {
+pub async fn nota_spell_check(app: tauri::AppHandle, lang: String, words: Vec<String>) -> Result<Vec<usize>> {
+    use tauri::Manager as _;
+    let 词典目录 = 随包词典目录(&app);
     tauri::async_runtime::spawn_blocking(move || {
-        let Some(后端) = 挑后端() else {
+        let Some(后端) = 挑后端(词典目录.as_deref()) else {
             return Err(NotaError::other(没有后端的话()));
         };
         后端
@@ -255,15 +287,24 @@ pub async fn nota_spell_check(lang: String, words: Vec<String>) -> Result<Vec<us
 
 /// **要建议**（界面上的「替换为…」那一列）。拿不到就给空表，不报错。
 #[tauri::command]
-pub async fn nota_spell_suggest(lang: String, word: String) -> Result<Vec<String>> {
+pub async fn nota_spell_suggest(app: tauri::AppHandle, lang: String, word: String) -> Result<Vec<String>> {
+    use tauri::Manager as _;
+    let 词典目录 = 随包词典目录(&app);
     tauri::async_runtime::spawn_blocking(move || {
-        let Some(后端) = 挑后端() else {
+        let Some(后端) = 挑后端(词典目录.as_deref()) else {
             return Err(NotaError::other(没有后端的话()));
         };
         Ok(后端.建议(&lang, &word))
     })
     .await
     .map_err(|e| NotaError::other(format!("拼写建议的线程挂了：{e}")))?
+}
+
+/// 安装包自带的那份词典在哪（`resource_dir()/dicts`）。拿不到给 `None`。
+fn 随包词典目录(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    use tauri::Manager as _;
+    let 目录 = app.path().resource_dir().ok()?.join("dicts");
+    if 目录.is_dir() { Some(目录) } else { None }
 }
 
 /// 后端还活着、但**这本词典它没有**时说的那句话。

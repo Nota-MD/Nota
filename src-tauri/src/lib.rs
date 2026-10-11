@@ -201,6 +201,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        // 剪贴板（2026-10-11）：菜单里那条「粘贴」从前只能读 WebKit 的
+        // `navigator.clipboard.readText()`，而那个被挡在权限后面——被拒时只能弹一句
+        // "请按 Ctrl+V"（用户：「剪切板始终显示要CtrlV粘贴，但是我已经是CtrlV了」）。
+        // 现在读剪贴板走**宿主**（这个插件），菜单那条就真的能粘了。
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             // ── ① 设置 ────────────────────────────────────────────────────
             // 读失败**不回滚启动**：一份坏掉的 settings.toml 不该让人连界面都进不去。

@@ -47,6 +47,8 @@ import type { RefObject } from "react";
 
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import type { CommandPayload, EditorCommand, 选区内容 } from "@/editor/create";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
+
 import { writeClipboard } from "@/editor/code-block";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
@@ -138,7 +140,11 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
     // 之后再单独 catch 一次——那样漏掉的就是"对象不存在"这一种。
     let text: string;
     try {
-      text = await navigator.clipboard.readText();
+      // ⚠️ **读剪贴板走宿主**（`@tauri-apps/plugin-clipboard-manager`，权限只有
+      // `allow-read-text` 那一条）：WebKit 把 `navigator.clipboard.readText()` 挡在
+      // 权限后面，被拒时这条菜单只能弹一句"请按 Ctrl+V"——用户的原话是
+      //「剪切板始终显示要CtrlV粘贴，但是我已经是CtrlV了」。宿主没这个限制。
+      text = await readText();
     } catch {
       toast(t("The system does not allow reading the clipboard from the menu — press Ctrl+V to paste."), "warn");
       return;

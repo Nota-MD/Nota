@@ -84,6 +84,16 @@ export interface 编辑区接线 {
   设命令状态: Dispatch<SetStateAction<CommandState | null>>;
   /** 转交一条编辑命令（`ui/useEditorCommands.ts`）。 */
   跑命令: 命令出口["run"];
+  /**
+   * 「插入图像」那一条（`ui/useImageInsert.ts` 的 `插入图像`）。
+   *
+   * ⚠️ 工具栏那颗图片键**必须**走它，不能交给 `跑命令("image")`：编辑器那条
+   * `image` 要的是 `{src, alt}` 两个参数，而工具栏点下去一个都不带 ⇒ 插进去的是
+   * 一张 `src=""` 的空图，屏幕上看就是"点了没反应"（用户 2026-10-11：
+   * 「现在工具栏没法插入图片」）。链接那颗同理（`useEditorCommands` 里 `link`
+   * 那条改道）。
+   */
+  插入图像: () => Promise<void>;
   /** 几个 hook 的出口。⚠️ 整个给，不挑字段（见文件头）。 */
   文档出口: 文档出口;
   查找条: 查找条;
@@ -124,7 +134,8 @@ export interface 编辑区接线 {
  */
 export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
   const { 主区, 格式化栏, 编辑器, activeDoc, settings, viewMode, focusMode, typewriter } = 接线;
-  const { 格式化栏开着, 收起格式化栏, 命令状态, 设命令状态, 跑命令, refreshDocs, toast } = 接线;
+  const { 格式化栏开着, 收起格式化栏, 命令状态, 设命令状态, 跑命令, 插入图像, refreshDocs, toast } =
+    接线;
   const { 文档出口, 查找条, 预览出口, 改动出口, 会话出口, 插件, 对话框 } = 接线;
 
   // 正文里点一下链接那件事（`docs/07` 第 96 项）：单击弹同一个「链接」框、
@@ -205,7 +216,9 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
         <FormatBar
           ref={格式化栏}
           state={命令状态}
-          onCommand={跑命令}
+          // ⚠️ 图片那颗走"先弹框问地址/文件、再落笔"那条路（见上面 `插入图像` 那段注释）；
+          // 其余照旧交给编辑器命令那一侧（链接那颗由 `useEditorCommands` 自己改道）。
+          onCommand={(id) => (id === "image" ? void 插入图像() : 跑命令(id))}
           onHide={收起格式化栏}
         />
       )}

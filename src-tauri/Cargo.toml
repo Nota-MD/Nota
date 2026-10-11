@@ -95,6 +95,7 @@ sha2 = "0.10"
 ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
 zip = { version = "8", default-features = false, features = ["deflate"] }
+tauri-plugin-clipboard-manager = "2.3.3"
 
 # ── 网络 ──────────────────────────────────────────────────────────────────
 # 只给 `nota.http`（`src/lua/api/http.rs`）用，也就是**只给插件**用。

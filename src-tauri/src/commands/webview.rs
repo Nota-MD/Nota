@@ -122,6 +122,9 @@ enum 改动 {
     开关(bool),
     /// 语言列表。⚠️ **空列表是"跟随系统"那一档**（见文件头第 2 条）。
     语言(Vec<String>),
+    /// **关掉引擎的"平滑滚动"**（2026-10-11，用户：「触摸板上下滑动速度貌似居然是
+    /// 贝塞尔曲线，而且有延迟……改成硬滑动」）。见 `硬滚动` 那条命令。
+    硬滚动,
 }
 
 /// 读一眼拼写检查现在是什么状态（开关 ＋ 真加载着的词典）。
@@ -201,6 +204,16 @@ fn 读一眼(w: &tauri::webview::PlatformWebview, 要改: 改动) -> Option<拼�
     match 要改 {
         改动::只读 => {}
         改动::开关(开) => 上.set_spell_checking_enabled(开),
+        改动::硬滚动 => {
+            // ⚠️ 这一档动的是 **WebView 的 settings**（不是 context）：触摸板滚动的
+            // 缓动是 `WebKitSettings:enable-smooth-scrolling`（**默认开**）做的，
+            // 关掉之后手指动多少就滚多少。⚠️ **只关平滑、不动 `kinetic`（惯性滑行）**：
+            // 用户抱怨的是"曲线 + 延迟"，不是松手之后那一段滑行。
+            use webkit2gtk::SettingsExt as _;
+            if let Some(设置) = w.inner().settings() {
+                设置.set_enable_smooth_scrolling(false);
+            }
+        }
         改动::语言(语言) => {
             // ⚠️ 空 `Vec` 要**照样调**（不能 `if !语言.is_empty()` 跳过）：
             // 空列表是"跟随系统"那一档，跳过它就等于"上一个语言还留着"。
@@ -239,6 +252,23 @@ fn 读一眼(_w: &tauri::webview::PlatformWebview, 要改: 改动) -> Option<拼
         改动::语言(语言) => {
             let _ = 语言;
         }
+        改动::硬滚动 => {}
     }
     None
+}
+
+/// **把引擎的"平滑滚动"关掉**（2026-10-11，用户：「触摸板上下滑动速度貌似居然是
+/// 贝塞尔曲线，而且有延迟，很影响体验。改成硬滑动」）。
+///
+/// 那不是我们写的动画：触摸板滚动由**引擎**缓动，WebKitGTK 那边就是
+/// `WebKitSettings:enable-smooth-scrolling`（默认开）。所以这条命令跟拼写那两条
+/// 同一类——**引擎身上的设置**，都得过一次主线程。
+///
+/// ⚠️ **别的平台没有这个开关**（Windows 那份是 WebView2 ＝ Chromium，对应的东西是
+/// 启动参数 `--disable-smooth-scrolling`），所以那边这一档是空实现、**不报错**
+/// （"这件事这个平台做不到"与"你操作错了"不是一回事）。欠账记在 `docs/07` 第 114 项。
+#[tauri::command]
+pub async fn nota_webview_scroll_hard(app: tauri::AppHandle) -> Result<()> {
+    let _ = 问主线程(app, 改动::硬滚动).await?;
+    Ok(())
 }

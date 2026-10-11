@@ -395,6 +395,7 @@ pub fn run() {
             commands::webview::nota_webview_spellcheck_get,
             commands::webview::nota_webview_spellcheck_set,
             commands::webview::nota_webview_spellcheck_languages_set,
+            commands::webview::nota_webview_scroll_hard,
             commands::settings::nota_settings_open_dir,
             commands::settings::nota_settings_problem,
             commands::settings::nota_app_lang,

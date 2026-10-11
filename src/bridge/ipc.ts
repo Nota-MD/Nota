@@ -124,6 +124,13 @@ export const api = {
      */
     spellcheckLanguagesSet: (languages: string[]) =>
       invoke<string[]>("nota_webview_spellcheck_languages_set", { languages }),
+    /**
+     * **关掉引擎的"平滑滚动"**（触摸板要"硬"的，2026-10-11 用户报的"贝塞尔曲线 + 延迟"）。
+     *
+     * ⚠️ 用户**没有开关**：这是手感上的抱怨，不是一条偏好——多给一格设置就多一处
+     * "这个平台做不到"的解释成本。别的平台（WebView2）没有这个接口，宿主那边是空实现。
+     */
+    scrollHard: () => invoke<void>("nota_webview_scroll_hard"),
   },
   /**
    * 路径**是什么**（拖放那条路用，`ui/useFileDrop.ts`）。

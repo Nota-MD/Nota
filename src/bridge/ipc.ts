@@ -139,6 +139,19 @@ export const api = {
    * 对回"哪一条路径"的。少一条或者挪一位的症状是**拖进来的名字和打开的东西
    * 对不上**，而那种错没有人会往这个方向查。
    */
+  /**
+   * **拼写检查**（2026-10-11，走 `src-tauri/src/spell/` 那一层**自己的后端**，
+   * 与浏览器内核无关）。⚠️ 三种失败分得很清：后端没装 / 这本词典没有 / 一个都没错
+   * ——判据在 `spell/mod.rs` 文件头。
+   */
+  spell: {
+    /** 查一批词，返回**拼错的那几个的下标**（按入参顺序）。 */
+    check: (lang: string, words: string[]) =>
+      invoke<number[]>("nota_spell_check", { lang, words }),
+    /** 给一个词的建议（右键菜单那一列）。拿不到就是空表，不报错。 */
+    suggest: (lang: string, word: string) =>
+      invoke<string[]>("nota_spell_suggest", { lang, word }),
+  },
   pathKind: (paths: string[]) =>
     invoke<路径种类[]>("nota_paths_kind", { paths }),
   workspace: {

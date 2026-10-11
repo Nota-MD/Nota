@@ -45,6 +45,7 @@
 import { useEffect } from "react";
 
 import { api } from "@/bridge/ipc";
+import { 设拼写语言 } from "@/editor/spell-check";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
@@ -129,6 +130,9 @@ export function useSpellcheck(w: 拼写接线): void {
   useEffect(() => {
     // 同上面那一条：设置还没读回来时**什么都别做**。
     if (语言 === null) return;
+    // ⚠️ 同一门语言还要给**编辑器里那条插件**（它自己画波浪线，
+    // 见 `editor/spell-check.ts`）：`""` = 跟随系统。
+    设拼写语言(语言[0] ?? "");
 
     let 算了 = false;
     void (async () => {

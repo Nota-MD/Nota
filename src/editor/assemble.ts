@@ -61,6 +61,9 @@ import { 拼回前置块 } from "@/editor/front-matter";
 import { 预览中吗, 预览插件 } from "./review-prose";
 // 光标所在块的 Markdown 标记（`##`、`>`、`-`……）浅灰画在块左边。
 // 这是"标记不消失、只淡化"的口径，理由写在它自己的文件头上。
+import { $prose } from "@milkdown/kit/utils";
+
+import { 拼写检查插件 } from "./spell-check";
 import { instantRender } from "./instant-render";
 // 光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 半透明画在那段文字两边。
 // 块级标记归上面那个（画在装订线里），行内没有装订线，所以是另一份插件；
@@ -464,6 +467,11 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // 转换器）。现在它包在 `handlers.text` 上，见上面 `.config()` 里那一行。
     // ⚠️ **那两次失败都写进了 `atom-space.ts` 的文件头**——包括"怎么验出
     // 没被调用"的探针。别再往这里加第三次。
+    // ⚠️ **拼写检查那条波浪线**（2026-10-11）：后端在 `src-tauri/src/spell/`，
+    // 画是这一条插件干的（`spell-check.ts` 文件头有三条规矩）。⚠️ 它**只加
+    // decoration**——不改 schema、不抢输入规则，所以放在链子这儿的哪一段都不影响
+    // 语义；放这儿是图它离 `history` 近（另一个"只做事不定义文档形状"的插件）。
+    .use($prose(() => 拼写检查插件()))
     .use(history)
     .use(listener)
     .use(cursor)

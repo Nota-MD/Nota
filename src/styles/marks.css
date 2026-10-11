@@ -229,3 +229,15 @@
 .editor-mount .ProseMirror .nota-heading-pending {
   font-weight: 600;
 }
+
+/* ── 拼写检查画的那条波浪线（2026-10-11）────────────────────────────────────
+
+   ⚠️ 它是个 `Decoration`（`editor/spell-check.ts`），**不是内核画的原生波浪线**
+   ——本地这一版内核根本画不出来，而我们自己有后端之后就没必要再指望它。
+   ⚠️ 类名带 `nota-` 前缀：导出那一条路会把这一族**整个摘掉**（`editor/export.ts`
+   的 `nota类前缀`），所以导出的 HTML / PDF 里不会带着一堆红波浪线。 */
+.nota-spell-error {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}

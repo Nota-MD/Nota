@@ -1,7 +1,7 @@
 {
   "name": "nota",
   "private": true,
-  "version": "0.4.0-beta",
+  "version": "0.5.0-beta",
   "type": "module",
   "description": "Nota — 一款所见即所得的 Markdown 编辑器，带 Lua 插件系统（Tauri + ProseMirror）",
   "license": "BSD-2-Clause",

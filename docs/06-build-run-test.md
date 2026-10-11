@@ -268,10 +268,18 @@ release 下也不走 `debug_assertions` 分支。**开发期看不出来**（走
 |---|---|---|
 | ① 数组 | `["../../Nota-plugins/plugins/**/*"]`（独立仓库之前是 `"../plugins/**/*"`） | 目标路径由 `resource_relpath()` 算，它把 `..` **映射成 `_up_`** → `_up_/plugins/...`，`resource_dir.join("plugins")` 命不中 |
 | ② 映射 + glob | `{"../../Nota-plugins/plugins/**/*": "plugins/"}` | **目录名对了、里面是错的**：`plugins/main.lua` + `plugins/plugin.toml` ——**只取文件名**，两个插件的 `main.lua` 互相盖掉一个。根因在 `tauri-utils` 的 `resources.rs`：glob 且 dest 非空时目标就是 `dest.join(path.file_name())`，树被**拍平**（源码注释自己写着 "preserving the file name as it is"） |
-| ③ **现行** | `{"../../Nota-plugins/plugins": "plugins"}`（独立仓库之前写的是 `"../plugins"`；⚠️ 键相对 `src-tauri/`，所以是两级 `..`） | ✅ 走的是 `Walk` 分支：`dest.join(path.strip_prefix(pattern))`，**保留结构**。实测包里是 `usr/lib/Nota/plugins/ai/{plugin.toml,main.lua}` + `git/` 各自一份 |
+| ③ ~~映射~~（**2026-10-11 起不要了，见下**） | `{"../../Nota-plugins/plugins": "plugins"}`（独立仓库之前写的是 `"../plugins"`；⚠️ 键相对 `src-tauri/`，所以是两级 `..`） | ✅ 走的是 `Walk` 分支：`dest.join(path.strip_prefix(pattern))`，**保留结构**。实测包里是 `usr/lib/Nota/plugins/ai/{plugin.toml,main.lua}` + `git/` 各自一份 |
 
 **判据：`**键要写成目录，不要写 glob**`。要吃"某几个文件"而不是"整棵目录"时，
-这条不成立——那时得逐条列出来（`{"../../Nota-plugins/plugins/git/main.lua": "plugins/git/main.lua"}`），
+📌 **2026-10-11：这条映射整个删了**（用户：「安装包内默认不分发拓展。重新编译」）——
+拓展在**独立仓库** `Nota-plugins` 里、有自己的发布节奏，塞进主程序包里等于把两个东西
+的发版绑死；而且四个内置插件里有一个（AI）要填密钥、一个（Slidev）要另装 node 工具链，
+"装上就有一堆用不了的东西"比"装上什么都没有、要去装拓展"更让人困惑。
+⇒ 现在安装包里**一份拓展都没有**，用户自己装（「设置 → 拓展 → 从文件安装」或把
+`plugins/` 放到 exe 旁边）。上面那三行**留着当历史**：把这条映射加回来时，
+**必须走 ③ 那个写法**（glob 会被拍平、数组会映射成 `_up_`）。
+
+（以下是当年的两条反例，留着不动）这条不成立——那时得逐条列出来（`{"../../Nota-plugins/plugins/git/main.lua": "plugins/git/main.lua"}`），
 因为 glob 那一支没有保留结构的能力。
 
 **验证方法**（三条缺一不可，只做第一条会漏掉上面的版本②）：

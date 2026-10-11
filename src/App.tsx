@@ -834,7 +834,6 @@ export default function App() {
             口径键={树指纹}
             // 右上角那个 × 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`
             // 是**同一个开关的三个入口**，共用下面这一个 setter。
-            onClose={() => setSidebarOpen(false)}
             // 收起状态（2026-09-30）：**不是卸载**，是把宽度动画到 0。
             // ⚠️ 与上面那个 `sidebarOpen` 是同一个开关，别在这里另记一份状态。
             折叠={!sidebarOpen}
@@ -940,7 +939,6 @@ export default function App() {
               // 接线）。2026-09-25 删了：预览现在是**插件自己的一个面板**，
               // 走的是通用那条路（`nota.ui.register_panel` ＋ `kind = "frame"`），
               // 宿主这边不再有任何一条为它开的口子。
-              onClose={() => setDockOpen(false)}
               onCall={调插件}
               askPrompt={askPrompt}
               动作={插件动作}

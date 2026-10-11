@@ -155,43 +155,23 @@ body.resizing-col {
 }
 
 .sidebar-tab {
-  /* ⚠️ 2026-10-11 改的样子（用户：「这个菜单还是有点丑」，配的正是这一条栏的首帧）。
-
-     原来两页签是**平铺满整条**的：`flex: 1` 把它们各撑成半条，文字居中，
-     选中的那一页底下挂一条 **2px 的 accent 长下划线**——用户看到的是一条
-     横贯半个侧栏的橙线。现在的写法**照右侧插件栏那排页签抄**（`styles/dock.css`
-     的 `.dock-tab`）：**左对齐、按内容宽度、圆角上沿、选中用底色 ＋ 字重**。
-
-     理由不是"换个花样"，是**两栏并排站着**：左边一栏是橙下划线、右边一栏是
-     圆角底片，同一个应用里两套页签语言，看着就像两个人做的——这条判据与
-     `sidebar-close` 那颗 × 对上 `dock-close` 时用的是同一条。
-     ⚠️ 顺带把 `dock-tab` 注释里那条也接上：**选中态不用 accent 下划线**
-     （那排页签会折行时，下划线会指到上一行去）。 */
-  flex: 0 1 auto;
-  padding: 4px 10px;
-  border-radius: 4px 4px 0 0;
+  flex: 1;
   height: 32px;
   border: 0;
   background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
-  font-family: inherit;
-  font-size: 0.82em;
-  /* 名字长的页签不许把这一行顶宽（× 会被挤出去）——同 `dock-tab`。 */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.92em;
+  border-bottom: 2px solid transparent;
 }
 
 .sidebar-tab:hover {
   background: var(--bg-hover);
-  color: var(--fg);
 }
 
 .sidebar-tab-active {
-  background: var(--bg);
   color: var(--fg);
-  font-weight: 600;
+  border-bottom-color: var(--accent);
 }
 
 .sidebar-body {

@@ -113,7 +113,6 @@ interface Props {
    * ⚠️ **只收，不"切换"**：传进来的东西只管关。要做成开关的话，用户
    * 点一个 × 却把它点开了——那种行为不合预期。开关语义留在 App 那边。
    */
-  onClose: () => void;
   /**
    * 打开文件夹。**只在"还没打开工作区"那个空态里用**（2026-09-24 补）——
    * 那里原本只有一句话：界面提示要打开一个文件夹，
@@ -164,7 +163,6 @@ export function Sidebar({
   onJumpOutline,
   loadDir,
   口径键,
-  onClose,
   onOpenFolder,
   inert,
   onResize,
@@ -196,15 +194,11 @@ export function Sidebar({
               这里也照这个次序排。 */}
           <TabButton id="outline" current={tab} onSelect={onTab} label={t("Outline")} />
         </nav>
-        <button
-          type="button"
-          className="sidebar-close"
-          title={t("Hide the sidebar")}
-          aria-label={t("Hide the sidebar")}
-          onClick={onClose}
-        >
-          <Icon name="folio-close-symbolic" />
-        </button>
+        {/* ⚠️ **这里原来有一颗 ×**（收起侧栏），2026-10-11 用户点名去掉了
+            （「右侧叉可以删掉」）。去掉不是"少了一个入口"：隐藏侧栏本来就有三条路
+            ——菜单「视图 → 切换侧栏」、`Ctrl+Shift+L`、以及**状态栏最左那颗圈**
+            （它画的就是这一栏的开合）。而那颗 × 站在页签右边，紧挨着页签，
+            点错的代价是整栏消失、还得去别处找回来。 */}
       </div>
 
       <div className="sidebar-body">

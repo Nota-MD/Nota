@@ -87,7 +87,6 @@ import { useTablistKeys } from "@/ui/useTablistKeys";
 
 import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type PluginInfo, type PluginPanel, type 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { Icon } from "@/ui/Icon";
 import { PanelBody } from "@/ui/PanelBody";
 import {
   记忆,
@@ -112,7 +111,6 @@ interface Props {
    * 信任按**指纹**判，而指纹只有能被核对才有意义（`ui/usePlugins.ts::PluginsState::信任`）。
    */
   信任: 信任记录[];
-  onClose: () => void;
   /** 跑一条插件命令（错误由 `App.tsx` 那边 toast，这里只管调）。 */
   onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
@@ -148,7 +146,6 @@ export function PluginDock({
   plugins,
   panels,
   信任,
-  onClose,
   onCall,
   askPrompt,
   动作,
@@ -616,15 +613,10 @@ export function PluginDock({
         <span className="dock-title">
           {活动面板 ? 活动面板.title || 活动面板.id : t("Extensions")}
         </span>
-        <button
-          type="button"
-          className="dock-close"
-          title={t("Hide the extension dock")}
-          aria-label={t("Hide the extension dock")}
-          onClick={onClose}
-        >
-          <Icon name="folio-close-symbolic" />
-        </button>
+        {/* ⚠️ **这颗 × 2026-10-11 按用户点名去掉了**（「拓展的那个叉也可以关掉」）：
+            收起拓展栏仍有两条路——顶部那颗 `Extensions` 开关（`TopBar`）与
+            菜单「视图 → 拓展栏」。⚠️ 它是**和左侧栏那颗 × 一起摘的**：两栏并排站着，
+            一颗有一颗没有才奇怪（那条"两栏要长得像"的判据同时也在管着页签）。 */}
       </nav>
 
       {/* 页签：每个右侧面板一页 ＋ 「插件」页（清单）。

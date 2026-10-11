@@ -212,6 +212,13 @@ fn 读一眼(w: &tauri::webview::PlatformWebview, 要改: 改动) -> Option<拼�
             use webkit2gtk::SettingsExt as _;
             if let Some(设置) = w.inner().settings() {
                 设置.set_enable_smooth_scrolling(false);
+                // ⚠️ **还没做的一条，记在这儿**：触摸板**捏合**会让引擎自己放大页面
+                // （用户 2026-10-11：「触摸板放大手势会导致软件真的放大。要改」）。
+                // 正解是关掉 WebKit 的 `enable-page-zoom`，但**这个绑定里没有那个方法**
+                // （`webkit2gtk-2.0.2` 的 `Settings` 只有 `zoom_text_only`；WebKitGTK 2.24
+                // 起才有 `enable-page-zoom` 这个属性）⇒ 要么升这个 crate，要么照
+                // `format_keys.rs` 那套在 **GTK 捕获相位**挂一个手势控制器把它吃掉。
+                // `docs/07` 第 116 项记着这笔。
             }
         }
         改动::语言(语言) => {

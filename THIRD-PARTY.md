@@ -38,6 +38,7 @@
 | [`similar`](https://github.com/mitsuhiko/similar) | 3.2.0 | Apache-2.0 | ⚠️ **目前没用到**，见 §4 |
 | [`tauri`](https://github.com/tauri-apps/tauri) | 2.11.6 | Apache-2.0 OR MIT | 宿主框架（窗口、IPC、WebView） |
 | [`tauri-build`](https://github.com/tauri-apps/tauri) | 2.6.3 | Apache-2.0 OR MIT | 构建期代码生成 |
+| [`tauri-plugin-clipboard-manager`](https://github.com/tauri-apps/plugins-workspace) | 2.4.2 | Apache-2.0 OR MIT | **读剪贴板**（`ui/useClipboard.ts` 的粘贴；⚠️ 只开 `allow-read-text` 一条权限，见 `capabilities/default.json`）。⚠️ 2026-10-11 补登记：它是 2026-10-11 那一批加进来的（「菜单里的粘贴真能粘」那一条），**当时漏了这儿** |
 | [`tauri-plugin-dialog`](https://github.com/tauri-apps/plugins-workspace) | 2.7.3 | Apache-2.0 OR MIT | 打开/保存文件对话框 |
 | [`tauri-plugin-fs`](https://github.com/tauri-apps/plugins-workspace) | 2.5.2 | Apache-2.0 OR MIT | 前端读写文件 |
 | [`tauri-plugin-opener`](https://github.com/tauri-apps/plugins-workspace) | 2.5.5 | Apache-2.0 OR MIT | 用系统默认程序打开链接 |
@@ -45,7 +46,8 @@
 | [`toml`](https://github.com/toml-rs/toml) | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 | 读插件清单与设置文件 |
 | [`ureq`](https://github.com/algesten/ureq) | 3.4.0 | MIT OR Apache-2.0 | **`nota.http`，也就是只给插件发请求用**（2026-09-24）。默认 feature 就带下面那套 TLS，**不依赖系统 OpenSSL** |
 | [`webkit2gtk`](https://github.com/tauri-apps/webkit2gtk-rs) | 2.0.2 | MIT | Tauri 在 Linux 上的 WebView 绑定（与 `gtk` 同属"tauri 已经拖进来、我们直接引用"那一类） |
-| [`zip`](https://github.com/zip-rs/zip2) | 8.6.0 | MIT | 读 zip 包（`.nota-plugin`、主题包之类的打包件） |
+| [`zip`](https://github.com/zip-rs/zip2) | 8.6.0 | MIT | 读 zip 包（`.nota-plugin`、主题包之类的打包件、**用户导入的词典 `.zip`**） |
+| [`zspell`](https://github.com/pluots/zspell) | 0.5.5 | **Apache-2.0** | **拼写检查的引擎**（2026-10-11 加）：纯 Rust 的 hunspell 实现，读 `.aff`/`.dic`，**编进程序**——换掉的是"借浏览器内核"与"借系统程序"那两代。⚠️ 依赖链里还有 `stringmetrics` / `xxhash-rust` / `itertools` / `hashbrown` / `unicode-segmentation` 等（都无 C 依赖，交叉编译 Windows 直接过）。⚠️ **许可正文是 Apache-2.0**（仓库 `LICENSE` 里那几行，`Cargo.toml` 用的是 `license-file` 而不是 SPDX 字段）——⚠️ 2026-10-11 选型时拿到的第二手材料说它是 MIT，**那是错的**，以仓库正文为准；Apache-2.0 与 BSD-2 兼容，义务见 §7 |
 
 ### 随 `ureq` 一起编进来的 TLS 栈
 
@@ -245,28 +247,60 @@ SOFTWARE.
 
 ---
 
-## 7. 拼写检查：**一个字典字节都不带**，BSD 那一件是 SCOWL
+## 7. 拼写检查：**一个字典字节都不带**（引擎编在里面），BSD 那一件是 SCOWL
 
 **2026-09-28 加**。用户点名：「拼写检查找一个 BSD 开源的属个名」。
+⚠️ **2026-10-11 这一节整块改写过**——那一天的结论是「安装包**默认随包不分发任何
+字典**」（用户原话，照 Typora 那条 `❌ 词典数据不内置`），而"引擎"那一半换了人：
+它从**浏览器内核**（WebKitGTK）换成**系统程序**（`enchant-2` / `hunspell` 的命令行），
+当天再换成**我们自己编进去的那个**（`zspell`，§1 最后一行）。
 
-### 7.1 这条链子长什么样
+### 7.1 这条链子长什么样（2026-10-11 版）
 
 ```text
 设置里的开关（`editor.spellcheck`）
-  → `ui/useSpellcheck.ts` → `commands/webview.rs::nota_webview_spellcheck_set`
-    → WebKitGTK 的内置拼写检查（`webkit_settings_set_enable_spell_checking`）
-      → libenchant-2 → hunspell → **系统装的字典**
+  → `ui/useSpellcheck.ts` → 编辑器里那条插件（`src/editor/spell-check.ts` 自己画波浪线）
+      → 宿主 `nota_spell_check` → `src-tauri/src/spell/`
+          ├─ native.rs：**zspell**（Apache-2.0，编进程序，§1）读 `.aff`/`.dic`
+          │     └─ 词典从两个方向找：**用户目录** ＋ **系统目录**（`store.rs`）
+          └─ 手里没这门语言的词典时，退到 `enchant-2` / `hunspell` 的命令行
 ```
 
-⚠️ **Nota 自己不带字典、也不带引擎**：整条链子从 WebKitGTK 往下全是**系统库**，
-和 §3 那批系统依赖同一性质。所以本节的义务落点是**打包**那一侧——谁把这些
-打进 AppImage 或安装包**随包分发**，谁就得把下面的声明随包带上。
+⚠️ **引擎现在是我们的依赖**（Apache-2.0，§1 记着正文出处与义务），而**词典仍然
+一个字节都不带**——用户 2026-10-11 拍板：「默认随包不分发任何字典」。词典要么是
+用户自己**导入的 `.zip` / 拷进 `dictionaries/` 的两份文件**，要么是**系统包**装的
+（`hunspell-en-US` 那一类）——后者与 §3 那批系统依赖同一性质，义务落点在**打包那
+一侧**：谁把字典打进 AppImage 或安装包**随包分发**，谁就得把下面的声明随包带上。
 
-⚠️ 也正因为这样，**不装字典的机器上这个开关是"开着也不划红线"**——
-`useSpellcheck.ts` 拿不到"引擎其实没有字典"这件事，WebKitGTK 的接口只回一个
-布尔。这是这一格至今填 🟡 的理由之一（`docs/10` §8）。
+⚠️ 也正因为这样，**没装字典的机器上拼写检查是"开着也不划红线"**——但今天这件事
+**说得出来**了：界面上会弹一句"这台机器上没有 `xx_XX` 的词典"，并给出三条出路
+（装系统包 / 导入 `.zip` / 拷进目录）。⚠️ 2026-10-11 之前那句话说不出来
+（WebKitGTK 的接口只回一个布尔），那是这一格当时填 🟡 的理由之一。
 
-### 7.2 BSD 的那一件：SCOWL
+### 7.1b ⚠️ 我们**不联网下载**词典（与 Typora 的一处不同）
+
+Typora 的 Windows/Linux 版首次开某个语言的拼写检查时，会从 `dict.typora.io`
+**下载**词典包到 `%APPDATA%\Typora\dictionaries\` / `~/.config/Typora/dictionaries/`。
+**Nota 不这么做**：本仓对拼写这一格钉死了两条纪律（`src-tauri/src/spell/mod.rs`
+顶上那段）——**不联网、不下载**；**失败给"不知道"，不给"拼错了"**。
+学的是 Typora 的**目录模型**（一个用户目录、手动丢进去就能用、还去系统目录里找），
+不是它的下载那一条。
+
+### 7.2 Apache-2.0 的那一件：zspell（引擎）
+
+`zspell`（Trevor Gross）是本仓 2026-10-11 起**唯一新增的运行时依赖**，许可正文是
+**Apache-2.0**（仓库里那份 `LICENSE`，13 行；`Cargo.toml` 用的是 `license-file`
+而不是 SPDX 的 `license` 字段，所以 `cargo metadata` 里读不到 SPDX 名）。
+
+⚠️ **义务**：Apache-2.0 要求**保留版权与许可声明**（本文件就是那一份），
+并且**改动了它的源码要写明白**——本仓**没有改**它一个字（`Cargo.toml` 只开了一个
+`unstable-suggestions` feature，那是它自己的开关）。
+⚠️ **没有 `NOTICE` 文件**（上游仓库里没有），所以不必另附第三方 NOTICE。
+⚠️ **与 BSD-2-Clause 兼容**：Apache-2.0 不是著佐权，链进 BSD 产品没有任何额外负担。
+⚠️ 选型时拿到的第二手材料说它是 **MIT**，**那是错的**——以仓库正文为准，
+本文件与「关于 → 鸣谢」都按 Apache-2.0 写。
+
+### 7.3 BSD 的那一件：SCOWL（词表）
 
 `hunspell-en-US` 这类英文字典的**词表**由 **SCOWL**（Spell Checker Oriented
 Word Lists，Kevin Atkinson）构建；RPM 上标的是
@@ -339,7 +373,7 @@ OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 ```
 
-### 7.3 「关于」框里那一行
+### 7.4 「关于」框里那一行
 
 `src/ui/useAbout.ts` 的 `致谢` 表加了一行 **`SCOWL`（拼写检查词表）**——
 与 §5 / §6 那两批同一条规矩：**真的用了、而且是用户看得见的那种**才进那张表。

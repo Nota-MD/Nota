@@ -364,3 +364,50 @@
   min-width: 0;
   flex: 1 1 auto;
 }
+
+/* ── 词典从哪儿来（2026-10-11）────────────────────────────────────────────
+   安装包里**一本词典都不带**（用户拍板「默认随包不分发任何字典」，照 Typora），
+   所以"选哪一门"旁边必须摆着"去哪儿弄"：两颗按钮 ＋ 目录本身 ＋ 一句安装提示。
+   ⚠️ 目录那行**要能选中复制**（`user-select: text` ＋ 等宽）：用户最常见的下一步
+   是把这段路径拷进文件管理器，而不是靠那颗按钮（他可能想在别的程序里用它）。 */
+.stg-lang-missing {
+  color: var(--fg-faint);
+  font-size: 0.92em;
+}
+
+.stg-lang-source {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.stg-lang-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stg-lang-dir {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.88em;
+  color: var(--fg-muted);
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.stg-lang-hint {
+  font-size: 0.92em;
+  color: var(--fg-muted);
+}
+
+.stg-lang-ok {
+  font-size: 0.92em;
+  color: var(--fg-muted);
+}
+
+.stg-lang-err {
+  font-size: 0.92em;
+  color: var(--danger);
+}

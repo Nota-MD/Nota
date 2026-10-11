@@ -6178,3 +6178,50 @@ v2 用 HTTP/1.0 ＋ 不发长度 ＋ 说完关连接（应用把**整份正文**
 
 **收工时**：测试实例、假端点、Xvfb 都**按 PID** 杀掉（⚠️ 那台机器上还有用户自己的实例，
 `kill` 之前先 `tr '\0' '\n' < /proc/$p/environ | grep DISPLAY` 认一遍）。
+
+### 5.62 验「拼写检查：自己画的波浪线 ＋ 错词右键 ＋ 换词典的来源」（2026-10-11，✅ **开窗逐条拍过**）
+
+**要验的是什么**：第 119 项那条链的**收尾**（引擎换成我们自己的之后）：
+① 波浪线还画不画得出来；② 连字符词**不许**被误标；③ 错词上右键弹出来的那段
+（建议 / 加入词典 / 忽略）**真的动了文档与用户词表**；④ 设置页那一格列的是
+**真有的词典**，装词典那两条按钮在。
+
+**配方**（都在容器里，⚠️ 隔离 `XDG_*`、按 PID 收工，别碰用户那台）：
+
+1. `Xvfb :99 -screen 0 1600x1000x24`（已经有一只长跑的就直接用）。
+2. `XDG_CONFIG_HOME=/tmp/…/cfg XDG_DATA_HOME=… XDG_CACHE_HOME=… XDG_RUNTIME_DIR=…`
+   ＋ `DISPLAY=:99`，`./target/debug/nota /tmp/…/spell.md`。
+   ⚠️ 文稿里要**同时**放错词与几类连字符词，一句就够：
+   `helllo wrold thiss is a mispelled sentance with state-of-the-art Wi-Fi e-mail words.`
+   ＋ 第二行一句**全对**的（`Hello world, this sentence is fine and well-known too.`）。
+3. 等 8~9 秒（编辑器起来 ＋ 那条 600 ms 去抖），`import -window root` 收第一帧。
+4. `xdotool mousemove <错词中心> click 3` 收第二帧（菜单）；再点其中一条，收第三帧。
+
+**看到了什么**（逐条）：
+
+* **波浪线**：第一行四个错词（`helllo` / `wrold` / `thiss` / `mispelled`…）都有线，
+  第二行一个都没有。✅
+* ⚠️ **连字符那一条是本批最值钱的判据**：`state-of-the-art` / `Wi-Fi` / `e-mail` /
+  `well-known` **全都没有被标**——而它们整段送去查一定是错的（SCOWL 那份 `.dic` 里
+  一个带 `-` 的词条都没有，`grep -c -- "-" en_US.dic` 是 **0**）。修法在切词那一侧
+  （按 `-` 拆开、段里少于 3 个字母的不查）。
+* **右键**：菜单最前面多出「建议 / Add to dictionary / Ignore」三段，**下面原来那份
+  一个字没动**。点建议 `hello` → 正文里 `helllo` 当场变成 `hello` 且线消失；
+  点「Add to dictionary」→ `wrold` 的线消失，`…/cfg/nota/dictionaries/user-words.txt`
+  里**真多了一行 `wrold`**（`cat` 核过）。✅
+* **设置页**：编辑器页 → 拼写检查 → 语言那一格列出的是**容器里那 25 本系统词典**
+  （`en_AG` … `en_ZW`），底下「Import dictionary (.zip)…」「Show dictionary folder」
+  两颗 ＋ 目录路径 `/tmp/…/cfg/nota/dictionaries` ＋ 那句三条出路的提示。✅
+
+**⚠️ 这一路上量出来的两条坑**（都记进了代码的文件头）：
+
+1. **`navigator.language` 不一定是一门语言**：容器里 `LANG=C.UTF-8`，跟随系统那一档
+   发出去的是 `nota_spell_check(lang="C")`，而"没有 `C` 这门语言" ⇒ **一条线都没有**，
+   看着像整个坏了。修法是认不出像语言标签就退到 `en_US`（`当前语言标签`）。
+2. **给 Rust 加了命令之后必须 `cargo build`**（第 119 项那条同款教训，这里是它的第二次）：
+   这一轮 `vite build` 与 `cargo build` 是**并发**跑的，而 debug 构建把 `dist` **编进二进制**
+   ——`vite` 后跑完就会拿到旧前端。所以顺序是**先 `vite build`、再 `cargo build`**，
+   而且改了前端之后要 `touch build.rs` 逼它重编（只改 `dist` 时 `tauri-build` 不认它是变化）。
+
+**收工时**：测试实例按 PID 杀掉（`kill <pid>`，⚠️ **不许 `pkill -f`**——它会把发起命令的
+那条 shell 一起打死，2026-10-11 踩过一次）。

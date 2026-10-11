@@ -27,16 +27,13 @@ export const 运行表: Record<string, string> = {
   "Could not toggle Always on Top: {0}": "切换窗口置顶失败：{0}",
   "Could not open the developer tools: {0}": "打开开发者工具失败：{0}",
   "Could not open a new window: {0}": "开不了新窗口：{0}",
-  "Spell checking did not end up the way you asked; the engine stayed as it was": "拼写检查没有改成你要的样子，引擎那边还停在原处",
-  "Could not change spell checking: {0}": "拼写检查没能改成功：{0}",
-  "Could not change the spell-check language: {0}": "拼写检查的语言没能改成功：{0}",
-  // ⚠️ 这一句 2026-10-10 晚改过口径：从前是"**一本词典都没加载**"（单门时的判据），
-  // 现在逐门说（`{0}` 是那几门没挂上的语言，用 `, ` 连起来）——多门时挂上了一门
-  // 就永远不空，那句老话就永远不说了（理由见 `ui/useSpellcheck.ts` 文件头）。
-  "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own.":
-    "这台机器上没有 {0} 的词典，那几门语言里的词不会被检查。Nota 自己不随附任何词典，得由系统装。",
-  "This machine has no spell-check dictionary at all, so nothing will be checked in any language. Install one (hunspell / enchant) on the system first.":
-    "这台机器上一个拼写词典都没有，任何语言都不会检查。先在系统里装一个词典包（hunspell / enchant 那一类）才会有红线。",
+  // ⚠️ 拼写那几条消息 2026-10-11 **整批换了口径**（引擎换成我们自己的之后，
+  // 从前那三句"引擎没改成你要的样子 / 改不了拼写检查 / 改不了拼写语言"全都不
+  // 存在了——那时候要过主线程去问 WebKitGTK，现在拨的是我们自己的插件）。
+  // 留下来的是**唯一**那一句"这台机器没有这本词典"，而它现在也把三条出路写全了
+  //（理由见 `ui/useSpellcheck.ts` 文件头与 `spell/mod.rs::没有这本词典的话`）。
+  "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own — install one, or import a .zip under Settings → Editor → Spell check.":
+    "这台机器上没有 {0} 的词典，那几门语言里的词不会被检查。Nota 自己不随附任何词典——要么装一个系统词典包，要么在「设置 → 编辑器 → 拼写检查」里导入一个 .zip。",
   "Could not tell what was dropped in: {0}": "拖进来的东西读不出来：{0}",
   "The dropped “{0}” is gone (moved or deleted?)": "拖进来的「{0}」已经不在了（被移走或删掉了？）",
   "{0} of the dropped items are gone (starting with “{1}”)": "拖进来的 {0} 个东西已经不在了（第一个是「{1}」）",

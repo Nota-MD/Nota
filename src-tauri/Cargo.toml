@@ -96,6 +96,12 @@ ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
 zip = { version = "8", default-features = false, features = ["deflate"] }
 tauri-plugin-clipboard-manager = "2.3.3"
+# 拼写检查的**引擎**（纯 Rust，无 C 依赖，编进程序）。⚠️ `unstable-suggestions`
+# 是给右键菜单那条「替换为…」用的（`spell/native.rs::建议`）——它在这份 crate 里
+# 还没稳定，所以名字带 unstable；真拿不到建议时**只少一列候选**，不影响"这个词
+# 是错的"那个判断。版本与三条实测（建表 155 ms / 查 2000 词 0.2 ms / 大小写）
+# 记在 `spell/native.rs` 文件头。
+zspell = { version = "0.5.5", features = ["unstable-suggestions"] }
 
 # ── 网络 ──────────────────────────────────────────────────────────────────
 # 只给 `nota.http`（`src/lua/api/http.rs`）用，也就是**只给插件**用。

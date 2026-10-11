@@ -164,7 +164,66 @@ export const 输入框条目: readonly string[] = [
 export type 行 =
   | { kind: "icons"; key: string; ids: readonly string[] }
   | { kind: "item"; key: string; spec: MenuItemSpec }
+  | { kind: "spell"; key: string; id: string; label: string }
   | { kind: "sep"; key: string };
+
+/**
+ * 拼写那一段的三个动作 id（**现场造出来的，不在命令表里**）。
+ *
+ * ⚠️ 它们**故意不写进 `ui/commands.ts` 的 `MENUS`**：那三条命令的前提是
+ * "用户右键点在**哪一个**错词上"，而命令表的形状是 `id → () => void`
+ * （`App.tsx` 的 `menuHandlers`）——它**说不出来"哪一个"**，塞进去只会多出
+ * 一个永远不知道自己在说哪个词的处理器。所以实现就在 `ui/ContextMenu.tsx`
+ * 自己身上（与"输入框那一档"同一个先例，见文件头那张表）。
+ *
+ * ⚠️ 建议那几条的 id 是 **`spell.replace:<下标>`**：下标指的是**这一刻**那一列
+ * 建议里的第几条（菜单是从 `nota_spell_suggest` 现拉的，每次都不一样），
+ * 所以它只能是运行时的。
+ */
+export const 拼写加词典 = "spell.add";
+export const 拼写忽略 = "spell.ignore";
+export const 拼写替换前缀 = "spell.replace:";
+
+/**
+ * 错词那一段要的三样东西。
+ *
+ * ⚠️ 那两个动作名**是调用方翻好了递进来的**（`t("Add to dictionary")` 写在
+ * `ContextMenu.tsx` 里）：这一份是**纯的、不 import React**（见文件头那段），
+ * 拿不到 `useT()`。
+ * ⚠️ 而建议那几条**原样用**（不过 `t()`）——它们是从词典里查出来的真词，
+ * 不是文案：哪天某个建议恰好等于一条界面原文（`Ignore` 这种真词完全可能存在），
+ * 过一遍翻译就会把它**翻成别的**。
+ */
+export interface 拼写线索 {
+  建议们: readonly string[];
+  加词典: string;
+  忽略: string;
+}
+
+/**
+ * 错词上右键时挂在**最前面**的那一段：建议（可能一条都没有）＋ 两个动作。
+ *
+ * ⚠️ 拼错的那个词本身**不画出来**：菜单就弹在它上面，再写一遍是废话——
+ * Typora 与常见编辑器也都是这么画的。
+ * ⚠️ 建议一条都没有时**不画那一格空行**（底下空空如也看着像坏了）：
+ * `spell/mod.rs` 那句"拿不到建议就给空表"在这里的落点就是"少一段，
+ * 不影响下面两个动作"。
+ * ⚠️ 每条建议**各占一行漫游落点**（不像图标那样整排算一个）：这一列是文本、
+ * 长短不一，"排里翻格"那套左右键语义在这儿没有意义，↑↓ 一路走过去最自然。
+ */
+export function 拼写行(线索: 拼写线索): 行[] {
+  const 行们: 行[] = 线索.建议们.map((建议, i) => ({
+    kind: "spell",
+    key: `spell-${i}`,
+    id: `${拼写替换前缀}${i}`,
+    label: 建议,
+  }));
+  if (行们.length > 0) 行们.push({ kind: "sep", key: "spell-sep-1" });
+  行们.push({ kind: "spell", key: "spell-add", id: 拼写加词典, label: 线索.加词典 });
+  行们.push({ kind: "spell", key: "spell-ignore", id: 拼写忽略, label: 线索.忽略 });
+  行们.push({ kind: "sep", key: "spell-sep-2" });
+  return 行们;
+}
 
 /**
  * 这一档的菜单长什么样。
@@ -180,7 +239,16 @@ export type 行 =
  * 理由：原生菜单里那条 `Inspect Element` 被我们拦掉了，开发时得留个门。
  * 判据用 `import.meta.env.DEV`——**正式构建里这一条不存在**。
  */
-export function 给行(位置: 落点, 开发模式: boolean): 行[] {
+export function 给行(
+  位置: 落点,
+  开发模式: boolean,
+  /**
+   * 这一下右键落在**一个错词**上时给的那一段（`ContextMenu.tsx` 从
+   * `.nota-spell-error` 那个元素上认出来，见 `editor/spell-check.ts`）。
+   * `null` = 没落在错词上，菜单照旧。
+   */
+  拼写: 拼写线索 | null = null,
+): 行[] {
   if (位置 === "输入框") {
     // ⚠️ **摊平**（见 `条目行` 那第三个参数）：`edit.select` 在编辑菜单里
     // 2026-10-07 起是一个**子菜单的壳**（选行/词/句那四条），但输入框这一档
@@ -193,6 +261,7 @@ export function 给行(位置: 落点, 开发模式: boolean): 行[] {
   if (位置 !== "编辑器") return []; // 外壳：只拦不弹（见文件头那张表）
 
   const 行们: 行[] = [
+    ...(拼写 ? 拼写行(拼写) : []),
     { kind: "icons", key: "icons-clip", ids: 剪贴图标 },
     ...条目行(["edit.copyAs"], "复制为"),
     { kind: "sep", key: "sep-1" },
@@ -259,6 +328,10 @@ function 条目行(ids: readonly string[], 名字: string, 摊平 = false): 行[
 export function 整行灰(r: 行, 灰: ReadonlySet<string>): boolean {
   if (r.kind === "sep") return true;
   if (r.kind === "icons") return r.ids.every((id) => 灰.has(id));
+  // ⚠️ 拼写那一段**永远不灰**：它不在 `灰名单` 里（那份名单是命令表的账，
+  // 而这几条是现场造出来的 id），照下面那两行去查会一律命中"不在名单里 ⇒
+  // 当灰的看"——那正是"加了一条菜单、它却永远灰着"那个老毛病。
+  if (r.kind === "spell") return false;
   const 子 = r.spec.submenu;
   if (子) {
     const 真条目 = 子.filter(isMenuItem);

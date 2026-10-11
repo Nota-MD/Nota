@@ -123,6 +123,16 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       许可: "MIT",
     },
     {
+      // 2026-10-11 起**拼写检查的引擎**就是它（`src-tauri/src/spell/native.rs`）：
+      // 纯 Rust 的 hunspell 实现，编进程序里。⚠️ 许可那一栏写 **Apache-2.0** 是
+      // 照它仓库里那份 `LICENSE` 抄的——**不是**选型时拿到的第二手材料说的 MIT
+      // （`THIRD-PARTY.md` §7.2 记着这笔更正）。
+      名: "zspell",
+      用处: t("Spell checking engine"),
+      链接: "https://github.com/pluots/zspell",
+      许可: "Apache-2.0",
+    },
+    {
       名: "Mermaid",
       用处: t("Diagrams"),
       链接: "https://github.com/mermaid-js/mermaid",
@@ -214,6 +224,15 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       用处: t("Extension packages"),
       链接: "https://github.com/zip-rs/zip2",
       许可: "MIT",
+    },
+    {
+      // 2026-10-11 起 `ui/useClipboard.ts` 走它读剪贴板（菜单里的「粘贴」那条路）。
+      // ⚠️ 它是 2026-10-11 那一批加进来的，`THIRD-PARTY.md` §1 **当时漏登记了**，
+      // 同一批补上——两张表必须同批改，理由见文件头。
+      名: "tauri-plugin-clipboard-manager",
+      用处: t("Reading the clipboard"),
+      链接: "https://github.com/tauri-apps/plugins-workspace",
+      许可: "Apache-2.0 OR MIT",
     },
     {
       名: "dirs",

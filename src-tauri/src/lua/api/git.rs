@@ -636,7 +636,10 @@ mod tests {
     }
 
     #[test]
-    fn 复制的_C_也算多一段() {
+    // ⚠️ 名字里那个 `c` 是**小写**的：Rust 的 `non_snake_case` 会把大写的
+    // 标识符当成类型报一条 warning（`cargo test --lib` 会打出来）。这一条是
+    // 2026-10-11 顺手清掉的——它跟拼写那一批无关，只是每次编译都在那儿响。
+    fn 复制的_c_也算多一段() {
         let (_, e) = 解析状态(&状态(&["## main", "C  b.md", "a.md"]));
         assert_eq!(e.len(), 1);
         assert_eq!(e[0].orig.as_deref(), Some("a.md"));

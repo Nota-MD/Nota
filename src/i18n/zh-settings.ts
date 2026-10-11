@@ -124,6 +124,16 @@ export const 设置表: Record<string, string> = {
   "More than one can be checked at once — words are checked against all of them. Nota ships no dictionaries; if a language has none on this machine, it will say so.":
     "可以同时勾选多门——勾上的语言会一起用来查词。Nota 自己不随附词典；哪一门在这台机器上没有词典，它当场就会说一句。",
   "Add": "添加",
+  // ── 词典从哪儿来（2026-10-11）────────────────────────────────────────────
+  // ⚠️ 这几句是**新模型**的落点：安装包里一本词典都不带（用户拍板「默认随包
+  // 不分发任何字典」，照 Typora 那条 `❌ 词典数据不内置`），所以"选哪一门"
+  // 旁边必须摆着"去哪儿弄"。
+  "not installed": "未安装",
+  "Import dictionary (.zip)…": "导入词典包（.zip）…",
+  "Show dictionary folder": "在文件夹里显示词典目录",
+  "Imported {0}": "已导入 {0}",
+  "Nota ships no dictionaries. Install one from your system (e.g. {0}), import a .zip that has a .aff and a .dic in it, or drop those two files into the folder above.":
+    "Nota 不随附任何词典。三条路：装一个系统词典包（比如 {0}）、导入一个里面装着 .aff 与 .dic 的 .zip、或者把这两个文件直接拷进上面那个目录。",
   "Smart symbol completion": "智能符号补全",
   "Show the Markdown source of the current block": "显示当前块的 Markdown 源码",
   "Copy/cut the whole line when nothing is selected": "没有选中文字时整行复制 / 剪切",

@@ -62,7 +62,25 @@ import type { CommandState } from "@/editor/command-state";
 import { useT } from "@/i18n";
 import { formatAccel } from "@/ui/accel";
 import { 取条目 } from "@/ui/commands";
-import { 给行, 行内下一格, 判落点, 整行灰, 这一档的灰, type 行, type 落点 } from "@/ui/context-menu";
+import { api } from "@/bridge/ipc";
+import {
+  当前语言标签,
+  找视图,
+  替换拼写,
+  重新查拼写,
+} from "@/editor/spell-check";
+import {
+  拼写加词典,
+  拼写忽略,
+  拼写替换前缀,
+  给行,
+  行内下一格,
+  判落点,
+  整行灰,
+  这一档的灰,
+  type 行,
+  type 落点,
+} from "@/ui/context-menu";
 import { 按钮表, 按钮亮着, 提示, 字形类 } from "@/ui/FormatBar";
 import { Icon, type 图标名 } from "@/ui/Icon";
 import { SubMenu } from "@/ui/MenuPopup";
@@ -263,6 +281,51 @@ async function 落到输入框(id: string, 场: 输入框现场, t: 翻译, toas
 
 /** `toast` 的形状。写成别名只是为了上面那个函数签名短一点。 */
 type 提示 = (message: string, level?: Toast["level"]) => void;
+
+/**
+ * 拼写那一段的三条（建议 / 加入词典 / 忽略）。
+ *
+ * ⚠️ **它为什么和 `落到输入框` 一样住在这儿**：这几条的 id 是运行时的
+ * （`spell.replace:2` 这种东西没法进 `MENUS`），而它们的实现要用到"用户刚才
+ * 右键的是哪一个错词"——那是**只有这一层才握着**的现场（见 `拼写现场`）。
+ *
+ * ⚠️ 「加入词典」与「忽略」**是两件事**，别看着像就合成一条：
+ * 前者落盘（`dictionaries/user-words.txt`，以后一直算对），后者只在本次运行里
+ * 算对（重开软件照旧标）。并成一个的话用户点哪一次都是猜。
+ */
+function 落到拼写(id: string, 现场: 拼写现场 | null, toast: 提示): void {
+  if (!现场) return;
+  // ⚠️ 菜单开着这几百毫秒里文档可能被改过（外部改动、自动保存那一路会重画
+  // 正文）。节点已经不在文档里时 `posAtDOM` 会抛——先查一下，什么都不做
+  // 也比抛出去强（用户看到的是"点了一下没反应"，不是一屏红字）。
+  if (!现场.元素.isConnected) return;
+  const 视图 = 找视图(现场.元素);
+  if (!视图) return;
+
+  if (id === 拼写加词典 || id === 拼写忽略) {
+    const 做 = id === 拼写加词典 ? api.spell.wordAdd(现场.词) : api.spell.wordIgnore(现场.词);
+    void 做
+      // ⚠️ 做完**立刻重查**（不走去抖）：用户要的是"这一下就没了"，
+      // 再等 600 毫秒看着像没生效（`重新查拼写` 那段写着）。
+      .then(() => 重新查拼写(视图))
+      .catch((e) => {
+        // ⚠️ 写用户词表失败（配置目录只读那种）**要说出来**：静默吞掉的话
+        // "加入词典"在用户眼里就是个坏掉的功能。
+        toast(String(e), "error");
+      });
+    return;
+  }
+
+  if (!id.startsWith(拼写替换前缀)) return;
+  const 下标 = Number(id.slice(拼写替换前缀.length));
+  const 建议 = 现场.建议们[下标];
+  if (!建议) return; // 理论上到不了：那一列的下标就是这一刻刚拉回来的
+  // ⚠️ 范围是**这一刻**从 DOM 上算的，不是菜单打开时算的：文档在这之间可能
+  // 移过位，而那个 span 是跟着文档重画的——拿现在这个算，画到的才是用户
+  // 眼睛看到的那个词。
+  const 从 = 视图.posAtDOM(现场.元素, 0);
+  替换拼写(视图, 从, 从 + 现场.词.length, 建议);
+}
 
 // ── 画 ─────────────────────────────────────────────────────────────────────
 
@@ -535,6 +598,43 @@ function ContextMenuPanel(p: 面板接线) {
         // "键盘走到哪一项、以及哪一项的子菜单开着"画同一种底色）。
         const 是焦点 = roving.focusedIndex === 序号;
         const 漫游 = roving.itemProps(序号);
+
+        // 拼写那一段（建议 / 加入词典 / 忽略）。⚠️ 形状与上面的 `item` 一致
+        //（同一条 `.menu-item`），差的是**标签原样用、不过 `t()`**——那是从
+        // 词典里查出来的真词，不是文案（理由见 `context-menu.ts::拼写线索`）。
+        if (r.kind === "spell") {
+          return (
+            <div className="menu-item-root" key={r.key}>
+              <button
+                type="button"
+                role="menuitem"
+                className={`menu-item ${是焦点 ? "menu-item-open" : ""}`}
+                tabIndex={漫游.tabIndex}
+                ref={(n) => {
+                  行钮.current.set(r.key, n);
+                  roving.registerItem(序号, n);
+                }}
+                onFocus={漫游.onFocus}
+                onMouseEnter={() => {
+                  漫游.onMouseEnter();
+                  关子();
+                }}
+                // ⚠️ 与上面那一排同一条：不拦的话编辑区的选区会被右键抢走，
+                // 于是"换成 hello"作用在一个已经塌掉的光标上（见文件头第 1 条）。
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onPick(r.id)}
+              >
+                <span className="menu-check" />
+                <span className="menu-label">{r.label}</span>
+                <span className="menu-arrow" />
+              </button>
+            </div>
+          );
+        }
+
+        // ⚠️ 收窄到 `item`：上面那个 `spell` 分支已经把另一种可能接走了，
+        // 而类型上还留着 `sep`（摊平时滤掉的是**运行时**的分隔线）。
+        if (r.kind !== "item") return null;
         return (
           <div className="menu-item-root" key={r.key}>
             <button
@@ -640,6 +740,30 @@ interface 开着 {
   落点: 落点;
   /** 输入框那一档才有。 */
   场: 输入框现场 | null;
+  /**
+   * 这一下右键落在**一个拼错的词**上时才有：那个 `<span class="nota-spell-error">`
+   * 元素，以及它里面的词、这一刻拿到的那一列建议。
+   *
+   * ⚠️ **认它是靠 DOM 类名，不是靠编辑器那边的回调**：波浪线是
+   * `Decoration.inline(…, { class: "nota-spell-error" })`（`editor/spell-check.ts`），
+   * ProseMirror 把它渲染成一个真的 `span`，所以 `e.target.closest("…")` 就问到
+   * 了。⚠️ 走回调那条路**在这里行不通**：这个监听挂在 **window 捕获阶段**，
+   * 它比编辑器 DOM 上任何监听都先跑——菜单已经开完了，编辑器那边才醒。
+   */
+  拼写: 拼写现场 | null;
+}
+
+/**
+ * 一个错词的现场。
+ *
+ * ⚠️ `元素` 是那一刻那个 `span` 的引用：菜单开着的这几百毫秒里文档可能被改
+ * （自动保存、外部改动），所以用它之前要查 `isConnected`——对着一个已经不在
+ * 文档里的节点算位置，`posAtDOM` 会抛。
+ */
+interface 拼写现场 {
+  元素: HTMLElement;
+  词: string;
+  建议们: string[];
 }
 
 /**
@@ -696,7 +820,16 @@ export function ContextMenu(接线: 右键接线) {
       // 到这儿一律拦下：全接管，WebKit 那份英文菜单从此不再出现。
       e.preventDefault();
 
-      const 行们 = 给行(落, import.meta.env.DEV);
+      // 这一下是不是落在**一个拼错的词**上（波浪线是 `span.nota-spell-error`，
+      // 那一段的来历见 `拼写现场`）。
+      const 拼写元素 = el.closest(".nota-spell-error") as HTMLElement | null;
+      const 拼写词 = 拼写元素?.textContent?.trim() ?? "";
+      const 拼写线索 =
+        拼写元素 && 拼写词 !== ""
+          ? { 建议们: [] as string[], 加词典: t("Add to dictionary"), 忽略: t("Ignore") }
+          : null;
+
+      const 行们 = 给行(落, import.meta.env.DEV, 拼写线索);
       if (行们.length === 0) {
         // 外壳：只拦不弹（用户 2026-10-04 选的，见 `context-menu.ts`）。
         set开(null);
@@ -717,10 +850,44 @@ export function ContextMenu(接线: 右键接线) {
         ? 场.元素
         : ((el.closest(".ProseMirror, .cm-editor") as HTMLElement | null) ?? null);
 
-      set开({ 位置: { top: e.clientY, left: e.clientX }, 行: 行们, 落点: 落, 场 });
+      const 现场: 拼写现场 | null =
+        拼写元素 && 拼写词 !== "" ? { 元素: 拼写元素, 词: 拼写词, 建议们: [] } : null;
+
+      set开({ 位置: { top: e.clientY, left: e.clientX }, 行: 行们, 落点: 落, 场, 拼写: 现场 });
+
+      // ⚠️ 建议是**过 IPC 现拉的**（一次词典查询）：菜单先按"没有建议"那一版画出来
+      //（两个动作当场就能点），拿到之后**只把这前半段补上**。
+      // ⚠️ 用户可能在等待期间把它关掉（或点了别处）：下面那个 `if (旧?.拼写)` 就是在
+      // 防这个——`set开` 的回调拿到的是**那一刻**的 state，`null` 就什么都不做。
+      if (现场) {
+        void api.spell
+          .suggest(当前语言标签(), 现场.词)
+          .then((建议们) => {
+            set开((旧) => {
+              if (!旧?.拼写) return 旧;
+              const 新拼写 = { ...旧.拼写, 建议们 };
+              return {
+                ...旧,
+                拼写: 新拼写,
+                行: 给行(
+                  旧.落点,
+                  import.meta.env.DEV,
+                  { 建议们, 加词典: t("Add to dictionary"), 忽略: t("Ignore") },
+                ),
+              };
+            });
+          })
+          .catch(() => {
+            // 拿不到建议：这一栏就这么空着（菜单本身照旧能用）。
+          });
+      }
     };
     window.addEventListener("contextmenu", 听, true);
     return () => window.removeEventListener("contextmenu", 听, true);
+    // ⚠️ 依赖是**空的**（`t` 是模块级那一个稳定的函数，`i18n/index.ts::useT`）：
+    // 那两句动作名虽然是在这个监听里翻的，但 `t` **每次被调用时才读当前语言**，
+    // 所以不用重挂。⚠️ 别把 `t` 写进依赖数组假装它是个依赖——它永远不会变，
+    // 写了只会让人以为这里跟语言有关而漏掉真正该重挂的那一处。
   }, []);
 
   const 收起 = useCallback(() => {
@@ -743,6 +910,12 @@ export function ContextMenu(接线: 右键接线) {
       // 输入框那一档走**另一套**实现（见 `落到输入框` 那段）。
       if (这一份.场) {
         void 落到输入框(id, 这一份.场, t, toast);
+        return;
+      }
+      // 拼写那一段也走自己的实现（理由：它是**现场造出来的 id**，
+      // 命令表里没有它们，见 `context-menu.ts::拼写加词典` 那段）。
+      if (id.startsWith("spell.")) {
+        落到拼写(id, 这一份.拼写, toast);
         return;
       }
       // ⚠️ 与 `App.tsx` 的 `onCommand` 逐字相同：全应用只此一个派发口。

@@ -400,10 +400,14 @@ export const 界面表: Record<string, string> = {
   "Export {0}": "导出 {0}",
   "Exporting {0}": "开始导出 {0}",
   "Esc to discard": "Esc 放弃",
-  "Hide the sidebar": "收起侧边栏",
-  // 另外两条栏上那颗就地 ×（2026-10-04，第 49 项：每个可关的面板都有一颗）。
-  // ⚠️ 三条**必须同句式**（"收起…"）：它们是同一族按钮，其中一条写成"隐藏"、
-  // 一条写成"关闭"，读起来像三个人加的三颗。
+  // 栏上那两颗就地 ×（2026-10-04，第 49 项：每个可关的面板都有一颗）。
+  // ⚠️ 两条**必须同句式**（"收起…"）：它们是同一族按钮，其中一条写成"隐藏"、
+  // 一条写成"关闭"，读起来像两个人加的。
+  // ⚠️⚠️ **原来这里是三条**，2026-10-11 那条 `"Hide the sidebar"` 被
+  // `tools/i18n-check.sh` 报成**废键**（"代码里找不到这句原文"）——它是
+  // 2026-10-11「侧栏上面那条 × 去掉、页签改成平铺铺满」那一次**留下的孤儿**：
+  // 按钮删了，中文译文没跟着删。留着的坏处正是这道闸要防的那种——同一句原文
+  // 哪天被别处再用一次时，这里会**悄悄**生效，而没人知道它已经不对应任何按钮了。
   "Hide the status bar": "收起状态栏",
   "Hide the formatting toolbar": "收起格式工具栏",
   // 侧栏右缘那条拖动把手（2026-09-30）。读屏用户看不到宽度、也没有键盘拖动
@@ -473,6 +477,10 @@ export const 界面表: Record<string, string> = {
   "Hide comparison": "收起对照",
   "Reload from disk": "重新载入",
   "Ignore": "忽略",
+  // 错词上右键弹出的那一层（2026-10-11，`ui/SpellMenu.tsx`）。
+  // ⚠️ `"Ignore"` 那把键**上面已经有了**（「磁盘上的改动」那条横幅在用）——
+  // 同一个动作两处两把键的话，改一处另一处静默退回英文，所以这里只补另外两个。
+  "Add to dictionary": "加入词典",
   "Show what differs between the file on disk and what is in the editor": "在编辑区里看磁盘上那份和编辑器里这份的差别",
   "Hide the comparison and go back to the document (the file on disk is left alone)": "收起对照，回到正文（磁盘上那份不会被改动）",
   "Replace the editor contents with the file on disk (unsaved changes are lost — you are asked first)": "用磁盘上那份替换编辑器里的（没存的改动会丢，会先问你一次）",

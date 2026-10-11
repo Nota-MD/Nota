@@ -402,9 +402,17 @@ pub fn run() {
             commands::webview::nota_webview_spellcheck_set,
             commands::webview::nota_webview_spellcheck_languages_set,
             commands::webview::nota_webview_scroll_hard,
-            // 拼写检查的**独立后端**（不借内核，见 `spell/mod.rs` 文件头）。
+            // 拼写检查的**独立后端**（不借内核，见 `spell/mod.rs` 文件头）：
+            // 引擎编在程序里（zspell），词典是数据（用户目录 ＋ 系统目录）。
+            // ⚠️ 后五条是 2026-10-11 加的（词典从哪儿来那一组）。
             spell::nota_spell_check,
             spell::nota_spell_suggest,
+            spell::nota_spell_dictionaries,
+            spell::nota_spell_dict_dir,
+            spell::nota_spell_dict_reveal,
+            spell::nota_spell_dict_import,
+            spell::nota_spell_word_add,
+            spell::nota_spell_word_ignore,
             commands::settings::nota_settings_open_dir,
             commands::settings::nota_settings_problem,
             commands::settings::nota_app_lang,

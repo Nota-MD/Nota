@@ -25,6 +25,7 @@
 import { Plugin, PluginKey } from "@milkdown/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/prose/view";
 import type { EditorState } from "@milkdown/prose/state";
+import type { EditorView } from "@milkdown/prose/view";
 
 import { api } from "@/bridge/ipc";
 
@@ -37,19 +38,81 @@ const 一次最多 = 2000;
 /** 这一刻用哪门语言。`""` = 跟随系统（这时按界面语言挑一个最接近的标签）。 */
 let 语言 = "";
 
+/** 拼写检查开着没有（`settings.editor.spellcheck`）。关着时**一条线都不画**。 */
+let 开着 = true;
+
+/** 还活着的编辑器实例（`view()` 里加、`destroy()` 里删）。 */
+const 活着的 = new Set<EditorView>();
+
 /** 由 `ui/useSpellcheck.ts` 在设置变了的时候调一次。 */
 export function 设拼写语言(next: string): void {
   语言 = next;
 }
 
+/**
+ * 开关（`settings.editor.spellcheck`）。由 `ui/useSpellcheck.ts` 拨。
+ *
+ * ⚠️ **关了要当场把已经画上的线擦掉**（逐个实例重跑一遍），不能只让"下一次
+ * 打字时不画"——用户拨这个开关的时候正文是**静止**的，不回头的症状是
+ * "开关关了，红波浪线一条不少地留在那儿"，看着就是没生效。
+ */
+export function 设拼写开关(on: boolean): void {
+  if (开着 === on) return;
+  开着 = on;
+  for (const 视图 of 活着的) 重查们.get(视图)?.();
+}
+
+/** 波浪线那个类名。**只此一处**——`marks.css` 与右键命中的判据都用它。 */
+const 类名 = "nota-spell-error";
+
+/**
+ * 从一段 DOM 找回它是**哪一个编辑器实例**（右键菜单那条路要用）。
+ *
+ * ⚠️ **为什么是"扫一遍活着的实例"而不是"记一个当前视图"**：一个窗口里同时开着
+ * 好几个（正文 / 分屏预览），而"记最后一个"在分屏下是错的——用户在**左边**右键，
+ * 那条 transaction 会打到右边去。DOM 包含关系是唯一没有歧义的判据。
+ */
+export function 找视图(节点: Node): EditorView | null {
+  for (const 视图 of 活着的) {
+    if (视图.dom.contains(节点)) return 视图;
+  }
+  return null;
+}
+
+/**
+ * 每个编辑器实例的"重新跑一遍"（`view()` 里注册、`destroy()` 里撤掉）。
+ *
+ * ⚠️ 键是**视图本身**：一个窗口里好几个实例，而"加入了词典"这件事要在
+ * **用户右键的那一个**上立刻生效（别的实例下次文档变化时自己会跟上）。
+ */
+const 重查们 = new WeakMap<EditorView, () => void>();
+
+/** 立刻重跑一遍拼写检查（用户刚「加入词典」/「忽略」时叫它）。 */
+export function 重新查拼写(视图: EditorView): void {
+  重查们.get(视图)?.();
+}
+
+/** 把 `从..到` 那段换成别的字（右键菜单里点一条建议）。 */
+export function 替换拼写(视图: EditorView, 从: number, 到: number, 建议: string): void {
+  视图.dispatch(视图.state.tr.insertText(建议, 从, 到).scrollIntoView());
+}
+
 /** 真正送给后端的那门语言：设置里写了就用它，没写（跟随系统）就按界面语言猜一个。 */
-function 实际语言(): string {
+export function 当前语言标签(): string {
   if (语言) return 语言;
   // ⚠️ 后端要的是 enchant 那套 `zh_CN`（下划线），而 `navigator.language` 给的是
   // `zh-CN`——这一步转换不是可有可无的（写成连字符时 enchant 查不到词典，
   // 症状是"一个字都不检查"，见 `commands/webview.rs` 文件头）。
-  const 猜 = (typeof navigator !== "undefined" && navigator.language) || "en-US";
-  return 猜.replace(/-/g, "_");
+  const 猜 = (typeof navigator !== "undefined" && navigator.language) || "";
+  // ⚠️⚠️ **`navigator.language` 不一定是一门语言**：`LANG=C` / `LANG=POSIX`
+  // 的环境里它报的是 `C`（2026-10-11 在容器里实测：无头那一枪发出去的是
+  // `nota_spell_check(lang="C")`，而"没有 `C` 这门语言" ⇒ 一条波浪线都没有，
+  // 看着像"拼写检查整个坏了"）。所以这里**只认长得像语言标签的**，
+  // 认不出来就退到 `en_US`——那是最保守的一档（英语词表遍地都是），
+  // 而且**总比拿一个不存在的标签去问强**。
+  const 像语言 = /^[A-Za-z]{2,3}([_-][A-Za-z0-9]+)*$/;
+  const 净 = 猜.replace(/-/g, "_");
+  return 像语言.test(净) ? 净 : "en_US";
 }
 
 /** 哪些文本要查。⚠️ 排除法：**代码 / 公式 / 链接**一律跳过（见文件头那张表）。 */
@@ -64,16 +127,45 @@ function 该跳过(nodeName: string): boolean {
   );
 }
 
-/** 从一个词里去掉首尾的标点（`hello,` → `hello`），并给出它在字符串里的偏移。 */
+/**
+ * 从一个词里去掉首尾的标点（`hello,` → `hello`），并给出它在字符串里的偏移。
+ *
+ * # 连字符那一条（2026-10-11 量的）
+ *
+ * `Wi-Fi` / `e-mail` / `well-known` 这样的词**整段送去查一定是错**：实测那份
+ * SCOWL `en_US` 词表里**一个带 `-` 的词条都没有**（`grep -c -- "-" en_US.dic`
+ * 是 0），于是 `Wi-Fi`、`e-mail`、`well-known` 三个都是 `false`。所以这里把它们
+ * **按 `-` 拆成几段分别查**，而**段里太短的（少于 3 个字母）不查**——
+ * `Wi` / `Fi` / `e` 这种两个字母以内、又是组合词一部分的东西，没有任何词典
+ * 能判准，标出来就是噪音（而 `well` / `known` / `mail` 照样查）。
+ *
+ * ⚠️ 代价如实记着：**独立出现的两字母词也不再查**（`zz` 这种打错不会标）。
+ * 两字母的真错词本来就极少，而"把一个好端端的 `Wi-Fi` 标红"是**每次都会遇到**
+ * 的那种假阳性——两边不对称，所以这么选。
+ */
 function 切词(文本: string): Array<{ 词: string; 起: number; 止: number }> {
   const 出: Array<{ 词: string; 起: number; 止: number }> = [];
-  // ⚠️ 只认"字母 + 撇号"（`don't` 是一个词）；数字与 CJK 一律不算——
-  // 没有中文词典时把汉字标成错的是最刺眼的那种假阳性。
-  const re = /[A-Za-z][A-Za-z'’-]*/g;
-  for (const m of 文本.matchAll(re)) {
-    const 词 = m[0].replace(/['’-]+$/, "");
-    if (词.length < 2) continue;
-    出.push({ 词, 起: m.index ?? 0, 止: (m.index ?? 0) + 词.length });
+  // ⚠️ 只认"字母 + 撇号 + 连字符"（`don't` 是一个词，`state-of-the-art` 整段
+  // 先抓进来再拆）；数字与 CJK 一律不算——没有中文词典时把汉字标成错的是
+  // 最刺眼的那种假阳性。
+  const 整段 = /[A-Za-z][A-Za-z'’]*(?:-[A-Za-z][A-Za-z'’]*)*/g;
+  const 一段 = /[A-Za-z][A-Za-z'’]*/g;
+  for (const m of 文本.matchAll(整段)) {
+    const 整段文字 = m[0];
+    const 基 = m.index ?? 0;
+    // 没有连字符：整段就是一个词（判据同以前——两个字母起才查）。
+    if (!整段文字.includes("-")) {
+      const 词 = 整段文字.replace(/['’]+$/, "");
+      if (词.length >= 2) 出.push({ 词, 起: 基, 止: 基 + 词.length });
+      continue;
+    }
+    // 有连字符：按 `-` 拆开，每一段各自定位（这样波浪线只画在坏的那一段上）。
+    for (const p of 整段文字.matchAll(一段)) {
+      const 词 = p[0].replace(/['’]+$/, "");
+      if (词.length < 3) continue;
+      const 起 = 基 + (p.index ?? 0);
+      出.push({ 词, 起, 止: 起 + 词.length });
+    }
   }
   return 出;
 }
@@ -134,15 +226,28 @@ export function 拼写检查插件(): Plugin<DecorationSet> {
       let 定时: number | null = null;
       let 这一轮 = 0;
 
+      /** 把已经画上的线全擦掉（关掉开关、或文档里一个词都没有了）。 */
+      const 清空 = () => {
+        视图.dispatch(视图.state.tr.setMeta(键, DecorationSet.empty).setMeta("addToHistory", false));
+      };
+
       const 问 = async () => {
+        // 开关关着：**一条线都不画**，而且要把上一轮画的擦掉（见 `设拼写开关` 那段）。
+        if (!开着) {
+          清空();
+          return;
+        }
         const 这一趟 = ++这一轮;
         const 位置 = 取词(视图.state);
-        if (位置.length === 0) return;
+        if (位置.length === 0) {
+          清空();
+          return;
+        }
         const 索引 = 去重(位置);
         const 词们 = [...索引.keys()].slice(0, 一次最多);
         let 错的下标: number[];
         try {
-          错的下标 = await api.spell.check(实际语言(), 词们);
+          错的下标 = await api.spell.check(当前语言标签(), 词们);
         } catch {
           // 后端没装 / 词典没有：**一个人都不标**（见文件头最后一段）。
           return;
@@ -155,7 +260,7 @@ export function 拼写检查插件(): Plugin<DecorationSet> {
         for (const [词, 段们] of 索引) {
           if (!错的词.has(词)) continue;
           for (const { 从, 到 } of 段们) {
-            装饰.push(Decoration.inline(从, 到, { class: "nota-spell-error" }));
+            装饰.push(Decoration.inline(从, 到, { class: 类名 }));
           }
         }
         const 集 = DecorationSet.create(视图.state.doc, 装饰);
@@ -171,6 +276,14 @@ export function 拼写检查插件(): Plugin<DecorationSet> {
         定时 = window.setTimeout(() => void 问(), SETTLE_MS);
       };
 
+      // ⚠️ 立刻重查那一档**不走去抖**：用户刚点完「加入词典」/「忽略」，
+      // 他要的是"这一下就没了"，再等 600 毫秒看着像没反应。
+      重查们.set(视图, () => {
+        if (定时 !== null) window.clearTimeout(定时);
+        void 问();
+      });
+      活着的.add(视图);
+
       // 头一次进来先问一遍（打开时就有一篇现成的文档，不该等到敲第一个键）。
       排();
       return {
@@ -179,6 +292,8 @@ export function 拼写检查插件(): Plugin<DecorationSet> {
         },
         destroy() {
           if (定时 !== null) window.clearTimeout(定时);
+          重查们.delete(视图);
+          活着的.delete(视图);
         },
       };
     },

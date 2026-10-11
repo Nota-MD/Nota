@@ -21,7 +21,7 @@ import type {
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
-  会话, 路径种类,
+  会话, 路径种类, 拼写词典,
 } from "./types";
 // ⚠️ 这一条是**类型专线**：`选区快照` 的家在编辑器那一侧
 // （`editor/caret-snapshot.ts`，它的文件头就是这张表的设计说明），
@@ -151,6 +151,41 @@ export const api = {
     /** 给一个词的建议（右键菜单那一列）。拿不到就是空表，不报错。 */
     suggest: (lang: string, word: string) =>
       invoke<string[]>("nota_spell_suggest", { lang, word }),
+    /**
+     * **这台机器上有哪些词典**（右键菜单、设置页那一格都用它）。
+     *
+     * ⚠️ 列的是"**我们的引擎读得了的**"（用户目录 ＋ 系统目录里的 `.aff`/`.dic`），
+     * 不是"enchant 认哪些标签"——两个问题的答案不一样，理由写在
+     * `src-tauri/src/spell/store.rs::列出` 那段。
+     */
+    dictionaries: () => invoke<拼写词典[]>("nota_spell_dictionaries"),
+    /** 用户词典目录（设置页那一行"打开文件夹"用）。 */
+    dictDir: () => invoke<string>("nota_spell_dict_dir"),
+    /**
+     * **在文件管理器里打开用户词典目录**，返回那个目录的路径。
+     *
+     * ⚠️ "打开"这一步在**宿主**：理由与 `settings.openDir()` 同源（BUG-27，
+     * 前端自己开要过 ACL 的 path scope，而本仓的目录口径在 `paths.rs` 的 XDG 里）。
+     * 这一处还多一件事——`dictionaries/` **可能还不存在**，宿主会先把它建出来。
+     */
+    dictReveal: () => invoke<string>("nota_spell_dict_reveal"),
+    /**
+     * **导入一个 `.zip` 词典包**，返回装进去的语言标签。
+     *
+     * ⚠️ `path` 由前端用文件对话框问出来（`@tauri-apps/plugin-dialog` 的 `open`）：
+     * 命令不带路径、宿主调系统选择器那种写法在这里更要命——它会把**选文件**这件
+     * 事的失败（用户点了取消）和**装词典**的失败混成一个错误。
+     */
+    dictImport: (path: string) => invoke<string>("nota_spell_dict_import", { path }),
+    /** 「加入词典」：写进用户词表，**以后一直算对**。返回真正写进去的那个词。 */
+    wordAdd: (word: string) => invoke<string>("nota_spell_word_add", { word }),
+    /**
+     * 「忽略」：**只在本次运行里**不再标它（重开软件照旧）。
+     *
+     * ⚠️ 与 `wordAdd` 分开是**必须的**：一个是"这个词是对的"（落盘），一个是
+     * "这一篇里别烦我"（不落盘）。并成一个的话用户点哪一次都是猜。
+     */
+    wordIgnore: (word: string) => invoke<string>("nota_spell_word_ignore", { word }),
   },
   pathKind: (paths: string[]) =>
     invoke<路径种类[]>("nota_paths_kind", { paths }),

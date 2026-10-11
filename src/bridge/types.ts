@@ -41,6 +41,23 @@ export interface Document {
 export type 路径种类 = "dir" | "file" | "missing";
 
 /**
+ * 一本**我们的引擎真读得了**的词典（`spell::nota_spell_dictionaries` 回的那种）。
+ *
+ * ⚠️ `来源` 是两个英文小写字符串（跨 IPC 的取值一律英文小写，同 [`路径种类`]）：
+ * · `user`——用户自己放进 `dictionaries/` 的（导入的 zip 或手拷的）；
+ * · `system`——`hunspell-en-US` 那一类系统包装出来的。
+ *
+ * ⚠️ **安装包不带任何词典**（用户 2026-10-11 拍板），所以没有第三种来源。
+ */
+export interface 拼写词典 {
+  /** 语言标签，`en_US` 这种（文件名去掉后缀）。 */
+  tag: string;
+  来源: "user" | "system";
+  /** 在哪个目录（"打开文件夹"那条路用）。 */
+  目录: string;
+}
+
+/**
  * 文件树的一格。
  *
  * ⚠️ **它身上没有时间**（既没有 `mtime` 也没有 `ctime`）。"按修改时间排"

@@ -121,6 +121,13 @@ PAIRS=(
   "src-tauri/src/pandoc/tests.rs                  02,05,06"
   "src-tauri/src/pandoc_format.rs                 02,05,06,10"
   "src-tauri/src/pdf_print.rs                     02,05,06,10"
+  # 2026-10-11：拼写检查这一整套（引擎 / 词典 / 口径）。⚠️ 在这之前
+  # `spell/mod.rs` **没登记在这张表里**（⑤ 过得去是因为 AGENTS.md §2 里
+  # 有它那一行，而 ② 的"源改了文档没跟"根本管不到它）——今天补上。
+  "src-tauri/src/spell/mod.rs                    02,03,04,07,10"
+  "src-tauri/src/spell/native.rs                 02,03,07,10"
+  "src-tauri/src/spell/store.rs                  02,03,07,10"
+  "src-tauri/src/spell/tests.rs                  02,06"
   # 2026-09-28：和 `pdf_print.rs` 隔壁、同样"只有 Linux 编"的那一份 ——
   # GTK 捕获阶段拦 `Ctrl+B`/`Ctrl+I`（BUG-49 的修法）。
   "src-tauri/src/format_keys.rs                   01,02,04,06,07,10"

@@ -132,6 +132,8 @@ PAIRS=(
   "src/ui/SpellMenu.tsx                          04,02"
   "src/ui/spell-langs.ts                         04,02"
   "src/ui/settings/open-request.ts               04,02"
+  # 2026-10-11（修用户报的“菜单里一下滚就消失”）：弹层自己滚不算“底下动了”。
+  "src/ui/popup-scroll.ts                         04,02"
   # 2026-09-28：和 `pdf_print.rs` 隔壁、同样"只有 Linux 编"的那一份 ——
   # GTK 捕获阶段拦 `Ctrl+B`/`Ctrl+I`（BUG-49 的修法）。
   "src-tauri/src/format_keys.rs                   01,02,04,06,07,10"

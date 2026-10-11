@@ -36,6 +36,7 @@ import type { DocId, Document } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 import { MenuPopup } from "@/ui/MenuPopup";
+import { 弹层自己在滚 } from "@/ui/popup-scroll";
 import type { MenuEntry } from "@/ui/commands";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
@@ -118,11 +119,18 @@ export function TabBar(props: {
   // 桌面软件的每一条细节，是**别让它指错人**。
   useEffect(() => {
     if (!菜单) return;
+    // ⚠️ 滚的**不是**弹层自己才关（判据在 `ui/popup-scroll.ts`）：这一份菜单今天
+    // 只有一条、滚不动，但同一个坑在 2026-10-11 另外两处（状态栏那个拼写菜单、
+    // 右键菜单的子菜单）都真踩到了——用户报的是「一下滑就直接消失」。
+    const 关滚 = (e: Event) => {
+      if (弹层自己在滚(e.target)) return;
+      关菜单();
+    };
     window.addEventListener("resize", 关菜单);
-    window.addEventListener("scroll", 关菜单, true);
+    window.addEventListener("scroll", 关滚, true);
     return () => {
       window.removeEventListener("resize", 关菜单);
-      window.removeEventListener("scroll", 关菜单, true);
+      window.removeEventListener("scroll", 关滚, true);
     };
   }, [菜单, 关菜单]);
 

@@ -62,6 +62,7 @@ import type { CommandState } from "@/editor/command-state";
 import { useT } from "@/i18n";
 import { formatAccel } from "@/ui/accel";
 import { 取条目 } from "@/ui/commands";
+import { 弹层自己在滚 } from "@/ui/popup-scroll";
 import { api } from "@/bridge/ipc";
 import {
   当前语言标签,
@@ -935,15 +936,27 @@ export function ContextMenu(接线: 右键接线) {
       set开(null);
     };
     const 关 = () => set开(null);
+    /**
+     * 底下的东西滚了 → 关掉（同 `ui/TabBar.tsx` 那一段：`fixed` 的菜单会与
+     * 它指着的位置脱节，浮在已经滚走的正文上）。
+     *
+     * ⚠️⚠️ **但弹层自己滚不算**（2026-10-11 与状态栏那个缺陷同一批修的）：
+     * 「段落」/「插入」那两栏子菜单**自己就能滚**（`.menu-sub` 那条 `max-height`），
+     * 而里面的滚动事件照样冒到 `window` 的捕获相——不判这一下的话，用户在子菜单里
+     * 往下拨一下滚轮，整份右键菜单当场消失。判据在 `ui/popup-scroll.ts`。
+     */
+    const 关滚 = (e: Event) => {
+      if (弹层自己在滚(e.target)) return;
+      关();
+    };
     document.addEventListener("mousedown", 点别处);
     window.addEventListener("resize", 关);
-    // ⚠️ `scroll` 要挂**捕获**：编辑区自己的滚动容器也要能关掉菜单，
-    // 不然菜单会浮在已经滚走的正文上（同 `ui/TabBar.tsx` 那一段）。
-    window.addEventListener("scroll", 关, true);
+    // ⚠️ `scroll` 要挂**捕获**：编辑区自己的滚动容器也要能关掉菜单。
+    window.addEventListener("scroll", 关滚, true);
     return () => {
       document.removeEventListener("mousedown", 点别处);
       window.removeEventListener("resize", 关);
-      window.removeEventListener("scroll", 关, true);
+      window.removeEventListener("scroll", 关滚, true);
     };
   }, [开]);
 

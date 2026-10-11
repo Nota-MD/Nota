@@ -111,6 +111,7 @@ import { FocusMeter } from "@/ui/FocusMeter";
 import { Icon } from "@/ui/Icon";
 import { MenuPopup } from "@/ui/MenuPopup";
 import { SpellMenu } from "@/ui/SpellMenu";
+import { 弹层自己在滚 } from "@/ui/popup-scroll";
 import type { MenuEntry } from "@/ui/commands";
 import { countText } from "@/ui/outline";
 
@@ -281,15 +282,27 @@ export function StatusBar({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") 关菜单();
     };
+    /**
+     * 底下的东西滚了 → 关掉（`fixed` 的菜单会与它指着的位置脱节）。
+     *
+     * ⚠️⚠️ **但菜单自己滚不算**（2026-10-11 修的用户缺陷）：拼写菜单里那一长列
+     * 语言就在菜单内部滚，`scroll` 事件照样冒到 `window` 的捕获相，于是
+     * "往下拨一下滚轮 → 菜单当场消失、焦点掉回正文"（用户原话：「列表无法下滑，
+     * 一下滑就直接消失」）。判据在 `ui/popup-scroll.ts`。
+     */
+    const onScroll = (e: Event) => {
+      if (弹层自己在滚(e.target)) return;
+      关菜单();
+    };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", 关菜单);
-    window.addEventListener("scroll", 关菜单, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("resize", 关菜单);
-      window.removeEventListener("scroll", 关菜单, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [菜单, 关菜单]);
 

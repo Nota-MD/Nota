@@ -934,7 +934,7 @@ export default function App() {
             <PluginDock
               plugins={plugins}
               panels={panels}
-              信任={信任表}
+              信任={信任表} onResize={(宽: number) => void updateSettings({ appearance: { ...settings!.appearance, dock_width: 宽 } })}
               // ⚠️ 这里原来还给 `PluginDock` 塞一份 `slidev={…}`（预览那一页的
               // 接线）。2026-09-25 删了：预览现在是**插件自己的一个面板**，
               // 走的是通用那条路（`nota.ui.register_panel` ＋ `kind = "frame"`），

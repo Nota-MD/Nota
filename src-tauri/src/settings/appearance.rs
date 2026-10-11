@@ -242,6 +242,18 @@ pub struct Appearance {
     /// 夹的活儿在真正用它画界面的那两处做更合适——**存下来的值原样保留**，
     /// 用户手滑之后还能看出自己写了什么（同 `reading_speed` 那条的理由）。
     pub sidebar_width: u32,
+    /// **右侧插件栏的宽度**（2026-10-11，用户：「拓展菜单左侧也可以拖动」）。
+    ///
+    /// ⚠️ 与 `sidebar_width` **同一套口径**（别自己发明第二套）：拖动期间**直接写
+    /// `<html>` 上那条 `--dock-width`**（不落盘），**松手才落盘**；前端把它夹在
+    /// **200 ~ 560** 之间（`applyTheme.ts` 与 `DockResizer.tsx` 各夹一次），
+    /// 这里**不夹**——存的是用户拖出来的结果，手改 `settings.toml` 写了个 9999
+    /// 也该能看出自己写了什么（同 `sidebar_width` 那条的理由）。
+    ///
+    /// ⚠️ 出厂 **260**，与 `styles/theme/base.css` 里 `--dock-width`、以及
+    /// `DockResizer.右栏宽默认` **三处必须同值**（改一处要三处一起看）。
+    /// ⚠️ **设置页里没有它的控件**：控件就是那条把手本身（同 `sidebar_width`）。
+    pub dock_width: u32,
     /// 专注模式下非聚焦内容压多暗。**默认标准**，三档见 [`FocusDim`]。
     pub focus_mode_dim: FocusDim,
     /// **窗口标题里带当前文档的名字**（2026-10-04，照 VMark 的窗口版加的）。
@@ -286,6 +298,9 @@ impl Default for Appearance {
             // ⚠️ 与 `theme/base.css` 里 `--sidebar-width` 的出厂值、
             // `SidebarResizer.tsx` 的 `侧栏宽默认` **必须同值**（三个 240）。
             sidebar_width: 240,
+            // 右侧插件栏出厂 260：够装下一行插件面板的正文（`panel.css` 那些
+            // 规则都是照这个宽度写的），又不会把正文挤得太窄。
+            dock_width: 260,
             // ⚠️ 默认标准，见 `FocusDim::Standard` 那段：这一项加进来之前，
             // 专注模式的压暗就是这一个值，默认不该让老用户看到的东西变样。
             focus_mode_dim: FocusDim::Standard,

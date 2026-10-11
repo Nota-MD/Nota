@@ -179,6 +179,14 @@ export function applyTheme(settings: Settings): () => void {
       ? Math.min(480, Math.max(180, Math.round(原宽)))
       : 240;
     root.style.setProperty("--sidebar-width", `${侧栏宽}px`);
+
+    // ⚠️ 右侧插件栏那一条同理（2026-10-11）：出厂 260 与 `theme/base.css`、
+    // `DockResizer.右栏宽默认` 三处同值；不是数就退回出厂值（理由同上那一段）。
+    const 原右 = settings.appearance.dock_width;
+    const 右栏宽 = Number.isFinite(原右)
+      ? Math.min(560, Math.max(200, Math.round(原右)))
+      : 260;
+    root.style.setProperty("--dock-width", `${右栏宽}px`);
   };
 
   paint();

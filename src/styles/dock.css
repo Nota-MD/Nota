@@ -54,6 +54,9 @@
    ② 宽度走 `--dock-width`，与 `--sidebar-width` 分开——见 theme.css 那句。 */
 
 .plugin-dock {
+  /* ⚠️ `position: relative` 是给左缘那条把手当定位父级的（2026-10-11）——
+     和 `.sidebar` 上那一条同理：把手要量"这一栏的右缘"，只有现场量得准。 */
+  position: relative;
   width: var(--dock-width);
   flex: none;
   display: flex;
@@ -254,3 +257,23 @@
   width: min(560px, 45vw);
 }
 
+/* ── 左缘那条可以拖的把手（2026-10-11，用户：「拓展菜单左侧也可以拖动」）────────
+
+   ⚠️ 与 `.sidebar-resizer` **镜像**：那条在右缘、这条在左缘，命中区都是 6px，
+   光标都是 `col-resize`（`.resizing-col` 那条全局光标复用侧栏那一套）。
+   宽度写在 `<html>` 的 `--dock-width` 上（拖动期间直接写、松手才落盘），
+   见 `ui/DockResizer.tsx` 文件头。 */
+.dock-resizer {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+
+.dock-resizer:hover {
+  background: var(--accent);
+  opacity: 0.4;
+}

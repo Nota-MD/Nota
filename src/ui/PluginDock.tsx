@@ -87,6 +87,7 @@ import { useTablistKeys } from "@/ui/useTablistKeys";
 
 import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type PluginInfo, type PluginPanel, type 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { DockResizer } from "@/ui/DockResizer";
 import { PanelBody } from "@/ui/PanelBody";
 import {
   记忆,
@@ -113,6 +114,8 @@ interface Props {
   信任: 信任记录[];
   /** 跑一条插件命令（错误由 `App.tsx` 那边 toast，这里只管调）。 */
   onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
+  /** 拖动**左缘**改宽（用户 2026-10-11：「拓展菜单左侧也可以拖动」）。 */
+  onResize: (宽: number) => void;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
   /**
    * 「插件」页那几颗按钮（装 / 卸 / 启停 / 信任）。**实现全在
@@ -147,6 +150,7 @@ export function PluginDock({
   panels,
   信任,
   onCall,
+  onResize,
   askPrompt,
   动作,
   inert,
@@ -661,6 +665,7 @@ export function PluginDock({
       <div className="dock-body">
         {正文}
       </div>
+      <DockResizer onCommit={onResize} />
     </aside>
   );
 }

@@ -508,6 +508,13 @@ export interface AppearanceSettings {
    */
   sidebar_width: number;
   /**
+   * **右侧插件栏的宽度**（2026-10-11）。⚠️ 与 `sidebar_width` 同一套：拖动期间
+   * 直接写 `<html>` 的 `--dock-width`、松手才落盘；前端夹在 200~560。
+   * 出厂 260（与 `theme/base.css` 的 `--dock-width` 同值）。**设置页里没有控件**
+   * ——控件就是拓展栏左缘那条把手。
+   */
+  dock_width: number;
+  /**
    * 专注模式下非聚焦内容压多暗。默认 `"standard"`。
    *
    * ⚠️ 它**不在 `[focus]` 表里**——那张表是「强制专注」（番茄钟那本账），

@@ -84,6 +84,10 @@ use tauri::Manager;
 
 use crate::error::{NotaError, Result};
 
+/// 「捏合那条钩子装过了」的闸。⚠️ 装两遍的后果是回调叠着跑（每捏一下按回去好几次），
+/// 不至于坏，但没必要。
+static 装过: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// 主窗口的 label。⚠️ 与 `tauri.conf.json` 里那个窗口的 `label` 必须一致
 /// （同 `commands/window.rs`）。
 const 主窗口: &str = "main";
@@ -228,6 +232,27 @@ fn 读一眼(w: &tauri::webview::PlatformWebview, 要改: 改动) -> Option<拼�
             上.set_spell_checking_languages(&借用);
         }
     }
+    // ── 捏合缩放：**盯住 `zoom-level`，一被人改就按回 1.0**（2026-10-11）────────
+    //
+    // 用户原话：「现在触摸板放大手势会导致软件真的放大。要改」。
+    //
+    // ⚠️ 正解是关掉 WebKit 的 `enable-page-zoom`，但**这个绑定里没有那个方法**
+    //（`webkit2gtk-2.0.2` 的 `Settings` 只有 `zoom_text_only`，`webkit2gtk-sys` 里
+    // 连 `webkit_settings_set_enable_page_zoom` 都没有——那一批绑定比 WebKitGTK 2.24 还老）。
+    // 于是退而求其次：**它改一次我们就按回去一次**。捏合走的就是这条路，所以
+    // 观感上捏合不再放大；而 Nota 自己的"缩放"是**另一套**（`appearance.zoom`
+    // 算出来的 CSS 变量），压根不碰引擎这个数，互不干扰。
+    //
+    // ⚠️ 只装一次（`装过` 那道闸）：这条命令在启动时叫一次，但组件重挂时还会再叫。
+    if !装过.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        use webkit2gtk::WebViewExt as _;
+        w.inner().connect_zoom_level_notify(|v| {
+            if (v.zoom_level() - 1.0).abs() > f64::EPSILON {
+                v.set_zoom_level(1.0);
+            }
+        });
+    }
+
     Some(拼写现状 {
         on: 上.is_spell_checking_enabled(),
         // ⚠️ `GString` → `String` 转一手：`GString` 带的是 glib 的引用计数，

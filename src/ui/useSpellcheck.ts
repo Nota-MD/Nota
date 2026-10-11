@@ -75,17 +75,40 @@ export function useSpellcheck(w: 拼写接线): void {
     if (开 === null) return;
 
     let 算了 = false;
+
+    // ⚠️⚠️ **失败要重试，不能只试一次**（2026-10-10 实测修的那条）。
+    //
+    // 这条命令是**过主线程**去问 WebKitGTK 的（`commands/webview.rs`），而那边
+    // 等回话只给 **800 毫秒**——超时就报错。启动那一下主线程最忙（建窗、加载
+    // 插件、跑 `on_page_load`），于是**这一枪打空是常事**；而 WebKitGTK 的
+    // `spell-checking-enabled` **出厂就是关的**，打空一次就等于**这一次运行
+    // 永远没有拼写检查**（用户看到的：打一串错字，一个红波浪线都没有）。
+    // 实测证据：容器里 `hunspell-en-US` 是装着的，而开窗打
+    // `helllo wrold thiss is a mispelled sentance.` 一个波浪线都没有。
+    //
+    // 重试的代价只有几百毫秒；不重试的代价是"这个开关压根不生效"。
+    const 次数 = 6;
     void (async () => {
-      try {
-        const 实际 = await api.webview.spellcheckSet(开);
-        // ⚠️ **只在不一致时说话**：一致是常态，每次都弹一条"已生效"就是噪音。
-        if (算了 || 实际 === 开) return;
-        toast(t("Spell checking did not end up the way you asked; the engine stayed as it was"), "error");
-      } catch (e) {
-        if (算了) return;
-        // 报错的原因是"这个平台没接口"或"等引擎回话超时"，两种都在这一句里
-        // 说得过去（宿主那边回来的原文带着具体原因，原样接上）。
-        toast(t("Could not change spell checking: {0}", String(e)), "error");
+      for (let i = 1; i <= 次数 && !算了; i++) {
+        try {
+          const 实际 = await api.webview.spellcheckSet(开);
+          // ⚠️ **只在不一致时说话**：一致是常态，每次都弹一条"已生效"就是噪音。
+          if (算了 || 实际 === 开) return;
+          if (i < 次数) {
+            await new Promise((r) => setTimeout(r, 500));
+            continue;
+          }
+          toast(t("Spell checking did not end up the way you asked; the engine stayed as it was"), "error");
+        } catch (e) {
+          if (算了) return;
+          if (i < 次数) {
+            await new Promise((r) => setTimeout(r, 500));
+            continue;
+          }
+          // 报错的原因是"这个平台没接口"或"等引擎回话超时"，两种都在这一句里
+          // 说得过去（宿主那边回来的原文带着具体原因，原样接上）。
+          toast(t("Could not change spell checking: {0}", String(e)), "error");
+        }
       }
     })();
 
@@ -117,6 +140,19 @@ export function useSpellcheck(w: 拼写接线): void {
             t(
               "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own.",
               没挂上的.join(", "),
+            ),
+            "error",
+          );
+        } else if (语言.length === 0 && 实际.length === 0) {
+          // ⚠️ **"跟随系统"这一档也要能自报病情**（2026-10-10 加的）。
+          //
+          // 引擎读回来一本词典都没有 ⇒ **不管你怎么打都不会有红线**，而这一档
+          // 从前是**一声不吭**的（空列表我们刻意不说话）。于是用户只看到
+          // "拼写检查没用"，却没有任何线索指向"这台机器没装词典"——
+          // 这正是本仓最忌讳的那种静默失败。装一个词典包就能好，那就得说出来。
+          toast(
+            t(
+              "This machine has no spell-check dictionary at all, so nothing will be checked in any language. Install one (hunspell / enchant) on the system first.",
             ),
             "error",
           );

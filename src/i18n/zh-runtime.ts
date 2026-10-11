@@ -35,6 +35,8 @@ export const 运行表: Record<string, string> = {
   // 就永远不空，那句老话就永远不说了（理由见 `ui/useSpellcheck.ts` 文件头）。
   "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own.":
     "这台机器上没有 {0} 的词典，那几门语言里的词不会被检查。Nota 自己不随附任何词典，得由系统装。",
+  "This machine has no spell-check dictionary at all, so nothing will be checked in any language. Install one (hunspell / enchant) on the system first.":
+    "这台机器上一个拼写词典都没有，任何语言都不会检查。先在系统里装一个词典包（hunspell / enchant 那一类）才会有红线。",
   "Could not tell what was dropped in: {0}": "拖进来的东西读不出来：{0}",
   "The dropped “{0}” is gone (moved or deleted?)": "拖进来的「{0}」已经不在了（被移走或删掉了？）",
   "{0} of the dropped items are gone (starting with “{1}”)": "拖进来的 {0} 个东西已经不在了（第一个是「{1}」）",

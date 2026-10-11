@@ -41,6 +41,7 @@ pub mod pdf_print;
 pub mod plugin;
 pub mod proc;
 pub mod session;
+pub mod spell;
 pub mod settings;
 pub mod single_instance;
 pub mod state;
@@ -396,6 +397,9 @@ pub fn run() {
             commands::webview::nota_webview_spellcheck_set,
             commands::webview::nota_webview_spellcheck_languages_set,
             commands::webview::nota_webview_scroll_hard,
+            // 拼写检查的**独立后端**（不借内核，见 `spell/mod.rs` 文件头）。
+            spell::nota_spell_check,
+            spell::nota_spell_suggest,
             commands::settings::nota_settings_open_dir,
             commands::settings::nota_settings_problem,
             commands::settings::nota_app_lang,

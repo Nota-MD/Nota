@@ -861,3 +861,4 @@ podman exec -u 1000 -w "$PWD" tauri-dev npx vite build
 ```
 
 四条都过才算做完。⚠️ 前三条过了**不代表性对**——见 §5。
+| `spell/mod.rs` + `spell/tests.rs` | 拼写检查的独立后端（2026-10-11，`Backend` trait ＋ enchant/hunspell 命令行实现） |

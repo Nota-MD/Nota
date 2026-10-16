@@ -215,7 +215,8 @@ a {
 
 strong {
   font-weight: 700;
-  color: #000000;
+  /* ⚠️ 不写颜色（原 `#000000`，2026-10-16 改，同 `minimal.css` 那一条）。 */
+  color: inherit;
 }
 
 em {
@@ -246,9 +247,12 @@ code {
 blockquote {
   margin: 1.2em 0 1.2em 1.5em;
   padding: 0.5em 0 0.5em 1em;
-  border-left: 2px solid #000000;
+  /* ⚠️ **两条都别硬编码**（2026-10-16 改）：`#000` 的竖线与 `#3a3a3a` 的字
+     在深色纸面上一个是"看不见的线"、一个是"黑字压深底"——正是 `strong` 那条
+     同一个病灶。竖线改用正文色（浅色下几乎看不出差别），字色跟着正文继承。 */
+  border-left: 2px solid currentColor;
   font-size: 0.94em;
-  color: #3a3a3a;
+  color: inherit;
 }
 
 blockquote > :first-child {

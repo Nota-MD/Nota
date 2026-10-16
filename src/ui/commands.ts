@@ -290,7 +290,10 @@ export const MENUS: MenuSpec[] = [
       "sep",
       { id: "file.open", label: "Open…", accel: "Ctrl+O" },
       { id: "file.openFolder", label: "Open Folder…" },
-      { id: "file.quickOpen", label: "Quick Open…", accel: "Ctrl+P" },
+      // ⚠️ **快速打开让出了 `Ctrl+P`**（2026-10-16）：用户点名「打印默认快捷键是
+      // Ctrl+P」，而 `Ctrl+P` 早被这一条占着。打印是**文档级**的动作、通用约定
+      // 就是 `Ctrl+P`；快速打开挪到 `Ctrl+Shift+P`（另一套常见约定）。
+      { id: "file.quickOpen", label: "Quick Open…", accel: "Ctrl+Shift+P" },
       { id: "file.recent", label: "Open Recent File" },
       { id: "file.reload", label: "Reload from Disk", needsDoc: true },
       "sep",
@@ -337,7 +340,7 @@ export const MENUS: MenuSpec[] = [
           { id: "file.exportOther", label: "Other Formats…", needsDoc: true },
         ],
       },
-      { id: "file.print", label: "Print…", accel: "Alt+Shift+P", needsDoc: true },
+      { id: "file.print", label: "Print…", accel: "Ctrl+P", needsDoc: true },
       "sep",
       { id: "file.preferences", label: "Settings…", accel: "Ctrl+," },
       "sep",

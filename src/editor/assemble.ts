@@ -64,6 +64,9 @@ import { 预览中吗, 预览插件 } from "./review-prose";
 import { $prose } from "@milkdown/kit/utils";
 
 import { 拼写检查插件 } from "./spell-check";
+// 覆写模式（`Insert` 键，2026-10-16）。⚠️ 它**有状态**（开关住在插件 state 里，
+// 理由在那边文件头），所以与 `spell-check` 那种"只加 decoration"的不是一类。
+import { 覆写插件 } from "./overtype";
 import { instantRender } from "./instant-render";
 // 光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 半透明画在那段文字两边。
 // 块级标记归上面那个（画在装订线里），行内没有装订线，所以是另一份插件；
@@ -472,6 +475,11 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // decoration**——不改 schema、不抢输入规则，所以放在链子这儿的哪一段都不影响
     // 语义；放这儿是图它离 `history` 近（另一个"只做事不定义文档形状"的插件）。
     .use($prose(() => 拼写检查插件()))
+    // ⚠️ 覆写那一层要排在 `history` **前面**（插件顺序 = 谁先拿到键与输入）：
+    // 它只认 `Insert` 与"覆写开着时的打字"，抢不到别人的键；但排在后面的话
+    // `insertText` 那条默认路已经先把字插进去了，覆写就成了"插一个、再删一个"
+    //（撤销栈里多出一笔，用户按一下 Ctrl+Z 只退半个动作）。
+    .use($prose(() => 覆写插件()))
     .use(history)
     .use(listener)
     .use(cursor)

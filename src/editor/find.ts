@@ -48,12 +48,21 @@ export interface FindOptions {
   wholeWord: boolean;
   /** 把查询当正则（⚠️ 写坏了不算错，只是查不到——见下面 `编译`）。 */
   regex: boolean;
+  /**
+   * **把 `*` 与 `?` 当通配符**（2026-10-16 加，朋友清单里的「功能:通配符支持」）。
+   *
+   * ⚠️ 与 {@link regex} **互斥**，而且 `regex` 优先：查的是正则的时候，
+   * `*` 与 `?` 在正则里本来就有意思（重复、可选），再把它们当通配符就会
+   * **两套规则打架**。界面上那两颗开关也据此互斥（点一颗关掉另一颗）。
+   */
+  wildcard: boolean;
 }
 
 export const 默认查找选项: FindOptions = {
   caseSensitive: false,
   wholeWord: false,
   regex: false,
+  wildcard: false,
 };
 
 /** 一段文本里的一个命中。`start`/`end` 是**这段文本**里的下标。 */
@@ -69,10 +78,32 @@ const 词字符 = /[\p{L}\p{N}_]/u;
 /** 正则里的元字符。非正则模式下要先转义掉，否则用户查 `1.` 会当成"1 加任意字符"。 */
 const 元字符 = /[.*+?^${}()|[\]\\]/g;
 
+/**
+ * **通配符写法 → 正则源**（`*` = 任意多个字符、`?` = 恰好一个字符）。
+ *
+ * ⚠️ 做法与"把查询当正则"正好相反：**先把用户写的每一个字符都转义掉**
+ * （这样 `.` `[` 这些就只是字面字符），**再**把 `\*` / `\?` 换回 `.` 那一套。
+ * 反过来的写法（先替换再转义）会把刚换进去的 `.*` 又转义掉，症状是
+ * "通配符开关打开之后什么都没变"——而这正是最容易写错的一步。
+ *
+ * ⚠️ `*` **不匹配换行**（`.` 在 JS 正则里默认就不匹配 `\n`）：查"通配符"
+ * 的人要的是"这一段里的东西"，让 `a*b` 跨段把两段连起来命中的话，替换起来
+ * 会吃掉段落分隔——那是另一件事（. 加 `s` 旗标）。这一条与"逐节点问"
+ * 那个设计（见文件头）也是同一个口径。
+ */
+function 通配符转正则(query: string): string {
+  return query
+    .replace(元字符, "\\$&")
+    .replace(/\\\*/g, ".*")
+    .replace(/\\\?/g, ".");
+}
+
 function 编译(query: string, opts: FindOptions): RegExp | null {
   let source: string;
   if (opts.regex) {
     source = query;
+  } else if (opts.wildcard) {
+    source = 通配符转正则(query);
   } else {
     source = query.replace(元字符, "\\$&");
   }

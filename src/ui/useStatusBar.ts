@@ -35,6 +35,7 @@
 import type { ComponentProps, Dispatch, SetStateAction } from "react";
 
 import type { Document, Settings, ViewMode } from "@/bridge/ipc";
+import type { CommandState } from "@/editor/command-state";
 import type { FocusState } from "@/bridge/types";
 import type { StatusMetric } from "@/bridge/types-settings";
 import { StatusBar } from "@/ui/StatusBar";
@@ -77,6 +78,19 @@ export function useStatusBar(接线: {
    * （与菜单那条、`Ctrl+,` 同一条路）。这一格只是把那个 setter 递下来。
    */
   打开设置页: () => void;
+  /**
+   * 光标那一份状态（`App.tsx` 的 `commandState`）。状态栏只吃它**一格**：
+   * `overtype`（覆写模式开着没有，画那个 `OVR`）。`null` = 读不出来
+   * （源码模式 / 还没打开文档）——那时不画。
+   */
+  光标: CommandState | null;
+  /**
+   * 顶上那一条画不画（`usingNativeMenu || !show_menu_bar`，与 `App.tsx` 给
+   * `TopBar` 的是**同一个布尔**）。⚠️ 这里**故意由调用方算好递进来**：
+   * 那是"外壳上那几条开关"的口径（`ui/useChromeVisibility.ts`），在这一层
+   * 再判一次就是同一个判断的第二份抄本。
+   */
+  插件栏: { 开: boolean; 切换: () => void } | null;
 }): 栏的props {
   const {
     settings,
@@ -89,10 +103,14 @@ export function useStatusBar(接线: {
     focus,
     设界面,
     打开设置页,
+    光标,
+    插件栏,
   } = 接线;
 
   return {
     doc,
+    光标,
+    插件栏,
     mode: viewMode,
     sidebarOpen,
     // 强制专注的余额。**没在跑时那一格不画**（见 `ui/FocusMeter.tsx`）。

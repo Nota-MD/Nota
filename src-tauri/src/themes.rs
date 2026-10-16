@@ -98,6 +98,47 @@ const BUILTIN: &[Builtin] = &[
         name: "LaTeX",
         css: include_str!("../../src/styles/themes/latex.css"),
     },
+    // ── 深色那三档（2026-10-16）──────────────────────────────────────────
+    //
+    // ⚠️⚠️ **它们是"浅色那份 ＋ 一层颜色补丁"拼出来的**，不是另写一份完整主题：
+    // 排版（字体、字号、行高、圆角、标题边距）只有一份，**颜色**是深色那份的
+    // 全部内容。`concat!` 是编译期拼字符串（两个 `include_str!` 都是常量），
+    // 所以运行时一个字节都不多花。
+    // ⚠️ 为什么这么做：**深色不是把浅色反色**——反色会把 `--border`、
+    // `--code-string` 那些中间色一起变成灰糊糊的一团。每个值都得照"深色纸面上
+    // 还看得清"重挑（三份补丁的文件头都写着这一条）。
+    //
+    // 用户朋友 2026-10-16 报的：「**功能:编辑器暗色/浅色跟随主题**」——他的截图里
+    // 深色界面配着一整张白纸。⚠️ 机制其实**早就有了**（`appearance.dark_theme_separate`
+    // ＋ `dark_document_theme`，外观页里能选），**缺的是"能选的东西"**：
+    // 三套内置主题全是浅色，于是那一格无论怎么选都还是白的。这三条补的就是它。
+    Builtin {
+        id: "minimal-dark",
+        name: "极简（深色）",
+        css: concat!(
+            include_str!("../../src/styles/themes/minimal.css"),
+            "\n",
+            include_str!("../../src/styles/themes/dark/minimal.css")
+        ),
+    },
+    Builtin {
+        id: "adwaita-dark",
+        name: "Adwaita（深色）",
+        css: concat!(
+            include_str!("../../src/styles/themes/adwaita.css"),
+            "\n",
+            include_str!("../../src/styles/themes/dark/adwaita.css")
+        ),
+    },
+    Builtin {
+        id: "latex-dark",
+        name: "LaTeX（深色）",
+        css: concat!(
+            include_str!("../../src/styles/themes/latex.css"),
+            "\n",
+            include_str!("../../src/styles/themes/dark/latex.css")
+        ),
+    },
 ];
 
 /// 菜单/设置里要列的一项。

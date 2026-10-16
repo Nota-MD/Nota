@@ -105,6 +105,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Document, ViewMode } from "@/bridge/ipc";
 import type { FocusState } from "@/bridge/types";
+import type { CommandState } from "@/editor/command-state";
 import type { StatusMetric } from "@/bridge/types-settings";
 import { useT } from "@/i18n";
 import { FocusMeter } from "@/ui/FocusMeter";
@@ -130,6 +131,8 @@ const 统计前缀 = "status.metric.";
 
 export function StatusBar({
   doc,
+  /** 光标那一份状态（`App.tsx` 的 `commandState`）。状态栏只用它一格：`overtype`。 */
+  光标,
   mode,
   sidebarOpen,
   readingSpeed,
@@ -140,11 +143,14 @@ export function StatusBar({
   拼写语言,
   onChangeSpell,
   onOpenSettings,
+  插件栏,
   onToggleSidebar,
   onToggleSource,
   onHide,
 }: {
   doc: Document | null;
+  /** 光标那一份状态（`null` = 读不出来：源码模式 / 还没打开文档）。⚠️ 见上面 `overtype`。 */
+  光标: CommandState | null;
   /** 当前**实际**编辑模式（`App.tsx` 的 `viewMode`：家在那条会话内 `useState`，这里已经过完降级）。**只用来点亮那颗 `</>`。** */
   mode: ViewMode;
   /** 侧栏此刻开着没有（`App.tsx` 的 `sidebarOpen`）。**决定左一是圆圈还是折角。** */
@@ -203,6 +209,16 @@ export function StatusBar({
   onChangeSpell: (补: { 开?: boolean; 语言?: string[] }) => void;
   /** 菜单底下那条「全局设置…」：打开设置窗并落在「编辑器」页。 */
   onOpenSettings: () => void;
+  /**
+   * **插件栏的开关**——`null` = 别画（顶栏在，那颗开关住在那儿）。
+   *
+   * ⚠️ 为什么状态栏也可能要画它（2026-10-16 用户：「隐藏菜单栏只能这样，
+   * 并不是真的隐藏」）：顶栏藏着时**整条不画**（`ui/TopBar.tsx`），那颗开关
+   * 会跟着消失 ⇒ 插件栏就再也打不开了。所以那一种情况下由状态栏补一颗。
+   * ⚠️ 判据**不在这一层**：调用方（`App.tsx`）给 `null` 就是"别画"，
+   * 这里不复判一遍（两处各判一次迟早会错开）。
+   */
+  插件栏: { 开: boolean; 切换: () => void } | null;
   /** 显示/隐藏侧栏。**与「视图」菜单、`Ctrl+Shift+L`、侧栏那颗 × 同一个 setter。** */
   onToggleSidebar: () => void;
   /** 切到源码模式／切回所见即所得。**在 App 那边落到 `设模式`**（会话内状态，不落盘）。 */
@@ -357,6 +373,24 @@ export function StatusBar({
           name={sidebarOpen ? "nota-sidebar-collapse-symbolic" : "nota-sidebar-toggle-symbolic"}
         />
       </button>
+      {/* ⚠️ **插件栏那颗开关搬进来的一格**（2026-10-16）。它平时住在顶栏最右
+          （`ui/TopBar.tsx`），而顶栏在"菜单栏藏起来"时**整条不画**——那时
+          插件栏就没有第二入口了。所以：**只在顶栏藏着的时候**在这儿补一颗，
+          平时不画（同一个开关两个入口并排出现，用户会以为它们是两件事）。
+          ⚠️ 看房顶那颗 `hasDockToggle` 在 `App.tsx` 里怎么算的：`!菜单栏开着`
+          ——它是"顶上那条画不画"的**同一个判据**，不是另算一遍。 */}
+      {插件栏 && (
+        <button
+          type="button"
+          className="status-btn"
+          onClick={插件栏.切换}
+          title={t("Show the extension dock")}
+          aria-label={t("Show the extension dock")}
+          aria-pressed={插件栏.开}
+        >
+          <Icon name="folio-columns-symbolic" />
+        </button>
+      )}
       <button
         type="button"
         className="status-btn"
@@ -394,6 +428,19 @@ export function StatusBar({
             >
               <Icon name="nota-spellcheck-symbolic" />
             </button>
+            {/* ⚠️ **覆写模式的小标**（2026-10-16，朋友那条「INSERT 键无法使用」）：
+                它只在开着时出现，而且**不跟着 `.status-aux` 悬停才显形**
+                ——"我此刻在覆写"是**当前状态**，不是悬停才有的操作入口
+                （同右端那颗 × 的理由）。⚠️ 三个字母 `OVR` 是**符号**，与
+                `Aa` / `.*` 一样不翻（两种语言下都这么写）。 */}
+            {光标?.overtype && (
+              <span
+                className="status-ovr"
+                title={t("Overtype: typing replaces the character to the right")}
+              >
+                OVR
+              </span>
+            )}
             <span className="status-count" title={详细}>
               {四个[metric]}
             </span>

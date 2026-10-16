@@ -88,10 +88,38 @@ export function 深色专用在生效(settings: Settings | null, 明暗: "light"
   return !!a && a.dark_theme_separate && a.dark_document_theme !== "" && 明暗 === "dark";
 }
 
-/** 此刻**生效**的文档主题 id。与 `深色专用在生效` 是同一套判据的正面。 */
+/**
+ * 「跟随界面明暗」时，把哪一套换成哪一套（2026-10-16）。
+ *
+ * ⚠️ 只有**内置的三套**有配对的深色档（`极简 ↔ 极简（深色）`…），所以这张表
+ * 是一张**写死的对照**，不是"给 id 加个后缀"。⚠️ 别改成"拼 `-dark` 后缀"那种
+ * 写法：用户自己的主题文件叫什么都可能，拼出来的 id **加载不到**就等于
+ * "选了个主题反而没主题了"（`读主题CSS` 拿不到 → 空样式）。
+ */
+const 深色配对: Record<string, string> = {
+  minimal: "minimal-dark",
+  adwaita: "adwaita-dark",
+  latex: "latex-dark",
+};
+
+/**
+ * 此刻**生效**的文档主题 id。与 `深色专用在生效` 是同一套判据的正面。
+ *
+ * ⚠️ **2026-10-16 多了一条"跟随"**（用户朋友报的「功能:编辑器暗色/浅色跟随主题」，
+ * 他的截图是深色界面配一整张白纸）：**深色下**、用户又**没**单独指定深色那一套
+ * 时，如果当前这套内置主题有配对的深色档，就用深色那份。
+ *
+ * ⚠️ **它只在"内置的、有深色档的"那三套上生效**（见 `深色配对`）：
+ * 用户自己的主题、以及本来就没有深色档的那些，一个字都不动——猜错的表现是
+ * "我选的主题不见了"，比"深色下纸是白的"严重得多。
+ * ⚠️ 显式指定（`dark_theme_separate`）**永远优先**：用户明确说过的事，不许被
+ * 这条自动规则盖掉。
+ */
 export function 生效的文档主题(settings: Settings | null, 明暗: "light" | "dark"): string {
   if (深色专用在生效(settings, 明暗)) return settings?.appearance.dark_document_theme ?? "";
-  return settings?.document_theme ?? "";
+  const id = settings?.document_theme ?? "";
+  if (明暗 === "dark") return 深色配对[id] ?? id;
+  return id;
 }
 
 export interface 主题接线 {

@@ -250,6 +250,10 @@ PAIRS=(
   "src/editor/code-block-cm.ts                    05,07,02"
   "tests/code-block-editing.test.ts               02,06"
   "src/editor/heading-on-enter.ts                 05,04,02"
+  # 2026-10-16（用户朋友清单第 12 条「INSERT 键无法使用」）：新文件。
+  # ⚠️ 它和 `command-state.ts` 是一对——开关住在插件 state 里、状态栏那个
+  # `OVR` 靠**签名串**发现它变了，所以改这个文件要连着 `05` 与 `04` 一起看。
+  "src/editor/overtype.ts                        05,04"
   "src/editor/table-input.ts                      05,04,10"
   # 2026-09-27：行首那颗多余的反斜杠（`\| 1 | 2 |`）。⚠️ 它**不改表格那条路**——只动"物理上只能占一行"的普通段落。
   "src/editor/table-pipe.ts                      05,07"
@@ -510,6 +514,12 @@ PAIRS=(
   "src/styles/themes/minimal.css                 04"
   "src/styles/themes/adwaita.css                 04"
   "src/styles/themes/latex.css                   04"
+  # ⚠️ 2026-10-16 加的**三份深色补丁**（用户朋友清单第 11 条「编辑器暗色/浅色
+  # 跟随主题」）：它们不是另写一份排版，`themes.rs` 把同名浅色那份 `concat!`
+  # 进去、这三份只盖颜色——所以文档跟着内置主题那三条走（`04`）。
+  "src/styles/themes/dark/minimal.css            04"
+  "src/styles/themes/dark/adwaita.css            04"
+  "src/styles/themes/dark/latex.css              04"
   "src/styles/diagram.css                        04,05"
   "src/styles/math.css                          04,05"
   "src/editor/video-view.ts                       05,04,10"

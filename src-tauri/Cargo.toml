@@ -145,3 +145,26 @@ version = "3"
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", features = ["v3_24"] }
 webkit2gtk = "2.0"
+
+# ── 只有 Windows 用到：**让"打印"真的去打印**（2026-10-16）────────────────────
+#
+# 用户朋友报的：「**「打印」功能绑定浏览器而非使用默认打开方式**」。
+# 我们那条路本来就是"写成 HTML 交给系统默认程序"（`commands/export.rs`
+# `nota_export_print`）——而 Windows 上 `.html` 的默认程序就是浏览器，于是
+# 屏幕上多出一个标签页、还得自己按 `Ctrl+P`。
+#
+# ShellExecuteW 的 **`print` 动词**才是"打印"这个动作本身：系统会找注册了
+# 打印动词的那个程序（浏览器都注册）并**直接把它的打印对话框叫出来**。
+# ⚠️ 它**没有跨平台等价物**（Linux 的 xdg-open 没有 print 动词），所以这一块
+# 挂在 `cfg(windows)` 下，别的平台照旧走"交给默认程序"那条路。
+#
+# ⚠️ `windows-sys` 本来就**在依赖树里**（tauri 拖进来的）——和 `sha2` / `gtk`
+# 那两条注释同一个理由：借别人的传递依赖用是要不得的，所以这里提成直接依赖，
+# 而且**只开这三个 feature**（基础类型 ＋ 外壳 ＋ 窗口消息框），不要把整个
+# Win32 表面开进来。
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }

@@ -90,6 +90,9 @@ const 名字表 = [
   "nota-quote-symbolic",
   "nota-task-symbolic",
   // 各处"收起/关闭"的 ×（侧边栏、插件栏、标签页、查找条、提示气泡）
+  // ⚠️ 2026-10-16 新用的一枚：状态栏里那颗"插件栏"开关（顶栏藏着时才出现，
+  // 见 `ui/StatusBar.tsx`）。两栏并列的那个形状正对"右边那一栏"。
+  "folio-columns-symbolic",
   "folio-close-symbolic",
   // 侧边栏空态里那颗「打开文件夹…」
   "folio-document-open-symbolic",

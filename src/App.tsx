@@ -11,8 +11,7 @@
  * 搬走的清单与各自的日期见 `docs/09` §2。判据是**和外壳骨架无关**：那块东西
  * 自己有一份完整的理由可写，留在本文件里只会把上面那三件事淹掉。
  *
- * ⚠️ 搬完要**重数**行数：头两次搬完它反而还在 916 行——同一批里又往里加了
- * 格式工具栏与查找条的接线，搬走的和加进来的正好抵掉。数出来的才算数。
+ * ⚠️ 搬完要**重数**行数：搬走的和加进来的会抵掉，数出来的才算数。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -753,6 +752,9 @@ export default function App() {
     // 不在 `useStatusBar` 里另写一份 `appearance` 的整表铺开。
     设界面: setChrome,
     打开设置页: () => setSettingsOpen(true),
+    光标: commandState,
+    // ⚠️ 顶栏整条不画时（见 `TopBar`），插件栏那颗开关落到状态栏——`null` = 顶栏在。
+    插件栏: usingNativeMenu || !menuBarOpen ? { 开: dockOpen, 切换: () => setDockOpen((v) => !v) } : null,
   });
 
   // 窗口标题跟着**当前文档**走（第 51 项）：任务栏里几份文档要分得出来，
@@ -977,10 +979,8 @@ export default function App() {
         )}
 
         {/* 浮层那一族（pandoc 面板 ＋ 四个对话框 ＋ 专注总结）。⚠️ 整块 2026-09-27
-            搬去了 `ui/AppDialogs.tsx`——本文件当时 1024 行，顶破了 1000 行硬线。
-            ⚠️ 那里收的是**一个 `对话框` 对象**（不是十来个函数），理由见那份文件头。
-            ⚠️ `专注总结` 走的是**另一条路**（`useFocusTrace` 给的，不是 `askXxx`）：
-            它不问任何事，是一份看完就关的报告，理由在 `ui/FocusSummaryDialog.tsx`。 */}
+            搬去了 `ui/AppDialogs.tsx`（当时本文件 1024 行，顶破硬线）；那里收的是
+            **一个 `对话框` 对象**不是一打函数，`专注总结` 也走另一条路（非 `askXxx`）。 */}
         <AppDialogs
           对话框={对话框}
           pandocGate={pandocGate}

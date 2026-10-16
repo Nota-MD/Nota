@@ -32,6 +32,8 @@ import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorState } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 
+import { 覆写开着 } from "./overtype";
+
 /**
  * 光标所在块属于哪一族。**同一时刻只有一个**——工具栏那一排块级按钮
  * （标题 / 引用 / 列表 / 代码块）是互斥的，用 `BlockKind` 一个字段就能表达，
@@ -73,6 +75,15 @@ export interface CommandState {
   /** 所在块。见 `BlockKind`。 */
   block: BlockKind;
   /**
+   * **覆写模式开着没有**（`Insert` 键，2026-10-16）。
+   *
+   * ⚠️ 它**不在文档里**（那是插件的 state，见 `editor/overtype.ts`），但它是
+   * "光标那一位的状态"，与这一份里别的格子同源：状态栏据此画那个 `OVR` 小标。
+   * ⚠️ 不加它的话，用户**没有任何办法知道覆写开着**——症状是"我敲一个字，
+   * 屏幕上少一个字"，而他会以为是自己打错了。
+   */
+  overtype: boolean;
+  /**
    * 光标在表格里。
    *
    * ⚠️ 表格那十条命令（插行/插列/删行/删列/删表/对齐）**只有这一条判据**：
@@ -98,6 +109,7 @@ export interface CommandState {
 
 /** 什么都没有的初始值。编辑器还没建好时用它。 */
 export const 空状态: CommandState = {
+  overtype: false,
   bold: false,
   italic: false,
   strike: false,
@@ -184,6 +196,7 @@ export function 读状态(state: EditorState): CommandState {
   });
 
   return {
+    overtype: 覆写开着(state),
     bold: 有("strong"),
     italic: 有("emphasis"),
     strike: 有("strike_through"),
@@ -206,7 +219,11 @@ export function 读状态(state: EditorState): CommandState {
  * "某一项的高亮永远不更新"——因为签名没变，通知就没发出去。
  */
 function 签名(s: CommandState): string {
-  return `${s.bold ? 1 : 0}${s.italic ? 1 : 0}${s.strike ? 1 : 0}${s.inlineCode ? 1 : 0}` +
+  // ⚠️ `overtype` 也在签名里（2026-10-16）：它是**唯一**一格"与文档无关、
+  // 却要驱动界面"的字段（`Insert` 只翻插件的 meta，不改文档）。漏掉它的症状
+  // 很典型：状态栏那个 `OVR` **永远不出现**——因为签名没变，通知就没发出去
+  // （这正是上面那条"加字段时两边一起加"的告诫说的那种情况）。
+  return `${s.overtype ? 1 : 0}${s.bold ? 1 : 0}${s.italic ? 1 : 0}${s.strike ? 1 : 0}${s.inlineCode ? 1 : 0}` +
     `${s.highlight ? 1 : 0}${s.superscript ? 1 : 0}${s.subscript ? 1 : 0}${s.underline ? 1 : 0}` +
     `|${s.block}|${s.inTable ? 1 : 0}${s.hasSelection ? 1 : 0}${s.hasHeadings ? 1 : 0}`;
 }

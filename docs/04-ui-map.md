@@ -152,7 +152,9 @@ ErrorBoundary                       (ui/ErrorBoundary.tsx)  兜住渲染期崩�
    │     │     ├─ span.find-count     「N / M」或「无结果」（空查询时不画）。⚠️ **2026-10-07（第 95 项）**：正则写坏了的时候
    │     │     │                      这一格改成 **`Invalid regex`**（`.find-count[data-bad]`），输入框同时带 `data-bad`/`aria-invalid`
    │     │     │                      ——**当场认出来**，不再等 `new RegExp` 抛（那个异常此前被 `try` 吞掉、屏幕上什么都不说）
-   │     │     ├─ button.find-toggle  「Aa」「全词」「.*」，data-on 表示按下
+   │     │     ├─ button.find-toggle  「Aa」「全词」「.*」**「✻」**，data-on 表示按下
+   │     │     │                      ⚠️ 「✻」是**通配符**（2026-10-16 加，朋友清单第 9 条）：`*`
+   │     │     │                      配任意多、`?` 配恰好一个；它与「.*」（正则）**互斥**
    │     │     ├─ button.find-btn     「↑」「↓」「✕」
    │     │     └─ button.find-btn-wide 「替换」「全部替换」
    │     │
@@ -937,7 +939,7 @@ ProseMirror 把它渲染成一个真的 `<span>`，所以 `ContextMenu.tsx` 那�
 | 代码块里的**文字本身**（2026-10-06 第 101 项新增的一行） | 不是控件，是**两层并排的 DOM**：`<code class="nota-code-text">`（隐藏，ProseMirror 的 contentDOM）＋ `.cm-editor`（可见，CodeMirror）。**用户看到、点到的都是 CM 那一层** | `code-block.ts` 建出来的 NodeView 里；CSS 在 `styles/code-block.css` 的 `.nota-code-text`（零尺寸、`pointer-events: none`）＋ `code-block-cm.ts` 的 `EditorView.theme`（内边距归零、光标/选区用 `--accent` / `--bg-active`） | 🟡 **代码在、判据（`tests/code-block-editing.test.ts` 21 条）在，但手感那半（配对、回车续行、`Tab`、`Ctrl+Z`）**没开窗点过**——见 `docs/10` 那一格与 `docs/07` 第 101 项。⚠️ 两层文本的存在**不是冗余**：存盘/撤销/查找读的是隐藏那层，见 `docs/05` §4.24 |
 | 图表块（` ```mermaid `）的挂件 | 右上角一颗「预览 / 编辑源码」开关；空块是一张「这里还没有图表源码」＋同一颗按钮；出错是一张说明卡（中文说清是语法错、附 mermaid 原文报错）＋同一颗按钮 | `editor/diagram-view.ts` 的 NodeView：平时**看图**、点一下才在图上边展开源码框（改完 **250ms** 防抖写回 `attrs.value`，失焦/`Esc` 立即落）——`diagram` 是 `atom`、没有 contentDOM，所以只能自己摆控件。⚠️ **渲染失败绝不回写文档**（出错只画卡）。⚠️ **点图本身不算点挂件**：那一下该让 ProseMirror 把整块选中（才能删/复制）——`是我的挂件` 的判据不含预览区（`docs/07` BUG-37 的对照写的就是这条） | ✅（2026-09-26 开窗拍过：图、错误卡、空块三种画面；小图撑满整栏的那条当天修掉）。⚠️ **2026-10-04（第 27 项）**：节点与转化是本仓 `editor/diagram-node.ts`（上游包退役）、mermaid 改**动态加载**——那之后**没再开过窗**（构建产物为证） |
 | 装载后的认领 | 无文案 | `EditorPane` 在 `focus()` 之后调一次 `api.doc.settle(id, text)` | ✅ 修 BUG-12 的那一步，见 `docs/03` §4.2 |
-| 查找高亮 | 无文案（命中底色 `--find-hit` / 当前命中 `--find-current`） | `editor/find.ts`（所见即所得）与 `source.ts`（源码）的**装饰**，两种模式都有；命令来自上方的 `FindBar` | ✅（2026-09-24），见 `docs/05` §4.3。⚠️ **底色画在哪一颗字上**现有判据（2026-10-06，`tests/find.test.ts` **42 条**：`doc.textBetween(命中)` 必须等于查询串——BUG-67 那个"向后位移一位"就是这条抓的）；**屏幕上真有没有颜色**仍是开窗目检 |
+| 查找高亮 | 无文案（命中底色 `--find-hit` / 当前命中 `--find-current`） | `editor/find.ts`（所见即所得）与 `source.ts`（源码）的**装饰**，两种模式都有；命令来自上方的 `FindBar` | ✅（2026-09-24），见 `docs/05` §4.3。⚠️ **底色画在哪一颗字上**现有判据（2026-10-06，`tests/find.test.ts` **53 条**：`doc.textBetween(命中)` 必须等于查询串——BUG-67 那个"向后位移一位"就是这条抓的）；**屏幕上真有没有颜色**仍是开窗目检 |
 | 压暗兄弟块 | 无文案（`opacity: var(--focus-dim)`，标准档 `0.32`） | 专注模式，`editor/writing-modes.ts` 的**装饰**；不改文档、不进撤销栈。⚠️ 这只是专注模式的**一半**——另一半是把外壳收起来，见 §2.10。📌 **2026-10-04（第 45 项）那个数改成可配的三档**（`appearance.focus_mode_dim`，`ui/useFocusDim.ts` 写 `<html data-focus-dim>`，两条压暗选择器——所见即所得的 `.nota-dim` 与源码模式的 `.cm-editor.nota-focus …`——**共读同一个变量**，各写一个数的症状是"拨了开关只有一半跟着变"） | ✅（2026-09-24），见 `docs/05` §4.4 |
 | 当前行标记 | 无文案（源码模式下其余行压暗） | 打字机模式的 `Decoration.line`（源码那边只有**一颗**装饰） | ✅（2026-09-24） |
 | 空态（`Home`） | 「新建文档」+「Ctrl+N」 | `onNew` → `newDoc()` | ✅ |
@@ -1105,6 +1107,8 @@ ProseMirror 把它渲染成一个真的 `<span>`，所以 `ContextMenu.tsx` 那�
 | 右·最右（**悬停才出现**） | 无字，一枚上下双箭头（`nota-unfold-more-symbolic`） | 点它 → 弹出「字数统计」菜单：`≤1 分钟` / `1 行` / `0 词` / `0 字符`（**四项各带此刻的数值**，选中的那项打勾）→ 挑一项 → `updateSettings({ appearance: { status_metric } })` | ✅ **2026-09-30 晚加**（图4、图5）。⚠️ 排在那一个数**右边**，与拼写那颗分列两侧。⚠️ 菜单是**往上弹**的（这一栏贴着窗口底边），锚是零高度的 `.status-menu-anchor`——与标签栏右键那个锚同一套做法，只有"往上"这一处不同，理由在 `styles/tabs-status.css` |
 | 右·最左（**悬停才出现**） | 无字，一枚 `A✓`（`nota-spellcheck-symbolic`） | 点它 → 弹出拼写菜单（`自动检测语言`（配了语言时改写成 `Languages: …`）/ `不使用拼写检查`，两项互斥）→ `updateSettings({ editor: { spellcheck } })` | ✅ **2026-09-30 晚加**（图2、图3）。⚠️ 它是**设置页那个开关的第二个入口**，两处读写的是同一格 `editor.spellcheck`，值一变 `ui/useSpellcheck.ts` 那条 effect 就把它拨到 WebKitGTK 上。⚠️ **设置没读回来时两项都灰**（不拿一个假设值去拨引擎）。⚠️ **这个小菜单里不放语言列表**（十几项塞不进这条小菜单），语言在设置页——但第一项的**措辞**会说出当下挂着的那几门。 |
 | 右·第一格 | 「强制专注」＋ 余额进度条，悬停提示三档 | `FocusState`（`nota:focus-state`，每秒一发） | ✅ 2026-09-26 加，**2026-09-30 之后它是条上唯一"不是统计"的东西**——用户点名「其余全删。**除了强制专注余额在需要时显示**」。⚠️ 仍然**没在跑就整个不画、不占位**；⚠️ **它排在统计那一格左边**（下栏从右往左是"数 / 专注"——"需要时才出现"的东西不该把恒显的那个数挤来挤去）。条宽按比例算并夹到 `[0,1]`，见 §2.11 |
+| `OVR` 小标（**覆写模式开着时才出现**） | 三个字母 `OVR`（`.status-ovr`），无按钮、不可点 | `commandState.overtype`（`ui/useStatusBar.ts` 把 `光标` 那一格透传进来） | ✅ **2026-10-16 加**（朋友清单第 12 条「INSERT 键无法使用」）：按 `Insert` 切覆写，开着时敲一个字会**顶掉右边那一个**（`editor/overtype.ts`）。⚠️ 状态栏这一格是"现在是不是覆写"的**唯一**可见处（那颗键没有菜单项）。⚠️ 开关住在插件 state 里、**不改文档**，所以它靠 `command-state.ts::签名` 被发现——`docs/09` §2.2 记着那一格漏掉的症状（开着但永不出示） |
+| 「拓展」那颗开关（**只在顶栏整条不画时才出现**） | 一枚 `folio-columns-symbolic` ＋ 悬停提示「显示 / 隐藏拓展栏」 | `插件栏`（`useStatusBar` 接第二入口）：`开: dockOpen` / `切换: setDockOpen(v => !v)` | ✅ **2026-10-16 加**：它原来只长在**顶栏最右**，而顶栏在 `hideMenuBar` 时**整条 `return null`**（§2.1）——不搬过来就等于"菜单栏一藏、拓展栏再也没法开"。⚠️ **三个入口同一个状态**（「视图 → 拓展栏」＋ 顶栏那颗 ＋ 这一颗）。⚠️ 判据是 `usingNativeMenu || !menuBarOpen`，与 `TopBar` 里那个布尔**逐字同一个**（见 `src/App.tsx` 那两行注释） |
 | **右·最右端那颗「×」**（2026-10-04，第 49 项） | 无字，一枚 `folio-close-symbolic`。`title` / `aria-label` 都是「收起状态栏」 | 点它 → `useStatusBar` 的 `onHide` → `设界面({ show_status_bar: false })`，而 `设界面` 就是 `App.tsx` 那个 `setChrome` ——**与菜单「视图 → 状态栏」写的是同一格** | ✅ **2026-10-04 加**（`docs/07` 第 49 项的口径：「每个可关的面板都有一颗就地的 ×，三条入口汇到同一个 setter」）。⚠️ **只关不开**（菜单那条才是切换）：那颗 × 不在屏幕上时若写 `!`，点它会**把栏打开**。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`）：关掉这一栏是这一栏的正事。⚠️ **排在 `.status-right` 里面**（不是 `footer` 的第三个孩子），否则 `space-between` 会把字数那一格挤到中间。⚠️ **再打开只有菜单那条路**（这一栏没有"回来"的入口——不像菜单栏另配了 `Alt+M`，状态栏藏了不影响任何别的入口） |
 | 无文档时 | **照画那两枚开关 ＋ 右端那颗 ×**，右边只留专注那一格 | — | ⚠️ **不能再写「就绪」两个字**：那句话连同"左半格显示路径 / 未保存"整片删了（见下）。⚠️ **BUG-45 的教训仍然有效**：没文档时 **两枚开关 ＋ 专注余额都要画**，只把统计那一格省掉。⚠️ **2026-09-30 晚新增的三样（那一个数 ＋ 悬停才出现的两颗）一起省掉**——它们说的都是"**这份文档**有多少内容"，没有正文时没有一个可拨的对象。⚠️ 别顺手把拼写那颗留下：`editor.spellcheck` 本身是全局的，但在没文档的地方拨它没有任何可观察的结果，留在那儿只会让人以为它坏了。⚠️ **那颗 × 不省**：它说的是"这一栏画不画"，与有没有文档无关（同那两枚开关） |
 
@@ -1860,7 +1864,7 @@ grep -rn "docs/04" src/ src-tauri/src/ \
 | `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru` | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**（改了就认不出老设置文件，用户会被静默打回默认档） |
 | `data-ui-mode` | `auto` / `light` / `dark` | `auto` 由 `matchMedia("(prefers-color-scheme: dark)")` 解析 |
 | `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 14 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
-| `document_theme`（设置项） | 内置三套的 id（`minimal` / `adwaita` / `latex`）＋ 用户目录里的文件名 | **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套" |
+| `document_theme`（设置项） | 内置**六套**的 id（浅色 `minimal` / `adwaita` / `latex` ＋ 深色 `minimal-dark` / `adwaita-dark` / `latex-dark`）＋ 用户目录里的文件名 | **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套"。⚠️ **2026-10-16 加回三档深色**（朋友清单第 11 条「编辑器暗色/浅色跟随主题」）：`useDocTheme.ts` 多一张 `深色配对` 表——**界面是深色且用户没单独指定 `dark_document_theme` 时**，`minimal`/`adwaita`/`latex` 自动换成自己的深色档（只对这三套内置生效，用户主题不动）。⚠️ 深色那三份是**颜色补丁**（`themes.rs` 把同名浅色 `concat!` 在前面），排版只有一份 |
 
 前两条轴的写入动作在 `applyTheme(settings)`（`src/styles/applyTheme.ts`），由
 `ui/useAppearance.ts` 里那条 `useEffect(() => { if (settings) applyTheme(settings); }, [settings])`
@@ -2607,7 +2611,7 @@ node -e 'const fs=require("fs");const re=/id:\s*"([^"]+)"((?:(?!id:)[\s\S])*?)ac
 | `Ctrl+Shift+S` | `file.saveAs` | **强制**弹「保存为」 |
 | `Ctrl+W` | `file.close` | 关闭（走未保存确认） |
 | `Ctrl+,` | `file.preferences` | 打开偏好设置 |
-| `Alt+Shift+P` | `file.print` | **打印**（2026-09-24 加）。⚠️ 它是"导出含样式的那份 HTML + 交给系统默认程序"，提示里会同时说清两步 |
+| `Ctrl+P` | `file.print` | **打印**（2026-09-24 加；**2026-10-16 起默认键位是 `Ctrl+P`**，用户点名「打印默认快捷键是 Ctrl+P」）。⚠️ 它是"导出含样式的那份 HTML + 交给系统默认程序"，提示里会同时说清两步。⚠️ **它原来是 `Alt+Shift+P`**：`Ctrl+P` 早被「快速打开」占着，而打印这条**更通用**（`Ctrl+P` 是通用约定），所以 2026-10-16 让打印拿 `Ctrl+P`、「快速打开」挪去 `Ctrl+Shift+P`（见下面那一行）。⚠️ Windows 上这一条现在会把**系统自己的打印对话框**叫出来（`ShellExecuteW(…, "print", …)`），Linux/macOS 仍走默认程序，见 `docs/09` §2.1 那格 |
 | `Ctrl+Z` / `Ctrl+Y` | `edit.undo` / `edit.redo` | 撤销 / 重做。⚠️ 两种模式各走各的历史（§4.2 末条） |
 | `Ctrl+Shift+C` | `edit.copyAsMarkdown` | 复制为 Markdown。⚠️ 快捷键在**子菜单**里：`edit.copy` 那一项飞出来的子菜单 |
 | `Ctrl+Shift+V` | `edit.pastePlain` | **粘贴为纯文本**（2026-10-07 加）。⚠️ 与 `edit.paste` 走**同一条路**（本应用的粘贴本来就只进纯文本，Milkdown 没有 `clipboardParser`），留这一条是因为那颗键是肌肉记忆。⚠️ WebKitGTK 上 `navigator.clipboard.readText()` 被权限拦着 → 弹「请按 Ctrl+V」（**环境如此，不是这一条没做**） |
@@ -2653,7 +2657,9 @@ node -e 'const fs=require("fs");const re=/id:\s*"([^"]+)"((?:(?!id:)[\s\S])*?)ac
 ### 4.2 写着但按不动的
 
 **3 条**（同样是算出来的，**2026-10-07 重跑**）：`file.newWindow` `Ctrl+Shift+N`、
-`file.quickOpen` `Ctrl+P`、`view.search` `Ctrl+Shift+F`。
+`file.quickOpen` `Ctrl+Shift+P`、`view.search` `Ctrl+Shift+F`。
+⚠️ 那一行的键位 **2026-10-16 从 `Ctrl+P` 改成 `Ctrl+Shift+P`**（让给打印），
+这一组"写着但按不动"的结论没变——让位之后它照旧没有处理函数。
 📌 **2026-10-07：5 → 3**——`edit.moveLineUp/Down`（`Alt+↑/↓`）**接上了**，搬去了 §4.1
 （`editor/move-block.ts`；它们此前在这份名单里待了很久，是"菜单里写着键位、按下去没反应"
 那一族里最典型的两条）。

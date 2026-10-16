@@ -567,6 +567,39 @@ export const 界面表: Record<string, string> = {
   "⚠️ This extension was changed, so the signature no longer matches and the package carries none — others can still install it, but they will see “unsigned”.": "⚠️ 这个拓展被改过，签名对不上，所以包里没有签名——别人装得上，但会看到「未签名」。",
   "This extension was never signed.": "这个拓展本来就没有签名。",
 
+  // 2026-10-16 补账：`tools/i18n-check.sh` 那天报的 29 条欠账里，**中文与英文
+  // 写法不一样**的都收在这里（`Markdown` / `PDF…` / `{0}%` 这种两边一模一样的
+  // 照本文件头的规矩不抄）。三条一组，按来源分块写。
+  //
+  // ① 查找条（`ui/FindBar.tsx`）——通配符那颗按钮与替换开关那两句话。
+  "Wildcards: * for any run of characters, ? for exactly one": "通配符：* 代表任意多个字符，? 代表恰好一个字符",
+  "Show Replace": "显示替换",
+  "Show Replace (Ctrl+H)": "显示替换（Ctrl+H）",
+  "Hide Replace": "收起替换",
+  "Not used while Regular Expression is on — \\b does the same job": "正则表达式开启时不生效——\\b 起同样作用",
+  "Find…": "查找…",
+
+  // ② 功能提示（`ui/hints.ts`）——「新手友好」那一套里还没翻的八条。
+  "Hold Ctrl and click to open the link.": "按住 Ctrl 单击可打开链接。",
+  "To leave a code block, press Enter twice or click somewhere else.": "要离开代码块，连按两次 Enter 或点别处。",
+  "Tab moves to the next cell — on the last row it adds a new one.": "Tab 移到下一个单元格——最后一行会新增一行。",
+  "Shift+Tab goes back to the previous cell.": "Shift+Tab 回到上一个单元格。",
+  "Type / at the start of an empty line to insert tables, math, emoji and more.": "在空行行首输入 / 可插入表格、公式、表情等。",
+  "Press Enter to turn this into a heading.": "按 Enter 把它变成标题。",
+  "Switching files saved this one automatically. You can turn auto save off in Settings.": "切换文件时已自动保存这一份。自动保存可以在设置里关掉。",
+  "Ctrl+F finds text, Ctrl+H also replaces it.": "Ctrl+F 查找，Ctrl+H 还能替换。",
+  "PDF is produced by your system's Pandoc — Nota does not bundle one.": "PDF 由你系统上的 Pandoc 生成——Nota 不随包分发。",
+
+  // ③ 状态栏与拓展栏（`ui/StatusBar.tsx` / `ui/DockResizer.tsx`）。
+  "Overtype: typing replaces the character to the right": "覆写模式：输入会覆盖右边的字符",
+  "Resize the extension dock": "拖动调整拓展栏宽度",
+
+  // ④ 鸣谢里那两条（`ui/credits.ts`）。
+  "Spell checking engine": "拼写检查引擎",
+  "Reading the clipboard": "正在读取剪切板",
+  "Could not open the link: {0}": "无法打开链接：{0}",
+  "GPL-2.0-or-later (external program — Nota does not bundle it)": "GPL-2.0-or-later（外部程序——Nota 不随包分发）",
+
   // 2026-09-28 补：**插入表格的模板**（源码模式下「插入表格」插出来的那四行）。
   // ⚠️ 它落在**文档里**，不是界面上的字——但一样该跟着语言走：英语用户插出来的
   // 表，表头该是英语。`$0` 是光标占位符（`editor/source.ts` 的 `insertBlock`）。

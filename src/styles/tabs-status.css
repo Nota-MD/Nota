@@ -183,6 +183,24 @@
 /* 那一格词数。⚠️ `cursor: default` 是**故意**的：里面的信息全在那个
    `title` 提示里，而 `title` 只在指针**停住**时才弹——画成文本光标（I 形）
    会让它看着像可以选中复制的正文。 */
+/**
+ * **覆写模式的小标 `OVR`**（2026-10-16，朋友那条「INSERT 键无法使用」）。
+ *
+ * ⚠️ 它**不跟** `.status-aux` 那一族（悬停才出现）：覆写开着是**当前状态**，
+ * 不是"悬停才有的入口"——用户得随时看得见它，否则症状是"我敲一个字、
+ * 屏幕上少一个字"（同右端那颗 × 的理由）。
+ * ⚠️ 长相与那一个数同一档（`--fg-faint`、等宽、不发光）：它是**提示**不是按钮
+ * （点不动，也没有 title 以外的交互）。
+ */
+.status-ovr {
+  margin-right: 6px;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
+
 .status-count {
   cursor: default;
 }

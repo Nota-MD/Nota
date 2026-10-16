@@ -82,6 +82,12 @@ export function FindBar({
     // 引擎照旧静默，但界面会当场把红边和原因亮出来（见 `find.ts::正则写坏了`）。
     // 气泡是给用户看的，得说界面上会发生什么。
     { key: "regex", label: ".*", title: t("Regular Expression (a broken pattern is flagged right away)") },
+    // ⚠️ **通配符那一颗**（2026-10-16，朋友清单里的「功能:通配符支持」）：
+    // `*` 配任意多个字符、`?` 配恰好一个（`docs/01`… 不对，判据在
+    // `find.ts::通配符转正则`）。⚠️ 它**与 `.*` 互斥**（见下面 `报告` 里那次
+    // 归一化）：两边都开着的话，`*` 同时是"通配符"和"正则里的重复"，
+    // 用户看到的命中会是他自己都推不出来的那种。
+    { key: "wildcard", label: "\u2731", title: t("Wildcards: * for any run of characters, ? for exactly one") },
   ];
   const [query, setQuery] = useState("");
   const [替换成, set替换成] = useState("");
@@ -118,6 +124,11 @@ export function FindBar({
     上报.current(query, {
       ...options,
       wholeWord: options.regex ? false : options.wholeWord,
+      // ⚠️ 两颗"写法"开关**互斥**（2026-10-16）：正则开着时通配符不参与，
+      // 反过来也一样。与上面 `wholeWord` 同一条口径——**只在这一次上报上归一化**，
+      // `options` 本身不动（关掉一颗之后另一颗要原样回来）。
+      wildcard: options.regex ? false : options.wildcard,
+      regex: options.wildcard ? false : options.regex,
     });
   }, [query, options]);
 
@@ -210,7 +221,14 @@ export function FindBar({
           //   被上报上去，界面上"关着"、行为上"开着"，那就是撒谎）。
           //   所以下面那个 `onClick` 与上报那一趟都用 `算得出` 归一化过。
           (() => {
-            const 失灵 = s.key === "wholeWord" && options.regex;
+            // ⚠️ **两处"失灵"**（2026-10-16）：
+            // · `wholeWord` 在正则开着时灰（正则自己就有 `\b`）；
+            // · `wildcard` 与 `regex` **互为**对方的灰——两颗都是"怎么写这个查询"，
+            //   同时开着的话 `*` 有歧义（通配符 vs 原子的重复）。
+            const 失灵 =
+              (s.key === "wholeWord" && options.regex) ||
+              (s.key === "wildcard" && options.regex) ||
+              (s.key === "regex" && options.wildcard);
             return (
           <button
             key={s.key}

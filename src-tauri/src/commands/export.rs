@@ -94,11 +94,24 @@ pub fn nota_export_write_bytes(path: String, base64: String) -> Result<String> {
     path_to_string(&target)
 }
 
-/// 打印：写成一份 HTML 交给系统默认程序。
+/// 打印：写成一份 HTML，**然后交给系统去打印**。
 ///
 /// `doc_path` 是**当前文档的路径**（没存过盘就给 `None`）——它的**父目录**
 /// 决定了落点，理由见文件头。返回值是写出去的路径，前端拿它给用户看
 /// （"文件在哪"是用户唯一能核对的东西）。
+///
+/// # ⚠️ Windows 上走 **`print` 动词**（2026-10-16）
+///
+/// 用户朋友报的：「**「打印」功能绑定浏览器而非使用默认打开方式**」。
+/// 我们这条路本来就是"交给系统默认程序"，而 Windows 上 `.html` 的默认程序
+/// 就是浏览器——于是屏幕上多出一个标签页、还得自己按 `Ctrl+P`。
+/// `ShellExecuteW(…, "print", …)` 才是**打印这个动作本身**：系统会找注册了
+/// 打印动词的那个程序（浏览器都注册）并**直接把打印对话框叫出来**。
+///
+/// ⚠️ **动词没注册 / 调用失败时退回"默认程序打开"**（不是报错）：那台机器上
+/// 没有打印动词是它自己的配置，"打不开"比"多一个标签页"糟得多。
+/// ⚠️ 别的平台**没有等价物**（Linux 的 `xdg-open` 没有 print 动词），
+/// 所以那些平台照旧走"交给默认程序"。
 #[tauri::command]
 pub fn nota_export_print(
     app: AppHandle,
@@ -115,6 +128,9 @@ pub fn nota_export_print(
     // ⚠️ 打不开**不是**致命错误（文件已经写好了），但也**不能咽掉**：
     // 咽掉的话用户看到的是"点了没反应"。转成一句带路径的话交上去。
     let shown = path_to_string(&target)?;
+    if 交给系统打印(&shown) {
+        return Ok(shown);
+    }
     app.opener()
         .open_path(shown.clone(), None::<&str>)
         .map_err(|e| {
@@ -124,6 +140,44 @@ pub fn nota_export_print(
         })?;
 
     Ok(shown)
+}
+
+/// 用系统的 **`print` 动词**打印那个文件；办不到给 `false`（调用方退回"打开"）。
+///
+/// ⚠️ **只有 Windows 有这条路**：`ShellExecuteW` 的第二个参数就是"动词"，
+/// 而 Linux 的 `xdg-open` 只认"打开"，macOS 的 `open` 也一样（`open -a` 能指定
+/// 程序，但"打印"这个动作没有统一的动词）。
+#[cfg(target_os = "windows")]
+fn 交给系统打印(路径: &str) -> bool {
+    use std::ffi::c_void;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    /// UTF-16 + 结尾的 0（Win32 的宽字符串）。
+    fn 宽(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+    let 动词 = 宽("print");
+    let 文件 = 宽(路径);
+    // ⚠️ `ShellExecuteW` 的返回值 ≤ 32 是**错误码**（> 32 才是"成功"，
+    // 文档里写的是"like a HINSTANCE"）。所以判据是 `> 32`，不是"非零"。
+    let 结果 = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut::<c_void>() as _,
+            动词.as_ptr(),
+            文件.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    结果 as isize > 32
+}
+
+/// 别的平台上"系统的打印动词"不存在——照旧交给默认程序。
+#[cfg(not(target_os = "windows"))]
+fn 交给系统打印(_路径: &str) -> bool {
+    false
 }
 
 /// 在文件管理器里**定位**一个文件（选中它，不是打开它）。

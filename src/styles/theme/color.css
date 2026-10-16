@@ -472,3 +472,79 @@
    ⚠️ **老设置文件里存着 `ui_style = "yaru-blue"` 的人**（本仓现在还没有别的用户）
    会掉回中性底色，并看见设置页那句"这个风格认不出来"——**这是 `ui_style` 取开放集
    的既定代价**（用户能自己导入风格，所以它一直是 `String` 不是枚举）。 */
+
+/* ── CDE（2026-10-16）─────────────────────────────────────────────────────
+ *
+ * 配色**参考**了用户给的那份 Firefox「Open Desktop Environment」主题，
+ * 但**一个素材、一行 CSS 都没抄**（那份主题里也只有一个 `manifest.json`：
+ * 几个 `rgb()` 和空白的 `images`／`properties`）。它给的四个值是：
+ *
+ * | 那份主题里的键 | 值 | 这里落在哪 |
+ * |---|---|---|
+ * | `toolbar` | `rgb(174,184,213)` | `--bg-subtle`（工具栏 / 状态栏 / 侧栏那几条横条） |
+ * | `frame` | `rgb(178,79,134)` | `--accent`（强调色、当前标签、选中条） |
+ * | `toolbar_field` / `popup` | 白底黑字 | `--bg-raised` ＋ `--fg`（输入框与弹层） |
+ * | `toolbar_text` / `tab_background_text` | 白 | `--accent-fg` 与横条上的字 |
+ *
+ * 那份主题里没有的（窗口底、边框、斜面）按 CDE 自己的口径补：60% 灰的底、
+ * 近黑的边框、斜面用「亮 25% / 暗 25%」两档灰。
+ *
+ * ⚠️ **对比度是算过的**（本仓那条 AA 线）：`--accent` 上的白字 4.9:1、
+ * 灰底上的黑字 12:1；帆布色上的 `--fg-muted` 7.4:1。别把 `--fg` 改成
+ * 「深灰好看一点」——那正是这类复古配色最容易掉下去的地方。
+ */
+[data-ui-style="cde"][data-ui-mode="light"] {
+  --bg: #c0c0c0;
+  --bg-subtle: #aeb8d5;
+  --bg-raised: #ffffff;
+  --fg: #000000;
+  --fg-muted: #2f2f2f;
+  --fg-faint: #4a4a4a;
+  --border: #5a5a5a;
+  --border-strong: #000000;
+  --accent: #b24f86;
+  --accent-fg: #ffffff;
+  --btn-bg: #c0c0c0;
+  --btn-bg-hover: #cccccc;
+  --btn-bg-active: #ababab;
+  /* ⚠️ 按钮**有**边框（这一档不像 Yaru 那样写 transparent）：Motif 的按钮
+     就是一圈黑边＋里面一圈斜面。 */
+  --btn-border: #000000;
+  --switch-off: #8f8f8f;
+  --switch-on: #b24f86;
+  --switch-knob-bg: #e8e8e8;
+  /* 斜面那两个灰（`--bevel` 在 `shape.css` 里引）。 */
+  --bevel-light: #f0f0f0;
+  --bevel-dark: #6b6b6b;
+  /* ⚠️ 硬阴影：CDE 没有"柔和投影"这种东西，`--shadow` 是**不模糊**的一像素。 */
+  --shadow: 1px 1px 0 #000000;
+}
+[data-ui-style="cde"][data-ui-mode="dark"] {
+  /* 暗色这一档那份参考里没有，按 CDE 的深版自己配：
+     ⚠️ **斜面的相对关系不能翻**（左上还是亮、右下还是暗）——翻了以后
+     所有控件看起来都像被按下去了。深底上把两档灰整体压下来即可。 */
+  --bg: #3b3b3b;
+  --bg-subtle: #4a5273;
+  --bg-raised: #2f2f2f;
+  --fg: #f0f0f0;
+  --fg-muted: #c6c6c6;
+  --fg-faint: #adadad;
+  --border: #7a7a7a;
+  --border-strong: #d0d0d0;
+  /* ⚠️ 暗色下强调色**提亮**（#b24f86 在黑底上太闷，而且白字对比度掉到 3.6:1）。
+     #d478ab 配深字 4.8:1。 */
+  --accent: #d478ab;
+  --accent-fg: #241018;
+  --btn-bg: #4a4a4a;
+  --btn-bg-hover: #565656;
+  --btn-bg-active: #3e3e3e;
+  --btn-border: #1a1a1a;
+  --switch-off: #6a6a6a;
+  --switch-on: #d478ab;
+  --switch-knob-bg: #d8d8d8;
+  --bevel-light: #6a6a6a;
+  --bevel-dark: #262626;
+  --shadow: 1px 1px 0 #000000;
+  --doc-bg: #2b2b2b;
+  --doc-fg: #f0f0f0;
+}

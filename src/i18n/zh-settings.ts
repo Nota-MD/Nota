@@ -73,6 +73,7 @@ export const 设置表: Record<string, string> = {
   "Subtle corner radius, Mica": "小圆角、Mica",
   "Square corners, Acrylic — squarer than Windows 11": "直角、亚克力，比 Windows 11 更方",
   "Ubuntu, orange accent": "Ubuntu，橙色强调",
+  "Motif-era 3D: square corners, hard bevels, magenta accents": "Motif 那个年头的 3D：直角、硬斜面、品红强调色",
   // ⚠️ 这里原来还有「Yaru Blue」那两条译文。2026-10-07 用户说「只需要 Yaru，
   // 不需要 Yaru Blue 了」，那一档连 id 一起从内置清单里删了——译文留着就是
   // 废键（`tools/i18n-check.sh` ③ 会 FAIL），所以同批删掉。

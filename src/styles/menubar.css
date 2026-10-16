@@ -85,7 +85,7 @@
 .menu-heading {
   padding: 4px 8px 2px;
   color: var(--fg-faint);
-  font-size: 12px;
+  font-size: 0.8rem;
 }
 
 /* 弹层最顶上那个搜索框（2026-10-11，照用户贴的 Typora 截图：那一格不是标题）。
@@ -102,7 +102,7 @@
   background: var(--bg-input, var(--bg-sunken));
   color: var(--fg);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8667rem;
 }
 
 .menu-search::placeholder {
@@ -171,7 +171,7 @@
 .menu-check {
   flex: none;
   width: 12px;
-  font-size: 12px;
+  font-size: 0.8rem;
   color: var(--accent);
 }
 
@@ -181,7 +181,7 @@
 
 .menu-accel {
   padding-left: 18px;
-  font-size: 12px;
+  font-size: 0.8rem;
   color: var(--fg-faint);
 }
 
@@ -194,7 +194,7 @@
 .menu-arrow {
   flex: none;
   width: 10px;
-  font-size: 10px;
+  font-size: 0.6667rem;
   line-height: 1;
   color: var(--fg-faint);
   text-align: center;

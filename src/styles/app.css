@@ -41,11 +41,38 @@ body,
 
 body {
   font-family: var(--font-ui);
-  font-size: var(--ui-font-size);
+  /* ⚠️ **`1rem` 就是 `--ui-font-size`**（见下面 `html` 那一条）：这一行是"没写明
+     字号的地方"的基准。⚠️ 别再写回 `var(--ui-font-size)`——那样 `em` 会相对
+     `html`（1rem 基准）再相对 body 各算一次，两处基准不一致。 */
+  font-size: 1rem;
   color: var(--fg);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   overflow: hidden; /* 滚动条交给各自的面板，body 不滚 */
+}
+
+/* ── 界面字号**真的管到整个界面**（2026-10-16 修）──────────────────────
+ *
+ * 用户报的：「这里的字体控制只能控制编辑区的，而不是整个界面的所有文字。」
+ * 根因：`--ui-font-size` 原来只喂 `body { font-size }`，也就是**只对"没写明
+ * 字号"的元素生效**；而界面上各处写死了 25 处 `font-size: Npx`（菜单、工具栏、
+ * 代码块挂件、提示条…），那些地方**一个像素都不动**。正文反而跟着动，因为
+ * 它继承的就是 body 那一份。
+ *
+ * 修法两步，缺一不可：
+ * ① 这里把 `--ui-font-size` 落到**根元素**上（`1rem` 从此等于它）——
+ *    默认 15px，与改之前 `body` 那份**一模一样**，所以不选"自定义"的人
+ *    一个像素都看不出差别；
+ * ② 那 25 处 px 换成 `rem`（同一个换算：12px → 0.8rem）。⚠️ 用 `rem` 不用
+ *    `em`：`em` 相对的是**父元素**，嵌套几层之后会自己叠上去，改一个地方
+ *    却动了三处。
+ *
+ * ⚠️ **这条和「界面缩放」是两件事，别合并**：缩放（`ui/useZoom.ts`）改的是
+ * 整个 WebView 的渲染比例（连图标、间距一起放大），字号只该动文字。用户
+ * 2026-10-16 那句话把两者的分工说得很清楚：「如果是"界面缩放"是改变所有的
+ * 字体大小」——那是缩放的**副作用**，不是它的定义。 */
+html {
+  font-size: var(--ui-font-size);
 }
 
 button {
@@ -204,6 +231,12 @@ button {
   font-weight: var(--btn-font-weight);
   cursor: pointer;
   transition: background 90ms ease;
+  /* ⚠️ **这一行是"3D 斜面"那条轴唯一的消费者**（2026-10-16 加，为 `cde` 那一档）。
+     `--bevel` 默认没定义 ⇒ `none` ⇒ 除了 CDE 之外**一个像素都不变**。
+     为什么不给别的元素也挂上：`.menu-popup` / 提示条那些**已经有自己的
+     `box-shadow`**（`--shadow`），在这里再写一条同属性声明会把它们盖掉——
+     而"某个风格下弹层没有阴影了"这种症状没人会往这儿查。 */
+  box-shadow: var(--bevel, none);
 }
 
 /* ⚠️ 灰底那两条**必须把 `.btn-primary` / `.btn-danger` 排除掉**。

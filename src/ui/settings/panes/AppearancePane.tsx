@@ -46,6 +46,7 @@ const STYLE_ORDER: BuiltinUiStyle[] = [
   "windows",
   "windows10",
   "yaru",
+  "cde",
 ];
 
 /**
@@ -193,6 +194,7 @@ export function AppearancePane({
     windows: { label: "Windows 11", hint: t("Subtle corner radius, Mica") },
     windows10: { label: "Windows 10", hint: t("Square corners, Acrylic — squarer than Windows 11") },
     yaru: { label: "Yaru", hint: t("Ubuntu, orange accent") },
+    cde: { label: "CDE", hint: t("Motif-era 3D: square corners, hard bevels, magenta accents") },
   };
 
   const 写 = paneWriter(settings, onChange, "appearance");

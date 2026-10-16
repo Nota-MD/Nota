@@ -1877,7 +1877,24 @@ grep -rn "docs/04" src/ src-tauri/src/ \
 
 | 轴 | 设置字段 | DOM 属性 | 写在哪个元素上 | 管什么 |
 |---|---|---|---|---|
-| **界面风格** | `ui_style` | `data-ui-style` | `<html>` | **一整套设计语言**：控件形状、圆角、间距、控件高度、阴影、字体栈。⚠️ 它**不是**"主题"的同义词 |
+| **界面风格** | `ui_style` | 
+⚠️ **2026-10-16 加了第八档 `cde`**（CDE / Motif 那个年头的样子）：**一个圆角都没有**、
+3D 靠**硬边斜面**（左上亮右下暗）而不是投影、控件矮间距紧、强调色是品红
+（配色**参考**用户给的一份 Firefox CDE 主题的四个 `rgb()` 值，**没抄它的素材**）。
+⚠️ 为它加了一个变量 `--bevel`（唯一消费者是 `app.css` 的 `.btn`）——这是"3D 斜面"这条轴
+第一次有人用；默认没定义 ⇒ `none` ⇒ **别的七档一个像素都不变**。暗色那一档是自配的，
+判据只有一条：**斜面的相对关系不许翻**（翻了所有控件看着都像按下去的）。
+
+⚠️ **同批修掉一条真缺陷：`ui_font_size` 原来只管得到编辑区**（用户：
+「这里的字体控制只能控制编辑区的，而不是整个界面的所有文字」）。根因是它只喂
+`body { font-size }`，而界面上另有 **25 处写死的 `font-size: Npx`**（菜单、工具栏、
+代码块挂件、提示条…）一个都不动；正文反而跟着动，因为它继承的就是 body 那一份。
+修法两步：把 `--ui-font-size` 落到 **`html`** 上（`1rem` 从此等于它，默认 15px 与改前
+一模一样）＋ 那 25 处 px 换成 `rem`（12px → 0.8rem，同一个换算；用 `rem` 不用 `em`，
+`em` 相对父元素会自己叠）。⚠️ **它与「界面缩放」分工不同**：缩放改的是整个 WebView 的
+渲染比例（图标、间距一起放大），字号只动文字——用户那句「如果是"界面缩放"是改变所有的
+字体大小」说的是缩放的**副作用**，不是它的定义。
+| `data-ui-style` | `<html>` | **一整套设计语言**：控件形状、圆角、间距、控件高度、阴影、字体栈。⚠️ 它**不是**"主题"的同义词 |
 | **明暗** | `ui_mode` | `data-ui-mode` | `<html>` | 亮/暗。`auto` 时跟随系统（`prefers-color-scheme`）。**任何风格下都成立** |
 | **主题色** | `appearance.accent` | （**没有 DOM 属性**） | `<html>` 的**内联** `--accent` / `--accent-fg` / `--switch-on` | **强调色一处**（2026-09-26 加）。空串 = 跟随当前风格自带的出厂色。⚠️ 它与前两条**不同源也不同落点**：不写 `data-*`，改的是内联 CSS 变量，所以**一行覆盖 14 格**。⚠️ **第三个变量 `--switch-on` 是 2026-09-30 加的**：用户报「右侧开关还是橙色的」——色块跟了、开关没跟（各风格在 `color.css` 里各写各的字面值，不引用 `--accent`），来龙去脉在 `styles/accent.ts::accentVars` 那段 |
 | **文档主题** | `document_theme` | （**没有 DOM 属性**） | 一份注进 `<head>` 的 `<style>` | **只管正文**。见 §3.3——它**不是**第三条 CSS 变量轴，落法与前两条完全不同 |
@@ -1886,7 +1903,7 @@ grep -rn "docs/04" src/ src-tauri/src/ \
 
 | 轴 | 取值 | 落点 |
 |---|---|---|
-| `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru` | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**（改了就认不出老设置文件，用户会被静默打回默认档） |
+| `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru` / **`cde`** | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**（改了就认不出老设置文件，用户会被静默打回默认档） |
 | `data-ui-mode` | `auto` / `light` / `dark` | `auto` 由 `matchMedia("(prefers-color-scheme: dark)")` 解析 |
 | `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 14 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
 | `document_theme`（设置项） | 内置**六套**的 id（浅色 `minimal` / `adwaita` / `latex` ＋ 深色 `minimal-dark` / `adwaita-dark` / `latex-dark`）＋ 用户目录里的文件名 | **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套"。⚠️ **2026-10-16 加回三档深色**（朋友清单第 11 条「编辑器暗色/浅色跟随主题」）：`useDocTheme.ts` 多一张 `深色配对` 表——**界面是深色且用户没单独指定 `dark_document_theme` 时**，`minimal`/`adwaita`/`latex` 自动换成自己的深色档（只对这三套内置生效，用户主题不动）。⚠️ 深色那三份是**颜色补丁**（`themes.rs` 把同名浅色 `concat!` 在前面），排版只有一份 |

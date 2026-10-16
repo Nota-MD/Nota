@@ -341,7 +341,7 @@
   /* ⚠️ **这里故意不写 `max-height`**（2026-10-04 目检后改的，见 `docs/07` BUG-63）。
      起手写过一条 `220px`，注释里按"一条约 21px ⇒ 十条装得下"配的——
      **真窗口里量出来一条是 24.7px**（一条 = 上下 padding 4 ＋ 预览那格的高度，
-     而预览那格的 `font-size: 12px` 是**写死的 px**，所以这个行高跟界面字号
+     而预览那格的 `font-size: 0.8rem` 是**写死的 px**，所以这个行高跟界面字号
      基本无关）：220px 只装得下**九条**，第十条（常用里是 `\theta`）被切在框外，
      而选中项移出视野时**列表不跟着滚** —— 按九下方向键就选到一条看不见的候补上，
      再按回车就插进去一个用户没看见的命令。
@@ -362,7 +362,7 @@
   /* 弹窗是**界面**不是正文：说清"有哪些命令、各是什么"用界面字体；
      中间那段公式预览归 KaTeX 自己那棵树管，不受这条影响。 */
   font-family: var(--font-ui, inherit);
-  font-size: 11px;
+  font-size: 0.7333rem;
   color: var(--fg);
 }
 
@@ -399,7 +399,7 @@
   /* 样本行内排（KaTeX 给的是行内盒），而这一条在 flex 里——
      不加这句那棵树会被当成一个块级盒子撑满整行。 */
   display: inline-block;
-  font-size: 12px;
+  font-size: 0.8rem;
   line-height: 1;
 }
 
@@ -409,7 +409,7 @@
   margin-left: auto;
   padding-left: 10px;
   opacity: 0.65;
-  font-size: 10px;
+  font-size: 0.6667rem;
 }
 
 /* physics 那个小角标（`enable_physics` 开着时才有的那几十条）。 */
@@ -419,7 +419,7 @@
   border-radius: 999px;
   background: var(--bg-subtle);
   color: var(--fg-muted);
-  font-size: 9px;
+  font-size: 0.6rem;
   line-height: 1.6;
 }
 

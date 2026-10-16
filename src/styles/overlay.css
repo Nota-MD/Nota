@@ -282,7 +282,7 @@
   /* 投影用写死的黑：它在浅色和深色下都成立（同 `.nota-lang-popup`）。 */
   box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
   font-family: var(--font-ui, inherit);
-  font-size: 11px;
+  font-size: 0.7333rem;
   color: var(--fg);
 }
 
@@ -309,7 +309,7 @@
 
 /* 字符是主角（用户是看图在挑），短代码是陪衬。 */
 .nota-emoji-glyph {
-  font-size: 15px;
+  font-size: 1.0rem;
   line-height: 1;
 }
 
@@ -340,7 +340,7 @@
   background: var(--bg-raised);
   box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
   font-family: var(--font-ui, inherit);
-  font-size: 12px;
+  font-size: 0.8rem;
   color: var(--fg);
 }
 

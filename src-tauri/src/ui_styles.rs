@@ -80,6 +80,11 @@ pub const BUILTIN_IDS: &[&str] = &[
     "windows",   // Windows 11：小圆角、Mica
     "windows10", // Windows 10 原生：直角、亚克力。⚠️ **只能手选**，见下
     "yaru",      // Ubuntu Yaru：橙色强调
+    // CDE（Common Desktop Environment / Motif 那种年头的样子）：直角、3D 斜面、
+    // 硬阴影。⚠️ **它不是"某个现代桌面"的复刻**，与 `ghub` 同类——是一条设计语言，
+    // 所以 `auto` 永远不会探到它，只能手选。配色取自用户 2026-10-16 给的一份
+    // Firefox 主题（只取配色方向、**没有抄它的任何素材**，见 `theme/color.css`）。
+    "cde",
 ];
 
 // ⚠️ **`windows10` 与 `windows` 是并存的两代，不是替换关系**，而且

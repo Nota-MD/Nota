@@ -251,3 +251,42 @@
   --switch-knob: 18px;
   --switch-travel: 18px;
 }
+
+/* ── CDE（Common Desktop Environment / Motif 那个年头的样子）2026-10-16 加 ────
+ *
+ * 用户当天给了一份 **Firefox 的 CDE 主题**当参考，并明确「**仅参考不抄袭**」——
+ * 所以这一段是照着那套视觉语言**重新取的形状值**，一个素材都没搬（配色在
+ * `color.css` 那两段里，来路也写在那儿）。
+ *
+ * ⚠️ 它和 `ghub` 是同一类：**不是"某个桌面环境的复刻"**，是一条设计语言。
+ * 所以 `auto` 永远探不到它（`applyTheme.ts` 里没有它的线索），只能手选——
+ * 这与 `windows10`「探不出来」是两回事：那个是探得到但线索重合。
+ *
+ * 三条判据（这三条就是 CDE 那套长相的全部）：
+ * ① **一个圆角都没有**——Motif 的控件是方的；
+ * ② **3D 靠硬边斜面，不靠投影**：凸起 = 左上亮、右下暗，凹下 = 反过来。
+ *    这里用 `--bevel` 那个变量给（消费者在 `app.css` 的 `.btn` 上），
+ *    工具栏那一条则复用已有的 `--toolbar-shadow`（它本来就是"给横条用的"）；
+ * ③ **控件矮、间距小**：那个年代的栅格比现在紧。
+ */
+[data-ui-style="cde"] {
+  --radius-sm: 0;
+  --radius: 0;
+  --radius-lg: 0;
+  /* ⚠️ 28px 是"看得出是按钮、又不至于像现代控件那么高"那一档。 */
+  --control-height: 28px;
+  --toolbar-height: 30px;
+  --spacing: 6px;
+  --btn-font-weight: 400;
+  /* 凸起斜面：左上亮、右下暗。⚠️ 这两条颜色**写死在变量值里**是有意的——
+     它描述的是"斜面"这件形状，不是主题色；换明暗那两档时斜面照旧。 */
+  --bevel:
+    inset 1px 1px 0 var(--bevel-light), inset -1px -1px 0 var(--bevel-dark);
+  --toolbar-shadow: inset 0 1px 0 var(--bevel-light), inset 0 -1px 0 var(--bevel-dark);
+
+  /* 开关：34×18，滑块 14（比现代档都小一号）。行走 16px = 34 − 2 − 14 − 2。 */
+  --switch-w: 34px;
+  --switch-h: 18px;
+  --switch-knob: 14px;
+  --switch-travel: 16px;
+}

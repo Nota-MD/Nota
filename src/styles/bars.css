@@ -145,7 +145,7 @@
 }
 
 .format-glyph {
-  font-size: 12px;
+  font-size: 0.8rem;
   line-height: 1;
   white-space: nowrap;
 }
@@ -167,7 +167,7 @@
  * `color`）——在这里各写一个色值，亮起来的时候就会有两个颜色打架。 */
 .format-glyph-inlineCode {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 0.7333rem;
 }
 
 /* 导航键的**焦点圈**。⚠️ 只在键盘走到时画（`:focus-visible`），鼠标点过
@@ -235,7 +235,7 @@
   height: 26px;
   padding: 0 8px;
   font: inherit;
-  font-size: 12px;
+  font-size: 0.8rem;
   color: var(--fg);
   background: var(--bg-raised);
   border: 1px solid var(--border);
@@ -279,7 +279,7 @@
   /* 固定宽度 + 等宽数字：命中数变长变短时右边那排按钮不会左右跳。 */
   min-width: 58px;
   text-align: right;
-  font-size: 12px;
+  font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   color: var(--fg-muted);
 }
@@ -307,7 +307,7 @@
   height: 24px;
   padding: 0 5px;
   font: inherit;
-  font-size: 11px;
+  font-size: 0.7333rem;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;

@@ -36,6 +36,12 @@ mod 编译期 {
 /// 问一条外部命令要一行版本。超时 2 秒——`uname -r` 一类的，卡住就说明有问题。
 ///
 /// ⚠️ **失败一律给空串**，不向上报错：这一页少一行是可以接受的，"整页打不开"不是。
+///
+/// ⚠️ `#[cfg(not(target_os = "windows"))]`：Windows 上这一格整族走的是
+/// [`问一行非空`]（`cmd /C ver` 那个输出**带前导空行**，`lines().next()` 拿到的是
+/// 空的那一行），于是这一个在那边没有任何调用点——不加这个 `cfg` 就是一条
+/// dead_code 警告（2026-10-16 交叉编 Windows 时当场看到的）。
+#[cfg(not(target_os = "windows"))]
 fn 问一行(程序: &str, 参数: &[&str]) -> String {
     let 参数: Vec<String> = 参数.iter().map(|s| s.to_string()).collect();
     match run_capture(程序, &参数, RunOpts::timeout(Duration::from_secs(2))) {
@@ -44,10 +50,23 @@ fn 问一行(程序: &str, 参数: &[&str]) -> String {
     }
 }
 
-/// `/etc/os-release` 里的 `PRETTY_NAME`（就是"Fedora Linux 44"这种给人看的名字）。
+/// 这台机器跑的是什么系统，**给人看的一句话**。
 ///
-/// ⚠️ **不引 shell**：就是读一个文本文件、找一行、把两头的引号去掉。用 `sh -c` 去做
-/// 这件事等于为了省十行代码给自己开一个执行任意字符串的口子。
+/// | 平台 | 从哪儿来 | 长什么样 |
+/// |---|---|---|
+/// | Linux | `/etc/os-release` 的 `PRETTY_NAME` | `Fedora Linux 44` |
+/// | macOS | `sw_vers -productName` ＋ `-productVersion` | `macOS 14.5` |
+/// | Windows | `cmd /C ver` | `Microsoft Windows [Version 10.0.22631.4169]` |
+///
+/// ⚠️⚠️ **2026-10-16 之前只有 Linux 那一支**（原来这个函数直接读 `/etc/os-release`），
+/// 于是 Windows 上「本机信息」那一整段全是「—」（朋友实测报回来的：
+/// 「"本机信息"Windows上面无法显示」）。macOS 同理——那里也没有那个文件。
+///
+/// ⚠️ **Linux 那一支不引 shell**：就是读一个文本文件、找一行、把两头的引号去掉。
+/// 用 `sh -c` 去做这件事等于为了省十行代码给自己开一个执行任意字符串的口子。
+/// Windows / macOS 那两支**必须**起一个进程（没有等价的可读文件），所以走
+/// `问一行`（2 秒超时、失败给空串，同这个文件顶上那条口径）。
+#[cfg(target_os = "linux")]
 fn 发行版() -> String {
     let 内容 = match std::fs::read_to_string("/etc/os-release") {
         Ok(它) => 它,
@@ -59,6 +78,84 @@ fn 发行版() -> String {
         }
     }
     String::new()
+}
+
+/// macOS：`macOS 14.5`（两个 `sw_vers` 字段拼起来）。
+///
+/// ⚠️ `sw_vers` **没有"一行给全部"的写法**（`-productVersion` 与 `-productName`
+/// 是两个开关），所以这里问两次。两次都在 `问一行` 的超时里，取不到就是空串。
+#[cfg(target_os = "macos")]
+fn 发行版() -> String {
+    let 名 = 问一行("sw_vers", &["-productName"]);
+    let 版本 = 问一行("sw_vers", &["-productVersion"]);
+    match (名.is_empty(), 版本.is_empty()) {
+        (true, true) => String::new(),
+        (true, false) => 版本,
+        (false, true) => 名,
+        (false, false) => format!("{名} {版本}"),
+    }
+}
+
+/// Windows：`cmd /C ver` 的那一行。
+///
+/// ⚠️ **不用 `wmic`**：它在 Windows 11 上已经被移除了（微软的弃用公告），
+/// 而 `ver` 是 `cmd` 的内建命令、哪一版都在。得到的串长这样：
+/// `Microsoft Windows [Version 10.0.22631.4169]`——那句话里既有"什么系统"
+/// 也有内部版本号（[`内核版本`] 从同一个串里抠），够这一页用了。
+///
+/// ⚠️ `ver` 在 Windows 上带一个**前导空行**，而 `问一行` 取的是 `lines().next()`
+/// ——那会拿到空串。所以这里用 `问一行非空`（见那个函数）。
+#[cfg(target_os = "windows")]
+fn 发行版() -> String {
+    问一行非空("cmd", &["/C", "ver"])
+}
+
+/// 内核 / 内部版本号。
+///
+/// | 平台 | 从哪儿来 |
+/// |---|---|
+/// | Linux / macOS | `uname -r`（`6.11.5-300.fc41.x86_64` / `23.6.0`） |
+/// | Windows | 从 `cmd /C ver` 那行里抠出 `[Version 10.0.22631.4169]` 的中间那段 |
+///
+/// ⚠️ Windows 那一支**不是"没有内核所以留空"**：NT 的版本号就是这一格该说的东西
+/// （同一个串里，`ver` 给的就是它），留空只会让那一行继续是「—」。
+#[cfg(not(target_os = "windows"))]
+fn 内核版本() -> String {
+    问一行("uname", &["-r"])
+}
+
+#[cfg(target_os = "windows")]
+fn 内核版本() -> String {
+    let 原 = 问一行非空("cmd", &["/C", "ver"]);
+    // `Microsoft Windows [Version 10.0.22631.4169]` → `10.0.22631.4169`
+    match (原.find("[Version "), 原.rfind(']')) {
+        (Some(起), Some(止)) if 止 > 起 + 9 => 原[起 + 9..止].to_string(),
+        // 认不出来就给**原串**：这一格是"排查时看一眼"，给半句也比空着强。
+        _ => 原,
+    }
+}
+
+/// 同 [`问一行`]，但**跳过空行**取第一行有内容的前面那一段。
+///
+/// ⚠️ 2026-10-16 加，只为 Windows 的 `ver`：它的输出第一行是空的
+/// （实测 `\r\nMicrosoft Windows [Version …]`），`问一行` 的 `lines().next()`
+/// 拿到的是那个空行——症状是"函数起了、也问到了、还是空的"。
+///
+/// ⚠️ `#[cfg(target_os = "windows")]`：**只有 Windows 那两支用得上它**
+/// （Linux 的 `uname -r` 与 macOS 的 `sw_vers` 都不带前导空行），
+/// 不加这个 `cfg` 在别的平台上就是一条 dead_code 警告。
+#[cfg(target_os = "windows")]
+fn 问一行非空(程序: &str, 参数: &[&str]) -> String {
+    let 参数: Vec<String> = 参数.iter().map(|s| s.to_string()).collect();
+    match run_capture(程序, &参数, RunOpts::timeout(Duration::from_secs(2))) {
+        Ran::Done { ok: true, stdout, .. } => stdout
+            .lines()
+            .map(str::trim)
+            .find(|行| !行.is_empty())
+            .unwrap_or("")
+            .to_string(),
+        _ => String::new(),
+    }
 }
 
 /// GTK 的**运行时**版本（`major.minor.micro`）。
@@ -166,7 +263,7 @@ pub fn 收集() -> 诊断 {
         gtk_crate: 编译期::GTK_CRATE_版本.to_string(),
         mlua: 编译期::MLUA_版本.to_string(),
         os_pretty: 发行版(),
-        kernel: 问一行("uname", &["-r"]),
+        kernel: 内核版本(),
         arch: std::env::consts::ARCH.to_string(),
         gtk_runtime: gtk_运行时(),
         webkit_runtime: webkit_运行时(),

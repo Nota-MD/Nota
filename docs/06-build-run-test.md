@@ -305,16 +305,37 @@ cd /tmp && ar x <包>.deb && tar tf data.tar.gz | grep plugins   # ⚠️ 别停
 
 `src-tauri/icons/nota.svg` 是**唯一的手写源**，其余全部由它派生：
 
+⚠️ **2026-10-16 起是三步**（第 ② 步是那次加的，见下面"白底"那段）：
+
 ```sh
 # ① 矢量母版 → 1024 PNG（Chrome 无头光栅化，宿主就能跑，不需要容器）
 google-chrome --headless=new --disable-gpu --hide-scrollbars \
   --window-size=1024,1024 --screenshot=/tmp/master.png \
   "file://$PWD/src-tauri/icons/nota.svg"
 
-# ② 1024 PNG → 全套（icns / ico / png / Square*Logo）
-podman exec -u 1000 -w "$PWD" tauri-dev npx tauri icon /tmp/master.png
+# ② **把外面那圈白切成透明**（这一步不能省，理由见下）
+#    ⚠️ Chrome / ImageMagick 光栅化 SVG 时都会先铺一层**白底**，于是出来的 PNG
+#    四角是"不透明的白"（实测 `rgba(254,254,254,255)`）——落到 Windows 的开始菜单
+#    / 任务栏上就是一块白方块。`--default-background-color=00000000` 在新无头模式
+#    下**不生效**（实测），所以只能事后抠：
+podman exec -u 1000 -w "$PWD" tauri-dev bash -lc '
+  magick -background none src-tauri/icons/nota.svg -resize 1024x1024 PNG32:/tmp/master.png
+  # 从左上角做**洪水填充**：`fuzz 2%` 只吃页面那层白（254），
+  # 不吃卡片的 `#f9f8f7`（249）——差 5 级，正好卡在中间
+  magick /tmp/master.png -alpha set -fuzz 2% -fill none \
+    -floodfill +0+0 "srgb(255,255,255)" PNG32:/tmp/master-alpha.png
+  # 验一刀：角上必须是 alpha 0、卡片上必须是不透明的
+  magick /tmp/master-alpha.png -format "角=%[pixel:p{0,0}] 卡片=%[pixel:p{512,150}]\n" info:'
+
+# ③ 透明的那张 → 全套（icns / ico / png / Square*Logo）
+podman exec -u 1000 -w "$PWD" tauri-dev npx tauri icon /tmp/master-alpha.png
 rm -rf src-tauri/icons/android src-tauri/icons/ios   # 这两个不要
 ```
+
+⚠️⚠️ **"四角是不是透明的"这件事必须验**（上面那条 `magick -format` 就是在验它）：
+白底那种毛病**在自己机器上是看不出来的**（浅色主题、浅色桌面下，"白底 + 浅卡片"
+跟"透明 + 浅卡片"长得一样），只有落到深色任务栏的用户那儿才现形
+（用户朋友 2026-10-11 报的「图标裁切问题：没有裁切好透明底」正是这个）。
 
 ⚠️ `nota.svg` 里写的是 `width="100%" height="100%"` + `viewBox="0 0 1254 1254"`，
 **故意不给固定像素**——这样 Chrome 会按窗口尺寸整幅缩放（给 1024 就出 1024），
@@ -6258,6 +6279,44 @@ v2 用 HTTP/1.0 ＋ 不发长度 ＋ 说完关连接（应用把**整份正文**
    ⚠️ 顺带记一条：列表里那圈蓝边是照 `focusedIndex` 画的，**不等于 DOM 焦点在那儿**。
 
 **收工时**：测试实例按 PID 杀掉（⚠️ **不许 `pkill -f`**）。
+
+### 5.64 验「朋友那份清单里的第一批（2026-10-16，✅ 六条开窗验过）」
+
+**这一批的来路**：用户把朋友在 **Windows** 上试用的一份清单（十七条）＋ 六张现象截图
+发了过来（`~/下载/Nota 现象截图/`）。这一节只记**当场做完并验过**的那几条，
+其余的按"要动的面"排在 `docs/07` 第 122 项那一行里。
+
+| # | 现象（朋友原话） | 怎么修的 | 怎么验的 |
+|---|---|---|---|
+| 4 | 「按下两次星号键**另一边只补全出了一个**」 | 段首那颗 `*` 是**故意的项目符号**、不配对（`auto-pair.ts` ⑤ 条），于是他打第二颗时现场是 `*\|`，落到"补一对"只补右边一颗 ⇒ 屏幕上留着 `**\|*`。新增一条判据 `前是段首` ＋ 一个动作 **「补齐」**（`*\|` ⇒ `**\|**`） | 无头窗里打 `**bold`，盘上写出来的是 `**bold**`（改之前是 `***bold`）；`tests/auto-pair.test.ts` 58 条全过 |
+| 13 | 「**代码块语言类型重复**」（图里 `arm-asm` 与 `armasm` 挨着） | 真图那张表里**每一组就是同一门语言的几种写法**，于是 `markdown`/`md`、`plaintext`/`plain`/`text`/`txt` 各占一行。新增 `代表语言(id)`（取组里第一个），下拉**一行一族**；搜索仍认别名（打 `armasm` 筛得出那一行） | `tests/lang-icons.test.ts` 第七组（三条）；列表从 93 行降到 70 出头 |
+| 15 | 「我认为在代码块一开始按下 BACKSPACE 应该删掉代码块」 | 那颗键原来**什么都不做**（CM 光标已在 0、没有字可删）。现在：空选区 ＋ 偏移 0 ⇒ 把这**一块**拆成一行一段的**正文段落**（一个字都不丢，**一笔事务**，撤销一次回得来）。⚠️ 缩进那几行存盘会写成 `&#x20;`（序列化器防"4 个空格又变回代码块"，是它对） | 无头窗：点进代码块 → `Ctrl+Home` → `Backspace` → 块没了、三行代码成了三段正文；`Ctrl+Home` 再打 `MARK`，落点在第一段开头 |
+| 10 | 「"本机信息"Windows上面无法显示」（那张图里 OS / 内核 / GTK 全是「—」） | `diagnostics.rs` 原来只有 Linux 那一支（`/etc/os-release` ＋ `uname -r`）。现在按平台分三支：Linux 不变；macOS 走 `sw_vers`；Windows 走 `cmd /C ver`（`wmic` 在 Win11 上已被移除）并从同一个串里抠出内部版本号 | 交叉编 Windows **0 警告**（顺手把那边两条 dead_code 按 `cfg` 收干净） |
+| 2 | 「跟随系统在 win 上面是英文，（第一次打开就是英文）」 | 系统语言原来**只读 `LC_ALL`/`LC_MESSAGES`/`LANG`**，而 Windows 上没有这三个变量 ⇒ 落到 `en`。现在先问 `sys-locale`（各平台走官方接口：Windows `GetUserDefaultLocaleName` / macOS `NSLocale` / Linux 仍是那三个变量），环境变量那条留着当第二道 | 两个平台都编过；`cargo test --lib` 全绿（既有那几条判据吃的是"给进来的语言"，不受影响） |
+| 1 | 「**图标裁切问题**：没有裁切好透明底」 | 图标 PNG 四角是**不透明的白**（`rgba(254,254,254,255)`）——Chrome/IM 光栅化时铺的白底。`docs/06` §2.4 的配方补了"洪水填充抠白"那一步，全套图标重新出 | 四角 `alpha=0`、卡片 `#f9f8f7` 不透明（`magick -format` 逐点验过）；128/512/ico 三处都查了 |
+
+**另外两条是当天新加的（不在那份清单里）**：
+
+1. **沉浸模式里顶栏与悬停工具栏叠在一起**（用户：「这种时候会有一级标题和引用同时存在」的
+   同一条消息里报的：「有下方工具栏时，操作上方的那个工具栏会有如图所示的问题」）。
+   判据：沉浸模式下主区从**窗口顶**开始，而悬停档的工具栏也钉在主区顶端 ⇒ 两条都占
+   最上面那 38px。修法：沉浸时工具栏整体下移一条顶栏的高度
+   （`styles/bars.css` 的 `.app[data-zen="true"] …`）。
+   ⚠️ 中间试过"把触发带一起下移"（JS 读 `--toolbar-height`），**那一版让工具栏够不着**
+   （指针落在带里了、它却不出来），退回"只挪画笔不挪判据"。
+2. **标题徽标压在引用块的竖线上**（用户：「这种时候会有一级标题和引用同时存在」）：
+   徽标宽约 2.1em、而引用块左内边距只有 1em/1.1em。修法：
+   `blockquote:has(> .nota-srcmark-h)` 那一族的引用块**加宽到 2.6em**
+   （⚠️ 这一条**不包 `:where()`**，它要压过主题的 `padding` —— 修冲突不是排版口味）。
+
+**收工时**：测试实例按 PID 杀掉（⚠️ **不许 `pkill -f`**——这一批又踩了一次：
+`pkill -f "vite --port 5273"` 把自己那条 shell 一起打死了，退出码 143）。
+⚠️ **另一个坑记在这里**：dev 用的 `npx vite` **必须跑在容器里**（app 的
+`localhost:5273` 是容器的 loopback）——在宿主机上起的那几个，窗口里看到的是
+**Connection refused**；而宿主机上那个"老 vite"进程（2026-10-11 起的）虽然还被
+容器连着，但它对 `?raw` 那道转换**缓存住了旧图标**，于是"源码明明换了、窗口里还是
+老图"，重启那个 dev server 才对上。
+
 
 **⚠️️ 收尾之后用户又报了一条（已修、当日重测）**：
 「选择拼写检查语言的列表**无法下滑**，一下滑就直接消失，焦点返回工作区」。

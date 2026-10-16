@@ -93,6 +93,7 @@ import type { Toast } from "@/ui/Toasts";
 /** 触发带的高度（px）。见文件头"悬停那一档的判据"。 */
 const 顶部触发带 = 8;
 
+
 export interface 外壳接线 {
   /** 主区（`App.tsx` 的 `<main class="app-main">`）。⚠️ 只用来量它顶端在哪。 */
   主区: RefObject<HTMLElement | null>;

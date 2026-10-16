@@ -77,6 +77,15 @@ export type 语言选择器 = {
 export function 创建语言选择器(选项: {
   /** 全部语言名（调用方算好并缓存，这里每次都取一遍）。 */
   全部语言: () => string[];
+  /**
+   * 这一门语言的**全部写法**（含别名），用于搜索。
+   *
+   * ⚠️ 2026-10-16 加：下拉里现在**一行一个语言族**（`armasm`/`arm-asm` 只剩一行，
+   * 见 `code-block.ts::allLanguages`），而用户可能按别名找——`别名` 让"打
+   * `armasm` 也能筛出那一行"。⚠️ 它**只用于匹配**，选项的标签与值仍然是
+   * `全部语言` 给的那个代表名。
+   */
+  别名: (lang: string) => readonly string[];
   /** 当前语言，用于开场定位。 */
   当前语言: () => string;
   /** 用户选定了某个语言。 */
@@ -190,7 +199,12 @@ export function 创建语言选择器(选项: {
     const 问 = 原文.toLowerCase();
     弹层.appendChild(造一项(NO_LANGUAGE, 纯文本()));
     for (const lang of 选项.全部语言()) {
-      if (问 === "" || lang.toLowerCase().includes(问)) 弹层.appendChild(造一项(lang, lang));
+      // ⚠️ **连别名一起匹配**（2026-10-16，朋友报的「代码块语言类型重复」那一批）：
+      // 下拉里现在**一行一个语言族**（`armasm`/`arm-asm` 只留下一行，见
+      // `code-block.ts::allLanguages`）。用户按 `armasm` 找的时候得找得到那一行，
+      // 不然他会以为"这个语言被删了"。`选项.别名` 给的是这一族的所有写法。
+      const 命中 = 问 === "" || 选项.别名(lang).some((名) => 名.toLowerCase().includes(问));
+      if (命中) 弹层.appendChild(造一项(lang, lang));
     }
     if (问 !== "" && !选项.全部语言().some((l) => l.toLowerCase() === 问)) {
       弹层.appendChild(造一项(原文, 原文, true));

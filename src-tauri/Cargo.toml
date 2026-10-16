@@ -46,6 +46,15 @@ mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"]
 # ── 杂项 ──────────────────────────────────────────────────────────────────
 thiserror = "2"
 dirs = "6"
+# `sys-locale`：**这台机器的系统语言**（`src-tauri/src/lang.rs::系统语言`）。
+#
+# ⚠️ 2026-10-16 提成直接依赖，理由与上面 `chrono` / `sha2` 那两条同源：**借别人的
+# 传递依赖用是要不得的**（它本来就在树里——`zspell` 拖进来的）。而它解决的是一件
+# 只靠环境变量解决不了的事：**Windows 上没有 `LANG` 那三个变量**，于是"跟随系统"
+# 在中文 Windows 上落到 `en`（朋友实测报回来的：第一次打开就是英文）。这个 crate
+# 各平台走各自的官方接口（Windows `GetUserDefaultLocaleName` / macOS `NSLocale` /
+# Linux 那三个环境变量），Linux 上仍然是我们原来的老路。
+sys-locale = "0.3"
 # `chrono`：**本地日期与时间**（`src-tauri/src/lua/api/time.rs`）。
 #
 # ⚠️ 它本来就在依赖树里（`package.rs` 那段注释写过"为了一个给人看的栏去引

@@ -151,16 +151,33 @@ pub fn 规范(tag: &str) -> String {
     }
 }
 
-/// 系统语言。取 `LC_ALL` → `LC_MESSAGES` → `LANG` 里第一个非空的。
+/// 系统语言。
 ///
-/// ⚠️ 只用环境变量，**不引第三方库**：Linux 上这就是标准做法（`LANG` 是
-/// POSIX 定的），而这个项目对依赖很吝啬（见 `Cargo.toml` 顶上那段）。
-/// 代价写在明处：**Windows / macOS 上 `LANG` 通常没有**，于是"自动"会落到
-/// `en`；要用中文就在设置里直接选「中文」——那一条在哪个平台都管用。
+/// # 两条路，先问平台再问环境变量（2026-10-16 改）
+///
+/// ⚠️⚠️ **从前只有环境变量那条路**（`LC_ALL` → `LC_MESSAGES` → `LANG`），
+/// 而 **Windows 上没有 `LANG` 这一套**——于是「跟随系统」在中文 Windows 上落到
+/// `en`（**第一次打开就是英文**）。这是朋友实测报回来的：设置页写着
+/// 「Automatic (follow the system)」、下面一行「In use right now: en」，
+/// 而系统明明是中文。
+///
+/// 现在先问 [`sys_locale::get_locale`]：那个 crate 在各平台走**各自的官方接口**
+/// （Windows 是 `GetUserDefaultLocaleName`、macOS 是 `NSLocale`、Linux 才是
+/// 那三个环境变量），正好补上这一格。⚠️ 它 Linux 上也只是读环境变量，
+/// 所以那条老路**留着当第二道**：平台接口给不出东西时（极少）再走一遍。
+///
+/// ⚠️ **两条路的结果都过同一次 [`规范`]**：Windows 给的是 `zh-CN`、
+/// Linux 给的是 `zh_CN.UTF-8`，不归一化成同一种写法就比不出"这是不是中文"。
 ///
 /// ⚠️ `C` / `POSIX` 是"没设"而不是"某种语言"：它们的意思是"不翻译"，
 /// 所以当成取不到。
 pub fn 系统语言() -> Option<String> {
+    if let Some(平台给的) = sys_locale::get_locale() {
+        let 一 = 规范(&平台给的);
+        if !一.is_empty() && 一 != "c" && 一 != "posix" {
+            return Some(一);
+        }
+    }
     for 键 in ["LC_ALL", "LC_MESSAGES", "LANG"] {
         let Ok(值) = std::env::var(键) else { continue };
         let 一 = 规范(&值);

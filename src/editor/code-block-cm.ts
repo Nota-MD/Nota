@@ -532,6 +532,13 @@ export type 代码块编辑器选项 = {
   /** 代码块里按了 Ctrl+Z / Ctrl+Shift+Z。⚠️ 撤销归 ProseMirror，见文件头。 */
   撤销: () => void;
   重做: () => void;
+  /**
+   * 光标在**最开头**按了退格：把这一块代码拆回正文段落（2026-10-16）。
+   *
+   * ⚠️ 这一颗键在本文件里**只负责认现场**（空选区 ＋ 偏移 0），拆不拆、怎么拆
+   * 归外面那一层（`code-block.ts::拆掉这一块`）——它才知道这一块在文档里的位置。
+   */
+  退出到正文: () => void;
 };
 
 export function 创建代码块编辑器(选项: 代码块编辑器选项): 代码块编辑器 {
@@ -642,6 +649,19 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
         keymap.of([
           { key: "Enter", run: 回车带缩进 },
           { key: "Shift-Enter", run: 回车带缩进 },
+          // ⚠️ **退格**：只在"光标在最开头"这一种现场插手，其余一律 `false`
+          //（还给 `defaultKeymap` 里那条 `deleteCharBackward`）。
+          // 用户朋友 2026-10-16 报的：「在代码块一开始按下 BACKSPACE 应该删掉
+          // 代码块」——在那之前这一颗键什么都不做。
+          {
+            key: "Backspace",
+            run: (目标) => {
+              const 区 = 目标.state.selection.main;
+              if (!区.empty || 区.from !== 0) return false;
+              选项.退出到正文();
+              return true;
+            },
+          },
           撤销键,
           ...重做键,
           ...选择键,

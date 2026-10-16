@@ -56,7 +56,7 @@ import { join } from "node:path";
 import "refractor/all";
 import { refractor } from "refractor";
 
-import { 图标名, 图标组, 全部图标名 } from "../src/editor/lang-icons-real";
+import { 代表语言, 图标名, 图标组, 全部图标名 } from "../src/editor/lang-icons-real";
 
 /* ── 极小的测试工装（与 `mark-hint.test.ts` 同一套长相）───────────────── */
 
@@ -269,6 +269,30 @@ const 语言id全集 = new Set<string>(refractor.listLanguages());
   const 源 = readFileSync(join(仓库根, "src", "editor", "lang-icon.ts"), "utf8");
   断言(源.includes("真图标URI("), "`lang-icon.ts` 应当先问真图");
   断言(源.includes("缩写(lang)"), "`lang-icon.ts` 应当留着徽章那条兜底");
+});
+
+组("七、一个语言族只留一行（2026-10-16，朋友报的「代码块语言类型重复」）");
+
+测("代表语言：一组里所有写法都指向表里排第一的那个", () => {
+  等(代表语言("armasm"), "nasm", "armasm 是 nasm 的别名");
+  等(代表语言("arm-asm"), "nasm", "arm-asm 同一族");
+  等(代表语言("md"), "markdown", "md → markdown");
+  等(代表语言("plain"), "plaintext", "plain → plaintext");
+  等(代表语言("txt"), "plaintext", "txt 也是同一族");
+  等(代表语言("markdown"), "markdown", "代表名映射到它自己");
+});
+
+测("⚠️ 每一族的代表名必须是它自己（不然那一族会整族从下拉里消失）", () => {
+  const 坏的: string[] = [];
+  for (const { 语言 } of 图标组) {
+    const 代表 = 语言[0]!;
+    if (代表语言(代表) !== 代表) 坏的.push(代表);
+  }
+  断言(坏的.length === 0, `这些代表名映射到了别的族：${坏的.join("、")}`);
+});
+
+测("⚠️ 表里没有的 id 原样返回（用户自己敲的那种）", () => {
+  等(代表语言("没有这个语言"), "没有这个语言", "不认识的原样给回去");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

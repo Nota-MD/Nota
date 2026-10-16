@@ -37,6 +37,7 @@ import { t } from "@/i18n";
 import { 创建代码块编辑器, 算最小改动 } from "./code-block-cm";
 import { 创建语言选择器 } from "./lang-picker";
 import { 有专属图标 } from "./lang-icon";
+import { 图标组, 代表语言 } from "./lang-icons-real";
 
 /** 下拉第一项：不指定语言。与 `code_block` 的 `language` 默认值一致。 */
 const NO_LANGUAGE = "";
@@ -111,9 +112,30 @@ function allLanguages(): string[] {
     sortedLanguages = refractor
       .listLanguages()
       .filter((名) => 有专属图标(名))
+      // ⚠️⚠️ **同一门语言只留一行**（2026-10-16，朋友报的「代码块语言类型重复」）：
+      // 真图那张表里每一组就是"同一门语言的不同写法"（`markdown`/`md`、
+      // `plaintext`/`plain`/`text`/`txt`、`nasm`/`armasm`/`asm6502`/`arm-asm`…），
+      // 而它们排进下拉就是好几行**一模一样的东西**（用户那张图里 `arm-asm` 与
+      // `armasm` 挨着）。判据是 `代表语言`——组里第一个是代表。
+      // ⚠️ **一个都没少**：`refractor` 那 400 个 id 照旧全部支持，用户手打
+      // `armasm` 一样能用（输入框那条路，`lang-picker.ts`）；变的只是"摆出来的
+      // 那几行"。
+      .filter((名) => 代表语言(名) === 名)
       .sort((a, b) => a.localeCompare(b));
   }
   return sortedLanguages;
+}
+
+/**
+ * 同一个图标组里的**全部写法**（含代表名自己）。
+ *
+ * ⚠️ 给搜索用：下拉里一行一个语言族（`allLanguages` 那条写着为什么），而用户
+ * 可能按 `armasm` / `md` / `plain` 这些**别名**找——它们和代表名是同一门语言。
+ * ⚠️ 表里没有的（用户自己敲的那种）原样给一个。
+ */
+function 同族语言(id: string): readonly string[] {
+  const 代表 = 代表语言(id);
+  return 图标组.find((g) => g.语言.includes(代表))?.语言 ?? [id];
 }
 
 /**
@@ -300,6 +322,9 @@ export const codeBlockView = $view(
 
       const 语言选择器 = 创建语言选择器({
         全部语言: allLanguages,
+        // ⚠️ 搜索要连**别名**一起认（2026-10-16）：下拉一行一个语言族，
+        // 而 `armasm` / `md` / `plain` 这些别名也得能筛出那一行。见 `代表语言`。
+        别名: 同族语言,
         当前语言: () => languageOf(当前节点),
         选语言: applyLanguage,
       });
@@ -329,7 +354,48 @@ export const codeBlockView = $view(
         失焦: () => {},
         撤销: () => 走命令(undo),
         重做: () => 走命令(redo),
+        退出到正文: () => 拆掉这一块(),
       });
+
+      /**
+       * **把这一块代码拆成正文段落**（光标在代码块**最开头**按退格时走这条路）。
+       *
+       * 用户朋友报的原话：「我认为在代码块一开始按下 BACKSPACE 应该删掉代码块」
+       * ——在此之前那一颗键**什么都不做**（CM 的光标已经在 0，没有字可删）。
+       *
+       * ⚠️ **拆成段落、不是把内容扔掉**：要的是"去掉围栏"，不是"把这一块连字一起
+       * 删掉"。所以一行一段（段落装不下换行），一个字都不丢；想连内容一起删，
+       * 那是 `Ctrl+A` ＋ 删除的事。
+       *
+       * ⚠️ 一行一段而不是"合成一段"：代码块里换行的位置是有意义的（缩进、分支），
+       * 合成一段等于把所有换行吃掉。⚠️ 空代码块给一条空段落（效果就是"删掉这一块"）。
+       *
+       * ⚠️ **一笔事务**（撤销一次就回到代码块），而且光标落在**第一个段落开头**
+       * ——用户接着打字就是在正文里接着写，正是他按这一颗键的意图。
+       */
+      function 拆掉这一块(): void {
+        const pos = getPos();
+        if (typeof pos !== "number") return;
+        const 节点 = view.state.doc.nodeAt(pos);
+        if (!节点) return;
+        const 段落类型 = view.state.schema.nodes.paragraph;
+        if (!段落类型) return;
+        const 行们 = 节点.textContent.split("\n");
+        const 段们 = (行们.length > 0 ? 行们 : [""]).map((行) =>
+          段落类型.create(null, 行 === "" ? null : view.state.schema.text(行)),
+        );
+        const 事务 = view.state.tr.replaceWith(pos, pos + 节点.nodeSize, 段们);
+        事务.setSelection(TextSelection.create(事务.doc, pos + 1));
+        // ⚠️ `同步中` 那把锁要**先按住**：`replaceWith` 会把 CM 那一层整个换掉
+        //（NodeView 被销毁、`文本变化` 在销毁前后还可能响一次），不按住的话
+        // 那一笔回声会再推一次文本、把刚拆出来的段落又改一遍。
+        同步中 = true;
+        try {
+          view.dispatch(事务);
+        } finally {
+          同步中 = false;
+        }
+      }
 
       /**
        * 把 CodeMirror 里的改动**推回文档**（一笔真事务）。

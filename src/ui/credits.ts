@@ -123,6 +123,17 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       许可: "MIT",
     },
     {
+      // 「Nota」那三个字的字体（2026-10-16 用户点名：「文字徽标用"Nota"，
+      // 字体是 Monoton……鸣谢里写一下徽标字体用的是这个」）。
+      // ⚠️ 它**不是 npm 包**，是一个随包分发的字体文件
+      //（`src/assets/fonts/Monoton-Regular.ttf` ＋ 同目录那份 `OFL.txt`），
+      // 所以这一行是这一份名单里少见的"搬进仓库的东西"——与 §6 的图标同一类。
+      名: "Monoton",
+      用处: t("The “Nota” wordmark"),
+      链接: "https://fonts.google.com/specimen/Monoton",
+      许可: "OFL-1.1",
+    },
+    {
       // 2026-10-11 起**拼写检查的引擎**就是它（`src-tauri/src/spell/native.rs`）：
       // 纯 Rust 的 hunspell 实现，编进程序里。⚠️ 许可那一栏写 **Apache-2.0** 是
       // 照它仓库里那份 `LICENSE` 抄的——**不是**选型时拿到的第二手材料说的 MIT

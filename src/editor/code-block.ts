@@ -35,6 +35,7 @@ import { refractor } from "refractor";
 import { t } from "@/i18n";
 
 import { 创建代码块编辑器, 算最小改动 } from "./code-block-cm";
+import { 建HTML预览 } from "./code-preview";
 import { 创建语言选择器 } from "./lang-picker";
 import { 有专属图标 } from "./lang-icon";
 import { 图标组, 代表语言 } from "./lang-icons-real";
@@ -466,9 +467,27 @@ export const codeBlockView = $view(
       }
 
       bar.append(foldBtn, copyBtn);
+      // ── HTML 预览（2026-10-16）───────────────────────────────────────
+      // ⚠️ **它长在 `pre` 之外**（`wrap > pre ＋ 预览`），所以这一批多套了一层
+      // `div.nota-code-wrap`。两层理由：
+      // ① 预览要**占文档流**（它不是浮层）：`pre` 上那三样挂件全靠
+      //    `position: absolute` 挂在块外，谁也不推下一段；预览是一整块框，
+      //    必须把后面的内容顶下去；
+      // ② `pre` 上有 `overflow: visible`（为围栏标记留的）与一堆绝对定位的
+      //    挂件，把预览**塞进 `pre` 里面**去改它的内边距，会连语言框、按钮条
+      //    的落点一起挪。
+      // ⚠️ 这一层 `div` 让 `.ProseMirror > pre` 那类**直接子元素**选择器不再命中
+      //    ——现网那几条全是后代选择器（`.ProseMirror pre`），核过，一条不受影响；
+      //    往后加样式时照着后代选择器写。
+      // ⚠️ 预览语言不是 HTML 时它 `hidden`，**一个像素都不占**（见 `code-preview.ts`）。
+      const wrap = document.createElement("div");
+      wrap.className = "nota-code-wrap";
+      const 预览 = 建HTML预览();
+
       // ⚠️ 顺序：`code`（隐藏的 contentDOM）与 CM 的根一起放在最前，三个挂件随后。
       // 挂件都是绝对定位，顺序上不敏感，但 contentDOM 必须是 `pre` 的子元素。
       pre.append(code, 代码编辑器.视图.dom, gutter, bar, langWrap);
+      wrap.append(pre, 预览.元素);
 
       // 点在 `pre` 的**内边距**上（不在 CM 的内容里）时，把焦点交给 CM。
       // ⚠️ 不这么做的话这一击被 `stopEvent` 拦下、谁也不管——用户会觉得
@@ -539,12 +558,18 @@ export const codeBlockView = $view(
         // 看不出来，长代码块上会变成打字时的卡顿。
         const 号 = 行号(node);
         if (gutter.textContent !== 号) gutter.textContent = 号;
+        // ⚠️ 预览跟着**语言**决定露不露脸、跟着**内容**换 `srcdoc`
+        // （内部去抖，见 `code-preview.ts` 文件头第 3 条）。
+        预览.同步(node);
       };
 
+      // ⚠️ 首帧**立刻写**（不去抖）：块刚挂上来时不存在"用户还在打字"这回事，
+      // 攒 300ms 只会让刚打开的文档里那段 HTML 慢半拍才出来。
       syncChrome(initialNode);
+      预览.同步(initialNode, true);
 
       return {
-        dom: pre,
+        dom: wrap,
         contentDOM: code,
 
         update: (updated) => {
@@ -579,7 +604,11 @@ export const codeBlockView = $view(
         // ⚠️ **2026-10-06 起判据放宽成整个 `pre` 子树**（原来是"三个挂件"）：
         // 代码区里现在是 CodeMirror 的 DOM，它每一次按键/重绘都发生在这个子树里。
         // 漏一条进去，PM 就会去重解析那一坨不属于它的 DOM——光标当场飞走。
-        stopEvent: (e) => e.target instanceof Node && pre.contains(e.target),
+        // ⚠️ 预览那一块（2026-10-16）也一起拦：点它不该被 PM 当成"点了编辑区"
+        // 去挪光标。它里面的 iframe **自成一份文档**，那些事件根本不上来，
+        // 所以这里判的是预览框自己那一圈内边距 / 边框。
+        stopEvent: (e) =>
+          e.target instanceof Node && (pre.contains(e.target) || 预览.元素.contains(e.target)),
 
         // ⚠️ 一律 `true`：这个节点里的 DOM 变化**没有一件**是 PM 该关心的
         // ——文本的唯一入口是 `推回文档` 那条事务，不靠它从 DOM 里读。
@@ -604,6 +633,8 @@ export const codeBlockView = $view(
         destroy: () => {
           语言选择器.销毁();
           代码编辑器.销毁();
+          // ⚠️ 预览自己那条待写的定时器也要撤（见 `code-preview.ts` 文件头）。
+          预览.销毁();
         },
       };
     },

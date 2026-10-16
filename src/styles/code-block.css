@@ -474,6 +474,45 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
   overflow: hidden;
   opacity: 0;
   /* ⚠️ 它零尺寸、又正压在 `pre` 的左上内边距上，不给这一条的话那里会有
-     一小块"点了没反应"的死区——事件落进一个看不见的节点里。 */
+    一小块"点了没反应"的死区——事件落进一个看不见的节点里。 */
   pointer-events: none;
+}
+
+/* ── HTML 代码块下面那块预览（2026-10-16）─────────────────────────────
+   用户点名：「如果代码框语言是html的话，在下面可以直接显示预览，类似流程图那样」。
+   判据、沙箱那一条（`allow-scripts` 但**不给** `allow-same-origin`）与去抖的
+   理由都写在 `editor/code-preview.ts` 文件头，这里只管长相。
+
+   ⚠️ 这一层 `div` 是 NodeView 新套的那一层（`wrap > pre ＋ 预览`），所以
+   **`.nota-code-wrap` 自己不画任何东西**（边框、底色、内边距一个都不给）：
+   它的唯一作用是"让预览占文档流、又不动 `pre` 上那三样绝对定位的挂件"。
+   给它加内边距会把语言选择框与按钮条（都 `top: 100%` 挂在 `pre` 上）一起挪。 */
+.nota-code-wrap {
+  /* ⚠️ 不给 `overflow`：`pre` 上那三样挂件全靠"块外可见"才画得出来。 */
+  display: block;
+}
+
+.nota-code-preview {
+  /* ⚠️ 高度是**写死的**：预览里那段 HTML 没有自己的视口高度，让它撑高就成了
+     "拖地"（一段 `<div style="height:4000px">` 能把正文推到屏幕外）。240px 是
+     "看得出长什么样、又不至于把正文挤走"那一档。里面自己滚。 */
+  height: 240px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  /* ⚠️ 白底是**写死的 `#fff`**，不跟界面主题、也不跟文档主题：
+     这一格里画的是一张**网页**，浏览器里它就该是白的——深色界面下用 `--bg`
+     会让"我这段 HTML 在浏览器里到底长什么样"这个问题答不准。 */
+  background: #fff;
+}
+
+.nota-code-preview-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* ⚠️ 这是**给 iframe 文档**设的底色（它自己的 `html` 没有背景时透上来），
+     与上面那条同理写死白色。 */
+  background: #fff;
 }

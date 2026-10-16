@@ -3545,7 +3545,7 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing find select move-block link-edit panel-dock-state; do
+for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing code-preview find select move-block link-edit panel-dock-state; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -6445,3 +6445,29 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 `import -crop` 出来那张图上是**窗口内坐标**——先 `xdotool getwindowgeometry <id>`
 把偏移（本机 `250,120`）加上去。直接拿裁剪图上的像素当点击坐标，那一下会点进编辑区，
 然后你会以为"动画没触发"。
+
+### 5.67 验「HTML 代码块下面的预览」（2026-10-16，✅ 开窗验过）
+
+用户点名：「还有一个小修改：**如果代码框语言是html的话，在下面可以直接显示预览，
+类似流程图那样**」。
+
+**配方**：隔离 `XDG_*` 的桩文档里放两段围栏——一段 ` ```html ` （一个带内联样式的
+`div` ＋ 一句中文）、一段 ` ```javascript `（对照组，**不该有**预览）。启动、
+`import -window root` 抓帧。
+
+**看到了什么**：`html` 那块下面是**一张白底的框**（240px 高、圆角、`--border` 描边），
+里面画着预览里的标题（`<h3>`）与那段绿字——**内联样式生效了**，
+说明它是真在 iframe 里渲染，不是把 HTML 当文本显示；`javascript` 那块下面
+**什么都没有**（`.nota-code-preview` 是 `hidden`，一个像素都不占）。
+⚠️ 同帧里还能看到代码块自己那三样挂件**位置没变**（悬停时左下角 `Collapse`/`Copy`、
+右下角 `HTML` 语言框）——那一层 `div.nota-code-wrap` 是 2026-10-16 加 HTML 预览时
+套上去的，最容易的坏法就是把它那三样的落点一起挪走。
+
+**live 更新那一条**（预览会跟着你打字变）：点进那段代码、`End`、敲 `<hr>`，
+等 300ms 以上再抓一帧——预览里**多出一条横线**。⚠️ 判据是"变了"，不是"没崩"：
+不去抖/不重写 `srcdoc` 的坏法正好是"代码改了、框里还是旧的"，而那种静态帧
+（只看一张图）**完全看不出来**。
+
+⚠️ **这一条没验的**：`allow-scripts` 那半边（桩文档里没放 `<script>`）——真要验得写一段
+会动的脚本，而且"脚本跑了没有"在静帧上很难判；这里只核了**属性写对了**
+（`sandbox="allow-scripts"` 且**没有** `allow-same-origin`，见 `docs/05` §4.28 ②）。

@@ -971,6 +971,16 @@ ProseMirror 把它渲染成一个真的 `<span>`，所以 `ContextMenu.tsx` 那�
 ⚠️ 逐项的职责与坑以 `docs/02` 那几行为准，这一节不重抄一份。
 这是刻意的（省得去写"把 A 文档的撤销栈换成 B 的"），见 `docs/05`。
 
+
+⚠️ **2026-10-16：代码块下面多了一块 HTML 预览**（用户：「如果代码框语言是html的话，
+在下面可以直接显示预览，类似流程图那样」）。它长在 `pre` **之外**（NodeView 现在
+是 `div.nota-code-wrap > pre ＋ 预览`），**只在语言是 `html` / `htm` / `xhtml` 时出现**，
+其余语言一个像素都不占。⚠️ 沙箱只开 `allow-scripts`、**不给** `allow-same-origin`
+（两个一起给等于没沙箱）；`srcdoc` 去抖 300ms（写一次＝换一份文档）。⚠️ 它是**编辑时
+零件**：`editor/export.ts` 的 `整块删掉` 名单里有它，导出的 HTML / PDF 里**没有**这一块。
+判据 `tests/code-preview.test.ts` 14 条 ＋ 开窗目检（`docs/06` §5.67）；做法与三条 ⚠️
+写在 `docs/05` §4.28。
+
 ### 2.3b 编辑区里的插件预览（`ui/ReviewPane.tsx`）—— 2026-09-25 起
 
 **用户原话**：「要求允许直接在Markdown编辑区域进行预览。删除用红色背景色+删除线；

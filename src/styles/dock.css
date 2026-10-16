@@ -55,7 +55,7 @@
 
 .plugin-dock {
   /* ⚠️ `position: relative` 是给左缘那条把手当定位父级的（2026-10-11）——
-     和 `.sidebar` 上那一条同理：把手要量"这一栏的右缘"，只有现场量得准。 */
+    和 `.sidebar` 上那一条同理：把手要量"这一栏的右缘"，只有现场量得准。 */
   position: relative;
   width: var(--dock-width);
   flex: none;
@@ -64,6 +64,45 @@
   border-left: 1px solid var(--border);
   background: var(--bg-subtle);
   min-height: 0;
+  /* ── 开栏那一下**滑进来**，不硬切（2026-10-16）─────────────────────────
+
+     用户原话：「**拓展界面打开时要求也有一个动画，别硬切**」。
+
+     ⚠️ **滑的是 `margin-right`，不是 `transform`**：这一栏是 `.app-body` 里
+     最后一个 flex 项，给它一个负的右外边距就等于**把它自己推出窗口右缘**，
+     而 `flex: 1` 的正文列会跟着一点点变宽——于是"面板滑进来"与"正文列让位"
+     是**同一段动画**（正文不会在开头那一帧硬跳一下，字幕跟着重排）。用
+     `translateX` 只挪画面、不挪布局，正文列会在第一帧就跳到最终宽度。
+
+     ⚠️ 滑出去的那一半**靠 `body { overflow: hidden }` 裁掉**（`app.css` 顶上
+     那一条），**不是**给这一栏加 `overflow: hidden`——那样会把左缘那条
+     拖动把手（`.dock-resizer`，`left: -3px`）一起裁掉，而那正是 2026-10-11
+     用户点名要的东西。
+
+     ⚠️ 距离走 `--dock-slide` 而不是直接写 `--dock-width`：加宽档（画布类面板，
+     `data-wide="true"` 时宽度是 `min(560px, 45vw)`）得滑同样远，用 `--dock-width`
+     的话宽面板只滑一半就"落位"了。 */
+  --dock-slide: var(--dock-width);
+  animation: dock-in calc(var(--duration-fast) * 1.6) var(--ease-out);
+}
+
+@keyframes dock-in {
+  from {
+    margin-right: calc(-1 * var(--dock-slide));
+    opacity: 0.35;
+  }
+  to {
+    margin-right: 0;
+    opacity: 1;
+  }
+}
+
+/* ⚠️ 系统开了"减少动态效果"就**不要动画**（同菜单 / 提示条那两条：这类用户里
+   有一部分是前庭功能敏感，位移类动画会真的让人不舒服）。 */
+@media (prefers-reduced-motion: reduce) {
+  .plugin-dock {
+    animation: none;
+  }
 }
 
 .dock-head {
@@ -255,6 +294,8 @@
    插件一改名就静默失灵（不报错，只是变窄）。现在读的是面板清单里的 `wide`。 */
 .plugin-dock[data-wide="true"] {
   width: min(560px, 45vw);
+  /* 加宽档要**滑同样远**（见上面 `--dock-slide` 那一段）。 */
+  --dock-slide: min(560px, 45vw);
 }
 
 /* ── 左缘那条可以拖的把手（2026-10-11，用户：「拓展菜单左侧也可以拖动」）────────

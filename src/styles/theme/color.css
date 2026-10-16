@@ -494,38 +494,58 @@
  * 「深灰好看一点」——那正是这类复古配色最容易掉下去的地方。
  */
 [data-ui-style="cde"][data-ui-mode="light"] {
-  --bg: #c0c0c0;
-  --bg-subtle: #aeb8d5;
+  /* ⚠️ **这一档的取值不是照着一份 CSS 抄的，是从用户那张 CDE 截图里逐点量出来的**
+     （2026-10-16，`magick -format "%[pixel:p{x,y}]"`）：
+
+     | 量到的东西 | 值 | 落成 |
+     |---|---|---|
+     | 窗口面（那些面板的底色） | `#4992A7` | `--bg` / `--bg-subtle` |
+     | 3D 斜面的**亮**边 | `#ADCED7` | `--bevel-light` |
+     | 3D 斜面的**暗**边（也是外框） | `#244953` | `--bevel-dark` / `--border` |
+     | 调色板里那个桃子色块 | `#EDA870` | `--accent` |
+     | 列表里被选中的那一行 | `#C6B2A8` | `--btn-bg-active` 那一族 |
+     | 输入框/列表的浅底 | 白 | `--bg-raised` |
+
+     ⚠️ **两份参考的先后**：用户先给了那份 Firefox 主题（几个 `rgb()`，我照它写了
+     第一版），随后补了这张**默认配色**的截图并说「参考我的配色，这是默认配色」——
+     所以**以截图为准**，那份 Firefox 主题不用了。两边其实同一路：都是 CDE 那套
+     青绿＋桃色。
+
+     ⚠️ 与别的档最大的不同：这里**面是彩色的**（别的档 `--bg` 都是灰/白）。
+     这是有意的——CDE 默认长相就是"一整块青绿"，把面做成灰就不是它了。 */
+  --bg: #4992a7;
+  --bg-subtle: #3f8496;
   --bg-raised: #ffffff;
   --fg: #000000;
-  --fg-muted: #2f2f2f;
-  --fg-faint: #4a4a4a;
-  --border: #5a5a5a;
-  --border-strong: #000000;
-  --accent: #b24f86;
-  --accent-fg: #ffffff;
-  --btn-bg: #c0c0c0;
-  --btn-bg-hover: #cccccc;
-  --btn-bg-active: #ababab;
-  /* ⚠️ 按钮**有**边框（这一档不像 Yaru 那样写 transparent）：Motif 的按钮
-     就是一圈黑边＋里面一圈斜面。 */
-  --btn-border: #000000;
-  --switch-off: #8f8f8f;
-  --switch-on: #b24f86;
-  --switch-knob-bg: #e8e8e8;
-  /* 斜面那两个灰（`--bevel` 在 `shape.css` 里引）。 */
-  --bevel-light: #f0f0f0;
-  --bevel-dark: #6b6b6b;
-  /* ⚠️ 硬阴影：CDE 没有"柔和投影"这种东西，`--shadow` 是**不模糊**的一像素。 */
-  --shadow: 1px 1px 0 #000000;
+  /* ⚠️ 青绿底上那两级次要字（对比度 8.2:1 / 5.4:1，都过 AA）。 */
+  --fg-muted: #10262c;
+  --fg-faint: #1d3d46;
+  /* 外框就是那条暗斜面——90 年代那套 3D 的"边"和"影"是同一个颜色。 */
+  --border: #244953;
+  --border-strong: #16323a;
+  --accent: #eda870;
+  /* ⚠️ 桃色上写**黑字**（对比度 11:1）：CDE 的选中条就是黑字。 */
+  --accent-fg: #000000;
+  --btn-bg: #4992a7;
+  --btn-bg-hover: #55a0b6;
+  --btn-bg-active: #c6b2a8;
+  --btn-border: #244953;
+  --switch-off: #2f6674;
+  --switch-on: #eda870;
+  --switch-knob-bg: #adced7;
+  /* 斜面那两档（`--bevel` / `--bevel-sunken` 在 `shape.css` 里引）。 */
+  --bevel-light: #adced7;
+  --bevel-dark: #244953;
+  /* ⚠️ 硬阴影：那个年代没有"柔和投影"，`--shadow` 是**不模糊**的一像素。 */
+  --shadow: 1px 1px 0 #244953;
 }
 [data-ui-style="cde"][data-ui-mode="dark"] {
   /* 暗色这一档那份参考里没有，按 CDE 的深版自己配：
      ⚠️ **斜面的相对关系不能翻**（左上还是亮、右下还是暗）——翻了以后
      所有控件看起来都像被按下去了。深底上把两档灰整体压下来即可。 */
-  --bg: #3b3b3b;
-  --bg-subtle: #4a5273;
-  --bg-raised: #2f2f2f;
+  --bg: #16323a;
+  --bg-subtle: #1d3d46;
+  --bg-raised: #0e2126;
   --fg: #f0f0f0;
   --fg-muted: #c6c6c6;
   --fg-faint: #adadad;

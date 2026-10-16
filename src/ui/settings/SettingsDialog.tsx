@@ -75,7 +75,6 @@ import { GeneralPane } from "./panes/GeneralPane";
 import { ImagePane } from "./panes/ImagePane";
 import { MarkdownPane } from "./panes/MarkdownPane";
 import { ShortcutsPane } from "./panes/ShortcutsPane";
-import { 取设置页请求 } from "./open-request";
 import type { PaneProps } from "./panes/props";
 
 export type SectionId =
@@ -258,14 +257,14 @@ export function SettingsDialog({
    * ⚠️ 默认「外观」而不是第一节「文件」：打开设置的人多半是要调样子或者找
    * Markdown 那几档开关，而文件页那几条（启动选项、拖放）一辈子改一次。
    *
-   * ⚠️ 2026-10-11 起**可以从外面指定**（状态栏那个拼写菜单底下的「全局设置…」，
-   * 见 `ui/settings/open-request.ts` 顶上那三条路）：取的是**一次性的信箱**，
-   * ⚠️ **只在挂载时取一次**（`useState` 的初值），所以切页那件交互仍然只归这一份
-   * `useState` 管——信箱管的是"这一次打开落在哪儿"，不是"这一页现在在哪"。
+   * ⚠️ **2026-10-11 到 2026-10-16 之间它还能被外面指定**（状态栏那个拼写菜单
+   * 底下的「全局设置…」投一封一次性信件进来，`ui/settings/open-request.ts`）。
+   * ⚠️ **那条链 2026-10-16 整条删了**：用户点名「我认为这里不应该有"全局设置"
+   * 的按钮」，而那一封信**只有那一个投递方**——留着就是"没人写、有人读"的死账。
+   * 所以这一格又回到"只有自己这一份 `useState` 说了算"，而且**这次是唯一的入口**：
+   * 要再让外面指定一次，就得连同"谁来投信"一起设计，别再单独把信箱加回来。
    */
-  const [section, setSection] = useState<SectionId>(
-    () => 取设置页请求() ?? "appearance",
-  );
+  const [section, setSection] = useState<SectionId>("appearance");
   const [query, setQuery] = useState("");
 
   // 查询先小写化再进 context：`hits()` 只做一次 `includes`，

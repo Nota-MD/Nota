@@ -39,7 +39,6 @@ import type { CommandState } from "@/editor/command-state";
 import type { FocusState } from "@/bridge/types";
 import type { StatusMetric } from "@/bridge/types-settings";
 import { StatusBar } from "@/ui/StatusBar";
-import { 请求设置页 } from "@/ui/settings/open-request";
 
 /** `StatusBar` 要的全部 props。**别手抄**，见文件头最后那段。 */
 type 栏的props = ComponentProps<typeof StatusBar>;
@@ -71,14 +70,6 @@ export function useStatusBar(接线: {
    */
   设界面: (patch: Partial<Settings["appearance"]>) => void;
   /**
-   * 打开设置窗（`App.tsx` 的 `setSettingsOpen`，2026-10-11 加）。
-   *
-   * ⚠️ 只有状态栏那个拼写菜单底下的「全局设置…」用它，而它**不是**"打开设置"
-   * 的第二条实现：真正开窗的仍然是 `App.tsx` 那一个 `setSettingsOpen`
-   * （与菜单那条、`Ctrl+,` 同一条路）。这一格只是把那个 setter 递下来。
-   */
-  打开设置页: () => void;
-  /**
    * 光标那一份状态（`App.tsx` 的 `commandState`）。状态栏只吃它**一格**：
    * `overtype`（覆写模式开着没有，画那个 `OVR`）。`null` = 读不出来
    * （源码模式 / 还没打开文档）——那时不画。
@@ -102,7 +93,6 @@ export function useStatusBar(接线: {
     setSidebarOpen,
     focus,
     设界面,
-    打开设置页,
     光标,
     插件栏,
   } = 接线;
@@ -170,14 +160,6 @@ export function useStatusBar(接线: {
         },
       });
     },
-    // 菜单底下那条「全局设置…」：**先投一条"要去哪一页"的信**，再开窗
-    // （顺序不能反——`SettingsDialog` 是在挂载那一刻取那封信的，
-    // 见 `ui/settings/open-request.ts` 顶上那三条路）。
-    onOpenSettings: () => {
-      请求设置页("editor");
-      打开设置页();
-    },
-
     // 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`、侧栏那颗 ×
     // 是**同一个开关的第五个入口**，共用 `App.tsx` 那个 setter。
     onToggleSidebar: () => setSidebarOpen((v) => !v),

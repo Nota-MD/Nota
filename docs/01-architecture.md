@@ -364,9 +364,13 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 
 ### 通道 A：前端 → 后端（`invoke` 命令）
 
-注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 94 项**：
-`commands::*` 下的 **84 条** ＋ **`spell::*` 那 8 条** ＋ `lib.rs` 自己那两条
+注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 95 项**：
+`commands::*` 下的 **85 条** ＋ **`spell::*` 那 8 条** ＋ `lib.rs` 自己那两条
 （前端就绪握手 `nota_frontend_ready`、启动参数 `nota_startup_file`）。
+⚠️ **第十四遍（2026-10-16，退出前那一问那一批时重数的）**：真值 **95 = 85 ＋ 8 ＋ 2**，
+唯一动的是**窗口那一组 2 → 3**（新增 `nota_quit`：前端确认过之后**真的退出**，
+见 `docs/02` 的 `commands/window.rs` 一节）。⚠️ 数的配方与上一遍一样
+（`grep -oE 'commands::[a-z_]*::' src-tauri/src/lib.rs | wc -l`，**先去注释**）。
 ⚠️ **第十三遍（2026-10-11，拼写检查换引擎那一批时重数的）**：真值 **94 = 84 ＋ 8 ＋ 2**，
 按模块是 文档 15 ＋ 工作区 4 ＋ 设置 6 ＋ 主题 3 ＋ **插件 17** ＋ 导出 4 ＋
 借 pandoc 导出 2 ＋ 原生菜单 1 ＋ 插入图片 1 ＋ 上传图片 3 ＋ 焦点 6 ＋ 表格宽度 3 ＋

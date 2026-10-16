@@ -751,7 +751,6 @@ export default function App() {
     // 菜单 / 快捷键 / × 三条入口汇到同一个 setter），所以这里把 setter 交出去，
     // 不在 `useStatusBar` 里另写一份 `appearance` 的整表铺开。
     设界面: setChrome,
-    打开设置页: () => setSettingsOpen(true),
     光标: commandState,
     // ⚠️ 顶栏整条不画时（见 `TopBar`），插件栏那颗开关落到状态栏——`null` = 顶栏在。
     插件栏: usingNativeMenu || !menuBarOpen ? { 开: dockOpen, 切换: () => setDockOpen((v) => !v) } : null,

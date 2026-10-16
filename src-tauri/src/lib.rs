@@ -393,6 +393,7 @@ pub fn run() {
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
             commands::window::nota_window_open_devtools,
+            commands::window::nota_quit,
             commands::window::nota_window_open_new,
             // 拖放那条路要的「这条路径是什么」（`commands/paths.rs`）。
             commands::path_kind::nota_paths_kind,
@@ -465,6 +466,31 @@ pub fn run() {
             let _ = app.emit("nota:native-menu", event.id().0.clone());
         })
         .on_window_event(|window, event| {
+            // ── 关窗口时先问一句（2026-10-16 加）──────────────────────────
+            //
+            // 用户朋友那份清单的第 7／16 条：「**功能:退出软件时对更改进行保存/弹窗**」。
+            // 在那之前，点窗口的叉就是**直接退**——内存里没存的那几笔改动一个字
+            // 都不问就没了，是那种"用户不会想到要报、但一定会骂"的事故。
+            //
+            // ⚠️ **这两个条件是"拦不拦"的全部判据，而且都在这儿判**：
+            //   ① 设置里开着「关闭前先问我」（`Settings::confirm_unsaved`）；
+            //   ② 宿主那份镜像里**确实有**没保存的改动。
+            // 两条有一条不成立就直接放行——**没有未保存的改动就不该多一次往返**
+            //（关一下窗口要等前端回话才退，那是另一种坏体验）。
+            //
+            // ⚠️ **问的那句话、存盘、以及"用户点了取消"这三件事一件都不在这儿**：
+            // 正文真相与"哪几份是脏的"都在前端（见 `commands/window.rs::nota_quit`）。
+            // 宿主只做一件事——把这一下**挡回去**，然后告诉前端"有人要关窗了"。
+            //
+            // ⚠️ **只拦 `main`**（与下面 `Focused` / `Destroyed` 两段同一条口径）：
+            // 别的窗口（对话框、以后插件自己开的窗）关掉就该立刻关掉。
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && 关窗前要问(window) {
+                    api.prevent_close();
+                    let _ = window.app_handle().emit("nota:close-requested", ());
+                }
+            }
+
             // ── 强制专注靠这一枪吃饭 ────────────────────────────────────────
             //
             // ⚠️⚠️ **判据必须钉死在 `main` 上**，这里比 `Destroyed` 那一段更要紧：
@@ -585,6 +611,35 @@ pub fn run() {
                 }
             }
         })
+}
+
+/// 关窗前**要不要把这一下挡回去、让前端去问用户**。
+///
+/// ⚠️ **两条都成立才拦**：设置里开着「关闭前先问我」，**而且**镜像里确实有
+/// 没保存的改动。读法按本仓的锁序（`plugins → documents → settings`）：这里只
+/// 碰 `documents` 与 `settings`，而且是**先放掉 documents 再取 settings**，
+/// 不把两把锁同时握着（同一条理由写在 `state.rs` 顶上）。
+///
+/// ⚠️ **读不到状态就放行**：拿不到（启动早期、`AppState` 还没 `manage`）时按
+/// "不用问"办。拦一个自己都读不懂的窗口，最坏的结果是**关不掉**——那比少问一句
+/// 严重得多。
+fn 关窗前要问(window: &tauri::Window) -> bool {
+    let Some(state) = window.try_state::<AppState>() else {
+        return false;
+    };
+    let 有未保存 = state
+        .documents
+        .lock()
+        .map(|docs| docs.has_unsaved())
+        .unwrap_or(false);
+    if !有未保存 {
+        return false;
+    }
+    state
+        .settings
+        .lock()
+        .map(|s| s.confirm_unsaved)
+        .unwrap_or(false)
 }
 
 /// 启动时命令行里带的那个文件（`nota 笔记.md`），没有就是 `None`。

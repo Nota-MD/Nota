@@ -131,7 +131,6 @@ PAIRS=(
   # 2026-10-11（照 Typora 重做状态栏那个拼写菜单）：三个新文件。
   "src/ui/SpellMenu.tsx                          04,02"
   "src/ui/spell-langs.ts                         04,02"
-  "src/ui/settings/open-request.ts               04,02"
   # 2026-10-11（修用户报的“菜单里一下滚就消失”）：弹层自己滚不算“底下动了”。
   "src/ui/popup-scroll.ts                         04,02"
   # 2026-09-28：和 `pdf_print.rs` 隔壁、同样"只有 Linux 编"的那一份 ——
@@ -254,6 +253,10 @@ PAIRS=(
   # ⚠️ 它和 `command-state.ts` 是一对——开关住在插件 state 里、状态栏那个
   # `OVR` 靠**签名串**发现它变了，所以改这个文件要连着 `05` 与 `04` 一起看。
   "src/editor/overtype.ts                        05,04"
+  # 2026-10-16（朋友清单第 7／16 条「退出软件时对更改进行保存/弹窗」）：新文件。
+  # 它与 `src-tauri/src/lib.rs` 的 `CloseRequested` 是一对——改一边就要看一眼
+  # 另一边，所以 `04`（界面上的那一问）与 `02`（模块账）都挂上。
+  "src/ui/useQuitGuard.ts                        04,02"
   "src/editor/table-input.ts                      05,04,10"
   # 2026-09-27：行首那颗多余的反斜杠（`\| 1 | 2 |`）。⚠️ 它**不改表格那条路**——只动"物理上只能占一行"的普通段落。
   "src/editor/table-pipe.ts                      05,07"

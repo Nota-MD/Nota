@@ -57,6 +57,7 @@ import type { EditorPaneHandle } from "@/ui/EditorPane";
 import { 口径键, 读口径 } from "@/ui/tree-options";
 import { useAutosave } from "@/ui/useAutosave";
 import type { Dialogs } from "@/ui/useDialogs";
+import { useQuitGuard } from "@/ui/useQuitGuard";
 import { 所在目录, 拼路径 } from "@/ui/useExport";
 import type { Toast } from "@/ui/Toasts";
 
@@ -633,6 +634,17 @@ export function useDocuments(w: 文档接线): 文档出口 {
     activeIdRef,
     saveDoc: (id) => saveDoc(id, false, true),
   });
+
+  /**
+   * **退出前把没存的那几份问一遍**（2026-10-16 加，朋友清单第 7／16 条）。
+   *
+   * ⚠️ 挂在这里、不挂 `App.tsx`：它要的四样东西（文档表 / 存盘 / 问框 / 提示条）
+   * 这一层全都有，而 `App.tsx` 常年贴着 1000 行硬线。理由与那条两段式的流程
+   * 写在 `ui/useQuitGuard.ts` 文件头。
+   *
+   * ⚠️ 它的位置在 `saveDoc` **之后**（与 `useAutosave` 同一条理由）。
+   */
+  useQuitGuard({ docs, saveDoc: (id) => saveDoc(id), toast, askConfirm });
 
   return {
     openPath,

@@ -128,25 +128,10 @@ interface PopupProps {
    * （那一层由调用方负责，见 `ui/SpellMenu.tsx` 里输入框上那条 `onKeyDown`）。
    */
   top?: ReactNode;
-  /**
-   * **最后一条真条目钉在这一层底部**（`position: sticky`）。
-   *
-   * ⚠️ 2026-10-11 加，用它的目前只有状态栏那个「选择拼写检查语言」菜单：
-   * 用户贴的 Typora 截图里，语言那一长列**滚动**而底下那条「全局设置…」
-   * **一直看得见**——菜单开在窗口右下角，长列表里最下面那一条不给钉住就等于
-   * 藏着。
-   *
-   * ⚠️ **它仍然是一条正常条目**（占漫游下标、能点、能勾）：钉住的只是**画法**。
-   * 早先想过把"出口"做成 `heading` 那样的非条目——那样键盘用户就走不到它了
-   * （漫游只认条目），而"菜单里有一条键盘到不了的出口"比"它跟着列表滚"
-   * 坏得多。
-   */
-  stickyLast?: boolean;
 }
 
 export function MenuPopup(props: PopupProps) {
-  const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label, heading, top, stickyLast } =
-    props;
+  const { entries, disabled, checks, onPick, onDismiss, onArrowOut, label, heading, top } = props;
 
   // ⚠️ 条目文字**在这里才翻**：`ui/commands.ts` 那张表里存的是**键**（英文原文）。
   // 规矩与理由写在 `ui/MenuBar.tsx::useT` 那一段，`SubMenu` 那边同样要一份。
@@ -218,22 +203,6 @@ export function MenuPopup(props: PopupProps) {
 
   const { itemProps, registerItem } = roving;
 
-  /**
-   * `stickyLast` 时把**最后一行**从滚动区里摘出来（`menu-popup-foot` 那一套）。
-   *
-   * ⚠️ 摘的是"最后一行"而不是"最后一条真条目"：这一层的调用方（状态栏那个拼写
-   * 菜单）把那条出口放在**末尾**、分隔线在它前面，所以两者是同一行。⚠️ 真要是
-   * 哪天末尾跟了一条分隔线，那条分隔线会被钉在底部——**看得出来**，不是静默错。
-   *
-   * ⚠️ 早先试过 `position: sticky; bottom: 0` 让最后一条自己钉住，**WebKit 上不
-   * 生效**（2026-10-11 开窗实测：滚到底也见不到那一行）。所以改成把弹层做成
-   * `flex` 列、只让中间那块滚。
-   */
-  const 分段 = useMemo(() => {
-    if (!stickyLast || lines.length < 2) return null;
-    return { 身: lines.slice(0, -1), 尾: lines[lines.length - 1]! };
-  }, [lines, stickyLast]);
-
   /** 登记父项按钮。**必须转一手**，不能把 `registerItem` 直接挂上去。 */
   const registerRow = (row: number, node: HTMLElement | null) => {
     rowRefs.current[row] = node;
@@ -266,9 +235,8 @@ export function MenuPopup(props: PopupProps) {
   }
 
   /**
-   * 画一行。⚠️ 提成函数而不是留在 JSX 里，是因为 `stickyLast` 要把**最后一条**
-   * 摘到滚动区外面（见下面 `分段`）——同一段 JSX 要按两处切片渲染，
-   * 复制一份 `.map` 回调就等于埋一份将来会漂的抄本。
+   * 画一行。⚠️ 提成函数而不是留在 JSX 里，是因为它有两处用处（父项那条 `map`
+   * 与子菜单那段），复制一份回调就等于埋一份将来会漂的抄本。
    */
   const 画行 = (line: Line) => {
       if (line.kind === "sep") {
@@ -286,12 +254,7 @@ export function MenuPopup(props: PopupProps) {
 
       return (
         <div
-          // ⚠️ `row === items.length - 1` 是"最后一条**真条目**"（分隔线不在
-          // `items` 里，见上面 `layout` 那段），所以这一条给的是那条出口，
-          // 而不是列表末尾那条分隔线。
-          className={`menu-item-root ${
-            stickyLast && row === items.length - 1 ? "menu-item-sticky" : ""
-          }`}
+          className="menu-item-root"
           key={entry.id}
         >
           <button
@@ -377,7 +340,7 @@ export function MenuPopup(props: PopupProps) {
 
   return (
     <div
-      className={`menu-popup ${分段 ? "menu-popup-foot" : ""}`}
+      className="menu-popup"
       role="menu"
       aria-label={label}
       onKeyDown={(e) => {
@@ -392,8 +355,7 @@ export function MenuPopup(props: PopupProps) {
       {/* ⚠️ 两块都在 `lines` **之外**：它们不是条目，不占漫游下标（见 `heading` / `top` 那两段）。 */}
       {top}
       {heading && <div className="menu-heading">{t(heading)}</div>}
-      {分段 ? <div className="menu-body">{分段.身.map(画行)}</div> : null}
-      {分段 ? 画行(分段.尾) : lines.map(画行)}
+      {lines.map(画行)}
     </div>
   );
 }

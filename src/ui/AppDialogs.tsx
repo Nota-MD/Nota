@@ -74,6 +74,22 @@ export function AppDialogs({
           confirmLabel={confirmReq.confirmLabel}
           danger={confirmReq.danger}
           hideCancel={confirmReq.hideCancel}
+          /**
+           * ⚠️ **这一行是 2026-10-16 补的，补之前第三条路从来没画出来过**（BUG-74）。
+           *
+           * `ConfirmRequest` 里一直有 `extraLabel`，`ConfirmDialog` 也一直支持它，
+           * 漏的是**中间这一层**：这里逐个字段铺过去，而 `extraLabel` 不在名单上——
+           * 于是"关掉一份没存盘的文档"那个框实际只有「取消 / 丢弃并关闭」两颗，
+           * 「保存并关闭」**一次都没出现过**。⚠️ 它是**静默**的：类型不报错
+           *（铺字段本来就不要求铺全）、界面上也看不出少了一颗——
+           * 直到 2026-10-16 做「退出前那一问」时才被同一类现象撞出来
+           *（那一批的三选框同样只画出了两颗）。判据见 `docs/06` §5.66。
+           *
+           * ⚠️ 教训：**这一层是"逐个字段铺"的写法，加字段必须回来补一行**。
+           * 更稳的写法是 `{...confirmReq}`（`ConfirmDialog` 与 `ConfirmRequest`
+           * 只差一个 `onAnswer`），但那是另一笔改动——先把这一颗补上。
+           */
+          extraLabel={confirmReq.extraLabel}
           onAnswer={answerConfirm}
         />
       )}

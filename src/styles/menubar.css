@@ -88,32 +88,6 @@
   font-size: 12px;
 }
 
-/* ── 钉在底部的那一条（2026-10-11）────────────────────────────────────────
-   `MenuPopup` 的 `stickyLast`：状态栏那个「选择拼写检查语言」菜单里，语言那一
-   长列会滚动，而最后那条「全局设置…」**一直看得见**（照用户贴的 Typora 截图）。
-
-   ⚠️⚠️ **它不走 `position: sticky`**——试过，**WebKit 上不生效**（2026-10-11
-   开窗实测：`bottom: 0` 也好、`bottom: -5px` 也好，滚到底都见不到那一行；
-   后者还把元素顶到滚动口外面去了）。改成把弹层做成 `flex` 列、**只让中间那块滚**：
-   `MenuPopup` 在 `stickyLast` 时把最后一行摘到 `.menu-body` 外面（结构见那边的
-   `分段`），这里只负责三句布局。
-
-   ⚠️ `min-height: 0` 是必须的：flex 子项的默认 `min-height: auto` 会让它**不肯
-   缩到内容以下**，于是那一块根本滚不起来、整层继续往外涨（这条在 flex 里踩过
-   无数次，`ui/panel.css` 那边也标着）。
-   ⚠️ `overflow: hidden` 落在弹层上（覆盖 `.menu-popup` 那条 `overflow-y: auto`）：
-   滚的是里面那一块，弹层自己不滚。 */
-.menu-popup-foot {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.menu-body {
-  min-height: 0;
-  overflow-y: auto;
-}
-
 /* 弹层最顶上那个搜索框（2026-10-11，照用户贴的 Typora 截图：那一格不是标题）。
    ⚠️ 它是 `MenuPopup` 的 `top` 那一块，**和条目一样落在弹层的内边距里**，
    所以左右不用自己再加边距。

@@ -142,7 +142,6 @@ export function StatusBar({
   spellcheck,
   拼写语言,
   onChangeSpell,
-  onOpenSettings,
   插件栏,
   onToggleSidebar,
   onToggleSource,
@@ -207,8 +206,6 @@ export function StatusBar({
    * 两处都是"空数组＝跟随系统 ＋ 能勾多门"，规则一个字都不许分岔。
    */
   onChangeSpell: (补: { 开?: boolean; 语言?: string[] }) => void;
-  /** 菜单底下那条「全局设置…」：打开设置窗并落在「编辑器」页。 */
-  onOpenSettings: () => void;
   /**
    * **插件栏的开关**——`null` = 别画（顶栏在，那颗开关住在那儿）。
    *
@@ -506,10 +503,6 @@ export function StatusBar({
               spellcheck={spellcheck}
               语言={拼写语言}
               onChangeSpell={onChangeSpell}
-              onOpenSettings={() => {
-                关菜单();
-                onOpenSettings();
-              }}
               onDismiss={关菜单}
             />
           )}

@@ -465,7 +465,6 @@ export const 界面表: Record<string, string> = {
   //（`MenuPopup` 的 `heading` 收的是**键**、由它翻）——同一个东西两处两个名字的话，
   // 改一处另一处静默退回英文。
   "Select spell check language": "选择拼写检查语言",
-  "Global settings…": "全局设置…",
   "No dictionaries on this machine": "这台机器上还没有词典",
   // 搜索框里打了字、一门都没搜到（2026-10-11）。
   "No matching languages": "没有匹配的语言",
@@ -566,6 +565,15 @@ export const 界面表: Record<string, string> = {
   "The signature was carried over — this package still counts as verified for whoever receives it (as long as they trust that key).": "签名原样带上了——这份包在别人那里还是「已验证」（如果他信任那把钥匙）。",
   "⚠️ This extension was changed, so the signature no longer matches and the package carries none — others can still install it, but they will see “unsigned”.": "⚠️ 这个拓展被改过，签名对不上，所以包里没有签名——别人装得上，但会看到「未签名」。",
   "This extension was never signed.": "这个拓展本来就没有签名。",
+
+  // ⑤ 退出前那一问（`ui/useQuitGuard.ts`，2026-10-16 新建，朋友清单第 7／16 条）。
+  // ⚠️ 与「关掉一份文档」那一组（`"Save and Close"` / `"Discard and Close"`）
+  // **措辞必须不一样**：那组问的是"这一份"，这组问的是"全部"。
+  "Still unsaved: {0}. Save before quitting?": "还没保存：{0}。退出前要存吗？",
+  "Save All and Quit": "全部保存并退出",
+  "Discard and Quit": "不保存，直接退出",
+  "Could not save “{0}”, so Nota is staying open": "「{0}」没存上，所以 Nota 先不退出了",
+  "{0} and {1} more": "{0} 等 {1} 份",
 
   // 2026-10-16 补账：`tools/i18n-check.sh` 那天报的 29 条欠账里，**中文与英文
   // 写法不一样**的都收在这里（`Markdown` / `PDF…` / `{0}%` 这种两边一模一样的

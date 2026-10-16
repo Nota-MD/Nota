@@ -6252,6 +6252,12 @@ v2 用 HTTP/1.0 ＋ 不发长度 ＋ 说完关连接（应用把**整份正文**
 ① 菜单的形状对不对；② 顶上那个搜索框**能不能打字、能不能筛**；③ 底部那条
 「全局设置…」是不是**钉着**的；④ 勾一门语言**真写进设置**。
 
+📌 **2026-10-16 后记：这一节里的 ③ 与 "钉住的" 那件事都作废了**——用户当天看截图
+点名「我认为这里不应该有"全局设置"的按钮」，那条出口连同 `MenuPopup::stickyLast`
+一起删了（本节留下的**结论**仍然有效：`position: sticky` 在 WebKit 上钉不住，
+下次要做钉住的东西直接引第 1 条）。⚠️ 这一节**按当时的现场原样保留**（它是那一天
+的读数），只在头上挂这一条后记。
+
 **配方**（都在容器里，⚠️ 隔离 `XDG_*`、按 PID 收工）：`Xvfb :99` ＋
 `./target/debug/nota 一份带错词的 .md`，指针移到状态栏右端、点那颗 `A✓`（坐标从那帧
 `import -window root` 的截图里现读），然后 `import -window root` 逐帧收。
@@ -6354,3 +6360,65 @@ v2 用 HTTP/1.0 ＋ 不发长度 ＋ 说完关连接（应用把**整份正文**
 判据（无头 `:99`）：菜单开着，指针停在那一列语言上**连续下滚 14 格**：菜单不关、列表一路滚到底（最后一条 `English (ZW)`）、
 搜索框与「Global settings…」两头**照旧钉着**。单元测试在 `tests/context-menu.test.ts` 第十一组（四条）。
 
+### 5.66 验「退出前那一问」＋ 顺手撞出来的 BUG-74（2026-10-16，✅ 开窗走完全程）
+
+**要验的是什么**（用户朋友清单第 7／16 条「退出软件时对更改进行保存/弹窗」）：
+点窗口的叉之后**不许直接退**——要先问、按答案存盘、存不上就不退。
+
+#### ① 怎么把"点叉"这一下在无头窗口里造出来
+
+`Xvfb :99` 里**没有窗口管理器**，所以既没有标题栏的叉、`Alt+F4` 也没人接。
+`xdotool` 的 `windowclose` 走的是 `XDestroyWindow`（**绕过** `WM_DELETE_WINDOW`，
+也就绕过 Tauri 的 `CloseRequested`），**验不了这一条**。
+
+能用的那条路是**自己发一条 `WM_DELETE_WINDOW` 客户端消息**（就是窗口管理器点叉时
+做的事）。容器里没有 `python3-xlib`，用 `ctypes` 直接调 `libX11` 二十来行就够：
+
+```python
+class ClientMessage(ctypes.Structure):        # XClientMessageEvent（64 位下 96 字节）
+    _fields_ = [("type", c_int), ("serial", c_ulong), ("send_event", c_int),
+                ("display", c_void_p), ("window", c_ulong), ("message_type", c_ulong),
+                ("format", c_int), ("data", c_long * 5)]
+ev.type = 33                                   # ClientMessage
+ev.message_type = XInternAtom(dpy, b"WM_PROTOCOLS", 0)
+ev.format = 32
+ev.data[0] = XInternAtom(dpy, b"WM_DELETE_WINDOW", 0)
+XSendEvent(dpy, wid, 0, 0, byref(缓冲))
+```
+
+⚠️ `XSendEvent` 那个 `XEvent*` 按 192 字节申请一块缓冲再 `memmove` 进去（那条联合体
+比 `XClientMessageEvent` 大），不然会写坏栈。窗口 id 从 `xdotool search --pid <pid>`
+拿，**认名字**：主窗叫 `a — Nota`（脏了会变成 `a • — Nota`）。
+
+#### ② 走完的那条路（逐帧）
+
+1. 启动（隔离 `XDG_*`）→ `xdotool mousemove 800 400 click 1` 把光标点进正文 →
+   `xdotool type "hello world"` → 标题变成 **`a • — Nota`**（有未保存 = 宿主那份
+   镜像也脏了，`关窗前要问` 的第二个条件成立）；
+2. 发 `WM_DELETE_WINDOW` → **窗口没退**，中间弹出一个框：标题 `Has unsaved changes`、
+   正文 `Still unsaved: a. Save before quitting?`、三颗按钮
+   **`Cancel` / `Save All and Quit` / `Discard and Quit`**（截图那一帧）；
+3. 点中间那颗 → 进程退出（`pgrep -x nota` 只剩用户自己那一个），盘上
+   `a.md` 是 **`helloSECOND`**（第一轮敲的 `hello world` ＋ 第二轮追加的 `SECOND`），
+   日志最后一行 `[nota] 退出（前端确认过）`。
+
+⚠️ **判据为什么是这三样一起看**："框弹出来了"只证明拦住了；"进程没了"只证明退了；
+**只有"盘上真是刚敲进去的那几个字"才证明那次退出走的是"全部保存"而不是"丢弃"**。
+⚠️ 反过来那条路（`Discard and Quit`）也点过：进程退出、**盘上仍是旧内容**
+（`a.md` 那一份没被改写）——两条路的差别就在这一处。
+
+#### ③ 顺手撞出来的 BUG-74：只有两颗按钮
+
+第一轮跑出来的那一帧**只有 `Cancel` 与 `Discard and Quit`**——而代码里明明给了
+`extraLabel`。查下去是 `ui/AppDialogs.tsx` 往 `ConfirmDialog` 上是**逐个字段铺**的，
+`extraLabel` **不在名单上**（`title` / `message` / `confirmLabel` / `danger` /
+`hideCancel` 五个在，第六条漏了）。⚠️ 于是 2026-09-25 那个「保存并关闭」
+**四个星期里一次都没在屏幕上出现过**，而且**它是静默的**：类型不报错（铺字段本来
+就不要求铺全）、界面也看不出少了一颗。补上那一行之后同一帧里三颗都在（见 ② 那帧）。
+⚠️ **这一条给下一轮的教训**：`ConfirmRequest` 加字段就回来补一行；更稳的写法是
+`{...confirmReq}`（两份形状只差一个 `onAnswer`）。
+
+⚠️ **改前端之后必须走**：`npx vite build` → `touch src-tauri/build.rs` → `cargo build`
+（`tauri-build` 只认"构建脚本重新跑过"，光改 `dist` 它不重编；本批第一轮就是拿旧
+前端跑出来的，症状是"新加的那句话在、另一个改动没生效"——**两次不同的读数是
+两套代码，别把它们当成同一个 bug**）。

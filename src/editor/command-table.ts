@@ -57,6 +57,11 @@ import {
   setAlignCommand,
 } from "@milkdown/kit/preset/gfm";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
+import { lift } from "@milkdown/kit/prose/commands";
+import { liftListItem } from "@milkdown/kit/prose/schema-list";
+import type { EditorState } from "@milkdown/kit/prose/state";
+import type { NodeType } from "@milkdown/kit/prose/model";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import { callCommand } from "@milkdown/kit/utils";
 
 import { 行内标记命令 } from "./inline-marks";
@@ -122,9 +127,14 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   subscript: (e) => e.action(callCommand(行内标记命令[2]!.key)),
   underline: (e) => e.action(callCommand(行内标记命令[3]!.key)),
   text: (e) => e.action(callCommand(turnIntoTextCommand.key)),
-  quote: (e) => e.action(callCommand(wrapInBlockquoteCommand.key)),
-  ul: (e) => e.action(callCommand(wrapInBulletListCommand.key)),
-  ol: (e) => e.action(callCommand(wrapInOrderedListCommand.key)),
+  // ⚠️⚠️ **这三条是「切换」不是「再包一层」**（2026-10-16 修的用户报的缺陷）：
+  // 上游那三条（`wrapInBlockquote` / `wrapInBulletList` / `wrapInOrderedList`）
+  // 走的是 `prosemirror-commands` 的 `wrapIn`，那个**无条件往外面再裹一层**
+  // ——用户连点五下「引用」，正文里就长出五层引用（他报的截图正是那样：
+  // 左边一排套着的竖线）。菜单/工具栏那一颗按钮的语义是**开关**，不是"再包一层"。
+  quote: (e) => 切换包裹(e, "blockquote", () => e.action(callCommand(wrapInBlockquoteCommand.key))),
+  ul: (e) => 切换包裹(e, "bullet_list", () => e.action(callCommand(wrapInBulletListCommand.key))),
+  ol: (e) => 切换包裹(e, "ordered_list", () => e.action(callCommand(wrapInOrderedListCommand.key))),
   task: (e) => 转成任务列表(e),
   codeBlock: (e) => e.action(callCommand(createCodeBlockCommand.key)),
   hr: (e) => e.action(callCommand(insertHrCommand.key)),
@@ -205,6 +215,67 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
     });
   },
 };
+
+/**
+ * 光标所在的那一块**已经在**这类容器里了吗（含它自己与所有祖先）。
+ *
+ * ⚠️ 判据看**祖先链**而不是"父节点是不是它"：`> > x` 这种套着的引用里也要算"在"，
+ * 否则第二次点就成了"再包一层"，正是要修的那个缺陷。
+ */
+function 在包裹里(state: EditorState, 类型: NodeType): boolean {
+  const { $from } = state.selection;
+  for (let 层 = $from.depth; 层 >= 0; 层--) {
+    if ($from.node(层).type === 类型) return true;
+  }
+  return false;
+}
+
+/**
+ * **切换**一层块级包裹：已经在里面就**抬出去一层**，不在就包一层。
+ *
+ * ⚠️ 用户朋友 2026-10-16 报的：「多次点击工具栏的引用按钮会导致这种结果」——
+ * 截图里是**八层套着的引用**。根因是那三条命令直接调了上游的
+ * `wrapInBlockquote` / `wrapInBulletList` / `wrapInOrderedList`，而它们底下是
+ * `prosemirror-commands` 的 `wrapIn`：**它无条件往外面再裹一层**（源码里那段
+ * `findWrapping(range, nodeType)` → `tr.wrap`，没有任何"已经在了"的判断）。
+ * 菜单/工具栏上那一颗按钮显然是**开关**（点一下开、再点一下关），不是"再包一层"。
+ *
+ * ⚠️ **抬出去用 `lift`**（同一个包里那条），它抬的是"选区所在的那一块"、
+ * 一次只抬**一层**：套了八层时点八下能一层层退回来，而不是"啪"地掉成一个段落
+ * （那会把用户多做的几次都吃掉，而他正是想一层层退）。
+ *
+ * ⚠️ 抬不动时（`lift` 给 `false`，比如光标在文档最外层的引用里、再往上没地方了）
+ * **什么都不做**：那时"再包一层"更不是用户要的。
+ */
+function 切换包裹(e: Editor, 容器名: string, 包: () => void): void {
+  const 视图 = e.ctx.get(editorViewCtx);
+  const 类型 = 视图.state.schema.nodes[容器名];
+  if (类型 && 在包裹里(视图.state, 类型)) {
+    抬一层(视图, 容器名);
+    return;
+  }
+  包();
+}
+
+/**
+ * 把光标所在的那一块**抬出**它现在这一层包裹。
+ *
+ * ⚠️ **两种容器两条路，别合并**（2026-10-16 实测出来的）：
+ * - **引用**用 `lift`：选区的 `blockRange` 在引用块里，`lift` 正好把那一块挪到
+ *   引用外面 ✓（实测：连点五下 = 一开一关一开一关一开，最后只剩**一层**）。
+ * - **列表**要用 `liftListItem`：`lift` 对着列表项**给 `false`**（列表项不能凭空
+ *   挪进文档根——那是非法结构），于是第一版改完"点第二下什么都不发生"，
+ *   而 `liftListItem` 正是为这一格准备的（顶层的项会被拆成普通段落＝关掉列表，
+ *   嵌套的项会抬到上一层）。两者都来自 prosemirror 那一套。
+ */
+function 抬一层(视图: EditorView, 容器名: string): void {
+  if (容器名 === "blockquote") {
+    lift(视图.state, 视图.dispatch);
+    return;
+  }
+  const 项 = 视图.state.schema.nodes.list_item;
+  if (项) liftListItem(项)(视图.state, 视图.dispatch);
+}
 
 /**
  * 跑一条编辑命令，**只管命令、不管焦点**。

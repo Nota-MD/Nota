@@ -48,6 +48,36 @@
   background: var(--bg-active);
 }
 
+/* ── CDE：**菜单栏那一排也是 3D 按钮**（2026-10-16）──────────────────────
+ *
+ * 用户看图点名：「这个不应该也是 3D 按钮吗」——图里那一排「文件 编辑 段落…」
+ * 在 CDE 里确实是**一颗颗凸起的按钮**，不是一排平铺的文字。
+ *
+ * ⚠️ 这是本项目**第一次给某一档风格写"组件补丁"**（别处的风格块只给变量）。
+ * 原因很实在：`--radius` / `--btn-bg` 这类变量管不了"这一排要不要有边框和斜面"
+ * ——那是**组件结构上的长相**，只能按选择器写。规矩照旧：**选择器一律带
+ * `[data-ui-style="cde"]` 前缀**，别的七档一个像素都不受影响。
+ * ⚠️ 真要再加第二档这样的补丁，就该把这几段抽成 `theme/<id>.css`；
+ * 现在只有一档，写在消费者自己那一份里（省一个新文件的登记成本）。 */
+[data-ui-style="cde"] .menu-title {
+  height: 24px;
+  margin: 2px 1px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: var(--btn-bg);
+  box-shadow: var(--bevel);
+}
+
+[data-ui-style="cde"] .menu-title:hover {
+  background: var(--btn-bg-hover);
+}
+
+/* 菜单开着的那一栏：**凹下去**（`--bevel-sunken`），这就是"按着"的长相。 */
+[data-ui-style="cde"] .menu-title-open {
+  background: var(--btn-bg-active);
+  box-shadow: var(--bevel-sunken);
+}
+
 .menu-popup {
   position: absolute;
   top: calc(100% + 5px);

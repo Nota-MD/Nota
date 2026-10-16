@@ -178,6 +178,25 @@
   font-weight: 600;
 }
 
+/* ── CDE：拓展栏那一排页签也是 3D 按钮（2026-10-16）────────────────────
+ *
+ * 用户看图点名：「还有这个」——图里「AI / Git / Slidev / 写作统计」那一排，
+ * 当前那一页是一颗**凸起的方按钮**，不是现在这种圆角高亮块。
+ *
+ * ⚠️ 判据与菜单栏那一段同一条（写在 `menubar.css` 里）：选择器**一律带
+ * `[data-ui-style="cde"]`**，别的七档一个像素都不动。
+ * ⚠️ 只有**当前这一页**画成按钮，别的页保持平铺——这是标签栏的惯例，
+ * 全部画成按钮会让"现在是哪一页"看不出来。 */
+[data-ui-style="cde"] .dock-tab {
+  border-radius: 0;
+}
+
+[data-ui-style="cde"] .dock-tab[data-active="true"] {
+  border: 1px solid var(--border);
+  background: var(--btn-bg);
+  box-shadow: var(--bevel);
+}
+
 /* 「插件」页（清单）。**它永远在最右**，表示"这里还有不属于任何插件的东西"，
    和插件页签之间留一道空隙，免得看起来像是某个插件的页。 */
 .dock-tab-plugins {

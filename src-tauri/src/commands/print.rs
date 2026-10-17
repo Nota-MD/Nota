@@ -2,9 +2,9 @@
 //!
 //! | 命令 | 干什么 |
 //! |---|---|
-//! | `nota_print_printers` | 这台机器上有哪些打印机（`lpstat`） |
+//! | `nota_print_printers` | 这台机器上有哪些打印机（CUPS/IPP） |
 //! | `nota_print_prepare` | 把 HTML 印成 PDF，再把每页出成缩略图 |
-//! | `nota_print_send` | 把那份 PDF 投给选中的打印机（`lp`） |
+//! | `nota_print_send` | 把那份 PDF 投给选中的打印机（CUPS/IPP） |
 //!
 //! ⚠️ 三条都**只做接线**（本目录的规矩）：真正的活在 `print_job.rs`，
 //! 而"HTML 怎么变 PDF"在 `pdf_print.rs`。
@@ -20,8 +20,7 @@ use tauri::AppHandle;
 use crate::error::Result;
 use crate::print_job::{self, 打印环境, 打印预览, 版面请求};
 
-/// 列出打印机。⚠️ 没有 `lpstat` 时给空表**不算错**：界面要画成
-/// "这台机器上还没有打印机"，而不是一条红色报错。
+/// 列出打印机。⚠️ 直连 CUPS socket，不依赖 `lpstat`。
 #[tauri::command]
 pub fn nota_print_printers() -> 打印环境 {
     print_job::列打印机()

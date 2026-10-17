@@ -16,10 +16,9 @@
 //! |---|---|---|
 //! | 出 PDF | `pdf_print.rs`（WebKit 的打印后端，Linux 独有） | 直说"这台系统上没有" |
 //! | 数页 / 出图 | `pdfinfo` / `pdftoppm`（poppler 工具） | 直说"装 poppler-utils"，**别假装预览为空** |
-//! | 投给打印机 | `lp`（CUPS 客户端） | 把 `lp` 自己的 stderr 端给用户 |
+//! | 列打印机 / 投递 | `cups.rs` 直连 CUPS Unix socket 说 IPP | 不依赖 `lpstat` / `lp` |
 //!
-//! ⚠️ 三段里**只有第一段是我们的代码**，另外两段是系统里那两个程序——和
-//! `pandoc` / `git` 同一条先例：**只调用、不打包**。
+//! ⚠️ PDF 分页与预览仍借系统 poppler；CUPS 那一半不再调用外部客户端。
 //!
 //! # 临时目录
 //!
@@ -37,23 +36,22 @@ use tauri::AppHandle;
 use crate::error::{NotaError, Result};
 use crate::proc::{run_capture, Ran, RunOpts};
 
-/// 一台打印机（`lpstat -p -d` 能告诉我们的那点东西）。
+/// 一台打印机（由 CUPS 的 IPP 属性整理出来）。
 #[derive(Debug, Clone, Serialize)]
 pub struct 打印机信息 {
     pub name: String,
-    /// `lpstat` 那句人话（`is idle` / `disabled since …`）。⚠️ 原样给出去，
-    /// 不翻译："打印机在报什么错"比一句通用的"不可用"有用得多。
+    /// 状态与 CUPS 的 `printer-info`，例如 `idle · Epson L3150`。
+    /// ⚠️ 原样给出去，不翻译："打印机在报什么错"比一句通用的"不可用"有用得多。
     pub description: String,
     pub is_default: bool,
 }
 
-/// 打印环境：把 CUPS 服务、`lpstat` 客户端与打印机列表拆成三份事实。
+/// 打印环境：服务是否可达、列表查询的错误与打印机清单。
 #[derive(Debug, Clone, Serialize)]
 pub struct 打印环境 {
     pub cups_available: bool,
-    /// CUPS 客户端（`lpstat` / `lp`）是否可调用。⚠️ 服务在、客户端不在时，
-    /// 系统打印对话框仍能列出打印机，但应用内列表拿不到。
-    pub cups_client_available: bool,
+    /// CUPS 在，但这次 IPP 查询失败时的原因；成功与“服务不存在”都是 `None`。
+    pub problem: Option<String>,
     pub printers: Vec<打印机信息>,
 }
 
@@ -129,89 +127,33 @@ fn 纸张尺寸(名字: &str) -> (f64, f64) {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn 是_unix_socket(路径: &Path) -> bool {
-    use std::os::unix::fs::FileTypeExt;
-
-    std::fs::metadata(路径)
-        .map(|元| 元.file_type().is_socket())
-        .unwrap_or(false)
-}
-
-/// CUPS 服务在不在。
-///
-/// ⚠️ **不能拿 `lpstat` 是否存在当判据**：Flatpak / 精简发行版里常常只有
-/// CUPS 服务和 GTK 系统打印对话框，没有 `cups-client`。2026-10-17 用户机器上
-/// 系统设置明明列着 L3150，Nota 却报"没有 CUPS"，根因就是这里把客户端缺失
-/// 误当成了服务缺失。CUPS 的标准 Unix socket 在，就说明服务可达。
-#[cfg(target_os = "linux")]
-fn cups服务可达() -> bool {
-    ["/run/cups/cups.sock", "/var/run/cups/cups.sock"]
-        .iter()
-        .any(|路径| 是_unix_socket(Path::new(路径)))
-}
-
 /// 列出这台机器上的打印机。
 ///
-/// ⚠️ `lpstat` 是应用内**枚举**打印机的客户端；它不在时不能谎报"CUPS 不存在"。
-/// 三种状态分开返回：服务没有 / 服务在但客户端不在 / 两者都在。界面据此决定
-/// 是提示没 CUPS、提示列表不可用，还是直接给打印机下拉。
+/// 直接走 `cups.rs` 的 IPP 查询；**不执行 `lpstat`**。服务不在、IPP 查询失败
+/// 与真的没有配置打印机是三种不同事实，不能让一个空数组同时代表它们。
 pub fn 列打印机() -> 打印环境 {
     #[cfg(target_os = "linux")]
     {
-        let 参 = vec!["-p".to_string(), "-d".to_string()];
-        let 结果 = run_capture(
-            "lpstat",
-            &参,
-            RunOpts::timeout(Duration::from_secs(6)),
-        );
-        let (服务在, 客户端在, stdout) = match 结果 {
-            Ran::Done { ok: true, stdout, .. } => (true, true, stdout),
-            Ran::Done { .. } => (cups服务可达(), true, String::new()),
-            Ran::NoProgram => (cups服务可达(), false, String::new()),
-            Ran::Timeout | Ran::Failed(_) => (cups服务可达(), true, String::new()),
-        };
-        if !服务在 {
-            return 打印环境 {
-                cups_available: false,
-                cups_client_available: 客户端在,
-                printers: Vec::new(),
-            };
-        }
-        let mut 默认 = String::new();
-        let mut 出 = Vec::new();
-        for 行 in stdout.lines() {
-            if let Some(名) = 行.strip_prefix("system default destination:") {
-                默认 = 名.trim().to_string();
-                continue;
-            }
-            // `printer <名字> is idle.  enabled since …`
-            let Some(余下) = 行.strip_prefix("printer ") else {
-                    continue;
-                };
-            let mut 词 = 余下.splitn(2, char::is_whitespace);
-            let Some(名) = 词.next() else { continue };
-            let 描述 = 词.next().unwrap_or("").trim().to_string();
-            出.push(打印机信息 {
-                name: 名.to_string(),
-                description: 描述,
-                is_default: false,
-            });
-        }
-        for p in &mut 出 {
-            p.is_default = !默认.is_empty() && p.name == 默认;
-        }
+        let 结果 = crate::cups::列打印机();
         打印环境 {
-            cups_available: true,
-            cups_client_available: 客户端在,
-            printers: 出,
+            cups_available: 结果.服务可用,
+            problem: 结果.问题,
+            printers: 结果
+                .打印机
+                .into_iter()
+                .map(|p| 打印机信息 {
+                    name: p.名,
+                    description: p.描述,
+                    is_default: p.是默认,
+                })
+                .collect(),
         }
     }
     #[cfg(not(target_os = "linux"))]
     {
         打印环境 {
             cups_available: false,
-            cups_client_available: false,
+            problem: None,
             printers: Vec::new(),
         }
     }
@@ -375,8 +317,7 @@ fn 出缩略图(pdf: &Path, 目录: &Path, 页数: usize) -> Result<(Vec<String>
 
 /// 把那份 PDF 投给打印机。
 ///
-/// ⚠️ 交给 `lp` 而不是自己走 IPP：CUPS 的客户端本来就在系统里（和 `git` 同一条
-/// 先例），而"自己实现一份 IPP 客户端"是另一个量级的活。
+/// 直连 CUPS Unix socket 的 `Print-Job`；不再依赖 `lp`。
 pub fn 投递(pdf: &Path, printer: &str, copies: u32, ranges: Option<&str>) -> Result<String> {
     #[cfg(not(target_os = "linux"))]
     {
@@ -385,73 +326,13 @@ pub fn 投递(pdf: &Path, printer: &str, copies: u32, ranges: Option<&str>) -> R
     }
     #[cfg(target_os = "linux")]
     {
-        if printer.trim().is_empty() {
-            return Err(NotaError::other("没有选打印机"));
-        }
-        let mut 参: Vec<String> = vec!["-d".into(), printer.to_string()];
-        if copies > 1 {
-            参.push("-n".into());
-            参.push(copies.to_string());
-        }
-        if let Some(范围) = ranges.map(str::trim).filter(|r| !r.is_empty()) {
-            // ⚠️ `page-ranges` 是 CUPS 的选项名；格式 `1-3,5`。让 `lp` 自己校验，
-            // 我们只把它原样递过去——自己解析一遍只会多一套会漂的语法。
-            参.push("-o".into());
-            参.push(format!("page-ranges={范围}"));
-        }
-        参.push(pdf.to_string_lossy().to_string());
-
-        match run_capture("lp", &参, RunOpts::timeout(Duration::from_secs(60))) {
-            Ran::Done { ok: true, stdout, .. } => {
-                let 句 = stdout.trim();
-                // `request id is HP-42 (1 file(s))` → 把 id 摘出来报给用户。
-                let id = 句
-                    .strip_prefix("request id is ")
-                    .and_then(|r| r.split_whitespace().next())
-                    .unwrap_or(句)
-                    .to_string();
-                Ok(id)
-            }
-            Ran::NoProgram => Err(NotaError::other(
-                "这台机器上没有 lp（CUPS 客户端），没法把任务交给打印机。",
-            )),
-            Ran::Timeout => Err(NotaError::other("lp 超过 60 秒没回话")),
-            Ran::Done { ok: false, stderr, .. } => Err(NotaError::other(format!(
-                "打印机拒了这个任务：{}",
-                stderr.trim()
-            ))),
-            Ran::Failed(e) => Err(NotaError::other(format!("起 lp 失败：{e}"))),
-        }
+        crate::cups::投递(pdf, printer, copies, ranges)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn cups_判据认_unix_socket_而不是普通文件() {
-        use std::os::unix::net::UnixListener;
-
-        let 目录 = std::env::temp_dir().join(format!(
-            "nota-cups-socket-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0)
-        ));
-        std::fs::create_dir_all(&目录).unwrap();
-        let socket = 目录.join("cups.sock");
-        let 监听 = UnixListener::bind(&socket).unwrap();
-
-        assert!(是_unix_socket(&socket));
-        assert!(!是_unix_socket(&目录));
-
-        drop(监听);
-        let _ = std::fs::remove_dir_all(&目录);
-    }
 
     #[test]
     fn 纸张名字认得几个常用的() {

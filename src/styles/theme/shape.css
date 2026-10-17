@@ -275,15 +275,9 @@
   --radius-lg: 0;
   /* ⚠️ 字体也是"长相"的一部分：CDE 那个年代是 **Helvetica**（X11 上退到
      Nimbus Sans）。这里照样保留 CJK 兜底——中文不能因此变成豆腐块。 */
-  /* ⚠️ 2026-10-17：**界面也用点宋那一族**（用户：「注意 UI 主题也用这个」）。
-     ⚠️ 首选带 **EBDT/EBLC 内嵌位图**的 TTF（`Nota GB16ST Bitmap`）：普通轮廓
-     TTF 即使照着点阵字形描边，WebKit 仍会抗锯齿；字体里直接保存 16×16 的
-     1-bit 字模，FreeType 才返回 MONO 位图。菜单、正文与 AI 面板三处已放大目检。 */
-  /* ⚠️ **兜底仍排在无衬线前面**：界面里有大量粗体；若 WebKit 为找不到 Bold
-     的家族换用 `Noto Sans CJK SC`，同一屏就会宋体与黑体混杂。 */
-  /* 点阵字模只覆盖 CJK（`@font-face` 有 unicode-range）；西文落到 Noto Sans，
-     不再用那套发粗、字宽异常的 HZK 半角字形。 */
-  --font-ui: "Nota GB16ST Bitmap", "Noto Sans", "Noto Sans CJK SC",
+  /* ⚠️ 2026-10-17：界面与正文共用完整的 WenQuanYi Bitmap Song 16px TTF。
+     它同时带正确的点阵中文与西文，不再靠 unicode-range 把西文推给 Noto。 */
+  --font-ui: "Nota WenQuanYi Bitmap Song", "Noto Sans", "Noto Sans CJK SC",
     "DejaVu Sans", "WenQuanYi Bitmap Song 16px", sans-serif;
   /* ⚠️ **2026-10-17 晚：2× 那版撤了**——用户目检：「放大之后字体变得大了很多，
      已经超出那个框框的范围了」。整档放大不是要的东西；字号与控件回到 1×。 */

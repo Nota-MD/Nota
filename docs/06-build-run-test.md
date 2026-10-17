@@ -6610,6 +6610,22 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 钉住“界面统一 Regular、正文除外”这条选择器，防止以后某个 600 标题又把
 700 位图带回来。
 
+📌 **同日三次目检（以本条为准）：GB16ST 废弃，改用完整 WQY TTF。**
+字体管理器里第一张图对应的文件是
+`WenQuanYi.Bitmap.Song.16px.ttf`；第二张图里那支 `Nota GB16ST Bitmap` 的
+西文半角表本来就是残的。现在仓库直接放完整 TTF
+`src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf`，中文与西文都走同一家族，并由
+`font-synthesis:none` 禁止合成粗体。真窗口 `Ctrl+P` 复验：`L3150`、`A4`
+与中文标签都显示为同一套点阵，西文字宽恢复正常。
+字体同目录放 WQY 版权、GPL-2.0 全文与来源说明，安装包 `licenses/` 也复制同一组。
+
+📌 **同日 CUPS/IPP 实连（以本条为准）**：打印框不再执行 `lpstat` / `lp`。
+宿主直连 `/run/cups/cups.sock`，实窗已列出系统里的 `L3150`，按钮从
+“系统打印…”切回“打印”。⚠️ 调试时踩到一个协议坑：Rust 发送完请求后若
+`shutdown(Write)`，CUPS 会回 `Content-Length: 95` 但**正文 0 字节**；
+保持写半边打开、用 `Connection: close` 收完整响应后才拿到 95 字节 IPP 正文。
+这行注释和回归判据在 `cups.rs::发请求`。
+
 📌 **同日补记（3D 质感与点宋）**：真机截图放大 6 倍之后，三件事被推翻重做——
 斜面 **2px → 1px**、按钮**去掉外圈黑线**、字**黑 → 白**（菜单栏/按钮/标签全是白字）；
 另外补了菜单栏底下那条 2px 桃色分隔线。字体那头：`xfonts-wqy`（文泉驿点阵宋）是

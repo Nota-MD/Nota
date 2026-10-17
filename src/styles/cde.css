@@ -14,30 +14,25 @@
  */
 
 /*
- * 点阵字体随安装包分发。字形来自 WenQuanYi Bitmap Song 的 16px 字模，
- * 再封装成 TTF 的 EBDT/EBLC 1-bit strike；许可证是 GPL-2.0 with font
- * embedding exception，完整版权与例外正文在 assets/fonts 同目录。
+ * 点阵字体随安装包分发。这里直接用 WenQuanYi Bitmap Song 16px 的完整
+ * TTF：它的中文与西文来自同一套 16px 字模，预览器里看到哪些字形，应用里
+ * 就是哪些字形。许可证是 GPL-2.0 with font embedding exception，完整
+ * 版权与例外正文放在主题目录 `themes/cde/`，与该 TTF 同目录。
  */
 @font-face {
-  font-family: "Nota GB16ST Bitmap";
-  src: url("../assets/fonts/NotaGB16ST-EBDT-Regular.ttf") format("truetype");
+  font-family: "Nota WenQuanYi Bitmap Song";
+  src: url("./themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
   font-display: block;
-  unicode-range:
-    U+2E80-2EFF, U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF,
-    U+FF00-FFEF, U+20000-2FA1F;
 }
 
 @font-face {
-  font-family: "Nota GB16ST Bitmap Bold";
-  src: url("../assets/fonts/NotaGB16ST-EBDT-Bold.ttf") format("truetype");
+  font-family: "Nota WenQuanYi Bitmap Song";
+  src: url("./themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf") format("truetype");
   font-style: normal;
   font-weight: 700;
   font-display: block;
-  unicode-range:
-    U+2E80-2EFF, U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF,
-    U+FF00-FFEF, U+20000-2FA1F;
 }
 
 /* 窗口最外框。右下角的深蓝灰属于真机画布，外框本身仍是棕 + 奶油两道。 */
@@ -55,11 +50,9 @@
 /*
  * 界面字重统一压到 Regular。
  *
- * 上面的界面家族只挂 Regular；显式写了 600/700 的标题、卡片标题和按钮如果
- * 继续请求粗体，Windows WebView2 会合成加粗，WebKit 则会从后面的 Noto 里
- * 换一支，结果就是用户截图里的“中文发粗、西文字宽忽宽忽窄”。CDE 的位图
- * 界面没有现代字重层级，统一 Regular 才接近原机；正文里的 `strong` 仍由
- * 文档主题单独挂 Bold 位图，不受这条影响。
+ * 这份字库只有一套 Medium 点阵字形。显式写了 600/700 的标题、卡片标题和
+ * 按钮若继续请求粗体，浏览器会合成加粗，结果就是用户截图里的“中文发粗、
+ * 西文字宽忽宽忽窄”。CDE 的位图界面没有现代字重层级，统一 400 才接近原机。
  */
 [data-ui-style="cde"] .app *:not(.ProseMirror, .ProseMirror *) {
   font-weight: 400;

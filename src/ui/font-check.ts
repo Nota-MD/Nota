@@ -31,7 +31,7 @@ const 样本 = "mmmmWWQ0123ili中文测试字体";
 const 兜底族 = ["monospace", "serif", "sans-serif"] as const;
 
 /** 随安装包打包、由 `styles/cde.css` 的 `@font-face` 提供的字体。 */
-const 随包字体 = new Set(["Nota GB16ST Bitmap"]);
+const 随包字体 = new Set(["Nota WenQuanYi Bitmap Song"]);
 
 /** 这支字体是不是应用自己随包提供的（不是系统字体）。 */
 export function 是随包字体(名字: string): boolean {

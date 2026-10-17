@@ -18,9 +18,9 @@
  * # 点宋
  *
  * 「点宋」= **点阵宋体**那一族。硬边不能靠把点阵字形描成轮廓：那种 TTF 仍会被
- * WebKit 抗锯齿。2026-10-17 用的 `Nota GB16ST Bitmap` 在 TTF 中直接保存
- * EBDT/EBLC 16×16 位图，FreeType 实测返回 pixel_mode=1（MONO）。文泉驿轮廓版、
- * Zpix 与 Noto Serif 只作后备。字体不随包分发；缺失时 `ui/font-check.ts` 明确提示。
+ * WebKit 抗锯齿。2026-10-17 最终随包的是 WenQuanYi Bitmap Song 16px 的完整
+ * TTF（中文、西文同一套字模），Zpix 与 Noto Serif 只作后备。
+ * 字体随包分发；缺失属于构建错误，`ui/font-check.ts` 对随包家族直接判可用。
  *
  * # 排版
  *
@@ -51,10 +51,8 @@
   --accent-fg: #000000;
 
   /* ── 排版 ── */
-  /* 首选实际带 16×16 EBDT 位图的字体；后面是能保证中文不出豆腐块的兜底。
-     轮廓转写版 `WenQuanYi Bitmap Song 16px` 只作后备：字形是宋，但边缘会抗锯齿。
-     位图字体按 16px 设计，所以 16px 界面字号正好命中原生字模。 */
-  --font-doc: "Nota GB16ST Bitmap", "Noto Serif", "Noto Serif CJK SC",
+  /* 首选完整文泉驿点阵宋；后面是能保证中文不出豆腐块的兜底。 */
+  --font-doc: "Nota WenQuanYi Bitmap Song", "Noto Serif", "Noto Serif CJK SC",
     "WenQuanYi Bitmap Song", "文泉驿点阵宋体", serif;
   --doc-font-size: 1em;
   --doc-line-height: 1.75;
@@ -137,9 +135,8 @@ p {
 }
 
 strong {
-  /* 界面的 Regular 家族不声明 700，避免 600 的卡片标题被浏览器挑成粗体；
-     正文真正需要加粗时走这一支单独的 Bold 位图家族。 */
-  font-family: "Nota GB16ST Bitmap Bold", "Noto Serif", "Noto Serif CJK SC",
+  /* 字库只有一套点阵字形；`font-synthesis:none` 保证不会把 700 合成为粗体。 */
+  font-family: "Nota WenQuanYi Bitmap Song", "Noto Serif", "Noto Serif CJK SC",
     "WenQuanYi Bitmap Song", "文泉驿点阵宋体", serif;
   font-weight: 700;
   /* ⚠️ 继承正文色（同 2026-10-16 那条修法）。 */

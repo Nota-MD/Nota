@@ -37,9 +37,9 @@
     "active": true,
     "targets": "all",
     "resources": {
-      "../src/assets/fonts/WQY-Bitmap-Song-COPYRIGHT.txt": "licenses/WQY-Bitmap-Song-COPYRIGHT.txt",
-      "../src/assets/fonts/Nota-GB16ST-NOTICE.txt": "licenses/Nota-GB16ST-NOTICE.txt",
-      "../src/assets/fonts/GPL-2.0.txt": "licenses/GPL-2.0.txt"
+      "../src/styles/themes/cde/WQY-Bitmap-Song-COPYRIGHT.txt": "licenses/WQY-Bitmap-Song-COPYRIGHT.txt",
+      "../src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-NOTICE.txt": "licenses/Nota-WenQuanYi-Bitmap-Song-NOTICE.txt",
+      "../src/styles/themes/cde/GPL-2.0.txt": "licenses/GPL-2.0.txt"
     },
     "icon": [
       "icons/32x32.png",

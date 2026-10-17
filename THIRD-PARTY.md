@@ -412,19 +412,21 @@ Monoton**（下载目录也有）**鸣谢里写一下徽标字体用的是这个
 ## 9. CDE 点阵字体：WenQuanYi Bitmap Song（GPL-2.0 with font embedding exception，**随包分发**）
 
 **2026-10-17 用户批准随安装包分发**。CDE 界面主题与 CDE 文档主题使用的
-`Nota GB16ST Bitmap` 来自 **WenQuanYi Bitmap Song 1.0 RC1** 的 16px
-单色字模；Nota 将其重新封装为带 **EBDT/EBLC 1-bit strike** 的 OpenType
-字体，使 WebKit/FreeType 不经过抗锯齿直接绘制原生像素。
+`Nota WenQuanYi Bitmap Song` 是 **AmusementClub/Wenquanyi-Bitmap-Song-TTF**
+转写的完整 16px TTF，原字形来自 **WenQuanYi Bitmap Song 1.0 RC1**。
+使用完整字体而不是只提取 CJK 字模，西文与中文才能来自同一套点阵字形。
 
 | 项 | 说明 |
 |---|---|
-| 上游 | [WenQuanYi Bitmap Song](https://sourceforge.net/projects/wqy/files/wqy-bitmapfont/) |
+| 原字形上游 | [WenQuanYi Bitmap Song](https://sourceforge.net/projects/wqy/files/wqy-bitmapfont/) |
+| TTF 转写 | [AmusementClub/Wenquanyi-Bitmap-Song-TTF](https://github.com/AmusementClub/Wenquanyi-Bitmap-Song-TTF) |
 | 版权 | Copyright (C) 2004–2010, WenQuanYi Project Board of Trustees and Qianqian Fang |
 | 许可 | **GPL-2.0 with font embedding exception** |
-| 修改 | 提取 16×16 字模；重封装为 EBDT/EBLC TTF；提供 Regular / Bold 两档 |
-| 源码形式 | `src/assets/fonts/*.ttf` 本身即字体的首选可编辑形式；上游及 changelog 见上表链接 |
-| 完整许可 | 版权与例外：[`WQY-Bitmap-Song-COPYRIGHT.txt`](src/assets/fonts/WQY-Bitmap-Song-COPYRIGHT.txt)；GPL-2.0 全文：[`GPL-2.0.txt`](src/assets/fonts/GPL-2.0.txt) |
-| 修改说明 | [`Nota-GB16ST-NOTICE.txt`](src/assets/fonts/Nota-GB16ST-NOTICE.txt) |
+| 修改 | Nota 原样分发该 TTF；不修改字形，不再另造残缺的 CJK-only 字体 |
+| SHA-256 | `09ebd60aa1900d8d09b61dfc786cbe51454c38b26f0374ead786d7ab96de51be` |
+| 字体位置 | `src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf`（也是首选可编辑形式） |
+| 完整许可 | 与字体同目录：[`WQY-Bitmap-Song-COPYRIGHT.txt`](src/styles/themes/cde/WQY-Bitmap-Song-COPYRIGHT.txt)＋[`GPL-2.0.txt`](src/styles/themes/cde/GPL-2.0.txt) |
+| 字体说明 | 与字体同目录：[`Nota-WenQuanYi-Bitmap-Song-NOTICE.txt`](src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-NOTICE.txt) |
 | 打包位置 | `@font-face` 打进前端资源；版权与修改说明还通过 `tauri.conf.json` 的 `resources` 复制到安装包 `licenses/` |
 
 ⚠️ **根 `LICENSE` 仍然只有 BSD-2-Clause**。字体是独立数据组件，按它自己的

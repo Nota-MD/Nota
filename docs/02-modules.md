@@ -46,7 +46,8 @@
 | `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir`（2026-09-25 由 `nota_doc_themes_dir` 改名，同 BUG-27） |
 | `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir`（2026-09-26 新增）——**界面风格**那三条，与 `commands/theme.rs` 一一对应、同一套口径（id 不是路径；"打开"在宿主做；目录用到时才建） |
 | `commands/plugin.rs` | `nota_plugins_list` / `set_enabled` / `call` / `find_command` / `panels` / `panel_content` / **`review`** / **`review_close`** / `menus` / `install` / `uninstall` / `trust` / `trust_list` —— **13 条**（2026-09-25 多了装卸信任那四条；随后又多了 `review` 两条：**编辑区里摊着的那块面板**）。⚠️ **异步的是这五条**：`set_enabled` / `install` / `uninstall` / `call` / `panel_content`（都要跑 Lua 或解包，走 `spawn_blocking`）；⚠️ `review` / `review_close` 拿的是 `ReviewState`，**不碰 `plugins` 锁**——理由见 `docs/01` §第四条链路 |
-| `print_job.rs` | **应用内打印**：`列打印机()` 返回 `打印环境`（CUPS 服务、`lpstat` 客户端、打印机列表三态分开）；`准备()` 出 PDF 与预览；`系统打印()` 起系统对话框；`投递()` 走 `lp`。系统 poppler/CUPS 只调用不打包。 |
+| `cups.rs` | **最小 CUPS/IPP 客户端**：直连 CUPS Unix socket；`CUPS-Get-Printers` 列打印机、`CUPS-Get-Default` 找默认项、`Print-Job` 投递 PDF。⚠️ 不依赖 `lpstat` / `lp`；只实现本机标量属性与页码范围，不扩展成通用 IPP 引擎。 |
+| `print_job.rs` | **应用内打印**：`列打印机()` 把 CUPS/IPP 结果转成 `打印环境`；`准备()` 出 PDF 与预览；`系统打印()` 起系统对话框；`投递()` 走 CUPS/IPP。系统 poppler 只调用不打包。 |
 | `commands/print.rs` | 打印命令：`supported` / `printers` / `prepare` / `system` / `send`。⚠️ `prepare` 与 `system` 必须 `async`。 |
 | `commands/export.rs` | 导出与打印的**落盘那一步**（**四条**：`nota_export_write` 写文本、`nota_export_write_bytes` 写**二进制**——前端先 base64、宿主解码再落盘，分享卡存 PNG 走它、`nota_export_print` 写到 `.nota-print.html` 再交给系统默认程序、`nota_export_reveal` 在文件管理器里定位）。⚠️ 本题**不生成 HTML**——HTML 由前端生成（`editor/export.ts`），这一层只管 IO 与落点 |
 | `commands/pandoc.rs` | `nota_pandoc_probe` / `nota_pandoc_export` 两条，**都异步**（探测起进程、导出最长 180 秒，走 `spawn_blocking`）。⚠️ PDF **两条路**：pandoc 不通且 `pdf_print::available()` 时改走自带那套，返回值 `route` 说明走的哪条 |
@@ -172,7 +173,7 @@
 | `styles/heatmap.css` | **热力图那一块的皮**（83 行，2026-09-27）。⚠️ **另开一份是因为 `dock.css` 当时 971 行、顶着硬线**（同 `share.css` / `marks.css` 那两次拆）。⚠️ **列宽是弹性的**（`flex: 1`）：面板那一栏能从 260px 拖宽，写死像素的话拖宽之后整块图缩在左上角。⚠️ 格子深浅走 **`color-mix` 兑透明**、不写死五个颜色（兑透明才不会被底色的深浅两套吃掉） |
 | `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26 新增）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反（界面风格要改的就是整个外壳）；于是"同名覆盖内置"的**全部实现就是文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验 |
 | `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增，按 `useDocTheme` 的先例单独一个 hook：要问后端、是异步的）。⚠️ 判据是**"这一档有没有文件"**而不是"是不是内置七档之一"——用户放一个 `adwaita.css` 就是覆盖内置，那时 `data-ui-style` 仍是 `adwaita` 但那份 CSS 得取回来。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
-| `styles/themes/*.css` | 内置**七套**文档主题（含 **`cde`**：深底浅字 ＋ `Nota GB16ST Bitmap`）。📌 该字体 Regular/Bold 已随前端包分发，许可见 `THIRD-PARTY.md` §9。`minimal` / `adwaita` / `latex` 各带深色补丁，只写颜色；旧 id 会悬空。每套自带 `--code-*`。 |
+| `styles/themes/*.css` | 内置**七套**文档主题（含 **`cde`**：深底浅字 ＋ `Nota WenQuanYi Bitmap Song`）。📌 完整中英文字体已随前端包分发，许可见 `THIRD-PARTY.md` §9。`minimal` / `adwaita` / `latex` 各带深色补丁，只写颜色；旧 id 会悬空。每套自带 `--code-*`。 |
 | `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：源码框、渲染区、说明卡。⚠️ 渲染出来那张 `<svg>` 的宽度上限**主要不在 CSS 里**（`diagram-view.ts` 按 `viewBox` 自然宽取 `min(100%, 自然宽)`；只写 `max-width: 100%` 会让小图被容器宽度等比放大） |
 | `styles/math.css` | **公式那棵树**（2026-09-26）：面板 / 半透明分隔符 / 源码框 / 渲染区三种 `data-state` / 说明卡。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），别在 `.nota-math-panel` 上另写 `display: none`。⚠️ KaTeX 自己那份 `katex.min.css` 只管 `.katex` 那棵树 |
 | `styles/settings.css` | 偏好设置框的**壳与版式**：框体 + 左栏那十一个分页 + 右栏「标签在左、控件在右」的行（479 行）。2026-09-23 从 `app.css` 拆出，同日晚些改成 VMark 那套版式；**2026-09-29 又按功能拆成三份** |

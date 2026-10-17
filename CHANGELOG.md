@@ -6,7 +6,7 @@ Nota 采用面向发布线的简短记录。完整证据、缺陷编号与历史
 ## 0.5.0-beta
 
 - CDE 界面与文档主题；真实 EBDT 点阵字随包分发（WQY 派生，许可见 `THIRD-PARTY.md` §9）。
-- 打印区分 CUPS 服务、`lpstat` 客户端与打印机列表三态；CDE 界面统一 Regular，正文才用 Bold。
+- 打印直连 CUPS Unix socket 的 IPP，不再依赖 `lpstat` / `lp`；CDE 改用完整 WQY 点阵宋。
 - 主题资源可由 CSS 自由声明图标、字体和图片；新增 CDE 自绘硬边图标集。
 - 改进 AI/Git/Slidev/写作统计插件；应用内打印与 HTML 代码预览。
 - Windows 交叉编译与安装包尝试。

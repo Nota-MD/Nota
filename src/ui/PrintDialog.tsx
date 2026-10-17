@@ -8,7 +8,7 @@
  * 版面（纸张/方向/边距）
  *   └─▶ 宿主静默印一份 PDF（就是打印机将来收到的那一份）
  *         └─▶ pdftoppm 把前 N 页渲成图 ──▶ 左边那块预览
- *               └─▶ 点「打印」→ lp 把**同一份 PDF** 投给打印机
+ *               └─▶ 点「打印」→ CUPS/IPP 把**同一份 PDF** 投给打印机
  * ```
  *
  * ⚠️ **预览与投递必须是同一份 PDF**：换一份重新排版就等于"预览是一回事、
@@ -87,7 +87,7 @@ export function PrintDialog({
         if (活)
           设打印环境({
             cups_available: false,
-            cups_client_available: false,
+            problem: null,
             printers: [],
           });
       });
@@ -169,10 +169,9 @@ export function PrintDialog({
   const 总页 = 预览?.page_count ?? 0;
   const 当前图 = 预览?.pages[第几页 - 1];
   const 没CUPS = 打印环境 !== null && !打印环境.cups_available;
-  const 缺打印客户端 =
-    打印环境 !== null && 打印环境.cups_available && !打印环境.cups_client_available;
+  const 列表出错 = 打印环境?.problem != null;
   const 没有打印机 = 打印环境 !== null && 打印环境.printers.length === 0;
-  const 走系统对话框 = 没CUPS || 缺打印客户端 || 没有打印机;
+  const 走系统对话框 = 没CUPS || 列表出错 || 没有打印机;
 
   return (
     <div className="print-backdrop" onMouseDown={onClose}>
@@ -241,10 +240,11 @@ export function PrintDialog({
                   "CUPS was not found. You can still use “System print…” or export to PDF.",
                 )}
               </span>
-            ) : 缺打印客户端 ? (
+            ) : 列表出错 ? (
               <span className="print-hint print-warning">
                 {t(
-                  "CUPS is running, but the lpstat client is unavailable, so Nota cannot list printers. “System print…” can still show the configured printers.",
+                  "CUPS is running, but the printer list request failed: {0}. “System print…” is still available.",
+                  打印环境.problem ?? "",
                 )}
               </span>
             ) : 没有打印机 ? (

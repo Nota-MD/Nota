@@ -17,6 +17,7 @@
 
 pub mod cli;
 pub mod commands;
+pub mod cups;
 pub mod devserver;
 pub mod diagnostics;
 pub mod diff;

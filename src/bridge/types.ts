@@ -912,7 +912,7 @@ export interface Diagnostics {
 /**
  * **一台打印机**（2026-10-17，应用内打印）。
  *
- * ⚠️ `description` 是 `lpstat` 那句原话（`is idle` / `disabled since …`）——
+ * ⚠️ `description` 由 IPP 的 `printer-state` 与 `printer-info` 组成——
  * **不翻译、不改写**："打印机在报什么错"比一句通用的"不可用"有用得多。
  */
 export interface PrinterInfo {
@@ -921,12 +921,12 @@ export interface PrinterInfo {
   is_default: boolean;
 }
 
-/** 打印环境：区分 CUPS 服务、`lpstat` 客户端与打印机列表三态。 */
+/** 打印环境：CUPS 是否可达、IPP 查询错误与打印机列表。 */
 export interface PrintEnvironment {
-  /** CUPS 服务是否可达（看标准 Unix socket，不把客户端缺失误判成服务缺失）。 */
+  /** CUPS 服务是否可达（看标准 Unix socket）。 */
   cups_available: boolean;
-  /** `lpstat` / `lp` 客户端是否可调用；服务在但客户端不在时应用内无法列打印机。 */
-  cups_client_available: boolean;
+  /** CUPS 在、但这次 IPP 查询失败时的原因；无错误为 `null`。 */
+  problem: string | null;
   printers: PrinterInfo[];
 }
 

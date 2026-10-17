@@ -398,10 +398,11 @@ body.resizing-col {
 [data-ui-style="cde"] ::-webkit-scrollbar {
   width: 15px;
   height: 15px;
-  background: var(--bevel-light);
+  /* ⚠️ 槽是**暖灰**（真机截图里量到 `#C6B2A8`），不是浅青——那一格属于窗框那一族。 */
+  background: var(--btn-bg-active);
 }
 [data-ui-style="cde"] ::-webkit-scrollbar-track {
-  background: var(--bevel-light);
+  background: var(--btn-bg-active);
   /* 凹槽：左上暗、右下亮（和按钮相反）。 */
   box-shadow: inset 1px 1px 0 var(--bevel-dark), inset -1px -1px 0 var(--bg-raised);
 }
@@ -422,7 +423,7 @@ body.resizing-col {
   background: var(--btn-bg);
   border: 1px solid var(--border);
   box-shadow: var(--bevel);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13'%3E%3Cpath d='M3 9 L6.5 3.5 L10 9 Z' fill='%23244953'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13'%3E%3Cpath d='M3 9 L6.5 3.5 L10 9 Z' fill='%237d593b'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
 }
@@ -432,7 +433,7 @@ body.resizing-col {
   background: var(--btn-bg);
   border: 1px solid var(--border);
   box-shadow: var(--bevel);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13'%3E%3Cpath d='M3 4 L6.5 9.5 L10 4 Z' fill='%23244953'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13'%3E%3Cpath d='M3 4 L6.5 9.5 L10 4 Z' fill='%237d593b'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
 }

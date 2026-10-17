@@ -337,3 +337,23 @@
   background: var(--accent);
   opacity: 0.4;
 }
+
+/* ── CDE：栏头 = **桃色标题条**（2026-10-17，对着四张真机截图重定）─────────
+ *
+ * CDE 里每个窗口最抢眼的是那条**桃色标题栏**（截图 84 量到 `#EDA870`）。
+ * 我们没有自绘窗口标题栏（那是布局的事），但**每一栏的头**承担的是同一个角色
+ * ——"这一段现在是谁"。所以给侧栏头与拓展栏头这一条桃色、黑字、2px 斜面，
+ * 其它地方一个像素不动。
+ *
+ * ⚠️ 只给**头**，不给整栏：整栏刷成桃色就变成"一屏都是标题栏"，反而看不出层级。 */
+[data-ui-style="cde"] .dock-head,
+[data-ui-style="cde"] .sidebar-head {
+  background: var(--accent);
+  color: var(--accent-fg);
+  box-shadow: var(--bevel);
+}
+
+[data-ui-style="cde"] .dock-head .dock-title,
+[data-ui-style="cde"] .sidebar-head .sidebar-title {
+  color: var(--accent-fg);
+}

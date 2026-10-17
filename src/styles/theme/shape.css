@@ -273,6 +273,9 @@
   --radius-sm: 0;
   --radius: 0;
   --radius-lg: 0;
+  /* ⚠️ 字体也是"长相"的一部分：CDE 那个年代是 **Helvetica**（X11 上退到
+     Nimbus Sans）。这里照样保留 CJK 兜底——中文不能因此变成豆腐块。 */
+  --font-ui: Helvetica, "Nimbus Sans", "DejaVu Sans", "Noto Sans CJK SC", sans-serif;
   /* ⚠️ 28px 是"看得出是按钮、又不至于像现代控件那么高"那一档。 */
   --control-height: 28px;
   --toolbar-height: 30px;
@@ -280,16 +283,19 @@
   --btn-font-weight: 400;
   /* 凸起斜面：左上亮、右下暗。⚠️ 这两条颜色**写死在变量值里**是有意的——
      它描述的是"斜面"这件形状，不是主题色；换明暗那两档时斜面照旧。 */
+  /* ⚠️ **2px**，不是 1px（2026-10-17 对着四张真机截图重定的）：Motif 的斜面是
+     **两像素**宽的一条亮带 + 一条暗带，1px 出来是现代扁平控件描了个边，
+     2px 才有那种"粗粝"的年代感。 */
   --bevel:
-    inset 1px 1px 0 var(--bevel-light), inset -1px -1px 0 var(--bevel-dark);
+    inset 2px 2px 0 var(--bevel-light), inset -2px -2px 0 var(--bevel-dark);
   /* ⚠️ **按下/开着那一档：把两个颜色对调**（左上变暗、右下变亮）＝凹下去。
      用户 2026-10-16 的原话：「如果按钮按下去会有显示的变化（那种 90 年代电脑 UI
      自带的粗粝简单的 3D），从突起到凹陷，**是持续的**而不是我鼠标一走就没了」
      ——所以它不只挂在 `:active`（鼠标按住那一瞬间）上，还挂在**"这一颗现在是开着的"**
      那几个标记上（`.btn-on` / `data-on` / `aria-pressed`）。裁在 `app.css` 的 `.btn` 那一族。 */
   --bevel-sunken:
-    inset 1px 1px 0 var(--bevel-dark), inset -1px -1px 0 var(--bevel-light);
-  --toolbar-shadow: inset 0 1px 0 var(--bevel-light), inset 0 -1px 0 var(--bevel-dark);
+    inset 2px 2px 0 var(--bevel-dark), inset -2px -2px 0 var(--bevel-light);
+  --toolbar-shadow: inset 0 2px 0 var(--bevel-light), inset 0 -2px 0 var(--bevel-dark);
 
   /* 开关：34×18，滑块 14（比现代档都小一号）。行走 16px = 34 − 2 − 14 − 2。 */
   --switch-w: 34px;

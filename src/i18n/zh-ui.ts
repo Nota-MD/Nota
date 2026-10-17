@@ -566,6 +566,11 @@ export const 界面表: Record<string, string> = {
   "⚠️ This extension was changed, so the signature no longer matches and the package carries none — others can still install it, but they will see “unsigned”.": "⚠️ 这个拓展被改过，签名对不上，所以包里没有签名——别人装得上，但会看到「未签名」。",
   "This extension was never signed.": "这个拓展本来就没有签名。",
 
+  // ⑦ 首选字体缺失那一条（`ui/useDocTheme.ts`，2026-10-17）
+  "Missing font": "缺少字体",
+  "The “{0}” theme prefers “{1}”, which is not installed on this machine. The editor is using a fallback font.":
+    "「{0}」这套主题首选「{1}」，但这台机器上没有装它；编辑器已经退回系统字体。",
+
   // ⑥ 应用内打印框（`ui/PrintDialog.tsx`，2026-10-17）
   "Print": "打印",
   "Printer": "打印机",

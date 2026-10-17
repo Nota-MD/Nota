@@ -22,6 +22,8 @@ import { useCallback, useEffect } from "react";
 
 import { api, type DocThemeInfo, type Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { 字体可用, 首选字体 } from "@/ui/font-check";
+import type { Dialogs } from "@/ui/useDialogs";
 import { applyDocTheme } from "@/styles/doc-theme";
 import type { Toast } from "@/ui/Toasts";
 import { useUiMode } from "@/ui/useUiMode";
@@ -143,6 +145,11 @@ export interface 主题接线 {
    */
   重扫: () => void;
   toast: (message: string, level?: Toast["level"]) => void;
+  /**
+   * 问一句（2026-10-17）：**首选字体没装时弹一条**。
+   * ⚠️ 借确认框那条"只报信"的用法（`hideCancel`）：这不是选择，是告知。
+   */
+  askConfirm: Dialogs["askConfirm"];
 }
 
 export interface 主题出口 {
@@ -152,11 +159,18 @@ export interface 主题出口 {
   openThemesDir: () => Promise<void>;
 }
 
+/**
+ * 已经提示过的"缺字体"（`主题 id → 字体名`）。
+ * ⚠️ 挂在**模块级**：用户来回切主题时不该每分钟被同一句话说一次；而换一支字体
+ * （主题更新了）仍然要重新提示，所以键是 `id|字体` 而不是只有 id。
+ */
+const 说过的缺字体 = new Set<string>();
+
 export function useDocTheme(w: 主题接线): 主题出口 {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const { themeId, 写主题, themes, 重扫, toast } = w;
+  const { themeId, 写主题, themes, 重扫, toast, askConfirm } = w;
 
   useEffect(() => {
     let alive = true;
@@ -166,6 +180,27 @@ export function useDocTheme(w: 主题接线): 主题出口 {
         // 空串 = 无主题，直接把 style 摘掉，编辑区回中性样式。
         const css = themeId ? await api.theme.css(themeId) : null;
         if (alive) applyDocTheme(css);
+        // ── 首选字体在不在（2026-10-17，用户点名要的那句提示）────────────
+        // ⚠️ 查的是**主题自己写的** `--font-doc` 第一项，不是生效的计算值：
+        // 计算值里已经是"候选, 兜底…"整串，查不出"谁是首选"。
+        const 首 = css ? 首选字体(css) : null;
+        if (alive && 首 && !字体可用(首)) {
+          const 键 = `${themeId}|${首}`;
+          if (!说过的缺字体.has(键)) {
+            说过的缺字体.add(键);
+            const 名 = themes.find((x) => x.id === themeId)?.name ?? themeId;
+            void askConfirm({
+              title: t("Missing font"),
+              message: t(
+                "The “{0}” theme prefers “{1}”, which is not installed on this machine. The editor is using a fallback font.",
+                名,
+                首,
+              ),
+              confirmLabel: t("OK"),
+              hideCancel: true,
+            });
+          }
+        }
       } catch (e) {
         // ⚠️ **安静地退回无主题，不弹错**：settings 里记着一个 id、而那份
         // `.css` 被删了，是很平常的事（换机器、清理磁盘），不是需要打断
@@ -179,7 +214,7 @@ export function useDocTheme(w: 主题接线): 主题出口 {
     return () => {
       alive = false;
     };
-  }, [themeId, themes]);
+  }, [themeId, themes, askConfirm, t]);
 
   const pickTheme = useCallback(
     (id: string) => {

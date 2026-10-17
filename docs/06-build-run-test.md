@@ -6504,3 +6504,31 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 **没验的**（如实记）：**真正投给打印机那一步**没走通——这台机器 `lpstat -p -d`
 报的是 `No destinations added`（一台打印机都没配），所以 `lp` 那条只能靠代码判据
 （参数拼法、`request id` 解析）；有打印机的机器上第一次用请看一眼 CUPS 队列。
+
+### 5.69 验「CDE 文档风格 ＋ 首选字体缺失提示」（2026-10-17，✅ 开窗拍到）
+
+用户：「还有注意模仿 **CDE 默认的文档风格**，以及**点宋**。你可以选一个点宋软链接。
+加一个修改：**如果主题首选的字体系统中没有，弹窗提示**」。
+
+**配方**：隔离 XDG，`ui_style = "cde"`、`document_theme = "cde"`，一份普通 Markdown。
+容器里 `fc-list | grep -i "bitmap song\|点阵"` **一支都没有**——这正好是缺字体那次
+提示的现场。
+
+**看到了什么**：
+
+- 正文那一块是**蓝灰画布**（`#686F82`）、浅色字、方角、标题没有装饰线：
+  和另外三套"白纸"文档主题一眼分得开。
+- 一进来弹一句：**"Missing font — The 'CDE' theme prefers 'WenQuanYi Bitmap Song',
+  which is not installed on this machine. The editor is using a fallback font."**
+  框本身也吃 CDE 那一档（青绿底、桃色 OK 键）。
+- 点掉之后编辑照常，字号/排版是兜底字体（本机是 Noto Sans CJK）——**如实**。
+
+**判据落在哪儿**：`ui/font-check.ts` 用**画布量宽度**（同一串中英混排，先用
+`monospace/serif/sans-serif` 各量一次，再拿「候选, 兜底」量一次，差 >0.5px 就算有）；
+⚠️ **不能用 `document.fonts.check()`**——它答的是"这个 `@font-face` 加载没有"，
+对系统已装字体几乎恒真，用它就永远不会提示。⚠️ 提示**一次会话里同一套主题的同一支
+字体只弹一次**（模块级 `Set`，键是 `id|字体`）。
+
+⚠️ **今天没做的**：点宋**没有随包分发**（也没有可软链的目标——这台机器上根本没装）。
+主题里点名了三个常见的点宋/像素宋（文泉驿点阵宋、Zpix、Fusion Pixel），
+装上任一之后重新选一次主题就会用上；没装时那条提示就是它存在的理由。

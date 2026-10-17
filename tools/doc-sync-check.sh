@@ -528,6 +528,10 @@ PAIRS=(
   # ⚠️ 2026-10-16 加的**三份深色补丁**（用户朋友清单第 11 条「编辑器暗色/浅色
   # 跟随主题」）：它们不是另写一份排版，`themes.rs` 把同名浅色那份 `concat!`
   # 进去、这三份只盖颜色——所以文档跟着内置主题那三条走（`04`）。
+  # 2026-10-17: CDE 文档风格（深底浅字 + 点宋）。
+  "src/styles/themes/cde.css                    04"
+  # 2026-10-17: 首选字体缺失那条提示的判据。
+  "src/ui/font-check.ts                         04,02"
   "src/styles/themes/dark/minimal.css            04"
   "src/styles/themes/dark/adwaita.css            04"
   "src/styles/themes/dark/latex.css              04"

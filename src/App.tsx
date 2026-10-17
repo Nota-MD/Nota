@@ -188,9 +188,8 @@ export default function App() {
   // 不是十来个函数——五个框的 `answerXxx` 全在它身上，摊开传的下场是漏一个
   // 就有一个框永远关不掉（见 `ui/AppDialogs.tsx` 的文件头）。
   const 对话框 = useDialogs();
-  // ⚠️ 这里**只解构本文件还用的那几个**：五个 `answerXxx` 由 `AppDialogs`
-  // 直接从对象上取，本文件不再碰（`confirmReq` / `promptReq` / `imageReq` /
-  // `linkReq` / `emojiOpen` 还要用——下面那个 `有浮层` 判据要数它们）。
+  // ⚠️ 只解构本文件还用的那几个：`answerXxx` 由 `AppDialogs` 直接取；下面
+  // `有浮层` 要数 `confirmReq` / `promptReq` / `imageReq` / `linkReq` / `emojiOpen`。
   const { confirmReq, promptReq, imageReq, linkReq, emojiOpen } = 对话框;
   const { askConfirm, askPrompt, askLink, askImage, askEmoji } = 对话框;
 
@@ -509,6 +508,7 @@ export default function App() {
     // 现在打开主题文件夹回来会重拉一把。清单还是只有 `themes` 这一份状态。
     重扫: () => void api.theme.list().then(setThemes),
     toast,
+    askConfirm: 对话框.askConfirm, // 首选字体没装的提示（2026-10-17）
   });
 
   // 用户**导入的**界面风格（取 CSS 注入 / 打开风格文件夹）在

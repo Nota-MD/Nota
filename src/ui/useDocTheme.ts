@@ -22,7 +22,7 @@ import { useCallback, useEffect } from "react";
 
 import { api, type DocThemeInfo, type Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { 字体可用, 首选字体 } from "@/ui/font-check";
+import { 字体可用, 可选字体 } from "@/ui/font-check";
 import type { Dialogs } from "@/ui/useDialogs";
 import { applyDocTheme } from "@/styles/doc-theme";
 import type { Toast } from "@/ui/Toasts";
@@ -183,8 +183,12 @@ export function useDocTheme(w: 主题接线): 主题出口 {
         // ── 首选字体在不在（2026-10-17，用户点名要的那句提示）────────────
         // ⚠️ 查的是**主题自己写的** `--font-doc` 第一项，不是生效的计算值：
         // 计算值里已经是"候选, 兜底…"整串，查不出"谁是首选"。
-        const 首 = css ? 首选字体(css) : null;
-        if (alive && 首 && !字体可用(首)) {
+        // ⚠️ 判的是"**这一族**里有没有一支能用"，不是只看第一支：字体栈本来就是
+        // "首选不在就用下一个"的语义（2026-10-17：装了 Zpix 的机器不该被
+        // 因为没装文泉驿点阵宋而报警）。一支都没有才叫"退回系统字体"。
+        const 候选 = css ? 可选字体(css) : [];
+        const 首 = 候选[0] ?? null;
+        if (alive && 首 && !候选.some(字体可用)) {
           const 键 = `${themeId}|${首}`;
           if (!说过的缺字体.has(键)) {
             说过的缺字体.add(键);

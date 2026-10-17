@@ -41,15 +41,24 @@ export function 字体可用(名字: string): boolean {
   if (!名) return true;
   const 画布 = document.createElement("canvas").getContext("2d");
   if (!画布) return true;
-  return 兜底族.some((兜底) => {
-    画布.font = `72px ${兜底}`;
-    const 基准 = 画布.measureText(样本).width;
-    画布.font = `72px "${名}", ${兜底}`;
-    const 试过 = 画布.measureText(样本).width;
-    // 0.5px 的容差：同一个字体在不同兜底下会有亚像素级的抖动。
-    return Math.abs(试过 - 基准) > 0.5;
-  });
+  // ⚠️ **要试几个字号，不能只试一个**（2026-10-17 踩到的）：
+  // `WenQuanYi Bitmap Song` 那种**纯点阵**字体只在几个固定像素尺寸上有字形
+  // （9/10/11/12/13pt…）。用 72px 去量时它根本没有那个尺寸的点阵，浏览器于是
+  // 退回兜底 ⇒ 被误判成"没装"。正文实际用的是 16–17px，所以从 16 起试。
+  return 字号们.some((字号) =>
+    兜底族.some((兜底) => {
+      画布.font = `${字号}px ${兜底}`;
+      const 基准 = 画布.measureText(样本).width;
+      画布.font = `${字号}px "${名}", ${兜底}`;
+      const 试过 = 画布.measureText(样本).width;
+      // 0.5px 的容差：同一个字体在不同兜底下会有亚像素级的抖动。
+      return Math.abs(试过 - 基准) > 0.5;
+    }),
+  );
 }
+
+/** 探测字号（px）。⚠️ 见 `字体可用` 里那条：点阵字体按"固定像素尺寸"出字形。 */
+const 字号们 = [16, 24, 32] as const;
 
 /**
  * 从一份主题 CSS 里挑出**首选字体**（`--font-doc` 的第一个家族）。
@@ -60,11 +69,20 @@ export function 字体可用(名字: string): boolean {
  *    那些一定存在，不算"缺字体"。
  */
 export function 首选字体(css: string): string | null {
+  const 候选 = 可选字体(css);
+  return 候选[0] ?? null;
+}
+
+/**
+ * 主题 CSS 里 `--font-doc` 点名的**全部具体字体**（去掉通用族）。
+ *
+ * ⚠️ 2026-10-17 加这一条的理由：一套主题的字体栈是"**一族**偏好"——
+ * CDE 那一套点的是 `WenQuanYi Bitmap Song` / `Zpix` / `Fusion Pixel` 三支
+ * 点宋，**装上任一支就够**。只看第一支会把"装了 Zpix 的机器"也报成缺字体。
+ */
+export function 可选字体(css: string): string[] {
   const 命中 = /--font-doc\s*:\s*([^;]+);/.exec(css);
-  if (!命中?.[1]) return null;
-  const 首个 = 命中[1].split(",")[0]?.trim() ?? "";
-  const 名 = 首个.replace(/^["']|["']$/g, "").trim();
-  if (!名) return null;
+  if (!命中?.[1]) return [];
   const 通用 = new Set([
     "serif",
     "sans-serif",
@@ -82,5 +100,8 @@ export function 首选字体(css: string): string | null {
     "-apple-system",
     "",
   ]);
-  return 通用.has(名.toLowerCase()) ? null : 名;
+  return 命中[1]
+    .split(",")
+    .map((x) => x.trim().replace(/^["']|["']$/g, "").trim())
+    .filter((x) => x.length > 0 && !通用.has(x.toLowerCase()));
 }

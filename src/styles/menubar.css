@@ -321,3 +321,14 @@
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
+
+/* ── CDE：菜单栏底下那条**桃色线**（2026-10-17，放大真机截图看到的）────────
+ *
+ * 真机里菜单栏和正文画布之间有一道**橙/桃色**的分隔线（就是标题栏那一支颜色），
+ * 它不是普通的 1px 灰线，是整整 2px、很显眼的一条。少了它，青绿的菜单栏和
+ * 蓝灰画布会直接糊在一起。
+ *
+ * ⚠️ 只给 `cde`：别的档那条分隔线是 `--border` 的细线（`app.css` 的 `.toolbar`）。 */
+[data-ui-style="cde"] .toolbar {
+  border-bottom: 2px solid var(--accent);
+}

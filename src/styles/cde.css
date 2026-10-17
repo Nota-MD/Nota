@@ -23,6 +23,40 @@
   font-smooth: never;
 }
 
+/* ── CDE 图标集 ────────────────────────────────────────────────────────
+ *
+ * 主题只声明“图标 ID → 图片地址”，`Icon` 自己把逻辑名拼成
+ * `--icon-<逻辑名>`。这条约束不绑定文件夹名，用户可以把资源放在风格目录下的
+ * 任意相对位置，甚至让多个风格共享同一棵 assets 目录。
+ *
+ * 内置 CDE 的自绘图标全部是 16 格、整数坐标、硬边，不复制第三方图标。
+ */
+[data-ui-style="cde"] {
+  --icon-folio-document-open-symbolic: url("../assets/icons/cde/document-open.svg");
+  --icon-folio-document-new-symbolic: url("../assets/icons/cde/document-new.svg");
+  --icon-folio-document-save-symbolic: url("../assets/icons/cde/document-save.svg");
+  --icon-folio-document-save-as-symbolic: url("../assets/icons/cde/document-save.svg");
+  --icon-folio-close-symbolic: url("../assets/icons/cde/close.svg");
+  --icon-folio-configure-symbolic: url("../assets/icons/cde/configure.svg");
+  --icon-nota-plugin-symbolic: url("../assets/icons/cde/plugin.svg");
+  --icon-folio-window-symbolic: url("../assets/icons/cde/window.svg");
+  --icon-folio-insert-image-symbolic: url("../assets/icons/cde/image.svg");
+  --icon-folio-insert-code-symbolic: url("../assets/icons/cde/code.svg");
+  --icon-folio-insert-link-symbolic: url("../assets/icons/cde/link.svg");
+  --icon-folio-columns-symbolic: url("../assets/icons/cde/columns.svg");
+  --icon-nota-spellcheck-symbolic: url("../assets/icons/cde/spellcheck.svg");
+  --icon-folio-format-text-bold-symbolic: url("../assets/icons/cde/format-bold.svg");
+  --icon-folio-format-text-italic-symbolic: url("../assets/icons/cde/format-italic.svg");
+  --icon-folio-format-text-underline-symbolic: url("../assets/icons/cde/format-underline.svg");
+  --icon-folio-view-list-bullet-symbolic: url("../assets/icons/cde/list-bullet.svg");
+  --icon-folio-view-list-ordered-symbolic: url("../assets/icons/cde/list-ordered.svg");
+  --icon-nota-quote-symbolic: url("../assets/icons/cde/quote.svg");
+  --icon-nota-task-symbolic: url("../assets/icons/cde/task.svg");
+  --icon-nota-unfold-more-symbolic: url("../assets/icons/cde/unfold-more.svg");
+  --icon-nota-sidebar-collapse-symbolic: url("../assets/icons/cde/sidebar-collapse.svg");
+  --icon-nota-sidebar-toggle-symbolic: url("../assets/icons/cde/sidebar-toggle.svg");
+}
+
 /* 顶栏：桃色硬帽、连续青绿菜单带，底缘按真机压“暗青 → 桃色 → 画布”。 */
 [data-ui-style="cde"] .toolbar {
   height: 34px;

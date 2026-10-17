@@ -23,8 +23,10 @@
   /* ⚠️ 颜色走 `currentColor`：按钮 `:hover`、`data-on` 只改自己的 `color`，
    * 图标就跟着变。**不要在这里写色值**，写一个就少支持一种组合。 */
   background-color: currentColor;
-  -webkit-mask-image: var(--icon);
-  mask-image: var(--icon);
+  /* 主题 CSS 声明 `--icon-<逻辑名>: url(...)`；`Icon.tsx` 把它拼成
+     `--icon-override`，没有声明时回落到默认图。 */
+  -webkit-mask-image: var(--icon-override, var(--icon-base));
+  mask-image: var(--icon-override, var(--icon-base));
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;

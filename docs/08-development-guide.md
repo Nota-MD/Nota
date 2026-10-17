@@ -501,6 +501,36 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 [data-ui-style="my-style"][data-ui-mode="dark"]  { --bg: #141414; --fg: #eeeeee; --accent: #4aa3ff; }
 ```
 
+### 主题资源：图标、字体与图片都在 CSS 里声明
+
+2026-10-17 起，用户主题不再要求资源放进 `<主题id>/icons/`。所有相对 `url()`
+都以**这份 CSS 文件所在目录**为基准，可以自由建 `assets/`、`fonts/`、`shared/`，
+也可以让多个主题共享同一棵目录：
+
+```css
+[data-ui-style="my-style"] {
+  --icon-folio-close-symbolic: url("../shared/icons/close.svg");
+  --icon-folio-format-text-bold-symbolic: url("./assets/bold.svg");
+  --font-ui: "My Theme UI", sans-serif;
+}
+
+@font-face {
+  font-family: "My Theme UI";
+  src: url("./fonts/theme.woff2");
+  font-weight: 400;
+}
+```
+
+图标 ID 就是 `Icon` 组件的逻辑名（`data-icon`），主题只声明
+`--icon-<逻辑名>: url(...)`；没声明的图标继续用 Nota 默认图。后端会把
+`ui-styles/` 或 `themes/` 根目录内的相对资源转成 data URI，所以不碰 WebKit 的
+`asset:` 字体限制。允许在根内用 `../` 共享；逃出主题根、绝对路径、未知后缀、
+单件超过 8 MiB 或合计超过 24 MiB 的那一条资源会保持原样（不生效），不会让整份
+主题失败。
+
+文档主题也在自己的 `themes/` 根内使用同一套相对 `url()` 规则，适合放
+`@font-face`；但文档主题仍然**不能**覆盖界面图标，界面资源归 `ui-styles/`。
+
 ⚠️ **规矩只有三条**，全在 `styles/ui-style.ts` 的文件头：
 ①选择器从 `[data-ui-style="<你的 id>"]` 起头（**不限域是有意的**——界面风格要改的
 就是整个外壳，套一层 `.editor-pane` 前缀等于整份文件都不生效，而且**不报错**）；

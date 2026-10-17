@@ -47,6 +47,7 @@ pub mod settings;
 pub mod single_instance;
 pub mod state;
 pub mod table_width;
+pub mod theme_assets;
 pub mod themes;
 pub mod ui_styles;
 pub mod upload;

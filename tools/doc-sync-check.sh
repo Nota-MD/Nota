@@ -423,6 +423,7 @@ PAIRS=(
   "src/styles/theme/color.css                     04"
   "src/styles/theme/extras.css                    04"
   "src/styles/cde.css                            04,08"
+  "src-tauri/src/theme_assets.rs                 02,08"
   "src/styles/ui-style.ts                         04,08"
   "src/styles/icons.css                           04"
   "src/styles/applyTheme.ts                       04"
@@ -603,6 +604,7 @@ PAIRS=(
   "src/styles/heatmap.css                        04"
   # ── 测试（15）⚠️ 这一组最要紧：`tests/` 没有任何别的闸看着 ──────────────
   "tests/accent.test.ts                          02,06"
+  "tests/icon-theme.test.ts                      02,06"
   "tests/doc-typography.test.ts                  02,06"
   "tests/empty-doc-save.test.ts                  02,06"
   "tests/focus-summary.test.ts                   06,07"

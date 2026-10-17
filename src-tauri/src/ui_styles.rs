@@ -165,7 +165,12 @@ pub fn css_of(id: &str) -> Result<String> {
         )));
     }
     check_size(&path, MAX_CSS_BYTES)?;
-    std::fs::read_to_string(&path).map_err(|source| NotaError::Read { path, source })
+    let css = std::fs::read_to_string(&path).map_err(|source| NotaError::Read {
+        path: path.clone(),
+        source,
+    })?;
+    let root = paths::user_ui_styles_dir()?;
+    Ok(crate::theme_assets::inline(&css, &path, &root))
 }
 
 /// 用户风格目录里的所有 id（文件名去掉 `.css`）。目录不存在就是空表。
@@ -284,4 +289,5 @@ mod tests {
         let err = css_of("../../etc/passwd").unwrap_err();
         assert!(err.to_string().contains("不合法"), "实际：{err}");
     }
+
 }

@@ -213,7 +213,12 @@ pub fn css_of(id: &str) -> Result<String> {
     let path = paths::user_themes_dir()?.join(format!("{id}.css"));
     if path.is_file() {
         check_size(&path, MAX_CSS_BYTES)?;
-        return std::fs::read_to_string(&path).map_err(|source| NotaError::Read { path, source });
+        let css = std::fs::read_to_string(&path).map_err(|source| NotaError::Read {
+            path: path.clone(),
+            source,
+        })?;
+        let root = paths::user_themes_dir()?;
+        return Ok(crate::theme_assets::inline(&css, &path, &root));
     }
 
     BUILTIN

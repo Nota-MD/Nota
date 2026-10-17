@@ -176,10 +176,15 @@ export function Icon({ name, size = 16 }: { name: 图标名; size?: number }) {
   return (
     <span
       className={网址 ? "icon" : "icon icon-missing"}
+      data-icon={name}
       aria-hidden="true"
       style={
         {
-          "--icon": 网址 ? `url("${网址}")` : "none",
+          // 主题 CSS 只需声明 `--icon-<逻辑名>: url(...)`。这里把逻辑名拼成
+          // 自定义属性名，再用默认图作 fallback；不需要为每枚图标写一条组件规则。
+          // 如果两处都写 `--icon-base`，行内 style 会永远赢过主题 CSS。
+          "--icon-base": 网址 ? `url("${网址}")` : "none",
+          "--icon-override": `var(--icon-${name}, var(--icon-base))`,
           width: size,
           height: size,
         } as CSSProperties

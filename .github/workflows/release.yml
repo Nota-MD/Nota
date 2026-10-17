@@ -17,6 +17,9 @@
 
 name: 打包
 
+permissions:
+  contents: write
+
 on:
   push:
     tags: ["v*"]
@@ -24,7 +27,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+    with:
+      base_sha: ${{ github.event.before || '' }}
+
   build:
+    needs: verify
     strategy:
       # 一个平台挂了不代表别的平台也挂，让其余的跑完——六个平台跑一轮很贵。
       fail-fast: false
@@ -99,6 +108,16 @@ jobs:
           # ⚠️ `--bundles` 一定要给。配置里写的是 `"targets": "all"`，
           # 在 Windows 上"all" 会连 MSI 一起打，而我们要的是 exe 安装程序（NSIS）。
           args: --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          # 只在 tag 上创建**草稿** Release；手跑只出 artifact，不会公开版本。
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Nota {0}', github.ref_name) || '' }}
+          releaseDraft: true
+          prerelease: true
+          releaseBody: |
+            源码提交：${{ github.sha }}
+            CI 运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            这是自动生成的草稿 Release。SHA256SUMS.txt 与 BUILD-INFO.json 由 checksums job 追加。
 
       # ⚠️ 收包用的是**产物目录**而不是 `target/release/bundle`：
       # 带 `--target` 时 Tauri 把产物放在 `target/<三元组>/release/bundle/` 下，
@@ -113,3 +132,42 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+
+  checksums:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 生成校验和与构建来源
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS.txt
+          node - <<'NODE'
+          const fs = require("fs");
+          const info = {
+            product: "Nota",
+            version: require("./src-tauri/tauri.conf.json").version,
+            tag: process.env.TAG,
+            commit: process.env.SHA,
+            workflowRun: process.env.RUN_URL,
+            runId: process.env.RUN_ID,
+            generatedAt: new Date().toISOString(),
+            pluginsBundled: false,
+          };
+          fs.writeFileSync("dist/BUILD-INFO.json", JSON.stringify(info, null, 2) + "\n");
+          NODE
+
+      - name: 追加到草稿 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/SHA256SUMS.txt dist/BUILD-INFO.json --clobber

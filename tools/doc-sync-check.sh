@@ -28,6 +28,13 @@ set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 ROOT=$PWD
 
+# CI 模式：② 不用 mtime，而是拿 `DOC_SYNC_BASE...HEAD` 的 git diff 判
+# “源文件改了、映射文档没改”。干净 checkout 上没有可靠的 mtime。
+CI_MODE=0
+if [ "${1:-}" = "--ci" ]; then
+  CI_MODE=1
+fi
+
 # ── 输出小工具 ───────────────────────────────────────────────────────────
 if [ -t 1 ]; then
   R=$'\e[31m'; Y=$'\e[33m'; G=$'\e[32m'; B=$'\e[1m'; N=$'\e[0m'
@@ -619,6 +626,10 @@ PAIRS=(
   "tests/url-link.test.ts                        02,06"
   "tests/file-kind.test.ts                       02,06"
   "tests/tree-options.test.ts                    02,06"
+  "tests/contribution-policy.test.ts             02,06"
+  "tests/dock-resize.test.ts                     02,06"
+  "tools/check-version.sh                       06"
+  "tools/test-frontend.sh                       06"
 )
 
 # 文档编号 → 文件。找不到就说明 docs/ 里缺了这份。
@@ -660,23 +671,44 @@ head_ "② 文档新鲜度（源改了、映射到的文档没跟）"
 # 那是构建顺序不是漂移。真漂移（改了代码没动文档）间隔远大于此。
 TOL=120
 STALE=0
-for row in "${PAIRS[@]}"; do
-  src=${row%% *}
-  docs_part=${row##* }
-  [ -e "$src" ] || continue          # 文件没了：主循环不管，⑤ 会提
-  src_t=$(mtime_of "$src")
-  IFS=',' read -r -a nums <<<"$docs_part"
-  for num in "${nums[@]}"; do
-    doc=$(doc_file "$num")
-    [ -e "$doc" ] || continue
-    doc_t=$(mtime_of "$doc")
-    if [ $((src_t - doc_t)) -gt "$TOL" ]; then
-      warn "$src 比 $doc 新 $((src_t - doc_t)) 秒 —— 这份文档的结论可能被推翻了"
+BASE=${DOC_SYNC_BASE:-}
+if [ "$CI_MODE" -eq 1 ] && [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+  CHANGED=$(git diff --name-only "$BASE...HEAD" 2>/dev/null || true)
+  while IFS= read -r row; do
+    src=${row%% *}
+    docs_part=${row##* }
+    printf '%s\n' "$CHANGED" | grep -Fqx "$src" || continue
+    IFS=',' read -r -a nums <<<"$docs_part"
+    missing=""
+    for num in "${nums[@]}"; do
+      doc=$(doc_file "$num")
+      printf '%s\n' "$CHANGED" | grep -Fqx "$doc" || missing="$missing $doc"
+    done
+    if [ -n "$missing" ]; then
+      fail "$src 改了，但映射文档没同批修改：$missing"
       STALE=$((STALE + 1))
     fi
+  done < <(printf '%s\n' "${PAIRS[@]}")
+  [ "$STALE" -eq 0 ] && ok "git diff 内的源文件都有同批文档修改"
+else
+  for row in "${PAIRS[@]}"; do
+    src=${row%% *}
+    docs_part=${row##* }
+    [ -e "$src" ] || continue          # 文件没了：主循环不管，⑤ 会提
+    src_t=$(mtime_of "$src")
+    IFS=',' read -r -a nums <<<"$docs_part"
+    for num in "${nums[@]}"; do
+      doc=$(doc_file "$num")
+      [ -e "$doc" ] || continue
+      doc_t=$(mtime_of "$doc")
+      if [ $((src_t - doc_t)) -gt "$TOL" ]; then
+        warn "$src 比 $doc 新 $((src_t - doc_t)) 秒 —— 这份文档的结论可能被推翻了"
+        STALE=$((STALE + 1))
+      fi
+    done
   done
-done
-[ "$STALE" -eq 0 ] && ok "映射表里的文档都跟上了"
+  [ "$STALE" -eq 0 ] && ok "映射表里的文档都跟上了"
+fi
 
 # ── ③ 文档引用存在性 ─────────────────────────────────────────────────────
 head_ "③ 文档引用存在性（docs/NN-*.md 必须真有）"

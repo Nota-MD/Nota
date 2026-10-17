@@ -9,6 +9,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "test": "bash tools/test-frontend.sh",
+    "verify": "bash tools/check-version.sh && npm run typecheck && npm test && bash tools/i18n-check.sh && bash tools/doc-sync-check.sh",
     "tauri": "tauri",
     "app": "tauri dev",
     "app:build": "tauri build",

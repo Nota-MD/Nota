@@ -1,7 +1,13 @@
 # Nota
 
-> 意大利语「笔记」。一款**所见即所得**的 Markdown 编辑器，
-> 带 **Lua 插件系统**与四个内置插件：**AI 助手**、**Git 版本控制**、**Slidev 演示**、**写作统计**。
+[![验证](https://github.com/Nota-MD/Nota/actions/workflows/verify.yml/badge.svg)](https://github.com/Nota-MD/Nota/actions/workflows/verify.yml)
+
+> 意大利语「笔记」。一款**所见即所得**的 Markdown 编辑器，带 **Lua 插件系统**。
+> 四个官方插件（AI 助手、Git 版本控制、Slidev 演示、写作统计）独立发布；
+> **安装包不随附插件**。
+
+Nota **明确欢迎 AI 辅助贡献**；提交者必须在 PR 中声明 AI 使用范围，并**亲自完成**
+所贡献功能的端到端测试。规则见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
 
 **[Tauri 2](https://tauri.app/) + [Milkdown 7](https://milkdown.dev/)（ProseMirror）× Lua 5.4**
 
@@ -20,7 +26,7 @@ Nota 把 Markdown 当成**一棵文档树**而不是一段纯文本。所以：
 ## 现在能做什么
 
 ⚠️ **先说清楚现状**：Nota 还在早期，功能缺口是实打实的。
-逐项状态以 **[`docs/10-feature-matrix.md`](docs/10-feature-matrix.md)**（120 项对照矩阵）为准，
+逐项状态以 **[`docs/10-feature-matrix.md`](docs/10-feature-matrix.md)**（138 项对照矩阵）为准，
 **不要以本文为准**。
 
 当前**真的能用**（有人在界面上点过，不是"代码写了"）：
@@ -38,7 +44,7 @@ Nota 把 Markdown 当成**一棵文档树**而不是一段纯文本。所以：
 - 格式化工具栏（默认不显示，可在菜单或设置里选三档）、文档主题切换
 - 导出 HTML、打印
 - 字数统计（字符 / 词 / 行 / 阅读时长）
-- Lua 插件加载与命令派发；内置**四个**插件——**AI 助手**（多对话 ＋ 改动块）、**Git**、**Slidev 演示**（预览嵌在右侧插件栏里）、**写作统计**（打字速度：一个大号数字 ＋ 一条 s-t 曲线）
+- Lua 插件加载、安装与命令派发；开发态会在同级 `Nota-plugins` 仓库发现四个官方插件——**AI 助手**、**Git**、**Slidev 演示**、**写作统计**。**发布安装包不含插件**，需要用户在「设置 → 拓展」里安装 `.nota-plugin`
 
 **代码在了、还没有人在界面上点过**（所以不算在上面那一条里）：
 
@@ -85,6 +91,9 @@ npm run dev
 # 类型检查 + 构建
 npm run build
 
+# 前端测试全集（自动扫描 tests/*.test.ts）
+npm test
+
 # 后端测试
 cd src-tauri && cargo test
 ```
@@ -105,9 +114,11 @@ src/                   ← React 前端
   editor/create.ts    　  Milkdown 装配
   ui/                  　 侧栏 / 编辑区 / 状态栏 / 主页
   styles/              　 三条外观轴的 CSS 变量
-plugins/git/           ← 内置 Git 插件（plugin.toml + main.lua）
-plugins/ai/            ← 内置 AI 助手插件
-plugins/slidev/        ← 内置 Slidev 演示插件（起本机 Slidev，预览嵌进面板）
+../Nota-plugins/       ← 官方插件独立仓库（开发态相邻检出；不随安装包分发）
+  plugins/git/         ← Git 插件
+  plugins/ai/          ← AI 助手插件
+  plugins/slidev/      ← Slidev 演示插件
+  plugins/stats/       ← 写作统计插件
 tools/doc-sync-check.sh ← 文档同步与行数自检
 ```
 

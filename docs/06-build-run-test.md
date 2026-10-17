@@ -1,6 +1,6 @@
 # 06 · 依赖、构建、运行、调试与测试
 
-> 最后同步：2026-10-07
+> 最后同步：2026-10-17
 >
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
 > 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 599 条各钉住了什么。
@@ -243,7 +243,7 @@ glibc 是**向前兼容、不向后兼容**的，在新系统上编的二进制�
 |---|---|---|
 | `targets` | `"all"` | 本地想打哪种就打哪种（配合 `--bundles`），CI 上用 `--bundles` 收窄 |
 | `category` | `"Productivity"` | ⚠️ **必须是 Tauri 2 那张枚举里的值**。可选项是 `Business` / `DeveloperTool` / `Education` / `GraphicsAndDesign` / `Music` / `Photography` / `Productivity` / `Utility` / … **没有 `Office`**。写错不会在 `cargo build` 时报——⚠️ **编到最后一刻**才 `failed to build bundler settings: invalid category`，等于多等一轮（见 §2.4 末尾那条实测） |
-| `resources` | `{ "../plugins": "plugins" }` | **这就是 BUG-11 的修法**。⚠️ **键必须是目录、不能带 glob**——写成 `"../plugins/**/*"` 会打出**平的一片文件**，见下 |
+| `resources` | `{}` | **当前发布策略：安装包不随附插件**。开发态另从同级 `Nota-plugins` 仓库发现；只有重新决定随包时才加目录映射，且键必须是目录、不能带 glob |
 | `icon` | 6 个（见 `icons/`） | Tauri 各平台各取所需：Windows 要 `.ico`、macOS 要 `.icns`、Linux 要 `.png` |
 | `windows.nsis` | `languages: [SimpChinese, English]` + 语言选择器 | 中文用户双击安装看到中文。⚠️ 界面文案一律中文，但**安装器的是语言选择器**，两种都列出来让用户选 |
 | `windows.nsis.installMode` | `currentUser` | 免 UAC 提权。装到用户目录，卸载干净 |
@@ -251,11 +251,11 @@ glibc 是**向前兼容、不向后兼容**的，在新系统上编的二进制�
 | `linux.deb.depends` | `libwebkit2gtk-4.1-0` / `libgtk-3-0` | Tauri 会自动填大部分，Nota 补的是**运行期真正要的那两个 soname** |
 | `linux.rpm.depends` | `webkit2gtk4.1` / `gtk3` | 同上，rpm 的包名和 deb 不一样 |
 
-#### 插件在打包后从哪儿扫（BUG-11，**已修**）
+#### 插件在打包后从哪儿扫（当前：发布包不随附）
 
-打包后内置插件的落点变了：从**资源目录**的 `plugins/` 里扫，不再是开发态那几个落点
-——这条分支在 `paths::builtin_plugins_dirs()`（`src-tauri/src/paths.rs`），展开见
-`docs/11` §1.1（⚠️ 2026-10-09 起开发态第一顺位是**同级插件仓库** `Nota-plugins`）。
+2026-10-11 起 `bundle.resources = {}`：发布包**没有**资源目录插件，只加载用户安装的
+`.nota-plugin`。开发态从同级 `Nota-plugins` 仓库发现官方插件，展开见 `docs/11` §1.1。
+下面保留 BUG-11 的弯路，作为“若重新随包”时的验收警告。
 
 ⚠️ **2026-09-23 之前这里是坏的**：`bundle` 段**没有 `resources` 键**，
 那份 `plugins/` 根本不会被塞进包里，`resource_dir.join("plugins")` **永不命中**，
@@ -3541,6 +3541,14 @@ unified diff（git 的输出）。所以它的用例大半是在对付**格式�
 
 ⚠️ **本仓没有 vitest / jsdom，也不为这件事装包**——所以前端的测试是"用现成的
 `esbuild` ＋ `node` 手工跑"的几份普通 TS 文件：
+
+```sh
+npm test
+# 等价于 bash tools/test-frontend.sh
+```
+
+2026-10-17 起测试名册**自动扫** `tests/*.test.ts`，不再维护手抄 `for` 名单；
+CI 的 `verify.yml` 跑的就是这一份。下面保留早期逐名列表作为历史跑法。
 
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota

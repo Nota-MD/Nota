@@ -1,6 +1,6 @@
 # 01 · 运行时架构
 
-> 最后同步：2026-10-07
+> 最后同步：2026-10-17
 
 本文讲**运行时**：进程怎么起来、状态放在哪、两条通道各有什么、插件在哪一层被装配。
 逐文件的接口签名在 `docs/02-modules.md`，字段级的数据结构在 `docs/03-data-structures.md`。
@@ -879,10 +879,9 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
   `id` 是清单里声明的、插件之间互相引用的名字。用目录名去重会出现"改个文件夹名就多出
   一份插件"这种事。debug 构建下 `builtin_plugins_dirs` 额外返回几档开发态目录（2026-10-09 起第一顺位是**同级插件仓库** `Nota-plugins/plugins`，见 `docs/11` §1.1），
   所以改完 Lua 存盘即生效，不用重编。
-- ⚠️ **打包后那个资源目录里的 `plugins/` 是 `bundle.resources` 从 `../../Nota-plugins/plugins` 拷进去的**（键相对 `src-tauri/`），
-  它**不是**自动的：`tauri.conf.json` 里那条 `{"../plugins": "plugins"}`
-  必须**键写目录**（写 glob 会被拍平成一层文件，两个插件的 `main.lua` 互相盖掉）。
-  这条只有**真拆开一个包**才验得了，开发期看不出来——完整经过见 `docs/06` §2.4。
+- ⚠️ **当前安装包不含插件**：`tauri.conf.json` 的 `bundle.resources = {}`，
+  四个官方插件从独立仓库单独发布并在用户目录安装。开发态仍从同级
+  `Nota-plugins/plugins` 加载；不要把“开发态能发现四个插件”误读成“发布包随附四个插件”。
 
 ### 通道名归一化（`plugin::manifest::channel_id()`）
 

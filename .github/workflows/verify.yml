@@ -1,0 +1,108 @@
+name: 验证
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      base_sha:
+        description: "文档同步检查的比较基线"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      DOC_SYNC_BASE: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before || '' }}
+      NOTA_PLUGINS_DIR: ${{ github.workspace }}/Nota-plugins/plugins
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 检出官方插件仓库
+        uses: actions/checkout@v4
+        with:
+          repository: Nota-MD/Nota-plugins
+          ref: master
+          path: Nota-plugins
+
+      - name: 装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl file lua5.4 pkg-config \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libssl-dev libxdo-dev patchelf
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 版本三处一致
+        run: bash tools/check-version.sh
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 前端测试全集
+        run: bash tools/test-frontend.sh
+
+      - name: Rust 测试
+        run: cargo test --lib --locked
+        working-directory: src-tauri
+
+      - name: 国际化
+        run: bash tools/i18n-check.sh
+
+      - name: 文档同步与结构闸
+        run: bash tools/doc-sync-check.sh --ci
+
+      - name: 官方插件仓库自检
+        run: bash tools/check.sh
+        working-directory: Nota-plugins
+
+      - name: 前端生产构建
+        run: npm run build
+
+  platform:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - name: 前端生产构建
+        run: npm run build
+      - name: 平台后端编译
+        run: cargo check --locked
+        working-directory: src-tauri

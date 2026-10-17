@@ -503,12 +503,12 @@ async function 主() {
 
   组("⚠️ 没有外链、没有撞名的 id（不然光栅化会失败）");
 
-  await 测("两个标识的 id 各带前缀，没有裸 id=\"tile\"", () => {
+  await 测("两个标识的 id 各带前缀，没有裸 id=\"drop\"", () => {
     const svg = 分享图SVG(本轮卡(), 深色卡, 量宽);
     // ⚠️ 同名的 `id` 在同一份文档里只认第一个。两个图标长得一模一样，所以撞名
     // **表现上看不出来**——这一条就是不让它靠运气。
-    等(次数(svg, 'id="tile"'), 0, "有裸 id");
-    断言(svg.includes('id="顶tile"') && svg.includes('id="脚tile"'), "两个前缀没带上");
+    等(次数(svg, 'id="drop"'), 0, "有裸 id");
+    断言(svg.includes('id="顶drop"') && svg.includes('id="脚drop"'), "两个前缀没带上");
   });
 
   await 测("每一个 url(#…) 都在这一串里定义过", () => {

@@ -21,7 +21,6 @@ jobs:
     timeout-minutes: 45
     env:
       DOC_SYNC_BASE: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before || '' }}
-      NOTA_PLUGINS_DIR: ${{ github.workspace }}/Nota-plugins/plugins
     steps:
       - uses: actions/checkout@v4
         with:

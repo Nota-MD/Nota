@@ -192,12 +192,15 @@ mod tests {
     #[test]
     fn 开发态先看环境变量再看同级插件仓库再看老落点() {
         let 资源 = Path::new("/假资源目录");
-        let 目录们 = builtin_plugins_dirs(Some(资源));
         let 主仓库 = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("src-tauri 的上一级");
         let 兄弟 = 主仓库.parent().expect("工作区那一级").join("Nota-plugins").join("plugins");
         let 老落点 = 主仓库.join("plugins");
+        // ⚠️ 不在这里调 `builtin_plugins_dirs`：它会读进程环境，而 CI / 本地都可能设了
+        // `NOTA_PLUGINS_DIR`。测顺序就用纯函数，资源快照手工垫到最后。
+        let mut 目录们 = 开发态候选(None, 主仓库);
+        目录们.push(资源.join("plugins"));
         let i兄弟 = 目录们.iter().position(|p| p == &兄弟).expect("同级插件仓库那一档在");
         let i老 = 目录们.iter().position(|p| p == &老落点).expect("老落点那一档在");
         assert!(i兄弟 < i老, "同级插件仓库必须排在这个之前：{目录们:?}");
@@ -205,11 +208,7 @@ mod tests {
 
         // 不设环境变量时的三档：同级插件仓库 → 老落点。
         let 候选 = 开发态候选(None, 主仓库);
-        assert_eq!(
-            候选.first(),
-            Some(&兄弟),
-            "同级插件仓库必须是第一个：{候选:?}"
-        );
+        assert_eq!(候选.first(), Some(&兄弟), "同级插件仓库必须是第一个：{候选:?}");
         assert_eq!(候选.last(), Some(&老落点), "老落点垫底");
 
         // 设了环境变量就**只认它**（显式覆盖：CI / 别的目录布局 / 想跑一份干净的）。

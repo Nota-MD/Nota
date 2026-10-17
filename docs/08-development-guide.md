@@ -820,7 +820,12 @@ blockquote { border-left: 3px solid var(--border); }
 
 ---
 
-## 6. 新增一个内置插件
+## 6. 新增一个官方插件（不随安装包分发）
+
+⚠️ **当前发行口径（2026-10-11 起）**：插件源码在独立仓库 `Nota-plugins`，
+主安装包不携带插件。开发态由 `paths::builtin_plugins_dirs()` 从同级插件仓库发现；
+测试顺序必须用不读进程环境的纯函数，否则设了 `NOTA_PLUGINS_DIR` 的 CI 会把
+“同级仓库 → 老落点”那条回归测成假失败。
 
 完整规格在 `docs/11-writing-a-plugin.md`（目录形状、清单逐栏、能力表）与
 `docs/13-lua-api.md`（能用的 `nota.*`）。这一节只说**要动哪几个地方**。

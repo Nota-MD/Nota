@@ -921,7 +921,7 @@ export interface PrinterInfo {
   is_default: boolean;
 }
 
-/** 打印环境：区分“没装 CUPS”和“CUPS 在、但没有配置打印机”。 */
+/** 打印环境：区分 CUPS 服务、`lpstat` 客户端与打印机列表三态。 */
 export interface PrintEnvironment {
   /** CUPS 服务是否可达（看标准 Unix socket，不把客户端缺失误判成服务缺失）。 */
   cups_available: boolean;

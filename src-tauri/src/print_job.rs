@@ -47,7 +47,7 @@ pub struct 打印机信息 {
     pub is_default: bool,
 }
 
-/// 打印环境：不仅给列表，还要能区分“CUPS 没装”和“CUPS 在但没打印机”。
+/// 打印环境：把 CUPS 服务、`lpstat` 客户端与打印机列表拆成三份事实。
 #[derive(Debug, Clone, Serialize)]
 pub struct 打印环境 {
     pub cups_available: bool,

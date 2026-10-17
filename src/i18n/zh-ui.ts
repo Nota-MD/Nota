@@ -490,7 +490,7 @@ export const 界面表: Record<string, string> = {
   // ⚠️ `"Ignore"` 那把键**上面已经有了**（「磁盘上的改动」那条横幅在用）——
   // 同一个动作两处两把键的话，改一处另一处静默退回英文，所以这里只补另外两个。
   // 鸣谢里那一条字体（2026-10-16）：Monoton 是「Nota」这三个字用的字标字体。
-  "The “Nota” wordmark": "「Nota」这三个字的字标",
+  "The “Nota” wordmark (vector outlines — no font file is shipped)": "「Nota」这三个字的字标（矢量轮廓，不随包带字体）",
   "Add to dictionary": "加入词典",
   "Show what differs between the file on disk and what is in the editor": "在编辑区里看磁盘上那份和编辑器里这份的差别",
   "Hide the comparison and go back to the document (the file on disk is left alone)": "收起对照，回到正文（磁盘上那份不会被改动）",

@@ -451,7 +451,9 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                 aria-hidden="true"
                 dangerouslySetInnerHTML={{ __html: 标识(0, 0, 1254, "about") }}
               />
-              <div className="about-name">Nota</div>
+              {/* ⚠️ 字标是 **SVG 轮廓**（2026-10-17），不再用随包字体：见 `styles/overlay.css`
+            里 `.about-name` 那一段。`role="img"` + `aria-label` 保留读屏可读。 */}
+            <div className="about-name" role="img" aria-label="Nota" />
               {/* ⚠️ **作者名 2026-10-10 起是 `Leo Lee`**（用户原话：「还有，软件作者叫
                   Leo Lee。」），与 `LICENSE` / `Cargo.toml` 的 `authors` / 四个内置插件
                   清单里的 `authors` **四处同源**——改一处就得四处一起改。

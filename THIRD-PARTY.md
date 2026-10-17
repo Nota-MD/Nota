@@ -381,29 +381,28 @@ SUCH DAMAGE.
 
 ---
 
-## 8. 字标字体：Monoton（OFL-1.1，**随包分发**）
+## 8. 字标：Monoton（OFL-1.1，**只以矢量轮廓出现，不随包分发字体文件**）
 
-**2026-10-16 加**。用户原话：「**文字徽标用"Nota"，字体是 Monoton**（下载目录也有）
-**鸣谢里写一下徽标字体用的是这个**」。
+**2026-10-16 加，2026-10-17 改**。用户原话（先）：「**文字徽标用"Nota"，字体是
+Monoton**（下载目录也有）**鸣谢里写一下徽标字体用的是这个**」；（后）：
+「**最好不要搞任何随包字体。我的建议是你把那个 monoton 的随包字体给换掉。
+把这几个字换成 svg 就可以了**」。
 
-「关于」那张框里那三个字母（`.about-name`）用的就是它——它**不是 npm 包**，
-是一个**搬进仓库的字体文件**（和 §5 那两套图标同一类）：
+于是：`src/assets/fonts/Monoton-Regular.ttf` 与它的 `OFL.txt` **已经从仓库里删掉**，
+换成 `src/assets/nota-wordmark.svg`——从 Monoton 里把 **N / o / t / a** 四个字形转成
+**矢量路径**（`<path>`，不是 `<text>`，所以任何机器上都渲染得出来，不依赖字体文件）。
 
 | 文件 | 是什么 |
 |---|---|
-| `src/assets/fonts/Monoton-Regular.ttf` | 字体本体（49 KB，vernon adams 2011） |
-| `src/assets/fonts/Monoton-OFL.txt` | **许可正文**，与字体同目录 |
+| `src/assets/nota-wordmark.svg` | 字标轮廓（约 6 KB，路径由 `opentype.js` 从 Monoton 导出） |
 
-⚠️ **OFL-1.1 的两条义务**，逐条对上：① **许可正文要随字体一起分发** ——
-那份 `OFL.txt` 就在同一个目录里；② **保留字体名**（`Reserved Font Names: "Monoton"`）
-—— 针对的是"改了字体文件还叫那个名"，而我们**一个字节都没改**（改名字、改几何、
-重新打包都算改，那三样我们一件没做）。所以这一条**不需要**额外动作，
-但要记住：**以后要改字体文件，得连名字一起换**。
+⚠️ **OFL-1.1 的两条义务**：① **许可正文随字体分发**——我们**不再分发字体文件**，
+只是把字形转成轮廓用在标识上（OFL 允许把字形用于 artwork/logo，不要求把字体文件
+一起发）；② **保留字体名**——我们**没有**发布任何叫 "Monoton" 的字体文件，所以
+那一条不适用。⚠️ 出处仍然写在这里与「关于 → 鸣谢」（OFL 要求署名）。
 
-⚠️ **它不是"界面字体"**：Monoton 是霓虹灯管式的装饰面，只有拉丁字母，
-**只给"Nota"这三个字用**（`styles/overlay.css` 里那条 `@font-face` 的
-`font-family` 起名 `Nota Wordmark`，就是为了别让它被别处顺手引走）。
-界面其余部分仍然走系统无衬线（`docs/09` §3 ⑥ 那条"界面不许出现衬线"的闸照旧）。
+⚠️ **它不是"界面字体"**：只有拉丁字母，只给「Nota」字标用；界面其余部分走
+`--font-ui`（`docs/09` §3 ⑥ 那条"界面不许出现衬线"的闸照旧）。
 
 ⚠️ **上游**：<https://fonts.google.com/specimen/Monoton>（作者主页
-<https://www.newtypography.co.uk/>）。"关于 → 鸣谢"里那一行在 `ui/credits.ts`。
+<https://www.newtypography.co.uk/>）。「关于 → 鸣谢」里那一行在 `ui/credits.ts`。

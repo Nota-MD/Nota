@@ -422,38 +422,32 @@
   height: 128px;
 }
 
-/*
- * ⚠️⚠️ **「Nota」那三个字是标识（字标），字体是 Monoton**（2026-10-16 用户：
- * 「文字徽标用"Nota"，字体是 Monoton（下载目录也有）鸣谢里写一下徽标字体用的是这个」）。
+/* ── 「Nota」字标（2026-10-17 改为 **SVG 轮廓**）────────────────────────
  *
- * 字体文件**随包分发**（`src/assets/fonts/Monoton-Regular.ttf`，49 KB，
- * OFL-1.1，许可正文与它的 `OFL.txt` 摆在同一个目录；那份字体**一个字节都没改**，
- * 所以 OFL 那条"保留字体名"的规矩不用管）。鸣谢里的那一行在
- * `ui/credits.ts`，第三方清单在 `THIRD-PARTY.md` §8。
+ * 用户：「最好不要搞任何随包字体。我的建议是你把那个 monoton 的随包字体给换掉。
+ * **把这几个字换成 svg 就可以了**」。
  *
- * ⚠️ `font-display: swap`：字体是**本地打包**的，正常情况下第一帧就在；
- * 万一没加载上（打包漏了那个文件），`swap` 让那三个字先用兜底字体画出来、
- * 而不是**整块空白**——字标空着比字体不对难查得多。
- * ⚠️ 兜底栈里**不放衬线**（那条"界面不许用衬线"的死规矩，`tools/doc-sync-check.sh` ⑥）：
- * 兜底是系统无衬线，看着只是"没那么花"，不是另一种气质。
+ * 所以 `src/assets/fonts/Monoton-Regular.ttf` **已经删掉**（连同它的 OFL 文本），
+ * 换成 `src/assets/nota-wordmark.svg`——从 Monoton 里把 **N o t a** 四个字形转成
+ * **矢量路径**（不是 `<text>`，所以不依赖任何字体文件）。
+ *
+ * ⚠️ 落地和图标同一招：**`mask-image` ＋ `background: currentColor`**——
+ * 颜色跟着 `color` 走（深色/浅色、强调色都不用另做一份图）。
+ * 鸣谢里那一条**保留**（OFL 要求保留出处），只是措辞改成「轮廓、不随包带字体」。
  */
-@font-face {
-  font-family: "Nota Wordmark";
-  src: url("../assets/fonts/Monoton-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
 .about-name {
+  width: 111px;
+  height: 34px;
   margin-top: 12px;
-  font-size: 1.7em;
-  /* ⚠️ **标识字体排在最前、兜底是无衬线**：Monoton 是那种"霓虹灯管"式的装饰面，
-     只给"Nota"这三个字用（它没有中文字，也不能拿去画界面文字）。 */
-  font-family: "Nota Wordmark", system-ui, sans-serif;
-  font-weight: 400;
-  /* Monoton 的字面自带宽大的行距，给一点字距让三个字母不挤在一起。 */
-  letter-spacing: 0.02em;
+  background: currentColor;
+  -webkit-mask-image: url("../assets/nota-wordmark.svg");
+  mask-image: url("../assets/nota-wordmark.svg");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 }
 
 .about-developer {

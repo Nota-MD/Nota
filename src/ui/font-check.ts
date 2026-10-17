@@ -45,7 +45,7 @@ export function 字体可用(名字: string): boolean {
   // `WenQuanYi Bitmap Song` 那种**纯点阵**字体只在几个固定像素尺寸上有字形
   // （9/10/11/12/13pt…）。用 72px 去量时它根本没有那个尺寸的点阵，浏览器于是
   // 退回兜底 ⇒ 被误判成"没装"。正文实际用的是 16–17px，所以从 16 起试。
-  return 字号们.some((字号) =>
+  const 画布有 = 字号们.some((字号) =>
     兜底族.some((兜底) => {
       画布.font = `${字号}px ${兜底}`;
       const 基准 = 画布.measureText(样本).width;
@@ -55,6 +55,30 @@ export function 字体可用(名字: string): boolean {
       return Math.abs(试过 - 基准) > 0.5;
     }),
   );
+  if (画布有) return true;
+  // ⚠️ **纯点阵字体（PCF）canvas 量不出来**（2026-10-17 实测：文泉驿点阵宋
+  // 在布局里画得好好的，`measureText` 却一直等于兜底宽）——canvas 那条路走的是
+  // 不同的一套字体回退。所以再拿**真正的 DOM 布局**量一次：两个等宽的 span，
+  // 一个用兜底、一个用"候选, 兜底"，宽度不同就是有。
+  return 布局量得到(名);
+}
+
+/** 用真实 DOM 再量一次（见 `字体可用` 末尾那条注释）。 */
+function 布局量得到(名: string): boolean {
+  const 甲 = document.createElement("span");
+  const 乙 = document.createElement("span");
+  for (const el of [甲, 乙]) {
+    el.textContent = 样本;
+    el.style.cssText =
+      "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;font-size:16px";
+  }
+  甲.style.fontFamily = "monospace";
+  乙.style.fontFamily = `"${名}", monospace`;
+  document.body.append(甲, 乙);
+  const 差 = Math.abs(甲.getBoundingClientRect().width - 乙.getBoundingClientRect().width);
+  甲.remove();
+  乙.remove();
+  return 差 > 0.5;
 }
 
 /** 探测字号（px）。⚠️ 见 `字体可用` 里那条：点阵字体按"固定像素尺寸"出字形。 */

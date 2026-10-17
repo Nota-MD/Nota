@@ -123,13 +123,13 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       许可: "MIT",
     },
     {
-      // 「Nota」那三个字的字体（2026-10-16 用户点名：「文字徽标用"Nota"，
+      // 「Nota」那三个字的字标（2026-10-16 用户点名：「文字徽标用"Nota"，
       // 字体是 Monoton……鸣谢里写一下徽标字体用的是这个」）。
-      // ⚠️ 它**不是 npm 包**，是一个随包分发的字体文件
-      //（`src/assets/fonts/Monoton-Regular.ttf` ＋ 同目录那份 `OFL.txt`），
-      // 所以这一行是这一份名单里少见的"搬进仓库的东西"——与 §6 的图标同一类。
+      // ⚠️ **2026-10-17 起不再随包带字体**（用户：「最好不要搞任何随包字体……把这
+      // 几个字换成 svg 就可以了」）：字形已经转成 `src/assets/nota-wordmark.svg` 的
+      // **矢量轮廓**，仓库里没有 `.ttf` 了。这一行保留是 OFL 的出处要求。
       名: "Monoton",
-      用处: t("The “Nota” wordmark"),
+      用处: t("The “Nota” wordmark (vector outlines — no font file is shipped)"),
       链接: "https://fonts.google.com/specimen/Monoton",
       许可: "OFL-1.1",
     },

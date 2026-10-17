@@ -276,9 +276,10 @@
   /* ⚠️ 字体也是"长相"的一部分：CDE 那个年代是 **Helvetica**（X11 上退到
      Nimbus Sans）。这里照样保留 CJK 兜底——中文不能因此变成豆腐块。 */
   /* ⚠️ 2026-10-17：**界面也用点宋那一族**（用户：「注意 UI 主题也用这个」）。
-     首选 Zpix（最像素，TTF／OFL，笔画最接近真机那种细点阵）；
-     第二三支是别的点宋实现；最后才是 CJK 兜底——没装点宋也不会出豆腐块。 */
-  --font-ui: "Zpix", "NanoDyongWongSong", "WenQuanYi Bitmap Song",
+     ⚠️ 首选**文泉驿点阵宋**（PCF）：放大真机截图比对后——真机是**宋体**（横细竖粗、
+     有衬线），而 Zpix 是**像素黑体**（笔画一样粗、无衬线），用户一眼看出"像无衬线"。
+     所以点宋在前、Zpix 退到后备。最后是 CJK 兜底——没装点宋也不会出豆腐块。 */
+  --font-ui: "WenQuanYi Bitmap Song", "文泉驿点阵宋体", "NanoDyongWongSong", "Zpix",
     "文泉驿点阵宋体", "Noto Sans CJK SC", "DejaVu Sans", sans-serif;
   /* ⚠️ 28px 是"看得出是按钮、又不至于像现代控件那么高"那一档。 */
   --control-height: 28px;

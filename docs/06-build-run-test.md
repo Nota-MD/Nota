@@ -6626,13 +6626,15 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 保持写半边打开、用 `Connection: close` 收完整响应后才拿到 95 字节 IPP 正文。
 这行注释和回归判据在 `cups.rs::发请求`。
 
-📌 **同日真实打印（L3150-4 已完成）**：普通 PDF 任务被 CUPS 的 Epson PPD
+📌 **同日真实打印排障（raw 是错误方向）**：普通 PDF 任务被 CUPS 的 Epson PPD
 过滤链拒绝，`lpstat -l` 为 `Filter failed`；本机 `epson-escpr-wrapper` 的
 `ldd` 显示缺 `libcupsimage.so.2`。IPP 属性同时表明打印机的
-`document-format-preferred = application/pdf`，改用 raw PDF 后 `L3150-4`
-从队列消失、打印机报告 `Rendering completed`，实体打印成功。Nota 现会在
-“单份、无页码范围、打印机首选 PDF”时自动使用 `application/vnd.cups-raw`；
-其余组合仍交给 CUPS，避免静默丢失份数或页范围语义。
+`document-format-preferred = application/pdf`，但 raw PDF 实测被打印机当文本
+直接吐出 `%PDF-1.4` 和乱码，证明这里的“preferred”不能绕过 PPD 光栅化。
+正确修法是安装当前 Debian 包 `libcupsimage2t64`（旧发行版是
+`libcupsimage2`），让 `epson-escpr-wrapper` 的 CUPS raster → ESC/P-R 链恢复；
+`ldd` 后 `not found` 应为空。Nota 继续提交 `application/pdf` 给 CUPS，
+**不要使用 `application/vnd.cups-raw`**。
 
 📌 **同日补记（3D 质感与点宋）**：真机截图放大 6 倍之后，三件事被推翻重做——
 斜面 **2px → 1px**、按钮**去掉外圈黑线**、字**黑 → 白**（菜单栏/按钮/标签全是白字）；

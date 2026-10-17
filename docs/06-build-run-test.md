@@ -4172,6 +4172,10 @@ curl -s http://localhost:5273/ | grep -c '@vite/client'   # 1 = dev 那份在听
 npm run build                                             # 类型闸门 ＋ 打包产物（发布/打包才需要）
 ```
 
+`package.json` 用 override 把传递依赖 `source-map-js` 固定到 **1.2.2**，修掉事件循环
+DoS 高危项。`npm audit` 仍有 6 条 low，来自 KaTeX / Mermaid / remark-math；上游暂无
+无破坏升级路径，不能为了清零强行升大版本。
+
 ⚠️ 想确认"屏幕上那一版是不是我刚改的"，**看 5273 那个 URL，别去翻 `dist/`**。
 反过来，想确认"打包产物里有没有我这一版"，才看 `dist/` 与 `npm run build` 的退出码。
 

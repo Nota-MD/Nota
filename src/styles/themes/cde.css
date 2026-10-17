@@ -55,9 +55,8 @@
   /* ── 排版 ── */
   /* ⚠️ 点宋那一族在前；后面是**能保证中文不出豆腐块**的兜底。
      第一项就是 `ui/font-check.ts` 去查的那一个。 */
-  --font-doc: "WenQuanYi Bitmap Song", "文泉驿点阵宋体", "Zpix", "最像素",
-    "Fusion Pixel 12px Proportional SC", "Noto Sans Mono CJK SC",
-    "Droid Sans Fallback", monospace;
+  --font-doc: "Zpix", "NanoDyongWongSong", "WenQuanYi Bitmap Song",
+    "文泉驿点阵宋体", "Noto Sans Mono CJK SC", "Droid Sans Fallback", monospace;
   --doc-font-size: 1.02em;
   --doc-line-height: 1.75;
   --doc-h-weight: 700;

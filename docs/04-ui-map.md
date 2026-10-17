@@ -1948,7 +1948,24 @@ grep -rn "docs/04" src/ src-tauri/src/ \
 | `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru` / **`cde`** | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**（改了就认不出老设置文件，用户会被静默打回默认档） |
 | `data-ui-mode` | `auto` / `light` / `dark` | `auto` 由 `matchMedia("(prefers-color-scheme: dark)")` 解析 |
 | `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 14 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
-| `document_theme`（设置项） | 内置**七套**的 id（浅色 `minimal` / `adwaita` / `latex` ＋ 深色 `minimal-dark` / `adwaita-dark` / `latex-dark` ＋ **`cde`**）＋ 用户目录里的文件名 | ⚠️ **`cde` 是 2026-10-17 加的**：**深底浅字**那一挂（画布 `#686F82` 照真机截图量的、正文 `#F2F1EE`），方角、无装饰线，`--font-doc` 首选**点宋**（`WenQuanYi Bitmap Song` / `Zpix` / `Fusion Pixel`）。⚠️ 它**没有深色配对**（自己就是深的）。⚠️ 首选字体没装时**弹一句**（`ui/font-check.ts`，判据是画布量宽度，不是 `document.fonts.check()`——那个对系统字体几乎恒真）。 **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套"。⚠️ **2026-10-16 加回三档深色**（朋友清单第 11 条「编辑器暗色/浅色跟随主题」）：`useDocTheme.ts` 多一张 `深色配对` 表——**界面是深色且用户没单独指定 `dark_document_theme` 时**，`minimal`/`adwaita`/`latex` 自动换成自己的深色档（只对这三套内置生效，用户主题不动）。📌 **2026-10-17 晚：3D 质感按"放大 6 倍的像素"重定了一遍**（用户：「CDE 的 3D 质感好像
+| `document_theme`（设置项） | 内置**七套**的 id（浅色 `minimal` / `adwaita` / `latex` ＋ 深色 `minimal-dark` / `adwaita-dark` / `latex-dark` ＋ **`cde`**）＋ 用户目录里的文件名 | ⚠️ **`cde` 是 2026-10-17 加的**：**深底浅字**那一挂（画布 `#686F82` 照真机截图量的、正文 `#F2F1EE`），方角、无装饰线，`--font-doc` 首选**点宋**（`WenQuanYi Bitmap Song` / `Zpix` / `Fusion Pixel`）。⚠️ 它**没有深色配对**（自己就是深的）。⚠️ 首选字体没装时**弹一句**（`ui/font-check.ts`，判据是画布量宽度，不是 `document.fonts.check()`——那个对系统字体几乎恒真）。 **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套"。⚠️ **2026-10-16 加回三档深色**（朋友清单第 11 条「编辑器暗色/浅色跟随主题」）：`useDocTheme.ts` 多一张 `深色配对` 表——**界面是深色且用户没单独指定 `dark_document_theme` 时**，`minimal`/`adwaita`/`latex` 自动换成自己的深色档（只对这三套内置生效，用户主题不动）。📌 **2026-10-17 晚（续）：点宋选型试了三支，选了 Zpix。**
+
+用户：「但是他有中文吗？你也可以试一下纳米点宋或者其他点宋。**找出效果最好的一个用就行**」
+＋「注意 **UI 主题也用这个**」。三支都装进 `~/.local/share/fonts` 逐张开窗比过（4 倍放大看笔画）：
+
+| 候选 | 长相 | 结论 |
+|---|---|---|
+| `WenQuanYi Bitmap Song 16px`（社区做的**矢量 TTF 版**） | 平滑的宋体（竖粗横细、有衬线），**不是点阵** | 好看，但不是 CDE 那个味道 |
+| `NanoDyongWongSong`（纳米点望宋） | 真点阵，但笔画**两像素粗**、字形略糙 | 比真机更"重"，小字号下不如 Zpix 好读 |
+| **`Zpix`（最像素）** | 真点阵，**一像素细笔画**、干净 | **选它**：和真机截图里那种细点阵最接近，覆盖 GB2312＋，OFL 许可 |
+
+所以 **`--font-doc` 与 `--font-ui` 都首选 Zpix**（第二三支留纳米点望宋 / 文泉驿点阵宋作兜底）。
+⚠️ **UI 也用同一支**是用户点名要的（「注意 UI 主题也用这个」）——中文界面下菜单/工具栏/
+对话框的字都是点阵（开窗拍过：`文件 编辑 段落…` 明显是点阵笔画）。
+⚠️ **拉丁字母仍然走系统无衬线**：这几支中文点阵字体不带（或 WebKit 不认）拉丁字形，
+英文界面下 `File / Edit / Paragraph` 是平滑的——这不是没生效，是字体本身没有那批字形。
+
+📌 **2026-10-17 晚：3D 质感按"放大 6 倍的像素"重定了一遍**（用户：「CDE 的 3D 质感好像
 不是我们这样的」）。把真机截图放大 6 倍之后能看清三个**之前想当然弄错**的地方：
 
 1. **斜面是 1px，不是 2px**：一条亮线顶在左上、一条暗线压右下，中间就是面；

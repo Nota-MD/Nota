@@ -180,6 +180,7 @@ export function useDocTheme(w: 主题接线): 主题出口 {
         // 空串 = 无主题，直接把 style 摘掉，编辑区回中性样式。
         const css = themeId ? await api.theme.css(themeId) : null;
         if (alive) applyDocTheme(css);
+
         // ── 首选字体在不在（2026-10-17，用户点名要的那句提示）────────────
         // ⚠️ 查的是**主题自己写的** `--font-doc` 第一项，不是生效的计算值：
         // 计算值里已经是"候选, 兜底…"整串，查不出"谁是首选"。

@@ -279,7 +279,8 @@
      ⚠️ 首选**文泉驿点阵宋**（PCF）：放大真机截图比对后——真机是**宋体**（横细竖粗、
      有衬线），而 Zpix 是**像素黑体**（笔画一样粗、无衬线），用户一眼看出"像无衬线"。
      所以点宋在前、Zpix 退到后备。最后是 CJK 兜底——没装点宋也不会出豆腐块。 */
-  --font-ui: "WenQuanYi Bitmap Song", "文泉驿点阵宋体", "NanoDyongWongSong", "Zpix",
+  --font-ui: "WenQuanYi Bitmap Song 16px", "WenQuanYi Bitmap Song", "文泉驿点阵宋体",
+    "NanoDyongWongSong", "Zpix",
     "文泉驿点阵宋体", "Noto Sans CJK SC", "DejaVu Sans", sans-serif;
   /* ⚠️ 28px 是"看得出是按钮、又不至于像现代控件那么高"那一档。 */
   --control-height: 28px;

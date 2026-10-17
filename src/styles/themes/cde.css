@@ -54,10 +54,15 @@
 
   /* ── 排版 ── */
   /* ⚠️ 点宋那一族在前；后面是**能保证中文不出豆腐块**的兜底。
-     第一项就是 `ui/font-check.ts` 去查的那一个。 */
-  --font-doc: "WenQuanYi Bitmap Song", "文泉驿点阵宋体", "NanoDyongWongSong",
-    "Zpix", "Noto Sans Mono CJK SC", "Droid Sans Fallback", monospace;
-  --doc-font-size: 1.02em;
+     第一项就是 `ui/font-check.ts` 去查的那一个。
+     ⚠️ **首选的是社区把文泉驿点阵宋转出来的 TTF**（`WenQuanYi Bitmap Song 16px`）：
+     原版 PCF 在 WebKitGTK 里用不上（点阵字体被 fontconfig 拒），而这支 TTF 的
+     字形就是那套点阵——横细竖粗、有衬线，**是宋**，不是像素黑。
+     ⚠️ 它按 **16px** 设计，所以下面 `--doc-font-size: 1em`（配 16px 的界面字号
+     正好是原生尺寸；15px 会缩一点、边缘略软）。 */
+  --font-doc: "WenQuanYi Bitmap Song 16px", "WenQuanYi Bitmap Song",
+    "文泉驿点阵宋体", "NanoDyongWongSong", "Zpix", "Noto Serif CJK SC", serif;
+  --doc-font-size: 1em;
   --doc-line-height: 1.75;
   --doc-h-weight: 700;
   --doc-h-line-height: 1.3;

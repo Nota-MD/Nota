@@ -43,6 +43,7 @@ const IPP_MIME_TYPE: u8 = 0x49;
 
 const CUPS_GET_DEFAULT: u16 = 0x4001;
 const CUPS_GET_PRINTERS: u16 = 0x4002;
+const GET_PRINTER_ATTRIBUTES: u16 = 0x0009;
 const PRINT_JOB: u16 = 0x0002;
 
 const IPP_STATUS_CLIENT_NOT_FOUND: u16 = 0x0406;
@@ -145,11 +146,23 @@ pub(crate) fn 投递(
             .filter(|s| !s.is_empty())
             .unwrap_or("Nota"),
     );
+    // ⚠️ 很多 AirPrint/驱动less 打印机在 IPP 属性里声明 `application/pdf`
+    // 为首选格式，但 CUPS 仍会先套本机 PPD 过滤链。Epson 驱动的
+    // `epson-escpr-wrapper` 一旦缺 `libcupsimage.so.2`，整笔任务就 filter failed。
+    // 这种机器上 raw PDF 才是真正能到打印机的那条路。只在单份、无页码范围时
+    // 使用 raw；否则仍交给 CUPS 过滤，避免丢掉份数与 page-ranges 语义。
+    let 可直发_pdf = copies <= 1
+        && ranges.map(str::trim).is_none_or(str::is_empty)
+        && 打印机首选_pdf(&socket, &uri);
     加字符串(
         &mut 请求,
         IPP_MIME_TYPE,
         "document-format",
-        "application/pdf",
+        if 可直发_pdf {
+            "application/vnd.cups-raw"
+        } else {
+            "application/pdf"
+        },
     );
     if copies > 1 {
         加整数(&mut 请求, "copies", copies);
@@ -251,6 +264,33 @@ fn 查询默认(socket: &Path) -> Result<Option<String>> {
     Ok(按组(&文档.属性, IPP_PRINTER_ATTRIBUTES)
         .first()
         .and_then(|组| 组字符串(组, "printer-name")))
+}
+
+/// 这台打印机是否明确把 PDF 声明为首选格式。查询失败一律返回 `false`：
+/// 宁可按普通 PDF 交给 CUPS，也不要在不支持 PDF 的打印机上乱发 raw。
+fn 打印机首选_pdf(socket: &Path, uri: &str) -> bool {
+    let mut 请求 = 起始请求(GET_PRINTER_ATTRIBUTES, 4);
+    加字符串(&mut 请求, IPP_URI, "printer-uri", uri);
+    加字符串(
+        &mut 请求,
+        IPP_KEYWORD,
+        "requested-attributes",
+        "document-format-preferred",
+    );
+    请求.push(IPP_END);
+    let Ok(响应) = 发请求(socket, "/", &请求, None, Duration::from_secs(10)) else {
+        return false;
+    };
+    let Ok(文档) = 解析响应(&响应) else {
+        return false;
+    };
+    if 文档.状态 > 0x00ff {
+        return false;
+    }
+    按组(&文档.属性, IPP_PRINTER_ATTRIBUTES)
+        .first()
+        .and_then(|组| 组字符串(组, "document-format-preferred"))
+        .is_some_and(|格式| 格式.eq_ignore_ascii_case("application/pdf"))
 }
 
 fn 起始请求(operation: u16, request_id: u32) -> Vec<u8> {

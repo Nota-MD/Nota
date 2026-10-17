@@ -6626,6 +6626,14 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 保持写半边打开、用 `Connection: close` 收完整响应后才拿到 95 字节 IPP 正文。
 这行注释和回归判据在 `cups.rs::发请求`。
 
+📌 **同日真实打印（L3150-4 已完成）**：普通 PDF 任务被 CUPS 的 Epson PPD
+过滤链拒绝，`lpstat -l` 为 `Filter failed`；本机 `epson-escpr-wrapper` 的
+`ldd` 显示缺 `libcupsimage.so.2`。IPP 属性同时表明打印机的
+`document-format-preferred = application/pdf`，改用 raw PDF 后 `L3150-4`
+从队列消失、打印机报告 `Rendering completed`，实体打印成功。Nota 现会在
+“单份、无页码范围、打印机首选 PDF”时自动使用 `application/vnd.cups-raw`；
+其余组合仍交给 CUPS，避免静默丢失份数或页范围语义。
+
 📌 **同日补记（3D 质感与点宋）**：真机截图放大 6 倍之后，三件事被推翻重做——
 斜面 **2px → 1px**、按钮**去掉外圈黑线**、字**黑 → 白**（菜单栏/按钮/标签全是白字）；
 另外补了菜单栏底下那条 2px 桃色分隔线。字体那头：`xfonts-wqy`（文泉驿点阵宋）是

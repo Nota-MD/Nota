@@ -536,6 +536,15 @@
      量到 `#7D593B`，那是整块面板的边，不是普通分隔线。 */
   --border: #2c5f6d;
   --border-strong: #7d593b;
+  /* 真机窗口的外框是两层：内侧浅奶油、外侧棕。它只服务 CDE 的组件规则
+     （标题条、侧栏、弹层的双色边），不参与通用的 `--border`，否则文件树、
+     输入框那些普通分隔线会一起变成棕色。 */
+  --frame-light: #f7d9c0;
+  --frame-dark: #7d593b;
+  --title-fg: #ffffff;
+  --btn-fg: #ffffff;
+  /* 被选中/压下的按键是暖灰面，字转深青；这是真机列表选中行与按下键的配色。 */
+  --btn-fg-active: #173c45;
   --accent: #eda870;
   /* ⚠️ 桃色上写**黑字**（对比度 11:1）：CDE 的选中条就是黑字。 */
   --accent-fg: #000000;
@@ -570,6 +579,11 @@
   --fg-faint: #adadad;
   --border: #7a7a7a;
   --border-strong: #d0d0d0;
+  --frame-light: #9aa4a6;
+  --frame-dark: #111a1d;
+  --title-fg: #ffffff;
+  --btn-fg: #ffffff;
+  --btn-fg-active: #101719;
   /* ⚠️ 暗色下强调色**提亮**（#b24f86 在黑底上太闷，而且白字对比度掉到 3.6:1）。
      #d478ab 配深字 4.8:1。 */
   --accent: #d478ab;

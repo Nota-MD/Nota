@@ -276,13 +276,16 @@
   /* ⚠️ 字体也是"长相"的一部分：CDE 那个年代是 **Helvetica**（X11 上退到
      Nimbus Sans）。这里照样保留 CJK 兜底——中文不能因此变成豆腐块。 */
   /* ⚠️ 2026-10-17：**界面也用点宋那一族**（用户：「注意 UI 主题也用这个」）。
-     ⚠️ 首选**文泉驿点阵宋**（PCF）：放大真机截图比对后——真机是**宋体**（横细竖粗、
-     有衬线），而 Zpix 是**像素黑体**（笔画一样粗、无衬线），用户一眼看出"像无衬线"。
-     所以点宋在前、Zpix 退到后备。最后是 CJK 兜底——没装点宋也不会出豆腐块。 */
-  --font-ui: "WenQuanYi Bitmap Song 16px", "WenQuanYi Bitmap Song", "文泉驿点阵宋体",
-    "NanoDyongWongSong", "Zpix",
-    "文泉驿点阵宋体", "Noto Sans CJK SC", "DejaVu Sans", sans-serif;
-  /* ⚠️ 28px 是"看得出是按钮、又不至于像现代控件那么高"那一档。 */
+     ⚠️ 首选带 **EBDT/EBLC 内嵌位图**的 TTF（`Nota GB16ST Bitmap`）：普通轮廓
+     TTF 即使照着点阵字形描边，WebKit 仍会抗锯齿；字体里直接保存 16×16 的
+     1-bit 字模，FreeType 才返回 MONO 位图。菜单、正文与 AI 面板三处已放大目检。 */
+  /* ⚠️ **兜底仍排在无衬线前面**：界面里有大量粗体；若 WebKit 为找不到 Bold
+     的家族换用 `Noto Sans CJK SC`，同一屏就会宋体与黑体混杂。 */
+  --font-ui: "Nota GB16ST Bitmap", "Nota GB16ST", "Nota DotSong 12",
+    "WenQuanYi Bitmap Song 16px", "Noto Serif CJK SC", "NanoDyongWongSong",
+    "Zpix", serif;
+  /* ⚠️ **2026-10-17 晚：2× 那版撤了**——用户目检：「放大之后字体变得大了很多，
+     已经超出那个框框的范围了」。整档放大不是要的东西；字号与控件回到 1×。 */
   --control-height: 28px;
   --toolbar-height: 30px;
   --spacing: 6px;

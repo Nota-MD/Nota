@@ -538,7 +538,7 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 ```rust
 pub const BUILTIN_IDS: &[&str] = &[
     "auto", "adwaita", "ghub", "plasma", "macos",
-    "windows", "windows10", "yaru",
+    "windows", "windows10", "yaru", "cde",
 ];
 ```
 
@@ -546,11 +546,14 @@ pub const BUILTIN_IDS: &[&str] = &[
 
 ⚠️ 清单现在共 **9 项**，数的时候把 `auto` 和风格分开：`auto` 是"跟随系统"，
 由 `applyTheme.ts` 的探测表落成下面某一个（不是一个风格本身）；要在明暗两态下
-各自成立的风格是**七个**（`theme.css` 那句「7 风格 × 2 模式 = 14 格」数的是这七个）
-——等一下，`auto` + 七个风格是八项，而 14 格数的是**七个**风格，两处数的不是同一件事，
-别按 9 × 2 去算格子。
+各自成立的风格是**八个**（`theme.css` 那句「8 风格 × 2 模式 = 16 格」数的是这八个）。
 ⚠️ **2026-10-07 之前这里举的例子是 `yaru-blue` 与 `yaru` 共用形状**（同一套语言换强调色）——
 那一档当天删了，但**写法本身留着当范例**：要加「同一套语言换强调色」的档时，形状段写成并列选择器。
+
+⚠️ **需要覆盖跨组件结构的风格**（当前只有 `cde`）不能只写变量：在
+`src/styles/cde.css` 里加 `[data-ui-style="<id>"]` 前缀的组件规则，并从
+`main.tsx` **靠后**加载。放到 `theme/extras.css` 不够——那份经 `theme.css`
+先加载，会被 `dock.css` / `bars.css` / `settings.css` 的现代控件规则盖回去。
 
 ⚠️ **加风格时顺手问一句"`auto` 探得到它吗"**。探得到的才往 `applyTheme.ts` 的探测表里加一行；
 `ghub` / `windows10` 就是**故意的探不到**（GitHub 没说自己是什么桌面、

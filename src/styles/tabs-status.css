@@ -274,9 +274,10 @@
  */
 [data-ui-style="cde"] .tab-active {
   background: var(--accent);
-  color: var(--accent-fg);
-  box-shadow: var(--bevel);
+  color: var(--title-fg);
+  box-shadow: inset 1px 1px 0 var(--frame-light);
 }
 [data-ui-style="cde"] .tab-active .tab-label {
-  color: var(--accent-fg);
+  color: var(--title-fg);
+  text-shadow: 1px 1px 0 var(--frame-dark);
 }

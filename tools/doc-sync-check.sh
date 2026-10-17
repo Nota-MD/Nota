@@ -422,6 +422,7 @@ PAIRS=(
   "src/styles/theme/shape.css                     04"
   "src/styles/theme/color.css                     04"
   "src/styles/theme/extras.css                    04"
+  "src/styles/cde.css                            04,08"
   "src/styles/ui-style.ts                         04,08"
   "src/styles/icons.css                           04"
   "src/styles/applyTheme.ts                       04"

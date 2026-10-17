@@ -192,9 +192,12 @@
 }
 
 [data-ui-style="cde"] .dock-tab[data-active="true"] {
-  border: 1px solid var(--border);
-  background: var(--btn-bg);
-  box-shadow: var(--bevel);
+  /* 真机的选中项是一块暖灰面、深青字，斜面反过来（凹下）；并不把当前页
+     画成另一颗普通凸按钮。这样一眼能分清“能点的页”和“正在看的页”。 */
+  border: 0;
+  background: var(--btn-bg-active);
+  color: var(--btn-fg-active);
+  box-shadow: var(--bevel-sunken);
 }
 
 /* 「插件」页（清单）。**它永远在最右**，表示"这里还有不属于任何插件的东西"，
@@ -349,11 +352,12 @@
 [data-ui-style="cde"] .dock-head,
 [data-ui-style="cde"] .sidebar-head {
   background: var(--accent);
-  color: var(--accent-fg);
-  box-shadow: var(--bevel);
+  color: var(--title-fg);
+  box-shadow: inset 1px 1px 0 var(--frame-light);
 }
 
 [data-ui-style="cde"] .dock-head .dock-title,
 [data-ui-style="cde"] .sidebar-head .sidebar-title {
-  color: var(--accent-fg);
+  color: var(--title-fg);
+  text-shadow: 1px 1px 0 var(--frame-dark);
 }

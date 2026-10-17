@@ -1,0 +1,262 @@
+/**
+ * CDE 组件的**最后一层覆盖**（2026-10-17）。
+ *
+ * 四张真机图里，窗口不是靠“圆角 + 阴影”分层，而是靠两条硬边：
+ * 外面一条棕线、里面一条奶油亮线；按键是青绿面上的一道 1px 凸起，
+ * 按下去就把亮暗对调。这种关系跨越菜单、侧栏、面板、状态栏和对话框，
+ * 变量本身说不清“哪一条边压在哪一个元素上”，因此集中在这个最后加载的文件。
+ *
+ * ⚠️ **必须排在 `main.tsx` 的最后一批样式之后**：`theme/extras.css` 虽然也叫
+ * “变量表达不了的事”，但它经 `theme.css` 在 `app.css` / `dock.css` / `bars.css`
+ * **之前**加载；这里若也放在那里，`dock.css` 后写的栏头颜色会把它盖回去。
+ *
+ * 全部选择器带 `[data-ui-style="cde"]`；其他七档不会命中。
+ */
+
+/* 窗口最外框。右下角的深蓝灰属于真机画布，外框本身仍是棕 + 奶油两道。 */
+[data-ui-style="cde"] .app {
+  border: 1px solid var(--frame-dark);
+  box-shadow: inset 1px 1px 0 var(--frame-light);
+  /* WebKitGTK 实际会忽略这两条，真正生效的是 EBDT 字模；保留它们是为了
+     在支持字体平滑开关的 Windows WebView2 上别把 1-bit 边缘再洗成灰阶。 */
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+/* 顶栏：桃色硬帽、连续青绿菜单带，底缘按真机压“暗青 → 桃色 → 画布”。 */
+[data-ui-style="cde"] .toolbar {
+  height: 34px;
+  padding: 5px 4px 4px;
+  border-top: 3px solid var(--accent);
+  border-bottom: 1px solid var(--bevel-dark);
+  background: var(--bg);
+  box-shadow:
+    inset 0 1px 0 var(--frame-light),
+    inset 0 -2px 0 var(--accent);
+}
+
+[data-ui-style="cde"] .menubar {
+  gap: 0;
+}
+
+[data-ui-style="cde"] .toolbar-dock-toggle {
+  height: 24px;
+  margin: 0 0 0 auto;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--title-fg);
+}
+
+[data-ui-style="cde"] .toolbar-dock-toggle:hover:not(:disabled) {
+  background: rgb(0 0 0 / 10%);
+}
+
+[data-ui-style="cde"] .toolbar-dock-toggle.btn-on {
+  background: var(--bg-subtle);
+  box-shadow: var(--bevel-sunken);
+}
+
+/* 弹层：暗青外框 + 奶油亮边，条目紧贴，没有任何圆角或柔光。 */
+[data-ui-style="cde"] :is(.menu-popup, .menu-sub, .context-menu, .context-sub) {
+  padding: 0;
+  border: 1px solid var(--bevel-dark);
+  border-radius: 0;
+  background: var(--bg);
+  box-shadow: 1px 1px 0 var(--frame-light);
+}
+
+[data-ui-style="cde"] .menu-item {
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 0;
+  color: var(--title-fg);
+}
+
+[data-ui-style="cde"] .menu-item:hover:not(:disabled),
+[data-ui-style="cde"] .menu-item-open:not(:disabled) {
+  background: var(--bg-subtle);
+  box-shadow: var(--bevel-sunken);
+}
+
+[data-ui-style="cde"] .menu-heading {
+  padding: 3px 7px;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+[data-ui-style="cde"] .menu-search {
+  margin: 0;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-sunken);
+  color: var(--title-fg);
+  box-shadow: var(--bevel-sunken);
+}
+
+[data-ui-style="cde"] .menu-sep {
+  height: 2px;
+  margin: 0;
+  background: var(--bevel-dark);
+  box-shadow: 0 1px 0 var(--bevel-light);
+}
+
+/* 格式栏：图标键凸起，当前标记持续凹下，不随鼠标移开复原。 */
+[data-ui-style="cde"] .format-bar {
+  padding: 4px 6px;
+  border-top: 1px solid var(--bevel-light);
+  border-bottom: 2px solid var(--bevel-dark);
+  background: var(--bg-subtle);
+}
+
+[data-ui-style="cde"] .format-btn {
+  min-width: 26px;
+  height: 24px;
+  border: 0;
+  border-radius: 0;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--bevel);
+}
+
+[data-ui-style="cde"] .format-btn:hover {
+  background: var(--btn-bg-hover);
+  color: var(--btn-fg);
+}
+
+[data-ui-style="cde"] .format-btn:active,
+[data-ui-style="cde"] .format-btn[data-on="true"] {
+  background: var(--btn-bg-active);
+  color: var(--btn-fg-active);
+  box-shadow: var(--bevel-sunken);
+}
+
+[data-ui-style="cde"] .format-sep {
+  width: 3px;
+  height: 18px;
+  margin: 0 4px;
+  background: transparent;
+  box-shadow:
+    inset 1px 0 0 var(--bevel-dark),
+    inset 2px 0 0 var(--bevel-light);
+}
+
+[data-ui-style="cde"] .format-bar-close {
+  height: 24px;
+  border: 0;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--bevel);
+}
+
+/* 当前页签：暖灰凹面；未选页签保持平铺文字。 */
+[data-ui-style="cde"] .sidebar-tab-active,
+[data-ui-style="cde"] .dock-tab[data-active="true"] {
+  border: 0;
+  background: var(--btn-bg-active);
+  color: var(--btn-fg-active);
+  box-shadow: var(--bevel-sunken);
+}
+
+/* 栏头承担真机窗口标题条的角色：桃色、白点阵字、右下棕线。 */
+[data-ui-style="cde"] .dock-head,
+[data-ui-style="cde"] .sidebar-head {
+  border-bottom: 1px solid var(--frame-dark);
+  background: var(--accent);
+  color: var(--title-fg);
+  box-shadow: inset 1px 1px 0 var(--frame-light);
+}
+
+[data-ui-style="cde"] :is(.dock-head .dock-title, .sidebar-head .sidebar-title) {
+  color: var(--title-fg);
+  text-shadow: 1px 1px 0 var(--frame-dark);
+}
+
+[data-ui-style="cde"] :is(.dock-close, .sidebar-close) {
+  border-left: 1px solid var(--frame-dark);
+  color: var(--title-fg);
+}
+
+/* 两栏与正文之间也是硬边，不用现代灰 hairline。 */
+[data-ui-style="cde"] .sidebar {
+  border-right: 2px solid var(--frame-dark);
+  box-shadow: inset -1px 0 0 var(--frame-light);
+}
+
+[data-ui-style="cde"] .plugin-dock {
+  border-left: 2px solid var(--frame-dark);
+  box-shadow: inset 1px 0 0 var(--frame-light);
+}
+
+/* 输入区、下拉、搜索框：左上暗、右下亮的真正凹槽。 */
+[data-ui-style="cde"] :is(input:not([type="checkbox"], [type="radio"]), textarea, select) {
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-sunken);
+  color: var(--title-fg);
+  box-shadow: var(--bevel-sunken);
+}
+
+[data-ui-style="cde"] :is(input, textarea)::placeholder {
+  color: var(--fg-faint);
+}
+
+[data-ui-style="cde"] :is(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--accent);
+}
+
+/* 按钮：悬停只换面，按下才翻斜面；面保持青绿，不用现代透明底。 */
+[data-ui-style="cde"] .btn:not(.toolbar-dock-toggle) {
+  border: 0;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--bevel);
+}
+
+[data-ui-style="cde"] .btn:not(.toolbar-dock-toggle):hover:not(:disabled) {
+  background: var(--btn-bg-hover);
+}
+
+[data-ui-style="cde"] .btn:not(.toolbar-dock-toggle):is(:active, .btn-on, [data-on="true"], [aria-pressed="true"]) {
+  background: var(--btn-bg-active);
+  color: var(--btn-fg-active);
+  box-shadow: var(--bevel-sunken);
+}
+
+/* 状态栏：短而硬的凸起横带；小开关开着时持续凹下。 */
+[data-ui-style="cde"] .statusbar {
+  border-top: 1px solid var(--bevel-dark);
+  background: var(--bg-subtle);
+  color: var(--title-fg);
+  box-shadow: inset 0 1px 0 var(--bevel-light);
+}
+
+[data-ui-style="cde"] .status-btn {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 0;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--bevel);
+}
+
+[data-ui-style="cde"] .status-btn:hover {
+  background: var(--btn-bg-hover);
+  color: var(--btn-fg);
+}
+
+[data-ui-style="cde"] .status-btn[data-on] {
+  background: var(--btn-bg-active);
+  color: var(--btn-fg-active);
+  box-shadow: var(--bevel-sunken);
+}
+
+[data-ui-style="cde"] .status-count {
+  padding: 1px 5px;
+  background: var(--bg-sunken);
+  color: var(--title-fg);
+  box-shadow: var(--bevel-sunken);
+}

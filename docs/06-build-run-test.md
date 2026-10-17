@@ -6541,3 +6541,12 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 ⚠️ 因此 `font-check` 的判据改成"**这一族里有没有任意一支能用**"，不是只看第一支。
 ⚠️ 这两支字体是**装在 `~/.local/share/fonts` 里**的（对这台机器生效），
 **没有**进仓库、也没有随包分发。
+
+📌 **同日最终目检（真 EBDT 点阵）**：把 HZK16 的 16×16 原始字模写成
+TTF 的 **EBDT/EBLC** 表后，`ftdump` 显示 `EBDT` / `EBLC` 与 `fixed size 16×16`，
+FreeType 对“中 / 文 / A”返回 `pixel_mode=1`（MONO）。无头 `:99` 里用
+`ui_style = "cde"`、`document_theme = "cde"` 开窗，菜单、正文、AI 面板、
+当前页签与标题均显示硬像素；格式栏的 `B` 点下后移到别处仍保持暖灰凹面。
+⚠️ **开发期踩到的一个坑**：新字体名已写进 `shape.css`，但长时间运行的 Vite
+仍持有旧 CSS 模块，fontconfig 调试日志里完全看不到新家族；重启 Vite 后立刻命中。
+因此目检“换字体没生效”时先看 `FC_DEBUG=1` 有没有请求目标家族，再判断字体表。

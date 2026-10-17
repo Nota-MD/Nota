@@ -551,6 +551,10 @@ export type EditorCommand =
 
 ⚠️ `h1`~`h6` 走**同一族**命令（`wrapInHeadingCommand` 带层数参数），在派发口
 （`command-table.ts::跑命令`）里拆开，所以这里列六个而不是一个 `heading` 加参数。
+📌 **2026-10-17 起它们是开关**：当前块已经是 H1 时再点 H1（或 `Ctrl+1`）会走
+`turnIntoTextCommand` 退回正文；H2 上点 H1 仍然改成 H1，不会错误地退回正文。
+源码模式同一判据：选区每行都已经是同一串 `#… ` 时再点同一级会清掉标题前缀。
+判据 `tests/heading-toggle.test.ts` **5 条**。
 
 ⚠️⚠️ **2026-09-28：命令白名单（`COMMANDS` 表）整块从 `create.ts` 搬去了
 `src/editor/command-table.ts`**——搬的原因只有行数一个（那边到 **1010** 行、越过

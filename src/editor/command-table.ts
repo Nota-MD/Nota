@@ -103,6 +103,17 @@ function isHeading(name: EditorCommand): name is HeadingCommand {
 }
 
 /**
+ * 光标所在块是不是**同一级标题**。
+ *
+ * 菜单和工具栏上的 H1/H2/H3 是开关：已经在 H1 时再点 H1 应退回正文；
+ * 在 H2 时点 H1 仍应改成 H1。判据只看当前最内层文本块，列表/引用里的标题也成立。
+ */
+export function 同层标题(state: EditorState, level: number): boolean {
+  const { $from } = state.selection;
+  return $from.parent.type.name === "heading" && $from.parent.attrs.level === level;
+}
+
+/**
  * 命令白名单的**实体**。
  *
  * ⚠️ 存的是 `$Command` 的**回调**而不是 `$Command` 本身：Milkdown 的
@@ -291,7 +302,13 @@ function 抬一层(视图: EditorView, 容器名: string): void {
  */
 export function 跑命令(editor: Editor, name: 表内命令, payload?: CommandPayload): void {
   if (isHeading(name)) {
-    editor.action(callCommand(wrapInHeadingCommand.key, Number(HEADING_RE.exec(name)![1])));
+    const level = Number(HEADING_RE.exec(name)![1]);
+    const view = editor.ctx.get(editorViewCtx);
+    if (同层标题(view.state, level)) {
+      editor.action(callCommand(turnIntoTextCommand.key));
+    } else {
+      editor.action(callCommand(wrapInHeadingCommand.key, level));
+    }
   } else {
     COMMANDS[name](editor, payload);
   }

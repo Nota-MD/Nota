@@ -118,6 +118,17 @@ function setLinePrefix(
   view.dispatch({ changes });
 }
 
+/** 选区里的每个非空行是否都已经以**同一串**标题标记开头。 */
+function 全部是这一级标题(view: EditorView, prefix: string, strict: boolean): boolean {
+  const re = atxPrefixRe(strict);
+  const lines = selectedLines(view).filter((line) => view.state.doc.sliceString(line.from, line.to).trim() !== "");
+  if (lines.length === 0) return false;
+  return lines.every((line) => {
+    const hit = re.exec(view.state.doc.sliceString(line.from, line.to));
+    return hit?.[0] === prefix;
+  });
+}
+
 /** 把选区包进 `before`/`after`；没选东西就插一个占位词并选中它。 */
 function wrapSelection(
   view: EditorView,
@@ -310,7 +321,8 @@ export function applyCommand(
     case "h5":
     case "h6": {
       const level = Number(name.slice(1));
-      setLinePrefix(view, "heading", "#".repeat(level) + " ", strict);
+      const prefix = "#".repeat(level) + " ";
+      setLinePrefix(view, "heading", 全部是这一级标题(view, prefix, strict) ? null : prefix, strict);
       return true;
     }
     case "text":

@@ -95,7 +95,7 @@
 | `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 ⚠️ **2026-10-07 拆过（第 89 项）：1006 → 502 行**——「一次性把一切装上去」那一段整块搬去了 `editor/assemble.ts`（620 行），这边只留「实例建好之后怎么用」。 |
 | `editor/assemble.ts` | **「把一切装上去」那一段**（**635 行**，2026-10-07 从 `create.ts` 拆出，`docs/07` 第 89 项）：`.config()` ＋ 整条 `.use()` 插件链——ctx 初值、序列化器、输入规则、NodeView、各种可选插件。参数收**一个对象**（`装配参数`），不收一长串位置参数（同一条理由见 `ui/pane-editors.ts`）。⚠️ **顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问）：**搬的时候一字未改**，要动顺序先把那一条注释读完。⚠️ `取前置块` / `记账列宽` 两样必须走**回调**不能传值——前者要"这一刻"那一段（换文档、源码切回来都会换），后者要调用方手里**活的那张表**。📌 **2026-10-07 同日加 `移动键位`**（`.use(readOnly ? [] : [移动键位])`，`editor/move-block.ts`）：`Alt+↑/↓` 必须抢在 `baseKeymap` 的 `joinUp`/`joinDown` **前面**接（那条链里 `[...prosePlugins, …, createKeymap(…)]` 的顺序就是这条键位能生效的原因） |
 | `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十六条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化**。⚠️ 建编辑器时要**摘掉与界面快捷键撞车的 CodeMirror 默认键位**（`撞车键位`，2026-09-25；⚠️ **2026-10-04 那份名单搬去了 `editor/key-conflicts.ts`**，因为 BUG-58 正是"名单漏了一条"——搬出来才能被测试读到） ⚠️ **2026-10-07 又拆一次（第 89 项）：1048 → 637 行**——「一条命令落到文本上」那一块搬去了 `editor/source-commands.ts`（443 行），这边只留编辑器本身（扩展、主题、句柄、查找/写作模式接线）。⚠️ 两次拆的落点见 `tools/doc-sync-check.sh` 的 `PAIRS`。⚠️ **同一天傍晚（BUG-71）`notaTheme` 里补了两段注释 ＋ 把当前行那一档换成半透明配方，现在 652 行**（理由见 `docs/07` BUG-71——不透明的当前行底色会把选区整条盖住）。 |
-| `editor/source-commands.ts` | **源码模式的「命令落点」**（**511 行**，2026-10-07 从 `source.ts` 拆出；同日又接上「选择」那族与 `Alt+↑/↓`）：一条 `EditorCommand` 落到 CodeMirror 文本上的那一下（`applyCommand` 那张 `switch` ＋ 七八个私房文本工具），**对外只有这一个名字**。⚠️ **本文件一句都不 import `source.ts`**（那边 import 本文件，反过来就是环）：它要的判据全是"纯文本"那一档，各自在 `atx.ts` / `source-mark.ts` / `footnote.ts` / `front-matter.ts` 里。📌 **`selectLine`/`selectWord`/`selectSentence`/`deleteWord` 调的是 `editor/select.ts` 那两个纯函数**（与所见即所得共用判据）；**选行用的是 CodeMirror 自己的 `selectLine`**，所以这边**含末尾那个换行**、所见即所得那边不含（"行"在两边本来就不是同一个东西）。`moveLineUp`/`moveLineDown` 直接用 CM 自己那两个函数 |
+| `editor/source-commands.ts` | **源码模式的「命令落点」**（2026-10-07 从 `source.ts` 拆出）：`applyCommand` 与文本小工具，对外只有这一个名字；不 import `source.ts`。📌 **2026-10-17 起 H1/H2/H3 也是开关**：选区所有非空行都已是同一串标题前缀时，再点同层会清掉前缀退回正文。 |
 | `editor/select.ts` | **「选择」那一族**（337 行，2026-10-07 新建）：选当前行 / 选当前词 / 选当前句 / 选词并删（`Ctrl+L` / `Ctrl+D` / `Ctrl+E` / `Ctrl+Shift+D`；菜单里是「编辑 → 选择 ▸」那四条）。**三层**：`选词区间`/`选句区间`（纯文本 ＋ 字符偏移）→ `行区间`/`词区间`/`句区间`（PM 文档 ＋ 位置）→ `选行`/`选词`/`选句`/`删词`（一个 `Editor`）。⚠️ **前两层两种模式共用**（源码那边调的是同一对函数），另写一份"哪个字算一个词"迟早变成"切一下模式，同一个词选得不一样"。⚠️ 分词交给 **`Intl.Segmenter`**（结果是**环境**给的，所以用例只钉 ASCII、中文只钉"包含关系"）。⚠️ 最常撞上的边界：光标**贴着词尾**时选的是**刚过去**那个词。⚠️ 代码块给 `null`（那一格归块里那颗 CodeMirror）。用例 **25 条**在 `tests/select.test.ts`；真按键那半在 `docs/06` §5.55 ④ |
 | `editor/move-block.ts` | **`Alt+↑` / `Alt+↓`：上移 / 下移光标所在的块**（235 行，2026-10-07 新建）：`算移动(doc, 位置, 方向)` 给一份"删哪儿、插哪儿、光标落哪"的计划（纯算术，用例 **20 条**），`移动块(editor, 方向)` 照着派一笔事务，`移动键位` 是挂进实例的那个插件。⚠️ 光标在**列表项**里搬那一个列表项（找**最深**那层列表），别处搬**顶层块**；⚠️ **表格里什么都不做**（没做行/列挪动，"整张表上移"才是最坏的）；⚠️ **到边就是不动**（不绕回去）。⚠️⚠️ **这两颗键必须自己接**：`baseKeymap` 已经把 `Alt-ArrowUp`/`Alt-ArrowDown` 绑给了 `joinUp`/`joinDown`（合并相邻两段）并 `preventDefault`，不接的话全局那条 accel 整颗放行、用户看到的是"两段被并成一段"（`docs/06` §5.55 ④）。⚠️ 只挂给**可编辑**实例 |
 | `editor/key-conflicts.ts` | **CodeMirror 默认键位里与本应用撞车的那几条**（101 行，2026-10-04 从 `source.ts` 拆出）：`撞车键位`（摘掉：`Mod-/` `Mod-i` `Shift-Mod-k` `Mod-z` `Mod-y` **`Mod-u`** ＋ **2026-10-07 挪进来的 `Alt-ArrowUp`/`Alt-ArrowDown`**）。⭐ **拆出来的理由是 BUG-58**：原来的名单只有人眼在看，漏了一条 `Mod-u`（CM 的 `undoSelection`，还带 `preventDefault` ⇒ 应用被放行 ⇒ **什么都不发生**，症状与"功能没做"一模一样，躲了四个月）。⚠️ **2026-10-07 起只剩这一份名单**（第二份 `故意不摘` 撤了：那两条 handler 接上了，照当时写下的约定挪进 `撞车键位`——**键位只能有一个主人**）。⚠️ 它**纯**（不 import CM、不 import DOM），所以 `tests/key-conflicts.test.ts`（**19 条**）能反过来拿 CM 自己那张表查这份名单。判据与两类症状（"两边都跑" / "被放行"）在文件头与 `docs/06` §5.43 ⑩、§5.47 |
@@ -397,7 +397,7 @@
 `paste-clean.test.ts` **25** · `math-currency.test.ts` **23**
 `code-block-editing.test.ts` **21** · `key-conflicts.test.ts` **21**
 `auto-correct.test.ts` **20** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20**
-`atom-space.test.ts` **19** · `heading-on-enter.test.ts` **19** · `accent.test.ts` **18**
+`atom-space.test.ts` **19** · `heading-on-enter.test.ts` **19** · `heading-toggle.test.ts` **5** · `accent.test.ts` **18**
 `mark-hint.test.ts` **18** · `instant-render.test.ts` **17** · `list-indent.test.ts` **16**
 `focus-dim.test.ts` **15** · `file-kind.test.ts` **14** · `html-block.test.ts` **14**
 `lang-icons.test.ts` **14** · `bar-close.test.ts` **13** · `syntax-escape.test.ts` **13**
@@ -5663,7 +5663,7 @@ payload），搬走之后 `create.ts` 那边只剩一个 `跑命令` 的调用�
 
 | 名字 | 是什么 |
 |---|---|
-| `COMMANDS` | `Record<EditorCommand, (editor, payload?) => void>` 那张表：键是**编辑器命令**名（`bold` / `ul` / `tableRowBelow`…），值是"怎么把它派给 Milkdown"。⚠️ **`h1`~`h6` 不在表里**——它们共用 `wrapInHeadingCommand`、只是层数不同，先由下面那个分支摘出去 |
+| `COMMANDS` | `Record<EditorCommand, (editor, payload?) => void>` 那张表。⚠️ **`h1`~`h6` 不在表里**——`跑命令` 单独分流；📌 **2026-10-17 起同层标题再按一次会退回正文**，跨层仍改成目标标题 |
 | `跑命令(editor, name, payload?)` | 派发口。⚠️ **只管命令、不管焦点**——焦点那件事留在 `create.ts`：两个用家（菜单栏 / 斜杠菜单）的焦点处境正好相反，见 `docs/05` §3 |
 | `HeadingCommand` / `BlockCommand` / `HEADING_RE` / `isHeading` | 上面那个分支要用的类型与判据。`isHeading` 写成**类型谓词**而不是 `as`：写成 `as` 的话，"表里漏了一项"这种错误也会被一起放过去 |
 

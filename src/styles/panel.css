@@ -559,12 +559,16 @@
  * 对现代矢量字体没有必要，反而会让层级变平。 */
 [data-ui-style="cde"] .panel-hero-title {
   font-weight: 400;
-  font-size: 1.2em;
+  font-size: min(1em, 16px);
+  line-height: 1.5;
 }
 
 [data-ui-style="cde"] .panel-hero-sub,
 [data-ui-style="cde"] .panel-text,
 [data-ui-style="cde"] .panel-item,
 [data-ui-style="cde"] .panel-field {
-  font-size: 1em;
+  /* 20px 的全局界面字号会把 16px 字模放大并让 AI 面板每行只剩几个字；
+     这里把密集面板压回原生 16px 点阵，外壳字号仍照用户设置。 */
+  font-size: min(1em, 16px);
+  line-height: 1.6;
 }

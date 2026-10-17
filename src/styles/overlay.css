@@ -834,6 +834,11 @@
   font-size: 0.82em;
 }
 
+.print-hint.print-warning {
+  color: var(--warn);
+  font-weight: 600;
+}
+
 .print-side {
   display: flex;
   flex-direction: column;

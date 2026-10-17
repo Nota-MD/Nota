@@ -13,6 +13,33 @@
  * 全部选择器带 `[data-ui-style="cde"]`；其他七档不会命中。
  */
 
+/*
+ * 点阵字体随安装包分发。字形来自 WenQuanYi Bitmap Song 的 16px 字模，
+ * 再封装成 TTF 的 EBDT/EBLC 1-bit strike；许可证是 GPL-2.0 with font
+ * embedding exception，完整版权与例外正文在 assets/fonts 同目录。
+ */
+@font-face {
+  font-family: "Nota GB16ST Bitmap";
+  src: url("../assets/fonts/NotaGB16ST-EBDT-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  unicode-range:
+    U+2E80-2EFF, U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF,
+    U+FF00-FFEF, U+20000-2FA1F;
+}
+
+@font-face {
+  font-family: "Nota GB16ST Bitmap";
+  src: url("../assets/fonts/NotaGB16ST-EBDT-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  unicode-range:
+    U+2E80-2EFF, U+3000-303F, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF,
+    U+FF00-FFEF, U+20000-2FA1F;
+}
+
 /* 窗口最外框。右下角的深蓝灰属于真机画布，外框本身仍是棕 + 奶油两道。 */
 [data-ui-style="cde"] .app {
   border: 1px solid var(--frame-dark);
@@ -21,6 +48,8 @@
      在支持字体平滑开关的 Windows WebView2 上别把 1-bit 边缘再洗成灰阶。 */
   -webkit-font-smoothing: none;
   font-smooth: never;
+  /* 点阵字体只有 400/700 两档；禁止 WebKit 把 600 之类的字重“合成加粗”。 */
+  font-synthesis: none;
 }
 
 /* ── CDE 图标集 ────────────────────────────────────────────────────────
@@ -231,6 +260,45 @@
   background: var(--bg-sunken);
   color: var(--title-fg);
   box-shadow: var(--bevel-sunken);
+}
+
+/* 原生 select / number spinner 在 WebKitGTK 里会盖回白底圆角现代外观。
+   这里必须真正关掉 `appearance`，否则上面那条 background 声明只写在原生皮肤下面。 */
+[data-ui-style="cde"] select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 24px;
+  background-color: var(--bg-sunken);
+  background-image:
+    linear-gradient(135deg, transparent 45%, var(--title-fg) 45% 55%, transparent 55%),
+    linear-gradient(45deg, transparent 45%, var(--title-fg) 45% 55%, transparent 55%);
+  background-position:
+    calc(100% - 12px) 50%,
+    calc(100% - 7px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+}
+
+[data-ui-style="cde"] select:focus-visible {
+  outline: 1px dotted var(--frame-light);
+  outline-offset: -3px;
+}
+
+[data-ui-style="cde"] select option {
+  background: var(--bg);
+  color: var(--title-fg);
+}
+
+[data-ui-style="cde"] input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+[data-ui-style="cde"] input[type="number"]::-webkit-inner-spin-button,
+[data-ui-style="cde"] input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 [data-ui-style="cde"] :is(input, textarea)::placeholder {

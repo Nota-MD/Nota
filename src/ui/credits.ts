@@ -134,6 +134,15 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       许可: "OFL-1.1",
     },
     {
+      // CDE 界面与文档用的 16px 硬点阵字（2026-10-17 用户批准随包分发）。
+      // 字形来自 WenQuanYi Bitmap Song，重新封装为 EBDT/EBLC TTF；
+      // 完整 GPL-2.0＋字体嵌入例外正文在 `src/assets/fonts/` 与 `THIRD-PARTY.md` §9。
+      名: "WenQuanYi Bitmap Song",
+      用处: t("CDE interface and document bitmap font"),
+      链接: "https://sourceforge.net/projects/wqy/files/wqy-bitmapfont/",
+      许可: "GPL-2.0-with-font-embedding-exception",
+    },
+    {
       // 2026-10-11 起**拼写检查的引擎**就是它（`src-tauri/src/spell/native.rs`）：
       // 纯 Rust 的 hunspell 实现，编进程序里。⚠️ 许可那一栏写 **Apache-2.0** 是
       // 照它仓库里那份 `LICENSE` 抄的——**不是**选型时拿到的第二手材料说的 MIT

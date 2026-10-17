@@ -921,6 +921,12 @@ export interface PrinterInfo {
   is_default: boolean;
 }
 
+/** 打印环境：区分“没装 CUPS”和“CUPS 在、但没有配置打印机”。 */
+export interface PrintEnvironment {
+  cups_available: boolean;
+  printers: PrinterInfo[];
+}
+
 /**
  * 打印预览（`nota_print_prepare` 的返回）。
  *

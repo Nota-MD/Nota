@@ -224,3 +224,10 @@
 :where(.editor-mount .ProseMirror) .nota-smart-hide {
   font-size: 0;
 }
+/* 图片不要按原始像素撑出编辑区；文档里的 `width/height` 若没有显式给出，
+   以正文列宽为上界。这是屏幕显示约束，不改 Markdown 属性。 */
+.editor-mount .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}

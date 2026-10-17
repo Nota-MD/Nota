@@ -281,9 +281,10 @@
      1-bit 字模，FreeType 才返回 MONO 位图。菜单、正文与 AI 面板三处已放大目检。 */
   /* ⚠️ **兜底仍排在无衬线前面**：界面里有大量粗体；若 WebKit 为找不到 Bold
      的家族换用 `Noto Sans CJK SC`，同一屏就会宋体与黑体混杂。 */
-  --font-ui: "Nota GB16ST Bitmap", "Nota GB16ST", "Nota DotSong 12",
-    "WenQuanYi Bitmap Song 16px", "Noto Serif CJK SC", "NanoDyongWongSong",
-    "Zpix", serif;
+  /* 点阵字模只覆盖 CJK（`@font-face` 有 unicode-range）；西文落到 Noto Sans，
+     不再用那套发粗、字宽异常的 HZK 半角字形。 */
+  --font-ui: "Nota GB16ST Bitmap", "Noto Sans", "Noto Sans CJK SC",
+    "DejaVu Sans", "WenQuanYi Bitmap Song 16px", sans-serif;
   /* ⚠️ **2026-10-17 晚：2× 那版撤了**——用户目检：「放大之后字体变得大了很多，
      已经超出那个框框的范围了」。整档放大不是要的东西；字号与控件回到 1×。 */
   --control-height: 28px;

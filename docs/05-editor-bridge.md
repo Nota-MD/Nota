@@ -1373,6 +1373,13 @@ ProseMirror / CodeMirror 对"剪贴板里是图片"的处理是**把那坨二进
 
 用户原话（点名的一串小功能里的一条）：「**图片语法指向 `.mp4` 当视频**」。
 
+📌 **2026-10-17 同一条 NodeView 还接管了本地图片路径**：绝对路径、`file://`、
+相对路径与 Windows 盘符先算成本机绝对路径，再由宿主 `nota_image_data_url`
+读成 data URL 设置到屏幕上的 `<img>` / `<video>`。Markdown 的 `attrs.src`
+一个字节不改。这样不再依赖 WebKitGTK asset 协议，中文目录、SVG 和 dev server
+下都不会静默只剩 `alt`。相对路径的基准来自 `CreateOptions.文档路径`；没存过盘
+的文档不猜。图片另有 `max-width:100%; height:auto`，不会按原始 1254px 撑破正文。
+
 `![](a.mp4)` 今天渲染成 `<img src="a.mp4">`，浏览器画不出图，产物是一颗破图标
 ＋ `alt` 那行字——**而 Markdown 源码是对的**。所以这一条**只改屏幕**。
 

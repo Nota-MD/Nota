@@ -113,6 +113,18 @@ pub fn print_html_to_pdf_with(
     linux::印刷(app, html, base_dir, target, 版面)
 }
 
+/// 用 WebKit 起**系统打印对话框**。应用内没有可用打印机时走这条：
+/// 对话框自己会列打印机 / Print to File，用户仍然可以当场选。
+#[cfg(target_os = "linux")]
+pub fn print_html_dialog_with(
+    app: &AppHandle,
+    html: &str,
+    base_dir: Option<&Path>,
+    版面: 版面,
+) -> Result<()> {
+    linux::对话框(app, html, base_dir, 版面)
+}
+
 #[cfg(target_os = "linux")]
 mod linux {
     use super::*;
@@ -226,6 +238,107 @@ mod linux {
                 Err(NotaError::other("印刷任务没了下文（主线程那边可能已经退出）"))
             }
         }
+    }
+
+    /// 系统打印对话框。与静默印 PDF 共用「隐藏窗口 + WebView」那套，
+    /// 区别只在最后调用 `run_dialog`，不指定 `Print to File`。
+    pub(super) fn 对话框(
+        app: &AppHandle,
+        html: &str,
+        base_dir: Option<&Path>,
+        版面: super::版面,
+    ) -> Result<()> {
+        let base_uri = match base_dir {
+            Some(dir) => {
+                let mut uri = 转地址(dir)?;
+                if !uri.ends_with('/') {
+                    uri.push('/');
+                }
+                Some(uri)
+            }
+            None => None,
+        };
+        let (tx, rx) = mpsc::channel::<std::result::Result<(), String>>();
+        let html = html.to_string();
+        app.run_on_main_thread(move || 起对话框(&html, base_uri.as_deref(), 版面, tx))
+            .map_err(|e| NotaError::other(format!("把系统打印任务交给主线程失败：{e}")))?;
+
+        match rx.recv_timeout(Duration::from_secs(15 * 60)) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(NotaError::other(e)),
+            Err(RecvTimeoutError::Timeout) => {
+                let _ = app.run_on_main_thread(收工);
+                Err(NotaError::other("系统打印对话框超过 15 分钟没有结束"))
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                Err(NotaError::other("系统打印任务没了下文（主线程可能已经退出）"))
+            }
+        }
+    }
+
+    fn 起对话框(
+        html: &str,
+        base_uri: Option<&str>,
+        版面: super::版面,
+        tx: Sender<std::result::Result<(), String>>,
+    ) {
+        let window = gtk::Window::new(gtk::WindowType::Toplevel);
+        let webview = webkit2gtk::WebView::new();
+        window.add(&webview);
+        window.realize();
+        // 系统打印对话框需要一个**已映射**的父窗口，否则在无窗管/无头环境里
+        // 可能直接返回 Cancel 且什么都不画。父窗口放到屏幕外、1×1，不闪用户。
+        window.set_decorated(false);
+        window.set_default_size(1, 1);
+        window.move_(-10000, -10000);
+        window.show_all();
+        印刷中.with(|c| {
+            let _ = c.borrow_mut().replace(会话 {
+                window: window.clone(),
+                op: None,
+            });
+        });
+
+        let (宽, 高) = if 版面.横向 {
+            (版面.高毫米, 版面.宽毫米)
+        } else {
+            (版面.宽毫米, 版面.高毫米)
+        };
+        let 纸 = gtk::PaperSize::new_custom("nota-print", "Nota", 宽, 高, gtk::Unit::Mm);
+        let 页面 = gtk::PageSetup::new();
+        页面.set_paper_size(&纸);
+        页面.set_top_margin(版面.边距毫米, gtk::Unit::Mm);
+        页面.set_bottom_margin(版面.边距毫米, gtk::Unit::Mm);
+        页面.set_left_margin(版面.边距毫米, gtk::Unit::Mm);
+        页面.set_right_margin(版面.边距毫米, gtk::Unit::Mm);
+
+        webview.connect_load_changed(
+            glib::clone!(@strong window, @strong 页面, @strong tx => move |view, event| {
+                if event != webkit2gtk::LoadEvent::Finished {
+                    return;
+                }
+                let op = webkit2gtk::PrintOperation::new(view);
+                op.set_page_setup(&页面);
+                印刷中.with(|c| {
+                    if let Some(s) = c.borrow_mut().as_mut() {
+                        s.op = Some(op.clone());
+                    }
+                });
+                let 结果 = tx.clone();
+                let 父 = window.clone();
+                glib::idle_add_local_once(move || {
+                    let 响应 = op.run_dialog(Some(&父));
+                    let 发送 = match 响应 {
+                        webkit2gtk::PrintOperationResponse::Print
+                        | webkit2gtk::PrintOperationResponse::Cancel => Ok(()),
+                        _ => Err("系统打印对话框返回了未知结果".to_string()),
+                    };
+                    let _ = 结果.send(发送);
+                    glib::idle_add_local_once(收工);
+                });
+            }),
+        );
+        webview.load_html(html, base_uri);
     }
 
     /// 转成 `file://` 地址。⚠️ 用 glib 那个函数而不是自己拼字符串：目录名里
@@ -352,5 +465,17 @@ pub fn print_html_to_pdf(
     Err(NotaError::other(
         "这台系统上 Nota 没有自带的 PDF 排版（那是 WebKitGTK 的打印后端，只有 Linux 有）。\
          导出 PDF 需要 pandoc 加一个排版引擎（xelatex / tectonic 之类）。",
+    ))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn print_html_dialog_with(
+    _app: &AppHandle,
+    _html: &str,
+    _base_dir: Option<&Path>,
+    _版面: 版面,
+) -> Result<()> {
+    Err(NotaError::other(
+        "这台系统上没有 WebKitGTK 系统打印对话框；请用系统默认程序的打印入口。",
     ))
 }

@@ -332,6 +332,13 @@ export interface CreateOptions {
   /** 初始内容。 */
   initialMarkdown: string;
   /**
+   * 当前文档的完整路径（没存过盘就是 `null`）。
+   *
+   * ⚠️ 只用于**把图片地址显示成 asset URL**，不写回文档：绝对路径直接转换，
+   * 相对路径以它所在目录为基准；节点 `attrs.src` 和存盘字节保持原样。
+   */
+  文档路径?: string | null;
+  /**
    * 文档变化回调。**已经在 Milkdown 的 `updated` 钩子里**——
    * 调用方拿到后仍要做去抖（见 `docs/03` §真相在哪）。
    */

@@ -50,6 +50,8 @@ export interface 主窗格公共 {
   root: HTMLElement;
   /** 初始文本。⚠️ 是"最后一次知道的文本"，**不是** `doc.text`（理由见 `EditorPane` 文件头第 1 条）。 */
   initial: string;
+  /** 当前文档路径；图片相对地址靠它解析。没存过盘为 `null`。 */
+  文档路径: string | null;
   /** 严格模式。⚠️ 两边都要传，但管的**不是同一件事**，见各自那一条。 */
   strict: boolean;
   /** 专注模式 / 打字机模式的初值（拨开关走 `setWritingModes`，不重建）。 */
@@ -92,6 +94,7 @@ export async function 建所见即所得编辑器(参数: 所见即所得参数)
   const {
     root,
     initial,
+    文档路径,
     列宽,
     onTableResize,
     strict,
@@ -112,6 +115,7 @@ export async function 建所见即所得编辑器(参数: 所见即所得参数)
   return createEditor({
     root,
     initialMarkdown: initial,
+    文档路径,
     tableWidths: 列宽,
     // ⚠️ 拖完一次就把**这一刻所有拖过的表**整体报一遍（为什么这样报、以及
     // "没有 `doc.path` 就一个字都不存"，见 `ui/table-widths.ts`）。
@@ -209,6 +213,7 @@ export function 建源码编辑器(参数: 源码参数): SourceHandle {
 export async function 建预览编辑器(参数: {
   root: HTMLElement;
   initial: string;
+  文档路径: string | null;
   strict: boolean;
   physics: boolean;
   行内扩展: 行内扩展开关;
@@ -217,6 +222,7 @@ export async function 建预览编辑器(参数: {
   return createEditor({
     root: 参数.root,
     initialMarkdown: 参数.initial,
+    文档路径: 参数.文档路径,
     // ⚠️ **理由同 `inlineMarks`**：预览显示的就是左边那份文档，开关不一样的话，
     // `#标题` 在左侧正文里按标题排版、在右边是一条普通段落。
     // ⚠️ 但**分屏左侧是源码模式**，那边 `#标题` 本来就是一行原文，所以实际上

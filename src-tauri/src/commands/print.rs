@@ -18,12 +18,12 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 
 use crate::error::Result;
-use crate::print_job::{self, 打印预览, 打印机信息, 版面请求};
+use crate::print_job::{self, 打印环境, 打印预览, 版面请求};
 
 /// 列出打印机。⚠️ 没有 `lpstat` 时给空表**不算错**：界面要画成
 /// "这台机器上还没有打印机"，而不是一条红色报错。
 #[tauri::command]
-pub fn nota_print_printers() -> Vec<打印机信息> {
+pub fn nota_print_printers() -> 打印环境 {
     print_job::列打印机()
 }
 
@@ -40,6 +40,32 @@ pub async fn nota_print_prepare(
 ) -> Result<打印预览> {
     let 目录: Option<PathBuf> = base_dir.map(PathBuf::from);
     print_job::准备(
+        &app,
+        &html,
+        目录.as_deref(),
+        版面请求 {
+            paper,
+            landscape,
+            margin_mm,
+        },
+    )
+}
+
+/// 不经过应用内打印机列表，直接调用系统打印对话框。
+///
+/// 这台机器没有 CUPS destination、但用户仍然想从系统对话框选
+/// “Print to File”/虚拟打印机时必须有一条能点的路。
+#[tauri::command]
+pub async fn nota_print_system(
+    app: AppHandle,
+    html: String,
+    base_dir: Option<String>,
+    paper: String,
+    landscape: bool,
+    margin_mm: f64,
+) -> Result<()> {
+    let 目录: Option<PathBuf> = base_dir.map(PathBuf::from);
+    print_job::系统打印(
         &app,
         &html,
         目录.as_deref(),

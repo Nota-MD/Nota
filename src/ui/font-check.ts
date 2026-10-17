@@ -30,6 +30,14 @@ const 样本 = "mmmmWWQ0123ili中文测试字体";
 /** 只拿这三种通用族当基准（浏览器一定认识它们）。 */
 const 兜底族 = ["monospace", "serif", "sans-serif"] as const;
 
+/** 随安装包打包、由 `styles/cde.css` 的 `@font-face` 提供的字体。 */
+const 随包字体 = new Set(["Nota GB16ST Bitmap"]);
+
+/** 这支字体是不是应用自己随包提供的（不是系统字体）。 */
+export function 是随包字体(名字: string): boolean {
+  return 随包字体.has(名字.trim().replace(/^["']|["']$/g, "").trim());
+}
+
 /**
  * 这台机器上有没有这个字体。
  *
@@ -39,6 +47,12 @@ const 兜底族 = ["monospace", "serif", "sans-serif"] as const;
 export function 字体可用(名字: string): boolean {
   const 名 = 名字.trim().replace(/^["']|["']$/g, "").trim();
   if (!名) return true;
+  // 随包字体由应用自己的 `@font-face` 提供；它缺失是构建错误，不该在用户
+  // 启动时提示“系统没装”。`document.fonts.check()` 在这里反而比系统探测准。
+  if (是随包字体(名)) {
+    void document.fonts.load(`16px "${名}"`, 样本);
+    return true;
+  }
   const 画布 = document.createElement("canvas").getContext("2d");
   if (!画布) return true;
   // ⚠️ **要试几个字号，不能只试一个**（2026-10-17 踩到的）：

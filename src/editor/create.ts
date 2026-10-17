@@ -110,6 +110,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     root,
     initialMarkdown,
     onChange,
+    文档路径 = null,
     readOnly = false,
     physics = false,
     // ⚠️ 默认 `false` = **宽松档**，与 `Settings.strict_markdown` 的默认值一致
@@ -182,6 +183,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     正文: 首部.正文,
     physics,
     readOnly,
+    文档路径,
     strict,
     行内扩展,
     标点,

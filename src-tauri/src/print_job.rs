@@ -47,6 +47,13 @@ pub struct 打印机信息 {
     pub is_default: bool,
 }
 
+/// 打印环境：不仅给列表，还要能区分“CUPS 没装”和“CUPS 在但没打印机”。
+#[derive(Debug, Clone, Serialize)]
+pub struct 打印环境 {
+    pub cups_available: bool,
+    pub printers: Vec<打印机信息>,
+}
+
 /// 打印框里那三项版面设置。
 #[derive(Debug, Clone, Deserialize)]
 pub struct 版面请求 {
@@ -124,7 +131,7 @@ fn 纸张尺寸(名字: &str) -> (f64, f64) {
 /// ⚠️ 只认 `lpstat`（CUPS 的客户端）。**没有它不算错**：没装 CUPS 的机器上
 /// 打印本来就不成立，界面拿到空列表会画成"这台机器上还没有打印机"，并说明
 /// 可以仍然打印成 PDF（那一条不依赖 `lp`）。
-pub fn 列打印机() -> Vec<打印机信息> {
+pub fn 列打印机() -> 打印环境 {
     #[cfg(target_os = "linux")]
     {
         let 参 = vec!["-p".to_string(), "-d".to_string()];
@@ -134,7 +141,10 @@ pub fn 列打印机() -> Vec<打印机信息> {
             RunOpts::timeout(Duration::from_secs(6)),
         );
         let Ran::Done { ok: true, stdout, .. } = 结果 else {
-            return Vec::new();
+            return 打印环境 {
+                cups_available: false,
+                printers: Vec::new(),
+            };
         };
         let mut 默认 = String::new();
         let mut 出 = Vec::new();
@@ -159,11 +169,17 @@ pub fn 列打印机() -> Vec<打印机信息> {
         for p in &mut 出 {
             p.is_default = !默认.is_empty() && p.name == 默认;
         }
-        出
+        打印环境 {
+            cups_available: true,
+            printers: 出,
+        }
     }
     #[cfg(not(target_os = "linux"))]
     {
-        Vec::new()
+        打印环境 {
+            cups_available: false,
+            printers: Vec::new(),
+        }
     }
 }
 
@@ -212,6 +228,27 @@ pub fn 准备(
         pages,
         truncated,
     })
+}
+
+/// 直接打开系统的打印对话框（不要求应用内先有打印机列表）。
+pub fn 系统打印(
+    app: &AppHandle,
+    html: &str,
+    base_dir: Option<&Path>,
+    版面: 版面请求,
+) -> Result<()> {
+    let (宽, 高) = 纸张尺寸(&版面.paper);
+    crate::pdf_print::print_html_dialog_with(
+        app,
+        html,
+        base_dir,
+        crate::pdf_print::版面 {
+            宽毫米: 宽,
+            高毫米: 高,
+            横向:版面.landscape,
+            边距毫米:版面.margin_mm,
+        },
+    )
 }
 
 /// 用 `pdfinfo` 数页。⚠️ 拿不到就报错，**不猜**——猜错的后果是预览少几页、

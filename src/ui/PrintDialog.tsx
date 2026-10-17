@@ -26,7 +26,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { api, type PrinterInfo, type PrintPreview } from "@/bridge/ipc";
+import { api, type PrintEnvironment, type PrintPreview } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { useModalTrap } from "@/ui/useModalTrap";
 
@@ -56,7 +56,7 @@ export function PrintDialog({
   const 框 = useRef<HTMLDivElement>(null);
   useModalTrap(框, { onEscape: onClose });
 
-  const [打印机们, 设打印机们] = useState<PrinterInfo[] | null>(null);
+  const [打印环境, 设打印环境] = useState<PrintEnvironment | null>(null);
   const [打印机, 设打印机] = useState("");
   const [纸张, 设纸张] = useState<string>("a4");
   const [横向, 设横向] = useState(false);
@@ -77,14 +77,14 @@ export function PrintDialog({
     let 活 = true;
     void api.print
       .printers()
-      .then((表) => {
+      .then((环境) => {
         if (!活) return;
-        设打印机们(表);
-        const 默认 = 表.find((p) => p.is_default) ?? 表[0];
+        设打印环境(环境);
+        const 默认 = 环境.printers.find((p) => p.is_default) ?? 环境.printers[0];
         设打印机(默认?.name ?? "");
       })
       .catch(() => {
-        if (活) 设打印机们([]);
+        if (活) 设打印环境({ cups_available: false, printers: [] });
       });
     return () => {
       活 = false;
@@ -142,8 +142,30 @@ export function PrintDialog({
     }
   }, [预览, 打印机, 份数, 范围, onClose]);
 
+  const 系统开打 = useCallback(async () => {
+    设忙(true);
+    设错(null);
+    try {
+      await api.print.system({
+        html: request.html,
+        baseDir: request.baseDir,
+        paper: 纸张,
+        landscape: 横向,
+        marginMm: 边距,
+      });
+      设任务号(t("System print dialog"));
+      window.setTimeout(onClose, 500);
+    } catch (e) {
+      设错(String(e));
+      设忙(false);
+    }
+  }, [request, 纸张, 横向, 边距, onClose, t]);
+
   const 总页 = 预览?.page_count ?? 0;
   const 当前图 = 预览?.pages[第几页 - 1];
+  const 没CUPS = 打印环境 !== null && !打印环境.cups_available;
+  const 没有打印机 = 打印环境 !== null && 打印环境.printers.length === 0;
+  const 走系统对话框 = 没CUPS || 没有打印机;
 
   return (
     <div className="print-backdrop" onMouseDown={onClose}>
@@ -204,13 +226,23 @@ export function PrintDialog({
 
           <label className="print-field">
             <span>{t("Printer")}</span>
-            {打印机们 === null ? (
+            {打印环境 === null ? (
               <span className="print-hint">{t("Reading the printers…")}</span>
-            ) : 打印机们.length === 0 ? (
-              <span className="print-hint">{t("This machine has no printer — export to PDF instead.")}</span>
+            ) : 没CUPS ? (
+              <span className="print-hint print-warning">
+                {t(
+                  "CUPS was not found (lpstat is unavailable). You can still use “System print…” to choose a printer or save as PDF.",
+                )}
+              </span>
+            ) : 没有打印机 ? (
+              <span className="print-hint print-warning">
+                {t(
+                  "CUPS is running, but no printers are configured. You can still use “System print…” or export to PDF.",
+                )}
+              </span>
             ) : (
               <select value={打印机} onChange={(e) => 设打印机(e.target.value)}>
-                {打印机们.map((p) => (
+                {打印环境.printers.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
                     {p.is_default ? ` · ${t("default")}` : ""}
@@ -285,10 +317,10 @@ export function PrintDialog({
             <button
               type="button"
               className="btn btn-primary"
-              disabled={忙 || !预览 || !打印机 || 任务号 !== null}
-              onClick={() => void 开打()}
+              disabled={忙 || 任务号 !== null || (!走系统对话框 && (!预览 || !打印机))}
+              onClick={() => void (走系统对话框 ? 系统开打() : 开打())}
             >
-              {t("Print")}
+              {走系统对话框 ? t("System print…") : t("Print")}
             </button>
           </div>
         </section>

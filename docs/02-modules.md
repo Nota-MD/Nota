@@ -38,7 +38,7 @@
 | `image.rs` | **插入图片的算式**（2026-09-26 为 backlog 第 62 项写的，唯一一份）：地址规则 / 落点与文件名 / 计划与落地。⚠️ **本文件只放类型与 `pub use`，实现分在四个子文件里**（那天它自己长到 1232 行、顶破 1000 行硬线）：`image/address.rs`（110 行，`是网络地址` / `规则适用` / `相对路径` / `加点点斜杠` / `转义地址`）· `image/target.rs`（178 行，`目标目录` / `定名` / `从地址猜名字`）· `image/plan.rs`（254 行，`算计划` / `落地` / `取网络字节`——**全仓唯一一处"往网络要字节"的地方**）· `image/tests.rs`（575 行）。⚠️ **拆分对调用方零改动**：`pub use` 把 `crate::image::放置` 一族路径原样保住，`commands/image.rs` 那边一行没改 |
 | `upload/` | **「把一张图送到用户自己填的那台服务器上」的唯一一份实现**（2026-09-26 第二批）：`upload.rs`（707 行，算式与设置——拼多部件体 / 解析请求头 / 从响应按点路径取地址 / `nota-auto-upload` 前件 / 文件 0600 建）· `upload/net.rs`（181 行，**唯一碰网络的地方**）· `upload/tests.rs`（747 行，28 条用例）。⚠️ **不并进 `image.rs`**：那边最远只到磁盘，这边要**把用户的字节送出这台机器**。⚠️ **不预设任何服务商**（测试里钉着这件事）；**配置在 `~/.config/nota/image-upload.toml`，0600**，不许并进 0644 的 `settings.toml` |
 | `commands/mod.rs` | 只是**十五**个子模块的声明（2026-09-26 现数：`diff` / `document` / `export` / **`focus`** / `image` / `image_upload` / `menu` / `pandoc` / `plugin` / `settings` / `table_width` / `theme` / `ui_style` / `watch` / `workspace`）+ 命令层的分工说明（无函数）。⚠️ 这一格此前写着"十"，那是个**只数了最近几批新加进来的**的旧账——**数是数出来的，不是推出来的** |
-| `commands/image.rs` | `nota_image_place` 一条，**异步**（可能要下载网络图片、写磁盘，走 `spawn_blocking`；`docs/06` §3.1 那条"任何碰磁盘/网络的命令都不许跑在主线程上"）。⚠️ **规则与文档位置一律由宿主从 `Settings` 与 `DocumentStore` 现取，不信前端传进来的那份**——前端只给"哪份文档 / 图片来源 / 替代文字"，否则前端就成了第二份判据 |
+| `commands/image.rs` | `nota_image_place` 与 `nota_image_data_url`，都异步走 `spawn_blocking`。前者按宿主规则落图并返回 Markdown 地址；后者给编辑区显示本地图，限 32MB、只读主目录/文档/桌面/下载，返回 data URL。规则与文档位置不由前端提供。 |
 | `commands/image_upload.rs` | 「上传图片」那三条（`nota_image_upload_get` / `_set` / `_one`），**都是异步 ＋ `spawn_blocking`**（读盘、联网最长 60 秒）。⚠️ **手动与自动两条路共用同一次上传**，但方向相反：手动**先传、失败才落盘**，自动**先落盘、失败就保留本地地址**。⚠️ **三道闸缺一不可**（`enabled` / `auto` / 文档 YAML 里的 `nota-auto-upload`） |
 | `commands/document.rs` | `nota_doc_*` **十五个**命令（⚠️ **2026-10-04 现数**（第 14 项那一批）：十四 → **十五**，新增 `nota_doc_cursor`，编辑器把**选区**报上来——⚠️ 它**什么都不改**（不碰 `text` / `revision` / `dirty`，见 `docs/03` §4.2）。⚠️ 上一次第十遍是十二 → 十四（`nota_doc_rename` / `nota_doc_move`），第九遍把"十一"改成"十二"（多出的是 `nota_doc_disk_text`，给外部改动提示条的「查看修改」用）——⚠️ ⚠️ `AGENTS.md` §2 那格当时停在"十二"，**两处对不上有一阵子了**，这一批各现数一遍才对齐）。⚠️ **这一层收的是"名字一段"或"目录一条"，不是整条路径**——前端手里的 `path` 是有损的（非 UTF-8 目录名会变成 `?`），详见下面 `nota_doc_rename` 那一节 |
 | `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode` + 文件树遍历。⚠️ 2026-09-28 起 `tree` 多收一个 `TreeOptions`（排序 / 过滤 / 隐藏文件），并把 `show_hidden` / `tree_filter` 那两个死开关接上了线 |
@@ -46,8 +46,8 @@
 | `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir`（2026-09-25 由 `nota_doc_themes_dir` 改名，同 BUG-27） |
 | `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir`（2026-09-26 新增）——**界面风格**那三条，与 `commands/theme.rs` 一一对应、同一套口径（id 不是路径；"打开"在宿主做；目录用到时才建） |
 | `commands/plugin.rs` | `nota_plugins_list` / `set_enabled` / `call` / `find_command` / `panels` / `panel_content` / **`review`** / **`review_close`** / `menus` / `install` / `uninstall` / `trust` / `trust_list` —— **13 条**（2026-09-25 多了装卸信任那四条；随后又多了 `review` 两条：**编辑区里摊着的那块面板**）。⚠️ **异步的是这五条**：`set_enabled` / `install` / `uninstall` / `call` / `panel_content`（都要跑 Lua 或解包，走 `spawn_blocking`）；⚠️ `review` / `review_close` 拿的是 `ReviewState`，**不碰 `plugins` 锁**——理由见 `docs/01` §第四条链路 |
-| `print_job.rs` | **应用内打印的三段**（2026-10-17 新建）：`列打印机()`（`lpstat -p -d`）／`准备()`（WebKit 静默印 PDF → `pdfinfo` 数页 → `pdftoppm` 出前 40 页缩略图，base64 回前端）／`投递()`（`lp -d … [-n 份数] [-o page-ranges=…]`）。⚠️ **预览与投递是同一份 PDF**；⚠️ `pdfinfo`/`pdftoppm`/`lp` **只调用、不打包**（同 `pandoc`/`git`）；⚠️ 只有 Linux 有，非 Linux 由前端退回"交给系统默认程序"那条老路。判据两条单测 ＋ 开窗（`docs/06` §5.68） |
-| `commands/print.rs` | 打印四条命令：`nota_print_supported` / `nota_print_printers` / `nota_print_prepare` / `nota_print_send`（2026-10-17）。⚠️ `prepare` 必须 `async`——主线程等主线程＝死锁 |
+| `print_job.rs` | **应用内打印**：`列打印机()` 返回 `打印环境`（区分无 CUPS / 无配置打印机）；`准备()` 出 PDF 与预览；`系统打印()` 起系统对话框；`投递()` 走 `lp`。系统 poppler/CUPS 只调用不打包。 |
+| `commands/print.rs` | 打印命令：`supported` / `printers` / `prepare` / `system` / `send`。⚠️ `prepare` 与 `system` 必须 `async`。 |
 | `commands/export.rs` | 导出与打印的**落盘那一步**（**四条**：`nota_export_write` 写文本、`nota_export_write_bytes` 写**二进制**——前端先 base64、宿主解码再落盘，分享卡存 PNG 走它、`nota_export_print` 写到 `.nota-print.html` 再交给系统默认程序、`nota_export_reveal` 在文件管理器里定位）。⚠️ 本题**不生成 HTML**——HTML 由前端生成（`editor/export.ts`），这一层只管 IO 与落点 |
 | `commands/pandoc.rs` | `nota_pandoc_probe` / `nota_pandoc_export` 两条，**都异步**（探测起进程、导出最长 180 秒，走 `spawn_blocking`）。⚠️ PDF **两条路**：pandoc 不通且 `pdf_print::available()` 时改走自带那套，返回值 `route` 说明走的哪条 |
 | `commands/focus.rs` | 强制专注那**六条**（2026-09-26，95 行）：`nota_focus_get` / `_start` / `_stop` / `_ack` / `_beep` / `_close_alarm`。⚠️ **无判据层**：只转给 `focus::*`、再 `广播`一份，规则一条都不在这儿（判据全在 `focus/mod.rs`）。⚠️ 在 **`FocusState` 与 `AppState` 两份**托管状态上操作（设置在后者）。⚠️ `close_alarm` 是给调试和退出用的，**前端一个调用点都没有**——前端明说了不自己关窗，收窗靠 `alarm::对账` |
@@ -89,7 +89,8 @@
 |---|---|
 | `main.tsx` | React 入口 |
 | `App.tsx` | 外壳与状态编排。⚠️ `TopBar` / `TabBar` 2026-09-23 搬去了同名文件，本文件只剩 `App` 一个组件；⚠️ 2026-09-24 又搬走了**六块**（菜单判据与两个对话框的状态 → `ui/useMenus.ts` / `ui/useDialogs.ts`；导出打印、文档主题、命令转交 → `ui/useExport.ts` / `ui/useDocTheme.ts` / `ui/useEditorCommands.ts`；**插件三份清单 ＋ 跑命令 → `ui/usePlugins.ts`**），1118 → 916 → 918 → 926 → 941 → 960（2026-09-25：用户体验评估那一轮把状态栏 / 格式化工具栏的可见性搬去了 `ui/useChromeVisibility.ts`，同批加回一段"为什么不再是内存 state"的说明；搬之前是 934。当晚**命令行文件**那一轮把 `openPath` 挪到了"启动"effect 的上面、并在启动时开一次命令行给的文件）→ **892 行**（2026-09-25：**沉浸模式**那一轮又搬走三块——文档四件套 → `ui/useDocuments.ts`，剪贴板四件 → `ui/useClipboard.ts`，专注/全屏与 Esc 退出 → `ui/useImmersive.ts`，另有提示条宿主 → `ui/useToasts.ts`）→ **892 行**（2026-09-25 **导出那批**：菜单里多出「导出为」那七项，`App.tsx` 接上 `pandocGate` 浮层——没搬东西，只是接线）→ **899 行** → **926 行**（2026-09-25 **外观接线那一批**：把 `appearance` 里 6 个"存了值没人读"的字段接到行为上，其中界面主题与缩放两处搬进了 `ui/useAppearance.ts`；⚠️ 那一批**先涨到 934**，搬完才回到 926——**搬完要重数**，`wc -l`）。⚠️ **"搬了"≠"变小了"**：头两次搬完反而还在 916 行，因为同批又加进了格式工具栏与查找条的接线；所以**每次搬完要重数**（`wc -l`）→ **989 行**（2026-09-26 **插入图片那批**：接上 `ui/useImageInsert.ts`（对话框 / 粘贴 / 拖入三条路）与 `ui/ImageDialog.tsx` 的挂载——**这一批是涨不是缩**，⚠️ 已经进了软上限 WARN 区（≥900），下一批动它之前要先想清楚搬哪块）→ **975 行**（2026-09-27／09-28 那几批：侧栏「文档列表」那一页、语言翻转、菜单栏开关——**这几批都是净缩**，缩的是被删掉的那一页与它那一族菜单项／props）→ **932 行**（2026-09-28：⚠️ **这一批当时它 998 行，离硬线只剩 2**——加的是「关于」框重做与 `*` 自配对，只加不拆就会顶破，所以拆的是**两整档职责**：「关于」那一摊全进 `ui/AboutDialog.tsx`（`ui/useAbout.ts` **整份删掉**，状态并进 `ui/useDialogs.ts`）、强制专注那一整档（73 行）进 `ui/useFocusSession.ts`。⚠️ **又一次「搬完要重数」**：998 是 WARN 不是 FAIL，所以「反正还没 FAIL 就再加几行」这个念头是错的，见 `docs/09` §4） |
-| `bridge/ipc.ts` | 调用后端的唯一出口 ＋ 事件名表（**只放"发生类"**）。⚠️ **类型定义 2026-09-26 搬去了 `bridge/types.ts`**（那天本文件 1035 行、顶破硬线），头部那行 `export * from "./types"` 让 16 个类型名照旧能从 `@/bridge/ipc` 引到，**调用点一处没改**。⚠️ 两个文件的分工是**"有没有副作用"**：`ipc.ts` 摸 `invoke` 与 `listen`，`types.ts` **一个 import 都没有**（纯形状） |
+| `bridge/ipc.ts` | 调用后端的唯一出口。⚠️ **类型定义 2026-09-26 搬去了 `bridge/types.ts`**（那天本文件 1035 行、顶破硬线），头部那行 `export * from "./types"` 让 16 个类型名照旧能从 `@/bridge/ipc` 引到，**调用点一处没改**。⚠️ **事件订阅与频道名 2026-10-17 搬去了 `bridge/ipc-events.ts`**（新增打印接口后本文件到 1006 行），这里再导出 `on` / `events`，调用点照旧。`types.ts` **一个 import 都没有**（纯形状）。 |
+| `bridge/ipc-events.ts` | **事件订阅与频道名**（2026-10-17 从 `ipc.ts` 拆出，218 行）：`on()` 与 `events`。⚠️ 只放「发生类」事件；声明类走 `api.plugin.panels()` / `menus()` 拉（BUG-13）。 |
 | `bridge/types.ts` | **所有跨边界的形状**（2026-09-26 从 `ipc.ts` 拆出）：文档 / 设置 / 插件 / 导出 / 图像。⚠️ **纯类型文件**——不 import `@tauri-apps/api`、不写运行时值，所以谁都能引它而不背上副作用。⚠️ **2026-09-27 又拆了一次**（本文件 1009 行、① 行数闸 FAIL）：事件载荷那四个去了 `payloads.ts`，拆完 **967 行** |
 | `bridge/payloads.ts` | **事件载荷的形状**（2026-09-27 从 `types.ts` 拆出，69 行）：`NotifyPayload` / `PanelDirtyPayload` / `DocumentChangedPayload` / `FileChangedPayload`。⚠️ **拆的线**＝"命令的返回类型"（上面那份）vs"推过来的事件"（这份）——`events.*` 是**发生了一件事**，不是回答 |
 | `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 ⚠️ **2026-10-07 拆过（第 89 项）：1006 → 502 行**——「一次性把一切装上去」那一段整块搬去了 `editor/assemble.ts`（620 行），这边只留「实例建好之后怎么用」。 |
@@ -171,7 +172,7 @@
 | `styles/heatmap.css` | **热力图那一块的皮**（83 行，2026-09-27）。⚠️ **另开一份是因为 `dock.css` 当时 971 行、顶着硬线**（同 `share.css` / `marks.css` 那两次拆）。⚠️ **列宽是弹性的**（`flex: 1`）：面板那一栏能从 260px 拖宽，写死像素的话拖宽之后整块图缩在左上角。⚠️ 格子深浅走 **`color-mix` 兑透明**、不写死五个颜色（兑透明才不会被底色的深浅两套吃掉） |
 | `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26 新增）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反（界面风格要改的就是整个外壳）；于是"同名覆盖内置"的**全部实现就是文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验 |
 | `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增，按 `useDocTheme` 的先例单独一个 hook：要问后端、是异步的）。⚠️ 判据是**"这一档有没有文件"**而不是"是不是内置七档之一"——用户放一个 `adwaita.css` 就是覆盖内置，那时 `data-ui-style` 仍是 `adwaita` 但那份 CSS 得取回来。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
-| `styles/themes/*.css` | 内置**七套**文档主题（含 2026-10-17 加的 **`cde`**：深底浅字 ＋ 点宋，见 `styles/themes/cde.css`）——`minimal`（极简）/ `adwaita`（Adwaita）/ `latex`（LaTeX），各带一档深色。⚠️ **2026-09-26 从六套换成三套**（用户：「删掉所有默认主题」），旧 id（`paper`/`blueprint`/`mist`/`print`/`ink`/`pine`）在老机器上会**悬空**；⚠️ **2026-10-16 又加回三档深色**（朋友清单第 11 条），落点是 `styles/themes/dark/{minimal,adwaita,latex}.css`——**只写颜色**，`themes.rs` 把同名浅色那份 `concat!` 在前面（排版只有一份），而且**必须自己盖掉浅色里写死的 `h1..h6 { color:#000 }`**。⚠️ 按**普通文档 CSS** 写、**不带作用域前缀**，靠 `doc-theme.ts` 统一挂；每套必须自带一套 `--code-*` |
+| `styles/themes/*.css` | 内置**七套**文档主题（含 **`cde`**：深底浅字 ＋ `Nota GB16ST Bitmap`）。📌 该字体 Regular/Bold 已随前端包分发，许可见 `THIRD-PARTY.md` §9。`minimal` / `adwaita` / `latex` 各带深色补丁，只写颜色；旧 id 会悬空。每套自带 `--code-*`。 |
 | `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：源码框、渲染区、说明卡。⚠️ 渲染出来那张 `<svg>` 的宽度上限**主要不在 CSS 里**（`diagram-view.ts` 按 `viewBox` 自然宽取 `min(100%, 自然宽)`；只写 `max-width: 100%` 会让小图被容器宽度等比放大） |
 | `styles/math.css` | **公式那棵树**（2026-09-26）：面板 / 半透明分隔符 / 源码框 / 渲染区三种 `data-state` / 说明卡。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），别在 `.nota-math-panel` 上另写 `display: none`。⚠️ KaTeX 自己那份 `katex.min.css` 只管 `.katex` 那棵树 |
 | `styles/settings.css` | 偏好设置框的**壳与版式**：框体 + 左栏那十一个分页 + 右栏「标签在左、控件在右」的行（479 行）。2026-09-23 从 `app.css` 拆出，同日晚些改成 VMark 那套版式；**2026-09-29 又按功能拆成三份** |
@@ -335,7 +336,7 @@
 | **`settings/files.rs`** | 5 |
 | `settings/keys.rs` | 5 |
 | `settings/markdown.rs` | 5 |
-| `commands/image.rs` | 4 |
+| `commands/image.rs` | 5 |
 | `commands/pandoc.rs` | 4 |
 | `lua/api/json.rs` | 4 |
 | `lua/api/mod.rs` | 4 |
@@ -397,11 +398,11 @@
 `paste-clean.test.ts` **25** · `math-currency.test.ts` **23**
 `code-block-editing.test.ts` **21** · `key-conflicts.test.ts` **21**
 `auto-correct.test.ts` **20** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20**
-`atom-space.test.ts` **19** · `heading-on-enter.test.ts` **19** · `heading-toggle.test.ts` **5** · `accent.test.ts` **18**
+`atom-space.test.ts` **19** · `heading-on-enter.test.ts` **19** · `heading-toggle.test.ts` **5** · `font-bundle.test.ts` **6** · `accent.test.ts` **18**
 `mark-hint.test.ts` **18** · `instant-render.test.ts` **17** · `list-indent.test.ts` **16**
 `focus-dim.test.ts` **15** · `file-kind.test.ts` **14** · `html-block.test.ts` **14**
 `lang-icons.test.ts` **14** · `bar-close.test.ts` **13** · `syntax-escape.test.ts` **13**
-`chart-ticks.test.ts` **12** · `sidebar-resize.test.ts` **12** · `video-view.test.ts` **12**
+`chart-ticks.test.ts` **12** · `sidebar-resize.test.ts` **12** · `video-view.test.ts` **12** · `image-source.test.ts` **6**
 `doc-typography.test.ts` **11** · `caret-snapshot.test.ts` **10** · `hints.test.ts` **10**
 `status-metric.test.ts` **10** · `modal-trap.test.ts` **9** · `tree-options.test.ts` **9**
 `empty-doc-save.test.ts` **8** · `window-title.test.ts` **8** · `tablist-keys.test.ts` **6**。
@@ -9291,6 +9292,11 @@ MCP 的**工具清单**：`nota_info` / `nota_documents` / `nota_read` / `nota_w
 
 **图片语法里的地址指向视频时，画成播放器**（2026-09-28 新建，用户原话
 「…**图片语法指向 `.mp4` 当视频**…都是简单的小功能」）。
+
+📌 **2026-10-17 起同一 NodeView 也负责本地图片显示**：绝对/相对路径先解析成
+本机路径，再由 `nota_image_data_url` 读成 data URL；Markdown 源地址保持不变。
+`CreateOptions.文档路径` 只用于解析相对路径，未存盘文档不猜。中文路径、SVG
+与 dev server 不再破图；图片最大宽度限制在正文列。
 
 ```ts
 export const 视频后缀: readonly string[];        // mp4 / m4v / webm / ogv

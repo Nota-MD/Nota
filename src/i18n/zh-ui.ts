@@ -491,6 +491,7 @@ export const 界面表: Record<string, string> = {
   // 同一个动作两处两把键的话，改一处另一处静默退回英文，所以这里只补另外两个。
   // 鸣谢里那一条字体（2026-10-16）：Monoton 是「Nota」这三个字用的字标字体。
   "The “Nota” wordmark (vector outlines — no font file is shipped)": "「Nota」这三个字的字标（矢量轮廓，不随包带字体）",
+  "CDE interface and document bitmap font": "CDE 界面与文档的点阵字体",
   "Add to dictionary": "加入词典",
   "Show what differs between the file on disk and what is in the editor": "在编辑区里看磁盘上那份和编辑器里这份的差别",
   "Hide the comparison and go back to the document (the file on disk is left alone)": "收起对照，回到正文（磁盘上那份不会被改动）",
@@ -576,7 +577,12 @@ export const 界面表: Record<string, string> = {
   "Printer": "打印机",
   "default": "默认",
   "Reading the printers…": "正在读取打印机…",
-  "This machine has no printer — export to PDF instead.": "这台机器上没有打印机——可以改用「导出 → PDF」",
+  "CUPS was not found (lpstat is unavailable). You can still use “System print…” to choose a printer or save as PDF.":
+    "没有检测到 CUPS（lpstat 不可用）。仍可点「系统打印…」选择打印机或保存 PDF。",
+  "CUPS is running, but no printers are configured. You can still use “System print…” or export to PDF.":
+    "CUPS 正在运行，但没有配置打印机。仍可点「系统打印…」或导出 PDF。",
+  "System print…": "系统打印…",
+  "System print dialog": "系统打印对话框",
   "Paper": "纸张",
   "Orientation": "方向",
   "Portrait": "纵向",

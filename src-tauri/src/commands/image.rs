@@ -29,6 +29,7 @@
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use tauri::State;
 
 use crate::commands::image_upload::{自动传, 文档位置, 文档写着键吗, 读设置};
@@ -235,6 +236,83 @@ pub(crate) fn 解析来源(s: 图片来源) -> Result<来源> {
     }
 }
 
+/** 本地图片显示上限。显示层走 data URL，不能把几百 MB 的图塞进 IPC。 */
+const 图片显示上限: u64 = 32 * 1024 * 1024;
+
+fn 图片_mime(路径: &Path) -> &'static str {
+    match 路径
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "avif" => "image/avif",
+        _ => "application/octet-stream",
+    }
+}
+
+fn 图片根目录们() -> Vec<PathBuf> {
+    [
+        dirs::home_dir(),
+        dirs::document_dir(),
+        dirs::desktop_dir(),
+        dirs::download_dir(),
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|p| p.canonicalize().ok())
+    .collect()
+}
+
+fn 在图片根里(路径: &Path, 根们: &[PathBuf]) -> bool {
+    根们.iter().any(|根| 路径.starts_with(根))
+}
+
+fn 读成数据地址(路径: &str) -> Result<String> {
+    let 路径 = PathBuf::from(路径);
+    let 真 = 路径
+        .canonicalize()
+        .map_err(|e| NotaError::other(format!("图片 {} 打不开：{e}", 路径.display())))?;
+    let 元 =
+        std::fs::metadata(&真).map_err(|e| NotaError::other(format!("读图片信息失败：{e}")))?;
+    if !元.is_file() {
+        return Err(NotaError::other("图片地址不是一个文件"));
+    }
+    if 元.len() > 图片显示上限 {
+        return Err(NotaError::other(format!(
+            "图片有 {:.1} MB，超过显示上限 32 MB",
+            元.len() as f64 / 1048576.0
+        )));
+    }
+    if !在图片根里(&真, &图片根目录们()) {
+        return Err(NotaError::other(
+            "图片不在主目录、文档、桌面或下载目录内，已拒绝读取",
+        ));
+    }
+    let 字节 =
+        std::fs::read(&真).map_err(|e| NotaError::other(format!("读图片失败：{e}")))?;
+    let 引擎 = base64::engine::general_purpose::STANDARD;
+    Ok(format!("data:{};base64,{}", 图片_mime(&真), 引擎.encode(字节)))
+}
+
+/// 把本机图片读成 data URL 给编辑区显示。
+///
+/// ⚠️ 不改 Markdown 的 `src`，也不经过 WebKitGTK 的 asset/CORS 那一条；
+/// 本地绝对路径、SVG 与中文路径都从这里稳定显示。
+#[tauri::command]
+pub async fn nota_image_data_url(path: String) -> Result<String> {
+    tauri::async_runtime::spawn_blocking(move || 读成数据地址(&path))
+        .await
+        .map_err(|e| NotaError::other(format!("图片读取任务失败：{e}")))?
+}
+
 /// 动作的 kebab-case 名字。⚠️ 与 `settings/image.rs` 里 `serde` 写出去的那一套
 /// **是同一套字符串**（`none` / `copy-to-assets` / …），前端拿它跟设置值比对，
 /// 就能知道"这次是按哪个动作落的"。
@@ -253,6 +331,26 @@ fn 动作名字(a: &crate::settings::image::InsertImageAction) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn 图片扩展名给出正确的_mime() {
+        assert_eq!(图片_mime(Path::new("a.PNG")), "image/png");
+        assert_eq!(图片_mime(Path::new("a.jpeg")), "image/jpeg");
+        assert_eq!(图片_mime(Path::new("a.svg")), "image/svg+xml");
+        assert_eq!(图片_mime(Path::new("a.unknown")), "application/octet-stream");
+    }
+
+    #[test]
+    fn 图片路径必须落在允许的根目录内() {
+        let 根 = std::env::temp_dir().join(format!("nota-image-root-{}", std::process::id()));
+        std::fs::create_dir_all(根.join("inside")).unwrap();
+        std::fs::write(根.join("inside/a.png"), b"x").unwrap();
+        let 根 = 根.canonicalize().unwrap();
+        let 内 = 根.join("inside/a.png");
+        assert!(在图片根里(&内, std::slice::from_ref(&根)));
+        assert!(!在图片根里(Path::new("/etc/passwd"), std::slice::from_ref(&根)));
+        let _ = std::fs::remove_dir_all(根);
+    }
 
     fn 解(s: 图片来源) -> Result<来源> {
         解析来源(s)

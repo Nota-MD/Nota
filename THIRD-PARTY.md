@@ -1,6 +1,6 @@
 # 第三方组件
 
-> 最后核对：**2026-10-06**
+> 最后核对：**2026-10-17**
 >
 > ⚠️ **2026-10-06 那一次：每一项都补上了仓库/主页链接**（用户：「**鸣谢里加上各个项目的仓库**」，并贴了 Typora 的鸣谢页当参照）。
 > 链接**不是凭印象写的**：Rust 那半从 `cargo metadata` 里读每个 crate 的 `repository` 字段，前端那半读 `node_modules/<包>/package.json` 的 `repository`。
@@ -406,3 +406,27 @@ Monoton**（下载目录也有）**鸣谢里写一下徽标字体用的是这个
 
 ⚠️ **上游**：<https://fonts.google.com/specimen/Monoton>（作者主页
 <https://www.newtypography.co.uk/>）。「关于 → 鸣谢」里那一行在 `ui/credits.ts`。
+
+---
+
+## 9. CDE 点阵字体：WenQuanYi Bitmap Song（GPL-2.0 with font embedding exception，**随包分发**）
+
+**2026-10-17 用户批准随安装包分发**。CDE 界面主题与 CDE 文档主题使用的
+`Nota GB16ST Bitmap` 来自 **WenQuanYi Bitmap Song 1.0 RC1** 的 16px
+单色字模；Nota 将其重新封装为带 **EBDT/EBLC 1-bit strike** 的 OpenType
+字体，使 WebKit/FreeType 不经过抗锯齿直接绘制原生像素。
+
+| 项 | 说明 |
+|---|---|
+| 上游 | [WenQuanYi Bitmap Song](https://sourceforge.net/projects/wqy/files/wqy-bitmapfont/) |
+| 版权 | Copyright (C) 2004–2010, WenQuanYi Project Board of Trustees and Qianqian Fang |
+| 许可 | **GPL-2.0 with font embedding exception** |
+| 修改 | 提取 16×16 字模；重封装为 EBDT/EBLC TTF；提供 Regular / Bold 两档 |
+| 源码形式 | `src/assets/fonts/*.ttf` 本身即字体的首选可编辑形式；上游及 changelog 见上表链接 |
+| 完整许可 | 版权与例外：[`WQY-Bitmap-Song-COPYRIGHT.txt`](src/assets/fonts/WQY-Bitmap-Song-COPYRIGHT.txt)；GPL-2.0 全文：[`GPL-2.0.txt`](src/assets/fonts/GPL-2.0.txt) |
+| 修改说明 | [`Nota-GB16ST-NOTICE.txt`](src/assets/fonts/Nota-GB16ST-NOTICE.txt) |
+| 打包位置 | `@font-face` 打进前端资源；版权与修改说明还通过 `tauri.conf.json` 的 `resources` 复制到安装包 `licenses/` |
+
+⚠️ **根 `LICENSE` 仍然只有 BSD-2-Clause**。字体是独立数据组件，按它自己的
+GPL-2.0＋字体嵌入例外分发，不改变 Nota 源码许可证；两份许可正文不得合并。
+⚠️ 「关于 → 鸣谢」同步登记 `WenQuanYi Bitmap Song`，用户不需要读源码就能看到出处。

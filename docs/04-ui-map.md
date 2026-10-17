@@ -1365,7 +1365,7 @@ pandoc 那条路还在用（§2.6e），只是 CSS 类从那时的 `slidev-*` �
 |---|---|
 | 左 | 预览：整页等比缩到能看见全貌；底下一行 `↑ 第 N / M 页 ↓`；超过 40 页时多一句「只预览了前 40 页」 |
 | 右 | 文档标题、打印机（`lpstat` 的清单，带"默认"）、纸张（A4/A5/B5/Letter/Legal）、方向、边距（毫米）、份数、页码范围（留空 = 全部） |
-| 底 | `取消` / `打印`。⚠️ 没有打印机时**打印那颗是灰的**，并写明"可以改用「导出 → PDF」" |
+| 底 | `取消` / `打印`。📌 **2026-10-17 起没有 CUPS 或没有配置打印机时不再灰死**：分别显示对应提示，主按钮变成「系统打印…」，点击后打开系统打印对话框（可选打印机或 Print to File/PDF）。CDE 下 select 与数字微调器原生外观被关闭，统一方角凹槽。 |
 
 ⚠️ **改版面会重新出 PDF＋重出预览**（去抖 350ms）。这不是"重画一张预览图"——预览
 本来就是那份 PDF 渲出来的，纸张一变 PDF 本身就变了。
@@ -1958,6 +1958,11 @@ LaTeX——这是两条轴本来就独立：`ui_style = "cde"` 只改外壳，�
 | `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 14 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
 | `document_theme`（设置项） | 内置**七套**的 id（浅色 `minimal` / `adwaita` / `latex` ＋ 深色 `minimal-dark` / `adwaita-dark` / `latex-dark` ＋ **`cde`**）＋ 用户目录里的文件名 | ⚠️ **`cde` 是 2026-10-17 加的**：**深底浅字**那一挂（画布 `#686F82` 照真机截图量的、正文 `#F2F1EE`），方角、无装饰线，`--font-doc` 首选**点宋**（`WenQuanYi Bitmap Song` / `Zpix` / `Fusion Pixel`）。⚠️ 它**没有深色配对**（自己就是深的）。⚠️ 首选字体没装时**弹一句**（`ui/font-check.ts`，判据是画布量宽度，不是 `document.fonts.check()`——那个对系统字体几乎恒真）。 **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套"。⚠️ **2026-10-16 加回三档深色**（朋友清单第 11 条「编辑器暗色/浅色跟随主题」）：`useDocTheme.ts` 多一张 `深色配对` 表——**界面是深色且用户没单独指定 `dark_document_theme` 时**，`minimal`/`adwaita`/`latex` 自动换成自己的深色档（只对这三套内置生效，用户主题不动）。📌 **2026-10-17 晚（续）：点宋选型——最后选的是「文泉驿点阵宋的 TTF 转写」。**
 
+📌 **2026-10-17 随包决定（覆盖上面“首选字体没装时”那句）**：
+`Nota GB16ST Bitmap` 的 Regular/Bold TTF 现在随软件包分发，因此正常安装后
+不会再弹“CDE 缺字体”。只有用户自定义主题点名了其他未安装字体时，`font-check`
+才继续负责提示。字体许可、修改说明与安装包 `resources` 映射见 `THIRD-PARTY.md` §9。
+
 用户先指出「截图里那个好像是无衬线」——**对的**：Zpix / Ark Pixel 是**像素黑体**
 （笔画一样粗、无衬线），只是"点阵味"对。真机是**宋**（横细竖粗、有衬线）。
 但**原版 PCF 在 WebKitGTK 里用不上**（点阵字体被 fontconfig 的 `no-bitmap` 规则拒），
@@ -2041,6 +2046,15 @@ Motif 的斜面是两像素一条亮带＋一条暗带，1px 出来只是"描了
 放大后都是硬像素宋体。`styles/theme/shape.css` 的 CDE 字体栈与
 `styles/themes/cde.css` 的 `--font-doc` 都首选它。字体**不随包分发**；
 主题首选字体全缺时，仍由 `ui/font-check.ts` 提示。
+
+📌 **2026-10-17 后续（以本条为准）：上一段“不随包分发”已经作废。**
+`Nota GB16ST Bitmap` 的 Regular/Bold TTF 现在放在 `src/assets/fonts/`，由
+`styles/cde.css` 的 `@font-face` 加载并进入前端安装包；版权与 GPL-2.0
+字体嵌入例外正文放在同目录，并由 `tauri.conf.json` 复制到安装包 `licenses/`。
+`ui/font-check.ts` 对随包字体直接判可用，不再把“系统没装”当成缺字。
+其 `unicode-range` 只覆盖 CJK；西文回落 Noto Sans / Noto Serif，避免 HZK
+半角字形导致西文过粗、字宽异常。`font-synthesis:none` 禁止 600 字重被合成加粗，
+CDE 文档标题默认 400 字重。
 
 📌 **主题图标也是 CSS 变量**：`Icon` 输出 `data-icon="<逻辑名>"` 并拼成
 `--icon-<逻辑名>`，主题 CSS 只需声明

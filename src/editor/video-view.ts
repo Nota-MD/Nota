@@ -59,6 +59,7 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import type { NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
 
+import { api } from "@/bridge/ipc";
 import { 后缀 } from "./file-kind";
 
 /**
@@ -90,6 +91,48 @@ function 文本(值: unknown): string {
   return typeof 值 === "string" ? 值 : "";
 }
 
+/** 不是本机文件：网络地址、内联数据、已经转换过的 asset 地址。 */
+function 是外部地址(地址: string): boolean {
+  return /^(?:https?:|data:|blob:|asset:)/i.test(地址.trim());
+}
+
+/** Markdown 地址 → 本机绝对路径；不是本地文件时给 `null`。 */
+export function 本地图片绝对路径(地址: string, 文档路径: string | null): string | null {
+  const 原 = 地址.trim();
+  if (!原 || 是外部地址(原)) return null;
+  if (原.toLowerCase().startsWith("file://")) {
+    try {
+      return decodeURIComponent(原.slice("file://".length));
+    } catch {
+      return 原.slice("file://".length);
+    }
+  }
+
+  const Windows绝对 = /^[a-zA-Z]:[\\/]/.test(原);
+  const Unix绝对 = 原.startsWith("/");
+  const UNC = 原.startsWith("\\\\");
+  if (Windows绝对 || Unix绝对 || UNC) return 原;
+  if (!文档路径) return null;
+
+  const 斜杠 = 文档路径.includes("\\") ? "\\" : "/";
+  const 切 = 文档路径.lastIndexOf(斜杠);
+  if (切 < 0) return null;
+  const 目录 = 文档路径.slice(0, 切);
+  const 段 = `${目录}${斜杠}${原}`.split(/[\\/]+/);
+  const 归并: string[] = [];
+  for (const 一 of 段) {
+    if (!一 || 一 === ".") continue;
+    if (一 === "..") {
+      归并.pop();
+      continue;
+    }
+    归并.push(一);
+  }
+  const 正文 = 归并.join(斜杠);
+  if (UNC) return `\\\\${正文}`;
+  return 文档路径.startsWith("/") ? `/${正文}` : 正文;
+}
+
 /** 造出来的那一对：外面那层盒子 ＋ 里面那颗图片/视频元素。 */
 interface 视图件 {
   /** 节点视图的根。ProseMirror 的选中高亮与 `draggable` 都挂在这一颗上。 */
@@ -98,6 +141,8 @@ interface 视图件 {
   媒体: HTMLImageElement | HTMLVideoElement;
   /** 造的时候认定的是不是视频。**建成之后不再变**（变了就整个重建，见 `update`）。 */
   是视频: boolean;
+  /** 异步读图令牌：后一次 update 回来时，旧结果不许覆盖新节点。 */
+  代: number;
 }
 
 /**
@@ -110,7 +155,7 @@ function 造元素(是视频: boolean): 视图件 {
     // `toDOM` 今天给出的形状（`["img", {...imageAttr, ...node.attrs}]`，
     // 本仓没有覆盖 `imageAttr`），一模一样才不会动到别处对图片的假设。
     const img = document.createElement("img");
-    return { dom: img, 媒体: img, 是视频: false };
+    return { dom: img, 媒体: img, 是视频: false, 代: 0 };
   }
 
   // ⚠️ 视频这一支**要**包一层盒子，两个理由：
@@ -127,7 +172,7 @@ function 造元素(是视频: boolean): 视图件 {
   // 见文件头第 2 条：schema 是 `draggable: true`，这一行是"别把我当拖拽把手"。
   video.setAttribute("draggable", "false");
   盒.appendChild(video);
-  return { dom: 盒, 媒体: video, 是视频: true };
+  return { dom: 盒, 媒体: video, 是视频: true, 代: 0 };
 }
 
 /**
@@ -142,13 +187,30 @@ function 造元素(是视频: boolean): 视图件 {
  *（`![](a.mp4 "演示")` 里那个 `alt` 说的就是"这段视频在讲什么"），而 `title`
  * 两边都是全局属性，照写当鼠标提示。
  */
-function 写属性(件: 视图件, 节点: PMNode): void {
+function 写属性(件: 视图件, 节点: PMNode, 文档路径: string | null): void {
   const src = 文本(节点.attrs.src);
   const alt = 文本(节点.attrs.alt);
   const title = 文本(节点.attrs.title);
+  const 代 = ++件.代;
 
-  件.媒体.setAttribute("src", src);
-  件.媒体.setAttribute("title", title);
+  const 本地 = 本地图片绝对路径(src, 文档路径);
+  if (!本地) {
+    件.媒体.setAttribute("src", src);
+  } else {
+    // 本地图片由宿主读成 data URL。asset 协议在中文路径 / SVG / dev server 下
+    // 会静默失败，表现正是“只剩 alt 和一顆破图标”。
+    件.媒体.removeAttribute("src");
+    void api.image
+      .dataUrl(本地)
+      .then((地址) => {
+        if (件.代 === 代) 件.媒体.setAttribute("src", 地址);
+      })
+      .catch(() => {
+        // 读不了就保留 alt；不要把 `src` 设回相对路径让浏览器再猜一次。
+        if (件.代 === 代) 件.媒体.removeAttribute("src");
+      });
+  }
+ 件.媒体.setAttribute("title", title);
   if (件.是视频) {
     if (alt) 件.媒体.setAttribute("aria-label", alt);
     else 件.媒体.removeAttribute("aria-label");
@@ -163,13 +225,14 @@ function 写属性(件: 视图件, 节点: PMNode): void {
  * ⚠️ **`$view` 收的是 `$Node`，不是 `$NodeSchema`**——要的是 `imageSchema.node`
  *（同 `code-block.ts` 顶上那条注释）。
  */
-export const 视频视图 = $view(
-  imageSchema.node,
-  () =>
-    (初节点: PMNode): NodeView => {
+export function 视频视图(文档路径: string | null = null) {
+  return $view(
+    imageSchema.node,
+    () =>
+      (初节点: PMNode): NodeView => {
       const 初 = 造元素(是视频地址(文本(初节点.attrs.src)));
       const 是视频 = 初.是视频;
-      写属性(初, 初节点);
+      写属性(初, 初节点, 文档路径);
 
       return {
         dom: 初.dom,
@@ -181,13 +244,14 @@ export const 视频视图 = $view(
           // ⚠️ 症状对照：不写这一条的话，用户把 `![](a.mp4)` 改成 `![](a.png)`
           // 之后**屏幕上还是一块播放器**（而且 `a.png` 播不出来，是黑的）。
           if (是视频地址(文本(新节点.attrs.src)) !== 是视频) return false;
-          写属性(初, 新节点);
+          写属性(初, 新节点, 文档路径);
           return true;
         },
         // 视频自己就会变 DOM（控件浮出来、封面帧画上去），告诉 ProseMirror
         // **别把这些当成"用户编辑了文档"**。图片那一支同样返回 `true`：它的
         // 属性全由上面那个 `update` 写，用不着观察器再看一眼。
         ignoreMutation: () => true,
-      };
-    },
-);
+        };
+      },
+  );
+}

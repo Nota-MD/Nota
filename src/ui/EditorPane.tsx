@@ -578,6 +578,7 @@ export function EditorPane({
           handle = await 建所见即所得编辑器({
             root: mount,
             initial,
+            文档路径: doc.path,
             列宽,
             // ⚠️ "没有 `doc.path` 就一个字都不存"在 `ui/table-widths.ts` 里。
             onTableResize: (表) => 存表格列宽(doc.path, 表),
@@ -604,6 +605,7 @@ export function EditorPane({
           handle = 建源码编辑器({
             root: mount,
             initial,
+            文档路径: doc.path,
             strict,
             纯文本,
             写作模式: 写作模式Ref.current,
@@ -631,6 +633,7 @@ export function EditorPane({
           preview = await 建预览编辑器({
             root: previewRef.current,
             initial,
+            文档路径: doc.path,
             strict,
             physics,
             行内扩展,

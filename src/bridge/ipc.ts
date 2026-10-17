@@ -8,20 +8,21 @@
  * 命名对应关系：`api.docSave` ↔ Rust 侧 `nota_doc_save` ↔ `commands::document::nota_doc_save`。
  *
  * ⚠️ **形状不在本文件**（2026-09-26 起）：所有 `interface` / `type` 搬去了
- * `bridge/types.ts`（那次是这边 1035 行顶破了硬线）。本文件只管**通道**——
- * `api` 那些 `invoke` 调用、`on` 订阅、`events` 频道名。下面那行 `export *`
- * 让所有类型照旧能从 `@/bridge/ipc` 引到，所以调用点一处都没改。
+ * `bridge/types.ts`（那次是这边 1035 行顶破了硬线）。本文件只管**命令通道**——
+ * `api` 那些 `invoke` 调用。事件订阅与频道名 2026-10-17 搬去了
+ * `bridge/ipc-events.ts`（新增打印接口后本文件到 1006 行），这里原样再导出，
+ * 所以 `import { events, on } from "@/bridge/ipc"` 的调用点一处都没改。
+ * `export * from "./types"` 也让所有类型照旧能从本文件引到。
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 import type {
   AppLang, Diagnostics, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
-  会话, 路径种类, 拼写词典, PrinterInfo, PrintPreview,
+  会话, 路径种类, 拼写词典, PrintEnvironment, PrintPreview,
 } from "./types";
 // ⚠️ 这一条是**类型专线**：`选区快照` 的家在编辑器那一侧
 // （`editor/caret-snapshot.ts`，它的文件头就是这张表的设计说明），
@@ -31,6 +32,7 @@ import type {
 import type { 选区快照 } from "@/editor/caret-snapshot";
 
 export * from "./types";
+export { events, on } from "./ipc-events";
 
 // ── 文档 ──────────────────────────────────────────────────────────────────
 export const api = {
@@ -298,7 +300,7 @@ export const api = {
     /** 有没有应用内打印（Linux 才有）。⚠️ 没有就走 `export.print` 那条老路，**不是**报错。 */
     supported: () => invoke<boolean>("nota_print_supported"),
     /** 这台机器上有哪些打印机。**空数组不是错**：没装 CUPS 的机器上就是没有。 */
-    printers: () => invoke<PrinterInfo[]>("nota_print_printers"),
+    printers: () => invoke<PrintEnvironment>("nota_print_printers"),
     /** 出 PDF ＋ 逐页预览图（data URL）。⚠️ 参数扁平；JS 的 camelCase 由 Tauri 映射到 snake_case。 */
     prepare: (req: {
       html: string;
@@ -308,6 +310,14 @@ export const api = {
       marginMm: number;
     }) =>
       invoke<PrintPreview>("nota_print_prepare", req),
+    /** 应用内没有打印机时，直接打开系统打印对话框。 */
+    system: (req: {
+      html: string;
+      baseDir: string | null;
+      paper: string;
+      landscape: boolean;
+      marginMm: number;
+    }) => invoke<void>("nota_print_system", req),
     /** 把那份 PDF 投给打印机，返回 CUPS 任务号。 */
     send: (req: {
       pdf: string;
@@ -333,6 +343,8 @@ export const api = {
   image: {
     place: (docId: DocId | null, source: ImageSourceArg) =>
       invoke<ImagePlaced>("nota_image_place", { docId, source }),
+    /** 本地图片 → data URL。用于编辑区显示绝对路径、SVG 与中文路径。 */
+    dataUrl: (path: string) => invoke<string>("nota_image_data_url", { path }),
     /**
      * 上传服务器设置（读 / 写 / 手动传一张）。
      *
@@ -783,214 +795,3 @@ export const api = {
     quit: () => invoke<void>("nota_quit"),
   },
 };
-
-// ── 事件 ──────────────────────────────────────────────────────────────────
-
-
-/**
- * 订阅一个宿主事件。返回退订函数——**组件卸载时一定要调**，
- * 不然热重载几轮之后同一个事件会有好几个监听者，一次通知弹好几遍。
- */
-export function on<T>(event: string, handler: (payload: T) => void): Promise<UnlistenFn> {
-  return listen<T>(event, (e) => handler(e.payload));
-}
-
-/**
- * 宿主事件名。
- *
- * ⚠️ 这里只该有**"此刻发生了一件事"**的事件。**声明类的东西不走事件**——
- * 面板/菜单/命令是"插件启动时声明了一次、之后一直成立"的状态，走
- * `api.plugin.panels()` / `menus()` / `findCommand()` 去**拉**。
- *
- * 曾经这里有 `pluginPanel` / `pluginMenu` 两条，前后端各写好了类型，
- * 却**一个订阅者都没有**——插件在 `setup()` 里注册、前端挂载后才 `listen()`，
- * 时序上必漏，而且 Tauri 对没有监听者的频道 emit 是**静默成功**的，
- * 日志里连痕迹都没有。见 BUG-13。
- */
-export const events = {
-  /**
-   * **强制专注的状态变了**（2026-09-26 加，核心功能，不是插件）。
-   *
-   * ⚠️ 这是**"发生了一件事"**（余额又过了一秒），不是"声明"——所以走事件是对的
-   *（BUG-13 那条判据管的是后者）。载荷是完整的一份 `FocusState`。
-   *
-   * ⚠️ **它每秒一发**，所以里面的东西要么是绝对量、要么是已经算好的值，
-   * **前端不要拿它去累加**（丢一拍就永久错位）。宿主那边就是这么设计的
-   *（`focus/mod.rs::快照` 顶上那段）。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `focus/mod.rs::EVENT_FOCUS`。两处必须是同一个字符串，
-   * 改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
-   */
-  focusState: "nota:focus-state",
-  /**
-   * **该出声了**（警报触发）。载荷是空的。
-   *
-   * ⚠️ 声音为什么不在宿主做：音色、节奏、渐强这些东西在 Web Audio 里
-   * 几行就写完了，而在 Rust 里要先合成一个 WAV、写盘、再找个播放器
-   *（`focus/alarm.rs::系统提示音` 那条兜底路就是这么走的，它是备用方案）。
-   *
-   * ⚠️ 与 `focusState` 分工：**状态**走那条（每秒都有），**事件**走这条
-   *（只在响的那一下）。别把"该响了"塞进状态里让前端去比——那样一轮里
-   * 重连、重放、多窗口都会各响一遍。
-   */
-  focusBeep: "nota:focus-beep",
-  notify: "nota:notify",
-  documentChanged: "nota:document-changed",
-  /**
-   * **插件要在光标处改一笔**（`docs/07` 第 14 项，2026-10-04 加）。
-   *
-   * ⚠️ 与 `documentChanged` 的分工是这个设计的关键：那条是**"正文已经换了"**
-   * （宿主改完镜像再通知，前端整篇 `setMarkdown`），这条是**"请你替我改"**
-   * ——宿主**改不动**，因为"在光标处插一段"在 markdown 里**没有对应的偏移**
-   * （量测见 `editor/caret-snapshot.ts` 顶上那张表：块边界上按偏移拼会把
-   * 结构弄坏）。所以它只递一个**意图**，由编辑器落成一笔真事务。
-   *
-   * ⚠️ 因此这条事件**不保证被处理**：编辑区没挂载、那条意图瞄的不是当前
-   * 文档、或者当前实例是只读的，都会静默丢掉。这是**故意的**——另一条路
-   * （宿主按偏移拼字符串）是"看起来成功、存盘之后才发现结构坏了"。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `lua/api/document.rs::EVENT_EDIT`。两处必须是同一个
-   * 字符串，改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默
-   * 成功的）。
-   */
-  documentEdit: "nota:document-edit",
-  /**
-   * 某个面板的**内容**变了（插件喊了一声 `nota.ui.refresh`）。
-   *
-   * ⚠️ 这条**没有**违反"声明走拉、发生走推"那条判据（BUG-13），因为它是
-   * **"此刻变了"这个动作**，不是"面板长什么样"那份状态。收到它的反应是
-   * **去重拉**（`api.plugin.panelContent`），事件里一个字节的内容都没有。
-   *
-   * ⚠️ 因此它**丢了也不影响正确性**：面板还没打开时这一次本来就没人收，
-   * 而用户打开面板时一定会拉一次。它只是个省一次往返的提示。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `plugin/mod.rs::EVENT_PANEL_DIRTY`。**两处必须
-   * 说同一个字符串**，别只改一边——改了收不到、也不报错（Tauri 对没有
-   * 监听者的频道 emit 是静默成功的）。
-   */
-  pluginPanel: "nota:plugin-panel",
-  /**
-   * 编辑区里摊的那一块**换了**（插件喊了 `nota.ui.review`，或者用户按了
-   * 「回到正文」）。载荷是空的——**收到就重拉**（`api.plugin.review()`）。
-   *
-   * ⚠️ 同一件事有"拉"和"推"两条路，它们分工不同，别只留一条：
-   * **拉**是初始状态（挂载时、切文档回来时都对），**推**是"此刻变了"那一瞬间
-   * （插件提了改动，用户正看着编辑区，得当场换成预览）。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `plugin/mod.rs::EVENT_REVIEW`。两处必须是同一个
-   * 字符串，改一边不报错、只是收不到。
-   */
-  pluginReview: "nota:plugin-review",
-  /**
-   * **插件正在往外吐字，先画出来**（插件喊了 `nota.ui.stream(text)`，
-   * 2026-10-04 加，`docs/07` 第 58 项）。
-   *
-   * 载荷是 `{plugin, text}`——**这条事件带着内容**。
-   *
-   * ⚠️ **这是"声明走拉、发生走推"那条判据（BUG-13）唯一的例外，而且是不得不然**
-   * ——不是图省事。上面 `pluginPanel` 那条的收法是"收到就去重拉"，但那条路
-   * **在长命令跑着的时候根本回不来**：插件命令执行期间宿主一直握着 `plugins`
-   * 锁（`commands/plugin.rs::nota_plugin_call`），而 `nota_plugin_panel_content`
-   * 要的正是同一把锁。于是"边生成边显示"如果走拉，屏幕上会一直是旧的，
-   * 直到那次命令整个跑完——**拉到的东西永远是最终结果**。
-   * 完整推演在 `lua/api/ui.rs::实时表` 顶上，那边是这条设计的第一现场。
-   *
-   * ⚠️ 因此这条**只能装临时显示用的东西**，不许拿它当第二条状态通道：
-   * 内容不进面板的任何一份状态，`text` 为空表示**收工**（把这段撤掉）。
-   * 插件收工时**必须**另喊一次 `nota.ui.refresh` 去拉那份真内容——不然屏幕上
-   * 会一直停在那半截上。
-   *
-   * ⚠️ 丢了不影响正确性：它本来就只是"正在写的字"，收工之后那份完整内容
-   * 走的是拉。宿主那边还只带**最后 8000 个字符**（`ui.rs::实时上限`），
-   * 因为这条一秒要发好几次。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `plugin/mod.rs::EVENT_PANEL_STREAM`。**两处必须说
-   * 同一个字符串**，改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit
-   * 是静默成功的）。
-   */
-  pluginStream: "nota:plugin-stream",
-  /**
-   * 原生菜单被点了，载荷是命令 **id**。
-   *
-   * ⚠️ 它和上面那个 BUG-13 的教训**不冲突**：那条说的是"**声明**类的东西
-   * （面板/菜单长什么样）不许走事件"，因为那要拉。而这条是**"发生了一件事"**
-   * ——有人点了一下，就是事件，推是对的。菜单**内容**仍然由前端推给 Rust
-   * （`nativeMenu.apply`），方向正好相反，两边没有各存一份。
-   */
-  nativeMenu: "nota:native-menu",
-  /**
-   * **有人要关窗口**（2026-10-16 加，朋友清单第 7／16 条）。
-   *
-   * ⚠️ 载荷是空的——"要不要问、问什么、存哪几份"全在前端算（正文真相与
-   * "哪几份脏"都在 `ui/useDocuments.ts`）。宿主那一侧只做了两件事：
-   * 判"要不要拦"（设置 ＋ 有没有未保存）与把这一下**挡回去**。
-   *
-   * ⚠️ **宿主只在这两条都成立时才发它**（`lib.rs::关窗前要问`）：设置里
-   * 关着「关闭前先问我」，或者镜像里没有未保存的改动——那两种情况下窗口
-   * **已经直接关掉了**，这条事件一次都不会来。所以前端收到它就等于
-   * "确实有未保存的改动、而且用户要求问一句"。
-   *
-   * ⚠️ 收不到也不影响正确性（同 `pluginPanel` 那条）：它是"发生了一件事"，
-   * 而"用户点了取消"这条路**就是靠不收尾**实现的——前端什么都不做，
-   * 窗口就停在原地。
-   */
-  quitRequested: "nota:close-requested",
-  /**
-   * **磁盘上那份文件被别的程序改了**（2026-09-26 加，非插件）。
-   *
-   * ⚠️ 这是**"发生了一件事"**，不是"声明"——所以它走事件是对的（BUG-13 那条
-   * 判据管的是后者）。载荷只有 `{id, path, hash}`，磁盘正文要用的时候现拉
-   *（`api.doc.diskText`）。
-   *
-   * ⚠️ **宿主那边的"忽略"是零动作**：点过「忽略」之后，宿主手里那个摘要
-   * 基准已经挪到磁盘上这一份了，所以**不会**为同一次改动再报一遍。前端不必
-   * 记"这个 hash 我忽略过了"——真那样做，两份账本一旦不同步就是"提示再也不
-   * 出现"，而那种 bug 没有人会报（安安静静地不工作）。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `watch.rs::EVENT_FILE_CHANGED`。**两处必须说同一个
-   * 字符串**，改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
-   */
-  fileChanged: "nota:file-changed",
-  /**
-   * **用户又启动了一次 Nota**（2026-09-27，单实例那一格）。
-   *
-   * 第二份进程把"要打开什么"转交给已经在跑的这份（`single_instance.rs`），
-   * 宿主收到之后**先把主窗抬起来**（`unminimize` ＋ `set_focus`），再发这条。
-   * 所以前端要做的事只剩一件：带路径就照常开一份文档，没带就什么都不做。
-   *
-   * ⚠️ 这是**"发生了一件事"**（有别的进程来敲过门），不是"声明"——走事件是对的
-   *（BUG-13 那条判据管的是后者）。⚠️ 它**丢了也不影响正确性**：窗口已经被
-   * 宿主抬起来了，丢的只是"顺手把那份文件也打开"。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `single_instance.rs::事件`。**两处必须说同一个字符串**，
-   * 改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
-   */
-  secondInstance: "nota:second-instance",
-  /**
-   * **宿主从 GTK 捕获阶段截下了一颗格式快捷键**（2026-09-28，非插件）。
-   * 载荷是 `"bold"` / `"italic"`。
-   *
-   * ⚠️ 这条事件**不是**前端偷懒的产物，它是 BUG-49 唯一的出路：WebKitGTK 在
-   * 把按键派发给 DOM **之前**就把 `Ctrl+B` / `Ctrl+I` 当成自己的编辑命令吃掉了，
-   * 所以 `window` 上那条 `keydown`（`ui/useMenus.ts`）**一次都收不到**。
-   * 宿主于是在 `GtkEventControllerKey` 的捕获相位把它们拦下来，转成这条事件。
-   * 完整来龙去脉在 `src-tauri/src/format_keys.rs` 的文件头。
-   *
-   * ⚠️ **它和那条 keydown 是两条互补的路，不是一主一备**：
-   * - Linux：走这条（keydown 收不到那两颗键）；
-   * - macOS / Windows：走 keydown（`format_keys.rs` 在那些平台上**不装**，
-   *   装了会和 keydown 撞成"执行两遍"）。
-   *
-   * ⚠️ 既然是"发生了一件事"（有人按了一颗键），走事件是对的（BUG-13 那条判据
-   * 管的是"声明"类的东西）。
-   *
-   * ⚠️ 频道名在 Rust 侧是 `format_keys.rs::EVENT`。**两处必须说同一个字符串**，
-   * 改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
-   */
-  formatKey: "nota:format-key",
-  // ⚠️ 这里曾经有两条和"预览窗"绑在一起的事件（`slidevStopped` 等），
-  // 2026-09-25 **都删掉了**：预览不再单开窗口，它成了插件面板里的一块
-  // `kind = "frame"`（见 `ui/panel-nodes.ts`），而插件和前端之间的往来
-  // 走的是**通用**的那两条（`plugin:…` 事件 + `nota_plugin_call` 命令）。
-  // 留一条永远不会来的订阅，比没有它更难查。
-} as const;

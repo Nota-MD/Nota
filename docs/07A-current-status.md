@@ -15,7 +15,7 @@
 | 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖产物 |
 | 文档同步 | CI 用 git diff；mtime 只在本地模式用于提醒 |
 
-最近一次本地验证（2026-10-17）：前端 **64 份 / 1574 条**、Rust **639 / 0**、
+最近一次本地验证（2026-10-17）：前端 **67 份 / 1596 条**、Rust **641 / 0**、
 插件仓库 **0 FAIL / 2 行数 WARN**、TypeScript 与生产构建通过。
 依赖审计：`source-map-js` 的高危 DoS 已用 override 固定到 **1.2.2**；余下
 **6 条 low** 来自 KaTeX/Mermaid/remark-math，当前上游没有无破坏升级路径，继续跟踪。

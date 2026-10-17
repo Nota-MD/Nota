@@ -745,3 +745,151 @@
      许可证是**按 80 列定宽**的正文，最容易撞上这条。 */
   padding-right: 12px;
 }
+
+/* ── 应用内打印框（`ui/PrintDialog.tsx`，2026-10-17）────────────────────
+   左边预览、右边参数。⚠️ 它**没有复用 `.confirm-dialog`**：那个框是"问一句"
+   的窄卡片（320–440px），而这里要放一整页纸的预览。但**遮罩那一层是同一个**
+   （`.confirm-backdrop` 的视觉与"点外面取消"直接照搬，只是 z-index 高一档，
+   因为它是这一族里唯一一个自己带长流程的）。
+
+   ⚠️ 预览图是 `data:` URL，**尺寸按宽度撑满、高度按比例**：纸张本来就是有比例的
+   东西，用 `object-fit: contain` 会加上不存在的白边，看起来像"排版错了"。 */
+.print-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 42%);
+}
+
+.print-dialog {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 0;
+  width: min(980px, 92vw);
+  height: min(720px, 88vh);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 34%);
+  overflow: hidden;
+}
+
+.print-preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  gap: 10px;
+  /* ⚠️ 深灰的画布把纸"衬"出来：白纸压在纯白底上，用户看不到边界。 */
+  background: var(--bg-sunken, rgb(0 0 0 / 8%));
+}
+
+/* ⚠️ **滚动只在这一块里**（2026-10-17 第一次开窗撞出来的）：一张 A4 竖过来
+   比这块区域高，如果滚动挂在外层 `print-preview` 上，页码条会被一起滚出屏幕
+   ——而"第几页 / 上一页"恰恰住在它下面。 */
+.print-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.print-page {
+  display: block;
+  /* ⚠️ 宽高都给上限、让它在**不改变比例的**前提下缩到能看见整页：
+     只给 `width: 100%` 时 A4 会高到需要滚动，而预览的第一眼应该是"整页长什么样"。 */
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+  width: auto;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 26%);
+}
+
+.print-blank {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+.print-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.print-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  font-size: 0.85em;
+}
+
+.print-hint {
+  color: var(--fg-faint);
+  font-size: 0.82em;
+}
+
+.print-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-left: 1px solid var(--border);
+  overflow: auto;
+}
+
+.print-title {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.print-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85em;
+  color: var(--fg-muted);
+}
+
+.print-field select,
+.print-field input {
+  height: var(--control-height);
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input, var(--bg));
+  color: var(--fg);
+  font: inherit;
+}
+
+.print-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85em;
+}
+
+.print-ok {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.85em;
+}
+
+.print-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}

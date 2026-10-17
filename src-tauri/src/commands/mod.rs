@@ -18,6 +18,7 @@ pub mod menu;
 pub mod pandoc;
 pub mod path_kind;
 pub mod plugin;
+pub mod print;
 pub mod session;
 pub mod settings;
 pub mod table_width;

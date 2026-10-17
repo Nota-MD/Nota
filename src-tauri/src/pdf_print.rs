@@ -58,6 +58,37 @@ pub(crate) fn available() -> bool {
     cfg!(target_os = "linux")
 }
 
+/// 一次印刷的**版面**（2026-10-17 加，给应用内打印框用）。
+///
+/// ⚠️ 在这之前这条路上所有参数都是写死的（A4、纵向、GTK 默认边距）——因为
+/// 它只服务"导出一份 PDF"。应用内打印要让人挑纸张/方向/边距，所以把这三样提出来。
+#[derive(Debug, Clone, Copy)]
+pub struct 版面 {
+    /// 纸张宽高（毫米）。⚠️ 用**自定义纸张**而不是 GTK 的纸张表：`A4` / `Letter`
+    /// 这些名字在 GTK 里是本地化的键，跨版本不一定同一个；而打印框那边本来就只有
+    /// 几张固定纸，直接给宽高最不容易错。
+    pub 宽毫米: f64,
+    pub 高毫米: f64,
+    /// 横向：**交换宽高**（而不是只设方向）——WebKit 的分页看的是纸张盒子的形状，
+    /// 只设 `PageOrientation` 在 GTK 的后端上会把内容转过去、纸张却没转，
+    /// 结果是"内容横着、纸还是竖的"。
+    pub 横向: bool,
+    /// 四边统一的内边距（毫米）。
+    pub 边距毫米: f64,
+}
+
+impl Default for 版面 {
+    /// A4、纵向、12mm 边距——与 2026-10 之前那条路的行为一致。
+    fn default() -> Self {
+        Self {
+            宽毫米: 210.0,
+            高毫米: 297.0,
+            横向: false,
+            边距毫米: 12.0,
+        }
+    }
+}
+
 // ── Linux：真印 ───────────────────────────────────────────────────────────
 
 #[cfg(target_os = "linux")]
@@ -67,7 +98,19 @@ pub fn print_html_to_pdf(
     base_dir: Option<&Path>,
     target: &Path,
 ) -> Result<()> {
-    linux::印刷(app, html, base_dir, target)
+    linux::印刷(app, html, base_dir, target, 版面::default())
+}
+
+/// 带版面地把 HTML 静默印成 PDF（应用内打印框用）。
+#[cfg(target_os = "linux")]
+pub fn print_html_to_pdf_with(
+    app: &AppHandle,
+    html: &str,
+    base_dir: Option<&Path>,
+    target: &Path,
+    版面: 版面,
+) -> Result<()> {
+    linux::印刷(app, html, base_dir, target, 版面)
 }
 
 #[cfg(target_os = "linux")]
@@ -143,6 +186,7 @@ mod linux {
         html: &str,
         base_dir: Option<&Path>,
         target: &Path,
+        版面: super::版面,
     ) -> Result<()> {
         let target_uri = 转地址(target)?;
         // ⚠️ 末尾那个斜杠不能少：少了的时候最后一段会被当成**文件名**替换掉，
@@ -164,7 +208,7 @@ mod linux {
         // "建窗口 + 开印"要交回去做，这边只等结论。
         //
         // ⚠️ 这个闭包**立刻返回**：结果经 `tx` 回传（占着主线程等信号 = 死锁）。
-        app.run_on_main_thread(move || 起印刷(&html, base_uri.as_deref(), &target_uri, tx))
+        app.run_on_main_thread(move || 起印刷(&html, base_uri.as_deref(), &target_uri, 版面, tx))
             .map_err(|e| NotaError::other(format!("把印刷任务交给主线程失败：{e}")))?;
 
         match rx.recv_timeout(PRINT_TIMEOUT) {
@@ -207,6 +251,7 @@ mod linux {
         html: &str,
         base_uri: Option<&str>,
         target_uri: &str,
+        版面: super::版面,
         tx: Sender<std::result::Result<(), String>>,
     ) {
         // ⚠️ 只 `realize()`、**不 `show()`**（理由见文件头第 2 条）。
@@ -231,17 +276,34 @@ mod linux {
         // 落点与格式（键名与理由见上面那两条常量）。
         settings.set(KEY_URI, Some(target_uri));
         settings.set(KEY_FORMAT, Some(FORMAT));
+        // ── 版面（2026-10-17 加）─────────────────────────────────────────
+        // ⚠️ **横向要交换宽高**，不能只设方向（理由见 `pdf_print::版面` 上那条）。
+        let (宽, 高) = if 版面.横向 {
+            (版面.高毫米, 版面.宽毫米)
+        } else {
+            (版面.宽毫米, 版面.高毫米)
+        };
+        let 纸 = gtk::PaperSize::new_custom("nota-print", "Nota", 宽, 高, gtk::Unit::Mm);
+        let 页面 = gtk::PageSetup::new();
+        页面.set_paper_size(&纸);
+        页面.set_top_margin(版面.边距毫米, gtk::Unit::Mm);
+        页面.set_bottom_margin(版面.边距毫米, gtk::Unit::Mm);
+        页面.set_left_margin(版面.边距毫米, gtk::Unit::Mm);
+        页面.set_right_margin(版面.边距毫米, gtk::Unit::Mm);
 
         // ⚠️ 闭包**不捕获 `webview`**，用信号自己传进来的那一个：闭包挂在
         // webview 身上，再让它持有 webview 就是引用环，那个窗口永远释放不掉。
         webview.connect_load_changed(
-            glib::clone!(@strong settings, @strong tx => move |view, event| {
+            glib::clone!(@strong settings, @strong 页面, @strong tx => move |view, event| {
                 // 只在**加载完**之后印：早一步页面上还是空的。
                 if event != webkit2gtk::LoadEvent::Finished {
                     return;
                 }
                 let op = webkit2gtk::PrintOperation::new(view);
                 op.set_print_settings(&settings);
+                // ⚠️ 纸张与边距走 `PageSetup`：`PrintSettings` 里那套 paper-width/height
+                // 是"打印后端自己算出来的缓存值"，设了不一定被听。
+                op.set_page_setup(&页面);
                 // 把它挂进会话：信号来之前它不能被回收。
                 印刷中.with(|c| {
                     if let Some(s) = c.borrow_mut().as_mut() {

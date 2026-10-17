@@ -21,7 +21,7 @@ import type {
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
-  会话, 路径种类, 拼写词典,
+  会话, 路径种类, 拼写词典, PrinterInfo, PrintPreview,
 } from "./types";
 // ⚠️ 这一条是**类型专线**：`选区快照` 的家在编辑器那一侧
 // （`editor/caret-snapshot.ts`，它的文件头就是这张表的设计说明），
@@ -281,13 +281,7 @@ export const api = {
      */
     writeBytes: (path: string, base64: string) =>
       invoke<string>("nota_export_write_bytes", { path, base64 }),
-    /**
-     * 打印：写成 HTML → 交给系统默认程序（浏览器）打开 → 用户在那边按 `Ctrl+P`。
-     *
-     * ⚠️ **`docPath` 决定落点**：有文档路径就写在**它所在的目录**里，
-     * 这样正文里 `![](./img.png)` 那种相对路径才解析得对；没有就落系统临时目录。
-     * 见 `commands/export.rs` 文件头。返回值是那个文件的路径。
-     */
+    /** 打印的**老路**（非 Linux 兜底）：写 HTML → 交给系统默认程序。⚠️ `docPath` 决定落点（相对图片才解析得对）。 */
     print: (docPath: string | null, title: string, content: string) =>
       invoke<string>("nota_export_print", { docPath, title, content }),
     /**
@@ -297,6 +291,30 @@ export const api = {
      * PDF 塞进某个看图程序里，而用户此刻多半是想把文件拖到别处去。
      */
     reveal: (path: string) => invoke<string>("nota_export_reveal", { path }),
+  },
+
+  /** 应用内打印（2026-10-17）：先印 PDF → 拿同一份 PDF 出预览 → 投给打印机。⚠️ 只有 Linux（PDF 靠 WebKitGTK），别处走 `export.print` 老路。 */
+  print: {
+    /** 有没有应用内打印（Linux 才有）。⚠️ 没有就走 `export.print` 那条老路，**不是**报错。 */
+    supported: () => invoke<boolean>("nota_print_supported"),
+    /** 这台机器上有哪些打印机。**空数组不是错**：没装 CUPS 的机器上就是没有。 */
+    printers: () => invoke<PrinterInfo[]>("nota_print_printers"),
+    /** 出 PDF ＋ 逐页预览图（data URL）。⚠️ 参数扁平；JS 的 camelCase 由 Tauri 映射到 snake_case。 */
+    prepare: (req: {
+      html: string;
+      baseDir: string | null;
+      paper: string;
+      landscape: boolean;
+      marginMm: number;
+    }) =>
+      invoke<PrintPreview>("nota_print_prepare", req),
+    /** 把那份 PDF 投给打印机，返回 CUPS 任务号。 */
+    send: (req: {
+      pdf: string;
+      printer: string;
+      copies: number;
+      ranges: string | null;
+    }) => invoke<string>("nota_print_send", req),
   },
 
   /**

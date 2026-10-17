@@ -38,6 +38,7 @@ pub mod pandoc_format;
 pub mod pandoc_probe;
 pub mod paths;
 pub mod pdf_print;
+pub mod print_job;
 pub mod plugin;
 pub mod proc;
 pub mod session;
@@ -380,6 +381,11 @@ pub fn run() {
             commands::export::nota_export_write_bytes,
             commands::export::nota_export_print,
             commands::export::nota_export_reveal,
+            // 应用内打印（2026-10-17）：列打印机 / 出 PDF＋预览 / 投递。
+            commands::print::nota_print_supported,
+            commands::print::nota_print_printers,
+            commands::print::nota_print_prepare,
+            commands::print::nota_print_send,
             commands::image::nota_image_place,
             commands::image_upload::nota_image_upload_get,
             commands::image_upload::nota_image_upload_set,

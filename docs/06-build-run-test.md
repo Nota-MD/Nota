@@ -6471,3 +6471,36 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 ⚠️ **这一条没验的**：`allow-scripts` 那半边（桩文档里没放 `<script>`）——真要验得写一段
 会动的脚本，而且"脚本跑了没有"在静帧上很难判；这里只核了**属性写对了**
 （`sandbox="allow-scripts"` 且**没有** `allow-same-origin`，见 `docs/05` §4.28 ②）。
+
+### 5.68 验「应用内打印框」（2026-10-17，✅ 开窗走完预览与翻页）
+
+用户拍板的路：「**你让它做成PDF然后再预览**，这样问题就基本解决了」。
+
+**配方**：容器里 `Xvfb :99` ＋ `npx vite --port 5273`（⚠️ **debug 二进制加载的是
+这个 dev server，不是 `dist/`**——这一条今天又踩了一次：没起 vite 时窗口里只有一行
+`Could not connect to localhost`）＋ 一份制造出多页的 `.md`（8 节、每节一段长文）。
+进窗口 → 点正文 → `Ctrl+P`。
+
+**看到了什么**：
+
+- 左半是一张**真纸**：标题、正文、引用块、第二节全在，排版与编辑器里那份一致
+  （它就是"含样式导出"那条渲染路径出的 HTML 印出来的）。
+- 右下角一行 `↑ 第 1 / 3 页 ↓`；点 `↓` → **第 2 / 3 页**，纸也换了。
+- 右半：标题、打印机（这台机器上 `lpstat` 一个都没有 → 一行
+  "This machine has no printer — export to PDF instead."）、Paper A4、
+  Orientation Portrait、Margins 12、Copies 1、Page range。
+- ⚠️ 没有打印机时「打印」是**灰的**（`disabled`），不会假装发出去。
+
+**这一路撞到的两件事**（都进代码注释了）：
+
+1. **页码条会被滚出屏幕**：第一版把 `overflow: auto` 挂在整个左半上，而 A4 竖过来
+   比那块区域高 ⇒ 页码条跟着滚走，"第几页"看不见了。改成"纸在自己的 `.print-canvas`
+   里滚、页码条在外面固定"。
+2. **容器里没有 poppler**：`pdfinfo` / `pdftoppm` 都不在，第一次点下去只得到
+   "这台机器上没有 pdfinfo（poppler-utils）"。`dnf install poppler-utils` 之后才通。
+   ⚠️ 这三段里**只有"出 PDF"是我们的代码**，另外两段（数页/出图、投递）都是系统程序
+   ——和 `pandoc`/`git` 同一条先例：只调用、不打包。
+
+**没验的**（如实记）：**真正投给打印机那一步**没走通——这台机器 `lpstat -p -d`
+报的是 `No destinations added`（一台打印机都没配），所以 `lp` 那条只能靠代码判据
+（参数拼法、`request id` 解析）；有打印机的机器上第一次用请看一眼 CUPS 队列。

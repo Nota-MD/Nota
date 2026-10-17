@@ -233,7 +233,9 @@ mod tests {
         assert_eq!(
             BUILTIN_IDS,
             &[
-                "auto", "adwaita", "ghub", "plasma", "macos", "windows", "windows10", "yaru"
+                "auto", "adwaita", "ghub", "plasma", "macos", "windows", "windows10", "yaru",
+                // 2026-10-16 加的第八档（CDE / Motif 那种 3D）。
+                "cde"
             ]
         );
     }

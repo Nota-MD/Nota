@@ -566,6 +566,27 @@ export const 界面表: Record<string, string> = {
   "⚠️ This extension was changed, so the signature no longer matches and the package carries none — others can still install it, but they will see “unsigned”.": "⚠️ 这个拓展被改过，签名对不上，所以包里没有签名——别人装得上，但会看到「未签名」。",
   "This extension was never signed.": "这个拓展本来就没有签名。",
 
+  // ⑥ 应用内打印框（`ui/PrintDialog.tsx`，2026-10-17）
+  "Print": "打印",
+  "Printer": "打印机",
+  "default": "默认",
+  "Reading the printers…": "正在读取打印机…",
+  "This machine has no printer — export to PDF instead.": "这台机器上没有打印机——可以改用「导出 → PDF」",
+  "Paper": "纸张",
+  "Orientation": "方向",
+  "Portrait": "纵向",
+  "Landscape": "横向",
+  "Margins (mm)": "边距（毫米）",
+  "Copies": "份数",
+  "Page range (empty = all)": "页码范围（留空 = 全部）",
+  "Preparing preview…": "正在生成预览…",
+  "No preview": "没有预览",
+  "Previous page": "上一页",
+  "Next page": "下一页",
+  "Page {0} of {1}": "第 {0} / {1} 页",
+  "Only the first {0} pages are previewed": "只预览了前 {0} 页",
+  "Sent to the printer: {0}": "已送到打印机：{0}",
+
   // ⑤ 退出前那一问（`ui/useQuitGuard.ts`，2026-10-16 新建，朋友清单第 7／16 条）。
   // ⚠️ 与「关掉一份文档」那一组（`"Save and Close"` / `"Discard and Close"`）
   // **措辞必须不一样**：那组问的是"这一份"，这组问的是"全部"。

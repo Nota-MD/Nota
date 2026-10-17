@@ -28,6 +28,7 @@
  */
 
 import { useCallback, useRef, useState } from "react";
+import type { PrintRequest } from "@/ui/PrintDialog";
 
 /**
  * 确认框的出口。
@@ -190,6 +191,17 @@ export interface Dialogs {
   /** 用户回答了（`ui/LinkDialog` 的 `onAnswer` 接这个）。 */
   answerLink: (answer: LinkAnswer | null) => void;
 
+  /**
+   * **应用内打印框**（2026-10-17）：`null` = 没开。
+   *
+   * ⚠️ 它不是"问一句"（没有 Promise、没有答案）：打印框自己有一套状态
+   * （打印机列表、版面、预览、任务号），关掉它就是"这次不打了"。所以这里只给
+   * `openPrint` / `closePrint` 一对动作，别硬塞进 `askConfirm` 那个模子。
+   */
+  printReq: PrintRequest | null;
+  openPrint: (req: PrintRequest) => void;
+  closePrint: () => void;
+
   emojiOpen: boolean;
   /**
    * 弹 Emoji 选择器，返回他选的**那一个字符**；取消给 `null`。
@@ -313,6 +325,15 @@ export function useDialogs(): Dialogs {
 
   // 「关于」——见 `Dialogs.关于开着` 上那段：它不是问答框，所以没有 `resolve`，
   // 也没有"谁在等答案"要接。
+  /**
+   * 打印框：**只存"要不要开、开的是哪一份"**。
+   * ⚠️ 它自己那套状态（打印机/版面/预览）全在 `ui/PrintDialog.tsx` 里——
+   * 放这一层会让每次改纸张都重渲染整个 `App`（那一层的依赖表里就有它）。
+   */
+  const [printReq, setPrintReq] = useState<PrintRequest | null>(null);
+  const openPrint = useCallback((req: PrintRequest) => setPrintReq(req), []);
+  const closePrint = useCallback(() => setPrintReq(null), []);
+
   const [关于开着, set关于] = useState(false);
   const 开关于 = useCallback(() => set关于(true), []);
   const 关关于 = useCallback(() => set关于(false), []);
@@ -330,6 +351,9 @@ export function useDialogs(): Dialogs {
     linkReq,
     askLink,
     answerLink,
+    printReq,
+    openPrint,
+    closePrint,
     emojiOpen,
     askEmoji,
     answerEmoji,

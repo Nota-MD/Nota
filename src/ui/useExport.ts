@@ -50,6 +50,7 @@ import {
   type PandocProbe,
 } from "@/bridge/ipc";
 import { 导出HTML, 默认导出名 } from "@/editor/export";
+import type { PrintRequest } from "@/ui/PrintDialog";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
@@ -73,6 +74,11 @@ export interface 导出接线 {
   /** 导出那一页的设置（默认文件夹、导出后是否定位到文件）。 */
   exportSettings: ExportSettings;
   toast: (message: string, level?: Toast["level"]) => void;
+  /**
+   * 打开**应用内打印框**（2026-10-17）。⚠️ 只递"要打哪一份"——那个框自己
+   * 负责版面、预览与投递（状态全在 `ui/PrintDialog.tsx` 里）。
+   */
+  openPrint: (req: PrintRequest) => void;
 }
 
 export interface 导出出口 {
@@ -136,7 +142,7 @@ export function useExport(w: 导出接线): 导出出口 {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const { activeId, docs, getMarkdown, themeId, exportSettings, toast } = w;
+  const { activeId, docs, getMarkdown, themeId, exportSettings, toast, openPrint } = w;
   const [pandocGate, setPandocGate] = useState<PandocGate | null>(null);
 
   /** 主题 CSS 的**原始**文本。限域在 `editor/export.ts` 里做，那边统一。 */
@@ -239,14 +245,31 @@ export function useExport(w: 导出接线): 导出出口 {
         themeCss: await 取主题CSS(),
         title: doc.title,
       });
-      // ⚠️ 落点由后端按 `doc.path` 的**父目录**决定，不是随便找个临时目录：
-      // 正文里 `![](./img.png)` 是相对路径，换个目录图片就全没了。
-      const path = await api.export.print(doc.path, doc.title, html);
-      toast(t("Opened in the system default app — press Ctrl+P there to print (the file is at {0})", path), "info");
+      // ⚠️ **两条路，按系统分**（2026-10-17）：
+      // - **有**应用内打印（Linux：WebKitGTK 的打印后端）→ 开打印框：宿主把这份
+      //   HTML 静默印成 PDF、拿 PDF 出预览、再把**同一份 PDF** 投给打印机
+      //   （用户拍板的那条路：「让它做成PDF然后再预览」）；
+      // - **没有**（Windows / macOS）→ **退回老那条**"写成 HTML 交给系统默认程序"。
+      //   ⚠️ 那条一直是能用的，别因为新功能在那些平台上把它挡掉。
+      if (await api.print.supported()) {
+        // ⚠️ 基准目录必须是**文档所在的目录**：正文里 `![](./img.png)` 是相对路径，
+        // 换个目录就全是裂图。
+        openPrint({
+          html,
+          baseDir: doc.path ? 所在目录(doc.path) : null,
+          title: doc.title,
+        });
+      } else {
+        const path = await api.export.print(doc.path, doc.title, html);
+        toast(
+          t("Opened in the system default app — press Ctrl+P there to print (the file is at {0})", path),
+          "info",
+        );
+      }
     } catch (e) {
       toast(t("Could not print: {0}", String(e)), "error");
     }
-  }, [activeId, docs, getMarkdown, 取主题CSS, toast]);
+  }, [activeId, docs, getMarkdown, 取主题CSS, toast, openPrint]);
 
   /**
    * 真的导一次（闸门放行之后走这条）。`format` 来自探测报告那张表。

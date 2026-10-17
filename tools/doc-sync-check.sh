@@ -81,6 +81,9 @@ PAIRS=(
   "src-tauri/src/commands/menu.rs                 02,04"
   "src-tauri/src/commands/theme.rs                02,04,10"
   "src-tauri/src/commands/ui_style.rs             02,04,08"
+  # 2026-10-17：应用内打印（先 PDF 再预览，最后 lp 投递）。
+  "src-tauri/src/print_job.rs                    02,04,06"
+  "src-tauri/src/commands/print.rs               02,04"
   "src-tauri/src/commands/export.rs            02,04,05"
   "src-tauri/src/commands/image.rs             02,04,10"
   "src-tauri/src/image.rs                      02,03,10"

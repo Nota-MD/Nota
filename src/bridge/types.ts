@@ -908,3 +908,31 @@ export interface Diagnostics {
   gtk_runtime: string;
   webkit_runtime: string;
 }
+
+/**
+ * **一台打印机**（2026-10-17，应用内打印）。
+ *
+ * ⚠️ `description` 是 `lpstat` 那句原话（`is idle` / `disabled since …`）——
+ * **不翻译、不改写**："打印机在报什么错"比一句通用的"不可用"有用得多。
+ */
+export interface PrinterInfo {
+  name: string;
+  description: string;
+  is_default: boolean;
+}
+
+/**
+ * 打印预览（`nota_print_prepare` 的返回）。
+ *
+ * ⚠️ `pages` 是**逐页 PNG 的 data URL**（`data:image/png;base64,…`），不是路径：
+ * 走 base64 就不必给 asset 协议开临时目录的 scope，也不必担心文件被清掉之后
+ * 界面上一片碎图。代价是每页百来 KB，所以宿主那边**只出前 40 页**（`truncated`
+ * 为真时界面要如实说"只预览前 N 页"，不然用户以为文档就这么多页）。
+ */
+export interface PrintPreview {
+  /** 那份 PDF 的路径（投递那一步用它）。 */
+  pdf: string;
+  page_count: number;
+  pages: string[];
+  truncated: boolean;
+}

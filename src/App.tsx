@@ -445,6 +445,7 @@ export default function App() {
     // ⚠️ 兜底那份**每一格都要写出来**（`pandoc_args` 是 2026-10-10 加的）。
     exportSettings: settings?.export ?? { default_folder: "", open_after_export: false, pandoc_args: "" },
     toast,
+    openPrint: 对话框.openPrint, // 应用内打印框（2026-10-17）
   });
 
   // 状态栏 / 格式化工具栏 / 菜单栏：**以设置文件为准**，搬去了
@@ -483,7 +484,7 @@ export default function App() {
       promptReq !== null ||
       imageReq !== null ||
       linkReq !== null || // 「链接」框（第 96 ＋ 102 项）
-      emojiOpen ||
+      emojiOpen || 对话框.printReq !== null || // 应用内打印框（2026-10-17）
       对话框.关于开着 || // 「关于」框（见 `ui/useDialogs.ts` 那一格）
       pandocGate !== null || 专注总结 !== null,
     toast,

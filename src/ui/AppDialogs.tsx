@@ -22,6 +22,7 @@
 
 import { AboutDialog } from "@/ui/AboutDialog";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { PrintDialog } from "@/ui/PrintDialog";
 import { PromptDialog } from "@/ui/PromptDialog";
 import { ImageDialog } from "@/ui/ImageDialog";
 import { LinkDialog } from "@/ui/LinkDialog";
@@ -59,6 +60,7 @@ export function AppDialogs({
   const { confirmReq, answerConfirm, promptReq, answerPrompt } = 对话框;
   const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = 对话框;
   const { 关于开着, 关关于 } = 对话框;
+  const { printReq, closePrint } = 对话框;
 
   return (
     <>
@@ -66,6 +68,12 @@ export function AppDialogs({
       {pandocGate && (
         <PandocPanel probe={pandocGate.probe} format={pandocGate.format} {...pandocGateActions} />
       )}
+
+      {/**
+        * 应用内打印框（2026-10-17）。⚠️ 它**排在最前面**：打印途中用户还能看到
+        * 别的框是不合理的（那会盖在预览上），所以它是这一族里层级最高的一张。
+        */}
+      {printReq && <PrintDialog request={printReq} onClose={closePrint} />}
 
       {confirmReq && (
         <ConfirmDialog

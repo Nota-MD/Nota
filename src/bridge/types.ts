@@ -923,7 +923,10 @@ export interface PrinterInfo {
 
 /** 打印环境：区分“没装 CUPS”和“CUPS 在、但没有配置打印机”。 */
 export interface PrintEnvironment {
+  /** CUPS 服务是否可达（看标准 Unix socket，不把客户端缺失误判成服务缺失）。 */
   cups_available: boolean;
+  /** `lpstat` / `lp` 客户端是否可调用；服务在但客户端不在时应用内无法列打印机。 */
+  cups_client_available: boolean;
   printers: PrinterInfo[];
 }
 

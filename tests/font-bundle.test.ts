@@ -51,15 +51,17 @@ console.log("\n【随包 GB16ST 点阵字体】");
   }
 });
 
-测("CDE CSS 声明了 400 / 700 两档，并引用两份随包字体", () => {
+测("CDE CSS 把界面 Regular 与正文 Bold 分成两支，并引用两份随包字体", () => {
   const css = 读("src/styles/cde.css");
   含(css, 'font-family: "Nota GB16ST Bitmap"', "@font-face 家族");
+  含(css, 'font-family: "Nota GB16ST Bitmap Bold"', "单独的粗体家族");
   含(css, "NotaGB16ST-EBDT-Regular.ttf", "常规字重地址");
   含(css, "NotaGB16ST-EBDT-Bold.ttf", "粗体字重地址");
   含(css, "font-weight: 400", "常规字重");
   含(css, "font-weight: 700", "粗体字重");
   含(css, "U+4E00-9FFF", "点阵字面只接管 CJK");
   含(css, "font-synthesis: none", "禁止合成加粗");
+  含(css, ".app *:not(.ProseMirror, .ProseMirror *)", "界面统一 Regular，正文除外");
 });
 
 测("CDE 打印框不会露出原生圆角 select / number spinner", () => {

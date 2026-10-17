@@ -46,7 +46,7 @@
 | `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir`（2026-09-25 由 `nota_doc_themes_dir` 改名，同 BUG-27） |
 | `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir`（2026-09-26 新增）——**界面风格**那三条，与 `commands/theme.rs` 一一对应、同一套口径（id 不是路径；"打开"在宿主做；目录用到时才建） |
 | `commands/plugin.rs` | `nota_plugins_list` / `set_enabled` / `call` / `find_command` / `panels` / `panel_content` / **`review`** / **`review_close`** / `menus` / `install` / `uninstall` / `trust` / `trust_list` —— **13 条**（2026-09-25 多了装卸信任那四条；随后又多了 `review` 两条：**编辑区里摊着的那块面板**）。⚠️ **异步的是这五条**：`set_enabled` / `install` / `uninstall` / `call` / `panel_content`（都要跑 Lua 或解包，走 `spawn_blocking`）；⚠️ `review` / `review_close` 拿的是 `ReviewState`，**不碰 `plugins` 锁**——理由见 `docs/01` §第四条链路 |
-| `print_job.rs` | **应用内打印**：`列打印机()` 返回 `打印环境`（区分无 CUPS / 无配置打印机）；`准备()` 出 PDF 与预览；`系统打印()` 起系统对话框；`投递()` 走 `lp`。系统 poppler/CUPS 只调用不打包。 |
+| `print_job.rs` | **应用内打印**：`列打印机()` 返回 `打印环境`（CUPS 服务、`lpstat` 客户端、打印机列表三态分开）；`准备()` 出 PDF 与预览；`系统打印()` 起系统对话框；`投递()` 走 `lp`。系统 poppler/CUPS 只调用不打包。 |
 | `commands/print.rs` | 打印命令：`supported` / `printers` / `prepare` / `system` / `send`。⚠️ `prepare` 与 `system` 必须 `async`。 |
 | `commands/export.rs` | 导出与打印的**落盘那一步**（**四条**：`nota_export_write` 写文本、`nota_export_write_bytes` 写**二进制**——前端先 base64、宿主解码再落盘，分享卡存 PNG 走它、`nota_export_print` 写到 `.nota-print.html` 再交给系统默认程序、`nota_export_reveal` 在文件管理器里定位）。⚠️ 本题**不生成 HTML**——HTML 由前端生成（`editor/export.ts`），这一层只管 IO 与落点 |
 | `commands/pandoc.rs` | `nota_pandoc_probe` / `nota_pandoc_export` 两条，**都异步**（探测起进程、导出最长 180 秒，走 `spawn_blocking`）。⚠️ PDF **两条路**：pandoc 不通且 `pdf_print::available()` 时改走自带那套，返回值 `route` 说明走的哪条 |

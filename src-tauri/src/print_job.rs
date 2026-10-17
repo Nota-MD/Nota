@@ -51,6 +51,9 @@ pub struct 打印机信息 {
 #[derive(Debug, Clone, Serialize)]
 pub struct 打印环境 {
     pub cups_available: bool,
+    /// CUPS 客户端（`lpstat` / `lp`）是否可调用。⚠️ 服务在、客户端不在时，
+    /// 系统打印对话框仍能列出打印机，但应用内列表拿不到。
+    pub cups_client_available: bool,
     pub printers: Vec<打印机信息>,
 }
 
@@ -126,11 +129,33 @@ fn 纸张尺寸(名字: &str) -> (f64, f64) {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn 是_unix_socket(路径: &Path) -> bool {
+    use std::os::unix::fs::FileTypeExt;
+
+    std::fs::metadata(路径)
+        .map(|元| 元.file_type().is_socket())
+        .unwrap_or(false)
+}
+
+/// CUPS 服务在不在。
+///
+/// ⚠️ **不能拿 `lpstat` 是否存在当判据**：Flatpak / 精简发行版里常常只有
+/// CUPS 服务和 GTK 系统打印对话框，没有 `cups-client`。2026-10-17 用户机器上
+/// 系统设置明明列着 L3150，Nota 却报"没有 CUPS"，根因就是这里把客户端缺失
+/// 误当成了服务缺失。CUPS 的标准 Unix socket 在，就说明服务可达。
+#[cfg(target_os = "linux")]
+fn cups服务可达() -> bool {
+    ["/run/cups/cups.sock", "/var/run/cups/cups.sock"]
+        .iter()
+        .any(|路径| 是_unix_socket(Path::new(路径)))
+}
+
 /// 列出这台机器上的打印机。
 ///
-/// ⚠️ 只认 `lpstat`（CUPS 的客户端）。**没有它不算错**：没装 CUPS 的机器上
-/// 打印本来就不成立，界面拿到空列表会画成"这台机器上还没有打印机"，并说明
-/// 可以仍然打印成 PDF（那一条不依赖 `lp`）。
+/// ⚠️ `lpstat` 是应用内**枚举**打印机的客户端；它不在时不能谎报"CUPS 不存在"。
+/// 三种状态分开返回：服务没有 / 服务在但客户端不在 / 两者都在。界面据此决定
+/// 是提示没 CUPS、提示列表不可用，还是直接给打印机下拉。
 pub fn 列打印机() -> 打印环境 {
     #[cfg(target_os = "linux")]
     {
@@ -140,12 +165,19 @@ pub fn 列打印机() -> 打印环境 {
             &参,
             RunOpts::timeout(Duration::from_secs(6)),
         );
-        let Ran::Done { ok: true, stdout, .. } = 结果 else {
+        let (服务在, 客户端在, stdout) = match 结果 {
+            Ran::Done { ok: true, stdout, .. } => (true, true, stdout),
+            Ran::Done { .. } => (cups服务可达(), true, String::new()),
+            Ran::NoProgram => (cups服务可达(), false, String::new()),
+            Ran::Timeout | Ran::Failed(_) => (cups服务可达(), true, String::new()),
+        };
+        if !服务在 {
             return 打印环境 {
                 cups_available: false,
+                cups_client_available: 客户端在,
                 printers: Vec::new(),
             };
-        };
+        }
         let mut 默认 = String::new();
         let mut 出 = Vec::new();
         for 行 in stdout.lines() {
@@ -171,6 +203,7 @@ pub fn 列打印机() -> 打印环境 {
         }
         打印环境 {
             cups_available: true,
+            cups_client_available: 客户端在,
             printers: 出,
         }
     }
@@ -178,6 +211,7 @@ pub fn 列打印机() -> 打印环境 {
     {
         打印环境 {
             cups_available: false,
+            cups_client_available: false,
             printers: Vec::new(),
         }
     }
@@ -394,6 +428,30 @@ pub fn 投递(pdf: &Path, printer: &str, copies: u32, ranges: Option<&str>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn cups_判据认_unix_socket_而不是普通文件() {
+        use std::os::unix::net::UnixListener;
+
+        let 目录 = std::env::temp_dir().join(format!(
+            "nota-cups-socket-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&目录).unwrap();
+        let socket = 目录.join("cups.sock");
+        let 监听 = UnixListener::bind(&socket).unwrap();
+
+        assert!(是_unix_socket(&socket));
+        assert!(!是_unix_socket(&目录));
+
+        drop(监听);
+        let _ = std::fs::remove_dir_all(&目录);
+    }
 
     #[test]
     fn 纸张名字认得几个常用的() {

@@ -84,7 +84,12 @@ export function PrintDialog({
         设打印机(默认?.name ?? "");
       })
       .catch(() => {
-        if (活) 设打印环境({ cups_available: false, printers: [] });
+        if (活)
+          设打印环境({
+            cups_available: false,
+            cups_client_available: false,
+            printers: [],
+          });
       });
     return () => {
       活 = false;
@@ -164,8 +169,10 @@ export function PrintDialog({
   const 总页 = 预览?.page_count ?? 0;
   const 当前图 = 预览?.pages[第几页 - 1];
   const 没CUPS = 打印环境 !== null && !打印环境.cups_available;
+  const 缺打印客户端 =
+    打印环境 !== null && 打印环境.cups_available && !打印环境.cups_client_available;
   const 没有打印机 = 打印环境 !== null && 打印环境.printers.length === 0;
-  const 走系统对话框 = 没CUPS || 没有打印机;
+  const 走系统对话框 = 没CUPS || 缺打印客户端 || 没有打印机;
 
   return (
     <div className="print-backdrop" onMouseDown={onClose}>
@@ -231,7 +238,13 @@ export function PrintDialog({
             ) : 没CUPS ? (
               <span className="print-hint print-warning">
                 {t(
-                  "CUPS was not found (lpstat is unavailable). You can still use “System print…” to choose a printer or save as PDF.",
+                  "CUPS was not found. You can still use “System print…” or export to PDF.",
+                )}
+              </span>
+            ) : 缺打印客户端 ? (
+              <span className="print-hint print-warning">
+                {t(
+                  "CUPS is running, but the lpstat client is unavailable, so Nota cannot list printers. “System print…” can still show the configured printers.",
                 )}
               </span>
             ) : 没有打印机 ? (

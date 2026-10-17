@@ -6561,11 +6561,14 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 `/tmp/nota-cde-print/print.png`。
 
 📌 **同日再补（无 CUPS / 无打印机）**：打印环境现在不是裸数组，而是
-`{ cups_available, printers }`。实机隔离环境里 `lpstat` 不存在，界面明确显示
-“没有检测到 CUPS（lpstat 不可用）。仍可点「系统打印…」选择打印机或保存 PDF。”，
-主按钮**可点**并变成「系统打印…」，不再是一颗没有反应的灰按钮。
-按钮先建离屏 iframe 调 `print()`，失败才退回 WebKitGTK 系统打印对话框命令。
-截图 `/tmp/nota-cde-print/nocups-latest.png`。
+`{ cups_available, cups_client_available, printers }`。CUPS 服务按
+`/run/cups/cups.sock` / `/var/run/cups/cups.sock` 判断，`lpstat` 只表示应用内
+能否枚举；因此“系统有打印机、容器里没 cups-client”不会再被误报成“没有 CUPS”。
+三种提示分别是：服务没有 / 服务在但缺 `lpstat` / 有客户端但没有配置打印机。
+后两种主按钮**可点**并变成「系统打印…」，按钮先建离屏 iframe 调 `print()`，
+失败才退回 WebKitGTK 系统打印对话框命令。实机系统设置列出 L3150 时，
+界面应显示“CUPS 正在运行，但缺少 lpstat 客户端……「系统打印…」仍可显示打印机”，
+而不是“没有检测到 CUPS”。
 
 ### 5.69 验「CDE 文档风格 ＋ 首选字体缺失提示」（2026-10-17，✅ 开窗拍到）
 
@@ -6600,6 +6603,12 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 由 `styles/cde.css` 的 `@font-face` 加载；许可正文与修改说明也随安装包资源复制。
 因此 CDE 首次打开**不应再弹缺字体**。`tests/font-bundle.test.ts` 钉住
 “字体文件／CSS 声明／许可映射”三件事同时在。
+
+📌 **同日二次目检（界面偏粗）**：Regular 与 Bold 现在分成两个家族，界面家族
+只有 400；CDE 外壳除正文 `.ProseMirror` 外的所有后代统一 400，文档 `strong`
+才使用 Bold 位图。西文继续回落 Noto Sans / Noto Serif。`font-bundle` 用例同时
+钉住“界面统一 Regular、正文除外”这条选择器，防止以后某个 600 标题又把
+700 位图带回来。
 
 📌 **同日补记（3D 质感与点宋）**：真机截图放大 6 倍之后，三件事被推翻重做——
 斜面 **2px → 1px**、按钮**去掉外圈黑线**、字**黑 → 白**（菜单栏/按钮/标签全是白字）；

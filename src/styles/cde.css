@@ -30,7 +30,7 @@
 }
 
 @font-face {
-  font-family: "Nota GB16ST Bitmap";
+  font-family: "Nota GB16ST Bitmap Bold";
   src: url("../assets/fonts/NotaGB16ST-EBDT-Bold.ttf") format("truetype");
   font-style: normal;
   font-weight: 700;
@@ -50,6 +50,19 @@
   font-smooth: never;
   /* 点阵字体只有 400/700 两档；禁止 WebKit 把 600 之类的字重“合成加粗”。 */
   font-synthesis: none;
+}
+
+/*
+ * 界面字重统一压到 Regular。
+ *
+ * 上面的界面家族只挂 Regular；显式写了 600/700 的标题、卡片标题和按钮如果
+ * 继续请求粗体，Windows WebView2 会合成加粗，WebKit 则会从后面的 Noto 里
+ * 换一支，结果就是用户截图里的“中文发粗、西文字宽忽宽忽窄”。CDE 的位图
+ * 界面没有现代字重层级，统一 Regular 才接近原机；正文里的 `strong` 仍由
+ * 文档主题单独挂 Bold 位图，不受这条影响。
+ */
+[data-ui-style="cde"] .app *:not(.ProseMirror, .ProseMirror *) {
+  font-weight: 400;
 }
 
 /* ── CDE 图标集 ────────────────────────────────────────────────────────

@@ -137,6 +137,10 @@ p {
 }
 
 strong {
+  /* 界面的 Regular 家族不声明 700，避免 600 的卡片标题被浏览器挑成粗体；
+     正文真正需要加粗时走这一支单独的 Bold 位图家族。 */
+  font-family: "Nota GB16ST Bitmap Bold", "Noto Serif", "Noto Serif CJK SC",
+    "WenQuanYi Bitmap Song", "文泉驿点阵宋体", serif;
   font-weight: 700;
   /* ⚠️ 继承正文色（同 2026-10-16 那条修法）。 */
   color: inherit;

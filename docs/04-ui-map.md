@@ -2056,6 +2056,13 @@ Motif 的斜面是两像素一条亮带＋一条暗带，1px 出来只是"描了
 半角字形导致西文过粗、字宽异常。`font-synthesis:none` 禁止 600 字重被合成加粗，
 CDE 文档标题默认 400 字重。
 
+📌 **2026-10-17 二次收口（以本条为准）：界面 Regular、正文 Bold 分家。**
+实机截图里界面标题仍是 600，浏览器于是为 CJK 选中了 700 位图，整屏比 CDE 原机
+重一档。现在 `@font-face` 拆成 `Nota GB16ST Bitmap`（只声明 400）和
+`Nota GB16ST Bitmap Bold`（只声明 700）：CDE 外壳除 `.ProseMirror` 正文外统一
+`font-weight:400`，显式写 600 的卡片标题也只能命中 Regular；文档 `strong`
+单独挂 Bold。西文仍走 Noto Sans / Noto Serif，不接触 HZK 半角字形。
+
 📌 **主题图标也是 CSS 变量**：`Icon` 输出 `data-icon="<逻辑名>"` 并拼成
 `--icon-<逻辑名>`，主题 CSS 只需声明
 `--icon-folio-close-symbolic: url("../任意相对路径/close.svg")`。

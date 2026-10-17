@@ -577,8 +577,10 @@ export const 界面表: Record<string, string> = {
   "Printer": "打印机",
   "default": "默认",
   "Reading the printers…": "正在读取打印机…",
-  "CUPS was not found (lpstat is unavailable). You can still use “System print…” to choose a printer or save as PDF.":
-    "没有检测到 CUPS（lpstat 不可用）。仍可点「系统打印…」选择打印机或保存 PDF。",
+  "CUPS was not found. You can still use “System print…” or export to PDF.":
+    "没有检测到 CUPS。仍可点「系统打印…」或导出为 PDF。",
+  "CUPS is running, but the lpstat client is unavailable, so Nota cannot list printers. “System print…” can still show the configured printers.":
+    "CUPS 正在运行，但缺少 lpstat 客户端，Nota 无法列出打印机。「系统打印…」仍可显示系统已配置的打印机。",
   "CUPS is running, but no printers are configured. You can still use “System print…” or export to PDF.":
     "CUPS 正在运行，但没有配置打印机。仍可点「系统打印…」或导出 PDF。",
   "System print…": "系统打印…",

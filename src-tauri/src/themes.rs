@@ -37,8 +37,8 @@
 //! # 用户主题放哪儿
 //!
 //! `~/.config/nota/themes/<id>.css`。**只扫这一个目录**。
-//! 文件名去掉 `.css` 就是 id，与内置主题**同名即覆盖内置那套**
-//! （想改哪套就复制出去改，升级不会冲掉）。
+//! 文件名去掉 `.css` 就是 id。**Adwaita / Adwaita Dark 是只读内置主题**：
+//! 用户目录里的同名文件会被忽略；其他 id 才能作为用户主题加入。
 //!
 //! ⚠️ 这条覆盖规则意味着 id 是**用户可控的字符串**，所以 `css_of` 里
 //! 有一道 id 形状检查——不能让 `../../etc/passwd` 这样的名字拼进路径。
@@ -56,7 +56,7 @@ const MAX_CSS_BYTES: u64 = 2 * 1024 * 1024;
 
 /// 一套内置主题。三个字段都是编译期常量。
 struct Builtin {
-    /// 唯一键。同时是用户覆盖它时该用的文件名（`<id>.css`）。
+    /// 唯一键。内置主题不可被用户目录里的同名文件覆盖。
     id: &'static str,
     /// 菜单里显示的名字。**中文**——界面文案一律中文。
     name: &'static str,
@@ -103,26 +103,23 @@ pub struct DocThemeInfo {
     pub id: String,
     /// 显示名（中文）。
     pub name: String,
-    /// 是不是内置的那几套。界面上要标出来——用户自己放的同名文件会盖掉内置，
-    /// 不标的话"我改的文件怎么没生效"会变成一个查不动的问题。
+    /// 是不是内置的只读主题。Adwaita 永远为真，用户目录不能覆盖。
     pub builtin: bool,
 }
 
 /// 列出所有可用主题：内置的 ＋ 用户目录里多出来的。
 ///
-/// 用户主题**同名覆盖内置**，所以清单一律按 id 去重，用户那份赢。
+/// 内置 Adwaita 是只读的；用户目录只能增加其他 id，不能覆盖内置主题。
 pub fn discover() -> Vec<DocThemeInfo> {
     let user = user_ids();
 
-    // 内置的在前，保持 `BUILTIN` 里排好的顺序。被用户同名文件盖掉的那条
-    // **仍然在原来的位置**（只是 `builtin` 翻成 false），这样菜单的顺序
-    // 不会因为用户放了个文件就整体挪位——菜单位置变来变去比"多一个条目"烦人。
+    // 内置的在前，保持 `BUILTIN` 里排好的顺序，并永远标成只读内置。
     let mut out: Vec<DocThemeInfo> = BUILTIN
         .iter()
         .map(|b| DocThemeInfo {
             id: b.id.to_owned(),
             name: b.name.to_owned(),
-            builtin: !user.iter().any(|id| id == b.id),
+            builtin: true,
         })
         .collect();
 
@@ -146,11 +143,15 @@ pub fn discover() -> Vec<DocThemeInfo> {
 
 /// 取一份主题的 CSS 文本。
 ///
-/// 用户目录里有同名文件就用它，否则回落到内置。找不到就报错——
+/// 内置主题永远优先且不可覆盖；其他 id 再从用户目录读取。找不到就报错——
 /// 这里**不能静默给空串**：静默的后果是"设置里记着一个名字、界面上一片默认"，
 /// 而用户看不出是名字错了还是文件没了。
 pub fn css_of(id: &str) -> Result<String> {
     check_id(id)?;
+
+    if let Some(builtin) = BUILTIN.iter().find(|b| b.id == id) {
+        return Ok(builtin.css.to_owned());
+    }
 
     let path = paths::user_themes_dir()?.join(format!("{id}.css"));
     if path.is_file() {
@@ -163,11 +164,7 @@ pub fn css_of(id: &str) -> Result<String> {
         return Ok(crate::theme_assets::inline(&css, &path, &root));
     }
 
-    BUILTIN
-        .iter()
-        .find(|b| b.id == id)
-        .map(|b| b.css.to_owned())
-        .ok_or_else(|| NotaError::other(format!("没有名为 {id} 的文档主题")))
+    Err(NotaError::other(format!("没有名为 {id} 的文档主题")))
 }
 
 /// id 的形状检查。**这是本模块的安全边界**，见文件头那段。
@@ -345,12 +342,19 @@ mod tests {
         let builtin_count = list.iter().filter(|t| t.builtin).count();
         assert!(builtin_count <= BUILTIN.len());
         for b in BUILTIN {
-            // 可能被用户同名文件盖成 builtin: false，所以只查 id 在不在。
             assert!(
                 list.iter().any(|t| t.id == b.id),
                 "内置主题 {} 从清单里消失了",
                 b.id
             );
+        }
+    }
+
+    #[test]
+    fn 内置_adwaita_永远只读且不能被用户目录覆盖() {
+        for id in ["adwaita", "adwaita-dark"] {
+            let css = css_of(id).unwrap();
+            assert!(css.contains("--doc-bg"), "{id} 没有取到内置 CSS");
         }
     }
 }

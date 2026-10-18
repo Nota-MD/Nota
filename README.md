@@ -62,6 +62,7 @@ for decades without a proprietary database.
 | **Interface and document themes** | The shell and the document are independent visual axes. Interface themes can provide their own CSS, icons and fonts. |
 | **Native desktop packaging** | Linux and Windows packages are built from the same Rust and React codebase. |
 | **Verified updates** | Experimental application updates select the correct package kind; extensions can check their declared `latest.json` repositories. |
+| **Proxy-aware downloads** | Debug-only prefix replacement rules can route application and extension update downloads through a mirror. |
 
 ## Interface themes
 

@@ -23,11 +23,13 @@
 | 设置结构 | ✅ 拓展管理、插件设置独立分页；调试模式由版本号五连点开启，开启后才显示高级设置 |
 | 文档同步 | CI 用 git diff；mtime 只在本地模式用于提醒 |
 
-最近一次本地验证（2026-10-18）：前端 **72 份 / 1620 条**、Rust **660 / 0**、
+最近一次本地验证（2026-10-18）：前端 **72 份 / 1620 条**、Rust **661 / 0**、
 插件仓库 **0 FAIL / 2 行数 WARN**、Windows 目标 cargo check **0 警告**、
 TypeScript、生产构建、deb/rpm/AppImage 与 Windows NSIS/便携 ZIP 打包通过。
 GitHub 官方验证的近期失败日志均为 runner 收到 shutdown signal，发生在 Rust 测试阶段，
 不是编译或断言失败；本地同一提交完整通过。
+更新链路实测：用 0.7.0-beta 的 Debian 二进制读取 0.8.0-beta Release，界面正确显示
+当前 `0.7.0-beta`、最新 `0.8.0-beta`、安装类型 `Debian 软件包（.deb）` 和可下载入口。
 依赖审计：`source-map-js` 的高危 DoS 已用 override 固定到 **1.2.2**；余下
 **6 条 low** 来自 KaTeX/Mermaid/remark-math，当前上游没有无破坏升级路径，继续跟踪。
 

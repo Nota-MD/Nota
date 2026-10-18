@@ -30,6 +30,9 @@ GitHub 官方验证的近期失败日志均为 runner 收到 shutdown signal，�
 不是编译或断言失败；本地同一提交完整通过。
 更新链路实测：用 0.7.0-beta 的 Debian 二进制读取 0.8.0-beta Release，界面正确显示
 当前 `0.7.0-beta`、最新 `0.8.0-beta`、安装类型 `Debian 软件包（.deb）` 和可下载入口。
+0.8.0-beta 二进制已开窗复验：版本号五连点会落盘 `debug_mode = true` 并出现「高级设置」；
+左栏同时显示独立的「插件设置」「拓展管理」「高级设置」，关闭调试模式后 `debug_mode = false`
+且高级页从导航消失。设置页目检截图保存在本地临时目录，未提交到仓库。
 依赖审计：`source-map-js` 的高危 DoS 已用 override 固定到 **1.2.2**；余下
 **6 条 low** 来自 KaTeX/Mermaid/remark-math，当前上游没有无破坏升级路径，继续跟踪。
 

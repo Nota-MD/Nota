@@ -35,10 +35,10 @@ import { useEffect, useState } from "react";
 
 import { api, type AppLang } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { ActionButton, SettingRow, SettingsGroup, Select, Toggle, Value } from "../primitives";
+import { SettingRow, SettingsGroup, Select, Value } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
-export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettings }: PaneProps) {
+export function GeneralPane({ settings, onChange }: PaneProps) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -84,22 +84,6 @@ export function GeneralPane({ settings, onChange, onOpenConfigDir, onResetSettin
               ...(语言表?.available ?? []).map((l) => ({ value: l.tag, label: l.label })),
             ]}
           />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Debug mode")}>
-        <SettingRow>
-          <Toggle checked={settings.general.debug_mode} onChange={(debug_mode) => 写({ debug_mode })} />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Advanced")}>
-        <SettingRow label={t("Settings file")}>
-          <ActionButton onClick={onOpenConfigDir}>{t("Open Folder…")}</ActionButton>
-        </SettingRow>
-
-        <SettingRow label={t("Reset to Defaults")}>
-          <ActionButton onClick={onResetSettings}>{t("Reset")}</ActionButton>
         </SettingRow>
       </SettingsGroup>
 

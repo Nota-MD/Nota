@@ -671,6 +671,8 @@ export const 界面表: Record<string, string> = {
   "Spell checking engine": "拼写检查引擎",
   "Reading the clipboard": "正在读取剪切板",
   "Could not open the link: {0}": "无法打开链接：{0}",
+  "Advanced settings enabled.": "高级设置已开启。",
+  "Debug mode disabled.": "调试模式已关闭。",
   "GPL-2.0-or-later (external program — Nota does not bundle it)": "GPL-2.0-or-later（外部程序——Nota 不随包分发）",
 
   // 2026-09-28 补：**插入表格的模板**（源码模式下「插入表格」插出来的那四行）。

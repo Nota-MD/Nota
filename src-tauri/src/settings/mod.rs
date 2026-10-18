@@ -73,6 +73,7 @@ use crate::paths;
 
 pub mod appearance;
 pub mod document;
+pub mod download;
 pub mod editor;
 pub mod export;
 pub mod files;
@@ -84,6 +85,7 @@ pub mod markdown;
 
 pub use appearance::Appearance;
 pub use document::{DocFont, Document};
+pub use download::Download;
 pub use editor::Editor;
 pub use export::Export;
 pub use files::Files;
@@ -231,6 +233,8 @@ pub struct Settings {
     pub appearance: Appearance,
     /// 「通用」页。见 [`general`]。
     pub general: General,
+    /// 仅调试模式显示的高级下载规则。见 [`download`]。
+    pub download: Download,
     /// 「强制专注」页。见 [`focus`]。
     ///
     /// ⚠️ 这一页**不是插件的**（用户 2026-09-26：「这不是插件。这是核心功能」）。
@@ -279,6 +283,7 @@ impl Default for Settings {
             export: Export::default(),
             appearance: Appearance::default(),
             general: General::default(),
+            download: Download::default(),
             focus: Focus::default(),
             document: Document::default(),
             keys: Keys::default(),
@@ -486,6 +491,7 @@ mod tests {
         s.export.open_after_export = true;
         s.appearance.zoom = 125;
         s.general.debug_mode = true;
+        s.download.replacements = "github.com/ => gh-proxy.net/github.com/".to_owned();
         s.save_to(&path).unwrap();
 
         let back = Settings::load_from(&path).unwrap();
@@ -504,6 +510,10 @@ mod tests {
         assert!(back.export.open_after_export);
         assert_eq!(back.appearance.zoom, 125);
         assert!(back.general.debug_mode);
+        assert_eq!(
+            back.download.replacements,
+            "github.com/ => gh-proxy.net/github.com/"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

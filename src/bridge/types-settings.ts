@@ -550,3 +550,9 @@ export interface GeneralSettings {
   /* ⚠️ 这里**不会有**遥测、许可证、外部服务器。`settings/general.rs`
    * 里有一条测试盯着这些字符串。 */
 }
+
+/** 仅调试模式里的高级下载替换规则。 */
+export interface DownloadSettings {
+  /** 每行一条 `原地址前缀 => 新地址前缀`。空串 = 不替换。 */
+  replacements: string;
+}

@@ -9,7 +9,21 @@ use std::time::Duration;
 use crate::error::{NotaError, Result};
 
 /// GET 一个地址，响应体不得超过 `上限`。
-pub(crate) fn 取(地址: &str, 上限: u64, 超时: Duration) -> Result<Vec<u8>> {
+///
+/// `replacements` 是用户配置的 `旧前缀 => 新前缀` 规则。改写后的地址仍须通过
+/// HTTPS / 本机回环检查，避免一个替换规则把下载悄悄降成明文或非法协议。
+pub(crate) fn 取(
+    地址: &str,
+    替换规则: &str,
+    上限: u64,
+    超时: Duration,
+) -> Result<Vec<u8>> {
+    let 地址 = crate::settings::download::改写地址(地址, 替换规则)?;
+    if !地址可信(&地址) {
+        return Err(NotaError::other(format!(
+            "下载地址替换后不是 HTTPS 或本机地址：{地址}"
+        )));
+    }
     let 配置 = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .max_redirects(5)
@@ -18,7 +32,7 @@ pub(crate) fn 取(地址: &str, 上限: u64, 超时: Duration) -> Result<Vec<u8>
         .build();
     let 请求 = ureq::http::Request::builder()
         .method("GET")
-        .uri(地址)
+        .uri(&地址)
         .header("user-agent", format!("Nota/{}", env!("CARGO_PKG_VERSION")))
         .body(Vec::new())
         .map_err(|e| NotaError::other(format!("更新请求无效：{e}")))?;

@@ -215,7 +215,6 @@ export default function App() {
     调: 调插件,
     动作: 插件动作,
   } = 插件;
-
   // ── 编辑区那一格的两种形态与"看哪一面"（2026-09-27 搬到 `ui/useReviewView.ts`）
   //
   // 搬走的是一整块：**分派形态 / 记住看法 / `Esc` 之后干什么**，三件事挂的是
@@ -229,12 +228,10 @@ export default function App() {
   // ⚠️ 这里**不再拆字段**：整份 `预览出口` 交给 `ui/EditorArea.tsx` 去了
   //（那边要用 `活跃预览` / `面板预览` / `看法` / `退出预览` 好几样），拆一半
   // 留一半只会多一份"哪几个在这边有用"的账。
-
   // 口径指纹（`ui/tree-options.ts`）：换排序 / 换过滤 / 拨开隐藏文件之后树要
   // 自己重取，靠的就是下面那个依赖。⚠️ 依赖它而不是口径对象——对象每次渲染
   // 都换身份，那样 `refreshTree` 的身份会跟着抖，取树也会跟着每次都重跑。
   const 树指纹 = 口径键(读口径(settings));
-
   const refreshTree = useCallback(async () => {
     if (!workspace) {
       setTree([]);
@@ -975,6 +972,7 @@ export default function App() {
             插件信任={信任表}
             插件更新={插件更新}
             插件动作={插件动作}
+            debugMode={settings.general.debug_mode}
           />
         )}
 
@@ -987,6 +985,8 @@ export default function App() {
           pandocGateActions={pandocGateActions}
           专注总结={专注总结}
           关掉专注总结={关掉专注总结}
+          debugMode={settings?.general.debug_mode ?? false}
+          onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })}
         />
 
         {/* 右键菜单（2026-10-04）：接管 WebKit 那份英文原生菜单。和

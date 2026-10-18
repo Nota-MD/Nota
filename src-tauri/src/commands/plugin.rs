@@ -231,7 +231,17 @@ pub async fn nota_plugin_updates(
         let host = state.plugins.lock().unwrap();
         crate::plugin::updater::来源(&host)
     };
-    tauri::async_runtime::spawn_blocking(move || crate::plugin::updater::检查(&sources))
+    let 替换规则 = {
+        let state = app.state::<AppState>();
+        state
+            .settings
+            .lock()
+            .map(|s| s.download.replacements.clone())
+            .unwrap_or_default()
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::plugin::updater::检查(&sources, &替换规则)
+    })
         .await
         .map_err(|e| NotaError::other(format!("插件更新检查线程挂了：{e}")))
 }
@@ -252,8 +262,16 @@ pub async fn nota_plugin_update(
                 NotaError::other(format!("拓展 {id} 没有声明更新仓库，不能在线更新"))
             })?
     };
+    let 替换规则 = {
+        let state = app.state::<AppState>();
+        state
+            .settings
+            .lock()
+            .map(|s| s.download.replacements.clone())
+            .unwrap_or_default()
+    };
     let prepared = tauri::async_runtime::spawn_blocking(move || {
-        crate::plugin::updater::准备(&source)
+        crate::plugin::updater::准备(&source, &替换规则)
     })
     .await
     .map_err(|e| NotaError::other(format!("插件更新下载线程挂了：{e}")))??;

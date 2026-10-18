@@ -125,7 +125,15 @@ function 或破折(v: string): string {
   return v.trim() === "" ? 空 : v;
 }
 
-export function AboutDialog({ onClose }: { onClose: () => void }) {
+export function AboutDialog({
+  onClose,
+  debugMode,
+  onSetDebugMode,
+}: {
+  onClose: () => void;
+  debugMode: boolean;
+  onSetDebugMode: (enabled: boolean) => void;
+}) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -152,6 +160,8 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
    * "not allowed to open url" 才能。
    */
   const [链接错误, 设链接错误] = useState<string | null>(null);
+  const versionClicks = useRef<number[]>([]);
+  const [调试提示, 设调试提示] = useState<string | null>(null);
 
   useEffect(() => {
     let 还在 = true;
@@ -453,7 +463,30 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
                   ⚠️ 名字**不走 `t()`**：人名不是文案（`zh-ui.ts` 里那两条键同批删掉，
                   留着它们会被 `tools/i18n-check.sh` ③ 报成废键）。 */}
               <div className="about-developer">Leo Lee</div>
-              <div className="about-version">{版本}</div>
+              <button
+                type="button"
+                className="about-version"
+                title={t("Version")}
+                onClick={() => {
+                  const now = Date.now();
+                  versionClicks.current = versionClicks.current.filter((time) => now - time < 2500);
+                  versionClicks.current.push(now);
+                  if (versionClicks.current.length < 5) return;
+                  versionClicks.current = [];
+                  const 开启 = !debugMode;
+                  onSetDebugMode(开启);
+                  设调试提示(
+                    开启 ? t("Advanced settings enabled.") : t("Debug mode disabled."),
+                  );
+                }}
+              >
+                {版本}
+              </button>
+              {调试提示 && (
+                <div className="about-debug-hint" role="status">
+                  {调试提示}
+                </div>
+              )}
 
               {/* 两组行。⚠️ 空数组时不画那一组（`外链行` 今天就是空的）。 */}
               {外链行.length > 0 && (

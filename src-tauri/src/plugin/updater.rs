@@ -101,12 +101,12 @@ pub fn 来源(host: &PluginHost) -> Vec<更新来源> {
 }
 
 /// 检查全部已声明更新源的插件。
-pub fn 检查(sources: &[更新来源]) -> Vec<插件更新状态> {
+pub fn 检查(sources: &[更新来源], 替换规则: &str) -> Vec<插件更新状态> {
     let mut 按地址: BTreeMap<String, Result<仓库>> = BTreeMap::new();
     for source in sources {
         按地址
             .entry(source.manifest.clone())
-            .or_insert_with(|| 取仓库(&source.manifest));
+            .or_insert_with(|| 取仓库(&source.manifest, 替换规则));
     }
 
     sources
@@ -132,8 +132,8 @@ pub fn 检查(sources: &[更新来源]) -> Vec<插件更新状态> {
 /// 准备一个插件更新：重新读取仓库、验证地址与 SHA-256，并写到临时文件。
 ///
 /// 返回后调用方应持 `plugins` 锁执行 `PluginHost::装`，再删除临时文件。
-pub(crate) fn 准备(source: &更新来源) -> Result<准备好的更新> {
-    let repo = 取仓库(&source.manifest)?;
+pub(crate) fn 准备(source: &更新来源, 替换规则: &str) -> Result<准备好的更新> {
+    let repo = 取仓库(&source.manifest, 替换规则)?;
     let entry = 找仓库项(&repo, &source.id).cloned().ok_or_else(|| {
         NotaError::other(format!("仓库 {} 里没有 `{}`", source.manifest, source.id))
     })?;
@@ -149,7 +149,7 @@ pub(crate) fn 准备(source: &更新来源) -> Result<准备好的更新> {
     if entry.size.is_some_and(|size| size > PACKAGE_LIMIT) {
         return Err(NotaError::other("插件包超过 256 MiB 上限"));
     }
-    let bytes = remote::取(&entry.url, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
+    let bytes = remote::取(&entry.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
     let digest = format!("{:x}", Sha256::digest(&bytes));
     if digest != entry.sha256.to_ascii_lowercase() {
         return Err(NotaError::other(format!(
@@ -211,11 +211,11 @@ pub(crate) fn 安装(host: &mut PluginHost, prepared: 准备好的更新) -> Res
     })
 }
 
-fn 取仓库(url: &str) -> Result<仓库> {
+fn 取仓库(url: &str, 替换规则: &str) -> Result<仓库> {
     if !remote::地址可信(url) {
         return Err(NotaError::other("插件更新清单地址必须是 HTTPS"));
     }
-    let bytes = remote::取(url, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
+    let bytes = remote::取(url, 替换规则, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
     let repo: 仓库 = serde_json::from_slice(&bytes)
         .map_err(|e| NotaError::other(format!("插件更新清单解析失败：{e}")))?;
     if repo.schema != 1 {

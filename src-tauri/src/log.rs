@@ -29,7 +29,10 @@
 //! 前端的 `console.*` **也不走这里**：它压根不出现在终端里（Tauri 不转发 WebView
 //! 的控制台），要看只能开 devtools，而"打开 devtools"这个动作本身就等于"调试模式"。
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
+
+static 运行闸门: AtomicBool = AtomicBool::new(false);
 
 /// 调试闸门开着没有。
 ///
@@ -39,15 +42,20 @@ use std::sync::OnceLock;
 /// 认得的写法：`1` / `true` / `yes` / `on`（不分大小写，两头空白不算数）。
 /// 其余一律当**关**——包括 `0`、空串、以及根本没设。
 pub fn 开着() -> bool {
-    static 闸门: OnceLock<bool> = OnceLock::new();
-    *闸门.get_or_init(|| {
+    static 环境闸门: OnceLock<bool> = OnceLock::new();
+    *环境闸门.get_or_init(|| {
         std::env::var("NOTA_DEBUG").is_ok_and(|v| {
             matches!(
                 v.trim().to_ascii_lowercase().as_str(),
                 "1" | "true" | "yes" | "on"
             )
         })
-    })
+    }) || 运行闸门.load(Ordering::Relaxed)
+}
+
+/// 由「调试模式」设置打开或关闭。环境变量设了 `NOTA_DEBUG` 时始终开着。
+pub fn 设置调试模式(on: bool) {
+    运行闸门.store(on, Ordering::Relaxed);
 }
 
 /// 只在调试闸门开着时才往 stderr 写一行。用法和 `eprintln!` 一模一样。
@@ -65,4 +73,16 @@ macro_rules! 日志 {
             eprintln!($($arg)*);
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn 运行期调试模式能打开共用闸门() {
+        设置调试模式(true);
+        assert!(开着());
+        设置调试模式(false);
+    }
 }

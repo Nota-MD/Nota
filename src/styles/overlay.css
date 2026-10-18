@@ -465,11 +465,20 @@
 .about-version {
   margin-top: 10px;
   padding: 3px 12px;
+  border: 0;
   border-radius: 999px;
   background: var(--bg-hover);
   color: var(--fg-muted);
+  font: inherit;
   font-size: 0.85em;
   font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+
+.about-debug-hint {
+  margin-top: 7px;
+  color: var(--fg-muted);
+  font-size: 0.85em;
 }
 
 /* ── 两组行（外链那组 / 子页那组）────────────────────────────────────────── */

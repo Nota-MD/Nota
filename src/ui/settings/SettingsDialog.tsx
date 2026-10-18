@@ -19,7 +19,7 @@
  * └──────────────┴────────────────────────────────────┘
  * ```
  *
- * # 十一页是怎么来的
+ * # 页面是怎么来的
  *
  * 前七页（文件 / 编辑器 / 图像 / Markdown / 导出 / 外观 / 通用）是一组通用分节，
  * **中间四页是 Nota 自己的**：
@@ -38,7 +38,7 @@
  *
  * # 三件事的分工（都别改）
  *
- * 1. **左栏搜索是就地过滤**，不是跳转：查询非空时十一页**叠着**渲染，
+ * 1. **左栏搜索是就地过滤**，不是跳转：查询非空时所有可见页**叠着**渲染，
  *    每行自己比标签、说明和**所属组的标题**（见 `primitives.tsx` 顶上那段）。
  *    所以搜索态下左栏不高亮任何一页——`data-active` 那一行是 `!searching && …`。
  * 2. **改动即时生效**，唯一那个按钮是「完成」（= 关掉）。⚠️ 不要加「取消」，
@@ -73,6 +73,7 @@ import { useModalTrap } from "@/ui/useModalTrap";
 import type { 插件动作 } from "@/ui/usePlugins";
 import { QueryProvider, SearchField } from "./primitives";
 import { AppearancePane } from "./panes/AppearancePane";
+import { AdvancedPane } from "./panes/AdvancedPane";
 import { DocThemePane } from "./panes/DocThemePane";
 import { EditorPane } from "./panes/EditorPane";
 import { ExportPane } from "./panes/ExportPane";
@@ -82,6 +83,7 @@ import { FocusPane } from "./panes/FocusPane";
 import { GeneralPane } from "./panes/GeneralPane";
 import { ImagePane } from "./panes/ImagePane";
 import { MarkdownPane } from "./panes/MarkdownPane";
+import { PluginSettingsPane } from "./panes/PluginSettingsPane";
 import { ShortcutsPane } from "./panes/ShortcutsPane";
 import type { PaneProps } from "./panes/props";
 
@@ -95,11 +97,13 @@ export type SectionId =
   | "docTheme"
   | "shortcuts"
   | "focus"
+  | "pluginSettings"
   | "extensions"
-  | "general";
+  | "general"
+  | "advanced";
 
 /**
- * 左栏的十一页。
+ * 左栏的页面。
  *
  * ⚠️ 图标来自 `ui/Icon.tsx` 那张 `名字表`：**十一枚里七枚是 Folio 那 96 枚里的，
  * 四枚（Markdown / 文档主题 / 强制专注 / 拓展）是 Nota 自己画的**——Folio 那一套里
@@ -114,7 +118,7 @@ export type SectionId =
  * ——不报错。两处都在同一个文件里，改一处时看得见另一处。
  */
 const SECTIONS: Record<SectionId, 图标名> = {
-  // ⚠️ 这里**只有图标**。十一页的**名字**是界面文案，挪到组件体里的 `页名` 表去了
+  // ⚠️ 这里**只有图标**。页面**名字**是界面文案，挪到组件体里的 `页名` 表去了
   // （模块级求值时 `t` 还没订阅，而且 `tools/i18n-check.sh` 只认源码里的字面量
   // `t("…")`——那一对理由写在 `页名` 上面）。别把名字搬回这张表。
   // 文件页管的是启动、文件树、拖放 —— 一枚「打开的文件夹」
@@ -139,7 +143,9 @@ const SECTIONS: Record<SectionId, 图标名> = {
   // 强制专注：秒表。⚠️ 这一枚是**Nota 自己画的**（同上面那两枚的来路）——
   // 那一套里没有秒表，而最近的两枚都指错了东西，理由写在 `ui/Icon.tsx`。
   focus: "nota-force-focus-symbolic",
+  pluginSettings: "folio-configure-symbolic",
   general: "folio-configure-symbolic",
+  advanced: "nota-advanced-symbolic",
 };
 
 /**
@@ -159,6 +165,7 @@ const ORDER: SectionId[] = [
   "docTheme",
   "shortcuts",
   "focus",
+  "pluginSettings",
   "extensions",
   "general",
 ];
@@ -196,7 +203,7 @@ interface Props {
    * 已装插件清单，「拓展」那一页用。
    *
    * ⚠️ 下面这三样**不并进 `PaneProps`**：它们与设置项一个字节都不沾，整包铺给
-   * 十一页的话，别的页也会莫名其妙拿到一份插件清单（`panes/props.ts` 顶上那段
+   * 所有页的话，别的页也会莫名其妙拿到一份插件清单（`panes/props.ts` 顶上那段
    * 写着同一件事：一页该依赖什么，得能从它的入参一眼读出来）。
    * 这三样是 `App.tsx` 里**同一个 `usePlugins`** 喂的——右侧插件栏吃的是
    * 同一份，所以不会出现"那一栏说装好了、这一页还没有"。
@@ -208,6 +215,8 @@ interface Props {
   插件更新: PluginUpdateInfo[];
   /** 装 / 导出 / 卸 / 启停 / 信任那几颗按钮的实现。见 `ui/usePlugins.ts`。 */
   插件动作: 插件动作;
+  /** 调试模式；只有开启时才让「高级设置」进入左栏和搜索。 */
+  debugMode: boolean;
 }
 
 export function SettingsDialog({
@@ -226,13 +235,14 @@ export function SettingsDialog({
   插件信任,
   插件更新,
   插件动作,
+  debugMode,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
 
   /**
-   * 左栏十一页的名字。
+   * 左栏页面的名字。
    *
    * ⚠️ **必须写在组件里现建**，不能提到模块级当常量——理由与
    * `PluginDock.tsx::能力名` 那三张表完全相同：模块级求值时 `t` 还是
@@ -254,12 +264,15 @@ export function SettingsDialog({
     // （F8，收起外壳），和这一页是两件事。名字撞了的话，用户找"专注"会找到
     // 那一页去，然后觉得"怎么只有个界面开关"。（`ui/commands.ts` 那两条的注释）
     focus: t("Force Focus"),
+    pluginSettings: t("Extension Settings"),
     // ⚠️ 页名叫「拓展」而**不是「插件」**：右侧那一栏的清单页已经叫「插件」了
     // （`PluginDock.tsx`），两处同名会让人以为点哪个都一样。这一页管的是
     // **装 / 导出 / 卸载**（用户 2026-09-27 的原话就是"拓展管理面板"）。
-    extensions: t("Extensions"),
+    extensions: t("Extension Management"),
     general: t("General"),
+    advanced: t("Advanced"),
   };
+  const visibleOrder: SectionId[] = debugMode ? [...ORDER, "advanced"] : ORDER;
 
   const panelRef = useRef<HTMLDivElement>(null);
   /**
@@ -277,6 +290,9 @@ export function SettingsDialog({
    */
   const [section, setSection] = useState<SectionId>("appearance");
   const [query, setQuery] = useState("");
+  useEffect(() => {
+    if (!debugMode && section === "advanced") setSection("general");
+  }, [debugMode, section]);
 
   // 查询先小写化再进 context：`hits()` 只做一次 `includes`，
   // 不该让每一行都自己 `toLowerCase` 一遍。
@@ -331,6 +347,8 @@ export function SettingsDialog({
         return <ShortcutsPane menus={menus} settings={settings} onChange={onChange} />;
       case "focus":
         return <FocusPane {...props} />;
+      case "pluginSettings":
+        return <PluginSettingsPane plugins={plugins} 动作={插件动作} />;
       // ⚠️ 拓展页**不吃 `{...props}`**（同「快捷键」那一条，理由也一样）：
       // 它要的是插件清单、信任表、插件动作那三样，与设置项一个字节都不沾。
       case "extensions":
@@ -344,6 +362,8 @@ export function SettingsDialog({
         );
       case "general":
         return <GeneralPane {...props} />;
+      case "advanced":
+        return <AdvancedPane {...props} />;
       default:
         return <AppearancePane {...props} />;
     }
@@ -368,7 +388,7 @@ export function SettingsDialog({
           </div>
 
           <nav className="settings-nav-list" aria-label={t("Settings sections")}>
-            {ORDER.map((id) => (
+            {visibleOrder.map((id) => (
               <button
                 key={id}
                 type="button"
@@ -402,7 +422,9 @@ export function SettingsDialog({
 
         <div className="settings-content">
           <QueryProvider value={normalized}>
-            {searching ? ORDER.map((id) => <div key={id}>{paneFor(id)}</div>) : paneFor(section)}
+            {searching
+              ? visibleOrder.map((id) => <div key={id}>{paneFor(id)}</div>)
+              : paneFor(section)}
           </QueryProvider>
         </div>
       </div>

@@ -39,6 +39,8 @@ export function AppDialogs({
   pandocGateActions,
   专注总结,
   关掉专注总结,
+  debugMode,
+  onSetDebugMode,
 }: {
   对话框: Dialogs;
   /** 缺外部工具那张面板；`null` = 不显示（探通了就直接进保存对话框）。 */
@@ -56,6 +58,8 @@ export function AppDialogs({
   专注总结: { 总: 总结; 现在: Date } | null;
   /** 用户把总结关掉了。 */
   关掉专注总结: () => void;
+  debugMode: boolean;
+  onSetDebugMode: (enabled: boolean) => void;
 }) {
   const { confirmReq, answerConfirm, promptReq, answerPrompt } = 对话框;
   const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = 对话框;
@@ -117,7 +121,9 @@ export function AppDialogs({
       {/* 「关于 Nota」。⚠️ 与 `专注总结` 一样是**另一条路**：它不问任何事，
           是一份看完就关的报告（区别是它的开关住在 `useDialogs` 里，
           所以从上面那个对象上取，不占 `App.tsx` 的 props）。 */}
-      {关于开着 && <AboutDialog onClose={关关于} />}
+      {关于开着 && (
+        <AboutDialog onClose={关关于} debugMode={debugMode} onSetDebugMode={onSetDebugMode} />
+      )}
 
       {/* 强制专注这一轮的总结。⚠️ 排在最后＝**盖在最上面**：它是一份"你看完
           就关"的报告，不该被别的浮层压在下面（实际上它们不会同时出现，

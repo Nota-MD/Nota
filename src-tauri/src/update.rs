@@ -174,8 +174,8 @@ fn 命令成功(程序: &str, 参数: &[&str]) -> bool {
         .is_ok_and(|状态| 状态.success())
 }
 
-pub fn 检查() -> Result<更新状态> {
-    let 清单 = 取清单()?;
+pub fn 检查(替换规则: &str) -> Result<更新状态> {
+    let 清单 = 取清单(替换规则)?;
     验证清单(&清单)?;
     let 类型 = 当前安装类型();
     let 包 = 选包(&清单, 类型);
@@ -196,8 +196,8 @@ pub fn 检查() -> Result<更新状态> {
     })
 }
 
-pub fn 安装() -> Result<安装结果> {
-    let 清单 = 取清单()?;
+pub fn 安装(替换规则: &str) -> Result<安装结果> {
+    let 清单 = 取清单(替换规则)?;
     验证清单(&清单)?;
     let 类型 = 当前安装类型();
     if 类型 == 安装类型::Dev {
@@ -213,7 +213,7 @@ pub fn 安装() -> Result<安装结果> {
     if !合法下载地址(&包.url) {
         return Err(NotaError::other("更新包地址不属于 Nota 官方 Release"));
     }
-    执行(类型, 包)
+    执行(类型, 包, 替换规则)
 }
 
 fn 验证清单(清单: &清单) -> Result<()> {
@@ -237,14 +237,14 @@ fn 版本格式合法(版本: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+'))
 }
 
-fn 取清单() -> Result<清单> {
-    let 字节 = 取网络(MANIFEST_URL, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
+fn 取清单(替换规则: &str) -> Result<清单> {
+    let 字节 = 取网络(MANIFEST_URL, 替换规则, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
     serde_json::from_slice(&字节)
         .map_err(|e| NotaError::other(format!("更新清单解析失败：{e}")))
 }
 
-fn 取网络(地址: &str, 上限: u64, 超时: Duration) -> Result<Vec<u8>> {
-    remote::取(地址, 上限, 超时)
+fn 取网络(地址: &str, 替换规则: &str, 上限: u64, 超时: Duration) -> Result<Vec<u8>> {
+    remote::取(地址, 替换规则, 上限, 超时)
 }
 
 fn 选包<'a>(清单: &'a 清单, 类型: 安装类型) -> Option<&'a 安装包> {
@@ -256,8 +256,8 @@ fn 选包<'a>(清单: &'a 清单, 类型: 安装类型) -> Option<&'a 安装包>
     })
 }
 
-fn 执行(类型: 安装类型, 包: &安装包) -> Result<安装结果> {
-    let 文件 = 下载到临时(包)?;
+fn 执行(类型: 安装类型, 包: &安装包, 替换规则: &str) -> Result<安装结果> {
+    let 文件 = 下载到临时(包, 替换规则)?;
     match 类型 {
         安装类型::Deb => {
             启动特权("apt-get", &["install", "-y"], &文件)?;
@@ -301,11 +301,11 @@ fn 执行(类型: 安装类型, 包: &安装包) -> Result<安装结果> {
 const MAIN_DEV_UPDATE_COMMAND: &str =
     "git pull --ff-only && npm ci && npm run build && cd src-tauri && cargo build --release";
 
-fn 下载到临时(包: &安装包) -> Result<PathBuf> {
+fn 下载到临时(包: &安装包, 替换规则: &str) -> Result<PathBuf> {
     if !合法下载地址(&包.url) {
         return Err(NotaError::other("更新包地址不属于 Nota 官方 Release"));
     }
-    let 字节 = 取网络(&包.url, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
+    let 字节 = 取网络(&包.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
     let 摘要 = format!("{:x}", Sha256::digest(&字节));
     if 摘要 != 包.sha256.to_ascii_lowercase() {
         return Err(NotaError::other(format!(

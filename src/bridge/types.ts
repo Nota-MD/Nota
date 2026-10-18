@@ -264,6 +264,7 @@ export interface PandocExport {
 // `export *` 是给**外面**的调用方再导出的，它**不会**把名字带进本文件的局部作用域。
 import type {
   AppearanceSettings,
+  DownloadSettings,
   EditorSettings,
   ExportSettings,
   FileFilter,
@@ -314,7 +315,7 @@ export interface Settings {
    */
   enable_physics: boolean;
 
-  /* ── 分页的那几张表（2026-09-27 起九张）───────────────────────────────────────────────────────
+  /* ── 分页的那几张表（2026-10-18 起十一张）────────────────────────────────────────────────────
    *
    * ⚠️⚠️ **上面那 10 个字段一个都没挪进这七张表，是有意的。**
    * 它们是 2026-09-22 / 09-23 定下来的老字段，已经写进了用户的设置文件。
@@ -322,7 +323,7 @@ export interface Settings {
    * 打开过的严格模式、装好的 physics，升级之后全没了，而他的配置文件
    * 一个字都没动。所以按"新字段进表、老字段不动"处理。
    *
-   * ⚠️ 这几张表（2026-09-27 起是**十张**，最后一张是 `keys`）**与 Rust 侧一一对应**（`src-tauri/src/settings/` 下每页一个
+   * ⚠️ 这几张表（2026-10-18 起是**十一张**，包括 `download`）**与 Rust 侧一一对应**（`src-tauri/src/settings/` 下每页一个
    * 文件，`mod.rs` 里 `pub mod` 一行一个）。字段名一律 snake_case、枚举取值
    * 一律 kebab-case，两边必须逐字相同——TS 这边写错一个字母**不会编译不过**，
    * 只会在运行时拿到 `undefined`，而 `undefined` 传回 Rust 会被 serde 当成
@@ -337,6 +338,7 @@ export interface Settings {
   export: ExportSettings;
   appearance: AppearanceSettings;
   general: GeneralSettings;
+  download: DownloadSettings;
   /** 强制专注。⚠️ 这是**核心功能**的设置，不是插件的。见 `settings/focus.rs`。 */
   focus: FocusSettings;
   /**

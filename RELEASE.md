@@ -4,7 +4,7 @@
 
 1. 三份版本文件必须一致：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 2. 运行 `bash tools/check-version.sh <tag>`；tag 去掉前缀 `v` 后必须等于源码版本。
-3. 建议 tag 与版本同形，例如源码 `0.7.0-beta` → `v0.7.0-beta`。
+3. 建议 tag 与版本同形，例如源码 `0.8.0-beta` → `v0.8.0-beta`。
 4. 每个 Release 必须上传根目录的 `update/latest.json`。客户端固定读取
    `releases/latest/download/latest.json`；版本号可以带 `beta`，但 GitHub Release
    必须发布为 latest（不是 prerelease），否则该固定地址不会指向新版本。

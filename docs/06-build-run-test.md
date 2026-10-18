@@ -429,7 +429,7 @@ podman exec -u 1000 -w /work/nota tauri-dev \
 ```
 
 这样 `std::env::current_dir()` 和生成的 `installer.nsi` 都是 `/work/nota/...`，
-0.7.0-beta 的 `Nota_0.7.0-beta_x64-setup.exe` 已用这条路径实际生成。便携 ZIP
+0.8.0-beta 的 `Nota_0.8.0-beta_x64-setup.exe` 已用这条路径实际生成。便携 ZIP
 另带顶层 `Nota/` 与 `nota-portable.marker`。
 
 `aarch64-pc-windows-*` 的 std 在 Fedora 仓库里仍没有，Windows arm64 继续交给 CI。

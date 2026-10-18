@@ -137,6 +137,7 @@ pub fn nota_settings_reset(state: State<'_, AppState>) -> Result<Settings> {
 /// 放掉、再 `documents`），而它是**承重**的，漏掉一半就是死锁。
 fn 落盘(state: &AppState, next: Settings) -> Result<()> {
     let strict = next.strict_markdown;
+    let debug_mode = next.general.debug_mode;
 
     // ⚠️ 这一对花括号不是装饰：`documents` 在锁序里**排在 `settings` 前面**
     // （`plugins → documents → settings`，见 `state.rs` 顶上），所以下面那段
@@ -154,6 +155,8 @@ fn 落盘(state: &AppState, next: Settings) -> Result<()> {
             return Err(e);
         }
     }
+
+    crate::log::设置调试模式(debug_mode);
 
     // 「严格模式」改了要**立刻重算已打开文档的标题**：标题是从正文猜的，
     // 而两种模式对"这一行算不算标题"看法不同（`#标签`）。不重算的话，

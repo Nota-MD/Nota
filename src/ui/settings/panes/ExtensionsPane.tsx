@@ -2,11 +2,8 @@
  * 「拓展」那一页 —— 插件的**管理面板**（2026-09-27 加）。
  *
  * 用户 2026-09-27：「完全没有拓展管理面板。做一个。可以**导入，导出和卸载**拓展」。
- * 2026-10-04 又加了一件事：**插件声明给宿主画的设置**就在这一页上
- * （用户那天要的是一根"打字速度按几秒算"的滑杆，原话：「这个德尔塔t可以在拓展的
- * 设置页面更改，默认为5秒。应该是一个托条，从1秒到1分钟可选」）。
- * 形状由清单里的 `[[settings]]` 声明，这里**照着画**、不认插件 id
- * （加这一块时一个 `if (p.id === "nota.stats")` 都不许有）。
+ * 2026-10-18 起「插件设置」独立成 `PluginSettingsPane.tsx`：本页只做管理，
+ * 不再内嵌插件声明的控件。
  *
  * # 与右侧「插件」栏的分工
  *
@@ -18,8 +15,7 @@
  * 再决定。两边用的是**同一份数据、同一批动作**（`usePlugins` 的 `plugins` 与
  * `动作`），所以不会出现"这一栏说装好了、那一页还没有"这种两份真相源。
  *
- * ⚠️ **设置那几行只在这一页**（不在右侧那一栏）：栏宽 260px 放不下一根滑杆加
- * 一句说明，而且那一栏是"看"的、这一页是"改"的——见上面那张分工。
+ * 插件声明给宿主画的设置只住在「插件设置」页；右侧那一栏仍只负责诊断。
  *
  * # ⚠️ 导入 / 导出 / 卸载三件事里，只有**导出**是这一轮新做的
  *
@@ -43,16 +39,7 @@ import type { PluginInfo, PluginUpdateInfo, 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { 来源说明, 能力名, 语言对不上, 语言提示, 语言标签名 } from "@/ui/pluginText";
 import type { 插件动作 } from "@/ui/usePlugins";
-import {
-  ActionButton,
-  Note,
-  Range,
-  SettingRow,
-  SettingsGroup,
-  TextInput,
-  Toggle,
-  Value,
-} from "../primitives";
+import { ActionButton, Note, SettingRow, SettingsGroup, Value } from "../primitives";
 
 /**
  * 这一页要的三样。
@@ -126,7 +113,7 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
         </Note>
       ) : (
         <SettingsGroup title={t("Installed extensions")}>
-          {plugins.flatMap((p) => [
+          {plugins.map((p) => (
             <SettingRow
               key={p.id}
               label={p.name}
@@ -190,64 +177,8 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
                   </ActionButton>
                 )}
               </div>
-            </SettingRow>,
-            // ── 这个插件声明给宿主画的设置（2026-10-04 加）────────────────
-            //
-            // ⚠️ **跟在这个插件那一行的后面**（而不是各占一段）：来回切两段读，
-            // 用户得自己把"这一格是谁的"接上。挨着放，加上小字里那句插件名，
-            // 一眼就是"上面那个拓展的设置"。
-            //
-            // ⚠️ **停用 / 加载失败的插件照样能改**：值在磁盘上（
-            // `plugin-settings/<id>.toml`），插件下次启用时读的就是它。
-            // 这里没有灰的理由——灰了用户只会在"先启用还是先设置"上卡一下。
-            ...p.settings.map((s) => (
-              <SettingRow
-                key={`${p.id}:${s.key}`}
-                label={s.label}
-                // 搜插件名、id 和设置键都能搜到这一行（同上面那行的理由）。
-                searchText={`${p.id} ${p.name} ${s.key}`}
-                description={
-                  <>
-                    {/* 这句插件名就是"这一格是谁的"那句话。穿 `.plugin-desc`
-                        是**有意的**：它是这一页里已经有的那一段小字（见
-                        `拓展说明` 顶上那段，同一条"别再造一套类名"）。 */}
-                    <span className="plugin-desc">{p.name}</span>
-                    {s.help && <span className="plugin-desc">{s.help}</span>}
-                  </>
-                }
-              >
-                {/* ⚠️ **照 `kind` 分派的位置就是这里**（三种：滑杆／文本／开关，
-                    2026-10-10 从一种加到三种——AI 插件那几格设置要搬进这个窗口）。
-                    每一种都直接读宿主收好的那个字段，**前端不夹值、不判形状**：
-                    "什么值合法"只有清单那边一处判据（`SettingDecl::收值`）。 */}
-                {s.kind === "range" ? (
-                  <Range
-                    value={s.value}
-                    min={s.min}
-                    max={s.max}
-                    step={s.step}
-                    suffix={s.unit}
-                    title={s.help || undefined}
-                    onChange={(v) => void 动作.设置(p.id, s.key, v)}
-                  />
-                ) : s.kind === "toggle" ? (
-                  <Toggle
-                    checked={s.on}
-                    onChange={(v) => void 动作.设置(p.id, s.key, v)}
-                  />
-                ) : (
-                  <TextInput
-                    value={s.text}
-                    secret={s.secret}
-                    width="lg"
-                    placeholder={s.placeholder || undefined}
-                    title={s.help || undefined}
-                    onChange={(v) => void 动作.设置(p.id, s.key, v)}
-                  />
-                )}
-              </SettingRow>
-            )),
-          ])}
+            </SettingRow>
+          ))}
         </SettingsGroup>
       )}
 

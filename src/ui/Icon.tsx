@@ -119,6 +119,7 @@ const 名字表 = [
   "nota-doc-theme-symbolic", // 文档主题（框里的 Aa）
   "nota-keys-symbolic", // 快捷键
   "nota-plugin-symbolic", // 拓展（拼图块）
+  "nota-advanced-symbolic", // 高级设置（三条滑杆）
   "folio-configure-symbolic", // 通用（齿轮）
   // ⚠️ 这一枚是 **Nota 自己画的**（`nota-` 前缀，2026-09-26），同上面那三枚的
   // 来路。为什么不用现成的：那一套里**没有**秒表/时钟/盾牌这一类，而最接近的

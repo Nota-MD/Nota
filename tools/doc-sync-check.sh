@@ -76,6 +76,7 @@ PAIRS=(
   "src-tauri/src/settings/export.rs                 03,04,10"
   "src-tauri/src/settings/appearance.rs             03,04,10"
   "src-tauri/src/settings/general.rs                03,04,10"
+  "src-tauri/src/settings/download.rs               03,04,07"
   "src-tauri/src/document/mod.rs                  03,05"
   # ⚠️ 2026-10-04 新建：`derive_title` 那一族从 `mod.rs` 拆出来的（那边过了 800 行）。
   # 拆缝是「纯文本进、标题出」——不认识 `DocId`、不碰仓库、不取锁，谁都能调它。
@@ -421,6 +422,8 @@ PAIRS=(
   "src/ui/settings/panes/FocusPane.tsx               04"
   # 2026-09-27：设置里的「扩展」页（装 / 导出 / 卸载）。
   "src/ui/settings/panes/ExtensionsPane.tsx          04"
+  "src/ui/settings/panes/PluginSettingsPane.tsx      04,11"
+  "src/ui/settings/panes/AdvancedPane.tsx            04,07"
   "src/ui/settings/panes/props.ts                   04"
   "src/ui/outline.ts                              05"
   "src/ui/view-modes.ts                           04"

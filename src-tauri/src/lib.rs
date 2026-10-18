@@ -17,6 +17,7 @@
 
 pub mod cli;
 pub mod commands;
+#[cfg(target_os = "linux")]
 pub mod cups;
 pub mod devserver;
 pub mod diagnostics;

@@ -169,41 +169,43 @@ pub fn 准备(
     base_dir: Option<&Path>,
     版面: 版面请求,
 ) -> Result<打印预览> {
-    let (宽, 高) = 纸张尺寸(&版面.paper);
-    let 目录 = 工作目录()?;
-    let pdf = 目录.join("print.pdf");
-
     #[cfg(target_os = "linux")]
-    crate::pdf_print::print_html_to_pdf_with(
-        app,
-        html,
-        base_dir,
-        &pdf,
-        crate::pdf_print::版面 {
-            宽毫米: 宽,
-            高毫米: 高,
-            横向: 版面.landscape,
-            边距毫米: 版面.margin_mm,
-        },
-    )?;
-    #[cfg(not(target_os = "linux"))]
     {
-        let _ = (app, html, base_dir, &pdf);
-        return Err(NotaError::other(
-            "应用内打印目前只在 Linux 上有（它靠的是 WebKitGTK 的打印后端）。\
-             这台系统上请用「文件 → 导出 → PDF」，再用系统自己的打印对话框。",
-        ));
+        let (宽, 高) = 纸张尺寸(&版面.paper);
+        let 目录 = 工作目录()?;
+        let pdf = 目录.join("print.pdf");
+        crate::pdf_print::print_html_to_pdf_with(
+            app,
+            html,
+            base_dir,
+            &pdf,
+            crate::pdf_print::版面 {
+                宽毫米: 宽,
+                高毫米: 高,
+                横向: 版面.landscape,
+                边距毫米: 版面.margin_mm,
+            },
+        )?;
+
+        let 页数 = 数页(&pdf)?;
+        let (pages, truncated) = 出缩略图(&pdf, &目录, 页数)?;
+
+        Ok(打印预览 {
+            pdf: pdf.to_string_lossy().to_string(),
+            page_count: 页数,
+            pages,
+            truncated,
+        })
     }
 
-    let 页数 = 数页(&pdf)?;
-    let (pages, truncated) = 出缩略图(&pdf, &目录, 页数)?;
-
-    Ok(打印预览 {
-        pdf: pdf.to_string_lossy().to_string(),
-        page_count: 页数,
-        pages,
-        truncated,
-    })
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (app, html, base_dir, 版面);
+        Err(NotaError::other(
+            "应用内打印目前只在 Linux 上有（它靠的是 WebKitGTK 的打印后端）。\
+            这台系统上请用「文件 → 导出 → PDF」，再用系统自己的打印对话框。",
+        ))
+    }
 }
 
 /// 直接打开系统的打印对话框（不要求应用内先有打印机列表）。

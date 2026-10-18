@@ -1,0 +1,70 @@
+/* GitHub Markdown Alerts。 */
+.editor-mount .ProseMirror .nota-github-alert {
+  --github-alert-color: var(--accent);
+  margin: 1em 0;
+  padding: 10px 14px 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--github-alert-color) 42%, var(--border));
+  border-left: 4px solid var(--github-alert-color);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--github-alert-color) 8%, var(--bg));
+}
+
+.editor-mount .ProseMirror .nota-github-alert-marker {
+  display: none;
+}
+
+.editor-mount .ProseMirror .nota-github-alert > p:first-child {
+  margin-top: 0;
+}
+
+.editor-mount .ProseMirror .nota-github-alert > p:last-child {
+  margin-bottom: 0;
+}
+
+.editor-mount .ProseMirror .nota-github-alert::before {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--github-alert-color);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.editor-mount .ProseMirror .nota-github-alert-note {
+  --github-alert-color: var(--accent);
+}
+
+.editor-mount .ProseMirror .nota-github-alert-note::before {
+  content: "Note";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-tip {
+  --github-alert-color: var(--success);
+}
+
+.editor-mount .ProseMirror .nota-github-alert-tip::before {
+  content: "Tip";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-important {
+  --github-alert-color: var(--accent);
+}
+
+.editor-mount .ProseMirror .nota-github-alert-important::before {
+  content: "Important";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-warning {
+  --github-alert-color: var(--warn);
+}
+
+.editor-mount .ProseMirror .nota-github-alert-warning::before {
+  content: "Warning";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-caution {
+  --github-alert-color: var(--danger);
+}
+
+.editor-mount .ProseMirror .nota-github-alert-caution::before {
+  content: "Caution";
+}

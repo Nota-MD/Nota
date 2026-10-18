@@ -66,7 +66,7 @@ CSP **只写在 `src-tauri/tauri.conf.json`** 里，`index.html` 里不许再写
 （两个策略会同时生效并互相冲突）。现在的策略是：
 
 ```
-default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:;
+default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob: https: http:;
 style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self';
 worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost
 ```
@@ -83,6 +83,9 @@ worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost
   ⚠️ 所以**为了"统一"把 `font-src` 加回 `asset:` 是错的**——那一条无效。
 - **`style-src` 里的 `'unsafe-inline'`** 是文档主题的**前提**：主题 CSS 是运行时
   注入 `<style id="nota-doc-theme">` 的（`styles/doc-theme.ts`），没有它主题一律不生效。
+- **`img-src` 的 `https:` / `http:`** 服务于 GitHub Markdown 徽章和远程图片。
+  它只放行图片，不放行脚本、iframe 或通用网络请求；文档第一次打开时，远程图片
+  仍可能向图片服务器暴露访问时间与 IP。
 
 ---
 

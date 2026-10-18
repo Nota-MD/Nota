@@ -14,6 +14,7 @@
 | 文档主题策略 | **安装包只随附 Adwaita 浅色/深色**；其他官方主题预留独立主题仓库 |
 | 界面风格策略 | **主程序内置 `auto` ＋ 七档通用风格**；CDE、Motif 等完整皮肤以自包含外置主题包维护，不进入二进制 |
 | 对话框规范 | 所有 `role="dialog"` / `role="alertdialog"` 都显示统一的右上角关闭按钮 |
+| Markdown 兼容 | GitHub Flavored Markdown、脚注、GitHub Alerts、徽章图片、公式与 Mermaid；HTTP/HTTPS 远程图片可直接加载 |
 | CI | push / PR 先验证；tag 打包依赖验证通过，Release 为草稿 |
 | 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖产物 |
 | 文档同步 | CI 用 git diff；mtime 只在本地模式用于提醒 |

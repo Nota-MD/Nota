@@ -55,6 +55,7 @@ for decades without a proprietary database.
 | | |
 |---|---|
 | **True WYSIWYG** | Headings, emphasis, lists, quotes, code, math and diagrams render in place. Source and split modes remain available. |
+| **GitHub Markdown** | GitHub Flavored Markdown, footnotes, alerts, task lists, badges, math and Mermaid are supported; remote HTTPS/HTTP images can load directly. |
 | **Plain files** | Every document is saved as standard `.md`. There is no hidden JSON layer or private document format. |
 | **A real workspace** | Tabs, folder tree, outline, autosave, external-change detection and distraction-free writing modes share one focused interface. |
 | **Extensible in Lua** | AI, Git, presentation and writing-statistics extensions are installed separately and receive capabilities from an explicit manifest. |

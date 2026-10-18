@@ -71,6 +71,7 @@ import "./styles/settings-widgets.css";
 // **行内那一层**（`editor-inline.css`）＋ **块级那一层**（`editor-blocks.css`）。
 // ⚠️ **下面 code-block.css / marks.css 那几条必须继续排在这三份之后**。
 import "./styles/editor.css";
+import "./styles/github-alert.css";
 // 行内那一层：高亮 / 上标 / 下标 / 下划线、裸 HTML 与注释、脚注、智能标点的仅显示转换。
 import "./styles/editor-inline.css";
 // 块级那一层：代码块、任务列表复选框、表格与拖列宽手柄、分隔线与引用。

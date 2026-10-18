@@ -303,6 +303,7 @@ PAIRS=(
   # 行内标记（高亮/上标/下标/下划线）与块级裸 HTML＋注释，2026-09-27 同批落地。
   "src/editor/inline-marks.ts                   05,04,10"
   "src/editor/html-block.ts                     05,04,10"
+  "src/editor/github-alert.ts                   04,05,10"
   "src/editor/smart-punctuation.ts              05,04,10"
   "src/editor/auto-correct.ts                   05,04,10"
   # Emoji：短代码替换 ＋ 补全面板（2026-09-27）。
@@ -481,6 +482,7 @@ PAIRS=(
   "tests/instant-render.test.ts                  02,06"
   "tests/inline-marks.test.ts                   02,06"
   "tests/html-block.test.ts                     02,06"
+  "tests/github-markdown.test.ts                 04,06"
   "tests/smart-punctuation.test.ts              02,06"
   "tests/auto-correct.test.ts                   02,06"
   "tests/emoji.test.ts                          02,06"
@@ -526,6 +528,7 @@ PAIRS=(
   "src/styles/plugin-list.css                     04"
   # ⚠️ 2026-09-27 从 `app.css` 拆出来的浮层那一族（四个对话框 ＋ Emoji 补全面板）。
   "src/styles/overlay.css                         04"
+  "src/styles/github-alert.css                    04"
   "src/styles/gate.css                            04"
   "src/styles/diff.css                            04,05"
   "src/styles/review.css                          04,05"

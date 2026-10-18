@@ -719,6 +719,42 @@ unit    = "s"                # 可选，读数后面跟的那个单位
 ⚠️ 前端**不许**出现 `if (p.id === "nota.stats")` 这类按插件 id 的特判：这一页画的是
 **清单声明的形状**，不是某几个插件的表。
 
+### 2.6 ⭐ `[update]`：声明插件更新仓库（2026-10-18 定）
+
+```toml
+[update]
+manifest = "https://github.com/Nota-MD/Nota-plugins/releases/latest/download/latest.json"
+```
+
+`manifest` 必须是 HTTPS；`http://127.0.0.1` / `http://localhost` / `http://[::1]`
+只用于本机开发。一个仓库可以同时描述多个插件：
+
+```json
+{
+  "schema": 1,
+  "plugins": [
+    {
+      "id": "nota.ai",
+      "version": "0.1.1",
+      "file": "nota.ai-0.1.1.nota-plugin",
+      "sha256": "64 位十六进制摘要",
+      "url": "https://github.com/example/releases/download/v0.1.1/nota.ai-0.1.1.nota-plugin",
+      "notes": "Release notes shown in the extension manager."
+    }
+  ]
+}
+```
+
+宿主按当前插件 **id** 取对应项，版本必须严格大于已装版本才显示更新。下载后先校验
+SHA-256，再走原有的 `.nota-plugin` 验签、签名者连续性检查和原子替换；安装成功后
+立即重新加载插件。设置文件与插件数据不随更新删除。
+
+⚠️ **签名者连续性**：已装插件记录了原签名者指纹时，新包必须带签名且指纹一致。
+这是从 Chrome 扩展更新借鉴的原则，但 Nota 不复制 Chrome 的 XML / Omaha / CRX3
+协议。我们使用 JSON 清单、SHA-256 与现有 Ed25519 包签名。
+
+⚠️ 主题不支持这份自动更新机制；`[update]` 目前只属于插件清单。
+
 ---
 
 ## 3. ⭐ 能力表

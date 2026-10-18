@@ -39,7 +39,7 @@
  * 它也读设置。
  */
 
-import type { PluginInfo, 信任记录 } from "@/bridge/ipc";
+import type { PluginInfo, PluginUpdateInfo, 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { 来源说明, 能力名, 语言对不上, 语言提示, 语言标签名 } from "@/ui/pluginText";
 import type { 插件动作 } from "@/ui/usePlugins";
@@ -65,11 +65,13 @@ export interface 拓展页入参 {
   plugins: PluginInfo[];
   /** 信任库里那几把钥匙。⚠️ 要**摆出来**：信任按指纹判，看不见的表等于没有表。 */
   信任: 信任记录[];
+  /** 已声明更新源的插件及最近一次检查结果。 */
+  updates: PluginUpdateInfo[];
   /** 装 / 导出 / 卸 / 启停 / 信任那几颗按钮的实现。见 `ui/usePlugins.ts`。 */
   动作: 插件动作;
 }
 
-export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
+export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页入参) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -78,10 +80,30 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
   // "点了没反应，过一会儿又好了"。
   const 忙 = 动作.忙;
   const 灰 = 忙 !== null;
+  const 更新表 = new Map(updates.map((update) => [update.id, update]));
+  const 可更新 = updates.filter((update) => update.available);
 
   return (
     <>
       <SettingsGroup title={t("Extensions")}>
+        <SettingRow
+          label={t("Extension updates")}
+          description={t(
+            "Installed extensions can declare a trusted latest.json repository. Updates use the same package validation and atomic replacement as file installation.",
+          )}
+        >
+          <div className="stg-inline">
+            <ActionButton disabled={灰} onClick={() => void 动作.检查更新()}>
+              {忙 === "更新检查" ? t("Checking…") : t("Check for Updates")}
+            </ActionButton>
+            <ActionButton disabled={灰 || 可更新.length === 0} onClick={() => void 动作.全部更新()}>
+              {忙 === "全部更新"
+                ? t("Updating…")
+                : t("Update All ({0})", 可更新.length)}
+            </ActionButton>
+          </div>
+        </SettingRow>
+
         <SettingRow label={t("Install from file…")}>
           <ActionButton disabled={灰} onClick={() => void 动作.装()}>
             {忙 === "装" ? t("Installing…") : t("Choose an extension package…")}
@@ -112,9 +134,24 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
               // 而 id 画在下面那段小字里，**那段小字是 JSX**（`description` 是
               // 字符串才会自动进搜索）。所以这里显式补一遍。
               searchText={`${p.id} ${p.version}`}
-              description={<拓展说明 p={p} />}
+              description={<拓展说明 p={p} update={更新表.get(p.id)} />}
             >
               <div className="stg-inline">
+                {更新表.get(p.id)?.available && (
+                  <ActionButton
+                    disabled={灰}
+                    title={t(
+                      "Replace {0} with version {1} from its declared update repository.",
+                      p.name,
+                      更新表.get(p.id)?.latestVersion ?? "",
+                    )}
+                    onClick={() => void 动作.更新(p.id)}
+                  >
+                    {忙 === p.id
+                      ? t("Updating…")
+                      : t("Update to {0}", 更新表.get(p.id)?.latestVersion ?? "")}
+                  </ActionButton>
+                )}
                 <ActionButton
                   disabled={灰}
                   onClick={() => void 动作.启停(p.id, p.state === "disabled")}
@@ -254,7 +291,7 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
  * ⚠️ **别再抄一份 `.stg-ext-*` 出来**：`settings.css` 那天离 1000 行只剩几十行，
  * 而这两处要的本来就是同一种样子。
  */
-function 拓展说明({ p }: { p: PluginInfo }) {
+function 拓展说明({ p, update }: { p: PluginInfo; update?: PluginUpdateInfo }) {
   const t = useT();
   return (
     <>
@@ -266,6 +303,16 @@ function 拓展说明({ p }: { p: PluginInfo }) {
       </span>
 
       {p.description && <span className="plugin-desc">{p.description}</span>}
+
+      {update?.error && (
+        <span className="plugin-error">
+          {t("Update check failed: {0}", update.error)}
+        </span>
+      )}
+
+      {update?.available && update.notes && (
+        <span className="plugin-desc">{update.notes}</span>
+      )}
 
       {/* 语言对不上那句。⚠️ 判据是宿主算好的两格，不在前端猜（见 `pluginText.ts`），
           摆法与插件栏那一段逐字一致（连"用哪一份文案"那个小标签也照搬）。 */}

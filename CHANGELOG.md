@@ -3,6 +3,14 @@
 Nota 采用面向发布线的简短记录。完整证据、缺陷编号与历史过程在
 [`docs/07-feature-status.md`](docs/07-feature-status.md)。
 
+## 0.7.0-beta
+
+- 新增实验性应用更新检查。宿主按 deb、rpm、AppImage、Windows 便携版、Windows 安装器和开发构建选择资产。
+- 更新清单固定在官方仓库，安装包只能来自 Nota 官方 Release，并在执行前强制校验 SHA-256。
+- 新增插件仓库更新：插件可在 `[update] manifest` 指定一份可描述多个插件的 `latest.json`。
+- 插件更新复用原有的包摘要、Ed25519 验签、签名者连续性与原子替换流程。
+- GitHub Markdown 徽章、远程图片和 GitHub Alerts 的兼容修复进入 Beta 发布线。
+
 ## 0.6.0-beta
 
 - 首个公开发布的 Beta 版本，提供 Linux 与 Windows 安装包。

@@ -24,6 +24,7 @@ pub mod settings;
 pub mod table_width;
 pub mod theme;
 pub mod ui_style;
+pub mod update;
 pub mod watch;
 pub mod webview;
 pub mod window;

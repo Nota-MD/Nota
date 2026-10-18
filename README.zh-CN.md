@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="版本" src="https://img.shields.io/badge/release-v0.6.0--beta-e95420?style=flat-square">
+    <img alt="版本" src="https://img.shields.io/badge/release-v0.7.0--beta-e95420?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota/actions/workflows/verify.yml">
     <img alt="验证" src="https://github.com/Nota-MD/Nota/actions/workflows/verify.yml/badge.svg">
@@ -60,6 +60,7 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 | **Lua 拓展** | AI、Git、演示与写作统计独立安装，并通过清单获得明确授权的能力。 |
 | **界面与文档双主题** | 外壳与正文分别控制；界面主题可以提供自己的 CSS、图标和字体。 |
 | **原生桌面分发** | Linux 和 Windows 安装包由同一套 Rust 与 React 代码构建。 |
+| **可校验更新** | 实验性应用更新会按安装包类型选择资产；拓展可检查其声明的 `latest.json` 仓库。 |
 
 ## 界面风采
 

@@ -22,6 +22,7 @@ import type {
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
+  PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   会话, 路径种类, 拼写词典, PrintEnvironment, PrintPreview,
 } from "./types";
 // ⚠️ 这一条是**类型专线**：`选区快照` 的家在编辑器那一侧
@@ -45,6 +46,15 @@ export const api = {
   diagnostics: {
     /** 采一份编译信息 ＋ 本机信息。取不到的格子是空串，不报错。 */
     collect: () => invoke<Diagnostics>("nota_diagnostics"),
+  },
+
+  /**
+   * 实验性应用更新。清单地址固定在宿主，前端不能传入 URL。
+   * 宿主按当前安装类型选择 deb、rpm、AppImage、便携 EXE 或安装器 EXE。
+   */
+  update: {
+    check: () => invoke<UpdateStatus>("nota_update_check"),
+    install: () => invoke<UpdateInstallResult>("nota_update_install"),
   },
 
   doc: {
@@ -643,6 +653,19 @@ export const api = {
 
     /** 信任库里现在有哪几把钥匙。 */
     trustList: () => invoke<信任记录[]>("nota_plugin_trust_list"),
+
+    /**
+     * 检查所有声明了 `[update] manifest` 的插件。
+     *
+     * 一份清单可以同时描述多个插件；同一地址在一轮检查里只读取一次。
+     */
+    updates: () => invoke<PluginUpdateInfo[]>("nota_plugin_updates"),
+
+    /**
+     * 更新一个插件。宿主重新读取清单、校验 SHA-256、验证签名者连续性，
+     * 然后走原有的原子替换流程。
+     */
+    update: (id: string) => invoke<PluginUpdateResult>("nota_plugin_update", { id }),
 
     /**
      * 调插件命令。`plugin` **必须**是注册者自己的 id——

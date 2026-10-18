@@ -57,7 +57,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import type { DocThemeInfo, PluginInfo, Settings, UiStyleInfo, 信任记录 } from "@/bridge/ipc";
+import type {
+  DocThemeInfo,
+  PluginInfo,
+  PluginUpdateInfo,
+  Settings,
+  UiStyleInfo,
+  信任记录,
+} from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { MenuSpec } from "@/ui/commands";
 import { DialogClose } from "@/ui/DialogClose";
@@ -197,6 +204,8 @@ interface Props {
   plugins: PluginInfo[];
   /** 信任库里那几把钥匙（指纹 + 名字）。⚠️ **要摆出来**：信任按指纹判，看不见的表等于没有表。 */
   插件信任: 信任记录[];
+  /** 插件仓库的最近一次检查结果。 */
+  插件更新: PluginUpdateInfo[];
   /** 装 / 导出 / 卸 / 启停 / 信任那几颗按钮的实现。见 `ui/usePlugins.ts`。 */
   插件动作: 插件动作;
 }
@@ -215,6 +224,7 @@ export function SettingsDialog({
   menus,
   plugins,
   插件信任,
+  插件更新,
   插件动作,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
@@ -324,7 +334,14 @@ export function SettingsDialog({
       // ⚠️ 拓展页**不吃 `{...props}`**（同「快捷键」那一条，理由也一样）：
       // 它要的是插件清单、信任表、插件动作那三样，与设置项一个字节都不沾。
       case "extensions":
-        return <ExtensionsPane plugins={plugins} 信任={插件信任} 动作={插件动作} />;
+        return (
+          <ExtensionsPane
+            plugins={plugins}
+            信任={插件信任}
+            updates={插件更新}
+            动作={插件动作}
+          />
+        );
       case "general":
         return <GeneralPane {...props} />;
       default:

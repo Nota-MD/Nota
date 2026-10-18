@@ -9,7 +9,7 @@
 
 | 项 | 当前值 |
 |---|---|
-| 源码版本 | `0.6.0-beta`（三份版本文件一致） |
+| 源码版本 | `0.7.0-beta`（三份版本文件一致） |
 | 插件策略 | **安装包不随附插件**；四个官方插件从独立仓库发布 |
 | 文档主题策略 | **安装包只随附 Adwaita 浅色/深色**；其他官方主题预留独立主题仓库 |
 | 界面风格策略 | **主程序内置 `auto` ＋ 七档通用风格**；CDE、Motif 等完整皮肤以自包含外置主题包维护，不进入二进制 |
@@ -17,10 +17,13 @@
 | Markdown 兼容 | GitHub Flavored Markdown、脚注、GitHub Alerts、徽章图片、公式与 Mermaid；HTTP/HTTPS 远程图片可直接加载 |
 | CI | push / PR 先验证；tag 打包依赖验证通过，Release 为草稿 |
 | 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖产物 |
+| 应用更新 | 🧪 实验功能；`latest.json` 随每个 Release 发布；按安装类型分流 deb / rpm / AppImage / 便携 EXE / 安装器 EXE；开发构建只提示重建命令 |
+| 插件更新 | ✅ 插件 `[update] manifest` → 多插件 `latest.json` → SHA-256 → 原包验签 → 原子替换并重载 |
 | 文档同步 | CI 用 git diff；mtime 只在本地模式用于提醒 |
 
-最近一次本地验证（2026-10-18）：前端 **69 份 / 1605 条**、Rust **649 / 0**、
-插件仓库 **0 FAIL / 2 行数 WARN**、TypeScript 与生产构建通过。
+最近一次本地验证（2026-10-18）：前端 **71 份 / 1614 条**、Rust **656 / 0**、
+插件仓库 **0 FAIL / 2 行数 WARN**、Windows 目标 cargo check **0 警告**、
+TypeScript、生产构建、deb/rpm/AppImage 与 Windows NSIS/便携 ZIP 打包通过。
 依赖审计：`source-map-js` 的高危 DoS 已用 override 固定到 **1.2.2**；余下
 **6 条 low** 来自 KaTeX/Mermaid/remark-math，当前上游没有无破坏升级路径，继续跟踪。
 
@@ -35,7 +38,8 @@
 | 110 | Windows | 部分完成 | P1 | 0.5.x | Windows 真机验收 | 安装、单实例、MCP、插件安装逐项通过 |
 | 118 | 侧栏视觉 | 部分完成 | P3 | 0.6 | 用户目检 | 树/大纲与 CDE 主题一致 |
 | 122 | Windows 清单 | 部分完成 | P1 | 0.5.x | 文件编码与剩余清单 | 每条有通过/不做结论 |
-| 123 | 插件自更新 | 未做 | P2 | 0.6 | 索引与签名策略 | 下载→验签→原子替换→重载端到端通过 |
+| 123 | 插件自更新 | 已实现 | P1 | 0.7 | 插件仓库 `latest.json` | 下载→SHA-256→验签→签名者连续性→原子替换→重载 |
+| 124 | 应用更新 | 实验实现 | P1 | 0.7 | GitHub Release 资产与安装类型检测 | 0.7 → 0.8 各包类型实测覆盖安装 |
 
 ## 发布前硬条件
 

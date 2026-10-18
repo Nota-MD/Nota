@@ -23,6 +23,8 @@ mod install;
 pub mod manifest;
 pub mod package;
 pub mod settings_decl;
+/// 插件仓库检查与更新。
+pub mod updater;
 /// 信任的签名公钥表（TOFU，2026-09-29 从 `package.rs` 拆出，见那边的模块注释）。
 pub mod trust;
 /// 对外声明的形状（2026-09-29 从本文件拆出，见那边的模块注释）。

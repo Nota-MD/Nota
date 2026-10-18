@@ -715,6 +715,34 @@
   outline-offset: 2px;
 }
 
+/* 软件更新页。数据仍用无框线表格；命令单独画成可选择、可换行的等宽块。 */
+.update-command {
+  display: inline-block;
+  padding: 4px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  font: inherit;
+  font-family: var(--font-mono, monospace);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.about-update-notes {
+  margin: 4px 0 14px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.about-update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 /* ── 许可证全文（`ui/LicenseDialog.tsx`）────────────────────────────────────
    ⚠️ 它借的是确认框那层壳（`.confirm-backdrop` / `.confirm-dialog`），
    只加这两条。 */

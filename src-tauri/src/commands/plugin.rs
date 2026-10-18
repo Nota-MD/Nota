@@ -218,6 +218,55 @@ pub fn nota_plugin_trust_list(state: State<'_, AppState>) -> Result<Vec<crate::p
     Ok(host.信任表())
 }
 
+/// 检查所有声明了 `[update] manifest` 的插件。
+///
+/// 网络请求在 `spawn_blocking` 线程里完成，且**不持 `plugins` 锁**：
+/// 多个插件可以共用一份 `latest.json`，宿主先按地址去重再读取。
+#[tauri::command]
+pub async fn nota_plugin_updates(
+    app: tauri::AppHandle,
+) -> Result<Vec<crate::plugin::updater::插件更新状态>> {
+    let sources = {
+        let state = app.state::<AppState>();
+        let host = state.plugins.lock().unwrap();
+        crate::plugin::updater::来源(&host)
+    };
+    tauri::async_runtime::spawn_blocking(move || crate::plugin::updater::检查(&sources))
+        .await
+        .map_err(|e| NotaError::other(format!("插件更新检查线程挂了：{e}")))
+}
+
+/// 更新一个插件。`id` 由界面从检查结果里带回来，URL 与摘要只能来自插件清单。
+#[tauri::command]
+pub async fn nota_plugin_update(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<crate::plugin::updater::插件更新结果> {
+    let source = {
+        let state = app.state::<AppState>();
+        let host = state.plugins.lock().unwrap();
+        crate::plugin::updater::来源(&host)
+            .into_iter()
+            .find(|source| source.id == id)
+            .ok_or_else(|| {
+                NotaError::other(format!("拓展 {id} 没有声明更新仓库，不能在线更新"))
+            })?
+    };
+    let prepared = tauri::async_runtime::spawn_blocking(move || {
+        crate::plugin::updater::准备(&source)
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("插件更新下载线程挂了：{e}")))??;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let mut host = state.plugins.lock().unwrap();
+        crate::plugin::updater::安装(&mut host, prepared)
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("插件更新安装线程挂了：{e}")))?
+}
+
 /// 调一个插件注册的命令。
 ///
 /// # 为什么参数与返回值直接走 JSON 而不是自定义类型

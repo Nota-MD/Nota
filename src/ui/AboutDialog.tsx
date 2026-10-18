@@ -71,17 +71,18 @@ import type { Diagnostics } from "@/bridge/types";
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
 import { LicenseDialog } from "@/ui/LicenseDialog";
+import { SoftwareUpdatePane } from "@/ui/SoftwareUpdatePane";
 // 应用标识的**唯一手写源**是 `src-tauri/icons/nota.svg`，这里借分享图那一套
 // 嵌法（`标识()` 顺带做 id 改名与圆角裁剪），不再画第二遍。
 import { 标识, 标识视图 } from "@/ui/nota-mark";
 
 /**
- * 四个子页。`null` ＝ 首页那一列行。
+ * 五个子页。`null` ＝ 首页那一列行。
  *
  * ⚠️ 值写成中文是**内部标识**，不显示给用户（标题走下面 `页标题()` 里那张表的
  * `t("…")`）——所以它不进 i18n 表，也别拿它去拼界面文字。
  */
-type 页 = null | "故障排除" | "权限列表" | "鸣谢" | "法律信息";
+type 页 = null | "软件更新" | "故障排除" | "权限列表" | "鸣谢" | "法律信息";
 
 /**
  * 外面那两行要的网址。**今天是空的**（见文件头口径 ②），空着的行不画。
@@ -310,6 +311,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
 
   /** 子页的标题（首页那几行的字复用同一张表）。 */
   const 页标题: Record<Exclude<页, null>, string> = {
+    软件更新: t("Software Update"),
     故障排除: t("Troubleshooting"),
     权限列表: t("Permissions"),
     鸣谢: t("Credits"),
@@ -317,6 +319,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
   };
 
   const 子页行: readonly 子页行[] = [
+    { 键: "u", 标签: t("Software Update"), 页: "软件更新" },
     { 键: "t", 标签: t("Troubleshooting"), 页: "故障排除" },
     { 键: "p", 标签: t("Permissions"), 页: "权限列表" },
     { 键: "c", 标签: t("Credits"), 页: "鸣谢" },
@@ -488,6 +491,8 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
               </div>
 
               <div className="about-page-body">
+                {页 === "软件更新" && <SoftwareUpdatePane />}
+
                 {页 === "故障排除" && (
                   <>
                     {诊断炸了 ? (

@@ -62,6 +62,12 @@
   interface 是**两份手抄的定义**，改一边必须同批改另一边——不一致时 `invoke` 不报错，
   只会返回一个少了字段的对象，然后在某个 `.map` 上抛错。
 
+**更新边界**：应用更新清单作为每个 Release 的 `latest.json` 资产发布，宿主固定读取
+`releases/latest/download/latest.json`；前端只能触发“检查”与“安装”，不能传 URL。
+安装包只接受 Nota 官方 Release 地址并通过 SHA-256。插件更新地址由插件清单的
+`[update] manifest` 声明，一份清单可描述多个插件；网络读取在 `plugins` 锁之外完成，
+最后的安装仍走 `.nota-plugin` 原有的验签与原子替换。主题不参与在线更新。
+
 CSP **只写在 `src-tauri/tauri.conf.json`** 里，`index.html` 里不许再写一份
 （两个策略会同时生效并互相冲突）。现在的策略是：
 

@@ -43,6 +43,7 @@ pub mod pdf_print;
 pub mod print_job;
 pub mod plugin;
 pub mod proc;
+pub mod remote;
 pub mod session;
 pub mod spell;
 pub mod settings;
@@ -52,6 +53,7 @@ pub mod table_width;
 pub mod theme_assets;
 pub mod themes;
 pub mod ui_styles;
+pub mod update;
 pub mod upload;
 pub mod url_scheme;
 pub mod watch;
@@ -458,6 +460,8 @@ pub fn run() {
             commands::ui_style::nota_ui_styles,
             commands::ui_style::nota_ui_style_css,
             commands::ui_style::nota_ui_styles_open_dir,
+            commands::update::nota_update_check,
+            commands::update::nota_update_install,
             commands::plugin::nota_plugins_list,
             commands::plugin::nota_plugin_set_enabled,
             commands::plugin::nota_plugin_call,
@@ -472,6 +476,8 @@ pub fn run() {
             commands::plugin::nota_plugin_trust,
             commands::plugin::nota_plugin_setting_set,
             commands::plugin::nota_plugin_trust_list,
+            commands::plugin::nota_plugin_updates,
+            commands::plugin::nota_plugin_update,
             commands::plugin::nota_plugin_export,
             commands::plugin::nota_plugin_export_name,
             commands::plugin::nota_plugins_open_dir,

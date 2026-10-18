@@ -363,7 +363,7 @@ rm -rf src-tauri/icons/android src-tauri/icons/ios   # 这两个不要
 ⚠️ 那条路径是**采出来的数据**不是可读参数，手改不动；脚本默认参数跑出来的那条
 与第一版里现存的那条**逐字符一致**（用脚本对着 SVG 反查过）。
 
-#### Windows 交叉编译：**能编过，但出不了安装程序**
+#### Windows 交叉编译：**在 ASCII 挂载路径下能出安装程序**
 
 本机（Fedora）没有 Windows 工具链。实测的结论分三层，**第一层最容易误判**。
 
@@ -412,16 +412,28 @@ cd src-tauri && cargo build --release --target x86_64-pc-windows-gnu   # 约 4 �
 **mingw 编过 ≠ msvc 编过**，所以它不能当替身。它唯一的价值是
 **在本地提前发现"这段代码在 Windows 上根本编不过"**（比如误用了 unix 专有的 API）。
 
-**③ 出不了 `setup.exe`，arm64 也不行。**
+**③ NSIS 本体能跑，但路径里不能有中文。**
 
-- NSIS 那一步要 `makensis`，而非 Windows 宿主上 Tauri 是**下载 NSIS 再用 `wine` 跑**的。
-  容器里 `wine`、`makensis` 都没有，**装 NSIS 自带的 makensis 也没用**——
-  tauri-bundler 只认自己下载的那份，不读 `PATH`。所以安装程序仍然只能在 CI 上出
-- `aarch64-pc-windows-*` 的 std 在 Fedora 仓库里**根本没有**（gnu 的也没有），
-  Windows arm64 同样交给 CI
+容器里的 `makensis` 是 Linux 原生版，不需要 Wine。不过 2026-10-18 实测：
+从 `/home/lqy/项目/…/Nota` 直接打包会在 `Running makensis` 之后报
+`FATAL: main argv conversion failed!`。手写的 `.nsi` 里只有 ASCII，真正的问题是
+生成脚本把含中文的绝对源码路径写进了 argv。
 
-口径不变：**CI 是 Windows 包的唯一出处**，本地交叉编译只是提前报警
-（CI 的六格矩阵见上面 §2.4 开头，Windows arm64 走 `windows-latest` 原生 runner）。
+解决办法是给同一个目录加一个 ASCII 绑定挂载：
+
+```bash
+podman exec -u 0 tauri-dev mkdir -p /work/nota
+podman exec -u 0 tauri-dev mount --bind "$PWD" /work/nota
+podman exec -u 1000 -w /work/nota tauri-dev \
+  npm run tauri build -- --target x86_64-pc-windows-gnu --bundles nsis
+```
+
+这样 `std::env::current_dir()` 和生成的 `installer.nsi` 都是 `/work/nota/...`，
+0.7.0-beta 的 `Nota_0.7.0-beta_x64-setup.exe` 已用这条路径实际生成。便携 ZIP
+另带顶层 `Nota/` 与 `nota-portable.marker`。
+
+`aarch64-pc-windows-*` 的 std 在 Fedora 仓库里仍没有，Windows arm64 继续交给 CI。
+CI 仍是签名与 arm64 的权威出处；本地 gnu 包用于功能验收和更新链路测试。
 
 ---
 

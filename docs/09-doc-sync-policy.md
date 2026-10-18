@@ -39,6 +39,9 @@
 
 | 源 | 必须同批更新 | 为什么 |
 |---|---|---|
+| `update.rs` / `remote.rs` / `commands/update.rs` | `01` `02` `04` `07A` | 应用更新：Release 内 `latest.json`、安装类型与架构分流、官方地址围栏、SHA-256、各平台覆盖安装；`remote.rs` 同时服务插件仓库 |
+| `plugin/updater.rs` | `02` `04` `11` | 插件更新：清单 `[update] manifest`、多插件仓库、版本比较、摘要与签名者连续性、原子替换 |
+| `ui/SoftwareUpdatePane.tsx` | `02` `04` `05` | 「关于 → 软件更新」界面；前端只触发命令，不持有可传 URL 的接口 |
 | `src-tauri/src/main.rs` | `06` | 入口只有一个函数，变了说明启动方式变了 |
 | `src-tauri/src/lib.rs` | `01` `02` `04` `05` | 启动顺序、命令注册表、窗口事件——四份都记了。⚠️ `nota_frontend_ready` 的**用途**（不是「重放插件 UI 注册」，是「WebView 从这一刻起能收事件」）在 `02` 与 `05` 都有，改它要动两处 |
 | `src-tauri/src/error.rs` | `02` `03` | 枚举变体与 Display 文案是对外行为 |

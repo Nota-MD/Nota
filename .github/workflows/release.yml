@@ -101,7 +101,9 @@ jobs:
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: ${{ startsWith(github.ref, 'refs/tags/') && format('Nota {0}', github.ref_name) || '' }}
           releaseDraft: true
-          prerelease: true
+          # 版本字符串可以带 beta，但 GitHub 的 releases/latest 只认非 prerelease。
+          # 更新清单固定从 releases/latest/download/latest.json 读取，所以这里必须为 false。
+          prerelease: false
           releaseBody: |
             源码提交：${{ github.sha }}
             CI 运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -115,14 +117,18 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $arch = if ("${{ matrix.target }}".StartsWith("aarch64")) { "arm64" } else { "x64" }
           $releaseDir = "src-tauri/target/${{ matrix.target }}/release"
-          $stageDir = Join-Path $releaseDir "nota-portable"
-          $zipPath = Join-Path $releaseDir "bundle/nota_${version}_${{ matrix.label }}.zip"
+          $stageRoot = Join-Path $releaseDir "nota-portable"
+          $stageDir = Join-Path $stageRoot "Nota"
+          Remove-Item $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
+          $zipPath = Join-Path $releaseDir "bundle/Nota_${version}_${arch}-portable.zip"
           New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
           Copy-Item "$releaseDir/nota.exe" $stageDir
           Copy-Item README.md,README.zh-CN.md,LICENSE,THIRD-PARTY.md $stageDir
+          Set-Content -LiteralPath (Join-Path $stageDir "nota-portable.marker") -Value "portable" -NoNewline
           New-Item -ItemType Directory -Force -Path (Split-Path $zipPath) | Out-Null
-          Compress-Archive -Path "$stageDir/*" -DestinationPath $zipPath -Force
+          Compress-Archive -Path $stageDir -DestinationPath $zipPath -Force
 
       - name: 上传 Windows 便携 ZIP 到 Release
         if: startsWith(matrix.platform, 'windows') && startsWith(github.ref, 'refs/tags/')
@@ -131,7 +137,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
-          $zipPath = "src-tauri/target/${{ matrix.target }}/release/bundle/nota_${version}_${{ matrix.label }}.zip"
+          $arch = if ("${{ matrix.target }}".StartsWith("aarch64")) { "arm64" } else { "x64" }
+          $zipPath = "src-tauri/target/${{ matrix.target }}/release/bundle/Nota_${version}_${arch}-portable.zip"
           gh release upload $env:GITHUB_REF_NAME $zipPath --clobber
 
       # ⚠️ 收包用的是**产物目录**而不是 `target/release/bundle`：
@@ -166,6 +173,7 @@ jobs:
           SHA: ${{ github.sha }}
           TAG: ${{ github.ref_name }}
         run: |
+          node tools/make-update-manifest.mjs dist "$GITHUB_REF_NAME"
           find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS.txt
           node - <<'NODE'
           const fs = require("fs");
@@ -185,4 +193,4 @@ jobs:
       - name: 追加到草稿 Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/SHA256SUMS.txt dist/BUILD-INFO.json --clobber
+        run: gh release upload "$GITHUB_REF_NAME" dist/latest.json dist/SHA256SUMS.txt dist/BUILD-INFO.json --clobber

@@ -254,6 +254,7 @@ mod tests {
             dir,
             capabilities: Vec::new(),
             devserver: None,
+            update: None,
             // 这份清单不声明任何设置（2026-10-04 加的那一格；这一组用例
             // 测的是语言协商，与设置无关）。
             settings: Vec::new(),

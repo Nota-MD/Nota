@@ -315,12 +315,24 @@ impl DevServerSpec {
     }
 }
 
+/// `[update]` 段：这个插件从哪一份仓库清单检查新版本。
+///
+/// 清单本身允许多个插件共用一个地址。宿主只读取当前插件的 id 对应项，
+/// 安装包仍走 `.nota-plugin` 原有的摘要与签名校验。
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateSpec {
+    /// `latest.json` 的 HTTPS 地址。回环 HTTP 只用于本机开发与测试。
+    pub manifest: String,
+}
+
 
 #[derive(Debug, Clone, Deserialize)]
 struct ManifestFile {
     plugin: PluginMeta,
     #[serde(default)]
     devserver: Option<DevServerSpec>,
+    #[serde(default)]
+    update: Option<UpdateSpec>,
     /// `[[settings]]` 那一串（顶层数组，与 `[devserver]` 平级）。空 = 这个插件
     /// 没有要宿主画的设置。
     #[serde(default)]
@@ -336,6 +348,8 @@ pub struct Manifest {
     pub capabilities: Vec<Capability>,
     /// `[devserver]` 段。`None` = 这个插件不起开发服务器。
     pub devserver: Option<DevServerSpec>,
+    /// `[update]` 段。`None` = 这个插件不参与在线更新检查。
+    pub update: Option<UpdateSpec>,
     /// `[[settings]]` 段（已经校验过）。空 = 没有要宿主画的设置。
     pub settings: Vec<SettingDecl>,
 }
@@ -366,12 +380,20 @@ impl Manifest {
             })?
             .to_path_buf();
 
-        Self::from_meta(file.plugin, file.devserver, file.settings, dir, path)
+        Self::from_meta(
+            file.plugin,
+            file.devserver,
+            file.update,
+            file.settings,
+            dir,
+            path,
+        )
     }
 
     fn from_meta(
         meta: PluginMeta,
         devserver: Option<DevServerSpec>,
+        update: Option<UpdateSpec>,
         settings: Vec<SettingDecl>,
         dir: PathBuf,
         file: &Path,
@@ -447,6 +469,19 @@ impl Manifest {
         //    加载时报出来，别等到用户点了按钮才发现什么都起不来。
         let devserver = check_devserver(devserver, &capabilities, file)?;
 
+        // ── [update] ─────────────────────────────────────────────────────
+        if let Some(spec) = &update {
+            if !crate::remote::地址可信(&spec.manifest) {
+                return Err(NotaError::Manifest {
+                    file: file.to_path_buf(),
+                    reason: format!(
+                        "`[update] manifest` 必须是 HTTPS 地址（本机回环 HTTP 仅用于开发）：{}",
+                        spec.manifest
+                    ),
+                });
+            }
+        }
+
         // ── [[settings]] ────────────────────────────────────────────────
         let settings = settings_decl::check_settings(settings, &capabilities, file)?;
 
@@ -455,6 +490,7 @@ impl Manifest {
             dir,
             capabilities,
             devserver,
+            update,
             settings,
         })
     }
@@ -730,6 +766,41 @@ capabilities = ["document.read", "process.git"]
         assert_eq!(找到.len(), 1, "实际找到：{找到:?}");
         assert!(找到[0].ends_with("a.b/plugin.toml"), "实际：{:?}", 找到[0]);
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn 更新清单必须是_https_或本机回环() {
+        let dir = std::env::temp_dir().join("nota-manifest-update-url");
+        let _ = std::fs::remove_dir_all(&dir);
+        write_manifest(
+            &dir,
+            r#"
+[plugin]
+id = "x.y"
+name = "X"
+api = 2
+
+[update]
+manifest = "http://example.com/latest.json"
+"#,
+        );
+        assert!(Manifest::load(&dir.join("plugin.toml")).is_err());
+
+        write_manifest(
+            &dir,
+            r#"
+[plugin]
+id = "x.y"
+name = "X"
+api = 2
+
+[update]
+manifest = "https://example.com/latest.json"
+"#,
+        );
+        let manifest = Manifest::load(&dir.join("plugin.toml")).unwrap();
+        assert!(manifest.update.is_some());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

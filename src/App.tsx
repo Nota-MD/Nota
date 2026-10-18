@@ -202,9 +202,9 @@ export default function App() {
   // "确定吗"同理（`askConfirm`，宿主自己画的框，不是 `window.confirm`）。
   const 插件 = usePlugins({ toast, askPrompt, askConfirm });
   const {
-    plugins,
-    panels,
+    plugins, panels,
     信任: 信任表,
+    插件更新,
     // 编辑区里此刻摊着的插件面板（`nota.ui.review` 放进去的那一格）＋收起它。
     // ⚠️ **归宿主**（`plugin::ReviewState`），不是这里的一份 `useState`：
     // 刷新一次界面 / 热重载一次，"我正在看 AI 提的那份改动"不该就这么没了。
@@ -215,7 +215,6 @@ export default function App() {
     调: 调插件,
     动作: 插件动作,
   } = 插件;
-
 
   // ── 编辑区那一格的两种形态与"看哪一面"（2026-09-27 搬到 `ui/useReviewView.ts`）
   //
@@ -974,6 +973,7 @@ export default function App() {
             // 不会出现"这一栏说装好了、那一页还没有"。
             plugins={plugins}
             插件信任={信任表}
+            插件更新={插件更新}
             插件动作={插件动作}
           />
         )}

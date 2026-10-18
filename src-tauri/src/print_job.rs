@@ -26,14 +26,19 @@
 //! 顺手清掉旧的**（`清旧的`）。不放进用户文档目录：那是我们的中间产物，不是
 //! 用户要的文件。
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
+#[cfg(target_os = "linux")]
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 
 use crate::error::{NotaError, Result};
+#[cfg(target_os = "linux")]
 use crate::proc::{run_capture, Ran, RunOpts};
 
 /// 一台打印机（由 CUPS 的 IPP 属性整理出来）。
@@ -78,12 +83,15 @@ pub struct 打印预览 {
 
 /// 预览最多出多少页。⚠️ 一页 72dpi 的 PNG 百来 KB，base64 之后再涨三成；
 /// 一百页的文档要传几十 MB 过 IPC，那不是预览、那是搬家。
+#[cfg(target_os = "linux")]
 const 预览上限: usize = 40;
 
 /// 预览分辨率（dpi）。72 够看清分页与排版，再高只是白花时间。
+#[cfg(target_os = "linux")]
 const 预览分辨率: &str = "72";
 
 /// 一份临时工作目录（打印一次一个）。
+#[cfg(target_os = "linux")]
 fn 工作目录() -> Result<PathBuf> {
     let 根 = crate::paths::cache_dir()?.join("print");
     crate::paths::ensure_dir(&根)?;
@@ -103,6 +111,7 @@ fn 工作目录() -> Result<PathBuf> {
 
 /// 删掉上一次留下的工作目录。⚠️ **只删我们自己建的那种纯数字目录**，
 /// 别去动那个目录里可能存在的别的文件。
+#[cfg(target_os = "linux")]
 fn 清旧的(根: &Path) {
     let Ok(读) = std::fs::read_dir(根) else {
         return;
@@ -231,6 +240,7 @@ pub fn 系统打印(
 
 /// 用 `pdfinfo` 数页。⚠️ 拿不到就报错，**不猜**——猜错的后果是预览少几页、
 /// 而用户以为那就是全部。
+#[cfg(target_os = "linux")]
 fn 数页(pdf: &Path) -> Result<usize> {
     let 参 = vec![pdf.to_string_lossy().to_string()];
     match run_capture("pdfinfo", &参, RunOpts::timeout(Duration::from_secs(10))) {
@@ -252,6 +262,7 @@ fn 数页(pdf: &Path) -> Result<usize> {
 }
 
 /// 把 PDF 的前 [`预览上限`] 页渲成 PNG，再 base64 成 data URL。
+#[cfg(target_os = "linux")]
 fn 出缩略图(pdf: &Path, 目录: &Path, 页数: usize) -> Result<(Vec<String>, bool)> {
     let 要出 = 页数.min(预览上限);
     let 前缀 = 目录.join("page");

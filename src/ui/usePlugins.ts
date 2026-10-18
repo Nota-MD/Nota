@@ -38,6 +38,7 @@ import {
   type PluginPanel,
   type PluginSetting,
   type PluginReview,
+  type PluginUpdateInfo,
   type 信任记录,
   type 导出报告,
 } from "@/bridge/ipc";
@@ -100,6 +101,12 @@ export interface 插件动作 {
    * 按钮在拖动期间一直灰着（装 / 卸 / 启停共用 `忙`）。
    */
   设置: (id: string, key: string, value: string | number | boolean) => Promise<void>;
+  /** 重新读取所有插件声明的仓库清单。 */
+  检查更新: () => Promise<void>;
+  /** 安装一个插件的可用更新。 */
+  更新: (id: string) => Promise<void>;
+  /** 顺序安装当前全部可用更新。 */
+  全部更新: () => Promise<void>;
   /** 此刻正忙的那个：插件 id，或者 `"装"`（安装中）。按钮据此置灰。 */
   忙: string | null;
 }
@@ -118,6 +125,8 @@ export interface PluginsState {
    * （`package.rs::信任库::列` 的注释里写着同一句话）。
    */
   信任: 信任记录[];
+  /** 有更新源的插件及其当前检查结果。 */
+  插件更新: PluginUpdateInfo[];
   /**
    * 菜单栏**这一份**要摆的那几栏 = `MENUS` ＋ 插件那一栏（没有插件菜单就没有它）。
    *
@@ -164,6 +173,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   const [菜单项们, set菜单项们] = useState<PluginMenuItem[]>([]);
   /** 见 [`PluginsState::信任`]。拉法与前三个一样。 */
   const [信任表, set信任表] = useState<信任记录[]>([]);
+  const [插件更新, set插件更新] = useState<PluginUpdateInfo[]>([]);
   /** 正忙哪一个（插件 id 或 `"装"`）。见 [`插件动作::忙`]。 */
   const [忙, set忙] = useState<string | null>(null);
 
@@ -214,6 +224,22 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       }
     })();
   }, [重拉, toast]);
+
+  // 启动后静默检查一次。离线时不打扰用户，手动点「检查更新」才显示错误。
+  useEffect(() => {
+    let 还在 = true;
+    api.plugin
+      .updates()
+      .then((updates) => {
+        if (还在) set插件更新(updates);
+      })
+      .catch(() => {
+        /* 手动检查会报告原因。 */
+      });
+    return () => {
+      还在 = false;
+    };
+  }, []);
 
   /**
    * 编辑区里摊着的那一块。**拉一次 + 订阅"变了"**，两条都要：
@@ -374,6 +400,74 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     },
     [plugins, askConfirm, 跑],
   );
+
+  const 检查更新 = useCallback(async () => {
+    set忙("更新检查");
+    try {
+      const updates = await api.plugin.updates();
+      if (活着.current) set插件更新(updates);
+      const failures = updates.filter((update) => update.error);
+      if (failures.length > 0) {
+        toast(failures.map((update) => `${update.name}: ${update.error}`).join("\n"), "error");
+      }
+    } catch (e) {
+      toast(t("Could not check extension updates: {0}", String(e)), "error");
+    } finally {
+      if (活着.current) set忙(null);
+    }
+  }, [toast]);
+
+  const 更新一个 = useCallback(
+    async (id: string) => {
+      set忙(id);
+      try {
+        const result = await api.plugin.update(id);
+        await 重拉();
+        const updates = await api.plugin.updates().catch(() => null);
+        if (updates && 活着.current) set插件更新(updates);
+        toast(
+          t("Updated {0} from {1} to {2}", result.id, result.fromVersion, result.toVersion),
+          "info",
+        );
+        const list = await api.plugin.list().catch(() => []);
+        const installed = list.find((plugin) => plugin.id === id);
+        if (installed?.signature === "unknown") {
+          await 信任它(installed.id, installed.key_id);
+        }
+      } catch (e) {
+        toast(t("Could not update extension {0}: {1}", id, String(e)), "error");
+      } finally {
+        if (活着.current) set忙(null);
+      }
+    },
+    [重拉, 信任它, toast],
+  );
+
+  const 全部更新 = useCallback(async () => {
+    const pending = 插件更新.filter((update) => update.available).map((update) => update.id);
+    if (pending.length === 0) return;
+    set忙("全部更新");
+    const failures: string[] = [];
+    try {
+      for (const id of pending) {
+        try {
+          await api.plugin.update(id);
+        } catch (e) {
+          failures.push(`${id}: ${String(e)}`);
+        }
+      }
+      await 重拉();
+      const updates = await api.plugin.updates().catch(() => null);
+      if (updates && 活着.current) set插件更新(updates);
+      if (failures.length > 0) {
+        toast(failures.join("\n"), "error");
+      } else {
+        toast(t("Updated {0} extensions.", pending.length), "info");
+      }
+    } finally {
+      if (活着.current) set忙(null);
+    }
+  }, [插件更新, 重拉, toast]);
 
   const 装它 = useCallback(async () => {
     // ⚠️ 文件框由前端弹（宿主不弹框）：那是界面的事，而且宿主弹框在无头测试里
@@ -539,11 +633,37 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       启停: 启停它,
       信任: 信任它,
       设置: 写设置,
+      检查更新,
+      更新: 更新一个,
+      全部更新,
     }),
-    [忙, 装它, 导它, 卸它, 打开目录它, 启停它, 信任它, 写设置],
+    [
+      忙,
+      装它,
+      导它,
+      卸它,
+      打开目录它,
+      启停它,
+      信任它,
+      写设置,
+      检查更新,
+      更新一个,
+      全部更新,
+    ],
   );
 
-  return { plugins, panels, 信任: 信任表, menus, handlers, 调, 动作, review, 收预览 };
+  return {
+    plugins,
+    panels,
+    信任: 信任表,
+    插件更新,
+    menus,
+    handlers,
+    调,
+    动作,
+    review,
+    收预览,
+  };
 }
 
 /**

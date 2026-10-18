@@ -478,6 +478,34 @@ export interface FocusState {
    症状是「改了设置类型、某一处不生效」，最难查的那一类。 */
 export * from "./types-settings";
 
+/** 当前二进制是怎样安装的。更新器据此选择资产和覆盖命令。 */
+export type UpdatePackageKind =
+  | "deb"
+  | "rpm"
+  | "appimage"
+  | "exe"
+  | "exeinstall"
+  | "dev";
+
+/** `nota_update_check` 的返回值。 */
+export interface UpdateStatus {
+  currentVersion: string;
+  latestVersion: string;
+  packageKind: UpdatePackageKind;
+  available: boolean;
+  canInstall: boolean;
+  releaseUrl: string;
+  notes: string;
+  assetName: string | null;
+  installCommand: string;
+}
+
+/** `nota_update_install` 的返回值。 */
+export interface UpdateInstallResult {
+  message: string;
+  restartRequired: boolean;
+}
+
 export interface PluginInfo {
   id: string;
   name: string;
@@ -536,6 +564,25 @@ export interface PluginInfo {
    * 插件自己在面板里画设置界面那种（AI 插件）**本来就是一格都不声明**。
    */
   settings: PluginSetting[];
+}
+
+/** 插件仓库的一行检查结果。仓库坏了只影响声明了它的那些插件。 */
+export interface PluginUpdateInfo {
+  id: string;
+  name: string;
+  currentVersion: string;
+  latestVersion: string | null;
+  available: boolean;
+  assetName: string | null;
+  notes: string;
+  error: string | null;
+}
+
+/** 一个插件完成替换后的版本变化。 */
+export interface PluginUpdateResult {
+  id: string;
+  fromVersion: string;
+  toVersion: string;
 }
 
 /**

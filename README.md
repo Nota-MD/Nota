@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="Release" src="https://img.shields.io/badge/release-v0.6.0--beta-e95420?style=flat-square">
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.7.0--beta-e95420?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota/actions/workflows/verify.yml">
     <img alt="Verification" src="https://github.com/Nota-MD/Nota/actions/workflows/verify.yml/badge.svg">
@@ -61,6 +61,7 @@ for decades without a proprietary database.
 | **Extensible in Lua** | AI, Git, presentation and writing-statistics extensions are installed separately and receive capabilities from an explicit manifest. |
 | **Interface and document themes** | The shell and the document are independent visual axes. Interface themes can provide their own CSS, icons and fonts. |
 | **Native desktop packaging** | Linux and Windows packages are built from the same Rust and React codebase. |
+| **Verified updates** | Experimental application updates select the correct package kind; extensions can check their declared `latest.json` repositories. |
 
 ## Interface themes
 

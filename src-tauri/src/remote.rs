@@ -1,0 +1,47 @@
+//! 更新器共用的受限 HTTP 下载。
+//!
+//! 应用更新和插件更新都只从外部取两类东西：一份 JSON 清单与一个发布包。
+//! 两边都要有重定向上限、总时限、响应体上限和统一的 User-Agent，所以这里
+//! 只保留一条下载路径。调用方负责更严格的地址围栏与摘要校验。
+
+use std::time::Duration;
+
+use crate::error::{NotaError, Result};
+
+/// GET 一个地址，响应体不得超过 `上限`。
+pub(crate) fn 取(地址: &str, 上限: u64, 超时: Duration) -> Result<Vec<u8>> {
+    let 配置 = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .max_redirects(5)
+        .timeout_global(Some(超时))
+        .user_agent(format!("Nota/{}", env!("CARGO_PKG_VERSION")))
+        .build();
+    let 请求 = ureq::http::Request::builder()
+        .method("GET")
+        .uri(地址)
+        .header("user-agent", format!("Nota/{}", env!("CARGO_PKG_VERSION")))
+        .body(Vec::new())
+        .map_err(|e| NotaError::other(format!("更新请求无效：{e}")))?;
+    let mut 响应 = ureq::Agent::new_with_config(配置)
+        .run(请求)
+        .map_err(|e| NotaError::other(format!("更新请求失败：{e}")))?;
+    let 状态 = 响应.status().as_u16();
+    if !(200..300).contains(&状态) {
+        return Err(NotaError::other(format!("更新服务器返回 HTTP {状态}")));
+    }
+    响应
+        .body_mut()
+        .with_config()
+        .limit(上限)
+        .read_to_vec()
+        .map_err(|e| NotaError::other(format!("更新数据读取失败：{e}")))
+}
+
+/// 更新清单只接受 HTTPS。回环 HTTP 留给本地测试，不出本机。
+pub(crate) fn 地址可信(地址: &str) -> bool {
+    let 地址 = 地址.trim();
+    地址.starts_with("https://")
+        || 地址.starts_with("http://127.0.0.1:")
+        || 地址.starts_with("http://localhost:")
+        || 地址.starts_with("http://[::1]:")
+}

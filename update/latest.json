@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "version": "0.7.0-beta",
+  "release_url": "https://github.com/Nota-MD/Nota/releases/tag/v0.7.0-beta",
+  "notes": "Experimental updater release. Windows support is new and has limited testing.",
+  "packages": {
+    "deb-x86_64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.7.0-beta/Nota_0.7.0-beta_amd64.deb",
+      "sha256": "fbc2d49403c0b465dfd1a8d65282b95473b4d3ba0cdc1fcc9be3177b1831a7cd",
+      "file": "Nota_0.7.0-beta_amd64.deb"
+    },
+    "rpm-x86_64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.7.0-beta/Nota-0.7.0-beta-1.x86_64.rpm",
+      "sha256": "db569aa44a977b5aaffef1c08c9e4091596499d4698f5ba963e9800dd9a44ed1",
+      "file": "Nota-0.7.0-beta-1.x86_64.rpm"
+    },
+    "appimage-x86_64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.7.0-beta/Nota_0.7.0-beta_amd64.AppImage",
+      "sha256": "9965996a10a83cc986dd4a0600e510396ec5a351405f9b7cb9cdb2a10a866d3f",
+      "file": "Nota_0.7.0-beta_amd64.AppImage"
+    },
+    "exe-x86_64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.7.0-beta/Nota_0.7.0-beta_x64-portable.zip",
+      "sha256": "a50e5e5e9b48e532fa9a4646e4e7054bd48e0da8f0b3bc7a56112497cbca166d",
+      "file": "Nota_0.7.0-beta_x64-portable.zip"
+    },
+    "exeinstall-x86_64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.7.0-beta/Nota_0.7.0-beta_x64-setup.exe",
+      "sha256": "2f4a818c9e512c03f115de2dc18d274557e07ff37e02d835c3320ec979b0e648",
+      "file": "Nota_0.7.0-beta_x64-setup.exe"
+    }
+  }
+}

@@ -46,7 +46,7 @@
 - 前端：React 19 + TypeScript + Vite，编辑器内核是 **Milkdown 7**（ProseMirror + remark）
 - 插件：**Lua 5.4**（mlua，`vendored`），每个插件一个**独立的 Lua 状态**
 - 应用 ID：`io.github.nota.Nota`
-- 版本：`0.5.0-beta`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
+- 版本：`0.6.0-beta`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
 - 代码注释与文档使用中文；界面字符串**写中文原文，缺译文就用原文**（i18n 已接上，见 `src/i18n/`。⚠️ **2026-09-26 起铺到整个界面**，不再只有插件那一面：`bash tools/i18n-check.sh` 报「界面 `t()` 的键 **861** 条，中文表里 **837** 条」，**24 条欠账**——那 24 句在**中文界面**上显示的是英文原文（📌 **2026-10-07 当天第二次现数**：上一版这里的 853/829 是当天「选择」那批之后量的，这一批又加了 3 条新键（「链接显示名称」「显示在正文里的文字」「去掉链接」）**且三条都带了中文**，所以两个数各 ＋3、**欠账那 24 个数没动**。再上一版是 732/732 的「0 欠账、0 废键」，那之后别的批次一直在往里加句子，这一行没跟。⚠️ 界面原文是**英文**、译文表在 `src/i18n/`——中文原文只出现在 `zh-ui.ts` 这一层，别把两件事记混）
 
 **名字**：Nota 是意大利语「笔记」，与工作区里的 Folio（对开本）/ Fascia（幻灯片）/

@@ -119,6 +119,30 @@ jobs:
 
             这是自动生成的草稿 Release。SHA256SUMS.txt 与 BUILD-INFO.json 由 checksums job 追加。
 
+      - name: 生成 Windows 便携 ZIP
+        if: startsWith(matrix.platform, 'windows')
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $releaseDir = "src-tauri/target/${{ matrix.target }}/release"
+          $stageDir = Join-Path $releaseDir "nota-portable"
+          $zipPath = Join-Path $releaseDir "bundle/nota_${version}_${{ matrix.label }}.zip"
+          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+          Copy-Item "$releaseDir/nota.exe" $stageDir
+          Copy-Item README.md,README.zh-CN.md,LICENSE,THIRD-PARTY.md $stageDir
+          New-Item -ItemType Directory -Force -Path (Split-Path $zipPath) | Out-Null
+          Compress-Archive -Path "$stageDir/*" -DestinationPath $zipPath -Force
+
+      - name: 上传 Windows 便携 ZIP 到 Release
+        if: startsWith(matrix.platform, 'windows') && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $zipPath = "src-tauri/target/${{ matrix.target }}/release/bundle/nota_${version}_${{ matrix.label }}.zip"
+          gh release upload $env:GITHUB_REF_NAME $zipPath --clobber
+
       # ⚠️ 收包用的是**产物目录**而不是 `target/release/bundle`：
       # 带 `--target` 时 Tauri 把产物放在 `target/<三元组>/release/bundle/` 下，
       # 写死路径会在 CI 上收不到东西（本地不带 --target 时又是另一个路径）。
@@ -131,6 +155,7 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.zip
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
 
   checksums:

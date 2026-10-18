@@ -4,7 +4,7 @@
 
 1. 三份版本文件必须一致：`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`。
 2. 运行 `bash tools/check-version.sh <tag>`；tag 去掉前缀 `v` 后必须等于源码版本。
-3. 建议 tag 与版本同形，例如源码 `0.5.0-beta` → `v0.5.0-beta`。
+3. 建议 tag 与版本同形，例如源码 `0.6.0-beta` → `v0.6.0-beta`。
 
 ## 2. 自动验证
 

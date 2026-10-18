@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 版本号必须只有一个事实：package.json / Cargo.toml / tauri.conf.json。
-# 可选第一个参数是发布 tag；`v0.5.0-beta.1` 必须对应三份文件里的 `0.5.0-beta.1`。
+# 可选第一个参数是发布 tag；`v0.6.0-beta.1` 必须对应三份文件里的 `0.6.0-beta.1`。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

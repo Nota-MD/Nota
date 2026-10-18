@@ -1,8 +1,9 @@
 Nota WenQuanYi Bitmap Song
 ==========================
 
-This is the complete 16px WenQuanYi Bitmap Song TTF, redistributed unchanged
-as the CDE interface and document font.
+This TTF is generated directly from the complete WenQuanYi Bitmap Song
+16px PCF, preserving both the ASCII and CJK 16x16 bitmap glyphs and embedding
+them as EBDT/EBLC strikes for use as the CDE interface and document font.
 
 Original glyph project:
 
@@ -19,7 +20,7 @@ TTF transcription used by Nota:
 
 The distributed file is:
 
-  Nota-WenQuanYi-Bitmap-Song-16px.ttf
+  Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf
 
 License:
 

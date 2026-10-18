@@ -413,7 +413,7 @@ App.tsx 的 menuHandlers 里有没有这个 id ──有──> 能点
 | 格式 | `fmt.bold` · `fmt.italic` · `fmt.code` · `fmt.strike` · **`fmt.link` · `fmt.image` · `fmt.clear`**（2026-09-24）· `fmt.superscript` / `fmt.subscript` / `fmt.highlight` / `fmt.underline`（2026-09-27）· **`fmt.emoji`**（2026-09-27，**无加速键**——挑一个字符不值得占一个全局键位） |
 | 视图 | `view.toggleSidebar` · `view.outline` · `view.fileTree` · `view.toggleDock` · **`view.toolbarAlways` · `view.toolbarHover` · `view.toolbarNever`**（2026-09-25 起把原来那条 `view.formatBar` 换成三档子菜单）· `view.statusBar` · **`view.menuBar`**（2026-09-28 加，`Alt+M`——⚠️ **它是本栏里唯一"藏起来之后自己也点不到"的那一条**，所以键位不是可选的；理由见 §3 外观页那一行与 `ui/useChromeVisibility.ts` 文件头） · **`view.zoomIn` · `view.zoomOut` · `view.zoomReset`**（2026-09-27 加） · **`view.focusMode` · `view.typewriter`** · `view.fullscreen` · `view.modeWysiwyg` · `view.modeSource` · `view.modeSplit` |
 | ⚠️ 视图这一栏的**分段**（2026-09-27 用户点名要的那条线，2026-10-04 挪过两条） | 线上面管**「外壳上画出什么」**（侧栏那一族 ｜ 插件栏 · 格式化工具栏 · **状态栏 · 菜单栏**），线下面管**「正文那一块怎么呈现」**（三种编辑模式 / 只读 / 专注 / 打字机）。⚠️ **`view.statusBar` 与 `view.menuBar` 原来夹在「打字机模式」与「全屏」中间**（即下面那一段里），2026-10-04 第 49 项挪上来了——理由与那张测试（`tests/bar-close.test.ts` 组三）写在 `ui/commands.ts` 那段注释里。⚠️ **往这一栏加东西之前先想清楚它属于哪一组**：插错边那条线就变成一条没有意义的横杠 |
-| 主题 | **动态**，不经 `menuHandlers`：**文档主题**（内置三套 + 用户目录里的）+ 「无主题（内置）」+ 「打开主题文件夹…」 |
+| 主题 | **动态**，不经 `menuHandlers`：**文档主题**（安装包内置 Adwaita 浅色/深色 + 用户目录里的）+ 「无主题（内置）」+ 「打开主题文件夹…」 |
 | **插件** | **动态**（2026-09-24）：插件声明的菜单项，id 是合成的 `__plugin:<插件>:<命令>`。⚠️ **一条插件菜单都没有时这一栏根本不存在**（不出现一栏空的「插件」） |
 | 帮助 | `help.about` |
 
@@ -1958,6 +1958,12 @@ LaTeX——这是两条轴本来就独立：`ui_style = "cde"` 只改外壳，�
 | `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 14 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
 | `document_theme`（设置项） | 内置**七套**的 id（浅色 `minimal` / `adwaita` / `latex` ＋ 深色 `minimal-dark` / `adwaita-dark` / `latex-dark` ＋ **`cde`**）＋ 用户目录里的文件名 | ⚠️ **`cde` 是 2026-10-17 加的**：**深底浅字**那一挂（画布 `#686F82` 照真机截图量的、正文 `#F2F1EE`），方角、无装饰线，`--font-doc` 首选**点宋**（`WenQuanYi Bitmap Song` / `Zpix` / `Fusion Pixel`）。⚠️ 它**没有深色配对**（自己就是深的）。⚠️ 首选字体没装时**弹一句**（`ui/font-check.ts`，判据是画布量宽度，不是 `document.fonts.check()`——那个对系统字体几乎恒真）。 **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套"。⚠️ **2026-10-16 加回三档深色**（朋友清单第 11 条「编辑器暗色/浅色跟随主题」）：`useDocTheme.ts` 多一张 `深色配对` 表——**界面是深色且用户没单独指定 `dark_document_theme` 时**，`minimal`/`adwaita`/`latex` 自动换成自己的深色档（只对这三套内置生效，用户主题不动）。📌 **2026-10-17 晚（续）：点宋选型——最后选的是「文泉驿点阵宋的 TTF 转写」。**
 
+📌 **2026-10-18 随包策略（覆盖上表 `document_theme` 那一行）**：
+安装包只内置 `adwaita` 与 `adwaita-dark`。极简、LaTeX、CDE 以及它们对应的深色档
+不再进 `themes.rs::BUILTIN`，源码留作迁移到独立官方主题仓库的来源。用户放进
+`~/.config/nota/themes/` 的主题仍照常发现；老设置里指向已移除内置 id 的值会安静
+退回无主题。
+
 📌 **2026-10-17 随包决定（覆盖上面“首选字体没装时”那句）**：
 `Nota GB16ST Bitmap` 的 Regular/Bold TTF 现在随软件包分发，因此正常安装后
 不会再弹“CDE 缺字体”。只有用户自定义主题点名了其他未安装字体时，`font-check`
@@ -2067,11 +2073,11 @@ CDE 文档标题默认 400 字重。
 上面两次对 HZK/GB16ST 的修法都已作废。真正的问题不是字重，而是我们提取的
 CJK-only 字体在西文 cmap 上是残的：字体预览器直接读文件时能看到错位半角，
 应用里又靠 `unicode-range` 把它藏起来。现在随包的是
-`src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf`，即字体管理器显示为
-“WenQuanYi Bitmap Song 16px, Medium”的**完整中英文 TTF**。界面与文档都选同一个
-家族，不再用 `unicode-range` 排除西文；`font-synthesis:none` 和 CDE 外壳统一
-400 只负责禁止额外合成加粗。WQY 版权、GPL 全文与来源说明和字体放在同一目录；
-清单记录在 `THIRD-PARTY.md` §9。
+`src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`：从完整
+16px WQY PCF 生成，ASCII 与 CJK 都带 16×16 EBDT/EBLC 位图。界面与文档都选
+同一个家族，不再用 `unicode-range` 排除西文；CDE 固定在原生 16px 网格，
+`font-synthesis:none` 和外壳统一 400 禁止额外合成加粗。WQY 版权、GPL 全文与
+来源说明和字体放在同一目录；清单记录在 `THIRD-PARTY.md` §9。
 
 📌 **主题图标也是 CSS 变量**：`Icon` 输出 `data-icon="<逻辑名>"` 并拼成
 `--icon-<逻辑名>`，主题 CSS 只需声明

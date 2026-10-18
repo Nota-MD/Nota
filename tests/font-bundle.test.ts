@@ -36,24 +36,22 @@ const 读 = (路径: string) => readFileSync(`${根}/${路径}`, "utf8");
 
 console.log("\n【随包文泉驿点阵宋】");
 
-测("完整文泉驿点阵宋 TTF 在仓库里，且不是空文件", () => {
-  const 名 = "Nota-WenQuanYi-Bitmap-Song-16px.ttf";
+测("完整文泉驿点阵宋 EBDT TTF 在仓库里，且不是空文件", () => {
+  const 名 = "Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf";
   const 大小 = statSync(`${根}/src/styles/themes/cde/${名}`).size;
-  真(大小 > 5_000_000, `${名} 只有 ${大小} 字节`);
+  真(大小 > 1_000_000, `${名} 只有 ${大小} 字节`);
 });
 
-测("TTF 的 name 表带完整文泉驿来源，不是残缺 HZK 半角表", () => {
+测("TTF 同时带完整 WQY 来源、ASCII cmap 与 EBDT/EBLC 位图表", () => {
   const 二进制 = readFileSync(
-    `${根}/src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf`,
+    `${根}/src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`,
   );
   真(二进制.includes(Buffer.from("WenQuanYi")), "缺 WenQuanYi 名称记录");
-  真(
-    二进制.includes(Buffer.from("AmusementClub")),
-    "缺 AmusementClub TTF 转写来源",
-  );
+  真(二进制.includes(Buffer.from("EBDT")), "缺 EBDT 位图数据");
+  真(二进制.includes(Buffer.from("EBLC")), "缺 EBLC 位图定位表");
   真(
     createHash("sha256").update(二进制).digest("hex") ===
-      "09ebd60aa1900d8d09b61dfc786cbe51454c38b26f0374ead786d7ab96de51be",
+      "9ef195f67950c47b98d09015e4e4cf8692f82ab3180df04a8697c072d330f0ea",
     "TTF 与 THIRD-PARTY.md 登记的上游文件不是同一份",
   );
 });
@@ -61,7 +59,7 @@ console.log("\n【随包文泉驿点阵宋】");
 测("CDE CSS 用同一完整字体覆盖中文与西文，界面仍统一 Regular", () => {
   const css = 读("src/styles/cde.css");
   含(css, 'font-family: "Nota WenQuanYi Bitmap Song"', "@font-face 家族");
-  含(css, "Nota-WenQuanYi-Bitmap-Song-16px.ttf", "随包字体地址");
+  含(css, "Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf", "随包字体地址");
   含(css, "font-weight: 400", "常规字重");
   含(css, "font-weight: 700", "粗体字重");
   真(!css.includes("unicode-range"), "完整字体不应再用 unicode-range 排除西文");

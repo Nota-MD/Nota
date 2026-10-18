@@ -102,14 +102,12 @@ tauri::Builder::default()
     .expect("Nota 启动失败");                                  // ⑤
 ```
 
-⚠️ **`.setup()` 之前还有几步，都不在上面那张图里**。最前面的一步是 `兜住_webkit_的_dmabuf_渲染器()`
-（`lib.rs`，2026-09-24）。它在 `tauri::Builder` 建起来之前**给环境设一个默认值**
-`WEBKIT_DISABLE_DMABUF_RENDERER=1`（**只在 Linux 上、只在用户没自己设过时**），
-为的是绕开 WebKitGTK 那个**随机退出**：进程活着、退出码 0、日志里一句
-`VM … received NeedDebuggerBreak trap`，没有 core——加变量之后不再复现。
-⚠️ 它是**绕开不是优化**，所以：① 用户自己设了任何值就一律不覆盖（想验 DMABUF 那条路、
-或者将来 WebKit 修了想回去，都靠这一点）；② 容器目检那套配方（`docs/06` §5）**另外**
-还开着 `WEBKIT_DISABLE_COMPOSITING_MODE`——那是另一个开关，两者不能合并成一条。
+⚠️ **`.setup()` 之前还有几步，都不在上面那张图里**。`lib.rs::配置_webkit_渲染器()`
+（2026-10-18 改）默认**保留 WebKitGTK 的 DMA-BUF/GPU 路径**。2026-09-24 曾因
+WebKit 随机退出而默认设 `WEBKIT_DISABLE_DMABUF_RENDERER=1`，但实机使用证明这会把
+滚动和代码块打字压到 15–30Hz。现在只有显式 `NOTA_SAFE_RENDERING=1` 才进入旧兼容回退；
+用户自己给 `WEBKIT_DISABLE_DMABUF_RENDERER` 任何值时仍完全听用户的。容器目检那套配方
+（`docs/06` §5）仍可**另外**开 `WEBKIT_DISABLE_COMPOSITING_MODE`，两者不是一回事。
 
 ### ⓿ `Builder::build()` 之前那三步（单实例 / `--mcp` / `--new-window`）
 

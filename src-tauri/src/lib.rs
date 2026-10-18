@@ -63,7 +63,7 @@ use settings::Settings;
 use state::AppState;
 use tauri::{Emitter, Manager};
 
-/// Linux 上给 WebKitGTK 关掉 DMABUF 渲染器。**这是绕开崩溃，不是性能优化。**
+/// WebKitGTK 渲染器的**安全回退开关**。默认走 DMA-BUF/GPU。
 ///
 /// # 症状（2026-09-24 实测）
 ///
@@ -89,20 +89,32 @@ use tauri::{Emitter, Manager};
 /// 启动、从 IDE 里跑，都不认它。而这个崩溃的表现是"用着用着自己没了"，
 /// 用户没法把它跟一个没设的环境变量联系起来。
 ///
-/// ⚠️ **只兜底、不强制**：用户显式设过就一律听用户的（`=0` 能盖回来）。
-/// 想验 DMABUF 那条路、或者以后 WebKit 修了想回去，都靠这一点。
+/// ⚠️ **2026-10-18 改为默认不关**：真实使用里强制关 DMA-BUF 会把频繁重绘压到
+/// 15–30Hz，代码块打字和滚动明显卡顿。只有显式设置
+/// `NOTA_SAFE_RENDERING=1` 才进入旧的安全回退；用户自己给
+/// `WEBKIT_DISABLE_DMABUF_RENDERER` 任何值时仍然完全听用户的。
 /// ⚠️ **只管 Linux**：macOS 走 WKWebView、Windows 走 WebView2，都不经这条路。
-fn 兜住_webkit_的_dmabuf_渲染器() {
+fn 配置_webkit_渲染器() {
     if !cfg!(target_os = "linux") {
         return;
     }
     if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
         return;
     }
+    let 安全回退 = std::env::var("NOTA_SAFE_RENDERING").is_ok_and(|v| {
+        matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+        )
+    });
+    if !安全回退 {
+        crate::日志!("[nota] WebKitGTK 使用默认 DMA-BUF/GPU 渲染");
+        return;
+    }
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     crate::日志!(
-        "[nota] 已关闭 WebKitGTK 的 DMABUF 渲染器（默认值，可用 \
-         WEBKIT_DISABLE_DMABUF_RENDERER=0 覆盖）。理由见 lib.rs 里那段注释。"
+        "[nota] NOTA_SAFE_RENDERING：已关闭 WebKitGTK 的 DMA-BUF 渲染器；\
+         这是兼容回退，会降低滚动与打字帧率。"
     );
 }
 
@@ -110,7 +122,7 @@ pub fn run() {
     // 闸门开着就先自报一句：不然"我设了 NOTA_DEBUG 怎么什么都没有"和
     // "日志真的干净"从终端上看不出区别。这一行本身也走闸门，所以默认照旧静默。
     crate::日志!("[nota] 调试模式（NOTA_DEBUG）；下面这些行默认不输出，见 log.rs");
-    兜住_webkit_的_dmabuf_渲染器();
+    配置_webkit_渲染器();
 
     // ── ⓿ 单实例 ──────────────────────────────────────────────────────────
     // ⚠️ **必须在 `Builder::build()` 之前**：晚了的话，第二次启动会先闪出一个

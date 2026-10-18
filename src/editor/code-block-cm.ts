@@ -323,6 +323,13 @@ const 语言字段 = StateField.define<string>({
 /** "请重新算一遍着色"。⚠️ 只给**长尾语言那一份表异步到货**时用（见下）。 */
 const 重算效果 = StateEffect.define<null>();
 
+/** 短块直接重算；超过这条线的长块先把旧装饰随改动平移，再攒一帧重算。 */
+export function 需要延迟着色(长度: number): boolean {
+  return 长度 > 2_000;
+}
+
+const 长块着色等待毫秒 = 80;
+
 function 算装饰(state: EditorState): DecorationSet {
   const 文本 = state.doc.toString();
   const 语言 = state.field(语言字段, false) ?? "";
@@ -338,7 +345,9 @@ function 算装饰(state: EditorState): DecorationSet {
 const 分色插件 = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    constructor(view: EditorView) {
+    private 计时: number | null = null;
+    private 活着 = true;
+    constructor(private view: EditorView) {
       this.decorations = 算装饰(view.state);
     }
     update(u: ViewUpdate) {
@@ -346,7 +355,34 @@ const 分色插件 = ViewPlugin.fromClass(
       const 要重算 = u.transactions.some((事务) =>
         事务.effects.some((效果) => 效果.is(重算效果)),
       );
-      if (u.docChanged || 语言变了 || 要重算) this.decorations = 算装饰(u.state);
+      if (语言变了 || 要重算) {
+        if (this.计时 !== null) window.clearTimeout(this.计时);
+        this.计时 = null;
+        this.decorations = 算装饰(u.state);
+        return;
+      }
+      if (!u.docChanged) return;
+      if (!需要延迟着色(u.state.doc.length)) {
+        if (this.计时 !== null) window.clearTimeout(this.计时);
+        this.计时 = null;
+        this.decorations = 算装饰(u.state);
+        return;
+      }
+
+      // 长代码块打字时，refractor 对整块重新分词比按键本身贵得多。先只把旧
+      // 装饰按改动映射到新坐标，80ms 内没有新按键再派一条一次性事务重算。
+      this.decorations = this.decorations.map(u.changes);
+      if (this.计时 !== null) window.clearTimeout(this.计时);
+      this.计时 = window.setTimeout(() => {
+        this.计时 = null;
+        if (!this.活着) return;
+        this.view.dispatch({ effects: 重算效果.of(null) });
+      }, 长块着色等待毫秒);
+    }
+    destroy() {
+      this.活着 = false;
+      if (this.计时 !== null) window.clearTimeout(this.计时);
+      this.计时 = null;
     }
   },
   { decorations: (v) => v.decorations },

@@ -451,7 +451,7 @@ NOTA_DEBUG=1 npm run tauri dev
 |---|---|
 | 不设（默认） | **0 行**（140 字节，全是 Mesa 那两行） |
 | `NOTA_DEBUG=0` | **0 行** —— "关"是字面意义上的关，不是"只认 1" |
-| `NOTA_DEBUG=1` | `[nota] 调试模式（NOTA_DEBUG）…` ＋ `[nota] 已关闭 WebKitGTK 的 DMABUF 渲染器…` ＋ `[nota] 载入 2 个插件` |
+| `NOTA_DEBUG=1` | `[nota] 调试模式（NOTA_DEBUG）…` ＋ `[nota] WebKitGTK 使用默认 DMA-BUF/GPU 渲染` ＋ `[nota] 载入 2 个插件` |
 
 | 位置 | 打出什么 | 什么时候看它 |
 |---|---|---|
@@ -461,7 +461,7 @@ NOTA_DEBUG=1 npm run tauri dev
 | `lua/mod.rs`（卸载） | `[nota] 插件 {id} 的 on_unload 出错：{e}` | 退出时。卸载报错只记不抛，不卡卸载流程 |
 | `lua/api/mod.rs`（`nota.log` 那一族） | `[nota:{插件 id}] INFO/WARN/ERROR {消息}` | 插件的 `nota.log.*`。多插件同时刷输出时靠前缀分清是谁。⚠️ **插件别拿它当用户提示**——默认不输出；要对用户说话走 `nota.ui.notify` |
 | `lib.rs` `setup()` | `[nota] 读设置失败，本次用默认值：{e}` | 一份坏掉的 `settings.toml` **不会**让应用打不开。⚠️ 但**用户看到的是启动 toast**（BUG-23 的修法），这一行只给开发者（`state.rs::settings_problem`） |
-| `lib.rs` `兜住_webkit_的_dmabuf_渲染器()` | `[nota] 已关闭 WebKitGTK 的 DMABUF 渲染器…` | Linux 上每次启动都有（自己设过 `WEBKIT_DISABLE_DMABUF_RENDERER` 就没有），所以它从前是最吵的一行 |
+| `lib.rs` `配置_webkit_渲染器()` | `[nota] WebKitGTK 使用默认 DMA-BUF/GPU 渲染`；`NOTA_SAFE_RENDERING=1` 时改成安全回退提示 | 默认启用 GPU；只有旧驱动崩溃时才用安全回退 |
 | ~~`lib.rs` `nota_startup_file()`~~ | ⚠️ **这一处 2026-09-25 撤了** | 命令行那个文件名不是合法 UTF-8 时，现在改成**报错给前端**（`NotaError::NonUtf8Path`）→ 启动那段弹一条提示条。原来那句 stderr 静默的后果是"双击了没反应"，记在 `docs/07` §2 |
 | `lua/api/settings.rs` | `[nota] 插件设置文件读不了（本次当空的用）：{路径}：{e}` | 插件的 `settings.toml` 坏了，插件拿到一张空表 |
 | `native_menu.rs` `leaf_accel()` | `[nota] 原生菜单：菜单项 {} 的快捷键 "…" 转不成原生写法，这一项不带快捷键` | 菜单项**照样能点**，只是没有快捷键——界面上看不出异常 |
@@ -525,6 +525,7 @@ NOTA_DEBUG=1 npm run tauri dev
 | `RUST_BACKTRACE` | Rust panic 的栈 | `1`（或 `full`）。⚠️ 宿主的 panic 多半在 `setup()`，这时**只有**这一条能给出位置 |
 | `GDK_BACKEND` | 强制 GTK 走哪个后端 | `x11`。无头目检时要（§5） |
 | `WEBKIT_DISABLE_COMPOSITING_MODE` | 关掉 WebKit 的合成层 | `1`。⚠️ **Xvfb 下不开它常常抓到一片黑**：没有 GPU 合成器时 WebKit 的加速路径会渲染不出来 |
+| `NOTA_SAFE_RENDERING` | 给旧 WebKit/驱动启用软件渲染兼容回退 | `1` / `true` / `yes` / `on`。⚠️ 默认不设＝保留 DMA-BUF/GPU；回退会显著降低帧率 |
 | `TAURI_DEV_HOST` | 让 vite 监听一个可达的 host，并把 HMR 挂到 5274 | 由 `vite.config.ts` 读（`process.env.TAURI_DEV_HOST`）。只在容器/远程开发时才需要 |
 | `TAURI_ENV_DEBUG` | 由 tauri 在 dev 时自己设 | `vite.config.ts` 用它决定**不压缩 + 出 sourcemap**。所以 dev 构建的 JS 是可读的 |
 | **`NOTA_DEBUG`** | **打开后端调试输出**（2026-09-25 加，见 §3.1） | `1` / `true` / `yes` / `on`（不分大小写）。⚠️ **默认关着，关着时后端一个字都不打**。它只管 stderr——前端的 `console.*` 不走它（那要看 devtools，§3.3） |
@@ -6614,7 +6615,8 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 字体管理器里第一张图对应的文件是
 `WenQuanYi.Bitmap.Song.16px.ttf`；第二张图里那支 `Nota GB16ST Bitmap` 的
 西文半角表本来就是残的。现在仓库直接放完整 TTF
-`src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf`，中文与西文都走同一家族，并由
+`src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`。该文件由
+完整 16px PCF 生成，ASCII 与 CJK 都带 EBDT/EBLC 位图；CDE 固定原生 16px 网格，
 `font-synthesis:none` 禁止合成粗体。真窗口 `Ctrl+P` 复验：`L3150`、`A4`
 与中文标签都显示为同一套点阵，西文字宽恢复正常。
 字体同目录放 WQY 版权、GPL-2.0 全文与来源说明，安装包 `licenses/` 也复制同一组。

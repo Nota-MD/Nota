@@ -14,14 +14,14 @@
  */
 
 /*
- * 点阵字体随安装包分发。这里直接用 WenQuanYi Bitmap Song 16px 的完整
- * TTF：它的中文与西文来自同一套 16px 字模，预览器里看到哪些字形，应用里
- * 就是哪些字形。许可证是 GPL-2.0 with font embedding exception，完整
+ * 点阵字体随安装包分发。这份 TTF 由 WenQuanYi Bitmap Song 16px PCF
+ * 直接生成，中文与西文来自同一套 16×16 字模，并带 EBDT/EBLC 1-bit
+ * strike。许可证是 GPL-2.0 with font embedding exception，完整
  * 版权与例外正文放在主题目录 `themes/cde/`，与该 TTF 同目录。
  */
 @font-face {
   font-family: "Nota WenQuanYi Bitmap Song";
-  src: url("./themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf") format("truetype");
+  src: url("./themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
   font-display: block;
@@ -29,7 +29,7 @@
 
 @font-face {
   font-family: "Nota WenQuanYi Bitmap Song";
-  src: url("./themes/cde/Nota-WenQuanYi-Bitmap-Song-16px.ttf") format("truetype");
+  src: url("./themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf") format("truetype");
   font-style: normal;
   font-weight: 700;
   font-display: block;

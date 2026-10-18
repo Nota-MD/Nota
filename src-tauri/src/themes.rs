@@ -64,54 +64,18 @@ struct Builtin {
     css: &'static str,
 }
 
-/// 内置主题清单。**顺序就是菜单里的顺序**。
+/// 内置主题清单。**2026-10-18 起安装包只带 Adwaita 浅色/深色。**
 ///
-/// 2026-09-26 换成现在这三套（用户点名的：极简 / Adwaita / LaTeX），
-/// 之前那六套（素纸 / 蓝图 / 晨雾 / 报刊 / 墨色 / 松林）连同它们的 `.css`
-/// 一起删掉了。**三套都是浅色**——用户没要深色，而三套摆在一起时深浅一致
-/// 才好对比；也正因为如此，原来那句"浅色几套在前、深色几套在后"的排序
-/// 规矩现在没有意义了，**顺序就是想要的第一印象**：「极简」放第一个
-/// （它最像"默认"），Adwaita 次之，LaTeX 最后。
-///
-/// ⚠️ 这些文件在仓库的 `src/styles/themes/` 下，不在 `src-tauri/` 里。
-/// 改完主题 CSS 后 `cargo build` 会跟着重编（`include_str!` 的依赖会进
-/// dep-info），**不需要 `touch` 什么**；但 `vite` 那边不认这些文件，
-/// 前端拿到的永远是后端发过去的文本——单一真相源就在这儿。
-///
-/// ⚠️ 文件名是 ASCII、显示名是中文，**故意分开的**：中文文件名在
-/// Windows 交叉编译和 zip 打包时都是麻烦，而菜单里要显示中文。
-/// 唯一的例外是 `adwaita`：那是个专有名词（GNOME 的主题名），
-/// 中文里也是照原名写的，所以显示名就写 `Adwaita`。
+/// 用户要求：「主题除了一个 Adwaita 之外，其他的不再随包分发。到时候专门建
+/// 一个官方主题的仓库来存储官方主题。」所以极简、LaTeX、CDE 的源码继续留在
+/// 仓库供官方主题仓库迁移，但不再进 `BUILTIN`，也不由 `include_str!` 编进应用。
 const BUILTIN: &[Builtin] = &[
-    Builtin {
-        id: "minimal",
-        name: "极简",
-        css: include_str!("../../src/styles/themes/minimal.css"),
-    },
     Builtin {
         id: "adwaita",
         name: "Adwaita",
         css: include_str!("../../src/styles/themes/adwaita.css"),
     },
-    Builtin {
-        id: "latex",
-        name: "LaTeX",
-        css: include_str!("../../src/styles/themes/latex.css"),
-    },
-    // ── CDE（2026-10-17）────────────────────────────────────────────────
-    //
-    // 用户：「还有注意模仿 **CDE 默认的文档风格**，以及**点宋**」。它是**深底浅字**
-    // 那一挂（画布是 `#686F82`，照真机截图量的），而另外三套都是白纸。
-    // ⚠️ 它**没有深色配对**：它自己就是深底——`ui/useDocTheme.ts` 的 `深色配对`
-    // 表里没有它，所以"界面深色时自动换深色档"对它不生效（本来就是深的）。
-    // ⚠️ 首选字体是点宋（`WenQuanYi Bitmap Song` 那一族）。没装时前端会**弹一句**
-    // （`ui/font-check.ts`），而不是安静地退回系统字体——这是用户点名要的。
-    Builtin {
-        id: "cde",
-        name: "CDE",
-        css: include_str!("../../src/styles/themes/cde.css"),
-    },
-    // ── 深色那三档（2026-10-16）──────────────────────────────────────────
+    // ── Adwaita 深色 ─────────────────────────────────────────────────
     //
     // ⚠️⚠️ **它们是"浅色那份 ＋ 一层颜色补丁"拼出来的**，不是另写一份完整主题：
     // 排版（字体、字号、行高、圆角、标题边距）只有一份，**颜色**是深色那份的
@@ -121,19 +85,6 @@ const BUILTIN: &[Builtin] = &[
     // `--code-string` 那些中间色一起变成灰糊糊的一团。每个值都得照"深色纸面上
     // 还看得清"重挑（三份补丁的文件头都写着这一条）。
     //
-    // 用户朋友 2026-10-16 报的：「**功能:编辑器暗色/浅色跟随主题**」——他的截图里
-    // 深色界面配着一整张白纸。⚠️ 机制其实**早就有了**（`appearance.dark_theme_separate`
-    // ＋ `dark_document_theme`，外观页里能选），**缺的是"能选的东西"**：
-    // 三套内置主题全是浅色，于是那一格无论怎么选都还是白的。这三条补的就是它。
-    Builtin {
-        id: "minimal-dark",
-        name: "极简（深色）",
-        css: concat!(
-            include_str!("../../src/styles/themes/minimal.css"),
-            "\n",
-            include_str!("../../src/styles/themes/dark/minimal.css")
-        ),
-    },
     Builtin {
         id: "adwaita-dark",
         name: "Adwaita（深色）",
@@ -141,15 +92,6 @@ const BUILTIN: &[Builtin] = &[
             include_str!("../../src/styles/themes/adwaita.css"),
             "\n",
             include_str!("../../src/styles/themes/dark/adwaita.css")
-        ),
-    },
-    Builtin {
-        id: "latex-dark",
-        name: "LaTeX（深色）",
-        css: concat!(
-            include_str!("../../src/styles/themes/latex.css"),
-            "\n",
-            include_str!("../../src/styles/themes/dark/latex.css")
         ),
     },
 ];
@@ -329,6 +271,7 @@ mod tests {
         ids.sort();
         ids.dedup();
         assert_eq!(ids.len(), n, "内置 id 有重复");
+        assert_eq!(ids, vec!["adwaita", "adwaita-dark"], "安装包只带 Adwaita");
     }
 
     #[test]

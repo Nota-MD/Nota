@@ -6,7 +6,9 @@ Nota 采用面向发布线的简短记录。完整证据、缺陷编号与历史
 ## 0.5.0-beta
 
 - CDE 界面与文档主题；真实 EBDT 点阵字随包分发（WQY 派生，许可见 `THIRD-PARTY.md` §9）。
-- 打印直连 CUPS Unix socket 的 IPP，不再依赖 `lpstat` / `lp`；PDF 仍经过正确的 CUPS 驱动链。CDE 改用完整 WQY 点阵宋，字体与许可同目录随包。
+- 打印直连 CUPS Unix socket 的 IPP，不再依赖 `lpstat` / `lp`；PDF 仍经过正确的 CUPS 驱动链。CDE 改用完整 WQY EBDT 点阵宋，字体与许可同目录随包。
+- Linux 默认恢复 WebKit DMA-BUF/GPU 合成；长代码块语法着色改为 80ms 合并，改善滚动与打字帧率。
+- 安装包文档主题缩减为 Adwaita 浅色/深色，其余官方主题转入独立主题仓库策略。
 - 主题资源可由 CSS 自由声明图标、字体和图片；新增 CDE 自绘硬边图标集。
 - 改进 AI/Git/Slidev/写作统计插件；应用内打印与 HTML 代码预览。
 - Windows 交叉编译与安装包尝试。

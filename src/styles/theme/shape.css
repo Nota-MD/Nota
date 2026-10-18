@@ -273,6 +273,10 @@
   --radius-sm: 0;
   --radius: 0;
   --radius-lg: 0;
+  /* ⚠️ 这份 WQY 点阵字体的原生网格是 16px。让它跟随 20/21px 之类的界面字号，
+     WebKit 会把字形轮廓缩放并重新抗锯齿，西文尤其会变成普通细字。
+     其他风格仍完整服从 --ui-font-size；CDE 固定在原生网格，缩放交给界面缩放。 */
+  --ui-font-size: 16px !important;
   /* ⚠️ 字体也是"长相"的一部分：CDE 那个年代是 **Helvetica**（X11 上退到
      Nimbus Sans）。这里照样保留 CJK 兜底——中文不能因此变成豆腐块。 */
   /* ⚠️ 2026-10-17：界面与正文共用完整的 WenQuanYi Bitmap Song 16px TTF。

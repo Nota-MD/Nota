@@ -30,7 +30,7 @@
     <img alt="许可证" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="平台" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-5e6272?style=flat-square">
+    <img alt="平台" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-5e6272?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota-plugins">
     <img alt="拓展" src="https://img.shields.io/badge/extensions-Nota--plugins-6f42c1?style=flat-square">
@@ -58,7 +58,7 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 | **完整写作工作区** | 标签页、文件树、大纲、自动保存、外部修改检测与专注写作模式共用一套克制界面。 |
 | **Lua 拓展** | AI、Git、演示与写作统计独立安装，并通过清单获得明确授权的能力。 |
 | **界面与文档双主题** | 外壳与正文分别控制；界面主题可以提供自己的 CSS、图标和字体。 |
-| **原生桌面分发** | Linux、Windows 和 macOS 安装包由同一套 Rust 与 React 代码构建。 |
+| **原生桌面分发** | Linux 和 Windows 安装包由同一套 Rust 与 React 代码构建。 |
 
 ## 界面风采
 
@@ -91,7 +91,10 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 
 从 **[GitHub Releases](https://github.com/Nota-MD/Nota/releases)** 下载对应平台的安装包。
 
-Release 包含 Linux、Windows 与 macOS 的正式打包产物。官方拓展和主题需要单独安装。
+Release 包含 Linux 与 Windows 的正式打包产物。官方拓展和主题需要单独安装。
+
+> Windows 版本尚属新增支持，当前测试范围有限。欢迎在
+> [GitHub Issues](https://github.com/Nota-MD/Nota/issues) 提交问题、兼容性信息和使用建议。
 
 ## 从源码运行
 

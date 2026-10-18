@@ -21,13 +21,14 @@ push tag 后，`release.yml` 先调用 `verify.yml`。任一项失败都禁止�
 
 ## 3. 产物与追溯
 
-- 六平台打包任务全部通过后才生成校验和清单。
+- Linux 与 Windows 的打包任务全部通过后才生成校验和清单。
 - `BUILD-INFO.json` 固定记录版本、tag、commit、workflow run 与 `pluginsBundled=false`。
 - `SHA256SUMS.txt` 覆盖本次下载到的全部安装包。
 - Release 默认是**草稿 + prerelease**，人工核对后才公开。
 
 ## 4. 发布前人工验收
 
+- Windows 版本需明确标注“新增支持、测试范围有限”，欢迎用户通过 Issues 反馈。
 - 从每个平台草稿产物实际安装一次。
 - 确认安装包不含插件，应用能启动。
 - 打开一份文档、编辑、保存、重启并重新打开。

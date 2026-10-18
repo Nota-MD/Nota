@@ -1,14 +1,12 @@
-# 六个平台的安装包。**每个平台只能在它自己的系统上打**——这是工具链的硬约束，
+# Linux 与 Windows 的安装包。**每个平台只能在它自己的系统上打**——这是工具链的硬约束，
 # 不是我们图省事：
 #
-#   - Windows 的 `setup.exe` 由 NSIS 生成，macOS 的 `.dmg` 由 `hdiutil` 生成，
-#     两个都是原生工具，Linux 上没有；
+#   - Windows 的 `setup.exe` 由 NSIS 生成，Linux 上没有这套工具；
 #   - Linux 的 `.deb`/`.rpm`/`.AppImage` 反过来要 `dpkg-deb`/`rpmbuild`/linuxdeploy。
 #
 # 唯一能省的是**架构**：Windows 那一格一条 runner 就能出 x64 和 arm64 两个包
 #（`--target` 换了而已，SDK 是同一套），所以 arm64 不需要单独的机器。
-# macOS 那两格**必须分开**：`macos-13` 是 Intel 机器，`macos-latest` 是 Apple Silicon，
-# 而 dmg 只能在对应的机器上打——交叉那一步 Tauri 不做。
+# 当前版本不发布 macOS 包。
 #
 # ⚠️ Linux 两格固定在 **22.04** 而不是 `ubuntu-latest`：打出来的包要能跑在
 # 老发行版上，而 glibc 是**向前兼容、不向后兼容**的（在新系统上编的二进制
@@ -55,15 +53,6 @@ jobs:
             target: aarch64-pc-windows-msvc
             bundles: nsis
             label: windows-arm64
-          - platform: macos-13 # Intel
-            target: x86_64-apple-darwin
-            bundles: dmg
-            label: macos-x86_64
-          - platform: macos-latest # Apple Silicon
-            target: aarch64-apple-darwin
-            bundles: dmg
-            label: macos-arm64
-
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -117,6 +106,8 @@ jobs:
             源码提交：${{ github.sha }}
             CI 运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
+            Windows 版本尚属新增支持，测试范围有限。欢迎通过 GitHub Issues 提交问题与建议。
+
             这是自动生成的草稿 Release。SHA256SUMS.txt 与 BUILD-INFO.json 由 checksums job 追加。
 
       - name: 生成 Windows 便携 ZIP
@@ -156,7 +147,6 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.zip
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
 
   checksums:
     if: startsWith(github.ref, 'refs/tags/')

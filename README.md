@@ -30,7 +30,7 @@
     <img alt="License" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="Platforms" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-5e6272?style=flat-square">
+    <img alt="Platforms" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-5e6272?style=flat-square">
   </a>
   <a href="https://github.com/Nota-MD/Nota-plugins">
     <img alt="Extensions" src="https://img.shields.io/badge/extensions-Nota--plugins-6f42c1?style=flat-square">
@@ -59,7 +59,7 @@ for decades without a proprietary database.
 | **A real workspace** | Tabs, folder tree, outline, autosave, external-change detection and distraction-free writing modes share one focused interface. |
 | **Extensible in Lua** | AI, Git, presentation and writing-statistics extensions are installed separately and receive capabilities from an explicit manifest. |
 | **Interface and document themes** | The shell and the document are independent visual axes. Interface themes can provide their own CSS, icons and fonts. |
-| **Native desktop packaging** | Linux, Windows and macOS packages are built from the same Rust and React codebase. |
+| **Native desktop packaging** | Linux and Windows packages are built from the same Rust and React codebase. |
 
 ## Interface themes
 
@@ -93,8 +93,12 @@ from **Settings → Appearance → Styles folder** or from the documented theme 
 Download the package for your platform from
 **[GitHub Releases](https://github.com/Nota-MD/Nota/releases)**.
 
-The release builds include Linux packages, Windows installers and macOS disk images.
+The release builds include Linux packages and Windows installers.
 Official extensions and themes are installed separately.
+
+> Windows support is new and has received limited testing. Bug reports, compatibility
+> details and suggestions are welcome in
+> [GitHub Issues](https://github.com/Nota-MD/Nota/issues).
 
 ## Build from source
 

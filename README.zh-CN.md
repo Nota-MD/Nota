@@ -16,7 +16,7 @@
   <a href="README.md">English</a> ·
   <a href="https://github.com/Nota-MD/Nota/releases">下载</a> ·
   <a href="https://nota-md.github.io/zh-CN.html">官网</a> ·
-  <a href="docs/README.md">文档</a>
+  <a href="https://nota-md.github.io/docs/">文档</a>
 </p>
 
 <p align="center">
@@ -84,6 +84,7 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 | [Nota](https://github.com/Nota-MD/Nota) | 桌面应用、编辑器内核与文档 |
 | [Nota-plugins](https://github.com/Nota-MD/Nota-plugins) | 官方 Lua 拓展：AI、Git、Slidev 与写作统计 |
 | [Nota-themes](https://github.com/Nota-MD/Nota-themes) | 官方界面主题与文档主题 |
+| [Nota-docs](https://github.com/Nota-MD/Nota-docs) | 在线用户文档与开发者文档 |
 | [nota-md.github.io](https://github.com/Nota-MD/nota-md.github.io) | 项目官网 |
 
 ## 安装

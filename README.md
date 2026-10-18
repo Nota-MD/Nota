@@ -16,7 +16,7 @@
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="https://github.com/Nota-MD/Nota/releases">Download</a> ·
   <a href="https://nota-md.github.io/">Website</a> ·
-  <a href="docs/README.md">Documentation</a>
+  <a href="https://nota-md.github.io/docs/">Documentation</a>
 </p>
 
 <p align="center">
@@ -85,6 +85,7 @@ from **Settings → Appearance → Styles folder** or from the documented theme 
 | [Nota](https://github.com/Nota-MD/Nota) | Desktop application, core editor and documentation |
 | [Nota-plugins](https://github.com/Nota-MD/Nota-plugins) | Official Lua extensions: AI, Git, Slidev and writing statistics |
 | [Nota-themes](https://github.com/Nota-MD/Nota-themes) | Official interface and document themes |
+| [Nota-docs](https://github.com/Nota-MD/Nota-docs) | Online user and developer documentation |
 | [nota-md.github.io](https://github.com/Nota-MD/nota-md.github.io) | Project website |
 
 ## Install

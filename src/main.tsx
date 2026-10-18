@@ -178,13 +178,6 @@ import "katex/dist/katex.min.css";
 //（手柄颜色、单元格最小宽）：这份 CSS 写死了 `#adf`，深色主题下太扎眼。
 import "@milkdown/kit/prose/tables/style/tables.css";
 
-// CDE 的最后一层组件覆盖。⚠️ **必须排在所有外壳/面板/编辑器样式之后**：
-// 这一档要统一重画菜单带、栏头、按键与输入槽的硬边，而 `theme/extras.css`
-// 在主题入口里加载，早于 `dock.css` / `bars.css` / `settings.css`。
-// 放在那里会让后加载的现代圆角栏头反过来盖掉 CDE。选择器全部带
-// `[data-ui-style="cde"]`，其他风格不会命中。
-import "./styles/cde.css";
-
 // 把全局错误钩上，免得未捕获的 Promise 拒绝只在 devtools 里一闪而过——
 // 打包后的应用没有 devtools，那时这类错误就是彻底静默的。
 installErrorHooks();

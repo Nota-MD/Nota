@@ -565,7 +565,7 @@ function 签名去向说明(去向: 导出报告["signature"]): string {
     case "kept":
       return t("The signature was carried over — this package still counts as verified for whoever receives it (as long as they trust that key).");
     case "dropped":
-      return t("⚠️ This extension was changed, so the signature no longer matches and the package carries none — others can still install it, but they will see “unsigned”.");
+      return t("This extension was modified, so its signature no longer matches. The package does not contain a signature. It can still be installed, but it will be shown as unsigned.");
     default:
       return t("This extension was never signed.");
   }

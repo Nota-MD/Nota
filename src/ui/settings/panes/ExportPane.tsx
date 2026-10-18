@@ -84,7 +84,7 @@ export function ExportPane({ settings, onChange }: PaneProps) {
         <SettingRow
           label={t("Passed to pandoc when exporting with it")}
           help={t(
-            "For PDF, Word, OpenOffice, RTF or LaTeX. Separate arguments with spaces; put quotes around anything that contains spaces. The document theme reaches EPUB on its own — for Word, point --reference-doc at your own .docx template.",
+            "Applies to PDF, Word, OpenOffice, RTF, and LaTeX. Separate arguments with spaces and quote values that contain spaces. The document theme is applied to EPUB automatically. For Word output, use --reference-doc to specify a .docx template.",
           )}
         >
           <TextInput

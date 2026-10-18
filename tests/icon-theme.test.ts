@@ -6,8 +6,8 @@
  * `主题id/icons/` 目录。真窗口里“换主题后图标有没有变”另走目检。
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 
 let 过 = 0;
 let 败 = 0;
@@ -35,7 +35,8 @@ function 读(...段: string[]): string {
 
 const Icon = 读("src", "ui", "Icon.tsx");
 const iconsCss = 读("src", "styles", "icons.css");
-const cdeCss = 读("src", "styles", "cde.css");
+const cdeCss = 读("src", "styles", "external-themes", "cde", "theme.css");
+const mainTsx = 读("src", "main.tsx");
 const assetsRs = 读("src-tauri", "src", "theme_assets.rs");
 const uiStylesRs = 读("src-tauri", "src", "ui_styles.rs");
 
@@ -50,11 +51,36 @@ const uiStylesRs = 读("src-tauri", "src", "ui_styles.rs");
 
 测("CDE 只声明图标 ID → 地址，不写 per-icon 组件规则", () => {
   真(
-    cdeCss.includes('--icon-folio-close-symbolic: url("../assets/icons/cde/close.svg")'),
+    cdeCss.includes(
+      '--icon-folio-close-symbolic: url("./assets/icons/close.svg")',
+    ),
     "缺少 CDE 的 close 映射",
   );
   真(cdeCss.includes("--icon-folio-format-text-bold-symbolic"), "缺少加粗图标映射");
   真(!cdeCss.includes('.icon[data-icon="folio-close-symbolic"]'), "又退回选择器硬编码了");
+});
+
+测("CDE 外部主题不进入程序内置风格和静态样式导入", () => {
+  真(!uiStylesRs.includes('"cde"'), "ui_styles.rs 仍把 cde 列为内置风格");
+  真(!mainTsx.includes('"./styles/external-themes/cde/theme.css"'), "main.tsx 静态导入了 CDE");
+  真(!mainTsx.includes('"./styles/cde.css"'), "main.tsx 仍在导入旧 CDE 样式");
+});
+
+测("核心 CSS 不再包含 CDE 专用选择器", () => {
+  const 根 = join(process.cwd(), "src", "styles");
+  const 外置 = join(根, "external-themes");
+  const css文件 = (目录: string): string[] =>
+    readdirSync(目录, { withFileTypes: true }).flatMap((项) => {
+      const 路径 = join(目录, 项.name);
+      if (项.isDirectory()) return 路径 === 外置 ? [] : css文件(路径);
+      return 项.isFile() && 项.name.endsWith(".css") ? [路径] : [];
+    });
+  for (const 路径 of css文件(根)) {
+    真(
+      !readFileSync(路径, "utf8").includes('data-ui-style="cde"'),
+      `${relative(process.cwd(), 路径)} 仍含 CDE 专用选择器`,
+    );
+  }
 });
 
 测("自绘 CDE 图标都存在且是 16 格源", () => {
@@ -82,7 +108,7 @@ const uiStylesRs = 读("src-tauri", "src", "ui_styles.rs");
     "sidebar-collapse",
     "sidebar-toggle",
   ]) {
-    const 路径 = join("src", "assets", "icons", "cde", `${名}.svg`);
+    const 路径 = join("src", "styles", "external-themes", "cde", "assets", "icons", `${名}.svg`);
     真(existsSync(路径), `缺少 ${路径}`);
     const 源 = readFileSync(路径, "utf8");
     真(源.includes('width="16"') && 源.includes('height="16"'), `${名} 不是 16×16`);

@@ -1900,6 +1900,13 @@ grep -rn "docs/04" src/ src-tauri/src/ \
 指的是 **①②③**（**不含**文档主题，因为用户 2026-09-23 明确划过线：
 「这是文档风格，不是界面风格」）。两套数法都对，只是范围不同——`docs/03` §5.2 有同一张对照表。
 
+📌 **2026-10-18 当前事实：CDE 不是内置界面风格。** 主程序只登记
+`auto` ＋ 七档具体界面风格；CDE 的 CSS、图标、点阵字体和许可证全部位于
+`src/styles/external-themes/cde/`，通过通用用户界面风格机制安装。核心代码、
+静态入口与 Rust 二进制都不得包含 `cde` 分支或 CDE 专用资源。下文较早的
+CDE 段落是设计历史，当前行为以本段、`ui_styles.rs::BUILTIN_IDS` 和
+`tests/icon-theme.test.ts` 为准。
+
 
 | 轴 | 设置字段 | DOM 属性 | 写在哪个元素上 | 管什么 |
 |---|---|---|---|---|
@@ -1953,7 +1960,7 @@ LaTeX——这是两条轴本来就独立：`ui_style = "cde"` 只改外壳，�
 
 | 轴 | 取值 | 落点 |
 |---|---|---|
-| `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru` / **`cde`** | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**（改了就认不出老设置文件，用户会被静默打回默认档） |
+| `data-ui-style` | `auto` / `adwaita` / **`ghub`** / `macos` / **`plasma`** / `windows` / **`windows10`** / `yaru`，以及用户目录中的任意合法 id | `auto` 由 `detectStyle()` 解析：含 `kde`/`plasma` → `plasma`，含 `ubuntu`/`yaru` → `yaru`，含 `windows` → `windows`，含 `mac`/`darwin` → `macos`，**探不出来就 `adwaita`**。<br>⚠️ **`windows10` 探不到**：Win10 与 Win11 在 UA 和 `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），`windows` 这个线索只有一个去处，所以 `windows10` **只能手选**。⚠️ `ghub` 同理只能手选（不是"探不到"，是**根本没有对应的桌面**）。⚠️ 枚举里的名字和标签不一样：`plasma` 在界面上写 **Breeze**、`ghub` 写 **GitHub**、`windows` 写 **Windows 11**——**落盘的值不改**。CDE 属于用户目录中的外置风格 |
 | `data-ui-mode` | `auto` / `light` / `dark` | `auto` 由 `matchMedia("(prefers-color-scheme: dark)")` 解析 |
 | `--accent`（内联） | 空串 / `#rgb` / `#rrggbb`（大小写随便，`#` 可省） | 空串 = **跟随风格**：`applyTheme` 用 `removeProperty` 把内联值**摘掉**，让 14 格选择器里那个出厂色生效。认清不出来的一律当空串处理（`styles/accent.ts` 的 `parseAccent`），**不报错、落盘时也不清洗**——和 `ui_style` 同一个口径：一个手抖的字不该让整份设置读不出来。⚠️ `--accent-fg`（压在强调色上的白/近黑）**不存**，由 `accentFg()` 按相对亮度当场算，分界线 0.25（推导与代价见 `docs/03` §5.2b） |
 | `document_theme`（设置项） | 内置**七套**的 id（浅色 `minimal` / `adwaita` / `latex` ＋ 深色 `minimal-dark` / `adwaita-dark` / `latex-dark` ＋ **`cde`**）＋ 用户目录里的文件名 | ⚠️ **`cde` 是 2026-10-17 加的**：**深底浅字**那一挂（画布 `#686F82` 照真机截图量的、正文 `#F2F1EE`），方角、无装饰线，`--font-doc` 首选**点宋**（`WenQuanYi Bitmap Song` / `Zpix` / `Fusion Pixel`）。⚠️ 它**没有深色配对**（自己就是深的）。⚠️ 首选字体没装时**弹一句**（`ui/font-check.ts`，判据是画布量宽度，不是 `document.fonts.check()`——那个对系统字体几乎恒真）。 **空串 = 无主题**，此时那份 `<style>` 被整个摘掉，编辑区回 `editor.css` 里的中性样式。⚠️ **它不写任何 DOM 属性**。⚠️ **2026-09-26 内置那批换过**（原六套 `paper`/`blueprint`/`mist`/`print`/`ink`/`pine` 全删）：老机器上字段里可能是个**已经不存在的 id**，那时 `useDocTheme.ts` 安静退回无主题、不弹错，而设置页那一格会把 id 原样显示并注明"找不到这一套"。⚠️ **2026-10-16 加回三档深色**（朋友清单第 11 条「编辑器暗色/浅色跟随主题」）：`useDocTheme.ts` 多一张 `深色配对` 表——**界面是深色且用户没单独指定 `dark_document_theme` 时**，`minimal`/`adwaita`/`latex` 自动换成自己的深色档（只对这三套内置生效，用户主题不动）。📌 **2026-10-17 晚（续）：点宋选型——最后选的是「文泉驿点阵宋的 TTF 转写」。**
@@ -1964,10 +1971,10 @@ LaTeX——这是两条轴本来就独立：`ui_style = "cde"` 只改外壳，�
 `~/.config/nota/themes/` 的主题仍照常发现；老设置里指向已移除内置 id 的值会安静
 退回无主题。
 
-📌 **2026-10-17 随包决定（覆盖上面“首选字体没装时”那句）**：
-`Nota GB16ST Bitmap` 的 Regular/Bold TTF 现在随软件包分发，因此正常安装后
-不会再弹“CDE 缺字体”。只有用户自定义主题点名了其他未安装字体时，`font-check`
-才继续负责提示。字体许可、修改说明与安装包 `resources` 映射见 `THIRD-PARTY.md` §9。
+📌 **2026-10-18 字体分发边界（覆盖上面的旧记录）**：WQY 点阵字体只随外置
+CDE 主题包分发，位于 `src/styles/external-themes/cde/assets/fonts/`；
+许可证正文与字体同目录。Nota 安装包不再携带该字体或它的许可证资源。
+用户没有安装外置 CDE 主题时，核心应用不会注册这个字体家族。
 
 用户先指出「截图里那个好像是无衬线」——**对的**：Zpix / Ark Pixel 是**像素黑体**
 （笔画一样粗、无衬线），只是"点阵味"对。真机是**宋**（横细竖粗、有衬线）。
@@ -2042,9 +2049,9 @@ Motif 的斜面是两像素一条亮带＋一条暗带，1px 出来只是"描了
 📌 **同日最终纠偏：上面的“菜单一颗颗按钮”和“2px 斜面”都已被四张真机图推翻。**
 文本编辑器那张里的菜单是**一条连续青绿带**，条目平铺；只有悬停/打开时那一格才凹下。
 设置对话框放大到像素后，凸键是**左上 1px 亮、右下 1px 暗**，面直接贴背景，没有外圈黑线；
-按下时暖灰面配反向斜面，并持续到开关关闭。当前实现集中在最后加载的
-`styles/cde.css`：桃色硬帽顶栏、连续菜单带、双色窗框、栏头标题条、
-格式/状态/对话框按键、凹槽输入区和弹层都由这一层统一覆盖。
+按下时暖灰面配反向斜面，并持续到开关关闭。当前实现集中在完全外置的
+`styles/external-themes/cde/theme.css`：桃色硬帽顶栏、连续菜单带、双色窗框、
+栏头标题条、格式/状态/对话框按键、凹槽输入区和弹层都由这一层统一覆盖。
 
 📌 **点阵字体的最终落点**：普通轮廓 TTF（包括把点阵字形转成方块轮廓的版本）
 仍会被 WebKit 抗锯齿。最终用的 `Nota GB16ST Bitmap` 是带 **EBDT/EBLC 16×16
@@ -2069,12 +2076,12 @@ CDE 文档标题默认 400 字重。
 `font-weight:400`，显式写 600 的卡片标题也只能命中 Regular；文档 `strong`
 单独挂 Bold。西文仍走 Noto Sans / Noto Serif，不接触 HZK 半角字形。
 
-📌 **2026-10-17 三次收口（以本条为准）：改用第一张截图那支完整字体。**
+📌 **2026-10-17 三次收口：改用第一张截图那支完整字体。**
 上面两次对 HZK/GB16ST 的修法都已作废。真正的问题不是字重，而是我们提取的
 CJK-only 字体在西文 cmap 上是残的：字体预览器直接读文件时能看到错位半角，
-应用里又靠 `unicode-range` 把它藏起来。现在随包的是
-`src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`：从完整
-16px WQY PCF 生成，ASCII 与 CJK 都带 16×16 EBDT/EBLC 位图。界面与文档都选
+应用里又靠 `unicode-range` 把它藏起来。现在外置主题包使用的是
+`src/styles/external-themes/cde/assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`：
+从完整 16px WQY PCF 生成，ASCII 与 CJK 都带 16×16 EBDT/EBLC 位图。界面与文档都选
 同一个家族，不再用 `unicode-range` 排除西文；CDE 固定在原生 16px 网格，
 `font-synthesis:none` 和外壳统一 400 禁止额外合成加粗。WQY 版权、GPL 全文与
 来源说明和字体放在同一目录；清单记录在 `THIRD-PARTY.md` §9。
@@ -2083,8 +2090,9 @@ CJK-only 字体在西文 cmap 上是残的：字体预览器直接读文件时�
 `--icon-<逻辑名>`，主题 CSS 只需声明
 `--icon-folio-close-symbolic: url("../任意相对路径/close.svg")`。
 资源路径相对主题 CSS 文件，允许在 `ui-styles/` 根内共享；后端
-`theme_assets.rs` 统一把图片与字体内联成 data URI。CDE 内置的自绘 16 格硬边
-图标放在 `src/assets/icons/cde/`，由 `styles/cde.css` 用同一套变量接入。
+`theme_assets.rs` 统一把图片与字体内联成 data URI。CDE 外置主题的自绘 16 格
+硬边图标放在 `src/styles/external-themes/cde/assets/icons/`，由主题自己的
+`theme.css` 通过同一套变量接入。
 
 📌 **2026-10-16 修：文档主题里写死的颜色在深色下会变成黑字压深底**（用户报的「深色模式下有些主题的加粗会这样」＋ 一句「**建议配色不要硬编码**」）。病根：三份浅色主题在 `strong` 上写死了 `#000000` / `#16191c`，而深色补丁只盖了`h1..h6` 那六个——于是加粗的字在深色纸面上当场看不见。修法照用户那句话办：`strong` 改成 `color: inherit`（浅色下与原来的黑几乎看不出差别，深色下自动跟着变亮）；同批把 `latex` 引用块那条写死的竖线 `#000` 与字色 `#3a3a3a` 一起改成 `currentColor` / `inherit`（同一个病灶）。⚠️ **规矩**：文档主题里给文字上色一律走变量或 `inherit`，写死一个色值就等于给三个深色档各埋一颗雷。⚠️ 今天没动的两处同类（不报错，只是深色下不好看）：三份主题里 `th` 的底色 `#f7f7f7` 一族、`adwaita` 行内代码块的浅底——它们不涉及看不见的字（浅底配深字仍然读得出），留着等哪套深色要精细打磨时一起收。
 

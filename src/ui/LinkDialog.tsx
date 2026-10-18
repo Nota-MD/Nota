@@ -26,6 +26,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 import type { LinkAnswer, LinkRequest } from "@/ui/useDialogs";
 
 export function LinkDialog({
@@ -81,6 +82,7 @@ export function LinkDialog({
         aria-label={t("Link")}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={() => onAnswer(null)} />
         <h2 className="confirm-title">{t("Link")}</h2>
 
         <label className="prompt-label" htmlFor="nota-link-label">

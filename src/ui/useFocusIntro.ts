@@ -64,26 +64,26 @@ export function useFocusIntro(
       if (!设置) return;
       if (!设置.focus.introduced) {
         const 答 = await askConfirm({
-          title: t("Force Focus: Let Us Be Clear First"),
+          title: t("Force Focus: Before You Begin"),
           message: [
             t(
-              "This is an account of attention. While you sit at the editor the balance goes up; when you switch elsewhere it goes down. When the balance runs out, it calls you back with a full red screen and a sharp sound.",
+              "Force Focus maintains an attention balance. The balance increases while you work in the editor and decreases while you are away. If it reaches zero, Nota displays a full-screen alert and plays a sound.",
             ),
             "",
-            t("It needs three things:"),
-            t("① Whether Nota's own window is the active window;"),
-            t("② putting up an always-on-top, full-screen window — the red screen;"),
-            t("③ making a sound."),
+            t("Force Focus uses three system capabilities:"),
+            t("① Detecting whether the Nota window is active;"),
+            t("② displaying a full-screen, always-on-top alert window;"),
+            t("③ playing an alert sound."),
             "",
             t(
-              "Those three, only while it is running. It does not read the keyboard, take screenshots, watch what you do in other programs, or send anything of yours anywhere.",
+              "These capabilities are used only while Force Focus is running. Nota does not read the keyboard, capture screenshots, monitor activity in other applications, or transmit data.",
             ),
             "",
             t(
-              "One last thing that has to be said plainly: you can stop this mode at any time, and you can bypass it with system tools — it is not a lock, and it will not hold anyone who really wants out. But if you bypass it, setting it up in the first place means nothing. So please take this promise you made to yourself seriously: once you decide, follow through.",
+              "Force Focus can be stopped at any time and can be bypassed with system tools. It is not a lock. Bypassing it defeats the purpose of the feature. If you choose to use it, follow through with the commitment you have set.",
             ),
           ].join("\n"),
-          confirmLabel: t("I Understand — Start"),
+          confirmLabel: t("Start Force Focus"),
           // ⚠️ 「取消」**留着**，而且它就是"算了，不开了"（见文件头最后一段）。
           // 这里**不能**用 `hideCancel`：那会让"我知道了"和"我要开始"变成同一个
           // 答案，用户没有任何办法在看完之后反悔。

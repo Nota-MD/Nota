@@ -33,6 +33,7 @@ import { useEffect, useRef } from "react";
 import 许可证全文 from "../../LICENSE?raw";
 
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 import { useModalTrap } from "@/ui/useModalTrap";
 
 /**
@@ -71,6 +72,7 @@ export function LicenseDialog({ onClose }: { onClose: () => void }) {
         ref={框}
         tabIndex={-1}
       >
+        <DialogClose onClose={onClose} />
         <h2 className="confirm-title">{t("{0} License", 短名)}</h2>
         {/* ⚠️ `<pre>` 是**故意的**：许可证正文的换行与缩进是它的一部分，
             塞进 `<p>` 会被 CSS 折成一坨。`wrap` 那条见 `overlay.css`。 */}

@@ -28,6 +28,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, type PrintEnvironment, type PrintPreview } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 import { useModalTrap } from "@/ui/useModalTrap";
 
 export interface PrintRequest {
@@ -184,6 +185,7 @@ export function PrintDialog({
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={onClose} />
         {/* ── 左：预览 ─────────────────────────────────────────────────── */}
         <section className="print-preview" aria-live="polite">
           {/* ⚠️ 纸放在**自己的滚动区**里、页码条在外面：不分开的话，一张 A4 竖过来

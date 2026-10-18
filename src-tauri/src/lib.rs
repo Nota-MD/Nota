@@ -452,7 +452,7 @@ pub fn run() {
             commands::theme::nota_doc_themes,
             commands::theme::nota_doc_theme_css,
             commands::theme::nota_doc_themes_open_dir,
-            // 界面风格里"用户导入的那一半"。⚠️ 内置那八档没有文件，
+            // 界面风格里"用户导入的那一半"。⚠️ 内置档没有文件，
             // 所以 `nota_ui_style_css` 只对导入的 id 有效（`ui_styles.rs` 文件头）。
             commands::ui_style::nota_ui_styles,
             commands::ui_style::nota_ui_style_css,

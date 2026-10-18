@@ -30,10 +30,15 @@ const 样本 = "mmmmWWQ0123ili中文测试字体";
 /** 只拿这三种通用族当基准（浏览器一定认识它们）。 */
 const 兜底族 = ["monospace", "serif", "sans-serif"] as const;
 
-/** 随安装包打包、由 `styles/cde.css` 的 `@font-face` 提供的字体。 */
-const 随包字体 = new Set(["Nota WenQuanYi Bitmap Song"]);
+/**
+ * 应用核心随包提供的字体。
+ *
+ * ⚠️ 现在是空集：CDE 的 WQY 点阵字体属于外部 CDE 主题包，不再进 Nota
+ * 二进制。外部主题自己的 `@font-face` 由 WebKit 的 FontFaceSet 负责。
+ */
+const 随包字体 = new Set<string>();
 
-/** 这支字体是不是应用自己随包提供的（不是系统字体）。 */
+/** 这支字体是不是应用核心随包提供的（不是系统或外部主题字体）。 */
 export function 是随包字体(名字: string): boolean {
   return 随包字体.has(名字.trim().replace(/^["']|["']$/g, "").trim());
 }

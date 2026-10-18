@@ -178,27 +178,6 @@
   font-weight: 600;
 }
 
-/* ── CDE：拓展栏那一排页签也是 3D 按钮（2026-10-16）────────────────────
- *
- * 用户看图点名：「还有这个」——图里「AI / Git / Slidev / 写作统计」那一排，
- * 当前那一页是一颗**凸起的方按钮**，不是现在这种圆角高亮块。
- *
- * ⚠️ 判据与菜单栏那一段同一条（写在 `menubar.css` 里）：选择器**一律带
- * `[data-ui-style="cde"]`**，别的七档一个像素都不动。
- * ⚠️ 只有**当前这一页**画成按钮，别的页保持平铺——这是标签栏的惯例，
- * 全部画成按钮会让"现在是哪一页"看不出来。 */
-[data-ui-style="cde"] .dock-tab {
-  border-radius: 0;
-}
-
-[data-ui-style="cde"] .dock-tab[data-active="true"] {
-  /* 真机的选中项是一块暖灰面、深青字，斜面反过来（凹下）；并不把当前页
-     画成另一颗普通凸按钮。这样一眼能分清“能点的页”和“正在看的页”。 */
-  border: 0;
-  background: var(--btn-bg-active);
-  color: var(--btn-fg-active);
-  box-shadow: var(--bevel-sunken);
-}
 
 /* 「插件」页（清单）。**它永远在最右**，表示"这里还有不属于任何插件的东西"，
    和插件页签之间留一道空隙，免得看起来像是某个插件的页。 */
@@ -339,25 +318,4 @@
 .dock-resizer:hover {
   background: var(--accent);
   opacity: 0.4;
-}
-
-/* ── CDE：栏头 = **桃色标题条**（2026-10-17，对着四张真机截图重定）─────────
- *
- * CDE 里每个窗口最抢眼的是那条**桃色标题栏**（截图 84 量到 `#EDA870`）。
- * 我们没有自绘窗口标题栏（那是布局的事），但**每一栏的头**承担的是同一个角色
- * ——"这一段现在是谁"。所以给侧栏头与拓展栏头这一条桃色、黑字、2px 斜面，
- * 其它地方一个像素不动。
- *
- * ⚠️ 只给**头**，不给整栏：整栏刷成桃色就变成"一屏都是标题栏"，反而看不出层级。 */
-[data-ui-style="cde"] .dock-head,
-[data-ui-style="cde"] .sidebar-head {
-  background: var(--accent);
-  color: var(--title-fg);
-  box-shadow: inset 1px 1px 0 var(--frame-light);
-}
-
-[data-ui-style="cde"] .dock-head .dock-title,
-[data-ui-style="cde"] .sidebar-head .sidebar-title {
-  color: var(--title-fg);
-  text-shadow: 1px 1px 0 var(--frame-dark);
 }

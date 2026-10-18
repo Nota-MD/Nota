@@ -28,6 +28,7 @@
 import { useEffect, useMemo, useRef } from "react";
 
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 import { 专注率, 造分享卡, type 总结 } from "@/ui/focus-summary";
 import { ShareCardPreview, useShareCard } from "@/ui/ShareCard";
 import { 说时长 } from "@/ui/useForceFocus";
@@ -97,6 +98,7 @@ export function FocusSummaryDialog({
         // 点在框里不该冒到遮罩上去，否则点标题也会把框关掉。
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={onClose} />
         <h2 className="confirm-title">{t("This Session Has Ended")}</h2>
 
         <div className="focus-summary-body">

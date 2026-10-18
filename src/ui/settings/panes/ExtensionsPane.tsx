@@ -100,9 +100,7 @@ export function ExtensionsPane({ plugins, 信任, 动作 }: 拓展页入参) {
           放进去的话，一个插件都没装时这一整段会**消失**，用户看不到任何解释。 */}
       {plugins.length === 0 ? (
         <Note>
-          {t("No extensions installed yet. Use ")}
-          <strong>{t("“Choose an extension package…”")}</strong>
-          {t(" above to install one — a package carries its own plugin.toml and entry file, and it works as soon as it is installed.")}
+          {t("No extensions are installed. Use “Install from file…” to install one. An extension package includes plugin.toml and its entry file, and is available immediately after installation.")}
         </Note>
       ) : (
         <SettingsGroup title={t("Installed extensions")}>

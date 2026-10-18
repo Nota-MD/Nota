@@ -542,33 +542,3 @@
   border-radius: 4px;
   line-height: 1.5;
 }
-
-/* ── CDE：面板里的字也要看得出是**宋**（2026-10-17）────────────────────
- *
- * 用户目检：「其他完全没有改变。特别是那个 AI 插件，你看它最明显了」。
- * 查过计算字体：`.panel-hero-title` / `.panel-text` 的 `font-family` **确实**是
- * 文泉驿点阵宋那一串——字体是接上的，问题在**渲染**：
- *
- * - hero 是 `font-weight: 600`，而那支点宋**只有 Medium 一个字重**，WebKit 于是
- *   **合成加粗**：把本来"横细竖粗"的宋体横画一起加粗 ⇒ 衬线对比被抹平，看着就像黑体；
- * - 正文是 `0.85–0.87em`（≈14px），点宋的衬线只有 1px，缩小之后几乎看不见。
- *
- * 所以这一档（**只 cde**）做两件事：**不合成加粗**（保持 Medium，衬线才在）、
- * **把面板正文提到 1em**（点宋按 16px 设计，缩了就没形）。
- * ⚠️ 别把这两条推广到别的风格：它们是"点阵字体在非原生尺寸下的补救"，
- * 对现代矢量字体没有必要，反而会让层级变平。 */
-[data-ui-style="cde"] .panel-hero-title {
-  font-weight: 400;
-  font-size: min(1em, 16px);
-  line-height: 1.5;
-}
-
-[data-ui-style="cde"] .panel-hero-sub,
-[data-ui-style="cde"] .panel-text,
-[data-ui-style="cde"] .panel-item,
-[data-ui-style="cde"] .panel-field {
-  /* 20px 的全局界面字号会把 16px 字模放大并让 AI 面板每行只剩几个字；
-     这里把密集面板压回原生 16px 点阵，外壳字号仍照用户设置。 */
-  font-size: min(1em, 16px);
-  line-height: 1.6;
-}

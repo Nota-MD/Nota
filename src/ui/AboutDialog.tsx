@@ -69,7 +69,7 @@ import { api } from "@/bridge/ipc";
 import { 致谢名单 } from "@/ui/credits";
 import type { Diagnostics } from "@/bridge/types";
 import { useT } from "@/i18n";
-import { Icon } from "@/ui/Icon";
+import { DialogClose } from "@/ui/DialogClose";
 import { LicenseDialog } from "@/ui/LicenseDialog";
 // 应用标识的**唯一手写源**是 `src-tauri/icons/nota.svg`，这里借分享图那一套
 // 嵌法（`标识()` 顺带做 id 改名与圆角裁剪），不再画第二遍。
@@ -272,7 +272,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     {
       名: t("Reading images under your home folder (read-only)"),
       说明: t(
-        "Image files in your home, Documents, Desktop, and Downloads folders can be read and shown inside the document (assetProtocol.scope). ⚠️ Note: this range is wider than “the folder you opened” — an image can be any absolute path, and the interface has to be able to show it. They are read as images only: never written, never changed, never sent anywhere.",
+        "Image files in the home, Documents, Desktop, and Downloads folders can be read and displayed in a document (assetProtocol.scope). Note: this range is wider than the opened folder because images may use any absolute path. Files are read as images only and are never written, modified, or transmitted.",
       ),
     },
     {
@@ -284,14 +284,14 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     {
       名: t("Reading and writing the files and folders you open"),
       说明: t(
-        "Open, edit, save, Save As; inside a workspace folder it also watches for file changes (inotify), to tell you “this file was changed elsewhere”. ⚠️ It watches only the folder you opened.",
+        "Open, edit, save, and Save As. Within a workspace folder, file changes are also monitored (inotify) so changes made by another program can be reported. Only the opened folder is monitored.",
       ),
     },
     { 名: t("Clipboard"), 说明: t("Copy, cut, and paste.") },
     {
       名: t("Starting external processes"),
       说明: t(
-        "The export formats call pandoc (an external program, optional); the Git extension calls git; Force Focus calls the system bell program when the alarm sounds (canberra-gtk-play or aplay). ⚠️ All short-lived processes that exit when done; nothing stays resident.",
+        "Export formats use pandoc when installed; the Git extension uses git; Force Focus uses a system notification sound when an alarm is triggered (canberra-gtk-play or aplay). These processes are short-lived and do not remain resident.",
       ),
     },
     {
@@ -303,7 +303,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
     {
       名: t("The three things Force Focus uses"),
       说明: t(
-        "① Knowing whether Nota's own window is the active window; ② putting up a full-screen always-on-top window; ③ making a sound. ⚠️ Those three, and only after you press View → Force Focus. It does not read the keyboard, take screenshots, or look at other applications.",
+        "① Detecting whether Nota's own window is active; ② displaying a full-screen, always-on-top window; ③ playing a sound. These capabilities are used only after selecting View → Force Focus. Force Focus does not read the keyboard, capture screenshots, or inspect other applications.",
       ),
     },
   ];
@@ -425,18 +425,8 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
           aria-modal="true"
           aria-label={t("About Nota")}
         >
-          {/* × 固定在右上角（截图里也在那儿）。⚠️ 它是**首页最上面那颗按钮**
-              （`头一颗` 在首页指它），子页里那颗让给"返回"。 */}
-          <button
-            type="button"
-            className="about-close"
-            ref={页 === null ? 头一颗 : undefined}
-            onClick={onClose}
-            aria-label={t("Close")}
-            title={t("Close")}
-          >
-            <Icon name="folio-close-symbolic" />
-          </button>
+          {/* 在首页，统一关闭按钮同时承担焦点落点；进入子页后焦点交给返回键。 */}
+          <DialogClose ref={页 === null ? 头一颗 : undefined} onClose={onClose} />
 
           {页 === null ? (
             <div className="about-home">

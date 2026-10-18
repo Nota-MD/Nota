@@ -124,7 +124,7 @@ export interface 会话 {
 /**
  * **内置**的界面风格 id。
  *
- * ⚠️ 八个具体风格**每一个都要在浅色和深色下成立**（8 × 2 = 16 格），
+ * ⚠️ 七个具体风格**每一个都要在浅色和深色下成立**（7 × 2 = 14 格），
  * 每一档的形状在 `styles/theme/shape.css`、颜色在 `theme/color.css`。
  *
  * ⚠️ 这张表是**三份抄本之一**（另两份：`theme/shape.css` 里的
@@ -142,8 +142,7 @@ export type BuiltinUiStyle =
   | "plasma"
   | "windows"
   | "windows10"
-  | "yaru"
-  | "cde";
+  | "yaru";
 
 /**
  * 界面风格。**这是外壳的设计语言**，与文档主题是两回事。

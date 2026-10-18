@@ -87,7 +87,7 @@ export function FocusAlarmWindow() {
             void ack();
           }}
         >
-          {按过了 ? t("Going back…") : t("I'm Back")}
+          {按过了 ? t("Returning…") : t("I'm Back")}
         </button>
       </div>
     </div>

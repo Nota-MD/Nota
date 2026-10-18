@@ -35,6 +35,7 @@
 }
 
 .confirm-dialog {
+  position: relative;
   min-width: 320px;
   max-width: 440px;
   padding: 20px 22px 16px;
@@ -45,6 +46,36 @@
   background: var(--bg-raised);
   color: var(--fg);
   box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
+}
+
+/* 所有自绘对话框共用同一颗右上角关闭按钮。位置相对 `.confirm-dialog`、
+   `.settings-shell` 或 `.print-dialog`，不依赖各页面自己的标题栏结构。 */
+.dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.dialog-close:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.dialog-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .confirm-title {
@@ -378,33 +409,7 @@
      清单，两边各放一档。 */
   min-width: 420px;
   max-width: 560px;
-  /* ⚠️ 壳的 `padding: 20px 22px 16px` 留着，但 × 是**绝对定位**到右上角的，
-     那个 20px 正好当它的留白（见下面 `.about-close`）。 */
-  position: relative;
-}
-
-/* × 固定在右上角（截图里也在那儿）。⚠️ 它同时是"焦点第一颗"，
-   所以 `:focus-visible` 那一圈要画得看得见。 */
-.about-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-
-.about-close:hover {
-  background: var(--bg-hover);
-  color: var(--fg);
+  /* 壳的 `padding: 20px 22px 16px` 留着；统一关闭按钮绝对定位到右上角。 */
 }
 
 /* ── 首页：一列居中 ─────────────────────────────────────────────────────── */
@@ -759,6 +764,7 @@
 }
 
 .print-dialog {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
   gap: 0;
@@ -850,6 +856,7 @@
 
 .print-title {
   margin: 0;
+  padding-right: 28px;
   font-size: 1em;
   font-weight: 600;
 }

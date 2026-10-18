@@ -4,7 +4,7 @@
  *   [data-ui-style="…"]  定**形状**：圆角、间距、控件比例、字体栈、阴影
  *   [data-ui-mode="…"]   定**颜色**：前景/背景/边框/强调色
  *
- * 两条轴都作用于**整个应用外壳**，二者相乘就是 8 风格 × 2 模式 = 16 种外观，
+ * 两条轴都作用于**整个应用外壳**，内置风格相乘就是 7 风格 × 2 模式 = 14 种外观，
  * 每一种都必须是能看的（用户 2026-09-23 点着名要的就是这个：
  * 「ghub(light&dark) yaru(light&dark) plasma(light&dark) adwaita(light&dark)
  * macos(light&dark) windows(light&dark)」；2026-09-26 又加了 `windows10`——
@@ -36,8 +36,8 @@
  * 拆成四份**放在 `styles/theme/` 下：
  *
  *   ① `theme/base.css`   两条轴本身：`:root` 公共量 ＋ `[data-ui-mode]` 两段
- *   ② `theme/shape.css`  轴一：八档风格的**形状**
- *   ③ `theme/color.css`  轴一 × 轴二：八档 × 明暗 = 16 段**颜色**
+ *   ② `theme/shape.css`  轴一：七档内置风格的**形状**
+ *   ③ `theme/color.css`  轴一 × 轴二：七档 × 明暗 = 14 段**颜色**
  *   ④ `theme/extras.css` 变量表达不了的那几件事（唯一带组件选择器的一份）
  *
  * ⚠️ **顺序不能换，四个都要在**：`base` 必须在 `shape` 前面——那两处的选择器

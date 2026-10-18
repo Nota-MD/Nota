@@ -262,22 +262,3 @@
     transform: translateY(0) scale(1);
   }
 }
-
-/* ── CDE：当前标签长成**标题栏**那一支（2026-10-17）────────────────────
- *
- * 真机截图里最抢眼的一块是**桃色标题栏**（量到 `#EDA870`），而它的角色就是
- * "这一段东西现在是谁"。我们没有自绘标题栏（那是布局的事），但**当前标签**承担
- * 的是同一个角色——所以把它画成那一条桃色：黑字、方角、凸起的斜面。
- *
- * ⚠️ 只动 `cde` 这一档（别处的当前标签是 `--bg` 的浅底）。
- * ⚠️ 不把整条标签栏都刷成桃色：那样"哪一个当前"就又看不出来了。
- */
-[data-ui-style="cde"] .tab-active {
-  background: var(--accent);
-  color: var(--title-fg);
-  box-shadow: inset 1px 1px 0 var(--frame-light);
-}
-[data-ui-style="cde"] .tab-active .tab-label {
-  color: var(--title-fg);
-  text-shadow: 1px 1px 0 var(--frame-dark);
-}

@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
 import { useT } from "@/i18n";
 import { Emoji表, Emoji分类, 带冒号, type Emoji项 } from "@/editor/emoji";
+import { DialogClose } from "@/ui/DialogClose";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
 export function EmojiDialog({
@@ -130,6 +131,7 @@ export function EmojiDialog({
         aria-label={t("Insert Emoji")}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={() => onAnswer(null)} />
         <h2 className="confirm-title">{t("Insert Emoji")}</h2>
 
         <input

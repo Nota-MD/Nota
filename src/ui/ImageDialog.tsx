@@ -28,6 +28,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { open as 选文件 } from "@tauri-apps/plugin-dialog";
 
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 import type { ImageAnswer, ImageRequest } from "@/ui/useDialogs";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
@@ -118,6 +119,7 @@ export function ImageDialog({
         aria-label={t("Insert Image")}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={() => onAnswer(null)} />
         <h2 className="confirm-title">{t("Insert Image")}</h2>
 
         <div ref={页签栏} className="image-src-tabs" role="tablist" aria-label={t("Where the image comes from")}>
@@ -198,7 +200,7 @@ export function ImageDialog({
                 里加英文时**别把这个空格抹掉**，抹掉就成了废键（`tools/i18n-check.sh`
                 会判 FAIL）。写成两截包是另一种做法，但那会把一句话拆成两个键。
               */}
-              {t("⚠️ This document has not been saved yet — the “Copy to…” actions need the document's folder. Save once (Ctrl+S) and try again.")}
+              {t("This document has no saved location. The “Copy to…” actions require the document folder. Save the document (Ctrl+S), then try again.")}
             </>
           )}
         </p>
@@ -215,7 +217,7 @@ export function ImageDialog({
           <p className="prompt-hint">
             {/* ⚠️ 「写着」后面那个 `{" "}` 是**原来就在的**一个空格（JSX 文本在
                 `<code>` 前面留的空），拆成两截之后得显式补回来，不然会粘在一起。 */}
-            {t("⚠️ This document's YAML sets")}{" "}
+            {t("The document YAML specifies")}{" "}
             <code>nota-auto-upload</code>
             {t(", and settings allow automatic upload — the image is uploaded right after inserting and the document gets the returned URL (delete that line from the YAML to turn this off).")}
           </p>
@@ -233,7 +235,7 @@ export function ImageDialog({
         )}
         {!request.会自动上传 && request.能上传 && 要上传 && (
           <p className="prompt-hint">
-            {t("⚠️ If the upload fails, the image is inserted as usual with its local path — nothing is lost, and the failure is reported separately.")}
+              {t("If upload fails, the document uses the local file path instead. The failure is reported separately.")}
           </p>
         )}
 

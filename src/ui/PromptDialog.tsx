@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 import { useModalTrap } from "@/ui/useModalTrap";
 
 interface Props {
@@ -118,6 +119,7 @@ export function PromptDialog({
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={() => onAnswer(null)} />
         <h2 className="confirm-title">{title}</h2>
         <label className="prompt-label" htmlFor="nota-prompt-main">
           {label}

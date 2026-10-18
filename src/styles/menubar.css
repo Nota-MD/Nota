@@ -48,39 +48,7 @@
   background: var(--bg-active);
 }
 
-/* ── CDE：**菜单栏那一排也是 3D 按钮**（2026-10-16）──────────────────────
- *
- * 用户看图点名：「这个不应该也是 3D 按钮吗」——图里那一排「文件 编辑 段落…」
- * 在 CDE 里确实是**一颗颗凸起的按钮**，不是一排平铺的文字。
- *
- * ⚠️ 这是本项目**第一次给某一档风格写"组件补丁"**（别处的风格块只给变量）。
- * 原因很实在：`--radius` / `--btn-bg` 这类变量管不了"这一排要不要有边框和斜面"
- * ——那是**组件结构上的长相**，只能按选择器写。规矩照旧：**选择器一律带
- * `[data-ui-style="cde"]` 前缀**，别的七档一个像素都不受影响。
- * ⚠️ 真要再加第二档这样的补丁，就该把这几段抽成 `theme/<id>.css`；
- * 现在只有一档，写在消费者自己那一份里（省一个新文件的登记成本）。 */
-[data-ui-style="cde"] .menu-title {
-  /* 真机里文字编辑器的那一排菜单**不是一排按钮**：它是一条连续青色菜单带，
-    文字直接铺在上面。只有鼠标停住或菜单打开时，那一格才换成一小块凹槽。
-    之前的逐项描边是照着“工具栏按钮”的直觉画的，和四张真机图都对不上。 */
-  height: 24px;
-  margin: 0;
-  padding: 0 8px;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--title-fg);
-}
-
-[data-ui-style="cde"] .menu-title:hover {
-  background: rgb(0 0 0 / 10%);
-}
-
 /* 菜单开着的那一栏：**凹下去**（`--bevel-sunken`），这就是"按着"的长相。 */
-[data-ui-style="cde"] .menu-title-open {
-  background: var(--bg-subtle);
-  box-shadow: var(--bevel-sunken);
-}
 
 .menu-popup {
   position: absolute;
@@ -324,17 +292,4 @@
 .menu-icon-row .format-btn[data-current] {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
-}
-
-/* ── CDE：菜单栏底下那条**桃色线**（2026-10-17，放大真机截图看到的）────────
- *
- * 真机里菜单栏和正文画布之间有一道**橙/桃色**的分隔线（就是标题栏那一支颜色），
- * 它不是普通的 1px 灰线，是整整 2px、很显眼的一条。少了它，青绿的菜单栏和
- * 蓝灰画布会直接糊在一起。
- *
- * ⚠️ 只给 `cde`：别的档那条分隔线是 `--border` 的细线（`app.css` 的 `.toolbar`）。 */
-[data-ui-style="cde"] .toolbar {
-  /* 底缘由 `theme/extras.css` 统一画成“暗线 → 桃色线 → 暗线”；
-     这里不再单独压一条，否则会与那三道叠成四道。 */
-  border-bottom: 1px solid var(--bevel-dark);
 }

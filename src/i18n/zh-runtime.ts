@@ -33,7 +33,7 @@ export const 运行表: Record<string, string> = {
   // 留下来的是**唯一**那一句"这台机器没有这本词典"，而它现在也把三条出路写全了
   //（理由见 `ui/useSpellcheck.ts` 文件头与 `spell/mod.rs::没有这本词典的话`）。
   "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own — install one, or import a .zip under Settings → Editor → Spell check.":
-    "这台机器上没有 {0} 的词典，那几门语言里的词不会被检查。Nota 自己不随附任何词典——要么装一个系统词典包，要么在「设置 → 编辑器 → 拼写检查」里导入一个 .zip。",
+    "系统中没有 {0} 词典，因此不会检查该语言的词。Nota 不附带词典。请安装系统词典，或在“设置 → 编辑器 → 拼写检查”中导入 ZIP 压缩包。",
   "Could not tell what was dropped in: {0}": "拖进来的东西读不出来：{0}",
   "The dropped “{0}” is gone (moved or deleted?)": "拖进来的「{0}」已经不在了（被移走或删掉了？）",
   "{0} of the dropped items are gone (starting with “{1}”)": "拖进来的 {0} 个东西已经不在了（第一个是「{1}」）",
@@ -43,7 +43,7 @@ export const 运行表: Record<string, string> = {
   "At most {0} files are opened at once; {1} were left unopened this time": "一次最多打开 {0} 个文件，这一次还剩 {1} 个没开",
   "“{0}” is not a text file, and Nota does not convert formats, so it cannot open it": "「{0}」不是文本文件，Nota 不做格式转换，打不开它",
   "Could not open “{0}” in the file manager: {1}": "在文件管理器里打开「{0}」失败：{1}",
-  "Trust is recorded by fingerprint — check it against the one the author publishes, not just the name.": "信任是按指纹记的——请对着作者公布的那一份核对，别只看名字。",
+  "Trust is recorded by fingerprint — check it against the one the author publishes, not just the name.": "信任记录依据指纹。请与作者公布的指纹核对，不应仅核对名称。",
   "Trusted {0}": "信任了 {0}",
   "Extension Package": "拓展包",
   "Installed: {0} ({1})": "装好了：{0}（{1}）",
@@ -54,7 +54,7 @@ export const 运行表: Record<string, string> = {
   "Enabled {0}": "启用了 {0}",
   "Disabled {0}": "停用了 {0}",
   "origin not recorded": "来路没记过",
-  "This document has not been saved yet — use Save As to give it a location first": "这份文档还没存过盘，先用「保存为」给它一个位置",
+  "This document has not been saved yet — use Save As to give it a location first": "此文档尚未保存。请先使用“另存为”设置保存位置。",
   "Renamed to “{0}”": "已重命名为「{0}」",
   "Moved to “{0}”": "已移动到「{0}」",
   "Desktop shell and windows": "桌面外壳与窗口",

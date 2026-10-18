@@ -194,7 +194,6 @@ body.resizing-col {
   margin: 0 0 calc(var(--spacing) * 0.75);
 }
 
-
 /* ── 文件树 ───────────────────────────────────────────────────────────── */
 
 .tree,
@@ -317,7 +316,6 @@ body.resizing-col {
    随用户那句「<文档列表>这一栏可以删了」删掉，一组 `.sidebar-list` / `.sidebar-item*`
    规则没人再用了，一起删（`src/ui/Sidebar.tsx` 文件头）。 */
 
-
 /* ── 大纲 ─────────────────────────────────────────────────────────────── */
 
 /* 一行 = 三角 + 标题（+ 折起来的条数）。⚠️ 缩进在下发时按层级算好写在
@@ -374,66 +372,4 @@ body.resizing-col {
   color: var(--fg-faint);
   font-size: 0.78em;
   font-variant-numeric: tabular-nums;
-}
-
-/* ── CDE：**那一套官方的 3D 滚动条**（2026-10-16）────────────────────────
- *
- * 用户看图点名：「侧边栏这个应该用 CDE 官方的那个，大概这样」（他给的那张图就是
- * CDE 的滚动条：浅色凹槽、两端各一颗小三角箭头、中间一块带斜面的滑块），
- * 还补了一句「**每个主题都应该专门有规定一个侧边栏主题**」。
- *
- * ⚠️ 这一段的判据正是那句话：**带 `[data-ui-style="cde"]` 前缀**，只改 CDE 那一档；
- * 别的七档继续用系统原生的滚动条（那是它们的长相，不该被这一档连坐）。
- * 以后哪一档也要自定义滚动条，就把这一段复制过去改颜色——**这是"每档可以有自己的
- * 侧边栏长相"这条口子的第一个使用者**。
- *
- * ⚠️ `::-webkit-scrollbar` 这一族是 **WebKit 私有**（本应用只跑 WebKitGTK / WebView2，
- * 两个都认），标准写法 `scrollbar-color` / `scrollbar-width` 在 WebKitGTK 上不生效，
- * 所以这里只能写私有的那套。
- *
- * ⚠️ 三角箭头靠 `::-webkit-scrollbar-button` ＋ 一张 data-URI 的 SVG：**不能用
- * border 画三角**（那个伪元素上放不下普通盒模型的花样）。⚠️ 认不出这两个伪元素的
- * 系统上退化成的样子是"没有箭头、只有凹槽和滑块"——仍然比原生那条好看，不会错位。
- */
-[data-ui-style="cde"] ::-webkit-scrollbar {
-  width: 15px;
-  height: 15px;
-  /* ⚠️ 槽是**暖灰**（真机截图里量到 `#C6B2A8`），不是浅青——那一格属于窗框那一族。 */
-  background: var(--btn-bg-active);
-}
-[data-ui-style="cde"] ::-webkit-scrollbar-track {
-  background: var(--btn-bg-active);
-  /* 凹槽：左上暗、右下亮（和按钮相反）。 */
-  box-shadow: inset 1px 1px 0 var(--bevel-dark), inset -1px -1px 0 var(--bg-raised);
-}
-[data-ui-style="cde"] ::-webkit-scrollbar-thumb {
-  background: var(--btn-bg);
-  border: 1px solid var(--border);
-  box-shadow: var(--bevel);
-}
-[data-ui-style="cde"] ::-webkit-scrollbar-thumb:hover {
-  background: var(--btn-bg-hover);
-}
-[data-ui-style="cde"] ::-webkit-scrollbar-corner {
-  background: var(--bevel-light);
-}
-[data-ui-style="cde"] ::-webkit-scrollbar-button:vertical:decrement {
-  display: block;
-  height: 15px;
-  background: var(--btn-bg);
-  border: 1px solid var(--border);
-  box-shadow: var(--bevel);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13'%3E%3Cpath d='M3 9 L6.5 3.5 L10 9 Z' fill='%237d593b'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: center;
-}
-[data-ui-style="cde"] ::-webkit-scrollbar-button:vertical:increment {
-  display: block;
-  height: 15px;
-  background: var(--btn-bg);
-  border: 1px solid var(--border);
-  box-shadow: var(--bevel);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13'%3E%3Cpath d='M3 4 L6.5 9.5 L10 4 Z' fill='%237d593b'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: center;
 }

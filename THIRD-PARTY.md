@@ -409,9 +409,10 @@ Monoton**（下载目录也有）**鸣谢里写一下徽标字体用的是这个
 
 ---
 
-## 9. CDE 点阵字体：WenQuanYi Bitmap Song（GPL-2.0 with font embedding exception，**随包分发**）
+## 9. CDE 主题的点阵字体：WenQuanYi Bitmap Song（GPL-2.0 with font embedding exception，**随主题包分发**）
 
-**2026-10-17 用户批准随安装包分发**。CDE 界面主题与 CDE 文档主题使用的
+**随外置 CDE 主题包分发，不进入 Nota 安装包**。CDE 外置界面主题与
+CDE 文档主题迁移源使用的
 `Nota WenQuanYi Bitmap Song` 从 **WenQuanYi Bitmap Song 1.0 RC1**
 的完整 16px PCF 生成，原字形与参考项目是
 **AmusementClub/Wenquanyi-Bitmap-Song-TTF**。生成后的 TTF 同时保留
@@ -425,11 +426,11 @@ ASCII/CJK 16×16 字模，并嵌入 EBDT/EBLC 1-bit strike。
 | 许可 | **GPL-2.0 with font embedding exception** |
 | 修改 | 从完整 16px PCF 生成 TTF；保留全部 ASCII/CJK 位图并嵌入 EBDT/EBLC |
 | SHA-256 | `9ef195f67950c47b98d09015e4e4cf8692f82ab3180df04a8697c072d330f0ea` |
-| 字体位置 | `src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`（也是首选可编辑形式） |
-| 完整许可 | 与字体同目录：[`WQY-Bitmap-Song-COPYRIGHT.txt`](src/styles/themes/cde/WQY-Bitmap-Song-COPYRIGHT.txt)＋[`GPL-2.0.txt`](src/styles/themes/cde/GPL-2.0.txt) |
-| 字体说明 | 与字体同目录：[`Nota-WenQuanYi-Bitmap-Song-NOTICE.txt`](src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-NOTICE.txt) |
-| 打包位置 | `@font-face` 打进前端资源；版权与修改说明还通过 `tauri.conf.json` 的 `resources` 复制到安装包 `licenses/` |
+| 字体位置 | `src/styles/external-themes/cde/assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`（也是首选可编辑形式） |
+| 完整许可 | 与字体同目录：[`WQY-Bitmap-Song-COPYRIGHT.txt`](src/styles/external-themes/cde/assets/fonts/WQY-Bitmap-Song-COPYRIGHT.txt)＋[`GPL-2.0.txt`](src/styles/external-themes/cde/assets/fonts/GPL-2.0.txt) |
+| 字体说明 | 与字体同目录：[`Nota-WenQuanYi-Bitmap-Song-NOTICE.txt`](src/styles/external-themes/cde/assets/fonts/Nota-WenQuanYi-Bitmap-Song-NOTICE.txt) |
+| 打包位置 | 位于外置主题的 `assets/fonts/`；由该主题自己的 `@font-face` 加载。Nota 的 `tauri.conf.json` 不再复制字体或许可证 |
 
 ⚠️ **根 `LICENSE` 仍然只有 BSD-2-Clause**。字体是独立数据组件，按它自己的
 GPL-2.0＋字体嵌入例外分发，不改变 Nota 源码许可证；两份许可正文不得合并。
-⚠️ 「关于 → 鸣谢」同步登记 `WenQuanYi Bitmap Song`，用户不需要读源码就能看到出处。
+⚠️ 外置主题包必须随字体保留同目录的版权、修改说明与 GPL 全文。

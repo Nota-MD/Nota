@@ -34,6 +34,7 @@ import { useEffect, useRef } from "react";
 
 import type { PandocFormatInfo, PandocProbe } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 
 interface Props {
   /** `null` = 还在检测。 */
@@ -129,6 +130,7 @@ export function PandocPanel({
         aria-label={t("Export {0}", 格式名)}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={onClose} />
         <h2 className="confirm-title">{t("Export {0}", 格式名)}</h2>
 
         <div className="gate-status">
@@ -136,7 +138,7 @@ export function PandocPanel({
             {mark.glyph}
           </span>
           <p className="gate-message">
-            {busy ? t("Looking for pandoc on this machine…") : probe.message}
+            {busy ? t("Checking for pandoc on this system…") : probe.message}
           </p>
         </div>
 

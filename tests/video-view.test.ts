@@ -19,7 +19,7 @@
  * - **第三组是"挂上了没有"**：NodeView 本体在本仓**测不了**（没有 DOM），
  *   但"写完了没接上"是这一批最容易发生、也最贵的一类错——三种实例少接一处，
  *   症状就是某一块地方还画着破图标。所以这一组去**读源码**：`create.ts` 里
- *   得真的 `.use()` 了、`main.tsx` 里得真的引了那份 CSS、三份文档主题里得
+ *   得真的 `.use()` 了、`main.tsx` 里得真的引了那份 CSS、内置文档主题里得
  *   真的有那条 `video`（导出那条路只认元素选择器）。
  *
  * # ⚠️ 这份测试**证明不了**什么
@@ -162,15 +162,14 @@ function 读(相对: string): string {
     throw new Error("main.tsx 里没有 import ./styles/video.css");
 });
 
-测("⚠️ 三份文档主题里都有那条 `video`（导出那条路全靠它）", () => {
+测("⚠️ 内置文档主题里有那条 `video`（导出那条路全靠它）", () => {
   // ⚠️ 导出会把 `nota-` 开头的类名全摘掉（`editor/export.ts`），所以
   // `src/styles/video.css` 里那条选择器在导出的 HTML 里**一个字都匹配不上**。
-  // 漏一份的症状是"某几套主题导出之后视频顶宽"，而截图分享时才发现。
-  for (const 名 of ["minimal", "adwaita", "latex"]) {
-    const 源 = 读(`src/styles/themes/${名}.css`);
-    if (!/^video \{/m.test(源) && !/^img,\nvideo \{/m.test(源))
-      throw new Error(`themes/${名}.css 里没有 video 那条`);
-  }
+  // 2026-10-18 起安装包只内置 Adwaita；深色主题由同一份 theme.css 拼接颜色
+  // 补丁，因此排版规则只存在于这一份。漏掉时症状是导出后视频顶宽。
+  const 源 = 读("src/styles/themes/adwaita/theme.css");
+  if (!/^video \{/m.test(源) && !/^img,\nvideo \{/m.test(源))
+    throw new Error("themes/adwaita/theme.css 里没有 video 那条");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

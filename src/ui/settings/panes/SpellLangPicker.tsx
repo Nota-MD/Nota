@@ -208,7 +208,7 @@ export function SpellLangPicker({
         {目录 !== "" && <div className="stg-lang-dir">{目录}</div>}
         <div className="stg-lang-hint">
           {t(
-            "Nota ships no dictionaries. Install one from your system (e.g. {0}), import a .zip that has a .aff and a .dic in it, or drop those two files into the folder above.",
+            "Nota does not include dictionaries. Install a system dictionary (for example, {0}), import a ZIP archive containing an .aff and a .dic file, or place both files in the folder above.",
             "hunspell-en-US",
           )}
         </div>

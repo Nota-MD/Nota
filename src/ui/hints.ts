@@ -114,7 +114,7 @@ export const 提示表: readonly 提示声明[] = [
     类型: "首次",
     条件: "第一次因为切换文件而自动存盘之后",
     默认: true,
-    文案: () => t("Switching files saved this one automatically. You can turn auto save off in Settings."),
+    文案: () => t("The file was saved automatically when you switched documents. Auto Save can be disabled in Settings."),
   },
   {
     id: "findKey",
@@ -128,7 +128,7 @@ export const 提示表: readonly 提示声明[] = [
     类型: "首次",
     条件: "第一次点「文件 → 导出 → PDF…」时",
     默认: true,
-    文案: () => t("PDF is produced by your system's Pandoc — Nota does not bundle one."),
+    文案: () => t("PDF export uses the system installation of Pandoc. Nota does not include Pandoc."),
   },
 ];
 

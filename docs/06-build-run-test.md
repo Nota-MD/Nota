@@ -3733,7 +3733,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 📌 **2026-10-17 现跑**：`auto-pair` 从 **57** 增到 **63**（闭括号智能跳过、
 自配对的 `_` / `~` / 反引号 / `=` 真实 schema 链路）；新增
 `heading-toggle.test.ts` **5 条**（同层标题再按一次退回正文）与
-`font-bundle.test.ts` **6 条**（随包字体、CSS、许可、安装包资源与 CDE 原生控件对账）
+`font-bundle.test.ts` **6 条**（外置 CDE 主题包的字体、CSS、许可与安装包隔离对账）
 ＋ `image-source.test.ts` **6 条**（本地图片路径解析）。
 全量前端名册是 **67 份 / 1596 条，全部 exit=0**。下面那行仍是早期快照，历史读数不改。
 
@@ -6555,7 +6555,8 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 
 📌 **2026-10-17 后续（CDE 原生控件）**：用户截图指出打印框里纸张/方向仍是
 白底圆角选择框、数字输入仍带白色微调器。原因是 CDE 只改了 `background`，
-没有 `appearance:none`，WebKit 原生皮肤仍盖在上面。现在 `styles/cde.css`
+没有 `appearance:none`，WebKit 原生皮肤仍盖在上面。现在外置
+`styles/external-themes/cde/theme.css`
 直接关闭 select/number spinner 原生外观，使用方角凹槽与两段 5px 硬边箭头。
 在 `DISPLAY=:99`、CDE 配置下重新 `Ctrl+P` 开窗确认：纸张、方向都是方角青绿凹槽，
 焦点是点阵虚线框，边距/份数输入不再出现白色 spinner。截图在
@@ -6601,7 +6602,8 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 
 📌 **2026-10-17 后续：上面“没有随包分发”已经作废。**
 `Nota GB16ST Bitmap` Regular/Bold 两份 TTF 已放进 `src/assets/fonts/`，
-由 `styles/cde.css` 的 `@font-face` 加载；许可正文与修改说明也随安装包资源复制。
+由外置主题的 `@font-face` 加载；许可正文与修改说明与该字体同目录，不进入
+Nota 安装包资源。
 因此 CDE 首次打开**不应再弹缺字体**。`tests/font-bundle.test.ts` 钉住
 “字体文件／CSS 声明／许可映射”三件事同时在。
 
@@ -6615,7 +6617,7 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 字体管理器里第一张图对应的文件是
 `WenQuanYi.Bitmap.Song.16px.ttf`；第二张图里那支 `Nota GB16ST Bitmap` 的
 西文半角表本来就是残的。现在仓库直接放完整 TTF
-`src/styles/themes/cde/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`。该文件由
+`src/styles/external-themes/cde/assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`。该文件由
 完整 16px PCF 生成，ASCII 与 CJK 都带 EBDT/EBLC 位图；CDE 固定原生 16px 网格，
 `font-synthesis:none` 禁止合成粗体。真窗口 `Ctrl+P` 复验：`L3150`、`A4`
 与中文标签都显示为同一套点阵，西文字宽恢复正常。

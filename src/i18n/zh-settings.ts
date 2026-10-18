@@ -73,7 +73,6 @@ export const 设置表: Record<string, string> = {
   "Subtle corner radius, Mica": "小圆角、Mica",
   "Square corners, Acrylic — squarer than Windows 11": "直角、亚克力，比 Windows 11 更方",
   "Ubuntu, orange accent": "Ubuntu，橙色强调",
-  "Motif-era 3D: square corners, hard bevels, magenta accents": "Motif 那个年头的 3D：直角、硬斜面、品红强调色",
   // ⚠️ 这里原来还有「Yaru Blue」那两条译文。2026-10-07 用户说「只需要 Yaru，
   // 不需要 Yaru Blue 了」，那一档连 id 一起从内置清单里删了——译文留着就是
   // 废键（`tools/i18n-check.sh` ③ 会 FAIL），所以同批删掉。
@@ -98,7 +97,7 @@ export const 设置表: Record<string, string> = {
   "Scope of the four items above": "上面四项的作用范围",
   "Scope": "作用范围",
   "Display only — the file is untouched": "只改编辑区，不动文件",
-  "⚠ Dark mode uses a different set": "⚠ 深色下用的是另一套",
+  "Dark mode uses a separate set of settings": "深色模式使用单独设置",
   "Light mode uses": "浅色下用的是",
   "{0} (theme not found — showing No Theme instead)": "{0}（找不到这一套，现在按「无主题」显示）",
   // ⚠️ 这里原来还有 `"Editing mode": "编辑模式"`：那是「编辑器」页里那个
@@ -123,7 +122,7 @@ export const 设置表: Record<string, string> = {
   // 第二份：同一条原文两处两把键，改一处另一处就静默退回英文（`index.ts` 文件头那条规矩）。
   "Languages": "语言",
   "More than one can be checked at once — words are checked against all of them. Nota ships no dictionaries; if a language has none on this machine, it will say so.":
-    "可以同时勾选多门——勾上的语言会一起用来查词。Nota 自己不随附词典；哪一门在这台机器上没有词典，它当场就会说一句。",
+    "可同时选择多种语言，选中的语言都会参与拼写检查。Nota 不附带词典；系统中缺少所选语言的词典时会显示提示。",
   "Add": "添加",
   // ── 词典从哪儿来（2026-10-11）────────────────────────────────────────────
   // ⚠️ 这几句是**新模型**的落点：安装包里一本词典都不带（用户拍板「默认随包
@@ -133,8 +132,8 @@ export const 设置表: Record<string, string> = {
   "Import dictionary (.zip)…": "导入词典包（.zip）…",
   "Show dictionary folder": "在文件夹里显示词典目录",
   "Imported {0}": "已导入 {0}",
-  "Nota ships no dictionaries. Install one from your system (e.g. {0}), import a .zip that has a .aff and a .dic in it, or drop those two files into the folder above.":
-    "Nota 不随附任何词典。三条路：装一个系统词典包（比如 {0}）、导入一个里面装着 .aff 与 .dic 的 .zip、或者把这两个文件直接拷进上面那个目录。",
+  "Nota does not include dictionaries. Install a system dictionary (for example, {0}), import a ZIP archive containing an .aff and a .dic file, or place both files in the folder above.":
+    "Nota 不附带词典。可安装系统词典（例如 {0}）、导入同时包含 .aff 与 .dic 文件的 ZIP 压缩包，或将这两个文件放入上述目录。",
   "Smart symbol completion": "智能符号补全",
   "Show the Markdown source of the current block": "显示当前块的 Markdown 源码",
   "Copy/cut the whole line when nothing is selected": "没有选中文字时整行复制 / 剪切",
@@ -148,8 +147,8 @@ export const 设置表: Record<string, string> = {
   "Open the folder the exported file goes into": "打开导出文件所在的目录",
   "Pandoc extra arguments": "Pandoc 额外参数",
   "Passed to pandoc when exporting with it": "借 pandoc 导出时捎上的参数",
-  "For PDF, Word, OpenOffice, RTF or LaTeX. Separate arguments with spaces; put quotes around anything that contains spaces. The document theme reaches EPUB on its own — for Word, point --reference-doc at your own .docx template.":
-    "给 PDF / Word / OpenOffice / RTF / LaTeX 用。多个参数用空格分开，参数里带空格就用引号括起来。文档主题自己会带上的是 EPUB；要 Word 也跟着变，用 --reference-doc 指向你自己的 .docx 模板。",
+  "Applies to PDF, Word, OpenOffice, RTF, and LaTeX. Separate arguments with spaces and quote values that contain spaces. The document theme is applied to EPUB automatically. For Word output, use --reference-doc to specify a .docx template.":
+    "适用于 PDF、Word、OpenOffice、RTF 和 LaTeX。多个参数以空格分隔，包含空格的参数值需使用引号。文档主题会自动应用到 EPUB；导出 Word 时，可使用 --reference-doc 指定 .docx 模板。",
   "Startup": "启动选项",
   "Open a blank document": "打开空白文档",
   "Restore the last open files": "恢复上次打开的文件",
@@ -165,7 +164,7 @@ export const 设置表: Record<string, string> = {
   "Restore drafts": "恢复草稿",
   "Clear recent files history": "清除历史文件记录",
   "Clear records": "清除记录",
-  "Not implemented yet: this needs a separate copy made before writing to disk, while Auto Save currently writes straight to the original file — once written there is no draft left. See the note at the end of this group.": "尚未实现：这一项要在写盘之前另外留一份底，而现在的自动保存是直接往原文件写——写成了就没有草稿可言了。现状见本组末尾的说明。",
+  "Not implemented yet: this needs a separate copy made before writing to disk, while Auto Save currently writes straight to the original file — once written there is no draft left. See the note at the end of this group.": "尚未实现：此功能需要在写入磁盘前保留一份独立副本，而自动保存目前直接写入原文件。写入完成后不会保留草稿。详见本组末尾的说明。",
   "Remember recent files and folders": "记录历史文件和文件夹",
   "Which files to show": "显示哪些文件",
   "Show only Markdown and plain text": "只显示 Markdown 和纯文本",
@@ -238,7 +237,7 @@ export const 设置表: Record<string, string> = {
   "Clear": "清除",
   "Not set": "未设置",
   "Press the new keys…": "按下新的键位…",
-  "Press the keys you want to use; press Esc to cancel": "按下你想用的键位；按 Esc 取消",
+  "Press the keys you want to use; press Esc to cancel": "请按下新的快捷键；按 Esc 取消",
   "No shortcut for this command": "这条命令不要快捷键",
   "Reset this one to its factory binding (or to none, if it never had one)": "把这一条恢复成出厂键位（或出厂就没有键位）",
   "changed": "已修改",
@@ -317,7 +316,7 @@ export const 设置表: Record<string, string> = {
   "Grace period": "宽限",
   "Grace before charging": "刚切走多少秒不扣",
   "These apps do not count as slacking": "这些应用里不算摸鱼",
-  "Decided against: it would have to read other applications' active window, and this feature is not worth crossing the application boundary for.": "决定不做：它要读别的应用的活动窗口，为了这个功能不值得越过应用的边界。",
+  "Decided against: it would have to read other applications' active window, and this feature is not worth crossing the application boundary for.": "不实现此功能：它需要读取其他应用的活动窗口，该功能不足以证明需要跨越应用边界。",
   "Not enabled": "未启用",
   "Alarm": "警报",
   "Play the alarm": "响警报",

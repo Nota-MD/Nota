@@ -30,6 +30,7 @@
 import { useEffect, useRef } from "react";
 
 import { useT } from "@/i18n";
+import { DialogClose } from "@/ui/DialogClose";
 import type { ConfirmAnswer } from "@/ui/useDialogs";
 import { useModalTrap } from "@/ui/useModalTrap";
 
@@ -109,6 +110,7 @@ export function ConfirmDialog({
         // 点在框里不该冒到遮罩上去，否则点标题也会把框关掉。
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={() => onAnswer("cancel")} />
         <h2 className="confirm-title">{title}</h2>
         <p className="confirm-message">{message}</p>
         <div className="confirm-actions">

@@ -399,6 +399,7 @@ PAIRS=(
   "src/ui/PandocPanel.tsx                         04,02"
   "src/ui/ReviewPane.tsx                          04,05,02"
   "src/ui/ConfirmDialog.tsx                       04,02"
+  "src/ui/DialogClose.tsx                         04"
   "src/ui/Home.tsx                                04,10"
   "src/ui/StatusBar.tsx                           04"
   "src/ui/Toasts.tsx                              04"
@@ -429,7 +430,7 @@ PAIRS=(
   "src/styles/theme/shape.css                     04"
   "src/styles/theme/color.css                     04"
   "src/styles/theme/extras.css                    04"
-  "src/styles/cde.css                            04,08"
+  "src/styles/external-themes/cde/theme.css      04,08"
   "src-tauri/src/theme_assets.rs                 02,08"
   "src/styles/ui-style.ts                         04,08"
   "src/styles/icons.css                           04"
@@ -512,6 +513,8 @@ PAIRS=(
   # `ui/useChromeVisibility.ts` / `ui/useStatusBar.ts` / `ui/useCommandTable.ts`，
   # 以及 `ui/commands.ts` 里「视图」那一栏的分段。
   "tests/bar-close.test.ts                      02,06"
+  "tests/dialog-close.test.ts                   04,06"
+  "tests/ui-copy.test.ts                        04,06"
   # 2026-10-04 深夜（第 14 项那批）：选区上报那一份。⚠️ 第三组是**量测表**（按 markdown
   # 偏移拼接重建不出光标处插入），它盯的是 `editor/caret-snapshot.ts` ＋ `document/mod.rs`
   # ＋ `lua/api/document.rs` 这一条链的**前提**，两边任一侧改了口径它都该被重看。

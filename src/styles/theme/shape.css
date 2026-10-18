@@ -1,6 +1,6 @@
 /* ── ② 轴一：界面风格（只定形状，不定颜色）＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
  *
- * 八档风格各一段：圆角、控件高、间距、字体栈、开关尺寸、材料参数。
+ * 七档内置风格各一段：圆角、控件高、间距、字体栈、开关尺寸、材料参数。
  * ⚠️ **这里一条颜色都不许有**——理由写在下面那段原文里（颜色进了风格块，
  * 这个风格就没法配暗色了）。对应的颜色在 `color.css`。
  *
@@ -250,64 +250,4 @@
   --switch-h: 22px;
   --switch-knob: 18px;
   --switch-travel: 18px;
-}
-
-/* ── CDE（Common Desktop Environment / Motif 那个年头的样子）2026-10-16 加 ────
- *
- * 用户当天给了一份 **Firefox 的 CDE 主题**当参考，并明确「**仅参考不抄袭**」——
- * 所以这一段是照着那套视觉语言**重新取的形状值**，一个素材都没搬（配色在
- * `color.css` 那两段里，来路也写在那儿）。
- *
- * ⚠️ 它和 `ghub` 是同一类：**不是"某个桌面环境的复刻"**，是一条设计语言。
- * 所以 `auto` 永远探不到它（`applyTheme.ts` 里没有它的线索），只能手选——
- * 这与 `windows10`「探不出来」是两回事：那个是探得到但线索重合。
- *
- * 三条判据（这三条就是 CDE 那套长相的全部）：
- * ① **一个圆角都没有**——Motif 的控件是方的；
- * ② **3D 靠硬边斜面，不靠投影**：凸起 = 左上亮、右下暗，凹下 = 反过来。
- *    这里用 `--bevel` 那个变量给（消费者在 `app.css` 的 `.btn` 上），
- *    工具栏那一条则复用已有的 `--toolbar-shadow`（它本来就是"给横条用的"）；
- * ③ **控件矮、间距小**：那个年代的栅格比现在紧。
- */
-[data-ui-style="cde"] {
-  --radius-sm: 0;
-  --radius: 0;
-  --radius-lg: 0;
-  /* ⚠️ 这份 WQY 点阵字体的原生网格是 16px。让它跟随 20/21px 之类的界面字号，
-     WebKit 会把字形轮廓缩放并重新抗锯齿，西文尤其会变成普通细字。
-     其他风格仍完整服从 --ui-font-size；CDE 固定在原生网格，缩放交给界面缩放。 */
-  --ui-font-size: 16px !important;
-  /* ⚠️ 字体也是"长相"的一部分：CDE 那个年代是 **Helvetica**（X11 上退到
-     Nimbus Sans）。这里照样保留 CJK 兜底——中文不能因此变成豆腐块。 */
-  /* ⚠️ 2026-10-17：界面与正文共用完整的 WenQuanYi Bitmap Song 16px TTF。
-     它同时带正确的点阵中文与西文，不再靠 unicode-range 把西文推给 Noto。 */
-  --font-ui: "Nota WenQuanYi Bitmap Song", "Noto Sans", "Noto Sans CJK SC",
-    "DejaVu Sans", "WenQuanYi Bitmap Song 16px", sans-serif;
-  /* ⚠️ **2026-10-17 晚：2× 那版撤了**——用户目检：「放大之后字体变得大了很多，
-     已经超出那个框框的范围了」。整档放大不是要的东西；字号与控件回到 1×。 */
-  --control-height: 28px;
-  --toolbar-height: 30px;
-  --spacing: 6px;
-  --btn-font-weight: 400;
-  /* 凸起斜面：左上亮、右下暗。⚠️ 这两条颜色**写死在变量值里**是有意的——
-     它描述的是"斜面"这件形状，不是主题色；换明暗那两档时斜面照旧。 */
-  /* ⚠️ **1px**（2026-10-17 把真机按钮放大 6 倍数的）：Motif 的斜面是**一条**亮线
-     顶在左上、**一条**暗线压右下，中间就是面——**没有**外圈黑边。之前那版 2px 是
-     我按"粗粝"想当然，放大看真机并不是那样：2px 会变成"两圈描边"，反而不像。 */
-  --bevel:
-    inset 1px 1px 0 var(--bevel-light), inset -1px -1px 0 var(--bevel-dark);
-  /* ⚠️ **按下/开着那一档：把两个颜色对调**（左上变暗、右下变亮）＝凹下去。
-     用户 2026-10-16 的原话：「如果按钮按下去会有显示的变化（那种 90 年代电脑 UI
-     自带的粗粝简单的 3D），从突起到凹陷，**是持续的**而不是我鼠标一走就没了」
-     ——所以它不只挂在 `:active`（鼠标按住那一瞬间）上，还挂在**"这一颗现在是开着的"**
-     那几个标记上（`.btn-on` / `data-on` / `aria-pressed`）。裁在 `app.css` 的 `.btn` 那一族。 */
-  --bevel-sunken:
-    inset 1px 1px 0 var(--bevel-dark), inset -1px -1px 0 var(--bevel-light);
-  --toolbar-shadow: inset 0 1px 0 var(--bevel-light), inset 0 -1px 0 var(--bevel-dark);
-
-  /* 开关：34×18，滑块 14（比现代档都小一号）。行走 16px = 34 − 2 − 14 − 2。 */
-  --switch-w: 34px;
-  --switch-h: 18px;
-  --switch-knob: 14px;
-  --switch-travel: 16px;
 }

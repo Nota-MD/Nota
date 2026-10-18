@@ -60,6 +60,7 @@ import { useEffect, useRef, useState } from "react";
 import type { DocThemeInfo, PluginInfo, Settings, UiStyleInfo, 信任记录 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { MenuSpec } from "@/ui/commands";
+import { DialogClose } from "@/ui/DialogClose";
 import { Icon, type 图标名 } from "@/ui/Icon";
 import { useModalTrap } from "@/ui/useModalTrap";
 import type { 插件动作 } from "@/ui/usePlugins";
@@ -343,6 +344,7 @@ export function SettingsDialog({
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
+        <DialogClose onClose={onClose} />
         <aside className="settings-nav">
           <div className="settings-nav-search">
             <SearchField value={query} onChange={setQuery} />

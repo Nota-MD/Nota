@@ -201,7 +201,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     </SettingsGroup>
 
     {深色那一套在生效 && (
-      <SettingsGroup title={t("⚠ Dark mode uses a different set")}>
+      <SettingsGroup title={t("Dark mode uses a separate set of settings")}>
         {/* ⚠️ 这一行是这个组**画得出来的前提**，不是装饰：组里一行 `.stg-row`
             都没有时 `settings.css` 会把整组 `display: none` 掉（搜索那一套规则的
             副作用）。理由和实测经过见本文件顶上的文件头。 */}

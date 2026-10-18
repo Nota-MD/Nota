@@ -14,7 +14,7 @@
 //! 应用的侧栏和菜单跟着变亮，一半亮一半暗——那一整套桥接已拆干净，
 //! 守住这条线的机制在 `src/styles/doc-theme.ts`（注入前强制限域）。
 //!
-//! 三条轴的落地形态见 `docs/04-ui-map.md` §外观（含 8 风格 × 2 模式 = 16 格的矩阵）。
+//! 三条轴的落地形态见 `docs/04-ui-map.md` §外观（含 7 风格 × 2 模式 = 14 格的矩阵）。
 //! ⚠️ 2026-09-26 起 `ui_style` 的取值是**开放的**（用户能导入风格文件），
 //! 所以它是 `String` 而不是枚举——理由见 [`DEFAULT_UI_STYLE`] 那一段。
 //!
@@ -146,7 +146,7 @@ impl Default for UiMode {
 #[serde(default)]
 pub struct Settings {
     /// 界面风格 **id**（不是显示名、不是枚举）。见 [`DEFAULT_UI_STYLE`] 那一段：
-    /// 内置八档的 id 在 `ui_styles::BUILTIN_IDS`，用户导入的是他自己起的文件名。
+    /// 内置档的 id 在 `ui_styles::BUILTIN_IDS`，用户导入的是他自己起的文件名。
     pub ui_style: String,
     pub ui_mode: UiMode,
     /// 文档主题 **id**（不是显示名），对应 `themes::DocThemeInfo::id`。

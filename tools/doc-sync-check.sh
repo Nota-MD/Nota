@@ -532,7 +532,7 @@ PAIRS=(
   # `src-tauri/src/themes.rs` 的 `BUILTIN` 表和这里，两处少一处就会出现
   # "菜单里有、清单里没有"（`docs/09` §2.2 那条规矩）。
   "src/styles/themes/minimal.css                 04"
-  "src/styles/themes/adwaita.css                 04"
+  "src/styles/themes/adwaita/theme.css           04"
   "src/styles/themes/latex.css                   04"
   # ⚠️ 2026-10-16 加的**三份深色补丁**（用户朋友清单第 11 条「编辑器暗色/浅色
   # 跟随主题」）：它们不是另写一份排版，`themes.rs` 把同名浅色那份 `concat!`
@@ -542,7 +542,7 @@ PAIRS=(
   # 2026-10-17: 首选字体缺失那条提示的判据。
   "src/ui/font-check.ts                         04,02"
   "src/styles/themes/dark/minimal.css            04"
-  "src/styles/themes/dark/adwaita.css            04"
+  "src/styles/themes/adwaita/dark.css            04"
   "src/styles/themes/dark/latex.css              04"
   "src/styles/diagram.css                        04,05"
   "src/styles/math.css                          04,05"

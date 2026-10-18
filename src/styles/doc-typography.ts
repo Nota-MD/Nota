@@ -41,7 +41,7 @@ import type { DocFont, DocumentSettings } from "@/bridge/types";
  *
  * ⚠️ 不捆绑任何字体文件（`docs/10` §11.2 那条边界）：这里只是**点名系统里
  * 现有的字体**，中文字体优先点 Noto / 思源那两个常见族（与内置主题同一套
- * 写法，见 `src/styles/themes/adwaita.css`）。
+ * 写法，见 `src/styles/themes/adwaita/theme.css`）。
  */
 const 字体栈: Record<DocFont, string> = {
   sans: 'system-ui, "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',

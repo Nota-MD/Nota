@@ -73,7 +73,7 @@ const BUILTIN: &[Builtin] = &[
     Builtin {
         id: "adwaita",
         name: "Adwaita",
-        css: include_str!("../../src/styles/themes/adwaita.css"),
+        css: include_str!("../../src/styles/themes/adwaita/theme.css"),
     },
     // ── Adwaita 深色 ─────────────────────────────────────────────────
     //
@@ -89,9 +89,9 @@ const BUILTIN: &[Builtin] = &[
         id: "adwaita-dark",
         name: "Adwaita（深色）",
         css: concat!(
-            include_str!("../../src/styles/themes/adwaita.css"),
+            include_str!("../../src/styles/themes/adwaita/theme.css"),
             "\n",
-            include_str!("../../src/styles/themes/dark/adwaita.css")
+            include_str!("../../src/styles/themes/adwaita/dark.css")
         ),
     },
 ];

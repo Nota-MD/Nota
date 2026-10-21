@@ -435,6 +435,7 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
     //    因为那棵要的就是"与上游相同"，见 `画上游`）。
     const dom = document.createElement(行内 ? "span" : "div");
     dom.className = `nota-math nota-math-${行内 ? "inline" : "block"}`;
+    if (!行内) dom.classList.add("md-math-block");
     dom.classList.toggle("nota-math-readonly", !view.editable);
 
     const 渲染 = document.createElement(行内 ? "span" : "div");

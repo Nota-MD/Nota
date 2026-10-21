@@ -75,6 +75,9 @@ AGENTS.md                → 硬性规则、代码地图、踩过的坑
 | 11 | [`11-writing-a-plugin.md`](11-writing-a-plugin.md) | 怎么写一个插件：目录、清单、能力表、生命周期、构建接线 |
 | 12 | [`12-plugin-runtime.md`](12-plugin-runtime.md) | 插件**运行时**：为什么是 Lua + 独立状态、沙箱画在哪 |
 | 13 | [`13-lua-api.md`](13-lua-api.md) | **Lua API 参考**：`nota.*` 每个表每个函数 |
+| 参考 | [`reference/cde-menu-pixel-fidelity.md`](reference/cde-menu-pixel-fidelity.md) | CDE/Motif 菜单源码与本项目实现的逐项对照，说明像素级还原的证据链与边界 |
+| 参考 | [`reference/theme-package-spec.md`](reference/theme-package-spec.md) | 文档主题与界面主题的包目录、选择器作用域、变量、资源、Typora 对照和发布检查表 |
+| 参考 | [`reference/typora-theme-compatibility.md`](reference/typora-theme-compatibility.md) | LaTeXTypora 2.1.4 的真实兼容测试、结构与字体映射及已知差异 |
 
 ## 三份"会打脸"的文档
 

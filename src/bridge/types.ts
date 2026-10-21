@@ -74,6 +74,23 @@ export interface TreeNode {
   children: TreeNode[] | null;
 }
 
+/** 自绘文件选择器里的一个起始位置。 */
+export interface PickerPlace {
+  kind: string;
+  path: string;
+}
+
+/** 自绘文件选择器里的一条目录项。 */
+export interface PickerEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  isSymlink: boolean;
+  size: number;
+  modifiedMs: number | null;
+  hidden: boolean;
+}
+
 /**
  * 取文件树时跟着请求一起递过去的**口径**（`commands/workspace.rs::TreeOptions`）。
  *
@@ -134,15 +151,7 @@ export interface 会话 {
  * ⚠️ 它同时是 `AppearancePane.tsx` 里 `STYLES` 那张表的键类型，
  * 所以**内置档漏一个仍然编译不过**（那正是当初写成 `Record` 的理由）。
  */
-export type BuiltinUiStyle =
-  | "auto"
-  | "adwaita"
-  | "ghub"
-  | "macos"
-  | "plasma"
-  | "windows"
-  | "windows10"
-  | "yaru";
+export type BuiltinUiStyle = "adwaita";
 
 /**
  * 界面风格。**这是外壳的设计语言**，与文档主题是两回事。
@@ -197,6 +206,8 @@ export type UiMode = "auto" | "light" | "dark";
  */
 export type ViewMode = "wysiwyg" | "source" | "split";
 
+import type { PandocImportFormatInfo } from "./types-runtime";
+export type { PandocImport, UpdateDownloadProgress } from "./types-runtime";
 /**
  * 「系统里那个 pandoc」的探测结论。
  *
@@ -244,6 +255,8 @@ export interface PandocProbe {
   fallback_pdf: boolean;
   /** 七种格式的 id / 中文名 / 后缀，按该有的顺序。 */
   formats: PandocFormatInfo[];
+  /** 五种可导入格式的 id / 名称 / 后缀。 */
+  import_formats: PandocImportFormatInfo[];
 }
 
 /** 这一份文件是谁排的版。**必须如实回报**，否则两次导出结果不同就成了玄学。 */
@@ -263,102 +276,11 @@ export interface PandocExport {
 // 下面 `Settings` 里那九张表仍要从那边**点名 import 一次**：文件末尾那句
 // `export *` 是给**外面**的调用方再导出的，它**不会**把名字带进本文件的局部作用域。
 import type {
-  AppearanceSettings,
-  DownloadSettings,
-  EditorSettings,
-  ExportSettings,
   FileFilter,
-  FilesSettings,
-  GeneralSettings,
-  ImageSettings,
-  MarkdownSettings,
   TreeSort,
 } from "./types-settings";
 
-export interface Settings {
-  ui_style: UiStyle;
-  ui_mode: UiMode;
-  document_theme: string;
-  // ⚠️ `view_mode` 2026-10-07 退休：模式改成会话内状态（见 `ViewMode` 顶上那段），
-  // 后端结构体里那份也已经删掉——老设置文件里残留的键由 serde 忽略。
-  ui_font_size: number;
-  content_width: number;
-  /**
-   * **限制正文宽度**。默认 `false` ＝ 正文列铺满编辑区（两侧各留 56px 装订线）。
-   *
-   * ⚠️ 只有开着时 `content_width` 才生效。默认关是 2026-10-09 按用户那条
-   * 「文字没有完全铺满屏幕……应该两边边距一样」定的——在那之前正文列一律
-   * 被 `content_width` 卡住、而且是贴左的，宽窗口里右边会剩一大条空档。
-   */
-  limit_text_width: boolean;
-  confirm_unsaved: boolean;
-  autosave_seconds: number;
-  /**
-   * **严格模式**：ATX 标题的井号后面必须有空格（`# 标题` 才算，`#标题` 不算）。
-   * **默认 `false`**（宽松）。
-   *
-   * ⚠️ 这一项**影响正文怎么解析**，不是一条外观轴：改了之后 `EditorPane` 会把
-   * 编辑器整个重建，后端也会重算已打开文档的标题。判据见 `editor/atx.ts`。
-   */
-  strict_markdown: boolean;
-  /**
-   * **数学公式里的 physics 宏包**（`\qty` / `\dv` / `\braket` …）。**默认 `false`**。
-   *
-   * ⚠️ KaTeX **官方没有 physics**，所以这一档不是"加载一个扩展"，而是把
-   * `editor/math-macros.ts` 里那套本仓自己的宏定义交给 KaTeX（`macros` 选项）。
-   * 开着时它会**重定义 `\div` / `\Re` / `\Im`**——这正是 physics 本身的行为，
-   * 也是它默认关着的原因。
-   *
-   * ⚠️ 它**影响正文怎么渲染**，和 `strict_markdown` 同类：改了之后
-   * `EditorPane` 会重建编辑器（KaTeX 的宏是在渲染那一刻查表的，已渲染的节点
-   * 不会自己回头重画）。
-   */
-  enable_physics: boolean;
-
-  /* ── 分页的那几张表（2026-10-18 起十一张）────────────────────────────────────────────────────
-   *
-   * ⚠️⚠️ **上面那 10 个字段一个都没挪进这七张表，是有意的。**
-   * 它们是 2026-09-22 / 09-23 定下来的老字段，已经写进了用户的设置文件。
-   * 搬进某张表会让**老设置文件里的值静默丢回默认**——用户选好的界面风格、
-   * 打开过的严格模式、装好的 physics，升级之后全没了，而他的配置文件
-   * 一个字都没动。所以按"新字段进表、老字段不动"处理。
-   *
-   * ⚠️ 这几张表（2026-10-18 起是**十一张**，包括 `download`）**与 Rust 侧一一对应**（`src-tauri/src/settings/` 下每页一个
-   * 文件，`mod.rs` 里 `pub mod` 一行一个）。字段名一律 snake_case、枚举取值
-   * 一律 kebab-case，两边必须逐字相同——TS 这边写错一个字母**不会编译不过**，
-   * 只会在运行时拿到 `undefined`，而 `undefined` 传回 Rust 会被 serde 当成
-   * "这一项没给"、落回默认值。也就是"改了一下，看着像没生效"。
-   *
-   * 判据：改这里之前先看一眼 `settings/mod.rs` 顶上那张"哪一页对应哪个文件"的
-   * 表，别凭印象。 */
-  files: FilesSettings;
-  editor: EditorSettings;
-  image: ImageSettings;
-  markdown: MarkdownSettings;
-  export: ExportSettings;
-  appearance: AppearanceSettings;
-  general: GeneralSettings;
-  download: DownloadSettings;
-  /** 强制专注。⚠️ 这是**核心功能**的设置，不是插件的。见 `settings/focus.rs`。 */
-  focus: FocusSettings;
-  /**
-   * 「文档主题」那一页里那四个**可调项**（行距 / 段距 / 字体 / 字号）。
-   * 见 `settings/document.rs`。
-   *
-   * ⚠️ **"用哪一套主题"不在这里**——那是顶层的 `document_theme`（老字段，
-   * 搬进表里会让老设置文件的值静默丢回默认）。这一张表回答的是"那套主题给的
-   * 默认值里，哪几项我不听它的"。
-   */
-  document: DocumentSettings;
-  /**
-   * 「快捷键」那一页里**用户改过的那几条**。见 `settings/keys.rs`。
-   *
-   * ⚠️ **这是差量，不是整张键位表**：整张表的真相源是 `ui/commands.ts` 的
-   * `MENUS`（那份是代码，跟着版本走）。没动过的命令**不会**出现在这里——
-   * 出现了就等于把当时的默认值钉死，以后改默认键位用户收不到。
-   */
-  keys: KeysSettings;
-}
+export * from "./types-app-settings";
 
 /**
  * 「快捷键」那一页的设置。与 `src-tauri/src/settings/keys.rs` 逐字对应。
@@ -989,6 +911,8 @@ export interface PrintEnvironment {
 export interface PrintPreview {
   /** 那份 PDF 的路径（投递那一步用它）。 */
   pdf: string;
+  /** 实际生成 PDF 的引擎。 */
+  engine: string;
   page_count: number;
   pages: string[];
   truncated: boolean;

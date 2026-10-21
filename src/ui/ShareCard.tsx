@@ -26,7 +26,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { save as saveDialog } from "@/ui/file-picker";
 
 import { api } from "@/bridge/ipc";
 import { useT } from "@/i18n";

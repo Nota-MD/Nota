@@ -75,6 +75,8 @@ import {
 } from "@/bridge/ipc";
 import { 正文排版变量 } from "@/styles/doc-typography";
 import { useT } from "@/i18n";
+import { markEditorReady } from "@/ui/useBootReveal";
+import { 大文件阈值 } from "@/editor/file-kind";
 import type { 预览看法 } from "@/editor/review";
 import {
   type CommandPayload,
@@ -366,6 +368,10 @@ interface Props {
 
 /** 推给后端的去抖间隔。见 `docs/03` §真相在哪。 */
 const SYNC_DEBOUNCE_MS = 300;
+/** 大文件只更新编辑器本地状态；跨 IPC 同步放慢，避免每个击键都复制整篇。 */
+const LARGE_SYNC_DEBOUNCE_MS = 1000;
+/** 大文件刷新文档列表的最低间隔；`list()` 会把整篇正文一起传回来。 */
+const LARGE_DOCS_REFRESH_MS = 1500;
 /** 分屏里把源码推给预览的去抖。比 sync 短——那是本地的，不跨 IPC。 */
 const PREVIEW_DEBOUNCE_MS = 150;
 // ⚠️ 第三档「选区快照」那条（250ms）在 `useCursorSnapshot.ts` 里，第四档
@@ -408,6 +414,13 @@ export function EditorPane({
   const previewTimerRef = useRef<number | null>(null);
   /** 最后一次知道的文本。切模式时用它当新实例的初始值。 */
   const latestRef = useRef(doc.text);
+  /**
+   * 打开这一刻是不是大文件。与自动降级用同一阈值，之后不再因正文增长而改变，
+   * 避免“写着写着同步节奏自己变了”。
+   */
+  const 大文件Ref = useRef(doc.text.length > 大文件阈值);
+  /** 上一次用 `onDocsChanged` 整表回拉的时间。只影响大文件。 */
+  const 上次刷新文档Ref = useRef(0);
   const [ready, setReady] = useState(false);
   // ── 正文上方那条 front matter 横幅（`docs/07` 第 64 项）──────────────
   // ⚠️ 它自己那份状态（输入框里正在打的字、两击确认、基准）全在
@@ -546,11 +559,18 @@ export function EditorPane({
         timerRef.current = null;
         try {
           await api.doc.sync(doc.id, markdown);
-          await onDocsChanged();
+          const 现在 = Date.now();
+          if (
+            !大文件Ref.current ||
+            现在 - 上次刷新文档Ref.current >= LARGE_DOCS_REFRESH_MS
+          ) {
+            await onDocsChanged();
+            上次刷新文档Ref.current = 现在;
+          }
         } catch (e) {
           onToast(t("Could not sync to the backend: {0}", String(e)), "error");
         }
-      }, SYNC_DEBOUNCE_MS);
+      }, 大文件Ref.current ? LARGE_SYNC_DEBOUNCE_MS : SYNC_DEBOUNCE_MS);
     };
 
     (async () => {
@@ -654,6 +674,9 @@ export function EditorPane({
         // 换全文**都会把插入点带到文末**，于是"打开一篇长文档，光标在屏幕外"。
         // 理由与两条机制写在 `EditorHandle.focusAtStart` 的注释里。
         handle.focusAtStart();
+        // 窗口只在这一刻之后显示：实例已挂载、编辑区已聚焦，用户看到的第一帧
+        // 就能直接输入。
+        markEditorReady();
 
         // ── 回到上次滚到的地方（`docs/07` 第 76 项）──────────────────────
         // ⚠️ **必须在 `focusAtStart()` 之后**：聚焦会派一次事务、把插入点放到
@@ -692,6 +715,7 @@ export function EditorPane({
           try {
             await api.doc.settle(doc.id, settled);
             await onDocsChanged();
+            上次刷新文档Ref.current = Date.now();
           } catch (e) {
             // 认领失败不该挡住编辑——最坏的结果是脏标记虚报一次。
             console.warn("[nota] 装载后认领文本失败：", e);

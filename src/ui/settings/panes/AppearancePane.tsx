@@ -38,14 +38,7 @@ import { paneWriter, type PaneProps } from "./props";
  * 但选中的那档照旧生效（`data-ui-style` 由 `applyTheme` 写，与本页无关）。
  */
 const STYLE_ORDER: BuiltinUiStyle[] = [
-  "auto",
   "adwaita",
-  "ghub",
-  "plasma",
-  "macos",
-  "windows",
-  "windows10",
-  "yaru",
 ];
 
 /**
@@ -185,14 +178,7 @@ export function AppearancePane({
    * 躺一条"A → A"的死键。带解释的那半句一律要 `t()`。
    */
   const STYLES: Record<BuiltinUiStyle, { label: string; hint: string }> = {
-    auto: { label: t("Follow the system"), hint: t("Pick one automatically for the current desktop environment") },
     adwaita: { label: "Adwaita", hint: t("GNOME native — flat, depth from shadows") },
-    ghub: { label: "GitHub", hint: t("Tight, cool grey-blue borders") },
-    plasma: { label: "Breeze", hint: t("KDE Plasma's native look — square-ish with soft corners") },
-    macos: { label: "macOS", hint: t("Acrylic, large corner radius, a menu highlight that is a solid band of blue") },
-    windows: { label: "Windows 11", hint: t("Subtle corner radius, Mica") },
-    windows10: { label: "Windows 10", hint: t("Square corners, Acrylic — squarer than Windows 11") },
-    yaru: { label: "Yaru", hint: t("Ubuntu, orange accent") },
   };
 
   const 写 = paneWriter(settings, onChange, "appearance");

@@ -516,3 +516,55 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
      与上面那条同理写死白色。 */
   background: #fff;
 }
+
+/* ── 语言为 math / latex / tex 的围栏 ───────────────────────────────────
+ * 文件里仍是普通围栏代码块；显示层按 LaTeX 处理。光标移走后只留下带框线的
+ * 渲染结果，进入编辑时再露出下方源码。`$…$` 与 `$$…$$` 的原生公式节点不经过
+ * 这里，因此仍按设计要求保持无框。 */
+.nota-code-math-preview {
+  display: none;
+  margin: 30px 0;
+  padding: 22px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  overflow-x: auto;
+}
+
+.nota-code-wrap.nota-code-math .nota-code-math-preview {
+  display: block;
+}
+
+.nota-code-wrap.nota-code-math .nota-code-preview {
+  display: none;
+}
+
+.nota-code-wrap.nota-code-math:not(.nota-code-math-editing) > pre {
+  display: none;
+}
+
+.nota-code-wrap.nota-code-math-editing .nota-code-math-preview {
+  margin-bottom: 10px;
+}
+
+.nota-code-wrap.nota-code-math-editing > pre {
+  margin-top: 10px;
+}
+
+.nota-code-math-preview[data-state="empty"] {
+  min-height: 70px;
+  display: grid;
+  place-items: center;
+  color: var(--fg-muted);
+  font-family: var(--font-ui, inherit);
+}
+
+.nota-code-math-render {
+  min-width: max-content;
+  color: var(--fg);
+  text-align: center;
+}
+
+.nota-code-math-preview[hidden] {
+  display: none;
+}

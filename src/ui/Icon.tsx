@@ -78,6 +78,8 @@ const 名字表 = [
   "folio-format-text-subscript-symbolic",
   "folio-format-text-underline-symbolic",
   "folio-insert-code-symbolic",
+  "nota-inline-code-symbolic",
+  "nota-code-block-symbolic",
   "folio-insert-link-symbolic",
   "folio-insert-image-symbolic",
   "folio-view-list-bullet-symbolic",
@@ -119,6 +121,7 @@ const 名字表 = [
   "nota-doc-theme-symbolic", // 文档主题（框里的 Aa）
   "nota-keys-symbolic", // 快捷键
   "nota-plugin-symbolic", // 拓展（拼图块）
+  "nota-update-symbolic", // 更新设置（循环箭头）
   "nota-advanced-symbolic", // 高级设置（三条滑杆）
   "folio-configure-symbolic", // 通用（齿轮）
   // ⚠️ 这一枚是 **Nota 自己画的**（`nota-` 前缀，2026-09-26），同上面那三枚的

@@ -6,19 +6,28 @@
  * 突然被提权或替换文件。
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-import { api, type UpdatePackageKind, type UpdateStatus } from "@/bridge/ipc";
+import {
+  api,
+  events,
+  on,
+  type UpdateDownloadProgress,
+  type UpdatePackageKind,
+  type UpdateStatus,
+} from "@/bridge/ipc";
 import { useT } from "@/i18n";
 
-export function SoftwareUpdatePane() {
+export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean } = {}) {
   const t = useT();
   const [status, setStatus] = useState<UpdateStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [checking, setChecking] = useState(true);
+  const [checking, setChecking] = useState(autoCheck);
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
+  const 安装中 = useRef(false);
 
   const check = useCallback(async () => {
     setChecking(true);
@@ -34,21 +43,38 @@ export function SoftwareUpdatePane() {
   }, []);
 
   useEffect(() => {
-    void check();
-  }, [check]);
+    if (autoCheck) void check();
+  }, [autoCheck, check]);
 
-  const install = async () => {
+  useEffect(() => {
+    let 退订: (() => void) | undefined;
+    let 活着 = true;
+    void on<UpdateDownloadProgress>(events.updateProgress, setProgress).then((un) => {
+      if (活着) 退订 = un;
+      else un();
+    });
+    return () => {
+      活着 = false;
+      退订?.();
+    };
+  }, []);
+
+  const install = useCallback(async () => {
+    if (安装中.current) return;
+    安装中.current = true;
     setInstalling(true);
     setError(null);
+    setProgress(null);
     try {
       const installed = await api.update.install();
       setResult(installed.message);
     } catch (e) {
       setError(String(e));
     } finally {
+      安装中.current = false;
       setInstalling(false);
     }
-  };
+  }, []);
 
   if (checking && status === null) {
     return <p className="about-lead">{t("Checking for updates…")}</p>;
@@ -105,13 +131,50 @@ export function SoftwareUpdatePane() {
       {error && <p className="about-err">{t("Update failed: {0}", error)}</p>}
       {result && <p className="about-lead">{result}</p>}
 
+      {installing && (
+        <div className="about-update-progress">
+          <div
+            className={`about-update-progress-track${progress?.total ? "" : " is-indeterminate"}`}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={progress?.total ? 100 : undefined}
+            aria-valuenow={
+              progress?.total
+                ? Math.min(100, Math.round((progress.downloaded / progress.total) * 100))
+                : undefined
+            }
+          >
+            <span
+              style={
+                progress?.total
+                  ? {
+                      width: `${Math.min(100, Math.round((progress.downloaded / progress.total) * 100))}%`,
+                    }
+                  : undefined
+              }
+            />
+          </div>
+          <p className="about-lead">
+            {progress?.phase === "installing"
+              ? t("Download complete. Installing the update…")
+              : progress?.total
+                ? t("Downloading update: {0}%", Math.min(100, Math.round((progress.downloaded / progress.total) * 100)))
+                : t("Downloading update…")}
+          </p>
+        </div>
+      )}
+
       <div className="about-update-actions">
         <button type="button" className="btn" disabled={checking || installing} onClick={() => void check()}>
-          {checking ? t("Checking…") : t("Check Again")}
+          {checking
+            ? t("Checking…")
+            : status
+              ? t("Check Again")
+              : t("Check for Updates")}
         </button>
         {status?.canInstall && (
           <button type="button" className="btn btn-primary" disabled={installing} onClick={() => void install()}>
-            {installing ? t("Installing…") : t("Download and Install")}
+            {installing ? t("Downloading…") : t("Download and Install")}
           </button>
         )}
         {status?.releaseUrl && (

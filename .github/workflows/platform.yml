@@ -1,0 +1,28 @@
+name: 平台编译检查
+
+# 平台编译与发布打包分开。它只验证 Windows 工具链，不重复跑前端全集、
+# Rust 全集、文档和国际化的完整门禁；完整验证由 verify.yml 独立负责。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-check:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm run build
+      - run: cargo check --locked
+        working-directory: src-tauri

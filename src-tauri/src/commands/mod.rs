@@ -11,6 +11,7 @@ pub mod diagnostics;
 pub mod diff;
 pub mod document;
 pub mod export;
+pub mod file_picker;
 pub mod focus;
 pub mod image;
 pub mod image_upload;

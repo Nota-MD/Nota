@@ -478,3 +478,26 @@
 .stg-row-desc > .plugin-caps {
   display: block;
 }
+
+/* 更新页把现有更新面板嵌进一行。给它一个可读的控件宽度，同时允许窄窗口
+   继续换行；不另写一套更新表格样式，避免和「关于 → 软件更新」漂移。 */
+.stg-update-panel {
+  width: min(34rem, 58vw);
+  min-width: 0;
+}
+
+.stg-update-panel .about-lead,
+.stg-update-panel .about-update-notes,
+.stg-update-panel .about-err {
+  margin: 0 0 10px;
+}
+
+.stg-update-panel .about-table {
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .stg-update-panel {
+    width: 100%;
+  }
+}

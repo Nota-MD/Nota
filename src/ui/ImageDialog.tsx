@@ -25,7 +25,7 @@
  */
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { open as 选文件 } from "@tauri-apps/plugin-dialog";
+import { open as 选文件 } from "@/ui/file-picker";
 
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";

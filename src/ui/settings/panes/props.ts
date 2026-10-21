@@ -93,6 +93,7 @@ export type PageKey =
   | "appearance"
   | "general"
   | "download"
+  | "updates"
   | "focus"
   // ⚠️ 表名与页名差一点：那一页叫「文档主题」，而 `document_theme` 这个顶层
   // 老字段已经占着"用哪一套主题"的意思了。理由见 `settings/document.rs`。

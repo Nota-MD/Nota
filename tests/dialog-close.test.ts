@@ -32,6 +32,7 @@ const 对话框 = [
   "src/ui/AboutDialog.tsx",
   "src/ui/ConfirmDialog.tsx",
   "src/ui/EmojiDialog.tsx",
+  "src/ui/FilePickerDialog.tsx",
   "src/ui/FocusSummaryDialog.tsx",
   "src/ui/ImageDialog.tsx",
   "src/ui/LicenseDialog.tsx",
@@ -40,6 +41,7 @@ const 对话框 = [
   "src/ui/PrintDialog.tsx",
   "src/ui/PromptDialog.tsx",
   "src/ui/settings/SettingsDialog.tsx",
+  "src/ui/settings/SettingsExportDialog.tsx",
 ];
 
 console.log("\n【对话框统一关闭入口】");
@@ -61,11 +63,14 @@ console.log("\n【对话框统一关闭入口】");
   真(源.includes('name="folio-close-symbolic"'), "关闭图标不统一");
 });
 
-测("三类对话框壳都给绝对定位的关闭按钮提供定位上下文", () => {
+测("独立对话框壳都给绝对定位的关闭按钮提供定位上下文", () => {
   const overlay = readFileSync(join(process.cwd(), "src/styles/overlay.css"), "utf8");
+  const print = readFileSync(join(process.cwd(), "src/styles/print-dialog.css"), "utf8");
+  const picker = readFileSync(join(process.cwd(), "src/styles/file-picker.css"), "utf8");
   const settings = readFileSync(join(process.cwd(), "src/styles/settings.css"), "utf8");
   真(/\.confirm-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "确认框壳缺少 position");
-  真(/\.print-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "打印框缺少 position");
+  真(/\.print-dialog\s*\{[^}]*position:\s*relative/s.test(print), "打印框缺少 position");
+  真(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "文件选择器缺少 position");
   真(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "设置框缺少 position");
   真(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(overlay), "关闭按钮不是绝对定位");
 });

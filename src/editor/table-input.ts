@@ -261,6 +261,13 @@ export function 判表头行(行: string): 格子[] | null {
   return 格子.length > 0 ? 格子 : null;
 }
 
+/** 一行 pipe 文本能否直接成为表头。至少两列，避免把普通 `|` 正文当成表格。 */
+export function 判单行表格(行: string): 格子[] | null {
+  if (判分隔行(行) !== null) return null;
+  const 格 = 判表头行(行);
+  return 格 && 格.length >= 2 ? 格 : null;
+}
+
 /**
  * 一行能不能当**分隔行**。能就给出每列的对齐。
  *
@@ -395,6 +402,47 @@ function 试换表格(state: EditorState, $分隔: ResolvedPos, 分隔行: strin
 }
 
 /**
+ * 把一行 `| 1 | 2 |` 直接换成两列表格。
+ *
+ * 这是用户 2026-10-21 指定的快捷输入：回车前只有表头行，分隔行由 Nota 补成
+ * 无对齐（`null`），并额外生成一行空数据格。输入仍然先经过
+ * {@link 判单行表格}，所以普通段落里的竖线不会触发。
+ */
+export function 试单行表格(state: EditorState, $行: ResolvedPos): Transaction | null {
+  if ($行.depth !== 1) return null;
+  const 本段 = $行.parent;
+  if (!本段.isTextblock || !全为文字(本段)) return null;
+
+  const 格 = 判单行表格(本段.textContent);
+  if (!格) return null;
+  const 类型 = 取类型(state.schema);
+  if (!类型) return null;
+
+  const 段起点 = $行.before(1);
+  const 内容起点 = 段起点 + 1;
+  const 表头格 = 格.map((一格) =>
+    类型.表头.create(
+      { alignment: null },
+      类型.段落.create(
+        null,
+        state.doc.slice(内容起点 + 一格.起点, 内容起点 + 一格.终点).content,
+      ),
+    ),
+  );
+  const 数据格 = 格.map(() => 类型.格.create({ alignment: null }, 类型.段落.create()));
+  const 表头行节点 = 类型.表头行.create(null, 表头格);
+  const 表格 = 类型.表.create(null, [
+    表头行节点,
+    类型.行.create(null, 数据格),
+  ]);
+
+  const tr = state.tr.replaceWith(段起点, $行.after(1), 表格);
+  const 数据格内容起点 = 段起点 + 1 + 表头行节点.nodeSize + 3;
+  tr.setSelection(TextSelection.near(tr.doc.resolve(数据格内容起点)));
+  return tr.scrollIntoView();
+}
+
+/**
  * 一条**完整的**分隔行（以 `|` 收尾）。
  *
  * 守在这里只是为了让 `InputRule` 有条正则可用；判据的真相在 `判分隔行` 里
@@ -459,7 +507,10 @@ export const 表格输入 = $prose(
           if ($分隔.depth !== 1) return false;
           if ($分隔.parentOffset !== $分隔.parent.content.size) return false;
 
-          const tr = 试换表格(state, $分隔, $分隔.parent.textContent);
+          const 分隔 = 判分隔行($分隔.parent.textContent);
+          const tr =
+            (分隔 ? 试换表格(state, $分隔, $分隔.parent.textContent) : null) ??
+            试单行表格(state, $分隔);
           if (!tr) return false;
           view.dispatch(tr);
           return true;

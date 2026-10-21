@@ -32,6 +32,7 @@ pub mod types;
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use mlua::Lua;
 use serde::Serialize;
@@ -93,6 +94,46 @@ pub const EVENT_REVIEW: &str = "nota:plugin-review";
 /// **加 `ui/PluginDock.tsx` 的订阅**。**三处必须说同一个字符串**。
 pub const EVENT_PANEL_STREAM: &str = "nota:plugin-stream";
 
+/// 窗口与编辑器先启动，再由 `nota_frontend_ready` 触发插件发现。
+///
+/// 插件 `on_load` 可能有进程、网络和 Lua 初始化。若它在窗口创建后立刻开跑，
+/// 即使放在阻塞线程，也会与 WebView 首次解析和编辑器构建争 CPU；实测会把
+/// “能开窗”拖到约一秒、把“可编辑”拖到四秒以上。这里只保存启动参数，等前端
+/// 完成首轮会话恢复后再启动，且只启动一次。
+pub struct DeferredDiscovery {
+    pending: Mutex<Option<(Option<PathBuf>, HostContext)>>,
+}
+
+impl DeferredDiscovery {
+    pub fn new(resource_dir: Option<PathBuf>, base: HostContext) -> Self {
+        Self {
+            pending: Mutex::new(Some((resource_dir, base))),
+        }
+    }
+
+    pub fn start(&self, app: &tauri::AppHandle) {
+        let Some((resource_dir, base)) = self
+            .pending
+            .lock()
+            .ok()
+            .and_then(|mut slot| slot.take())
+        else {
+            return;
+        };
+        let 插件线程 = app.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            // 给首帧编辑器一个很短的无争用窗口；这不是启动门禁，前端不会等它。
+            std::thread::sleep(std::time::Duration::from_millis(350));
+            let loaded = PluginHost::discover(resource_dir, &base);
+            crate::日志!("[nota] 载入 {} 个拓展", loaded.count());
+            let state = 插件线程.state::<crate::state::AppState>();
+            if let Ok(mut slot) = state.plugins.lock() {
+                *slot = loaded;
+            };
+        });
+    }
+}
+
 pub struct PluginHost {
     plugins: Vec<LuaPlugin>,
     /// 本地账本：哪些插件开着、当初装进来时验签验出了什么。
@@ -106,9 +147,25 @@ pub struct PluginHost {
     /// ⚠️ 存下来是为了**运行期**还能加载：用户点「启用」或者从文件装一个插件时，
     /// `discover()` 早就跑完了，没有第二个地方拿得到 `AppHandle` 这些东西。
     base: HostContext,
+    /// 启动时先托管空宿主，后台发现完成后再置真。插件读取命令会短暂等待它。
+    ready: bool,
 }
 
 impl PluginHost {
+    /// 窗口创建前先放一个空宿主；真正的目录扫描放到窗口之后的后台线程。
+    pub fn empty(base: &HostContext) -> Self {
+        Self {
+            plugins: Vec::new(),
+            installed: Installed::load(),
+            base: base.clone(),
+            ready: false,
+        }
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.ready
+    }
+
     /// 扫目录、加载全部插件。
     ///
     /// `resource_dir` 是打包后的资源目录（开发时传 `None`）。
@@ -195,6 +252,7 @@ impl PluginHost {
             plugins,
             installed,
             base: base.clone(),
+            ready: true,
         }
     }
 

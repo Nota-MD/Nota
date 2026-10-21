@@ -12,16 +12,21 @@
 
 import { useCallback, useState } from "react";
 
-import type { Toast } from "@/ui/Toasts";
+import type { Toast, ToastAction } from "@/ui/Toasts";
 
 export function useToasts() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const toast = useCallback(
-    (message: string, level: Toast["level"] = "info", ttlMs?: number) => {
+    (
+      message: string,
+      level: Toast["level"] = "info",
+      ttlMs?: number,
+      action?: ToastAction,
+    ) => {
       // id 只要在这一次会话里不撞就行，不必是 UUID。
       const id = Math.random().toString(36).slice(2);
-      setToasts((prev) => [...prev, { id, message, level }]);
+      setToasts((prev) => [...prev, { id, message, level, action }]);
 
       // 自动消失。错误留久一点——用户多半要读完再决定怎么办。
       //

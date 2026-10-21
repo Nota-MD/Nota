@@ -1,0 +1,30 @@
+/* Adwaita 是安装包唯一随附的界面与文档主题族。字体随该主题一起分发，
+   许可证在同目录 `src/assets/fonts/adwaita/LICENSE.txt`。 */
+@font-face {
+  font-family: "Adwaita Sans";
+  src: url("../../assets/fonts/adwaita/AdwaitaSans-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Adwaita Sans";
+  src: url("../../assets/fonts/adwaita/AdwaitaSans-Italic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Adwaita Mono";
+  src: url("../../assets/fonts/adwaita/AdwaitaMono-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Adwaita Mono";
+  src: url("../../assets/fonts/adwaita/AdwaitaMono-Italic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+}

@@ -56,6 +56,8 @@ export const events = {
    * 重连、重放、多窗口都会各响一遍。
    */
   focusBeep: "nota:focus-beep",
+  /** 应用更新包正在下载，或下载完成后的安装准备阶段。 */
+  updateProgress: "nota:update-progress",
   notify: "nota:notify",
   documentChanged: "nota:document-changed",
   /**

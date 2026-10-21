@@ -92,6 +92,19 @@ pub async fn nota_print_send(
     )
 }
 
+/// 预览生成之后另存为 PDF。与“投递给打印机”完全独立。
+#[tauri::command]
+pub async fn nota_print_save_pdf(pdf: String, target: String) -> Result<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        print_job::另存(
+            std::path::Path::new(&pdf),
+            std::path::Path::new(&target),
+        )
+    })
+    .await
+    .map_err(|e| crate::error::NotaError::other(format!("保存 PDF 的线程挂了：{e}")))?
+}
+
 /// 这台系统上有没有**应用内打印**（2026-10-17）。
 ///
 /// ⚠️ 判据就是"PDF 那一段有没有"——它靠 WebKitGTK 的打印后端，只有 Linux 有。

@@ -41,7 +41,7 @@
 
 import { useCallback, useRef } from "react";
 import type { RefObject } from "react";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@/ui/file-picker";
 
 import {
   api,
@@ -156,6 +156,13 @@ export interface 文档出口 {
   openPath: (path: string) => Promise<boolean>;
   /** 新建一份空文档并切过去。 */
   newDoc: () => Promise<void>;
+  /**
+   * 用一段转换好的 Markdown 新建未命名文档并切过去。
+   *
+   * 标签一开始就是未保存状态；正文有标题时后端优先用标题，否则使用
+   * `titleHint`（通常是导入前原文件的文件名）。
+   */
+  newDocWithText: (text: string, titleHint: string | null) => Promise<void>;
   /** 打开对话框 → `openPath`。 */
   openViaDialog: () => Promise<void>;
   /**
@@ -372,6 +379,19 @@ export function useDocuments(w: 文档接线): 文档出口 {
       toast(String(e), "error");
     }
   }, [refreshDocs, 切换文档, toast]);
+
+  const newDocWithText = useCallback(
+    async (text: string, titleHint: string | null) => {
+      try {
+        const id = await api.doc.createWithText(text, titleHint);
+        await refreshDocs();
+        await 切换文档(id);
+      } catch (e) {
+        toast(String(e), "error");
+      }
+    },
+    [refreshDocs, 切换文档, toast],
+  );
 
   const openViaDialog = useCallback(async () => {
     const picked = await openDialog({
@@ -649,6 +669,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
   return {
     openPath,
     newDoc,
+    newDocWithText,
     openViaDialog,
     openFolder,
     loadDir,

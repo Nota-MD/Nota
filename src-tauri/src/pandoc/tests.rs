@@ -56,6 +56,38 @@ fn 参数里有标准输入之外的输入路径信息() {
 }
 
 #[test]
+fn 导入参数把原文件交给_pandoc_并输出_markdown() {
+    let args = build_import_args(
+        &["--sandbox".to_string()],
+        ImportFormat::Docx,
+        Path::new("/home/u/源文件.docx"),
+    );
+    assert_eq!(args[0], "--sandbox");
+    assert!(args.contains(&"--from=docx".to_string()), "{args:?}");
+    assert!(args.contains(&"--to=markdown".to_string()), "{args:?}");
+    assert!(args.contains(&"--wrap=none".to_string()), "{args:?}");
+    assert!(args.contains(&"--markdown-headings=atx".to_string()), "{args:?}");
+    assert_eq!(args.last().unwrap(), "/home/u/源文件.docx");
+}
+
+#[test]
+#[cfg(unix)]
+fn 导入把_pandoc_的标准输出原样作为正文() {
+    let dir = temp_dir("import-stdout");
+    let source = dir.join("输入.docx");
+    std::fs::write(&source, b"not a real docx").unwrap();
+    let fake = 假命令(
+        "import-bin",
+        "printf '# 导入标题\\n\\n正文 🎉\\n'; printf 'WARNING: 图片没找到\\n' >&2",
+    );
+    let out = import_with(&fake.display().to_string(), ImportFormat::Docx, &source)
+        .expect("假 pandoc 成功时应当返回正文");
+    assert_eq!(out.markdown, "# 导入标题\n\n正文 🎉\n");
+    assert!(out.warnings.contains("图片没找到"), "{}", out.warnings);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn 排版引擎只给_pdf_而且只在找到时给() {
     let pdf = build_args(
         &[],
@@ -582,4 +614,3 @@ fn 容器里能落到宿主那一份_pandoc_上() {
         "宿主那份的数据目录是编进二进制的，得靠这个变量指过去"
     );
 }
-

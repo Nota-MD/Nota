@@ -36,6 +36,7 @@
  */
 
 import { useT } from "@/i18n";
+import { chooseDirectory } from "@/ui/file-picker";
 import { ActionButton, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
@@ -57,11 +58,15 @@ export function ExportPane({ settings, onChange }: PaneProps) {
               placeholder={t("Automatic (the current document's folder)")}
               onChange={(default_folder) => 写({ default_folder })}
             />
-            {/* ⚠️ 灰着而不是藏起来：藏起来用户会以为是自己没找到。
-                `title` 里写明为什么——这是 Nota 对"没做完的东西"的一贯做法。 */}
             <ActionButton
-              disabled
-              title={t("Not implemented yet: the folder picker is not wired up, so type the path in by hand for now.")}
+              onClick={() => {
+                void chooseDirectory({
+                  title: t("Default export folder"),
+                  defaultPath: e.default_folder || undefined,
+                }).then((path) => {
+                  if (path) 写({ default_folder: path });
+                });
+              }}
             >
               {t("Choose…")}
             </ActionButton>

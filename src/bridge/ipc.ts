@@ -20,11 +20,16 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   AppLang, Diagnostics, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
-  NativeMenuNode, PandocExport, PandocProbe, PluginInfo, PluginMenuItem,
+  NativeMenuNode, PandocExport, PandocImport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
-  PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
+  PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   会话, 路径种类, 拼写词典, PrintEnvironment, PrintPreview,
 } from "./types";
+import type {
+  SettingsExportInventory,
+  SettingsExportReport,
+  SettingsExportRequest,
+} from "./types-settings-export";
 // ⚠️ 这一条是**类型专线**：`选区快照` 的家在编辑器那一侧
 // （`editor/caret-snapshot.ts`，它的文件头就是这张表的设计说明），
 // 不搬进 `bridge/types.ts`——搬过去会让"桥"这个模块变成选区的定义者，
@@ -37,6 +42,14 @@ export { events, on } from "./ipc-events";
 
 // ── 文档 ──────────────────────────────────────────────────────────────────
 export const api = {
+  picker: {
+    places: () => invoke<PickerPlace[]>("nota_picker_places"),
+    list: (path: string, showHidden: boolean) =>
+      invoke<PickerEntry[]>("nota_picker_list", { path, showHidden }),
+    createDir: (parent: string, name: string) =>
+      invoke<string>("nota_picker_create_dir", { parent, name }),
+  },
+
   /**
    * **诊断信息**（「关于 → 故障排除」那一页）。
    *
@@ -59,6 +72,9 @@ export const api = {
 
   doc: {
     create: () => invoke<DocId>("nota_doc_new"),
+    /** 新建一份带初始正文的未命名文档。导入转换结果走这条。 */
+    createWithText: (text: string, titleHint: string | null = null) =>
+      invoke<DocId>("nota_doc_new_with_text", { text, titleHint }),
     open: (path: string) => invoke<DocId>("nota_doc_open", { path }),
     /** 前端推文本给后端。返回新 revision。**意思是"用户改了"。** */
     sync: (id: DocId, text: string) => invoke<number>("nota_doc_sync", { id, text }),
@@ -184,7 +200,7 @@ export const api = {
     /**
      * **导入一个 `.zip` 词典包**，返回装进去的语言标签。
      *
-     * ⚠️ `path` 由前端用文件对话框问出来（`@tauri-apps/plugin-dialog` 的 `open`）：
+     * ⚠️ `path` 由前端用应用内文件选择器问出来：
      * 命令不带路径、宿主调系统选择器那种写法在这里更要命——它会把**选文件**这件
      * 事的失败（用户点了取消）和**装词典**的失败混成一个错误。
      */
@@ -232,6 +248,10 @@ export const api = {
   settings: {
     get: () => invoke<Settings>("nota_settings_get"),
     set: (settings: Settings) => invoke<void>("nota_settings_set", { settings }),
+    exportInventory: () =>
+      invoke<SettingsExportInventory>("nota_settings_export_inventory"),
+    exportPackage: (request: SettingsExportRequest) =>
+      invoke<SettingsExportReport>("nota_settings_export", { request }),
     /**
      * 在系统的文件管理器里打开设置文件所在的那个目录（一般是
      * `~/.config/nota`），返回打开的是哪个路径。
@@ -335,6 +355,9 @@ export const api = {
       copies: number;
       ranges: string | null;
     }) => invoke<string>("nota_print_send", req),
+    /** 把预览过的那份 PDF 另存到用户选中的路径。 */
+    savePdf: (pdf: string, target: string) =>
+      invoke<string>("nota_print_save_pdf", { pdf, target }),
   },
 
   /**
@@ -421,6 +444,14 @@ export const api = {
         themeCss: args.themeCss,
         pandocArgs: args.pandocArgs,
       }),
+    /**
+     * 把 Word / RTF / LaTeX / EPUB / OpenDocument 转成 Markdown。
+     *
+     * `source` 是用户在打开对话框里选中的原文件。命令返回正文与警告，不直接建
+     * 标签；新文档的生命周期仍由前端 `useDocuments` 统一管理。
+     */
+    importFile: (format: string, source: string) =>
+      invoke<PandocImport>("nota_pandoc_import", { format, source }),
   },
 
   /**
@@ -576,7 +607,7 @@ export const api = {
     /**
      * 从一个插件包（`.nota-plugin` / `.zip`）或一个目录装一个插件。返回它的 id。
      *
-     * `path` 由前端用文件对话框问出来（`@tauri-apps/plugin-dialog` 的 `open`）：
+     * `path` 由前端用应用内文件选择器问出来：
      * 宿主不自己弹框——那是界面的事，而且宿主弹框在无头测试里没法验。
      *
      * ⚠️ **只有 `path` 一个参数。** 这里曾经多一个 `trust`，但宿主那条命令根本
@@ -599,7 +630,7 @@ export const api = {
     /**
      * 把一个已装的插件导出成一个 `.nota-plugin` 包（2026-09-27 加）。
      *
-     * `path` 由前端用**保存对话框**问出来（`@tauri-apps/plugin-dialog` 的 `save`），
+     * `path` 由前端用**应用内保存选择器**问出来，
      * 默认值拿 [`exportName`]；宿主不自己弹框——与 `install` 是同一个分工。
      *
      * ⚠️ 它**只读**：不碰插件、不碰设置、**不签名**。包里带不带那个签名块由后端按
@@ -783,7 +814,7 @@ export const api = {
   },
 
   /**
-   * 窗口自身的控制（2026-09-27）。**目前只有一条**。
+   * 窗口自身的控制（2026-09-27）。开发者工具与诊断信息各一条。
    *
    * ⚠️ 「窗口置顶」**故意不在这里**：它前端直接用 Tauri 的 JS API
    * （`getCurrentWindow().setAlwaysOnTop()` / `isAlwaysOnTop()`），
@@ -792,8 +823,12 @@ export const api = {
    * `devtools` feature 只给了 Rust 侧一个 `open_devtools()`。
    */
   window: {
+    /** 编辑器和界面样式就绪后显示主窗口。 */
+    showMain: () => invoke<void>("nota_window_show_main"),
     /** 打开开发者工具。⚠️ 已经开着时是**调到前面**，不是关掉。 */
     openDevtools: () => invoke<void>("nota_window_open_devtools"),
+    /** 在独立窗口显示运行诊断信息。重复调用会聚焦已有窗口。 */
+    openDebugInfo: () => invoke<void>("nota_window_open_debug_info"),
     /**
      * 把一份文档**在新窗口里打开**（标签页右键那一条，2026-09-27）。
      *

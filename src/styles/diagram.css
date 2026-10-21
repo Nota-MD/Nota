@@ -109,7 +109,7 @@
    先 `innerHTML` 再改 svg 的内联样式）。**真正生效的上限在 `diagram-view.ts`**：
    它按 `viewBox` 的自然宽取 `min(100%, 自然宽)`——只写 `100%` 会让小图被
    容器宽度等比放大（2026-09-26 实测，理由写在那边的注释里）。 */
-.editor-mount .ProseMirror .nota-diagram-preview[data-state="ok"] svg {
+.editor-mount .ProseMirror .nota-diagram-preview svg {
   display: block;
   margin: 0 auto;
   max-width: 100%;

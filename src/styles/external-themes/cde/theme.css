@@ -14,14 +14,16 @@
  */
 
 /*
- * 点阵字体随这份主题包分发。这份 TTF 由 WenQuanYi Bitmap Song 16px PCF
- * 直接生成，中文与西文来自同一套 16×16 字模，并带 EBDT/EBLC 1-bit
- * strike。许可证是 GPL-2.0 with font embedding exception，完整
- * 版权与例外正文放在 `assets/fonts/`，与该 TTF 同目录。
+ * 点阵字体随这份主题包分发。运行时使用由同一份 TTF 无损转成的 WOFF2：
+ * 中文与西文来自同一套 16×16 字模，并带 EBDT/EBLC 1-bit strike。
+ * WOFF2 只改变传输容器，不改变字模；体积从 2.1 MB 降到约 653 KB，
+ * 冷启动时主题 CSS 的内联与 WebView 解析都显著缩短。
+ * 许可证是 GPL-2.0 with font embedding exception，完整版权与例外正文
+ * 放在 `assets/fonts/`，与两种字体容器同目录。TTF 保留为可编辑源文件。
  */
 @font-face {
   font-family: "Nota WenQuanYi Bitmap Song";
-  src: url("./assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf") format("truetype");
+  src: url("./assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: block;
@@ -29,7 +31,7 @@
 
 @font-face {
   font-family: "Nota WenQuanYi Bitmap Song";
-  src: url("./assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf") format("truetype");
+  src: url("./assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.woff2") format("woff2");
   font-style: normal;
   font-weight: 700;
   font-display: block;
@@ -94,9 +96,9 @@
 
 /* 顶栏：桃色硬帽、连续青绿菜单带，底缘按真机压“暗青 → 桃色 → 画布”。 */
 [data-ui-style="cde"] .toolbar {
-  height: 34px;
-  padding: 5px 4px 4px;
-  border-top: 3px solid var(--accent);
+  height: 30px;
+  padding: 0;
+  border-top: 0;
   border-bottom: 1px solid var(--bevel-dark);
   background: var(--bg);
   box-shadow:
@@ -106,6 +108,15 @@
 
 [data-ui-style="cde"] .menubar {
   gap: 0;
+  height: 100%;
+  padding: 0;
+  background: #4992a7;
+  box-shadow: none;
+}
+
+/* Motif 的菜单栏条目占满整条 bar；弹层从 bar 的底边开始，而不是从文字盒开始。 */
+[data-ui-style="cde"] .menu-root {
+  height: 100%;
 }
 
 [data-ui-style="cde"] .toolbar-dock-toggle {
@@ -127,26 +138,85 @@
   box-shadow: var(--bevel-sunken);
 }
 
-/* 弹层：暗青外框 + 奶油亮边，条目紧贴，没有任何圆角或柔光。 */
+/*
+ * 弹层按 Motif `XmRowColumn` 的 pulldown 默认几何收口：
+ *
+ * - `RowColumn.c`：pulldown / popup 的 `XmNmarginWidth`、`XmNmarginHeight`
+ *   缺省都是 **0**（只有普通 RowColumn 才补 3）；
+ * - `LabelG.c`：菜单标签 `marginWidth` / `marginHeight` 缺省都是 **2**；
+ * - 外框与条目斜面由 `XmPrimitive` 的 1px shadow 负责，没有外投影。
+ *
+ * 所以这里不能保留现代菜单那圈 5px 内边距、224px 最小宽度和奶油色外投影。
+ * `width: max-content` 让每栏按自己的最长标签＋Motif 的 15px accelerator pad
+ * 自然定宽；同一父栏里的条目仍由 flex 拉成等宽。
+ */
 [data-ui-style="cde"] :is(.menu-popup, .menu-sub, .context-menu, .context-sub) {
+  min-width: 0;
+  width: max-content;
+  max-width: calc(100vw - 8px);
   padding: 0;
   border: 1px solid var(--bevel-dark);
   border-radius: 0;
   background: var(--bg);
-  box-shadow: 1px 1px 0 var(--frame-light);
+  box-shadow: none;
+  animation: none;
+  transform: none;
+}
+
+[data-ui-style="cde"] .menu-popup {
+  top: 100%;
+}
+
+[data-ui-style="cde"] .tab-menu-anchor .menu-popup {
+  top: calc(100% + 5px);
+}
+
+[data-ui-style="cde"] .status-menu-anchor .menu-popup {
+  top: auto;
+  bottom: calc(100% + 5px);
 }
 
 [data-ui-style="cde"] .menu-item {
-  height: 22px;
-  padding: 0 7px;
+  height: 20px;
+  gap: 0;
+  padding: 0 6px;
   border-radius: 0;
   color: var(--title-fg);
+  font-size: 16px;
+  font-kerning: none;
+  font-variant-ligatures: none;
+  letter-spacing: 0;
 }
 
 [data-ui-style="cde"] .menu-item:hover:not(:disabled),
 [data-ui-style="cde"] .menu-item-open:not(:disabled) {
-  background: var(--bg-subtle);
+  background: var(--bg-active);
+  color: var(--title-fg);
   box-shadow: var(--bevel-sunken);
+}
+
+/* Motif 不预留现代菜单那个空白图标列。只有真的勾选时才画出标记。 */
+[data-ui-style="cde"] .menu-check:empty,
+[data-ui-style="cde"] .menu-arrow:empty {
+  display: none;
+}
+
+[data-ui-style="cde"] .menu-check:not(:empty) {
+  width: auto;
+  margin-right: 4px;
+  color: var(--title-fg);
+}
+
+/* `LabelG.c::LABELG_ACC_PAD` 是 15px；快捷键字号与菜单正文同为 16px 点阵。 */
+[data-ui-style="cde"] .menu-accel {
+  padding-left: 15px;
+  color: var(--title-fg);
+  font-size: 1em;
+}
+
+[data-ui-style="cde"] .menu-arrow:not(:empty) {
+  width: 10px;
+  color: var(--title-fg);
 }
 
 [data-ui-style="cde"] .menu-heading {
@@ -166,7 +236,7 @@
 }
 
 [data-ui-style="cde"] .menu-sep {
-  height: 2px;
+  height: 1px;
   margin: 0;
   background: var(--bevel-dark);
   box-shadow: 0 1px 0 var(--bevel-light);
@@ -529,9 +599,9 @@
   /* 真机里文字编辑器的那一排菜单**不是一排按钮**：它是一条连续青色菜单带，
     文字直接铺在上面。只有鼠标停住或菜单打开时，那一格才换成一小块凹槽。
     之前的逐项描边是照着“工具栏按钮”的直觉画的，和四张真机图都对不上。 */
-  height: 24px;
+  height: 100%;
   margin: 0;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -539,11 +609,25 @@
 }
 
 [data-ui-style="cde"] .menu-title:hover {
-  background: rgb(0 0 0 / 10%);
+  background: rgb(0 0 0 / 8%);
+  box-shadow: none;
+}
+
+/* 菜单已经开着时，跨到另一栏只移动指针；那一格不许抢先显出 armed 态。 */
+[data-ui-style="cde"] .menubar[data-menu-open="true"] .menu-title:hover:not(.menu-title-open) {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* F10 进入菜单栏后的键盘落点：与 Motif 的 active cascade 一样凹下。 */
+[data-ui-style="cde"] :is(.menu-title:focus-visible, .menu-title-keyboard) {
+  background: var(--bg-active);
+  box-shadow: var(--bevel-sunken);
 }
 
 [data-ui-style="cde"] .menu-title-open {
-  background: var(--bg-subtle);
+  background: var(--bg-active);
+  color: var(--title-fg);
   box-shadow: var(--bevel-sunken);
 }
 
@@ -617,6 +701,66 @@
   font-weight: 400;
   font-size: min(1em, 16px);
   line-height: 1.5;
+}
+
+/*
+ * 关于窗里的正文、快捷键助记符、版本号与表格统一落在 16px 原生点阵网格。
+ * 这些元素在通用样式里用了 0.85/0.9em；16 × 0.85 = 13.6px，EBDT 字体没有
+ * 这个 strike，WebKit 会退回平滑系统字体——截图里 `(U)`、`Leo Lee`、版本号
+ * 与箭头混用的根因就在这里。
+ */
+[data-ui-style="cde"] .about-dialog,
+[data-ui-style="cde"] .about-dialog * {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+[data-ui-style="cde"] .about-dialog .about-name {
+  width: 111px;
+  height: 34px;
+}
+
+[data-ui-style="cde"] .about-dialog :is(.about-version, .about-row) {
+  border: 0;
+  border-radius: 0;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  box-shadow: var(--bevel);
+}
+
+[data-ui-style="cde"] .about-dialog .about-version {
+  padding: 2px 8px;
+}
+
+[data-ui-style="cde"] .about-dialog .about-row {
+  padding: 4px 6px;
+}
+
+[data-ui-style="cde"] .about-dialog .about-row:hover {
+  background: var(--btn-bg-active);
+  color: var(--btn-fg-active);
+  box-shadow: var(--bevel-sunken);
+}
+
+[data-ui-style="cde"] .about-dialog :is(.about-developer, .about-row-key, .about-mark) {
+  color: var(--fg-muted);
+}
+
+[data-ui-style="cde"] .about-dialog :is(.about-page-title, .about-sub, .about-item-name, .about-cell-name) {
+  font-weight: 400;
+}
+
+[data-ui-style="cde"] .about-dialog .about-back {
+  border-radius: 0;
+  color: var(--fg);
+}
+
+[data-ui-style="cde"] .about-dialog .about-back:hover {
+  background: var(--btn-bg-active);
+  color: var(--btn-fg-active);
+  box-shadow: var(--bevel-sunken);
 }
 
 [data-ui-style="cde"] .panel-hero-sub,

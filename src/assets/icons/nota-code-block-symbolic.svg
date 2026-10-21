@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 代码块：左右花括号围住两行代码，和行内代码的反引号框区分。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<path fill="none" stroke="#2e3436" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" d="M5.5 2.75C4.1 2.75 4.15 5.15 2.8 5.85C4.15 6.55 4.1 8.95 5.5 8.95"/>
+<path fill="none" stroke="#2e3436" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" d="M10.5 2.75C11.9 2.75 11.85 5.15 13.2 5.85C11.85 6.55 11.9 8.95 10.5 8.95"/>
+<path fill="none" stroke="#2e3436" stroke-width="1.25" stroke-linecap="round" d="M6.15 11.25H9.85M6.15 13.25H8.65"/>
+</svg>

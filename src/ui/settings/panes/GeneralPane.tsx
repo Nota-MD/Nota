@@ -19,7 +19,7 @@
  * | 没做的那一项 | 理由 |
  * |---|---|
  * | 语言（重启后生效） | **做了**（2026-09-25，用户要求）。 |
- * | 许可证信息 | **改为直接显示许可证**（下面「许可证」那一组）。Nota 是 BSD-2-Clause，没有"激活"这回事。⚠️ 「关于 → 法律信息」那一页还有个**看全文**的超链接（`ui/LicenseDialog.tsx`）。 |
+ * | 许可证信息 | **只放在「关于 → 法律信息」**。通用设置不重复展示同一份许可证；全文仍由 `ui/LicenseDialog.tsx` 提供。 |
  * | 快捷键 | 有，但不在这页——**独立的「快捷键」页**。 |
  * | 重置全部警告提示对话框 | **不做**。它要的是一份"用户点过不再提示"的记录，而 Nota 目前一个可静音的对话框都没有。留一个按了没反应的按钮更糟。 |
  * | 高级设置 | **做**，落法不同：见下面「高级设置」那一组。 |
@@ -34,19 +34,25 @@
 import { useEffect, useState } from "react";
 
 import { api, type AppLang } from "@/bridge/ipc";
+import type { SettingsExportReport } from "@/bridge/types-settings-export";
 import { useT } from "@/i18n";
-import { SettingRow, SettingsGroup, Select, Value } from "../primitives";
+import { ActionButton, SettingRow, SettingsGroup, Select, TextArea, Value } from "../primitives";
+import { SettingsExportDialog } from "../SettingsExportDialog";
 import { paneWriter, type PaneProps } from "./props";
 
-export function GeneralPane({ settings, onChange }: PaneProps) {
+export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
   const 写 = paneWriter(settings, onChange, "general");
+  const 写下载 = paneWriter(settings, onChange, "download");
 
   // 可选的语言**由宿主给**（`nota_app_lang.available`），前端不列第二份。
   // 拉不到就只画「自动」——下拉少几项比画错标签好。
   const [语言表, set语言表] = useState<AppLang | null>(null);
+  const [导出包开着, 设导出包开着] = useState(false);
+  const [导出结果, 设导出结果] = useState<SettingsExportReport | null>(null);
+  const [导出错误, 设导出错误] = useState<string | null>(null);
   useEffect(() => {
     let 还活着 = true;
     void api
@@ -87,12 +93,65 @@ export function GeneralPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("License")}>
-        <SettingRow label="Nota">
-          <Value>BSD-2-Clause</Value>
+      <SettingsGroup title={t("Downloads")}>
+        <SettingRow
+          label={t("Download replacement rules")}
+          description={t(
+            "One rule per line, using original prefix => replacement prefix. Example: github.com/ => gh-proxy.net/github.com/. Rules apply to application and extension update downloads; the rewritten address must still use HTTPS.",
+          )}
+        >
+          <TextArea
+            value={settings.download.replacements}
+            rows={5}
+            mono
+            spellCheck={false}
+            placeholder={"github.com/ => gh-proxy.net/github.com/"}
+            onChange={(replacements) => 写下载({ replacements })}
+          />
         </SettingRow>
-        <SettingRow label={t("Interface icons")}>
-          <Value>{t("BSD-2-Clause (Folio, same author)")}</Value>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("Settings package")}>
+        <SettingRow
+          label={t("Export settings and data")}
+          description={t(
+            "Choose program settings, user data, and each extension's settings or data independently. The result is a ZIP-based settings package, not an application installer.",
+          )}
+        >
+          <ActionButton onClick={() => 设导出包开着(true)}>
+            {t("Export settings package…")}
+          </ActionButton>
+        </SettingRow>
+        {导出结果 && (
+          <SettingRow label={t("Last export")}>
+            <Value>{导出结果.path}</Value>
+          </SettingRow>
+        )}
+        {导出错误 && (
+          <SettingRow label={t("Export failed")}>
+            <Value>{导出错误}</Value>
+          </SettingRow>
+        )}
+      </SettingsGroup>
+
+      {导出包开着 && (
+        <SettingsExportDialog
+          onClose={() => 设导出包开着(false)}
+          onExported={(report) => {
+            设导出结果(report);
+            设导出错误(null);
+            设导出包开着(false);
+          }}
+          onError={(message) => 设导出错误(message)}
+        />
+      )}
+
+      <SettingsGroup title={t("Reset")}>
+        <SettingRow
+          label={t("Reset to Defaults")}
+          description={t("Restore program settings to their factory values.")}
+        >
+          <ActionButton onClick={onResetSettings}>{t("Reset")}</ActionButton>
         </SettingRow>
       </SettingsGroup>
     </>

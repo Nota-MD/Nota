@@ -24,13 +24,61 @@
 //! 再起一份进程天然就是独立的（文档、工作区、插件各一份），代价只有一处：
 //! **跳过单实例那一关**（`cli.rs` 的 `--new-window`，判据与代价写在 `lib.rs` ⓿'）。
 
-use tauri::Manager;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::error::{NotaError, Result};
 
 /// 主窗口的 label。⚠️ 与 `tauri.conf.json` 里那个窗口的 `label` **必须一致**；
 /// 写错了的症状是"点了没反应"（命令报"找不到窗口"，而按钮看着是亮的）。
 const 主窗口: &str = "main";
+
+/// 编辑器和界面主题都就绪后，把预热窗口移到屏幕中央并显示。
+///
+/// 窗口在 `tauri.conf.json` 里先创建在屏幕外、隐藏任务栏按钮。隐藏窗口的
+/// WebView 会被 WebKit 暂停动画帧，编辑器初始化反而可能永远等不到；因此让它在
+/// 屏幕外正常渲染，就绪后再移入视野。用户第一次看到窗口时，正文已经可输入。
+#[tauri::command]
+pub fn nota_window_show_main(app: tauri::AppHandle) -> Result<()> {
+    let 窗 = app
+        .get_webview_window(主窗口)
+        .ok_or_else(|| NotaError::other(format!("找不到窗口 `{主窗口}`")))?;
+    窗.set_skip_taskbar(false)
+        .map_err(|e| NotaError::other(format!("显示任务栏入口失败：{e}")))?;
+    窗.center()
+        .map_err(|e| NotaError::other(format!("居中主窗口失败：{e}")))?;
+    窗.show()
+        .map_err(|e| NotaError::other(format!("显示主窗口失败：{e}")))?;
+    窗.set_focus()
+        .map_err(|e| NotaError::other(format!("聚焦主窗口失败：{e}")))?;
+    crate::日志!("[nota] 编辑器已就绪，显示主窗口");
+    Ok(())
+}
+
+/// 打开（或聚焦）一个只显示运行诊断信息的小窗口。
+///
+/// 这个窗口属于同一个进程，和主窗口共用设置与宿主状态；它不挂完整编辑器，
+/// 只读取 `nota_diagnostics`。重复点击时复用已有窗口。
+#[tauri::command]
+pub fn nota_window_open_debug_info(app: tauri::AppHandle) -> Result<()> {
+    if let Some(窗) = app.get_webview_window("debug-info") {
+        窗.show()
+            .map_err(|e| NotaError::other(format!("显示调试信息窗口失败：{e}")))?;
+        窗.set_focus()
+            .map_err(|e| NotaError::other(format!("聚焦调试信息窗口失败：{e}")))?;
+        return Ok(());
+    }
+    WebviewWindowBuilder::new(
+        &app,
+        "debug-info",
+        WebviewUrl::App("index.html#debug-info".into()),
+    )
+    .title("Nota Debug Information")
+    .inner_size(720.0, 520.0)
+    .min_inner_size(520.0, 360.0)
+    .build()
+    .map_err(|e| NotaError::other(format!("打开调试信息窗口失败：{e}")))?;
+    Ok(())
+}
 
 /// 打开主窗口的开发者工具（菜单「视图 → 开发者工具」/ `Shift+F12`）。
 ///

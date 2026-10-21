@@ -160,7 +160,13 @@ const 行内组: 按钮[] = [
   { cmd: "bold", menu: "fmt.bold", label: "B", icon: "folio-format-text-bold-symbolic", on: "bold" },
   { cmd: "italic", menu: "fmt.italic", label: "I", icon: "folio-format-text-italic-symbolic", on: "italic" },
   { cmd: "strike", menu: "fmt.strike", label: "S", icon: "folio-format-text-strikethrough-symbolic", on: "strike" },
-  { cmd: "inlineCode", menu: "fmt.code", label: "</>", on: "inlineCode" },
+  {
+    cmd: "inlineCode",
+    menu: "fmt.code",
+    label: "</>",
+    icon: "nota-inline-code-symbolic",
+    on: "inlineCode",
+  },
   // 扩展语法四条（`editor/inline-marks.ts`）。**四枚都有现成图标**
   // （`folio-marker-symbolic` 那枚的注释就写着"标记（高亮）：记号笔 + 底部
   // 高亮色条"），所以一个文字字形都不用——工具栏是整条一起看的。
@@ -192,7 +198,13 @@ const 块组: 按钮[] = [
   { cmd: "ul", menu: "para.ul", label: "•", icon: "folio-view-list-bullet-symbolic", block: "ul" },
   { cmd: "ol", menu: "para.ol", label: "1.", icon: "folio-view-list-ordered-symbolic", block: "ol" },
   { cmd: "task", menu: "para.task", label: "Task", icon: "nota-task-symbolic", block: "task" },
-  { cmd: "codeBlock", menu: "para.codeBlock", label: "{ }", icon: "folio-insert-code-symbolic", block: "codeBlock" },
+  {
+    cmd: "codeBlock",
+    menu: "para.codeBlock",
+    label: "{ }",
+    icon: "nota-code-block-symbolic",
+    block: "codeBlock",
+  },
   { cmd: "clearFormat", menu: "fmt.clear", label: "Clear", icon: "folio-eraser-symbolic" },
 ];
 

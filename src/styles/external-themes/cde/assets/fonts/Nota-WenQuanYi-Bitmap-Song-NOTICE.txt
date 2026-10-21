@@ -18,9 +18,14 @@ TTF transcription used by Nota:
   AmusementClub/Wenquanyi-Bitmap-Song-TTF
   https://github.com/AmusementClub/Wenquanyi-Bitmap-Song-TTF
 
-The distributed file is:
+The distributed files are:
 
   Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf
+  Nota-WenQuanYi-Bitmap-Song-EBDT-16px.woff2
+
+The WOFF2 is a lossless container conversion of the TTF above. It preserves
+all cmap entries, EBDT/EBLC bitmap strikes and naming records; the TTF remains
+the editable source form.
 
 License:
 
@@ -29,4 +34,4 @@ License:
   as WQY-Bitmap-Song-COPYRIGHT.txt, and the full GPL-2.0 text is in
   GPL-2.0.txt.
 
-The TTF is the preferred editable form and is distributed with this notice.
+Both containers are distributed with this notice and the same licence files.

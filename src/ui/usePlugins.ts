@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@/ui/file-picker";
 
 import {
   api,

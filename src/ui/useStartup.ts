@@ -59,6 +59,7 @@ import { useEffect } from "react";
 import { api, type DocThemeInfo, type Settings, type StartupAction } from "@/bridge/ipc";
 import { 定语言, t } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
+import { markStartupReady } from "@/ui/useBootReveal";
 
 export interface 启动接线 {
   setSettings: (s: Settings) => void;
@@ -95,32 +96,44 @@ export function useStartup(w: 启动接线): void {
         // ⚠️ 插件那三样（清单 / 面板 / 菜单项）**不在这里拉**——它们在
         // `ui/usePlugins.ts` 里有自己的一整套拉取与派生（合成菜单栏、建处理函数）。
         // 搬回来的话，拉的地方和用它的地方分开，就又要靠 props 一层层传。
-        const [s, ws, themeList, 设置问题, 启动文件, 界面语言] = await Promise.all([
+        //
+        // ⚠️ **设置有关的三枪先走，其余四枪在后台同时开跑**。旧实现把六枪放进
+        // 同一个 `Promise.all`，于是哪怕设置只用了 40 ms，也必须等主题目录扫描、
+        // 工作区、命令行文件和语言全部回来才 `setSettings`；而 `useUiStyles`
+        // 又要等 `settings` 才肯取主题 CSS。冷启动的 5 秒里，这条串联链贡献的是
+        // **所有 IPC 的最大值之和的一半**，不是任何一项本身。
+        //
+        // 主题 CSS 的第一帧只依赖设置里的 `ui_style`。所以先让设置/语言/设置问题
+        // 到岸，立刻 `setSettings` 触发主题装载；其余状态继续并行，不改变下面
+        // “先文档列表、再启动文件、最后会话”的既有顺序。
+        const 工作区任务 = api.workspace.get();
+        // 主题扫目录。目录不存在、一个主题都没有都是**正常结果**（返回空表），
+        // 不是错误——主题目录还没建起来的机器就是这种情况。
+        const 主题任务 = api.theme.list();
+        // 命令行带来的文件（`nota 笔记.md`、"用 Nota 打开"）。宿主只转告路径。
+        //
+        // ⚠️ 这一枪**自带 `catch`**（2026-09-25）：文件名不是合法 UTF-8 时
+        // 宿主会如实报错，而它一旦把后面那组 `Promise.all` 整体掀翻，
+        // 工作区 / 主题 / 文档列表就**全都不会生效**——一个打不开的文件
+        // 不该拖垮整个启动。报错本身还是要给用户看，所以就地弹一条。
+        const 启动文件任务 = api.startupFile().catch((e) => {
+          toast(t("Could not open the file from the command line: {0}", String(e)), "error");
+          return null;
+        });
+        const [s, 设置问题, 界面语言] = await Promise.all([
           api.settings.get(),
-          api.workspace.get(),
-          // 主题扫目录。目录不存在、一个主题都没有都是**正常结果**（返回空表），
-          // 不是错误——主题目录还没建起来的机器就是这种情况。
-          api.theme.list(),
           // 开机读设置有没有出问题（解析不了 `settings.toml` 时宿主退回默认值
           // 继续跑）。**这条不是可选的**，理由见文件头。
           api.settings.problem(),
-          // 命令行带来的文件（`nota 笔记.md`、"用 Nota 打开"）。宿主只转告路径。
-          //
-          // ⚠️ 这一枪**自带 `catch`**（2026-09-25）：文件名不是合法 UTF-8 时
-          // 宿主会如实报错，而它一旦把外面这个 `Promise.all` 整体掀翻，
-          // 设置 / 主题 / 文档列表就**全都不会生效**——一个打不开的文件
-          // 不该拖垮整个启动。报错本身还是要给用户看，所以就地弹一条。
-          api.startupFile().catch((e) => {
-            toast(t("Could not open the file from the command line: {0}", String(e)), "error");
-            return null;
-          }),
-          // 界面语言。⚠️ 同样是**自带 `catch`** 的一枪，理由见文件头。
+          // 界面语言。⚠️ 自带 `catch`，理由见文件头。
           api.appLang().catch(() => null),
         ]);
         if (!alive) return;
         // ⚠️ 在 `setSettings` 之前定语言（理由见文件头第 1 条）。
         if (界面语言) 定语言(界面语言.effective);
         setSettings(s);
+        const [ws, themeList, 启动文件] = await Promise.all([工作区任务, 主题任务, 启动文件任务]);
+        if (!alive) return;
         // ⚠️ 这一枪**冷启动时永远是 `null`**：工作区在宿主进程里只是个
         // `Mutex<Option<PathBuf>>`，新进程开出来必然是空的。这里照设不误是因为
         // 它才是"这次进程现在的工作区"的真相；真正的"接上上次那个文件夹"在
@@ -149,6 +162,7 @@ export function useStartup(w: 启动接线): void {
         // 那个 `?.` 与 `App.tsx` 里 `keys?.` 那条同一个理由：跑起来的后端
         // 可能是旧的，缺了这一截就是启动即白屏。
         await 接上会话(启动文件 ?? null, 启动档);
+        markStartupReady();
       } catch (e) {
         toast(t("Could not read the state at startup: {0}", String(e)), "error");
       }

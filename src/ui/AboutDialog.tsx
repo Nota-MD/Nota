@@ -269,9 +269,9 @@ export function AboutDialog({
       ),
     },
     {
-      名: t("System file dialogs"),
+      名: t("File and folder selection"),
       说明: t(
-        "Open files, Save As, message boxes, question boxes (dialog:allow-open/save/message/ask). These use the system's own dialogs, and you choose which file.",
+        "Open files, Save As and folder selection use Nota's in-app file picker. The app reads only the directory listing you navigate and the path you confirm.",
       ),
     },
     {
@@ -404,10 +404,12 @@ export function AboutDialog({
     </table>
   );
 
-  /** 一颗「行」按钮的共同长相：标签 ＋ 行尾那颗记号（`›` / `↗`）。 */
+  type 行记号 = "next" | "external" | "back";
+
+  /** 一颗「行」按钮的共同长相：标签 ＋ 行尾那颗硬边记号。 */
   const 行壳 = (
     行: { 键: string; 标签: string },
-    记号: string,
+    记号: Exclude<行记号, "back">,
     点: () => void,
   ) => (
     <button type="button" className="about-row" accessKey={行.键} onClick={点}>
@@ -417,9 +419,7 @@ export function AboutDialog({
             两边是同一个字母——所以这里 `toUpperCase()` 而不是再抄一遍。 */}
         <span className="about-row-key">({行.键.toUpperCase()})</span>
       </span>
-      <span className="about-mark" aria-hidden="true">
-        {记号}
-      </span>
+      <span className={`about-mark about-mark-${记号}`} aria-hidden="true" />
     </button>
   );
 
@@ -476,7 +476,7 @@ export function AboutDialog({
                   const 开启 = !debugMode;
                   onSetDebugMode(开启);
                   设调试提示(
-                    开启 ? t("Advanced settings enabled.") : t("Debug mode disabled."),
+                    开启 ? t("Developer mode enabled.") : t("Developer mode disabled."),
                   );
                 }}
               >
@@ -492,7 +492,7 @@ export function AboutDialog({
               {外链行.length > 0 && (
                 <div className="about-rows">
                   {外链行.map((行) =>
-                    行壳(行, "↗", () => {
+                    行壳(行, "external", () => {
                       void openUrl(行.网址).catch(() => {
                         // 打不开就算了：这一条不改变文档、也不影响用户正在做的事，
                         // 弹一句"打不开"只会打断他（与 `useExport` 那条同一条口径）。
@@ -503,7 +503,7 @@ export function AboutDialog({
               )}
 
               <div className="about-rows">
-                {子页行.map((行) => 行壳(行, "›", () => 设页(行.页)))}
+                {子页行.map((行) => 行壳(行, "next", () => 设页(行.页)))}
               </div>
             </div>
           ) : (
@@ -515,9 +515,7 @@ export function AboutDialog({
                   ref={头一颗}
                   onClick={() => 设页(null)}
                 >
-                  <span className="about-mark" aria-hidden="true">
-                    ‹
-                  </span>
+                  <span className="about-mark about-mark-back" aria-hidden="true" />
                   {t("Back")}
                 </button>
                 <span className="about-page-title">{页标题[页]}</span>

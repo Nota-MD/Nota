@@ -1,0 +1,89 @@
+name: 云端编译（不发布）
+
+# 只编译桌面安装包并上传 Actions artifact。不创建 tag、Release 或自动更新清单。
+# 完整测试在 verify.yml；平台工具链检查在 platform.yml；正式打包在 release.yml。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,rpm,appimage
+            label: linux-x86_64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+            label: windows-x86_64
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 50
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Linux 系统依赖
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev \
+            build-essential
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.label }}
+
+      - run: npm ci
+
+      - name: 编译安装包
+        run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - name: 生成 Windows 便携 ZIP
+        if: startsWith(matrix.platform, 'windows')
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $releaseDir = "src-tauri/target/${{ matrix.target }}/release"
+          $stageRoot = Join-Path $releaseDir "nota-portable"
+          $stageDir = Join-Path $stageRoot "Nota"
+          Remove-Item $stageRoot -Recurse -Force -ErrorAction SilentlyContinue
+          $zipPath = Join-Path $releaseDir "bundle/Nota_${version}_x64-portable.zip"
+          New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
+          Copy-Item "$releaseDir/nota.exe" $stageDir
+          Get-ChildItem $releaseDir -Filter *.dll -File | Copy-Item -Destination $stageDir
+          Copy-Item README.md,README.zh-CN.md,LICENSE,THIRD-PARTY.md $stageDir
+          Set-Content -LiteralPath (Join-Path $stageDir "nota-portable.marker") -Value "portable" -NoNewline
+          New-Item -ItemType Directory -Force -Path (Split-Path $zipPath) | Out-Null
+          Compress-Archive -Path $stageDir -DestinationPath $zipPath -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nota-preview-${{ matrix.label }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.rpm
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.zip

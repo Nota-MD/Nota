@@ -655,10 +655,10 @@ OVER=0
 while IFS= read -r f; do
   n=$(wc -l <"$f")
   if [ "$n" -ge 1000 ]; then
-    fail "$f 有 $n 行，超上限了 —— 就地按职责拆（docs/09 §4）"
+    fail "$f has $n lines and exceeds the hard limit; split it by responsibility (docs/09 §4)"
     OVER=$((OVER + 1))
   elif [ "$n" -gt 800 ]; then
-    warn "$f 有 $n 行，过了 800（目标 300–800，docs/09 §4），按功能拆"
+    warn "$f has $n lines, above the 800-line target (300-800, docs/09 §4); split by feature"
   fi
 # ⚠️ `tests` 也要扫（2026-10-07 加上，`docs/07` 第 89 项）：在加它之前，
 #    `tests/` 是这条硬线**唯一没盖到的地方**——`math-view.test.ts` 就是这么
@@ -671,7 +671,7 @@ done < <(find src-tauri/src src tools tests -type f \
            \( -name '*.rs' -o -name '*.ts' -o -name '*.tsx' \
               -o -name '*.lua' -o -name '*.css' -o -name '*.sh' \) 2>/dev/null | sort)
 
-[ "$OVER" -eq 0 ] && ok "没有超限的文件"
+[ "$OVER" -eq 0 ] && ok "no files exceed the line limit"
 
 # ── ② 文档新鲜度 ─────────────────────────────────────────────────────────
 head_ "② 文档新鲜度（源改了、映射到的文档没跟）"
@@ -694,11 +694,11 @@ if [ "$CI_MODE" -eq 1 ] && [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>
       printf '%s\n' "$CHANGED" | grep -Fqx "$doc" || missing="$missing $doc"
     done
     if [ -n "$missing" ]; then
-      fail "$src 改了，但映射文档没同批修改：$missing"
+      fail "$src changed without updating its mapped documents: $missing"
       STALE=$((STALE + 1))
     fi
   done < <(printf '%s\n' "${PAIRS[@]}")
-  [ "$STALE" -eq 0 ] && ok "git diff 内的源文件都有同批文档修改"
+  [ "$STALE" -eq 0 ] && ok "all changed source files have matching document updates in git diff"
 else
   for row in "${PAIRS[@]}"; do
     src=${row%% *}
@@ -711,12 +711,12 @@ else
       [ -e "$doc" ] || continue
       doc_t=$(mtime_of "$doc")
       if [ $((src_t - doc_t)) -gt "$TOL" ]; then
-        warn "$src 比 $doc 新 $((src_t - doc_t)) 秒 —— 这份文档的结论可能被推翻了"
+        warn "$src is $((src_t - doc_t)) seconds newer than $doc; the document may be stale"
         STALE=$((STALE + 1))
       fi
     done
   done
-  [ "$STALE" -eq 0 ] && ok "映射表里的文档都跟上了"
+  [ "$STALE" -eq 0 ] && ok "all mapped documents are up to date"
 fi
 
 # ── ③ 文档引用存在性 ─────────────────────────────────────────────────────
@@ -725,17 +725,17 @@ head_ "③ 文档引用存在性（docs/NN-*.md 必须真有）"
 MISSING_REF=0
 while IFS= read -r ref; do
   num=$(printf '%s' "$ref" | sed -E 's#docs/([0-9]{2})-.*#\1#')
-  [ -e "$(doc_file "$num")" ] || { fail "有人引用了 $ref，但 docs/ 里没有这份"; MISSING_REF=$((MISSING_REF + 1)); }
+  [ -e "$(doc_file "$num")" ] || { fail "$ref is referenced, but the document does not exist"; MISSING_REF=$((MISSING_REF + 1)); }
 done < <(grep -rhoE 'docs/[0-9]{2}-[a-z-]+\.md' \
            src-tauri/src src plugins tools AGENTS.md docs 2>/dev/null | sort -u)
-[ "$MISSING_REF" -eq 0 ] && ok "所有文档引用都指得到"
+[ "$MISSING_REF" -eq 0 ] && ok "all document references resolve"
 
 # ── ④ 编号存在性（backlog 第 N 项 / BUG-N）───────────────────────────────
 head_ "④ 编号存在性（docs/07 第 N 项 / BUG-N）"
 
 BACKLOG=docs/07-feature-status.md
 if [ ! -e "$BACKLOG" ]; then
-  warn "$BACKLOG 不存在，跳过编号检查"
+  warn "$BACKLOG does not exist; skipping backlog reference checks"
 else
   # backlog 表：从「## 3. Backlog」到下一个「## 」之间的 `| N |` 行
   backlog_nums=$(awk '/^## 3\. Backlog/{f=1;next} /^## /{f=0} f' "$BACKLOG" \
@@ -748,7 +748,7 @@ else
   # 代码与文档里所有「docs/07 … 第 N 项」的引用
   while IFS= read -r n; do
     printf '%s\n' "$backlog_nums" | grep -qx "$n" \
-      || { fail "有人引用 docs/07 第 $n 项，但 backlog 里没有这一项"; BAD_REF=$((BAD_REF + 1)); }
+      || { fail "docs/07 item $n is referenced, but it is missing from the backlog"; BAD_REF=$((BAD_REF + 1)); }
   done < <(grep -rhE '07-feature-status|docs/07' \
              src-tauri/src src plugins tools AGENTS.md docs 2>/dev/null \
            | grep -oE '第 *[0-9]+ *项' | grep -oE '[0-9]+' | sort -u)
@@ -756,13 +756,13 @@ else
   # 代码里所有 BUG-N 的引用（BUG-5 这种占位也算，所以只查编号在不在表里）
   while IFS= read -r n; do
     printf '%s\n' "$bug_nums" | grep -qx "$n" \
-      || { fail "有人引用 BUG-$n，但缺陷清单里没有这一条"; BAD_REF=$((BAD_REF + 1)); }
+      || { fail "BUG-$n is referenced, but it is missing from the bug list"; BAD_REF=$((BAD_REF + 1)); }
   done < <(grep -rhoE 'BUG-[0-9]+' src-tauri/src src plugins tools AGENTS.md docs 2>/dev/null \
            | sort -u | grep -oE '[0-9]+' | sort -u)
 
   # ⚠️ 计数要 `printf '%s\n'`：`printf '%s'` 不带尾换行时 `wc -l` 会少算一行，
   # 于是"27 项"被报成"26 项"——一个只会让人对不上号的假信息。
-  [ "$BAD_REF" -eq 0 ] && ok "backlog 与 BUG 的引用编号都存在（backlog $(printf '%s\n' "$backlog_nums" | wc -l) 项、BUG $(printf '%s\n' "$bug_nums" | wc -l) 条）"
+  [ "$BAD_REF" -eq 0 ] && ok "all backlog and BUG references resolve (backlog: $(printf '%s\n' "$backlog_nums" | wc -l), bugs: $(printf '%s\n' "$bug_nums" | wc -l))"
 fi
 
 # ── ⑤ 源文件已在文档里登记 ───────────────────────────────────────────────
@@ -777,11 +777,11 @@ while IFS= read -r f; do
   if grep -qF "$key" AGENTS.md 2>/dev/null || grep -qF "$key" docs/09-doc-sync-policy.md 2>/dev/null; then
     :
   else
-    warn "$f 没在 AGENTS.md §2 或 docs/09 §2 里登记 —— 加一行（键：$key）"
+    warn "$f is not registered in AGENTS.md §2 or docs/09 §2; add a row (key: $key)"
     UNREG=$((UNREG + 1))
   fi
 done < <(find src-tauri/src src -type f \( -name '*.rs' -o -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) 2>/dev/null | sort)
-[ "$UNREG" -eq 0 ] && ok "每个源文件都能在文档里找到"
+[ "$UNREG" -eq 0 ] && ok "every source file is registered in the documentation"
 
 # ── ⑥ 界面字体里不许出现衬线 ─────────────────────────────────────────────
 # 用户 2026-09-24：「绝对不要用衬线字体做UI字体。」——原话就是这么绝对。
@@ -818,10 +818,10 @@ scan_serif() {
 BAD_FONT=$(scan_serif src/styles/*.css index.html 2>/dev/null || true)
 if [ -n "$BAD_FONT" ]; then
   while IFS= read -r line; do
-    [ -n "$line" ] && fail "界面样式里出现衬线：$line"
+    [ -n "$line" ] && fail "serif font found in interface styles: $line"
   done <<< "$BAD_FONT"
 else
-  ok "界面那几份样式里没有衬线字体（themes/ 与 --font-doc 不在此列）"
+  ok "interface styles contain no serif fonts (themes/ and --font-doc are exempt)"
 fi
 
 # ⑥之二：**间接**引用也要挡。`font-family: var(--font-doc)` 一个字面
@@ -853,15 +853,17 @@ DOCFONT=$(grep -rn 'font-doc' src/styles --exclude-dir=themes 2>/dev/null \
   | grep -vE '^src/styles/(theme/|theme\.css$|editor\.css$|doc-typography\.ts$)' || true)
 if [ -n "$DOCFONT" ]; then
   while IFS= read -r f; do
-    [ -n "$f" ] && fail "$f 引了 --font-doc（文档字体），界面里只能用它画正文"
+    [ -n "$f" ] && fail "$f references --font-doc; interface files may use it only for document body text"
   done <<< "$DOCFONT"
 else
-  ok "--font-doc 只在 theme/ 、editor.css、themes 里出现"
+  ok "--font-doc appears only in theme/, editor.css, and themes"
 fi
 
-# ⑦ 内置界面风格的 id 三份抄本必须一致（2026-09-26）。
-#    三份分别是：`ui_styles.rs::BUILTIN_IDS`（**权威**）、`theme/shape.css` 的
-#    `[data-ui-style="…"]` 选择器、`AppearancePane.tsx` 的 `STYLE_ORDER`。
+# ⑦ 每个内置界面风格都必须在形状表与前端顺序表里有落点（2026-09-26）。
+#    权威清单仍是 `ui_styles.rs::BUILTIN_IDS`；`theme/shape.css` 与
+#    `AppearancePane.tsx` 的 `STYLE_ORDER` 必须覆盖它。2026-10-21 起安装包只
+#    随附 Adwaita，所以 CSS 里可以留有供外部官方主题包参考的历史形状段，
+#    但**不能反过来漏掉一个仍被列为内置的 id**。
 #    ⚠️ 为什么值得一条机器判据：三份不一致的**症状分两种，都不报错**——
 #    少在 shape.css 里一档 = 那一档选中后"形状是默认的、颜色却是它自己的"（半套）；
 #    少在 STYLE_ORDER 里一档 = 后端还没回来时下拉里少一项（一会儿又出现）。
@@ -870,7 +872,7 @@ fi
 #    `applyTheme.ts::resolveStyle()` 落成某个具体风格，所以它自己**没有**
 #    形状段也没有颜色段——`shape.css` 里找不到它是**对的**。
 #    这条判据 2026-09-26 第一次跑就报了它，遂加这一句过滤。
-head_ "⑦ 内置界面风格的 id 三份一致"
+head_ "⑦ 内置界面风格的 id 都有落点"
 RUST_IDS=$(sed -n '/pub const BUILTIN_IDS/,/^];/p' src-tauri/src/ui_styles.rs 2>/dev/null \
   | grep -oE '"[a-z0-9-]+"' | tr -d '"' | grep -vx auto | sort -u || true)
 CSS_IDS=$(grep -rhoE '\[data-ui-style="[a-z0-9-]+"\]' src/styles/theme/shape.css 2>/dev/null \
@@ -879,30 +881,18 @@ CSS_IDS=$(grep -rhoE '\[data-ui-style="[a-z0-9-]+"\]' src/styles/theme/shape.css
 TS_IDS=$(sed -n '/const STYLE_ORDER/,/^\];/p' src/ui/settings/panes/AppearancePane.tsx 2>/dev/null \
   | grep -oE '"[a-z0-9-]+"' | tr -d '"' | grep -vx auto | sort -u || true)
 if [ -z "$RUST_IDS" ] || [ -z "$CSS_IDS" ] || [ -z "$TS_IDS" ]; then
-  warn '⑦ 取 id 清单时有一份是空的——判据本身失效了，别当成三份一致（Rust/CSS/TS 各自取到的行数：'"$(printf '%s\n' "${RUST_IDS:-x}" | wc -l)"'/'"$(printf '%s\n' "${CSS_IDS:-x}" | wc -l)"'/'"$(printf '%s\n' "${TS_IDS:-x}" | wc -l)"'）'
+  warn 'Rule 7 received an empty id list; the check itself is invalid (Rust/CSS/TS line counts: '"$(printf '%s\n' "${RUST_IDS:-x}" | wc -l)"'/'"$(printf '%s\n' "${CSS_IDS:-x}" | wc -l)"'/'"$(printf '%s\n' "${TS_IDS:-x}" | wc -l)"')'
 else
-  # 两两比一次。⚠️ 用 comm 而不是 diff：comm 的 `-3` 输出**单边独有**的行，
-  # 而 `-3` 只压掉两边都有的——正好是"哪一份少了谁"。
   IDS_OK=1
-  cmp_ids() {  # $1/$2 是两份清单，$3/$4 是它们各自的名字
-    local diff
-    diff=$(comm -3 <(printf '%s\n' "$1") <(printf '%s\n' "$2") || true)
-    [ -z "$diff" ] && return 0
-    IDS_OK=0
-    while IFS= read -r line; do
-      [ -z "$line" ] && continue
-      case "$line" in
-        $'\t'*) fail "界面风格 id 「${line#$'\t'}」只在 $4 里，$3 里没有" ;;
-        *)      fail "界面风格 id 「$line」只在 $3 里，$4 里没有" ;;
-      esac
-    done <<< "$diff"
-    return 0
-  }
-  cmp_ids "$RUST_IDS" "$CSS_IDS" "ui_styles.rs::BUILTIN_IDS" "theme/shape.css"
-  cmp_ids "$RUST_IDS" "$TS_IDS"  "ui_styles.rs::BUILTIN_IDS" "AppearancePane.tsx 的 STYLE_ORDER"
-  cmp_ids "$CSS_IDS"  "$TS_IDS"  "theme/shape.css"           "AppearancePane.tsx 的 STYLE_ORDER"
+  while IFS= read -r id; do
+    [ -z "$id" ] && continue
+    printf '%s\n' "$CSS_IDS" | grep -qx "$id" \
+      || { fail "UI style id '$id' is built in but has no [data-ui-style] shape block"; IDS_OK=0; }
+    printf '%s\n' "$TS_IDS" | grep -qx "$id" \
+      || { fail "UI style id '$id' is built in but missing from STYLE_ORDER"; IDS_OK=0; }
+  done <<< "$RUST_IDS"
   if [ "$IDS_OK" -eq 1 ]; then
-    ok "三份 id 清单一致（$(printf '%s\n' "$RUST_IDS" | wc -l) 项）"
+    ok "all built-in style ids have CSS and frontend entries ($(printf '%s\n' "$RUST_IDS" | wc -l) entries)"
   fi
 fi
 
@@ -929,27 +919,27 @@ if command -v node >/dev/null 2>&1 && [ -d node_modules/postcss ]; then
   ' 2>/dev/null || true)
   if [ -n "$CSSBAD" ]; then
     while IFS= read -r line; do
-      [ -n "$line" ] && fail "样式表解析失败 $line —— PostCSS 会拒收整份文件（整个应用没样式）"
+      [ -n "$line" ] && fail "stylesheet parse failure $line; PostCSS rejects the entire file, leaving the app unstyled"
     done <<< "$CSSBAD"
   else
-    ok "src/styles 下每份 .css 都能解析"
+    ok "every .css file under src/styles parses"
   fi
 else
-  ok "跳过（没有 node 或 node_modules/postcss）"
+  ok "skipped (node or node_modules/postcss is unavailable)"
 fi
 
 # ── 汇总 ─────────────────────────────────────────────────────────────────
-printf '\n%s── 汇总%s\n' "$B" "$N"
+printf '\n%s-- Summary%s\n' "$B" "$N"
 if [ "$FAILS" -gt 0 ]; then
-  printf '%s%d 项 FAIL、%d 项 WARN%s\n' "$R" "$FAILS" "$WARNS" "$N"
-  printf '规则见 docs/09-doc-sync-policy.md\n'
+  printf '%s%d FAIL, %d WARN%s\n' "$R" "$FAILS" "$WARNS" "$N"
+  printf 'See docs/09-doc-sync-policy.md for the rules.\n'
   exit 1
 fi
 if [ "$WARNS" -gt 0 ]; then
-  printf '%s0 项 FAIL、%d 项 WARN%s —— WARN 要人判断：\n' "$Y" "$WARNS" "$N"
-  printf '  · 真漂移就去更新文档（不是改脚本）\n'
-  printf '  · 只是 mtime 假警报就忽略，并在 docs/07 §4 记一笔\n'
+  printf '%s0 FAIL, %d WARN%s -- WARN entries require judgement:\n' "$Y" "$WARNS" "$N"
+  printf '  · Update the documentation for real drift; do not weaken the check.\n'
+  printf '  · Ignore mtime-only false alarms and record them in docs/07 §4.\n'
   exit 0
 fi
-printf '%s全部通过%s\n' "$G" "$N"
+printf '%sAll checks passed.%s\n' "$G" "$N"
 exit 0

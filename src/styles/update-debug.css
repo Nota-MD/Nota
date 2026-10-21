@@ -1,0 +1,66 @@
+/* 更新进度与独立诊断窗口。⚠️ 必须在 overlay.css 之后加载。 */
+
+.about-update-progress {
+  margin: 10px 0 4px;
+}
+
+.about-update-progress .about-lead {
+  margin: 6px 0 0;
+}
+
+.about-update-progress-track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-subtle);
+}
+
+.about-update-progress-track > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 160ms linear;
+}
+
+.about-update-progress-track.is-indeterminate > span {
+  width: 35%;
+  animation: update-progress-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes update-progress-slide {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(390%);
+  }
+}
+
+.debug-window {
+  height: 100%;
+  padding: 20px;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.debug-window h1 {
+  margin: 0 0 14px;
+  font-size: 1.25rem;
+}
+
+.debug-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.debug-table th {
+  width: 34%;
+}
+
+.debug-table td {
+  overflow-wrap: anywhere;
+  user-select: text;
+}

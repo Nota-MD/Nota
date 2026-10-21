@@ -169,16 +169,37 @@ impl DocumentStore {
 
     /// 新建一份空文档并设为活动。
     pub fn create_untitled(&mut self) -> DocId {
+        self.create_untitled_with_text(String::new(), None)
+    }
+
+    /// 新建一份带正文的未命名文档并设为活动。
+    ///
+    /// 这是导入外部格式后落成标签的入口。正文来自转换器，因此一开始就与空的
+    /// `clean_text` 不同，`dirty` 会如实为真；标题优先取正文里的第一个标题，
+    /// 没有标题时才用原文件名提示。
+    pub fn create_untitled_with_text(
+        &mut self,
+        text: String,
+        title_hint: Option<String>,
+    ) -> DocId {
         self.untitled_count += 1;
         let id = self.alloc_id();
+        let idx = self.untitled_count;
+        let mut title = derive_title(&text, None, idx, self.strict_markdown);
+        if title.starts_with("未命名 ") {
+            if let Some(hint) = title_hint.filter(|hint| !hint.trim().is_empty()) {
+                title = hint;
+            }
+        }
+        let dirty = !text.is_empty();
         let doc = Document {
             id,
             path: None,
-            title: format!("未命名 {}", self.untitled_count),
-            text: String::new(),
-            dirty: false,
+            title,
+            text,
+            dirty,
             revision: 0,
-            untitled_index: self.untitled_count,
+            untitled_index: idx,
             clean_text: String::new(),
             选区: None,
         };
@@ -478,6 +499,27 @@ mod tests {
         let id = 宽松.create_untitled();
         宽松.sync(id, "#标签\n".to_owned()).unwrap();
         assert_eq!(宽松.get(id).unwrap().title, "标签", "宽松仓里它是标题");
+    }
+
+    #[test]
+    fn 导入正文直接建出脏文档并优先使用正文标题() {
+        let mut s = DocumentStore::new(LAX);
+        let id = s.create_untitled_with_text(
+            "# 导入的标题\n\n正文".to_string(),
+            Some("原文件名".to_string()),
+        );
+        let doc = s.get(id).expect("刚建的文档应当在");
+        assert_eq!(doc.title, "导入的标题");
+        assert_eq!(doc.text, "# 导入的标题\n\n正文");
+        assert!(doc.dirty, "导入内容还没有存盘，必须显示未保存状态");
+        assert_eq!(doc.clean_text, "");
+    }
+
+    #[test]
+    fn 导入正文没有标题时用原文件名兜底() {
+        let mut s = DocumentStore::new(LAX);
+        let id = s.create_untitled_with_text("只有正文".to_string(), Some("会议记录".to_string()));
+        assert_eq!(s.get(id).expect("刚建的文档应当在").title, "会议记录");
     }
 
     #[test]

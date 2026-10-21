@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { save as saveDialog } from "@/ui/file-picker";
 
 import { api, type PrintEnvironment, type PrintPreview } from "@/bridge/ipc";
 import { useT } from "@/i18n";
@@ -70,6 +71,7 @@ export function PrintDialog({
   const [忙, 设忙] = useState(false);
   const [错, 设错] = useState<string | null>(null);
   const [任务号, 设任务号] = useState<string | null>(null);
+  const [已存PDF, 设已存PDF] = useState<string | null>(null);
   /** ⚠️ 见文件头最后一段：过期结果不许覆盖新的。 */
   const 令牌 = useRef(0);
 
@@ -166,6 +168,26 @@ export function PrintDialog({
       设忙(false);
     }
   }, [request, 纸张, 横向, 边距, onClose, t]);
+
+  const 另存PDF = useCallback(async () => {
+    if (!预览) return;
+    const target = await saveDialog({
+      title: t("Save PDF"),
+      defaultPath: `${request.title || "Nota"}.pdf`,
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    });
+    if (!target) return;
+    设忙(true);
+    设错(null);
+    try {
+      const 已存 = await api.print.savePdf(预览.pdf, target);
+      设已存PDF(已存);
+    } catch (e) {
+      设错(String(e));
+    } finally {
+      设忙(false);
+    }
+  }, [预览, request.title, t]);
 
   const 总页 = 预览?.page_count ?? 0;
   const 当前图 = 预览?.pages[第几页 - 1];
@@ -323,6 +345,7 @@ export function PrintDialog({
           </label>
 
           {错 && <p className="print-error">{错}</p>}
+          {已存PDF && <p className="print-ok">{t("Saved PDF: {0}", 已存PDF)}</p>}
           {任务号 && <p className="print-ok">{t("Sent to the printer: {0}", 任务号)}</p>}
 
           <div className="print-actions">
@@ -331,7 +354,15 @@ export function PrintDialog({
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className={走系统对话框 ? "btn btn-primary" : "btn"}
+              disabled={忙 || !预览}
+              onClick={() => void 另存PDF()}
+            >
+              {t("Save PDF…")}
+            </button>
+            <button
+              type="button"
+              className={走系统对话框 ? "btn" : "btn btn-primary"}
               disabled={忙 || 任务号 !== null || (!走系统对话框 && (!预览 || !打印机))}
               onClick={() => void (走系统对话框 ? 系统开打() : 开打())}
             >

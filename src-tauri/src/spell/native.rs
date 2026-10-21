@@ -153,12 +153,18 @@ fn 建词典(aff: Option<&std::path::Path>, dic: &std::path::Path) -> Option<Dic
 mod tests {
     use super::*;
 
+    /// 缓存是进程级共享状态；Rust 测试默认并行，两个用例互相清缓存会让
+    /// “第二次仍然拿到同一份”在全集里偶发失败。单独重跑又永远通过，所以
+    /// 这里只串行化碰这份缓存的用例，不改变生产路径的任何语义。
+    static 缓存测试锁: Mutex<()> = Mutex::new(());
+
     /// 拿**一份真词典**走完整条路：建、查、建议。
     ///
     /// ⚠️ 这份词典是**用例自己现写**的（不是某个系统包），所以它在任何机器上
     /// 都跑得起来——这一条正是"测试不许依赖这台机器装了什么"那条规矩的落点。
     #[test]
     fn 一份最小的词典也能建起来并查词() {
+        let _锁 = 缓存测试锁.lock().unwrap();
         let 根 = std::env::temp_dir().join(format!("nota-native-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&根);
         std::fs::create_dir_all(&根).unwrap();
@@ -189,6 +195,7 @@ mod tests {
     /// ⚠️ 缓存那条：**同一个键不许建两遍**（155 ms × 每次打字）。
     #[test]
     fn 同一份词典只建一次() {
+        let _锁 = 缓存测试锁.lock().unwrap();
         let 根 = std::env::temp_dir().join(format!("nota-native-cache-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&根);
         std::fs::create_dir_all(&根).unwrap();

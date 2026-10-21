@@ -33,10 +33,16 @@ import { api, type Settings, type UiStyleInfo } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { applyUiStyleCss } from "@/styles/ui-style";
 import type { Toast } from "@/ui/Toasts";
+import { useBootReveal } from "@/ui/useBootReveal";
 
 export interface 风格出口 {
   /** 清单：内置的 ＋ 用户导入的。**空数组 = 还没拉到（或拉失败了）**。 */
   styles: UiStyleInfo[];
+  /**
+   * 设置已读回、风格清单已拉取，并且当前风格 CSS 已注入或已明确退回内置。
+   * 主窗口等它为真后再显示，避免用户先看到默认配色的半成品。
+   */
+  ready: boolean;
   /** 打开（必要时先建出来的）用户风格目录。 */
   openStylesDir: () => Promise<void>;
 }
@@ -48,52 +54,43 @@ export function useUiStyles(
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画）。
   const t = useT();
   const [styles, setStyles] = useState<UiStyleInfo[]>([]);
+  const [ready, setReady] = useState(false);
+  const id = settings?.ui_style ?? "";
+  const hasSettings = settings !== null;
+  useBootReveal(settings !== null && ready);
 
-  // 清单：启动时拉一次。理由（状态不是事件）写在文件头。
+  // 清单与当前导入样式一次拉齐。两步分开时，主窗口会在“清单到了、CSS 还没到”
+  // 的那一帧误判为已就绪，于是又闪回默认配色。
   useEffect(() => {
+    if (!hasSettings) {
+      setReady(false);
+      return;
+    }
     let alive = true;
     (async () => {
       try {
         const list = await api.uiStyle.list();
-        if (alive) setStyles(list);
+        if (!alive) return;
+        setStyles(list);
+        const 有文件 = list.some((style) => style.id === id && !style.builtin);
+        const css = 有文件 ? await api.uiStyle.css(id) : null;
+        if (!alive) return;
+        applyUiStyleCss(css);
       } catch (e) {
         // ⚠️ **拉不到不是空清单，是"不知道"**：这两种状态下拉里都只剩内置那几档
         // （见 `AppearancePane` 的兜底），但只有"拉到了"才允许判断某个 id 是不是
         // 内置的。所以这里保持空数组、**不做任何"那就当没有导入档"的推断**。
         console.warn("[nota] 读取界面风格清单失败：", e);
+        if (alive) applyUiStyleCss(null);
+      } finally {
+        if (alive) setReady(true);
       }
     })();
+    // ⚠️ `alive` 挡住快速切档时后回来的旧请求，避免旧 CSS 盖住新选择。
     return () => {
       alive = false;
     };
-  }, []);
-
-  const id = settings?.ui_style ?? "";
-  // 这一档在清单里、而且清单说它**有文件**（用户新加的，或用户覆盖了内置的）。
-  const 有文件 = styles.some((s) => s.id === id && !s.builtin);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const css = 有文件 ? await api.uiStyle.css(id) : null;
-        if (alive) applyUiStyleCss(css);
-      } catch (e) {
-        // 见文件头：文件被删了就退回内置那套，不打断用户。
-        // ⚠️ 退回时要**真的把注入的那份撤掉**，否则旧的文件内容还挂在 `<head>` 里，
-        // 用户会看到"我删了文件，风格还在"。
-        if (alive) {
-          console.warn("[nota] 应用导入的界面风格失败：", e);
-          applyUiStyleCss(null);
-        }
-      }
-    })();
-    // ⚠️ `alive` 标志必须有：快速连点两档时，先发出去的那次 IPC 可能后回来，
-    // 不挡住就会用旧的那份 CSS 盖掉新的（`useDocTheme` 同一条）。
-    return () => {
-      alive = false;
-    };
-  }, [id, 有文件, styles]);
+  }, [hasSettings, id]);
 
   const openStylesDir = useCallback(async () => {
     try {
@@ -105,5 +102,5 @@ export function useUiStyles(
     }
   }, [toast, t]);
 
-  return { styles, openStylesDir };
+  return { styles, ready, openStylesDir };
 }

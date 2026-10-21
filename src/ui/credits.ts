@@ -70,16 +70,6 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       链接: "https://github.com/facebook/react",
       许可: "MIT",
     },
-    {
-      // ⚠️ 这两样是 **Linux 那一侧**的（Tauri 在别的平台上换一套自己的实现），
-      // 但它们在 `Cargo.toml` 里是**我们直接引的**（`gtk` 那条还开了 `v3_24`
-      // 拿 `EventControllerKey`），所以照实列出来。
-      名: "GTK / WebKitGTK",
-      用处: t("Window, widgets and web view on Linux"),
-      链接: "https://github.com/tauri-apps/webkit2gtk-rs",
-      许可: "MIT",
-    },
-
     // ── 编辑器：正文（所见即所得）与代码块（CodeMirror）────────────────
     {
       名: "Milkdown / ProseMirror",

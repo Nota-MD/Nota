@@ -35,7 +35,7 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
-import { save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save as saveDialog } from "@/ui/file-picker";
 // ⚠️ 是 `openUrl` 不是 `openPath`：要交给系统浏览器的是个 **http 地址**，权限
 // 也分开管（`capabilities/default.json` 里开的是 `opener:allow-open-url`）。
 // 本文件里它只服务一处：下面那条 `PANDOC_GUIDE`——给用户一份安装指南。
@@ -50,7 +50,10 @@ import {
   type PandocProbe,
 } from "@/bridge/ipc";
 import { 导出HTML, 默认导出名 } from "@/editor/export";
+import { 数学代码块转公式 } from "@/editor/math-code";
+import { documentThemeLooksDark } from "@/styles/theme-contrast";
 import type { PrintRequest } from "@/ui/PrintDialog";
+import type { Dialogs } from "@/ui/useDialogs";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
@@ -74,11 +77,15 @@ export interface 导出接线 {
   /** 导出那一页的设置（默认文件夹、导出后是否定位到文件）。 */
   exportSettings: ExportSettings;
   toast: (message: string, level?: Toast["level"]) => void;
+  /** 深色主题下阻止打印或 PDF 导出时，用来显示只报信的弹窗。 */
+  askConfirm: Dialogs["askConfirm"];
   /**
    * 打开**应用内打印框**（2026-10-17）。⚠️ 只递"要打哪一份"——那个框自己
    * 负责版面、预览与投递（状态全在 `ui/PrintDialog.tsx` 里）。
    */
   openPrint: (req: PrintRequest) => void;
+  /** 用导入转换得到的 Markdown 新建一份未命名文档。 */
+  openImported: (markdown: string, titleHint: string | null) => Promise<void>;
 }
 
 export interface 导出出口 {
@@ -88,6 +95,8 @@ export interface 导出出口 {
   打印: () => Promise<void>;
   /** 借系统里的 pandoc 导出七种格式之一（`pdf` / `docx` / `rtf` / …）。 */
   导出为: (format: string) => Promise<void>;
+  /** 借系统里的 pandoc 把外部文档格式导入为 Markdown。 */
+  导入为: (format: string) => Promise<void>;
   /** 装没装的闸门。`null` = 没在问。 */
   pandocGate: PandocGate | null;
   /**
@@ -142,7 +151,17 @@ export function useExport(w: 导出接线): 导出出口 {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const { activeId, docs, getMarkdown, themeId, exportSettings, toast, openPrint } = w;
+  const {
+    activeId,
+    docs,
+    getMarkdown,
+    themeId,
+    exportSettings,
+    toast,
+    askConfirm,
+    openPrint,
+    openImported,
+  } = w;
   const [pandocGate, setPandocGate] = useState<PandocGate | null>(null);
 
   /** 主题 CSS 的**原始**文本。限域在 `editor/export.ts` 里做，那边统一。 */
@@ -155,6 +174,26 @@ export function useExport(w: 导出接线): 导出出口 {
       return undefined;
     }
   }, [themeId]);
+
+  /**
+   * 打印与 PDF 共用的浅色主题闸门。
+   *
+   * 返回 `null` 表示这次动作需要停止；`undefined` 表示当前没有可加载的主题
+   *（导出基础样式本身就是浅色），并不是错误。
+   */
+  const 取打印主题CSS = useCallback(async (): Promise<string | undefined | null> => {
+    const css = await 取主题CSS();
+    if (!documentThemeLooksDark(css ?? "")) return css;
+    await askConfirm({
+      title: t("Light theme required"),
+      message: t(
+        "Printing and PDF output only support light themes. Please select a light theme before printing.",
+      ),
+      confirmLabel: t("OK"),
+      hideCancel: true,
+    });
+    return null;
+  }, [askConfirm, t, 取主题CSS]);
 
   /**
    * 导出后按设置**定位**到那个文件。
@@ -221,6 +260,7 @@ export function useExport(w: 导出接线): 导出出口 {
         const html = await 导出HTML(text, {
           styled,
           themeCss: styled ? await 取主题CSS() : undefined,
+          includeHtmlPreviews: true,
           title: doc.title,
         });
         const written = await api.export.write(picked, html);
@@ -240,9 +280,12 @@ export function useExport(w: 导出接线): 导出出口 {
     if (!doc || text === undefined) return;
 
     try {
+      const themeCss = await 取打印主题CSS();
+      if (themeCss === null) return;
       const html = await 导出HTML(text, {
         styled: true,
-        themeCss: await 取主题CSS(),
+        themeCss,
+        lightOutput: true,
         title: doc.title,
       });
       // ⚠️ **两条路，按系统分**（2026-10-17）：
@@ -269,7 +312,7 @@ export function useExport(w: 导出接线): 导出出口 {
     } catch (e) {
       toast(t("Could not print: {0}", String(e)), "error");
     }
-  }, [activeId, docs, getMarkdown, 取主题CSS, toast, openPrint]);
+  }, [activeId, docs, getMarkdown, 取打印主题CSS, toast, openPrint]);
 
   /**
    * 真的导一次（闸门放行之后走这条）。`format` 来自探测报告那张表。
@@ -281,6 +324,9 @@ export function useExport(w: 导出接线): 导出出口 {
       const text = getMarkdown();
       if (text === undefined) return;
       try {
+        const pdf = format.id === "pdf";
+        const printThemeCss = pdf ? await 取打印主题CSS() : undefined;
+        if (printThemeCss === null) return;
         const picked = await saveDialog({
           title: t("Export {0}", format.name),
           defaultPath: 默认落点(默认导出名(doc.title, format.extension), doc.path),
@@ -292,17 +338,18 @@ export function useExport(w: 导出接线): 导出出口 {
         // 走 Nota 自带的排版（`pdf_print.rs`）。不备的话，"pandoc 装了但没有
         // 排版引擎"这种情况就只剩一句报错，而它本来有救。
         const html =
-          format.id === "pdf"
+          pdf
             ? await 导出HTML(text, {
                 styled: true,
-                themeCss: await 取主题CSS(),
+                themeCss: printThemeCss,
+                lightOutput: true,
                 title: doc.title,
               })
             : null;
 
         const 结果 = await api.pandoc.export({
           format: format.id,
-          markdown: text,
+          markdown: 数学代码块转公式(text),
           target: picked,
           docPath: doc.path,
           html,
@@ -310,7 +357,9 @@ export function useExport(w: 导出接线): 导出出口 {
           // 由后端的 `pandoc.rs::能带_CSS` 判"这一种格式吃不吃 CSS"，前端不判
           // ——判据放两处就一定会有一天两边不一样，而症状是"这一种格式带主题、
           // 那一种不带"，没人能说清为什么。
-          themeCss: (await 取主题CSS()) ?? "",
+          // PDF 不接收文档主题 CSS：直接走 pandoc 时由排版引擎使用浅色纸面；
+          // 走 HTML 兜底时，上面那份已经过了浅色主题闸门。
+          themeCss: pdf ? "" : ((await 取主题CSS()) ?? ""),
           // 用户在「设置 → 导出」里写的那串额外参数（原样搬，前端不解析）。
           pandocArgs: exportSettings.pandoc_args,
         });
@@ -322,7 +371,15 @@ export function useExport(w: 导出接线): 导出出口 {
         toast(t("Could not export: {0}", String(e)), "error");
       }
     },
-    [getMarkdown, 取主题CSS, exportSettings.pandoc_args, toast, 默认落点, 可能要定位],
+    [
+      getMarkdown,
+      取打印主题CSS,
+      取主题CSS,
+      exportSettings.pandoc_args,
+      toast,
+      默认落点,
+      可能要定位,
+    ],
   );
 
   /**
@@ -360,6 +417,55 @@ export function useExport(w: 导出接线): 导出出口 {
     [activeId, docs, getMarkdown, 真导出, toast],
   );
 
+  /**
+   * 导入与导出共用同一条 pandoc 探测。对话框后缀由后端那张格式表给出，
+   * 前端不另抄一份；转换结果交给文档生命周期建一张未保存标签。
+   */
+  const 导入为 = useCallback(
+    async (format: string) => {
+      let probe: PandocProbe;
+      try {
+        probe = await api.pandoc.probe();
+      } catch (e) {
+        toast(t("Could not probe for pandoc: {0}", String(e)), "error");
+        return;
+      }
+      const info = probe.import_formats.find((item) => item.id === format);
+      if (!info) {
+        toast(t("Unrecognised import format: {0}", format), "error");
+        return;
+      }
+      if (probe.state !== "ready") {
+        toast(
+          t("Importing {0} requires Pandoc. Install it, then try again.", info.name),
+          "error",
+        );
+        return;
+      }
+
+      const picked = await openDialog({
+        title: t("Import {0}", info.name),
+        multiple: false,
+        filters: [{ name: info.name, extensions: info.extensions }],
+      });
+      if (typeof picked !== "string") return;
+
+      try {
+        const result = await api.pandoc.importFile(format, picked);
+        const name = picked.split(/[\\/]/).pop() ?? picked;
+        const titleHint = name.replace(/\.[^.]+$/, "");
+        await openImported(result.markdown, titleHint);
+        const note = result.warnings
+          ? ` ${t("Some resources may not have been imported: {0}", result.warnings)}`
+          : "";
+        toast(t("Imported {0}", name) + note, result.warnings ? "info" : "success");
+      } catch (e) {
+        toast(t("Could not import: {0}", String(e)), "error");
+      }
+    },
+    [openImported, t, toast],
+  );
+
   /** 闸门面板上那几颗按钮。 */
   const pandocGateActions = useMemo(
     () => ({
@@ -395,5 +501,5 @@ export function useExport(w: 导出接线): 导出出口 {
     [pandocGate, docs, activeId, 真导出, toast],
   );
 
-  return { 导出, 打印, 导出为, pandocGate, pandocGateActions };
+  return { 导出, 打印, 导出为, 导入为, pandocGate, pandocGateActions };
 }

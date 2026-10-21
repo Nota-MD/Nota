@@ -79,6 +79,7 @@ import { taskList } from "./task-list";
 // 那种速记，标准 Markdown 表格语法一个都不认）。判据、对齐值的坑、
 // 两条触发路都写在它自己的文件头上。
 import { 表格输入规则, 表格输入 } from "./table-input";
+import { 块容器按键 } from "./block-keys";
 // 标题**回车才成块**（照 Typora）：`# 你好` 在按回车之前一直是段落，
 // 只按粗体提示；回车才去掉前缀、换成标题。理由见它自己的文件头。
 import { 标题回车成块, 标题行首退格 } from "./heading-on-enter";
@@ -516,6 +517,9 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     .use(taskList)
     .use(表格输入规则)
     .use(表格输入)
+    // 引用开头空格退出、空表格开头退格删表。两条都在 `handleKeyDown` 里，
+    // 因此比输入规则和 `baseKeymap` 先拿到这一下。
+    .use(readOnly ? [] : [块容器按键])
     // ⚠️ **它是个工厂，要收 `strict`**（2026-09-29 起）：那份"标题写法"的
     // 加粗提示在宽松档下要认 `#你好`、严格档下不认——判据一处
     // （`atx.ts::atxPrefix`），四个消费者一起守。详见 `heading-on-enter.ts` 文件头。

@@ -17,6 +17,20 @@ pub fn nota_doc_new(state: State<'_, AppState>) -> Result<DocId> {
     Ok(docs.create_untitled())
 }
 
+/// 新建一份带初始正文的未命名文档，用于导入格式转换结果。
+///
+/// `title_hint` 只作为“正文没有标题”时的兜底；正文里有 Markdown 标题时，
+/// 仍由文档仓按当前严格模式从正文推导标题。
+#[tauri::command]
+pub fn nota_doc_new_with_text(
+    state: State<'_, AppState>,
+    text: String,
+    title_hint: Option<String>,
+) -> Result<DocId> {
+    let mut docs = state.documents.lock().unwrap();
+    Ok(docs.create_untitled_with_text(text, title_hint))
+}
+
 /// 打开一个文件。**已打开就复用**（不重复开标签），并把活动标签切过去。
 ///
 /// ⚠️ 打开之后要把**外部改动监视**的基准挪到"我们刚读进来的这一份"：

@@ -50,47 +50,14 @@ function systemPrefersDark(): boolean {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
 }
 
-/**
- * 探"自动"风格该落到哪个具体风格上。
- *
- * Linux 下靠 `XDG_CURRENT_DESKTOP` 猜桌面环境。**这只是初值**——
- * 用户可以在设置里显式指定（比如在 GNOME 上偏要用 macOS 风格），
- * 指定了就一律听用户的，不再自动探。
- *
- * ⚠️ 这张表要跟着 `UiStyle` 一起长。**探不出来时兜底是 Adwaita**：
- * 它是 GNOME 的原生语言，也是 WebKitGTK 下最不出错的一档。
- *
- * ⚠️ **`windows10` 故意不在这里**：`windows` 这个线索只指向 Win11 那一档。
- * Windows 10 与 Windows 11 在 UA / `XDG_CURRENT_DESKTOP` 上区分不了
- * （`navigator.userAgent` 里只有 "Windows NT 10.0"，而 Win10 和 Win11 报的是
- * **同一个字符串**），所以 `windows10` 是**只能手选**的一档——
- * `ui_style = auto` 永远不会落到它上面。这一条如实写在 `docs/07` 里。
- */
-function detectStyle(): Exclude<UiStyle, "auto"> {
-  const desktop = (navigator.userAgent + " " + guessDesktop()).toLowerCase();
-  if (desktop.includes("kde") || desktop.includes("plasma")) return "plasma";
-  if (desktop.includes("ubuntu") || desktop.includes("yaru")) return "yaru";
-  if (desktop.includes("windows")) return "windows";
-  if (desktop.includes("mac") || desktop.includes("darwin")) return "macos";
-  return "adwaita";
-}
-
-/** WebKitGTK 不会把桌面环境告诉 JS，只能从别处找线索。 */
-function guessDesktop(): string {
-  // 没有可靠的同步 API，所以 `XDG_CURRENT_DESKTOP` 目前传不进来——
-  // 除非用 `navigator.userAgent` 里那点线索（WebKitGTK 会带上 "Linux"，
-  // 但不带桌面名）。**这是"自动"这个选项今天并不真的自动**的原因，
-  // 如实记在 `docs/07` 里；想接上得走 XDG desktop portal。
-  return "";
-}
-
 export function resolveMode(mode: UiMode): "light" | "dark" {
   if (mode === "auto") return systemPrefersDark() ? "dark" : "light";
   return mode;
 }
 
 export function resolveStyle(style: UiStyle): string {
-  return style === "auto" ? detectStyle() : style;
+  // 自动匹配桌面主题的功能已移除；旧设置中的 `auto` 仅作兼容迁移。
+  return style === "auto" ? "adwaita" : style;
 }
 
 /** 把解析后的两条轴写进 `<html>`。返回一个退订函数。 */

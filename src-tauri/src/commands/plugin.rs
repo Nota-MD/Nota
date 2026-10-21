@@ -7,11 +7,29 @@ use crate::error::{NotaError, Result};
 use crate::plugin::{PluginInfo, PluginMenuItem, PluginPanel, ReviewState};
 use crate::state::AppState;
 
+/// 启动时插件目录扫描在后台执行。只让插件读取命令短暂等它完成；窗口与
+/// 设置/文档 IPC 不受影响。调用方拿到的是已经 ready 的普通 MutexGuard。
+fn 等插件<'a>(state: &'a AppState) -> std::sync::MutexGuard<'a, crate::plugin::PluginHost> {
+    loop {
+        let guard = state.plugins.lock().unwrap();
+        if guard.is_ready() {
+            return guard;
+        }
+        drop(guard);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
 /// 列出所有插件（含加载失败的，界面上要标红）。
 #[tauri::command]
-pub fn nota_plugins_list(state: State<'_, AppState>) -> Result<Vec<PluginInfo>> {
-    let host = state.plugins.lock().unwrap();
-    Ok(host.list_info())
+pub async fn nota_plugins_list(app: tauri::AppHandle) -> Result<Vec<PluginInfo>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let host = 等插件(&state);
+        Ok(host.list_info())
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("读取拓展清单的线程挂了：{e}")))?
 }
 
 /// 启用 / 停用一个插件。
@@ -40,7 +58,7 @@ pub async fn nota_plugin_set_enabled(
 
 /// 从一个插件包（`.nota-plugin` / `.zip`）或目录装一个插件。返回它的 id。
 ///
-/// ⚠️ `path` 由前端用文件对话框问出来（`@tauri-apps/plugin-dialog` 的 `open`），
+/// ⚠️ `path` 由前端用应用内文件选择器问出来，
 /// 宿主**不自己弹框**：那是界面的事，而且宿主弹框在无头测试里没法验。
 ///
 /// ⚠️ "未知签名者"**不是**拒装的理由（`plugin::PluginHost::装` 里写明为什么）：
@@ -83,7 +101,7 @@ pub fn nota_plugin_trust(state: State<'_, AppState>, id: String) -> Result<()> {
 
 /// 把一个已装的插件导出成一个 `.nota-plugin` 包（2026-09-27 加）。
 ///
-/// ⚠️ `path` 由前端用**保存对话框**问出来（`@tauri-apps/plugin-dialog` 的 `save`），
+/// ⚠️ `path` 由前端用**应用内保存选择器**问出来，
 /// 宿主不自己弹框——与 [`nota_plugin_install`] 那条完全同源的理由。
 ///
 /// ⚠️ 这个动作**只读**：它不碰插件自己、不碰设置、不签名。签名带不带由
@@ -114,9 +132,14 @@ pub async fn nota_plugin_export(
 ///
 /// ⚠️ 这是一次**纯查询**（不落盘、不改状态），所以留在同步命令里。
 #[tauri::command]
-pub fn nota_plugin_export_name(state: State<'_, AppState>, id: String) -> Result<String> {
-    let host = state.plugins.lock().unwrap();
-    host.导出默认名(&id)
+pub async fn nota_plugin_export_name(app: tauri::AppHandle, id: String) -> Result<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let host = 等插件(&state);
+        host.导出默认名(&id)
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("读取拓展导出名的线程挂了：{e}")))?
 }
 
 /// 在系统的文件管理器里打开用户插件目录（`~/.local/share/nota/plugins`），
@@ -213,9 +236,16 @@ pub fn nota_plugin_setting_set(
 
 /// 信任库里现在有哪几把钥匙。
 #[tauri::command]
-pub fn nota_plugin_trust_list(state: State<'_, AppState>) -> Result<Vec<crate::plugin::信任记录>> {
-    let host = state.plugins.lock().unwrap();
-    Ok(host.信任表())
+pub async fn nota_plugin_trust_list(
+    app: tauri::AppHandle,
+) -> Result<Vec<crate::plugin::信任记录>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let host = 等插件(&state);
+        Ok(host.信任表())
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("读取拓展信任表的线程挂了：{e}")))?
 }
 
 /// 检查所有声明了 `[update] manifest` 的插件。
@@ -437,9 +467,14 @@ pub fn nota_plugin_find_command(state: State<'_, AppState>, command: String) -> 
 /// ⚠️ 别改成"等事件推"——注册发生在插件加载时（启动阶段），比前端挂载早，
 /// 推必漏且静默。见 `plugin/mod.rs::panels` 与 BUG-13。
 #[tauri::command]
-pub fn nota_plugin_panels(state: State<'_, AppState>) -> Result<Vec<PluginPanel>> {
-    let host = state.plugins.lock().unwrap();
-    Ok(host.panels())
+pub async fn nota_plugin_panels(app: tauri::AppHandle) -> Result<Vec<PluginPanel>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let host = 等插件(&state);
+        Ok(host.panels())
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("读取拓展面板的线程挂了：{e}")))?
 }
 
 /// 插件声明的菜单项。范式同 `nota_plugin_panels`。
@@ -448,7 +483,12 @@ pub fn nota_plugin_panels(state: State<'_, AppState>) -> Result<Vec<PluginPanel>
 /// 留着是刻意的：写入侧已经按最终形态落好了，菜单栏一做就是接上这一根线，
 /// 不用回头再改一遍 `ui.rs`。
 #[tauri::command]
-pub fn nota_plugin_menus(state: State<'_, AppState>) -> Result<Vec<PluginMenuItem>> {
-    let host = state.plugins.lock().unwrap();
-    Ok(host.menus())
+pub async fn nota_plugin_menus(app: tauri::AppHandle) -> Result<Vec<PluginMenuItem>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let host = 等插件(&state);
+        Ok(host.menus())
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("读取拓展菜单的线程挂了：{e}")))?
 }

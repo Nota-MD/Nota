@@ -51,7 +51,7 @@
   /* ── 排版 ── */
   /* Adwaita 的正文字是**无衬线**（GNOME 的界面与文档都不用衬线），
      所以这里和「极简」「LaTeX」正好相反。系统字体优先，中文落 Noto Sans。 */
-  --font-doc: system-ui, "Cantarell", "Noto Sans CJK SC", "Source Han Sans SC",
+  --font-doc: "Adwaita Sans", "Noto Sans CJK SC", "Source Han Sans SC",
     "PingFang SC", "Microsoft YaHei", sans-serif;
   --doc-font-size: 1.02em;
   --doc-line-height: 1.75;

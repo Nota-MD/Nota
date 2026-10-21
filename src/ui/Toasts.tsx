@@ -8,18 +8,26 @@
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface Toast {
   id: string;
   message: string;
   level: "info" | "warn" | "error" | "success";
+  /** 可选的主操作。通知仍然是提示，不强迫用户先回答。 */
+  action?: ToastAction;
 }
 
 interface Props {
   items: Toast[];
   onDismiss: (id: string) => void;
+  position: "top-center" | "bottom-right";
 }
 
-export function Toasts({ items, onDismiss }: Props) {
+export function Toasts({ items, onDismiss, position }: Props) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   // ⚠️ 它必须在下面那个提前 `return null` **之前**：hooks 不能有条件。
@@ -27,14 +35,28 @@ export function Toasts({ items, onDismiss }: Props) {
   if (!items.length) return null;
 
   return (
-    <div className="toasts" role="status" aria-live="polite">
+    <div className="toasts" data-position={position} role="status" aria-live="polite">
       {/* ⚠️ 这个回调参数原来叫 `t`，现在和上面那个 `t` 撞名了——参数会把它盖住，
           `t("Dismiss")` 会变成"拿一个 toast 对象当函数调"。所以改叫 `项`。
           ⚠️ `项.message` **不翻**：那句话是调用方**已经拼好**的（见 `useExport.ts`
           那几处 `toast(t("…"))`），这里再翻一次等于翻一条已经不认识的句子。 */}
       {items.map((项) => (
         <div key={项.id} className={`toast toast-${项.level}`}>
-          <span className="toast-message">{项.message}</span>
+          <div className="toast-content">
+            <span className="toast-message">{项.message}</span>
+            {项.action && (
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => {
+                  onDismiss(项.id);
+                  项.action?.onClick();
+                }}
+              >
+                {项.action.label}
+              </button>
+            )}
+          </div>
           <button
             type="button"
             className="toast-close"

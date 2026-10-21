@@ -31,7 +31,7 @@ use crate::proc::{command_or_default, run_capture, split_command, Ran, RunOpts};
 // ⚠️ 这两份在 `pandoc.rs` 里（**留在那边**）：`Format` / `FormatInfo` / `格式表`
 // 是七种格式的词汇表（真正那份在 `pandoc_format.rs`），`ENV_CMD` / `DEFAULT_CMD`
 // 是命令名——探测与导出都要用，所以它们的主场是那一半，这里借过来。
-use super::pandoc::{DEFAULT_CMD, ENV_CMD};
+use super::pandoc::{import_formats, DEFAULT_CMD, ENV_CMD, ImportFormatInfo};
 use crate::pandoc_format::{FormatInfo, 格式表};
 
 /// 问版本用的旗子。`--version` 是 pandoc 的稳定接口（第一行 `pandoc 3.x`）。
@@ -334,6 +334,8 @@ pub struct PandocProbe {
     pub fallback_pdf: bool,
     /// 七种格式的 id / 中文名 / 后缀。前端拿它拼保存对话框的过滤器与默认文件名。
     pub formats: Vec<FormatInfo>,
+    /// 可导入的五种文档格式。前端拿它拼打开对话框的过滤器。
+    pub import_formats: Vec<ImportFormatInfo>,
 }
 
 /// 探测本机有没有能用的 pandoc。**不联网、不下载**。
@@ -353,6 +355,7 @@ pub(crate) fn probe_with(command: &str) -> PandocProbe {
         pdf_engine: find_engine(),
         fallback_pdf: crate::pdf_print::available(),
         formats: 格式表(),
+        import_formats: import_formats(),
     };
 
     // ⚠️ 命令名交给 [`解析`] 去落成"现在真能跑的那一条"（PATH → 知名目录 →

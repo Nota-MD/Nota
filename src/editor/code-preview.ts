@@ -25,9 +25,8 @@
  *    （滚动位置、表单里填了一半的字、`<video>` 的播放进度全没了），所以不能
  *    每敲一个字就写一次——打字的这一段攒 300ms 再写。
  *
- * ⚠️ **它不进导出**：`editor/export.ts` 的 `整块删掉` 名单里有 `.nota-code-preview`
- * （漏了的症状是导出的 HTML / PDF 里嵌着一份"代码块下面的预览"，而那是编辑时的
- * 零件，第 69 项那次用户打出来的 PDF 就是这么发现的）。
+ * ⚠️ **HTML 导出保留它，PDF / 打印删掉它**：HTML 导出的预览是可交互内容；
+ * PDF 只需要文档本身，不能把同一段 HTML 的源码和结果各印一遍。
  */
 
 import type { Node as PMNode } from "@milkdown/kit/prose/model";

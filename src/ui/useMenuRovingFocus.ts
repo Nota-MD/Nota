@@ -88,6 +88,14 @@ export interface UseMenuRovingFocusOptions<T extends RovingItem> {
   /** Esc / Tab：关掉菜单。焦点还给谁由调用方决定。 */
   onDismiss: () => void;
   /**
+   * Esc 单独取消一层。不传时与 `onDismiss` 相同。
+   *
+   * ⚠️ 子菜单必须传自己的 `onClose`：Motif 的 `MenuEscape` 调的是
+   * `popdownOne`，先收当前子菜单；再按一次才收父菜单。Tab 仍走
+   * `onDismiss`，因为 Tab 的语义是离开整条菜单链。
+   */
+  onCancel?: () => void;
+  /**
    * 向右。调用方自己决定做什么：有子菜单就展开，没有就切到右边那一栏。
    * ⚠️ **没有返回值**——按键一定会被这一层吃掉（见下面 `handled()`），
    * 所以"返回 false 让事件冒上去"那条路已经不存在了。
@@ -140,6 +148,7 @@ export function useMenuRovingFocus<T extends RovingItem>({
   items,
   onActivate,
   onDismiss,
+  onCancel,
   onRight,
   onLeft,
   enabled = true,
@@ -207,7 +216,7 @@ export function useMenuRovingFocus<T extends RovingItem>({
           return;
         case "Escape":
           handled();
-          onDismiss();
+          (onCancel ?? onDismiss)();
           return;
         case "Tab":
           // ⚠️ **不** preventDefault 之后什么也不做，而是关掉菜单让 Tab 照常走。
@@ -237,7 +246,7 @@ export function useMenuRovingFocus<T extends RovingItem>({
           return;
       }
     },
-    [items, focusedIndex, onActivate, onDismiss, onRight, onLeft],
+    [items, focusedIndex, onActivate, onDismiss, onCancel, onRight, onLeft],
   );
 
   const registerItem = useCallback((index: number, node: HTMLElement | null) => {

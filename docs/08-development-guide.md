@@ -531,6 +531,12 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 文档主题也在自己的 `themes/` 根内使用同一套相对 `url()` 规则，适合放
 `@font-face`；但文档主题仍然**不能**覆盖界面图标，界面资源归 `ui-styles/`。
 
+📌 **2026-10-21 起推荐自包含主题包**：`themes/<id>/theme.css` 或
+`ui-styles/<id>/theme.css`，资源与主 CSS 放在同一主题目录。根目录里的扁平
+`<id>.css` 不再接受。文档主题可以用 Typora 常见的 `#write`
+选择正文根；限域器会把它映射到 `.editor-pane .ProseMirror`。完整规范见
+`docs/reference/theme-package-spec.md`。
+
 ⚠️ **规矩只有三条**，全在 `styles/ui-style.ts` 的文件头：
 ①选择器从 `[data-ui-style="<你的 id>"]` 起头（**不限域是有意的**——界面风格要改的
 就是整个外壳，套一层 `.editor-pane` 前缀等于整份文件都不生效，而且**不报错**）；

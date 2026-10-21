@@ -25,13 +25,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify:
-    uses: ./.github/workflows/verify.yml
-    with:
-      base_sha: ${{ github.event.before || '' }}
-
   build:
-    needs: verify
     strategy:
       # 一个平台挂了不代表别的平台也挂，让其余的跑完——六个平台跑一轮很贵。
       fail-fast: false
@@ -125,6 +119,9 @@ jobs:
           $zipPath = Join-Path $releaseDir "bundle/Nota_${version}_${arch}-portable.zip"
           New-Item -ItemType Directory -Force -Path $stageDir | Out-Null
           Copy-Item "$releaseDir/nota.exe" $stageDir
+          # Windows uses WebView2 (Chromium), not WebKitGTK. The only runtime
+          # loader that may sit beside nota.exe is WebView2Loader.dll.
+          Get-ChildItem $releaseDir -Filter *.dll -File | Copy-Item -Destination $stageDir
           Copy-Item README.md,README.zh-CN.md,LICENSE,THIRD-PARTY.md $stageDir
           Set-Content -LiteralPath (Join-Path $stageDir "nota-portable.marker") -Value "portable" -NoNewline
           New-Item -ItemType Directory -Force -Path (Split-Path $zipPath) | Out-Null

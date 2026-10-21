@@ -20,9 +20,9 @@
 //!
 //! 第三方主题文件的**版权归各自的作者**，随包分发属于侵权，
 //! 用户 2026-09-23 明确划了这条线。
-//! 所以：既不扫描外部的主题安装目录，也不带第三方主题的解析器
-//! （那套 `@import` 展开 ＋ `url()` 内联成 data: URL 的机器一起删了，
-//! 见 `docs/07` §4 的记录）。
+//! 所以：既不扫描外部编辑器的主题安装目录，也不复制第三方主题。用户自己的
+//! 主题包可以带图片和字体，相对 `url()` 由 `theme_assets` 在注入前内联；
+//! `@import` 仍被前端限域器删除，不允许主题引入远程或跨包样式。
 //!
 //! 内置的这几套是**自己写的**（`src/styles/themes/*.css`），
 //! 用 `include_str!` 编进二进制，所以新装的机器上主题菜单不是空的。
@@ -36,8 +36,8 @@
 //!
 //! # 用户主题放哪儿
 //!
-//! `~/.config/nota/themes/<id>.css`。**只扫这一个目录**。
-//! 文件名去掉 `.css` 就是 id。**Adwaita / Adwaita Dark 是只读内置主题**：
+//! `~/.config/nota/themes/<id>/theme.css`。**只扫这一个目录**。
+//! 目录名就是 id。**Adwaita / Adwaita Dark 是只读内置主题**：
 //! 用户目录里的同名文件会被忽略；其他 id 才能作为用户主题加入。
 //!
 //! ⚠️ 这条覆盖规则意味着 id 是**用户可控的字符串**，所以 `css_of` 里
@@ -153,18 +153,54 @@ pub fn css_of(id: &str) -> Result<String> {
         return Ok(builtin.css.to_owned());
     }
 
-    let path = paths::user_themes_dir()?.join(format!("{id}.css"));
+    let root = paths::user_themes_dir()?;
+    let path = resolve_user_css(&root, id)
+        .ok_or_else(|| NotaError::other(format!("没有名为 {id} 的文档主题")))?;
     if path.is_file() {
         check_size(&path, MAX_CSS_BYTES)?;
         let css = std::fs::read_to_string(&path).map_err(|source| NotaError::Read {
             path: path.clone(),
             source,
         })?;
-        let root = paths::user_themes_dir()?;
-        return Ok(crate::theme_assets::inline(&css, &path, &root));
+        return Ok(crate::theme_assets::inline(
+            &css,
+            &path,
+            &css_scope_root(&root, &path),
+        ));
     }
 
     Err(NotaError::other(format!("没有名为 {id} 的文档主题")))
+}
+
+/// 用户主题只接受 Typora 式的自包含目录：
+///
+/// ```text
+/// themes/<id>/theme.css
+/// themes/<id>/<id>.css
+/// themes/<id>/assets/...
+/// ```
+///
+/// 资源内联的允许根是主题目录自身，不允许一个主题穿过 `../` 读取别的主题资源。
+pub(crate) fn resolve_user_css(root: &Path, id: &str) -> Option<PathBuf> {
+    if check_id(id).is_err() {
+        return None;
+    }
+    let package = root.join(id);
+    for candidate in [package.join("theme.css"), package.join(format!("{id}.css"))] {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+pub(crate) fn css_scope_root(root: &Path, css_path: &Path) -> PathBuf {
+    let parent = css_path.parent().unwrap_or(root);
+    if parent == root {
+        root.to_path_buf()
+    } else {
+        parent.to_path_buf()
+    }
 }
 
 /// id 的形状检查。**这是本模块的安全边界**，见文件头那段。
@@ -195,28 +231,36 @@ pub(crate) fn check_id(id: &str) -> Result<()> {
 ///
 /// 认不出来的文件名**跳过**（不符合 `check_id` 的直接不要），
 /// 免得清单里出现一个读不了的条目。
+pub(crate) fn scan_user_css_ids(dir: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for entry in entries.flatten() {
+        let Ok(ft) = entry.file_type() else { continue };
+        if ft.is_symlink() {
+            continue;
+        }
+        if ft.is_dir() {
+            let Some(id) = entry.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            if resolve_user_css(dir, &id).is_some() {
+                out.push(id);
+            }
+            continue;
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 fn user_ids() -> Vec<String> {
     let Ok(dir) = paths::user_themes_dir() else {
         return Vec::new();
     };
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("css") {
-            continue;
-        }
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        if check_id(stem).is_ok() {
-            out.push(stem.to_owned());
-        }
-    }
-    out
+    scan_user_css_ids(&dir)
 }
 
 /// 体积闸。⚠️ 与 `check_id` 一样是 `pub(crate)` 给 `ui_styles.rs` 复用的。
@@ -356,5 +400,32 @@ mod tests {
             let css = css_of(id).unwrap();
             assert!(css.contains("--doc-bg"), "{id} 没有取到内置 CSS");
         }
+    }
+
+    #[test]
+    fn 只发现主题包目录并忽略旧版扁平_css() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "nota-theme-layout-{}-{stamp}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(root.join("dusk/assets")).unwrap();
+        std::fs::write(root.join("legacy.css"), "--doc-bg: white;").unwrap();
+        std::fs::write(root.join("dusk/theme.css"), "--doc-bg: black;").unwrap();
+        std::fs::write(root.join("flat.css"), "--doc-bg: red;").unwrap();
+
+        assert!(resolve_user_css(&root, "legacy").is_none(), "扁平 CSS 不再兼容");
+        assert!(resolve_user_css(&root, "flat").is_none(), "根目录 CSS 不再发现");
+        let package = resolve_user_css(&root, "dusk").unwrap();
+        assert_eq!(package, root.join("dusk/theme.css"));
+        assert_eq!(css_scope_root(&root, &package), root.join("dusk"));
+        assert_eq!(
+            scan_user_css_ids(&root),
+            vec!["dusk".to_owned()]
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

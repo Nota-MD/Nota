@@ -240,7 +240,14 @@ export function MenuPopup(props: PopupProps) {
    */
   const 画行 = (line: Line) => {
       if (line.kind === "sep") {
-        return <div className="menu-sep" key={line.key} role="separator" />;
+        return (
+          <div
+            className="menu-sep"
+            key={line.key}
+            role="separator"
+            onMouseEnter={() => roving.setFocusedIndex(-1)}
+          />
+        );
       }
 
       const { entry, row } = line;
@@ -274,6 +281,10 @@ export function MenuPopup(props: PopupProps) {
             onFocus={p.onFocus}
             onMouseEnter={() => {
               // 鼠标划过：焦点跟过去，并按有没有子菜单决定开还是收。
+              if (disabled.has(entry.id)) {
+                roving.setFocusedIndex(-1);
+                return;
+              }
               p.onMouseEnter();
               if (entry.submenu) openSub(row, "划");
               else {
@@ -343,6 +354,7 @@ export function MenuPopup(props: PopupProps) {
       className="menu-popup"
       role="menu"
       aria-label={label}
+      onMouseLeave={() => roving.setFocusedIndex(-1)}
       onKeyDown={(e) => {
         // ⚠️ 顶上那块（`top`）里如果是一个输入框，它里面的按键**归它自己**：
         // 不放行的话 ↑↓ 会被漫游吃掉（输入框里的光标动不了）、
@@ -426,8 +438,10 @@ export function SubMenu(props: SubMenuProps) {
       if (entry && !disabled.has(entry.id)) onPick(entry.id);
     },
     // Esc / Tab 关掉的是**整条链**，不是只收这一层——这是桌面软件的惯例，
-    // 也是"按了 Esc 就一定能回到正文"的保证。
+    // 也是"按了 Tab 就一定能回到正文"的保证。
     onDismiss,
+    // Motif 的 Esc 只 `popdownOne`：先收当前子菜单并把焦点还给父项。
+    onCancel: onClose,
     // 一层到顶了：`→` **什么都不做**（空函数就是"吞掉"），`←` 收起自己。
     onRight: () => {},
     onLeft: onClose,
@@ -443,6 +457,7 @@ export function SubMenu(props: SubMenuProps) {
       role="menu"
       style={{ top: pos.top, left: pos.left }}
       onKeyDown={roving.handleKeyDown}
+      onMouseLeave={() => roving.setFocusedIndex(-1)}
     >
       {lines.map((line) => {
         if (line.kind === "sep") {
@@ -465,7 +480,10 @@ export function SubMenu(props: SubMenuProps) {
             tabIndex={p.tabIndex}
             ref={(n) => registerItem(row, n)}
             onFocus={p.onFocus}
-            onMouseEnter={p.onMouseEnter}
+            onMouseEnter={() => {
+              if (disabled.has(entry.id)) roving.setFocusedIndex(-1);
+              else p.onMouseEnter();
+            }}
             onClick={() => {
               if (!disabled.has(entry.id)) onPick(entry.id);
             }}

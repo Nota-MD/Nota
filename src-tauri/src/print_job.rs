@@ -73,6 +73,8 @@ pub struct 版面请求 {
 pub struct 打印预览 {
     /// 那份 PDF 的路径（投递那一步用它）。
     pub pdf: String,
+    /// 实际生成 PDF 的引擎：`google-chrome` / `weasyprint` / `webkit2gtk` 等。
+    pub engine: String,
     pub page_count: usize,
     /// 逐页缩略图，`data:image/png;base64,…`。
     pub pages: Vec<String>,
@@ -183,7 +185,7 @@ pub fn 准备(
         let (宽, 高) = 纸张尺寸(&版面.paper);
         let 目录 = 工作目录()?;
         let pdf = 目录.join("print.pdf");
-        crate::pdf_print::print_html_to_pdf_with(
+        let engine = crate::pdf_render::渲染(
             app,
             html,
             base_dir,
@@ -201,6 +203,7 @@ pub fn 准备(
 
         Ok(打印预览 {
             pdf: pdf.to_string_lossy().to_string(),
+            engine,
             page_count: 页数,
             pages,
             truncated,
@@ -215,6 +218,25 @@ pub fn 准备(
             这台系统上请用「文件 → 导出 → PDF」，再用系统自己的打印对话框。",
         ))
     }
+}
+
+/// 把已经生成并预览过的 PDF 另存到用户选中的位置。
+///
+/// 只允许复制打印缓存目录里的文件，前端传来的任意路径不能变成通用读文件接口。
+pub fn 另存(pdf: &Path, target: &Path) -> Result<String> {
+    let 根 = crate::paths::cache_dir()?.join("print");
+    let 源 = pdf
+        .canonicalize()
+        .map_err(|e| NotaError::other(format!("找不到打印 PDF：{e}")))?;
+    let 根 = 根
+        .canonicalize()
+        .map_err(|e| NotaError::other(format!("找不到打印缓存目录：{e}")))?;
+    if !源.starts_with(&根) {
+        return Err(NotaError::other("拒绝保存打印缓存目录之外的文件"));
+    }
+    std::fs::copy(&源, target)
+        .map_err(|e| NotaError::other(format!("保存 PDF 失败：{e}")))?;
+    Ok(target.to_string_lossy().to_string())
 }
 
 /// 直接打开系统的打印对话框（不要求应用内先有打印机列表）。

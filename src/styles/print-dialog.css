@@ -1,0 +1,167 @@
+/* 应用内打印框。必须在 overlay.css 之后加载。 */
+.print-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 42%);
+}
+
+.print-dialog {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 0;
+  width: min(980px, 92vw);
+  height: min(720px, 88vh);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 34%);
+  overflow: hidden;
+}
+
+.print-preview {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px;
+  gap: 10px;
+  background: var(--bg-sunken, rgb(0 0 0 / 8%));
+}
+
+.print-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.print-page {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+  width: auto;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 26%);
+}
+
+.print-blank {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+.print-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.print-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  font-size: 0.85em;
+}
+
+.print-hint {
+  color: var(--fg-faint);
+  font-size: 0.82em;
+}
+
+.print-hint.print-warning {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.print-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-left: 1px solid var(--border);
+  overflow: auto;
+}
+
+.print-title {
+  margin: 0;
+  padding-right: 28px;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+.print-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85em;
+  color: var(--fg-muted);
+}
+
+.print-field select,
+.print-field input {
+  height: var(--control-height);
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-subtle);
+  color: var(--fg);
+  color-scheme: inherit;
+  font: inherit;
+}
+
+.print-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 24px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--fg-muted) 50%),
+    linear-gradient(135deg, var(--fg-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 12px) 50%,
+    calc(100% - 8px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+}
+
+.print-field select option {
+  background: var(--bg-raised);
+  color: var(--fg);
+}
+
+.print-field select:focus,
+.print-field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.print-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85em;
+}
+
+.print-ok {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.85em;
+}
+
+.print-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}

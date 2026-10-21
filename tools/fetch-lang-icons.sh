@@ -77,13 +77,13 @@ MODE="${1:-fetch}"
 if [ "$MODE" = "--verify" ]; then
   # ⚠️ `sha256sum -c` 要在**它自己那个目录**里跑：`SHA256SUMS` 里的路径是相对的。
   #     少一个文件、多一个文件它都会报出来。
-  cd "$OUT" || { echo "没有 $OUT —— 先跑一次不带参数的抓取"; exit 1; }
+  cd "$OUT" || { echo "$OUT does not exist; run a normal fetch first"; exit 1; }
   if sha256sum -c SHA256SUMS --quiet; then
-    echo "✔ $OUT：$(wc -l < SHA256SUMS) 个文件与 SHA256SUMS 逐字节相同"
+    echo "OK: $OUT: $(wc -l < SHA256SUMS) files match SHA256SUMS byte-for-byte"
   else
-    echo "✘ $OUT 与 SHA256SUMS 对不上（上面是差在哪几个）" >&2
-    echo "  如果是有意改的，那要先想清楚：这些是**搬来的**文件，" >&2
-    echo "  『一个字节没改』这句话是它们能被一眼核对的前提（见 THIRD-PARTY.md §6）。" >&2
+    echo "FAIL: $OUT does not match SHA256SUMS (differences are listed above)" >&2
+    echo "  These files are copied verbatim from upstream. The byte-for-byte guarantee" >&2
+    echo "  is what makes them auditable; see THIRD-PARTY.md §6." >&2
     exit 1
   fi
   exit 0
@@ -98,20 +98,19 @@ for name in $NAMES; do
   # 存下来是个「.svg 后缀的 HTML」，而它照样能被浏览器渲染成"一片空白"——那种
   # 坏法在界面上看不出原因。
   if ! curl -fsS --max-time 30 -o "$dst" "$url"; then
-    echo "✘ 抓不到 file_type_$name.svg（$url）" >&2
+    echo "FAIL: could not fetch file_type_$name.svg ($url)" >&2
     FAIL=1
     continue
   fi
   # 只认 `<svg` 开头的（前面可能有 BOM / XML 声明 / 注释，所以不按字节 0 判）。
   if ! head -c 200 "$dst" | grep -q "<svg"; then
-    echo "✘ file_type_$name.svg 抓下来的不是 SVG（上游改名或换了格式？）" >&2
+    echo "FAIL: file_type_$name.svg is not SVG (upstream may have renamed or changed format)" >&2
     FAIL=1
   fi
 done
 
 if [ "$FAIL" != 0 ]; then
-  echo "有文件没抓全，**没有**刷新 SHA256SUMS —— 半套图标会让界面上少几颗图，" >&2
-  echo "而那种缺法是静默的（回落徽章），不留神就发不现。" >&2
+  echo "Some files are missing; SHA256SUMS was NOT updated. This avoids publishing an incomplete icon set." >&2
   exit 1
 fi
 
@@ -120,5 +119,5 @@ fi
 #     就会得到一份"内容一样但行序不同"的 SHA256SUMS，那种 diff 全是噪音。
 ( cd "$OUT" && LC_ALL=C ls file_type_*.svg | sort | xargs sha256sum > SHA256SUMS )
 
-echo "✔ $OUT：$(printf '%s\n' $NAMES | wc -l) 个文件，SHA256SUMS 已重写"
-echo "  来源：vscode-icons $TAG（MIT），版权与许可正文见 THIRD-PARTY.md §6"
+echo "OK: $OUT: $(printf '%s\n' $NAMES | wc -l) files; SHA256SUMS rewritten"
+echo "  Source: vscode-icons $TAG (MIT); full attribution is in THIRD-PARTY.md §6"

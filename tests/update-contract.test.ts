@@ -37,7 +37,7 @@ console.log("\n【更新器契约】");
     packages: Record<string, { url: string; sha256: string; file: string }>;
   };
   真(manifest.schema === 1, "schema 不是 1");
-  真(manifest.version === "0.8.0-beta", "清单版本不是 0.8.0-beta");
+  真(manifest.version === "0.8.0-beta", "清单版本不是当前公开的 0.8.0-beta");
   for (const kind of ["deb", "rpm", "appimage", "exe", "exeinstall"]) {
     真(manifest.packages[`${kind}-x86_64`], `缺少 ${kind}-x86_64`);
   }

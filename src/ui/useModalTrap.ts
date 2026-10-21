@@ -137,15 +137,23 @@ export interface 弹层封闭选项 {
  */
 export function useModalTrap(
   panelRef: RefObject<HTMLElement | null>,
-  { onEscape }: 弹层封闭选项 = {},
+  { onEscape, enabled = true }: 弹层封闭选项 & { enabled?: boolean } = {},
 ): void {
   useEffect(() => {
+    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
       // ⚠️ 输入法组字期间一概不接（同 `useMenuRovingFocus.ts` 的 `isImeKey`）：
       // 组字中的 Esc 是"收候选框"、方向键是"选字"，这些键该归输入法；
       // 抢了它们，中文用户按 Esc 会把整个框关掉。`keyCode === 229` 是老
       // WebView 唯一能给的信号，`isComposing` 是标准信号，两个都要看。
       if (e.isComposing || e.keyCode === 229) return;
+      // 设置页里再开的模态框（例如设置包选择）优先级更高。外层设置框
+      // `contains` 不到 portal 到 body 的子模态，于是让子模态自己的陷阱处理
+      // Esc/Tab；子模态自己的 panelRef 就是标记节点，不会把自己让掉。
+      const 最内层 = document.querySelector<HTMLElement>('[data-modal-layer="true"]');
+      if (最内层 && 最内层 !== panelRef.current && !panelRef.current?.contains(最内层)) {
+        return;
+      }
       // ⚠️ **焦点在浮层里就整个让路**（`Esc` 与 `Tab` 都让）：右键菜单开着时
       // 它自己那套漫游在管焦点，`Esc` 该关的是菜单、`Tab` 该关掉菜单放行。
       // 这里不 return 的话，`Esc` 会被下面那条 `stopPropagation` 掐死在捕获
@@ -191,5 +199,5 @@ export function useModalTrap(
       window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("focusin", onFocusIn, true);
     };
-  }, [onEscape, panelRef]);
+  }, [enabled, onEscape, panelRef]);
 }

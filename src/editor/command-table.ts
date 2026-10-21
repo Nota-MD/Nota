@@ -36,7 +36,6 @@ import { editorViewCtx, type Editor } from "@milkdown/kit/core";
 import {
   toggleStrongCommand,
   toggleEmphasisCommand,
-  toggleInlineCodeCommand,
   wrapInHeadingCommand,
   turnIntoTextCommand,
   wrapInBlockquoteCommand,
@@ -59,7 +58,7 @@ import {
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import { lift } from "@milkdown/kit/prose/commands";
 import { liftListItem } from "@milkdown/kit/prose/schema-list";
-import type { EditorState } from "@milkdown/kit/prose/state";
+import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { NodeType } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { callCommand } from "@milkdown/kit/utils";
@@ -113,6 +112,58 @@ export function 同层标题(state: EditorState, level: number): boolean {
   return $from.parent.type.name === "heading" && $from.parent.attrs.level === level;
 }
 
+/** 光标当前是否落在代码块里（含代码块里的 NodeSelection）。 */
+export function 光标在代码块(state: EditorState): boolean {
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    if ($from.node(depth).type.name === "code_block") return true;
+  }
+  return false;
+}
+
+/**
+ * 行内代码是**开关型标记**，并且必须支持“没有选区”的工具栏点击。
+ *
+ * 上游 `toggleInlineCodeCommand` 在空选区直接返回 `false`，于是工具栏那颗按钮
+ * 看着能按、命令却立刻被报成“当前模式不可用”。这里按编辑器通行语义处理：
+ * 空选区时改 `storedMarks`，下一次输入带行内代码；再点一次则取消待输入标记。
+ */
+export function 切换行内代码(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const 类型 = state.schema.marks.inlineCode;
+  if (!类型) return false;
+  const { from, to, empty, $from } = state.selection;
+
+  if (empty) {
+    const 已开 = (state.storedMarks ?? $from.marks()).some((m) => m.type === 类型);
+    const tr = state.tr;
+    if (已开) {
+      tr.removeStoredMark(类型);
+    } else {
+      for (const mark of Object.values(state.schema.marks)) {
+        if (mark !== 类型) tr.removeStoredMark(mark);
+      }
+      tr.addStoredMark(类型.create());
+    }
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  }
+
+  if (state.doc.rangeHasMark(from, to, 类型)) {
+    dispatch?.(state.tr.removeMark(from, to, 类型).scrollIntoView());
+    return true;
+  }
+
+  const tr = state.tr;
+  for (const mark of Object.values(state.schema.marks)) {
+    if (mark !== 类型) tr.removeMark(from, to, mark);
+  }
+  dispatch?.(tr.addMark(from, to, 类型.create()).scrollIntoView());
+  return true;
+}
+
 /**
  * 命令白名单的**实体**。
  *
@@ -126,7 +177,11 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   redo: (e) => e.action(callCommand(redoCommand.key)),
   bold: (e) => e.action(callCommand(toggleStrongCommand.key)),
   italic: (e) => e.action(callCommand(toggleEmphasisCommand.key)),
-  inlineCode: (e) => e.action(callCommand(toggleInlineCodeCommand.key)),
+  inlineCode: (e) =>
+    e.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      return 切换行内代码(view.state, (tr) => view.dispatch(tr));
+    }),
   strike: (e) => e.action(callCommand(toggleStrikethroughCommand.key)),
   // 行内标记四条（高亮 / 上标 / 下标 / 下划线）。**不跟开关走**：命令表是
   // 静态的，而"这条命令能不能跑"取决于开关的话，菜单项的灰/亮就得跟着设置变
@@ -147,7 +202,18 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   ul: (e) => 切换包裹(e, "bullet_list", () => e.action(callCommand(wrapInBulletListCommand.key))),
   ol: (e) => 切换包裹(e, "ordered_list", () => e.action(callCommand(wrapInOrderedListCommand.key))),
   task: (e) => 转成任务列表(e),
-  codeBlock: (e) => e.action(callCommand(createCodeBlockCommand.key)),
+  // 与其他块级按钮一致：在代码块里再按一次退回普通段落。上游
+  // `createCodeBlockCommand` 在“已经是代码块”时返回 false，图标看着能点却完全没有
+  // 反馈；工具栏按钮必须始终是一次可见的切换。
+  codeBlock: (e) =>
+    e.action(
+      callCommand(
+        (光标在代码块(e.ctx.get(editorViewCtx).state)
+          ? turnIntoTextCommand
+          : createCodeBlockCommand
+        ).key,
+      ),
+    ),
   hr: (e) => e.action(callCommand(insertHrCommand.key)),
   // 公式块：`plugin-math` 没有插入命令，见 `insert.ts` 的 `插公式块`（2026-09-26）。
   mathBlock: (e) => 插公式块(e),

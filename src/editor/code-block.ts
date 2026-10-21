@@ -24,12 +24,14 @@
  */
 
 import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { katexOptionsCtx } from "@milkdown/plugin-math";
 import { redo, undo } from "@milkdown/kit/prose/history";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import type { Command } from "@milkdown/kit/prose/state";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
+import type { KatexOptions } from "katex";
 import { refractor } from "refractor";
 
 import { t } from "@/i18n";
@@ -39,9 +41,13 @@ import { 建HTML预览 } from "./code-preview";
 import { 创建语言选择器 } from "./lang-picker";
 import { 有专属图标 } from "./lang-icon";
 import { 图标组, 代表语言 } from "./lang-icons-real";
+import { 建数学代码输出, 是数学代码语言 } from "./math-code";
 
 /** 下拉第一项：不指定语言。与 `code_block` 的 `language` 默认值一致。 */
 const NO_LANGUAGE = "";
+
+/** `math` 是 Nota 的数学围栏别名；refractor 没有同名语言，所以单独列入下拉。 */
+const 数学语言别名 = "math";
 
 /** 复制按钮显示"已复制"多久。 */
 const COPY_FEEDBACK_MS = 1200;
@@ -112,7 +118,7 @@ function allLanguages(): string[] {
   if (sortedLanguages === null) {
     sortedLanguages = refractor
       .listLanguages()
-      .filter((名) => 有专属图标(名))
+      .filter((名) => 有专属图标(名) || 名 === 数学语言别名)
       // ⚠️⚠️ **同一门语言只留一行**（2026-10-16，朋友报的「代码块语言类型重复」）：
       // 真图那张表里每一组就是"同一门语言的不同写法"（`markdown`/`md`、
       // `plaintext`/`plain`/`text`/`txt`、`nasm`/`armasm`/`asm6502`/`arm-asm`…），
@@ -135,6 +141,7 @@ function allLanguages(): string[] {
  * ⚠️ 表里没有的（用户自己敲的那种）原样给一个。
  */
 function 同族语言(id: string): readonly string[] {
+  if (id === 数学语言别名) return ["math", "latex", "tex"];
   const 代表 = 代表语言(id);
   return 图标组.find((g) => g.语言.includes(代表))?.语言 ?? [id];
 }
@@ -186,8 +193,14 @@ export const codeBlockView = $view(
   // `$view` 收的是 `$Node | $Mark`，而 `$NodeSchema` 是"schema 定义 + 那个 node"
   // 的合成体，类型上不是 `$Node`。
   codeBlockSchema.node,
-  () =>
-    (initialNode: PMNode, view: EditorView, getPos: () => number | undefined): NodeView => {
+  (ctx) => {
+    let 数学选项: KatexOptions = {};
+    try {
+      数学选项 = ctx.get(katexOptionsCtx.key) ?? {};
+    } catch {
+      // 选项没准备好时仍显示公式，只是 physics 宏不可用。
+    }
+    return (initialNode: PMNode, view: EditorView, getPos: () => number | undefined): NodeView => {
       // ── 结构 ──────────────────────────────────────────────────────────
       // <pre data-language="rust">
       //   <code class="nota-code-text">…</code>  ← contentDOM：ProseMirror 的文本住这儿
@@ -216,6 +229,9 @@ export const codeBlockView = $view(
       // - bar（折叠 / 复制）在块**下沿之外**的左侧（2026-09-26 从块内搬出来）；
       // - 语言框在块**下沿之外**的右侧。
       const pre = document.createElement("pre");
+      // Typora 主题把代码块写成 `pre.md-fences`。这是结构兼容标记，不触发任何
+      // 主题专用程序分支；没有外部主题时它也只是一个不会命中的 class。
+      pre.className = "md-fences ty-contain-cm";
       // ⚠️⚠️ **这一行是整件事的开关，删了它代码块就整个哑掉**（2026-10-06
       // 一路开窗量出来的）。
       //
@@ -331,6 +347,12 @@ export const codeBlockView = $view(
       });
       langWrap.appendChild(语言选择器.dom);
 
+      /** `math` / `latex` / `tex` 围栏的渲染结果。普通代码语言时整块隐藏。 */
+      const 数学 = 建数学代码输出(数学选项);
+      const 设数学编辑 = (开: boolean) => {
+        wrap.classList.toggle("nota-code-math-editing", 开);
+      };
+
       // ── CodeMirror：这一段的输入面 ─────────────────────────────────────
       // ⚠️ **两把 `同步中` 锁**是本批最要紧的一处（`code-block-cm.ts` 文件头
       // 那三个坑的第一个）：这一把管"PM 收到的改动是不是自己刚推出去的那一笔"，
@@ -351,8 +373,15 @@ export const codeBlockView = $view(
         初始文本: initialNode.textContent,
         初始语言: languageOf(initialNode),
         文本变化: (新文) => 推回文档(新文),
-        聚焦: () => 认领选区(),
-        失焦: () => {},
+        聚焦: () => {
+          设数学编辑(true);
+          认领选区();
+        },
+        失焦: () => {
+          queueMicrotask(() => {
+            if (!wrap.contains(document.activeElement)) 设数学编辑(false);
+          });
+        },
         撤销: () => 走命令(undo),
         重做: () => 走命令(redo),
         退出到正文: () => 拆掉这一块(),
@@ -487,7 +516,14 @@ export const codeBlockView = $view(
       // ⚠️ 顺序：`code`（隐藏的 contentDOM）与 CM 的根一起放在最前，三个挂件随后。
       // 挂件都是绝对定位，顺序上不敏感，但 contentDOM 必须是 `pre` 的子元素。
       pre.append(code, 代码编辑器.视图.dom, gutter, bar, langWrap);
-      wrap.append(pre, 预览.元素);
+      wrap.append(数学.元素, pre, 预览.元素);
+
+      // 收起态只看见渲染结果；点它进入 Typora 式的"上面公式、下面源码"。
+      数学.元素.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        设数学编辑(true);
+        代码编辑器.聚焦();
+      });
 
       // 点在 `pre` 的**内边距**上（不在 CM 的内容里）时，把焦点交给 CM。
       // ⚠️ 不这么做的话这一击被 `stopEvent` 拦下、谁也不管——用户会觉得
@@ -536,7 +572,10 @@ export const codeBlockView = $view(
       // 点一下就会被 PM 当作"点了编辑区"去挪光标（`stopEvent`）。
       const inChrome = (target: EventTarget | null) =>
         target instanceof Node &&
-        (bar.contains(target) || langWrap.contains(target) || gutter.contains(target));
+        (bar.contains(target) ||
+          langWrap.contains(target) ||
+          gutter.contains(target) ||
+          数学.元素.contains(target));
 
       const syncChrome = (node: PMNode) => {
         const lang = languageOf(node);
@@ -558,6 +597,15 @@ export const codeBlockView = $view(
         // 看不出来，长代码块上会变成打字时的卡顿。
         const 号 = 行号(node);
         if (gutter.textContent !== 号) gutter.textContent = 号;
+        const 是数学 = 是数学代码语言(lang);
+        wrap.classList.toggle("nota-code-math", 是数学);
+        数学.元素.hidden = !是数学;
+        if (是数学) {
+          数学.同步(node.textContent);
+          if (wrap.contains(document.activeElement) || view.hasFocus()) 设数学编辑(true);
+        } else {
+          设数学编辑(false);
+        }
         // ⚠️ 预览跟着**语言**决定露不露脸、跟着**内容**换 `srcdoc`
         // （内部去抖，见 `code-preview.ts` 文件头第 3 条）。
         预览.同步(node);
@@ -608,7 +656,10 @@ export const codeBlockView = $view(
         // 去挪光标。它里面的 iframe **自成一份文档**，那些事件根本不上来，
         // 所以这里判的是预览框自己那一圈内边距 / 边框。
         stopEvent: (e) =>
-          e.target instanceof Node && (pre.contains(e.target) || 预览.元素.contains(e.target)),
+          e.target instanceof Node &&
+          (pre.contains(e.target) ||
+            数学.元素.contains(e.target) ||
+            预览.元素.contains(e.target)),
 
         // ⚠️ 一律 `true`：这个节点里的 DOM 变化**没有一件**是 PM 该关心的
         // ——文本的唯一入口是 `推回文档` 那条事务，不靠它从 DOM 里读。
@@ -618,6 +669,7 @@ export const codeBlockView = $view(
         // 把光标交给 CodeMirror。⚠️ 坐标是**相对这个节点内容起点**的
         //（PM 的 `ViewDesc` 逐层把节点起点减掉了），所以减 1 才是文本偏移。
         setSelection: (锚, 头) => {
+          设数学编辑(true);
           const 长 = 代码编辑器.取文本().length;
           const 夹 = (n: number) => Math.max(0, Math.min(长, n - 1));
           代码编辑器.设选区(夹(锚), 夹(头));
@@ -637,7 +689,8 @@ export const codeBlockView = $view(
           预览.销毁();
         },
       };
-    },
+    };
+  },
 );
 
 /** 取节点的语言属性。缺省是空串，统一成 `NO_LANGUAGE`。 */

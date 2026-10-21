@@ -14,7 +14,8 @@
 //! 应用的侧栏和菜单跟着变亮，一半亮一半暗——那一整套桥接已拆干净，
 //! 守住这条线的机制在 `src/styles/doc-theme.ts`（注入前强制限域）。
 //!
-//! 三条轴的落地形态见 `docs/04-ui-map.md` §外观（含 7 风格 × 2 模式 = 14 格的矩阵）。
+//! 三条轴的落地形态见 `docs/04-ui-map.md` §外观。安装包只随附 Adwaita，
+//! 其他界面主题由 `Nota-themes` 作为外部主题包安装。
 //! ⚠️ 2026-09-26 起 `ui_style` 的取值是**开放的**（用户能导入风格文件），
 //! 所以它是 `String` 而不是枚举——理由见 [`DEFAULT_UI_STYLE`] 那一段。
 //!
@@ -82,6 +83,7 @@ pub mod general;
 pub mod image;
 pub mod keys;
 pub mod markdown;
+pub mod updates;
 
 pub use appearance::Appearance;
 pub use document::{DocFont, Document};
@@ -94,6 +96,7 @@ pub use general::General;
 pub use image::Image;
 pub use keys::Keys;
 pub use markdown::Markdown;
+pub use updates::Updates;
 
 /// 界面风格的**默认值**（`ui_style` 那一格没写时用哪个）。
 ///
@@ -120,7 +123,7 @@ pub use markdown::Markdown;
 /// ⚠️ 内置那几档的 id 清单在 `ui_styles::BUILTIN_IDS`（三份抄本之一，
 /// 另两份是 `theme/shape.css` 与前端的 `STYLE_ORDER`，机器判据是
 /// `tools/doc-sync-check.sh` ⑦）。
-pub const DEFAULT_UI_STYLE: &str = "auto";
+pub const DEFAULT_UI_STYLE: &str = "adwaita";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -235,6 +238,8 @@ pub struct Settings {
     pub general: General,
     /// 仅调试模式显示的高级下载规则。见 [`download`]。
     pub download: Download,
+    /// 「更新设置」页。见 [`updates`]。
+    pub updates: Updates,
     /// 「强制专注」页。见 [`focus`]。
     ///
     /// ⚠️ 这一页**不是插件的**（用户 2026-09-26：「这不是插件。这是核心功能」）。
@@ -284,6 +289,7 @@ impl Default for Settings {
             appearance: Appearance::default(),
             general: General::default(),
             download: Download::default(),
+            updates: Updates::default(),
             focus: Focus::default(),
             document: Document::default(),
             keys: Keys::default(),

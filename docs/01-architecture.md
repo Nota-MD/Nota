@@ -106,8 +106,7 @@ worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost
 
 ```rust
 tauri::Builder::default()
-    .plugin(tauri_plugin_dialog::init())   // ① Tauri 自带的三个插件先装
-    .plugin(tauri_plugin_fs::init())
+    .plugin(tauri_plugin_fs::init())       // ① 只装确实需要的前端插件
     .plugin(tauri_plugin_opener::init())
     .setup(|app| { /* ② 载设置 → 建共享状态 → 发现并加载插件 → manage */ })
     .invoke_handler(tauri::generate_handler![ …45 项… ])          // ③
@@ -697,6 +696,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 | `nota:file-changed` | `watch.rs:275`（发现那一半） | `{id, path, hash}`——**磁盘上那份文件被别的程序改了** | ✅ 订阅了 → `ui/useExternalChanges.ts` |
 | `nota:second-instance` | `single_instance.rs:307`（第二个进程递过来的那一路）＋ `mcp/host.rs:204`（复用同一名字） | 「抬窗」 / 「打开某个路径」 / 报错三种（见 `bridge/payloads.ts`） | ✅ 订阅了 → `ui/useAppEvents.ts` |
 | `nota:format-key` | `format_keys.rs:175`——⚠️ **GTK 捕获相位那一层，不是命令也不是 Lua**（2026-09-28，**BUG-49**） | 命令名（`bold` / `italic`） | ✅ 订阅了 → `ui/useMenus.ts`（走**和 `keydown` 一模一样**的判据）。⚠️⚠️ **2026-09-29 实测：这条事件在真程序里一次都没响过**（生产者在真程序里从不触发），前端那条订阅是**备用**，见下面第 3 条 |
+| `nota:update-progress` | `commands/update.rs`（应用更新安装线程，2026-10-19） | `{phase, downloaded, total}`；`phase` 为 `downloading` / `installing` | ✅ 订阅了 → `ui/SoftwareUpdatePane.tsx`，画确定或不确定进度；它是“正在发生”的事件，不承担清单状态 |
 | `plugin:<channel_id>:<name>` | `lua/api/mod.rs:217`（`nota.event.emit`） | 插件自定（Lua 值 → JSON） | ❌ 名字由插件决定，前端只能事后 `listen`；今天没人订 ⚠️ |
 
 ⚠️ **曾经还有 `nota:plugin-menu` 与 `nota:slidev-stopped` 两条，都删掉了。**
@@ -968,7 +968,7 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 
 | effect | 依赖 | 干什么 |
 |---|---|---|
-| ~~启动~~ | — | ⚠️ **这一条 2026-09-26 搬去了 `ui/useStartup.ts`**（当时 `App.tsx` 1049 行），不在下面这张表里了：`Promise.all` 拉 settings / workspace / plugins / panels / themes / **`nota_settings_problem`** / **启动文件** / **`nota_app_lang`** → `refreshDocs()` → 调一次 `api.frontendReady()`（失败只 `console.warn`）。用 `alive` 标志挡住卸载后的 setState。⚠️ 后三枪**各自自带 `catch`**：它们坏掉不该把整个启动掀翻（设置问题那条退了就是少一个提示，语言那条退了就按兜底语言画）。⚠️ **`定语言(界面语言.effective)` 必须在 `setSettings` 之前**——定了之后 `i18n` 会通知订阅者重画，而那一批订阅者这一帧还没挂上。⚠️ **2026-09-27 起它还要读设置里的「启动时」那一档**并递给 `接上会话`（三档），那一档在 2026-09-27 之前是**摆设** |
+| ~~启动~~ | — | ⚠️ **这一条 2026-09-26 搬去了 `ui/useStartup.ts`**（当时 `App.tsx` 1049 行），不在下面这张表里了。📌 **2026-10-19 起不再等所有 IPC 才 `setSettings`**：先把 workspace / themes / startup-file 三条任务并行启动，再 `Promise.all` 等 settings / 设置问题 / 界面语言，语言与设置一到就立即应用；随后才等待前三项并走 `refreshDocs()`、命令行文件与会话恢复，最后 `api.frontendReady()`。📌 **2026-10-21：插件目录扫描也不再挡窗口创建**——`setup` 先托管空 `PluginHost`，窗口建立后在阻塞线程发现并加载插件；插件读取命令短暂等待 `ready`。⚠️ 命令行文件与界面语言**各自自带 `catch`**；`alive` 挡住卸载后的 setState。⚠️ **`定语言(界面语言.effective)` 必须在 `setSettings` 之前**。启动档仍从设置读，并递给 `接上会话`。 |
 | 事件订阅 | `[toast, refreshDocs]` | 订 `nota:notify`（→ toast）与 `nota:document-changed`（→ 活动文档且 `origin === "plugin"` 时整篇覆盖编辑器；**改的不是当前那份**就退而 `refreshDocs()`，否则用户切回去时会拿旧文本重建、把插件的改动覆盖掉）。返回时逐个退订。⚠️ 依赖里**没有 `activeId`**——它在回调里读 `activeIdRef`，所以这个 effect 只跑一次。⚠️ `nota:plugin-panel` / `nota:plugin-review` 那两条**不在这里订**——它们归 `usePlugins` / `PluginDock`（谁用谁订） |
 | 活动文档上报 | `[activeId, toast]` | 写 `activeIdRef` 并 `api.doc.setActive(id)`，让后端的"活动文档"跟上用户真正在看的那个标签（BUG-6） |
 | 外观 | `[settings]` | `settings` 有值就 `applyTheme(settings)` |

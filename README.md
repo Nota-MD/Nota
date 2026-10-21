@@ -105,7 +105,8 @@ Official extensions and themes are installed separately.
 
 ## Build from source
 
-Requirements: Rust 1.85 or newer, Node.js, and WebKitGTK 4.1 on Linux.
+Requirements: Rust 1.85 or newer and Node.js. Linux uses WebKitGTK 4.1;
+Windows uses Microsoft Edge WebView2 (Chromium), not WebKitGTK.
 
 ```sh
 npm install

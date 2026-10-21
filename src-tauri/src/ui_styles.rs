@@ -1,4 +1,4 @@
-//! 界面风格：内置的七档（另有 `auto` 开关）＋ **用户自己放进来的**。
+//! 界面风格：内置 Adwaita ＋ **用户自己放进来的**。
 //!
 //! # 和 `themes.rs`（文档主题）是一对，但不是一件事
 //!
@@ -21,8 +21,8 @@
 //!
 //! # 用户文件怎么写
 //!
-//! `~/.config/nota/ui-styles/<id>.css`，**只扫这一个目录**，文件名去掉 `.css`
-//! 就是 id。标准的写法是三块（形状 ＋ 浅色 ＋ 深色）：
+//! `~/.config/nota/ui-styles/<id>/theme.css`，**只扫这一个目录**。
+//! 目录名就是 id。标准的写法是三块（形状 ＋ 浅色 ＋ 深色）：
 //!
 //! ```css
 //! [data-ui-style="my-style"] { --radius: 6px; --control-height: 30px; }
@@ -57,39 +57,23 @@ use crate::error::{NotaError, Result};
 use crate::paths;
 // ⚠️ 这两条判据**复用文档主题那份，不另写一份**：它们是安全边界（路径穿越），
 // 两份实现迟早会漂，而漂的那一刻没人看得出来。`themes.rs` 那边有注释说明。
-use crate::themes::{check_id, check_size};
+use crate::themes::{check_id, check_size, css_scope_root, resolve_user_css, scan_user_css_ids};
 
 /// 风格 CSS 的体积上限。与文档主题同值——超过这个数基本可以断定不是在装风格。
 const MAX_CSS_BYTES: u64 = 2 * 1024 * 1024;
 
-/// 内置风格的 id。**顺序就是下拉里的顺序**（`auto` 在最前）。
+/// 内置风格的 id。安装包唯一随附的是 Adwaita。
 ///
-/// ⚠️ **`auto` 不是一档具体的风格**：它是"跟随当前桌面环境"，由前端
-/// `styles/applyTheme.ts::resolveStyle()` 在运行期解析成下面某一个。
-/// 把它列在这里是因为它**在设置里占一格**（`ui_style = "auto"` 是默认值）。
+/// 2026-10-21 起移除了“自动检测系统并匹配主题”。旧设置里的 `auto` 仍由前端
+/// `resolveStyle()` 兼容映射到 Adwaita，但不再出现在设置下拉中。
 ///
 /// ⚠️ **这张表是三份抄本之一**（另两份：`src/styles/theme/shape.css` 里的
 /// `[data-ui-style="…"]` 段、前端 `AppearancePane.tsx` 的 `STYLE_ORDER`）。
 /// `tools/doc-sync-check.sh` 的 ⑦ 会报不一致——改一处就要改三处。
 pub const BUILTIN_IDS: &[&str] = &[
-    "auto",      // 跟随当前桌面环境，探不到就用 adwaita
-    "adwaita",   // GNOME 原生：中等圆角、扁平、层级靠阴影
-    "ghub",      // GitHub：冷灰蓝边框、无阴影
-    "plasma",    // KDE Plasma 的 Breeze（⚠️ 界面上显示成 Breeze，落盘的值是 plasma）
-    "macos",     // macOS：大圆角、控件偏矮、亚克力
-    "windows",   // Windows 11：小圆角、Mica
-    "windows10", // Windows 10 原生：直角、亚克力。⚠️ **只能手选**，见下
-    "yaru",      // Ubuntu Yaru：橙色强调
+    "adwaita", // 安装包唯一随附的界面主题
 ];
 
-// ⚠️ **`windows10` 与 `windows` 是并存的两代，不是替换关系**，而且
-// **`auto` 永远探不到它**：Windows 10 与 Windows 11 在 UA 和
-// `XDG_CURRENT_DESKTOP` 上都是同一串（`Windows NT 10.0`），
-// `applyTheme.ts` 里 `windows` 那个线索只有一个去处。所以它只能手选。
-//
-// ⚠️ 同理 `ghub` 也没有对应的桌面——它**根本不是"某个系统"**，是设计语言。
-// 两者的共同点：`auto` 的探测表里没有它们，也不该有。
-//
 // ⚠️ **2026-10-07 删掉了 `"yaru-blue"`**（Yaru 的蓝色强调档，形状与 yaru 共用）：
 // 用户原话「**只需要 Yaru，不需要 Yaru Blue 了**」。整档一起删——`color.css` 里那
 // 两段、`shape.css` 里并列的那个选择器、`zh-settings.ts` 的两条译文、
@@ -153,19 +137,22 @@ pub fn discover() -> Vec<UiStyleInfo> {
 pub fn css_of(id: &str) -> Result<String> {
     check_id(id)?;
 
-    let path = paths::user_ui_styles_dir()?.join(format!("{id}.css"));
-    if !path.is_file() {
-        return Err(NotaError::other(format!(
+    let root = paths::user_ui_styles_dir()?;
+    let path = resolve_user_css(&root, id).ok_or_else(|| {
+        NotaError::other(format!(
             "没有名为 {id} 的界面风格——它多半是被删了，或者名字里的字母大小写不对"
-        )));
-    }
+        ))
+    })?;
     check_size(&path, MAX_CSS_BYTES)?;
     let css = std::fs::read_to_string(&path).map_err(|source| NotaError::Read {
         path: path.clone(),
         source,
     })?;
-    let root = paths::user_ui_styles_dir()?;
-    Ok(crate::theme_assets::inline(&css, &path, &root))
+    Ok(crate::theme_assets::inline(
+        &css,
+        &path,
+        &css_scope_root(&root, &path),
+    ))
 }
 
 /// 用户风格目录里的所有 id（文件名去掉 `.css`）。目录不存在就是空表。
@@ -176,24 +163,7 @@ fn user_ids() -> Vec<String> {
     let Ok(dir) = paths::user_ui_styles_dir() else {
         return Vec::new();
     };
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return Vec::new();
-    };
-
-    let mut out = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("css") {
-            continue;
-        }
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
-            continue;
-        };
-        if check_id(stem).is_ok() {
-            out.push(stem.to_owned());
-        }
-    }
-    out
+    scan_user_css_ids(&dir)
 }
 
 /// 用户风格目录，**用到时才建**。返回它的绝对路径。
@@ -220,7 +190,7 @@ mod tests {
         for id in BUILTIN_IDS {
             assert!(check_id(id).is_ok(), "内置 id 自己都不合法：{id}");
         }
-        assert_eq!(BUILTIN_IDS[0], "auto", "auto 必须排在最前面（下拉的第一格）");
+        assert_eq!(BUILTIN_IDS[0], "adwaita");
     }
 
     #[test]
@@ -232,9 +202,7 @@ mod tests {
         // 而且**老设置文件里存着它的用户会掉回默认**（不报错）。
         assert_eq!(
             BUILTIN_IDS,
-            &[
-                "auto", "adwaita", "ghub", "plasma", "macos", "windows", "windows10", "yaru"
-            ]
+            &["adwaita"]
         );
     }
 
@@ -270,11 +238,8 @@ mod tests {
         // `discover()` 说 `builtin: false` 时才该调它。这条用例把这个口径钉住。
         let err = css_of("no-such-style-xyz").unwrap_err();
         assert!(err.to_string().contains("没有名为"), "实际：{err}");
-        let err = css_of("adwaita").unwrap_err();
-        assert!(
-            err.to_string().contains("没有名为"),
-            "内置档不该有文件可读，实际：{err}"
-        );
+        // ⚠️ 不能再拿 `adwaita` 当"没有文件"的样本：用户可以用同名主题包覆盖
+        // 内置档，开发机上确实可能有该文件。这里只钉一个绝不会存在的 id。
     }
 
     #[test]

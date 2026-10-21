@@ -30,4 +30,4 @@ for file in tests/*.test.ts; do
   files=$((files + 1))
 done
 
-echo "前端测试：$files 份，至少记录到 $total 条断言，全部 exit=0"
+echo "Frontend tests: $files suites, at least $total assertions recorded, all exit=0"

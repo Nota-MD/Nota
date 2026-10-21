@@ -30,9 +30,9 @@
 | `focus/mod.rs` | **强制专注的账本**（2026-09-26，657 行）：`阶段`（`专注` / `走神 { 起于 }` / `警报`，`名字()` 给前端分叉用）、`会话`、跨边界的 `快照`、`FocusState`，以及那个**一秒一拍的裸线程**（`起`）。⚠️ **它不是插件，是核心功能**（用户原话「注意啊，这不是插件。这是核心功能」）——它要窗口焦点、要开置顶窗、要出声，三样都在插件沙箱之外。三条不变量在文件头：**宽限期内不欠账** / **警报中账本冻结** / **冷却要攒回复活线**（`复活线最小` 10s ～ `复活线最大` 60s）。⚠️ `FocusState` **单独 `manage`、不进 `AppState`**（同 `Heartbeat` / `DevServerState` / `ReviewState` / `ProbeCache`），账本自己一把锁。⚠️ 发事件与开窗都在**放开锁之后**（锁序）。13 条用例 |
 | `focus/alarm.rs` | **警报窗与那一声响**（2026-09-26，191 行）：`窗_LABEL = "focus-alarm"`（`lib.rs` 两处分派靠它）、`EVENT_BEEP`、`响` / `开窗` / `关窗` / **`对账`** / `系统提示音`。⚠️ 为什么必须是**另一个真窗口**（置顶 ＋ 全屏 ＋ 抢焦点）而不是主窗里盖一层红布：警报响时用户**已经切走了**，主窗在他背后。⚠️ **开与关都认 `阶段` 一个真相源**——计时线程每一拍 `对账` 一次；`关窗` 别在 `确认` 里再调一次。⚠️ `对账` 是 **BUG-41** 的修法：这一段设计原先只写在文件头里、计时线程里从没实现过，所以**改这里先去 `super::起` 数一眼调用点，别只读注释** |
 | `proc.rs` | **跑外部程序的那一层**（2026-09-25 从 `slidev.rs` 抽出来，判据是**依赖方向**——pandoc 导出要用同样三件，不该让 `pandoc.rs` → `slidev.rs`）：`split_command`（⚠️ **只按空白分词**、不认引号）· `command_or_default` · `kill_group` · `spawn_retrying`（⚠️ `ETXTBSY` 等一下再试，见本文件里那一节）· `run_capture(program, args, RunOpts)`（自成进程组、可选喂 stdin、带超时，超时**杀整个进程组**）· `Ran` 四档 |
-| `update.rs` | **实验性应用更新**：固定读取 `releases/latest/download/latest.json`，按安装类型和架构选资产；只接受 Nota 官方 Release 地址，强制 SHA-256。0.8 起下载前应用 `[download].replacements`，随后按类型调用包管理器、AppImage 替换、Windows 便携覆盖或 NSIS 覆盖。开发构建只返回源码重建命令 |
+| `update.rs` | **实验性应用更新**：固定读取 `releases/latest/download/latest.json`，按安装类型和架构选资产；只接受 Nota 官方 Release 地址，强制 SHA-256。0.8 起下载前应用 `[download].replacements`，随后按类型调用包管理器、AppImage 替换、Windows 便携覆盖或 NSIS 覆盖。2026-10-19 起下载按 1% 或 512 KiB 节流回报进度，下载完成后再进入安装阶段；开发构建只返回源码重建命令 |
 | `remote.rs` | 应用与插件更新共用的受限 GET：先应用用户的前缀替换规则，再要求结果仍是 HTTPS / 本机回环；同时统一重定向上限、总时限、响应体上限与 User-Agent |
-| `commands/update.rs` | `nota_update_check` / `nota_update_install` 两条，前端不能传 URL |
+| `commands/update.rs` | `nota_update_check` / `nota_update_install` 两条，前端不能传 URL。检查与安装各有 `AtomicBool` 单飞闸；安装通过 `nota:update-progress` 推送下载阶段与安装阶段，长时间网络等待不再表现为按钮无反馈 |
 | `diagnostics.rs` | **「关于 → 故障排除」要的两组信息**（2026-10-04 新增）：**编译信息**（`version` / `build_time` / `build_host` / `build_platform` / `target` / `profile` / `rustc` / `cargo` / `node` / `npm` / `tauri` / `webkit_crate` / `gtk_crate` / `mlua`）＋ **本机信息**（`os_pretty` / `kernel` / `arch` / `gtk_runtime` / `webkit_runtime`）。⚠️ **两组是两个不同机器的事实**（打包那台 vs 用户手上这台），混起来是这一页最容易犯的错。⚠️ **编译期那一半不在这儿采**：`build.rs` 写好 `OUT_DIR/build_info.rs`、这里 `include!`（理由见那个文件的文件头）。⚠️ **取不到就写空串**，前端画「—」——绝不能因为缺一条整页空白。⚠️ 字段名 snake_case 直接过 JSON（本仓惯例） |
 | `commands/diagnostics.rs` | `nota_diagnostics` 一条（2026-10-04）。⚠️ **异步 ＋ `spawn_blocking`**（采集要起 `uname` 子进程，同步命令跑在主线程上会把界面冻住，同 `nota_pandoc_probe`）。⚠️ `Err` 只有一种情形：那个阻塞任务自己 panic 了 |
 | `file_move.rs` | **重命名 / 移动的唯一实现**（2026-09-27，`docs/10` §1 那格，418 行）：只有 `移动(从, 到)` 一个入口。⚠️ **三条硬口径**：**绝不覆盖**（目标在了就报错，一个字节都不动；**坏链接也算"在了"**）、**跨设备要能走**（`rename` 失败就退化成"临时文件 → 复制 → 改名 → 删源"）、**失败不留半个东西**（临时文件落在目标那一层目录里，复制失败就地删掉）。⚠️ 跨设备的判据是 `ErrorKind::CrossesDevices`，**不写裸错误码 18**——Windows 的同类错误是 17，而两边的 kind 是同一个。⚠️ 删源那一步失败时**明说"两份都在"**，不假装成功（那是用户自己收拾得掉的局面）。⚠️ **三条不做**：不猜文件名（重名报错，不自动加 `-1`）、不挪目录、不服软链接（`symlink_metadata` 判，跟着链接走会挪错东西）。12 条用例，其中"真跨设备"那条**在本机真跑过**（`/tmp` 与 `/dev/shm` 是两个设备） |
@@ -40,7 +40,8 @@
 | `document/title.rs` | **标题从哪来**（2026-10-04 从 `document/mod.rs` 拆出，114 行）：`derive_title` ＋ 三个私有辅助（`front_matter_title` / `first_heading` / `strip_atx`）。⚠️ **纯文本进、标题出**——不认识 `DocId`、不取锁、不碰磁盘，这就是它能被拆出来的那条缝。⚠️ `front_matter_title` / `strip_atx` 与前端 `src/editor/atx.ts` **同构，两边要一起改** |
 | `image.rs` | **插入图片的算式**（2026-09-26 为 backlog 第 62 项写的，唯一一份）：地址规则 / 落点与文件名 / 计划与落地。⚠️ **本文件只放类型与 `pub use`，实现分在四个子文件里**（那天它自己长到 1232 行、顶破 1000 行硬线）：`image/address.rs`（110 行，`是网络地址` / `规则适用` / `相对路径` / `加点点斜杠` / `转义地址`）· `image/target.rs`（178 行，`目标目录` / `定名` / `从地址猜名字`）· `image/plan.rs`（254 行，`算计划` / `落地` / `取网络字节`——**全仓唯一一处"往网络要字节"的地方**）· `image/tests.rs`（575 行）。⚠️ **拆分对调用方零改动**：`pub use` 把 `crate::image::放置` 一族路径原样保住，`commands/image.rs` 那边一行没改 |
 | `upload/` | **「把一张图送到用户自己填的那台服务器上」的唯一一份实现**（2026-09-26 第二批）：`upload.rs`（707 行，算式与设置——拼多部件体 / 解析请求头 / 从响应按点路径取地址 / `nota-auto-upload` 前件 / 文件 0600 建）· `upload/net.rs`（181 行，**唯一碰网络的地方**）· `upload/tests.rs`（747 行，28 条用例）。⚠️ **不并进 `image.rs`**：那边最远只到磁盘，这边要**把用户的字节送出这台机器**。⚠️ **不预设任何服务商**（测试里钉着这件事）；**配置在 `~/.config/nota/image-upload.toml`，0600**，不许并进 0644 的 `settings.toml` |
-| `commands/mod.rs` | 只是**十五**个子模块的声明（2026-09-26 现数：`diff` / `document` / `export` / **`focus`** / `image` / `image_upload` / `menu` / `pandoc` / `plugin` / `settings` / `table_width` / `theme` / `ui_style` / `watch` / `workspace`）+ 命令层的分工说明（无函数）。⚠️ 这一格此前写着"十"，那是个**只数了最近几批新加进来的**的旧账——**数是数出来的，不是推出来的** |
+| `commands/mod.rs` | 只是各命令域子模块的声明（2026-10-21 现数：`diff` / `document` / **`file_picker`** / `export` / **`focus`** / `image` / `image_upload` / `menu` / `pandoc` / `plugin` / `print` / `settings` / `table_width` / `theme` / `ui_style` / `watch` / `workspace`）+ 命令层的分工说明（无函数） |
+| `commands/file_picker.rs` | **应用内文件选择器的宿主半边**：`nota_picker_places` 列主目录 / 桌面 / 文档 / 下载与文件系统根，`nota_picker_list` 读取一层目录并返回名称、路径、大小和修改时间，`nota_picker_create_dir` 新建文件夹。它不读文件内容、不保存文件；业务命令仍由文档、导出、插件等域处理。路径分隔符与隐藏文件判断按平台处理。 |
 | `commands/image.rs` | `nota_image_place` 与 `nota_image_data_url`，都异步走 `spawn_blocking`。前者按宿主规则落图并返回 Markdown 地址；后者给编辑区显示本地图，限 32MB、只读主目录/文档/桌面/下载，返回 data URL。规则与文档位置不由前端提供。 |
 | `commands/image_upload.rs` | 「上传图片」那三条（`nota_image_upload_get` / `_set` / `_one`），**都是异步 ＋ `spawn_blocking`**（读盘、联网最长 60 秒）。⚠️ **手动与自动两条路共用同一次上传**，但方向相反：手动**先传、失败才落盘**，自动**先落盘、失败就保留本地地址**。⚠️ **三道闸缺一不可**（`enabled` / `auto` / 文档 YAML 里的 `nota-auto-upload`） |
 | `commands/document.rs` | `nota_doc_*` **十五个**命令（⚠️ **2026-10-04 现数**（第 14 项那一批）：十四 → **十五**，新增 `nota_doc_cursor`，编辑器把**选区**报上来——⚠️ 它**什么都不改**（不碰 `text` / `revision` / `dirty`，见 `docs/03` §4.2）。⚠️ 上一次第十遍是十二 → 十四（`nota_doc_rename` / `nota_doc_move`），第九遍把"十一"改成"十二"（多出的是 `nota_doc_disk_text`，给外部改动提示条的「查看修改」用）——⚠️ ⚠️ `AGENTS.md` §2 那格当时停在"十二"，**两处对不上有一阵子了**，这一批各现数一遍才对齐）。⚠️ **这一层收的是"名字一段"或"目录一条"，不是整条路径**——前端手里的 `path` 是有损的（非 UTF-8 目录名会变成 `?`），详见下面 `nota_doc_rename` 那一节 |
@@ -98,6 +99,8 @@
 | `bridge/ipc-events.ts` | **事件订阅与频道名**（2026-10-17 从 `ipc.ts` 拆出，218 行）：`on()` 与 `events`。⚠️ 只放「发生类」事件；声明类走 `api.plugin.panels()` / `menus()` 拉（BUG-13）。 |
 | `bridge/types.ts` | **所有跨边界的形状**（2026-09-26 从 `ipc.ts` 拆出）：文档 / 设置 / 插件 / 导出 / 图像。⚠️ **纯类型文件**——不 import `@tauri-apps/api`、不写运行时值，所以谁都能引它而不背上副作用。⚠️ **2026-09-27 又拆了一次**（本文件 1009 行、① 行数闸 FAIL）：事件载荷那四个去了 `payloads.ts`，拆完 **967 行** |
 | `bridge/payloads.ts` | **事件载荷的形状**（2026-09-27 从 `types.ts` 拆出，69 行）：`NotifyPayload` / `PanelDirtyPayload` / `DocumentChangedPayload` / `FileChangedPayload`。⚠️ **拆的线**＝"命令的返回类型"（上面那份）vs"推过来的事件"（这份）——`events.*` 是**发生了一件事**，不是回答 |
+| `ui/file-picker.ts` | **应用内文件选择器的请求队列与纯路径函数**：`pickFile` / `openFile` / `saveFile` / `chooseDirectory` 共用一条 Promise 队列；`matchesFileFilters` 与 `resolveSavePath` 负责筛选和保存后缀。路径拆分覆盖 Unix、Windows 盘符根与 UNC 路径，不调用系统原生对话框。 |
+| `ui/FilePickerDialog.tsx` | **文件选择器界面**：打开 / 保存 / 选择文件夹三种模式共用左侧位置栏、路径栏、文件列表、隐藏文件开关、新建文件夹与覆盖确认。支持鼠标双击、方向键、Home / End 和 Enter；保存模式会补筛选后缀。所有颜色与形状来自界面主题。 |
 | `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 ⚠️ **2026-10-07 拆过（第 89 项）：1006 → 502 行**——「一次性把一切装上去」那一段整块搬去了 `editor/assemble.ts`（620 行），这边只留「实例建好之后怎么用」。 |
 | `editor/assemble.ts` | **「把一切装上去」那一段**（**635 行**，2026-10-07 从 `create.ts` 拆出，`docs/07` 第 89 项）：`.config()` ＋ 整条 `.use()` 插件链——ctx 初值、序列化器、输入规则、NodeView、各种可选插件。参数收**一个对象**（`装配参数`），不收一长串位置参数（同一条理由见 `ui/pane-editors.ts`）。⚠️ **顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问）：**搬的时候一字未改**，要动顺序先把那一条注释读完。⚠️ `取前置块` / `记账列宽` 两样必须走**回调**不能传值——前者要"这一刻"那一段（换文档、源码切回来都会换），后者要调用方手里**活的那张表**。📌 **2026-10-07 同日加 `移动键位`**（`.use(readOnly ? [] : [移动键位])`，`editor/move-block.ts`）：`Alt+↑/↓` 必须抢在 `baseKeymap` 的 `joinUp`/`joinDown` **前面**接（那条链里 `[...prosePlugins, …, createKeymap(…)]` 的顺序就是这条键位能生效的原因） |
 | `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十六条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化**。⚠️ 建编辑器时要**摘掉与界面快捷键撞车的 CodeMirror 默认键位**（`撞车键位`，2026-09-25；⚠️ **2026-10-04 那份名单搬去了 `editor/key-conflicts.ts`**，因为 BUG-58 正是"名单漏了一条"——搬出来才能被测试读到） ⚠️ **2026-10-07 又拆一次（第 89 项）：1048 → 637 行**——「一条命令落到文本上」那一块搬去了 `editor/source-commands.ts`（443 行），这边只留编辑器本身（扩展、主题、句柄、查找/写作模式接线）。⚠️ 两次拆的落点见 `tools/doc-sync-check.sh` 的 `PAIRS`。⚠️ **同一天傍晚（BUG-71）`notaTheme` 里补了两段注释 ＋ 把当前行那一档换成半透明配方，现在 652 行**（理由见 `docs/07` BUG-71——不透明的当前行底色会把选区整条盖住）。 |
@@ -176,7 +179,7 @@
 | `styles/share.css` | **分享图那一块面板的皮**（61 行，2026-09-27）：`.panel-share` / `.panel-share-img` / `.panel-share-actions` / `.panel-share-note`。⚠️ **另开一份是因为 `dock.css` 当时 961 行、贴着 1000 行硬线**。⚠️ 卡片自己的配色**不在这里**——那张 SVG 塞在 `<img>` 里、继承不到任何 CSS 变量。⚠️ 要在 `dock.css` 之后加载（借那边的 `.panel-btn`） |
 | `styles/heatmap.css` | **热力图那一块的皮**（83 行，2026-09-27）。⚠️ **另开一份是因为 `dock.css` 当时 971 行、顶着硬线**（同 `share.css` / `marks.css` 那两次拆）。⚠️ **列宽是弹性的**（`flex: 1`）：面板那一栏能从 260px 拖宽，写死像素的话拖宽之后整块图缩在左上角。⚠️ 格子深浅走 **`color-mix` 兑透明**、不写死五个颜色（兑透明才不会被底色的深浅两套吃掉） |
 | `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26 新增）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反（界面风格要改的就是整个外壳）；于是"同名覆盖内置"的**全部实现就是文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验 |
-| `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增，按 `useDocTheme` 的先例单独一个 hook：要问后端、是异步的）。⚠️ 判据是**"这一档有没有文件"**而不是"是不是内置七档之一"——用户放一个 `adwaita.css` 就是覆盖内置，那时 `data-ui-style` 仍是 `adwaita` 但那份 CSS 得取回来。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
+| `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增）。清单、当前 CSS 与 `ready` 一次拉齐：主窗口在屏幕外预热，编辑器与样式都就绪后才移入屏幕，不会先画出默认配色或加载动画。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
 | `styles/themes/*.css` | 文档主题源文件。📌 安装包只内置 `adwaita` / `adwaita-dark`；`minimal` / `latex` / `cde` 留给独立官方主题仓库迁移，`BUILTIN` 不再引用它们。每套主题仍自带 `--code-*`。 |
 | `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：源码框、渲染区、说明卡。⚠️ 渲染出来那张 `<svg>` 的宽度上限**主要不在 CSS 里**（`diagram-view.ts` 按 `viewBox` 自然宽取 `min(100%, 自然宽)`；只写 `max-width: 100%` 会让小图被容器宽度等比放大） |
 | `styles/math.css` | **公式那棵树**（2026-09-26）：面板 / 半透明分隔符 / 源码框 / 渲染区三种 `data-state` / 说明卡。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），别在 `.nota-math-panel` 上另写 `display: none`。⚠️ KaTeX 自己那份 `katex.min.css` 只管 `.katex` 那棵树 |
@@ -231,7 +234,7 @@
 | `ui/panel-dock-state.ts` | **插件栏那三份凭据（当前哪一页 / 每页拉回来的内容 / 正在吐的那段字）住在组件外面**（2026-10-10 新增，`docs/07` 第 111 项）：关掉插件栏 = `PluginDock` 被卸载、组件里的 state 全丢；而插件的一条命令跑着时宿主握着 `plugins` 锁，`nota_plugin_panel_content` 要的**正是同一把锁**，所以重开时那次"重拉"回不来（用户报的「关掉面板再打开就找不到了」）。这里装着那份 `记忆`（`起始页` 那个三态：`undefined` 才是"没选过"、`null` 是"用户自己停在插件清单页"；`记住内容表` 抹掉 `busy`——不抹的话重开是一排永远解不开的灰按钮）与纯函数 `这一页画什么`（其中一条是**内容拉不回来但有流式文字时先把字画出来**）。⚠️ 进程内、不落盘。判据 `tests/panel-dock-state.test.ts`（44 条） |
 | `ui/credits.ts` | **「关于 → 鸣谢」那一页的名单**（2026-10-10 从 `ui/AboutDialog.tsx` 搬出来并补全：用户「将 Codemirror 等引入的 BSD/MIT 库写入"鸣谢"」）：判据是"**直接依赖里那些宽松许可的**"（MIT / BSD / ISC / Apache-2.0 / CDLA），逐条对着 `THIRD-PARTY.md` §1/§2 抄——**两份必须同批改**。⚠️ 写成**函数**（收一个 `t` 进来现调）而不是模块级常量，理由同 `ui/pluginText.ts`；每条 `用处` 都是字面量 `t("…")`（`tools/i18n-check.sh` 只认那种写法）。⚠️ 仍然不是"完整的传递依赖闭包"（那有几百个包） ⚠️ **2026-10-16 多了一行 `Monoton`**（「Nota」那三个字的字标字体，OFL-1.1，出处与义务在 `THIRD-PARTY.md` §8）。 |
 | `ui/settings/panes/SpellLangPicker.tsx` | **「拼写检查语言」那一格的控件 ＋ 词典从哪儿来**（2026-10-10 建，**2026-10-11 大改**）：一个**能同时勾几门**的列表（跟随系统是列表第一个勾——勾上就是清空，不是并列的开关）＋ 一格"添加自定义标签"＋ 底下那一段**装词典**（导入 `.zip` / 在文件夹里显示词典目录 / 目录路径 / 三条出路的提示）。⚠️⚠️ **候选的本事反过来了**：2026-10-10 那一版是一张**写死的表**（那时候列不出"这台机器装了什么"，四种列法全不靠谱，实测在 `commands/webview.rs` 文件头）；今天引擎是我们自己的（只认 `.aff`/`.dic`），"扫得到"与"用得了"成了同一件事，所以列表**分两档**画：**装着的**（来自 `nota_spell_dictionaries`）与**常见但没装的**（勾得上、旁边写"未安装"——做成点不动的用户会以为"这软件不支持德语"）。⚠️ 它**不是页面**，是「编辑器」页里的一格（值走 `paneWriter` 写的 `spellcheck_langs`） |
-| `ui/useExport.ts` | **导出与打印的接线**（2026-09-24 从 `App.tsx` 搬出）：取正文 → 取主题 → 生成 HTML → 问落点/交给系统 → 报结果。⚠️ 正文**必须从编辑器拿**（`doc.text` 是 300ms 去抖后的镜像）；主题取不到**不算失败**。⚠️ 2026-09-25 起多了**借 pandoc 那七种**（`导出为(id)` + `pandocGate`）：**先探测再决定**，`ready` 直接进保存对话框、`missing`/`unknown` 才出面板；⚠️ 默认落点三档，且**与「另存为」不是一回事**（那个换的是这份文档自己的路径） |
+| `ui/useExport.ts` | **导出、导入与打印的接线**（2026-09-24 从 `App.tsx` 搬出）：取正文 → 取主题 → 生成 HTML → 问落点/交给系统 → 报结果。⚠️ 正文**必须从编辑器拿**（`doc.text` 是 300ms 去抖后的镜像）；主题取不到**不算失败**。⚠️ 2026-09-25 起多了**借 pandoc 那七种**（`导出为(id)` + `pandocGate`）；2026-10-19 又加上五种导入（Word / RTF / LaTeX / EPUB / ODT → Markdown），转换结果交给 `useDocuments.newDocWithText` 建未保存标签。⚠️ 默认落点三档，且**与「另存为」不是一回事** |
 | `ui/useDocTheme.ts` | **文档主题的应用/切换/打开目录**（2026-09-24 从 `App.tsx` 搬出）。⚠️ 与界面主题的 `applyTheme` **分开**：那条是同步写属性，这条要取回来 + 限域，节奏不一样。⚠️ 2026-09-25 起多一层**槽**（`useDocThemeSlot`）：`appearance.dark_theme_separate` 打开后深色下生效的是 `dark_document_theme` 那份，于是「读哪份」与「写哪份」必须同源；两个纯函数导出给设置页显示用。⚠️ 2026-10-04（第 41 项）：`主题接线` 多一格 `重扫`，「打开主题文件夹…」**成功回来之后**调它（`App.tsx` 接 `api.theme.list().then(setThemes)`）——清单重扫后取 CSS 那个 effect 会跟着重跑（`themes` 本来就在依赖里）；**不做轮询** |
 | `ui/useAppearance.ts` | **「外观」几条轴的接线**（2026-09-25 新增，从 `App.tsx` 搬出）：界面风格/明暗/主题色一起落进 `<html>`（`applyTheme` 的退订要交出去，BUG-7）＋ 缩放落到 webview（转 `ui/useZoom.ts`）。⚠️ **2026-09-27 起它有返回值**：`useZoom` 交给它的**缩放那三档的动作**（放大/缩小/实际大小），原样转给 `App.tsx` → `ui/useCommandTable.ts` → 菜单与快捷键。⚠️ 转出去的是**同一个对象**、不再拼一层，因为它的身份是稳的（`useMemo` 过）——这正是剪贴板那四件必须拆开、这只不必的区别 |⚠️ 几条轴落点不同却同属一页，合在一处是为了"改外观页时知道代码在哪"。⚠️ `[appearance]` 那半张表（`accent` 就在里面）与文档主题**都不在这里** |
 | `ui/useZoom.ts` | **界面缩放 ＋ 界面字号 ＋ Ctrl+滚轮 ＋ 键盘那三档**（2026-09-25 新增；**2026-09-26 加了第二档**；**2026-09-27 加了「视图 → 放大/缩小/实际大小」**，现 347 行）：⚠️ 那三档与滚轮**共用同一个 `应用缩放(值)`**（夹紧 → `setZoom` → 攒 400ms 落盘），但**不看** `ctrl_wheel_zoom`、**不跟** `ctrl_wheel_target` 走（那两格管的是滚轮）；⚠️ 「实际大小」是 `Ctrl+Shift+0` 而**不是** `Ctrl+0`——后者是本仓的「正文」，撞车是 `tools/menu-harness` 的 `#accel` 场抓到的。接上 `[appearance].zoom`（`webview.setZoom()`）、顶层 `ui_font_size`（内联 `--ui-font-size`），以及 `ctrl_wheel_zoom` ＋ `ctrl_wheel_target` **两格**。⚠️ 那两格是**两个问题**：前者管「生不生效」、后者管「动的是哪一个数」（`font_size` 默认 ／ `zoom`）。⚠️ 拨字号那一档会顺手打开顶层 `custom_font_size`，不然滚起来像坏的。⚠️ 走 `webview.setZoom()` 而不是 CSS（`100vh` 撑满，CSS 放大后底边被切）；⚠️ Ctrl+滚轮自己写（这套 WebKitGTK 不响应），**立刻改、攒 400ms 落盘**，累加按"已落到 webview 上的值"算。⚠️ 上下限与设置页那个 `NumberInput` **必须一致** |
@@ -403,7 +406,7 @@
 `paste-clean.test.ts` **25** · `math-currency.test.ts` **23**
 `code-block-editing.test.ts` **21** · `key-conflicts.test.ts` **21**
 `auto-correct.test.ts` **20** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20**
-`atom-space.test.ts` **19** · `heading-on-enter.test.ts` **19** · `heading-toggle.test.ts` **5** · `font-bundle.test.ts` **6** · `accent.test.ts` **18**
+`atom-space.test.ts` **19** · `heading-on-enter.test.ts` **19** · `heading-toggle.test.ts` **5** · `font-bundle.test.ts` **7** · `cde-menu-fidelity.test.ts` **11** · `settings-export.test.ts` **5** · `accent.test.ts` **18**
 `mark-hint.test.ts` **18** · `instant-render.test.ts` **17** · `list-indent.test.ts` **16**
 `focus-dim.test.ts` **15** · `file-kind.test.ts` **14** · `html-block.test.ts` **14**
 `lang-icons.test.ts` **14** · `bar-close.test.ts` **13** · `syntax-escape.test.ts` **13**
@@ -601,7 +604,7 @@ pub mod native_menu;    pub mod themes;
 
 无参数、无返回（`-> ()`）。里面 `tauri::Builder::default()` 链式装配：
 
-1. `.plugin(tauri_plugin_dialog::init())`、`tauri_plugin_fs::init()`、`tauri_plugin_opener::init()`
+1. `tauri_plugin_fs::init()`、`tauri_plugin_opener::init()`；文件选择由应用内选择器、`ui/file-picker.ts` 和 `commands/file_picker.rs` 完成，不加载 GTK 原生 dialog 插件
 2. `.setup(|app| { … })`：
    - `Settings::load()` → 失败则 `日志!("[nota] 读设置失败，本次用默认值：{e}")` +
      `Settings::default()`，并把**压成一行**的那句话塞进 `AppState::settings_problem`
@@ -1102,29 +1105,21 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
 ⚠️⚠️ **2026-09-26 起 `Settings::ui_style` 是一个 `String`，原来的 `UiStyle` 枚举
 已经删除**。用户原话：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」——
 所以取值是**开放的**，枚举写不下。理由、好处与风险完整地写在
-`settings/mod.rs::DEFAULT_UI_STYLE` 那一段（默认值 `"auto"`）。
+`settings/mod.rs::DEFAULT_UI_STYLE` 那一段（默认值 `"adwaita"`）。
 
-内置那**八**档的 id 表在 `ui_styles.rs`，是**三份抄本里的权威那一份**
+安装包内置的 id 表在 `ui_styles.rs`，是**权威清单**
 （另两份：`theme/shape.css` 的选择器、`AppearancePane.tsx` 的 `STYLE_ORDER`；
 `tools/doc-sync-check.sh` ⑦ 查三份是否一致）：
 
 ```rust
 pub const BUILTIN_IDS: &[&str] = &[
-    "auto",      // 跟随当前桌面环境，探不到就用 Adwaita
-    "adwaita",   // GNOME 原生：中等圆角、紧凑。探不出桌面时的兜底
-    "ghub",      // GitHub：冷灰蓝边框、无阴影、蓝色强调
-    "plasma",    // KDE Plasma（Breeze）：方正偏圆、蓝色强调
-    "macos",     // macOS：大圆角、控件偏矮、层次靠阴影
-    "windows",   // Windows 11：小圆角、直角感、蓝色强调
-    "windows10", // Windows 10 原生（Acrylic）：**比 Win11 更方**——窗口直角、材质是亚克力不是 Mica
-    "yaru",      // Ubuntu Yaru：大圆角、控件更高、橙色强调
+    "adwaita",   // 安装包唯一随附的界面主题
 ];
 ```
 
-`"auto"` 是"跟随当前桌面环境"，运行期由前端 `styles/applyTheme.ts::resolveStyle()`
-解析成某一种具体风格（探不到就落到 `adwaita`），所以真正要写的样式是
-**七种风格 × 2 种明暗 = 14 格**；`ghub` **和 `windows10`** 只能手动选中，
-`auto` 探测的结果里没有它们。
+2026-10-21 起**移除自动检测系统并匹配主题**。旧设置文件里的 `"auto"` 由
+`styles/applyTheme.ts::resolveStyle()` 兼容映射到 `adwaita`，但不再出现在设置下拉中。
+Yaru、GitHub、Breeze、macOS、Windows、CDE 等从 `Nota-themes` 安装为外部主题。
 
 ⚠️ **`windows10` 与 `windows` 是并存的两代，不是替换关系**。两条理由：
 ①用户 2026-09-26 给的是两份稿子，而且**专门写明"不是 Mica"**——Win10 是直角、
@@ -1847,7 +1842,7 @@ pub struct TreeOptions {
 | `pub fn nota_plugin_review_close(app: tauri::AppHandle, plugin: String) -> Result<()>` | 收起编辑区那一块。⚠️ 「回到正文」走的是**这条命令、不绕道插件**——插件可能已经卡住、或者根本没提供"关掉"的命令 |
 | `pub fn nota_plugin_find_command(state: State<'_, AppState>, command: String) -> Result<Option<String>>` | `host.find_command_owner(&command).map(str::to_owned)` |
 | `pub fn nota_plugin_panels(state: State<'_, AppState>) -> Result<Vec<PluginPanel>>` | `host.panels()`。**前端挂载后主动拉一次**，不能改成等事件（BUG-13） |
-| `pub async fn nota_plugin_install(app: tauri::AppHandle, path: String) -> Result<String>` | 装一个包，返回它的 id。⚠️ `path` 由**前端**用文件对话框问出来（`@tauri-apps/plugin-dialog`），宿主不自己弹框——那是界面的事，而且宿主弹框在无头测试里没法验。⚠️ 异步：装完**当场加载**（跑 `on_load`）。⚠️ 只收 `path` **一个**参数：`trust` 是**装完之后**的另一个动作（`nota_plugin_trust`）|
+| `pub async fn nota_plugin_install(app: tauri::AppHandle, path: String) -> Result<String>` | 装一个包，返回它的 id。⚠️ `path` 由**前端**用应用内文件选择器问出来，宿主不自己弹框——那是界面的事，而且宿主弹框在无头测试里没法验。⚠️ 异步：装完**当场加载**（跑 `on_load`）。⚠️ 只收 `path` **一个**参数：`trust` 是**装完之后**的另一个动作（`nota_plugin_trust`）|
 | `pub async fn nota_plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<()>` | 卸掉：磁盘删、内存拿掉、账本忘掉。⚠️ 异步，而且是**不可逆**的（目录真的没了），前端必须先问一句 |
 | `pub fn nota_plugin_trust(state: State<'_, AppState>, id: String) -> Result<()>` | 信任这个插件的签名者（TOFU ＋ 显式信任），透传 `PluginHost::信` |
 | `pub fn nota_plugin_trust_list(state: State<'_, AppState>) -> Result<Vec<信任记录>>` | 信任库里现在有哪几把钥匙。界面「已信任的签名者」那一块用它 |
@@ -1898,9 +1893,9 @@ pub struct TreeOptions {
 
 ---
 
-## `src-tauri/src/commands/window.rs`（77 行）
+## `src-tauri/src/commands/window.rs`
 
-**窗口自身的控制**两条（2026-09-27；开发者工具那条在前，晚些时候加了第二条）。
+**窗口自身的控制**三条：开发者工具、新建进程窗口、独立诊断信息窗口。
 ⚠️ 这两条**不是我们划在一起的**：Tauri 的权限给两套命名空间（`core:window:*` 与
 `core:webview:*`，见 `capabilities/default.json`），开发者工具那条走 webview。
 ⚠️ 「窗口置顶」**不在这里**——前端直接 `getCurrentWindow().setAlwaysOnTop()` 就够了，
@@ -1926,6 +1921,12 @@ std::process::Command::new(&程序)
 对外开着的一条路，别指望调用方都守规矩。
 ⚠️ 程序自己那条路径用 `std::env::current_exe()` 取，**不缓存、也不从设置里读**：
 新窗口必须与当前这一份是同一个可执行文件。
+
+### `nota_window_open_debug_info() -> Result<()>`
+
+打开或聚焦 `debug-info` 窗口。窗口加载同一个前端入口的
+`index.html#debug-info` 分支，只挂 `ui/DebugInfoWindow.tsx`，调用
+`nota_diagnostics` 并把编译与运行信息固定用英文显示。重复点击复用已有窗口。
 
 ### 测试
 
@@ -4801,7 +4802,7 @@ React 入口，四件事：
 的 `MENUS`）；② **启动档**——`ui/useStartup.ts` 读 `files.startup`，把它当入参递给
 `ui/useSession.ts::接上会话`（见 `docs/03` §5.6e）。⚠️ 两处的落点不一样：**键位覆盖**在
 本文件里读一次、`useMemo` 叠上去（依赖里带着 `settings?.keys?.overrides`）；**启动档**
-由 `ui/useStartup.ts` 自己读——它那一枪本来就要拉设置（六枪走同一个 `Promise.all`）。
+由 `ui/useStartup.ts` 自己读——设置到岸后立即应用，其余启动 IPC 继续并行。
 **别在子组件里再读一遍设置文件**。
 
 应用外壳：状态编排 + 布局。文件头写明这一层只做三件事——**取数据、派事件、拼布局**；
@@ -4927,9 +4928,11 @@ React 按位置对不上就退到"按键值查"那条路，而那张表是 Map�
 **① 启动**（依赖 `[refreshDocs, toast, openPath]`）
 
 ```text
-Promise.all([api.settings.get(), api.workspace.get(), api.theme.list(),
-             api.settings.problem(), api.startupFile()])
-  → setSettings / setWorkspace / setThemes
+workspace / theme.list / startupFile 先并行开跑
+  → Promise.all([settings.get(), settings.problem(), appLang()])
+  → 定语言 + setSettings（界面风格 CSS 从这里开始取）
+  → 等 workspace / theme.list / startupFile
+  → setWorkspace / setThemes
   → 有设置问题就 toast(`设置读不出来了，这次按默认值启动。${…}`, "error", 0)
   → await refreshDocs()
   → 有命令行文件就 await openPath(那个文件)
@@ -5290,7 +5293,7 @@ IPC 桥：**前端唯一允许直接 `invoke` 的地方**。理由不是洁癖�
 | `DocId` | `type DocId = number` | `DocId(u64)` |
 | `Document` | `{id, path: string\|null, title, text, dirty, revision}` | `document::Document` |
 | `TreeNode` | `{name, path, is_dir, children: TreeNode[]\|null}` | `commands::workspace::TreeNode` |
-| `UiStyle` | `"auto" \| "adwaita" \| "ghub" \| "macos" \| "plasma" \| "windows" \| "yaru"` | `settings::UiStyle`（定义在 `settings/mod.rs`）。⚠️ **七个**，与 `ui/settings/panes/AppearancePane.tsx` 的 `STYLES` 表一一对应（那张表写成 `Record<UiStyle, …>`，所以加值时漏不掉） |
+| `BuiltinUiStyle` | `"adwaita"` | 安装包唯一随附的界面风格。其他主题 id 由 `Nota-themes` 以字符串提供；旧值 `auto` 兼容映射到 Adwaita |
 | `UiMode` | `"auto" \| "light" \| "dark"` | `settings::UiMode` |
 | `ViewMode` | `"wysiwyg" \| "source" \| "split"` | **没有 Rust 对应物**（2026-10-07 起）：模式是**会话内状态、不落盘**，`settings::ViewMode` 已随"模式不再存盘"删掉，家（那条 `useState`）在 `ui/useFileKindMode.ts`。⚠️ **不是外观轴**，见 `docs/05` §3.1 |
 | `Settings` | `{ui_style, ui_mode, document_theme, ui_font_size, content_width, limit_text_width, confirm_unsaved, autosave_seconds, strict_markdown, enable_physics, files, editor, image, markdown, export, appearance, general}` | `settings::Settings`。⚠️ **九个顶层老字段 ＋ 一个新加的（`limit_text_width`，2026-10-09）＋ 七张分页表**（表名与 Rust 侧逐字相同；2026-10-07 前是十个，少的那个是退休的 `view_mode`）。⚠️ 这里写错一个字母**不会编译不过**，只会在运行时拿到 `undefined`，而它传回 Rust 会被 serde 当成"这一项没给"、落回默认值——症状是"改了一下，看着像没生效" |
@@ -5360,7 +5363,7 @@ Rust 侧它是 `Option<PathBuf>`，所以前端一定可能拿到 `null`——**
 | | `menus()` | `nota_plugin_menus` | 📌 **2026-09-24 起有调用者了**（`ui/usePlugins.ts`，与 `list()` / `panels()` 同一个 `Promise.all`） |
 | | `review()` | `nota_plugin_review` | 📌 **2026-09-25 起**：编辑区里此刻摊着哪一块，没有就是 `null`（`PluginReview \| null`）。启动时拉一次，并订阅 `nota:plugin-review` 重拉（`ui/usePlugins.ts`） |
 | | `reviewClose(plugin)` | `nota_plugin_review_close` | 📌 **2026-09-25 起**：收起来、切回正文。⚠️ **不经过插件**——插件正卡在慢调用里（宿主还抱着 `plugins` 锁）时用户也得退得出来。⚠️ 传的是**当前摊着的那个插件**（`review().plugin`），只收它自己那一格 |
-| | `install(path)` | `nota_plugin_install` | 返回装好的 id；`path` 由 `@tauri-apps/plugin-dialog` 的 `open` 问出来。⚠️ **没有 `trust` 参数**——信任是装完之后另一个动作（`trust`），装的那一刻不去猜用户信不信 |
+| | `install(path)` | `nota_plugin_install` | 返回装好的 id；`path` 由 `@/ui/file-picker` 的 `open` 问出来。⚠️ **没有 `trust` 参数**——信任是装完之后另一个动作（`trust`），装的那一刻不去猜用户信不信 |
 | | `uninstall(id)` | `nota_plugin_uninstall` | ⚠️ **不可逆**，调用方必须先问一句 |
 | | `trust(id)` | `nota_plugin_trust` | TOFU ＋ 显式信任：把这个插件签名者的指纹写进 `trusted-keys.toml` |
 | | `trustList()` | `nota_plugin_trust_list` | 返回 `信任记录[]`。与 `list()` 同一个 `Promise.all`（`ui/usePlugins.ts::重拉` 一次拉四样）|
@@ -5955,10 +5958,8 @@ DOM 节点里"的映射，而块首那种位置是有歧义的）。
 | 函数 | 行为 |
 |---|---|
 | `systemPrefersDark() -> boolean` | `window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false` |
-| `detectStyle() -> Exclude<UiStyle, "auto">` | 探"自动"风格该落到哪个具体风格。把 `navigator.userAgent` 与 `guessDesktop()` 拼起来小写后判：含 `kde`/`plasma` → `plasma`；含 `ubuntu`/`yaru` → `yaru`；含 `windows` → `windows`；含 `mac`/`darwin` → `macos`；**其余一律 `adwaita`**（它是 GNOME 的原生语言，也是 WebKitGTK 下最不出错的一档） |
-| `guessDesktop() -> string` | ⚠️ **恒返回空串**（注释：WebKitGTK 不会把桌面环境告诉 JS，没有可靠的同步 API；等接上 XDG portal 的 `color-scheme` 后换掉）。所以 `detectStyle()` 实际上**永远返回 `adwaita`** |
 | `resolveMode(mode) -> "light" \| "dark"` | `auto` → 跟 `systemPrefersDark()`；否则原样 |
-| `resolveStyle(style) -> string` | `auto` → `detectStyle()`；否则原样 |
+| `resolveStyle(style) -> string` | `auto` → `adwaita`（旧设置兼容）；否则原样 |
 
 ⚠️ `detectStyle` 里 `kde`/`plasma` 那一支返回的是 `adwaita` 而**不是**某个 KDE 风格
 （枚举里本来也没有 KDE 档），所以那条分支与兜底分支效果相同。留着是为将来加
@@ -6664,7 +6665,7 @@ interface Props {
 
 | 常量 | 值 | 推给谁 |
 |---|---|---|
-| `SYNC_DEBOUNCE_MS` | `300` | 后端（`api.doc.sync`）。见 `docs/03` §9.1 |
+| `SYNC_DEBOUNCE_MS` | `300`（普通文档）/ `1000`（超过大文件阈值） | 后端（`api.doc.sync`）。大文件还会把 `api.doc.list()` 的整表回拉限制到至少 1.5 秒一次 |
 | `PREVIEW_DEBOUNCE_MS` | `150` | **分屏右边那个预览窗格**。本地的、不跨 IPC，比 300 短——够挡住"每个字符都重解析整篇文档"就行 |
 | `CURSOR_DEBOUNCE_MS` | `250` | **后端（`api.doc.cursor`），报的是选区快照**（2026-10-04 加，第 14 项）。⚠️ 它推的是**旁路**（推丢了只影响插件读到的选区，不影响正文），所以去抖可以比 `SYNC_DEBOUNCE_MS` 短；⚠️ 两支插件那边还有一层**签名去重**（`empty\|text` 没变就不报），两层加起来才是"不每敲一颗字跨一次 IPC" |
 
@@ -8743,7 +8744,7 @@ export function 口径键(口径: 树口径): string;      // 给依赖数组用
 
 ```ts
 export const MARKDOWN后缀: readonly string[];   // 六种，全仓唯一一份
-export const 大文件阈值 = 1_000_000;             // UTF-16 码元
+export const 大文件阈值 = 200_000;               // UTF-16 码元
 export function 后缀(路径: string): string;
 export function 是Markdown后缀(路径: string): boolean;
 export function 认文件类型(路径: string): "markdown" | "text";
@@ -8782,8 +8783,8 @@ export function 实际模式(偏好: ViewMode, 缘由: 降级缘由 | null): Vie
 
 ### ⚠️ 大文件阈值**是一个判断，不是量出来的转折点**
 
-`1_000_000` 这个数单独摆在常量上、写明理由：ProseMirror 那棵树与它的 DOM 是**整篇**建的
-（不是按视口），10 万字符已有可感迟滞，100 万字符是"敲一个字等半秒"；而 100 万码元
+`200_000` 这个数单独摆在常量上、写明理由：ProseMirror 那棵树与它的 DOM 是**整篇**建的
+（不是按视口），约 10 万字符已有可感迟滞，超过 20 万后每次输入都要重排整篇文档
 ≈ 1 MB 的 UTF-8 中文，放到写作场景里比《战争与和平》还长。⚠️ **宁可压高不压低**：
 压低了正常长文会突然掉进源码模式（用户觉得"编辑器退化了"，但能自己切回来），压高了
 超大文件卡死（用户觉得"编辑器坏了"，切不回来）。

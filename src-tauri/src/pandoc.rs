@@ -45,6 +45,107 @@ use crate::proc::{command_or_default, run_capture, Ran, RunOpts};
 // 本文件的探测与导出）一个字都不用改。
 pub(crate) use crate::pandoc_format::Format;
 
+/// 可从外部文档导入 Markdown 的格式。
+///
+/// 这张表只负责“菜单 id / pandoc 输入格式 / 文件后缀 / 显示名”的对应关系。
+/// 文件选择、打开新文档与提示条由前端负责；本模块只跑一次无状态的格式转换。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ImportFormat {
+    Docx,
+    Rtf,
+    Latex,
+    Epub,
+    Odt,
+}
+
+impl ImportFormat {
+    pub(crate) fn from_id(id: &str) -> Option<Self> {
+        Some(match id {
+            "docx" => Self::Docx,
+            "rtf" => Self::Rtf,
+            "latex" => Self::Latex,
+            "epub" => Self::Epub,
+            "odt" => Self::Odt,
+            _ => return None,
+        })
+    }
+
+    fn from(self) -> &'static str {
+        match self {
+            Self::Docx => "docx",
+            Self::Rtf => "rtf",
+            Self::Latex => "latex",
+            Self::Epub => "epub",
+            Self::Odt => "odt",
+        }
+    }
+
+    fn id(self) -> &'static str {
+        match self {
+            Self::Docx => "docx",
+            Self::Rtf => "rtf",
+            Self::Latex => "latex",
+            Self::Epub => "epub",
+            Self::Odt => "odt",
+        }
+    }
+
+    fn extensions(self) -> &'static [&'static str] {
+        match self {
+            Self::Docx => &["docx"],
+            Self::Rtf => &["rtf"],
+            Self::Latex => &["tex", "latex"],
+            Self::Epub => &["epub"],
+            Self::Odt => &["odt"],
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Docx => "Word",
+            Self::Rtf => "RTF",
+            Self::Latex => "LaTeX",
+            Self::Epub => "EPUB",
+            Self::Odt => "OpenDocument",
+        }
+    }
+}
+
+const IMPORT_ALL: [ImportFormat; 5] = [
+    ImportFormat::Docx,
+    ImportFormat::Rtf,
+    ImportFormat::Latex,
+    ImportFormat::Epub,
+    ImportFormat::Odt,
+];
+
+/// 前端打开文件对话框时需要的格式表。
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportFormatInfo {
+    pub id: String,
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
+pub(crate) fn import_formats() -> Vec<ImportFormatInfo> {
+    IMPORT_ALL
+        .iter()
+        .map(|format| ImportFormatInfo {
+            id: format.id().to_string(),
+            name: format.name().to_string(),
+            extensions: format.extensions().iter().map(|ext| (*ext).to_string()).collect(),
+        })
+        .collect()
+}
+
+/// 一次导入转换的结果。
+#[derive(Debug, Clone, Serialize)]
+pub struct PandocImport {
+    pub markdown: String,
+    /// pandoc 成功退出时仍可能报告的警告，例如资源未找到。
+    pub warnings: String,
+}
+
 // ⚠️ 探测那一半搬去了 `pandoc_probe.rs`（那边有为什么拆的说明）。
 // **在这里接回原名**：`crate::pandoc::{ProbeState, probe, find_engine}` 这类写法
 //（`commands/pandoc.rs` 走的就是它们）一个字都不用改。
@@ -205,6 +306,78 @@ pub(crate) fn export_to(
         engine.as_deref(),
         捎带,
     )
+}
+
+/// 用 pandoc 把一份外部文档转换为 Nota 可编辑的 Markdown。
+///
+/// 输入路径交给 pandoc 自己读取，因此文档内的相对资源仍以原文件目录为基准。
+/// 输出走标准输出，不替用户创建额外的中间文件。
+pub(crate) fn import_to(format: ImportFormat, source: &Path) -> Result<PandocImport> {
+    let command = command_or_default(ENV_CMD, DEFAULT_CMD);
+    import_with(&command, format, source)
+}
+
+fn import_with(command: &str, format: ImportFormat, source: &Path) -> Result<PandocImport> {
+    let Some(落) = 解析(command) else {
+        return Err(NotaError::other(format!("{ENV_CMD} 是空的，没有命令可跑")));
+    };
+    let args = build_import_args(&落.args, format, source);
+    let mut opts = RunOpts::timeout(EXPORT_TIMEOUT).env("NO_COLOR", "1");
+    for (k, v) in &落.env {
+        opts = opts.env(k, v);
+    }
+    if let Some(dir) = source.parent() {
+        opts = opts.cwd(dir);
+    }
+    if let Some((k, v)) = 补语言环境() {
+        opts = opts.env(k, v);
+    }
+
+    let 命令全称 = format!("{} {}", 落.program, args.join(" "));
+    match run_capture(&落.program, &args, opts) {
+        Ran::Done {
+            ok: true,
+            stdout,
+            stderr,
+        } => Ok(PandocImport {
+            markdown: stdout,
+            warnings: 成功时的警告(&stderr),
+        }),
+        Ran::Done {
+            ok: false,
+            stdout,
+            stderr,
+        } => {
+            let 病因 = if stderr.trim().is_empty() {
+                tail_of(&stdout)
+            } else {
+                tail_of(&stderr)
+            };
+            Err(NotaError::other(format!(
+                "pandoc 没能把{}转换成 Markdown：\n{病因}",
+                format.name()
+            )))
+        }
+        Ran::NoProgram => Err(NotaError::other(format!(
+            "没找到 `{}`（`{ENV_CMD}` 可以换一条命令）",
+            落.program
+        ))),
+        Ran::Timeout => Err(NotaError::other(format!(
+            "pandoc 转换超过 {} 秒，已经停止。命令是：{命令全称}",
+            EXPORT_TIMEOUT.as_secs()
+        ))),
+        Ran::Failed(msg) => Err(NotaError::other(msg)),
+    }
+}
+
+fn build_import_args(prefix: &[String], format: ImportFormat, source: &Path) -> Vec<String> {
+    let mut args = prefix.to_vec();
+    args.push(format!("--from={}", format.from()));
+    args.push("--to=markdown".to_string());
+    args.push("--wrap=none".to_string());
+    args.push("--markdown-headings=atx".to_string());
+    args.push(source.display().to_string());
+    args
 }
 
 /// 这一趟除了正文，还要捎给 pandoc 的那两样（2026-10-10 加，`docs/07` 第 112 项）。

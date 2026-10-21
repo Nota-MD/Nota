@@ -90,6 +90,16 @@ pub struct 安装结果 {
     pub restart_required: bool,
 }
 
+/// 更新包下载阶段的进度。前端订阅事件后画进度条，避免长时间只有一个
+/// “下载并安装”按钮而看起来像卡死。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct 下载进度 {
+    pub phase: String,
+    pub downloaded: u64,
+    pub total: Option<u64>,
+}
+
 pub fn 当前安装类型() -> 安装类型 {
     if let Ok(值) = std::env::var("NOTA_PACKAGE_KIND") {
         if let Some(类型) = match 值.to_ascii_lowercase().as_str() {
@@ -196,7 +206,10 @@ pub fn 检查(替换规则: &str) -> Result<更新状态> {
     })
 }
 
-pub fn 安装(替换规则: &str) -> Result<安装结果> {
+pub fn 安装(
+    替换规则: &str,
+    进度: impl FnMut(下载进度),
+) -> Result<安装结果> {
     let 清单 = 取清单(替换规则)?;
     验证清单(&清单)?;
     let 类型 = 当前安装类型();
@@ -213,7 +226,7 @@ pub fn 安装(替换规则: &str) -> Result<安装结果> {
     if !合法下载地址(&包.url) {
         return Err(NotaError::other("更新包地址不属于 Nota 官方 Release"));
     }
-    执行(类型, 包, 替换规则)
+    执行(类型, 包, 替换规则, 进度)
 }
 
 fn 验证清单(清单: &清单) -> Result<()> {
@@ -256,8 +269,18 @@ fn 选包<'a>(清单: &'a 清单, 类型: 安装类型) -> Option<&'a 安装包>
     })
 }
 
-fn 执行(类型: 安装类型, 包: &安装包, 替换规则: &str) -> Result<安装结果> {
-    let 文件 = 下载到临时(包, 替换规则)?;
+fn 执行(
+    类型: 安装类型,
+    包: &安装包,
+    替换规则: &str,
+    mut 进度: impl FnMut(下载进度),
+) -> Result<安装结果> {
+    let 文件 = 下载到临时(包, 替换规则, &mut 进度)?;
+    进度(下载进度 {
+        phase: "installing".to_string(),
+        downloaded: fs::metadata(&文件).map(|m| m.len()).unwrap_or(0),
+        total: fs::metadata(&文件).ok().map(|m| m.len()),
+    });
     match 类型 {
         安装类型::Deb => {
             启动特权("apt-get", &["install", "-y"], &文件)?;
@@ -301,11 +324,25 @@ fn 执行(类型: 安装类型, 包: &安装包, 替换规则: &str) -> Result<�
 const MAIN_DEV_UPDATE_COMMAND: &str =
     "git pull --ff-only && npm ci && npm run build && cd src-tauri && cargo build --release";
 
-fn 下载到临时(包: &安装包, 替换规则: &str) -> Result<PathBuf> {
+fn 下载到临时(
+    包: &安装包,
+    替换规则: &str,
+    进度: &mut impl FnMut(下载进度),
+) -> Result<PathBuf> {
     if !合法下载地址(&包.url) {
         return Err(NotaError::other("更新包地址不属于 Nota 官方 Release"));
     }
-    let 字节 = 取网络(&包.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
+    let mut 上次报告 = 0_u64;
+    let 字节 = remote::取_带进度(&包.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT, |下载, 总长| {
+        if 值得报告进度(下载, 上次报告, 总长) {
+            上次报告 = 下载;
+            进度(下载进度 {
+                phase: "downloading".to_string(),
+                downloaded: 下载,
+                total: 总长,
+            });
+        }
+    })?;
     let 摘要 = format!("{:x}", Sha256::digest(&字节));
     if 摘要 != 包.sha256.to_ascii_lowercase() {
         return Err(NotaError::other(format!(
@@ -320,6 +357,17 @@ fn 下载到临时(包: &安装包, 替换规则: &str) -> Result<PathBuf> {
     fs::write(&文件, 字节)
         .map_err(|e| NotaError::other(format!("更新包写不进去：{e}")))?;
     Ok(文件)
+}
+
+/// 下载进度节流：有总长度时每跨 1%，不知道总长度时每 512 KiB 报一次。
+fn 值得报告进度(现在: u64, 上次: u64, 总长: Option<u64>) -> bool {
+    if 现在 == 0 || 上次 == 0 {
+        return true;
+    }
+    match 总长.filter(|总| *总 > 0) {
+        Some(总) => 现在.saturating_mul(100) / 总 != 上次.saturating_mul(100) / 总,
+        None => 现在.saturating_sub(上次) >= 512 * 1024,
+    }
 }
 
 fn 安全文件名(名: &str) -> String {
@@ -526,6 +574,15 @@ mod tests {
     fn 包名会被清洗成单段文件名() {
         assert_eq!(安全文件名("../../evil.deb"), "evil.deb");
         assert_eq!(安全文件名("a b?.AppImage"), "a_b_.AppImage");
+    }
+
+    #[test]
+    fn 下载进度按百分比或半兆节流() {
+        assert!(值得报告进度(1, 0, Some(100)));
+        assert!(!值得报告进度(1, 1, Some(100)));
+        assert!(值得报告进度(2, 1, Some(100)));
+        assert!(!值得报告进度(600_000, 100_000, None));
+        assert!(值得报告进度(512 * 1024 + 100_000, 100_000, None));
     }
 
     #[test]

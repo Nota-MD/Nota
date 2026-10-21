@@ -96,6 +96,7 @@ export interface 命令表输入 {
   /** `true` = 带样式那一档。两档的差别在 `ui/useExport.ts`。 */
   导出: (带样式: boolean) => Promise<void>;
   导出为: (格式: string) => Promise<void>;
+  导入为: (格式: string) => Promise<void>;
   打印: () => Promise<void>;
 
   // ── 编辑 ──────────────────────────────────────────────────────────────
@@ -208,6 +209,7 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
     打开设置页: setSettingsOpen,
     导出,
     导出为,
+    导入为,
     打印,
     运行: run,
     切查找,
@@ -301,6 +303,11 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "file.exportLatex": () => void 导出为("latex"),
       "file.exportEpub": () => void 导出为("epub"),
       "file.exportOpml": () => void 导出为("opml"),
+      "file.importDocx": () => void 导入为("docx"),
+      "file.importRtf": () => void 导入为("rtf"),
+      "file.importLatex": () => void 导入为("latex"),
+      "file.importEpub": () => void 导入为("epub"),
+      "file.importOdt": () => void 导入为("odt"),
       "file.print": () => void 打印(),
 
       "edit.undo": () => run("undo"),

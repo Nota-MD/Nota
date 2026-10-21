@@ -73,7 +73,7 @@ import { useModalTrap } from "@/ui/useModalTrap";
 import type { 插件动作 } from "@/ui/usePlugins";
 import { QueryProvider, SearchField } from "./primitives";
 import { AppearancePane } from "./panes/AppearancePane";
-import { AdvancedPane } from "./panes/AdvancedPane";
+import { DebugPane } from "./panes/DebugPane";
 import { DocThemePane } from "./panes/DocThemePane";
 import { EditorPane } from "./panes/EditorPane";
 import { ExportPane } from "./panes/ExportPane";
@@ -85,6 +85,7 @@ import { ImagePane } from "./panes/ImagePane";
 import { MarkdownPane } from "./panes/MarkdownPane";
 import { PluginSettingsPane } from "./panes/PluginSettingsPane";
 import { ShortcutsPane } from "./panes/ShortcutsPane";
+import { UpdatePane } from "./panes/UpdatePane";
 import type { PaneProps } from "./panes/props";
 
 export type SectionId =
@@ -93,6 +94,7 @@ export type SectionId =
   | "image"
   | "markdown"
   | "export"
+  | "updates"
   | "appearance"
   | "docTheme"
   | "shortcuts"
@@ -100,7 +102,7 @@ export type SectionId =
   | "pluginSettings"
   | "extensions"
   | "general"
-  | "advanced";
+  | "debug";
 
 /**
  * 左栏的页面。
@@ -129,6 +131,7 @@ const SECTIONS: Record<SectionId, 图标名> = {
   // 那说的是"显示编辑标记"，是**另一个设置项**，指错了东西（2026-09-25 换）。
   markdown: "nota-markdown-symbolic",
   export: "folio-document-export-symbolic",
+  updates: "nota-update-symbolic",
   // 一枚窗口 = 整个应用的样子（外观页管外壳，不管正文）
   appearance: "folio-window-symbolic",
   // 一枚"拼图"= 拓展那一页（装 / 导出 / 卸载）。⚠️ 这一枚是 **Nota 自己画的**
@@ -145,7 +148,7 @@ const SECTIONS: Record<SectionId, 图标名> = {
   focus: "nota-force-focus-symbolic",
   pluginSettings: "folio-configure-symbolic",
   general: "folio-configure-symbolic",
-  advanced: "nota-advanced-symbolic",
+  debug: "nota-advanced-symbolic",
 };
 
 /**
@@ -161,6 +164,7 @@ const ORDER: SectionId[] = [
   "image",
   "markdown",
   "export",
+  "updates",
   "appearance",
   "docTheme",
   "shortcuts",
@@ -217,6 +221,8 @@ interface Props {
   插件动作: 插件动作;
   /** 调试模式；只有开启时才让「高级设置」进入左栏和搜索。 */
   debugMode: boolean;
+  /** 外部请求打开某一页；通知的「查看更新」用。 */
+  initialSection?: SectionId | null;
 }
 
 export function SettingsDialog({
@@ -236,6 +242,7 @@ export function SettingsDialog({
   插件更新,
   插件动作,
   debugMode,
+  initialSection,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -257,6 +264,7 @@ export function SettingsDialog({
     // ⚠️ 这一条**不包 `t()`**：Markdown 是同一门语言的词，中英两版一模一样。
     markdown: "Markdown",
     export: t("Export"),
+    updates: t("Updates"),
     appearance: t("Appearance"),
     docTheme: t("Document Themes"),
     shortcuts: t("Shortcuts"),
@@ -270,9 +278,9 @@ export function SettingsDialog({
     // **装 / 导出 / 卸载**（用户 2026-09-27 的原话就是"拓展管理面板"）。
     extensions: t("Extension Management"),
     general: t("General"),
-    advanced: t("Advanced"),
+    debug: t("Developer Mode"),
   };
-  const visibleOrder: SectionId[] = debugMode ? [...ORDER, "advanced"] : ORDER;
+  const visibleOrder: SectionId[] = debugMode ? [...ORDER, "debug"] : ORDER;
 
   const panelRef = useRef<HTMLDivElement>(null);
   /**
@@ -288,10 +296,13 @@ export function SettingsDialog({
    * 所以这一格又回到"只有自己这一份 `useState` 说了算"，而且**这次是唯一的入口**：
    * 要再让外面指定一次，就得连同"谁来投信"一起设计，别再单独把信箱加回来。
    */
-  const [section, setSection] = useState<SectionId>("appearance");
+  const [section, setSection] = useState<SectionId>(initialSection ?? "appearance");
+  useEffect(() => {
+    if (initialSection) setSection(initialSection);
+  }, [initialSection]);
   const [query, setQuery] = useState("");
   useEffect(() => {
-    if (!debugMode && section === "advanced") setSection("general");
+    if (!debugMode && section === "debug") setSection("general");
   }, [debugMode, section]);
 
   // 查询先小写化再进 context：`hits()` 只做一次 `includes`，
@@ -337,6 +348,8 @@ export function SettingsDialog({
         return <MarkdownPane {...props} />;
       case "export":
         return <ExportPane {...props} />;
+      case "updates":
+        return <UpdatePane {...props} />;
       case "docTheme":
         return <DocThemePane {...props} />;
       // ⚠️ 快捷键页**不吃 `{...props}`**（2026-09-27 起它可编辑了，但吃的仍然只有
@@ -362,8 +375,8 @@ export function SettingsDialog({
         );
       case "general":
         return <GeneralPane {...props} />;
-      case "advanced":
-        return <AdvancedPane {...props} />;
+      case "debug":
+        return <DebugPane {...props} />;
       default:
         return <AppearancePane {...props} />;
     }

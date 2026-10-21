@@ -820,16 +820,16 @@ Milkdown 实例**：`createEditor({ root, initialMarkdown, strict, readOnly: tru
 用同一套变量。
 
 ⚠️ **两种导出**：不含样式那份**连 class 都不带**（贴进别的系统再加工）；
-含样式那份嵌**三份 CSS**（都是 `?inline`，**和编辑器同一份字节**）＋**限域后的**
-文档主题：`theme/base.css`（变量那一层）＋ `editor.css`（正文）＋
-`katex.min.css`（公式）。外面那几层 class（`.editor-pane` > `.editor-mount` >
-`.milkdown` > `.ProseMirror`）**必须照着编辑区的 DOM 摆**——那份 CSS 的作用域要求，
-摆错了症状是"CSS 在、但哪条都没命中"。
+含样式那份嵌正文实际使用的样式层：变量、外壳、行内层、块级层、图表与
+KaTeX 公式，再叠**限域后的**文档主题。外面那几层 class（`.editor-pane` >
+`.editor-mount` > `.milkdown` > `.ProseMirror`）**必须照着编辑区的 DOM 摆**，
+否则 CSS 在、却哪条都不命中。
 
-⚠️ **那三份的名单是 2026-09-27 定下来的，别随手加。** 编辑区在界面上拿到十来份
-CSS，但 `code-block.css` / `math.css` / `marks.css` / `diagram.css` 的规则
-**全部挂在 `.nota-*` 上**，而 `.nota-*` 正是上面要摘掉的东西——摘完之后它们一条
-都不命中。判据：把注释剥掉，看还剩几条选择器不带 `nota-`。
+⚠️ **块级层不能漏**。2026-10-21 用户看到的“代码框散成一行行灰底”就是缺了
+`editor-blocks.css`：主题里的 `code` 行内样式直接落到 `<pre><code>` 上。
+流程图生成物保留 `.nota-diagram*` 白名单类名，从而继续获得框线与居中；
+`marks.css` 等其余编辑期零件仍不导出。KaTeX 字体在导出时转成 data URL，
+离开 Nota 的 origin 后公式仍使用正确字体。
 ⚠️ 少带那三份各自的症状（都是"看着不对但不报错"）：缺 `theme/base.css` →
 文件里每一条 `var(--x)` 都是未定义，**代码块没有底色、token 没有配色、任务项的
 方框整个消失**；缺 `katex.min.css` → KaTeX 的两棵树（好看的 `katex-html` 与
@@ -2963,6 +2963,10 @@ pointing into a node with inline content`）。空段落那条判据就栽在这
 
 ### 4.24 代码块里那一段是 **CodeMirror 在编辑**（`editor/code-block-cm.ts`，2026-10-06 第 101 项）
 
+📌 **2026-10-19：`codeBlock` 命令改成真正的切换。** 光标不在代码块时仍调用上游
+`createCodeBlockCommand`；已经在代码块里时调用 `turnIntoTextCommand` 退回普通段落。
+上游命令在“已经是代码块”时返回 `false`，旧按钮因此第二次点击没有任何可见反馈。
+
 用户 2026-10-06 定的做法：「**引入开源项目：CodeMirror。解决代码框。**」
 ——在此之前代码块是纯 ProseMirror 的 `code_block`，`auto-pair.ts` 只能给它补
 "配对"这一件，**缩进与 `Tab` 补不进去**（那两件要按行看上下文，是编辑器内核的事）。
@@ -3318,7 +3322,7 @@ div.nota-code-wrap          ← 新套的一层，自己不画任何东西
 | 点 | 口径 |
 |---|---|
 | 去抖放在**调用方**（`EditorPane`），不在 `create.ts` 里 | 代码注释的原话：**"多快算太快"取决于拿这个回调干什么**——存草稿 / 推给后端 / 更新字数，三种节奏不一样。`create.ts` 只保证"变了就叫我"（还用 `markdown !== prev` 挡掉空转） |
-| 去抖间隔是 `SYNC_DEBOUNCE_MS = 300`（`EditorPane.tsx`） | 见 `docs/03` §9.1 |
+| 去抖间隔是 `SYNC_DEBOUNCE_MS = 300`；大文件走 `LARGE_SYNC_DEBOUNCE_MS = 1000`（`EditorPane.tsx`） | 见 `docs/03` §9.1 |
 | 脏标记**由后端算** | 只有后端知道跟磁盘上那份一不一样；所以同步完要 `refreshDocs()` 把 `dirty` 取回来 |
 | `onActivity`（2026-09-25 加）是**同一个变化信号的第二个消费者** | 它只在 `onChange` 的**第一行**报一下"刚刚有人在打字"，给自动保存的停笔计时器用（`ui/useAutosave.ts`）。⚠️ 它**不额外挂监听、也不去读文档**——所以"自动保存"这件事对编辑区的代价是零；反过来，**不许**把它换成轮询 `getMarkdown()` 比一比，那是把整篇文档每秒复制一遍（`docs/02` 的 `useAutosave` 一节） |
 
@@ -3526,7 +3530,7 @@ nota_plugin_panel_content →                  等锁 ⏳（一直等到上面�
 
 | 命令 | 前端 | 做什么 |
 |---|---|---|
-| `nota_plugin_install` | `api.plugin.install(path)` | 装一个包。⚠️ `path` 由**前端**用文件对话框问出来，宿主不自己弹框 |
+| `nota_plugin_install` | `api.plugin.install(path)` | 装一个包。⚠️ `path` 由**前端**用应用内文件选择器问出来，宿主不自己弹框 |
 | `nota_plugin_uninstall` | `api.plugin.uninstall(id)` | 卸掉。⚠️ **不可逆**，调用方先问一句 |
 | `nota_plugin_set_enabled` | `api.plugin.setEnabled(id, on)` | 开/关。⚠️ 停用＝**真卸载**（`on_unload` 会跑），所以动完**必须重拉** `list` / `panels` / `menus` |
 | `nota_plugin_trust` / `nota_plugin_trust_list` | `api.plugin.trust(id)` / `trustList()` | TOFU 信任表 |

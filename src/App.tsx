@@ -75,6 +75,8 @@ import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
 import { useMenuTable } from "@/ui/useMenuTable";
 import { ContextMenu } from "@/ui/ContextMenu";
+import { FilePickerDialog } from "@/ui/FilePickerDialog";
+import { useSettingsWindow } from "@/ui/useSettingsWindow";
 
 export default function App() {
   const [docs, setDocs] = useState<Document[]>([]);
@@ -92,7 +94,6 @@ export default function App() {
   // ⚠️ 只在内存里，没进 settings：它跟左侧栏选的是哪一页一样是**看的时候的状态**，
   // 不是文档的属性。真要持久化时跟 `content_width` 那批一起走。
   const [dockOpen, setDockOpen] = useState(false);
-
   // 左侧栏开着没有、以及它现在是哪一页。**放在 App 上**是为了让
   // 「视图 → 显示/隐藏侧边栏 / 大纲 / 文件树」那几条菜单项能驱动它
   //（见 `ui/Sidebar.tsx` 里那段"为什么改成受控"）。
@@ -103,17 +104,11 @@ export default function App() {
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("tree");
   // ⚠️ 状态栏**不在这里**（2026-09-25 起）：它以设置文件为准，见下面
   // `updateSettings` 之后那两条派生值。
-
-  // 偏好设置开着没有。**只在内存里**：它是一次交互，不是设置项本身。
-  const [settingsOpen, setSettingsOpen] = useState(false);
-
   // ⚠️ 格式化工具栏**也不在这里**了（2026-09-25 起），理由同上一行；它比状态栏
   // 多一层：**是三档**（始终显示 / 鼠标悬停时显示 / 始终不显示），默认最后那一档。
   // 三档和悬停的判据都在 `ui/useChromeVisibility.ts` 的文件头。
-
   // 查找条的状态与四个动作在 `ui/useFindBar.ts`（2026-09-27 从本文件搬走）。
   // ⚠️ **命中数不在这里算**，由编辑器报上来——理由见那份文件头。
-
   // 打字机模式。**只在内存里**，同「格式化工具栏」：它是"写这一篇时想不想这样"
   // 的临时状态，不是"以后都这样"的偏好。真实现（往哪儿滚）在
   // `editor/writing-modes.ts`。⚠️ 和它成对的**专注模式不在这里**（2026-09-25
@@ -135,7 +130,6 @@ export default function App() {
   // `<html>` 的属性，不经过这份清单。
   const [themes, setThemes] = useState<DocThemeInfo[]>([]);
 
-
   // 事件订阅里要读"当前是哪份"，但**不能把它写进依赖数组**——那会让每次切标签都
   // 退订再订一遍，中间那一刻的事件是丢的。用 ref 读最新值，订阅只发生一次。
   const activeIdRef = useRef<DocId | null>(null);
@@ -147,6 +141,8 @@ export default function App() {
   // `ui/useToasts.ts`——本文件当时 958 行、软上限 900。搬的是"什么时候消失"，
   // 文案照旧由这里给。那条 `ttlMs === 0` 的分支（不自动消失）见那个文件。
   const { toasts, toast, dismiss } = useToasts();
+
+  const settingsWindow = useSettingsWindow({ settings, toast });
 
   // ⚠️ 本文件里要翻的界面串只剩两处（下面「替换」那条提示、以及递给
   // `useFileKind` 的那两条降级提示）：都是**回调里现取**的，而 `useToasts`
@@ -271,6 +267,7 @@ export default function App() {
   const {
     openPath,
     newDoc,
+    newDocWithText,
     openViaDialog,
     openFolder,
     loadDir,
@@ -293,7 +290,6 @@ export default function App() {
   // `ui/EditorArea.tsx` 了。这边留「对照」是因为下面那个"摊着预览吗"的判据
   // 要它（外部对照同样把正文顶掉）。
   const { 对照: 外部对照 } = 改动出口;
-
 
   /**
    * 摊着预览吗。**两种形态都算**——用户 2026-09-26 说「最好当预览的时候禁止
@@ -372,7 +368,6 @@ export default function App() {
 
   // ── 菜单命令 ────────────────────────────────────────────────────────────
 
-
   /** 改设置并落盘。改不动就把内存里的改回去，免得"界面上是新的、重开又变回去"。 */
   const updateSettings = useCallback(
     async (patch: Partial<Settings>) => {
@@ -432,7 +427,7 @@ export default function App() {
   // ⚠️ `themeId` 给的是**生效的那一套**，不是 `settings.document_theme`：这个值
   // 用来把主题 CSS 内联进导出的 HTML／PDF，口径就是"导出的东西和屏幕上一样"。
   // 给存储的那一份的话，深色下导出会是一份配色完全不同的文件。
-  const { 导出, 打印, 导出为, pandocGate, pandocGateActions } = useExport({
+  const { 导出, 打印, 导出为, 导入为, pandocGate, pandocGateActions } = useExport({
     activeId,
     docs,
     getMarkdown: getEditorMarkdown,
@@ -440,7 +435,8 @@ export default function App() {
     // ⚠️ 兜底那份**每一格都要写出来**（`pandoc_args` 是 2026-10-10 加的）。
     exportSettings: settings?.export ?? { default_folder: "", open_after_export: false, pandoc_args: "" },
     toast,
-    openPrint: 对话框.openPrint, // 应用内打印框（2026-10-17）
+    askConfirm, openPrint: 对话框.openPrint, // 打印浅色闸门与应用内打印框
+    openImported: newDocWithText,
   });
 
   // 状态栏 / 格式化工具栏 / 菜单栏：**以设置文件为准**，搬去了
@@ -474,7 +470,7 @@ export default function App() {
   // 也退掉——两个都关掉的话，用户只是想把报告收起来，却连外壳一起被拆了。
   const { 沉浸, focusMode, 切换专注, fullscreen, 切换全屏 } = useImmersive({
     有浮层:
-      settingsOpen ||
+      settingsWindow.open ||
       confirmReq !== null ||
       promptReq !== null ||
       imageReq !== null ||
@@ -593,7 +589,6 @@ export default function App() {
   // 里读；这边留的 `切查找` 是菜单那条 `edit.find`（它要开/关来回切）。
   const { 切查找 } = 查找条;
 
-
   /**
    * 命令 id → 实现。**这张表就是"菜单项能不能点"的唯一真相源。**
    *
@@ -630,9 +625,10 @@ export default function App() {
     保存文档: saveDoc,
     关闭文档: closeDoc,
     活动文档: activeId,
-    打开设置页: setSettingsOpen,
+    打开设置页: settingsWindow.setOpenFromMenu,
     导出,
     导出为,
+    导入为,
     打印,
     运行: run,
     切查找,
@@ -948,14 +944,17 @@ export default function App() {
             />
           )}
         </div>
-
-        <Toasts items={toasts} onDismiss={dismiss} />
-
-        {settingsOpen && settings && (
+        <Toasts
+          items={toasts}
+          onDismiss={dismiss}
+          position={settings?.updates.notification_position ?? "bottom-right"}
+        />
+        <FilePickerDialog />
+        {settingsWindow.open && settings && (
           <SettingsDialog
             settings={settings}
             onChange={updateSettings}
-            onClose={() => setSettingsOpen(false)}
+            onClose={settingsWindow.close}
             docThemes={themes}
             onOpenThemesDir={() => void openThemesDir()}
             uiStyles={uiStyles}
@@ -973,6 +972,7 @@ export default function App() {
             插件更新={插件更新}
             插件动作={插件动作}
             debugMode={settings.general.debug_mode}
+            initialSection={settingsWindow.initialSection}
           />
         )}
 

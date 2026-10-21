@@ -164,15 +164,15 @@ for 路径 in sorted(glob.glob("src/i18n/zh*.ts")):
 未翻译 = sorted(调用键 - 表键)
 废键 = sorted(表键 - 调用键)
 
-print(f"界面 t() 的键 {len(调用键)} 条，中文表里 {len(表键)} 条")
+print(f"UI t() keys: {len(调用键)}; Chinese translations: {len(表键)}")
 if 未翻译:
-    print(f"\n还没翻译（{len(未翻译)} 条，不算错，是欠账）——"
-          f"这几句在**中文界面**上显示的是英语原文：")
+    print(f"\nUntranslated keys ({len(未翻译)}; warning, not an error) - "
+          f"these strings fall back to English in the Chinese UI:")
     for k in 未翻译:
         print(f"  · {k}")
 if 废键:
-    print(f"\n⚠️ 废掉的键（{len(废键)} 条）：代码里找不到这句原文——"
-          f"要么原文改过、要么键打错了。那条**中文没有生效**：")
+    print(f"\nDead translation keys ({len(废键)}): the source string no longer exists - "
+          f"the English key changed or contains a typo. These translations are inactive:")
     for k in 废键:
         print(f"  · {k}")
 
@@ -319,13 +319,13 @@ for 目录 in sorted(glob.glob(插件根 + "/*")):
         插件硬伤.append(f"{目录}：有 `lang/` 表却没声明 `langs`——宿主不会读它")
 
 if 插件对 or 废插件键 or 插件硬伤 or 欠账:
-    print(f"\n插件文案表：核了 {插件对} 条")
+    print(f"\nExtension translations checked: {插件对}")
     for x in 废插件键:
-        print(f"  ⚠️ 代码里找不到这句原文：{x}")
+        print(f"  WARNING: source string not found: {x}")
     for x in 插件硬伤:
-        print(f"  ⚠️ {x}")
+        print(f"  WARNING: {x}")
     for 目录, 没翻 in 欠账.items():
-        print(f"  · {目录}：还有 {len(没翻)} 条原文没进 lang/zh-CN.toml（不算错，是欠账）")
+        print(f"  · {目录}: {len(没翻)} source strings are not yet in lang/zh-CN.toml (warning)")
         for k in 没翻:
             print(f"      · {k}")
 
@@ -405,14 +405,14 @@ for f in sorted(
 
 if 泄漏:
     总数 = sum(len(v) for v in 泄漏.values())
-    print(f"\n⚠️ 没包 `t(...)` 的中文（{总数} 条，{len(泄漏)} 个文件）——"
-          f"这几句**不会**出现在上面的「还没翻译」里，因为那条判据要求先有 `t(\"…\")`：")
+    print(f"\nUnwrapped Chinese strings ({总数}, {len(泄漏)} files) - "
+          f"these do not appear in the untranslated list because they are not passed through t(\"...\"):")
     for f, 们 in sorted(泄漏.items(), key=lambda kv: -len(kv[1])):
-        print(f"  {f}（{len(们)}）")
+        print(f"  {f} ({len(们)})")
         for v in 们[:3]:
             print(f"      · {v[:60]}")
         if len(们) > 3:
-            print(f"      · …还有 {len(们) - 3} 条")
+            print(f"      · …and {len(们) - 3} more")
 
 # ⚠️ 2026-09-26：这一栏**从"只打印"改成计入 FAIL**。改的时机是有讲究的——
 # 加这条判据的那天全仓还有两条真漏网（`FormatBar.tsx` 的 `aria-label="格式化"`、

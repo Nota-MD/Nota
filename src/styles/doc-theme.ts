@@ -17,9 +17,9 @@
  * 另外还做两件事：展开 `@import`、把字体 `url()` 内联成 data: URL。
  * 用户 2026-09-23 说了两条，这个文件因此缩到现在这个大小：
  *
- * 1. **不要内置外部编辑器的主题，会侵权**；那套主题先不用兼容。
- *    —— 那两件事（跨文件 import、读字体资源）都是为它服务的，
- *    随着兼容链一起删掉。现在主题是**单文件 CSS**，不许引外部资源。
+ * 1. **不要内置外部编辑器的主题，会侵权**；不复制第三方主题。
+ *    用户自己的主题包可以带资源，宿主会把包内相对 `url()` 内联；`@import`
+ *    与远程资源仍在这一层删除。
  * 2. 「这是文档风格，不是界面风格，不应该影响到UI主题」
  *    —— 上一版还会把主题的 `:root` 变量**提升到全局**，再由 `theme.css`
  *    的桥接规则喂给外壳。那正是"选个浅色文档主题、整个应用跟着变亮"的
@@ -135,10 +135,28 @@ function emitStyleRule(rule: CSSStyleRule, out: string[]): void {
  * 把一个选择器收拢到编辑区之下。四条规矩见文件头。
  */
 function scopeSelector(sel: string): string {
-  const s = sel.trim();
+  let s = sel.trim();
   if (!s) return "";
   if (s.includes(ANCHOR)) return s;
   if (ROOT_LIKE_RE.test(s)) return ANCHOR;
+
+  // Typora 结构名 → Nota 语义结构。这里只做稳定的结构别名，不猜主题 id，
+  // 也不为任何单个主题增加程序分支。
+  s = s
+    .replace(/ul\.task-list(?=[\s>+~,:.#\[]|$)/g, 'ul:has(> li[data-item-type="task"])')
+    .replace(/li\.task-list-item\.task-list-done(?=[\s>+~,:.#\[]|$)/g, 'li[data-checked="true"]')
+    .replace(/li\.task-list-item(?=[\s>+~,:.#\[]|$)/g, 'li[data-item-type="task"]')
+    .replace(/\.md-math-block(?=[\s>+~,:.#\[]|$)/g, ".nota-math-block")
+    .replace(/\.mathjax-block(?=[\s>+~,:.#\[]|$)/g, ".nota-math-block")
+    .replace(/\.md-diagram-panel(?=[\s>+~,:.#\[]|$)/g, ".nota-diagram");
+
+  // Typora 主题把正文根写成 `#write`。Nota 没有那个 id，但 ProseMirror 的
+  // 内容根承担同一个角色。先做这一层兼容替换，其余资源与排版规则就能按
+  // Typora 主题的常见写法落地；组件专用选择器仍需按 Nota DOM 改写。
+  if (/(^|[\s>+~,(])#write(?![\w-])/.test(s)) {
+    const replaced = s.replace(/(^|[\s>+~,(])#write(?![\w-])/g, `$1${ANCHOR} .ProseMirror`);
+    return replaced.includes(ANCHOR) ? replaced : `${ANCHOR} ${replaced}`;
+  }
 
   // 连续的前导 html/body 一并换成锚点：`html body > p` → `.editor-pane > p`。
   let rest = s;

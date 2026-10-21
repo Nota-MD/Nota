@@ -12,15 +12,15 @@ echo "package.json:           $pkg"
 echo "src-tauri/Cargo.toml:   $cargo"
 echo "src-tauri/tauri.conf:   $tauri"
 
-[ "$pkg" = "$cargo" ] || { echo "FAIL Cargo.toml 版本与 package.json 不一致" >&2; exit 1; }
-[ "$pkg" = "$tauri" ] || { echo "FAIL tauri.conf.json 版本与 package.json 不一致" >&2; exit 1; }
+[ "$pkg" = "$cargo" ] || { echo "FAIL: Cargo.toml version differs from package.json" >&2; exit 1; }
+[ "$pkg" = "$tauri" ] || { echo "FAIL: tauri.conf.json version differs from package.json" >&2; exit 1; }
 
 if [ "${1:-}" != "" ]; then
   tag=${1#v}
   [ "$tag" = "$pkg" ] || {
-    echo "FAIL tag $1 与源码版本 $pkg 不一致" >&2
+    echo "FAIL: tag $1 does not match source version $pkg" >&2
     exit 1
   }
 fi
 
-echo "OK 版本一致：$pkg"
+echo "OK: versions match: $pkg"

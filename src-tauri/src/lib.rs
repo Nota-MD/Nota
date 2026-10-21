@@ -40,11 +40,13 @@ pub mod pandoc_format;
 pub mod pandoc_probe;
 pub mod paths;
 pub mod pdf_print;
+pub mod pdf_render;
 pub mod print_job;
 pub mod plugin;
 pub mod proc;
 pub mod remote;
 pub mod session;
+pub mod settings_export;
 pub mod spell;
 pub mod settings;
 pub mod single_instance;
@@ -216,7 +218,6 @@ pub fn run() {
     };
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         // 剪贴板（2026-10-11）：菜单里那条「粘贴」从前只能读 WebKit 的
@@ -289,8 +290,10 @@ pub fn run() {
                 plugin_id: String::new(), // 每个插件加载时会被换成自己的 id
                 应用语言: 应用语言.clone(),
             };
-            let plugins = PluginHost::discover(resource_dir, &base);
-            crate::日志!("[nota] 载入 {} 个拓展", plugins.count());
+            // 插件发现要扫描清单、建 Lua 状态并跑 on_load。它不应挡住窗口创建：
+            // 先把空宿主托管进去，等系统窗口和 WebView 开始绘制后，再由后台线程
+            // 完成真正的加载。前端第一批插件清单命令会短暂等待 ready。
+            let plugins = PluginHost::empty(&base);
 
             // ── ③ 交给 Tauri 托管 ─────────────────────────────────────────
             app.manage(AppState {
@@ -348,6 +351,7 @@ pub fn run() {
             if let Some(听) = 单实例 {
                 single_instance::起(app.handle().clone(), 听);
             }
+            app.manage(plugin::DeferredDiscovery::new(resource_dir, base));
             // ⑧ 把 `nota://` 接到本程序上（2026-09-27 加，"从 URL scheme 打开"
             //    那一格的注册那一半，解析在 `cli.rs`）。⚠️ 失败**不拦启动**：
             //    注册不上就是"点链接打不开"，那不该让应用起不来。
@@ -368,7 +372,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::diagnostics::nota_diagnostics,
+            commands::file_picker::nota_picker_places,
+            commands::file_picker::nota_picker_list,
+            commands::file_picker::nota_picker_create_dir,
             commands::document::nota_doc_new,
+            commands::document::nota_doc_new_with_text,
             commands::document::nota_doc_open,
             commands::document::nota_doc_sync,
             commands::document::nota_doc_settle,
@@ -405,6 +413,7 @@ pub fn run() {
             commands::print::nota_print_prepare,
             commands::print::nota_print_system,
             commands::print::nota_print_send,
+            commands::print::nota_print_save_pdf,
             commands::image::nota_image_place,
             commands::image::nota_image_data_url,
             commands::image_upload::nota_image_upload_get,
@@ -412,6 +421,7 @@ pub fn run() {
             commands::image_upload::nota_image_upload_one,
             commands::pandoc::nota_pandoc_probe,
             commands::pandoc::nota_pandoc_export,
+            commands::pandoc::nota_pandoc_import,
             commands::workspace::nota_workspace_open,
             commands::workspace::nota_workspace_close,
             commands::workspace::nota_workspace_get,
@@ -419,6 +429,8 @@ pub fn run() {
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
             commands::window::nota_window_open_devtools,
+            commands::window::nota_window_open_debug_info,
+            commands::window::nota_window_show_main,
             commands::window::nota_quit,
             commands::window::nota_window_open_new,
             // 拖放那条路要的「这条路径是什么」（`commands/paths.rs`）。
@@ -444,6 +456,8 @@ pub fn run() {
             commands::settings::nota_settings_problem,
             commands::settings::nota_app_lang,
             commands::settings::nota_settings_reset,
+            commands::settings::nota_settings_export_inventory,
+            commands::settings::nota_settings_export,
             // 强制专注（核心功能，不是插件）。⚠️ 只有这四条是"命令"，
             // 真正的计时在 `focus/mod.rs` 的后台线程里，前端碰不到它。
             commands::focus::nota_focus_get,
@@ -726,6 +740,6 @@ fn nota_startup_file() -> Result<Option<String>, error::NotaError> {
 /// ⚠️ 明确**不要**再把它当"重放插件 UI 注册"的钩子——那件事已经不需要了。
 #[tauri::command]
 fn nota_frontend_ready(app: tauri::AppHandle) -> Result<(), String> {
-    let _ = app;
+    app.state::<plugin::DeferredDiscovery>().start(&app);
     Ok(())
 }

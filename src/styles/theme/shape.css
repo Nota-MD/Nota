@@ -23,13 +23,16 @@
  *    开关 36×20 → 44×22。**`--radius`(8px) 和 `--radius-sm` 没动**——
  *    稿子给的就是 8px，和 ① 那次调的正好一样。
  *
- * 为什么两轮都盯的是它：**`ui_style = auto` 在这台机器上就落在这里**（GNOME），
- * 也就是"默认长相"就是它（`applyTheme.ts` 里探不出来时兜底的也是它）。
+ * 为什么两轮都盯的是它：**Adwaita 是安装包唯一的默认界面风格**，也就是“默认长相”
+ * 就是它；自动匹配系统主题已移除。
  * 改这一档 = 改没选过风格的人看到的东西，**不是**改"GNOME 用户对照用的样本"。
  *
  * ⚠️ 所以这里和 GNOME 的真实取值**不再逐值相同**（GNOME 自己的原值是
  * 4/6/10 + 控件高 30 + 间距 8，git 历史里也在）。改之前先想清楚上面那句话。 */
 [data-ui-style="adwaita"] {
+  --font-ui: "Adwaita Sans", "Noto Sans CJK SC", "Source Han Sans SC",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "Adwaita Mono", "Noto Sans Mono CJK SC", monospace;
   --radius-sm: 5px;
   /* ⚠️ 稿子：普通按钮圆角 8px —— **和 2026-09-24 那次调的正好一样**，没动。 */
   --radius: 8px;

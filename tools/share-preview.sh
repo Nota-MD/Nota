@@ -29,7 +29,7 @@ tmpstage=/tmp/nota-share-preview
 mkdir -p "$tmpstage" "$out"
 
 command -v rsvg-convert >/dev/null || {
-  echo "缺 rsvg-convert：dnf install -y librsvg2-tools（容器里用 -u 0 装）" >&2
+  echo "Missing rsvg-convert. Install it with: dnf install -y librsvg2-tools" >&2
   exit 1
 }
 
@@ -45,4 +45,4 @@ for f in "$out"/*.svg; do
   [ -e "$f" ] || continue
   rsvg-convert -o "${f%.svg}.png" "$f"
 done
-echo "光栅化完成 → $out/*.png"
+echo "Rasterization complete -> $out/*.png"

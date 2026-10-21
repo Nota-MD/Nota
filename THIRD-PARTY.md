@@ -39,7 +39,6 @@
 | [`tauri`](https://github.com/tauri-apps/tauri) | 2.11.6 | Apache-2.0 OR MIT | 宿主框架（窗口、IPC、WebView） |
 | [`tauri-build`](https://github.com/tauri-apps/tauri) | 2.6.3 | Apache-2.0 OR MIT | 构建期代码生成 |
 | [`tauri-plugin-clipboard-manager`](https://github.com/tauri-apps/plugins-workspace) | 2.4.2 | Apache-2.0 OR MIT | **读剪贴板**（`ui/useClipboard.ts` 的粘贴；⚠️ 只开 `allow-read-text` 一条权限，见 `capabilities/default.json`）。⚠️ 2026-10-11 补登记：它是 2026-10-11 那一批加进来的（「菜单里的粘贴真能粘」那一条），**当时漏了这儿** |
-| [`tauri-plugin-dialog`](https://github.com/tauri-apps/plugins-workspace) | 2.7.3 | Apache-2.0 OR MIT | 打开/保存文件对话框 |
 | [`tauri-plugin-fs`](https://github.com/tauri-apps/plugins-workspace) | 2.5.2 | Apache-2.0 OR MIT | 前端读写文件 |
 | [`tauri-plugin-opener`](https://github.com/tauri-apps/plugins-workspace) | 2.5.5 | Apache-2.0 OR MIT | 用系统默认程序打开链接 |
 | [`thiserror`](https://github.com/dtolnay/thiserror) | 2.0.20 | MIT OR Apache-2.0 | `NotaError` 的样板 |
@@ -97,7 +96,6 @@
 | [`@milkdown/plugin-math`](https://github.com/Milkdown/milkdown) | 7.5.9 | MIT | 数学公式。⚠️ 同上（渲染那一半在 `src/editor/…` 与 `katexOptionsCtx`） |
 | [`@milkdown/plugin-prism`](https://github.com/Milkdown/milkdown) | 7.22.1 | MIT | 代码块语法高亮 |
 | [`@tauri-apps/api`](https://github.com/tauri-apps/tauri) | 2.11.1 | Apache-2.0 OR MIT | 前端调后端 |
-| [`@tauri-apps/plugin-dialog`](https://github.com/tauri-apps/plugins-workspace) | 2.7.3 | MIT OR Apache-2.0 | — |
 | [`@tauri-apps/plugin-fs`](https://github.com/tauri-apps/plugins-workspace) | 2.5.2 | MIT OR Apache-2.0 | — |
 | [`@tauri-apps/plugin-opener`](https://github.com/tauri-apps/plugins-workspace) | 2.5.5 | MIT OR Apache-2.0 | — |
 | [`katex`](https://github.com/KaTeX/KaTeX) | 0.16.47 | MIT | 公式渲染 |
@@ -416,7 +414,8 @@ CDE 文档主题迁移源使用的
 `Nota WenQuanYi Bitmap Song` 从 **WenQuanYi Bitmap Song 1.0 RC1**
 的完整 16px PCF 生成，原字形与参考项目是
 **AmusementClub/Wenquanyi-Bitmap-Song-TTF**。生成后的 TTF 同时保留
-ASCII/CJK 16×16 字模，并嵌入 EBDT/EBLC 1-bit strike。
+ASCII/CJK 16×16 字模，并嵌入 EBDT/EBLC 1-bit strike。主题运行时使用由该
+TTF **无损转成**的 WOFF2 容器；两种容器的字形、cmap 与位图表相同。
 
 | 项 | 说明 |
 |---|---|
@@ -425,8 +424,9 @@ ASCII/CJK 16×16 字模，并嵌入 EBDT/EBLC 1-bit strike。
 | 版权 | Copyright (C) 2004–2010, WenQuanYi Project Board of Trustees and Qianqian Fang |
 | 许可 | **GPL-2.0 with font embedding exception** |
 | 修改 | 从完整 16px PCF 生成 TTF；保留全部 ASCII/CJK 位图并嵌入 EBDT/EBLC |
-| SHA-256 | `9ef195f67950c47b98d09015e4e4cf8692f82ab3180df04a8697c072d330f0ea` |
-| 字体位置 | `src/styles/external-themes/cde/assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.ttf`（也是首选可编辑形式） |
+| 源文件 SHA-256 | `9ef195f67950c47b98d09015e4e4cf8692f82ab3180df04a8697c072d330f0ea`（TTF） |
+| WOFF2 SHA-256 | `beb8fbad0af63498b0c424c7bdcb8e69041b166fe5b1a161b77204287676187b` |
+| 字体位置 | `src/styles/external-themes/cde/assets/fonts/Nota-WenQuanYi-Bitmap-Song-EBDT-16px.{ttf,woff2}`；CSS 加载 WOFF2，TTF 是可编辑源文件 |
 | 完整许可 | 与字体同目录：[`WQY-Bitmap-Song-COPYRIGHT.txt`](src/styles/external-themes/cde/assets/fonts/WQY-Bitmap-Song-COPYRIGHT.txt)＋[`GPL-2.0.txt`](src/styles/external-themes/cde/assets/fonts/GPL-2.0.txt) |
 | 字体说明 | 与字体同目录：[`Nota-WenQuanYi-Bitmap-Song-NOTICE.txt`](src/styles/external-themes/cde/assets/fonts/Nota-WenQuanYi-Bitmap-Song-NOTICE.txt) |
 | 打包位置 | 位于外置主题的 `assets/fonts/`；由该主题自己的 `@font-face` 加载。Nota 的 `tauri.conf.json` 不再复制字体或许可证 |
@@ -434,3 +434,19 @@ ASCII/CJK 16×16 字模，并嵌入 EBDT/EBLC 1-bit strike。
 ⚠️ **根 `LICENSE` 仍然只有 BSD-2-Clause**。字体是独立数据组件，按它自己的
 GPL-2.0＋字体嵌入例外分发，不改变 Nota 源码许可证；两份许可正文不得合并。
 ⚠️ 外置主题包必须随字体保留同目录的版权、修改说明与 GPL 全文。
+
+## 10. 安装包内置的 Adwaita 字体（SIL OFL 1.1）
+
+Nota 安装包只随附 Adwaita 界面风格与 Adwaita 文档主题（浅色、深色）。该主题族
+包含：
+
+- **Adwaita Sans** — 基于 Inter，GNOME Adwaita Fonts 定制。
+- **Adwaita Mono** — 基于 Iosevka，并针对 Inter 调整。
+
+版权与许可正文位于
+[`src/assets/fonts/adwaita/LICENSE.txt`](src/assets/fonts/adwaita/LICENSE.txt)，
+许可证为 **SIL Open Font License 1.1**。字体文件、主题 CSS 与许可作为同一个
+Adwaita 主题资源随包分发。
+
+⚠️ 这些字体鸣谢**不进入软件的“关于 → 鸣谢”窗口**。Yaru、LaTeX 等其他主题的
+字体只存在于各自的主题包内，由主题包自己的 `assets/fonts/` 目录保留许可。

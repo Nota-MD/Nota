@@ -34,6 +34,9 @@
 7. **明确支持 AI 贡献，但提交者必须亲自完整测试。** AI 辅助/生成代码、测试、文档、
    图标、主题都欢迎；提交者必须在 PR 中声明 AI 参与范围，并写清本人实际执行的测试环境、
    步骤和结果。只跑 CI、只读代码或“AI 说测过”不算完成。完整规则见 `CONTRIBUTING.md`。
+8. **打印与 PDF 只允许浅色主题。** 当前活动文档主题为深色时，打印、保存 PDF、
+   系统打印和 Pandoc PDF 都必须在开始排版前停止，并提示用户先选择浅色主题；
+   不允许静默替换主题，也不允许继续生成深色纸面。
 
 ---
 
@@ -46,7 +49,7 @@
 - 前端：React 19 + TypeScript + Vite，编辑器内核是 **Milkdown 7**（ProseMirror + remark）
 - 插件：**Lua 5.4**（mlua，`vendored`），每个插件一个**独立的 Lua 状态**
 - 应用 ID：`io.github.nota.Nota`
-- 版本：`0.8.0-beta`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
+- 版本：`0.9.0`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
 - 代码注释与文档使用中文；界面字符串**写中文原文，缺译文就用原文**（i18n 已接上，见 `src/i18n/`。⚠️ **2026-09-26 起铺到整个界面**，不再只有插件那一面：`bash tools/i18n-check.sh` 报「界面 `t()` 的键 **861** 条，中文表里 **837** 条」，**24 条欠账**——那 24 句在**中文界面**上显示的是英文原文（📌 **2026-10-07 当天第二次现数**：上一版这里的 853/829 是当天「选择」那批之后量的，这一批又加了 3 条新键（「链接显示名称」「显示在正文里的文字」「去掉链接」）**且三条都带了中文**，所以两个数各 ＋3、**欠账那 24 个数没动**。再上一版是 732/732 的「0 欠账、0 废键」，那之后别的批次一直在往里加句子，这一行没跟。⚠️ 界面原文是**英文**、译文表在 `src/i18n/`——中文原文只出现在 `zh-ui.ts` 这一层，别把两件事记混）
 
 **名字**：Nota 是意大利语「笔记」，与工作区里的 Folio（对开本）/ Fascia（幻灯片）/
@@ -74,7 +77,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | 文件 | 职责 |
 |---|---|
 | `main.rs` | 进程入口，只是 `nota_lib::run()` 的一层壳 |
-| `lib.rs` | `run()`：建 Tauri、装 dialog/fs/opener 插件、`setup()` 里**按顺序**做三件事（载设置 → 建共享状态 → 发现并加载插件）→ `manage(AppState)`；全部 `nota_*` 命令的注册表（**78 项** = `commands::*` 76 ＋ 本文件 2；⚠️ **2026-09-27 晚第十一遍重数**（当场跑配方数的，配方与逐组小计在 `docs/01` §通道 A）：在第十遍的 77 之上多出 **1** 条——`nota_window_open_new`（「在新窗口中打开」，逐条说明在 `docs/02` 的 `commands/window.rs` 一节）；⚠️ **2026-09-27 晚第十遍重数**：在第九遍的 65 之上多出 12 条，**其中只有 2 条是「重命名 / 移动」那一批的**（`nota_doc_rename` / `nota_doc_move`），另外 10 条是别的会话在这之间落的（session 6 / path_kind 1 / webview 2 / window 1）；⚠️ 第九遍那次是因为 `docs/01` §通道 A 里"总数"与"分组表"自己打起来了（顶上写 64、底下分组表只有 49，**两个都不对**：五整组命令 focus 6 / table_width 3 / diff 1 / watch 1 / ui_style 3 根本没进过表），当时的真值是 65，复算配方与教训见那一节）；`on_window_event` 在窗口销毁时 `unload_all()` |
+| `lib.rs` | `run()`：建 Tauri、装 fs/opener 插件、`setup()` 里载设置并建共享状态 → `manage(AppState)`；插件目录发现和 Lua 加载在窗口创建后由阻塞线程完成，不挡首帧。文件打开/保存/目录选择由应用内选择器和 `file_picker.rs` 承担，不再加载 GTK 原生 dialog 插件。全部 `nota_*` 命令的注册表；`on_window_event` 在窗口销毁时 `unload_all()` |
 | `cli.rs` | 命令行参数：`首个要打开的文件()` 挑出 `nota 笔记.md` / 文件管理器"用 Nota 打开"带的那个路径，由 `lib.rs::nota_startup_file` 转告前端。⚠️ **纯函数，不判存在性也不读文件**（读不出来的错由前端那条开文档的路照常弹）；⚠️ 只认第一个非选项参数。⚠️ **2026-09-27 起还有第二个参数**：`要开新窗口()` ＋ 常量 `新窗口选项`（`--new-window`）——「标签页右键 → 在新窗口中打开」时，`commands/window.rs` 用**常量**拼命令、`lib.rs` 用**同一个常量**判"这一份进程整关跳过单实例"，**两边必须是同一个串**，所以只在常量那一处定义。⚠️ **判据是 `OsStr` 整串相等**（比较用 `as_os_str()`），不是 `to_string_lossy` 之后的 `contains` —— 后者会把 `--new-windowish` 也认成新窗口，而且"能被有损转换"本身就不该当判据（与 `single_instance.rs` 里路径按原始字节传同一条口径） |
 | `error.rs` | `NotaError` 枚举，**中文 Display 消息**，自定义 `Serialize` 以便过 Tauri IPC |
 | `log.rs` | **调试输出的总闸门**（2026-09-25）：`开着()`（`NOTA_DEBUG` 只读一次、`OnceLock` 缓存）＋ `日志!` 宏。⚠️ **默认一个字都不往 stderr 写**，后端十处输出全走它——宿主是给人用的桌面程序，双击图标的人看不到 stderr，终端里的人只会被刷屏。⛔ **不要再往里写裸 `eprintln!`**，那会把"默认静默"这条规矩一点点漏掉。⚠️ 用户看得见的东西**不走这里**（设置坏掉是启动 toast，命令失败是 `NotaError`），前端的 `console.*` 也不走（它压根不进终端） |
@@ -113,7 +116,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `text_encoding.rs` | **文件编码**（2026-10-16 新建，**还没接进 `Document`**）：`认编码` / `规范名` / `读文件`（BOM → 合法 UTF-8 → `chardetng` 猜）/ `按编码读` / `按编码写`；UTF-16 写 BOM、UTF-8 不写。⚠️ 依赖 `encoding_rs` ＋ `chardetng`（都 MIT/Apache-2.0）。⚠️ 接线时才动 `document/mod.rs` 的读写四处与前端菜单 |
 | `themes.rs` | **文档主题**：安装包**只内置 Adwaita 浅色/深色**（`adwaita` / `adwaita-dark`，`include_str!` 编进二进制），这两个 id **只读、不能被用户目录同名覆盖**；用户放进 `~/.config/nota/themes/` 的其他主题照常发现。📌 **2026-10-18 用户要求**：其他官方主题不再随包，后续迁到独立官方主题仓库。极简 / LaTeX / CDE 的源码文件仍可留在本仓作为迁移源，但不在 `BUILTIN` 就不会进安装包。⚠️ 老设置里的悬空 id 安静回落到无主题，见 `ui/settings/panes/DocThemePane.tsx`。⚠️ `check_id` 是安全边界：id 只放行 ASCII 字母数字与 `-` `_`。⛔ **不内置外部编辑器主题**（版权） |
 | `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir` 三条。⚠️ 入参是 **id 不是路径**——路径由后端自己拼，前端没有"读任意文件"的能力。⚠️ 最后那条**连"打开"一起做完**（宿主调 `plugin-opener`）：让前端拿路径去调 `openPath` 会撞 Tauri 的 ACL（BUG-27），形状与 `commands/settings.rs::nota_settings_open_dir` 一致 |
-| `ui_styles.rs` | **界面风格的发现与读盘**（2026-09-26 新增），与 `themes.rs` **并行**——两条机制的区别写在它文件头上那张对照表里（目录 / 限不限域 / 怎么注入），⛔ **别把两份合成一份**。内置七档的 id 表 `BUILTIN_IDS` 是**三份抄本里的权威那一份**（另两份：`theme/shape.css`、`AppearancePane.tsx` 的 `STYLE_ORDER`）。⚠️ 用户丢进 `~/.config/nota/ui-styles/` 的 `<id>.css` 是**按 id 找文件**，所以 `check_id` / `check_size` 直接**复用 `themes.rs` 的 `pub(crate)` 那两个**（同一道安全边界两份实现，漂的是哪一份没人看得出来）。⚠️ **内置那七档没有文件**：`css_of` 只认用户的 `.css`，内置样式打包在样式表里 |
+| `ui_styles.rs` | **界面风格的发现与读盘**（2026-09-26 新增），与 `themes.rs` **并行**——两条机制的区别写在它文件头上那张对照表里（目录 / 限不限域 / 怎么注入），⛔ **别把两份合成一份**。2026-10-21 起安装包**只随附 Adwaita**，并移除“自动匹配系统桌面主题”；旧设置里的 `auto` 兼容映射到 Adwaita。`BUILTIN_IDS` 是权威清单；Yaru、macOS、Windows、CDE 等从 `Nota-themes` 安装为自包含外部主题。⚠️ 用户丢进 `~/.config/nota/ui-styles/` 的 `<id>/theme.css` 是**按 id 找文件**，所以 `check_id` / `check_size` 直接**复用 `themes.rs` 的 `pub(crate)` 那两个**（同一道安全边界两份实现，漂的是哪一份没人看得出来）。⚠️ **内置档没有独立文件**：`css_of` 只认用户的 `.css`，内置 Adwaita 样式打包在样式表里 |
 | `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir` 三条（2026-09-26），形状与 `commands/theme.rs` 一一对应。⚠️ 目录**用到时才建**（首次打开"风格文件夹"时它多半还不存在） |
 | `cups.rs` | **最小 CUPS/IPP 客户端**（2026-10-17 新建）：直连 `/run/cups/cups.sock`，用 `CUPS-Get-Printers` 列打印机、`CUPS-Get-Default` 找默认项、`Print-Job` 投递 PDF。⚠️ 不执行 `lpstat` / `lp`。PDF 必须交给 CUPS 驱动链转换成打印机能吃的格式；**不能发 raw PDF**，否则 Epson 会把 `%PDF` 源文件当文本打印。⚠️ **发送后不要 `shutdown(Write)`**：CUPS 看到写半边关闭时只回 HTTP 头，不回 IPP 正文。 |
 | `print_job.rs` | **应用内打印**（2026-10-17）：`列打印机()` 把 `cups.rs` 的结果转成 `打印环境 { cups_available, problem, printers }`；`准备()` 走 WebKit PDF＋`pdfinfo`/`pdftoppm` 预览；`系统打印()` 直接起系统打印对话框；`投递()` 走 CUPS/IPP。⚠️ 预览与投递仍是同一份 PDF，临时目录仍只清纯数字子目录。 |
@@ -368,13 +371,13 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `ui/settings/panes/ExtensionsPane.tsx` | **「拓展」那一页**（2026-09-27 新建，275 行；设置里的第**十**页）：用户「完全没有拓展管理面板。做一个。可以导入，导出和卸载拓展」。⚠️ 与右侧「插件」栏的分工是**诊断 vs 管理**：那一栏是出问题时第一眼看的地方（栏宽 260px、插件一多就得滚着读），这一页把装 / 导出 / 卸载三件事摆在一条行上、宽度够、能对着读完再决定。⚠️ 两边用的是**同一份数据、同一批动作**（`usePlugins` 的 `plugins` 与 `动作`），所以不会出现"这一栏说装好了、那一页还没有"这种两份真相源。⚠️ 三件事里**只有导出是这一轮新做的**（装与卸早就在、右侧栏一直在用），宿主那半在 `plugin/export.rs`；文案在 `ui/pluginText.ts` |
 | `styles/focus.css` | 强制专注那**三块**的样式（2026-09-26 两块，2026-09-27 加第三块）：状态栏那一格（`.status-focus` 三态）＋ 警报窗（`.alarm-root` 整块红屏 + 大白字 + 那颗按钮）＋ **结束后的总结框**（`.focus-summary*`）。⚠️ 警报窗那份要按**整块屏幕**写，**不借** `.app-shell` 那套布局——它压根不在那个壳里。⚠️ **BUG-44**：`.alarm-card` 原来写 `max-width: 22ch`，而 `ch` 量的是**卡片自己的**字号（继承 `body` 的 15px），标题却是 `clamp(2.5rem, 9vw, 7rem)`（800 宽的屏上就是 72px），再扣掉卡片自己那条 `padding: 0 5vw`——留给字的只剩几十像素，标题一行一个字竖排、按钮被挤出视口；现在跟着 `--alarm-title-size` 走（`calc(... * 9)`），**宽度与标题字号同一个出处**。⚠️ 总结框那一族用**两个类**（`.confirm-dialog.focus-summary`）而不是靠 import 顺序：`gate.css` 那种写法把正确性押在 `main.tsx` 上，失效时不报错 |
 | `styles/theme.css` | **界面主题的唯一入口**——2026-09-26 起只剩四行 `@import`（原 1117 行顶破本仓 1000 行硬线，**就地按职责拆成四份**）。⚠️ **四份的顺序是承重的**：`base` → `shape` → `color` → `extras`；`base` 与 `shape` 的选择器权重都是 (0,1,0)、靠源序决胜，**换顺序会让所有风格的圆角与控件高静默失效**；`extras` 必须在最后。⚠️ 拆完**不必**去改全仓那些"见 `theme.css` 的某个变量"的注释——变量还是从这条路进来的。⛔ 文档主题一个变量都不许经这里中转 |
-| `styles/theme/base.css` | 拆出来的第 ① 份：`:root` 公共量（**两条轴本身**）＋ `[data-ui-mode]` 两段。三条字体栈（`--font-ui` / `--font-mono` / `--font-doc`）定义在这里：⛔ `--font-ui` **不许出现衬线**（用户 2026-09-24：「绝对不要用衬线字体做UI字体」；`tools/doc-sync-check.sh` 的 ⑥ 与 ⑥之二 查这个），`--font-doc` 可以是衬线但**只有 `.editor-pane` 下的正文能引**。⚠️ **2026-09-24 按「默认风格轻快一点」调过**：底色/次底色各浅一档、`--border` 0.11→0.08、`--accent` 换亮一档，**Adwaita（`ui_style=auto` 在 GNOME 上落到的那一档）的圆角/间距/控件高也各放松一格**——理由与"原值是多少"都写在那两段注释里 |
-| `styles/theme/shape.css` | 拆出来的第 ② 份：**轴一（形状）**，**七档内置风格**各一段（`[data-ui-style="x"]`）：圆角、间距、控件高、动效、阴影。含 `--find-hit` / `--find-current`（查找高亮要盖在**正文**上，和 `--accent` 在暗色下的合适值差得很远，所以单独两个）。⛔ **一个颜色都不许写进来**——写死颜色这一档就配不了暗色了。⚠️ 内置档 id 在这里出现，是**三份抄本之二**（另两份：`ui_styles.rs::BUILTIN_IDS`、`AppearancePane.tsx` 的 `STYLE_ORDER`），`doc-sync-check.sh` ⑦ 查三份一致。CDE 等外置风格不在这里登记 |
+| `styles/theme/base.css` | 拆出来的第 ① 份：`:root` 公共量（**两条轴本身**）＋ `[data-ui-mode]` 两段。三条字体栈（`--font-ui` / `--font-mono` / `--font-doc`）定义在这里：⛔ `--font-ui` **不许出现衬线**（用户 2026-09-24：「绝对不要用衬线字体做UI字体」；`tools/doc-sync-check.sh` 的 ⑥ 与 ⑥之二 查这个），`--font-doc` 可以是衬线但**只有 `.editor-pane` 下的正文能引**。2026-10-21 起默认界面主题固定为 Adwaita，自动匹配系统主题已移除。 |
+| `styles/theme/shape.css` | 拆出来的第 ② 份：**轴一（形状）**。安装包实际可选的具体内置风格只有 **Adwaita**；其他官方风格的完整自包含 CSS 在 `Nota-themes`。含 `--find-hit` / `--find-current`（查找高亮要盖在**正文**上，和 `--accent` 在暗色下的合适值差得很远，所以单独两个）。⛔ **一个颜色都不许写进来**——写死颜色这一档就配不了暗色了。`doc-sync-check.sh` ⑦ 只要求 `ui_styles.rs::BUILTIN_IDS` 的每一项都有形状与前端落点。CDE、Yaru 等外置风格不在这里登记 |
 | `styles/theme/color.css` | 拆出来的第 ③ 份：**轴一 × 轴二（颜色）**，七档 × 明暗 = **14 段**都要有；`[data-ui-mode]` 只给颜色，确有识别色的风格（GitHub 的冷灰蓝边框、Yaru 的橙…）写成**两属性**选择器放在最后（比单属性更具体，稳定压过上面两段）。⚠️ 规范里的强调色**次色/按下色故意没 token 化**（全仓共用一条 `filter: brightness()`），欠账与理由记在 `docs/04` §3.2c |
 | `styles/theme/extras.css` | 拆出来的第 ④ 份：**变量表达不了的那几件事**，是四份里唯一带组件选择器的，必须在最后加载（它要盖住的正是前面定下来的值） |
 | `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反：界面风格要改的就是整个外壳，套前缀等于把用户那份文件整个废掉而且**不报错**。于是"同名覆盖内置"的全部实现就是**文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验，语法错由 WebKit 自己丢那一条 |
 | `styles/icons.css` | 那一套搬来的图标怎么画：`.icon`（`mask-image` + `background-color: currentColor`，**`-webkit-` 前缀两条都要留**——真窗口是 WebKitGTK、试验台是 Chrome）、`.icon-missing`（名字对不上文件时画虚线框，避免它"空着像设计如此"）、`.btn-with-icon`（图标 + 文字的 `gap`）。⚠️ 与前后几份样式**没有重叠选择器**，加载顺序不影响结果 |
-| `styles/applyTheme.ts` | 把 `ui_style` / `ui_mode` 两条轴写到 `<html>` 的属性上 + 探测表（KDE→plasma、Ubuntu→yaru…），外加**界面那三条轴里的第三条「主题色」**（`appearance.accent` → 内联 `--accent` / `--accent-fg` / `--switch-on` 三个变量，写法与「字体大小」那一段同形：**只写不摘**会让"改回跟随风格"不生效。⚠️ 第三个是 2026-09-30 加的：用户报「右侧开关还是橙色的」——各风格在 `color.css` 里把 `--switch-on` 各写成字面值，**不引用 `--accent`**，所以色块跟了、开关不跟）。⚠️ 2026-09-30 起它还管**侧栏宽度**（`appearance.sidebar_width` → `--sidebar-width`，夹 180~480，与 `ui/SidebarResizer.tsx` 同一个区间）。⚠️ 那一段里**"不是数就退回 240"那道兜底不能少**（`Number.isFinite`）：缺了它，后端没给出这一格时算出的 `NaN` 会被 `setProperty` **真写进去**——把 `theme/base.css` 里那个 240 顶掉、而自己又不合法，于是 `width` 整条声明失效、退回 `auto`，宽度改由内容撑开（实测 486px）。看着既不像 240 也不像报错 |
+| `styles/applyTheme.ts` | 把 `ui_style` / `ui_mode` 两条轴写到 `<html>` 的属性上；旧值 `ui_style = "auto"` 兼容映射为 Adwaita，但不再探测桌面。还负责**界面第三条轴「主题色」**（`appearance.accent` → 内联 `--accent` / `--accent-fg` / `--switch-on` 三个变量）。⚠️ 2026-09-30 起它还管**侧栏宽度**（`appearance.sidebar_width` → `--sidebar-width`，夹 180~480，与 `ui/SidebarResizer.tsx` 同一个区间）。⚠️ 那一段里**"不是数就退回 240"那道兜底不能少**（`Number.isFinite`）。 |
 | `styles/accent.ts` | **界面外观第三轴「主题色」的纯函数**（2026-09-26）：`parseAccent`（三/六位十六进制，认不出来返回 `null` = 跟随风格）＋ `accentFg`（强调色上那行字用黑还是白）＋ `accentVars`（`applyTheme` 直接拿它去 `setProperty`；⚠️ 输出是**三个**键——`--accent` / `--accent-fg` / `--switch-on`，第三个 2026-09-30 加，理由写在那个函数上面）。⚠️⚠️ **`accentFg` 的判据是一个亮度阈值 0.25，不是"挑对比度高的那个"**——后者和出厂那 15 对有 7 对不一致（连 Adwaita 的旗舰蓝都会翻成黑字），0.25 是从出厂值里读出来的，`tests/accent.test.ts` 第二组直接读 `color.css` 钉着它。⚠️ 本文件不碰 DOM，所以能在 node 里跑 |
 | `styles/code-block.css` | 代码块上的**挂件**（2026-09-26 从 `editor.css` 整段搬出，原第 373–698 行——那边当时 961 行、离硬上限只剩 39 行，**内容一个字节没改**）：折叠/复制那一条、语言图标、语言下拉。⚠️ **顺序仍然要紧**：这一份里那几条选择器要盖住 `editor.css` 里对 `pre` / `code` 的规则，所以 `editor.css` 必须 `@import` 它、且排在后面。📌 **2026-10-06（第 101 项）起代码块里有两层文本**，本文件里**凡是以 `pre > code` 为靶子的规则都要重新问一句"它收的是不是那一层零尺寸的隐藏层"**：折叠那条已经从 `> code` 改成 `> .cm-editor`（BUG-69——改之前按钮会翻字、画面一动不动）。⚠️ `pre` 的框（`--bg-subtle` 底色 ＋ `--border` 边框 ＋ `--radius` 圆角）在 `styles/editor-blocks.css`，**不在本文件**——查"框怎么没了"要去那儿 |
 | `styles/doc-typography.ts` | **「文档主题」那四个可调项 → 四个 CSS 变量**（2026-09-27 新建，98 行，纯函数不碰 DOM）：`--doc-line-height` / `--doc-para-gap` / `--font-doc` / `--doc-font-size`，由 `ui/EditorPane.tsx` 写进 `.editor-pane` 的内联 style。⚠️ **前三个变量文档主题自己也会定义**（`styles/themes/*.css` 的 `:root`），也就是"主题给一套默认、用户逐项盖掉"——所以输出**必须落在 `.editor-pane` 那一层**（声明就在那层，写 `<html>` 靠继承盖不过它，见 `settings/document.rs` 文件头）。⚠️ 这也是它和 `styles/accent.ts` 的差别：那个的结果由 `applyTheme.ts` 写进 `<html>`，这个不能。⚠️ **只有打开的项才写**：关着的一项一个字都不写（写成"等于默认值"会顶掉主题那套）。⚠️ 三档字体栈**每档都带通用族兜底**、且不捆绑任何字体文件（`docs/10` §11.2 那条边界）；等宽那档交给 `--font-mono`，不抄一份 |
@@ -580,8 +583,8 @@ Xvfb + ImageMagick 那一条是验证过可用的。
   表达力不够就加新 `kind`，不另开口子。
 - ⚠️ **`07` 第 16 项已作废**——原先打算的"记账 + 重放"是**错的修法**，不是没做完。
 - **界面外观那三条轴都接通了**（`07` 第 11 项已结清；三条 = 风格 / 明暗 / 主题色，**文档主题是第四条、不算界面轴**）：界面风格与明暗在**偏好设置 →
-  外观**（**7 风格 × 2 模式 = 14 格** CSS 与切换界面都在），文档主题在**菜单栏「主题」**
-  （内置**三套**（极简 / Adwaita / LaTeX）＋ 用户目录）。⚠️ 两者**互不影响**是硬约束，机制在 `styles/doc-theme.ts`。
+  外观**（安装包只随附 **Adwaita × 两种明暗模式**；其他官方界面风格从主题仓库安装），文档主题在**菜单栏「主题」**
+  （安装包只内置 Adwaita 浅色/深色；其他文档主题从主题仓库安装）。⚠️ 两者**互不影响**是硬约束，机制在 `styles/doc-theme.ts`。
   ⚠️ 2026-09-26 起**界面风格也能由用户导入**（`~/.config/nota/ui-styles/<id>.css`，
   同名覆盖内置）——`ui_styles.rs` ＋ `commands/ui_style.rs` ＋ `styles/ui-style.ts`
   ＋ `ui/useUiStyles.ts`，与文档主题**同一套机制、两个目录**。`ui_style` 因此从枚举

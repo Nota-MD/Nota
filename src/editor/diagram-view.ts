@@ -385,6 +385,7 @@ export const diagramView = $view(
       //    有 SVG、有错误提示。真相只有源码一份，不该有第二个入口。
       const dom = document.createElement("div");
       dom.className = "nota-diagram";
+      dom.classList.add("md-diagram-panel");
 
       const bar = document.createElement("div");
       bar.className = "nota-diagram-bar";

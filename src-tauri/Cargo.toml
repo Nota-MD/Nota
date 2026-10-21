@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.8.0-beta"
+version = "0.9.0"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota — 所见即所得的 Markdown 编辑器，带 Lua 插件系统"
@@ -21,7 +21,6 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # ── 宿主框架 ──────────────────────────────────────────────────────────────
 tauri = { version = "2", features = ["protocol-asset", "devtools"] }
-tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2"
 
@@ -111,6 +110,13 @@ tauri-plugin-clipboard-manager = "2.3.3"
 # 是错的"那个判断。版本与三条实测（建表 155 ms / 查 2000 词 0.2 ms / 大小写）
 # 记在 `spell/native.rs` 文件头。
 zspell = { version = "0.5.5", features = ["unstable-suggestions"] }
+
+# ── 文件编码（2026-10-16，朋友清单第 6 条「打开,保存编码增加」）──────────────
+# 两个都是 MIT / Apache-2.0 双许可（与 BSD-2 相容），作者都是 Henri Sivonen：
+# `encoding_rs` 是编解码本体（Firefox 里那份的 Rust 版），`chardetng` 是探测器。
+# ⚠️ 探测器只在**没有 BOM 而且不是合法 UTF-8** 时才用（判据在 `text_encoding.rs`）。
+encoding_rs = "0.8"
+chardetng = "0.1"
 
 # ── 网络 ──────────────────────────────────────────────────────────────────
 # 只给 `nota.http`（`src/lua/api/http.rs`）用，也就是**只给插件**用。

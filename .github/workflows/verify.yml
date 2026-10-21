@@ -80,28 +80,3 @@ jobs:
 
       - name: 前端生产构建
         run: npm run build
-
-  platform:
-    needs: verify
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-      - run: npm ci
-      - name: 前端生产构建
-        run: npm run build
-      - name: 平台后端编译
-        run: cargo check --locked
-        working-directory: src-tauri

@@ -34,7 +34,7 @@
  * | 菜单项 | 里面有什么 | 用在哪 |
  * |---|---|---|
  * | HTML（不含样式） | 只有语义标签，**一条 CSS 都没有** | 贴进别的系统、丢给别的工具再加工 |
- * | HTML（含样式） | 嵌 **三份**驻留在磁盘上的 CSS（`?inline`，同一份字节）：`theme/base.css`（变量）＋`editor.css`（正文）＋`katex.min.css`（公式），再叠上当前文档主题 | 直接打开看、打印、发给人 |
+ * | HTML（含样式） | 嵌正文实际使用的 CSS（`?inline`）：变量、外壳版式、行内层、块级层与公式，再叠上当前文档主题 | 直接打开看、打印、发给人 |
  *
  * ⚠️ 「含样式」复用**编辑器自己那几份 CSS**，不是另写一份。另写一份
  * 就是第二个真相源，而它漂移的症状是"导出看着挺像但哪哪都不对"，最难查。
@@ -42,15 +42,15 @@
  * `.milkdown`/`.ProseMirror`）**必须照着编辑区的 DOM 摆**——这不是巧合，
  * 是这套 CSS 的作用域要求。
  *
- * ⚠️ 那三份的**名单是 2026-09-27 定下来的**，不是拍脑袋挑的：编辑区在界面上
- * 拿到的 CSS 有十来份，但其中 `code-block.css` / `math.css` / `marks.css` /
- * `diagram.css` 的规则**全部挂在 `.nota-*` 上**，而 `.nota-*` 正是上面要摘掉的
- * 编辑时零件——摘完之后它们一条都不命中。所以导出真正需要的只有那三份。
- * **再加一份之前先问一句：它的规则在摘干净之后还命中吗？**（怎么看出来：
- * 把注释剥掉，看还剩几条选择器不带 `nota-`。）
+ * ⚠️ 导出必须带完整正文样式层；只带外壳 CSS 会让主题里的行内 `code` 样式
+ * 落到 `<pre><code>` 上，代码块就散成一行行灰底。流程图保留少数
+ * `.nota-diagram*` 生成物类名并带 `diagram.css`，以保持框线与居中；其余编辑期
+ * 零件仍按 `nota-` 前缀摘掉。
  */
 
 import { createEditor } from "@/editor/create";
+import { inlineCssAssets } from "@/editor/export-assets";
+import { 是数学代码语言 } from "@/editor/math-code";
 import { 是目录标记, 锚点 } from "@/editor/toc";
 import { t } from "@/i18n";
 import { scopeDocThemeCss } from "@/styles/doc-theme";
@@ -72,6 +72,19 @@ export interface 导出选项 {
   styled: boolean;
   /** 文档主题的**原始** CSS（没限域过的）。缺省 = 不嵌主题。 */
   themeCss?: string;
+  /**
+   * HTML 导出时保留 HTML 代码块下面的沙箱预览。
+   *
+   * PDF 与打印必须为假：那份输出只保留文档本身，不把编辑区的交互零件打两遍。
+   */
+  includeHtmlPreviews?: boolean;
+  /**
+   * 打印与 PDF 专用的浅色输出模式。
+   *
+   * 调用方必须在进入这里之前拒绝深色主题；这里再钉一层
+   * `color-scheme: light` 与白纸底色，防止打印引擎自行切到深色配色。
+   */
+  lightOutput?: boolean;
   /**
    * 写进 `<title>`。也是**导出**对话框的默认文件名（`默认导出名`）。
    *
@@ -231,7 +244,7 @@ async function 等异步渲染(pm: Element): Promise<void> {
  *（`coordsAtPos`、行高），`display: none` 下量出来全是 0，某些插件会当场
  * 走岔路。`visibility: hidden` 保留布局、不占屏，两头都对。
  */
-async function 摘正文(markdown: string): Promise<string> {
+async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise<string> {
   const root = document.createElement("div");
   root.setAttribute(
     "style",
@@ -265,7 +278,28 @@ async function 摘正文(markdown: string): Promise<string> {
       // ⚠️ 在**还挂着的 DOM 上**摘零件，不是先把 HTML 拼成字符串再拿正则洗：
       // 正则会碰到正文里恰好出现 `contenteditable` 这几个字之类的意外，
       // 而遍历 DOM 只认真正的元素和真正的属性。
-      for (const sel of 整块删掉) pm.querySelectorAll(sel).forEach((n) => n.remove());
+      for (const sel of 整块删掉) {
+        if (sel === ".nota-code-preview" && includeHtmlPreviews) continue;
+        pm.querySelectorAll(sel).forEach((n) => n.remove());
+      }
+
+      if (includeHtmlPreviews) {
+        for (const preview of pm.querySelectorAll<HTMLElement>(".nota-code-preview")) {
+          const frame = preview.querySelector("iframe");
+          if (preview.hidden || !frame?.getAttribute("srcdoc")) {
+            preview.remove();
+            continue;
+          }
+          preview.setAttribute(
+            "style",
+            "height:240px;margin-top:8px;border:1px solid #d6d6d6;border-radius:5px;overflow:hidden;background:#fff",
+          );
+          frame.setAttribute(
+            "style",
+            "display:block;width:100%;height:100%;border:0;background:#fff",
+          );
+        }
+      }
 
       // ── 代码块：把编辑时那一层 DOM **换回** `<pre><code>` ──────────────
       //
@@ -280,7 +314,7 @@ async function 摘正文(markdown: string): Promise<string> {
       // 中间那三层零件由上面 `整块删掉` 收走，但**下面两件事它管不了**：
       //
       // ① `.cm-editor` 那一层是**内容**、不是零件，删不得；可它的 CSS
-      //    （`code-block.css`）**不在导出的那三份里**。于是导出的文件里那一段
+      //    （`code-block.css`）不完整包含在导出样式里。于是导出的文件里那一段
       //    是一堆没有样式的 `<div class="cm-line">`——**看着像纯文本，其实不是**。
       // ② 更硬的一条：**`<pre>` 里装着 `<div>`**。别的工具读这份 HTML 时认出的是
       //    "一个 pre、里面若干 div"，不是"一段代码"——用户 2026-10-10 那句
@@ -296,6 +330,17 @@ async function 摘正文(markdown: string): Promise<string> {
         const 代码 = pre.querySelector("code");
         if (!代码) continue;
         const 语言 = pre.getAttribute("data-language") ?? "";
+        if (是数学代码语言(语言)) {
+          const wrap = pre.closest(".nota-code-wrap");
+          const rendered = wrap?.querySelector(".nota-code-math-render");
+          const math = document.createElement("div");
+          math.className = "md-math-code";
+          if (rendered) math.append(...Array.from(rendered.cloneNode(true).childNodes));
+          else math.textContent = 代码.textContent ?? "";
+          if (wrap) wrap.replaceWith(math);
+          else pre.replaceWith(math);
+          continue;
+        }
         if (语言) 代码.setAttribute("class", `language-${语言}`);
         pre.removeAttribute("data-language");
         // ⚠️ `replaceChildren`：那一层 CM 的 DOM、行号、工具条、语言选择器
@@ -343,8 +388,18 @@ async function 摘正文(markdown: string): Promise<string> {
       // 删整族会连用户的换行一起吃掉。
       for (const br of pm.querySelectorAll("br.ProseMirror-trailingBreak")) br.remove();
 
+      const 导出保留类 = new Set([
+        "nota-diagram",
+        "nota-diagram-preview",
+        "nota-diagram-note",
+        "nota-diagram-note-title",
+        "nota-diagram-note-detail",
+        ...(includeHtmlPreviews ? ["nota-code-preview", "nota-code-preview-frame"] : []),
+      ]);
       for (const n of [pm, ...pm.querySelectorAll("*")]) {
-        const 留着 = [...n.classList].filter((c) => !nota类前缀.test(c));
+        const 留着 = [...n.classList].filter(
+          (c) => !nota类前缀.test(c) || 导出保留类.has(c),
+        );
         if (留着.length) n.setAttribute("class", 留着.join(" "));
         else n.removeAttribute("class");
         for (const a of 摘掉的属性) n.removeAttribute(a);
@@ -384,6 +439,16 @@ const 导出基础样式 = [
   // 打印时页面背景常常被浏览器丢掉（省墨），文字颜色却是深底主题的浅字
   // ——那会打出白纸白字。所以打印时强制两样都回到黑纸白字。
   "@media print { body { background: #fff; color: #000; } }",
+  ".md-math-code { margin: 30px 0; padding: 22px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-subtle); overflow-x: auto; text-align: center; }",
+  ".md-math-code .katex-display { margin: 0; }",
+  ".nota-diagram-preview { text-align: center; }",
+  ".nota-diagram-preview svg { display: block; margin: 0 auto; }",
+].join("\n");
+
+/** 打印与 PDF 的最终底色保障。只改颜色机制，不改主题排版。 */
+const 浅色输出样式 = [
+  ":root, html, body { color-scheme: only light; }",
+  "html, body { background: #fff !important; color: #1a1a1a !important; }",
 ].join("\n");
 
 /** 转义进 `<title>` 的文本。正文不动——它是 HTML。 */
@@ -397,14 +462,14 @@ function 转义文本(s: string): string {
 
 /** 生成一份完整的 HTML 文档。 */
 export async function 导出HTML(markdown: string, opts: 导出选项): Promise<string> {
-  const 正文 = await 摘正文(markdown);
+  const 正文 = await 摘正文(markdown, opts.includeHtmlPreviews === true);
 
   const 样式块: string[] = [];
   if (opts.styled) {
     // ⚠️ 动态 import：这几份 CSS 只有"含样式导出"才用得上，不该压在主包里
     //（编辑区那几份是通过 `main.tsx` 正常加载的，跟这里无关）。
     //
-    // ⚠️ **三份缺一不可**，各自缺了会少什么，都是"看着不对但不报错"的那种：
+    // ⚠️ **这几层缺一不可**，各自缺了会少什么，都是"看着不对但不报错"的那种：
     //
     //  · `theme/base.css` —— 变量那一层（`--doc-bg` / `--fg-muted` / `--border`
     //    / `--code-keyword` …）。**2026-09-27 补的**：在这之前导出只带
@@ -419,18 +484,30 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
     //    三套文档主题全是浅色，打印也是白纸（下面那条 `@media print`），
     //    一份"深色界面下导出的 PDF"没人要得。代价是深色界面下导出 ≠ 屏幕，
     //    见 `docs/07` 第 69 项那条待定。
-    //  · `editor.css` —— 正文自己的长相（这一段原本就有）。
+    //  · `editor.css` —— 正文外壳与版式。
+    //  · `editor-inline.css` —— 高亮、上下标、脚注等行内节点。
+    //  · `editor-blocks.css` —— 代码块、任务列表、表格、引用与分隔线。
     //  · `katex.min.css` —— 公式。**2026-09-27 补的**：KaTeX 画一棵公式是
     //    **两棵树**（好看的 `katex-html` ＋ 给读屏器/无 CSS 环境用的 MathML
     //    `katex-mathml`），平时靠这一份里那句 `.katex-mathml { position:
     //    absolute; clip: … }` 把后一棵藏起来。少了它，导出的公式在页面上
     //    **画两遍**（一遍好看的、一遍 MathML 的原样），打印出来像排错了版。
-    const [主题基, 编辑区, 公式] = await Promise.all([
+    const [主题基, 编辑区, 行内层, 块级层, 图表, 公式] = await Promise.all([
       import("@/styles/theme/base.css?inline"),
       import("@/styles/editor.css?inline"),
+      import("@/styles/editor-inline.css?inline"),
+      import("@/styles/editor-blocks.css?inline"),
+      import("@/styles/diagram.css?inline"),
       import("katex/dist/katex.min.css?inline"),
     ]);
-    样式块.push(主题基.default, 编辑区.default, 公式.default);
+    样式块.push(
+      主题基.default,
+      编辑区.default,
+      行内层.default,
+      块级层.default,
+      图表.default,
+      await inlineCssAssets(公式.default),
+    );
     if (opts.themeCss) {
       // ⚠️ **必须限域**，理由和界面上完全一样（否则主题里那句 `body { … }`
       // 会跑到导出文件的页面上、而不是正文上）。见 `styles/doc-theme.ts`。
@@ -446,6 +523,7 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
   // ⚠️ 导出专用那几条**永远在最后**：它们是"为了导出而做的让步"
   //（页面由整页滚、打印回黑纸白字），必须压得住前面所有的东西。
   样式块.push(导出基础样式);
+  if (opts.lightOutput) 样式块.push(浅色输出样式);
 
   // ⚠️ 不含样式那一种**连 class 都不带**（正文直接进 `<body>`）：它的用途是
   // "贴进别的系统再加工"，而 `.editor-mount` 这种类名在那里毫无意义，只会
@@ -455,7 +533,7 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
 
   return [
     "<!DOCTYPE html>",
-    '<html lang="zh-CN">',
+    `<html lang="zh-CN"${opts.lightOutput ? ' data-nota-output="print"' : ""}>`,
     "<head>",
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',

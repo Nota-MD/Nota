@@ -39,10 +39,10 @@
 
 | 源 | 必须同批更新 | 为什么 |
 |---|---|---|
-| `settings/download.rs` | `03` `07A` | 0.8 高级下载替换规则：语法、顺序应用、应用与插件更新共用 |
+| `settings/download.rs` | `03` `07A` | 下载前缀替换规则：语法、顺序应用、应用与插件更新共用；界面入口在普通「设置 → 通用 → 下载」 |
 | `update.rs` / `remote.rs` / `commands/update.rs` | `01` `02` `04` `07A` | 应用更新：Release 内 `latest.json`、安装类型与架构分流、官方地址围栏、SHA-256、各平台覆盖安装；`remote.rs` 同时服务插件仓库 |
 | `plugin/updater.rs` | `02` `04` `11` | 插件更新：清单 `[update] manifest`、多插件仓库、版本比较、摘要与签名者连续性、原子替换 |
-| `ui/SoftwareUpdatePane.tsx` | `02` `04` `05` | 「关于 → 软件更新」界面；前端只触发命令，不持有可传 URL 的接口 |
+| `ui/SoftwareUpdatePane.tsx` | `02` `04` `05` | 「关于 → 软件更新」界面；前端只触发命令，不持有可传 URL 的接口。2026-10-19 起订阅 `nota:update-progress`，显示分块下载百分比或不确定进度，并在下载完成后切到安装阶段 |
 | `src-tauri/src/main.rs` | `06` | 入口只有一个函数，变了说明启动方式变了 |
 | `src-tauri/src/lib.rs` | `01` `02` `04` `05` | 启动顺序、命令注册表、窗口事件——四份都记了。⚠️ `nota_frontend_ready` 的**用途**（不是「重放插件 UI 注册」，是「WebView 从这一刻起能收事件」）在 `02` 与 `05` 都有，改它要动两处 |
 | `src-tauri/src/error.rs` | `02` `03` | 枚举变体与 Display 文案是对外行为 |
@@ -86,7 +86,7 @@
 | `src-tauri/src/native_menu.rs` | `01` `02` `04` | macOS 的原生菜单。⚠️ **这里没有菜单定义**，树由前端推来；`cfg!` 而非 `#[cfg]` 是有意的（让它在 Linux 上也参与类型检查）。⚠️ **灰掉的项不发快捷键**——macOS 连禁用项的键位一起匹配，灰着的 ⌘C 会把复制粘贴吃掉 |
 | `src-tauri/src/text_encoding.rs` | `02` `03` | **文件编码**（2026-10-16 新建，**还没接进 `Document`**）：编解码与探测三个约定（编码是文档属性、认不出按 UTF-8、写盘用文档记着的那一个）。接线时同批改 `02`「文件读写」那一节 |
 | `src-tauri/src/themes.rs` | `02` `03` `08` | 文档主题的发现与读盘。⛔ **不兼容也不内置外部编辑器主题**（版权，用户 2026-09-23 定的）。⚠️ `check_id` 是安全边界，那条"id 只放行 ASCII 字母数字与 `-` `_`"的规矩改这里要连带改 `03` 与 `08`。⚠️ 2026-09-26 起 `check_id` / `check_size` 是 **`pub(crate)`**——`ui_styles.rs` 复用这两个函数而**不复制**（同一道安全边界两份实现，漂的是哪一份没人看得出来） |
-| `src-tauri/src/ui_styles.rs` | `02` `03` `04` `08` | **界面风格的发现与读盘**，与 `themes.rs` 并行：内置七档具体风格（另有 `auto`）＋ 用户丢进 `~/.config/nota/ui-styles/` 的。⚠️ 不限域；用户 CSS 原样注入前交给 `theme_assets.rs` 内联相对图标/字体资源。内置档没有独立 CSS 文件；CDE 等外置主题不登记 |
+| `src-tauri/src/ui_styles.rs` | `02` `03` `04` `08` | **界面风格的发现与读盘**，与 `themes.rs` 并行：安装包只列 Adwaita，其余通过 `~/.config/nota/ui-styles/` 安装；自动匹配系统桌面主题已移除。⚠️ 不限域；用户 CSS 原样注入前交给 `theme_assets.rs` 内联相对图标/字体资源。内置档没有独立 CSS 文件；Yaru、CDE 等外置主题不登记 |
 | `src-tauri/src/theme_assets.rs` | `02` `08` | **主题相对资源内联**（2026-10-17）：`url()` 相对 CSS 文件解析，支持图标与字体等扩展为 data URI；只读主题根内，失败单条跳过 |
 | `src-tauri/src/commands/ui_style.rs` | `02` `04` `08` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir` 三条（2026-09-26）。⚠️ 与 `commands/theme.rs` 同一套口径：**入参是 id 不是路径**、最后那条**连"打开"一起做完**（`plugin-opener`，绕开 ACL / BUG-27）、目录**用到时才建** |
 | `src-tauri/src/cups.rs` | `02` `04` `06` | **最小 CUPS/IPP 客户端**：Unix socket 上执行 `CUPS-Get-Printers` / `CUPS-Get-Default` / `Print-Job`。⚠️ 不依赖 `lpstat` / `lp`；PDF 必须经过 CUPS 驱动链，不能发 raw PDF；发送完不要 `shutdown(Write)`。 |
@@ -238,6 +238,18 @@
 | `src/editor/footnote.ts` | `05` `10` | **脚注的编号分配 ＋ 插入事务**（2026-09-27 新建，约 190 行）：`脚注事务(state)` 是**纯函数**（吃 `EditorState`、吐 `Transaction \| null`，不碰 DOM），`插脚注(editor)` 只负责 dispatch。⚠️ **这一格不缺节点**——`footnote_reference` / `footnote_definition` 是 `preset-gfm` 自带的，解析与序列化都是上游的，CSS 也早在第 71 项那批写好；缺的只有「从零插一条」。⚠️ **编号取「最小未用正整数」不是「最大加一」**（删过之后补洞，不留洞），**源码模式引的是同一个 `下一个脚注标签`**。⚠️ **两条 `null` 出口**：schema 里没有那两颗节点（没挂 gfm）、光标在**代码块**里（`code_block` 的 content 是 `text*`，硬插会被 `canReplace` 拒而**抛错**）。⚠️ **不重排编号、不跳转、定义一律补在文末**三条边界写在 `docs/05` §4.16。⚠️ 判据 `tests/footnote.test.ts` 30 条 |
 | `src/ui/AppDialogs.tsx` | `04` `02` | **浮层那一族的总装**（2026-09-27 新建，约 70 行）：pandoc 面板 ＋ 确认框 / 输入框 / 插图框 / Emoji 选择框。⚠️ **只为 1000 行硬线**从 `App.tsx` 搬出（加了 Emoji 之后 1024 行）；搬的是"浮在正文之上、跟哪份文档无关的一层"。⚠️ 只收**一个 `对话框` 对象**（`ui/useDialogs.ts` 那套 promise 式问答），不摊成十来个 props——漏一个就有一个框**永远关不掉**，且不报错。⚠️ **这里的顺序就是层叠顺序**（后画的盖住先画的） |
 | `src/ui/ImageDialog.tsx` | `02` `04` | **「插入图像」那个框**（2026-09-26）：本地文件 / 网络地址两页 ＋ 替代文字，本地那页带「浏览…」。⚠️ **它不自己算路径**——落点与写法全在 `src-tauri/src/image.rs`（那边 26 条用例），在这儿再算一遍 = 两份实现。⚠️ 所以框里那句说明**只说"看设置"、不预告落点**。⚠️ Esc / 点遮罩 / 主字段为空 三条与另两个自绘框一致。⚠️ 2026-09-26 第二批加了一个**「上传到服务器」勾选框**（默认不勾，且**只有配了服务器才画出来**）：勾了就先走 `uploadOne`，见上一行 |
+| `src/ui/file-picker.ts` | `02` `04` | **应用内文件选择器的队列和纯路径逻辑**：打开、保存、目录选择共用一个 Promise 队列；筛选、保存后缀、Unix / Windows 盘符根与 UNC 路径算法可独立测试。⚠️ 业务写盘不在这里，选择结果仍交给各命令域。 |
+| `src/ui/FilePickerDialog.tsx` | `02` `04` | **应用内文件选择器界面**：位置栏、路径栏、文件列表、隐藏文件、新建文件夹、覆盖确认和键盘导航。⚠️ 必须随界面主题变化；新增任何文件入口都走 `@/ui/file-picker`，不得重新引入系统原生对话框。 |
+| `src/styles/file-picker.css` | `04` | 文件选择器的壳、位置栏、列表、状态栏与宽度断点。⚠️ 只使用主题变量，CDE 等外置主题通过变量获得方角与配色，不需要组件内主题分支。 |
+| `src-tauri/src/commands/file_picker.rs` | `02` | **文件选择器只读宿主能力**：列出常用位置、一层目录与新建文件夹。⚠️ 不读文件正文、不保存业务文件；非 UTF-8 路径与隐藏文件判断按平台处理。 |
+| `tests/file-picker.test.ts` | `02` `06` | 自绘选择器的路径、筛选、保存后缀和依赖契约：`package.json`、`Cargo.toml`、`lib.rs` 与能力清单都不得再出现原生 dialog 插件。 |
+| `src/styles/theme-contrast.ts` | `02` `04` `10` | **文档主题明暗判据**：解析 `color-scheme`、`--doc-bg` 与前景色亮度，不按主题 id 写特例。⚠️ 打印和 PDF 的浅色闸门用它；认不出颜色时不阻止，避免误伤浅色主题。 |
+| `tests/print-light.test.ts` | `06` `10` | 打印 / PDF 浅色规则：内置深色主题必须被识别，打印与 PDF 共用闸门，PDF 不把活动主题 CSS 交给 Pandoc，中文提示明确要求选择浅色主题。 |
+| `src/editor/math-code.ts` | `02` `05` `10` | `math` / `latex` / `tex` 围栏的数学语义：编辑器生成 KaTeX 预览，Pandoc 输入把围栏改为 `$$…$$`。文件里的 Markdown 字节不改。 |
+| `src/editor/export-assets.ts` | `02` `05` | 把导出 CSS 的本地字体和图片资源内联成 data URL，保证导出的 HTML/PDF 离开 Nota 后仍能显示 KaTeX 公式。 |
+| `tests/math-code.test.ts` | `05` `06` | 数学围栏语言别名、Pandoc 转换、波浪线围栏、未闭合围栏与普通代码保护。 |
+| `tests/export-render.test.ts` | `05` `06` | 导出样式层、KaTeX 字体内联、HTML 预览保留规则、流程图框线居中与数学围栏输出。 |
+| `tests/startup-visible.test.ts` | `04` `06` `07A` | 主窗口屏幕外预热、无网页加载动画、编辑器聚焦后显示、任务栏入口延后。 |
 | `src/ui/EditorPane.tsx` | `05` | "那个 div 从不被 React 重渲染"是硬约束。⚠️ 2026-09-24 起句柄上还有**查找五条**与 `focus`；`onCommandState` / `onFindStatus` / 两个写作开关**都走 ref 读**（不重建实例），只有 `doc.id` / `mode` / `strict` 才重挂。⚠️ **2026-10-07 拆过（第 89 项）：1171 → 800 行**，搬出去六份（下面六行）——每份都是一件事，**边界是"搬出去的那几件事别再搬回来"**（文件头那张表列着谁在哪儿）。⚠️ 拆的是**六个不同的缝**，不是按行数对半砍 |
 | `src/ui/FrontMatterBanner.tsx` | `04` `05` | 正文上方那条 **YAML front matter 横幅**（2026-10-04 第 64 项；2026-10-07 从 `EditorPane.tsx` 拆出，第 89 项，333 行）。⚠️ **改的路只有一条**：`runCommand("frontMatter", …)`——那段文本归编辑器那一侧持有，这里绝不自己拼一份存起来（两处各存一份的话，插件整篇替换文本之后横幅里那份就成了旧的）。⚠️ 文本由外面**推**进来（`同步(markdown)` 走 `useImperativeHandle`），**不进 React 状态**：每敲一下重渲染整棵树，而且"编辑器报来的"与"React 记着的"两份会互相追。⚠️⚠️ **切源码模式时它照样挂着**（那一档只渲染 `null`）——状态要一直跟着，否则切回来是切走那一刻的旧内容；**不要**改成"源码模式下不渲染这个组件"。⚠️ 输入框**受控但不跟文档走**（回声识别靠 `前置块基准Ref`），无脑覆盖会把用户正打的字顶掉。⚠️ 「删除」是**两击确认**（`删除确认毫秒` 4 秒），不是弹窗——为一行 YAML 把 `useDialogs` 那一套从 `App` 一路传进来不值当 |
 | `src/ui/pane-editors.ts` | `05` | **那三个实例各传哪些选项**（2026-10-07 从 `EditorPane.tsx` 拆出，第 89 项，239 行）：`建所见即所得编辑器` / `建源码编辑器` / `建预览编辑器`。⚠️ 三种口径：`physics` / `inlineMarks` / `标点` / `自动更正` / `emoji` / `智能符号` / `strict` **只有所见即所得那一份传**；预览那一份要跟主编辑器**逐项一致**（否则 `==甲==` 左边高亮、右边光秃秃，用户会以为分屏坏了），但**不传 `自动更正`**（只读，是死代码）、**不传 `emoji` / `智能符号`**（只读里弹补全面板只是噪声）。⚠️ **造了不负责拆** |
@@ -319,12 +331,14 @@
 | `src/ui/useDialogs.ts` | `04` `02` | 两个自绘对话框"谁在等答案"的 Promise 拼接（2026-09-24 从 `App.tsx` 搬出）。⚠️ **一次只可能有一个**（每个框后面是单个 ref，不是队列） |
 | `src/ui/settings/SettingsDialog.tsx` | `04` | 偏好设置那个框的**壳**：左栏（搜索 + 十页 + 「完成」）+ 右栏；页面顺序由 `ORDER` 定（⚠️ 加一页要同时改 `SECTIONS` / `ORDER` / `页名` 三处，漏了 `ORDER` 的症状是"这一页点不到"，不报错）。⚠️ 搜索是就地过滤，靠 `QueryProvider` 把查询喂给每一行 |
 | `src/ui/settings/primitives.tsx` | `04` | 偏好设置的原语（行 / 组 / 下拉 / 开关 / 滑杆 / 搜索框 / 图标）。⚠️ 加控件时「能不能被 `<label htmlFor>` 指」要在 `LABELABLE_TAGS` 那处判 |
-| `src/ui/settings/panes/` | `04` | 偏好设置页面一页一个文件，加共用的 `props.ts`。2026-10-18 起常规页为文件 / 编辑器 / 图像 / Markdown / 导出 / 外观 / 文档主题 / 快捷键 / 强制专注 / **插件设置** / **拓展管理** / 通用；调试模式开启后动态追加 **高级设置**。`AdvancedPane.tsx` 含下载替换规则、运行信息与设置文件操作；`PluginSettingsPane.tsx` 只画插件声明的控件。`ImageUploadGroup.tsx` 仍不是页面，而是「图像」页内一组 |
+| `src/ui/settings/panes/` | `04` | 偏好设置页面一页一个文件，加共用的 `props.ts`。2026-10-19 起常规页仍为文件 / 编辑器 / 图像 / Markdown / 导出 / 外观 / 文档主题 / 快捷键 / 强制专注 / **插件设置** / **拓展管理** / 通用；开发者模式开启后动态追加 **高级设置** 与 **开发者模式** 两页。下载替换规则移入通用页；`AdvancedPane.tsx` 只保留诊断窗口、设置文件和恢复默认；`DebugPane.tsx` 管理开发者模式状态；`PluginSettingsPane.tsx` 只画插件声明的控件。`ImageUploadGroup.tsx` 仍不是页面，而是「图像」页内一组 |
 | `src/ui/settings/panes/ShortcutsPane.tsx` | `04` | 快捷键一览。⚠️ 条目**从 `MENUS` 读**，别抄成静态表——那就是第二份真相源 |
 | `src/ui/settings/panes/ImageUploadGroup.tsx` | `04` | **「上传服务器」那一组**（住在「图像」页里，2026-09-26 加）：`api.image.uploadGet` / `uploadSet`，**每改一项立刻写一次盘**。⚠️ **它不走 `paneWriter`，全仓唯一一组这样做的**：值在 `~/.config/nota/image-upload.toml`（0600，装着令牌）而不在 `settings.toml`，所以**自己读、自己写、自己存一份 state**；于是「恢复出厂默认」**故意不碰这一组**（把令牌一起清掉是那种「点了一下才发现」的损失）。⚠️ 写失败**退回上一个值**并说一句 |
 | `src/ui/settings/panes/ExtensionsPane.tsx` | `04` | **「拓展管理」页**：安装、启停、导出、卸载和更新。2026-10-18 起**不再内嵌插件设置**；与右侧「插件」栏共用 `usePlugins` |
 | `src/ui/settings/panes/PluginSettingsPane.tsx` | `04` `11` | **「插件设置」页**：只按插件清单的 `[[settings]]` 画 `range` / `text` / `toggle`，不认插件 id，不写 `settings.toml` |
-| `src/ui/settings/panes/AdvancedPane.tsx` | `04` `07A` | **仅调试模式显示的「高级设置」**：下载替换规则、运行信息、设置文件目录与恢复默认 |
+| `src/ui/settings/panes/AdvancedPane.tsx` | `04` `07A` | **仅开发者模式显示的「高级设置」**：在独立英文诊断窗口查看运行信息，以及设置文件目录与恢复默认；下载替换规则已移出本页 |
+| `src/ui/settings/panes/DebugPane.tsx` | `04` `07A` | **仅开发者模式显示的「开发者模式」页**：显示模式状态、诊断窗口入口与关闭按钮；与「高级设置」分开 |
+| `src/ui/DebugInfoWindow.tsx` | `02` `04` | `index.html#debug-info` 独立窗口：读取 `nota_diagnostics`，所有诊断字段与值使用英文，不挂主编排或编辑器 |
 | `src/ui/outline.ts` | `05` | ⚠️ 是**启发式正则**不是 AST，已知误差记在 `05` |
 | `src/ui/view-modes.ts` | `04` | 三种编辑模式的**显示名**与出厂顺序（**45 行**）。⚠️ **2026-09-30 删掉了短名那一列**（原来是一长一短 `{ short, full }`，短的专给状态栏那格字）：状态栏改成一颗 `</>` 图标之后短名没有读者了，于是 `VIEW_MODE_LABELS` 直接是 `Record<ViewMode, string>`；随之从 `zh-ui.ts` 删掉 `"Source"` / `"Split"` 两条中文（**留着就是废键，`i18n-check` ③ 会 FAIL**）。⚠️ **2026-10-07 起这张表一个读者都没有**（偏好设置里那个「编辑模式」下拉删了），**文件照旧留着**——它是"加第四种模式"时唯一会当场编译不过的地方（理由写在它文件头，别当死代码清掉）。⚠️ 只是名字表，**不含切换逻辑**——切换 2026-10-07 起走 `ui/useFileKindMode.ts` 的 `设模式`（以前是 `App.tsx` 的 `updateSettings({ view_mode })`，那条路随字段一起没了） |
 | `src/styles/doc-theme.ts` | `04` `05` `08` | **文档主题的限域注入器**：用 `CSSStyleSheet` 解析后把每条选择器收到 `.editor-pane` 之下（`:root`/`html`/`body` **改写成** `.editor-pane`，不是加前缀）。⚠️ **这一步就是"文档主题碰不到外壳"的全部保证**，六条规则写在它顶上；新增 at 规则的处理要连带改 `04` §3.3 |
@@ -343,6 +357,9 @@
 | `src/styles/theme/extras.css` | `04` | 拆出来的第 ④ 份：变量表达不了的那几件事，**唯一带组件选择器的一份**，必须在最后加载（它要盖住的正是前面定下来的值） |
 | `src/styles/ui-style.ts` | `04` `08` | **用户导入的界面风格的注入器**（2026-09-26）：把那份 CSS 塞进一个固定 `<style id="nota-user-ui-style">`，**追加到 `<head>` 末尾**。⚠️⚠️ **这里故意什么都不改写**（`doc-theme.ts` 那边相反，那边必须限域）——界面风格要改的就是整个外壳，套一层 `.editor-pane` 前缀等于把用户那份文件整个废掉，而且**不报错**。于是"同名覆盖内置"这条规则的全部实现就是**文档顺序**：后者胜出，一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验，语法错由 WebKit 自己丢那一条，不做二次报错；⚠️ 用**一个固定的 style 元素**替换而不是每次 append（否则来回切风格会堆出一串，而且越早的越靠前越容易被盖住，症状是"我改了文件、重启没生效"） |
 | `src/ui/useUiStyles.ts` | `02` `04` `08` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26，按 `useDocTheme` 的先例单独一个 hook：要问后端、是异步的）。⚠️ **判据是"这一档有没有文件"，不是"是不是内置那七档之一"**——用户放一个 `adwaita.css` 就是覆盖内置，那时 `data-ui-style` 仍是 `adwaita` 但那份 CSS 得取回来；这个信息只有清单的 `builtin` 那格有，所以清单必须先拿到手。⚠️ 清单是**状态不是事件**（同 `panels` / `themes`）：运行期间往目录里丢文件**不会**触发通知，要重开应用。⚠️ 取失败**安静退回内置那套**（文件被删是很平常的事），但**必须真的把注入的那份撤掉**，否则用户看到"我删了文件、风格还在"。⚠️ 与 `useAppearance` / `useDocTheme` 三方分工写在文件头上 |
+| `src/ui/useBootReveal.ts` | `02` `04` | 主窗口揭幕：窗口先在屏幕外预热，设置、界面风格 CSS 与编辑器实例都就绪、且编辑器已聚焦后才调用宿主移入屏幕；没有网页加载层，也不等 `document.fonts.ready`。8 秒兜底在 `main.tsx` |
+| `src/bridge/types-runtime.ts` | `02` `05` | Pandoc 导入格式 / 导入结果与更新下载进度三类运行时边界形状；`types.ts` 原样再导出 |
+| `src/styles/update-debug.css` | `02` `04` | 软件更新进度条与独立诊断窗口样式；在 `overlay.css` 之后加载 |
 | `src/styles/icons.css` | `04` | 图标遮罩原语：`.icon` 是 **`mask-image` + `background-color: currentColor`**，`mask-image` 消费 `--icon-override`（由 `--icon-<逻辑名>` 生成）并回落到默认图；`.icon-missing` 画虚线框、`.btn-with-icon` 给图标与文字那道 `gap`。主题覆盖规则不再写进这里 |
 | `src/styles/applyTheme.ts` | `04` | 轴 → `<html>` 属性的写入口（**两条走 `data-*` 属性，第三条「主题色」走内联 `--accent` / `--accent-fg`**：前两条是"选哪一格"、离散，第三条是一支连续的量，1677 万种颜色写不成选择器格。理由在文件头） |
 | `src/styles/accent.ts` | `04` `08` | **第三条外观轴「主题色」的纯函数**（2026-09-26，用户：「这个主题只包含一个 UI 的设计样式……而不包含主题颜色」）：`parseAccent`（认 `#rgb` / `#rrggbb`、前导 `#` 可省、短写法**逐位翻倍**；认不出来一律 `null` = 跟随风格，不抛异常）＋ `相对亮度` / `对比度`（WCAG 那两条）＋ `accentFg`（强调色上那行字用黑还是白）＋ `accentVars`（返回 `null` = 调用方要把上一次写的**摘掉**）。⚠️⚠️ **`accentFg` 的判据是一个亮度阈值 0.25，不是"挑对比度高的那个"**——第一版是后者，拿 `color.css` 那 15 对一量**有 7 对不一致**（含 Adwaita 的旗舰蓝 `#3584e4`，会翻成黑字）；0.25 是从出厂值里"读"出来的（白字那侧最高 0.238、深字那侧最低 0.258）。⚠️ 本文件**不碰 DOM**，所以 `tests/accent.test.ts` 能在 node 里跑 |
@@ -411,7 +428,9 @@
 | `tests/status-metric.test.ts` | `02` `06` | **10 条**（2026-09-30，新文件）：测**「状态栏显示哪一个统计量」那条轴**——这条轴上的值有**四个名字**分居四个文件、两种语言，彼此**没有任何编译期或运行期的联系**。三组：① Rust 枚举 ↔ TS 字面量（`Character` 少个 `s` 那种拼错**整份设置读不进来**、`rename_all` 少了落盘成大驼峰前端认不出、结构体级 `#[serde(default)]` 少了老设置文件读崩、字段名前后端逐字相同）；② Rust 的 `#[default]` ↔ `ui/useStatusBar.ts` 的 `?? "words"`（不一致的症状是"启动那一瞬间先显示另一个数、随后自己跳一下"，不报错、只在慢机器上看得见）；③ `StatusBar.tsx` 的 `菜单次序` 覆盖全部四项、不重复、**四个 i18n 键在代码里以字面量出现**、那一格与菜单共用 `四个[metric]`。⚠️ **第三组那条字面量检查拦的是一种已经发生过的坏法**：把四个键收进一张表再用 `t(表[m], 数)`，`tools/i18n-check.sh`（扫字面量）就再也看不见它们，中文表里那四行被判成废键、整个闸门 FAIL——实测踩过一次。⚠️ **它证明不了**：悬停那两颗真的会出现（CSS `:hover`，要真指针）、点一下菜单真的改了显示（要真 React）、菜单长得跟图4 一样（宽度/间距/往上弹都在 CSS 里）。⚠️ 读的是 `ui/useStatusBar.ts` 而**不是** `App.tsx`——那一格 2026-09-30 晚从 App 搬走了，再搬家时这份测试要跟着改（它报红不是误报） |
 | `tests/heading-on-enter.test.ts` | `02` `06` | **19 条**（2026-09-30，新文件，**当天改过两轮**）：测 `editor/heading-on-enter.ts` 的「扫描 ＋ 装什么装饰」——`算装饰条目(doc, strict)`（全篇段落扫下来，每个区间的 `起`/`止`；含 `#   标题` 这种井号后多几个空格的、`#` 与 `# ` 这种没有正文的、原子节点打头的、**已经是标题块的不该再进装饰**）与 `建装饰集(doc, 条目)`（**所有条目一视同仁**）。⚠️ 只读文档、不碰视图，但要一份**真 Schema**（含 `heading`）——判据全是按位置算的，拿假对象糊不过去。⚠️ **它证明不了**回车真的成块了、装饰真的挂到屏幕上没有（那要真窗口，见 `docs/06` §5.39，⚠️ 那六帧是第一批拍的）；⚠️ 两轮踩的坑写在 `docs/06` §6.3 那条 📌 里（`#   标题` 的结论两轮相反、`.join()` 默认逗号、两档的断言别写在同一条里） |
 | `tests/heading-toggle.test.ts` | `02` `06` | **5 条**（2026-10-17 新文件）：测 `command-table.ts::同层标题` 的开关判据——H1 上点 H1、H2 上点 H2 为真；H2 点 H1、正文点 H1 为假；层数越界不会和正常层误配。真命令派发在 `跑命令`：真走 `turnIntoTextCommand`，假走 `wrapInHeadingCommand`。开窗已按 H1 按钮两次验证：先退回正文、再恢复 H1。 |
-| `tests/font-bundle.test.ts` | `02` `06` | **6 条**（2026-10-17 新文件）：完整 WQY Bitmap Song EBDT TTF 同时含 WQY name、ASCII/CJK cmap 与 EBDT/EBLC；`cde.css` 用同一字体覆盖中文与西文、界面统一 Regular；打印框禁掉原生圆角 select / number spinner；WQY 版权、字体说明与安装包资源映射齐全；第三方清单与鸣谢登记且根 `LICENSE` 仍是 BSD-2-Clause。 |
+| `tests/font-bundle.test.ts` | `02` `06` | **7 条**：完整 WQY Bitmap Song EBDT TTF 源文件与约 653KB WOFF2 运行时容器同时存在；两者分别有登记哈希，WOFF2 带 `wOF2` 签名；`cde.css` 用同一字体覆盖中文与西文、界面统一 Regular；打印框禁掉原生圆角 select / number spinner；许可、说明与安装包隔离齐全。 |
+| `tests/cde-menu-fidelity.test.ts` | `02` `06` | **11 条**：钉住 CDE 菜单的 Motif 整数几何（0px pulldown margin、1px 边、20px 行、15px accelerator pad、无空图标槽）、状态栏向上弹、F10/方向键导航、跨栏悬停、指针离开解除 armed、子菜单 Esc 单层取消、关于窗 16px 点阵网格、代码块按钮切换，以及启动揭幕不等待 `document.fonts.ready`、设置先应用而其余 IPC 并行。 |
+| `tests/settings-export.test.ts` | `02` `04` `06` | **5 条**：设置包是带清单的标准 ZIP；程序项和每个插件的设置/数据分别可选；含令牌项默认不选；目录遍历跳过符号链接和依赖缓存；命令已注册且默认后缀是 `.nota-backup`。 |
 | `tests/lang-guess.test.ts` | `02` `06` | **31 条**（2026-09-28）：测 `editor/lang-guess.ts`——`按文件名线索` ／ `按内容猜语言`（`#!/bin/bash` / `package main` / `fn main()`）／ `按扩展名推语言`（110 个 id）／粘贴那道闸 `像代码`。⚠️ 第八组拿 `refractor.listLanguages()` 核表里**每一个 id 真的存在**——写错一个**不报错**，只是"这个语言永远认不出来"。⚠️ `像代码` 那几条否决（中文正文 / 少于两行 / 打分不够）错了的症状是「用户粘一段散文进来变成了代码块」，所以它们是这份测试里最该看住的一批 |
 | `tests/paste-clean.test.ts` | `02` `06` | **25 条**（2026-09-28）：测 `editor/paste-clean.ts` 的洗标签三件事（整块删 / 丢壳 / 样式换语义标签）＋ **语言线索那两张表**（扩展名族查 `lang-guess.ts` 的 `扩展名表`、语言长名族查本文件的 `语言名表`——只查前者时 `lang-python` 与 `data-language="rust"` **一个都落空**，症状只是"粘进来的代码块没有语言"）＋ 栈上"开标签输出过没有"那笔账（漏了会让闭合标签漏出来：`<span>甲</span>` 洗成 `甲</span>`）。⚠️ **没用 `DOMParser`**（没有 jsdom 就不是纯函数、测不了），代价是畸形 HTML 处理不了，如实写在文件头 |
 | `tests/url-link.test.ts` | `02` `06` | **29 条**（2026-09-28）：测 `editor/url-link.ts`——`正规化网址`（两路唯一的出口）／裸 URL 的边界（`example.com` / `README.md` / `node.js` / `v1.2` **一个都不许认**）／危险协议黑名单（`javascript:` / `vbscript:` / `data:` / `file:` / `blob:`——上游 `linkSchema` 不校验 `href`，而输入源是剪贴板）／`右配左` 表里那几颗中文右括号（少一颗，链接尾巴上就会粘一颗书名号） |

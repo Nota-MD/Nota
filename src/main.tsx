@@ -6,8 +6,11 @@ import { api } from "./bridge/ipc";
 import { t, 定语言 } from "./i18n";
 import { installErrorHooks } from "./ui/ErrorBoundary";
 import { FocusAlarmWindow } from "./ui/FocusAlarmWindow";
+import { DebugInfoWindow } from "./ui/DebugInfoWindow";
+import adwaitaFontLicense from "./assets/fonts/adwaita/LICENSE.txt?url";
 
 import "./styles/theme.css";
+import "./styles/theme/adwaita-fonts.css";
 // 外壳骨架：全局 reset、窗口骨架、沉浸模式、工具条、按钮原语。
 // ⚠️ **这一条必须是所有外壳样式里的第一个**——那一段 `*` / `html, body` 的 reset
 // 是别人的底子。⚠️ 2026-09-29 按功能拆成五份（那一份当时 836 行）：骨架（这一条）
@@ -28,6 +31,9 @@ import "./styles/toast.css";
 // 那排分类按钮会静默变回全尺寸。（2026-09-27 从 `app.css` 里按职责拆出来的，
 // 理由见那份文件头。）
 import "./styles/overlay.css";
+import "./styles/print-dialog.css";
+import "./styles/file-picker.css";
+import "./styles/update-debug.css";
 // 左侧栏（栏本身 + 文件树 + 大纲）。⚠️ **必须在 `app.css` 之后**——折叠三角、
 // 缩进那几条比 `app.css` 里的通用行规则更具体，靠顺序而不是 `!important` 压过去。
 import "./styles/sidebar.css";
@@ -63,6 +69,8 @@ import "./styles/settings.css";
 import "./styles/settings-controls.css";
 // 设置框里的三块专用小件：`?` 气泡、明暗缩略图、快捷键那一页。
 import "./styles/settings-widgets.css";
+// 设置包选择框（「通用 → 设置包」）的列表与滚动区。
+import "./styles/settings-export.css";
 // 正文编辑区的**外壳与版式**。⚠️ **必须在 `app.css` 之后**。两份文件的选择器有
 // 重叠的部分（比如都碰过 `.ProseMirror` 那棵树），靠后者覆盖前者。顺序反过来，
 // 正文区的字号、行高、代码块底色就都会被外壳那几条盖掉。这条约束写在
@@ -183,11 +191,23 @@ import "@milkdown/kit/prose/tables/style/tables.css";
 // 打包后的应用没有 devtools，那时这类错误就是彻底静默的。
 installErrorHooks();
 
+// Keep the licence next to the bundled Adwaita font assets without listing font
+// acknowledgements in the user-facing About window.
+const fontLicenseLink = document.createElement("link");
+fontLicenseLink.rel = "license";
+fontLicenseLink.href = adwaitaFontLicense;
+document.head.appendChild(fontLicenseLink);
+
 const root = document.getElementById("root");
 if (!root) {
   // ⚠️ 走 `t(...)`：这句话会出现在错误边界那张卡片上（用户看得见）。
   throw new Error(t("No #root mount point; was index.html broken?"));
 }
+
+// 主窗口揭幕兜底：设置读取异常时不能让它永远留在屏幕外。
+window.setTimeout(() => {
+  document.documentElement.dataset.booted = "true";
+}, 8000);
 
 /**
  * ⚠️⚠️ **本应用有两个入口，靠 hash 分叉。**
@@ -211,6 +231,7 @@ if (!root) {
  * ⚠️ `location.hash` 里带 `#`，所以比的是 `"#focus-alarm"`，不是 `"focus-alarm"`。
  */
 const 是警报窗 = location.hash === "#focus-alarm";
+const isDebugInfoWindow = location.hash === "#debug-info";
 
 /**
  * ⚠️⚠️ **警报窗那一支要自己把界面语言拉回来**（2026-09-27 补）。
@@ -233,6 +254,7 @@ const 是警报窗 = location.hash === "#focus-alarm";
  *（它是这种情况下用户唯一能看见的东西）。
  */
 if (是警报窗) {
+  document.documentElement.dataset.booted = "true";
   api.appLang()
     .then((语言) => 定语言(语言.effective))
     .catch(() => {});
@@ -240,6 +262,6 @@ if (是警报窗) {
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    {是警报窗 ? <FocusAlarmWindow /> : <App />}
+    {是警报窗 ? <FocusAlarmWindow /> : isDebugInfoWindow ? <DebugInfoWindow /> : <App />}
   </React.StrictMode>,
 );

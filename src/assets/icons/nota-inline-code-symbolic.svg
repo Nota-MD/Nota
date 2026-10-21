@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 行内代码：带反引号的短行内标记，与块级花括号图标区分。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+<rect x="2.25" y="4.25" width="11.5" height="7.5" rx="1.25" fill="none" stroke="#2e3436" stroke-width="1.15"/>
+<path fill="none" stroke="#2e3436" stroke-width="1.25" stroke-linecap="round" d="M5.15 6.35L4.55 7.45M6.75 6.35L6.15 7.45M9.85 8.55L10.45 9.65M11.45 8.55L12.05 9.65"/>
+<path fill="#2e3436" d="M7.15 8.75H8.85V9.55H7.15Z"/>
+</svg>

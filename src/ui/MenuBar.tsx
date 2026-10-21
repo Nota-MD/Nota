@@ -20,15 +20,16 @@
  *
  * # 交互按桌面惯例，不是按网页惯例
  *
- * - 菜单开着时**鼠标划过另一栏就切过去**——不用先点开再点另一栏；
+ * - 菜单开着时，鼠标划过另一栏**只移动高亮，不切菜单**；要切必须点击；
  * - 点空白处、按 Esc 都关；
- * - **点某一栏的第一下永远是"打开它"**，哪怕它已经被划过切过来了（BUG-17）：
- *   "开着"和"用户点开的"不是一回事，混起来就会出现"从别的栏点过来，
- *   第一下把菜单关掉了"。判据在 `点开的` 那个 ref 上，这一条同样管着
- *   `MenuPopup` 里的子菜单（那边文件头也记着同一条）；
+ * - 点击另一栏时直接打开那一栏；方向键切过来的菜单需要一次点击确认；
  * - `←` `→` 在栏间移动（走到头就停住，不绕回——这是 macOS 的惯例，
  *   绕回在栏多的时候会让人分不清"绕了一圈"还是"没动"）；
  * - Esc 关掉之后焦点回到那一栏的按钮上（不然键盘用户会掉到页面里）。
+ * - `F10` 是 Motif 菜单栏的缺省 accelerator（`MenuBarInitialize` 在
+ *   `XmNmenuAccelerator` 为空时写 `<KeyUp>F10`）：无修饰键按一次把焦点送到
+ *   菜单栏，再按一次退出；焦点在菜单栏时用 `←` `→` 换栏，`↓` / Enter / Space
+ *   打开当前栏。
  *
  * 这几条是原生菜单的行为。不这么做的话，用惯桌面软件的人会觉得"这个菜单是假的"。
  */
@@ -80,16 +81,22 @@ export function MenuBar(props: Props) {
 
   // 哪一栏开着。`null` = 全关。
   const [open, setOpen] = useState<string | null>(null);
+  /**
+   * F10/方向键进入菜单栏后，当前键盘落点在哪一栏。
+   *
+   * 不能只靠 `:focus-visible`：WebKit 对脚本 `focus()` 的可见性判定不稳定，
+   * 同一段代码在真实窗口里可能画不出 Motif 的 armed 凹槽。这一格只服务键盘
+   * 导航；鼠标点击会立即清掉它。
+   */
+  const [键盘落点, set键盘落点] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   /**
    * 现在开着的那一栏是**点开的**（记 id），还是**鼠标划过 / 方向键切过来的**（`null`）。
    *
    * ⚠️ 与 `MenuPopup.tsx` 里 `点开的` 那个 ref 是**同一类东西、同一个 bug**
-   *（BUG-17）：菜单开着时，鼠标划过另一栏会把它切过来（`onMouseEnter`），
-   * 于是"点这一栏"那一刻看到的永远是"它已经开着"；按"开着就收起"处理的话，
-   * 从别的栏点过来的人**第一下把菜单整个关掉**了，得再点一下。所以只有点开的
-   * 才被点击收起，划开的算**确认**（顺带记成点开的，这样再点一下才关）。
+   *（BUG-17）：方向键可以在栏间移动，而鼠标无论是否划过另一栏、都不会自动
+   * 切菜单。只有点击才改变当前打开的顶层菜单。
    */
   const 点开的 = useRef<string | null>(null);
 
@@ -128,6 +135,47 @@ export function MenuBar(props: Props) {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
+  /**
+   * Motif 的菜单栏 accelerator：F10 进出菜单栏。
+   *
+   * ⚠️ 不处理 Shift+F10（上下文菜单）、Alt/Control/Meta 组合，也不处理输入法
+   * 组字态。它是**移动焦点**，不直接弹菜单；方向键或 Enter 才打开，和
+   * `XmCreateMenuBar` 的默认 accelerator 一致。
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        e.key !== "F10" ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.metaKey ||
+        e.shiftKey ||
+        e.isComposing ||
+        e.keyCode === 229
+      ) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      if (open) {
+        set键盘落点(null);
+        关栏();
+        focusTitle(open);
+        return;
+      }
+      const active = document.activeElement;
+      const activeMenu =
+        active instanceof HTMLElement ? active.closest<HTMLElement>("[data-menu]")?.dataset.menu : undefined;
+      const target = props.menus.find((m) => m.id === activeMenu) ?? props.menus[0];
+      if (target) {
+        set键盘落点(target.id);
+        focusTitle(target.id);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, props.menus]);
+
   // Esc 的**兜底**。弹层里那条（`useMenuRovingFocus`）管的是"焦点在菜单项上"，
   // 这条管的是"焦点还停在菜单栏的按钮上"——只按了一下按钮、还没往下走就按 Esc。
   // 两条都在，去掉任何一条都会留下一个关不掉的死角。
@@ -136,7 +184,9 @@ export function MenuBar(props: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
+      const 来自键盘 = 点开的.current === null;
       关栏();
+      if (来自键盘) set键盘落点(open);
       // 焦点还给那一栏的按钮。不还的话键盘用户在菜单关掉后
       // 就没有落点了，下一次 Tab 会从页面开头重新数。
       focusTitle(open);
@@ -173,8 +223,14 @@ export function MenuBar(props: Props) {
   };
 
   return (
-    <div className="menubar" role="menubar" ref={barRef}>
-      {props.menus.map((menu) => {
+    <div
+      className="menubar"
+      role="menubar"
+      ref={barRef}
+      data-menu-open={open === null ? undefined : "true"}
+      aria-keyshortcuts="F10"
+    >
+      {props.menus.map((menu, menuIndex) => {
         const isThemes = menu.dynamic === "themes";
         const entries = isThemes ? themeEntries(props.themes) : menu.items;
         // ⚠️ 主题那几项的 id 是**合成出来的**，不在 `App.tsx` 的 `menuChecks` 里，
@@ -190,21 +246,49 @@ export function MenuBar(props: Props) {
             <button
               type="button"
               data-menu={menu.id}
-              className={`menu-title ${isOpen ? "menu-title-open" : ""}`}
+              className={`menu-title ${isOpen ? "menu-title-open" : ""} ${
+                键盘落点 === menu.id ? "menu-title-keyboard" : ""
+              }`}
               aria-haspopup="menu"
               aria-expanded={isOpen}
+              onKeyDown={(e) => {
+                if (e.ctrlKey || e.altKey || e.metaKey) return;
+                if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const direction = e.key === "ArrowRight" ? 1 : -1;
+                  const next = props.menus[menuIndex + direction];
+                  if (next) {
+                    set键盘落点(next.id);
+                    focusTitle(next.id);
+                  }
+                  return;
+                }
+                if (e.key === "Home" || e.key === "End") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const target = e.key === "Home" ? props.menus[0] : props.menus[props.menus.length - 1];
+                  if (target) {
+                    set键盘落点(target.id);
+                    focusTitle(target.id);
+                  }
+                  return;
+                }
+                if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  开栏(menu.id, "键");
+                }
+              }}
               // 点这一栏：关着就开，开着就关（再点一次收起是桌面惯例）。
               onClick={() => {
-                // ⚠️ 开着的那一栏点一下收起——但**只有"点开的"才算数**：
-                // 划过另一栏会把它切过来，那一刻它已经开着了，而用户这一下的
-                // 本意是"打开这一栏"。不区分的话第一下点击会把菜单整个关掉
-                //（从别的栏点过来的人看到的正是这个），得点两下才开（BUG-17）。
+                set键盘落点(null);
+                // ⚠️ 开着的那一栏点一下收起；方向键切过来的那一栏先用一次
+                // 点击确认，避免键盘切栏后指针恰好落下就立刻关掉。
                 if (!isOpen) 开栏(menu.id, "点");
                 else if (点开的.current === menu.id) 关栏();
                 else 开栏(menu.id, "点");
               }}
-              // 已经有菜单开着时，划过就切过去——不用先点开再点另一栏。
-              onMouseEnter={() => open && open !== menu.id && 开栏(menu.id, "划")}
             >
               {t(menu.label)}
             </button>
@@ -221,7 +305,9 @@ export function MenuBar(props: Props) {
                 checks={checks}
                 onPick={pick}
                 onDismiss={() => {
+                  const 来自键盘 = 点开的.current === null;
                   关栏();
+                  if (来自键盘) set键盘落点(menu.id);
                   focusTitle(menu.id);
                 }}
                 onArrowOut={arrowAcross}

@@ -1,5 +1,5 @@
 /**
- * 0.8 设置重组契约：插件管理/设置分栏、隐藏高级页、版本号五连点、下载替换规则。
+ * 设置重组契约：插件管理/设置分栏、开发者模式两页、版本号五连点、下载替换规则。
  */
 
 import { readFileSync } from "node:fs";
@@ -39,15 +39,16 @@ console.log("\n【0.8 设置重组】");
   真(dialog.includes("<ExtensionsPane"), "拓展管理页没有接线");
 });
 
-测("高级设置只在调试模式出现", () => {
+测("开发者模式页只在开启后出现，旧的空高级页已移除", () => {
   const dialog = 读("src", "ui", "settings", "SettingsDialog.tsx");
   真(
-    dialog.includes('debugMode ? [...ORDER, "advanced"] : ORDER'),
-    "高级页没有按调试模式收放",
+    dialog.includes('debugMode ? [...ORDER, "debug"] : ORDER'),
+    "开发者模式页没有按开发者模式收放",
   );
+  真(!dialog.includes("AdvancedPane"), "旧的高级设置页仍在接线");
   const general = 读("src", "ui", "settings", "panes", "GeneralPane.tsx");
   真(!general.includes("debug_mode"), "通用页仍然暴露调试开关");
-  真(!general.includes("onResetSettings"), "通用页仍然暴露高级操作");
+  真(general.includes("onResetSettings"), "通用页缺少恢复出厂设置");
 });
 
 测("版本号五连点负责开关调试模式", () => {
@@ -57,11 +58,16 @@ console.log("\n【0.8 设置重组】");
   真(about.includes("onSetDebugMode"), "没有调试模式回调");
 });
 
-测("高级页包含下载替换规则和运行信息", () => {
-  const advanced = 读("src", "ui", "settings", "panes", "AdvancedPane.tsx");
-  真(advanced.includes("settings.download.replacements"), "没有下载替换规则输入");
-  真(advanced.includes("Runtime information"), "没有运行信息");
-  真(advanced.includes("Disable Debug Mode"), "没有关闭调试模式入口");
+测("下载替换规则属于通用页", () => {
+  const general = 读("src", "ui", "settings", "panes", "GeneralPane.tsx");
+  真(general.includes("settings.download.replacements"), "通用页没有下载替换规则输入");
+});
+
+测("开发者模式页负责诊断、设置文件与关闭模式", () => {
+  const debug = 读("src", "ui", "settings", "panes", "DebugPane.tsx");
+  真(debug.includes("debug_mode: false"), "没有关闭开发者模式入口");
+  真(debug.includes("openDebugInfo"), "开发者模式页没有诊断窗口入口");
+  真(debug.includes("onOpenConfigDir"), "开发者模式页没有设置文件入口");
 });
 
 测("应用更新与插件更新都使用替换规则", () => {

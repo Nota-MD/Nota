@@ -131,6 +131,26 @@ pub fn nota_settings_reset(state: State<'_, AppState>) -> Result<Settings> {
     Ok(next)
 }
 
+#[tauri::command]
+pub fn nota_settings_export_inventory(
+    state: State<'_, AppState>,
+) -> crate::settings_export::导出清单 {
+    crate::settings_export::清单(&state)
+}
+
+/// 把选中的设置与数据收成一个标准 ZIP 设置包。
+///
+/// 路径来自前端的保存对话框；源文件路径只由宿主 `paths.rs` 计算。打包可能包含
+/// 主题字体、插件数据和用户词典，因此在阻塞线程执行，且成功前只写同目录临时文件。
+#[tauri::command]
+pub async fn nota_settings_export(
+    request: crate::settings_export::导出请求,
+) -> Result<crate::settings_export::导出报告> {
+    tauri::async_runtime::spawn_blocking(move || crate::settings_export::导出(&request))
+        .await
+        .map_err(|e| NotaError::other(format!("设置包导出线程挂了：{e}")))?
+}
+
 /// `set` 与 `reset` 共用的写入口。
 ///
 /// ⚠️ **两处都必须走这里**：各写一遍就会漏掉下面那段锁序（先 `settings`、

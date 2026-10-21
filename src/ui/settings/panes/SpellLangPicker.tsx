@@ -32,7 +32,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { open as 选文件 } from "@tauri-apps/plugin-dialog";
+import { open as 选文件 } from "@/ui/file-picker";
 
 import { api, type 拼写词典 } from "@/bridge/ipc";
 import { useT } from "@/i18n";

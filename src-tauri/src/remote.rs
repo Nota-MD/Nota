@@ -18,6 +18,21 @@ pub(crate) fn 取(
     上限: u64,
     超时: Duration,
 ) -> Result<Vec<u8>> {
+    取_带进度(地址, 替换规则, 上限, 超时, |_, _| {})
+}
+
+/// 与 [`取`] 相同，但每读一块就报告一次“已下载 / 总长度”。
+///
+/// 下载包只在内存里攒一份，不额外写临时分片；回调负责把进度推给界面。
+pub(crate) fn 取_带进度(
+    地址: &str,
+    替换规则: &str,
+    上限: u64,
+    超时: Duration,
+    mut 进度: impl FnMut(u64, Option<u64>),
+) -> Result<Vec<u8>> {
+    use std::io::Read as _;
+
     let 地址 = crate::settings::download::改写地址(地址, 替换规则)?;
     if !地址可信(&地址) {
         return Err(NotaError::other(format!(
@@ -43,12 +58,21 @@ pub(crate) fn 取(
     if !(200..300).contains(&状态) {
         return Err(NotaError::other(format!("更新服务器返回 HTTP {状态}")));
     }
-    响应
-        .body_mut()
-        .with_config()
-        .limit(上限)
-        .read_to_vec()
-        .map_err(|e| NotaError::other(format!("更新数据读取失败：{e}")))
+    let 总长 = 响应.body().content_length();
+    let mut 读取 = 响应.body_mut().with_config().limit(上限).reader();
+    let mut 字节 = Vec::with_capacity(总长.unwrap_or(0).min(上限) as usize);
+    let mut 块 = [0_u8; 64 * 1024];
+    loop {
+        let 读入 = 读取
+            .read(&mut 块)
+            .map_err(|e| NotaError::other(format!("更新数据读取失败：{e}")))?;
+        if 读入 == 0 {
+            break;
+        }
+        字节.extend_from_slice(&块[..读入]);
+        进度(字节.len() as u64, 总长);
+    }
+    Ok(字节)
 }
 
 /// 更新清单只接受 HTTPS。回环 HTTP 留给本地测试，不出本机。

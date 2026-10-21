@@ -551,8 +551,21 @@ export interface GeneralSettings {
    * 里有一条测试盯着这些字符串。 */
 }
 
-/** 仅调试模式里的高级下载替换规则。 */
+/** 普通设置项里的下载前缀替换规则。 */
 export interface DownloadSettings {
   /** 每行一条 `原地址前缀 => 新地址前缀`。空串 = 不替换。 */
   replacements: string;
+}
+
+/** 应用内通知的位置。与 `settings/updates.rs::NotificationPosition` 一一对应。 */
+export type NotificationPosition = "top-center" | "bottom-right";
+
+/** 「更新设置」页。与 `src-tauri/src/settings/updates.rs::Updates` 一一对应。 */
+export interface UpdateSettings {
+  /** 每次启动后在后台检查一次。默认关闭，避免未获同意就联网。 */
+  check_on_startup: boolean;
+  /** 发现新版本时显示可操作通知。只在启动检查开启时由界面允许修改。 */
+  notify_when_available: boolean;
+  /** 全部应用内通知的位置。 */
+  notification_position: NotificationPosition;
 }

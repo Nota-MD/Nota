@@ -1,0 +1,233 @@
+/* 应用内文件选择器。所有颜色与尺寸都跟随当前界面主题。 */
+.file-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 340;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 42%);
+}
+
+.file-picker {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(900px, 92vw);
+  height: min(650px, 86vh);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: var(--popup-shadow, 0 18px 48px rgb(0 0 0 / 34%));
+}
+
+.file-picker-head,
+.file-picker-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-subtle);
+}
+
+.file-picker-head {
+  border-bottom: 1px solid var(--border);
+  padding-right: 42px;
+}
+
+.file-picker-foot {
+  border-top: 1px solid var(--border);
+}
+
+.file-picker-body {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.file-picker-places {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
+.file-picker-place {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-picker-place:hover,
+.file-picker-place[data-active="true"] {
+  background: var(--bg-hover);
+}
+
+.file-picker-main {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px;
+  gap: 8px;
+}
+
+.file-picker-toolbar,
+.file-picker-create,
+.file-picker-name-field {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.file-picker-path,
+.file-picker-create input,
+.file-picker-name-field input {
+  height: var(--control-height);
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.file-picker-path {
+  flex: 1;
+}
+
+.file-picker-hidden {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-muted);
+  font-size: 0.84em;
+  white-space: nowrap;
+}
+
+.file-picker-columns,
+.file-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px 135px;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-picker-columns {
+  padding: 0 9px 5px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 0.8em;
+}
+
+.file-picker-list {
+  min-height: 0;
+  overflow: auto;
+}
+
+.file-picker-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.file-picker-row {
+  width: 100%;
+  min-height: 31px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.file-picker-row:hover {
+  background: var(--bg-hover);
+}
+
+.file-picker-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.file-picker-row[data-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.file-picker-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-picker-empty {
+  margin: 24px;
+  color: var(--fg-muted);
+  text-align: center;
+}
+
+.file-picker-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.84em;
+}
+
+.file-picker-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: 0.82em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-picker-name-field {
+  flex: 1;
+}
+
+.file-picker-name-field > span {
+  color: var(--fg-muted);
+  font-size: 0.84em;
+}
+
+.file-picker-name-field > input {
+  flex: 1;
+}
+
+@media (max-width: 720px) {
+  .file-picker-body {
+    grid-template-columns: 130px minmax(0, 1fr);
+  }
+
+  .file-picker-columns,
+  .file-picker-row {
+    grid-template-columns: minmax(0, 1fr) 88px;
+  }
+
+  .file-picker-columns > :last-child,
+  .file-picker-row > :last-child {
+    display: none;
+  }
+}

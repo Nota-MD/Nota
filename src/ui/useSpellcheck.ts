@@ -62,6 +62,26 @@ function 归一(标签: string): string {
   return 标签.toLowerCase().replace(/-/g, "_");
 }
 
+const 缺词典提示记录 = "nota.spell.missing-dictionary-alerts.v1";
+
+function 读过提示记录(): Set<string> {
+  try {
+    const 原文 = localStorage.getItem(缺词典提示记录);
+    const 表: unknown = 原文 ? JSON.parse(原文) : [];
+    return new Set(Array.isArray(表) ? 表.filter((v): v is string => typeof v === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function 写提示记录(标签们: Set<string>): void {
+  try {
+    localStorage.setItem(缺词典提示记录, JSON.stringify([...标签们].sort()));
+  } catch {
+    // 存不了就退回本进程内不重复；提示本身不能因为 localStorage 不可用而消失。
+  }
+}
+
 export function useSpellcheck(w: 拼写接线): void {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，
   // 见 `i18n/index.ts::useT`）。
@@ -143,15 +163,21 @@ export function useSpellcheck(w: 拼写接线): void {
           : 有.length === 0
             ? [当前语言标签()]
             : [];
-      if (没有的.length > 0) {
+      const 提示过 = 读过提示记录();
+      const 装上的 = [...提示过].filter((tag) => 装着的.has(tag));
+      for (const tag of 装上的) 提示过.delete(tag);
+      const 还没说 = 没有的.filter((tag) => !提示过.has(归一(tag)));
+      if (还没说.length > 0) {
         toast(
           t(
             "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own — install one, or import a .zip under Settings → Editor → Spell check.",
-            没有的.join(", "),
+            还没说.join(", "),
           ),
           "error",
         );
+        for (const tag of 还没说) 提示过.add(归一(tag));
       }
+      if (还没说.length > 0 || 装上的.length > 0) 写提示记录(提示过);
     })();
 
     return () => {

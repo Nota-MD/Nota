@@ -61,7 +61,7 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 | **界面与文档双主题** | 外壳与正文分别控制；界面主题可以提供自己的 CSS、图标和字体。 |
 | **原生桌面分发** | Linux 和 Windows 安装包由同一套 Rust 与 React 代码构建。 |
 | **可校验更新** | 实验性应用更新会按安装包类型选择资产；拓展可检查其声明的 `latest.json` 仓库。 |
-| **下载替换** | 调试模式下的高级设置可配置地址前缀替换，将应用和拓展更新流量导向镜像。 |
+| **下载替换** | 「设置 → 通用 → 下载」可配置地址前缀替换，将应用和拓展更新流量导向镜像。 |
 
 ## 界面风采
 
@@ -101,7 +101,8 @@ Release 包含 Linux 与 Windows 的正式打包产物。官方拓展和主题�
 
 ## 从源码运行
 
-依赖：Rust 1.85 或更高版本、Node.js；Linux 还需要 WebKitGTK 4.1。
+依赖：Rust 1.85 或更高版本、Node.js。Linux 使用 WebKitGTK 4.1；
+Windows 使用 Microsoft Edge WebView2（Chromium），不使用 WebKitGTK。
 
 ```sh
 npm install

@@ -13,10 +13,6 @@
     "core:window:allow-set-always-on-top",
     "core:webview:allow-internal-toggle-devtools",
     "core:webview:allow-set-webview-zoom",
-    "dialog:allow-open",
-    "dialog:allow-save",
-    "dialog:allow-message",
-    "dialog:allow-ask",
     "opener:allow-open-url",
     "clipboard-manager:allow-read-text",
     "opener:allow-default-urls"

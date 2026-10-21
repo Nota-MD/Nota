@@ -52,7 +52,6 @@ podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
 | crate | 声明 | 在这里做什么 |
 |---|---|---|
 | `tauri` | `2`, features `["protocol-asset", "devtools"]` | 宿主框架：窗口、IPC、WebView。`protocol-asset` 给 `asset:` 协议（CSP 里那个 `asset:` 源）；`devtools` 让 **debug 构建**能开 WebView 检查器（配合 `capabilities/default.json` 的 `core:webview:allow-internal-toggle-devtools`） |
-| `tauri-plugin-dialog` | `2` | 原生打开/保存/消息框。`capabilities/default.json` 里开了 `dialog:allow-open` / `-save` / `-message` / `-ask` |
 | `tauri-plugin-fs` | `2` | 前端直接读写文件的通道。⚠️ **注册了但没给权限**——`capabilities/default.json` 里**没有**它的任何 permission。原则写在那个文件的 `description` 里：能用 Nota 自己的 `#[tauri::command]` 走通的，就不开插件权限 |
 | `tauri-plugin-opener` | `2` | 用系统默认程序打开 URL。开了 `opener:allow-open-url` |
 | `serde` / `serde_json` | `1` / `1` | 序列化。插件命令的入参出参走 JSON（`commands/plugin.rs` 文件头解释了为什么不定自定义类型） |
@@ -91,7 +90,6 @@ podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
 | `@codemirror/language` | 把 token 映射成样式的机制（`notaHighlight`） |
 | `react` / `react-dom` | 界面框架（React 19，`main.tsx` 用 `createRoot`） |
 | `@tauri-apps/api` | `invoke` / `listen`。**只在 `src/bridge/ipc.ts` 里用** |
-| `@tauri-apps/plugin-dialog` | 前端调 dialog 插件（打开/保存对话框） |
 | `@tauri-apps/plugin-fs` | ⚠️ 装了但**没给权限**，与上面对应的 Rust 侧同理 |
 | `@tauri-apps/plugin-opener` | 用系统程序打开链接 |
 | `@tauri-apps/cli`(dev) | `tauri dev` / `tauri build`，`package.json` 的 `app` / `app:build` 脚本调它 |
@@ -2064,15 +2062,15 @@ done
 | 开着文档、没改动 | `nota /tmp/nota-fixture/words.md` | `字数样张 — Nota` |
 | 开着文档、有改动 | 点进正文敲一个字（**别存**） | `字数样张 • — Nota` |
 | 没开文档 | 在干净文档上按 `Ctrl+W` | `Nota` |
-| 再打开 | `Ctrl+O` → `Ctrl+L` → 粘路径 → `Return` | 回到第一行 |
+| 再打开 | `Ctrl+O` → 在应用内选择器的路径栏粘路径 → `Enter` → 选中文件 → `Open` | 回到第一行 |
 
 ⚠️ "敲一个字"那一步**记得 `Ctrl+Z` 撤销**，并核对夹具没被动过
 （`md5sum /tmp/nota-fixture/words.md`，基线 `82cab6dea322f837f53b2145b10cdf67`）。
 本批四个状态的字面读数依次是 `字数样张 • — Nota` / `字数样张 — Nota` / `Nota` /
 `字数样张 — Nota`，`Ctrl+Z` 之后 `•` 当场消失。
 
-⚠️ **`Ctrl+O` 那个对话框要按 `Ctrl+L` 走"位置"输入行**再打路径——直接打字符会被
-文件列表吃掉（第一次打的一串路径就是这么丢的）。这条对任何 GTK 文件对话框都成立。
+⚠️ **`Ctrl+O` 现在打开的是应用内选择器**。路径写进顶部路径栏，按 `Enter`
+进入目录；文件行上双击可直接打开。旧的 `Ctrl+L` 只适用于已经移除的 GTK 原生对话框。
 
 ⚠️ **主窗口的标题变了，别处依赖"标题恒为 Nota"的工装要跟着改**：本节的 §5.3 就是
 一处（那一节按名挑窗口的写法本批改掉了）。
@@ -3745,9 +3743,15 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 📌 **2026-10-17 现跑**：`auto-pair` 从 **57** 增到 **63**（闭括号智能跳过、
 自配对的 `_` / `~` / 反引号 / `=` 真实 schema 链路）；新增
 `heading-toggle.test.ts` **5 条**（同层标题再按一次退回正文）与
-`font-bundle.test.ts` **6 条**（外置 CDE 主题包的字体、CSS、许可与安装包隔离对账）
+`font-bundle.test.ts` **7 条**（外置 CDE 主题包的 TTF 源文件、WOFF2 运行时容器、CSS、许可与安装包隔离对账）
+＋ `cde-menu-fidelity.test.ts` **11 条**（Motif pulldown 的 0px 内边距、20px 行高、
+15px accelerator pad、向上弹的状态栏菜单、F10/方向键菜单栏导航、指针离开解除 armed、
+子菜单 Esc 只收一层、关于窗 16px 点阵网格、代码块按钮切换，以及启动揭幕不再等待整套字体）
 ＋ `image-source.test.ts` **6 条**（本地图片路径解析）。
-全量前端名册是 **67 份 / 1596 条，全部 exit=0**。下面那行仍是早期快照，历史读数不改。
+＋ `settings-export.test.ts` **5 条**（设置包 ZIP、程序/插件分开选择、敏感项、
+符号链接边界与 IPC 接线）。
+随后按自动生成名册复跑，当前全量前端是 **74 份 / 至少 1639 条，全部 exit=0**。
+下面那行仍是早期快照，历史读数不改。
 
 `keymap` **54** · `auto-pair` **57** · `slash` **49** · `share-card` **46** ·
 `math-view` **31** · `math-wiring` **20** · `math-delim` **47** · `find` **48** · `table-input` **39** · `inline-marks` **37** ·

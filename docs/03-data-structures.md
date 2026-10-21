@@ -278,7 +278,7 @@ pub struct Settings { … }
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `ui_style` | `String` | `"auto"` | **轴一**：界面风格的 **id**（设计语言）。⚠️⚠️ **2026-09-26 起是 `String` 不是枚举**（用户：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」）——取值**开放**，内置七档的 id 表在 `ui_styles.rs::BUILTIN_IDS`（`auto` / `adwaita` / `ghub` / `plasma` / `macos` / `windows` / `windows10` / `yaru`），此外还能是用户自己起的文件名。⚠️ **与 `document_theme` 同一个口径**：认不出的 id **不退回默认档**，`<html>` 上照写，外壳落到 `:root` 默认样式——「外观」页把它补成 `（找不到「…」）` 选项，让这件事看得见。⚠️ 换成 `String` 的好处是**老设置文件里一个不认识的 id 不会让整份 `settings.toml` 读不进来**（枚举会），风险是**拼错再无拦截**。完整理由在 `settings/mod.rs::DEFAULT_UI_STYLE` |
+| `ui_style` | `String` | `"adwaita"` | **轴一**：界面风格的 **id**（设计语言）。⚠️ **2026-09-26 起是 `String` 不是枚举**（用户：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」）——取值**开放**。⚠️ **2026-10-21 起安装包只随附 Adwaita，并移除自动匹配系统桌面主题**；旧值 `auto` 兼容映射到 Adwaita。Yaru、GitHub、Breeze、macOS、Windows、CDE 等从 `Nota-themes` 安装。⚠️ **与 `document_theme` 同一个口径**：认不出的 id **不退回默认档**，`<html>` 上照写，外壳落到 `:root` 默认样式——「外观」页把它补成 `（找不到「…」）` 选项，让这件事看得见。完整理由在 `settings/mod.rs::DEFAULT_UI_STYLE` |
 | `ui_mode` | `UiMode` | `UiMode::Auto` | **轴二**：明暗 |
 | `document_theme` | `String` | `""` | **轴三**：文档主题的 **id**（**就是 `.css` 的文件名去掉后缀**，如 `minimal`）；**空串 = 无主题**。⚠️ 它是**键不是显示名**——内置三套（`minimal` ↔ 极简 / `adwaita` ↔ Adwaita / `latex` ↔ LaTeX）的对应关系在 `themes.rs` 的 `BUILTIN` 表里。⚠️ **2026-09-26 内置那批换过**（六套 → 三套），所以老机器上这个字段可能是**悬空 id**：那时主题静默退回"无主题"，设置页会把 id 原样显示并注明它没生效。⚠️ 除内置外**只在 `~/.config/nota/themes/` 里扫**（见 §9.4），所以换机器、或者文件被删了，也可能"这个主题没了" |
 | `ui_font_size` | `u32` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
@@ -316,7 +316,7 @@ pub struct Settings { … }
 
 ### 5.1c 高级下载规则与调试模式（2026-10-18，0.8）
 
-`[download].replacements` 是**多行字符串**，只在调试模式下由「高级设置」显示。
+`[download].replacements` 是**多行字符串**，在普通「设置 → 通用 → 下载」中显示。
 每行一条 `原前缀 => 替换前缀`；空行与 `#` 注释跳过。下载器先验证原始 URL，
 再应用规则，最后仍要求结果走 HTTPS 或本机回环。应用更新和插件更新共用
 `src-tauri/src/remote.rs` 这一条路径，因此规则同时作用于 `latest.json` 与安装包。
@@ -448,7 +448,7 @@ ui_mode = "dark"
 
 - 这串字符串**就是接口**——用户手改 `settings.toml` 时要能猜到怎么写；
 - 前端的类型也是同一批串：
-  `export type UiStyle = "auto" | "adwaita" | "ghub" | "macos" | "plasma" | "windows" | "windows10" | "yaru";`
+  `export type BuiltinUiStyle = "adwaita";`
   `export type UiMode = "auto" | "light" | "dark";`
   `export type ViewMode = "wysiwyg" | "source" | "split";`
   （`src/bridge/types.ts`），改一处就要改另一处。⚠️ `ViewMode` 那一条 2026-10-07
@@ -1199,7 +1199,7 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
 
 | 常量 | 值 | 在哪 | 说明 |
 |---|---|---|---|
-| `SYNC_DEBOUNCE_MS` | `300` | `src/ui/EditorPane.tsx` | 前端→后端推文本的去抖间隔 |
+| `SYNC_DEBOUNCE_MS` | `300` / `1000` | `src/ui/EditorPane.tsx` | 前端→后端推文本的去抖间隔；普通文档 300ms，超过 20 万字符的大文件 1000ms |
 | toast 存活时间（非 error） | `3200` ms | `src/ui/useToasts.ts::toast` | 自动消失。⚠️ 调用方传 `ttlMs = 0` 是**不自动消失**（那一分支见 §3） |
 | toast 存活时间（error） | `8000` ms | 同上 | 错误留久一点——用户多半要读完再决定怎么办 |
 | 文件树请求深度 | `1` | `App.tsx::refreshTree` / `openFolder` | `api.workspace.tree(undefined, 1)`：**本轮只列一层** |

@@ -24,8 +24,8 @@ use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 
 use crate::error::{NotaError, Result};
-use crate::pandoc::{self, Format, PandocExport, PandocProbe, Route};
-use crate::pdf_print;
+use crate::pandoc::{self, Format, ImportFormat, PandocExport, PandocImport, PandocProbe, Route};
+use crate::pdf_render;
 
 /// 本机有没有能用的 pandoc —— 「文件 → 导出 → …」点那些格式时先问这一条。
 ///
@@ -37,6 +37,21 @@ pub async fn nota_pandoc_probe() -> Result<PandocProbe> {
     tauri::async_runtime::spawn_blocking(pandoc::probe)
         .await
         .map_err(|e| NotaError::other(format!("探测 pandoc 装没装失败：{e}")))
+}
+
+/// 用 pandoc 把一份 Word / RTF / LaTeX / EPUB / OpenDocument 文档转换为 Markdown。
+///
+/// `format` 是探测报告 `import_formats` 里的 id；`source` 是用户在打开对话框里
+/// 选中的原文件。命令只返回转换结果，不直接新建文档——新文档与活动标签属于前端
+/// 生命周期，命令层不替界面决定标签顺序。
+#[tauri::command]
+pub async fn nota_pandoc_import(format: String, source: String) -> Result<PandocImport> {
+    let kind = ImportFormat::from_id(&format)
+        .ok_or_else(|| NotaError::other(format!("不认识这种导入格式：{format}")))?;
+    let path = PathBuf::from(source);
+    tauri::async_runtime::spawn_blocking(move || pandoc::import_to(kind, &path))
+        .await
+        .map_err(|e| NotaError::other(format!("导入任务没跑起来：{e}")))?
 }
 
 /// 用 pandoc 导出，`format` 是 `pdf` / `docx` / `rtf` / `epub` / `latex` / `odt` / `opml`。
@@ -98,7 +113,7 @@ pub async fn nota_pandoc_export(
             note: pandoc_那句(kind, &警告),
         }),
         // ── 第二条路：只有 PDF 有 ──────────────────────────────────────────
-        Err(e) if kind == Format::Pdf && pdf_print::available() => {
+        Err(e) if kind == Format::Pdf => {
             let Some(html) = html else {
                 // 前端没给 HTML：**如实说**，不要退回"那就别导了"这种含糊话。
                 return Err(NotaError::other(format!(
@@ -107,7 +122,13 @@ pub async fn nota_pandoc_export(
                     一句话(&e)
                 )));
             };
-            pdf_print::print_html_to_pdf(&app, &html, doc_dir.as_deref(), &target)?;
+            let engine = pdf_render::渲染(
+                &app,
+                &html,
+                doc_dir.as_deref(),
+                &target,
+                crate::pdf_print::版面::default(),
+            )?;
             Ok(PandocExport {
                 path: target.display().to_string(),
                 route: Route::Nota,
@@ -116,9 +137,10 @@ pub async fn nota_pandoc_export(
                 // 提示条里一直是这个写法。
                 note: format!(
                     "这份 PDF 是 Nota 自己排的版：pandoc 那条路没走通（{}）。\
-                     排版是浏览器那套——要目录、要更讲究的分页，装好 pandoc 和一个\
+                     本次引擎：{}。要目录、要更讲究的分页，装好 pandoc 和一个\
                      排版引擎（xelatex / tectonic 之类）再导一次。",
-                    一句话(&e)
+                    一句话(&e),
+                    engine
                 ),
             })
         }

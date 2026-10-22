@@ -35,7 +35,6 @@ jobs:
 
       - name: 装系统依赖
         run: |
-          sudo apt-get update
           sudo apt-get install -y \
             build-essential curl file lua5.4 pkg-config \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \

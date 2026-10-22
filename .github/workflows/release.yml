@@ -63,7 +63,7 @@ jobs:
             patchelf \
             libxdo-dev \
             build-essential \
-            curl wget file
+            curl wget file xdg-utils
 
       - uses: actions/setup-node@v4
         with:

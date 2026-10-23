@@ -43,6 +43,13 @@
     "Songti SC", serif;
 
   --sidebar-width: 240px;
+  /* 侧栏是一块独立的导航面，不是正文的一块切边。各界面风格可以覆盖这组值；
+     CDE 等硬边主题会把圆角和留白归零。 */
+  --sidebar-gutter: 6px;
+  --sidebar-radius: 10px;
+  --sidebar-surface: var(--bg-raised);
+  --sidebar-selected-bg: var(--bg-hover);
+  --sidebar-shadow: 0 1px 3px rgb(0 0 0 / 8%), 0 8px 24px rgb(0 0 0 / 5%);
   /* 右侧插件栏。**比左侧栏宽 20px**：插件卡片里有名称+版本+能力标签，
      跟文件树那种一行一个名字的密度不一样。 */
   --dock-width: 260px;

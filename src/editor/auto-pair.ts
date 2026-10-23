@@ -291,6 +291,8 @@ export interface 现场 {
    * 避免把正文里零散的右括号当成自动补出来的那一颗。
    */
   前文: string;
+  /** 光标位于链接标记里：URL / 裸链接文本不参与自动配对。 */
+  链接?: boolean;
 }
 
 /** 光标在某一段文字里的"前一颗 / 后一颗"。⚠️ 边界与原子节点一律给 `""`。 */
@@ -352,6 +354,7 @@ export function 读现场(state: EditorState, 位置: number): 现场 {
     空选区: from === to,
     前是段首: 位置前那一颗是段首(state, 位置),
     前文: $位.parent.inlineContent ? $位.parent.textBetween(0, $位.parentOffset, "") : "",
+    链接: $位.marks().some((标记) => 标记.type.name === "link"),
   };
 }
 
@@ -405,6 +408,7 @@ function 位置前那一颗是段首(state: EditorState, 位置: number): boolea
 export function 要配对(现场: 现场, 字: string): string | null {
   const 闭 = 闭括号(字);
   if (!闭) return null;
+  if (现场.链接) return null;
   // ⚠️ 行内代码里不配；**代码块里配**（2026-10-06 把这两个情况分开了）。
   if (现场.代码 && !现场.代码块) return null;
   // ⚠️ 代码块里**不配那几颗 Markdown 标记符号**（`*`）：代码里打 `*` 要的是
@@ -425,6 +429,7 @@ export function 要配对(现场: 现场, 字: string): string | null {
  */
 export function 要跳过(现场: 现场, 字: string): boolean {
   if (!现场.空选区) return false;
+  if (现场.链接) return false;
   if (!是闭括号(字)) return false;
   const 开 = 开括号(字);
   return 开 !== null && 现场.后 === 字 && 有未闭合开括号(现场.前文, 开, 字);
@@ -449,20 +454,31 @@ export function 要删成对(现场: 现场): boolean {
  */
 export function 要跳(现场: 现场, 方向: 1 | -1): boolean {
   if (!现场.空选区) return false;
+  if (现场.链接) return false;
   if (现场.代码) return false;
   if (方向 === 1) return 是闭括号(现场.后) || 自配对表[现场.后] === 现场.后;
   return 是开括号(现场.前) || 自配对表[现场.前] === 现场.前;
 }
 
 /* ── 自配对字符（Markdown 标记）─────────────────────────────────────────── */
-
 /** 自配对字符。它们不进 `配对表`，否则左右同形的标记会同时命中两套括号判据。 */
 export const 自配对表: Readonly<Record<string, string>> = {
   "*": "*",
   "_": "_",
   "~": "~",
+  "^": "^",
   "`": "`",
   "=": "=",
+};
+
+/** Markdown 扩展配对与对应行内能力；缺省全开，供动作判据单测直接调用。 */
+export interface 配对能力 {
+  superscript?: boolean;
+  highlight?: boolean;
+}
+const 全开配对能力: Readonly<配对能力> = {
+  superscript: true,
+  highlight: true,
 };
 
 /**
@@ -487,6 +503,7 @@ const 落标记表: Readonly<
   "*": ["emphasis", "strong"],
   "_": ["emphasis", "strong"],
   "~": ["subscript", "strike_through"],
+  "^": ["superscript", null],
   "`": ["inlineCode", null],
   "=": [null, "highlight"],
 };
@@ -510,14 +527,21 @@ export type 标记动作 =
   | "跳过";
 
 /** 决定自配对字符该补、升级、补齐还是跳过；返回 `null` 表示交给上游。 */
-export function 要补标记(现场: 现场, 字: string): 标记动作 | null {
+export function 要补标记(
+  现场: 现场,
+  字: string,
+  能力: 配对能力 = 全开配对能力,
+): 标记动作 | null {
   const 自配 = 自配对表[字];
   const 升级闭 = 可升级表[字];
   if (!自配 && !升级闭) return null;
   if (现场.代码) return null;
+  if (现场.链接) return null;
   if (现场.前 === "\\") return null;
   if (自配) {
     if (!现场.空选区) return null;
+    if (字 === "^" && 能力.superscript === false) return null;
+    if (字 === "=" && 能力.highlight === false) return null;
     // 段首的 `*` 是列表项、反引号是围栏代码块，都不许补成行内的一对。
     if (现场.前 === "" && (字 === "*" || 字 === "`")) return null;
     // `=` 单独一颗没有 Markdown 语义；第二颗落下来时才补成 `==|==`。
@@ -545,6 +569,9 @@ export function 要补标记(现场: 现场, 字: string): 标记动作 | null {
     // 是另一种现场（比如用户从别处粘了一句结尾带 `*` 的话、接着想再打一颗），
     // 那里"补一对"是对的。省掉它会让那一类也变成四颗星。
     if (现场.前 === 字 && 现场.后 === "" && 现场.前是段首) return "补齐";
+    // `_` 不能紧跟在字母 / 数字后面开始一组斜体；`my_variable_` 保持原样。
+    // 收尾那条已在上面按“右边已有闭符号”处理，不受这条影响。
+    if (字 === "_" && /[\p{L}\p{N}_]$/u.test(现场.前)) return null;
     return "补一对";
   }
   // 可升级的开括号（今天只有 `[`，见 {@link 可升级表}）：**只有一种情况要插手**
@@ -874,7 +901,7 @@ function 按键(view: EditorView, event: KeyboardEvent): boolean {
  * 打引号时都有一次 composition，那期间动文档会把候选框里的东西打乱。
  * 代价如实记在文件头第 5 节（全角括号常常配不上对）。
  */
-export function 配对处理(开 = true) {
+export function 配对处理(开 = true, 能力: 配对能力 = 全开配对能力) {
   // ⚠️ **关掉 = 这条插件不装**（返回 `[]`，与 `smart-punctuation.ts` 的
   // `标点输入` 同一个做法）：四件事（补一对 / 跳过 / 空对退格 / `Tab` 跳出）
   // 是**一条插件**，只关一半等于让 `Tab` 去跳一颗根本没补出来的括号。
@@ -929,7 +956,7 @@ export function 配对处理(开 = true) {
             // ⚠️ 自配对先问：它的判据比 `要配对` 多两条（段首 / 升级），
             // 而 `配对表` 里没有 `*`，两个判据的适用范围不重叠、顺序无所谓
             // ——先问它只是为了让"星号"这件事在这段里读起来是一句话。
-            const 动作 = 要补标记(此现场, 文);
+            const 动作 = 要补标记(此现场, 文, 能力);
             if (动作 === "补一对") {
               // ① 这颗星号可能其实是**收尾**：前面已经有一颗开星号、内文也合法，
               // 而右边一颗星号都没有（`*甲` 后面用户自己敲下闭定界符那一下）。

@@ -74,6 +74,8 @@ interface Props {
   tree: TreeNode[];
   /** 当前文档正文，用来抽大纲。 */
   docText: string;
+  /** 当前文档的完整路径，用来在文件树里标出“正在编辑这一份”。 */
+  activePath?: string | null;
   /**
    * **严格模式**（`Settings.strict_markdown`）。大纲是**从正文猜**的，而
    * `#你好` 算不算标题取决于它——不传就会出现"侧栏和正文各说各的"。
@@ -156,6 +158,7 @@ export function Sidebar({
   workspace,
   tree,
   docText,
+  activePath,
   strict,
   tab,
   onTab,
@@ -202,11 +205,12 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-body">
-        {tab === "tree" &&
-          (workspace ? (
+        <section className="sidebar-pane" role="tabpanel" hidden={tab !== "tree"}>
+          {workspace ? (
             <FileTree
               nodes={tree}
               workspace={workspace}
+              activePath={activePath ?? null}
               onOpenFile={onOpenFile}
               loadDir={loadDir}
               口径键={口径键}
@@ -224,9 +228,11 @@ export function Sidebar({
                 {t("Open Folder…")}
               </button>
             </div>
-          ))}
-
-        {tab === "outline" && <Outline items={outline} onJump={onJumpOutline} />}
+          )}
+        </section>
+        <section className="sidebar-pane" role="tabpanel" hidden={tab !== "outline"}>
+          <Outline items={outline} onJump={onJumpOutline} />
+        </section>
       </div>
 
       {/* 右缘那条可以拖的把手（2026-09-30）。⚠️ **必须是 `.sidebar` 的最后一个
@@ -289,6 +295,33 @@ function Outline({
   //（`useT` 是 hook，不能在两个组件之间借用）。
   const t = useT();
   const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set());
+  const [activeLine, setActiveLine] = useState<number | null>(null);
+
+  useEffect(() => {
+    const read = () => {
+      const selection = window.getSelection();
+      const anchor = selection?.anchorNode;
+      const element = anchor instanceof Element ? anchor : anchor?.parentElement ?? null;
+      const editor = element?.closest(".ProseMirror");
+      if (!editor || !anchor) return;
+      const headings = Array.from(editor.querySelectorAll("h1, h2, h3, h4, h5, h6"));
+      let index = -1;
+      for (let i = 0; i < headings.length; i += 1) {
+        const heading = headings[i]!;
+        if (heading === anchor || heading.contains(anchor)) {
+          index = i;
+          break;
+        }
+        if (heading.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_FOLLOWING) {
+          index = i;
+        }
+      }
+      setActiveLine(index >= 0 ? items[index]?.line ?? null : null);
+    };
+    read();
+    document.addEventListener("selectionchange", read);
+    return () => document.removeEventListener("selectionchange", read);
+  }, [items]);
 
   const rows = useMemo<OutlineRow[]>(() => {
     const hasKids = items.map(
@@ -336,7 +369,7 @@ function Outline({
           <li
             key={`${item.line}-${i}`}
             className="outline-row"
-            style={{ paddingLeft: `${(item.level - 1) * 12 + 4}px` }}
+            style={{ paddingLeft: `${(item.level - 1) * 16 + 4}px` }}
           >
             {hasKids ? (
               <button
@@ -359,7 +392,7 @@ function Outline({
                 而侧栏其余可点的东西（三角、页签、×）本来就都是按钮。 */}
             <button
               type="button"
-              className="outline-item"
+              className={`outline-item${activeLine === item.line ? " outline-item-active" : ""}`}
               title={item.text}
               onClick={() => onJump({ line: item.line, index: i })}
             >
@@ -378,6 +411,7 @@ function Outline({
 function FileTree(props: {
   nodes: TreeNode[];
   workspace: string;
+  activePath: string | null;
   onOpenFile: (path: string) => void;
   loadDir: (path: string) => Promise<TreeNode[]>;
   口径键: string;
@@ -394,6 +428,8 @@ function FileTree(props: {
   const [kids, setKids] = useState<Record<string, TreeNode[]>>({});
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const kidsRef = useRef(kids);
+  kidsRef.current = kids;
 
   /**
    * `loadDir` 的**最新一份**（ref 快照）。
@@ -462,6 +498,26 @@ function FileTree(props: {
     取一层(path);
   };
 
+  useEffect(() => {
+    if (!props.activePath) return;
+    const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
+    const workspace = normalize(props.workspace);
+    const active = normalize(props.activePath);
+    if (!active.startsWith(`${workspace}/`)) return;
+    const parts = active.slice(workspace.length + 1).split("/");
+    const parents: string[] = [];
+    for (let i = 1; i < parts.length; i += 1) parents.push(parts.slice(0, i).join("/"));
+    if (!parents.length) return;
+    setOpen((prev) => {
+      const next = new Set(prev);
+      for (const path of parents) next.add(path);
+      return next;
+    });
+    for (const path of parents) {
+      if (!kidsRef.current[path]) 取一层(path);
+    }
+  }, [props.activePath, props.workspace, 取一层]);
+
   if (!props.nodes.length) {
     return <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>;
   }
@@ -486,6 +542,7 @@ function FileTree(props: {
           open={open}
           kids={kids}
           errors={errors}
+          activePath={props.activePath}
           onToggleDir={toggle}
           onOpenFile={openFile}
         />
@@ -501,13 +558,18 @@ function TreeRow(props: {
   open: ReadonlySet<string>;
   kids: Record<string, TreeNode[]>;
   errors: Record<string, string>;
+  activePath: string | null;
   onToggleDir: (path: string) => void;
   onOpenFile: (rel: string) => void;
 }) {
-  const { node, workspace, depth, open, kids, errors, onToggleDir, onOpenFile } = props;
+  const { node, workspace, depth, open, kids, errors, activePath, onToggleDir, onOpenFile } = props;
   // 订阅语言（同 `Outline`：每个组件各自订阅一次）。
   const t = useT();
-  const pad = { paddingLeft: `${depth * 12 + 4}px` };
+  const pad = { paddingLeft: `${depth * 16 + 8}px` };
+  const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
+  const absolute = `${workspace}/${node.path}`;
+  const isActive =
+    activePath !== null && normalize(activePath) === normalize(absolute);
 
   if (node.is_dir) {
     const expanded = open.has(node.path);
@@ -540,6 +602,7 @@ function TreeRow(props: {
                 open={open}
                 kids={kids}
                 errors={errors}
+                activePath={activePath}
                 onToggleDir={onToggleDir}
                 onOpenFile={onOpenFile}
               />
@@ -562,6 +625,7 @@ function TreeRow(props: {
         type="button"
         className="tree-file-btn"
         style={pad}
+        aria-current={isActive ? "page" : undefined}
         title={`${workspace}/${node.path}`}
         onClick={() => onOpenFile(node.path)}
       >

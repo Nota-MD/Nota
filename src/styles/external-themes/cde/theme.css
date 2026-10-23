@@ -320,8 +320,20 @@
 
 /* 两栏与正文之间也是硬边，不用现代灰 hairline。 */
 [data-ui-style="cde"] .sidebar {
+  --sidebar-gutter: 0px;
+  --sidebar-radius: 0px;
+  --sidebar-surface: var(--bg-subtle);
+  --sidebar-selected-bg: var(--btn-bg-active);
+  --sidebar-shadow: none;
   border-right: 2px solid var(--frame-dark);
+  border-left: 0;
+  border-top: 0;
+  border-bottom: 0;
   box-shadow: inset -1px 0 0 var(--frame-light);
+}
+
+[data-ui-style="cde"] .sidebar-tab-active::after {
+  display: none;
 }
 
 [data-ui-style="cde"] .plugin-dock {

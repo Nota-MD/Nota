@@ -815,6 +815,7 @@ export default function App() {
             workspace={workspace}
             tree={tree}
             docText={activeDoc?.text ?? ""}
+            activePath={activeDoc?.path ?? null}
             strict={settings?.strict_markdown ?? false}
             tab={sidebarTab}
             onTab={setSidebarTab}

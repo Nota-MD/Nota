@@ -29,6 +29,16 @@ export const 选区标记表: Readonly<Record<string, string>> = {
   "`": "`",
 };
 
+export interface 选区标记能力 {
+  superscript?: boolean;
+  highlight?: boolean;
+}
+
+const 全开: Readonly<选区标记能力> = {
+  superscript: true,
+  highlight: true,
+};
+
 /** 一对包裹标记；没有这种标记时给 `null`。 */
 export function 选区标记(字: string): string | null {
   return 选区标记表[字] ?? null;
@@ -53,8 +63,11 @@ export function 应包裹选区(
   from: number,
   to: number,
   字: string,
+  能力: 选区标记能力 = 全开,
 ): boolean {
   if (to <= from || !选区标记(字)) return false;
+  if (字 === "^" && 能力.superscript === false) return false;
+  if (字 === "=" && 能力.highlight === false) return false;
   const $从 = state.doc.resolve(from);
   const $到 = state.doc.resolve(to);
   if (!$从.parent.inlineContent || !$从.sameParent($到)) return false;
@@ -72,9 +85,10 @@ export function 包裹选区事务(
   from: number,
   to: number,
   字: string,
+  能力: 选区标记能力 = 全开,
 ): Transaction | null {
   const 标记 = 选区标记(字);
-  if (!标记 || !应包裹选区(state, from, to, 字)) return null;
+  if (!标记 || !应包裹选区(state, from, to, 字, 能力)) return null;
 
   const tr = state.tr;
   tr.insertText(标记, to, to);
@@ -93,13 +107,13 @@ export const 选区标记键 = new PluginKey("nota-selection-marks");
  *
  * `smart_symbols` 关闭时不安装，与自动配对插件共用同一个用户开关。
  */
-export function 建选区标记插件(): Plugin {
+export function 建选区标记插件(能力: 选区标记能力 = 全开): Plugin {
   return new Plugin({
     key: 选区标记键,
     props: {
       handleTextInput: (view: EditorView, from, to, 文) => {
         if (view.composing || 文.length !== 1) return false;
-        const tr = 包裹选区事务(view.state, from, to, 文);
+        const tr = 包裹选区事务(view.state, from, to, 文, 能力);
         if (!tr) return false;
         view.dispatch(tr);
         return true;
@@ -109,7 +123,7 @@ export function 建选区标记插件(): Plugin {
 }
 
 /** 挂进 Milkdown 的插件工厂；关掉智能符号时返回空数组。 */
-export function 选区标记补全(启用 = true) {
+export function 选区标记补全(启用 = true, 能力: 选区标记能力 = 全开) {
   if (!启用) return [];
-  return $prose(() => 建选区标记插件());
+  return $prose(() => 建选区标记插件(能力));
 }

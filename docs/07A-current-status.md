@@ -20,7 +20,7 @@
 | PDF 临时文件 | ✅ 中间 HTML 与 Chromium profile 只写系统临时目录；渲染结束由 RAII 整目录删除，目标目录不会出现 `print-render.html` |
 | 数学围栏 | ✅ 语言为 `math` / `latex` / `tex` 的围栏按 LaTeX 处理：光标移走后只显示带框线的渲染结果，进入编辑时显示渲染结果与源码；Pandoc 输入转换为标准 `$$…$$` |
 | 启动显示 | ✅ 主窗口先在屏幕外预热并隐藏任务栏入口；编辑器挂载、聚焦且界面主题就绪后才移入屏幕中央。没有网页启动动画 |
-| Markdown 兼容 | GitHub Flavored Markdown、脚注、GitHub Alerts、徽章图片、公式与 Mermaid；HTTP/HTTPS 远程图片可直接加载 |
+| Markdown 兼容 | GitHub Flavored Markdown、脚注、GitHub Alerts、徽章图片、公式与 Mermaid；Mermaid 可编辑块采用源码在上、独立渲染在下，普通代码块被标为 `mermaid` 后会自动转成图表节点；HTTP/HTTPS 远程图片可直接加载 |
 | 编辑手感 | 🟡 括号与标记自动配对；`_` 在单词内部与链接区域不插手，`^` / `=` 跟随行内功能开关；选中文字后可包裹并叠加；智能引号补另一边、越过闭符并支持选区包裹；表格回车与表格工具已接通。侧栏当前文件、当前章节、双页展开与滚动状态也已接通。待统一开窗复验 |
 | CI | `verify.yml` 负责测试、`platform.yml` 负责平台工具链、`build.yml` 只手动编译预览包、`release.yml` 只在 tag 发布；彼此不再串联全量测试 |
 | 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖产物 |

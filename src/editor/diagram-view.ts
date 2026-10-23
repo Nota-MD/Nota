@@ -10,22 +10,14 @@
  * 宿主的。本仓此前没写，所以 ` ```mermaid ` 在编辑器里的表现是：围栏被吃掉、
  * 源码退化成一坨正文。这个文件就是补上那一步。
  *
- * # 为什么是"平时看图，点一下才切成源码"（而不是并排）
+ * # 为什么是"源码在上、渲染在下"
  *
  * `diagram` 节点在 schema 里是 `atom: true`，**没有 contentDOM 可给**——它的
  * 源码不在子节点里，而在 `attrs.value` 里（见下面 `取源码`）。所以"改源码"
  * 只能是 NodeView 自己摆一个输入控件，再把内容写回节点属性。
  *
- * 两个候选做法里选了**默认收起源码**：
- *
- * - 并排（源码常驻）在文档里太吵：一屏里放三个流程图就变成三块 textarea，
- *   而用户要的是"看文档"，不是"看数据库"。默认看图的版本扫一眼就过去了。
- * - 收起来还顺带省一次重排：源码框常驻时每个块都要多持有一份多行控件的布局。
- * - 代价是**多一次点击**。为了补偿，`说明卡`（出错 / 空块）里也放了一颗
- *   「编辑源码」——出错时用户不用先去右上角找那颗按钮。
- *
- * 进源码模式后**图不会消失**（源码框在图上边，图在下面），这样边改边看：
- * 语法错修好的一瞬间图就出来了。
+ * 可编辑实例始终把源码框放在上方，把独立渲染结果放在下方，切到源码框就能
+ * 直接改；只读实例只保留渲染结果。这样与 Typora 的块内编辑方式一致。
  *
  * # 文档里的真相永远是源码
  *
@@ -372,9 +364,8 @@ export const diagramView = $view(
     (initialNode: PMNode, view: EditorView, getPos: () => number | undefined): NodeView => {
       // ── 骨架 ──────────────────────────────────────────────────────────
       // <div class="nota-diagram">
-      //   <div class="nota-diagram-bar">        ← 右上角那颗「编辑源码 / 预览」
       //   <div class="nota-diagram-body">
-      //     <textarea class="nota-diagram-source">   ← 平时不显示（CSS 按类的有无管）
+      //     <textarea class="nota-diagram-source">   ← 可编辑实例常驻
       //     <div class="nota-diagram-preview">       ← 画好的 SVG，或一张说明卡
       //
       // ⚠️ **一个 `data-type` / `data-value` / `data-id` 都不给它**。plugin 的
@@ -386,15 +377,6 @@ export const diagramView = $view(
       const dom = document.createElement("div");
       dom.className = "nota-diagram";
       dom.classList.add("md-diagram-panel");
-
-      const bar = document.createElement("div");
-      bar.className = "nota-diagram-bar";
-
-      const 切换 = document.createElement("button");
-      切换.type = "button";
-      // 借代码块那条按钮的皮（`editor.css` 的 `.nota-code-btn`）：同一个编辑器里
-      // 两颗同功能的按钮长成两样才是问题。
-      切换.className = "nota-code-btn nota-diagram-toggle";
 
       const body = document.createElement("div");
       body.className = "nota-diagram-body";
@@ -409,8 +391,7 @@ export const diagramView = $view(
       预览.className = "nota-diagram-preview";
 
       body.append(源码框, 预览);
-      bar.append(切换);
-      dom.append(bar, body);
+      dom.append(body);
 
       // ── 这个视图的状态（都不进文档）──────────────────────────────────
       /**
@@ -429,9 +410,6 @@ export const diagramView = $view(
       let 代号 = 0;
       /** 防抖计时器；`null` = 没有待派发的内容。 */
       let 防抖: number | null = null;
-      /** 是不是"源码"模式。**只活在这个视图里**，不写进文档（同代码块的折叠）。 */
-      let 源码模式 = false;
-
       // ── 画 ────────────────────────────────────────────────────────────
 
       /** 说明卡：标题 + 一段原文 + 可选一颗按钮。出错、空块、渲染中都用它。 */
@@ -459,7 +437,7 @@ export const diagramView = $view(
           按.className = "nota-code-btn nota-diagram-note-btn";
           按.textContent = 按钮;
           按.addEventListener("mousedown", (e) => e.preventDefault());
-          按.addEventListener("click", () => 设模式(true));
+          按.addEventListener("click", () => 源码框.focus());
           卡.append(按);
         }
         return 卡;
@@ -480,8 +458,8 @@ export const diagramView = $view(
           预览.append(
             说明卡(
               t("There is no diagram source here yet"),
-              t("Click “Edit Source” at the top right to write Mermaid, for example:\ngraph TD; A[Start] --> B[End]"),
-              view.editable ? t("Edit Source") : null,
+              t("Write Mermaid in the code box above, for example:\ngraph TD; A[Start] --> B[End]"),
+              null,
             ),
           );
           return;
@@ -493,7 +471,7 @@ export const diagramView = $view(
             说明卡(
               t("The diagram has a syntax error and cannot be drawn (your source is untouched in the document)."),
               结果.消息,
-              view.editable ? t("Edit Source") : null,
+              null,
             ),
           );
           return;
@@ -571,29 +549,6 @@ export const diagramView = $view(
         画(结果);
       }
 
-      // ── 源码模式 ──────────────────────────────────────────────────────
-
-      function 设模式(要到源码: boolean): void {
-        // 只读实例（分屏右侧的预览、导出）没有源码模式——那里连光标都落不下去。
-        if (要到源码 && !view.editable) return;
-
-        源码模式 = 要到源码;
-        dom.classList.toggle("nota-diagram-editing", 源码模式);
-        切换.textContent = 源码模式 ? t("Preview") : t("Edit Source");
-        切换.title = 源码模式 ? t("Hide the source and show the rendered diagram") : t("Edit this diagram's Mermaid source");
-        切换.setAttribute("aria-pressed", String(源码模式));
-
-        if (源码模式) {
-          源码框.value = 取源码(当前);
-          // 点了「编辑源码」就是要打字，不用再点第二下。
-          // （ProseMirror 能接受焦点落在自己的 DOM 里但不落在 `view.dom` 上：
-          //  `input.ts` 的 blur 处理器专门判了 `relatedTarget` 是不是自己人。）
-          源码框.focus();
-        } else {
-          源码框.blur();
-        }
-      }
-
       /**
        * 把源码框里的内容写回节点。
        *
@@ -614,7 +569,7 @@ export const diagramView = $view(
         );
       }
 
-      /** 有没派发完的就立刻派发（失焦、退出源码模式、视图销毁时用）。 */
+      /** 有没派发完的就立刻派发（失焦、视图销毁时用）。 */
       function 先派发(): void {
         if (防抖 === null) return;
         window.clearTimeout(防抖);
@@ -623,11 +578,6 @@ export const diagramView = $view(
       }
 
       // ── 事件 ──────────────────────────────────────────────────────────
-
-      // `mousedown` 上 preventDefault：不这样做，点按钮会先让编辑区失焦、
-      // 选区被清掉（同 `code-block.ts` 那条）。
-      切换.addEventListener("mousedown", (e) => e.preventDefault());
-      切换.addEventListener("click", () => 设模式(!源码模式));
 
       源码框.addEventListener("input", () => {
         if (防抖 !== null) window.clearTimeout(防抖);
@@ -641,13 +591,12 @@ export const diagramView = $view(
       源码框.addEventListener("blur", 先派发);
 
       源码框.addEventListener("keydown", (e) => {
-        // Escape 退出源码模式（"进了一个态，按 Esc 出来"是通行的那一手）。
+        // Escape 把焦点还给正文；源码框本身保持常驻。
         // ⚠️ **只认 Escape**：Enter 是换行——Mermaid 的源码几乎每行都靠换行分开，
         //    把 Enter 当"确认"会让这个框没法用。
         if (e.key !== "Escape") return;
         e.preventDefault();
         先派发();
-        设模式(false);
         view.focus();
       });
 
@@ -661,13 +610,7 @@ export const diagramView = $view(
        * 删除 / 复制 / 剪切。把整块预览都算成挂件的话，点图就成了"什么都没发生"。
        */
       const 是我的挂件 = (目标: EventTarget | null): boolean =>
-        目标 instanceof Element &&
-        (bar.contains(目标) ||
-          源码框 === 目标 ||
-          // 说明卡里那颗「编辑源码」不在 bar 上，单独认一下。⚠️ 它**必须**被拦住：
-          // 否则 ProseMirror 会在同一次点击里把选区挪到本节点上，把刚给源码框的
-          // 焦点又抢走（于是"点一下进源码模式"变成了"点了但没进去"）。
-          目标.closest("button") !== null);
+        目标 instanceof Element && (源码框 === 目标 || 目标.closest("button") !== null);
 
       // ── 主题 ──────────────────────────────────────────────────────────
 
@@ -676,14 +619,12 @@ export const diagramView = $view(
       };
       跟上主题(跟主题);
 
-      /** 只读实例里那颗按钮没有意义（也点不动），整条 bar 收起来。 */
+      /** 只读实例只保留渲染结果，源码框由 CSS 隐藏。 */
       function 同步可编辑(): void {
         dom.classList.toggle("nota-diagram-readonly", !view.editable);
-        if (!view.editable && 源码模式) 设模式(false);
       }
 
       同步可编辑();
-      设模式(false);
       void 同步();
 
       return {
@@ -694,7 +635,7 @@ export const diagramView = $view(
           if (更新后.type !== initialNode.type) return false;
 
           const 新源码 = 取源码(更新后);
-          // ⚠️ 这条判据是"**外面**改的"：撤销、源码模式里手改文档、插件改文档、
+          // ⚠️ 这条判据是"**外面**改的"：撤销、源码框里手改文档、插件改文档、
           //    整个文档被换掉……都会走到这儿。只认这一类，因为本视图自己派的那次
           //    不能再写回源码框——每敲一个字就把光标拽回开头，那个框没法用。
           const 外面改的 = 新源码 !== 最后派发;

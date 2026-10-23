@@ -36,20 +36,6 @@
   border-color: var(--accent);
 }
 
-/* ── 右上角那颗按钮 ───────────────────────────────────────────────────── */
-
-.editor-mount .ProseMirror .nota-diagram-bar {
-  display: flex;
-  justify-content: flex-end;
-  /* ⚠️ 与代码块那条不同：**不做悬停才出现**。代码块满屏都是、那颗按钮只是锦上添花，
-     这里是**改源码的唯一入口**（块里没有别的地方能编辑），藏起来等于没有。 */
-}
-
-/* 只读实例（分屏右侧的预览、导出）里没有源码可改，整条收掉。 */
-.editor-mount .ProseMirror .nota-diagram-readonly .nota-diagram-bar {
-  display: none;
-}
-
 /* 键盘走到时给个圈（`.nota-code-btn` 自己没有这一条，而本块的这颗按钮是
    主要入口，键盘走不到等于不可用）。只圈本块里的，不动代码块那边。 */
 .editor-mount .ProseMirror .nota-diagram .nota-code-btn:focus-visible {
@@ -60,10 +46,11 @@
 /* ── 源码框 ───────────────────────────────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-diagram-source {
-  display: none;
+  display: block;
   box-sizing: border-box;
   width: 100%;
-  min-height: 96px;
+  min-height: 120px;
+  margin: 0 0 8px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -79,11 +66,9 @@
   appearance: none;
 }
 
-/* 显示与否走**根上的类**，不用 `hidden` 属性：`hidden` 只是 UA 的一条
-   `display: none`，本文件上面那条 `display: none` 与它不冲突，但下面那条
-   `display: block` 会连 `hidden` 一起盖掉——两处都写得出效果，将来必然改岔。 */
-.editor-mount .ProseMirror .nota-diagram-editing .nota-diagram-source {
-  display: block;
+/* 只读预览与导出不需要源码区。 */
+.editor-mount .ProseMirror .nota-diagram-readonly .nota-diagram-source {
+  display: none;
 }
 
 .editor-mount .ProseMirror .nota-diagram-source:focus-visible {
@@ -94,7 +79,9 @@
 /* ── 渲染区 ───────────────────────────────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-diagram-preview {
-  padding: 2px 4px 4px;
+  margin-top: 2px;
+  padding: 12px 4px 4px;
+  border-top: 1px solid var(--border);
   /* 窄窗格里让图自己横向滚，而不是把正文列顶宽。 */
   overflow-x: auto;
 }

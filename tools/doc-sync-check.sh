@@ -283,6 +283,8 @@ PAIRS=(
   # （`event.key` 是 `Unidentified`），只比 `event.key === "Tab"` 的那一版
   # **单测全绿、真窗口却是坏的**（`docs/06` §5.48）。
   "src/editor/table-tab.ts                       05,07,02"
+  # 2026-10-23：表格普通回车——中间格前进、末格加行，Mod+Enter 仍退出。
+  "src/editor/table-enter.ts                     05,07,02"
   "src/editor/diagram-view.ts                     05,04,10"
   "src/editor/math-view.ts                      05,04,10"
   "src/editor/math-input.ts                     05,04,10"
@@ -487,6 +489,7 @@ PAIRS=(
   "tests/html-block.test.ts                     02,06"
   "tests/github-markdown.test.ts                 04,06"
   "tests/smart-punctuation.test.ts              02,06"
+  "tests/selection-marks.test.ts                02,06"
   "tests/auto-correct.test.ts                   02,06"
   "tests/emoji.test.ts                          02,06"
   "tests/footnote.test.ts                       02,06"
@@ -601,6 +604,8 @@ PAIRS=(
   # ── 前端（20）────────────────────────────────────────────────────────
   "src/editor/url-link.ts                        05,04,10"
   "src/editor/auto-pair.ts                       05,04,10"
+  # 2026-10-23：选中文字后的 Markdown 标记包裹。
+  "src/editor/selection-marks.ts                 05,04,10"
   "src/editor/paste.ts                           05,04,10"
   "src/editor/paste-clean.ts                     05,04,10"
   "src/editor/lang-guess.ts                      05,04,10"

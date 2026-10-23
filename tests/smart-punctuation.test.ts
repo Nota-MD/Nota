@@ -51,9 +51,15 @@
 
 import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
+import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import {
   弯引号,
   破折号,
+  取引号配法,
+  是开引号位置,
+  有未闭合引号,
+  引号输入事务,
+  引号配对,
   扫标点,
   装饰清单,
   标点输入,
@@ -98,6 +104,10 @@ function 同(实际: unknown, 期望: unknown, 说明: string): void {
   if (a !== b) throw new Error(`${说明}：\n      期望 ${b}\n      实际 ${a}`);
 }
 
+function 真(值: unknown, 说明: string): asserts 值 {
+  if (!值) throw new Error(说明);
+}
+
 /** 在默认设置上改几格。 */
 function 设(改: Partial<标点设置>): 标点设置 {
   return { ...默认标点设置, ...改 };
@@ -123,6 +133,15 @@ function 文档(...段落: string[]): PMNode {
     null,
     段落.map((t) => schema.node("paragraph", null, t ? [schema.text(t)] : [])),
   );
+}
+
+function 引号状态(文: string, 从 = 文.length, 到 = 从): EditorState {
+  const doc = 文档(文);
+  return EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 1 + 从, 1 + 到),
+  });
 }
 
 /* ── 一、三个纯函数 ──────────────────────────────────────────────────── */
@@ -161,6 +180,16 @@ function 文档(...段落: string[]): PMNode {
 测("破折号：em 风格下两个也是长横", () => {
   等(破折号("em", 2), "—", "两个");
   等(破折号("em", 3), "—", "三个");
+});
+
+测("引号对与开引号位置共用智能标点的方向判据", () => {
+  同(取引号配法(true, "curly"), { 开: "“", 闭: "”" }, "弯双引号");
+  同(取引号配法(false, "curly"), { 开: "‘", 闭: "’" }, "弯单引号");
+  同(取引号配法(true, "straight"), { 开: '"', 闭: '"' }, "直双引号");
+  等(是开引号位置(""), true, "行首");
+  等(是开引号位置("甲"), false, "文字后");
+  等(有未闭合引号("“甲", "“", "”"), true, "弯引号未闭");
+  等(有未闭合引号('"甲"', '"', '"'), false, "直引号已配平");
 });
 
 测("默认设置与 Rust 那边的 Default 逐条一致", () => {
@@ -255,6 +284,61 @@ function 文档(...段落: string[]): PMNode {
   同(扫标点("a'b", 设({ 单引号: "straight" })), [], "无命中");
 });
 
+/* ── 三½、引号配对事务 ─────────────────────────────────────────────── */
+
+组("三½、引号配对事务");
+
+测("行首开双引号：一次放进一对，光标在中间", () => {
+  const state = 引号状态("");
+  const tr = 引号输入事务(state, 1, 1, '"', 默认标点设置);
+  真(tr, "应当接管开引号");
+  const after = state.apply(tr);
+  等(after.doc.textContent, "“”", "成对");
+  等(after.selection.from, 2, "光标在中间");
+  const 再按 = 引号输入事务(after, after.selection.from, after.selection.from, '"', 默认标点设置);
+  真(再按, "闭引号应当被接住");
+  const 再按后 = after.apply(再按);
+  等(再按后.doc.textContent, "“”", "连按两次也不叠成两组");
+  等(再按后.selection.from, 3, "跨到闭引号之后");
+});
+
+测("自动补出的闭引号前再敲引号：只跨过去", () => {
+  const state = 引号状态("“甲”", 2);
+  const tr = 引号输入事务(state, 3, 3, '"', 默认标点设置);
+  真(tr, "闭引号应当被接住");
+  const after = state.apply(tr);
+  等(after.doc.textContent, "“甲”", "不改字");
+  等(after.selection.from, 4, "跨过闭引号");
+});
+
+测("选中文字再敲引号：包住并保留选区", () => {
+  const state = 引号状态("甲乙", 0, 2);
+  const tr = 引号输入事务(state, 1, 3, '"', 默认标点设置);
+  真(tr, "应当包住选区");
+  const after = state.apply(tr);
+  等(after.doc.textContent, "“甲乙”", "两侧各一颗");
+  等(after.selection.from, 2, "选区起点仍在原文");
+  等(after.selection.to, 4, "选区终点仍在原文");
+});
+
+测("字母后的单引号是撒号，不补另一边", () => {
+  const state = 引号状态("don");
+  const tr = 引号输入事务(state, 4, 4, "'", 默认标点设置);
+  真(tr, "应当落撒号");
+  const after = state.apply(tr);
+  等(after.doc.textContent, "don’", "弯撒号");
+});
+
+测("直引号字形也遵守同一套配对与跳过", () => {
+  const 设置 = 设({ 双引号: "straight" });
+  const state = 引号状态("");
+  const opened = state.apply(引号输入事务(state, 1, 1, '"', 设置)!);
+  等(opened.doc.textContent, '""', "直引号成对");
+  const closed = 引号输入事务(opened, 2, 2, '"', 设置);
+  真(closed, "直闭引号应被接住");
+  等(opened.apply(closed).doc.textContent, '""', "不再多插一颗");
+});
+
 /* ── 三、装饰清单：位置换算 ─────────────────────────────────────────── */
 
 组("三、装饰清单（文本内偏移 → 文档位置）");
@@ -298,10 +382,10 @@ function 文档(...段落: string[]): PMNode {
   等(标点输入(设({ 模式: "render" })).length, 0, "render");
 });
 
-测("input 模式挂 5 条输入规则", () => {
-  // 2（`---` / `--`）＋ 1（`...`）＋ 2（`"` / `'`）
-  等(标点输入(设({ 模式: "input" })).length, 5, "条数");
-  等(标点输入(设({ 模式: "input", 省略号: false })).length, 4, "关省略号：少一条");
+测("input 模式的输入规则只负责横线与省略号", () => {
+  // 2（`---` / `--`）＋ 1（`...`）；引号由 `引号配对` 接管。
+  等(标点输入(设({ 模式: "input" })).length, 3, "条数");
+  等(标点输入(设({ 模式: "input", 省略号: false })).length, 2, "关省略号：少一条");
 });
 
 测("off / input 模式不挂装饰插件", () => {
@@ -318,9 +402,16 @@ function 文档(...段落: string[]): PMNode {
   // 挂在 `.use()` 链上的东西随模式而变，所以 `EditorPane` 必须把六个字段
   // 全放进那个 `useMemo` 的依赖里（只放"模式"那三项的话，改了字形——
   // 它也是被闭包捕获的——活着的实例里还是旧的，屏幕上什么都不变）。
-  等(标点输入(设({ 模式: "input", 引号: false })).length, 3, "input 但关掉引号：2+1");
-  等(标点输入(设({ 模式: "input", 破折号: false })).length, 2, "input 但关掉破折号：2（只有引号）");
+  等(标点输入(设({ 模式: "input", 引号: false })).length, 3, "关引号：输入规则条数不变");
+  等(标点输入(设({ 模式: "input", 破折号: false })).length, 0, "关破折号：横线规则全部不挂");
   等(标点输入(设({ 模式: "input", 引号: false, 破折号: false })).length, 0, "两项都关：0");
+});
+
+测("引号配对只在 Input 且引号开启时安装", () => {
+  等((引号配对(设({ 模式: "off" })) as unknown[]).length, 0, "off");
+  等((引号配对(设({ 模式: "render" })) as unknown[]).length, 0, "render");
+  等((引号配对(设({ 引号: false })) as unknown[]).length, 0, "关闭引号");
+  等(Array.isArray(引号配对(默认标点设置)), false, "input 开引号时是插件");
 });
 
 /* ── 五、横线骨架那道守卫（BUG-51）────────────────────────────────────── */

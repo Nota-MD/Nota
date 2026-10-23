@@ -1,6 +1,6 @@
 # 07A · 当前状态与执行队列
 
-> 最后同步：2026-10-19
+> 最后同步：2026-10-23
 
 这里只回答“现在是什么状态、下一步做什么”。永久编号、缺陷复盘和日期历史在
 [`07-feature-status.md`](07-feature-status.md)，后者是审计档案。
@@ -21,6 +21,7 @@
 | 数学围栏 | ✅ 语言为 `math` / `latex` / `tex` 的围栏按 LaTeX 处理：光标移走后只显示带框线的渲染结果，进入编辑时显示渲染结果与源码；Pandoc 输入转换为标准 `$$…$$` |
 | 启动显示 | ✅ 主窗口先在屏幕外预热并隐藏任务栏入口；编辑器挂载、聚焦且界面主题就绪后才移入屏幕中央。没有网页启动动画 |
 | Markdown 兼容 | GitHub Flavored Markdown、脚注、GitHub Alerts、徽章图片、公式与 Mermaid；HTTP/HTTPS 远程图片可直接加载 |
+| 编辑手感 | 🟡 括号与标记自动配对；选中文字后输入 `*` / `_` / `~` / `^` / 反引号可包住并叠加；智能引号补另一边、越过闭符并支持选区包裹；表格普通回车按格前进、末格加行，`Mod+Enter` 仍退出。静态判据已过，待统一开窗逐键复验 |
 | CI | `verify.yml` 负责测试、`platform.yml` 负责平台工具链、`build.yml` 只手动编译预览包、`release.yml` 只在 tag 发布；彼此不再串联全量测试 |
 | 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖产物 |
 | 应用更新 | 🧪 实验功能；`latest.json` 随每个 Release 发布；按安装类型分流 deb / rpm / AppImage / 便携 EXE / 安装器 EXE；开发构建只提示重建命令 |
@@ -34,7 +35,9 @@
 | 大文件 | ✅ 超过 20 万字符自动使用源码模式；同步去抖放宽到 1 秒，整表 `list()` 回拉限制为至少 1.5 秒一次 |
 | 文档同步 | CI 用 git diff；mtime 只在本地模式用于提醒 |
 
-最近一次本地验证（2026-10-21）：前端 **74 份 / 至少 1639 条**、Rust **671 / 0**、
+最近一次本地验证（2026-10-23）：前端 **84 份 / 至少 1699 条**、TypeScript **0**、
+国际化检查 **OK**；Rust 与安装包未在本轮重跑。
+上一轮完整本地验证（2026-10-21）：前端 **74 份 / 至少 1639 条**、Rust **671 / 0**、
 插件仓库 **0 FAIL / 2 行数 WARN**、Windows 目标 cargo check **0 警告**、
 TypeScript、生产构建、deb/rpm/AppImage 与 Windows NSIS/便携 ZIP 打包通过。
 GitHub 官方验证的近期失败日志均为 runner 收到 shutdown signal，发生在 Rust 测试阶段，

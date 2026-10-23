@@ -3564,7 +3564,7 @@ CI 的 `verify.yml` 跑的就是这一份。下面保留早期逐名列表作为
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing code-preview find select move-block link-edit panel-dock-state; do
+for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair selection-marks lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing code-preview find select move-block link-edit panel-dock-state; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3751,6 +3751,10 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 ＋ `settings-export.test.ts` **5 条**（设置包 ZIP、程序/插件分开选择、敏感项、
 符号链接边界与 IPC 接线）。
 随后按自动生成名册复跑，当前全量前端是 **74 份 / 至少 1639 条，全部 exit=0**。
+📌 **2026-10-23 现跑**：前端全集 **84 份 / 至少 1699 条，全部 exit=0**。
+本轮 `smart-punctuation` **36 → 43**、`table-tab` **58 → 67**（并入普通回车），
+并新增 `selection-marks.test.ts` **7 条**。TypeScript 与国际化检查同批通过；
+本轮按要求没有构建安装包，也没有开窗逐键复验。
 下面那行仍是早期快照，历史读数不改。
 
 `keymap` **54** · `auto-pair` **57** · `slash` **49** · `share-card` **46** ·

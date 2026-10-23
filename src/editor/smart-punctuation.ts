@@ -61,10 +61,16 @@
 
 import { $inputRule, $prose } from "@milkdown/kit/utils";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
-import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import {
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type EditorState,
+  type Transaction,
+} from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
-import type { EditorState } from "@milkdown/kit/prose/state";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
+import type { EditorView } from "@milkdown/kit/prose/view";
 
 /* ── 设置（`Settings.markdown` 那六格的投影）──────────────────────────── */
 
@@ -128,6 +134,59 @@ export function 弯引号(前一个: string, 是双引号: boolean, 字形: 引�
   const 开 = 前一个 === "" || /[\s([{<（【「『“‘]/.test(前一个);
   if (字形 === "straight") return 是双引号 ? '"' : "'";
   return 是双引号 ? (开 ? "“" : "”") : 开 ? "‘" : "’";
+}
+
+/** 一对引号的开头与结尾。直引号两边相同，弯引号分开。 */
+export interface 引号配法 {
+  开: string;
+  闭: string;
+}
+
+/** 当前字形下的一对引号。 */
+export function 取引号配法(是双引号: boolean, 字形: 引号字形): 引号配法 {
+  return {
+    开: 弯引号("", 是双引号, 字形),
+    闭: 弯引号("甲", 是双引号, 字形),
+  };
+}
+
+/**
+ * 这个位置按引号键时，是“开始一段引文”还是“结束/撒号”。
+ *
+ * 与输入规则共用同一份前文判据，避免自动补对和智能标点把同一颗按键理解成
+ * 两个方向。
+ */
+export function 是开引号位置(前一个: string): boolean {
+  return 前一个 === "" || /[\s([{<（【「『“‘]/.test(前一个);
+}
+
+/**
+ * 前文里是否还有一个没有闭合的开引号。
+ *
+ * 直引号的开闭是同一颗，只能按奇偶判断；弯引号分别计数。反斜杠后的引号不计数。
+ */
+export function 有未闭合引号(前文: string, 开: string, 闭: string): boolean {
+  let 层 = 0;
+  let 转义 = false;
+  for (const 字 of 前文) {
+    if (转义) {
+      转义 = false;
+      continue;
+    }
+    if (字 === "\\") {
+      转义 = true;
+      continue;
+    }
+    if (开 === 闭 && 字 === 开) {
+      // 直引号没有方向，只能按奇偶成对。
+      层 = 层 === 0 ? 1 : 0;
+    } else if (字 === 开) {
+      层 += 1;
+    } else if (字 === 闭 && 层 > 0) {
+      层 -= 1;
+    }
+  }
+  return 层 > 0;
 }
 
 /**
@@ -301,35 +360,18 @@ function 省略号规则() {
   );
 }
 
-function 引号规则(设置: 标点设置) {
-  const 一条 = (字: string, 是双: boolean) =>
-    $inputRule(() =>
-      new InputRule(
-        new RegExp(`${字 === '"' ? '"' : "'"}$`),
-        (state, _m, 始, 终) => {
-          // ⚠️ `设置.引号` 那一格不在这里判（关掉就不注册）；这里要判的是**字形**
-          // ——它是"值"不是"开关"，`straight` 就等于"这一颗不转换"。
-          const 字形 = 是双 ? 设置.双引号 : 设置.单引号;
-          if (字形 === "straight") return null;
-          // ⚠️ 只取**前一个字符**：输入规则手里只有这一截（见文件头最后一条）。
-          const 前文 = state.doc.textBetween(Math.max(0, 始 - 1), 始, "￼", "");
-          const 替 = !是双 && 是撒号(前文) ? "’" : 弯引号(前文, 是双, 字形);
-          return 替 === 字 ? null : 换掉(state, 始, 终, 替);
-        },
-        规则选项,
-      ),
-    );
-  return [一条('"', true), 一条("'", false)];
-}
-
 /** 把 `[始, 终)` 换成 `替`。⚠️ 只换文本，不动任何 mark 与节点结构。 */
 function 换掉(state: EditorState, 始: number, 终: number, 替: string) {
   return state.tr.insertText(替, 始, 终);
 }
 
 /**
- * 挂进 `.use()` 的输入规则（**`Input` 模式专用**），最多五条：
- * `---` / `--` / `...` / `"` / `'`。
+ * 挂进 `.use()` 的输入规则（**`Input` 模式专用**），最多三条：
+ * `---` / `--` / `...`。
+ *
+ * 引号不走输入规则：它们要同时完成“开引号补另一边、闭引号跳过去、选中文字
+ * 时包起来”，这些都需要 `handleTextInput` 拿到选区。`引号配对` 接管全部
+ * 引号字形转换，本函数不再注册 `"` / `'`。
  *
  * ⚠️ **该关的一律不注册**，不是在处理器里返回 `null`——两处判据只留一处：
  *
@@ -338,7 +380,7 @@ function 换掉(state: EditorState, 始: number, 终: number, 替: string) {
  * | 模式不是 `input` | **0**（一条都不挂） |
  * | `破折号 = false` | 少掉 `---` / `--` / `...` 三条（省略号挂靠在破折号上） |
  * | `省略号 = false` | 少掉 `...` 一条 |
- * | `引号 = false` | 少掉 `"` / `'` 两条 |
+ * | `引号 = false` | 输入规则条数不变；`引号配对` 不安装 |
  *
  * 理由有两条：① 输入规则**每敲一个字符都要跑一遍全部正则**，关掉的不该还在跑；
  * ② 条数本身是个可测的判据（`tests/smart-punctuation.test.ts` 第四组拿它钉
@@ -358,8 +400,108 @@ export function 标点输入(设置: 标点设置) {
     出.push(...破折号规则(设置));
     if (设置.省略号) 出.push(省略号规则());
   }
-  if (设置.引号) 出.push(...引号规则(设置));
   return 出;
+}
+
+/* ── 第三½格：引号自动配成对（`Input` 模式）──────────────────────────── */
+
+export const 引号配对键 = new PluginKey("nota-smart-quote-pair");
+
+function 在代码里(state: EditorState, 位置: number): boolean {
+  const $位 = state.doc.resolve(位置);
+  for (let 层 = $位.depth; 层 > 0; 层 -= 1) {
+    if ($位.node(层).type.spec.code) return true;
+  }
+  return $位.marks().some((标记) => 标记.type.spec.code);
+}
+
+/**
+ * 处理敲下的一颗直引号。
+ *
+ * 返回 `null` 表示不接管，让智能标点输入规则按旧路处理。这里负责的是浏览器
+ * 本身不会提供、而且输入规则也很难补上的三种手感：
+ * - 在空位置敲开引号：一次得到 `“|”`；
+ * - 光标停在自动补出的闭引号前：再敲引号只跨过去；
+ * - 选中一段再敲引号：用一对引号包住选区，并保留选区。
+ */
+export function 引号输入事务(
+  state: EditorState,
+  从: number,
+  到: number,
+  字: string,
+  设置: 标点设置,
+): Transaction | null {
+  if (设置.模式 !== "input" || !设置.引号 || (字 !== '"' && 字 !== "'")) return null;
+  const 是双 = 字 === '"';
+  const 字形 = 是双 ? 设置.双引号 : 设置.单引号;
+  const { 开, 闭 } = 取引号配法(是双, 字形);
+  const $从 = state.doc.resolve(从);
+  if (!$从.parent.inlineContent || 在代码里(state, 从)) return null;
+
+  if (从 !== 到) {
+    const $到 = state.doc.resolve(到);
+    if (!$从.sameParent($到) || 在代码里(state, 到)) return null;
+    const tr = state.tr;
+    tr.insertText(闭, 到, 到);
+    tr.insertText(开, 从, 从);
+    tr.setSelection(TextSelection.create(tr.doc, 从 + 开.length, 到 + 开.length));
+    return tr.scrollIntoView();
+  }
+
+  const 父 = $从.parent;
+  const 偏移 = $从.parentOffset;
+  const 前 = 偏移 > 0 ? 父.textBetween(偏移 - 1, 偏移, "") : "";
+  const 后 = 偏移 < 父.content.size ? 父.textBetween(偏移, 偏移 + 1, "") : "";
+  const 前文 = 父.textBetween(0, 偏移, "");
+
+  // `don't` 里的单引号是撒号，要落成 `’`，但不要再补一对。
+  if (!是双 && /[\p{L}\p{N}]$/u.test(前) && !是开引号位置(前)) {
+    return state.tr.insertText(闭, 从);
+  }
+  if (前 === "\\") return null;
+
+  // 先判“越过我们补出来的闭引号”，再判“这里算不算开引号位置”：
+  // 光标夹在 `“|”` 中间时，前一颗本身就是开引号，后判会再补一对。
+  if (后 === 闭 && 有未闭合引号(前文, 开, 闭)) {
+    return state.tr
+      .setSelection(TextSelection.create(state.doc, 从 + 1))
+      .setMeta("addToHistory", false);
+  }
+
+  if (是开引号位置(前)) {
+    const tr = state.tr.insertText(开 + 闭, 从);
+    tr.setSelection(TextSelection.create(tr.doc, 从 + 开.length));
+    return tr;
+  }
+
+  return state.tr.insertText(闭, 从);
+}
+
+/** 引号配对的 ProseMirror 插件。导出是为了让测试直接驱动 `handleTextInput`。 */
+export function 建引号配对插件(设置: 标点设置): Plugin {
+  return new Plugin({
+    key: 引号配对键,
+    props: {
+      handleTextInput: (view: EditorView, 从, 到, 文) => {
+        if (view.composing || 文.length !== 1) return false;
+        const tr = 引号输入事务(view.state, 从, 到, 文, 设置);
+        if (!tr) return false;
+        view.dispatch(tr);
+        return true;
+      },
+    },
+  });
+}
+
+/**
+ * 挂进 `.use()` 的引号配对插件。
+ *
+ * 必须在 `标点输入` **前面**：两者都听 `handleTextInput`，本插件先接管时才能
+ * 一次放进成对引号；排到输入规则后面就只能看到已经被替换过的单颗字符。
+ */
+export function 引号配对(设置: 标点设置) {
+  if (设置.模式 !== "input" || !设置.引号) return [];
+  return $prose(() => 建引号配对插件(设置));
 }
 
 /* ── 第四格：显示装饰（`Render` 模式）──────────────────────────────── */

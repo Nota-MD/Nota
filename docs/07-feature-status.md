@@ -1,12 +1,10 @@
 # 07 · 功能状态、缺陷清单与 backlog
 
-> 最后同步：2026-10-17
+> 最后同步：2026-10-23
 >
 > **日常执行队列见 [`07A-current-status.md`](07A-current-status.md)。**
 > 本文件保留永久编号、逐项证据、backlog 全文和日期历史，作为审计档案。
 
-> 最后同步：2026-10-07
->
 > ⚠️ **本文是永久编号与证据的审计档案。** “现在先做什么”看 07A；
 > 某项功能的历史、缺陷根因与验收证据以本文为准。别处提到某项功能的状态时，
 > 当前队列看 07A、历史事实看本文；发现对不上就改对应的一份。
@@ -650,6 +648,7 @@ Linux 三种包**真打出来验过内容**（BUG-11）；Windows 的**可执行
 发现"文档说的与代码做的不一样"时记在这里，并在同一批修正文档。
 
 | 日期 | 原委 |
+| 2026-10-23（**编辑手感：选区标记、引号配对、表格回车**） | ① 新增 `editor/selection-marks.ts`：选中文字后按 `*` / `_` / `~` / `^` / 反引号会包住选区并保留原文选中，再按一次叠成双颗；`=` 第一次直接包成双等号。跨段、代码块、行内代码放行，开关沿用 `smart_symbols`。② 智能标点的引号输入从输入规则改为统一 `handleTextInput`：补另一边、越过闭引号、包选区、撒号和直引号奇偶判断走同一套判据；横线与省略号规则不变。③ 新增 `editor/table-enter.ts`，用 priority 110 接管表格裸回车：中间格下一格、末格加行，`Mod+Enter` 仍退出，`Shift+Enter` 仍软换行。判据：`selection-marks` 7、`smart-punctuation` 43、`table-tab` 67；前端全集 84 份 / 至少 1699 条通过，TypeScript 与国际化检查通过。尚未开窗逐键复验，也未构建或发布。 |
 | 2026-10-17（**主题资源自由声明 ＋ CDE 自绘图标集**） | **① 主题结构改成资源由 CSS 自己声明**：图标写 `--icon-<逻辑名>: url(...)`，字体写普通 `@font-face src: url(...)`；所有相对路径按 CSS 文件目录解析，不再强制 `<主题id>/icons/`。新增 `theme_assets.rs` 在宿主侧内联 data URI，允许主题根内共享资源并对大小、路径逃逸设界。**② 图标链可覆盖**：`Icon` 输出逻辑 ID，行内把 `--icon-<id>` 与默认图串起来；用户主题换任一图标不需要改 React。**③ CDE 自绘 22 枚 16 格硬边 SVG**，覆盖打开/新建/保存/关闭、设置、拓展、窗口、图片、代码、链接、布局、拼写、B/I/U、两种列表、引用、任务、展开与侧栏开关。**④ 目检**：CDE 格式栏图标与状态栏图标已换成硬边像素风；测试用户主题把 `close` 放到 `ui-styles/shared-assets/` 并成功覆盖，证明没有被主题 ID 目录绑死。**闸门**：新增 `tests/icon-theme.test.ts`，Rust `theme_assets` 两条与 `ui_styles` 七条通过。 |
 | 2026-10-17（**CDE 真点阵字体 ＋ 四张真机图重定组件质感**） | **① 字体不再停在“宋但抗锯齿”**：把 HZK16 的 16×16 原始字模写成 TTF 的 **EBDT/EBLC** 表（`Nota GB16ST Bitmap`），FreeType 实测 `pixel_mode=1`；正文、菜单、AI 面板与标题均为硬像素。字体只装在本机 `~/.local/share/fonts`，**不随包分发**；缺失时仍由 `ui/font-check.ts` 提示。<br>**② 开发期真根因**：Vite 的旧 CSS 模块没刷新，fontconfig 根本没收到新家族请求；重启 Vite 后立即命中。排查配方写进 `docs/06` §5.69 末段。<br>**③ 四张真机图共同推翻旧实现**：菜单不是一排按钮，而是连续青绿带；凸键是 1px 亮/暗硬边、无外圈线；栏头桃色白字；当前页签暖灰凹面；输入区是深蓝灰凹槽。新增最后加载的 `styles/cde.css` 统一覆盖，避免被 `dock.css` / `bars.css` 的后加载现代规则盖回去。<br>**④ 目检**：格式栏 `B` 按下后移开仍凹；File/View 弹层、AI 面板、状态栏与滚动条均按四张图统一。**闸门**：`cargo test --lib` 637/0、`tsc --noEmit` 0、`vite build` ✓、`doc-sync-check` 0 FAIL。 |
 | 2026-10-17（后续：**点阵字体随包分发 ＋ CDE 原生控件收口**） | **① 字体入包**：`Nota GB16ST Bitmap` Regular/Bold 放进 `src/assets/fonts/`，`styles/cde.css` 用 `@font-face` 加载；前端构建后随 dist 进安装包。字体来自 WenQuanYi Bitmap Song 16px 字模，许可为 **GPL-2.0 with font embedding exception**；完整版权、修改说明与资源映射都在包内，根 `LICENSE` 仍是纯 BSD-2。**② 不再误报缺字体**：`ui/font-check.ts` 对随包家族直接判可用。**③ 打印框原生控件**：CDE 下关闭 `select` 与 number spinner 的原生外观，选择框改方角凹槽＋硬边箭头，焦点改点阵虚线框。判据：`tests/font-bundle.test.ts`、TypeScript、生产构建。 |

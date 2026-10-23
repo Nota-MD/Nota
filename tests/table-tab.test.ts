@@ -52,6 +52,7 @@ import {
   表格Tab键,
   表格Tab按键,
 } from "../src/editor/table-tab";
+import { 表格回车, 表格回车键 } from "../src/editor/table-enter";
 
 let 过 = 0;
 let 败 = 0;
@@ -168,6 +169,14 @@ function 按Tab(state: EditorState, 反向 = false): { 接了: boolean; 状态: 
   const 接了 = 表格Tab处理(state, (tr) => {
     新 = state.apply(tr);
   }, 反向);
+  return { 接了, 状态: 新 };
+}
+
+function 按回车(state: EditorState): { 接了: boolean; 状态: EditorState } {
+  let 新 = state;
+  const 接了 = 表格回车(state, (tr) => {
+    新 = state.apply(tr);
+  });
   return { 接了, 状态: 新 };
 }
 
@@ -373,6 +382,28 @@ const 三列表 = (...数据行: PMNode[]): PMNode =>
   断言("槽位名对上", 插件.spec.key, 表格Tab键);
   断言("工厂每次给新的一份", 建表格Tab插件() === 插件, false);
   断言("`$prose` 那条也造得出来", typeof 表格Tab(), "function");
+}
+
+// ── 八、普通回车：下一格 / 表尾加行 ───────────────────────────
+{
+  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "a");
+  const r = 按回车(状态);
+  断言("中格按回车接了", r.接了, true);
+  断言("中格按回车走到下一格", 所在格(r.状态)?.textContent, "b");
+  断言("中格按回车不动文档", r.状态.doc.eq(状态.doc), true);
+}
+{
+  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "b");
+  const r = 按回车(状态);
+  断言("末格按回车接了", r.接了, true);
+  断言("末格按回车加一行", 第一张表(r.状态.doc).childCount, 3);
+  断言("末格按回车落到新行第一格", 所在格(r.状态)?.textContent, "");
+  断言("加出来的是数据行", 第一张表(r.状态.doc).lastChild?.type.name, "table_row");
+}
+{
+  const 状态 = 造状态(文(段("表格外")), "表格外");
+  断言("表格外按回车放行", 按回车(状态).接了, false);
+  断言("回车键位对象造得出来", typeof 表格回车键, "function");
 }
 
 // ── 汇总 ──────────────────────────────────────────────────────

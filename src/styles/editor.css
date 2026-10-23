@@ -336,6 +336,17 @@
   padding: 48px 0 120px;
 }
 
+/*
+ * 浏览器的 UA 样式会把 h1~h6 默认设成粗体。标题字形与字重属于文档主题，
+ * 不能被编辑器这一层暗地里接管；这里用零权重的 `:where()` 把它们退回继承，
+ * 文档主题里真正的 `h1 { font-weight: … }` 仍会按正常优先级覆盖。
+ * `font-synthesis: none` 同时禁止字库没有对应字重时由浏览器伪造粗体。
+ */
+:where(.editor-mount .ProseMirror) :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: inherit;
+  font-synthesis: none;
+}
+
 /* ⚠️ 段距**走 token 不给死值**（2026-09-27，「文档主题」那一页新加的那一项）：
    用户可以把它改成 0（段落挨着）或更松。逗号后面那个 `0.85em` 是"无文档主题 +
    用户没动过这一项"时的中性值——**它必须与 `settings/document.rs` 里

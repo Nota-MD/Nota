@@ -5770,6 +5770,10 @@ DOM 节点里"的映射，而块首那种位置是有歧义的）。
 | `editor/headings.ts` | 大纲、字数、标签页标题那一侧认不认这一行是标题（走 `atxTextRe`） |
 | `editor/source.ts` | 源码模式的标题高亮（走 `atxPrefixRe`） |
 
+⚠️ 源码模式的标题只染色，不再由 CodeMirror 硬编码 `font-weight: 600`。标题是否
+粗、粗到什么程度属于文档主题；所见即所得里 UA 的标题默认字重也已在 `editor.css`
+用零权重规则退回继承，并关闭浏览器合成粗体。
+
 ⚠️ **还有一份同构的实现在 Rust 侧**：`src-tauri/src/document/title.rs::strip_atx()`——
 标签页标题是**后端**按当前口径从正文算出来的（`first_heading`），不是前端传上去的。
 两边判据必须一起改：只改一边的症状是"正文里是标题、标签页却显示「未命名」"（或反过来）。

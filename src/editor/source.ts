@@ -234,7 +234,7 @@ export interface CreateSourceOptions {
  * `doc-theme.ts` 的限域逻辑一起管；而写死一个 `#0969da` 之后，用户换一套
  * 深色文档主题就会得到"深底深字"。 */
 const notaHighlight = HighlightStyle.define([
-  { tag: tags.heading, color: "var(--accent)", fontWeight: "600" },
+  { tag: tags.heading, color: "var(--accent)" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strikethrough, textDecoration: "line-through" },

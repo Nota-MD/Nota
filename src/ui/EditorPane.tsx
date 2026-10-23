@@ -50,7 +50,6 @@
  * | `ui/useEditorSettings.ts` | `settings.markdown` → 编辑器要的那三个值（含记忆化） |
  * | `ui/useEditorHandle.ts` | 13 条命令怎么落到活着的那两个实例上 |
  * | `ui/useCursorSnapshot.ts` | 选区快照 → 后端那条 250ms 的去抖 |
- * | `ui/table-widths.ts` | 表格列宽侧车的读与写 |
  *
  * ⚠️ 边界是**搬出去的那几件事别再搬回来**：想往里加"横幅里某个按钮"或者
  * "某一侧多传一个选项"的时候，去上表那一份改——两个地方各写一半的话，
@@ -98,8 +97,6 @@ import { use编辑器开关 } from "@/ui/useEditorSettings";
 import { use编辑器句柄 } from "@/ui/useEditorHandle";
 // 选区快照 → 后端（那条 250ms 的去抖与"拆的时候要清定时器"都在里面）。
 import { use选区快照 } from "@/ui/useCursorSnapshot";
-// 表格列宽侧车那两跳（`docs/07` 第 26 项那批）。⚠️ 2026-10-07 搬出去的。
-import { 存表格列宽, 读表格列宽 } from "@/ui/table-widths";
 import type { 写作模式 } from "@/editor/writing-modes";
 import { 空查找状态, type FindOptions, type FindStatus } from "@/editor/find";
 import { 恢复滚动比例, 读滚动比例 } from "@/editor/scroll-into-view";
@@ -586,22 +583,10 @@ export function EditorPane({
         横幅Ref.current?.同步(initial, false);
 
         if (mode === "wysiwyg") {
-          // ── 表格列宽（侧车）─────────────────────────────────────────
-          // ⚠️ 读那一跳（"没有路径就不查"、"读失败按自动排版显示"）在
-          // `ui/table-widths.ts` 里（2026-10-07 搬出去的）。
-          const 列宽 = await 读表格列宽(doc.path);
-          // ⚠️ 上面这个 `await` 之后要重判一次 `disposed`：建编辑器本身也是
-          // await，中间隔着一次 IPC 就多一个"effect 已经拆了、这里才回来"的
-          // 窗口（StrictMode 下一定会撞上）。
-          if (disposed) return;
-
           handle = await 建所见即所得编辑器({
             root: mount,
             initial,
             文档路径: doc.path,
-            列宽,
-            // ⚠️ "没有 `doc.path` 就一个字都不存"在 `ui/table-widths.ts` 里。
-            onTableResize: (表) => 存表格列宽(doc.path, 表),
             strict,
             physics,
             行内扩展,

@@ -3,7 +3,7 @@
  *
  * # 为什么是 ProseMirror 系而不是「textarea + 高亮装饰」
  *
- * 这一层要的语义是**文档树**，不是"带样式的文本缓冲"。表格拖列宽、图片定尺寸、
+ * 这一层要的语义是**文档树**，不是"带样式的文本缓冲"。表格结构、图片定尺寸、
  * 嵌套列表的层级、脚注引用、任务项勾选——这些在文档树上都是**一等的节点**，
  * 在文本缓冲上则要一层层拿文本偏移去近似，且每次编辑都可能算错。
  * 那些看起来"琐碎"的功能，正是文本缓冲方案最先崩的地方。
@@ -31,7 +31,7 @@ import { 拆前置块, 拼回前置块, 换前置块, 新建前置块模板 } fr
 // ⚠️ **装配（`.config()` ＋ 整条 `.use()` 插件链）2026-10-07 整块搬去了
 // `./assemble`**（本文件那天 1006 行，`docs/07` 第 89 项）：那边只管"一次性把
 // 一切装上去"，本文件只剩"实例建好之后怎么用"（句柄、front matter 的读写、
-// 列宽摆回去、存盘拼回）。⚠️ 那条链的**顺序就是语义**，别在那边随手挪 `.use()`。
+// 存盘拼回）。⚠️ 那条链的**顺序就是语义**，别在那边随手挪 `.use()`。
 import { 装配实例 } from "./assemble";
 // ⚠️ 命令表里那几条"先看一眼光标在哪、再一笔事务里改两处"的实现
 //（`insert.ts` 的任务列表 / 清除格式 / 表格增删 / 公式块 / 目录，`footnote.ts`
@@ -49,10 +49,6 @@ import { 设预览 } from "./review-prose";
 import { 默认行内扩展开关 } from "./inline-marks";
 // ⚠️ `undefined` 落到它（`input` 档），与 Rust 那边的 `Default` 一致。
 import { 默认标点设置 } from "./smart-punctuation";
-// ⚠️ 只有"摆回文档"这一半在这儿（`setMarkdown` 与建完实例各一次）；
-// 读/存侧车那一半与插件挂载都在 `assemble.ts`。
-// ⚠️ 上半截是 CSS（`main.tsx` 引的那份 `tables.css`），缺了它"能拖"没有出口。
-import { 应用列宽 } from "./table-width";
 // 写作模式（专注 / 打字机）：装配在 `assemble.ts`，这里管"开关被拨动时推给
 // 活着的实例"。
 import { 滚到当前行, 设写作模式, type 写作模式 } from "./writing-modes";
@@ -164,17 +160,6 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
    */
   let 上次预览: 改动预览 | null = options.review ?? null;
 
-  /**
-   * **这一刻**记着的表格列宽。初值是侧车那份，用户每拖完一次就跟着更新。
-   *
-   * ⚠️ 必须是**活的那一份**，不能每次回读 `options.tableWidths`：整篇替换
-   * （`setMarkdown`：重新载入、插件改文档、切模式）之后要把它摆回去，而
-   * `options` 里那份是**建实例时**的快照——用它的话，用户刚拖完列宽、插件
-   * 紧接着改一次文档，列宽就会被**退回建实例那一刻的旧值**，看起来像"我刚
-   * 拖的它自己变回去了"。
-   */
-  let 列宽表: Record<string, number[]> = { ...(options.tableWidths ?? {}) };
-
   // 装配（`.config()` ＋ 整条 `.use()` 链）2026-10-07 整块搬去了 `./assemble`
   //（本文件那天 1006 行，`docs/07` 第 89 项）。这里只把"装什么"列成一张清单：
   // 下面每一项为什么是回调、为什么是这个值，见 `assemble.ts` 与 `create-types.ts`。
@@ -194,33 +179,11 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // ⚠️ 取的是**这一刻**那一段：`markdownUpdated` 拼回去时它可能已经换了
     //（换文档、源码模式切回来都走 `setMarkdown`，那里会重新切一刀）。
     取前置块: () => 前置块,
-    // 拖完列宽：先更新本文件手里这份（**活的那一份**，`setMarkdown` 那条路
-    // 读的是这里，见 `列宽表` 上那条注释），再报给调用方写侧车。
-    记账列宽: (表) => {
-      for (const 一张 of 表) 列宽表[一张.指纹] = 一张.宽度;
-      options.onTableResize?.(表);
-    },
     // ⚠️ 斜杠菜单那条路要的是 `跑一条命令`**本身**（它是本文件的函数声明，
     // 会被提升，所以这里包一层不影响它"在 `.use()` 之后才定义"）。
     跑一条命令: (name, payload) => 跑一条命令(name, payload),
     options,
   });
-
-  // 把侧车里记着的列宽摆回文档。
-  //
-  // ⚠️ **必须在 `.create()` 之后**：这是要往真的视图里派事务的，而视图到
-  // 这一刻才存在（`.config()` 那一段跑的比它早，那儿的 `editorViewCtx` 还
-  // 取不出来）。
-  //
-  // ⚠️ 它**不会**把文档标脏：`colwidth` 是节点属性，GFM 序列化时压根不写出去
-  //（那正是"重开就丢、所以要侧车"的原因），所以下面这笔事务前后
-  // `serializer(doc)` 是同一个字符串——`create.ts` 里那条
-  // `if (markdown !== prev)` 于是不成立，`onChange` 一次都不会响。
-  // ⚠️ 这一条**不能只靠推理**：本批的目检项之一就是"打开一份记着列宽的文档，
-  // 状态栏不出现「已修改」"（结论记在 `docs/07` §4 本批那一行）。
-  if (!readOnly) {
-    editor.action((ctx) => 应用列宽(ctx.get(editorViewCtx), 列宽表));
-  }
 
   // 实例建好时如果打字机模式已经开着，先把当前行摆正再交给调用方——
   // 插件那个 `view.update` 在"建好那一刻"不会跑（没有事务），不补这一下
@@ -353,13 +316,6 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
         view.dispatch(
           view.state.tr.setSelection(TextSelection.atStart(view.state.doc)).scrollIntoView(),
         );
-        // ⚠️ 整篇换掉之后**把列宽重新摆一遍**：这一段文本刚被解析成新的文档树，
-        // 而 GFM 里根本没有列宽这回事（`colwidth` 是节点属性，序列化时丢）
-        // ——不补这一下，「重新载入」（以及"放弃修改重载"、插件改文档）之后
-        // 用户刚拖好的列宽会**全部回到自动**，而屏幕上没有任何解释。
-        // ⚠️ 摆在设选区**之后**：那笔事务只动选区，两者不冲突，但这个顺序读起来
-        // 是"先把文档摆好、再收光标"。
-        应用列宽(view, 列宽表);
       });
     },
 

@@ -21,7 +21,6 @@ import type { FindOptions, FindStatus } from "./find";
 import type { 行内扩展开关 } from "./inline-marks";
 import type { 标点设置 } from "./smart-punctuation";
 import type { 改动预览, 预览看法 } from "./review";
-import type { 一张表的宽度 } from "./table-width";
 import type { 写作模式 } from "./writing-modes";
 
 
@@ -76,6 +75,13 @@ export type EditorCommand =
   | "tableAlignLeft"
   | "tableAlignCenter"
   | "tableAlignRight"
+  | "tableResize"
+  | "tableMoveRowUp"
+  | "tableMoveRowDown"
+  | "tableMoveColLeft"
+  | "tableMoveColRight"
+  | "tableCopy"
+  | "tableFormat"
   | "insertText"
   /**
    * **写一条链接 / 去掉一条链接**（2026-10-07）。
@@ -135,6 +141,10 @@ export type EditorCommand =
  * 而按设置重建整个编辑器实例的代价远大于随命令带一个布尔。见它自己那段。
  */
 export interface CommandPayload {
+  /** 调整表格时的目标列数。 */
+  columns?: number;
+  /** 调整表格时的目标行数（包含表头行）。 */
+  rows?: number;
   /** 超链接的目标地址。 */
   href?: string;
   /**
@@ -500,19 +510,4 @@ export interface CreateOptions {
    * 自己手里那份补丁），而那一整条链子在 `App.tsx` 手里。这里只报"他按了"。
    */
   onReviewEscape?: () => void;
-  /**
-   * 侧车里记着的表格列宽：`指纹 → 每列多宽`。**建实例时摆回去**。
-   *
-   * ⚠️ 值必须是 `Record`（而不是数组）：一张文档里可能有好几张表，指纹是
-   * 唯一的键（算法在 `table-width.ts::表格指纹`，**只在那儿**）。
-   * 不传或传空对象 = 一个都不摆，全按自动排版走。
-   */
-  tableWidths?: Record<string, number[]>;
-  /**
-   * 用户**刚拖完一次表格列宽**时喊一声，参数是这一刻文档里所有拖过的表。
-   *
-   * ⚠️ **不传就不挂那条插件**（同 `onCommandState` / `onFindStatus`）：
-   * 源码模式那一侧没有文档树、只读那一侧改不了文档，它们挂了也是白算。
-   */
-  onTableResize?: (表: 一张表的宽度[]) => void;
 }

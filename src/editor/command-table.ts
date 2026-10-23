@@ -69,6 +69,13 @@ import { 插脚注 } from "./footnote";
 import { 选行, 选词, 选句, 删词 } from "./select";
 import { 移动块 } from "./move-block";
 import { 装链接, 摘链接 } from "./link-edit";
+import {
+  复制当前表格,
+  格式化当前表格,
+  调整当前表格,
+  移动当前表列,
+  移动当前表行,
+} from "./table-context";
 import type { CommandPayload, EditorCommand } from "./create-types";
 
 /** `h1`~`h6`。它们共用一条命令，只是层数不同，所以单独一族。 */
@@ -238,6 +245,13 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   tableAlignLeft: (e) => e.action(callCommand(setAlignCommand.key, "left")),
   tableAlignCenter: (e) => e.action(callCommand(setAlignCommand.key, "center")),
   tableAlignRight: (e) => e.action(callCommand(setAlignCommand.key, "right")),
+  tableResize: (e, p) => 调整当前表格(e, p?.columns ?? 3, p?.rows ?? 3),
+  tableMoveRowUp: (e) => 移动当前表行(e, -1),
+  tableMoveRowDown: (e) => 移动当前表行(e, 1),
+  tableMoveColLeft: (e) => 移动当前表列(e, -1),
+  tableMoveColRight: (e) => 移动当前表列(e, 1),
+  tableCopy: (e) => 复制当前表格(e),
+  tableFormat: (e) => 格式化当前表格(e),
 
   // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/ImageDialog.tsx`）。
   // 缺省值给空串而不是"不执行"——空串的语义是"插一个还没填地址的链接/图片"，

@@ -793,6 +793,35 @@ export const 右键段落项: MenuItemSpec = {
   ]),
 };
 
+/**
+ * 表格内的右键子菜单。前四条与工具栏共用已有命令；移动、复制、格式化与删除
+ * 是这一层专用的入口，但仍是 `EditorCommand` 白名单里的正式命令。
+ */
+export const 右键表格项: MenuItemSpec = {
+  id: "ctx.table",
+  label: "Table",
+  submenu: [
+    ...摊条目([
+      "para.tableRowAbove",
+      "para.tableRowBelow",
+      "para.tableColLeft",
+      "para.tableColRight",
+    ]),
+    "sep",
+    { id: "para.tableMoveRowUp", label: "Move Row Up", needsDoc: true },
+    { id: "para.tableMoveRowDown", label: "Move Row Down", needsDoc: true },
+    { id: "para.tableMoveColLeft", label: "Move Column Left", needsDoc: true },
+    { id: "para.tableMoveColRight", label: "Move Column Right", needsDoc: true },
+    "sep",
+    ...摊条目(["para.tableDelRow", "para.tableDelCol"]),
+    "sep",
+    { id: "para.tableCopy", label: "Copy Table", needsDoc: true },
+    { id: "para.tableFormat", label: "Format Table Source", needsDoc: true },
+    "sep",
+    ...摊条目(["para.tableDel"]),
+  ],
+};
+
 /** 见 {@link 右键段落项}。 */
 export const 右键插入项: MenuItemSpec = {
   id: "ctx.insert",

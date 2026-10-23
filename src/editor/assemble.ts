@@ -3,7 +3,7 @@
  *
  * 2026-10-07 从 `create.ts` 整块搬出来的（`docs/07` 第 89 项）——那边那天 1006 行。
  * 切这一刀的依据是**职责**：`create.ts` 管的是"实例建好之后怎么用"（句柄的 13 条
- * 命令、front matter 的读写、列宽摆回去、存盘拼回），而这里管的是**一次性地把
+ * 命令、front matter 的读写、存盘拼回），而这里管的是**一次性地把
  * 一切装上去**：ctx 的初值、序列化器、输入规则、NodeView、各种可选插件。
  *
  * # 为什么是这个形状（一个参数对象，不是一个长参数表）
@@ -13,11 +13,9 @@
  * 为了躲开它才用解构的。所以这里收**一个对象**，每一样都有名字，调用点读起来
  * 是一张"这份实例按什么装"的清单。
  *
- * ⚠️ 两样必须走**回调**、不能传值：
+ * ⚠️ 下面这一样必须走**回调**、不能传值：
  *   · `取前置块`——`markdownUpdated` 拼回去的必须是**这一刻**那一段（换文档、
  *     源码模式切回来都会换掉它），传值就把建实例那一刻的那一份钉死了；
- *   · `记账列宽`——拖完列宽要更新调用方手里**活的那一张表**（`setMarkdown`
- *     会读它把宽度摆回去）。
  *
  * # ⚠️ 顺序就是语义，别按"看着顺眼"挪 `.use()`
  *
@@ -202,16 +200,6 @@ import { 斜杠菜单 } from "./slash";
 // 症状与实测记录都在它自己的文件头上。
 import { 补全图片属性 } from "./image-attrs";
 import { katexOptionsFor } from "./math-macros";
-// 表格列宽（拖动改大小那条路的下半截：记住 / 摆回来）。
-// ⚠️ 上半截是 CSS（`main.tsx` 引的那份 `tables.css`），缺了它"能拖"没有出口。
-// ⚠️ **拖列宽那条插件不在 `gfm` 的 `plugins` 数组里**（2026-09-26 查出来时反了
-// 直觉：`@milkdown/preset-gfm/lib/index.js:1012` 那四个里没有它），得在
-// `.use()` 里自己挂。症状正是用户报的那条（「表格，允许拖动改变大小」）：
-// 画得出、打得进、不报错，**就是拖不动**——压根没有插件在监听鼠标。
-// ⚠️ 2026-09-27 起**连它导出的那个都不用**，改用本仓包的 `列宽拖动插件`
-// （只把它那个 `defaultCellMinWidth` 改成 0：默认 100 把表格宽钉死在
-// "列数 × 100px"上，理由见那个常量）。
-import { 列宽插件, 列宽拖动插件 } from "./table-width";
 // 「光标现在在什么状态」。格式化工具栏的高亮与菜单那十条表格命令的灰/亮
 // 都问它——**只读不写**，见它自己的文件头。
 import { 选区快照插件 } from "./caret-snapshot";
@@ -250,14 +238,12 @@ export interface 装配参数 {
   onChange?: (markdown: string) => void;
   /** **这一刻**那一段 front matter，`null` = 没有。⚠️ 见文件头"为什么是回调"。 */
   取前置块: () => string | null;
-  /** 用户拖完列宽：记进调用方手里那张表（**活的那一份**），再报出去。 */
-  记账列宽: (表: { 指纹: string; 宽度: number[] }[]) => void;
   /** 斜杠菜单选中一条要走的那条路（`create.ts` 的 `跑一条命令`）。 */
   跑一条命令: (name: EditorCommand, payload?: CommandPayload) => void;
   /** `CreateOptions` 里那几条"不传就不挂"的可选回调——原样转给对应插件。 */
   options: Pick<
     CreateOptions,
-    "onCommandState" | "onFindStatus" | "onSelection" | "writingModes" | "review" | "onReviewEscape" | "onTableResize"
+    "onCommandState" | "onFindStatus" | "onSelection" | "writingModes" | "review" | "onReviewEscape"
   >;
 }
 
@@ -466,12 +452,6 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // 东西可接（见 `html-block.ts` 文件头）。
     .use(块HTML规格插件)
     .use(块HTML解析())
-    // ⚠️ **拖列宽那条插件要自己装**，用的是**本仓包的那一个**（`列宽拖动插件`）：
-    // 表格宽因此不再被钉死在"列数 × 100px"上（用户报的「表格全宽度是钉死的」），
-    // 为什么只能从那个选项下手写在 `table-width.ts::列宽拖动插件` 顶上。
-    // ⚠️ 必须排在 `gfm` **之后**（schema 是它带进来的）。⚠️ **源码模式那一侧也装**
-    // 是故意的：少装一次省不下什么，反而多一个"哪个模式装了哪个没装"的分支。
-    .use(列宽拖动插件)
     // ⚠️ 在 `commonmark` 之后即可（它只是往 mdast 上多挂一个变换），
     // 但**必须在 `.create()` 之前**：mdast → ProseMirror 那一步发生在建实例时，
     // 建完了再挂就等于没挂。**只读的那一份也要挂**（分屏预览、导出），
@@ -654,17 +634,4 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // 不传 `onReviewEscape` 时给一个空函数——`Esc` 那一下没人接就是了，
     // 比让插件在按下时抛错好。
     .use(readOnly ? [] : [预览插件(options.review ?? null, options.onReviewEscape ?? (() => {}))])
-    // 表格列宽：**拖完之后**把这一刻的宽度报出去（调用方写侧车）。
-    // ⚠️ 与上面那两条"不传就不挂"同一个理由；另外它单独一条还是因为那条插件
-    // 只在**拖动真的结束**时才出声（判据写在 `table-width.ts::列宽插件`），
-    // 挂上去不产生任何日常开销。
-    .use(
-      readOnly || !options.onTableResize
-        ? []
-        : [
-            // ⚠️ 记账那一步在调用方（`create.ts` 的 `列宽表` 是**活的那一份**，
-            // 整篇替换之后要摆回去，见那张表上那条注释）。
-            列宽插件((表) => 参数.记账列宽(表)),
-          ],
-    )
     .create();}

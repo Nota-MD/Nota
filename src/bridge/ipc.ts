@@ -479,24 +479,6 @@ export const api = {
   },
 
   /**
-   * 表格的**列宽**（用户拖出来的那些）。
-   *
-   * ⚠️ 它**不写进 Markdown 正文**：列宽是给人看的排版偏好，不是文档内容。
-   * 落点是宿主那边的一份侧车文件（`~/.local/share/nota/table-widths.toml`，
-   * 形状与理由见 `src-tauri/src/table_width.rs`）。
-   *
-   * ⚠️ **指纹由前端算**（`editor/table-width.ts`）——宿主只当它是个字符串，
-   * 不解释格式。改指纹算法不该动 Rust。
-   */
-  tableWidths: {
-    /** 一份文档里所有表格的列宽，键是指纹。**没拖过就是空对象，不是错误。** */
-    get: (path: string) => invoke<Record<string, number[]>>("nota_table_widths_get", { path }),
-    /** 记一个表格的列宽。`widths` 给空数组 = 删掉这条记录（拖回自动那档）。 */
-    set: (path: string, fingerprint: string, widths: number[]) =>
-      invoke<void>("nota_table_widths_set", { path, fingerprint, widths }),
-  },
-
-  /**
    * 会话与最近文件：上次开着哪几份、最近打开过哪些、每份滚到哪儿。
    *
    * ⚠️ 全部是**记忆**，不是文档内容：删掉那份侧车（`~/.local/share/nota/session.toml`）

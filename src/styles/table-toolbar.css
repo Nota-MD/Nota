@@ -1,0 +1,116 @@
+/* 当前表格上方的浮动快捷栏。列宽拖动已移除，这里只做结构操作。 */
+
+.table-toolbar {
+  position: fixed;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  padding: 2px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  box-shadow: var(--popup-shadow);
+}
+
+.table-toolbar-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.table-toolbar-btn:hover,
+.table-toolbar-btn:focus-visible,
+.table-toolbar-btn[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.table-toolbar-btn.is-danger:hover,
+.table-toolbar-btn.is-danger:focus-visible {
+  color: var(--danger);
+}
+
+.table-toolbar-gap {
+  width: 12px;
+}
+
+.table-grid-glyph {
+  display: grid;
+  grid-template-columns: repeat(2, 5px);
+  grid-template-rows: repeat(2, 5px);
+  gap: 2px;
+}
+
+.table-grid-glyph i {
+  border: 1px solid currentColor;
+}
+
+.table-align-glyph {
+  display: grid;
+  width: 16px;
+  gap: 2px;
+}
+
+.table-align-glyph i {
+  display: block;
+  height: 2px;
+  background: currentColor;
+}
+
+.table-align-glyph.is-left i:nth-child(2) { width: 10px; }
+.table-align-glyph.is-left i:nth-child(3) { width: 13px; }
+.table-align-glyph.is-center i:nth-child(1) { width: 13px; justify-self: center; }
+.table-align-glyph.is-center i:nth-child(2) { width: 8px; justify-self: center; }
+.table-align-glyph.is-center i:nth-child(3) { width: 15px; justify-self: center; }
+.table-align-glyph.is-right i:nth-child(2) { width: 10px; justify-self: end; }
+.table-align-glyph.is-right i:nth-child(3) { width: 13px; justify-self: end; }
+
+.table-size-picker {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 184px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--popup-shadow);
+}
+
+.table-size-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 16px);
+  gap: 4px;
+}
+
+.table-size-grid button {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-subtle);
+  cursor: pointer;
+}
+
+.table-size-grid button.is-active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 55%, var(--bg-raised));
+}
+
+.table-size-label {
+  margin-top: 8px;
+  color: var(--fg-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

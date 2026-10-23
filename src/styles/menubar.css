@@ -226,6 +226,11 @@
   animation: menu-popup-in var(--duration-fast) var(--ease-out);
 }
 
+/* 右侧放不下时，子菜单从父项左缘向左展开；动画起点也换到右上角。 */
+.menu-sub.menu-sub-left {
+  transform-origin: top right;
+}
+
 /* 带子菜单的项，弹层定位的基准是**这一项**，不是整栏。 */
 .menu-item-root {
   position: relative;

@@ -374,7 +374,11 @@ function ContextMenuPanel(p: 面板接线) {
   const [行内位, set行内位] = useState<Record<string, number>>({});
   /** 哪个子菜单开着（漫游下标）。`null` = 没开。 */
   const [子开, set子开] = useState<number | null>(null);
-  const [子锚, set子锚] = useState<{ top: number; left: number } | null>(null);
+  const [子锚, set子锚] = useState<{
+    top: number;
+    left: number;
+    parentLeft: number;
+  } | null>(null);
 
   const 面板 = useRef<HTMLDivElement>(null);
   const 行钮 = useRef(new Map<string, HTMLElement | null>());
@@ -434,7 +438,7 @@ function ContextMenuPanel(p: 面板接线) {
     const b = el.getBoundingClientRect();
     // 左边缘**减去 4px 叠到父项上**，中间不留缝——留缝的话鼠标从父项移到子菜单
     // 的路上会经过一条"谁都不属于"的带子，菜单自己就关了（`MenuPopup` 那段）。
-    set子锚({ top: b.top, left: b.right - 4 });
+    set子锚({ top: b.top, left: b.right - 4, parentLeft: b.left });
     set子开(行下标);
   }
 

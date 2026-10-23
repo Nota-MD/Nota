@@ -82,7 +82,7 @@ import "./styles/editor.css";
 import "./styles/github-alert.css";
 // 行内那一层：高亮 / 上标 / 下标 / 下划线、裸 HTML 与注释、脚注、智能标点的仅显示转换。
 import "./styles/editor-inline.css";
-// 块级那一层：代码块、任务列表复选框、表格与拖列宽手柄、分隔线与引用。
+// 块级那一层：代码块、任务列表复选框、表格、分隔线与引用。
 import "./styles/editor-blocks.css";
 // 代码块上的**挂件**（折叠/复制条、语言图标、语言下拉）。⚠️ **必须在
 // `editor.css` 之后**：这一份里那几条选择器要盖住那边对 `pre` / `code` 的
@@ -128,6 +128,7 @@ import "./styles/heatmap.css";
 // 格式化工具栏 / 查找替换条。⚠️ **必须在 `app.css` 之后**：这几条横条
 // 贴在 `.app-main` 里，和外壳的骨架有重叠的选择器（`flex`、边框）。
 import "./styles/bars.css";
+import "./styles/table-toolbar.css";
 // 从 Folio 搬来的那套图标（`.icon` 的遮罩画法）。
 // ⚠️ 这一份与上面几份**没有重叠的选择器**，所以顺序不影响结果——
 // 放在最后只是照这条规矩来（后一份能压前一份），省得以后加规则时
@@ -160,31 +161,9 @@ import "./styles/focus.css";
 // `x^2` 的 2 和 x 一样大。看着像"公式功能没做"，实际是"样式没引"。
 import "katex/dist/katex.min.css";
 
-// ⚠️ **拖列宽那份样式**（`prosemirror-tables` 自带，MIT）。
-//
-// 用户 2026-09-26：「还有就是表格，允许拖动改变大小」。这条功能缺的是**两半**，
-// 而且**两半都缺**（一开始只找出一半，见下面那条更正）：
-//
-// ① **那条插件压根没装**——`@milkdown/preset-gfm` 的 `columnResizingPlugin`
-//    只是被 `export` 出来，**不在 `gfm` 那个 `plugins` 数组里**（"preset 默认
-//    就装"是个反直觉的错判）。装它那一行在 `create.ts`，注释在那边。
-// ② **这份 CSS 没引过**（本行下面那条 `import`）。
-//
-// 所以少了它的症状是"表格看起来根本不能拖"：
-//
-// - 那根拖动手柄是一个 `<div class="column-resize-handle">`，
-//   靠 `.ProseMirror td/th { position: relative }` ＋ 手柄自己的
-//   `position:absolute; right:-2px; width:4px` 才**落在列边界上**。
-//   少了这份 CSS，手柄是个 `static` 的零尺寸 div——不在任何地方，
-//   鼠标碰不到，眼睛也看不见；
-// - `cursor: col-resize`（`.resize-cursor`）同样在这儿。没有它，
-//   鼠标移到列边界上光标一点变化都没有，"这儿能拖"这件事**没有出口**。
-//
-// 与 `katex.min.css` 是**同一种缺法**：不报错、不空白，功能其实在，
-// 只是"什么反应都没有"——那种症状最容易被当成"这个功能没做"。
-//
-// ⚠️ 它自带的那几条**跟随主题的东西**在 `styles/editor.css` 里被覆盖
-//（手柄颜色、单元格最小宽）：这份 CSS 写死了 `#adf`，深色主题下太扎眼。
+// `prosemirror-tables` 的基础表格布局（MIT）：表头/单元格的盒模型、
+// `table-layout: fixed`、表格 wrapper 的横向滚动和单元格选区覆盖层。
+// 列宽拖动功能已移除，这里只保留普通表格显示所需的规则。
 import "@milkdown/kit/prose/tables/style/tables.css";
 
 // 把全局错误钩上，免得未捕获的 Promise 拒绝只在 devtools 里一闪而过——

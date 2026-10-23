@@ -285,6 +285,7 @@ PAIRS=(
   "src/editor/table-tab.ts                       05,07,02"
   # 2026-10-23：表格普通回车——中间格前进、末格加行，Mod+Enter 仍退出。
   "src/editor/table-enter.ts                     05,07,02"
+  "src/editor/table-context.ts                   05,04,02"
   "src/editor/diagram-view.ts                     05,04,10"
   "src/editor/math-view.ts                      05,04,10"
   "src/editor/math-input.ts                     05,04,10"
@@ -320,7 +321,6 @@ PAIRS=(
   "src/ui/useEditorSettings.ts                    05,04"   # 设置 → 开关（哪几项要重建实例）
   "src/ui/useEditorHandle.ts                      05"      # 十三条转发出去的命令
   "src/ui/useCursorSnapshot.ts                    05,07"   # 选区快照推给后端（第 14 项）
-  "src/ui/table-widths.ts                         05,04"   # 表格列宽侧车的读写
   "src/ui/FormatBar.tsx                           04,05"
   "src/ui/Icon.tsx                                02,04"
   # 2026-09-30：侧栏右缘那条可以拖的把手（不是"顺手重构"，是用户照 Typora 点名的）。
@@ -606,6 +606,8 @@ PAIRS=(
   "src/editor/auto-pair.ts                       05,04,10"
   # 2026-10-23：选中文字后的 Markdown 标记包裹。
   "src/editor/selection-marks.ts                 05,04,10"
+  "src/ui/TableToolbar.tsx                       04,05"
+  "src/styles/table-toolbar.css                  04"
   "src/editor/paste.ts                           05,04,10"
   "src/editor/paste-clean.ts                     05,04,10"
   "src/editor/lang-guess.ts                      05,04,10"

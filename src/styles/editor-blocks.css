@@ -307,63 +307,6 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
   background: var(--bg-subtle);
 }
 
-/* ── 拖列宽那根手柄（`prosemirror-tables` 自带样式的一份覆盖）──────────────
- *
- * 用户 2026-09-26：「还有就是表格，允许拖动改变大小」。那份样式已经由
- * `main.tsx` 引了（`@milkdown/kit/prose/tables/style/tables.css`，MIT），
- * 那一条 import 的注释里写着"少了它的症状是什么"。这里只补**它跟不了主题**
- * 的几处——它是通用库，不认识本仓的 token。
- *
- * ⚠️ 下面这两条**故意不用 `:where()`**（与上面那一段的规矩相反）：拖动手柄是
- * **编辑器自己的界面**，不是文档内容，所以文档主题**不该**管它。用 `:where()`
- * 把权重压到 0 的话，任何一份主题里一条沾边的手柄规则都能把它顶掉——而那种
- * "只有拖动时的颜色不对" nobody 会报成 bug。包在 `.editor-mount` 里是为了
- * **只在编辑区生效**（导出、打印那些离屏实例里没有拖动手柄）。
- */
-
-/* ⚠️ 这个变量**必须写在表格上、而且必须 `!important`**——两个都省不得。
- *
- * 库那份 CSS 用 `min-width: var(--default-cell-min-width)` 给"没拖过的列"留一个
- * 最小宽度，但**它自己不定义这个变量**：得有人给值，不给就是非法值、等于没有，
- * 短内容的表格每列会被挤成一条线。
- *
- * ⚠️ 而**这个"有人"不能是 `.editor-mount .ProseMirror` 那一层**（2026-09-27 改）：
- * `TableView` 建实例时会把它拿到的那个选项**原样写成表格上的行内变量**
- * （`prosemirror-tables/dist/index.js:2289` 那句 `this.table.style.setProperty`，
- * 值就是 `列宽拖动插件` 传进去的 `defaultCellMinWidth`）。自定义属性是**继承**的、
- * 且**离得近的赢**，所以写在外层会被表格自己的行内值整个遮住——外层那条规则
- * 会变成一条**永远不生效的死规则**，而症状是"这条规则像没写一样"。
- *
- * ⚠️ 表上写了还不够：行内声明的优先级**高于本文件里任何普通选择器**，
- * 只有作者样式表里的 `!important` 能压过它（这是 CSS 层叠里少数几个
- * "`!important` 是唯一办法"的位置之一，不是偷懒）。
- *
- * ⚠️ 值给**相对量**（em）而不是像素：文档主题会改正文字号，`em` 跟着走，像素不会。 */
-.editor-mount .ProseMirror table {
-  --default-cell-min-width: 3em !important;
-}
-
-/* 手柄颜色。库那份写死了 `#adf`（浅蓝）——深色主题下它是一道刺眼的白线，
- * 而它出现的位置又恰好是用户正盯着的地方。用强调色，亮暗两档都自洽。 */
-.editor-mount .ProseMirror .column-resize-handle {
-  background-color: var(--accent);
-}
-
-/* 拖拽那一刻，**正在拖的那一格**加一层浅浅的强调色，比"只有那根 4px 的线
- * 跟着跑"更容易看出"我正在拖这一列"。
- *
- * ⚠️ 这个 class **挂在单元格上**（`td.column-resize-dragging`），不是挂在
- * 编辑器根上——那是库里的 `Decoration.node(…, { class: "column-resize-dragging" })`，
- * 包的是被拖那一列的那个 cell。挂在根上写（`.ProseMirror.column-resize-dragging`）
- * 是**永远不会匹配**的写法，而它的症状是"这条规则像没写一样"。
- * ⚠️ 与它容易混的 `resize-cursor` 才是挂在根上的（`attributes` 那一条）。
- *
- * ⚠️ 用 `--accent` 兑出来的半透明，别写字面色。 */
-.editor-mount .ProseMirror td.column-resize-dragging,
-.editor-mount .ProseMirror th.column-resize-dragging {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
 /* ── 分隔线与引用（**同样只在没有文档主题时**显形的那一份）────────────────
  *
  * # 为什么非要补这一段

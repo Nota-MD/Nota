@@ -57,7 +57,15 @@
  * （文件树那一族是另一个功能，见 `docs/07` 第 77 项）。这一条写进了 `docs/04`。
  */
 
-import { isMenuItem, 取条目, 右键插入项, 右键段落项, type MenuEntry, type MenuItemSpec } from "@/ui/commands";
+import {
+  isMenuItem,
+  取条目,
+  右键插入项,
+  右键段落项,
+  右键表格项,
+  type MenuEntry,
+  type MenuItemSpec,
+} from "@/ui/commands";
 
 /** 右键落在哪儿。四档的表现完全不同，见文件头那张表。 */
 export type 落点 = "编辑器" | "输入框" | "外壳" | "不弹";
@@ -269,6 +277,7 @@ export function 给行(
     { kind: "icons", key: "icons-block", ids: 块图标 },
     { kind: "sep", key: "sep-2" },
     { kind: "item", key: "ctx.paragraph", spec: 右键段落项 },
+    { kind: "item", key: "ctx.table", spec: 右键表格项 },
     { kind: "item", key: "ctx.insert", spec: 右键插入项 },
   ];
   if (开发模式) 行们.push({ kind: "sep", key: "sep-3" }, ...条目行(["view.devtools"], "工具"));
@@ -383,7 +392,8 @@ export function 表里全部id(): string[] {
   }
   // 两栏子菜单里的条目（`给行` 只给出父项本身）。
   摊子(右键段落项.submenu, 收);
- 摊子(右键插入项.submenu, 收);
+  摊子(右键表格项.submenu, 收);
+  摊子(右键插入项.submenu, 收);
   return 收;
 }
 

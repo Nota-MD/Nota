@@ -42,7 +42,6 @@ import type { 行内扩展开关 } from "@/editor/inline-marks";
 import { createSourceEditor, type SourceHandle } from "@/editor/source";
 import type { 标点设置 } from "@/editor/smart-punctuation";
 import type { 写作模式 } from "@/editor/writing-modes";
-import type { 一张表的列宽 } from "@/ui/table-widths";
 
 /** 主窗格那两份建法**都要**的那几样。 */
 export interface 主窗格公共 {
@@ -66,9 +65,6 @@ export interface 主窗格公共 {
 }
 
 export interface 所见即所得参数 extends 主窗格公共 {
-  /** 这份文档**以前记过的**表格列宽（侧车，见 `ui/table-widths.ts`）。 */
-  列宽: Record<string, number[]>;
-  onTableResize: (表: 一张表的列宽[]) => void;
   /** 光标状态。⚠️ 只有这一侧读得出来（源码模式没有文档树）。 */
   onCommandState: (s: CommandState | null) => void;
   physics: boolean;
@@ -95,8 +91,6 @@ export async function 建所见即所得编辑器(参数: 所见即所得参数)
     root,
     initial,
     文档路径,
-    列宽,
-    onTableResize,
     strict,
     physics,
     行内扩展,
@@ -116,10 +110,6 @@ export async function 建所见即所得编辑器(参数: 所见即所得参数)
     root,
     initialMarkdown: initial,
     文档路径,
-    tableWidths: 列宽,
-    // ⚠️ 拖完一次就把**这一刻所有拖过的表**整体报一遍（为什么这样报、以及
-    // "没有 `doc.path` 就一个字都不存"，见 `ui/table-widths.ts`）。
-    onTableResize,
     // **严格模式**。⚠️ 所见即所得这一侧**要传**：它换的是正文里"`#你好` 算不算
     // 标题的写法"（`heading-on-enter.ts`）。这里原来写着"没有 `strict`，两种模式
     // 已经完全一样了"——那是 2026-09-26 删掉显示层之后的实情，**2026-09-29 又加

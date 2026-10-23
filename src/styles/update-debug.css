@@ -8,6 +8,20 @@
   margin: 6px 0 0;
 }
 
+.about-update-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.about-update-progress-size {
+  flex: none;
+  color: var(--fg-faint);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .about-update-progress-track {
   position: relative;
   height: 8px;

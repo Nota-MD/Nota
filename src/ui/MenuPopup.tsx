@@ -142,7 +142,11 @@ export function MenuPopup(props: PopupProps) {
   // 哪一项的子菜单开着（漫游下标）。`null` = 没开。
   const [subOpen, setSubOpen] = useState<number | null>(null);
   // 那一层飞出的位置（视口坐标）。和 `subOpen` 同生共死。
-  const [subAnchor, setSubAnchor] = useState<{ top: number; left: number } | null>(null);
+  const [subAnchor, setSubAnchor] = useState<{
+    top: number;
+    left: number;
+    parentLeft: number;
+  } | null>(null);
 
   /**
    * 现在开着的子菜单是**点父项开的**（记下标），还是**鼠标划过父项开的**（`null`）。
@@ -217,7 +221,7 @@ export function MenuPopup(props: PopupProps) {
     // 左边缘**减去 4px 叠到父项上**，中间不留缝——留缝的话鼠标从父项移到
     // 子菜单的路上会经过一条"谁都不属于"的带子，鼠标一进那条带子
     // 父项就不是 hover 了，菜单自己关掉。
-    setSubAnchor({ top: r.top, left: r.right - 4 });
+    setSubAnchor({ top: r.top, left: r.right - 4, parentLeft: r.left });
     点开的.current = 来源 === "点" ? row : null;
     setSubOpen(row);
   }
@@ -380,7 +384,7 @@ export interface SubMenuProps {
   onDismiss: () => void;
   onClose: () => void;
   /** 父项右边沿的位置（视口坐标），来自 `MenuPopup`。 */
-  anchor: { top: number; left: number };
+  anchor: { top: number; left: number; parentLeft: number };
   /**
    * 多挂一个类名。**只有一个用处**：右键菜单那份要抬层级。
    *
@@ -417,6 +421,7 @@ export function SubMenu(props: SubMenuProps) {
 
   const boxRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(anchor);
+  const [flipped, setFlipped] = useState(false);
 
   // 量一下自己多高多宽，再把位置**夹**回视口里：底下放不下就往上提，
   // 右边放不下就往左挪。
@@ -427,8 +432,14 @@ export function SubMenu(props: SubMenuProps) {
     const el = boxRef.current;
     if (!el) return;
     const top = Math.max(8, Math.min(anchor.top, window.innerHeight - el.offsetHeight - 8));
-    const left = Math.max(8, Math.min(anchor.left, window.innerWidth - el.offsetWidth - 8));
-    setPos({ top, left });
+    const 右侧越界 = anchor.left + el.offsetWidth > window.innerWidth - 8;
+    const 左侧锚点 = anchor.parentLeft - el.offsetWidth + 4;
+    const 向左展开 = 右侧越界 && 左侧锚点 >= 8;
+    const left = 向左展开
+      ? 左侧锚点
+      : Math.max(8, Math.min(anchor.left, window.innerWidth - el.offsetWidth - 8));
+    setFlipped(向左展开);
+    setPos({ ...anchor, top, left });
   }, [anchor]);
 
   const roving = useMenuRovingFocus<{ disabled?: boolean }>({
@@ -453,7 +464,7 @@ export function SubMenu(props: SubMenuProps) {
   return (
     <div
       ref={boxRef}
-      className={className ? `menu-sub ${className}` : "menu-sub"}
+      className={`menu-sub${flipped ? " menu-sub-left" : ""}${className ? ` ${className}` : ""}`}
       role="menu"
       style={{ top: pos.top, left: pos.left }}
       onKeyDown={roving.handleKeyDown}

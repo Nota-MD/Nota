@@ -45,6 +45,7 @@ import { FormatBar } from "@/ui/FormatBar";
 import { Home } from "@/ui/Home";
 import { ReviewBar } from "@/ui/ReviewBar";
 import { ReviewPane } from "@/ui/ReviewPane";
+import { TableToolbar } from "@/ui/TableToolbar";
 import type { Dialogs } from "@/ui/useDialogs";
 import type { 文档出口 } from "@/ui/useDocuments";
 import type { 命令出口 } from "@/ui/useEditorCommands";
@@ -222,6 +223,11 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           onHide={收起格式化栏}
         />
       )}
+      <TableToolbar
+        visible={viewMode === "wysiwyg" && Boolean(命令状态?.inTable)}
+        documentKey={activeDoc?.id ?? ""}
+        run={跑命令}
+      />
       {活跃预览 && (
         // 改动预览顶上那一条细条。⚠️ **排在编辑区前面**（同一个 flex
         // 列里的上一行），不是编辑区的子节点——分屏那两个窗格是横向

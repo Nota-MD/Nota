@@ -34,9 +34,9 @@
  */
 
 import type { KatexOptions } from "katex";
-import katex from "katex";
 
 import { t } from "@/i18n";
+import { 渲染公式 } from "./katex-runtime";
 import {
   找当场,
   套用,
@@ -370,7 +370,9 @@ export function 建建议框(选项: 建议选项): 建议框 {
  * **不该**把用户的输入打断。
  */
 function 默认画预览(样本: string, 目标: HTMLElement, 选项?: KatexOptions): void {
-  katex.render(样本, 目标, { throwOnError: false, ...选项 });
+  void 渲染公式(样本, 目标, { throwOnError: false, ...选项 }).catch(() => {
+    目标.textContent = "";
+  });
 }
 
 /** 造一个"用某份选项画预览"的 `画预览`（`math-view.ts` 里就是这么接的）。 */

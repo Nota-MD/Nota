@@ -89,7 +89,7 @@ import type { NodeType } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { NodeSelection, Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { mathBlockSchema, mathInlineSchema } from "@milkdown/plugin-math";
+import { mathBlockSchema, mathInlineSchema } from "./math-schema";
 
 import { 美元数属性 } from "./math-delim";
 

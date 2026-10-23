@@ -24,7 +24,7 @@
  */
 
 import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
-import { katexOptionsCtx } from "@milkdown/plugin-math";
+import { katexOptionsCtx } from "./math-schema";
 import { redo, undo } from "@milkdown/kit/prose/history";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import type { Command } from "@milkdown/kit/prose/state";

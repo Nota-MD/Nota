@@ -5,9 +5,10 @@
  * Pandoc 出口在读取时把这些围栏按 LaTeX 数学处理。
  */
 
-import katex, { type KatexOptions } from "katex";
+import type { KatexOptions } from "katex";
 
 import { t } from "@/i18n";
+import { 渲染公式 } from "./katex-runtime";
 
 const 数学语言 = new Set(["math", "latex", "tex"]);
 
@@ -28,23 +29,29 @@ export function 建数学代码输出(options: KatexOptions = {}): 数学代码�
   const 输出 = document.createElement("div");
   输出.className = "nota-code-math-render";
   元素.append(输出);
+  let 代号 = 0;
 
   return {
     元素,
     同步: (source) => {
       const 源码 = source.trim();
+      const 我的代号 = ++代号;
       if (!源码) {
         元素.dataset.state = "empty";
         输出.textContent = `< ${t("Empty Math Block")} >`;
         return;
       }
-      try {
-        元素.dataset.state = "ready";
-        katex.render(源码, 输出, { ...options, displayMode: true, throwOnError: false });
-      } catch {
-        元素.dataset.state = "error";
-        输出.textContent = 源码;
-      }
+      元素.dataset.state = "loading";
+      输出.textContent = "";
+      void 渲染公式(源码, 输出, { ...options, displayMode: true, throwOnError: false })
+        .then(() => {
+          if (我的代号 === 代号) 元素.dataset.state = "ready";
+        })
+        .catch(() => {
+          if (我的代号 !== 代号) return;
+          元素.dataset.state = "error";
+          输出.textContent = 源码;
+        });
     },
   };
 }

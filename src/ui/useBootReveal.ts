@@ -46,9 +46,23 @@ export function useBootReveal(ready: boolean): void {
       // ⚠️ 不能等 rAF：窗口隐藏时 WebKit 会暂停它，ready 之后永远等不到下一帧。
       // 编辑器在此刻已经挂载并聚焦，直接显示原生窗口即可。
       document.documentElement.dataset.booted = "true";
-      void api.window.showMain().catch((error) => {
-        console.error("[nota] 显示主窗口失败：", error);
-      });
+      void api.window
+        .showMain()
+        .then(() => {
+          // 窗口已经真正显示后才开始加载 KaTeX 等增强 chunk。计时器里再让
+          // 一拍，确保 WebKit 先提交首帧；失败时同样放行，不能把公式永远卡住。
+          document.documentElement.dataset.windowShown = "true";
+          window.dispatchEvent(new Event("nota-window-shown"));
+          window.setTimeout(() => {
+            if (cancelled) return;
+            void import("@/editor/katex-runtime").then((m) => m.预热Katex());
+          }, 0);
+        })
+        .catch((error) => {
+          console.error("[nota] 显示主窗口失败：", error);
+          document.documentElement.dataset.windowShown = "true";
+          window.dispatchEvent(new Event("nota-window-shown"));
+        });
     };
     const maybeReveal = () => {
       // ⚠️ 只认编辑器实例已经建好。`startupReady` 只表示会话恢复完成，不能证明

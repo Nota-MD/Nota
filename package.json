@@ -36,7 +36,8 @@
     "mermaid": "^10.9.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "refractor": "^5.0.0"
+    "refractor": "^5.0.0",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.5",

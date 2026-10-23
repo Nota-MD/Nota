@@ -112,7 +112,7 @@
 
 import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import { $nodeSchema, $remark } from "@milkdown/kit/utils";
-import { mathInlineSchema } from "@milkdown/plugin-math";
+import { mathInlineSchema } from "./math-schema";
 import { mathToMarkdown } from "mdast-util-math";
 
 /**
@@ -416,4 +416,3 @@ export function 不转义美元(原文?: 文本处理器): 文本处理器 {
     return 输出.replace(被转义的美元, "$1$");
   };
 }
-

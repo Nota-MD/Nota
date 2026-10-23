@@ -165,11 +165,11 @@ import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/p
 import type { EditorView, NodeView, NodeViewConstructor } from "@milkdown/kit/prose/view";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose, $view } from "@milkdown/kit/utils";
-import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "@milkdown/plugin-math";
-import katex from "katex";
+import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "./math-schema";
 import type { KatexOptions } from "katex";
 
 import { t } from "@/i18n";
+import { 渲染公式 } from "./katex-runtime";
 import { 建命令表, type 收下 } from "./math-commands";
 import { 建建议框, 用选项画预览 } from "./math-suggest";
 
@@ -387,6 +387,8 @@ function 画上游(node: PMNode): HTMLElement {
   return 兜底;
 }
 
+const 画进代号 = new WeakMap<HTMLElement, number>();
+
 /**
  * 建一个公式的 NodeView。行内与块共用这一份，只差输入控件和写回路径。
  *
@@ -555,17 +557,18 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * 这条分界与全仓一致（同 `diagram-view.ts`）。
      */
     function 画进(目标: HTMLElement, 源码: string): void {
-      try {
-        // ⚠️ `katex.render` 直接改这个元素（不返回字符串）：宏表通过
-        //    `katexOptionsCtx` 一路传进来，与上游 `toDOM` 用的是同一份选项。
-        katex.render(源码, 目标, 选项);
-        目标.dataset.state = "ok";
-      } catch (e) {
-        // `throwOnError: false` 时 KaTeX 自己会把错处画成红的（更好看），
-        // 走到这儿是它连渲染都进不去的那种错，别让它静默。
-        目标.dataset.state = "error";
-        目标.textContent = 提取消息(e);
-      }
+      const 代号 = (画进代号.get(目标) ?? 0) + 1;
+      画进代号.set(目标, 代号);
+      目标.dataset.state = "loading";
+      void 渲染公式(源码, 目标, 选项)
+        .then(() => {
+          if (画进代号.get(目标) === 代号) 目标.dataset.state = "ok";
+        })
+        .catch((e: unknown) => {
+          if (画进代号.get(目标) !== 代号) return;
+          目标.dataset.state = "error";
+          目标.textContent = 提取消息(e);
+        });
     }
 
     /**
@@ -587,7 +590,9 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
       预览.dataset.state = "";
 
       if (!view.editable) {
-        渲染.append(画上游(当前));
+        const 上游 = 画上游(当前);
+        渲染.append(上游);
+        画进(上游, 取源码(当前));
         return;
       }
 

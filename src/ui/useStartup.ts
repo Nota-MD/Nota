@@ -1,25 +1,24 @@
 /**
- * **启动那一枪**：把设置、工作区、主题、开机问题、命令行文件、界面语言
- * 一次拉齐，然后握手。
+ * **启动那一枪**：优先把设置、语言与首份文档接上，其余导航状态并行补齐。
  *
  * 从 `App.tsx` 搬出来的（2026-09-26，本文件当时 1049 行、硬上限 1000）。
  * 判据是老规矩（见 `App.tsx` 文件头）：**这块东西自己有一份完整的理由可写**。
  * 搬的时候一行逻辑没改，只是把外面那几个 `setState` 变成了入参。
  *
- * # 为什么这些必须**一起**拉
+ * # 首帧关键路径
  *
- * 六枪走的是同一个 `Promise.all`。逐条各有各的理由，写在这里免得以后有人
- * "顺手"把某一枪挪出去：
+ * ```text
+ * 设置 + 语言 + 设置问题 → 命令行文件 → 首份文档 → 编辑器可输入 → 显示窗口
+ * ```
  *
- * - **设置 / 工作区 / 主题**：三样都是"界面第一帧就要"的状态。分开拉的话，
- *   先画出来的那一帧里，正文宽度、侧栏根目录、主题名至少有一个是空的。
- * - **开机问题**（`api.settings.problem()`）：**不是可选的**。不报的话，用户
- *   看到的是一份"自己变回默认"的设置，而下一次改动能把原文件覆盖掉。
- * - **命令行文件**：自带 `catch`（见下面那段的注释）——一个打不开的文件不该
- *   拖垮整个启动。⚠️ **打开动作不在这里**，走的是 `openPath`（下面那个
- *   `await`），因为读不出来时该弹的提示条、该选中的标签都在那条路上。
- * - **界面语言**：也自带 `catch`。它决定界面上用中文还是英文（`src/i18n/`），
- *   拉不到就按兜底语言画——为它把整个启动掀翻是说不通的。
+ * 工作区根目录与文档主题清单只影响随后出现的侧栏和菜单。它们和关键路径同时
+ * 发起，但完成后各自 `setState`，不再用 `Promise.all` 把窗口挡在后面。
+ *
+ * - **开机问题**：与设置、语言同批等待。不报的话，用户看到的是一份“自己变回
+ *   默认”的设置，而下一次改动能把原文件覆盖掉。
+ * - **命令行文件**：自带 `catch`；打开失败时退回默认启动档，而不是让窗口停到
+ *   五秒兜底计时器。
+ * - **界面语言**：必须在 `setSettings` 前定好，否则第一帧会先画成英文再跳中文。
  *
  * # ⚠️ 「启动时」那一档是从设置里读的（2026-09-27 起它真的生效了）
  *
@@ -38,16 +37,16 @@
  * ⚠️ 所以**默认行为变了**：从没动过这一项的人，启动时从"什么都有"变成"一张白纸"。
  * 那是用户点名要的第一档，也是 `StartupAction::default()` 一直以来的值。
  *
- * # ⚠️ 顺序上那两处刻意的安排（都留着原注释的理由）
+ * # ⚠️ 顺序上刻意保留的安排
  *
  * 1. `定语言` 必须在 `setSettings` **之前**：定了之后 `i18n` 会通知所有订阅者
  *    重画一次（`useT`），而那一批订阅者这一帧还没挂上，不会白画一趟。
- * 2. `openPath(启动文件)` 必须在 `refreshDocs()` **之后**：`openPath` 自己会再
- *    刷新一次列表，先刷是为了让标签栏先立起来（不然开文件那一下界面是空的）。
+ * 2. 命令行文件先 `openPath`，再交给 `接上会话` 只恢复最近记录与滚动位置；
+ *    这样编辑器不必等会话侧车整份读完才出现。
  *
  * # ⚠️ 这个 effect 只跑一次——那是一条**约定**，不是观察
  *
- * 依赖里的 `refreshDocs` / `toast` / `openPath` 都是空依赖的 `useCallback`，
+ * 依赖里的 `toast` / `openPath` 都是空依赖的 `useCallback`，
  * 三个 `set*` 是 `useState` 给的稳定身份。⚠️ 哪天有人给 `openPath` 的上游加一条
  * 会抖的依赖（比如直接捕获 `docs`），这个 effect 就会每次刷新文档列表都重跑
  * 一遍、**把命令行那份文件反复重新打开**。那条约定记在 `ui/useDocuments.ts`
@@ -65,8 +64,6 @@ export interface 启动接线 {
   setSettings: (s: Settings) => void;
   setWorkspace: (w: string | null) => void;
   setThemes: (t: DocThemeInfo[]) => void;
-  /** 重拉文档列表。**必须在 `openPath` 之前调一次**，理由见文件头第 2 条。 */
-  refreshDocs: () => Promise<unknown>;
   /** 打开一份文档（命令行给的那个也走它）。 */
   openPath: (path: string) => Promise<unknown>;
   /**
@@ -86,7 +83,7 @@ export interface 启动接线 {
 }
 
 export function useStartup(w: 启动接线): void {
-  const { setSettings, setWorkspace, setThemes, refreshDocs, openPath, 接上会话, toast } = w;
+  const { setSettings, setWorkspace, setThemes, openPath, 接上会话, toast } = w;
 
   useEffect(() => {
     let alive = true;
@@ -104,8 +101,8 @@ export function useStartup(w: 启动接线): void {
         // **所有 IPC 的最大值之和的一半**，不是任何一项本身。
         //
         // 主题 CSS 的第一帧只依赖设置里的 `ui_style`。所以先让设置/语言/设置问题
-        // 到岸，立刻 `setSettings` 触发主题装载；其余状态继续并行，不改变下面
-        // “先文档列表、再启动文件、最后会话”的既有顺序。
+        // 到岸，立刻 `setSettings` 触发主题装载。工作区与主题清单只影响菜单和
+        // 侧栏，不参与编辑器首帧，到了就各自写入，不再挡在主路径上。
         const 工作区任务 = api.workspace.get();
         // 主题扫目录。目录不存在、一个主题都没有都是**正常结果**（返回空表），
         // 不是错误——主题目录还没建起来的机器就是这种情况。
@@ -132,22 +129,31 @@ export function useStartup(w: 启动接线): void {
         // ⚠️ 在 `setSettings` 之前定语言（理由见文件头第 1 条）。
         if (界面语言) 定语言(界面语言.effective);
         setSettings(s);
-        const [ws, themeList, 启动文件] = await Promise.all([工作区任务, 主题任务, 启动文件任务]);
+        void 工作区任务
+          .then((ws) => {
+            if (alive) setWorkspace(ws);
+          })
+          .catch((e) => {
+            if (alive) console.warn("[nota] 工作区状态读取失败：", e);
+          });
+        void 主题任务
+          .then((themeList) => {
+            if (alive) setThemes(themeList);
+          })
+          .catch((e) => {
+            if (alive) console.warn("[nota] 主题清单读取失败：", e);
+          });
+
+        const 启动文件 = await 启动文件任务;
         if (!alive) return;
-        // ⚠️ 这一枪**冷启动时永远是 `null`**：工作区在宿主进程里只是个
-        // `Mutex<Option<PathBuf>>`，新进程开出来必然是空的。这里照设不误是因为
-        // 它才是"这次进程现在的工作区"的真相；真正的"接上上次那个文件夹"在
-        // `接上会话` 里（第三档），而且要排在它**后面**才对得上。
-        setWorkspace(ws);
-        setThemes(themeList);
         // 不自动消失（`0`）：这是状态，不是一次操作的结果。见 `ui/useToasts.ts`。
         if (设置问题) toast(t("The settings could not be read; starting with defaults this time. {0}", String(设置问题)), "error", 0);
         // ⚠️ 那个 `?.` 是给**旧后端**留的（同上面那段）：真正缺了这一截时按第一档
         // 办——那正是这一档的词义，也是 `StartupAction` 的 `Default`。
         const 启动档: StartupAction = s.files?.startup ?? "new-file";
-        await refreshDocs();
-        // ⚠️ 放在 `refreshDocs()` **之后**（理由见文件头第 2 条）。
-        if (启动文件) await openPath(启动文件);
+        // 命令行指名的文件可以先开；开失败时把 `null` 交给会话恢复，
+        // 让默认的「新建空白文档」仍有一条兜底。
+        const 已开启动文件 = 启动文件 ? await openPath(启动文件) : false;
         // ⚠️ **恢复会话排在最后**，而且两步的顺序不能反：`接上会话` 在没有
         // 命令行文件时会把上次那几个标签逐个开回来，而它自己也要**先**读到
         // 那份侧车才知道该开谁。放到 `openPath` 前面的话，命令行给的那一份
@@ -161,7 +167,7 @@ export function useStartup(w: 启动接线): void {
         // 而这一段无条件恢复标签和工作区，也就是永远按第三档办。
         // 那个 `?.` 与 `App.tsx` 里 `keys?.` 那条同一个理由：跑起来的后端
         // 可能是旧的，缺了这一截就是启动即白屏。
-        await 接上会话(启动文件 ?? null, 启动档);
+        await 接上会话(已开启动文件 ? 启动文件 : null, 启动档);
         markStartupReady();
       } catch (e) {
         toast(t("Could not read the state at startup: {0}", String(e)), "error");
@@ -181,5 +187,5 @@ export function useStartup(w: 启动接线): void {
     // ⚠️ 这三个 `set*` 是 `useState` 给的稳定身份（React 保证），列进来是为了
     // 这条 effect 的依赖看起来是完整的；真正会变的是那三个回调，而它们**必须**
     // 是稳定的——理由见文件头最后一段。
-  }, [refreshDocs, toast, openPath, 接上会话, setSettings, setWorkspace, setThemes]);
+  }, [toast, openPath, 接上会话, setSettings, setWorkspace, setThemes]);
 }

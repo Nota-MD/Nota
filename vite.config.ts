@@ -12,9 +12,21 @@ export default defineConfig({
   resolve: {
     // `@/…` → `src/…`。**必须与 tsconfig.json 的 paths 保持一致**——
     // 两处不一致时的表现是：`tsc` 过了、`vite build` 挂了（或者反过来）。
-    alias: {
-      "@": fileURLToPath(new URL("./src", import.meta.url)),
-    },
+    alias: [
+      {
+        find: "@",
+        replacement: fileURLToPath(new URL("./src", import.meta.url)),
+      },
+      {
+        // `micromark-extension-math` 的 index 同时导出语法与 HTML 扩展，而
+        // HTML 扩展在顶层静态导入 KaTeX。编辑器只用语法；把这个未使用的分支
+        // 换掉后，KaTeX 才能留在后台 chunk 里。
+        find: /micromark-extension-math\/lib\/html\.js$/,
+        replacement: fileURLToPath(
+          new URL("./src/editor/micromark-math-html-placeholder.ts", import.meta.url),
+        ),
+      },
+    ],
   },
 
   // Tauri 期望一个固定端口，端口被占用时**直接失败**而不是悄悄换一个

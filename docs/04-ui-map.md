@@ -276,7 +276,7 @@ ErrorBoundary                       (ui/ErrorBoundary.tsx)  兜住渲染期崩�
    │        ├─ button.btn              「取消」
    │        └─ button.btn.btn-primary  主按钮（按状态换，见 §2.6e）
    │
-   ├─ (SettingsDialog)              (ui/settings/SettingsDialog.tsx)  仅 `settingsOpen`
+   ├─ (SettingsDialog)              (ui/settings/SettingsDialog.tsx)  仅 `settingsWindow.open`
    ├─ (ImageDialog)                 (ui/ImageDialog.tsx)  仅 `imageReq` 非空（2026-09-26）
    │  └─ div.confirm-backdrop > div.confirm-dialog.prompt-dialog（⚠️ **复用提示框那套类**）
    │     ├─ div.image-src-tabs[role=tablist] → button × 2   「本地文件」/「网络地址」
@@ -3100,7 +3100,7 @@ ProseMirror 的 DOM 也是 `contenteditable`，所以那个"不在编辑区里"�
 | `statusBarOpen` | `boolean`（默认 `true`） | 菜单栏「视图 → 状态栏」＋ **状态栏右端那颗 ×**（2026-10-04 加，第 49 项——两颗走同一个 `setChrome`，只是那颗 × 只写 `false`、不取反）。⚠️ **2026-09-25 起不再是这里的 state**：值是 `settings.appearance.show_status_bar` 的派生值（`ui/useChromeVisibility.ts`），改它走 `updateSettings`——在那之前菜单与设置页各有一套同名开关、互不联动（见 `docs/07` §2） |
 | `dockOpen` | `boolean`（**默认 `false`**） | 顶栏的「插件」开关、右栏的 ×、菜单栏「视图 → 插件栏」。⚠️ **只在内存里，没进 `settings`**——它和左栏选哪一页一样是「看的时候的状态」，不是文档属性。刷新即复位 |
 | `themes` | `DocThemeInfo[]` | **只在启动时读一次** `api.theme.list()`。⚠️ 所以往主题目录丢新 `.css` 得重启才看得见（`docs/07` 第 41 项） |
-| `settingsOpen` | `boolean`（默认 `false`） | 菜单「文件 → 偏好设置」、`Ctrl+,`；关由 `SettingsDialog` 的「关闭」 |
+| `settingsOpen` | `boolean`（默认 `false`） | 菜单「文件 → 偏好设置」、`Ctrl+,`；关由 `SettingsDialog` 的「完成」或右上角 × |
 | `formatBarOpen` | `boolean`（**默认 `false`**） | 由 `settings.appearance.toolbar` 派生（`ui/useChromeVisibility.ts`）＋ **工具栏右端那颗 ×**（2026-10-04 加，第 49 项：它与菜单里 `view.toolbarNever` 写的是**同一句** `setChrome({ toolbar: "never" })`，见 `ui/useChromeVisibility.ts` 的 `收起工具栏`）。⚠️ **2026-09-25 起它不是布尔量了**：设置文件里那一格是**三档** `ToolbarMode`（`always` / `hover` / `never`），**默认 `never`**（用户要求），这里是它的"这一档现在画不画"的化简。⚠️ 菜单里对应的是**三条子项**（`view.toolbarAlways` / `view.toolbarHover` / `view.toolbarNever`，见 §2.1b），不是一条可勾项；「悬停」那一档靠一条 **8px** 的触发带实现（`顶部触发带`，压在**主区**最顶上那 8px，不是窗口顶端——去点菜单时不该顺带弹出一条工具栏）。⚠️ **别把它和 §2.10 那条 6px 的 `--zen-peek` 混起来**：一条在主区顶端唤工具栏（JS 里的常量），一条在窗口顶端唤菜单栏（CSS 变量），两个数故意不同。⚠️ 悬停那一档**会把正文挤下去**（工具栏在文档流里，不是浮层）——"看的时候挡住内容"比"内容跳一下"更糟。理由都在 `useChromeVisibility.ts` 文件头 |
 | `findOpen` | `boolean`（默认 `false`） | 菜单「编辑 → 查找与替换」、`Ctrl+H` 开；`Esc` / 条子上的 ✕ 关（`App.tsx::关查找`，一并清高亮并把焦点还给编辑区） |
 | `findStatus` | `FindStatus` | **编辑器报上来的**（`EditorPane` 的 `onFindStatus`），`App.tsx` 不自己算。⚠️ 换文档/切模式时编辑器会报一次 `空查找状态`——不留着上一次那份 |
@@ -3194,9 +3194,10 @@ plugin 13 / frontendReady 1 / startupFile 1），**从未被调用过的有 4 �
 | **文件名**不是合法 UTF-8 | **宿主**，`nota_startup_file` 直接 reject（`NotaError::NonUtf8Path`） | 「命令行给的文件打不开：路径不是合法的 UTF-8：…」——**就地弹，不进 `openPath`** |
 | 文件名没问题、**内容**不是合法 UTF-8 | 前端 `openPath` 把它读进来时 | 「读文件失败 …：内容不是合法的 UTF-8 文本」 |
 
-⚠️ **上面那张表里 `startupFile` 那一枪自带 `catch`，不是可选的**：它蹲在启动那个
-`Promise.all` 里，一 reject 就会把 `setSettings` / `setThemes` / `refreshDocs` **整个跳过**
-——一个打不开的文件不该把启动拖垮。改这段代码前先看 `App.tsx` 那一枪旁边的注释。
+⚠️ **`startupFile` 那一枪自带 `catch`，不是可选的**：现在它不在设置那一组
+`Promise.all` 里，而是设置到岸后先等这一条，再决定“开命令行文件”还是“按启动档
+建白纸 / 恢复会话”。一 reject 就直接退回默认启动档——一个打不开的文件不该把
+编辑器首帧拖垮。改这段代码前先看 `ui/useStartup.ts` 那一枪旁边的注释。
 
 ⚠️ **插件声明的面板与菜单不走事件，走上面这两条命令拉**（BUG-13，2026-09-22）。
 曾经它们是 `events.pluginPanel` / `events.pluginMenu` 两条事件，而 `App.tsx` 里

@@ -45,7 +45,7 @@ import { trailing } from "@milkdown/kit/plugin/trailing";
 import { prism } from "@milkdown/plugin-prism";
 // ⚠️ `mathInlineInputRule` / `mathBlockInputRule` 是**按引用拿掉**的那两条，
 // 见下面 `.use(math.filter(...))`。
-import { katexOptionsCtx, math, mathBlockInputRule, mathInlineInputRule } from "@milkdown/plugin-math";
+import { katexOptionsCtx, math } from "./math-schema";
 // ⚠️ **命令白名单那一串**（`toggleStrongCommand` … `setAlignCommand`）2026-09-28
 // 整段搬去了 `./command-table`；这里只剩这一条：它**不是命令**，是一条输入
 // 规则，留着是为了把上游那条从 `commonmark` 里过滤掉
@@ -543,7 +543,7 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // 两处的边界与实测表都在 `math-input.ts` 文件头。
     // ⚠️ `math` 是**纯数组**（`plugin-math/lib/index.es.js` 尾部那个
     // `[…].flat()`），所以按引用滤得掉，**摘一条不影响别的**。
-    .use(math.filter((p) => p !== mathInlineInputRule && p !== mathBlockInputRule))
+    .use(math)
     .use(公式输入)
     // ⚠️ **块公式的回车**（2026-10-04）：`$$` 那一段按回车 → 一块空的
     // `math_block`，源码框当场打开。放在这里只是为了挨着上面那两条（同一个

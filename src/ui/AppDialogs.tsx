@@ -20,18 +20,39 @@
  * 这一条只是别让人随手改动顺序时踩空。
  */
 
-import { AboutDialog } from "@/ui/AboutDialog";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { PrintDialog } from "@/ui/PrintDialog";
-import { PromptDialog } from "@/ui/PromptDialog";
-import { ImageDialog } from "@/ui/ImageDialog";
-import { LinkDialog } from "@/ui/LinkDialog";
-import { EmojiDialog } from "@/ui/EmojiDialog";
-import { FocusSummaryDialog } from "@/ui/FocusSummaryDialog";
-import { PandocPanel } from "@/ui/PandocPanel";
+import { lazy, Suspense } from "react";
+
 import type { 总结 } from "@/ui/focus-summary";
 import type { Dialogs } from "@/ui/useDialogs";
 import type { 导出出口, PandocGate } from "@/ui/useExport";
+
+const AboutDialog = lazy(() =>
+  import("@/ui/AboutDialog").then((m) => ({ default: m.AboutDialog })),
+);
+const ConfirmDialog = lazy(() =>
+  import("@/ui/ConfirmDialog").then((m) => ({ default: m.ConfirmDialog })),
+);
+const PrintDialog = lazy(() =>
+  import("@/ui/PrintDialog").then((m) => ({ default: m.PrintDialog })),
+);
+const PromptDialog = lazy(() =>
+  import("@/ui/PromptDialog").then((m) => ({ default: m.PromptDialog })),
+);
+const ImageDialog = lazy(() =>
+  import("@/ui/ImageDialog").then((m) => ({ default: m.ImageDialog })),
+);
+const LinkDialog = lazy(() =>
+  import("@/ui/LinkDialog").then((m) => ({ default: m.LinkDialog })),
+);
+const EmojiDialog = lazy(() =>
+  import("@/ui/EmojiDialog").then((m) => ({ default: m.EmojiDialog })),
+);
+const FocusSummaryDialog = lazy(() =>
+  import("@/ui/FocusSummaryDialog").then((m) => ({ default: m.FocusSummaryDialog })),
+);
+const PandocPanel = lazy(() =>
+  import("@/ui/PandocPanel").then((m) => ({ default: m.PandocPanel })),
+);
 
 export function AppDialogs({
   对话框,
@@ -67,7 +88,7 @@ export function AppDialogs({
   const { printReq, closePrint } = 对话框;
 
   return (
-    <>
+    <Suspense fallback={null}>
       {/* 借 pandoc 那七种：**没探通才有它**（探通了直接进保存对话框）。 */}
       {pandocGate && (
         <PandocPanel probe={pandocGate.probe} format={pandocGate.format} {...pandocGateActions} />
@@ -118,9 +139,6 @@ export function AppDialogs({
           所以判的是 `emojiOpen` 那个布尔，不是某个请求对象。 */}
       {emojiOpen && <EmojiDialog onAnswer={answerEmoji} />}
 
-      {/* 「关于 Nota」。⚠️ 与 `专注总结` 一样是**另一条路**：它不问任何事，
-          是一份看完就关的报告（区别是它的开关住在 `useDialogs` 里，
-          所以从上面那个对象上取，不占 `App.tsx` 的 props）。 */}
       {关于开着 && (
         <AboutDialog onClose={关关于} debugMode={debugMode} onSetDebugMode={onSetDebugMode} />
       )}
@@ -135,6 +153,6 @@ export function AppDialogs({
           onClose={关掉专注总结}
         />
       )}
-    </>
+    </Suspense>
   );
 }

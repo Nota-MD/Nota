@@ -58,18 +58,9 @@ import "./styles/plugin-list.css";
 // 之后**——它借了确认框那层壳（`.confirm-backdrop`/`.confirm-dialog`），
 // 再靠顺序盖掉那个 440px 的宽度。
 import "./styles/gate.css";
-// 偏好设置那个框的样式：**框体与版式**。**必须在 `app.css` 之后**——它加宽的
-// 是 `app.css` 里 `.confirm-dialog` 那套底子（确认框和设置框共用一层遮罩）。
-// ⚠️ 2026-09-29 按功能拆成三份（那一份当时 962 行）：壳与版式（这一条）＋
-// **控件原语**（`settings-controls.css`）＋ **某一页专用的小件**
-// （`settings-widgets.css`，`?` 气泡 / 明暗缩略图 / 快捷键页）。三份的顺序不承重，
-// 但都要在 `app.css` 之后（前两份借那边的按钮底子）。
 import "./styles/settings.css";
-// 控件原语：下拉、开关、滑块、单选、输入框、按钮排、明暗缩略图。
 import "./styles/settings-controls.css";
-// 设置框里的三块专用小件：`?` 气泡、明暗缩略图、快捷键那一页。
 import "./styles/settings-widgets.css";
-// 设置包选择框（「通用 → 设置包」）的列表与滚动区。
 import "./styles/settings-export.css";
 // 正文编辑区的**外壳与版式**。⚠️ **必须在 `app.css` 之后**。两份文件的选择器有
 // 重叠的部分（比如都碰过 `.ProseMirror` 那棵树），靠后者覆盖前者。顺序反过来，
@@ -152,10 +143,9 @@ import "./styles/focus.css";
 
 // ⚠️ KaTeX 的排版样式，**必须引，而且只能从这里引**。
 //
-// `@milkdown/plugin-math` 的 `toDOM` 里是真的调了 `katex.render()` 的
-// （`src/editor/create.ts` 里 `.use(math)`），它把 `$x^2$` 渲染成一棵
-// 带 `katex` class 的 HTML 树——**但分数线画在哪、上下标缩到多大、
-// 积分号用什么字体，全在这份 CSS 里，不在那棵树里**。
+// 数学 NodeView 通过 `editor/katex-runtime.ts` 异步加载 KaTeX。JS 可以在核心
+// 编辑器就绪后再取，但样式表只有 29 KB，放主样式里可避免公式首次出现时闪排版。
+// 分数线画在哪、上下标缩到多大、积分号用什么字体，全在这份 CSS 里。
 //
 // 少了它的表现很有迷惑性：不报错、不空白，只是 `\frac{a}{b}` 变成两个字母并排、
 // `x^2` 的 2 和 x 一样大。看着像"公式功能没做"，实际是"样式没引"。
@@ -241,6 +231,12 @@ if (是警报窗) {
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    {是警报窗 ? <FocusAlarmWindow /> : isDebugInfoWindow ? <DebugInfoWindow /> : <App />}
+    {是警报窗 ? (
+      <FocusAlarmWindow />
+    ) : isDebugInfoWindow ? (
+      <DebugInfoWindow />
+    ) : (
+      <App />
+    )}
   </React.StrictMode>,
 );

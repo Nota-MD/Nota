@@ -288,6 +288,9 @@ PAIRS=(
   "src/editor/table-context.ts                   05,04,02"
   "src/editor/diagram-view.ts                     05,04,10"
   "src/editor/math-view.ts                      05,04,10"
+  "src/editor/math-schema.ts                    05,10"
+  "src/editor/katex-runtime.ts                  05,10"
+  "src/editor/micromark-math-html-placeholder.ts 02,05"
   "src/editor/math-input.ts                     05,04,10"
   # 行内公式"用几个 `$`"那一套（2026-09-27）：解析标注 ＋ 规格加属性 ＋ 序列化选处理器。
   "src/editor/math-delim.ts                     05,04,10"
@@ -337,6 +340,8 @@ PAIRS=(
   "src/ui/EmojiDialog.tsx                         04,02"
   "src/ui/AppDialogs.tsx                          04,02"
   "src/ui/Sidebar.tsx                             04"
+  "src/ui/DeferredUi.tsx                         02,04,10"
+  "src/ui/useSettingsWindow.ts                   02,04,10"
   "src/ui/MenuBar.tsx                             04,10"
   "src/ui/TopBar.tsx                              04,02"
   "src/ui/TabBar.tsx                              04,02"

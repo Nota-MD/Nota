@@ -47,7 +47,6 @@
  * ⚠️ 只在**这一个文件**里引：它改的是 katex 那个模块实例，引两遍是无害的
  * 重复，但"到底谁把它打开的"会变得没人说得清。
  */
-import "katex/dist/contrib/mhchem.mjs";
 import type { KatexOptions } from "katex";
 
 /**

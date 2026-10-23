@@ -143,6 +143,9 @@
 | `editor/image-attrs.ts` | **图片装载兜底**（2026-09-24，P0）：上游 preset 少写 `\|null`，不带 title 的图**装载时被整节点丢掉**（打开含图文档 → 存盘 → 图没了）。一个 `$remark` 插件，在 mdast 上把 `null` 抹成 `""`。⚠️ **只读实例也要挂**（导出、分屏预览） |
 | `editor/math-macros.ts` | **physics 宏包的表**（2026-09-24）：108 条宏 + 每条一个可渲染样例，做成 KaTeX 的 `macros`；外加 `PHYSICS_EQUIVALENTS` 对照表（宏写法 vs 手写等价 TeX）。⚠️ 官方没有 physics，`katex-physics`（2019）**刻意没引**（无 LICENSE），表由 Nota 自己写。**能写与写不出来的逐条在 `docs/10` §11.1** |
 | `editor/math-view.ts` | **公式能就地改 ＋ `$` / `$$` 半透明**（2026-09-26）：上游那两个节点是 `atom`、**一个视图都没有**，所以敲进去的字会被 `toMarkdown` 静默丢掉（源码在两处：`math_inline` 在**内容**里、`math_block` 在 **`attrs.value`** 里——写错哪一边不报错、只丢字；⚠️ 2026-09-27 起 `math_inline` **有** `attrs` 了，但那只是为了记「用了几个 `$`」，**源码仍在内容里**，见 `editor/math-delim.ts`）。⚠️ **不改上游 schema**；只读实例画上游 `toDOM` 那棵树。⚠️ 用例 **51** 条在 `tests/math-view.test.ts`（跑法见 `docs/06` §6.3）；2026-09-26 起那个文件也盖 `insert.ts` 的 `插公式块`；⚠️ 原第七组盖的是 `lax-heading.ts` 的**显示层**装饰，那天显示层删掉后**整组换成了 `不转义行首井号`**（38 → 41）；⚠️ **2026-10-04 加的第八组**（41 → 51）量的是**命令补全弹窗的接线**——那格弹窗挂进 `面板` 里、只读实例不挂、行内那档用 `span`、回车收下之后面板**留着**、Esc 第一下只收弹窗、点一条候选走同一个口子、`aria-activedescendant` 写在源码框上、**丢焦点只收弹窗（面板归选区管）**——最后一那条是**有意**把"弹窗归焦点、面板归选区"这条分界钉住 |
+| `editor/math-schema.ts` | **数学节点的轻量 schema**：保留 `math_inline` / `math_block`、remark 解析与序列化，不静态导入 KaTeX。这样核心 Markdown 编辑器先可用，公式排版引擎由 `katex-runtime.ts` 在窗口揭幕后加载 |
+| `editor/katex-runtime.ts` | **KaTeX 异步运行层**：`import("katex")` 与 mhchem 扩展只在窗口已经显示后开始，Promise 去重；公式 NodeView、命令候选和 `math` / `latex` 代码围栏共用它。主 CSS 仍带 29 KB 的 KaTeX 样式，避免公式第一次出现时折行闪动 |
+| `editor/micromark-math-html-placeholder.ts` | 生产构建替换 `micromark-extension-math/lib/html.js` 的未使用 HTML 分支；该分支原本静态导入 KaTeX，会把数学引擎重新拖回首屏 |
 | `editor/math-input.ts` | **公式的打字规则**（288 行，2026-09-26；⚠️ **2026-09-27 起"敲的就是存的"**——两条规则各多带一个 `dollars` 参数，`$$x$$` 存盘还是 `$$x$$`，机制在 `math-delim.ts`，用例 **28** 条）：`$$x$$` 与 `$x$` 各一条，敲完当场变一颗 `math_inline`。⚠️ **上游那条 `mathInlineInputRule` 被按引用滤掉了**（`create.ts`，和标题的 `wrapInHeadingInputRule` 同一个手法）：它的正则认不出 `$$…$$`，用户敲到 `A$$bb$` 那一下尾巴就够匹配、当场变出「文本 `A$` ＋ 公式 `bb`」——**"行内 `$$…$$` 打不出来"的根因在这儿，跟解析器无关**（解析器本来就认）。⚠️ `$…$` 那条只剩**一道**守卫：前面紧挨着**还是 `$`** 就让开（⚠️ 2026-10-04 加过第二道"值紧挨着空白的不算公式"、**当天就整条撤回了**——它把 `$ \LaTeX $` 这种常见写法也判成了普通文字，用户拍板；两句判据都记在 `docs/05` §4.17 ⑦）。⚠️ **2026-10-04 同批还摘掉了上游的 `mathBlockInputRule`**（`/^\$\$\s$/`：「`$$` ＋**一颗空格**」就凭空建一块**空**公式），换成 `公式块回车`（`$prose` ＋ `handleKeyDown`，四条守卫）——上游那条自己的注释写着 "press **enter**"、实现却跟注释不符。用例在 `tests/math-input.test.ts`（**28** 条，第三、四组是这两件） |
 | `editor/math-commands.ts` | **LaTeX 命令候选的那张表与四个纯函数**（435 行，2026-10-04，用户要的「加 LaTeX 命令补全」的**纯逻辑那一半**）：`建命令表(有physics)`／`找当场(源, 光标)`（从光标往前扫字母、前面**奇数颗**反斜杠才算命令头——`\\` 是换行不是命令头）／`挑候选(表, 词, 上限)`（**只做前缀匹配，不做模糊**）／`套用(...)`（光标落进第一个 `{}`）。⚠️ 手写一列 ＋ physics 那 216 条**从 KaTeX 的 `PHYSICS_MACROS` 推**（参数个数取 `#n` 的最大下标）；⚠️ **`\div` 两处同名**（手写表是除号、KaTeX physics 是散度），开 physics 时**后者顶掉前者**，代价是看不到「÷」那条提示。⚠️ `候选上限` **故意等于 `常用名` 的条数**（小了就有 `常用` 条目被静默截掉——写这一批时真踩过）。⚠️ **弹窗高度只认这一个数**：CSS 那边原来是按估算配了一条像素 `max-height`，目检量出只装得下九条，已删（BUG-63）。⚠️ **样本必须"单独立得住"**：留空串吃的是"跟名字一样"那条兜底，而 `\right` 离了配对的 `\left` 标不出来——KaTeX 把红字报错画进那一格（BUG-64），它的样本已改成 `\left. x \right)`。用例 **35** 条在 `tests/math-commands.test.ts` |
 | `editor/math-suggest.ts` | **命令候选弹窗那一棵 DOM 树**（379 行，2026-10-04）：建元素、跟输入换内容、↑↓ 选、回车/Tab 收、点一条也收、Escape 只收弹窗。⚠️ **挂在公式自己的 NodeView 那棵树里**（绝对定位），不像 `lang-picker.ts` 那样挂 `document.body`——白拿主题变量、不必算屏幕坐标，而且**假 DOM 跑得动**（`tests/fake-dom.ts` 没有 `body`/`window`/`getComputedStyle`）。⚠️ 这一层**不碰文档**：算出来的新源码经 `收下后` 交回 `math-view.ts`，**键盘与鼠标走同一个口子**（早先键盘那一路漏喊了 `收下后`，症状是"按回车没反应"——测试当场抓到的，见 `docs/07` BUG-60）。⚠️ 行内那档用 `span` 建（整棵 NodeView 活在一个 `<span>` 里，`div` 是非法嵌套）。用例 **27** 条在 `tests/math-suggest.test.ts` |
@@ -221,6 +224,7 @@
 | `ui/useCursorSnapshot.ts` | **选区快照 → 后端镜像**（103 行，第 14 项；2026-10-04 加、2026-10-07 从 `ui/EditorPane.tsx` 拆出）：编辑器每报一份选区，压一道 **250ms** 时间窗再 `api.doc.cursor(...)` 推给插件。⚠️ 编辑器那一侧的键是"快照变没变"、这里的键是"多久没推过了"——**只挪光标、不改字**不会触发 `sync`，没有这一条插件读到的选区会一直停在敲键盘之前。⚠️ 定时器与 `sync` 那条**分开**（合用一个会让"改一个字"吞掉"刚挪了光标"那次推送）；**推失败只吞掉**不弹提示条（旁路，下一笔事务自愈） |
 | `ui/TableToolbar.tsx` | **当前表格上方的浮动快捷栏**（2026-10-23 新建）：调整行列数、左 / 中 / 右对齐、删除表格。只在所见即所得且光标位于表格时出现，按当前表格矩形定位；点击按钮不抢编辑器选区。 |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件 / 大纲）。文件页默认是 **扁平列表**，按当前口径递归列出工作区内的 Markdown，并保留列表/树形切换；大纲页随正文选区标记当前章节。两页始终挂载，只用 `hidden` 切换，因此视图选择和折叠状态不会在页签之间丢失。底栏依次提供新建、工作区名、更多操作（打开文件夹 / 刷新）和视图切换；整栏是贴边面板，不再使用悬浮卡片外观。 |
+| `ui/DeferredUi.tsx` | 首屏按需加载的大型界面：设置对话框、右侧拓展栏和文件选择器。只有真正打开时才请求对应 chunk |
 | `ui/PluginDock.tsx` | 右侧插件栏（⚠️ 2026-10-04 起页签有 ←→/Home/End，`useTablistKeys`，第 50 项）：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
 | `ui/pluginText.ts` | **插件在界面上那几句人话**（2026-09-27 新建，136 行）：来源 / 签名 / 语言 / 能力名 / 位置名。⚠️ 起因是同一句「自装 · 已验证」要在**两个界面**上出现（右侧插件栏 ＋ 设置里的「拓展」页），谁抄第二份，往后就是"改一处、另一处不动"，而那种不一致**不报错**。⚠️ **只有文案**（没有 JSX、没有状态、不碰 `api`）；⚠️ **全是函数不是模块级常量表**——模块级求值时 `t` 还没订阅，且 `tools/i18n-check.sh` 只数为字面量写出来的 `t(…)` |
 | `ui/PanelBody.tsx` | **一张插件面板的身体**（2026-09-24）：拉 `nota_plugin_panel_content` → 交给 `panel-nodes.ts` 认形状 → 按白名单画。⚠️ 拉是**每次打开都拉**，不是缓存；`nota:plugin-panel` 那条事件只是"去重拉"的信号。⚠️ 2026-09-24 起多了三种块：`message`（一问一答，保留换行）/ `diff`（增删对照，**只画**）/ `input`（**面板里唯一的输入控件**，发出去＝调 `submit` 命令、参数 `{ [arg] = 输入 }`，跟按钮零区别） ⚠️ **2026-10-10 又加了两块**（AI 插件改成现代对话框那批）：`tabs`（上方的标签页：点字面切、点小叉关、末尾一颗「＋」）与 `hero`（空态那行大字）；`message` 多了 `copy`（那颗「复制」是**宿主**画的——插件那套 API 里没有剪贴板）、`input` 多了 `chips`（卡片里那排预设小按钮）＋ **发送键改成一枚圆形箭头**。⚠️ 消息那一块自此**有自己的状态**（"已复制"那 1.6 秒的反馈），同 `PanelInput` 的草稿 |
@@ -4929,17 +4933,20 @@ React 按位置对不上就退到"按键值查"那条路，而那张表是 Map�
 
 ### 五个 `useEffect`（另附两段已搬走的）
 
-**① 启动**（依赖 `[refreshDocs, toast, openPath]`）
+**① 启动**（依赖 `[toast, openPath, 接上会话]`）
 
 ```text
 workspace / theme.list / startupFile 先并行开跑
   → Promise.all([settings.get(), settings.problem(), appLang()])
   → 定语言 + setSettings（界面风格 CSS 从这里开始取）
-  → 等 workspace / theme.list / startupFile
-  → setWorkspace / setThemes
+  → workspace / theme.list 到岸后各自 setState（不挡首帧）
+  → 等 startupFile
   → 有设置问题就 toast(`设置读不出来了，这次按默认值启动。${…}`, "error", 0)
-  → await refreshDocs()
-  → 有命令行文件就 await openPath(那个文件)
+  → 有命令行文件就先 await openPath(那个文件)
+  → await 接上会话(启动文件, 启动档)
+     ├─ new-file：先 newDoc() 落一张白纸，再读最近 / 滚动侧车
+     └─ last-file / last-session：恢复标签与工作区
+  → markStartupReady()
 失败 → toast(`启动时读取状态失败：${e}`, "error")
 
 然后（无论上面成功与否）：
@@ -4956,8 +4963,12 @@ workspace / theme.list / startupFile 先并行开跑
 effect 上面**的原因——详情见 `docs/09` 的 `App.tsx` 一行。
 
 用一个 `alive` 标志挡住卸载后的 setState；`return` 里把 `alive` 置假。
-⚠️ `alive` 只挡了 `Promise.all` 之后的那一段——`refreshDocs()` 的 `setDocs` 在 `alive`
-检查之后调用，所以安全；但 `api.frontendReady()` 没有 `alive` 检查（它不改 state，无害）。
+工作区与主题清单的后台任务各自检查一次 `alive`。编辑器揭幕不依赖这两项：
+`newDoc()` 或 `openPath()` 一旦让编辑器实例挂载并聚焦，`useBootReveal` 就显示窗口，
+侧栏和主题菜单可以在之后几十毫秒内补齐。
+
+⚠️ **侧栏折叠时文件列表不做递归扫描**：`FileList` 只有同时满足“文件页可见、侧栏
+未折叠”才读取子目录。否则恢复工作区会在后台扫整棵树，和编辑器首帧抢磁盘与主线程。
 
 ⚠️ **主题只在这里拉一次**（`api.theme.list()`）。所以用户点「打开主题文件夹…」丢进去一份
 新主题之后**菜单里不会出现**，得重启——欠账记在 `docs/07` 第 41 项。
@@ -6940,7 +6951,7 @@ CodeMirror**（2026-09-30 新建，BUG-57）。
 
 ---
 
-## `src/ui/Sidebar.tsx`（878 行）
+## `src/ui/Sidebar.tsx`（885 行）
 
 左侧栏：**文件树 / 大纲** 两页。`SidebarTab` 就两个值（`"tree"` / `"outline"`），
 菜单里那两条（`Ctrl+Shift+3` 文件树 / `Ctrl+Shift+1` 大纲）与这里是同一套。
@@ -7031,7 +7042,7 @@ nav + 两个 `TabButton`）+ `<div className="sidebar-body">`（按 `tab` 二选
 |---|---|---|
 | `TabButton` | `{id, current, onSelect, label}` | `role="tab"` 的 button，`aria-selected` 与 `className` 按 `current === id` 定 |
 | `Outline` | `{items: OutlineItem[], onJump}` | 大纲整页（见下）。空时显示"这份文档还没有标题。"；点标题把行号与序号交给编辑器跳转 |
-| `FileList` | `{nodes, workspace, activePath, onOpenFile, loadDir}` | 默认扁平文件页。根层文件立即出现，子目录按批次递归读取；最多遍历 512 个目录，失败或触顶时明确提示列表不完整 |
+| `FileList` | `{nodes, workspace, activePath, onOpenFile, loadDir, active}` | 默认扁平文件页。只有 `active=true`（文件页可见且侧栏未折叠）时才递归读取子目录；根层文件仍立即出现，最多遍历 512 个目录，失败或触顶时明确提示列表不完整 |
 | `FileTree` | `{nodes, workspace, onOpenFile, loadDir, 口径键}` | 空时显示"这个文件夹里没有 Markdown 文件。"，否则 `<ul className="tree">` + 每项一个 `TreeRow` |
 | `TreeRow` | `{node, workspace, depth, open, kids, errors, onToggleDir, onOpenFile}` | 递归，见下 |
 

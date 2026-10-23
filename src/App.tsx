@@ -32,10 +32,13 @@ import { useFileKind } from "@/ui/useFileKindMode";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import { resolvePick } from "@/ui/commands";
 import { useT } from "@/i18n";
-import { PluginDock } from "@/ui/PluginDock";
+import {
+  DeferredFilePickerDialog,
+  DeferredPluginDock,
+  DeferredSettingsDialog,
+} from "@/ui/DeferredUi";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
 import { 口径键, 读口径 } from "@/ui/tree-options";
-import { SettingsDialog } from "@/ui/settings/SettingsDialog";
 import { StatusBar } from "@/ui/StatusBar";
 import { useStatusBar } from "@/ui/useStatusBar";
 import { Toasts } from "@/ui/Toasts";
@@ -75,7 +78,6 @@ import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
 import { useMenuTable } from "@/ui/useMenuTable";
 import { ContextMenu } from "@/ui/ContextMenu";
-import { FilePickerDialog } from "@/ui/FilePickerDialog";
 import { useSettingsWindow } from "@/ui/useSettingsWindow";
 
 export default function App() {
@@ -353,7 +355,7 @@ export default function App() {
   // 文件走的就是那条路）。⚠️ 这两个 hook 里那几条 effect 都**只跑一次**，
   // 而那是**约定不是观察**——上游回调用 `useCallback` 包稳的规矩在
   // `ui/useStartup.ts` 文件头最后一段里，改那边之前先读那一段。
-  useStartup({ setSettings, setWorkspace, setThemes, refreshDocs, openPath, 接上会话, toast });
+  useStartup({ setSettings, setWorkspace, setThemes, openPath, 接上会话, toast });
   useAppEvents({ toast, refreshDocs, openPath, activeId, activeIdRef, editorRef });
   // ── 主题 ────────────────────────────────────────────────────────
   // ⚠️ 界面主题与缩放搬去了 `ui/useAppearance.ts`（2026-09-25，本文件顶着行数
@@ -476,7 +478,7 @@ export default function App() {
       imageReq !== null ||
       linkReq !== null || // 「链接」框（第 96 ＋ 102 项）
       emojiOpen || 对话框.printReq !== null || // 应用内打印框（2026-10-17）
-      对话框.关于开着 || // 「关于」框（见 `ui/useDialogs.ts` 那一格）
+      对话框.关于开着 ||
       pandocGate !== null || 专注总结 !== null,
     toast,
   });
@@ -510,9 +512,6 @@ export default function App() {
 
   // 「复制为 Markdown」（`edit.copyAsMarkdown`）也搬去了 `ui/useClipboard.ts`
   // （2026-09-25），理由在那个文件的文件头；接线在下面 `剪贴板` 那一行。
-  // 「关于 Nota」：框体在 `ui/AboutDialog.tsx`，开关在 `ui/useDialogs.ts`
-  // （2026-09-28 从 `ui/useAbout.ts` 并过去：那个文件当时只剩内容，而状态本来
-  // 就该和别的浮层待在一起。整段理由在 `ui/useDialogs.ts` 那一格的注释里）。
   const showAbout = 对话框.开关于;
 
   // 「跑一条编辑命令」与两个"先问参数、再插进去"的命令搬去了
@@ -763,9 +762,6 @@ export default function App() {
     settings?.appearance.show_filename_in_titlebar ?? true,
   );
 
-  // 设置文件的两件事（打开所在目录 / 恢复默认）搬去了
-  // `ui/useSettingsFile.ts`（2026-09-24，本文件顶着行数上限）。
-  // 那边的文件头写着"为什么恢复默认必须用后端返回的那一份"。
   const { openConfigDir, resetSettings } = useSettingsFile({ setSettings, toast });
 
   // 右键菜单（2026-10-04）的接线。⚠️ 五样都**原样传下去**，一件也不在这里
@@ -927,7 +923,7 @@ export default function App() {
           />
 
           {dockOpen && (
-            <PluginDock
+            <DeferredPluginDock
               plugins={plugins}
               panels={panels}
               信任={信任表} onResize={(宽: number) => void updateSettings({ appearance: { ...settings!.appearance, dock_width: 宽 } })}
@@ -949,9 +945,9 @@ export default function App() {
           onDismiss={dismiss}
           position={settings?.updates.notification_position ?? "bottom-right"}
         />
-        <FilePickerDialog />
+        <DeferredFilePickerDialog />
         {settingsWindow.open && settings && (
-          <SettingsDialog
+          <DeferredSettingsDialog
             settings={settings}
             onChange={updateSettings}
             onClose={settingsWindow.close}
@@ -963,10 +959,6 @@ export default function App() {
             onResetSettings={() => void resetSettings()}
             onClearRecent={() => void 清空最近()}
             menus={菜单}
-            // 「拓展」那一页要的三样（⚠️ **不是** `...` 铺一份 `插件`：那一页只
-            // 吃这三样，别的字段铺过去只会让人以为它也读面板 / 读菜单）。
-            // 与右侧插件栏给的是**同一份**（同一个 `usePlugins`），所以两边
-            // 不会出现"这一栏说装好了、那一页还没有"。
             plugins={plugins}
             插件信任={信任表}
             插件更新={插件更新}

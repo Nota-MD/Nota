@@ -53,8 +53,7 @@
  *   这一条记在 `docs/07` 的账里。
  *
  * ⚠️ 壳（`.confirm-backdrop` / `.confirm-dialog`）与别的框**共用**：长得一样、
- * 行为也一样（`Esc` 关、点遮罩关），样式不该有两套（`styles/overlay.css` 文件头
- * 那段"五段用的是同一层壳"）。本文件只加 `.about-*` 那几条。
+ * 行为也一样（`Esc` 关、点遮罩关），样式不该有两套。许可证仍是它内部的子对话框。
  */
 
 import { useEffect, useRef, useState } from "react";

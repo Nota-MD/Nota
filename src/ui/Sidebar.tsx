@@ -246,6 +246,7 @@ export function Sidebar({
                 activePath={activePath ?? null}
                 onOpenFile={onOpenFile}
                 loadDir={loadDir}
+                active={!折叠 && tab === "tree"}
               />
             ) : (
               <FileTree
@@ -387,6 +388,8 @@ function FileList(props: {
   activePath: string | null;
   onOpenFile: (path: string) => void;
   loadDir: (path: string) => Promise<TreeNode[]>;
+  /** 页面现在真的可见吗。折叠侧栏或切到大纲时，不要在后台递归扫描工作区。 */
+  active: boolean;
 }) {
   const t = useT();
   const [files, setFiles] = useState<FlatFile[]>(() => 取顶层文件(props.nodes));
@@ -400,6 +403,10 @@ function FileList(props: {
     const 首次 = 取顶层文件(props.nodes);
     setFiles(首次);
     setPartial(false);
+    if (!props.active) {
+      setLoading(false);
+      return;
+    }
 
     const 队列 = props.nodes.filter((node) => node.is_dir).map((node) => node.path);
     setLoading(队列.length > 0);
@@ -446,7 +453,7 @@ function FileList(props: {
     return () => {
       取消 = true;
     };
-  }, [props.nodes]);
+  }, [props.nodes, props.active]);
 
   const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
   const active = props.activePath ? normalize(props.activePath) : null;

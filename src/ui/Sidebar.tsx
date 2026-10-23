@@ -124,6 +124,10 @@ interface Props {
    * 不是这里另开一条通路。
    */
   onOpenFolder: () => void;
+  /** 底栏「＋」：新建一份文档。 */
+  onNewFile: () => void;
+  /** 底栏更多菜单：重新读取当前工作区。 */
+  onRefresh: () => void;
   /**
    * 摊着改动预览时把整栏锁掉（`inert`：点不动、也聚焦不了）。
    *
@@ -167,6 +171,8 @@ export function Sidebar({
   loadDir,
   口径键,
   onOpenFolder,
+  onNewFile,
+  onRefresh,
   inert,
   onResize,
   折叠,
@@ -174,9 +180,35 @@ export function Sidebar({
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   const t = useT();
   const outline = useMemo(() => extractOutline(docText, strict), [docText, strict]);
+  const [fileView, setFileView] = useState<"list" | "tree">("list");
+  const [footerMenu, setFooterMenu] = useState(false);
+  const footer = useRef<HTMLDivElement>(null);
+  const workspaceName = useMemo(() => {
+    if (!workspace) return "Nota";
+    const parts = workspace.replaceAll("\\", "/").replace(/\/+$/, "").split("/");
+    return parts[parts.length - 1] || workspace;
+  }, [workspace]);
   // 页签的方向键（第 50 项，2026-10-04）。
   const 页签栏 = useRef<HTMLElement>(null);
   useTablistKeys(页签栏);
+
+  useEffect(() => {
+    if (!footerMenu) return;
+    const 点别处 = (e: PointerEvent) => {
+      const 目标 = e.target;
+      if (目标 instanceof Node && footer.current?.contains(目标)) return;
+      setFooterMenu(false);
+    };
+    const 按键 = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFooterMenu(false);
+    };
+    document.addEventListener("pointerdown", 点别处);
+    document.addEventListener("keydown", 按键);
+    return () => {
+      document.removeEventListener("pointerdown", 点别处);
+      document.removeEventListener("keydown", 按键);
+    };
+  }, [footerMenu]);
 
   return (
     <aside
@@ -207,14 +239,24 @@ export function Sidebar({
       <div className="sidebar-body">
         <section className="sidebar-pane" role="tabpanel" hidden={tab !== "tree"}>
           {workspace ? (
-            <FileTree
-              nodes={tree}
-              workspace={workspace}
-              activePath={activePath ?? null}
-              onOpenFile={onOpenFile}
-              loadDir={loadDir}
-              口径键={口径键}
-            />
+            fileView === "list" ? (
+              <FileList
+                nodes={tree}
+                workspace={workspace}
+                activePath={activePath ?? null}
+                onOpenFile={onOpenFile}
+                loadDir={loadDir}
+              />
+            ) : (
+              <FileTree
+                nodes={tree}
+                workspace={workspace}
+                activePath={activePath ?? null}
+                onOpenFile={onOpenFile}
+                loadDir={loadDir}
+                口径键={口径键}
+              />
+            )
           ) : (
             // ⚠️ 这一块**必须有那颗按钮**（2026-09-24 补）：只有一句话的话，
             // 用户盯着的就是这个死胡同——界面说"去打开一个文件夹"，
@@ -235,11 +277,211 @@ export function Sidebar({
         </section>
       </div>
 
+      {tab === "tree" && (
+        <div ref={footer} className="sidebar-footer">
+          {footerMenu && (
+            <div className="sidebar-footer-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFooterMenu(false);
+                  onNewFile();
+                }}
+              >
+                {t("New Document")}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFooterMenu(false);
+                  onOpenFolder();
+                }}
+              >
+                {t("Open Folder…")}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setFooterMenu(false);
+                  onRefresh();
+                }}
+              >
+                {t("Refresh")}
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            className="sidebar-footer-btn"
+            title={t("New Document")}
+            aria-label={t("New Document")}
+            onClick={onNewFile}
+          >
+            <Icon name="folio-add-symbolic" />
+          </button>
+          <span className="sidebar-workspace" title={workspace ?? ""}>
+            {workspaceName}
+          </span>
+          <button
+            type="button"
+            className="sidebar-footer-btn sidebar-more"
+            title={t("More actions")}
+            aria-label={t("More actions")}
+            aria-expanded={footerMenu}
+            onClick={() => setFooterMenu((open) => !open)}
+          >
+            ⋮
+          </button>
+          <button
+            type="button"
+            className="sidebar-footer-btn sidebar-view-toggle"
+            title={t("Switch List/Tree View")}
+            aria-label={t("Switch List/Tree View")}
+            onClick={() => setFileView((view) => (view === "list" ? "tree" : "list"))}
+          >
+            <span
+              className={`sidebar-view-glyph ${fileView === "list" ? "is-list" : "is-tree"}`}
+              aria-hidden="true"
+            >
+              <i /><i /><i />
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* 右缘那条可以拖的把手（2026-09-30）。⚠️ **必须是 `.sidebar` 的最后一个
           子元素**：它靠 `parentElement` 量这一栏的左缘（判据见
           `ui/SidebarResizer.tsx` 文件头），换个位置量到的就是别人。 */}
       <SidebarResizer onCommit={onResize} />
     </aside>
+  );
+}
+
+/* ── 文件列表：Typora 式的扁平视图 ─────────────────────────────────────── */
+
+interface FlatFile {
+  name: string;
+  path: string;
+  parent: string | null;
+}
+
+function 取顶层文件(nodes: TreeNode[]): FlatFile[] {
+  return nodes
+    .filter((node) => !node.is_dir)
+    .map((node) => {
+      const 斜杠 = node.path.lastIndexOf("/");
+      return {
+        name: node.name,
+        path: node.path,
+        parent: 斜杠 >= 0 ? node.path.slice(0, 斜杠) : null,
+      };
+    });
+}
+
+function FileList(props: {
+  nodes: TreeNode[];
+  workspace: string;
+  activePath: string | null;
+  onOpenFile: (path: string) => void;
+  loadDir: (path: string) => Promise<TreeNode[]>;
+}) {
+  const t = useT();
+  const [files, setFiles] = useState<FlatFile[]>(() => 取顶层文件(props.nodes));
+  const [loading, setLoading] = useState(false);
+  const [partial, setPartial] = useState(false);
+  const loadDir = useRef(props.loadDir);
+  loadDir.current = props.loadDir;
+
+  useEffect(() => {
+    let 取消 = false;
+    const 首次 = 取顶层文件(props.nodes);
+    setFiles(首次);
+    setPartial(false);
+
+    const 队列 = props.nodes.filter((node) => node.is_dir).map((node) => node.path);
+    setLoading(队列.length > 0);
+    if (!队列.length) return;
+
+    const 已访问 = new Set<string>();
+    const 最多目录 = 512;
+    const walk = async () => {
+      while (队列.length && 已访问.size < 最多目录) {
+        const 一批 = 队列.splice(0, 8).filter((path) => !已访问.has(path));
+        for (const dir of 一批) 已访问.add(dir);
+        const 结果 = await Promise.all(
+          一批.map(async (dir) => {
+            try {
+              return { children: await loadDir.current(dir), ok: true as const };
+            } catch {
+              return { children: [] as TreeNode[], ok: false as const };
+            }
+          }),
+        );
+        if (取消) return;
+
+        for (const { children, ok } of 结果) {
+          if (!ok) setPartial(true);
+          const 新文件 = 取顶层文件(children);
+          if (新文件.length) {
+            setFiles((prev) => {
+              const 已有 = new Set(prev.map((file) => file.path));
+              return [...prev, ...新文件.filter((file) => !已有.has(file.path))];
+            });
+          }
+          for (const child of children) {
+            if (child.is_dir && !已访问.has(child.path)) 队列.push(child.path);
+          }
+        }
+      }
+      if (!取消) {
+        if (队列.length) setPartial(true);
+        setLoading(false);
+      }
+    };
+    void walk();
+
+    return () => {
+      取消 = true;
+    };
+  }, [props.nodes]);
+
+  const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
+  const active = props.activePath ? normalize(props.activePath) : null;
+
+  if (!files.length && loading) {
+    return <p className="sidebar-empty">{t("Loading…")}</p>;
+  }
+  if (!files.length) {
+    return <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>;
+  }
+
+  return (
+    <>
+      <ul className="file-list" aria-busy={loading}>
+        {files.map((file) => {
+          const absolute = `${props.workspace}/${file.path}`;
+          const isActive = active !== null && active === normalize(absolute);
+          return (
+            <li className="file-list-row" key={file.path}>
+              <button
+                type="button"
+                className="file-list-btn"
+                aria-current={isActive ? "page" : undefined}
+                title={absolute}
+                onClick={() => props.onOpenFile(absolute)}
+              >
+                <span className="file-list-name">{file.name}</span>
+                {file.parent && <span className="file-list-parent">{file.parent}</span>}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {partial && <p className="sidebar-list-warning">{t("Some folders could not be read.")}</p>}
+    </>
   );
 }
 

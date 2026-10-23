@@ -60,6 +60,7 @@
  */
 
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
+import { redo, undo } from "@milkdown/kit/prose/history";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
 
@@ -71,6 +72,10 @@ import { $view } from "@milkdown/kit/utils";
 
 import { t } from "@/i18n";
 import { writeClipboard } from "@/editor/code-block";
+import {
+  创建代码块编辑器,
+  type 代码块编辑器,
+} from "@/editor/code-block-cm";
 
 import { 图表规格 } from "@/editor/diagram-node";
 
@@ -85,6 +90,13 @@ const 缓存上限 = 50;
 
 /** 明暗。**按正文纸面判**，不按界面判（理由见 `读明暗`）。 */
 type 明暗 = "light" | "dark";
+
+interface 图表主题 {
+  mode: 明暗;
+  accent: string;
+  /** 缓存键与“主题变没变”判据共用的一份稳定指纹。 */
+  key: string;
+}
 
 /**
  * 一档渲染结果。**失败也是一种结果**，一样进缓存。
@@ -151,16 +163,18 @@ function 排队<T>(任务: () => Promise<T>): Promise<T> {
  * （ESM 的模块记录只有一份），连"加载中"的状态都不用画：
  * 第一次出图晚一两秒，之后有缓存。
  */
-async function 渲染(源码: string, 主题: 明暗): Promise<渲染结果> {
+async function 渲染(源码: string, 主题: 图表主题): Promise<渲染结果> {
   return 排队(async () => {
     const mermaid = (await import("mermaid")).default;
+    const mindmap = 图表类型(源码) === "mindmap";
 
     // `startOnLoad` 这里重申一遍：`initialize` 是"整个配置表覆盖一次"，
     // 少给一条就落回默认值（默认 `true` 会让 mermaid 自己去扫页面上的
     // `.mermaid` 节点，那是另一条我们不要的路）。
     mermaid.initialize({
       startOnLoad: false,
-      theme: 主题 === "dark" ? "dark" : "default",
+      theme: mindmap ? "base" : 主题.mode === "dark" ? "dark" : "default",
+      themeVariables: mindmap ? 思维导图配色(主题.mode, 主题.accent) : undefined,
     });
 
     const 编号 = `nota-mermaid-${++渲染序号}`;
@@ -250,6 +264,121 @@ function 归一颜色(值: string): [number, number, number] | null {
   return null;
 }
 
+function 两位(值: number): string {
+  return Math.round(Math.min(1, Math.max(0, 值)) * 255)
+    .toString(16)
+    .padStart(2, "0");
+}
+
+function 颜色十六(通道: [number, number, number]): string {
+  const [r, g, b] = 通道;
+  return `#${两位(r)}${两位(g)}${两位(b)}`;
+}
+
+function 颜色转hsl(通道: [number, number, number]): { h: number; s: number; l: number } {
+  const [r, g, b] = 通道;
+  const 大 = Math.max(r, g, b);
+  const 小 = Math.min(r, g, b);
+  const 差 = 大 - 小;
+  const l = (大 + 小) / 2;
+  if (差 === 0) return { h: 0, s: 0, l };
+  const s = l > 0.5 ? 差 / (2 - 大 - 小) : 差 / (大 + 小);
+  let h: number;
+  if (大 === r) h = (g - b) / 差 + (g < b ? 6 : 0);
+  else if (大 === g) h = (b - r) / 差 + 2;
+  else h = (r - g) / 差 + 4;
+  return { h: h * 60, s, l };
+}
+
+function hsl颜色(h: number, s: number, l: number): string {
+  const 色相 = (((h % 360) + 360) % 360) / 360;
+  const 饱和 = Math.max(0, Math.min(1, s));
+  const 亮度 = Math.max(0, Math.min(1, l));
+  if (饱和 === 0) return 颜色十六([亮度, 亮度, 亮度]);
+  const q = 亮度 < 0.5 ? 亮度 * (1 + 饱和) : 亮度 + 饱和 - 亮度 * 饱和;
+  const p = 2 * 亮度 - q;
+  const 分量 = (偏移: number): number => {
+    let t = 色相 + 偏移;
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  return 颜色十六([分量(1 / 3), 分量(0), 分量(-1 / 3)]);
+}
+
+/**
+ * 认图表类型。跳过空行、Mermaid 注释和 `---` 配置块，只看第一条真正的指令。
+ * 只用于决定“思维导图要不要改配色”，认不出来时按普通图表处理。
+ */
+function 图表类型(源码: string): string {
+  let 配置块 = false;
+  for (const 原行 of 源码.split(/\r?\n/)) {
+    const 行 = 原行.trim();
+    if (!行 || 行.startsWith("%%")) continue;
+    if (行 === "---") {
+      配置块 = !配置块;
+      continue;
+    }
+    if (配置块) continue;
+    return 行.split(/\s+/, 1)[0]?.toLowerCase() ?? "";
+  }
+  return "";
+}
+
+/**
+ * 思维导图的色彩：从当前强调色取色相，只在中邻近的色相里铺开。
+ *
+ * Mermaid 自带的 `default` 主题会在分支级上按 30° 一路跳到红、绿、紫，
+ * 一张图会同时出现好几种互不相干的主色。这里改成围绕主题色做一组低饱和的
+ * 邻近色：根部保持主题色，一级分支向外做小幅色相偏移。具体亮度按文档纸面
+ * 分两套，浅色是柔和粉彩，深色是压暗的色块；文字分别用深色和浅色。
+ *
+ * ⚠️ Mermaid 在 `base` 主题里会再次把 `cScale*` 调暗（浅色 -25、深色 -75
+ * 个亮度点），所以这里的输入亮度要先把这一步补回去；否则深色模式会得到
+ * 近黑色块。这个补偿只影响最终颜色，不改变文档里的任何源码。
+ */
+function 思维导图配色(mode: 明暗, accent: string): Record<string, string> {
+  const 通道 = 归一颜色(accent) ?? [0.208, 0.518, 0.894];
+  const { h, s } = 颜色转hsl(通道);
+  const 饱和 = Math.min(0.42, Math.max(0.2, s * 0.72 + 0.08));
+  const 深色 = mode === "dark";
+  const 分支色相 = [-32, 0, 26, -54, 48, 72, -74, 14, 38, -44, 58, -16];
+  const 浅色亮度 = [0.76, 0.81, 0.78, 0.84, 0.79, 0.82, 0.77, 0.83, 0.8, 0.75, 0.82, 0.78];
+  const 深色亮度 = [0.23, 0.27, 0.2, 0.29, 0.25, 0.22, 0.31, 0.24, 0.28, 0.19, 0.26, 0.21];
+  const 文字 = 深色 ? "#f4f2ee" : "#202124";
+  const 根底 = hsl颜色(h, Math.min(0.48, 饱和 + 0.08), 深色 ? 0.67 : 0.46);
+  const 根字 = 深色 ? "#16181b" : "#ffffff";
+  const 变量: Record<string, string> = {
+    background: "transparent",
+    fontFamily: "var(--font-ui), sans-serif",
+    fontSize: "14px",
+    primaryColor: 根底,
+    primaryTextColor: 文字,
+    primaryBorderColor: hsl颜色(h, Math.min(0.48, 饱和 + 0.12), 深色 ? 0.54 : 0.35),
+    secondaryColor: hsl颜色(h + 24, 饱和, 深色 ? 0.22 : 0.8),
+    tertiaryColor: hsl颜色(h - 28, 饱和, 深色 ? 0.26 : 0.8),
+    textColor: 文字,
+    nodeTextColor: 文字,
+    labelTextColor: 文字,
+    scaleLabelColor: 文字,
+    git0: 根底,
+    gitBranchLabel0: 根字,
+  };
+
+  for (let i = 0; i < 分支色相.length; i += 1) {
+    const hue = h + (分支色相[i] ?? 0);
+    const 目标亮度 = (深色 ? 深色亮度 : 浅色亮度)[i] ?? (深色 ? 0.24 : 0.8);
+    const 输入亮度 = 深色 ? 目标亮度 + 0.75 : 目标亮度 + 0.25;
+    变量[`cScale${i}`] = hsl颜色(hue, 饱和, 输入亮度);
+    变量[`cScaleInv${i}`] = hsl颜色(hue, Math.min(0.48, 饱和 + 0.08), 深色 ? 0.72 : 0.34);
+    变量[`cScaleLabel${i}`] = 文字;
+  }
+  return 变量;
+}
+
 /**
  * 从一棵树上读一个 CSS 变量的计算值。
  *
@@ -293,6 +422,20 @@ function 读明暗(自己的根: HTMLElement, 视图根: HTMLElement | null | un
 }
 
 /**
+ * 图表重画要跟着两件事走：纸面明暗与主题色。只跟明暗的话，换一个同明暗的
+ * 界面主题后，思维导图仍会停在旧强调色上。
+ */
+function 读图表主题(自己的根: HTMLElement, 视图根: HTMLElement): 图表主题 {
+  const mode = 读明暗(自己的根, 视图根);
+  const 强调 =
+    归一颜色(读变量(自己的根, "--accent")) ??
+    归一颜色(读变量(视图根, "--accent")) ??
+    ([0.208, 0.518, 0.894] as [number, number, number]);
+  const accent = 颜色十六(强调);
+  return { mode, accent, key: `${mode}|${accent}` };
+}
+
+/**
  * 主题变了要重画的通知。
  *
  * 图上那些颜色是 mermaid 在渲染时**烤进 SVG 里**的（内联样式 + SVG 自己那段
@@ -318,7 +461,7 @@ function 跟上主题(回调: () => void): void {
   });
   主题观察器.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-ui-mode", "data-ui-style"],
+    attributeFilter: ["data-ui-mode", "data-ui-style", "style"],
   });
   主题观察器.observe(document.head, { childList: true, subtree: true });
 }
@@ -385,11 +528,8 @@ export const diagramView = $view(
       const sourceShell = document.createElement("div");
       sourceShell.className = "nota-diagram-source-shell";
 
-      const 源码框 = document.createElement("textarea");
-      源码框.className = "nota-diagram-source";
-      源码框.spellcheck = false;
-      源码框.rows = 6;
-      源码框.setAttribute("aria-label", t("Diagram Source (Mermaid)"));
+      const 源码框 = document.createElement("div");
+      源码框.className = "nota-diagram-source nota-diagram-cm";
 
       const 预览 = document.createElement("div");
       预览.className = "nota-diagram-preview";
@@ -429,12 +569,13 @@ export const diagramView = $view(
       let 最后派发 = 取源码(initialNode);
       /** 屏幕上有没有画过东西。只用来决定"第一次渲染要不要先摆一句正在渲染"。 */
       let 画过 = false;
-      /** `已画` 用的是哪一档明暗。主题一变就得重画。 */
-      let 已画主题: 明暗 = "light";
+      /** `已画` 用的是哪一档配色。主题一变就得重画。 */
+      let 已画主题 = "";
       /** 代号：异步渲染回来时用它判"这份结果是不是已经过期了"。 */
       let 代号 = 0;
       /** 防抖计时器；`null` = 没有待派发的内容。 */
       let 防抖: number | null = null;
+      let 代码编辑器: 代码块编辑器 | null = null;
       // ── 画 ────────────────────────────────────────────────────────────
 
       /** 说明卡：标题 + 一段原文 + 可选一颗按钮。出错、空块、渲染中都用它。 */
@@ -462,7 +603,7 @@ export const diagramView = $view(
           按.className = "nota-code-btn nota-diagram-note-btn";
           按.textContent = 按钮;
           按.addEventListener("mousedown", (e) => e.preventDefault());
-          按.addEventListener("click", () => 源码框.focus());
+          按.addEventListener("click", () => 代码编辑器?.聚焦() ?? view.focus());
           卡.append(按);
         }
         return 卡;
@@ -540,8 +681,8 @@ export const diagramView = $view(
        */
       async function 同步(): Promise<void> {
         const 源码 = 取源码(当前);
-        const 主题 = 读明暗(dom, view.dom);
-        已画主题 = 主题;
+        const 主题 = 读图表主题(dom, view.dom);
+        已画主题 = 主题.key;
 
         if (源码.trim() === "") {
           // 空源码不交给 mermaid（它会当解析失败报一句"没有识别出图表类型"，
@@ -554,7 +695,7 @@ export const diagramView = $view(
         // ⚠️ 键里带明暗：同一份源码在深色/浅色下是**两张图**，不能互相顶。
         // ⚠️ `identity` 可能是空串（schema 的默认值）——那时这条键是共用的，
         // 但下面的源码比对会挡住错用，代价只是那种块之间会来回顶掉缓存。
-        const 键 = `${取身份(当前)}|${主题}`;
+        const 键 = `${取身份(当前)}|${主题.key}`;
         const 命中 = 查缓存(键, 源码);
         if (命中) {
           代号++;
@@ -570,7 +711,7 @@ export const diagramView = $view(
         // 期间节点又变了（或者视图没了）→ 这份结果作废。
         if (我的代号 !== 代号) return;
         写缓存(键, 源码, 结果);
-        已画主题 = 主题;
+        已画主题 = 主题.key;
         画(结果);
       }
 
@@ -599,8 +740,39 @@ export const diagramView = $view(
         if (防抖 === null) return;
         window.clearTimeout(防抖);
         防抖 = null;
-        派发(源码框.value);
+        派发(代码编辑器?.取文本() ?? "");
       }
+
+      // ── CodeMirror：Mermaid 源码的输入面 ─────────────────────────────
+      // 节点正文始终在 PM 的 `attrs.value` 里；CM 只负责输入、选区、配对、
+      // Tab 缩进与剪贴板。粘贴事件必须落在 CM 自己的 DOM 上，不能再交给
+      // 外层 ProseMirror，否则会变成"源码框空着、正文多出一段粘贴内容"。
+      代码编辑器 = 创建代码块编辑器({
+        初始文本: 取源码(initialNode),
+        初始语言: "mermaid",
+        文本变化: (新文) => {
+          if (防抖 !== null) window.clearTimeout(防抖);
+          防抖 = window.setTimeout(() => {
+            防抖 = null;
+            派发(新文);
+          }, 防抖毫秒);
+        },
+        聚焦: () => {
+          // CM 自己持有选区；PM 这一层只保留节点本身。
+        },
+        失焦: 先派发,
+        撤销: () => undo(view.state, view.dispatch, view),
+        重做: () => redo(view.state, view.dispatch, view),
+        退出到正文: () => view.focus(),
+      });
+      源码框.append(代码编辑器.视图.dom);
+      代码编辑器.视图.contentDOM.setAttribute("aria-label", t("Diagram Source (Mermaid)"));
+      代码编辑器.视图.dom.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        e.preventDefault();
+        先派发();
+        view.focus();
+      });
 
       // ── 事件 ──────────────────────────────────────────────────────────
 
@@ -615,34 +787,13 @@ export const diagramView = $view(
       });
 
       复制.addEventListener("click", () => {
-        void writeClipboard(源码框.value).then((ok) => {
+        void writeClipboard(代码编辑器?.取文本() ?? 取源码(当前)).then((ok) => {
           if (!ok) return;
           复制.textContent = t("Copied");
           window.setTimeout(() => {
             复制.textContent = t("Copy");
           }, 1200);
         });
-      });
-
-      源码框.addEventListener("input", () => {
-        if (防抖 !== null) window.clearTimeout(防抖);
-        防抖 = window.setTimeout(() => {
-          防抖 = null;
-          派发(源码框.value);
-        }, 防抖毫秒);
-      });
-
-      // 失焦就落盘：不然"改了源码直接去点别处"会丢掉最后那几个字。
-      源码框.addEventListener("blur", 先派发);
-
-      源码框.addEventListener("keydown", (e) => {
-        // Escape 把焦点还给正文；源码框本身保持常驻。
-        // ⚠️ **只认 Escape**：Enter 是换行——Mermaid 的源码几乎每行都靠换行分开，
-        //    把 Enter 当"确认"会让这个框没法用。
-        if (e.key !== "Escape") return;
-        e.preventDefault();
-        先派发();
-        view.focus();
       });
 
       // ── 与 ProseMirror 的边界 ─────────────────────────────────────────
@@ -661,7 +812,7 @@ export const diagramView = $view(
       // ── 主题 ──────────────────────────────────────────────────────────
 
       const 跟主题 = (): void => {
-        if (读明暗(dom, view.dom) !== 已画主题) void 同步();
+        if (读图表主题(dom, view.dom).key !== 已画主题) void 同步();
       };
       跟上主题(跟主题);
 
@@ -689,7 +840,7 @@ export const diagramView = $view(
 
           if (外面改的) {
             最后派发 = 新源码;
-            if (源码框.value !== 新源码) 源码框.value = 新源码;
+            if (代码编辑器 && 代码编辑器.取文本() !== 新源码) 代码编辑器.设文本(新源码);
           }
 
           同步可编辑();
@@ -715,6 +866,7 @@ export const diagramView = $view(
           // 只在**真有待派发的内容**时补一次：销毁常常发生在整篇文档被换掉
           // （`replaceAll`）的过程中，那时去派事务是没必要的风险。
           先派发();
+          代码编辑器?.销毁();
           别再跟了(跟主题);
         },
       };

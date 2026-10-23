@@ -129,7 +129,7 @@
 | `editor/task-list.ts` | 任务项复选框：`- [x]` 画方框、点它勾上、回车切出来的新项**不继承勾** |
 | `editor/code-block.ts` | 代码块的 NodeView（语言选择器 / 复制 / 折叠）。⚠️ **第一个 `$view`**（第二个是 `editor/diagram-view.ts`，2026-09-26）。⚠️ 2026-10-04 起 `refractor/all`（507 kB）是**异步加载**（本模块顶层发起 `import()`，第 27 项）：首屏只留 common 62 种语言，全量表到了清下拉缓存；那个“冷启动第一帧遇长尾语言块先显示纯文本”的时序窗口写在加载块上。⚠️ 语言选择器的**外观**＝`appearance: none` ＋ 自画箭头（`editor.css` 的 `.nota-code-lang-wrap`），少一条在深色下就是**纯白的原生框**。<br>📌 **2026-10-06（第 101 项）起本文件里的 `pre` 有两层文本**：`<code class="nota-code-text">`（**PM 的 contentDOM**，零尺寸藏起来，文档树/撤销/存盘读它）＋ `.cm-editor`（**CodeMirror**，用户打字那一层）。四条接线：① `stopEvent` / `ignoreMutation` 判据放宽成**整个 `pre` 子树**；② `setSelection(锚, 头)` 收的是**相对节点内容起点**的位置（减 1 得文本偏移），把光标交给 CM；③ `update()` 里把节点文本推进 CM（`同步中` 锁必须判）；④ `destroy()` 里连 CM 一起销毁 |
 | `editor/code-block-cm.ts` | **代码块里的 CodeMirror**（2026-10-06 新建，**732 行**；2026-10-07 补上**整行剪贴板**那一层、傍晚又给选区规则补了一段注释——BUG-71）。📌 那一层（`整行剪贴`/`落剪贴板` ＋ `记按键`）：没有选区时 `Ctrl+C`/`Ctrl+X` 按**整行**来（含末尾换行），有选区时才照常。⚠️ 它挂在 **Capture 段**（`handleDOMEvents.copy/cut` 之前），并且要**记一下这一下按的是哪颗键**——**WebKitGTK 会把 `copy`/`cut` 事件各派发两遍**（`paste` 只有一遍），照单全收会往剪贴板写两次、`cut` 更会删两遍。⚠️ 另有一个 `剪贴板键` 的放行口在 `ui/useMenus.ts`（见那条）。三件导出给测试的纯函数：`算最小改动(旧文, 新文) → {删起, 删到, 插入}`（抠公共前后缀；⚠️ **两条边界要退到完整字符上**，否则 `"😀"→"😁"` 会被切成半个 emoji）· `分色(文本, 语言) → {从, 到, 类}[]`（拿 **refractor** 分词，类名逐字沿用 `token xxx`，所以配色 CSS 一个常量都没加；语言为空/不认得/分词抛 → 返回空数组，**不抛**）· `回车续行(前文, 后文, 单位) → {删多少, 插入, 光标}`（延续缩进 / 上一行 `{`（`[` 再进一级 / 夹在空括号里展开成三行 / 停在纯空白后面把那截空白并进新行）。⛔ **一个反例**：`"([{".indexOf("")` 回的是 `0`，所以"末字符为空"那一格必须先挡掉——这条是 `tests/code-block-editing.test.ts` 当场抓出来的。<br>`创建代码块编辑器(选项)` 返回 `{视图, 取文本, 取光标, 设文本, 设语言, 设选区, 聚焦, 有焦点, 销毁}`。装配：`closeBrackets()` ＋ `closeBracketsKeymap`（**新增依赖 `@codemirror/autocomplete` 只为它**）· 自定义回车（CM 自带的 `insertNewlineAndIndent` 在没有文法时**只照抄上一行缩进**，不会"再进一级"）· `indentWithTab`（`indentUnit = 4` 空格，本批自己定的数，见文件里那段注释）· `Ctrl+Z`/`Ctrl+Shift+Z` **转回 PM**（撤销只有一套）· 分色插件（`ViewPlugin` ＋ `Decoration.mark`）· `drawSelection()` · 换行 `Compartment`（盯 `<html data-code-wrap>`）· `EditorView.updateListener`（推文本 / 报焦点）。⚠️ 长尾语言表异步到货时用一条 `重算效果` 通知重算着色 |
-| `editor/diagram-view.ts` | **图表块的 NodeView**：可编辑实例采用上下双区，上方是带折叠、复制和 `mermaid` 标识的源码框，下方是独立边框的渲染区；源码写回 `attrs.value`，编辑时同步重绘。只读预览与导出只显示渲染结果。Mermaid 只在渲染时动态加载；所有图类型走同一条 `mermaid.render()`，包括 `mindmap`。 |
+| `editor/diagram-view.ts` | **图表块的 NodeView**：可编辑实例采用上下双区，上方是 **CodeMirror** 源码编辑器（折叠、复制、`mermaid` 标识），下方是独立边框的渲染区；源码经 250ms 防抖写回 `attrs.value`，撤销/重做仍归 ProseMirror。粘贴由 CM 自己接管，不能再落进外层正文。只读预览与导出只显示渲染结果。Mermaid 只在渲染时动态加载；`mindmap` 从当前 `--accent` 推导同色相的柔和分支色，其他图表继续使用 Mermaid 的明暗主题。 |
 | `editor/lang-picker.ts` | **代码块语言选择器**（341 行）：**自绘的下拉**，不是原生 `<select>`——HTML 规定 `<option>` 只能是纯文字，`<img>` / `background-image` 塞进去都不渲染，所以「连弹层里也要图标」这条要求**只能自己画**。⚠️ 代价是原生白送的键盘上下 / 打字跳转 / Escape / 点外关都得自己补，**并且 NodeView 销毁时必须把弹层摘掉**（挂在 `document.body` 上，不摘就一次留一个孤儿）。⚠️ 400 项**每次打开现建**，不常驻。⚠️ **2026-10-04 加了一道让路守卫**：`全局按键` 挂在 **`document` 的捕获阶段**，比右键菜单那一层（React，冒泡阶段）**先**收到键，于是 `Enter` 被它先收下（还顺手卸载了输入框）、`Esc` 把两层浮层一起关掉——现在开头一句 `if (document.querySelector("[data-context-menu]")) return;` 整个让开（实测帧与后果见 `docs/06` §5.54） |
 | `editor/lang-icon.ts` | **`languageIcon(lang)` 的唯一入口**（271 行）：「先问真图、问不到回落徽章」这件事收在这一个函数里。⚠️ 徽章＝圆角小方块 ＋ 字母缩写 ＋ 该语言的代表色，**400 个语言 id 人人都有**（兜底是主路径不是边角：任何图标集都盖不全）；真图在 `lang-icons-real.ts` |
 | `editor/lang-icons-real.ts` | **真图那一半**（276 行，2026-09-26）：93 颗彩色 logo，**逐字节**从 vscode-icons tag `v12.19.0` 搬来（MIT，`THIRD-PARTY.md` §6），抓取与核对在 `tools/fetch-lang-icons.sh`（`--verify` 拿 `SHA256SUMS` 对账）。⚠️ **那批 `.svg` 一个字节都不许改**（连"顺手调颜色"也不行），能一眼核对的前提就是这个。⚠️ 本文件少一个语言**不是错**——400 个 id 里绝大多数一辈子不会有人贴 ⚠️ **2026-10-16 加了 `代表语言(id)`**：同一组里排第一的那个 id 就是这一族的代表（下拉一行一族靠它，解的是「语言类型重复」）。 |
@@ -185,8 +185,8 @@
 | `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26 新增）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反（界面风格要改的就是整个外壳）；于是"同名覆盖内置"的**全部实现就是文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验 |
 | `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增）。清单、当前 CSS 与 `ready` 一次拉齐：主窗口在屏幕外预热，编辑器与样式都就绪后才移入屏幕，不会先画出默认配色或加载动画。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
 | `styles/themes/*.css` | 文档主题源文件。📌 安装包只内置 `adwaita` / `adwaita-dark`；`minimal` / `latex` / `cde` 留给独立官方主题仓库迁移，`BUILTIN` 不再引用它们。每套主题仍自带 `--code-*`。 |
-| `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：源码框、渲染区、说明卡。⚠️ 渲染出来那张 `<svg>` 的宽度上限**主要不在 CSS 里**（`diagram-view.ts` 按 `viewBox` 自然宽取 `min(100%, 自然宽)`；只写 `max-width: 100%` 会让小图被容器宽度等比放大） |
-| `styles/math.css` | **公式那棵树**（2026-09-26）：面板 / 半透明分隔符 / 源码框 / 渲染区三种 `data-state` / 说明卡。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），别在 `.nota-math-panel` 上另写 `display: none`。⚠️ KaTeX 自己那份 `katex.min.css` 只管 `.katex` 那棵树 |
+| `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：CodeMirror 源码区、渲染区、说明卡。⚠️ 渲染出来那张 `<svg>` 的宽度上限**主要不在 CSS 里**（`diagram-view.ts` 按 `viewBox` 自然宽取 `min(100%, 自然宽)`；只写 `max-width: 100%` 会让小图被容器宽度等比放大） |
+| `styles/math.css` | **公式那棵树**（2026-09-26）：面板 / 半透明分隔符 / 源码框 / 渲染区三种 `data-state` / 说明卡。公式源码与空态说明使用 `--font-math` 的数学衬线字体栈；KaTeX 渲染继续使用自带的数学衬线字形。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），别在 `.nota-math-panel` 上另写 `display: none` |
 | `styles/settings.css` | 偏好设置框的**壳与版式**：框体 + 左栏那十一个分页 + 右栏「标签在左、控件在右」的行（479 行）。2026-09-23 从 `app.css` 拆出，同日晚些改成 VMark 那套版式；**2026-09-29 又按功能拆成三份** |
 | `styles/settings-controls.css` | 设置框里的**控件原语**（297 行，2026-09-29 从 `settings.css` 拆出）：下拉、开关、滑块、单选、输入框、按钮排、明暗缩略图 |
 | `styles/settings-widgets.css` | 设置框里的三块**专用小件**（234 行，2026-09-29 从 `settings.css` 拆出）：`?` 气泡、快捷键那一页 |
@@ -220,7 +220,7 @@
 | `ui/useEditorHandle.ts` | `EditorPane` 那个 `useImperativeHandle`——**外面那 13 条命令怎么落到"当前活着的那两个实例"上**（98 行，2026-10-07 拆出）。⚠️ 每条都 `?.` 加兜底，读的给 `undefined`/`null`/`0`/`false`、写的什么都不做，**一律不抛错**：实例是异步建的，这些方法常正好压在"编辑器正在重建"上，抛出去的症状不是"命令没生效"而是**整棵 React 树被带下来**（白屏）。⚠️ `setMarkdown` 要**连 `最新文本Ref` 一起改**（不然紧接着切一次模式会把替换前那一份装回去），并**顺手推给预览那一格**（右格不接 `onChange`，不推就停在被替换之前） |
 | `ui/useCursorSnapshot.ts` | **选区快照 → 后端镜像**（103 行，第 14 项；2026-10-04 加、2026-10-07 从 `ui/EditorPane.tsx` 拆出）：编辑器每报一份选区，压一道 **250ms** 时间窗再 `api.doc.cursor(...)` 推给插件。⚠️ 编辑器那一侧的键是"快照变没变"、这里的键是"多久没推过了"——**只挪光标、不改字**不会触发 `sync`，没有这一条插件读到的选区会一直停在敲键盘之前。⚠️ 定时器与 `sync` 那条**分开**（合用一个会让"改一个字"吞掉"刚挪了光标"那次推送）；**推失败只吞掉**不弹提示条（旁路，下一笔事务自愈） |
 | `ui/TableToolbar.tsx` | **当前表格上方的浮动快捷栏**（2026-10-23 新建）：调整行列数、左 / 中 / 右对齐、删除表格。只在所见即所得且光标位于表格时出现，按当前表格矩形定位；点击按钮不抢编辑器选区。 |
-| `ui/Sidebar.tsx` | 左侧栏两页（文件树 / 大纲）。开合与当前页由 `App.tsx` 控制；两个页面始终挂载，只用 `hidden` 切换，因此目录展开、大纲折叠和各自滚动位置不会因切页签而丢失。`activePath` 接通当前文件高亮，并自动展开它所在的目录链；大纲随正文选区标记当前章节。末尾拖宽把手保持不变。 |
+| `ui/Sidebar.tsx` | 左侧栏两页（文件 / 大纲）。文件页默认是 **扁平列表**，按当前口径递归列出工作区内的 Markdown，并保留列表/树形切换；大纲页随正文选区标记当前章节。两页始终挂载，只用 `hidden` 切换，因此视图选择和折叠状态不会在页签之间丢失。底栏依次提供新建、工作区名、更多操作（打开文件夹 / 刷新）和视图切换；整栏是贴边面板，不再使用悬浮卡片外观。 |
 | `ui/PluginDock.tsx` | 右侧插件栏（⚠️ 2026-10-04 起页签有 ←→/Home/End，`useTablistKeys`，第 50 项）：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
 | `ui/pluginText.ts` | **插件在界面上那几句人话**（2026-09-27 新建，136 行）：来源 / 签名 / 语言 / 能力名 / 位置名。⚠️ 起因是同一句「自装 · 已验证」要在**两个界面**上出现（右侧插件栏 ＋ 设置里的「拓展」页），谁抄第二份，往后就是"改一处、另一处不动"，而那种不一致**不报错**。⚠️ **只有文案**（没有 JSX、没有状态、不碰 `api`）；⚠️ **全是函数不是模块级常量表**——模块级求值时 `t` 还没订阅，且 `tools/i18n-check.sh` 只数为字面量写出来的 `t(…)` |
 | `ui/PanelBody.tsx` | **一张插件面板的身体**（2026-09-24）：拉 `nota_plugin_panel_content` → 交给 `panel-nodes.ts` 认形状 → 按白名单画。⚠️ 拉是**每次打开都拉**，不是缓存；`nota:plugin-panel` 那条事件只是"去重拉"的信号。⚠️ 2026-09-24 起多了三种块：`message`（一问一答，保留换行）/ `diff`（增删对照，**只画**）/ `input`（**面板里唯一的输入控件**，发出去＝调 `submit` 命令、参数 `{ [arg] = 输入 }`，跟按钮零区别） ⚠️ **2026-10-10 又加了两块**（AI 插件改成现代对话框那批）：`tabs`（上方的标签页：点字面切、点小叉关、末尾一颗「＋」）与 `hero`（空态那行大字）；`message` 多了 `copy`（那颗「复制」是**宿主**画的——插件那套 API 里没有剪贴板）、`input` 多了 `chips`（卡片里那排预设小按钮）＋ **发送键改成一枚圆形箭头**。⚠️ 消息那一块自此**有自己的状态**（"已复制"那 1.6 秒的反馈），同 `PanelInput` 的草稿 |
@@ -268,7 +268,7 @@
 | `ui/view-modes.ts` | **三种编辑模式的名字**（2026-09-24，**45 行**）。⚠️ **2026-09-30 删掉了短名那一列**：原来是一长一短（`short` 给状态栏、`full` 给菜单与设置），状态栏改成一颗 `</>` 图标之后短名没有读者了；`zh-ui.ts` 里 `"Source"` / `"Split"` 两条中文随之删除（留着就是废键，`i18n-check` ③ 会 FAIL）。⚠️ **2026-10-07 起连 `VIEW_MODE_LABELS` 也没有读者了**（偏好设置里那个「编辑模式」下拉随"模式不再存盘"一起删掉）——这个文件**没删**，留着是因为那张 `Record<ViewMode, string>` 是"加第四种模式"时**唯一会当场编译不过的地方**（理由与"别看没人 import 就清掉"写在它文件头）。⚠️ **只是名字，没有切换逻辑**——切换在 `ui/useFileKindMode.ts` 的 `设模式` / `ui/commands.ts` |
 | `ui/Toasts.tsx` | 提示条（42 行，**纯展示 + 点叉关掉**；什么时候消失由 `ui/useToasts.ts` 定）。⚠️ **一行样式都没有**——外观全在 `styles/toast.css`（2026-09-29 从 `app.css` 拆出来的那一节）（那一节的表格见 `docs/04` §2.6） |
 | `ui/useToasts.ts` | **提示条的宿主**（47 行，2026-09-25 从 `App.tsx` 搬出，本文件当时 958 行）：`toasts` 数组 ＋ `toast(msg, level?, ttlMs?)` ＋ `dismiss`。⚠️ 文案照旧由调用方给，这里只管"什么时候消失"——那条规则有两条反直觉的分支：`error` 留 8 秒（其他 3.2 秒）、**`ttlMs === 0` 是不自动消失**（给"描述状态、不是描述刚做的那件事"的提示用，比如开机读设置失败） |
-| `ui/ErrorBoundary.tsx` | 渲染错误兜底 + 全局错误钩子 |
+| `ui/ErrorBoundary.tsx` | 渲染错误兜底 + 全局错误钩子。错误页除「试着继续」外还提供「退出 Nota」，直接走 `api.window.quit()`，避免前端已经崩溃时应用关闭流程在不可见的确认框上死锁 |
 | `ui/outline.ts` | 字数的纯函数（`countText` / `Counts` / `isCjk`）。⚠️ 2026-09-27 起**大纲那一半搬去了 `editor/headings.ts`**（依赖方向，见那一行）；文件名没改——"outline" 仍与侧栏那一页对得上 |
 | `ui/ReviewPane.tsx` | **编辑区里摊着的那块插件面板**（2026-09-25，`nota.ui.review` 的前端那一半）：从宿主 `ReviewState` 拉"哪一页"，再从插件清单查名字、从面板清单查那一页，然后**复用 `PanelBody` 画**。⚠️ 它**只画**，开合归宿主状态；⚠️ 标题与那句「此插件不支持您的语言」的合成都在这儿（要查两张表），所以 `App.tsx` 只把两份清单递进来 |
 | `i18n/index.ts` | **前端 i18n**（2026-09-25）：`t(原文, …参数)` / `语言()` / `定语言()` / `useT()` / **`use语言()`**。⚠️ **键就是原文**（与插件那套同一门语言），所以没翻译的字符串取到的是它自己；⚠️ **2026-09-28 起"原文"是英语**（用户定的方向：英语才是主语言、中文是翻译包），译文在 `i18n/zh*.ts`，`en*.ts` 那四份删了；⚠️ 模块级**兜底是 `en`**（与宿主 `lang.rs::应用兜底` 同值，两条注释互相指回）——语言还没拉回来之前界面不能空着，而英语是原文所以这个落点**永远完整**；⚠️ 组件**必须**调 `useT()`，模块级那个 `t` **不会**触发重渲染；⚠️ **不是画字、而是把语言当依赖**（推原生菜单、重算 memo）要用 `use语言()`；⚠️ `{0}` / `{1}` 是占位符 |
@@ -4868,7 +4868,7 @@ React 按位置对不上就退到"按键值查"那条路，而那张表是 Map�
 | `themes` | `useState<DocThemeInfo[]>([])` | 扫到的**文档主题**，喂给菜单栏「主题」那一栏。**启动时拉一次** |
 | `settingsOpen` | `useState(false)` | 偏好设置框开不开。入口是菜单「文件 → 偏好设置」（`file.preferences`） |
 | `dockOpen` | `useState(false)` | 右侧插件栏。⚠️ **默认关**（用户 2026-09-24 定的口径） |
-| `sidebarOpen` | `useState(false)` | 左侧栏。⚠️ **默认关**，同上。⚠️ **三个入口调同一个 setter**：菜单「视图 → 显示/隐藏侧边栏」（`Ctrl+Shift+L`）、栏内右上角那颗 ×（`Sidebar.onClose`）、菜单打勾。**不是三份状态** |
+| `sidebarOpen` | `useState(false)` | 左侧栏。⚠️ **默认关**。菜单「视图 → 显示/隐藏侧边栏」（`Ctrl+Shift+L`）与状态栏左端按钮调同一个 setter；侧栏内部不再另画关闭叉 |
 | `sidebarTab` | `useState<SidebarTab>("tree")` | 左栏当前哪一页 |
 | ~~`focusMode`~~ | — | **2026-09-25 搬去了 `ui/useImmersive.ts`**（和全屏合成同一个"沉浸"概念，见那个文件）。⚠️ 它**仍然不进 `settings`**：和 `dockOpen` 同类，是"看的时候的状态" |
 | `typewriter` | `useState(false)` | **打字机模式**。同上（这条**没有**跟着专注模式一起搬——它只有编辑区那一半，见 `editor/writing-modes.ts`） |
@@ -5198,14 +5198,11 @@ ProseMirror 那棵树也是 `contenteditable`，不放过的话编辑器里一�
     <TopBar disabled checks themes currentTheme onCommand onTheme onOpenThemesDir
             dockOpen onToggleDock />
     <div className="app-body">
-      {sidebarOpen && (
-        <Sidebar workspace tree docText={activeDoc?.text ?? ""}
-                 strict={settings?.strict_markdown ?? false}
-                 tab={sidebarTab} onTab={setSidebarTab} onOpenFile={openPath}
-                 loadDir={loadDir}
-                 onClose={() => setSidebarOpen(false)}
-                 onOpenFolder={() => void openFolder()} />
-      )}
+      <Sidebar workspace tree docText={activeDoc?.text ?? ""}
+               tab={sidebarTab} onTab={setSidebarTab} onOpenFile={openPath}
+               loadDir={loadDir} onOpenFolder={() => void openFolder()}
+               onNewFile={() => void newDoc()} onRefresh={() => void refreshTree()}
+               折叠={!sidebarOpen} />
       <main className="app-main">
         {activeDoc ? <EditorPane ref={editorRef} key={activeDoc.id} doc={activeDoc}
                                  mode={viewMode}
@@ -6943,7 +6940,7 @@ CodeMirror**（2026-09-30 新建，BUG-57）。
 
 ---
 
-## `src/ui/Sidebar.tsx`（572 行）
+## `src/ui/Sidebar.tsx`（878 行）
 
 左侧栏：**文件树 / 大纲** 两页。`SidebarTab` 就两个值（`"tree"` / `"outline"`），
 菜单里那两条（`Ctrl+Shift+3` 文件树 / `Ctrl+Shift+1` 大纲）与这里是同一套。
@@ -6991,7 +6988,7 @@ CodeMirror**（2026-09-30 新建，BUG-57）。
 ⚠️ **`.sidebar-head` 与 `role="tablist"` 的关系没变**：那排页签按规矩只能是 tab，
 外面那条 `.sidebar-head`（`styles/sidebar.css`）留着（同 `docs/04` §2.1 那棵树）。
 
-### `export function Sidebar({ workspace, tree, docText, strict, tab, onTab, onOpenFile, loadDir, onClose, onOpenFolder }: Props)`
+### `export function Sidebar({ workspace, tree, docText, strict, tab, onTab, onOpenFile, loadDir, onOpenFolder, onNewFile, onRefresh, onResize, 折叠 }: Props)`
 
 props：
 
@@ -7006,16 +7003,19 @@ props：
 | `onOpenFile` | `(path: string) => void` | 接的是 `App.openPath`，传的是**绝对路径** |
 | `loadDir` | `(path: string) => Promise<TreeNode[]>` | 展开子目录时按需取那一层。⚠️ 它已经带着当前口径（`ui/tree-options.ts`），这一层不用管 |
 | `口径键` | `string` | 当前口径的字符串指纹，**只用来判断"已经取回来的那几层过期了没有"**（见下面 `FileTree` 那段） |
-| `onClose` | `() => void` | 收起这一栏。**只收不切**（点 × 却把它点开，那种手感无法接受） |
 | `onOpenFolder` | `() => void` | 空态那颗按钮，接的是 `App.openFolder`——**和「文件 → 打开文件夹…」同一个回调**，不是另开一条通路 |
-| `折叠` | `boolean` | 收起态（2026-09-30 深夜加）。**不卸载**——这一栏在 flex 行里，"宽度从 240 走到 0"那一帧要有元素才画得出来，所以只加 `.sidebar-collapsed` 类、把宽度交给 CSS 那 160ms，同时上 `inert`。⚠️ 它与 `onClose` 是**同一个开关的两面**：`App.tsx` 传的是 `折叠={!sidebarOpen}` |
+| `onNewFile` | `() => void` | 底栏「＋」，接 `newDoc()` |
+| `onRefresh` | `() => void` | 底栏更多菜单里的「刷新」，重新读取当前工作区 |
+| `onResize` | `(宽: number) => void` | 拖动右缘后提交侧栏宽度 |
+| `折叠` | `boolean` | 收起态。**不卸载**，只加 `.sidebar-collapsed` 并把宽度动画到 0，同时上 `inert`；`App.tsx` 传 `折叠={!sidebarOpen}` |
 
 ⚠️ **`plugins` 这个 prop 2026-09-22 拿掉了**——插件那一页搬去了右边的 `PluginDock`。
 
 内部只有 `const outline = useMemo(() => extractOutline(docText, strict), [docText, strict])`。
 
 渲染结构：`<aside className="sidebar">` → `div.sidebar-head`（一个 `role="tablist"` 的
-nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 `tab` 二选一）。
+nav + 两个 `TabButton`）+ `<div className="sidebar-body">`（按 `tab` 二选一）＋
+文件页底栏。
 ⚠️ **2026-09-30 深夜起，`折叠` 为真时那个 `className` 是 `"sidebar sidebar-collapsed"`**
 （`inert` 也一起上）——看着只多了一个类，实质是这一栏**从此一直挂在树上**，
 `App.tsx` 那边不再条件渲染（见 `docs/06` §5.44 的帧序列）。
@@ -7030,7 +7030,8 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 | 组件 | props | 行为 |
 |---|---|---|
 | `TabButton` | `{id, current, onSelect, label}` | `role="tab"` 的 button，`aria-selected` 与 `className` 按 `current === id` 定 |
-| `Outline` | `{items: OutlineItem[]}` | 大纲整页（见下）。空时显示"这份文档还没有标题。" |
+| `Outline` | `{items: OutlineItem[], onJump}` | 大纲整页（见下）。空时显示"这份文档还没有标题。"；点标题把行号与序号交给编辑器跳转 |
+| `FileList` | `{nodes, workspace, activePath, onOpenFile, loadDir}` | 默认扁平文件页。根层文件立即出现，子目录按批次递归读取；最多遍历 512 个目录，失败或触顶时明确提示列表不完整 |
 | `FileTree` | `{nodes, workspace, onOpenFile, loadDir, 口径键}` | 空时显示"这个文件夹里没有 Markdown 文件。"，否则 `<ul className="tree">` + 每项一个 `TreeRow` |
 | `TreeRow` | `{node, workspace, depth, open, kids, errors, onToggleDir, onOpenFile}` | 递归，见下 |
 
@@ -7043,7 +7044,8 @@ nav + 两个 `TabButton` + 那颗 ×）+ `<div className="sidebar-body">`（按 
 - 有子标题的才画 `outline-twisty`（`aria-expanded`）；叶子留一个**同宽的空占位**
   （不留的话叶子与父标题的文字起点差 14px，扫一列标题时像缩进乱了）。
 - 折起来时后面挂一个 `outline-folded-count`（那一节有多少个子标题）。
-- ⚠️ 那颗标题**还不可点**（点了不跳转）——见 `docs/07` 第 48 项，`docs/04` §2.2 有标记。
+- 标题是真正的 `<button>`；点击后把 `{line, index}` 交给编辑器。`line` 供源码模式定位，
+  `index` 供 ProseMirror 按标题序号定位。
 
 **`FileTree` / `TreeRow`** —— 折的是**目录**：
 
@@ -7870,7 +7872,7 @@ export interface Toast {
 
 ---
 
-## `src/ui/ErrorBoundary.tsx`（69 行）
+## `src/ui/ErrorBoundary.tsx`（87 行）
 
 全局错误兜底。做两件事：
 
@@ -7890,7 +7892,7 @@ interface State { error: Error | null; info: ErrorInfo | null; }
 | `state` | 初值 `{ error: null, info: null }` |
 | `static getDerivedStateFromError(error: Error): Partial<State>` | 返回 `{ error }`（这是 React 要求的静态方法，渲染期抛错时被调） |
 | `componentDidCatch(error: Error, info: ErrorInfo)` | `console.error("[nota] 渲染出错：", error, info.componentStack)`，再 `setState({ info })` |
-| `render()` | `error` 为 `null` → 直接渲染 children（**正常路径零开销**）。否则渲染一屏：`h1 界面出了点问题` + 一句说明（"你正在编辑的内容还在后端存着，没有丢。可以先把下面这段信息记下来，然后重启 Nota。"）+ `<pre>` 里的错误消息与组件栈 + 一个「试着继续」按钮（`setState({ error: null, info: null })`） |
+| `render()` | `error` 为 `null` → 直接渲染 children（**正常路径零开销**）。否则渲染一屏：`h1 界面出了点问题` + 一句说明 + `<pre>` 里的错误消息与组件栈 + 「试着继续」与「退出 Nota」两个动作。后者直接调用后端退出命令，不依赖已经损坏的 React 子树去弹保存确认 |
 
 ⚠️ 那句"你正在编辑的内容还在后端存着，没有丢"是**基于镜像的去抖延迟说的**：
 真崩溃时最近 300ms 内的击键**可能**还没推给后端。这是一句善意但不完全准确的安慰话，

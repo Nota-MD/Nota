@@ -139,7 +139,7 @@
   border: none;
   background: transparent;
   padding: 0;
-  font-family: inherit;
+  font-family: var(--font-math);
   font-size: inherit;
   line-height: inherit;
   color: var(--fg);
@@ -201,7 +201,7 @@
   position: absolute;
   visibility: hidden;
   white-space: pre;
-  font-family: inherit;
+  font-family: var(--font-math);
   font-size: inherit;
   pointer-events: none;
 }
@@ -456,8 +456,8 @@
   border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
   color: var(--fg-muted);
-  /* 卡是**界面**不是正文：说清一件状态的事，用界面字体（同 `.nota-diagram-note`）。 */
-  font-family: var(--font-ui, inherit);
+  /* 公式块内部统一使用数学衬线字体，空公式提示也跟随。 */
+  font-family: var(--font-math);
   font-size: 0.9em;
   line-height: 1.6;
 }

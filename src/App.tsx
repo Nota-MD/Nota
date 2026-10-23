@@ -828,13 +828,10 @@ export default function App() {
             // 口径指纹：换排序 / 换过滤 / 拨开隐藏文件之后，侧栏靠它知道
             // "已经取回来的那几层过期了"（`ui/Sidebar.tsx::FileTree` 那个 effect）。
             口径键={树指纹}
-            // 右上角那个 × 与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L`
-            // 是**同一个开关的三个入口**，共用下面这一个 setter。
-            // 收起状态（2026-09-30）：**不是卸载**，是把宽度动画到 0。
+            // 侧栏开关的三个入口共用下面这个 setter；收起不是卸载，是宽度动画到 0。
             // ⚠️ 与上面那个 `sidebarOpen` 是同一个开关，别在这里另记一份状态。
             折叠={!sidebarOpen}
-            // 右缘拖动改宽度（2026-09-30）：**松手才落盘**，拖动过程是
-            // `ui/SidebarResizer.tsx` 直接写 `--sidebar-width`。
+            // 右缘拖动**松手才落盘**；拖动过程由 `SidebarResizer` 直接写变量。
             // ⚠️ 落盘时要**整份 `appearance` 交上去**（`updateSettings` 的
             // patch 只做浅合并，少一个字段就等于把它抹回默认值）。
             onResize={(宽) => {
@@ -846,6 +843,8 @@ export default function App() {
             }}
             // 空态里那颗按钮走的是「文件 → 打开文件夹…」那条路，同一个函数。
             onOpenFolder={() => void openFolder()}
+            onNewFile={() => void newDoc()}
+            onRefresh={() => void refreshTree()}
             // 预览期间锁掉（`inert`）。理由见 `预览中` 那一段。
             inert={预览中}
           />

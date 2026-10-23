@@ -57,20 +57,36 @@
   width: 100%;
   min-height: 120px;
   margin: 0;
-  padding: 10px 12px;
-  border: 0;
+  overflow: auto;
   border-bottom: 1px solid var(--border);
-  border-radius: 0;
   background: var(--bg-subtle);
   color: var(--fg);
   font-family: var(--font-mono);
   font-size: 0.86em;
   line-height: 1.55;
-  /* 竖直方向可拉：源码长一点的时候用户能自己放大它。 */
   resize: vertical;
-  /* ⚠️ 原生外观要自己关掉（同 `editor.css` 里 `<select>` / `<button>` 那条）：
-     WebKit 会把表单控件的绘制交给 GTK 的原生外观，而**原生外观盖得住 CSS**。 */
-  appearance: none;
+}
+
+.editor-mount .ProseMirror .nota-diagram-source .cm-editor {
+  min-height: 118px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.editor-mount .ProseMirror .nota-diagram-source .cm-scroller {
+  min-height: 118px;
+  overflow: visible;
+}
+
+.editor-mount .ProseMirror .nota-diagram-source .cm-content {
+  min-height: 118px;
+  padding: 10px 12px;
+  caret-color: var(--accent);
+}
+
+.editor-mount .ProseMirror .nota-diagram-source .cm-line {
+  padding: 0;
 }
 
 .editor-mount .ProseMirror .nota-diagram-source-shell.is-collapsed .nota-diagram-source {
@@ -78,6 +94,12 @@
   height: 34px;
   overflow: hidden;
   resize: none;
+}
+
+.editor-mount .ProseMirror .nota-diagram-source-shell.is-collapsed .cm-editor,
+.editor-mount .ProseMirror .nota-diagram-source-shell.is-collapsed .cm-scroller,
+.editor-mount .ProseMirror .nota-diagram-source-shell.is-collapsed .cm-content {
+  min-height: 34px;
 }
 
 .editor-mount .ProseMirror .nota-diagram-source-bar {

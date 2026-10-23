@@ -419,7 +419,7 @@ async function scenario(hash: string, log: string[]): Promise<void> {
       // 大纲来自正文、与工作区无关，所以默认那一页是有内容的——要看空态
       // 得先切到「文件」页。这一句顺带也验了"页签切得动"。
       const treeTab = [...document.querySelectorAll<HTMLElement>(".sidebar-tab")].find(
-        (b) => b.textContent === "文件",
+        (b) => b.textContent === "File" || b.textContent === "文件",
       );
       treeTab?.click();
       await waitFor(".sidebar-empty .btn");
@@ -469,36 +469,28 @@ async function scenario(hash: string, log: string[]): Promise<void> {
       `点第 2 行大纲 → 回调 ${跳大纲.length} 次，给的是 ${跳大纲.length ? JSON.stringify(跳大纲[跳大纲.length - 1]) : "(没有)"}`,
     );
 
-    // 文件树：先切到「文件」页（页签是**真组件**的，所以这条也顺带验了）
+    // 文件页：先验默认扁平列表，再切树形视图展开目录。
     const treeTab = [...document.querySelectorAll<HTMLElement>(".sidebar-tab")].find(
-      (b) => b.textContent === "文件",
+      (b) => b.textContent === "File" || b.textContent === "文件",
     );
     treeTab?.click();
+    await waitFor(".sidebar-footer");
+    await waitFor(".file-list-btn");
+    log.push(`「文件」页默认列表 = ${document.querySelectorAll(".file-list-btn").length} 行`);
+    (document.querySelector(".sidebar-view-toggle") as HTMLElement).click();
     await waitFor(".tree-dir-btn");
-    log.push(`切到「文件」页 = ${document.querySelectorAll(".tree-dir-btn, .tree-file-btn").length} 行`);
+    log.push(`切到树形视图 = ${document.querySelectorAll(".tree-dir-btn, .tree-file-btn").length} 行`);
     (document.querySelector(".tree-dir-btn") as HTMLElement).click();
     await sleep(120);
     log.push(`展开目录后行数 = ${document.querySelectorAll(".tree-dir-btn, .tree-file-btn").length}`);
     log.push(`目录的三角转了 = ${document.querySelector(".tree-twisty")?.getAttribute("data-open")}`);
-
-    // ── 右上角那颗「收起」×（2026-09-24 加的）──────────────────────────
-    const closeBtn = document.querySelector<HTMLElement>(".sidebar-close");
-    log.push(`收起那颗 × 在不在 = ${!!closeBtn}`);
-    log.push(`× 的提示 = ${closeBtn?.getAttribute("title") ?? "(没有)"}`);
-    // ⚠️ tablist 的子元素按规矩只能是 tab。× 塞进去读屏会把它念成一个页签。
-    log.push(`× 没被塞进 tablist = ${!document.querySelector('[role="tablist"] .sidebar-close')}`);
-    // ⚠️ **量几何**，不是查存在：页签文字把 `.sidebar-tabs` 撑宽时 × 会被挤出
-    // 可视区，而那种情况下查询照样查得到、`click()` 照样点得动——只有框能看出来。
-    const closeBox = closeBtn?.getBoundingClientRect();
-    const headBox = document.querySelector(".sidebar-head")?.getBoundingClientRect();
-    log.push(
-      `× 还在栏内（右边缘 ${closeBox?.right.toFixed(1) ?? "?"} ≤ ${headBox?.right.toFixed(1) ?? "?"}）= ${!!closeBox && !!headBox && closeBox.right <= headBox.right + 0.5}`,
-    );
-    closeBtn?.click();
+    log.push(`底栏工作区 = ${document.querySelector(".sidebar-workspace")?.textContent ?? "(没有)"}`);
+    (document.querySelector(".sidebar-footer-btn") as HTMLElement).click();
     await sleep(60);
-    // ⚠️ 试验台里挂的是 Sidebar **本体**，App 不在，所以点了 × 栏子不会消失——
-    // 这里能验的、也只该验的是"回调发出去了"。真正的卸载是 `App.tsx` 的事。
-    log.push(`点 × 之后回调次数 = ${侧栏关闭次数}`);
+    log.push(`底栏新建回调次数 = ${新建文档次数}`);
+    (document.querySelector(".sidebar-view-toggle") as HTMLElement).click();
+    await waitFor(".file-list-btn");
+    log.push(`切回列表 = ${document.querySelectorAll(".file-list-btn").length} 行`);
     return;
   }
 
@@ -782,14 +774,8 @@ function nativeScenario(log: string[]): void {
   log.push(bad ? `${bad} 条不符` : `推给原生菜单的树 ${checks.length} 条全对`);
 }
 
-/**
- * 侧栏右上角那颗 × 被点过几次。
- *
- * ⚠️ 放在模块层而不是 `Harness` 里：`scenario()` 与它是两个函数，
- * 计数器进 state 就得再往 `scenario` 传一个读数回调，而这里要的只是
- * "点了一下有没有反应"。见 `#sidebar` 场景末尾那段。
- */
-let 侧栏关闭次数 = 0;
+/** 底栏「＋」被点过几次。 */
+let 新建文档次数 = 0;
 
 /** 「打开文件夹…」那颗按钮被点过几次（`#sidebar-empty` 场景）。 */
 let 打开文件夹次数 = 0;
@@ -907,17 +893,16 @@ function Harness() {
             loadDir={loadDirFixture}
             // ⚠️ 试验台里口径固定不变（这一场验的是侧栏长得对不对，不是
             // 排序）——给个常量指纹就行。真换口径之后"已经展开的那几层要重取"
-            // 那一条归 `App.tsx` 那条路，这里验不了。
-            口径键="name|supported|false"
-            // ⚠️ 数一下回调次数，不在这儿真把栏子撤掉：试验台要验的是
-            // "× 点得动、回调发得出去"，卸载归 `App.tsx` 管。
-            onClose={() => {
-              侧栏关闭次数++;
-            }}
-            onOpenFolder={() => {
-              打开文件夹次数++;
-            }}
-          />
+             // 那一条归 `App.tsx` 那条路，这里验不了。
+             口径键="name|supported|false"
+             onOpenFolder={() => {
+               打开文件夹次数++;
+             }}
+             onNewFile={() => {
+               新建文档次数++;
+             }}
+             onRefresh={() => console.log("refresh-tree")}
+           />
         </div>
       )}
     </StrictMode>
@@ -940,6 +925,10 @@ const TREE_FIXTURE = [
  */
 const loadDirFixture = async (sub: string) => {
   await sleep(80);
+  // 列表视图会递归枚举目录。夹具到第二层就收住，避免造出一条无限嵌套的假路径。
+  if (sub.includes("/")) {
+    return [{ name: "更深.md", path: `${sub}/更深.md`, is_dir: false, children: null }];
+  }
   return [
     { name: `${sub}/子目录`, path: `${sub}/子目录`, is_dir: true, children: null },
     { name: "子文档.md", path: `${sub}/子文档.md`, is_dir: false, children: null },

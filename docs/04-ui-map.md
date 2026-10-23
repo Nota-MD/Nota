@@ -126,18 +126,21 @@ ErrorBoundary                       (ui/ErrorBoundary.tsx)  兜住渲染期崩�
    │  │  │   用户 2026-10-11 让删掉：「**侧栏上面的 × 可以删掉**」——
    │  │  │   收起侧栏的入口仍然有两个：状态栏左端那颗圆圈、菜单「视图 → 侧边栏」）
    │  │  ├─ div.sidebar-body
-   │  │     ├─ [tab=tree] FileTree
+   │  │     ├─ [tab=tree, 默认] FileList / FileTree
    │  │     │  ├─ div.sidebar-empty  「还没打开文件夹。…」＋ button.btn「打开文件夹…」
    │  │     │  ├─ p.sidebar-empty    「这个文件夹里没有 Markdown 文件。」
-   │  │     │  └─ ul.tree → TreeRow
-   │  │     │     ├─ li.tree-dir  > button.tree-dir-btn   目录名（**可点：展开/收起**，
-   │  │     │     │                                       前面 span.tree-twisty 转 90°）
-   │  │     │     └─ li.tree-file > button.tree-file-btn  文件名（可点，title 是绝对路径）
+   │  │     │  ├─ ul.file-list → button.file-list-btn  默认扁平文件列表
+   │  │     │  └─ ul.tree → TreeRow  底栏切换后的树形视图
    │  │     └─ [tab=outline] ul.outline → li.outline-row
    │  │        ├─ button.outline-twisty  「▸」折叠三角（只有带子标题的行才有，其余留同宽占位）
    │  │        ├─ span.outline-item     标题文本（**纯文本，不可点**）
    │  │        └─ span.outline-folded-count  折起来的条数
    │  │        └─ p.sidebar-empty    「这份文档还没有标题。」
+   │  │  ├─ div.sidebar-footer（仅文件页）
+   │  │  │  ├─ button.sidebar-footer-btn  新建文档
+   │  │  │  ├─ span.sidebar-workspace     工作区名
+   │  │  │  ├─ button.sidebar-more        更多操作菜单
+   │  │  │  └─ button.sidebar-view-toggle 列表 / 树形视图
    │  │  └─ SidebarResizer          (ui/SidebarResizer.tsx)  ⚠️ **必须是 `.sidebar` 的最后一个子元素**
    │  │     └─ div.sidebar-resizer   贴右缘的一条 6px 把手，`cursor: col-resize`
    │  │                              ⚠️ 它靠 `parentElement` 量这一栏的左缘（见 §2.2）
@@ -716,11 +719,14 @@ ProseMirror 把它渲染成一个真的 `<span>`，所以 `ContextMenu.tsx` 那�
 
 | 控件 | 文案 | 回调 → 最终动作 | 当前状态 |
 |---|---|---|---|
-| 收起 | 「×」`title="收起侧边栏"` | `onClose()` → `App.tsx` 的 `setSidebarOpen(false)` | ✅ 2026-09-24 补。⚠️ **只收不切**；与「视图 → 显示/隐藏侧边栏」、`Ctrl+Shift+L` 共用 `sidebarOpen` 一份状态 |
 | **开合那 160ms**（2026-09-30） | 没有新控件——是收起/展开这个动作本身 | `sidebarOpen` 一变 → `App.tsx` 传的 `折叠={!sidebarOpen}` → `<aside>` 挂上 `.sidebar-collapsed`，宽度 240 ↔ 0 走 `transition: width 160ms ease`（边框宽度一起收，否则栏收成 0 宽还留着一条 1px 竖线） | ✅ **2026-09-30 深夜加**。用户原话：「展开侧边栏，加一个小动画。**不用很长，不要对使用产生影响。**」⚠️ **这一栏从此一直在树上**——卸载了就没有中间帧（`docs/02` 的 `ui/Sidebar.tsx`）；折叠时上 `inert`，Tab 与读屏进不去。⚠️ **拖动那条把手不带这个动画**（`body.resizing-col` 里 `transition: none`，逐像素跟手）；⚠️ `prefers-reduced-motion` 下不播。帧序列与三档拖动落点见 `docs/06` §5.44 |
-| **导航层重做**（2026-10-23） | 无新按钮 | 侧栏改成独立表面：圆角、轻阴影、外边距和短页签下划线都走主题变量；文件与大纲各占一个持久滚动页，当前文件使用整行浅底选中态，大纲随正文选区标出当前章节 | 当前路径由 `activeDoc.path` 传入；文件树会自动展开当前文件所在目录。切换页签不再卸载两棵树，因此展开与滚动位置保留。CDE 主题继续使用零圆角、零阴影的硬边外观 |
+| **导航层重做**（2026-10-23） | 文件页底栏：＋ / 工作区名 / ⋮ / 列表-树形切换 | 点击切换视图；⋮ 菜单提供新建、打开文件夹、刷新 | 侧栏改成贴边整栏，不再使用圆角、外边距和阴影；默认扁平列表，树形视图仍保留。当前文件在两种视图里都使用整行浅底选中态，大纲随正文选区标出当前章节 |
 | 标签页 | 文件 | `setTab("tree")`（**只改本地 state**，不走后端） | ✅ 默认页 |
 | 标签页 | 大纲 | `setTab("outline")` | ✅ 能用（内容只读） |
+| 文件列表·文件 | 文件名 + 父目录 | `onOpenFile(`${workspace}/${path}`)`；子目录由 `loadDir()` 按批次读取并展开成同一个扁平列表 | 默认视图。根层文件先出现，深层文件随后补入；最多读取 512 个目录，读不到或触顶时在底部提示列表不完整 |
+| 文件页底栏·＋ | 新建文档 | `onNewFile()` → `newDoc()` | 文件页常驻入口 |
+| 文件页底栏·⋮ | 更多操作 | 菜单含「新建文档」「打开文件夹…」「刷新」；`Esc` 或点击菜单外收起 | 打开文件夹复用空态那颗按钮的回调；刷新重新读取工作区 |
+| 文件页底栏·视图按钮 | 无文字，三条横线切换缩进形态 | 在默认列表和原有文件树之间切换 | 两者共用当前路径高亮；视图选择属于侧栏会话状态，不写入设置 |
 | 文件树·文件 | 文件名 | `onOpenFile(`${workspace}/${node.path}`)` → `openPath()` → `api.doc.open()` | ✅ **能点开**（`Sidebar.tsx` 的 `TreeNodeRow` 有 `onClick`）；`title` 显示拼出来的绝对路径。⚠️ `docs/07` 第 25 项与 `docs/10` §2 的"文件树"一行都写着"点了不开/只读展示"，**与代码不符**，见 §7 |
 | 文件树·目录 | 目录名 | `onToggleDir(path)`，第一次展开时 `loadDir()` → `api.workspace.tree(dir, 1, 口径)` | ✅ **可展开**（2026-09-24 起：按需取那一层，取回来的子节点缓存在 `FileTree` 的本地 state 里，不回写 App 那棵树）。⚠️ 读不了就在那一行下面写红字（`.tree-error`），**不静默成"空目录"**。⚠️ **2026-09-28 起带着当前口径**（排序 / 过滤 / 隐藏文件，`ui/tree-options.ts`）；口径一变，`FileTree` 靠 `口径键` 那个 effect **清掉 `kids` 缓存并对还开着的路径逐条重取**（保留展开状态）——不清的话会出现"顶层按新规则排了、展开的目录还是旧顺序" |
 | 文件树·空态 | 「还没打开文件夹。…」＋「打开文件夹…」 | 按钮 → `onOpenFolder()` → 与「文件 → 打开文件夹…」同一个 `openFolder()` | ✅ 2026-09-24 补。**在那之前这一段只有一句话、没有任何可点的东西**——界面让人去打开文件夹，路却只在菜单里 |
@@ -972,7 +978,7 @@ ProseMirror 把它渲染成一个真的 `<span>`，所以 `ContextMenu.tsx` 那�
 | 代码块右下角那一条 | 块**内部**右下角：「折叠」「复制」；语言下拉（没指定语言时显示「纯文本」，指定了就显示语言名）**不在这条上**，它单飞，见右栏 | 同一处的 NodeView（`editor/code-block.ts`）：复制走 `navigator.clipboard` 兜底 `execCommand`，**界面文案会在 1200ms 内变成「已复制」/「复制失败」**；折叠**只活在这个视图里、不写进文档** | ✅（2026-09-22 开窗实测，2026-09-25 又验了一次写回）。⚠️ 那一条是 `opacity: 0` 的，**鼠标进代码块才亮**。⚠️ **代码块上下间距各 30px**（2026-09-26 照 Typora，原来是 `0 0 30px`）——与相邻段落的 `margin` **取大的那个**（不是相加），`editor.css` 那条注释里写着算式。<br>⚠️ **语言下拉的外观是"自己画的"**（2026-09-25）：`appearance: none` 去掉原生外观（**连同原生那颗箭头**）＋ `.nota-code-lang-wrap::after` 补一颗。少写 `appearance: none` 的后果是**深色下整个框画成纯白**（原生 `menulist` 外观盖在 CSS 之上）。📌 那颗控件当天又从 `<select>` 换成了 `<button>`（理由见右栏），但**这一条留着**——`<button>` 一样有原生外观；另一处在设置页（`settings.css` 的 `.stg-select`），**两处各画各的箭头**（一个跟界面主题、一个跟文档主题），改一处要想到另一处。<br>📌 **2026-10-06（第 101 项收尾）**：折叠那条 CSS 的靶子**从 `> code` 改成 `> .cm-editor`**——第 101 项之后 `> code` 是**零尺寸、藏起来的** ProseMirror contentDOM，收它等于没反应（按钮会翻字、画面不动，BUG-69）；真正该收的是 `.cm-editor`（用户看着的那一层）。⚠️ 原规则里那句 `display: block`（为行内元素 `<code>` 补的）**没有跟着搬**——`.cm-editor` 是块级、CodeMirror 自己还写了 `display: flex` |
 | 代码块**下面**那颗语言下拉 | 语言下拉（与上一行同一个控件，**位置不同**）：**图标 ＋ 语言名**，点开是一张 400 项的列表，**每一行也是"图标 ＋ 名字"** | 住在 `pre` 的**下边框之外**：`.nota-code-lang-wrap` 是 `position: absolute; top: 100%; right: 6px`，定位祖先是 `pre`（它自带 `position: relative`，`overflow` 又是为围栏标记留的 `visible`，所以画得到框外）。**不占文档流**，悬停时压在下一段第一行上——有意如此，常驻占位等于每个代码块下面空一截。展开的列表是**自绘的**（`editor/lang-picker.ts`），挂在 `document.body` 上、`position: fixed`，装不下时**向上翻** | ✅（2026-09-25 开窗实测，用户点名：「调整一下语言选择框的位置。是代码块右下方，下面」）。⚠️ 搬出来时有两处**必须连带改**，漏一个就是坏：①`langWrap.contentEditable = "false"` 要自己写（以前是跟着 `.nota-code-bar` 继承的）；②`code-block.ts` 里那条 `inChrome` 判据要**同时包含 bar 和 langWrap**，只判 bar 的话点下拉会被 ProseMirror 当成"点了编辑区"。⚠️ 折叠/复制**没有跟着搬**——用户明确选的是"只挪语言选择框"。<br>⚠️ **为什么非自己画不可**：原生 `<select>` 的 `<option>` 内容模型是**纯文字**，图片/图标塞进去不渲染，而用户要求「连弹层里也要图标」——硬约束。代价是原生白送的都得补（打字跳转 / 上下键 / 开场滚到当前项 / Escape / 点外面关），**都补了**。<br>⚠️ **图标 2026-09-26 起是真图**：热门语言走 `editor/lang-icons-real.ts` 的 93 颗 **vscode-icons** SVG（MIT，用户当天点名「只支持热门语言即可。但是要画真图标」），问不到才回落成 `editor/lang-icon.ts` 的**字母徽章**（底色＝语言约定色）。⚠️ 走了 `background-image` 的 data URI 而**不是**把 `<svg>` 插进 DOM——那批图里好几份都定义 `id="a"`，内联进同一份文档会**互相串色**。<br>⚠️ 弹层开着时**闭合框要一直亮着**（`:has(.nota-lang-open)`）：鼠标从按钮往弹层里走会离开代码块，不给这一条就是"框淡出、弹层还在" |
 | 代码块里的**文字本身**（2026-10-06 第 101 项新增的一行） | 不是控件，是**两层并排的 DOM**：`<code class="nota-code-text">`（隐藏，ProseMirror 的 contentDOM）＋ `.cm-editor`（可见，CodeMirror）。**用户看到、点到的都是 CM 那一层** | `code-block.ts` 建出来的 NodeView 里；CSS 在 `styles/code-block.css` 的 `.nota-code-text`（零尺寸、`pointer-events: none`）＋ `code-block-cm.ts` 的 `EditorView.theme`（内边距归零、光标/选区用 `--accent` / `--bg-active`） | 🟡 **代码在、判据（`tests/code-block-editing.test.ts` 21 条）在，但手感那半（配对、回车续行、`Tab`、`Ctrl+Z`）**没开窗点过**——见 `docs/10` 那一格与 `docs/07` 第 101 项。⚠️ 两层文本的存在**不是冗余**：存盘/撤销/查找读的是隐藏那层，见 `docs/05` §4.24 |
-| 图表块（` ```mermaid `）的挂件 | 右上角一颗「预览 / 编辑源码」开关；空块是一张「这里还没有图表源码」＋同一颗按钮；出错是一张说明卡（中文说清是语法错、附 mermaid 原文报错）＋同一颗按钮 | `editor/diagram-view.ts` 的 NodeView：平时**看图**、点一下才在图上边展开源码框（改完 **250ms** 防抖写回 `attrs.value`，失焦/`Esc` 立即落）——`diagram` 是 `atom`、没有 contentDOM，所以只能自己摆控件。⚠️ **渲染失败绝不回写文档**（出错只画卡）。⚠️ **点图本身不算点挂件**：那一下该让 ProseMirror 把整块选中（才能删/复制）——`是我的挂件` 的判据不含预览区（`docs/07` BUG-37 的对照写的就是这条） | ✅（2026-09-26 开窗拍过：图、错误卡、空块三种画面；小图撑满整栏的那条当天修掉）。⚠️ **2026-10-04（第 27 项）**：节点与转化是本仓 `editor/diagram-node.ts`（上游包退役）、mermaid 改**动态加载**——那之后**没再开过窗**（构建产物为证） |
+| 图表块（` ```mermaid `） | 上方 CodeMirror 源码框（折叠 / 复制 / 语言标识），下方独立渲染区；空块与语法错误各显示一张说明卡 | `editor/diagram-view.ts` 的 NodeView：源码经 **250ms** 防抖写回 `attrs.value`，失焦/`Esc` 立即落；CM 负责输入、配对、Tab 与剪贴板，撤销和重做转给 ProseMirror。`mindmap` 从当前主题色推导一组同色相柔和配色，普通流程图继续跟随明暗主题 | 2026-10-23 开窗实测：原 `mindmap` 正常渲染；源码框粘贴 `graph TD…` 后内容留在框内，预览同步更新。⚠️ **渲染失败绝不回写文档**；点图本身交给 ProseMirror 选中整块 |
 | 装载后的认领 | 无文案 | `EditorPane` 在 `focus()` 之后调一次 `api.doc.settle(id, text)` | ✅ 修 BUG-12 的那一步，见 `docs/03` §4.2 |
 | 查找高亮 | 无文案（命中底色 `--find-hit` / 当前命中 `--find-current`） | `editor/find.ts`（所见即所得）与 `source.ts`（源码）的**装饰**，两种模式都有；命令来自上方的 `FindBar` | ✅（2026-09-24），见 `docs/05` §4.3。⚠️ **底色画在哪一颗字上**现有判据（2026-10-06，`tests/find.test.ts` **53 条**：`doc.textBetween(命中)` 必须等于查询串——BUG-67 那个"向后位移一位"就是这条抓的）；**屏幕上真有没有颜色**仍是开窗目检 |
 | 压暗兄弟块 | 无文案（`opacity: var(--focus-dim)`，标准档 `0.32`） | 专注模式，`editor/writing-modes.ts` 的**装饰**；不改文档、不进撤销栈。⚠️ 这只是专注模式的**一半**——另一半是把外壳收起来，见 §2.10。📌 **2026-10-04（第 45 项）那个数改成可配的三档**（`appearance.focus_mode_dim`，`ui/useFocusDim.ts` 写 `<html data-focus-dim>`，两条压暗选择器——所见即所得的 `.nota-dim` 与源码模式的 `.cm-editor.nota-focus …`——**共读同一个变量**，各写一个数的症状是"拨了开关只有一半跟着变"） | ✅（2026-09-24），见 `docs/05` §4.4 |

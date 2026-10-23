@@ -10,6 +10,7 @@
 
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { api } from "@/bridge/ipc";
 import { t } from "@/i18n";
 
 interface Props {
@@ -58,13 +59,18 @@ export class ErrorBoundary extends Component<Props, State> {
           {error.message}
           {info?.componentStack ? `\n\n${t("Component stack: {0}", info.componentStack)}` : ""}
         </pre>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => this.setState({ error: null, info: null })}
-        >
-          {t("Try to Continue")}
-        </button>
+        <div className="crash-actions">
+          <button
+            type="button"
+            className="btn"
+            onClick={() => this.setState({ error: null, info: null })}
+          >
+            {t("Try to Continue")}
+          </button>
+          <button type="button" className="btn" onClick={() => void api.window.quit()}>
+            {t("Quit Nota")}
+          </button>
+        </div>
       </div>
     );
   }

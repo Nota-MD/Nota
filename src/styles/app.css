@@ -179,6 +179,14 @@ button {
   min-height: 0; /* 没有这行，flex 子项的滚动区会被撑破 */
 }
 
+/* 前端崩溃页：两个动作并排，避免“试着继续”与“退出”挤成一段普通文字。 */
+.crash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 .app-main {
   flex: 1;
   min-width: 0;

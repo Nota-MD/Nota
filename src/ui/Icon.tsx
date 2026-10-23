@@ -82,6 +82,7 @@ const 名字表 = [
   "nota-code-block-symbolic",
   "folio-insert-link-symbolic",
   "folio-insert-image-symbolic",
+  "folio-add-symbolic",
   "folio-view-list-bullet-symbolic",
   "folio-view-list-ordered-symbolic",
   "folio-eraser-symbolic",

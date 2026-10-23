@@ -516,9 +516,12 @@ export const codeBlockView = $view(
       // ⚠️ 顺序：`code`（隐藏的 contentDOM）与 CM 的根一起放在最前，三个挂件随后。
       // 挂件都是绝对定位，顺序上不敏感，但 contentDOM 必须是 `pre` 的子元素。
       pre.append(code, 代码编辑器.视图.dom, gutter, bar, langWrap);
-      wrap.append(数学.元素, pre, 预览.元素);
+      // ⚠️ 当前顺序是**源码在上、生成物在下**：普通代码块后面接 HTML 预览，
+      // `math` / `latex` / `tex` 后面接 KaTeX。数学预览曾经排在 `pre` 前面，
+      // 结果是“上方公式、下方源码”，与 Mermaid、HTML 预览的方向相反。
+      wrap.append(pre, 数学.元素, 预览.元素);
 
-      // 收起态只看见渲染结果；点它进入 Typora 式的"上面公式、下面源码"。
+      // 收起态只看见渲染结果；点它进入“上面源码、下面公式”的编辑态。
       数学.元素.addEventListener("mousedown", (event) => {
         event.preventDefault();
         设数学编辑(true);

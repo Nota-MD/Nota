@@ -70,11 +70,11 @@ ctx 初值、序列化器、输入规则、NodeView）现在在 `assemble.ts::�
 | `@milkdown/kit/utils` | `replaceAll` | `setMarkdown` 用的整篇替换（§6） |
 | `@milkdown/plugin-prism` | `prism` | 代码块高亮 |
 | `@milkdown/plugin-math` | `math` | 数学公式（KaTeX）：节点是 `math_inline` / `math_block`。⚠️ **这个包一个 NodeView 都没有**（`toDOM` 只把源码交给 `katex.render` 画出来），而且两个节点的**源码不在同一个地方**——`math_inline` 在**节点的内容**里、`math_block` 在 **`attrs.value`** 里。⚠️ **不改它的结果就是「敲进去的字静默丢掉」**（屏幕上写着、`toMarkdown` 交出去是空）。补视图的是本仓的 `./math-view`（§4.6b） |
-| `@milkdown/plugin-diagram` | `diagram` | ```mermaid 代码块 → `diagram` 节点（它的输入规则 `/^```mermaid$/` **是打完那几个字母当场成块**的）。⚠️ 这个包**自己不画图**——`toDOM` 只有一句 `dom.textContent = code`，一处 `mermaid.render` 都没有；画的那一半是本仓的 `./diagram-view`（§4.10） |
+| `./diagram-node`（**本仓**） | `diagram` | ```mermaid 围栏 → `diagram` 节点，并把手动选成 `mermaid` 的代码块也转成同一个节点。上游 `@milkdown/plugin-diagram` 已退役：它不画图，却会把整包 Mermaid 静态拖进首屏。节点源码仍只存 `attrs.value` |
 | `./heading-on-enter`（**本仓**） | `标题回车成块` | **标题"回车才成块"** ＋ 输入期给井号后面那段文字加粗；2026-09-30 起**宽松档（`#你好`）与严格档走完全同一条路**——没按回车只加粗，按了回车才成块。见 §4.9 与 §4.9c |
 | `./table-input`（**本仓**） | `表格输入规则` / `表格输入` | 敲表头行 ＋ 分隔行 → 回车吃成一张真表格（此前只能用菜单插）。⚠️ 它和 `heading-on-enter` 都要处理"回车"，所以两边的守卫里各有一条绕开对方的地盘 |
 | `./table-tab`（**本仓**） | `表格Tab` | **表格里的 `Tab` / `Shift+Tab`**（2026-10-04，`docs/07` 第 55 项 ②③）：⚠️ 上游 `preset-gfm` 的 `tableKeymap` **已经绑了这两颗键**，这一条只接它**撂挑子**的两种现场——**最后一格 `Tab`**（在下面加一行、光标进新行第一格）与**第一格 `Shift+Tab`**（**吃掉这颗键**：不吃的话焦点会静默飞出编辑器，接着打的字落到别处）。⚠️ 表格之外一律放行（`Tab` 照旧缩进）。⚠️ 排在 `配对处理` **后面**、`indent` **前面**——见 §4.21 |
-| `./diagram-view`（**本仓**） | `diagramView` | 图表块的 NodeView：把源码画成图，并且还能改源码。⚠️ **第二个 `$view`**（第一个是 `code-block.ts`） |
+| `./diagram-view`（**本仓**） | `diagramView` | 图表块的 NodeView：上方 CodeMirror 源码编辑器、下方独立渲染区。CM 的撤销/重做转给 ProseMirror，粘贴事件由 CM 自己接收；`mindmap` 从 `--accent` 推导同色相柔和配色，Mermaid 仍只在实际出图时动态加载 |
 | `./math-view`（**本仓**） | `mathView` ＋ `公式当前` | 公式那两个节点的视图：点一下就地改（半透明 `$` / `$$` 标出输入位置）。⚠️ **第三个 `$view`**，而且是**唯一一个 `.use()` 收数组的**（两条线：`公式当前` 管"当前是哪一块"、`mathView` 管怎么画）。见 §4.6b |
 | `./video-view`（**本仓**） | `视频视图` | **图片语法里的地址指向视频时画成播放器**（2026-09-28）：`![](a.mp4)` 不再是一颗破图标。⚠️ **第四个 `$view`**（前三个是 `code-block.ts` / `diagram-view.ts` / `math-view.ts`），判据只看**地址后缀**且复用 `editor/file-kind.ts` 的 `后缀()`。⚠️ 它**不改 schema**：源码与存盘那条路一个字节没动。⚠️ 尺寸那条 CSS 在**文档主题**里也有一份（导出会摘掉 `nota-` 类名），见 §4.8c |
 | `./math-input`（**本仓**） | `公式输入`（两条输入规则）＋ `公式块回车`（一个 `$prose` 按键钩子） | **公式的打字规则**（`:use()` 收数组，两条）：敲 `$$x$$` 或 `$x$` 当场变成一颗 `math_inline`。⚠️ 换掉了 `@milkdown/plugin-math` 那条 `mathInlineInputRule`——它**认不出 `$$…$$`**，用户敲到 `A$$bb$` 那一下尾巴就够匹配了，等他补最后一个 `$` 已经是另一段文字；所以 `create.ts` 把上游那条**按引用 `.filter()` 掉**（与标题那一条同一个手法）。⚠️ **2026-10-04 又摘掉第二条**：上游 `mathBlockInputRule`（`/^\$\$\s$/`）是「`$$` ＋**一颗空格**」就当场建出一块**空的**公式块——它自己的注释写的是 "press **enter**"，实现跟注释不符（用户拿 Typora 截图点的就是这条）。现在「建块」退回**回车**（`公式块回车`，判据在 §4.6c）。见 §4.6c |
@@ -945,6 +945,9 @@ OpenOffice / OPML 是**交给系统里那个 pandoc** 转的（`ui/useExport.ts`
 - 编辑态下两根 `$` / `$$` 半透明（`.nota-math-delim`，走 `.nota-srcmark` 那张配方：
   `--fg-faint` ＋ 0.16s 淡入，**不再乘 `opacity`**），行内公式编辑时渲染区
   `display: none`（Typora 式：源码框替掉结果）。
+- 公式源码框、宽度标尺和空态说明使用 `--font-math`：主栈从 KaTeX 数学字体开始，
+  中文回落到系统衬线字体。KaTeX 渲染结果继续用它自带的数学衬线字形；界面其他文本
+  仍使用 `--font-ui`，不把衬线体扩散到外壳。
 - **只读实例（分屏右预览 / 导出）画的是上游 `toDOM` 那棵树**，所以那两处的输出与今天
   **逐字节相同**；只读时面板**建了也不挂**。
 - 有意留下的三条取舍（都在文件头）：光标紧挨着不算当前、行内**不做**选区归位（做了会把

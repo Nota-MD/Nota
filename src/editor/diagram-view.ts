@@ -70,6 +70,7 @@ import { $view } from "@milkdown/kit/utils";
 // 退役了；`package.json` 里那行依赖**留着**（动态 import 一样要它）。
 
 import { t } from "@/i18n";
+import { writeClipboard } from "@/editor/code-block";
 
 import { 图表规格 } from "@/editor/diagram-node";
 
@@ -381,6 +382,9 @@ export const diagramView = $view(
       const body = document.createElement("div");
       body.className = "nota-diagram-body";
 
+      const sourceShell = document.createElement("div");
+      sourceShell.className = "nota-diagram-source-shell";
+
       const 源码框 = document.createElement("textarea");
       源码框.className = "nota-diagram-source";
       源码框.spellcheck = false;
@@ -390,7 +394,28 @@ export const diagramView = $view(
       const 预览 = document.createElement("div");
       预览.className = "nota-diagram-preview";
 
-      body.append(源码框, 预览);
+      const sourceBar = document.createElement("div");
+      sourceBar.className = "nota-diagram-source-bar";
+
+      const 折叠 = document.createElement("button");
+      折叠.type = "button";
+      折叠.className = "nota-code-btn";
+      折叠.textContent = t("Collapse");
+      折叠.title = t("Collapse this diagram source");
+
+      const 复制 = document.createElement("button");
+      复制.type = "button";
+      复制.className = "nota-code-btn";
+      复制.textContent = t("Copy");
+      复制.title = t("Copy Mermaid source");
+
+      const 语言 = document.createElement("span");
+      语言.className = "nota-diagram-language";
+      语言.textContent = "mermaid";
+
+      sourceBar.append(折叠, 复制, 语言);
+      sourceShell.append(源码框, sourceBar);
+      body.append(sourceShell, 预览);
       dom.append(body);
 
       // ── 这个视图的状态（都不进文档）──────────────────────────────────
@@ -579,6 +604,26 @@ export const diagramView = $view(
 
       // ── 事件 ──────────────────────────────────────────────────────────
 
+      for (const 按钮 of [折叠, 复制]) {
+        按钮.addEventListener("mousedown", (e) => e.preventDefault());
+      }
+
+      折叠.addEventListener("click", () => {
+        const collapsed = sourceShell.classList.toggle("is-collapsed");
+        折叠.textContent = collapsed ? t("Expand") : t("Collapse");
+        折叠.title = collapsed ? t("Expand this diagram source") : t("Collapse this diagram source");
+      });
+
+      复制.addEventListener("click", () => {
+        void writeClipboard(源码框.value).then((ok) => {
+          if (!ok) return;
+          复制.textContent = t("Copied");
+          window.setTimeout(() => {
+            复制.textContent = t("Copy");
+          }, 1200);
+        });
+      });
+
       源码框.addEventListener("input", () => {
         if (防抖 !== null) window.clearTimeout(防抖);
         防抖 = window.setTimeout(() => {
@@ -610,7 +655,8 @@ export const diagramView = $view(
        * 删除 / 复制 / 剪切。把整块预览都算成挂件的话，点图就成了"什么都没发生"。
        */
       const 是我的挂件 = (目标: EventTarget | null): boolean =>
-        目标 instanceof Element && (源码框 === 目标 || 目标.closest("button") !== null);
+        目标 instanceof Element &&
+        (sourceShell.contains(目标) || 目标.closest("button") !== null);
 
       // ── 主题 ──────────────────────────────────────────────────────────
 

@@ -22,39 +22,46 @@
 /* ── 卡片本体 ─────────────────────────────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-diagram {
-  /* 底色/圆角/描边与代码块同一套（`editor.css` 里的 `pre`）：同一种"外来内容
-     的容器"，长得不一样会显得是两套设计。 */
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
-  padding: 4px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 2px 0;
 }
 
 /* 被选中（点了一下图上）时描边亮起来——这个节点是 `atom`，ProseMirror 选中它
    就是把整块选中，用户接着才会去按 Backspace / Ctrl+C。 */
 .editor-mount .ProseMirror .nota-diagram.ProseMirror-selectednode {
-  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 3px;
+  border-radius: var(--radius);
 }
 
-/* 键盘走到时给个圈（`.nota-code-btn` 自己没有这一条，而本块的这颗按钮是
-   主要入口，键盘走不到等于不可用）。只圈本块里的，不动代码块那边。 */
-.editor-mount .ProseMirror .nota-diagram .nota-code-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.editor-mount .ProseMirror .nota-diagram-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* ── 源码框 ───────────────────────────────────────────────────────────── */
+/* ── 源码外壳：独立代码框 ─────────────────────────────────────────────── */
+
+.editor-mount .ProseMirror .nota-diagram-source-shell {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
 
 .editor-mount .ProseMirror .nota-diagram-source {
   display: block;
   box-sizing: border-box;
   width: 100%;
   min-height: 120px;
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg-subtle);
   color: var(--fg);
   font-family: var(--font-mono);
   font-size: 0.86em;
@@ -66,8 +73,37 @@
   appearance: none;
 }
 
+.editor-mount .ProseMirror .nota-diagram-source-shell.is-collapsed .nota-diagram-source {
+  min-height: 34px;
+  height: 34px;
+  overflow: hidden;
+  resize: none;
+}
+
+.editor-mount .ProseMirror .nota-diagram-source-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 3px 5px;
+}
+
+.editor-mount .ProseMirror .nota-diagram-language {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+}
+
 /* 只读预览与导出不需要源码区。 */
 .editor-mount .ProseMirror .nota-diagram-readonly .nota-diagram-source {
+  display: none;
+}
+
+.editor-mount .ProseMirror .nota-diagram-readonly .nota-diagram-source-shell {
   display: none;
 }
 
@@ -79,11 +115,17 @@
 /* ── 渲染区 ───────────────────────────────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-diagram-preview {
-  margin-top: 2px;
-  padding: 12px 4px 4px;
-  border-top: 1px solid var(--border);
+  min-height: 280px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
   /* 窄窗格里让图自己横向滚，而不是把正文列顶宽。 */
   overflow-x: auto;
+}
+
+.editor-mount .ProseMirror .nota-diagram-readonly .nota-diagram-preview {
+  min-height: 0;
 }
 
 /* 说明卡（空 / 出错 / 正在渲染）也得有个像样的高度，不然那一下是个薄片。 */

@@ -532,8 +532,7 @@ export function 要补标记(
   字: string,
   能力: 配对能力 = 全开配对能力,
 ): 标记动作 | null {
-  const 自配 = 自配对表[字];
-  const 升级闭 = 可升级表[字];
+  const 自配 = 自配对表[字], 升级闭 = 可升级表[字];
   if (!自配 && !升级闭) return null;
   if (现场.代码) return null;
   if (现场.链接) return null;
@@ -542,13 +541,14 @@ export function 要补标记(
     if (!现场.空选区) return null;
     if (字 === "^" && 能力.superscript === false) return null;
     if (字 === "=" && 能力.highlight === false) return null;
-    // 段首的 `*` 是列表项、反引号是围栏代码块，都不许补成行内的一对。
-    if (现场.前 === "" && (字 === "*" || 字 === "`")) return null;
+    // 段首的 `*` 是列表项，不许补成行内的一对；反引号仍补，第三颗会按字面插入。
+    if (现场.前 === "" && 字 === "*") return null;
     // `=` 单独一颗没有 Markdown 语义；第二颗落下来时才补成 `==|==`。
     if (字 === "=") {
       if (现场.后 === "=" && 现场.后二 === "=") return "跳过";
       return 现场.前 === "=" && 现场.后 === "" ? "补齐" : null;
     }
+    if (字 === "`" && 现场.后 === "" && /``$/.test(现场.前文)) return null;
     if (现场.后 === 字) {
       // 右边还跟着第二颗（`**粗|**`）：用户在**把这一对写完**，跳过去。
       if (现场.后二 === 字) return "跳过";

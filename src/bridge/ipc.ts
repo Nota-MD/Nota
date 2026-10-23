@@ -48,6 +48,14 @@ export const api = {
       invoke<PickerEntry[]>("nota_picker_list", { path, showHidden }),
     createDir: (parent: string, name: string) =>
       invoke<string>("nota_picker_create_dir", { parent, name }),
+    /** 优先使用系统原生打开/保存/选目录对话框；平台不可用时前端回退到自绘界面。 */
+    native: (request: {
+      mode: "open" | "save" | "directory";
+      title?: string;
+      defaultPath?: string;
+      filters?: { name: string; extensions: string[] }[];
+      multiple?: boolean;
+    }) => invoke<string[] | null>("nota_dialog_native", { request }),
   },
 
   /**

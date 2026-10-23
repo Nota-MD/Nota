@@ -255,6 +255,7 @@ export default function App() {
     docs,
     setActiveId,
     activeIdRef,
+    workspace,
     refreshDocs,
     setWorkspace,
     setTree,
@@ -270,6 +271,7 @@ export default function App() {
     openPath,
     newDoc,
     newDocWithText,
+    接上现有,
     openViaDialog,
     openFolder,
     loadDir,
@@ -324,6 +326,7 @@ export default function App() {
     // ⚠️ 只有「启动时」**第一档**会用一次：那一档要的是"落到一张白纸上"，
     // 见 `ui/useSession.ts::接上会话` 最后那一段。
     新建文档: newDoc,
+    接上现有,
     // ⚠️ 只有「启动时」第三档会用一次：侧车记着上次那个文件夹，接上它要**经过
     // 宿主**（围栏在那边），回来的是规范化后的路径，得有地方放。见
     // `ui/useSession.ts::接上会话` 里那一段。
@@ -839,7 +842,7 @@ export default function App() {
             }}
             // 空态里那颗按钮走的是「文件 → 打开文件夹…」那条路，同一个函数。
             onOpenFolder={() => void openFolder()}
-            onNewFile={() => void newDoc()}
+            onNewFile={(name) => void newDoc(name)}
             onRefresh={() => void refreshTree()}
             // 预览期间锁掉（`inert`）。理由见 `预览中` 那一段。
             inert={预览中}

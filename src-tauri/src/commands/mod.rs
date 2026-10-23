@@ -16,6 +16,7 @@ pub mod focus;
 pub mod image;
 pub mod image_upload;
 pub mod menu;
+pub mod native_dialog;
 pub mod pandoc;
 pub mod path_kind;
 pub mod plugin;

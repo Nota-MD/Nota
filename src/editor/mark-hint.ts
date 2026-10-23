@@ -15,40 +15,35 @@
  * 存在于文档里（要改 schema）"——那句话说的是**第五版之前**的思路：那是要
  * 让 `**` 变成可点、可退格、可把光标停进去的真字符（`docs/07` backlog 第 37 项）。
  * 用户这次要的**不是那个**：他要的是"看得见"，不是"能编辑这个符号"。
- * 所以这里走的是**纯显示**（`Decoration.inline` + `::before`/`::after`），
+ * 所以这里走的是**纯显示**（左右各一颗 `Decoration.widget`），
  * 不动 schema、不动文档，一个字节都不写回。
  *
- * # ⚠️ 两颗符号的画法**不一样**（2026-10-05 起，BUG-65）
+ * # 两颗符号都是**真实文本节点**（2026-10-23）
  *
- * | | 画法 | 为什么 |
- * |---|---|---|
- * | **左**（开符号） | `::before`（挂在那段文字上） | 光标停在标记**起点**时落在它**右边** ⇒ `*|你好`，正是要的 |
- * | **右**（闭符号） | **`Decoration.widget(到, …, { side: -1 })`** | `::after` 画在那段文字**里面**，光标停在标记**终点**时会被它挡在**左边**（`你好|*`）；widget 的 `side:-1` 是"**画在光标左边、插进去的字落在它后面**"，于是光标能停在右符号**右边** ⇒ `你好*|` |
+ * 两颗各是一个带文字内容的 `<span>`，由 `Decoration.widget` 放进编辑器 DOM。
+ * 左侧 `side:-1` 放在标记起点之前，光标落在它右边；右侧同样 `side:-1` 放在
+ * 标记终点之前，光标落在它右边。这样既保留 BUG-65 定下的光标手感，又不让
+ * 符号成为粗体／斜体文字的伪元素。
  *
- * ⚠️ **为什么右符号非改不可**（2026-10-05 用户试用时报的，原话「光标无法移动到
- * 右边 `*` 的右侧。因为这里 `*` 不是实体了」）：`::after` 那版在光标贴段尾时
- * 会把右符号画到光标**右边**，看着像"卡在斜体里出不去"，而**打出来的字其实
- * 落在外面**——**光标的位置在撒谎**。用户当天拿 Typora 的两张图定了口径：
- * **符号照常显示，光标要能在它两侧移动**。
+ * ⚠️ **不能再用 `Decoration.inline` + `::before` 画左符号**（2026-10-23，用户
+ * 看截图报「这两个星号不是实体。事实上它们应该是半透明的实体」）：伪元素挂在
+ * 被加粗／倾斜的文本上，会继承宿主的字形与字重；视觉上仍是正文的一部分。
+ * widget 自带真实文字，并通过 `marks: []` 明确不套任何行内 mark。
  *
  * ⚠️ 中途试过、**被推翻**的一条：把"光标贴段尾"那一格整个不画（`扫一段` 收紧）。
  * 那是"躲开问题"不是解决——Typora 那里是**照常显示**的。别再走回去。
- *
- * ⚠️ 左符号没跟着一起换成 widget，是有意的：`::before` 在起点这一侧本来就是对的，
- * 换成 widget 等于凭空多一处要验的行为。"哪边错改哪边"。
  *
  * ⚠️ **widget 只插 DOM、不进文档**：它没有文档位置，一个字节都不写回，
  * 与 `instant-render.ts` 那个"插 `<span>` 被当成正文"的坑**不是一回事**——
  * 那边错在把元素插进了文本节点流里当正文，这边是 ProseMirror 认得的装饰。
  *
- * # 长相：`content: attr()` 画在 `::before` / `::after` 上
+ * # 长相：widget 内的真实文字
  *
- * 符号走属性（`data-markhint`），CSS 里 `content: attr(data-markhint)` 取它——
- * 与 `.nota-srcmark` 同一条路子，于是**淡入动画、不可选中、不吃鼠标事件、
- * 颜色跟着 `--fg-faint`** 这几条可以照抄同一张配方（`marks.css` 里那段）。
+ * 符号直接写进 `textContent`。CSS 用 `.nota-markhint` 把它固定成等宽、常规
+ * 字重、正体、`--fg-faint`；不可选中、不吃鼠标事件与淡入仍沿用块标记的配方。
  *
- * ⚠️ **代价讲清楚**：这两个符号是**占宽度**的（它们是真真切切的 `::before` /
- * `::after`，不是绝对定位的浮标）。所以光标进出加粗段时，那一行会横向动
+ * ⚠️ **代价讲清楚**：这两个符号是**占宽度**的（它们是文档流里的真实 `<span>`，
+ * 不是绝对定位的浮标）。所以光标进出加粗段时，那一行会横向动
  * 两个字符的宽度。选它是因为用户反复拿 Typora 当参照（那边就是把 `**` 原样
  * 显示出来），而"看得见自己写的是 `**` 还是 `_`"正是他要的信息。
  * 想改成不占位的浮标（`position: absolute` + `right: 100%`，像 `.nota-srcmark`
@@ -62,7 +57,7 @@
  * 带进导出文件。
  *
  * ⚠️ 所以**压根不给只读实例装**（`create.ts` 那句 `readOnly ? [] : [markHint]`）
- * ——这也是为什么 `editor/export.ts` 的 `摘掉的属性` 里**没有** `data-markhint`：
+ * ——这也是为什么 `editor/export.ts` 的 `摘掉的属性` 里**没有** `.nota-markhint`：
  * 那个清单是给"装上了、但导出时要洗掉"的东西用的（`data-srcmark` 就是，
  * `instantRender` 是恒挂的）。本文件没挂上去，就没有第二个地方要记。
  * 将来真改成恒挂，**先在那边登记 `提示属性`**，否则环星号会跟着进导出文件。
@@ -71,13 +66,10 @@
 import { $prose } from "@milkdown/kit/utils";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
-import type { MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
+import type { Mark, MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
 
-/** 加在**那一段文字**上的 class。CSS 见 `src/styles/marks.css`。 */
+/** 加在左右两颗标记 widget 上的 class。CSS 见 `src/styles/marks.css`。 */
 export const 提示类 = "nota-markhint";
-
-/** 符号文字走这个属性，CSS 里 `content: attr(data-markhint)` 取它。 */
-export const 提示属性 = "data-markhint";
 
 /**
  * 提示哪几种标记、各画什么符号。**就这一张表**——加第三种（行内代码、链接）
@@ -216,24 +208,32 @@ function 查缺名字(marks: Record<string, MarkType | undefined>): void {
   );
 }
 
-/** 闭合符号那个 widget 元素的 class。样式与左符号共用一套，见 `styles/marks.css`。 */
-export const 闭合类 = "nota-markhint-close";
-
 /**
- * 建闭合符号那颗 widget 元素。
+ * 建一颗标记 widget 元素。
  *
  * ⚠️ 这个函数**只在真渲染那一刻**才被调（`Decoration.widget` 收的是构造函数），
  * 所以 `tests/mark-hint.test.ts` 在 node 里 import 本模块、跑 `扫一段` 时
  * **不会**碰到 `document`——这是"纯位置算术能在无 DOM 环境里测"的前提，
  * 别图省事把 `document.createElement` 挪到模块顶层。
  */
-function 建闭合符号(符号: string): HTMLElement {
+function 建标记符号(符号: string): HTMLElement {
   const 元素 = document.createElement("span");
-  元素.className = 闭合类;
+  元素.className = 提示类;
   元素.textContent = 符号;
   元素.setAttribute("aria-hidden", "true");
   return 元素;
 }
+
+/**
+ * 每种符号复用同一个无参构造函数。装饰会在每次选区变化时重算，稳定的构造器
+ * 让 ProseMirror 认出 widget 没有变，不会在每次输入时重建 DOM、重播淡入。
+ */
+const 符号构造器 = new Map(
+  提示表.map(({ 符号 }) => [符号, () => 建标记符号(符号)] as const),
+);
+
+/** 显式空 mark 集：widget 既不继承左侧粗体，也不继承右侧斜体。 */
+const 无行内标记: readonly Mark[] = [];
 
 /**
  * 按当前选区算装饰集。
@@ -260,18 +260,15 @@ function 算提示(state: { selection: unknown; doc: PMNode; schema: unknown }):
     const 段 = 扫一段(doc, 位置, 类型);
     if (!段 || 段.从 >= 段.到) continue;
 
-    // 一个 mark 两条装饰：左边那颗与右边那颗**画法不同**（理由见文件头那一格）。
-    //  `***又粗又斜***` 会拿到两套、符号并排画出来正好是 `***`，不用为嵌套另写逻辑。
-    //
-    // ① **左**：给**那一段文字**挂 class 和属性，由 `::before` 画出来。
-    // ② **右**：`Decoration.widget(段.到, …, { side: -1 })`。
-    //    ⚠️ `side:-1` 的语义（`prosemirror-view` 的 `WidgetType.side` 原文）：
-    //    "画在光标**左边**，在那里插进去的内容落在 widget **后面**"。
-    //    所以光标贴段尾时画出来是 `你好*|`——正是 Typora 那张图的做法。
-    //    ⚠️ 建 DOM 的那个函数**只在真渲染时**才被调，node 里跑测试碰不到 `document`。
+    // 一个 mark 两颗真实文本 widget。`***又粗又斜***` 会拿到两套，并排起来
+    // 仍是 `***`。`side:-1` 让光标落在 widget 右侧，同时明确 `marks:[]`，
+    // 让符号完全脱离被强调文字的字重与倾斜。
+    const 建符号 = 符号构造器.get(符号);
+    if (!建符号) continue;
+    const widget规格 = { side: -1, marks: 无行内标记 };
     装饰.push(
-      Decoration.inline(段.从, 段.到, { class: 提示类, [提示属性]: 符号 }),
-      Decoration.widget(段.到, () => 建闭合符号(符号), { side: -1 }),
+      Decoration.widget(段.从, 建符号, widget规格),
+      Decoration.widget(段.到, 建符号, widget规格),
     );
   }
 

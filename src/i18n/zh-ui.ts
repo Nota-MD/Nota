@@ -413,6 +413,8 @@ export const 界面表: Record<string, string> = {
   "Close (Esc)": "关闭（Esc）",
   "A WYSIWYG Markdown editor": "所见即所得的 Markdown 编辑器",
   "New Document": "新建文档",
+  "Enter a valid file name.": "请输入有效文件名。",
+  "A file with this name already exists.": "同名文件已存在。",
   "Refresh": "刷新",
   "More actions": "更多操作",
   "Switch List/Tree View": "切换列表/树形视图",

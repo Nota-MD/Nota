@@ -125,7 +125,7 @@ interface Props {
    */
   onOpenFolder: () => void;
   /** 底栏「＋」：新建一份文档。 */
-  onNewFile: () => void;
+  onNewFile: (workspaceFileName?: string) => void;
   /** 底栏更多菜单：重新读取当前工作区。 */
   onRefresh: () => void;
   /**
@@ -181,6 +181,7 @@ export function Sidebar({
   const t = useT();
   const outline = useMemo(() => extractOutline(docText, strict), [docText, strict]);
   const [fileView, setFileView] = useState<"list" | "tree">("list");
+  const [creatingFile, setCreatingFile] = useState(false);
   const [footerMenu, setFooterMenu] = useState(false);
   const footer = useRef<HTMLDivElement>(null);
   const workspaceName = useMemo(() => {
@@ -191,6 +192,15 @@ export function Sidebar({
   // 页签的方向键（第 50 项，2026-10-04）。
   const 页签栏 = useRef<HTMLElement>(null);
   useTablistKeys(页签栏);
+
+  const 开始新建文件 = useCallback(() => {
+    if (!workspace) {
+      onNewFile();
+      return;
+    }
+    setFileView("list");
+    setCreatingFile(true);
+  }, [onNewFile, workspace]);
 
   useEffect(() => {
     if (!footerMenu) return;
@@ -247,6 +257,12 @@ export function Sidebar({
                 onOpenFile={onOpenFile}
                 loadDir={loadDir}
                 active={!折叠 && tab === "tree"}
+                creating={creatingFile}
+                onCancelCreate={() => setCreatingFile(false)}
+                onCreateFile={(name) => {
+                  setCreatingFile(false);
+                  onNewFile(name);
+                }}
               />
             ) : (
               <FileTree
@@ -287,7 +303,7 @@ export function Sidebar({
                 role="menuitem"
                 onClick={() => {
                   setFooterMenu(false);
-                  onNewFile();
+                  开始新建文件();
                 }}
               >
                 {t("New Document")}
@@ -319,7 +335,7 @@ export function Sidebar({
             className="sidebar-footer-btn"
             title={t("New Document")}
             aria-label={t("New Document")}
-            onClick={onNewFile}
+            onClick={开始新建文件}
           >
             <Icon name="folio-add-symbolic" />
           </button>
@@ -341,7 +357,10 @@ export function Sidebar({
             className="sidebar-footer-btn sidebar-view-toggle"
             title={t("Switch List/Tree View")}
             aria-label={t("Switch List/Tree View")}
-            onClick={() => setFileView((view) => (view === "list" ? "tree" : "list"))}
+            onClick={() => {
+              setCreatingFile(false);
+              setFileView((view) => (view === "list" ? "tree" : "list"));
+            }}
           >
             <span
               className={`sidebar-view-glyph ${fileView === "list" ? "is-list" : "is-tree"}`}
@@ -365,6 +384,10 @@ export function Sidebar({
 
 interface FlatFile {
   name: string;
+  /** 去掉最后一段后缀的显示名。扩展名单独淡色显示，与 Typora 的文件列表一致。 */
+  base: string;
+  /** 含点的末段后缀；没有后缀时为空串。 */
+  extension: string;
   path: string;
   parent: string | null;
 }
@@ -374,8 +397,11 @@ function 取顶层文件(nodes: TreeNode[]): FlatFile[] {
     .filter((node) => !node.is_dir)
     .map((node) => {
       const 斜杠 = node.path.lastIndexOf("/");
+      const 点 = node.name.lastIndexOf(".");
       return {
         name: node.name,
+        base: 点 > 0 ? node.name.slice(0, 点) : node.name,
+        extension: 点 > 0 ? node.name.slice(点) : "",
         path: node.path,
         parent: 斜杠 >= 0 ? node.path.slice(0, 斜杠) : null,
       };
@@ -390,6 +416,9 @@ function FileList(props: {
   loadDir: (path: string) => Promise<TreeNode[]>;
   /** 页面现在真的可见吗。折叠侧栏或切到大纲时，不要在后台递归扫描工作区。 */
   active: boolean;
+  creating: boolean;
+  onCancelCreate: () => void;
+  onCreateFile: (name: string) => void;
 }) {
   const t = useT();
   const [files, setFiles] = useState<FlatFile[]>(() => 取顶层文件(props.nodes));
@@ -458,16 +487,24 @@ function FileList(props: {
   const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
   const active = props.activePath ? normalize(props.activePath) : null;
 
-  if (!files.length && loading) {
+  if (!files.length && loading && !props.creating) {
     return <p className="sidebar-empty">{t("Loading…")}</p>;
   }
-  if (!files.length) {
-    return <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>;
-  }
+
+  const workspaceName =
+    props.workspace.replaceAll("\\", "/").replace(/\/+$/, "").split("/").pop() ||
+    props.workspace;
 
   return (
     <>
       <ul className="file-list" aria-busy={loading}>
+        {props.creating && (
+          <NewFileRow
+            context={workspaceName}
+            onCancel={props.onCancelCreate}
+            onSubmit={props.onCreateFile}
+          />
+        )}
         {files.map((file) => {
           const absolute = `${props.workspace}/${file.path}`;
           const isActive = active !== null && active === normalize(absolute);
@@ -480,15 +517,66 @@ function FileList(props: {
                 title={absolute}
                 onClick={() => props.onOpenFile(absolute)}
               >
-                <span className="file-list-name">{file.name}</span>
-                {file.parent && <span className="file-list-parent">{file.parent}</span>}
+                <span className="file-list-title">
+                  <span className="file-list-name">{file.base}</span>
+                  {file.extension && <span className="file-list-ext">{file.extension}</span>}
+                </span>
+                <span className="file-list-parent">{file.parent ?? workspaceName}</span>
               </button>
             </li>
           );
         })}
       </ul>
+      {!files.length && !loading && !props.creating && (
+        <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>
+      )}
       {partial && <p className="sidebar-list-warning">{t("Some folders could not be read.")}</p>}
     </>
+  );
+}
+
+function NewFileRow(props: {
+  context: string;
+  onCancel: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const t = useT();
+  const [name, setName] = useState("Untitled.md");
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, []);
+
+  return (
+    <li className="file-list-row file-list-row-new">
+      <form
+        className="file-list-new"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          props.onSubmit(trimmed);
+        }}
+      >
+        <input
+          ref={input}
+          className="file-list-new-input"
+          value={name}
+          aria-label={t("File name")}
+          spellCheck={false}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              props.onCancel();
+            }
+          }}
+        />
+        <span className="file-list-parent">{props.context}</span>
+      </form>
+    </li>
   );
 }
 
@@ -814,7 +902,7 @@ function TreeRow(props: {
   const { node, workspace, depth, open, kids, errors, activePath, onToggleDir, onOpenFile } = props;
   // 订阅语言（同 `Outline`：每个组件各自订阅一次）。
   const t = useT();
-  const pad = { paddingLeft: `${depth * 16 + 8}px` };
+  const pad = { paddingLeft: `${depth * 18 + 6}px` };
   const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
   const absolute = `${workspace}/${node.path}`;
   const isActive =
@@ -837,7 +925,8 @@ function TreeRow(props: {
           <span className="tree-twisty" data-open={expanded}>
             ▸
           </span>
-          {node.name}
+          <span className="tree-folder-icon" data-open={expanded} aria-hidden="true" />
+          <span className="tree-row-label">{node.name}</span>
         </button>
 
         {expanded && children && (
@@ -878,7 +967,8 @@ function TreeRow(props: {
         title={`${workspace}/${node.path}`}
         onClick={() => onOpenFile(node.path)}
       >
-        {node.name}
+        <span className="tree-file-icon" aria-hidden="true" />
+        <span className="tree-row-label">{node.name}</span>
       </button>
     </li>
   );

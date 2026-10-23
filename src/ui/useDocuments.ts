@@ -120,6 +120,8 @@ export interface 文档接线 {
   setActiveId: (id: DocId | null) => void;
   /** 活动文档 id 的 **ref 快照**。⚠️ `reloadDoc` 用它判"这份是不是正显示着那个"。 */
   activeIdRef: RefObject<DocId | null>;
+  /** 当前工作区。侧栏新建文件时，用它把文件名落成工作区根目录下的真实文件。 */
+  workspace: string | null;
   /** 重新拉文档列表，返回新列表（`App.tsx` 的 `refreshDocs`）。 */
   refreshDocs: () => Promise<Document[]>;
   setWorkspace: (path: string | null) => void;
@@ -154,8 +156,13 @@ export interface 文档出口 {
    *（见文件头第 2 条）。
    */
   openPath: (path: string) => Promise<boolean>;
-  /** 新建一份空文档并切过去。 */
-  newDoc: () => Promise<void>;
+  /**
+   * 新建并切换文档。
+   *
+   * 不传文件名时保持原行为，建一份未命名的内存文档；传了文件名时，在当前
+   * 工作区根目录下直接创建真实 Markdown 文件，再打开它。
+   */
+  newDoc: (workspaceFileName?: string) => Promise<void>;
   /**
    * 用一段转换好的 Markdown 新建未命名文档并切过去。
    *
@@ -165,6 +172,13 @@ export interface 文档出口 {
   newDocWithText: (text: string, titleHint: string | null) => Promise<void>;
   /** 打开对话框 → `openPath`。 */
   openViaDialog: () => Promise<void>;
+  /**
+   * 接回宿主里**已经存在**的文档，不新建。
+   *
+   * 开发热重载会重新挂载前端，但宿主的 `DocumentStore` 还在；启动恢复先问
+   * 这一条，能避免每次热更新都追加一张“未命名 N”。返回是否接回了至少一份。
+   */
+  接上现有: () => Promise<boolean>;
   /**
    * 把一个文件夹当工作区。
    *
@@ -206,6 +220,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
     docs,
     setActiveId,
     activeIdRef,
+    workspace,
     refreshDocs,
     setWorkspace,
     setTree,
@@ -216,6 +231,10 @@ export function useDocuments(w: 文档接线): 文档出口 {
     askConfirm,
     askPrompt,
   } = w;
+  const workspaceRef = useRef(workspace);
+  workspaceRef.current = workspace;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
 
   /**
    * 文档列表的 **ref 快照**。给 `saveDoc` / `切换文档` 查表用，**不进依赖数组**。
@@ -294,9 +313,6 @@ export function useDocuments(w: 文档接线): 文档出口 {
     [editorRef, refreshDocs, toast],
   );
 
-  /** 「切换文件时自动保存」这一档开着没有。 */
-  const 切页前先存 = settings?.files.autosave_on_switch ?? false;
-
   /**
    * 切到另一份文档。
    *
@@ -316,14 +332,17 @@ export function useDocuments(w: 文档接线): 文档出口 {
   const 切换文档 = useCallback(
     async (id: DocId | null) => {
       const 当前 = activeIdRef.current;
+      const 切页前先存 = settingsRef.current?.files.autosave_on_switch ?? false;
       if (切页前先存 && 当前 !== null && 当前 !== id) {
         const doc = docsRef.current.find((d) => d.id === 当前);
         if (doc?.dirty && doc.path) await saveDoc(当前, false, true);
       }
       setActiveId(id);
     },
-    [切页前先存, activeIdRef, saveDoc, setActiveId],
+    [activeIdRef, saveDoc, setActiveId],
   );
+  const 切换文档Ref = useRef(切换文档);
+  切换文档Ref.current = 切换文档;
 
   /**
    * 打开一份文档。**返回值是"开上了没有"**（`false` 时提示条已经弹过了）。
@@ -370,15 +389,47 @@ export function useDocuments(w: 文档接线): 文档出口 {
     [树指纹],
   );
 
-  const newDoc = useCallback(async () => {
+  const newDoc = useCallback(async (workspaceFileName?: string) => {
+    let id: DocId | null = null;
     try {
-      const id = await api.doc.create();
+      id = await api.doc.create();
+
+      const 当前工作区 = workspaceRef.current;
+      if (workspaceFileName && 当前工作区) {
+        let 文件名 = workspaceFileName.trim();
+        if (!文件名 || /[\\/]/.test(文件名) || 文件名 === "." || 文件名 === "..") {
+          throw new Error(t("Enter a valid file name."));
+        }
+        if (!MARKDOWN后缀.some((ext) => 文件名.toLowerCase().endsWith(`.${ext}`))) {
+          文件名 += ".md";
+        }
+        const 落点 = 拼路径(当前工作区, 文件名);
+        const [已存在] = await api.pathKind([落点]);
+        if (已存在 !== "missing") {
+          throw new Error(t("A file with this name already exists."));
+        }
+        await api.doc.save(id, 落点);
+        setTree(await api.workspace.tree(undefined, 1, 读口径(settingsRef.current)));
+      }
+
       await refreshDocs();
-      await 切换文档(id);
+      await 切换文档Ref.current(id);
     } catch (e) {
+      if (id !== null) {
+        await api.doc.close(id).catch(() => undefined);
+        await refreshDocs().catch(() => undefined);
+      }
       toast(String(e), "error");
     }
-  }, [refreshDocs, 切换文档, toast]);
+  }, [refreshDocs, setTree, toast]);
+
+  const 接上现有 = useCallback(async (): Promise<boolean> => {
+    const list = await refreshDocs();
+    const 最后一份 = list.at(-1);
+    if (!最后一份) return false;
+    setActiveId(最后一份.id);
+    return true;
+  }, [refreshDocs, setActiveId]);
 
   const newDocWithText = useCallback(
     async (text: string, titleHint: string | null) => {
@@ -670,6 +721,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
     openPath,
     newDoc,
     newDocWithText,
+    接上现有,
     openViaDialog,
     openFolder,
     loadDir,

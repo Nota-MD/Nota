@@ -81,6 +81,8 @@ export interface 会话接线 {
    *（那份文件头最后一段讲的就是这条约定）。
    */
   新建文档: () => Promise<void>;
+  /** 宿主里已有文档时接回它们；热重载和重复启动路径用它避免追加空白标签。 */
+  接上现有: () => Promise<boolean>;
   /**
    * 设工作区（左侧栏那棵树）。只被 [`接上会话`] 的第三档用一次，见那边。
    *
@@ -131,7 +133,7 @@ export function useSession(w: 会话接线): 会话出口 {
   // ⚠️ 这里**不订阅语言**（没有 `useT()`）：本 hook 一个字的文案都不产出
   // ——"打不开"那条提示是 `openPath` 弹的，路径名不进翻译表（它不是键）。
   // 订阅了反而会让整份会话在切语言时重建一遍。
-  const { docs, activeId, openPath, 新建文档, setWorkspace, toast } = w;
+  const { docs, activeId, openPath, 新建文档, 接上现有, setWorkspace, toast } = w;
 
   const [最近, set最近] = useState<readonly string[]>([]);
   /**
@@ -168,8 +170,11 @@ export function useSession(w: 会话接线): 会话出口 {
         // 侧车只影响菜单和恢复信息，不该挡住编辑器首帧；`newDoc()` 自己会刷新
         // 文档列表并激活新标签，因此不需要启动链先整表回拉一次。
         if (!启动文件 && 启动档 === "new-file") {
-          await 新建文档();
-          已准备文档 = true;
+          已准备文档 = await 接上现有();
+          if (!已准备文档) {
+            await 新建文档();
+            已准备文档 = true;
+          }
         }
 
         const 会话 = await api.session.get();
@@ -212,8 +217,10 @@ export function useSession(w: 会话接线): 会话出口 {
           // 那一份（`nota_doc_open` 就是这么定的），所以"最后开的那个"自然
           // 成了前台——不必再写一条"切到某个路径"的路。
           const 其余 = 会话.open.filter((p) => p !== 会话.active);
-          for (const p of 其余) await openPath(p);
-          if (会话.active) await openPath(会话.active);
+          for (const p of 其余) {
+            if (await openPath(p)) 已准备文档 = true;
+          }
+          if (会话.active && (await openPath(会话.active))) 已准备文档 = true;
           // ⚠️ 再读一次：上面每开一份，宿主的 `nota_doc_open` 都会把它推到
           // 「最近」的最前面（`commands/document.rs` 里那条钩子），所以列表
           // **顺序已经变了**。不重读的话，菜单里那份顺序要等到下一次打开
@@ -236,19 +243,22 @@ export function useSession(w: 会话接线): 会话出口 {
         // ⚠️ **恢复档里 `open = []` 也要建白纸**：否则没有 `EditorPane`，
         // 主窗口只能等 `useBootReveal` 的五秒故障兜底才出现——这正是 6 秒
         // 冷启动的来源。恢复文件失败时同样落到这张白纸上。
-        if (!启动文件 && !已准备文档) await 新建文档();
+        if (!启动文件 && !已准备文档 && !(await 接上现有())) await 新建文档();
       } catch (e) {
         // ⚠️ 读不出来就照"第一次启动"办，**绝不弹错**：这份侧车坏了只该让
         // 标签不恢复，不该在启动时先给用户一条看不懂的错。
         console.warn("[nota] 读会话失败：", e);
-        if (!启动文件 && !已准备文档) await 新建文档();
+        if (!启动文件 && !已准备文档) {
+          const 接上了 = await 接上现有().catch(() => false);
+          if (!接上了) await 新建文档();
+        }
       } finally {
         // ⚠️ **无论成功失败都要翻开**，否则记录那条路就永远断着
         //（`finally` 而不是 try 末尾，就是为了"读失败"这一支）。
         就绪.current = true;
       }
     },
-    [openPath, 新建文档, setWorkspace],
+    [openPath, 新建文档, setWorkspace, 接上现有],
   );
 
   // ── 记「现在开着哪几份」 ───────────────────────────────────────────────

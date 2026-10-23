@@ -1,5 +1,7 @@
 /** 应用内文件选择器的请求队列。 */
 
+import { api } from "@/bridge/ipc";
+
 export interface FileFilter {
   name: string;
   extensions: string[];
@@ -29,12 +31,33 @@ function emit(): void {
   listeners.forEach((fn) => fn());
 }
 
-export function pickFile(request: FilePickerRequest): Promise<string | null> {
+function pickInApp(request: FilePickerRequest): Promise<string | null> {
   pending?.resolve(null);
   return new Promise((resolve) => {
     pending = { request, resolve };
     emit();
   });
+}
+
+/**
+ * 先问系统原生选择器。GNOME/KDE 的搜索、最近文件与书签，以及 Windows 的
+ * 常用位置都由操作系统负责；只有这次 IPC 本身失败时才打开应用内回退。
+ * 用户点取消会正常返回 `null`，不会再弹第二层选择器。
+ */
+export async function pickFile(request: FilePickerRequest): Promise<string | null> {
+  try {
+    const paths = await api.picker.native({
+      mode: request.mode,
+      title: request.title,
+      defaultPath: request.defaultPath,
+      filters: request.filters,
+      multiple: request.multiple,
+    });
+    return paths?.[0] ?? null;
+  } catch (error) {
+    console.warn("[nota] Native file dialog unavailable; using in-app picker.", error);
+    return pickInApp(request);
+  }
 }
 
 export function subscribeFilePicker(fn: () => void): () => void {

@@ -65,6 +65,7 @@ import { Icon } from "@/ui/Icon";
 import { extractOutline, type OutlineItem } from "@/editor/headings";
 // 右缘那条可以拖的把手（2026-09-30）。⚠️ 它**渲染在这一栏里面**，理由见那边文件头。
 import { SidebarResizer } from "@/ui/SidebarResizer";
+import { FileList } from "@/ui/SidebarFiles";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
 export type SidebarTab = "tree" | "outline";
@@ -377,206 +378,6 @@ export function Sidebar({
           `ui/SidebarResizer.tsx` 文件头），换个位置量到的就是别人。 */}
       <SidebarResizer onCommit={onResize} />
     </aside>
-  );
-}
-
-/* ── 文件列表：Typora 式的扁平视图 ─────────────────────────────────────── */
-
-interface FlatFile {
-  name: string;
-  /** 去掉最后一段后缀的显示名。扩展名单独淡色显示，与 Typora 的文件列表一致。 */
-  base: string;
-  /** 含点的末段后缀；没有后缀时为空串。 */
-  extension: string;
-  path: string;
-  parent: string | null;
-}
-
-function 取顶层文件(nodes: TreeNode[]): FlatFile[] {
-  return nodes
-    .filter((node) => !node.is_dir)
-    .map((node) => {
-      const 斜杠 = node.path.lastIndexOf("/");
-      const 点 = node.name.lastIndexOf(".");
-      return {
-        name: node.name,
-        base: 点 > 0 ? node.name.slice(0, 点) : node.name,
-        extension: 点 > 0 ? node.name.slice(点) : "",
-        path: node.path,
-        parent: 斜杠 >= 0 ? node.path.slice(0, 斜杠) : null,
-      };
-    });
-}
-
-function FileList(props: {
-  nodes: TreeNode[];
-  workspace: string;
-  activePath: string | null;
-  onOpenFile: (path: string) => void;
-  loadDir: (path: string) => Promise<TreeNode[]>;
-  /** 页面现在真的可见吗。折叠侧栏或切到大纲时，不要在后台递归扫描工作区。 */
-  active: boolean;
-  creating: boolean;
-  onCancelCreate: () => void;
-  onCreateFile: (name: string) => void;
-}) {
-  const t = useT();
-  const [files, setFiles] = useState<FlatFile[]>(() => 取顶层文件(props.nodes));
-  const [loading, setLoading] = useState(false);
-  const [partial, setPartial] = useState(false);
-  const loadDir = useRef(props.loadDir);
-  loadDir.current = props.loadDir;
-
-  useEffect(() => {
-    let 取消 = false;
-    const 首次 = 取顶层文件(props.nodes);
-    setFiles(首次);
-    setPartial(false);
-    if (!props.active) {
-      setLoading(false);
-      return;
-    }
-
-    const 队列 = props.nodes.filter((node) => node.is_dir).map((node) => node.path);
-    setLoading(队列.length > 0);
-    if (!队列.length) return;
-
-    const 已访问 = new Set<string>();
-    const 最多目录 = 512;
-    const walk = async () => {
-      while (队列.length && 已访问.size < 最多目录) {
-        const 一批 = 队列.splice(0, 8).filter((path) => !已访问.has(path));
-        for (const dir of 一批) 已访问.add(dir);
-        const 结果 = await Promise.all(
-          一批.map(async (dir) => {
-            try {
-              return { children: await loadDir.current(dir), ok: true as const };
-            } catch {
-              return { children: [] as TreeNode[], ok: false as const };
-            }
-          }),
-        );
-        if (取消) return;
-
-        for (const { children, ok } of 结果) {
-          if (!ok) setPartial(true);
-          const 新文件 = 取顶层文件(children);
-          if (新文件.length) {
-            setFiles((prev) => {
-              const 已有 = new Set(prev.map((file) => file.path));
-              return [...prev, ...新文件.filter((file) => !已有.has(file.path))];
-            });
-          }
-          for (const child of children) {
-            if (child.is_dir && !已访问.has(child.path)) 队列.push(child.path);
-          }
-        }
-      }
-      if (!取消) {
-        if (队列.length) setPartial(true);
-        setLoading(false);
-      }
-    };
-    void walk();
-
-    return () => {
-      取消 = true;
-    };
-  }, [props.nodes, props.active]);
-
-  const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
-  const active = props.activePath ? normalize(props.activePath) : null;
-
-  if (!files.length && loading && !props.creating) {
-    return <p className="sidebar-empty">{t("Loading…")}</p>;
-  }
-
-  const workspaceName =
-    props.workspace.replaceAll("\\", "/").replace(/\/+$/, "").split("/").pop() ||
-    props.workspace;
-
-  return (
-    <>
-      <ul className="file-list" aria-busy={loading}>
-        {props.creating && (
-          <NewFileRow
-            context={workspaceName}
-            onCancel={props.onCancelCreate}
-            onSubmit={props.onCreateFile}
-          />
-        )}
-        {files.map((file) => {
-          const absolute = `${props.workspace}/${file.path}`;
-          const isActive = active !== null && active === normalize(absolute);
-          return (
-            <li className="file-list-row" key={file.path}>
-              <button
-                type="button"
-                className="file-list-btn"
-                aria-current={isActive ? "page" : undefined}
-                title={absolute}
-                onClick={() => props.onOpenFile(absolute)}
-              >
-                <span className="file-list-title">
-                  <span className="file-list-name">{file.base}</span>
-                  {file.extension && <span className="file-list-ext">{file.extension}</span>}
-                </span>
-                <span className="file-list-parent">{file.parent ?? workspaceName}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {!files.length && !loading && !props.creating && (
-        <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>
-      )}
-      {partial && <p className="sidebar-list-warning">{t("Some folders could not be read.")}</p>}
-    </>
-  );
-}
-
-function NewFileRow(props: {
-  context: string;
-  onCancel: () => void;
-  onSubmit: (name: string) => void;
-}) {
-  const t = useT();
-  const [name, setName] = useState("Untitled.md");
-  const input = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    input.current?.focus();
-    input.current?.select();
-  }, []);
-
-  return (
-    <li className="file-list-row file-list-row-new">
-      <form
-        className="file-list-new"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const trimmed = name.trim();
-          if (!trimmed) return;
-          props.onSubmit(trimmed);
-        }}
-      >
-        <input
-          ref={input}
-          className="file-list-new-input"
-          value={name}
-          aria-label={t("File name")}
-          spellCheck={false}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.preventDefault();
-              props.onCancel();
-            }
-          }}
-        />
-        <span className="file-list-parent">{props.context}</span>
-      </form>
-    </li>
   );
 }
 
@@ -925,7 +726,10 @@ function TreeRow(props: {
           <span className="tree-twisty" data-open={expanded}>
             ▸
           </span>
-          <span className="tree-folder-icon" data-open={expanded} aria-hidden="true" />
+          <Icon
+            name={expanded ? "nota-tree-folder-open-symbolic" : "nota-tree-folder-symbolic"}
+            size={16}
+          />
           <span className="tree-row-label">{node.name}</span>
         </button>
 
@@ -967,7 +771,7 @@ function TreeRow(props: {
         title={`${workspace}/${node.path}`}
         onClick={() => onOpenFile(node.path)}
       >
-        <span className="tree-file-icon" aria-hidden="true" />
+        <Icon name="nota-tree-file-symbolic" size={16} />
         <span className="tree-row-label">{node.name}</span>
       </button>
     </li>

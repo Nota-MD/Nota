@@ -138,6 +138,11 @@ const 名字表 = [
   // 拿它当"收起侧栏"是把两件事画成一张脸。
   "nota-sidebar-toggle-symbolic", // 侧栏关着（空心圆圈）
   "nota-sidebar-collapse-symbolic", // 侧栏开着（左向折角）
+  // 侧栏文件树的目录／文件图标。主题可以通过对应的
+  // `--icon-nota-tree-*-symbolic` 变量完全替换，不绑定具体主题目录。
+  "nota-tree-folder-symbolic",
+  "nota-tree-folder-open-symbolic",
+  "nota-tree-file-symbolic",
   // ⚠️ 这两枚也是 **Nota 自己画的**（2026-09-30），来路同上：状态栏右下角
   // **鼠标移进去才出现**的那两颗（拼写检查、展开字数统计菜单）。105 枚里
   // 没有"字母 + 对勾"这一类，而上下双箭头与"把这一项往下挪"（单个下箭头）

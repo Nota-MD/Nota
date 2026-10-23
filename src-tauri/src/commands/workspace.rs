@@ -27,6 +27,7 @@
 //! 要等下一次别的原因刷新才换。这种"拨了没反应、过一会儿自己好了"是最难报的
 //! 一类 bug。前端把当前口径**跟着请求一起递过来**，就没有这个时间差。
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -49,6 +50,15 @@ pub struct TreeNode {
     pub is_dir: bool,
     /// 目录才有；文件是 `None`。
     pub children: Option<Vec<TreeNode>>,
+}
+
+/// 文件列表的轻量摘要。只读正文开头，不进入文档仓库，也不改变任何文件。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceExcerpt {
+    pub path: String,
+    pub title: Option<String>,
+    pub detail: Option<String>,
 }
 
 /// 前端这一次请求要用的树口径。**三格全是可选的**：没给的格子回落到设置。
@@ -156,6 +166,117 @@ pub fn nota_workspace_get(state: State<'_, AppState>) -> Result<Option<String>> 
     match ws.as_ref() {
         Some(p) => Ok(Some(crate::paths::path_to_string(p)?)),
         None => Ok(None),
+    }
+}
+
+/// 批量读取文件列表要显示的标题与下一段文字。
+///
+/// 只读每个文件开头 16 KiB，在阻塞线程池执行；打开工作区时不会为了摘要把整棵
+/// 树的正文全部读一遍。路径仍经过工作区围栏。
+#[tauri::command]
+pub async fn nota_workspace_excerpts(
+    state: State<'_, AppState>,
+    paths: Vec<String>,
+) -> Result<Vec<WorkspaceExcerpt>> {
+    let root = state
+        .workspace
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| NotaError::other("没有打开工作区"))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        paths
+            .into_iter()
+            .map(|path| {
+                let full = crate::lua::api::fs::resolve_in(&root, &path)?;
+                let mut bytes = Vec::with_capacity(16 * 1024);
+                let file = std::fs::File::open(&full).map_err(|source| NotaError::Read {
+                    path: full.clone(),
+                    source,
+                })?;
+                file.take(16 * 1024)
+                    .read_to_end(&mut bytes)
+                    .map_err(|source| NotaError::Read {
+                        path: full,
+                        source,
+                    })?;
+                let text = String::from_utf8_lossy(&bytes);
+                let (title, detail) = 取摘要(&text);
+                Ok(WorkspaceExcerpt {
+                    path,
+                    title,
+                    detail,
+                })
+            })
+            .collect()
+    })
+    .await
+    .map_err(|e| NotaError::other(format!("读取文件摘要失败：{e}")))?
+}
+
+fn 取摘要(text: &str) -> (Option<String>, Option<String>) {
+    let mut lines = text.lines();
+    if lines.clone().next().is_some_and(|line| line.trim() == "---") {
+        lines.next();
+        for line in lines.by_ref() {
+            if line.trim() == "---" {
+                break;
+            }
+        }
+    }
+
+    let mut picked = Vec::new();
+    for raw in lines {
+        let Some(line) = 清理摘要行(raw) else {
+            continue;
+        };
+        picked.push(截断(&line, if picked.is_empty() { 80 } else { 120 }));
+        if picked.len() == 2 {
+            break;
+        }
+    }
+    (picked.first().cloned(), picked.get(1).cloned())
+}
+
+fn 清理摘要行(raw: &str) -> Option<String> {
+    let mut line = raw.trim();
+    if line.is_empty()
+        || line == "---"
+        || line.starts_with("```")
+        || line.starts_with("~~~")
+        || line.starts_with("<!--")
+        || line.starts_with('|')
+    {
+        return None;
+    }
+    line = line.trim_start_matches(['#', '>']).trim();
+    for marker in ["- ", "* ", "+ "] {
+        if let Some(rest) = line.strip_prefix(marker) {
+            line = rest.trim();
+            break;
+        }
+    }
+    if let Some((prefix, rest)) = line.split_once(". ") {
+        if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_digit()) {
+            line = rest.trim();
+        }
+    }
+    let cleaned = line
+        .replace("**", "")
+        .replace("__", "")
+        .replace("~~", "")
+        .replace('`', "");
+    let cleaned = cleaned.trim();
+    (!cleaned.is_empty()).then(|| cleaned.to_string())
+}
+
+fn 截断(text: &str, max_chars: usize) -> String {
+    let mut chars = text.chars();
+    let head: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        format!("{head}…")
+    } else {
+        head
     }
 }
 
@@ -382,6 +503,14 @@ mod tests {
         assert!(is_markdown("b.markdown"));
         assert!(!is_markdown("c.rs"));
         assert!(!is_markdown("d.pd"));
+    }
+
+    #[test]
+    fn 文件摘要跳过_front_matter_并取两行() {
+        let text = "---\ntitle: 元数据\n---\n\n# UNIX®\n\n**厦门市槟榔中学** 2024（12） 李齐\n\n后文";
+        let (title, detail) = 取摘要(text);
+        assert_eq!(title.as_deref(), Some("UNIX®"));
+        assert_eq!(detail.as_deref(), Some("厦门市槟榔中学 2024（12） 李齐"));
     }
 
     #[test]

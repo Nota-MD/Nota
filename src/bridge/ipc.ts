@@ -21,7 +21,8 @@ import type {
   AppLang, Diagnostics, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocImport, PandocProbe, PluginInfo, PluginMenuItem,
-  PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, 信任记录, 导出报告,
+  PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, WorkspaceExcerpt,
+  信任记录, 导出报告,
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   会话, 路径种类, 拼写词典, PrintEnvironment, PrintPreview,
 } from "./types";
@@ -242,6 +243,9 @@ export const api = {
         depth: depth ?? 1,
         opts: opts ?? null,
       }),
+    /** 批量读正文开头的标题与下一段文字；失败时调用方静默保留文件路径。 */
+    excerpts: (paths: string[]) =>
+      invoke<WorkspaceExcerpt[]>("nota_workspace_excerpts", { paths }),
   },
 
   /**

@@ -427,6 +427,7 @@ pub fn run() {
             commands::workspace::nota_workspace_close,
             commands::workspace::nota_workspace_get,
             commands::workspace::nota_workspace_tree,
+            commands::workspace::nota_workspace_excerpts,
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
             commands::window::nota_window_open_devtools,

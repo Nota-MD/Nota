@@ -74,6 +74,13 @@ export interface TreeNode {
   children: TreeNode[] | null;
 }
 
+/** 侧栏文件列表读取的正文摘要。`path` 与 `TreeNode.path` 相同，是相对工作区路径。 */
+export interface WorkspaceExcerpt {
+  path: string;
+  title: string | null;
+  detail: string | null;
+}
+
 /** 自绘文件选择器里的一个起始位置。 */
 export interface PickerPlace {
   kind: string;

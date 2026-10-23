@@ -392,23 +392,29 @@ const 分色插件 = ViewPlugin.fromClass(
  * 外观。⚠️ **一个色值都不写**：颜色全走 `var(--…)`（和 `source.ts` 那条
  * 同一个理由——写死了之后换文档主题就会得到"深底深字"）。
  *
- * ⚠️ 这里只补 CM 自己的盒模型（内边距、行距、光标、选区），
- * **字体与字号不在这条里**：它们从 `pre` 继承（`.88em` 那一档），
- * 改在那边改。
+ * ⚠️ 字号继续从 `pre` 继承（`.88em` 那一档）；字体必须在这里显式点成
+ * `var(--font-mono)`。CodeMirror 的 baseTheme 会给 `.cm-scroller` 写
+ * `font-family: monospace`，只写 `inherit` 在不同 WebView/主题组合下并不稳；
+ * 文档主题只要覆盖 `--font-mono`，代码框就该跟着它走。
  */
 const 主题 = EditorView.theme({
   "&": { backgroundColor: "transparent", color: "inherit", height: "auto" },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
-    fontFamily: "inherit",
+    fontFamily: "var(--font-mono)",
     lineHeight: "inherit",
     // ⚠️ `pre` 那边才是滚动的那一层（它 `overflow: visible` 是**必须的**：
     // 块外那三样挂件——围栏标记、工具栏、语言框——都要画到框外去，见
     // `editor-blocks.css` 那条注释）。所以这里不能自己开一个滚动区。
     overflow: "visible",
   },
-  ".cm-content": { padding: "0", minHeight: "0", caretColor: "var(--accent)" },
-  ".cm-line": { padding: "0" },
+  ".cm-content": {
+    padding: "0",
+    minHeight: "0",
+    fontFamily: "var(--font-mono)",
+    caretColor: "var(--accent)",
+  },
+  ".cm-line": { padding: "0", fontFamily: "var(--font-mono)" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)", borderLeftWidth: "2px" },
   // ⚠️⚠️ **第一条选择器要照 CM 自己那条写全**（理由与 `source.ts` 那处一字不差，
   // 2026-10-07 一起量出来的）：写短了权重压不过 CM 出厂的聚焦色，画出来是它的

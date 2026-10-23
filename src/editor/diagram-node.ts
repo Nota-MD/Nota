@@ -47,7 +47,13 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { InputRule } from "@milkdown/prose/inputrules";
 import { setBlockType } from "@milkdown/prose/commands";
 import type { MarkdownNode, ParserState, SerializerState } from "@milkdown/kit/transformer";
-import { $command, $inputRule, $nodeSchema, $remark } from "@milkdown/kit/utils";
+import { $command, $inputRule, $nodeSchema, $prose, $remark } from "@milkdown/kit/utils";
+import {
+  Plugin,
+  PluginKey,
+  type EditorState,
+  type Transaction,
+} from "@milkdown/kit/prose/state";
 
 
 /** 节点名。**不能改**：`diagram-view.ts` 的 `$view`、缓存判型、`stopEvent` 都认它。 */
@@ -210,6 +216,57 @@ export const 图表规格插件: MilkdownPlugin[] = [
   图表规格.ctx as unknown as MilkdownPlugin,
   图表规格[1],
 ];
+
+/**
+ * 把已经存在的 `code_block(language="mermaid")` 转成图表节点。
+ *
+ * 手打围栏时，通用代码块输入规则可能先于 Mermaid 专用规则把内容变成普通代码块；
+ * 从语言下拉里选 `mermaid` 也不会重新走解析器。这个插件守在所有事务之后，
+ * 只要文档里出现语言为 `mermaid` 的代码块，就保留原文并换成图表节点。
+ */
+export const Mermaid代码块转换 = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey("nota-mermaid-code-block"),
+      view: (view) => {
+        const tr = 代码块转图表(view.state);
+        if (tr) queueMicrotask(() => view.dispatch(tr));
+        return {};
+      },
+      appendTransaction: (事务们, _旧, 新) => {
+        if (!事务们.some((tr) => tr.docChanged)) return null;
+        return 代码块转图表(新);
+      },
+    }),
+);
+
+function 代码块转图表(state: EditorState): Transaction | null {
+  const 图表 = state.schema.nodes[图表节点名];
+  if (!图表) return null;
+  const 待换: { pos: number; end: number; node: PMNode }[] = [];
+  state.doc.descendants((node, pos) => {
+    if (
+      node.type.name === "code_block" &&
+      String(node.attrs.language ?? "").trim().toLowerCase() === "mermaid"
+    ) {
+      待换.push({
+        pos,
+        end: pos + node.nodeSize,
+        node: 图表.create({
+          value: node.textContent,
+          identity: 随机标识(),
+        }),
+      });
+    }
+    return true;
+  });
+  if (!待换.length) return null;
+  const tr = state.tr;
+  for (const { pos, end, node } of 待换.reverse()) {
+    tr.replaceWith(pos, end, node);
+  }
+  return tr;
+}
 
 /* ── 第三件：输入规则 ＋ 第四件：命令 ─────────────────────────────────── */
 

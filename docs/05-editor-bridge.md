@@ -1536,6 +1536,11 @@ ProseMirror / CodeMirror 对"剪贴板里是图片"的处理是**把那坨二进
 
 ### 4.10 图表块：上游**不画图**（`editor/diagram-view.ts`，2026-09-26）
 
+📌 **2026-10-23**：手打围栏时通用代码块规则可能先建立一个
+`code_block(language="mermaid")`。`diagram-node.ts` 现在在挂载时和每次文档事务后
+检查这种代码块，保留其文本并转换为 `diagram` 节点；因此流程图、时序图、
+`mindmap` 等 Mermaid 图类型都在同一条渲染链上。
+
 ⚠️ **2026-10-04（第 27 项）**：`@milkdown/plugin-diagram` **整个退役**——本节的
 "上游只做三件"仍然是对当年的准确描述，但那三件（外加输入规则、命令）现在是
 **本仓自己的** `editor/diagram-node.ts`（判据逐行照抄，`attrs.value`/`identity` 等形状一个没动）；

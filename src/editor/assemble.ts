@@ -88,7 +88,7 @@ import { codeBlockView } from "./code-block";
 // 图表块（```mermaid）的**节点**（schema/remark 转换/输入规则）2026-10-04 起
 // 是本仓自己的（`diagram-node.ts`，第 27 项）：`@milkdown/plugin-diagram` 整个
 // 退役——它只做了这几件不含 mermaid 的小活，却把 mermaid 静态打进首屏。
-import { 图表解析, 图表规格插件, 图表输入规则 } from "./diagram-node";
+import { Mermaid代码块转换, 图表解析, 图表规格插件, 图表输入规则 } from "./diagram-node";
 // ⚠️ 视图（真图、改源码）在下面这一行；mermaid 从那里**动态**加载。
 import { diagramView } from "./diagram-view";
 // 公式（`$x$` / `$$ … $$`）：上游那两个节点是 `atom`，却一个 NodeView 都没有
@@ -577,6 +577,7 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // ⚠️ `图表解析` 排在 `gfm` 之后（它改的是解析完的树）；`图表输入规则`
     // 只是 `` ```mermaid `` 那一条，与 gfm 的表格规则不抢。
     .use(图表规格插件)
+    .use(Mermaid代码块转换)
     .use(图表输入规则)
     .use(图表解析())
     .use(diagramView)

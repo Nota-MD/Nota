@@ -725,6 +725,7 @@ export default function App() {
     // ⚠️ 勾在**你此刻看着的**那一套上（`槽.id`），不是 `settings.document_theme`：
     // 这个勾就是"现在用的是这套"，而菜单里选一套改的也正是这套（见上面 `槽`）。
     documentTheme: 槽.id,
+    menuRenderer: settings?.appearance.menu_renderer ?? "nota",
     onNativePick,
   });
 

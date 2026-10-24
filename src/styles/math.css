@@ -236,6 +236,14 @@
   min-height: 46px;
 }
 
+/* KaTeX 自带字体栈里的中文回退由不同 WebView 自行决定，可能在 Noto Sans 与
+   Noto Serif 之间漂移。公式根继续用主题的 `--font-math`，让 `$…$`、`$$…$$`
+   与 math/latex/tex 围栏保持同一套中文衬线回退；子元素的数学字体规则不动。 */
+.editor-mount .ProseMirror .nota-math-render .katex,
+.editor-mount .ProseMirror .nota-math-preview .katex {
+  font-family: var(--font-math);
+}
+
 /* 渲染真出错时（`data-state="error"`，`math-view.ts` 里那条兜底）：把原文按
    等宽字排出来、别折行折到看不出是报错。⚠️ `throwOnError: false` 时 KaTeX
    自己会把错处画成红的（更好看），走到这里的是它连渲染都进不去的那种错。 */

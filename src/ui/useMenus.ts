@@ -38,6 +38,7 @@ import {
   events,
   type DocId,
   type DocThemeInfo,
+  type MenuBarRenderer,
   type ToolbarMode,
   type ViewMode,
 } from "@/bridge/ipc";
@@ -129,6 +130,8 @@ export interface MenuWiring {
   };
   themes: DocThemeInfo[];
   documentTheme: string;
+  /** 菜单栏由 Nota 自绘还是交给系统。 */
+  menuRenderer: MenuBarRenderer;
   /**
    * 原生菜单被点了（macOS）。⚠️ **去向判据不在这里**：主题、主题目录、
    * 命令三条路怎么分是 `App.tsx` 的事（`resolvePick`），这里只管收事件。
@@ -189,7 +192,16 @@ const 光标条件: Record<string, (s: CommandState) => boolean> = {
 };
 
 export function useMenus(w: MenuWiring): MenuState {
-  const { menus, menuHandlers, activeId, commandState, themes, documentTheme, onNativePick } = w;
+  const {
+    menus,
+    menuHandlers,
+    activeId,
+    commandState,
+    themes,
+    documentTheme,
+    menuRenderer,
+    onNativePick,
+  } = w;
   const {
     sidebarOpen,
     sidebarTab,
@@ -463,6 +475,20 @@ export function useMenus(w: MenuWiring): MenuState {
   // 把菜单推给原生那一侧。菜单内容有变化（灰的变了、勾变了、主题清单变了）就重推。
   useEffect(() => {
     let alive = true;
+    if (menuRenderer !== "system" || !menuBarOpen) {
+      void api.nativeMenu
+        .apply([])
+        .then(() => {
+          if (alive) setUsingNativeMenu(false);
+        })
+        .catch((e) => {
+          console.warn("[nota] 清理原生菜单失败", e);
+          if (alive) setUsingNativeMenu(false);
+        });
+      return () => {
+        alive = false;
+      };
+    }
     void api.nativeMenu
       .apply(buildNativeTree(menus, disabledCommands, menuChecks, themes, documentTheme))
       .then((ok) => {
@@ -480,7 +506,7 @@ export function useMenus(w: MenuWiring): MenuState {
     // 原生菜单得跟着重推一次，否则 macOS 的菜单栏里永远没有「插件」。
     // ⚠️ `语` 在内：树里的 `label` 是在 `nativeMenu.ts` 里翻好的（那边用的是
     // 模块级 `t`），不重推就还是旧语言——理由见上面 `语` 那段。
-  }, [menus, disabledCommands, menuChecks, themes, documentTheme, 语]);
+  }, [menus, disabledCommands, menuChecks, themes, documentTheme, menuRenderer, menuBarOpen, 语]);
 
   // 原生菜单被点了 → 交回 `App.tsx`（那边走 `resolvePick` 判去向），
   // 于是"点菜单"这件事只有一条实现。

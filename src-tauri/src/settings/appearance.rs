@@ -148,6 +148,17 @@ pub enum FocusDim {
     Stronger,
 }
 
+/// 菜单栏由谁绘制。默认使用 Nota 自绘菜单，保持各平台外观一致。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MenuBarRenderer {
+    /// 应用内自绘菜单栏。
+    #[default]
+    Nota,
+    /// 交给系统窗口工具包绘制；macOS 会放到屏幕顶端。
+    System,
+}
+
 /// 文档主题在深色模式下是否换成**另一个**主题。
 ///
 /// ⚠️ 这一条只在**文档主题**这条轴上成立（`document_theme`），
@@ -200,6 +211,8 @@ pub struct Appearance {
     /// 正在被藏），所以前端在藏下去的那一刻会发一条会自己走掉的提示，
     /// 见 `src/ui/useChromeVisibility.ts`。
     pub show_menu_bar: bool,
+    /// 菜单栏由 Nota 自绘还是使用系统原生实现。
+    pub menu_renderer: MenuBarRenderer,
     /// 阅读速度（词每分钟），只用来把字数换算成"约几分几秒读完"。
     /// 中文常见取值 382。
     pub reading_speed: u32,
@@ -287,6 +300,7 @@ impl Default for Appearance {
             // ⚠️ 默认**显示**，与 `toolbar` 相反，理由见字段那段：菜单栏是命令的
             // 总入口，默认藏了等于把界面清空。
             show_menu_bar: true,
+            menu_renderer: MenuBarRenderer::Nota,
             reading_speed: 382,
             // ⚠️ 见 `ToolbarMode::Never` 那段：本项默认**不显示**，是刻意的取舍。
             toolbar: ToolbarMode::Never,
@@ -321,6 +335,34 @@ mod tests {
         // ⚠️ `zoom: 0` 会让整个界面消失（或者按 0% 算出一堆 NaN 尺寸）。
         // 默认值写成 0 是可以编译、可以过测试、只在界面上炸的那类错误。
         assert_eq!(Appearance::default().zoom, 100);
+    }
+
+    #[test]
+    fn 菜单栏样式默认_nota_并可切换系统() {
+        assert_eq!(
+            Appearance::default().menu_renderer,
+            MenuBarRenderer::Nota,
+            "默认必须保持跨平台一致的 Nota 自绘菜单"
+        );
+        let old: Appearance = toml::from_str("").expect("旧设置文件没有这一格也要能读");
+        assert_eq!(
+            old.menu_renderer,
+            MenuBarRenderer::Nota,
+            "旧设置文件缺 menu_renderer 时必须补成 Nota"
+        );
+        for (renderer, 词) in [
+            (MenuBarRenderer::Nota, "nota"),
+            (MenuBarRenderer::System, "system"),
+        ] {
+            let text = toml::to_string_pretty(&Appearance {
+                menu_renderer: renderer,
+                ..Appearance::default()
+            })
+            .expect("序列化该成功");
+            assert!(text.contains(&format!("menu_renderer = \"{词}\"")));
+            let back: Appearance = toml::from_str(&text).expect("读得回来");
+            assert_eq!(back.menu_renderer, renderer);
+        }
     }
 
     #[test]

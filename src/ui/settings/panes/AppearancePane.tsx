@@ -409,6 +409,21 @@ export function AppearancePane({
             onChange={(show_menu_bar) => 写({ show_menu_bar })}
           />
         </SettingRow>
+        <SettingRow
+          label={t("Menu bar rendering")}
+          description={t(
+            "Use Nota's built-in menu on every platform, or the native system menu. On macOS, the system menu appears at the top of the screen.",
+          )}
+        >
+          <Select
+            value={a.menu_renderer}
+            options={[
+              { value: "nota", label: t("Nota (self-drawn)") },
+              { value: "system", label: t("System native") },
+            ]}
+            onChange={(menu_renderer) => 写({ menu_renderer })}
+          />
+        </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Show status bar")}>

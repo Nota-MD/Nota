@@ -1,10 +1,10 @@
-//! 原生菜单——macOS 顶端菜单栏与桌面平台的原生窗口菜单。
+//! 可选的系统原生菜单——macOS 顶端菜单栏与桌面平台的原生窗口菜单。
 //!
 //! # 为什么要有它
 //!
 //! macOS 的菜单栏在屏幕顶端、属于应用而不是窗口；Windows/Linux 也可以把
-//! 菜单交给窗口管理器/GTK 绘制。三端都优先尝试原生菜单，失败时自绘菜单
-//! （`src/ui/MenuBar.tsx`）继续兜底。
+//! 菜单交给窗口管理器/GTK 绘制。默认仍用 Nota 自绘菜单；用户在「外观」中
+//! 选择系统原生后才调用这里，失败时自绘菜单（`src/ui/MenuBar.tsx`）继续兜底。
 //!
 //! # 菜单内容是**前端推过来的**
 //!
@@ -85,6 +85,10 @@ pub fn available() -> bool {
 /// 桌面平台都尝试挂载；建失败返回 `Err`（前端据此继续用自绘菜单）。
 pub fn apply<R: Runtime>(app: &AppHandle<R>, nodes: &[MenuNode]) -> Result<bool, String> {
     if !available() {
+        return Ok(false);
+    }
+    if nodes.is_empty() {
+        app.remove_menu().map_err(estr)?;
         return Ok(false);
     }
     let menu = build(app, nodes)?;

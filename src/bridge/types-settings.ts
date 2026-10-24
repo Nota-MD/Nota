@@ -449,6 +449,9 @@ export type StatusMetric = "words" | "characters" | "lines" | "minutes";
  */
 export type FocusModeDim = "standard" | "strong" | "stronger";
 
+/** 菜单栏绘制方式。默认 `"nota"`，可切换为系统原生菜单。 */
+export type MenuBarRenderer = "nota" | "system";
+
 export interface AppearanceSettings {
   /** 「自定义」界面字号。⚠️ 字号本身是顶层 `ui_font_size`，这个只是"算不算数"。 */
   custom_font_size: boolean;
@@ -476,6 +479,8 @@ export interface AppearanceSettings {
    * `useChromeVisibility` 在藏下去的那一刻会发一条会自己走掉的提示。
    */
   show_menu_bar: boolean;
+  /** 菜单栏由 Nota 自绘还是使用系统原生实现。默认 `"nota"`。 */
+  menu_renderer: MenuBarRenderer;
   /** 词每分钟，只用来把字数换算成"约几分几秒读完"。 */
   reading_speed: number;
   /** 格式工具栏什么时候露出来。⚠️ 默认 `"never"`（不显示）——见 Rust 侧 `ToolbarMode`。 */

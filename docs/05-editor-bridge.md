@@ -945,9 +945,10 @@ OpenOffice / OPML 是**交给系统里那个 pandoc** 转的（`ui/useExport.ts`
 - 编辑态下两根 `$` / `$$` 半透明（`.nota-math-delim`，走 `.nota-srcmark` 那张配方：
   `--fg-faint` ＋ 0.16s 淡入，**不再乘 `opacity`**），行内公式编辑时渲染区
   `display: none`（Typora 式：源码框替掉结果）。
-- 公式源码框、宽度标尺和空态说明使用 `--font-math`：主栈从 KaTeX 数学字体开始，
-  中文回落到系统衬线字体。KaTeX 渲染结果继续用它自带的数学衬线字形；界面其他文本
-  仍使用 `--font-ui`，不把衬线体扩散到外壳。
+- 公式源码框、宽度标尺、空态说明和 KaTeX 渲染根都使用 `--font-math`：主栈从 KaTeX
+  数学字体开始，中文明确回落到 Noto Serif CJK / 思源宋体等衬线字体。行内公式、块公式
+  与 `math` / `latex` / `tex` 围栏共用这条链；KaTeX 的数学变量仍保留自己的专用字形。
+  界面其他文本继续使用 `--font-ui`，不把衬线体扩散到外壳。
 - 数学 schema 本身留在核心编辑器里，因此公式块始终可选中、可输入源码；昂贵的
   KaTeX JS 与 mhchem 由 `katex-runtime.ts` 动态加载。等待时节点标成 `loading`，
   不阻塞窗口揭幕。窗口 `show()` 完成后才启动预热，正常本地启动下在首帧后的

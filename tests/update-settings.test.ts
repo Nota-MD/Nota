@@ -67,6 +67,20 @@ console.log("\n【更新设置与通知】");
   真(hook.includes("notify_when_available"), "没有读取通知开关");
 });
 
+测("菜单栏默认 Nota 自绘，外观设置可切系统原生", () => {
+  const rust = 读("src-tauri", "src", "settings", "appearance.rs");
+  const types = 读("src", "bridge", "types-settings.ts");
+  const pane = 读("src", "ui", "settings", "panes", "AppearancePane.tsx");
+  const hooks = 读("src", "ui", "useMenus.ts");
+  真(rust.includes("MenuBarRenderer"), "Rust 缺少菜单栏渲染枚举");
+  真(rust.includes("menu_renderer: MenuBarRenderer::Nota"), "默认不是 Nota 自绘");
+  真(types.includes('export type MenuBarRenderer = "nota" | "system"'), "前端类型不对");
+  真(pane.includes('label={t("Menu bar rendering")}'), "外观页没有菜单样式选项");
+  真(pane.includes("<Select") && pane.includes('{ value: "system", label: t("System native") }'), "菜单样式必须使用下拉框");
+  真(pane.includes('label: t("Nota (self-drawn)")'), "默认选项没有说明为 Nota 自绘");
+  真(hooks.includes('menuRenderer !== "system"'), "菜单钩子没有尊重渲染设置");
+});
+
 if (败 > 0) {
   console.error(`\n${败} 项失败`);
   process.exitCode = 1;

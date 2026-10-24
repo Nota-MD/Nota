@@ -37,6 +37,10 @@ export const 设置表: Record<string, string> = {
   "Use the scroll wheel while holding Ctrl": "按住 Ctrl 时用滚轮",
   "What the wheel changes": "滚轮改什么",
   "Interface zoom": "界面缩放",
+  "Menu bar rendering": "菜单栏样式",
+  "Use Nota's built-in menu on every platform, or the native system menu. On macOS, the system menu appears at the top of the screen.": "使用 Nota 跨平台一致的自绘菜单，或交给系统原生菜单。macOS 中系统菜单位于屏幕顶部。",
+  "Nota (self-drawn)": "Nota 自绘",
+  "System native": "系统原生",
   "Show status bar": "显示状态栏",
   // 「窗口」与「专注模式」那两组（2026-10-04，第 45 项，照 VMark 的窗口版加的）。
   // ⚠️ 组名「专注模式」用的是**已有的**那条键（`zh-ui.ts` 里 `"Focus Mode"`，

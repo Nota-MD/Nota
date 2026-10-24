@@ -975,7 +975,7 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 | 文档主题 | `[settings?.document_theme, themes]` | 找到同名主题就 `applyDocTheme()`，空名/找不到就撤掉样式 |
 | 重取文件树 | `[refreshTree]` | 而 `refreshTree` 依赖 `workspace`，所以工作区一变就重取 |
 | 快捷键 | `[accelIndex, menuHandlers, disabledCommands]` | `window` 上听 `keydown`，**查表派发**（不再逐个判键）：键位签名 → 命令 id → `menuHandlers[id]`。表由 `ui/accel.ts::buildAccelIndex(菜单)` 推出来，而 `菜单` 是 `App.tsx` 里 `应用键位覆盖(注入最近文件(全部菜单, 最近), settings?.keys?.overrides ?? {})` 那一份——**出厂键位在 `commands.ts` 的 `accel` 字段，用户改过的那些在 `settings.keys.overrides`**。完整口径见 `04` §4 |
-| 原生菜单 | `[disabledCommands, menuChecks, themes, settings?.document_theme]` | `api.nativeMenu.apply(buildNativeTree(...))` 优先推给 macOS/Windows/Linux 的原生菜单（返回 `false` 就继续用自绘的）；另一个 effect 订 `nota:native-menu`，收到 id 走 `resolvePick` 分流。见 `04` §2.1c |
+| 原生菜单 | `[menus, disabledCommands, menuChecks, themes, documentTheme, menuRenderer, menuBarOpen]` | 默认使用 Nota 自绘；外观设置选择“系统原生”且菜单栏开启时，`api.nativeMenu.apply(buildNativeTree(...))` 推给 macOS/Windows/Linux，空树会卸载。另一个 effect 订 `nota:native-menu`，收到 id 走 `resolvePick` 分流。见 `04` §2.1c |
 
 ### 主链路（前三条 ＋ 下面第四条）
 

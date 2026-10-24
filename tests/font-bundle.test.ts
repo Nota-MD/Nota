@@ -167,5 +167,22 @@ console.log("\n【LaTeX 主题的 CM Unicode 等宽字体】");
   真(!tauri.includes("latex-fonts"), "LaTeX 字体仍被核心安装包资源列表收录");
 });
 
+测("LaTeX 数学区与 KaTeX 渲染都使用带中文衬线回退的数学字体栈", () => {
+  const base = 读("src/styles/theme/base.css");
+  const codeBlock = 读("src/styles/code-block.css");
+  const math = 读("src/styles/math.css");
+  含(base, '"Noto Serif CJK SC"', "数学字体栈的中文衬线回退");
+  含(base, '"Source Han Serif SC"', "数学字体栈的思源宋体回退");
+  含(codeBlock, ".nota-code-math-render .katex", "math/latex/tex 围栏的 KaTeX 根");
+  含(codeBlock, "font-family: var(--font-math)", "围栏公式字体");
+  含(math, ".nota-math-render .katex", "行内与块公式的 KaTeX 根");
+  含(math, ".nota-math-preview .katex", "公式编辑预览的 KaTeX 根");
+  真(
+    !codeBlock.includes(".nota-code-math-render .katex *") &&
+      !math.includes(".nota-math-render .katex *"),
+    "不要用通配符覆盖 KaTeX_Math 等数学专用字形",
+  );
+});
+
 console.log(`\n通过 ${过} 条，失败 ${败} 条`);
 if (败 > 0) process.exitCode = 1;

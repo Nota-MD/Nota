@@ -570,6 +570,14 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
   text-align: center;
 }
 
+/* KaTeX 默认只声明 KaTeX_Main、Times New Roman 与通用衬线字体；中文实际落到哪个
+   通用衬线字体由 WebView 决定。这里把渲染根接回文档主题的数学字体栈，中文明确
+   走 Noto Serif CJK / 思源宋体，西文仍优先 KaTeX_Main。不要下探到 `.katex *`：
+   那会连同数学变量自己的 KaTeX_Math 一起覆盖。 */
+.nota-code-math-render .katex {
+  font-family: var(--font-math);
+}
+
 /* `math` / `latex` / `tex` 围栏的源码也属于数学区，不以普通代码的等宽字体显示。 */
 .nota-code-wrap.nota-code-math-editing > pre .cm-scroller,
 .nota-code-wrap.nota-code-math-editing > pre .cm-content,

@@ -1,6 +1,6 @@
 # Typora 主题兼容实测：LaTeXTypora 2.1.4
 
-最后同步：2026-10-21
+最后同步：2026-10-23
 
 测试主题：
 
@@ -48,6 +48,29 @@ latex.css（去掉 @import）
 | `.md-diagram-panel` | `.nota-diagram` |
 | `@font-face` | 支持，资源必须留在主题包内 |
 | `@media print` | 支持，导出也沿用文档主题 |
+
+## 2026-10-23 排印对照
+
+用同一份包含标题、粗体、斜体、代码块、引用、列表、表格、行内公式与块公式的
+文档，分别加载 Typora 当前安装的 `latex.css` 和 Nota 内置
+`src/styles/themes/latex.css`。Nota 侧吸收的是可验证的排印尺度，不是复制
+Typora 的应用外壳或整份 CSS：
+
+- 正文版心从铺满编辑区改为 `32em` 居中；
+- h1 从 1.7em/700 改为 1.55em/400，h2–h6 保留粗体；
+- 段落使用 1.55em 首行缩进与两端对齐；
+- quote 去掉灰色背景和左边线，只保留左右 2.5em 缩进；
+- 表格改为自然宽度居中，只保留 booktabs 的顶部、表头、底部横线；
+- 代码块使用暖白底、2px 小圆角和 CM Unicode 原版 `cmuntt.ttf`
+  （`CMU Typewriter Text`），行内代码同步改暖白底；
+- 链接改用 `hyperref` 风格的群青蓝。
+
+开窗检查时，标题层级、正文宽度、引用、列表、代码块、表格、行内公式和块公式
+均正常；Nota 外壳未受影响。差异在于 Nota 源码主题不内嵌 Typora 的 New
+Computer Modern 正文字体：用户机器若没有同名系统字体，会继续使用现有衬线
+回退。等宽字体已经由主题资源目录携带 CM Unicode 0.7.0 的 `cmuntt.ttf` 及
+同目录 SIL OFL 1.1；需要正文也完全相同时，应由外置 LaTeX 主题包继续携带
+对应正文字体及许可后加载。
 
 ## 实测结果
 

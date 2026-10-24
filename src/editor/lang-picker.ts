@@ -29,7 +29,7 @@
 
 import { t } from "@/i18n";
 
-import { languageIcon } from "./lang-icon";
+import { languageIcon, 有专属图标 } from "./lang-icon";
 
 /** 下拉第一项：不指定语言。与 `code_block` 的 `language` 默认值一致。 */
 const NO_LANGUAGE = "";
@@ -77,6 +77,8 @@ export type 语言选择器 = {
 export function 创建语言选择器(选项: {
   /** 全部语言名（调用方算好并缓存，这里每次都取一遍）。 */
   全部语言: () => string[];
+  /** 输入查询时可搜索的完整语言表；允许比默认下拉更多。 */
+  搜索语言: () => string[];
   /**
    * 这一门语言的**全部写法**（含别名），用于搜索。
    *
@@ -197,19 +199,35 @@ export function 创建语言选择器(选项: {
     for (const el of 选项们()) el.remove();
     const 原文 = 输入.value.trim();
     const 问 = 原文.toLowerCase();
-    弹层.appendChild(造一项(NO_LANGUAGE, 纯文本()));
-    for (const lang of 选项.全部语言()) {
+    // 空查询才显示「纯文本」；开始输入后只保留命中的语言，和常见代码编辑器的
+    // 语言补全一致。需要清空语言时把输入框删空即可。
+    if (问 === "") 弹层.appendChild(造一项(NO_LANGUAGE, 纯文本()));
+    const 候选 = 问 === "" ? 选项.全部语言() : 选项.搜索语言();
+    const 命中 = 候选
+      .filter((lang) => 问 === "" || 选项.别名(lang).some((名) => 名.toLowerCase().includes(问)))
+      .sort((a, b) => {
+        if (问 === "") return 0;
+        const a前 = a.toLowerCase().startsWith(问) ? 1 : 0;
+        const b前 = b.toLowerCase().startsWith(问) ? 1 : 0;
+        const a图 = 有专属图标(a) ? 1 : 0;
+        const b图 = 有专属图标(b) ? 1 : 0;
+        return b前 - a前 || b图 - a图 || a.length - b.length || a.localeCompare(b);
+      });
+    for (const lang of 命中) {
       // ⚠️ **连别名一起匹配**（2026-10-16，朋友报的「代码块语言类型重复」那一批）：
       // 下拉里现在**一行一个语言族**（`armasm`/`arm-asm` 只留下一行，见
       // `code-block.ts::allLanguages`）。用户按 `armasm` 找的时候得找得到那一行，
       // 不然他会以为"这个语言被删了"。`选项.别名` 给的是这一族的所有写法。
-      const 命中 = 问 === "" || 选项.别名(lang).some((名) => 名.toLowerCase().includes(问));
-      if (命中) 弹层.appendChild(造一项(lang, lang));
+      弹层.appendChild(造一项(lang, lang));
     }
-    if (问 !== "" && !选项.全部语言().some((l) => l.toLowerCase() === 问)) {
+    if (问 !== "" && 命中.length === 0) {
       弹层.appendChild(造一项(原文, 原文, true));
     }
-    高亮(0);
+    const 当前 = 选项.当前语言();
+    const 精确项 = 选项们().findIndex(
+      (el) => el.dataset.lang === (问 === "" ? 当前 : 原文),
+    );
+    高亮(精确项 >= 0 ? 精确项 : 0);
   }
 
   /**
@@ -307,6 +325,8 @@ export function 创建语言选择器(选项: {
     // 拼写红线与历史下拉在这里只会挡住列表。
     inp.autocomplete = "off";
     inp.spellcheck = false;
+    // 选择框本身也承担输入框：打开后可直接改写当前语言，再按输入内容筛选。
+    inp.value = 是空;
     搜索.appendChild(inp);
     pop.appendChild(搜索);
     输入 = inp;

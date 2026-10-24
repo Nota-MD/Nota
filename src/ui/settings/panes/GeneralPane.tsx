@@ -33,7 +33,7 @@
 
 import { useEffect, useState } from "react";
 
-import { api, type AppLang } from "@/bridge/ipc";
+import { api, type AppLang, type NotificationPosition } from "@/bridge/ipc";
 import type { SettingsExportReport } from "@/bridge/types-settings-export";
 import { useT } from "@/i18n";
 import { ActionButton, SettingRow, SettingsGroup, Select, TextArea, Value } from "../primitives";
@@ -46,6 +46,7 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
   const t = useT();
   const 写 = paneWriter(settings, onChange, "general");
   const 写下载 = paneWriter(settings, onChange, "download");
+  const 写更新 = paneWriter(settings, onChange, "updates");
 
   // 可选的语言**由宿主给**（`nota_app_lang.available`），前端不列第二份。
   // 拉不到就只画「自动」——下拉少几项比画错标签好。
@@ -68,6 +69,11 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
     };
   }, []);
 
+  const POSITIONS: Array<{ value: NotificationPosition; label: string }> = [
+    { value: "bottom-right", label: t("Bottom right") },
+    { value: "top-center", label: t("Top center") },
+  ];
+
   return (
     <>
       <SettingsGroup title={t("Interface language")}>
@@ -89,6 +95,19 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
               // `src-tauri/src/lang.rs::语言名`。
               ...(语言表?.available ?? []).map((l) => ({ value: l.tag, label: l.label })),
             ]}
+          />
+        </SettingRow>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("Notifications")}>
+        <SettingRow
+          label={t("Notification position")}
+          description={t("Applies to all in-app notifications.")}
+        >
+          <Select
+            value={settings.updates.notification_position}
+            options={POSITIONS}
+            onChange={(notification_position) => 写更新({ notification_position })}
           />
         </SettingRow>
       </SettingsGroup>

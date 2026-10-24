@@ -1,25 +1,19 @@
 /**
  * 「更新设置」页。
  *
- * 启动检查、可用更新通知与通知位置是设置项；具体的下载和安装仍由
+ * 启动检查与可用更新通知是设置项；通知位置属于「通用」页。具体的下载和安装仍由
  * `SoftwareUpdatePane` 展示。前端不接收更新 URL，也不能替换宿主选中的安装包。
  */
 
-import type { NotificationPosition } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { SoftwareUpdatePane } from "@/ui/SoftwareUpdatePane";
-import { Select, SettingRow, SettingsGroup, Toggle } from "../primitives";
+import { SettingRow, SettingsGroup, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
 export function UpdatePane({ settings, onChange }: PaneProps) {
   const t = useT();
   const 写 = paneWriter(settings, onChange, "updates");
   const u = settings.updates;
-
-  const POSITIONS: Array<{ value: NotificationPosition; label: string }> = [
-    { value: "bottom-right", label: t("Bottom right") },
-    { value: "top-center", label: t("Top center") },
-  ];
 
   return (
     <>
@@ -45,19 +39,6 @@ export function UpdatePane({ settings, onChange }: PaneProps) {
             checked={u.notify_when_available}
             disabled={!u.check_on_startup}
             onChange={(notify_when_available) => 写({ notify_when_available })}
-          />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Notifications")}>
-        <SettingRow
-          label={t("Notification position")}
-          description={t("Applies to all in-app notifications.")}
-        >
-          <Select
-            value={u.notification_position}
-            options={POSITIONS}
-            onChange={(notification_position) => 写({ notification_position })}
           />
         </SettingRow>
       </SettingsGroup>

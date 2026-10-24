@@ -549,7 +549,9 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
 }
 
 .nota-code-wrap.nota-code-math-editing > pre {
-  margin-bottom: 12px;
+  /* 工具栏与语言框都绝对定位在 pre 下沿之外，高 22px；保留 30px 槽位，
+     否则它们会压住下方公式预览的上边框。 */
+  margin-bottom: 30px;
 }
 
 .nota-code-math-preview[data-state="empty"] {
@@ -557,13 +559,27 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
   display: grid;
   place-items: center;
   color: var(--fg-muted);
-  font-family: var(--font-ui, inherit);
+  /* LaTeX/math 块内部始终按数学排印处理，包括“空公式块”这句占位文字。 */
+  font-family: var(--font-math);
+  font-style: italic;
 }
 
 .nota-code-math-render {
   min-width: max-content;
   color: var(--fg);
   text-align: center;
+}
+
+/* `math` / `latex` / `tex` 围栏的源码也属于数学区，不以普通代码的等宽字体显示。 */
+.nota-code-wrap.nota-code-math-editing > pre .cm-scroller,
+.nota-code-wrap.nota-code-math-editing > pre .cm-content,
+.nota-code-wrap.nota-code-math-editing > pre .cm-line {
+  font-family: var(--font-math);
+}
+
+/* 语言标签属于 math 内容本身；工具栏按钮仍保持界面字体。 */
+.nota-code-wrap.nota-code-math .nota-lang-name {
+  font-family: var(--font-math);
 }
 
 .nota-code-math-preview[hidden] {

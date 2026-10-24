@@ -27,6 +27,9 @@ pub struct Updates {
     /// 只有 `check_on_startup` 开启时界面才允许修改这一项。
     pub notify_when_available: bool,
     /// 所有应用内通知的位置。
+    ///
+    /// ⚠️ 2026-10-24 起界面入口在「通用」页；字段仍留在 `[updates]` 是为了
+    /// 不破坏已存在的设置文件。它描述的是全应用通知，不是更新专用行为。
     pub notification_position: NotificationPosition,
 }
 

@@ -48,8 +48,12 @@ console.log("\n【更新设置与通知】");
 });
 
 测("通知支持位置和操作按钮", () => {
+  const general = 读("src", "ui", "settings", "panes", "GeneralPane.tsx");
+  const update = 读("src", "ui", "settings", "panes", "UpdatePane.tsx");
   const toasts = 读("src", "ui", "Toasts.tsx");
   const css = 读("src", "styles", "toast.css");
+  真(general.includes('label={t("Notification position")}'), "通知位置没有落在通用页");
+  真(!update.includes('label={t("Notification position")}'), "更新页仍重复通知位置");
   真(toasts.includes("data-position"), "通知容器没有位置属性");
   真(toasts.includes("ToastAction"), "通知没有操作类型");
   真(toasts.includes("toast-action"), "通知没有操作按钮");

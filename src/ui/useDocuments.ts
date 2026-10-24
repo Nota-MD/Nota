@@ -163,6 +163,8 @@ export interface 文档出口 {
    * 工作区根目录下直接创建真实 Markdown 文件，再打开它。
    */
   newDoc: (workspaceFileName?: string) => Promise<void>;
+  /** 在当前工作区根目录新建文件夹，成功后刷新侧栏树。 */
+  newFolder: () => Promise<void>;
   /**
    * 用一段转换好的 Markdown 新建未命名文档并切过去。
    *
@@ -430,6 +432,23 @@ export function useDocuments(w: 文档接线): 文档出口 {
     setActiveId(最后一份.id);
     return true;
   }, [refreshDocs, setActiveId]);
+
+  const newFolder = useCallback(async () => {
+    const root = workspaceRef.current;
+    if (!root) return;
+    const 答 = await askPrompt({
+      title: t("New Folder"),
+      label: t("Folder name"),
+      confirmLabel: t("Create"),
+    });
+    if (!答) return;
+    try {
+      await api.picker.createDir(root, 答.value.trim());
+      setTree(await api.workspace.tree(undefined, 1, 读口径(settingsRef.current)));
+    } catch (e) {
+      toast(String(e), "error");
+    }
+  }, [askPrompt, setTree, t, toast]);
 
   const newDocWithText = useCallback(
     async (text: string, titleHint: string | null) => {
@@ -721,6 +740,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
     openPath,
     newDoc,
     newDocWithText,
+    newFolder,
     接上现有,
     openViaDialog,
     openFolder,

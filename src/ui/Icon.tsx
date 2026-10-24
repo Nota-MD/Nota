@@ -99,6 +99,7 @@ const 名字表 = [
   "folio-close-symbolic",
   // 侧边栏空态里那颗「打开文件夹…」
   "folio-document-open-symbolic",
+  "folio-edit-find-symbolic",
   // 偏好设置左栏那十一页（`ui/settings/SettingsDialog.tsx`）。
   // ⚠️ 在这一批之前，设置左栏用的是 `settings/primitives.tsx` 里**手写的五枚
   // 24 格细线图标**——那是第二套画风，和工具栏、侧栏、菜单里这 96 枚摆在一起

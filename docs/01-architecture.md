@@ -635,7 +635,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 
 | 命令 | 签名要点 |
 |---|---|
-| `nota_native_menu_apply` | `(app, nodes: Vec<MenuNode>) -> Result<bool, String>`。返回 `bool` 而不是 `()`：**前端要靠它决定要不要隐藏自绘菜单栏**，`false` = 没挂上（非 macOS 或 Tauri 报错），那就继续用自绘的那套 |
+| `nota_native_menu_apply` | `(app, nodes: Vec<MenuNode>) -> Result<bool, String>`。返回 `bool` 而不是 `()`：**前端要靠它决定要不要隐藏自绘菜单栏**，`false` = 原生菜单没挂上（Tauri/窗口系统报错），那就继续用自绘的那套 |
 
 **启动与握手（2 个）**
 
@@ -975,7 +975,7 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 | 文档主题 | `[settings?.document_theme, themes]` | 找到同名主题就 `applyDocTheme()`，空名/找不到就撤掉样式 |
 | 重取文件树 | `[refreshTree]` | 而 `refreshTree` 依赖 `workspace`，所以工作区一变就重取 |
 | 快捷键 | `[accelIndex, menuHandlers, disabledCommands]` | `window` 上听 `keydown`，**查表派发**（不再逐个判键）：键位签名 → 命令 id → `menuHandlers[id]`。表由 `ui/accel.ts::buildAccelIndex(菜单)` 推出来，而 `菜单` 是 `App.tsx` 里 `应用键位覆盖(注入最近文件(全部菜单, 最近), settings?.keys?.overrides ?? {})` 那一份——**出厂键位在 `commands.ts` 的 `accel` 字段，用户改过的那些在 `settings.keys.overrides`**。完整口径见 `04` §4 |
-| 原生菜单 | `[disabledCommands, menuChecks, themes, settings?.document_theme]` | `api.nativeMenu.apply(buildNativeTree(...))` 推一份给 macOS（返回 `false` 就继续用自绘的）；另一个 effect 订 `nota:native-menu`，收到 id 走 `resolvePick` 分流。见 `04` §2.1c |
+| 原生菜单 | `[disabledCommands, menuChecks, themes, settings?.document_theme]` | `api.nativeMenu.apply(buildNativeTree(...))` 优先推给 macOS/Windows/Linux 的原生菜单（返回 `false` 就继续用自绘的）；另一个 effect 订 `nota:native-menu`，收到 id 走 `resolvePick` 分流。见 `04` §2.1c |
 
 ### 主链路（前三条 ＋ 下面第四条）
 

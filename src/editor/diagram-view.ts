@@ -763,7 +763,7 @@ export const diagramView = $view(
         失焦: 先派发,
         撤销: () => undo(view.state, view.dispatch, view),
         重做: () => redo(view.state, view.dispatch, view),
-        退出到正文: () => view.focus(),
+        开头退格: () => view.focus(),
       });
       源码框.append(代码编辑器.视图.dom);
       代码编辑器.视图.contentDOM.setAttribute("aria-label", t("Diagram Source (Mermaid)"));

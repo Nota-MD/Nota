@@ -128,9 +128,8 @@ export const 界面表: Record<string, string> = {
   "Switch between source mode and WYSIWYG": "切换代码/所见即所得模式",
   "Outline": "大纲",
   "File Tree": "文件树",
-  // ⚠️ 这里原来还有 `"Document List": "文档列表"`：2026-09-28 侧栏第三页
-  //（文档列表）与菜单里那一条一起删了，键随之删除（留着就是废键，
-  // `tools/i18n-check.sh` ③ 会 FAIL）。
+  // `"Document List"` 现在只用于文件页右键菜单里的列表视图项；
+  // 2026-09-28 删掉的是独立「文档列表」页，不是这个视图名称。
   "Search": "搜索",
   "Extension Dock": "拓展栏",
   "Formatting Toolbar": "格式化工具栏",
@@ -216,6 +215,15 @@ export const 界面表: Record<string, string> = {
   "Go": "前往",
   "Hidden files": "隐藏文件",
   "New Folder": "新建文件夹",
+  "New File": "新建文件",
+  "Copy File Path": "复制文件路径",
+  "Open File Location": "打开文件位置",
+  "Document List": "文档列表",
+  "Document Tree": "文档树",
+  "Search files…": "搜索文件…",
+  "Search files": "搜索文件",
+  "No matching files.": "没有匹配的文件。",
+  "File list is empty": "文件列表为空",
   "Folder name": "文件夹名称",
   "Create": "创建",
   "Name": "名称",
@@ -494,7 +502,6 @@ export const 界面表: Record<string, string> = {
   "Expand this section": "展开这一节",
   "Collapse this section": "折叠这一节",
   "Cannot read this folder: {0}": "读不了这个文件夹：{0}",
-  "No folder is open yet. Open a folder and its Markdown files will be listed here.": "还没打开文件夹。打开一个文件夹后，这里会列出其中的 Markdown。",
   "This folder has no Markdown files.": "这个文件夹里没有 Markdown 文件。",
   "This document has no headings yet.": "这份文档还没有标题。",
   // ⚠️ 这里原来还有 `"Remove from list"` 与 `"No recent files yet.…"` 两条：

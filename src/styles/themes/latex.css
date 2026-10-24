@@ -4,21 +4,26 @@
  * 用户 2026-09-26 点名的三套之一，原话是「LaTeX（模仿LaTeX官方的主题）」。
  * 模仿的是**排版规则**，不是某个模板的皮肤，四处落点：
  *
- *   · **衬线正文**       `--font-doc` 先试 Latin Modern / Computer Modern，
- *                        没装就一路退到中文衬线、Georgia、Times；
- *   · **居中标题**       h1 / h2 居中（`amsart` 那一路的分节标题就是居中的），
- *                        h3 以下靠左、加粗；
- *   · **段落首行缩进**   `text-indent: 1.5em`，而且段与段之间**没有**空档
+ *   · **衬线正文**       优先 New Computer Modern / Latin Modern，没装就
+ *                        退到中文衬线、Times；
+ *   · **LaTeX 版心**     正文列收到 32em 并居中，接近 `article` 的 textwidth；
+ *   · **轻标题**         h1 使用正常字重、居中，h2 以下才加粗；
+ *   · **段落首行缩进**   `text-indent: 1.55em`，而且段与段之间**没有**空档
  *                        ——LaTeX 靠缩进分段，不靠空行（见下面"段落"那一段）；
- *   · **`\hline` 细横线** 表格只有横线、没有竖线，列距靠 `padding` 撑开；
- *   · **脚注式引用**     `blockquote` 字小一档、左外侧一条短竖线。
+ *   · **booktabs 表格**  自然宽度、居中，只有顶部/表头/底部三条横线；
+ *   · **quote 环境**     左右各缩进 2.5em，没有边框、底色和字号变化。
  *
- * # ⛔ 不下载、不内嵌任何字体
+ * 2026-10-23 对照本机 Typora 当前 LaTeX 主题后，主要吸收的是这些**排印尺度**：
+ * 32em 版心、h1 1.55em/常规字重、1.55em 段首缩进、quiet quote 与自然宽表格。
+ * 没有复制 Typora 的 CSS 或字体文件；这里仍是 Nota 自己按 LaTeX article
+ * 规则写的一份主题。
  *
- * `docs/07` 里那条"不内置第三方资源"的线同样管字体：**不许**把 Computer
- * Modern / Latin Modern 的 `.woff2` 打进包里（那是另一份许可证，而且体积
- * 不小）。这里只用**系统上已经装了的**字体栈，装了就长成 LaTeX、没装就
- * 优雅退化——所以下面那一串回退**每一档都要是能用的衬线**，别删中间几档。
+ * # 字体
+ *
+ * 正文仍优先使用系统里的 New Computer Modern / Latin Modern，并用完整衬线
+ * 回退链保证中文可读。等宽字体例外：`latex-fonts/cmunt.ttf` 是 CM Unicode
+ * 0.7.0 的原版 `cmuntt.ttf`，采用 SIL OFL 1.1，许可证与字体同目录保存。
+ * 这样代码块不必碰运气等系统恰好安装了 CMU Typewriter Text。
  *
  * # 写法约定
  *
@@ -29,24 +34,34 @@
  * ——守卫照样会挂上 `.editor-pane`，写成 (0,2,1)。详见下面"段落"那一段。
  */
 
+@font-face {
+  font-family: "Nota CMU Typewriter";
+  src:
+    local("CMU Typewriter Text"),
+    url("./latex-fonts/cmunt.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   /* ── 纸面：纯白 + 近黑。LaTeX 就是黑白两色，几乎没有灰阶分层可言 ── */
   --doc-bg: #ffffff;
-  --doc-fg: #141414;
-  --fg: #141414;
-  --fg-muted: #4a4a4a;
+  --doc-fg: #000000;
+  --fg: #000000;
+  --fg-muted: #4d4d4d;
   /* 块标记（## / > / 1.）与任务项方框。`#767676` 在白纸上 4.54:1，过 AA
      ——门槛的来历见 `minimal.css` 里 `--fg-faint` 那条注释。 */
-  --fg-faint: #767676;
+  --fg-faint: #707070;
   --border: #c9c9c9;
   --border-strong: #8a8a8a;
-  --bg-subtle: #f5f5f5; /* 代码块底 */
-  --bg-raised: #ebebeb; /* 代码块右上角那排按钮 */
+  --bg-subtle: #fbfaf7; /* 代码块底：LaTeX 主题的暖白纸色 */
+  --bg-raised: #f7f4ee; /* 代码块右上角那排按钮 */
   --bg-hover: rgba(0, 0, 0, 0.05);
   --bg-active: rgba(0, 0, 0, 0.09);
-  --radius: 0; /* LaTeX 里没有"圆角"这种东西，一处都不要给 */
-  --radius-sm: 0;
-  --accent: #8a1c1c; /* 暗红：`hyperref` 那种"链接是有颜色的"的味道 */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --accent: #1d12e2; /* hyperref colorlinks 的群青色 */
   --accent-fg: #ffffff;
 
   /* ── 排版 ──
@@ -54,13 +69,16 @@
      中间两档是中文衬线（不写它，中文会掉到最后一档的 Times，
      而 Times 没有汉字，最后交给系统随便挑一个——那就不是这套的主题了），
      后面两档才是"什么年代什么机器上都有的"兜底。 */
-  --font-doc: "Latin Modern Roman", "Computer Modern", "CMU Serif",
-    "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman",
-    "Songti SC", serif;
-  --doc-font-size: 1.04em;
+  --font-doc: "New Computer Modern", "Latin Modern Roman", "Computer Modern",
+    "CMU Serif", "Times New Roman", "Songti SC", "STSong", "SimSun",
+    "Source Han Serif SC", "Noto Serif CJK SC", serif;
+  --font-mono: "Nota CMU Typewriter", "CMU Typewriter Text",
+    "New Computer Modern Mono", "Latin Modern Mono", "JuliaMono", "Courier New",
+    monospace;
+  --doc-font-size: 1em;
   /* ⚠️ LaTeX 的 `\baselineskip` 其实是字号的 1.2 倍，比这里紧得多；
-     但屏幕上的正文列有 760px 宽，1.2 会挤成一团黑——1.68 是"看得出是
-     LaTeX、又能在屏幕上读"的那个折中，别照抄纸上的那个数。 */
+     屏幕上的中文仍需更大的行距。1.68 是中文版心"看得出是 LaTeX、又能
+     在屏幕上读"的折中；窄拉丁文段落如需更紧，可在主题覆盖这一项。 */
   --doc-line-height: 1.68;
   /* 标题的六级字号 ＋ 字重/行高。⚠️ 下面 `h1`~`h6` 那几条**读的就是这里**：
      一套数值只此一份，别无第二处抄一遍。
@@ -73,11 +91,11 @@
      ⚠️ 这一套的 h5 与 h6 **同号**（都是 1em），两个变量仍各写一格——标题块
      按级取号（`#` 取 h1 … `######` 取 h6），合并掉 h6 那一格就取不到了。 */
   --doc-h-weight: 700;
-  --doc-h-line-height: 1.3;
-  --doc-h1-size: 1.7em;
-  --doc-h2-size: 1.35em;
-  --doc-h3-size: 1.15em;
-  --doc-h4-size: 1.02em;
+  --doc-h-line-height: 1.25;
+  --doc-h1-size: 1.55em;
+  --doc-h2-size: 1.28em;
+  --doc-h3-size: 1.1em;
+  --doc-h4-size: 1em;
   --doc-h5-size: 1em;
   --doc-h6-size: 1em;
 
@@ -103,26 +121,39 @@ h3,
 h4,
 h5,
 h6 {
+  /* 拉丁字母仍走 Computer Modern；中文字形跳过它，落到 Heiti / 思源黑体。
+     这与 Typora LaTeX 的 CJK heading 规则一致，避免标题变成正文宋体。 */
+  font-family: "New Computer Modern", "Latin Modern Roman", "Heiti SC",
+    "PingFang SC", "Microsoft YaHei", "Source Han Sans SC",
+    "Noto Sans CJK SC", "SimHei", sans-serif;
   line-height: var(--doc-h-line-height);
   color: #000000;
   font-weight: var(--doc-h-weight);
+  text-indent: 0;
+  text-wrap: balance;
 }
 
-/* h1 / h2 居中（`amsart` 的分节标题），h3 以下靠左——这个"上重下轻"的
-   层级差正是 LaTeX 论文的样子。⚠️ **标题底下一条线都不加**：LaTeX 的
-   标题靠字号和空白分隔，不靠下划线（那条线是网页编辑器的习惯）。 */
+/* 文档标题 h1 居中且使用常规字重；分节标题 h2 以下靠左加粗。这个
+   "轻标题、重分节"的层级差正是 LaTeX article 的样子。
+   ⚠️ **标题底下一条线都不加**：LaTeX 的标题靠字号和空白分隔，
+   不靠下划线（那条线是网页编辑器的习惯）。 */
 h1 {
   font-size: var(--doc-h1-size);
+  font-weight: 400;
+  line-height: 1.2;
   text-align: center;
+  margin-bottom: 2.2rem;
 }
 
 h2 {
   font-size: var(--doc-h2-size);
-  text-align: center;
+  text-align: left;
+  margin-bottom: 1rem;
 }
 
 h3 {
   font-size: var(--doc-h3-size);
+  margin-bottom: 0.7rem;
 }
 
 h4 {
@@ -134,31 +165,44 @@ h4 {
 h5 {
   font-size: var(--doc-h5-size);
   font-weight: var(--doc-h-weight);
-  color: var(--fg-muted);
+  color: inherit;
 }
 
 h6 {
   font-size: var(--doc-h6-size);
   font-weight: var(--doc-h-weight);
-  color: var(--fg-muted);
+  color: inherit;
+  font-style: italic;
 }
 
 /* 标题上边距。⚠️ `.ProseMirror` 的由来见 `minimal.css` 文件头——不写它，
    标题上下的空档会被 `editor.css` 那条 0.85em 抹平，而这一套的观感
    恰恰建立在"标题前后松、段落之间紧"这个反差上。 */
 .ProseMirror h1 {
-  margin-top: 2.6em;
+  margin-top: 1.6rem;
 }
 .ProseMirror h2 {
-  margin-top: 2.2em;
+  margin-top: 1.85rem;
 }
 .ProseMirror h3 {
-  margin-top: 1.8em;
+  margin-top: 1.6rem;
 }
 .ProseMirror h4,
 .ProseMirror h5,
 .ProseMirror h6 {
-  margin-top: 1.6em;
+  margin-top: 1.5rem;
+}
+
+/* LaTeX 的版心按 article 11pt 的 `\textwidth` 收紧在这里。正文不像普通网页
+   那样铺满编辑区；标题、代码、表格和公式都一起落进这条版心。 */
+.ProseMirror {
+  width: 100%;
+  max-width: 32em;
+  margin-right: auto;
+  margin-left: auto;
+  padding-top: 5.5rem;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures contextual;
 }
 
 /* ── 段落：首行缩进 + 段间无空档 ─────────────────────────────────────────
@@ -178,8 +222,9 @@ h6 {
  * 一行行大缝——比排不齐更难看。 */
 p {
   margin: 0;
-  text-align: left;
-  text-indent: 1.5em;
+  text-align: justify;
+  text-indent: 1.55em;
+  text-justify: inter-ideograph;
 }
 
 .ProseMirror p + p {
@@ -232,26 +277,25 @@ del {
 code {
   padding: 0.1em 0.3em;
   border-radius: var(--radius-sm);
-  background: #f4f4f4;
+  background: #f7f4ee;
   color: var(--fg);
+  font-family: var(--font-mono);
   font-size: 0.92em;
+  font-variant-ligatures: none;
 }
 
-/* ── 引用：脚注的观感（字小一档、左外侧一条短竖线）───────────────────── */
+/* ── 引用：LaTeX `quote` 环境（只缩进，不加框、不加底色）────────────── */
 
 /* ⚠️ 不用斜体：中文的"斜体"是浏览器硬斜的，读起来只是歪，不是强调。
-   ⚠️ `margin-left: 1.5em` 是**这一套的特例**：LaTeX 的 `quote` 环境本来就
-   在左右两侧各缩进一档，所以这里**故意**不让那条竖线跟正文左缘对齐
-   ——那是 LaTeX 引用"陷在版心里"的样子。（另两套是齐左的。）
-   左右两条外边距还有一个作用：清掉浏览器 UA 那句 `margin: 1em 40px`。 */
+   ⚠️ Typora 当前 LaTeX 主题把 `quote` 的规则线、底色和字号差都关掉了，
+   只保留左右 2.5em 的版心缩进；这比“灰色引用卡片”更接近排印出来的
+   article。GitHub Alert 仍由通用块样式负责，不在这里一并抹平。 */
 blockquote {
-  margin: 1.2em 0 1.2em 1.5em;
-  padding: 0.5em 0 0.5em 1em;
-  /* ⚠️ **两条都别硬编码**（2026-10-16 改）：`#000` 的竖线与 `#3a3a3a` 的字
-     在深色纸面上一个是"看不见的线"、一个是"黑字压深底"——正是 `strong` 那条
-     同一个病灶。竖线改用正文色（浅色下几乎看不出差别），字色跟着正文继承。 */
-  border-left: 2px solid currentColor;
-  font-size: 0.94em;
+  margin: 1rem 2.5em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 1em;
   color: inherit;
 }
 
@@ -263,13 +307,17 @@ blockquote > :first-child {
 
 ul,
 ol {
-  padding-left: 1.6em;
+  padding-left: 2.5em;
 }
 
 /* ⚠️ 用 `--fg-muted` 而不是别处那档 `--fg-faint`：LaTeX 的圆点/序号
    和正文一样黑，这里只压一档，别让它淡成"没画出来"。 */
 li::marker {
   color: var(--fg-muted);
+}
+
+li {
+  margin-bottom: 0.32em;
 }
 
 /* ── 分隔线 ───────────────────────────────────────────────────────────────
@@ -301,34 +349,34 @@ hr {
  * 横向三条线则一条都不省（表头上下、每行之间、末行收尾），所以它并不比
  * 别的主题"看不清"，只是"看得清的方式不同"。
  *
- * ⚠️ 不写 `width: 100%`：宽度归 `prosemirror-tables` 的行内样式管
- * （见 `editor.css` 表格那一段）。 */
+ * ⚠️ `width: auto` 是这里的关键：LaTeX 表格按内容定宽并居中，不铺满版心。
+ * `prosemirror-tables` 可能写入最小列宽；`max-width: 100%` 负责兜住窄窗口。 */
 table {
+  width: auto;
+  max-width: 100%;
+  margin: 1.6rem auto;
   border-collapse: collapse;
+  border-top: 0.08em solid #000000;
+  border-bottom: 0.08em solid #000000;
   font-size: 0.95em;
+  text-indent: 0;
 }
 
 th,
 td {
-  padding: 0.45em 1em;
+  padding: 0.42em 0.75em;
   border: 0;
   text-align: left;
 }
 
 th {
-  border-top: 2px solid #000000;
-  border-bottom: 1px solid #000000;
+  border-bottom: 0.05em solid #000000;
   font-weight: 700;
+  text-align: center;
 }
 
 td {
-  border-bottom: 1px solid #b9b9b9;
-}
-
-/* 表格底部那条收尾的横线（`\hline` 在最后一行之后）。 */
-tbody tr:last-child > td,
-tbody tr:last-child > th {
-  border-bottom: 2px solid #000000;
+  border-bottom: 0;
 }
 
 /* ⚠️ `video` 和 `img` 并列（2026-09-28，图片语法指向视频那颗播放器）：

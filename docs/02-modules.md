@@ -211,7 +211,7 @@
 | `ui/hints.ts` | **功能提示的注册表**（2026-10-06 新建，约 150 行）：用户那天要的是"整理所有提示、看看哪些能加**不再显示**"，外加一条质量要求「**提示要确定**——什么情况下才显示」。所以是一张表：`id` / `类型`（**当场**｜**首次**）/ **一句话写死的触发条件** / 默认 / 文案，外加唯一的判定实现 `该显示吗`（上下文 ＋ 没静音 ＋ 首次型没看过）。⚠️ 展示（`ui/HintBar.tsx`）、静音（`[hints]`）、设置页「提示」三处**读同一张表**。⚠️ **报错类不进表**，「报错不是文案」。⚠️ 文案是函数 `() => t("…")`，别改成模块级 |
 | `ui/commands.ts` | 菜单的**条目表**（逐条整理自用户 2026-09-22 提供的截图）+ **快捷键的唯一真源**（`accel` 字段）。⚠️ 里面**故意没有** `implemented` 标志位。⚠️ **"唯一真源"这条 2026-09-27 之后要加一个限定**：用户改过的那几条存在 `settings.toml` 的 `[keys.overrides]` 里（差量），**有效键位 ＝ 这份表叠上那份差量**——叠的地方在 `App.tsx`（`菜单`），别在别处再叠一遍。⚠️ 「视图」那一栏**分两段**（2026-09-27 用户点名要的那条线：线上面"外壳上画出什么"、线下面"正文那一块怎么呈现"）；**2026-10-04（第 49 项）把 `view.statusBar` 与 `view.menuBar` 从下面那段挪了上来**（它们原来夹在「打字机模式」与「全屏」中间）。⚠️ 往这一栏加条目之前先想清楚它属于哪一组，`tests/bar-close.test.ts` 组三把这一段钉住了。📌 **2026-10-07：799 行**（**离 800 WARN 线只剩 1**，下一批动它之前先看 `docs/07` 第 89 项那份拆分打算）——同日「编辑」栏多了 `edit.pastePlain`（`Ctrl+Shift+V`）与 `edit.select` 那四条（`edit.select` **从一条死的叶子变成子菜单父项**，父项自己**不在任何 handler 表里**、不许被点亮） |
 | `ui/accel.ts` | 快捷键的解析/显示/派发：`parseAccel` · `accelSig` · `eventAccel` · `formatAccel` · `buildAccelIndex` · `isOutsideEditor`，⚠️ 2026-09-27 又加了 **`accelToText`**（录制出来的那一下 → **写回设置**的文本）。⚠️ 判 `e.code` 不判 `e.key`，理由见文件头。⚠️ **`accelToText` 和 `formatAccel` 是两件事，别合并**：后者在 macOS 上要出 `⇧⌘S`（那是**给人看**的），前者要出**哪台机器都读得回来**的 `Ctrl+Shift+S`（它是**存进 `settings.toml`** 的——存成 `⇧⌘S`，换到 Linux 上 `parseAccel` 认不出，这条快捷键会**静默失效**）。⚠️ 三种情况返回 `null`（调用方当"这一下不算数、继续等"）：光按修饰键；空格与加号（`parseAccel` 的词法里没有它们的写法）；**不带修饰键的单个可见字符**——⚠️ 这一条**不能**写成"必须带修饰键"，全仓默认键位里有 `F8`/`F9`/`F11` 三条不带修饰的，那样写会把它们判死 |
-| `ui/nativeMenu.ts` | 把同一份 `MENUS` 翻译成后端要的原生菜单树（macOS 兜底）。⚠️ **不碰 `muda` 的语法**——那是纯 Rust 那边的事 |
+| `ui/nativeMenu.ts` | 把同一份 `MENUS` 翻译成后端要的原生菜单树（macOS/Windows/Linux 优先，自绘菜单兜底）。⚠️ **不碰 `muda` 的语法**——那是纯 Rust 那边的事 |
 | `ui/settings/SettingsDialog.tsx` | 偏好设置的**壳**：左栏（搜索 + 十一页 + 「完成」）+ 右栏内容。⚠️ 搜索是**就地过滤**（十页叠着渲染，每行自己筛），不是跳转。左栏十页的顺序在 `ORDER`，图标在 `SECTIONS`，名字在组件体里的 `页名` 表（三处都在同一个文件里，加一页漏了 `ORDER` 的症状是"这一页点不到"，不报错） |
 | `ui/settings/primitives.tsx` | 偏好设置的原语：`SettingRow` · `SettingsGroup` · `Select` · `Toggle` · `Radio` · `TextInput` · `NumberInput` · `Range` · `ActionButton` · `HelpDot` · `Value` · `Note` · `SearchField` · `QueryProvider` / `useQuery` / `hits()`。⚠️ 过滤只有一处判据：`SettingRow`（与 `Note`）拿 `query` 调 `hits()`，比不中返回 `null` 不进 DOM，没有第二份索引；⚠️ 图标自 2026-09-24 起全部来自 `ui/Icon.tsx`，原先这里手写的那几枚已删 ⚠️ `TextInput` 2026-10-10 起认 `secret`：`true` 就画成密码框（**只管显示**——插件设置文件是明文的） |
 | `ui/settings/panes/` | **十一页**内容，一页一个文件（2026-09-24 从单文件 `panes.tsx` 拆出）：⚠️ 2026-09-27 现数：多出「**拓展**」一页（`ExtensionsPane.tsx`，见下），所以「十页」那句要改成十一页（`docs/09` §2.2 同批改了）。列出的十个是：`FilesPane` · `EditorPane` · `ImagePane` · `MarkdownPane` · `ExportPane` · `AppearancePane` · `DocThemePane` · `ShortcutsPane` · **`FocusPane`** · `GeneralPane`。⚠️ `FocusPane`（强制专注）是**核心功能的设置页，不是插件的**（用户 2026-09-26 原话「注意啊，这不是插件。这是核心功能」），顺序上插在「快捷键」之后（2026-09-27 又多了「拓展」一页，排在它后面）——通用那页是收尾的"别的都归不到一起"，而这一页是一整块有自己的账本的**有状态**功能，塞进收尾里不对。⚠️ 这一页**不显示会话状态**（余额、已响几次），那是每秒都在变的内存态，出口是状态栏那一格 `ui/FocusMeter.tsx`；设置页显示它会让整页每秒重画。`props.ts` 是十页共用的入参 `PaneProps` 与 `paneWriter`（`PageKey` 是手写的七张分页表名，不是 `keyof Settings`——理由见文件头）。⚠️ `STYLES` 表在 `AppearancePane.tsx`，写成 `Record<UiStyle, …>`，加风格时**编译期**就漏不掉。⚠️ 「保存 & 恢复」那一组下面那条**如实告知**的 `stg-note` 在 `FilesPane.tsx`：2026-09-25 起它**只标着「恢复未保存的草稿」与「清除历史文件记录」两条**（自动保存本身那天接的线，见 `docs/07` 第 20 项）——**别整段删、也别照抄成"三档全没接"**。⚠️ 那条 `Note` 必须留在**组内容区里**：`.stg-note` 落在组里才跨两栏对齐，摆到组外会变成整页宽、贴着最左边，看着像下一组的标题 |
@@ -225,7 +225,7 @@
 | `ui/useCursorSnapshot.ts` | **选区快照 → 后端镜像**（103 行，第 14 项；2026-10-04 加、2026-10-07 从 `ui/EditorPane.tsx` 拆出）：编辑器每报一份选区，压一道 **250ms** 时间窗再 `api.doc.cursor(...)` 推给插件。⚠️ 编辑器那一侧的键是"快照变没变"、这里的键是"多久没推过了"——**只挪光标、不改字**不会触发 `sync`，没有这一条插件读到的选区会一直停在敲键盘之前。⚠️ 定时器与 `sync` 那条**分开**（合用一个会让"改一个字"吞掉"刚挪了光标"那次推送）；**推失败只吞掉**不弹提示条（旁路，下一笔事务自愈） |
 | `ui/TableToolbar.tsx` | **当前表格上方的浮动快捷栏**（2026-10-23 新建）：调整行列数、左 / 中 / 右对齐、删除表格。只在所见即所得且光标位于表格时出现，按当前表格矩形定位；点击按钮不抢编辑器选区。 |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件 / 大纲）。文件页默认是 **扁平列表**，按当前口径递归列出工作区内的 Markdown，并保留列表/树形切换；大纲页随正文选区标记当前章节。列表按 24 个一批向宿主读取 `WorkspaceExcerpt`，显示“去后缀标题 ＋ 淡色后缀 ＋ 首标题 ＋ 下一段”；读取失败静默回落到目录。树形页用 `nota-tree-folder[-open]` / `nota-tree-file` 三个可被主题覆盖的 SVG 图标。底栏「＋」在已有工作区时插入 `Untitled.md` 内联输入行，确认后创建真实文件并刷新树。 |
-| `ui/SidebarFiles.tsx` | **侧栏文件页的扁平列表**（2026-10-23 从 `Sidebar.tsx` 拆出）：递归扫描工作区、24 个一批加载 `WorkspaceExcerpt`、新文件输入行。页签、大纲、底栏和树形视图仍在 `Sidebar.tsx`。 |
+| `ui/SidebarFiles.tsx` | **侧栏文件页的扁平列表**（2026-10-23 从 `Sidebar.tsx` 拆出）：递归扫描工作区、24 个一批加载 `WorkspaceExcerpt`、新文件输入行，以及文件名/摘要搜索框。右键菜单在 `Sidebar.tsx`，负责新建文件/文件夹、搜索、列表/树形切换和文件路径动作。 |
 | `ui/DeferredUi.tsx` | 首屏按需加载的大型界面：设置对话框、右侧拓展栏和文件选择器。只有真正打开时才请求对应 chunk |
 | `ui/PluginDock.tsx` | 右侧插件栏（⚠️ 2026-10-04 起页签有 ←→/Home/End，`useTablistKeys`，第 50 项）：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
 | `ui/pluginText.ts` | **插件在界面上那几句人话**（2026-09-27 新建，136 行）：来源 / 签名 / 语言 / 能力名 / 位置名。⚠️ 起因是同一句「自装 · 已验证」要在**两个界面**上出现（右侧插件栏 ＋ 设置里的「拓展」页），谁抄第二份，往后就是"改一处、另一处不动"，而那种不一致**不报错**。⚠️ **只有文案**（没有 JSX、没有状态、不碰 `api`）；⚠️ **全是函数不是模块级常量表**——模块级求值时 `t` 还没订阅，且 `tools/i18n-check.sh` 只数为字面量写出来的 `t(…)` |
@@ -1898,7 +1898,7 @@ pub struct TreeOptions {
 ### `nota_native_menu_apply(app, nodes: Vec<NativeMenuNode>) -> Result<bool, String>`
 
 返回 `bool` 而不是 `()`：**前端要靠这个返回值决定要不要隐藏自绘菜单栏**。
-`ok == false` 表示"没挂上"（非 macOS，或者 Tauri 那边报错），
+`ok == false` 表示"没挂上"（Tauri 或窗口系统报错），
 前端就继续用自绘的那套——**而不是变成"一个菜单都没有"**。
 
 ---
@@ -2506,8 +2506,8 @@ Lua 那一侧的完整语义（四档 `state`、`need` 与 `need_found`）在 `d
 
 ## `src-tauri/src/native_menu.rs`（494 行）
 
-**原生菜单（macOS 兜底）。** 用户 2026-09-23 拍板「两套都要：自绘为主，
-加原生菜单兜底」。形状与自绘菜单同源（同一份 `MENUS`），见 `docs/04` §2.1c。
+**原生菜单（桌面平台优先）。** macOS 使用屏幕顶端菜单，Windows/Linux 使用窗口系统菜单；
+自绘菜单保留为失败兜底。形状与自绘菜单同源（同一份 `MENUS`），见 `docs/04` §2.1c。
 
 ### ⚠️ 用 `cfg!` 不用 `#[cfg]`
 
@@ -6228,7 +6228,7 @@ Nota 的 DOM 契约与外部编辑器不同，不应假装相同。
 
 ```text
 commands.ts 的 accel ──> ui/accel.ts::buildAccelIndex ──> App.tsx 查表派发
-                     └──> ui/nativeMenu.ts ──────────> 原生菜单（macOS）
+                     └──> ui/nativeMenu.ts ──────────> 原生菜单（桌面平台）
                      └──> ui/MenuPopup.tsx::formatAccel ──> 菜单上显示的那几个字
 ```
 

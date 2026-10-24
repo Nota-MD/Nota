@@ -167,7 +167,7 @@ export const 图标组: readonly { 图标: string; 语言: readonly string[] }[]
   /* ── 文档 / 图表 ───────────────────────────────────────────────────── */
   { 图标: "markdown", 语言: ["markdown", "md"] },
   { 图标: "asciidoc", 语言: ["asciidoc", "adoc"] },
-  { 图标: "tex", 语言: ["latex", "tex"] },
+  { 图标: "tex", 语言: ["math", "latex", "tex"] },
   { 图标: "text", 语言: ["plaintext", "plain", "text", "txt"] },
   { 图标: "mermaid", 语言: ["mermaid"] },
   { 图标: "plantuml", 语言: ["plantuml", "plant-uml"] },

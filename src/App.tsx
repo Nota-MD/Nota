@@ -271,6 +271,7 @@ export default function App() {
     openPath,
     newDoc,
     newDocWithText,
+    newFolder,
     接上现有,
     openViaDialog,
     openFolder,
@@ -843,6 +844,7 @@ export default function App() {
             // 空态里那颗按钮走的是「文件 → 打开文件夹…」那条路，同一个函数。
             onOpenFolder={() => void openFolder()}
             onNewFile={(name) => void newDoc(name)}
+            onNewFolder={() => void newFolder()}
             onRefresh={() => void refreshTree()}
             // 预览期间锁掉（`inert`）。理由见 `预览中` 那一段。
             inert={预览中}

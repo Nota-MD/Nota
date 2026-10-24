@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, type TreeNode, type WorkspaceExcerpt } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { Icon } from "@/ui/Icon";
 
 interface FlatFile {
   name: string;
@@ -46,6 +47,8 @@ export function FileList(props: {
   /** 页面现在真的可见吗。折叠侧栏或切到大纲时，不要在后台递归扫描工作区。 */
   active: boolean;
   creating: boolean;
+  searching: boolean;
+  onCloseSearch: () => void;
   onCancelCreate: () => void;
   onCreateFile: (name: string) => void;
 }) {
@@ -54,9 +57,20 @@ export function FileList(props: {
   const [excerpts, setExcerpts] = useState<Record<string, WorkspaceExcerpt>>({});
   const [loading, setLoading] = useState(false);
   const [partial, setPartial] = useState(false);
+  const [query, setQuery] = useState("");
   const loadDir = useRef(props.loadDir);
   loadDir.current = props.loadDir;
   const 请求过摘要 = useRef(new Set<string>());
+  const 搜索框 = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (props.searching) {
+      搜索框.current?.focus();
+      搜索框.current?.select();
+    } else {
+      setQuery("");
+    }
+  }, [props.searching]);
 
   useEffect(() => {
     setExcerpts({});
@@ -160,9 +174,41 @@ export function FileList(props: {
   const workspaceName =
     props.workspace.replaceAll("\\", "/").replace(/\/+$/, "").split("/").pop() ||
     props.workspace;
+  const 查询 = query.trim().toLocaleLowerCase();
+  const visibleFiles = 查询
+    ? files.filter((file) => {
+        const excerpt = excerpts[file.path];
+        return [file.path, excerpt?.title, excerpt?.detail]
+          .filter(Boolean)
+          .some((text) => String(text).toLocaleLowerCase().includes(查询));
+      })
+    : files;
 
   return (
     <>
+      {props.searching && (
+        <div className="file-list-search">
+          <Icon name="folio-edit-find-symbolic" size={15} />
+          <input
+            ref={搜索框}
+            value={query}
+            placeholder={t("Search files…")}
+            aria-label={t("Search files")}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") props.onCloseSearch();
+            }}
+          />
+          <button
+            type="button"
+            title={t("Close")}
+            aria-label={t("Close")}
+            onClick={props.onCloseSearch}
+          >
+            <Icon name="folio-close-symbolic" size={14} />
+          </button>
+        </div>
+      )}
       <ul className="file-list" aria-busy={loading}>
         {props.creating && (
           <NewFileRow
@@ -171,7 +217,7 @@ export function FileList(props: {
             onSubmit={props.onCreateFile}
           />
         )}
-        {files.map((file) => {
+        {visibleFiles.map((file) => {
           const absolute = `${props.workspace}/${file.path}`;
           const isActive = active !== null && active === normalize(absolute);
           const excerpt = excerpts[file.path];
@@ -182,6 +228,7 @@ export function FileList(props: {
                 className="file-list-btn"
                 aria-current={isActive ? "page" : undefined}
                 title={absolute}
+                data-absolute-path={absolute}
                 onClick={() => props.onOpenFile(absolute)}
               >
                 <span className="file-list-title">
@@ -199,6 +246,9 @@ export function FileList(props: {
       </ul>
       {!files.length && !loading && !props.creating && (
         <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>
+      )}
+      {files.length > 0 && !visibleFiles.length && (
+        <p className="sidebar-empty">{t("No matching files.")}</p>
       )}
       {partial && <p className="sidebar-list-warning">{t("Some folders could not be read.")}</p>}
     </>

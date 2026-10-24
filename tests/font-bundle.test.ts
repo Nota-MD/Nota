@@ -1,5 +1,5 @@
 /**
- * 外部 CDE 主题包的点阵字体：文件、CSS 声明与同目录许可证必须同时存在。
+ * 外部主题包的字体：文件、CSS 声明与同目录许可证必须同时存在。
  *
  * 少字体文件 ⇒ CDE 静默退回系统宋体；少 `@font-face` ⇒ 文件在包里但没人用；
  * 少许可资源 ⇒ 分发不合规。三件事任何一件漏掉，界面都不一定报错。
@@ -136,6 +136,35 @@ console.log("\n【外部 CDE 主题的文泉驿点阵宋】");
   for (const 名 of ["Adwaita Sans", "Adwaita Mono", "Ubuntu Mono", "New Computer Modern"]) {
     真(!鸣谢.includes(名), `关于页不应列出主题字体 ${名}`);
   }
+});
+
+console.log("\n【LaTeX 主题的 CM Unicode 等宽字体】");
+
+测("cmuntt.ttf 原版字体与 OFL 许可同时存在且摘要匹配", () => {
+  const 字体路径 = `${根}/src/styles/themes/latex-fonts/cmunt.ttf`;
+  const 二进制 = readFileSync(字体路径);
+  真(二进制.length > 500_000, `cmunt.ttf 体积异常：${二进制.length}`);
+  真(
+    [0x00010000, 0x74727565].includes(二进制.readUInt32BE(0)),
+    "cmunt.ttf 不是可识别的 TrueType 字体",
+  );
+  真(
+    createHash("sha256").update(二进制).digest("hex") ===
+      "408c037330446e5f3225add1fcca336e2072c459deb39f5318390004a780de82",
+    "cmunt.ttf 与 THIRD-PARTY.md 登记的 CM Unicode 0.7.0 文件不一致",
+  );
+  const 许可 = 读("src/styles/themes/latex-fonts/OFL.txt");
+  含(许可, "SIL OPEN FONT LICENSE", "CM Unicode 字体许可");
+  含(许可, "Andrey V. Panov", "CM Unicode 版权署名");
+});
+
+测("LaTeX 主题通过 @font-face 使用包内 cmuntt，且许可证不随核心包分发", () => {
+  const css = 读("src/styles/themes/latex.css");
+  含(css, 'font-family: "Nota CMU Typewriter"', "@font-face 逻辑家族");
+  含(css, 'url("./latex-fonts/cmunt.ttf")', "主题内字体地址");
+  含(css, '--font-mono: "Nota CMU Typewriter"', "代码块等宽字体栈");
+  const tauri = 读("src-tauri/tauri.conf.json");
+  真(!tauri.includes("latex-fonts"), "LaTeX 字体仍被核心安装包资源列表收录");
 });
 
 console.log(`\n通过 ${过} 条，失败 ${败} 条`);

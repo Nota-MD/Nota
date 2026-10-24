@@ -229,6 +229,27 @@ body.resizing-col {
   margin: 0 0 calc(var(--spacing) * 0.75);
 }
 
+.sidebar-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 220px;
+  color: var(--fg-muted);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.sidebar-empty-state p {
+  margin: 0;
+  font-size: 0.95em;
+}
+
+.sidebar:hover .sidebar-empty-state,
+.sidebar:focus-within .sidebar-empty-state {
+  opacity: 1;
+}
+
 /* ── 底栏 ────────────────────────────────────────────────────────────── */
 
 .sidebar-footer {
@@ -241,6 +262,39 @@ body.resizing-col {
   padding: 2px 4px;
   border-top: 1px solid var(--border);
   background: var(--sidebar-surface);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.sidebar-footer-empty {
+  grid-template-columns: minmax(0, 1fr) 30px 30px;
+}
+
+.sidebar:hover .sidebar-footer,
+.sidebar:focus-within .sidebar-footer,
+.sidebar[data-controls-open="true"] .sidebar-footer {
+  opacity: 1;
+}
+
+.sidebar-footer-open {
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 0.86em;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.sidebar-footer-open:hover,
+.sidebar-footer-open:focus-visible {
+  color: var(--fg);
+  background: var(--bg-hover);
 }
 
 .sidebar-footer-btn {
@@ -351,6 +405,45 @@ body.resizing-col {
 }
 
 /* ── 扁平文件列表 ────────────────────────────────────────────────────── */
+
+.file-list-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar-surface);
+  color: var(--fg-muted);
+}
+
+.file-list-search input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 2px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+}
+
+.file-list-search button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
 
 .file-list {
   list-style: none;
@@ -468,6 +561,58 @@ body.resizing-col {
   margin: 6px 8px 0;
   color: var(--fg-faint);
   font-size: 0.82em;
+}
+
+/* 文件页的右键菜单。位置由 React 按指针坐标写进行内 left/top；这里只管皮。 */
+.sidebar-context-menu {
+  position: fixed;
+  z-index: var(--z-popup);
+  width: 220px;
+  padding: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+}
+
+.sidebar-context-menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 31px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-context-menu button:hover,
+.sidebar-context-menu button:focus-visible {
+  background: var(--bg-hover);
+}
+
+.sidebar-context-menu button:disabled {
+  color: var(--fg-faint);
+  cursor: default;
+}
+
+.sidebar-context-menu button:disabled:hover {
+  background: transparent;
+}
+
+.sidebar-context-sep {
+  height: 1px;
+  margin: 5px 0;
+  background: var(--border);
+}
+
+.sidebar-context-check {
+  width: 18px;
+  flex: none;
+  color: var(--fg);
 }
 
 /* ── 文件树 ───────────────────────────────────────────────────────────── */

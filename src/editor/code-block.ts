@@ -81,6 +81,7 @@ const 全量表到了 = import("refractor/all").then(() => {
   全量表已到 = true;
   // 下拉那份名字算过一次就缓存了（`sortedLanguages`），全量表到了要重算。
   sortedLanguages = null;
+  searchableLanguages = null;
 });
 
 /**
@@ -131,6 +132,23 @@ function allLanguages(): string[] {
       .sort((a, b) => a.localeCompare(b));
   }
   return sortedLanguages;
+}
+
+let searchableLanguages: string[] | null = null;
+
+/** 输入查询时使用的完整 refractor 语言表；默认下拉仍只预摆带图标的语言。 */
+function searchLanguages(): string[] {
+  if (searchableLanguages === null) {
+    searchableLanguages = [
+      ...new Set([
+        ...refractor.listLanguages().filter((名) => 名.trim() !== ""),
+        "math",
+        "latex",
+        "tex",
+      ]),
+    ].sort((a, b) => a.localeCompare(b));
+  }
+  return searchableLanguages;
 }
 
 /**
@@ -339,6 +357,7 @@ export const codeBlockView = $view(
 
       const 语言选择器 = 创建语言选择器({
         全部语言: allLanguages,
+        搜索语言: searchLanguages,
         // ⚠️ 搜索要连**别名**一起认（2026-10-16）：下拉一行一个语言族，
         // 而 `armasm` / `md` / `plain` 这些别名也得能筛出那一行。见 `代表语言`。
         别名: 同族语言,
@@ -384,48 +403,7 @@ export const codeBlockView = $view(
         },
         撤销: () => 走命令(undo),
         重做: () => 走命令(redo),
-        退出到正文: () => 拆掉这一块(),
       });
-
-      /**
-       * **把这一块代码拆成正文段落**（光标在代码块**最开头**按退格时走这条路）。
-       *
-       * 用户朋友报的原话：「我认为在代码块一开始按下 BACKSPACE 应该删掉代码块」
-       * ——在此之前那一颗键**什么都不做**（CM 的光标已经在 0，没有字可删）。
-       *
-       * ⚠️ **拆成段落、不是把内容扔掉**：要的是"去掉围栏"，不是"把这一块连字一起
-       * 删掉"。所以一行一段（段落装不下换行），一个字都不丢；想连内容一起删，
-       * 那是 `Ctrl+A` ＋ 删除的事。
-       *
-       * ⚠️ 一行一段而不是"合成一段"：代码块里换行的位置是有意义的（缩进、分支），
-       * 合成一段等于把所有换行吃掉。⚠️ 空代码块给一条空段落（效果就是"删掉这一块"）。
-       *
-       * ⚠️ **一笔事务**（撤销一次就回到代码块），而且光标落在**第一个段落开头**
-       * ——用户接着打字就是在正文里接着写，正是他按这一颗键的意图。
-       */
-      function 拆掉这一块(): void {
-        const pos = getPos();
-        if (typeof pos !== "number") return;
-        const 节点 = view.state.doc.nodeAt(pos);
-        if (!节点) return;
-        const 段落类型 = view.state.schema.nodes.paragraph;
-        if (!段落类型) return;
-        const 行们 = 节点.textContent.split("\n");
-        const 段们 = (行们.length > 0 ? 行们 : [""]).map((行) =>
-          段落类型.create(null, 行 === "" ? null : view.state.schema.text(行)),
-        );
-        const 事务 = view.state.tr.replaceWith(pos, pos + 节点.nodeSize, 段们);
-        事务.setSelection(TextSelection.create(事务.doc, pos + 1));
-        // ⚠️ `同步中` 那把锁要**先按住**：`replaceWith` 会把 CM 那一层整个换掉
-        //（NodeView 被销毁、`文本变化` 在销毁前后还可能响一次），不按住的话
-        // 那一笔回声会再推一次文本、把刚拆出来的段落又改一遍。
-        同步中 = true;
-        try {
-          view.dispatch(事务);
-        } finally {
-          同步中 = false;
-        }
-      }
 
       /**
        * 把 CodeMirror 里的改动**推回文档**（一笔真事务）。

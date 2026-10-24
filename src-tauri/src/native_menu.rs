@@ -1,11 +1,10 @@
-//! 原生菜单——**macOS 的兜底**。
+//! 原生菜单——macOS 顶端菜单栏与桌面平台的原生窗口菜单。
 //!
 //! # 为什么要有它
 //!
-//! 自绘菜单（`src/ui/MenuBar.tsx`）在 Windows / Linux 上是对的：菜单就长在窗口里。
-//! **macOS 不是**。那边菜单栏在屏幕顶端、属于应用而不是窗口，窗口里再画一条
-//! 是错的——macOS 的菜单栏约定属于应用本身，任何应用都该挂系统菜单栏。
-//! 自绘那条让位。
+//! macOS 的菜单栏在屏幕顶端、属于应用而不是窗口；Windows/Linux 也可以把
+//! 菜单交给窗口管理器/GTK 绘制。三端都优先尝试原生菜单，失败时自绘菜单
+//! （`src/ui/MenuBar.tsx`）继续兜底。
 //!
 //! # 菜单内容是**前端推过来的**
 //!
@@ -21,18 +20,15 @@
 //! 由前端那张 `menuHandlers` 去跑。于是"点自绘菜单"和"点原生菜单"
 //! **走的是同一条路**，不会出现两套实现各自分叉。
 //!
-//! # 本机（Linux）验不了，所以刻意让它"编译得到、跑不到"
+//! # 跨平台与失败回退
 //!
 //! 判定用的是 `cfg!`（运行期常量）而不是 `#[cfg]`（条件编译）：这样**整个建菜单
 //! 的代码在所有平台上都参与类型检查**，不至于只有 macOS 打包时才发现 API 写错。
-//! 而 `apply` 在非 macOS 上一行就返回 `Ok(false)`，不会去碰 GTK。
-//!
 //! 前端拿 `Ok(false)` 的意思是"没有原生菜单，请继续显示自绘菜单栏"——
-//! 于是**建不出来也只是退回自绘**，不会变成"mac 上一条菜单都没有"。
+//! 于是**建不出来也只是退回自绘**，不会变成"一条菜单都没有"。
 //!
-//! ⚠️ 诚实记一笔：这个模块**只在 Linux 上过了编译和单元测试**，
-//! 没有在真的 macOS 上跑过（本机没有，容器里也没有）。所以每处失败路径
-//! 都刻意退化成"少一条快捷键"或"退回自绘菜单"，不留崩溃点。
+//! 2026-10-24 已在 Linux/GTK 窗口实测菜单能挂上、能展开和派发事件；
+//! macOS 与 Windows 走同一套 Tauri API，仍需各自平台复核。
 
 use serde::Deserialize;
 use tauri::menu::{
@@ -72,17 +68,21 @@ fn yes() -> bool {
     true
 }
 
-/// 这套原生菜单支不支持。目前只有 macOS。
+/// 这套原生菜单支不支持。桌面平台均启用；失败了前端会自动退回自绘菜单。
 ///
 /// 前端拿它来定"要不要把自绘菜单栏藏起来"——`apply` 的返回值更好用，
 /// 见 `commands/menu.rs`。
 pub fn available() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(any(
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "linux"
+    ))
 }
 
 /// 建菜单并挂上去。返回"挂上了没有"。
 ///
-/// 非 macOS 直接 `Ok(false)`；建失败返回 `Err`（前端据此继续用自绘菜单）。
+/// 桌面平台都尝试挂载；建失败返回 `Err`（前端据此继续用自绘菜单）。
 pub fn apply<R: Runtime>(app: &AppHandle<R>, nodes: &[MenuNode]) -> Result<bool, String> {
     if !available() {
         return Ok(false);
@@ -100,28 +100,31 @@ fn build<R: Runtime>(app: &AppHandle<R>, nodes: &[MenuNode]) -> Result<Menu<R>, 
     // ── ① macOS 的第一栏必须是"应用菜单" ──────────────────────────────
     // 关于 / 服务 / 隐藏 / 退出标准四段。这几项**不用**前端推——
     // 它们是操作系统规定的角色，不是这个应用的功能，抄进 `commands.ts`
-    // 反而会让人以为"少了一项就是没实现"。
-    let about = PredefinedMenuItem::about(app, Some("关于 Nota"), None).map_err(estr)?;
-    let services = PredefinedMenuItem::services(app, None).map_err(estr)?;
-    let hide = PredefinedMenuItem::hide(app, None).map_err(estr)?;
-    let hide_others = PredefinedMenuItem::hide_others(app, None).map_err(estr)?;
-    let show_all = PredefinedMenuItem::show_all(app, None).map_err(estr)?;
-    let quit = PredefinedMenuItem::quit(app, None).map_err(estr)?;
-    let sep1 = PredefinedMenuItem::separator(app).map_err(estr)?;
-    let sep2 = PredefinedMenuItem::separator(app).map_err(estr)?;
+    // 反而会让人以为"少了一项就是没实现"。Windows/Linux 没有这条约定，
+    // 所以只给 macOS 插。
+    if cfg!(target_os = "macos") {
+        let about = PredefinedMenuItem::about(app, Some("关于 Nota"), None).map_err(estr)?;
+        let services = PredefinedMenuItem::services(app, None).map_err(estr)?;
+        let hide = PredefinedMenuItem::hide(app, None).map_err(estr)?;
+        let hide_others = PredefinedMenuItem::hide_others(app, None).map_err(estr)?;
+        let show_all = PredefinedMenuItem::show_all(app, None).map_err(estr)?;
+        let quit = PredefinedMenuItem::quit(app, None).map_err(estr)?;
+        let sep1 = PredefinedMenuItem::separator(app).map_err(estr)?;
+        let sep2 = PredefinedMenuItem::separator(app).map_err(estr)?;
 
-    let app_menu = SubmenuBuilder::new(app, "Nota")
-        .item(&about)
-        .item(&sep1)
-        .item(&services)
-        .item(&sep2)
-        .item(&hide)
-        .item(&hide_others)
-        .item(&show_all)
-        .item(&quit)
-        .build()
-        .map_err(estr)?;
-    items.push(Box::new(app_menu));
+        let app_menu = SubmenuBuilder::new(app, "Nota")
+            .item(&about)
+            .item(&sep1)
+            .item(&services)
+            .item(&sep2)
+            .item(&hide)
+            .item(&hide_others)
+            .item(&show_all)
+            .item(&quit)
+            .build()
+            .map_err(estr)?;
+        items.push(Box::new(app_menu));
+    }
 
     // ── ② 前端推来的那几栏 ────────────────────────────────────────────
     items.extend(build_nodes(app, nodes)?);
@@ -199,6 +202,13 @@ fn build_leaf<R: Runtime>(
 /// 顺带的好处：灰着的项本来就不该宣传一个按下去没反应的键位。
 fn leaf_accel(node: &MenuNode) -> Option<String> {
     if !node.enabled {
+        return None;
+    }
+    // GTK/Tauri currently creates the menu without an accelerator group, so
+    // attaching accelerators only yields "no accelerator installed" warnings
+    // and does not make them work. Linux shortcuts are already handled by the
+    // frontend keydown dispatcher.
+    if cfg!(target_os = "linux") {
         return None;
     }
     let raw = node.accel.as_deref()?;
@@ -431,6 +441,11 @@ mod tests {
     }
 
     #[test]
+    fn 桌面平台优先尝试原生菜单() {
+        assert!(available());
+    }
+
+    #[test]
     fn 手抄的表和_commands_ts_一样多() {
         // 只挡住"键位从 50 条涨到 60 条、测试表没跟"这一种漂移。
         //
@@ -482,7 +497,12 @@ mod tests {
         // ⚠️⚠️ 这条是**功能性的**，不是洁癖：macOS 上禁用的菜单项照样会
         // 吃掉自己的键位，于是灰着的 ⌘C 会把复制粘贴弄坏。
         assert_eq!(leaf_accel(&node(false)), None);
-        assert_eq!(leaf_accel(&node(true)).as_deref(), Some("CmdOrCtrl+C"));
+        if cfg!(target_os = "linux") {
+            // Linux/GTK 没有 accelerator group，显示层快捷键仍由前端处理。
+            assert_eq!(leaf_accel(&node(true)), None);
+        } else {
+            assert_eq!(leaf_accel(&node(true)).as_deref(), Some("CmdOrCtrl+C"));
+        }
     }
 
     #[test]

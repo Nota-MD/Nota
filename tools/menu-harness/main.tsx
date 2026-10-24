@@ -901,6 +901,7 @@ function Harness() {
              onNewFile={() => {
                新建文档次数++;
              }}
+             onNewFolder={() => console.log("new-folder")}
              onRefresh={() => console.log("refresh-tree")}
            />
         </div>

@@ -435,7 +435,25 @@ TTF **无损转成**的 WOFF2 容器；两种容器的字形、cmap 与位图表
 GPL-2.0＋字体嵌入例外分发，不改变 Nota 源码许可证；两份许可正文不得合并。
 ⚠️ 外置主题包必须随字体保留同目录的版权、修改说明与 GPL 全文。
 
-## 10. 安装包内置的 Adwaita 字体（SIL OFL 1.1）
+## 10. LaTeX 主题的 CM Unicode 等宽字体（SIL OFL 1.1）
+
+| 项 | 说明 |
+|---|---|
+| 字体包 | [Computer Modern Unicode Fonts 0.7.0](https://sourceforge.net/projects/cm-unicode/) |
+| 字体文件 | `cmuntt.ttf`（family：`CMU Typewriter Text`） |
+| 版权 | Copyright (C) Authors of original metafont fonts；Copyright (C) 2003–2009, Andrey V. Panov |
+| 许可 | **SIL Open Font License 1.1** |
+| 源文件 SHA-256 | `408c037330446e5f3225add1fcca336e2072c459deb39f5318390004a780de82` |
+| 字体与许可位置 | `src/styles/themes/latex-fonts/cmunt.ttf` ＋ 同目录 [`OFL.txt`](src/styles/themes/latex-fonts/OFL.txt) |
+| 用途 | LaTeX 文档主题的代码块、行内代码及等宽预览；通过主题自身 `@font-face` 加载 |
+| 打包边界 | 字体不进入 Adwaita 内置主题或安装包；外置 LaTeX 主题包必须同时携带字体与 OFL 正文 |
+
+⚠️ **根 `LICENSE` 仍然只有 BSD-2-Clause**。字体是独立数据组件，按 SIL OFL
+1.1 分发，不改变 Nota 源码许可证。OFL 中的保留字体名称
+“Computer Modern Unicode fonts” 不用于 Nota 的 `@font-face` 别名
+（Nota 使用 `Nota CMU Typewriter`），字体原文件未做修改。
+
+## 11. 安装包内置的 Adwaita 字体（SIL OFL 1.1）
 
 Nota 安装包只随附 Adwaita 界面风格与 Adwaita 文档主题（浅色、深色）。该主题族
 包含：

@@ -566,6 +566,9 @@ export interface UpdateSettings {
   check_on_startup: boolean;
   /** 发现新版本时显示可操作通知。只在启动检查开启时由界面允许修改。 */
   notify_when_available: boolean;
-  /** 全部应用内通知的位置。 */
+  /**
+   * 全部应用内通知的位置。界面入口在「通用」页；字段沿用 `[updates]`
+   * 是为了兼容已有设置文件。
+   */
   notification_position: NotificationPosition;
 }

@@ -57,7 +57,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { TreeNode } from "@/bridge/ipc";
+import { api, type TreeNode } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 // ⚠️ 2026-09-27 起在 `editor/headings.ts`（原来挂在 `ui/outline.ts`）：
@@ -127,6 +127,8 @@ interface Props {
   onOpenFolder: () => void;
   /** 底栏「＋」：新建一份文档。 */
   onNewFile: (workspaceFileName?: string) => void;
+  /** 右键菜单：在当前工作区新建文件夹。 */
+  onNewFolder: () => void;
   /** 底栏更多菜单：重新读取当前工作区。 */
   onRefresh: () => void;
   /**
@@ -173,6 +175,7 @@ export function Sidebar({
   口径键,
   onOpenFolder,
   onNewFile,
+  onNewFolder,
   onRefresh,
   inert,
   onResize,
@@ -183,6 +186,12 @@ export function Sidebar({
   const outline = useMemo(() => extractOutline(docText, strict), [docText, strict]);
   const [fileView, setFileView] = useState<"list" | "tree">("list");
   const [creatingFile, setCreatingFile] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    path: string | null;
+  } | null>(null);
   const [footerMenu, setFooterMenu] = useState(false);
   const footer = useRef<HTMLDivElement>(null);
   const workspaceName = useMemo(() => {
@@ -221,11 +230,26 @@ export function Sidebar({
     };
   }, [footerMenu]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const 关闭 = () => setContextMenu(null);
+    const 按键 = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setContextMenu(null);
+    };
+    document.addEventListener("pointerdown", 关闭);
+    document.addEventListener("keydown", 按键);
+    return () => {
+      document.removeEventListener("pointerdown", 关闭);
+      document.removeEventListener("keydown", 按键);
+    };
+  }, [contextMenu]);
+
   return (
     <aside
       // ⚠️ 折叠**不卸载**，只加类（宽度动画到 0）——见 `折叠` 那个 prop 的注释。
       className={折叠 ? "sidebar sidebar-collapsed" : "sidebar"}
       inert={inert || 折叠 || undefined}
+      data-controls-open={footerMenu || contextMenu ? "true" : undefined}
     >
       {/* ⚠️ 页签与外层的 `role="tablist"` 之间**不能夹别的按钮**：tablist 的
           子元素按规矩只能是 tab，把 × 塞进去会让读屏把"关闭"念成一个页签。
@@ -248,7 +272,24 @@ export function Sidebar({
       </div>
 
       <div className="sidebar-body">
-        <section className="sidebar-pane" role="tabpanel" hidden={tab !== "tree"}>
+        <section
+          className="sidebar-pane"
+          role="tabpanel"
+          hidden={tab !== "tree"}
+          onContextMenu={(e) => {
+            if (!workspace) return;
+            e.preventDefault();
+            const target = e.target as Element;
+            const 行 = target.closest<HTMLElement>("[data-absolute-path]");
+            const width = 220;
+            const height = 270;
+            setContextMenu({
+              x: Math.min(e.clientX, window.innerWidth - width - 8),
+              y: Math.min(e.clientY, window.innerHeight - height - 8),
+              path: 行?.dataset.absolutePath ?? activePath ?? null,
+            });
+          }}
+        >
           {workspace ? (
             fileView === "list" ? (
               <FileList
@@ -259,6 +300,8 @@ export function Sidebar({
                 loadDir={loadDir}
                 active={!折叠 && tab === "tree"}
                 creating={creatingFile}
+                searching={searching}
+                onCloseSearch={() => setSearching(false)}
                 onCancelCreate={() => setCreatingFile(false)}
                 onCreateFile={(name) => {
                   setCreatingFile(false);
@@ -276,17 +319,8 @@ export function Sidebar({
               />
             )
           ) : (
-            // ⚠️ 这一块**必须有那颗按钮**（2026-09-24 补）：只有一句话的话，
-            // 用户盯着的就是这个死胡同——界面说"去打开一个文件夹"，
-            // 而唯一的路藏在菜单里。
-            <div className="sidebar-empty">
-              <p className="sidebar-empty-lead">
-                {t("No folder is open yet. Open a folder and its Markdown files will be listed here.")}
-              </p>
-              <button type="button" className="btn btn-with-icon" onClick={onOpenFolder}>
-                <Icon name="folio-document-open-symbolic" />
-                {t("Open Folder…")}
-              </button>
+            <div className="sidebar-empty-state">
+              <p>{t("File list is empty")}</p>
             </div>
           )}
         </section>
@@ -296,7 +330,10 @@ export function Sidebar({
       </div>
 
       {tab === "tree" && (
-        <div ref={footer} className="sidebar-footer">
+        <div
+          ref={footer}
+          className={`sidebar-footer${workspace ? "" : " sidebar-footer-empty"}`}
+        >
           {footerMenu && (
             <div className="sidebar-footer-menu" role="menu">
               <button
@@ -331,18 +368,30 @@ export function Sidebar({
               </button>
             </div>
           )}
-          <button
-            type="button"
-            className="sidebar-footer-btn"
-            title={t("New Document")}
-            aria-label={t("New Document")}
-            onClick={开始新建文件}
-          >
-            <Icon name="folio-add-symbolic" />
-          </button>
-          <span className="sidebar-workspace" title={workspace ?? ""}>
-            {workspaceName}
-          </span>
+          {workspace ? (
+            <>
+              <button
+                type="button"
+                className="sidebar-footer-btn"
+                title={t("New Document")}
+                aria-label={t("New Document")}
+                onClick={开始新建文件}
+              >
+                <Icon name="folio-add-symbolic" />
+              </button>
+              <span className="sidebar-workspace" title={workspace}>
+                {workspaceName}
+              </span>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="sidebar-footer-open"
+              onClick={onOpenFolder}
+            >
+              {t("Open Folder…")}
+            </button>
+          )}
           <button
             type="button"
             className="sidebar-footer-btn sidebar-more"
@@ -360,6 +409,7 @@ export function Sidebar({
             aria-label={t("Switch List/Tree View")}
             onClick={() => {
               setCreatingFile(false);
+              setSearching(false);
               setFileView((view) => (view === "list" ? "tree" : "list"));
             }}
           >
@@ -369,6 +419,105 @@ export function Sidebar({
             >
               <i /><i /><i />
             </span>
+          </button>
+        </div>
+      )}
+
+      {contextMenu && (
+        <div
+          className="sidebar-context-menu"
+          role="menu"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setContextMenu(null);
+              开始新建文件();
+            }}
+          >
+            {t("New File")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setContextMenu(null);
+              onNewFolder();
+            }}
+          >
+            {t("New Folder")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setContextMenu(null);
+              setFileView("list");
+              setSearching(true);
+            }}
+          >
+            {t("Search")}
+          </button>
+          <div className="sidebar-context-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={fileView === "list"}
+            onClick={() => {
+              setContextMenu(null);
+              setSearching(false);
+              setFileView("list");
+            }}
+          >
+            <span className="sidebar-context-check" aria-hidden="true">
+              {fileView === "list" ? "✓" : ""}
+            </span>
+            {t("Document List")}
+          </button>
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={fileView === "tree"}
+            onClick={() => {
+              setContextMenu(null);
+              setSearching(false);
+              setFileView("tree");
+            }}
+          >
+            <span className="sidebar-context-check" aria-hidden="true">
+              {fileView === "tree" ? "✓" : ""}
+            </span>
+            {t("Document Tree")}
+          </button>
+          <div className="sidebar-context-sep" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!contextMenu.path}
+            onClick={() => {
+              if (contextMenu.path) void navigator.clipboard.writeText(contextMenu.path);
+              setContextMenu(null);
+            }}
+          >
+            {t("Copy File Path")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!contextMenu.path}
+            onClick={() => {
+              if (contextMenu.path) {
+                void api.export.reveal(contextMenu.path).catch((e) => {
+                  console.warn("[nota] 打开文件位置失败：", e);
+                });
+              }
+              setContextMenu(null);
+            }}
+          >
+            {t("Open File Location")}
           </button>
         </div>
       )}
@@ -721,6 +870,7 @@ function TreeRow(props: {
           data-open={expanded}
           aria-expanded={expanded}
           title={node.path}
+          data-absolute-path={`${workspace}/${node.path}`}
           onClick={() => onToggleDir(node.path)}
         >
           <span className="tree-twisty" data-open={expanded}>
@@ -769,6 +919,7 @@ function TreeRow(props: {
         style={pad}
         aria-current={isActive ? "page" : undefined}
         title={`${workspace}/${node.path}`}
+        data-absolute-path={`${workspace}/${node.path}`}
         onClick={() => onOpenFile(node.path)}
       >
         <Icon name="nota-tree-file-symbolic" size={16} />

@@ -112,7 +112,10 @@ console.log("\n【CDE 菜单几何与启动路径】");
 测("启动揭幕不再把整套字体加载放进必经链", () => {
   真(!boot.includes("document.fonts?.ready"), "useBootReveal 又等 document.fonts.ready");
   真(!boot.includes("setTimeout(resolve, 2000)"), "useBootReveal 又出现 2 秒字体超时");
-  含(boot, "api.window.showMain()", "编辑器就绪后直接显示已预热的窗口");
+  真(
+    /api\.window\s*\.showMain\(\)/.test(boot),
+    "编辑器就绪后直接显示已预热的窗口",
+  );
 });
 
 测("启动设置先应用，主题目录等任务继续并行", () => {

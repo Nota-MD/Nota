@@ -169,10 +169,20 @@ function 点不动的(行们: readonly 行[] = 给行("编辑器", true)): strin
 组("id 对账 · 表里写到的每一条都得在 MENUS 里");
 
 测("**借来的**每一个 id 都能查到（打错一个字符就是那条永远灰着）", () => {
-  // ⚠️ 那两条**右键菜单独有**的父项（`ctx.paragraph` / `ctx.insert`）要摘出去：
-  // `MENUS` 里**没有**它们（下面一条单独钉）。⚠️ **只摘这两条**，别把
-  // `edit.copyAs` 一起摘了——那一条是真在 `MENUS` 里的，摘掉就等于放它一马。
-  const 占位 = new Set(点不动的().filter((id) => !取条目(id)));
+  // 右键菜单独有的是三个组合父项，以及表格子菜单里只在右键提供的六个动作。
+  // 它们由 `useCommandTable.ts` 直接接线，不进入菜单栏的 `MENUS`。
+  const 右键独有动作 = new Set([
+    "para.tableMoveRowUp",
+    "para.tableMoveRowDown",
+    "para.tableMoveColLeft",
+    "para.tableMoveColRight",
+    "para.tableCopy",
+    "para.tableFormat",
+  ]);
+  const 占位 = new Set([
+    ...点不动的().filter((id) => !取条目(id)),
+    ...右键独有动作,
+  ]);
   const 全部 = 表里全部id();
   真(全部.length > 0, "一条都没扫到——`给行` 或 `表里全部id` 八成坏了，先查那个");
   const 查不到的 = 全部.filter((id) => !占位.has(id) && !取条目(id));
@@ -182,19 +192,27 @@ function 点不动的(行们: readonly 行[] = 给行("编辑器", true)): strin
   );
 });
 
-测("两份子菜单的父项**不**在 MENUS 里（它们是右键菜单独有的组合）", () => {
-  // ⚠️ 父项有三条，但**只有两条**是右键菜单独有的：
+测("三份子菜单父项里只有右键独有组合不在 MENUS 中", () => {
+  // ⚠️ 父项有四条，但**只有三条**是右键菜单独有的：
   // `edit.copyAs`（「复制为…」）**本来就在 MENUS 里**——编辑菜单里也有它。
   // 那一条必须继续查得到，否则"复制为"在**菜单栏**里也会消失。
   const 父项们 = 点不动的();
   const 独占的 = 父项们.filter((id) => !取条目(id));
-  等(独占的.join("、"), "ctx.paragraph、ctx.insert", "右键菜单独有的父项");
+  等(独占的.join("、"), "ctx.paragraph、ctx.table、ctx.insert", "右键菜单独有的父项");
   // 借来的那个父项照旧必须查得到，而且它得真有子菜单。
   真(Boolean(取条目("edit.copyAs")), "`edit.copyAs` 在 MENUS 里查不到了——编辑菜单会少一条");
   const 到子 = 取条目("edit.copyAs")?.submenu ?? [];
   真(到子.filter(isMenuItem).length >= 3, "「复制为…」的子菜单里应该至少有 Markdown/纯文本/HTML 三条");
   // 子菜单里**借来的**那些照旧必须查得到（同上，打错就是永远灰着）。
-  for (const 子 of 点得动的(给行("编辑器", true))) {
+  const 表格私有 = new Set([
+    "para.tableMoveRowUp",
+    "para.tableMoveRowDown",
+    "para.tableMoveColLeft",
+    "para.tableMoveColRight",
+    "para.tableCopy",
+    "para.tableFormat",
+  ]);
+  for (const 子 of 点得动的(给行("编辑器", true)).filter((id) => !表格私有.has(id))) {
     真(Boolean(取条目(子)), `子菜单里的 \`${子}\` 在 MENUS 里查不到`);
   }
 });
@@ -387,7 +405,7 @@ const 普通条: 行 = { kind: "item", key: "i", spec: 段落项 };
   等(真条目, 输入框条目.filter((id) => id !== "sep").length, "条目条数");
 });
 
-测("编辑器 → 三排图标 ＋ 两个子菜单父项", () => {
+测("编辑器 → 三排图标 ＋ 三个子菜单父项", () => {
   const 行们 = 给行("编辑器", false);
   const 排 = 行们.filter((r) => r.kind === "icons");
   等(排.length, 3, "图标排数");
@@ -395,7 +413,8 @@ const 普通条: 行 = { kind: "item", key: "i", spec: 段落项 };
     行们.some((r) => r.kind === "item" && r.spec.id === "ctx.paragraph"),
     "少了「段落」那一栏",
   );
-  真(行们.some((r) => r.kind === "item" && r.spec.id === "ctx.insert"), "少了「插入」那一栏");
+ 真(行们.some((r) => r.kind === "item" && r.spec.id === "ctx.insert"), "少了「插入」那一栏");
+  真(行们.some((r) => r.kind === "item" && r.spec.id === "ctx.table"), "少了「表格」那一栏");
 });
 
 测("⚠️ 开发者工具只在开发模式里出现", () => {

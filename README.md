@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="Release" src="https://img.shields.io/badge/release-v0.9.0-e95420?style=flat-square">
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.9.0--beta-e95420?style=flat-square">
   </a>
   <a href="LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">

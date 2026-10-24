@@ -116,6 +116,8 @@ const 磁盘上的图标名 = new Set(
 );
 
 const 语言id全集 = new Set<string>(refractor.listLanguages());
+/** `math` 是本仓为 LaTeX 数学围栏增加的别名，不是 refractor 自带 id。 */
+const 本仓扩展语言 = new Set(["math"]);
 
 /* ── 用例 ─────────────────────────────────────────────────────────────── */
 
@@ -169,15 +171,17 @@ const 语言id全集 = new Set<string>(refractor.listLanguages());
   断言(空.length === 0, `这几个文件小得不像一颗图：${空.join("、")}`);
 });
 
-组("三、⚠️ 表里的语言 id 必须是 `refractor` 真有的 id");
+组("三、⚠️ 表里的语言 id 必须是 `refractor` 或本仓扩展里真有的 id");
 
-测("每个语言 id 都在 refractor.listLanguages() 里", () => {
+测("每个语言 id 都在 refractor.listLanguages() 或本仓扩展表里", () => {
   //  ⚠️ 这一组挡的是"猜了一个语言名"——`bash` 有、`zsh` 没有，`markup` 有、
   //     `svg` 在、`jsx` 在……记不全就得靠这条。写错了的症状是那条映射
   //     **永远命中不了**，一句报错都没有。
   const 不存在的: string[] = [];
   for (const { 语言 } of 图标组) {
-    for (const id of 语言) if (!语言id全集.has(id)) 不存在的.push(id);
+    for (const id of 语言) {
+      if (!语言id全集.has(id) && !本仓扩展语言.has(id)) 不存在的.push(id);
+    }
   }
   断言(
     不存在的.length === 0,

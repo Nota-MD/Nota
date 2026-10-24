@@ -54,7 +54,7 @@ console.log("\n【启动窗口可见性】");
 
 测("揭幕动作是显示原生窗口，而不是播放网页动画", () => {
   const source = readFileSync(join(process.cwd(), "src/ui/useBootReveal.ts"), "utf8");
-  真(source.includes("api.window.showMain()"), "没有调用宿主显示窗口");
+  真(/api\.window\s*\.showMain\(\)/.test(source), "没有调用宿主显示窗口");
   真(!source.includes("opacity"), "仍有网页透明度动画");
 });
 

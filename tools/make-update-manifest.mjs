@@ -9,7 +9,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 const dir = process.argv[2];
@@ -21,16 +21,18 @@ if (!dir) {
   process.exit(2);
 }
 
-const files = readdirSync(dir)
-  .filter((name) => statSync(join(dir, name)).isFile())
-  .filter((name) => name.includes(version))
+// Actions 会保留 upload-artifact 里的 `bundle/deb` 等目录层级；这里必须递归，
+// 否则解压后的产物明明存在，清单却会误报缺失。
+const files = 找文件(dir)
+  .filter((path) => basename(path).includes(version))
   .sort();
 
 const packages = {};
-for (const file of files) {
+for (const path of files) {
+  const file = basename(path);
   const entry = classify(file);
   if (!entry) continue;
-  const bytes = readFileSync(join(dir, file));
+  const bytes = readFileSync(path);
   packages[`${entry.kind}-${entry.arch}`] = {
     url: `https://github.com/Nota-MD/Nota/releases/download/${tag}/${encodeURIComponent(file)}`,
     sha256: createHash("sha256").update(bytes).digest("hex"),
@@ -71,4 +73,14 @@ function classify(name) {
   if (/^Nota_.*_x64-setup\.exe$/.test(name)) return { kind: "exeinstall", arch: "x86_64" };
   if (/^Nota_.*_arm64-setup\.exe$/.test(name)) return { kind: "exeinstall", arch: "aarch64" };
   return null;
+}
+
+function 找文件(path) {
+  const out = [];
+  for (const entry of readdirSync(path, { withFileTypes: true })) {
+    const child = join(path, entry.name);
+    if (entry.isDirectory()) out.push(...找文件(child));
+    else if (entry.isFile()) out.push(child);
+  }
+  return out;
 }

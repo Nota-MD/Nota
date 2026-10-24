@@ -9,7 +9,7 @@
 
 | 项 | 当前值 |
 |---|---|
-| 源码版本 | `0.9.0-beta`（版本文件一致；Linux x86_64 本地安装包已生成，尚未公开） |
+| 源码版本 | `0.9.0-beta`（版本文件一致；已发布 `v0.9.0-beta`，覆盖 Linux / Windows 的 x86_64 与 ARM64） |
 | 插件策略 | **安装包不随附插件**；四个官方插件从独立仓库发布 |
 | 文档主题策略 | **安装包只随附 Adwaita 浅色/深色**；其他官方主题预留独立主题仓库 |
 | 界面风格策略 | **主程序只随附 Adwaita**，不再自动匹配系统桌面主题；Yaru、GitHub、Breeze、macOS、Windows、CDE 等以自包含外置主题包维护 |
@@ -23,8 +23,8 @@
 | Markdown 兼容 | GitHub Flavored Markdown、脚注、GitHub Alerts、徽章图片、公式与 Mermaid；Mermaid 可编辑块采用源码在上、独立渲染在下，普通代码块被标为 `mermaid` 后会自动转成图表节点；HTTP/HTTPS 远程图片可直接加载 |
 | 编辑手感 | 🟡 括号与标记自动配对；`_` 在单词内部与链接区域不插手，`^` / `=` 跟随行内功能开关；选中文字后可包裹并叠加；智能引号补另一边、越过闭符并支持选区包裹；表格回车与表格工具已接通。侧栏当前文件、当前章节、双页展开与滚动状态也已接通。待统一开窗复验 |
 | CI | `verify.yml` 负责测试、`platform.yml` 负责平台工具链、`build.yml` 只手动编译预览包、`release.yml` 只在 tag 发布；彼此不再串联全量测试 |
-| 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖产物 |
-| 应用更新 | 🧪 实验功能；`latest.json` 随每个 Release 发布；按安装类型分流 deb / rpm / AppImage / 便携 EXE / 安装器 EXE；下载时显示百分比、已下载 / 总大小和安装阶段；开发构建只提示重建命令 |
+| 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖 10 个 x86_64 / ARM64 产物；`v0.9.0-beta` 由运行 `40091801135` 构建 |
+| 应用更新 | 🧪 实验功能；`latest.json` 随每个 Release 发布；按安装类型分流 deb / rpm / AppImage / 便携 EXE / 安装器 EXE；下载时显示百分比、已下载 / 总大小和安装阶段；开发构建只提示重建命令。已验证 `releases/latest/download/latest.json` 返回 `0.9.0-beta` 与 10 个包 |
 | 插件更新 | ✅ 插件 `[update] manifest` → 多插件 `latest.json` → SHA-256 → 原包验签 → 原子替换并重载 |
 | 下载替换 | ✅ 普通设置 → 通用 → 下载；`原前缀 => 新前缀`，应用更新与插件更新共用 |
 | 设置结构 | ✅ 拓展管理、插件设置、更新设置独立分页；「恢复出厂设置」在通用；开发者模式由版本号五连点开启 |

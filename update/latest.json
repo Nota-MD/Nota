@@ -1,33 +1,58 @@
 {
   "schema": 1,
-  "version": "0.8.0-beta",
-  "release_url": "https://github.com/Nota-MD/Nota/releases/tag/v0.8.0-beta",
-  "notes": "Adds download replacement rules, separate extension settings, and a hidden advanced page enabled by tapping the version five times.",
+  "version": "0.9.0-beta",
+  "release_url": "https://github.com/Nota-MD/Nota/releases/tag/v0.9.0-beta",
+  "notes": "Application updates are experimental. Windows support is new and has limited testing. Package selection follows the installation type and CPU architecture.",
   "packages": {
     "deb-x86_64": {
-      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.8.0-beta/Nota_0.8.0-beta_amd64.deb",
-      "sha256": "3e6e9648ebc41a9ee303b3db7ac0680d2e81075fb7cc0d840125e47cb98cfe53",
-      "file": "Nota_0.8.0-beta_amd64.deb"
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_amd64.deb",
+      "sha256": "912c3646238899d232de5ccef942f0b7fbc41b9bea23364a795eb4a1f9953a33",
+      "file": "Nota_0.9.0-beta_amd64.deb"
+    },
+    "deb-aarch64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_arm64.deb",
+      "sha256": "3290980e65a286a68030b049d33161dc2cedb74304d088c8941619c8e3a575b3",
+      "file": "Nota_0.9.0-beta_arm64.deb"
     },
     "rpm-x86_64": {
-      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.8.0-beta/Nota-0.8.0-beta-1.x86_64.rpm",
-      "sha256": "882e1fcf1d83115fcabf28370c52b3ec4749698bf41cbec5fbcebf15b10031b2",
-      "file": "Nota-0.8.0-beta-1.x86_64.rpm"
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota-0.9.0-beta-1.x86_64.rpm",
+      "sha256": "cd3496d873cd5efe757d4eb613ef8e442c1bd9a75274d1adf20b877d268e0007",
+      "file": "Nota-0.9.0-beta-1.x86_64.rpm"
+    },
+    "rpm-aarch64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota-0.9.0-beta-1.aarch64.rpm",
+      "sha256": "8faf4a029829500c5518b4f46218ba40aadac374c24e7c523b700e4e6ab1379c",
+      "file": "Nota-0.9.0-beta-1.aarch64.rpm"
     },
     "appimage-x86_64": {
-      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.8.0-beta/Nota_0.8.0-beta_amd64.AppImage",
-      "sha256": "e482863f201fd7d8022f76a86fcabeff5344c5b23901875684d62f6d2100cbdb",
-      "file": "Nota_0.8.0-beta_amd64.AppImage"
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_amd64.AppImage",
+      "sha256": "2938b9965942e47d3634426517c8fe056aad085ebb6a97d2107d9ea65e841422",
+      "file": "Nota_0.9.0-beta_amd64.AppImage"
+    },
+    "appimage-aarch64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_aarch64.AppImage",
+      "sha256": "f5c927035a6ca2f977eb4215c61ad2f7be50ae68e9d3cbc2e6f1f0c39ddf1af3",
+      "file": "Nota_0.9.0-beta_aarch64.AppImage"
     },
     "exe-x86_64": {
-      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.8.0-beta/Nota_0.8.0-beta_x64-portable.zip",
-      "sha256": "c41964ed551d2e1a4ec6c3a9af2e2a2dd7cd7335376eadd7d97491f60a2b27bb",
-      "file": "Nota_0.8.0-beta_x64-portable.zip"
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_x64-portable.zip",
+      "sha256": "c839e77f96c3871437bb1fe925cfb0032c0f1d22bc51f760246fa51b9fe8b292",
+      "file": "Nota_0.9.0-beta_x64-portable.zip"
+    },
+    "exe-aarch64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_arm64-portable.zip",
+      "sha256": "94b72b983a33b3aff5ce061d353cfef58c03c5d1ce96a8eba76267a20348cc80",
+      "file": "Nota_0.9.0-beta_arm64-portable.zip"
     },
     "exeinstall-x86_64": {
-      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.8.0-beta/Nota_0.8.0-beta_x64-setup.exe",
-      "sha256": "ca7e92dbdac1eefd9616e2757c9774fd3630bf3ab87e3ae0fdde4a6a3ddc6285",
-      "file": "Nota_0.8.0-beta_x64-setup.exe"
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_x64-setup.exe",
+      "sha256": "52f45d7f8036c7335088da46f76467a1f62c00b7cc48e2519602731661aadb64",
+      "file": "Nota_0.9.0-beta_x64-setup.exe"
+    },
+    "exeinstall-aarch64": {
+      "url": "https://github.com/Nota-MD/Nota/releases/download/v0.9.0-beta/Nota_0.9.0-beta_arm64-setup.exe",
+      "sha256": "58557a442fc498edc268273b81f260ea4db61d1ab5ed73029486afdd8aa636d1",
+      "file": "Nota_0.9.0-beta_arm64-setup.exe"
     }
   }
 }

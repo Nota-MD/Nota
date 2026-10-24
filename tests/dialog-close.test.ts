@@ -61,6 +61,7 @@ console.log("\n【对话框统一关闭入口】");
   真(源.includes('aria-label={t("Close")}'), "缺少 aria-label");
   真(源.includes('title={t("Close")}'), "缺少 title");
   真(源.includes('name="folio-close-symbolic"'), "关闭图标不统一");
+  真(源.includes("size={16}"), "关闭图标没有使用官方 16px 尺寸");
 });
 
 测("独立对话框壳都给绝对定位的关闭按钮提供定位上下文", () => {
@@ -73,6 +74,8 @@ console.log("\n【对话框统一关闭入口】");
   真(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "文件选择器缺少 position");
   真(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "设置框缺少 position");
   真(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(overlay), "关闭按钮不是绝对定位");
+  真(/\.dialog-close\s*\{[^}]*width:\s*32px/s.test(overlay), "关闭按钮点击区不是 32px");
+  真(/\.dialog-close:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s.test(overlay), "关闭按钮缺少统一焦点环");
 });
 
 console.log(`\n通过 ${过} 条，失败 ${败} 条`);

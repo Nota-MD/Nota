@@ -214,6 +214,7 @@ PAIRS=(
   "src/editor/insert.ts                           05"
   "src/editor/lang-icon.ts                        05,04"
   "src/editor/lang-picker.ts                      05,04"
+  "src/editor/fence-lang.ts                       05,04,02,10"
   "src/editor/find.ts                             05,04"
   "src/editor/scroll-into-view.ts                 05,04,10"
   "src/editor/writing-modes.ts                    05,04"

@@ -1,6 +1,6 @@
 /**
- * 行内标记的提示：光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*`
- * 半透明画在那段文字的左右两边。
+ * 行内标记的提示：光标落在任一行内标记里时，把该标记的真实左右源码符号
+ * 画在那段文字的左右两边。
  *
  * 用户 2026-09-26 的原话：「我认为如果光标在黑体/斜体内容内，可否半透明显示*？」
  *
@@ -14,11 +14,11 @@
  * ⚠️ `instant-render.ts` 的文件头里写着"行内标记是另一回事，必须让符号真的
  * 存在于文档里（要改 schema）"——那句话说的是**第五版之前**的思路：那是要
  * 让 `**` 变成可点、可退格、可把光标停进去的真字符（`docs/07` backlog 第 37 项）。
- * 用户这次要的**不是那个**：他要的是"看得见"，不是"能编辑这个符号"。
+ * 用户要的是"看得见的实体符号"，不是"把定界符变成可编辑的结构字符"。
  * 所以这里走的是**纯显示**（左右各一颗 `Decoration.widget`），
  * 不动 schema、不动文档，一个字节都不写回。
  *
- * # 两颗符号都是**真实文本节点**（2026-10-23）
+ * # 左右符号都是**真实文本节点**（2026-10-23，2026-10-24 扩展到全部行内标记）
  *
  * 两颗各是一个带文字内容的 `<span>`，由 `Decoration.widget` 放进编辑器 DOM。
  * 左侧 `side:-1` 放在标记起点之前，光标落在它右边；右侧同样 `side:-1` 放在
@@ -39,8 +39,8 @@
  *
  * # 长相：widget 内的真实文字
  *
- * 符号直接写进 `textContent`。CSS 用 `.nota-markhint` 把它固定成等宽、常规
- * 字重、正体、`--fg-faint`；不可选中、不吃鼠标事件与淡入仍沿用块标记的配方。
+ * 符号直接写进 `textContent`。2026-10-24 起 CSS 让它继承正文颜色、字体和字号，
+ * 只锁死常规字重与正体；不可选中、不吃鼠标事件，但最终是完全不透明的实体字符。
  *
  * ⚠️ **代价讲清楚**：这两个符号是**占宽度**的（它们是文档流里的真实 `<span>`，
  * 不是绝对定位的浮标）。所以光标进出加粗段时，那一行会横向动
@@ -68,12 +68,14 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { Mark, MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
 
+import { 标记表 } from "./inline-marks";
+
 /** 加在左右两颗标记 widget 上的 class。CSS 见 `src/styles/marks.css`。 */
 export const 提示类 = "nota-markhint";
 
 /**
- * 提示哪几种标记、各画什么符号。**就这一张表**——加第三种（行内代码、链接）
- * 只需要在这儿添一行，插件本体一个字都不用改。
+ * 提示哪几种标记、各画什么左右符号。**就这一张表**；本仓自造的高亮 / 上下标 /
+ * 下划线从 `inline-marks.ts` 的标记表取源码符号，避免第二份真相源。
  *
  * ⚠️ `名` 是 **schema 里那个 mark 的 id**，不是中文、不是节点名、也**不是
  * Markdown 语法里的名字**。取不到就跳过那一行（`state.schema.marks[名]` 为
@@ -86,20 +88,22 @@ export const 提示类 = "nota-markhint";
  * 现在有两道防线：`tests/mark-hint.test.ts` 拿**真 preset** 的 id 对一遍，
  * 运行期取不到会 `console.warn`（见 `算提示`）。
  *
- * ⚠️ 符号**一律写星号**，不写 `_` / `__`：本仓存盘走的是 milkdown 那套
- * serializer，加粗/斜体它一律输出星号（`**` / `*`）。写了别的就是"屏幕上的
- * 和存出来的不一样"——那正是这一整个功能要消掉的东西。
- *
- * ⚠️ 反引号（行内代码）**没进这张表**：用户这次只点了加粗与斜体两样
- *（「在黑体/斜体内容内」）。要加的话是加 `{ 名: "inlineCode", 符号: "`" }`
- *（同样先照上面那条核实 id），但还要先确认 serializer 到底用几个反引号
- *（源码里出现反引号时要加成对的两个），别照着印象填。
+ * ⚠️ 每行的左右符号要与 serializer 一致：加粗/斜体为 `**`/`*`，行内代码为
+ * 反引号，删除线 `~~`，高亮 `==`，上下标 `^`/`~`，下划线 `<u>`/`</u>`。
+ * 左右分开声明，不能假设两边相同。
  *
  * 📌 导出只给 `tests/mark-hint.test.ts` 用（它拿真 preset 的 id 对这张表）。
  */
-export const 提示表: readonly { 名: string; 符号: string }[] = [
-  { 名: "strong", 符号: "**" },
-  { 名: "emphasis", 符号: "*" },
+export const 提示表: readonly { 名: string; 左: string; 右: string }[] = [
+  { 名: "strong", 左: "**", 右: "**" },
+  { 名: "emphasis", 左: "*", 右: "*" },
+  { 名: "inlineCode", 左: "`", 右: "`" },
+  { 名: "strike_through", 左: "~~", 右: "~~" },
+  ...标记表.map((规格) => ({
+    名: 规格.标签,
+    左: 规格.左,
+    右: 规格.右,
+  })),
 ];
 
 /**
@@ -228,9 +232,11 @@ function 建标记符号(符号: string): HTMLElement {
  * 每种符号复用同一个无参构造函数。装饰会在每次选区变化时重算，稳定的构造器
  * 让 ProseMirror 认出 widget 没有变，不会在每次输入时重建 DOM、重播淡入。
  */
-const 符号构造器 = new Map(
-  提示表.map(({ 符号 }) => [符号, () => 建标记符号(符号)] as const),
-);
+const 符号构造器 = new Map<string, () => HTMLElement>();
+for (const { 左, 右 } of 提示表) {
+  if (!符号构造器.has(左)) 符号构造器.set(左, () => 建标记符号(左));
+  if (!符号构造器.has(右)) 符号构造器.set(右, () => 建标记符号(右));
+}
 
 /** 显式空 mark 集：widget 既不继承左侧粗体，也不继承右侧斜体。 */
 const 无行内标记: readonly Mark[] = [];
@@ -252,7 +258,7 @@ function 算提示(state: { selection: unknown; doc: PMNode; schema: unknown }):
   const 装饰: Decoration[] = [];
   查缺名字(marks);
 
-  for (const { 名, 符号 } of 提示表) {
+  for (const { 名, 左, 右 } of 提示表) {
     const 类型 = marks[名];
     if (!类型) continue;
 
@@ -263,12 +269,13 @@ function 算提示(state: { selection: unknown; doc: PMNode; schema: unknown }):
     // 一个 mark 两颗真实文本 widget。`***又粗又斜***` 会拿到两套，并排起来
     // 仍是 `***`。`side:-1` 让光标落在 widget 右侧，同时明确 `marks:[]`，
     // 让符号完全脱离被强调文字的字重与倾斜。
-    const 建符号 = 符号构造器.get(符号);
-    if (!建符号) continue;
+    const 建左 = 符号构造器.get(左);
+    const 建右 = 符号构造器.get(右);
+    if (!建左 || !建右) continue;
     const widget规格 = { side: -1, marks: 无行内标记 };
     装饰.push(
-      Decoration.widget(段.从, 建符号, widget规格),
-      Decoration.widget(段.到, 建符号, widget规格),
+      Decoration.widget(段.从, 建左, widget规格),
+      Decoration.widget(段.到, 建右, widget规格),
     );
   }
 

@@ -115,7 +115,7 @@ export function 等语言表(): Promise<void> {
  * ⚠️ 这里**不筛掉空语言**：`""` 不是"一个没有图标的语言"，它是"不指定语言"
  * 那一项（下拉第一行，显示「纯文本」）。筛掉它，用户就再也没法把语言改回空了。
  */
-function allLanguages(): string[] {
+export function allLanguages(): string[] {
   if (sortedLanguages === null) {
     sortedLanguages = refractor
       .listLanguages()
@@ -137,7 +137,7 @@ function allLanguages(): string[] {
 let searchableLanguages: string[] | null = null;
 
 /** 输入查询时使用的完整 refractor 语言表；默认下拉仍只预摆带图标的语言。 */
-function searchLanguages(): string[] {
+export function searchLanguages(): string[] {
   if (searchableLanguages === null) {
     searchableLanguages = [
       ...new Set([
@@ -158,7 +158,7 @@ function searchLanguages(): string[] {
  * 可能按 `armasm` / `md` / `plain` 这些**别名**找——它们和代表名是同一门语言。
  * ⚠️ 表里没有的（用户自己敲的那种）原样给一个。
  */
-function 同族语言(id: string): readonly string[] {
+export function 同族语言(id: string): readonly string[] {
   if (id === 数学语言别名) return ["math", "latex", "tex"];
   const 代表 = 代表语言(id);
   return 图标组.find((g) => g.语言.includes(代表))?.语言 ?? [id];

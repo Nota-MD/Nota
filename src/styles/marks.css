@@ -199,15 +199,14 @@
    上头那份画在块左边的 56px 装订线里（`right: 100%`，不占正文宽度），
    行内没有装订线可用——绝对定位会压在前一个字上面，比"动两格"难看得多。
    取舍写在 `mark-hint.ts` 的文件头里。 */
-/* 左右两颗都是 `mark-hint.ts` 插进 DOM 的真实文字 widget，共用这一套配方。
-   `marks: []` 已在装饰层切断行内 mark；这里再显式锁死字形，防止主题的标题、
-   粗体规则通过父元素把它带成黑体或斜体。`side:-1` 保持 BUG-65 定下的光标位置。 */
+/* 左右两颗都是 `mark-hint.ts` 插进 DOM 的真实文字 widget。
+   2026-10-24 用户要求“实体而不是鬼影”：标记应读成正文里真实敲出的 `**` /
+   `==` / `~~`，不再缩小成界面字号的淡灰徽记。因此这里继承正文的字体、字号
+   与颜色，只切断行内 mark，避免 `**` 自己也被加粗。`side:-1` 保持 BUG-65
+   定下的光标位置。 */
 .editor-mount .ProseMirror .nota-markhint {
-  font-family: var(--font-mono);
-  /* ⚠️ 与 `.nota-srcmark::before` 同一个基准（`--ui-font-size` 而不是 `em`）：
-     用 `em` 的话，加粗段落在标题里就是"标题字号的 0.85 倍"，同一对 `*`
-     换个位置就换个大小——那正是用户 2026-09-26 报过的"标记会变大变小"。 */
-  font-size: calc(var(--ui-font-size, 15px) * 0.85);
+  font-family: inherit;
+  font-size: inherit;
   font-weight: 400;
   font-style: normal;
   font-variant: normal;
@@ -217,14 +216,19 @@
   text-decoration: none;
   text-transform: none;
   white-space: pre;
-  color: var(--fg-faint);
-  /* ⚠️ 这里**不许**再乘 `opacity`（理由与 `.nota-srcmark::before` 那条一样：
-     浓淡由文档主题的 `--fg-faint` 一处决定）。 */
+  color: inherit;
   user-select: none;
   pointer-events: none;
-  /* 淡入。⚠️ 只有进入有过渡——伪元素是跟着 class 一起被摘掉的，
-     没有机会播退场动画（同 `.nota-srcmark::before`）。 */
-  animation: nota-srcmark-in 0.16s ease-out;
+  animation: nota-markhint-in 0.16s ease-out;
+}
+
+@keyframes nota-markhint-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 「待成块」的标题：段落行首敲了 `#` 加空格，**还**没按回车。

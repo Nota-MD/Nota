@@ -73,6 +73,12 @@ function 等(实际: unknown, 期望: unknown, 说明: string): void {
   }
 }
 
+function 含(实际: string, 片段: string, 说明: string): void {
+  if (!实际.includes(片段)) {
+    throw new Error(`${说明}：${JSON.stringify(实际)} 里没有 ${JSON.stringify(片段)}`);
+  }
+}
+
 /* ── 一颗够用的真 Schema（只要 strong / em 两个 mark）────────────────── */
 
 const schema = new Schema({
@@ -290,12 +296,15 @@ const 真名 = new Set([
   等([...真名].sort().join("、"), "emphasis、inlineCode、strong", "preset 里这三个 mark 的 id");
 });
 
-测("每一个名字都是 `@milkdown/preset-commonmark` 真有的 mark id", () => {
+测("每一个名字都是当前 schema 真有的 mark id", () => {
   //  ⚠️ 这一组是**唯一**能挡住"名字写错、提示悄悄不出现"的东西。
   //     2026-09-26 就是这么错的：斜体写成 `"em"`，而 preset 里的 id 是
   //     `"emphasis"`——加粗的 `**` 出来了，斜体的 `*` 死活不出来，不报错。
-  for (const { 名, 符号 } of 提示表) {
-    断言(真名.has(名), `提示表里的「${名}」（画 ${符号}）不是 preset 里的 mark id`);
+  for (const { 名, 左, 右 } of 提示表) {
+    断言(
+      真名.has(名) || ["strike_through", "highlight", "superscript", "subscript", "underline"].includes(名),
+      `提示表里的「${名}」（画 ${左}…${右}）不是已知 mark id`,
+    );
   }
 });
 
@@ -303,9 +312,16 @@ const 真名 = new Set([
   断言(!真名.has("em"), "`em` 不该是 preset 的 mark id——它是 `emphasis`");
 });
 
-测("这张表里**只有**加粗和斜体两样（用户 2026-09-26 只点了这两样）", () => {
-  等(提示表.length, 2, "行数");
-  等(提示表.map((行) => 行.符号).join(" "), "** *", "符号");
+测("所有行内标记都有真实左右符号，包括 `==`、`~~`、反引号与上下标", () => {
+  const 符号 = 提示表.map((行) => `${行.左}${行.右}`).join(" ");
+  含(符号, "****", "加粗");
+  含(符号, "**", "斜体");
+  含(符号, "``", "行内代码");
+  含(符号, "~~~~", "删除线");
+  含(符号, "====", "高亮");
+  含(符号, "^^", "上标");
+  含(符号, "~~", "下标");
+  含(符号, "<u></u>", "下划线");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

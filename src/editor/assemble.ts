@@ -85,6 +85,7 @@ import { 段落不写空行, 文档别导出空根 } from "./empty-paragraph";
 // 代码块的右下角那一条：语言选择器 / 复制 / 折叠。用 NodeView 的地方之一
 // （另一处是下面的图表块），理由写在它自己的文件头上。
 import { codeBlockView } from "./code-block";
+import { 围栏语言补全 } from "./fence-lang";
 // 图表块（```mermaid）的**节点**（schema/remark 转换/输入规则）2026-10-04 起
 // 是本仓自己的（`diagram-node.ts`，第 27 项）：`@milkdown/plugin-diagram` 整个
 // 退役——它只做了这几件不含 mermaid 的小活，却把 mermaid 静态打进首屏。
@@ -396,6 +397,7 @@ export async function 装配实例(参数: 装配参数): Promise<Editor> {
     // ⚠️ `commonmark` / `gfm` 是**纯数组**（`preset-commonmark/lib/index.js:2133`
     // 那个 `[…].flat()`），所以按引用滤得掉；别处那几条输入规则（列表 `- `、
     // 引用 `> `、分割线 `---`）**照旧敲完就变**，只摘标题这一条。
+    .use(围栏语言补全)
     .use(commonmark.filter((p) => p !== wrapInHeadingInputRule))
     // ⚠️ **这三条必须排在 `gfm` 前面**，理由见文件顶 `inline-marks` 那段 import
     // 注释（`$inputRule` 先中者赢，而 `gfm` 的删除线会抢中文的 `张~2~`）。

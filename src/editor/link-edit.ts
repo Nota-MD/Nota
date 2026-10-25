@@ -41,10 +41,10 @@ import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
 import type { CommandPayload } from "./create-types";
-import { 危险协议 } from "./url-link";
+import { DangerousProtocol } from "./url-link";
 
 /** 一段区间：`from` 含、`to` 不含。与 `select.ts` 那个同名同形。 */
-export interface 区间 {
+export interface range {
   from: number;
   to: number;
 }
@@ -61,14 +61,14 @@ export interface 区间 {
  *   发生（与 `PromptDialog` 那条"主字段为空 = 取消"同一口径，这里是它的兜底）；
  * - **危险协议 → `href` 给 `null`**（同上），见文件头那道闸。
  */
-export function 链接落点(名称: string, 地址: string): { label: string; href: string | null } {
-  const 名 = 名称.trim();
-  const 址 = 地址.trim();
-  return { label: 名 || 址, href: 址 === "" || 危险协议(址) ? null : 址 };
+export function linkDropPoint(name: string, address: string): { label: string; href: string | null } {
+  const name3 = name.trim();
+  const address2 = address.trim();
+  return { label: name3 || address2, href: address2 === "" || DangerousProtocol(address2) ? null : address2 };
 }
 
 /** 一条 Markdown 行内链接在**纯文本**里的位置（源码模式用）。 */
-export interface 源文链接 {
+export interface sourceLink {
   from: number;
   to: number;
   label: string;
@@ -87,7 +87,7 @@ export interface 源文链接 {
  * ⚠️ 名称里排除 `]` 与换行、地址里排除 `)` 与空白：这三样本仓写出来的链接里
  * 都不会出现，放进去只会让"哪一段算是这条链接"变得更含糊。
  */
-const 源文链接正则 = /\[([^\]\n]*)\]\(([^)\s]*)\)/g;
+const sourceLinkPattern = /\[([^\]\n]*)\]\(([^)\s]*)\)/g;
 
 /**
  * 光标处（`位置` 是**整篇文本**里的偏移）那条 `[名称](地址)`。
@@ -96,22 +96,22 @@ const 源文链接正则 = /\[([^\]\n]*)\]\(([^)\s]*)\)/g;
  * 正好在它开头那一个字符上，都是"在这条链接里"——与 `select.ts::挑词` 那条
  * "贴着词尾也算"同一个道理，也正是用户点一下那条链接时最常撞上的位置。
  */
-export function 源文链接区间(文: string, 位置: number): 源文链接 | null {
-  const 位 = Math.max(0, Math.min(位置, 文.length));
-  源文链接正则.lastIndex = 0;
-  for (const 匹配 of 文.matchAll(源文链接正则)) {
-    const from = 匹配.index ?? 0;
-    const to = from + 匹配[0].length;
-    if (位 >= from && 位 <= to) {
-      return { from, to, label: 匹配[1] ?? "", href: 匹配[2] ?? "" };
+export function sourceLinkRange(text4: string, position2: number): sourceLink | null {
+  const position3 = Math.max(0, Math.min(position2, text4.length));
+  sourceLinkPattern.lastIndex = 0;
+  for (const match2 of text4.matchAll(sourceLinkPattern)) {
+    const from = match2.index ?? 0;
+    const to = from + match2[0].length;
+    if (position3 >= from && position3 <= to) {
+      return { from, to, label: match2[1] ?? "", href: match2[2] ?? "" };
     }
   }
   return null;
 }
 
 /** 把「名称 ＋ 地址」写成 Markdown 该有的那串字（危险/空地址时只有名称）。 */
-export function 源文链接(名称: string, 地址: string): string {
-  const { label, href } = 链接落点(名称, 地址);
+export function sourceLink(name: string, address: string): string {
+  const { label, href } = linkDropPoint(name, address);
   return href === null ? label : `[${label}](${href})`;
 }
 
@@ -121,20 +121,20 @@ export function 源文链接(名称: string, 地址: string): string {
  * ⚠️ 与 `source-commands.ts::清除行内标记` 里那条链接规则**同一个形状**，
  * 但那一条还顺手摘加粗/斜体——两者不是一件事，谁都不许调谁。
  */
-export function 摘源文链接(文本: string): string {
-  return 文本.replace(/\[([\s\S]*?)\]\([^)\s]*\)/g, "$1");
+export function removeSourceLink(text2: string): string {
+  return text2.replace(/\[([\s\S]*?)\]\([^)\s]*\)/g, "$1");
 }
 
 /* ══ 第二组：ProseMirror 层的换算与事务 ═════════════════════════════════ */
 
 /** 光标处那条链接：文档位置 ＋ 它显示的文字 ＋ 地址。 */
-export interface 链接处 extends 区间 {
+export interface LinkPlace extends range {
   label: string;
   href: string;
 }
 
-function 夹(值: number, 下: number, 上: number): number {
-  return Math.max(下, Math.min(值, 上));
+function clamp(value2: number, below: number, above: number): number {
+  return Math.max(below, Math.min(value2, above));
 }
 
 /**
@@ -148,45 +148,45 @@ function 夹(值: number, 下: number, 上: number): number {
  * 文字被别的标记（比如一段加粗的链接）切开时，一条链接会摊成两个节点。只看光标
  * 落在的那一个节点的话，改一次链接只改掉半截。
  */
-export function 链接区间(doc: PMNode, 位置: number): 链接处 | null {
-  const 链接型 = doc.type.schema.marks.link;
-  if (!链接型) return null;
-  const $位 = doc.resolve(夹(位置, 0, doc.content.size));
-  const 块 = $位.parent;
-  if (!块.isTextblock || 块.type.spec.code) return null;
-  const 起点 = $位.start();
-  const 位 = 夹(位置, 起点, 起点 + 块.content.size);
+export function linkRange(doc: PMNode, position2: number): LinkPlace | null {
+  const linkType = doc.type.schema.marks.link;
+  if (!linkType) return null;
+  const position = doc.resolve(clamp(position2, 0, doc.content.size));
+  const block = position.parent;
+  if (!block.isTextblock || block.type.spec.code) return null;
+  const start4 = position.start();
+  const position3 = clamp(position2, start4, start4 + block.content.size);
 
   // 命中哪一颗子节点：两端都算（同 {@link 源文链接区间}）。
-  let 偏 = 0;
-  let 命中 = -1;
-  for (let i = 0; i < 块.childCount; i++) {
-    const 子 = 块.child(i);
-    const 始 = 起点 + 偏;
-    if (位 >= 始 && 位 <= 始 + 子.nodeSize) {
-      命中 = i;
+  let bias = 0;
+  let match = -1;
+  for (let i = 0; i < block.childCount; i++) {
+    const child3 = block.child(i);
+    const start6 = start4 + bias;
+    if (position3 >= start6 && position3 <= start6 + child3.nodeSize) {
+      match = i;
       break;
     }
-    偏 += 子.nodeSize;
+    bias += child3.nodeSize;
   }
-  if (命中 < 0) return null;
+  if (match < 0) return null;
 
-  const 取链接 = (i: number) => 块.child(i).marks.find((m) => m.type === 链接型) ?? null;
-  const 首 = 取链接(命中);
-  if (!首) return null;
-  const href = String(首.attrs.href ?? "");
-  const 同一条 = (i: number) => String(取链接(i)?.attrs.href ?? "\u0000") === href;
+  const getLink = (i: number) => block.child(i).marks.find((m) => m.type === linkType) ?? null;
+  const first = getLink(match);
+  if (!first) return null;
+  const href = String(first.attrs.href ?? "");
+  const sameOneItem = (i: number) => String(getLink(i)?.attrs.href ?? "\u0000") === href;
 
-  let 左 = 命中;
-  let 右 = 命中;
-  while (左 > 0 && 同一条(左 - 1)) 左--;
-  while (右 + 1 < 块.childCount && 同一条(右 + 1)) 右++;
+  let left = match;
+  let right = match;
+  while (left > 0 && sameOneItem(left - 1)) left--;
+  while (right + 1 < block.childCount && sameOneItem(right + 1)) right++;
 
-  let 从头 = 起点;
-  for (let i = 0; i < 左; i++) 从头 += 块.child(i).nodeSize;
-  let 到尾 = 从头;
-  for (let i = 左; i <= 右; i++) 到尾 += 块.child(i).nodeSize;
-  return { from: 从头, to: 到尾, label: doc.textBetween(从头, 到尾, ""), href };
+  let fromHead = start4;
+  for (let i = 0; i < left; i++) fromHead += block.child(i).nodeSize;
+  let toTail = fromHead;
+  for (let i = left; i <= right; i++) toTail += block.child(i).nodeSize;
+  return { from: fromHead, to: toTail, label: doc.textBetween(fromHead, toTail, ""), href };
 }
 
 /**
@@ -197,19 +197,19 @@ export function 链接区间(doc: PMNode, 位置: number): 链接处 | null {
  * `schema.text` ＋ **`removeStoredMark`** —— 最后那一下不能省：不摘掉"存储标记"，
  * 紧接着敲的下一个字会接着带上链接。
  */
-export function 建链接事务(
+export function createLinkTransaction(
   state: EditorState,
-  区: 区间,
-  名称: string,
-  地址: string,
+  area: range,
+  name: string,
+  address: string,
 ): Transaction | null {
-  const 链接型 = state.schema.marks.link;
-  if (!链接型) return null;
-  const { label, href } = 链接落点(名称, 地址);
+  const linkType = state.schema.marks.link;
+  if (!linkType) return null;
+  const { label, href } = linkDropPoint(name, address);
   if (label === "") return null;
-  const 节点 =
-    href === null ? state.schema.text(label) : state.schema.text(label, [链接型.create({ href })]);
-  return state.tr.replaceWith(区.from, 区.to, 节点).removeStoredMark(链接型);
+  const node =
+    href === null ? state.schema.text(label) : state.schema.text(label, [linkType.create({ href })]);
+  return state.tr.replaceWith(area.from, area.to, node).removeStoredMark(linkType);
 }
 
 /**
@@ -218,10 +218,10 @@ export function 建链接事务(
  * ⚠️ 摘的是**标记**、不是那串 `[名称](地址)` 的字：所见即所得那边本来就没有中括号，
  * 摘完就是普通文字。源码模式那一侧走的是 {@link 摘源文链接}（纯文本）。
  */
-export function 摘链接事务(state: EditorState, 区: 区间): Transaction | null {
-  const 链接型 = state.schema.marks.link;
-  if (!链接型 || 区.from >= 区.to) return null;
-  return state.tr.removeMark(区.from, 区.to, 链接型).removeStoredMark(链接型);
+export function removeLinkTransaction(state: EditorState, area: range): Transaction | null {
+  const linkType = state.schema.marks.link;
+  if (!linkType || area.from >= area.to) return null;
+  return state.tr.removeMark(area.from, area.to, linkType).removeStoredMark(linkType);
 }
 
 /* ══ 第三组：两条命令（落到真编辑器上）══════════════════════════════════ */
@@ -231,26 +231,26 @@ export function 摘链接事务(state: EditorState, 区: 区间): Transaction | 
  * - 有选区 → 就是那个选区（用户选了一段字再插链接，那就是他的意思）；
  * - 空光标 → 光标处那条链接整条；不在链接里就是光标那一点（"插一条新的"）。
  */
-function 目标区间(view: EditorView): 区间 {
-  const 选 = view.state.selection;
-  if (!选.empty) return { from: 选.from, to: 选.to };
-  return 链接区间(view.state.doc, 选.from) ?? { from: 选.from, to: 选.to };
+function targetRange(view: EditorView): range {
+  const select = view.state.selection;
+  if (!select.empty) return { from: select.from, to: select.to };
+  return linkRange(view.state.doc, select.from) ?? { from: select.from, to: select.to };
 }
 
 /** 写一条链接进去（`linkSet`）。名称与地址由框里问来（见 `ui/LinkDialog.tsx`）。 */
-export function 装链接(editor: Editor, payload?: CommandPayload): void {
+export function installLink(editor: Editor, payload?: CommandPayload): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
-    const tr = 建链接事务(view.state, 目标区间(view), payload?.label ?? "", payload?.href ?? "");
+    const tr = createLinkTransaction(view.state, targetRange(view), payload?.label ?? "", payload?.href ?? "");
     if (tr) view.dispatch(tr);
   });
 }
 
 /** 去掉光标处那条链接（`linkRemove`）——**文字留着**。 */
-export function 摘链接(editor: Editor): void {
+export function removeLink(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
-    const tr = 摘链接事务(view.state, 目标区间(view));
+    const tr = removeLinkTransaction(view.state, targetRange(view));
     if (tr) view.dispatch(tr);
   });
 }

@@ -76,44 +76,201 @@
   text-decoration-color: var(--fg-faint);
 }
 
-/* ── 裸 HTML 与注释（2026-09-27）────────────────────────────────────────
+/* ── 裸 HTML 与注释（2026-09-27；2026-10-25 改为安全渲染）──────────────
  *
- * 两种节点都由 `editor/html-block.ts` 产出（行内的 `<u>` 那类归 preset 的
- * `htmlSchema`），这里只管它们长什么样。**画的是源码**，不是渲染出来的 HTML——
- * 那条边界写在那个文件的文件头里（第 2 条：渲染等于把用户写的标签交给浏览器
- * 执行）。所以两者都按"一段不该被当成正文读的源码"来画：等宽、小一号、
- * 淡、左边一条竖线。
+ * 两种节点都由 `editor/html-block.ts` 产出，显示层在
+ * `editor/html-block-view.ts`。普通 HTML 使用 DOMPurify 白名单渲染；注释仍按
+ * 源码显示，因为它本来就没有可见渲染结果。行内的 `<u>` 那类仍归 preset 的
+ * `htmlSchema`，不经过这里。
  *
  * ⚠️ 这两条**必须住在 `editor.css`**（理由同上面行内标记那一段：带样式的导出
  * 只嵌 `theme/base.css` ＋ 本文件 ＋ `katex.min.css`）。⚠️ 不同的是，
- * **块级那条根本不会出现在导出里**（导出走序列化后的 Markdown，那边出来的是
- * 真的 HTML 元素），会出现的是**行内那条** —— `span[data-type="html"]` 是
- * 编辑区的 DOM，导出时会跟着正文一起被抄下来。
+ * 块级渲染内容会进入导出；源码编辑框与切换按钮由 `editor/export.ts` 的
+ * `整块删掉` 移出。行内那条 `span[data-type="html"]` 则随正文一起导出。
  *
  * ⚠️ 注释那一格靠 `data-comment` **属性**选，不靠类名：类名带 `nota-` 前缀的话
- * 导出时会被剥掉（`editor/export.ts` 那条前缀规则），而这里的块级节点虽然
- * 不进导出，行内那一条是进的——两处用同一套属性判据，读的人少记一样东西。 */
-:where(.editor-mount .ProseMirror) div[data-type="html-block"] {
+ * 导出时会被剥掉（`editor/export.ts` 那条前缀规则），而注释文本仍要保留
+ * 与普通正文可区分的结构。 */
+:where(.editor-mount .ProseMirror) .nota-html-block {
+  position: relative;
+  display: block;
+  margin: 0.8em 0;
+  background: transparent;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode,
+:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode .nota-html-render {
+  /* 选中只负责显示右上角源码按钮，不把整块刷成灰色。 */
+  background: transparent;
+  color: inherit;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode::selection,
+:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode ::selection {
+  /* 原子节点被整块选中时，浏览器会把内部渲染文本一并涂上选择色。 */
+  background: transparent;
+  color: inherit;
+}
+
+/* 渲染内容就是文档内容。这里不画灰底、不改字体，也不额外加边框；HTML 自己
+ * 的 h1 / p / table 继续使用文档主题对同名标签的规则。 */
+:where(.editor-mount .ProseMirror) .nota-html-render > :first-child {
+  margin-top: 0;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render > :last-child {
+  margin-bottom: 0;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render {
+  cursor: text;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render img {
+  max-width: 100%;
+  height: auto;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: var(--fg-faint);
+  text-underline-offset: 0.15em;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render [align="center"] {
+  text-align: center;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render details {
+  padding: 0.35em 0;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* 源码回退与注释共用同一套外观。普通 HTML 只有切到源码模式时才显示 textarea。 */
+:where(.editor-mount .ProseMirror) .nota-html-source {
+  display: none;
+  width: 100%;
+  min-height: 5.5em;
+  box-sizing: border-box;
   font-family: var(--font-mono);
   font-size: 0.85em;
   line-height: 1.5;
   color: var(--fg-muted);
   background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5em 0.75em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* 同公式源码框：覆盖层光标把父级原生光标设为透明，表单控件必须恢复。 */
+  caret-color: var(--accent);
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-source .cm-editor,
+:where(.editor-mount .ProseMirror) .nota-html-source .cm-scroller {
+  width: 100%;
+  background: transparent;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-source-mode .nota-html-render {
+  display: none;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-source-mode .nota-html-source {
+  /* 单行源码在 5.5em 高的框里默认贴顶，看起来像上方被截住。源码框是
+     flex 列容器，CodeMirror 作为一个整体在垂直方向居中；多行内容超过
+     最小高度时自然撑开，不限制滚动。 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-comment {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: var(--fg-faint);
+  font-style: italic;
+  background: var(--bg-subtle);
   border-left: 2px solid var(--border-strong);
   border-radius: var(--radius-sm);
   padding: 0.5em 0.75em;
-  margin: 0.8em 0;
-  /* ⚠️ `pre-wrap` 而不是 `pre`：用户写的一行 HTML 可能很长，`pre` 会让它
-     顶出正文列（水平滚动条长在整页上，不是长在这一块上）。`anywhere` 是给
-     `<div class="aaa-bbb-ccc">` 那种没有空格的串准备的。 */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+/* 切换按钮只在鼠标经过、键盘进入或整块选中时出现，避免压住居中的徽章。 */
+:where(.editor-mount .ProseMirror) .nota-html-source-toggle {
+  position: absolute;
+  top: 0.45em;
+  inset-inline-end: 0.55em;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 1.65em;
+  padding: 0 0.5em;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 0.72em;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-block:hover .nota-html-source-toggle,
+:where(.editor-mount .ProseMirror) .nota-html-block:focus-within .nota-html-source-toggle,
+:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode .nota-html-source-toggle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-source-toggle:hover,
+:where(.editor-mount .ProseMirror) .nota-html-source-toggle[aria-pressed="true"] {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-source-toggle[aria-pressed="true"]::after {
+  display: inline-block;
+  width: 4px;
+  height: 8px;
+  margin: 0 0 1px 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  transform: rotate(45deg);
+}
+
+/* 注释没有可切换的渲染态，不显示 HTML 按钮。 */
+:where(.editor-mount .ProseMirror) .nota-html-block[data-comment="true"] .nota-html-source-toggle {
+  display: none;
+}
+
+/* 兼容旧 DOM 形状：剪贴板、未挂 NodeView 的离屏路径仍可能给出源码。
+ * 这一段只处理 `data-comment` 与无子元素回退，不覆盖新视图。 */
+:where(.editor-mount .ProseMirror) div[data-type="html-block"] {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
 :where(.editor-mount .ProseMirror) div[data-type="html-block"][data-comment="true"] {
   /* 注释比普通 HTML 再淡一档、并加斜体：它是**写给自己看的**，不该和正文
-     抢注意力。⚠️ 只改颜色与字形，**不动字号与内边距**——动了的话，一段
-     注释插进正文会让上下两行的位置跳一下。 */
+     抢注意力。 */
   color: var(--fg-faint);
   font-style: italic;
 }

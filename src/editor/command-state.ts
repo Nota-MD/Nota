@@ -32,7 +32,7 @@ import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorState } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
 
-import { 覆写开着 } from "./overtype";
+import { coverWriteOpen } from "./overtype";
 
 /**
  * 光标所在块属于哪一族。**同一时刻只有一个**——工具栏那一排块级按钮
@@ -108,7 +108,7 @@ export interface CommandState {
 }
 
 /** 什么都没有的初始值。编辑器还没建好时用它。 */
-export const 空状态: CommandState = {
+export const emptyState: CommandState = {
   overtype: false,
   bold: false,
   italic: false,
@@ -125,11 +125,11 @@ export const 空状态: CommandState = {
 };
 
 /** 从文档树里读块族。`inTable` 单独一条路径（它和中途遇到的块无关）。 */
-function 读块(state: EditorState): { block: BlockKind; inTable: boolean } {
+function readBlock(state: EditorState): { block: BlockKind; inTable: boolean } {
   const { $from } = state.selection;
   let block: BlockKind = "text";
   let inTable = false;
-  let 定过 = false;
+  let fixedPass = false;
 
   // ⚠️ **从光标往上走**，不是只看 `$from.node(1)`：块可以嵌在任何深度
   // （引用里的段落、列表项里的第二段、表格单元格里的段落……），
@@ -142,15 +142,15 @@ function 读块(state: EditorState): { block: BlockKind; inTable: boolean } {
     // 表格只是"在不在里面"，不参与块族的判定——单元格里的块才是。
     if (name === "table_cell" || name === "table_header") inTable = true;
 
-    if (定过) continue;
+    if (fixedPass) continue;
     switch (name) {
       case "code_block":
         block = "codeBlock";
-        定过 = true;
+        fixedPass = true;
         break;
       case "blockquote":
         block = "quote";
-        定过 = true;
+        fixedPass = true;
         break;
       case "heading":
         // `level` 是 schema 里的属性，理论上可能是 1–6 之外的数（自定义
@@ -158,16 +158,16 @@ function 读块(state: EditorState): { block: BlockKind; inTable: boolean } {
         block = (node.attrs.level >= 1 && node.attrs.level <= 6
           ? `h${node.attrs.level}`
           : "text") as BlockKind;
-        定过 = true;
+        fixedPass = true;
         break;
       case "list_item": {
         // ⚠️ 有序/无序要从**父节点**认（列表项自己不带这个信息），
         // 而父节点正好在上面一层（`d - 1`）。
-        const 父 = d > 1 ? $from.node(d - 1).type.name : "";
+        const parent = d > 1 ? $from.node(d - 1).type.name : "";
         // `checked != null` = 任务项（`null` 是普通项，见 `insert.ts` 里那段）。
         block =
-          node.attrs.checked != null ? "task" : 父 === "ordered_list" ? "ol" : "ul";
-        定过 = true;
+          node.attrs.checked != null ? "task" : parent === "ordered_list" ? "ol" : "ul";
+        fixedPass = true;
         break;
       }
       default:
@@ -179,32 +179,32 @@ function 读块(state: EditorState): { block: BlockKind; inTable: boolean } {
 }
 
 /** 读一份完整的状态。导出来是为了让用例/别的调用点能直接问，不必建插件。 */
-export function 读状态(state: EditorState): CommandState {
+export function readState(state: EditorState): CommandState {
   const { $from, empty } = state.selection;
   // ⚠️ `storedMarks` 优先：光标刚落在某个位置、用户还没打字时，选区位置上的
   // marks 是**空的**，而下一次输入会用什么 mark 存在 `storedMarks` 里。
   // 只看 `$from.marks()` 的话，"按了 Ctrl+B 还没打字"这段时间工具栏不亮。
   const marks = state.storedMarks ?? (empty ? [] : $from.marks());
-  const 有 = (name: string) => marks.some((m) => m.type.name === name);
-  const { block, inTable } = 读块(state);
+  const has = (name: string) => marks.some((m) => m.type.name === name);
+  const { block, inTable } = readBlock(state);
 
   // 「内容目录」那一项：整篇里有没有标题。⚠️ 只走**顶层**，理由见
   // `CommandState.hasHeadings` 那段（要与 `extractOutline` 同一片视野）。
   let hasHeadings = false;
-  state.doc.forEach((节点) => {
-    if (节点.type.name === "heading") hasHeadings = true;
+  state.doc.forEach((node) => {
+    if (node.type.name === "heading") hasHeadings = true;
   });
 
   return {
-    overtype: 覆写开着(state),
-    bold: 有("strong"),
-    italic: 有("emphasis"),
-    strike: 有("strike_through"),
-    inlineCode: 有("inlineCode"),
-    highlight: 有("highlight"),
-    superscript: 有("superscript"),
-    subscript: 有("subscript"),
-    underline: 有("underline"),
+    overtype: coverWriteOpen(state),
+    bold: has("strong"),
+    italic: has("emphasis"),
+    strike: has("strike_through"),
+    inlineCode: has("inlineCode"),
+    highlight: has("highlight"),
+    superscript: has("superscript"),
+    subscript: has("subscript"),
+    underline: has("underline"),
     block,
     inTable,
     hasSelection: !empty,
@@ -218,7 +218,7 @@ export function 读状态(state: EditorState): CommandState {
  * ⚠️ 顺序必须与 `读状态` 一一对应；加字段时**两边一起加**，漏了的话症状是
  * "某一项的高亮永远不更新"——因为签名没变，通知就没发出去。
  */
-function 签名(s: CommandState): string {
+function keyName(s: CommandState): string {
   // ⚠️ `overtype` 也在签名里（2026-10-16）：它是**唯一**一格"与文档无关、
   // 却要驱动界面"的字段（`Insert` 只翻插件的 meta，不改文档）。漏掉它的症状
   // 很典型：状态栏那个 `OVR` **永远不出现**——因为签名没变，通知就没发出去
@@ -234,14 +234,14 @@ function 签名(s: CommandState): string {
  * `onChange` 在**建实例时**就会被调一次（`view` 钩子在挂载时跑），
  * 所以调用方不需要自己再读一遍初始值。
  */
-export function 光标状态插件(onChange: (state: CommandState) => void) {
+export function cursorStatePlugin(onChange: (state: CommandState) => void) {
   return $prose(() => {
-    let 上次 = "";
-    const 报 = (state: EditorState) => {
-      const now = 读状态(state);
-      const sig = 签名(now);
-      if (sig === 上次) return;
-      上次 = sig;
+    let aboveCount = "";
+    const report = (state: EditorState) => {
+      const now = readState(state);
+      const sig = keyName(now);
+      if (sig === aboveCount) return;
+      aboveCount = sig;
       onChange(now);
     };
     return new Plugin({
@@ -249,10 +249,10 @@ export function 光标状态插件(onChange: (state: CommandState) => void) {
         // ⚠️ **挂载那一刻先报一次**。只挂 `update` 的话，初值要等到用户
         // 第一次敲键/点鼠标才会送到界面——那之前工具栏是"全灭"的，
         // 而用户看到的第一眼正是那一段时间。
-        报(view.state);
+        report(view.state);
         return {
           update: (view) => {
-            报(view.state);
+            report(view.state);
             // ⚠️ **一律返回 `false`**：这个插件不改 DOM。返回 `true` 会让
             // ProseMirror 以为视图需要重读，每次事务都多一轮无谓的工作。
             return false;

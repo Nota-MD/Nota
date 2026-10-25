@@ -8,7 +8,7 @@
 
 import type { PluginInfo } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import type { 插件动作 } from "@/ui/usePlugins";
+import type { pluginAction } from "@/ui/usePlugins";
 import {
   Note,
   Range,
@@ -20,15 +20,15 @@ import {
 
 export function PluginSettingsPane({
   plugins,
-  动作,
+  action,
 }: {
   plugins: PluginInfo[];
-  动作: 插件动作;
+  action: pluginAction;
 }) {
   const t = useT();
-  const 有设置的 = plugins.filter((plugin) => plugin.settings.length > 0);
+  const hasSettingsOf = plugins.filter((plugin) => plugin.settings.length > 0);
 
-  if (有设置的.length === 0) {
+  if (hasSettingsOf.length === 0) {
     return (
       <Note>
         {t(
@@ -40,7 +40,7 @@ export function PluginSettingsPane({
 
   return (
     <>
-      {有设置的.map((plugin) => (
+      {hasSettingsOf.map((plugin) => (
         <SettingsGroup key={plugin.id} title={plugin.name}>
           {plugin.settings.map((setting) => (
             <SettingRow
@@ -61,12 +61,12 @@ export function PluginSettingsPane({
                   step={setting.step}
                   suffix={setting.unit}
                   title={setting.help || undefined}
-                  onChange={(value) => void 动作.设置(plugin.id, setting.key, value)}
+                  onChange={(value) => void action.settings(plugin.id, setting.key, value)}
                 />
               ) : setting.kind === "toggle" ? (
                 <Toggle
                   checked={setting.on}
-                  onChange={(value) => void 动作.设置(plugin.id, setting.key, value)}
+                  onChange={(value) => void action.settings(plugin.id, setting.key, value)}
                 />
               ) : (
                 <TextInput
@@ -75,7 +75,7 @@ export function PluginSettingsPane({
                   width="lg"
                   placeholder={setting.placeholder || undefined}
                   title={setting.help || undefined}
-                  onChange={(value) => void 动作.设置(plugin.id, setting.key, value)}
+                  onChange={(value) => void action.settings(plugin.id, setting.key, value)}
                 />
               )}
             </SettingRow>

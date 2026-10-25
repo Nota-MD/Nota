@@ -73,26 +73,26 @@ import { $view } from "@milkdown/kit/utils";
 import { t } from "@/i18n";
 import { writeClipboard } from "@/editor/code-block";
 import {
-  创建代码块编辑器,
-  type 代码块编辑器,
+  createCodeBlockEditor,
+  type codeBlockEditor,
 } from "@/editor/code-block-cm";
 
-import { 图表规格 } from "@/editor/diagram-node";
+import { imageTableSpec } from "@/editor/diagram-node";
 
 /** 节点名。与 plugin 里 `const id = "diagram"` 一致，判类型时要用。 */
-const 节点名 = "diagram";
+const nodeName = "diagram";
 
 /** 源码框改完多久写回文档。太短会在每个字上一笔事务，太长会觉得"没保存"。 */
-const 防抖毫秒 = 250;
+const guardDebounceMilliSeconds = 250;
 
 /** 缓存条数上限。超过就丢最老那条（LRU，见 `写缓存`）。 */
-const 缓存上限 = 50;
+const bufferSaveLimit = 50;
 
 /** 明暗。**按正文纸面判**，不按界面判（理由见 `读明暗`）。 */
-type 明暗 = "light" | "dark";
+type mode = "light" | "dark";
 
-interface 图表主题 {
-  mode: 明暗;
+interface ImageTableTheme {
+  mode: mode;
   accent: string;
   /** 缓存键与“主题变没变”判据共用的一份稳定指纹。 */
   key: string;
@@ -101,52 +101,52 @@ interface 图表主题 {
 /**
  * 一档渲染结果。**失败也是一种结果**，一样进缓存。
  */
-type 渲染结果 =
-  | { 状态: "ok"; 图形: string }
-  | { 状态: "错"; 消息: string };
+type RenderResult =
+  | { state: "ok"; imageShape: string }
+  | { state: "错"; clearMessage: string };
 
-interface 缓存项 {
+interface BufferSaveItem {
   /** 这份结果是哪份源码画的。identity 不变而源码变过时，靠它判不能复用。 */
-  源码: string;
-  结果: 渲染结果;
+  source2: string;
+  result2: RenderResult;
 }
 
 /** `identity|明暗` → 上次画出来的东西。 */
-const 缓存 = new Map<string, 缓存项>();
+const bufferSave = new Map<string, BufferSaveItem>();
 
-function 查缓存(键: string, 源码: string): 渲染结果 | null {
-  const 命中 = 缓存.get(键);
-  if (!命中 || 命中.源码 !== 源码) return null;
+function checkBufferSave(key: string, source2: string): RenderResult | null {
+  const match = bufferSave.get(key);
+  if (!match || match.source2 !== source2) return null;
   // 命中就挪到队尾（Map 的插入序就是这里的 LRU 序）。
-  缓存.delete(键);
-  缓存.set(键, 命中);
-  return 命中.结果;
+  bufferSave.delete(key);
+  bufferSave.set(key, match);
+  return match.result2;
 }
 
-function 写缓存(键: string, 源码: string, 结果: 渲染结果): void {
-  缓存.delete(键);
-  缓存.set(键, { 源码, 结果 });
-  while (缓存.size > 缓存上限) {
-    const 最老 = 缓存.keys().next();
-    if (最老.done) break;
-    缓存.delete(最老.value);
+function writeBufferSave(key: string, source2: string, result2: RenderResult): void {
+  bufferSave.delete(key);
+  bufferSave.set(key, { source2, result2 });
+  while (bufferSave.size > bufferSaveLimit) {
+    const mostOld = bufferSave.keys().next();
+    if (mostOld.done) break;
+    bufferSave.delete(mostOld.value);
   }
 }
 
 /** mermaid 每次渲染要一个**独一无二**的 id（它的内部 CSS 就是按这个 id 限域的）。 */
-let 渲染序号 = 0;
+let renderIndex = 0;
 
 /** 渲染的串行链。理由见 `渲染`。 */
-let 渲染链: Promise<unknown> = Promise.resolve();
+let renderChain: Promise<unknown> = Promise.resolve();
 
-function 排队<T>(任务: () => Promise<T>): Promise<T> {
+function arrangeQueue<T>(taskTask: () => Promise<T>): Promise<T> {
   // 前一个任务失败也要接着跑下一个，所以两个分支都给同一个 `任务`。
-  const 结果 = 渲染链.then(任务, 任务);
-  渲染链 = 结果.then(
+  const result2 = renderChain.then(taskTask, taskTask);
+  renderChain = result2.then(
     () => undefined,
     () => undefined,
   );
-  return 结果;
+  return result2;
 }
 
 /**
@@ -163,29 +163,29 @@ function 排队<T>(任务: () => Promise<T>): Promise<T> {
  * （ESM 的模块记录只有一份），连"加载中"的状态都不用画：
  * 第一次出图晚一两秒，之后有缓存。
  */
-async function 渲染(源码: string, 主题: 图表主题): Promise<渲染结果> {
-  return 排队(async () => {
+async function render(source2: string, theme: ImageTableTheme): Promise<RenderResult> {
+  return arrangeQueue(async () => {
     const mermaid = (await import("mermaid")).default;
-    const mindmap = 图表类型(源码) === "mindmap";
+    const mindmap = imageTableType(source2) === "mindmap";
 
     // `startOnLoad` 这里重申一遍：`initialize` 是"整个配置表覆盖一次"，
     // 少给一条就落回默认值（默认 `true` 会让 mermaid 自己去扫页面上的
     // `.mermaid` 节点，那是另一条我们不要的路）。
     mermaid.initialize({
       startOnLoad: false,
-      theme: mindmap ? "base" : 主题.mode === "dark" ? "dark" : "default",
-      themeVariables: mindmap ? 思维导图配色(主题.mode, 主题.accent) : undefined,
+      theme: mindmap ? "base" : theme.mode === "dark" ? "dark" : "default",
+      themeVariables: mindmap ? thinkDimensionGuideImageConfigureColor(theme.mode, theme.accent) : undefined,
     });
 
-    const 编号 = `nota-mermaid-${++渲染序号}`;
+    const editNumber = `nota-mermaid-${++renderIndex}`;
     try {
       // ⚠️ 不传第三个参数（容器）：给了容器它会直接改我们传进去的元素，
       // 我们要的是拿到字符串自己插——插哪儿、什么时候插由本文件说了算。
-      const { svg } = await mermaid.render(编号, 源码);
-      return { 状态: "ok", 图形: svg };
+      const { svg } = await mermaid.render(editNumber, source2);
+      return { state: "ok", imageShape: svg };
     } catch (e) {
-      清除残留(编号);
-      return { 状态: "错", 消息: 提取消息(e) };
+      clearRemoveRemnantKeep(editNumber);
+      return { state: "错", clearMessage: raiseGetClearMessage(e) };
     }
   });
 }
@@ -200,10 +200,10 @@ async function 渲染(源码: string, 主题: 图表主题): Promise<渲染结�
  * 红炸弹错误图**，挂在 body 最后、盖在所有东西上面，而本块里那块说明卡也在报
  * 同一件事——两个错误提示，其中一个还不在文档流里。
  */
-function 清除残留(编号: string): void {
+function clearRemoveRemnantKeep(editNumber: string): void {
   // 非 sandbox（默认 `securityLevel: "strict"`）挂的是 `d<id>`；sandbox 档是
   // iframe `i<id>`。全试一遍，没有就算了。
-  for (const id of [`d${编号}`, `i${编号}`, 编号]) {
+  for (const id of [`d${editNumber}`, `i${editNumber}`, editNumber]) {
     document.getElementById(id)?.remove();
   }
 }
@@ -215,14 +215,14 @@ function 清除残留(编号: string): void {
  * `str` / `hash` 的普通对象，`message` 未必有——只写 `e.message` 会得到
  * `undefined` 摆在用户面前。
  */
-function 提取消息(e: unknown): string {
+function raiseGetClearMessage(e: unknown): string {
   if (e instanceof Error && e.message) return e.message;
   if (typeof e === "string") return e;
 
-  const 形如错误 = e as { message?: unknown; str?: unknown } | null;
-  if (形如错误) {
-    if (typeof 形如错误.message === "string" && 形如错误.message) return 形如错误.message;
-    if (typeof 形如错误.str === "string" && 形如错误.str) return 形如错误.str;
+  const shapeLikeError = e as { message?: unknown; str?: unknown } | null;
+  if (shapeLikeError) {
+    if (typeof shapeLikeError.message === "string" && shapeLikeError.message) return shapeLikeError.message;
+    if (typeof shapeLikeError.str === "string" && shapeLikeError.str) return shapeLikeError.str;
   }
   return String(e);
 }
@@ -234,29 +234,29 @@ function 提取消息(e: unknown): string {
  * **用户写的 CSS**，`#abc`、`rgb()`、`hsl()`、系统色、`color-mix()` 都可能出现，
  * 自己解析等于把"哪些写法算数"重新定义一遍。
  */
-function 归一颜色(值: string): [number, number, number] | null {
-  if (!值) return null;
-  const 上下文 = document.createElement("canvas").getContext("2d");
-  if (!上下文) return null;
+function normalizeColor(value2: string): [number, number, number] | null {
+  if (!value2) return null;
+  const aboveBelowText = document.createElement("canvas").getContext("2d");
+  if (!aboveBelowText) return null;
 
   // 先填一个哨兵：**无效的颜色值不会改变 `fillStyle`**，读回来还是哨兵，
   // 于是"认不出来"这件事是判得出来的（换成先设 `#000` 就不行——黑色是合法值）。
-  上下文.fillStyle = "#010203";
-  上下文.fillStyle = 值;
-  const 归一 = 上下文.fillStyle;
-  if (归一 === "#010203") return null;
+  aboveBelowText.fillStyle = "#010203";
+  aboveBelowText.fillStyle = value2;
+  const normalize = aboveBelowText.fillStyle;
+  if (normalize === "#010203") return null;
 
   // 归一之后只可能是 `#rrggbb` 或 `rgba(r, g, b, a)` 两种写法。
-  const 十六 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(归一);
-  if (十六) {
-    const [, r, g, b] = 十六;
+  const tenSix = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(normalize);
+  if (tenSix) {
+    const [, r, g, b] = tenSix;
     if (r && g && b) {
       return [parseInt(r, 16) / 255, parseInt(g, 16) / 255, parseInt(b, 16) / 255];
     }
   }
-  const 函数式 = /^rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(归一);
-  if (函数式) {
-    const [, r, g, b] = 函数式;
+  const functionNumberStyle = /^rgba?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(normalize);
+  if (functionNumberStyle) {
+    const [, r, g, b] = functionNumberStyle;
     if (r && g && b) {
       return [Number(r) / 255, Number(g) / 255, Number(b) / 255];
     }
@@ -264,41 +264,41 @@ function 归一颜色(值: string): [number, number, number] | null {
   return null;
 }
 
-function 两位(值: number): string {
-  return Math.round(Math.min(1, Math.max(0, 值)) * 255)
+function twoDigits(value2: number): string {
+  return Math.round(Math.min(1, Math.max(0, value2)) * 255)
     .toString(16)
     .padStart(2, "0");
 }
 
-function 颜色十六(通道: [number, number, number]): string {
-  const [r, g, b] = 通道;
-  return `#${两位(r)}${两位(g)}${两位(b)}`;
+function colorHex(throughWay: [number, number, number]): string {
+  const [r, g, b] = throughWay;
+  return `#${twoDigits(r)}${twoDigits(g)}${twoDigits(b)}`;
 }
 
-function 颜色转hsl(通道: [number, number, number]): { h: number; s: number; l: number } {
-  const [r, g, b] = 通道;
-  const 大 = Math.max(r, g, b);
-  const 小 = Math.min(r, g, b);
-  const 差 = 大 - 小;
-  const l = (大 + 小) / 2;
-  if (差 === 0) return { h: 0, s: 0, l };
-  const s = l > 0.5 ? 差 / (2 - 大 - 小) : 差 / (大 + 小);
+function colorToHsl(throughWay: [number, number, number]): { h: number; s: number; l: number } {
+  const [r, g, b] = throughWay;
+  const large = Math.max(r, g, b);
+  const small = Math.min(r, g, b);
+  const difference = large - small;
+  const l = (large + small) / 2;
+  if (difference === 0) return { h: 0, s: 0, l };
+  const s = l > 0.5 ? difference / (2 - large - small) : difference / (large + small);
   let h: number;
-  if (大 === r) h = (g - b) / 差 + (g < b ? 6 : 0);
-  else if (大 === g) h = (b - r) / 差 + 2;
-  else h = (r - g) / 差 + 4;
+  if (large === r) h = (g - b) / difference + (g < b ? 6 : 0);
+  else if (large === g) h = (b - r) / difference + 2;
+  else h = (r - g) / difference + 4;
   return { h: h * 60, s, l };
 }
 
-function hsl颜色(h: number, s: number, l: number): string {
-  const 色相 = (((h % 360) + 360) % 360) / 360;
-  const 饱和 = Math.max(0, Math.min(1, s));
-  const 亮度 = Math.max(0, Math.min(1, l));
-  if (饱和 === 0) return 颜色十六([亮度, 亮度, 亮度]);
-  const q = 亮度 < 0.5 ? 亮度 * (1 + 饱和) : 亮度 + 饱和 - 亮度 * 饱和;
-  const p = 2 * 亮度 - q;
-  const 分量 = (偏移: number): number => {
-    let t = 色相 + 偏移;
+function hslColor(h: number, s: number, l: number): string {
+  const hue = (((h % 360) + 360) % 360) / 360;
+  const saturation = Math.max(0, Math.min(1, s));
+  const lightness = Math.max(0, Math.min(1, l));
+  if (saturation === 0) return colorHex([lightness, lightness, lightness]);
+  const q = lightness < 0.5 ? lightness * (1 + saturation) : lightness + saturation - lightness * saturation;
+  const p = 2 * lightness - q;
+  const shareMeasure = (offset: number): number => {
+    let t = hue + offset;
     if (t < 0) t += 1;
     if (t > 1) t -= 1;
     if (t < 1 / 6) return p + (q - p) * 6 * t;
@@ -306,24 +306,24 @@ function hsl颜色(h: number, s: number, l: number): string {
     if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
     return p;
   };
-  return 颜色十六([分量(1 / 3), 分量(0), 分量(-1 / 3)]);
+  return colorHex([shareMeasure(1 / 3), shareMeasure(0), shareMeasure(-1 / 3)]);
 }
 
 /**
  * 认图表类型。跳过空行、Mermaid 注释和 `---` 配置块，只看第一条真正的指令。
  * 只用于决定“思维导图要不要改配色”，认不出来时按普通图表处理。
  */
-function 图表类型(源码: string): string {
-  let 配置块 = false;
-  for (const 原行 of 源码.split(/\r?\n/)) {
-    const 行 = 原行.trim();
-    if (!行 || 行.startsWith("%%")) continue;
-    if (行 === "---") {
-      配置块 = !配置块;
+function imageTableType(source2: string): string {
+  let configurePlaceBlock = false;
+  for (const originalLine of source2.split(/\r?\n/)) {
+    const line3 = originalLine.trim();
+    if (!line3 || line3.startsWith("%%")) continue;
+    if (line3 === "---") {
+      configurePlaceBlock = !configurePlaceBlock;
       continue;
     }
-    if (配置块) continue;
-    return 行.split(/\s+/, 1)[0]?.toLowerCase() ?? "";
+    if (configurePlaceBlock) continue;
+    return line3.split(/\s+/, 1)[0]?.toLowerCase() ?? "";
   }
   return "";
 }
@@ -340,43 +340,43 @@ function 图表类型(源码: string): string {
  * 个亮度点），所以这里的输入亮度要先把这一步补回去；否则深色模式会得到
  * 近黑色块。这个补偿只影响最终颜色，不改变文档里的任何源码。
  */
-function 思维导图配色(mode: 明暗, accent: string): Record<string, string> {
-  const 通道 = 归一颜色(accent) ?? [0.208, 0.518, 0.894];
-  const { h, s } = 颜色转hsl(通道);
-  const 饱和 = Math.min(0.42, Math.max(0.2, s * 0.72 + 0.08));
-  const 深色 = mode === "dark";
-  const 分支色相 = [-32, 0, 26, -54, 48, 72, -74, 14, 38, -44, 58, -16];
-  const 浅色亮度 = [0.76, 0.81, 0.78, 0.84, 0.79, 0.82, 0.77, 0.83, 0.8, 0.75, 0.82, 0.78];
-  const 深色亮度 = [0.23, 0.27, 0.2, 0.29, 0.25, 0.22, 0.31, 0.24, 0.28, 0.19, 0.26, 0.21];
-  const 文字 = 深色 ? "#f4f2ee" : "#202124";
-  const 根底 = hsl颜色(h, Math.min(0.48, 饱和 + 0.08), 深色 ? 0.67 : 0.46);
-  const 根字 = 深色 ? "#16181b" : "#ffffff";
-  const 变量: Record<string, string> = {
+function thinkDimensionGuideImageConfigureColor(mode: mode, accent: string): Record<string, string> {
+  const throughWay = normalizeColor(accent) ?? [0.208, 0.518, 0.894];
+  const { h, s } = colorToHsl(throughWay);
+  const saturation = Math.min(0.42, Math.max(0.2, s * 0.72 + 0.08));
+  const dark = mode === "dark";
+  const branchHue = [-32, 0, 26, -54, 48, 72, -74, 14, 38, -44, 58, -16];
+  const lightLuminance = [0.76, 0.81, 0.78, 0.84, 0.79, 0.82, 0.77, 0.83, 0.8, 0.75, 0.82, 0.78];
+  const darkLuminance = [0.23, 0.27, 0.2, 0.29, 0.25, 0.22, 0.31, 0.24, 0.28, 0.19, 0.26, 0.21];
+  const text3 = dark ? "#f4f2ee" : "#202124";
+  const rootBottom = hslColor(h, Math.min(0.48, saturation + 0.08), dark ? 0.67 : 0.46);
+  const rootCharacter = dark ? "#16181b" : "#ffffff";
+  const changeMeasure: Record<string, string> = {
     background: "transparent",
     fontFamily: "var(--font-ui), sans-serif",
     fontSize: "14px",
-    primaryColor: 根底,
-    primaryTextColor: 文字,
-    primaryBorderColor: hsl颜色(h, Math.min(0.48, 饱和 + 0.12), 深色 ? 0.54 : 0.35),
-    secondaryColor: hsl颜色(h + 24, 饱和, 深色 ? 0.22 : 0.8),
-    tertiaryColor: hsl颜色(h - 28, 饱和, 深色 ? 0.26 : 0.8),
-    textColor: 文字,
-    nodeTextColor: 文字,
-    labelTextColor: 文字,
-    scaleLabelColor: 文字,
-    git0: 根底,
-    gitBranchLabel0: 根字,
+    primaryColor: rootBottom,
+    primaryTextColor: text3,
+    primaryBorderColor: hslColor(h, Math.min(0.48, saturation + 0.12), dark ? 0.54 : 0.35),
+    secondaryColor: hslColor(h + 24, saturation, dark ? 0.22 : 0.8),
+    tertiaryColor: hslColor(h - 28, saturation, dark ? 0.26 : 0.8),
+    textColor: text3,
+    nodeTextColor: text3,
+    labelTextColor: text3,
+    scaleLabelColor: text3,
+    git0: rootBottom,
+    gitBranchLabel0: rootCharacter,
   };
 
-  for (let i = 0; i < 分支色相.length; i += 1) {
-    const hue = h + (分支色相[i] ?? 0);
-    const 目标亮度 = (深色 ? 深色亮度 : 浅色亮度)[i] ?? (深色 ? 0.24 : 0.8);
-    const 输入亮度 = 深色 ? 目标亮度 + 0.75 : 目标亮度 + 0.25;
-    变量[`cScale${i}`] = hsl颜色(hue, 饱和, 输入亮度);
-    变量[`cScaleInv${i}`] = hsl颜色(hue, Math.min(0.48, 饱和 + 0.08), 深色 ? 0.72 : 0.34);
-    变量[`cScaleLabel${i}`] = 文字;
+  for (let i = 0; i < branchHue.length; i += 1) {
+    const hue = h + (branchHue[i] ?? 0);
+    const targetLightness = (dark ? darkLuminance : lightLuminance)[i] ?? (dark ? 0.24 : 0.8);
+    const inputLightness = dark ? targetLightness + 0.75 : targetLightness + 0.25;
+    changeMeasure[`cScale${i}`] = hslColor(hue, saturation, inputLightness);
+    changeMeasure[`cScaleInv${i}`] = hslColor(hue, Math.min(0.48, saturation + 0.08), dark ? 0.72 : 0.34);
+    changeMeasure[`cScaleLabel${i}`] = text3;
   }
-  return 变量;
+  return changeMeasure;
 }
 
 /**
@@ -388,9 +388,9 @@ function 思维导图配色(mode: 明暗, accent: string): Record<string, string
  * 深色文档里的第一笔会按"读不到 → 浅色"画，而且**不会自己纠正**
  * （主题没变，观察器不响）。
  */
-function 读变量(元素: HTMLElement | null | undefined, 名: string): string {
-  if (!元素 || !元素.isConnected) return "";
-  return getComputedStyle(元素).getPropertyValue(名).trim();
+function readChangeMeasure(element: HTMLElement | null | undefined, name3: string): string {
+  if (!element || !element.isConnected) return "";
+  return getComputedStyle(element).getPropertyValue(name3).trim();
 }
 
 /**
@@ -408,15 +408,15 @@ function 读变量(元素: HTMLElement | null | undefined, 名: string): string 
  * 取不到变量就按浅色处理：浅色是 mermaid 的默认主题，猜错的那一版至少是它
  * 自己设计的配色。
  */
-function 读明暗(自己的根: HTMLElement, 视图根: HTMLElement | null | undefined): 明暗 {
-  const 底色 =
-    读变量(自己的根, "--doc-bg") ||
-    读变量(视图根, "--doc-bg") ||
-    读变量(自己的根, "--bg") ||
-    读变量(视图根, "--bg");
-  const 通道 = 归一颜色(底色);
-  if (!通道) return "light";
-  const [r, g, b] = 通道;
+function readMode(selfSelfOfRoot: HTMLElement, viewRoot: HTMLElement | null | undefined): mode {
+  const bottomColor =
+    readChangeMeasure(selfSelfOfRoot, "--doc-bg") ||
+    readChangeMeasure(viewRoot, "--doc-bg") ||
+    readChangeMeasure(selfSelfOfRoot, "--bg") ||
+    readChangeMeasure(viewRoot, "--bg");
+  const throughWay = normalizeColor(bottomColor);
+  if (!throughWay) return "light";
+  const [r, g, b] = throughWay;
   // 感知亮度。纸面这两档离阈值都远（近黑 / 近白），阈值取哪儿都差不多。
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5 ? "dark" : "light";
 }
@@ -425,13 +425,13 @@ function 读明暗(自己的根: HTMLElement, 视图根: HTMLElement | null | un
  * 图表重画要跟着两件事走：纸面明暗与主题色。只跟明暗的话，换一个同明暗的
  * 界面主题后，思维导图仍会停在旧强调色上。
  */
-function 读图表主题(自己的根: HTMLElement, 视图根: HTMLElement): 图表主题 {
-  const mode = 读明暗(自己的根, 视图根);
-  const 强调 =
-    归一颜色(读变量(自己的根, "--accent")) ??
-    归一颜色(读变量(视图根, "--accent")) ??
+function readDiagramTheme(selfSelfOfRoot: HTMLElement, viewRoot: HTMLElement): ImageTableTheme {
+  const mode = readMode(selfSelfOfRoot, viewRoot);
+  const strongConfigure =
+    normalizeColor(readChangeMeasure(selfSelfOfRoot, "--accent")) ??
+    normalizeColor(readChangeMeasure(viewRoot, "--accent")) ??
     ([0.208, 0.518, 0.894] as [number, number, number]);
-  const accent = 颜色十六(强调);
+  const accent = colorHex(strongConfigure);
   return { mode, accent, key: `${mode}|${accent}` };
 }
 
@@ -449,28 +449,28 @@ function 读图表主题(自己的根: HTMLElement, 视图根: HTMLElement): 图
  * （键里带明暗，另一档早就画过一次了），所以一次主题切换的代价是每块一次
  * `innerHTML`，不会重新去跑 mermaid。
  */
-const 活动视图 = new Set<() => void>();
-let 主题观察器: MutationObserver | null = null;
+const activityView = new Set<() => void>();
+let themeObserver: MutationObserver | null = null;
 
-function 跟上主题(回调: () => void): void {
-  活动视图.add(回调);
-  if (主题观察器) return;
+function followAboveTheme(returnConfigure: () => void): void {
+  activityView.add(returnConfigure);
+  if (themeObserver) return;
 
-  主题观察器 = new MutationObserver(() => {
-    for (const 回调 of 活动视图) 回调();
+  themeObserver = new MutationObserver(() => {
+    for (const returnConfigure of activityView) returnConfigure();
   });
-  主题观察器.observe(document.documentElement, {
+  themeObserver.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["data-ui-mode", "data-ui-style", "style"],
   });
-  主题观察器.observe(document.head, { childList: true, subtree: true });
+  themeObserver.observe(document.head, { childList: true, subtree: true });
 }
 
-function 别再跟了(回调: () => void): void {
-  活动视图.delete(回调);
-  if (活动视图.size === 0) {
-    主题观察器?.disconnect();
-    主题观察器 = null;
+function distinguishAgainFollowDone(returnConfigure: () => void): void {
+  activityView.delete(returnConfigure);
+  if (activityView.size === 0) {
+    themeObserver?.disconnect();
+    themeObserver = null;
   }
 }
 
@@ -481,9 +481,9 @@ function 别再跟了(回调: () => void): void {
  * `toMarkdown` 读的也是它），**不在节点的子内容里**——这个节点是 `atom`，
  * 子内容一直是空的。
  */
-function 取源码(node: PMNode): string {
-  const 值: unknown = node.attrs.value;
-  return typeof 值 === "string" ? 值 : "";
+function readSource(node: PMNode): string {
+  const value2: unknown = node.attrs.value;
+  return typeof value2 === "string" ? value2 : "";
 }
 
 /**
@@ -493,9 +493,9 @@ function 取源码(node: PMNode): string {
  * `nanoid(8)`，字母表只有 `abcdefg`），**改源码不会换**——所以它是"这个块"
  * 的标识，不是"这份源码"的标识。缓存键用它，但**必须再比一遍源码**。
  */
-function 取身份(node: PMNode): string {
-  const 值: unknown = node.attrs.identity;
-  return typeof 值 === "string" ? 值 : "";
+function getBodyPart(node: PMNode): string {
+  const value2: unknown = node.attrs.identity;
+  return typeof value2 === "string" ? value2 : "";
 }
 
 export const diagramView = $view(
@@ -503,7 +503,7 @@ export const diagramView = $view(
   // `$view` 收的是 `$Node | $Mark`（同 `code-block.ts` 那句注）。
   // 2026-10-04 起这颗 schema 是本仓自己的（`diagram-node.ts::图表规格`，
   // 第 27 项替掉了 `@milkdown/plugin-diagram`），形状与上游逐字段一致。
-  图表规格.node,
+  imageTableSpec.node,
   () =>
     (initialNode: PMNode, view: EditorView, getPos: () => number | undefined): NodeView => {
       // ── 骨架 ──────────────────────────────────────────────────────────
@@ -528,34 +528,34 @@ export const diagramView = $view(
       const sourceShell = document.createElement("div");
       sourceShell.className = "nota-diagram-source-shell";
 
-      const 源码框 = document.createElement("div");
-      源码框.className = "nota-diagram-source nota-diagram-cm";
+      const sourceBox = document.createElement("div");
+      sourceBox.className = "nota-diagram-source nota-diagram-cm";
 
-      const 预览 = document.createElement("div");
-      预览.className = "nota-diagram-preview";
+      const preview = document.createElement("div");
+      preview.className = "nota-diagram-preview";
 
       const sourceBar = document.createElement("div");
       sourceBar.className = "nota-diagram-source-bar";
 
-      const 折叠 = document.createElement("button");
-      折叠.type = "button";
-      折叠.className = "nota-code-btn";
-      折叠.textContent = t("Collapse");
-      折叠.title = t("Collapse this diagram source");
+      const collapse2 = document.createElement("button");
+      collapse2.type = "button";
+      collapse2.className = "nota-code-btn";
+      collapse2.textContent = t("Collapse");
+      collapse2.title = t("Collapse this diagram source");
 
-      const 复制 = document.createElement("button");
-      复制.type = "button";
-      复制.className = "nota-code-btn";
-      复制.textContent = t("Copy");
-      复制.title = t("Copy Mermaid source");
+      const copy = document.createElement("button");
+      copy.type = "button";
+      copy.className = "nota-code-btn";
+      copy.textContent = t("Copy");
+      copy.title = t("Copy Mermaid source");
 
-      const 语言 = document.createElement("span");
-      语言.className = "nota-diagram-language";
-      语言.textContent = "mermaid";
+      const language = document.createElement("span");
+      language.className = "nota-diagram-language";
+      language.textContent = "mermaid";
 
-      sourceBar.append(折叠, 复制, 语言);
-      sourceShell.append(源码框, sourceBar);
-      body.append(sourceShell, 预览);
+      sourceBar.append(collapse2, copy, language);
+      sourceShell.append(sourceBox, sourceBar);
+      body.append(sourceShell, preview);
       dom.append(body);
 
       // ── 这个视图的状态（都不进文档）──────────────────────────────────
@@ -564,49 +564,49 @@ export const diagramView = $view(
        * 永远不变（`code-block.ts` 顶上那段踩过这个坑：拿旧节点读属性会读出
        * 老值，而症状只在那一个动作上发作）。
        */
-      let 当前 = initialNode;
+      let current = initialNode;
       /** 最近一次**由本视图**写进文档的源码，用来分清"这变化是我派的还是外面改的"。 */
-      let 最后派发 = 取源码(initialNode);
+      let mostAfterDispatch = readSource(initialNode);
       /** 屏幕上有没有画过东西。只用来决定"第一次渲染要不要先摆一句正在渲染"。 */
-      let 画过 = false;
+      let rendered = false;
       /** `已画` 用的是哪一档配色。主题一变就得重画。 */
-      let 已画主题 = "";
+      let renderedTheme = "";
       /** 代号：异步渲染回来时用它判"这份结果是不是已经过期了"。 */
-      let 代号 = 0;
+      let representNumber = 0;
       /** 防抖计时器；`null` = 没有待派发的内容。 */
-      let 防抖: number | null = null;
-      let 代码编辑器: 代码块编辑器 | null = null;
+      let guardDebounce: number | null = null;
+      let codeEditor: codeBlockEditor | null = null;
       // ── 画 ────────────────────────────────────────────────────────────
 
       /** 说明卡：标题 + 一段原文 + 可选一颗按钮。出错、空块、渲染中都用它。 */
-      function 说明卡(标题: string, 正文: string, 按钮: string | null): HTMLElement {
-        const 卡 = document.createElement("div");
-        卡.className = "nota-diagram-note";
+      function descriptionCard(markTitle: string, body2: string, PressButton: string | null): HTMLElement {
+        const card = document.createElement("div");
+        card.className = "nota-diagram-note";
 
-        const 题 = document.createElement("div");
-        题.className = "nota-diagram-note-title";
-        题.textContent = 标题;
-        卡.append(题);
+        const title = document.createElement("div");
+        title.className = "nota-diagram-note-title";
+        title.textContent = markTitle;
+        card.append(title);
 
         // ⚠️ 是 `div` **不是 `pre`**：`editor.css` 里有一条
         // `.editor-mount .ProseMirror pre`（代码块那套：底色、描边、34px 的下内边距），
         // 用 `pre` 就得再写五六条去抵消它。换行/空白由 CSS 的 `white-space: pre-wrap`
         // 保——那正是这里要的全部。
-        const 文 = document.createElement("div");
-        文.className = "nota-diagram-note-detail";
-        文.textContent = 正文;
-        卡.append(文);
+        const text4 = document.createElement("div");
+        text4.className = "nota-diagram-note-detail";
+        text4.textContent = body2;
+        card.append(text4);
 
-        if (按钮) {
-          const 按 = document.createElement("button");
-          按.type = "button";
-          按.className = "nota-code-btn nota-diagram-note-btn";
-          按.textContent = 按钮;
-          按.addEventListener("mousedown", (e) => e.preventDefault());
-          按.addEventListener("click", () => 代码编辑器?.聚焦() ?? view.focus());
-          卡.append(按);
+        if (PressButton) {
+          const press = document.createElement("button");
+          press.type = "button";
+          press.className = "nota-code-btn nota-diagram-note-btn";
+          press.textContent = PressButton;
+          press.addEventListener("mousedown", (e) => e.preventDefault());
+          press.addEventListener("click", () => codeEditor?.clusterFocus() ?? view.focus());
+          card.append(press);
         }
-        return 卡;
+        return card;
       }
 
       /**
@@ -615,14 +615,14 @@ export const diagramView = $view(
        * ⚠️ `data-state` 的值是**英文**（CSS 要按它选）；卡里的字才是中文——
        * 这条分界与全仓一致。
        */
-      function 画(结果: 渲染结果 | null): void {
-        画过 = true;
-        预览.replaceChildren();
+      function draw(result2: RenderResult | null): void {
+        rendered = true;
+        preview.replaceChildren();
 
-        if (结果 === null) {
-          预览.dataset.state = "empty";
-          预览.append(
-            说明卡(
+        if (result2 === null) {
+          preview.dataset.state = "empty";
+          preview.append(
+            descriptionCard(
               t("There is no diagram source here yet"),
               t("Write Mermaid in the code box above, for example:\ngraph TD; A[Start] --> B[End]"),
               null,
@@ -631,25 +631,25 @@ export const diagramView = $view(
           return;
         }
 
-        if (结果.状态 === "错") {
-          预览.dataset.state = "error";
-          预览.append(
-            说明卡(
+        if (result2.state === "错") {
+          preview.dataset.state = "error";
+          preview.append(
+            descriptionCard(
               t("The diagram has a syntax error and cannot be drawn (your source is untouched in the document)."),
-              结果.消息,
+              result2.clearMessage,
               null,
             ),
           );
           return;
         }
 
-        预览.dataset.state = "ok";
+        preview.dataset.state = "ok";
         // mermaid 返回的这段 SVG 已经过 DOMPurify 洗过（它默认 `securityLevel:
         // "strict"`，那条路一定会走 `DOMPurify.sanitize`），所以这里可以直接
         // 用 `innerHTML`——这是 mermaid 官方文档给的用法。
-        预览.innerHTML = 结果.图形;
-        const 图 = 预览.querySelector("svg");
-        if (图 instanceof SVGSVGElement) {
+        preview.innerHTML = result2.imageShape;
+        const image = preview.querySelector("svg");
+        if (image instanceof SVGSVGElement) {
           // ⚠️ mermaid 给的 `<svg>` 上带的是**内联**样式（`width="100%"` 属性 ＋
           // 一条 `max-width`），内联权重高过样式表，所以只能在 DOM 上改
           // （在 CSS 里跟它较劲要动 `!important`，那是最后手段）。
@@ -662,16 +662,16 @@ export const diagramView = $view(
           // `width="100%"` 配 `height: auto` 是按 viewBox 的宽高比**等比放大**的，
           // 容器多宽它就放多大，`Start` 一个词占了半个屏幕、块还溢出到屏幕外。
           // 换成"自然宽与容器宽取小"之后：宽窗格里按自然大小画，窄窗格里才缩。
-          const 自然宽 = 图.viewBox.baseVal.width;
-          图.style.maxWidth = 自然宽 > 0 ? `min(100%, ${Math.ceil(自然宽)}px)` : "100%";
-          图.style.height = "auto";
+          const selfThenWidth = image.viewBox.baseVal.width;
+          image.style.maxWidth = selfThenWidth > 0 ? `min(100%, ${Math.ceil(selfThenWidth)}px)` : "100%";
+          image.style.height = "auto";
         }
       }
 
       /** 第一帧专用：还没画过任何东西时先摆一句，免得是个空盒子。 */
-      function 画中(): void {
-        预览.dataset.state = "loading";
-        预览.replaceChildren(说明卡(t("Rendering the diagram…"), t("Mermaid is parsing this source."), null));
+      function drawMiddle(): void {
+        preview.dataset.state = "loading";
+        preview.replaceChildren(descriptionCard(t("Rendering the diagram…"), t("Mermaid is parsing this source."), null));
       }
 
       // ── 同步 ──────────────────────────────────────────────────────────
@@ -679,40 +679,40 @@ export const diagramView = $view(
       /**
        * 让屏幕跟上节点：**源码 + 明暗**没变就不重渲染。
        */
-      async function 同步(): Promise<void> {
-        const 源码 = 取源码(当前);
-        const 主题 = 读图表主题(dom, view.dom);
-        已画主题 = 主题.key;
+      async function sameStep(): Promise<void> {
+        const source2 = readSource(current);
+        const theme = readDiagramTheme(dom, view.dom);
+        renderedTheme = theme.key;
 
-        if (源码.trim() === "") {
+        if (source2.trim() === "") {
           // 空源码不交给 mermaid（它会当解析失败报一句"没有识别出图表类型"，
           // 那是让用户对着一个还没写东西的块看错误提示）。
-          代号++;
-          画(null);
+          representNumber++;
+          draw(null);
           return;
         }
 
         // ⚠️ 键里带明暗：同一份源码在深色/浅色下是**两张图**，不能互相顶。
         // ⚠️ `identity` 可能是空串（schema 的默认值）——那时这条键是共用的，
         // 但下面的源码比对会挡住错用，代价只是那种块之间会来回顶掉缓存。
-        const 键 = `${取身份(当前)}|${主题.key}`;
-        const 命中 = 查缓存(键, 源码);
-        if (命中) {
-          代号++;
-          画(命中);
+        const key = `${getBodyPart(current)}|${theme.key}`;
+        const match = checkBufferSave(key, source2);
+        if (match) {
+          representNumber++;
+          draw(match);
           return;
         }
 
-        const 我的代号 = ++代号;
+        const selfOfRepresentNumber = ++representNumber;
         // ⚠️ 已经画过就**留着上一版**：改一个字闪一下白是更糟的观感。
-        if (!画过) 画中();
+        if (!rendered) drawMiddle();
 
-        const 结果 = await 渲染(源码, 主题);
+        const result2 = await render(source2, theme);
         // 期间节点又变了（或者视图没了）→ 这份结果作废。
-        if (我的代号 !== 代号) return;
-        写缓存(键, 源码, 结果);
-        已画主题 = 主题.key;
-        画(结果);
+        if (selfOfRepresentNumber !== representNumber) return;
+        writeBufferSave(key, source2, result2);
+        renderedTheme = theme.key;
+        draw(result2);
       }
 
       /**
@@ -721,77 +721,77 @@ export const diagramView = $view(
        * ⚠️ **只能走 `setNodeMarkup` 改 `attrs.value`**：那才是文档里的真相。
        * ⚠️ `identity` 要**原样带过去**（`{ ...节点.attrs }`），换了它缓存键就换了。
        */
-      function 派发(新源码: string): void {
+      function dispatch(newValueSource: string): void {
         const pos = getPos();
         if (typeof pos !== "number") return;
 
-        const 节点 = view.state.doc.nodeAt(pos);
-        if (!节点 || 节点.type.name !== 节点名) return;
-        if (取源码(节点) === 新源码) return;
+        const node = view.state.doc.nodeAt(pos);
+        if (!node || node.type.name !== nodeName) return;
+        if (readSource(node) === newValueSource) return;
 
-        最后派发 = 新源码;
+        mostAfterDispatch = newValueSource;
         view.dispatch(
-          view.state.tr.setNodeMarkup(pos, undefined, { ...节点.attrs, value: 新源码 }),
+          view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, value: newValueSource }),
         );
       }
 
       /** 有没派发完的就立刻派发（失焦、视图销毁时用）。 */
-      function 先派发(): void {
-        if (防抖 === null) return;
-        window.clearTimeout(防抖);
-        防抖 = null;
-        派发(代码编辑器?.取文本() ?? "");
+      function firstDispatch(): void {
+        if (guardDebounce === null) return;
+        window.clearTimeout(guardDebounce);
+        guardDebounce = null;
+        dispatch(codeEditor?.getText() ?? "");
       }
 
       // ── CodeMirror：Mermaid 源码的输入面 ─────────────────────────────
       // 节点正文始终在 PM 的 `attrs.value` 里；CM 只负责输入、选区、配对、
       // Tab 缩进与剪贴板。粘贴事件必须落在 CM 自己的 DOM 上，不能再交给
       // 外层 ProseMirror，否则会变成"源码框空着、正文多出一段粘贴内容"。
-      代码编辑器 = 创建代码块编辑器({
-        初始文本: 取源码(initialNode),
-        初始语言: "mermaid",
-        文本变化: (新文) => {
-          if (防抖 !== null) window.clearTimeout(防抖);
-          防抖 = window.setTimeout(() => {
-            防抖 = null;
-            派发(新文);
-          }, 防抖毫秒);
+      codeEditor = createCodeBlockEditor({
+        initialStartText: readSource(initialNode),
+        initialStartLanguage: "mermaid",
+        textChangeConvert: (newText) => {
+          if (guardDebounce !== null) window.clearTimeout(guardDebounce);
+          guardDebounce = window.setTimeout(() => {
+            guardDebounce = null;
+            dispatch(newText);
+          }, guardDebounceMilliSeconds);
         },
-        聚焦: () => {
+        clusterFocus: () => {
           // CM 自己持有选区；PM 这一层只保留节点本身。
         },
-        失焦: 先派发,
-        撤销: () => undo(view.state, view.dispatch, view),
-        重做: () => redo(view.state, view.dispatch, view),
-        开头退格: () => view.focus(),
+        loseFocus: firstDispatch,
+        undoCancel: () => undo(view.state, view.dispatch, view),
+        heavyDo: () => redo(view.state, view.dispatch, view),
+        openHeadBackCell: () => view.focus(),
       });
-      源码框.append(代码编辑器.视图.dom);
-      代码编辑器.视图.contentDOM.setAttribute("aria-label", t("Diagram Source (Mermaid)"));
-      代码编辑器.视图.dom.addEventListener("keydown", (e) => {
+      sourceBox.append(codeEditor.view.dom);
+      codeEditor.view.contentDOM.setAttribute("aria-label", t("Diagram Source (Mermaid)"));
+      codeEditor.view.dom.addEventListener("keydown", (e) => {
         if (e.key !== "Escape") return;
         e.preventDefault();
-        先派发();
+        firstDispatch();
         view.focus();
       });
 
       // ── 事件 ──────────────────────────────────────────────────────────
 
-      for (const 按钮 of [折叠, 复制]) {
-        按钮.addEventListener("mousedown", (e) => e.preventDefault());
+      for (const PressButton of [collapse2, copy]) {
+        PressButton.addEventListener("mousedown", (e) => e.preventDefault());
       }
 
-      折叠.addEventListener("click", () => {
+      collapse2.addEventListener("click", () => {
         const collapsed = sourceShell.classList.toggle("is-collapsed");
-        折叠.textContent = collapsed ? t("Expand") : t("Collapse");
-        折叠.title = collapsed ? t("Expand this diagram source") : t("Collapse this diagram source");
+        collapse2.textContent = collapsed ? t("Expand") : t("Collapse");
+        collapse2.title = collapsed ? t("Expand this diagram source") : t("Collapse this diagram source");
       });
 
-      复制.addEventListener("click", () => {
-        void writeClipboard(代码编辑器?.取文本() ?? 取源码(当前)).then((ok) => {
+      copy.addEventListener("click", () => {
+        void writeClipboard(codeEditor?.getText() ?? readSource(current)).then((ok) => {
           if (!ok) return;
-          复制.textContent = t("Copied");
+          copy.textContent = t("Copied");
           window.setTimeout(() => {
-            复制.textContent = t("Copy");
+            copy.textContent = t("Copy");
           }, 1200);
         });
       });
@@ -805,53 +805,53 @@ export const diagramView = $view(
        * ProseMirror 去处理——它会把这个原子节点整块选中，用户才能接着
        * 删除 / 复制 / 剪切。把整块预览都算成挂件的话，点图就成了"什么都没发生"。
        */
-      const 是我的挂件 = (目标: EventTarget | null): boolean =>
-        目标 instanceof Element &&
-        (sourceShell.contains(目标) || 目标.closest("button") !== null);
+      const isSelfOfAttachItem = (target: EventTarget | null): boolean =>
+        target instanceof Element &&
+        (sourceShell.contains(target) || target.closest("button") !== null);
 
       // ── 主题 ──────────────────────────────────────────────────────────
 
-      const 跟主题 = (): void => {
-        if (读图表主题(dom, view.dom).key !== 已画主题) void 同步();
+      const followTheme = (): void => {
+        if (readDiagramTheme(dom, view.dom).key !== renderedTheme) void sameStep();
       };
-      跟上主题(跟主题);
+      followAboveTheme(followTheme);
 
       /** 只读实例只保留渲染结果，源码框由 CSS 隐藏。 */
-      function 同步可编辑(): void {
+      function sameStepEditable(): void {
         dom.classList.toggle("nota-diagram-readonly", !view.editable);
       }
 
-      同步可编辑();
-      void 同步();
+      sameStepEditable();
+      void sameStep();
 
       return {
         dom,
 
-        update: (更新后: PMNode): boolean => {
+        update: (afterUpdate: PMNode): boolean => {
           // 节点类型变了（这段内容被转成了别的东西）→ 这个视图不该再用。
-          if (更新后.type !== initialNode.type) return false;
+          if (afterUpdate.type !== initialNode.type) return false;
 
-          const 新源码 = 取源码(更新后);
+          const newValueSource = readSource(afterUpdate);
           // ⚠️ 这条判据是"**外面**改的"：撤销、源码框里手改文档、插件改文档、
           //    整个文档被换掉……都会走到这儿。只认这一类，因为本视图自己派的那次
           //    不能再写回源码框——每敲一个字就把光标拽回开头，那个框没法用。
-          const 外面改的 = 新源码 !== 最后派发;
-          当前 = 更新后;
+          const externalSurfaceChangeOf = newValueSource !== mostAfterDispatch;
+          current = afterUpdate;
 
-          if (外面改的) {
-            最后派发 = 新源码;
-            if (代码编辑器 && 代码编辑器.取文本() !== 新源码) 代码编辑器.设文本(新源码);
+          if (externalSurfaceChangeOf) {
+            mostAfterDispatch = newValueSource;
+            if (codeEditor && codeEditor.getText() !== newValueSource) codeEditor.setText(newValueSource);
           }
 
-          同步可编辑();
+          sameStepEditable();
           // 源码没变时 `同步` 是一次 Map 查表就返回，不必在这儿先比一遍。
-          void 同步();
+          void sameStep();
           return true;
         },
 
         // 这一条和底下那条是**两件事**（同 `code-block.ts`）：`stopEvent` 管一进来
         // 就拦下；`ignoreMutation` 管已经发生的 DOM 变更要不要告诉 ProseMirror。
-        stopEvent: (e) => 是我的挂件(e.target),
+        stopEvent: (e) => isSelfOfAttachItem(e.target),
 
         // ⚠️ 恒为 `true`：这棵树整个由本视图管，没有任何一处是 ProseMirror 该读的
         // （这个节点没有 contentDOM，源码在 attrs 里）。返回 false 的话，
@@ -862,12 +862,12 @@ export const diagramView = $view(
 
         destroy: () => {
           // 在飞的渲染结果作废（它回来时视图已经没了）。
-          代号++;
+          representNumber++;
           // 只在**真有待派发的内容**时补一次：销毁常常发生在整篇文档被换掉
           // （`replaceAll`）的过程中，那时去派事务是没必要的风险。
-          先派发();
-          代码编辑器?.销毁();
-          别再跟了(跟主题);
+          firstDispatch();
+          codeEditor?.cancelDestroy();
+          distinguishAgainFollowDone(followTheme);
         },
       };
     },

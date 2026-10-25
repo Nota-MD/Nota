@@ -10,7 +10,7 @@
  *
  * 那些格式 Nota 自己不会转，是借系统里那个 pandoc 转的。所以点下去第一件事是
  * **探测**：没装就先说清楚，别让用户白等一次失败，并且给一条能走下去的路
- * （pandoc 官网的安装页）。装好了**不出这个面板**（那种情形面板上只有一个
+ * （应用内帮助的 Pandoc 章节）。装好了**不出这个面板**（那种情形面板上只有一个
  * "开始导出"按钮），只有 `missing` / `unknown` 才轮到它——见 `useExport.ts`。
  *
  * # ⚠️ 它必须说清 PDF 有第二条路
@@ -44,10 +44,10 @@ interface Props {
   /** 照导（`unknown` 的"仍然试一次"，或走了自带 PDF 那条路）。 */
   onExport: () => void;
   /**
-   * 去 pandoc 官网看安装指南。落到哪一页由 `useExport.ts` 的 `PANDOC_GUIDE` 定
-   * （那儿记着这个链接该怎么核）。
+   * 打开应用内帮助的 Pandoc 章节。帮助正文与界面共用翻译表，不需要浏览器或
+   * 独立文档包。
    */
-  onGuide: () => void;
+  onHelp: () => void;
   onRecheck: () => void;
   onClose: () => void;
 }
@@ -56,7 +56,7 @@ export function PandocPanel({
   probe,
   format,
   onExport,
-  onGuide,
+  onHelp,
   onRecheck,
   onClose,
 }: Props) {
@@ -66,9 +66,9 @@ export function PandocPanel({
   const busy = probe === null;
   const okRef = useRef<HTMLButtonElement>(null);
 
-  const 格式名 = format?.name ?? t("This file");
+  const cellStyleName = format?.name ?? t("This file");
   // 这条路存不存在：PDF **且**这台机器上有自带那套（只有 Linux 有）。
-  const 有自带PDF = probe?.fallback_pdf === true && format?.id === "pdf";
+  const hasBuiltInPdf = probe?.fallback_pdf === true && format?.id === "pdf";
 
   /**
    * 主按钮。⚠️ 三档的落点不同，理由见文件头：
@@ -79,11 +79,11 @@ export function PandocPanel({
    */
   const primary =
     probe?.state === "ready"
-      ? { label: t("Exporting {0}", 格式名), run: onExport }
+      ? { label: t("Exporting {0}", cellStyleName), run: onExport }
       : probe?.state === "missing"
-        ? 有自带PDF
+        ? hasBuiltInPdf
           ? { label: t("Typeset and export with Nota itself"), run: onExport }
-          : { label: t("Install guide on the official site"), run: onGuide }
+          : { label: t("Open installation help"), run: onHelp }
         : probe?.state === "unknown"
           ? { label: t("Try Anyway"), run: onExport }
           : null;
@@ -118,7 +118,7 @@ export function PandocPanel({
         : { className: "is-ask", glyph: "?" };
 
   // 「仍然试一次」只在主按钮**不是**它的时候出现——否则同一件事两颗按钮。
-  const 留一条路 = probe !== null && primary?.run !== onExport;
+  const keepOneItemPath = probe !== null && primary?.run !== onExport;
 
   return (
     // 点遮罩 = 关掉，和 `ConfirmDialog` 同一条约定。
@@ -127,11 +127,11 @@ export function PandocPanel({
         className="confirm-dialog gate-panel"
         role="dialog"
         aria-modal="true"
-        aria-label={t("Export {0}", 格式名)}
+        aria-label={t("Export {0}", cellStyleName)}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <DialogClose onClose={onClose} />
-        <h2 className="confirm-title">{t("Export {0}", 格式名)}</h2>
+        <h2 className="confirm-title">{t("Export {0}", cellStyleName)}</h2>
 
         <div className="gate-status">
           <span className={`gate-mark ${mark.className}`} aria-hidden="true">
@@ -179,7 +179,7 @@ export function PandocPanel({
             </button>
             {/* ⚠️ 探测是**有根据的猜测**，不是证明。判定错了的时候用户得能自己
                 走下去——所以除了主按钮那条路，**永远再留一条**。 */}
-            {留一条路 && (
+            {keepOneItemPath && (
               <button type="button" className="btn" onClick={onExport}>
                 {t("Try Anyway")}
               </button>

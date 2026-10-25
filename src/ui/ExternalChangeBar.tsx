@@ -29,57 +29,57 @@
  */
 
 import { useT } from "@/i18n";
-import type { 外部改动 } from "@/ui/useExternalChanges";
+import type { ExternalPartChangeAction } from "@/ui/useExternalChanges";
 
 interface Props {
-  改动: 外部改动[];
-  忽略: (id: number) => void;
-  重新载入: (id: number) => void;
-  查看修改: (id: number) => void;
+  changeAction: ExternalPartChangeAction[];
+  ignoreOmit: (id: number) => void;
+  heavyNewValueLoadEnter: (id: number) => void;
+  checkSeeFixChange: (id: number) => void;
   /** 正在看哪一份的对照（`null` = 没在看）。看的时候那颗按钮改成"回到正文"。 */
-  正在看: number | null;
+  correctAtSee: number | null;
   /** 收起对照。 */
-  关对照: () => void;
+  closeCorrectAccording: () => void;
 }
 
 export function ExternalChangeBar({
-  改动,
-  忽略,
-  重新载入,
-  查看修改,
-  正在看,
-  关对照,
+  changeAction,
+  ignoreOmit,
+  heavyNewValueLoadEnter,
+  checkSeeFixChange,
+  correctAtSee,
+  closeCorrectAccording,
 }: Props) {
   // ⚠️ 这一行不只是取值：它订阅了语言（宿主报来语言之后这一条要重画）。
   const t = useT();
 
   // 一条都没有时**整块不画**（返回 `null`，不是画一个空框子）。
-  if (改动.length === 0) return null;
+  if (changeAction.length === 0) return null;
 
   return (
     <div className="external-change-bar" role="status">
-      {改动.map((一) => (
-        <div className="external-change-row" key={一.id}>
+      {changeAction.map((value) => (
+        <div className="external-change-row" key={value.id}>
           {/* ⚠️ `title` 放完整路径：条上写的是文件名（窄），而"到底是哪一份"
               有时候得靠路径才分得清（两个目录下同名的 `README.md`）。 */}
-          <span className="external-change-text" title={一.path}>
-            {t("“{0}” was changed on disk by another program.", 一.title)}
+          <span className="external-change-text" title={value.path}>
+            {t("“{0}” was changed on disk by another program.", value.title)}
           </span>
           <span className="external-change-spacer" />
           <button
             type="button"
             className="btn external-change-btn"
             onClick={() =>
-              正在看 === 一.id ? 关对照() : 查看修改(一.id)
+              correctAtSee === value.id ? closeCorrectAccording() : checkSeeFixChange(value.id)
             }
             title={t("Show what differs between the file on disk and what is in the editor")}
           >
-            {正在看 === 一.id ? t("Hide comparison") : t("View changes")}
+            {correctAtSee === value.id ? t("Hide comparison") : t("View changes")}
           </button>
           <button
             type="button"
             className="btn external-change-btn"
-            onClick={() => void 重新载入(一.id)}
+            onClick={() => void heavyNewValueLoadEnter(value.id)}
             title={t("Replace the editor contents with the file on disk (unsaved changes are lost — you are asked first)")}
           >
             {t("Reload from disk")}
@@ -87,7 +87,7 @@ export function ExternalChangeBar({
           <button
             type="button"
             className="btn external-change-btn"
-            onClick={() => 忽略(一.id)}
+            onClick={() => ignoreOmit(value.id)}
             title={t("Leave it alone: keep editing, and overwrite the file on disk when you save")}
           >
             {t("Ignore")}

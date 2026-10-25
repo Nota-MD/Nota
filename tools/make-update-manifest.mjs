@@ -40,11 +40,16 @@ for (const path of files) {
   };
 }
 
-for (const kind of ["deb", "rpm", "appimage", "exe", "exeinstall"]) {
-  const key = `${kind}-x86_64`;
-  if (!packages[key]) {
-    console.error(`missing x86_64 ${kind} asset for ${version}`);
-    process.exit(1);
+// A platform-local build may intentionally contain only the packages available
+// on that host. Release CI still runs without this flag and requires every kind.
+const requireAll = !process.argv.includes("--available-only");
+if (requireAll) {
+  for (const kind of ["deb", "rpm", "appimage", "exe", "exeinstall"]) {
+    const key = `${kind}-x86_64`;
+    if (!packages[key]) {
+      console.error(`missing x86_64 ${kind} asset for ${version}`);
+      process.exit(1);
+    }
   }
 }
 

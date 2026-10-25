@@ -91,12 +91,12 @@ import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
 /** 触发带的高度（px）。见文件头"悬停那一档的判据"。 */
-const 顶部触发带 = 8;
+const topPartTriggerSendWith = 8;
 
 
-export interface 外壳接线 {
+export interface ExternalShellWiring {
   /** 主区（`App.tsx` 的 `<main class="app-main">`）。⚠️ 只用来量它顶端在哪。 */
-  主区: RefObject<HTMLElement | null>;
+  mainArea: RefObject<HTMLElement | null>;
   /**
    * 格式工具栏那一条（`FormatBar` 的根元素）。
    *
@@ -104,7 +104,7 @@ export interface 外壳接线 {
    * 而那个位置随查找条开没开、界面风格、缩放而变——在 JS 里按常量算一份
    * 就是同一个数字存两处（同 `MenuPopup` 里量子菜单高度那段）。
    */
-  工具栏: RefObject<HTMLElement | null>;
+  workToolBar: RefObject<HTMLElement | null>;
   /**
    * 发一条会自己走掉的提示。
    *
@@ -117,7 +117,7 @@ export interface 外壳接线 {
 export function useChromeVisibility(
   settings: Settings | null,
   updateSettings: (patch: Partial<Settings>) => Promise<void>,
-  refs: 外壳接线,
+  refs: ExternalShellWiring,
 ) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后那一条要重画，
   // 见 `i18n/index.ts::useT`）。下面那条提示的文案是 `t(…)`。
@@ -143,7 +143,7 @@ export function useChromeVisibility(
    *  ⚠️ 指针移动是**每帧好几个**事件，每个都 `setPeek` 的话，React 虽然对
    *  同值更新会提前退出，但那仍是一次次调度。用 ref 挡在前面，值是
    *  `true` 的时候移动鼠标**一次渲染都不会有**。 */
-  const 设Peek = useCallback((next: boolean) => {
+  const updatePeek = useCallback((next: boolean) => {
     if (peekRef.current === next) return;
     peekRef.current = next;
     setPeek(next);
@@ -153,37 +153,37 @@ export function useChromeVisibility(
     // ⚠️ **档位写到 `.app-main` 上给 CSS 认**（2026-10-11，用户报的"悬停时文本随之下移"）：
     // 悬停那一档要按**浮层**摆（详见 `styles/bars.css` 里那条规则），而 CSS 认不出
     // "这一条是悬停弹出来的"——"画不画"（`formatBarOpen`）在"始终显示"那一档里恒为真。
-    refs.主区.current?.setAttribute("data-toolbar", toolbarMode);
+    refs.mainArea.current?.setAttribute("data-toolbar", toolbarMode);
     // 不是悬停那一档：把窥视状态收干净，也不挂监听。
     if (toolbarMode !== "hover") {
-      设Peek(false);
+      updatePeek(false);
       return;
     }
 
-    const 判 = (e: PointerEvent) => {
-      const bar = refs.工具栏.current;
+    const determine = (e: PointerEvent) => {
+      const bar = refs.workToolBar.current;
       if (bar) {
         // 已经露出来了：指针在它下沿以上就算还在上面（见文件头那张表）。
-        设Peek(e.clientY <= bar.getBoundingClientRect().bottom);
+        updatePeek(e.clientY <= bar.getBoundingClientRect().bottom);
         return;
       }
-      const 主区顶 = refs.主区.current?.getBoundingClientRect().top ?? 0;
-      设Peek(e.clientY >= 主区顶 && e.clientY <= 主区顶 + 顶部触发带);
+      const mainAreaTop = refs.mainArea.current?.getBoundingClientRect().top ?? 0;
+      updatePeek(e.clientY >= mainAreaTop && e.clientY <= mainAreaTop + topPartTriggerSendWith);
     };
 
-    const 藏 = () => 设Peek(false);
+    const store = () => updatePeek(false);
 
-    window.addEventListener("pointermove", 判);
+    window.addEventListener("pointermove", determine);
     // 指针移出窗口 / 窗口失去焦点：留着那条工具栏没有意义，而"看不见的
     // 鼠标"再也不会发 `pointermove` 回来把它收掉。
-    window.addEventListener("blur", 藏);
-    document.documentElement.addEventListener("pointerleave", 藏);
+    window.addEventListener("blur", store);
+    document.documentElement.addEventListener("pointerleave", store);
     return () => {
-      window.removeEventListener("pointermove", 判);
-      window.removeEventListener("blur", 藏);
-      document.documentElement.removeEventListener("pointerleave", 藏);
+      window.removeEventListener("pointermove", determine);
+      window.removeEventListener("blur", store);
+      document.documentElement.removeEventListener("pointerleave", store);
     };
-  }, [toolbarMode, refs.主区, refs.工具栏, 设Peek]);
+  }, [toolbarMode, refs.mainArea, refs.workToolBar, updatePeek]);
 
   /** 那一条工具栏现在画不画。三档在这里合成**一个**布尔，外壳只认它。 */
   const formatBarOpen = toolbarMode === "always" || (toolbarMode === "hover" && peek);
@@ -217,12 +217,12 @@ export function useChromeVisibility(
    * ⚠️ ttl 给 6 秒（默认 3.2 秒）：这句话比"已保存"那种长，而它说的是**出路**，
    * 多留两秒没有代价（同 `useImmersive` 那条）。
    */
-  const 上次菜单栏 = useRef<boolean | null>(null);
+  const aboveCountMenuBar = useRef<boolean | null>(null);
   useEffect(() => {
     if (!settings) return;
-    const 上次 = 上次菜单栏.current;
-    上次菜单栏.current = menuBarOpen;
-    if (上次 === null || 上次 === menuBarOpen || menuBarOpen) return;
+    const aboveCount = aboveCountMenuBar.current;
+    aboveCountMenuBar.current = menuBarOpen;
+    if (aboveCount === null || aboveCount === menuBarOpen || menuBarOpen) return;
     toast(
       t(
         "Menu bar hidden. Press Alt+M or open Settings ▸ Appearance ▸ Show menu bar to bring it back.",
@@ -243,7 +243,7 @@ export function useChromeVisibility(
    * ⚠️ 收起来之后**这一条自己就没了**，怎么再打开在菜单与设置里各有入口，
    * 所以**不发提示**（与菜单栏那条不同，见文件头最后那一段）。
    */
-  const 收起工具栏 = useCallback(() => setChrome({ toolbar: "never" }), [setChrome]);
+  const hideToolbar = useCallback(() => setChrome({ toolbar: "never" }), [setChrome]);
 
-  return { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome, 收起工具栏 };
+  return { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome, hideToolbar };
 }

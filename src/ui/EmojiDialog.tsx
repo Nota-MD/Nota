@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import { useT } from "@/i18n";
-import { Emoji表, Emoji分类, 带冒号, type Emoji项 } from "@/editor/emoji";
+import { emojiTable, emojiCategory, withEmergeNumber, type EmojiItem } from "@/editor/emoji";
 import { DialogClose } from "@/ui/DialogClose";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
@@ -32,20 +32,20 @@ export function EmojiDialog({
   onAnswer,
 }: {
   /** 选中的字符；取消给 `null`（与另外三个框同形）。 */
-  onAnswer: (字符: string | null) => void;
+  onAnswer: (character: string | null) => void;
 }) {
   // ⚠️ 这一行不只是取值：它订阅了语言（见 `i18n/index.ts::useT`）。
   const t = useT();
-  const [搜索, set搜索] = useState("");
+  const [searchSearch, setSearchSearch] = useState("");
   /** 当前分类，`null` = 全部。 */
-  const [分类, set分类] = useState<string | null>(null);
-  const 输入框 = useRef<HTMLInputElement>(null);
+  const [category, setCategory] = useState<string | null>(null);
+  const inputBox = useRef<HTMLInputElement>(null);
   // 分类页签的方向键（第 50 项，2026-10-04）。
-  const 页签栏 = useRef<HTMLDivElement>(null);
-  useTablistKeys(页签栏);
+  const pageKeyBar = useRef<HTMLDivElement>(null);
+  useTablistKeys(pageKeyBar);
 
   useEffect(() => {
-    输入框.current?.focus();
+    inputBox.current?.focus();
   }, []);
 
   /**
@@ -54,12 +54,12 @@ export function EmojiDialog({
    * ⚠️ 搜索串**两头各去掉一个冒号**（`:` 是短代码的壳，用户很自然会带着打
    * ——面板里看起来就是 `:smile:`），并转小写（短代码全是小写）。
    */
-  const 结果 = useMemo<Emoji项[]>(() => {
-    const 池 = 分类 === null ? Emoji表 : Emoji表.filter((项) => 项.分类 === 分类);
-    const 串 = 搜索.trim().replace(/^:/, "").replace(/:$/, "").toLowerCase();
-    if (串 === "") return 池;
-    return 池.filter((项) => 项.短代码.includes(串));
-  }, [搜索, 分类]);
+  const result2 = useMemo<EmojiItem[]>(() => {
+    const pool = category === null ? emojiTable : emojiTable.filter((item5) => item5.category === category);
+    const stringValue = searchSearch.trim().replace(/^:/, "").replace(/:$/, "").toLowerCase();
+    if (stringValue === "") return pool;
+    return pool.filter((item5) => item5.shortcode.includes(stringValue));
+  }, [searchSearch, category]);
 
   /**
    * 分类名 → 译文。
@@ -75,8 +75,8 @@ export function EmojiDialog({
    * ⚠️ `default` **原样还回去**，不吞：表里将来多一个分类，用户看到的是那个
    * 中文名，而不是一片空白。
    */
-  const 分类文案 = (一类: string) => {
-    switch (一类) {
+  const categoryCopy = (oneKind: string) => {
+    switch (oneKind) {
       case "表情":
         return t("Smileys");
       case "手势":
@@ -100,7 +100,7 @@ export function EmojiDialog({
       case "旗帜":
         return t("Flags");
       default:
-        return 一类;
+        return oneKind;
     }
   };
 
@@ -111,11 +111,11 @@ export function EmojiDialog({
    * 而它的收益（少点一次鼠标）在**一个"我在找东西"的框里**不成立——用户
    * 还在看着网格挑。⚠️ 面板那边**必须**有上下键（那是打字流里，手不在鼠标上）。
    */
-  const 回车或退出 = (e: KeyboardEvent<HTMLInputElement>) => {
+  const returnCarOrBackOutput = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const 第一条 = 结果[0];
-      if (第一条) onAnswer(第一条.字符);
+      const ordinalOneItem = result2[0];
+      if (ordinalOneItem) onAnswer(ordinalOneItem.character);
     } else if (e.key === "Escape") {
       e.preventDefault();
       onAnswer(null);
@@ -136,59 +136,59 @@ export function EmojiDialog({
 
         <input
           id="nota-emoji-search"
-          ref={输入框}
+          ref={inputBox}
           className="prompt-input"
           type="text"
           autoComplete="off"
           spellCheck={false}
-          value={搜索}
+          value={searchSearch}
           placeholder={t("Search shortcodes, e.g. smi or check")}
-          onChange={(e) => set搜索(e.target.value)}
-          onKeyDown={回车或退出}
+          onChange={(e) => setSearchSearch(e.target.value)}
+          onKeyDown={returnCarOrBackOutput}
         />
 
         {/* 分类筛选。⚠️ 「全部」在最前、`null` 表示它——不摆一个"全部"的话，
             用户进了某个分类就出不来了（只能关掉框重开）。 */}
-        <div ref={页签栏} className="emoji-cats" role="tablist" aria-label={t("Emoji category")}>
+        <div ref={pageKeyBar} className="emoji-cats" role="tablist" aria-label={t("Emoji category")}>
           <button
             type="button"
             role="tab"
-            aria-selected={分类 === null}
-            className={`btn emoji-cat ${分类 === null ? "btn-primary" : ""}`}
-            onClick={() => set分类(null)}
+            aria-selected={category === null}
+            className={`btn emoji-cat ${category === null ? "btn-primary" : ""}`}
+            onClick={() => setCategory(null)}
           >
             {t("All")}
           </button>
-          {Emoji分类.map((一类) => (
+          {emojiCategory.map((oneKind) => (
             <button
-              key={一类}
+              key={oneKind}
               type="button"
               role="tab"
-              aria-selected={分类 === 一类}
-              className={`btn emoji-cat ${分类 === 一类 ? "btn-primary" : ""}`}
-              onClick={() => set分类(一类)}
+              aria-selected={category === oneKind}
+              className={`btn emoji-cat ${category === oneKind ? "btn-primary" : ""}`}
+              onClick={() => setCategory(oneKind)}
             >
-              {分类文案(一类)}
+              {categoryCopy(oneKind)}
             </button>
           ))}
         </div>
 
-        {结果.length === 0 ? (
+        {result2.length === 0 ? (
           <p className="prompt-hint">{t("No matching emoji.")}</p>
         ) : (
           <div className="emoji-grid">
-            {结果.map((项) => (
+            {result2.map((item5) => (
               // ⚠️ `key` 用短代码而不是字符：表里同一个字符可能有两条短代码
               // （比如 `-1` 与 `thumbsdown`），用字符当 key 会撞。
               <button
-                key={项.短代码}
+                key={item5.shortcode}
                 type="button"
                 className="emoji-cell"
-                title={带冒号(项.短代码)}
-                onClick={() => onAnswer(项.字符)}
+                title={withEmergeNumber(item5.shortcode)}
+                onClick={() => onAnswer(item5.character)}
               >
-                <span className="emoji-glyph">{项.字符}</span>
-                <span className="emoji-name">{带冒号(项.短代码)}</span>
+                <span className="emoji-glyph">{item5.character}</span>
+                <span className="emoji-name">{withEmergeNumber(item5.shortcode)}</span>
               </button>
             ))}
           </div>

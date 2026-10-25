@@ -59,39 +59,39 @@
 
 import {
   isMenuItem,
-  取条目,
-  右键插入项,
-  右键段落项,
-  右键表格项,
+  getItem,
+  contextInsertItems,
+  contextParagraphItems,
+  contextTableItems,
   type MenuEntry,
   type MenuItemSpec,
 } from "@/ui/commands";
 
 /** 右键落在哪儿。四档的表现完全不同，见文件头那张表。 */
-export type 落点 = "编辑器" | "输入框" | "外壳" | "不弹";
+export type DropPoint = "编辑器" | "输入框" | "外壳" | "不弹";
 
 /** 落点判据吃的那几件事。**都不碰 DOM**：调用方查完再传进来（这样才测得了）。 */
-export interface 落点线索 {
+export interface DropPointLineSearch {
   /** 目标是不是 `input` / `textarea`。 */
-  是输入框: boolean;
+  isInputBox: boolean;
   /** 目标在不在编辑区里（`.ProseMirror` / `.cm-editor` / `.editor-pane`）。 */
-  在编辑器里: boolean;
+  atEditorInside: boolean;
   /** 已经有别人认领了这一下（标签栏）。 */
-  已被认领: boolean;
+  alreadyIsRecognizeLead: boolean;
 }
 
 /**
  * 判落点。**顺序要紧**：认领 → 输入框 → 编辑器 → 外壳（理由见文件头那张表）。
  */
-export function 判落点(线索: 落点线索): 落点 {
-  if (线索.已被认领) return "不弹";
-  if (线索.是输入框) return "输入框";
-  if (线索.在编辑器里) return "编辑器";
+export function determineDropPoint(lineSearch: DropPointLineSearch): DropPoint {
+  if (lineSearch.alreadyIsRecognizeLead) return "不弹";
+  if (lineSearch.isInputBox) return "输入框";
+  if (lineSearch.atEditorInside) return "编辑器";
   return "外壳";
 }
 
 /** 一个空灰名单。见 {@link 这一档的灰}——只读，共用一份没有风险。 */
-const 一个都不灰: ReadonlySet<string> = new Set<string>();
+const noneDisabled: ReadonlySet<string> = new Set<string>();
 
 /**
  * 这一档该拿哪份灰名单。
@@ -116,8 +116,8 @@ const 一个都不灰: ReadonlySet<string> = new Set<string>();
  * "命令表里这一条能不能用"的**唯一**真相源，菜单自己不判第二遍（`ui/useMenus.ts`
  * 文件头那张表）。
  */
-export function 这一档的灰(位置: 落点, 灰: ReadonlySet<string>): ReadonlySet<string> {
-  return 位置 === "输入框" ? 一个都不灰 : 灰;
+export function disabledForLocation(position2: DropPoint, disabled2: ReadonlySet<string>): ReadonlySet<string> {
+  return position2 === "输入框" ? noneDisabled : disabled2;
 }
 
 /**
@@ -127,7 +127,7 @@ export function 这一档的灰(位置: 落点, 灰: ReadonlySet<string>): Reado
  * 那张 `图标表` 里——它们由 `ui/ContextMenu.tsx` 里一张小表单独给。
  * 分界是"这是不是一条格式命令"，不是"长得像不像按钮"。
  */
-export const 剪贴图标: readonly string[] = [
+export const cutPasteIcon: readonly string[] = [
   "edit.cut",
   "edit.copy",
   "edit.paste",
@@ -141,10 +141,10 @@ export const 剪贴图标: readonly string[] = [
  * （`FormatBar.tsx` 导出的 `图标表`）——那正是"同一个命令两个入口不该各写一份"
  * 那条规矩（见 `FormatBar.tsx` 文件头）。
  */
-export const 行内图标: readonly string[] = ["fmt.bold", "fmt.italic", "fmt.code", "fmt.link"];
+export const inlineIcon: readonly string[] = ["fmt.bold", "fmt.italic", "fmt.code", "fmt.link"];
 
 /** 第三排：块级四件（引用 / 无序 / 有序 / 任务）。见 {@link 行内图标}。 */
-export const 块图标: readonly string[] = ["para.quote", "para.ul", "para.ol", "para.task"];
+export const blockIcon: readonly string[] = ["para.quote", "para.ul", "para.ol", "para.task"];
 
 /**
  * 输入框那一档的条目。
@@ -157,7 +157,7 @@ export const 块图标: readonly string[] = ["para.quote", "para.ul", "para.ol",
  * ⚠️ 借 id 不是偷懒：id 一样、**译文就一样**。另起一组 id 的话，同一个
  * "Paste" 要在译文表里出现两次，两处迟早会漂。
  */
-export const 输入框条目: readonly string[] = [
+export const inputBoxItem: readonly string[] = [
   "edit.undo",
   "edit.redo",
   "sep",
@@ -169,7 +169,7 @@ export const 输入框条目: readonly string[] = [
 ];
 
 /** 右键菜单渲染用的行。**比 `MenuEntry` 多一种 `icons`**（那是一排按钮格子）。 */
-export type 行 =
+export type line3 =
   | { kind: "icons"; key: string; ids: readonly string[] }
   | { kind: "item"; key: string; spec: MenuItemSpec }
   | { kind: "spell"; key: string; id: string; label: string }
@@ -188,9 +188,9 @@ export type 行 =
  * 建议里的第几条（菜单是从 `nota_spell_suggest` 现拉的，每次都不一样），
  * 所以它只能是运行时的。
  */
-export const 拼写加词典 = "spell.add";
-export const 拼写忽略 = "spell.ignore";
-export const 拼写替换前缀 = "spell.replace:";
+export const combineWriteAddWordDictionary = "spell.add";
+export const combineWriteIgnoreOmit = "spell.ignore";
+export const combineWriteReplaceReplacePrefix = "spell.replace:";
 
 /**
  * 错词那一段要的三样东西。
@@ -202,10 +202,10 @@ export const 拼写替换前缀 = "spell.replace:";
  * 不是文案：哪天某个建议恰好等于一条界面原文（`Ignore` 这种真词完全可能存在），
  * 过一遍翻译就会把它**翻成别的**。
  */
-export interface 拼写线索 {
-  建议们: readonly string[];
-  加词典: string;
-  忽略: string;
+export interface CombineWriteLineSearch {
+  createProposalPlural: readonly string[];
+  addWordDictionary: string;
+  ignoreOmit: string;
 }
 
 /**
@@ -219,18 +219,18 @@ export interface 拼写线索 {
  * ⚠️ 每条建议**各占一行漫游落点**（不像图标那样整排算一个）：这一列是文本、
  * 长短不一，"排里翻格"那套左右键语义在这儿没有意义，↑↓ 一路走过去最自然。
  */
-export function 拼写行(线索: 拼写线索): 行[] {
-  const 行们: 行[] = 线索.建议们.map((建议, i) => ({
+export function combineWriteLine(lineSearch: CombineWriteLineSearch): line3[] {
+  const rows: line3[] = lineSearch.createProposalPlural.map((createProposal, i) => ({
     kind: "spell",
     key: `spell-${i}`,
-    id: `${拼写替换前缀}${i}`,
-    label: 建议,
+    id: `${combineWriteReplaceReplacePrefix}${i}`,
+    label: createProposal,
   }));
-  if (行们.length > 0) 行们.push({ kind: "sep", key: "spell-sep-1" });
-  行们.push({ kind: "spell", key: "spell-add", id: 拼写加词典, label: 线索.加词典 });
-  行们.push({ kind: "spell", key: "spell-ignore", id: 拼写忽略, label: 线索.忽略 });
-  行们.push({ kind: "sep", key: "spell-sep-2" });
-  return 行们;
+  if (rows.length > 0) rows.push({ kind: "sep", key: "spell-sep-1" });
+  rows.push({ kind: "spell", key: "spell-add", id: combineWriteAddWordDictionary, label: lineSearch.addWordDictionary });
+  rows.push({ kind: "spell", key: "spell-ignore", id: combineWriteIgnoreOmit, label: lineSearch.ignoreOmit });
+  rows.push({ kind: "sep", key: "spell-sep-2" });
+  return rows;
 }
 
 /**
@@ -247,41 +247,41 @@ export function 拼写行(线索: 拼写线索): 行[] {
  * 理由：原生菜单里那条 `Inspect Element` 被我们拦掉了，开发时得留个门。
  * 判据用 `import.meta.env.DEV`——**正式构建里这一条不存在**。
  */
-export function 给行(
-  位置: 落点,
-  开发模式: boolean,
+export function buildRows(
+  position2: DropPoint,
+  openSendMode: boolean,
   /**
    * 这一下右键落在**一个错词**上时给的那一段（`ContextMenu.tsx` 从
    * `.nota-spell-error` 那个元素上认出来，见 `editor/spell-check.ts`）。
    * `null` = 没落在错词上，菜单照旧。
    */
-  拼写: 拼写线索 | null = null,
-): 行[] {
-  if (位置 === "输入框") {
+  combineWrite: CombineWriteLineSearch | null = null,
+): line3[] {
+  if (position2 === "输入框") {
     // ⚠️ **摊平**（见 `条目行` 那第三个参数）：`edit.select` 在编辑菜单里
     // 2026-10-07 起是一个**子菜单的壳**（选行/词/句那四条），但输入框这一档
     // 要的是**全选**那一条（`ContextMenu.tsx::落到输入框` 里那个
     // `document.execCommand("selectAll")`）。放着一层子菜单渲染出去的话，
     // 输入框上右键会飞出一层"选当前词"这种**编辑区命令**——点了什么也不会
     // 发生（那几个处理函数只认编辑区）。
-    return 条目行(输入框条目, "输入框", true);
+    return itemLine(inputBoxItem, "输入框", true);
   }
-  if (位置 !== "编辑器") return []; // 外壳：只拦不弹（见文件头那张表）
+  if (position2 !== "编辑器") return []; // 外壳：只拦不弹（见文件头那张表）
 
-  const 行们: 行[] = [
-    ...(拼写 ? 拼写行(拼写) : []),
-    { kind: "icons", key: "icons-clip", ids: 剪贴图标 },
-    ...条目行(["edit.copyAs"], "复制为"),
+  const rows: line3[] = [
+    ...(combineWrite ? combineWriteLine(combineWrite) : []),
+    { kind: "icons", key: "icons-clip", ids: cutPasteIcon },
+    ...itemLine(["edit.copyAs"], "复制为"),
     { kind: "sep", key: "sep-1" },
-    { kind: "icons", key: "icons-inline", ids: 行内图标 },
-    { kind: "icons", key: "icons-block", ids: 块图标 },
+    { kind: "icons", key: "icons-inline", ids: inlineIcon },
+    { kind: "icons", key: "icons-block", ids: blockIcon },
     { kind: "sep", key: "sep-2" },
-    { kind: "item", key: "ctx.paragraph", spec: 右键段落项 },
-    { kind: "item", key: "ctx.table", spec: 右键表格项 },
-    { kind: "item", key: "ctx.insert", spec: 右键插入项 },
+    { kind: "item", key: "ctx.paragraph", spec: contextParagraphItems },
+    { kind: "item", key: "ctx.table", spec: contextTableItems },
+    { kind: "item", key: "ctx.insert", spec: contextInsertItems },
   ];
-  if (开发模式) 行们.push({ kind: "sep", key: "sep-3" }, ...条目行(["view.devtools"], "工具"));
-  return 行们;
+  if (openSendMode) rows.push({ kind: "sep", key: "sep-3" }, ...itemLine(["view.devtools"], "工具"));
+  return rows;
 }
 
 /**
@@ -295,18 +295,18 @@ export function 给行(
  * **从 `MENUS` 里取**（`取条目`）——摊平的是结构，不是名字：另起一条平行
  * 的条目表就意味着同一个 "Select" 要写两遍、两处迟早会漂（这一段的上文）。
  */
-function 条目行(ids: readonly string[], 名字: string, 摊平 = false): 行[] {
-  const out: 行[] = [];
+function itemLine(ids: readonly string[], name2: string, flattenFlat = false): line3[] {
+  const out: line3[] = [];
   ids.forEach((id, i) => {
     if (id === "sep") {
-      out.push({ kind: "sep", key: `${名字}-sep-${i}` });
+      out.push({ kind: "sep", key: `${name2}-sep-${i}` });
       return;
     }
-    const spec = 取条目(id);
+    const spec = getItem(id);
     if (!spec) return;
     // 摘壳：只留"点一下执行"用得着的那几格（`accel` 留着——输入框那一档
     // 虽然不吃快捷键，但显示出来是对的，用户按 Ctrl+Shift+V 会看到它）。
-    const 一条 = 摊平 && spec.submenu
+    const oneItem = flattenFlat && spec.submenu
       ? {
           id: spec.id,
           label: spec.label,
@@ -316,7 +316,7 @@ function 条目行(ids: readonly string[], 名字: string, 摊平 = false): 行[
           danger: spec.danger,
         }
       : spec;
-    out.push({ kind: "item", key: `${名字}-${id}`, spec: 一条 });
+    out.push({ kind: "item", key: `${name2}-${id}`, spec: oneItem });
   });
   return out;
 }
@@ -334,19 +334,19 @@ function 条目行(ids: readonly string[], 名字: string, 摊平 = false): 行[
  * `useMenus` 判它时用的也是"子项全灰才灰"这条一样的规矩。所以这里自己算一遍
  * 是必须的，不是重复。
  */
-export function 整行灰(r: 行, 灰: ReadonlySet<string>): boolean {
+export function wholeLineDisabled(r: line3, disabled2: ReadonlySet<string>): boolean {
   if (r.kind === "sep") return true;
-  if (r.kind === "icons") return r.ids.every((id) => 灰.has(id));
+  if (r.kind === "icons") return r.ids.every((id) => disabled2.has(id));
   // ⚠️ 拼写那一段**永远不灰**：它不在 `灰名单` 里（那份名单是命令表的账，
   // 而这几条是现场造出来的 id），照下面那两行去查会一律命中"不在名单里 ⇒
   // 当灰的看"——那正是"加了一条菜单、它却永远灰着"那个老毛病。
   if (r.kind === "spell") return false;
-  const 子 = r.spec.submenu;
-  if (子) {
-    const 真条目 = 子.filter(isMenuItem);
-    return 真条目.length === 0 || 真条目.every((c) => 灰.has(c.id));
+  const child3 = r.spec.submenu;
+  if (child3) {
+    const assertValueItem = child3.filter(isMenuItem);
+    return assertValueItem.length === 0 || assertValueItem.every((c) => disabled2.has(c.id));
   }
-  return 灰.has(r.spec.id);
+  return disabled2.has(r.spec.id);
 }
 
 /**
@@ -360,15 +360,15 @@ export function 整行灰(r: 行, 灰: ReadonlySet<string>): boolean {
  * ⚠️ 返回 `当前` 表示"没处去"。调用方据此决定要不要重画焦点（对照
  * `findEdgeEnabled` 返回 -1 的语义：那边是"这里根本没有能落的地方"）。
  */
-export function 行内下一格(
-  可用: readonly { disabled?: boolean }[],
-  当前: number,
-  方向: 1 | -1,
+export function inlineBelowValueCell(
+  canUse: readonly { disabled?: boolean }[],
+  current: number,
+  direction: 1 | -1,
 ): number {
-  for (let i = 当前 + 方向; i >= 0 && i < 可用.length; i += 方向) {
-    if (!可用[i]?.disabled) return i;
+  for (let i = current + direction; i >= 0 && i < canUse.length; i += direction) {
+    if (!canUse[i]?.disabled) return i;
   }
-  return 当前;
+  return current;
 }
 
 /**
@@ -378,30 +378,30 @@ export function 行内下一格(
  * 吗"。手写一遍清单就等于第二份真相源，所以让它自己摊——`给行` 走哪条路，
  * 它就收哪条路。
  */
-export function 表里全部id(): string[] {
-  const 收: string[] = [];
-  const 摊 = (ids: readonly string[]) => {
-    for (const id of ids) if (id !== "sep") 收.push(id);
+export function allTableIds(): string[] {
+  const receive: string[] = [];
+  const flatten = (ids: readonly string[]) => {
+    for (const id of ids) if (id !== "sep") receive.push(id);
   };
-  for (const 档 of ["编辑器", "输入框"] as const) {
+  for (const level of ["编辑器", "输入框"] as const) {
     // ⚠️ 循环变量**不叫 `行`**：上面有个同名的类型，叫一样了读的人要愣一下。
-    for (const 项 of 给行(档, true)) {
-      if (项.kind === "icons") 摊(项.ids);
-      else if (项.kind === "item") 收.push(项.spec.id);
+    for (const item5 of buildRows(level, true)) {
+      if (item5.kind === "icons") flatten(item5.ids);
+      else if (item5.kind === "item") receive.push(item5.spec.id);
     }
   }
   // 两栏子菜单里的条目（`给行` 只给出父项本身）。
-  摊子(右键段落项.submenu, 收);
-  摊子(右键表格项.submenu, 收);
-  摊子(右键插入项.submenu, 收);
-  return 收;
+  flattenChild(contextParagraphItems.submenu, receive);
+  flattenChild(contextTableItems.submenu, receive);
+  flattenChild(contextInsertItems.submenu, receive);
+  return receive;
 }
 
-function 摊子(entries: readonly MenuEntry[] | undefined, 收: string[]): void {
+function flattenChild(entries: readonly MenuEntry[] | undefined, receive: string[]): void {
   for (const e of entries ?? []) {
     if (e === "sep") continue;
-    收.push(e.id);
+    receive.push(e.id);
     // 目前只一层，写递归是防哪天加了第二层——那时这里不该悄悄漏掉。
-    摊子(e.submenu, 收);
+    flattenChild(e.submenu, receive);
   }
 }

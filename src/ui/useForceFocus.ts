@@ -27,7 +27,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { api, events, on } from "@/bridge/ipc";
 import type { FocusState } from "@/bridge/types";
 
-export interface 强制专注出口 {
+export interface StrongMakeDedicatedNoteOutputMouth {
   /**
    * 此刻的状态。**还没拉到是 `null`**——不是"没在跑"。
    *
@@ -44,12 +44,12 @@ export interface 强制专注出口 {
   ack: () => Promise<void>;
 }
 
-export function useForceFocus(): 强制专注出口 {
+export function useForceFocus(): StrongMakeDedicatedNoteOutputMouth {
   const [state, setState] = useState<FocusState | null>(null);
 
   useEffect(() => {
-    let 已卸载 = false;
-    let 退订: UnlistenFn | null = null;
+    let alreadyUninstall = false;
+    let unsubscribe: UnlistenFn | null = null;
 
     // 先拉一次：窗口可能是**会话开始之后**才建的（警报窗就是这样），
     // 只靠事件的话它会一直显示"正在读"。
@@ -57,23 +57,23 @@ export function useForceFocus(): 强制专注出口 {
       .get()
       .then((s) => {
         // ⚠️ 拉到之前可能已经有事件到了（那几拍比这一枪新）。别覆盖回去。
-        if (!已卸载) setState((旧) => 旧 ?? s);
+        if (!alreadyUninstall) setState((oldValue) => oldValue ?? s);
       })
       .catch(() => {
         // 拉不到就当"没在跑"（`null` 留给"正在读"，但这里已经确定读不到了）。
         // 不弹错误：这个功能拉不到不该在界面上占一行，用户按一下开始就知道了。
-        if (!已卸载) setState((旧) => 旧 ?? { ...空状态 });
+        if (!alreadyUninstall) setState((oldValue) => oldValue ?? { ...emptyState });
       });
 
     on<FocusState>(events.focusState, setState).then((f) => {
       // ⚠️ 竞态：`on` 是异步的，挂载后马上卸载的话，退订函数到手时组件已经没了。
-      if (已卸载) f();
-      else 退订 = f;
+      if (alreadyUninstall) f();
+      else unsubscribe = f;
     });
 
     return () => {
-      已卸载 = true;
-      退订?.();
+      alreadyUninstall = true;
+      unsubscribe?.();
     };
   }, []);
 
@@ -94,7 +94,7 @@ export function useForceFocus(): 强制专注出口 {
 }
 
 /** 读不到宿主状态时的占位（形状对、值全是 0）。 */
-const 空状态: FocusState = {
+const emptyState: FocusState = {
   running: false,
   balance_ms: 0,
   cap_ms: 0,
@@ -116,11 +116,11 @@ const 空状态: FocusState = {
  * ⚠️ 负数按 0 算：余额在警报那一刻正好是 0，但浮点累加或某一拍的顺序
  * 都可能让它短暂地探到 -1 毫秒，而界面上显示 `-0:01` 会让人以为欠了钱。
  */
-export function 说时长(毫秒: number): string {
-  const 总秒 = Math.max(0, Math.floor(毫秒 / 1000));
-  const 时 = Math.floor(总秒 / 3600);
-  const 分 = Math.floor((总秒 % 3600) / 60);
-  const 秒 = 总秒 % 60;
-  const 补 = (n: number) => String(n).padStart(2, "0");
-  return 时 > 0 ? `${时}:${补(分)}:${补(秒)}` : `${分}:${补(秒)}`;
+export function sayTimeLength(milliSeconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliSeconds / 1000));
+  const time = Math.floor(totalSeconds / 3600);
+  const share = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const fill = (n: number) => String(n).padStart(2, "0");
+  return time > 0 ? `${time}:${fill(share)}:${fill(seconds)}` : `${share}:${fill(seconds)}`;
 }

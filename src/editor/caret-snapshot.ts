@@ -55,7 +55,7 @@ import { $prose } from "@milkdown/kit/utils";
  * ⚠️ 别往这里加 `from` / `to`：本文件顶上那张表说明了为什么那种坐标
  * 在块边界上根本不存在。
  */
-export interface 选区快照 {
+export interface SelectionSnapshot {
   /**
    * 选中的**纯文本**。
    *
@@ -83,7 +83,7 @@ export interface 选区快照 {
  * 会被**静默地粘成一行**——"第一段末尾"连上"第二段开头"，看起来像一句话，
  * 而那是错的。
  */
-export function 读选区快照(state: EditorState): 选区快照 {
+export function readSelectionSnapshot(state: EditorState): SelectionSnapshot {
   const sel = state.selection;
   if (sel.empty) return { text: "", empty: true };
   return { text: state.doc.textBetween(sel.from, sel.to, "\n"), empty: false };
@@ -100,8 +100,8 @@ export function 读选区快照(state: EditorState): 选区快照 {
  * "打开文档、什么都没选、插件读 `get_selection()`"会读到上一个文档留下的
  * 那一份。
  */
-export function 选区快照插件(onChange: (快照: 选区快照) => void) {
-  return $prose(() => 建选区快照插件(onChange));
+export function selectionSnapshotPlugin(onChange: (snapshot: SelectionSnapshot) => void) {
+  return $prose(() => createSelectionSnapshotPlugin(onChange));
 }
 
 /**
@@ -111,22 +111,22 @@ export function 选区快照插件(onChange: (快照: 选区快照) => void) {
  * `建选区快照插件(cb).spec.view(假视图)` 把它驱动起来——
  * 覆盖到的是去重那一段（"每一颗字都跨一次 IPC"就栽在那里）。
  */
-export function 建选区快照插件(onChange: (快照: 选区快照) => void) {
+export function createSelectionSnapshotPlugin(onChange: (snapshot: SelectionSnapshot) => void) {
   return new Plugin({
     view: (view: { state: EditorState }) => {
-      let 上次: string | null = null;
-      const 报 = (state: EditorState) => {
-        const now = 读选区快照(state);
+      let aboveCount: string | null = null;
+      const report = (state: EditorState) => {
+        const now = readSelectionSnapshot(state);
         const sig = `${now.empty ? 1 : 0}|${now.text}`;
-        if (sig === 上次) return;
-        上次 = sig;
+        if (sig === aboveCount) return;
+        aboveCount = sig;
         onChange(now);
       };
       // ⚠️ 挂载那一刻先报一次初值（见上面那条注解）。
-      报(view.state);
+      report(view.state);
       return {
         update: (view: { state: EditorState }) => {
-          报(view.state);
+          report(view.state);
           // ⚠️ **一律返回 `false`**：本插件不改 DOM。返回 `true` 会让
           // ProseMirror 以为视图需要重读，每次事务都多一轮无谓的工作
           //（与 `光标状态插件` 同一个理由）。

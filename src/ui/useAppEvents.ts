@@ -43,7 +43,7 @@ import { t } from "@/i18n";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 事件接线 {
+export interface EventWiring {
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
   refreshDocs: () => Promise<unknown>;
   /**
@@ -59,7 +59,7 @@ export interface 事件接线 {
   editorRef: RefObject<EditorPaneHandle | null>;
 }
 
-export function useAppEvents(w: 事件接线): void {
+export function useAppEvents(w: EventWiring): void {
   const { toast, refreshDocs, openPath, activeId, activeIdRef, editorRef } = w;
 
   // ── 宿主推来的事件 ────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ export function useAppEvents(w: 事件接线): void {
           // ⚠️ **不看返回值、也不弹提示**：插件发这条时用户可能正看着别处，
           // 而"没做成"本来就是这条路允许的结果之一（见 `payloads.ts` 那条）。
           // 拿一条 toast 告诉用户"插件没能替你插进去"只会让他莫名其妙。
-          editorRef.current?.插入在光标处(p.text);
+          editorRef.current?.insertAtCursorPlace(p.text);
         }),
 
         // **用户又启动了一次 Nota**（2026-09-27 加，单实例那一格）。

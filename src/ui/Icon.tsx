@@ -49,23 +49,23 @@ import type { CSSProperties } from "react";
  * 才去取那一个文件（遮罩图是懒加载的），所以多发的那些文件不花运行时的钱。
  * 724 KB 对一个桌面应用是可忽略的；换来的是"想用哪枚就写哪枚名字"。
  */
-const 网址表: Record<string, string> = import.meta.glob("../assets/icons/*.svg", {
+const urlTable: Record<string, string> = import.meta.glob("../assets/icons/*.svg", {
   query: "?url",
   eager: true,
   import: "default",
 });
 
 /** glob 的键是相对本文件的路径（`../assets/icons/folio-close-symbolic.svg`）。 */
-const 图标网址: Record<string, string> = {};
-for (const [路径, 网址] of Object.entries(网址表)) {
-  图标网址[路径.slice(路径.lastIndexOf("/") + 1).replace(/\.svg$/, "")] = 网址;
+const iconUrl: Record<string, string> = {};
+for (const [path, url] of Object.entries(urlTable)) {
+  iconUrl[path.slice(path.lastIndexOf("/") + 1).replace(/\.svg$/, "")] = url;
 }
 
 /**
  * Nota 实际用到的那几枚。名字**与文件名逐字符相同**（含 `-symbolic` 后缀）——
  * 这样从调用处能直接找到文件，不需要第二张"别名 → 文件"的表。
  */
-const 名字表 = [
+const nameTable = [
   // 格式化工具栏（`ui/FormatBar.tsx`）
   "folio-format-text-bold-symbolic",
   "folio-format-text-italic-symbolic",
@@ -86,12 +86,22 @@ const 名字表 = [
   "folio-view-list-bullet-symbolic",
   "folio-view-list-ordered-symbolic",
   "folio-eraser-symbolic",
+  // 标题按钮与正文源码标记。三枚标题图标由 Nota 自绘：H 保持同一形状，
+  // 右侧数字用轮廓路径而不是字体，所以 16px 下不依赖界面字体。
+  "nota-heading-1-symbolic",
+  "nota-heading-2-symbolic",
+  "nota-heading-3-symbolic",
   // 上面那套（Folio）里凑不出来的两枚，**是 Nota 自己画的**（`nota-` 前缀）。
   // 引用和任务列表原先拿汉字「引」「任」当图标——汉字笔画多，缩到 16px
   // 就是一团糊，而且和左右两边真正的图形混在一起看着像错位。见
   // `ui/FormatBar.tsx` 里那段说明。
   "nota-quote-symbolic",
   "nota-task-symbolic",
+  // 编辑器左侧装订线里的块标记。它们走遮罩绘制，颜色跟随
+  // `--fg-faint`，CDE 可通过同名的 CSS 变量换成自己的像素图标。
+  "nota-source-quote-symbolic",
+  "nota-source-bullet-symbolic",
+  "nota-source-code-symbolic",
   // 各处"收起/关闭"的 ×（侧边栏、插件栏、标签页、查找条、提示气泡）
   // ⚠️ 2026-10-16 新用的一枚：状态栏里那颗"插件栏"开关（顶栏藏着时才出现，
   // 见 `ui/StatusBar.tsx`）。两栏并列的那个形状正对"右边那一栏"。
@@ -162,12 +172,12 @@ const 名字表 = [
   "folio-delete-symbolic", // 删除（圆圈 + 叉）
 ] as const;
 
-export type 图标名 = (typeof 名字表)[number];
+export type iconName = (typeof nameTable)[number];
 
-for (const 名 of 名字表) {
-  if (!图标网址[名]) {
+for (const name3 of nameTable) {
+  if (!iconUrl[name3]) {
     console.error(
-      `[图标] 名字表里的 "${名}" 在 src/assets/icons/ 里没有对应文件。` +
+      `[图标] 名字表里的 "${name3}" 在 src/assets/icons/ 里没有对应文件。` +
         `界面上那颗按钮会是空的——要么补文件，要么把这一行删掉。`,
     );
   }
@@ -182,11 +192,11 @@ for (const 名 of 名字表) {
  * `size` 默认 16：原文件就是 16 格画的，缩放到别的尺寸会糊。
  * 真要变，**成对改宽高**（写成两处的话，一颗图标会被拉成长方形）。
  */
-export function Icon({ name, size = 16 }: { name: 图标名; size?: number }) {
-  const 网址 = 图标网址[name];
+export function Icon({ name, size = 16 }: { name: iconName; size?: number }) {
+  const url = iconUrl[name];
   return (
     <span
-      className={网址 ? "icon" : "icon icon-missing"}
+      className={url ? "icon" : "icon icon-missing"}
       data-icon={name}
       aria-hidden="true"
       style={
@@ -194,7 +204,7 @@ export function Icon({ name, size = 16 }: { name: 图标名; size?: number }) {
           // 主题 CSS 只需声明 `--icon-<逻辑名>: url(...)`。这里把逻辑名拼成
           // 自定义属性名，再用默认图作 fallback；不需要为每枚图标写一条组件规则。
           // 如果两处都写 `--icon-base`，行内 style 会永远赢过主题 CSS。
-          "--icon-base": 网址 ? `url("${网址}")` : "none",
+          "--icon-base": url ? `url("${url}")` : "none",
           "--icon-override": `var(--icon-${name}, var(--icon-base))`,
           width: size,
           height: size,

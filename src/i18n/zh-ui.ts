@@ -13,7 +13,7 @@
  *    `tools/i18n-check.sh` 按这个标记切表体，多一个就会把条数错。
  */
 
-export const 界面表: Record<string, string> = {
+export const uiMessages: Record<string, string> = {
   "File": "文件",
   "Edit": "编辑",
   "Paragraph": "段落",
@@ -48,7 +48,6 @@ export const 界面表: Record<string, string> = {
   "HTML (No Styles)…": "HTML（不含样式）…",
   "HTML (With Styles)…": "HTML（含样式）…",
   "Image…": "图片…",
-  "Other Formats…": "其他格式…",
   "Undo": "撤销",
   "Redo": "重做",
   "Cut": "剪切",
@@ -170,6 +169,48 @@ export const 界面表: Record<string, string> = {
   "No Theme (Built-in)": "无主题（内置）",
   "Open Themes Folder…": "打开主题文件夹…",
   "{0} (customized)": "{0}（已自定义）",
+  "Nota Help…": "Nota 帮助…",
+  "Nota Help": "Nota 帮助",
+  "Could not open help: {0}": "无法打开帮助：{0}",
+  "Essential guidance for writing, export, printing, and common problems.":
+    "写作、导出、打印与常见问题的必要说明。",
+  "Getting started": "开始使用",
+  "Use File to create, open, and save documents. Opening a folder adds its file tree and the current document outline to the sidebar.":
+    "使用「文件」菜单新建、打开和保存文档。打开文件夹后，左侧栏会显示文件树与当前文档大纲。",
+  "Interface themes change the application. Document themes change only the editor.":
+    "界面主题改变整个应用；文档主题只改变编辑区。",
+  "Markdown supports GitHub Flavored Markdown, tables, task lists, footnotes, alerts, KaTeX, and Mermaid.":
+    "支持 GitHub Flavored Markdown、表格、任务列表、脚注、Alerts、KaTeX 与 Mermaid。",
+  "Plugin installation and plugin-specific setup belong to the extension's own documentation.":
+    "插件安装与插件专用设置请查看该拓展自己的文档。",
+  "Pandoc and TeX": "Pandoc 与 TeX",
+  "Pandoc is not bundled with Nota. It is required for Word, OpenDocument, RTF, LaTeX, EPUB, and OPML import or export, plus Pandoc PDF export. HTML export, built-in PDF, and in-app printing do not need it.":
+    "Nota 不附带 Pandoc。Word、OpenDocument、RTF、LaTeX、EPUB 与 OPML 的导入或导出，以及 Pandoc PDF 导出需要它。HTML 导出、内置 PDF 与应用内打印不需要它。",
+  "Pandoc PDF also needs a TeX engine such as xelatex. Restart Nota after installation. For a custom location, set NOTA_PANDOC_CMD before starting Nota.":
+    "Pandoc PDF 还需要 xelatex 等 TeX 引擎。安装后重新启动 Nota；自定义位置可在启动前设置 NOTA_PANDOC_CMD。",
+  "Printing": "打印",
+  "On Linux, Nota connects directly to CUPS and does not require the lpstat or lp command-line clients.":
+    "Linux 下 Nota 直接连接 CUPS，不要求 lpstat 或 lp 命令行客户端。",
+  "If CUPS is unavailable or no printer is configured, use System Print or export a PDF. Printing and PDF export require a light document theme.":
+    "CUPS 不可用或没有配置打印机时，可使用系统打印或导出 PDF。打印与 PDF 导出只允许浅色文档主题。",
+  "Keyboard shortcuts": "快捷键",
+  "Action": "动作",
+  "Shortcut": "快捷键",
+  "The complete list and custom bindings are in Settings → Shortcuts.":
+    "完整列表和自定义键位在「设置 → 快捷键」。",
+  "Open installation help": "打开安装帮助",
+  "Saved {0} documents.": "已保存 {0} 份文档。",
+  "There are no unsaved changes.": "没有未保存的改动。",
+  "Save the document before opening its location.": "先保存文档，才能打开它所在的位置。",
+  "Save the document before revealing it in the sidebar.": "先保存文档，才能在侧栏中定位它。",
+  "Use Close for a document that has not been saved.": "尚未保存的文档请使用「关闭」。",
+  "Delete file?": "删除文件？",
+  "Delete “{0}” from disk? This cannot be undone.": "要从磁盘删除「{0}」吗？此操作无法撤销。",
+  "Place the cursor on an image or select exactly one image first.":
+    "请先把光标放到图片上，或只选中一张图片。",
+  "Copied the image to the clipboard.": "已将图片复制到剪贴板。",
+  "Could not copy the image: {0}": "无法复制图片：{0}",
+  "Export Image": "导出图片",
   "About Nota": "关于 Nota",
   "Software Update": "软件更新",
   "Website": "网站",
@@ -184,19 +225,6 @@ export const 界面表: Record<string, string> = {
   // ── 「故障排除」那两张表（2026-10-04）────────────────────────────────────
   // ⚠️ 左列里 `rustc` / `cargo` / `node` / `npm` / `tauri` / `webkit2gtk` /
   // `gtk` / `mlua` 八个**故意不翻**（程序名与包名，翻了找不到），所以这里没有它们。
-  "Build information": "编译信息",
-  "This machine": "本机信息",
-  "Package version": "包版本",
-  "Build time": "编译时间",
-  "Build host": "编译主机",
-  "Build platform": "编译平台",
-  "Target triple": "目标三元组",
-  "Build profile": "构建档案",
-  "Operating system": "操作系统",
-  "Kernel": "内核",
-  "Architecture": "架构",
-  "GTK version": "GTK 版本",
-  "WebKitGTK version": "WebKitGTK 版本",
   "Loading…": "正在读取…",
   "Could not read the information.": "没读到这些信息。",
   "Checking for updates…": "正在检查更新…",
@@ -220,10 +248,13 @@ export const 界面表: Record<string, string> = {
   "Open File Location": "打开文件位置",
   "Document List": "文档列表",
   "Document Tree": "文档树",
+  "Operations": "操作",
+  "Recent Directories": "最近使用的目录",
   "Search files…": "搜索文件…",
   "Search files": "搜索文件",
   "No matching files.": "没有匹配的文件。",
   "File list is empty": "文件列表为空",
+  "Outline is empty": "大纲内容为空",
   "Folder name": "文件夹名称",
   "Create": "创建",
   "Name": "名称",
@@ -481,7 +512,6 @@ export const 界面表: Record<string, string> = {
   "Checking…": "检测中…",
   "Checking for pandoc on this system…": "正在检查系统中的 pandoc…",
   "Not found in PATH": "没在 PATH 里找到",
-  "Install guide on the official site": "去官网看安装指南",
   "Try Anyway": "仍然试一次",
   "Export {0}": "导出 {0}",
   "Exporting {0}": "开始导出 {0}",
@@ -502,8 +532,6 @@ export const 界面表: Record<string, string> = {
   "Expand this section": "展开这一节",
   "Collapse this section": "折叠这一节",
   "Cannot read this folder: {0}": "读不了这个文件夹：{0}",
-  "This folder has no Markdown files.": "这个文件夹里没有 Markdown 文件。",
-  "This document has no headings yet.": "这份文档还没有标题。",
   // ⚠️ 这里原来还有 `"Remove from list"` 与 `"No recent files yet.…"` 两条：
   // 它们只服务侧栏那一页，2026-09-28 随那一页一起删（同上）。
   // ⚠️ 这一段（2026-09-30 下栏重做之前是十三行）现在只剩两行。用户那天给了
@@ -776,4 +804,11 @@ export const 界面表: Record<string, string> = {
   "Could not export the settings package: {0}": "无法导出设置包：{0}",
   "Nota settings package": "Nota 设置包",
   "Restore program settings to their factory values.": "将程序设置恢复为出厂值。",
+  "HTML source": "HTML 源码",
+  "Edit HTML source": "编辑 HTML 源码",
+  "Align current column left": "当前列左对齐",
+  "Align current column center": "当前列居中对齐",
+  "Align current column right": "当前列右对齐",
+  "Formula": "公式",
+  "Finish editing": "结束编辑",
 };

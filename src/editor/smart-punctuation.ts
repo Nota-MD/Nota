@@ -75,27 +75,27 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 /* ── 设置（`Settings.markdown` 那六格的投影）──────────────────────────── */
 
 /** 什么时候转换。与 Rust 那边 `SmartPunctuation` 的三个变体一一对应。 */
-export type 标点时机 = "off" | "render" | "input";
+export type PunctuationTimeMachine = "off" | "render" | "input";
 
 /** 引号字形。与 `QuoteStyle` 一一对应。 */
-export type 引号字形 = "curly" | "straight";
+export type ReferenceNumberCharacterShape = "curly" | "straight";
 
 /** `--` 变成什么。与 `DashStyle` 一一对应。 */
-export type 破折号风格 = "en-em" | "em";
+export type DashWindCell = "en-em" | "em";
 
 /**
  * 这一层要的全部设置。**字段名与 Rust 那边逐条对应**（`markdown.rs`），
  * 名字取自 `src/bridge/types.ts` 的驼峰写法，`EditorPane` 负责投影。
  */
-export interface 标点设置 {
-  模式: 标点时机;
-  引号: boolean;
+export interface punctuationSettings {
+  mode2: PunctuationTimeMachine;
+  referenceNumber: boolean;
   /** 双引号（`"`）的字形。 */
-  双引号: 引号字形;
+  doubleReferenceNumber: ReferenceNumberCharacterShape;
   /** 单引号（`'`）的字形。 */
-  单引号: 引号字形;
-  破折号: boolean;
-  风格: 破折号风格;
+  singleReferenceNumber: ReferenceNumberCharacterShape;
+  dash: boolean;
+  windCell: DashWindCell;
   /**
    * `...` → `…`。
    *
@@ -105,18 +105,18 @@ export interface 标点设置 {
    * 而为一个字符再开一格设置、再改一次 `settings.toml` 的结构，
    * 代价与它不匹配。这条是**有意**的，不是忘了。
    */
-  省略号: boolean;
+  saveOmitNumber: boolean;
 }
 
 /** 出厂默认。⚠️ 与 Rust 那边的 `Default` **必须一致**（六项逐条对过）。 */
-export const 默认标点设置: 标点设置 = {
-  模式: "input",
-  引号: true,
-  双引号: "curly",
-  单引号: "curly",
-  破折号: true,
-  风格: "en-em",
-  省略号: true,
+export const DefaultPunctuationSettings: punctuationSettings = {
+  mode2: "input",
+  referenceNumber: true,
+  doubleReferenceNumber: "curly",
+  singleReferenceNumber: "curly",
+  dash: true,
+  windCell: "en-em",
+  saveOmitNumber: true,
 };
 
 /* ── 第一格：纯函数（判据都在这儿）────────────────────────────────────── */
@@ -130,23 +130,23 @@ export const 默认标点设置: 标点设置 = {
  * 这一截（见文件头最后那条）。开引号的三种前文：行首、空白、
  * 左括号那一族（`([{<` 与全角的 `（【「『`）。
  */
-export function 弯引号(前一个: string, 是双引号: boolean, 字形: 引号字形): string {
-  const 开 = 前一个 === "" || /[\s([{<（【「『“‘]/.test(前一个);
-  if (字形 === "straight") return 是双引号 ? '"' : "'";
-  return 是双引号 ? (开 ? "“" : "”") : 开 ? "‘" : "’";
+export function curveReferenceNumber(previous: string, isDoubleReferenceNumber: boolean, characterShape: ReferenceNumberCharacterShape): string {
+  const open2 = previous === "" || /[\s([{<（【「『“‘]/.test(previous);
+  if (characterShape === "straight") return isDoubleReferenceNumber ? '"' : "'";
+  return isDoubleReferenceNumber ? (open2 ? "“" : "”") : open2 ? "‘" : "’";
 }
 
 /** 一对引号的开头与结尾。直引号两边相同，弯引号分开。 */
-export interface 引号配法 {
-  开: string;
-  闭: string;
+export interface ReferenceNumberConfigureMethod {
+  open2: string;
+  close3: string;
 }
 
 /** 当前字形下的一对引号。 */
-export function 取引号配法(是双引号: boolean, 字形: 引号字形): 引号配法 {
+export function getReferenceNumberConfigureMethod(isDoubleReferenceNumber: boolean, characterShape: ReferenceNumberCharacterShape): ReferenceNumberConfigureMethod {
   return {
-    开: 弯引号("", 是双引号, 字形),
-    闭: 弯引号("甲", 是双引号, 字形),
+    open2: curveReferenceNumber("", isDoubleReferenceNumber, characterShape),
+    close3: curveReferenceNumber("甲", isDoubleReferenceNumber, characterShape),
   };
 }
 
@@ -156,8 +156,8 @@ export function 取引号配法(是双引号: boolean, 字形: 引号字形): �
  * 与输入规则共用同一份前文判据，避免自动补对和智能标点把同一颗按键理解成
  * 两个方向。
  */
-export function 是开引号位置(前一个: string): boolean {
-  return 前一个 === "" || /[\s([{<（【「『“‘]/.test(前一个);
+export function isOpenReferenceNumberPosition(previous: string): boolean {
+  return previous === "" || /[\s([{<（【「『“‘]/.test(previous);
 }
 
 /**
@@ -165,28 +165,28 @@ export function 是开引号位置(前一个: string): boolean {
  *
  * 直引号的开闭是同一颗，只能按奇偶判断；弯引号分别计数。反斜杠后的引号不计数。
  */
-export function 有未闭合引号(前文: string, 开: string, 闭: string): boolean {
-  let 层 = 0;
-  let 转义 = false;
-  for (const 字 of 前文) {
-    if (转义) {
-      转义 = false;
+export function hasNotCloseCombineReferenceNumber(prefixText: string, open2: string, close3: string): boolean {
+  let layer = 0;
+  let convertMeaning = false;
+  for (const character2 of prefixText) {
+    if (convertMeaning) {
+      convertMeaning = false;
       continue;
     }
-    if (字 === "\\") {
-      转义 = true;
+    if (character2 === "\\") {
+      convertMeaning = true;
       continue;
     }
-    if (开 === 闭 && 字 === 开) {
+    if (open2 === close3 && character2 === open2) {
       // 直引号没有方向，只能按奇偶成对。
-      层 = 层 === 0 ? 1 : 0;
-    } else if (字 === 开) {
-      层 += 1;
-    } else if (字 === 闭 && 层 > 0) {
-      层 -= 1;
+      layer = layer === 0 ? 1 : 0;
+    } else if (character2 === open2) {
+      layer += 1;
+    } else if (character2 === close3 && layer > 0) {
+      layer -= 1;
     }
   }
-  return 层 > 0;
+  return layer > 0;
 }
 
 /**
@@ -198,24 +198,24 @@ export function 有未闭合引号(前文: string, 开: string, 闭: string): bo
  *
  * @param 个数 打进文档的连字符个数（`2` 或 `3+`）。
  */
-export function 破折号(风格: 破折号风格, 个数: number): string {
-  if (个数 >= 3) return "—";
-  return 风格 === "en-em" ? "–" : "—";
+export function dash(windCell: DashWindCell, itemNumber: number): string {
+  if (itemNumber >= 3) return "—";
+  return windCell === "en-em" ? "–" : "—";
 }
 
 /** 撒号（`don't` 里那颗）该不该用 `’` 而不是 `‘`。 */
-function 是撒号(前文: string): boolean {
-  return /[\p{L}\p{N}]$/u.test(前文);
+function isApostropheNumber(prefixText: string): boolean {
+  return /[\p{L}\p{N}]$/u.test(prefixText);
 }
 
 /* ── 第二格：扫描（`Render` 模式用它，测试也用它）────────────────────── */
 
 /** 一处该被换掉的地方。`始` / `终` 是**文本节点内**的偏移。 */
-export interface 标点命中 {
-  始: number;
-  终: number;
+export interface PunctuationMatch {
+  start6: number;
+  end3: number;
   /** 替换成的那串字符。 */
-  替: string;
+  replace: string;
 }
 
 /**
@@ -228,20 +228,20 @@ export interface 标点命中 {
  * 返回的顺序是**从前往后、互不重叠**（边扫边跳过已命中的那一段），
  * 所以调用方可以直接拿着偏移去挂装饰。
  */
-export function 扫标点(文: string, 设置: 标点设置): 标点命中[] {
-  if (设置.模式 === "off") return [];
-  const 出: 标点命中[] = [];
+export function scanPunctuation(text4: string, settings: punctuationSettings): PunctuationMatch[] {
+  if (settings.mode2 === "off") return [];
+  const output2: PunctuationMatch[] = [];
   let i = 0;
-  while (i < 文.length) {
-    const 字 = 文[i]!;
+  while (i < text4.length) {
+    const character2 = text4[i]!;
     // ── 破折号：`--` / `---`（**先吃掉整串**，别一次只吃两个）
-    if (设置.破折号 && 字 === "-" && 文[i + 1] === "-") {
+    if (settings.dash && character2 === "-" && text4[i + 1] === "-") {
       let n = 0;
-      while (文[i + n] === "-") n++;
+      while (text4[i + n] === "-") n++;
       // ⚠️ 四个及以上的连字符**不碰**：那是分割线（`----`）或者用户手打的
       // 一串横线，换成 `——` 会让那一行从"分割线"变成"正文里的一个破折号"。
       if (n <= 3) {
-        出.push({ 始: i, 终: i + n, 替: 破折号(设置.风格, n) });
+        output2.push({ start6: i, end3: i + n, replace: dash(settings.windCell, n) });
         i += n;
         continue;
       }
@@ -249,29 +249,29 @@ export function 扫标点(文: string, 设置: 标点设置): 标点命中[] {
       continue;
     }
     // ── 省略号：`...`（**只吃三个**，`....` 里的前三个照换）
-    if (设置.破折号 && 设置.省略号 && 字 === "." && 文[i + 1] === "." && 文[i + 2] === ".") {
-      出.push({ 始: i, 终: i + 3, 替: "…" });
+    if (settings.dash && settings.saveOmitNumber && character2 === "." && text4[i + 1] === "." && text4[i + 2] === ".") {
+      output2.push({ start6: i, end3: i + 3, replace: "…" });
       i += 3;
       continue;
     }
     // ── 引号：逐颗判断朝哪边
-    if (设置.引号 && (字 === '"' || 字 === "'")) {
-      const 是双 = 字 === '"';
-      const 字形 = 是双 ? 设置.双引号 : 设置.单引号;
-      const 前文 = 文.slice(0, i);
-      const 替 =
-        字形 === "straight"
-          ? 字
-          : !是双 && 是撒号(前文)
+    if (settings.referenceNumber && (character2 === '"' || character2 === "'")) {
+      const isDouble = character2 === '"';
+      const characterShape = isDouble ? settings.doubleReferenceNumber : settings.singleReferenceNumber;
+      const prefixText = text4.slice(0, i);
+      const replace =
+        characterShape === "straight"
+          ? character2
+          : !isDouble && isApostropheNumber(prefixText)
             ? "’"
-            : 弯引号(前文.slice(-1), 是双, 字形);
-      if (替 !== 字) 出.push({ 始: i, 终: i + 1, 替 });
+            : curveReferenceNumber(prefixText.slice(-1), isDouble, characterShape);
+      if (replace !== character2) output2.push({ start6: i, end3: i + 1, replace });
       i++;
       continue;
     }
     i++;
   }
-  return 出;
+  return output2;
 }
 
 /* ── 第三格：输入规则（`Input` 模式）────────────────────────────────── */
@@ -296,7 +296,7 @@ export function 扫标点(文: string, 设置: 标点设置): 标点命中[] {
  * `if ($from.parent.type.spec.code) { if (!rule.inCode) continue }`，
  * 而 `inCode` 默认就是 `false`。
  */
-const 规则选项 = { inCodeMark: false } as const;
+const ruleRuleOption = { inCodeMark: false } as const;
 
 /**
  * 「光标前这一截」**除了表格骨架（空白、横线、竖线、冒号）以外没有别的字符**吗。
@@ -328,41 +328,41 @@ const 规则选项 = { inCodeMark: false } as const;
  * 所以"行里已经有字"时照转不误——那是对的：`| a | --` 这种数据格里的 `--`
  * 本来就该变成 `–`。
  */
-export function 只有横线骨架(前文: string): boolean {
-  return /^[\s|:-]*$/.test(前文);
+export function onlyHasHorizontalLineBoneFrame(prefixText: string): boolean {
+  return /^[\s|:-]*$/.test(prefixText);
 }
 
 /** 上面那条判据的取数：从段落开头到光标。 */
-function 是横线骨架行(state: EditorState, 始: number): boolean {
-  const $始 = state.doc.resolve(始);
-  return 只有横线骨架($始.parent.textBetween(0, $始.parentOffset, "", ""));
+function isHorizontalLineBoneFrameLine(state: EditorState, start6: number): boolean {
+  const start = state.doc.resolve(start6);
+  return onlyHasHorizontalLineBoneFrame(start.parent.textBetween(0, start.parentOffset, "", ""));
 }
 
 /** 连字符那一串：**两条规则**（`---` 在前，长的先试）。 */
-function 破折号规则(设置: 标点设置) {
-  const 一条 = (个数: 2 | 3) =>
+function dashRuleRule(settings: punctuationSettings) {
+  const oneItem = (itemNumber: 2 | 3) =>
     $inputRule(() =>
       new InputRule(
-        new RegExp(`-{${个数}}$`),
+        new RegExp(`-{${itemNumber}}$`),
         // ⚠️ 这里**不再判 `设置.破折号`**：关掉那一格时这一条压根不注册
         // （见 `标点输入`）。判据只留一处，读的人不必两头对。
-        (state, _m, 始, 终) =>
-          是横线骨架行(state, 始) ? null : 换掉(state, 始, 终, 破折号(设置.风格, 个数)),
-        规则选项,
+        (state, _m, start6, end3) =>
+          isHorizontalLineBoneFrameLine(state, start6) ? null : replaceRemove(state, start6, end3, dash(settings.windCell, itemNumber)),
+        ruleRuleOption,
       ),
     );
-  return [一条(3), 一条(2)];
+  return [oneItem(3), oneItem(2)];
 }
 
-function 省略号规则() {
+function saveOmitNumberRuleRule() {
   return $inputRule(() =>
-    new InputRule(/\.{3}$/, (state, _m, 始, 终) => 换掉(state, 始, 终, "…"), 规则选项),
+    new InputRule(/\.{3}$/, (state, _m, start6, end3) => replaceRemove(state, start6, end3, "…"), ruleRuleOption),
   );
 }
 
 /** 把 `[始, 终)` 换成 `替`。⚠️ 只换文本，不动任何 mark 与节点结构。 */
-function 换掉(state: EditorState, 始: number, 终: number, 替: string) {
-  return state.tr.insertText(替, 始, 终);
+function replaceRemove(state: EditorState, start6: number, end3: number, replace: string) {
+  return state.tr.insertText(replace, start6, end3);
 }
 
 /**
@@ -392,27 +392,27 @@ function 换掉(state: EditorState, 始: number, 终: number, 替: string) {
  * 打架的**，靠 `是横线骨架行` 那道守卫让开，理由写在那个函数上——那是本文件
  * 最容易、也已经真的被改坏过的一处（BUG-51）。
  */
-export function 标点输入(设置: 标点设置) {
-  if (设置.模式 !== "input") return [];
-  const 出 = [];
+export function punctuationInput(settings: punctuationSettings) {
+  if (settings.mode2 !== "input") return [];
+  const output2 = [];
   // ⚠️ 省略号**挂靠在破折号那一格上**（`标点设置.省略号` 那条注释讲了为什么）。
-  if (设置.破折号) {
-    出.push(...破折号规则(设置));
-    if (设置.省略号) 出.push(省略号规则());
+  if (settings.dash) {
+    output2.push(...dashRuleRule(settings));
+    if (settings.saveOmitNumber) output2.push(saveOmitNumberRuleRule());
   }
-  return 出;
+  return output2;
 }
 
 /* ── 第三½格：引号自动配成对（`Input` 模式）──────────────────────────── */
 
-export const 引号配对键 = new PluginKey("nota-smart-quote-pair");
+export const referenceNumberConfigureCorrectKey = new PluginKey("nota-smart-quote-pair");
 
-function 在代码里(state: EditorState, 位置: number): boolean {
-  const $位 = state.doc.resolve(位置);
-  for (let 层 = $位.depth; 层 > 0; 层 -= 1) {
-    if ($位.node(层).type.spec.code) return true;
+function atCodeInside(state: EditorState, position2: number): boolean {
+  const position = state.doc.resolve(position2);
+  for (let layer = position.depth; layer > 0; layer -= 1) {
+    if (position.node(layer).type.spec.code) return true;
   }
-  return $位.marks().some((标记) => 标记.type.spec.code);
+  return position.marks().some((mark) => mark.type.spec.code);
 }
 
 /**
@@ -424,67 +424,67 @@ function 在代码里(state: EditorState, 位置: number): boolean {
  * - 光标停在自动补出的闭引号前：再敲引号只跨过去；
  * - 选中一段再敲引号：用一对引号包住选区，并保留选区。
  */
-export function 引号输入事务(
+export function referenceNumberInputTransaction(
   state: EditorState,
-  从: number,
-  到: number,
-  字: string,
-  设置: 标点设置,
+  from: number,
+  to2: number,
+  character2: string,
+  settings: punctuationSettings,
 ): Transaction | null {
-  if (设置.模式 !== "input" || !设置.引号 || (字 !== '"' && 字 !== "'")) return null;
-  const 是双 = 字 === '"';
-  const 字形 = 是双 ? 设置.双引号 : 设置.单引号;
-  const { 开, 闭 } = 取引号配法(是双, 字形);
-  const $从 = state.doc.resolve(从);
-  if (!$从.parent.inlineContent || 在代码里(state, 从)) return null;
+  if (settings.mode2 !== "input" || !settings.referenceNumber || (character2 !== '"' && character2 !== "'")) return null;
+  const isDouble = character2 === '"';
+  const characterShape = isDouble ? settings.doubleReferenceNumber : settings.singleReferenceNumber;
+  const { open2, close3 } = getReferenceNumberConfigureMethod(isDouble, characterShape);
+  const fromValue = state.doc.resolve(from);
+  if (!fromValue.parent.inlineContent || atCodeInside(state, from)) return null;
 
-  if (从 !== 到) {
-    const $到 = state.doc.resolve(到);
-    if (!$从.sameParent($到) || 在代码里(state, 到)) return null;
+  if (from !== to2) {
+    const to = state.doc.resolve(to2);
+    if (!fromValue.sameParent(to) || atCodeInside(state, to2)) return null;
     const tr = state.tr;
-    tr.insertText(闭, 到, 到);
-    tr.insertText(开, 从, 从);
-    tr.setSelection(TextSelection.create(tr.doc, 从 + 开.length, 到 + 开.length));
+    tr.insertText(close3, to2, to2);
+    tr.insertText(open2, from, from);
+    tr.setSelection(TextSelection.create(tr.doc, from + open2.length, to2 + open2.length));
     return tr.scrollIntoView();
   }
 
-  const 父 = $从.parent;
-  const 偏移 = $从.parentOffset;
-  const 前 = 偏移 > 0 ? 父.textBetween(偏移 - 1, 偏移, "") : "";
-  const 后 = 偏移 < 父.content.size ? 父.textBetween(偏移, 偏移 + 1, "") : "";
-  const 前文 = 父.textBetween(0, 偏移, "");
+  const parent = fromValue.parent;
+  const offset = fromValue.parentOffset;
+  const before2 = offset > 0 ? parent.textBetween(offset - 1, offset, "") : "";
+  const after = offset < parent.content.size ? parent.textBetween(offset, offset + 1, "") : "";
+  const prefixText = parent.textBetween(0, offset, "");
 
   // `don't` 里的单引号是撒号，要落成 `’`，但不要再补一对。
-  if (!是双 && /[\p{L}\p{N}]$/u.test(前) && !是开引号位置(前)) {
-    return state.tr.insertText(闭, 从);
+  if (!isDouble && /[\p{L}\p{N}]$/u.test(before2) && !isOpenReferenceNumberPosition(before2)) {
+    return state.tr.insertText(close3, from);
   }
-  if (前 === "\\") return null;
+  if (before2 === "\\") return null;
 
   // 先判“越过我们补出来的闭引号”，再判“这里算不算开引号位置”：
   // 光标夹在 `“|”` 中间时，前一颗本身就是开引号，后判会再补一对。
-  if (后 === 闭 && 有未闭合引号(前文, 开, 闭)) {
+  if (after === close3 && hasNotCloseCombineReferenceNumber(prefixText, open2, close3)) {
     return state.tr
-      .setSelection(TextSelection.create(state.doc, 从 + 1))
+      .setSelection(TextSelection.create(state.doc, from + 1))
       .setMeta("addToHistory", false);
   }
 
-  if (是开引号位置(前)) {
-    const tr = state.tr.insertText(开 + 闭, 从);
-    tr.setSelection(TextSelection.create(tr.doc, 从 + 开.length));
+  if (isOpenReferenceNumberPosition(before2)) {
+    const tr = state.tr.insertText(open2 + close3, from);
+    tr.setSelection(TextSelection.create(tr.doc, from + open2.length));
     return tr;
   }
 
-  return state.tr.insertText(闭, 从);
+  return state.tr.insertText(close3, from);
 }
 
 /** 引号配对的 ProseMirror 插件。导出是为了让测试直接驱动 `handleTextInput`。 */
-export function 建引号配对插件(设置: 标点设置): Plugin {
+export function createReferenceNumberConfigureCorrectPlugin(settings: punctuationSettings): Plugin {
   return new Plugin({
-    key: 引号配对键,
+    key: referenceNumberConfigureCorrectKey,
     props: {
-      handleTextInput: (view: EditorView, 从, 到, 文) => {
-        if (view.composing || 文.length !== 1) return false;
-        const tr = 引号输入事务(view.state, 从, 到, 文, 设置);
+      handleTextInput: (view: EditorView, from, to2, text4) => {
+        if (view.composing || text4.length !== 1) return false;
+        const tr = referenceNumberInputTransaction(view.state, from, to2, text4, settings);
         if (!tr) return false;
         view.dispatch(tr);
         return true;
@@ -499,20 +499,20 @@ export function 建引号配对插件(设置: 标点设置): Plugin {
  * 必须在 `标点输入` **前面**：两者都听 `handleTextInput`，本插件先接管时才能
  * 一次放进成对引号；排到输入规则后面就只能看到已经被替换过的单颗字符。
  */
-export function 引号配对(设置: 标点设置) {
-  if (设置.模式 !== "input" || !设置.引号) return [];
-  return $prose(() => 建引号配对插件(设置));
+export function referenceNumberConfigureCorrect(settings: punctuationSettings) {
+  if (settings.mode2 !== "input" || !settings.referenceNumber) return [];
+  return $prose(() => createReferenceNumberConfigureCorrectPlugin(settings));
 }
 
 /* ── 第四格：显示装饰（`Render` 模式）──────────────────────────────── */
 
-export const 标点装饰键 = new PluginKey("notaSmartPunct");
+export const punctuationDecorationKey = new PluginKey("notaSmartPunct");
 
 /** 一处装饰：文档位置上的 `[从, 到)` 换成 `替`。 */
-export interface 装饰项 {
-  从: number;
-  到: number;
-  替: string;
+export interface DecorationItem {
+  from: number;
+  to2: number;
+  replace: string;
 }
 
 /**
@@ -527,41 +527,41 @@ export interface 装饰项 {
  * ⚠️ 只扫文档，**不碰选择**：它与光标在哪无关（这一点和 `instant-render`
  * 正相反——那一条的判据就是光标）。
  */
-export function 装饰清单(文档: PMNode, 设置: 标点设置): 装饰项[] {
-  const 出: 装饰项[] = [];
-  文档.descendants((节点, 位置) => {
-    if (!节点.isText || !节点.text) return;
-    for (const 命中 of 扫标点(节点.text, 设置)) {
-      出.push({ 从: 位置 + 命中.始, 到: 位置 + 命中.终, 替: 命中.替 });
+export function decorationClearSingle(document: PMNode, settings: punctuationSettings): DecorationItem[] {
+  const output2: DecorationItem[] = [];
+  document.descendants((node, position2) => {
+    if (!node.isText || !node.text) return;
+    for (const match of scanPunctuation(node.text, settings)) {
+      output2.push({ from: position2 + match.start6, to2: position2 + match.end3, replace: match.replace });
     }
   });
-  return 出;
+  return output2;
 }
 
 /** 把 {@link 装饰清单} 算出来的东西变成 ProseMirror 的装饰集。 */
-function 算装饰(state: EditorState, 设置: 标点设置): DecorationSet {
-  const 装: Decoration[] = [];
-  for (const 项 of 装饰清单(state.doc, 设置)) {
+function computeDecorations(state: EditorState, settings: punctuationSettings): DecorationSet {
+  const install: Decoration[] = [];
+  for (const item5 of decorationClearSingle(state.doc, settings)) {
     // 原文压成 0 宽（CSS 在 `editor.css` 的 `.nota-smart-hide`）；
     // 转换后的字符交给紧挨着的 widget 画。
-    装.push(Decoration.inline(项.从, 项.到, { class: "nota-smart-hide" }));
-    装.push(
+    install.push(Decoration.inline(item5.from, item5.to2, { class: "nota-smart-hide" }));
+    install.push(
       Decoration.widget(
-        项.从,
+        item5.from,
         () => {
-          const 盒 = document.createElement("span");
-          盒.className = "nota-smart-show";
-          盒.textContent = 项.替;
+          const box = document.createElement("span");
+          box.className = "nota-smart-show";
+          box.textContent = item5.replace;
           // ⚠️ 这一颗**不是可编辑内容**：不让 PM 把光标停进去，
           // 也不参与选中（选中的仍然是文档里那两个字符）。
-          盒.setAttribute("aria-hidden", "true");
-          return 盒;
+          box.setAttribute("aria-hidden", "true");
+          return box;
         },
         { side: -1 },
       ),
     );
   }
-  return DecorationSet.create(state.doc, 装);
+  return DecorationSet.create(state.doc, install);
 }
 
 /**
@@ -571,18 +571,18 @@ function 算装饰(state: EditorState, 设置: 标点设置): DecorationSet {
  * 拖一下窗口、敲一个字，它重算一遍，但 `getMarkdown()` 出来的仍是用户写的
  * 那两个减号。
  */
-export function 标点装饰(设置: 标点设置) {
-  if (设置.模式 !== "render") return [];
+export function punctuationDecoration(settings: punctuationSettings) {
+  if (settings.mode2 !== "render") return [];
   return [
     $prose(
       () =>
         new Plugin({
-          key: 标点装饰键,
+          key: punctuationDecorationKey,
           state: {
-            init: (_c, state) => 算装饰(state, 设置),
-            apply: (tr, _旧, _老, 新) => (tr.docChanged ? 算装饰(新, 设置) : _旧),
+            init: (_c, state) => computeDecorations(state, settings),
+            apply: (tr, _OldValue, _Old, newValue) => (tr.docChanged ? computeDecorations(newValue, settings) : _OldValue),
           },
-          props: { decorations: (state) => 标点装饰键.getState(state) },
+          props: { decorations: (state) => punctuationDecorationKey.getState(state) },
         }),
     ),
   ];

@@ -24,7 +24,7 @@
 
 import type { FocusState } from "@/bridge/types";
 import { useT } from "@/i18n";
-import { 说时长 } from "@/ui/useForceFocus";
+import { sayTimeLength } from "@/ui/useForceFocus";
 
 export function FocusMeter({ state }: { state: FocusState | null }) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
@@ -32,13 +32,13 @@ export function FocusMeter({ state }: { state: FocusState | null }) {
   const t = useT();
   if (!state?.running) return null;
 
-  const 上限 = Math.max(1, state.cap_ms);
+  const limit = Math.max(1, state.cap_ms);
   // ⚠️ 夹到 [0,1]：宿主那边余额已经不会越界，但这一格是**按比例画宽度**的——
   // 哪天宿主改了口径（比如允许透支），这里不能跟着画出一条超出容器的红条。
-  const 比例 = Math.min(1, Math.max(0, state.balance_ms / 上限));
+  const compareExample = Math.min(1, Math.max(0, state.balance_ms / limit));
 
-  const 警报中 = state.phase === "alarm";
-  const 走神中 = state.phase === "away";
+  const warnReportMiddle = state.phase === "alarm";
+  const walkSpiritMiddle = state.phase === "away";
 
   // ⚠️ 三个阶段的**颜色语义**要能一眼分开：
   // - 专注：平常色，不抢眼；
@@ -46,30 +46,30 @@ export function FocusMeter({ state }: { state: FocusState | null }) {
   //   看到黄的会以为已经在扣了，而这几秒其实是白送的（`焦点/mod.rs` 的
   //   `走神` 那一支：宽限内一分不扣）。
   // - 警报：红的。⚠️ 这时警报窗已经盖在屏幕上了，这一格是**背景**不是主提示。
-  const 类名 = 警报中
+  const className2 = warnReportMiddle
     ? "status-focus status-focus-alarm"
-    : 走神中
+    : walkSpiritMiddle
       ? "status-focus status-focus-away"
       : "status-focus";
 
-  const 说明 = 警报中
+  const description = warnReportMiddle
     ? t("Force Focus: the balance hit zero and the alarm has sounded.")
-    : 走神中
+    : walkSpiritMiddle
       ? state.away_ms < state.grace_ms
-        ? t("Force Focus: you switched away, still inside the {0}-second grace period — these seconds are free.", 说时长(state.grace_ms - state.away_ms))
+        ? t("Force Focus: you switched away, still inside the {0}-second grace period — these seconds are free.", sayTimeLength(state.grace_ms - state.away_ms))
         : t("Force Focus: the balance is being charged. Come back to Nota and the charge stops.")
-      : t("Force Focus: you are writing, the balance is rising (cap {0}). Start and stop it under View → Force Focus.", 说时长(state.cap_ms));
+      : t("Force Focus: you are writing, the balance is rising (cap {0}). Start and stop it under View → Force Focus.", sayTimeLength(state.cap_ms));
 
   return (
-    <span className={类名} title={说明}>
+    <span className={className2} title={description}>
       {/* ⚠️ 用「专注」两个字而不是「强制专注」：状态栏右边挤着四格统计，
           四个字会把整条顶宽（同 `StatusBar.tsx` 里模式名取 `short` 那一列的理由）。
           全名在 `title` 里。 */}
       <span className="status-focus-name">{t("Focus")}</span>
       <span className="status-focus-bar" aria-hidden="true">
-        <span className="status-focus-fill" style={{ width: `${比例 * 100}%` }} />
+        <span className="status-focus-fill" style={{ width: `${compareExample * 100}%` }} />
       </span>
-      <span className="status-focus-num">{说时长(state.balance_ms)}</span>
+      <span className="status-focus-num">{sayTimeLength(state.balance_ms)}</span>
     </span>
   );
 }

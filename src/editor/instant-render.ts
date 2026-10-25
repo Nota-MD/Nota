@@ -48,38 +48,8 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 /** 加在块上的 class。CSS 见 `src/styles/marks.css`。 */
 const MARK_CLASS = "nota-srcmark";
 
-/**
- * 标题那一档额外挂的 class（**只它一个**）。CSS 见 `src/styles/marks.css`。
- * 它把标记画成一颗 `H1`/`H2` 的**徽标**，而不是一排井号。
- */
-const MARK_CLASS_标题 = "nota-srcmark-h";
-
 /** 标记文字走这个属性，CSS 里 `content: attr(data-srcmark)` 取它。 */
 export const MARK_ATTR = "data-srcmark";
-
-/**
- * 标题在装订线里显示的那颗**徽标**：`H1` … `H6`。
- *
- * ⚠️ **2026-09-26 用户要求改的**，原话：「标题输入后，前面的半透明 “#” 改成
- * H 几的这样的小图标吧」。改之前是 `"#".repeat(level)`，即**照原样显示井号**。
- *
- * ⚠️ 这与本文件的主旨有一处**故意的不一致**，写下来免得后人当成 bug 改回去：
- * 这个插件的立身之本是"**把编辑器吃掉的那个标记还给用户看**"（见文件头），
- * 而 `H1` 并不是用户敲进去的东西——它是一层**翻译**。换它的理由有两条：
- * ① 用户要的是"一眼看出这是几级"，数井号是**读**，`H1` 是**直接答**；
- * ② 井号数一多（`######`）在 56px 的装订线里挤成一条虚线，本来也不好认。
- * 代价讲清楚：**标题这一档不再告诉你"源码里是几个井号"**——要那个信息就切
- * 源码模式（`Ctrl+/`），那边一个字都不改。
- *
- * ⚠️ 层级**只认 1~6**（CommonMark 就六档，`node.attrs.level` 理论上也可能是
- * `null`／字符串）。越界一律并到边界那一档，不显示 `H0` / `H7` 这种文档里
- * 不存在的层级——徽标是个**标识**，它撒谎比它缺失更糟。
- */
-export function 标题徽标(level: unknown): string {
-  const n = Math.floor(Number(level));
-  const 档 = Number.isFinite(n) && n >= 1 ? Math.min(6, n) : 1;
-  return `H${档}`;
-}
 
 /**
  * 这个块该在左边显示什么标记。**返回 null = 不显示**（段落、表格等）。
@@ -87,10 +57,11 @@ export function 标题徽标(level: unknown): string {
  * `parent` / `index` 只对列表项有用：有序列表的序号得知道"我是第几项"，
  * 而那是**父节点和同级位置**的信息，node 自己身上没有。
  */
-function markerOf(node: PMNode, parent: PMNode | null, index: number): string | null {
+export function blockMark(node: PMNode, parent: PMNode | null, index: number): string | null {
   switch (node.type.name) {
     case "heading":
-      return 标题徽标(node.attrs.level);
+      // Typora 在回车成块后不再回显标题语法；标题字号和层级已经由块本身表达。
+      return null;
 
     case "blockquote":
       return ">";
@@ -149,18 +120,14 @@ function buildDecorations(state: { selection: unknown; doc: PMNode }): Decoratio
   for (let d = $from.depth; d > 0; d--) {
     const node = $from.node(d);
     const parent = d > 1 ? $from.node(d - 1) : null;
-    const mark = markerOf(node, parent, parent ? $from.index(d - 1) : 0);
+    const mark = blockMark(node, parent, parent ? $from.index(d - 1) : 0);
     if (!mark) continue;
 
     const from = $from.before(d);
-    // 标题那一档多挂一个 class（它要画成徽标，见 `标题徽标` 的注释）。
-    // ⚠️ 判据写成 `node.type.name` 而不是"看 mark 长什么样"：徽标的样子在 CSS
-    // 里定，这里只回答"这是不是标题"，两边各管一段，不互相猜。
-    const 类 = node.type.name === "heading" ? `${MARK_CLASS} ${MARK_CLASS_标题}` : MARK_CLASS;
     decos.push(
       // ⚠️ 给**块本身**挂 class 和属性，不插新元素。理由见文件头那一段。
       Decoration.node(from, from + node.nodeSize, {
-        class: 类,
+        class: MARK_CLASS,
         [MARK_ATTR]: mark,
       }),
     );

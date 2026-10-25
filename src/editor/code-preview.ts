@@ -32,7 +32,7 @@
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 
 /** 认哪些语言（`code_block` 的 `language` 属性，已经是小写、去空格之后的）。 */
-const HTML语言 = new Set(["html", "htm", "xhtml"]);
+const hTMLLanguage = new Set(["html", "htm", "xhtml"]);
 
 /**
  * 这段语言算不算 HTML。
@@ -41,81 +41,81 @@ const HTML语言 = new Set(["html", "htm", "xhtml"]);
  *（`HTML` 这种写法在别处也可能出现），而 `refractor` 那边认的是小写短名。
  * 判据只有这一处，别在 `code-block.ts` 里再写一遍 `=== "html"`。
  */
-export function 是HTML(语言: string): boolean {
-  return HTML语言.has(语言.trim().toLowerCase());
+export function isHtml(language: string): boolean {
+  return hTMLLanguage.has(language.trim().toLowerCase());
 }
 
 /** 打字这一段的攒批时长。⚠️ 见文件头第 3 条：写 `srcdoc` 是一次"换文档"。 */
-const 攒批毫秒 = 300;
+const accumulateBatchMilliSeconds = 300;
 
-export interface HTML预览 {
+export interface HTMLPreview {
   /** 挂在 `pre` **下面**的那一块。 */
-  readonly 元素: HTMLElement;
+  readonly element: HTMLElement;
   /** 节点变了就喊一声：语言不是 HTML 时整块收起来。 */
-  同步: (node: PMNode, 立刻?: boolean) => void;
+  sameStep: (node: PMNode, standaloneMoment?: boolean) => void;
   /** ⚠️ **必须收**：那一个 `setTimeout` 不撤掉的话，块被删掉之后它还会
    * 去写一个已经不在文档里的 iframe（不崩，但白白留着一条待跑的定时器）。 */
-  销毁: () => void;
+  cancelDestroy: () => void;
 }
 
 /**
  * 建那一块。⚠️ 返回的是**一棵已经建好的子树**，调用方负责把它挂到 `dom` 上
  * （这一层不认识 ProseMirror 的 NodeView，只认识"给我一个节点、我画它"）。
  */
-export function 建HTML预览(): HTML预览 {
-  const 元素 = document.createElement("div");
-  元素.className = "nota-code-preview";
+export function createHTMLPreview(): HTMLPreview {
+  const element = document.createElement("div");
+  element.className = "nota-code-preview";
   // ⚠️ 与 `pre` 上那条同理：这一段是**非编辑孤岛**，ProseMirror 不该把光标
   // 放进来（也让里面那些表单控件拿得到焦点）。
-  元素.contentEditable = "false";
-  元素.hidden = true;
+  element.contentEditable = "false";
+  element.hidden = true;
 
-  const 框 = document.createElement("iframe");
-  框.className = "nota-code-preview-frame";
+  const box2 = document.createElement("iframe");
+  box2.className = "nota-code-preview-frame";
   // ⚠️ 见文件头第 2 条：只开 `allow-scripts`。
-  框.setAttribute("sandbox", "allow-scripts");
+  box2.setAttribute("sandbox", "allow-scripts");
   // 读屏器与"这是谁的框"：不写的话它是一颗没有名字的 `iframe`。
-  框.setAttribute("title", "HTML preview");
-  元素.append(框);
+  box2.setAttribute("title", "HTML preview");
+  element.append(box2);
 
-  let 待写: number | null = null;
+  let pendingWrite: number | null = null;
 
-  const 撤掉待写 = () => {
-    if (待写 !== null) {
-      clearTimeout(待写);
-      待写 = null;
+  const undoRemovePendingWrite = () => {
+    if (pendingWrite !== null) {
+      clearTimeout(pendingWrite);
+      pendingWrite = null;
     }
   };
 
   return {
-    元素,
-    同步: (node, 立刻 = false) => {
-      const 是 = 是HTML(语言(node));
-      元素.hidden = !是;
-      if (!是) {
+    element,
+    sameStep: (node, standaloneMoment = false) => {
+      const isValue = isHtml(language(node));
+      element.hidden = !isValue;
+      if (!isValue) {
         // ⚠️ 语言被改成别的（`html` → `python`）时**也要把待写撤掉**：
         // 留着的话 300ms 之后它会再写一次，而那时这一块已经收起来了——
         // 界面上看不出来，但那是"藏起来的东西还在偷偷干活"。
-        撤掉待写();
+        undoRemovePendingWrite();
         return;
       }
-      const 正文 = node.textContent;
-      撤掉待写();
-      if (立刻) {
-        框.srcdoc = 正文;
+      const body2 = node.textContent;
+      undoRemovePendingWrite();
+      if (standaloneMoment) {
+        box2.srcdoc = body2;
         return;
       }
-      待写 = window.setTimeout(() => {
-        待写 = null;
-        框.srcdoc = 正文;
-      }, 攒批毫秒);
+      pendingWrite = window.setTimeout(() => {
+        pendingWrite = null;
+        box2.srcdoc = body2;
+      }, accumulateBatchMilliSeconds);
     },
-    销毁: 撤掉待写,
+    cancelDestroy: undoRemovePendingWrite,
   };
 }
 
 /** 取节点的语言属性。⚠️ 缺省是空串（与 `code-block.ts::languageOf` 同一条口径）。 */
-function 语言(node: PMNode): string {
+function language(node: PMNode): string {
   const raw = node.attrs.language;
   return typeof raw === "string" ? raw : "";
 }

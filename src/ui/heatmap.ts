@@ -34,55 +34,55 @@
  * 那是全应用唯一的一份，不该从调用方一层层传进来。
  */
 
-import { 语言 } from "../i18n";
+import { language } from "../i18n";
 
 /** 一天的记录。 */
-export interface 热力记录 {
+export interface HotForceRecordRecord {
   /** `2026-09-27`。 */
-  日: string;
+  date: string;
   /** 那一天写了多少字。**只有字**——用户点名「仅记录打字数」。 */
-  值: number;
+  value2: number;
 }
 
 /** 一格。 */
-export interface 热力格 {
+export interface HotForceCell {
   /** `2026-09-27`。渲染层拿它做悬停提示。 */
-  日: string;
-  值: number;
+  date: string;
+  value2: number;
   /** 颜色深浅，**0 = 没写**（`1`~`4` 由大到小）。 */
-  档: 0 | 1 | 2 | 3 | 4;
+  level: 0 | 1 | 2 | 3 | 4;
 }
 
 /** 一列 = 一周。 */
-export interface 热力列 {
+export interface HotForceColumn {
   /** 这一列顶上那个月份（`9月`）。**空串 = 不标**（同一个月只标一次）。 */
-  月: string;
+  month: string;
   /** 从周一到周日，最多 7 格。最后一列可能不足 7 格。 */
-  格: 热力格[];
+  cell2: HotForceCell[];
 }
 
 /** 一张算好的热力图。 */
-export interface 热力图 {
-  列: 热力列[];
+export interface HotForceImage {
+  column: HotForceColumn[];
   /** 窗口里最大的一天（定每档的深浅）。 */
-  最大: number;
+  mostLarge: number;
   /** 窗口里的总和（「这半年一共写了多少字」）。 */
-  总计: number;
+  totalCount: number;
   /** 窗口里**有字**的天数（不是窗口长度——"写了 173 天"比"这半年"更有用）。 */
-  天数: number;
+  dayNumber: number;
   /** 窗口的第一天 / 最后一天（`2026-04-06` / `2026-09-27`）。 */
-  起: string;
-  止: string;
+  start5: string;
+  end2: string;
 }
 
 /** 一年最多这些列。再多一年就摆不下了（53 周 = 371 天）。 */
-const 周数上限 = 53;
+const weekNumberLimit = 53;
 /** 少于这个列数不成"长期"（8 周 = 两个月）。 */
-const 周数下限 = 8;
+const weekNumberBelowLimit = 8;
 /** 插件没写 `weeks` 时铺多久：半年。 */
-const 默认周数 = 26;
+const defaultWeekCount = 26;
 /** 最多认这么多天的记录（比一年略多，防手里的账本比窗口还长）。 */
-const 记录上限 = 400;
+const recordRecordLimit = 400;
 
 /**
  * 读插件给的 `days` 字符串。
@@ -104,24 +104,24 @@ const 记录上限 = 400;
  * ⚠️ 同一天出现两次**后写的赢**：那是"账本里有重复行"的症状，而这里不是
  * 修账的地方（`plugins/stats/main.lua` 那边按天索引，本来就不会重复）。
  */
-export function 读热力记录(raw: unknown): 热力记录[] {
+export function readHotForceRecordRecord(raw: unknown): HotForceRecordRecord[] {
   if (typeof raw !== "string") return [];
-  const 表 = new Map<string, number>();
-  for (const 段 of raw.split(/\s+/)) {
-    if (!段 || 表.size >= 记录上限) continue;
-    const 切 = 段.indexOf(":");
-    if (切 <= 0) continue;
-    const 日 = 段.slice(0, 切);
-    if (!日号(日)) continue;
-    const 值 = Number(段.slice(切 + 1));
-    if (!Number.isFinite(值) || 值 < 0) continue;
-    表.set(日, Math.floor(值));
+  const table2 = new Map<string, number>();
+  for (const paragraph2 of raw.split(/\s+/)) {
+    if (!paragraph2 || table2.size >= recordRecordLimit) continue;
+    const split = paragraph2.indexOf(":");
+    if (split <= 0) continue;
+    const date = paragraph2.slice(0, split);
+    if (!dateNumber(date)) continue;
+    const value2 = Number(paragraph2.slice(split + 1));
+    if (!Number.isFinite(value2) || value2 < 0) continue;
+    table2.set(date, Math.floor(value2));
   }
-  return [...表].map(([日, 值]) => ({ 日, 值 }));
+  return [...table2].map(([date, value2]) => ({ date, value2 }));
 }
 
 /** `YYYY-MM-DD` 才算。 */
-function 是日期(s: string): boolean {
+function isDatePeriod(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
@@ -131,42 +131,42 @@ function 是日期(s: string): boolean {
  * ⚠️ 不能写 `new Date("2026-09-27")`：那一串会被当成 **UTC** 解析，在东八区
  * 变成前一天早上八点——整张图会整体偏一格，而且只在某些时区偏。所以自己拆。
  */
-function 日号(日: string): Date | null {
-  if (!是日期(日)) return null;
-  const 年 = Number(日.slice(0, 4));
-  const 月 = Number(日.slice(5, 7));
-  const 天 = Number(日.slice(8, 10));
-  if (月 < 1 || 月 > 12 || 天 < 1 || 天 > 31) return null;
-  const d = new Date(年, 月 - 1, 天);
+function dateNumber(date: string): Date | null {
+  if (!isDatePeriod(date)) return null;
+  const year = Number(date.slice(0, 4));
+  const month = Number(date.slice(5, 7));
+  const day = Number(date.slice(8, 10));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(year, month - 1, day);
   // 溢出的日期（`2026-02-30` → 3 月 2 日）不算那一天，当没有。
-  if (d.getMonth() !== 月 - 1 || d.getDate() !== 天) return null;
+  if (d.getMonth() !== month - 1 || d.getDate() !== day) return null;
   return d;
 }
 
 /** 反过来：本地那一天 → `2026-09-27`。 */
-function 日串(d: Date): string {
-  const 月 = String(d.getMonth() + 1).padStart(2, "0");
-  const 天 = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${月}-${天}`;
+function dateString(d: Date): string {
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 
 /** 加减天数。⚠️ 走 `setDate`（会自己跨月跨年），不是"加 86400 秒"——夏令时那天不是 24 小时。 */
-function 移(d: Date, 天: number): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 天);
+function move2(d: Date, day: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + day);
 }
 
 /** 周一 = 0，周日 = 6。 */
-function 星期几(d: Date): number {
+function starPeriodHowMany(d: Date): number {
   return (d.getDay() + 6) % 7;
 }
 
 /** 数值 → 颜色档。⚠️ 相对**这张图的最大值**分四档（不写死阈值：一天 300 字和一天 3000 字都该有自己的深浅）。 */
-function 档(值: number, 最大: number): 0 | 1 | 2 | 3 | 4 {
-  if (值 <= 0) return 0;
-  if (最大 <= 0) return 1;
-  if (值 * 4 <= 最大) return 1;
-  if (值 * 2 <= 最大) return 2;
-  if (值 * 4 <= 最大 * 3) return 3;
+function level(value2: number, mostLarge: number): 0 | 1 | 2 | 3 | 4 {
+  if (value2 <= 0) return 0;
+  if (mostLarge <= 0) return 1;
+  if (value2 * 4 <= mostLarge) return 1;
+  if (value2 * 2 <= mostLarge) return 2;
+  if (value2 * 4 <= mostLarge * 3) return 3;
   return 4;
 }
 
@@ -177,55 +177,55 @@ function 档(值: number, 最大: number): 0 | 1 | 2 | 3 | 4 {
  * 认不出来用 26）。`止` 认不出来时退到**记录里最晚的那一天**——两张都认不出来
  * 就是一张空图（`列` 是空数组，渲染层不画）。
  */
-export function 算热力(记录: 热力记录[], 止: string, 周数: number): 热力图 {
-  const 空: 热力图 = { 列: [], 最大: 0, 总计: 0, 天数: 0, 起: "", 止: "" };
-  const 表 = new Map(记录.map((r) => [r.日, r.值]));
+export function computeHeatmap(recordRecord: HotForceRecordRecord[], end2: string, weekNumber: number): HotForceImage {
+  const emptyValue: HotForceImage = { column: [], mostLarge: 0, totalCount: 0, dayNumber: 0, start5: "", end2: "" };
+  const table2 = new Map(recordRecord.map((r) => [r.date, r.value2]));
 
-  let 末日 = 日号(止);
-  if (!末日) {
-    for (const r of 记录) {
-      const d = 日号(r.日);
-      if (d && (!末日 || d > 末日)) 末日 = d;
+  let endDate = dateNumber(end2);
+  if (!endDate) {
+    for (const r of recordRecord) {
+      const d = dateNumber(r.date);
+      if (d && (!endDate || d > endDate)) endDate = d;
     }
   }
-  if (!末日) return 空;
+  if (!endDate) return emptyValue;
 
-  const 列数 = Math.min(周数上限, Math.max(周数下限, Math.floor(周数) || 默认周数));
+  const columnCount = Math.min(weekNumberLimit, Math.max(weekNumberBelowLimit, Math.floor(weekNumber) || defaultWeekCount));
   // 末列的**周一**：今天是周三就退回两天，好让最后一列还是"周一到周日"。
-  const 末列起 = 移(末日, -星期几(末日));
-  const 首列起 = 移(末列起, -(列数 - 1) * 7);
+  const endColumnStart = move2(endDate, -starPeriodHowMany(endDate));
+  const firstColumnStart = move2(endColumnStart, -(columnCount - 1) * 7);
 
-  const 列: 热力列[] = [];
-  let 最大 = 0;
-  let 总计 = 0;
-  let 天数 = 0;
-  let 上个标签 = "";
-  for (let c = 0; c < 列数; c++) {
-    const 本列起 = 移(首列起, c * 7);
-    const 格: 热力格[] = [];
+  const column: HotForceColumn[] = [];
+  let mostLarge = 0;
+  let totalCount = 0;
+  let dayNumber = 0;
+  let aboveItemLabel = "";
+  for (let c = 0; c < columnCount; c++) {
+    const localColumnStart = move2(firstColumnStart, c * 7);
+    const cell2: HotForceCell[] = [];
     for (let r = 0; r < 7; r++) {
-      const 本日 = 移(本列起, r);
-      if (本日 > 末日) break; // 最后一列：未来的那几天不画（`break` 不是 `continue`）
-      const 键 = 日串(本日);
-      const 值 = 表.get(键) ?? 0;
-      if (值 > 最大) 最大 = 值;
-      总计 += 值;
-      if (值 > 0) 天数 += 1;
-      格.push({ 日: 键, 值, 档: 0 }); // 档要等最大出来才知道，下面补
+      const localDate = move2(localColumnStart, r);
+      if (localDate > endDate) break; // 最后一列：未来的那几天不画（`break` 不是 `continue`）
+      const key = dateString(localDate);
+      const value2 = table2.get(key) ?? 0;
+      if (value2 > mostLarge) mostLarge = value2;
+      totalCount += value2;
+      if (value2 > 0) dayNumber += 1;
+      cell2.push({ date: key, value2, level: 0 }); // 档要等最大出来才知道，下面补
     }
     // ⚠️ 标签先算进一个局部量再 push：`列[列.length - 1]` 那种写法在
     // `noUncheckedIndexedAccess` 下是"可能没有"，而且它读的正是刚写进去的东西。
-    const 本标签 = 月标签(本列起, 上个标签);
-    列.push({ 月: 本标签, 格 });
-    上个标签 = 本标签 || 上个标签;
+    const localLabel = monthLabel(localColumnStart, aboveItemLabel);
+    column.push({ month: localLabel, cell2 });
+    aboveItemLabel = localLabel || aboveItemLabel;
   }
 
   // ⚠️ **两遍**：深浅是相对最大值的，而最大值要等所有格子都数完才知道。
-  for (const 一列 of 列) {
-    for (const 一 of 一列.格) 一.档 = 档(一.值, 最大);
+  for (const oneColumn of column) {
+    for (const value of oneColumn.cell2) value.level = level(value.value2, mostLarge);
   }
 
-  return { 列, 最大, 总计, 天数, 起: 日串(首列起), 止: 日串(末日) };
+  return { column, mostLarge, totalCount, dayNumber, start5: dateString(firstColumnStart), end2: dateString(endDate) };
 }
 
 /**
@@ -239,18 +239,18 @@ export function 算热力(记录: 热力记录[], 止: string, 周数: number): 
  * 里还是「9月」、在英文里变成「September」（26 列里挤不下），`"narrow"` 在英文
  * 里退化成一个字母「S」（9 月和 11 月长得一模一样）。
  */
-function 月标签(本列起: Date, 上个: string): string {
-  const 本 = 月名(本列起);
-  return 本 === 上个 ? "" : 本;
+function monthLabel(localColumnStart: Date, aboveItem: string): string {
+  const local = monthName(localColumnStart);
+  return local === aboveItem ? "" : local;
 }
 
 /** 月份名随界面语言走。**按语言缓存一个**——26 列会问 26 次，而语言几乎不变。 */
-let 月格式: { 语言: string; 器: Intl.DateTimeFormat } | null = null;
+let monthCellStyle: { language: string; device: Intl.DateTimeFormat } | null = null;
 
-function 月名(d: Date): string {
-  const 语 = 语言();
-  if (!月格式 || 月格式.语言 !== 语) {
-    月格式 = { 语言: 语, 器: new Intl.DateTimeFormat(语, { month: "short" }) };
+function monthName(d: Date): string {
+  const language2 = language();
+  if (!monthCellStyle || monthCellStyle.language !== language2) {
+    monthCellStyle = { language: language2, device: new Intl.DateTimeFormat(language2, { month: "short" }) };
   }
-  return 月格式.器.format(d);
+  return monthCellStyle.device.format(d);
 }

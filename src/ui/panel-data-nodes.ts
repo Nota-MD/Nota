@@ -18,8 +18,8 @@
  * 各自那段注释里，拆的时候**一个字节没改**——它们的来历见 `docs/13` §8.5 那张表。
  */
 
-import type { 刻度 } from "@/ui/chart-ticks";
-import type { 热力图 } from "@/ui/heatmap";
+import type { tick } from "@/ui/chart-ticks";
+import type { HotForceImage } from "@/ui/heatmap";
 
 
 /**
@@ -54,12 +54,12 @@ export interface PanelChart {
    * （心电图一秒一个点、git 的图一次提交一个点）。不写就是**没有横轴刻度**，
    * 那是正常状态，不是坏掉。
    */
-  xTicks: 刻度[];
+  xTicks: tick[];
   /**
    * **纵轴**的刻度。**通常不用写**——不写时宿主按 `points` 的极值推三档
    * （见 `ui/chart-ticks.ts` 文件头那张表）。写给那些"纵轴不是数据本身"的图。
    */
-  yTicks: 刻度[];
+  yTicks: tick[];
 }
 
 /** 分享卡上那一格指标（`kind = "share"` 的 `stats`）。 */
@@ -98,7 +98,7 @@ export interface PanelShare {
   /** 曲线上的点（`字/分钟`）。与 `PanelChart.points` 同规矩：切掉最旧的、只留 200 个。 */
   points: number[];
   /** 横轴刻度。**卡片只有横轴刻度**：纵轴被幂函数压过（`ui/share-card.ts`），刻度位置由宿主自己推。 */
-  xTicks: 刻度[];
+  xTicks: tick[];
   /**
    * 横轴上相邻两档刻度之间**再分几小格**（没字的短线），`0` = 不分。**2026-09-27 加**。
    *
@@ -128,7 +128,7 @@ export interface PanelShare {
    *
    * ⚠️ 与 `PanelHeatmap.grid` 是**同一份**算出来的：算的动作在 `ui/heatmap.ts`。
    */
-  heat: 热力图 | null;
+  heat: HotForceImage | null;
   /** 热力图右下角那排深浅标尺两头的字（`少` / `多`）。空串不画。 */
   less: string;
   more: string;
@@ -158,7 +158,7 @@ export interface PanelHeatmap {
    * ⚠️ 空图与"全是 0 档的图"是两件事：前者没数据、后者有数据但那几天没写，
    * 渲染层按 `列.length` 判，不看 `总计`（总计 0 也可能是"窗口里正好没写字"）。
    */
-  grid: 热力图;
+  grid: HotForceImage;
 }
 
 /**

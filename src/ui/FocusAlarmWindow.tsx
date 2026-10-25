@@ -37,14 +37,14 @@ export function FocusAlarmWindow() {
   const { state, ack } = useForceFocus();
   // ⚠️ 点过之后就把按钮锁住。宿主那边的阶段要**下一拍**才翻过来（最多 1 秒），
   // 这中间按钮还是活的——不锁的话用户会连点，而连点几下就是几条命令。
-  const [按过了, set按过了] = useState(false);
+  const [pressPassDone, setPressPassDone] = useState(false);
 
   // Esc = 点那颗按钮（同一条 ack，不是绕过）。理由写在文件头。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        set按过了(true);
+        setPressPassDone(true);
         void ack();
       }
     };
@@ -55,7 +55,7 @@ export function FocusAlarmWindow() {
   // ⚠️ 阶段已经不是警报了（用户在别处点了停止、或者宿主自己收了）——
   // 这个窗**等着宿主来关**（`alarm.rs::关窗` 由计时线程按阶段对账）。
   // 这里什么都不做，尤其**不要**自己 `close()`：那会让"谁负责关窗"变成两处。
-  const 第几次 = state?.alarms ?? 0;
+  const ordinalHowManyCount = state?.alarms ?? 0;
 
   return (
     <div className="alarm-root">
@@ -66,8 +66,8 @@ export function FocusAlarmWindow() {
         <h1 className="alarm-title">{t("Back to Writing")}</h1>
 
         <p className="alarm-sub">
-          {第几次 > 1
-            ? t("This is alarm {0} of this session.", 第几次)
+          {ordinalHowManyCount > 1
+            ? t("This is alarm {0} of this session.", ordinalHowManyCount)
             : t("The account balance has been charged to zero.")}
         </p>
 
@@ -81,13 +81,13 @@ export function FocusAlarmWindow() {
         <button
           type="button"
           className="btn alarm-btn"
-          disabled={按过了}
+          disabled={pressPassDone}
           onClick={() => {
-            set按过了(true);
+            setPressPassDone(true);
             void ack();
           }}
         >
-          {按过了 ? t("Returning…") : t("I'm Back")}
+          {pressPassDone ? t("Returning…") : t("I'm Back")}
         </button>
       </div>
     </div>

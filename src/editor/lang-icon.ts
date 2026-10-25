@@ -36,7 +36,7 @@
  * 的话，会把 93 颗彩色 logo 全变成一片纯色——那是把"真图标"这件事取消掉。
  */
 
-import { 图标名, 真图标URI } from "./lang-icons-real";
+import { iconName, assertValueIconURI } from "./lang-icons-real";
 
 /** 不指定语言（`NO_LANGUAGE`，与 `code-block.ts` 同一个值）。 */
 const NO_LANGUAGE = "";
@@ -47,7 +47,7 @@ const NO_LANGUAGE = "";
  * ⚠️ 判据是"看不看得出来"，不是"够不够短"：`python` → `P` 和 `perl` → `P`
  * 会撞成一样，所以这两个都得给两字母。反过来 `rust` → `R` 没人会认错，就别写。
  */
-const 缩写表: Record<string, string> = {
+const shrinkWriteTable: Record<string, string> = {
   python: "Py",
   perl: "Pl",
   php: "Ph",
@@ -98,7 +98,7 @@ const 缩写表: Record<string, string> = {
  * ⚠️ 这些是**颜色**，不是图形——色值本身不构成商标。但**别把它们当成
  * "官方色"去宣传**：表里的是"社区里大家认的那个色"，够用即可。
  */
-const 颜色表: Record<string, string> = {
+const colorTable: Record<string, string> = {
   rust: "#CE422B",
   python: "#3776AB",
   javascript: "#F7DF1E",
@@ -185,11 +185,11 @@ const 颜色表: Record<string, string> = {
  * "这是哪个语言"，跟"现在用的是浅色还是深色文档主题"无关。同一个语言在哪个
  * 主题下都该是同一个颜色，用户才认得住。
  */
-const 中性色 = "#8A8A8A";
+const middlePropertyColor = "#8A8A8A";
 
 /** 底色偏亮时，压在上面的字用这个深色；偏暗时用白色。 */
-const 亮底上的字 = "#1A1A1A";
-const 暗底上的字 = "#FFFFFF";
+const brightBottomAboveOfCharacter = "#1A1A1A";
+const darkBottomAboveOfCharacter = "#FFFFFF";
 
 /**
  * 给一个底色，算压在上面的字该用黑还是白。
@@ -202,19 +202,19 @@ const 暗底上的字 = "#FFFFFF";
  * 但用来在两种颜色里二选一**够用**——这里要的只是"别看不见"，
  * 不是精确的对比度数值（真要那个得解 WCAG 的公式，为这点收益不值得）。
  */
-function 对比色(hex: string): string {
+function correctCompareColor(hex: string): string {
   const n = Number.parseInt(hex.slice(1), 16);
   const r = (n >> 16) & 0xff;
   const g = (n >> 8) & 0xff;
   const b = n & 0xff;
-  return (r * 299 + g * 587 + b * 114) / 1000 >= 128 ? 亮底上的字 : 暗底上的字;
+  return (r * 299 + g * 587 + b * 114) / 1000 >= 128 ? brightBottomAboveOfCharacter : darkBottomAboveOfCharacter;
 }
 
 /** 取一个语言的缩写。没写死的走首字母大写；空语言给一个通用的破折号。 */
-function 缩写(lang: string): string {
+function shrinkWrite(lang: string): string {
   if (lang === NO_LANGUAGE) return "—";
-  const 写死 = 缩写表[lang];
-  if (写死) return 写死;
+  const writeDead = shrinkWriteTable[lang];
+  if (writeDead) return writeDead;
   return lang.charAt(0).toUpperCase();
 }
 
@@ -236,24 +236,24 @@ export function languageIcon(lang: string): HTMLElement {
   // 图标本身没有语义（语言名就写在旁边），别让读屏器把它念一遍。
   el.setAttribute("aria-hidden", "true");
 
-  const 图 = 真图标URI(lang);
-  if (图 !== null) {
+  const image = assertValueIconURI(lang);
+  if (image !== null) {
     el.classList.add("nota-lang-icon--logo");
-    el.style.backgroundImage = 图;
+    el.style.backgroundImage = image;
     // ⚠️ 真图那条路**不留文字**（`textContent` 一个字符都没有）：留着的话
     //    徽章的缩写会压在图上面，而 `--logo` 那条已经把底色改成透明——
     //    于是"图 + 一个孤零零的字母"叠在一起，只在真图的语言上看得到。
     return el;
   }
 
-  el.textContent = 缩写(lang);
-  const 色 = 颜色表[lang] ?? 中性色;
+  el.textContent = shrinkWrite(lang);
+  const color = colorTable[lang] ?? middlePropertyColor;
   // ⚠️ 底色和字色**一起给**（都是内联的 CSS 变量，样式全在
   // `editor.css` 的 `.nota-lang-icon` 里）。分两处算的话，将来加一个语言
   // 忘了补对比色，那颗徽章就是"浅色底 + 白字"——而且只在那一个语言上出错，
   // 极难被发现。
-  el.style.setProperty("--nota-lang-color", 色);
-  el.style.setProperty("--nota-lang-on", 对比色(色));
+  el.style.setProperty("--nota-lang-color", color);
+  el.style.setProperty("--nota-lang-on", correctCompareColor(color));
   return el;
 }
 
@@ -266,6 +266,6 @@ export function languageIcon(lang: string): HTMLElement {
  * 一部分责任）。⚠️ 判据是**真图标表**，不是色表——色表管的是徽章的底色，
  * 两个问题没关系。
  */
-export function 有专属图标(lang: string): boolean {
-  return 图标名(lang) !== null;
+export function hasDedicatedBelongIcon(lang: string): boolean {
+  return iconName(lang) !== null;
 }

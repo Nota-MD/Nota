@@ -36,7 +36,7 @@ Document::text（Rust 里）＝ 镜像，存盘写的是它
 
 | # | 对策 | 落在哪 |
 |---|---|---|
-| ① | 前端改动后**去抖 300ms** 推一次，不是每击键一次 | `src/ui/EditorPane.tsx` 的 `SYNC_DEBOUNCE_MS` |
+| ① | 前端改动后**去抖 300ms** 推一次，不是每击键一次。源码模式在大文件上还**不在击键事务里复制全文**：先记活动，去抖结束后读取一次当前 CodeMirror 文档 | `src/ui/EditorPane.tsx` 的 `SYNC_DEBOUNCE_MS` ＋ `src/editor/deferred-snapshot.ts` |
 | ② | 任何"要读文档"的动作（存盘、插件读文档）**先强制同步一次** | `ui/useDocuments.ts` 的 `saveDoc()` 在 `api.doc.save` 之前调 `api.doc.sync`（**自动保存调的就是它**，所以两条路的字节一样） |
 
 ⚠️ **不要在前端直接改后端镜像之外的东西**：写文件、写设置都要走对应的命令，
@@ -771,6 +771,21 @@ EPUB/HTML 认 `--css=`。**文档主题是一份 CSS**，所以它自动能到�
 查的是"整份 TOML 里不许出现 pandoc 这七个字母"。现在改成 `不存_pandoc_的路径`——它真正要挡的
 一直是**路径**（存下来的会过期：换机器、改 PATH、重装），而这一格是本机此刻就能用的东西。
 ⚠️ 老的那条测试**删掉新字段也是绿的**（它只查字面），改名时顺手把"这一格必须在"也钉上了。
+
+### 5.6i `[export].custom_exporters`：分隔线以下那一组用户导出器
+
+`custom_exporters` 是 `Vec<CustomExporter>`，每项保存：
+
+- `id`：菜单命令的稳定后缀，重命名时不变；
+- `name`：用户在设置页里看到、并显示在「文件 → 导出」里的名称；
+- `format`：交给 Pandoc 的底层格式，限定为当前十种词汇之一；
+- `args`：这一项自己的额外参数；
+- `style_file`：Word/ODT 的参考文档、EPUB 的 CSS，或 LaTeX 的头文件；
+- `open_after_export`：这一项完成后是否在文件管理器里定位结果。
+
+默认九项从 Word 排到 OPML。字段缺失时补默认九项；但显式
+`custom_exporters = []` 保留“用户已经全部删除”的状态，不能再次自动补回。
+PDF / HTML 两档 / 图片是固定项，不在这个数组里，也不能通过自定义工具栏删除或排序。
 
 ### 5.6b `[appearance]`：界面缩放、界面字号、Ctrl+滚轮拨哪一个、侧栏有多宽、状态栏显示哪个统计量
 

@@ -5,35 +5,35 @@
  * 是纯函数，而它恰好是"拖坏了找不到回来"的唯一防线：拖成 0 宽等于把这一栏弄丢，
  * 而丢的方式是**看不见**。所以这一条必须钉住。
  */
-import { 夹右栏宽, 右栏宽最大, 右栏宽最小, 右栏宽默认 } from "@/ui/DockResizer";
+import { clampRightBarWidth, rightBarWidthMostLarge, rightBarWidthMostSmall, rightBarWidthDefault } from "@/ui/DockResizer";
 
-let 过 = 0;
-let 败 = 0;
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) throw new Error(`${说明}：期望 ${String(期望)}，实际 ${String(实际)}`);
+let pass = 0;
+let fail = 0;
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) throw new Error(`${description}：期望 ${String(expected)}，实际 ${String(actual)}`);
 }
-function 测(名称: string, 体: () => void): void {
-  try { 体(); 过++; console.log(`  ✔ ${名称}`); }
-  catch (e) { 败++; console.log(`  ✘ ${名称}\n      ${e instanceof Error ? e.message : String(e)}`); }
+function testCase(name: string, body3: () => void): void {
+  try { body3(); pass++; console.log(`  ✔ ${name}`); }
+  catch (e) { fail++; console.log(`  ✘ ${name}\n      ${e instanceof Error ? e.message : String(e)}`); }
 }
 
-测("区间内的原样通过，并且取整", () => {
-  等(夹右栏宽(300), 300, "整数");
-  等(夹右栏宽(300.4), 300, "向下取整");
-  等(夹右栏宽(300.6), 301, "向上取整");
+testCase("区间内的原样通过，并且取整", () => {
+  equal(clampRightBarWidth(300), 300, "整数");
+  equal(clampRightBarWidth(300.4), 300, "向下取整");
+  equal(clampRightBarWidth(300.6), 301, "向上取整");
 });
-测("比最小还小就夹到最小、比最大还大就夹到最大", () => {
-  等(夹右栏宽(1), 右栏宽最小, "过小");
-  等(夹右栏宽(-999), 右栏宽最小, "负数");
-  等(夹右栏宽(99999), 右栏宽最大, "过大");
+testCase("比最小还小就夹到最小、比最大还大就夹到最大", () => {
+  equal(clampRightBarWidth(1), rightBarWidthMostSmall, "过小");
+  equal(clampRightBarWidth(-999), rightBarWidthMostSmall, "负数");
+  equal(clampRightBarWidth(99999), rightBarWidthMostLarge, "过大");
 });
-测("不是数就退回出厂值", () => {
-  for (const 怪 of [NaN, Infinity, -Infinity]) 等(夹右栏宽(怪), 右栏宽默认, String(怪));
+testCase("不是数就退回出厂值", () => {
+  for (const strange of [NaN, Infinity, -Infinity]) equal(clampRightBarWidth(strange), rightBarWidthDefault, String(strange));
 });
-测("出厂值与另外两处必须同值", () => {
-  等(右栏宽默认, 260, "默认宽");
-  if (!(右栏宽最小 < 右栏宽默认 && 右栏宽默认 < 右栏宽最大)) throw new Error("区间方向反了");
+testCase("出厂值与另外两处必须同值", () => {
+  equal(rightBarWidthDefault, 260, "默认宽");
+  if (!(rightBarWidthMostSmall < rightBarWidthDefault && rightBarWidthDefault < rightBarWidthMostLarge)) throw new Error("区间方向反了");
 });
 
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) process.exitCode = 1;
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) process.exitCode = 1;

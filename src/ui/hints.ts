@@ -41,23 +41,23 @@
 import { t } from "@/i18n";
 
 /** 提示的触发形态。 */
-export type 提示类型 = "当场" | "首次";
+export type NoticeType = "当场" | "首次";
 
-export interface 提示声明 {
+export interface NoticeSoundClear {
   /** 永久 id。⚠️ 它同时是落盘的键（`hints.<id>`），**改了等于把用户的静音设置弄丢**。 */
   readonly id: string;
-  readonly 类型: 提示类型;
+  readonly type: NoticeType;
   /**
    * **什么时候出现**——一句话写死的判据。
    *
    * ⚠️ 实现必须照着这一句写。写得比它宽（比如"光标在附近"）就是"到处乱弹"，
    * 写得比它窄就是"该出现时不出现"——两种都是用户 2026-10-06 要求避开的。
    */
-  readonly 条件: string;
+  readonly condition: string;
   /** 出厂默认开不开。 */
-  readonly 默认: boolean;
+  readonly default: boolean;
   /** 正文。⚠️ 见文件头「文案写成函数」那一段，别改成模块级求值。 */
-  readonly 文案: () => string;
+  readonly copy2: () => string;
 }
 
 /**
@@ -66,80 +66,80 @@ export interface 提示声明 {
  * ⚠️ 加之前先回答三个问题：① 它属于"当场"还是"首次"？② **精确条件**是什么
  * （写成 `条件` 那一栏）？③ 它**是不是报错**——是报错就别放进来（见文件头）。
  */
-export const 提示表: readonly 提示声明[] = [
+export const noticeTable: readonly NoticeSoundClear[] = [
   {
     id: "linkCtrlClick",
-    类型: "当场",
-    条件: "折叠光标落在某个 link 的区间内，且这个链接的源码不在编辑态",
-    默认: true,
-    文案: () => t("Hold Ctrl and click to open the link."),
+    type: "当场",
+    condition: "折叠光标落在某个 link 的区间内，且这个链接的源码不在编辑态",
+    default: true,
+    copy2: () => t("Hold Ctrl and click to open the link."),
   },
   {
     id: "codeBlockExit",
-    类型: "当场",
-    条件: "光标所在的那一行是代码块里最后一个空行，且代码块里已经有内容",
-    默认: true,
-    文案: () => t("To leave a code block, press Enter twice or click somewhere else."),
+    type: "当场",
+    condition: "光标所在的那一行是代码块里最后一个空行，且代码块里已经有内容",
+    default: true,
+    copy2: () => t("To leave a code block, press Enter twice or click somewhere else."),
   },
   {
     id: "tableTabLastRow",
-    类型: "当场",
-    条件: "光标在表格最后一行的单元格里（这时 Tab 会加出一行）",
-    默认: true,
-    文案: () => t("Tab moves to the next cell — on the last row it adds a new one."),
+    type: "当场",
+    condition: "光标在表格最后一行的单元格里（这时 Tab 会加出一行）",
+    default: true,
+    copy2: () => t("Tab moves to the next cell — on the last row it adds a new one."),
   },
   {
     id: "tableShiftTabFirstRow",
-    类型: "当场",
-    条件: "光标在表格第一行的单元格里（这时 Shift+Tab 挪不出去）",
-    默认: true,
-    文案: () => t("Shift+Tab goes back to the previous cell."),
+    type: "当场",
+    condition: "光标在表格第一行的单元格里（这时 Shift+Tab 挪不出去）",
+    default: true,
+    copy2: () => t("Shift+Tab goes back to the previous cell."),
   },
   {
     id: "slashMenu",
-    类型: "首次",
-    条件: "用户第二次新建文档、且光标停在一个空段落上时（第一次不弹——那时他还在看界面）",
-    默认: true,
-    文案: () => t("Type / at the start of an empty line to insert tables, math, emoji and more."),
+    type: "首次",
+    condition: "用户第二次新建文档、且光标停在一个空段落上时（第一次不弹——那时他还在看界面）",
+    default: true,
+    copy2: () => t("Type / at the start of an empty line to insert tables, math, emoji and more."),
   },
   {
     id: "headingEnter",
-    类型: "首次",
-    条件: "第一次打出 “# ” 之后、还没按回车的那一刻",
-    默认: true,
-    文案: () => t("Press Enter to turn this into a heading."),
+    type: "首次",
+    condition: "第一次打出 “# ” 之后、还没按回车的那一刻",
+    default: true,
+    copy2: () => t("Press Enter to turn this into a heading."),
   },
   {
     id: "autosave",
-    类型: "首次",
-    条件: "第一次因为切换文件而自动存盘之后",
-    默认: true,
-    文案: () => t("The file was saved automatically when you switched documents. Auto Save can be disabled in Settings."),
+    type: "首次",
+    condition: "第一次因为切换文件而自动存盘之后",
+    default: true,
+    copy2: () => t("The file was saved automatically when you switched documents. Auto Save can be disabled in Settings."),
   },
   {
     id: "findKey",
-    类型: "首次",
-    条件: "第一次在正文里按 Ctrl+F 之后",
-    默认: true,
-    文案: () => t("Ctrl+F finds text, Ctrl+H also replaces it."),
+    type: "首次",
+    condition: "第一次在正文里按 Ctrl+F 之后",
+    default: true,
+    copy2: () => t("Ctrl+F finds text, Ctrl+H also replaces it."),
   },
   {
     id: "exportPdf",
-    类型: "首次",
-    条件: "第一次点「文件 → 导出 → PDF…」时",
-    默认: true,
-    文案: () => t("PDF export uses the system installation of Pandoc. Nota does not include Pandoc."),
+    type: "首次",
+    condition: "第一次点「文件 → 导出 → PDF…」时",
+    default: true,
+    copy2: () => t("PDF export uses the system installation of Pandoc. Nota does not include Pandoc."),
   },
 ];
 
 /** 表里所有 id（给设置页与测试用）。 */
-export function 提示id们(): string[] {
-  return 提示表.map((条) => 条.id);
+export function noticeidPlural(): string[] {
+  return noticeTable.map((item4) => item4.id);
 }
 
 /** 按 id 找一条。找不到返回 `undefined`（⚠️ 调用方要按"没有这条"处理，别抛）。 */
-export function 找提示(id: string): 提示声明 | undefined {
-  return 提示表.find((条) => 条.id === id);
+export function findNotice(id: string): NoticeSoundClear | undefined {
+  return noticeTable.find((item4) => item4.id === id);
 }
 
 /**
@@ -149,19 +149,19 @@ export function 找提示(id: string): 提示声明 | undefined {
  * 这样它能在 node 里直接测（`tests/hints.test.ts`），而"设置里关了还在弹"
  * 这类 bug 也有一条能按住的地方。
  */
-export function 该显示吗(参数: {
+export function shouldShow(parameter: {
   id: string;
   /** 已经静音的（`hints.<id> === false`）。 */
-  静音: ReadonlySet<string>;
+  staticSound: ReadonlySet<string>;
   /** 已经显示过的（只对"首次"型有意义）。 */
-  看过: ReadonlySet<string>;
+  seePass2: ReadonlySet<string>;
   /** 这一条自己的上下文条件此刻成不成立。 */
-  上下文成立: boolean;
+  contextMatches: boolean;
 }): boolean {
-  const 条 = 找提示(参数.id);
-  if (!条) return false;
-  if (!参数.上下文成立) return false;
-  if (参数.静音.has(参数.id)) return false;
-  if (条.类型 === "首次" && 参数.看过.has(参数.id)) return false;
+  const item4 = findNotice(parameter.id);
+  if (!item4) return false;
+  if (!parameter.contextMatches) return false;
+  if (parameter.staticSound.has(parameter.id)) return false;
+  if (item4.type === "首次" && parameter.seePass2.has(parameter.id)) return false;
   return true;
 }

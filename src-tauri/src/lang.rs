@@ -186,6 +186,37 @@ pub fn 系统语言() -> Option<String> {
         }
         return Some(一);
     }
+    #[cfg(target_os = "linux")]
+    for 路径 in ["/etc/default/locale", "/etc/locale.conf"] {
+        if let Ok(内容) = std::fs::read_to_string(路径) {
+            if let Some(语言) = 从语言配置取(&内容) {
+                return Some(语言);
+            }
+        }
+    }
+    None
+}
+
+/// 从 `key=value` 形状的系统 locale 配置里取一个可用语言。
+///
+/// 这是 Linux 上环境变量全为 `C` / `POSIX` 时的最后一道回退。Virtualenv、
+/// Toolbx、Steam Runtime 和部分桌面启动项会把 `LC_ALL=C.UTF-8` 注入进程，
+/// 但 `/etc/default/locale` / `/etc/locale.conf` 仍是发行版安装时选的语言。
+/// `LANGUAGE=zh_CN:zh` 这种候选列表只取第一项。
+pub fn 从语言配置取(内容: &str) -> Option<String> {
+    for 键 in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
+        for 行 in 内容.lines() {
+            let 行 = 行.trim();
+            let Some(值) = 行.strip_prefix(&format!("{键}=")) else {
+                continue;
+            };
+            let 首项 = 值.trim().trim_matches(['"', '\'']).split(':').next()?;
+            let 归一 = 规范(首项);
+            if !归一.is_empty() && 归一 != "c" && 归一 != "posix" {
+                return Some(归一);
+            }
+        }
+    }
     None
 }
 
@@ -362,6 +393,14 @@ mod tests {
         assert_eq!(有效语言(自动, Some("en-US".to_owned())), "en");
         assert_eq!(有效语言(自动, None), 应用兜底, "取不到系统语言就落到应用兜底");
         assert_eq!(有效语言(自动, Some("ja-JP".to_owned())), 应用兜底, "日语没有文案表");
+    }
+
+    #[test]
+    fn 虚拟环境只有_c_locale_时从系统配置找回中文() {
+        let 配置 = "LANG=\"zh_CN.UTF-8\"\nLANGUAGE=\"zh_CN:zh\"\n";
+        assert_eq!(从语言配置取(配置).as_deref(), Some("zh-CN"));
+        assert_eq!(从语言配置取("LANG=C.UTF-8\n").as_deref(), None);
+        assert_eq!(从语言配置取("LANG=en_US.UTF-8\n").as_deref(), Some("en-US"));
     }
 
     #[test]

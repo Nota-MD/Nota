@@ -36,26 +36,25 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { open as openDialog, save as saveDialog } from "@/ui/file-picker";
-// ⚠️ 是 `openUrl` 不是 `openPath`：要交给系统浏览器的是个 **http 地址**，权限
-// 也分开管（`capabilities/default.json` 里开的是 `opener:allow-open-url`）。
-// 本文件里它只服务一处：下面那条 `PANDOC_GUIDE`——给用户一份安装指南。
-import { openUrl } from "@tauri-apps/plugin-opener";
 
 import {
   api,
+  type CustomExporter,
   type DocId,
   type Document,
   type ExportSettings,
   type PandocFormatInfo,
   type PandocProbe,
 } from "@/bridge/ipc";
-import { 导出HTML, 默认导出名 } from "@/editor/export";
-import { 数学代码块转公式 } from "@/editor/math-code";
+import { exportHtml, defaultExportName } from "@/editor/export";
+import { htmlToPngBase64 } from "@/ui/export-image";
+import { numberLearnCodeBlockConvertCommonStyle } from "@/editor/math-code";
 import { documentThemeLooksDark } from "@/styles/theme-contrast";
 import type { PrintRequest } from "@/ui/PrintDialog";
 import type { Dialogs } from "@/ui/useDialogs";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
+import { styleStyleTextItemParameter } from "@/ui/export-templates";
 
 /** 探测不通时那个闸门面板要的东西。 */
 export interface PandocGate {
@@ -63,9 +62,11 @@ export interface PandocGate {
   probe: PandocProbe | null;
   /** 用户点的是哪一种格式（面板标题与按钮文案要用）。 */
   format: PandocFormatInfo | null;
+  /** 自定义导出器在闸门等待期间要保留的参数与“导出后定位”开关。 */
+  exporter?: CustomExporter | null;
 }
 
-export interface 导出接线 {
+export interface exportWiring {
   /** 当前活动文档的 id。 */
   activeId: DocId | null;
   /** 全部文档。用来把 id 换成对象（拿标题与路径）。 */
@@ -88,15 +89,19 @@ export interface 导出接线 {
   openImported: (markdown: string, titleHint: string | null) => Promise<void>;
 }
 
-export interface 导出出口 {
+export interface exportApi {
   /** 导出 HTML。`styled` 决定含不含样式。 */
-  导出: (styled: boolean) => Promise<void>;
+  export: (styled: boolean) => Promise<void>;
+  /** 把当前文档排成一张纵向 PNG。 */
+  exportImage: () => Promise<void>;
   /** 打印（= 导出含样式的那份 + 交给系统默认程序）。 */
-  打印: () => Promise<void>;
+  print: () => Promise<void>;
   /** 借系统里的 pandoc 导出七种格式之一（`pdf` / `docx` / `rtf` / …）。 */
-  导出为: (format: string) => Promise<void>;
+  exportAs: (format: string) => Promise<void>;
+  /** 导出设置里分隔线以下的某一份自定义导出器。 */
+  exportCustom: (id: string) => Promise<void>;
   /** 借系统里的 pandoc 把外部文档格式导入为 Markdown。 */
-  导入为: (format: string) => Promise<void>;
+  guideEnterAs: (format: string) => Promise<void>;
   /** 装没装的闸门。`null` = 没在问。 */
   pandocGate: PandocGate | null;
   /**
@@ -107,16 +112,10 @@ export interface 导出出口 {
     /** 照导（`unknown` 的"仍然试一次"，或走了自带 PDF 那条路）。 */
     onExport: () => void;
     onRecheck: () => void;
-    onGuide: () => void;
+    onHelp: () => void;
     onClose: () => void;
   };
 }
-
-/**
- * pandoc 的安装指南。⚠️ 是**核过的**那一页，不是首页——用户点"去官网"是
- * 要照着装的，落到首页等于让他自己再找一遍。
- */
-const PANDOC_GUIDE = "https://pandoc.org/installing.html";
 
 /**
  * 一个路径所在的那一层目录。`null` = 它本来就没有目录那一段（光秃秃一个文件名）。
@@ -125,7 +124,7 @@ const PANDOC_GUIDE = "https://pandoc.org/installing.html";
  * 切出来会是**空串**，而空串当目录用等于"往根目录旁边导"，不如老实说没有目录。
  * Windows 的 `C:\a.md` 同理（`cut === 2`，能过）。
  */
-export function 所在目录(path: string): string | null {
+export function placeAtItemRecord(path: string): string | null {
   const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   return cut <= 0 ? null : path.slice(0, cut);
 }
@@ -142,12 +141,12 @@ export function 所在目录(path: string): string | null {
  * 要先问一次平台才知道分隔符，为拼一个字符串多一跳 IPC 不值。判据是"这个
  * 路径长什么样"——含反斜杠且不含斜杠的就是 Windows 路径。
  */
-export function 拼路径(dir: string, name: string): string {
+export function combinePath(dir: string, name: string): string {
   const sep = dir.includes("\\") && !dir.includes("/") ? "\\" : "/";
   return dir.endsWith(sep) ? dir + name : dir + sep + name;
 }
 
-export function useExport(w: 导出接线): 导出出口 {
+export function useExport(w: exportWiring): exportApi {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -165,7 +164,7 @@ export function useExport(w: 导出接线): 导出出口 {
   const [pandocGate, setPandocGate] = useState<PandocGate | null>(null);
 
   /** 主题 CSS 的**原始**文本。限域在 `editor/export.ts` 里做，那边统一。 */
-  const 取主题CSS = useCallback(async (): Promise<string | undefined> => {
+  const readThemeCss = useCallback(async (): Promise<string | undefined> => {
     if (!themeId) return undefined;
     try {
       return await api.theme.css(themeId);
@@ -181,8 +180,8 @@ export function useExport(w: 导出接线): 导出出口 {
    * 返回 `null` 表示这次动作需要停止；`undefined` 表示当前没有可加载的主题
    *（导出基础样式本身就是浅色），并不是错误。
    */
-  const 取打印主题CSS = useCallback(async (): Promise<string | undefined | null> => {
-    const css = await 取主题CSS();
+  const getPrintThemeCSS = useCallback(async (): Promise<string | undefined | null> => {
+    const css = await readThemeCss();
     if (!documentThemeLooksDark(css ?? "")) return css;
     await askConfirm({
       title: t("Light theme required"),
@@ -193,7 +192,7 @@ export function useExport(w: 导出接线): 导出出口 {
       hideCancel: true,
     });
     return null;
-  }, [askConfirm, t, 取主题CSS]);
+  }, [askConfirm, t, readThemeCss]);
 
   /**
    * 导出后按设置**定位**到那个文件。
@@ -201,9 +200,9 @@ export function useExport(w: 导出接线): 导出出口 {
    * ⚠️ 失败只落一句警告、**不抛**：文件已经导出成功了，这时候弹一个红条
    * 会把"导好了"这件事盖掉。但也不能咽掉——用户会以为设置没生效。
    */
-  const 可能要定位 = useCallback(
-    async (path: string) => {
-      if (!exportSettings.open_after_export) return;
+  const canAbleWantFixedPosition = useCallback(
+    async (path: string, override?: boolean) => {
+      if (!(override ?? exportSettings.open_after_export)) return;
       try {
         await api.export.reveal(path);
       } catch (e) {
@@ -230,10 +229,10 @@ export function useExport(w: 导出接线): 导出出口 {
    * ⚠️ 第 2 档是**开窗量出来**的：不给的话对话框落在**进程的当前目录**里
    * （实测是 `src-tauri/`）——那是"从哪儿启动的"，不是"用户在编辑什么"。
    */
-  const 默认落点 = useCallback(
+  const defaultDrop = useCallback(
     (name: string, docPath: string | null): string => {
-      const dir = exportSettings.default_folder || (docPath ? 所在目录(docPath) : null);
-      return dir ? 拼路径(dir, name) : name;
+      const dir = exportSettings.default_folder || (docPath ? placeAtItemRecord(docPath) : null);
+      return dir ? combinePath(dir, name) : name;
     },
     [exportSettings.default_folder],
   );
@@ -242,7 +241,7 @@ export function useExport(w: 导出接线): 导出出口 {
    * 导出 HTML。两档只差一个布尔，**故意合成一条路**——分成两个函数的话，
    * "另一种也一并改一下"迟早会漏一次。
    */
-  const 导出 = useCallback(
+  const exportHtmlAction = useCallback(
     async (styled: boolean) => {
       const doc = docs.find((d) => d.id === activeId);
       const text = getMarkdown();
@@ -252,37 +251,63 @@ export function useExport(w: 导出接线): 导出出口 {
         const picked = await saveDialog({
           title: styled ? t("Export HTML (With Styles)") : t("Export HTML (No Styles)"),
           // ⚠️ 默认名**保留原文件名、只换后缀**：用户认得自己那份文档叫什么。
-          defaultPath: 默认落点(默认导出名(doc.title, "html"), doc.path),
+          defaultPath: defaultDrop(defaultExportName(doc.title, "html"), doc.path),
           filters: [{ name: "HTML", extensions: ["html", "htm"] }],
         });
         if (!picked) return; // 用户取消了，不是错误
 
-        const html = await 导出HTML(text, {
+        const html = await exportHtml(text, {
           styled,
-          themeCss: styled ? await 取主题CSS() : undefined,
+          themeCss: styled ? await readThemeCss() : undefined,
           includeHtmlPreviews: true,
           title: doc.title,
         });
         const written = await api.export.write(picked, html);
         // 报**真实写出去的路径**：对话框可能改了它（补后缀、换目录）。
         toast(t("Exported to {0}", written), "success");
-        await 可能要定位(written);
+        await canAbleWantFixedPosition(written);
       } catch (e) {
         toast(t("Could not export: {0}", String(e)), "error");
       }
     },
-    [activeId, docs, getMarkdown, 取主题CSS, toast, 默认落点, 可能要定位],
+    [activeId, docs, getMarkdown, readThemeCss, toast, defaultDrop, canAbleWantFixedPosition],
   );
 
-  const 打印 = useCallback(async () => {
+  const exportImage = useCallback(async () => {
+    const doc = docs.find((d) => d.id === activeId);
+    const text = getMarkdown();
+    if (!doc || text === undefined) return;
+    try {
+      const html = await exportHtml(text, {
+        styled: true,
+        themeCss: await readThemeCss(),
+        includeHtmlPreviews: false,
+        title: doc.title,
+      });
+      const base64 = await htmlToPngBase64(html);
+      const picked = await saveDialog({
+        title: t("Export Image"),
+        defaultPath: defaultDrop(defaultExportName(doc.title, "png"), doc.path),
+        filters: [{ name: "PNG", extensions: ["png"] }],
+      });
+      if (!picked) return;
+      const written = await api.export.writeBytes(picked, base64);
+      toast(t("Exported to {0}", written), "success");
+      await canAbleWantFixedPosition(written);
+    } catch (e) {
+      toast(t("Could not export: {0}", String(e)), "error");
+    }
+  }, [activeId, docs, getMarkdown, readThemeCss, toast, defaultDrop, canAbleWantFixedPosition, t]);
+
+  const print = useCallback(async () => {
     const doc = docs.find((d) => d.id === activeId);
     const text = getMarkdown();
     if (!doc || text === undefined) return;
 
     try {
-      const themeCss = await 取打印主题CSS();
+      const themeCss = await getPrintThemeCSS();
       if (themeCss === null) return;
-      const html = await 导出HTML(text, {
+      const html = await exportHtml(text, {
         styled: true,
         themeCss,
         lightOutput: true,
@@ -299,7 +324,7 @@ export function useExport(w: 导出接线): 导出出口 {
         // 换个目录就全是裂图。
         openPrint({
           html,
-          baseDir: doc.path ? 所在目录(doc.path) : null,
+          baseDir: doc.path ? placeAtItemRecord(doc.path) : null,
           title: doc.title,
         });
       } else {
@@ -312,24 +337,28 @@ export function useExport(w: 导出接线): 导出出口 {
     } catch (e) {
       toast(t("Could not print: {0}", String(e)), "error");
     }
-  }, [activeId, docs, getMarkdown, 取打印主题CSS, toast, openPrint]);
+  }, [activeId, docs, getMarkdown, getPrintThemeCSS, toast, openPrint]);
 
   /**
    * 真的导一次（闸门放行之后走这条）。`format` 来自探测报告那张表。
    *
    * ⚠️ 正文、主题 CSS 都在**这一刻**取：面板可能开了一会儿，中途用户改了正文。
    */
-  const 真导出 = useCallback(
-    async (doc: Document, format: PandocFormatInfo) => {
+  const realExport = useCallback(
+    async (
+      doc: Document,
+      format: PandocFormatInfo,
+      exporter: CustomExporter | null = null,
+    ) => {
       const text = getMarkdown();
       if (text === undefined) return;
       try {
         const pdf = format.id === "pdf";
-        const printThemeCss = pdf ? await 取打印主题CSS() : undefined;
+        const printThemeCss = pdf ? await getPrintThemeCSS() : undefined;
         if (printThemeCss === null) return;
         const picked = await saveDialog({
           title: t("Export {0}", format.name),
-          defaultPath: 默认落点(默认导出名(doc.title, format.extension), doc.path),
+          defaultPath: defaultDrop(defaultExportName(doc.title, format.extension), doc.path),
           filters: [{ name: format.name, extensions: [format.extension] }],
         });
         if (!picked) return;
@@ -339,7 +368,7 @@ export function useExport(w: 导出接线): 导出出口 {
         // 排版引擎"这种情况就只剩一句报错，而它本来有救。
         const html =
           pdf
-            ? await 导出HTML(text, {
+            ? await exportHtml(text, {
                 styled: true,
                 themeCss: printThemeCss,
                 lightOutput: true,
@@ -347,9 +376,15 @@ export function useExport(w: 导出接线): 导出出口 {
               })
             : null;
 
-        const 结果 = await api.pandoc.export({
+        const styleStyleParameter = exporter
+          ? styleStyleTextItemParameter(exporter.format, exporter.style_file)
+          : "";
+        const exportArguments = exporter
+          ? [exportSettings.pandoc_args, exporter.args, styleStyleParameter]
+          : [exportSettings.pandoc_args];
+        const result2 = await api.pandoc.export({
           format: format.id,
-          markdown: 数学代码块转公式(text),
+          markdown: numberLearnCodeBlockConvertCommonStyle(text),
           target: picked,
           docPath: doc.path,
           html,
@@ -359,26 +394,26 @@ export function useExport(w: 导出接线): 导出出口 {
           // 那一种不带"，没人能说清为什么。
           // PDF 不接收文档主题 CSS：直接走 pandoc 时由排版引擎使用浅色纸面；
           // 走 HTML 兜底时，上面那份已经过了浅色主题闸门。
-          themeCss: pdf ? "" : ((await 取主题CSS()) ?? ""),
+          themeCss: pdf ? "" : ((await readThemeCss()) ?? ""),
           // 用户在「设置 → 导出」里写的那串额外参数（原样搬，前端不解析）。
-          pandocArgs: exportSettings.pandoc_args,
+          pandocArgs: exportArguments.filter(Boolean).join(" "),
         });
         // ⚠️ 把后端的 `note` 一起说出来：走的是 pandoc 还是 Nota 自己那套，
         // 用户必须有办法知道（同一份文档两次结果不同才不至于是玄学）。
-        toast(t("Exported to {0}. {1}", 结果.path, 结果.note), "success");
-        await 可能要定位(结果.path);
+        toast(t("Exported to {0}. {1}", result2.path, result2.note), "success");
+        await canAbleWantFixedPosition(result2.path, exporter?.open_after_export);
       } catch (e) {
         toast(t("Could not export: {0}", String(e)), "error");
       }
     },
     [
       getMarkdown,
-      取打印主题CSS,
-      取主题CSS,
+      getPrintThemeCSS,
+      readThemeCss,
       exportSettings.pandoc_args,
       toast,
-      默认落点,
-      可能要定位,
+      defaultDrop,
+      canAbleWantFixedPosition,
     ],
   );
 
@@ -389,7 +424,7 @@ export function useExport(w: 导出接线): 导出出口 {
    * 直接进保存对话框；`missing` / `unknown` 才出面板——那种时候需要用户做选择
    *（装、或者明知如此仍然试）。
    */
-  const 导出为 = useCallback(
+  const exportAs = useCallback(
     async (format: string) => {
       const doc = docs.find((d) => d.id === activeId);
       if (!doc || getMarkdown() === undefined) return;
@@ -409,19 +444,51 @@ export function useExport(w: 导出接线): 导出出口 {
       }
 
       if (probe.state === "ready") {
-        await 真导出(doc, info);
+        await realExport(doc, info);
         return;
       }
       setPandocGate({ probe, format: info });
     },
-    [activeId, docs, getMarkdown, 真导出, toast],
+    [activeId, docs, getMarkdown, realExport, toast],
+  );
+
+  const exportCustom = useCallback(
+    async (id: string) => {
+      const exporter =
+        exportSettings.custom_exporters.find((item) => item.id === id) ?? null;
+      if (!exporter) {
+        toast(t("Unrecognised export format: {0}", id), "error");
+        return;
+      }
+      const doc = docs.find((d) => d.id === activeId);
+      if (!doc || getMarkdown() === undefined) return;
+
+      let probe: PandocProbe;
+      try {
+        probe = await api.pandoc.probe();
+      } catch (e) {
+        toast(t("Could not probe for pandoc: {0}", String(e)), "error");
+        return;
+      }
+      const info = probe.formats.find((item) => item.id === exporter.format) ?? null;
+      if (!info) {
+        toast(t("Unrecognised export format: {0}", exporter.format), "error");
+        return;
+      }
+      if (probe.state === "ready") {
+        await realExport(doc, info, exporter);
+        return;
+      }
+      setPandocGate({ probe, format: info, exporter });
+    },
+    [activeId, docs, exportSettings.custom_exporters, getMarkdown, realExport, t, toast],
   );
 
   /**
    * 导入与导出共用同一条 pandoc 探测。对话框后缀由后端那张格式表给出，
    * 前端不另抄一份；转换结果交给文档生命周期建一张未保存标签。
    */
-  const 导入为 = useCallback(
+  const guideEnterAs = useCallback(
     async (format: string) => {
       let probe: PandocProbe;
       try {
@@ -476,7 +543,7 @@ export function useExport(w: 导出接线): 导出出口 {
         setPandocGate(null);
         if (doc === undefined) return;
         // 照导：pandoc 通了就走它，不通就由后端退到 Nota 自带那套（PDF 才有）。
-        void 真导出(doc, gate.format);
+        void realExport(doc, gate.format, gate.exporter ?? null);
       },
       onRecheck: () => {
         setPandocGate((g) => (g === null ? g : { ...g, probe: null }));
@@ -490,16 +557,25 @@ export function useExport(w: 导出接线): 导出出口 {
           }
         })();
       },
-      onGuide: () => {
-        // ⚠️ 失败要吭声：点"去官网"没反应会让人以为按钮坏了。
-        void openUrl(PANDOC_GUIDE).catch((e: unknown) =>
-          toast(t("Could not open the browser: {0}", String(e)), "error"),
+      onHelp: () => {
+        // 上下文入口直接落到帮助的 Pandoc 章节；失败仍按用户动作报错。
+        void api.window.openHelp("pandoc").catch((e: unknown) =>
+          toast(t("Could not open help: {0}", String(e)), "error"),
         );
       },
       onClose: () => setPandocGate(null),
     }),
-    [pandocGate, docs, activeId, 真导出, toast],
+    [pandocGate, docs, activeId, realExport, toast],
   );
 
-  return { 导出, 打印, 导出为, 导入为, pandocGate, pandocGateActions };
+  return {
+    export: exportHtmlAction,
+    exportImage,
+    print,
+    exportAs,
+    exportCustom,
+    guideEnterAs,
+    pandocGate,
+    pandocGateActions,
+  };
 }

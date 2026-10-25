@@ -199,7 +199,7 @@ fn 读存档(侧车: &Path) -> 存档 {
         Ok(s) => s,
         Err(e) => {
             crate::日志!(
-                "[nota] 表格列宽读不了（本次当「没记过」用）：{}：{e}",
+                "[nota] table-width file unreadable; using empty state: {}: {e}",
                 侧车.display()
             );
             存档::default()
@@ -239,7 +239,7 @@ pub fn 读() -> Vec<记录> {
         Ok(侧车) => 读文件(&侧车),
         // 连家目录都探不到：当一份都没记过（与 `upload::读` 同一条退路）。
         Err(e) => {
-            crate::日志!("[nota] 找不到表格列宽的落点（本次当「没记过」用）：{e}");
+            crate::日志!("[nota] table-width path unavailable; using empty state: {e}");
             Vec::new()
         }
     }
@@ -264,7 +264,7 @@ pub fn 取(文档: &Path) -> Vec<记录> {
     match paths::table_widths_file() {
         Ok(侧车) => 取文件(&侧车, 文档),
         Err(e) => {
-            crate::日志!("[nota] 找不到表格列宽的落点（本次当「没记过」用）：{e}");
+            crate::日志!("[nota] table-width path unavailable; using empty state: {e}");
             Vec::new()
         }
     }

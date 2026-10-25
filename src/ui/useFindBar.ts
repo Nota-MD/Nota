@@ -30,11 +30,11 @@ import { useCallback, useState } from "react";
 import type { RefObject } from "react";
 
 import type { useT } from "@/i18n";
-import { 空查找状态, type FindStatus } from "@/editor/find";
+import { emptyFindState, type FindStatus } from "@/editor/find";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 查找条出入 {
+export interface FindBarOutputEnter {
   /** 编辑区句柄。⚠️ 传 `ref` **本体**（身份稳定），不是 `ref.current`。 */
   editorRef: RefObject<EditorPaneHandle | null>;
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
@@ -43,49 +43,49 @@ export interface 查找条出入 {
   t: ReturnType<typeof useT>;
 }
 
-export interface 查找条 {
+export interface findBar {
   /** 条子开着没有。 */
-  查找开着: boolean;
+  findOpen: boolean;
   /** 编辑器报上来的命中情况（几个、现在第几个）。 */
-  命中情况: FindStatus;
+  matchSituationSituation: FindStatus;
   /** 编辑器**报**命中情况用的。给 `EditorPane` 的 `onFindStatus`。 */
-  报命中: (s: FindStatus) => void;
+  reportMatch: (s: FindStatus) => void;
   /** 关掉：清高亮、清命中数，并把焦点还给编辑区。 */
-  关查找: () => void;
+  closeFind: () => void;
   /** 「查找和替换…」——开、再点一次关。 */
-  切查找: (带替换?: boolean) => void;
+  splitCheckFind: (withReplaceReplace?: boolean) => void;
   /** 替换那一行画不画。⚠️ `Ctrl+F` 开的是"只找"（不带替换行）、`Ctrl+H` 才带。 */
-  替换行: boolean;
+  replaceReplaceLine: boolean;
   /** 「替换」：换掉**当前那个**命中。 */
-  替换当前: (text: string) => void;
+  replaceReplaceCurrent: (text: string) => void;
   /** 「全部替换」：报个数。 */
-  全部替换: (text: string) => void;
+  replaceAll: (text: string) => void;
 }
 
-export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 {
-  const [查找开着, set查找开着] = useState(false);
+export function useFindBar({ editorRef, toast, t }: FindBarOutputEnter): findBar {
+  const [findOpen, setFindOpen] = useState(false);
   // ⚠️ 2026-10-06：`Ctrl+F` 与 `Ctrl+H` 开的是**同一个条子**，差别只在
   // 这一格——前者只画查找那一行。收工关掉时**不重置**它：下次按哪颗键
   // 由 `带替换` 重新决定。
-  const [替换行, 设替换行] = useState(true);
-  const [命中情况, 报命中] = useState<FindStatus>(空查找状态);
+  const [replaceReplaceLine, setReplaceReplaceLine] = useState(true);
+  const [matchSituationSituation, reportMatch] = useState<FindStatus>(emptyFindState);
 
-  const 关查找 = useCallback(() => {
-    set查找开着(false);
-    报命中(空查找状态);
+  const closeFind = useCallback(() => {
+    setFindOpen(false);
+    reportMatch(emptyFindState);
     editorRef.current?.clearFind();
     editorRef.current?.focus();
   }, [editorRef]);
 
-  const 切查找 = useCallback(
-    (带替换 = true) => {
-      if (查找开着) 关查找();
+  const splitCheckFind = useCallback(
+    (withReplaceReplace = true) => {
+      if (findOpen) closeFind();
       else {
-        设替换行(带替换);
-        set查找开着(true);
+        setReplaceReplaceLine(withReplaceReplace);
+        setFindOpen(true);
       }
     },
-    [查找开着, 关查找],
+    [findOpen, closeFind],
   );
 
   /**
@@ -93,7 +93,7 @@ export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 
    * 不提示的话用户看到的是"点了没反应"，而原因（还没按过「下一个」）
    * 是看不出来的。
    */
-  const 替换当前 = useCallback(
+  const replaceReplaceCurrent = useCallback(
     (text: string) => {
       if (!editorRef.current?.replaceCurrent(text)) {
         toast(t("The cursor is not on a match — press “Next” first."), "info");
@@ -103,7 +103,7 @@ export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 
   );
 
   /** 「全部替换」：报个数——换了多少是用户唯一能核对的凭据。 */
-  const 全部替换 = useCallback(
+  const replaceAll = useCallback(
     (text: string) => {
       const n = editorRef.current?.replaceAll(text) ?? 0;
       toast(
@@ -114,5 +114,5 @@ export function useFindBar({ editorRef, toast, t }: 查找条出入): 查找条 
     [editorRef, toast, t],
   );
 
-  return { 查找开着, 替换行, 命中情况, 报命中, 关查找, 切查找, 替换当前, 全部替换 };
+  return { findOpen, replaceReplaceLine, matchSituationSituation, reportMatch, closeFind, splitCheckFind, replaceReplaceCurrent, replaceAll };
 }

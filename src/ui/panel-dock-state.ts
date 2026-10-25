@@ -44,29 +44,29 @@ import { normalise, type PanelNode } from "@/ui/panel-nodes";
 
 /** 一个面板此刻的状态。`loading` 只在**第一次**拉的时候出现——
  *  重拉时保留旧内容，否则每按一次「刷新」面板就闪一下白。 */
-export type 面板状态 =
+export type PanelState =
   | { state: "loading" }
   | { state: "ok"; nodes: PanelNode[]; busy: string | null }
   | { state: "error"; message: string; busy: string | null };
 
 /** 页签的坐标。`null` = 「插件」那一页（插件清单，不是插件声明的面板）。 */
-export type 页 = string | null;
+export type page = string | null;
 
 /** 关掉这一栏再打开时**要接着用的那一份**（见文件头）。 */
-export interface 面板记忆 {
+export interface PanelRecordRecall {
   /**
    * 上一次停在那一页。
    *
    * ⚠️ 三态，别拿 `??` 去接：`undefined` = 还没选过（那时才该落到第一页）、
    * `null` = **用户自己停在「插件」那一页**（那是一个正经的选择，不该被顶掉）。
    */
-  当前: 页 | undefined;
-  内容表: Record<string, 面板状态>;
-  实时表: Record<string, string>;
+  current: page | undefined;
+  contentTable: Record<string, PanelState>;
+  actualTimeTable: Record<string, string>;
 }
 
 /** 这份记忆**只有一份**（一个应用一个窗口一栏）。 */
-export const 记忆: 面板记忆 = { 当前: undefined, 内容表: {}, 实时表: {} };
+export const recordRecall: PanelRecordRecall = { current: undefined, contentTable: {}, actualTimeTable: {} };
 
 /**
  * 这一栏**开起来的时候停在哪一页**。
@@ -79,8 +79,8 @@ export const 记忆: 面板记忆 = { 当前: undefined, 内容表: {}, 实时�
  * ⚠️ 抽成纯函数是为了能在 `tests/panel-dock-state.test.ts` 里把三态各钉一条
  * （`null` / `undefined` / 清单还空着）。
  */
-export function 起始页(记得的: 页 | undefined, 键们: readonly string[]): 页 {
-  return 记得的 !== undefined ? 记得的 : (键们[0] ?? null);
+export function startStartPage(recordObtainOf: page | undefined, keys: readonly string[]): page {
+  return recordObtainOf !== undefined ? recordObtainOf : (keys[0] ?? null);
 }
 
 /**
@@ -92,28 +92,28 @@ export function 起始页(记得的: 页 | undefined, 键们: readonly string[])
  * 数组还是同一个；测试里往记忆那份 `push` 一条，组件手上那份会跟着多一条
  * （`tests/panel-dock-state.test.ts` 第 (4) 组钉着这一条，它当时就是这么红的）。
  */
-export function 记住内容表(表: Record<string, 面板状态>): Record<string, 面板状态> {
-  const 出: Record<string, 面板状态> = {};
-  for (const [键, 态] of Object.entries(表)) {
+export function recordHoldContentTable(table2: Record<string, PanelState>): Record<string, PanelState> {
+  const output2: Record<string, PanelState> = {};
+  for (const [key, state2] of Object.entries(table2)) {
     // ⚠️ 两档都要抹（`ok` 与 `error` 都带 `busy` 那一格）。
-    出[键] =
-      态.state === "ok"
-        ? { ...态, nodes: [...态.nodes], busy: null }
-        : 态.state === "error"
-          ? { ...态, busy: null }
-          : 态;
+    output2[key] =
+      state2.state === "ok"
+        ? { ...state2, nodes: [...state2.nodes], busy: null }
+        : state2.state === "error"
+          ? { ...state2, busy: null }
+          : state2;
   }
-  return 出;
+  return output2;
 }
 
 /** [`这一页画什么`] 的结论。 */
-export interface 该画什么 {
+export interface ShouldDrawWhatWhat {
   /** 这一页要画的节点（已经收窄过、已经拼上流式那一条）。 */
-  节点们: PanelNode[];
+  nodes: PanelNode[];
   /** 没有节点可画时那句提示。 */
-  提示: "载入" | "空" | null;
+  notice: "载入" | "空" | null;
   /** 拉失败那一句（有它就不画别的）。 */
-  错误: string | null;
+  error: string | null;
   /** 这一页正在跑哪条命令（按钮要不要灰着）。 */
   busy: string | null;
 }
@@ -130,28 +130,28 @@ export interface 该画什么 {
  * ⚠️ 拉失败（`error`）时**不画流式文字**：那一段的意义是"结果马上就来"，
  * 而拉失败恰恰是"这一页坏了"——两句话叠在一起，用户读不出哪句是真的。
  */
-export function 这一页画什么(态: 面板状态, 实时: string): 该画什么 {
-  if (态.state === "error") {
-    return { 节点们: [], 提示: null, 错误: 态.message, busy: 态.busy };
+export function thisValuePageDrawWhatWhat(state2: PanelState, actualTime: string): ShouldDrawWhatWhat {
+  if (state2.state === "error") {
+    return { nodes: [], notice: null, error: state2.message, busy: state2.busy };
   }
 
-  const 实时节点 =
-    实时 === "" ? null : (normalise([{ kind: "message", from: "ai", text: 实时 }])[0] ?? null);
+  const actualTimeNode =
+    actualTime === "" ? null : (normalise([{ kind: "message", from: "ai", text: actualTime }])[0] ?? null);
 
-  if (态.state === "loading") {
+  if (state2.state === "loading") {
     // ⚠️ 这一支就是这次的修法（见文件头）：**内容还拉不回来的时候，先把正在吐的
     // 那段字画出来**。没有它，命令跑着的时候重开面板只能看见一句「正在读取…」，
     // 而那一次的"读取"要等命令跑完（锁在宿主那边）。
-    return 实时节点
-      ? { 节点们: [实时节点], 提示: null, 错误: null, busy: null }
-      : { 节点们: [], 提示: "载入", 错误: null, busy: null };
+    return actualTimeNode
+      ? { nodes: [actualTimeNode], notice: null, error: null, busy: null }
+      : { nodes: [], notice: "载入", error: null, busy: null };
   }
 
-  const 节点们 = 实时节点 === null ? 态.nodes : [...态.nodes, 实时节点];
+  const nodes = actualTimeNode === null ? state2.nodes : [...state2.nodes, actualTimeNode];
   return {
-    节点们,
-    提示: 节点们.length === 0 ? "空" : null,
-    错误: null,
-    busy: 态.busy,
+    nodes,
+    notice: nodes.length === 0 ? "空" : null,
+    error: null,
+    busy: state2.busy,
   };
 }

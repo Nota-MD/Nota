@@ -45,7 +45,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 沉浸接线 {
+export interface immersiveWiring {
   /**
    * 现在有没有浮层开着（设置、确认框、输入框、pandoc 那个面板）。
    *
@@ -57,32 +57,32 @@ export interface 沉浸接线 {
    * 将来加第五个浮层时改的是 `App.tsx` 而不是这里。列出来的代价是那一行变长，
    * 换来的是"还有谁想收 `Esc`"在调用处一眼可见。
    */
-  有浮层: boolean;
+  hasFloatingLayer: boolean;
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
 }
 
-export interface 沉浸出口 {
+export interface immersiveApi {
   /** 外壳认的**那一个**布尔（`专注 ∨ 全屏`），落在 `.app[data-zen]` 上。 */
-  沉浸: boolean;
+  immersive: boolean;
   focusMode: boolean;
-  切换专注: () => void;
+  splitReplaceDedicatedNote: () => void;
   fullscreen: boolean;
-  切换全屏: () => void;
+  toggleFullscreen: () => void;
   /** 退出去（`Esc` 之外的地方要用，比如将来的菜单项）。 */
-  退出沉浸: () => void;
+  exitImmersive: () => void;
 }
 
-export function useImmersive(w: 沉浸接线): 沉浸出口 {
+export function useImmersive(w: immersiveWiring): immersiveApi {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const { 有浮层, toast } = w;
+  const { hasFloatingLayer, toast } = w;
 
   const [focusMode, setFocusMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
 
   /** 读一次窗口，把上面那个镜像对齐。读不出来（窗口还没建好/已经没了）就维持现状。 */
-  const 同步全屏 = useCallback(async () => {
+  const syncFullscreen = useCallback(async () => {
     try {
       setFullscreen(await getCurrentWindow().isFullscreen());
     } catch {
@@ -92,21 +92,21 @@ export function useImmersive(w: 沉浸接线): 沉浸出口 {
   }, []);
 
   useEffect(() => {
-    void 同步全屏();
+    void syncFullscreen();
     // 全屏切换一定伴随窗口尺寸变化，所以 `onResized` 是能接住它的那一个事件。
-    let 退订: (() => void) | null = null;
+    let unsubscribe: (() => void) | null = null;
     void getCurrentWindow()
-      .onResized(() => void 同步全屏())
+      .onResized(() => void syncFullscreen())
       .then((f) => {
-        退订 = f;
+        unsubscribe = f;
       })
       .catch(() => {
         // 订不上就退化成"只在挂载时同步一次"，界面仍然能用。
       });
-    return () => 退订?.();
-  }, [同步全屏]);
+    return () => unsubscribe?.();
+  }, [syncFullscreen]);
 
-  const 切换全屏 = useCallback(async () => {
+  const toggleFullscreen = useCallback(async () => {
     const win = getCurrentWindow();
     try {
       await win.setFullscreen(!(await win.isFullscreen()));
@@ -116,11 +116,11 @@ export function useImmersive(w: 沉浸接线): 沉浸出口 {
       // ⚠️ **成败都要同步**：失败时窗口没动（同步一次是白做的），成功时窗口动了
       //（这一下才是让勾跟上）。写成"成功才同步"要多一个分支，而那个分支正好是
       // 唯一会漏更新的一条路。
-      void 同步全屏();
+      void syncFullscreen();
     }
-  }, [toast, 同步全屏]);
+  }, [toast, syncFullscreen]);
 
-  const 切换专注 = useCallback(() => setFocusMode((v) => !v), []);
+  const splitReplaceDedicatedNote = useCallback(() => setFocusMode((v) => !v), []);
 
   /**
    * 退出沉浸：**专注与全屏一起退**。
@@ -129,33 +129,33 @@ export function useImmersive(w: 沉浸接线): 沉浸出口 {
    * 还给我"——让他按一次 `Esc` 之后发现侧栏回来了、菜单栏还在上面挂着，还得再按
    * 一次，那是把内部状态（两个布尔）暴露成了两步操作。
    */
-  const 退出沉浸 = useCallback(() => {
+  const exitImmersive = useCallback(() => {
     setFocusMode(false);
     // `fullscreen` 是窗口的**镜像**，可能比窗口晚一帧。所以这里读它只是为了
     // "要不要去动窗口"，真正的判据仍在 `切换全屏` 里（它问窗口）。
-    if (fullscreen) void 切换全屏();
-  }, [fullscreen, 切换全屏]);
+    if (fullscreen) void toggleFullscreen();
+  }, [fullscreen, toggleFullscreen]);
 
   /** 外壳认的那一个布尔。⚠️ 只有这一个出口，见文件头那张表。 */
-  const 沉浸 = focusMode || fullscreen;
+  const immersive = focusMode || fullscreen;
 
   // `Esc` 退出沉浸。判据要写全——**沉浸不是唯一想收 `Esc` 的东西**。
   //
   // ⚠️ 不用捕获阶段（`addEventListener` 的第三个参数）：保持和 `useMenus` 里那条
   // 键位分发同一个层级。谁先注册谁先跑这件事在这个应用里没有依赖过，别在这里开这个头。
   useEffect(() => {
-    if (!沉浸) return;
+    if (!immersive) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // 组字期间一概不接（同 `useMenus` / `useMenuRovingFocus` 里那条判据）。
       if (e.isComposing || e.keyCode === 229) return;
-      if (有浮层) return;
+      if (hasFloatingLayer) return;
       e.preventDefault();
-      退出沉浸();
+      exitImmersive();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [沉浸, 退出沉浸, 有浮层]);
+  }, [immersive, exitImmersive, hasFloatingLayer]);
 
   /**
    * 进沉浸时给一条**会自己走掉**的提示：怎么出去。
@@ -167,23 +167,23 @@ export function useImmersive(w: 沉浸接线): 沉浸出口 {
    * ⚠️ ttl 给 6 秒（默认 3.2 秒）：这句话比"已保存"那种长，读一遍要时间；而它
    * 只是在说路怎么走，多留两秒没有代价。
    */
-  const 上次沉浸 = useRef(false);
+  const lastImmersive = useRef(false);
   useEffect(() => {
-    if (沉浸 === 上次沉浸.current) return;
-    上次沉浸.current = 沉浸;
-    if (!沉浸) return;
+    if (immersive === lastImmersive.current) return;
+    lastImmersive.current = immersive;
+    if (!immersive) return;
     // 三条路里都有这一句，所以单拎出来当 `{0}` 传进去——它在三种情形下是同一句话。
-    const 路 = t("Move the mouse to the very top of the window to bring the menu bar back");
+    const path2 = t("Move the mouse to the very top of the window to bring the menu bar back");
     toast(
       focusMode && fullscreen
-        ? t("Focus + full screen: press F8 / F11 / Esc to exit, {0}", 路)
+        ? t("Focus + full screen: press F8 / F11 / Esc to exit, {0}", path2)
         : fullscreen
-          ? t("Full screen: press F11 or Esc to exit, {0}", 路)
-          : t("Focus mode: press F8 or Esc to exit, {0}", 路),
+          ? t("Full screen: press F11 or Esc to exit, {0}", path2)
+          : t("Focus mode: press F8 or Esc to exit, {0}", path2),
       "info",
       6000,
     );
-  }, [沉浸, focusMode, fullscreen, toast]);
+  }, [immersive, focusMode, fullscreen, toast]);
 
-  return { 沉浸, focusMode, 切换专注, fullscreen, 切换全屏, 退出沉浸 };
+  return { immersive, focusMode, splitReplaceDedicatedNote, fullscreen, toggleFullscreen, exitImmersive };
 }

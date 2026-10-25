@@ -313,7 +313,9 @@
      两边不一致。用户 2026-09-26 的原话：「闪烁的光标应该始终显示」。
      ⚠️ 这里只解决**颜色**；"进入文档时看不见光标"是**选区落在哪儿**的问题，
      代码在 `src/editor/create.ts` 的 `光标到开头` 与 `setMarkdown` 里。 */
-  caret-color: var(--accent);
+  /* 原生 caret 在 WebKitGTK 上不保证闪烁；可编辑实例由 ProseMirror 插件画
+     `.nota-blink-caret`。这里隐藏原生光标，避免出现重影。 */
+  caret-color: transparent;
   font-family: var(--font-doc);
   color: var(--doc-fg);
   line-height: var(--doc-line-height, 1.75);
@@ -334,6 +336,43 @@
      它照样长到内容那么高**、由外层滚动条去滚。 */
   flex: 1;
   padding: 48px 0 120px;
+}
+
+/* WebKitGTK 在部分环境下会画出一条不闪烁的原生插入光标。正文的插入光标
+ * 由 `editor/blink-caret.ts` 在编辑区 DOM 之外画，避免 contenteditable=false
+ * 的装饰节点干扰 WebKitGTK 的文字输入。 */
+.nota-blink-caret {
+  position: fixed;
+  z-index: 20;
+  display: none;
+  width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  user-select: none;
+}
+
+.nota-blink-caret.nota-blink-caret-on {
+  display: block;
+  animation: nota-caret-blink 1.06s steps(1, end) infinite;
+}
+
+@keyframes nota-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nota-blink-caret.nota-blink-caret-on {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /*

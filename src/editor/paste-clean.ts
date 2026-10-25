@@ -52,14 +52,14 @@
  *   `ui/useImageInsert.ts` 那条路的事，不在这里拦。
  */
 
-import { 按扩展名推语言 } from "./lang-guess";
+import { LanguageFromExtension } from "./lang-guess";
 
 /** 洗完之后的两样东西。 */
-export interface 清理结果 {
+export interface ClearManageResult {
   /** 洗干净的 HTML。**可能为空串**（整段都是垃圾），调用方要自己判。 */
   html: string;
   /** 从 `class` / `data-language` 里认出来的语言 id（`refractor` 的写法）；认不出给 `null`。 */
-  语言线索: string | null;
+  languageClue: string | null;
 }
 
 /* ── 三张表 ───────────────────────────────────────────────────────────── */
@@ -72,7 +72,7 @@ export interface 清理结果 {
  * ⚠️ `<select>` / `<textarea>` / `<button>` 也删：表单控件粘进正文里
  * 既编辑不了也存不下去，留着只是几个空壳。
  */
-const 整块删 = new Set([
+const wholeBlockRemove = new Set([
   "script",
   "style",
   "head",
@@ -101,7 +101,7 @@ const 整块删 = new Set([
  * ⚠️ `body` / `html` 也在里面，虽然 `template.innerHTML` 本来就不会给我们这两层；
  * 留着是防"用户粘的是一整份网页源码、外面还裹着 `<!DOCTYPE html>`"那一类。
  */
-const 丢壳 = new Set([
+const loseShell = new Set([
   "html",
   "body",
   "span",
@@ -141,7 +141,7 @@ const 丢壳 = new Set([
  * `preset-commonmark` 的 `code_block` 就是 `dom.dataset.language`
  * 那一行读的（`node_modules/@milkdown/preset-commonmark/lib/index.js:805`）。
  */
-const 属性白名单: Readonly<Record<string, readonly string[]>> = {
+const attributeWhiteNameSingle: Readonly<Record<string, readonly string[]>> = {
   a: ["href", "title"],
   img: ["src", "alt", "title"],
   td: ["colspan", "rowspan"],
@@ -151,7 +151,7 @@ const 属性白名单: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** 空元素：没有闭合标签，遇到就直接输出。 */
-const 空元素 = new Set([
+const emptyElement = new Set([
   "br",
   "img",
   "hr",
@@ -172,7 +172,7 @@ const 空元素 = new Set([
  * ⚠️ 判据是"它是不是块级容器"，所以 `td` / `th` / `li` **不在**里面
  * ——它们里面装的是行内内容，`<td><strong>x</strong></td>` 完全合法。
  */
-const 不包裹 = new Set([
+const notPackageWrap = new Set([
   "p",
   "div",
   "h1",
@@ -209,7 +209,7 @@ const 不包裹 = new Set([
  * （没有 Markdown 语法，见 `inline-marks.ts` 文件头），留着 `ins` 的话
  * 粘进来的下划线**存盘就没了**（序列化器不认识 `ins`）。
  */
-const 换名: Readonly<Record<string, string>> = {
+const replaceName: Readonly<Record<string, string>> = {
   ins: "u",
   strike: "s",
   b: "strong",
@@ -223,7 +223,7 @@ const 换名: Readonly<Record<string, string>> = {
  * （加粗 / 斜体 / 下划线 / 删除线）。字号、颜色、字体一律丢——
  * 理由同上：显示口径归文档主题。
  */
-const 样式语义: readonly (readonly [RegExp, string])[] = [
+const styleStyleLanguageMeaning: readonly (readonly [RegExp, string])[] = [
   [/font-weight\s*:\s*(?:bold|bolder|[6-9]\d0)\b/i, "strong"],
   [/font-style\s*:\s*italic\b/i, "em"],
   [/text-decoration(?:-line)?\s*:[^;]*\bunderline\b/i, "u"],
@@ -233,16 +233,16 @@ const 样式语义: readonly (readonly [RegExp, string])[] = [
 /* ── 扫 ──────────────────────────────────────────────────────────────── */
 
 /** 一个标签壳：名、是不是闭合标签、属性串、是不是自闭合。 */
-interface 标签 {
-  名: string;
-  闭合: boolean;
-  自闭合: boolean;
-  属性串: string;
+interface label {
+  name3: string;
+  closeCombine: boolean;
+  selfCloseCombine: boolean;
+  attributeString: string;
 }
 
 /** 栈上的一项：还没闭合的元素，以及它开出来的那几层语义包裹。 */
-interface 栈项 {
-  名: string;
+interface StackItem {
+  name3: string;
   /**
    * **这个元素的开标签真的输出过吗**。
    *
@@ -252,105 +252,105 @@ interface 栈项 {
    * `甲</span>`——一对孤零零的闭合标签，症状是粘进来一段内容后面多出几个
    * 莫名其妙的 `</div>` 之类。
    */
-  出标签: boolean;
-  包: string[];
+  outputLabel2: boolean;
+  packageValue: string[];
 }
 
 /**
  * 洗一遍。**纯函数**：只吃字符串、只吐字符串（＋一个语言线索），
  * 不碰 DOM、不碰文档（`tests/paste-clean.test.ts` 全靠这一条）。
  */
-export function 清理粘贴HTML(html: string): 清理结果 {
-  const 全文线索 = 找语言线索(html);
-  let 出 = "";
+export function clearManagePastePasteHTML(html: string): ClearManageResult {
+  const fullTextLineSearch = findLanguageClue(html);
+  let output2 = "";
   let i = 0;
-  const 栈: 栈项[] = [];
+  const stack: StackItem[] = [];
   /** 正在丢的整块里（`>0`），记着是哪个标签开的。 */
-  let 丢深度 = 0;
-  let 丢名 = "";
+  let loseDarkDegree = 0;
+  let loseName = "";
   const n = html.length;
 
   while (i < n) {
-    const 左 = html.indexOf("<", i);
-    if (左 < 0) {
-      if (丢深度 === 0) 出 += 文本(html.slice(i));
+    const left = html.indexOf("<", i);
+    if (left < 0) {
+      if (loseDarkDegree === 0) output2 += text2(html.slice(i));
       break;
     }
     // ⚠️ `<` 后面不是"标签名 / `/` / `!` / `?`"，那它就是正文里的一颗小于号
     //（`2 < 3`）。当标签处理会把它后面的东西整段吃掉。
-    if (!/[a-zA-Z!/?]/.test(html[左 + 1] ?? "")) {
-      if (丢深度 === 0) 出 += 文本(html.slice(i, 左 + 1));
-      i = 左 + 1;
+    if (!/[a-zA-Z!/?]/.test(html[left + 1] ?? "")) {
+      if (loseDarkDegree === 0) output2 += text2(html.slice(i, left + 1));
+      i = left + 1;
       continue;
     }
-    if (丢深度 === 0) 出 += 文本(html.slice(i, 左));
+    if (loseDarkDegree === 0) output2 += text2(html.slice(i, left));
 
-    if (html.startsWith("<!--", 左)) {
-      const 完 = html.indexOf("-->", 左 + 4);
-      i = 完 < 0 ? n : 完 + 3;
+    if (html.startsWith("<!--", left)) {
+      const complete = html.indexOf("-->", left + 4);
+      i = complete < 0 ? n : complete + 3;
       continue;
     }
-    if (html[左 + 1] === "!" || html[左 + 1] === "?") {
-      const 完 = html.indexOf(">", 左);
-      i = 完 < 0 ? n : 完 + 1;
+    if (html[left + 1] === "!" || html[left + 1] === "?") {
+      const complete = html.indexOf(">", left);
+      i = complete < 0 ? n : complete + 1;
       continue;
     }
 
-    const 尾 = 找标签尾(html, 左);
-    if (尾 < 0) {
+    const tail = findLabelTail(html, left);
+    if (tail < 0) {
       // 这个 `<` 之后一直到文末都没有 `>`：它不是标签，是正文。
-      if (丢深度 === 0) 出 += 文本(html.slice(左));
+      if (loseDarkDegree === 0) output2 += text2(html.slice(left));
       break;
     }
-    const 解 = 解析标签(html.slice(左, 尾 + 1));
-    i = 尾 + 1;
-    if (!解) continue;
+    const parse2 = parseLabel(html.slice(left, tail + 1));
+    i = tail + 1;
+    if (!parse2) continue;
 
     // ── 正在丢的整块里：只数同名标签的进出，别的什么都不做
-    if (丢深度 > 0) {
-      if (解.名 === 丢名) {
-        if (解.闭合) 丢深度--;
-        else if (!解.自闭合) 丢深度++;
+    if (loseDarkDegree > 0) {
+      if (parse2.name3 === loseName) {
+        if (parse2.closeCombine) loseDarkDegree--;
+        else if (!parse2.selfCloseCombine) loseDarkDegree++;
       }
       continue;
     }
-    if (整块删.has(解.名)) {
-      if (!解.闭合 && !解.自闭合) {
-        丢深度 = 1;
-        丢名 = 解.名;
+    if (wholeBlockRemove.has(parse2.name3)) {
+      if (!parse2.closeCombine && !parse2.selfCloseCombine) {
+        loseDarkDegree = 1;
+        loseName = parse2.name3;
       }
       continue;
     }
     // ── Office 命名空间（`o:p` / `w:ProofErr` / `v:shape` / `st1:*`）：
     //    标签丢掉，包里那点内容留着（常常是空的，那就是全丢）。
-    const 是命名空间 = 解.名.includes(":");
+    const isCommandNameEmptyInterval = parse2.name3.includes(":");
 
-    if (解.闭合) {
-      const 收 = 收栈(栈, 解.名, 出);
-      出 = 收.出;
-      if (收.配上 && 收.出标签) 出 += `</${解.名}>`;
+    if (parse2.closeCombine) {
+      const receive = receiveStack(stack, parse2.name3, output2);
+      output2 = receive.output2;
+      if (receive.configureAbove && receive.outputLabel2) output2 += `</${parse2.name3}>`;
       continue;
     }
 
     // ── 开始标签
-    const 包 = 读语义包裹(解, 是命名空间);
-    for (const t of 包) 出 += `<${t}>`;
-    const 是空 = 空元素.has(解.名) || 解.自闭合;
+    const packageValue = readLanguageMeaningPackageWrap(parse2, isCommandNameEmptyInterval);
+    for (const t of packageValue) output2 += `<${t}>`;
+    const isEmpty = emptyElement.has(parse2.name3) || parse2.selfCloseCombine;
     // 三件互不冲突的事，分开写：① 命名空间标签与"壳"标签都**不输出标签本身**；
     // ② 不是壳的才输出（过了白名单）；③ 不是空元素的进栈等着被闭合。
-    const 出标签 = !是命名空间 && !丢壳.has(解.名);
-    if (出标签) 出 += 输出标签(解, 全文线索);
-    if (!是空) 栈.push({ 名: 解.名, 出标签, 包 });
+    const outputLabel2 = !isCommandNameEmptyInterval && !loseShell.has(parse2.name3);
+    if (outputLabel2) output2 += outputLabel(parse2, fullTextLineSearch);
+    if (!isEmpty) stack.push({ name3: parse2.name3, outputLabel2, packageValue });
   }
 
   // 文末还有没闭合的：把包裹一层层收回来，元素本身也补一个闭合
   //（不补的话，最后一段就成了下一段的父节点）。
-  while (栈.length > 0) {
-    const 项 = 栈.pop()!;
-    for (let k = 项.包.length - 1; k >= 0; k--) 出 += `</${项.包[k]}>`;
-    if (项.出标签) 出 += `</${项.名}>`;
+  while (stack.length > 0) {
+    const item5 = stack.pop()!;
+    for (let k = item5.packageValue.length - 1; k >= 0; k--) output2 += `</${item5.packageValue[k]}>`;
+    if (item5.outputLabel2) output2 += `</${item5.name3}>`;
   }
-  return { html: 出, 语言线索: 全文线索 };
+  return { html: output2, languageClue: fullTextLineSearch };
 }
 
 /* ── 小工具（都是纯函数）──────────────────────────────────────────────── */
@@ -362,21 +362,21 @@ export function 清理粘贴HTML(html: string): 清理结果 {
  * 再转一次会变成 `&amp;amp;`（最后 `template.innerHTML` 还要解一遍，
  * 一进一出就成了字面的 `&amp;` 显示在屏幕上）。
  */
-function 文本(s: string): string {
+function text2(s: string): string {
   return s.replace(/</g, "&lt;");
 }
 
 /** 从 `起`（一个 `<`）往后找这个标签的 `>`，跳过引号里的。找不到给 `-1`。 */
-function 找标签尾(s: string, 起: number): number {
-  let 引 = "";
-  for (let i = 起 + 1; i < s.length; i++) {
+function findLabelTail(s: string, start5: number): number {
+  let reference = "";
+  for (let i = start5 + 1; i < s.length; i++) {
     const c = s[i]!;
-    if (引 !== "") {
-      if (c === 引) 引 = "";
+    if (reference !== "") {
+      if (c === reference) reference = "";
       continue;
     }
     if (c === '"' || c === "'") {
-      引 = c;
+      reference = c;
       continue;
     }
     if (c === ">") return i;
@@ -385,47 +385,47 @@ function 找标签尾(s: string, 起: number): number {
 }
 
 /** 拆一个标签壳。**认不出给 `null`**（调用方把它当没看见）。 */
-function 解析标签(原文: string): 标签 | null {
-  const m = /^<\s*(\/?)\s*([a-zA-Z][\w:.-]*)([\s\S]*?)(\/?)\s*>$/.exec(原文);
+function parseLabel(source: string): label | null {
+  const m = /^<\s*(\/?)\s*([a-zA-Z][\w:.-]*)([\s\S]*?)(\/?)\s*>$/.exec(source);
   if (!m) return null;
-  const 小写 = m[2]!.toLowerCase();
+  const smallWrite = m[2]!.toLowerCase();
   return {
     // ⚠️ 换名在**这里**做（而不是输出那一步）：进栈的键与闭合标签的键都要
     //    用换过之后的名字，否则 `<ins>…</ins>` 会变成"开着 `ins`、关着 `u`"，
     //    栈永远收不了口。
-    名: 换名[小写] ?? 小写,
-    闭合: m[1] === "/",
-    自闭合: m[4] === "/",
-    属性串: m[3] ?? "",
+    name3: replaceName[smallWrite] ?? smallWrite,
+    closeCombine: m[1] === "/",
+    selfCloseCombine: m[4] === "/",
+    attributeString: m[3] ?? "",
   };
 }
 
 /** 拆属性串：给 `[名, 值(null = 光杆属性)]`。 */
-function 解析属性(串: string): [string, string | null][] {
-  const 出: [string, string | null][] = [];
-  const 找 = /\s([a-zA-Z_:][\w:.-]*)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?/g;
-  for (let m = 找.exec(串); m; m = 找.exec(串)) {
-    const 名 = m[1]!.toLowerCase();
-    let 值 = m[2] ?? null;
-    if (值 !== null && (值.startsWith('"') || 值.startsWith("'"))) 值 = 值.slice(1, -1);
-    出.push([名, 值]);
+function parseAttribute(stringValue: string): [string, string | null][] {
+  const output2: [string, string | null][] = [];
+  const find = /\s([a-zA-Z_:][\w:.-]*)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+))?/g;
+  for (let m = find.exec(stringValue); m; m = find.exec(stringValue)) {
+    const name3 = m[1]!.toLowerCase();
+    let value2 = m[2] ?? null;
+    if (value2 !== null && (value2.startsWith('"') || value2.startsWith("'"))) value2 = value2.slice(1, -1);
+    output2.push([name3, value2]);
   }
-  return 出;
+  return output2;
 }
 
 /** 从 `style` 里读出该包的语义标签（顺序固定：strong → em → u → s）。 */
-function 读语义包裹(解: 标签, 是命名空间: boolean): string[] {
+function readLanguageMeaningPackageWrap(parse2: label, isCommandNameEmptyInterval: boolean): string[] {
   // ⚠️ **块级元素上不许包**：`<p style="font-weight:bold">` 包成
   // `<strong><p>` 是非法嵌套，浏览器会自己"修"一遍，修成什么样没法预测
   //（多半是把 `<strong>` 提到 `<p>` 外面、只裹住前半句）。
   // ⚠️ 命名空间标签（`<SPAN style='font-weight:bold'>` 在 Word 里也可能
   // 写成 `<w:r>` 包着）不受这条限制——它本来就是要拆的壳。
-  if (!是命名空间 && 不包裹.has(解.名)) return [];
-  const 样式 = 解析属性(解.属性串).find(([k]) => k === "style")?.[1];
-  if (!样式) return [];
-  const 出: string[] = [];
-  for (const [判据, 标签名] of 样式语义) if (判据.test(样式)) 出.push(标签名);
-  return 出;
+  if (!isCommandNameEmptyInterval && notPackageWrap.has(parse2.name3)) return [];
+  const styleStyle = parseAttribute(parse2.attributeString).find(([k]) => k === "style")?.[1];
+  if (!styleStyle) return [];
+  const output2: string[] = [];
+  for (const [determineEvidence, labelName] of styleStyleLanguageMeaning) if (determineEvidence.test(styleStyle)) output2.push(labelName);
+  return output2;
 }
 
 /**
@@ -434,25 +434,25 @@ function 读语义包裹(解: 标签, 是命名空间: boolean): string[] {
  * ⚠️ `pre` 补语言那一条**不打乱原有属性**：它自己带了 `data-language`
  * 就不补（以它自己的为准）。
  */
-function 输出标签(解: 标签, 全文线索: string | null): string {
-  const 允许 = 属性白名单[解.名];
-  if (!允许) return `<${解.名}>`;
-  const 保: string[] = [];
-  for (const [k, v] of 解析属性(解.属性串)) {
-    if (允许.includes(k) && v !== null) 保.push(`${k}="${转义属性(v)}"`);
+function outputLabel(parse2: label, fullTextLineSearch: string | null): string {
+  const allowAllow = attributeWhiteNameSingle[parse2.name3];
+  if (!allowAllow) return `<${parse2.name3}>`;
+  const keep: string[] = [];
+  for (const [k, v] of parseAttribute(parse2.attributeString)) {
+    if (allowAllow.includes(k) && v !== null) keep.push(`${k}="${convertMeaningAttribute(v)}"`);
   }
-  if (解.名 === "pre" && !保.some((a) => a.startsWith("data-language"))) {
+  if (parse2.name3 === "pre" && !keep.some((a) => a.startsWith("data-language"))) {
     // ⚠️ 这个 `<pre>` 自己带的线索优先（`class="lang-python"`），
     //    没有才退回全文那一个——一份 HTML 里几个代码块语言不同时，
     //    至少带线索的那些能各归各位。
-    const 自带 = 找语言线索(解.属性串) ?? 全文线索;
-    if (自带) 保.push(`data-language="${转义属性(自带)}"`);
+    const selfWith = findLanguageClue(parse2.attributeString) ?? fullTextLineSearch;
+    if (selfWith) keep.push(`data-language="${convertMeaningAttribute(selfWith)}"`);
   }
-  return 保.length > 0 ? `<${解.名} ${保.join(" ")}>` : `<${解.名}>`;
+  return keep.length > 0 ? `<${parse2.name3} ${keep.join(" ")}>` : `<${parse2.name3}>`;
 }
 
 /** 属性值里的引号与尖括号要转义，否则会把这个标签拆坏。 */
-function 转义属性(s: string): string {
+function convertMeaningAttribute(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
@@ -467,26 +467,26 @@ function 转义属性(s: string): string {
  *   `出标签` 是那个元素的**开**标签当初输出过没有（`丢壳` / 命名空间那两类没有
  *   ——见 {@link 栈项.出标签}）。
  */
-function 收栈(
-  栈: 栈项[],
-  名: string,
-  出: string,
-): { 出: string; 配上: boolean; 出标签: boolean } {
+function receiveStack(
+  stack: StackItem[],
+  name3: string,
+  output2: string,
+): { output2: string; configureAbove: boolean; outputLabel2: boolean } {
   let k = -1;
-  for (let j = 栈.length - 1; j >= 0; j--) {
-    if (栈[j]!.名 === 名) {
+  for (let j = stack.length - 1; j >= 0; j--) {
+    if (stack[j]!.name3 === name3) {
       k = j;
       break;
     }
   }
-  if (k < 0) return { 出, 配上: false, 出标签: false };
-  const 出标签 = 栈[k]!.出标签;
-  for (let j = 栈.length - 1; j >= k; j--) {
-    const 包 = 栈[j]!.包;
-    for (let t = 包.length - 1; t >= 0; t--) 出 += `</${包[t]}>`;
+  if (k < 0) return { output2, configureAbove: false, outputLabel2: false };
+  const outputLabel2 = stack[k]!.outputLabel2;
+  for (let j = stack.length - 1; j >= k; j--) {
+    const packageValue = stack[j]!.packageValue;
+    for (let t = packageValue.length - 1; t >= 0; t--) output2 += `</${packageValue[t]}>`;
   }
-  栈.length = k;
-  return { 出, 配上: true, 出标签 };
+  stack.length = k;
+  return { output2, configureAbove: true, outputLabel2 };
 }
 
 /**
@@ -510,7 +510,7 @@ function 收栈(
  * 断言：这张表里**每一个值**都必须在 {@link 扩展名表} 里出现过）——也就是
  * 说这张表只能"换名字"，不能引进一个别处不认的语言 id。
  */
-export const 语言名表: Readonly<Record<string, string>> = {
+export const languageNameTable: Readonly<Record<string, string>> = {
   python: "python", python3: "python",
   javascript: "javascript", typescript: "typescript",
   jsx: "jsx", tsx: "tsx",
@@ -572,12 +572,12 @@ export const 语言名表: Readonly<Record<string, string>> = {
  * 这些键也兼着扩展名的身份，先查扩展名表才能保证 `.sh` 文件与
  * `class="lang-sh"` 给的是同一个答案。
  */
-export function 找语言线索(s: string): string | null {
-  const 找 =
+export function findLanguageClue(s: string): string | null {
+  const find =
     /(?:highlight-source-|language-|lang-|brush:\s*|data-language\s*=\s*["']|data-lang\s*=\s*["'])([A-Za-z][\w+#.-]*)/i.exec(
       s,
     );
-  if (!找) return null;
-  const 记号 = 找[1]!;
-  return 按扩展名推语言(记号) ?? 语言名表[记号.toLowerCase()] ?? null;
+  if (!find) return null;
+  const recordNumber = find[1]!;
+  return LanguageFromExtension(recordNumber) ?? languageNameTable[recordNumber.toLowerCase()] ?? null;
 }

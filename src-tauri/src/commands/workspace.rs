@@ -142,8 +142,9 @@ pub fn nota_workspace_open(state: State<'_, AppState>, path: String) -> Result<S
     let 标准串 = crate::paths::path_to_string(&canonical)?;
     *state.workspace.lock().unwrap() = Some(canonical.clone());
     if let Err(e) = crate::session::记工作区(Some(&标准串)) {
-        crate::日志!("[nota] 工作区没记进会话（下次启动不会恢复它）：{e}");
+        crate::日志!("[nota] workspace not saved to session: {e}");
     }
+    crate::日志!("[nota] workspace opened: {标准串}");
     Ok(标准串)
 }
 
@@ -155,8 +156,9 @@ pub fn nota_workspace_open(state: State<'_, AppState>, path: String) -> Result<S
 pub fn nota_workspace_close(state: State<'_, AppState>) -> Result<()> {
     *state.workspace.lock().unwrap() = None;
     if let Err(e) = crate::session::记工作区(None) {
-        crate::日志!("[nota] 工作区关不掉（会话里那一笔没清干净）：{e}");
+        crate::日志!("[nota] failed to clear workspace from session: {e}");
     }
+    crate::日志!("[nota] workspace closed");
     Ok(())
 }
 

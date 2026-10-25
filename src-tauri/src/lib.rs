@@ -20,6 +20,7 @@ pub mod commands;
 #[cfg(target_os = "linux")]
 pub mod cups;
 pub mod devserver;
+pub mod debug_log;
 pub mod diagnostics;
 pub mod diff;
 pub mod document;
@@ -113,21 +114,34 @@ fn 配置_webkit_渲染器() {
         )
     });
     if !安全回退 {
-        crate::日志!("[nota] WebKitGTK 使用默认 DMA-BUF/GPU 渲染");
+        crate::日志!("[nota] WebKitGTK using default DMA-BUF/GPU rendering");
         return;
     }
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     crate::日志!(
-        "[nota] NOTA_SAFE_RENDERING：已关闭 WebKitGTK 的 DMA-BUF 渲染器；\
-         这是兼容回退，会降低滚动与打字帧率。"
+        "[nota] NOTA_SAFE_RENDERING: WebKitGTK DMA-BUF renderer disabled; \
+         compatibility fallback reduces scrolling and typing frame rate."
     );
 }
 
 pub fn run() {
     // 闸门开着就先自报一句：不然"我设了 NOTA_DEBUG 怎么什么都没有"和
     // "日志真的干净"从终端上看不出区别。这一行本身也走闸门，所以默认照旧静默。
-    crate::日志!("[nota] 调试模式（NOTA_DEBUG）；下面这些行默认不输出，见 log.rs");
+    crate::日志!("[nota] debug mode enabled (NOTA_DEBUG); log output is normally suppressed");
     配置_webkit_渲染器();
+
+    // 独立调试报告模式：完全不建 Tauri/WebView，前端白屏或 WebKit 初始化失败
+    // 时仍能生成日志并交给系统文本查看器。
+    if cli::要查看调试日志(std::env::args_os()) {
+        match debug_log::生成并打开() {
+            Ok(path) => eprintln!("[nota] 调试报告：{}", path.display()),
+            Err(e) => {
+                eprintln!("[nota] 打开调试日志失败：{e}");
+                std::process::exit(5);
+            }
+        }
+        std::process::exit(0);
+    }
 
     // ── ⓿ 单实例 ──────────────────────────────────────────────────────────
     // ⚠️ **必须在 `Builder::build()` 之前**：晚了的话，第二次启动会先闪出一个
@@ -202,7 +216,7 @@ pub fn run() {
     // 事件（它没有 socket）。所以"把这个标签页送回原来那个窗口"这种操作
     // 做不了——用户明确说了不用考虑拖回来（原话「不用考虑拖回来的情况了」）。
     let 单实例 = if cli::要开新窗口(std::env::args_os()) {
-        crate::日志!("[nota] --new-window：跳过单实例，这一份自己开一个窗口");
+        crate::日志!("[nota] --new-window: bypassing single instance");
         None
     } else {
         match single_instance::抢占(这次要开的.as_deref().map(|p| p.as_os_str())) {
@@ -211,7 +225,7 @@ pub fn run() {
             // ⚠️ 起不来就**照常单开**，不拦启动：单实例是个便利，不是一个前提。
             // 拿不到运行目录、socket 文件建不出来，都不该让人用不了 Nota。
             Err(e) => {
-                crate::日志!("[nota] 单实例起不来（照常启动）：{e}");
+                crate::日志!("[nota] single-instance unavailable (continuing): {e}");
                 None
             }
         }
@@ -240,7 +254,7 @@ pub fn run() {
             let (settings, 启动时的问题) = match Settings::load() {
                 Ok(s) => (s, None),
                 Err(e) => {
-                    crate::日志!("[nota] 读设置失败，本次用默认值：{e}");
+                    crate::日志!("[nota] settings read failed; using defaults: {e}");
                     // ⚠️ 送上界面前**压成一行**：`toml` 的报错是多行的（带行号、
                     // 一个 `|` 画出来的箭头、还有出错那一行的原文），原样塞进提示条
                     // 就是一段六行的"ASCII 画"——用户第一眼看到的是"界面坏了"，
@@ -255,6 +269,27 @@ pub fn run() {
                 }
             };
             log::设置调试模式(settings.general.debug_mode);
+            crate::日志!(
+                "[nota] runtime: version={} pid={} os={} arch={} profile={}",
+                env!("CARGO_PKG_VERSION"),
+                std::process::id(),
+                std::env::consts::OS,
+                std::env::consts::ARCH,
+                if cfg!(debug_assertions) { "debug" } else { "release" }
+            );
+            crate::日志!(
+                "[nota] settings loaded: strict_markdown={} physics={} ui_style={} ui_mode={:?} document_theme={} limit_text_width={} debug_mode={}",
+                settings.strict_markdown,
+                settings.enable_physics,
+                settings.ui_style,
+                settings.ui_mode,
+                settings.document_theme,
+                settings.limit_text_width,
+                settings.general.debug_mode
+            );
+            if let Ok(path) = crate::paths::settings_file() {
+                crate::日志!("[nota] settings file: {}", path.display());
+            }
 
             // ── ② 插件 ────────────────────────────────────────────────────
             // ⚠️ **建仓时就把标题口径传进去**（严格模式）：标签页标题是文档仓
@@ -280,6 +315,7 @@ pub fn run() {
                     .unwrap_or_else(|_| crate::lang::自动.to_owned());
                 crate::lang::有效语言(&设定, crate::lang::系统语言())
             };
+            crate::日志!("[nota] interface language: {应用语言}");
 
             let resource_dir = app.path().resource_dir().ok();
             let base = HostContext {
@@ -372,6 +408,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::diagnostics::nota_diagnostics,
+            commands::diagnostics::nota_debug_log_read,
+            commands::diagnostics::nota_debug_log_write,
             commands::file_picker::nota_picker_places,
             commands::file_picker::nota_picker_list,
             commands::file_picker::nota_picker_create_dir,
@@ -386,6 +424,7 @@ pub fn run() {
             commands::document::nota_doc_rename,
             commands::document::nota_doc_move,
             commands::document::nota_doc_close,
+            commands::document::nota_doc_delete,
             commands::document::nota_doc_set_active,
             commands::document::nota_doc_get,
             commands::document::nota_doc_list,
@@ -431,7 +470,8 @@ pub fn run() {
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
             commands::window::nota_window_open_devtools,
-            commands::window::nota_window_open_debug_info,
+            commands::window::nota_window_open_help,
+            commands::window::nota_window_open_debug_log,
             commands::window::nota_window_show_main,
             commands::window::nota_quit,
             commands::window::nota_window_open_new,
@@ -614,7 +654,7 @@ pub fn run() {
         // 写在 `format_keys.rs` 的文件头。
         .on_page_load(|webview, _| {
             if let Err(e) = format_keys::装上(webview) {
-                crate::日志!("[nota] 格式快捷键那一层没装上（Ctrl+B 会退回旧样）：{e}");
+                crate::日志!("[nota] format shortcut hook unavailable (Ctrl+B uses fallback): {e}");
             }
         })
         .build(tauri::generate_context!())

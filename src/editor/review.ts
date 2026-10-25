@@ -49,7 +49,7 @@
 /* ── 类型 ─────────────────────────────────────────────────────────────── */
 
 /** 一个「接受 / 放弃」按钮：**措辞归插件**（i18n），前端只负责画和点。 */
-export interface 预览动作 {
+export interface PreviewAction {
   /** 按钮上写什么。插件给的是 `T("接受改动")` 那一套。 */
   label: string;
   /** 点下去要调的命令名，配 `plugin.call(插件, 命令)` 用。 */
@@ -64,35 +64,35 @@ export interface 预览动作 {
  * `apply_changes`），宿主与编辑器只认"整篇该长什么样"这一种说法——多一种说法
  * 就多一处对不齐的地方。
  */
-export interface 改动预览 {
+export interface changePreview {
   /** 标题。摊在编辑区顶上那条细条里。 */
   title: string;
   /** **目标文本**：应用之后文档该长什么样。 */
   text: string;
   /** 「接受」。`null` = 插件没给，不画（那就只能靠 Esc / 那条细条上的「收起」）。 */
-  accept: 预览动作 | null;
+  accept: PreviewAction | null;
   /** 「放弃」。`null` 同理。 */
-  reject: 预览动作 | null;
+  reject: PreviewAction | null;
 }
 
 /** 两种看法。用户说的"显示diff对比 / 显示修改后的效果"。 */
-export type 预览看法 = "diff" | "result";
+export type previewMode = "diff" | "result";
 
 /* ── 类名。⚠️ 只有一处定义：CSS、两种编辑器的适配层都引这些 ───────────── */
 
 /** 编辑器根节点上的 class：**有预览**时挂上（两种看法共用一个）。 */
-export const 预览根类 = "nota-review";
+export const previewRootClass = "nota-review";
 /** 看法 = 对比。 */
-export const 对比看法类 = "nota-review-diff";
+export const correctCompareViewModeClass = "nota-review-diff";
 /** 看法 = 改后。 */
-export const 结果看法类 = "nota-review-result";
+export const resultViewModeClass = "nota-review-result";
 
 /** 被删掉的那一行（源码）/ 那一块（所见即所得）。 */
-export const 删类 = "nota-review-del";
+export const removeClass = "nota-review-del";
 /** 新增的那一串：块级 widget 的外框。 */
-export const 增类 = "nota-review-add";
+export const increaseClass = "nota-review-add";
 /** 新增外框里的单行（源码模式一行一个 `div`；所见即所得里是渲染出来的块）。 */
-export const 增行类 = "nota-review-add-line";
+export const increaseLineClass = "nota-review-add-line";
 
 /* ── 差异算法 ─────────────────────────────────────────────────────────── */
 
@@ -103,10 +103,10 @@ export const 增行类 = "nota-review-add-line";
  * "**排在它前面最近的那个 `同` / `删`**"定位。这条约定是给两种编辑器共用的：
  * 两边都是"顺着单元表走一遍，记住上一个落点，遇到新增就在那儿插一个 widget"。
  */
-export type 差异单元 =
-  | { 类: "同"; 文本: string; 位: number }
-  | { 类: "删"; 文本: string; 位: number }
-  | { 类: "增"; 行: string[] };
+export type DifferenceExceptionSingleDollar =
+  | { class: "同"; text2: string; position3: number }
+  | { class: "删"; text2: string; position3: number }
+  | { class: "增"; line3: string[] };
 
 /**
  * 两条文本之间，按**单元**（行、或块）做差异。
@@ -126,95 +126,95 @@ export type 差异单元 =
  * 这是**降级不是 bug**，而且降级后的结果仍然是对的（用户看到的确实是"这一大段
  * 全换了"），只是没有逐行对齐那么精细。
  */
-export function 差异(旧: string[], 新: string[]): 差异单元[] {
-  const 出: 差异单元[] = [];
+export function differenceException(oldValue: string[], newValue: string[]): DifferenceExceptionSingleDollar[] {
+  const output2: DifferenceExceptionSingleDollar[] = [];
 
   // 公共前缀。
-  let 头 = 0;
-  while (头 < 旧.length && 头 < 新.length && 旧[头] === 新[头]) 头++;
+  let head2 = 0;
+  while (head2 < oldValue.length && head2 < newValue.length && oldValue[head2] === newValue[head2]) head2++;
   // 公共后缀。⚠️ 上界是 `length - 头`：前缀吃掉的部分不能再被后缀吃一次。
-  let 尾 = 0;
+  let tail = 0;
   while (
-    尾 < 旧.length - 头 &&
-    尾 < 新.length - 头 &&
-    旧[旧.length - 1 - 尾] === 新[新.length - 1 - 尾]
+    tail < oldValue.length - head2 &&
+    tail < newValue.length - head2 &&
+    oldValue[oldValue.length - 1 - tail] === newValue[newValue.length - 1 - tail]
   ) {
-    尾++;
+    tail++;
   }
 
-  const 中旧 = 旧.slice(头, 旧.length - 尾);
-  const 中新 = 新.slice(头, 新.length - 尾);
+  const middleOldValue = oldValue.slice(head2, oldValue.length - tail);
+  const middleNewValue = newValue.slice(head2, newValue.length - tail);
 
-  for (let i = 0; i < 头; i++) 出.push({ 类: "同", 文本: 旧[i]!, 位: i });
+  for (let i = 0; i < head2; i++) output2.push({ class: "同", text2: oldValue[i]!, position3: i });
 
   /** 攒着的新增。⚠️ 连续的增要合成**一串**：一串画一个 widget，不是一行一个。 */
-  let 待增: string[] = [];
-  const 收增 = () => {
-    if (待增.length) {
-      出.push({ 类: "增", 行: 待增 });
-      待增 = [];
+  let pendingIncrease: string[] = [];
+  const receiveIncrease = () => {
+    if (pendingIncrease.length) {
+      output2.push({ class: "增", line3: pendingIncrease });
+      pendingIncrease = [];
     }
   };
 
-  if (中旧.length * 中新.length > 单元格上限) {
-    for (let i = 0; i < 中旧.length; i++) {
-      出.push({ 类: "删", 文本: 中旧[i]!, 位: 头 + i });
+  if (middleOldValue.length * middleNewValue.length > singleDollarCellLimit) {
+    for (let i = 0; i < middleOldValue.length; i++) {
+      output2.push({ class: "删", text2: middleOldValue[i]!, position3: head2 + i });
     }
-    待增 = 中新.slice();
-    收增();
+    pendingIncrease = middleNewValue.slice();
+    receiveIncrease();
   } else {
-    const n = 中旧.length;
-    const m = 中新.length;
-    const 宽 = m + 1;
+    const n = middleOldValue.length;
+    const m = middleNewValue.length;
+    const width = m + 1;
     // `表[i * 宽 + j]` = `中旧[i..]` 与 `中新[j..]` 的最长公共子序列长度。
     // 从后往前填，回溯才能从前往后走（这样输出天然是正序的）。
     //
     // ⚠️ 下面那些 `!` 不是偷懒：这张表的每个下标都是 `i ∈ [0, n]`、`j ∈ [0, m]`
     // 算出来的，永远在范围内；而 `tsconfig` 开着 `noUncheckedIndexedAccess`，
     // 类型系统认不出这一点（与 `find.ts` / `outline.ts` 里那些 `!` 同一个理由）。
-    const 表 = new Int32Array((n + 1) * 宽);
+    const table2 = new Int32Array((n + 1) * width);
     for (let i = n - 1; i >= 0; i--) {
       for (let j = m - 1; j >= 0; j--) {
-        const 上 = 表[(i + 1) * 宽 + j]!;
-        const 右 = 表[i * 宽 + (j + 1)]!;
-        表[i * 宽 + j] = 中旧[i] === 中新[j] ? 上 + 1 : Math.max(上, 右);
+        const above = table2[(i + 1) * width + j]!;
+        const right = table2[i * width + (j + 1)]!;
+        table2[i * width + j] = middleOldValue[i] === middleNewValue[j] ? above + 1 : Math.max(above, right);
       }
     }
 
     let i = 0;
     let j = 0;
     while (i < n && j < m) {
-      if (中旧[i] === 中新[j]) {
-        收增(); // ⚠️ 先收再换向：`增` 之后紧跟 `同` 时，widget 得落在那一行之前。
-        出.push({ 类: "同", 文本: 中旧[i]!, 位: 头 + i });
+      if (middleOldValue[i] === middleNewValue[j]) {
+        receiveIncrease(); // ⚠️ 先收再换向：`增` 之后紧跟 `同` 时，widget 得落在那一行之前。
+        output2.push({ class: "同", text2: middleOldValue[i]!, position3: head2 + i });
         i++;
         j++;
-      } else if (表[(i + 1) * 宽 + j]! >= 表[i * 宽 + (j + 1)]!) {
-        收增();
-        出.push({ 类: "删", 文本: 中旧[i]!, 位: 头 + i });
+      } else if (table2[(i + 1) * width + j]! >= table2[i * width + (j + 1)]!) {
+        receiveIncrease();
+        output2.push({ class: "删", text2: middleOldValue[i]!, position3: head2 + i });
         i++;
       } else {
-        待增.push(中新[j]!);
+        pendingIncrease.push(middleNewValue[j]!);
         j++;
       }
     }
     while (i < n) {
-      收增();
-      出.push({ 类: "删", 文本: 中旧[i]!, 位: 头 + i });
+      receiveIncrease();
+      output2.push({ class: "删", text2: middleOldValue[i]!, position3: head2 + i });
       i++;
     }
     while (j < m) {
-      待增.push(中新[j]!);
+      pendingIncrease.push(middleNewValue[j]!);
       j++;
     }
-    收增();
+    receiveIncrease();
   }
 
-  for (let i = 尾; i > 0; i--) {
-    const 位 = 旧.length - i;
-    出.push({ 类: "同", 文本: 旧[位]!, 位 });
+  for (let i = tail; i > 0; i--) {
+    const position3 = oldValue.length - i;
+    output2.push({ class: "同", text2: oldValue[position3]!, position3 });
   }
-  return 出;
+  return output2;
 }
 
 /**
@@ -224,7 +224,7 @@ export function 差异(旧: string[], 新: string[]): 差异单元[] {
  * 文本是 2500 万格（100MB）——那不该让它算。而正常情况下掐完只剩下几十行，
  * 离这个上限远得很。
  */
-export const 单元格上限 = 4_000_000;
+export const singleDollarCellLimit = 4_000_000;
 
 /**
  * 按**行**差异两条 markdown 文本。
@@ -232,8 +232,8 @@ export const 单元格上限 = 4_000_000;
  * ⚠️ 行尾的空串要保留（`text.split("\n")` 的原样）：末尾有没有换行、末尾那个
  * 空行，都是**用户文本的一部分**——存盘存的就是这个。这里不做任何"顺手清理"。
  */
-export function 按行差异(旧: string, 新: string): 差异单元[] {
-  return 差异(旧.split("\n"), 新.split("\n"));
+export function pressLineDifferenceException(oldValue: string, newValue: string): DifferenceExceptionSingleDollar[] {
+  return differenceException(oldValue.split("\n"), newValue.split("\n"));
 }
 
 /* ── 共用 DOM ─────────────────────────────────────────────────────────── */
@@ -246,20 +246,20 @@ export function 按行差异(旧: string, 新: string): 差异单元[] {
  * 块 DOM**（`review-prose.ts` 那边用 `DOMSerializer` 把新增块画出来）。
  * 所以这个函数只负责"套个框、把内容摆进去"，不认识 markdown。
  */
-export function 造增框(行: (string | HTMLElement)[]): HTMLElement {
-  const 框 = document.createElement("div");
-  框.className = 增类;
+export function createIncreaseBox(line3: (string | HTMLElement)[]): HTMLElement {
+  const box2 = document.createElement("div");
+  box2.className = increaseClass;
   // ⚠️ 标记给**编辑器**看：块级 widget 在 CodeMirror 里是垫在文档流里的一个
   // 普通元素，它没有"我是谁"的语义，靠这个属性让 CSS 与将来的调试认出来。
-  框.setAttribute("data-nota-review", "add");
-  for (const 项 of 行) {
-    const 条 = document.createElement("div");
-    条.className = 增行类;
-    if (typeof 项 === "string") 条.textContent = 项;
-    else 条.append(项);
-    框.append(条);
+  box2.setAttribute("data-nota-review", "add");
+  for (const item5 of line3) {
+    const item4 = document.createElement("div");
+    item4.className = increaseLineClass;
+    if (typeof item5 === "string") item4.textContent = item5;
+    else item4.append(item5);
+    box2.append(item4);
   }
-  return 框;
+  return box2;
 }
 
 /**
@@ -268,13 +268,13 @@ export function 造增框(行: (string | HTMLElement)[]): HTMLElement {
  * ⚠️ 两个 class 都要显式开一个关一个（不是只 toggle 一个）：看法是一个二选一
  * 的量，只 toggle 一个的话，"连着切两次到同一个看法"就会漏掉一次。
  */
-export function 设看法(根: HTMLElement, 看法: 预览看法): void {
-  根.classList.add(预览根类);
-  根.classList.toggle(对比看法类, 看法 === "diff");
-  根.classList.toggle(结果看法类, 看法 === "result");
+export function setViewMode2(root: HTMLElement, viewMode: previewMode): void {
+  root.classList.add(previewRootClass);
+  root.classList.toggle(correctCompareViewModeClass, viewMode === "diff");
+  root.classList.toggle(resultViewModeClass, viewMode === "result");
 }
 
 /** 摘掉预览那三个 class（收起来时调）。 */
-export function 摘看法(根: HTMLElement): void {
-  根.classList.remove(预览根类, 对比看法类, 结果看法类);
+export function removeViewMode(root: HTMLElement): void {
+  root.classList.remove(previewRootClass, correctCompareViewModeClass, resultViewModeClass);
 }

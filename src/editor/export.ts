@@ -50,12 +50,12 @@
 
 import { createEditor } from "@/editor/create";
 import { inlineCssAssets } from "@/editor/export-assets";
-import { 是数学代码语言 } from "@/editor/math-code";
-import { 是目录标记, 锚点 } from "@/editor/toc";
+import { isMathCodeLanguage } from "@/editor/math-code";
+import { isItemRecordMark, anchor } from "@/editor/toc";
 import { t } from "@/i18n";
 import { scopeDocThemeCss } from "@/styles/doc-theme";
 
-export interface 导出选项 {
+export interface exportOptions {
   // ⚠️ 这里原来有一个 `strict`（`Settings.strict_markdown`），2026-09-26 删掉了，
   // **2026-09-29 也没有加回来——这是有意的**：导出走的虽然是同一条渲染路径
   //（一个只读 Milkdown 实例，`摘正文` 里建的那个），但见上面那条前缀规则
@@ -100,8 +100,8 @@ export interface 导出选项 {
  * 摆正文外面那几层用的 class。**必须和 `EditorPane.tsx` / `editor.css` 一致**
  *（那边是 `div.editor-mount > div.milkdown > div.ProseMirror`）。
  */
-const 外壳开头 = '<div class="editor-mount"><div class="milkdown"><div class="ProseMirror">';
-const 外壳结尾 = "</div></div></div>";
+const externalShellOpenHead = '<div class="editor-mount"><div class="milkdown"><div class="ProseMirror">';
+const externalShellJoinTail = "</div></div></div>";
 
 /**
  * 本仓插进编辑区 DOM 的**装饰**——挂在正文元素上的类名。
@@ -114,7 +114,7 @@ const 外壳结尾 = "</div></div></div>";
  * ⚠️⚠️ **它只管类名，管不了元素**——容器型零件必须登记在下面 `整块删掉` 里。
  * 见那段注释：这条边界是用户打了一份带行号和语言选择器的 PDF 才划清的。
  */
-const nota类前缀 = /^nota-/;
+const notaClassPrefix = /^nota-/;
 
 /**
  * 摘掉的那些属性：全是"编辑时才成立"的。`data-srcmark` 是块标记的文字。
@@ -131,7 +131,7 @@ const nota类前缀 = /^nota-/;
  * 于是**现在整棵树上一个 `data-nota-*` 式属性都没有了**，只剩 `data-srcmark`
  * 那一颗（它是标记的文字，不是装饰参数）。下一个加进来的记得回这儿登记。
  */
-const 摘掉的属性 = [
+const removeRemoveOfAttribute = [
   "data-srcmark",
   "contenteditable",
   "spellcheck",
@@ -169,7 +169,12 @@ const 摘掉的属性 = [
  * `document.body` 上（`lang-picker.ts`，为了不被代码块的 `overflow` 切掉），
  * 根本不在本文要遍历的这棵树里，写在这儿是一条永远不会命中的死规则。
  */
-const 整块删掉 = [
+const wholeBlockRemoveRemove = [
+  // ── 块级 HTML 的编辑控件（`html-block-view.ts`）────────────────────────
+  // 预览内容要留下，源码编辑框与切换按钮只属于编辑界面。类名虽会被前缀规则
+  // 摘掉，元素本身还在；因此两个容器必须登记在这里。
+  ".nota-html-source",
+  ".nota-html-source-toggle",
   // ── 代码块（`code-block.ts`）──────────────────────────────────────────
   /** 行号。内容就是 `1\n2\n3`，不带类名之后看着像正文里混进去的一串数字。 */
   ".nota-code-gutter",
@@ -227,10 +232,10 @@ const 整块删掉 = [
  * 那一步是纯 DOM 计算（不是"等下一帧再画"），而 rAF 在窗口被遮住 / 最小化时
  * 会被浏览器压到几秒一次——那会让这里的上限变成"上限 ÷ 帧率"。
  */
-async function 等异步渲染(pm: Element): Promise<void> {
-  const 上限毫秒 = 5000;
-  const 起点 = performance.now();
-  while (performance.now() - 起点 < 上限毫秒) {
+async function equalExceptionStepRender(pm: Element): Promise<void> {
+  const limitMilliSeconds = 5000;
+  const start4 = performance.now();
+  while (performance.now() - start4 < limitMilliSeconds) {
     if (!pm.querySelector('.nota-diagram-preview[data-state="loading"]')) return;
     await new Promise((r) => setTimeout(r, 30));
   }
@@ -244,7 +249,7 @@ async function 等异步渲染(pm: Element): Promise<void> {
  *（`coordsAtPos`、行高），`display: none` 下量出来全是 0，某些插件会当场
  * 走岔路。`visibility: hidden` 保留布局、不占屏，两头都对。
  */
-async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise<string> {
+async function removeBody(markdown: string, includeHtmlPreviews = false): Promise<string> {
   const root = document.createElement("div");
   root.setAttribute(
     "style",
@@ -262,7 +267,7 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
   root.setAttribute("data-ui-mode", "light");
   document.body.appendChild(root);
 
-  let 片段 = "";
+  let fragment = "";
   try {
     const handle = await createEditor({
       root,
@@ -273,12 +278,12 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
     if (pm) {
       // ⚠️ **先等，后摘**。反过来（先摘再等）会连 mermaid 拿去比对的那棵树都
       // 一起改了，而它的渲染是异步的——那一头拿的就是我们摘过的 DOM。
-      await 等异步渲染(pm);
+      await equalExceptionStepRender(pm);
 
       // ⚠️ 在**还挂着的 DOM 上**摘零件，不是先把 HTML 拼成字符串再拿正则洗：
       // 正则会碰到正文里恰好出现 `contenteditable` 这几个字之类的意外，
       // 而遍历 DOM 只认真正的元素和真正的属性。
-      for (const sel of 整块删掉) {
+      for (const sel of wholeBlockRemoveRemove) {
         if (sel === ".nota-code-preview" && includeHtmlPreviews) continue;
         pm.querySelectorAll(sel).forEach((n) => n.remove());
       }
@@ -327,25 +332,25 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
       // 高亮器都认这个），`data-language` 那是本仓自己的记号，不给出去。
       // ⚠️ 标准写法里**空语言不写 class**：`language-` 后面没东西是无效值。
       for (const pre of pm.querySelectorAll("pre")) {
-        const 代码 = pre.querySelector("code");
-        if (!代码) continue;
-        const 语言 = pre.getAttribute("data-language") ?? "";
-        if (是数学代码语言(语言)) {
+        const code = pre.querySelector("code");
+        if (!code) continue;
+        const language = pre.getAttribute("data-language") ?? "";
+        if (isMathCodeLanguage(language)) {
           const wrap = pre.closest(".nota-code-wrap");
           const rendered = wrap?.querySelector(".nota-code-math-render");
           const math = document.createElement("div");
           math.className = "md-math-code";
           if (rendered) math.append(...Array.from(rendered.cloneNode(true).childNodes));
-          else math.textContent = 代码.textContent ?? "";
+          else math.textContent = code.textContent ?? "";
           if (wrap) wrap.replaceWith(math);
           else pre.replaceWith(math);
           continue;
         }
-        if (语言) 代码.setAttribute("class", `language-${语言}`);
+        if (language) code.setAttribute("class", `language-${language}`);
         pre.removeAttribute("data-language");
         // ⚠️ `replaceChildren`：那一层 CM 的 DOM、行号、工具条、语言选择器
         // **一起**出局——不用逐个删（逐个删就是再抄一遍上面那份名单）。
-        pre.replaceChildren(代码);
+        pre.replaceChildren(code);
       }
 
       // ── 拆掉预览那一层壳（2026-10-16）────────────────────────────────
@@ -371,7 +376,7 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
       // ⚠️ 只删**本仓自己那两条**，不是"删掉所有注释"：用户写的 HTML 注释在
       // 导出里长什么样是另一件事（`docs/10` §3「注释」那一格），不在这儿顺手改。
       for (const n of pm.querySelectorAll('[data-type="html-block"]')) {
-        if (是目录标记(n.getAttribute("data-value") ?? "")) n.remove();
+        if (isItemRecordMark(n.getAttribute("data-value") ?? "")) n.remove();
       }
 
       // ── 空段落里那颗占位 `<br>`（`ProseMirror-trailingBreak`，2026-10-10）──
@@ -388,7 +393,7 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
       // 删整族会连用户的换行一起吃掉。
       for (const br of pm.querySelectorAll("br.ProseMirror-trailingBreak")) br.remove();
 
-      const 导出保留类 = new Set([
+      const exportRetainedClass = new Set([
         "nota-diagram",
         "nota-diagram-preview",
         "nota-diagram-note",
@@ -397,12 +402,12 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
         ...(includeHtmlPreviews ? ["nota-code-preview", "nota-code-preview-frame"] : []),
       ]);
       for (const n of [pm, ...pm.querySelectorAll("*")]) {
-        const 留着 = [...n.classList].filter(
-          (c) => !nota类前缀.test(c) || 导出保留类.has(c),
+        const keepActive = [...n.classList].filter(
+          (c) => !notaClassPrefix.test(c) || exportRetainedClass.has(c),
         );
-        if (留着.length) n.setAttribute("class", 留着.join(" "));
+        if (keepActive.length) n.setAttribute("class", keepActive.join(" "));
         else n.removeAttribute("class");
-        for (const a of 摘掉的属性) n.removeAttribute(a);
+        for (const a of removeRemoveOfAttribute) n.removeAttribute(a);
       }
 
       // ── 标题补锚点 ────────────────────────────────────────────────────
@@ -413,12 +418,12 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
       //
       // ⚠️ 文档顺序扫（`querySelectorAll` 就是文档顺序），与生成目录那次**同一顺序**，
       // 所以重名标题的 `-1` / `-2` 后缀也对得上。
-      const 已用锚点 = new Set<string>();
+      const alreadyUseAnchor = new Set<string>();
       for (const h of pm.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
-        h.setAttribute("id", 锚点(h.textContent ?? "", 已用锚点));
+        h.setAttribute("id", anchor(h.textContent ?? "", alreadyUseAnchor));
       }
 
-      片段 = pm.innerHTML;
+      fragment = pm.innerHTML;
     }
     handle.destroy();
   } finally {
@@ -426,11 +431,11 @@ async function 摘正文(markdown: string, includeHtmlPreviews = false): Promise
     // 就在页面上留一个看不见的编辑器（它的 DOM 监听还活着）。
     root.remove();
   }
-  return 片段;
+  return fragment;
 }
 
 /** 嵌进去的那一小段<strong>导出专用</strong>规则。 */
-const 导出基础样式 = [
+const exportBaseStyles = [
   "html, body { margin: 0; }",
   'body { background: var(--doc-bg, #fff); color: var(--doc-fg, #1a1a1a); }',
   // 屏上那一栏是"编辑区有一个自己的滚动条"，导出的文件由**整页**滚，
@@ -446,13 +451,13 @@ const 导出基础样式 = [
 ].join("\n");
 
 /** 打印与 PDF 的最终底色保障。只改颜色机制，不改主题排版。 */
-const 浅色输出样式 = [
+const lightOutputStyleStyle = [
   ":root, html, body { color-scheme: only light; }",
   "html, body { background: #fff !important; color: #1a1a1a !important; }",
 ].join("\n");
 
 /** 转义进 `<title>` 的文本。正文不动——它是 HTML。 */
-function 转义文本(s: string): string {
+function convertMeaningText(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -461,10 +466,10 @@ function 转义文本(s: string): string {
 }
 
 /** 生成一份完整的 HTML 文档。 */
-export async function 导出HTML(markdown: string, opts: 导出选项): Promise<string> {
-  const 正文 = await 摘正文(markdown, opts.includeHtmlPreviews === true);
+export async function exportHtml(markdown: string, opts: exportOptions): Promise<string> {
+  const body2 = await removeBody(markdown, opts.includeHtmlPreviews === true);
 
-  const 样式块: string[] = [];
+  const styleStyleBlock: string[] = [];
   if (opts.styled) {
     // ⚠️ 动态 import：这几份 CSS 只有"含样式导出"才用得上，不该压在主包里
     //（编辑区那几份是通过 `main.tsx` 正常加载的，跟这里无关）。
@@ -492,7 +497,7 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
     //    `katex-mathml`），平时靠这一份里那句 `.katex-mathml { position:
     //    absolute; clip: … }` 把后一棵藏起来。少了它，导出的公式在页面上
     //    **画两遍**（一遍好看的、一遍 MathML 的原样），打印出来像排错了版。
-    const [主题基, 编辑区, 行内层, 块级层, 图表, 公式] = await Promise.all([
+    const [themeBase, editorArea, inlineLayer, blockLevelLayer, imageTable, commonStyle] = await Promise.all([
       import("@/styles/theme/base.css?inline"),
       import("@/styles/editor.css?inline"),
       import("@/styles/editor-inline.css?inline"),
@@ -500,36 +505,36 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
       import("@/styles/diagram.css?inline"),
       import("katex/dist/katex.min.css?inline"),
     ]);
-    样式块.push(
-      主题基.default,
-      编辑区.default,
-      行内层.default,
-      块级层.default,
-      图表.default,
-      await inlineCssAssets(公式.default),
+    styleStyleBlock.push(
+      themeBase.default,
+      editorArea.default,
+      inlineLayer.default,
+      blockLevelLayer.default,
+      imageTable.default,
+      await inlineCssAssets(commonStyle.default),
     );
     if (opts.themeCss) {
       // ⚠️ **必须限域**，理由和界面上完全一样（否则主题里那句 `body { … }`
       // 会跑到导出文件的页面上、而不是正文上）。见 `styles/doc-theme.ts`。
-      const 限域后 = scopeDocThemeCss(opts.themeCss);
+      const limitFieldAfter = scopeDocThemeCss(opts.themeCss);
       // ⚠️ 压在 `editor.css` **之后**，与界面上一致：`applyDocTheme` 是往
       // `document.head` **末尾**追加一个 `<style>`，而主题那几条选择器与
       // `editor.css` 的**权重相同**（都是 `.… .ProseMirror xxx`）——所以
       // "谁在后面谁赢"。原来这里把它放在最前面（等于让 `editor.css` 盖住主题），
       // 那样导出的正文与屏幕上就不一样了。
-      if (限域后) 样式块.push(限域后);
+      if (limitFieldAfter) styleStyleBlock.push(limitFieldAfter);
     }
   }
   // ⚠️ 导出专用那几条**永远在最后**：它们是"为了导出而做的让步"
   //（页面由整页滚、打印回黑纸白字），必须压得住前面所有的东西。
-  样式块.push(导出基础样式);
-  if (opts.lightOutput) 样式块.push(浅色输出样式);
+  styleStyleBlock.push(exportBaseStyles);
+  if (opts.lightOutput) styleStyleBlock.push(lightOutputStyleStyle);
 
   // ⚠️ 不含样式那一种**连 class 都不带**（正文直接进 `<body>`）：它的用途是
   // "贴进别的系统再加工"，而 `.editor-mount` 这种类名在那里毫无意义，只会
   // 变成噪声。含样式那一种则必须带——那是上面那份 CSS 的作用域。
-  const body = opts.styled ? 外壳开头 + 正文 + 外壳结尾 : 正文;
-  const headStyle = opts.styled ? `<style>\n${样式块.join("\n")}\n</style>\n` : "";
+  const body = opts.styled ? externalShellOpenHead + body2 + externalShellJoinTail : body2;
+  const headStyle = opts.styled ? `<style>\n${styleStyleBlock.join("\n")}\n</style>\n` : "";
 
   return [
     "<!DOCTYPE html>",
@@ -537,7 +542,7 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
     "<head>",
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    `<title>${转义文本(opts.title)}</title>`,
+    `<title>${convertMeaningText(opts.title)}</title>`,
     headStyle + "</head>",
     opts.styled ? `<body class="editor-pane">${body}</body>` : `<body>${body}</body>`,
     "</html>",
@@ -546,7 +551,7 @@ export async function 导出HTML(markdown: string, opts: 导出选项): Promise<
 }
 
 /** 导出文件的默认文件名。**只做后缀替换**——保留原文件名，用户认识它。 */
-export function 默认导出名(title: string, ext: string): string {
-  const 底 = title.replace(/\.(md|markdown|mdx|mdown|mkd|txt)$/i, "");
-  return `${底 || t("Untitled")}.${ext}`;
+export function defaultExportName(title: string, ext: string): string {
+  const bottom = title.replace(/\.(md|markdown|mdx|mdown|mkd|txt)$/i, "");
+  return `${bottom || t("Untitled")}.${ext}`;
 }

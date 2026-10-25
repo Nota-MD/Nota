@@ -36,7 +36,7 @@ import type { CommandState } from "@/editor/command-state";
 import type { Document, ViewMode } from "@/bridge/ipc";
 import type { Settings } from "@/bridge/types";
 import type { Toast } from "@/ui/Toasts";
-import { 认文件类型 } from "@/editor/file-kind";
+import { recognizeTextItemType } from "@/editor/file-kind";
 import { EditorPane, type EditorPaneHandle } from "@/ui/EditorPane";
 import { ExternalChangeBar } from "@/ui/ExternalChangeBar";
 import { ExternalDiffPane } from "@/ui/ExternalDiffPane";
@@ -47,23 +47,23 @@ import { ReviewBar } from "@/ui/ReviewBar";
 import { ReviewPane } from "@/ui/ReviewPane";
 import { TableToolbar } from "@/ui/TableToolbar";
 import type { Dialogs } from "@/ui/useDialogs";
-import type { 文档出口 } from "@/ui/useDocuments";
-import type { 命令出口 } from "@/ui/useEditorCommands";
-import type { 外部改动出口 } from "@/ui/useExternalChanges";
-import type { 查找条 } from "@/ui/useFindBar";
+import type { documentApi } from "@/ui/useDocuments";
+import type { commandApi } from "@/ui/useEditorCommands";
+import type { ExternalPartChangeActionOutputMouth } from "@/ui/useExternalChanges";
+import type { findBar } from "@/ui/useFindBar";
 import type { PluginsState } from "@/ui/usePlugins";
-import type { 预览看法出口 } from "@/ui/useReviewView";
-import type { 会话出口 } from "@/ui/useSession";
-import { use点链接 } from "@/ui/useLinkClick";
+import type { PreviewModeOutputMouth } from "@/ui/useReviewView";
+import type { MeetingSpeechOutputMouth } from "@/ui/useSession";
+import { usePointLink } from "@/ui/useLinkClick";
 
 /** 这一格要的全部东西。见文件头「为什么收一个对象」。 */
-export interface 编辑区接线 {
+export interface editorAreaWiring {
   /** `<main>` 自己那个挂载点。⚠️ 「悬停显形」那段量鼠标位置的窥视带要它。 */
-  主区: RefObject<HTMLElement | null>;
+  mainArea: RefObject<HTMLElement | null>;
   /** 格式化工具栏那排按钮的挂载点（同一段窥视带也要它）。 */
-  格式化栏: RefObject<HTMLDivElement | null>;
+  cellStyleConvertBar: RefObject<HTMLDivElement | null>;
   /** 编辑器句柄：大纲跳转、查找、菜单命令都往它身上送。 */
-  编辑器: RefObject<EditorPaneHandle | null>;
+  editor: RefObject<EditorPaneHandle | null>;
   /** 此刻前台那份文档。`null` = 一份都没开，主区画主页。 */
   activeDoc: Document | null;
   settings: Settings | null;
@@ -71,20 +71,21 @@ export interface 编辑区接线 {
   viewMode: ViewMode;
   focusMode: boolean;
   typewriter: boolean;
+  /** 正文只读模式（视图菜单）。 */ onlyReadMode: boolean;
   /** 格式化工具栏此刻该不该画（三档里由 `ui/useChromeVisibility.ts` 算出来）。 */
-  格式化栏开着: boolean;
+  cellStyleConvertBarOpen: boolean;
   /**
    * 收起格式工具栏（**它右端那颗 ×**，2026-10-04 补，`docs/07` 第 49 项）。
    *
    * ⚠️ 由 `App.tsx` 交下来，落点就是上面那个 `格式化栏开着` 的**同一个 setter**
    * （`setChrome({ toolbar: "never" })`）——这里只负责把它接到那颗按钮上。
    */
-  收起格式化栏: () => void;
+  hideFormatBar: () => void;
   /** 光标那儿的格式状态（工具栏那排按钮亮不亮）。 */
-  命令状态: CommandState | null;
-  设命令状态: Dispatch<SetStateAction<CommandState | null>>;
+  commandState: CommandState | null;
+  setCommandState: Dispatch<SetStateAction<CommandState | null>>;
   /** 转交一条编辑命令（`ui/useEditorCommands.ts`）。 */
-  跑命令: 命令出口["run"];
+  runCommand: commandApi["run"];
   /**
    * 「插入图像」那一条（`ui/useImageInsert.ts` 的 `插入图像`）。
    *
@@ -94,16 +95,16 @@ export interface 编辑区接线 {
    * 「现在工具栏没法插入图片」）。链接那颗同理（`useEditorCommands` 里 `link`
    * 那条改道）。
    */
-  插入图像: () => Promise<void>;
+  insertImageLike: () => Promise<void>;
   /** 几个 hook 的出口。⚠️ 整个给，不挑字段（见文件头）。 */
-  文档出口: 文档出口;
-  查找条: 查找条;
-  预览出口: 预览看法出口;
-  改动出口: 外部改动出口;
-  会话出口: 会话出口;
-  插件: PluginsState;
+  documentApi: documentApi;
+  findBar: findBar;
+  previewOutputMouth: PreviewModeOutputMouth;
+  changeActionOutputMouth: ExternalPartChangeActionOutputMouth;
+  MeetingSpeechOutputMouth: MeetingSpeechOutputMouth;
+  plugin: PluginsState;
   /** 自绘对话框那一套（`ui/useDialogs.ts`）：面板里那颗按钮要问参数。 */
-  对话框: Dialogs;
+  dialog: Dialogs;
   /**
    * 从磁盘重读一次文档列表（编辑器那边存/另存之后要刷新标签栏）。
    * ⚠️ 返回 `Promise<unknown>` 而不是 `Promise<void>`：它给的是重读之后的整份
@@ -126,29 +127,42 @@ export interface 编辑区接线 {
    * `docs` / `activeId` / `专注状态` / `sidebarOpen` 那一批，全在 App 手里，
    * 为了"让 EditorArea 自己建"再把它们搬一遍，等于给同一个状态开第二条路。
    */
-  底部: ReactNode;
+  bottomPart: ReactNode;
 }
 
 /**
  * ⚠️ 形参是**一个叫 `接线` 的 prop**（`{ 接线 }` 解构），不是把接口摊成 props
  * ——调用处因此写成 `<EditorArea 接线={{ … }} />`，那一整个字面量是**一处**看得完的账。
  */
-export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
-  const { 主区, 格式化栏, 编辑器, activeDoc, settings, viewMode, focusMode, typewriter } = 接线;
-  const { 格式化栏开着, 收起格式化栏, 命令状态, 设命令状态, 跑命令, 插入图像, refreshDocs, toast } =
-    接线;
-  const { 文档出口, 查找条, 预览出口, 改动出口, 会话出口, 插件, 对话框 } = 接线;
+export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
+  const { mainArea, cellStyleConvertBar, editor, activeDoc, settings, viewMode, focusMode, typewriter, onlyReadMode } = wiring;
+  const { cellStyleConvertBarOpen, hideFormatBar, commandState, setCommandState, runCommand, insertImageLike, refreshDocs, toast } =
+    wiring;
+  const { documentApi, findBar, previewOutputMouth, changeActionOutputMouth, MeetingSpeechOutputMouth, plugin, dialog } = wiring;
 
   // 正文里点一下链接那件事（`docs/07` 第 96 项）：单击弹同一个「链接」框、
   // `Ctrl`＋单击交给系统浏览器。⚠️ 挂的是 `<main>` 上的一条 `click` 委托，
   // 判据（只认可编辑那一侧、地址危险不放行）写在 `ui/useLinkClick.ts` 文件头。
-  use点链接({ 主区, askLink: 对话框.askLink, 跑命令, toast });
+  usePointLink({
+    mainArea,
+    askLink: dialog.askLink,
+    runCommand,
+    toast,
+    openDocument: documentApi.openPath,
+    documentPath: activeDoc?.path ?? null,
+  });
 
-  const { newDoc, openViaDialog, openFolder, 记活动 } = 文档出口;
-  const { 查找开着, 替换行, 命中情况, 报命中, 关查找, 替换当前, 全部替换 } = 查找条;
-  const { 活跃预览, 面板预览, 看法, set看法, 退出预览 } = 预览出口;
-  const { 改动: 外部改动, 忽略: 忽略外部改动, 重新载入: 重新载入外部, 查看修改, 对照: 外部对照, 关对照 } = 改动出口;
-  const { 最近, 打开最近, 滚动位置, 记滚动 } = 会话出口;
+  const { newDoc, openViaDialog, openFolder, recordActivity } = documentApi;
+  const { findOpen, replaceReplaceLine, matchSituationSituation, reportMatch, closeFind, replaceReplaceCurrent, replaceAll } = findBar;
+  const {
+    activeJumpPreview,
+    panelPreview,
+    viewMode: reviewViewMode,
+    setViewMode,
+    backOutputPreview,
+  } = previewOutputMouth;
+  const { changeAction: ExternalPartChangeAction, ignoreOmit: ignoreOmitExternalPartChangeAction, heavyNewValueLoadEnter: heavyNewValueLoadEnterExternalPart, checkSeeFixChange, correctAccording: ExternalPartCorrectAccording, closeCorrectAccording } = changeActionOutputMouth;
+  const { recent, openRecent, rollActionPosition, recordRollAction } = MeetingSpeechOutputMouth;
 
   return (
     // ⚠️ `data-review` 是给 CSS 的开关（`styles/review.css`）：
@@ -157,15 +171,15 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
     // `"inline"` = 改动预览，正文留在原地，改动画在它身上。
     <main
       className="app-main"
-      ref={主区}
+      ref={mainArea}
       data-review={
-        外部对照
+        ExternalPartCorrectAccording
           ? // 外部改动那份对照是**块**（占编辑区，正文让位），不是画在正文
             // 身上的装饰——它跟插件面板同一形态，所以走 `"true"` 那一支。
             "true"
-          : 活跃预览
+          : activeJumpPreview
             ? "inline"
-            : 面板预览
+            : panelPreview
               ? "true"
               : undefined
       }
@@ -174,14 +188,14 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           之前**，因为它必须在**任何模式、任何预览形态**下都看得见——
           磁盘上那份被改了这件事，不会因为用户此刻开着预览就不算数。 */}
       <ExternalChangeBar
-        改动={外部改动}
-        忽略={忽略外部改动}
-        重新载入={重新载入外部}
-        查看修改={(id) => void 查看修改(id)}
-        正在看={外部对照?.id ?? null}
-        关对照={关对照}
+        changeAction={ExternalPartChangeAction}
+        ignoreOmit={ignoreOmitExternalPartChangeAction}
+        heavyNewValueLoadEnter={heavyNewValueLoadEnterExternalPart}
+        checkSeeFixChange={(id) => void checkSeeFixChange(id)}
+        correctAtSee={ExternalPartCorrectAccording?.id ?? null}
+        closeCorrectAccording={closeCorrectAccording}
       />
-      {activeDoc && 查找开着 && (
+      {activeDoc && findOpen && (
         // ⚠️ key 要归零（换文档时清掉查询——理由见下），但**必须带前缀**：
         // 这个键值不能和下面 `EditorPane` 那个撞。同层兄弟键值相撞会让
         // React 把该删的旧 fiber 既不复用也不删，**被关掉的条子永远
@@ -198,16 +212,16 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
         // 反而多两行噪声。
         <FindBar
           key={`find-${activeDoc.id}`}
-          status={命中情况}
-          onQuery={(q, o) => 编辑器.current?.setFind(q, o)}
-          onStep={(d) => 编辑器.current?.findStep(d)}
-          onReplace={替换当前}
-          onReplaceAll={全部替换}
-          onClose={关查找}
-          显示替换={替换行}
+          status={matchSituationSituation}
+          onQuery={(q, o) => editor.current?.setFind(q, o)}
+          onStep={(d) => editor.current?.findStep(d)}
+          onReplace={replaceReplaceCurrent}
+          onReplaceAll={replaceAll}
+          onClose={closeFind}
+          showReplaceReplace={replaceReplaceLine}
         />
       )}
-      {activeDoc && 格式化栏开着 && (
+      {activeDoc && cellStyleConvertBarOpen && (
         // ⚠️ **只在有文档时画**。没文档时它是一排按不动的按钮
         //（命令全都没有活动文档可作用），那比不画更让人困惑。
         //
@@ -215,39 +229,39 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
         // 包了的话每次 `App` 重渲染都是一个新函数身份，`FormatBar`
         // 那十几颗按钮就整排重画一遍。
         <FormatBar
-          ref={格式化栏}
-          state={命令状态}
+          ref={cellStyleConvertBar}
+          state={commandState}
           // ⚠️ 图片那颗走"先弹框问地址/文件、再落笔"那条路（见上面 `插入图像` 那段注释）；
           // 其余照旧交给编辑器命令那一侧（链接那颗由 `useEditorCommands` 自己改道）。
-          onCommand={(id) => (id === "image" ? void 插入图像() : 跑命令(id))}
-          onHide={收起格式化栏}
+          onCommand={(id) => (id === "image" ? void insertImageLike() : runCommand(id))}
+          onHide={hideFormatBar}
         />
       )}
       <TableToolbar
-        visible={viewMode === "wysiwyg" && Boolean(命令状态?.inTable)}
+        visible={viewMode === "wysiwyg" && Boolean(commandState?.inTable)}
         documentKey={activeDoc?.id ?? ""}
-        run={跑命令}
+        run={runCommand}
       />
-      {活跃预览 && (
+      {activeJumpPreview && (
         // 改动预览顶上那一条细条。⚠️ **排在编辑区前面**（同一个 flex
         // 列里的上一行），不是编辑区的子节点——分屏那两个窗格是横向
         // flex，塞进去会把它们挤下去（理由写在 `ui/ReviewBar.tsx` 顶上）。
         <ReviewBar
-          review={活跃预览}
-          看法={看法}
-          on看法={set看法}
+          review={activeJumpPreview}
+          viewMode={reviewViewMode}
+          onViewMode={setViewMode}
           // ⚠️ 包一层：`调插件` 要插件 id（`命令` 只在插件内部唯一），
           // 而按钮给的只是命令名。插件 id 在这一份预览里，闭包里取。
-          onCall={(命令) => void 插件.调(活跃预览.plugin, 命令)}
-          onClose={() => void 插件.收预览()}
+          onCall={(command) => void plugin.configure(activeJumpPreview.plugin, command)}
+          onClose={() => void plugin.receivePreview()}
           // ⚠️ 与 `EditorPane` 那条 `onReviewEscape` **同一个函数**：焦点
           // 在正文里还是在这条工具栏上，按 `Esc` 应当做同一件事。
-          onEscape={退出预览}
+          onEscape={backOutputPreview}
         />
       )}
       {activeDoc ? (
         <EditorPane
-          ref={编辑器}
+          ref={editor}
           key={activeDoc.id}
           doc={activeDoc}
           mode={viewMode}
@@ -256,7 +270,7 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           // 一幅**错的画**）。这里**按路径现算**，不接 App 递下来的一份——
           // 文件是不是 Markdown 是它的属性，而"降级"是这一次打开时的决定
           //（用户手动切过模式之后降级就没了，可它**仍然**不是 Markdown）。
-          纯文本={activeDoc.path !== null && 认文件类型(activeDoc.path) === "text"}
+          plainText={activeDoc.path !== null && recognizeTextItemType(activeDoc.path) === "text"}
           strict={settings?.strict_markdown ?? false}
           physics={settings?.enable_physics ?? false}
           // Emoji 输入辅助（短代码替换 ＋ 补全面板）。⚠️ 这里是**一个**
@@ -268,13 +282,14 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           // 的 `智能符号` 那一格（关掉 = `editor/auto-pair.ts` 整条不装）。
           // ⚠️ **兜底取 `true`**，与 Rust 那边 `smart_symbols` 的默认值一致——
           // 取 `false` 的话，设置还没读回来那一小会儿编辑器是不补的。
-          智能符号={settings?.editor?.smart_symbols ?? true}
+          smartAbleSymbolNumber={settings?.editor?.smart_symbols ?? true}
           // 整整一页 Markdown 设置。⚠️ 只有 `editor/inline-marks.ts` 那三个
           // 开关用得上（高亮/上标/下标），挑字段与记忆化都在 `EditorPane`
           // 里做——`App.tsx` 在 1000 行硬线上，这里只给一行。
           markdown={settings?.markdown}
           focusMode={focusMode}
           typewriter={typewriter}
+          onlyReadMode={onlyReadMode}
           // 正文列宽那一对（第 107 项，2026-10-09）：
           // ⚠️ **开关默认 `false`**——不写这个变量时 `editor.css` 落到
           // `max-width: none`，正文列铺满编辑区（两侧各 56px 装订线）。
@@ -287,12 +302,12 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           // `ui/useSpellcheck.ts` 负责。⚠️ 空数组 → `undefined` = 不写这个属性
           // （"跟随系统"那一档），而设置还没读回来也走同一个 `undefined`——
           // 两种"空"在这里合流是**结果相同**（都不写属性），不是语义被抹平。
-          拼写语言={settings?.editor?.spellcheck_langs[0]}
+          combineWriteLanguage={settings?.editor?.spellcheck_langs[0]}
           // 正文排版那四项（行距 / 段距 / 字体 / 字号，文档主题那一页）。
           // ⚠️ 整份给，不挑字段（同 `markdown` 那一格的判据）：它在
           // `EditorPane` 里要被一起算成 CSS 变量、写在同一处。
           // `undefined` = 设置还没读回来，那时一个变量都不写。
-          文档排版={settings?.document}
+          documentTypography={settings?.document}
           // 滚动位置（第 76 项那两格：记住 + 恢复）。
           // ⚠️ `初始滚动` 是**编辑器实例建出来那一刻读一次**的值
           //（`EditorPane` 里那句注释），所以这里给 `undefined` 表示
@@ -300,53 +315,53 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           // 位置（比例 0 是短文档的正常值）。
           // ⚠️ `onScroll` 现写箭头函数**没问题**：那边把它存进 ref 读，
           // 身份抖不抖它不受影响（见 `EditorPane` 的 `滚动回调Ref`）。
-          初始滚动={滚动位置(activeDoc.path)}
-          onScroll={(比例) => {
-            if (activeDoc.path) 记滚动(activeDoc.path, 比例);
+          initialStartRollAction={rollActionPosition(activeDoc.path)}
+          onScroll={(compareExample) => {
+            if (activeDoc.path) recordRollAction(activeDoc.path, compareExample);
           }}
-          onCommandState={设命令状态}
-          onFindStatus={报命中}
+          onCommandState={setCommandState}
+          onFindStatus={reportMatch}
           onToast={toast}
           onDocsChanged={refreshDocs}
-          onActivity={记活动}
+          onActivity={recordActivity}
           // 改动预览按**两种形态**分派：`diff` 这一形态的图画在编辑区
           // 自己身上，所以那一份要交给它；`panel` 形态跟它无关（那是
           // 下面那个 `ReviewPane` 的事）。
-          review={活跃预览}
-          预览看法={看法}
-          onReviewEscape={退出预览}
+          review={activeJumpPreview}
+          previewMode={reviewViewMode}
+          onReviewEscape={backOutputPreview}
         />
       ) : (
         <Home
-          plugins={插件.plugins}
+          plugins={plugin.plugins}
           onNew={newDoc}
           onOpen={openViaDialog}
           onOpenFolder={openFolder}
-          最近={最近}
-          onOpenRecent={(p) => void 打开最近(p)}
+          recent={recent}
+          onOpenRecent={(p) => void openRecent(p)}
         />
       )}
 
-      {面板预览 && (
+      {panelPreview && (
         // 编辑区里的**插件面板**（用户 2026-09-25 要的"直接在 Markdown
         // 编辑区域预览"）。⚠️ 它排在正文**后面**，靠 CSS
         // （`.app-main[data-review="true"]`）让正文让位——不是"二选一渲染"：
         // 正文那一块不能卸载，理由见上面 `data-review` 那段。
         <ReviewPane
-          plugin={面板预览.plugin}
-          panel={面板预览.panel}
+          plugin={panelPreview.plugin}
+          panel={panelPreview.panel}
           // 标题与那句语言提示的合成都在 `ReviewPane` 那边（要拿插件清单
           // 和面板清单两张表查名字/查语言）。放这边的唯一理由是这个文件
           // 贴着 1000 行上限（`AGENTS.md` §0.4），多一行都是负担。
-          plugins={插件.plugins}
-          panels={插件.panels}
-          onClose={() => void 插件.收预览()}
-          onCall={插件.调}
-          askPrompt={对话框.askPrompt}
+          plugins={plugin.plugins}
+          panels={plugin.panels}
+          onClose={() => void plugin.receivePreview()}
+          onCall={plugin.configure}
+          askPrompt={dialog.askPrompt}
         />
       )}
 
-      {外部对照 && (
+      {ExternalPartCorrectAccording && (
         // **磁盘上那份和编辑器里这份**的对照（用户点了提示条上的
         // 「查看修改」）。⚠️ 它是**只读**的、一个可点节点都没有——理由
         //（以及"为什么不给它一颗接受按钮"）写在 `ui/ExternalDiffPane.tsx` 顶上。
@@ -354,7 +369,7 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
         // ⚠️ 它和上面那块插件面板**可以同时摊着**（各占一半）。罕见，
         // 但不必为它加优先级：两块都是用户自己点开的，替他把其中一块
         // 藏起来，他会以为是刚点的那下没生效。
-        <ExternalDiffPane 对照={外部对照} onClose={关对照} />
+        <ExternalDiffPane correctAccording={ExternalPartCorrectAccording} onClose={closeCorrectAccording} />
       )}
 
       {/* 底部那一条（标签栏 ＋ 状态栏）。⚠️ **排在最后**：它俩是这一列的
@@ -362,7 +377,7 @@ export function EditorArea({ 接线 }: { 接线: 编辑区接线 }) {
           哪几份文档 / 这一份多少字"，跟预览画什么无关）。
           ⚠️ 上面那几个面板的让位规则（`styles/review.css`）**没有把它俩算进去**
           ——那一份是"逐个排除"的写法，没点名的就留着。 */}
-      {接线.底部}
+      {wiring.bottomPart}
     </main>
   );
 }

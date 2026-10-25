@@ -42,7 +42,7 @@ import type { Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { accelSig, accelToText, eventAccel, formatAccel, parseAccel } from "@/ui/accel";
 import { walkMenuItems, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
-import { 是最近条目 } from "@/ui/recentMenu";
+import { isRecentItem } from "@/ui/recentMenu";
 import { ActionButton, SettingRow, SettingsGroup } from "../primitives";
 
 interface Props {
@@ -60,10 +60,10 @@ interface Shortcut {
 }
 
 /** 这条菜单项**能不能绑快捷键**。判据写在文件头第 4 条。 */
-function 可绑定(item: MenuItemSpec): boolean {
+function bindable(item: MenuItemSpec): boolean {
   if (item.submenu) return false; // 自己不执行命令，只是个入口
   if (item.id.startsWith("__")) return false; // 主题那套（`ui/commands.ts` 的三个常量）
-  return !是最近条目(item.id); // 最近文件那套（`ui/recentMenu.ts` 拼出来的 id）
+  return !isRecentItem(item.id); // 最近文件那套（`ui/recentMenu.ts` 拼出来的 id）
 }
 
 /**
@@ -76,13 +76,13 @@ function 可绑定(item: MenuItemSpec): boolean {
  *（`t(menu.label)` / `t(s.label)`）。模块级常量里调 `t` 是禁止的，理由写在
  * `ui/MenuBar.tsx::useT` 那一段。
  */
-function 按菜单组(menus: readonly MenuSpec[]): Array<{ menu: MenuSpec; items: Shortcut[] }> {
+function pressMenuGroup(menus: readonly MenuSpec[]): Array<{ menu: MenuSpec; items: Shortcut[] }> {
   const groups: Array<{ menu: MenuSpec; items: Shortcut[] }> = [];
 
   for (const menu of menus) {
     const items: Shortcut[] = [];
     walkMenuItems([menu], (item: MenuItemSpec) => {
-      if (!可绑定(item)) return;
+      if (!bindable(item)) return;
       items.push({ id: item.id, label: item.label, accel: item.accel });
     });
     if (items.length) groups.push({ menu, items });
@@ -97,16 +97,16 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
   const t = useT();
 
   /** 当前这份覆盖表。⚠️ 那个 `??` 兜的是"跑在旧后端上"（见 `App.tsx` 同处）。 */
-  const 覆盖 = settings?.keys?.overrides ?? {};
+  const coverCover = settings?.keys?.overrides ?? {};
 
   /** 正在录制的那一条的 id。`null` = 没在录。 */
-  const [录制中, set录制中] = useState<string | null>(null);
+  const [recordMakeMiddle, setRecordMakeMiddle] = useState<string | null>(null);
   /** 录制时撞了车的提示，挂在那一行下面。 */
-  const [撞车, set撞车] = useState<{ id: string; 文案: string } | null>(null);
+  const [collideCar, setCollideCar] = useState<{ id: string; copy2: string } | null>(null);
 
   // ⚠️ 依赖 `menus`：它每改一次键位就换一份新的（`App.tsx` 那个 useMemo），
   // 这一页要跟着重算——不然改完一条，表上还是旧键位。
-  const 组 = useMemo(() => 按菜单组(menus), [menus]);
+  const group = useMemo(() => pressMenuGroup(menus), [menus]);
 
   /**
    * 键位签名 → 那条命令。**判撞车用**。
@@ -114,23 +114,23 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
    * ⚠️ 用的是**生效**键位（`menus` 里那份已经叠过覆盖），不是出厂那份：
    * 用户把 A 改成了 `Ctrl+K`、而 B 本来就写着 `Ctrl+K`，这两个就是撞的。
    */
-  const 键位归属 = useMemo(() => {
+  const keyPositionReturnBelong = useMemo(() => {
     const m = new Map<string, Shortcut>();
-    for (const g of 组) {
+    for (const g of group) {
       for (const s of g.items) {
         const a = s.accel ? parseAccel(s.accel) : null;
         if (a) m.set(accelSig(a), s);
       }
     }
     return m;
-  }, [组]);
+  }, [group]);
 
   /** 写回设置。只动 `keys` 这一节，别的字段一个不碰。 */
-  const 写 = useCallback(
-    (补: Record<string, string>) => {
-      onChange({ keys: { overrides: { ...覆盖, ...补 } } });
+  const write = useCallback(
+    (fill: Record<string, string>) => {
+      onChange({ keys: { overrides: { ...coverCover, ...fill } } });
     },
-    [onChange, 覆盖],
+    [onChange, coverCover],
   );
 
   /**
@@ -145,48 +145,48 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
    * - 只认 `keydown`：`keyup` 在按住不放时会连发，`Ctrl` 还没松开就录进去了。
    */
   useEffect(() => {
-    if (!录制中) return;
-    const id = 录制中;
+    if (!recordMakeMiddle) return;
+    const id = recordMakeMiddle;
     const onKey = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
       if (e.key === "Escape") {
-        set录制中(null);
-        set撞车(null);
+        setRecordMakeMiddle(null);
+        setCollideCar(null);
         return;
       }
 
       const a = eventAccel(e);
-      const 文本 = accelToText(a);
+      const text2 = accelToText(a);
       // ⚠️ `null` = "这一下不算一个键位"（光按修饰键、或者不该绑的单字符）。
       // **不能**当成"用户想清空键位"——那个动作有单独的按钮，
       // 而空串在设置里的含义是"这条命令不要快捷键"，两者差得很远。
-      if (!文本) return;
+      if (!text2) return;
 
-      const 撞 = 键位归属.get(accelSig(a));
-      if (撞 && 撞.id !== id) {
-        set撞车({
+      const collide = keyPositionReturnBelong.get(accelSig(a));
+      if (collide && collide.id !== id) {
+        setCollideCar({
           id,
-          文案: t("That binding belongs to “{0}”. Clear it there first if you want this command to have it.", t(撞.label)),
+          copy2: t("That binding belongs to “{0}”. Clear it there first if you want this command to have it.", t(collide.label)),
         });
         return;
       }
 
-      set录制中(null);
-      set撞车(null);
-      写({ [id]: 文本 });
+      setRecordMakeMiddle(null);
+      setCollideCar(null);
+      write({ [id]: text2 });
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [录制中, 键位归属, 写, t]);
+  }, [recordMakeMiddle, keyPositionReturnBelong, write, t]);
 
   /** 这一条被用户动过没有（在覆盖表里就是动过，哪怕改成了空串）。 */
-  const 改过 = (id: string) => id in 覆盖;
+  const changePass = (id: string) => id in coverCover;
 
   return (
     <>
-      {组.map(({ menu, items }) => (
+      {group.map(({ menu, items }) => (
         <SettingsGroup key={menu.id} title={t(menu.label)}>
           {items.map((s) => (
             <SettingRow
@@ -198,13 +198,13 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
               // 菜单名那部分不用管——`SettingsGroup` 会把组标题加进每一行的搜索面。
               // ⚠️ 搜的是**原始 accel**（`Ctrl+S`）而不是显示出来的那串：
               // macOS 上显示成 `⌘S`，用户照着屏幕上抄下来的字反而搜不到。
-              searchText={[s.accel, 改过(s.id) ? t("changed") : ""].filter(Boolean).join(" ")}
+              searchText={[s.accel, changePass(s.id) ? t("changed") : ""].filter(Boolean).join(" ")}
               description={
-                撞车?.id === s.id ? <span className="stg-keys-clash">{撞车.文案}</span> : undefined
+                collideCar?.id === s.id ? <span className="stg-keys-clash">{collideCar.copy2}</span> : undefined
               }
             >
               <span className="stg-keys-cell">
-                {录制中 === s.id ? (
+                {recordMakeMiddle === s.id ? (
                   // ⚠️ 录制态**画成一个 `<kbd>` 的样子**（不是提示条）：它就长在
                   // 原来那个键位的格子里，用户的眼睛不用换地方。
                   <kbd className="stg-kbd stg-kbd-rec">{t("Press the new keys…")}</kbd>
@@ -215,29 +215,29 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
                 )}
                 <ActionButton
                   onClick={() => {
-                    set撞车(null);
-                    set录制中(录制中 === s.id ? null : s.id);
+                    setCollideCar(null);
+                    setRecordMakeMiddle(recordMakeMiddle === s.id ? null : s.id);
                   }}
                   title={t("Press the keys you want to use; press Esc to cancel")}
                 >
-                  {录制中 === s.id ? t("Cancel") : t("Change")}
+                  {recordMakeMiddle === s.id ? t("Cancel") : t("Change")}
                 </ActionButton>
                 {/* 「清除」只在**现在有键位**时出现：把这条设为"不要快捷键"。
                     ⚠️ 它和下面那颗「恢复默认」**不是一回事**，两句话都得看得见：
                     这一颗是"这条不要键位"，那一颗是"回到出厂那个键位"。 */}
                 {s.accel && (
-                  <ActionButton onClick={() => 写({ [s.id]: "" })} title={t("No shortcut for this command")}>
+                  <ActionButton onClick={() => write({ [s.id]: "" })} title={t("No shortcut for this command")}>
                     {t("Clear")}
                   </ActionButton>
                 )}
                 {/* 「恢复默认」只在**用户动过它**时出现——没动过时它按下去什么都不会变，
                     留一颗按了没反应的按钮，比没有这颗按钮更糟（`general.rs` 头上那句）。 */}
-                {改过(s.id) && (
+                {changePass(s.id) && (
                   <ActionButton
                     onClick={() => {
-                      const 新 = { ...覆盖 };
-                      delete 新[s.id];
-                      onChange({ keys: { overrides: 新 } });
+                      const newValue = { ...coverCover };
+                      delete newValue[s.id];
+                      onChange({ keys: { overrides: newValue } });
                     }}
                     title={t("Reset this one to its factory binding (or to none, if it never had one)")}
                   >
@@ -260,13 +260,13 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
           合并会把 `<strong>` / `<code>` 一起降级成纯文本。 */}
       {/* 「全部恢复默认」放在最后、而且**只在有改动时出现**：没有改动时它是个
           没有意义的按钮，不该在那儿压一颗永远灰着的。 */}
-      {Object.keys(覆盖).length > 0 && (
+      {Object.keys(coverCover).length > 0 && (
         <div className="stg-keys-reset-all">
           <ActionButton onClick={() => onChange({ keys: { overrides: {} } })}>
             {t("Reset all")}
           </ActionButton>
           <span className="stg-keys-hint">
-            {t("{0} changed. After resetting, every binding follows the factory defaults in commands.ts.", Object.keys(覆盖).length)}
+            {t("{0} changed. After resetting, every binding follows the factory defaults in commands.ts.", Object.keys(coverCover).length)}
           </span>
         </div>
       )}

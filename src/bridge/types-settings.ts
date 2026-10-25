@@ -397,12 +397,29 @@ export interface ExportSettings {
    * 空串＝一个都不加。⚠️ **前端只搬值，不解析它**——分词只有一处实现。
    */
   pandoc_args: string;
+  /**
+   * 分隔线以下的自定义导出器。默认是 Word / OpenDocument / RTF / EPUB /
+   * LaTeX / MediaWiki / reStructuredText / Textile / OPML；用户可以增删、
+   * 排序和改名。固定项不在这里。
+   */
+  custom_exporters: CustomExporter[];
   /* ⚠️ **没有 Pandoc 路径**，而且不会有——但理由 2026-09-25 变了：
    * 以前是"不做 Pandoc"，现在是"**每次都现探**"。存下来的路径会过期
    *（换机器、重装、改 PATH），于是"明明装了却报没装"；现探永远是对的，
    * 代价只是每次多起一个进程。`settings/export.rs` 里有测试盯着这一项。
    * ⚠️ 2026-10-10 起那条测试**收窄成"不存路径"**：`pandoc_args` 那一格是
    * 允许的（它不会过期），路径仍然不许有。 */
+}
+
+export interface CustomExporter {
+  id: string;
+  name: string;
+  /** `docx` / `odt` / `rtf` / `epub` / `latex` / `mediawiki` / `rst` / `textile` / `opml`。 */
+  format: string;
+  args: string;
+  /** Word/ODT 参考文档、EPUB CSS 或 LaTeX 头文件。空串＝不用。 */
+  style_file: string;
+  open_after_export: boolean;
 }
 
 /**

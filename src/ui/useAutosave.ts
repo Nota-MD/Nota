@@ -38,7 +38,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import type { DocId, Document } from "@/bridge/ipc";
 
-export interface 自动保存接线 {
+export interface SelfActionSaveWiring {
   /** `settings.autosave_seconds`，**0 = 关**（关着时一个定时器都不挂）。 */
   seconds: number;
   /** 打开的文档列表。用来查"当前这份脏不脏、有没有落点"。 */
@@ -53,46 +53,46 @@ export interface 自动保存接线 {
 }
 
 /** 看表的间隔。1 秒足够（最短的那档是 30 秒），而且这个回调非常便宜。 */
-const 看表毫秒 = 1000;
+const seeTableMilliSeconds = 1000;
 
 /**
  * 挂上自动保存。返回值是**"记一次活动"**——调用方要把它接到编辑器的内容变化
  * 那一路上去（`EditorPane` 的 `onActivity`）。
  */
-export function useAutosave(w: 自动保存接线): () => void {
+export function useAutosave(w: SelfActionSaveWiring): () => void {
   /** 最后一次"用户在打字"的时刻。**0 = 这一轮还没动过**（别拿 Date.now() 当初始值）。 */
-  const 活动 = useRef(0);
+  const activity = useRef(0);
   // ⚠️ 接线走 ref 读，理由同 `EditorPane` 里那几条回调：它是每次渲染新建的对象，
   // 进依赖就等于"每次渲染重建定时器"。
-  const 资料 = useRef(w);
-  资料.current = w;
+  const resourceMaterial = useRef(w);
+  resourceMaterial.current = w;
 
-  const 记活动 = useCallback(() => {
-    活动.current = Date.now();
+  const recordActivity = useCallback(() => {
+    activity.current = Date.now();
   }, []);
 
   useEffect(() => {
     if (!(w.seconds > 0)) return;
-    const 停笔毫秒 = w.seconds * 1000;
-    const 表 = window.setInterval(() => {
-      const 距今 = Date.now() - 活动.current;
+    const stopStrokeMilliSeconds = w.seconds * 1000;
+    const table2 = window.setInterval(() => {
+      const distanceToday = Date.now() - activity.current;
       // 还没动过键盘（刚开机、或者刚拨开这一档）——不存。
-      if (活动.current === 0 || 距今 < 停笔毫秒) return;
+      if (activity.current === 0 || distanceToday < stopStrokeMilliSeconds) return;
 
-      const id = 资料.current.activeIdRef.current;
-      const doc = 资料.current.docs.find((d) => d.id === id);
+      const id = resourceMaterial.current.activeIdRef.current;
+      const doc = resourceMaterial.current.docs.find((d) => d.id === id);
       if (!doc?.dirty || !doc.path) return;
 
       // ⚠️ **先记时间再存**：存盘要几十毫秒，不先记的话下一次看表会拿"刚才那次
       // 停笔"再判一遍；存失败时这一句同时也是退避（见文件头第 3 条）。
-      活动.current = Date.now();
-      void 资料.current.saveDoc(doc.id).catch(() => {
+      activity.current = Date.now();
+      void resourceMaterial.current.saveDoc(doc.id).catch(() => {
         // 提示条由 `saveDoc` 自己弹（那一条不该静音），这里只吞掉 Promise，
         // 免得变成未处理的拒绝。
       });
-    }, 看表毫秒);
-    return () => window.clearInterval(表);
+    }, seeTableMilliSeconds);
+    return () => window.clearInterval(table2);
   }, [w.seconds]);
 
-  return 记活动;
+  return recordActivity;
 }

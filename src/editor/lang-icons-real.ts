@@ -59,130 +59,130 @@
  *
  * 📌 导出只给 `tests/lang-icons.test.ts` 用（它拿真文件列表和真 prism id 对账）。
  */
-export const 图标组: readonly { 图标: string; 语言: readonly string[] }[] = [
+export const iconGroup: readonly { icon: string; language: readonly string[] }[] = [
   /* ── Web 前端 ──────────────────────────────────────────────────────── */
-  { 图标: "js", 语言: ["javascript", "js"] },
-  { 图标: "typescript", 语言: ["typescript", "ts"] },
-  { 图标: "reactjs", 语言: ["jsx"] },
-  { 图标: "reactts", 语言: ["tsx"] },
-  { 图标: "html", 语言: ["html", "markup"] },
-  { 图标: "css", 语言: ["css"] },
-  { 图标: "scss", 语言: ["scss"] },
-  { 图标: "sass", 语言: ["sass"] },
-  { 图标: "less", 语言: ["less"] },
-  { 图标: "stylus", 语言: ["stylus"] },
-  { 图标: "ejs", 语言: ["ejs"] },
-  { 图标: "erb", 语言: ["erb"] },
-  { 图标: "handlebars", 语言: ["handlebars", "hbs"] },
-  { 图标: "mustache", 语言: ["mustache"] },
-  { 图标: "jinja", 语言: ["jinja2", "django"] },
-  { 图标: "twig", 语言: ["twig", "tt2"] },
-  { 图标: "pug", 语言: ["pug"] },
-  { 图标: "haml", 语言: ["haml"] },
+  { icon: "js", language: ["javascript", "js"] },
+  { icon: "typescript", language: ["typescript", "ts"] },
+  { icon: "reactjs", language: ["jsx"] },
+  { icon: "reactts", language: ["tsx"] },
+  { icon: "html", language: ["html", "markup"] },
+  { icon: "css", language: ["css"] },
+  { icon: "scss", language: ["scss"] },
+  { icon: "sass", language: ["sass"] },
+  { icon: "less", language: ["less"] },
+  { icon: "stylus", language: ["stylus"] },
+  { icon: "ejs", language: ["ejs"] },
+  { icon: "erb", language: ["erb"] },
+  { icon: "handlebars", language: ["handlebars", "hbs"] },
+  { icon: "mustache", language: ["mustache"] },
+  { icon: "jinja", language: ["jinja2", "django"] },
+  { icon: "twig", language: ["twig", "tt2"] },
+  { icon: "pug", language: ["pug"] },
+  { icon: "haml", language: ["haml"] },
 
   /* ── 数据 / 配置 ───────────────────────────────────────────────────── */
-  { 图标: "json", 语言: ["json", "json5", "jsonp", "tsconfig"] },
-  { 图标: "yaml", 语言: ["yaml", "yml"] },
-  { 图标: "toml", 语言: ["toml"] },
-  { 图标: "ini", 语言: ["ini", "editorconfig"] },
-  { 图标: "xml", 语言: ["xml"] },
-  { 图标: "svg", 语言: ["svg"] },
-  { 图标: "excel", 语言: ["xls", "xlsx", "excel-formula"] },
-  { 图标: "sql", 语言: ["sql", "plsql"] },
-  { 图标: "graphql", 语言: ["graphql"] },
-  { 图标: "protobuf", 语言: ["protobuf"] },
-  { 图标: "diff", 语言: ["diff"] },
-  { 图标: "http", 语言: ["http"] },
-  { 图标: "rest", 语言: ["rest"] },
+  { icon: "json", language: ["json", "json5", "jsonp", "tsconfig"] },
+  { icon: "yaml", language: ["yaml", "yml"] },
+  { icon: "toml", language: ["toml"] },
+  { icon: "ini", language: ["ini", "editorconfig"] },
+  { icon: "xml", language: ["xml"] },
+  { icon: "svg", language: ["svg"] },
+  { icon: "excel", language: ["xls", "xlsx", "excel-formula"] },
+  { icon: "sql", language: ["sql", "plsql"] },
+  { icon: "graphql", language: ["graphql"] },
+  { icon: "protobuf", language: ["protobuf"] },
+  { icon: "diff", language: ["diff"] },
+  { icon: "http", language: ["http"] },
+  { icon: "rest", language: ["rest"] },
 
   /* ── 系统语言 ──────────────────────────────────────────────────────── */
-  { 图标: "c", 语言: ["c"] },
-  { 图标: "cpp", 语言: ["cpp"] },
-  { 图标: "csharp", 语言: ["csharp", "cs"] },
-  { 图标: "java", 语言: ["java"] },
-  { 图标: "kotlin", 语言: ["kotlin", "kt", "kts"] },
-  { 图标: "scala", 语言: ["scala"] },
-  { 图标: "groovy", 语言: ["groovy"] },
-  { 图标: "gradle", 语言: ["gradle"] },
-  { 图标: "go", 语言: ["go", "go-mod", "go-module"] },
-  { 图标: "rust", 语言: ["rust"] },
-  { 图标: "swift", 语言: ["swift"] },
-  { 图标: "objectivec", 语言: ["objectivec", "objc"] },
-  { 图标: "zig", 语言: ["zig"] },
-  { 图标: "nim", 语言: ["nim"] },
-  { 图标: "crystal", 语言: ["crystal"] },
-  { 图标: "dartlang", 语言: ["dart"] },
-  { 图标: "vb", 语言: ["vb", "vbnet", "visual-basic"] },
-  { 图标: "fsharp", 语言: ["fsharp"] },
-  { 图标: "qsharp", 语言: ["qsharp"] },
-  { 图标: "wasm", 语言: ["wasm"] },
+  { icon: "c", language: ["c"] },
+  { icon: "cpp", language: ["cpp"] },
+  { icon: "csharp", language: ["csharp", "cs"] },
+  { icon: "java", language: ["java"] },
+  { icon: "kotlin", language: ["kotlin", "kt", "kts"] },
+  { icon: "scala", language: ["scala"] },
+  { icon: "groovy", language: ["groovy"] },
+  { icon: "gradle", language: ["gradle"] },
+  { icon: "go", language: ["go", "go-mod", "go-module"] },
+  { icon: "rust", language: ["rust"] },
+  { icon: "swift", language: ["swift"] },
+  { icon: "objectivec", language: ["objectivec", "objc"] },
+  { icon: "zig", language: ["zig"] },
+  { icon: "nim", language: ["nim"] },
+  { icon: "crystal", language: ["crystal"] },
+  { icon: "dartlang", language: ["dart"] },
+  { icon: "vb", language: ["vb", "vbnet", "visual-basic"] },
+  { icon: "fsharp", language: ["fsharp"] },
+  { icon: "qsharp", language: ["qsharp"] },
+  { icon: "wasm", language: ["wasm"] },
 
   /* ── 脚本语言 ──────────────────────────────────────────────────────── */
-  { 图标: "python", 语言: ["python", "py"] },
-  { 图标: "ruby", 语言: ["ruby", "rb"] },
-  { 图标: "php", 语言: ["php"] },
-  { 图标: "perl", 语言: ["perl"] },
-  { 图标: "lua", 语言: ["lua"] },
-  { 图标: "r", 语言: ["r"] },
-  { 图标: "julia", 语言: ["julia"] },
-  { 图标: "matlab", 语言: ["matlab"] },
-  { 图标: "awk", 语言: ["awk", "gawk"] },
-  { 图标: "tcl", 语言: ["tcl"] },
-  { 图标: "vim", 语言: ["vim"] },
+  { icon: "python", language: ["python", "py"] },
+  { icon: "ruby", language: ["ruby", "rb"] },
+  { icon: "php", language: ["php"] },
+  { icon: "perl", language: ["perl"] },
+  { icon: "lua", language: ["lua"] },
+  { icon: "r", language: ["r"] },
+  { icon: "julia", language: ["julia"] },
+  { icon: "matlab", language: ["matlab"] },
+  { icon: "awk", language: ["awk", "gawk"] },
+  { icon: "tcl", language: ["tcl"] },
+  { icon: "vim", language: ["vim"] },
   // ⚠️ `shell` 这一颗同时罩着 `bash`/`sh`/`shell`/`sh-session`… —— 上游只有
   //    一颗终端图，而 `refractor` 把它们拆成了好几个 id。别为它们各找一颗，
   //    找来的也是同一张。
-  { 图标: "shell", 语言: ["bash", "sh", "shell", "shellsession", "shell-session", "sh-session"] },
-  { 图标: "powershell", 语言: ["powershell"] },
+  { icon: "shell", language: ["bash", "sh", "shell", "shellsession", "shell-session", "sh-session"] },
+  { icon: "powershell", language: ["powershell"] },
   // ⚠️ 语言 id 是 `batch`，**不是** `bat`（`bat` 是上游的文件名）。写错了这一行
   //    就是"下拉里的 Windows 批处理永远没有图"，一句报错都没有——
   //    `tests/lang-icons.test.ts` 第三组拿真 `listLanguages()` 把这种错拦下来。
-  { 图标: "bat", 语言: ["batch"] },
+  { icon: "bat", language: ["batch"] },
 
   /* ── 函数式 / 逻辑式 ───────────────────────────────────────────────── */
-  { 图标: "haskell", 语言: ["haskell", "hs"] },
-  { 图标: "clojure", 语言: ["clojure"] },
-  { 图标: "lisp", 语言: ["lisp", "emacs", "emacs-lisp", "elisp"] },
-  { 图标: "ocaml", 语言: ["ocaml"] },
-  { 图标: "elm", 语言: ["elm"] },
-  { 图标: "erlang", 语言: ["erlang"] },
-  { 图标: "elixir", 语言: ["elixir"] },
-  { 图标: "racket", 语言: ["racket", "rkt"] },
-  { 图标: "prolog", 语言: ["prolog"] },
-  { 图标: "ada", 语言: ["ada"] },
+  { icon: "haskell", language: ["haskell", "hs"] },
+  { icon: "clojure", language: ["clojure"] },
+  { icon: "lisp", language: ["lisp", "emacs", "emacs-lisp", "elisp"] },
+  { icon: "ocaml", language: ["ocaml"] },
+  { icon: "elm", language: ["elm"] },
+  { icon: "erlang", language: ["erlang"] },
+  { icon: "elixir", language: ["elixir"] },
+  { icon: "racket", language: ["racket", "rkt"] },
+  { icon: "prolog", language: ["prolog"] },
+  { icon: "ada", language: ["ada"] },
 
   /* ── 老牌 / 工业界 ─────────────────────────────────────────────────── */
-  { 图标: "fortran", 语言: ["fortran"] },
-  { 图标: "cobol", 语言: ["cobol"] },
+  { icon: "fortran", language: ["fortran"] },
+  { icon: "cobol", language: ["cobol"] },
   // ⚠️ 语言 id 里**没有** `assembly` 这个名——只有具体的几套汇编（`nasm`、
   //    `armasm`、`asm6502`、`arm-asm`）。所以这一组是"一颗图罩四个 id"，
   //    别照着图名去补一个 `"assembly"` 进来（那一条永远命中不了）。
-  { 图标: "assembly", 语言: ["nasm", "armasm", "asm6502", "arm-asm"] },
-  { 图标: "vhdl", 语言: ["vhdl"] },
-  { 图标: "verilog", 语言: ["verilog"] },
-  { 图标: "solidity", 语言: ["solidity"] },
-  { 图标: "glsl", 语言: ["glsl"] },
-  { 图标: "hlsl", 语言: ["hlsl"] },
+  { icon: "assembly", language: ["nasm", "armasm", "asm6502", "arm-asm"] },
+  { icon: "vhdl", language: ["vhdl"] },
+  { icon: "verilog", language: ["verilog"] },
+  { icon: "solidity", language: ["solidity"] },
+  { icon: "glsl", language: ["glsl"] },
+  { icon: "hlsl", language: ["hlsl"] },
 
   /* ── 文档 / 图表 ───────────────────────────────────────────────────── */
-  { 图标: "markdown", 语言: ["markdown", "md"] },
-  { 图标: "asciidoc", 语言: ["asciidoc", "adoc"] },
-  { 图标: "tex", 语言: ["math", "latex", "tex"] },
-  { 图标: "text", 语言: ["plaintext", "plain", "text", "txt"] },
-  { 图标: "mermaid", 语言: ["mermaid"] },
-  { 图标: "plantuml", 语言: ["plantuml", "plant-uml"] },
+  { icon: "markdown", language: ["markdown", "md"] },
+  { icon: "asciidoc", language: ["asciidoc", "adoc"] },
+  { icon: "tex", language: ["math", "latex", "tex"] },
+  { icon: "text", language: ["plaintext", "plain", "text", "txt"] },
+  { icon: "mermaid", language: ["mermaid"] },
+  { icon: "plantuml", language: ["plantuml", "plant-uml"] },
 
   /* ── 版本控制 / 服务 ───────────────────────────────────────────────── */
-  { 图标: "git", 语言: ["git", "gitignore"] },
-  { 图标: "docker", 语言: ["docker", "dockerfile"] },
-  { 图标: "nginx", 语言: ["nginx"] },
-  { 图标: "cmake", 语言: ["cmake"] },
+  { icon: "git", language: ["git", "gitignore"] },
+  { icon: "docker", language: ["docker", "dockerfile"] },
+  { icon: "nginx", language: ["nginx"] },
+  { icon: "cmake", language: ["cmake"] },
 ];
 
 /** 摊平后的查找表。语言 id 重复出现时**后写的赢**——`tests/lang-icons.test.ts` 会把重复拦下来。 */
-const 语言到图标 = new Map<string, string>();
-for (const { 图标, 语言 } of 图标组) {
-  for (const id of 语言) 语言到图标.set(id, 图标);
+const languageToIcon = new Map<string, string>();
+for (const { icon, language } of iconGroup) {
+  for (const id of language) languageToIcon.set(id, icon);
 }
 
 /**
@@ -199,9 +199,9 @@ for (const { 图标, 语言 } of 图标组) {
  *
  * ⚠️ 表里没有的 id 原样返回（它会落到"没有真图标"那一支，下拉里本来就不列）。
  */
-export function 代表语言(id: string): string {
-  const 组 = 图标组.find((g) => g.语言.includes(id));
-  return 组 ? 组.语言[0]! : id;
+export function representTableLanguage(id: string): string {
+  const group = iconGroup.find((g) => g.language.includes(id));
+  return group ? group.language[0]! : id;
 }
 
 /**
@@ -210,13 +210,13 @@ export function 代表语言(id: string): string {
  * ⚠️ **纯查表**，不碰 `import.meta.glob`、不碰 DOM——`tests/lang-icons.test.ts`
  * 直接拿它写断言（那份测试在 `node` 里跑，没有 Vite 那套转换）。
  */
-export function 图标名(语言: string): string | null {
-  return 语言到图标.get(语言) ?? null;
+export function iconName(language: string): string | null {
+  return languageToIcon.get(language) ?? null;
 }
 
 /** 供测试遍历用（避免测试自己再解析一遍那张表）。 */
-export function 全部图标名(): string[] {
-  return [...new Set(图标组.map(({ 图标 }) => 图标))];
+export function allIconNames(): string[] {
+  return [...new Set(iconGroup.map(({ icon }) => icon))];
 }
 
 /**
@@ -234,22 +234,22 @@ export function 全部图标名(): string[] {
  *    换来的是 `真图标URI()` 是同步的——下拉是同步建的，改成异步就要为
  *    "图标晚一拍才出现"再写一套重绘逻辑，为这点体积不值得。
  */
-let 原文缓存: Record<string, string> | null = null;
-function 全部原文(): Record<string, string> {
-  if (原文缓存 === null) {
-    原文缓存 = import.meta.glob("../assets/lang-icons/file_type_*.svg", {
+let sourceBufferSave: Record<string, string> | null = null;
+function allSource(): Record<string, string> {
+  if (sourceBufferSave === null) {
+    sourceBufferSave = import.meta.glob("../assets/lang-icons/file_type_*.svg", {
       query: "?raw",
       import: "default",
       eager: true,
     }) as Record<string, string>;
   }
-  return 原文缓存;
+  return sourceBufferSave;
 }
 
 // ⚠️ 下面这行拼出来的是 glob 的**键**（`import.meta.glob` 的键是"相对本文件的
 //    路径"）。路径里那个 `../assets/` 与上面 `import.meta.glob` 那一行必须一致——
 //    对不上的话每一颗图都取不到，症状是"全部回落成徽章"，且只在运行期看得出来。
-let 报过缺文件 = false;
+let reportPassMissingTextItem = false;
 
 /**
  * 真正的入口：这个语言要画的图，写成 CSS `background-image` 的值；
@@ -258,38 +258,38 @@ let 报过缺文件 = false;
  * ⚠️ 返回值**已经是一段 `url("…")`**，直接塞进 `style.backgroundImage` 就行。
  * 别在调用方再包一层引号。
  */
-export function 真图标URI(语言: string): string | null {
-  const 名 = 图标名(语言);
-  if (名 === null) return null;
+export function assertValueIconURI(language: string): string | null {
+  const name3 = iconName(language);
+  if (name3 === null) return null;
 
-  const 原文 = 全部原文();
-  let 图 = 原文[`../assets/lang-icons/file_type_${名}.svg`];
+  const source = allSource();
+  let image = source[`../assets/lang-icons/file_type_${name3}.svg`];
 
-  if (图 === undefined && !报过缺文件) {
+  if (image === undefined && !reportPassMissingTextItem) {
     // ⚠️ 这一条是"名字打错了"的**运行期**防线（另一半是
     //    `tests/lang-icons.test.ts` 拿真文件列表对账）。只报一次：这个函数
     //    每次开下拉都会跑几十遍。症状本身是静默的——回落成徽章，界面看着
     //    完全正常，只是那颗图永远不出现。
-    报过缺文件 = true;
+    reportPassMissingTextItem = true;
     console.warn(
-      `[nota] 语言图标：表里写着 \`${名}\`（语言 id 之一：${找语言(名) ?? "?"}），` +
-        `但 src/assets/lang-icons/file_type_${名}.svg 不在仓库里，这个语言会回落成首字母徽章。` +
+      `[nota] 语言图标：表里写着 \`${name3}\`（语言 id 之一：${findLanguage(name3) ?? "?"}），` +
+        `但 src/assets/lang-icons/file_type_${name3}.svg 不在仓库里，这个语言会回落成首字母徽章。` +
         `表在 src/editor/lang-icons-real.ts，抓图的脚本是 tools/fetch-lang-icons.sh。`,
     );
     return null;
   }
-  if (图 === undefined) return null;
+  if (image === undefined) return null;
 
   // ⚠️ `encodeURIComponent` 是这里唯一安全的编码方式：它会把 `#`（在 URL 里
   //    是片段分隔符）、`<`、`>`、`"` 全部转义掉，于是外面那对双引号里不可能
   //    出现一个没转义的引号把 `url(...)` 提前收尾。
   //    不加 `;base64`：`\n` 之外它几乎不省体积，可读性却差一大截（调试时
   //    想眼看一遍某颗图的源码就没法看了）。
-  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(图)}")`;
+  return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(image)}")`;
 }
 
 /** 反查：这个图标名是给哪个语言 id 用的（只为上面那条警告里能报个人话）。 */
-function 找语言(图标: string): string | null {
-  for (const [id, 名] of 语言到图标) if (名 === 图标) return id;
+function findLanguage(icon: string): string | null {
+  for (const [id, name3] of languageToIcon) if (name3 === icon) return id;
   return null;
 }

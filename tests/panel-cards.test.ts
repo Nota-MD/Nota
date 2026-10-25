@@ -41,36 +41,36 @@ import { normalise } from "../src/ui/panel-nodes";
 
 /* ── 极小的测试工装（与 `heatmap.test.ts` 同一套）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
 function eq(actual: unknown, want: unknown, what: string): void {
   const a = JSON.stringify(actual);
   const b = JSON.stringify(want);
   if (a === b) {
-    过++;
+    pass++;
   } else {
-    败++;
-    败的.push(`${what}\n     想要 [${b}]\n     实得 [${a}]`);
+    fail++;
+    failed.push(`${what}\n     想要 [${b}]\n     实得 [${a}]`);
   }
 }
 
 /** 把一份原始 JSON 收成节点，取第一块（就是 `kind` 那一块）。 */
-function 第一块(raw: unknown) {
+function ordinalOneBlock(raw: unknown) {
   const out = normalise(raw);
   return out[0];
 }
 
 /** 一份最小的记录卡块。 */
-function 块(spec: Record<string, unknown>) {
-  return 第一块([{ kind: "cards", ...spec }]);
+function block(spec: Record<string, unknown>) {
+  return ordinalOneBlock([{ kind: "cards", ...spec }]);
 }
 
 /* ── (1) 完整的五条 ─────────────────────────────────────────────── */
 
 {
-  const n = 块({
+  const n = block({
     title: "Writing record",
     items: [
       { icon: "round", value: "13", unit: "words / min", caption: "本轮 · 1,050 字 · 50 秒", points: [20, 0, 20] },
@@ -92,18 +92,18 @@ function 块(spec: Record<string, unknown>) {
 /* ── (2) 五个图标名与那个兜底 ────────────────────────────────────── */
 
 {
-  for (const 名 of ["round", "today", "long", "doc", "record"]) {
-    eq((块({ items: [{ icon: 名 }] }) as any).spec.items[0].icon, 名, `图标 ${名} 认得`);
+  for (const name3 of ["round", "today", "long", "doc", "record"]) {
+    eq((block({ items: [{ icon: name3 }] }) as any).spec.items[0].icon, name3, `图标 ${name3} 认得`);
   }
-  eq((块({ items: [{ icon: "stopwatch" }] }) as any).spec.items[0].icon, "record", "认不出的图标落到秒表");
-  eq((块({ items: [{ icon: 7 }] }) as any).spec.items[0].icon, "record", "图标是数也落到秒表");
-  eq((块({ items: [{}] }) as any).spec.items[0].icon, "record", "没写 icon 也一样");
+  eq((block({ items: [{ icon: "stopwatch" }] }) as any).spec.items[0].icon, "record", "认不出的图标落到秒表");
+  eq((block({ items: [{ icon: 7 }] }) as any).spec.items[0].icon, "record", "图标是数也落到秒表");
+  eq((block({ items: [{}] }) as any).spec.items[0].icon, "record", "没写 icon 也一样");
 }
 
 /* ── (3) 字段类型不对的兜底 ──────────────────────────────────────── */
 
 {
-  const n = 块({
+  const n = block({
     title: 42,
     items: [{ icon: "round", value: 1240, unit: null, caption: ["x"], points: "1,2,3" }],
   }) as any;
@@ -117,27 +117,27 @@ function 块(spec: Record<string, unknown>) {
 /* ── (4) 曲线那串点：只留数字、留最后 200 个 ─────────────────────── */
 
 {
-  const 脏 = [1, null, 2, "3", Number.NaN, Number.POSITIVE_INFINITY, 4, undefined];
-  eq((块({ items: [{ points: 脏 }] }) as any).spec.items[0].points, [1, 2, 4],
+  const dirty = [1, null, 2, "3", Number.NaN, Number.POSITIVE_INFINITY, 4, undefined];
+  eq((block({ items: [{ points: dirty }] }) as any).spec.items[0].points, [1, 2, 4],
     "只留有限数字（null / 字符串 / NaN / Infinity 全丢，**且顺序不变**）");
 
-  const 多 = Array.from({ length: 250 }, (_, i) => i);
-  const 收的 = (块({ items: [{ points: 多 }] }) as any).spec.items[0].points;
-  eq(收的.length, 200, "点数封顶 200（与 `chart` 同一个上限）");
-  eq(收的[0], 50, "**丢的是最老的**（留最后 200 个：起点是 50 不是 0）");
-  eq(收的[199], 249, "末尾那一个留着");
+  const many = Array.from({ length: 250 }, (_, i) => i);
+  const receiveOf = (block({ items: [{ points: many }] }) as any).spec.items[0].points;
+  eq(receiveOf.length, 200, "点数封顶 200（与 `chart` 同一个上限）");
+  eq(receiveOf[0], 50, "**丢的是最老的**（留最后 200 个：起点是 50 不是 0）");
+  eq(receiveOf[199], 249, "末尾那一个留着");
 }
 
 /* ── (5) 汇总那行：`null` 与"三个空串"是两件事 ──────────────────── */
 
 {
-  eq((块({ items: [{ icon: "round" }] }) as any).spec.total, null, "没给 total → null（不画那一行）");
-  eq((块({ items: [{ icon: "round" }], total: "12345 字" }) as any).spec.total, null,
+  eq((block({ items: [{ icon: "round" }] }) as any).spec.total, null, "没给 total → null（不画那一行）");
+  eq((block({ items: [{ icon: "round" }], total: "12345 字" }) as any).spec.total, null,
     "total 是个字符串 → 当没有，**不去猜它是不是一个数**");
-  eq((块({ items: [{ icon: "round" }], total: {} }) as any).spec.total,
+  eq((block({ items: [{ icon: "round" }], total: {} }) as any).spec.total,
     { label: "", value: "", unit: "" },
     "total 是个空表 → 三个空串（那是「有结论、值不知道」，画破折号）");
-  eq((块({ items: [], total: { label: "Whole document", value: "0", unit: "words" } }) as any).spec.total,
+  eq((block({ items: [], total: { label: "Whole document", value: "0", unit: "words" } }) as any).spec.total,
     { label: "Whole document", value: "0", unit: "words" },
     "⚠️ **一条记录都没有时，汇总照收**——idle 那一屏上它是唯一的数");
 }
@@ -145,29 +145,29 @@ function 块(spec: Record<string, unknown>) {
 /* ── (6) 边界：坏数据不发火、条数封顶、别的 kind 不受影响 ────────── */
 
 {
-  const n = 块({}) as any;
+  const n = block({}) as any;
   eq(n.kind, "cards", "一个字段都不给也是一个 cards 块");
   eq(n.spec.items, [], "items 缺 → 空数组");
   eq(n.spec.total, null, "total 缺 → null");
   eq(n.spec.title, "", "title 缺 → 空串（渲染层据此不画小标题）");
 
-  eq((块({ items: "三条" }) as any).spec.items, [], "items 不是数组 → 空数组（不是「一条空记录」）");
+  eq((block({ items: "三条" }) as any).spec.items, [], "items 不是数组 → 空数组（不是「一条空记录」）");
 
-  const 一堆 = Array.from({ length: 300 }, () => ({ icon: "round", value: "1" }));
-  eq((块({ items: 一堆 }) as any).spec.items.length, 200, "条数封顶 200（与宿主的「面板节点上限」同量级）");
+  const valueHeap = Array.from({ length: 300 }, () => ({ icon: "round", value: "1" }));
+  eq((block({ items: valueHeap }) as any).spec.items.length, 200, "条数封顶 200（与宿主的「面板节点上限」同量级）");
 
   // ⚠️ 新块不能动到邻居：同一份里别的块照旧。
-  const 混的 = normalise([
+  const mixedOf = normalise([
     { kind: "fields", items: [{ label: "a", value: "1" }] },
     { kind: "cards", items: [{ icon: "round", value: "13" }] },
     { kind: "text", text: "只在面板开着的时候记录。" },
   ]);
-  eq(混的.map((x) => x.kind), ["fields", "cards", "text"], "三个块各是各的");
-  eq((混的[1] as any).spec.items[0].value, "13", "中间那块照旧收下来");
+  eq(mixedOf.map((x) => x.kind), ["fields", "cards", "text"], "三个块各是各的");
+  eq((mixedOf[1] as any).spec.items[0].value, "13", "中间那块照旧收下来");
 }
 
 /* ── 收工 ───────────────────────────────────────────────────────── */
 
-console.log(`\n面板记录卡（cards）：${过} 条通过、${败} 条失败`);
-for (const m of 败的) console.log("  FAIL " + m);
-if (败 > 0) process.exit(1);
+console.log(`\n面板记录卡（cards）：${pass} 条通过、${fail} 条失败`);
+for (const m of failed) console.log("  FAIL " + m);
+if (fail > 0) process.exit(1);

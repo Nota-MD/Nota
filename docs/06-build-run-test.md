@@ -1,11 +1,11 @@
 # 06 · 依赖、构建、运行、调试与测试
 
-> 最后同步：2026-10-17
+> 最后同步：2026-10-25
 >
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
 > 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 599 条各钉住了什么。
 >
-> ⚠️ **测试数只在本文记数（Rust 当前 599 ／ 前端当前 1392）**，别处一律写"见 `docs/06`"。
+> ⚠️ **测试数只在本文记数（Rust 当前 690 ／ 前端当前 1769）**，别处一律写"见 `docs/06`"。
 >
 > ⚠️⚠️ **2026-10-09：插件源码与它的工装搬去了独立仓库**（`Nota-plugins`，与主仓库
 > 同级）。⇒ 本文里凡是写 **`tools/pack-plugin.py` / `tools/stats-state-test.lua` /
@@ -85,6 +85,7 @@ podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
 | `@milkdown/plugin-diagram` | Mermaid 图表的**节点与输入规则**：`` ```mermaid `` 围栏 → `diagram` 节点（`atom`，源码存在 `attrs.value` 里）。⚠️ **它自己不画图**——`toDOM` 只有一句 `dom.textContent = code`，全包没有一处 `mermaid.render`。画的那一半是本仓的 `src/editor/diagram-view.ts`（2026-09-26）。**它也是那堆超大 chunk 的来源**（见 §4） |
 | `mermaid` | 真正画图的那个（10.9.8）。⚠️ **显式列在 `package.json` 里**，不是蹭 `plugin-diagram` 的嵌套依赖——理由写在 `src/editor/diagram-view.ts` 文件头：那个包的 `exports` 只声明了 `"."`，任何子路径 import 会被 `tsc` 与 `vite` 双双拒掉 |
 | `katex` | 公式渲染。⚠️ **本行已过期过一次**：原文写的是"`src/` 里没有任何一处直接 import 它"。2026-09-22 起 `src/main.tsx` **确实 import 了它的样式**（`katex/dist/katex.min.css`）——那行之前是漏的，后果见 `docs/05` §2.2。列在 `package.json` 里的另一个作用是把版本钉在 `^0.16.11` |
+| `dompurify` | **块级 HTML 安全渲染**。2026-10-25 起 `editor/html-block-view.ts` 直接 import；虽然此前通过 `@milkdown/kit` / Mermaid 传递安装，但直接使用必须直接声明。配置只放行文档标签与属性，再叠一层 URL 闸门 |
 | `@codemirror/state` · `view` · `commands` | **源码模式**（`src/editor/source.ts`）的状态容器 / 视图 / 键位表与撤销栈。⚠️ 与 Milkdown **并列**的一套，不是它的插件——见 `docs/05` §2.5 |
 | `@codemirror/lang-markdown` · `@lezer/highlight` | Markdown 的语法切分与高亮标签。`language` 那半边（`syntaxHighlighting` / `HighlightStyle`）也从 `@codemirror/language` 进 |
 | `@codemirror/language` | 把 token 映射成样式的机制（`notaHighlight`） |
@@ -3081,7 +3082,7 @@ BUG-57 那批顺带现跑；⚠️ 那 +2 **也不是那一批写的**——那�
 "前端有测试框架了"——`package.json` 里**仍然没有**测试框架、也没有测试脚本，
 跑法是 `npx esbuild` ＋ `node` 两条命令（**§6.3**）。
 
-> ⚠️ 记数只在本文记（Rust 599 ／ 前端 1392）。别处提到测试数一律写"见 `docs/06`"。
+> ⚠️ 记数只在本文记（Rust 690 ／ 前端 1744）。别处提到测试数一律写"见 `docs/06`"。
 > 核实：`podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test --lib`。
 
 ### 6.1 逐条
@@ -3757,18 +3758,23 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 本轮按要求没有构建安装包，也没有开窗逐键复验。
 下面那行仍是早期快照，历史读数不改。
 
+📌 **2026-10-25 现跑**：前端全集 **98 份 / 至少 1769 条，全部 exit=0**。
+本轮新增 HTML 安全渲染、当前列对齐、模式切换滚动恢复、文档主题明暗选择与日志
+生命周期判据；TypeScript、`cargo check --lib`、国际化、文档同步和生产构建同批通过。
+
 `keymap` **54** · `auto-pair` **57** · `slash` **49** · `share-card` **46** ·
-`math-view` **31** · `math-wiring` **20** · `math-delim` **47** · `find` **48** · `table-input` **39** · `inline-marks` **37** ·
+`math-view` **33** · `math-wiring` **20** · `math-delim` **47** · `find` **48** · `table-input` **39** · `inline-marks` **37** ·
 `smart-punctuation` **36** · `focus-summary` **34** · `math-commands` **35** · `emoji` **32** · `front-matter` **32** ·
 `lang-guess` **31** · `footnote` **30** · `url-link` **29** · `paste-clean` **25** ·
 `table-pipe` **39** · `math-input` **28** · `source-mark` **28** · `toc` **27** ·
 `math-suggest` **27** · `auto-correct` **20** ·
 `heatmap` **20** · `atom-space` **19** · `heading-on-enter` **19** ·
 `accent` **18** · `mark-hint` **18** · `instant-render` **17** ·
-`file-kind` **14** · `html-block` **14** · `lang-icons` **14** · `focus-dim` **15** ·
+`file-kind` **14** · `html-block` **18** · `html-block-view` **8** · `deferred-snapshot` **9** · `count-text` **9** · `lang-icons` **17** · `focus-dim` **15** ·
 `chart-ticks` **12** · `video-view` **12** · `sidebar-resize` **12** ·
 `doc-typography` **11** · `status-metric` **10** · `tree-options` **9** ·
 `empty-doc-save` **8** · `window-title` **8** · `modal-trap` **9** · `tablist-keys` **6** · `key-conflicts` **19** ·
+`table-align` **3** · `mode-scroll` **4** · `doc-theme-mode` **4** · `debug-log-window` **6** ·
 `list-indent` **16** · `syntax-escape` **13** · `math-currency` **23** ·
 `table-tab` **58** · `bar-close` **13** · `caret-snapshot` **10** · `panel-cards` **37** ·
 `code-block-editing` **31** · `select` **25** · `move-block` **20** ·
@@ -5948,7 +5954,7 @@ Typora 那里是**照常显示**的，躲开不画不是它的做法。已回退
 
 ⚠️ **功能侧同时复核**：源码模式读到的是干净的 `*你好*`（一个反斜杠都没有）；
 在段尾打字落在斜体**外面**——与 `side:-1` 那句"插进去的内容落在 widget 后面"一致。
-⚠️ **判据**：`tests/mark-hint.test.ts` **18 条**（边界口径回到原样后全过）。
+⚠️ **判据**：`tests/mark-hint.test.ts` **19 条**（新增“多字符标记拆成独立字符”）。
 
 ### 5.56 验「代码块里换成 CodeMirror 编辑」（第 101 项，2026-10-06，⚠️ **手感那半开窗量过，`Tab` 与 `Ctrl+Z` 两条没验成**）
 
@@ -6689,3 +6695,88 @@ FreeType 对“中 / 文 / A”返回 `pixel_mode=1`（MONO）。无头 `:99` �
 `--icon-folio-close-symbolic: url("./shared-assets/custom-close.svg")` 指向
 **与主题 ID 不同名**的共享目录；重启后状态栏关闭键变成方框 + 叉，证明后端确实按
 CSS 文件目录解析相对资源，而不是要求 `<主题id>/icons/`。
+
+### 5.70 验「源码标记 SVG、标题按钮与代码框开头退格」（2026-10-25，✅ 开窗与纯节点测试）
+
+**现场**：隔离 XDG、`ui_style = "cde"`、`toolbar = "always"`，无头 `DISPLAY=:99`，
+打开包含标题、引用、段落与 Rust 围栏的同一份 Markdown。
+
+**看到了什么**：
+
+1. 光标进入引用块后，左侧源码标记不再显示字体字符 `>`，而是 CDE 自绘的
+   双引号像素图标；图形与引用块的纵向中心对齐。默认主题对应使用
+   `nota-source-quote-symbolic.svg`，接口相同、外观不是字体。
+2. 格式工具栏的 H1/H2/H3 已换成自绘路径图标，数字不再随界面字体变形；
+   CDE 提供独立的 16 格硬边版本。
+3. 点进非空 Rust 代码框，`Ctrl+Home` 后按 Backspace：代码框外壳消失，
+   三行代码分别成为正文段落，一个字符未丢；按一次 `Ctrl+Z`，原代码框恢复。
+
+**判据**：`tests/code-block-lift.test.ts` 4 条（多行、空块、空白行、非代码块），
+`tests/instant-render.test.ts` 3 条，`tests/heading-on-enter.test.ts` 20 条，
+`tests/icon-theme.test.ts` 核对新增图标源与 CDE 映射；`npx tsc --noEmit`、
+`npm run build` 通过。
+
+### 5.71 验「调试终端、灰项接线与图片导出」（2026-10-25）
+
+调试日志窗口用真实前端入口 `index.html#debug-log` 在 Chromium 中渲染；宿主调用由
+隔离注入返回一份诊断样例。目检结果是固定英文报告、等宽只读区域、顶部
+“Copy All”与“Export .log”两个动作，以及深色界面下可读的滚动区。
+
+图片导出没有只看静态代码：在 Chromium 中调用正式 `htmlToPngBase64()`，输入一份
+带标题、段落与表格的导出 HTML，返回 base64 以 PNG 头 `iVBORw0KGgoA` 开始。
+首版使用 blob URL 时 canvas 报 `SecurityError: Tainted canvases may not be exported`，
+改成 SVG data URL 后通过；这是该实现必须保留的细节。
+
+**判据**：`tests/menu-features.test.ts` 6 条、`tests/debug-log-window.test.ts`
+5 条与 `tests/diagnostics-text.test.ts` 3 条；全量前端 90 份、至少 1722 条通过。
+`tsc`、生产构建、国际化、
+文档同步与 `cargo check` 通过。实时日志截图见 `/tmp/nota-debug-log.png`；
+`Show Diagnostics` 的 Windows 字段截图见
+`/tmp/nota-debug-diagnostics-windows.png`。
+
+**启动门限**：在空 `XDG_*`、`DISPLAY=:98`、无窗口管理器的隔离环境里轮询
+`xwininfo`，只认主窗口几何从 `-10000,-10000` 变成屏幕内坐标的时刻。当前前端
+三测为 **1.769 / 1.790 / 1.840 秒**；已安装 0.9.0 发布版基线为
+**1.497 / 1.504 / 1.518 秒**。窗口就绪事件仍排在
+`handle.focusAtStart()` 之后，前端测试同时钉住“没有加载动画、未等待字体”。
+
+### 5.72 验「正文闪烁光标」（2026-10-25）
+
+WebKitGTK 在部分环境中不保证原生插入光标闪烁。`editor/blink-caret.ts` 现在在
+`.ProseMirror` 之外建 `.nota-blink-caret` 覆盖层，用 `coordsAtPos()` 跟随普通
+文本空选区；`styles/editor.css` 隐藏原生 caret，并用主题 `--accent` 画 2px 光标。
+
+⚠️ **第一版把光标做成 `Decoration.widget`，能看见但打不进字**。ProseMirror 会给
+widget 写 `contenteditable=false`，WebKitGTK 在紧邻它的折叠选区上无法接收输入。
+覆盖层必须留在文档 DOM 之外；测试同时禁止 `Decoration.widget` 和 `decorations()`
+重新出现。动画周期 1.06 秒，系统请求减少动态效果时取消动画并保持光标可见。
+
+代码块、公式块和图表块的父节点分别带 `code` 或 `atom` 规格，因此不显示正文覆盖层，
+内部 CodeMirror / NodeView 的光标不会被覆盖。只读的预览与导出实例不安装该插件。
+
+**判据**：`tests/blink-caret.test.ts` 9 条，覆盖普通段落与标题、非空选区、代码块、
+公式块、CSS 动画、焦点限制、只读隔离和“不得重新使用 Widget”的回归；全量前端
+**92 份 / 至少 1734 条**通过，`tsc --noEmit` 与 `vite build` 通过。另在
+`DISPLAY=:99` 的无头窗口里实际键入 `INPUT-OK`，文字进入正文；间隔 0.55 秒抓两帧，
+确认覆盖层一帧隐藏、一帧显示。截图保存在本机 `/tmp/nota-input-fixed.png`、
+`/tmp/nota-overlay-a.png` 与 `/tmp/nota-overlay-b.png`，不进入仓库。
+
+### 5.73 验「数学围栏空隙、菜单与自定义导出器」（2026-10-25）
+
+数学围栏源码区原先由 `view.hasFocus()` 保持展开；该值只表示正文编辑器有焦点，
+光标移到下方段落后仍会留下隐藏的源码区高度。现在改为检查当前选区是否落在
+`code_block` 的文档区间内。无头窗口里打开只有 ` ```math ` 的文档，点击下方空白
+再键入 `A`，`A` 紧接公式框后的正常段距出现。
+
+菜单侧统一菜单栏弹层、子菜单和侧栏操作弹层的 `--radius-sm` 圆角；侧栏文件页
+改为带“操作”标题、关闭按钮、操作组、列表/树形图标组、当前目录和文件动作的
+Typora 式弹层。导出设置分成固定项与自定义项两段：固定项为通用、PDF、HTML、
+无样式 HTML、图片；下方九种默认导出器可增删、排序和改名，并即时同步到
+「文件 → 导出」。
+
+**判据**：`tests/math-code.test.ts` 6 条、`tests/menu-visual.test.ts` 4 条、
+`tests/export-menu.test.ts` 6 条；全量前端 **94 份 / 至少 1744 条**通过；
+Rust 定向测试 `settings::export::tests` 4 条与 `pandoc_format::tests` 1 条通过；
+`tsc --noEmit`、`cargo check --lib`、生产构建通过。实际窗口截图保存在本机
+`/tmp/nota-math-gap-fixed2-typed.png`、`/tmp/nota-export-settings.png` 与
+`/tmp/nota-export-menu.png`，不进入仓库。

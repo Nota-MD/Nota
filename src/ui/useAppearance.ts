@@ -29,12 +29,12 @@ import { useEffect } from "react";
 
 import type { Settings } from "@/bridge/ipc";
 import { applyTheme } from "@/styles/applyTheme";
-import { useZoom, type 缩放动作 } from "@/ui/useZoom";
+import { useZoom, type ShrinkReleaseAction } from "@/ui/useZoom";
 
 export function useAppearance(
   settings: Settings | null,
   updateSettings: (patch: Partial<Settings>) => Promise<void>,
-): 缩放动作 {
+): ShrinkReleaseAction {
   useEffect(() => {
     // ⚠️ 必须把 `applyTheme` 返回的退订函数交出去。`ui_mode = "auto"` 时它挂了一个
     // `matchMedia` 监听，不接返回值就等于每次 settings 变化都再挂一个、旧的从不移除

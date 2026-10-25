@@ -7,6 +7,7 @@
   align-items: center;
   gap: 2px;
   height: 30px;
+  box-sizing: border-box;
   padding: 2px 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -40,7 +41,8 @@
 }
 
 .table-toolbar-gap {
-  width: 12px;
+  flex: 1;
+  min-width: 12px;
 }
 
 .table-grid-glyph {

@@ -1,6 +1,6 @@
 # 05 — 编辑器桥：Milkdown 装配、双向通道与大纲
 
-> 最后同步：2026-10-23
+> 最后同步：2026-10-25
 
 本文讲**编辑区那一半**：为什么是 ProseMirror 系、`src/editor/create.ts` 到底装了什么、
 **三种编辑模式**（所见即所得 / 源码 / 分屏，见 §3.1 与 §2.5）、React 与编辑器的边界画在哪、
@@ -57,6 +57,7 @@ ctx 初值、序列化器、输入规则、NodeView）现在在 `assemble.ts::�
 | `@milkdown/kit/plugin/history` | `history` | **撤销栈**。`App.tsx` 没有绑 Ctrl+Z，撤销完全由它自己的键盘处理负责 |
 | `@milkdown/kit/plugin/listener` | `listener` + `listenerCtx` | 文档变化回调的挂点（§5.1） |
 | `@milkdown/kit/plugin/cursor` | `cursor` | **拖放指示线 + gap 光标**（`dropCursorConfig` / `gap-cursor`），不是"光标样式" |
+| `./blink-caret`（**本仓**） | `闪烁光标` | **正文插入光标的显示**（2026-10-25）：普通文本空选区在 `.ProseMirror` 之外定位 `.nota-blink-caret` 覆盖层，WebKitGTK 的原生光标设为透明。覆盖层不进入文档 DOM，避免 Widget 的 `contenteditable=false` 阻断输入。代码块、公式块与图表块由内部编辑器继续画自己的光标；只给可编辑实例安装 |
 | `@milkdown/kit/plugin/clipboard` | `clipboard` | 剪贴板的序列化/反序列化 |
 | `@milkdown/kit/plugin/indent` | `indent` | 列表里按 Tab/空格缩进的快捷键（`indentConfig` 可配 `type` / `size`，**没配**，走默认） |
 | `@milkdown/kit/plugin/trailing` | `trailing` | 文末按 `trailingConfig.shouldAppend` 补一个节点（默认段落），保证末尾能落光标 |
@@ -71,7 +72,7 @@ ctx 初值、序列化器、输入规则、NodeView）现在在 `assemble.ts::�
 | `@milkdown/plugin-prism` | `prism` | 代码块高亮 |
 | `@milkdown/plugin-math` | `math` | 数学公式（KaTeX）：节点是 `math_inline` / `math_block`。⚠️ **这个包一个 NodeView 都没有**（`toDOM` 只把源码交给 `katex.render` 画出来），而且两个节点的**源码不在同一个地方**——`math_inline` 在**节点的内容**里、`math_block` 在 **`attrs.value`** 里。⚠️ **不改它的结果就是「敲进去的字静默丢掉」**（屏幕上写着、`toMarkdown` 交出去是空）。补视图的是本仓的 `./math-view`（§4.6b） |
 | `./diagram-node`（**本仓**） | `diagram` | ```mermaid 围栏 → `diagram` 节点，并把手动选成 `mermaid` 的代码块也转成同一个节点。上游 `@milkdown/plugin-diagram` 已退役：它不画图，却会把整包 Mermaid 静态拖进首屏。节点源码仍只存 `attrs.value` |
-| `./heading-on-enter`（**本仓**） | `标题回车成块` | **标题"回车才成块"** ＋ 输入期给井号后面那段文字加粗；2026-09-30 起**宽松档（`#你好`）与严格档走完全同一条路**——没按回车只加粗，按了回车才成块。见 §4.9 与 §4.9c |
+| `./heading-on-enter`（**本仓**） | `标题回车成块` | **标题"回车才成块"**：`##` 本身先是实体文本，空格出现后前缀变半透明、正文暂定加粗；回车成块后井号完全消失。见 §4.9 与 §4.9c |
 | `./table-input`（**本仓**） | `表格输入规则` / `表格输入` | 敲表头行 ＋ 分隔行 → 回车吃成一张真表格（此前只能用菜单插）。⚠️ 它和 `heading-on-enter` 都要处理"回车"，所以两边的守卫里各有一条绕开对方的地盘 |
 | `./table-tab`（**本仓**） | `表格Tab` | **表格里的 `Tab` / `Shift+Tab`**（2026-10-04，`docs/07` 第 55 项 ②③）：⚠️ 上游 `preset-gfm` 的 `tableKeymap` **已经绑了这两颗键**，这一条只接它**撂挑子**的两种现场——**最后一格 `Tab`**（在下面加一行、光标进新行第一格）与**第一格 `Shift+Tab`**（**吃掉这颗键**：不吃的话焦点会静默飞出编辑器，接着打的字落到别处）。⚠️ 表格之外一律放行（`Tab` 照旧缩进）。⚠️ 排在 `配对处理` **后面**、`indent` **前面**——见 §4.21 |
 | `./diagram-view`（**本仓**） | `diagramView` | 图表块的 NodeView：上方 CodeMirror 源码编辑器、下方独立渲染区。CM 的撤销/重做转给 ProseMirror，粘贴事件由 CM 自己接收；`mindmap` 从 `--accent` 推导同色相柔和配色，Mermaid 仍只在实际出图时动态加载 |
@@ -290,7 +291,7 @@ Prism 的 vue 语言在另一个包里，**全量注册不等于什么都有**�
 | `block` | 块手柄（左侧六点、拖动整块） | 同上 |
 | `tooltip` | 悬浮工具提示（链接预览等） | 同上 |
 | 任意 Markdown→HTML 库 | 导出时把正文转成 HTML 用的 | **导出走编辑器自己那条路**（建一个只读实例、摘它渲染出来的 DOM，见 §4.5）。再装一个库就等于第二套渲染实现，两边迟早长得不一样 |
-| Pandoc | 转 Word / ODT / LaTeX / Epub / PDF | ⚠️ **2026-09-25 改口径（原文是「不装它，那几项因此仍是 `⬜`」）**：作为**库**仍然不装（没有 `pandoc` 这个 crate 可装，它本来就是外部程序），但**系统里已经有的那个会用**——探测 → 借它转那七种（`src-tauri/src/pandoc.rs`）。判据是用户那句「你可以让他自己寻找系统的 pandoc，别人也是这么做的」：**不内嵌、不下载、不替用户装**，也不存它的路径（`docs/10` §11.2 那条窄口径） |
+| Pandoc | 转 Word / ODT / LaTeX / Epub / PDF / MediaWiki / reStructuredText / Textile 等 | ⚠️ **2026-09-25 改口径（原文是「不装它，那几项因此仍是 `⬜`」）**：作为**库**仍然不装（没有 `pandoc` 这个 crate 可装，它本来就是外部程序），但**系统里已经有的那个会用**——探测后按格式表转换（`src-tauri/src/pandoc.rs`）。判据是用户那句「你可以让他自己寻找系统的 pandoc，别人也是这么做的」：**不内嵌、不下载、不替用户装**，也不存它的路径 |
 
 这三个在 `docs/10` §3 的矩阵里最显眼：那一节的「斜杠菜单」一行就是 `⬜` +
 一句"`create.ts` 里**刻意没装** `@milkdown/plugin-slash`"。逐项状态以 `docs/10`
@@ -372,6 +373,7 @@ Milkdown（ProseMirror）自己拥有那块 `contenteditable`；React 只负责"
 | `disposed` 标志 + `handle.destroy()` | React 19 StrictMode 下 effect 会跑两遍：第一遍的实例如果已经建好了，这一遍就得拆掉，**不然页面上会有两个 ProseMirror** |
 | 卸载时清掉待执行的去抖定时器 | 不然组件没了还会 `api.doc.sync` 一次 |
 | 卸载时**再从活着的实例读一次文本**存进 `latestRef` | 去抖窗口里那最后一截（打完字不到 300ms 就切模式/换文档）只在编辑器里，丢掉它 = 用户亲眼看着刚打的字消失 |
+| 切换模式前读一次滚动比例，新实例聚焦后优先恢复这个值 | 模式一变编辑器会重建；只用会话里的“打开文档位置”会让用户从当前阅读处跳回旧位置。比例比像素更耐受字号、正文宽度和分屏变化 |
 
 `handle.focus()` 在建好之后立刻调一次；`ready` 为假时显示「正在准备编辑器…」。
 
@@ -851,9 +853,11 @@ KaTeX 公式，再叠**限域后的**文档主题。外面那几层 class（`.ed
 落点由后端按文档目录决定（`commands/export.rs`），因为正文里的 `![](./img.png)`
 是相对路径。
 
-⚠️ **那七种格式不在这条路上**（2026-09-25 加）：PDF / Word / RTF / EPUB / LaTeX /
-OpenOffice / OPML 是**交给系统里那个 pandoc** 转的（`ui/useExport.ts` → `nota_pandoc_export`
-→ `src-tauri/src/pandoc.rs`）。两点和上面那条口径连着：① **正文仍然是前端现取的**
+⚠️ **Pandoc 那一族不在这条路上**：格式表目前有十种，设置分隔线以下的默认模板从
+Word、OpenDocument、RTF、EPUB、LaTeX 排到 MediaWiki、reStructuredText、
+Textile、OPML；它们与固定 PDF 都**交给系统里那个 pandoc** 转
+（`ui/useExport.ts` → `nota_pandoc_export` → `src-tauri/src/pandoc.rs`）。
+两点和上面那条口径连着：① **正文仍然是前端现取的**
 （`getMarkdown()`），后端只收字符串、走 pandoc 的**标准输入**，不落中间文件；
 ② **PDF 有两条路**（pandoc 优先，不通就退到 Nota 自带那套 WebKit 打印），所以 PDF 那次
 前端**总是先把带样式的 HTML 备好**——兜底要用，不备的话"装了 pandoc 但没装排版引擎"
@@ -944,12 +948,14 @@ OpenOffice / OPML 是**交给系统里那个 pandoc** 转的（`ui/useExport.ts`
   面板就弹。装饰由 `公式当前` 那条线出（真 `appendTransaction`，把落进内容的光标改成整块
   选中），画的是 `nota-math-current`。
 - 编辑态下两根 `$` / `$$` 半透明（`.nota-math-delim`，走 `.nota-srcmark` 那张配方：
-  `--fg-faint` ＋ 0.16s 淡入，**不再乘 `opacity`**），行内公式编辑时渲染区
-  `display: none`（Typora 式：源码框替掉结果）。
-- 公式源码框、宽度标尺、空态说明和 KaTeX 渲染根都使用 `--font-math`：主栈从 KaTeX
-  数学字体开始，中文明确回落到 Noto Serif CJK / 思源宋体等衬线字体。行内公式、块公式
-  与 `math` / `latex` / `tex` 围栏共用这条链；KaTeX 的数学变量仍保留自己的专用字形。
-  界面其他文本继续使用 `--font-ui`，不把衬线体扩散到外壳。
+  `--fg-faint` ＋ 0.16s 淡入，**不再乘 `opacity`**）。块公式采用 Typora 式上下分区：
+  上方是四边等距、带「公式」结束编辑按钮的源码区，下方是参与文档流且公式水平垂直居中的
+  独立预览框；行内公式仍显示源码，并用短浮层预览，避免把一整段正文拆开。源码框显式恢复
+  `caret-color: var(--accent)`，点击源码区任意位置都会重新聚焦并显示原生闪烁光标。
+- 公式源码框与宽度标尺使用与代码框相同的 `--font-mono`；渲染结果、预览和空态说明
+  使用 `--font-math`，中文明确回落到 Noto Serif CJK / 思源宋体等衬线字体。
+  行内公式、块公式与 `math` / `latex` / `tex` 围栏共用渲染字体栈；KaTeX 的数学变量
+  仍保留自己的专用字形。界面其他文本继续使用 `--font-ui`。
 - 数学 schema 本身留在核心编辑器里，因此公式块始终可选中、可输入源码；昂贵的
   KaTeX JS 与 mhchem 由 `katex-runtime.ts` 动态加载。等待时节点标成 `loading`，
   不阻塞窗口揭幕。窗口 `show()` 完成后才启动预热，正常本地启动下在首帧后的
@@ -961,7 +967,8 @@ OpenOffice / OPML 是**交给系统里那个 pandoc** 转的（`ui/useExport.ts`
   退路）。⚠️ 代价：覆盖了 `selectNode` / `deselectNode` 之后，**这个节点不能再拖着搬家**了。
 
 ✅ **2026-09-26 在无头窗口里点过了**（上一批给自己留的那件验收；同批撞出 **BUG-37**）：
-① **编辑态与半透明都对**——点一颗块级公式，源码框满行展开、**左右两端各一个半透明的 `$$`**、上方保留 KaTeX 渲染（用户要的"指示输入位置"就是这个）；
+① **编辑态与半透明都对**——点一颗块级公式，源码框展开、`$$` 半透明；2026-10-25
+起预览移到下方独立框，不再覆盖正文；
 ② **焦点没有被顶掉**——那条 `queueMicrotask` 排聚焦**在真浏览器里站住了**：点完直接敲字，字进的是源码框（不是正文）；
 ③ **所见即所存**——敲完 `Ctrl+S`，把文件读出来核字节：`E=mc^2` → `E=mc^27`，两端仍是 `$$`（行内那颗同样验过：`$x^2$` 改成 `$x^27$`，定界符没串）。
 ⚠️ **但编辑态下"再点一下自己那块渲染区"会出事**：浏览器把焦点交回正文，而选区还停在整块上，于是**下一个字符把整块公式替换掉**（实测：48 字符掉到 36，块没了；同一串动作把那个字符换成 `Ctrl+A` ＋ `Delete` 就是**整篇删空**）。这是 **BUG-37**，修法是给 `渲染` 补一条 `mousedown`（编辑态时 `preventDefault` ＋ 把焦点收回源码框，非编辑态放行让 ProseMirror 去选中整块），**已复验**。
@@ -1513,7 +1520,8 @@ ProseMirror / CodeMirror 对"剪贴板里是图片"的处理是**把那坨二进
 
 | 时刻 | 两档的长相（完全一样） |
 |---|---|
-| 输入中（还没按回车） | **只加粗**——井号后面那段文字挂 `.nota-heading-pending`，字号行高一个不动 |
+| 输入中（光标还在这一段） | 井号前缀挂 `.nota-heading-prefix` 显示为 `--fg-faint`；井号后面那段文字挂 `.nota-heading-pending` 只加粗，字号行高一个不动 |
+| 输入后把光标移开（仍没按回车） | 整段挂 `.nota-heading-rendered-block`，按主题的 `--doc-h*` 字号/字重/行高渲染；前缀隐藏。点回该段时恢复上一行 |
 | 按下回车 | **变成真标题块**，字号这时才跳（之后由 `h1`~`h6` 排） |
 | 已经是标题块了 | 不再进装饰——**那正是这一版判"写完了没有"的方式** |
 
@@ -1612,8 +1620,9 @@ Mermaid 源码框，下方是独立边框的渲染区，输入后防抖回写节
 
 **① 行内标记的提示（`editor/mark-hint.ts`）**——光标进入任一支持的**行内标记**时，
 在文字左右显示真实源码符号：`**`、`*`、反引号、`~~`、`==`、`^`、`~`、`<u></u>`。
-2026-10-24 起符号继承正文颜色、字体和字号，只锁死常规字重/正体，最终完全不透明；
-用户要的是“实体字符”，不是以界面字号绘制的淡灰鬼影。
+2026-10-25 起符号继承正文字体与字号，颜色使用 `--fg-faint`，只锁死常规字重/正体：
+它们是真实字符，但视觉层级仍属于 Markdown 语法。每个字符各是一颗 widget，
+`**` / `</u>` 不再是一个不可分文字块，光标可以在两个同形定界字符之间移动。
 
 - ⚠️ **2026-10-23 起左右两颗都是 `Decoration.widget` 里的真实 `<span>` 文字**，
   并显式传 `marks: []`。在这之前左符号是挂在粗体文字上的 `::before`，用户看到它会继承
@@ -1647,7 +1656,7 @@ Mermaid 源码框，下方是独立边框的渲染区，输入后防抖回写节
   光标能在两侧移动；光标走开才消失。⚠️ **功能侧与它一致**：在段尾打字落在斜体**外面**。
   ⚠️⚠️ **中途翻过一次车**：当天**先**做的是"段尾那一格整个不画"（`扫一段` 收紧、注释里写成
   "光标的位置在撒谎"），**当天就被那两张图推翻**——躲开不画不是 Typora 的做法。已回退，
-  `扫一段` 的边界口径回到原样。⚠️ 判据 `tests/mark-hint.test.ts` **18 条**。
+  `扫一段` 的边界口径回到原样。⚠️ 判据 `tests/mark-hint.test.ts` **19 条**。
 
 **② 原子后面那颗空格（`editor/atom-space.ts`）**——2026-09-26 目检发现：行内公式后面紧跟
 一个空格，存盘时那个空格是 **U+00A0**（不换行空格，`cat -A` 里是 `M-BM- `），不是用户敲的空格；
@@ -1759,7 +1768,7 @@ Slidev 面板（改之前是「这份文档没写主题…」）：
 原来写着「`ready` 那一格仍然没在界面上见过」，**这句话就此被推翻**（改动见那边与第 46 项）。
 ⚠️ 它只说明**探测**通过：点「开始预览」才真去起 `npx @slidev/cli`，**那一步没做**。
 
-### 4.13 四种行内标记 ＋ 块级裸 HTML（`editor/inline-marks.ts` / `editor/html-block.ts`，2026-09-27）
+### 4.13 四种行内标记 ＋ 块级裸 HTML（`editor/inline-marks.ts` / `editor/html-block.ts` / `editor/html-block-view.ts`，2026-09-27）
 
 这一节装的是 §3 那六格 ⬜（高亮 / 上标 / 下标 / 下划线 / HTML 标签 / 注释）。
 **六格只拆成两个文件**，因为判据只有两类：
@@ -1836,19 +1845,20 @@ group:"inline", inline:true                ← 同文件 :1510
 那张表是**穷举**的四种（`root` / `blockquote` / `listItem` / `footnoteDefinition`），
 **新出的容器类型会落到行内那一支**——那正是安全的方向。
 
-⚠️ **编辑区里显示成源码**（灰底等宽），**不是渲染后的 HTML**。这是与 Typora 的
-**已知差别**，两条理由：① 真渲染得先把「html ＋ text ＋ html」三颗合成一颗带内容的
-节点，那是**重写一遍 HTML 解析器**；② 编辑区是**活文档**，渲染等于让用户写的
-`<script>` / `onerror=` 跑起来。⚠️ **导出与打印不受影响**：那边吃的是**序列化后的
-markdown**，原样的 `<div>` 交过去出来就是真的 HTML 元素——「写进文件的 HTML 是
-有效的」这件事仍然成立，代价只落在编辑区的观感上。
+⚠️ **2026-10-25 起编辑区安全渲染 HTML**。文档节点仍是原来的原子节点，源码仍只住在
+`attrs.value`；`html-block-view.ts` 只接管显示。DOMPurify 使用受控标签与属性白名单，
+保留 README 常用的居中段落、标题、图片、徽章链接、表格、详情块等内容，拒绝脚本、
+iframe、表单、SVG、内联样式、事件属性与危险 URL。相对图片路径按当前文档目录解析。
+悬浮 `HTML` 按钮可在块内编辑源码，内容写回 `attrs.value`，因此撤销、自动保存和源码
+模式共享同一份真相。导出继续读取渲染后的正文 DOM，但会移除源码编辑框与切换按钮。
 
 #### ③ 判据在哪
 
 | 文件 | 条数 | 盯什么 |
 |---|---|---|
 | `tests/inline-marks.test.ts` | **37** | `切文本` / `行内标记转换器` / 四颗规格的往返 / 叠加（BUG-48，两条路各一组）／半重叠与配对守卫（BUG-50，见 ⑥） |
-| `tests/html-block.test.ts` | **14** | `是注释` / `块HTML转换` / 真 `unified()` ＋ 真 `ParserState`/`SerializerState` 的往返 |
+| `tests/html-block.test.ts` | **18** | NodeView 注册键 / `是注释` / `块HTML转换`（含 `paragraph(html)` 包装） / 真 `unified()` ＋ 真 `ParserState`/`SerializerState` 的往返 |
+| `tests/html-block-view.test.ts` | **6** | 标签 / 属性白名单与 `href` / `src` 第二道地址闸门 |
 
 ✅ **2026-09-27 晚开窗点过了**——`docs/10` §3 那五格（高亮 / 上标·下标 / 下划线 /
 HTML 标签 / 注释）**从 🟡 翻成 ✅**：判据是**落盘的 markdown 字节差**（高亮 `+4`、
@@ -2941,7 +2951,7 @@ priority 110 压过上游 `ExitTable`，中间格复用 `goToNextCell`，末格�
 
 列宽拖动手柄已经移除。表格现在用一套结构操作：
 
-- 光标进入表格后，表格上方出现快捷栏：调整行列数、左 / 中 / 右对齐、删除表格；
+- 光标进入表格后，表格上方出现与表格同宽的快捷栏：调整行列数、当前列左 / 中 / 右对齐，删除按钮位于最右侧；
 - 右键菜单增加「表格」子菜单：插入行列、移动行列、删除行列、复制表格、格式化
   表格源码与删除整表；
 - 调整行列数会在保留现有单元格内容的前提下重建表格；移动行列直接使用
@@ -2950,7 +2960,9 @@ priority 110 压过上游 `ExitTable`，中间格复用 `goToNextCell`，末格�
   表格的规范列宽一致；
 - 右键子菜单在右侧空间不足且左侧可用时从父项左边展开。
 
-这些入口均只作用于当前表格，不按主题或具体文件写分支。本轮没有增加自动化测试。
+这些入口均只作用于当前表格，不按主题或具体文件写分支。列对齐由
+`tests/table-align.test.ts` 的 **3** 条判据约束：只修改光标所在列，同时覆盖表头与
+数据格；单元格里的段落继承单元格对齐值，不被文档主题的段落规则压回左侧。
 
 
 ### 4.22 第 39 项（行内标记即时渲染）：**方案与风险**（2026-10-04，⚠️ **只写不做**）
@@ -2968,8 +2980,8 @@ priority 110 压过上游 `ExitTable`，中间格复用 `goToNextCell`，末格�
 
 | 已有 | 管什么 | 那些标记在哪 |
 |---|---|---|
-| `editor/instant-render.ts`（154 行） | **块级**：`#` / `>` / `-` / 有序号 / 三个反引号 | 光标在当前块内时以灰色画在**左侧装订线**，离开连宽度一起收掉。⚠️ 是 `Decoration.widget`，**不在文档里** |
-| `editor/mark-hint.ts`（297 行） | **行内提示**：光标落进加粗/斜体时，把 `**` / `*` 半透明画在那段文字左右两边 | ⚠️ `Decoration.inline` ＋ `::before`（左符号）＋ **`Decoration.widget`（右符号，`side:-1`）**，**一个字节都不写回**——2026-10-05 BUG-65 |
+| `editor/instant-render.ts`（154 行） | **块级**：引用 / 无序列表 / 有序号 / 代码围栏 | 光标在当前块内时画在**左侧装订线**，离开连宽度一起收掉。引用、无序列表与围栏使用可主题覆盖的 SVG；位置由 `top:50%` 垂直居中。⚠️ 是 `Decoration.node`，**不在文档里** |
+| `editor/mark-hint.ts` | **行内提示**：光标落进支持的标记时，把源码定界符逐字符画在文字两侧 | 每字符一颗 `Decoration.widget`，`side:-1`、`marks:[]`、`--fg-faint`；**一个字节都不写回** |
 
 所以"出现/消失"这套**已经能演**。缺的是**用户能拿光标进到标记里、能删掉其中一半**——
 那件事**加装饰永远做不到**，因为那段文本根本不存在。
@@ -3061,6 +3073,12 @@ priority 110 压过上游 `ExitTable`，中间格复用 `goToNextCell`，末格�
 `createCodeBlockCommand`；已经在代码块里时调用 `turnIntoTextCommand` 退回普通段落。
 上游命令在“已经是代码块”时返回 `false`，旧按钮因此第二次点击没有任何可见反馈。
 
+📌 **2026-10-25：`math` 围栏后的巨大空隙。** `syncChrome()` 原来用
+`view.hasFocus()` 判断是否保持数学源码区展开；这个布尔表示“正文编辑器任意位置有焦点”，
+不是“选区在这个代码块里”。光标移到下方段落后源码区仍留在布局中，表现为渲染框后多出一整块空白。
+现在只在 `selection.from >= getPos()` 且 `selection.to <= pos + node.nodeSize`，
+或焦点确实在代码块子树里时展开；离开后立即收回。
+
 用户 2026-10-06 定的做法：「**引入开源项目：CodeMirror。解决代码框。**」
 ——在此之前代码块是纯 ProseMirror 的 `code_block`，`auto-pair.ts` 只能给它补
 "配对"这一件，**缩进与 `Tab` 补不进去**（那两件要按行看上下文，是编辑器内核的事）。
@@ -3098,6 +3116,13 @@ ProseMirror 的 `hasFocus()` 判的是 `activeElement == view.dom` → 假 →
 `selectionToDOM` **直接返回**，PM 不会去抢选区。同一件事的另一面是
 `stopEvent` 判据放宽成**整个 `pre` 子树**（原来是"三个挂件"）：代码区里的
 每一次按键都算"这个节点内部的事"，漏一条进去 PM 就会去重解析不属于它的 DOM。
+
+📌 **2026-10-25：代码框开头 Backspace**。光标在 CodeMirror 文档偏移 `0`
+（空选区）时，这一下不再被吞掉。`code-block.ts` 调 `code-block-lift.ts`
+把 `code_block` 的 `textContent` 按换行拆成一组普通 `paragraph`，空行也保留；
+一次 `replaceWith` 完成整块转换，并把选区放到第一段开头。非空代码内容不会丢，
+一次 `Ctrl+Z` 可以恢复原代码框。改之前先读纯节点测试
+`tests/code-block-lift.test.ts`。
 
 ⚠️ **着色仍然只有一个来源**：`refractor`。`分色()` 把它分词出来的叶子算成
 `{从, 到, 类}`，类名**逐字沿用** `token xxx`（`editor-blocks.css` 那一段配色照旧管用），
@@ -3411,6 +3436,13 @@ div.nota-code-wrap          ← 新套的一层，自己不画任何东西
   → 标签上的小圆点、状态栏、大纲跟着更新
 ```
 
+源码模式走同一去抖，但不在击键事务里复制全文：CodeMirror 的每次文档事务只调用
+`onDocumentActivity` 记录“内容已变化”，不执行 `state.doc.toString()`；去抖到期后
+`deferred-snapshot.ts` 才读取一次当前全文，再更新 `latestRef`、front matter 横幅、
+分屏预览与后端镜像。5.32 MB 文档的单次 `toString()` 实测约 12.6 ms；旧路径每个
+按键都复制一次，是持续掉帧和垃圾回收抖动的主要来源。保存、导出、切模式不等待
+这个定时器，仍直接调用 `getMarkdown()`。
+
 三个设计点：
 
 | 点 | 口径 |
@@ -3418,7 +3450,7 @@ div.nota-code-wrap          ← 新套的一层，自己不画任何东西
 | 去抖放在**调用方**（`EditorPane`），不在 `create.ts` 里 | 代码注释的原话：**"多快算太快"取决于拿这个回调干什么**——存草稿 / 推给后端 / 更新字数，三种节奏不一样。`create.ts` 只保证"变了就叫我"（还用 `markdown !== prev` 挡掉空转） |
 | 去抖间隔是 `SYNC_DEBOUNCE_MS = 300`；大文件走 `LARGE_SYNC_DEBOUNCE_MS = 1000`（`EditorPane.tsx`） | 见 `docs/03` §9.1 |
 | 脏标记**由后端算** | 只有后端知道跟磁盘上那份一不一样；所以同步完要 `refreshDocs()` 把 `dirty` 取回来 |
-| `onActivity`（2026-09-25 加）是**同一个变化信号的第二个消费者** | 它只在 `onChange` 的**第一行**报一下"刚刚有人在打字"，给自动保存的停笔计时器用（`ui/useAutosave.ts`）。⚠️ 它**不额外挂监听、也不去读文档**——所以"自动保存"这件事对编辑区的代价是零；反过来，**不许**把它换成轮询 `getMarkdown()` 比一比，那是把整篇文档每秒复制一遍（`docs/02` 的 `useAutosave` 一节） |
+| `onActivity`（2026-09-25 加）是**同一个变化信号的第二个消费者** | 所见即所得在 `onChange` 第一行报，源码模式在 `onDocumentActivity` 报；两者都只记"刚刚有人在打字"，给自动保存的停笔计时器用（`ui/useAutosave.ts`）。⚠️ 它**不额外挂监听、也不去读文档**——所以"自动保存"这件事对编辑区的代价是零；反过来，**不许**把它换成轮询 `getMarkdown()` 比一比，那是把整篇文档每秒复制一遍（`docs/02` 的 `useAutosave` 一节） |
 
 **强制同步点**（`docs/03` §1.1 对策②）：`ui/useDocuments.ts::saveDoc()` 在 `api.doc.save`
 之前先 `editorRef.current?.getMarkdown()` 再 `api.doc.sync(id, text)`——因为镜像可能还差

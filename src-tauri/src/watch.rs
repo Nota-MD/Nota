@@ -124,7 +124,7 @@ impl 内层 {
                         Ok(()) => {}
                         // ⚠️ **不静默**：盯不上就是"这一份的外部改动永远不报"，
                         // 而它在界面上没有任何别的表现。走调试闸门（`log.rs`）。
-                        Err(e) => crate::日志!("[nota] 盯不上目录 {}：{e}", 目录.display()),
+                        Err(e) => crate::日志!("[nota] failed to watch directory {}: {e}", 目录.display()),
                     }
                 }
             }
@@ -178,7 +178,7 @@ impl 监视器 {
             // 那会因为一个"正在退出"而 panic 在监视线程里。
             let _ = tx.send(ev);
         })
-        .map_err(|e| crate::日志!("[nota] 起不了文件监视器：{e}"))
+        .map_err(|e| crate::日志!("[nota] failed to start file watcher: {e}"))
         .ok();
 
         let 内 = Arc::new(Mutex::new(内层 {
@@ -234,7 +234,7 @@ fn 收事件(
                     攒了.extend(e.paths);
                 }
             }
-            Err(e) => crate::日志!("[nota] 文件监视报错：{e}"),
+            Err(e) => crate::日志!("[nota] file watcher error: {e}"),
         };
         收一条(首条, &mut 攒了);
 
@@ -270,7 +270,7 @@ fn 比对并发(app: AppHandle, 内: &Arc<Mutex<内层>>, 动过的: Vec<PathBuf
     };
 
     for (id, 路径, 摘要) in 报这些 {
-        crate::日志!("[nota] 磁盘上的 {} 被别的程序改了", 路径.display());
+        crate::日志!("[nota] file changed externally: {}", 路径.display());
         let _ = app.emit(
             EVENT_FILE_CHANGED,
             serde_json::json!({

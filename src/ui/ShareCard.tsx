@@ -30,7 +30,7 @@ import { save as saveDialog } from "@/ui/file-picker";
 
 import { api } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { 分享图SVG, 当前卡色, 安全文件名, 转base64, 光栅化 } from "@/ui/share-card";
+import { shareCardSvg, currentCardColor, SafeFileName, toBase64, lightGridConvert } from "@/ui/share-card";
 import type { PanelShare } from "@/ui/panel-nodes";
 
 /**
@@ -47,38 +47,38 @@ import type { PanelShare } from "@/ui/panel-nodes";
  * ⚠️ 用 `当前卡色()` 而不是自己读一遍：判据在 `share-card.ts` 里，这里不重写。
  */
 function useCardPalette() {
-  const [色, set色] = useState(() => 当前卡色());
+  const [color, setColor] = useState(() => currentCardColor());
 
   useEffect(() => {
-    const 看 = new MutationObserver(() => set色(当前卡色()));
+    const see2 = new MutationObserver(() => setColor(currentCardColor()));
     // ⚠️ 只订阅这一条属性：`style` 也在同一层（用户改主题色时会变），
     // 而卡片的强调色是**画死**的，跟着它重画纯属白跑。
-    看.observe(document.documentElement, {
+    see2.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-ui-mode"],
     });
     // 挂上之后再问一次：这中间（首次渲染到 effect 之间）主题可能已经换过了。
-    set色(当前卡色());
-    return () => 看.disconnect();
+    setColor(currentCardColor());
+    return () => see2.disconnect();
   }, []);
 
-  return 色;
+  return color;
 }
 
-export interface 分享图出口 {
+export interface ShareEnjoyImageOutputMouth {
   /** 那张 SVG 的源码（预览用，也可以直接喂给别的渲染路径）。 */
-  图: string;
+  image: string;
   /** 正在存 / 正在复制时是 `"save"` / `"copy"`，闲着是 `""`。按钮拿它置灰。 */
-  忙: "" | "save" | "copy";
+  busy: "" | "save" | "copy";
   /**
    * 上一次动作的结果，**一句话，直接显示给用户**（空串 = 还没动过）。
    *
    * ⚠️ 它是**结果不是错误**：里面既有"已保存到 /tmp/x.png"也有"没能写进剪贴板
    * （…）"。调用方别拿它当 `error` 处理（那会漏掉成功那一半）。
    */
-  结果: string;
-  存为图片: () => Promise<void>;
-  进剪贴板: () => Promise<void>;
+  result2: string;
+  saveAsImageSlice: () => Promise<void>;
+  enterCutPasteBoard: () => Promise<void>;
 }
 
 /**
@@ -99,62 +99,62 @@ export interface 分享图出口 {
  * 出来并指向"保存为图片"那条一定能走通的路。宁可多说一句，也不要让用户对着
  * 一张空的剪贴板反复按。
  */
-export function useShareCard(spec: PanelShare): 分享图出口 {
+export function useShareCard(spec: PanelShare): ShareEnjoyImageOutputMouth {
   const t = useT();
-  const 色 = useCardPalette();
-  const [忙, set忙] = useState<"" | "save" | "copy">("");
-  const [结果, set结果] = useState("");
+  const color = useCardPalette();
+  const [busy, setBusy] = useState<"" | "save" | "copy">("");
+  const [result2, setResult] = useState("");
 
   // ⚠️ 依赖用**内容签名**而不是 `spec` 这个对象：活面板每秒重画一次，插件每次
   // 递上来的都是一份全新的对象，`spec` 这个身份每秒都变。不这么写的话这串 SVG
   // 每秒重建、`encodeURIComponent` 每秒扫一遍、`<img>` 每秒重新解码——图根本
   // 没变，白转 CPU，而且会闪。
-  const 签名 = JSON.stringify(spec);
-  const 图 = useMemo(() => 分享图SVG(spec, 色), [签名, 色]);
+  const keyName = JSON.stringify(spec);
+  const image = useMemo(() => shareCardSvg(spec, color), [keyName, color]);
 
-  const 存为图片 = async () => {
-    set忙("save");
-    set结果("");
+  const saveAsImageSlice = async () => {
+    setBusy("save");
+    setResult("");
     try {
-      const 块 = await 光栅化(spec, 色);
-      const 路径 = await saveDialog({
+      const block = await lightGridConvert(spec, color);
+      const path = await saveDialog({
         title: t("Save share image"),
         // ⚠️ 默认名用调用方给的那个（`nota-stats-day-2026-09-27.png`）——它认识
         // 这是哪一天、哪一轮。但**不能信**：那是插件（或总结）来的字符串，
         // `../` 或 `:` 在"另存为"里是真能写到别处去的（`share-card.ts::安全文件名`）。
-        defaultPath: 安全文件名(spec.file),
+        defaultPath: SafeFileName(spec.file),
         filters: [{ name: "PNG", extensions: ["png"] }],
       });
-      if (!路径) return; // 用户取消了，不是错误
-      const 写出 = await api.export.writeBytes(路径, await 转base64(块));
-      set结果(t("Saved to {0}", 写出));
+      if (!path) return; // 用户取消了，不是错误
+      const writeOutput = await api.export.writeBytes(path, await toBase64(block));
+      setResult(t("Saved to {0}", writeOutput));
     } catch (e) {
-      set结果(t("Could not save: {0}", String(e)));
+      setResult(t("Could not save: {0}", String(e)));
     } finally {
-      set忙("");
+      setBusy("");
     }
   };
 
-  const 进剪贴板 = async () => {
-    set忙("copy");
-    set结果("");
+  const enterCutPasteBoard = async () => {
+    setBusy("copy");
+    setResult("");
     try {
       // ⚠️ 能力先问后做：`ClipboardItem` 不存在时 `new` 会抛一个不认识的
       // `ReferenceError`，那句话给用户看没有意义。这里换成一句能懂的话。
       if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
         throw new Error(t("This environment cannot put images on the clipboard"));
       }
-      const 块 = await 光栅化(spec, 色);
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": 块 })]);
-      set结果(t("Copied to clipboard"));
+      const block = await lightGridConvert(spec, color);
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": block })]);
+      setResult(t("Copied to clipboard"));
     } catch (e) {
-      set结果(t("Could not write to the clipboard ({0}). Try “Save as image” instead.", String(e)));
+      setResult(t("Could not write to the clipboard ({0}). Try “Save as image” instead.", String(e)));
     } finally {
-      set忙("");
+      setBusy("");
     }
   };
 
-  return { 图, 忙, 结果, 存为图片, 进剪贴板 };
+  return { image, busy, result2, saveAsImageSlice, enterCutPasteBoard };
 }
 
 /**
@@ -165,19 +165,19 @@ export function useShareCard(spec: PanelShare): 分享图出口 {
  */
 export function ShareCardPreview({
   spec,
-  图,
+  image,
   className,
 }: {
   spec: PanelShare;
   /** [`useShareCard`] 给的那一串；调用方已经有一份时别在这里再生成一遍。 */
-  图: string;
+  image: string;
   className?: string;
 }) {
   const t = useT();
   return (
     <img
       className={className}
-      src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(图)}`}
+      src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(image)}`}
       // 读屏软件读这句：卡片上那些数字对它是没有形状的（同 `PanelChartBlock`）。
       alt={t("Share image preview: {0} {1}", spec.title || "", spec.value || "")}
     />
@@ -193,26 +193,26 @@ export function ShareCardPreview({
  */
 export function ShareCardBlock({ spec }: { spec: PanelShare }) {
   const t = useT();
-  const { 图, 忙, 结果, 存为图片, 进剪贴板 } = useShareCard(spec);
+  const { image, busy, result2, saveAsImageSlice, enterCutPasteBoard } = useShareCard(spec);
 
   return (
     <div className="panel-share">
-      <ShareCardPreview spec={spec} 图={图} className="panel-share-img" />
+      <ShareCardPreview spec={spec} image={image} className="panel-share-img" />
 
       <div className="panel-share-actions">
         <button
           type="button"
           className="btn btn-primary panel-btn"
-          disabled={忙 !== ""}
-          onClick={() => void 存为图片()}
+          disabled={busy !== ""}
+          onClick={() => void saveAsImageSlice()}
         >
           {t("Save as image")}
         </button>
         <button
           type="button"
           className="btn panel-btn"
-          disabled={忙 !== ""}
-          onClick={() => void 进剪贴板()}
+          disabled={busy !== ""}
+          onClick={() => void enterCutPasteBoard()}
         >
           {t("Copy to clipboard")}
         </button>
@@ -220,9 +220,9 @@ export function ShareCardBlock({ spec }: { spec: PanelShare }) {
 
       {/* `role="status"`：这一行是**后来才出现的结果**，读屏软件要主动念出来
           （`aria-live` 的 polite 档，不打断用户正在读的东西）。 */}
-      {结果 && (
+      {result2 && (
         <p className="panel-share-note" role="status">
-          {结果}
+          {result2}
         </p>
       )}
     </div>

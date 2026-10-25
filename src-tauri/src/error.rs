@@ -24,6 +24,13 @@ pub enum NotaError {
         source: std::io::Error,
     },
 
+    #[error("删除文件失败 {path}：{}", 人话(source))]
+    Delete {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("路径不是合法的 UTF-8：{0}")]
     NonUtf8Path(PathBuf),
 

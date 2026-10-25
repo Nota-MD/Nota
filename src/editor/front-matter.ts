@@ -79,7 +79,7 @@
  */
 
 /** [`拆前置块`] 的结果。 */
-export interface 拆分结果 {
+export interface SplitShareResult {
   /**
    * 开头那一段原文（**含首尾两行围栏**，末尾带回车/换行），没有就是 `null`。
    *
@@ -91,17 +91,17 @@ export interface 拆分结果 {
    *
    * ⚠️ 是**原文切片**，不是拼出来的，所以能原样拼回去。
    */
-  前置块: string | null;
+  frontMatter: string | null;
   /** 剩下的部分（编辑器真正看得见的那部分）。**开头不是空行。** */
-  正文: string;
+  body2: string;
 }
 
 /** 首行必须是**整行** `---`（允许行尾空白），后面必须跟一个换行。 */
-const 首行围栏 = /^---[ \t]*(\r?\n)/;
+const firstFenceLine = /^---[ \t]*(\r?\n)/;
 /** 闭栏：`---` 或 `...` 独占一行。⚠️ `...` 是 YAML 的另一种收尾写法。 */
-const 闭栏 = /^(?:---|\.\.\.)[ \t]*$/;
+const closeBar = /^(?:---|\.\.\.)[ \t]*$/;
 /** 一行 YAML 映射项：`键:` 或 `键: 值`。⚠️ 冒号后**必须**是空白或行尾。 */
-const 映射项 = /^[^\s:][^:]*:(?:\s|$)/;
+const mapProjectItem = /^[^\s:][^:]*:(?:\s|$)/;
 
 /**
  * 这几行**看起来像不像** YAML 映射。空行不算内容，但也不妨碍。
@@ -110,15 +110,15 @@ const 映射项 = /^[^\s:][^:]*:(?:\s|$)/;
  * 映射（整行是一个普通标量字符串）。所以 `https://x` 这种行**不**算映射项——
  * 这也是我们想要的：它更像正文。
  */
-function 像映射(行们: string[]): boolean {
-  const 有内容 = 行们.filter((行) => 行.trim() !== "");
+function likeMapProject(rows: string[]): boolean {
+  const hasContent = rows.filter((line3) => line3.trim() !== "");
   // ⚠️ 空的 `---\n---` 不看：那更可能是一对分割线（或者用户随手敲的），
   // 而"退化成什么都不保留"这件事一旦发生，用户看到的是"我的内容没了"。
-  if (有内容.length === 0) return false;
-  return 有内容.every((行) => {
-    if (/^[ \t]/.test(行)) return true; // 缩进：续行 / 嵌套 / 列表项
-    if (行.startsWith("#")) return true; // YAML 注释
-    return 映射项.test(行);
+  if (hasContent.length === 0) return false;
+  return hasContent.every((line3) => {
+    if (/^[ \t]/.test(line3)) return true; // 缩进：续行 / 嵌套 / 列表项
+    if (line3.startsWith("#")) return true; // YAML 注释
+    return mapProjectItem.test(line3);
   });
 }
 
@@ -127,15 +127,15 @@ function 像映射(行们: string[]): boolean {
  *
  * ⚠️ 只吃**空行**，吃到第一个有内容的行就停：正文一个字都不挪。
  */
-function 吃掉空行(markdown: string, 位置: number): number {
-  while (位置 < markdown.length) {
-    const 换行处 = markdown.indexOf("\n", 位置);
-    const 行尾 = 换行处 === -1 ? markdown.length : 换行处 + 1;
-    if (!/^[ \t]*\r?\n?$/.test(markdown.slice(位置, 行尾))) return 位置;
-    if (换行处 === -1) return 行尾;
-    位置 = 行尾;
+function consumeRemoveEmptyLine(markdown: string, position2: number): number {
+  while (position2 < markdown.length) {
+    const replaceLinePlace = markdown.indexOf("\n", position2);
+    const lineTail = replaceLinePlace === -1 ? markdown.length : replaceLinePlace + 1;
+    if (!/^[ \t]*\r?\n?$/.test(markdown.slice(position2, lineTail))) return position2;
+    if (replaceLinePlace === -1) return lineTail;
+    position2 = lineTail;
   }
-  return 位置;
+  return position2;
 }
 
 /**
@@ -144,30 +144,30 @@ function 吃掉空行(markdown: string, 位置: number): number {
  *
  * ⚠️ **不抛错、不改字**：任何"拿不准"的情形都走"不认识"这一支。
  */
-export function 拆前置块(markdown: string): 拆分结果 {
-  const 不拆: 拆分结果 = { 前置块: null, 正文: markdown };
-  const 首 = 首行围栏.exec(markdown);
-  if (!首) return 不拆;
+export function splitFrontMatter(markdown: string): SplitShareResult {
+  const notSplit: SplitShareResult = { frontMatter: null, body2: markdown };
+  const first = firstFenceLine.exec(markdown);
+  if (!first) return notSplit;
 
-  const 体: string[] = [];
-  let 位置 = 首[0].length;
-  while (位置 <= markdown.length) {
-    const 换行处 = markdown.indexOf("\n", 位置);
+  const body3: string[] = [];
+  let position2 = first[0].length;
+  while (position2 <= markdown.length) {
+    const replaceLinePlace = markdown.indexOf("\n", position2);
     // `行尾` = 含换行的下一行起点；最后一行没有换行时就是串尾。
-    const 行尾 = 换行处 === -1 ? markdown.length : 换行处 + 1;
-    const 行 = markdown.slice(位置, 行尾).replace(/\r?\n$/, "");
-    if (闭栏.test(行)) {
-      if (!像映射(体)) return 不拆;
+    const lineTail = replaceLinePlace === -1 ? markdown.length : replaceLinePlace + 1;
+    const line3 = markdown.slice(position2, lineTail).replace(/\r?\n$/, "");
+    if (closeBar.test(line3)) {
+      if (!likeMapProject(body3)) return notSplit;
       // ⚠️ 切到 `行尾`（**含闭栏那行的换行**）：拼回去就是一次直接相接，
       // 正文开头那个换行不会被算重、也不会被吃掉。
-      const 头 = 吃掉空行(markdown, 行尾);
-      return { 前置块: markdown.slice(0, 头), 正文: markdown.slice(头) };
+      const head2 = consumeRemoveEmptyLine(markdown, lineTail);
+      return { frontMatter: markdown.slice(0, head2), body2: markdown.slice(head2) };
     }
-    if (换行处 === -1) return 不拆; // 到最后一行都没有闭栏
-    体.push(行);
-    位置 = 行尾;
+    if (replaceLinePlace === -1) return notSplit; // 到最后一行都没有闭栏
+    body3.push(line3);
+    position2 = lineTail;
   }
-  return 不拆;
+  return notSplit;
 }
 
 /**
@@ -177,8 +177,8 @@ export function 拆前置块(markdown: string): 拆分结果 {
  * 与 `正文` 本来就是相邻的两截。要"看起来整齐"而在这里加一个换行，就等于
  * **每存一次盘往文件里多一个空行**——那正是这个模块要根治的病。
  */
-export function 拼回前置块(前置块: string | null, 正文: string): string {
-  return 前置块 === null ? 正文 : 前置块 + 正文;
+export function joinFrontMatter(frontMatter: string | null, body2: string): string {
+  return frontMatter === null ? body2 : frontMatter + body2;
 }
 
 /* ── 改写那一段（`docs/07` 第 64 项，2026-10-04）────────────────────────
@@ -198,17 +198,17 @@ export function 拼回前置块(前置块: string | null, 正文: string): strin
  * 开头那一对围栏**在哪**：`内文起点` 是首行围栏之后、`闭栏行首` 是收尾那一行
  * 的行首。认不出来给 `null`（判据与 [`拆前置块`] 同一份）。
  */
-function 围栏位置(前置块: string): { 内文起点: number; 闭栏行首: number } | null {
-  const 首 = 首行围栏.exec(前置块);
-  if (!首) return null;
-  let 位置 = 首[0].length;
-  while (位置 <= 前置块.length) {
-    const 换行处 = 前置块.indexOf("\n", 位置);
-    const 行尾 = 换行处 === -1 ? 前置块.length : 换行处 + 1;
-    const 行 = 前置块.slice(位置, 行尾).replace(/\r?\n$/, "");
-    if (闭栏.test(行)) return { 内文起点: 首[0].length, 闭栏行首: 位置 };
-    if (换行处 === -1) break;
-    位置 = 行尾;
+function encloseBarPosition(frontMatter: string): { bodyStart: number; closingFenceLineStart: number } | null {
+  const first = firstFenceLine.exec(frontMatter);
+  if (!first) return null;
+  let position2 = first[0].length;
+  while (position2 <= frontMatter.length) {
+    const replaceLinePlace = frontMatter.indexOf("\n", position2);
+    const lineTail = replaceLinePlace === -1 ? frontMatter.length : replaceLinePlace + 1;
+    const line3 = frontMatter.slice(position2, lineTail).replace(/\r?\n$/, "");
+    if (closeBar.test(line3)) return { bodyStart: first[0].length, closingFenceLineStart: position2 };
+    if (replaceLinePlace === -1) break;
+    position2 = lineTail;
   }
   return null;
 }
@@ -220,10 +220,10 @@ function 围栏位置(前置块: string): { 内文起点: number; 闭栏行首: 
  * 是内文的一部分，不是围栏的）。去掉的这一个换来的是"多一行空行不算内文"，
  * 与 [`改前置块内文`] 补回来的那一个正好对上。
  */
-export function 拆前置块内文(前置块: string): string {
-  const 位 = 围栏位置(前置块);
-  if (!位) return "";
-  return 前置块.slice(位.内文起点, 位.闭栏行首).replace(/\r?\n$/, "");
+export function splitFrontMatterBody(frontMatter: string): string {
+  const position3 = encloseBarPosition(frontMatter);
+  if (!position3) return "";
+  return frontMatter.slice(position3.bodyStart, position3.closingFenceLineStart).replace(/\r?\n$/, "");
 }
 
 /**
@@ -233,14 +233,14 @@ export function 拆前置块内文(前置块: string): string {
  * ⚠️ 原来那段认不出来时**从头建一段**（而不是返回原样）：认不出来意味着它压根不是
  * 我们管的那一段，把它当没写过是唯一说得通的做法。
  */
-export function 改前置块内文(原块: string, 内文: string): string {
-  const 位 = 围栏位置(原块);
-  if (!位) return 建前置块(内文);
-  const 头 = 原块.slice(0, 位.内文起点); // 首行围栏 + 它的换行
-  const 尾 = 原块.slice(位.闭栏行首); // 闭栏那一行 + 它后面吃进的空行
-  const 换行 = 头.includes("\r\n") ? "\r\n" : "\n";
-  const 行们 = 内文.replace(/\r?\n$/, "").split(/\r?\n/);
-  return 头 + 行们.join(换行) + 换行 + 尾;
+export function replaceFrontMatterBody(originalBlock: string, body: string): string {
+  const position3 = encloseBarPosition(originalBlock);
+  if (!position3) return createFrontMatter(body);
+  const head2 = originalBlock.slice(0, position3.bodyStart); // 首行围栏 + 它的换行
+  const tail = originalBlock.slice(position3.closingFenceLineStart); // 闭栏那一行 + 它后面吃进的空行
+  const replaceLine = head2.includes("\r\n") ? "\r\n" : "\n";
+  const rows = body.replace(/\r?\n$/, "").split(/\r?\n/);
+  return head2 + rows.join(replaceLine) + replaceLine + tail;
 }
 
 /**
@@ -254,7 +254,7 @@ export function 改前置块内文(原块: string, 内文: string): string {
  * ⚠️ 末尾那个空格是**留给光标的**（编辑框打开时插入点落在它后面），不是给
  * YAML 看的。去掉也解析得对，别为它加一条 trim。
  */
-export const 新建前置块模板 = "title: ";
+export const newFrontMatterTemplate = "title: ";
 
 /**
  * 从零**建**一段 front matter（`docs/07` 第 64 项：菜单里「YAML Front Matter」
@@ -265,9 +265,9 @@ export const 新建前置块模板 = "title: ";
  * 会把 `---` 下面那行读成 setext 标题（`标题\n---` 那是一整套写法）。空一行之后
  * 对照的每一种读法都是干净的。这也正是 [`拆前置块`] 会把空行吃进切片的原因。
  */
-export function 建前置块(内文: string): string {
-  const 行们 = 内文.replace(/\r?\n$/, "").split(/\r?\n/);
-  return `---\n${行们.join("\n")}\n---\n\n`;
+export function createFrontMatter(body: string): string {
+  const rows = body.replace(/\r?\n$/, "").split(/\r?\n/);
+  return `---\n${rows.join("\n")}\n---\n\n`;
 }
 
 /**
@@ -278,9 +278,9 @@ export function 建前置块(内文: string): string {
  * 拼进正文还会被当成分割线。**这个判断只有这一处**——两个调用方
  * （`create.ts` 与 `source.ts`）都走它，免得一边删一边留一对空围栏。
  */
-export function 换前置块(原块: string | null, 内文: string): string | null {
-  if (内文.trim() === "") return null;
-  return 原块 === null ? 建前置块(内文) : 改前置块内文(原块, 内文);
+export function replaceFrontMatter(originalBlock: string | null, body: string): string | null {
+  if (body.trim() === "") return null;
+  return originalBlock === null ? createFrontMatter(body) : replaceFrontMatterBody(originalBlock, body);
 }
 
 /**
@@ -295,9 +295,9 @@ export function 换前置块(原块: string | null, 内文: string): string | nu
  * 吃进来的那几行空行也算：空行里没有标题，多跳几行没有任何代价，
  * 却能让大纲的行号与全文行号对得上。
  */
-export function 前置块行数(markdown: string): number {
-  const 头 = 拆前置块(markdown).前置块;
-  if (头 === null) return 0;
+export function frontMatterLineCount(markdown: string): number {
+  const head2 = splitFrontMatter(markdown).frontMatter;
+  if (head2 === null) return 0;
   // 切片末尾**通常**带着闭栏那行的换行（[`拆前置块`] 的注释），按换行切会多出
   // 一个空尾巴；⚠️ 但文件正好**停在闭栏那一行**（末尾没有换行）时就没那个尾巴。
   // 所以这里先把**最多一个**尾换行去掉再数，两种情形才是同一个答案。
@@ -306,5 +306,5 @@ export function 前置块行数(markdown: string): number {
   // 少跳一行（多扫一行 `---`）。那一行不是标题，所以没出过可见的错——
   // 但数错了就是数错了，这个函数的全部价值就在于它给出的行号是真的。
   // 吃进的空行（闭栏后面那几行）照旧算在里面，见上面的注解。
-  return 头.replace(/\r?\n$/, "").split(/\r?\n/).length;
+  return head2.replace(/\r?\n$/, "").split(/\r?\n/).length;
 }

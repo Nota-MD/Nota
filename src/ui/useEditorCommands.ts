@@ -35,11 +35,11 @@ import { useCallback, type RefObject } from "react";
 import { useT } from "@/i18n";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import type { Dialogs } from "@/ui/useDialogs";
-import { 光标处那条链接 } from "@/ui/useLinkClick";
+import { cursorPlaceThatItemLink } from "@/ui/useLinkClick";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 命令接线 {
+export interface commandWiring {
   /** 编辑区句柄。⚠️ 传 **ref 本体**（身份稳定），不是 `ref.current`。 */
   editorRef: RefObject<EditorPaneHandle | null>;
   /** ⚠️ 类型**从 `useDialogs` 借**，不在这里另写一份：另写的那份迟早少一个字段。 */
@@ -47,21 +47,21 @@ export interface 命令接线 {
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
-export interface 命令出口 {
+export interface commandApi {
   /** 转交一条编辑命令，做不到时如实提示。 */
   run: (c: EditorCommand, payload?: CommandPayload) => void;
   /** 「超链接」：先问地址，再连地址一起交给编辑器。 */
-  插入链接: () => Promise<void>;
+  insertLink: () => Promise<void>;
 }
 
-export function useEditorCommands(w: 命令接线): 命令出口 {
+export function useEditorCommands(w: commandWiring): commandApi {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
   const { editorRef, askLink, toast } = w;
 
   /** 把一条命令交给编辑器；这一侧没有实现时如实提示（两条路共用这一份）。 */
-  const 交命令 = useCallback(
+  const handoffCommand = useCallback(
     (c: EditorCommand, payload?: CommandPayload) => {
       if (!editorRef.current?.runCommand(c, payload)) {
         toast(t("This action is not available in the current editing mode."), "info");
@@ -81,17 +81,17 @@ export function useEditorCommands(w: 命令接线): 命令出口 {
    * - **落笔**交给编辑器（`linkSet` / `linkRemove`），判据全在 `editor/link-edit.ts`
    *   ——两种模式各有一份实现，但"哪段是这条链接、地址危险了怎么办"是同一份。
    */
-  const 插入链接 = useCallback(async () => {
-    const 现 = 光标处那条链接();
-    const 答 = await askLink({
-      label: 现?.label ?? editorRef.current?.选区()?.text ?? "",
-      href: 现?.href ?? "",
-      editing: 现 !== null,
+  const insertLink = useCallback(async () => {
+    const current2 = cursorPlaceThatItemLink();
+    const answer = await askLink({
+      label: current2?.label ?? editorRef.current?.selection()?.text ?? "",
+      href: current2?.href ?? "",
+      editing: current2 !== null,
     });
-    if (!答) return; // 用户取消了，不是错误
-    if (答.kind === "remove") 交命令("linkRemove");
-    else 交命令("linkSet", { href: 答.href, label: 答.label });
-  }, [askLink, 交命令, editorRef]);
+    if (!answer) return; // 用户取消了，不是错误
+    if (answer.kind === "remove") handoffCommand("linkRemove");
+    else handoffCommand("linkSet", { href: answer.href, label: answer.label });
+  }, [askLink, handoffCommand, editorRef]);
 
   const run = useCallback(
     (c: EditorCommand, payload?: CommandPayload) => {
@@ -99,13 +99,13 @@ export function useEditorCommands(w: 命令接线): 命令出口 {
       // 与菜单里那条「插入链接」是同一件事——所以在这里改道到"先问再落笔"。
       // ⛔ 不改道的后果：空 href 的 toggle 会给选中的文字挂上一条点不动的链接。
       if (c === "link") {
-        void 插入链接();
+        void insertLink();
         return;
       }
-      交命令(c, payload);
+      handoffCommand(c, payload);
     },
-    [交命令, 插入链接],
+    [handoffCommand, insertLink],
   );
 
-  return { run, 插入链接 };
+  return { run, insertLink };
 }

@@ -118,7 +118,7 @@ pub fn 开窗(app: &tauri::AppHandle) {
             // ⚠️ 这里**只记日志 + 退回一声响**，不弹 toast：能弹 toast 的地方是主窗，
             // 而主窗此刻正在用户背后——一个他看不见的提示等于没提示。
             // 声音是这种情况下**唯一**还能到达他的频道，所以兜底音量走它。
-            crate::日志!("[nota] 强制专注：警报窗开不出来（{e}）。改用系统提示音。");
+            crate::日志!("[nota] focus alarm window failed ({e}); using system beep");
             系统提示音();
         }
     }
@@ -213,7 +213,7 @@ pub fn 系统提示音() {
     // ⚠️ 三个都起不来就**到这里为止**，不再往下找。用户机器上没有这些程序
     // 是完全可能的（比如 Windows），而那不是错误——前端那条路才是主路径。
     // 记一条日志，不弹任何东西：警报没响这个事实，用户自己会注意到。
-    crate::日志!("[nota] 强制专注：系统提示音三个候选都没起来。");
+    crate::日志!("[nota] focus alarm: all system beep candidates failed");
 }
 
 #[cfg(test)]

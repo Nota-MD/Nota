@@ -30,17 +30,17 @@ import { t } from "@/i18n";
 import type { MenuEntry, MenuSpec } from "@/ui/commands";
 
 /** 本仓认得的那一栏。**只有它**——`menu` 写别的值无处安放（见文件头）。 */
-export const 认识的菜单 = "plugins";
+export const recognizeRecognizeOfMenu = "plugins";
 
 /** 能跑的插件项的 id 前缀。 */
-export const 插件项前缀 = "__plugin:";
+export const pluginItemPrefix = "__plugin:";
 
 /** 无处安放的插件项的 id 前缀。**故意和上面不一样**，见下面的注释。 */
-const 无处安放前缀 = "__plugin-unplaced:";
+const withoutPlaceSafeReleasePrefix = "__plugin-unplaced:";
 
 /** 一条插件菜单项在 `menuHandlers` 里的键。 */
-export function 插件项id(plugin: string, command: string): string {
-  return `${插件项前缀}${plugin}:${command}`;
+export function pluginItemId(plugin: string, command: string): string {
+  return `${pluginItemPrefix}${plugin}:${command}`;
 }
 
 /**
@@ -50,26 +50,26 @@ export function 插件项id(plugin: string, command: string): string {
  * ⚠️ `menuHandlers` 里**没有**这些 id 的话，它们就是灰的（判据同上）。
  * 所以这个函数只负责"摆出来"，不负责"能不能点"——那是 `App.tsx` 那张表的事。
  */
-export function 插件菜单栏(items: PluginMenuItem[]): MenuSpec | null {
+export function pluginMenuBar(items: PluginMenuItem[]): MenuSpec | null {
   if (items.length === 0) return null;
 
-  const 认得: MenuEntry[] = [];
-  const 无处: MenuEntry[] = [];
+  const recognizeObtain: MenuEntry[] = [];
+  const withoutPlace: MenuEntry[] = [];
 
   for (const it of items) {
-    if (it.menu === 认识的菜单) {
-      认得.push({
-        id: 插件项id(it.plugin, it.command),
+    if (it.menu === recognizeRecognizeOfMenu) {
+      recognizeObtain.push({
+        id: pluginItemId(it.plugin, it.command),
         label: it.label,
         ...(it.accelerator ? { accel: it.accelerator } : {}),
       });
     } else {
-      无处.push({
+      withoutPlace.push({
         // ⚠️ id **必须**和认得的那些不一样：同一个插件的同一条命令，
         // 若同时以两种 `menu` 值声明（合法的——去重看的是标签），
         // 用同一个 id 就是 React 的重复 key，也是 `disabledCommands`
         // 那张集合里两条打架。加上这一截就永远不会撞。
-        id: `${无处安放前缀}${it.plugin}:${it.menu}:${it.command}`,
+        id: `${withoutPlaceSafeReleasePrefix}${it.plugin}:${it.menu}:${it.command}`,
         // ⚠️ 括号里那半句**在这儿就翻**：它是拼出来的（`it.menu` 是插件自己写的
         // 值），而下游 `MenuPopup` 那个 `t(entry.label)` 查的是**整条标签**——
         // 拼进去的那一截它查不到。
@@ -84,7 +84,7 @@ export function 插件菜单栏(items: PluginMenuItem[]): MenuSpec | null {
     // （`ui/usePlugins.ts` 的 `useMemo`），不是模块级常量。
     label: t("Extensions"),
     // 一条都没有就**不摆分隔线**——一栏里只有一条分隔线看着像坏了。
-    items: 认得.length && 无处.length ? [...认得, "sep", ...无处] : [...认得, ...无处],
+    items: recognizeObtain.length && withoutPlace.length ? [...recognizeObtain, "sep", ...withoutPlace] : [...recognizeObtain, ...withoutPlace],
   };
 }
 
@@ -99,12 +99,12 @@ export function 插件菜单栏(items: PluginMenuItem[]): MenuSpec | null {
  * 牵着三条 `useMemo`／`useEffect`（`ui/useMenus.ts` 顶上那张表），其中
  * 最后一条会**每渲染重推一次原生菜单**（一次 IPC ＋ 一次重建）。
  */
-export function 带插件栏(menus: readonly MenuSpec[], items: PluginMenuItem[]): MenuSpec[] {
-  const 栏 = 插件菜单栏(items);
-  if (!栏) return [...menus];
+export function withPluginDock(menus: readonly MenuSpec[], items: PluginMenuItem[]): MenuSpec[] {
+  const bar = pluginMenuBar(items);
+  if (!bar) return [...menus];
 
   const out = [...menus];
-  const 帮助 = out.findIndex((m) => m.id === "help");
-  out.splice(帮助 < 0 ? out.length : 帮助, 0, 栏);
+  const helpHelp = out.findIndex((m) => m.id === "help");
+  out.splice(helpHelp < 0 ? out.length : helpHelp, 0, bar);
   return out;
 }

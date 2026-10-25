@@ -13,7 +13,7 @@
 
 import type { PluginInfo } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { 父目录名, 文件名 } from "@/ui/useSession";
+import { parentItemRecordName, textItemName } from "@/ui/useSession";
 
 interface Props {
   plugins: PluginInfo[];
@@ -21,11 +21,11 @@ interface Props {
   onOpen: () => void;
   onOpenFolder: () => void;
   /** 最近打开过的文件（新的在前）。**空表 = 这一块整个不画**，见文件头。 */
-  最近: readonly string[];
+  recent: readonly string[];
   onOpenRecent: (path: string) => void;
 }
 
-export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecent }: Props) {
+export function Home({ plugins, onNew, onOpen, onOpenFolder, recent, onOpenRecent }: Props) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -57,20 +57,20 @@ export function Home({ plugins, onNew, onOpen, onOpenFolder, 最近, onOpenRecen
             ⚠️ 这里**不画那颗"从列表里去掉"的 ×**（侧栏那一页有）：主页上
             多一排 × 会把"点一下就打开"这件事变得犹犹豫豫，而走到侧栏
             「文档列表」那一页的人本来就是来整理这份列表的。 */}
-        {最近.length > 0 && (
+        {recent.length > 0 && (
           <section className="home-recent">
             <h2 className="home-recent-title">{t("Recently Opened")}</h2>
             <ul className="home-recent-list">
-              {最近.map((路径) => (
-                <li key={路径}>
+              {recent.map((path) => (
+                <li key={path}>
                   <button
                     type="button"
                     className="home-recent-item"
-                    title={路径}
-                    onClick={() => onOpenRecent(路径)}
+                    title={path}
+                    onClick={() => onOpenRecent(path)}
                   >
-                    <span className="home-recent-name">{文件名(路径)}</span>
-                    <span className="home-recent-dir">{父目录名(路径)}</span>
+                    <span className="home-recent-name">{textItemName(path)}</span>
+                    <span className="home-recent-dir">{parentItemRecordName(path)}</span>
                   </button>
                 </li>
               ))}

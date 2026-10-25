@@ -54,7 +54,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
 /** 光标落在列表里的那种容器（见文件头那张表）。 */
-const 列表名 = new Set(["bullet_list", "ordered_list"]);
+const columnTableName = new Set(["bullet_list", "ordered_list"]);
 
 /**
  * 一次上移/下移要做的**全部算术**——调用方照着它派一笔事务即可。
@@ -65,19 +65,19 @@ const 列表名 = new Set(["bullet_list", "ordered_list"]);
  * 位置不对。⚠️ 一笔事务里 `delete` 之后再 `insert`，第二个位置的基准就是
  * **删完之后**那棵树（`Transform` 的既有语义），所以这里算出来的正是它要的。
  */
-export interface 移动计划 {
+export interface movePlan {
   /** 把哪一段从原地删掉（原文档坐标）。 */
-  删: { from: number; to: number };
+  remove: { from: number; to: number };
   /** 插到哪里（**删掉之后**的坐标）。 */
-  插到: number;
+  insertTo: number;
   /** 搬完之后光标落在哪（**删＋插之后**的坐标）。 */
-  光标: number;
+  cursor: number;
   /** 要搬走的那一块本身。 */
-  块: PMNode;
+  block: PMNode;
 }
 
-function 夹(值: number, 下: number, 上: number): number {
-  return Math.max(下, Math.min(值, 上));
+function clamp(value2: number, below: number, above: number): number {
+  return Math.max(below, Math.min(value2, above));
 }
 
 /**
@@ -87,10 +87,10 @@ function 夹(值: number, 下: number, 上: number): number {
  * 从它自己的起点 **＋1** 开始（那一格是开括号），而顶层块从位置 **0** 就开始了。
  * 差这一格的话顶层块搬家会**整体错一格**——删到半段、插进去也错位，而且不报错。
  */
-function 孩子起点(内容起: number, 容器: PMNode, 序号: number): number {
-  let 起点 = 内容起;
-  for (let i = 0; i < 序号; i++) 起点 += 容器.child(i).nodeSize;
-  return 起点;
+function childStart(contentStart2: number, container: PMNode, index: number): number {
+  let start4 = contentStart2;
+  for (let i = 0; i < index; i++) start4 += container.child(i).nodeSize;
+  return start4;
 }
 
 /**
@@ -99,8 +99,8 @@ function 孩子起点(内容起: number, 容器: PMNode, 序号: number): number
  * `位置` 取的是**选区的起点**（`state.selection.from`）：跨多块选中时搬的是
  * 起点那一段，剩下的原样留着——如实记在这儿，别指望它"搬一整片"。
  */
-export function 算移动(doc: PMNode, 位置: number, 方向: -1 | 1): 移动计划 | null {
-  const $pos = doc.resolve(夹(位置, 0, doc.content.size));
+export function computeMoveAction(doc: PMNode, position2: number, direction: -1 | 1): movePlan | null {
+  const $pos = doc.resolve(clamp(position2, 0, doc.content.size));
 
   // ── 表格里不做（文件头那段）。⚠️ 只看祖先链，不看选中了什么：整张表被
   // 选中时（`NodeSelection`）光标落在表**外面**（深度 0），那种该照搬不误。
@@ -109,40 +109,40 @@ export function 算移动(doc: PMNode, 位置: number, 方向: -1 | 1): 移动�
   }
 
   // ── 挑容器：光标在列表里就搬列表项，否则搬顶层块。
-  let 容器: PMNode = doc;
-  let 容器起点 = 0;
-  let 层 = 0;
+  let container: PMNode = doc;
+  let containerStart = 0;
+  let layer = 0;
   for (let d = $pos.depth; d > 0; d--) {
-    if (列表名.has($pos.node(d).type.name)) {
-      容器 = $pos.node(d);
-      容器起点 = $pos.before(d);
-      层 = d;
+    if (columnTableName.has($pos.node(d).type.name)) {
+      container = $pos.node(d);
+      containerStart = $pos.before(d);
+      layer = d;
       break;
     }
   }
-  const 序号 = $pos.index(层);
-  const 邻号 = 序号 + 方向;
-  if (邻号 < 0 || 邻号 >= 容器.childCount) return null;
+  const index = $pos.index(layer);
+  const neighborNumber = index + direction;
+  if (neighborNumber < 0 || neighborNumber >= container.childCount) return null;
 
-  const 块 = 容器.child(序号);
-  const 邻 = 容器.child(邻号);
+  const block = container.child(index);
+  const neighbor = container.child(neighborNumber);
   // ⚠️ 容器是 `doc` 时孩子从位置 0 开始，别的容器要从它自己 +1 开始（见 孩子起点）。
-  const 块起点 = 孩子起点(层 === 0 ? 0 : 容器起点 + 1, 容器, 序号);
+  const blockStart = childStart(layer === 0 ? 0 : containerStart + 1, container, index);
   // ⚠️ 两头的插点都跟着**邻**的身高走，不是"块自己"：事务里是**先删后插**，
   // 而 `插到` 是删完之后那棵树里的坐标。往下搬时邻往前挪了整整一个块的身位
   // （腾出来的正好是被删掉的那一块），所以"邻的后面"＝ `块起点 + 邻.nodeSize`；
   // 往上搬时邻一点没动过，插点就是它自己的起点。写成 `块.nodeSize` 的症状是
   // **两块不等高时内容落进邻块里面**（段落翻过一个代码块那种）——不报错，只是
   // 并进去了。
-  const 插到 = 方向 < 0 ? 块起点 - 邻.nodeSize : 块起点 + 邻.nodeSize;
+  const insertTo = direction < 0 ? blockStart - neighbor.nodeSize : blockStart + neighbor.nodeSize;
   // 光标在块**里**的相对位置（块自己那个开括号占一个位置，所以减 1）。
-  const 块内 = 夹(位置 - 块起点 - 1, 0, 块.content.size);
+  const blockInside = clamp(position2 - blockStart - 1, 0, block.content.size);
 
   return {
-    删: { from: 块起点, to: 块起点 + 块.nodeSize },
-    插到,
-    光标: 插到 + 1 + 块内,
-    块,
+    remove: { from: blockStart, to: blockStart + block.nodeSize },
+    insertTo,
+    cursor: insertTo + 1 + blockInside,
+    block,
   };
 }
 
@@ -154,22 +154,22 @@ export function 算移动(doc: PMNode, 位置: number, 方向: -1 | 1): 移动�
  * 或者插重了），那是这条命令最不该有的后果——同 `insert.ts` 的 `转成任务列表`
  * 那一段。
  */
-export function 移动块视图(view: EditorView, 方向: -1 | 1): boolean {
+export function moveBlockView(view: EditorView, direction: -1 | 1): boolean {
   const { state } = view;
-  const 计划 = 算移动(state.doc, state.selection.from, 方向);
-  if (!计划) return false;
-  const tr = state.tr.delete(计划.删.from, 计划.删.to).insert(计划.插到, 计划.块);
+  const plan = computeMoveAction(state.doc, state.selection.from, direction);
+  if (!plan) return false;
+  const tr = state.tr.delete(plan.remove.from, plan.remove.to).insert(plan.insertTo, plan.block);
   // ⚠️ 判据是"**落点**接不接文字光标"，不是"搬的那一块是不是文本块"：列表项、
   // 引用这些**容器块**自己不是文本块，可落点一般正落在它第一个段落里——那里能落
   // 文字光标。按"块是不是文本块"判的话，搬一个列表项会落成 `NodeSelection`
   // （整项被高亮选中），用户接着一敲字**一整项就没了**。
   // ⚠️ 另一头：原子块（分隔线、整张表）的落点压根不接文字，`TextSelection.create`
   // 会当场抛，所以判成 `NodeSelection`（它们本来就只能被"选中"）。
-  const 落点 = tr.doc.resolve(计划.光标);
+  const DropPoint = tr.doc.resolve(plan.cursor);
   tr.setSelection(
-    落点.parent.isTextblock
-      ? TextSelection.create(tr.doc, 计划.光标)
-      : NodeSelection.create(tr.doc, 计划.插到),
+    DropPoint.parent.isTextblock
+      ? TextSelection.create(tr.doc, plan.cursor)
+      : NodeSelection.create(tr.doc, plan.insertTo),
   );
   // 搬出去的那一块可能已经在屏幕外面了（长文档里连按几下）——跟着它滚。
   tr.scrollIntoView();
@@ -178,9 +178,9 @@ export function 移动块视图(view: EditorView, 方向: -1 | 1): boolean {
 }
 
 /** 菜单 / 斜杠菜单那条路（`command-table.ts` 那张表的下游）。 */
-export function 移动块(editor: Editor, 方向: -1 | 1): void {
+export function moveBlock(editor: Editor, direction: -1 | 1): void {
   editor.action((ctx) => {
-    移动块视图(ctx.get(editorViewCtx), 方向);
+    moveBlockView(ctx.get(editorViewCtx), direction);
   });
 }
 
@@ -215,7 +215,7 @@ export function 移动块(editor: Editor, 方向: -1 | 1): void {
  * ⚠️ 组字期间（`view.composing`）一概不碰：中文输入法在组字时会用方向键挑候选，
  * 那时候动文档是抢键盘（`auto-pair.ts` / `table-tab.ts` 同一条纪律）。
  */
-export function 建移动键位(): Plugin {
+export function createMoveKeymap(): Plugin {
   return new Plugin({
     key: new PluginKey("nota-move-block"),
     props: {
@@ -224,7 +224,7 @@ export function 建移动键位(): Plugin {
         if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false;
         if (view.composing) return false;
         if (event.defaultPrevented) return true; // 代码块里那颗 CodeMirror 已处理，见上
-        移动块视图(view, event.key === "ArrowUp" ? -1 : 1);
+        moveBlockView(view, event.key === "ArrowUp" ? -1 : 1);
         return true;
       },
     },
@@ -232,4 +232,4 @@ export function 建移动键位(): Plugin {
 }
 
 /** {@link 建移动键位} 的 `$prose` 外壳——`.use()` 收的是这一种（`assemble.ts`）。 */
-export const 移动键位 = $prose(() => 建移动键位());
+export const moveKeymap = $prose(() => createMoveKeymap());

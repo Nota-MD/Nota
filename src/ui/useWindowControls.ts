@@ -36,18 +36,20 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { api } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 
-export interface 窗口控制接线 {
+export interface windowControlWiring {
   /** 出错时弹一条。**只用于用户发起的那两个动作**，读回来的失败不弹（见下）。 */
   toast: (text: string, kind?: "info" | "error") => void;
 }
 
-export interface 窗口控制出口 {
+export interface windowControlApi {
   /** 窗口现在是不是置顶。菜单那个勾的判据。 */
-  置顶: boolean;
+  alwaysOnTop: boolean;
   /** 切换置顶。 */
-  切换置顶: () => Promise<void>;
+  toggleAlwaysOnTop: () => Promise<void>;
   /** 打开开发者工具。 */
-  开开发者工具: () => Promise<void>;
+  openDevTools: () => Promise<void>;
+  /** 在独立窗口打开编入前端的 HTML 帮助，可指定章节。 */
+  openHelp: (section?: "start" | "pandoc" | "printing" | "shortcuts") => Promise<void>;
   /**
    * 把一份**磁盘上的**文档在新窗口里打开（标签页右键那一条）。
    *
@@ -55,16 +57,16 @@ export interface 窗口控制出口 {
    * （`DocumentStore` 各一份）。调用方（`App.tsx`）负责从标签页查到路径；
    * 没有路径的标签在界面上是**灰的**，走不到这里。
    */
-  开新窗口: (path: string) => Promise<void>;
+  openNewWindow: (path?: string) => Promise<void>;
 }
 
-export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
+export function useWindowControls(w: windowControlWiring): windowControlApi {
   const { toast } = w;
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，
   // 见 `i18n/index.ts::useT`）。下面两处失败文案都走它。
   const t = useT();
 
-  const [置顶, set置顶] = useState(false);
+  const [alwaysOnTop, setAlwaysOnTop] = useState(false);
 
   /**
    * 读一次窗口，把上面那个镜像对齐。读不出来（窗口还没建好 / 已经没了）就维持现状。
@@ -72,29 +74,29 @@ export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
    * ⚠️ **故意不弹提示**：这不是用户发起的动作，报错也无从补救，弹出来只是
    * 多一条他关不掉的信息（与 `ui/useImmersive.ts::同步全屏` 同一条口径）。
    */
-  const 同步置顶 = useCallback(async () => {
+  const syncAlwaysOnTop = useCallback(async () => {
     try {
-      set置顶(await getCurrentWindow().isAlwaysOnTop());
+      setAlwaysOnTop(await getCurrentWindow().isAlwaysOnTop());
     } catch {
       // 见上：安静。
     }
   }, []);
 
   useEffect(() => {
-    void 同步置顶();
-    let 退订: (() => void) | null = null;
+    void syncAlwaysOnTop();
+    let unsubscribe: (() => void) | null = null;
     void getCurrentWindow()
-      .onFocusChanged(() => void 同步置顶())
+      .onFocusChanged(() => void syncAlwaysOnTop())
       .then((f) => {
-        退订 = f;
+        unsubscribe = f;
       })
       .catch(() => {
         // 订不上就退化成"只在挂载时同步一次"，界面仍然能用。
       });
-    return () => 退订?.();
-  }, [同步置顶]);
+    return () => unsubscribe?.();
+  }, [syncAlwaysOnTop]);
 
-  const 切换置顶 = useCallback(async () => {
+  const toggleAlwaysOnTop = useCallback(async () => {
     const win = getCurrentWindow();
     try {
       await win.setAlwaysOnTop(!(await win.isAlwaysOnTop()));
@@ -104,11 +106,11 @@ export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
       // ⚠️ **成败都要同步**（与全屏那条同理）：失败时窗口没动，同步一次是白做的；
       // 成功时这一下才是让勾跟上的那个。写成"成功才同步"要多一个分支，
       // 而那个分支正好是唯一会漏更新的一条路。
-      void 同步置顶();
+      void syncAlwaysOnTop();
     }
-  }, [toast, t, 同步置顶]);
+  }, [toast, t, syncAlwaysOnTop]);
 
-  const 开开发者工具 = useCallback(async () => {
+  const openDevTools = useCallback(async () => {
     try {
       await api.window.openDevtools();
     } catch (e) {
@@ -116,8 +118,16 @@ export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
     }
   }, [toast, t]);
 
-  const 开新窗口 = useCallback(
-    async (path: string) => {
+  const openHelp = useCallback(async (section?: "start" | "pandoc" | "printing" | "shortcuts") => {
+    try {
+      await api.window.openHelp(section);
+    } catch (e) {
+      toast(t("Could not open help: {0}", String(e)), "error");
+    }
+  }, [toast, t]);
+
+  const openNewWindow = useCallback(
+    async (path?: string) => {
       try {
         await api.window.openNew(path);
       } catch (e) {
@@ -130,5 +140,5 @@ export function useWindowControls(w: 窗口控制接线): 窗口控制出口 {
     [toast, t],
   );
 
-  return { 置顶, 切换置顶, 开开发者工具, 开新窗口 };
+  return { alwaysOnTop, toggleAlwaysOnTop, openDevTools, openHelp, openNewWindow };
 }

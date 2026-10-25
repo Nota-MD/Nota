@@ -35,7 +35,7 @@ import { useEffect } from "react";
 import type { Settings } from "@/bridge/ipc";
 
 /** 默认那一档。⚠️ 必须与 `settings/appearance.rs::FocusDim::default()` 同值。 */
-const 默认档 = "standard";
+const defaultLevel = "standard";
 
 export function useFocusDim(settings: Settings | null): void {
   useEffect(() => {
@@ -43,9 +43,9 @@ export function useFocusDim(settings: Settings | null): void {
     // 也就是把属性摘掉。不要"什么都不做"——那会让上一份设置的属性留在
     // `<html>` 上：换设置文件（或恢复默认）之后界面还带着老值，
     // "设置没生效"的症状里最难查的那一种。
-    const 档 = settings?.appearance.focus_mode_dim ?? 默认档;
+    const level = settings?.appearance.focus_mode_dim ?? defaultLevel;
     const root = document.documentElement;
-    if (档 === 默认档) root.removeAttribute("data-focus-dim");
-    else root.setAttribute("data-focus-dim", 档);
+    if (level === defaultLevel) root.removeAttribute("data-focus-dim");
+    else root.setAttribute("data-focus-dim", level);
   }, [settings]);
 }

@@ -1,4 +1,4 @@
-/* 更新进度与独立诊断窗口。⚠️ 必须在 overlay.css 之后加载。 */
+/* 更新进度。⚠️ 必须在 overlay.css 之后加载。 */
 
 .about-update-progress {
   margin: 10px 0 4px;
@@ -50,31 +50,4 @@
   to {
     transform: translateX(390%);
   }
-}
-
-.debug-window {
-  height: 100%;
-  padding: 20px;
-  overflow: auto;
-  background: var(--bg);
-  color: var(--fg);
-}
-
-.debug-window h1 {
-  margin: 0 0 14px;
-  font-size: 1.25rem;
-}
-
-.debug-table {
-  width: 100%;
-  table-layout: fixed;
-}
-
-.debug-table th {
-  width: 34%;
-}
-
-.debug-table td {
-  overflow-wrap: anywhere;
-  user-select: text;
 }

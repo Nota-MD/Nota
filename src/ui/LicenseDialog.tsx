@@ -30,7 +30,7 @@
 import { useEffect, useRef } from "react";
 
 // ⚠️ 仓库根目录那份 `LICENSE`（**不是** `src/` 里的副本，因为没有副本）。
-import 许可证全文 from "../../LICENSE?raw";
+import licenseProveFullText from "../../LICENSE?raw";
 
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
@@ -41,21 +41,21 @@ import { useModalTrap } from "@/ui/useModalTrap";
  * `Cargo.toml` 三处一致（`AboutDialog` 里那个 `许可证` 常量是同一个词，
  * 但那边管的是"关于"页上的显示，这里管的是标题——两处都要改）。
  */
-const 短名 = "BSD-2-Clause";
+const shortName = "BSD-2-Clause";
 
 export function LicenseDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   // ⚠️ `useModalTrap` 的 `focusin` 兜底会把跑出框的焦点拉到这个容器上，
   // 它必须自己能接焦点（`tabIndex={-1}`），同 `ConfirmDialog` 那一处。
-  const 框 = useRef<HTMLDivElement>(null);
-  const 关闭键 = useRef<HTMLButtonElement>(null);
+  const box2 = useRef<HTMLDivElement>(null);
+  const closeKey = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    关闭键.current?.focus();
+    closeKey.current?.focus();
   }, []);
 
   // Esc 关 ＋ 焦点陷阱，走共用钩子（第 50 项那两道闸）。
-  useModalTrap(框, { onEscape: onClose });
+  useModalTrap(box2, { onEscape: onClose });
 
   return (
     <div
@@ -68,17 +68,17 @@ export function LicenseDialog({ onClose }: { onClose: () => void }) {
         className="confirm-dialog lic-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={t("{0} License", 短名)}
-        ref={框}
+        aria-label={t("{0} License", shortName)}
+        ref={box2}
         tabIndex={-1}
       >
         <DialogClose onClose={onClose} />
-        <h2 className="confirm-title">{t("{0} License", 短名)}</h2>
+        <h2 className="confirm-title">{t("{0} License", shortName)}</h2>
         {/* ⚠️ `<pre>` 是**故意的**：许可证正文的换行与缩进是它的一部分，
             塞进 `<p>` 会被 CSS 折成一坨。`wrap` 那条见 `overlay.css`。 */}
-        <pre className="lic-text">{许可证全文}</pre>
+        <pre className="lic-text">{licenseProveFullText}</pre>
         <div className="confirm-actions">
-          <button type="button" className="btn" ref={关闭键} onClick={onClose}>
+          <button type="button" className="btn" ref={closeKey} onClick={onClose}>
             {t("Close")}
           </button>
         </div>

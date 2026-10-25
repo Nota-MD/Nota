@@ -2568,7 +2568,7 @@ dependencies = [
 
 [[package]]
 name = "nota"
-version = "0.9.0-beta"
+version = "0.10.0-beta"
 dependencies = [
  "base64 0.22.1",
  "chardetng",
@@ -2579,6 +2579,7 @@ dependencies = [
  "gtk",
  "mlua",
  "notify",
+ "open",
  "rfd",
  "serde",
  "serde_json",

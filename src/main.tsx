@@ -3,10 +3,11 @@ import ReactDOM from "react-dom/client";
 
 import App from "./App";
 import { api } from "./bridge/ipc";
-import { t, 定语言 } from "./i18n";
+import { t, setLanguage } from "./i18n";
 import { installErrorHooks } from "./ui/ErrorBoundary";
 import { FocusAlarmWindow } from "./ui/FocusAlarmWindow";
-import { DebugInfoWindow } from "./ui/DebugInfoWindow";
+import { HelpWindow } from "./ui/HelpWindow";
+import { DebugLogWindow } from "./ui/DebugLogWindow";
 import adwaitaFontLicense from "./assets/fonts/adwaita/LICENSE.txt?url";
 
 import "./styles/theme.css";
@@ -34,6 +35,8 @@ import "./styles/overlay.css";
 import "./styles/print-dialog.css";
 import "./styles/file-picker.css";
 import "./styles/update-debug.css";
+import "./styles/help-window.css";
+import "./styles/debug-log.css";
 // 左侧栏（栏本身 + 文件树 + 大纲）。⚠️ **必须在 `app.css` 之后**——折叠三角、
 // 缩进那几条比 `app.css` 里的通用行规则更具体，靠顺序而不是 `!important` 压过去。
 import "./styles/sidebar.css";
@@ -179,10 +182,10 @@ window.setTimeout(() => {
 }, 8000);
 
 /**
- * ⚠️⚠️ **本应用有两个入口，靠 hash 分叉。**
+ * ⚠️⚠️ **本应用有多个入口，靠 hash 分叉。**
  *
- * 主窗是 `index.html`（没有 hash），焦点警报窗是 `index.html#focus-alarm`
- * ——那个地址是宿主建窗时给的（`src-tauri/src/focus/alarm.rs::开窗`）。
+ * 主窗是 `index.html`（没有 hash）；焦点警报窗、诊断窗口与帮助窗口分别使用
+ * `#focus-alarm`、`#debug-log`、`#help/...`。
  *
  * # 为什么是 hash 而不是另开一个 HTML 文件
  *
@@ -199,8 +202,9 @@ window.setTimeout(() => {
  *
  * ⚠️ `location.hash` 里带 `#`，所以比的是 `"#focus-alarm"`，不是 `"focus-alarm"`。
  */
-const 是警报窗 = location.hash === "#focus-alarm";
-const isDebugInfoWindow = location.hash === "#debug-info";
+const isWarnReportWindow = location.hash === "#focus-alarm";
+const isDebugLogWindow = location.hash === "#debug-log";
+const isHelpWindow = location.hash === "#help" || location.hash.startsWith("#help/");
 
 /**
  * ⚠️⚠️ **警报窗那一支要自己把界面语言拉回来**（2026-09-27 补）。
@@ -222,19 +226,21 @@ const isDebugInfoWindow = location.hash === "#debug-info";
  * ⚠️ `catch` 不能省：`.catch` 掉链子时这一枪只是没生效，不该把警报窗整块掀翻
  *（它是这种情况下用户唯一能看见的东西）。
  */
-if (是警报窗) {
+if (isWarnReportWindow) {
   document.documentElement.dataset.booted = "true";
   api.appLang()
-    .then((语言) => 定语言(语言.effective))
+    .then((language) => setLanguage(language.effective))
     .catch(() => {});
 }
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    {是警报窗 ? (
+    {isWarnReportWindow ? (
       <FocusAlarmWindow />
-    ) : isDebugInfoWindow ? (
-      <DebugInfoWindow />
+    ) : isDebugLogWindow ? (
+      <DebugLogWindow />
+    ) : isHelpWindow ? (
+      <HelpWindow />
     ) : (
       <App />
     )}

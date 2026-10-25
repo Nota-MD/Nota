@@ -173,13 +173,13 @@
  */
 
 import { $prose } from "@milkdown/kit/utils";
-import type { Node as 模型节点 } from "@milkdown/kit/prose/model";
+import type { Node as modelTypeNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
 /** 插件键。⚠️ 起了名字才好在上游那一串里认出自己（调试时 `state.plugins` 上看）。 */
-export const 配对键 = new PluginKey("notaAutoPair");
+export const configureCorrectKey = new PluginKey("notaAutoPair");
 
 /**
  * **开括号 → 闭括号**。⚠️ 加项之前先读文件头第 2 节：左右同形的 Markdown
@@ -189,7 +189,7 @@ export const 配对键 = new PluginKey("notaAutoPair");
  * 它当年被挡在门外是因为"少一个便利"换"别把 Markdown 链接弄坏"，而
  * {@link 可升级表} 那一层把 `[[`（Wiki 链接）也安顿好了。
  */
-export const 配对表: Readonly<Record<string, string>> = {
+export const configureCorrectTable: Readonly<Record<string, string>> = {
   "(": ")",
   "{": "}",
   /* ⚠️ 用户 2026-09-28 点名要的：「自动补全 `*`、`[` 这种」。 */
@@ -207,20 +207,20 @@ export const 配对表: Readonly<Record<string, string>> = {
  * 反过来的那张（闭 → 开）。**从 {@link 配对表} 推出来**，不手写第二份
  * （手写就会两边不同步，而那是"配对"这件事最不能出的错）。
  */
-const 反表: Readonly<Record<string, string>> = (() => {
-  const 表: Record<string, string> = {};
-  for (const [开, 闭] of Object.entries(配对表)) 表[闭] = 开;
-  return 表;
+const reverseTable: Readonly<Record<string, string>> = (() => {
+  const table2: Record<string, string> = {};
+  for (const [open2, close3] of Object.entries(configureCorrectTable)) table2[close3] = open2;
+  return table2;
 })();
 
 /** 这颗字是不是本文件认的开括号。 */
-export function 是开括号(字: string): boolean {
-  return 配对表[字] !== undefined;
+export function isOpenBracketNumber(character2: string): boolean {
+  return configureCorrectTable[character2] !== undefined;
 }
 
 /** 这颗字是不是本文件认的闭括号。 */
-export function 是闭括号(字: string): boolean {
-  return 反表[字] !== undefined;
+export function isCloseBracketNumber(character2: string): boolean {
+  return reverseTable[character2] !== undefined;
 }
 
 /**
@@ -230,13 +230,13 @@ export function 是闭括号(字: string): boolean {
  * 而调用方一律按 `null` 判（`if (!闭)` 那种写法两个都能过，但混着用迟早
  * 会在 `===` 比较上翻车）。
  */
-export function 闭括号(开: string): string | null {
-  return 配对表[开] ?? null;
+export function closeBracketNumber(open2: string): string | null {
+  return configureCorrectTable[open2] ?? null;
 }
 
 /** 这颗闭括号配哪颗开括号；不是闭括号给 `null`。 */
-export function 开括号(闭: string): string | null {
-  return 反表[闭] ?? null;
+export function openBracketNumber(close3: string): string | null {
+  return reverseTable[close3] ?? null;
 }
 
 /* ── 现场：把 EditorState 收成一小份，判据只吃它 ───────────────────────── */
@@ -247,11 +247,11 @@ export function 开括号(闭: string): string | null {
  * ⚠️ 刻意**不把 `EditorState` 传进判据**：那样测试就得造一个真 schema ＋
  * 真实例，而本仓没有 jsdom、也不许为测试装包（`tests/` 那一族全是这个口径）。
  */
-export interface 现场 {
+export interface scene {
   /** 光标**左边**那一颗字符；行首（或前面是图片这类原子）给 `""`。 */
-  前: string;
+  before2: string;
   /** 光标**右边**那一颗字符；行尾给 `""`。 */
-  后: string;
+  after: string;
   /**
    * 光标右边**第二颗**字符；不足两颗给 `""`。
    *
@@ -259,9 +259,9 @@ export interface 现场 {
    * 的区别全在这里——前者右边只有一颗星（用户在扩成粗体），后者右边也是
    * 一颗星、但左边不是（用户在收尾）。括号那一族不需要它。
    */
-  后二: string;
+  afterTwo: string;
   /** 光标落在代码块或行内代码里。 */
-  代码: boolean;
+  code: boolean;
   /**
    * 光标在**代码块**里（`code_block` 那个节点里），而不是行内代码 `` `x` ``。
    *
@@ -270,9 +270,9 @@ export interface 现场 {
    * 恰恰是**任何编辑器都有的手感**（用户当天：「代码输入框没有类似真正编辑器的
    * 手感（比如自动补全对半符号和缩进）」）。行内代码仍旧不配（那是正文里的一句话）。
    */
-  代码块: boolean;
+  codeBlock: boolean;
   /** 选区是空的（没有选中任何东西）。 */
-  空选区: boolean;
+  emptySelection: boolean;
   /**
    * 光标左边那一颗字符**正好是这一段的第一颗**（`前` 是段首，`前` 之前没有字）。
    *
@@ -284,52 +284,52 @@ export interface 现场 {
    *
    * ⚠️ 它**只描述光标左边那一颗的位置**，不描述"整段是不是空的"。
    */
-  前是段首: boolean;
+  beforeIsParagraphFirst: boolean;
   /**
    * 段落开头到光标的原文。闭括号只在左边仍有未闭合开符号时才“跳过”，
    * 避免把正文里零散的右括号当成自动补出来的那一颗。
    */
-  前文: string;
+  prefixText: string;
   /** 光标位于链接标记里：URL / 裸链接文本不参与自动配对。 */
-  链接?: boolean;
+  link?: boolean;
 }
 
 /** 光标在某一段文字里的"前一颗 / 后一颗"。⚠️ 边界与原子节点一律给 `""`。 */
-function 取字符(state: EditorState, 位置: number, 偏移: -1 | 1): string {
-  const 尺寸 = state.doc.content.size;
-  if (位置 < 0 || 位置 > 尺寸) return "";
-  const $位 = state.doc.resolve(位置);
+function getCharacter(state: EditorState, position2: number, offset: -1 | 1): string {
+  const rulerInch = state.doc.content.size;
+  if (position2 < 0 || position2 > rulerInch) return "";
+  const position = state.doc.resolve(position2);
   // ⚠️ 块级位置上（`parent` 不是行内容）取不到"字符"——那说明光标在
   // 两段之间，不是"挨着一颗括号"。
-  if (!$位.parent.inlineContent) return "";
-  const 起 = $位.parentOffset + (偏移 === -1 ? -1 : 0);
-  const 止 = 起 + 1;
-  const 长 = $位.parent.content.size;
-  if (起 < 0 || 止 > 长) return "";
+  if (!position.parent.inlineContent) return "";
+  const start5 = position.parentOffset + (offset === -1 ? -1 : 0);
+  const end2 = start5 + 1;
+  const length = position.parent.content.size;
+  if (start5 < 0 || end2 > length) return "";
   // ⚠️ `textBetween` 的 `leafText` 不传 ⇒ 图片、公式那类原子贡献 `""`
   //（它们身上没有"字符"可配对），这正是想要的。
-  return $位.parent.textBetween(起, 止, "");
+  return position.parent.textBetween(start5, end2, "");
 }
 
 /** 光标在**代码块**里吗（只看节点那一层，**不看行内代码那个 mark**）。 */
-function 在代码块里(state: EditorState): boolean {
+function atCodeBlockInside(state: EditorState): boolean {
   const { $from } = state.selection;
-  for (let 层 = $from.depth; 层 > 0; 层--) {
-    if ($from.node(层).type.spec.code) return true;
+  for (let layer = $from.depth; layer > 0; layer--) {
+    if ($from.node(layer).type.spec.code) return true;
   }
   return false;
 }
 
 /** 光标在代码块 / 行内代码里吗。 */
-function 在代码里(state: EditorState): boolean {
+function atCodeInside(state: EditorState): boolean {
   const { $from } = state.selection;
-  for (let 层 = $from.depth; 层 > 0; 层--) {
+  for (let layer = $from.depth; layer > 0; layer--) {
     // ⚠️ 判 `spec.code` 而不是判名字：`code_block` 是上游起的名字，
     // 而 `spec.code` 才是 schema 自己那份"这是个原样文本块"的声明。
-    if ($from.node(层).type.spec.code) return true;
+    if ($from.node(layer).type.spec.code) return true;
   }
   // 行内代码是**标记**不是节点，得另问一次。
-  return $from.marks().some((标记) => 标记.type.spec.code);
+  return $from.marks().some((mark) => mark.type.spec.code);
 }
 
 /**
@@ -340,39 +340,39 @@ function 在代码里(state: EditorState): boolean {
  *   （上游 `trailing` / `indent` 那几条都可能动过），拿 `state.selection.from`
  *   去替代会让判据落在错的位置上。**位置只有一个来源：调用方给的那个。**
  */
-export function 读现场(state: EditorState, 位置: number): 现场 {
+export function readScene(state: EditorState, position2: number): scene {
   const { from, to } = state.selection;
-  const $位 = state.doc.resolve(位置);
+  const position = state.doc.resolve(position2);
   return {
-    前: 取字符(state, 位置, -1),
-    后: 取字符(state, 位置, 1),
+    before2: getCharacter(state, position2, -1),
+    after: getCharacter(state, position2, 1),
     // ⚠️ "后第二颗" = 从**后一颗的位置**再往后看一颗（偏移仍是 `1`）。
-    后二: 取字符(state, 位置 + 1, 1),
-    代码: 在代码里(state),
-    代码块: 在代码块里(state),
-    空选区: from === to,
-    前是段首: 位置前那一颗是段首(state, 位置),
-    前文: $位.parent.inlineContent ? $位.parent.textBetween(0, $位.parentOffset, "") : "",
-    链接: $位.marks().some((标记) => 标记.type.name === "link"),
+    afterTwo: getCharacter(state, position2 + 1, 1),
+    code: atCodeInside(state),
+    codeBlock: atCodeBlockInside(state),
+    emptySelection: from === to,
+    beforeIsParagraphFirst: positionBeforeThatOneTokenIsParagraphFirst(state, position2),
+    prefixText: position.parent.inlineContent ? position.parent.textBetween(0, position.parentOffset, "") : "",
+    link: position.marks().some((mark) => mark.type.name === "link"),
   };
 }
 
 /** 前文里这颗开括号是否仍有未配对的层级（反斜杠转义的不算）。 */
-function 有未闭合开括号(前文: string, 开: string, 闭: string): boolean {
-  let 层 = 0;
-  let 转义 = false;
-  for (const 字 of 前文) {
-    if (转义) {
-      转义 = false;
-    } else if (字 === "\\") {
-      转义 = true;
-    } else if (字 === 开) {
-      层++;
-    } else if (字 === 闭 && 层 > 0) {
-      层--;
+function hasNotCloseCombineOpenBracketNumber(prefixText: string, open2: string, close3: string): boolean {
+  let layer = 0;
+  let convertMeaning = false;
+  for (const character2 of prefixText) {
+    if (convertMeaning) {
+      convertMeaning = false;
+    } else if (character2 === "\\") {
+      convertMeaning = true;
+    } else if (character2 === open2) {
+      layer++;
+    } else if (character2 === close3 && layer > 0) {
+      layer--;
     }
   }
-  return 层 > 0;
+  return layer > 0;
 }
 
 /**
@@ -381,13 +381,13 @@ function 有未闭合开括号(前文: string, 开: string, 闭: string): boolea
  * ⚠️ 判据是**它在父节点里的偏移是 0**，不是"这一段只有它一颗"：
  * `* 项目` 里那颗星同样是段首（用户可能只是先打了星号、还没接着打）。
  */
-function 位置前那一颗是段首(state: EditorState, 位置: number): boolean {
-  const 尺寸 = state.doc.content.size;
-  if (位置 <= 0 || 位置 > 尺寸) return false;
-  const $位 = state.doc.resolve(位置);
-  if (!$位.parent.inlineContent) return false;
+function positionBeforeThatOneTokenIsParagraphFirst(state: EditorState, position2: number): boolean {
+  const rulerInch = state.doc.content.size;
+  if (position2 <= 0 || position2 > rulerInch) return false;
+  const position = state.doc.resolve(position2);
+  if (!position.parent.inlineContent) return false;
   // 光标左边那一颗的偏移是 `parentOffset - 1`；它在段首 ⟺ 那个偏移是 0。
-  return $位.parentOffset === 1;
+  return position.parentOffset === 1;
 }
 
 /* ── 四条判据（纯函数，`tests/auto-pair.test.ts` 只用这一层）────────────── */
@@ -404,18 +404,18 @@ function 位置前那一颗是段首(state: EditorState, 位置: number): boolea
  *    ⚠️ "没选中东西"这半句是**必须**的：选中一段再打 `(`，要的是**把它包起来**，
  *    这时右边那颗闭括号正是我们想要的。
  */
-export function 要配对(现场: 现场, 字: string): string | null {
-  const 闭 = 闭括号(字);
-  if (!闭) return null;
-  if (现场.链接) return null;
+export function needsPair(scene: scene, character2: string): string | null {
+  const close3 = closeBracketNumber(character2);
+  if (!close3) return null;
+  if (scene.link) return null;
   // ⚠️ 行内代码里不配；**代码块里配**（2026-10-06 把这两个情况分开了）。
-  if (现场.代码 && !现场.代码块) return null;
+  if (scene.code && !scene.codeBlock) return null;
   // ⚠️ 代码块里**不配那几颗 Markdown 标记符号**（`*`）：代码里打 `*` 要的是
   // 字面星号（乘法、指针、通配），补成一对是帮倒忙。括号那一族照配。
-  if (现场.代码块 && 字 === "*") return null;
-  if (现场.前 === "\\") return null;
-  if (现场.空选区 && 现场.后 === 闭) return null;
-  return 闭;
+  if (scene.codeBlock && character2 === "*") return null;
+  if (scene.before2 === "\\") return null;
+  if (scene.emptySelection && scene.after === close3) return null;
+  return close3;
 }
 
 /**
@@ -426,20 +426,20 @@ export function 要配对(现场: 现场, 字: string): string | null {
  * 我们补的"**——那要靠插件状态去记，而这里刻意无状态（记错了的症状是
  * "有时候跳有时候不跳"，比统一不跳难查得多）。
  */
-export function 要跳过(现场: 现场, 字: string): boolean {
-  if (!现场.空选区) return false;
-  if (现场.链接) return false;
-  if (!是闭括号(字)) return false;
-  const 开 = 开括号(字);
-  return 开 !== null && 现场.后 === 字 && 有未闭合开括号(现场.前文, 开, 字);
+export function wantJumpPass(scene: scene, character2: string): boolean {
+  if (!scene.emptySelection) return false;
+  if (scene.link) return false;
+  if (!isCloseBracketNumber(character2)) return false;
+  const open2 = openBracketNumber(character2);
+  return open2 !== null && scene.after === character2 && hasNotCloseCombineOpenBracketNumber(scene.prefixText, open2, character2);
 }
 
 /** 光标夹在一对**空的**括号中间时按退格：该不该两颗一起删。 */
-export function 要删成对(现场: 现场): boolean {
-  if (!现场.空选区) return false;
-  const 闭 = 闭括号(现场.前);
-  if (闭) return 闭 === 现场.后;
-  return 自配对表[现场.前] === 现场.后;
+export function wantRemoveBecomeCorrect(scene: scene): boolean {
+  if (!scene.emptySelection) return false;
+  const close3 = closeBracketNumber(scene.before2);
+  if (close3) return close3 === scene.after;
+  return selfConfigureCorrectTable[scene.before2] === scene.after;
 }
 
 /**
@@ -451,17 +451,17 @@ export function 要删成对(现场: 现场): boolean {
  * ⚠️ **在代码里一律不跳**：那里 `Tab` 的职责是**缩进**（上游 `indent` 插件），
  * 而"跨一位"会把缩进这件事废掉——两个都想抢同一颗按键时，让缩进赢。
  */
-export function 要跳(现场: 现场, 方向: 1 | -1): boolean {
-  if (!现场.空选区) return false;
-  if (现场.链接) return false;
-  if (现场.代码) return false;
-  if (方向 === 1) return 是闭括号(现场.后) || 自配对表[现场.后] === 现场.后;
-  return 是开括号(现场.前) || 自配对表[现场.前] === 现场.前;
+export function wantJump(scene: scene, direction: 1 | -1): boolean {
+  if (!scene.emptySelection) return false;
+  if (scene.link) return false;
+  if (scene.code) return false;
+  if (direction === 1) return isCloseBracketNumber(scene.after) || selfConfigureCorrectTable[scene.after] === scene.after;
+  return isOpenBracketNumber(scene.before2) || selfConfigureCorrectTable[scene.before2] === scene.before2;
 }
 
 /* ── 自配对字符（Markdown 标记）─────────────────────────────────────────── */
 /** 自配对字符。它们不进 `配对表`，否则左右同形的标记会同时命中两套括号判据。 */
-export const 自配对表: Readonly<Record<string, string>> = {
+export const selfConfigureCorrectTable: Readonly<Record<string, string>> = {
   "*": "*",
   "_": "_",
   "~": "~",
@@ -471,11 +471,11 @@ export const 自配对表: Readonly<Record<string, string>> = {
 };
 
 /** Markdown 扩展配对与对应行内能力；缺省全开，供动作判据单测直接调用。 */
-export interface 配对能力 {
+export interface ConfigureCorrectAbleForce {
   superscript?: boolean;
   highlight?: boolean;
 }
-const 全开配对能力: Readonly<配对能力> = {
+const allPairingCapabilities: Readonly<ConfigureCorrectAbleForce> = {
   superscript: true,
   highlight: true,
 };
@@ -493,11 +493,11 @@ const 全开配对能力: Readonly<配对能力> = {
  * ⚠️ 与 `*` 那条同源（`*|*` ⇒ `**|**`），只是这里的开闭**不是同一颗字符**，
  * 所以数字由 {@link 补标记} 现算（`字 + 字 + 闭 + 闭`），不写死四颗。
  */
-export const 可升级表: Readonly<Record<string, string>> = { "[": "]" };
+export const upgradeableTable: Readonly<Record<string, string>> = { "[": "]" };
 
 /** 单颗 / 双颗定界符各落哪个 mark；`null` 表示这个颗数没有语义。 */
-const 落标记表: Readonly<
-  Record<string, readonly [一颗: string | null, 两颗: string | null]>
+const dropMarkTable: Readonly<
+  Record<string, readonly [oneToken: string | null, twoTokens: string | null]>
 > = {
   "*": ["emphasis", "strong"],
   "_": ["emphasis", "strong"],
@@ -508,7 +508,7 @@ const 落标记表: Readonly<
 };
 
 /** 打一颗自配对字符之后要做的动作。 */
-export type 标记动作 =
+export type MarkAction =
   /** 补一颗，光标落中间（`*` ⇒ `*|*`）。 */
   | "补一对"
   /**
@@ -526,35 +526,35 @@ export type 标记动作 =
   | "跳过";
 
 /** 决定自配对字符该补、升级、补齐还是跳过；返回 `null` 表示交给上游。 */
-export function 要补标记(
-  现场: 现场,
-  字: string,
-  能力: 配对能力 = 全开配对能力,
-): 标记动作 | null {
-  const 自配 = 自配对表[字], 升级闭 = 可升级表[字];
-  if (!自配 && !升级闭) return null;
-  if (现场.代码) return null;
-  if (现场.链接) return null;
-  if (现场.前 === "\\") return null;
-  if (自配) {
-    if (!现场.空选区) return null;
-    if (字 === "^" && 能力.superscript === false) return null;
-    if (字 === "=" && 能力.highlight === false) return null;
+export function needsPairing(
+  scene: scene,
+  character2: string,
+  ableForce: ConfigureCorrectAbleForce = allPairingCapabilities,
+): MarkAction | null {
+  const selfConfigure = selfConfigureCorrectTable[character2], raiseLevelClose = upgradeableTable[character2];
+  if (!selfConfigure && !raiseLevelClose) return null;
+  if (scene.code) return null;
+  if (scene.link) return null;
+  if (scene.before2 === "\\") return null;
+  if (selfConfigure) {
+    if (!scene.emptySelection) return null;
+    if (character2 === "^" && ableForce.superscript === false) return null;
+    if (character2 === "=" && ableForce.highlight === false) return null;
     // 段首的 `*` 是列表项，不许补成行内的一对；反引号仍补，第三颗会按字面插入。
-    if (现场.前 === "" && 字 === "*") return null;
+    if (scene.before2 === "" && character2 === "*") return null;
     // `=` 单独一颗没有 Markdown 语义；第二颗落下来时才补成 `==|==`。
-    if (字 === "=") {
-      if (现场.后 === "=" && 现场.后二 === "=") return "跳过";
-      return 现场.前 === "=" && 现场.后 === "" ? "补齐" : null;
+    if (character2 === "=") {
+      if (scene.after === "=" && scene.afterTwo === "=") return "跳过";
+      return scene.before2 === "=" && scene.after === "" ? "补齐" : null;
     }
-    if (字 === "`" && 现场.后 === "" && /``$/.test(现场.前文)) return null;
-    if (现场.后 === 字) {
+    if (character2 === "`" && scene.after === "" && /``$/.test(scene.prefixText)) return null;
+    if (scene.after === character2) {
       // 右边还跟着第二颗（`**粗|**`）：用户在**把这一对写完**，跳过去。
-      if (现场.后二 === 字) return "跳过";
+      if (scene.afterTwo === character2) return "跳过";
       // 左边也是同一颗 ⇒ 光标正夹在一对**空的**星号里（`*|*`）：
       // 这是"再打一颗变粗体"，**不是**收尾。⚠️ 反过来的 `*粗|*` 左边是
       // 普通文字，那才是收尾——两者的分别全在 `前` 这一格上。
-      return 现场.前 === 字 && 字 !== "`" ? "升级" : "跳过";
+      return scene.before2 === character2 && character2 !== "`" ? "升级" : "跳过";
     }
     // ⚠️⚠️ **段首那颗星没配上对，挨着它再打一颗要"补齐"**（2026-10-16 修的
     // 用户报的缺陷，原话：「按下两次星号键**另一边只补全出了一个**」）。
@@ -567,29 +567,29 @@ export function 要补标记(
     // ⚠️ 判据里那个 `前是段首` **不能省**：不在段首的 `前 === 字 && 后 === ""`
     // 是另一种现场（比如用户从别处粘了一句结尾带 `*` 的话、接着想再打一颗），
     // 那里"补一对"是对的。省掉它会让那一类也变成四颗星。
-    if (现场.前 === 字 && 现场.后 === "" && 现场.前是段首) return "补齐";
+    if (scene.before2 === character2 && scene.after === "" && scene.beforeIsParagraphFirst) return "补齐";
     // `_` 只在 ASCII 字母 / 数字后不开始斜体；中文 `甲_乙_` 仍可正常强调。
     // 收尾那条已在上面按“右边已有闭符号”处理，不受这条影响。
-    if (字 === "_" && /[A-Za-z0-9_]$/.test(现场.前)) return null;
+    if (character2 === "_" && /[A-Za-z0-9_]$/.test(scene.before2)) return null;
     return "补一对";
   }
   // 可升级的开括号（今天只有 `[`，见 {@link 可升级表}）：**只有一种情况要插手**
   // ——光标正夹在一对**空的**方括号里再敲一颗（`[|]` ⇒ `[[|]]`）。
   // ⚠️ 其余一律 `null`，**交给 {@link 要配对}**：普通配对、包住选区、代码里
   // 不补、反斜杠转义那几条它都有；在这里再判一遍就是两份实现。
-  if (现场.空选区 && 现场.前 === 字 && 现场.后 === 升级闭 && 现场.后二 === 升级闭) {
+  if (scene.emptySelection && scene.before2 === character2 && scene.after === raiseLevelClose && scene.afterTwo === raiseLevelClose) {
     return "升级";
   }
   return null;
 }
 
 /** 往回找开定界符时最多看这么多颗字符（正常一对星号不会隔这么远）。 */
-const 回看上限 = 200;
+const returnSeeLimit = 200;
 
 /** 在这一段行内内容里取 `[从, 到)` 那几个字符；越界给 `""`，**不抛**。 */
-function 块内文(父: 模型节点, 从: number, 到: number): string {
-  if (从 < 0 || 从 >= 到 || 到 > 父.content.size) return "";
-  return 父.textBetween(从, 到, "");
+function blockBody(parent: modelTypeNode, from: number, to2: number): string {
+  if (from < 0 || from >= to2 || to2 > parent.content.size) return "";
+  return parent.textBetween(from, to2, "");
 }
 
 /**
@@ -642,71 +642,71 @@ function 块内文(父: 模型节点, 从: number, 到: number): string {
  *   后面的字**继续斜**（Typora 里就是一直斜下去，想收尾得自己按一颗星号，
  *   那一下由 {@link 尾巴带标记} 那条岔路接住）。
  */
-function 收尾事务(
+function receiveTailTransaction(
   state: EditorState,
-  位置: number,
-  字: string,
-  内文尾巴: string,
-  结束: boolean,
+  position2: number,
+  character2: string,
+  bodyTailPart: string,
+  joinBundle: boolean,
 ): Transaction | null {
-  const 名 = 落标记表[字];
-  if (!名) return null;
-  const $位 = state.doc.resolve(位置);
-  if (!$位.parent.inlineContent) return null;
+  const name3 = dropMarkTable[character2];
+  if (!name3) return null;
+  const position = state.doc.resolve(position2);
+  if (!position.parent.inlineContent) return null;
   // ⚠️ **行内代码里的星号是原样文字**，不是标记的定界符。`在代码里` 只覆盖
   // `state.selection`，而这里的位置是调用方给的，所以自己再问一次标记那一半。
-  if ($位.marks().some((标记) => 标记.type.spec.code)) return null;
-  const 父 = $位.parent;
-  const 起 = $位.parentOffset;
+  if (position.marks().some((mark) => mark.type.spec.code)) return null;
+  const parent = position.parent;
+  const start5 = position.parentOffset;
   // 闭定界符几颗：光标右边连着几颗同一颗字符（最多两颗）。
-  const 盘上 =
-    块内文(父, 起, 起 + 1) === 字 ? (块内文(父, 起 + 1, 起 + 2) === 字 ? 2 : 1) : 0;
+  const onDisk =
+    blockBody(parent, start5, start5 + 1) === character2 ? (blockBody(parent, start5 + 1, start5 + 2) === character2 ? 2 : 1) : 0;
   // ⚠️ 盘上一颗都没有时，**正在敲的那一颗**就是闭定界符（①：`*甲` 后面敲 `*`）。
   // 但"敲的是正文"那条路（`内文尾巴` 非空）不适用——它要求右边真有闭定界符。
-  const 闭长 = 盘上 || (内文尾巴 === "" ? 1 : 0);
-  if (!闭长) return null;
+  const closeLength = onDisk || (bodyTailPart === "" ? 1 : 0);
+  if (!closeLength) return null;
   // 往回扫内文：撞到同一颗字符（= 开定界符）或取不到字符（段首 / 原子）就停。
-  const 内: string[] = [];
-  while (内.length < 回看上限) {
-    const 文 = 块内文(父, 起 - 内.length - 1, 起 - 内.length);
-    if (文 === "" || 文 === 字) break;
-    内.push(文);
+  const inside: string[] = [];
+  while (inside.length < returnSeeLimit) {
+    const text4 = blockBody(parent, start5 - inside.length - 1, start5 - inside.length);
+    if (text4 === "" || text4 === character2) break;
+    inside.push(text4);
   }
   // ⚠️ 扫描的颗数用 `内.length`（盘中真实存在的），判"非空"用 `内文`（含尾巴）。
-  const 内文 = 内.reverse().join("") + 内文尾巴;
+  const body = inside.reverse().join("") + bodyTailPart;
   // ⚠️ 正好扫满上限 = 压根没找到开定界符，**不是**"找到了一对很长的"。
-  if (内文 === "" || 内.length >= 回看上限) return null;
-  if (/^\s|\s$/.test(内文)) return null;
-  if (块内文(父, 起 - 内.length - 1, 起 - 内.length) !== 字) return null;
+  if (body === "" || inside.length >= returnSeeLimit) return null;
+  if (/^\s|\s$/.test(body)) return null;
+  if (blockBody(parent, start5 - inside.length - 1, start5 - inside.length) !== character2) return null;
   // ⚠️ **下面这几个下标全是"父节点内容坐标"**（`textBetween` 吃的那套），
   // **不是文档位置**——两套差着 1（位置 = 内容坐标 ＋ 块首），混用一次就是
   // 差一颗字符（第一版把转义那一判写成 `开起 - 1`，正好指着开定界符**自己**，
   // 于是 `\*甲*` 照样被落了标记，测试当场抓住）。
-  const 开前 = 块内文(父, 起 - 内.length - 2, 起 - 内.length - 1);
+  const openBefore = blockBody(parent, start5 - inside.length - 2, start5 - inside.length - 1);
   // 开定界符前面紧挨着 `\` ⇒ 用户在转义（`\*甲*` 那种），不碰——与
   // {@link 要补标记} 的 ③ 同源。⚠️ 只判这一颗，不追"这个反斜杠自己是不是
   // 被转义的"（`\\*甲*`），理由同上那一条的注释。
-  if (开前 === "\\") return null;
-  const 开长 = 开前 === 字 ? 2 : 1;
-  if (开长 !== 闭长) return null;
-  const 开起 = 位置 - 开长 - 内.length;
+  if (openBefore === "\\") return null;
+  const openLength = openBefore === character2 ? 2 : 1;
+  if (openLength !== closeLength) return null;
+  const openStart = position2 - openLength - inside.length;
   // ⚠️ 下标写成 `闭长 - 1` 过不了 `tsc`（元组的变量下标一律是 `string | undefined`），
   // 拆成两支反而把"一颗对一颗、两颗对两颗"这件事写在脸上了。
-  const 标记名 = 闭长 === 2 ? 名[1] : 名[0];
-  if (标记名 === null) return null;
-  const 标记类型 = state.schema.marks[标记名];
-  if (!标记类型) return null;
+  const markName = closeLength === 2 ? name3[1] : name3[0];
+  if (markName === null) return null;
+  const markType = state.schema.marks[markName];
+  if (!markType) return null;
   // ⚠️ 替换范围的右端是 `位置 + 盘上`：**盘上有几颗就吃掉几颗**（① 是 0，
   // 那一颗是用户正在敲的、压根没进文档；②③ 是 1 或 2）。
-  const 事务 = state.tr.replaceWith(
-    开起,
-    位置 + 盘上,
-    state.schema.text(内文, [标记类型.create()]),
+  const transaction = state.tr.replaceWith(
+    openStart,
+    position2 + onDisk,
+    state.schema.text(body, [markType.create()]),
   );
   // 光标落在**标记之后**：`*甲|*` ⇒ `*甲*`（标记版）里 `甲` 后面那一格。
   // ⚠️ 是 `开起 + 内文.length` **不是** `位置`：闭定界符那几颗已经被换掉了，
   // 老坐标在新文档里指的位置早就不对了。
-  事务.setSelection(TextSelection.create(事务.doc, 开起 + 内文.length));
+  transaction.setSelection(TextSelection.create(transaction.doc, openStart + body.length));
   // ⚠️ **说清楚"到此为止"**：光标落在标记尾巴上，ProseMirror 默认会拿
   // `$from.marks()`（= 前一颗字那套 `emphasis`）接着用，于是用户接着打的字
   // **还是斜的**——而他刚敲下那颗星号的意思正是"斜体到这儿结束"。
@@ -714,8 +714,8 @@ function 收尾事务(
   // 而空数组在 JS 里为真，所以它会赢过"继承前一颗字的标记"。
   // 已经收笔就清空；还在标记内部输入则显式续用这颗 mark。后者对行内代码
   // 尤其必要：不能赌 `$from.marks()` 一定把后续字符接进同一个 `inlineCode`。
-  事务.setStoredMarks(结束 ? [] : [标记类型.create()]);
-  return 事务;
+  transaction.setStoredMarks(joinBundle ? [] : [markType.create()]);
+  return transaction;
 }
 
 /**
@@ -726,26 +726,26 @@ function 收尾事务(
  * "再补一对"。⚠️ 判据只答"要不要让它继承那套标记"，**吞键是调用方的事**
  *（见 {@link 到此为止事务}）。
  */
-function 尾巴带标记(state: EditorState, 位置: number, 字: string): boolean {
-  const $位 = state.doc.resolve(位置);
-  if (!$位.parent.inlineContent) return false;
-  const 前 = $位.nodeBefore;
-  if (!前) return false;
-  const 名 = 落标记表[字];
-  if (!名) return false;
-  return 前.marks.some((标记) => 标记.type.name === 名[0] || 标记.type.name === 名[1]);
+function tailPartWithMark(state: EditorState, position2: number, character2: string): boolean {
+  const position = state.doc.resolve(position2);
+  if (!position.parent.inlineContent) return false;
+  const before2 = position.nodeBefore;
+  if (!before2) return false;
+  const name3 = dropMarkTable[character2];
+  if (!name3) return false;
+  return before2.marks.some((mark) => mark.type.name === name3[0] || mark.type.name === name3[1]);
 }
 
 /** 行内代码的 mark 不是右侧 inclusive 的；每个后续字符都要重新续上 storedMark。 */
-function 续接行内代码(state: EditorState): Transaction | null {
+function continueConnectInlineCode(state: EditorState): Transaction | null {
   if (!state.selection.empty) return null;
-  const 类型 = state.schema.marks.inlineCode;
-  if (!类型 || state.storedMarks?.some((标记) => 标记.type === 类型)) return null;
-  const 前 = state.selection.$from.nodeBefore;
-  if (!前?.marks.some((标记) => 标记.type === 类型)) return null;
-  const 事务 = state.tr.setStoredMarks([类型.create()]);
-  事务.setMeta("addToHistory", false);
-  return 事务;
+  const type = state.schema.marks.inlineCode;
+  if (!type || state.storedMarks?.some((mark) => mark.type === type)) return null;
+  const before2 = state.selection.$from.nodeBefore;
+  if (!before2?.marks.some((mark) => mark.type === type)) return null;
+  const transaction = state.tr.setStoredMarks([type.create()]);
+  transaction.setMeta("addToHistory", false);
+  return transaction;
 }
 
 /**
@@ -759,11 +759,11 @@ function 续接行内代码(state: EditorState): Transaction | null {
  * ⚠️ 副作用如实记着：连着敲两颗星号想紧接着再开一段斜体（`*甲**乙*`）时，
  * 第一颗被吃掉；想接着开就把光标挪开一位，或者先打一颗空格。
  */
-function 到此为止事务(state: EditorState): Transaction {
-  const 事务 = state.tr.setStoredMarks([]);
+function toThisAsEndTransaction(state: EditorState): Transaction {
+  const transaction = state.tr.setStoredMarks([]);
   // 只改"接下来用什么标记"，文档一个字节都没动 —— 不进撤销历史。
-  事务.setMeta("addToHistory", false);
-  return 事务;
+  transaction.setMeta("addToHistory", false);
+  return transaction;
 }
 
 /**
@@ -773,55 +773,55 @@ function 到此为止事务(state: EditorState): Transaction {
  * 再插一颗"：同一事务里第二次插入的坐标要自己 `map`，而 `Transaction` 的
  * 坐标是**原始文档**坐标——写错一步的表现是"偶尔多一颗星"，没人会往这里找。
  */
-function 补标记(view: EditorView, 位置: number, 字: string, 动作: 标记动作): boolean {
-  if (动作 === "跳过") {
+function fillMark(view: EditorView, position2: number, character2: string, action: MarkAction): boolean {
+  if (action === "跳过") {
     // ⚠️ **收尾是"这一对写完了"的意思**，所以先问一句能不能落成真标记
     //（{@link 收尾事务}，BUG-54）；落不了才退回"只把光标跨过去"。
     // ⚠️ 顺序不能反：跨过去之后光标就不在闭定界符前面了，那颗键白按。
-    const 事务 = 收尾事务(view.state, 位置, 字, "", true);
-    if (事务) {
-      view.dispatch(事务);
+    const transaction = receiveTailTransaction(view.state, position2, character2, "", true);
+    if (transaction) {
+      view.dispatch(transaction);
       return true;
     }
-    跨一位(view, 1);
+    crossValuePosition(view, 1);
     return true;
   }
-  if (动作 === "升级") {
+  if (action === "升级") {
     const { state } = view;
     // ⚠️ **两颗哪一颗是闭，要现查**：`*` 是自配对（{@link 配对表} 里没有它，
     // 落到 `?? 字`），`[` 的闭是 `]`（表里有）。写死"四颗同一颗字"的话，
     // `[` 那一支会补成 `[[[[`。
-    const 闭 = 配对表[字] ?? 字;
-    const 事务 = state.tr.replaceWith(位置 - 1, 位置 + 1, state.schema.text(字 + 字 + 闭 + 闭));
+    const close3 = configureCorrectTable[character2] ?? character2;
+    const transaction = state.tr.replaceWith(position2 - 1, position2 + 1, state.schema.text(character2 + character2 + close3 + close3));
     // 四颗里光标落在正中间：`**|**` / `[[|]]`。
-    事务.setSelection(TextSelection.create(事务.doc, 位置 + 1));
-    view.dispatch(事务);
+    transaction.setSelection(TextSelection.create(transaction.doc, position2 + 1));
+    view.dispatch(transaction);
     return true;
   }
-  if (动作 === "补齐") {
+  if (action === "补齐") {
     // 现场是 `*|`（左边一颗、右边空）：把**那一颗**换成四颗，光标落正中。
     // ⚠️ 范围是 `[位置-1, 位置)`——**不含右边**（那边本来就没有东西）；写成
     // 「升级」那种 `[位置-1, 位置+1)` 会把右边一个字一并吃掉（右边是正文时
     // 症状是"打颗星吃掉后面一个字母"，而那种错没人会往自动配对这边想）。
     const { state } = view;
-    const 闭 = 配对表[字] ?? 字;
-    const 事务 = state.tr.replaceWith(位置 - 1, 位置, state.schema.text(字 + 字 + 闭 + 闭));
-    事务.setSelection(TextSelection.create(事务.doc, 位置 + 1));
-    view.dispatch(事务);
+    const close3 = configureCorrectTable[character2] ?? character2;
+    const transaction = state.tr.replaceWith(position2 - 1, position2, state.schema.text(character2 + character2 + close3 + close3));
+    transaction.setSelection(TextSelection.create(transaction.doc, position2 + 1));
+    view.dispatch(transaction);
     return true;
   }
   // 「补一对」：与括号那条同一个落点（空选区那半支）。
-  return 配对(view, 位置, 位置, 字, 字);
+  return configureCorrect(view, position2, position2, character2, character2);
 }
 
 /* ── 落点：插件 ────────────────────────────────────────────────────────── */
 
 /** 光标右移 / 左移一位，**不计进撤销历史**（那是导航不是改动）。 */
-function 跨一位(view: EditorView, 步: 1 | -1): void {
+function crossValuePosition(view: EditorView, step: 1 | -1): void {
   const { state } = view;
-  const 到 = state.selection.from + 步;
+  const to2 = state.selection.from + step;
   view.dispatch(
-    state.tr.setSelection(TextSelection.create(state.doc, 到)).setMeta("addToHistory", false),
+    state.tr.setSelection(TextSelection.create(state.doc, to2)).setMeta("addToHistory", false),
   );
 }
 
@@ -838,23 +838,23 @@ function 跨一位(view: EditorView, 步: 1 | -1): void {
  *   整篇选区上插字符会造出两个**只含一颗括号的段落**，不如不插手。
  * - 空选区：两颗一起插，光标落在中间。
  */
-function 配对(view: EditorView, 从: number, 到: number, 开: string, 闭: string): boolean {
+function configureCorrect(view: EditorView, from: number, to2: number, open2: string, close3: string): boolean {
   const { state } = view;
-  const 事务 = state.tr;
-  if (从 !== 到) {
-    const $从 = state.doc.resolve(从);
-    const $到 = state.doc.resolve(到);
-    if (!$从.parent.isTextblock || !$到.parent.isTextblock) return false;
-    事务.insertText(闭, 到, 到);
-    事务.insertText(开, 从, 从);
+  const transaction = state.tr;
+  if (from !== to2) {
+    const fromValue = state.doc.resolve(from);
+    const to = state.doc.resolve(to2);
+    if (!fromValue.parent.isTextblock || !to.parent.isTextblock) return false;
+    transaction.insertText(close3, to2, to2);
+    transaction.insertText(open2, from, from);
     // 开括号插在 `从` ⇒ 原本 `[从, 到)` 的内容整体右移一位，闭括号现在落在
     // `到 + 1`。光标摆到它前面 = 包住的那段之后。
-    事务.setSelection(TextSelection.create(事务.doc, 到 + 1));
+    transaction.setSelection(TextSelection.create(transaction.doc, to2 + 1));
   } else {
-    事务.insertText(开 + 闭, 从);
-    事务.setSelection(TextSelection.create(事务.doc, 从 + 1));
+    transaction.insertText(open2 + close3, from);
+    transaction.setSelection(TextSelection.create(transaction.doc, from + 1));
   }
-  view.dispatch(事务);
+  view.dispatch(transaction);
   return true;
 }
 
@@ -862,26 +862,26 @@ function 配对(view: EditorView, 从: number, 到: number, 开: string, 闭: st
  * 键盘那一路。⚠️ **`Tab` 只在那一种情况下返回 `true`**，其余一律放行——
  * 放行的意思是"让上游 `indent` 去缩进"，不是"什么都不做"。
  */
-function 按键(view: EditorView, event: KeyboardEvent): boolean {
+function keypress(view: EditorView, event: KeyboardEvent): boolean {
   // ⚠️ 带修饰键的一概不碰：`Ctrl+Tab` / `Alt+Tab` 是窗口管理器的，
   // `Cmd+Z` 是撤销的。Shift 不算修饰键（`Shift+Tab` 正是我们要的那一条）。
   if (event.ctrlKey || event.altKey || event.metaKey) return false;
   const { state } = view;
-  const 位置 = state.selection.from;
-  const 现场 = 读现场(state, 位置);
+  const position2 = state.selection.from;
+  const scene = readScene(state, position2);
   if (event.key === "Tab") {
-    const 方向 = event.shiftKey ? -1 : 1;
-    if (!要跳(现场, 方向)) return false;
-    跨一位(view, 方向);
+    const direction = event.shiftKey ? -1 : 1;
+    if (!wantJump(scene, direction)) return false;
+    crossValuePosition(view, direction);
     return true;
   }
   if (event.key === "Backspace") {
-    if (!要删成对(现场)) return false;
-    view.dispatch(state.tr.delete(位置 - 1, 位置 + 1));
+    if (!wantRemoveBecomeCorrect(scene)) return false;
+    view.dispatch(state.tr.delete(position2 - 1, position2 + 1));
     return true;
   }
-  if (event.key.length === 1 && 要跳过(现场, event.key)) {
-    跨一位(view, 1);
+  if (event.key.length === 1 && wantJumpPass(scene, event.key)) {
+    crossValuePosition(view, 1);
     return true;
   }
   return false;
@@ -900,24 +900,24 @@ function 按键(view: EditorView, event: KeyboardEvent): boolean {
  * 打引号时都有一次 composition，那期间动文档会把候选框里的东西打乱。
  * 代价如实记在文件头第 5 节（全角括号常常配不上对）。
  */
-export function 配对处理(开 = true, 能力: 配对能力 = 全开配对能力) {
+export function configureCorrectPlaceManage(open2 = true, ableForce: ConfigureCorrectAbleForce = allPairingCapabilities) {
   // ⚠️ **关掉 = 这条插件不装**（返回 `[]`，与 `smart-punctuation.ts` 的
   // `标点输入` 同一个做法）：四件事（补一对 / 跳过 / 空对退格 / `Tab` 跳出）
   // 是**一条插件**，只关一半等于让 `Tab` 去跳一颗根本没补出来的括号。
   // ⚠️ 参数默认 `true`：老调用点（以及测试）不传就是开，与 Rust 那边
   // `smart_symbols` 的默认值一致。
-  if (!开) return [];
+  if (!open2) return [];
   // ⚠️ 只有最后那条兜底要用到视图（要问一句 `view.composing`）。
-  let 视图: EditorView | null = null;
+  let view: EditorView | null = null;
   return $prose(
     () =>
       new Plugin({
-        key: 配对键,
-        view: (现在这个) => {
-          视图 = 现在这个;
+        key: configureCorrectKey,
+        view: (nowThisItem) => {
+          view = nowThisItem;
           return {
             destroy: () => {
-              视图 = null;
+              view = null;
             },
           };
         },
@@ -932,66 +932,66 @@ export function 配对处理(开 = true, 能力: 配对能力 = 全开配对能�
          * 判据与 `handleTextInput` 的 ③ 完全同一份（{@link 收尾事务}），
          * 一个字都没多写；这里只负责在**每一次事务之后**再问一遍。
          */
-        appendTransaction: (_事务们, _旧, 新) => {
+        appendTransaction: (_Transactions, _OldValue, newValue) => {
           // ⚠️ 组字期间一律不插手（与 `handleTextInput` 第一句同源）：
           // 那期间动文档会把候选框里的东西打乱。
-          if (视图?.composing) return null;
-          if (!新.selection.empty) return null;
-          const 从 = 新.selection.from;
-          const 字 = 取字符(新, 从, 1);
-          if (字) {
-            const 收尾 = 收尾事务(新, 从, 字, "", false);
-            if (收尾) return 收尾;
+          if (view?.composing) return null;
+          if (!newValue.selection.empty) return null;
+          const from = newValue.selection.from;
+          const character2 = getCharacter(newValue, from, 1);
+          if (character2) {
+            const receiveTail = receiveTailTransaction(newValue, from, character2, "", false);
+            if (receiveTail) return receiveTail;
           }
-          return 续接行内代码(新);
+          return continueConnectInlineCode(newValue);
         },
         props: {
-          handleTextInput: (view, 从, 到, 文) => {
+          handleTextInput: (view, from, to2, text4) => {
             if (view.composing) return false;
             // ⚠️ 一次只认一颗字符：粘贴、IME 提交、拖放都会带着一整串进来，
             // 而那些都**不是"打了一颗开括号"**。
-            if (文.length !== 1) return false;
-            const 此现场 = 读现场(view.state, 从);
+            if (text4.length !== 1) return false;
+            const thisScene = readScene(view.state, from);
             // ⚠️ 自配对先问：它的判据比 `要配对` 多两条（段首 / 升级），
             // 而 `配对表` 里没有 `*`，两个判据的适用范围不重叠、顺序无所谓
             // ——先问它只是为了让"星号"这件事在这段里读起来是一句话。
-            const 动作 = 要补标记(此现场, 文, 能力);
-            if (动作 === "补一对") {
+            const action = needsPairing(thisScene, text4, ableForce);
+            if (action === "补一对") {
               // ① 这颗星号可能其实是**收尾**：前面已经有一颗开星号、内文也合法，
               // 而右边一颗星号都没有（`*甲` 后面用户自己敲下闭定界符那一下）。
               // ⚠️ 先问它再补——补了就多出一颗用户没打过的星号（`*甲**`），
               // 而那个形状**谁都认不出来**（用户 2026-09-30 报的就是它）。
-              const 收尾 = 收尾事务(view.state, 从, 文, "", true);
-              if (收尾) {
-                view.dispatch(收尾);
+              const receiveTail = receiveTailTransaction(view.state, from, text4, "", true);
+              if (receiveTail) {
+                view.dispatch(receiveTail);
                 return true;
               }
               // 已经落成标记的尾巴上再敲一颗：意思是"到此为止"，**吃掉这一颗键**
               //（⚠️ 不能插一颗字面星号——那会让存盘写成 `*甲*\*`，正是用户报的
               //"自动插入斜杠"）。⚠️ `storedMarks` 已经是空数组 = 上一颗星号刚
               // 说过一次"到此为止"了，这时再敲就是要**另开一对**，别再吃。
-              if (view.state.storedMarks?.length !== 0 && 尾巴带标记(view.state, 从, 文)) {
-                view.dispatch(到此为止事务(view.state));
+              if (view.state.storedMarks?.length !== 0 && tailPartWithMark(view.state, from, text4)) {
+                view.dispatch(toThisAsEndTransaction(view.state));
                 return true;
               }
-              return 补标记(view, 从, 文, 动作);
+              return fillMark(view, from, text4, action);
             }
-            if (动作) return 补标记(view, 从, 文, 动作);
-            const 闭 = 要配对(此现场, 文);
-            if (闭) return 配对(view, 从, 到, 文, 闭);
+            if (action) return fillMark(view, from, text4, action);
+            const close3 = needsPair(thisScene, text4);
+            if (close3) return configureCorrect(view, from, to2, text4, close3);
             // ③ **普通正文**：这一颗字打下去，夹着的那一对星号可能就此完整了
             //（`*甲\|*` 里打进 `甲`）。⚠️ 排在最后：括号与 `*` 各有各的落点，
             // 轮到这里的一定是"没什么结构含义的一颗字"。
-            const 收尾 = 收尾事务(view.state, 从, 取字符(view.state, 从, 1), 文, false);
-            if (收尾) {
-              view.dispatch(收尾);
+            const receiveTail = receiveTailTransaction(view.state, from, getCharacter(view.state, from, 1), text4, false);
+            if (receiveTail) {
+              view.dispatch(receiveTail);
               return true;
             }
             return false;
           },
           handleKeyDown: (view, event) => {
             if (view.composing) return false;
-            return 按键(view, event);
+            return keypress(view, event);
           },
         },
       }),

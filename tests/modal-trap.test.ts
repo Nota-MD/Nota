@@ -35,127 +35,127 @@
 
 /* ── 最小工装（与 `toc.test.ts` 同一套，本仓没有测试框架）──────────────── */
 
-let 通过 = 0;
-let 失败 = 0;
-const 失败清单: string[] = [];
-let 当前组 = "";
+let passed = 0;
+let failure = 0;
+const failureList: string[] = [];
+let currentGroup = "";
 
-function 组(名: string): void {
-  当前组 = 名;
-  console.log(`\n── ${名} ${"─".repeat(Math.max(0, 56 - 名.length))}`);
+function group(name3: string): void {
+  currentGroup = name3;
+  console.log(`\n── ${name3} ${"─".repeat(Math.max(0, 56 - name3.length))}`);
 }
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    通过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    passed++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    失败++;
-    失败清单.push(`${当前组} / ${名称}`);
-    console.log(`  ✘ ${名称}`);
+    failure++;
+    failureList.push(`${currentGroup} / ${name}`);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  const a = JSON.stringify(实际);
-  const b = JSON.stringify(期望);
-  if (a !== b) throw new Error(`${说明}：期望 ${b}，实际 ${a}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  const a = JSON.stringify(actual);
+  const b = JSON.stringify(expected);
+  if (a !== b) throw new Error(`${description}：期望 ${b}，实际 ${a}`);
 }
 
-function 真(值: boolean, 说明: string): void {
-  if (!值) throw new Error(说明);
+function assertValue(value2: boolean, description: string): void {
+  if (!value2) throw new Error(description);
 }
 
 /** 假格子：`陷阱落点` 只比较身份、读不出别的，一个普通对象就够了。 */
-function 格(i: number): HTMLElement {
+function cell2(i: number): HTMLElement {
   return { id: `格${i}` } as unknown as HTMLElement;
 }
 
 /* ── 被测 ─────────────────────────────────────────────────────────────── */
 
-import { 陷阱落点 } from "../src/ui/useModalTrap";
+import { pitTrapDropPoint } from "../src/ui/useModalTrap";
 
 /* ── 一、没有格子 ─────────────────────────────────────────────────────── */
 
-组("一、面板里一个格子都没有");
+group("一、面板里一个格子都没有");
 
-测("Tab 与 Shift+Tab 都是「原地不动」", () => {
-  等(陷阱落点([], null, false).动作, "原地不动", "正向");
-  等(陷阱落点([], null, true).动作, "原地不动", "反向");
+testCase("Tab 与 Shift+Tab 都是「原地不动」", () => {
+  equal(pitTrapDropPoint([], null, false).action, "原地不动", "正向");
+  equal(pitTrapDropPoint([], null, true).action, "原地不动", "反向");
 });
 
 /* ── 二、焦点在面板外 ─────────────────────────────────────────────────── */
 
-组("二、焦点在面板外（含容器自己）");
+group("二、焦点在面板外（含容器自己）");
 
-测("焦点为 null：Tab 拉回第一格、Shift+Tab 拉回最后一格", () => {
-  const 格子 = [格(0), 格(1), 格(2)];
-  const 判定 = 陷阱落点(格子, null, false);
-  等(判定.动作, "送到", "送回面板");
-  真(判定.动作 === "送到" && 判定.目标 === 格子[0], "正向送第一格");
-  const 反判定 = 陷阱落点(格子, null, true);
-  真(反判定.动作 === "送到" && 反判定.目标 === 格子[2], "反向送最后一格");
+testCase("焦点为 null：Tab 拉回第一格、Shift+Tab 拉回最后一格", () => {
+  const cell = [cell2(0), cell2(1), cell2(2)];
+  const determineFixed = pitTrapDropPoint(cell, null, false);
+  equal(determineFixed.action, "送到", "送回面板");
+  assertValue(determineFixed.action === "送到" && determineFixed.target === cell[0], "正向送第一格");
+  const reverseDetermineFixed = pitTrapDropPoint(cell, null, true);
+  assertValue(reverseDetermineFixed.action === "送到" && reverseDetermineFixed.target === cell[2], "反向送最后一格");
 });
 
-测("焦点是面板容器自己（tabIndex=-1 那颗）：按「从外面进来」算", () => {
-  const 容器 = 格(9);
-  const 格子 = [格(0), 格(1)];
-  真(陷阱落点(格子, 容器, false).动作 === "送到", "容器不在格子里");
+testCase("焦点是面板容器自己（tabIndex=-1 那颗）：按「从外面进来」算", () => {
+  const container = cell2(9);
+  const cell = [cell2(0), cell2(1)];
+  assertValue(pitTrapDropPoint(cell, container, false).action === "送到", "容器不在格子里");
 });
 
-测("焦点在页面里别的东西上：拉回", () => {
-  const 格子 = [格(0), 格(1)];
-  const 外面 = 格(7);
-  真(陷阱落点(格子, 外面, false).动作 === "送到", "正向外人送回");
-  真(陷阱落点(格子, 外面, true).动作 === "送到", "反向外人送回");
+testCase("焦点在页面里别的东西上：拉回", () => {
+  const cell = [cell2(0), cell2(1)];
+  const externalSurface = cell2(7);
+  assertValue(pitTrapDropPoint(cell, externalSurface, false).action === "送到", "正向外人送回");
+  assertValue(pitTrapDropPoint(cell, externalSurface, true).action === "送到", "反向外人送回");
 });
 
 /* ── 三、首尾互跳 ─────────────────────────────────────────────────────── */
 
-组("三、首尾互跳（两个方向都夹住）");
+group("三、首尾互跳（两个方向都夹住）");
 
-测("第一格 Shift+Tab → 最后一格", () => {
-  const 格子 = [格(0), 格(1), 格(2)];
-  const 判定 = 陷阱落点(格子, 格子[0]!, true);
-  等(判定.动作, "送到", "绕到尾部");
-  真(判定.动作 === "送到" && 判定.目标 === 格子[2]!, "目标就是最后一格");
+testCase("第一格 Shift+Tab → 最后一格", () => {
+  const cell = [cell2(0), cell2(1), cell2(2)];
+  const determineFixed = pitTrapDropPoint(cell, cell[0]!, true);
+  equal(determineFixed.action, "送到", "绕到尾部");
+  assertValue(determineFixed.action === "送到" && determineFixed.target === cell[2]!, "目标就是最后一格");
 });
 
-测("最后一格 Tab → 第一格", () => {
-  const 格子 = [格(0), 格(1), 格(2)];
-  const 判定 = 陷阱落点(格子, 格子[2]!, false);
-  等(判定.动作, "送到", "绕回头部");
-  真(判定.动作 === "送到" && 判定.目标 === 格子[0]!, "目标就是第一格");
+testCase("最后一格 Tab → 第一格", () => {
+  const cell = [cell2(0), cell2(1), cell2(2)];
+  const determineFixed = pitTrapDropPoint(cell, cell[2]!, false);
+  equal(determineFixed.action, "送到", "绕回头部");
+  assertValue(determineFixed.action === "送到" && determineFixed.target === cell[0]!, "目标就是第一格");
 });
 
-测("只有一颗格子：两个方向都送回它自己", () => {
-  const 格子 = [格(0)];
-  真(陷阱落点(格子, 格子[0]!, false).动作 === "送到", "正向");
-  真(陷阱落点(格子, 格子[0]!, true).动作 === "送到", "反向");
+testCase("只有一颗格子：两个方向都送回它自己", () => {
+  const cell = [cell2(0)];
+  assertValue(pitTrapDropPoint(cell, cell[0]!, false).action === "送到", "正向");
+  assertValue(pitTrapDropPoint(cell, cell[0]!, true).action === "送到", "反向");
 });
 
 /* ── 四、格子中间 ─────────────────────────────────────────────────────── */
 
-组("四、格子中间：自然移动（不拦）");
+group("四、格子中间：自然移动（不拦）");
 
-测("中间的格子往两个方向都让浏览器自己挪", () => {
-  const 格子 = [格(0), 格(1), 格(2)];
-  等(陷阱落点(格子, 格子[1]!, false).动作, "自然移动", "正向");
-  等(陷阱落点(格子, 格子[1]!, true).动作, "自然移动", "反向");
+testCase("中间的格子往两个方向都让浏览器自己挪", () => {
+  const cell = [cell2(0), cell2(1), cell2(2)];
+  equal(pitTrapDropPoint(cell, cell[1]!, false).action, "自然移动", "正向");
+  equal(pitTrapDropPoint(cell, cell[1]!, true).action, "自然移动", "反向");
 });
 
-测("第一格按 Tab（还有下一格）也是自然移动", () => {
-  const 格子 = [格(0), 格(1)];
-  等(陷阱落点(格子, 格子[0]!, false).动作, "自然移动", "首格正向不该绕");
+testCase("第一格按 Tab（还有下一格）也是自然移动", () => {
+  const cell = [cell2(0), cell2(1)];
+  equal(pitTrapDropPoint(cell, cell[0]!, false).action, "自然移动", "首格正向不该绕");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"═".repeat(56)}`);
-console.log(`通过 ${通过}，失败 ${失败}`);
-if (失败 > 0) {
-  console.log(`失败清单：\n  ${失败清单.join("\n  ")}`);
+console.log(`通过 ${passed}，失败 ${failure}`);
+if (failure > 0) {
+  console.log(`失败清单：\n  ${failureList.join("\n  ")}`);
   process.exit(1);
 }

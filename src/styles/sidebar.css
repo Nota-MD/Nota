@@ -246,7 +246,7 @@ body.resizing-col {
 }
 
 .sidebar:hover .sidebar-empty-state,
-.sidebar:focus-within .sidebar-empty-state {
+.sidebar:has(:focus-visible) .sidebar-empty-state {
   opacity: 1;
 }
 
@@ -567,21 +567,55 @@ body.resizing-col {
 .sidebar-context-menu {
   position: fixed;
   z-index: var(--z-popup);
-  width: 220px;
-  padding: 6px 0;
+  width: 266px;
+  padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-raised);
-  box-shadow: var(--shadow);
+  box-shadow: var(--popup-shadow);
 }
 
-.sidebar-context-menu button {
+.sidebar-context-head {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px 2px 8px;
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}
+
+.sidebar-context-close {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+.sidebar-context-close:hover,
+.sidebar-context-close:focus-visible {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.sidebar-context-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-context-menu .sidebar-context-section button {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 31px;
-  padding: 0 14px;
+  min-height: 30px;
+  padding: 0 8px;
   border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg);
   font: inherit;
@@ -589,30 +623,86 @@ body.resizing-col {
   cursor: pointer;
 }
 
-.sidebar-context-menu button:hover,
-.sidebar-context-menu button:focus-visible {
+.sidebar-context-menu .sidebar-context-section button:hover,
+.sidebar-context-menu .sidebar-context-section button:focus-visible {
   background: var(--bg-hover);
 }
 
-.sidebar-context-menu button:disabled {
+.sidebar-context-menu .sidebar-context-section button:disabled {
   color: var(--fg-faint);
   cursor: default;
 }
 
-.sidebar-context-menu button:disabled:hover {
+.sidebar-context-menu .sidebar-context-section button:disabled:hover {
   background: transparent;
 }
 
 .sidebar-context-sep {
   height: 1px;
-  margin: 5px 0;
+  margin: 5px 2px;
   background: var(--border);
 }
 
-.sidebar-context-check {
-  width: 18px;
-  flex: none;
+.sidebar-context-title {
+  padding: 4px 8px 3px;
+  color: var(--fg-muted);
+  font-size: 0.86em;
+}
+
+.sidebar-context-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px 4px;
+}
+
+.sidebar-context-icons button {
+  display: grid;
+  width: 28px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.sidebar-context-icons button:hover,
+.sidebar-context-icons button:focus-visible {
+  background: var(--bg-hover);
   color: var(--fg);
+}
+
+.sidebar-context-icons button[data-on="true"] {
+  color: var(--accent);
+}
+
+.sidebar-context-folder {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 7px;
+  margin: 0 2px;
+  padding: 0 8px;
+  color: var(--fg);
+}
+
+.sidebar-context-folder span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-context-folder i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* ── 文件树 ───────────────────────────────────────────────────────────── */

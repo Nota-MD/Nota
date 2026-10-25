@@ -112,7 +112,7 @@ import { FocusMeter } from "@/ui/FocusMeter";
 import { Icon } from "@/ui/Icon";
 import { MenuPopup } from "@/ui/MenuPopup";
 import { SpellMenu } from "@/ui/SpellMenu";
-import { 弹层自己在滚 } from "@/ui/popup-scroll";
+import { popupSelfSelfAtRoll } from "@/ui/popup-scroll";
 import type { MenuEntry } from "@/ui/commands";
 import { countText } from "@/ui/outline";
 
@@ -123,16 +123,16 @@ import { countText } from "@/ui/outline";
  * ⚠️ 顺序**不是** `StatusMetric` 枚举的声明顺序（那个是"默认项排第一"）。
  * 图里怎么排就怎么排——用户是拿那张图来点名的。
  */
-const 菜单次序: StatusMetric[] = ["minutes", "lines", "words", "characters"];
+const menuOrder: StatusMetric[] = ["minutes", "lines", "words", "characters"];
 
 /** 菜单条目的 id 前缀。**不是命令**——它们不进 `ui/commands.ts` 那张表
  * （同 `TabBar.tsx` 里那条右键菜单的写法）。 */
-const 统计前缀 = "status.metric.";
+const systemCountPrefix = "status.metric.";
 
 export function StatusBar({
   doc,
   /** 光标那一份状态（`App.tsx` 的 `commandState`）。状态栏只用它一格：`overtype`。 */
-  光标,
+  cursor,
   mode,
   sidebarOpen,
   readingSpeed,
@@ -140,16 +140,16 @@ export function StatusBar({
   metric,
   onPickMetric,
   spellcheck,
-  拼写语言,
+  combineWriteLanguage,
   onChangeSpell,
-  插件栏,
+  pluginDock,
   onToggleSidebar,
   onToggleSource,
   onHide,
 }: {
   doc: Document | null;
   /** 光标那一份状态（`null` = 读不出来：源码模式 / 还没打开文档）。⚠️ 见上面 `overtype`。 */
-  光标: CommandState | null;
+  cursor: CommandState | null;
   /** 当前**实际**编辑模式（`App.tsx` 的 `viewMode`：家在那条会话内 `useState`，这里已经过完降级）。**只用来点亮那颗 `</>`。** */
   mode: ViewMode;
   /** 侧栏此刻开着没有（`App.tsx` 的 `sidebarOpen`）。**决定左一是圆圈还是折角。** */
@@ -193,7 +193,7 @@ export function StatusBar({
    * 菜单本身搬去了 `ui/SpellMenu.tsx`（它要自己问一次词典、拿一份 `useState`，
    * 而这一份是"一个 `useState` 都没有"的纯展示）。
    */
-  拼写语言: string[] | null;
+  combineWriteLanguage: string[] | null;
   /**
    * 用户在拼写菜单里改了点什么。**一次写入**（2026-10-11）。
    *
@@ -205,7 +205,7 @@ export function StatusBar({
    * ⚠️ 写的**就是设置页那两格**（`ui/settings/panes/SpellLangPicker.tsx`）：
    * 两处都是"空数组＝跟随系统 ＋ 能勾多门"，规则一个字都不许分岔。
    */
-  onChangeSpell: (补: { 开?: boolean; 语言?: string[] }) => void;
+  onChangeSpell: (fill: { open2?: boolean; language?: string[] }) => void;
   /**
    * **插件栏的开关**——`null` = 别画（顶栏在，那颗开关住在那儿）。
    *
@@ -215,7 +215,7 @@ export function StatusBar({
    * ⚠️ 判据**不在这一层**：调用方（`App.tsx`）给 `null` 就是"别画"，
    * 这里不复判一遍（两处各判一次迟早会错开）。
    */
-  插件栏: { 开: boolean; 切换: () => void } | null;
+  pluginDock: { open2: boolean; splitReplace: () => void } | null;
   /** 显示/隐藏侧栏。**与「视图」菜单、`Ctrl+Shift+L`、侧栏那颗 × 同一个 setter。** */
   onToggleSidebar: () => void;
   /** 切到源码模式／切回所见即所得。**在 App 那边落到 `设模式`**（会话内状态，不落盘）。 */
@@ -244,35 +244,35 @@ export function StatusBar({
   );
 
   /** 整个栏的 DOM。**开菜单时要拿它量锚点**（见 `开菜单`）。 */
-  const 栏 = useRef<HTMLElement | null>(null);
+  const bar = useRef<HTMLElement | null>(null);
 
   /** 开着哪个菜单。`null` = 都没开。⚠️ 两个菜单**共用一个锚**（都在这一栏上）。 */
-  const [菜单, set菜单] = useState<"count" | "spell" | null>(null);
+  const [menu, setMenu] = useState<"count" | "spell" | null>(null);
   /** 那个菜单的锚点（视口坐标）。与 `菜单` 同生共死，分开存会让 CSS 有一次空锚。 */
-  const [锚, set锚] = useState<{ left: number; top: number } | null>(null);
+  const [anchor2, setAnchor] = useState<{ left: number; top: number } | null>(null);
 
-  const 关菜单 = useCallback(() => {
-    set菜单(null);
-    set锚(null);
+  const closeMenu = useCallback(() => {
+    setMenu(null);
+    setAnchor(null);
   }, []);
 
-  const 开菜单 = useCallback(
-    (哪个: "count" | "spell") => {
+  const openMenu = useCallback(
+    (whichItem: "count" | "spell") => {
       // ⚠️ **再点同一颗就收起来**：菜单是点开的，点同一颗关掉——桌面软件的手感。
       //（⚠️ 别照 `MenuPopup` 里 BUG-17 那套"谁开的"抄：那个坑的成因是
       // **划过**也会开子菜单，而这里只有"点"这一条路，不存在划过那一前因。）
-      if (菜单 === 哪个) {
-        关菜单();
+      if (menu === whichItem) {
+        closeMenu();
         return;
       }
-      const r = 栏.current?.getBoundingClientRect();
+      const r = bar.current?.getBoundingClientRect();
       if (!r) return;
       // ⚠️ 锚点钉在**这一栏的上沿、右端**：菜单是往上弹的（`.status-menu-anchor`
       // 那段 CSS 写着为什么），左端用不着——菜单自己 `right: 0`。
-      set锚({ left: r.right, top: r.top });
-      set菜单(哪个);
+      setAnchor({ left: r.right, top: r.top });
+      setMenu(whichItem);
     },
-    [菜单, 关菜单],
+    [menu, closeMenu],
   );
 
   // 点别处 / 按 Esc / 改窗口大小 / 滚动 → 关掉。⚠️ 前两条与 `TabBar.tsx` 那两条
@@ -283,17 +283,17 @@ export function StatusBar({
   // ⚠️ **滚动与改窗口大小要关**：菜单是 `fixed` 的，而这栏会跟着窗口变宽变窄
   //（侧栏一拖就变），脱节之后菜单指着的位置就不对了。
   useEffect(() => {
-    if (!菜单) return;
+    if (!menu) return;
     const onDown = (e: MouseEvent) => {
       const el = e.target as Element | null;
-      if (栏.current?.contains(el as Node)) return;
+      if (bar.current?.contains(el as Node)) return;
       // ⚠️ 子菜单是 portal 到 `body` 的（`MenuPopup` 文件头那段），它**不在**
       // `栏` 里面。少了这一条，点子菜单里的项会先被这里关掉整个菜单。
       if (el?.closest?.(".menu-sub")) return;
-      关菜单();
+      closeMenu();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") 关菜单();
+      if (e.key === "Escape") closeMenu();
     };
     /**
      * 底下的东西滚了 → 关掉（`fixed` 的菜单会与它指着的位置脱节）。
@@ -304,20 +304,20 @@ export function StatusBar({
      * 一下滑就直接消失」）。判据在 `ui/popup-scroll.ts`。
      */
     const onScroll = (e: Event) => {
-      if (弹层自己在滚(e.target)) return;
-      关菜单();
+      if (popupSelfSelfAtRoll(e.target)) return;
+      closeMenu();
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey, true);
-    window.addEventListener("resize", 关菜单);
+    window.addEventListener("resize", closeMenu);
     window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("resize", 关菜单);
+      window.removeEventListener("resize", closeMenu);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [菜单, 关菜单]);
+  }, [menu, closeMenu]);
 
   // 四个统计量**此刻的文案**（数值已经填进去了）。⚠️ **四个数一次全算好**
   // （上面那个 `counts`）：菜单里四项各自带着自己此刻的数值排着（图4 就是
@@ -327,7 +327,7 @@ export function StatusBar({
   // （`t(键表[m], 数)`）——`tools/i18n-check.sh` 扫的是**代码里的字符串字面量**，
   // 键一旦变成变量它就再也看不见这四条，于是中文表里那四行会被判成"废键"
   // （实测：真报了 FAIL）。这是这套"键就是英文原文"的代价，别绕。
-  const 四个: Record<StatusMetric, string> = {
+  const fourItem: Record<StatusMetric, string> = {
     minutes: t("{0} minutes", counts.readingMinutes),
     lines: t("{0} lines", counts.lines),
     words: t("{0} words", counts.words),
@@ -337,18 +337,18 @@ export function StatusBar({
   // ⚠️ 这里传进去的是**已经翻好的句子**，而 `MenuPopup` 内部还会
   // `t(entry.label)` 一次。那一次查不到就原样返回——本仓既有做法
   // （`TabBar.tsx` 那条右键菜单同样），不是漏翻。
-  const 统计条目: MenuEntry[] = 菜单次序.map((m) => ({
-    id: 统计前缀 + m,
-    label: 四个[m],
+  const systemCountItem: MenuEntry[] = menuOrder.map((m) => ({
+    id: systemCountPrefix + m,
+    label: fourItem[m],
     checkable: true,
   }));
 
-  const 统计勾: Record<string, boolean> = {};
-  for (const m of 菜单次序) 统计勾[统计前缀 + m] = m === metric;
+  const systemCountCheck: Record<string, boolean> = {};
+  for (const m of menuOrder) systemCountCheck[systemCountPrefix + m] = m === metric;
 
   // 悬停才看得见的那一整份统计。⚠️ 用 ` · ` 拼成一行：`title` 属性里的换行
   // 在 WebKit 上不一定断行，多行提示会长得没法看。
-  const 详细 = t(
+  const detailThin = t(
     "{0} words · {1} characters · {2} lines · about {3} min",
     counts.words,
     counts.characters,
@@ -356,7 +356,7 @@ export function StatusBar({
     counts.readingMinutes,
   );
 
-  const 左 = (
+  const left = (
     <span className="status-left">
       <button
         type="button"
@@ -376,14 +376,14 @@ export function StatusBar({
           平时不画（同一个开关两个入口并排出现，用户会以为它们是两件事）。
           ⚠️ 看房顶那颗 `hasDockToggle` 在 `App.tsx` 里怎么算的：`!菜单栏开着`
           ——它是"顶上那条画不画"的**同一个判据**，不是另算一遍。 */}
-      {插件栏 && (
+      {pluginDock && (
         <button
           type="button"
           className="status-btn"
-          onClick={插件栏.切换}
+          onClick={pluginDock.splitReplace}
           title={t("Show the extension dock")}
           aria-label={t("Show the extension dock")}
-          aria-pressed={插件栏.开}
+          aria-pressed={pluginDock.open2}
         >
           <Icon name="folio-columns-symbolic" />
         </button>
@@ -402,13 +402,13 @@ export function StatusBar({
     </span>
   );
 
-  const 专注 = <FocusMeter state={focus} />;
+  const dedicatedNote = <FocusMeter state={focus} />;
 
   return (
-    <footer className="statusbar" ref={栏}>
-      {左}
+    <footer className="statusbar" ref={bar}>
+      {left}
       <span className="status-right">
-        {专注}
+        {dedicatedNote}
         {/* ⚠️ 没文档时这三样**一起不画**：它们说的都是"这份文档有多少内容"
             （见文件头最后那段）。 */}
         {doc && (
@@ -416,12 +416,12 @@ export function StatusBar({
             <button
               type="button"
               className="status-btn status-aux"
-              data-on={菜单 === "spell" || undefined}
-              onClick={() => 开菜单("spell")}
+              data-on={menu === "spell" || undefined}
+              onClick={() => openMenu("spell")}
               title={t("Spell check")}
               aria-label={t("Spell check")}
               aria-haspopup="menu"
-              aria-expanded={菜单 === "spell"}
+              aria-expanded={menu === "spell"}
             >
               <Icon name="nota-spellcheck-symbolic" />
             </button>
@@ -430,7 +430,7 @@ export function StatusBar({
                 ——"我此刻在覆写"是**当前状态**，不是悬停才有的操作入口
                 （同右端那颗 × 的理由）。⚠️ 三个字母 `OVR` 是**符号**，与
                 `Aa` / `.*` 一样不翻（两种语言下都这么写）。 */}
-            {光标?.overtype && (
+            {cursor?.overtype && (
               <span
                 className="status-ovr"
                 title={t("Overtype: typing replaces the character to the right")}
@@ -438,18 +438,18 @@ export function StatusBar({
                 OVR
               </span>
             )}
-            <span className="status-count" title={详细}>
-              {四个[metric]}
+            <span className="status-count" title={detailThin}>
+              {fourItem[metric]}
             </span>
             <button
               type="button"
               className="status-btn status-aux"
-              data-on={菜单 === "count" || undefined}
-              onClick={() => 开菜单("count")}
+              data-on={menu === "count" || undefined}
+              onClick={() => openMenu("count")}
               title={t("Which count the status bar shows")}
               aria-label={t("Which count the status bar shows")}
               aria-haspopup="menu"
-              aria-expanded={菜单 === "count"}
+              aria-expanded={menu === "count"}
             >
               <Icon name="nota-unfold-more-symbolic" />
             </button>
@@ -472,24 +472,24 @@ export function StatusBar({
         </button>
       </span>
 
-      {菜单 && 锚 && (
+      {menu && anchor2 && (
         // ⚠️ 锚容器在 `footer` **里面**（右键菜单那个锚在 `.tabbar` 里，同一套）：
         // 上面那条"点别处关掉"靠 `栏.current.contains` 判，锚在外面的话点菜单项
         // 会先被当作"点到了别处"。
-        <div className="status-menu-anchor" style={{ left: 锚.left, top: 锚.top }}>
-          {菜单 === "count" ? (
+        <div className="status-menu-anchor" style={{ left: anchor2.left, top: anchor2.top }}>
+          {menu === "count" ? (
             <MenuPopup
               label={t("Word Count")}
               heading="Word Count"
-              entries={统计条目}
+              entries={systemCountItem}
               disabled={new Set()}
-              checks={统计勾}
+              checks={systemCountCheck}
               onPick={(id) => {
-                const 挑的 = 菜单次序.find((m) => 统计前缀 + m === id);
-                关菜单();
-                if (挑的) onPickMetric(挑的);
+                const pickOf = menuOrder.find((m) => systemCountPrefix + m === id);
+                closeMenu();
+                if (pickOf) onPickMetric(pickOf);
               }}
-              onDismiss={关菜单}
+              onDismiss={closeMenu}
               // ⚠️ `←` `→` 在这里**什么都不做**：菜单栏那一套是"往左右切一栏"，
               // 而这一层是独立的一层、没有"邻栏"可切。传空函数而不是省略——
               // 省略的话那一层会拿到 `undefined` 并在按键时炸（同 `TabBar.tsx`）。
@@ -501,9 +501,9 @@ export function StatusBar({
             // `useState`，而这一份是"一个 `useState` 都没有"的纯展示。
             <SpellMenu
               spellcheck={spellcheck}
-              语言={拼写语言}
+              language={combineWriteLanguage}
               onChangeSpell={onChangeSpell}
-              onDismiss={关菜单}
+              onDismiss={closeMenu}
             />
           )}
         </div>

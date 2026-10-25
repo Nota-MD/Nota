@@ -53,69 +53,69 @@ import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import {
-  弯引号,
-  破折号,
-  取引号配法,
-  是开引号位置,
-  有未闭合引号,
-  引号输入事务,
-  引号配对,
-  扫标点,
-  装饰清单,
-  标点输入,
-  标点装饰,
-  只有横线骨架,
-  默认标点设置,
-  type 标点设置,
+  curveReferenceNumber,
+  dash,
+  getReferenceNumberConfigureMethod,
+  isOpenReferenceNumberPosition,
+  hasNotCloseCombineReferenceNumber,
+  referenceNumberInputTransaction,
+  referenceNumberConfigureCorrect,
+  scanPunctuation,
+  decorationClearSingle,
+  punctuationInput,
+  punctuationDecoration,
+  onlyHasHorizontalLineBoneFrame,
+  DefaultPunctuationSettings,
+  type punctuationSettings,
 } from "../src/editor/smart-punctuation";
 
 /* ── 一支极小的测试工装（与 `inline-marks.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
-function 同(实际: unknown, 期望: unknown, 说明: string): void {
-  const a = JSON.stringify(实际);
-  const b = JSON.stringify(期望);
-  if (a !== b) throw new Error(`${说明}：\n      期望 ${b}\n      实际 ${a}`);
+function same(actual: unknown, expected: unknown, description: string): void {
+  const a = JSON.stringify(actual);
+  const b = JSON.stringify(expected);
+  if (a !== b) throw new Error(`${description}：\n      期望 ${b}\n      实际 ${a}`);
 }
 
-function 真(值: unknown, 说明: string): asserts 值 {
-  if (!值) throw new Error(说明);
+function assertValue(value2: unknown, description: string): asserts value2 {
+  if (!value2) throw new Error(description);
 }
 
 /** 在默认设置上改几格。 */
-function 设(改: Partial<标点设置>): 标点设置 {
-  return { ...默认标点设置, ...改 };
+function set(change2: Partial<punctuationSettings>): punctuationSettings {
+  return { ...DefaultPunctuationSettings, ...change2 };
 }
 
 /** 只取命中的替身字符，省得每条都写一长串对象。 */
-function 替们(文: string, 设置: 标点设置 = 默认标点设置): string[] {
-  return 扫标点(文, 设置).map((h) => h.替);
+function replacePlural(text4: string, settings: punctuationSettings = DefaultPunctuationSettings): string[] {
+  return scanPunctuation(text4, settings).map((h) => h.replace);
 }
 
 /** 一份手搓的最小文档（只有 `doc`/`paragraph`/`text`），用来钉位置换算。 */
@@ -127,325 +127,325 @@ const schema = new Schema({
   },
 });
 
-function 文档(...段落: string[]): PMNode {
+function document(...paragraph: string[]): PMNode {
   return schema.node(
     "doc",
     null,
-    段落.map((t) => schema.node("paragraph", null, t ? [schema.text(t)] : [])),
+    paragraph.map((t) => schema.node("paragraph", null, t ? [schema.text(t)] : [])),
   );
 }
 
-function 引号状态(文: string, 从 = 文.length, 到 = 从): EditorState {
-  const doc = 文档(文);
+function referenceNumberState(text4: string, from = text4.length, to2 = from): EditorState {
+  const doc = document(text4);
   return EditorState.create({
     schema,
     doc,
-    selection: TextSelection.create(doc, 1 + 从, 1 + 到),
+    selection: TextSelection.create(doc, 1 + from, 1 + to2),
   });
 }
 
 /* ── 一、三个纯函数 ──────────────────────────────────────────────────── */
 
-组("一、纯函数");
+group("一、纯函数");
 
-测("弯引号：行首当开引号", () => {
-  等(弯引号("", true, "curly"), "“", "行首");
+testCase("弯引号：行首当开引号", () => {
+  equal(curveReferenceNumber("", true, "curly"), "“", "行首");
 });
 
-测("弯引号：空白之后当开引号", () => {
-  等(弯引号(" ", true, "curly"), "“", "空格后");
+testCase("弯引号：空白之后当开引号", () => {
+  equal(curveReferenceNumber(" ", true, "curly"), "“", "空格后");
 });
 
-测("弯引号：左括号之后当开引号（含全角）", () => {
-  等(弯引号("(", true, "curly"), "“", "半角括弧");
-  等(弯引号("（", true, "curly"), "“", "全角括弧");
-  等(弯引号("「", false, "curly"), "‘", "全角引号后");
+testCase("弯引号：左括号之后当开引号（含全角）", () => {
+  equal(curveReferenceNumber("(", true, "curly"), "“", "半角括弧");
+  equal(curveReferenceNumber("（", true, "curly"), "“", "全角括弧");
+  equal(curveReferenceNumber("「", false, "curly"), "‘", "全角引号后");
 });
 
-测("弯引号：字母之后当闭引号", () => {
-  等(弯引号("a", true, "curly"), "”", "字母后");
-  等(弯引号("好", false, "curly"), "’", "汉字后");
+testCase("弯引号：字母之后当闭引号", () => {
+  equal(curveReferenceNumber("a", true, "curly"), "”", "字母后");
+  equal(curveReferenceNumber("好", false, "curly"), "’", "汉字后");
 });
 
-测("弯引号：straight 字形原样还回去", () => {
-  等(弯引号("", true, "straight"), '"', "双引号");
-  等(弯引号("a", false, "straight"), "'", "单引号");
+testCase("弯引号：straight 字形原样还回去", () => {
+  equal(curveReferenceNumber("", true, "straight"), '"', "双引号");
+  equal(curveReferenceNumber("a", false, "straight"), "'", "单引号");
 });
 
-测("破折号：en-em 风格下两个是短横、三个是长横", () => {
-  等(破折号("en-em", 2), "–", "两个");
-  等(破折号("en-em", 3), "—", "三个");
+testCase("破折号：en-em 风格下两个是短横、三个是长横", () => {
+  equal(dash("en-em", 2), "–", "两个");
+  equal(dash("en-em", 3), "—", "三个");
 });
 
-测("破折号：em 风格下两个也是长横", () => {
-  等(破折号("em", 2), "—", "两个");
-  等(破折号("em", 3), "—", "三个");
+testCase("破折号：em 风格下两个也是长横", () => {
+  equal(dash("em", 2), "—", "两个");
+  equal(dash("em", 3), "—", "三个");
 });
 
-测("引号对与开引号位置共用智能标点的方向判据", () => {
-  同(取引号配法(true, "curly"), { 开: "“", 闭: "”" }, "弯双引号");
-  同(取引号配法(false, "curly"), { 开: "‘", 闭: "’" }, "弯单引号");
-  同(取引号配法(true, "straight"), { 开: '"', 闭: '"' }, "直双引号");
-  等(是开引号位置(""), true, "行首");
-  等(是开引号位置("甲"), false, "文字后");
-  等(有未闭合引号("“甲", "“", "”"), true, "弯引号未闭");
-  等(有未闭合引号('"甲"', '"', '"'), false, "直引号已配平");
+testCase("引号对与开引号位置共用智能标点的方向判据", () => {
+  same(getReferenceNumberConfigureMethod(true, "curly"), { open2: "“", close3: "”" }, "弯双引号");
+  same(getReferenceNumberConfigureMethod(false, "curly"), { open2: "‘", close3: "’" }, "弯单引号");
+  same(getReferenceNumberConfigureMethod(true, "straight"), { open2: '"', close3: '"' }, "直双引号");
+  equal(isOpenReferenceNumberPosition(""), true, "行首");
+  equal(isOpenReferenceNumberPosition("甲"), false, "文字后");
+  equal(hasNotCloseCombineReferenceNumber("“甲", "“", "”"), true, "弯引号未闭");
+  equal(hasNotCloseCombineReferenceNumber('"甲"', '"', '"'), false, "直引号已配平");
 });
 
-测("默认设置与 Rust 那边的 Default 逐条一致", () => {
+testCase("默认设置与 Rust 那边的 Default 逐条一致", () => {
   // ⚠️ 对账用的。左边是 `markdown.rs` 的 `Default for Markdown`（冒号后那一段），
   // 右边是本文件的 `默认标点设置`。**任何一边改了另一边不改就是 bug**，
   // 症状是"设置页上写着一个样、实际另一个样"。
-  等(默认标点设置.模式, "input", "SmartPunctuation::Input"); // :440 断言钉着
-  等(默认标点设置.引号, true, "smart_quotes: true"); // :375
-  等(默认标点设置.双引号, "curly", "QuoteStyle::Curly"); // :152
-  等(默认标点设置.单引号, "curly", "QuoteStyle::Curly");
-  等(默认标点设置.破折号, true, "smart_dashes: true"); // :378
-  等(默认标点设置.风格, "en-em", "DashStyle::EnEm"); // :168
+  equal(DefaultPunctuationSettings.mode2, "input", "SmartPunctuation::Input"); // :440 断言钉着
+  equal(DefaultPunctuationSettings.referenceNumber, true, "smart_quotes: true"); // :375
+  equal(DefaultPunctuationSettings.doubleReferenceNumber, "curly", "QuoteStyle::Curly"); // :152
+  equal(DefaultPunctuationSettings.singleReferenceNumber, "curly", "QuoteStyle::Curly");
+  equal(DefaultPunctuationSettings.dash, true, "smart_dashes: true"); // :378
+  equal(DefaultPunctuationSettings.windCell, "en-em", "DashStyle::EnEm"); // :168
 });
 
 /* ── 二、扫标点 ──────────────────────────────────────────────────────── */
 
-组("二、扫标点（`Render` 与测试共用的那一份判据）");
+group("二、扫标点（`Render` 与测试共用的那一份判据）");
 
-测("模式是 off 时什么都不扫", () => {
-  同(扫标点('a--b "x" ...', 设({ 模式: "off" })), [], "off");
+testCase("模式是 off 时什么都不扫", () => {
+  same(scanPunctuation('a--b "x" ...', set({ mode2: "off" })), [], "off");
 });
 
-测("两个连字符变成短横", () => {
-  同(替们("a--b"), ["–"], "en-em");
+testCase("两个连字符变成短横", () => {
+  same(replacePlural("a--b"), ["–"], "en-em");
 });
 
-测("三个连字符变成长横", () => {
-  同(替们("a---b"), ["—"], "en-em");
+testCase("三个连字符变成长横", () => {
+  same(replacePlural("a---b"), ["—"], "en-em");
 });
 
-测("四个连字符一根都不动（分割线那一类）", () => {
-  同(替们("-----"), [], "五个");
-  同(替们("----"), [], "四个");
+testCase("四个连字符一根都不动（分割线那一类）", () => {
+  same(replacePlural("-----"), [], "五个");
+  same(replacePlural("----"), [], "四个");
 });
 
-测("三个点变成省略号", () => {
-  同(替们("等等..."), ["…"], "省略号");
+testCase("三个点变成省略号", () => {
+  same(replacePlural("等等..."), ["…"], "省略号");
 });
 
-测("四个点只吃前三个", () => {
-  const 出 = 扫标点("....", 默认标点设置);
-  同(出, [{ 始: 0, 终: 3, 替: "…" }], "只一条、只吃三个");
+testCase("四个点只吃前三个", () => {
+  const output2 = scanPunctuation("....", DefaultPunctuationSettings);
+  same(output2, [{ start6: 0, end3: 3, replace: "…" }], "只一条、只吃三个");
 });
 
-测("双引号成对：前一个是空白就当开引号", () => {
-  同(替们('他说 "你好"。'), ["“", "”"], "成对");
+testCase("双引号成对：前一个是空白就当开引号", () => {
+  same(replacePlural('他说 "你好"。'), ["“", "”"], "成对");
 });
 
-测("单引号成对", () => {
-  同(替们("'x'"), ["‘", "’"], "成对");
+testCase("单引号成对", () => {
+  same(replacePlural("'x'"), ["‘", "’"], "成对");
 });
 
-测("字母后面的单引号是撒号", () => {
-  同(替们("don't"), ["’"], "撒号");
-  同(替们("it's a--b"), ["’", "–"], "撒号与破折号各归各");
+testCase("字母后面的单引号是撒号", () => {
+  same(replacePlural("don't"), ["’"], "撒号");
+  same(replacePlural("it's a--b"), ["’", "–"], "撒号与破折号各归各");
 });
 
-测("引号字形是 straight 时引号不动、破折号照动", () => {
-  const s = 设({ 双引号: "straight" });
-  同(替们('"a" -- b', s), ["–"], "只有破折号");
+testCase("引号字形是 straight 时引号不动、破折号照动", () => {
+  const s = set({ doubleReferenceNumber: "straight" });
+  same(replacePlural('"a" -- b', s), ["–"], "只有破折号");
 });
 
-测("关掉引号那一格：引号一个都不碰", () => {
-  同(替们('"a" -- b', 设({ 引号: false })), ["–"], "只剩破折号");
+testCase("关掉引号那一格：引号一个都不碰", () => {
+  same(replacePlural('"a" -- b', set({ referenceNumber: false })), ["–"], "只剩破折号");
 });
 
-测("关掉破折号那一格：短横与省略号都不碰", () => {
+testCase("关掉破折号那一格：短横与省略号都不碰", () => {
   // ⚠️ 省略号**挂靠在破折号那一格上**（`标点设置.省略号` 那条注释讲了为什么），
   // 所以关掉破折号会让它一起停——这一条就是钉这个挂靠关系的。
-  同(替们("a--b ...", 设({ 破折号: false })), [], "两样都不动");
+  same(replacePlural("a--b ...", set({ dash: false })), [], "两样都不动");
 });
 
-测("单独关掉省略号：短横照动、省略号不动", () => {
-  同(替们("a--b ...", 设({ 省略号: false })), ["–"], "只有短横");
+testCase("单独关掉省略号：短横照动、省略号不动", () => {
+  same(replacePlural("a--b ...", set({ saveOmitNumber: false })), ["–"], "只有短横");
 });
 
-测("命中的偏移是文本内的，且互不重叠", () => {
-  const 出 = 扫标点("--x---y", 默认标点设置);
-  同(
-    出,
+testCase("命中的偏移是文本内的，且互不重叠", () => {
+  const output2 = scanPunctuation("--x---y", DefaultPunctuationSettings);
+  same(
+    output2,
     [
-      { 始: 0, 终: 2, 替: "–" },
-      { 始: 3, 终: 6, 替: "—" },
+      { start6: 0, end3: 2, replace: "–" },
+      { start6: 3, end3: 6, replace: "—" },
     ],
     "两处、从前往后",
   );
 });
 
-测("替身与原文一样时不产生命中", () => {
+testCase("替身与原文一样时不产生命中", () => {
   // straight 之下 `'` 还是 `'`——**不产生一条"换成自己"的空命中**，
   // 否则装饰那一侧会给每个撇号都挂一对没用的装饰。
-  同(扫标点("a'b", 设({ 单引号: "straight" })), [], "无命中");
+  same(scanPunctuation("a'b", set({ singleReferenceNumber: "straight" })), [], "无命中");
 });
 
 /* ── 三½、引号配对事务 ─────────────────────────────────────────────── */
 
-组("三½、引号配对事务");
+group("三½、引号配对事务");
 
-测("行首开双引号：一次放进一对，光标在中间", () => {
-  const state = 引号状态("");
-  const tr = 引号输入事务(state, 1, 1, '"', 默认标点设置);
-  真(tr, "应当接管开引号");
+testCase("行首开双引号：一次放进一对，光标在中间", () => {
+  const state = referenceNumberState("");
+  const tr = referenceNumberInputTransaction(state, 1, 1, '"', DefaultPunctuationSettings);
+  assertValue(tr, "应当接管开引号");
   const after = state.apply(tr);
-  等(after.doc.textContent, "“”", "成对");
-  等(after.selection.from, 2, "光标在中间");
-  const 再按 = 引号输入事务(after, after.selection.from, after.selection.from, '"', 默认标点设置);
-  真(再按, "闭引号应当被接住");
-  const 再按后 = after.apply(再按);
-  等(再按后.doc.textContent, "“”", "连按两次也不叠成两组");
-  等(再按后.selection.from, 3, "跨到闭引号之后");
+  equal(after.doc.textContent, "“”", "成对");
+  equal(after.selection.from, 2, "光标在中间");
+  const againPress = referenceNumberInputTransaction(after, after.selection.from, after.selection.from, '"', DefaultPunctuationSettings);
+  assertValue(againPress, "闭引号应当被接住");
+  const againPressAfter = after.apply(againPress);
+  equal(againPressAfter.doc.textContent, "“”", "连按两次也不叠成两组");
+  equal(againPressAfter.selection.from, 3, "跨到闭引号之后");
 });
 
-测("自动补出的闭引号前再敲引号：只跨过去", () => {
-  const state = 引号状态("“甲”", 2);
-  const tr = 引号输入事务(state, 3, 3, '"', 默认标点设置);
-  真(tr, "闭引号应当被接住");
+testCase("自动补出的闭引号前再敲引号：只跨过去", () => {
+  const state = referenceNumberState("“甲”", 2);
+  const tr = referenceNumberInputTransaction(state, 3, 3, '"', DefaultPunctuationSettings);
+  assertValue(tr, "闭引号应当被接住");
   const after = state.apply(tr);
-  等(after.doc.textContent, "“甲”", "不改字");
-  等(after.selection.from, 4, "跨过闭引号");
+  equal(after.doc.textContent, "“甲”", "不改字");
+  equal(after.selection.from, 4, "跨过闭引号");
 });
 
-测("选中文字再敲引号：包住并保留选区", () => {
-  const state = 引号状态("甲乙", 0, 2);
-  const tr = 引号输入事务(state, 1, 3, '"', 默认标点设置);
-  真(tr, "应当包住选区");
+testCase("选中文字再敲引号：包住并保留选区", () => {
+  const state = referenceNumberState("甲乙", 0, 2);
+  const tr = referenceNumberInputTransaction(state, 1, 3, '"', DefaultPunctuationSettings);
+  assertValue(tr, "应当包住选区");
   const after = state.apply(tr);
-  等(after.doc.textContent, "“甲乙”", "两侧各一颗");
-  等(after.selection.from, 2, "选区起点仍在原文");
-  等(after.selection.to, 4, "选区终点仍在原文");
+  equal(after.doc.textContent, "“甲乙”", "两侧各一颗");
+  equal(after.selection.from, 2, "选区起点仍在原文");
+  equal(after.selection.to, 4, "选区终点仍在原文");
 });
 
-测("字母后的单引号是撒号，不补另一边", () => {
-  const state = 引号状态("don");
-  const tr = 引号输入事务(state, 4, 4, "'", 默认标点设置);
-  真(tr, "应当落撒号");
+testCase("字母后的单引号是撒号，不补另一边", () => {
+  const state = referenceNumberState("don");
+  const tr = referenceNumberInputTransaction(state, 4, 4, "'", DefaultPunctuationSettings);
+  assertValue(tr, "应当落撒号");
   const after = state.apply(tr);
-  等(after.doc.textContent, "don’", "弯撒号");
+  equal(after.doc.textContent, "don’", "弯撒号");
 });
 
-测("直引号字形也遵守同一套配对与跳过", () => {
-  const 设置 = 设({ 双引号: "straight" });
-  const state = 引号状态("");
-  const opened = state.apply(引号输入事务(state, 1, 1, '"', 设置)!);
-  等(opened.doc.textContent, '""', "直引号成对");
-  const closed = 引号输入事务(opened, 2, 2, '"', 设置);
-  真(closed, "直闭引号应被接住");
-  等(opened.apply(closed).doc.textContent, '""', "不再多插一颗");
+testCase("直引号字形也遵守同一套配对与跳过", () => {
+  const settings = set({ doubleReferenceNumber: "straight" });
+  const state = referenceNumberState("");
+  const opened = state.apply(referenceNumberInputTransaction(state, 1, 1, '"', settings)!);
+  equal(opened.doc.textContent, '""', "直引号成对");
+  const closed = referenceNumberInputTransaction(opened, 2, 2, '"', settings);
+  assertValue(closed, "直闭引号应被接住");
+  equal(opened.apply(closed).doc.textContent, '""', "不再多插一颗");
 });
 
 /* ── 三、装饰清单：位置换算 ─────────────────────────────────────────── */
 
-组("三、装饰清单（文本内偏移 → 文档位置）");
+group("三、装饰清单（文本内偏移 → 文档位置）");
 
-测("一段里的一处命中，位置要加上段落的起点", () => {
+testCase("一段里的一处命中，位置要加上段落的起点", () => {
   // doc > paragraph(0) > text(1)。`a--b` 里的 `--` 是文本内 1..3 ⇒ 文档 2..4。
-  同(装饰清单(文档("a--b"), 默认标点设置), [{ 从: 2, 到: 4, 替: "–" }], "换算");
+  same(decorationClearSingle(document("a--b"), DefaultPunctuationSettings), [{ from: 2, to2: 4, replace: "–" }], "换算");
 });
 
-测("第二段的偏移要算上第一段的长度", () => {
+testCase("第二段的偏移要算上第一段的长度", () => {
   // 第一段 `ab`：doc 里占 1(段首) + 2(文字) + 1(段尾) = 4 个位置，
   // 第二段的文字从 5 开始。`a--b` 的 `--` ⇒ 5+1=6 到 8。
-  同(装饰清单(文档("ab", "a--b"), 默认标点设置), [{ 从: 6, 到: 8, 替: "–" }], "第二段");
+  same(decorationClearSingle(document("ab", "a--b"), DefaultPunctuationSettings), [{ from: 6, to2: 8, replace: "–" }], "第二段");
 });
 
-测("同一段里的多处命中，从前往后", () => {
+testCase("同一段里的多处命中，从前往后", () => {
   // `"a" -- b` 这 8 个字符在文本内的偏移：`"`0 `a`1 `"`2 ` `3 `-`4 `-`5 ` `6 `b`7。
   // 段落文字从文档位置 1 起，所以三处分别是 1..2 / 3..4 / 5..7。
-  同(
-    装饰清单(文档('"a" -- b'), 默认标点设置),
+  same(
+    decorationClearSingle(document('"a" -- b'), DefaultPunctuationSettings),
     [
-      { 从: 1, 到: 2, 替: "“" },
-      { 从: 3, 到: 4, 替: "”" },
-      { 从: 5, 到: 7, 替: "–" },
+      { from: 1, to2: 2, replace: "“" },
+      { from: 3, to2: 4, replace: "”" },
+      { from: 5, to2: 7, replace: "–" },
     ],
     "三处",
   );
 });
 
-测("没有命中时是空数组（空段落也一样）", () => {
-  同(装饰清单(文档("", "甲"), 默认标点设置), [], "空");
-  同(装饰清单(文档("a--b"), 设({ 模式: "off" })), [], "off 模式");
+testCase("没有命中时是空数组（空段落也一样）", () => {
+  same(decorationClearSingle(document("", "甲"), DefaultPunctuationSettings), [], "空");
+  same(decorationClearSingle(document("a--b"), set({ mode2: "off" })), [], "off 模式");
 });
 
 /* ── 四、装配：不该挂的模式必须返回空数组 ───────────────────────────── */
 
-组("四、装配");
+group("四、装配");
 
-测("off / render 模式一条输入规则都不挂", () => {
-  等(标点输入(设({ 模式: "off" })).length, 0, "off");
-  等(标点输入(设({ 模式: "render" })).length, 0, "render");
+testCase("off / render 模式一条输入规则都不挂", () => {
+  equal(punctuationInput(set({ mode2: "off" })).length, 0, "off");
+  equal(punctuationInput(set({ mode2: "render" })).length, 0, "render");
 });
 
-测("input 模式的输入规则只负责横线与省略号", () => {
+testCase("input 模式的输入规则只负责横线与省略号", () => {
   // 2（`---` / `--`）＋ 1（`...`）；引号由 `引号配对` 接管。
-  等(标点输入(设({ 模式: "input" })).length, 3, "条数");
-  等(标点输入(设({ 模式: "input", 省略号: false })).length, 2, "关省略号：少一条");
+  equal(punctuationInput(set({ mode2: "input" })).length, 3, "条数");
+  equal(punctuationInput(set({ mode2: "input", saveOmitNumber: false })).length, 2, "关省略号：少一条");
 });
 
-测("off / input 模式不挂装饰插件", () => {
-  等(标点装饰(设({ 模式: "off" })).length, 0, "off");
-  等(标点装饰(设({ 模式: "input" })).length, 0, "input");
+testCase("off / input 模式不挂装饰插件", () => {
+  equal(punctuationDecoration(set({ mode2: "off" })).length, 0, "off");
+  equal(punctuationDecoration(set({ mode2: "input" })).length, 0, "input");
 });
 
-测("render 模式挂 1 条装饰插件", () => {
-  等(标点装饰(设({ 模式: "render" })).length, 1, "条数");
+testCase("render 模式挂 1 条装饰插件", () => {
+  equal(punctuationDecoration(set({ mode2: "render" })).length, 1, "条数");
 });
 
-测("模式变了之后挂的规则条数跟着变", () => {
+testCase("模式变了之后挂的规则条数跟着变", () => {
   // ⚠️ 这一条钉的是"**六项任一变化都要重建编辑器**"这条口径的**后果**：
   // 挂在 `.use()` 链上的东西随模式而变，所以 `EditorPane` 必须把六个字段
   // 全放进那个 `useMemo` 的依赖里（只放"模式"那三项的话，改了字形——
   // 它也是被闭包捕获的——活着的实例里还是旧的，屏幕上什么都不变）。
-  等(标点输入(设({ 模式: "input", 引号: false })).length, 3, "关引号：输入规则条数不变");
-  等(标点输入(设({ 模式: "input", 破折号: false })).length, 0, "关破折号：横线规则全部不挂");
-  等(标点输入(设({ 模式: "input", 引号: false, 破折号: false })).length, 0, "两项都关：0");
+  equal(punctuationInput(set({ mode2: "input", referenceNumber: false })).length, 3, "关引号：输入规则条数不变");
+  equal(punctuationInput(set({ mode2: "input", dash: false })).length, 0, "关破折号：横线规则全部不挂");
+  equal(punctuationInput(set({ mode2: "input", referenceNumber: false, dash: false })).length, 0, "两项都关：0");
 });
 
-测("引号配对只在 Input 且引号开启时安装", () => {
-  等((引号配对(设({ 模式: "off" })) as unknown[]).length, 0, "off");
-  等((引号配对(设({ 模式: "render" })) as unknown[]).length, 0, "render");
-  等((引号配对(设({ 引号: false })) as unknown[]).length, 0, "关闭引号");
-  等(Array.isArray(引号配对(默认标点设置)), false, "input 开引号时是插件");
+testCase("引号配对只在 Input 且引号开启时安装", () => {
+  equal((referenceNumberConfigureCorrect(set({ mode2: "off" })) as unknown[]).length, 0, "off");
+  equal((referenceNumberConfigureCorrect(set({ mode2: "render" })) as unknown[]).length, 0, "render");
+  equal((referenceNumberConfigureCorrect(set({ referenceNumber: false })) as unknown[]).length, 0, "关闭引号");
+  equal(Array.isArray(referenceNumberConfigureCorrect(DefaultPunctuationSettings)), false, "input 开引号时是插件");
 });
 
 /* ── 五、横线骨架那道守卫（BUG-51）────────────────────────────────────── */
 
-组("五、横线骨架那道守卫（`只有横线骨架`）");
+group("五、横线骨架那道守卫（`只有横线骨架`）");
 
-测("整行只有骨架字符时不转换：分割线那一类", () => {
-  for (const 文 of ["", "  ", "---", "----", "  --  "]) {
-    等(只有横线骨架(文), true, `「${文}」该被豁免`);
+testCase("整行只有骨架字符时不转换：分割线那一类", () => {
+  for (const text4 of ["", "  ", "---", "----", "  --  "]) {
+    equal(onlyHasHorizontalLineBoneFrame(text4), true, `「${text4}」该被豁免`);
   }
 });
 
-测("表格行也豁免：竖线与对齐冒号都算骨架", () => {
-  for (const 文 of ["|", "| --", "| ---", "| --- | ---", "| :--- | ---:", "-- | --", " : --"]) {
-    等(只有横线骨架(文), true, `「${文}」该被豁免`);
+testCase("表格行也豁免：竖线与对齐冒号都算骨架", () => {
+  for (const text4 of ["|", "| --", "| ---", "| --- | ---", "| :--- | ---:", "-- | --", " : --"]) {
+    equal(onlyHasHorizontalLineBoneFrame(text4), true, `「${text4}」该被豁免`);
   }
 });
 
-测("行里已经有字就照转（数据格里的 `--` 本来就该变 `–`）", () => {
-  for (const 文 of ["a--b", "他说 --", "| a | --", "- a --", "| a | b | --"]) {
-    等(只有横线骨架(文), false, `「${文}」不该被豁免`);
+testCase("行里已经有字就照转（数据格里的 `--` 本来就该变 `–`）", () => {
+  for (const text4 of ["a--b", "他说 --", "| a | --", "- a --", "| a | b | --"]) {
+    equal(onlyHasHorizontalLineBoneFrame(text4), false, `「${text4}」不该被豁免`);
   }
 });
 
-测("⚠️ 敲分隔行的**每一个瞬间**都豁免得住（BUG-51 的正身）", () => {
+testCase("⚠️ 敲分隔行的**每一个瞬间**都豁免得住（BUG-51 的正身）", () => {
   // 这一条是这份测试里唯一直接盯 BUG-51 的：破折号规则在**第二颗减号**那一下
   // 就会命中（`-{2}$`），所以"每个以 `--` / `---` 收尾的前缀"都必须是骨架——
   // 漏一个，那一行就会变成 `| –- |`，表格再也建不出来（盘上真写出过
   // `\| –- | –- |`）。⚠️ 两个变体都在：普通分隔行、带对齐冒号的。
-  for (const 行 of ["| --- | --- |", "| :--- | ---:", "-- | ---"]) {
-    for (let i = 1; i <= 行.length; i++) {
-      const 前文 = 行.slice(0, i);
-      if (!/-{2,3}$/.test(前文)) continue; // 只有"规则会命中的那几刀"才算
-      等(只有横线骨架(前文), true, `敲到「${前文}」时被豁免`);
+  for (const line3 of ["| --- | --- |", "| :--- | ---:", "-- | ---"]) {
+    for (let i = 1; i <= line3.length; i++) {
+      const prefixText = line3.slice(0, i);
+      if (!/-{2,3}$/.test(prefixText)) continue; // 只有"规则会命中的那几刀"才算
+      equal(onlyHasHorizontalLineBoneFrame(prefixText), true, `敲到「${prefixText}」时被豁免`);
     }
   }
 });
@@ -453,8 +453,8 @@ function 引号状态(文: string, 从 = 文.length, 到 = 从): EditorState {
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) {
-  console.log(`失败的：\n  - ${败的.join("\n  - ")}`);
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) {
+  console.log(`失败的：\n  - ${failed.join("\n  - ")}`);
   process.exitCode = 1;
 }

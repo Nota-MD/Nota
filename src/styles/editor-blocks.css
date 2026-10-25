@@ -292,6 +292,16 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
   text-align: left;
 }
 
+/*
+ * GFM 的列对齐写在 th / td 的 alignment 属性上，Milkdown 会把它变成单元格的
+ * 行内 `text-align`。单元格里的段落若被主题写成固定 `text-align: left`，
+ * 行内对齐不会传下去，命令看起来就完全没效果。这里只让表格直属段落继承
+ * 单元格值；普通正文段落仍由各文档主题决定。
+ */
+:where(.editor-mount .ProseMirror) :is(th, td) > p {
+  text-align: inherit;
+}
+
 /* 表头：底色 + 加粗。⚠️ `--fg` 而不是 `--fg-muted`——表头是**列的名字**，
    不是注释，比正文淡就对不起了。 */
 :where(.editor-mount .ProseMirror th) {

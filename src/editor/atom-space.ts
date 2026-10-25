@@ -134,7 +134,7 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
  * 不换行空格（U+00A0）。
  * ⚠️ 全仓只在这里写这个码点；别处要判它请引这个名字。
  */
-export const 不换行空格 = "\u00a0";
+export const Nbsp = "\u00a0";
 
 /**
  * remark 序列化选项的类型：**从 ctx 反推出来**（与 `lax-heading.ts` 同一套写法）。
@@ -143,15 +143,15 @@ export const 不换行空格 = "\u00a0";
  * `@milkdown/core` 的间接依赖。这里顺着 `SliceType` 上那个 `_typeInfo`
  * 把类型拿回来，一分钱不多花。
  */
-type 串化选项 = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
+type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
 /** mdast 的文本处理器（`handlers.text` 那一条）。 */
-type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]>;
+type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
 /** mdast 节点里本仓要用到的那两个字段（不引 `@types/mdast`，只取用得到的）。 */
-interface Mdast节点 {
+interface MdastNode {
   type?: string;
   value?: string;
-  children?: Mdast节点[];
+  children?: MdastNode[];
 }
 
 /**
@@ -174,7 +174,7 @@ interface Mdast节点 {
  * 节点（表情、脚注引用……）本仓还没有，等有了再加——⚠️ **加之前先照上面那样
  * 去上游 `toMarkdown` 里把真实名字抄下来**。
  */
-const 行内原子 = new Set(["inlineMath", "image", "break"]);
+const inlineAtom = new Set(["inlineMath", "image", "break"]);
 
 /**
  * 换法本身：**纯函数**，输入是本节点的值 ＋ **前一个兄弟的类型**，输出换过之后的值。
@@ -185,15 +185,15 @@ const 行内原子 = new Set(["inlineMath", "image", "break"]);
  * ⚠️ 只换**开头那一颗**：后面的 NBSP 是用户自己写的，不动（真用户写不出来两颗，
  * 但"粘贴 ＋ 敲"能凑出来）。
  */
-export function 换掉行内原子后的不换行空格(值: string, 前一兄弟类型: string | undefined): string {
+export function ReplaceNbspAfterInlineAtom(value2: string, beforeValueBrotherBrotherType: string | undefined): string {
   if (
-    值.startsWith(不换行空格) &&
-    前一兄弟类型 !== undefined &&
-    行内原子.has(前一兄弟类型)
+    value2.startsWith(Nbsp) &&
+    beforeValueBrotherBrotherType !== undefined &&
+    inlineAtom.has(beforeValueBrotherBrotherType)
   ) {
-    return " " + 值.slice(不换行空格.length);
+    return " " + value2.slice(Nbsp.length);
   }
-  return 值;
+  return value2;
 }
 
 /**
@@ -202,12 +202,12 @@ export function 换掉行内原子后的不换行空格(值: string, 前一兄�
  * ⚠️ `parent` 可能就是 `undefined`（`mdast-util-to-markdown` 处理根节点时会传
  * `undefined`，见它 `lib/index.js:66`），所以这里不能直接取 `.children`。
  */
-function 前一兄弟类型(node: Mdast节点, parent: Mdast节点 | undefined): string | undefined {
-  const 兄弟 = parent?.children;
-  if (!Array.isArray(兄弟)) return undefined;
-  const 位 = 兄弟.indexOf(node);
-  if (位 <= 0) return undefined;
-  return 兄弟[位 - 1]?.type;
+function beforeValueBrotherBrotherType(node: MdastNode, parent: MdastNode | undefined): string | undefined {
+  const brotherBrother = parent?.children;
+  if (!Array.isArray(brotherBrother)) return undefined;
+  const position3 = brotherBrother.indexOf(node);
+  if (position3 <= 0) return undefined;
+  return brotherBrother[position3 - 1]?.type;
 }
 
 /**
@@ -221,17 +221,17 @@ function 前一兄弟类型(node: Mdast节点, parent: Mdast节点 | undefined):
  * 交给 `原文`。序列化器本来就把这棵树丢掉，改不改都行，但"处理器不改入参"这件事
  * 少一个要记的前提。
  */
-export function 原子后的空格(原文?: 文本处理器): 文本处理器 {
+export function SpaceAfterAtom(source?: textHandler): textHandler {
   return (node, parent, state, info) => {
-    if (!原文) return node.value ?? "";
-    const 值 = node.value ?? "";
-    const 新值 = 换掉行内原子后的不换行空格(
-      值,
-      前一兄弟类型(node as Mdast节点, parent as Mdast节点 | undefined),
+    if (!source) return node.value ?? "";
+    const value2 = node.value ?? "";
+    const newValueValue = ReplaceNbspAfterInlineAtom(
+      value2,
+      beforeValueBrotherBrotherType(node as MdastNode, parent as MdastNode | undefined),
     );
     // ⚠️ 与 `值` 比、不是与 `node.value` 比：`value` 是 `undefined` 时上面按 `""`
     // 算的，跟 `node.value` 比就永远不等，等于每次都给副本（不致命，但白绕一圈）。
-    if (新值 === 值) return 原文(node, parent, state, info);
-    return 原文({ ...node, value: 新值 }, parent, state, info);
+    if (newValueValue === value2) return source(node, parent, state, info);
+    return source({ ...node, value: newValueValue }, parent, state, info);
   };
 }

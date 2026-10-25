@@ -198,7 +198,7 @@ pub fn 读() -> 上传设置 {
         Ok(路径) => 读文件(&路径),
         // 连家目录都探不到：默认值。
         Err(e) => {
-            crate::日志!("[nota] 找不到上传设置的落点（本次当空的用）：{e}");
+            crate::日志!("[nota] upload settings path unavailable; using empty settings: {e}");
             上传设置::default()
         }
     }
@@ -213,7 +213,7 @@ pub fn 读文件(路径: &std::path::Path) -> 上传设置 {
         Ok(s) => s,
         Err(e) => {
             crate::日志!(
-                "[nota] 上传设置读不了（本次当「没配」用）：{}：{e}",
+                "[nota] upload settings unreadable; using unconfigured state: {}: {e}",
                 路径.display()
             );
             上传设置::default()

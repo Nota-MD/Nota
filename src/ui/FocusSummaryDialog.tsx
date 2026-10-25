@@ -29,16 +29,16 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
-import { 专注率, 造分享卡, type 总结 } from "@/ui/focus-summary";
+import { dedicatedNoteRate, createShareEnjoyCard, type TotalJoin } from "@/ui/focus-summary";
 import { ShareCardPreview, useShareCard } from "@/ui/ShareCard";
-import { 说时长 } from "@/ui/useForceFocus";
+import { sayTimeLength } from "@/ui/useForceFocus";
 
 export function FocusSummaryDialog({
-  总,
-  现在,
+  total,
+  now,
   onClose,
 }: {
-  总: 总结;
+  total: TotalJoin;
   /**
    * 这一轮结束的时刻。
    *
@@ -46,14 +46,14 @@ export function FocusSummaryDialog({
    * 什么时候结束的"。在渲染里现取的话，用户把框开着放十分钟再截图，卡上印的是
    * 十分钟后——而卡片是要拿出去给人看的，那个时刻得是真的。
    */
-  现在: Date;
+  now: Date;
   onClose: () => void;
 }) {
   const t = useT();
   const okRef = useRef<HTMLButtonElement>(null);
 
-  const 卡 = useMemo(() => 造分享卡(总, 现在), [总, 现在]);
-  const { 图, 忙, 结果, 存为图片, 进剪贴板 } = useShareCard(卡);
+  const card = useMemo(() => createShareEnjoyCard(total, now), [total, now]);
+  const { image, busy, result2, saveAsImageSlice, enterCutPasteBoard } = useShareCard(card);
 
   // 默认焦点给「知道了」：这是唯一一条"看完就走"的路，而用户在按完"停止专注"
   // 之后手还在键盘上，回车就该收工（另两颗是"还要再做点什么"，不该抢默认）。
@@ -75,16 +75,16 @@ export function FocusSummaryDialog({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
-  const 率 = 专注率(总);
-  const 四格 = [
-    { k: t("Session Length"), v: 说时长(总.时长秒 * 1000) },
-    { k: t("Focus"), v: 说时长(总.专注秒 * 1000) },
-    { k: t("Away"), v: 说时长(总.离开秒 * 1000) },
+  const rate = dedicatedNoteRate(total);
+  const fourCells = [
+    { k: t("Session Length"), v: sayTimeLength(total.timeLengthSeconds * 1000) },
+    { k: t("Focus"), v: sayTimeLength(total.dedicatedNoteSeconds * 1000) },
+    { k: t("Away"), v: sayTimeLength(total.leaveOpenSeconds * 1000) },
     // ⚠️ 这里**不补单位**（不写 `t("{0} 次")`）：格子上面那行小字已经写着「警报」
     // 了，再补一个量词是同一句话说两遍；而且英文那边 "1 times" 是错的，
     // 为了避开它还得再加一条单复数分支——不值。卡片上那一格不一样（那三个数
     // 并排、没有各自的抬头），所以那边**要**单位，见 `focus-summary.ts`。
-    { k: t("Alarm"), v: String(总.警报) },
+    { k: t("Alarm"), v: String(total.warnReport) },
   ];
 
   return (
@@ -103,11 +103,11 @@ export function FocusSummaryDialog({
 
         <div className="focus-summary-body">
           <div className="focus-summary-stats">
-            {四格.map((格) => (
-              <div className="focus-summary-cell" key={格.k}>
-                <span className="focus-summary-k">{格.k}</span>
+            {fourCells.map((cell2) => (
+              <div className="focus-summary-cell" key={cell2.k}>
+                <span className="focus-summary-k">{cell2.k}</span>
                 {/* ⚠️ 等宽数字：四个数并排，宽度不一会让整块看着像没对齐。 */}
-                <span className="focus-summary-v">{格.v}</span>
+                <span className="focus-summary-v">{cell2.v}</span>
               </div>
             ))}
             {/* ⚠️ 专注率**没在卡片的三格里**（那边是"本轮时长 / 专注占比 / 警报"），
@@ -116,22 +116,22 @@ export function FocusSummaryDialog({
             <div className="focus-summary-cell">
               <span className="focus-summary-k">{t("Focus Share")}</span>
               <span className="focus-summary-v">
-                {率 === null ? t("—") : t("{0}%", 率)}
+                {rate === null ? t("—") : t("{0}%", rate)}
               </span>
             </div>
           </div>
 
           <div className="focus-summary-card">
-            <ShareCardPreview spec={卡} 图={图} className="focus-summary-img" />
+            <ShareCardPreview spec={card} image={image} className="focus-summary-img" />
           </div>
         </div>
 
         {/* ⚠️ 结果留在**框里**、就在按钮下面（不是 toast）：存完还想再存一次、
             剪贴板那次失败想改按"保存分享图"，用户的眼睛不用离开这里。
             与面板里那一块同一个理由（`ui/ShareCard.tsx::useShareCard`）。 */}
-        {结果 && (
+        {result2 && (
           <p className="panel-share-note focus-summary-note" role="status">
-            {结果}
+            {result2}
           </p>
         )}
 
@@ -139,16 +139,16 @@ export function FocusSummaryDialog({
           <button
             type="button"
             className="btn"
-            disabled={忙 !== ""}
-            onClick={() => void 存为图片()}
+            disabled={busy !== ""}
+            onClick={() => void saveAsImageSlice()}
           >
             {t("Save share image")}
           </button>
           <button
             type="button"
             className="btn"
-            disabled={忙 !== ""}
-            onClick={() => void 进剪贴板()}
+            disabled={busy !== ""}
+            onClick={() => void enterCutPasteBoard()}
           >
             {t("Copy Share Image")}
           </button>

@@ -33,7 +33,7 @@
  * 一个真编辑器实例不值（那要挂第二个 Milkdown，还得处理它的异步建实例）。
  */
 
-import type { Node as PM节点 } from "@milkdown/kit/prose/model";
+import type { Node as pMNode } from "@milkdown/kit/prose/model";
 import { DOMSerializer } from "@milkdown/kit/prose/model";
 import type { EditorState } from "@milkdown/kit/prose/state";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
@@ -42,7 +42,7 @@ import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { parserCtx, serializerCtx } from "@milkdown/kit/core";
 import { $prose } from "@milkdown/kit/utils";
 
-import { 删类, 差异, 造增框, type 改动预览 } from "./review";
+import { removeClass, differenceException, createIncreaseBox, type changePreview } from "./review";
 
 /**
  * 插件状态那一格。
@@ -52,31 +52,31 @@ import { 删类, 差异, 造增框, type 改动预览 } from "./review";
  * 都会被问一次的。预览期文档是锁住的（下面 `filterTransaction`），所以存住的
  * 那份不会过期；真变了也有一道防御（`apply` 里 `tr.docChanged` 就作废）。
  */
-interface 预览态 {
-  预览: 改动预览 | null;
+interface PreviewState {
+  preview: changePreview | null;
   /** `null` = 没有预览，或预览里一处改动都没有。 */
-  装饰: DecorationSet | null;
+  decoration: DecorationSet | null;
 }
 
-const 空态: 预览态 = { 预览: null, 装饰: null };
+const emptyState2: PreviewState = { preview: null, decoration: null };
 
 /** 改预览那一格状态用的元。走事务而不是改闭包变量：状态的东西就该在状态里。 */
-export const 预览元 = "nota-review";
+export const previewDollar = "nota-review";
 
-export const 预览键 = new PluginKey<预览态>("nota-review");
+export const previewKey = new PluginKey<PreviewState>("nota-review");
 
 /** 现在是不是在预览中。`editable` 与 `filterTransaction` 都要问它。 */
-export function 预览中吗(state: EditorState): boolean {
-  return Boolean(预览键.getState(state)?.预览);
+export function previewMiddleQuestion(state: EditorState): boolean {
+  return Boolean(previewKey.getState(state)?.preview);
 }
 
 /* ── 算装饰 ───────────────────────────────────────────────────────────── */
 
 /** 一串顶层块，连同它们在文档里的坐标。 */
-interface 带位块 {
-  节点: PM节点;
-  起: number;
-  止: number;
+interface WithPositionBlock {
+  node: pMNode;
+  start5: number;
+  end2: number;
 }
 
 /**
@@ -85,24 +85,24 @@ interface 带位块 {
  * ⚠️ `forEach` 给的 `偏移` 是**相对父节点内容起点**的，而顶层节点的父就是 doc
  * （内容起点是 0），所以它就是文档坐标。别拿它去套嵌套节点——那样会差一层。
  */
-function 顶层块(文档: PM节点): 带位块[] {
-  const 出: 带位块[] = [];
-  文档.forEach((节点, 偏移) => {
-    出.push({ 节点, 起: 偏移, 止: 偏移 + 节点.nodeSize });
+function topLayerBlock(document: pMNode): WithPositionBlock[] {
+  const output2: WithPositionBlock[] = [];
+  document.forEach((node, offset) => {
+    output2.push({ node, start5: offset, end2: offset + node.nodeSize });
   });
-  return 出;
+  return output2;
 }
 
 /** 一个节点单独序列化成 markdown。⚠️ 得先包进一个 doc，序列化器只认 doc。 */
-function 块文本(序列化: (n: PM节点) => string, 节点: PM节点): string {
+function blockText(serialize: (n: pMNode) => string, node: pMNode): string {
   try {
-    const 单块 = 节点.type.schema.topNodeType.create(null, 节点);
-    return 序列化(单块).trim();
+    const singleBlock = node.type.schema.topNodeType.create(null, node);
+    return serialize(singleBlock).trim();
   } catch {
     // ⚠️ 序列化器认不出的节点（第三方 schema 加的怪节点）不该把整次预览
     // 带下来。降级成"用它的纯文本当身份"——比拿一个空串强：空串会让它跟
     // 别的怪块"看起来一样"，于是差异表把它们错配成没变。
-    return 节点.textContent.trim();
+    return node.textContent.trim();
   }
 }
 
@@ -117,10 +117,10 @@ function 块文本(序列化: (n: PM节点) => string, 节点: PM节点): string
  * ⚠️ 掐尾**只按"文本为空"判**，不管那是不是 `trailing` 补的：真要分清是谁
  * 补的，得去问文档自己，而"空块在末尾"这件事在差异里本来就没有信息量。
  */
-function 掐尾空块(块: 带位块[], 序列化: (n: PM节点) => string): 带位块[] {
-  let 尾 = 块.length;
-  while (尾 > 0 && 块文本(序列化, 块[尾 - 1]!.节点) === "") 尾--;
-  return 块.slice(0, 尾);
+function pinchTailEmptyBlock(block: WithPositionBlock[], serialize: (n: pMNode) => string): WithPositionBlock[] {
+  let tail = block.length;
+  while (tail > 0 && blockText(serialize, block[tail - 1]!.node) === "") tail--;
+  return block.slice(0, tail);
 }
 
 /**
@@ -130,42 +130,42 @@ function 掐尾空块(块: 带位块[], 序列化: (n: PM节点) => string): 带
  * 不在建插件那一刻捕获：那两个东西是 Milkdown 在 Init 阶段填进 ctx 的，
  * 建插件时可能还没有。
  */
-function 算装饰(
-  序列化: (n: PM节点) => string,
-  解析: (md: string) => PM节点,
-  文档: PM节点,
-  预览: 改动预览,
+function computeDecorations(
+  serialize: (n: pMNode) => string,
+  parse: (md: string) => pMNode,
+  document: pMNode,
+  preview: changePreview,
 ): DecorationSet | null {
-  const 旧 = 掐尾空块(顶层块(文档), 序列化);
-  const 新 = 掐尾空块(顶层块(解析(预览.text)), 序列化);
-  if (旧.length === 0 && 新.length === 0) return null;
+  const oldValue = pinchTailEmptyBlock(topLayerBlock(document), serialize);
+  const newValue = pinchTailEmptyBlock(topLayerBlock(parse(preview.text)), serialize);
+  if (oldValue.length === 0 && newValue.length === 0) return null;
 
-  const 单元 = 差异(
-    旧.map((b) => 块文本(序列化, b.节点)),
-    新.map((b) => 块文本(序列化, b.节点)),
+  const singleDollar = differenceException(
+    oldValue.map((b) => blockText(serialize, b.node)),
+    newValue.map((b) => blockText(serialize, b.node)),
   );
 
-  const 装饰: Decoration[] = [];
+  const decoration: Decoration[] = [];
   /** 上一个 `同` / `删` 在**旧侧**的下标。`-1` = 新增落在最前面。 */
-  let 落点 = -1;
+  let DropPoint = -1;
   /** 已经消费到**新侧**的第几个块。理由见 `review.ts` 的 `差异单元` 那段。 */
-  let 新游标 = 0;
+  let newValueNavigateMark = 0;
 
-  for (const 项 of 单元) {
-    if (项.类 === "同") {
-      落点 = 项.位;
-      新游标++;
-    } else if (项.类 === "删") {
-      const 块 = 旧[项.位];
-      if (块) 装饰.push(Decoration.node(块.起, 块.止, { class: 删类 }));
-      落点 = 项.位;
+  for (const item5 of singleDollar) {
+    if (item5.class === "同") {
+      DropPoint = item5.position3;
+      newValueNavigateMark++;
+    } else if (item5.class === "删") {
+      const block = oldValue[item5.position3];
+      if (block) decoration.push(Decoration.node(block.start5, block.end2, { class: removeClass }));
+      DropPoint = item5.position3;
     } else {
-      const 数 = 项.行.length;
-      const 要画的 = 新.slice(新游标, 新游标 + 数);
-      新游标 += 数;
-      const 位 = 落点 < 0 ? 0 : (旧[落点]?.止 ?? 文档.content.size);
-      装饰.push(
-        Decoration.widget(位, () => 画增框(要画的), {
+      const number2 = item5.line3.length;
+      const wantDrawOf = newValue.slice(newValueNavigateMark, newValueNavigateMark + number2);
+      newValueNavigateMark += number2;
+      const position3 = DropPoint < 0 ? 0 : (oldValue[DropPoint]?.end2 ?? document.content.size);
+      decoration.push(
+        Decoration.widget(position3, () => drawIncreaseBox(wantDrawOf), {
           // `side: 1` = 这个 widget 认**它后面**那一段（新增内容紧跟着锚点，
           // 长得像"插在锚点后面"而不是"挂在锚点前面"）。
           side: 1,
@@ -174,26 +174,26 @@ function 算装饰(
           // ⚠️ `key` 只是给 PM 复用 DOM 用的（同一个 key 不会每次重建 DOM）。
           // 它在一次渲染里**允许重复**（PM 只拿它跟自己上一次比），所以这里
           // 不需要保证全局唯一。
-          key: `nota-review-add-${落点}-${新游标}`,
+          key: `nota-review-add-${DropPoint}-${newValueNavigateMark}`,
         }),
       );
     }
   }
 
-  return 装饰.length ? DecorationSet.create(文档, 装饰) : null;
+  return decoration.length ? DecorationSet.create(document, decoration) : null;
 }
 
 /** 把新增的块画成 DOM。⚠️ 见文件头"新增那些块是画出来的"那段。 */
-function 画增框(块们: 带位块[]): HTMLElement {
-  return 造增框(
-    块们.map((块) => {
-      const dom = DOMSerializer.fromSchema(块.节点.type.schema).serializeNode(
-        块.节点,
+function drawIncreaseBox(blockPlural: WithPositionBlock[]): HTMLElement {
+  return createIncreaseBox(
+    blockPlural.map((block) => {
+      const dom = DOMSerializer.fromSchema(block.node.type.schema).serializeNode(
+        block.node,
       );
       if (dom instanceof HTMLElement) return dom;
-      const 壳 = document.createElement("div");
-      壳.append(dom);
-      return 壳;
+      const shell = document.createElement("div");
+      shell.append(dom);
+      return shell;
     }),
   );
 }
@@ -215,14 +215,14 @@ function 画增框(块们: 带位块[]): HTMLElement {
  * 沉浸模式。那两个监听都不在捕获阶段（理由写在 `useImmersive.ts` 里），
  * 所以在编辑器这儿拦住有效。
  */
-export function 预览插件(
-  初始: 改动预览 | null,
-  退出: () => void,
+export function previewPlugin(
+  initialStart: changePreview | null,
+  backOutput: () => void,
 ): ReturnType<typeof $prose> {
   return $prose(
     (ctx) =>
-      new Plugin<预览态>({
-        key: 预览键,
+      new Plugin<PreviewState>({
+        key: previewKey,
         state: {
           // ⚠️ 初值给的是**真的那份预览**（不是空态）：换文档、切模式都会重建
           // 编辑器，而预览可能正开着——给空态的话，那一次重建会把预览吞掉，
@@ -230,34 +230,34 @@ export function 预览插件(
           // ⚠️ `cfg.doc` 在类型上是可选的。真没有时**不画**：宁可这一格空着
           // （下一次 `setReview` 会补上），也不能拿一个空文档去算装饰——
           // 那会算出一批对不上位置的装饰，比不画糟得多。
-          init: (cfg): 预览态 => {
-            if (!初始 || !cfg.doc) return 空态;
+          init: (cfg): PreviewState => {
+            if (!initialStart || !cfg.doc) return emptyState2;
             return {
-              预览: 初始,
-              装饰: 算装饰(
+              preview: initialStart,
+              decoration: computeDecorations(
                 (n) => ctx.get(serializerCtx)(n),
-                (md) => ctx.get(parserCtx)(md) as unknown as PM节点,
+                (md) => ctx.get(parserCtx)(md) as unknown as pMNode,
                 cfg.doc,
-                初始,
+                initialStart,
               ),
             };
           },
           apply: (tr, prev) => {
-            const 载荷 = tr.getMeta(预览元) as 改动预览 | null | undefined;
-            if (载荷 === undefined) {
+            const loadLoad = tr.getMeta(previewDollar) as changePreview | null | undefined;
+            if (loadLoad === undefined) {
               // ⚠️ 防御：预览期文档是锁住的，正常走不到这一支。真走到了
               // （比如别的插件绕过了过滤）说明存住的装饰已经对不上位置了，
               // 那就作废——宁可什么都不画，也不能画错行。
-              return tr.docChanged ? 空态 : prev;
+              return tr.docChanged ? emptyState2 : prev;
             }
-            if (载荷 === null) return 空态;
+            if (loadLoad === null) return emptyState2;
             return {
-              预览: 载荷,
-              装饰: 算装饰(
+              preview: loadLoad,
+              decoration: computeDecorations(
                 (n) => ctx.get(serializerCtx)(n),
-                (md) => ctx.get(parserCtx)(md) as unknown as PM节点,
+                (md) => ctx.get(parserCtx)(md) as unknown as pMNode,
                 tr.doc,
-                载荷,
+                loadLoad,
               ),
             };
           },
@@ -271,19 +271,19 @@ export function 预览插件(
         //
         // ⚠️ 它在**插件规格**这一层，不在 `props` 里：`filterTransaction` 是
         // `PluginSpec` 的字段（`props` 那份 `EditorProps` 里没有它）。
-        filterTransaction: (tr, state) => !(预览中吗(state) && tr.docChanged),
+        filterTransaction: (tr, state) => !(previewMiddleQuestion(state) && tr.docChanged),
         props: {
           decorations(state) {
-            return 预览键.getState(state)?.装饰 ?? null;
+            return previewKey.getState(state)?.decoration ?? null;
           },
           handleKeyDown(view, event) {
             if (event.key !== "Escape") return false;
-            if (!预览中吗(view.state)) return false;
+            if (!previewMiddleQuestion(view.state)) return false;
             // 组字期间一概不接（同 `useMenus` / `useImmersive` 里那条判据）。
             if (event.isComposing || event.keyCode === 229) return false;
             event.preventDefault();
             event.stopPropagation();
-            退出();
+            backOutput();
             return true;
           },
         },
@@ -292,6 +292,6 @@ export function 预览插件(
 }
 
 /** 设/清预览。走事务，插件那一格状态跟着变，装饰随之重画。 */
-export function 设预览(view: EditorView, 预览: 改动预览 | null): void {
-  view.dispatch(view.state.tr.setMeta(预览元, 预览));
+export function setPreview(view: EditorView, preview: changePreview | null): void {
+  view.dispatch(view.state.tr.setMeta(previewDollar, preview));
 }

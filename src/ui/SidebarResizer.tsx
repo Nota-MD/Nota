@@ -40,61 +40,61 @@ import { useRef } from "react";
 import { useT } from "@/i18n";
 
 /** 出厂的宽度。与 `theme/base.css` 的 `--sidebar-width`、Rust 那份默认值是同一个数。 */
-export const 侧栏宽默认 = 240;
+export const sideBarWidthDefault = 240;
 /** 让它至少装得下一行文件名，再窄就只剩省略号了。 */
-export const 侧栏宽最小 = 180;
+export const sideBarWidthMostSmall = 180;
 /** 再宽正文就没地方了（1300px 的窗口减掉它只剩一半）。 */
-export const 侧栏宽最大 = 480;
+export const sideBarWidthMostLarge = 480;
 
 /**
  * 把量出来的宽度夹进合法区间。**纯函数，单独摆出来是为了能测**——
  * `tests/sidebar-resize.test.ts` 盖的就是它（拖动本身要开窗，见 `docs/06` §5.40）。
  */
-export function 夹侧栏宽(宽: number): number {
+export function clampSidebarWidth(width: number): number {
   // ⚠️ 先把不是数的挡掉：`Math.min/max` 遇到 `NaN` 会安静地返回 `NaN`，
   // 而 `NaN` 写进 CSS 变量等于那一格失效 → 侧栏退回 CSS 里那个 240，
   // 看着像"拖动没生效"，不像报错。
-  if (!Number.isFinite(宽)) return 侧栏宽默认;
-  return Math.min(侧栏宽最大, Math.max(侧栏宽最小, Math.round(宽)));
+  if (!Number.isFinite(width)) return sideBarWidthDefault;
+  return Math.min(sideBarWidthMostLarge, Math.max(sideBarWidthMostSmall, Math.round(width)));
 }
 
 /**
  * 那条把手。**渲染在 `.sidebar` 内部、作为它最后一个子元素**（理由见文件头）。
  */
-export function SidebarResizer({ onCommit }: { onCommit: (宽: number) => void }) {
+export function SidebarResizer({ onCommit }: { onCommit: (width: number) => void }) {
   const t = useT();
   // 本次拖动最后落在哪个数上。**放在 ref 里不是为了省一次渲染**，是因为
   // `pointerup` 那次回调要读它，而回调闭包捕获的是**按下那一刻**的值。
-  const 最后 = useRef(侧栏宽默认);
+  const mostAfter = useRef(sideBarWidthDefault);
 
-  function 按下(e: React.PointerEvent<HTMLDivElement>) {
+  function pressBelow(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault(); // 别让它顺带选中点什么
-    const 把手 = e.currentTarget;
-    把手.setPointerCapture(e.pointerId);
+    const takeHand = e.currentTarget;
+    takeHand.setPointerCapture(e.pointerId);
     document.body.classList.add("resizing-col");
     // ⚠️ 左边**在按下这一刻量一次就够**：拖动期间这一栏的左缘不会动
     //（动的只有右缘，也就是正在拖的这条）。每次 move 都量要强制一次布局。
-    const 框 = 把手.parentElement?.getBoundingClientRect();
-    const 左缘 = 框?.left ?? 0;
-    最后.current = 夹侧栏宽(框?.width ?? 侧栏宽默认);
+    const box2 = takeHand.parentElement?.getBoundingClientRect();
+    const leftEdge = box2?.left ?? 0;
+    mostAfter.current = clampSidebarWidth(box2?.width ?? sideBarWidthDefault);
 
-    function 挪(ev: PointerEvent) {
-      const 宽 = 夹侧栏宽(ev.clientX - 左缘);
-      最后.current = 宽;
-      document.documentElement.style.setProperty("--sidebar-width", `${宽}px`);
+    function move(ev: PointerEvent) {
+      const width = clampSidebarWidth(ev.clientX - leftEdge);
+      mostAfter.current = width;
+      document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
     }
 
-    function 收() {
-      把手.removeEventListener("pointermove", 挪);
-      把手.removeEventListener("pointerup", 收);
-      把手.removeEventListener("pointercancel", 收);
+    function receive() {
+      takeHand.removeEventListener("pointermove", move);
+      takeHand.removeEventListener("pointerup", receive);
+      takeHand.removeEventListener("pointercancel", receive);
       document.body.classList.remove("resizing-col");
-      onCommit(最后.current);
+      onCommit(mostAfter.current);
     }
 
-    把手.addEventListener("pointermove", 挪);
-    把手.addEventListener("pointerup", 收);
-    把手.addEventListener("pointercancel", 收);
+    takeHand.addEventListener("pointermove", move);
+    takeHand.addEventListener("pointerup", receive);
+    takeHand.addEventListener("pointercancel", receive);
   }
 
   return (
@@ -105,7 +105,7 @@ export function SidebarResizer({ onCommit }: { onCommit: (宽: number) => void }
       // 读屏用户看不到宽度，也没有键盘拖动这条路——所以把"这是干什么的"
       // 说清楚，别只说"分隔条"。
       aria-label={t("Resize the sidebar")}
-      onPointerDown={按下}
+      onPointerDown={pressBelow}
     />
   );
 }

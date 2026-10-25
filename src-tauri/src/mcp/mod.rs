@@ -269,15 +269,15 @@ pub fn 服务流(流: std::os::unix::net::UnixStream, app: tauri::AppHandle) {
     let 写的那头 = match 流.try_clone() {
         Ok(另) => 另,
         Err(e) => {
-            crate::日志!("[nota] MCP：拿不到 socket 的写句柄：{e}");
+            crate::日志!("[nota] MCP: failed to acquire socket write handle: {e}");
             return;
         }
     };
     let 读 = BufReader::new(流);
     let mut 写 = BufWriter::new(写的那头);
     match 服务(读, &mut 写, &宿主) {
-        Ok(()) => crate::日志!("[nota] MCP：一条会话结束了"),
-        Err(e) => crate::日志!("[nota] MCP：一条会话断了：{e}"),
+        Ok(()) => crate::日志!("[nota] MCP: session ended"),
+        Err(e) => crate::日志!("[nota] MCP: session disconnected: {e}"),
     }
     let _ = 写.flush();
 }

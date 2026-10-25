@@ -69,18 +69,18 @@ import { PHYSICS_MACROS, PHYSICS_SAMPLES } from "./math-macros";
  * ⚠️ `命令` **带**反斜杠（表里、弹窗里、写进文档里的都是这一份），`词` 那一侧
  * 不带——`找当场` 与 `挑候选` 的边界就在这里，别在两边各写一遍。
  */
-export type 候选 = {
-  命令: string;
+export type candidate = {
+  command: string;
   /** 一句话说明（中文，弹窗右边那一列）。 */
-  说明: string;
+  description: string;
   /** 收下之后**写进源码框**的东西。有参数的命令在这里带 `{}`，光标落在头一个里面。 */
-  插入: string;
+  insert: string;
   /** 弹窗里那一小段渲染预览用的源码。 */
-  样本: string;
+  sample: string;
   /** `词` 还空着（刚敲下 `\`）时要不要露脸。 */
-  常用: boolean;
+  normalUse: boolean;
   /** 从哪来的（弹窗上那个小角标）。 */
-  族: "命令" | "physics";
+  family: "命令" | "physics";
 };
 
 /**
@@ -90,10 +90,10 @@ export type 候选 = {
  * 等于"插入 `\times`、样本 `\times`"。这样纯符号那几十条不必把 `\times` 写三遍
  * ——表一大，重复的那几遍就是抄错的来源。
  */
-type 手写条 = readonly [名: string, 插入: string, 样本: string, 说明: string];
+type HandWriteItem = readonly [name3: string, insert: string, sample: string, description: string];
 
 /** 敲 `\` 还没接着敲时，露脸的那几条。⭐ 挑的是"最常用来起手"的那些。 */
-const 常用名 = new Set([
+const normalUseName = new Set([
   "frac",
   "sqrt",
   "sum",
@@ -110,7 +110,7 @@ const 常用名 = new Set([
  * 手写的那一张表。**分族排的**（结构 → 希腊 → 符号 → 装饰 → 排版），
  * 这个顺序也是 [`挑候选`] 在 `词` 空着时的依据之一（同前缀长度时按表里的先后）。
  */
-const 手写表: readonly 手写条[] = [
+const handWriteTable: readonly HandWriteItem[] = [
   // ── 结构：带参数的那些，收下之后光标落进头一个 `{}` ────────────────────
   ["frac", "\\frac{}{}", "\\frac{a}{b}", "分数"],
   ["dfrac", "\\dfrac{}{}", "\\dfrac{a}{b}", "分数（大号，行间也撑开）"],
@@ -248,7 +248,7 @@ const 手写表: readonly 手写条[] = [
  * 这个数管（2026-10-04 目检量过：一条 24.7px ⇒ 十条约 264px）。
  * 两边都记一个数正是 BUG-63 的来由，别再加第二条。
  */
-export const 候选上限 = 10;
+export const candidateLimit = 10;
 
 /**
  * 一条手写条 → 候选。`插入` / `样本` 写空串就是"跟名字一样"。
@@ -258,17 +258,17 @@ export const 候选上限 = 10;
  * （2026-10-04 目检抓到的，见 `docs/07` BUG-64）。所以凡是离了配对标不出东西的
  * 命令，`样本` 得自己写一条**能独立渲染**的。
  */
-function 手写候选(条: 手写条): 候选 {
-  const [名, 插入, 样本, 说明] = 条;
-  const 命令 = `\\${名}`;
-  const 真插入 = 插入 === "" ? 命令 : 插入;
+function handWriteCandidate(item4: HandWriteItem): candidate {
+  const [name3, insert, sample, description] = item4;
+  const command = `\\${name3}`;
+  const assertValueInsert = insert === "" ? command : insert;
   return {
-    命令,
-    说明,
-    插入: 真插入,
-    样本: 样本 === "" ? 真插入 : 样本,
-    常用: 常用名.has(名),
-    族: "命令",
+    command,
+    description,
+    insert: assertValueInsert,
+    sample: sample === "" ? assertValueInsert : sample,
+    normalUse: normalUseName.has(name3),
+    family: "命令",
   };
 }
 
@@ -278,13 +278,13 @@ function 手写候选(条: 手写条): 候选 {
  * ⚠️ 数的是**最大下标**不是出现次数：`\div` 那种零参宏展开式里一个 `#` 都没有，
  * 于是插入就是命令本身（`\div\vb{a}` 这么用，physics 文档里就是这么写的）。
  */
-function 数参数(展开: string): number {
-  let 大 = 0;
-  for (const 匹配 of 展开.matchAll(/#(\d)/g)) {
-    const 第 = Number(匹配[1]);
-    if (第 > 大) 大 = 第;
+function numberParameter(expand2: string): number {
+  let large = 0;
+  for (const match2 of expand2.matchAll(/#(\d)/g)) {
+    const ordinal = Number(match2[1]);
+    if (ordinal > large) large = ordinal;
   }
-  return 大;
+  return large;
 }
 
 /**
@@ -294,20 +294,20 @@ function 数参数(展开: string): number {
  * 宏表加一条而用例没跟上就**编译不过**（理由在那个文件里）。所以这里不必担心
  * 样本缺失；`?? 命令` 只是给 TypeScript 看的兜底。
  */
-function physics候选们(): 候选[] {
-  const 出: 候选[] = [];
-  for (const [命令, 展开] of Object.entries(PHYSICS_MACROS)) {
-    const 参数量 = 数参数(展开);
-    出.push({
-      命令,
-      说明: 参数量 ? `physics 宏（${参数量} 个参数）` : "physics 宏（不需要参数）",
-      插入: 命令 + "{}".repeat(参数量),
-      样本: PHYSICS_SAMPLES[命令 as keyof typeof PHYSICS_SAMPLES] ?? 命令,
-      常用: false,
-      族: "physics",
+function physicsCandidatePlural(): candidate[] {
+  const output2: candidate[] = [];
+  for (const [command, expand2] of Object.entries(PHYSICS_MACROS)) {
+    const parameterMeasure = numberParameter(expand2);
+    output2.push({
+      command,
+      description: parameterMeasure ? `physics 宏（${parameterMeasure} 个参数）` : "physics 宏（不需要参数）",
+      insert: command + "{}".repeat(parameterMeasure),
+      sample: PHYSICS_SAMPLES[command as keyof typeof PHYSICS_SAMPLES] ?? command,
+      normalUse: false,
+      family: "physics",
     });
   }
-  return 出;
+  return output2;
 }
 
 /**
@@ -316,7 +316,7 @@ function physics候选们(): 候选[] {
  * ⚠️ 只为一个用途：**[`建命令表`] 拿它去重**——physics 开着的时候，名字撞上的
  * 那条**手写的要让位**（理由见 [`建命令表`]）。
  */
-const physics名字 = new Set(Object.keys(PHYSICS_MACROS));
+const physicsName = new Set(Object.keys(PHYSICS_MACROS));
 
 /**
  * 那张表。⚠️ 每次新建一份数组（调用方可能 `sort`，共用一份会串）。
@@ -335,23 +335,23 @@ const physics名字 = new Set(Object.keys(PHYSICS_MACROS));
  * 还在，只是不弹提示）。一条不弹的提示，比一条弹出来骗人的提示好。
  * ⚠️ 反过来（physics 关着）时 physics 那些命令一条都不进表，不存在这个问题。
  */
-export function 建命令表(有physics: boolean): 候选[] {
-  const 手写 = 手写表.map(手写候选);
-  const 出 = 有physics ? 手写.filter((条) => !physics名字.has(条.命令)) : 手写;
-  if (有physics) 出.push(...physics候选们());
-  return 出;
+export function createCommandTable(hasphysics: boolean): candidate[] {
+  const handWrite = handWriteTable.map(handWriteCandidate);
+  const output2 = hasphysics ? handWrite.filter((item4) => !physicsName.has(item4.command)) : handWrite;
+  if (hasphysics) output2.push(...physicsCandidatePlural());
+  return output2;
 }
 
 /** 光标现在停在一个命令里吗；停着的话，那颗反斜杠在哪、已经敲了哪几个字母。 */
-export type 当场 = {
+export type WhenScene = {
   /** 那颗反斜杠在源码里的下标（收下时从这里开始替换）。 */
-  起: number;
+  start5: number;
   /** 已经敲下的那几个字母（不带反斜杠）。⚠️ **可以是空串**（刚敲下 `\`）。 */
-  词: string;
+  word: string;
 };
 
 /** 字母判据。⚠️ 只认 ASCII 字母：命令名里不会有别的（KaTeX 的宏名全是字母）。 */
-const 是字母 = (字: string): boolean => /^[A-Za-z]$/.test(字);
+const isCharacterMother = (character2: string): boolean => /^[A-Za-z]$/.test(character2);
 
 /**
  * 光标**现在**是不是停在一个命令里。不是就返回 `null`（不弹窗）。
@@ -364,23 +364,23 @@ const 是字母 = (字: string): boolean => /^[A-Za-z]$/.test(字);
  * 2. **光标在命令后面**（`\frac{a}{b}|`）：往前是 `}` ⇒ 不是字母 ⇒ `null`。
  * 3. **段首一颗 `\`**：起 = 0，正常弹（词是空串）。
  */
-export function 找当场(源: string, 光标: number): 当场 | null {
-  if (光标 <= 0 || 光标 > 源.length) return null;
+export function findCurrent(source3: string, cursor: number): WhenScene | null {
+  if (cursor <= 0 || cursor > source3.length) return null;
 
-  let i = 光标;
+  let i = cursor;
   // ⚠️ `charAt` 而不是 `源[i - 1]`：本仓开着 `noUncheckedIndexedAccess`，
   //    下标取出来是 `string | undefined`，`是字母` 收的是 `string`。
   //    `charAt` 越界给空串，`是字母("")` 是假——判据一样，类型干净。
-  while (i > 0 && 是字母(源.charAt(i - 1))) i--;
+  while (i > 0 && isCharacterMother(source3.charAt(i - 1))) i--;
   if (i === 0) return null;
-  if (源[i - 1] !== "\\") return null;
+  if (source3[i - 1] !== "\\") return null;
 
   // 反斜杠前面还有几颗连着的反斜杠（见上第 1 条）。
-  let 连着的 = 0;
-  while (i - 2 - 连着的 >= 0 && 源[i - 2 - 连着的] === "\\") 连着的++;
-  if (连着的 % 2 === 1) return null;
+  let connectActiveOf = 0;
+  while (i - 2 - connectActiveOf >= 0 && source3[i - 2 - connectActiveOf] === "\\") connectActiveOf++;
+  if (connectActiveOf % 2 === 1) return null;
 
-  return { 起: i - 1, 词: 源.slice(i, 光标) };
+  return { start5: i - 1, word: source3.slice(i, cursor) };
 }
 
 /**
@@ -398,21 +398,21 @@ export function 找当场(源: string, 光标: number): 当场 | null {
  * ——模糊匹配在**一个字母就能分叉出十几条**的列表里会把人读晕，而这里敲的是
  * 半行命令名，多敲两个字母的成本远小于"候选列表跳来跳去"。
  */
-export function 挑候选(表: readonly 候选[], 词: string, 上限 = 候选上限): 候选[] {
-  if (词 === "") return 表.filter((条) => 条.常用).slice(0, 上限);
+export function pickCandidate(table2: readonly candidate[], word: string, limit = candidateLimit): candidate[] {
+  if (word === "") return table2.filter((item4) => item4.normalUse).slice(0, limit);
 
-  const 小词 = 词.toLowerCase();
-  const 中 = 表.filter((条) => 条.命令.slice(1).toLowerCase().startsWith(小词));
-  return [...中]
-    .sort((甲, 乙) => 甲.命令.length - 乙.命令.length || 甲.命令.localeCompare(乙.命令))
-    .slice(0, 上限);
+  const smallWord = word.toLowerCase();
+  const middle = table2.filter((item4) => item4.command.slice(1).toLowerCase().startsWith(smallWord));
+  return [...middle]
+    .sort((alpha, beta) => alpha.command.length - beta.command.length || alpha.command.localeCompare(beta.command))
+    .slice(0, limit);
 }
 
 /** 收下一条候选之后：源码框里该是什么、光标该落在哪。 */
-export type 收下 = {
-  源: string;
+export type ReceiveBelow = {
+  source3: string;
   /** 光标位置。⚠️ 有 `{}` 的命令落在**头一个 `{}` 里面**，没有就落在末尾。 */
-  光标: number;
+  cursor: number;
 };
 
 /**
@@ -425,11 +425,11 @@ export type 收下 = {
  * 第二个洞（上标）要自己按右键过去。做"Tab 依次跳洞"就得在本层存一份
  * "正在补的是哪一条"、还要跟文档变化对齐——那是另一件事，没做。
  */
-export function 套用(源: string, 光标: number, 当场: 当场, 条: 候选): 收下 {
-  const 新源 = 源.slice(0, 当场.起) + 条.插入 + 源.slice(光标);
-  const 洞 = 条.插入.indexOf("{}");
+export function setUse(source3: string, cursor: number, WhenScene: WhenScene, item4: candidate): ReceiveBelow {
+  const newValueSource2 = source3.slice(0, WhenScene.start5) + item4.insert + source3.slice(cursor);
+  const hole = item4.insert.indexOf("{}");
   return {
-    源: 新源,
-    光标: 当场.起 + (洞 >= 0 ? 洞 + 1 : 条.插入.length),
+    source3: newValueSource2,
+    cursor: WhenScene.start5 + (hole >= 0 ? hole + 1 : item4.insert.length),
   };
 }

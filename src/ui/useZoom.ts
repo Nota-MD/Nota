@@ -94,26 +94,26 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { Settings } from "@/bridge/ipc";
 
 /** 缩放百分比的上下限与一格滚轮的步长。⚠️ 与 `AppearancePane` 里 `NumberInput` 的 min/max/step **必须一致**。 */
-const 缩放最小 = 50;
-const 缩放最大 = 300;
-const 缩放步长 = 10;
+const shrinkReleaseMostSmall = 50;
+const shrinkReleaseMostLarge = 300;
+const shrinkReleaseStepLength = 10;
 
 /** 界面字号的上下限与一格滚轮的步长。⚠️ 与 `AppearancePane` 里那个 `Range` **必须一致**。 */
-const 字号最小 = 12;
-const 字号最大 = 20;
-const 字号步长 = 1;
+const characterNumberMostSmall = 12;
+const characterNumberMostLarge = 20;
+const characterNumberStepLength = 1;
 /** 字号算不出来时的兜底。⚠️ 与后端 `Settings::default()` 的 `ui_font_size` 对齐（15）。 */
-const 默认字号 = 15;
+const defaultFontSize = 15;
 
 /** 攒多久再落盘。太短等于没攒，太长会让"滚完马上关窗"丢掉最后一次。 */
-const 落盘延迟 = 400;
+const dropDiskDelayDelay = 400;
 
-function 夹(值: number, 最小: number, 最大: number, 兜底: number): number {
-  if (!Number.isFinite(值)) return 兜底;
-  return Math.min(最大, Math.max(最小, Math.round(值)));
+function clamp(value2: number, mostSmall: number, mostLarge: number, fallback: number): number {
+  if (!Number.isFinite(value2)) return fallback;
+  return Math.min(mostLarge, Math.max(mostSmall, Math.round(value2)));
 }
 
-let 抱怨过 = false;
+let holdComplainPass = false;
 
 /**
  * 把缩放交给 webview。
@@ -122,12 +122,12 @@ let 抱怨过 = false;
  * 错误——只说明这一层不存在。所以安静跳过，但**留一句 warn**（同一个问题只说
  * 一次，免得刷屏），否则将来"缩放坏了"会连一点线索都没有。
  */
-async function 设缩放(百分比: number) {
+async function setShrinkRelease(hundredShareCompare: number) {
   try {
-    await getCurrentWebview().setZoom(夹(百分比, 缩放最小, 缩放最大, 100) / 100);
+    await getCurrentWebview().setZoom(clamp(hundredShareCompare, shrinkReleaseMostSmall, shrinkReleaseMostLarge, 100) / 100);
   } catch (e) {
-    if (!抱怨过) {
-      抱怨过 = true;
+    if (!holdComplainPass) {
+      holdComplainPass = true;
       console.warn("[nota] 设置界面缩放失败（不在 Tauri 里跑时会这样，属正常）：", e);
     }
   }
@@ -140,31 +140,31 @@ async function 设缩放(百分比: number) {
  * 的意思就是把那一格打开（见文件头）。设置那边的那一支仍然由 `applyTheme`
  * 说了算——两处写同一个变量，谁后写谁生效，这正是"立刻见效"要的。
  */
-function 设字号(px: number) {
+function setCharacterNumber(px: number) {
   document.documentElement.style.setProperty(
     "--ui-font-size",
-    `${夹(px, 字号最小, 字号最大, 默认字号)}px`,
+    `${clamp(px, characterNumberMostSmall, characterNumberMostLarge, defaultFontSize)}px`,
   );
 }
 
 /** 一个"攒一会儿再落盘"的闸。⚠️ 字号与缩放**各要一个**：攒到的那点是要写的补丁不一样。 */
-function 用攒盘(): { 排: (落: () => void) => void; 取消: () => void } {
-  const 定时器 = useRef<number | null>(null);
-  const 排 = useCallback((落: () => void) => {
-    if (定时器.current !== null) window.clearTimeout(定时器.current);
-    定时器.current = window.setTimeout(() => {
-      定时器.current = null;
-      落();
-    }, 落盘延迟);
+function useAccumulateDisk(): { arrange: (drop: () => void) => void; getClear: () => void } {
+  const fixedTimeDevice = useRef<number | null>(null);
+  const arrange = useCallback((drop: () => void) => {
+    if (fixedTimeDevice.current !== null) window.clearTimeout(fixedTimeDevice.current);
+    fixedTimeDevice.current = window.setTimeout(() => {
+      fixedTimeDevice.current = null;
+      drop();
+    }, dropDiskDelayDelay);
   }, []);
-  const 取消 = useCallback(() => {
-    if (定时器.current !== null) window.clearTimeout(定时器.current);
+  const getClear = useCallback(() => {
+    if (fixedTimeDevice.current !== null) window.clearTimeout(fixedTimeDevice.current);
   }, []);
   // ⚠️ 这里**必须 `useMemo`**：直接返回字面量的话，每次渲染都是一个新对象，
   // 拿它当依赖的 `排落盘缩放/字号`（以及挂滚轮监听那条 effect）就每次渲染都重建、
   // 每渲染一次摘一次监听再挂一次。功能上看不出坏，但滚轮是热路径，
   // 而且那种"每次都重挂"的写法以后加 `{ once: true }` 之类会突然出怪事。
-  return useMemo(() => ({ 排, 取消 }), [排, 取消]);
+  return useMemo(() => ({ arrange, getClear }), [arrange, getClear]);
 }
 
 /**
@@ -174,82 +174,82 @@ function 用攒盘(): { 排: (落: () => void) => void; 取消: () => void } {
  * `ui/useCommandTable.ts` 那张表的依赖数组（那里用 `Object.values(输入)`），
  * 身份每帧换一次就等于那张表每帧重建，而它的身份是给原生菜单栏用的。
  */
-export interface 缩放动作 {
-  放大: () => void;
-  缩小: () => void;
+export interface ShrinkReleaseAction {
+  releaseLarge: () => void;
+  shrinkSmall: () => void;
   /** 回到 100%。⚠️ 是 **100 这个数**，不是"设置里原先那个值"——菜单上写的是「实际大小」。 */
-  复位: () => void;
+  restorePosition: () => void;
 }
 
 export function useZoom(
   settings: Settings | null,
   updateSettings: (patch: Partial<Settings>) => Promise<void>,
-): 缩放动作 {
+): ShrinkReleaseAction {
   const a = settings?.appearance ?? null;
-  const 想缩放 = a?.zoom ?? 100;
+  const thinkShrinkRelease = a?.zoom ?? 100;
   // ⚠️ 字号在**顶层**（`settings.ui_font_size`），不在 `appearance` 里——这是
   // 「外观」那一页的老结构，理由写在 `settings/appearance.rs` 的文件头。
   // 兜底那个 15 与后端 `Settings::default()` 对齐。
-  const 想字号 = settings?.ui_font_size ?? 15;
-  const 允许滚轮 = a?.ctrl_wheel_zoom ?? false;
-  const 目标 = a?.ctrl_wheel_target ?? "font_size";
+  const thinkCharacterNumber = settings?.ui_font_size ?? 15;
+  const allowAllowRollWheel = a?.ctrl_wheel_zoom ?? false;
+  const target = a?.ctrl_wheel_target ?? "font_size";
   // 设置到手了没有。**只用来挡住"还没读到设置就往 webview 上写"**：启动那一两百
   // 毫秒里 `想缩放` 是兜底的 100，照着它设一次会让写着 150 的用户先闪一下 100%。
   // 这个事实是单调的（`null` → 有值，不会退回去），所以它与 `想缩放` 分开依赖。
-  const 设置已到 = a !== null;
+  const settingsReady = a !== null;
 
   // 已经生效的那个值。滚轮的加减要按**它**算：落盘是去抖的，中间那几格设置里
   // 还没有，按设置算的话连滚五格会被算成同一个数。⚠️ 两条轴各记一个。
-  const 已应用缩放 = useRef(夹(想缩放, 缩放最小, 缩放最大, 100));
-  const 已应用字号 = useRef(夹(想字号, 字号最小, 字号最大, 默认字号));
+  const alreadyShouldUseShrinkRelease = useRef(clamp(thinkShrinkRelease, shrinkReleaseMostSmall, shrinkReleaseMostLarge, 100));
+  const alreadyShouldUseCharacterNumber = useRef(clamp(thinkCharacterNumber, characterNumberMostSmall, characterNumberMostLarge, defaultFontSize));
   // 去抖窗口里设置可能被别处改掉（换个界面风格、改个字号），所以补丁要带上
   // **最新**的那份外观，不能用手抽那一帧闭包里的那份——否则会把别人刚改的值写回去。
-  const 最新外观 = useRef(a);
-  最新外观.current = a;
+  const mostNewValueAppearance = useRef(a);
+  mostNewValueAppearance.current = a;
 
   useEffect(() => {
-    if (!设置已到) return;
-    已应用缩放.current = 夹(想缩放, 缩放最小, 缩放最大, 100);
+    if (!settingsReady) return;
+    alreadyShouldUseShrinkRelease.current = clamp(thinkShrinkRelease, shrinkReleaseMostSmall, shrinkReleaseMostLarge, 100);
     // ⚠️ 字号**只对基准、不写 DOM**：那一格变量归 `applyTheme` 管（它要处理
     // "自动"那一档——`custom_font_size` 为假时是把内联值**摘掉**）。这里要是
     // 也写一遍，用户选着「自动」而 `ui_font_size` 是 18，内联值会把自动档的
     // 效果整个盖掉，而设置里那两档看起来还是对的。
-    已应用字号.current = 夹(想字号, 字号最小, 字号最大, 默认字号);
-    void 设缩放(想缩放);
-  }, [设置已到, 想缩放, 想字号]);
+    alreadyShouldUseCharacterNumber.current = clamp(thinkCharacterNumber, characterNumberMostSmall, characterNumberMostLarge, defaultFontSize);
+    void setShrinkRelease(thinkShrinkRelease);
+  }, [settingsReady, thinkShrinkRelease, thinkCharacterNumber]);
 
-  const 缩放闸 = 用攒盘();
-  const 字号闸 = 用攒盘();
+  const shrinkReleaseGate = useAccumulateDisk();
+  const characterNumberGate = useAccumulateDisk();
 
-  const 排落盘缩放 = useCallback(
+  const arrangeDropDiskShrinkRelease = useCallback(
     (zoom: number) => {
-      缩放闸.排(() => {
+      shrinkReleaseGate.arrange(() => {
         // ⚠️ 设置还没到（启动那一两百毫秒）就什么都别写：凭空拼一份 `appearance`
         // 会把其余那些字段**恢复成默认值**，用户的字体大小、主题分配一起没了。
-        const 现在 = 最新外观.current;
-        if (!现在) return;
-        void updateSettings({ appearance: { ...现在, zoom } });
+        const now = mostNewValueAppearance.current;
+        if (!now) return;
+        void updateSettings({ appearance: { ...now, zoom } });
       });
     },
-    [updateSettings, 缩放闸],
+    [updateSettings, shrinkReleaseGate],
   );
 
-  const 排落盘字号 = useCallback(
+  const arrangeDropDiskCharacterNumber = useCallback(
     (ui_font_size: number) => {
-      字号闸.排(() => {
-        const 现在 = 最新外观.current;
-        if (!现在) return;
+      characterNumberGate.arrange(() => {
+        const now = mostNewValueAppearance.current;
+        if (!now) return;
         // ⚠️ 两处一起写：`ui_font_size` 在**顶层**、`custom_font_size` 在
         // `appearance` 里，而 `updateSettings` 只做**顶层浅合并**——`appearance`
         // 一旦出现就必须是**整张表**（少写一格就是把它恢复成默认值）。
-        最新外观.current = { ...现在, custom_font_size: true };
+        mostNewValueAppearance.current = { ...now, custom_font_size: true };
         void updateSettings({
           ui_font_size,
-          appearance: { ...现在, custom_font_size: true },
+          appearance: { ...now, custom_font_size: true },
         });
       });
     },
-    [updateSettings, 字号闸],
+    [updateSettings, characterNumberGate],
   );
 
   /**
@@ -259,20 +259,20 @@ export function useZoom(
    * 的判据就是"接到同一处"，两处各写一份的话，夹紧点与去抖窗口迟早漂开
    * （同 `editor/footnote.ts` 里那条"编号分配只有一处实现"）。
    */
-  const 应用缩放 = useCallback(
-    (值: number) => {
-      const 下一格 = 夹(值, 缩放最小, 缩放最大, 100);
+  const shouldUseShrinkRelease = useCallback(
+    (value2: number) => {
+      const belowValueCell = clamp(value2, shrinkReleaseMostSmall, shrinkReleaseMostLarge, 100);
       // 已经顶到 50% 或 300% 了（或者根本没变）：别再改，也别再排一次落盘。
-      if (下一格 === 已应用缩放.current) return;
-      已应用缩放.current = 下一格;
-      void 设缩放(下一格); // 先见效
-      排落盘缩放(下一格); // 再落盘（去抖）
+      if (belowValueCell === alreadyShouldUseShrinkRelease.current) return;
+      alreadyShouldUseShrinkRelease.current = belowValueCell;
+      void setShrinkRelease(belowValueCell); // 先见效
+      arrangeDropDiskShrinkRelease(belowValueCell); // 再落盘（去抖）
     },
-    [排落盘缩放],
+    [arrangeDropDiskShrinkRelease],
   );
 
   useEffect(() => {
-    if (!允许滚轮) return;
+    if (!allowAllowRollWheel) return;
 
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return;
@@ -280,41 +280,41 @@ export function useZoom(
       // 要挡住它就**必须**是 non-passive 的监听（见下面的 `passive: false`）。
       e.preventDefault();
 
-      if (目标 === "font_size") {
-        const 下一格 = 夹(
-          已应用字号.current + (e.deltaY < 0 ? 字号步长 : -字号步长),
-          字号最小,
-          字号最大,
-          默认字号,
+      if (target === "font_size") {
+        const belowValueCell = clamp(
+          alreadyShouldUseCharacterNumber.current + (e.deltaY < 0 ? characterNumberStepLength : -characterNumberStepLength),
+          characterNumberMostSmall,
+          characterNumberMostLarge,
+          defaultFontSize,
         );
         // 已经顶到 12px 或 20px 了：别再改，也别再排一次落盘。
-        if (下一格 === 已应用字号.current) return;
-        已应用字号.current = 下一格;
-        设字号(下一格); // 先见效
-        排落盘字号(下一格); // 再落盘（去抖）
+        if (belowValueCell === alreadyShouldUseCharacterNumber.current) return;
+        alreadyShouldUseCharacterNumber.current = belowValueCell;
+        setCharacterNumber(belowValueCell); // 先见效
+        arrangeDropDiskCharacterNumber(belowValueCell); // 再落盘（去抖）
         return;
       }
 
       // ⚠️ 加的是**已应用**那个值、不是设置里那个：落盘是去抖的，中间那几格
       // 设置里还没有，按设置算的话连滚五格会被算成同一个数（见上面 `已应用缩放`）。
       // 滚过头（比如已经 300 还往上滚）由 `应用缩放` 里的夹紧吞掉，什么都不发生。
-      应用缩放(已应用缩放.current + (e.deltaY < 0 ? 缩放步长 : -缩放步长));
+      shouldUseShrinkRelease(alreadyShouldUseShrinkRelease.current + (e.deltaY < 0 ? shrinkReleaseStepLength : -shrinkReleaseStepLength));
     };
 
     window.addEventListener("wheel", onWheel, { passive: false, capture: true });
     return () => window.removeEventListener("wheel", onWheel, { capture: true });
     // ⚠️ `目标` 在依赖里：换档之后要**重新挂**一次监听，否则闭包里那个 `目标`
     // 还是挂载时的那一档——症状是"设置里改成缩放，滚轮却还在改字号"。
-  }, [允许滚轮, 目标, 应用缩放, 排落盘字号]);
+  }, [allowAllowRollWheel, target, shouldUseShrinkRelease, arrangeDropDiskCharacterNumber]);
 
   // 卸载时把还没落盘的那几次取消掉——应用退出时窗口已经在拆了，写盘没有意义，
   // 而且会跟"关窗时保存设置"那一路撞上。
   useEffect(
     () => () => {
-      缩放闸.取消();
-      字号闸.取消();
+      shrinkReleaseGate.getClear();
+      characterNumberGate.getClear();
     },
-    [缩放闸, 字号闸],
+    [shrinkReleaseGate, characterNumberGate],
   );
 
   // ── 键盘那三档（`ui/commands.ts` 的 `view.zoomIn/zoomOut/zoomReset`）──
@@ -327,21 +327,21 @@ export function useZoom(
   // 那一刻是兜底的 100，照它加一档会让写着 150 的用户先被拽到 110，然后设置
   // 到达又被拉回 150。`应用缩放` 不判这一条（滚轮那边由 `允许滚轮` 挡着，
   // 而那个值本身来自设置），所以判据放这里。
-  return useMemo<缩放动作>(
+  return useMemo<ShrinkReleaseAction>(
     () => ({
-      放大: () => {
-        if (!设置已到) return;
-        应用缩放(已应用缩放.current + 缩放步长);
+      releaseLarge: () => {
+        if (!settingsReady) return;
+        shouldUseShrinkRelease(alreadyShouldUseShrinkRelease.current + shrinkReleaseStepLength);
       },
-      缩小: () => {
-        if (!设置已到) return;
-        应用缩放(已应用缩放.current - 缩放步长);
+      shrinkSmall: () => {
+        if (!settingsReady) return;
+        shouldUseShrinkRelease(alreadyShouldUseShrinkRelease.current - shrinkReleaseStepLength);
       },
-      复位: () => {
-        if (!设置已到) return;
-        应用缩放(100);
+      restorePosition: () => {
+        if (!settingsReady) return;
+        shouldUseShrinkRelease(100);
       },
     }),
-    [设置已到, 应用缩放],
+    [settingsReady, shouldUseShrinkRelease],
   );
 }

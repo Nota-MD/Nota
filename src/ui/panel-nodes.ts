@@ -26,8 +26,8 @@
 
 import { t } from "@/i18n";
 import type { PluginPrompt } from "@/bridge/ipc";
-import { 读刻度 } from "@/ui/chart-ticks";
-import { 读热力记录, 算热力 } from "@/ui/heatmap";
+import { readTick } from "@/ui/chart-ticks";
+import { readHotForceRecordRecord, computeHeatmap } from "@/ui/heatmap";
 
 /** 一块内容的语气。渲染层按它上色。 */
 export type PanelTone = "normal" | "muted" | "success" | "warn" | "danger";
@@ -302,10 +302,10 @@ import type {
 
 
 /** 一块内容最多这么多项（和宿主的 `面板节点上限` 同量级，但**各自把关**）。 */
-const 每块上限 = 200;
+const eachBlockLimit = 200;
 
 /** 分享卡上最多几格指标。多出来的丢掉：版式只有三格，第四格没地方放。 */
-const 指标上限 = 3;
+const pointMarkLimit = 3;
 
 /**
  * 热力图铺多少列。**8~53 由 `算热力` 夹**，这里只负责"把 `weeks` 变成数"，
@@ -315,12 +315,12 @@ const 指标上限 = 3;
  * 就成了另一对能对不上的数。范围与理由都在 `ui/heatmap.ts`（那是唯一知道
  * "一列是几天"的地方）。
  */
-function 周数(v: unknown): number {
+function weekNumber(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
 /** 文本兜底上限。宿主已经截过一刀，这是防手改过的数据。 */
-const 文本上限 = 4000;
+const textLimit = 4000;
 
 /**
  * 一条**消息**的兜底上限，比别的块宽得多。
@@ -329,15 +329,15 @@ const 文本上限 = 4000;
  * 4000 字会把正经内容从中间劈掉，而截断只留一个 `…`，用户会以为模型就
  * 写到那儿。宿主那边同样是 20000（`ui.rs::面板文本上限`），两处对齐。
  */
-const 消息上限 = 20000;
+const clearMessageLimit = 20000;
 
-function 文本(v: unknown, 上限 = 文本上限): string {
-  if (typeof v === "string") return v.length > 上限 ? `${v.slice(0, 上限)}…` : v;
+function text2(v: unknown, limit = textLimit): string {
+  if (typeof v === "string") return v.length > limit ? `${v.slice(0, limit)}…` : v;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
   return "";
 }
 
-function 语气(v: unknown): PanelTone {
+function languageGas(v: unknown): PanelTone {
   switch (v) {
     case "muted":
     case "success":
@@ -358,7 +358,7 @@ function 语气(v: unknown): PanelTone {
   }
 }
 
-function 是表(v: unknown): v is Record<string, unknown> {
+function isTable(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
@@ -370,7 +370,7 @@ function 是表(v: unknown): v is Record<string, unknown> {
  * 内容没了更难查**，但也比悄悄吞掉强（见本文件顶上三条规矩里的第 1 条）。
  * 所以它和宿主那五个字面量之间是**两份手抄的清单**，改一处必须改两处。
  */
-function 差异op(v: unknown): PanelDiffOp {
+function differenceExceptionop(v: unknown): PanelDiffOp {
   switch (v) {
     case "del":
     case "add":
@@ -384,9 +384,9 @@ function 差异op(v: unknown): PanelDiffOp {
 }
 
 /** 把一张表的某个键读成"表数组"。不是数组就空。 */
-function 表数组(v: unknown): Record<string, unknown>[] {
+function tableArray(v: unknown): Record<string, unknown>[] {
   if (!Array.isArray(v)) return [];
-  return v.filter(是表).slice(0, 每块上限);
+  return v.filter(isTable).slice(0, eachBlockLimit);
 }
 
 /**
@@ -398,47 +398,47 @@ function 表数组(v: unknown): Record<string, unknown>[] {
  * 动作"是**正常状态**（纯连接线行就没有右边的提交）。画成灰的会让整棵树
  * 布满灰块，反而看不出哪一头是真的能点。
  */
-function 动作(v: unknown): PanelAction | null {
-  if (!是表(v)) return null;
-  const command = 文本(v.command);
+function action(v: unknown): PanelAction | null {
+  if (!isTable(v)) return null;
+  const command = text2(v.command);
   if (!command) return null;
-  return { command, args: v.args, title: 文本(v.title) };
+  return { command, args: v.args, title: text2(v.title) };
 }
 
-function 图行(v: Record<string, unknown>): PanelGraphLine {
+function imageLine(v: Record<string, unknown>): PanelGraphLine {
   return {
     // ⚠️ `art` 的**空格不能 trim**：那是图线的一部分（`| ` 和 `  ` 不同），
     // 去掉了整棵树就散架。`文本()` 本来就不动首尾空白，这里只是写明白。
-    art: 文本(v.art),
-    text: 文本(v.text),
-    tone: 语气(v.tone),
-    bond: 动作(v.bond),
-    pick: 动作(v.pick),
+    art: text2(v.art),
+    text: text2(v.text),
+    tone: languageGas(v.tone),
+    bond: action(v.bond),
+    pick: action(v.pick),
     picked: v.picked === true,
   };
 }
 
-function 提示(v: unknown): PluginPrompt | null {
-  if (!是表(v)) return null;
-  const arg = 文本(v.arg);
+function notice(v: unknown): PluginPrompt | null {
+  if (!isTable(v)) return null;
+  const arg = text2(v.arg);
   // 没有 `arg` 的提示是空的——问了也送不出去。宁可当没写，
   // 也不要弹一个"填完什么都不会发生"的框。
   if (!arg) return null;
   // 第二个字段：**键名和标签两个都给才算数**，与 Rust 的 `读提示` 同一套判据。
   // 宿主的 `PromptDialog` 是"给了 `secondLabel` 才画第二行"，所以标签为空时
   // 让 `secondArg` 也跟着空——否则值会被悄悄丢掉（框都没画，哪来的值）。
-  const secondArg = 文本(v.secondArg);
-  const secondLabel = 文本(v.secondLabel);
-  const 两个都给 = Boolean(secondArg && secondLabel);
+  const secondArg = text2(v.secondArg);
+  const secondLabel = text2(v.secondLabel);
+  const twoAllGive = Boolean(secondArg && secondLabel);
   return {
     arg,
-    label: 文本(v.label) || t("Enter a value"),
-    placeholder: 文本(v.placeholder),
-    hint: 文本(v.hint),
+    label: text2(v.label) || t("Enter a value"),
+    placeholder: text2(v.placeholder),
+    hint: text2(v.hint),
     secret: v.secret === true,
-    secondArg: 两个都给 ? secondArg : "",
-    secondLabel: 两个都给 ? secondLabel : "",
-    secondPlaceholder: 两个都给 ? 文本(v.secondPlaceholder) : "",
+    secondArg: twoAllGive ? secondArg : "",
+    secondLabel: twoAllGive ? secondLabel : "",
+    secondPlaceholder: twoAllGive ? text2(v.secondPlaceholder) : "",
   };
 }
 
@@ -450,23 +450,23 @@ function 提示(v: unknown): PluginPrompt | null {
  * 而不是让整块消失。`提示()` 那边相反（没有 `arg` 就当没写），因为那时
  * 弹出来的框"填完什么都不会发生"，多一个框比少一个框更坏。
  */
-function 输入框(raw: Record<string, unknown>): PanelInput {
+function inputBox(raw: Record<string, unknown>): PanelInput {
   return {
-    arg: 文本(raw.arg),
-    submit: 文本(raw.submit),
-    submitLabel: 文本(raw.submit_label) || t("Submit"),
-    placeholder: 文本(raw.placeholder),
-    hint: 文本(raw.hint),
+    arg: text2(raw.arg),
+    submit: text2(raw.submit),
+    submitLabel: text2(raw.submit_label) || t("Submit"),
+    placeholder: text2(raw.placeholder),
+    hint: text2(raw.hint),
     multiline: raw.multiline === true,
     // ⚠️ 小按钮与 `buttons` 那一条**共用一份收窄**：它们是一模一样的动作形状，
     // 只是摆的地方不同（这里在输入卡片里）。
-    chips: 表数组(raw.chips)
-      .slice(0, 每块上限)
+    chips: tableArray(raw.chips)
+      .slice(0, eachBlockLimit)
       .map((it) => ({
-        label: 文本(it.label),
-        command: 文本(it.command),
+        label: text2(it.label),
+        command: text2(it.command),
         args: it.args,
-        prompt: 提示(it.prompt),
+        prompt: notice(it.prompt),
         style: it.style === "primary" || it.style === "danger" ? it.style : "normal",
         disabled: it.disabled === true,
       })),
@@ -477,12 +477,12 @@ function 输入框(raw: Record<string, unknown>): PanelInput {
  * 一颗标签页（`kind = "tabs"`）。⚠️ 没有 `pick` 的**留着但画成灰的**（同 `buttons`）；
  * `close` 缺了就是**不画那颗叉**——那是"这排标签只让看"的正常写法。
  */
-function 标签(it: Record<string, unknown>): PanelTab {
+function label(it: Record<string, unknown>): PanelTab {
   return {
-    label: 文本(it.label),
+    label: text2(it.label),
     active: it.active === true,
-    pick: 动作(it.pick),
-    close: 动作(it.close),
+    pick: action(it.pick),
+    close: action(it.close),
   };
 }
 
@@ -500,27 +500,27 @@ function 标签(it: Record<string, unknown>): PanelTab {
  * 是抄第三遍，抄的那两遍已经在各自注释里写着"同上面那条判据"——与其写三遍再
  * 指望三处一起改，不如让它只有一处。
  */
-function 曲线点(v: unknown): number[] {
-  const 原 = Array.isArray(v) ? v : [];
-  return 原.filter((n): n is number => typeof n === "number" && Number.isFinite(n)).slice(-每块上限);
+function curveLinePoint(v: unknown): number[] {
+  const original = Array.isArray(v) ? v : [];
+  return original.filter((n): n is number => typeof n === "number" && Number.isFinite(n)).slice(-eachBlockLimit);
 }
 
 /**
  * `chart` 块（`kind = "chart"`）。
  */
-function 图块(raw: Record<string, unknown>): PanelChart {
-  const points = 曲线点(raw.points);
+function imageBlock(raw: Record<string, unknown>): PanelChart {
+  const points = curveLinePoint(raw.points);
   return {
-    value: 文本(raw.value),
-    unit: 文本(raw.unit),
-    label: 文本(raw.label),
-    caption: 文本(raw.caption),
+    value: text2(raw.value),
+    unit: text2(raw.unit),
+    label: text2(raw.label),
+    caption: text2(raw.caption),
     points,
     // 刻度走 `ui/chart-ticks.ts`：坏项在那儿丢掉、位置在那儿夹到 0~1。
     // ⚠️ 纵轴**这里不推**：推的那一步要拿到 `points` 的极值，而那是渲染层
     // 才知道的事（它才是按极值归一化的那一方）。见那个文件头那张分工表。
-    xTicks: 读刻度(raw.x_ticks),
-    yTicks: 读刻度(raw.y_ticks),
+    xTicks: readTick(raw.x_ticks),
+    yTicks: readTick(raw.y_ticks),
   };
 }
 
@@ -533,50 +533,50 @@ function 图块(raw: Record<string, unknown>): PanelChart {
  * 它们最后会进 SVG 的 `<text>`，而 SVG 是**XML**——`&` 和 `<` 在里面是有含义的
  * （`ui/share-card.ts` 那边还会再转义一次，两道都在，谁漏了都不至于出洞）。
  */
-function 分享卡(raw: Record<string, unknown>): PanelShare {
-  const points = 曲线点(raw.points);
+function shareEnjoyCard(raw: Record<string, unknown>): PanelShare {
+  const points = curveLinePoint(raw.points);
 
   const stats: PanelShareStat[] = [];
   if (Array.isArray(raw.stats)) {
-    for (const 项 of raw.stats.slice(0, 指标上限)) {
-      if (typeof 项 !== "object" || 项 === null) continue;
-      const t = 项 as Record<string, unknown>;
-      stats.push({ k: 文本(t.k), v: 文本(t.v), small: 文本(t.small) });
+    for (const item5 of raw.stats.slice(0, pointMarkLimit)) {
+      if (typeof item5 !== "object" || item5 === null) continue;
+      const t = item5 as Record<string, unknown>;
+      stats.push({ k: text2(t.k), v: text2(t.v), small: text2(t.small) });
     }
   }
 
   return {
-    title: 文本(raw.title),
-    subtitle: 文本(raw.subtitle),
-    date: 文本(raw.date),
-    label: 文本(raw.label),
-    value: 文本(raw.value),
-    unit: 文本(raw.unit),
+    title: text2(raw.title),
+    subtitle: text2(raw.subtitle),
+    date: text2(raw.date),
+    label: text2(raw.label),
+    value: text2(raw.value),
+    unit: text2(raw.unit),
     points,
     // ⚠️ 卡片这里**自己给上限**（默认那 8 档是给面板一块 260px 宽的图定的）：
     // 全日那张卡的横轴是**钟点**，8 小时都标不满一天，而两档之间还有小格。
-    xTicks: 读刻度(raw.x_ticks, 卡刻度上限),
-    xMinor: 横细分数(raw.x_minor),
+    xTicks: readTick(raw.x_ticks, cardTickLimit),
+    xMinor: horizontalThinShareNumber(raw.x_minor),
     // 中间那块图画哪一种。⚠️ 判据是 `raw.shape === "heat"`（而不是"有没有给
     // `days`"）：哪天热力图多一个字段、或者插件手滑多发了一个 `days`，都没有
     // "这块该画什么"来得要紧。
     shape: raw.shape === "heat" ? "heat" : "curve",
     heat:
       raw.shape === "heat"
-        ? 算热力(读热力记录(raw.days), 文本(raw.to), 周数(raw.weeks))
+        ? computeHeatmap(readHotForceRecordRecord(raw.days), text2(raw.to), weekNumber(raw.weeks))
         : null,
-    less: 文本(raw.less),
-    more: 文本(raw.more),
+    less: text2(raw.less),
+    more: text2(raw.more),
     stats,
-    foot: 文本(raw.foot),
-    file: 文本(raw.file),
+    foot: text2(raw.foot),
+    file: text2(raw.file),
   };
 }
 
 /**
  * 分享卡横轴的主刻度最多几档。比面板那 8 档宽——理由见上面那一句。
  */
-const 卡刻度上限 = 13;
+const cardTickLimit = 13;
 
 /**
  * 认得的图标名。**不在这里的名字一律当 `"record"`**（画一颗中性的圆点）。
@@ -586,12 +586,12 @@ const 卡刻度上限 = 13;
  * 从头到尾在拆的那颗雷（`PanelBody.tsx` 文件头）。名字对不上顶多画错一颗图标，
  * 透一个名字进去就可能是一段注入。
  */
-const 图标名: PanelCardIcon[] = ["round", "today", "long", "doc", "record"];
+const iconName: PanelCardIcon[] = ["round", "today", "long", "doc", "record"];
 
 /** `raw.icon` → 白名单里的一个；认不出、或者压根没写，都给 `"record"`。 */
-function 图标(raw: unknown): PanelCardIcon {
+function icon(raw: unknown): PanelCardIcon {
   const s = typeof raw === "string" ? raw : "";
-  return 图标名.includes(s as PanelCardIcon) ? (s as PanelCardIcon) : "record";
+  return iconName.includes(s as PanelCardIcon) ? (s as PanelCardIcon) : "record";
 }
 
 /**
@@ -601,30 +601,30 @@ function 图标(raw: unknown): PanelCardIcon {
  * 插件决定"那该说句什么"——"没有记录"那句话该由插件按自己的话讲
  * （`plugins/stats/main.lua` 里那句 muted），而不是让宿主编一句通用文案。
  */
-function 记录卡列表(raw: Record<string, unknown>): PanelCards {
+function recordRecordCardColumnTable(raw: Record<string, unknown>): PanelCards {
   const items: PanelCard[] = [];
-  for (const 项 of 表数组(raw.items)) {
+  for (const item5 of tableArray(raw.items)) {
     items.push({
-      icon: 图标(项.icon),
-      value: 文本(项.value),
-      unit: 文本(项.unit),
-      caption: 文本(项.caption),
-      points: 曲线点(项.points),
+      icon: icon(item5.icon),
+      value: text2(item5.value),
+      unit: text2(item5.unit),
+      caption: text2(item5.caption),
+      points: curveLinePoint(item5.points),
     });
   }
 
   // 汇总那行：`total` 不是一个表就当没有（`null`）。⚠️ 与 `items` 不同，这里
   // **不判空**——一行"总计 0 字"是插件有意报的（今天真的一字没写），
   // 而"少发一个 `total`"才是"这一块没有可汇总的"。
-  const total = 是表(raw.total)
+  const total = isTable(raw.total)
     ? {
-        label: 文本(raw.total.label),
-        value: 文本(raw.total.value),
-        unit: 文本(raw.total.unit),
+        label: text2(raw.total.label),
+        value: text2(raw.total.value),
+        unit: text2(raw.total.unit),
       }
     : null;
 
-  return { title: 文本(raw.title), items, total };
+  return { title: text2(raw.title), items, total };
 }
 
 /**
@@ -634,7 +634,7 @@ function 记录卡列表(raw: Record<string, unknown>): PanelCards {
  * 不如在入口就说清楚。⚠️ 也不接受负数——负的格数会让下面那个循环一次都不跑，
  * 结果与 0 相同，但"设置里写了个 -1"是个该被发现的手误。
  */
-function 横细分数(raw: unknown): number {
+function horizontalThinShareNumber(raw: unknown): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return 0;
   return Math.max(0, Math.min(10, Math.floor(raw)));
 }
@@ -651,8 +651,8 @@ function 横细分数(raw: unknown): number {
  * 宿主那边填出来的一定是 `http://localhost:<port>/`，所以这条**正常情况下
  * 一次都不会触发**；它的用处是在数据不是宿主填的那种情况下兜底。
  */
-function 本机地址(v: unknown): string {
-  const s = 文本(v);
+function localMachineAddress(v: unknown): string {
+  const s = text2(v);
   if (!s) return "";
   try {
     const u = new URL(s);
@@ -672,115 +672,115 @@ function 本机地址(v: unknown): string {
  * 太大（有人写 99999）会把面板撑成一整屏、把别的块挤到看不见的地方。
  * 这个范围是"一块画布"的尺寸，不是"页面该多高"的规格。
  */
-function 高度(v: unknown): number {
+function heightDegree(v: unknown): number {
   const n = typeof v === "number" && Number.isFinite(v) ? v : 480;
   return Math.min(2000, Math.max(120, Math.round(n)));
 }
 
-function 一块(raw: Record<string, unknown>): PanelNode {
-  const kind = 文本(raw.kind);
+function oneBlock(raw: Record<string, unknown>): PanelNode {
+  const kind = text2(raw.kind);
   switch (kind) {
     case "heading":
-      return { kind: "heading", text: 文本(raw.text) };
+      return { kind: "heading", text: text2(raw.text) };
     case "text":
-      return { kind: "text", text: 文本(raw.text), tone: 语气(raw.tone) };
+      return { kind: "text", text: text2(raw.text), tone: languageGas(raw.tone) };
     case "fields":
       return {
         kind: "fields",
-        items: 表数组(raw.items).map((it) => ({
-          label: 文本(it.label),
-          value: 文本(it.value),
-          tone: 语气(it.tone),
+        items: tableArray(raw.items).map((it) => ({
+          label: text2(it.label),
+          value: text2(it.value),
+          tone: languageGas(it.tone),
         })),
       };
     case "list":
       return {
         kind: "list",
-        items: 表数组(raw.items).map((it) => ({
-          title: 文本(it.title),
-          subtitle: 文本(it.subtitle),
-          badge: 文本(it.badge),
-          tone: 语气(it.tone),
+        items: tableArray(raw.items).map((it) => ({
+          title: text2(it.title),
+          subtitle: text2(it.subtitle),
+          badge: text2(it.badge),
+          tone: languageGas(it.tone),
         })),
       };
     case "buttons":
       return {
         kind: "buttons",
-        items: 表数组(raw.items).map((it) => ({
-          label: 文本(it.label),
-          command: 文本(it.command),
+        items: tableArray(raw.items).map((it) => ({
+          label: text2(it.label),
+          command: text2(it.command),
           // `args` **原样带着**：它的形状由插件和它自己的命令约定，
           // 宿主和这里都不解析。`undefined` 也是一种合法的"没有参数"。
           args: it.args,
-          prompt: 提示(it.prompt),
+          prompt: notice(it.prompt),
           style: it.style === "primary" || it.style === "danger" ? it.style : "normal",
           disabled: it.disabled === true,
         })),
       };
     case "empty":
-      return { kind: "empty", text: 文本(raw.text) };
+      return { kind: "empty", text: text2(raw.text) };
     case "separator":
       return { kind: "separator" };
     case "message":
       return {
         kind: "message",
         from: raw.from === "user" ? "user" : "ai",
-        text: 文本(raw.text, 消息上限),
+        text: text2(raw.text, clearMessageLimit),
         copy: raw.copy === true,
       };
     case "diff":
       return {
         kind: "diff",
-        items: 表数组(raw.items).map((it) => ({
-          op: 差异op(it.op),
-          text: 文本(it.text),
+        items: tableArray(raw.items).map((it) => ({
+          op: differenceExceptionop(it.op),
+          text: text2(it.text),
         })),
       };
     case "graph":
-      return { kind: "graph", items: 表数组(raw.items).map(图行) };
+      return { kind: "graph", items: tableArray(raw.items).map(imageLine) };
     case "tabs":
       return {
         kind: "tabs",
-        items: 表数组(raw.items).slice(0, 每块上限).map(标签),
+        items: tableArray(raw.items).slice(0, eachBlockLimit).map(label),
         // ⚠️ 末尾那颗「＋」是**整排的一个动作**（不是第 N 颗标签），所以挂在块上：
         // 标签页的次序在界面上就是"哪一颗在哪儿"，它只能落在最后。
-        act: 动作(raw.new),
+        act: action(raw.new),
       };
     case "hero":
       return {
         kind: "hero",
-        title: 文本(raw.title),
-        subtitle: 文本(raw.subtitle),
+        title: text2(raw.title),
+        subtitle: text2(raw.subtitle),
       };
     case "input":
-      return { kind: "input", spec: 输入框(raw) };
+      return { kind: "input", spec: inputBox(raw) };
     case "chart":
-      return { kind: "chart", spec: 图块(raw) };
+      return { kind: "chart", spec: imageBlock(raw) };
     case "share":
-      return { kind: "share", spec: 分享卡(raw) };
+      return { kind: "share", spec: shareEnjoyCard(raw) };
     case "cards":
-      return { kind: "cards", spec: 记录卡列表(raw) };
+      return { kind: "cards", spec: recordRecordCardColumnTable(raw) };
     case "heatmap":
       return {
         kind: "heatmap",
         spec: {
-          title: 文本(raw.title),
-          unit: 文本(raw.unit),
+          title: text2(raw.title),
+          unit: text2(raw.unit),
           // ⚠️ `to` 走 `文本()`：它不是给人看的字，但也要是同一种收窄
           // （数字/布尔会被 `String()` 掉，日期本来就不该长成那样）。
-          grid: 算热力(读热力记录(raw.days), 文本(raw.to), 周数(raw.weeks)),
+          grid: computeHeatmap(readHotForceRecordRecord(raw.days), text2(raw.to), weekNumber(raw.weeks)),
         },
       };
     case "frame":
       return {
         kind: "frame",
-        url: 本机地址(raw.url),
+        url: localMachineAddress(raw.url),
         alive: raw.alive === true,
-        height: 高度(raw.height),
+        height: heightDegree(raw.height),
       };
     default: {
-      const 名 = kind || t("(no kind)");
-      return { kind: "unknown", raw: 名 };
+      const name3 = kind || t("(no kind)");
+      return { kind: "unknown", raw: name3 };
     }
   }
 }
@@ -794,7 +794,7 @@ function 一块(raw: Record<string, unknown>): PanelNode {
 export function normalise(raw: unknown): PanelNode[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .filter(是表)
-    .slice(0, 每块上限)
-    .map(一块);
+    .filter(isTable)
+    .slice(0, eachBlockLimit)
+    .map(oneBlock);
 }

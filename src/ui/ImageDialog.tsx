@@ -25,7 +25,7 @@
  */
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { open as 选文件 } from "@/ui/file-picker";
+import { open as selectTextItem } from "@/ui/file-picker";
 
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
@@ -33,12 +33,12 @@ import type { ImageAnswer, ImageRequest } from "@/ui/useDialogs";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
 /** 文件对话框的过滤器。⚠️ 与 `src-tauri/src/image.rs` 的 `认得的后缀` 同一套。 */
-const 图片后缀 = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
+const imageSliceExtension = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
 
 /** 从一条路径上取文件名（不带目录）。 */
-function 文件名(路径: string): string {
-  const 段 = 路径.split(/[\\/]/);
-  return 段[段.length - 1] || 路径;
+function textItemName(path: string): string {
+  const paragraph2 = path.split(/[\\/]/);
+  return paragraph2[paragraph2.length - 1] || path;
 }
 
 export function ImageDialog({
@@ -51,9 +51,9 @@ export function ImageDialog({
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const [来源, set来源] = useState<"path" | "url">("path");
-  const [地址, set地址] = useState("");
-  const [替代文字, set替代文字] = useState("");
+  const [comeSource, setComeSource] = useState<"path" | "url">("path");
+  const [address, setAddress] = useState("");
+  const [replaceRepresentText, setReplaceRepresentText] = useState("");
   /**
    * 勾了「插入后上传」。
    *
@@ -61,49 +61,49 @@ export function ImageDialog({
    * （与设置里 `enabled` 默认关同一条口径）。也**不记住上次的勾选**——
    * 记住就得有个地方存它，而那个地方迟早会被人当成"设置"去找。
    */
-  const [要上传, set要上传] = useState(false);
-  const 输入框 = useRef<HTMLInputElement>(null);
+  const [wantAbovePass, setWantAbovePass] = useState(false);
+  const inputBox = useRef<HTMLInputElement>(null);
   // 来源页签的方向键（第 50 项，2026-10-04）。
-  const 页签栏 = useRef<HTMLDivElement>(null);
-  useTablistKeys(页签栏);
+  const pageKeyBar = useRef<HTMLDivElement>(null);
+  useTablistKeys(pageKeyBar);
 
   useEffect(() => {
-    输入框.current?.focus();
+    inputBox.current?.focus();
   }, []);
 
   /** 浏览按钮：选完把路径填进输入框，替代文字留空时顺手用文件名补上。 */
-  const 浏览 = async () => {
-    const 选的 = await 选文件({
+  const browseView = async () => {
+    const selectOf = await selectTextItem({
       multiple: false,
       directory: false,
-      filters: [{ name: t("Images"), extensions: 图片后缀 }],
+      filters: [{ name: t("Images"), extensions: imageSliceExtension }],
     });
-    if (typeof 选的 !== "string") return; // 用户取消了，不是错误
-    set来源("path");
-    set地址(选的);
-    if (替代文字.trim() === "") {
+    if (typeof selectOf !== "string") return; // 用户取消了，不是错误
+    setComeSource("path");
+    setAddress(selectOf);
+    if (replaceRepresentText.trim() === "") {
       // 去掉后缀当替代文字：**只是默认值**，用户改得动。
-      set替代文字(文件名(选的).replace(/\.[^.]+$/, ""));
+      setReplaceRepresentText(textItemName(selectOf).replace(/\.[^.]+$/, ""));
     }
   };
 
   // ⚠️ **主字段为空 = 当作取消**，与 `PromptDialog` 同一条口径：
   // 一个 `![]()` 在正文里看不出坏、也点不开，而用户会以为是自己哪一步做错了。
   // 「改主意了、把框清空再点确定」是个很自然的取消方式。
-  const 提交 = () => {
-    const a = 地址.trim();
+  const raiseHandoff = () => {
+    const a = address.trim();
     if (a === "") return onAnswer(null);
     onAnswer({
-      source: 来源 === "url" ? { kind: "url", url: a } : { kind: "path", path: a },
-      alt: 替代文字,
-      上传: 要上传,
+      source: comeSource === "url" ? { kind: "url", url: a } : { kind: "path", path: a },
+      alt: replaceRepresentText,
+      abovePass: wantAbovePass,
     });
   };
 
-  const 回车或退出 = (e: KeyboardEvent<HTMLInputElement>) => {
+  const returnCarOrBackOutput = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      提交();
+      raiseHandoff();
     } else if (e.key === "Escape") {
       e.preventDefault();
       onAnswer(null);
@@ -122,49 +122,49 @@ export function ImageDialog({
         <DialogClose onClose={() => onAnswer(null)} />
         <h2 className="confirm-title">{t("Insert Image")}</h2>
 
-        <div ref={页签栏} className="image-src-tabs" role="tablist" aria-label={t("Where the image comes from")}>
+        <div ref={pageKeyBar} className="image-src-tabs" role="tablist" aria-label={t("Where the image comes from")}>
           <button
             type="button"
             role="tab"
-            aria-selected={来源 === "path"}
-            className={`btn ${来源 === "path" ? "btn-primary" : ""}`}
-            onClick={() => set来源("path")}
+            aria-selected={comeSource === "path"}
+            className={`btn ${comeSource === "path" ? "btn-primary" : ""}`}
+            onClick={() => setComeSource("path")}
           >
             {t("Local file")}
           </button>
           <button
             type="button"
             role="tab"
-            aria-selected={来源 === "url"}
-            className={`btn ${来源 === "url" ? "btn-primary" : ""}`}
-            onClick={() => set来源("url")}
+            aria-selected={comeSource === "url"}
+            className={`btn ${comeSource === "url" ? "btn-primary" : ""}`}
+            onClick={() => setComeSource("url")}
           >
             {t("Web address")}
           </button>
         </div>
 
         <label className="prompt-label" htmlFor="nota-image-src">
-          {来源 === "url" ? t("Image URL") : t("Image file")}
+          {comeSource === "url" ? t("Image URL") : t("Image file")}
         </label>
         <div className="image-src-row">
           <input
             id="nota-image-src"
-            ref={输入框}
+            ref={inputBox}
             className="prompt-input"
             type="text"
             autoComplete="off"
             spellCheck={false}
-            value={地址}
+            value={address}
             placeholder={
-              来源 === "url"
+              comeSource === "url"
                 ? t("https://example.com/image.png")
                 : t("Full path to the file, or a path relative to this document's folder")
             }
-            onChange={(e) => set地址(e.target.value)}
-            onKeyDown={回车或退出}
+            onChange={(e) => setAddress(e.target.value)}
+            onKeyDown={returnCarOrBackOutput}
           />
-          {来源 === "path" && (
-            <button type="button" className="btn" onClick={() => void 浏览()}>
+          {comeSource === "path" && (
+            <button type="button" className="btn" onClick={() => void browseView()}>
               {t("Browse…")}
             </button>
           )}
@@ -178,10 +178,10 @@ export function ImageDialog({
           className="prompt-input"
           type="text"
           autoComplete="off"
-          value={替代文字}
+          value={replaceRepresentText}
           placeholder={t("Shown when the image cannot be loaded")}
-          onChange={(e) => set替代文字(e.target.value)}
-          onKeyDown={回车或退出}
+          onChange={(e) => setReplaceRepresentText(e.target.value)}
+          onKeyDown={returnCarOrBackOutput}
         />
 
         {/*
@@ -191,7 +191,7 @@ export function ImageDialog({
         */}
         <p className="prompt-hint">
           {t("Where it lands after inserting depends on Settings → Image → When inserting an image.")}
-          {!request.文档存过盘 && (
+          {!request.documentSaved && (
             <>
               <br />
               {/*
@@ -213,7 +213,7 @@ export function ImageDialog({
             ② 配了服务器但不是这份文档要传：给勾选框。
             ③ 没配服务器：整行不出现。
         */}
-        {request.会自动上传 ? (
+        {request.meetingSelfActionAbovePass ? (
           <p className="prompt-hint">
             {/* ⚠️ 「写着」后面那个 `{" "}` 是**原来就在的**一个空格（JSX 文本在
                 `<code>` 前面留的空），拆成两截之后得显式补回来，不然会粘在一起。 */}
@@ -222,18 +222,18 @@ export function ImageDialog({
             {t(", and settings allow automatic upload — the image is uploaded right after inserting and the document gets the returned URL (delete that line from the YAML to turn this off).")}
           </p>
         ) : (
-          request.能上传 && (
+          request.ableAbovePass && (
             <label className="image-upload-row">
               <input
                 type="checkbox"
-                checked={要上传}
-                onChange={(e) => set要上传(e.target.checked)}
+                checked={wantAbovePass}
+                onChange={(e) => setWantAbovePass(e.target.checked)}
               />
               {t("Upload after inserting (the document gets the returned URL)")}
             </label>
           )
         )}
-        {!request.会自动上传 && request.能上传 && 要上传 && (
+        {!request.meetingSelfActionAbovePass && request.ableAbovePass && wantAbovePass && (
           <p className="prompt-hint">
               {t("If upload fails, the document uses the local file path instead. The failure is reported separately.")}
           </p>
@@ -243,7 +243,7 @@ export function ImageDialog({
           <button type="button" className="btn" onClick={() => onAnswer(null)}>
             {t("Cancel")}
           </button>
-          <button type="button" className="btn btn-primary" onClick={提交}>
+          <button type="button" className="btn btn-primary" onClick={raiseHandoff}>
             {t("Insert")}
           </button>
         </div>

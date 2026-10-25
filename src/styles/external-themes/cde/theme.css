@@ -92,6 +92,12 @@
   --icon-nota-unfold-more-symbolic: url("./assets/icons/unfold-more.svg");
   --icon-nota-sidebar-collapse-symbolic: url("./assets/icons/sidebar-collapse.svg");
   --icon-nota-sidebar-toggle-symbolic: url("./assets/icons/sidebar-toggle.svg");
+  --icon-nota-heading-1-symbolic: url("./assets/icons/heading-1.svg");
+  --icon-nota-heading-2-symbolic: url("./assets/icons/heading-2.svg");
+  --icon-nota-heading-3-symbolic: url("./assets/icons/heading-3.svg");
+  --nota-source-quote-icon: url("./assets/icons/source-quote.svg");
+  --nota-source-bullet-icon: url("./assets/icons/source-bullet.svg");
+  --nota-source-code-icon: url("./assets/icons/source-code.svg");
 }
 
 /* 顶栏：桃色硬帽、连续青绿菜单带，底缘按真机压“暗青 → 桃色 → 画布”。 */

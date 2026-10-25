@@ -15,16 +15,16 @@ import { $shortcut } from "@milkdown/kit/utils";
 import type { Command } from "@milkdown/kit/prose/state";
 import { isInTable } from "@milkdown/kit/prose/tables";
 
-import { 表格Tab处理 } from "./table-tab";
+import { handleTableTab } from "./table-tab";
 
 /**
  * 表格内的普通回车命令。
  *
  * 不在表格里返回 `false`，让列表、标题、段落和代码块继续使用各自原有的回车。
  */
-export const 表格回车: Command = (state, dispatch) => {
+export const tableEnter: Command = (state, dispatch) => {
   if (!isInTable(state)) return false;
-  return 表格Tab处理(state, dispatch, false);
+  return handleTableTab(state, dispatch, false);
 };
 
 /**
@@ -33,6 +33,6 @@ export const 表格回车: Command = (state, dispatch) => {
  * GFM 的 `ExitTable` 没写 priority（按 50 计）。这里给 110，既压过退出表格，
  * 也高于表格自己的 `NextCell`（100）；守卫仍由 {@link 表格回车} 收到表格范围。
  */
-export const 表格回车键 = $shortcut(() => ({
-  Enter: { key: "Enter", onRun: () => 表格回车, priority: 110 },
+export const tableEnterKey = $shortcut(() => ({
+  Enter: { key: "Enter", onRun: () => tableEnter, priority: 110 },
 }));

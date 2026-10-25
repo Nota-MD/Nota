@@ -162,7 +162,7 @@ export function MenuPopup(props: PopupProps) {
    * 点开的）；点开的，再点一下才收起。桌面软件就是这个手感——鼠标划开子菜单
    * 之后，点父项不会把它关掉。
    */
-  const 点开的 = useRef<number | null>(null);
+  const pointOpenOf = useRef<number | null>(null);
 
   // 父项的 DOM 节点。漫游钩子内部也存了一份，但那份不外借——
   // 展开子菜单时要拿它量坐标，所以这里自己再记一份。
@@ -214,7 +214,7 @@ export function MenuPopup(props: PopupProps) {
   };
 
   /** 展开第 `row` 项的子菜单，并记下它**右边沿**的坐标。`来源` 见上面 `点开的`。 */
-  function openSub(row: number, 来源: "点" | "划" | "键") {
+  function openSub(row: number, comeSource: "点" | "划" | "键") {
     const el = rowRefs.current[row];
     if (!el) return;
     const r = el.getBoundingClientRect();
@@ -222,13 +222,13 @@ export function MenuPopup(props: PopupProps) {
     // 子菜单的路上会经过一条"谁都不属于"的带子，鼠标一进那条带子
     // 父项就不是 hover 了，菜单自己关掉。
     setSubAnchor({ top: r.top, left: r.right - 4, parentLeft: r.left });
-    点开的.current = 来源 === "点" ? row : null;
+    pointOpenOf.current = comeSource === "点" ? row : null;
     setSubOpen(row);
   }
 
   /** 收起子菜单，**并把焦点还给父项**。 */
   function closeSub(row: number) {
-    点开的.current = null;
+    pointOpenOf.current = null;
     setSubOpen(null);
     setSubAnchor(null);
     // ⚠️ 用 `focusItem` 不是 `setFocusedIndex`——按 `→` 展开子菜单之前，
@@ -242,7 +242,7 @@ export function MenuPopup(props: PopupProps) {
    * 画一行。⚠️ 提成函数而不是留在 JSX 里，是因为它有两处用处（父项那条 `map`
    * 与子菜单那段），复制一份回调就等于埋一份将来会漂的抄本。
    */
-  const 画行 = (line: Line) => {
+  const drawLine = (line: Line) => {
       if (line.kind === "sep") {
         return (
           <div
@@ -260,7 +260,7 @@ export function MenuPopup(props: PopupProps) {
       // `styles/menubar.css` 里 `.menu-item-open` 那条注释）：这里原先只认
       // "子菜单开着"，于是 ↑↓ 是一套看不见的漫游——`Esc` 能关掉（说明键真到了）
       // 但屏幕上一格高亮都没有。
-      const 是焦点 = roving.focusedIndex === row;
+      const isFocusPoint = roving.focusedIndex === row;
       const p = itemProps(row);
 
       return (
@@ -272,7 +272,7 @@ export function MenuPopup(props: PopupProps) {
             type="button"
             role="menuitem"
             className={`menu-item ${entry.danger ? "menu-item-danger" : ""} ${
-              isSubOpen || 是焦点 ? "menu-item-open" : ""
+              isSubOpen || isFocusPoint ? "menu-item-open" : ""
             }`}
             // ⚠️ 用 `disabled` 而不是"点了不做事"：灰掉的项要**看得出**灰，
             // 也要让键盘跳过去时不落在它上面。
@@ -292,7 +292,7 @@ export function MenuPopup(props: PopupProps) {
               p.onMouseEnter();
               if (entry.submenu) openSub(row, "划");
               else {
-                点开的.current = null;
+                pointOpenOf.current = null;
                 setSubOpen(null);
               }
             }}
@@ -303,7 +303,7 @@ export function MenuPopup(props: PopupProps) {
                 // 那时候按"开着就收起"处理，用户的第一下点击是**把它关掉**，
                 // 于是弹层闪一下、什么都没发生，得点第二下才开。
                 // 所以只有"点开的那个"才被这一下收起。
-                if (isSubOpen && 点开的.current === row) closeSub(row);
+                if (isSubOpen && pointOpenOf.current === row) closeSub(row);
                 else openSub(row, "点");
                 return;
               }
@@ -363,15 +363,15 @@ export function MenuPopup(props: PopupProps) {
         // ⚠️ 顶上那块（`top`）里如果是一个输入框，它里面的按键**归它自己**：
         // 不放行的话 ↑↓ 会被漫游吃掉（输入框里的光标动不了）、
         // Home/End 也会变成"跳到菜单两端"。Esc 照旧留给这一层。
-        const 目标 = e.target as HTMLElement | null;
-        if (e.key !== "Escape" && 目标 && 目标.tagName === "INPUT") return;
+        const target = e.target as HTMLElement | null;
+        if (e.key !== "Escape" && target && target.tagName === "INPUT") return;
         roving.handleKeyDown(e);
       }}
     >
       {/* ⚠️ 两块都在 `lines` **之外**：它们不是条目，不占漫游下标（见 `heading` / `top` 那两段）。 */}
       {top}
       {heading && <div className="menu-heading">{t(heading)}</div>}
-      {lines.map(画行)}
+      {lines.map(drawLine)}
     </div>
   );
 }
@@ -432,13 +432,13 @@ export function SubMenu(props: SubMenuProps) {
     const el = boxRef.current;
     if (!el) return;
     const top = Math.max(8, Math.min(anchor.top, window.innerHeight - el.offsetHeight - 8));
-    const 右侧越界 = anchor.left + el.offsetWidth > window.innerWidth - 8;
-    const 左侧锚点 = anchor.parentLeft - el.offsetWidth + 4;
-    const 向左展开 = 右侧越界 && 左侧锚点 >= 8;
-    const left = 向左展开
-      ? 左侧锚点
+    const rightSideExceedBoundary = anchor.left + el.offsetWidth > window.innerWidth - 8;
+    const leftSideAnchor = anchor.parentLeft - el.offsetWidth + 4;
+    const expandLeft = rightSideExceedBoundary && leftSideAnchor >= 8;
+    const left = expandLeft
+      ? leftSideAnchor
       : Math.max(8, Math.min(anchor.left, window.innerWidth - el.offsetWidth - 8));
-    setFlipped(向左展开);
+    setFlipped(expandLeft);
     setPos({ ...anchor, top, left });
   }, [anchor]);
 
@@ -478,13 +478,13 @@ export function SubMenu(props: SubMenuProps) {
         const p = itemProps(row);
         // ⚠️ 同上：子菜单里也**只有**焦点那一行要亮。这里原先连 `menu-item-open`
         // 都没有，键盘一路 `→` 飞进来之后整栏一个字都不亮（2026-10-04 目检）。
-        const 是焦点 = roving.focusedIndex === row;
+        const isFocusPoint = roving.focusedIndex === row;
 
         return (
           <button
             type="button"
             role="menuitem"
-            className={`menu-item ${entry.danger ? "menu-item-danger" : ""} ${是焦点 ? "menu-item-open" : ""}`}
+            className={`menu-item ${entry.danger ? "menu-item-danger" : ""} ${isFocusPoint ? "menu-item-open" : ""}`}
             key={entry.id}
             disabled={disabled.has(entry.id)}
             aria-checked={entry.checkable ? !!checks[entry.id] : undefined}

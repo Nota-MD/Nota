@@ -45,45 +45,45 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 
 import {
-  Emoji表,
-  Emoji分类,
-  查短代码,
-  找Emoji,
-  带冒号,
-  认前缀,
-  采用候选,
-  输入规则正则,
-  emoji输入规则,
-  emoji补全,
-  type Emoji项,
+  emojiTable,
+  emojiCategory,
+  checkShortcode,
+  findEmoji,
+  withEmergeNumber,
+  recognizePrefix,
+  adoptUseCandidate,
+  inputRuleRuleCorrectRule,
+  emojiInputRuleRule,
+  emojiFillAll,
+  type EmojiItem,
 } from "../src/editor/emoji";
 
 /* ── 一支极小的测试工装（与 `smart-punctuation.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
@@ -97,290 +97,292 @@ const schema = new Schema({
 });
 
 /** 一段文本，光标停在**末尾**。 */
-function 段落状态(文本: string): EditorState {
-  const 段 = schema.node("paragraph", null, 文本 ? [schema.text(文本)] : []);
-  const doc = schema.node("doc", null, [段]);
-  const 末 = doc.content.size - 1;
+function paragraphState(text2: string): EditorState {
+  const paragraph2 = schema.node("paragraph", null, text2 ? [schema.text(text2)] : []);
+  const doc = schema.node("doc", null, [paragraph2]);
+  const end = doc.content.size - 1;
   return EditorState.create({
     schema,
     doc,
-    selection: TextSelection.create(doc, 末),
+    selection: TextSelection.create(doc, end),
   });
 }
 
 /* ── 一、表的账 ─────────────────────────────────────────────────────── */
 
-组("一、表的账（防死行）");
+group("一、表的账（防死行）");
 
-测("没有重名的短代码", () => {
+testCase("没有重名的短代码", () => {
   // ⚠️ 重名不报错：`按短代码` 那个 Map 只留第一条，后一条**永远查不到**，
   // 而它在对话框里照样列着、点得出字符——只有"敲短代码替换"那条路会静默失效。
-  const 见过 = new Set<string>();
-  const 重的: string[] = [];
-  for (const 项 of Emoji表) {
-    if (见过.has(项.短代码)) 重的.push(项.短代码);
-    见过.add(项.短代码);
+  const seePass = new Set<string>();
+  const heavyOf: string[] = [];
+  for (const item5 of emojiTable) {
+    if (seePass.has(item5.shortcode)) heavyOf.push(item5.shortcode);
+    seePass.add(item5.shortcode);
   }
-  if (重的.length) throw new Error(`重名 ${重的.length} 条：${重的.join("、")}`);
+  if (heavyOf.length) throw new Error(`重名 ${heavyOf.length} 条：${heavyOf.join("、")}`);
 });
 
-测("短代码一律小写，且只由 [a-z0-9_+-] 组成", () => {
+testCase("短代码一律小写，且只由 [a-z0-9_+-] 组成", () => {
   // 含大写 = 永远查不到（查表走 `toLowerCase()`，而表里的键是原样的）；
   // 含别的符号 = 输入规则的正则 `[a-zA-Z0-9_+-]` 认不出来。
-  const 坏的 = Emoji表.filter((项) => !/^[a-z0-9_+-]+$/.test(项.短代码));
-  if (坏的.length) {
-    throw new Error(`有 ${坏的.length} 条不合规：${坏的.map((项) => 项.短代码).join("、")}`);
+  const bad = emojiTable.filter((item5) => !/^[a-z0-9_+-]+$/.test(item5.shortcode));
+  if (bad.length) {
+    throw new Error(`有 ${bad.length} 条不合规：${bad.map((item5) => item5.shortcode).join("、")}`);
   }
 });
 
-测("每一条短代码都打得出来（拿输入规则那条正则核）", () => {
+testCase("每一条短代码都打得出来（拿输入规则那条正则核）", () => {
   // ⚠️ 这一条盯的是**输入规则的正则形状**：表里有 `:x:` / `:v:` 这种单字符
   // 短代码，正则一旦写成 `{2,}`，它们就在面板里选得到、**却永远敲不出来**
   // ——一种不报错的死行。所以这里**不另写一条正则**，直接用导出那条
   // （`输入规则正则`）核表里的每一条。
-  const 打不出 = Emoji表.filter((项) => !输入规则正则.test(`${带冒号(项.短代码)} `));
-  if (打不出.length) {
-    throw new Error(`有 ${打不出.length} 条敲不出来：${打不出.map((项) => 项.短代码).join("、")}`);
+  const hitNotOutput = emojiTable.filter((item5) => !inputRuleRuleCorrectRule.test(`${withEmergeNumber(item5.shortcode)} `));
+  if (hitNotOutput.length) {
+    throw new Error(`有 ${hitNotOutput.length} 条敲不出来：${hitNotOutput.map((item5) => item5.shortcode).join("、")}`);
   }
 });
 
-测("输入规则的正则不吃半截短代码", () => {
+testCase("输入规则的正则不吃半截短代码", () => {
   // ⚠️ 两头都要有冒号：`见 :smile 处`（少一个冒号）不该被换成 😄。
-  等(输入规则正则.test(":smile "), false, "缺结尾冒号");
-  等(输入规则正则.test("smile: "), false, "缺开头冒号");
-  等(输入规则正则.test(":smile:"), false, "后面没有空白（规则要一个触发字符）");
+  equal(inputRuleRuleCorrectRule.test(":smile "), false, "缺结尾冒号");
+  equal(inputRuleRuleCorrectRule.test("smile: "), false, "缺开头冒号");
+  equal(inputRuleRuleCorrectRule.test(":smile:"), false, "后面没有空白（规则要一个触发字符）");
   // ⚠️ 时间写法在**形状上就不中**（只有一个冒号）。
-  等(输入规则正则.test("10:30 "), false, "时间写法");
+  equal(inputRuleRuleCorrectRule.test("10:30 "), false, "时间写法");
   // ⚠️ 但 `:30:` 这种形状**是中的**——拦不拦得住全靠查表那一步。两处分工
   // 写在这里，免得将来有人把查表那一步"优化"掉。
-  等(输入规则正则.test(":30: "), true, "`:30:` 形状合法");
-  等(查短代码("30"), null, "查表挡得住");
+  equal(inputRuleRuleCorrectRule.test(":30: "), true, "`:30:` 形状合法");
+  equal(checkShortcode("30"), null, "查表挡得住");
 });
 
-测("每一条的字符与分类都非空", () => {
-  const 坏的 = Emoji表.filter((项) => 项.字符 === "" || 项.分类 === "");
-  if (坏的.length) throw new Error(`${坏的.length} 条空字段：${JSON.stringify(坏的.slice(0, 5))}`);
+testCase("每一条的字符与分类都非空", () => {
+  const bad = emojiTable.filter((item5) => item5.character === "" || item5.category === "");
+  if (bad.length) throw new Error(`${bad.length} 条空字段：${JSON.stringify(bad.slice(0, 5))}`);
 });
 
-测("每一条都查得到，而且查回来的就是它自己", () => {
+testCase("每一条都查得到，而且查回来的就是它自己", () => {
   // ⚠️ 遍历整张表——重名、写歪、值写反，都在这里现形。
-  const 坏的: string[] = [];
-  for (const 项 of Emoji表) {
-    const 回 = 查短代码(项.短代码);
-    if (!回 || 回.字符 !== 项.字符) 坏的.push(`${项.短代码}（查到 ${回 ? 回.字符 : "空"}）`);
+  const bad: string[] = [];
+  for (const item5 of emojiTable) {
+    const returnValue = checkShortcode(item5.shortcode);
+    if (!returnValue || returnValue.character !== item5.character) bad.push(`${item5.shortcode}（查到 ${returnValue ? returnValue.character : "空"}）`);
   }
-  if (坏的.length) throw new Error(`有 ${坏的.length} 条查不回自己：${坏的.slice(0, 10).join("、")}`);
+  if (bad.length) throw new Error(`有 ${bad.length} 条查不回自己：${bad.slice(0, 10).join("、")}`);
 });
 
-测("分类是那十一类，且每一类都有人", () => {
+testCase("分类是那十一类，且每一类都有人", () => {
   // ⚠️ 分类名拼歪（比如写了「动物类」）不会报错：对话框里会多出一个空页签，
   // 或者那一类的条目被算进"别的"分类里，看着只是"少了几条"。
-  等(Emoji分类.length, 11, "分类数");
-  const 空的 = Emoji分类.filter((一类) => !Emoji表.some((项) => 项.分类 === 一类));
-  if (空的.length) throw new Error(`有分类是空的：${空的.join("、")}`);
+  equal(emojiCategory.length, 11, "分类数");
+  const empty = emojiCategory.filter((oneKind) => !emojiTable.some((item5) => item5.category === oneKind));
+  if (empty.length) throw new Error(`有分类是空的：${empty.join("、")}`);
 });
 
-测("表不是空的，规模在「几百条」这个量级", () => {
+testCase("表不是空的，规模在「几百条」这个量级", () => {
   // ⚠️ 上界是**防手滑**：这张表是手写的固定表，不是"把全世界的 emoji 搬进来"。
-  if (Emoji表.length < 200) throw new Error(`只有 ${Emoji表.length} 条，是不是被误删了？`);
-  if (Emoji表.length > 800) throw new Error(`有 ${Emoji表.length} 条，这张表该是"手写的一小张"`);
+  if (emojiTable.length < 200) throw new Error(`只有 ${emojiTable.length} 条，是不是被误删了？`);
+  if (emojiTable.length > 800) throw new Error(`有 ${emojiTable.length} 条，这张表该是"手写的一小张"`);
 });
 
-测("同一个字符可以有多条短代码（别名），但别名也要能查到", () => {
+testCase("同一个字符可以有多条短代码（别名），但别名也要能查到", () => {
   // `+1` 与 `thumbsup` 指向同一个 👍——这是**故意**的（GitHub 也这么做），
   // 所以「重名」那条判的是短代码，不是字符。
-  const 别名 = new Map<string, Emoji项[]>();
-  for (const 项 of Emoji表) {
-    const 已 = 别名.get(项.字符) ?? [];
-    已.push(项);
-    别名.set(项.字符, 已);
+  const distinguishName = new Map<string, EmojiItem[]>();
+  for (const item5 of emojiTable) {
+    const already = distinguishName.get(item5.character) ?? [];
+    already.push(item5);
+    distinguishName.set(item5.character, already);
   }
-  const 有别名 = [...别名.values()].filter((组) => 组.length > 1);
-  if (有别名.length === 0) throw new Error("一条别名都没有？表里本该有 `+1`/`thumbsup` 这种");
-  for (const 组 of 有别名) {
+  const hasDistinguishName = [...distinguishName.values()].filter((group) => group.length > 1);
+  if (hasDistinguishName.length === 0) throw new Error("一条别名都没有？表里本该有 `+1`/`thumbsup` 这种");
+  for (const group of hasDistinguishName) {
     // 两条别名的**分类**必须一致：不一致的话，同一个字符在对话框里会
     // 同时出现在两个分类下，用户以为表坏了。
-    const 类 = new Set(组.map((项) => 项.分类));
-    if (类.size !== 1) throw new Error(`${组[0]!.字符} 的别名跨了分类：${[...类].join("、")}`);
+    const categories = new Set(group.map((item5) => item5.category));
+    if (categories.size !== 1) {
+      throw new Error(`${group[0]!.character} 的别名跨了分类：${[...categories].join("、")}`);
+    }
   }
 });
 
 /* ── 二、查短代码 ───────────────────────────────────────────────────── */
 
-组("二、查短代码");
+group("二、查短代码");
 
-测("大小写不敏感", () => {
-  等(查短代码("smile")?.字符, "😄", "小写");
-  等(查短代码("Smile")?.字符, "😄", "首字母大写");
-  等(查短代码("SMILE")?.字符, "😄", "全大写");
+testCase("大小写不敏感", () => {
+  equal(checkShortcode("smile")?.character, "😄", "小写");
+  equal(checkShortcode("Smile")?.character, "😄", "首字母大写");
+  equal(checkShortcode("SMILE")?.character, "😄", "全大写");
 });
 
-测("查不到给 null（不是空对象）", () => {
-  等(查短代码("zzzz"), null, "不存在的");
-  等(查短代码(""), null, "空串");
+testCase("查不到给 null（不是空对象）", () => {
+  equal(checkShortcode("zzzz"), null, "不存在的");
+  equal(checkShortcode(""), null, "空串");
 });
 
-测("别名两条都查得到，且指向同一个字符", () => {
-  等(查短代码("+1")?.字符, 查短代码("thumbsup")?.字符, "+1 与 thumbsup");
+testCase("别名两条都查得到，且指向同一个字符", () => {
+  equal(checkShortcode("+1")?.character, checkShortcode("thumbsup")?.character, "+1 与 thumbsup");
 });
 
 /* ── 三、找Emoji ────────────────────────────────────────────────────── */
 
-组("三、找Emoji（只做前缀匹配）");
+group("三、找Emoji（只做前缀匹配）");
 
-测("命中的每一条都以那个前缀开头", () => {
-  const 出 = 找Emoji("sm");
-  if (出.length === 0) throw new Error("`sm` 一条都没有？表里该有 smile / smiley 这一族");
-  const 坏的 = 出.filter((项) => !项.短代码.startsWith("sm"));
-  if (坏的.length) throw new Error(`不是前缀匹配：${坏的.map((项) => 项.短代码).join("、")}`);
+testCase("命中的每一条都以那个前缀开头", () => {
+  const output2 = findEmoji("sm");
+  if (output2.length === 0) throw new Error("`sm` 一条都没有？表里该有 smile / smiley 这一族");
+  const bad = output2.filter((item5) => !item5.shortcode.startsWith("sm"));
+  if (bad.length) throw new Error(`不是前缀匹配：${bad.map((item5) => item5.shortcode).join("、")}`);
 });
 
-测("默认上限 8 条", () => {
-  等(找Emoji("a").length, 8, "`a` 是个很宽的前缀");
-  等(找Emoji("").length, 8, "空前缀");
+testCase("默认上限 8 条", () => {
+  equal(findEmoji("a").length, 8, "`a` 是个很宽的前缀");
+  equal(findEmoji("").length, 8, "空前缀");
 });
 
-测("上限可以调小", () => {
-  等(找Emoji("a", 3).length, 3, "3 条");
-  等(找Emoji("a", 1).length, 1, "1 条");
+testCase("上限可以调小", () => {
+  equal(findEmoji("a", 3).length, 3, "3 条");
+  equal(findEmoji("a", 1).length, 1, "1 条");
 });
 
-测("前缀大小写不敏感", () => {
-  等(找Emoji("SM").length, 找Emoji("sm").length, "SM 与 sm");
+testCase("前缀大小写不敏感", () => {
+  equal(findEmoji("SM").length, findEmoji("sm").length, "SM 与 sm");
 });
 
-测("查不到给空数组（不是 null）", () => {
-  等(找Emoji("zzzz").length, 0, "不存在的");
+testCase("查不到给空数组（不是 null）", () => {
+  equal(findEmoji("zzzz").length, 0, "不存在的");
 });
 
-测("带冒号的前缀查不到（冒号不是短代码的一部分）", () => {
+testCase("带冒号的前缀查不到（冒号不是短代码的一部分）", () => {
   // ⚠️ `认前缀` 里正则已经把 `:` 剥掉了，所以这里不必处理冒号。
   // 万一哪天有人直接把它接到别处（比如搜索框），这条会提醒他先剥冒号。
-  等(找Emoji(":sm").length, 0, ":sm");
+  equal(findEmoji(":sm").length, 0, ":sm");
 });
 
-测("子串匹配**故意不做**：`eyes` 找不到 `heart_eyes`", () => {
+testCase("子串匹配**故意不做**：`eyes` 找不到 `heart_eyes`", () => {
   // ⚠️ 这条是**把口径钉住**：子串匹配会让 `:a` 命中几百条，面板第一个候选
   // 变成"表里的顺序"说了算的随机结果。代价如实记：`heart_eyes` 只能从头打。
-  const 出 = 找Emoji("eyes");
-  等(出.some((项) => 项.短代码 === "heart_eyes"), false, "heart_eyes 不该出现");
+  const output2 = findEmoji("eyes");
+  equal(output2.some((item5) => item5.shortcode === "heart_eyes"), false, "heart_eyes 不该出现");
 });
 
 /* ── 四、带冒号 ─────────────────────────────────────────────────────── */
 
-组("四、带冒号");
+group("四、带冒号");
 
-测("两头各一个冒号", () => {
-  等(带冒号("smile"), ":smile:", "smile");
-  等(带冒号("+1"), ":+1:", "带加号的别名");
+testCase("两头各一个冒号", () => {
+  equal(withEmergeNumber("smile"), ":smile:", "smile");
+  equal(withEmergeNumber("+1"), ":+1:", "带加号的别名");
 });
 
 /* ── 五、认前缀 ─────────────────────────────────────────────────────── */
 
-组("五、认前缀");
+group("五、认前缀");
 
-测("光标前是 `:sm` → 认出前缀与起点", () => {
-  const state = 段落状态("hi :sm");
-  const 状 = 认前缀(state);
-  if (!状) throw new Error("该认出来");
-  等(状.前缀, "sm", "前缀");
+testCase("光标前是 `:sm` → 认出前缀与起点", () => {
+  const state = paragraphState("hi :sm");
+  const state3 = recognizePrefix(state);
+  if (!state3) throw new Error("该认出来");
+  equal(state3.prefix, "sm", "前缀");
   // 文档位置 1='h' 2='i' 3=' ' 4=':' 5='s' 6='m'，所以 `:` 在 4。
-  等(状.起, 4, "`:` 的文档坐标");
-  if (状.候选.length === 0) throw new Error("候选不该是空的");
-  等(状.选中, 0, "初始高亮第一条");
+  equal(state3.start5, 4, "`:` 的文档坐标");
+  if (state3.candidate.length === 0) throw new Error("候选不该是空的");
+  equal(state3.selected, 0, "初始高亮第一条");
 });
 
-测("刚打出 `:` 就给候选（前缀为空也算一次认前缀？不——见下条）", () => {
+testCase("刚打出 `:` 就给候选（前缀为空也算一次认前缀？不——见下条）", () => {
   // ⚠️ 这里钉的是**现状**：正则要 `{1,}`，所以 `:` 后面一个字都没有时
   // **认不出**（用户刚敲下冒号那一刻面板不弹）。这是有意的保守：弹一个
   // "三百条全在"的列表比不弹更烦，用户再打一个字母就出来了。
-  等(认前缀(段落状态("hi :")), null, "只有冒号");
+  equal(recognizePrefix(paragraphState("hi :")), null, "只有冒号");
 });
 
-测("`:` 后面是空白 → 断开", () => {
-  等(认前缀(段落状态("hi :sm ile")), null, "空格之后");
+testCase("`:` 后面是空白 → 断开", () => {
+  equal(recognizePrefix(paragraphState("hi :sm ile")), null, "空格之后");
 });
 
-测("没有冒号 → null", () => {
-  等(认前缀(段落状态("hello")), null, "普通文本");
+testCase("没有冒号 → null", () => {
+  equal(recognizePrefix(paragraphState("hello")), null, "普通文本");
 });
 
-测("短代码查不到 → null", () => {
-  等(认前缀(段落状态("hi :zzzz")), null, "zzzz 不在表里");
+testCase("短代码查不到 → null", () => {
+  equal(recognizePrefix(paragraphState("hi :zzzz")), null, "zzzz 不在表里");
 });
 
-测("选区非空 → null（用户在选择，不是在打字）", () => {
-  const 段 = schema.node("paragraph", null, [schema.text("hi :sm")]);
-  const doc = schema.node("doc", null, [段]);
+testCase("选区非空 → null（用户在选择，不是在打字）", () => {
+  const paragraph2 = schema.node("paragraph", null, [schema.text("hi :sm")]);
+  const doc = schema.node("doc", null, [paragraph2]);
   const state = EditorState.create({
     schema,
     doc,
     selection: TextSelection.create(doc, 1, 7),
   });
-  等(认前缀(state), null, "有选区");
+  equal(recognizePrefix(state), null, "有选区");
 });
 
-测("前缀大小写不敏感（`:SM` 也能认）", () => {
-  const 状 = 认前缀(段落状态("hi :SM"));
-  if (!状) throw new Error("该认出来");
-  等(状.前缀, "SM", "前缀原样");
-  if (状.候选.length === 0) throw new Error("候选该按小写去匹配");
+testCase("前缀大小写不敏感（`:SM` 也能认）", () => {
+  const state3 = recognizePrefix(paragraphState("hi :SM"));
+  if (!state3) throw new Error("该认出来");
+  equal(state3.prefix, "SM", "前缀原样");
+  if (state3.candidate.length === 0) throw new Error("候选该按小写去匹配");
 });
 
-测("只看当前文本块：上一段里的 `:sm` 不算", () => {
-  const 上 = schema.node("paragraph", null, [schema.text(":sm")]);
-  const 下 = schema.node("paragraph", null, [schema.text("正文")]);
-  const doc = schema.node("doc", null, [上, 下]);
+testCase("只看当前文本块：上一段里的 `:sm` 不算", () => {
+  const above = schema.node("paragraph", null, [schema.text(":sm")]);
+  const below = schema.node("paragraph", null, [schema.text("正文")]);
+  const doc = schema.node("doc", null, [above, below]);
   const state = EditorState.create({
     schema,
     doc,
     selection: TextSelection.create(doc, doc.content.size - 1),
   });
-  等(认前缀(state), null, "跨块不算");
+  equal(recognizePrefix(state), null, "跨块不算");
 });
 
 /* ── 六、采用候选 ───────────────────────────────────────────────────── */
 
-组("六、采用候选");
+group("六、采用候选");
 
-测("只换掉从 `:` 到光标那一段，前面的字不动", () => {
-  const state = 段落状态("hi :sm");
-  const 状 = 认前缀(state);
-  if (!状) throw new Error("该认出来");
+testCase("只换掉从 `:` 到光标那一段，前面的字不动", () => {
+  const state = paragraphState("hi :sm");
+  const state3 = recognizePrefix(state);
+  if (!state3) throw new Error("该认出来");
   // 候选第一条按表里的顺序，`sm` 那一族的第一条就是 `smile`。
-  const tr = 采用候选(state, 状, 0);
+  const tr = adoptUseCandidate(state, state3, 0);
   if (!tr) throw new Error("该给出一笔事务");
-  const 后 = state.apply(tr);
-  等(后.doc.textContent, "hi 😄", "结果文本");
+  const after = state.apply(tr);
+  equal(after.doc.textContent, "hi 😄", "结果文本");
 });
 
-测("第几条越界 → null（不抛）", () => {
-  const state = 段落状态("hi :sm");
-  const 状 = 认前缀(state);
-  if (!状) throw new Error("该认出来");
-  等(采用候选(state, 状, 99), null, "越界");
-  等(采用候选(state, 状, -1), null, "负数");
+testCase("第几条越界 → null（不抛）", () => {
+  const state = paragraphState("hi :sm");
+  const state3 = recognizePrefix(state);
+  if (!state3) throw new Error("该认出来");
+  equal(adoptUseCandidate(state, state3, 99), null, "越界");
+  equal(adoptUseCandidate(state, state3, -1), null, "负数");
 });
 
 /* ── 七、装配 ───────────────────────────────────────────────────────── */
 
-组("七、装配");
+group("七、装配");
 
-测("关着的时候一条规则、一条插件都不挂", () => {
-  等(emoji输入规则(false).length, 0, "输入规则");
-  等(emoji补全(false).length, 0, "补全插件");
+testCase("关着的时候一条规则、一条插件都不挂", () => {
+  equal(emojiInputRuleRule(false).length, 0, "输入规则");
+  equal(emojiFillAll(false).length, 0, "补全插件");
 });
 
-测("开着的时候各挂 1 条", () => {
-  等(emoji输入规则(true).length, 1, "输入规则");
-  等(emoji补全(true).length, 1, "补全插件");
+testCase("开着的时候各挂 1 条", () => {
+  equal(emojiInputRuleRule(true).length, 1, "输入规则");
+  equal(emojiFillAll(true).length, 1, "补全插件");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) {
-  console.log(`失败的：\n  - ${败的.join("\n  - ")}`);
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) {
+  console.log(`失败的：\n  - ${failed.join("\n  - ")}`);
   process.exitCode = 1;
 }

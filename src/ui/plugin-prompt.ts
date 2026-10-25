@@ -22,13 +22,13 @@
 import type { PluginPrompt } from "@/bridge/ipc";
 import type { PromptRequest } from "@/ui/useDialogs";
 
-type 问句 = (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
+type AskSentence = (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
 
-export interface 问参数入参 {
+export interface AskParameterEnterParameter {
   /** 插件声明的问句。**`null` = 不用问，原样发 `args`。** */
   prompt: PluginPrompt | null;
   /** 弹框的函数（`App.tsx` 的 `askPrompt`）。 */
-  askPrompt: 问句;
+  askPrompt: AskSentence;
   /** 插件自己写的参数。用户填的那个键会盖在它上面。 */
   args?: unknown;
   /**
@@ -47,11 +47,11 @@ export interface 问参数入参 {
  *   包一层对象而不是直接返回 `args`：`args` 本身可以是 `undefined`
  *   （"这条命令没有参数"是合法的），不包的话"取消"和"没有参数"就分不开。
  */
-export async function 问参数(o: 问参数入参): Promise<{ args: unknown } | null> {
+export async function askParameter(o: AskParameterEnterParameter): Promise<{ args: unknown } | null> {
   const { prompt, askPrompt, args } = o;
   if (!prompt) return { args };
 
-  const 答 = await askPrompt({
+  const answer = await askPrompt({
     title: o.title || prompt.label,
     label: prompt.label,
     placeholder: prompt.placeholder || undefined,
@@ -65,15 +65,15 @@ export async function 问参数(o: 问参数入参): Promise<{ args: unknown } |
 
   // ⚠️ 取消就**到此为止**。`PromptDialog` 把"填了空白再确定"也当取消
   // （见那边 `submit` 的注释），所以这一条同时挡住了"空提交信息"。
-  if (!答) return null;
+  if (!answer) return null;
 
   // 插件自己写的 `args` 与用户填的**合并**，同名时用户填的赢——
   // 他就是来改这个键的。不是对象（数组、字符串、`undefined`）就当没有，
   // 不硬往里塞：那样得到的 `args` 形状是插件没约好的。
-  const 底 = typeof args === "object" && args !== null && !Array.isArray(args) ? args : {};
-  const 出: Record<string, unknown> = { ...(底 as Record<string, unknown>), [prompt.arg]: 答.value };
+  const bottom = typeof args === "object" && args !== null && !Array.isArray(args) ? args : {};
+  const output2: Record<string, unknown> = { ...(bottom as Record<string, unknown>), [prompt.arg]: answer.value };
   // 第二个值只在**真问了**的时候才放：`secondArg` 空着而这里硬塞一个空串，
   // 会让插件收到一个它没要的键（Git 那条会把邮箱写成空串）。
-  if (prompt.secondArg) 出[prompt.secondArg] = 答.second;
-  return { args: 出 };
+  if (prompt.secondArg) output2[prompt.secondArg] = answer.second;
+  return { args: output2 };
 }

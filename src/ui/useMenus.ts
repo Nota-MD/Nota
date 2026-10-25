@@ -43,7 +43,7 @@ import {
   type ViewMode,
 } from "@/bridge/ipc";
 import type { CommandState } from "@/editor/command-state";
-import { use语言 } from "@/i18n";
+import { useLanguage } from "@/i18n";
 import { accelSig, buildAccelIndex, eventAccel, isOutsideEditor } from "@/ui/accel";
 import { walkMenuItems, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
 import { buildNativeTree } from "@/ui/nativeMenu";
@@ -59,7 +59,7 @@ import { buildNativeTree } from "@/ui/nativeMenu";
  * 对不上时这里是 `undefined`，`on` 那个回调会安静地 return——**不报错**，
  * 症状就是"按了没反应"，正好和这个 bug 本身撞脸。
  */
-const 宿主格式键: Readonly<Record<string, string>> = {
+const hostFormatKey: Readonly<Record<string, string>> = {
   bold: "fmt.bold",
   italic: "fmt.italic",
 };
@@ -70,7 +70,7 @@ const 宿主格式键: Readonly<Record<string, string>> = {
  *
  * ⚠️ 四条都要在：少一条的症状是"在代码块里按它没反应，或者动的是外面那篇"。
  */
-const 剪贴板键 = new Set(["edit.copy", "edit.cut", "edit.paste", "edit.pastePlain"]);
+const cutPasteBoardKey = new Set(["edit.copy", "edit.cut", "edit.paste", "edit.pastePlain"]);
 
 export interface MenuWiring {
   /**
@@ -116,6 +116,8 @@ export interface MenuWiring {
      */
     forceFocus: boolean;
     typewriter: boolean;
+    /** 正文只读模式（会话内状态）。 */
+    readOnly: boolean;
     /**
      * 窗口现在是不是全屏。⚠️ 这是**从窗口读回来的镜像**，不是"我们想不想全屏"
      * ——所以它的勾跟着窗口的快捷键、WM 的平铺规则一起变（见 `App.tsx`）。
@@ -165,7 +167,7 @@ export interface MenuState {
  * 源码模式没有文档树，读不出"在不在表格里"，拿一个猜的值去灰菜单比不灰更糟。
  * 那一侧真有做不到的命令，由 `run` 的返回值如实提示。
  */
-const 光标条件: Record<string, (s: CommandState) => boolean> = {
+const cursorCondition: Record<string, (s: CommandState) => boolean> = {
   "para.tableRowAbove": (s) => s.inTable,
   "para.tableRowBelow": (s) => s.inTable,
   "para.tableColLeft": (s) => s.inTable,
@@ -213,6 +215,7 @@ export function useMenus(w: MenuWiring): MenuState {
     focusMode,
     forceFocus,
     typewriter,
+    readOnly,
     fullscreen,
     alwaysOnTop,
   } = w.view;
@@ -233,8 +236,8 @@ export function useMenus(w: MenuWiring): MenuState {
       if (!menuHandlers[item.id]) return true;
       if (item.needsDoc && activeId === null) return true;
       // 第二条判据（见上面 `光标条件`）。只在读得出光标状态时生效。
-      const 看光标 = 光标条件[item.id];
-      if (看光标 && commandState) return !看光标(commandState);
+      const seeCursor = cursorCondition[item.id];
+      if (seeCursor && commandState) return !seeCursor(commandState);
       return false;
     };
 
@@ -280,6 +283,7 @@ export function useMenus(w: MenuWiring): MenuState {
       "view.focusMode": focusMode,
       "view.forceFocus": forceFocus,
       "view.typewriter": typewriter,
+      "view.readOnly": readOnly,
       "view.fullscreen": fullscreen,
       "view.alwaysOnTop": alwaysOnTop,
     }),
@@ -294,6 +298,7 @@ export function useMenus(w: MenuWiring): MenuState {
       focusMode,
       forceFocus,
       typewriter,
+      readOnly,
       fullscreen,
       alwaysOnTop,
     ],
@@ -369,9 +374,9 @@ export function useMenus(w: MenuWiring): MenuState {
       // ⚠️ 类名 `nota-code-cm` 只有代码块那颗挂（`code-block-cm.ts` 里那个
       // `editorAttributes`）：源码模式也是 `.cm-editor`，按那个认会把源码模式
       // 一起放进来，而源码模式的这几颗键一直好用（CM 自己那份默认行为）。
-      if (剪贴板键.has(id)) {
-        const 目标 = e.target as HTMLElement | null;
-        if (typeof 目标?.closest === "function" && 目标.closest(".nota-code-cm")) return;
+      if (cutPasteBoardKey.has(id)) {
+        const target = e.target as HTMLElement | null;
+        if (typeof target?.closest === "function" && target.closest(".nota-code-cm")) return;
       }
 
       // 焦点在**编辑器之外的输入框**里（设置对话框那个文本框、查找条）时不接。
@@ -422,11 +427,11 @@ export function useMenus(w: MenuWiring): MenuState {
    * 正是这个文件头点名要消灭的那种不一致。
    */
   useEffect(() => {
-    let 已卸载 = false;
-    let 退订: UnlistenFn | null = null;
+    let alreadyUninstall = false;
+    let unsubscribe: UnlistenFn | null = null;
 
-    on<string>(events.formatKey, (名字) => {
-      const id = 宿主格式键[名字];
+    on<string>(events.formatKey, (name2) => {
+      const id = hostFormatKey[name2];
       if (!id) return;
       // ⚠️ 只能看 `document.activeElement`，看不了 `e.target`——这条路上**没有
       // DOM 事件**，宿主那一层只知道"按了哪颗键"，不知道焦点在谁身上。
@@ -438,13 +443,13 @@ export function useMenus(w: MenuWiring): MenuState {
     }).then((f) => {
       // 订阅是异步的，而组件可能在这中间就卸载了——那时退订函数没人接，
       // 监听者永远留着（同 `ui/useFocusAlarmSound.ts` 里的写法）。
-      if (已卸载) f();
-      else 退订 = f;
+      if (alreadyUninstall) f();
+      else unsubscribe = f;
     });
 
     return () => {
-      已卸载 = true;
-      退订?.();
+      alreadyUninstall = true;
+      unsubscribe?.();
     };
     // ⚠️ 依赖同上面那条 keydown：`menuHandlers` / `disabledCommands` 换了身份，
     // 这个闭包读到的就还是旧的那一份。
@@ -470,7 +475,7 @@ export function useMenus(w: MenuWiring): MenuState {
    * 热切语言做了，漏掉它的症状是**原生菜单栏还停在旧语言**（窗口里已经换了）
    * ——那种地方没人会想到去查依赖数组。
    */
-  const 语 = use语言();
+  const language2 = useLanguage();
 
   // 把菜单推给原生那一侧。菜单内容有变化（灰的变了、勾变了、主题清单变了）就重推。
   useEffect(() => {
@@ -506,7 +511,7 @@ export function useMenus(w: MenuWiring): MenuState {
     // 原生菜单得跟着重推一次，否则 macOS 的菜单栏里永远没有「插件」。
     // ⚠️ `语` 在内：树里的 `label` 是在 `nativeMenu.ts` 里翻好的（那边用的是
     // 模块级 `t`），不重推就还是旧语言——理由见上面 `语` 那段。
-  }, [menus, disabledCommands, menuChecks, themes, documentTheme, menuRenderer, menuBarOpen, 语]);
+  }, [menus, disabledCommands, menuChecks, themes, documentTheme, menuRenderer, menuBarOpen, language2]);
 
   // 原生菜单被点了 → 交回 `App.tsx`（那边走 `resolvePick` 判去向），
   // 于是"点菜单"这件事只有一条实现。

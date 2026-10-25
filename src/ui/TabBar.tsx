@@ -36,12 +36,12 @@ import type { DocId, Document } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 import { MenuPopup } from "@/ui/MenuPopup";
-import { 弹层自己在滚 } from "@/ui/popup-scroll";
+import { popupSelfSelfAtRoll } from "@/ui/popup-scroll";
 import type { MenuEntry } from "@/ui/commands";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
 /** 右键菜单里那一条的 id。**不是命令**——它不进 `commands.ts` 那张表（见下）。 */
-const 新窗口项 = "tab.openInNewWindow";
+const newValueWindowItem = "tab.openInNewWindow";
 
 // ── 标签栏 ────────────────────────────────────────────────────────────────
 
@@ -74,24 +74,24 @@ export function TabBar(props: {
    *
    * ⚠️ 路径**当场取**，不存 `DocId`：见文件头那段。
    */
-  const [菜单, set菜单] = useState<{ x: number; y: number; path: string | null } | null>(null);
-  const 锚 = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; path: string | null } | null>(null);
+  const anchor2 = useRef<HTMLDivElement>(null);
   // ⚠️ 方向键（←→/Home/End）走 `useTablistKeys`（第 50 项，2026-10-04）：
   // 在页签之间**挪焦点不切换**——每切一次文档要重挂编辑器，方向键连切
   // 三四个等于白挂三四个；Enter 由页签里那颗 `<button>` 自己点。
-  const 栏 = useRef<HTMLDivElement>(null);
-  useTablistKeys(栏);
+  const bar = useRef<HTMLDivElement>(null);
+  useTablistKeys(bar);
 
-  const 关菜单 = useCallback(() => set菜单(null), []);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
-  const 开菜单 = useCallback((d: Document, x: number, y: number) => {
+  const openMenu = useCallback((d: Document, x: number, y: number) => {
     // ⚠️ **贴边时往回收**：菜单宽 224px（`.menu-popup` 的 `min-width`），
     // 右击最右边那个标签的右半部分时不收就会顶出窗口右边——在窄窗口里
     // 那一整条就点不到了。高度这边不量（只有一条，70vh 的 `max-height`
     // 轮不到它），量了反而要等一帧。
-    const 宽 = 232;
-    const 左 = Math.max(0, Math.min(x, window.innerWidth - 宽));
-    set菜单({ x: 左, y, path: d.path ?? null });
+    const width = 232;
+    const left = Math.max(0, Math.min(x, window.innerWidth - width));
+    setMenu({ x: left, y, path: d.path ?? null });
   }, []);
 
   // 点别处 / 按 Esc 关掉。⚠️ 与 `MenuBar.tsx` 那两条**同一条口径**，
@@ -100,46 +100,46 @@ export function TabBar(props: {
   // 因为焦点在弹层里时那一条会被 `useMenuRovingFocus` 吃掉（它只调 `onDismiss`，
   // 也就是下面那个，所以两条不冲突：谁先到都关）。
   useEffect(() => {
-    if (!菜单) return;
+    if (!menu) return;
     const onDown = (e: MouseEvent) => {
       const t = e.target as Element | null;
-      if (锚.current?.contains(t as Node)) return;
+      if (anchor2.current?.contains(t as Node)) return;
       // ⚠️ 弹层**不在** `锚` 里面吗？在的（它是 `锚` 的子节点，右键菜单没有子菜单，
       // 不走 portal）。但 `.menu-sub` 那条特判仍然留着——`MenuPopup` 哪天给这一层
       // 加上子菜单，走 portal 的那一层就会漏在外面，而症状是"子菜单里的项点不动"。
       if (t?.closest?.(".menu-sub")) return;
-      关菜单();
+      closeMenu();
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [菜单, 关菜单]);
+  }, [menu, closeMenu]);
 
   // ⚠️ 菜单开着时**滚动或改窗口大小**就关掉：它是 `fixed` 的，锚在鼠标那一点上，
   // 底下那条栏一滚就与它脱节（菜单指着 A 标签，A 已经滚走了）。这不是追求
   // 桌面软件的每一条细节，是**别让它指错人**。
   useEffect(() => {
-    if (!菜单) return;
+    if (!menu) return;
     // ⚠️ 滚的**不是**弹层自己才关（判据在 `ui/popup-scroll.ts`）：这一份菜单今天
     // 只有一条、滚不动，但同一个坑在 2026-10-11 另外两处（状态栏那个拼写菜单、
     // 右键菜单的子菜单）都真踩到了——用户报的是「一下滑就直接消失」。
-    const 关滚 = (e: Event) => {
-      if (弹层自己在滚(e.target)) return;
-      关菜单();
+    const closeRoll = (e: Event) => {
+      if (popupSelfSelfAtRoll(e.target)) return;
+      closeMenu();
     };
-    window.addEventListener("resize", 关菜单);
-    window.addEventListener("scroll", 关滚, true);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeRoll, true);
     return () => {
-      window.removeEventListener("resize", 关菜单);
-      window.removeEventListener("scroll", 关滚, true);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeRoll, true);
     };
-  }, [菜单, 关菜单]);
+  }, [menu, closeMenu]);
 
-  const 条目: MenuEntry[] = [{ id: 新窗口项, label: t("Open in New Window") }];
+  const item: MenuEntry[] = [{ id: newValueWindowItem, label: t("Open in New Window") }];
   // ⚠️ 灰的判据就是"没有路径"，理由见文件头。
-  const 灰的 = new Set(菜单?.path ? [] : [新窗口项]);
+  const disabled = new Set(menu?.path ? [] : [newValueWindowItem]);
 
   return (
-    <div ref={栏} className="tabbar" role="tablist" inert={props.inert || undefined}>
+    <div ref={bar} className="tabbar" role="tablist" inert={props.inert || undefined}>
       {props.docs.map((d) => (
         <div
           key={d.id}
@@ -150,7 +150,7 @@ export function TabBar(props: {
           // 默认菜单（"重新载入 / 检查元素…"），我们的菜单要么被盖住、要么并排出现。
           onContextMenu={(e) => {
             e.preventDefault();
-            开菜单(d, e.clientX, e.clientY);
+            openMenu(d, e.clientX, e.clientY);
           }}
         >
           <button type="button" className="tab-label" onClick={() => props.onSelect(d.id)}>
@@ -169,19 +169,19 @@ export function TabBar(props: {
         </div>
       ))}
 
-      {菜单 && (
-        <div className="tab-menu-anchor" ref={锚} style={{ left: 菜单.x, top: 菜单.y }}>
+      {menu && (
+        <div className="tab-menu-anchor" ref={anchor2} style={{ left: menu.x, top: menu.y }}>
           <MenuPopup
             label={t("Tab")}
-            entries={条目}
-            disabled={灰的}
+            entries={item}
+            disabled={disabled}
             checks={{}}
             onPick={() => {
-              const 路 = 菜单.path;
-              关菜单();
-              if (路) props.onOpenInNewWindow(路);
+              const path2 = menu.path;
+              closeMenu();
+              if (path2) props.onOpenInNewWindow(path2);
             }}
-            onDismiss={关菜单}
+            onDismiss={closeMenu}
             // ⚠️ `←` `→` 在这里**什么都不做**：菜单栏那一套是"往左右切一栏"，
             // 而右键菜单是独立的一层、没有"邻栏"可切。传空函数而不是省略——
             // 省略的话那一层会拿到 `undefined` 并在按键时炸。

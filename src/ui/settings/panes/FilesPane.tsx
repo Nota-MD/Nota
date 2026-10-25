@@ -76,14 +76,14 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
     { value: "created", label: t("Recently created first") },
   ];
 
-  const 写 = paneWriter(settings, onChange, "files");
+  const write = paneWriter(settings, onChange, "files");
   const f = settings.files;
 
   return (
     <>
       <SettingsGroup title={t("Startup")}>
         <SettingRow>
-          <Select value={f.startup} options={STARTUP} onChange={(startup) => 写({ startup })} />
+          <Select value={f.startup} options={STARTUP} onChange={(startup) => write({ startup })} />
         </SettingRow>
       </SettingsGroup>
 
@@ -91,7 +91,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         <SettingRow label={t("Allow collapsing and expanding")}>
           <Toggle
             checked={f.outline_collapsible}
-            onChange={(outline_collapsible) => 写({ outline_collapsible })}
+            onChange={(outline_collapsible) => write({ outline_collapsible })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -108,7 +108,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         <SettingRow label={t("Auto Save when switching files")}>
           <Toggle
             checked={f.autosave_on_switch}
-            onChange={(autosave_on_switch) => 写({ autosave_on_switch })}
+            onChange={(autosave_on_switch) => write({ autosave_on_switch })}
           />
         </SettingRow>
 
@@ -140,11 +140,11 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
 
       <SettingsGroup title={t("File tree / library")}>
         <SettingRow label={t("Show hidden files")}>
-          <Toggle checked={f.show_hidden} onChange={(show_hidden) => 写({ show_hidden })} />
+          <Toggle checked={f.show_hidden} onChange={(show_hidden) => write({ show_hidden })} />
         </SettingRow>
 
         <SettingRow label={t("Which files to show")}>
-          <Select value={f.tree_filter} options={FILTER} onChange={(tree_filter) => 写({ tree_filter })} />
+          <Select value={f.tree_filter} options={FILTER} onChange={(tree_filter) => write({ tree_filter })} />
         </SettingRow>
 
         {/* ⚠️ 2026-09-28 加的这一格是**真的接线**，不是摆样子：口径随每次取树
@@ -152,7 +152,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
             同一批还把上面那两个开关接上了线——它们从 2026-09-24 起就在这一组里，
             而宿主那两个判断是写死的，拨了等于没拨。 */}
         <SettingRow label={t("Sort order")}>
-          <Select value={f.tree_sort} options={SORT} onChange={(tree_sort) => 写({ tree_sort })} />
+          <Select value={f.tree_sort} options={SORT} onChange={(tree_sort) => write({ tree_sort })} />
         </SettingRow>
       </SettingsGroup>
 
@@ -161,7 +161,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           <Select
             value={f.drop_folder}
             options={DROP}
-            onChange={(drop_folder) => 写({ drop_folder })}
+            onChange={(drop_folder) => write({ drop_folder })}
           />
         </SettingRow>
 
@@ -169,7 +169,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           <Select
             value={f.drop_markdown}
             options={DROP}
-            onChange={(drop_markdown) => 写({ drop_markdown })}
+            onChange={(drop_markdown) => write({ drop_markdown })}
           />
         </SettingRow>
 
@@ -177,7 +177,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
           <Select
             value={f.drop_importable}
             options={IMPORT}
-            onChange={(drop_importable) => 写({ drop_importable })}
+            onChange={(drop_importable) => write({ drop_importable })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -188,7 +188,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
             value={f.default_extension}
             width="sm"
             placeholder="md"
-            onChange={(default_extension) => 写({ default_extension })}
+            onChange={(default_extension) => write({ default_extension })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -197,7 +197,7 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
         <SettingRow>
           <Toggle
             checked={f.remember_recent}
-            onChange={(remember_recent) => 写({ remember_recent })}
+            onChange={(remember_recent) => write({ remember_recent })}
           />
         </SettingRow>
       </SettingsGroup>

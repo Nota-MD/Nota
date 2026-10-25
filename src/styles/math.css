@@ -7,17 +7,20 @@
  * 里，这里是正文里一种块的长相，靠后引才能盖住通用的 `pre` / `.ProseMirror > *`
  * 那几条）。
  *
- * # ⚠️⚠️ 这一版的主题是"**没有框**"（2026-09-26 改）
+ * # 显示规则
  *
- * 用户原话：「应该是**行内直接渲染，而不是搞一个框框**。是**输入时仍然正常
- * 文本**，`$` 用**灰色渲染（类似 `#`）**，下方有一个**悬浮框用来实时预览**。」
+ * 行内公式在非编辑态直接排版，编辑态显示源码与浮层预览；块公式则采用
+ * Typora 式上下分区：上方是 `$$` 源码区，下方是独立预览框，预览参与文档流。
+ * 用户 2026-10-25 的原话：「这样的处理方式并不对……搞一个下方预览框。」
  *
- * 上一版这里有几条线，**全部删掉了**，一条都不许加回来：
+ * 2026-09-26 曾把块公式的全部边框删掉，后来又出现浮层压住正文的问题。
+ * 当前的边界是：**非编辑态正文没有框；块公式编辑态只给源码和预览两块**
+ * （行内公式仍不加外框）：
  *
  * | 上一版有的 | 现在 | 为什么 |
  * |---|---|---|
- * | 块公式的 `border` + `background` + `padding`（一张卡片） | **没有** | 那就是用户说的"框框"：公式是正文，不是外来内容的容器 |
- * | 源码框（`<input>` / `<textarea>`）的 `border` + `background` + 等宽字体 | **没有**（`border: none` / `transparent` / `font: inherit`） | 编辑时用户看到的应该**就是正文**，只是 `$` 淡了一点 |
+ * | 块公式的持久卡片 | **没有** | 非编辑态它仍是正文；只有编辑时出现源码区与预览框 |
+ * | 源码框（`<input>` / `<textarea>`）的外框和底色 | **没有** | 源码属于编辑控件，但外观保持轻量；字体与代码框共用 `--font-mono` |
  * | 面板 `display: flex`（行内那颗会把段落劈成三行） | 行内 `inline`、块 `block` | 上一版点一下行内公式，那一段会当场裂成"前文 / 框 / 后文"三行 |
  *
  * ⚠️ 加回其中任何一条之前，先读上面那段用户原话。**这一份文件里"少了几条
@@ -72,6 +75,12 @@
   border-radius: var(--radius-sm);
 }
 
+/* 块公式编辑态自己有源码面与预览面，不让外层选中色再套一圈底色。 */
+.editor-mount .ProseMirror .nota-math-block.nota-math-editing.ProseMirror-selectednode {
+  background: transparent;
+  border-radius: 0;
+}
+
 /* ── 面板（分隔符 + 源码框 + 尺子）────────────────────────────────────── */
 
 /* 平时**不显示**：开合走根上的 `nota-math-editing` 类（`math-view.ts` 的
@@ -101,6 +110,46 @@
    样子（`$$` / 公式 / `$$`），也正好把整条公式的边界说出来。 */
 .editor-mount .ProseMirror .nota-math-editing.nota-math-block .nota-math-panel {
   display: block;
+  position: relative;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--bg-subtle);
+}
+
+/* 块公式源码区右上角的类型标签。它是界面标签，不参与选择，也不抢焦点。 */
+.editor-mount .ProseMirror .nota-math-kind {
+  position: absolute;
+  top: 7px;
+  right: 12px;
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+}
+
+.editor-mount .ProseMirror .nota-math-kind:hover,
+.editor-mount .ProseMirror .nota-math-kind:focus-visible {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.editor-mount .ProseMirror .nota-math-kind::after {
+  display: inline-block;
+  width: 4px;
+  height: 8px;
+  margin: 0 0 2px 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: "";
+  transform: rotate(45deg);
 }
 
 /* 分隔符：`.nota-srcmark` 那张配方（见文件头）。 */
@@ -139,7 +188,7 @@
   border: none;
   background: transparent;
   padding: 0;
-  font-family: var(--font-math);
+  font-family: var(--font-mono);
   font-size: inherit;
   line-height: inherit;
   color: var(--fg);
@@ -158,6 +207,9 @@
      但那一格当时露在正文里，抓手就在源码行右端画着一个小记号。抓手是"这是个
      控件"的信号里最刺眼的一条，明确关掉。 */
   resize: none;
+  /* `.ProseMirror` 为了覆盖层光标把原生光标设成透明；表单控件会继承这个值。
+     源码框必须显式恢复强调色光标，否则“已聚焦”和“没聚焦”看起来一模一样。 */
+  caret-color: var(--accent);
 }
 
 .editor-mount .ProseMirror .nota-math-source:focus-visible {
@@ -201,7 +253,7 @@
   position: absolute;
   visibility: hidden;
   white-space: pre;
-  font-family: var(--font-math);
+  font-family: var(--font-mono);
   font-size: inherit;
   pointer-events: none;
 }
@@ -256,54 +308,64 @@
   overflow-wrap: anywhere;
 }
 
-/* ── 悬浮预览（编辑时才在）─────────────────────────────────────────────── */
+/* ── 公式预览（编辑时才在）─────────────────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-math-preview {
   display: none;
 }
 
-/* ⚠️ 定位抄 `editor.css` 的 `.nota-code-lang-wrap`（那颗语言选择器）：同样是
-   "挂在块下面、压在正文上、不占文档流"的挂件，所以 `top: 100%` + `z-index: 3`
-   这两个值跟那边保持一致——同一个界面里两处"贴在块下面的浮层"不该有两个层高。 */
 .editor-mount .ProseMirror .nota-math-editing .nota-math-preview {
   display: block;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 3;
-  /* ⚠️ **不吃鼠标事件**：它压在下文上面，能点的话鼠标底下一块就成了点不透的
-     透明玻璃（用户点不到底下的字，却看不出为什么）。它也没有交互——要改就回
-     源码框里改。 */
+  /* 预览没有交互；块公式的预览也参与文档流，后面的正文会正常下移。 */
   pointer-events: none;
-  /* ⚠️⚠️ **宽度必须自己给**，这就是 `width: max-content` 那一条的全部理由。
-     绝对定位元素不写宽度时，浏览器按"可用宽度"收缩包围（shrink-to-fit）——
-     而可用宽度是**定位祖先的宽度减 `left`**。行内公式的定位祖先是它自己那一截
-     （`$E=mc^2$` ≈ 60px 宽），于是预览被掐到 60px 宽、`E = mc²` 当场折成两行
-     （2026-09-26 无头目检抓到的样子）。`max-width` 拦不住这个：那是"上限"，
-     这里缺的是"下限以外的东西"。
-     ⚠️ 块那格的定位祖先是整块（整列宽），所以上一版没暴露这个问题。 */
-  width: max-content;
-  padding: 6px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg-raised);
-  /* 投影用写死的黑：它在浅色和深色下都成立，而拿主题色去做投影会在深色主题下
-     变成一圈看不见的灰（同 `.nota-lang-popup` 那条）。 */
-  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
   /* 预览是**界面上的浮层**，用界面字体排"这里还没写"那类说明（同
      `.nota-diagram-note`）；公式本身照旧是 KaTeX 自己那棵树，字体不归这里管。 */
   font-family: var(--font-ui, inherit);
   font-size: 0.9em;
   line-height: 1.6;
   color: var(--fg);
-  /* 预览里的公式**不折行**：折了就看不出上下标的相对位置了。
-     ⚠️ 块那格**故意不给 `max-width`**：给它封顶的话，宽公式的尾巴会从边框里
-     伸出去（一个框里装不下的公式比一个大一点的框难看得多）；加 `overflow` 又
-     没用——`pointer-events: none` 的浮层滚不动。所以块这格是"框跟着公式长"，
-     极端宽的公式会顶到窗口外面（少见，且它 `pointer-events: none`、收起来就没了）。
-     行内那格另说，它**必须**封顶（见下面那条）。 */
+  /* 公式不折行；折了就看不出上下标的相对位置。 */
   white-space: nowrap;
   animation: nota-math-preview-in 0.12s ease-out;
+}
+
+/* 行内公式仍用短暂的浮层，否则会在段落中间撑出一整块，拆散前后文。 */
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 3;
+  width: max-content;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
+}
+
+/* 块公式采用 Typora 式上下分区：源码区在上，预览框在下，预览占文档流。 */
+.editor-mount .ProseMirror .nota-math-editing.nota-math-block .nota-math-preview {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 76px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 16px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  background: var(--doc-bg, var(--bg-raised));
+  box-shadow: none;
+  text-align: center;
+  overflow-x: auto;
+  pointer-events: auto;
+  cursor: text;
+}
+
+.editor-mount .ProseMirror .nota-math-editing.nota-math-block .nota-math-preview .katex-display {
+  margin: 0;
 }
 
 @keyframes nota-math-preview-in {

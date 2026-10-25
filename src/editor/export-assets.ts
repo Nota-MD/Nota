@@ -7,7 +7,7 @@
  * `data:` / `blob:` 与取不到的资源保持原样。
  */
 
-const 可内联后缀: Record<string, string> = {
+const canInsideLinkExtension: Record<string, string> = {
   woff2: "font/woff2",
   woff: "font/woff",
   ttf: "font/ttf",
@@ -23,7 +23,7 @@ const 可内联后缀: Record<string, string> = {
 export function cssAssetMime(path: string): string | null {
   const clean = path.split(/[?#]/, 1)[0] ?? path;
   const ext = clean.split(".").pop()?.toLowerCase() ?? "";
-  return 可内联后缀[ext] ?? null;
+  return canInsideLinkExtension[ext] ?? null;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -43,7 +43,7 @@ export async function inlineCssAssets(css: string): Promise<string> {
     if (raw && !/^(?:data|blob|https?):/i.test(raw) && !raw.startsWith("#")) urls.add(raw);
   }
 
-  const 替换 = new Map<string, string>();
+  const replaceReplace = new Map<string, string>();
   await Promise.all(
     [...urls].map(async (raw) => {
       const mime = cssAssetMime(raw);
@@ -53,7 +53,7 @@ export async function inlineCssAssets(css: string): Promise<string> {
         const response = await fetch(url);
         if (!response.ok) return;
         const bytes = new Uint8Array(await response.arrayBuffer());
-        替换.set(raw, `data:${mime};base64,${bytesToBase64(bytes)}`);
+        replaceReplace.set(raw, `data:${mime};base64,${bytesToBase64(bytes)}`);
       } catch {
         // 取不到就保留原地址；导出不应因为一个可选资源而整体失败。
       }
@@ -61,7 +61,7 @@ export async function inlineCssAssets(css: string): Promise<string> {
   );
 
   return css.replace(pattern, (whole, _quote: string, raw: string) => {
-    const data = 替换.get(raw.trim());
+    const data = replaceReplace.get(raw.trim());
     return data ? `url("${data}")` : whole;
   });
 }

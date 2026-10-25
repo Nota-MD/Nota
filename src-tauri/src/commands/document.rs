@@ -61,8 +61,14 @@ pub fn nota_doc_open(
     // ⚠️ 这里**故意不 `?`**：记不住最近是件小事，不该让"打开文档"这一枪失败。
     // 侧车写不进去（磁盘满、权限）时只记一行日志，文档照开。
     if let Err(e) = crate::session::记最近(&路径.to_string_lossy()) {
-        crate::日志!("[nota] 最近文件没记上：{e}");
+        crate::日志!("[nota] recent file not recorded: {e}");
     }
+    crate::日志!(
+        "[nota] document opened: id={} chars={} path={}",
+        id.0,
+        文本.chars().count(),
+        路径.display()
+    );
     Ok(id)
 }
 
@@ -181,9 +187,16 @@ pub fn nota_doc_save(
     // 「另存为」产出的是一条**新路径**，它不在最近列表里，正该记上。
     if 是另存为 {
         if let Err(e) = crate::session::记最近(&written.to_string_lossy()) {
-            crate::日志!("[nota] 最近文件没记上：{e}");
+            crate::日志!("[nota] recent file not recorded: {e}");
         }
     }
+    crate::日志!(
+        "[nota] document saved: id={} chars={} save_as={} path={}",
+        id.0,
+        文本.chars().count(),
+        是另存为,
+        written.display()
+    );
     crate::paths::path_to_string(&written)
 }
 
@@ -283,10 +296,10 @@ fn 挪过去(state: &AppState, id: DocId, 老: &std::path::Path, 目标: PathBuf
         新.to_string_lossy().into_owned(),
     );
     if let Err(e) = crate::session::改最近(&老串, &新串) {
-        crate::日志!("[nota] 改名后「最近」没跟上：{e}");
+        crate::日志!("[nota] recent list not updated after rename: {e}");
     }
     if let Err(e) = crate::table_width::改路径(老, &新) {
-        crate::日志!("[nota] 改名后表格列宽没跟上：{e}");
+        crate::日志!("[nota] table widths not updated after rename: {e}");
     }
     crate::paths::path_to_string(&新)
 }
@@ -296,6 +309,31 @@ fn 挪过去(state: &AppState, id: DocId, 老: &std::path::Path, 目标: PathBuf
 pub fn nota_doc_close(state: State<'_, AppState>, id: DocId) -> Result<()> {
     let mut docs = state.documents.lock().unwrap();
     docs.close(id);
+    Ok(())
+}
+
+/// 删除一份**已经存过盘**的文档：先删文件，成功后才关标签并清最近记录。
+///
+/// 未保存的新文档没有路径，调用方应改用 `nota_doc_close`。删除前的确认与
+/// 未保存改动处理在前端；这里保证失败时文档仍开着、文件也没有被部分修改。
+#[tauri::command]
+pub fn nota_doc_delete(state: State<'_, AppState>, id: DocId) -> Result<()> {
+    let path = {
+        let docs = state.documents.lock().unwrap();
+        docs.get(id)
+            .and_then(|doc| doc.path.clone())
+            .ok_or_else(|| NotaError::other("这份文档还没有保存到磁盘"))?
+    };
+    std::fs::remove_file(&path).map_err(|source| NotaError::Delete {
+        path: path.clone(),
+        source,
+    })?;
+    if let Ok(path_text) = crate::paths::path_to_string(&path) {
+        if let Err(e) = crate::session::忘最近(&path_text) {
+            crate::日志!("[nota] recent list not updated after delete: {e}");
+        }
+    }
+    state.documents.lock().unwrap().close(id);
     Ok(())
 }
 

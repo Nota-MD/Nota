@@ -46,36 +46,42 @@ import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 
-import { 块HTML转换, 块HTML节点名, 块级容器, 是注释 } from "../src/editor/html-block";
+import {
+  blockHTMLConvertReplace,
+  blockHtmlNodeName,
+  blockHTMLSpec,
+  blockLevelContainer,
+  isNoteRelease,
+} from "../src/editor/html-block";
 
 /* ── 最小工装 ─────────────────────────────────────────────────────────── */
 
-let 通过 = 0;
-let 失败 = 0;
-const 失败清单: string[] = [];
-let 当前组 = "";
+let passed = 0;
+let failure = 0;
+const failureList: string[] = [];
+let currentGroup = "";
 
-function 组(名: string): void {
-  当前组 = 名;
-  console.log(`\n── ${名} ${"─".repeat(Math.max(0, 56 - 名.length))}`);
+function group(name3: string): void {
+  currentGroup = name3;
+  console.log(`\n── ${name3} ${"─".repeat(Math.max(0, 56 - name3.length))}`);
 }
 
-function 测(名: string, 体: () => void): void {
+function testCase(name3: string, body3: () => void): void {
   try {
-    体();
-    通过++;
-    console.log(`  ✔ ${名}`);
+    body3();
+    passed++;
+    console.log(`  ✔ ${name3}`);
   } catch (e) {
-    失败++;
-    失败清单.push(`${当前组} / ${名}`);
-    console.log(`  ✘ ${名}\n      ${(e as Error).message.split("\n").join("\n      ")}`);
+    failure++;
+    failureList.push(`${currentGroup} / ${name3}`);
+    console.log(`  ✘ ${name3}\n      ${(e as Error).message.split("\n").join("\n      ")}`);
   }
 }
 
-function 等<T>(实: T, 期: T, 说明 = ""): void {
-  const a = JSON.stringify(实);
-  const b = JSON.stringify(期);
-  if (a !== b) throw new Error(`${说明}\n      实际：${a}\n      期望：${b}`);
+function equal<T>(actual2: T, period: T, description = ""): void {
+  const a = JSON.stringify(actual2);
+  const b = JSON.stringify(period);
+  if (a !== b) throw new Error(`${description}\n      实际：${a}\n      期望：${b}`);
 }
 
 /**
@@ -139,12 +145,12 @@ const schema = new Schema({
       atom: true,
       attrs: { value: { default: "" } },
       parseMarkdown: {
-        match: ({ type }: MarkdownNode) => type === 块HTML节点名,
+        match: ({ type }: MarkdownNode) => type === blockHtmlNodeName,
         runner: (state: ParserState, node: MarkdownNode, type: unknown) =>
           state.addNode(type as never, { value: node.value ?? "" }),
       },
       toMarkdown: {
-        match: (node: PMNode) => node.type.name === 块HTML节点名,
+        match: (node: PMNode) => node.type.name === blockHtmlNodeName,
         runner: (state: SerializerState, node: PMNode) =>
           state.addNode("html", undefined, node.attrs.value as string),
       },
@@ -183,17 +189,17 @@ const schema = new Schema({
 });
 
 /** 一台真处理机：`remark-parse` ＋ 本仓那个转换器，序列化走默认。 */
-function 造处理机() {
+function createPlaceManageMachine() {
   return unified()
     .use(remarkParse)
-    .use(() => (树: unknown) => 块HTML转换(树 as MarkdownNode))
+    .use(() => (tree: unknown) => blockHTMLConvertReplace(tree as MarkdownNode))
     .use(remarkStringify);
 }
 
 /** 一整趟：markdown → 文档 → markdown。两个方向都是真代码。 */
-function 往返(源: string): string {
-  const 机 = 造处理机();
-  return SerializerState.create(schema, 机)(ParserState.create(schema, 机)(源));
+function roundtrip(source3: string): string {
+  const machine = createPlaceManageMachine();
+  return SerializerState.create(schema, machine)(ParserState.create(schema, machine)(source3));
 }
 
 /**
@@ -206,115 +212,149 @@ function 往返(源: string): string {
  * （`transformer/lib/index.js:159`），所以这是**与产品同一条**路子。
  * （**踩过**：2026-09-27，一度以为转换器写坏了。）
  */
-function 解析(源: string): MarkdownNode {
-  const 机 = 造处理机();
-  return 机.runSync(机.parse(源), 源) as unknown as MarkdownNode;
+function parse(source3: string): MarkdownNode {
+  const machine = createPlaceManageMachine();
+  return machine.runSync(machine.parse(source3), source3) as unknown as MarkdownNode;
 }
 
 /** 树里所有节点的类型名（深度优先）。 */
-function 类型们(树: MarkdownNode): string[] {
-  const 出: string[] = [];
-  const 走 = (节点: MarkdownNode): void => {
-    出.push(节点.type);
-    const 孩子 = 节点.children;
-    if (Array.isArray(孩子)) for (const 一 of 孩子 as MarkdownNode[]) 走(一);
+function types(tree: MarkdownNode): string[] {
+  const output2: string[] = [];
+  const walk = (node: MarkdownNode): void => {
+    output2.push(node.type);
+    const child = node.children;
+    if (Array.isArray(child)) for (const value of child as MarkdownNode[]) walk(value);
   };
-  走(树);
-  return 出;
+  walk(tree);
+  return output2;
 }
 
 /* ── 一、`是注释`（纯函数）──────────────────────────────────────────────── */
 
-组("一、`是注释`（纯函数：一段 HTML 是不是注释）");
+group("一、`是注释`（纯函数：一段 HTML 是不是注释）");
 
-测("四种写法", () => {
-  等(是注释("<!-- x -->"), true, "标准写法");
-  等(是注释("<!-->"), true, "只认开头，不看结尾");
-  等(是注释("  <!-- 前面有空白 -->"), true, "前导空白先吃掉");
-  等(是注释("<div>x</div>"), false, "普通标签");
-  等(是注释("<p><!-- 在里面 --></p>"), false, "注释在**标签之后**的，按 HTML 画");
+testCase("HTML NodeView 的注册键在模块初始化时就是节点名", () => {
+  equal(blockHTMLSpec.node.id, blockHtmlNodeName, "`$view` 不能拿到 undefined 键");
+});
+
+testCase("四种写法", () => {
+  equal(isNoteRelease("<!-- x -->"), true, "标准写法");
+  equal(isNoteRelease("<!-->"), true, "只认开头，不看结尾");
+  equal(isNoteRelease("  <!-- 前面有空白 -->"), true, "前导空白先吃掉");
+  equal(isNoteRelease("<div>x</div>"), false, "普通标签");
+  equal(isNoteRelease("<p><!-- 在里面 --></p>"), false, "注释在**标签之后**的，按 HTML 画");
 });
 
 /* ── 二、`块HTML转换`（纯函数）────────────────────────────────────────── */
 
-组("二、`块HTML转换`（纯函数：哪些位置该换类型）");
+group("二、`块HTML转换`（纯函数：哪些位置该换类型）");
 
-测("独占一行的 HTML → 自造类型（**这就是那个 bug 的补丁**）", () => {
-  const 树 = 解析("<div>x</div>\n");
-  等(类型们(树), ["root", 块HTML节点名], "root 底下那颗换了类型");
+testCase("独占一行的 HTML → 自造类型（**这就是那个 bug 的补丁**）", () => {
+  const tree = parse("<div>x</div>\n");
+  equal(types(tree), ["root", blockHtmlNodeName], "root 底下那颗换了类型");
 });
 
-测("⚠️ 段落里的 HTML **一个字节都不动**（那是 preset 的行内节点）", () => {
-  const 树 = 解析("甲<u>乙</u>丙\n");
-  等(类型们(树), ["root", "paragraph", "text", "html", "text", "html", "text"], "行内那几颗还是 html");
+testCase("Milkdown 的 paragraph(html) 形状也收成 HTML 块，原文不变", () => {
+  const source = '<p align="center">\n  <img src="a.svg">\n</p>';
+  const tree: MarkdownNode = {
+    type: "root",
+    children: [
+      {
+        type: "paragraph",
+        children: [{ type: "html", value: source }],
+      },
+    ],
+  };
+  blockHTMLConvertReplace(tree);
+  equal(tree.children?.[0]?.type, blockHtmlNodeName, "包装层要变成块级节点");
+  equal(tree.children?.[0]?.value, source, "源码逐字保留");
 });
 
-测("注释与普通 HTML 走同一条路（mdast 里本来就是同一种东西）", () => {
-  等(类型们(解析("<!-- 甲 -->\n")), ["root", 块HTML节点名], "块级注释");
-  等(类型们(解析("甲 <!-- 乙 --> 丙\n")), ["root", "paragraph", "text", "html", "text"], "行内注释仍留 html");
+testCase("内联 HTML 仍夹在正文里的段落不动", () => {
+  const tree = parse("甲 <span>乙</span> 丙\n");
+  equal(types(tree), ["root", "paragraph", "text", "html", "text", "html", "text"], "普通段落原样");
 });
 
-测("引用里、列表项里也算块级（`块级容器` 那四个都算）", () => {
-  等(块级容器.has("blockquote") && 块级容器.has("listItem"), true, "表里有它们");
-  const 树 = 解析("> <div>x</div>\n");
-  等(类型们(树).includes(块HTML节点名), true, "引用里的那颗换掉了");
+testCase("⚠️ 段落里的 HTML **一个字节都不动**（那是 preset 的行内节点）", () => {
+  const tree = parse("甲<u>乙</u>丙\n");
+  equal(types(tree), ["root", "paragraph", "text", "html", "text", "html", "text"], "行内那几颗还是 html");
 });
 
-测("⚠️ 一处都没命中时，树**原样**（不重建、不乱动）", () => {
-  const 树 = 解析("甲\n\n乙\n");
-  等(类型们(树), ["root", "paragraph", "text", "paragraph", "text"], "纯文字");
+testCase("注释与普通 HTML 走同一条路（mdast 里本来就是同一种东西）", () => {
+  equal(types(parse("<!-- 甲 -->\n")), ["root", blockHtmlNodeName], "块级注释");
+  equal(types(parse("甲 <!-- 乙 --> 丙\n")), ["root", "paragraph", "text", "html", "text"], "行内注释仍留 html");
+});
+
+testCase("引用里、列表项里也算块级（`块级容器` 那四个都算）", () => {
+  equal(blockLevelContainer.has("blockquote") && blockLevelContainer.has("listItem"), true, "表里有它们");
+  const tree = parse("> <div>x</div>\n");
+  equal(types(tree).includes(blockHtmlNodeName), true, "引用里的那颗换掉了");
+});
+
+testCase("⚠️ 一处都没命中时，树**原样**（不重建、不乱动）", () => {
+  const tree = parse("甲\n\n乙\n");
+  equal(types(tree), ["root", "paragraph", "text", "paragraph", "text"], "纯文字");
 });
 
 /* ── 三、往返（真 unified ＋ 真 schema）────────────────────────────────── */
 
-组("三、往返（打开再存，一个字节都不许变）");
+group("三、往返（打开再存，一个字节都不许变）");
 
-测("块级 HTML：`<div>x</div>` 存回去还是它", () => {
-  等(往返("<div>x</div>\n"), "<div>x</div>\n", "整篇只有一个裸 HTML 块——这正是原来打不开的那一份");
+testCase("块级 HTML：`<div>x</div>` 存回去还是它", () => {
+  equal(roundtrip("<div>x</div>\n"), "<div>x</div>\n", "整篇只有一个裸 HTML 块——这正是原来打不开的那一份");
 });
 
-测("块级注释", () => {
-  等(往返("<!-- 甲 -->\n"), "<!-- 甲 -->\n", "注释原样");
+testCase("块级注释", () => {
+  equal(roundtrip("<!-- 甲 -->\n"), "<!-- 甲 -->\n", "注释原样");
 });
 
-测("HTML 块 ＋ 段落混排（顺序与空行都不许挪）", () => {
-  const 源 = "甲\n\n<div>x</div>\n\n乙\n";
-  等(往返(源), 源, "三块，两两之间一个空行");
+testCase("HTML 块 ＋ 段落混排（顺序与空行都不许挪）", () => {
+  const source3 = "甲\n\n<div>x</div>\n\n乙\n";
+  equal(roundtrip(source3), source3, "三块，两两之间一个空行");
 });
 
-测("HTML 块在**最前面**（原来是「整篇打不开」的典型形状）", () => {
-  const 源 = "<div>x</div>\n\n甲\n";
-  等(往返(源), 源, "开头就是 HTML");
+testCase("HTML 块在**最前面**（原来是「整篇打不开」的典型形状）", () => {
+  const source3 = "<div>x</div>\n\n甲\n";
+  equal(roundtrip(source3), source3, "开头就是 HTML");
 });
 
-测("行内 HTML 仍然走 preset 那一颗（本仓不碰）", () => {
-  const 源 = "甲<u>乙</u>丙\n";
-  等(往返(源), 源, "一字不差");
+testCase("行内 HTML 仍然走 preset 那一颗（本仓不碰）", () => {
+  const source3 = "甲<u>乙</u>丙\n";
+  equal(roundtrip(source3), source3, "一字不差");
 });
 
-测("多行的一块 HTML：换行照原样留着", () => {
-  const 源 = "<div>\n  <span>甲</span>\n</div>\n";
-  等(往返(源), 源, "块里的缩进与换行都还在");
+testCase("多行的一块 HTML：换行照原样留着", () => {
+  const source3 = "<div>\n  <span>甲</span>\n</div>\n";
+  equal(roundtrip(source3), source3, "块里的缩进与换行都还在");
 });
 
-测("⚠️ 一行里前后都有 HTML 标签，中间夹中文", () => {
-  const 源 = "<span>甲</span>乙<span>丙</span>\n";
-  等(往返(源), 源, "三颗行内节点串起来");
+testCase("GitHub README 的居中标题与徽章块", () => {
+  const source3 =
+    '<p align="center">\n' +
+    '  <a href="https://example.com"><img src="https://img.shields.io/badge/Nota-0.9.0-blue" alt="Release"></a>\n' +
+    "</p>\n\n" +
+    '<h1 align="center">Nota</h1>\n';
+  equal(roundtrip(source3), source3, "渲染范围扩大后，源码仍是逐字往返");
 });
 
-测("空串、纯空白：不许抛", () => {
-  for (const 源 of ["", "\n", "   \n"]) {
-    const 出 = 往返(源);
-    等(typeof 出, "string", `输入 ${JSON.stringify(源)} 应给出字符串`);
+testCase("⚠️ 一行里前后都有 HTML 标签，中间夹中文", () => {
+   const source3 = "<span>甲</span>乙<span>丙</span>\n";
+  equal(roundtrip(source3), source3, "三颗行内节点串起来");
+});
+
+testCase("空串、纯空白：不许抛", () => {
+  for (const source3 of ["", "\n", "   \n"]) {
+    const output2 = roundtrip(source3);
+    equal(typeof output2, "string", `输入 ${JSON.stringify(source3)} 应给出字符串`);
   }
 });
 
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-if (失败) {
-  console.log(`通过 ${通过} 条，失败 ${失败} 条：`);
-  for (const 名 of 失败清单) console.log(`  · ${名}`);
+if (failure) {
+  console.log(`通过 ${passed} 条，失败 ${failure} 条：`);
+  for (const name3 of failureList) console.log(`  · ${name3}`);
   process.exit(1);
 }
-console.log(`通过 ${通过} 条，失败 0 条`);
+console.log(`通过 ${passed} 条，失败 0 条`);

@@ -33,10 +33,10 @@
 import { useCallback, useMemo } from "react";
 
 import type { Settings } from "@/bridge/types";
-import type { 总结 } from "@/ui/focus-summary";
+import type { TotalJoin } from "@/ui/focus-summary";
 import type { ConfirmAnswer, ConfirmRequest } from "@/ui/useDialogs";
-import { useFocusAlarmSound, 预热音频 } from "@/ui/useFocusAlarmSound";
-import { useForceFocus, type 强制专注出口 } from "@/ui/useForceFocus";
+import { useFocusAlarmSound, preHotSoundFrequency } from "@/ui/useFocusAlarmSound";
+import { useForceFocus, type StrongMakeDedicatedNoteOutputMouth } from "@/ui/useForceFocus";
 import { useFocusIntro } from "@/ui/useFocusIntro";
 import { useFocusTrace } from "@/ui/useFocusTrace";
 
@@ -47,22 +47,22 @@ import { useFocusTrace } from "@/ui/useFocusTrace";
  * 还没有"这个中间态，而它在界面上没有意义（一张没有时间戳的卡）。合成一个
  * `null` / 非 `null` 之后，那个框只有"显示"和"不显示"两种。
  */
-export interface 专注总结值 {
-  总: 总结;
-  现在: Date;
+export interface DedicatedNoteTotalJoinValue {
+  total: TotalJoin;
+  now: Date;
 }
 
-export interface 专注会话出口 {
+export interface DedicatedNoteMeetingSpeechOutputMouth {
   /** 此刻的宿主状态。**每秒都在变**（`null` = 还没拉到，见 `useForceFocus`）。 */
-  专注状态: 强制专注出口["state"];
+  dedicatedNoteState: StrongMakeDedicatedNoteOutputMouth["state"];
   /** 这一轮在不在跑。⚠️ 是**一个布尔**，不是上面那个对象——理由见下。 */
-  专注运行中: boolean;
+  dedicatedNoteMoveLineMiddle: boolean;
   /** 「视图 → 强制专注」那一颗按钮两态（在跑就停、没跑就开）。 */
-  切换强制专注: () => void;
+  splitReplaceStrongMakeDedicatedNote: () => void;
   /** 刚结束那一轮的总结；`null` = 不显示那个框。 */
-  专注总结: 专注总结值 | null;
+  dedicatedNoteTotalJoin: DedicatedNoteTotalJoinValue | null;
   /** 用户把总结关掉了。 */
-  关掉专注总结: () => void;
+  closeDedicatedNoteTotalJoin: () => void;
 }
 
 export function useFocusSession({
@@ -73,20 +73,20 @@ export function useFocusSession({
   askConfirm: (req: ConfirmRequest) => Promise<ConfirmAnswer>;
   settings: Settings | null;
   updateSettings: (patch: Partial<Settings>) => void;
-}): 专注会话出口 {
-  const { state: 专注状态, start: 开始专注, stop: 停止专注 } = useForceFocus();
+}): DedicatedNoteMeetingSpeechOutputMouth {
+  const { state: dedicatedNoteState, start: startFocus, stop: stopEndDedicatedNote } = useForceFocus();
   useFocusAlarmSound();
-  const 先说明再专注 = useFocusIntro(askConfirm, settings, updateSettings);
+  const firstDescriptionAgainDedicatedNote = useFocusIntro(askConfirm, settings, updateSettings);
 
   // ⚠️ 传进去的是**每秒都在变**的那个对象，但这个 hook 只在"这一轮结束"那一下
   // 往 state 里写东西（中间那几百拍的曲线存在 ref 里）——所以它不会让 `App.tsx`
   // 多出一次重画。理由逐条写在 `ui/useFocusTrace.ts` 的文件头。
-  const { 结算: 专注结算, 结算于: 专注结算于, 收起: 收起专注结算 } =
-    useFocusTrace(专注状态);
+  const { joinCompute: dedicatedNoteJoinCompute, joinComputeAt: dedicatedNoteJoinComputeAt, collapse: collapseFocusSummary } =
+    useFocusTrace(dedicatedNoteState);
 
-  const 专注总结 = useMemo(
-    () => (专注结算 && 专注结算于 ? { 总: 专注结算, 现在: 专注结算于 } : null),
-    [专注结算, 专注结算于],
+  const dedicatedNoteTotalJoin = useMemo(
+    () => (dedicatedNoteJoinCompute && dedicatedNoteJoinComputeAt ? { total: dedicatedNoteJoinCompute, now: dedicatedNoteJoinComputeAt } : null),
+    [dedicatedNoteJoinCompute, dedicatedNoteJoinComputeAt],
   );
 
   /**
@@ -100,10 +100,10 @@ export function useFocusSession({
    * ——所以下面这个 `useCallback` 依赖 `专注运行中`（一个布尔），
    * 它一秒最多翻一次，而翻的那一次本来就该让菜单重推。
    */
-  const 专注运行中 = 专注状态?.running ?? false;
-  const 切换强制专注 = useCallback(() => {
-    if (专注运行中) {
-      void 停止专注();
+  const dedicatedNoteMoveLineMiddle = dedicatedNoteState?.running ?? false;
+  const splitReplaceStrongMakeDedicatedNote = useCallback(() => {
+    if (dedicatedNoteMoveLineMiddle) {
+      void stopEndDedicatedNote();
       return;
     }
     // ⚠️ **预热必须在这一行的位置**（`click` 的同步段里），不能挪进下面那个
@@ -114,17 +114,17 @@ export function useFocusSession({
     // 而手势只在 `click` 那一瞬间有效。用户在说明里点「取消」的话，这里多建的
     // 那个 `AudioContext` 什么也不做——它不出声、不占资源，下次点还复用它
     //（`取音频` 里那个模块级变量），所以这一枪白打也不要紧。
-    预热音频();
-    void 先说明再专注(async () => {
-      await 开始专注();
+    preHotSoundFrequency();
+    void firstDescriptionAgainDedicatedNote(async () => {
+      await startFocus();
     });
-  }, [专注运行中, 停止专注, 开始专注, 先说明再专注]);
+  }, [dedicatedNoteMoveLineMiddle, stopEndDedicatedNote, startFocus, firstDescriptionAgainDedicatedNote]);
 
   return {
-    专注状态,
-    专注运行中,
-    切换强制专注,
-    专注总结,
-    关掉专注总结: 收起专注结算,
+    dedicatedNoteState,
+    dedicatedNoteMoveLineMiddle,
+    splitReplaceStrongMakeDedicatedNote,
+    dedicatedNoteTotalJoin,
+    closeDedicatedNoteTotalJoin: collapseFocusSummary,
   };
 }

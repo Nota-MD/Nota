@@ -68,11 +68,11 @@ import { tags } from "@lezer/highlight";
 // 选区快照的**类型**（`docs/07` 第 14 项）。⚠️ 只借类型，实现在
 // `caret-snapshot.ts`——那边的算法吃的是 ProseMirror 的 `EditorState`，
 // 而这里手里是 CodeMirror 的文本，两边各算各的（见下面 `onSelection` 那条）。
-import type { 选区快照 } from "@/editor/caret-snapshot";
+import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 // 撞车的默认键位（那份名单 2026-10-04 搬去 `editor/key-conflicts.ts` 了，
 // 只为让**测试**读得到——BUG-58 就是漏了里面一条进来的，见那个文件头）。
-import { 撞车键位 } from "@/editor/key-conflicts";
-import type { CommandPayload, EditorCommand, 选区内容 } from "@/editor/create";
+import { collideCarKeyPosition } from "@/editor/key-conflicts";
+import type { CommandPayload, EditorCommand, SelectionContent } from "@/editor/create";
 // 查找：这里只要**两个类型**（接口上的 `setFind` / `onFindStatus`）。
 // 匹配的纯函数、状态、装饰都在别处：前者在 `find.ts`（一份匹配、两个适配器，
 // 见它的文件头），后者在 `source-find.ts`。
@@ -81,13 +81,13 @@ import { type FindOptions, type FindStatus } from "@/editor/find";
 // ⚠️ 2026-09-28 整块搬去 `source-find.ts` 的，因为本文件那天顶到了 1001 行、
 // 撞上 `doc-sync-check.sh` 的 1000 行硬上限。名字与用法一字未改。
 import {
-  设查找效果,
-  清查找效果,
-  查找字段,
-  查找装饰,
-  查找状态,
-  源码选中,
-  走查找效果,
+  setFindEffect,
+  clearFindEffect,
+  findField,
+  findDecoration,
+  findState,
+  sourceSelection,
+  findStepEffect,
 } from "@/editor/source-find";
 // 命令落点（一条 `EditorCommand` → 一段文本改动）。⚠️ 2026-10-07 整块搬去
 // `source-commands.ts` 的（本文件那天 1048 行，`docs/07` 第 89 项）：这边只剩
@@ -96,18 +96,18 @@ import { applyCommand } from "@/editor/source-commands";
 // 写作模式（专注 / 打字机）。⚠️ 只借类型与两个 DOM 小工具，**装饰各写各的**
 // ——源码里是平的行，没有"块的兄弟"可言（见 `writing-modes.ts` 顶上）。
 import {
-  专注类,
-  亮行类,
-  滚到正中,
-  默认写作模式,
-  type 写作模式,
+  dedicatedNoteClass,
+  brightLineClass,
+  rollToCorrectMiddle,
+  defaultWritingModes,
+  type WritingMode,
 } from "@/editor/writing-modes";
 // 就地改动预览。⚠️ 算法与两种看法在 `review.ts` 里，这里只用它那一侧的
 // 适配层（和上面那条写作模式同一个分工：**装饰各写各的**——源码里是平的行，
 // 按行比；所见即所得那边按块比，见 `review-prose.ts`）。
-import { 摘看法, 设看法, type 改动预览, type 预览看法 } from "@/editor/review";
+import { removeViewMode, setViewMode2, type changePreview, type previewMode } from "@/editor/review";
 // 就地改动预览那一侧的**装饰**（`Esc` 键位、只读舱的换挡都在那边）。
-import { 预览扩展集, 预览效果 } from "@/editor/review-source";
+import { previewExtensionExtendCollection, previewEffectResult } from "@/editor/review-source";
 // 界面文案。⚠️ 源码模式里有几处**写进文档的占位词**与一句空态提示，见下面用到的
 // 那几行——正文本身当然不进翻译（那是用户的内容）。
 import { t } from "@/i18n";
@@ -131,12 +131,12 @@ export interface SourceHandle {
    */
   focusAtStart: () => void;
   /** 拨专注/打字机模式。**随时可拨，不重建实例**（见 `writing-modes.ts`）。 */
-  setWritingModes: (模式: 写作模式) => void;
+  setWritingModes: (mode2: WritingMode) => void;
   /**
    * 摊开 / 收起**就地改动预览**。形状与理由同 `EditorHandle.setReview`
    * （那边写得全：按对象身份去重、看法只换 class）。
    */
-  setReview: (预览: 改动预览 | null, 看法: 预览看法) => void;
+  setReview: (preview: changePreview | null, viewMode: previewMode) => void;
   /** 跑一条编辑命令。**没有对应文本操作的返回 `false`**（见下）。 */
   runCommand: (name: EditorCommand, payload?: CommandPayload) => boolean;
   /**
@@ -148,16 +148,16 @@ export interface SourceHandle {
    * 按偏移拼字符串）**在那边**，见 `caret-snapshot.ts` 顶上那张表——
    * 这里必须存在，是因为插件的 `insert_at_cursor` 在源码模式下也得能用。
    */
-  插入在光标处: (text: string) => boolean;
+  insertAtCursorPlace: (text: string) => boolean;
   /* 查找五条，形状与 `EditorHandle` 那五条**完全一致**（`EditorPane` 才能
    * 两边通用）。⚠️ 同那边的理由：它们不进 `EditorCommand` 那套白名单。 */
   setFind: (query: string, options: FindOptions) => void;
-  findStep: (方向: 1 | -1) => void;
+  findStep: (direction: 1 | -1) => void;
   clearFind: () => void;
   replaceCurrent: (text: string) => boolean;
   replaceAll: (text: string) => number;
   /** 当前选中的内容。形状同 `EditorHandle` 那条（`EditorPane` 才能两边通用）。 */
-  选区: () => 选区内容 | null;
+  selection: () => SelectionContent | null;
   /**
    * 跳到大纲里第 `index` 个标题。形状同 `EditorHandle` 那条
    * （`EditorPane` 才能两边通用），但**这里只用 `line`**。
@@ -166,15 +166,28 @@ export interface SourceHandle {
    * 坐标，理由写在 `EditorHandle.跳到标题` 那段。这边拿到的是原文，
    * **行号是精确的**，序号反而不必用。
    */
-  跳到标题: (目标: { line: number; index: number }) => void;
+  jumpToMarkTitle: (target: { line: number; index: number }) => void;
   destroy: () => void;
 }
 
 export interface CreateSourceOptions {
   root: HTMLElement;
   initialMarkdown: string;
-  /** 文本变化回调。**不去抖**，与 `createEditor` 同口径：去抖是调用方的事。 */
+  /**
+   * 文本变化回调。**不去抖**，与 `createEditor` 同口径：去抖是调用方的事。
+   *
+   * ⚠️ 每触发一次都要把整篇 CM 文档复制成字符串。大文件如果只需要先知道
+   * “内容脏了”，应改传 [`onDocumentActivity`]，由调用方在去抖结束后用
+   * `getMarkdown()` 取一次快照。
+   */
   onChange?: (markdown: string) => void;
+  /**
+   * 文档内容发生了变化，但**不复制全文**。
+   *
+   * 传了它之后本实例就不再走 [`onChange`]：否则“省掉全文复制”没有发生。
+   * 调用方可据此立即记录活动状态，并把 `getMarkdown()` 推迟到保存或同步窗口。
+   */
+  onDocumentActivity?: () => void;
   /**
    * **选区变了**的通报（`docs/07` 第 14 项）。形状与 `CreateOptions.onSelection`
    * 一致，但**那边给的是 ProseMirror 的 `EditorState`、这边是 CodeMirror 的文本**，
@@ -183,14 +196,14 @@ export interface CreateSourceOptions {
    * ⚠️ 源码这一侧的 `text` 是**原文**（含 `**` 那些标记），所见即所得那一侧是
    * 纯文本——⚠️ 这是两种编辑器本来就不同的地方，不是漏了转换。
    */
-  onSelection?: (快照: 选区快照) => void;
+  onSelection?: (snapshot: SelectionSnapshot) => void;
   /** 建实例时两个写作开关的状态。**默认两个都关**。 */
-  writingModes?: 写作模式;
+  writingModes?: WritingMode;
   /**
    * 建实例时**已经开着**的那一份就地改动预览。理由同 `create.ts` 那条：
    * 换文档、切模式会重建编辑器，预览可能正开着，别把它吞掉。
    */
-  review?: 改动预览 | null;
+  review?: changePreview | null;
   /** 用户在正文里按 `Esc` 要退出预览时喊一声。理由同 `create.ts` 那条。 */
   onReviewEscape?: () => void;
   /** 只读（分屏里右侧预览若改用它，会走这条路；今天预览仍是 Milkdown）。 */
@@ -224,7 +237,7 @@ export interface CreateSourceOptions {
    * CodeMirror 文法，也不许为这件事加依赖。拿 Markdown 去染一份 Python 比
    * 不上色更糟——`# 注释` 会变成标题色、`*args` 会变成斜体，那是一幅**错的画**。
    */
-  纯文本?: boolean;
+  plainText?: boolean;
 }
 
 /* ── 高亮 ────────────────────────────────────────────────────────────────
@@ -330,7 +343,7 @@ const notaTheme = EditorView.theme({
  * 理由（源码里是一行一行的，没有"块的兄弟"）写在 `writing-modes.ts` 顶上。
  */
 
-const 写作模式效果 = StateEffect.define<写作模式>();
+const writingModeEffectResult = StateEffect.define<WritingMode>();
 
 /**
  * 建一份**这个实例专属**的字段与装饰。
@@ -339,27 +352,27 @@ const 写作模式效果 = StateEffect.define<写作模式>();
  * （切编辑模式会重建实例，那时开关可能已经是开着的），模块级常量就只能是
  * 一个所有实例共用的初值。函数式的写法让"建实例时开关是什么"如实生效。
  */
-function 写作模式扩展(初始: 写作模式): { 字段: StateField<写作模式>; 扩展: Extension[] } {
-  const 字段 = StateField.define<写作模式>({
-    create: () => 初始,
+function writingModeExtensionExtend(initialStart: WritingMode): { field: StateField<WritingMode>; extensionExtend: Extension[] } {
+  const field = StateField.define<WritingMode>({
+    create: () => initialStart,
     update(v, tr) {
-      let 出 = v;
-      for (const e of tr.effects) if (e.is(写作模式效果)) 出 = e.value;
-      return 出;
+      let output2 = v;
+      for (const e of tr.effects) if (e.is(writingModeEffectResult)) output2 = e.value;
+      return output2;
     },
   });
 
-  const 装饰 = EditorView.decorations.compute([字段], (state) => {
-    const m = state.field(字段);
+  const decoration = EditorView.decorations.compute([field], (state) => {
+    const m = state.field(field);
     if (!m.focus) return Decoration.none;
     // ⚠️ 只发**当前行**那一颗。其余行的压暗是 CSS 按根节点的 class 做的
     //（见 `writing-modes.ts` 里那两个常量）：给每一行都发一颗的话，
     // 装饰集的大小会随文档长度线性增长，而它每次事务都要重建一遍。
-    const 行 = state.doc.lineAt(state.selection.main.head);
-    return Decoration.set([Decoration.line({ class: 亮行类 }).range(行.from)]);
+    const line3 = state.doc.lineAt(state.selection.main.head);
+    return Decoration.set([Decoration.line({ class: brightLineClass }).range(line3.from)]);
   });
 
-  return { 字段, 扩展: [字段, 装饰] };
+  return { field, extensionExtend: [field, decoration] };
 }
 
 /* ⚠️ 就地改动预览（那一侧的装饰、`Esc` 键位、只读舱的用法）**不在这个文件里**
@@ -378,18 +391,19 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     root,
     initialMarkdown,
     onChange,
+    onDocumentActivity,
     onSelection,
     readOnly = false,
     strict = false,
     onFindStatus,
-    纯文本 = false,
-    writingModes = 默认写作模式,
+    plainText = false,
+    writingModes = defaultWritingModes,
     review = null,
     onReviewEscape,
   } = options;
 
   /** 上一次报出去的查找签名。**每个实例一份**（这个闭包在函数体里）。 */
-  let 上次查找签名 = "";
+  let aboveCountCheckFindKeyName = "";
   /**
    * 上一次报出去的选区快照的签名。
    *
@@ -397,13 +411,13 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
    * 不去重就是"光标每动一下跨一次 IPC"。所见即所得那一侧的去重在
    * `caret-snapshot.ts` 的插件里（同一套写法，只是一边在插件里、一边在这里）。
    */
-  let 上次快照签名 = "";
+  let aboveCountSnapshotKeyName = "";
   /** 同上的写法：打字机模式要判"这次是不是刚打开的"。 */
-  let 上次模式: 写作模式 = writingModes;
-  const { 字段: 写作字段, 扩展: 写作扩展 } = 写作模式扩展(writingModes);
+  let aboveCountMode: WritingMode = writingModes;
+  const { field: writeWorkField, extensionExtend: writeWorkExtensionExtend } = writingModeExtensionExtend(writingModes);
   /** 同上的写法：预览按**对象身份**去重（切看法不该重算装饰）。 */
-  let 上次预览: 改动预览 | null = review ?? null;
-  const { 扩展: 预览扩展 } = 预览扩展集(review ?? null, onReviewEscape);
+  let aboveCountPreview: changePreview | null = review ?? null;
+  const { extensionExtend: previewExtensionExtend } = previewExtensionExtendCollection(review ?? null, onReviewEscape);
 
   /**
    * 只读那两件单独住一间"舱"（`Compartment`）：改动预览期间要**临时**把
@@ -414,10 +428,10 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
    * 里就是 `combine: values => values.length ? values[0] : false`），叠一份
    * 谁赢全看它在数组里的位置——那是"改一处忘一处"的典型形状。整组换掉才准。
    */
-  const 只读舱 = new Compartment();
-  const 只读扩展 = (锁: boolean): Extension[] => [
-    EditorState.readOnly.of(锁),
-    EditorView.editable.of(!锁),
+  const onlyReadCabin = new Compartment();
+  const onlyReadExtensionExtend = (lock: boolean): Extension[] => [
+    EditorState.readOnly.of(lock),
+    EditorView.editable.of(!lock),
   ];
 
   const extensions: Extension[] = [
@@ -430,42 +444,42 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     // ⚠️ 非 Markdown 的文件**两样都不挂**：文法与它配套的那套配色是**一对**
     // ——只挂配色而不挂文法，`notaHighlight` 里那些 tag 一个都不会命中，
     // 结果是"看起来生效了、其实什么都没变"，下次有人来查会白花时间。
-    ...(纯文本 ? [] : [markdown(), syntaxHighlighting(notaHighlight)]),
+    ...(plainText ? [] : [markdown(), syntaxHighlighting(notaHighlight)]),
     notaTheme,
     // ⚠️ 那两个 `filter` 不是画蛇添足：CodeMirror 的默认键位会和本应用的
     // 快捷键**同时**触发（理由与逐条对照见上面 `撞车键位`），摘掉撞车的那些。
     keymap.of(
-      [...defaultKeymap, ...historyKeymap].filter((b) => !撞车键位.has(b.key ?? "")),
+      [...defaultKeymap, ...historyKeymap].filter((b) => !collideCarKeyPosition.has(b.key ?? "")),
     ),
     EditorView.updateListener.of((u) => {
       // 查找状态先报（`docChanged` 时它会重算，签名变了就要通知界面）。
       // ⚠️ 这一句必须在下面那个 `if (!u.docChanged) return` **之前**：
       // "走到下一个命中"只改选区、不改文档，放后面就永远报不出去，
       // 界面上的"第 3 / 7 个"会一直停着不动。
-      const s = u.state.field(查找字段, false);
+      const s = u.state.field(findField, false);
       if (onFindStatus && s) {
-        const status = 查找状态(s);
+        const status = findState(s);
         const sig = `${status.query}|${status.total}|${status.current}`;
-        if (sig !== 上次查找签名) {
-          上次查找签名 = sig;
+        if (sig !== aboveCountCheckFindKeyName) {
+          aboveCountCheckFindKeyName = sig;
           onFindStatus(status);
         }
       }
 
       // 写作模式（专注 / 打字机）。⚠️ 也在 `if (!u.docChanged) return` 之前：
       // 打字机模式跟的是**光标**，而"光标往下走一行"不改文档。
-      const 模式 = u.state.field(写作字段);
-      u.view.dom.classList.toggle(专注类, 模式.focus);
+      const mode2 = u.state.field(writeWorkField);
+      u.view.dom.classList.toggle(dedicatedNoteClass, mode2.focus);
       // 「刚打开」也要滚一次：不然开关拨开了，当前行还停在屏幕边上，
       // 用户得先打个字才看得到效果——那看起来就像开关没生效。
-      const 刚开 = 模式.typewriter && !上次模式.typewriter;
-      if (模式.typewriter && (刚开 || u.selectionSet || u.docChanged)) {
+      const justOpen = mode2.typewriter && !aboveCountMode.typewriter;
+      if (mode2.typewriter && (justOpen || u.selectionSet || u.docChanged)) {
         // ⚠️ CM 的 `coordsAtPos` 可能给 `null`（位置上没有可测的 DOM，
         // 比如刚删空的一行）。给它一个"这次不滚"，别让它把异常抛进事务里。
-        const 位 = u.view.coordsAtPos(u.state.selection.main.head);
-        if (位) 滚到正中(u.view.scrollDOM, 位.top, 位.bottom);
+        const position3 = u.view.coordsAtPos(u.state.selection.main.head);
+        if (position3) rollToCorrectMiddle(u.view.scrollDOM, position3.top, position3.bottom);
       }
-      上次模式 = 模式;
+      aboveCountMode = mode2;
 
       // 选区快照（`docs/07` 第 14 项）。⚠️ 也在 `if (!u.docChanged) return`
       // **之前**：光挪光标不改文档，而"用户选中了什么"正是要靠这一条报出去。
@@ -475,8 +489,8 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
         const { from, to } = u.state.selection.main;
         const text = from === to ? "" : u.state.sliceDoc(from, to);
         const sig = `${from === to ? 1 : 0}|${text}`;
-        if (sig !== 上次快照签名) {
-          上次快照签名 = sig;
+        if (sig !== aboveCountSnapshotKeyName) {
+          aboveCountSnapshotKeyName = sig;
           onSelection({ text, empty: from === to });
         }
       }
@@ -485,22 +499,23 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
       // ⚠️ 不带 `userEvent` 的过滤：本文件里所有 `dispatch` 都是"用户意图"
       // （命令、粘贴、打字），没有"程序性回填"——整篇替换走 `setMarkdown`，
       // 那条**不派发**（见下）。
-      onChange?.(u.state.doc.toString());
+      if (onDocumentActivity) onDocumentActivity();
+      else onChange?.(u.state.doc.toString());
     }),
     // 只读那两件。⚠️ 走舱，理由见 `只读舱` 那段。
-    只读舱.of(只读扩展(readOnly)),
+    onlyReadCabin.of(onlyReadExtensionExtend(readOnly)),
   ];
   if (!readOnly) extensions.push(placeholder(t("Write your Markdown here…")));
   // ⚠️ 查找那一套**只在可编辑的那一份上挂**：只读预览窗格没有查找可言，
   // 挂了也只是白算一遍匹配（同 `create.ts` 那边"不传就不挂"的口径）。
-  if (!readOnly && onFindStatus) extensions.push(查找字段, 查找装饰);
+  if (!readOnly && onFindStatus) extensions.push(findField, findDecoration);
   // 写作模式**恒挂**（可编辑的那一份）：两个开关随时可能被拨，而插件清单
   // 一旦绑进 `EditorPane` 的依赖，拨一下开关就得把编辑器整个重建——
   // 那会丢掉撤销栈和光标，写在半句话中间时尤其难受。
-  if (!readOnly) extensions.push(...写作扩展);
+  if (!readOnly) extensions.push(...writeWorkExtensionExtend);
   // 预览**恒挂**（可编辑那一份）：随时可能被插件喊起来，同 `create.ts` 那条。
   // ⚠️ 只读实例不挂——那边既没有插件能喊它，也没有"接受改动"可言。
-  if (!readOnly) extensions.push(...预览扩展);
+  if (!readOnly) extensions.push(...previewExtensionExtend);
 
   const view = new EditorView({
     state: EditorState.create({ doc: initialMarkdown, extensions }),
@@ -529,33 +544,33 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
       view.dispatch({ selection: { anchor: 0 }, scrollIntoView: true });
       view.focus();
     },
-    setReview: (预览: 改动预览 | null, 看法: 预览看法) => {
+    setReview: (preview: changePreview | null, viewMode: previewMode) => {
       // ⚠️ 只有**预览换了**才派事务（切看法是纯 CSS 的开关，不值得重算一遍
       // 行差异）。同 `create.ts` 那条。
-      if (预览 !== 上次预览) {
-        上次预览 = 预览;
+      if (preview !== aboveCountPreview) {
+        aboveCountPreview = preview;
         view.dispatch({
           effects: [
-            预览效果.of(预览),
+            previewEffectResult.of(preview),
             // 预览期正文锁成只读。⚠️ `readOnly ||` 那个或不能少：只读的实例
             // 本来就不许改，收预览时别把它解锁了。
-            只读舱.reconfigure(只读扩展(readOnly || 预览 !== null)),
+            onlyReadCabin.reconfigure(onlyReadExtensionExtend(readOnly || preview !== null)),
           ],
         });
       }
-      if (预览) 设看法(view.dom, 看法);
-      else 摘看法(view.dom);
+      if (preview) setViewMode2(view.dom, viewMode);
+      else removeViewMode(view.dom);
     },
 
-    setWritingModes: (模式: 写作模式) => {
-      view.dispatch({ effects: 写作模式效果.of(模式) });
+    setWritingModes: (mode2: WritingMode) => {
+      view.dispatch({ effects: writingModeEffectResult.of(mode2) });
       // ⚠️ 打开专注模式那一刻要**自己补一次 class**：`updateListener` 只在
       // 事务之后跑，而这里刚刚派了一笔——它会跑到，所以下面这句是给
       // "模式没变、只是重新设一遍"那种情况的兜底，代价可以忽略。
-      view.dom.classList.toggle(专注类, 模式.focus);
-      if (模式.typewriter) {
-        const 位 = view.coordsAtPos(view.state.selection.main.head);
-        if (位) 滚到正中(view.scrollDOM, 位.top, 位.bottom);
+      view.dom.classList.toggle(dedicatedNoteClass, mode2.focus);
+      if (mode2.typewriter) {
+        const position3 = view.coordsAtPos(view.state.selection.main.head);
+        if (position3) rollToCorrectMiddle(view.scrollDOM, position3.top, position3.bottom);
       }
     },
     runCommand: (name: EditorCommand, payload?: CommandPayload) =>
@@ -565,7 +580,7 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     // `create.ts` 那一侧 `tr.insertText(text, from, to)` 同一个语义。
     // ⚠️ 这一侧没有 `readOnly` 那回事：`createSourceEditor` 只给可编辑的
     // 正文建（分屏右侧是所见即所得那一路的只读实例），所以恒 `true`。
-    插入在光标处: (text: string) => {
+    insertAtCursorPlace: (text: string) => {
       const { from, to } = view.state.selection.main;
       view.dispatch({ changes: { from, to, insert: text } });
       return true;
@@ -575,13 +590,13 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     // 手里只有文本，硬凑一份 HTML 会让"复制"粘到别处时看起来像富文本，
     // 而那份 HTML 是我们编的、不是编辑器给的。空串 = 如实说明给不出，
     // 调用方（`ui/useClipboard.ts`）据此只写纯文本那一半。
-    选区: () => {
+    selection: () => {
       const { from, to } = view.state.selection.main;
       if (from === to) return null;
       return { text: view.state.sliceDoc(from, to), html: "" };
     },
 
-    跳到标题: ({ line }) => {
+    jumpToMarkTitle: ({ line }) => {
       // ⚠️ CodeMirror 的行号是 **1 起**，大纲给的是 **0 起**；越界一律夹回
       // 合法范围而不是提前返回——差一行也要跳，比"点了没反应"强。
       const n = Math.min(Math.max(line + 1, 1), view.state.doc.lines);
@@ -602,37 +617,37 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
     /* ── 查找五条。读状态一律走 `view.state.field(查找字段)` ──────────── */
 
     setFind: (query: string, options: FindOptions) => {
-      view.dispatch({ effects: 设查找效果.of({ query, options }) });
+      view.dispatch({ effects: setFindEffect.of({ query, options }) });
       // 设完立刻选中第一个命中（同 `find.ts` 里那条：只画高亮不移动光标的话，
       // 用户按「下一个」会从"第一个"跳到"第二个"，看起来跳过了开头那个）。
-      const s = view.state.field(查找字段);
-      if (s.index >= 0) 源码选中(view, s.matches[s.index]!);
+      const s = view.state.field(findField);
+      if (s.index >= 0) sourceSelection(view, s.matches[s.index]!);
     },
 
-    findStep: (方向: 1 | -1) => {
-      if (view.state.field(查找字段).matches.length === 0) return;
-      view.dispatch({ effects: 走查找效果.of(方向) });
-      const s = view.state.field(查找字段);
-      if (s.index >= 0) 源码选中(view, s.matches[s.index]!);
+    findStep: (direction: 1 | -1) => {
+      if (view.state.field(findField).matches.length === 0) return;
+      view.dispatch({ effects: findStepEffect.of(direction) });
+      const s = view.state.field(findField);
+      if (s.index >= 0) sourceSelection(view, s.matches[s.index]!);
     },
 
     clearFind: () => {
-      view.dispatch({ effects: 清查找效果.of(null) });
+      view.dispatch({ effects: clearFindEffect.of(null) });
     },
 
     replaceCurrent: (text: string) => {
-      const s = view.state.field(查找字段);
+      const s = view.state.field(findField);
       if (s.index < 0) return false;
       const m = s.matches[s.index]!;
       view.dispatch({ changes: { from: m.start, to: m.end, insert: text } });
       // 换完重读一次：命中表已经重算了，`index` 那一格现在指着**下一个**。
-      const 后 = view.state.field(查找字段);
-      if (后.index >= 0 && 后.matches[后.index]) 源码选中(view, 后.matches[后.index]!);
+      const after = view.state.field(findField);
+      if (after.index >= 0 && after.matches[after.index]) sourceSelection(view, after.matches[after.index]!);
       return true;
     },
 
     replaceAll: (text: string) => {
-      const s = view.state.field(查找字段);
+      const s = view.state.field(findField);
       if (s.matches.length === 0) return 0;
       // ⚠️ **从后往前换**，理由同 `find.ts` 里那条：替换文本长度与原文不一定
       // 一样，从前往后换会把后面所有命中的位置推着走。CM 的 `changes` 数组

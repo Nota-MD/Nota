@@ -44,40 +44,40 @@ import { MENUS } from "@/ui/commands";
 
 /* ── 一支极小的测试工装（与 `sidebar-resize.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
-function 真(条件: boolean, 说明: string): void {
-  if (!条件) throw new Error(说明);
+function assertValue(condition: boolean, description: string): void {
+  if (!condition) throw new Error(description);
 }
 
 /** 读 `src/` 下的一份源码。⚠️ 路径一律从仓库根算（跑法里 `cd` 到仓库根）。 */
-function 读(...段: string[]): string {
-  return readFileSync(join("src", ...段), "utf8");
+function read(...paragraph2: string[]): string {
+  return readFileSync(join("src", ...paragraph2), "utf8");
 }
 
 /**
@@ -87,26 +87,26 @@ function 读(...段: string[]): string {
  * 用哪条 i18n 键、画哪个图标）全在字面里，抠出来看比渲染出来看**更准**
  * ——渲染之后这三样都变成了别的东西。
  */
-function 抠按钮(源: string, class名: string): string {
-  const 处 = 源.indexOf(`className="${class名}"`);
+function pickPressButton(source3: string, className: string): string {
+  const place = source3.indexOf(`className="${className}"`);
   // 状态栏那颗的 className 带了两个记号（`status-btn statusbar-close`），
   // 所以先按"包含"找，再回退到最近的一个 `<button`。
-  const 位 = 处 >= 0 ? 处 : 源.indexOf(class名);
-  if (位 < 0) throw new Error(`源码里找不到 class \`${class名}\``);
-  const 起 = 源.lastIndexOf("<button", 位);
-  const 末 = 源.indexOf("</button>", 位);
-  if (起 < 0 || 末 < 0) throw new Error(`class \`${class名}\` 那个 <button> 抠不出来`);
-  return 源.slice(起, 末);
+  const position3 = place >= 0 ? place : source3.indexOf(className);
+  if (position3 < 0) throw new Error(`源码里找不到 class \`${className}\``);
+  const start5 = source3.lastIndexOf("<button", position3);
+  const end = source3.indexOf("</button>", position3);
+  if (start5 < 0 || end < 0) throw new Error(`class \`${className}\` 那个 <button> 抠不出来`);
+  return source3.slice(start5, end);
 }
 
 /** 一份源码里**带 `close` 的 className 有几个**（组一用它验"恰好一颗"）。 */
-function 叉的颗数(源: string): number {
-  return (源.match(/className="[^"]*\bclose\b[^"]*"/g) ?? []).length;
+function crossOfTokenNumber(source3: string): number {
+  return (source3.match(/className="[^"]*\bclose\b[^"]*"/g) ?? []).length;
 }
 
 /* ── 一、两颗 × 都在，而且长得一样 ─────────────────────────────────── */
 
-组("一、两颗 ×：各栏恰好一颗，长相一致");
+group("一、两颗 ×：各栏恰好一颗，长相一致");
 
 /**
  * 两颗 × 的现场：`[读源码用的路径, className, 组一那颗在的 CSS]`。
@@ -124,68 +124,68 @@ function 叉的颗数(源: string): number {
  * ⚠️ 判据没有放宽：这里仍然逐栏查"恰好一颗、同一个图标、title 与 aria-label
  * 同键、译文同句式"——**少的那两栏是从这个名单里去掉的**，不是把检查跳过。
  */
-const 两栏 = [
-  { 名: "格式化工具栏", 文件: ["ui", "FormatBar.tsx"], class名: "format-bar-close", css: ["styles", "bars.css"] },
-  { 名: "状态栏", 文件: ["ui", "StatusBar.tsx"], class名: "statusbar-close", css: ["styles", "tabs-status.css"] },
+const twoColumns = [
+  { name3: "格式化工具栏", textItem: ["ui", "FormatBar.tsx"], className: "format-bar-close", css: ["styles", "bars.css"] },
+  { name3: "状态栏", textItem: ["ui", "StatusBar.tsx"], className: "statusbar-close", css: ["styles", "tabs-status.css"] },
 ] as const;
 
-const 源表 = new Map(两栏.map((栏) => [栏.class名, 读(...栏.文件)]));
+const sourceTable = new Map(twoColumns.map((bar) => [bar.className, read(...bar.textItem)]));
 
-测("每一栏里带 `close` 的 className 都**恰好一个**", () => {
+testCase("每一栏里带 `close` 的 className 都**恰好一个**", () => {
   // ⚠️ 反过来的坏法：一颗 × 上同时挂着 `.sidebar-close` 和一个装饰用的 class，
   // 两颗按钮长得一样而只有一颗钉在右端。这里要的是"这一栏只有一个关的入口"。
-  for (const 栏 of 两栏) {
-    等(叉的颗数(源表.get(栏.class名)!), 1, `${栏.名}里带 close 的 className 个数`);
+  for (const bar of twoColumns) {
+    equal(crossOfTokenNumber(sourceTable.get(bar.className)!), 1, `${bar.name3}里带 close 的 className 个数`);
   }
 });
 
-测("两颗 × 画的是**同一个图标**（`folio-close-symbolic`）", () => {
-  for (const 栏 of 两栏) {
-    const 块 = 抠按钮(源表.get(栏.class名)!, 栏.class名);
-    真(
-      块.includes('name="folio-close-symbolic"'),
-      `${栏.名}那颗 × 的图标不是 folio-close-symbolic：\n${块}`,
+testCase("两颗 × 画的是**同一个图标**（`folio-close-symbolic`）", () => {
+  for (const bar of twoColumns) {
+    const block = pickPressButton(sourceTable.get(bar.className)!, bar.className);
+    assertValue(
+      block.includes('name="folio-close-symbolic"'),
+      `${bar.name3}那颗 × 的图标不是 folio-close-symbolic：\n${block}`,
     );
   }
 });
 
-测("⚠️ 每颗的 `title` 与 `aria-label` 是**同一个键**", () => {
+testCase("⚠️ 每颗的 `title` 与 `aria-label` 是**同一个键**", () => {
   // 读屏念的和鼠标悬停弹的必须是同一句话——两处分开写的话，改一处忘一处，
   // 症状是"看得见的人关得掉、看不见的人关不掉"（而且没人会报这个 bug）。
-  for (const 栏 of 两栏) {
-    const 块 = 抠按钮(源表.get(栏.class名)!, 栏.class名);
-    const 提示 = /title=\{t\("([^"]+)"\)\}/.exec(块);
-    const 念出 = /aria-label=\{t\("([^"]+)"\)\}/.exec(块);
-    if (!提示 || !念出) throw new Error(`${栏.名}那颗 × 缺 title 或 aria-label：\n${块}`);
-    等(念出[1], 提示[1], `${栏.名}那颗 × 的 aria-label 与 title`);
+  for (const bar of twoColumns) {
+    const block = pickPressButton(sourceTable.get(bar.className)!, bar.className);
+    const notice = /title=\{t\("([^"]+)"\)\}/.exec(block);
+    const ideaOutput = /aria-label=\{t\("([^"]+)"\)\}/.exec(block);
+    if (!notice || !ideaOutput) throw new Error(`${bar.name3}那颗 × 缺 title 或 aria-label：\n${block}`);
+    equal(ideaOutput[1], notice[1], `${bar.name3}那颗 × 的 aria-label 与 title`);
   }
 });
 
-测("⚠️ 两条 i18n 键在中文表里都译了、而且**同一个句式**", () => {
+testCase("⚠️ 两条 i18n 键在中文表里都译了、而且**同一个句式**", () => {
   // 两条里一条写「收起…」另一条写「隐藏…」的话，两颗按钮读起来像两个人加的。
   // ⚠️ 只能验"开头两个字一样"，验不出"这句话好不好听"——那是眼睛的事。
-  const 中文表 = 读("i18n", "zh-ui.ts");
-  const 键: string[] = [];
-  for (const 栏 of 两栏) {
-    const 块 = 抠按钮(源表.get(栏.class名)!, 栏.class名);
-    const m = /title=\{t\("([^"]+)"\)\}/.exec(块);
-    真(!!m, `${栏.名}那颗 × 的 title 抠不出来`);
-    键.push(m![1]);
-    const 译文 = new RegExp(`"${m![1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":\\s*"([^"]+)"`).exec(中文表);
-    真(!!译文, `中文表里没有 \`${m![1]}\` 的译文（界面上会显示英文原文）`);
-    真(
-      译文![1].startsWith("收起"),
-      `\`${m![1]}\` 的译文是「${译文![1]}」，不是「收起…」——两颗 × 必须同句式`,
+  const middleTextTable = read("i18n", "zh-ui.ts");
+  const key: string[] = [];
+  for (const bar of twoColumns) {
+    const block = pickPressButton(sourceTable.get(bar.className)!, bar.className);
+    const m = /title=\{t\("([^"]+)"\)\}/.exec(block);
+    assertValue(!!m, `${bar.name3}那颗 × 的 title 抠不出来`);
+    key.push(m![1]);
+    const translateText = new RegExp(`"${m![1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}":\\s*"([^"]+)"`).exec(middleTextTable);
+    assertValue(!!translateText, `中文表里没有 \`${m![1]}\` 的译文（界面上会显示英文原文）`);
+    assertValue(
+      translateText![1].startsWith("收起"),
+      `\`${m![1]}\` 的译文是「${translateText![1]}」，不是「收起…」——两颗 × 必须同句式`,
     );
   }
-  等(new Set(键).size, 2, "两条键互不相同（两栏各一条，不能共用）");
+  equal(new Set(key).size, 2, "两条键互不相同（两栏各一条，不能共用）");
 });
 
-测("两个 class 在各自那份 CSS 里都有规则", () => {
-  for (const 栏 of 两栏) {
-    真(
-      读(...栏.css).includes(`.${栏.class名}`),
-      `${栏.css.join("/")} 里没有 .${栏.class名} —— 那说明这颗 × 是裸的 <button>` +
+testCase("两个 class 在各自那份 CSS 里都有规则", () => {
+  for (const bar of twoColumns) {
+    assertValue(
+      read(...bar.css).includes(`.${bar.className}`),
+      `${bar.css.join("/")} 里没有 .${bar.className} —— 那说明这颗 × 是裸的 <button>` +
         `（浏览器默认样式会让它和另外那颗长得完全不一样）`,
     );
   }
@@ -193,129 +193,129 @@ const 源表 = new Map(两栏.map((栏) => [栏.class名, 读(...栏.文件)]));
 
 /* ── 二、每条入口汇到**同一个 setter** ─────────────────────────────── */
 
-组("二、菜单那条与 × 那颗走的是同一个 setter");
+group("二、菜单那条与 × 那颗走的是同一个 setter");
 
-const 格式栏源 = 源表.get("format-bar-close")!;
-const 状态栏源 = 源表.get("statusbar-close")!;
-const 接线源 = 读("ui", "EditorArea.tsx");
-const 栏开关源 = 读("ui", "useChromeVisibility.ts");
-const 命令表源 = 读("ui", "useCommandTable.ts");
-const 状态栏钩子源 = 读("ui", "useStatusBar.ts");
-const App源 = 读("App.tsx");
+const cellStyleBarSource = sourceTable.get("format-bar-close")!;
+const stateBarSource = sourceTable.get("statusbar-close")!;
+const wiringSource = read("ui", "EditorArea.tsx");
+const barFlagSource = read("ui", "useChromeVisibility.ts");
+const commandTableSource = read("ui", "useCommandTable.ts");
+const stateBarHookChildSource = read("ui", "useStatusBar.ts");
+const appSource = read("App.tsx");
 
-测("格式化工具栏：× → `onHide`（不走 `onCommand`）", () => {
+testCase("格式化工具栏：× → `onHide`（不走 `onCommand`）", () => {
   // ⚠️ 这条是**故意不接 `onCommand`** 的：那颗 × 不是一条编辑命令
   //（`commands.ts` 里没有"收起格式化工具栏"这一项），走命令表的话要点名一个
   // 不存在的 id。所以它直接调 prop。
-  const 块 = 抠按钮(格式栏源, "format-bar-close");
-  真(块.includes("onClick={onHide}"), `那颗 × 没接 onHide：\n${块}`);
-  真(!块.includes("onCommand"), `那颗 × 接了 onCommand —— 它不是一条编辑命令：\n${块}`);
+  const block = pickPressButton(cellStyleBarSource, "format-bar-close");
+  assertValue(block.includes("onClick={onHide}"), `那颗 × 没接 onHide：\n${block}`);
+  assertValue(!block.includes("onCommand"), `那颗 × 接了 onCommand —— 它不是一条编辑命令：\n${block}`);
 });
 
-测("格式化工具栏：`onHide` 一路接到 `收起工具栏`（三处都对得上）", () => {
+testCase("格式化工具栏：`onHide` 一路接到 `收起工具栏`（三处都对得上）", () => {
   // 链条：`FormatBar` 的 `onHide` → `EditorArea` 的 `收起格式化栏` → `App` 把它
   // 接成 `useChromeVisibility` 的 `收起工具栏` → 那一头写 `setChrome`。
   // ⚠️ 断在哪一环的症状都是**同一个**：按钮在、点了没反应（不报错）。
-  真(
-    接线源.includes("onHide={收起格式化栏}"),
-    "`EditorArea.tsx` 没把 `收起格式化栏` 接到 `<FormatBar onHide=…>` 上",
+  assertValue(
+    wiringSource.includes("onHide={hideFormatBar}"),
+    "`EditorArea.tsx` 没把 `hideFormatBar` 接到 `<FormatBar onHide=…>` 上",
   );
-  真(
-    接线源.includes("收起格式化栏: () => void;"),
-    "`EditorArea.tsx` 的 `编辑区接线` 接口里没有 `收起格式化栏` 这一格",
+  assertValue(
+    wiringSource.includes("hideFormatBar: () => void;"),
+    "`EditorArea.tsx` 的 `编辑区接线` 接口里没有 `hideFormatBar` 这一格",
   );
-  真(
-    接线源.includes("收起格式化栏"),
-    "`EditorArea.tsx` 没有解出 `收起格式化栏`",
+  assertValue(
+    wiringSource.includes("hideFormatBar"),
+    "`EditorArea.tsx` 没有解出 `hideFormatBar`",
   );
-  真(
-    App源.includes("收起格式化栏: 收起工具栏"),
-    "`App.tsx` 那个接线的字面量里没有 `收起格式化栏: 收起工具栏`（`EditorArea.tsx` 收到的是 undefined）",
+  assertValue(
+    appSource.includes("hideFormatBar: hideToolbar"),
+    "`App.tsx` 那个接线的字面量里没有 `hideFormatBar: hideToolbar`",
   );
-  真(
-    App源.includes("收起工具栏") && App源.includes("useChromeVisibility"),
-    "`App.tsx` 没有从 `useChromeVisibility` 里取 `收起工具栏`",
+  assertValue(
+    appSource.includes("hideToolbar") && appSource.includes("useChromeVisibility"),
+    "`App.tsx` 没有从 `useChromeVisibility` 里取 `hideToolbar`",
   );
 });
 
-测("⚠️ 格式工具栏：× 那颗与菜单 `view.toolbarNever` 写的是**同一句**", () => {
+testCase("⚠️ 格式工具栏：× 那颗与菜单 `view.toolbarNever` 写的是**同一句**", () => {
   // 这是"三条入口汇到同一个 setter"里唯一能文本验的一条，也是最有价值的一条：
   // 两颗按钮各自写 `setChrome({ toolbar: "never" })`，参数一模一样，
   // 改哪一边都看得见另一边。
-  真(
-    栏开关源.includes('收起工具栏 = useCallback(() => setChrome({ toolbar: "never" })'),
-    "`useChromeVisibility.ts` 里 `收起工具栏` 不再是 `setChrome({ toolbar: \"never\" })`",
+  assertValue(
+    barFlagSource.includes('hideToolbar = useCallback(() => setChrome({ toolbar: "never" })'),
+    "`useChromeVisibility.ts` 里 `hideToolbar` 不再是 `setChrome({ toolbar: \"never\" })`",
   );
-  真(
-    命令表源.includes('"view.toolbarNever": () => setChrome({ toolbar: "never" })'),
+  assertValue(
+    commandTableSource.includes('"view.toolbarNever": () => setChrome({ toolbar: "never" })'),
     '`useCommandTable.ts` 里 `view.toolbarNever` 不再是 `setChrome({ toolbar: "never" })`' +
       "——两个入口从这一刻起不再走同一个 setter 了",
   );
 });
 
-测("⚠️ 状态栏那颗 × **只关不开**（菜单那条才是切换）", () => {
+testCase("⚠️ 状态栏那颗 × **只关不开**（菜单那条才是切换）", () => {
   // 这条钉的是两边的**语义差异**，而它是有意的：
   // - 菜单项是一颗开关（勾着/没勾着），点一下取反；
   // - 栏上那颗 × 是"把这一栏收起来"这一个动作，写死 `false`。写 `!` 的话，
   //   某个状态不巧是 false 时点它会**把栏打开**——而那颗 × 当时根本不在屏幕上。
-  const 块 = 抠按钮(状态栏源, "statusbar-close");
-  真(块.includes("onClick={onHide}"), `状态栏那颗 × 没接 onHide：\n${块}`);
-  真(
-    状态栏钩子源.includes("onHide: () => 设界面({ show_status_bar: false })"),
-    "`useStatusBar.ts` 里 `onHide` 不再是 `设界面({ show_status_bar: false })`",
+  const block = pickPressButton(stateBarSource, "statusbar-close");
+  assertValue(block.includes("onClick={onHide}"), `状态栏那颗 × 没接 onHide：\n${block}`);
+  assertValue(
+    stateBarHookChildSource.includes("onHide: () => setUi({ show_status_bar: false })"),
+    "`useStatusBar.ts` 里 `onHide` 不再是 `setUi({ show_status_bar: false })`",
   );
-  真(
-    !/onHide:\s*\(\)\s*=>\s*设界面\(\{\s*show_status_bar:\s*!/.test(状态栏钩子源),
+  assertValue(
+    !/onHide:\s*\(\)\s*=>\s*setUi\(\{\s*show_status_bar:\s*!/.test(stateBarHookChildSource),
     "`onHide` 里写成了 `!…` —— × 变成了切换（见这条测试上面那段注释）",
   );
 });
 
-测("状态栏：那条链子也是接满的（`设界面` 就是 `setChrome`）", () => {
+testCase("状态栏：那条链子也是接满的（`设界面` 就是 `setChrome`）", () => {
   // 链条：`StatusBar` 的 `onHide` → `useStatusBar` 的 `设界面` → `App` 传的
   // `setChrome`（与菜单 `view.statusBar` 同一个）。
   //
   // ⚠️ `useStatusBar` 这一格**故意不自己铺一遍 appearance 的展开**
   //（`{...appearance, show_status_bar: false}` 那种写法）：铺了就是同一个
   // 设置的第二条写路，早晚和 `setChrome` 分叉。所以它收一个 `设界面`。
-  真(
-    状态栏钩子源.includes("设界面: (patch: Partial<Settings[\"appearance\"]>) => void"),
-    "`useStatusBar.ts` 的入参里没有 `设界面`（那一格被删了？）",
+  assertValue(
+    stateBarHookChildSource.includes("setUi: (patch: Partial<Settings[\"appearance\"]>) => void"),
+    "`useStatusBar.ts` 的入参里没有 `setUi`（那一格被删了？）",
   );
-  真(
-    App源.includes("设界面: setChrome"),
-    "`App.tsx` 没把 `setChrome` 当作 `设界面` 交给 `useStatusBar` ——" +
+  assertValue(
+    appSource.includes("setUi: setChrome"),
+    "`App.tsx` 没把 `setChrome` 当作 `setUi` 交给 `useStatusBar` ——" +
       "那颗 × 会走一个不是菜单那个的 setter",
   );
-  真(
-    命令表源.includes('"view.statusBar": () => setChrome({ show_status_bar: !statusBarOpen })'),
+  assertValue(
+    commandTableSource.includes('"view.statusBar": () => setChrome({ show_status_bar: !statusBarOpen })'),
     "`useCommandTable.ts` 里 `view.statusBar` 那一条变了（它和 × 应该落在同一个 `setChrome` 上）",
   );
 });
 
 /* ── 三、菜单上那一族挨着 ───────────────────────────────────────────── */
 
-组("三、⚠️ 视图菜单里「外壳上画出什么」那一族挨着");
+group("三、⚠️ 视图菜单里「外壳上画出什么」那一族挨着");
 
 /**
  * 把一条菜单按 `"sep"` 切成若干段，每段是那一段里的 item id（子菜单只算父项）。
  */
-function 切段(items: readonly unknown[]): string[][] {
-  const 段: string[][] = [[]];
+function splitParagraph(items: readonly unknown[]): string[][] {
+  const paragraph2: string[][] = [[]];
   for (const e of items) {
     if (e === "sep") {
-      段.push([]);
+      paragraph2.push([]);
       continue;
     }
-    段[段.length - 1].push((e as { id: string }).id);
+    paragraph2[paragraph2.length - 1].push((e as { id: string }).id);
   }
-  return 段;
+  return paragraph2;
 }
 
-const 视图菜单 = MENUS.find((m) => m.id === "view");
-真(!!视图菜单, "`MENUS` 里没有 id 为 `view` 的菜单");
-const 视图段 = 切段(视图菜单!.items);
+const viewMenu = MENUS.find((m) => m.id === "view");
+assertValue(!!viewMenu, "`MENUS` 里没有 id 为 `view` 的菜单");
+const viewSection = splitParagraph(viewMenu!.items);
 
-测("⚠️ 那一族是**连着的一段**（`view.toolbar` / `statusBar` / `menuBar` 与插件栏之间没有线）", () => {
+testCase("⚠️ 那一族是**连着的一段**（`view.toolbar` / `statusBar` / `menuBar` 与插件栏之间没有线）", () => {
   // 用户 2026-09-27 点名要的那条分隔线的判据是**分类**：
   // 上面一段管「外壳上画出什么」（侧栏那一族 / 插件栏 / 格式化工具栏 / 状态栏 /
   // 菜单栏），下面一段管「正文那一块怎么呈现」（三种编辑模式 / 只读 / 专注 / 打字机）。
@@ -328,40 +328,40 @@ const 视图段 = 切段(视图菜单!.items);
   // ⚠️ 红了怎么办：往这一段里**加**了一条（比如"标签栏"也做成可关的）——那是好事，
   // 把新 id 加进下面那个期望值里，并在 `commands.ts` 那段注释上补一句；
   // 加的是**别的东西**，说明你把它放错了边，回到上面那段判据里想清楚它是哪一类。
-  const 含状态栏 = 视图段.find((s) => s.includes("view.statusBar"));
-  真(!!含状态栏, "`view.statusBar` 在视图菜单里一条都没有了？");
-  等(
-    JSON.stringify(含状态栏),
+  const containsStateBar = viewSection.find((s) => s.includes("view.statusBar"));
+  assertValue(!!containsStateBar, "`view.statusBar` 在视图菜单里一条都没有了？");
+  equal(
+    JSON.stringify(containsStateBar),
     JSON.stringify(["view.toggleDock", "view.toolbar", "view.statusBar", "view.menuBar"]),
     "「外壳上画出什么」那一段的内容",
   );
 });
 
-测("⚠️ 两种写作模式**不在**这一段里（那一刀还在）", () => {
+testCase("⚠️ 两种写作模式**不在**这一段里（那一刀还在）", () => {
   // 挪动最容易出的错是"连分隔线一起搬走"，那样上面那段会一路吞到缩放去。
-  const 含状态栏 = 视图段.find((s) => s.includes("view.statusBar"))!;
+  const containsStateBar = viewSection.find((s) => s.includes("view.statusBar"))!;
   for (const id of ["view.focusMode", "view.typewriter", "view.readOnly", "view.modeWysiwyg"]) {
-    真(
-      !含状态栏.includes(id),
+    assertValue(
+      !containsStateBar.includes(id),
       `\`${id}\` 落在了「外壳上画出什么」那一段里 —— 它是"正文那一块怎么呈现"，` +
         "与那一族之间必须还隔着那条分隔线",
     );
   }
 });
 
-测("侧栏那一族仍在自己那一段里（没被这次挪动带下来）", () => {
+testCase("侧栏那一族仍在自己那一段里（没被这次挪动带下来）", () => {
   // ⚠️ 侧栏（`view.toggleSidebar`）与「大纲/文件树/搜索」同段，在插件栏那条线**上面**
   // ——那段自己有一条既有的线（`commands.ts` 里那条注释写着"上面那一段具体从哪算起
   // 是开窗量出来的"）。这次只动了 `statusBar` / `menuBar` 两条，这里钉一下没连带动。
-  const 含侧栏 = 视图段.find((s) => s.includes("view.toggleSidebar"))!;
-  真(!含侧栏.includes("view.toggleDock"), "侧栏与插件栏之间的那条线不见了");
-  真(!含侧栏.includes("view.statusBar"), "状态栏跑到侧栏那一段里去了（它属于插件栏那一族）");
+  const containsSideBar = viewSection.find((s) => s.includes("view.toggleSidebar"))!;
+  assertValue(!containsSideBar.includes("view.toggleDock"), "侧栏与插件栏之间的那条线不见了");
+  assertValue(!containsSideBar.includes("view.statusBar"), "状态栏跑到侧栏那一段里去了（它属于插件栏那一族）");
 });
 
 /* ── 收尾 ───────────────────────────────────────────────────────────── */
 
-console.log(`\n${过} 过 / ${败} 败`);
-if (败) {
-  console.log(`败的：${败的.join("、")}`);
+console.log(`\n${pass} 过 / ${fail} 败`);
+if (fail) {
+  console.log(`败的：${failed.join("、")}`);
   process.exitCode = 1;
 }

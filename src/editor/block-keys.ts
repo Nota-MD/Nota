@@ -20,18 +20,18 @@ import { deleteTable, findTable } from "@milkdown/kit/prose/tables";
 import { $prose } from "@milkdown/kit/utils";
 
 /** 光标是否在最外层引用框的绝对开头。 */
-export function 在引用最开头(state: EditorState): boolean {
+export function atReferenceUseMostOpenHead(state: EditorState): boolean {
   const { selection } = state;
   if (!selection.empty || selection.$from.parentOffset !== 0) return false;
   const $from = selection.$from;
-  let 有引用 = false;
-  for (let 层 = 1; 层 <= $from.depth; 层 += 1) {
-    if ($from.node(层).type.name !== "blockquote") continue;
-    有引用 = true;
+  let hasReferenceUse = false;
+  for (let layer = 1; layer <= $from.depth; layer += 1) {
+    if ($from.node(layer).type.name !== "blockquote") continue;
+    hasReferenceUse = true;
     // 当前段落、内层引用等每一级都必须是父节点的第一个孩子，才算“引用开头”。
-    if ($from.index(层 - 1) !== 0) return false;
+    if ($from.index(layer - 1) !== 0) return false;
   }
-  return 有引用;
+  return hasReferenceUse;
 }
 
 /**
@@ -41,63 +41,63 @@ export function 在引用最开头(state: EditorState): boolean {
  * 交给 view；这样嵌套引用会全部退出，而列表等别的容器只在确实挡住引用时参与
  * `lift` 的合法性判断。
  */
-export function 取消全部引用(
+export function getClearAllReferenceUse(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  if (!在引用最开头(state)) return false;
+  if (!atReferenceUseMostOpenHead(state)) return false;
   if (!dispatch) return true;
 
-  let 当前 = state;
-  for (let 次 = 0; 次 < 32; 次 += 1) {
-    let 抬出: Transaction | null = null;
-    if (!lift(当前, (tr) => (抬出 = tr))) break;
-    if (!抬出) break;
-    dispatch(抬出);
-    当前 = 当前.apply(抬出);
-    const $from = 当前.selection.$from;
-    let 还有引用 = false;
-    for (let 层 = 1; 层 <= $from.depth; 层 += 1) {
-      if ($from.node(层).type.name === "blockquote") {
-        还有引用 = true;
+  let current = state;
+  for (let count2 = 0; count2 < 32; count2 += 1) {
+    let liftOutput: Transaction | null = null;
+    if (!lift(current, (tr) => (liftOutput = tr))) break;
+    if (!liftOutput) break;
+    dispatch(liftOutput);
+    current = current.apply(liftOutput);
+    const $from = current.selection.$from;
+    let returnHasReferenceUse = false;
+    for (let layer = 1; layer <= $from.depth; layer += 1) {
+      if ($from.node(layer).type.name === "blockquote") {
+        returnHasReferenceUse = true;
         break;
       }
     }
-    if (!还有引用) break;
+    if (!returnHasReferenceUse) break;
   }
   return true;
 }
 
 /** 单元格、行、段落等容器是否完全没有文字或原子内容。 */
-function 节点为空(node: PMNode): boolean {
+function nodeAsEmpty(node: PMNode): boolean {
   if (node.isText) return node.text?.trim() === "";
   if (node.isLeaf) return false;
-  let 空 = true;
-  node.forEach((子) => {
-    if (!节点为空(子)) 空 = false;
+  let emptyValue = true;
+  node.forEach((child3) => {
+    if (!nodeAsEmpty(child3)) emptyValue = false;
   });
-  return 空;
+  return emptyValue;
 }
 
 /** 光标是否在空表格的一个空段落开头。 */
-export function 在空表格开头(state: EditorState): boolean {
+export function atEmptyTableCellOpenHead(state: EditorState): boolean {
   const { selection } = state;
   if (!selection.empty || selection.$from.parentOffset !== 0) return false;
   if (selection.$from.parent.content.size !== 0) return false;
-  const 表 = findTable(selection.$from);
-  return 表 !== null && 节点为空(表.node);
+  const table2 = findTable(selection.$from);
+  return table2 !== null && nodeAsEmpty(table2.node);
 }
 
 /** 在空表格开头退格时删掉整张表。 */
-export function 删除空表格(
+export function deleteEmptyTable(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  if (!在空表格开头(state)) return false;
+  if (!atEmptyTableCellOpenHead(state)) return false;
   return deleteTable(state, dispatch);
 }
 
-export const 块容器按键 = $prose(
+export const blockContainerKeypress = $prose(
   () =>
     new Plugin({
       key: new PluginKey("nota-block-container-keys"),
@@ -107,15 +107,15 @@ export const 块容器按键 = $prose(
             return false;
           }
           if (event.key === " " && !event.shiftKey) {
-            if (!在引用最开头(view.state)) return false;
+            if (!atReferenceUseMostOpenHead(view.state)) return false;
             event.preventDefault();
-            取消全部引用(view.state, (tr) => view.dispatch(tr));
+            getClearAllReferenceUse(view.state, (tr) => view.dispatch(tr));
             return true;
           }
           if (event.key === "Backspace" && !event.shiftKey) {
-            if (!在空表格开头(view.state)) return false;
+            if (!atEmptyTableCellOpenHead(view.state)) return false;
             event.preventDefault();
-            return 删除空表格(view.state, (tr) => view.dispatch(tr));
+            return deleteEmptyTable(view.state, (tr) => view.dispatch(tr));
           }
           return false;
         },

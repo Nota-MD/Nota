@@ -61,7 +61,7 @@ import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
  * 裸 URL 那一路本来也不会把 `mailto:` 认成网址（{@link 正规化网址} 只认
  * http/https/www），所以这里放行是安全的。
  */
-const 危险协议表 = ["javascript:", "vbscript:", "data:", "file:", "blob:"] as const;
+const dangerousProtocolTable = ["javascript:", "vbscript:", "data:", "file:", "blob:"] as const;
 
 /**
  * 这条地址危不危险（危险 = 不许进文档）。
@@ -72,9 +72,9 @@ const 危险协议表 = ["javascript:", "vbscript:", "data:", "file:", "blob:"] 
  * `java\tscript:` 这种写法会从这道闸底下钻过去（浏览器解析 `href` 时会把
  * 里面的制表符与换行吃掉，它**仍然是**一条 `javascript:`）。
  */
-export function 危险协议(地址: string): boolean {
-  const 干 = 地址.replace(/[\s\u0000-\u001f\u007f]/g, "").toLowerCase();
-  return 危险协议表.some((坏) => 干.startsWith(坏));
+export function DangerousProtocol(address: string): boolean {
+  const doValue = address.replace(/[\s\u0000-\u001f\u007f]/g, "").toLowerCase();
+  return dangerousProtocolTable.some((broken) => doValue.startsWith(broken));
 }
 
 /**
@@ -88,10 +88,10 @@ export function 危险协议(地址: string): boolean {
  * `www.x` 不认。IDN（`例子.中国`）走 `new URL()` 会被转成 punycode，
  * 到了这一步已经是 `xn--…`，最后一段是字母，照样放行。
  */
-function 是像主机名(主机: string): boolean {
-  if (主机 === "localhost") return true;
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(主机)) return true;
-  return /^[^.\s/]+(\.[^.\s/]+)*\.[a-z]{2,}$/i.test(主机);
+function isLikeMainMachineName(mainMachine: string): boolean {
+  if (mainMachine === "localhost") return true;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(mainMachine)) return true;
+  return /^[^.\s/]+(\.[^.\s/]+)*\.[a-z]{2,}$/i.test(mainMachine);
 }
 
 /**
@@ -109,38 +109,38 @@ function 是像主机名(主机: string): boolean {
  * ⚠️ **纯函数**：{@link 自动链接输入} 与 {@link 贴上网址事务} 用的是同一个它，
  * 测试（`tests/url-link.test.ts`）也是。
  */
-export function 正规化网址(候选: string): string | null {
-  const 文 = 候选.trim();
-  if (文 === "" || /\s/.test(文)) return null;
-  if (危险协议(文)) return null;
-  let 地址: string;
-  if (/^https?:\/\//i.test(文)) {
-    地址 = 文;
-  } else if (/^www\./i.test(文)) {
-    地址 = `https://${文}`;
+export function NormalizeUrl(candidate: string): string | null {
+  const text4 = candidate.trim();
+  if (text4 === "" || /\s/.test(text4)) return null;
+  if (DangerousProtocol(text4)) return null;
+  let address: string;
+  if (/^https?:\/\//i.test(text4)) {
+    address = text4;
+  } else if (/^www\./i.test(text4)) {
+    address = `https://${text4}`;
   } else {
     return null;
   }
-  let 解析: URL;
+  let parse: URL;
   try {
-    解析 = new URL(地址);
+    parse = new URL(address);
   } catch {
     // `new URL` 抛 = 这串压根不是个地址（`https://` 后面什么都没有、
     // 或者中间有浏览器不接受的字符）。**当没看见**，不是报错。
     return null;
   }
-  if (解析.protocol !== "http:" && 解析.protocol !== "https:") return null;
-  if (!是像主机名(解析.hostname)) return null;
-  return 地址;
+  if (parse.protocol !== "http:" && parse.protocol !== "https:") return null;
+  if (!isLikeMainMachineName(parse.hostname)) return null;
+  return address;
 }
 
 /** {@link 是裸URL} 的判据出口（测试用）。 */
-export function 是裸URL(候选: string): boolean {
-  return 正规化网址(候选) !== null;
+export function isBareURL(candidate: string): boolean {
+  return NormalizeUrl(candidate) !== null;
 }
 
 /** 左括号 / 左引号 → 右括号 / 右引号。{@link 切尾标点} 第 ② 条用它配对。 */
-const 右配左: Readonly<Record<string, string>> = {
+const rightConfigureLeft: Readonly<Record<string, string>> = {
   ")": "(",
   "]": "[",
   "}": "{",
@@ -178,29 +178,29 @@ const 右配左: Readonly<Record<string, string>> = {
  * @returns `网址` 是切干净的（**可能为空串**，调用方自己判），`尾巴` 是切下来的
  *   那一截（**原样**、顺序不变），调用方要把它当普通文字放回原处。
  */
-export function 切尾标点(原文: string): { 网址: string; 尾巴: string } {
-  const 数 = (s: string, c: string) => s.split(c).length - 1;
-  let 终 = 原文.length;
-  while (终 > 0) {
-    const 末 = 原文[终 - 1]!;
-    if (".,;:!?".includes(末)) {
-      终--;
+export function splitTailPunctuation(source: string): { url: string; tailPart: string } {
+  const number2 = (s: string, c: string) => s.split(c).length - 1;
+  let end3 = source.length;
+  while (end3 > 0) {
+    const end = source[end3 - 1]!;
+    if (".,;:!?".includes(end)) {
+      end3--;
       continue;
     }
-    const 左 = 右配左[末];
-    if (左 !== undefined) {
+    const left = rightConfigureLeft[end];
+    if (left !== undefined) {
       // ⚠️ `终` 是"最后一颗之后"的那个下标，所以 `slice(0, 终)` **已经含**
       // 当前这一颗了——不要再自己 `+ 1`。2026-09-28 写测试时加了那一颗，
       // 症状是**配平的地址反被切掉尾巴**（`.../A_(b)` 变成 `.../A_(b`）。
-      const 已有 = 原文.slice(0, 终);
-      if (数(已有, 末) > 数(已有, 左)) {
-        终--;
+      const alreadyHas = source.slice(0, end3);
+      if (number2(alreadyHas, end) > number2(alreadyHas, left)) {
+        end3--;
         continue;
       }
     }
     break;
   }
-  return { 网址: 原文.slice(0, 终), 尾巴: 原文.slice(终) };
+  return { url: source.slice(0, end3), tailPart: source.slice(end3) };
 }
 
 /* ── 第二格：输入规则（打字那一路）────────────────────────────────────── */
@@ -211,7 +211,7 @@ export function 切尾标点(原文: string): { 网址: string; 尾巴: string }
  * `true`，不写这一句行内代码里也会生效），那段长注释在 `smart-punctuation.ts`
  * 那边，这里不重复。
  */
-const 规则选项 = { inCodeMark: false } as const;
+const ruleRuleOption = { inCodeMark: false } as const;
 
 /**
  * 打到词尾那一下的匹配式。**导出是给测试用的**。
@@ -228,7 +228,7 @@ const 规则选项 = { inCodeMark: false } as const;
  * `始 = 光标 - match[0].length` 反推位置，不收尾就会把位置算错一个偏移，
  * 症状是"链接包住了 URL 前面那颗空格"。
  */
-export const 裸URL正则 =
+export const bareURLCorrectRule =
   /(?:^|[\s([{（【「『"'“‘>\uFFFC])((?:https?:\/\/|www\.)[^\s<>"'`]+)[ \t]$/;
 
 /**
@@ -241,26 +241,26 @@ export const 裸URL正则 =
  * 输入规则要的分隔符是 `#` / `>` / `-` / 数字 / 反引号 / `$`，与"字母冒号
  * 斜杠那一串"不重合，抢不起来；排后面是零代价的保险。
  */
-export function 自动链接输入() {
+export function selfActionLinkInput() {
   return [
     $inputRule(() =>
-      new InputRule(裸URL正则, (state, 匹配, 始, 终) => {
-        const 原 = 匹配[1]!;
+      new InputRule(bareURLCorrectRule, (state, match2, start6, end3) => {
+        const original = match2[1]!;
         // ⚠️ 先切尾标点**再**判网址：`https://a.com/b.` 里那颗句号让
         // `new URL` 仍然成功，而 `https://a.com/b,` 里那颗逗号未必——顺序反了
         // 会出现"带逗号的不认、带句号的认"这种说不通的差别。
-        const { 网址, 尾巴 } = 切尾标点(原);
-        const 地址 = 正规化网址(网址);
-        if (!地址) return null;
-        const 链接 = state.schema.marks.link;
-        if (!链接) return null;
+        const { url, tailPart } = splitTailPunctuation(original);
+        const address = NormalizeUrl(url);
+        if (!address) return null;
+        const link = state.schema.marks.link;
+        if (!link) return null;
         // ⚠️ `匹配[0]` 是"**前缀字符 ＋ 网址 ＋ 触发空白**"，`始` 落在前缀
         // 字符上、`终` 在光标（触发空白之后）。所以网址本体的区间是
         // `[始 + 前缀长, 终 - 1)`。前缀长**只能这么算**，不能写死：
         // 行首时前缀是空的（`^` 那一支），写死 1 会把第一个字符切掉。
-        const 前缀长 = 匹配[0].length - 原.length - 1;
-        return 换链接(state, 始 + 前缀长, 终 - 1, 网址, 尾巴, 地址, 链接);
-      }, 规则选项),
+        const prefixLength = match2[0].length - original.length - 1;
+        return replaceLink(state, start6 + prefixLength, end3 - 1, url, tailPart, address, link);
+      }, ruleRuleOption),
     ),
   ];
 }
@@ -278,18 +278,18 @@ export function 自动链接输入() {
  *    粘贴那一路同理。
  * ③ **顺序**：链接节点在前、尾巴在后，一次 `replaceWith` 传数组。
  */
-function 换链接(
+function replaceLink(
   state: EditorState,
-  始: number,
-  终: number,
-  网址: string,
-  尾巴: string,
-  地址: string,
-  链接: MarkType,
+  start6: number,
+  end3: number,
+  url: string,
+  tailPart: string,
+  address: string,
+  link: MarkType,
 ) {
-  const 节点 = [state.schema.text(网址, [链接.create({ href: 地址 })])];
-  if (尾巴 !== "") 节点.push(state.schema.text(尾巴));
-  return state.tr.replaceWith(始, 终, 节点).removeStoredMark(链接);
+  const node = [state.schema.text(url, [link.create({ href: address })])];
+  if (tailPart !== "") node.push(state.schema.text(tailPart));
+  return state.tr.replaceWith(start6, end3, node).removeStoredMark(link);
 }
 
 /* ── 第三格：粘贴那一路的入口 ──────────────────────────────────────────── */
@@ -316,11 +316,11 @@ function 换链接(
  * 上 `from`/`to` 之间是一整个**块节点**，`addMark` 会在它身上挂链接标记，
  * 存盘序列化出来没法看。所以只给 `inlineContent` 的两端挂。
  */
-export function 贴上网址事务(state: EditorState, 剪贴板文本: string): Transaction | null {
-  const 地址 = 正规化网址(剪贴板文本);
-  if (!地址) return null;
-  const 链接 = state.schema.marks.link;
-  if (!链接) return null;
+export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: string): Transaction | null {
+  const address = NormalizeUrl(cutPasteBoardText);
+  if (!address) return null;
+  const link = state.schema.marks.link;
+  if (!link) return null;
   const { selection } = state;
   if (selection.empty) {
     // ⚠️ **不能用 `insertText`**：它的签名里**没有** marks 那一格
@@ -330,10 +330,10 @@ export function 贴上网址事务(state: EditorState, 剪贴板文本: string):
       .replaceWith(
         selection.from,
         selection.to,
-        state.schema.text(剪贴板文本.trim(), [链接.create({ href: 地址 })]),
+        state.schema.text(cutPasteBoardText.trim(), [link.create({ href: address })]),
       )
-      .removeStoredMark(链接);
+      .removeStoredMark(link);
   }
   if (!selection.$from.parent.inlineContent || !selection.$to.parent.inlineContent) return null;
-  return state.tr.addMark(selection.from, selection.to, 链接.create({ href: 地址 }));
+  return state.tr.addMark(selection.from, selection.to, link.create({ href: address }));
 }

@@ -31,7 +31,7 @@
  * ⚠️ 名字**互不相同**，哪怕两种写法在中文里都叫"中文"（`中文（简体）` /
  * `中文（繁體）`）——它们在本地语里本来就是两句话。
  */
-const 主名: Record<string, string> = {
+const mainName: Record<string, string> = {
   af: "Afrikaans",
   ar: "العربية",
   be: "Беларуская",
@@ -96,7 +96,7 @@ const 主名: Record<string, string> = {
  * `de_CH` 在德语里就叫 Schweizerdeutsch（不是"瑞士的德语"），
  * `pt_BR` 叫 Português (Brasil)。⚠️ 别照着这张表推——推不出来，它是语言事实。
  */
-const 地区名: Record<string, string> = {
+const localAreaName: Record<string, string> = {
   "en_us": "English (US)",
   "en_gb": "English (UK)",
   "en_ca": "English (CA)",
@@ -119,8 +119,8 @@ const 地区名: Record<string, string> = {
 };
 
 /** 归一化：`en-US` 与 `en_US` 是同一门（与 `src-tauri/src/spell/store.rs::归一` 一致）。 */
-function 归一(标签: string): string {
-  return 标签.trim().toLowerCase().replace(/-/g, "_");
+function normalize(label: string): string {
+  return label.trim().toLowerCase().replace(/-/g, "_");
 }
 
 /**
@@ -129,19 +129,19 @@ function 归一(标签: string): string {
  * ⚠️ 表里没有的标签**原样返回**（`xx_XX`）：那时候"这个名字是什么"没人知道，
  * 而拿一个编出来的名字糊上去比显示原串坏——用户至少要能照着它去搜。
  */
-export function 语言名(标签: string): string {
-  const 净 = 归一(标签);
-  const 地区 = 地区名[净];
-  if (地区) return 地区;
-  const [主 = 净, 后缀] = 净.split("_");
-  const 本名 = 主名[主];
-  if (!本名) return 标签;
+export function languageName(label: string): string {
+  const clean = normalize(label);
+  const localArea = localAreaName[clean];
+  if (localArea) return localArea;
+  const [main = clean, extension] = clean.split("_");
+  const localName = mainName[main];
+  if (!localName) return label;
   // ⚠️ 带地区/书写系统的那些**必须**把后缀缀上（`en_AG` → `English (AG)`）：
   // 容器里那 25 份词典里有十几份是 `en_*`，不缀的话左边一列会是一整排一模一样的
   // "English"——**左边那一列就废了**（右列还有短码能分辨，但用户是靠名字扫的）。
-  if (!后缀) return 本名;
-  const 显示 = 后缀.length === 2 ? 后缀.toUpperCase() : 后缀[0]!.toUpperCase() + 后缀.slice(1);
-  return `${本名} (${显示})`;
+  if (!extension) return localName;
+  const show = extension.length === 2 ? extension.toUpperCase() : extension[0]!.toUpperCase() + extension.slice(1);
+  return `${localName} (${show})`;
 }
 
 /**
@@ -150,6 +150,6 @@ export function 语言名(标签: string): string {
  * ⚠️ 换连字符是**给人看的写法**（`EN-US` 是大家认得的样子），而设置里存、
  * 文件名上写的仍是**下划线**那一套（`en_US`）——两个不是一个东西，别互相抄。
  */
-export function 语言短码(标签: string): string {
-  return 归一(标签).toUpperCase().replace(/_/g, "-");
+export function languageCode(label: string): string {
+  return normalize(label).toUpperCase().replace(/_/g, "-");
 }

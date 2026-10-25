@@ -26,13 +26,13 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
           <Value>{t("Enabled")}</Value>
         </SettingRow>
         <SettingRow
-          label={t("Diagnostic information")}
+          label={t("Debug log")}
           description={t(
-            "Runtime and build information is formatted in English for issue reports and developer handoff.",
+            "Opens a live terminal-style backend log in a separate window. The log window is intentionally unstyled and untranslated.",
           )}
         >
-          <ActionButton onClick={() => void api.window.openDebugInfo()}>
-            {t("Open in a New Window")}
+          <ActionButton onClick={() => void api.window.openDebugLog()}>
+            {t("Open Log")}
           </ActionButton>
         </SettingRow>
         <SettingRow label={t("Settings file")}>

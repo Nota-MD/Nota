@@ -69,11 +69,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { DocId, Document, ViewMode } from "@/bridge/ipc";
-import { 实际模式, 降级缘由, type 降级缘由 as 缘由 } from "@/editor/file-kind";
+import { actualMode, LowerLevelReason, type LowerLevelReason as reason } from "@/editor/file-kind";
 import type { Toast } from "@/ui/Toasts";
 
 /** 这个 hook 要的输入。全是现成的状态，没有一样是它自己造的。 */
-export interface 输入 {
+export interface input {
   /** 当前开着的文档（`App.tsx` 那份列表）。 */
   docs: Document[];
   /** 前台是哪一份。`null` = 一份都没开。 */
@@ -81,12 +81,12 @@ export interface 输入 {
   /** 提示条出口（`ui/useToasts.ts`）。 */
   toast: (message: string, level?: Toast["level"]) => void;
   /** 翻译（`useT()`）。⚠️ 传进来而不是在这里 `useT()`：调用方本来就有。 */
-  t: (原文: string, ...参数: (string | number)[]) => string;
+  t: (source: string, ...parameter: (string | number)[]) => string;
 }
 
-export interface 出口 {
+export interface OutputMouth {
   /** **实际该用的模式**。降级了就是 `source`，没降级就是用户设的那一档。 */
-  模式: ViewMode;
+  mode2: ViewMode;
   /**
    * 用户**自己**选的那一档（还没过降级的原始值）。
    *
@@ -94,7 +94,7 @@ export interface 出口 {
    * "用户想要所见即所得吗"（决定自动配对之类的行为），与"这一份眼下被降级
    * 了没有"无关。
    */
-  偏好: ViewMode;
+  preference: ViewMode;
   /**
    * 用户自己选了模式（菜单「视图」那三条 ＋ 状态栏那颗 `</>` 都汇到这里）。
    *
@@ -103,17 +103,17 @@ export interface 出口 {
    * 「当前这一份」用 ref 读、不进依赖：这个回调要**身份稳定**，它是
    * `App.tsx` 整张菜单表的依赖之一，抖一次整张表重建一次。
    */
-  设模式: (m: ViewMode) => void;
+  setMode: (m: ViewMode) => void;
 }
 
-export function useFileKind(输入: 输入): 出口 {
-  const { docs, activeId, toast, t } = 输入;
+export function useFileKind(input: input): OutputMouth {
+  const { docs, activeId, toast, t } = input;
 
   /**
    * 用户**自己**选的那一档（**会话内状态**，不落盘，2026-10-07 起住这里）。
    * 每次启动一律从这个初值开始——用户原话「请设置默认启动为 WYSIWYG」。
    */
-  const [模式偏好, 设模式偏好] = useState<ViewMode>("wysiwyg");
+  const [modePreference, setModePreference] = useState<ViewMode>("wysiwyg");
 
   /**
    * `设模式` 要读"当前是哪一份"、又不许把它写进依赖（那个回调的身份要稳），
@@ -132,12 +132,12 @@ export function useFileKind(输入: 输入): 出口 {
    * ⚠️ **只装降级了的**，没降级的不占格子：绝大多数文档都是"什么都不用管"，
    * 给每一份都存一条 `null` 只是让这张表变长。
    */
-  const [降级表, set降级表] = useState<ReadonlyMap<DocId, 缘由>>(() => new Map());
+  const [lowerLevelTable, setLowerLevelTable] = useState<ReadonlyMap<DocId, reason>>(() => new Map());
 
   /** 判过了的。⚠️ 与 `降级表` **不是一回事**：判过之后结论是"不用管"的那些只在这里。 */
-  const 判过 = useRef(new Set<DocId>());
+  const determinePass = useRef(new Set<DocId>());
   /** 提示过条的。理由见文件头「提示条的时机」。 */
-  const 提示过 = useRef(new Set<DocId>());
+  const noticePass = useRef(new Set<DocId>());
 
   // ── ① 判（每份只判一次）＋ 收尸 ──────────────────────────────────────
   //
@@ -145,52 +145,52 @@ export function useFileKind(输入: 输入): 出口 {
   // 哪些"（就是 `docs`），拆成两个 effect 会让"关掉一份"这件事被处理两次，
   // 而它们谁先跑是不保证的。
   useEffect(() => {
-    const 在世 = new Set(docs.map((d) => d.id));
+    const atWorld = new Set(docs.map((d) => d.id));
 
     // 收尸：这一份关掉了，把它从两个本子里划掉。
     // ⚠️ 不清的话：`DocId` 是宿主那边递增发的，短时间重开一份新文档不会撞号；
     // 但**不清就是一份只会变长的账**，而且哪儿天宿主改成复用 id，症状会是
     // "新开的一份 .py 静静地按源码模式打开、一条提示都没有"——那是判过它了，
     // 用的是上一份的结论。收尸在 `docs` 每次变化时做一遍，代价是一次 Set 遍历。
-    let 有尸 = false;
-    for (const id of 判过.current) {
-      if (!在世.has(id)) {
-        判过.current.delete(id);
-        提示过.current.delete(id);
-        有尸 = true;
+    let hasDummy = false;
+    for (const id of determinePass.current) {
+      if (!atWorld.has(id)) {
+        determinePass.current.delete(id);
+        noticePass.current.delete(id);
+        hasDummy = true;
       }
     }
 
     // 判：只看还没判过的。
-    const 新降级: Array<[DocId, 缘由]> = [];
+    const newValueLowerLevel: Array<[DocId, reason]> = [];
     for (const d of docs) {
-      if (判过.current.has(d.id)) continue;
-      判过.current.add(d.id);
+      if (determinePass.current.has(d.id)) continue;
+      determinePass.current.add(d.id);
       // ⚠️ `d.path === null` 是"还没存盘的新文档"，`降级缘由` 认这个取值
       //（见那边的参数类型）：名字这一条判不了，大小那一条照判。
-      const 缘由 = 降级缘由(d.path, d.text.length);
-      if (缘由) 新降级.push([d.id, 缘由]);
+      const reason = LowerLevelReason(d.path, d.text.length);
+      if (reason) newValueLowerLevel.push([d.id, reason]);
     }
 
-    if (!有尸 && 新降级.length === 0) return;
+    if (!hasDummy && newValueLowerLevel.length === 0) return;
 
-    set降级表((旧) => {
-      const 新 = new Map<DocId, 缘由>();
-      for (const [id, 缘由] of 旧) if (在世.has(id)) 新.set(id, 缘由);
-      for (const [id, 缘由] of 新降级) 新.set(id, 缘由);
-      return 新;
+    setLowerLevelTable((oldValue) => {
+      const newValue = new Map<DocId, reason>();
+      for (const [id, reason] of oldValue) if (atWorld.has(id)) newValue.set(id, reason);
+      for (const [id, reason] of newValueLowerLevel) newValue.set(id, reason);
+      return newValue;
     });
   }, [docs]);
 
   // ── ② 提示（只在它成为前台那一份时，一次）──────────────────────────
   useEffect(() => {
     if (activeId === null) return;
-    const 缘由 = 降级表.get(activeId);
-    if (!缘由 || 提示过.current.has(activeId)) return;
+    const reason = lowerLevelTable.get(activeId);
+    if (!reason || noticePass.current.has(activeId)) return;
     const d = docs.find((x) => x.id === activeId);
     if (!d) return;
-    提示过.current.add(activeId);
-    if (缘由 === "text") {
+    noticePass.current.add(activeId);
+    if (reason === "text") {
       toast(
         t(
           "“{0}” is not a Markdown file, so it opened in Source mode.",
@@ -206,29 +206,29 @@ export function useFileKind(输入: 输入): 出口 {
         ),
       );
     }
-  }, [activeId, 降级表, docs, toast, t]);
+  }, [activeId, lowerLevelTable, docs, toast, t]);
 
   // ── ③ 合出实际模式 ──────────────────────────────────────────────────
-  const 这一份的缘由: 缘由 | null =
-    activeId === null ? null : (降级表.get(activeId) ?? null);
+  const thisOneDocumentOfReason: reason | null =
+    activeId === null ? null : (lowerLevelTable.get(activeId) ?? null);
 
   // ⚠️ 2026-10-07 起**不再有兜底值**：`模式偏好` 就是上面那条
   // `useState("wysiwyg")` 的当前值，不存在"设置还没读回来"的那几百毫秒
   // （那条窗口正是当初要三处兜底对齐的原因——现在那份默认值只有一处）。
-  const 模式 = 实际模式(模式偏好, 这一份的缘由);
+  const mode2 = actualMode(modePreference, thisOneDocumentOfReason);
 
   // ── ④ 切模式：改偏好 ＋ 解除这一份的降级 ─────────────────────────────
-  const 设模式 = useCallback((m: ViewMode) => {
-    设模式偏好(m);
+  const setMode = useCallback((m: ViewMode) => {
+    setModePreference(m);
     const id = activeIdRef.current;
     if (id === null) return;
-    set降级表((旧) => {
-      if (!旧.has(id)) return 旧; // 没降级过就原样返回，别白重画一次
-      const 新 = new Map(旧);
-      新.delete(id);
-      return 新;
+    setLowerLevelTable((oldValue) => {
+      if (!oldValue.has(id)) return oldValue; // 没降级过就原样返回，别白重画一次
+      const newValue = new Map(oldValue);
+      newValue.delete(id);
+      return newValue;
     });
   }, []);
 
-  return { 模式, 偏好: 模式偏好, 设模式 };
+  return { mode2, preference: modePreference, setMode };
 }

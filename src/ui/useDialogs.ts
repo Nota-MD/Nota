@@ -108,18 +108,18 @@ export interface PromptRequest {
  */
 export interface ImageRequest {
   /** 当前文档存过盘没有（没存盘 = 没有"文档旁边"这个目录）。 */
-  文档存过盘: boolean;
+  documentSaved: boolean;
   /**
    * 这台机器配了上传服务器吗（`image-upload.toml` 里 `enabled` 开着、
    * 地址也是 http/https）。**没配就不显示那个勾选框**——摆一个按下去报错的
    * 勾选框，比不摆更费解。
    */
-  能上传: boolean;
+  ableAbovePass: boolean;
   /**
    * 这份文档插一张本地图会不会**自动**上传（三道闸都过了）。
    * ⚠️ 为真时勾选框换成一句说明：这次会上传是文档说了算，勾不勾都一样。
    */
-  会自动上传: boolean;
+  meetingSelfActionAbovePass: boolean;
 }
 
 /**
@@ -162,7 +162,7 @@ export interface ImageAnswer {
    * 正常的插入（图照进文档，地址是本地那条），错误另说一句。
    * 自动上传那条路不看这一项（那由文档的前件决定）。
    */
-  上传: boolean;
+  abovePass: boolean;
 }
 
 export interface Dialogs {
@@ -215,7 +215,7 @@ export interface Dialogs {
    */
   askEmoji: () => Promise<string | null>;
   /** 用户回答了（`ui/EmojiDialog` 的 `onAnswer` 接这个）。 */
-  answerEmoji: (字符: string | null) => void;
+  answerEmoji: (character: string | null) => void;
 
   /**
    * 「关于 Nota」框开着没有。
@@ -228,11 +228,11 @@ export interface Dialogs {
    * 多；② "现在有哪些浮层"这件事该有一个统一的答案——`App.tsx` 的 `有浮层`
    * 要逐条列出来（见 `ui/useImmersive.ts` 那一格），多一个来源就多一处要记得改。
    */
-  关于开着: boolean;
+  aboutOpen: boolean;
   /** 打开它（菜单「帮助 → 关于 Nota」）。 */
-  开关于: () => void;
+  openAbout: () => void;
   /** 关掉它（× 键、`Esc`、点遮罩）。 */
-  关关于: () => void;
+  closeAbout: () => void;
 }
 
 export function useDialogs(): Dialogs {
@@ -307,7 +307,7 @@ export function useDialogs(): Dialogs {
   }, []);
 
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const emojiResolve = useRef<((字符: string | null) => void) | null>(null);
+  const emojiResolve = useRef<((character: string | null) => void) | null>(null);
 
   const askEmoji = useCallback(() => {
     return new Promise<string | null>((resolve) => {
@@ -316,11 +316,11 @@ export function useDialogs(): Dialogs {
     });
   }, []);
 
-  const answerEmoji = useCallback((字符: string | null) => {
+  const answerEmoji = useCallback((character: string | null) => {
     setEmojiOpen(false);
     const resolve = emojiResolve.current;
     emojiResolve.current = null;
-    resolve?.(字符);
+    resolve?.(character);
   }, []);
 
   // 「关于」——见 `Dialogs.关于开着` 上那段：它不是问答框，所以没有 `resolve`，
@@ -334,9 +334,9 @@ export function useDialogs(): Dialogs {
   const openPrint = useCallback((req: PrintRequest) => setPrintReq(req), []);
   const closePrint = useCallback(() => setPrintReq(null), []);
 
-  const [关于开着, set关于] = useState(false);
-  const 开关于 = useCallback(() => set关于(true), []);
-  const 关关于 = useCallback(() => set关于(false), []);
+  const [aboutOpen, setAbout] = useState(false);
+  const openAbout = useCallback(() => setAbout(true), []);
+  const closeAbout = useCallback(() => setAbout(false), []);
 
   return {
     confirmReq,
@@ -357,8 +357,8 @@ export function useDialogs(): Dialogs {
     emojiOpen,
     askEmoji,
     answerEmoji,
-    关于开着,
-    开关于,
-    关关于,
+    aboutOpen,
+    openAbout,
+    closeAbout,
   };
 }

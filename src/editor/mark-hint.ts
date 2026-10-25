@@ -39,8 +39,10 @@
  *
  * # 长相：widget 内的真实文字
  *
- * 符号直接写进 `textContent`。2026-10-24 起 CSS 让它继承正文颜色、字体和字号，
- * 只锁死常规字重与正体；不可选中、不吃鼠标事件，但最终是完全不透明的实体字符。
+ * 符号直接写进 `textContent`。字体与字号跟随正文，颜色使用主题的
+ * `--fg-faint`：它们是可辨认的实体字符，但视觉层级仍属于 Markdown 语法，
+ * 不能伪装成正文内容。每个符号字符各是一颗 widget，`**` / `</u>` 不再被
+ * 当成一个不可分的文字块。
  *
  * ⚠️ **代价讲清楚**：这两个符号是**占宽度**的（它们是文档流里的真实 `<span>`，
  * 不是绝对定位的浮标）。所以光标进出加粗段时，那一行会横向动
@@ -68,10 +70,10 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { Mark, MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
 
-import { 标记表 } from "./inline-marks";
+import { markTable } from "./inline-marks";
 
 /** 加在左右两颗标记 widget 上的 class。CSS 见 `src/styles/marks.css`。 */
-export const 提示类 = "nota-markhint";
+export const noticeClass = "nota-markhint";
 
 /**
  * 提示哪几种标记、各画什么左右符号。**就这一张表**；本仓自造的高亮 / 上下标 /
@@ -94,15 +96,15 @@ export const 提示类 = "nota-markhint";
  *
  * 📌 导出只给 `tests/mark-hint.test.ts` 用（它拿真 preset 的 id 对这张表）。
  */
-export const 提示表: readonly { 名: string; 左: string; 右: string }[] = [
-  { 名: "strong", 左: "**", 右: "**" },
-  { 名: "emphasis", 左: "*", 右: "*" },
-  { 名: "inlineCode", 左: "`", 右: "`" },
-  { 名: "strike_through", 左: "~~", 右: "~~" },
-  ...标记表.map((规格) => ({
-    名: 规格.标签,
-    左: 规格.左,
-    右: 规格.右,
+export const noticeTable: readonly { name3: string; left: string; right: string }[] = [
+  { name3: "strong", left: "**", right: "**" },
+  { name3: "emphasis", left: "*", right: "*" },
+  { name3: "inlineCode", left: "`", right: "`" },
+  { name3: "strike_through", left: "~~", right: "~~" },
+  ...markTable.map((spec) => ({
+    name3: spec.label,
+    left: spec.left,
+    right: spec.right,
   })),
 ];
 
@@ -133,43 +135,43 @@ export const 提示表: readonly { 名: string; 左: string; 右: string }[] = [
  * 这段是**线性**的（每个位置都要从后往前扫一遍孩子表），但 n 是"这一块里
  * 行内孩子的个数"，一段文字最多几十个，而且只在光标所在的那一块上跑。
  */
-export function 扫一段(
+export function scanOneParagraph(
   doc: PMNode,
-  位置: number,
-  类型: MarkType,
-): { 从: number; 到: number } | null {
-  const $位 = doc.resolve(位置);
-  const 父 = $位.parent;
+  position2: number,
+  type: MarkType,
+): { from: number; to2: number } | null {
+  const position = doc.resolve(position2);
+  const parent = position.parent;
   // 光标不落在能装文字的那一层（比如嵌在图片/公式这类原子节点里）就没得扫。
-  if (!父.inlineContent) return null;
+  if (!parent.inlineContent) return null;
 
   /** 每个行内孩子从哪个位置起、带不带这个标记。 */
-  const 各孩: { 从: number; 带: boolean }[] = [];
-  let 长 = 0;
-  for (let i = 0; i < 父.childCount; i++) {
-    const 孩 = 父.child(i);
-    const 宽 = 孩.isText === true ? ((孩.text as string).length) : 孩.nodeSize;
+  const children2: { from: number; withValue: boolean }[] = [];
+  let length = 0;
+  for (let i = 0; i < parent.childCount; i++) {
+    const child2 = parent.child(i);
+    const width = child2.isText === true ? ((child2.text as string).length) : child2.nodeSize;
     // ⚠️ `MarkType.isInSet` 的类型是 `Mark | undefined`（**不是** `boolean`），
     //    所以这里判"带不带"要比 `undefined`，不能写 `&&`/`=== true`——
     //    写成后者过不了 `tsc --noEmit`（`Mark | undefined` 与 `boolean` 没有交集）。
     //    行内原子（公式 / 图片）的 `marks` 是空集，问出来就是 `undefined`，
     //    所以**不用**再单独判 `isText`。
-    各孩.push({ 从: 长, 带: 类型.isInSet(孩.marks) !== undefined });
-    长 += 宽;
+    children2.push({ from: length, withValue: type.isInSet(child2.marks) !== undefined });
+    length += width;
   }
-  if (长 <= 0) return null;
+  if (length <= 0) return null;
 
   /** 第 `j` 个位置（`0 <= j < 长`）带不带这个标记。 */
-  const 带 = (j: number): boolean => {
-    for (let i = 各孩.length - 1; i >= 0; i--) {
-      const 孩 = 各孩[i];
-      if (孩 && j >= 孩.从) return 孩.带;
+  const withValue = (j: number): boolean => {
+    for (let i = children2.length - 1; i >= 0; i--) {
+      const child2 = children2[i];
+      if (child2 && j >= child2.from) return child2.withValue;
     }
     return false;
   };
 
-  const 块首 = $位.start();
-  const 光标 = Math.min(Math.max(位置 - 块首, 0), 长);
+  const blockFirst = position.start();
+  const cursor = Math.min(Math.max(position2 - blockFirst, 0), length);
   // 光标落在这一段里（第 `光标` 个位置带标记），或者**紧贴在段尾**
   // （刚打完 `**粗**`，光标停在最后一个字后面，那时它后面已经没有带标记的字了）。
   //
@@ -182,13 +184,13 @@ export function 扫一段(
   //   真正要修的是**画的位置**：右符号改走 `Decoration.widget(…, {side:-1})`
   //   之后，段尾那一格光标画在右符号**右边**，于是"看得见"与"光标不撒谎"
   //   两件事同时成立。**别再退回"不画"那一版。**
-  if (!((光标 < 长 && 带(光标)) || (光标 > 0 && 带(光标 - 1)))) return null;
+  if (!((cursor < length && withValue(cursor)) || (cursor > 0 && withValue(cursor - 1)))) return null;
 
-  let 从 = 光标;
-  let 到 = 光标;
-  while (从 > 0 && 带(从 - 1)) 从--;
-  while (到 < 长 && 带(到)) 到++;
-  return { 从: 块首 + 从, 到: 块首 + 到 };
+  let from = cursor;
+  let to2 = cursor;
+  while (from > 0 && withValue(from - 1)) from--;
+  while (to2 < length && withValue(to2)) to2++;
+  return { from: blockFirst + from, to2: blockFirst + to2 };
 }
 
 /**
@@ -199,15 +201,15 @@ export function 扫一段(
  * 每次光标动都会跑，逐次 `console.warn` 会把控制台刷爆（而且 `NOTA_DEBUG`
  * 那套日志本来就只在调试时看）。
  */
-let 报过缺名字 = false;
+let reportPassMissingName = false;
 
-function 查缺名字(marks: Record<string, MarkType | undefined>): void {
-  if (报过缺名字) return;
-  const 缺 = 提示表.filter(({ 名 }) => !marks[名]).map(({ 名 }) => 名);
-  if (!缺.length) return;
-  报过缺名字 = true;
+function checkMissingName(marks: Record<string, MarkType | undefined>): void {
+  if (reportPassMissingName) return;
+  const missing2 = noticeTable.filter(({ name3 }) => !marks[name3]).map(({ name3 }) => name3);
+  if (!missing2.length) return;
+  reportPassMissingName = true;
   console.warn(
-    `[nota] 行内标记提示：schema 里没有这几个 mark，对应的提示不会出现：${缺.join("、")}` +
+    `[nota] 行内标记提示：schema 里没有这几个 mark，对应的提示不会出现：${missing2.join("、")}` +
       `（提示表在 src/editor/mark-hint.ts）。斜体那个 mark 的 id 是 \`emphasis\`，不是 \`em\`。`,
   );
 }
@@ -220,26 +222,31 @@ function 查缺名字(marks: Record<string, MarkType | undefined>): void {
  * **不会**碰到 `document`——这是"纯位置算术能在无 DOM 环境里测"的前提，
  * 别图省事把 `document.createElement` 挪到模块顶层。
  */
-function 建标记符号(符号: string): HTMLElement {
-  const 元素 = document.createElement("span");
-  元素.className = 提示类;
-  元素.textContent = 符号;
-  元素.setAttribute("aria-hidden", "true");
-  return 元素;
+export function splitMarkCharacter(symbolNumber: string): string[] {
+  return Array.from(symbolNumber);
+}
+
+function createMarkCharacter(character: string): HTMLElement {
+  const element = document.createElement("span");
+  element.className = noticeClass;
+  element.textContent = character;
+  element.setAttribute("aria-hidden", "true");
+  return element;
 }
 
 /**
  * 每种符号复用同一个无参构造函数。装饰会在每次选区变化时重算，稳定的构造器
  * 让 ProseMirror 认出 widget 没有变，不会在每次输入时重建 DOM、重播淡入。
  */
-const 符号构造器 = new Map<string, () => HTMLElement>();
-for (const { 左, 右 } of 提示表) {
-  if (!符号构造器.has(左)) 符号构造器.set(左, () => 建标记符号(左));
-  if (!符号构造器.has(右)) 符号构造器.set(右, () => 建标记符号(右));
+const characterConstructCreateDevice = new Map<string, () => HTMLElement>();
+for (const { left, right } of noticeTable) {
+  for (const character of [...splitMarkCharacter(left), ...splitMarkCharacter(right)]) {
+    if (!characterConstructCreateDevice.has(character)) characterConstructCreateDevice.set(character, () => createMarkCharacter(character));
+  }
 }
 
 /** 显式空 mark 集：widget 既不继承左侧粗体，也不继承右侧斜体。 */
-const 无行内标记: readonly Mark[] = [];
+const withoutInlineMark: readonly Mark[] = [];
 
 /**
  * 按当前选区算装饰集。
@@ -248,38 +255,39 @@ const 无行内标记: readonly Mark[] = [];
  * 那时候用户的注意力在"选中了什么"，多两个符号只会让选区看起来变长。
  * 这条判据与 `instant-render.ts` 一致。
  */
-function 算提示(state: { selection: unknown; doc: PMNode; schema: unknown }): DecorationSet {
-  const 选 = state.selection as { empty: boolean; from: number };
-  if (!选.empty) return DecorationSet.empty;
+function computeNotice(state: { selection: unknown; doc: PMNode; schema: unknown }): DecorationSet {
+  const select = state.selection as { empty: boolean; from: number };
+  if (!select.empty) return DecorationSet.empty;
 
   const doc = state.doc;
-  const 位置 = 选.from;
+  const position2 = select.from;
   const marks = (state.schema as { marks: Record<string, MarkType | undefined> }).marks;
-  const 装饰: Decoration[] = [];
-  查缺名字(marks);
+  const decoration: Decoration[] = [];
+  checkMissingName(marks);
 
-  for (const { 名, 左, 右 } of 提示表) {
-    const 类型 = marks[名];
-    if (!类型) continue;
+  for (const { name3, left, right } of noticeTable) {
+    const type = marks[name3];
+    if (!type) continue;
 
     // "光标在这一段里 / 紧贴在段尾"两条判据都在 `扫一段` 里（见那一格）。
-    const 段 = 扫一段(doc, 位置, 类型);
-    if (!段 || 段.从 >= 段.到) continue;
+    const paragraph2 = scanOneParagraph(doc, position2, type);
+    if (!paragraph2 || paragraph2.from >= paragraph2.to2) continue;
 
     // 一个 mark 两颗真实文本 widget。`***又粗又斜***` 会拿到两套，并排起来
     // 仍是 `***`。`side:-1` 让光标落在 widget 右侧，同时明确 `marks:[]`，
     // 让符号完全脱离被强调文字的字重与倾斜。
-    const 建左 = 符号构造器.get(左);
-    const 建右 = 符号构造器.get(右);
-    if (!建左 || !建右) continue;
-    const widget规格 = { side: -1, marks: 无行内标记 };
-    装饰.push(
-      Decoration.widget(段.从, 建左, widget规格),
-      Decoration.widget(段.到, 建右, widget规格),
-    );
+    const widgetSpec = { side: -1, marks: withoutInlineMark };
+    for (const character of splitMarkCharacter(left)) {
+      const createCharacter = characterConstructCreateDevice.get(character);
+      if (createCharacter) decoration.push(Decoration.widget(paragraph2.from, createCharacter, widgetSpec));
+    }
+    for (const character of splitMarkCharacter(right)) {
+      const createCharacter = characterConstructCreateDevice.get(character);
+      if (createCharacter) decoration.push(Decoration.widget(paragraph2.to2, createCharacter, widgetSpec));
+    }
   }
 
-  return 装饰.length ? DecorationSet.create(doc, 装饰) : DecorationSet.empty;
+  return decoration.length ? DecorationSet.create(doc, decoration) : DecorationSet.empty;
 }
 
 /**
@@ -295,7 +303,7 @@ export const markHint = $prose(
     new Plugin({
       key: new PluginKey("nota-mark-hint"),
       props: {
-        decorations: (state) => 算提示(state as never),
+        decorations: (state) => computeNotice(state as never),
       },
     }),
 );

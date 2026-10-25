@@ -57,7 +57,7 @@ import {
 
 
 /** 节点名。**不能改**：`diagram-view.ts` 的 `$view`、缓存判型、`stopEvent` 都认它。 */
-export const 图表节点名 = "diagram";
+export const imageTableNodeName = "diagram";
 
 /* ── identity ─────────────────────────────────────────────────────────── */
 
@@ -65,17 +65,17 @@ export const 图表节点名 = "diagram";
  * 跟着节点走的随机 id（8 字符、`abcdefg` 字母表，与上游 nanoid 同参）。
  * 消费者只有两处：渲染缓存的键、`toDOM` 的 `data-id`。
  */
-function 随机标识(): string {
-  const 字母表 = "abcdefg";
+function followMachineMarkRecognize(): string {
+  const characterMotherTable = "abcdefg";
   let s = "";
-  for (let i = 0; i < 8; i++) s += 字母表[Math.floor(Math.random() * 字母表.length)];
+  for (let i = 0; i < 8; i++) s += characterMotherTable[Math.floor(Math.random() * characterMotherTable.length)];
   return s;
 }
 
 /** 上游的 `getId`：**已有的标识原样用**（改源码不换 id），没有才发新的。 */
-function 取标识(节点?: PMNode): string {
-  const 值: unknown = (节点 as { attrs?: { identity?: unknown } } | undefined)?.attrs?.identity;
-  return typeof 值 === "string" && 值 !== "" ? 值 : 随机标识();
+function getMarkRecognize(node?: PMNode): string {
+  const value2: unknown = (node as { attrs?: { identity?: unknown } } | undefined)?.attrs?.identity;
+  return typeof value2 === "string" && value2 !== "" ? value2 : followMachineMarkRecognize();
 }
 
 /* ── 第一件：remark 转换（围栏 → diagram 节点）────────────────────────── */
@@ -89,25 +89,25 @@ function 取标识(节点?: PMNode): string {
  * ⚠️ 引用、列表项**里面**的围栏也要认（块级容器里哪都有），所以遍历要递归；
  * 换完型的不用再进（`diagram` 节点没有孩子）。
  */
-export function 图表转换(树: MarkdownNode): void {
-  const 走 = (节点: MarkdownNode): void => {
-    const 孩子 = 节点.children;
-    if (!Array.isArray(孩子)) return;
-    for (let i = 0; i < 孩子.length; i++) {
-      const 一 = 孩子[i] as MarkdownNode | undefined;
-      if (!一) continue;
-      if (一.type === "code" && (一 as { lang?: unknown }).lang === "mermaid") {
-        孩子[i] = { type: 图表节点名, value: 一.value };
+export function imageTableConvertReplace(tree: MarkdownNode): void {
+  const walk = (node: MarkdownNode): void => {
+    const child = node.children;
+    if (!Array.isArray(child)) return;
+    for (let i = 0; i < child.length; i++) {
+      const value = child[i] as MarkdownNode | undefined;
+      if (!value) continue;
+      if (value.type === "code" && (value as { lang?: unknown }).lang === "mermaid") {
+        child[i] = { type: imageTableNodeName, value: value.value };
         continue;
       }
-      走(一);
+      walk(value);
     }
   };
-  走(树);
+  walk(tree);
 }
 
 /** `$remark` 工厂的类型（照 `html-block.ts` 的写法，从它自己的参数反推）。 */
-type 转换器工厂 = Parameters<typeof $remark<"nota图表", undefined>>[1];
+type ConvertReplaceDeviceWorkFactory = Parameters<typeof $remark<"nota图表", undefined>>[1];
 
 /**
  * 挂进 `.use()` 的那一条。
@@ -118,18 +118,18 @@ type 转换器工厂 = Parameters<typeof $remark<"nota图表", undefined>>[1];
  * ⚠️ **排在 `gfm` 之后**：它看的是解析完的树，与 `块HTML解析` / `行内标记解析`
  * 同一个位置、同一个理由。
  */
-export function 图表解析() {
-  const 转换器插件: ReturnType<转换器工厂> = () => (树) => {
-    图表转换(树 as MarkdownNode);
+export function imageTableParse() {
+  const convertReplaceDevicePlugin: ReturnType<ConvertReplaceDeviceWorkFactory> = () => (tree) => {
+    imageTableConvertReplace(tree as MarkdownNode);
   };
-  const 工厂: 转换器工厂 = () => 转换器插件;
-  return $remark("nota图表", 工厂);
+  const workFactory: ConvertReplaceDeviceWorkFactory = () => convertReplaceDevicePlugin;
+  return $remark("nota图表", workFactory);
 }
 
 /* ── 第二件：schema ───────────────────────────────────────────────────── */
 
 /** 节点属性。`value` 是 Mermaid 源码；`identity` 是跟着节点走的随机 id。 */
-interface 图表属性 {
+interface ImageTableAttribute {
   value: string;
   identity: string;
 }
@@ -141,7 +141,7 @@ interface 图表属性 {
  * ⚠️ `atom: true` → 没有 contentDOM，源码在 `attrs.value` 里；
  * 「平时看图、点一下改源码」是 `diagram-view.ts` 的 NodeView 在管。
  */
-export const 图表规格 = $nodeSchema(图表节点名, () => ({
+export const imageTableSpec = $nodeSchema(imageTableNodeName, () => ({
   content: "text*",
   group: "block",
   marks: "",
@@ -154,7 +154,7 @@ export const 图表规格 = $nodeSchema(图表节点名, () => ({
   },
   parseDOM: [
     {
-      tag: `div[data-type="${图表节点名}"]`,
+      tag: `div[data-type="${imageTableNodeName}"]`,
       preserveWhitespace: "full" as const,
       getAttrs: (dom: HTMLElement | string) => {
         // 上游在这里对非 HTMLElement 抛 `expectDomTypeError`（让 ProseMirror
@@ -171,35 +171,35 @@ export const 图表规格 = $nodeSchema(图表节点名, () => ({
     },
   ],
   toDOM: (node: PMNode) => {
-    const 属性 = node.attrs as 图表属性;
+    const attribute = node.attrs as ImageTableAttribute;
     return [
       "div",
       {
-        "data-type": 图表节点名,
-        "data-id": 取标识(node),
-        "data-value": 属性.value,
+        "data-type": imageTableNodeName,
+        "data-id": getMarkRecognize(node),
+        "data-value": attribute.value,
       },
-      属性.value,
+      attribute.value,
     ] as const;
   },
   parseMarkdown: {
-    match: ({ type }: MarkdownNode) => type === 图表节点名,
+    match: ({ type }: MarkdownNode) => type === imageTableNodeName,
     runner: (state: ParserState, node: MarkdownNode, type: unknown) => {
       // ⚠️ 第三个参数是 **PM 的 NodeType**（`html-block.ts` 那条注释：
       // 传字符串会被 `console.error` 吞掉、节点静默消失）。
       state.addNode(type as never, {
         value: node.value ?? "",
-        identity: 随机标识(),
+        identity: followMachineMarkRecognize(),
       });
     },
   },
   toMarkdown: {
-    match: (node: PMNode) => node.type.name === 图表节点名,
+    match: (node: PMNode) => node.type.name === imageTableNodeName,
     runner: (state: SerializerState, node: PMNode) => {
       // 序列化这一侧收的是**字符串**类型名（与解析那侧相反，同 `html-block.ts`）。
       // ⚠️ `mdast-util-to-markdown` 的 code 处理器自己会算围栏长度（源码里
       // 出现 ``` 时自动加长）——这就是"文档里的真相永远是源码"那条路的出口。
-      state.addNode("code", undefined, (node.attrs as 图表属性).value || "", {
+      state.addNode("code", undefined, (node.attrs as ImageTableAttribute).value || "", {
         lang: "mermaid",
       });
     },
@@ -212,9 +212,9 @@ export const 图表规格 = $nodeSchema(图表节点名, () => ({
  * ⚠️⚠️ **`[ctx, 插件]` 两格都要**（BUG-46 的坑，`html-block.ts` 文件头写过
  * 全文）：少第一格 ⇒ `Context "diagram" not found` ⇒ `editor.create()` 整个失败。
  */
-export const 图表规格插件: MilkdownPlugin[] = [
-  图表规格.ctx as unknown as MilkdownPlugin,
-  图表规格[1],
+export const imageTableSpecPlugin: MilkdownPlugin[] = [
+  imageTableSpec.ctx as unknown as MilkdownPlugin,
+  imageTableSpec[1],
 ];
 
 /**
@@ -224,45 +224,45 @@ export const 图表规格插件: MilkdownPlugin[] = [
  * 从语言下拉里选 `mermaid` 也不会重新走解析器。这个插件守在所有事务之后，
  * 只要文档里出现语言为 `mermaid` 的代码块，就保留原文并换成图表节点。
  */
-export const Mermaid代码块转换 = $prose(
+export const mermaidCodeBlockConvertReplace = $prose(
   () =>
     new Plugin({
       key: new PluginKey("nota-mermaid-code-block"),
       view: (view) => {
-        const tr = 代码块转图表(view.state);
+        const tr = codeBlockConvertImageTable(view.state);
         if (tr) queueMicrotask(() => view.dispatch(tr));
         return {};
       },
-      appendTransaction: (事务们, _旧, 新) => {
-        if (!事务们.some((tr) => tr.docChanged)) return null;
-        return 代码块转图表(新);
+      appendTransaction: (transactions, _OldValue, newValue) => {
+        if (!transactions.some((tr) => tr.docChanged)) return null;
+        return codeBlockConvertImageTable(newValue);
       },
     }),
 );
 
-function 代码块转图表(state: EditorState): Transaction | null {
-  const 图表 = state.schema.nodes[图表节点名];
-  if (!图表) return null;
-  const 待换: { pos: number; end: number; node: PMNode }[] = [];
+function codeBlockConvertImageTable(state: EditorState): Transaction | null {
+  const imageTable = state.schema.nodes[imageTableNodeName];
+  if (!imageTable) return null;
+  const pendingReplace: { pos: number; end: number; node: PMNode }[] = [];
   state.doc.descendants((node, pos) => {
     if (
       node.type.name === "code_block" &&
       String(node.attrs.language ?? "").trim().toLowerCase() === "mermaid"
     ) {
-      待换.push({
+      pendingReplace.push({
         pos,
         end: pos + node.nodeSize,
-        node: 图表.create({
+        node: imageTable.create({
           value: node.textContent,
-          identity: 随机标识(),
+          identity: followMachineMarkRecognize(),
         }),
       });
     }
     return true;
   });
-  if (!待换.length) return null;
+  if (!pendingReplace.length) return null;
   const tr = state.tr;
-  for (const { pos, end, node } of 待换.reverse()) {
+  for (const { pos, end, node } of pendingReplace.reverse()) {
     tr.replaceWith(pos, end, node);
   }
   return tr;
@@ -274,20 +274,20 @@ function 代码块转图表(state: EditorState): Transaction | null {
  * 打 `` ```mermaid `` 出一颗**空图框**（上游同款判据：整段恰是这个串才认，
  * 后面跟了别的内容就不算）。
  */
-export const 图表输入规则 = $inputRule(
+export const imageTableInputRuleRule = $inputRule(
   (ctx) =>
     new InputRule(/^```mermaid$/, (state, _match, start, end) => {
-      const nodeType = 图表规格.type(ctx);
+      const nodeType = imageTableSpec.type(ctx);
       const $start = state.doc.resolve(start);
       if (!$start.node(-1).canReplaceWith($start.index(-1), $start.indexAfter(-1), nodeType))
         return null;
       return state.tr.delete(start, end).setBlockType(start, start, nodeType, {
-        identity: 随机标识(),
+        identity: followMachineMarkRecognize(),
       });
     }),
 );
 
 /** 命令：把选中的块换成空 `diagram` 节点（上游 `InsertDiagramCommand` 同款）。 */
-export const 图表命令 = $command("InsertDiagramCommand", (ctx) => () =>
-  setBlockType(图表规格.type(ctx), { identity: 随机标识() }),
+export const imageTableCommand = $command("InsertDiagramCommand", (ctx) => () =>
+  setBlockType(imageTableSpec.type(ctx), { identity: followMachineMarkRecognize() }),
 );

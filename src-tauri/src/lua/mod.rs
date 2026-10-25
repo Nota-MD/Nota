@@ -514,7 +514,7 @@ impl LuaPlugin {
             // ⚠️ 它的去处于是只剩调试闸门——卸载出错的插件在界面上就是"没反应"，
             // 用户不会知道该做什么。想看就 `NOTA_DEBUG=1`（见 `crate::log`）。
             if let Err(e) = f.call::<()>(()) {
-                crate::日志!("[nota] 拓展 {} 的 on_unload 出错：{e}", self.manifest.meta.id);
+                crate::日志!("[nota] plugin {} on_unload failed: {e}", self.manifest.meta.id);
             }
         }
     }

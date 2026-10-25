@@ -56,34 +56,34 @@ import { docSchema, paragraphSchema } from "@milkdown/kit/preset/commonmark";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
-import { 文档别导出空根, 段落不写空行 } from "../src/editor/empty-paragraph";
+import { documentMustNotExportEmptyRoot, paragraphWithoutBlankLine } from "../src/editor/empty-paragraph";
 
 /* ── 一支极小的测试工装（与 `math-delim.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
@@ -107,8 +107,8 @@ ctx.inject(editorViewCtx, { state: undefined } as never);
 // 所以它不用预先登记切片——跑一遍插件就进注册表了。
 paragraphSchema.ctx(ctx);
 // 本仓那两份的切片也要登记，`ctx.get(段落不写空行.key)` 才取得到。
-段落不写空行.ctx(ctx);
-文档别导出空根.ctx(ctx);
+paragraphWithoutBlankLine.ctx(ctx);
+documentMustNotExportEmptyRoot.ctx(ctx);
 
 /**
  * 插件体是个 `async` 函数，挨个真跑一遍——**注册进 `nodesCtx` 的就是这一步**。
@@ -121,25 +121,25 @@ paragraphSchema.ctx(ctx);
  * 一个同名 doc"）——**它自己就是那个插件函数**，没有 `.node` 这一层。
  * 两者混用会当场 `xxx is not a function`（第一次跑这份测试就栽在这儿）。
  */
-const 跑元组插件 = async (支: unknown): Promise<void> => {
-  await (支 as { node: (c: Ctx) => () => Promise<void> }).node(ctx)();
+const runDollarGroupPlugin = async (support2: unknown): Promise<void> => {
+  await (support2 as { node: (c: Ctx) => () => Promise<void> }).node(ctx)();
 };
-const 跑裸插件 = async (支: unknown): Promise<void> => {
-  await (支 as (c: Ctx) => () => Promise<void>)(ctx)();
+const runBarePlugin = async (support2: unknown): Promise<void> => {
+  await (support2 as (c: Ctx) => () => Promise<void>)(ctx)();
 };
 
-const 注册表 = (): [string, unknown][] => ctx.get(nodesCtx) as [string, unknown][];
+const noteBookTable = (): [string, unknown][] => ctx.get(nodesCtx) as [string, unknown][];
 
-await 跑裸插件(docSchema);
-await 跑元组插件(paragraphSchema);
-await 跑元组插件(段落不写空行);
-await 跑元组插件(文档别导出空根);
+await runBarePlugin(docSchema);
+await runDollarGroupPlugin(paragraphSchema);
+await runDollarGroupPlugin(paragraphWithoutBlankLine);
+await runDollarGroupPlugin(documentMustNotExportEmptyRoot);
 
 /** doc/paragraph 那两份**从注册表里取**——跑完上面那几步之后，里面就是本仓这两份。 */
-const 取规格 = (id: string): never => {
-  const 找到 = 注册表().find(([名字]) => 名字 === id);
-  if (!找到) throw new Error(`注册表里没有 ${id}`);
-  return 找到[1] as never;
+const getSpec = (id: string): never => {
+  const findTo = noteBookTable().find(([name2]) => name2 === id);
+  if (!findTo) throw new Error(`注册表里没有 ${id}`);
+  return findTo[1] as never;
 };
 
 /**
@@ -150,8 +150,8 @@ const 取规格 = (id: string): never => {
  */
 const schema = new Schema({
   nodes: {
-    doc: 取规格("doc"),
-    paragraph: 取规格("paragraph"),
+    doc: getSpec("doc"),
+    paragraph: getSpec("paragraph"),
     text: {
       group: "inline",
       parseMarkdown: {
@@ -172,13 +172,13 @@ const schema = new Schema({
  * （见 `empty-paragraph.ts` 里"落点为什么是改 schema"那一节），所以这里不需要
  * 挂任何 handler。`void 序列化状态` 那行只是为了让上面那个未用的类型别名不报未使用。
  */
-const 处理机 = unified().use(remarkParse).use(remarkStringify);
+const placeManageMachine = unified().use(remarkParse).use(remarkStringify);
 
-const 解析 = ParserState.create(schema, 处理机);
-const 序列化 = SerializerState.create(schema, 处理机);
+const parse = ParserState.create(schema, placeManageMachine);
+const serialize = SerializerState.create(schema, placeManageMachine);
 
 /** 一整趟：markdown → 文档 → markdown。**两个方向都是真代码**。 */
-const 往返 = (源: string): string => String(序列化(解析(源)));
+const roundtrip = (source3: string): string => String(serialize(parse(source3)));
 
 /**
  * 手工建一篇"整篇都是空段落"的文档。
@@ -187,90 +187,90 @@ const 往返 = (源: string): string => String(序列化(解析(源)));
  * ——后者当场抛 `Invalid content for node doc: <>`（`doc.content` 声明的是 `block+`，
  * 而真编辑器里那种"一个孩子都没有"的文档是 `injectRoot` 建出来的，绕过了那条校验）。
  */
-const 空段落文档 = (几段: number): unknown => {
-  if (几段 === 0) return 解析("");
-  const 每段 = Array.from({ length: 几段 }, () => schema.node("paragraph"));
-  return schema.node("doc", null, 每段);
+const emptyParagraphDocument = (howManyParagraph: number): unknown => {
+  if (howManyParagraph === 0) return parse("");
+  const eachParagraph = Array.from({ length: howManyParagraph }, () => schema.node("paragraph"));
+  return schema.node("doc", null, eachParagraph);
 };
 
 /** 手工建一篇 `段落 > 空文本节点` 的文档（"敲了字又退格删掉"落到的那副样子）。 */
-const 空文本段落文档 = (): unknown =>
+const emptyTextParagraphDocument = (): unknown =>
   schema.node("doc", null, [schema.node("paragraph", null, [schema.node("text", null, "")])]);
 
 /* ── 一、正题：整篇都是空的，落盘必须 0 字节 ─────────────────────────── */
 
-组("一、空文档存盘是 0 字节");
+group("一、空文档存盘是 0 字节");
 
-测("0 字节的源：打开再存盘，还是 0 字节", () => {
-  const 出来 = 往返("");
-  console.log(`      （实际：${JSON.stringify(出来)}，${Buffer.byteLength(出来, "utf8")} 字节）`);
-  等(出来, "", "空文档序列化");
+testCase("0 字节的源：打开再存盘，还是 0 字节", () => {
+  const result = roundtrip("");
+  console.log(`      （实际：${JSON.stringify(result)}，${Buffer.byteLength(result, "utf8")} 字节）`);
+  equal(result, "", "空文档序列化");
 });
 
-测("整篇只有一个空段落：也是 0 字节", () => {
-  const 出来 = String(序列化(空段落文档(1)));
-  console.log(`      （实际：${JSON.stringify(出来)}，${Buffer.byteLength(出来, "utf8")} 字节）`);
-  等(出来, "", "一个空段落");
+testCase("整篇只有一个空段落：也是 0 字节", () => {
+  const result = String(serialize(emptyParagraphDocument(1)));
+  console.log(`      （实际：${JSON.stringify(result)}，${Buffer.byteLength(result, "utf8")} 字节）`);
+  equal(result, "", "一个空段落");
 });
 
-测("整篇好几个空段落：还是 0 字节", () => {
-  const 出来 = String(序列化(空段落文档(3)));
-  console.log(`      （实际：${JSON.stringify(出来)}，${Buffer.byteLength(出来, "utf8")} 字节）`);
-  等(出来, "", "三个空段落");
+testCase("整篇好几个空段落：还是 0 字节", () => {
+  const result = String(serialize(emptyParagraphDocument(3)));
+  console.log(`      （实际：${JSON.stringify(result)}，${Buffer.byteLength(result, "utf8")} 字节）`);
+  equal(result, "", "三个空段落");
 });
 
-测("`段落 > 空文本节点`（敲了字又退格删掉的样子）：也是 0 字节", () => {
+testCase("`段落 > 空文本节点`（敲了字又退格删掉的样子）：也是 0 字节", () => {
   // ⚠️ 这一条是 2026-09-26 那次"实测 0 字节"落到的形状，与上面两条**不是同一条路**：
   // 这里 `全篇都是空段落` 判成**假**（段落里有一颗空文本，`content.size` 是 1），
   // 于是走 `state.next()` → 段落那条（上游）→ 什么都不写 → root 的 children 是
   // **空数组**。它与"占位"那条路的区别见下面第二组。
-  const 出来 = String(序列化(空文本段落文档()));
-  console.log(`      （实际：${JSON.stringify(出来)}，${Buffer.byteLength(出来, "utf8")} 字节）`);
-  等(出来, "", "空文本段落");
+  const result = String(serialize(emptyTextParagraphDocument()));
+  console.log(`      （实际：${JSON.stringify(result)}，${Buffer.byteLength(result, "utf8")} 字节）`);
+  equal(result, "", "空文本段落");
 });
 
-测("⚠️ 一个 `<br />` 都不许漏出来", () => {
-  for (const 源 of ["", "\n", "\n\n"]) {
-    const 出来 = 往返(源);
-    if (出来.includes("<br")) throw new Error(`源 ${JSON.stringify(源)} 存成了 ${JSON.stringify(出来)}`);
+testCase("⚠️ 一个 `<br />` 都不许漏出来", () => {
+  for (const source3 of ["", "\n", "\n\n"]) {
+    const result = roundtrip(source3);
+    if (result.includes("<br")) throw new Error(`源 ${JSON.stringify(source3)} 存成了 ${JSON.stringify(result)}`);
   }
 });
 
 /* ── 二、保镖那条不许丢：空 root 不能把序列化器弄崩 ───────────────────── */
 
-组("二、保镖那条还在（空 root 不崩）");
+group("二、保镖那条还在（空 root 不崩）");
 
-测("⚠️ 空文档序列化**不抛错**（从前是 `node.children.some` 上 TypeError）", () => {
+testCase("⚠️ 空文档序列化**不抛错**（从前是 `node.children.some` 上 TypeError）", () => {
   // 这一条是 `文档别导出空根` 存在的**全部理由**：占位改成空串之后，
   // root 的 `children` 还得有人建出来，否则一打开空文件就白屏
   // （`empty-paragraph.ts` 文件头记着那条堆栈）。
-  let 炸了 = "";
+  let explodeDone = "";
   try {
-    序列化(空段落文档(0));
-    序列化(解析(""));
+    serialize(emptyParagraphDocument(0));
+    serialize(parse(""));
   } catch (e) {
-    炸了 = e instanceof Error ? e.message : String(e);
+    explodeDone = e instanceof Error ? e.message : String(e);
   }
-  等(炸了, "", "序列化空文档不该抛错");
+  equal(explodeDone, "", "序列化空文档不该抛错");
 });
 
 /* ── 三、有内容的一个字节都不许动 ────────────────────────────────────── */
 
-组("三、非空文档原样");
+group("三、非空文档原样");
 
-测("普通段落往返不变（含末尾那个换行）", () => {
-  等(往返("甲\n"), "甲\n", "一段");
-  等(往返("甲\n\n乙\n"), "甲\n\n乙\n", "两段");
+testCase("普通段落往返不变（含末尾那个换行）", () => {
+  equal(roundtrip("甲\n"), "甲\n", "一段");
+  equal(roundtrip("甲\n\n乙\n"), "甲\n\n乙\n", "两段");
 });
 
-测("段落里有字：还是原样（`段落不写空行` 只对空段落动手）", () => {
-  等(往返("甲 乙\n"), "甲 乙\n", "一段两个字");
+testCase("段落里有字：还是原样（`段落不写空行` 只对空段落动手）", () => {
+  equal(roundtrip("甲 乙\n"), "甲 乙\n", "一段两个字");
 });
 
 /* ── 收尾 ────────────────────────────────────────────────────────────── */
 
-console.log(`\n${过} 过 / ${败} 败`);
-if (败 > 0) {
-  console.log(`不过的：${败的.join("、")}`);
+console.log(`\n${pass} 过 / ${fail} 败`);
+if (fail > 0) {
+  console.log(`不过的：${failed.join("、")}`);
   process.exit(1);
 }

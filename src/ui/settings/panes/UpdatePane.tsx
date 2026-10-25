@@ -12,7 +12,7 @@ import { paneWriter, type PaneProps } from "./props";
 
 export function UpdatePane({ settings, onChange }: PaneProps) {
   const t = useT();
-  const 写 = paneWriter(settings, onChange, "updates");
+  const write = paneWriter(settings, onChange, "updates");
   const u = settings.updates;
 
   return (
@@ -26,7 +26,7 @@ export function UpdatePane({ settings, onChange }: PaneProps) {
         >
           <Toggle
             checked={u.check_on_startup}
-            onChange={(check_on_startup) => 写({ check_on_startup })}
+            onChange={(check_on_startup) => write({ check_on_startup })}
           />
         </SettingRow>
         <SettingRow
@@ -38,7 +38,7 @@ export function UpdatePane({ settings, onChange }: PaneProps) {
           <Toggle
             checked={u.notify_when_available}
             disabled={!u.check_on_startup}
-            onChange={(notify_when_available) => 写({ notify_when_available })}
+            onChange={(notify_when_available) => write({ notify_when_available })}
           />
         </SettingRow>
       </SettingsGroup>

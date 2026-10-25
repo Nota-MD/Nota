@@ -56,13 +56,13 @@ import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
 /** 表里的一行。 */
-export interface Emoji项 {
+export interface EmojiItem {
   /** GitHub 风格的短代码，**不带冒号**、全小写（`:smile:` → `"smile"`）。 */
-  短代码: string;
+  shortcode: string;
   /** 真正插进文档的那个字符（可能带变体选择符，如 `❤️` 是两个码点）。 */
-  字符: string;
+  character: string;
   /** 分类名，只用来在面板里分组与在对话框里分栏。 */
-  分类: string;
+  category: string;
 }
 
 /**
@@ -79,548 +79,548 @@ export interface Emoji项 {
  * 这个表的排序是有意义的——**同一前缀下越靠前的越可能被选中**，常用词
  * （`smile` / `heart` / `tada`）排在各分类靠前的位置。
  */
-export const Emoji表: Emoji项[] = [
+export const emojiTable: EmojiItem[] = [
   // ── 表情 ─────────────────────────────────────────────────────────────
-  { 短代码: "smile", 字符: "😄", 分类: "表情" },
-  { 短代码: "smiley", 字符: "😃", 分类: "表情" },
-  { 短代码: "grinning", 字符: "😀", 分类: "表情" },
-  { 短代码: "grin", 字符: "😁", 分类: "表情" },
-  { 短代码: "laughing", 字符: "😆", 分类: "表情" },
-  { 短代码: "satisfied", 字符: "😆", 分类: "表情" },
-  { 短代码: "sweat_smile", 字符: "😅", 分类: "表情" },
-  { 短代码: "rofl", 字符: "🤣", 分类: "表情" },
-  { 短代码: "joy", 字符: "😂", 分类: "表情" },
-  { 短代码: "slightly_smiling_face", 字符: "🙂", 分类: "表情" },
-  { 短代码: "upside_down_face", 字符: "🙃", 分类: "表情" },
-  { 短代码: "wink", 字符: "😉", 分类: "表情" },
-  { 短代码: "blush", 字符: "😊", 分类: "表情" },
-  { 短代码: "innocent", 字符: "😇", 分类: "表情" },
-  { 短代码: "smiling_face_with_three_hearts", 字符: "🥰", 分类: "表情" },
-  { 短代码: "heart_eyes", 字符: "😍", 分类: "表情" },
-  { 短代码: "star_struck", 字符: "🤩", 分类: "表情" },
-  { 短代码: "kissing_heart", 字符: "😘", 分类: "表情" },
-  { 短代码: "kissing", 字符: "😗", 分类: "表情" },
-  { 短代码: "relaxed", 字符: "☺️", 分类: "表情" },
-  { 短代码: "yum", 字符: "😋", 分类: "表情" },
-  { 短代码: "stuck_out_tongue", 字符: "😛", 分类: "表情" },
-  { 短代码: "stuck_out_tongue_winking_eye", 字符: "😜", 分类: "表情" },
-  { 短代码: "zany_face", 字符: "🤪", 分类: "表情" },
-  { 短代码: "money_mouth_face", 字符: "🤑", 分类: "表情" },
-  { 短代码: "hugs", 字符: "🤗", 分类: "表情" },
-  { 短代码: "hand_over_mouth", 字符: "🤭", 分类: "表情" },
-  { 短代码: "shushing_face", 字符: "🤫", 分类: "表情" },
-  { 短代码: "thinking", 字符: "🤔", 分类: "表情" },
-  { 短代码: "zipper_mouth_face", 字符: "🤐", 分类: "表情" },
-  { 短代码: "raised_eyebrow", 字符: "🤨", 分类: "表情" },
-  { 短代码: "neutral_face", 字符: "😐", 分类: "表情" },
-  { 短代码: "expressionless", 字符: "😑", 分类: "表情" },
-  { 短代码: "no_mouth", 字符: "😶", 分类: "表情" },
-  { 短代码: "smirk", 字符: "😏", 分类: "表情" },
-  { 短代码: "unamused", 字符: "😒", 分类: "表情" },
-  { 短代码: "roll_eyes", 字符: "🙄", 分类: "表情" },
-  { 短代码: "grimacing", 字符: "😬", 分类: "表情" },
-  { 短代码: "lying_face", 字符: "🤥", 分类: "表情" },
-  { 短代码: "relieved", 字符: "😌", 分类: "表情" },
-  { 短代码: "pensive", 字符: "😔", 分类: "表情" },
-  { 短代码: "sleepy", 字符: "😪", 分类: "表情" },
-  { 短代码: "sleeping", 字符: "😴", 分类: "表情" },
-  { 短代码: "mask", 字符: "😷", 分类: "表情" },
-  { 短代码: "face_with_thermometer", 字符: "🤒", 分类: "表情" },
-  { 短代码: "face_with_head_bandage", 字符: "🤕", 分类: "表情" },
-  { 短代码: "nauseated_face", 字符: "🤢", 分类: "表情" },
-  { 短代码: "vomiting_face", 字符: "🤮", 分类: "表情" },
-  { 短代码: "sneezing_face", 字符: "🤧", 分类: "表情" },
-  { 短代码: "hot_face", 字符: "🥵", 分类: "表情" },
-  { 短代码: "cold_face", 字符: "🥶", 分类: "表情" },
-  { 短代码: "woozy_face", 字符: "🥴", 分类: "表情" },
-  { 短代码: "dizzy_face", 字符: "😵", 分类: "表情" },
-  { 短代码: "exploding_head", 字符: "🤯", 分类: "表情" },
-  { 短代码: "cowboy_hat_face", 字符: "🤠", 分类: "表情" },
-  { 短代码: "partying_face", 字符: "🥳", 分类: "表情" },
-  { 短代码: "sunglasses", 字符: "😎", 分类: "表情" },
-  { 短代码: "nerd_face", 字符: "🤓", 分类: "表情" },
-  { 短代码: "monocle_face", 字符: "🧐", 分类: "表情" },
-  { 短代码: "confused", 字符: "😕", 分类: "表情" },
-  { 短代码: "worried", 字符: "😟", 分类: "表情" },
-  { 短代码: "slightly_frowning_face", 字符: "🙁", 分类: "表情" },
-  { 短代码: "frowning_face", 字符: "☹️", 分类: "表情" },
-  { 短代码: "open_mouth", 字符: "😮", 分类: "表情" },
-  { 短代码: "hushed", 字符: "😯", 分类: "表情" },
-  { 短代码: "astonished", 字符: "😲", 分类: "表情" },
-  { 短代码: "flushed", 字符: "😳", 分类: "表情" },
-  { 短代码: "pleading_face", 字符: "🥺", 分类: "表情" },
-  { 短代码: "frowning", 字符: "😦", 分类: "表情" },
-  { 短代码: "anguished", 字符: "😧", 分类: "表情" },
-  { 短代码: "fearful", 字符: "😨", 分类: "表情" },
-  { 短代码: "cold_sweat", 字符: "😰", 分类: "表情" },
-  { 短代码: "disappointed_relieved", 字符: "😥", 分类: "表情" },
-  { 短代码: "cry", 字符: "😢", 分类: "表情" },
-  { 短代码: "sob", 字符: "😭", 分类: "表情" },
-  { 短代码: "scream", 字符: "😱", 分类: "表情" },
-  { 短代码: "confounded", 字符: "😖", 分类: "表情" },
-  { 短代码: "persevere", 字符: "😣", 分类: "表情" },
-  { 短代码: "disappointed", 字符: "😞", 分类: "表情" },
-  { 短代码: "sweat", 字符: "😓", 分类: "表情" },
-  { 短代码: "weary", 字符: "😩", 分类: "表情" },
-  { 短代码: "tired_face", 字符: "😫", 分类: "表情" },
-  { 短代码: "yawning_face", 字符: "🥱", 分类: "表情" },
-  { 短代码: "triumph", 字符: "😤", 分类: "表情" },
-  { 短代码: "rage", 字符: "😡", 分类: "表情" },
-  { 短代码: "angry", 字符: "😠", 分类: "表情" },
-  { 短代码: "cursing_face", 字符: "🤬", 分类: "表情" },
-  { 短代码: "smiling_imp", 字符: "😈", 分类: "表情" },
-  { 短代码: "imp", 字符: "👿", 分类: "表情" },
-  { 短代码: "skull", 字符: "💀", 分类: "表情" },
-  { 短代码: "poop", 字符: "💩", 分类: "表情" },
-  { 短代码: "clown_face", 字符: "🤡", 分类: "表情" },
-  { 短代码: "ghost", 字符: "👻", 分类: "表情" },
-  { 短代码: "alien", 字符: "👽", 分类: "表情" },
-  { 短代码: "robot", 字符: "🤖", 分类: "表情" },
-  { 短代码: "see_no_evil", 字符: "🙈", 分类: "表情" },
-  { 短代码: "hear_no_evil", 字符: "🙉", 分类: "表情" },
-  { 短代码: "speak_no_evil", 字符: "🙊", 分类: "表情" },
-  { 短代码: "smiley_cat", 字符: "😺", 分类: "表情" },
-  { 短代码: "smile_cat", 字符: "😸", 分类: "表情" },
-  { 短代码: "heart_eyes_cat", 字符: "😻", 分类: "表情" },
-  { 短代码: "crying_cat_face", 字符: "😿", 分类: "表情" },
-  { 短代码: "pouting_cat", 字符: "😾", 分类: "表情" },
+  { shortcode: "smile", character: "😄", category: "表情" },
+  { shortcode: "smiley", character: "😃", category: "表情" },
+  { shortcode: "grinning", character: "😀", category: "表情" },
+  { shortcode: "grin", character: "😁", category: "表情" },
+  { shortcode: "laughing", character: "😆", category: "表情" },
+  { shortcode: "satisfied", character: "😆", category: "表情" },
+  { shortcode: "sweat_smile", character: "😅", category: "表情" },
+  { shortcode: "rofl", character: "🤣", category: "表情" },
+  { shortcode: "joy", character: "😂", category: "表情" },
+  { shortcode: "slightly_smiling_face", character: "🙂", category: "表情" },
+  { shortcode: "upside_down_face", character: "🙃", category: "表情" },
+  { shortcode: "wink", character: "😉", category: "表情" },
+  { shortcode: "blush", character: "😊", category: "表情" },
+  { shortcode: "innocent", character: "😇", category: "表情" },
+  { shortcode: "smiling_face_with_three_hearts", character: "🥰", category: "表情" },
+  { shortcode: "heart_eyes", character: "😍", category: "表情" },
+  { shortcode: "star_struck", character: "🤩", category: "表情" },
+  { shortcode: "kissing_heart", character: "😘", category: "表情" },
+  { shortcode: "kissing", character: "😗", category: "表情" },
+  { shortcode: "relaxed", character: "☺️", category: "表情" },
+  { shortcode: "yum", character: "😋", category: "表情" },
+  { shortcode: "stuck_out_tongue", character: "😛", category: "表情" },
+  { shortcode: "stuck_out_tongue_winking_eye", character: "😜", category: "表情" },
+  { shortcode: "zany_face", character: "🤪", category: "表情" },
+  { shortcode: "money_mouth_face", character: "🤑", category: "表情" },
+  { shortcode: "hugs", character: "🤗", category: "表情" },
+  { shortcode: "hand_over_mouth", character: "🤭", category: "表情" },
+  { shortcode: "shushing_face", character: "🤫", category: "表情" },
+  { shortcode: "thinking", character: "🤔", category: "表情" },
+  { shortcode: "zipper_mouth_face", character: "🤐", category: "表情" },
+  { shortcode: "raised_eyebrow", character: "🤨", category: "表情" },
+  { shortcode: "neutral_face", character: "😐", category: "表情" },
+  { shortcode: "expressionless", character: "😑", category: "表情" },
+  { shortcode: "no_mouth", character: "😶", category: "表情" },
+  { shortcode: "smirk", character: "😏", category: "表情" },
+  { shortcode: "unamused", character: "😒", category: "表情" },
+  { shortcode: "roll_eyes", character: "🙄", category: "表情" },
+  { shortcode: "grimacing", character: "😬", category: "表情" },
+  { shortcode: "lying_face", character: "🤥", category: "表情" },
+  { shortcode: "relieved", character: "😌", category: "表情" },
+  { shortcode: "pensive", character: "😔", category: "表情" },
+  { shortcode: "sleepy", character: "😪", category: "表情" },
+  { shortcode: "sleeping", character: "😴", category: "表情" },
+  { shortcode: "mask", character: "😷", category: "表情" },
+  { shortcode: "face_with_thermometer", character: "🤒", category: "表情" },
+  { shortcode: "face_with_head_bandage", character: "🤕", category: "表情" },
+  { shortcode: "nauseated_face", character: "🤢", category: "表情" },
+  { shortcode: "vomiting_face", character: "🤮", category: "表情" },
+  { shortcode: "sneezing_face", character: "🤧", category: "表情" },
+  { shortcode: "hot_face", character: "🥵", category: "表情" },
+  { shortcode: "cold_face", character: "🥶", category: "表情" },
+  { shortcode: "woozy_face", character: "🥴", category: "表情" },
+  { shortcode: "dizzy_face", character: "😵", category: "表情" },
+  { shortcode: "exploding_head", character: "🤯", category: "表情" },
+  { shortcode: "cowboy_hat_face", character: "🤠", category: "表情" },
+  { shortcode: "partying_face", character: "🥳", category: "表情" },
+  { shortcode: "sunglasses", character: "😎", category: "表情" },
+  { shortcode: "nerd_face", character: "🤓", category: "表情" },
+  { shortcode: "monocle_face", character: "🧐", category: "表情" },
+  { shortcode: "confused", character: "😕", category: "表情" },
+  { shortcode: "worried", character: "😟", category: "表情" },
+  { shortcode: "slightly_frowning_face", character: "🙁", category: "表情" },
+  { shortcode: "frowning_face", character: "☹️", category: "表情" },
+  { shortcode: "open_mouth", character: "😮", category: "表情" },
+  { shortcode: "hushed", character: "😯", category: "表情" },
+  { shortcode: "astonished", character: "😲", category: "表情" },
+  { shortcode: "flushed", character: "😳", category: "表情" },
+  { shortcode: "pleading_face", character: "🥺", category: "表情" },
+  { shortcode: "frowning", character: "😦", category: "表情" },
+  { shortcode: "anguished", character: "😧", category: "表情" },
+  { shortcode: "fearful", character: "😨", category: "表情" },
+  { shortcode: "cold_sweat", character: "😰", category: "表情" },
+  { shortcode: "disappointed_relieved", character: "😥", category: "表情" },
+  { shortcode: "cry", character: "😢", category: "表情" },
+  { shortcode: "sob", character: "😭", category: "表情" },
+  { shortcode: "scream", character: "😱", category: "表情" },
+  { shortcode: "confounded", character: "😖", category: "表情" },
+  { shortcode: "persevere", character: "😣", category: "表情" },
+  { shortcode: "disappointed", character: "😞", category: "表情" },
+  { shortcode: "sweat", character: "😓", category: "表情" },
+  { shortcode: "weary", character: "😩", category: "表情" },
+  { shortcode: "tired_face", character: "😫", category: "表情" },
+  { shortcode: "yawning_face", character: "🥱", category: "表情" },
+  { shortcode: "triumph", character: "😤", category: "表情" },
+  { shortcode: "rage", character: "😡", category: "表情" },
+  { shortcode: "angry", character: "😠", category: "表情" },
+  { shortcode: "cursing_face", character: "🤬", category: "表情" },
+  { shortcode: "smiling_imp", character: "😈", category: "表情" },
+  { shortcode: "imp", character: "👿", category: "表情" },
+  { shortcode: "skull", character: "💀", category: "表情" },
+  { shortcode: "poop", character: "💩", category: "表情" },
+  { shortcode: "clown_face", character: "🤡", category: "表情" },
+  { shortcode: "ghost", character: "👻", category: "表情" },
+  { shortcode: "alien", character: "👽", category: "表情" },
+  { shortcode: "robot", character: "🤖", category: "表情" },
+  { shortcode: "see_no_evil", character: "🙈", category: "表情" },
+  { shortcode: "hear_no_evil", character: "🙉", category: "表情" },
+  { shortcode: "speak_no_evil", character: "🙊", category: "表情" },
+  { shortcode: "smiley_cat", character: "😺", category: "表情" },
+  { shortcode: "smile_cat", character: "😸", category: "表情" },
+  { shortcode: "heart_eyes_cat", character: "😻", category: "表情" },
+  { shortcode: "crying_cat_face", character: "😿", category: "表情" },
+  { shortcode: "pouting_cat", character: "😾", category: "表情" },
 
   // ── 手势 / 身体 ──────────────────────────────────────────────────────
-  { 短代码: "wave", 字符: "👋", 分类: "手势" },
-  { 短代码: "raised_hand", 字符: "✋", 分类: "手势" },
-  { 短代码: "raised_back_of_hand", 字符: "🤚", 分类: "手势" },
-  { 短代码: "vulcan_salute", 字符: "🖖", 分类: "手势" },
-  { 短代码: "ok_hand", 字符: "👌", 分类: "手势" },
-  { 短代码: "pinched_fingers", 字符: "🤌", 分类: "手势" },
-  { 短代码: "v", 字符: "✌️", 分类: "手势" },
-  { 短代码: "crossed_fingers", 字符: "🤞", 分类: "手势" },
-  { 短代码: "love_you_gesture", 字符: "🤟", 分类: "手势" },
-  { 短代码: "metal", 字符: "🤘", 分类: "手势" },
-  { 短代码: "call_me_hand", 字符: "🤙", 分类: "手势" },
-  { 短代码: "point_left", 字符: "👈", 分类: "手势" },
-  { 短代码: "point_right", 字符: "👉", 分类: "手势" },
-  { 短代码: "point_up_2", 字符: "👆", 分类: "手势" },
-  { 短代码: "point_down", 字符: "👇", 分类: "手势" },
-  { 短代码: "point_up", 字符: "☝️", 分类: "手势" },
-  { 短代码: "thumbsup", 字符: "👍", 分类: "手势" },
-  { 短代码: "+1", 字符: "👍", 分类: "手势" },
-  { 短代码: "thumbsdown", 字符: "👎", 分类: "手势" },
-  { 短代码: "-1", 字符: "👎", 分类: "手势" },
-  { 短代码: "fist_raised", 字符: "✊", 分类: "手势" },
-  { 短代码: "fist_oncoming", 字符: "👊", 分类: "手势" },
-  { 短代码: "fist_left", 字符: "🤛", 分类: "手势" },
-  { 短代码: "fist_right", 字符: "🤜", 分类: "手势" },
-  { 短代码: "clap", 字符: "👏", 分类: "手势" },
-  { 短代码: "raised_hands", 字符: "🙌", 分类: "手势" },
-  { 短代码: "open_hands", 字符: "👐", 分类: "手势" },
-  { 短代码: "palms_up_together", 字符: "🤲", 分类: "手势" },
-  { 短代码: "handshake", 字符: "🤝", 分类: "手势" },
-  { 短代码: "pray", 字符: "🙏", 分类: "手势" },
-  { 短代码: "writing_hand", 字符: "✍️", 分类: "手势" },
-  { 短代码: "nail_care", 字符: "💅", 分类: "手势" },
-  { 短代码: "muscle", 字符: "💪", 分类: "手势" },
-  { 短代码: "eyes", 字符: "👀", 分类: "手势" },
-  { 短代码: "eye", 字符: "👁️", 分类: "手势" },
-  { 短代码: "ear", 字符: "👂", 分类: "手势" },
-  { 短代码: "nose", 字符: "👃", 分类: "手势" },
-  { 短代码: "brain", 字符: "🧠", 分类: "手势" },
-  { 短代码: "tongue", 字符: "👅", 分类: "手势" },
-  { 短代码: "lips", 字符: "👄", 分类: "手势" },
-  { 短代码: "selfie", 字符: "🤳", 分类: "手势" },
-  { 短代码: "shrug", 字符: "🤷", 分类: "手势" },
-  { 短代码: "facepalm", 字符: "🤦", 分类: "手势" },
-  { 短代码: "bow", 字符: "🙇", 分类: "手势" },
-  { 短代码: "no_good", 字符: "🙅", 分类: "手势" },
-  { 短代码: "ok_woman", 字符: "🙆", 分类: "手势" },
-  { 短代码: "raising_hand", 字符: "🙋", 分类: "手势" },
+  { shortcode: "wave", character: "👋", category: "手势" },
+  { shortcode: "raised_hand", character: "✋", category: "手势" },
+  { shortcode: "raised_back_of_hand", character: "🤚", category: "手势" },
+  { shortcode: "vulcan_salute", character: "🖖", category: "手势" },
+  { shortcode: "ok_hand", character: "👌", category: "手势" },
+  { shortcode: "pinched_fingers", character: "🤌", category: "手势" },
+  { shortcode: "v", character: "✌️", category: "手势" },
+  { shortcode: "crossed_fingers", character: "🤞", category: "手势" },
+  { shortcode: "love_you_gesture", character: "🤟", category: "手势" },
+  { shortcode: "metal", character: "🤘", category: "手势" },
+  { shortcode: "call_me_hand", character: "🤙", category: "手势" },
+  { shortcode: "point_left", character: "👈", category: "手势" },
+  { shortcode: "point_right", character: "👉", category: "手势" },
+  { shortcode: "point_up_2", character: "👆", category: "手势" },
+  { shortcode: "point_down", character: "👇", category: "手势" },
+  { shortcode: "point_up", character: "☝️", category: "手势" },
+  { shortcode: "thumbsup", character: "👍", category: "手势" },
+  { shortcode: "+1", character: "👍", category: "手势" },
+  { shortcode: "thumbsdown", character: "👎", category: "手势" },
+  { shortcode: "-1", character: "👎", category: "手势" },
+  { shortcode: "fist_raised", character: "✊", category: "手势" },
+  { shortcode: "fist_oncoming", character: "👊", category: "手势" },
+  { shortcode: "fist_left", character: "🤛", category: "手势" },
+  { shortcode: "fist_right", character: "🤜", category: "手势" },
+  { shortcode: "clap", character: "👏", category: "手势" },
+  { shortcode: "raised_hands", character: "🙌", category: "手势" },
+  { shortcode: "open_hands", character: "👐", category: "手势" },
+  { shortcode: "palms_up_together", character: "🤲", category: "手势" },
+  { shortcode: "handshake", character: "🤝", category: "手势" },
+  { shortcode: "pray", character: "🙏", category: "手势" },
+  { shortcode: "writing_hand", character: "✍️", category: "手势" },
+  { shortcode: "nail_care", character: "💅", category: "手势" },
+  { shortcode: "muscle", character: "💪", category: "手势" },
+  { shortcode: "eyes", character: "👀", category: "手势" },
+  { shortcode: "eye", character: "👁️", category: "手势" },
+  { shortcode: "ear", character: "👂", category: "手势" },
+  { shortcode: "nose", character: "👃", category: "手势" },
+  { shortcode: "brain", character: "🧠", category: "手势" },
+  { shortcode: "tongue", character: "👅", category: "手势" },
+  { shortcode: "lips", character: "👄", category: "手势" },
+  { shortcode: "selfie", character: "🤳", category: "手势" },
+  { shortcode: "shrug", character: "🤷", category: "手势" },
+  { shortcode: "facepalm", character: "🤦", category: "手势" },
+  { shortcode: "bow", character: "🙇", category: "手势" },
+  { shortcode: "no_good", character: "🙅", category: "手势" },
+  { shortcode: "ok_woman", character: "🙆", category: "手势" },
+  { shortcode: "raising_hand", character: "🙋", category: "手势" },
 
   // ── 人物 ─────────────────────────────────────────────────────────────
-  { 短代码: "baby", 字符: "👶", 分类: "人物" },
-  { 短代码: "boy", 字符: "👦", 分类: "人物" },
-  { 短代码: "girl", 字符: "👧", 分类: "人物" },
-  { 短代码: "man", 字符: "👨", 分类: "人物" },
-  { 短代码: "woman", 字符: "👩", 分类: "人物" },
-  { 短代码: "older_man", 字符: "👴", 分类: "人物" },
-  { 短代码: "older_woman", 字符: "👵", 分类: "人物" },
-  { 短代码: "family", 字符: "👪", 分类: "人物" },
-  { 短代码: "couple", 字符: "👫", 分类: "人物" },
-  { 短代码: "two_men_holding_hands", 字符: "👬", 分类: "人物" },
-  { 短代码: "two_women_holding_hands", 字符: "👭", 分类: "人物" },
-  { 短代码: "dancer", 字符: "💃", 分类: "人物" },
-  { 短代码: "man_dancing", 字符: "🕺", 分类: "人物" },
-  { 短代码: "santa", 字符: "🎅", 分类: "人物" },
-  { 短代码: "snowman", 字符: "⛄", 分类: "人物" },
+  { shortcode: "baby", character: "👶", category: "人物" },
+  { shortcode: "boy", character: "👦", category: "人物" },
+  { shortcode: "girl", character: "👧", category: "人物" },
+  { shortcode: "man", character: "👨", category: "人物" },
+  { shortcode: "woman", character: "👩", category: "人物" },
+  { shortcode: "older_man", character: "👴", category: "人物" },
+  { shortcode: "older_woman", character: "👵", category: "人物" },
+  { shortcode: "family", character: "👪", category: "人物" },
+  { shortcode: "couple", character: "👫", category: "人物" },
+  { shortcode: "two_men_holding_hands", character: "👬", category: "人物" },
+  { shortcode: "two_women_holding_hands", character: "👭", category: "人物" },
+  { shortcode: "dancer", character: "💃", category: "人物" },
+  { shortcode: "man_dancing", character: "🕺", category: "人物" },
+  { shortcode: "santa", character: "🎅", category: "人物" },
+  { shortcode: "snowman", character: "⛄", category: "人物" },
 
   // ── 动物 / 自然 ──────────────────────────────────────────────────────
-  { 短代码: "dog", 字符: "🐶", 分类: "动物" },
-  { 短代码: "cat", 字符: "🐱", 分类: "动物" },
-  { 短代码: "mouse", 字符: "🐭", 分类: "动物" },
-  { 短代码: "hamster", 字符: "🐹", 分类: "动物" },
-  { 短代码: "rabbit", 字符: "🐰", 分类: "动物" },
-  { 短代码: "fox_face", 字符: "🦊", 分类: "动物" },
-  { 短代码: "bear", 字符: "🐻", 分类: "动物" },
-  { 短代码: "panda_face", 字符: "🐼", 分类: "动物" },
-  { 短代码: "koala", 字符: "🐨", 分类: "动物" },
-  { 短代码: "tiger", 字符: "🐯", 分类: "动物" },
-  { 短代码: "lion", 字符: "🦁", 分类: "动物" },
-  { 短代码: "cow", 字符: "🐮", 分类: "动物" },
-  { 短代码: "pig", 字符: "🐷", 分类: "动物" },
-  { 短代码: "frog", 字符: "🐸", 分类: "动物" },
-  { 短代码: "monkey_face", 字符: "🐵", 分类: "动物" },
-  { 短代码: "chicken", 字符: "🐔", 分类: "动物" },
-  { 短代码: "penguin", 字符: "🐧", 分类: "动物" },
-  { 短代码: "bird", 字符: "🐦", 分类: "动物" },
-  { 短代码: "baby_chick", 字符: "🐤", 分类: "动物" },
-  { 短代码: "hatching_chick", 字符: "🐣", 分类: "动物" },
-  { 短代码: "duck", 字符: "🦆", 分类: "动物" },
-  { 短代码: "eagle", 字符: "🦅", 分类: "动物" },
-  { 短代码: "owl", 字符: "🦉", 分类: "动物" },
-  { 短代码: "bat", 字符: "🦇", 分类: "动物" },
-  { 短代码: "wolf", 字符: "🐺", 分类: "动物" },
-  { 短代码: "boar", 字符: "🐗", 分类: "动物" },
-  { 短代码: "horse", 字符: "🐴", 分类: "动物" },
-  { 短代码: "unicorn", 字符: "🦄", 分类: "动物" },
-  { 短代码: "bee", 字符: "🐝", 分类: "动物" },
-  { 短代码: "bug", 字符: "🐛", 分类: "动物" },
-  { 短代码: "butterfly", 字符: "🦋", 分类: "动物" },
-  { 短代码: "snail", 字符: "🐌", 分类: "动物" },
-  { 短代码: "beetle", 字符: "🐞", 分类: "动物" },
-  { 短代码: "ant", 字符: "🐜", 分类: "动物" },
-  { 短代码: "spider", 字符: "🕷️", 分类: "动物" },
-  { 短代码: "scorpion", 字符: "🦂", 分类: "动物" },
-  { 短代码: "crab", 字符: "🦀", 分类: "动物" },
-  { 短代码: "snake", 字符: "🐍", 分类: "动物" },
-  { 短代码: "lizard", 字符: "🦎", 分类: "动物" },
-  { 短代码: "turtle", 字符: "🐢", 分类: "动物" },
-  { 短代码: "tropical_fish", 字符: "🐠", 分类: "动物" },
-  { 短代码: "fish", 字符: "🐟", 分类: "动物" },
-  { 短代码: "blowfish", 字符: "🐡", 分类: "动物" },
-  { 短代码: "dolphin", 字符: "🐬", 分类: "动物" },
-  { 短代码: "whale", 字符: "🐳", 分类: "动物" },
-  { 短代码: "shark", 字符: "🦈", 分类: "动物" },
-  { 短代码: "octopus", 字符: "🐙", 分类: "动物" },
-  { 短代码: "shell", 字符: "🐚", 分类: "动物" },
-  { 短代码: "dragon", 字符: "🐉", 分类: "动物" },
-  { 短代码: "t_rex", 字符: "🦖", 分类: "动物" },
-  { 短代码: "sauropod", 字符: "🦕", 分类: "动物" },
+  { shortcode: "dog", character: "🐶", category: "动物" },
+  { shortcode: "cat", character: "🐱", category: "动物" },
+  { shortcode: "mouse", character: "🐭", category: "动物" },
+  { shortcode: "hamster", character: "🐹", category: "动物" },
+  { shortcode: "rabbit", character: "🐰", category: "动物" },
+  { shortcode: "fox_face", character: "🦊", category: "动物" },
+  { shortcode: "bear", character: "🐻", category: "动物" },
+  { shortcode: "panda_face", character: "🐼", category: "动物" },
+  { shortcode: "koala", character: "🐨", category: "动物" },
+  { shortcode: "tiger", character: "🐯", category: "动物" },
+  { shortcode: "lion", character: "🦁", category: "动物" },
+  { shortcode: "cow", character: "🐮", category: "动物" },
+  { shortcode: "pig", character: "🐷", category: "动物" },
+  { shortcode: "frog", character: "🐸", category: "动物" },
+  { shortcode: "monkey_face", character: "🐵", category: "动物" },
+  { shortcode: "chicken", character: "🐔", category: "动物" },
+  { shortcode: "penguin", character: "🐧", category: "动物" },
+  { shortcode: "bird", character: "🐦", category: "动物" },
+  { shortcode: "baby_chick", character: "🐤", category: "动物" },
+  { shortcode: "hatching_chick", character: "🐣", category: "动物" },
+  { shortcode: "duck", character: "🦆", category: "动物" },
+  { shortcode: "eagle", character: "🦅", category: "动物" },
+  { shortcode: "owl", character: "🦉", category: "动物" },
+  { shortcode: "bat", character: "🦇", category: "动物" },
+  { shortcode: "wolf", character: "🐺", category: "动物" },
+  { shortcode: "boar", character: "🐗", category: "动物" },
+  { shortcode: "horse", character: "🐴", category: "动物" },
+  { shortcode: "unicorn", character: "🦄", category: "动物" },
+  { shortcode: "bee", character: "🐝", category: "动物" },
+  { shortcode: "bug", character: "🐛", category: "动物" },
+  { shortcode: "butterfly", character: "🦋", category: "动物" },
+  { shortcode: "snail", character: "🐌", category: "动物" },
+  { shortcode: "beetle", character: "🐞", category: "动物" },
+  { shortcode: "ant", character: "🐜", category: "动物" },
+  { shortcode: "spider", character: "🕷️", category: "动物" },
+  { shortcode: "scorpion", character: "🦂", category: "动物" },
+  { shortcode: "crab", character: "🦀", category: "动物" },
+  { shortcode: "snake", character: "🐍", category: "动物" },
+  { shortcode: "lizard", character: "🦎", category: "动物" },
+  { shortcode: "turtle", character: "🐢", category: "动物" },
+  { shortcode: "tropical_fish", character: "🐠", category: "动物" },
+  { shortcode: "fish", character: "🐟", category: "动物" },
+  { shortcode: "blowfish", character: "🐡", category: "动物" },
+  { shortcode: "dolphin", character: "🐬", category: "动物" },
+  { shortcode: "whale", character: "🐳", category: "动物" },
+  { shortcode: "shark", character: "🦈", category: "动物" },
+  { shortcode: "octopus", character: "🐙", category: "动物" },
+  { shortcode: "shell", character: "🐚", category: "动物" },
+  { shortcode: "dragon", character: "🐉", category: "动物" },
+  { shortcode: "t_rex", character: "🦖", category: "动物" },
+  { shortcode: "sauropod", character: "🦕", category: "动物" },
 
   // ── 食物 ─────────────────────────────────────────────────────────────
-  { 短代码: "apple", 字符: "🍎", 分类: "食物" },
-  { 短代码: "green_apple", 字符: "🍏", 分类: "食物" },
-  { 短代码: "pear", 字符: "🍐", 分类: "食物" },
-  { 短代码: "tangerine", 字符: "🍊", 分类: "食物" },
-  { 短代码: "lemon", 字符: "🍋", 分类: "食物" },
-  { 短代码: "cherries", 字符: "🍒", 分类: "食物" },
-  { 短代码: "grapes", 字符: "🍇", 分类: "食物" },
-  { 短代码: "watermelon", 字符: "🍉", 分类: "食物" },
-  { 短代码: "strawberry", 字符: "🍓", 分类: "食物" },
-  { 短代码: "peach", 字符: "🍑", 分类: "食物" },
-  { 短代码: "melon", 字符: "🍈", 分类: "食物" },
-  { 短代码: "banana", 字符: "🍌", 分类: "食物" },
-  { 短代码: "pineapple", 字符: "🍍", 分类: "食物" },
-  { 短代码: "coconut", 字符: "🥥", 分类: "食物" },
-  { 短代码: "kiwi_fruit", 字符: "🥝", 分类: "食物" },
-  { 短代码: "tomato", 字符: "🍅", 分类: "食物" },
-  { 短代码: "avocado", 字符: "🥑", 分类: "食物" },
-  { 短代码: "eggplant", 字符: "🍆", 分类: "食物" },
-  { 短代码: "potato", 字符: "🥔", 分类: "食物" },
-  { 短代码: "carrot", 字符: "🥕", 分类: "食物" },
-  { 短代码: "corn", 字符: "🌽", 分类: "食物" },
-  { 短代码: "hot_pepper", 字符: "🌶️", 分类: "食物" },
-  { 短代码: "cucumber", 字符: "🥒", 分类: "食物" },
-  { 短代码: "mushroom", 字符: "🍄", 分类: "食物" },
-  { 短代码: "bread", 字符: "🍞", 分类: "食物" },
-  { 短代码: "croissant", 字符: "🥐", 分类: "食物" },
-  { 短代码: "baguette_bread", 字符: "🥖", 分类: "食物" },
-  { 短代码: "pancakes", 字符: "🥞", 分类: "食物" },
-  { 短代码: "cheese", 字符: "🧀", 分类: "食物" },
-  { 短代码: "meat_on_bone", 字符: "🍖", 分类: "食物" },
-  { 短代码: "poultry_leg", 字符: "🍗", 分类: "食物" },
-  { 短代码: "hamburger", 字符: "🍔", 分类: "食物" },
-  { 短代码: "fries", 字符: "🍟", 分类: "食物" },
-  { 短代码: "pizza", 字符: "🍕", 分类: "食物" },
-  { 短代码: "hotdog", 字符: "🌭", 分类: "食物" },
-  { 短代码: "sandwich", 字符: "🥪", 分类: "食物" },
-  { 短代码: "taco", 字符: "🌮", 分类: "食物" },
-  { 短代码: "burrito", 字符: "🌯", 分类: "食物" },
-  { 短代码: "egg", 字符: "🥚", 分类: "食物" },
-  { 短代码: "fried_egg", 字符: "🍳", 分类: "食物" },
-  { 短代码: "ramen", 字符: "🍜", 分类: "食物" },
-  { 短代码: "spaghetti", 字符: "🍝", 分类: "食物" },
-  { 短代码: "rice", 字符: "🍚", 分类: "食物" },
-  { 短代码: "curry", 字符: "🍛", 分类: "食物" },
-  { 短代码: "sushi", 字符: "🍣", 分类: "食物" },
-  { 短代码: "bento", 字符: "🍱", 分类: "食物" },
-  { 短代码: "dumpling", 字符: "🥟", 分类: "食物" },
-  { 短代码: "icecream", 字符: "🍦", 分类: "食物" },
-  { 短代码: "shaved_ice", 字符: "🍧", 分类: "食物" },
-  { 短代码: "cake", 字符: "🍰", 分类: "食物" },
-  { 短代码: "birthday", 字符: "🎂", 分类: "食物" },
-  { 短代码: "cupcake", 字符: "🧁", 分类: "食物" },
-  { 短代码: "pie", 字符: "🥧", 分类: "食物" },
-  { 短代码: "chocolate_bar", 字符: "🍫", 分类: "食物" },
-  { 短代码: "candy", 字符: "🍬", 分类: "食物" },
-  { 短代码: "lollipop", 字符: "🍭", 分类: "食物" },
-  { 短代码: "honey_pot", 字符: "🍯", 分类: "食物" },
-  { 短代码: "coffee", 字符: "☕", 分类: "食物" },
-  { 短代码: "tea", 字符: "🍵", 分类: "食物" },
-  { 短代码: "beer", 字符: "🍺", 分类: "食物" },
-  { 短代码: "beers", 字符: "🍻", 分类: "食物" },
-  { 短代码: "wine_glass", 字符: "🍷", 分类: "食物" },
-  { 短代码: "cocktail", 字符: "🍸", 分类: "食物" },
-  { 短代码: "tropical_drink", 字符: "🍹", 分类: "食物" },
-  { 短代码: "sake", 字符: "🍶", 分类: "食物" },
-  { 短代码: "milk_glass", 字符: "🥛", 分类: "食物" },
+  { shortcode: "apple", character: "🍎", category: "食物" },
+  { shortcode: "green_apple", character: "🍏", category: "食物" },
+  { shortcode: "pear", character: "🍐", category: "食物" },
+  { shortcode: "tangerine", character: "🍊", category: "食物" },
+  { shortcode: "lemon", character: "🍋", category: "食物" },
+  { shortcode: "cherries", character: "🍒", category: "食物" },
+  { shortcode: "grapes", character: "🍇", category: "食物" },
+  { shortcode: "watermelon", character: "🍉", category: "食物" },
+  { shortcode: "strawberry", character: "🍓", category: "食物" },
+  { shortcode: "peach", character: "🍑", category: "食物" },
+  { shortcode: "melon", character: "🍈", category: "食物" },
+  { shortcode: "banana", character: "🍌", category: "食物" },
+  { shortcode: "pineapple", character: "🍍", category: "食物" },
+  { shortcode: "coconut", character: "🥥", category: "食物" },
+  { shortcode: "kiwi_fruit", character: "🥝", category: "食物" },
+  { shortcode: "tomato", character: "🍅", category: "食物" },
+  { shortcode: "avocado", character: "🥑", category: "食物" },
+  { shortcode: "eggplant", character: "🍆", category: "食物" },
+  { shortcode: "potato", character: "🥔", category: "食物" },
+  { shortcode: "carrot", character: "🥕", category: "食物" },
+  { shortcode: "corn", character: "🌽", category: "食物" },
+  { shortcode: "hot_pepper", character: "🌶️", category: "食物" },
+  { shortcode: "cucumber", character: "🥒", category: "食物" },
+  { shortcode: "mushroom", character: "🍄", category: "食物" },
+  { shortcode: "bread", character: "🍞", category: "食物" },
+  { shortcode: "croissant", character: "🥐", category: "食物" },
+  { shortcode: "baguette_bread", character: "🥖", category: "食物" },
+  { shortcode: "pancakes", character: "🥞", category: "食物" },
+  { shortcode: "cheese", character: "🧀", category: "食物" },
+  { shortcode: "meat_on_bone", character: "🍖", category: "食物" },
+  { shortcode: "poultry_leg", character: "🍗", category: "食物" },
+  { shortcode: "hamburger", character: "🍔", category: "食物" },
+  { shortcode: "fries", character: "🍟", category: "食物" },
+  { shortcode: "pizza", character: "🍕", category: "食物" },
+  { shortcode: "hotdog", character: "🌭", category: "食物" },
+  { shortcode: "sandwich", character: "🥪", category: "食物" },
+  { shortcode: "taco", character: "🌮", category: "食物" },
+  { shortcode: "burrito", character: "🌯", category: "食物" },
+  { shortcode: "egg", character: "🥚", category: "食物" },
+  { shortcode: "fried_egg", character: "🍳", category: "食物" },
+  { shortcode: "ramen", character: "🍜", category: "食物" },
+  { shortcode: "spaghetti", character: "🍝", category: "食物" },
+  { shortcode: "rice", character: "🍚", category: "食物" },
+  { shortcode: "curry", character: "🍛", category: "食物" },
+  { shortcode: "sushi", character: "🍣", category: "食物" },
+  { shortcode: "bento", character: "🍱", category: "食物" },
+  { shortcode: "dumpling", character: "🥟", category: "食物" },
+  { shortcode: "icecream", character: "🍦", category: "食物" },
+  { shortcode: "shaved_ice", character: "🍧", category: "食物" },
+  { shortcode: "cake", character: "🍰", category: "食物" },
+  { shortcode: "birthday", character: "🎂", category: "食物" },
+  { shortcode: "cupcake", character: "🧁", category: "食物" },
+  { shortcode: "pie", character: "🥧", category: "食物" },
+  { shortcode: "chocolate_bar", character: "🍫", category: "食物" },
+  { shortcode: "candy", character: "🍬", category: "食物" },
+  { shortcode: "lollipop", character: "🍭", category: "食物" },
+  { shortcode: "honey_pot", character: "🍯", category: "食物" },
+  { shortcode: "coffee", character: "☕", category: "食物" },
+  { shortcode: "tea", character: "🍵", category: "食物" },
+  { shortcode: "beer", character: "🍺", category: "食物" },
+  { shortcode: "beers", character: "🍻", category: "食物" },
+  { shortcode: "wine_glass", character: "🍷", category: "食物" },
+  { shortcode: "cocktail", character: "🍸", category: "食物" },
+  { shortcode: "tropical_drink", character: "🍹", category: "食物" },
+  { shortcode: "sake", character: "🍶", category: "食物" },
+  { shortcode: "milk_glass", character: "🥛", category: "食物" },
 
   // ── 活动 ─────────────────────────────────────────────────────────────
-  { 短代码: "soccer", 字符: "⚽", 分类: "活动" },
-  { 短代码: "basketball", 字符: "🏀", 分类: "活动" },
-  { 短代码: "football", 字符: "🏈", 分类: "活动" },
-  { 短代码: "baseball", 字符: "⚾", 分类: "活动" },
-  { 短代码: "tennis", 字符: "🎾", 分类: "活动" },
-  { 短代码: "volleyball", 字符: "🏐", 分类: "活动" },
-  { 短代码: "rugby_football", 字符: "🏉", 分类: "活动" },
-  { 短代码: "golf", 字符: "⛳", 分类: "活动" },
-  { 短代码: "ski", 字符: "🎿", 分类: "活动" },
-  { 短代码: "ice_skate", 字符: "⛸️", 分类: "活动" },
-  { 短代码: "dart", 字符: "🎯", 分类: "活动" },
-  { 短代码: "8ball", 字符: "🎱", 分类: "活动" },
-  { 短代码: "bowling", 字符: "🎳", 分类: "活动" },
-  { 短代码: "video_game", 字符: "🎮", 分类: "活动" },
-  { 短代码: "game_die", 字符: "🎲", 分类: "活动" },
-  { 短代码: "chess_pawn", 字符: "♟️", 分类: "活动" },
-  { 短代码: "performing_arts", 字符: "🎭", 分类: "活动" },
-  { 短代码: "art", 字符: "🎨", 分类: "活动" },
-  { 短代码: "musical_note", 字符: "🎵", 分类: "活动" },
-  { 短代码: "notes", 字符: "🎶", 分类: "活动" },
-  { 短代码: "trophy", 字符: "🏆", 分类: "活动" },
-  { 短代码: "medal_sports", 字符: "🏅", 分类: "活动" },
-  { 短代码: "first_place_medal", 字符: "🥇", 分类: "活动" },
-  { 短代码: "second_place_medal", 字符: "🥈", 分类: "活动" },
-  { 短代码: "third_place_medal", 字符: "🥉", 分类: "活动" },
-  { 短代码: "ticket", 字符: "🎫", 分类: "活动" },
-  { 短代码: "tickets", 字符: "🎟️", 分类: "活动" },
-  { 短代码: "gift", 字符: "🎁", 分类: "活动" },
-  { 短代码: "balloon", 字符: "🎈", 分类: "活动" },
-  { 短代码: "tada", 字符: "🎉", 分类: "活动" },
-  { 短代码: "confetti_ball", 字符: "🎊", 分类: "活动" },
-  { 短代码: "sparkles", 字符: "✨", 分类: "活动" },
-  { 短代码: "firecracker", 字符: "🧨", 分类: "活动" },
-  { 短代码: "crystal_ball", 字符: "🔮", 分类: "活动" },
+  { shortcode: "soccer", character: "⚽", category: "活动" },
+  { shortcode: "basketball", character: "🏀", category: "活动" },
+  { shortcode: "football", character: "🏈", category: "活动" },
+  { shortcode: "baseball", character: "⚾", category: "活动" },
+  { shortcode: "tennis", character: "🎾", category: "活动" },
+  { shortcode: "volleyball", character: "🏐", category: "活动" },
+  { shortcode: "rugby_football", character: "🏉", category: "活动" },
+  { shortcode: "golf", character: "⛳", category: "活动" },
+  { shortcode: "ski", character: "🎿", category: "活动" },
+  { shortcode: "ice_skate", character: "⛸️", category: "活动" },
+  { shortcode: "dart", character: "🎯", category: "活动" },
+  { shortcode: "8ball", character: "🎱", category: "活动" },
+  { shortcode: "bowling", character: "🎳", category: "活动" },
+  { shortcode: "video_game", character: "🎮", category: "活动" },
+  { shortcode: "game_die", character: "🎲", category: "活动" },
+  { shortcode: "chess_pawn", character: "♟️", category: "活动" },
+  { shortcode: "performing_arts", character: "🎭", category: "活动" },
+  { shortcode: "art", character: "🎨", category: "活动" },
+  { shortcode: "musical_note", character: "🎵", category: "活动" },
+  { shortcode: "notes", character: "🎶", category: "活动" },
+  { shortcode: "trophy", character: "🏆", category: "活动" },
+  { shortcode: "medal_sports", character: "🏅", category: "活动" },
+  { shortcode: "first_place_medal", character: "🥇", category: "活动" },
+  { shortcode: "second_place_medal", character: "🥈", category: "活动" },
+  { shortcode: "third_place_medal", character: "🥉", category: "活动" },
+  { shortcode: "ticket", character: "🎫", category: "活动" },
+  { shortcode: "tickets", character: "🎟️", category: "活动" },
+  { shortcode: "gift", character: "🎁", category: "活动" },
+  { shortcode: "balloon", character: "🎈", category: "活动" },
+  { shortcode: "tada", character: "🎉", category: "活动" },
+  { shortcode: "confetti_ball", character: "🎊", category: "活动" },
+  { shortcode: "sparkles", character: "✨", category: "活动" },
+  { shortcode: "firecracker", character: "🧨", category: "活动" },
+  { shortcode: "crystal_ball", character: "🔮", category: "活动" },
 
   // ── 旅行 / 地点 ──────────────────────────────────────────────────────
-  { 短代码: "car", 字符: "🚗", 分类: "旅行" },
-  { 短代码: "taxi", 字符: "🚕", 分类: "旅行" },
-  { 短代码: "bus", 字符: "🚌", 分类: "旅行" },
-  { 短代码: "minibus", 字符: "🚐", 分类: "旅行" },
-  { 短代码: "police_car", 字符: "🚓", 分类: "旅行" },
-  { 短代码: "ambulance", 字符: "🚑", 分类: "旅行" },
-  { 短代码: "fire_engine", 字符: "🚒", 分类: "旅行" },
-  { 短代码: "truck", 字符: "🚚", 分类: "旅行" },
-  { 短代码: "bicycle", 字符: "🚲", 分类: "旅行" },
-  { 短代码: "motor_scooter", 字符: "🛵", 分类: "旅行" },
-  { 短代码: "motorcycle", 字符: "🏍️", 分类: "旅行" },
-  { 短代码: "train", 字符: "🚆", 分类: "旅行" },
-  { 短代码: "bullettrain_side", 字符: "🚄", 分类: "旅行" },
-  { 短代码: "airplane", 字符: "✈️", 分类: "旅行" },
-  { 短代码: "small_airplane", 字符: "🛩️", 分类: "旅行" },
-  { 短代码: "rocket", 字符: "🚀", 分类: "旅行" },
-  { 短代码: "helicopter", 字符: "🚁", 分类: "旅行" },
-  { 短代码: "sailboat", 字符: "⛵", 分类: "旅行" },
-  { 短代码: "speedboat", 字符: "🚤", 分类: "旅行" },
-  { 短代码: "ship", 字符: "🚢", 分类: "旅行" },
-  { 短代码: "anchor", 字符: "⚓", 分类: "旅行" },
-  { 短代码: "fuelpump", 字符: "⛽", 分类: "旅行" },
-  { 短代码: "traffic_light", 字符: "🚦", 分类: "旅行" },
-  { 短代码: "construction", 字符: "🚧", 分类: "旅行" },
-  { 短代码: "house", 字符: "🏠", 分类: "旅行" },
-  { 短代码: "office", 字符: "🏢", 分类: "旅行" },
-  { 短代码: "hospital", 字符: "🏥", 分类: "旅行" },
-  { 短代码: "bank", 字符: "🏦", 分类: "旅行" },
-  { 短代码: "hotel", 字符: "🏨", 分类: "旅行" },
-  { 短代码: "school", 字符: "🏫", 分类: "旅行" },
-  { 短代码: "church", 字符: "⛪", 分类: "旅行" },
-  { 短代码: "tent", 字符: "⛺", 分类: "旅行" },
-  { 短代码: "castle", 字符: "🏰", 分类: "旅行" },
-  { 短代码: "statue_of_liberty", 字符: "🗽", 分类: "旅行" },
-  { 短代码: "mount_fuji", 字符: "🗻", 分类: "旅行" },
+  { shortcode: "car", character: "🚗", category: "旅行" },
+  { shortcode: "taxi", character: "🚕", category: "旅行" },
+  { shortcode: "bus", character: "🚌", category: "旅行" },
+  { shortcode: "minibus", character: "🚐", category: "旅行" },
+  { shortcode: "police_car", character: "🚓", category: "旅行" },
+  { shortcode: "ambulance", character: "🚑", category: "旅行" },
+  { shortcode: "fire_engine", character: "🚒", category: "旅行" },
+  { shortcode: "truck", character: "🚚", category: "旅行" },
+  { shortcode: "bicycle", character: "🚲", category: "旅行" },
+  { shortcode: "motor_scooter", character: "🛵", category: "旅行" },
+  { shortcode: "motorcycle", character: "🏍️", category: "旅行" },
+  { shortcode: "train", character: "🚆", category: "旅行" },
+  { shortcode: "bullettrain_side", character: "🚄", category: "旅行" },
+  { shortcode: "airplane", character: "✈️", category: "旅行" },
+  { shortcode: "small_airplane", character: "🛩️", category: "旅行" },
+  { shortcode: "rocket", character: "🚀", category: "旅行" },
+  { shortcode: "helicopter", character: "🚁", category: "旅行" },
+  { shortcode: "sailboat", character: "⛵", category: "旅行" },
+  { shortcode: "speedboat", character: "🚤", category: "旅行" },
+  { shortcode: "ship", character: "🚢", category: "旅行" },
+  { shortcode: "anchor", character: "⚓", category: "旅行" },
+  { shortcode: "fuelpump", character: "⛽", category: "旅行" },
+  { shortcode: "traffic_light", character: "🚦", category: "旅行" },
+  { shortcode: "construction", character: "🚧", category: "旅行" },
+  { shortcode: "house", character: "🏠", category: "旅行" },
+  { shortcode: "office", character: "🏢", category: "旅行" },
+  { shortcode: "hospital", character: "🏥", category: "旅行" },
+  { shortcode: "bank", character: "🏦", category: "旅行" },
+  { shortcode: "hotel", character: "🏨", category: "旅行" },
+  { shortcode: "school", character: "🏫", category: "旅行" },
+  { shortcode: "church", character: "⛪", category: "旅行" },
+  { shortcode: "tent", character: "⛺", category: "旅行" },
+  { shortcode: "castle", character: "🏰", category: "旅行" },
+  { shortcode: "statue_of_liberty", character: "🗽", category: "旅行" },
+  { shortcode: "mount_fuji", character: "🗻", category: "旅行" },
 
   // ── 自然 ─────────────────────────────────────────────────────────────
-  { 短代码: "sunny", 字符: "☀️", 分类: "自然" },
-  { 短代码: "moon", 字符: "🌙", 分类: "自然" },
-  { 短代码: "star", 字符: "⭐", 分类: "自然" },
-  { 短代码: "star2", 字符: "🌟", 分类: "自然" },
-  { 短代码: "sunrise", 字符: "🌅", 分类: "自然" },
-  { 短代码: "rainbow", 字符: "🌈", 分类: "自然" },
-  { 短代码: "cloud", 字符: "☁️", 分类: "自然" },
-  { 短代码: "snowflake", 字符: "❄️", 分类: "自然" },
-  { 短代码: "zap", 字符: "⚡", 分类: "自然" },
-  { 短代码: "fire", 字符: "🔥", 分类: "自然" },
-  { 短代码: "ocean", 字符: "🌊", 分类: "自然" },
-  { 短代码: "earth_asia", 字符: "🌏", 分类: "自然" },
-  { 短代码: "globe_with_meridians", 字符: "🌐", 分类: "自然" },
-  { 短代码: "cactus", 字符: "🌵", 分类: "自然" },
-  { 短代码: "four_leaf_clover", 字符: "🍀", 分类: "自然" },
-  { 短代码: "maple_leaf", 字符: "🍁", 分类: "自然" },
-  { 短代码: "fallen_leaf", 字符: "🍂", 分类: "自然" },
-  { 短代码: "herb", 字符: "🌿", 分类: "自然" },
-  { 短代码: "rose", 字符: "🌹", 分类: "自然" },
-  { 短代码: "sunflower", 字符: "🌻", 分类: "自然" },
-  { 短代码: "tulip", 字符: "🌷", 分类: "自然" },
-  { 短代码: "cherry_blossom", 字符: "🌸", 分类: "自然" },
+  { shortcode: "sunny", character: "☀️", category: "自然" },
+  { shortcode: "moon", character: "🌙", category: "自然" },
+  { shortcode: "star", character: "⭐", category: "自然" },
+  { shortcode: "star2", character: "🌟", category: "自然" },
+  { shortcode: "sunrise", character: "🌅", category: "自然" },
+  { shortcode: "rainbow", character: "🌈", category: "自然" },
+  { shortcode: "cloud", character: "☁️", category: "自然" },
+  { shortcode: "snowflake", character: "❄️", category: "自然" },
+  { shortcode: "zap", character: "⚡", category: "自然" },
+  { shortcode: "fire", character: "🔥", category: "自然" },
+  { shortcode: "ocean", character: "🌊", category: "自然" },
+  { shortcode: "earth_asia", character: "🌏", category: "自然" },
+  { shortcode: "globe_with_meridians", character: "🌐", category: "自然" },
+  { shortcode: "cactus", character: "🌵", category: "自然" },
+  { shortcode: "four_leaf_clover", character: "🍀", category: "自然" },
+  { shortcode: "maple_leaf", character: "🍁", category: "自然" },
+  { shortcode: "fallen_leaf", character: "🍂", category: "自然" },
+  { shortcode: "herb", character: "🌿", category: "自然" },
+  { shortcode: "rose", character: "🌹", category: "自然" },
+  { shortcode: "sunflower", character: "🌻", category: "自然" },
+  { shortcode: "tulip", character: "🌷", category: "自然" },
+  { shortcode: "cherry_blossom", character: "🌸", category: "自然" },
 
   // ── 物件 ─────────────────────────────────────────────────────────────
-  { 短代码: "watch", 字符: "⌚", 分类: "物件" },
-  { 短代码: "iphone", 字符: "📱", 分类: "物件" },
-  { 短代码: "computer", 字符: "💻", 分类: "物件" },
-  { 短代码: "desktop_computer", 字符: "🖥️", 分类: "物件" },
-  { 短代码: "keyboard", 字符: "⌨️", 分类: "物件" },
-  { 短代码: "printer", 字符: "🖨️", 分类: "物件" },
-  { 短代码: "computer_mouse", 字符: "🖱️", 分类: "物件" },
-  { 短代码: "floppy_disk", 字符: "💾", 分类: "物件" },
-  { 短代码: "cd", 字符: "💿", 分类: "物件" },
-  { 短代码: "dvd", 字符: "📀", 分类: "物件" },
-  { 短代码: "battery", 字符: "🔋", 分类: "物件" },
-  { 短代码: "electric_plug", 字符: "🔌", 分类: "物件" },
-  { 短代码: "bulb", 字符: "💡", 分类: "物件" },
-  { 短代码: "flashlight", 字符: "🔦", 分类: "物件" },
-  { 短代码: "camera", 字符: "📷", 分类: "物件" },
-  { 短代码: "video_camera", 字符: "📹", 分类: "物件" },
-  { 短代码: "movie_camera", 字符: "🎥", 分类: "物件" },
-  { 短代码: "phone", 字符: "☎️", 分类: "物件" },
-  { 短代码: "telephone_receiver", 字符: "📞", 分类: "物件" },
-  { 短代码: "tv", 字符: "📺", 分类: "物件" },
-  { 短代码: "radio", 字符: "📻", 分类: "物件" },
-  { 短代码: "bell", 字符: "🔔", 分类: "物件" },
-  { 短代码: "no_bell", 字符: "🔕", 分类: "物件" },
-  { 短代码: "loud_sound", 字符: "🔊", 分类: "物件" },
-  { 短代码: "mute", 字符: "🔇", 分类: "物件" },
-  { 短代码: "mega", 字符: "📣", 分类: "物件" },
-  { 短代码: "hourglass", 字符: "⌛", 分类: "物件" },
-  { 短代码: "alarm_clock", 字符: "⏰", 分类: "物件" },
-  { 短代码: "lock", 字符: "🔒", 分类: "物件" },
-  { 短代码: "unlock", 字符: "🔓", 分类: "物件" },
-  { 短代码: "key", 字符: "🔑", 分类: "物件" },
-  { 短代码: "hammer", 字符: "🔨", 分类: "物件" },
-  { 短代码: "wrench", 字符: "🔧", 分类: "物件" },
-  { 短代码: "nut_and_bolt", 字符: "🔩", 分类: "物件" },
-  { 短代码: "gear", 字符: "⚙️", 分类: "物件" },
-  { 短代码: "link", 字符: "🔗", 分类: "物件" },
-  { 短代码: "paperclip", 字符: "📎", 分类: "物件" },
-  { 短代码: "scissors", 字符: "✂️", 分类: "物件" },
-  { 短代码: "pencil2", 字符: "✏️", 分类: "物件" },
-  { 短代码: "pen", 字符: "🖊️", 分类: "物件" },
-  { 短代码: "fountain_pen", 字符: "🖋️", 分类: "物件" },
-  { 短代码: "memo", 字符: "📝", 分类: "物件" },
-  { 短代码: "books", 字符: "📚", 分类: "物件" },
-  { 短代码: "book", 字符: "📖", 分类: "物件" },
-  { 短代码: "newspaper", 字符: "📰", 分类: "物件" },
-  { 短代码: "bookmark", 字符: "🔖", 分类: "物件" },
-  { 短代码: "email", 字符: "📧", 分类: "物件" },
-  { 短代码: "envelope", 字符: "✉️", 分类: "物件" },
-  { 短代码: "inbox_tray", 字符: "📥", 分类: "物件" },
-  { 短代码: "outbox_tray", 字符: "📤", 分类: "物件" },
-  { 短代码: "package", 字符: "📦", 分类: "物件" },
-  { 短代码: "mailbox", 字符: "📫", 分类: "物件" },
-  { 短代码: "chart_with_upwards_trend", 字符: "📈", 分类: "物件" },
-  { 短代码: "chart_with_downwards_trend", 字符: "📉", 分类: "物件" },
-  { 短代码: "bar_chart", 字符: "📊", 分类: "物件" },
-  { 短代码: "clipboard", 字符: "📋", 分类: "物件" },
-  { 短代码: "calendar", 字符: "📅", 分类: "物件" },
-  { 短代码: "pushpin", 字符: "📌", 分类: "物件" },
-  { 短代码: "round_pushpin", 字符: "📍", 分类: "物件" },
-  { 短代码: "triangular_ruler", 字符: "📐", 分类: "物件" },
-  { 短代码: "straight_ruler", 字符: "📏", 分类: "物件" },
-  { 短代码: "mag", 字符: "🔍", 分类: "物件" },
-  { 短代码: "mag_right", 字符: "🔎", 分类: "物件" },
-  { 短代码: "moneybag", 字符: "💰", 分类: "物件" },
-  { 短代码: "dollar", 字符: "💵", 分类: "物件" },
-  { 短代码: "credit_card", 字符: "💳", 分类: "物件" },
-  { 短代码: "gem", 字符: "💎", 分类: "物件" },
-  { 短代码: "shield", 字符: "🛡️", 分类: "物件" },
-  { 短代码: "wastebasket", 字符: "🗑️", 分类: "物件" },
+  { shortcode: "watch", character: "⌚", category: "物件" },
+  { shortcode: "iphone", character: "📱", category: "物件" },
+  { shortcode: "computer", character: "💻", category: "物件" },
+  { shortcode: "desktop_computer", character: "🖥️", category: "物件" },
+  { shortcode: "keyboard", character: "⌨️", category: "物件" },
+  { shortcode: "printer", character: "🖨️", category: "物件" },
+  { shortcode: "computer_mouse", character: "🖱️", category: "物件" },
+  { shortcode: "floppy_disk", character: "💾", category: "物件" },
+  { shortcode: "cd", character: "💿", category: "物件" },
+  { shortcode: "dvd", character: "📀", category: "物件" },
+  { shortcode: "battery", character: "🔋", category: "物件" },
+  { shortcode: "electric_plug", character: "🔌", category: "物件" },
+  { shortcode: "bulb", character: "💡", category: "物件" },
+  { shortcode: "flashlight", character: "🔦", category: "物件" },
+  { shortcode: "camera", character: "📷", category: "物件" },
+  { shortcode: "video_camera", character: "📹", category: "物件" },
+  { shortcode: "movie_camera", character: "🎥", category: "物件" },
+  { shortcode: "phone", character: "☎️", category: "物件" },
+  { shortcode: "telephone_receiver", character: "📞", category: "物件" },
+  { shortcode: "tv", character: "📺", category: "物件" },
+  { shortcode: "radio", character: "📻", category: "物件" },
+  { shortcode: "bell", character: "🔔", category: "物件" },
+  { shortcode: "no_bell", character: "🔕", category: "物件" },
+  { shortcode: "loud_sound", character: "🔊", category: "物件" },
+  { shortcode: "mute", character: "🔇", category: "物件" },
+  { shortcode: "mega", character: "📣", category: "物件" },
+  { shortcode: "hourglass", character: "⌛", category: "物件" },
+  { shortcode: "alarm_clock", character: "⏰", category: "物件" },
+  { shortcode: "lock", character: "🔒", category: "物件" },
+  { shortcode: "unlock", character: "🔓", category: "物件" },
+  { shortcode: "key", character: "🔑", category: "物件" },
+  { shortcode: "hammer", character: "🔨", category: "物件" },
+  { shortcode: "wrench", character: "🔧", category: "物件" },
+  { shortcode: "nut_and_bolt", character: "🔩", category: "物件" },
+  { shortcode: "gear", character: "⚙️", category: "物件" },
+  { shortcode: "link", character: "🔗", category: "物件" },
+  { shortcode: "paperclip", character: "📎", category: "物件" },
+  { shortcode: "scissors", character: "✂️", category: "物件" },
+  { shortcode: "pencil2", character: "✏️", category: "物件" },
+  { shortcode: "pen", character: "🖊️", category: "物件" },
+  { shortcode: "fountain_pen", character: "🖋️", category: "物件" },
+  { shortcode: "memo", character: "📝", category: "物件" },
+  { shortcode: "books", character: "📚", category: "物件" },
+  { shortcode: "book", character: "📖", category: "物件" },
+  { shortcode: "newspaper", character: "📰", category: "物件" },
+  { shortcode: "bookmark", character: "🔖", category: "物件" },
+  { shortcode: "email", character: "📧", category: "物件" },
+  { shortcode: "envelope", character: "✉️", category: "物件" },
+  { shortcode: "inbox_tray", character: "📥", category: "物件" },
+  { shortcode: "outbox_tray", character: "📤", category: "物件" },
+  { shortcode: "package", character: "📦", category: "物件" },
+  { shortcode: "mailbox", character: "📫", category: "物件" },
+  { shortcode: "chart_with_upwards_trend", character: "📈", category: "物件" },
+  { shortcode: "chart_with_downwards_trend", character: "📉", category: "物件" },
+  { shortcode: "bar_chart", character: "📊", category: "物件" },
+  { shortcode: "clipboard", character: "📋", category: "物件" },
+  { shortcode: "calendar", character: "📅", category: "物件" },
+  { shortcode: "pushpin", character: "📌", category: "物件" },
+  { shortcode: "round_pushpin", character: "📍", category: "物件" },
+  { shortcode: "triangular_ruler", character: "📐", category: "物件" },
+  { shortcode: "straight_ruler", character: "📏", category: "物件" },
+  { shortcode: "mag", character: "🔍", category: "物件" },
+  { shortcode: "mag_right", character: "🔎", category: "物件" },
+  { shortcode: "moneybag", character: "💰", category: "物件" },
+  { shortcode: "dollar", character: "💵", category: "物件" },
+  { shortcode: "credit_card", character: "💳", category: "物件" },
+  { shortcode: "gem", character: "💎", category: "物件" },
+  { shortcode: "shield", character: "🛡️", category: "物件" },
+  { shortcode: "wastebasket", character: "🗑️", category: "物件" },
 
   // ── 符号 ─────────────────────────────────────────────────────────────
-  { 短代码: "heart", 字符: "❤️", 分类: "符号" },
-  { 短代码: "orange_heart", 字符: "🧡", 分类: "符号" },
-  { 短代码: "yellow_heart", 字符: "💛", 分类: "符号" },
-  { 短代码: "green_heart", 字符: "💚", 分类: "符号" },
-  { 短代码: "blue_heart", 字符: "💙", 分类: "符号" },
-  { 短代码: "purple_heart", 字符: "💜", 分类: "符号" },
-  { 短代码: "black_heart", 字符: "🖤", 分类: "符号" },
-  { 短代码: "white_heart", 字符: "🤍", 分类: "符号" },
-  { 短代码: "brown_heart", 字符: "🤎", 分类: "符号" },
-  { 短代码: "broken_heart", 字符: "💔", 分类: "符号" },
-  { 短代码: "two_hearts", 字符: "💕", 分类: "符号" },
-  { 短代码: "sparkling_heart", 字符: "💖", 分类: "符号" },
-  { 短代码: "heartpulse", 字符: "💗", 分类: "符号" },
-  { 短代码: "heartbeat", 字符: "💓", 分类: "符号" },
-  { 短代码: "revolving_hearts", 字符: "💞", 分类: "符号" },
-  { 短代码: "cupid", 字符: "💘", 分类: "符号" },
-  { 短代码: "gift_heart", 字符: "💝", 分类: "符号" },
-  { 短代码: "100", 字符: "💯", 分类: "符号" },
-  { 短代码: "anger", 字符: "💢", 分类: "符号" },
-  { 短代码: "boom", 字符: "💥", 分类: "符号" },
-  { 短代码: "dizzy", 字符: "💫", 分类: "符号" },
-  { 短代码: "sweat_drops", 字符: "💦", 分类: "符号" },
-  { 短代码: "dash", 字符: "💨", 分类: "符号" },
-  { 短代码: "speech_balloon", 字符: "💬", 分类: "符号" },
-  { 短代码: "thought_balloon", 字符: "💭", 分类: "符号" },
-  { 短代码: "zzz", 字符: "💤", 分类: "符号" },
-  { 短代码: "white_check_mark", 字符: "✅", 分类: "符号" },
-  { 短代码: "x", 字符: "❌", 分类: "符号" },
-  { 短代码: "heavy_check_mark", 字符: "✔️", 分类: "符号" },
-  { 短代码: "heavy_multiplication_x", 字符: "✖️", 分类: "符号" },
-  { 短代码: "bangbang", 字符: "‼️", 分类: "符号" },
-  { 短代码: "question", 字符: "❓", 分类: "符号" },
-  { 短代码: "exclamation", 字符: "❗", 分类: "符号" },
-  { 短代码: "warning", 字符: "⚠️", 分类: "符号" },
-  { 短代码: "no_entry", 字符: "⛔", 分类: "符号" },
-  { 短代码: "recycle", 字符: "♻️", 分类: "符号" },
-  { 短代码: "arrow_up", 字符: "⬆️", 分类: "符号" },
-  { 短代码: "arrow_down", 字符: "⬇️", 分类: "符号" },
-  { 短代码: "arrow_left", 字符: "⬅️", 分类: "符号" },
-  { 短代码: "arrow_right", 字符: "➡️", 分类: "符号" },
-  { 短代码: "arrows_clockwise", 字符: "🔃", 分类: "符号" },
-  { 短代码: "repeat", 字符: "🔁", 分类: "符号" },
-  { 短代码: "infinity", 字符: "♾️", 分类: "符号" },
-  { 短代码: "yin_yang", 字符: "☯️", 分类: "符号" },
-  { 短代码: "trident", 字符: "🔱", 分类: "符号" },
-  { 短代码: "atom_symbol", 字符: "⚛️", 分类: "符号" },
-  { 短代码: "fleur_de_lis", 字符: "⚜️", 分类: "符号" },
-  { 短代码: "hash", 字符: "#️⃣", 分类: "符号" },
-  { 短代码: "asterisk", 字符: "*️⃣", 分类: "符号" },
+  { shortcode: "heart", character: "❤️", category: "符号" },
+  { shortcode: "orange_heart", character: "🧡", category: "符号" },
+  { shortcode: "yellow_heart", character: "💛", category: "符号" },
+  { shortcode: "green_heart", character: "💚", category: "符号" },
+  { shortcode: "blue_heart", character: "💙", category: "符号" },
+  { shortcode: "purple_heart", character: "💜", category: "符号" },
+  { shortcode: "black_heart", character: "🖤", category: "符号" },
+  { shortcode: "white_heart", character: "🤍", category: "符号" },
+  { shortcode: "brown_heart", character: "🤎", category: "符号" },
+  { shortcode: "broken_heart", character: "💔", category: "符号" },
+  { shortcode: "two_hearts", character: "💕", category: "符号" },
+  { shortcode: "sparkling_heart", character: "💖", category: "符号" },
+  { shortcode: "heartpulse", character: "💗", category: "符号" },
+  { shortcode: "heartbeat", character: "💓", category: "符号" },
+  { shortcode: "revolving_hearts", character: "💞", category: "符号" },
+  { shortcode: "cupid", character: "💘", category: "符号" },
+  { shortcode: "gift_heart", character: "💝", category: "符号" },
+  { shortcode: "100", character: "💯", category: "符号" },
+  { shortcode: "anger", character: "💢", category: "符号" },
+  { shortcode: "boom", character: "💥", category: "符号" },
+  { shortcode: "dizzy", character: "💫", category: "符号" },
+  { shortcode: "sweat_drops", character: "💦", category: "符号" },
+  { shortcode: "dash", character: "💨", category: "符号" },
+  { shortcode: "speech_balloon", character: "💬", category: "符号" },
+  { shortcode: "thought_balloon", character: "💭", category: "符号" },
+  { shortcode: "zzz", character: "💤", category: "符号" },
+  { shortcode: "white_check_mark", character: "✅", category: "符号" },
+  { shortcode: "x", character: "❌", category: "符号" },
+  { shortcode: "heavy_check_mark", character: "✔️", category: "符号" },
+  { shortcode: "heavy_multiplication_x", character: "✖️", category: "符号" },
+  { shortcode: "bangbang", character: "‼️", category: "符号" },
+  { shortcode: "question", character: "❓", category: "符号" },
+  { shortcode: "exclamation", character: "❗", category: "符号" },
+  { shortcode: "warning", character: "⚠️", category: "符号" },
+  { shortcode: "no_entry", character: "⛔", category: "符号" },
+  { shortcode: "recycle", character: "♻️", category: "符号" },
+  { shortcode: "arrow_up", character: "⬆️", category: "符号" },
+  { shortcode: "arrow_down", character: "⬇️", category: "符号" },
+  { shortcode: "arrow_left", character: "⬅️", category: "符号" },
+  { shortcode: "arrow_right", character: "➡️", category: "符号" },
+  { shortcode: "arrows_clockwise", character: "🔃", category: "符号" },
+  { shortcode: "repeat", character: "🔁", category: "符号" },
+  { shortcode: "infinity", character: "♾️", category: "符号" },
+  { shortcode: "yin_yang", character: "☯️", category: "符号" },
+  { shortcode: "trident", character: "🔱", category: "符号" },
+  { shortcode: "atom_symbol", character: "⚛️", category: "符号" },
+  { shortcode: "fleur_de_lis", character: "⚜️", category: "符号" },
+  { shortcode: "hash", character: "#️⃣", category: "符号" },
+  { shortcode: "asterisk", character: "*️⃣", category: "符号" },
 
   // ── 旗帜 ─────────────────────────────────────────────────────────────
-  { 短代码: "checkered_flag", 字符: "🏁", 分类: "旗帜" },
-  { 短代码: "triangular_flag_on_post", 字符: "🚩", 分类: "旗帜" },
-  { 短代码: "cn", 字符: "🇨🇳", 分类: "旗帜" },
-  { 短代码: "us", 字符: "🇺🇸", 分类: "旗帜" },
-  { 短代码: "jp", 字符: "🇯🇵", 分类: "旗帜" },
-  { 短代码: "kr", 字符: "🇰🇷", 分类: "旗帜" },
-  { 短代码: "gb", 字符: "🇬🇧", 分类: "旗帜" },
-  { 短代码: "de", 字符: "🇩🇪", 分类: "旗帜" },
-  { 短代码: "fr", 字符: "🇫🇷", 分类: "旗帜" },
-  { 短代码: "es", 字符: "🇪🇸", 分类: "旗帜" },
-  { 短代码: "it", 字符: "🇮🇹", 分类: "旗帜" },
-  { 短代码: "ru", 字符: "🇷🇺", 分类: "旗帜" },
+  { shortcode: "checkered_flag", character: "🏁", category: "旗帜" },
+  { shortcode: "triangular_flag_on_post", character: "🚩", category: "旗帜" },
+  { shortcode: "cn", character: "🇨🇳", category: "旗帜" },
+  { shortcode: "us", character: "🇺🇸", category: "旗帜" },
+  { shortcode: "jp", character: "🇯🇵", category: "旗帜" },
+  { shortcode: "kr", character: "🇰🇷", category: "旗帜" },
+  { shortcode: "gb", character: "🇬🇧", category: "旗帜" },
+  { shortcode: "de", character: "🇩🇪", category: "旗帜" },
+  { shortcode: "fr", character: "🇫🇷", category: "旗帜" },
+  { shortcode: "es", character: "🇪🇸", category: "旗帜" },
+  { shortcode: "it", character: "🇮🇹", category: "旗帜" },
+  { shortcode: "ru", character: "🇷🇺", category: "旗帜" },
 ];
 
 /** 按表里的**出现顺序**去重的分类名（对话框要拿它分栏）。 */
-export const Emoji分类: string[] = [...new Set(Emoji表.map((项) => 项.分类))];
+export const emojiCategory: string[] = [...new Set(emojiTable.map((item5) => item5.category))];
 
 /**
  * 短代码 → 表项。表里可能有重名（`+1` 与 `thumbsup` 是同一个字符），
  * 所以这里**只留第一条**——`输入规则` 用它把 `:thumbsup:` 换成 👍。
  */
-const 按短代码 = new Map<string, Emoji项>();
-for (const 项 of Emoji表) {
-  if (!按短代码.has(项.短代码)) 按短代码.set(项.短代码, 项);
+const pressShortcode = new Map<string, EmojiItem>();
+for (const item5 of emojiTable) {
+  if (!pressShortcode.has(item5.shortcode)) pressShortcode.set(item5.shortcode, item5);
 }
 
 /** 短代码查表（**大小写不敏感**：用户可能打成 `:Smile:`）。查不到给 `null`。 */
-export function 查短代码(短代码: string): Emoji项 | null {
-  return 按短代码.get(短代码.toLowerCase()) ?? null;
+export function checkShortcode(shortcode: string): EmojiItem | null {
+  return pressShortcode.get(shortcode.toLowerCase()) ?? null;
 }
 
 /**
@@ -632,21 +632,21 @@ export function 查短代码(短代码: string): Emoji项 | null {
  * 代价如实记：`heart_eyes` 用 `:eyes` 搜不到（只能从头打）。这一条与 Typora /
  * GitHub 的行为一致，不是本仓自创。
  */
-export function 找Emoji(前缀: string, 上限 = 8): Emoji项[] {
-  const 小 = 前缀.toLowerCase();
-  const 出: Emoji项[] = [];
-  for (const 项 of Emoji表) {
-    if (项.短代码.startsWith(小)) {
-      出.push(项);
-      if (出.length >= 上限) break;
+export function findEmoji(prefix: string, limit = 8): EmojiItem[] {
+  const small = prefix.toLowerCase();
+  const output2: EmojiItem[] = [];
+  for (const item5 of emojiTable) {
+    if (item5.shortcode.startsWith(small)) {
+      output2.push(item5);
+      if (output2.length >= limit) break;
     }
   }
-  return 出;
+  return output2;
 }
 
 /** 面板里显示的文本：`:smile:`。 */
-export function 带冒号(短代码: string): string {
-  return `:${短代码}:`;
+export function withEmergeNumber(shortcode: string): string {
+  return `:${shortcode}:`;
 }
 
 // ── 输入规则 ────────────────────────────────────────────────────────────
@@ -656,7 +656,7 @@ export function 带冒号(短代码: string): string {
  * 与 `smart-punctuation.ts` 的 `规则选项` 是同一个常量值，**没有共享**：
  * 两个文件各有各的理由，将来一个改了不该牵动另一个。
  */
-const 规则选项 = { inCodeMark: false } as const;
+const ruleRuleOption = { inCodeMark: false } as const;
 
 /**
  * **短代码的形状**（`:smile:` 里那一段），也是输入规则那条正则。
@@ -666,7 +666,7 @@ const 规则选项 = { inCodeMark: false } as const;
  * `:x:`（❌）与 `:v:`（✌️）这种单字符短代码（GitHub 也这么收），写成 `{2,}`
  * 的话这两条在面板里选得到、**却永远敲不出来**：一种不报错的死行。
  */
-export const 输入规则正则 = /:([a-zA-Z0-9_+-]{1,}):[ \t]$/;
+export const inputRuleRuleCorrectRule = /:([a-zA-Z0-9_+-]{1,}):[ \t]$/;
 
 /**
  * 敲完整短代码 ＋ **一个空白**时换成字符。
@@ -681,17 +681,17 @@ export const 输入规则正则 = /:([a-zA-Z0-9_+-]{1,}):[ \t]$/;
  * 冒号是"这是一段短代码"的开头标记，`找Emoji` 又只认表里的词，
  * 所以**误触的代价上限是"表里真有一个同名词、而用户恰好写了 `:词:`"**。
  */
-export function emoji输入规则(开: boolean) {
-  if (!开) return [];
+export function emojiInputRuleRule(open2: boolean) {
+  if (!open2) return [];
   return [
     $inputRule(() =>
-      new InputRule(输入规则正则, (state, 匹配, 始, 终) => {
-        const 项 = 查短代码(匹配[1]!);
-        if (!项) return null;
+      new InputRule(inputRuleRuleCorrectRule, (state, match2, start6, end3) => {
+        const item5 = checkShortcode(match2[1]!);
+        if (!item5) return null;
         // ⚠️ 只换短代码那一段，**后面那颗空白留在原地**（同 `auto-correct.ts`）。
         // 多插一个空格，或者把用户敲的空格吃掉，都会让下文的缩进/换行错位。
-        return state.tr.insertText(项.字符, 始, 终 - 1);
-      }, 规则选项),
+        return state.tr.insertText(item5.character, start6, end3 - 1);
+      }, ruleRuleOption),
     ),
   ];
 }
@@ -699,22 +699,22 @@ export function emoji输入规则(开: boolean) {
 // ── 补全面板 ────────────────────────────────────────────────────────────
 
 /** 插件键。⚠️ 单独导出：测试要据此读插件状态。 */
-export const emoji补全键 = new PluginKey<补全状态 | null>("notaEmoji");
+export const emojiFillAllKey = new PluginKey<FillAllState | null>("notaEmoji");
 
 /** 面板此刻该显示什么。`null` = 不显示。 */
-export interface 补全状态 {
+export interface FillAllState {
   /** `:` 的位置（文档坐标）——替换范围的左端。 */
-  起: number;
+  start5: number;
   /** 已经打出来的前缀（不含 `:`）。 */
-  前缀: string;
+  prefix: string;
   /** 候选（已经按上限截过）。 */
-  候选: Emoji项[];
+  candidate: EmojiItem[];
   /** 高亮第几条。 */
-  选中: number;
+  selected: number;
 }
 
 /** 光标前最多往回看这么多字符。够长到覆盖最长的短代码（`smiling_face_with_three_hearts`）。 */
-const 回看 = 40;
+const returnSee = 40;
 
 /**
  * 从光标往前认一段"正在打的短代码"。
@@ -725,26 +725,26 @@ const 回看 = 40;
  * ⚠️ **不跨行、不认空格**：正则里没有空白，所以 `:sm ile` 一经空格就断。
  * 这正是要的——用户在 `:sm` 后面敲空格说明他不打算打 emoji 了。
  */
-export function 认前缀(state: EditorState): 补全状态 | null {
-  const 选 = state.selection;
-  if (!选.empty) return null;
-  const $from = 选.$from;
+export function recognizePrefix(state: EditorState): FillAllState | null {
+  const select = state.selection;
+  if (!select.empty) return null;
+  const $from = select.$from;
   if (!$from.parent.isTextblock) return null;
-  const 起 = Math.max(0, $from.parentOffset - 回看);
-  const 前文 = $from.parent.textBetween(起, $from.parentOffset, undefined, "￼");
-  const 匹配 = /:([a-zA-Z0-9_+-]{1,})$/.exec(前文);
-  if (!匹配) return null;
-  const 前缀 = 匹配[1]!;
-  const 候选 = 找Emoji(前缀);
-  if (候选.length === 0) return null;
+  const start5 = Math.max(0, $from.parentOffset - returnSee);
+  const prefixText = $from.parent.textBetween(start5, $from.parentOffset, undefined, "￼");
+  const match2 = /:([a-zA-Z0-9_+-]{1,})$/.exec(prefixText);
+  if (!match2) return null;
+  const prefix = match2[1]!;
+  const candidate = findEmoji(prefix);
+  if (candidate.length === 0) return null;
   return {
-    前缀,
+    prefix,
     // ⚠️ 文档坐标 = 块起点 ＋ 块内偏移。`$from.start()` 是**块内**第一个
     // 位置的文档坐标，加块内偏移才对得上（与 `smart-punctuation.ts` 的
     // `装饰清单` 同一个换算，那边是按节点位置加的）。
-    起: $from.start() + 起 + 匹配.index,
-    候选,
-    选中: 0,
+    start5: $from.start() + start5 + match2.index,
+    candidate,
+    selected: 0,
   };
 }
 
@@ -755,12 +755,12 @@ export function 认前缀(state: EditorState): 补全状态 | null {
  * 两者理论上一回事，但用光标位置就不必再假设前缀长度与文档长度一致
  * （认前缀走的是 `textBetween`，它对被替换过的字符 `￼` 有特殊处理）。
  */
-export function 采用候选(state: EditorState, 状: 补全状态, 第几条: number): Transaction | null {
-  const 项 = 状.候选[第几条];
-  if (!项) return null;
-  const 到 = state.selection.from;
-  if (到 < 状.起) return null;
-  return state.tr.insertText(项.字符, 状.起, 到);
+export function adoptUseCandidate(state: EditorState, state3: FillAllState, ordinalHowManyItem: number): Transaction | null {
+  const item5 = state3.candidate[ordinalHowManyItem];
+  if (!item5) return null;
+  const to2 = state.selection.from;
+  if (to2 < state3.start5) return null;
+  return state.tr.insertText(item5.character, state3.start5, to2);
 }
 
 /**
@@ -774,59 +774,59 @@ export function 采用候选(state: EditorState, 状: 补全状态, 第几条: n
  * 同一条路子，那边的理由在这里逐字成立）：挂在编辑区里会被滚动容器算进
  * 可滚动范围，而且 ProseMirror 会把它当成文档的一部分。
  */
-export function emoji补全(开: boolean) {
-  if (!开) return [];
+export function emojiFillAll(open2: boolean) {
+  if (!open2) return [];
   return [
     $prose(() => {
-      const 面板 = document.createElement("div");
-      面板.className = "nota-emoji-pop";
-      面板.setAttribute("role", "listbox");
+      const panel = document.createElement("div");
+      panel.className = "nota-emoji-pop";
+      panel.setAttribute("role", "listbox");
       // ⚠️ `contenteditable="false"`：面板挂在 body 上，不在编辑器 DOM 里，
       // 但 WebKit 仍可能把它当成"可编辑区域之外的"东西——写上这一条是为了
       // 点它的时候不把焦点从编辑器抢走（`mousedown` 那条 `preventDefault` 同理）。
-      面板.contentEditable = "false";
-      面板.hidden = true;
-      document.body.appendChild(面板);
+      panel.contentEditable = "false";
+      panel.hidden = true;
+      document.body.appendChild(panel);
 
       /** 当前面板上画的是哪一版状态——用来判断要不要重画（省掉每帧重建 DOM）。 */
-      let 画过: 补全状态 | null = null;
+      let rendered: FillAllState | null = null;
 
-      function 收起() {
-        if (!面板.hidden) 面板.hidden = true;
-        画过 = null;
+      function collapse() {
+        if (!panel.hidden) panel.hidden = true;
+        rendered = null;
       }
 
-      function 摆位置(view: EditorView) {
+      function arrangePosition(view: EditorView) {
         // ⚠️ 用**面板左上角对齐光标**，而不是居中：emoji 是从光标处往外铺，
         // 居中的话面板左边缘会跑到光标左边去盖住已经写好的字。
-        const 坐标 = view.coordsAtPos(view.state.selection.from);
+        const coordinate = view.coordsAtPos(view.state.selection.from);
         // 先量高度再决定往上还是往下：往下会超出视口底边时翻到光标上方。
-        const 高 = 面板.offsetHeight;
-        const 下 = 坐标.bottom + 4;
-        const 上 = 坐标.top - 高 - 4;
-        面板.style.left = `${Math.min(坐标.left, window.innerWidth - 面板.offsetWidth - 8)}px`;
-        面板.style.top = `${下 + 高 > window.innerHeight - 8 ? Math.max(8, 上) : 下}px`;
+        const height = panel.offsetHeight;
+        const below = coordinate.bottom + 4;
+        const above = coordinate.top - height - 4;
+        panel.style.left = `${Math.min(coordinate.left, window.innerWidth - panel.offsetWidth - 8)}px`;
+        panel.style.top = `${below + height > window.innerHeight - 8 ? Math.max(8, above) : below}px`;
       }
 
-      function 画(view: EditorView, 状: 补全状态) {
+      function draw(view: EditorView, state3: FillAllState) {
         // 状态没变就不重画（方向键改的是 `选中`，那个要重画，所以比的是整份）。
-        if (画过 && 画过.起 === 状.起 && 画过.前缀 === 状.前缀 && 画过.选中 === 状.选中) {
-          摆位置(view);
+        if (rendered && rendered.start5 === state3.start5 && rendered.prefix === state3.prefix && rendered.selected === state3.selected) {
+          arrangePosition(view);
           return;
         }
-        面板.replaceChildren(
-          ...状.候选.map((项, i) => {
-            const 行 = document.createElement("div");
-            行.className = "nota-emoji-item" + (i === 状.选中 ? " is-on" : "");
-            行.setAttribute("role", "option");
-            行.setAttribute("aria-selected", String(i === 状.选中));
-            const 字 = document.createElement("span");
-            字.className = "nota-emoji-glyph";
-            字.textContent = 项.字符;
-            const 名 = document.createElement("span");
-            名.className = "nota-emoji-name";
-            名.textContent = 带冒号(项.短代码);
-            行.append(字, 名);
+        panel.replaceChildren(
+          ...state3.candidate.map((item5, i) => {
+            const line3 = document.createElement("div");
+            line3.className = "nota-emoji-item" + (i === state3.selected ? " is-on" : "");
+            line3.setAttribute("role", "option");
+            line3.setAttribute("aria-selected", String(i === state3.selected));
+            const character2 = document.createElement("span");
+            character2.className = "nota-emoji-glyph";
+            character2.textContent = item5.character;
+            const name3 = document.createElement("span");
+            name3.className = "nota-emoji-name";
+            name3.textContent = withEmergeNumber(item5.shortcode);
+            line3.append(character2, name3);
             // ⚠️ 鼠标点也得能选（键盘那几条在 `handleKeyDown` 里）。两件事
             // 缺一不可：
             //   ① `preventDefault()` —— 不写的话 WebKit 会把焦点从编辑器挪到
@@ -834,36 +834,36 @@ export function emoji补全(开: boolean) {
             //      用户接着打的字不知道会落在哪儿；
             //   ② 用**闭包里的 `i`**，不是 `状.选中` —— 点的那一条才是要选的
             //      那一条，而 `状` 在这一次重画里是快照。
-            行.addEventListener("mousedown", (e) => {
+            line3.addEventListener("mousedown", (e) => {
               e.preventDefault();
-              const tr = 采用候选(view.state, 状, i);
+              const tr = adoptUseCandidate(view.state, state3, i);
               if (tr) view.dispatch(tr);
             });
-            return 行;
+            return line3;
           }),
         );
-        面板.hidden = false;
-        画过 = 状;
-        摆位置(view);
+        panel.hidden = false;
+        rendered = state3;
+        arrangePosition(view);
       }
 
-      return new Plugin<补全状态 | null>({
-        key: emoji补全键,
+      return new Plugin<FillAllState | null>({
+        key: emojiFillAllKey,
 
         state: {
           init: () => null,
-          apply(tr, _旧, _旧state, 新state) {
+          apply(tr, _OldValue, _OldValuestate, newValuestate) {
             // ⚠️⚠️ **先看这一笔事务带没带面板自己的 meta**，带的话直接采用它。
             // 听起来像是优化，其实是**正确性**问题：上下键那两条改的只是
             // "高亮第几条"，它们没有改文档，所以在重算这条路上会**原样算回来**
             // ——上一版把 `选中` 从 0 改成 1，下一秒被 `认前缀` 重置成 0，
             // 表现为"按↓没反应"。那两条命令只能靠这条 meta 传递。
-            const 指定 = tr.getMeta(emoji补全键) as 补全状态 | null | undefined;
-            if (指定 !== undefined) return 指定 ?? null;
+            const pointFixed = tr.getMeta(emojiFillAllKey) as FillAllState | null | undefined;
+            if (pointFixed !== undefined) return pointFixed ?? null;
             // 其余事务一律重算：光标动、字变了、选区变了，前缀都可能不一样。
             // ⚠️ **不缓存、不做增量**：`认前缀` 只往回看 40 个字符，比任何
             // "哪些事务可能影响它"的判断都便宜，也不会漏。
-            return 认前缀(新state);
+            return recognizePrefix(newValuestate);
           },
         },
 
@@ -872,25 +872,25 @@ export function emoji补全(开: boolean) {
             // ⚠️⚠️ **输入法组合期间一律不接管**：中文输入法选字时也发上下键与回车，
             // 吃掉它们用户就选不了字了。这一条是硬要求（见文件头）。
             if (event.isComposing) return false;
-            const 状 = emoji补全键.getState(view.state);
-            if (!状) return false;
+            const state3 = emojiFillAllKey.getState(view.state);
+            if (!state3) return false;
             switch (event.key) {
               case "ArrowDown":
                 view.dispatch(
-                  view.state.tr.setMeta(emoji补全键, { ...状, 选中: (状.选中 + 1) % 状.候选.length }),
+                  view.state.tr.setMeta(emojiFillAllKey, { ...state3, selected: (state3.selected + 1) % state3.candidate.length }),
                 );
                 return true;
               case "ArrowUp":
                 view.dispatch(
-                  view.state.tr.setMeta(emoji补全键, {
-                    ...状,
-                    选中: (状.选中 - 1 + 状.候选.length) % 状.候选.length,
+                  view.state.tr.setMeta(emojiFillAllKey, {
+                    ...state3,
+                    selected: (state3.selected - 1 + state3.candidate.length) % state3.candidate.length,
                   }),
                 );
                 return true;
               case "Enter":
               case "Tab": {
-                const tr = 采用候选(view.state, 状, 状.选中);
+                const tr = adoptUseCandidate(view.state, state3, state3.selected);
                 if (!tr) return false;
                 view.dispatch(tr);
                 return true;
@@ -898,7 +898,7 @@ export function emoji补全(开: boolean) {
               case "Escape":
                 // ⚠️ Esc 只收面板，**不退出别的**（比如不关查找条）：它在这里的
                 // 层级最低，只吃掉"我画的那块浮层"。
-                收起();
+                collapse();
                 return true;
               default:
                 return false;
@@ -909,12 +909,12 @@ export function emoji补全(开: boolean) {
         view() {
           return {
             update(view) {
-              const 状 = emoji补全键.getState(view.state);
-              if (状) 画(view, 状);
-              else 收起();
+              const state3 = emojiFillAllKey.getState(view.state);
+              if (state3) draw(view, state3);
+              else collapse();
             },
             destroy() {
-              面板.remove();
+              panel.remove();
             },
           };
         },

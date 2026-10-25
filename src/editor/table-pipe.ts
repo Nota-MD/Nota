@@ -119,15 +119,15 @@
 import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 
 /** remark 序列化选项的类型：**从 ctx 反推出来**（同 `lax-heading.ts`）。 */
-type 串化选项 = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
+type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
 /** mdast 的文本处理器（`handlers.text` 那一条）。 */
-type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]>;
+type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
 /** mdast 节点里我们真正会读的那几个字段（不引 `@types/mdast`，够用就好）。 */
-type Mdast节点 = {
+type MdastNode = {
   type: string;
   value?: string;
-  children?: Mdast节点[];
+  children?: MdastNode[];
 };
 
 /**
@@ -137,10 +137,10 @@ type Mdast节点 = {
  * `-`/`:`"才会被上游转义，也只把那一类还回去。别的形状（`\|甲`）本仓不碰：
  * 上游没转义它，说明它压根不会拼成表格。
  */
-const 被转义的行首竖线 = /(^|\n)\\(\|)(?=[\t :-])/g;
+const isConvertMeaningOfLineFirstVerticalLine = /(^|\n)\\(\|)(?=[\t :-])/g;
 
 /** 硬换行的节点名。⚠️ 是 `break`，不是 `html`（写错不报错、只是一直不生效）。 */
-const 硬换行 = "break";
+const hardReplaceLine = "break";
 
 /**
  * 「这一行像不像一张表格的分隔行」：整行只有 `|`、`-`、`:`、空白，且至少一颗 `-`。
@@ -148,13 +148,13 @@ const 硬换行 = "break";
  * ⚠️ **放宽过**：真分隔行还要求每个格子是 `:?-+:?`、格子数与表头行相等——这里不查。
  * 判错了（把不像的判成像）只是多留一颗转义；反过来会把真表格放走。
  */
-const 像分隔行 = /^[\s|:-]*-[\s|:-]*$/;
+const likeSeparatorLine = /^[\s|:-]*-[\s|:-]*$/;
 
 /** `紧接的那一行` 的结论。⚠️ 三档，别把"一定不是"和"说不准"合成一档。 */
-export type 下一行判定 =
-  | { 形状: "已知"; 行: string }
-  | { 形状: "一定不是分隔行" }
-  | { 形状: "说不准" };
+export type BelowValueLineDetermineFixed =
+  | { shape: "已知"; line3: string }
+  | { shape: "一定不是分隔行" }
+  | { shape: "说不准" };
 
 /**
  * 这颗节点**自己会不会吃掉换行**（它写出来会不会占两行以上）。
@@ -162,10 +162,10 @@ export type 下一行判定 =
  * ⚠️ 只有包着行内内容的那些（`emphasis` / `strong` / `delete` / `link`）才可能，
  * 而且得里面真有一颗 `break` 或带 `\n` 的文本才算数（`**甲  \n乙**`）。
  */
-function 会不会跨行(节: Mdast节点): boolean {
-  if (节.type === 硬换行) return true;
-  if ((节.value ?? "").includes("\n")) return true;
-  return (节.children ?? []).some(会不会跨行);
+function meetingNotMeetingCrossLine(section: MdastNode): boolean {
+  if (section.type === hardReplaceLine) return true;
+  if ((section.value ?? "").includes("\n")) return true;
+  return (section.children ?? []).some(meetingNotMeetingCrossLine);
 }
 
 /**
@@ -174,31 +174,31 @@ function 会不会跨行(节: Mdast节点): boolean {
  * ⚠️ 判据只看**这一颗所在的那一行结束之后**的内容：同一行里跟在我后面的兄弟
  * 与我无关（我们判的是"下一行"），所以那一截要跳过（`本行未完` 那一支）。
  */
-export function 紧接的那一行(node: Mdast节点, parent: Mdast节点 | undefined): 下一行判定 {
-  const 兄弟 = parent?.children;
-  if (!Array.isArray(兄弟)) return { 形状: "说不准" };
-  let 到了 = false;
-  let 本行未完 = true;
-  let 出 = "";
-  for (const 孩 of 兄弟) {
-    if (孩 === node) {
-      到了 = true;
+export function tightConnectOfThatValueLine(node: MdastNode, parent: MdastNode | undefined): BelowValueLineDetermineFixed {
+  const brotherBrother = parent?.children;
+  if (!Array.isArray(brotherBrother)) return { shape: "说不准" };
+  let toDone = false;
+  let localLineNotComplete = true;
+  let output2 = "";
+  for (const child2 of brotherBrother) {
+    if (child2 === node) {
+      toDone = true;
       continue;
     }
-    if (!到了) continue;
-    if (孩.type === 硬换行) {
-      if (本行未完) {
-        本行未完 = false;
-        出 = "";
+    if (!toDone) continue;
+    if (child2.type === hardReplaceLine) {
+      if (localLineNotComplete) {
+        localLineNotComplete = false;
+        output2 = "";
         continue;
       }
-      return { 形状: "已知", 行: 出 }; // 下一行也到头了
+      return { shape: "已知", line3: output2 }; // 下一行也到头了
     }
-    if (孩.type !== "text") {
+    if (child2.type !== "text") {
       // 还在我们这一行上：它归这一行，与"下一行"无关。⚠️ 除非它自己就把这一行
       // 结束了，那下一行的开头在它肚子里——那是说不准。
-      if (本行未完) {
-        if (会不会跨行(孩)) return { 形状: "说不准" };
+      if (localLineNotComplete) {
+        if (meetingNotMeetingCrossLine(child2)) return { shape: "说不准" };
         continue;
       }
       // ⚠️ 落在下一行上 ⇒ **一定不像分隔行**：分隔行整行只有 `|`、`-`、`:`、空白，
@@ -206,28 +206,28 @@ export function 紧接的那一行(node: Mdast节点, parent: Mdast节点 | unde
       // 删除线的 `~`、行内代码的 `` ` ``、图片的 `!`、链接的 `[]()`、行内 HTML 的
       // `<>`…）。⚠️ 这条靠的是"没有哪种行内节点只写得出 `[\s|:-]`"——本仓自己加的
       // 行内节点只有公式（`inlineMath` → `$`），也在这个集合外面。
-      return { 形状: "一定不是分隔行" };
+      return { shape: "一定不是分隔行" };
     }
-    const 值 = 孩.value ?? "";
-    if (本行未完) {
-      const 断 = 值.indexOf("\n");
-      if (断 < 0) continue; // 还在同一行：与我们无关
-      本行未完 = false;
-      const 余 = 值.slice(断 + 1);
-      const 再断 = 余.indexOf("\n");
-      if (再断 >= 0) return { 形状: "已知", 行: 余.slice(0, 再断) };
-      出 = 余;
+    const value2 = child2.value ?? "";
+    if (localLineNotComplete) {
+      const breakValue = value2.indexOf("\n");
+      if (breakValue < 0) continue; // 还在同一行：与我们无关
+      localLineNotComplete = false;
+      const remaining = value2.slice(breakValue + 1);
+      const againBreak = remaining.indexOf("\n");
+      if (againBreak >= 0) return { shape: "已知", line3: remaining.slice(0, againBreak) };
+      output2 = remaining;
     } else {
-      const 断 = 值.indexOf("\n");
-      if (断 >= 0) return { 形状: "已知", 行: 出 + 值.slice(0, 断) };
-      出 += 值;
+      const breakValue = value2.indexOf("\n");
+      if (breakValue >= 0) return { shape: "已知", line3: output2 + value2.slice(0, breakValue) };
+      output2 += value2;
     }
   }
   // ⚠️ 压根没找到这颗节点（这一段里没有我）是说不准，一个字都不许动。
-  if (!到了) return { 形状: "说不准" };
+  if (!toDone) return { shape: "说不准" };
   // ⚠️ 兄弟走完还停在同一行 ⇒ 我这颗是这一段最后的东西，下一行是空行（或者已经
   // 在别的块里了）——空行**不可能**是分隔行（分隔行至少要一颗 `-`）。
-  return { 形状: "已知", 行: 本行未完 ? "" : 出 };
+  return { shape: "已知", line3: localLineNotComplete ? "" : output2 };
 }
 
 /**
@@ -235,11 +235,11 @@ export function 紧接的那一行(node: Mdast节点, parent: Mdast节点 | unde
  *
  * ⚠️ 单独导出来是给测试用的：`tests/table-pipe.test.ts` 第一条判据组量的就是它。
  */
-export function 下一行像分隔行(node: Mdast节点, parent: Mdast节点 | undefined): boolean | null {
-  const 判 = 紧接的那一行(node, parent);
-  if (判.形状 === "说不准") return null;
-  if (判.形状 === "一定不是分隔行") return false;
-  return 像分隔行.test(判.行);
+export function belowValueLineLikeSeparatorLine(node: MdastNode, parent: MdastNode | undefined): boolean | null {
+  const determine = tightConnectOfThatValueLine(node, parent);
+  if (determine.shape === "说不准") return null;
+  if (determine.shape === "一定不是分隔行") return false;
+  return likeSeparatorLine.test(determine.line3);
 }
 
 /**
@@ -248,29 +248,29 @@ export function 下一行像分隔行(node: Mdast节点, parent: Mdast节点 | u
  * `原文` 是 Milkdown 自己那条文本处理器（`remarkStringifyOptionsCtx` 的默认值里
  * 就有）；**没有它就原样返回**，不自己造一条——序列化是核心路径，宁可什么都不做。
  */
-export function 不转义行首竖线(原文?: 文本处理器): 文本处理器 {
+export function notConvertMeaningLineFirstVerticalLine(source?: textHandler): textHandler {
   return (node, parent, state, info) => {
-    if (!原文) return node.value ?? "";
-    const 输出 = 原文(node, parent, state, info);
+    if (!source) return node.value ?? "";
+    const output = source(node, parent, state, info);
     // 表格格子里那颗竖线必须留着（见文件头边界 1）。
-    if (state.stack.includes("tableCell")) return 输出;
-    if (!输出.includes("\\|")) return 输出;
-    const 本行 = 输出.split("\n");
+    if (state.stack.includes("tableCell")) return output;
+    if (!output.includes("\\|")) return output;
+    const localLine = output.split("\n");
     // ⚠️ 转义只在同一行里加字符、不加换行；行数对不上说明我对这一段形状的判断是
     // 错的（比如上游那条处理器换了个写法），那时一个字都不动。
-    if (本行.length !== ((node as Mdast节点).value ?? "").split("\n").length) return 输出;
-    const 父 = parent as Mdast节点 | undefined;
-    return 输出.replace(被转义的行首竖线, (整串, 前: string, 竖线: string, 偏移: number) => {
+    if (localLine.length !== ((node as MdastNode).value ?? "").split("\n").length) return output;
+    const parentNode = parent as MdastNode | undefined;
+    return output.replace(isConvertMeaningOfLineFirstVerticalLine, (wholeString, before2: string, verticalLine: string, offset: number) => {
       // ⚠️ 行号要从**那颗竖线自己**的位置数：正则的 `(^|\n)` 把换行也吃进了匹配，
       // 直接用 `偏移` 数出来的行号会**少一行**（量到的是上一行）——踩过一次。
-      const 行号 = 输出.slice(0, 偏移 + 前.length + 1).split("\n").length - 1;
+      const lineNumber = output.slice(0, offset + before2.length + 1).split("\n").length - 1;
       // 下一行在**这颗节点自己**肚子里（值里带的 `\n`）就直接读；
       // 到了最后一颗才去问兄弟（`紧接的那一行`）。⚠️ 两条路都得"确凿地不像"才放。
-      const 本节点里的下一行 = 本行[行号 + 1];
-      const 像 = 本节点里的下一行 === undefined
-        ? 下一行像分隔行(node as Mdast节点, 父)
-        : 像分隔行.test(本节点里的下一行);
-      return 像 === false ? 前 + 竖线 : 整串;
+      const localNodeInsideOfBelowValueLine = localLine[lineNumber + 1];
+      const like = localNodeInsideOfBelowValueLine === undefined
+        ? belowValueLineLikeSeparatorLine(node as MdastNode, parentNode)
+        : likeSeparatorLine.test(localNodeInsideOfBelowValueLine);
+      return like === false ? before2 + verticalLine : wholeString;
     });
   };
 }

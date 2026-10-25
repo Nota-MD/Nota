@@ -84,7 +84,7 @@ import { refractor } from "refractor";
 
 // ⚠️ 「哪个字算一个词」的判据**与所见即所得、源码模式是同一份**（`select.ts`
 // 第一组那几个纯函数）：同一颗 `Ctrl+D` 在三处选出来的东西必须一样。
-import { 选词区间, type 区间 } from "./select";
+import { wordRange, type range } from "./select";
 
 /**
  * 一级缩进的宽度。
@@ -94,7 +94,7 @@ import { 选词区间, type 区间 } from "./select";
  * 参考对象 Typora 也是 4。将来要做成设置项的话，**改这一处就够**——
  * `Tab`、`Shift+Tab`、回车续行三条路读的都是它。
  */
-const 缩进宽度 = "    ";
+const shrinkEnterWidthDegree = "    ";
 
 /* ── 纯函数：给测试读的那三个 ─────────────────────────────────────────────
  *
@@ -104,11 +104,11 @@ const 缩进宽度 = "    ";
  * 括号配对）得靠用例钉。
  */
 
-function 是高位(c: number): boolean {
+function isHeightPosition(c: number): boolean {
   return c >= 0xd800 && c <= 0xdbff;
 }
 
-function 是低位(c: number): boolean {
+function isLowPosition(c: number): boolean {
   return c >= 0xdc00 && c <= 0xdfff;
 }
 
@@ -127,43 +127,43 @@ function 是低位(c: number): boolean {
  * 判据在 `tests/code-block-editing.test.ts`：相等、纯插入、纯删除、中间替换、
  * 整段替换、以及上面那两种边界。
  */
-export function 算最小改动(
-  旧文: string,
-  新文: string,
-): { 删起: number; 删到: number; 插入: string } {
-  const 短 = Math.min(旧文.length, 新文.length);
+export function computeMostSmallChangeAction(
+  oldText: string,
+  newText: string,
+): { deleteStart: number; deleteEnd: number; insert: string } {
+  const short = Math.min(oldText.length, newText.length);
 
-  let 前 = 0;
-  while (前 < 短 && 旧文.charCodeAt(前) === 新文.charCodeAt(前)) 前++;
+  let before2 = 0;
+  while (before2 < short && oldText.charCodeAt(before2) === newText.charCodeAt(before2)) before2++;
   // ⚠️ 退到完整字符上：`前` 若正好落在（高位, 低位）之间，两边一起退一格。
-  while (前 > 0 && (是低位(旧文.charCodeAt(前)) || 是低位(新文.charCodeAt(前)))) {
-    if (是高位(旧文.charCodeAt(前 - 1)) || 是高位(新文.charCodeAt(前 - 1))) 前--;
+  while (before2 > 0 && (isLowPosition(oldText.charCodeAt(before2)) || isLowPosition(newText.charCodeAt(before2)))) {
+    if (isHeightPosition(oldText.charCodeAt(before2 - 1)) || isHeightPosition(newText.charCodeAt(before2 - 1))) before2--;
     else break;
   }
 
-  const 还能退 = () => 尾 < 短 - 前;
-  const 尾断在字符里 = (文: string) => {
-    const i = 文.length - 尾;
-    return i > 0 && i < 文.length && 是高位(文.charCodeAt(i - 1)) && 是低位(文.charCodeAt(i));
+  const returnAbleBack = () => tail < short - before2;
+  const tailBreakAtCharacterInside = (text4: string) => {
+    const i = text4.length - tail;
+    return i > 0 && i < text4.length && isHeightPosition(text4.charCodeAt(i - 1)) && isLowPosition(text4.charCodeAt(i));
   };
 
-  let 尾 = 0;
-  while (还能退() && 旧文.charCodeAt(旧文.length - 1 - 尾) === 新文.charCodeAt(新文.length - 1 - 尾))
-    尾++;
-  while (还能退() && (尾断在字符里(旧文) || 尾断在字符里(新文))) 尾++;
+  let tail = 0;
+  while (returnAbleBack() && oldText.charCodeAt(oldText.length - 1 - tail) === newText.charCodeAt(newText.length - 1 - tail))
+    tail++;
+  while (returnAbleBack() && (tailBreakAtCharacterInside(oldText) || tailBreakAtCharacterInside(newText))) tail++;
 
-  return { 删起: 前, 删到: 旧文.length - 尾, 插入: 新文.slice(前, 新文.length - 尾) };
+  return { deleteStart: before2, deleteEnd: oldText.length - tail, insert: newText.slice(before2, newText.length - tail) };
 }
 
 /** hast 里我们要用到的那几个字段。⚠️ refractor 的类型很宽，这里自己收窄。 */
-type 分词节点 = {
+type ShareWordNode = {
   type: string;
   value?: string;
-  children?: 分词节点[];
+  children?: ShareWordNode[];
   properties?: { className?: unknown };
 };
 
-export type 色块 = { 从: number; 到: number; 类: string };
+export type ColorBlock = { from: number; to2: number; class: string };
 
 /**
  * 把一段代码按语言分成着色区间（`{从, 到, 类}`）。
@@ -176,40 +176,42 @@ export type 色块 = { 从: number; 到: number; 类: string };
  * refractor 不认识这个语言、分词器自己抛（`refractor/all` 里个别语言就是会抛）。
  * 代码块变成纯文本**不好看**，但比"整块渲染不出来"好得多。
  */
-export function 分色(文本: string, 语言: string): 色块[] {
-  if (!文本 || !语言) return [];
-  if (!refractor.listLanguages().includes(语言)) return [];
+export function shareColor(text2: string, language: string): ColorBlock[] {
+  if (!text2 || !language) return [];
+  if (!refractor.listLanguages().includes(language)) return [];
 
-  let 树: 分词节点;
+  let tree: ShareWordNode;
   try {
-    树 = refractor.highlight(文本, 语言) as unknown as 分词节点;
+    tree = refractor.highlight(text2, language) as unknown as ShareWordNode;
   } catch {
     return [];
   }
 
-  const 出: 色块[] = [];
-  let 位 = 0;
-  const 走 = (节点们: 分词节点[], 类: string[]): void => {
-    for (const 节点 of 节点们) {
-      if (节点.type === "element") {
-        const 名 = Array.isArray(节点.properties?.className)
-          ? (节点.properties.className as string[])
+  const output2: ColorBlock[] = [];
+  let position3 = 0;
+  const walk = (nodes: ShareWordNode[], tokenClasses: string[]): void => {
+    for (const node of nodes) {
+      if (node.type === "element") {
+        const name3 = Array.isArray(node.properties?.className)
+          ? (node.properties.className as string[])
           : [];
-        走(节点.children ?? [], [...类, ...名]);
-      } else if (typeof 节点.value === "string") {
-        const 到 = 位 + 节点.value.length;
-        if (类.length && 节点.value.length) 出.push({ 从: 位, 到, 类: 类.join(" ") });
-        位 = 到;
+        walk(node.children ?? [], [...tokenClasses, ...name3]);
+      } else if (typeof node.value === "string") {
+        const to2 = position3 + node.value.length;
+        if (tokenClasses.length && node.value.length) {
+          output2.push({ from: position3, to2, class: tokenClasses.join(" ") });
+        }
+        position3 = to2;
       }
     }
   };
-  走(树.children ?? [], []);
-  return 出;
+  walk(tree.children ?? [], []);
+  return output2;
 }
 
 /** 三种括号的配对表（与 `closeBrackets` 那份表同源）。 */
-const 开括号 = "([{";
-const 闭括号 = ")]}";
+const openBracketNumber = "([{";
+const closeBracketNumber = ")]}";
 
 /**
  * 回车那一刻该插什么、光标落在哪。
@@ -225,34 +227,34 @@ const 闭括号 = ")]}";
  *
  * 返回的是**相对光标**的三个数，命令层照抄即可。
  */
-export function 回车续行(
-  前文: string,
-  后文: string,
-  单位: string,
-): { 删多少: number; 插入: string; 光标: number } {
-  const 纯空白 = /^[ \t]*$/.test(前文);
-  const 缩进 = /^[ \t]*/.exec(前文)?.[0] ?? "";
+export function returnCarContinueLine(
+  prefixText: string,
+  afterText: string,
+  singlePosition: string,
+): { removeManyLess: number; insert: string; cursor: number } {
+  const blankOnly = /^[ \t]*$/.test(prefixText);
+  const shrinkEnter = /^[ \t]*/.exec(prefixText)?.[0] ?? "";
 
-  const 非空白尾 = 前文.replace(/[ \t]+$/, "");
-  const 末字符 = 非空白尾.slice(-1);
+  const nonWhitespaceTail = prefixText.replace(/[ \t]+$/, "");
+  const endCharacter = nonWhitespaceTail.slice(-1);
   // ⚠️ `末字符` 为空时**不能直接 `indexOf`**：`"([{".indexOf("")` 回的是 `0`
   //（空串是任何字符串的子串），于是"光标停在一行纯空白后面"这一格会被当成
   // "上一行以 `(` 结尾"，凭空多进一级。**这一条是 `tests/code-block-editing.test.ts`
   // 当场抓出来的**（见那一组最后一条）。
-  const 位置 = 末字符 === "" ? -1 : 开括号.indexOf(末字符);
-  const 期望闭 = 位置 >= 0 ? 闭括号.charAt(位置) : "";
+  const position2 = endCharacter === "" ? -1 : openBracketNumber.indexOf(endCharacter);
+  const expectedClose = position2 >= 0 ? closeBracketNumber.charAt(position2) : "";
 
-  const 后文头 = /^[ \t]*/.exec(后文)?.[0] ?? "";
-  const 后文首 = 后文.charAt(后文头.length);
-  const 收尾 = 期望闭 !== "" && 后文首 === 期望闭;
+  const afterTextHead = /^[ \t]*/.exec(afterText)?.[0] ?? "";
+  const afterTextFirst = afterText.charAt(afterTextHead.length);
+  const receiveTail = expectedClose !== "" && afterTextFirst === expectedClose;
 
-  if (收尾) {
-    const 内缩进 = 缩进 + 单位;
-    return { 删多少: 纯空白 ? 前文.length : 0, 插入: `\n${内缩进}\n${缩进}`, 光标: 1 + 内缩进.length };
+  if (receiveTail) {
+    const insideShrinkEnter = shrinkEnter + singlePosition;
+    return { removeManyLess: blankOnly ? prefixText.length : 0, insert: `\n${insideShrinkEnter}\n${shrinkEnter}`, cursor: 1 + insideShrinkEnter.length };
   }
 
-  const 新缩进 = 期望闭 !== "" ? 缩进 + 单位 : 缩进;
-  return { 删多少: 纯空白 ? 前文.length : 0, 插入: `\n${新缩进}`, 光标: 1 + 新缩进.length };
+  const newValueShrinkEnter = expectedClose !== "" ? shrinkEnter + singlePosition : shrinkEnter;
+  return { removeManyLess: blankOnly ? prefixText.length : 0, insert: `\n${newValueShrinkEnter}`, cursor: 1 + newValueShrinkEnter.length };
 }
 
 /**
@@ -262,12 +264,12 @@ export function 回车续行(
  * 是 `位 - 1`，正好会捡到它前面那个 `\n`）——光标停在行首按 `Ctrl+C` 拿的
  * 该是**光标后面那一行**，不是它上面那一行。
  */
-export function 行界(文本: string, 位置: number): { 入: number; 出: number } {
-  const 位 = Math.max(0, Math.min(文本.length, 位置));
-  const 入 = 文本.lastIndexOf("\n", 位 - 1) + 1;
-  let 出 = 文本.indexOf("\n", 入);
-  if (出 < 0) 出 = 文本.length;
-  return { 入, 出 };
+export function lineBoundary(text2: string, position2: number): { enter: number; output2: number } {
+  const position3 = Math.max(0, Math.min(text2.length, position2));
+  const enter = text2.lastIndexOf("\n", position3 - 1) + 1;
+  let output2 = text2.indexOf("\n", enter);
+  if (output2 < 0) output2 = text2.length;
+  return { enter, output2 };
 }
 
 /**
@@ -287,102 +289,102 @@ export function 行界(文本: string, 位置: number): { 入: number; 出: numb
  *
  * 返回 `null` 表示"没算出来"（文档为空）——调用方照旧交回默认行为。
  */
-export function 整行剪贴(
-  文本: string,
-  位置: number,
-  是剪切: boolean,
-): { 文本: string; 删: { from: number; to: number } | null; 光标: number } | null {
-  if (!文本) return null;
-  const { 入, 出 } = 行界(文本, 位置);
-  const 有下行 = 出 < 文本.length;
-  const 行文 = 文本.slice(入, 出);
-  const 删 = 是剪切
+export function wholeLineCutPaste(
+  text2: string,
+  position2: number,
+  isCutSplit: boolean,
+): { text2: string; remove: { from: number; to: number } | null; cursor: number } | null {
+  if (!text2) return null;
+  const { enter, output2 } = lineBoundary(text2, position2);
+  const hasBelowLine = output2 < text2.length;
+  const lineText = text2.slice(enter, output2);
+  const remove = isCutSplit
     ? {
         // ⚠️ 末尾那一行（`有下行` 为假）删的是前面那个换行；只有一段的文档
         //（`入` 为 0）没有前面那个换行，就删它自己。
-        from: 有下行 ? 入 : Math.max(0, 入 - 1),
-        to: 有下行 ? 出 + 1 : 出,
+        from: hasBelowLine ? enter : Math.max(0, enter - 1),
+        to: hasBelowLine ? output2 + 1 : output2,
       }
     : null;
-  return { 文本: 行文 + (有下行 ? "\n" : ""), 删, 光标: 删 ? 删.from : 入 };
+  return { text2: lineText + (hasBelowLine ? "\n" : ""), remove, cursor: remove ? remove.from : enter };
 }
 
 /* ── CM 扩展 ──────────────────────────────────────────────────────────── */
 
 /** 语言靠一个 `StateField` 记着：代码块的 NodeView 改语言时发这条效果。 */
-const 设语言效果 = StateEffect.define<string>();
+const setLanguageEffectResult = StateEffect.define<string>();
 
-const 语言字段 = StateField.define<string>({
+const languageField = StateField.define<string>({
   create: () => "",
-  update(值, 事务) {
-    for (const 效果 of 事务.effects) if (效果.is(设语言效果)) return 效果.value;
-    return 值;
+  update(value2, transaction) {
+    for (const EffectResult of transaction.effects) if (EffectResult.is(setLanguageEffectResult)) return EffectResult.value;
+    return value2;
   },
 });
 
 /** "请重新算一遍着色"。⚠️ 只给**长尾语言那一份表异步到货**时用（见下）。 */
-const 重算效果 = StateEffect.define<null>();
+const heavyComputeEffectResult = StateEffect.define<null>();
 
 /** 短块直接重算；超过这条线的长块先把旧装饰随改动平移，再攒一帧重算。 */
-export function 需要延迟着色(长度: number): boolean {
-  return 长度 > 2_000;
+export function needWantDelayDelayActiveColor(lengthDegree: number): boolean {
+  return lengthDegree > 2_000;
 }
 
-const 长块着色等待毫秒 = 80;
+const lengthBlockActiveColorEqualPendingMilliSeconds = 80;
 
-function 算装饰(state: EditorState): DecorationSet {
-  const 文本 = state.doc.toString();
-  const 语言 = state.field(语言字段, false) ?? "";
-  const 区间 = 分色(文本, 语言).map((块) =>
-    Decoration.mark({ class: 块.类 }).range(块.从, 块.到),
+function computeDecorations(state: EditorState): DecorationSet {
+  const text2 = state.doc.toString();
+  const language = state.field(languageField, false) ?? "";
+  const range = shareColor(text2, language).map((block) =>
+    Decoration.mark({ class: block.class }).range(block.from, block.to2),
   );
   // ⚠️ 第二个参数 `true` 是"排一下序"：CM 要求装饰按起点有序，
   // 而 refractor 的叶子是**嵌套展平**出来的（父的类名会并进子串），
   // 自己排不如让它排。
-  return Decoration.set(区间, true);
+  return Decoration.set(range, true);
 }
 
-const 分色插件 = ViewPlugin.fromClass(
+const shareColorPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
-    private 计时: number | null = null;
-    private 活着 = true;
+    private countTime: number | null = null;
+    private activeActive = true;
     constructor(private view: EditorView) {
-      this.decorations = 算装饰(view.state);
+      this.decorations = computeDecorations(view.state);
     }
     update(u: ViewUpdate) {
-      const 语言变了 = u.startState.field(语言字段, false) !== u.state.field(语言字段, false);
-      const 要重算 = u.transactions.some((事务) =>
-        事务.effects.some((效果) => 效果.is(重算效果)),
+      const languageChanged = u.startState.field(languageField, false) !== u.state.field(languageField, false);
+      const wantHeavyCompute = u.transactions.some((transaction) =>
+        transaction.effects.some((EffectResult) => EffectResult.is(heavyComputeEffectResult)),
       );
-      if (语言变了 || 要重算) {
-        if (this.计时 !== null) window.clearTimeout(this.计时);
-        this.计时 = null;
-        this.decorations = 算装饰(u.state);
+      if (languageChanged || wantHeavyCompute) {
+        if (this.countTime !== null) window.clearTimeout(this.countTime);
+        this.countTime = null;
+        this.decorations = computeDecorations(u.state);
         return;
       }
       if (!u.docChanged) return;
-      if (!需要延迟着色(u.state.doc.length)) {
-        if (this.计时 !== null) window.clearTimeout(this.计时);
-        this.计时 = null;
-        this.decorations = 算装饰(u.state);
+      if (!needWantDelayDelayActiveColor(u.state.doc.length)) {
+        if (this.countTime !== null) window.clearTimeout(this.countTime);
+        this.countTime = null;
+        this.decorations = computeDecorations(u.state);
         return;
       }
 
       // 长代码块打字时，refractor 对整块重新分词比按键本身贵得多。先只把旧
       // 装饰按改动映射到新坐标，80ms 内没有新按键再派一条一次性事务重算。
       this.decorations = this.decorations.map(u.changes);
-      if (this.计时 !== null) window.clearTimeout(this.计时);
-      this.计时 = window.setTimeout(() => {
-        this.计时 = null;
-        if (!this.活着) return;
-        this.view.dispatch({ effects: 重算效果.of(null) });
-      }, 长块着色等待毫秒);
+      if (this.countTime !== null) window.clearTimeout(this.countTime);
+      this.countTime = window.setTimeout(() => {
+        this.countTime = null;
+        if (!this.activeActive) return;
+        this.view.dispatch({ effects: heavyComputeEffectResult.of(null) });
+      }, lengthBlockActiveColorEqualPendingMilliSeconds);
     }
     destroy() {
-      this.活着 = false;
-      if (this.计时 !== null) window.clearTimeout(this.计时);
-      this.计时 = null;
+      this.activeActive = false;
+      if (this.countTime !== null) window.clearTimeout(this.countTime);
+      this.countTime = null;
     }
   },
   { decorations: (v) => v.decorations },
@@ -397,7 +399,7 @@ const 分色插件 = ViewPlugin.fromClass(
  * `font-family: monospace`，只写 `inherit` 在不同 WebView/主题组合下并不稳；
  * 文档主题只要覆盖 `--font-mono`，代码框就该跟着它走。
  */
-const 主题 = EditorView.theme({
+const theme = EditorView.theme({
   "&": { backgroundColor: "transparent", color: "inherit", height: "auto" },
   "&.cm-focused": { outline: "none" },
   ".cm-scroller": {
@@ -449,7 +451,7 @@ const 主题 = EditorView.theme({
 });
 
 /** 配对表。⚠️ CM 出厂那份**没有反引号**，代码块里必须有（`` ` `` 是常用符号）。 */
-const 配对表 = EditorState.languageData.of(() => [
+const configureCorrectTable = EditorState.languageData.of(() => [
   { closeBrackets: { brackets: ["(", "[", "{", "'", '"', "`"], before: ")]}:;>`" } },
 ]);
 
@@ -476,7 +478,7 @@ const 配对表 = EditorState.languageData.of(() => [
  * 判据的由来见 {@link 记按键}：WebKitGTK 对同一次按键会派发**两遍**
  * `copy` / `cut`，所以要有一份"这一下按键办过没有"的账。
  */
-const 按键没办 = new WeakSet<EditorView>();
+const keypressNoneHandle = new WeakSet<EditorView>();
 
 /**
  * 剪贴板那两条键的"记账"键位（`Mod-c` / `Mod-x`）。
@@ -496,32 +498,32 @@ const 按键没办 = new WeakSet<EditorView>();
  * 错法的代价是**删掉用户的字**。⚠️ 账本按实例记（`WeakSet`）：一个文档里
  * 可能有多个代码块，各挂各的 keymap。
  */
-const 记按键: Command = (目标) => {
-  按键没办.add(目标);
+const recordKeypress: Command = (target) => {
+  keypressNoneHandle.add(target);
   return false;
 };
 
-function 落剪贴板(事件: ClipboardEvent, 视图: EditorView, 是剪切: boolean): boolean {
+function dropCutPasteBoard(event: ClipboardEvent, view: EditorView, isCutSplit: boolean): boolean {
   // ⚠️ **先认账**，再决定怎么办：不是新按键的那一遍直接咽掉——文档已经删过了、
   // 剪贴板也写好了，再办一遍就是多删一行。咽的时候要 `preventDefault()`：
   // 不拦的话浏览器会拿它自己那份（此时选区是空的）去动剪贴板与 DOM。
-  if (!按键没办.has(视图)) {
-    事件.preventDefault();
+  if (!keypressNoneHandle.has(view)) {
+    event.preventDefault();
     return true;
   }
-  按键没办.delete(视图);
+  keypressNoneHandle.delete(view);
 
-  const 选区们 = 视图.state.selection.ranges;
-  if (选区们.length !== 1 || !选区们[0]!.empty) return false;
-  const 计划 = 整行剪贴(视图.state.doc.toString(), 选区们[0]!.head, 是剪切);
-  if (!计划) return false;
-  if (!事件.clipboardData) return false;
-  事件.clipboardData.setData("text/plain", 计划.文本);
-  事件.preventDefault();
-  if (计划.删) {
-    视图.dispatch({
-      changes: { from: 计划.删.from, to: 计划.删.to },
-      selection: EditorSelection.cursor(计划.光标),
+  const selectionPlural = view.state.selection.ranges;
+  if (selectionPlural.length !== 1 || !selectionPlural[0]!.empty) return false;
+  const plan = wholeLineCutPaste(view.state.doc.toString(), selectionPlural[0]!.head, isCutSplit);
+  if (!plan) return false;
+  if (!event.clipboardData) return false;
+  event.clipboardData.setData("text/plain", plan.text2);
+  event.preventDefault();
+  if (plan.remove) {
+    view.dispatch({
+      changes: { from: plan.remove.from, to: plan.remove.to },
+      selection: EditorSelection.cursor(plan.cursor),
       scrollIntoView: true,
     });
   }
@@ -544,47 +546,47 @@ function 落剪贴板(事件: ClipboardEvent, 视图: EditorView, 是剪切: boo
  * （实测，两次都是 `isTrusted`，中间没有 keydown），于是 handler 里第一件事
  * 是认 {@link 记按键} 记的那笔账——那一笔的由来与"少两行"的症状都写在那儿。
  */
-const 整行剪贴处理 = EditorView.domEventHandlers({
-  copy: (事件, 视图) => 落剪贴板(事件, 视图, false),
-  cut: (事件, 视图) => 落剪贴板(事件, 视图, true),
+const wholeLineCutPastePlaceManage = EditorView.domEventHandlers({
+  copy: (event, view) => dropCutPasteBoard(event, view, false),
+  cut: (event, view) => dropCutPasteBoard(event, view, true),
 });
 
 
-export type 代码块编辑器 = {
+export type codeBlockEditor = {
   /** CM 的根元素，加进 `pre` 里当可见的那一层。 */
-  视图: EditorView;
-  取文本: () => string;
-  取光标: () => number;
+  view: EditorView;
+  getText: () => string;
+  getCursor: () => number;
   /** 从外面换掉整段文本（PM→CM 那条路）。⚠️ 走最小改动，所以光标不会跳。 */
-  设文本: (文: string) => void;
-  设语言: (语: string) => void;
-  设选区: (锚: number, 头: number) => void;
-  聚焦: () => void;
-  有焦点: () => boolean;
-  销毁: () => void;
+  setText: (text4: string) => void;
+  setLanguage2: (language2: string) => void;
+  setSelection: (anchor2: number, head2: number) => void;
+  clusterFocus: () => void;
+  hasFocusPoint: () => boolean;
+  cancelDestroy: () => void;
 };
 
-export type 代码块编辑器选项 = {
-  初始文本: string;
-  初始语言: string;
+export type codeBlockEditorOptions = {
+  initialStartText: string;
+  initialStartLanguage: string;
   /** CM 里的文本变了（**已经去掉了回声**：由调用方的 `同步中` 那把锁保证）。 */
-  文本变化: (新文: string) => void;
-  聚焦: () => void;
-  失焦: () => void;
+  textChangeConvert: (newText: string) => void;
+  clusterFocus: () => void;
+  loseFocus: () => void;
   /** 代码块里按了 Ctrl+Z / Ctrl+Shift+Z。⚠️ 撤销归 ProseMirror，见文件头。 */
-  撤销: () => void;
-  重做: () => void;
+  undoCancel: () => void;
+  heavyDo: () => void;
   /**
    * 光标在本实例最开头按下退格时的可选钩子。
    *
-   * ⚠️ 普通代码块**不传**：开头退格保持原位，避免 ProseMirror 抢走光标；
+   * 普通代码块会传入它：在代码框最开头按退格，去掉代码框并保留全部正文。
    * 图表源码框仍可传自己的退出动作。
    */
-  开头退格?: () => void;
+  openHeadBackCell?: () => void;
 };
 
-export function 创建代码块编辑器(选项: 代码块编辑器选项): 代码块编辑器 {
-  let 已销毁 = false;
+export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlockEditor {
+  let alreadyCancelDestroy = false;
 
   /**
    * 回车。
@@ -595,17 +597,17 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
    * 这里把它换成 `回车续行`（纯函数，有用例）＋ 同一个"夹在空括号里就展开"的
    * 口径。写进 keymap 的第一位，压住 `defaultKeymap` 里那一条。
    */
-  const 回车带缩进: Command = ({ state, dispatch }) => {
-    const 主 = state.selection.main;
-    const 行 = state.doc.lineAt(主.from);
-    const 前文 = state.sliceDoc(行.from, 主.from);
-    const 后文 = state.sliceDoc(主.to, 行.to);
-    const { 删多少, 插入, 光标 } = 回车续行(前文, 后文, 缩进宽度);
-    const 从 = 主.from - 删多少;
+  const returnCarWithShrinkEnter: Command = ({ state, dispatch }) => {
+    const main = state.selection.main;
+    const line3 = state.doc.lineAt(main.from);
+    const prefixText = state.sliceDoc(line3.from, main.from);
+    const afterText = state.sliceDoc(main.to, line3.to);
+    const { removeManyLess, insert, cursor } = returnCarContinueLine(prefixText, afterText, shrinkEnterWidthDegree);
+    const from = main.from - removeManyLess;
     dispatch(
       state.update({
-        changes: { from: 从, to: 主.to, insert: 插入 },
-        selection: EditorSelection.cursor(从 + 光标),
+        changes: { from: from, to: main.to, insert: insert },
+        selection: EditorSelection.cursor(from + cursor),
         scrollIntoView: true,
         userEvent: "input",
       }),
@@ -613,10 +615,10 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
     return true;
   };
 
-  const 撤销键 = { key: "Mod-z", run: () => (选项.撤销(), true) };
-  const 重做键 = [
-    { key: "Shift-Mod-z", run: () => (选项.重做(), true) },
-    { key: "Mod-y", run: () => (选项.重做(), true) },
+  const undoCancelKey = { key: "Mod-z", run: () => (option.undoCancel(), true) };
+  const heavyDoKey = [
+    { key: "Shift-Mod-z", run: () => (option.heavyDo(), true) },
+    { key: "Mod-y", run: () => (option.heavyDo(), true) },
   ];
 
   /**
@@ -626,51 +628,51 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
    * **光标所在这一行**（`行界` 那一套与 `source-commands.ts` 同一条口径）：
    * 拿整块代码去扫的话，光标停在行首时会去选**上一行的最后一个词**。
    */
-  const 光标处词 = (state: EditorState): 区间 | null => {
-    const 头 = state.selection.main.head;
-    const 行 = state.doc.lineAt(头);
-    const 词 = 选词区间(行.text, 头 - 行.from);
-    return 词 && { from: 行.from + 词.from, to: 行.from + 词.to };
+  const cursorPlaceWord = (state: EditorState): range | null => {
+    const head2 = state.selection.main.head;
+    const line3 = state.doc.lineAt(head2);
+    const word = wordRange(line3.text, head2 - line3.from);
+    return word && { from: line3.from + word.from, to: line3.from + word.to };
   };
 
   /** 选当前词（`Ctrl+D`）。⚠️ 与所见即所得那条同判据，理由见文件头。 */
-  const 选词键: Command = ({ state, dispatch }) => {
-    const 区 = 光标处词(state);
-    if (!区) return false;
-    dispatch(state.update({ selection: EditorSelection.range(区.from, 区.to), scrollIntoView: true }));
+  const selectWordKey: Command = ({ state, dispatch }) => {
+    const area = cursorPlaceWord(state);
+    if (!area) return false;
+    dispatch(state.update({ selection: EditorSelection.range(area.from, area.to), scrollIntoView: true }));
     return true;
   };
 
   /** 选当前词并删（`Ctrl+Shift+D`）。⚠️ 光标落在删掉那一段的**开头**（同 `select.ts::删词`）。 */
-  const 删词键: Command = ({ state, dispatch }) => {
-    const 区 = 光标处词(state);
-    if (!区) return false;
+  const removeWordKey: Command = ({ state, dispatch }) => {
+    const area = cursorPlaceWord(state);
+    if (!area) return false;
     dispatch(
       state.update({
-        changes: { from: 区.from, to: 区.to },
-        selection: EditorSelection.cursor(区.from),
+        changes: { from: area.from, to: area.to },
+        selection: EditorSelection.cursor(area.from),
         scrollIntoView: true,
       }),
     );
     return true;
   };
 
-  const 选择键: KeyBinding[] = [
+  const selectChooseKey: KeyBinding[] = [
     // ⚠️ `Mod-l` / `Mod-d` / `Mod-e` 在 CM 的 `defaultKeymap` 里**都没有**
     //（`Ctrl-e` / `Ctrl-d` 那两条住在 `emacsStyleKeymap`，本仓没装那份），
     // 所以这里不需要"压住谁"——写在这儿是因为**这一段文本的键位归这颗实例**。
     {
       key: "Mod-l",
-      run: (目标) => {
+      run: (target) => {
         // 直接借 CodeMirror 自己那条（源码模式也用它）——"一行"这个概念在
         // 文本上只有一个答案。⚠️ 它选中的是**整行连同末尾那个换行**，
         // 与所见即所得那边（段落内容、不含分隔）不同，理由见 `select.ts` 那一段。
-        selectLine(目标);
+        selectLine(target);
         return true;
       },
     },
-    { key: "Mod-d", run: 选词键 },
-    { key: "Mod-Shift-d", run: 删词键 },
+    { key: "Mod-d", run: selectWordKey },
+    { key: "Mod-Shift-d", run: removeWordKey },
   ];
 
   // 自动换行那一格（设置 → 编辑器 → 「代码块 → 自动换行」，默认开）。
@@ -678,49 +680,49 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
   // `html[data-code-wrap="off"] { white-space: pre }` 管不到 CM 内部
   //（它的 `.cm-content` 有自己的 `white-space`）。做成一个舱，设置一变就重配，
   // 这样那颗开关在代码块里**真的**是活的——不然就是又一个"拨了不生效的开关"。
-  const 换行舱 = new Compartment();
-  const 要换行 = () => document.documentElement.dataset.codeWrap !== "off";
+  const replaceLineCabin = new Compartment();
+  const wantReplaceLine = () => document.documentElement.dataset.codeWrap !== "off";
 
-  const 视图 = new EditorView({
+  const view = new EditorView({
     state: EditorState.create({
-      doc: 选项.初始文本,
+      doc: option.initialStartText,
       extensions: [
-        配对表,
+        configureCorrectTable,
         // ⚠️ 顺序既管优先级也管"谁先试"：我们自己那两条撤销键要在最前
         //（`defaultKeymap` 里没有 `Mod-z`，但先写能保证将来它加了也不打架）。
         keymap.of([
-          { key: "Enter", run: 回车带缩进 },
-          { key: "Shift-Enter", run: 回车带缩进 },
+          { key: "Enter", run: returnCarWithShrinkEnter },
+          { key: "Shift-Enter", run: returnCarWithShrinkEnter },
           // ⚠️ **退格**：光标在开头时吃掉按键并留在代码框内。2026-10-16 曾把
           // 这一下改成“拆回正文”，但 2026-10-24 用户实测发现光标会跳到页边距；
           // 代码框的输入焦点必须保持稳定。其余位置仍交给 `deleteCharBackward`。
           {
             key: "Backspace",
-            run: (目标) => {
-              const 区 = 目标.state.selection.main;
-              if (!区.empty || 区.from !== 0) return false;
-              选项.开头退格?.();
+            run: (target) => {
+              const area = target.state.selection.main;
+              if (!area.empty || area.from !== 0) return false;
+              option.openHeadBackCell?.();
               return true;
             },
           },
-          撤销键,
-          ...重做键,
-          ...选择键,
+          undoCancelKey,
+          ...heavyDoKey,
+          ...selectChooseKey,
           // ⚠️ 这两条**只记账、不办事**（`记按键` 里有整段理由）：`return false`
           // 才能让浏览器照旧发出 `copy` / `cut`，那才是这两条键的正文。
-          { key: "Mod-c", run: 记按键 },
-          { key: "Mod-x", run: 记按键 },
+          { key: "Mod-c", run: recordKeypress },
+          { key: "Mod-x", run: recordKeypress },
           ...closeBracketsKeymap,
           ...defaultKeymap,
           indentWithTab,
         ]),
         closeBrackets(),
-        indentUnit.of(缩进宽度),
-        EditorState.tabSize.of(缩进宽度.length),
-        语言字段.init(() => 选项.初始语言),
-        分色插件,
+        indentUnit.of(shrinkEnterWidthDegree),
+        EditorState.tabSize.of(shrinkEnterWidthDegree.length),
+        languageField.init(() => option.initialStartLanguage),
+        shareColorPlugin,
         drawSelection(),
-        整行剪贴处理,
+        wholeLineCutPastePlaceManage,
         // ⚠️ 给这颗实例的根元素挂一个**只属于代码块**的类名：`ui/useMenus.ts`
         // 那条全局 accel 要认它，才知道"剪贴板那几键归里层这个编辑器"
         //（源码模式也是 `.cm-editor`，光按那个认会把源码模式一起放进去）。
@@ -728,21 +730,21 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
         // 当前行那一层淡底（配色在同文件那条 `主题` 里，**与源码模式不是一个色**，
         // 理由见那条注释）。
         highlightActiveLine(),
-        换行舱.of(要换行() ? EditorView.lineWrapping : []),
-        主题,
+        replaceLineCabin.of(wantReplaceLine() ? EditorView.lineWrapping : []),
+        theme,
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) 选项.文本变化(u.state.doc.toString());
-          if (u.focusChanged) (u.view.hasFocus ? 选项.聚焦 : 选项.失焦)();
+          if (u.docChanged) option.textChangeConvert(u.state.doc.toString());
+          if (u.focusChanged) (u.view.hasFocus ? option.clusterFocus : option.loseFocus)();
         }),
       ],
     }),
   });
 
-  const 盯设置 = new MutationObserver(() => {
-    if (已销毁) return;
-    视图.dispatch({ effects: 换行舱.reconfigure(要换行() ? EditorView.lineWrapping : []) });
+  const watchSettings = new MutationObserver(() => {
+    if (alreadyCancelDestroy) return;
+    view.dispatch({ effects: replaceLineCabin.reconfigure(wantReplaceLine() ? EditorView.lineWrapping : []) });
   });
-  盯设置.observe(document.documentElement, {
+  watchSettings.observe(document.documentElement, {
     attributes: true,
     attributeFilter: ["data-code-wrap"],
   });
@@ -752,42 +754,42 @@ export function 创建代码块编辑器(选项: 代码块编辑器选项): 代�
   // 一份长尾语言的文档"这一格要靠这条通知补上。⚠️ `import()` 有缓存，
   // 每个代码块各挂一次不会重复下载。
   void import("refractor/all").then(() => {
-    if (已销毁) return;
+    if (alreadyCancelDestroy) return;
     try {
-      视图.dispatch({ effects: 重算效果.of(null) });
+      view.dispatch({ effects: heavyComputeEffectResult.of(null) });
     } catch {
       // 视图可能在 resolve 之前就被销毁了（整块被删掉）。不理它。
     }
   });
 
   return {
-    视图,
-    取文本: () => 视图.state.doc.toString(),
-    取光标: () => 视图.state.selection.main.head,
-    设文本: (文) => {
-      const 旧 = 视图.state.doc.toString();
-      if (旧 === 文) return;
-      const { 删起, 删到, 插入 } = 算最小改动(旧, 文);
-      视图.dispatch({ changes: { from: 删起, to: 删到, insert: 插入 } });
+    view,
+    getText: () => view.state.doc.toString(),
+    getCursor: () => view.state.selection.main.head,
+    setText: (text4) => {
+      const oldValue = view.state.doc.toString();
+      if (oldValue === text4) return;
+      const { deleteStart, deleteEnd, insert } = computeMostSmallChangeAction(oldValue, text4);
+      view.dispatch({ changes: { from: deleteStart, to: deleteEnd, insert: insert } });
     },
-    设语言: (语) => {
-      if (视图.state.field(语言字段) === 语) return;
-      视图.dispatch({ effects: 设语言效果.of(语) });
+    setLanguage2: (language2) => {
+      if (view.state.field(languageField) === language2) return;
+      view.dispatch({ effects: setLanguageEffectResult.of(language2) });
     },
-    设选区: (锚, 头) => {
-      const 长 = 视图.state.doc.length;
-      const 夹 = (n: number) => Math.max(0, Math.min(长, n));
-      const 新 = EditorSelection.range(夹(锚), 夹(头));
-      const 旧 = 视图.state.selection.main;
-      if (旧.anchor === 新.anchor && 旧.head === 新.head) return;
-      视图.dispatch({ selection: 新 });
+    setSelection: (anchor2, head2) => {
+      const length = view.state.doc.length;
+      const clamp = (n: number) => Math.max(0, Math.min(length, n));
+      const newValue = EditorSelection.range(clamp(anchor2), clamp(head2));
+      const oldValue = view.state.selection.main;
+      if (oldValue.anchor === newValue.anchor && oldValue.head === newValue.head) return;
+      view.dispatch({ selection: newValue });
     },
-    聚焦: () => 视图.focus(),
-    有焦点: () => 视图.hasFocus,
-    销毁: () => {
-      已销毁 = true;
-      盯设置.disconnect();
-      视图.destroy();
+    clusterFocus: () => view.focus(),
+    hasFocusPoint: () => view.hasFocus,
+    cancelDestroy: () => {
+      alreadyCancelDestroy = true;
+      watchSettings.disconnect();
+      view.destroy();
     },
   };
 }

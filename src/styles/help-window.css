@@ -1,0 +1,30 @@
+.help-window {
+  height: 100%;
+  min-height: 0;
+  background: var(--doc-bg, var(--bg));
+  color: var(--doc-fg, var(--fg));
+}
+
+.help-editor-pane {
+  height: 100%;
+}
+
+.help-editor-mount {
+  min-height: 100%;
+}
+
+.help-window-loading,
+.help-window-error {
+  margin: 0;
+  padding: 32px clamp(24px, 6vw, 80px);
+  color: var(--fg-muted);
+}
+
+.help-window-error {
+  color: var(--danger);
+}
+
+body:has(.help-window) {
+  overflow: hidden;
+  background: var(--doc-bg, var(--bg));
+}

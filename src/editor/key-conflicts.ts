@@ -77,7 +77,7 @@
  * （`"Ctrl+Shift+K"`）。摘的时候是拿它去 `!撞车键位.has(b.key ?? "")`
  * 比的，所以**必须一模一样**——差一个大小写就静默不摘。
  */
-export const 撞车键位 = new Set([
+export const collideCarKeyPosition = new Set([
   "Mod-/",
   "Mod-i",
   "Shift-Mod-k",

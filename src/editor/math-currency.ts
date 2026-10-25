@@ -110,48 +110,48 @@ import { $remark } from "@milkdown/kit/utils";
  * `-1` 是虚拟空格，`-2` 是 Tab，`-3/-4/-5` 是三种换行。判空白请走 `是空白`，
  * 别去 `String.fromCharCode`。
  */
-export type 码 = number | null;
+export type code2 = number | null;
 
 /** 一个分词状态：吃掉一颗字符，返回下一个状态。 */
-export type 状态 = (code: 码) => unknown;
+export type state = (code: code2) => unknown;
 
 /** 上游那条构造的"工具箱"。我们只包 `consume`，其余原样转发。 */
-export type 效果 = { consume: (code: 码) => void } & Record<string, unknown>;
+export type EffectResult = { consume: (code: code2) => void } & Record<string, unknown>;
 
 /** 一条 micromark 构造：只写本文件用得到的那几个字段。 */
-export type 构造 = {
+export type ConstructCreate = {
   name?: string;
-  previous?: (code: 码) => boolean;
-  resolve?: (...参数: never[]) => unknown;
-  resolveTo?: (...参数: never[]) => unknown;
+  previous?: (code: code2) => boolean;
+  resolve?: (...parameter: never[]) => unknown;
+  resolveTo?: (...parameter: never[]) => unknown;
   resolveAll?: boolean;
-  tokenize: (this: unknown, effects: 效果, ok: 状态, nok: 状态) => unknown;
+  tokenize: (this: unknown, effects: EffectResult, ok: state, nok: state) => unknown;
 };
 
 /* ── 判据（纯函数，测试直接量这几个）──────────────────────────────────── */
 
 /** 这一颗是不是 ASCII 数字。⚠️ 只认 `0-9`：全角数字不在判据里（`$１００` 不当钱）。 */
-export function 是数字(code: 码): boolean {
+export function isNumberCharacter(code: code2): boolean {
   return code !== null && code >= 48 && code <= 57;
 }
 
 /** 这一颗是不是空白（真空格、虚拟空格、Tab、三种换行）。 */
-export function 是空白(code: 码): boolean {
+export function isWhitespace(code: code2): boolean {
   return code === 32 || (code !== null && code < 0);
 }
 
 /** 一对 `$…$` 从分词器那儿量得到的五个数 —— 判据的全部输入。 */
-export type 形状 = {
+export type shape = {
   /** 开头连着几颗 `$`（1、2、3…）。 */
-  开几颗: number;
+  openHowManyToken: number;
   /** 紧跟开定界符右边的那一颗。 */
-  开右邻: 码;
+  openRightNeighbor: code2;
   /** 紧挨闭定界符左边的那一颗。 */
-  闭左邻: 码;
+  closeLeftNeighbor: code2;
   /** 闭定界符自己（应当是 `$`；不是就说明形状没认对，此时一律不动手）。 */
-  闭本身: 码;
+  closeLocalBody: code2;
   /** 紧挨闭定界符右边的那一颗。 */
-  闭右邻: 码;
+  closeRightNeighbor: code2;
 };
 
 /**
@@ -161,11 +161,11 @@ export type 形状 = {
  * （闭的右边是数字 / 闭的左边是空白）。为什么这么组合、每一行对应什么源码，
  * 全在文件头那张真值表里。
  */
-export function 该判成正文(形: 形状): boolean {
-  if (形.闭本身 !== 36) return false; // 收尾那颗不是 `$`：形状没认对
-  if (形.开几颗 !== 1) return false; // `$$…$$` 不可能是钱
-  if (!是数字(形.开右邻)) return false; // 门槛
-  return 是数字(形.闭右邻) || 是空白(形.闭左邻);
+export function isProse(shape2: shape): boolean {
+  if (shape2.closeLocalBody !== 36) return false; // 收尾那颗不是 `$`：形状没认对
+  if (shape2.openHowManyToken !== 1) return false; // `$$…$$` 不可能是钱
+  if (!isNumberCharacter(shape2.openRightNeighbor)) return false; // 门槛
+  return isNumberCharacter(shape2.closeRightNeighbor) || isWhitespace(shape2.closeLeftNeighbor);
 }
 
 /* ── 包一层：把上游那条行内公式构造改成"先问一句" ───────────────────── */
@@ -178,48 +178,48 @@ export function 该判成正文(形: 形状): boolean {
  * （开头连着几颗 `$`、紧跟着的那颗，以及最后两颗）。⚠️ 所以它是 **O(1)** 的——
  * 一段没配成对的 `$` 后面跟着几万字，也不会把这几万字攒在内存里。
  */
-export function 收窄美元公式(上游: 构造): 构造 {
+export function receiveNarrowDollarDollarCommonStyle(upstream: ConstructCreate): ConstructCreate {
   return {
-    ...上游,
+    ...upstream,
     // ⚠️ 必须去掉：停用是按名字查的（`disable: {null: ["mathText"]}`），
     // 带着这个名字的话我们自己这条也会被停掉，规则就静默失效了。
     name: undefined,
-    tokenize(this: unknown, effects: 效果, ok: 状态, nok: 状态): unknown {
-      let 开几颗 = 0;
-      let 开右邻: 码 = null;
-      let 头数完了 = false;
+    tokenize(this: unknown, effects: EffectResult, ok: state, nok: state): unknown {
+      let openHowManyToken = 0;
+      let openRightNeighbor: code2 = null;
+      let headNumberCompleteDone = false;
       /** 最近吃掉的两颗。成功那一刻，最后那颗应当是闭定界符。 */
-      const 尾两颗: 码[] = [];
+      const tailTwoTokens: code2[] = [];
 
-      const 影: 效果 = {
+      const shadow: EffectResult = {
         ...effects,
-        consume(code: 码): void {
-          if (!头数完了) {
-            if (code === 36) 开几颗++;
+        consume(code: code2): void {
+          if (!headNumberCompleteDone) {
+            if (code === 36) openHowManyToken++;
             else {
-              头数完了 = true;
-              开右邻 = code;
+              headNumberCompleteDone = true;
+              openRightNeighbor = code;
             }
           }
-          尾两颗.push(code);
-          if (尾两颗.length > 2) 尾两颗.shift();
+          tailTwoTokens.push(code);
+          if (tailTwoTokens.length > 2) tailTwoTokens.shift();
           effects.consume(code);
         },
       };
 
       /** 上游成功那一刻的回调。`code` 就是**闭定界符右边紧挨着的那一颗**。 */
-      const 收尾: 状态 = (code: 码) => {
-        const 形: 形状 = {
-          开几颗,
-          开右邻,
-          闭左邻: 尾两颗.length >= 2 ? 尾两颗[0] ?? null : null,
-          闭本身: 尾两颗.length >= 1 ? 尾两颗[尾两颗.length - 1] ?? null : null,
-          闭右邻: code,
+      const receiveTail: state = (code: code2) => {
+        const shape2: shape = {
+          openHowManyToken,
+          openRightNeighbor,
+          closeLeftNeighbor: tailTwoTokens.length >= 2 ? tailTwoTokens[0] ?? null : null,
+          closeLocalBody: tailTwoTokens.length >= 1 ? tailTwoTokens[tailTwoTokens.length - 1] ?? null : null,
+          closeRightNeighbor: code,
         };
-        return 该判成正文(形) ? nok(code) : ok(code);
+        return isProse(shape2) ? nok(code) : ok(code);
       };
 
-      return 上游.tokenize.call(this, 影, 收尾, nok);
+      return upstream.tokenize.call(this, shadow, receiveTail, nok);
     },
   };
 }
@@ -232,15 +232,15 @@ export function 收窄美元公式(上游: 构造): 构造 {
  * ⚠️ 认**名字**不认身份：这样 `remark-math` 换选项、换版本都不用跟着改。
  * 找不到就返回 `undefined`，调用方**什么都不做**（退回上游行为），不猜。
  */
-export function 找上游美元(扩展表: readonly unknown[]): 构造 | undefined {
-  for (const 项 of 扩展表) {
-    const 表 = (项 as { text?: Record<number, unknown> } | null)?.text;
-    if (!表) continue;
-    const 条 = 表[36];
-    const 列 = Array.isArray(条) ? 条 : 条 ? [条] : [];
-    for (const 颗 of 列) {
-      const 候选 = 颗 as 构造 | undefined;
-      if (候选?.name === "mathText" && typeof 候选.tokenize === "function") return 候选;
+export function findUpstreamDollarDollar(extensionExtendTable: readonly unknown[]): ConstructCreate | undefined {
+  for (const item5 of extensionExtendTable) {
+    const table2 = (item5 as { text?: Record<number, unknown> } | null)?.text;
+    if (!table2) continue;
+    const item4 = table2[36];
+    const column = Array.isArray(item4) ? item4 : item4 ? [item4] : [];
+    for (const token of column) {
+      const candidate = token as ConstructCreate | undefined;
+      if (candidate?.name === "mathText" && typeof candidate.tokenize === "function") return candidate;
     }
   }
   return undefined;
@@ -257,15 +257,15 @@ export function 找上游美元(扩展表: readonly unknown[]): 构造 | undefin
  * ⚠️ 这条约束**测试量得到**（`tests/math-currency.test.ts` 最后那一组直接读
  * `create.ts`），别只写在注释里。
  */
-export function 收严美元插件(this: unknown): void {
-  const 机 = this as { data: () => Record<string, unknown> };
-  const 全部 = 机.data();
-  const 表 = 全部["micromarkExtensions"];
-  if (!Array.isArray(表)) return;
-  const 上游 = 找上游美元(表);
-  if (!上游) return;
-  表.push({
-    text: { 36: 收窄美元公式(上游) },
+export function receiveStrictDollarDollarPlugin(this: unknown): void {
+  const machine = this as { data: () => Record<string, unknown> };
+  const all = machine.data();
+  const table2 = all["micromarkExtensions"];
+  if (!Array.isArray(table2)) return;
+  const upstream = findUpstreamDollarDollar(table2);
+  if (!upstream) return;
+  table2.push({
+    text: { 36: receiveNarrowDollarDollarCommonStyle(upstream) },
     // ⚠️ 上游那条按名字停掉（它是来者不拒的，不停掉的话我们 `nok` 之后
     // 会在同一个位置上再问它一次，然后它又配成了公式）。
     disable: { null: ["mathText"] },
@@ -273,10 +273,10 @@ export function 收严美元插件(this: unknown): void {
 }
 
 /** `$remark` 那个工厂的类型（与 `math-delim.ts` 同一套写法：**从它自己的参数里反推**）。 */
-type 转换器工厂 = Parameters<typeof $remark<"收严美元", undefined>>[1];
+type ConvertReplaceDeviceWorkFactory = Parameters<typeof $remark<"收严美元", undefined>>[1];
 
 /** 那个插件本体（三层里的**后两层**：选项 → 插件）。 */
-const 收严美元工厂: 转换器工厂 = () => 收严美元插件;
+const receiveStrictDollarDollarWorkFactory: ConvertReplaceDeviceWorkFactory = () => receiveStrictDollarDollarPlugin;
 
 /** 挂给 milkdown 的那一份：`.use()` 得**排在 `math` 后面**。 */
-export const 收严美元 = $remark("收严美元", 收严美元工厂);
+export const receiveStrictDollarDollar = $remark("收严美元", receiveStrictDollarDollarWorkFactory);

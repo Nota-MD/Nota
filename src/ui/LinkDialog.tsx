@@ -39,9 +39,9 @@ export function LinkDialog({
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const [名称, set名称] = useState(request.label);
-  const [地址, set地址] = useState(request.href);
-  const 名称框 = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState(request.label);
+  const [address, setAddress] = useState(request.href);
+  const nameBox = useRef<HTMLInputElement>(null);
 
   // ⚠️ 聚焦**第一个**框（「链接显示名称」）而不是主字段：那两个框是照着用户
   // 说的次序摆的（先名字后地址），光标落在第一个才顺——地址那一格按 `Tab`
@@ -49,22 +49,22 @@ export function LinkDialog({
   // 打开时里面都是**已有的那一条**，用户多半是想改一个词，全选之后直接打字
   // 就是换掉；不全选得先自己全选一次。
   useEffect(() => {
-    名称框.current?.focus();
-    名称框.current?.select();
+    nameBox.current?.focus();
+    nameBox.current?.select();
   }, []);
 
   // ⚠️ **主字段为空 = 当作取消**：地址空了，这条链接落下去就是一条点不动的
   // 东西（与 `ImageDialog` / `PromptDialog` 同一条口径）。
-  const 提交 = () => {
-    const a = 地址.trim();
+  const raiseHandoff = () => {
+    const a = address.trim();
     if (a === "") return onAnswer(null);
-    onAnswer({ kind: "set", label: 名称, href: a });
+    onAnswer({ kind: "set", label: name, href: a });
   };
 
-  const 回车或退出 = (e: KeyboardEvent<HTMLInputElement>) => {
+  const returnCarOrBackOutput = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      提交();
+      raiseHandoff();
     } else if (e.key === "Escape") {
       // ⚠️ 收在**输入框自己**身上、不绑 `window`：输入框里按 `Esc` 首先是
       // "把输入法候选框收掉"，绑到 window 上抢会把那一下吃掉（同 `PromptDialog`）。
@@ -90,15 +90,15 @@ export function LinkDialog({
         </label>
         <input
           id="nota-link-label"
-          ref={名称框}
+          ref={nameBox}
           className="prompt-input"
           type="text"
           autoComplete="off"
           spellCheck={false}
-          value={名称}
+          value={name}
           placeholder={t("Shown in the document")}
-          onChange={(e) => set名称(e.target.value)}
-          onKeyDown={回车或退出}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={returnCarOrBackOutput}
         />
 
         <label className="prompt-label" htmlFor="nota-link-href">
@@ -110,10 +110,10 @@ export function LinkDialog({
           type="text"
           autoComplete="off"
           spellCheck={false}
-          value={地址}
+          value={address}
           placeholder={t("https://example.com, or #anchor-on-this-page")}
-          onChange={(e) => set地址(e.target.value)}
-          onKeyDown={回车或退出}
+          onChange={(e) => setAddress(e.target.value)}
+          onKeyDown={returnCarOrBackOutput}
         />
 
         <div className="confirm-actions">
@@ -135,7 +135,7 @@ export function LinkDialog({
           <button type="button" className="btn" onClick={() => onAnswer(null)}>
             {t("Cancel")}
           </button>
-          <button type="button" className="btn btn-primary" onClick={提交}>
+          <button type="button" className="btn btn-primary" onClick={raiseHandoff}>
             {request.editing ? t("OK") : t("Insert")}
           </button>
         </div>

@@ -39,14 +39,14 @@ import {
   type PluginSetting,
   type PluginReview,
   type PluginUpdateInfo,
-  type 信任记录,
-  type 导出报告,
+  type trustRecord,
+  type exportReport,
 } from "@/bridge/ipc";
-import { t, use语言 } from "@/i18n";
+import { t, useLanguage } from "@/i18n";
 import { MENUS, type MenuSpec } from "@/ui/commands";
-import { 认识的菜单, 带插件栏, 插件项id } from "@/ui/pluginMenus";
-import { 问参数 } from "@/ui/plugin-prompt";
-import { 签名说明 } from "@/ui/pluginText";
+import { recognizeRecognizeOfMenu, withPluginDock, pluginItemId } from "@/ui/pluginMenus";
+import { askParameter } from "@/ui/plugin-prompt";
+import { keyNameDescription } from "@/ui/pluginText";
 import type { Toast } from "@/ui/Toasts";
 import type { ConfirmAnswer, ConfirmRequest, PromptRequest } from "@/ui/useDialogs";
 
@@ -63,9 +63,9 @@ export interface PluginsWiring {
  * ⚠️ 动作**在这里实现、在 `PluginDock` 里画**：那一栏是个纯展示组件
  * （props 进、JSX 出），装/卸要问文件、要问确认、要弹 toast，都不该塞进它。
  */
-export interface 插件动作 {
+export interface pluginAction {
   /** 弹文件框挑一个插件包，然后装。用户取消就什么都不做。 */
-  装: () => Promise<void>;
+  install: () => Promise<void>;
   /**
    * 弹保存框，把这个插件导成一个 `.nota-plugin` 包（2026-09-27 加）。
    *
@@ -74,9 +74,9 @@ export interface 插件动作 {
    *
    * ⚠️ 导出**不改任何状态**，所以不会弹确认框；取消保存框就什么都不做。
    */
-  导出: (id: string) => Promise<void>;
+  export: (id: string) => Promise<void>;
   /** 卸掉（**不可逆**，先问一句）。 */
-  卸: (id: string) => Promise<void>;
+  unload: (id: string) => Promise<void>;
   /**
    * 在系统的文件管理器里打开用户插件目录（`~/.local/share/nota/plugins`）。
    *
@@ -84,8 +84,8 @@ export interface 插件动作 {
    * （文件管理器调不起来是可能的），而 toast 只有这一层有。「拓展」那一页是
    * 纯展示的（同 `PluginDock`）。
    */
-  打开目录: () => Promise<void>;
-  启停: (id: string, enabled: boolean) => Promise<void>;
+  openDirectory2: () => Promise<void>;
+  toggle: (id: string, enabled: boolean) => Promise<void>;
   /**
    * 信任这个插件的签名者（TOFU + 显式信任）。
    *
@@ -93,22 +93,22 @@ export interface 插件动作 {
    * 看的东西就是指纹，而查清单会查到**这一次渲染的快照**——装完那一步调过来时，
    * 新插件还不在快照里。实现里的注释有完整来龙去脉。
    */
-  信任: (id: string, 指纹?: string | null) => Promise<void>;
+  messageTask: (id: string, pointTexture?: string | null) => Promise<void>;
   /**
    * 写插件声明的一格设置（2026-10-04 加：「设置 → 拓展」那一页上的滑杆）。
    *
    * ⚠️ **不走 `忙`**：滑杆拖一下就是一次调用，把它算进"正忙"会让旁边那几颗
    * 按钮在拖动期间一直灰着（装 / 卸 / 启停共用 `忙`）。
    */
-  设置: (id: string, key: string, value: string | number | boolean) => Promise<void>;
+  settings: (id: string, key: string, value: string | number | boolean) => Promise<void>;
   /** 重新读取所有插件声明的仓库清单。 */
-  检查更新: () => Promise<void>;
+  checkForUpdates: () => Promise<void>;
   /** 安装一个插件的可用更新。 */
-  更新: (id: string) => Promise<void>;
+  update: (id: string) => Promise<void>;
   /** 顺序安装当前全部可用更新。 */
-  全部更新: () => Promise<void>;
+  updateAll: () => Promise<void>;
   /** 此刻正忙的那个：插件 id，或者 `"装"`（安装中）。按钮据此置灰。 */
-  忙: string | null;
+  busy: string | null;
 }
 
 export interface PluginsState {
@@ -124,9 +124,9 @@ export interface PluginsState {
    * 点一下「信任」，然后永远不知道自己信了什么
    * （`package.rs::信任库::列` 的注释里写着同一句话）。
    */
-  信任: 信任记录[];
+  messageTask: trustRecord[];
   /** 有更新源的插件及其当前检查结果。 */
-  插件更新: PluginUpdateInfo[];
+  pluginUpdate: PluginUpdateInfo[];
   /**
    * 菜单栏**这一份**要摆的那几栏 = `MENUS` ＋ 插件那一栏（没有插件菜单就没有它）。
    *
@@ -145,16 +145,16 @@ export interface PluginsState {
    * 都是"点了就跑"的场合，往外抛就是一个**没人接的 Promise**，
    * 症状是控制台一行红字、界面上什么都没有。
    */
-  调: (plugin: string, command: string, args?: unknown) => Promise<void>;
+  configure: (plugin: string, command: string, args?: unknown) => Promise<void>;
   /** 「插件」页上那几颗按钮。见 [`插件动作`]。 */
-  动作: 插件动作;
+  action: pluginAction;
   /**
    * 编辑区里**此刻**摊着哪一块（没有就是 `null`）。`App.tsx` 据此决定
    * 主区是画正文还是画预览。
    */
   review: PluginReview | null;
   /** 收起编辑区里那一块、切回正文。用户点「回到正文」。 */
-  收预览: () => Promise<void>;
+  receivePreview: () => Promise<void>;
 }
 
 export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): PluginsState {
@@ -167,15 +167,15 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   // 算出来时就翻好了栏名与那句后缀，属于**存下来的字符串**。所以它多一条
   // 语言依赖，见下面 `menus` 那个 `useMemo`。
   // 当前语言，**只当依赖用**（见上面那段最后那条"几乎"）。
-  const 语 = use语言();
+  const language2 = useLanguage();
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const [panels, setPanels] = useState<PluginPanel[]>([]);
-  const [菜单项们, set菜单项们] = useState<PluginMenuItem[]>([]);
+  const [menuItems, setMenuItems] = useState<PluginMenuItem[]>([]);
   /** 见 [`PluginsState::信任`]。拉法与前三个一样。 */
-  const [信任表, set信任表] = useState<信任记录[]>([]);
-  const [插件更新, set插件更新] = useState<PluginUpdateInfo[]>([]);
+  const [trustTable, setTrustTable] = useState<trustRecord[]>([]);
+  const [pluginUpdate, setPluginUpdate] = useState<PluginUpdateInfo[]>([]);
   /** 正忙哪一个（插件 id 或 `"装"`）。见 [`插件动作::忙`]。 */
-  const [忙, set忙] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   /**
    * 拉一次三样。**装 / 卸 / 启停之后必须重拉**：那四件事都会真的加载或卸载
@@ -185,26 +185,26 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
    * ⚠️ 用 `ref` 装一个"这一次还活着吗"的旗标：动作是用户点的，页面可能在
    * 请求飞在路上时就被关掉，那时 `setState` 会报"更新了已卸载的组件"。
    */
-  const 活着 = useRef(true);
+  const activeActive = useRef(true);
   useEffect(() => {
-    活着.current = true;
+    activeActive.current = true;
     return () => {
-      活着.current = false;
+      activeActive.current = false;
     };
   }, []);
 
-  const 重拉 = useCallback(async () => {
+  const heavyPull = useCallback(async () => {
     const [ps, pn, mn, tk] = await Promise.all([
       api.plugin.list(),
       api.plugin.panels(),
       api.plugin.menus(),
       api.plugin.trustList(),
     ]);
-    if (!活着.current) return;
+    if (!activeActive.current) return;
     setPlugins(ps);
     setPanels(pn);
-    set菜单项们(mn);
-    set信任表(tk);
+    setMenuItems(mn);
+    setTrustTable(tk);
   }, []);
 
   // 启动拉一次。四样一起拉——它们回答的是同一个问题（"现在装了什么、
@@ -216,28 +216,28 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   useEffect(() => {
     void (async () => {
       try {
-        await 重拉();
+        await heavyPull();
       } catch (e) {
         // 插件读不出来**不该拦住别的**（设置、工作区、主题照常），
         // 但也不能不响：界面上少了一整栏，用户得知道是为什么。
         toast(t("Could not read extension status: {0}", String(e)), "error");
       }
     })();
-  }, [重拉, toast]);
+  }, [heavyPull, toast]);
 
   // 启动后静默检查一次。离线时不打扰用户，手动点「检查更新」才显示错误。
   useEffect(() => {
-    let 还在 = true;
+    let returnAt = true;
     api.plugin
       .updates()
       .then((updates) => {
-        if (还在) set插件更新(updates);
+        if (returnAt) setPluginUpdate(updates);
       })
       .catch(() => {
         /* 手动检查会报告原因。 */
       });
     return () => {
-      还在 = false;
+      returnAt = false;
     };
   }, []);
 
@@ -254,33 +254,33 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   const [review, setReview] = useState<PluginReview | null>(null);
 
   useEffect(() => {
-    let 退订: (() => void) | null = null;
-    let 还活着 = true;
+    let unsubscribe: (() => void) | null = null;
+    let returnActiveActive = true;
 
-    const 拉预览 = async () => {
+    const pullPreview = async () => {
       try {
-        const 现在 = await api.plugin.review();
-        if (还活着) setReview(现在);
+        const now = await api.plugin.review();
+        if (returnActiveActive) setReview(now);
       } catch (e) {
-        if (还活着) toast(t("Could not read the in-editor preview status: {0}", String(e)), "error");
+        if (returnActiveActive) toast(t("Could not read the in-editor preview status: {0}", String(e)), "error");
       }
     };
 
-    void 拉预览();
+    void pullPreview();
     void on<Record<string, never>>(events.pluginReview, () => {
-      void 拉预览();
+      void pullPreview();
     }).then((u) => {
-      if (还活着) 退订 = u;
+      if (returnActiveActive) unsubscribe = u;
       else u();
     });
 
     return () => {
-      还活着 = false;
-      退订?.();
+      returnActiveActive = false;
+      unsubscribe?.();
     };
   }, [toast]);
 
-  const 收预览 = useCallback(async () => {
+  const receivePreview = useCallback(async () => {
     if (!review) return;
     try {
       await api.plugin.reviewClose(review.plugin);
@@ -294,7 +294,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     }
   }, [review, toast]);
 
-  const 调 = useCallback(
+  const configure = useCallback(
     async (plugin: string, command: string, args?: unknown) => {
       try {
         await api.plugin.call(plugin, command, args);
@@ -309,7 +309,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   // ⚠️ `语` 在依赖里：`pluginMenus.ts` 那两处 `t(...)`（栏名「插件」、以及
   // "想挂到别的栏"那句后缀）是在**算这一份的时候**翻好的，语言换了不重算
   // 就还是旧语言。同一条理由见 `useMenus.ts` 推原生菜单那个 effect。
-  const menus = useMemo(() => 带插件栏(MENUS, 菜单项们), [菜单项们, 语]);
+  const menus = useMemo(() => withPluginDock(MENUS, menuItems), [menuItems, language2]);
 
   /**
    * 菜单项 → 实现。
@@ -321,18 +321,18 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
    */
   const handlers = useMemo(() => {
     const out: Record<string, () => void> = {};
-    for (const it of 菜单项们) {
-      if (it.menu !== 认识的菜单) continue;
-      out[插件项id(it.plugin, it.command)] = () => {
+    for (const it of menuItems) {
+      if (it.menu !== recognizeRecognizeOfMenu) continue;
+      out[pluginItemId(it.plugin, it.command)] = () => {
         void (async () => {
-          const 问 = await 问参数({ prompt: it.prompt, askPrompt });
-          if (!问) return; // 用户取消
-          await 调(it.plugin, it.command, 问.args);
+          const ask = await askParameter({ prompt: it.prompt, askPrompt });
+          if (!ask) return; // 用户取消
+          await configure(it.plugin, it.command, ask.args);
         })();
       };
     }
     return out;
-  }, [菜单项们, askPrompt, 调]);
+  }, [menuItems, askPrompt, configure]);
 
   /**
    * 「插件」页那几颗按钮的实现。四件事的共同形状：**忙什么 → 干 → 重拉 → 报错**。
@@ -346,22 +346,22 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
    * `if (x === null) return` 会被判成永远成立，后面的 `x` 变成 `never`。
    * 失败返回 `null`（那时 `跑` 已经 toast 过了）。
    */
-  const 跑 = useCallback(
-    async <T,>(标记: string, 干什么: () => Promise<T>, 成了?: string): Promise<T | null> => {
-      set忙(标记);
+  const run = useCallback(
+    async <T,>(mark: string, doWhatWhat: () => Promise<T>, becomeDone?: string): Promise<T | null> => {
+      setBusy(mark);
       try {
-        const 值 = await 干什么();
-        await 重拉();
-        if (成了) toast(成了, "info");
-        return 值;
+        const value2 = await doWhatWhat();
+        await heavyPull();
+        if (becomeDone) toast(becomeDone, "info");
+        return value2;
       } catch (e) {
         toast(String(e), "error");
         return null;
       } finally {
-        set忙(null);
+        setBusy(null);
       }
     },
-    [重拉, toast],
+    [heavyPull, toast],
   );
 
   /**
@@ -379,33 +379,33 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
    * 调用者要么手里已经有一份刚拉回来的清单（`装它`），要么正在渲染这一行
    * （列表里那颗「信任」），两处都拿得到真指纹。
    */
-  const 信任它 = useCallback(
-    async (id: string, 指纹?: string | null) => {
+  const trustPlugin = useCallback(
+    async (id: string, pointTexture?: string | null) => {
       // 兜底那一次查只是为了老调用点，正常情况下上面那条 `??` 用不上。
-      const 真指纹 = 指纹 ?? plugins.find((x) => x.id === id)?.key_id ?? null;
-      const 答 = await askConfirm({
+      const assertValuePointTexture = pointTexture ?? plugins.find((x) => x.id === id)?.key_id ?? null;
+      const answer = await askConfirm({
         title: t("Trust This Signer?"),
         // ⚠️ 拆成一句一条，而不是把三句拼成一个 `t("…")`：换行是**分段**，不是
         // 句子的一部分——键里带上 `\n` 的话，中文表那边也得照着写转义。
         message:
-          t("Fingerprint: {0}", 真指纹 ?? t("(unknown)")) +
+          t("Fingerprint: {0}", assertValuePointTexture ?? t("(unknown)")) +
           "\n\n" +
           t("Once trusted, any package signed with this key counts as verified.") +
           "\n" +
           t("Trust is recorded by fingerprint — check it against the one the author publishes, not just the name."),
         confirmLabel: t("Trust"),
       });
-      if (答 !== "confirm") return;
-      await 跑(id, () => api.plugin.trust(id), t("Trusted {0}", 真指纹 ?? id));
+      if (answer !== "confirm") return;
+      await run(id, () => api.plugin.trust(id), t("Trusted {0}", assertValuePointTexture ?? id));
     },
-    [plugins, askConfirm, 跑],
+    [plugins, askConfirm, run],
   );
 
-  const 检查更新 = useCallback(async () => {
-    set忙("更新检查");
+  const checkForUpdates = useCallback(async () => {
+    setBusy("更新检查");
     try {
       const updates = await api.plugin.updates();
-      if (活着.current) set插件更新(updates);
+      if (activeActive.current) setPluginUpdate(updates);
       const failures = updates.filter((update) => update.error);
       if (failures.length > 0) {
         toast(failures.map((update) => `${update.name}: ${update.error}`).join("\n"), "error");
@@ -413,18 +413,18 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     } catch (e) {
       toast(t("Could not check extension updates: {0}", String(e)), "error");
     } finally {
-      if (活着.current) set忙(null);
+      if (activeActive.current) setBusy(null);
     }
   }, [toast]);
 
-  const 更新一个 = useCallback(
+  const updateOne = useCallback(
     async (id: string) => {
-      set忙(id);
+      setBusy(id);
       try {
         const result = await api.plugin.update(id);
-        await 重拉();
+        await heavyPull();
         const updates = await api.plugin.updates().catch(() => null);
-        if (updates && 活着.current) set插件更新(updates);
+        if (updates && activeActive.current) setPluginUpdate(updates);
         toast(
           t("Updated {0} from {1} to {2}", result.id, result.fromVersion, result.toVersion),
           "info",
@@ -432,21 +432,21 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
         const list = await api.plugin.list().catch(() => []);
         const installed = list.find((plugin) => plugin.id === id);
         if (installed?.signature === "unknown") {
-          await 信任它(installed.id, installed.key_id);
+          await trustPlugin(installed.id, installed.key_id);
         }
       } catch (e) {
         toast(t("Could not update extension {0}: {1}", id, String(e)), "error");
       } finally {
-        if (活着.current) set忙(null);
+        if (activeActive.current) setBusy(null);
       }
     },
-    [重拉, 信任它, toast],
+    [heavyPull, trustPlugin, toast],
   );
 
-  const 全部更新 = useCallback(async () => {
-    const pending = 插件更新.filter((update) => update.available).map((update) => update.id);
+  const updateAll = useCallback(async () => {
+    const pending = pluginUpdate.filter((update) => update.available).map((update) => update.id);
     if (pending.length === 0) return;
-    set忙("全部更新");
+    setBusy("全部更新");
     const failures: string[] = [];
     try {
       for (const id of pending) {
@@ -456,31 +456,31 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
           failures.push(`${id}: ${String(e)}`);
         }
       }
-      await 重拉();
+      await heavyPull();
       const updates = await api.plugin.updates().catch(() => null);
-      if (updates && 活着.current) set插件更新(updates);
+      if (updates && activeActive.current) setPluginUpdate(updates);
       if (failures.length > 0) {
         toast(failures.join("\n"), "error");
       } else {
         toast(t("Updated {0} extensions.", pending.length), "info");
       }
     } finally {
-      if (活着.current) set忙(null);
+      if (activeActive.current) setBusy(null);
     }
-  }, [插件更新, 重拉, toast]);
+  }, [pluginUpdate, heavyPull, toast]);
 
-  const 装它 = useCallback(async () => {
+  const installPlugin = useCallback(async () => {
     // ⚠️ 文件框由前端弹（宿主不弹框）：那是界面的事，而且宿主弹框在无头测试里
     // 没法验。只认**包文件**——开发态的目录插件走仓库里的 `plugins/`，
     // 那条路本来就在（见 `plugin/mod.rs` 的"目录与去重"）。
-    const 选 = await openDialog({
+    const select = await openDialog({
       multiple: false,
       directory: false,
       filters: [{ name: t("Extension Package"), extensions: ["nota-plugin", "zip"] }],
     }).catch(() => null);
-    if (typeof 选 !== "string") return; // 用户取消 / 平台没给路径
+    if (typeof select !== "string") return; // 用户取消 / 平台没给路径
 
-    const id = await 跑("装", () => api.plugin.install(选));
+    const id = await run("装", () => api.plugin.install(select));
     if (id === null) return; // 装失败了，`跑` 已经 toast 过
 
     // 装完**直接问**（而不是只 toast 一句"去列表里点信任"）：用户刚选完文件，
@@ -491,60 +491,60 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     //
     // ⚠️ 这里**重新拉一次清单**而不是读 state 里的 `plugins`：那一个是上一次
     // 渲染的快照，刚装进来的那个插件还不在里面。
-    const 清单 = await api.plugin.list().catch(() => []);
-    const p = 清单.find((x) => x.id === id);
+    const clearSingle = await api.plugin.list().catch(() => []);
+    const p = clearSingle.find((x) => x.id === id);
     if (!p) return;
-    toast(t("Installed: {0} ({1})", p.name, 签名说明(p.signature)), "info");
-    if (p.signature === "unknown") await 信任它(p.id, p.key_id);
-  }, [跑, 信任它, toast]);
+    toast(t("Installed: {0} ({1})", p.name, keyNameDescription(p.signature)), "info");
+    if (p.signature === "unknown") await trustPlugin(p.id, p.key_id);
+  }, [run, trustPlugin, toast]);
 
-  const 导它 = useCallback(
+  const guideIt = useCallback(
     async (id: string) => {
       // ⚠️ 默认名**问后端要**（`paths::安全文件名` 的规则只该有一份实现）。
       // 拿不到就退回 `id + 后缀`：这一条路只在"插件刚好在这两步之间被卸掉了"
       // 时走到，那时保存框里写个 id 也比什么都不写好。
-      const 默认 = await api.plugin.exportName(id).catch(() => `${id}.nota-plugin`);
-      const 选 = await saveDialog({
-        defaultPath: 默认,
+      const defaultName = await api.plugin.exportName(id).catch(() => `${id}.nota-plugin`);
+      const select = await saveDialog({
+        defaultPath: defaultName,
         filters: [{ name: t("Extension Package"), extensions: ["nota-plugin"] }],
       }).catch(() => null);
-      if (typeof 选 !== "string") return; // 用户取消 / 平台没给路径
+      if (typeof select !== "string") return; // 用户取消 / 平台没给路径
 
       // ⚠️ 只补"压根没有后缀"的那一种（`backup` → `backup.nota-plugin`）。
       // 用户自己写了后缀就**一个字节都不动**：他要是打了 `backup.zip`，
       // 说明他知道自己在干什么，硬接一个 `.nota-plugin` 会变成
       // `backup.zip.nota-plugin`——难看到像出了故障。
-      const 路径 = 有后缀吗(选) ? 选 : `${选}.nota-plugin`;
+      const path = hasExtensionQuestion(select) ? select : `${select}.nota-plugin`;
 
       // ⚠️ 这里**沿用 `跑`**（它跑完会重拉一次清单）：导出不改任何状态，
       // 那一次重拉是多余的。留着它是因为"忙态 + 失败 toast + 收尾清忙"
       // 这三件事只该有一份实现——为省四个只读调用再抄一遍 try/catch，
       // 抄坏的那一次症状是"按钮永远转着圈"。
-      const 报告 = await 跑(id, () => api.plugin.export(id, 路径));
-      if (!报告) return; // 失败了，`跑` 已经 toast 过
+      const reportInform = await run(id, () => api.plugin.export(id, path));
+      if (!reportInform) return; // 失败了，`跑` 已经 toast 过
       toast(
         [
-          t("Exported {0}", 报告.path),
-          t("{0} files, {1}", String(报告.files), 大小说明(报告.bytes)),
-          签名去向说明(报告.signature),
+          t("Exported {0}", reportInform.path),
+          t("{0} files, {1}", String(reportInform.files), largeSmallDescription(reportInform.bytes)),
+          keyNameGoTowardDescription(reportInform.signature),
         ].join("\n"),
         "info",
       );
     },
-    [跑, toast],
+    [run, toast],
   );
 
-  const 打开目录它 = useCallback(async () => {
+  const openDirectory = useCallback(async () => {
     // 成功那一下也说一句：文件管理器可能在**另一个**窗口/工作区里弹出来，
     // 用户不一定看得见它。顺带把路径带上——找不到的人可以照着路径自己走。
-    await 跑("目录", () => api.plugin.openDir(), t("Opened the extension folder in your file manager"));
-  }, [跑]);
+    await run("目录", () => api.plugin.openDir(), t("Opened the extension folder in your file manager"));
+  }, [run]);
 
-  const 卸它 = useCallback(
+  const uninstallPlugin = useCallback(
     async (id: string) => {
       // ⚠️ 这一下**不可逆**（插件目录真的删掉），所以必须先问一句。
       // 文案里明说"设置文件留着"——用户最担心的正是"我的 API key 会不会没了"。
-      const 答 = await askConfirm({
+      const answer = await askConfirm({
         title: t("Uninstall This Extension?"),
         // 拆法同上面「信任」那张框（换行是分段，不进键）。
         message:
@@ -554,27 +554,27 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
         confirmLabel: t("Uninstall"),
         danger: true,
       });
-      if (答 !== "confirm") return;
-      await 跑(id, () => api.plugin.uninstall(id), t("Uninstalled {0}", id));
+      if (answer !== "confirm") return;
+      await run(id, () => api.plugin.uninstall(id), t("Uninstalled {0}", id));
     },
-    [askConfirm, 跑],
+    [askConfirm, run],
   );
 
-  const 启停它 = useCallback(
+  const togglePlugin = useCallback(
     async (id: string, enabled: boolean) => {
-      const 名 = plugins.find((p) => p.id === id)?.name ?? id;
+      const name3 = plugins.find((p) => p.id === id)?.name ?? id;
       // ⚠️ 停用是**真卸载**（见 `bridge/ipc.ts::setEnabled`）：要跑插件的
       // `on_unload` / `on_load`，所以会有一小会儿延迟，那颗按钮这时该是灰的。
       // ⚠️ 这一句原来是 `` `${enabled ? "启用" : "停用"}了 ${名}` ``：那个"…了"
       // 是接在**两个不同的词**后面的，拆开翻就会拼出"Enable 了 X"这种话。
       // 所以这里**整句当一个键**（两种形态两条）。
-      await 跑(
+      await run(
         id,
         () => api.plugin.setEnabled(id, enabled),
-        enabled ? t("Enabled {0}", 名) : t("Disabled {0}", 名),
+        enabled ? t("Enabled {0}", name3) : t("Disabled {0}", name3),
       );
     },
-    [plugins, 跑],
+    [plugins, run],
   );
 
   /**
@@ -594,9 +594,9 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
    * 3. **失败要说话 ＋ 拉回来**：本地那一格现在是写失败的那个数，
    *    不拉回来的话界面上摆着一个没落盘的值——那正是这一页最不该有的东西。
    */
-  const 写设置 = useCallback(
+  const writeSettings = useCallback(
     async (id: string, key: string, value: string | number | boolean) => {
-      const 打补丁 = (s: PluginSetting): PluginSetting => {
+      const hitFillSmall = (s: PluginSetting): PluginSetting => {
         if (s.kind === "range") return { ...s, value: Number(value) };
         if (s.kind === "toggle") return { ...s, on: value === true };
         return { ...s, text: String(value) };
@@ -606,7 +606,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
           p.id === id
             ? {
                 ...p,
-                settings: p.settings.map((s) => (s.key === key ? 打补丁(s) : s)),
+                settings: p.settings.map((s) => (s.key === key ? hitFillSmall(s) : s)),
               }
             : p,
         ),
@@ -615,54 +615,54 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
         await api.plugin.setSetting(id, key, value);
       } catch (e) {
         toast(t("Could not save a setting for extension {0}: {1}", id, String(e)), "error");
-        await 重拉().catch(() => {
+        await heavyPull().catch(() => {
           /* 拉不回来也已经说过了，别再叠一条 toast */
         });
       }
     },
-    [重拉, toast],
+    [heavyPull, toast],
   );
 
-  const 动作 = useMemo<插件动作>(
+  const action = useMemo<pluginAction>(
     () => ({
-      忙,
-      装: 装它,
-      导出: 导它,
-      卸: 卸它,
-      打开目录: 打开目录它,
-      启停: 启停它,
-      信任: 信任它,
-      设置: 写设置,
-      检查更新,
-      更新: 更新一个,
-      全部更新,
+      busy,
+      install: installPlugin,
+      export: guideIt,
+      unload: uninstallPlugin,
+      openDirectory2: openDirectory,
+      toggle: togglePlugin,
+      messageTask: trustPlugin,
+      settings: writeSettings,
+      checkForUpdates,
+      update: updateOne,
+      updateAll,
     }),
     [
-      忙,
-      装它,
-      导它,
-      卸它,
-      打开目录它,
-      启停它,
-      信任它,
-      写设置,
-      检查更新,
-      更新一个,
-      全部更新,
+      busy,
+      installPlugin,
+      guideIt,
+      uninstallPlugin,
+      openDirectory,
+      togglePlugin,
+      trustPlugin,
+      writeSettings,
+      checkForUpdates,
+      updateOne,
+      updateAll,
     ],
   );
 
   return {
     plugins,
     panels,
-    信任: 信任表,
-    插件更新,
+    messageTask: trustTable,
+    pluginUpdate,
     menus,
     handlers,
-    调,
-    动作,
+    configure,
+    action,
     review,
-    收预览,
+    receivePreview,
   };
 }
 
@@ -680,8 +680,8 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
  * 会是「未签名」，而发的人以为发的是一份"已验证"的包。这件事只有这一句话
  * 能告诉他（`bridge/types.ts::导出报告::signature` 写着同一件事）。
  */
-function 签名去向说明(去向: 导出报告["signature"]): string {
-  switch (去向) {
+function keyNameGoTowardDescription(goToward: exportReport["signature"]): string {
+  switch (goToward) {
     case "kept":
       return t("The signature was carried over — this package still counts as verified for whoever receives it (as long as they trust that key).");
     case "dropped":
@@ -692,16 +692,16 @@ function 签名去向说明(去向: 导出报告["signature"]): string {
 }
 
 /** 这个路径有没有后缀（最后一个路径分隔符之后还有没有点）。见 [`导它`]。 */
-function 有后缀吗(路径: string): boolean {
-  const 名 = 路径.slice(路径.lastIndexOf("/") + 1);
+function hasExtensionQuestion(path: string): boolean {
+  const name3 = path.slice(path.lastIndexOf("/") + 1);
   // ⚠️ 点开头的隐藏文件（`.bashrc`）算**没有**后缀：那个点是"隐藏"的意思，
   // 不是"后缀"。判据取最后那个点是不是在开头之后。
-  return 名.lastIndexOf(".") > 0;
+  return name3.lastIndexOf(".") > 0;
 }
 
 /** 给人看的字节数。单位**不进 i18n**：KB / MB 两门语言写出来一样。 */
-function 大小说明(字节: number): string {
-  if (字节 < 1024) return `${字节} B`;
-  if (字节 < 1024 * 1024) return `${(字节 / 1024).toFixed(1)} KB`;
-  return `${(字节 / 1024 / 1024).toFixed(1)} MB`;
+function largeSmallDescription(byte: number): string {
+  if (byte < 1024) return `${byte} B`;
+  if (byte < 1024 * 1024) return `${(byte / 1024).toFixed(1)} KB`;
+  return `${(byte / 1024 / 1024).toFixed(1)} MB`;
 }

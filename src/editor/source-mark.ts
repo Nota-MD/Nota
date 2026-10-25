@@ -66,10 +66,10 @@
  * 的 `changes` 就是这么收的（一次派发里几条改动各按原文档算，前后不互相
  * 挪位），所以摘外面那对定界符时，右半边那条不必减去左边删掉的字符数。
  */
-export type 文本改动 = { from: number; to: number; insert: string };
+export type TextChangeAction = { from: number; to: number; insert: string };
 
 /** 摘完之后选区该落在哪儿（`CodeMirror` 的选区形状）。 */
-export type 选区范围 = { anchor: number; head: number };
+export type SelectionScopeEnclose = { anchor: number; head: number };
 
 /**
  * [`试摘定界符`] 的结果。`"摘"` 带着改动与选区，`"不动"` 什么都不带。
@@ -78,9 +78,9 @@ export type 选区范围 = { anchor: number; head: number };
  * 读起来是"改动只有一条时……"，而这条**语义**（是里面那对还是外面那对）
  * 根本不该出现在调用方那一侧。
  */
-export type 摘定界 =
-  | { 结果: "摘"; 改动: 文本改动[]; 选区: 选区范围 }
-  | { 结果: "不动" };
+export type RemoveFixedBoundary =
+  | { result2: "摘"; changeAction: TextChangeAction[]; selection: SelectionScopeEnclose }
+  | { result2: "不动" };
 
 /**
  * 选区已经带着 `before` / `after` 这一对定界符了吗？是的话给出"摘掉"的改动
@@ -95,64 +95,64 @@ export type 摘定界 =
  * @returns 见 {@link 摘定界}；`null` 表示"没带着这一对，照旧包一层"。
  *          三种结果的差别见文件头。
  */
-export function 试摘定界符(
-  文: string,
+export function tryRemoveFixedBoundarySymbol(
+  text4: string,
   from: number,
   to: number,
   before: string,
   after: string,
-): 摘定界 | null {
-  const 选 = 文.slice(from, to);
+): RemoveFixedBoundary | null {
+  const select = text4.slice(from, to);
   // 空选区没有"已经加粗"可判（光标不在任何标记里），交给调用方插占位词。
-  if (选 === "") return null;
-  const 前 = before.length;
-  const 后 = after.length;
+  if (select === "") return null;
+  const beforeLength = before.length;
+  const afterLength = after.length;
   // 定界符**边缘那一颗**（`**` 是 `*`、`</u>` 是 `>`）：下面判"再往外/再往里
   // 还压着一颗同字符吗"用的就是它。
   // ⚠️ 用 `slice` 而不是下标取值：本仓开着 `noUncheckedIndexedAccess`，
   // `before[前 - 1]` 的类型是 `string | undefined`，而这两个串必然非空。
-  const 左缘 = before.slice(-1);
-  const 右缘 = after.slice(0, 1);
+  const leftEdge = before.slice(-1);
+  const rightEdge = after.slice(0, 1);
 
   // ── ① 定界符紧贴在选区**外面**：`**|甲|**` ──────────────────────────
-  const 外左 = 文.slice(Math.max(0, from - 前), from);
-  const 外右 = 文.slice(to, to + 后);
-  if (外左 === before && 外右 === after) {
+  const externalLeft = text4.slice(Math.max(0, from - beforeLength), from);
+  const externalRight = text4.slice(to, to + afterLength);
+  if (externalLeft === before && externalRight === after) {
     // ⚠️ 定界符再往外还有一颗同字符的话，说明外面接着更长的一串
     //（`***甲***` 里选中 `甲`，左边那两颗只是三颗星的后两颗）——
     // 那就是"嵌套"，不动。判据用的是定界符**最后**一个字符：`**` 是 `*`、
     // `</u>` 是 `>`，两种写法都落在同一句上。
-    const 更左 = 文.slice(Math.max(0, from - 前 - 1), Math.max(0, from - 前));
-    const 更右 = 文.slice(to + 后, to + 后 + 1);
-    if (更左 === 左缘 || 更右 === 右缘) return { 结果: "不动" };
+    const moreLeft = text4.slice(Math.max(0, from - beforeLength - 1), Math.max(0, from - beforeLength));
+    const moreRight = text4.slice(to + afterLength, to + afterLength + 1);
+    if (moreLeft === leftEdge || moreRight === rightEdge) return { result2: "不动" };
     return {
-      结果: "摘",
-      改动: [
-        { from: from - 前, to: from, insert: "" },
-        { from: to, to: to + 后, insert: "" },
+      result2: "摘",
+      changeAction: [
+        { from: from - beforeLength, to: from, insert: "" },
+        { from: to, to: to + afterLength, insert: "" },
       ],
       // 摘掉外面那两串，选区两端各左移一个左定界符那么长（右半边那条改动
       // 在选区右侧，不会把左半边再挪一次）。
-      选区: { anchor: from - 前, head: to - 前 },
+      selection: { anchor: from - beforeLength, head: to - beforeLength },
     };
   }
 
   // ── ② 定界符**在选区里**：`|**甲**|`（用户把星号一起框进来了） ────────
-  if (选.startsWith(before) && 选.endsWith(after) && 选.length > 前 + 后) {
-    const 内 = 选.slice(前, 选.length - 后);
+  if (select.startsWith(before) && select.endsWith(after) && select.length > beforeLength + afterLength) {
+    const inside = select.slice(beforeLength, select.length - afterLength);
     // ⚠️ 两道闸，都是"这不是干净的一对、别乱摘"：
     // 里面还压着一颗同字符（`***甲***` 全选，`内` 是 `*甲*`）⇒ 嵌套；
     // 外面紧挨着一颗同字符（`**粗体**` 里只选中 `*粗体*`）⇒ 选区只是更长
     // 一串的一部分，摘掉会把"加粗"变成"斜体"。
-    if (内.startsWith(左缘) || 内.endsWith(右缘)) return { 结果: "不动" };
-    const 前外 = 文.slice(Math.max(0, from - 1), from);
-    const 后外 = 文.slice(to, to + 1);
-    if (前外 === 左缘 || 后外 === 右缘) return { 结果: "不动" };
+    if (inside.startsWith(leftEdge) || inside.endsWith(rightEdge)) return { result2: "不动" };
+    const beforeExternal = text4.slice(Math.max(0, from - 1), from);
+    const afterExternal = text4.slice(to, to + 1);
+    if (beforeExternal === leftEdge || afterExternal === rightEdge) return { result2: "不动" };
     return {
-      结果: "摘",
-      改动: [{ from, to, insert: 内 }],
+      result2: "摘",
+      changeAction: [{ from, to, insert: inside }],
       // 摘的是选区自己那两端，所以选区**不挪位**，只是变短到正文那么长。
-      选区: { anchor: from, head: from + 内.length },
+      selection: { anchor: from, head: from + inside.length },
     };
   }
 

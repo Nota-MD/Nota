@@ -86,7 +86,7 @@ function ModeSwatch({
   // `data-ui-mode`，而 `theme/color.css` 里 `[data-ui-mode="light"]` 那一段
   // **又声明了一次 `--accent`**——于是继承被截断，缩略图上那道横杠永远是
   // 风格自带的色，用户换了主题色这里却不变。而那正是他拿来做判断的地方。
-  const 强调 = accentVars(accent);
+  const strongConfigure = accentVars(accent);
   return (
     <button
       type="button"
@@ -96,7 +96,7 @@ function ModeSwatch({
       aria-label={label}
       onClick={onPick}
     >
-      <span className="stg-swatch-page" data-ui-style={style} data-ui-mode={mode} style={强调 ?? undefined}>
+      <span className="stg-swatch-page" data-ui-style={style} data-ui-mode={mode} style={strongConfigure ?? undefined}>
         <span className="stg-swatch-ink">Aa</span>
         <span className="stg-swatch-rule" />
       </span>
@@ -125,11 +125,11 @@ function ModeSwatch({
  * ⚠️ 两条都不成立时（认不出来的 id 风格／那份 CSS 里根本没写 `--accent`）返回
  * 空串，调用方自己挑一个兜底值——**不要在这里编一个颜色**。
  */
-function 有效强调色(a: AppearanceSettings): string {
-  const 设了 = parseAccent(a.accent);
-  if (设了) return 设了;
-  const 读到的 = getComputedStyle(document.documentElement).getPropertyValue("--accent");
-  return parseAccent(读到的) ?? "";
+function effectiveAccent(a: AppearanceSettings): string {
+  const setDone = parseAccent(a.accent);
+  if (setDone) return setDone;
+  const readToOf = getComputedStyle(document.documentElement).getPropertyValue("--accent");
+  return parseAccent(readToOf) ?? "";
 }
 
 export function AppearancePane({
@@ -181,8 +181,8 @@ export function AppearancePane({
     adwaita: { label: "Adwaita", hint: t("GNOME native — flat, depth from shadows") },
   };
 
-  const 写 = paneWriter(settings, onChange, "appearance");
-  const { style, mode: 当前明暗 } = useResolvedAppearance(settings);
+  const write = paneWriter(settings, onChange, "appearance");
+  const { style, mode: currentMode } = useResolvedAppearance(settings);
   const auto = settings.ui_mode === "auto";
   const a = settings.appearance;
 
@@ -192,7 +192,7 @@ export function AppearancePane({
    * ⚠️ 判据是"非空 **且** 解析不出来"，不是单看解析结果：空串是**正常值**
    * （= 跟随风格），把它也算成"认不出"会让默认状态下就挂着一句警告。
    */
-  const 认不出 = a.accent !== "" && parseAccent(a.accent) === null;
+  const recognizeNotOutput = a.accent !== "" && parseAccent(a.accent) === null;
 
   /**
    * 一档风格在界面上的名字。三条判据，顺序有讲究：
@@ -210,10 +210,10 @@ export function AppearancePane({
    *
    * ⚠️ 与 `STYLES` 一样**在组件里现建**，理由同上面那段（`t()` 要能订阅语言）。
    */
-  const 档名 = (s: UiStyleInfo) => {
-    const 内置 = STYLES[s.id as BuiltinUiStyle];
-    if (!内置) return s.id;
-    return s.builtin ? 内置.label : `${内置.label} · ${t("overridden")}`;
+  const levelName = (s: UiStyleInfo) => {
+    const insidePlace = STYLES[s.id as BuiltinUiStyle];
+    if (!insidePlace) return s.id;
+    return s.builtin ? insidePlace.label : `${insidePlace.label} · ${t("overridden")}`;
   };
 
   /**
@@ -222,9 +222,9 @@ export function AppearancePane({
    * ⚠️ **以宿主那份清单为准，拉不到才用 `STYLE_ORDER` 兜底**：清单里多出来的
    * 就是用户导入的风格（`builtin: false`），它们**只能从后端知道**。
    */
-  const 清单: { value: string; label: string }[] =
+  const clearSingle: { value: string; label: string }[] =
     uiStyles.length > 0
-      ? uiStyles.map((s) => ({ value: s.id, label: 档名(s) }))
+      ? uiStyles.map((s) => ({ value: s.id, label: levelName(s) }))
       : STYLE_ORDER.map((v) => ({ value: v, label: STYLES[v].label }));
 
   /**
@@ -238,9 +238,9 @@ export function AppearancePane({
    * ⚠️ 只在**清单已经拉到**时才补：还没拉到时所有导入档都不在选项里，
    * 那时补一条等于每次启动都闪一下"找不到"。
    */
-  const 选项 = [...清单];
-  if (uiStyles.length > 0 && !选项.some((o) => o.value === settings.ui_style)) {
-    选项.push({ value: settings.ui_style, label: t("(“{0}” not found)", settings.ui_style) });
+  const option = [...clearSingle];
+  if (uiStyles.length > 0 && !option.some((o) => o.value === settings.ui_style)) {
+    option.push({ value: settings.ui_style, label: t("(“{0}” not found)", settings.ui_style) });
   }
 
   const current = STYLES[settings.ui_style as BuiltinUiStyle];
@@ -264,7 +264,7 @@ export function AppearancePane({
             而"要读文档才发现"的入口等于没有。同「文档主题」那页的「主题文件夹…」。 */}
         <SettingRow>
           <div className="stg-inline">
-            <Select value={settings.ui_style} options={选项} onChange={(ui_style) => onChange({ ui_style })} />
+            <Select value={settings.ui_style} options={option} onChange={(ui_style) => onChange({ ui_style })} />
             <ActionButton onClick={onOpenStylesDir} title={t("Open the styles folder. Drop a <name>.css in it to add a style.")}>
               {t("Styles folder…")}
             </ActionButton>
@@ -312,11 +312,11 @@ export function AppearancePane({
               // ⚠️ `type="color"` **只认 `#rrggbb`**，给空串它自己会退回黑色——
               // 那会让"跟随风格"看起来像"用户选了黑"，所以这里退到此刻真正在用的
               // 那个色（`有效强调色`），让色块**始终显示当前生效的颜色**。
-              value={有效强调色(a) || "#000000"}
-              onChange={(e) => 写({ accent: e.target.value })}
+              value={effectiveAccent(a) || "#000000"}
+              onChange={(e) => write({ accent: e.target.value })}
             />
             <ActionButton
-              onClick={() => 写({ accent: "" })}
+              onClick={() => write({ accent: "" })}
               disabled={a.accent === ""}
               title={t("Go back to the accent that the current style ships with.")}
             >
@@ -330,7 +330,7 @@ export function AppearancePane({
                 与「界面风格」下拉里那条「（找不到「…」）」同一个套路：说出
                 "生效的是这个东西、而它没被认出来"，而不是让用户对着一个
                 看起来正常的色块猜。 */}
-            {认不出 && (
+            {recognizeNotOutput && (
               <span className="stg-warn">{t("(Unrecognized: {0} — falling back to following the style)", a.accent)}</span>
             )}
           </div>
@@ -343,7 +343,7 @@ export function AppearancePane({
               浅色（2026-09-25 改，用户体验评估抓出来的）。原来写的是 `"light"`：
               用户先选了深色、再来取消"跟随系统"，界面会当场变浅——一个纯取消
               勾选的动作把另一个选择抹掉了，而且没有任何提示。 */}
-          <Toggle checked={auto} onChange={(on) => onChange({ ui_mode: on ? "auto" : 当前明暗 })} />
+          <Toggle checked={auto} onChange={(on) => onChange({ ui_mode: on ? "auto" : currentMode })} />
         </SettingRow>
       </SettingsGroup>
 
@@ -355,7 +355,7 @@ export function AppearancePane({
               { value: "auto", label: t("Automatic (Recommended)") },
               { value: "custom", label: t("Custom") },
             ]}
-            onChange={(v) => 写({ custom_font_size: v === "custom" })}
+            onChange={(v) => write({ custom_font_size: v === "custom" })}
           />
         </SettingRow>
 
@@ -379,14 +379,14 @@ export function AppearancePane({
             max={300}
             step={10}
             suffix="%"
-            onChange={(zoom) => 写({ zoom })}
+            onChange={(zoom) => write({ zoom })}
           />
         </SettingRow>
 
         <SettingRow label={t("Use the scroll wheel while holding Ctrl")}>
           <Toggle
             checked={a.ctrl_wheel_zoom}
-            onChange={(ctrl_wheel_zoom) => 写({ ctrl_wheel_zoom })}
+            onChange={(ctrl_wheel_zoom) => write({ ctrl_wheel_zoom })}
           />
         </SettingRow>
 
@@ -397,7 +397,7 @@ export function AppearancePane({
               { value: "font_size", label: t("Font size") },
               { value: "zoom", label: t("Interface zoom") },
             ]}
-            onChange={(ctrl_wheel_target) => 写({ ctrl_wheel_target })}
+            onChange={(ctrl_wheel_target) => write({ ctrl_wheel_target })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -406,7 +406,7 @@ export function AppearancePane({
         <SettingRow>
           <Toggle
             checked={a.show_menu_bar}
-            onChange={(show_menu_bar) => 写({ show_menu_bar })}
+            onChange={(show_menu_bar) => write({ show_menu_bar })}
           />
         </SettingRow>
         <SettingRow
@@ -421,7 +421,7 @@ export function AppearancePane({
               { value: "nota", label: t("Nota (self-drawn)") },
               { value: "system", label: t("System native") },
             ]}
-            onChange={(menu_renderer) => 写({ menu_renderer })}
+            onChange={(menu_renderer) => write({ menu_renderer })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -430,7 +430,7 @@ export function AppearancePane({
         <SettingRow>
           <Toggle
             checked={a.show_status_bar}
-            onChange={(show_status_bar) => 写({ show_status_bar })}
+            onChange={(show_status_bar) => write({ show_status_bar })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -442,7 +442,7 @@ export function AppearancePane({
         <SettingRow label={t("Show the file name in the title bar")}>
           <Toggle
             checked={a.show_filename_in_titlebar}
-            onChange={(show_filename_in_titlebar) => 写({ show_filename_in_titlebar })}
+            onChange={(show_filename_in_titlebar) => write({ show_filename_in_titlebar })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -459,7 +459,7 @@ export function AppearancePane({
               { value: "strong", label: t("Strong") },
               { value: "stronger", label: t("Stronger") },
             ]}
-            onChange={(focus_mode_dim) => 写({ focus_mode_dim })}
+            onChange={(focus_mode_dim) => write({ focus_mode_dim })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -471,7 +471,7 @@ export function AppearancePane({
             min={100}
             max={1000}
             step={1}
-            onChange={(reading_speed) => 写({ reading_speed })}
+            onChange={(reading_speed) => write({ reading_speed })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -488,7 +488,7 @@ export function AppearancePane({
               { value: "hover", label: t("Show on Hover") },
               { value: "never", label: t("Never Show") },
             ]}
-            onChange={(toolbar) => 写({ toolbar })}
+            onChange={(toolbar) => write({ toolbar })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -497,7 +497,7 @@ export function AppearancePane({
         <SettingRow label={t("Use a separate set of document themes")}>
           <Toggle
             checked={a.dark_theme_separate}
-            onChange={(dark_theme_separate) => 写({ dark_theme_separate })}
+            onChange={(dark_theme_separate) => write({ dark_theme_separate })}
           />
         </SettingRow>
 
@@ -508,10 +508,10 @@ export function AppearancePane({
               options={[
                 { value: "", label: t("Follow the light theme") },
                 // ⚠️ 回调参数**不能叫 `t`**：那是上面 `useT()` 的译文函数。
-                ...docThemes.map((主题) => ({ value: 主题.id, label: 主题.name })),
+                ...docThemes.map((theme) => ({ value: theme.id, label: theme.name })),
               ]}
               disabled={!a.dark_theme_separate}
-              onChange={(dark_document_theme) => 写({ dark_document_theme })}
+              onChange={(dark_document_theme) => write({ dark_document_theme })}
             />
             <ActionButton onClick={onOpenThemesDir} title={t("Open the themes folder. Put a .css file in it and it becomes selectable.")}>
               {t("Themes folder…")}

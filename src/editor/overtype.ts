@@ -40,11 +40,11 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import type { EditorState } from "@milkdown/kit/prose/state";
 
 /** 覆写开着没有。⚠️ 存的是**布尔**（`false` 与"没建起来"都按关着算）。 */
-export const 覆写键 = new PluginKey<boolean>("notaOvertype");
+export const coverWriteKey = new PluginKey<boolean>("notaOvertype");
 
 /** 这一刻覆写开着没有。`读命令状态`（`command-state.ts`）与状态栏都用它。 */
-export function 覆写开着(state: EditorState): boolean {
-  return 覆写键.getState(state) === true;
+export function coverWriteOpen(state: EditorState): boolean {
+  return coverWriteKey.getState(state) === true;
 }
 
 /**
@@ -55,51 +55,51 @@ export function 覆写开着(state: EditorState): boolean {
  * ——`delete` 那种范围会把右边那颗 emoji 拆成乱码。这一格只有六七行，
  * 但写错了就是"覆写模式下打一个字，旁边那个 emoji 变成方块"。
  */
-function 右边一颗(state: EditorState, 位置: number): string {
-  const $位 = state.doc.resolve(位置);
-  if (!$位.parent.inlineContent) return "";
-  const 起 = $位.parentOffset;
-  const 止 = 起 + 2;
-  if (起 >= $位.parent.content.size) return "";
-  const 两 = $位.parent.textBetween(起, Math.min(止, $位.parent.content.size), "");
-  if (两.length === 0) return "";
-  const 一 = 两.codePointAt(0);
-  if (一 === undefined) return "";
-  return String.fromCodePoint(一);
+function rightEdgeOneToken(state: EditorState, position2: number): string {
+  const position = state.doc.resolve(position2);
+  if (!position.parent.inlineContent) return "";
+  const start5 = position.parentOffset;
+  const end2 = start5 + 2;
+  if (start5 >= position.parent.content.size) return "";
+  const two2 = position.parent.textBetween(start5, Math.min(end2, position.parent.content.size), "");
+  if (two2.length === 0) return "";
+  const value = two2.codePointAt(0);
+  if (value === undefined) return "";
+  return String.fromCodePoint(value);
 }
 
 /** 覆写那一层。⚠️ 只有 `Insert` 与 `handleTextInput` 两条路，别加别的。 */
-export function 覆写插件(): Plugin<boolean> {
+export function coverWritePlugin(): Plugin<boolean> {
   return new Plugin<boolean>({
-    key: 覆写键,
+    key: coverWriteKey,
     state: {
       init: () => false,
-      apply(tr, 旧) {
+      apply(tr, oldValue) {
         // ⚠️ 开关只由**这一颗键**翻（meta），文档怎么变都不影响它。
-        const 翻 = tr.getMeta(覆写键) as boolean | undefined;
-        return 翻 === undefined ? 旧 : 翻;
+        const flip = tr.getMeta(coverWriteKey) as boolean | undefined;
+        return flip === undefined ? oldValue : flip;
       },
     },
     props: {
-      handleKeyDown(视图, 事件) {
-        if (事件.key !== "Insert") return false;
+      handleKeyDown(view, event) {
+        if (event.key !== "Insert") return false;
         // ⚠️ 组字期间不抢键（那时候 Insert 可能正在输入法里干活）。
-        if (视图.composing) return false;
-        const 新 = !覆写开着(视图.state);
-        视图.dispatch(视图.state.tr.setMeta(覆写键, 新).setMeta("addToHistory", false));
+        if (view.composing) return false;
+        const newValue = !coverWriteOpen(view.state);
+        view.dispatch(view.state.tr.setMeta(coverWriteKey, newValue).setMeta("addToHistory", false));
         return true;
       },
-      handleTextInput(视图, 从, 到, 文本) {
-        if (!覆写开着(视图.state)) return false;
+      handleTextInput(view, from, to2, text2) {
+        if (!coverWriteOpen(view.state)) return false;
         // 组字期间 / 一次上屏好几个字（输入法）/ 换行：都交给上游照常插入。
-        if (视图.composing) return false;
-        if (文本.length === 0 || 文本.length > 1 || 文本.includes("\n")) return false;
-        const { selection } = 视图.state;
-        if (!selection.empty || 从 !== 到) return false;
-        const 顶 = 右边一颗(视图.state, 从);
-        if (顶 === "") return false; // 行尾：没东西可顶，照常插入
-        const 事务 = 视图.state.tr.insertText(文本, 从, 到 + 顶.length);
-        视图.dispatch(事务);
+        if (view.composing) return false;
+        if (text2.length === 0 || text2.length > 1 || text2.includes("\n")) return false;
+        const { selection } = view.state;
+        if (!selection.empty || from !== to2) return false;
+        const top = rightEdgeOneToken(view.state, from);
+        if (top === "") return false; // 行尾：没东西可顶，照常插入
+        const transaction = view.state.tr.insertText(text2, from, to2 + top.length);
+        view.dispatch(transaction);
         return true;
       },
     },

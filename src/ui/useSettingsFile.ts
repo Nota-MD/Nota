@@ -26,20 +26,20 @@ import { api, type Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 设置文件接线 {
+export interface settingsFileWiring {
   /** 把整份设置写回内存（不落盘——落盘后端已经做完了）。 */
   setSettings: (settings: Settings) => void;
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
-export interface 设置文件出口 {
+export interface settingsFileApi {
   /** 打开设置文件所在的目录（一般是 `~/.config/nota`）。 */
   openConfigDir: () => Promise<void>;
   /** 恢复出厂默认，并把新的一份写回内存。 */
   resetSettings: () => Promise<void>;
 }
 
-export function useSettingsFile(w: 设置文件接线): 设置文件出口 {
+export function useSettingsFile(w: settingsFileWiring): settingsFileApi {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();

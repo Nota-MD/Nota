@@ -45,7 +45,7 @@ export interface PrintRequest {
 }
 
 /** 纸上那几项。⚠️ 值是给宿主认的短名（`print_job.rs::纸张尺寸`）。 */
-const 纸张表 = ["a4", "a5", "b5", "letter", "legal"] as const;
+const paperTable = ["a4", "a5", "b5", "letter", "legal"] as const;
 
 export function PrintDialog({
   request,
@@ -55,151 +55,153 @@ export function PrintDialog({
   onClose: () => void;
 }) {
   const t = useT();
-  const 框 = useRef<HTMLDivElement>(null);
-  useModalTrap(框, { onEscape: onClose });
+  const box2 = useRef<HTMLDivElement>(null);
+  useModalTrap(box2, { onEscape: onClose });
 
-  const [打印环境, 设打印环境] = useState<PrintEnvironment | null>(null);
-  const [打印机, 设打印机] = useState("");
-  const [纸张, 设纸张] = useState<string>("a4");
-  const [横向, 设横向] = useState(false);
-  const [边距, 设边距] = useState(12);
-  const [份数, 设份数] = useState(1);
-  const [范围, 设范围] = useState("");
+  const [printEnvironment, setPrintEnvironment] = useState<PrintEnvironment | null>(null);
+  const [printer, setPrinter] = useState("");
+  const [paper, setPaper] = useState<string>("a4");
+  const [horizontalToward, setHorizontalToward] = useState(false);
+  const [edgeDistance, setEdgeDistance] = useState(12);
+  const [partNumber, setPartNumber] = useState(1);
+  const [scopeEnclose, setScopeEnclose] = useState("");
 
-  const [预览, 设预览] = useState<PrintPreview | null>(null);
-  const [第几页, 设第几页] = useState(1);
-  const [忙, 设忙] = useState(false);
-  const [错, 设错] = useState<string | null>(null);
-  const [任务号, 设任务号] = useState<string | null>(null);
-  const [已存PDF, 设已存PDF] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PrintPreview | null>(null);
+  const [ordinalHowManyPage, setOrdinalHowManyPage] = useState(1);
+  const [busy, setBusy2] = useState(false);
+  const [error2, setError] = useState<string | null>(null);
+  const [taskTaskNumber, setTaskTaskNumber] = useState<string | null>(null);
+  const [savedPdf, setSavedPdf] = useState<string | null>(null);
   /** ⚠️ 见文件头最后一段：过期结果不许覆盖新的。 */
-  const 令牌 = useRef(0);
+  const commandCard = useRef(0);
 
   // ── 打印机（只拉一次）──────────────────────────────────────────────────
   useEffect(() => {
-    let 活 = true;
+    let active = true;
     void api.print
       .printers()
-      .then((环境) => {
-        if (!活) return;
-        设打印环境(环境);
-        const 默认 = 环境.printers.find((p) => p.is_default) ?? 环境.printers[0];
-        设打印机(默认?.name ?? "");
+      .then((ringEnvironment) => {
+        if (!active) return;
+        setPrintEnvironment(ringEnvironment);
+        const selectedPrinter =
+          ringEnvironment.printers.find((p) => p.is_default) ??
+          ringEnvironment.printers[0];
+        setPrinter(selectedPrinter?.name ?? "");
       })
       .catch(() => {
-        if (活)
-          设打印环境({
+        if (active)
+          setPrintEnvironment({
             cups_available: false,
             problem: null,
             printers: [],
           });
       });
     return () => {
-      活 = false;
+      active = false;
     };
   }, []);
 
   // ── 出 PDF ＋ 出预览（版面一变就重来，去抖 350ms）────────────────────────
   useEffect(() => {
-    const 我的 = ++令牌.current;
-    设忙(true);
-    设错(null);
-    const 计时 = window.setTimeout(() => {
+    const selfOf = ++commandCard.current;
+    setBusy2(true);
+    setError(null);
+    const countTime = window.setTimeout(() => {
       void api.print
         .prepare({
           html: request.html,
           baseDir: request.baseDir,
-          paper: 纸张,
-          landscape: 横向,
-          marginMm: 边距,
+          paper: paper,
+          landscape: horizontalToward,
+          marginMm: edgeDistance,
         })
-        .then((结果) => {
-          if (令牌.current !== 我的) return;
-          设预览(结果);
-          设第几页(1);
+        .then((result2) => {
+          if (commandCard.current !== selfOf) return;
+          setPreview(result2);
+          setOrdinalHowManyPage(1);
         })
         .catch((e) => {
-          if (令牌.current !== 我的) return;
-          设预览(null);
-          设错(String(e));
+          if (commandCard.current !== selfOf) return;
+          setPreview(null);
+          setError(String(e));
         })
         .finally(() => {
-          if (令牌.current === 我的) 设忙(false);
+          if (commandCard.current === selfOf) setBusy2(false);
         });
     }, 350);
-    return () => window.clearTimeout(计时);
-  }, [request, 纸张, 横向, 边距]);
+    return () => window.clearTimeout(countTime);
+  }, [request, paper, horizontalToward, edgeDistance]);
 
-  const 开打 = useCallback(async () => {
-    if (!预览 || !打印机) return;
-    设忙(true);
-    设错(null);
+  const start2 = useCallback(async () => {
+    if (!preview || !printer) return;
+    setBusy2(true);
+    setError(null);
     try {
-      const 号 = await api.print.send({
-        pdf: 预览.pdf,
-        printer: 打印机,
-        copies: 份数,
-        ranges: 范围.trim() || null,
+      const number = await api.print.send({
+        pdf: preview.pdf,
+        printer: printer,
+        copies: partNumber,
+        ranges: scopeEnclose.trim() || null,
       });
-      设任务号(号);
+      setTaskTaskNumber(number);
       // ⚠️ 停一下再关：任务号是这条路的**唯一凭证**，闪一下就走等于没给。
       window.setTimeout(onClose, 1200);
     } catch (e) {
-      设错(String(e));
-      设忙(false);
+      setError(String(e));
+      setBusy2(false);
     }
-  }, [预览, 打印机, 份数, 范围, onClose]);
+  }, [preview, printer, partNumber, scopeEnclose, onClose]);
 
-  const 系统开打 = useCallback(async () => {
-    设忙(true);
-    设错(null);
+  const systemSystemStart = useCallback(async () => {
+    setBusy2(true);
+    setError(null);
     try {
       await api.print.system({
         html: request.html,
         baseDir: request.baseDir,
-        paper: 纸张,
-        landscape: 横向,
-        marginMm: 边距,
+        paper: paper,
+        landscape: horizontalToward,
+        marginMm: edgeDistance,
       });
-      设任务号(t("System print dialog"));
+      setTaskTaskNumber(t("System print dialog"));
       window.setTimeout(onClose, 500);
     } catch (e) {
-      设错(String(e));
-      设忙(false);
+      setError(String(e));
+      setBusy2(false);
     }
-  }, [request, 纸张, 横向, 边距, onClose, t]);
+  }, [request, paper, horizontalToward, edgeDistance, onClose, t]);
 
-  const 另存PDF = useCallback(async () => {
-    if (!预览) return;
+  const savePdf = useCallback(async () => {
+    if (!preview) return;
     const target = await saveDialog({
       title: t("Save PDF"),
       defaultPath: `${request.title || "Nota"}.pdf`,
       filters: [{ name: "PDF", extensions: ["pdf"] }],
     });
     if (!target) return;
-    设忙(true);
-    设错(null);
+    setBusy2(true);
+    setError(null);
     try {
-      const 已存 = await api.print.savePdf(预览.pdf, target);
-      设已存PDF(已存);
+      const saved = await api.print.savePdf(preview.pdf, target);
+      setSavedPdf(saved);
     } catch (e) {
-      设错(String(e));
+      setError(String(e));
     } finally {
-      设忙(false);
+      setBusy2(false);
     }
-  }, [预览, request.title, t]);
+  }, [preview, request.title, t]);
 
-  const 总页 = 预览?.page_count ?? 0;
-  const 当前图 = 预览?.pages[第几页 - 1];
-  const 没CUPS = 打印环境 !== null && !打印环境.cups_available;
-  const 列表出错 = 打印环境?.problem != null;
-  const 没有打印机 = 打印环境 !== null && 打印环境.printers.length === 0;
-  const 走系统对话框 = 没CUPS || 列表出错 || 没有打印机;
+  const totalPage = preview?.page_count ?? 0;
+  const currentImage = preview?.pages[ordinalHowManyPage - 1];
+  const noCups = printEnvironment !== null && !printEnvironment.cups_available;
+  const listError = printEnvironment?.problem != null;
+  const noPrinter = printEnvironment !== null && printEnvironment.printers.length === 0;
+  const walkSystemSystemDialog = noCups || listError || noPrinter;
 
   return (
     <div className="print-backdrop" onMouseDown={onClose}>
       <div
-        ref={框}
+        ref={box2}
         className="print-dialog"
         role="dialog"
         aria-modal="true"
@@ -214,11 +216,11 @@ export function PrintDialog({
               比这块区域还高，`overflow: auto` 会把页码条一起滚出屏幕——
               而那正是"第几页 / 上一页"的家（2026-10-17 第一次开窗就撞上了）。 */}
           <div className="print-canvas">
-            {当前图 ? (
-              <img className="print-page" src={当前图} alt={t("Page {0} of {1}", 第几页, 总页)} />
+            {currentImage ? (
+              <img className="print-page" src={currentImage} alt={t("Page {0} of {1}", ordinalHowManyPage, totalPage)} />
             ) : (
               <div className="print-blank">
-                {忙 ? t("Preparing preview…") : 错 ? t("No preview") : t("Preparing preview…")}
+                {busy ? t("Preparing preview…") : error2 ? t("No preview") : t("Preparing preview…")}
               </div>
             )}
           </div>
@@ -226,26 +228,26 @@ export function PrintDialog({
             <button
               type="button"
               className="btn"
-              disabled={第几页 <= 1}
-              onClick={() => 设第几页((n) => Math.max(1, n - 1))}
+              disabled={ordinalHowManyPage <= 1}
+              onClick={() => setOrdinalHowManyPage((n) => Math.max(1, n - 1))}
               title={t("Previous page")}
             >
               ↑
             </button>
             <span className="print-count">
-              {预览 ? t("Page {0} of {1}", 第几页, 总页) : "—"}
+              {preview ? t("Page {0} of {1}", ordinalHowManyPage, totalPage) : "—"}
             </span>
             <button
               type="button"
               className="btn"
-              disabled={!预览 || 第几页 >= 预览.pages.length}
-              onClick={() => 设第几页((n) => Math.min(预览?.pages.length ?? 1, n + 1))}
+              disabled={!preview || ordinalHowManyPage >= preview.pages.length}
+              onClick={() => setOrdinalHowManyPage((n) => Math.min(preview?.pages.length ?? 1, n + 1))}
               title={t("Next page")}
             >
               ↓
             </button>
-            {预览?.truncated && (
-              <span className="print-hint">{t("Only the first {0} pages are previewed", 预览.pages.length)}</span>
+            {preview?.truncated && (
+              <span className="print-hint">{t("Only the first {0} pages are previewed", preview.pages.length)}</span>
             )}
           </div>
         </section>
@@ -256,30 +258,30 @@ export function PrintDialog({
 
           <label className="print-field">
             <span>{t("Printer")}</span>
-            {打印环境 === null ? (
+            {printEnvironment === null ? (
               <span className="print-hint">{t("Reading the printers…")}</span>
-            ) : 没CUPS ? (
+            ) : noCups ? (
               <span className="print-hint print-warning">
                 {t(
                   "CUPS was not found. You can still use “System print…” or export to PDF.",
                 )}
               </span>
-            ) : 列表出错 ? (
+            ) : listError ? (
               <span className="print-hint print-warning">
                 {t(
                   "CUPS is running, but the printer list request failed: {0}. “System print…” is still available.",
-                  打印环境.problem ?? "",
+                  printEnvironment.problem ?? "",
                 )}
               </span>
-            ) : 没有打印机 ? (
+            ) : noPrinter ? (
               <span className="print-hint print-warning">
                 {t(
                   "CUPS is running, but no printers are configured. You can still use “System print…” or export to PDF.",
                 )}
               </span>
             ) : (
-              <select value={打印机} onChange={(e) => 设打印机(e.target.value)}>
-                {打印环境.printers.map((p) => (
+              <select value={printer} onChange={(e) => setPrinter(e.target.value)}>
+                {printEnvironment.printers.map((p) => (
                   <option key={p.name} value={p.name}>
                     {p.name}
                     {p.is_default ? ` · ${t("default")}` : ""}
@@ -291,8 +293,8 @@ export function PrintDialog({
 
           <label className="print-field">
             <span>{t("Paper")}</span>
-            <select value={纸张} onChange={(e) => 设纸张(e.target.value)}>
-              {纸张表.map((v) => (
+            <select value={paper} onChange={(e) => setPaper(e.target.value)}>
+              {paperTable.map((v) => (
                 <option key={v} value={v}>
                   {v.toUpperCase()}
                 </option>
@@ -303,8 +305,8 @@ export function PrintDialog({
           <label className="print-field">
             <span>{t("Orientation")}</span>
             <select
-              value={横向 ? "landscape" : "portrait"}
-              onChange={(e) => 设横向(e.target.value === "landscape")}
+              value={horizontalToward ? "landscape" : "portrait"}
+              onChange={(e) => setHorizontalToward(e.target.value === "landscape")}
             >
               <option value="portrait">{t("Portrait")}</option>
               <option value="landscape">{t("Landscape")}</option>
@@ -318,8 +320,8 @@ export function PrintDialog({
               min={0}
               max={60}
               step={1}
-              value={边距}
-              onChange={(e) => 设边距(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
+              value={edgeDistance}
+              onChange={(e) => setEdgeDistance(Math.max(0, Math.min(60, Number(e.target.value) || 0)))}
             />
           </label>
 
@@ -329,8 +331,8 @@ export function PrintDialog({
               type="number"
               min={1}
               max={99}
-              value={份数}
-              onChange={(e) => 设份数(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
+              value={partNumber}
+              onChange={(e) => setPartNumber(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
             />
           </label>
 
@@ -339,14 +341,14 @@ export function PrintDialog({
             <input
               type="text"
               placeholder="1-3, 5"
-              value={范围}
-              onChange={(e) => 设范围(e.target.value)}
+              value={scopeEnclose}
+              onChange={(e) => setScopeEnclose(e.target.value)}
             />
           </label>
 
-          {错 && <p className="print-error">{错}</p>}
-          {已存PDF && <p className="print-ok">{t("Saved PDF: {0}", 已存PDF)}</p>}
-          {任务号 && <p className="print-ok">{t("Sent to the printer: {0}", 任务号)}</p>}
+          {error2 && <p className="print-error">{error2}</p>}
+          {savedPdf && <p className="print-ok">{t("Saved PDF: {0}", savedPdf)}</p>}
+          {taskTaskNumber && <p className="print-ok">{t("Sent to the printer: {0}", taskTaskNumber)}</p>}
 
           <div className="print-actions">
             <button type="button" className="btn" onClick={onClose}>
@@ -354,19 +356,19 @@ export function PrintDialog({
             </button>
             <button
               type="button"
-              className={走系统对话框 ? "btn btn-primary" : "btn"}
-              disabled={忙 || !预览}
-              onClick={() => void 另存PDF()}
+              className={walkSystemSystemDialog ? "btn btn-primary" : "btn"}
+              disabled={busy || !preview}
+              onClick={() => void savePdf()}
             >
               {t("Save PDF…")}
             </button>
             <button
               type="button"
-              className={走系统对话框 ? "btn" : "btn btn-primary"}
-              disabled={忙 || 任务号 !== null || (!走系统对话框 && (!预览 || !打印机))}
-              onClick={() => void (走系统对话框 ? 系统开打() : 开打())}
+              className={walkSystemSystemDialog ? "btn" : "btn btn-primary"}
+              disabled={busy || taskTaskNumber !== null || (!walkSystemSystemDialog && (!preview || !printer))}
+              onClick={() => void (walkSystemSystemDialog ? systemSystemStart() : start2())}
             >
-              {走系统对话框 ? t("System print…") : t("Print")}
+              {walkSystemSystemDialog ? t("System print…") : t("Print")}
             </button>
           </div>
         </section>

@@ -38,44 +38,44 @@
 import { Schema } from "@milkdown/kit/prose/model";
 import type { MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
 import { emphasisSchema, inlineCodeSchema, strongSchema } from "@milkdown/preset-commonmark";
-import { 扫一段, 提示表 } from "../src/editor/mark-hint";
+import { scanOneParagraph, splitMarkCharacter, noticeTable } from "../src/editor/mark-hint";
 
 /* ── 极小的测试工装（与 `math-view.test.ts` 同一套长相）───────────────── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 断言(条件: unknown, 说明: string): void {
-  if (!条件) throw new Error(说明);
+function assertion(condition: unknown, description: string): void {
+  if (!condition) throw new Error(description);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
-function 含(实际: string, 片段: string, 说明: string): void {
-  if (!实际.includes(片段)) {
-    throw new Error(`${说明}：${JSON.stringify(实际)} 里没有 ${JSON.stringify(片段)}`);
+function contains(actual: string, fragment: string, description: string): void {
+  if (!actual.includes(fragment)) {
+    throw new Error(`${description}：${JSON.stringify(actual)} 里没有 ${JSON.stringify(fragment)}`);
   }
 }
 
@@ -96,9 +96,9 @@ const schema = new Schema({
   },
 });
 
-const 强 = schema.marks.strong as MarkType;
-const 斜 = schema.marks.em as MarkType;
-const 段 = schema.nodes.paragraph;
+const strong = schema.marks.strong as MarkType;
+const slant = schema.marks.em as MarkType;
+const paragraph2 = schema.nodes.paragraph;
 
 /**
  * 拼一段：`甲 **一一一** 乙` 这种。`片段` 里每项是"文字 + 带哪些 mark"。
@@ -106,169 +106,169 @@ const 段 = schema.nodes.paragraph;
  * ⚠️ 文本节点**只能**走 `schema.text()`——`schema.nodes.text.create(...)`
  * 会抛 `NodeType.create can't construct text nodes`（第一次跑就撞上了）。
  */
-function 拼(片段: readonly (readonly [string, readonly MarkType[]])[]): PMNode {
-  const 块: PMNode[] = 片段.map(([字, 标记]) => schema.text(字, 标记.map((m) => m.create())));
-  return schema.nodes.doc.create(null, 段.create(null, 块));
+function combine2(fragment: readonly (readonly [string, readonly MarkType[]])[]): PMNode {
+  const block: PMNode[] = fragment.map(([character2, mark]) => schema.text(character2, mark.map((m) => m.create())));
+  return schema.nodes.doc.create(null, paragraph2.create(null, block));
 }
 
 /** 这一段的**内容**从哪个位置开始（绝对位置 1：doc 里第 0 个段落的内容起点）。 */
-const 块首 = 1;
+const blockFirst = 1;
 
 /** 把"相对块首的偏移"翻成绝对位置。 */
-function 处(偏移: number): number {
-  return 块首 + 偏移;
+function place(offset: number): number {
+  return blockFirst + offset;
 }
 
 /** 把 `扫一段` 的结果翻成"相对块首的 [从, 到)"，好读。 */
-function 扫(doc: PMNode, 偏移: number, 类型: MarkType): [number, number] | null {
-  const 段界 = 扫一段(doc, 处(偏移), 类型);
-  return 段界 ? [段界.从 - 块首, 段界.到 - 块首] : null;
+function scan(doc: PMNode, offset: number, type: MarkType): [number, number] | null {
+  const paragraphBoundary = scanOneParagraph(doc, place(offset), type);
+  return paragraphBoundary ? [paragraphBoundary.from - blockFirst, paragraphBoundary.to2 - blockFirst] : null;
 }
 
 /** 把结果写成好读的字符串，失败信息里能一眼看出窗口挪到哪儿去了。 */
-function 显示(结果: [number, number] | null): string {
-  return 结果 ? `[${结果[0]}, ${结果[1]})` : "null";
+function show(result2: [number, number] | null): string {
+  return result2 ? `[${result2[0]}, ${result2[1]})` : "null";
 }
 
 /* ── 用例 ─────────────────────────────────────────────────────────────── */
 
-组("一、光标落在加粗段**里面**：整段两头都要包住");
+group("一、光标落在加粗段**里面**：整段两头都要包住");
 
 //  位置: 0   1   2   3   4   5   6   7
 //        │   一   二   三   四   五   │
 //       甲   └─────── strong ──────┘   乙
 //  上面那一行是**位置**（`位置` 落在哪个字符之前），不是字符本身。
 //  ⚠️ 别照"第几个字"数偏移——`甲  前` 那种带空格的写法上一次就是在这里数错了一位。
-const 长加粗 = 拼([
+const lengthAddCoarse = combine2([
   ["甲", []],
-  ["一二三四五", [强]],
+  ["一二三四五", [strong]],
   ["乙", []],
 ]);
-const 整段: [number, number] = [1, 6];
+const wholeParagraph: [number, number] = [1, 6];
 
-测("光标在段首那个字之前（位置 1，紧贴段首）→ 整段", () => {
-  等(显示(扫(长加粗, 1, 强)), 显示(整段), "紧贴段首也算落在里面");
+testCase("光标在段首那个字之前（位置 1，紧贴段首）→ 整段", () => {
+  equal(show(scan(lengthAddCoarse, 1, strong)), show(wholeParagraph), "紧贴段首也算落在里面");
 });
 
-测("光标在段中间（位置 3）→ 整段", () => {
+testCase("光标在段中间（位置 3）→ 整段", () => {
   //  ⚠️ 这一格就是 2026-09-26 无头目检里复发的那一处：曾经答 [2, 7)
   //     （两端各右移一格，右端还吃掉了「乙」）。
-  等(显示(扫(长加粗, 3, 强)), 显示(整段), "曾经答 [2, 7)");
+  equal(show(scan(lengthAddCoarse, 3, strong)), show(wholeParagraph), "曾经答 [2, 7)");
 });
 
-测("光标在段尾那个字之后（位置 6，紧贴段尾）→ 整段", () => {
+testCase("光标在段尾那个字之后（位置 6，紧贴段尾）→ 整段", () => {
   // ⚠️ 这一格 2026-10-05 当天**翻过去又翻回来**：先改成"不画"，被用户拿 Typora
   //    的两张图推翻——**那边是照常显示的**，光标能在右符号两侧移动（`docs/07` BUG-65）。
   //    真正要改的是**画法**（右符号走 widget ＋ `side:-1`），不是"躲开不画"。
-  等(显示(扫(长加粗, 6, 强)), 显示(整段), "刚打完 `**粗**` 时就是这个位置");
+  equal(show(scan(lengthAddCoarse, 6, strong)), show(wholeParagraph), "刚打完 `**粗**` 时就是这个位置");
 });
 
-测("四个内部位置逐个走一遍，答案都一样", () => {
-  for (const 位 of [1, 2, 3, 4, 5, 6]) {
-    等(显示(扫(长加粗, 位, 强)), 显示(整段), `位置 ${位}`);
+testCase("四个内部位置逐个走一遍，答案都一样", () => {
+  for (const position3 of [1, 2, 3, 4, 5, 6]) {
+    equal(show(scan(lengthAddCoarse, position3, strong)), show(wholeParagraph), `位置 ${position3}`);
   }
 });
 
-组("二、光标不在这一段里 → 什么都不显示");
+group("二、光标不在这一段里 → 什么都不显示");
 
-测("光标在段首那个字**之前**（位置 0）→ null", () => {
-  等(显示(扫(长加粗, 0, 强)), "null", "位置 0 在「甲」之前");
+testCase("光标在段首那个字**之前**（位置 0）→ null", () => {
+  equal(show(scan(lengthAddCoarse, 0, strong)), "null", "位置 0 在「甲」之前");
 });
 
-测("光标在段尾那个字**之后**（位置 7，块尾）→ null", () => {
-  等(显示(扫(长加粗, 7, 强)), "null", "位置 7 在「乙」之后，不属于任何字符");
+testCase("光标在段尾那个字**之后**（位置 7，块尾）→ null", () => {
+  equal(show(scan(lengthAddCoarse, 7, strong)), "null", "位置 7 在「乙」之后，不属于任何字符");
 });
 
-测("光标在段后面那个普通字之后 → null", () => {
+testCase("光标在段后面那个普通字之后 → null", () => {
   //  位置 6 是"紧贴段尾"（算），位置 7 是"跨过「乙」之后"（不算）——
   //  这两条差一格，正是最容易糊在一起的地方。
-  等(显示(扫(长加粗, 6, 强)), 显示(整段), "位置 6 算");
-  等(显示(扫(长加粗, 7, 强)), "null", "位置 7 不算");
+  equal(show(scan(lengthAddCoarse, 6, strong)), show(wholeParagraph), "位置 6 算");
+  equal(show(scan(lengthAddCoarse, 7, strong)), "null", "位置 7 不算");
 });
 
-组("三、⚠️ 两端各有一个紧邻的另一段标记（最容易差一格）");
+group("三、⚠️ 两端各有一个紧邻的另一段标记（最容易差一格）");
 
 //  位置: 0   1   2   3   4   5   6
 //       甲   一   二   三   乙   丙
 //           └ strong ┘   └ strong ┘   ← 中间隔着「三」这个不带标记的字
-const 两段加粗 = 拼([
+const twoParagraphsAddCoarse = combine2([
   ["甲", []],
-  ["一二", [强]],
+  ["一二", [strong]],
   ["三", []],
-  ["乙丙", [强]],
+  ["乙丙", [strong]],
 ]);
 
-测("光标在一段里时，**不许**越过中间那个不带标记的字", () => {
-  等(显示(扫(两段加粗, 1, 强)), "[1, 3)", "第一段（紧贴段首）");
-  等(显示(扫(两段加粗, 2, 强)), "[1, 3)", "第一段中间");
-  等(显示(扫(两段加粗, 3, 强)), "[1, 3)", "第一段的段尾那一处");
-  等(显示(扫(两段加粗, 4, 强)), "[4, 6)", "第二段（紧贴段首）");
-  等(显示(扫(两段加粗, 6, 强)), "[4, 6)", "第二段的段尾那一处");
+testCase("光标在一段里时，**不许**越过中间那个不带标记的字", () => {
+  equal(show(scan(twoParagraphsAddCoarse, 1, strong)), "[1, 3)", "第一段（紧贴段首）");
+  equal(show(scan(twoParagraphsAddCoarse, 2, strong)), "[1, 3)", "第一段中间");
+  equal(show(scan(twoParagraphsAddCoarse, 3, strong)), "[1, 3)", "第一段的段尾那一处");
+  equal(show(scan(twoParagraphsAddCoarse, 4, strong)), "[4, 6)", "第二段（紧贴段首）");
+  equal(show(scan(twoParagraphsAddCoarse, 6, strong)), "[4, 6)", "第二段的段尾那一处");
 });
 
-组("四、一个 mark 都没有的段落 → null（不许报错）");
+group("四、一个 mark 都没有的段落 → null（不许报错）");
 
-const 无标记 = 拼([["甲 乙 丙", []]]);
+const withoutMark = combine2([["甲 乙 丙", []]]);
 
-测("普通段落里问加粗 → null", () => {
-  for (const 位 of [0, 2, 5]) 等(显示(扫(无标记, 位, 强)), "null", `位置 ${位}`);
+testCase("普通段落里问加粗 → null", () => {
+  for (const position3 of [0, 2, 5]) equal(show(scan(withoutMark, position3, strong)), "null", `位置 ${position3}`);
 });
 
-组("五、整段都是加粗（块首 / 块尾那两个边界）");
+group("五、整段都是加粗（块首 / 块尾那两个边界）");
 
-const 全加粗 = 拼([["一二三", [强]]]);
+const allBold = combine2([["一二三", [strong]]]);
 
-测("整段加粗：块首和块尾都算在里面", () => {
-  等(显示(扫(全加粗, 0, 强)), "[0, 3)", "块首");
-  等(显示(扫(全加粗, 2, 强)), "[0, 3)", "中间");
-  等(显示(扫(全加粗, 3, 强)), "[0, 3)", "块尾");
+testCase("整段加粗：块首和块尾都算在里面", () => {
+  equal(show(scan(allBold, 0, strong)), "[0, 3)", "块首");
+  equal(show(scan(allBold, 2, strong)), "[0, 3)", "中间");
+  equal(show(scan(allBold, 3, strong)), "[0, 3)", "块尾");
 });
 
-组("六、又粗又斜（两个 mark 叠在同一段上）");
+group("六、又粗又斜（两个 mark 叠在同一段上）");
 
-const 又粗又斜 = 拼([
+const againCoarseAgainSlant = combine2([
   ["甲", []],
-  ["一二三", [强, 斜]],
+  ["一二三", [strong, slant]],
   ["乙", []],
 ]);
 
-测("两个 mark 各扫各的，扫出来的是**同一段**", () => {
-  等(显示(扫(又粗又斜, 2, 强)), "[1, 4)", "粗");
-  等(显示(扫(又粗又斜, 2, 斜)), "[1, 4)", "斜");
+testCase("两个 mark 各扫各的，扫出来的是**同一段**", () => {
+  equal(show(scan(againCoarseAgainSlant, 2, strong)), "[1, 4)", "粗");
+  equal(show(scan(againCoarseAgainSlant, 2, slant)), "[1, 4)", "斜");
 });
 
-测("只带一个 mark 的段：另一个 mark 问出来是 null", () => {
+testCase("只带一个 mark 的段：另一个 mark 问出来是 null", () => {
   //  ⚠️ 这只是"两个 mark 各自扫出来是同一段"的**逻辑**侧。两个装饰落在
   //     同一段上时，ProseMirror 会把它们并成一颗 span、属性只剩一个赢家，
   //     所以 `***又粗又斜***` 画不出 `***`（画出来的长相见 `mark-hint.ts` 文件头）。
-  等(显示(扫(长加粗, 3, 斜)), "null", "只有 strong，问 em 应该没有");
+  equal(show(scan(lengthAddCoarse, 3, slant)), "null", "只有 strong，问 em 应该没有");
 });
 
-组("七、行内原子（公式 / 图片）占一格、且一律不带标记");
+group("七、行内原子（公式 / 图片）占一格、且一律不带标记");
 
 //  位置: 0   1   2   3
 //       甲   [原子]   乙
 //  上面是**位置**；`乙` 落在位置 2 到 3 之间那一格，所以它是偏移 2。
 //  「原子」占一格（位置 1 到 2 之间），本身带不了 mark。
-const 带原子 = schema.nodes.doc.create(
+const withOriginalChild = schema.nodes.doc.create(
   null,
-  段.create(null, [
+  paragraph2.create(null, [
     schema.text("甲"),
     schema.nodes.atom.create(null),
-    schema.text("乙", [强.create()]),
+    schema.text("乙", [strong.create()]),
   ]),
 );
 
-测("问加粗：只扫出「乙」，原子不会被算进去", () => {
-  等(显示(扫(带原子, 3, 强)), "[2, 3)", "位置 3 紧贴在「乙」之后（段尾）");
-  等(显示(扫(带原子, 2, 强)), "[2, 3)", "位置 2 是「乙」的段首");
+testCase("问加粗：只扫出「乙」，原子不会被算进去", () => {
+  equal(show(scan(withOriginalChild, 3, strong)), "[2, 3)", "位置 3 紧贴在「乙」之后（段尾）");
+  equal(show(scan(withOriginalChild, 2, strong)), "[2, 3)", "位置 2 是「乙」的段首");
 });
 
-测("问加粗：原子自己那一格不算（它是节点不是字）", () => {
-  等(显示(扫(带原子, 1, 强)), "null", "位置 1 是原子的起点");
+testCase("问加粗：原子自己那一格不算（它是节点不是字）", () => {
+  equal(show(scan(withOriginalChild, 1, strong)), "null", "位置 1 是原子的起点");
 });
 
-组("八、⚠️ 提示表里的 mark 名字要和**真 preset** 对得上");
+group("八、⚠️ 提示表里的 mark 名字要和**真 preset** 对得上");
 
 /**
  * 从 preset 导出的那一片里抠出 mark 的 id。
@@ -279,60 +279,71 @@ const 带原子 = schema.nodes.doc.create(
  * 这一条会红，那时候改的是这个函数，**不是删掉这一组用例**：
  * 它挡的是"名字写错、提示悄悄不出现"这种没有任何报错的坏法。
  */
-function 抠名字(片: { key?: { id?: unknown } }): string {
-  const 原 = String(片.key?.id);
-  const 命中 = /Context-(.*)\)$/.exec(原);
-  if (!命中) throw new Error(`认不出这个 ctx key 里的 mark 名：${原}`);
-  return 命中[1] as string;
+function pickName(slice: { key?: { id?: unknown } }): string {
+  const original = String(slice.key?.id);
+  const match = /Context-(.*)\)$/.exec(original);
+  if (!match) throw new Error(`认不出这个 ctx key 里的 mark 名：${original}`);
+  return match[1] as string;
 }
 
-const 真名 = new Set([
-  抠名字(strongSchema as unknown as { key?: { id?: unknown } }),
-  抠名字(emphasisSchema as unknown as { key?: { id?: unknown } }),
-  抠名字(inlineCodeSchema as unknown as { key?: { id?: unknown } }),
+const assertValueName = new Set([
+  pickName(strongSchema as unknown as { key?: { id?: unknown } }),
+  pickName(emphasisSchema as unknown as { key?: { id?: unknown } }),
+  pickName(inlineCodeSchema as unknown as { key?: { id?: unknown } }),
 ]);
 
-测("先把 preset 的 id 认对（认错的话下面那两条就是假的）", () => {
-  等([...真名].sort().join("、"), "emphasis、inlineCode、strong", "preset 里这三个 mark 的 id");
+testCase("先把 preset 的 id 认对（认错的话下面那两条就是假的）", () => {
+  equal([...assertValueName].sort().join("、"), "emphasis、inlineCode、strong", "preset 里这三个 mark 的 id");
 });
 
-测("每一个名字都是当前 schema 真有的 mark id", () => {
+testCase("每一个名字都是当前 schema 真有的 mark id", () => {
   //  ⚠️ 这一组是**唯一**能挡住"名字写错、提示悄悄不出现"的东西。
   //     2026-09-26 就是这么错的：斜体写成 `"em"`，而 preset 里的 id 是
   //     `"emphasis"`——加粗的 `**` 出来了，斜体的 `*` 死活不出来，不报错。
-  for (const { 名, 左, 右 } of 提示表) {
-    断言(
-      真名.has(名) || ["strike_through", "highlight", "superscript", "subscript", "underline"].includes(名),
-      `提示表里的「${名}」（画 ${左}…${右}）不是已知 mark id`,
+  for (const { name3, left, right } of noticeTable) {
+    assertion(
+      assertValueName.has(name3) || ["strike_through", "highlight", "superscript", "subscript", "underline"].includes(name3),
+      `提示表里的「${name3}」（画 ${left}…${right}）不是已知 mark id`,
     );
   }
 });
 
-测("`em` 那种写法确实不在 preset 里（把这一课钉住）", () => {
-  断言(!真名.has("em"), "`em` 不该是 preset 的 mark id——它是 `emphasis`");
+testCase("`em` 那种写法确实不在 preset 里（把这一课钉住）", () => {
+  assertion(!assertValueName.has("em"), "`em` 不该是 preset 的 mark id——它是 `emphasis`");
 });
 
-测("所有行内标记都有真实左右符号，包括 `==`、`~~`、反引号与上下标", () => {
-  const 符号 = 提示表.map((行) => `${行.左}${行.右}`).join(" ");
-  含(符号, "****", "加粗");
-  含(符号, "**", "斜体");
-  含(符号, "``", "行内代码");
-  含(符号, "~~~~", "删除线");
-  含(符号, "====", "高亮");
-  含(符号, "^^", "上标");
-  含(符号, "~~", "下标");
-  含(符号, "<u></u>", "下划线");
+testCase("所有行内标记都有真实左右符号，包括 `==`、`~~`、反引号与上下标", () => {
+  const symbolNumber = noticeTable.map((line3) => `${line3.left}${line3.right}`).join(" ");
+  contains(symbolNumber, "****", "加粗");
+  contains(symbolNumber, "**", "斜体");
+  contains(symbolNumber, "``", "行内代码");
+  contains(symbolNumber, "~~~~", "删除线");
+  contains(symbolNumber, "====", "高亮");
+  contains(symbolNumber, "^^", "上标");
+  contains(symbolNumber, "~~", "下标");
+  contains(symbolNumber, "<u></u>", "下划线");
+});
+
+testCase("多字符标记拆成独立字符，`**` 不是一颗不可分的文字块", () => {
+  equal(splitMarkCharacter("**").join("|"), "*|*", "加粗开闭符号");
+  equal(splitMarkCharacter("<u>").join("|"), "<|u|>", "下划线开符号");
+  equal(splitMarkCharacter("</u>").join("|"), "<|/|u|>", "下划线闭符号");
+  for (const { left, right } of noticeTable) {
+    for (const character of [...splitMarkCharacter(left), ...splitMarkCharacter(right)]) {
+      equal(Array.from(character).length, 1, `${left} / ${right} 里有非单字符项`);
+    }
+  }
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) {
-  console.log(`失败的：\n  - ${败的.join("\n  - ")}`);
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) {
+  console.log(`失败的：\n  - ${failed.join("\n  - ")}`);
   process.exitCode = 1;
 }
 
 // ℹ️ 这份文件里 `断言` 只有个别用例用得上（大部分是"等"），留着是为了与
 //    `math-view.test.ts` 同一套工装长相——别因为"没人用"就删掉。
-void 断言;
+void assertion;

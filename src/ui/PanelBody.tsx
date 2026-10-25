@@ -21,8 +21,8 @@
 import { useState } from "react";
 
 import { useT } from "@/i18n";
-import { 推纵刻度, 格式化数 } from "@/ui/chart-ticks";
-import { 问参数 } from "@/ui/plugin-prompt";
+import { pushVerticalTick, formatNumber } from "@/ui/chart-ticks";
+import { askParameter } from "@/ui/plugin-prompt";
 // ⚠️ 分享图那一块（`kind: "share"`）2026-09-27 搬去了 `ui/ShareCard.tsx`：
 // 强制专注的总结框要共用同一份"存/复制"实现，而那个框不是面板、够不着本文件的
 // 私有组件。`.panel-share*` 那几个类名没变（仍在 `share.css`）。
@@ -82,14 +82,14 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
    * 在 `ui/plugin-prompt.ts`，与插件**菜单项**那条路共用同一份实现——
    * 写两遍就会漂，漂的那一半是"把空串当参数发出去"这种不报错的毛病。
    */
-  const 点按钮 = async (b: Extract<PanelNode, { kind: "buttons" }>["items"][number]) => {
+  const pointPressButton = async (b: Extract<PanelNode, { kind: "buttons" }>["items"][number]) => {
     if (b.disabled || busy || !b.command) return;
 
     // 用户取消 → `null` → 到此为止（`plugin-prompt.ts` 里写着理由）。
-    const 问 = await 问参数({ prompt: b.prompt, askPrompt, args: b.args, title: b.label });
-    if (!问) return;
+    const ask = await askParameter({ prompt: b.prompt, askPrompt, args: b.args, title: b.label });
+    if (!ask) return;
 
-    await onCall(plugin, b.command, 问.args);
+    await onCall(plugin, b.command, ask.args);
   };
 
   /**
@@ -99,7 +99,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
    * 的动作（`panel-nodes.ts::PanelAction` 写着这条）。`busy` 时同样不理，
    * 因为树上的键一按就是一次 git 调用。
    */
-  const 点动作 = (a: PanelAction) => {
+  const pointAction = (a: PanelAction) => {
     if (busy) return;
     void onCall(plugin, a.command, a.args);
   };
@@ -160,15 +160,15 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                 {node.items.map((b, j) => {
                   // 没写 `command` 的按钮**画成灰的**，而不是消失：
                   // 它摆在那儿是给插件作者看的信号（"这里少写了一根线"）。
-                  const 灰 = b.disabled || busy !== null || !b.command;
+                  const disabled2 = b.disabled || busy !== null || !b.command;
                   return (
                     <button
                       key={j}
                       type="button"
                       className={`btn panel-btn${b.style === "normal" ? "" : ` btn-${b.style}`}`}
-                      disabled={灰}
+                      disabled={disabled2}
                       title={b.command ? undefined : t("This button has no `command`, so clicking it does nothing")}
-                      onClick={() => void 点按钮(b)}
+                      onClick={() => void pointPressButton(b)}
                     >
                       {b.label || b.command}
                     </button>
@@ -212,7 +212,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                       className="panel-tab-pick"
                       disabled={busy !== null || !tb.pick}
                       title={tb.pick?.title || undefined}
-                      onClick={() => tb.pick && 点动作(tb.pick)}
+                      onClick={() => tb.pick && pointAction(tb.pick)}
                     >
                       {tb.label}
                     </button>
@@ -224,7 +224,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                         // ⚠️ 没有 `title` 时用宿主自己那句「关闭」：这颗叉是**宿主
                         // 画的**，插件没给话就由宿主说一句，不是留个没有名字的按钮。
                         title={tb.close.title || t("Close")}
-                        onClick={() => 点动作(tb.close!)}
+                        onClick={() => pointAction(tb.close!)}
                       >
                         ×
                       </button>
@@ -237,7 +237,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                     className="panel-tab-new"
                     disabled={busy !== null}
                     title={node.act.title || undefined}
-                    onClick={() => 点动作(node.act!)}
+                    onClick={() => pointAction(node.act!)}
                   >
                     ＋
                   </button>
@@ -272,7 +272,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
               <div key={i} className="panel-graph">
                 {node.items.map((l, j) => (
                   // ⚠️ 和别的块一样用下标当 key（理由同上面那段：这一串没有身份）。
-                  <GraphRow key={j} line={l} disabled={busy !== null} onPress={点动作} />
+                  <GraphRow key={j} line={l} disabled={busy !== null} onPress={pointAction} />
                 ))}
               </div>
             );
@@ -301,7 +301,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                 key={i}
                 spec={node.spec}
                 disabled={busy !== null}
-                onSubmit={(值) => onCall(plugin, node.spec.submit, { [node.spec.arg]: 值 })}
+                onSubmit={(value2) => onCall(plugin, node.spec.submit, { [node.spec.arg]: value2 })}
                 onCommand={(c, args) => void onCall(plugin, c, args)}
               />
             );
@@ -384,18 +384,18 @@ function GraphRow({
   disabled: boolean;
   onPress: (a: PanelAction) => void;
 }) {
-  const 键 = line.bond;
-  const 字 = line.pick;
+  const key = line.bond;
+  const character2 = line.pick;
 
   return (
     <div className={`pg-row tone-${line.tone}${line.picked ? " is-picked" : ""}`}>
-      {键 ? (
+      {key ? (
         <button
           type="button"
           className="pg-art"
-          title={键.title || undefined}
+          title={key.title || undefined}
           disabled={disabled}
-          onClick={() => onPress(键)}
+          onClick={() => onPress(key)}
         >
           {line.art}
         </button>
@@ -403,15 +403,15 @@ function GraphRow({
         <span className="pg-art">{line.art}</span>
       )}
 
-      {字 ? (
+      {character2 ? (
         <button
           type="button"
           className="pg-text"
           // `title` 里放**整串字**：这一栏只有 260px，长标题会被截断
           //（`dock.css` 的 `text-overflow`），鼠标停上去得能看到全的。
-          title={字.title || line.text}
+          title={character2.title || line.text}
           disabled={disabled}
-          onClick={() => onPress(字)}
+          onClick={() => onPress(character2)}
         >
           {line.text}
         </button>
@@ -450,21 +450,21 @@ function PanelInput({
 }: {
   spec: PanelInputSpec;
   disabled: boolean;
-  onSubmit: (值: string) => Promise<void>;
+  onSubmit: (value2: string) => Promise<void>;
   /** 跑输入框里那排小按钮各自的命令（与 `buttons` 那条路同一件事）。 */
   onCommand: (command: string, args?: unknown) => void;
 }) {
   // ⚠️ 这是**另一个组件**，`PanelBody` 里那个 `t` 它够不着，得自己订阅一次
   // （`useT` 是 hook，不能在两个组件之间借用）。
   const t = useT();
-  const [草稿, set草稿] = useState("");
-  const 灰 = disabled || !spec.submit || !spec.arg;
+  const [draftDraft, setDraftDraft] = useState("");
+  const disabled2 = disabled || !spec.submit || !spec.arg;
 
-  const 发 = () => {
-    const 值 = 草稿.trim();
-    if (灰 || !值) return;
-    set草稿("");
-    void onSubmit(值);
+  const send = () => {
+    const value2 = draftDraft.trim();
+    if (disabled2 || !value2) return;
+    setDraftDraft("");
+    void onSubmit(value2);
   };
 
   return (
@@ -474,16 +474,16 @@ function PanelInput({
           <textarea
             className="panel-input-box"
             rows={3}
-            value={草稿}
+            value={draftDraft}
             placeholder={spec.placeholder}
-            disabled={灰}
-            onChange={(e) => set草稿(e.target.value)}
+            disabled={disabled2}
+            onChange={(e) => setDraftDraft(e.target.value)}
             // 多行框用 `Ctrl/Cmd+Enter` 发：回车在这个框里是**换行**，
             // 否则一段话永远打不完（发出去的都是第一行）。
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
-                发();
+                send();
               }
             }}
           />
@@ -491,14 +491,14 @@ function PanelInput({
           <input
             type="text"
             className="panel-input-box"
-            value={草稿}
+            value={draftDraft}
             placeholder={spec.placeholder}
-            disabled={灰}
-            onChange={(e) => set草稿(e.target.value)}
+            disabled={disabled2}
+            onChange={(e) => setDraftDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                发();
+                send();
               }
             }}
           />
@@ -526,14 +526,14 @@ function PanelInput({
           <button
             type="button"
             className="btn btn-primary panel-input-send"
-            disabled={灰 || !草稿.trim()}
+            disabled={disabled2 || !draftDraft.trim()}
             // ⚠️ **只有一颗圆钮 ＋ 一个箭头**（现代 AI 对话框都是这个形状，
             // Nota 参照的那份 Markra 源码里也是 `RoundIconButton` ＋ `ArrowUp`）。
             // 「发送」那两个字没有丢：它成了 `aria-label` 与 `title`——
             // 屏幕上不占位，读屏与悬停照样说得出这颗按钮是干什么的。
-            title={灰 ? t("This input box has no `submit` / `arg`, so clicking it does nothing") : spec.submitLabel}
+            title={disabled2 ? t("This input box has no `submit` / `arg`, so clicking it does nothing") : spec.submitLabel}
             aria-label={spec.submitLabel}
-            onClick={发}
+            onClick={send}
           >
             ↑
           </button>
@@ -558,19 +558,19 @@ function PanelInput({
  */
 function PanelMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> }) {
   const t = useT();
-  const [结果, set结果] = useState<"idle" | "ok" | "fail">("idle");
+  const [result2, setResult] = useState<"idle" | "ok" | "fail">("idle");
 
-  const 复制 = () => {
+  const copy = () => {
     if (!node.text) return;
     // ⚠️ **连属性访问都要包在 try 里**：不是安全上下文时 `navigator.clipboard`
     // 整个不存在（`ui/ContextMenu.tsx` 那边踩过同一个坑）。
     try {
       void Promise.resolve(navigator.clipboard?.writeText?.(node.text)).then(
-        () => set结果("ok"),
-        () => set结果("fail"),
+        () => setResult("ok"),
+        () => setResult("fail"),
       );
     } catch {
-      set结果("fail");
+      setResult("fail");
     }
   };
 
@@ -582,10 +582,10 @@ function PanelMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> 
       <span className="panel-msg-text">{node.text}</span>
       {node.copy && node.text !== "" && (
         <div className="panel-msg-actions">
-          <button type="button" className="panel-msg-action" onClick={复制}>
-            {结果 === "ok" ? t("Copied to clipboard") : t("Copy")}
+          <button type="button" className="panel-msg-action" onClick={copy}>
+            {result2 === "ok" ? t("Copied to clipboard") : t("Copy")}
           </button>
-          {结果 === "fail" && (
+          {result2 === "fail" && (
             <span className="panel-msg-action-fail">
               {t("Could not copy: the system refused to write to the clipboard.")}
             </span>
@@ -615,8 +615,8 @@ function PanelMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> 
  * 曲线 CSS 高 64px，画出来大约 2.5:1，一眼能看出起伏。改宽度那一档的时候
  * 不必跟着改这里——`preserveAspectRatio="none"` 会自己撑满。
  */
-const 画布宽 = 100;
-const 画布高 = 30;
+const drawDistributeWidth = 100;
+const drawDistributeHeight = 30;
 
 /**
  * 一块**热力图**（`kind = "heatmap"`，长期记录，2026-09-27 加）。
@@ -635,24 +635,24 @@ const 画布高 = 30;
  * 128,400 个字」）。格子上的数（每格多少字）走 `title`，那是鼠标悬停时才有的东西。
  */
 function PanelHeatmapBlock({ spec }: { spec: PanelHeatmap }) {
-  if (spec.grid.列.length === 0) return null;
+  if (spec.grid.column.length === 0) return null;
   return (
     <div className="panel-heat">
       {spec.title && <div className="panel-heat-title">{spec.title}</div>}
       <div className="panel-heat-grid" aria-hidden="true">
-        {spec.grid.列.map((列, i) => (
+        {spec.grid.column.map((column, i) => (
           // ⚠️ 用下标当 key：这一串是"第几周"，没有身份（同上面 `panel-graph`）。
           <div key={i} className="heat-col">
             {/* 月份那格**每一列都占位**（没有月份就是一个空 div）：只在这一列画
                 的话，有月份的那几列会比别的列高一截，整排格子就参差了。 */}
-            <div className="heat-month">{列.月}</div>
-            {列.格.map((格) => (
+            <div className="heat-month">{column.month}</div>
+            {column.cell2.map((cell2) => (
               <span
-                key={格.日}
-                className={`heat-cell heat-${格.档}`}
+                key={cell2.date}
+                className={`heat-cell heat-${cell2.level}`}
                 // 悬停看到"哪一天、写了多少"。⚠️ 这一串是给人看的本地话，
                 // 不翻译：它是 `2026-09-27` 这种日期 ＋ 一个数，译不出别的东西。
-                title={格.值 > 0 ? `${格.日} · ${格.值} ${spec.unit}` : 格.日}
+                title={cell2.value2 > 0 ? `${cell2.date} · ${cell2.value2} ${spec.unit}` : cell2.date}
               />
             ))}
           </div>
@@ -674,36 +674,36 @@ function PanelHeatmapBlock({ spec }: { spec: PanelHeatmap }) {
  */
 function PanelChartBlock({ spec }: { spec: PanelChart }) {
   const t = useT();
-  const 点 = spec.points;
-  const 有图 = 点.length >= 2;
+  const point = spec.points;
+  const hasImage = point.length >= 2;
 
   // ⚠️ 归一化的上下界取**这段时间自己的**极值，不写死 0：写作速度从 0 起跳、
   // 累计字数从某个非零值起跳，两种曲线的"底"本来就不一样。取 min/max 之后，
   // 平的那一段贴着底、高峰顶到天，一块 64px 高的图里才看得出起伏。
-  const 上限 = 有图 ? Math.max(...点) : 0;
-  const 下限 = 有图 ? Math.min(...点) : 0;
-  const 跨度 = 上限 - 下限;
+  const limit = hasImage ? Math.max(...point) : 0;
+  const belowLimit = hasImage ? Math.min(...point) : 0;
+  const crossDegree = limit - belowLimit;
 
   // ⚠️ 跨度是 0（这一段一直没变，比如停笔了）时**摆在中线**，不是贴着底：
   // 贴着底容易读成"掉到零了"，而事实是"一直平着"。
-  const 纵向 = (v: number) => (跨度 > 0 ? (上限 - v) / 跨度 : 0.5) * 画布高;
-  const 横向 = (i: number) => (i / (点.length - 1)) * 画布宽;
+  const verticalToward = (v: number) => (crossDegree > 0 ? (limit - v) / crossDegree : 0.5) * drawDistributeHeight;
+  const horizontalToward = (i: number) => (i / (point.length - 1)) * drawDistributeWidth;
 
   // 刻度（2026-09-27 加，用户：「横纵坐标的刻度要标」）。
   //
   // ⚠️ **纵轴由这里推**（按 `points` 的极值，与上面 `纵向()` 那条归一化同源），
   // **横轴只有插件标得出来**（一个点对应哪一刻是插件定的）。分工与理由在
   // `ui/chart-ticks.ts` 文件头那张表。插件自己给了纵轴刻度就用它的。
-  const 纵刻度 = spec.yTicks.length > 0 ? spec.yTicks : 推纵刻度(点);
-  const 横刻度 = spec.xTicks;
+  const verticalTick = spec.yTicks.length > 0 ? spec.yTicks : pushVerticalTick(point);
+  const horizontalTick = spec.xTicks;
 
   // ⚠️ 保留两位小数：一条 200 点的曲线如果每个坐标都是十几位有效数字，
   // 那个 `d` 字符串会白白长出好几千字符（宿主和前端各截一刀也拦不住它）。
-  const 折线 = 点
-    .map((v, i) => `${i === 0 ? "M" : "L"}${横向(i).toFixed(2)} ${纵向(v).toFixed(2)}`)
+  const foldLine = point
+    .map((v, i) => `${i === 0 ? "M" : "L"}${horizontalToward(i).toFixed(2)} ${verticalToward(v).toFixed(2)}`)
     .join(" ");
   // 曲线下面那层淡淡的面：收口从最后一个点垂直落到右下角，再回到左下角。
-  const 面积 = `${折线} L${画布宽} ${画布高} L0 ${画布高} Z`;
+  const surfaceAccumulate = `${foldLine} L${drawDistributeWidth} ${drawDistributeHeight} L0 ${drawDistributeHeight} Z`;
 
   return (
     <div className="panel-chart">
@@ -716,14 +716,14 @@ function PanelChartBlock({ spec }: { spec: PanelChart }) {
         {spec.unit && <span className="panel-chart-unit">{spec.unit}</span>}
       </div>
 
-      {有图 && (
+      {hasImage && (
         <div className="panel-chart-plot-wrap">
           {/* 纵轴刻度：左边一条窄边栏。⚠️ 它是**单独一层 HTML**，不是 SVG 里的
               `<text>`——这块 svg 横竖不等比（`preserveAspectRatio="none"`），
               里面的字会被横向拉扁。文字一律走 HTML 叠层。 */}
-          {纵刻度.length > 0 && (
+          {verticalTick.length > 0 && (
             <div className="panel-chart-yticks" aria-hidden="true">
-              {纵刻度.map((k, i) => (
+              {verticalTick.map((k, i) => (
                 <span
                   key={i}
                   className={
@@ -740,40 +740,40 @@ function PanelChartBlock({ spec }: { spec: PanelChart }) {
 
           <svg
             className="panel-chart-plot"
-            viewBox={`0 0 ${画布宽} ${画布高}`}
+            viewBox={`0 0 ${drawDistributeWidth} ${drawDistributeHeight}`}
             // ⚠️ `none`：横竖各自撑满。等比的话曲线只占中间一条，左右全是空白。
             preserveAspectRatio="none"
             // 这块图的意思是给读屏软件的一句话——里面那些数字对它是没有形状的。
             // ⚠️ 刻度写进这句里：它们是**读得出来的数**，而曲线对读屏是一团空气。
             role="img"
             aria-label={
-              横刻度.length > 0
+              horizontalTick.length > 0
                 ? t(
                     "A curve with {0} points, vertical axis {1} to {2}",
-                    点.length,
-                    格式化数(上限),
-                    格式化数(下限),
+                    point.length,
+                    formatNumber(limit),
+                    formatNumber(belowLimit),
                   )
-                : t("A curve with {0} points", 点.length)
+                : t("A curve with {0} points", point.length)
             }
           >
             {/* 刻度的横线：线用 `non-scaling-stroke`，不然竖着被压扁的那点
                 缩放会把 1px 的线画成看不见的细缝。 */}
-            {纵刻度.map((k, i) => (
+            {verticalTick.map((k, i) => (
               <line
                 key={i}
                 className="panel-chart-grid"
                 x1={0}
-                x2={画布宽}
-                y1={k.at * 画布高}
-                y2={k.at * 画布高}
+                x2={drawDistributeWidth}
+                y1={k.at * drawDistributeHeight}
+                y2={k.at * drawDistributeHeight}
                 vectorEffect="non-scaling-stroke"
               />
             ))}
-            <path className="panel-chart-area" d={面积} />
+            <path className="panel-chart-area" d={surfaceAccumulate} />
             <path
               className="panel-chart-line"
-              d={折线}
+              d={foldLine}
               vectorEffect="non-scaling-stroke"
             />
           </svg>
@@ -782,9 +782,9 @@ function PanelChartBlock({ spec }: { spec: PanelChart }) {
 
       {/* 横轴刻度：曲线正下方一行字。⚠️ 与上面那块图**左右对齐**（都让开
           纵轴那条边栏），否则标签会整体偏出去一条边栏的宽度。 */}
-      {有图 && 横刻度.length > 0 && (
+      {hasImage && horizontalTick.length > 0 && (
         <div className="panel-chart-xticks" aria-hidden="true">
-          {横刻度.map((k, i) => (
+          {horizontalTick.map((k, i) => (
             <span
               key={i}
               className={
@@ -831,7 +831,7 @@ function PanelCardsBlock({ spec }: { spec: PanelCards }) {
         // ⚠️ key 用下标（与上面那一串同一个理由）：这一串没有身份，插件每次给的
         // 都是一份全新的列表，而用内容当 key 会在两条记录刚好相同时撞车。
         <div key={i} className="panel-card">
-          <卡图标 name={card.icon} />
+          <CardIcon name={card.icon} />
           <div className="panel-card-body">
             <div className="panel-card-head">
               {/* 空串画破折号：那是"这一格现在没有数"，不是 0（同 `chart`）。 */}
@@ -839,7 +839,7 @@ function PanelCardsBlock({ spec }: { spec: PanelCards }) {
               {card.unit && <span className="panel-card-unit">{card.unit}</span>}
             </div>
             {card.caption && <div className="panel-card-caption">{card.caption}</div>}
-            <卡窄曲线 points={card.points} />
+            <CardNarrowCurveLine points={card.points} />
           </div>
         </div>
       ))}
@@ -868,7 +868,7 @@ function PanelCardsBlock({ spec }: { spec: PanelCards }) {
  * ⚠️ 认不出的名字在解析层就已经被换成 `"record"` 了，所以这里那个兜底
  * 分支是"兜到底"，不是"日常会走到"。
  */
-function 卡图标({ name }: { name: PanelCardIcon }) {
+function CardIcon({ name }: { name: PanelCardIcon }) {
   return (
     <span className="panel-card-icon" aria-hidden="true">
       <svg
@@ -890,16 +890,16 @@ function 卡图标({ name }: { name: PanelCardIcon }) {
           // 长期：一格格的日子（就是热力图那个形状）。⚠️ 深浅不一，看着才像
           // "有的天写得多、有的少"；全一样就成了一块砖。
           <g fill="currentColor" stroke="none">
-            {[0, 1, 2].map((行) =>
-              [0, 1, 2].map((列) => (
+            {[0, 1, 2].map((line3) =>
+              [0, 1, 2].map((column) => (
                 <rect
-                  key={`${行}-${列}`}
-                  x={3.6 + 列 * 6}
-                  y={3.6 + 行 * 6}
+                  key={`${line3}-${column}`}
+                  x={3.6 + column * 6}
+                  y={3.6 + line3 * 6}
                   width={4.6}
                   height={4.6}
                   rx={1.2}
-                  opacity={0.32 + ((行 + 列) % 3) * 0.26}
+                  opacity={0.32 + ((line3 + column) % 3) * 0.26}
                 />
               )),
             )}
@@ -937,34 +937,34 @@ function 卡图标({ name }: { name: PanelCardIcon }) {
  * ⚠️ 归一化取的是**这一段自己的**极值（不是从 0 起）——理由与 `PanelChartBlock`
  * 那段一样：本轮分速可能一直在一万二到一万三之间，从 0 起画就是一条直线。
  */
-function 卡窄曲线({ points }: { points: number[] }) {
+function CardNarrowCurveLine({ points }: { points: number[] }) {
   const t = useT();
   // 一个点画出来是"一条横贯的直线"，看着像"速度平稳"，而它其实是"只有一个采样"。
   if (points.length < 2) return null;
 
-  const 上限 = Math.max(...points);
-  const 下限 = Math.min(...points);
-  const 跨度 = 上限 - 下限;
-  const 纵向 = (v: number) => (跨度 > 0 ? (上限 - v) / 跨度 : 0.5) * 窄图高;
-  const 横向 = (i: number) => (i / (points.length - 1)) * 窄图宽;
+  const limit = Math.max(...points);
+  const belowLimit = Math.min(...points);
+  const crossDegree = limit - belowLimit;
+  const verticalToward = (v: number) => (crossDegree > 0 ? (limit - v) / crossDegree : 0.5) * narrowImageHeight;
+  const horizontalToward = (i: number) => (i / (points.length - 1)) * narrowImageWidth;
 
   // ⚠️ 保留两位小数（同 `PanelChartBlock`）：不给的话每个坐标会带上十几位有效
   // 数字，一条 200 点的 `d` 白白长出几千字符。
-  const 折线 = points
-    .map((v, i) => `${i === 0 ? "M" : "L"}${横向(i).toFixed(2)} ${纵向(v).toFixed(2)}`)
+  const foldLine = points
+    .map((v, i) => `${i === 0 ? "M" : "L"}${horizontalToward(i).toFixed(2)} ${verticalToward(v).toFixed(2)}`)
     .join(" ");
 
   return (
     <svg
       className="panel-card-spark"
-      viewBox={`0 0 ${窄图宽} ${窄图高}`}
+      viewBox={`0 0 ${narrowImageWidth} ${narrowImageHeight}`}
       // ⚠️ 横竖各自撑满（同上面那块图）：等比的话这条 18px 高的线会挤成中间一小段。
       preserveAspectRatio="none"
       role="img"
       // 曲线对读屏是一团空气，这一句才是它能读出来的东西（与 `chart` 那块同一句话）。
       aria-label={t("A curve with {0} points", points.length)}
     >
-      <path className="panel-card-spark-line" d={折线} vectorEffect="non-scaling-stroke" />
+      <path className="panel-card-spark-line" d={foldLine} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -975,5 +975,5 @@ function 卡窄曲线({ points }: { points: number[] }) {
  * ⚠️ 它**不是像素**：`preserveAspectRatio="none"` 会把这两个数拉成框的实际宽
  * 和 18px 高（CSS 里那个高度）。写成 100×18 只是让路径指令里的数短一点。
  */
-const 窄图宽 = 100;
-const 窄图高 = 18;
+const narrowImageWidth = 100;
+const narrowImageHeight = 18;

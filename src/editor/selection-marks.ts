@@ -20,7 +20,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
  * `=` 在 Markdown 里没有单颗语义，所以第一次就包成 `==…==`。其余标记先包一层；
  * 选区会留在原文字上，用户再按一次同一个标记便能自然叠成双颗。
  */
-export const 选区标记表: Readonly<Record<string, string>> = {
+export const selectionMarkTable: Readonly<Record<string, string>> = {
   "*": "*",
   _: "_",
   "~": "~",
@@ -29,27 +29,27 @@ export const 选区标记表: Readonly<Record<string, string>> = {
   "`": "`",
 };
 
-export interface 选区标记能力 {
+export interface SelectionMarkAbleForce {
   superscript?: boolean;
   highlight?: boolean;
 }
 
-const 全开: Readonly<选区标记能力> = {
+const allOpen: Readonly<SelectionMarkAbleForce> = {
   superscript: true,
   highlight: true,
 };
 
 /** 一对包裹标记；没有这种标记时给 `null`。 */
-export function 选区标记(字: string): string | null {
-  return 选区标记表[字] ?? null;
+export function selectionMark(character2: string): string | null {
+  return selectionMarkTable[character2] ?? null;
 }
 
-function 在代码里(state: EditorState, 位置: number): boolean {
-  const $位 = state.doc.resolve(位置);
-  for (let 层 = $位.depth; 层 > 0; 层 -= 1) {
-    if ($位.node(层).type.spec.code) return true;
+function atCodeInside(state: EditorState, position2: number): boolean {
+  const position = state.doc.resolve(position2);
+  for (let layer = position.depth; layer > 0; layer -= 1) {
+    if (position.node(layer).type.spec.code) return true;
   }
-  return $位.marks().some((标记) => 标记.type.spec.code);
+  return position.marks().some((mark) => mark.type.spec.code);
 }
 
 /**
@@ -58,20 +58,20 @@ function 在代码里(state: EditorState, 位置: number): boolean {
  * 两端必须在同一个 `inlineContent` 父节点里；代码块和行内代码里保持字面输入；
  * 空选区不属于这里（由自动配对插件的“补一对”负责）。
  */
-export function 应包裹选区(
+export function shouldPackageWrapSelection(
   state: EditorState,
   from: number,
   to: number,
-  字: string,
-  能力: 选区标记能力 = 全开,
+  character2: string,
+  ableForce: SelectionMarkAbleForce = allOpen,
 ): boolean {
-  if (to <= from || !选区标记(字)) return false;
-  if (字 === "^" && 能力.superscript === false) return false;
-  if (字 === "=" && 能力.highlight === false) return false;
-  const $从 = state.doc.resolve(from);
-  const $到 = state.doc.resolve(to);
-  if (!$从.parent.inlineContent || !$从.sameParent($到)) return false;
-  return !(在代码里(state, from) || 在代码里(state, to));
+  if (to <= from || !selectionMark(character2)) return false;
+  if (character2 === "^" && ableForce.superscript === false) return false;
+  if (character2 === "=" && ableForce.highlight === false) return false;
+  const fromPosition = state.doc.resolve(from);
+  const toPosition = state.doc.resolve(to);
+  if (!fromPosition.parent.inlineContent || !fromPosition.sameParent(toPosition)) return false;
+  return !(atCodeInside(state, from) || atCodeInside(state, to));
 }
 
 /**
@@ -80,40 +80,40 @@ export function 应包裹选区(
  * 先插右侧、再插左侧，避免前一次插入把后一个坐标顶偏。选中状态继续保留，
  * 所以紧接着再按一次 `*` 或 `_` 会继续包第二层，直接得到粗体/删除线。
  */
-export function 包裹选区事务(
+export function packageWrapSelectionTransaction(
   state: EditorState,
   from: number,
   to: number,
-  字: string,
-  能力: 选区标记能力 = 全开,
+  character2: string,
+  ableForce: SelectionMarkAbleForce = allOpen,
 ): Transaction | null {
-  const 标记 = 选区标记(字);
-  if (!标记 || !应包裹选区(state, from, to, 字, 能力)) return null;
+  const mark = selectionMark(character2);
+  if (!mark || !shouldPackageWrapSelection(state, from, to, character2, ableForce)) return null;
 
   const tr = state.tr;
-  tr.insertText(标记, to, to);
-  tr.insertText(标记, from, from);
+  tr.insertText(mark, to, to);
+  tr.insertText(mark, from, from);
   tr.setSelection(
-    TextSelection.create(tr.doc, from + 标记.length, to + 标记.length),
+    TextSelection.create(tr.doc, from + mark.length, to + mark.length),
   );
   return tr.scrollIntoView();
 }
 
 /** 插件键。 */
-export const 选区标记键 = new PluginKey("nota-selection-marks");
+export const selectionMarkKey = new PluginKey("nota-selection-marks");
 
 /**
  * 建立一个只认“有选区的单一文本块”的输入插件。
  *
  * `smart_symbols` 关闭时不安装，与自动配对插件共用同一个用户开关。
  */
-export function 建选区标记插件(能力: 选区标记能力 = 全开): Plugin {
+export function createSelectionMarkPlugin(ableForce: SelectionMarkAbleForce = allOpen): Plugin {
   return new Plugin({
-    key: 选区标记键,
+    key: selectionMarkKey,
     props: {
-      handleTextInput: (view: EditorView, from, to, 文) => {
-        if (view.composing || 文.length !== 1) return false;
-        const tr = 包裹选区事务(view.state, from, to, 文, 能力);
+      handleTextInput: (view: EditorView, from, to, text4) => {
+        if (view.composing || text4.length !== 1) return false;
+        const tr = packageWrapSelectionTransaction(view.state, from, to, text4, ableForce);
         if (!tr) return false;
         view.dispatch(tr);
         return true;
@@ -123,7 +123,7 @@ export function 建选区标记插件(能力: 选区标记能力 = 全开): Plug
 }
 
 /** 挂进 Milkdown 的插件工厂；关掉智能符号时返回空数组。 */
-export function 选区标记补全(启用 = true, 能力: 选区标记能力 = 全开) {
-  if (!启用) return [];
-  return $prose(() => 建选区标记插件(能力));
+export function selectionMarkFillAll(enable2 = true, ableForce: SelectionMarkAbleForce = allOpen) {
+  if (!enable2) return [];
+  return $prose(() => createSelectionMarkPlugin(ableForce));
 }

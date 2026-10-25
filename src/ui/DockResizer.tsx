@@ -21,55 +21,55 @@ import { useRef } from "react";
 import { useT } from "@/i18n";
 
 /** 出厂的宽度。与 `theme/base.css` 的 `--dock-width`、Rust 那份默认值是同一个数。 */
-export const 右栏宽默认 = 260;
+export const rightBarWidthDefault = 260;
 /** 再窄就装不下一行插件文案了（那里面还有 12px 的内边距）。 */
-export const 右栏宽最小 = 200;
+export const rightBarWidthMostSmall = 200;
 /** 再宽正文就得让位（1300px 的窗口减掉侧栏之后只剩一半）。 */
-export const 右栏宽最大 = 560;
+export const rightBarWidthMostLarge = 560;
 
 /**
  * 把量出来的宽度夹进合法区间。**纯函数，单独摆出来是为了能测**——
  * `tests/dock-resize.test.ts` 盖的就是它（拖动本身要开窗）。
  */
-export function 夹右栏宽(宽: number): number {
+export function clampRightBarWidth(width: number): number {
   // ⚠️ 先把不是数的挡掉：`Math.min/max` 遇到 `NaN` 会安静地返回 `NaN`，
   // 而 `NaN` 写进 CSS 变量等于那一格失效 → 退回 CSS 里那个 260，
   // 看着像"拖动没生效"，不像报错（同 `SidebarResizer.夹侧栏宽`）。
-  if (!Number.isFinite(宽)) return 右栏宽默认;
-  return Math.min(右栏宽最大, Math.max(右栏宽最小, Math.round(宽)));
+  if (!Number.isFinite(width)) return rightBarWidthDefault;
+  return Math.min(rightBarWidthMostLarge, Math.max(rightBarWidthMostSmall, Math.round(width)));
 }
 
 /** 那条把手。**渲染在 `.plugin-dock` 内部、作为它最后一个子元素**（理由见文件头）。 */
-export function DockResizer({ onCommit }: { onCommit: (宽: number) => void }) {
+export function DockResizer({ onCommit }: { onCommit: (width: number) => void }) {
   const t = useT();
-  const 最后 = useRef(右栏宽默认);
+  const mostAfter = useRef(rightBarWidthDefault);
 
-  function 按下(e: React.PointerEvent<HTMLDivElement>) {
+  function pressBelow(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
-    const 把手 = e.currentTarget;
-    把手.setPointerCapture(e.pointerId);
+    const takeHand = e.currentTarget;
+    takeHand.setPointerCapture(e.pointerId);
     document.body.classList.add("resizing-col");
-    const 框 = 把手.parentElement?.getBoundingClientRect();
-    const 右缘 = 框?.right ?? window.innerWidth;
-    最后.current = 夹右栏宽(框?.width ?? 右栏宽默认);
+    const box2 = takeHand.parentElement?.getBoundingClientRect();
+    const rightEdge = box2?.right ?? window.innerWidth;
+    mostAfter.current = clampRightBarWidth(box2?.width ?? rightBarWidthDefault);
 
-    function 挪(ev: PointerEvent) {
-      const 宽 = 夹右栏宽(右缘 - ev.clientX);
-      最后.current = 宽;
-      document.documentElement.style.setProperty("--dock-width", `${宽}px`);
+    function move(ev: PointerEvent) {
+      const width = clampRightBarWidth(rightEdge - ev.clientX);
+      mostAfter.current = width;
+      document.documentElement.style.setProperty("--dock-width", `${width}px`);
     }
 
-    function 收() {
-      把手.removeEventListener("pointermove", 挪);
-      把手.removeEventListener("pointerup", 收);
-      把手.removeEventListener("pointercancel", 收);
+    function receive() {
+      takeHand.removeEventListener("pointermove", move);
+      takeHand.removeEventListener("pointerup", receive);
+      takeHand.removeEventListener("pointercancel", receive);
       document.body.classList.remove("resizing-col");
-      onCommit(最后.current);
+      onCommit(mostAfter.current);
     }
 
-    把手.addEventListener("pointermove", 挪);
-    把手.addEventListener("pointerup", 收);
-    把手.addEventListener("pointercancel", 收);
+    takeHand.addEventListener("pointermove", move);
+    takeHand.addEventListener("pointerup", receive);
+    takeHand.addEventListener("pointercancel", receive);
   }
 
   return (
@@ -78,7 +78,7 @@ export function DockResizer({ onCommit }: { onCommit: (宽: number) => void }) {
       role="separator"
       aria-orientation="vertical"
       aria-label={t("Resize the extension dock")}
-      onPointerDown={按下}
+      onPointerDown={pressBelow}
     />
   );
 }

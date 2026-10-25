@@ -38,7 +38,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const 写 = paneWriter(settings, onChange, "editor");
+  const write = paneWriter(settings, onChange, "editor");
   const e = settings.editor;
 
   /**
@@ -81,11 +81,11 @@ export function EditorPane({ settings, onChange }: PaneProps) {
             value={e.default_indent}
             min={1}
             max={8}
-            onChange={(default_indent) => 写({ default_indent })}
+            onChange={(default_indent) => write({ default_indent })}
           />
         </SettingRow>
         <SettingRow label={t("Aligned indent")}>
-          <Toggle checked={e.align_indent} onChange={(align_indent) => 写({ align_indent })} />
+          <Toggle checked={e.align_indent} onChange={(align_indent) => write({ align_indent })} />
         </SettingRow>
       </SettingsGroup>
 
@@ -93,7 +93,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         <SettingRow>
           <Toggle
             checked={e.paragraph_indent}
-            onChange={(paragraph_indent) => 写({ paragraph_indent })}
+            onChange={(paragraph_indent) => write({ paragraph_indent })}
           />
         </SettingRow>
         <SettingRow label={t("Indent width")}>
@@ -102,7 +102,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
             min={1}
             max={8}
             disabled={!e.paragraph_indent}
-            onChange={(paragraph_indent_chars) => 写({ paragraph_indent_chars })}
+            onChange={(paragraph_indent_chars) => write({ paragraph_indent_chars })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -111,7 +111,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         <SettingRow>
           <Toggle
             checked={e.smart_symbols}
-            onChange={(smart_symbols) => 写({ smart_symbols })}
+            onChange={(smart_symbols) => write({ smart_symbols })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -120,7 +120,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         <SettingRow>
           <Toggle
             checked={e.emoji_autocomplete}
-            onChange={(emoji_autocomplete) => 写({ emoji_autocomplete })}
+            onChange={(emoji_autocomplete) => write({ emoji_autocomplete })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -129,7 +129,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         <SettingRow>
           <Toggle
             checked={e.show_block_source}
-            onChange={(show_block_source) => 写({ show_block_source })}
+            onChange={(show_block_source) => write({ show_block_source })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -138,7 +138,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         <SettingRow>
           <Toggle
             checked={e.copy_markdown_source}
-            onChange={(copy_markdown_source) => 写({ copy_markdown_source })}
+            onChange={(copy_markdown_source) => write({ copy_markdown_source })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -147,7 +147,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         <SettingRow>
           <Toggle
             checked={e.copy_line_when_empty}
-            onChange={(copy_line_when_empty) => 写({ copy_line_when_empty })}
+            onChange={(copy_line_when_empty) => write({ copy_line_when_empty })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -157,14 +157,14 @@ export function EditorPane({ settings, onChange }: PaneProps) {
           <Radio
             value={e.line_ending}
             options={LINE_ENDINGS}
-            onChange={(line_ending) => 写({ line_ending })}
+            onChange={(line_ending) => write({ line_ending })}
           />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Spell check")}>
         <SettingRow>
-          <Toggle checked={e.spellcheck} onChange={(spellcheck) => 写({ spellcheck })} />
+          <Toggle checked={e.spellcheck} onChange={(spellcheck) => write({ spellcheck })} />
         </SettingRow>
         {/* ⚠️ 关着时**不画**下面这两行（同上面「正文宽度」那条滑杆的口径）：
             开关关着的时候语言不发生任何作用，摆在那儿就得解释"为什么选了没反应"。 */}
@@ -180,7 +180,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
           >
             <SpellLangPicker
               value={e.spellcheck_langs}
-              onChange={(spellcheck_langs) => 写({ spellcheck_langs })}
+              onChange={(spellcheck_langs) => write({ spellcheck_langs })}
             />
           </SettingRow>
         )}
@@ -190,7 +190,7 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         <SettingRow label={t("Keep the cursor in the middle of the screen")}>
           <Toggle
             checked={e.typewriter_keep_caret_centered}
-            onChange={(typewriter_keep_caret_centered) => 写({ typewriter_keep_caret_centered })}
+            onChange={(typewriter_keep_caret_centered) => write({ typewriter_keep_caret_centered })}
           />
         </SettingRow>
       </SettingsGroup>

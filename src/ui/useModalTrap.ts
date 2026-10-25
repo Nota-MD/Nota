@@ -60,7 +60,7 @@ import { useEffect, type RefObject } from "react";
  * ⚠️ 藏起来的不算：设置面板搜索态下每一页都渲染、靠 CSS 藏行，不滤掉的话
  * Tab 会掉进看不见的格子里（`offsetParent` 为 `null` 就是 `display: none`）。
  */
-export function 可聚焦(panel: HTMLElement): HTMLElement[] {
+export function focusable(panel: HTMLElement): HTMLElement[] {
   return Array.from(
     panel.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]),' +
@@ -70,7 +70,7 @@ export function 可聚焦(panel: HTMLElement): HTMLElement[] {
 }
 
 /** 右键菜单挂在自己两层上的标记（`ui/ContextMenu.tsx`：本体与子菜单各一个）。 */
-const 浮层标记 = "[data-context-menu]";
+const floatingLayerMark = "[data-context-menu]";
 
 /**
  * 这个节点是不是落在**浮层**（右键菜单，含它飞出来的子菜单）里面。
@@ -79,18 +79,18 @@ const 浮层标记 = "[data-context-menu]";
  * `focusin` 的 `e.target`（理论上可以是文本节点），所以 `closest` 要
  * 可选调用一次——和 `ContextMenu.tsx` 里那条"点别处就关"同一个写法。
  */
-export function 在浮层里(node: Node | null): boolean {
-  return !!(node as Element | null)?.closest?.(浮层标记);
+export function atFloatingLayerInside(node: Node | null): boolean {
+  return !!(node as Element | null)?.closest?.(floatingLayerMark);
 }
 
 /** `陷阱落点` 的判定结果。三种动作之外没有别的可能。 */
-export type 陷阱判定 =
+export type PitTrapDetermineFixed =
   /** 不拦：焦点在格子中间，Tab 让浏览器自己挪。 */
-  | { 动作: "自然移动" }
+  | { action: "自然移动" }
   /** 拦下但没处去（面板里一个能聚焦的格子都没有）：按了等于没按。 */
-  | { 动作: "原地不动" }
+  | { action: "原地不动" }
   /** 拦下并把焦点送到这个格子。 */
-  | { 动作: "送到"; 目标: HTMLElement };
+  | { action: "送到"; target: HTMLElement };
 
 /**
  * Tab 该把焦点送到哪儿。`当前` 传 `document.activeElement`（可为 `null`）。
@@ -104,26 +104,26 @@ export type 陷阱判定 =
  *   Tab 从最后一格绕回第一格。只拦一个方向，另一个方向照样漏。
  * - **格子中间** → 自然移动（不拦）。拦了反而要自己实现一遍整条漫游。
  */
-export function 陷阱落点(格子: HTMLElement[], 当前: Element | null, 反向: boolean): 陷阱判定 {
-  if (格子.length === 0) return { 动作: "原地不动" };
+export function pitTrapDropPoint(cell: HTMLElement[], current: Element | null, reverseToward: boolean): PitTrapDetermineFixed {
+  if (cell.length === 0) return { action: "原地不动" };
 
-  const first = 格子[0];
-  const last = 格子[格子.length - 1];
+  const first = cell[0];
+  const last = cell[cell.length - 1];
   // 上面判过 `length === 0`，这两个只是给 `noUncheckedIndexedAccess` 看的。
-  if (!first || !last) return { 动作: "原地不动" };
+  if (!first || !last) return { action: "原地不动" };
 
   // 焦点不在面板里（或在面板容器自己身上）＝从外面进来。
   // ⚠️ 判据是"当前焦点是不是其中一格"：容器自己（`tabIndex={-1}`）与面板外
   // 的任何东西都不在格子里，走"从外面进来"那一条。
-  const 在面板里 = !!当前 && 格子.includes(当前 as HTMLElement);
-  if (!在面板里) return { 动作: "送到", 目标: 反向 ? last : first };
+  const atPanelInside = !!current && cell.includes(current as HTMLElement);
+  if (!atPanelInside) return { action: "送到", target: reverseToward ? last : first };
 
-  if (反向 && 当前 === first) return { 动作: "送到", 目标: last };
-  if (!反向 && 当前 === last) return { 动作: "送到", 目标: first };
-  return { 动作: "自然移动" };
+  if (reverseToward && current === first) return { action: "送到", target: last };
+  if (!reverseToward && current === last) return { action: "送到", target: first };
+  return { action: "自然移动" };
 }
 
-export interface 弹层封闭选项 {
+export interface PopupSealCloseOption {
   /** Esc 的去处。不给的话 Esc 不拦（弹层自己有别管 Esc 的人时用）。 */
   onEscape?: () => void;
 }
@@ -137,7 +137,7 @@ export interface 弹层封闭选项 {
  */
 export function useModalTrap(
   panelRef: RefObject<HTMLElement | null>,
-  { onEscape, enabled = true }: 弹层封闭选项 & { enabled?: boolean } = {},
+  { onEscape, enabled = true }: PopupSealCloseOption & { enabled?: boolean } = {},
 ): void {
   useEffect(() => {
     if (!enabled) return;
@@ -150,15 +150,15 @@ export function useModalTrap(
       // 设置页里再开的模态框（例如设置包选择）优先级更高。外层设置框
       // `contains` 不到 portal 到 body 的子模态，于是让子模态自己的陷阱处理
       // Esc/Tab；子模态自己的 panelRef 就是标记节点，不会把自己让掉。
-      const 最内层 = document.querySelector<HTMLElement>('[data-modal-layer="true"]');
-      if (最内层 && 最内层 !== panelRef.current && !panelRef.current?.contains(最内层)) {
+      const mostInsideLayer = document.querySelector<HTMLElement>('[data-modal-layer="true"]');
+      if (mostInsideLayer && mostInsideLayer !== panelRef.current && !panelRef.current?.contains(mostInsideLayer)) {
         return;
       }
       // ⚠️ **焦点在浮层里就整个让路**（`Esc` 与 `Tab` 都让）：右键菜单开着时
       // 它自己那套漫游在管焦点，`Esc` 该关的是菜单、`Tab` 该关掉菜单放行。
       // 这里不 return 的话，`Esc` 会被下面那条 `stopPropagation` 掐死在捕获
       // 阶段，菜单的 `onDismiss` 一辈子收不到（2026-10-04 目检量到的）。
-      if (在浮层里(document.activeElement)) return;
+      if (atFloatingLayerInside(document.activeElement)) return;
       if (e.key === "Escape") {
         if (!onEscape) return;
         e.preventDefault();
@@ -178,9 +178,9 @@ export function useModalTrap(
 
       const panel = panelRef.current;
       if (!panel) return;
-      const 判定 = 陷阱落点(可聚焦(panel), document.activeElement, e.shiftKey);
-      if (判定.动作 !== "自然移动") e.preventDefault();
-      if (判定.动作 === "送到") 判定.目标.focus();
+      const determineFixed = pitTrapDropPoint(focusable(panel), document.activeElement, e.shiftKey);
+      if (determineFixed.action !== "自然移动") e.preventDefault();
+      if (determineFixed.action === "送到") determineFixed.target.focus();
     };
 
     const onFocusIn = (e: FocusEvent) => {
@@ -189,7 +189,7 @@ export function useModalTrap(
       if (!panel || !target || panel.contains(target)) return;
       // ⚠️ 浮层里的焦点**不拽回来**：菜单一开就把焦点播种到自己第一项上，
       // 拽回来的话菜单画着、键盘却不在里面（`Esc`/方向键全失灵）。
-      if (在浮层里(target)) return;
+      if (atFloatingLayerInside(target)) return;
       panel.focus();
     };
 

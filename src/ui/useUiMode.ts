@@ -26,10 +26,10 @@ import type { UiMode } from "@/bridge/ipc";
 import { resolveMode } from "@/styles/applyTheme";
 
 export function useUiMode(mode: UiMode): "light" | "dark" {
-  const [当前, set当前] = useState(() => resolveMode(mode));
+  const [current, setCurrent] = useState(() => resolveMode(mode));
 
   useEffect(() => {
-    const paint = () => set当前(resolveMode(mode));
+    const paint = () => setCurrent(resolveMode(mode));
     paint();
 
     const mq = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -39,5 +39,5 @@ export function useUiMode(mode: UiMode): "light" | "dark" {
     return () => mq.removeEventListener("change", paint);
   }, [mode]);
 
-  return 当前;
+  return current;
 }

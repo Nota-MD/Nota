@@ -27,8 +27,8 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
   const [installing, setInstalling] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
-  const 安装中 = useRef(false);
-  const 百分比 =
+  const safeInstallMiddle = useRef(false);
+  const hundredShareCompare =
     progress?.total && progress.total > 0
       ? Math.min(100, Math.max(0, Math.round((progress.downloaded / progress.total) * 100)))
       : null;
@@ -51,21 +51,21 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
   }, [autoCheck, check]);
 
   useEffect(() => {
-    let 退订: (() => void) | undefined;
-    let 活着 = true;
+    let unsubscribe: (() => void) | undefined;
+    let activeActive = true;
     void on<UpdateDownloadProgress>(events.updateProgress, setProgress).then((un) => {
-      if (活着) 退订 = un;
+      if (activeActive) unsubscribe = un;
       else un();
     });
     return () => {
-      活着 = false;
-      退订?.();
+      activeActive = false;
+      unsubscribe?.();
     };
   }, []);
 
   const install = useCallback(async () => {
-    if (安装中.current) return;
-    安装中.current = true;
+    if (safeInstallMiddle.current) return;
+    safeInstallMiddle.current = true;
     setInstalling(true);
     setError(null);
     setProgress(null);
@@ -75,7 +75,7 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
     } catch (e) {
       setError(String(e));
     } finally {
-      安装中.current = false;
+      safeInstallMiddle.current = false;
       setInstalling(false);
     }
   }, []);
@@ -105,7 +105,7 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
             </tr>
             <tr>
               <th scope="row">{t("Installation type")}</th>
-              <td>{安装说明(status.packageKind, t).label}</td>
+              <td>{safeInstallDescription(status.packageKind, t).label}</td>
             </tr>
             <tr>
               <th scope="row">{t("Update method")}</th>
@@ -113,7 +113,7 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
                 {status.packageKind === "dev" ? (
                   <code className="update-command">{status.installCommand}</code>
                 ) : (
-                  安装说明(status.packageKind, t).action
+                  safeInstallDescription(status.packageKind, t).action
                 )}
               </td>
             </tr>
@@ -142,12 +142,12 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={progress?.total ? 100 : undefined}
-            aria-valuenow={百分比 ?? undefined}
+            aria-valuenow={hundredShareCompare ?? undefined}
           >
             <span
               style={
-                百分比 !== null
-                  ? { width: `${百分比}%` }
+                hundredShareCompare !== null
+                  ? { width: `${hundredShareCompare}%` }
                   : undefined
               }
             />
@@ -156,13 +156,13 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
             <p className="about-lead">
               {progress?.phase === "installing"
                 ? t("Download complete. Installing the update…")
-                : 百分比 !== null
-                  ? t("Downloading update: {0}%", 百分比)
+                : hundredShareCompare !== null
+                  ? t("Downloading update: {0}%", hundredShareCompare)
                   : t("Downloading update…")}
             </p>
-            {progress && progress.phase !== "installing" && 百分比 !== null && (
+            {progress && progress.phase !== "installing" && hundredShareCompare !== null && (
               <span className="about-update-progress-size">
-                {字节(progress.downloaded)} / {字节(progress.total)}
+                {byte(progress.downloaded)} / {byte(progress.total)}
               </span>
             )}
           </div>
@@ -200,17 +200,17 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
   );
 }
 
-function 字节(值: number | null | undefined): string {
-  if (!值 || 值 <= 0) return "0 B";
-  const 单位 = ["B", "KB", "MB", "GB"];
-  const 档 = Math.min(单位.length - 1, Math.floor(Math.log(值) / Math.log(1024)));
-  const 数 = 值 / 1024 ** 档;
-  return `${数 >= 10 || 档 === 0 ? 数.toFixed(0) : 数.toFixed(1)} ${单位[档]}`;
+function byte(value2: number | null | undefined): string {
+  if (!value2 || value2 <= 0) return "0 B";
+  const singlePosition = ["B", "KB", "MB", "GB"];
+  const level = Math.min(singlePosition.length - 1, Math.floor(Math.log(value2) / Math.log(1024)));
+  const number2 = value2 / 1024 ** level;
+  return `${number2 >= 10 || level === 0 ? number2.toFixed(0) : number2.toFixed(1)} ${singlePosition[level]}`;
 }
 
-function 安装说明(
+function safeInstallDescription(
   kind: UpdatePackageKind,
-  t: (原文: string, ...参数: (string | number)[]) => string,
+  t: (source: string, ...parameter: (string | number)[]) => string,
 ): { label: string; action: string } {
   switch (kind) {
     case "deb":

@@ -1,4 +1,4 @@
-//! 「系统里那个 pandoc」——**探测装没装 + 借它导出**那七种格式。
+//! 「系统里那个 pandoc」——**探测装没装 + 借它导出**格式表里的十种格式。
 //!
 //! # 为什么不捆绑 pandoc（用户 2026-09-25 定的）
 //!
@@ -40,7 +40,7 @@ use crate::error::{NotaError, Result};
 // 能跑的命令，那一处是唯一的出口）——这一半不再直接分词。
 use crate::proc::{command_or_default, run_capture, Ran, RunOpts};
 
-// ⚠️ 七种格式的词汇表搬去了 `pandoc_format.rs`（那边有为什么拆的说明）。
+// ⚠️ 格式词汇表搬去了 `pandoc_format.rs`（那边有为什么拆的说明）。
 // **在这里接回原名**：`crate::pandoc::Format` 这类写法（`commands/pandoc.rs`、
 // 本文件的探测与导出）一个字都不用改。
 pub(crate) use crate::pandoc_format::Format;

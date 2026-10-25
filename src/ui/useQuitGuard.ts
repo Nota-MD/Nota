@@ -60,40 +60,40 @@ export function useQuitGuard(w: {
    * 那一门。⚠️ 这里**不该**用 `useT()`：这一层什么都不画，订阅只会让它在
    * 语言一变时重挂一次监听（而"挂一次"正是上面那条的要点）。
    */
-  const 最新 = useRef({ docs, saveDoc, toast, askConfirm });
-  最新.current = { docs, saveDoc, toast, askConfirm };
+  const mostNewValue = useRef({ docs, saveDoc, toast, askConfirm });
+  mostNewValue.current = { docs, saveDoc, toast, askConfirm };
 
   useEffect(() => {
-    let 退订: (() => void) | undefined;
-    let 卸载了 = false;
+    let unsubscribe: (() => void) | undefined;
+    let uninstallDone = false;
     /**
      * 正在问的那一轮的闸。⚠️ 弹框那次 `await` 期间用户完全可能再点一次叉，
      * 不防的话就是**两个确认框摞在一起**，而用户点完上面那个、下面那个还在问。
      */
-    let 正在进行 = false;
+    let correctAtEnterLine = false;
     void on(events.quitRequested, () => {
-      if (正在进行) return;
-      正在进行 = true;
+      if (correctAtEnterLine) return;
+      correctAtEnterLine = true;
       void (async () => {
-        const { docs: 表, saveDoc: 存, toast: 提示, askConfirm: 问 } = 最新.current;
-        const 脏的 = 表.filter((d) => d.dirty);
+        const { docs: table2, saveDoc: save, toast: notice, askConfirm: ask } = mostNewValue.current;
+        const dirtyOf = table2.filter((d) => d.dirty);
         try {
           // ⚠️ **没有脏的就直接退**，一个字都不问。宿主那边已经用镜像判过一遍
           // 了（`lib.rs::关窗前要问`），这里再判一次不是重复：两份东西不同源
           //（镜像 vs 编辑器树上那份），而"多问一句"比"少问一句"的代价小得多。
-          if (脏的.length) {
-            const 答 = await 问({
+          if (dirtyOf.length) {
+            const answer = await ask({
               title: t("Has unsaved changes"),
-              message: t("Still unsaved: {0}. Save before quitting?", 名单(脏的)),
+              message: t("Still unsaved: {0}. Save before quitting?", nameSingle(dirtyOf)),
               extraLabel: t("Save All and Quit"),
               confirmLabel: t("Discard and Quit"),
               danger: true,
             });
-            if (答 === "cancel") return;
-            if (答 === "extra") {
-              for (const d of 脏的) {
-                if (!(await 存(d.id))) {
-                  提示(
+            if (answer === "cancel") return;
+            if (answer === "extra") {
+              for (const d of dirtyOf) {
+                if (!(await save(d.id))) {
+                  notice(
                     t("Could not save “{0}”, so Nota is staying open", d.title),
                     "error",
                   );
@@ -106,27 +106,27 @@ export function useQuitGuard(w: {
         } finally {
           // ⚠️ **成败都要把闸放开**：一直关着的话，用户下一次点叉就再也没有
           // 反应了。真退成了的那一路无所谓——进程都没了。
-          正在进行 = false;
+          correctAtEnterLine = false;
         }
       })();
     }).then((fn) => {
-      退订 = fn;
+      unsubscribe = fn;
       // ⚠️ **订阅是异步的**：那一下 `await` 期间组件已经卸载的话，清理函数早跑过
       // 了、`退订` 这时候才拿到——不补这一枪就漏一个监听者（热重载几轮之后，
       // 一次关窗弹好几个框）。
-      if (卸载了) fn();
+      if (uninstallDone) fn();
     });
     return () => {
-      卸载了 = true;
-      退订?.();
+      uninstallDone = true;
+      unsubscribe?.();
     };
   }, []);
 }
 
 /** 把脏的那几份列成一句人话。⚠️ **最多点三个名字**，多了就写"等 N 份"。 */
-function 名单(脏的: readonly Document[]): string {
-  const 名字 = 脏的.map((d) => d.title);
-  if (名字.length <= 3) return 名字.join("、");
+function nameSingle(dirtyOf: readonly Document[]): string {
+  const name2 = dirtyOf.map((d) => d.title);
+  if (name2.length <= 3) return name2.join("、");
   // ⚠️ 第二个数是**还有几份**，不是一共几份——写错的话用户会去数标签。
-  return t("{0} and {1} more", 名字.slice(0, 3).join("、"), 名字.length - 3);
+  return t("{0} and {1} more", name2.slice(0, 3).join("、"), name2.length - 3);
 }

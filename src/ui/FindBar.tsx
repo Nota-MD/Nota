@@ -25,9 +25,9 @@
  * 这条判据和 `ui/accel.ts` 里那条是同一个理由。
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent as 键盘事件 } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as keyDiskEvent } from "react";
 
-import { 正则写坏了, 默认查找选项, type FindOptions, type FindStatus } from "@/editor/find";
+import { correctRuleWriteBrokenDone, defaultFindOptions, type FindOptions, type FindStatus } from "@/editor/find";
 import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 
@@ -37,7 +37,7 @@ interface Props {
   /** 查询或三个开关变了。空串 = 把高亮全清掉。 */
   onQuery: (query: string, options: FindOptions) => void;
   /** 走上一个（`-1`）/ 下一个（`1`）。 */
-  onStep: (方向: 1 | -1) => void;
+  onStep: (direction: 1 | -1) => void;
   /** 替换当前命中。 */
   onReplace: (text: string) => void;
   /** 全部替换。 */
@@ -50,7 +50,7 @@ interface Props {
    * 差别只在这一格。不画那一行时，**替换那两件事的入口就整个消失**，
    * 这比"灰着"干净：没打开替换的人不需要看见两颗永远用不上的按钮。
    */
-  显示替换: boolean;
+  showReplaceReplace: boolean;
 }
 
 export function FindBar({
@@ -60,7 +60,7 @@ export function FindBar({
   onReplace,
   onReplaceAll,
   onClose,
-  显示替换,
+  showReplaceReplace,
 }: Props) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -74,7 +74,7 @@ export function FindBar({
   // 存成模块级常量就等于把这几句中文当数据，那些键会算"没被调用"。同
   // `ui/PluginDock.tsx` 里那三张表。
   // `label` 里 `Aa` / `.*` 是**符号**（两种语言下都一样），所以只有「全词」要翻。
-  const 开关组: { key: keyof FindOptions; label: string; title: string }[] = [
+  const flagGroup: { key: keyof FindOptions; label: string; title: string }[] = [
     { key: "caseSensitive", label: "Aa", title: t("Match Case") },
     { key: "wholeWord", label: t("Word"), title: t("Match Whole Word: a match cannot be part of a longer word") },
     // ⚠️ 这把气泡 2026-10-07 改过口（第 95 项）：原来写的是"写坏了不算错，
@@ -90,8 +90,8 @@ export function FindBar({
     { key: "wildcard", label: "\u2731", title: t("Wildcards: * for any run of characters, ? for exactly one") },
   ];
   const [query, setQuery] = useState("");
-  const [替换成, set替换成] = useState("");
-  const [options, setOptions] = useState<FindOptions>(默认查找选项);
+  const [replaceReplaceBecome, setReplaceReplaceBecome] = useState("");
+  const [options, setOptions] = useState<FindOptions>(defaultFindOptions);
   /**
    * 手动把替换那一行拉出来（2026-10-06，用户：「**无"替换"选项**」）。
    *
@@ -99,18 +99,18 @@ export function FindBar({
    * ——在他眼里就是"这个查找条不能替换"。所以补一颗展开键：**不必知道快捷键**
    * 也能把替换拉出来。`Ctrl+H` 照旧是"开出来就带替换"。
    */
-  const [手动展开, 设手动展开] = useState(false);
-  const 查询框 = useRef<HTMLInputElement>(null);
+  const [manualExpand, setManualExpand] = useState(false);
+  const queryBox = useRef<HTMLInputElement>(null);
 
   // ⚠️ 查询上报走**ref 读**，不进下面那个 effect 的依赖：`onQuery` 是
   // `App` 每次重渲染新建的函数，进依赖就等于"每渲染一次重设一次查询"，
   // 而设查询会把光标搬到第一个命中上——那样连点两下别的东西都会跳光标。
-  const 上报 = useRef(onQuery);
-  上报.current = onQuery;
+  const aboveReport = useRef(onQuery);
+  aboveReport.current = onQuery;
 
   // 打开就把光标放进查询框。
   useEffect(() => {
-    查询框.current?.focus();
+    queryBox.current?.focus();
   }, []);
 
   // 查询或开关一变就报上去。⚠️ 挂载时也报一次（`query` 是空串 = 清空高亮）：
@@ -121,7 +121,7 @@ export function FindBar({
     // 面是灰的，值也必须在这里归零——不然界面上"关着"、行为上"开着"，
     // 而用户看不见我们悄悄加的那道边界。⚠️ 归一化只发生在这**一次上报**上，
     // `options` 本身不动：关掉正则之后那颗开关要原样回来。
-    上报.current(query, {
+    aboveReport.current(query, {
       ...options,
       wholeWord: options.regex ? false : options.wholeWord,
       // ⚠️ 两颗"写法"开关**互斥**（2026-10-16）：正则开着时通配符不参与，
@@ -139,7 +139,7 @@ export function FindBar({
    * 自己写一份 `try { new RegExp(...) }` 的话，两份判据迟早会分家，
    * 而分家的那一天屏幕上会出现"框红着、结果却找得到"（理由写在那个函数上）。
    */
-  const 写坏了 = 正则写坏了(query, options);
+  const writeBrokenDone = correctRuleWriteBrokenDone(query, options);
 
   /**
    * 命中数的说法。⚠️ **四种情况分开写**，因为它们的含义不同：
@@ -152,8 +152,8 @@ export function FindBar({
    * 而"无结果"会把用户支到文档里去找一个根本不存在的词。所以这一档必须
    * 排在 `No results` 前面，且说得出来的理由是**正则本身**。
    */
-  const 计数 =
-    写坏了
+  const countNumber =
+    writeBrokenDone
       ? t("Invalid regex")
       : status.query === ""
         ? ""
@@ -162,7 +162,7 @@ export function FindBar({
           : `${status.current} / ${status.total}`;
 
   /** 组字期间一概不接（理由见文件头）。 */
-  const 组字中 = (e: 键盘事件) =>
+  const groupCharacterMiddle = (e: keyDiskEvent) =>
     e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229;
 
   return (
@@ -173,7 +173,7 @@ export function FindBar({
       // ⚠️ 收在条子自己身上，不绑 `window`：绑了的话，焦点在编辑区里
       // 按 Esc 也会把条子关掉——而那时用户多半是想收输入法的候选框。
       onKeyDown={(e) => {
-        if (组字中(e)) return;
+        if (groupCharacterMiddle(e)) return;
         if (e.key === "Escape") {
           e.preventDefault();
           onClose();
@@ -184,7 +184,7 @@ export function FindBar({
           ⚠️ 第一版把这一层套在了**上一行**上，于是 `Ctrl+F` 开出来跟 `Ctrl+H` 一模一样——`tsc` 照样过（JSX 是平衡的），**只有开窗看一眼才发现**。 */}
       <div className="find-row">
         <input
-          ref={查询框}
+          ref={queryBox}
           className="find-input"
           type="text"
           value={query}
@@ -195,12 +195,12 @@ export function FindBar({
           // `.find-input[data-bad]` 画。⚠️ 传 `undefined` 而不是 `false`：
           // 前者把属性整个摘掉，后者会渲染成 `data-bad="false"`——
           // 属性在不在是 CSS 的判据，写个 `"false"` 等于永远为真。
-          data-bad={写坏了 || undefined}
+          data-bad={writeBrokenDone || undefined}
           // 给读屏的那一份：光有颜色不算"说出来"（红绿色盲、读屏用户都收不到）。
-          aria-invalid={写坏了 || undefined}
+          aria-invalid={writeBrokenDone || undefined}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (组字中(e)) return;
+            if (groupCharacterMiddle(e)) return;
             if (e.key === "Enter") {
               e.preventDefault();
               // Shift+Enter 往回走，和大多数编辑器一致。
@@ -210,10 +210,10 @@ export function FindBar({
         />
         {/* ⚠️ `aria-live`:写坏了那一刻这一格会从"无结果"变成原因，读屏要念出来
             （它同样收不到红边）。 */}
-        <span className="find-count" data-bad={写坏了 || undefined} aria-live="polite">
-          {计数}
+        <span className="find-count" data-bad={writeBrokenDone || undefined} aria-live="polite">
+          {countNumber}
         </span>
-        {开关组.map((s) => (
+        {flagGroup.map((s) => (
           // ⚠️ **正则开着时「全词」灰掉**（2026-10-06，第 95 项）：正则自己就有
           //   `\b`，再叠一层"命中两侧不许是词字符"是**两把尺子量一件事**——
           //   用户在正则里写的边界会被我们悄悄改掉，而屏幕上什么都看不出来。
@@ -225,7 +225,7 @@ export function FindBar({
             // · `wholeWord` 在正则开着时灰（正则自己就有 `\b`）；
             // · `wildcard` 与 `regex` **互为**对方的灰——两颗都是"怎么写这个查询"，
             //   同时开着的话 `*` 有歧义（通配符 vs 原子的重复）。
-            const 失灵 =
+            const loseResponsive =
               (s.key === "wholeWord" && options.regex) ||
               (s.key === "wildcard" && options.regex) ||
               (s.key === "regex" && options.wildcard);
@@ -234,11 +234,11 @@ export function FindBar({
             key={s.key}
             type="button"
             className="find-toggle"
-            data-on={!失灵 && options[s.key]}
-            data-off={失灵 || undefined}
-            aria-pressed={!失灵 && options[s.key]}
-            disabled={失灵}
-            title={失灵 ? t("Not used while Regular Expression is on — \\b does the same job") : s.title}
+            data-on={!loseResponsive && options[s.key]}
+            data-off={loseResponsive || undefined}
+            aria-pressed={!loseResponsive && options[s.key]}
+            disabled={loseResponsive}
+            title={loseResponsive ? t("Not used while Regular Expression is on — \\b does the same job") : s.title}
             // 同 `FormatBar`：不拦的话按钮会把焦点从输入框抢走，
             // 用户点完开关得再点一次输入框才能接着打字。
             onMouseDown={(e) => e.preventDefault()}
@@ -272,15 +272,15 @@ export function FindBar({
         <button
           type="button"
           className="find-toggle"
-          data-on={显示替换 || 手动展开}
-          aria-expanded={显示替换 || 手动展开}
-          title={(显示替换 || 手动展开) ? t("Hide Replace") : t("Show Replace (Ctrl+H)")}
-          aria-label={(显示替换 || 手动展开) ? t("Hide Replace") : t("Show Replace")}
+          data-on={showReplaceReplace || manualExpand}
+          aria-expanded={showReplaceReplace || manualExpand}
+          title={(showReplaceReplace || manualExpand) ? t("Hide Replace") : t("Show Replace (Ctrl+H)")}
+          aria-label={(showReplaceReplace || manualExpand) ? t("Hide Replace") : t("Show Replace")}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => 设手动展开((v) => !v)}
+          onClick={() => setManualExpand((v) => !v)}
         >
           {/* ⚠️ 字形不是图标：Folio 那 96 枚里没有 chevron（docs/07 第 105 项记着这条）。 */}
-          {(显示替换 || 手动展开) ? "⌃" : "⌄"}
+          {(showReplaceReplace || manualExpand) ? "⌃" : "⌄"}
         </button>
         <button
           type="button"
@@ -293,17 +293,17 @@ export function FindBar({
           <Icon name="folio-close-symbolic" />
         </button>
       </div>
-      {(显示替换 || 手动展开) && (
+      {(showReplaceReplace || manualExpand) && (
 
       <div className="find-row">
         <input
           className="find-input"
           type="text"
-          value={替换成}
+          value={replaceReplaceBecome}
           placeholder={t("Replace with")}
           spellCheck={false}
           aria-label={t("Replacement text")}
-          onChange={(e) => set替换成(e.target.value)}
+          onChange={(e) => setReplaceReplaceBecome(e.target.value)}
         />
         <button
           type="button"
@@ -311,7 +311,7 @@ export function FindBar({
           // ⚠️ 不拦的话，"替换"会把焦点抢走，而"替换"最常用的姿势是
           // **连点好几下**——第二下之后就换成替换输入框里的字了。
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onReplace(替换成)}
+          onClick={() => onReplace(replaceReplaceBecome)}
         >
           {t("Replace")}
         </button>
@@ -319,7 +319,7 @@ export function FindBar({
           type="button"
           className="find-btn find-btn-wide"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onReplaceAll(替换成)}
+          onClick={() => onReplaceAll(replaceReplaceBecome)}
         >
           {t("Replace All")}
         </button>

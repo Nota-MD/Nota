@@ -35,7 +35,7 @@
  */
 
 /** 弹层这一族的三个标记。⚠️ 加新的一族时**必须**也加到这里，否则新弹层里的滚动又会把菜单关掉。 */
-const 弹层选择器 = ".menu-popup, .menu-sub, [data-context-menu]";
+const popupSelectChooseDevice = ".menu-popup, .menu-sub, [data-context-menu]";
 
 /**
  * 这一发 `scroll` 是不是出自弹层内部？
@@ -43,8 +43,8 @@ const 弹层选择器 = ".menu-popup, .menu-sub, [data-context-menu]";
  * ⚠️ 参数收 `EventTarget | null` 而不是 `Element`：`scroll` 的目标可能是
  * `document`（没有 `closest`），调用方不必自己判两次。
  */
-export function 弹层自己在滚(目标: EventTarget | null): boolean {
-  const el = 目标 as Element | null;
+export function popupSelfSelfAtRoll(target: EventTarget | null): boolean {
+  const el = target as Element | null;
   if (!el || typeof el.closest !== "function") return false;
-  return el.closest(弹层选择器) !== null;
+  return el.closest(popupSelectChooseDevice) !== null;
 }

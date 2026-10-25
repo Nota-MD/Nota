@@ -85,23 +85,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
-import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type PluginInfo, type PluginPanel, type 信任记录 } from "@/bridge/ipc";
+import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type PluginInfo, type PluginPanel, type trustRecord } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { DockResizer } from "@/ui/DockResizer";
 import { PanelBody } from "@/ui/PanelBody";
 import {
-  记忆,
-  记住内容表,
-  起始页,
-  这一页画什么,
-  type 页,
-  type 面板状态,
+  recordRecall,
+  recordHoldContentTable,
+  startStartPage,
+  thisValuePageDrawWhatWhat,
+  type page,
+  type PanelState,
 } from "@/ui/panel-dock-state";
 // ⚠️ `normalise` 还留着：拉回来的那一路（`拉` 里）照样过这道门收窄。
 import { normalise } from "@/ui/panel-nodes";
-import { 位置名, 能力名, 来源说明, 语言标签名, 语言对不上, 语言提示 } from "@/ui/pluginText";
+import { positionName, ableForceName, comeSourceDescription, languageTag, languageMismatch, languageHint } from "@/ui/pluginText";
 import type { PromptRequest } from "@/ui/useDialogs";
-import type { 插件动作 } from "@/ui/usePlugins";
+import type { pluginAction } from "@/ui/usePlugins";
 
 interface Props {
   plugins: PluginInfo[];
@@ -111,18 +111,18 @@ interface Props {
    * 信任库里那几把钥匙。⚠️ **摆出来是这套机制的正当性所在**：
    * 信任按**指纹**判，而指纹只有能被核对才有意义（`ui/usePlugins.ts::PluginsState::信任`）。
    */
-  信任: 信任记录[];
+  messageTask: trustRecord[];
   /** 跑一条插件命令（错误由 `App.tsx` 那边 toast，这里只管调）。 */
   onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
   /** 拖动**左缘**改宽（用户 2026-10-11：「拓展菜单左侧也可以拖动」）。 */
-  onResize: (宽: number) => void;
+  onResize: (width: number) => void;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
   /**
    * 「插件」页那几颗按钮（装 / 卸 / 启停 / 信任）。**实现全在
    * `ui/usePlugins.ts`**，这里只画——那一层要弹文件框、弹确认框、弹 toast，
    * 都不该塞进这个纯展示组件里。
    */
-  动作: 插件动作;
+  action: pluginAction;
   /**
    * 摊着改动预览时把整栏锁掉（`inert`：点不动、也聚焦不了）。
    *
@@ -134,7 +134,7 @@ interface Props {
 }
 
 /** 面板的坐标字符串。id 只在插件内部唯一，所以**必须**带上插件名。 */
-function 坐标(p: PluginPanel): string {
+function coordinate(p: PluginPanel): string {
   return `${p.plugin}/${p.id}`;
 }
 
@@ -148,11 +148,11 @@ function 坐标(p: PluginPanel): string {
 export function PluginDock({
   plugins,
   panels,
-  信任,
+  messageTask,
   onCall,
   onResize,
   askPrompt,
-  动作,
+  action,
   inert,
 }: Props) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
@@ -172,22 +172,22 @@ export function PluginDock({
   // 必须是函数、为什么里面非得是字面量 `t("…")`（这两条在这里时也一样成立）。
 
   // 右侧的进这一栏，**一个一页**。另外两类各有各的去处，见下。
-  const 右侧的 = useMemo(() => panels.filter((p) => p.location === "right"), [panels]);
+  const rightSideOf = useMemo(() => panels.filter((p) => p.location === "right"), [panels]);
   // `main`：属于**编辑区**（插件喊 `nota.ui.review` 时摊到正文那一块）。
   // 它**不是**没落脚处——只是落脚处不在这一栏，所以单独列出来（见「插件」页）。
-  const 编辑区的 = panels.filter((p) => p.location === "main");
+  const editorAreaOf = panels.filter((p) => p.location === "main");
   // 剩下的（`left` 之类）目前**哪儿都不显示**——但**不静默丢掉**：
   // 「插件」页里单独列出来并写明，否则就成了"插件声明了却哪儿都没有"那种
   // 最难查的症状（BUG-13 就是这个形状）。
-  const 没落脚处的 = panels.filter((p) => p.location !== "right" && p.location !== "main");
+  const noneDropFootPlaceOf = panels.filter((p) => p.location !== "right" && p.location !== "main");
 
   // ⚠️ 依赖是**拼出来的字符串**而不是 `右侧的` 那个数组：数组每次渲染都是
   // 新身份，拿它当依赖会让下面每个 effect 每渲染一次都重跑一遍。
-  const 键串 = 右侧的.map(坐标).join("\n");
-  const 键们 = useMemo(
-    () => 右侧的.map(坐标),
+  const keyString = rightSideOf.map(coordinate).join("\n");
+  const keys = useMemo(
+    () => rightSideOf.map(coordinate),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [键串],
+    [keyString],
   );
 
   /**
@@ -202,8 +202,8 @@ export function PluginDock({
    * ⚠️ `当前` 的兜底**不能写成 `??`**：`null` 是"用户自己停在「插件」那一页"
    * （一个正经的选择），只有 `undefined`（从没选过）才该落回第一页。
    */
-  const [当前, set当前] = useState<页>(() => 起始页(记忆.当前, 键们));
-  const [内容表, set内容表] = useState<Record<string, 面板状态>>(() => 记忆.内容表);
+  const [current, setCurrent] = useState<page>(() => startStartPage(recordRecall.current, keys));
+  const [contentTable, setContentTable] = useState<Record<string, PanelState>>(() => recordRecall.contentTable);
 
   /**
    * **正在往外吐的那段字**，按插件 id 记（2026-10-04 加，`docs/07` 第 58 项）。
@@ -216,29 +216,29 @@ export function PluginDock({
    * ⚠️ 按**插件**记而不是按面板坐标记：宿主那边（`lua/api/ui.rs::实时表`）
    * 只知道是哪个插件在吐字，不知道是哪个面板——载荷里根本没有 `id`。
    */
-  const [实时表, set实时表] = useState<Record<string, string>>(() => 记忆.实时表);
+  const [actualTimeTable, setActualTimeTable] = useState<Record<string, string>>(() => recordRecall.actualTimeTable);
 
   // 上面三个 state 每变一次就抄进记忆一份（那份记忆才是"关掉再打开时的起点"）。
   // ⚠️ 内容表抄过去的时候要**抹掉 `busy`**（见 `记住内容表` 的注释：不抹的话
   // 面板重开时会是一排永远解不开的灰按钮）。
   useEffect(() => {
-    记忆.当前 = 当前;
-  }, [当前]);
+    recordRecall.current = current;
+  }, [current]);
   useEffect(() => {
-    记忆.内容表 = 记住内容表(内容表);
-  }, [内容表]);
+    recordRecall.contentTable = recordHoldContentTable(contentTable);
+  }, [contentTable]);
   useEffect(() => {
-    记忆.实时表 = 实时表;
-  }, [实时表]);
+    recordRecall.actualTimeTable = actualTimeTable;
+  }, [actualTimeTable]);
 
   /** 用户**手动**点过页签。点过之后就不再替用户选（他点了「插件」页就该留在那儿）。 */
-  const 手动选过 = useRef(false);
+  const handActionSelectPass = useRef(false);
   // ⚠️ 页签的方向键走 `useTablistKeys`（第 50 项，2026-10-04）：挪焦点不切换。
-  const 页签栏 = useRef<HTMLElement>(null);
-  useTablistKeys(页签栏);
-  const 切到 = (页: 页) => {
-    手动选过.current = true;
-    set当前(页);
+  const pageKeyBar = useRef<HTMLElement>(null);
+  useTablistKeys(pageKeyBar);
+  const splitTo = (page: page) => {
+    handActionSelectPass.current = true;
+    setCurrent(page);
   };
 
   // 面板清单是**启动时异步拉的**：第一次渲染时 `键们` 很可能是空的，
@@ -246,16 +246,16 @@ export function PluginDock({
   // 除非用户已经自己点过。
   // 反过来的情况（当前这页的插件被卸了／面板没了）也一样处理：落到第一页。
   useEffect(() => {
-    const 有效 = 当前 !== null && 键们.includes(当前);
-    if (有效) return;
-    if (手动选过.current && 当前 !== null) return; // 用户选的页没了 → 下面兜底
-    if (当前 === null && 手动选过.current) return; // 用户自己停在「插件」页
-    set当前(键们[0] ?? null);
+    const hasEffect = current !== null && keys.includes(current);
+    if (hasEffect) return;
+    if (handActionSelectPass.current && current !== null) return; // 用户选的页没了 → 下面兜底
+    if (current === null && handActionSelectPass.current) return; // 用户自己停在「插件」页
+    setCurrent(keys[0] ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [键串]);
+  }, [keyString]);
 
-  const 活动 = 当前 !== null && 键们.includes(当前) ? 当前 : null;
-  const 活动面板 = 右侧的.find((p) => 坐标(p) === 活动) ?? null;
+  const activity = current !== null && keys.includes(current) ? current : null;
+  const activityPanel = rightSideOf.find((p) => coordinate(p) === activity) ?? null;
 
   /**
    * 每次请求的序号，按面板记。
@@ -265,44 +265,44 @@ export function PluginDock({
    * 新内容盖成旧的——症状是"提交完列表还是旧的，再点一次刷新才对"，
    * 而且它只在慢的时候出现。
    */
-  const 序号 = useRef<Record<string, number>>({});
+  const index = useRef<Record<string, number>>({});
 
-  const 拉 = useCallback(async (plugin: string, id: string) => {
-    const 键 = `${plugin}/${id}`;
-    const 这次 = (序号.current[键] = (序号.current[键] ?? 0) + 1);
+  const pull = useCallback(async (plugin: string, id: string) => {
+    const key = `${plugin}/${id}`;
+    const thisCount = (index.current[key] = (index.current[key] ?? 0) + 1);
 
-    set内容表((m) => ({
+    setContentTable((m) => ({
       ...m,
       // 已经有内容就留着，别闪白（见 `面板状态` 的注释）。
-      [键]: m[键]?.state === "ok" || m[键]?.state === "error" ? m[键] : { state: "loading" },
+      [key]: m[key]?.state === "ok" || m[key]?.state === "error" ? m[key] : { state: "loading" },
     }));
 
     try {
       const nodes = normalise(await api.plugin.panelContent(plugin, id));
-      if (序号.current[键] !== 这次) return; // 已经有更新的请求在飞了
-      set内容表((m) => ({ ...m, [键]: { state: "ok", nodes, busy: null } }));
+      if (index.current[key] !== thisCount) return; // 已经有更新的请求在飞了
+      setContentTable((m) => ({ ...m, [key]: { state: "ok", nodes, busy: null } }));
       // ⚠️ 真内容到手了 ⇒ 把这一段临时的擦掉（`docs/07` 第 58 项）。
       // 这里就是"收工"这件事的落点：插件吐完最后喊的那一声 `nota.ui.refresh`
       // 会走到这儿来。放在**成功之后**（而不是发请求的时候）是有意的——
       // 拉失败时那段字还留着，比屏幕上一片空白强。
-      set实时表((m) => (plugin in m ? { ...m, [plugin]: "" } : m));
+      setActualTimeTable((m) => (plugin in m ? { ...m, [plugin]: "" } : m));
     } catch (e) {
-      if (序号.current[键] !== 这次) return;
+      if (index.current[key] !== thisCount) return;
       // **错误要看得见**：面板渲染失败（插件里 `render` 抛错）是插件作者
       // 最需要看到的一条信息，吞掉它就等于让人对着一个空面板猜。
-      set内容表((m) => ({
+      setContentTable((m) => ({
         ...m,
-        [键]: { state: "error", message: String(e), busy: null },
+        [key]: { state: "error", message: String(e), busy: null },
       }));
     }
   }, []);
 
   // 切到哪一页就拉哪一页（包括第一次打开）。
   useEffect(() => {
-    if (!活动面板) return;
-    void 拉(活动面板.plugin, 活动面板.id);
+    if (!activityPanel) return;
+    void pull(activityPanel.plugin, activityPanel.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [活动, 拉]);
+  }, [activity, pull]);
 
   // 插件说"这一侧变了" → 重拉。载荷里没有内容，只有一个坐标（或 `id = null`
   // 表示"这个插件的都重拉"）。
@@ -312,8 +312,8 @@ export function PluginDock({
     let alive = true;
 
     void on<PanelDirtyPayload>(events.pluginPanel, ({ plugin, id }) => {
-      if (!活动面板 || 活动面板.plugin !== plugin) return;
-      if (id === null || id === 活动面板.id) void 拉(活动面板.plugin, 活动面板.id);
+      if (!activityPanel || activityPanel.plugin !== plugin) return;
+      if (id === null || id === activityPanel.id) void pull(activityPanel.plugin, activityPanel.id);
     }).then((u) => {
       if (alive) unlisten = u;
       else u();
@@ -324,7 +324,7 @@ export function PluginDock({
       unlisten?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [活动, 拉]);
+  }, [activity, pull]);
 
   // 插件正往外吐字（`nota.ui.stream`）→ 直接画，**一个字节都不去宿主那边取**。
   //
@@ -342,7 +342,7 @@ export function PluginDock({
     let alive = true;
 
     void on<PanelStreamPayload>(events.pluginStream, ({ plugin, text }) => {
-      set实时表((m) => ({ ...m, [plugin]: text }));
+      setActualTimeTable((m) => ({ ...m, [plugin]: text }));
     }).then((u) => {
       if (alive) unlisten = u;
       else u();
@@ -355,12 +355,12 @@ export function PluginDock({
   }, []);
 
   /** 面板上的按钮：跑命令，跑完**自己**再拉一次。 */
-  const 跑 = async (plugin: string, id: string, command: string, args?: unknown) => {
-    const 键 = `${plugin}/${id}`;
-    set内容表((m) => {
-      const 旧 = m[键];
-      if (旧?.state !== "ok") return m;
-      return { ...m, [键]: { ...旧, busy: command } };
+  const run = async (plugin: string, id: string, command: string, args?: unknown) => {
+    const key = `${plugin}/${id}`;
+    setContentTable((m) => {
+      const oldValue = m[key];
+      if (oldValue?.state !== "ok") return m;
+      return { ...m, [key]: { ...oldValue, busy: command } };
     });
     try {
       await onCall(plugin, command, args);
@@ -371,14 +371,14 @@ export function PluginDock({
       //
       // ⚠️ 这里**不管当前在哪一页**都拉：命令是这一页发出去的，跑完得把它
       // 自己刷干净（用户可能已经切走了，切回来时看到的必须是结果不是过程）。
-      void 拉(plugin, id);
+      void pull(plugin, id);
     }
   };
 
   /** 「插件」页：清单 ＋ 没落脚处的面板。抽出来只为让下面 JSX 短一点。 */
-  const 插件页 = (
+  const pluginPage = (
     <>
-      {编辑区的.length > 0 && (
+      {editorAreaOf.length > 0 && (
         // 声明了 `location = "main"` 的面板：它们摊在**正文那一块**，由插件自己
         // 在日常流程里喊开（AI 提了改动之后点「在编辑区看」）。这里是**清单**，
         // 不是开关——宿主点不开它们，因为"该不该摊"只有插件知道
@@ -388,8 +388,8 @@ export function PluginDock({
           <p className="dock-hint">
             {t("These panels are laid over the editing area; the extension opens one when it needs to (e.g. “View in editor” after the AI proposes a change).")}
           </p>
-          {编辑区的.map((p) => (
-            <p key={坐标(p)} className="dock-orphan">
+          {editorAreaOf.map((p) => (
+            <p key={coordinate(p)} className="dock-orphan">
               {p.title || p.id}
               <span className="dock-orphan-where">{t("editing area")}</span>
             </p>
@@ -397,18 +397,18 @@ export function PluginDock({
         </section>
       )}
 
-      {没落脚处的.length > 0 && (
+      {noneDropFootPlaceOf.length > 0 && (
         <section className="dock-orphans">
           <h4 className="dock-subtitle">{t("Nowhere to land")}</h4>
           <p className="dock-hint">
             {t("These panels declare a location that does not exist yet, so they are not shown anywhere.")}
           </p>
-          {没落脚处的.map((p) => (
-            <p key={坐标(p)} className="dock-orphan">
+          {noneDropFootPlaceOf.map((p) => (
+            <p key={coordinate(p)} className="dock-orphan">
               {p.title || p.id}
               {/* ⚠️ 认不出的位置**照原样显示**（`left` 之类）。上面那段话已经说了
                   "还没有对应的地方"，这里露出原始值正好是给作者看的线索。 */}
-              <span className="dock-orphan-where">{位置名(p.location) ?? p.location}</span>
+              <span className="dock-orphan-where">{positionName(p.location) ?? p.location}</span>
             </p>
           ))}
         </section>
@@ -427,11 +427,11 @@ export function PluginDock({
           // 「颜色异常。现在看不清按钮。」）。同族的 `.stg-action`（设置页）与
           // `panel-btn`（面板 DSL）都老老实实挂着 `btn`，只有这一栏漏了。
           className="btn plugin-install"
-          disabled={动作.忙 !== null}
+          disabled={action.busy !== null}
           title={t("Install from an extension package (.nota-plugin)")}
-          onClick={() => void 动作.装()}
+          onClick={() => void action.install()}
         >
-          {动作.忙 === "装" ? t("Installing…") : t("Install from file…")}
+          {action.busy === "装" ? t("Installing…") : t("Install from file…")}
         </button>
       </h4>
       {plugins.length ? (
@@ -446,17 +446,17 @@ export function PluginDock({
                 {p.id}
                 {/* 来路 + 验签结论。⚠️ **未签名**也要如实写出来：用户看得见
                     自己在信一个什么东西，是这套机制唯一的用处。 */}
-                <span className="plugin-origin">{来源说明(p)}</span>
+                <span className="plugin-origin">{comeSourceDescription(p)}</span>
               </div>
               {p.description && <p className="plugin-desc">{p.description}</p>}
               {/* ⚠️ 语言对不上就在这里说一句（用户 2026-09-25 要的那句话）。
                   位置在**这一行插件**上，因为用户是从这里点进它的面板的；
                   面板里还会再说一次（那才是他真正在看的那些字）。 */}
-              {语言对不上(p) && (
+              {languageMismatch(p) && (
                 <p className="plugin-lang">
-                  {语言提示()}
+                  {languageHint()}
                   <span className="plugin-lang-now">
-                    {语言标签名(p.lang ?? "en") ?? (p.lang ?? "en")}
+                    {languageTag(p.lang ?? "en") ?? (p.lang ?? "en")}
                   </span>
                 </p>
               )}
@@ -467,7 +467,7 @@ export function PluginDock({
                     // ⚠️ `title` 留着**原始 id**：中文名是给用户看的，id 是给
                     // 写清单的人对照 `docs/11` 那张能力表用的，两个都要在。
                     <span key={c} className="cap" title={c}>
-                      {能力名(c) ?? c}
+                      {ableForceName(c) ?? c}
                     </span>
                   ))}
                 </div>
@@ -476,10 +476,10 @@ export function PluginDock({
                 <button
                   type="button"
                   className="btn plugin-action"
-                  disabled={动作.忙 !== null}
-                  onClick={() => void 动作.启停(p.id, p.state === "disabled")}
+                  disabled={action.busy !== null}
+                  onClick={() => void action.toggle(p.id, p.state === "disabled")}
                 >
-                  {动作.忙 === p.id
+                  {action.busy === p.id
                     ? "…"
                     : p.state === "disabled"
                       ? t("Enable")
@@ -492,8 +492,8 @@ export function PluginDock({
                   <button
                     type="button"
                     className="btn plugin-action plugin-action-danger"
-                    disabled={动作.忙 !== null}
-                    onClick={() => void 动作.卸(p.id)}
+                    disabled={action.busy !== null}
+                    onClick={() => void action.unload(p.id)}
                   >
                     {t("Uninstall")}
                   </button>
@@ -502,9 +502,9 @@ export function PluginDock({
                   <button
                     type="button"
                     className="btn plugin-action"
-                    disabled={动作.忙 !== null}
+                    disabled={action.busy !== null}
                     title={t("Trust {0}", p.key_id ?? t("this signer"))}
-                    onClick={() => void 动作.信任(p.id, p.key_id)}
+                    onClick={() => void action.messageTask(p.id, p.key_id)}
                   >
                     {t("Trust")}
                   </button>
@@ -523,7 +523,7 @@ export function PluginDock({
           等于没记。这里只列不删——撤销信任是**改文件**的事
           （`~/.config/nota/trusted-keys.toml`，布局在 `docs/11` §1.6.5），
           不在这儿加一颗"删除"，免得用户以为那是"卸载这个插件"。 */}
-      {信任.length > 0 && (
+      {messageTask.length > 0 && (
         <section className="dock-trust">
           <h4 className="dock-subtitle">{t("Trusted signers")}</h4>
           <p className="dock-hint">
@@ -531,7 +531,7 @@ export function PluginDock({
             <code>trusted-keys.toml</code>
             {t(" to fix a mismatch.")}
           </p>
-          {信任.map((k) => (
+          {messageTask.map((k) => (
             <p key={k.key_id} className="trust-row">
               <span className="trust-key">{k.key_id}</span>
               <span className="trust-name">{k.name}</span>
@@ -549,50 +549,50 @@ export function PluginDock({
    * 下面还各套一个立即执行的箭头函数）读起来要来回数问号，加新页面时
    * 几乎一定会接错分支——而接错的表现是"某一页显示成另一页"，不报错。
    */
-  const 正文 = (() => {
-    if (活动面板 === null) return 插件页;
+  const body2 = (() => {
+    if (activityPanel === null) return pluginPage;
 
     // ⚠️ 这里重新算一遍坐标而不是用上面的 `活动`：那个的类型是
     // `string | null`（TS 不会因为 `活动面板` 非空就把它窄化），
     // 拿它当索引 TS 要报"不能用 null 当索引"。
-    const 键 = 坐标(活动面板);
-    const 态 = 内容表[键] ?? { state: "loading" as const };
+    const key = coordinate(activityPanel);
+    const state2 = contentTable[key] ?? { state: "loading" as const };
     // 这一刻该画什么（内容 ＋ 插件正在吐的那段字）——判据全在
     // `ui/panel-dock-state.ts::这一页画什么` 里（**纯函数**，单测是
     // `tests/panel-dock-state.test.ts`）。那边有一条是这一栏的救命条款：
     // **内容还拉不回来、但有流式文字时先把文字画出来**（第 111 项）。
-    const 实时 = 实时表[活动面板.plugin] ?? "";
-    const 画 = 这一页画什么(态, 实时);
+    const actualTime = actualTimeTable[activityPanel.plugin] ?? "";
+    const draw = thisValuePageDrawWhatWhat(state2, actualTime);
 
     // 这一页的插件语言对不上吗？（那位用户看到的是英语的插件 + 一句话解释）
-    const 这插件 = plugins.find((p) => p.id === 活动面板.plugin);
+    const thisPlugin = plugins.find((p) => p.id === activityPanel.plugin);
     return (
       <section className="dock-panels">
         {/* key 用坐标：换页时**换掉整棵子树**，否则
             `<PanelBody>` 里输入框的草稿会跟着页签跑到另一页去。 */}
-        <article key={键} className="panel">
-          {这插件 && 语言对不上(这插件) && (
-            <p className="panel-lang">{语言提示()}</p>
+        <article key={key} className="panel">
+          {thisPlugin && languageMismatch(thisPlugin) && (
+            <p className="panel-lang">{languageHint()}</p>
           )}
           <div className="panel-body">
-            {画.提示 === "载入" && <p className="panel-pending">{t("Loading…")}</p>}
-            {画.错误 !== null && (
+            {draw.notice === "载入" && <p className="panel-pending">{t("Loading…")}</p>}
+            {draw.error !== null && (
               <p className="panel-error" role="alert">
-                {画.错误}
+                {draw.error}
               </p>
             )}
             {
               // 空的**不是错误**：插件这一刻没有内容可显示（没开文件夹、
               // 没有改动）。如实说，别画一个空框让人以为坏了。
-              画.提示 === "空" && <p className="panel-empty">{t("The extension has nothing to show.")}</p>
+              draw.notice === "空" && <p className="panel-empty">{t("The extension has nothing to show.")}</p>
             }
-            {画.节点们.length > 0 && (
+            {draw.nodes.length > 0 && (
               <PanelBody
-                plugin={活动面板.plugin}
-                nodes={画.节点们}
-                busy={画.busy}
+                plugin={activityPanel.plugin}
+                nodes={draw.nodes}
+                busy={draw.busy}
                 askPrompt={askPrompt}
-                onCall={(plugin, command, args) => 跑(plugin, 活动面板.id, command, args)}
+                onCall={(plugin, command, args) => run(plugin, activityPanel.id, command, args)}
               />
             )}
           </div>
@@ -610,12 +610,12 @@ export function PluginDock({
     // 焊在外壳里，插件一改名/一搬家，这段就静默失灵（不报错，只是变窄）。
     <aside
       className="plugin-dock"
-      data-wide={活动面板?.wide || undefined}
+      data-wide={activityPanel?.wide || undefined}
       inert={inert || undefined}
     >
       <nav className="dock-head">
         <span className="dock-title">
-          {活动面板 ? 活动面板.title || 活动面板.id : t("Extensions")}
+          {activityPanel ? activityPanel.title || activityPanel.id : t("Extensions")}
         </span>
         {/* ⚠️ **这颗 × 2026-10-11 按用户点名去掉了**（「拓展的那个叉也可以关掉」）：
             收起拓展栏仍有两条路——顶部那颗 `Extensions` 开关（`TopBar`）与
@@ -626,19 +626,19 @@ export function PluginDock({
       {/* 页签：每个右侧面板一页 ＋ 「插件」页（清单）。
           ⚠️ 页签**永远都在**，哪怕只有一个面板：它是"这里还有别的东西"的
           唯一线索，藏起来的话用户会以为这一栏就叫这个名字。 */}
-      <nav ref={页签栏} className="dock-tabs" role="tablist" aria-label={t("Extension panels")}>
-        {右侧的.map((p) => {
-          const 键 = 坐标(p);
+      <nav ref={pageKeyBar} className="dock-tabs" role="tablist" aria-label={t("Extension panels")}>
+        {rightSideOf.map((p) => {
+          const key = coordinate(p);
           return (
             <button
-              key={键}
+              key={key}
               type="button"
               role="tab"
               className="dock-tab"
-              data-active={键 === 活动}
-              aria-selected={键 === 活动}
+              data-active={key === activity}
+              aria-selected={key === activity}
               title={t("Provided by extension {0}", p.plugin)}
-              onClick={() => 切到(键)}
+              onClick={() => splitTo(key)}
             >
               {p.title || p.id}
             </button>
@@ -648,10 +648,10 @@ export function PluginDock({
           type="button"
           role="tab"
           className="dock-tab dock-tab-plugins"
-          data-active={活动 === null}
-          aria-selected={活动 === null}
+          data-active={activity === null}
+          aria-selected={activity === null}
           title={t("Installed extensions (look here when something is wrong)")}
-          onClick={() => 切到(null)}
+          onClick={() => splitTo(null)}
         >
           {t("Extensions")}
         </button>
@@ -663,7 +663,7 @@ export function PluginDock({
           （`panel-nodes.ts` 里夹在 120–2000 之间），面板照旧"内容多高就多高、
           超出滚动"。一条滚动规则，不必再分两种。 */}
       <div className="dock-body">
-        {正文}
+        {body2}
       </div>
       <DockResizer onCommit={onResize} />
     </aside>

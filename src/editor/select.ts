@@ -53,7 +53,7 @@ import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
 /** 一段区间：`from` 含、`to` 不含。 */
-export interface 区间 {
+export interface range {
   from: number;
   to: number;
 }
@@ -61,7 +61,7 @@ export interface 区间 {
 /* ══ 第一组：纯文本层的判据（两种模式共用，见文件头）══════════════════════ */
 
 /** 行内叶子的替身。`U+FFFC`（OBJECT REPLACEMENT CHARACTER）不是词、不是句读。 */
-const 原子占位 = "￼";
+const atomPlaceholder = "￼";
 
 /**
  * 分词器。**有没有随环境变**（WebKit 老版本、精简 ICU 的 Node 都可能没有），
@@ -71,24 +71,24 @@ const 原子占位 = "￼";
  * （中文按词典切、英文按词形切），每次新建一份没有意义。⚠️ 语言给 `undefined`
  * 表示"按运行环境的默认语言"——本应用没有"文档语言"这个概念，用系统默认是对的。
  */
-let 分段器: Intl.Segmenter | null | undefined;
+let shareParagraphDevice: Intl.Segmenter | null | undefined;
 
-function 取分段器(): Intl.Segmenter | null {
-  if (分段器 !== undefined) return 分段器;
+function getShareParagraphDevice(): Intl.Segmenter | null {
+  if (shareParagraphDevice !== undefined) return shareParagraphDevice;
   try {
-    分段器 = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "word" }) : null;
+    shareParagraphDevice = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "word" }) : null;
   } catch {
     // 建不出来（个别环境的 ICU 会抛）也不该让整条命令倒下——退回正则那一支。
-    分段器 = null;
+    shareParagraphDevice = null;
   }
-  return 分段器;
+  return shareParagraphDevice;
 }
 
 /** 没有分词器时的兜底：字母/数字/下划线连成一段。⚠️ 中文会**整段**连成一"词"。 */
-const 词正则 = /[\p{L}\p{N}_]+/gu;
+const wordCorrectRule = /[\p{L}\p{N}_]+/gu;
 
-function 夹(值: number, 下: number, 上: number): number {
-  return Math.max(下, Math.min(值, 上));
+function clamp(value2: number, below: number, above: number): number {
+  return Math.max(below, Math.min(value2, above));
 }
 
 /**
@@ -107,40 +107,40 @@ function 夹(值: number, 下: number, 上: number): number {
  * ⚠️ 收的是 `Iterable` 而不是数组：源码模式那边喂进来的可能是整篇文本，
  * 而**挑到就该停**——物化成一整张候选表再去挑，是替一次按键把全篇都分一遍词。
  */
-function 挑词(候选: Iterable<区间>, 位: number): 区间 | null {
-  let 前: 区间 | null = null;
-  for (const 词 of 候选) {
-    if (位 >= 词.from && 位 < 词.to) return 词;
+function pickWord(candidate: Iterable<range>, position3: number): range | null {
+  let before2: range | null = null;
+  for (const word of candidate) {
+    if (position3 >= word.from && position3 < word.to) return word;
     // ⚠️ 判据是 `<=`（"整个词都在前面"），不是 `===`（"正好贴着它尾巴"）：
     // 空白**不止一格**（`"hello  world"` 里光标停在第 2 个空格上）时，
     // `===` 会让 `前` 一直是空的，第 3 条于是给出**后一个**词——而"光标
     // 在空白里往前找一个词"是这条命令的本意（见文件头那把三条判据）。
-    if (词.to <= 位) 前 = 词;
-    else if (词.from > 位) return 前 ?? 词;
+    if (word.to <= position3) before2 = word;
+    else if (word.from > position3) return before2 ?? word;
   }
-  return 前;
+  return before2;
 }
 
 /** 分词器那一支的候选（**懒**的，见 {@link 挑词}）。`isWordLike` 是分词器自己的判据。 */
-function* 分词器候选(文本: string, 段: Intl.Segmenter): Generator<区间> {
-  for (const 一 of 段.segment(文本)) {
-    if (一.isWordLike) yield { from: 一.index, to: 一.index + 一.segment.length };
+function* shareWordDeviceCandidate(text2: string, paragraph2: Intl.Segmenter): Generator<range> {
+  for (const value of paragraph2.segment(text2)) {
+    if (value.isWordLike) yield { from: value.index, to: value.index + value.segment.length };
   }
 }
 
 /** 兜底那一支的候选（同样懒）。 */
-function* 正则候选(文本: string): Generator<区间> {
-  for (const 匹配 of 文本.matchAll(词正则)) {
-    yield { from: 匹配.index, to: 匹配.index + 匹配[0].length };
+function* correctRuleCandidate(text2: string): Generator<range> {
+  for (const match2 of text2.matchAll(wordCorrectRule)) {
+    yield { from: match2.index, to: match2.index + match2[0].length };
   }
 }
 
 /** 一段纯文本里，`位置` 处那个**词**的区间。没有词（空文、纯空白、纯标点）给 `null`。 */
-export function 选词区间(文本: string, 位置: number): 区间 | null {
-  if (!文本) return null;
-  const 位 = 夹(位置, 0, 文本.length);
-  const 段 = 取分段器();
-  return 挑词(段 ? 分词器候选(文本, 段) : 正则候选(文本), 位);
+export function wordRange(text2: string, position2: number): range | null {
+  if (!text2) return null;
+  const position3 = clamp(position2, 0, text2.length);
+  const paragraph2 = getShareParagraphDevice();
+  return pickWord(paragraph2 ? shareWordDeviceCandidate(text2, paragraph2) : correctRuleCandidate(text2), position3);
 }
 
 /**
@@ -151,10 +151,10 @@ export function 选词区间(文本: string, 位置: number): 区间 | null {
  * 一按就只选中半截，而英文里逗号更多——"选句"会退化成"选到下一个逗号"。
  * ⚠️ 句号（半角 `.`）**单独判**，见 {@link 是句读}。
  */
-const 句读集 = new Set(["。", "！", "？", "…", "；", "!", "?", ";", "\n"]);
+const sentenceReadCollection = new Set(["。", "！", "？", "…", "；", "!", "?", ";", "\n"]);
 
-function 是数字(字: string | undefined): boolean {
-  return 字 !== undefined && 字 >= "0" && 字 <= "9";
+function isNumberCharacter(character2: string | undefined): boolean {
+  return character2 !== undefined && character2 >= "0" && character2 <= "9";
 }
 
 /**
@@ -165,15 +165,15 @@ function 是数字(字: string | undefined): boolean {
  * ⚠️ 缩写（`Fig. 1`）**不躲**——那需要一部缩写词典，本仓不做；认它当句尾是
  * 可接受的偏差，如实记在这儿。
  */
-function 是句读(文本: string, i: number): boolean {
-  const 字 = 文本[i];
-  if (字 === undefined) return false;
-  if (字 === ".") return !(是数字(文本[i - 1]) && 是数字(文本[i + 1]));
-  return 句读集.has(字);
+function isSentenceRead(text2: string, i: number): boolean {
+  const character2 = text2[i];
+  if (character2 === undefined) return false;
+  if (character2 === ".") return !(isNumberCharacter(text2[i - 1]) && isNumberCharacter(text2[i + 1]));
+  return sentenceReadCollection.has(character2);
 }
 
-function 是空白(字: string | undefined): boolean {
-  return 字 !== undefined && /\s/.test(字);
+function isWhitespace(character2: string | undefined): boolean {
+  return character2 !== undefined && /\s/.test(character2);
 }
 
 /**
@@ -182,24 +182,24 @@ function 是空白(字: string | undefined): boolean {
  * ⚠️ 收边**必须在算完起止之后统一做一次**：起点前面那几个空格、结尾那个换行
  * 都得切——切不干净的症状是"选中之后一敲字，后面的行被并上来了"（`\n` 被删了）。
  */
-function 收边(文本: string, 起: number, 终: number): 区间 | null {
-  let 头 = 起;
-  let 尾 = 终;
-  while (头 < 尾 && 是空白(文本[头])) 头++;
-  while (尾 > 头 && 是空白(文本[尾 - 1])) 尾--;
-  return 尾 > 头 ? { from: 头, to: 尾 } : null;
+function receiveEdge(text2: string, start5: number, end3: number): range | null {
+  let head2 = start5;
+  let tail = end3;
+  while (head2 < tail && isWhitespace(text2[head2])) head2++;
+  while (tail > head2 && isWhitespace(text2[tail - 1])) tail--;
+  return tail > head2 ? { from: head2, to: tail } : null;
 }
 
 /** 光标往前收一句：句尾是 `句尾`（那个句读的下标 + 1）。 */
-function 往回一句(文本: string, 句尾: number): 区间 | null {
-  let 起 = 0;
-  for (let i = 句尾 - 2; i >= 0; i--) {
-    if (是句读(文本, i)) {
-      起 = i + 1;
+function towardReturnOneSentence(text2: string, sentenceTail: number): range | null {
+  let start5 = 0;
+  for (let i = sentenceTail - 2; i >= 0; i--) {
+    if (isSentenceRead(text2, i)) {
+      start5 = i + 1;
       break;
     }
   }
-  return 收边(文本, 起, 句尾);
+  return receiveEdge(text2, start5, sentenceTail);
 }
 
 /**
@@ -212,30 +212,30 @@ function 往回一句(文本: string, 句尾: number): 区间 | null {
  * - 其余情况 → 光标所在那一句：往左找到最近的句读（不含），往右找到最近的句读
  *   （含它，除了 `\n`——换行不跟着选，理由见 {@link 收边}）。
  */
-export function 选句区间(文本: string, 位置: number): 区间 | null {
-  if (!文本) return null;
-  const 位 = 夹(位置, 0, 文本.length);
-  if (位 > 0 && 是句读(文本, 位 - 1)) {
-    const 回头 = 往回一句(文本, 位);
-    if (回头) return 回头;
+export function sentenceRange(text2: string, position2: number): range | null {
+  if (!text2) return null;
+  const position3 = clamp(position2, 0, text2.length);
+  if (position3 > 0 && isSentenceRead(text2, position3 - 1)) {
+    const returnHead = towardReturnOneSentence(text2, position3);
+    if (returnHead) return returnHead;
     // ⚠️ 收不出来（连着两个句读、前面只有空白）就往下走，别在这里返回空。
   }
-  let 起 = 0;
-  for (let i = 位 - 1; i >= 0; i--) {
-    if (是句读(文本, i)) {
-      起 = i + 1;
+  let start5 = 0;
+  for (let i = position3 - 1; i >= 0; i--) {
+    if (isSentenceRead(text2, i)) {
+      start5 = i + 1;
       break;
     }
   }
-  let 终 = 文本.length;
-  for (let j = 位; j < 文本.length; j++) {
-    if (是句读(文本, j)) {
+  let end3 = text2.length;
+  for (let j = position3; j < text2.length; j++) {
+    if (isSentenceRead(text2, j)) {
       // ⚠️ 换行**不跟着选**：选进去的话，选中之后一敲字，下一行就被并上来了。
-      终 = 文本[j] === "\n" ? j : j + 1;
+      end3 = text2[j] === "\n" ? j : j + 1;
       break;
     }
   }
-  return 收边(文本, 起, 终);
+  return receiveEdge(text2, start5, end3);
 }
 
 /* ══ 第二组：ProseMirror 层的换算 ══════════════════════════════════════════ */
@@ -246,37 +246,37 @@ export function 选句区间(文本: string, 位置: number): 区间 | null {
  * ⚠️ 三条出口：块不是文本块（表格里的 `table_row`、图片那类原子块）、块是
  * 代码块（见文件头）、位置在文档之外（理论上不会有）。
  */
-function 摊开块(doc: PMNode, 位置: number): { 块: PMNode; 文: string; 位: number; 起点: number } | null {
-  const $pos = doc.resolve(夹(位置, 0, doc.content.size));
-  const 块 = $pos.parent;
-  if (!块.isTextblock || 块.type.spec.code) return null;
-  const 文 = 块.textBetween(0, 块.content.size, undefined, (叶) =>
-    叶.type.name === "hardbreak" ? "\n" : 原子占位,
+function expandBlock(doc: PMNode, position2: number): { block: PMNode; text4: string; position3: number; start4: number } | null {
+  const $pos = doc.resolve(clamp(position2, 0, doc.content.size));
+  const block = $pos.parent;
+  if (!block.isTextblock || block.type.spec.code) return null;
+  const text4 = block.textBetween(0, block.content.size, undefined, (leaf) =>
+    leaf.type.name === "hardbreak" ? "\n" : atomPlaceholder,
   );
-  return { 块, 文, 位: $pos.parentOffset, 起点: $pos.start() };
+  return { block, text4, position3: $pos.parentOffset, start4: $pos.start() };
 }
 
 /** 光标所在那一段的**整段文字**区间（`Ctrl+L`）。空段落给 `null`。 */
-export function 行区间(doc: PMNode, 位置: number): 区间 | null {
-  const 摊 = 摊开块(doc, 位置);
-  if (!摊 || 摊.块.content.size === 0) return null;
-  return { from: 摊.起点, to: 摊.起点 + 摊.块.content.size };
+export function lineRange(doc: PMNode, position2: number): range | null {
+  const flatten = expandBlock(doc, position2);
+  if (!flatten || flatten.block.content.size === 0) return null;
+  return { from: flatten.start4, to: flatten.start4 + flatten.block.content.size };
 }
 
 /** 光标所在那个**词**的区间（`Ctrl+D`）。 */
-export function 词区间(doc: PMNode, 位置: number): 区间 | null {
-  const 摊 = 摊开块(doc, 位置);
-  if (!摊) return null;
-  const 区 = 选词区间(摊.文, 摊.位);
-  return 区 && { from: 摊.起点 + 区.from, to: 摊.起点 + 区.to };
+export function wordRange2(doc: PMNode, position2: number): range | null {
+  const flatten = expandBlock(doc, position2);
+  if (!flatten) return null;
+  const area = wordRange(flatten.text4, flatten.position3);
+  return area && { from: flatten.start4 + area.from, to: flatten.start4 + area.to };
 }
 
 /** 光标所在那一**句**的区间（`Ctrl+E`）。 */
-export function 句区间(doc: PMNode, 位置: number): 区间 | null {
-  const 摊 = 摊开块(doc, 位置);
-  if (!摊) return null;
-  const 区 = 选句区间(摊.文, 摊.位);
-  return 区 && { from: 摊.起点 + 区.from, to: 摊.起点 + 区.to };
+export function sentenceRange2(doc: PMNode, position2: number): range | null {
+  const flatten = expandBlock(doc, position2);
+  if (!flatten) return null;
+  const area = sentenceRange(flatten.text4, flatten.position3);
+  return area && { from: flatten.start4 + area.from, to: flatten.start4 + area.to };
 }
 
 /* ══ 第三组：四条命令（落到真编辑器上）══════════════════════════════════ */
@@ -285,33 +285,33 @@ export function 句区间(doc: PMNode, 位置: number): 区间 | null {
  * 把算出来的区间落成选区。⚠️ 空区间/`null` 一律**什么都不做**：那不是错，
  * 是"这里没有东西可选"（空段落、纯空白）。派一笔空事务反而会把撤销栈搞脏。
  */
-function 落选区(view: EditorView, 区: 区间 | null): void {
-  if (!区 || 区.from >= 区.to) return;
+function dropSelection(view: EditorView, area: range | null): void {
+  if (!area || area.from >= area.to) return;
   const { state } = view;
-  view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, 区.from, 区.to)));
+  view.dispatch(state.tr.setSelection(TextSelection.create(state.doc, area.from, area.to)));
 }
 
 /** 选当前**行**（`Ctrl+L`）。 */
-export function 选行(editor: Editor): void {
+export function selectLine(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
-    落选区(view, 行区间(view.state.doc, view.state.selection.from));
+    dropSelection(view, lineRange(view.state.doc, view.state.selection.from));
   });
 }
 
 /** 选当前**词**（`Ctrl+D`）。 */
-export function 选词(editor: Editor): void {
+export function selectWord(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
-    落选区(view, 词区间(view.state.doc, view.state.selection.from));
+    dropSelection(view, wordRange2(view.state.doc, view.state.selection.from));
   });
 }
 
 /** 选当前**句**（`Ctrl+E`）。 */
-export function 选句(editor: Editor): void {
+export function selectSentence(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
-    落选区(view, 句区间(view.state.doc, view.state.selection.from));
+    dropSelection(view, sentenceRange2(view.state.doc, view.state.selection.from));
   });
 }
 
@@ -322,16 +322,16 @@ export function 选句(editor: Editor): void {
  * 再把选区挪到附近某个词上"只会让他按第二下时删错东西。这条与
  * {@link 删词} 的另一个调用点（菜单）是同一件事——菜单上那一条的判据与键位一致。
  */
-export function 删词(editor: Editor): void {
+export function removeWord(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     const { state } = view;
-    const 选 = state.selection;
-    const 区 = 选.empty ? 词区间(state.doc, 选.from) : { from: 选.from, to: 选.to };
-    if (!区 || 区.from >= 区.to) return;
+    const select = state.selection;
+    const area = select.empty ? wordRange2(state.doc, select.from) : { from: select.from, to: select.to };
+    if (!area || area.from >= area.to) return;
     // ⚠️ 光标落在**删掉的那一段的开头**（不是结尾）：中文写作里删掉一个词之后
     // 接着敲的往往是新词，落在原地比跳到别处稳。
-    const tr = state.tr.delete(区.from, 区.to);
-    view.dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(区.from))));
+    const tr = state.tr.delete(area.from, area.to);
+    view.dispatch(tr.setSelection(TextSelection.near(tr.doc.resolve(area.from))));
   });
 }

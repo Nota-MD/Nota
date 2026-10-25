@@ -51,15 +51,15 @@
 import { useEffect } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
-import { api, type ImageSourceArg, type 路径种类 } from "@/bridge/ipc";
+import { api, type ImageSourceArg, type PathKindClass } from "@/bridge/ipc";
 import type { FilesSettings } from "@/bridge/types";
-import { t as 翻译, useT } from "@/i18n";
+import { t as FlipTranslate, useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
-import { 是Markdown后缀 } from "@/editor/file-kind";
-import { 是图片文件 } from "@/ui/useImageInsert";
+import { isMarkdownExtension } from "@/editor/file-kind";
+import { isImageSliceTextItem } from "@/ui/useImageInsert";
 
 /** 一次拖进来的文件最多处理几个。⚠️ 超出的会如实说一句（见文件头）。 */
-const 一次最多 = 12;
+const maxPerCall = 12;
 
 /**
  * 认得的**文本类**后缀。
@@ -73,7 +73,7 @@ const 一次最多 = 12;
  * 笔记的地方（配置、脚本、数据），当纯文本打开没有任何副作用——按 Ctrl+S
  * 存回去还是原来那些字节。
  */
-const 文本后缀 = [
+const textExtension = [
   "md", "markdown", "mdown", "mkd", "mdx",
   "txt", "text", "log", "csv", "tsv",
   "json", "json5", "toml", "yaml", "yml", "ini", "conf", "env",
@@ -92,13 +92,13 @@ const 文本后缀 = [
  */
 
 /** 能当文本文档打开吗（没有后缀的也当能——那多半是一篇没有扩展名的笔记）。 */
-function 是文本文件(路径: string): boolean {
-  const 名 = 路径.split("/").pop() ?? "";
-  if (!名.includes(".")) return true;
-  return 文本后缀.includes(名.split(".").pop()?.toLowerCase() ?? "");
+function isTextTextItem(path: string): boolean {
+  const name3 = path.split("/").pop() ?? "";
+  if (!name3.includes(".")) return true;
+  return textExtension.includes(name3.split(".").pop()?.toLowerCase() ?? "");
 }
 
-export interface 拖放接线 {
+export interface DragReleaseWiring {
   /** 打开一份磁盘上已有的文档（`useDocuments.openPath`）。返回值是"开上了没有"。 */
   openPath: (path: string) => Promise<boolean>;
   /**
@@ -107,7 +107,7 @@ export interface 拖放接线 {
    */
   openFolder: (path?: string) => Promise<void>;
   /** 把一张图插到当前光标（`useImageInsert` 的 `落一张`）。 */
-  落一张: (source: ImageSourceArg, alt: string, 要上传?: boolean) => Promise<void>;
+  dropOneImage: (source: ImageSourceArg, alt: string, wantAbovePass?: boolean) => Promise<void>;
   /** 拖放那三条设置（`settings.files`）。`null` = 设置还没读回来，按默认办。 */
   files: FilesSettings | null;
   /** 有没有打开着文档（拖图片进来而一份都没开时要说一句）。 */
@@ -115,108 +115,108 @@ export interface 拖放接线 {
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
-export function useFileDrop(w: 拖放接线): void {
+export function useFileDrop(w: DragReleaseWiring): void {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，
   // 见 `i18n/index.ts::useT`）。
   const t = useT();
-  const { openPath, openFolder, 落一张, files, hasDoc, toast } = w;
+  const { openPath, openFolder, dropOneImage, files, hasDoc, toast } = w;
 
   useEffect(() => {
     /**
      * 一次 drop 的全过程。**写成 `async` 是为了 `await api.pathKind`**，
      * 但调用处不 `await` 它（事件回调不返回 Promise）——出错全在函数体里收拾。
      */
-    const 收下一批 = async (paths: string[]) => {
+    const receiveBelowBatch = async (paths: string[]) => {
       if (paths.length === 0) return;
 
-      let 种类: 路径种类[];
+      let kindClass: PathKindClass[];
       try {
-        种类 = await api.pathKind(paths);
+        kindClass = await api.pathKind(paths);
       } catch (e) {
         // ⚠️ 问不出来**不当成"什么都没有发生"**：那会让用户以为拖放坏了。
         toast(t("Could not tell what was dropped in: {0}", String(e)), "error");
         return;
       }
-      if (种类.length !== paths.length) {
+      if (kindClass.length !== paths.length) {
         // 长度对不上是宿主的契约破了（那边一一对应）。**宁可什么都不做**，
         // 也不要按下标硬凑——凑错的症状是"打开的东西不是拖进来的那个"。
         console.warn("[nota] nota_paths_kind 的长度与入参对不上，这一次拖放跳过");
         return;
       }
 
-      const 文件夹: string[] = [];
-      const 图片: string[] = [];
-      const 文档: { path: string; markdown: boolean }[] = [];
-      const 丢了: string[] = [];
+      const textItemClamp: string[] = [];
+      const imageSlice: string[] = [];
+      const document: { path: string; markdown: boolean }[] = [];
+      const loseDone: string[] = [];
 
-      paths.forEach((路径, i) => {
-        const k = 种类[i];
-        if (k === "missing") return void 丢了.push(路径);
-        if (k === "dir") return void 文件夹.push(路径);
-        if (是图片文件(路径)) return void 图片.push(路径);
+      paths.forEach((path, i) => {
+        const k = kindClass[i];
+        if (k === "missing") return void loseDone.push(path);
+        if (k === "dir") return void textItemClamp.push(path);
+        if (isImageSliceTextItem(path)) return void imageSlice.push(path);
         // ⚠️ **Markdown 与"别的文本"分开**：它们归两条不同的设置
         //（`drop_markdown` / `drop_importable`），而在"打开"这个动作上
         // 两者是一回事（见下面 `打开` 里那句）。
-        文档.push({ path: 路径, markdown: 是Markdown后缀(路径) });
+        document.push({ path: path, markdown: isMarkdownExtension(path) });
       });
 
       // ── 不在了的那些：如实说，一次一句 ──────────────────────────────
-      if (丢了.length > 0) {
+      if (loseDone.length > 0) {
         // ⚠️ 只报**第一个**名字，剩下用个数带过：拖十个文件进来而其中一个
         // 刚好被删了，弹十条提示条等于把界面刷了。名字要说出来——"有个文件
         // 没找到"没有可操作性，用户不知道该去看哪个。
-        const 头一条 = 丢了[0];
+        const headOneItem = loseDone[0];
         // ⚠️ `丢了.length > 0` 在这里不构成"下标一定在"的证明（`noUncheckedIndexedAccess`），
         // 所以取出来判一次——真取不到就整段跳过，下面那句提示宁可不发。
-        if (!头一条) return;
-        const 名 = 头一条.split("/").pop() ?? 头一条;
+        if (!headOneItem) return;
+        const name3 = headOneItem.split("/").pop() ?? headOneItem;
         toast(
-          丢了.length === 1
-            ? t("The dropped “{0}” is gone (moved or deleted?)", 名)
-            : t("{0} of the dropped items are gone (starting with “{1}”)", 丢了.length, 名),
+          loseDone.length === 1
+            ? t("The dropped “{0}” is gone (moved or deleted?)", name3)
+            : t("{0} of the dropped items are gone (starting with “{1}”)", loseDone.length, name3),
           "error",
         );
       }
 
       // ── ① 图片：只认第一个，归插图那条 ─────────────────────────────
-      const 首张 = 图片[0];
-      if (首张) {
+      const firstImage = imageSlice[0];
+      if (firstImage) {
         if (!hasDoc) {
           toast(t("Open a document first so the picture has somewhere to go"), "info");
         } else {
           // ⚠️ 焦点判据保留（老口径，见文件头）：拖放事件没有"落点"，
           // 插入点只能是当前光标，而焦点不在正文里时那个光标是**上一次**
           // 停的地方——插进去的图会跑到用户没在看的那一段。
-          if (!在编辑区里有焦点()) {
+          if (!atEditorAreaInsideHasFocusPoint()) {
             toast(t("Click into the text first, then drop the picture — otherwise there is no place to put it"), "info");
           }
-          await 落一张({ kind: "path", path: 首张 }, "");
+          await dropOneImage({ kind: "path", path: firstImage }, "");
         }
       }
 
       // ── ② 文件夹：只认第一个，当工作区打开 ───────────────────────────
-      const 首个目录 = 文件夹[0];
-      if (首个目录) {
-        const 选 = files?.drop_folder ?? "open-in-app";
-        if (选 === "open-in-app") {
-          if (文件夹.length > 1) {
+      const firstFolder = textItemClamp[0];
+      if (firstFolder) {
+        const select = files?.drop_folder ?? "open-in-app";
+        if (select === "open-in-app") {
+          if (textItemClamp.length > 1) {
             toast(
-              t("Only one workspace can be open at a time; opened “{0}”", 首个目录.split("/").pop() ?? 首个目录),
+              t("Only one workspace can be open at a time; opened “{0}”", firstFolder.split("/").pop() ?? firstFolder),
               "info",
             );
           }
-          await openFolder(首个目录);
-        } else if (选 === "open-in-file-manager") {
-          await 交给文件管理器(首个目录, t, toast);
+          await openFolder(firstFolder);
+        } else if (select === "open-in-file-manager") {
+          await handoffGiveTextItemManageManageDevice(firstFolder, t, toast);
         }
         // `ignore` = 什么也不做（设置上写着"什么也不做"，再弹一句就成了噪音）
       }
 
       // ── ③ 文件：全开，上限一次最多 ──────────────────────────────────
-      const 开的 = 文档.slice(0, 一次最多);
-      if (文档.length > 一次最多) {
+      const openOf = document.slice(0, maxPerCall);
+      if (document.length > maxPerCall) {
         toast(
-          t("At most {0} files are opened at once; {1} were left unopened this time", 一次最多, 文档.length - 一次最多),
+          t("At most {0} files are opened at once; {1} were left unopened this time", maxPerCall, document.length - maxPerCall),
           "info",
         );
       }
@@ -224,54 +224,54 @@ export function useFileDrop(w: 拖放接线): void {
       // 所以这里按"是不是 Markdown"再分一次。⚠️ `import-file` 那一档对**文本**
       // 文件就是"打开"——Nota 不做格式转换（§11.2），而"打开一篇 .txt"不需要
       // 任何转换。非文本的**单独说一句**（见下），不静默、也不塞乱码。
-      for (const 一份 of 开的) {
-        const 选 = 一份.markdown ? (files?.drop_markdown ?? "open-in-app") : (files?.drop_importable ?? "import-file");
-        if (选 === "ignore") continue;
-        if (选 === "open-in-file-manager") {
-          await 交给文件管理器(一份.path, t, toast);
+      for (const oneDocument of openOf) {
+        const select = oneDocument.markdown ? (files?.drop_markdown ?? "open-in-app") : (files?.drop_importable ?? "import-file");
+        if (select === "ignore") continue;
+        if (select === "open-in-file-manager") {
+          await handoffGiveTextItemManageManageDevice(oneDocument.path, t, toast);
           continue;
         }
-        if (!一份.markdown && !是文本文件(一份.path)) {
+        if (!oneDocument.markdown && !isTextTextItem(oneDocument.path)) {
           // `import-file`（或那一档的默认）落在一个**不是文本**的文件上：
           // 如实说。⚠️ 这句话是**这一格能不能算"做完了"的关键**——不写它的话，
           // 拖一个 .docx 进来会静默无事发生，而 `drop_importable` 那一格在设置页
           // 里明明写着「当普通文件导入（转成 Markdown）」。
           toast(
-            t("“{0}” is not a text file, and Nota does not convert formats, so it cannot open it", 一份.path.split("/").pop() ?? 一份.path),
+            t("“{0}” is not a text file, and Nota does not convert formats, so it cannot open it", oneDocument.path.split("/").pop() ?? oneDocument.path),
             "info",
           );
           continue;
         }
-        await openPath(一份.path);
+        await openPath(oneDocument.path);
       }
     };
 
-    let 取消: (() => void) | undefined;
-    let 拆了 = false;
+    let getClear: (() => void) | undefined;
+    let splitDone = false;
     void getCurrentWebview()
       .onDragDropEvent((e) => {
         if (e.payload.type !== "drop") return;
-        void 收下一批(e.payload.paths);
+        void receiveBelowBatch(e.payload.paths);
       })
       .then((un) => {
         // StrictMode 下 effect 会跑两遍：这一遍如果已经拆了，就得当场退订，
         // 不然会留下一个永远不会被摘掉的监听（拖一次开两份，或者拖一张图插两张）。
-        if (拆了) un();
-        else 取消 = un;
+        if (splitDone) un();
+        else getClear = un;
       })
       .catch((e) => {
         // 订阅不上不该让界面挂掉：拖放这条路边不可用，别处照旧。
         console.warn("[nota] 订阅拖放事件失败：", e);
       });
     return () => {
-      拆了 = true;
-      取消?.();
+      splitDone = true;
+      getClear?.();
     };
-  }, [openFolder, openPath, 落一张, files, hasDoc, t, toast]);
+  }, [openFolder, openPath, dropOneImage, files, hasDoc, t, toast]);
 }
 
 /** 焦点此刻在编辑区里吗。⚠️ 判据是那个类名，与 `ui/useImageInsert.ts` 同一套。 */
-function 在编辑区里有焦点(): boolean {
+function atEditorAreaInsideHasFocusPoint(): boolean {
   const el = document.activeElement as HTMLElement | null;
   return !!el?.closest?.(".editor-pane");
 }
@@ -285,15 +285,15 @@ function 在编辑区里有焦点(): boolean {
  * 全仓只有这一份实现。⚠️ 定位**目录**时它打开的是父目录并选中它，这正是
  * 用户要的（"我要去看这个文件夹"）。
  */
-async function 交给文件管理器(
-  路径: string,
-  t: typeof 翻译,
+async function handoffGiveTextItemManageManageDevice(
+  path: string,
+  t: typeof FlipTranslate,
   toast: (message: string, level?: Toast["level"]) => void,
 ): Promise<void> {
   try {
-    await api.export.reveal(路径);
+    await api.export.reveal(path);
   } catch (e) {
-    toast(t("Could not open “{0}” in the file manager: {1}", 路径.split("/").pop() ?? 路径, String(e)), "error");
+    toast(t("Could not open “{0}” in the file manager: {1}", path.split("/").pop() ?? path, String(e)), "error");
   }
 }
 

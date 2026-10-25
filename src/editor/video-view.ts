@@ -60,7 +60,7 @@ import type { NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
 
 import { api } from "@/bridge/ipc";
-import { 后缀 } from "./file-kind";
+import { extension } from "./file-kind";
 
 /**
  * 认作视频的后缀，小写、不带点。
@@ -71,7 +71,7 @@ import { 后缀 } from "./file-kind";
  * ⚠️ 加新的一条之前，先想清楚"播不动时用户看到什么"——一块黑框不会告诉
  * 他为什么黑（见文件头那段）。
  */
-export const 视频后缀: readonly string[] = ["mp4", "m4v", "webm", "ogv"];
+export const visionFrequencyExtension: readonly string[] = ["mp4", "m4v", "webm", "ogv"];
 
 /**
  * 这个地址指的是一个视频吗。
@@ -81,89 +81,89 @@ export const 视频后缀: readonly string[] = ["mp4", "m4v", "webm", "ogv"];
  * 浏览器自己认），不切的话取出来的后缀是 `mp4?t=3`，判据当场失效——而症状是
  * "带时间戳的那种链接画不成播放器"，看着像视频支持时灵时不灵。
  */
-export function 是视频地址(地址: string): boolean {
-  const 净 = 地址.split(/[?#]/, 1)[0] ?? "";
-  return 视频后缀.includes(后缀(净));
+export function IsVideoSource(address: string): boolean {
+  const clean = address.split(/[?#]/, 1)[0] ?? "";
+  return visionFrequencyExtension.includes(extension(clean));
 }
 
 /** 属性取字符串。⚠️ 上游那三个属性的类型是 `string`，但**运行时不保证**（见 `image-attrs.ts`）。 */
-function 文本(值: unknown): string {
-  return typeof 值 === "string" ? 值 : "";
+function text2(value2: unknown): string {
+  return typeof value2 === "string" ? value2 : "";
 }
 
 /** 不是本机文件：网络地址、内联数据、已经转换过的 asset 地址。 */
-function 是外部地址(地址: string): boolean {
-  return /^(?:https?:|data:|blob:|asset:)/i.test(地址.trim());
+function isExternalPartAddress(address: string): boolean {
+  return /^(?:https?:|data:|blob:|asset:)/i.test(address.trim());
 }
 
 /** Markdown 地址 → 本机绝对路径；不是本地文件时给 `null`。 */
-export function 本地图片绝对路径(地址: string, 文档路径: string | null): string | null {
-  const 原 = 地址.trim();
-  if (!原 || 是外部地址(原)) return null;
-  if (原.toLowerCase().startsWith("file://")) {
+export function localLocalImageSliceAbsoluteCorrectPath(address: string, documentPath: string | null): string | null {
+  const original = address.trim();
+  if (!original || isExternalPartAddress(original)) return null;
+  if (original.toLowerCase().startsWith("file://")) {
     try {
-      return decodeURIComponent(原.slice("file://".length));
+      return decodeURIComponent(original.slice("file://".length));
     } catch {
-      return 原.slice("file://".length);
+      return original.slice("file://".length);
     }
   }
 
-  const Windows绝对 = /^[a-zA-Z]:[\\/]/.test(原);
-  const Unix绝对 = 原.startsWith("/");
-  const UNC = 原.startsWith("\\\\");
-  if (Windows绝对 || Unix绝对 || UNC) return 原;
-  if (!文档路径) return null;
+  const windowsAbsoluteCorrect = /^[a-zA-Z]:[\\/]/.test(original);
+  const unixAbsoluteCorrect = original.startsWith("/");
+  const UNC = original.startsWith("\\\\");
+  if (windowsAbsoluteCorrect || unixAbsoluteCorrect || UNC) return original;
+  if (!documentPath) return null;
 
-  const 斜杠 = 文档路径.includes("\\") ? "\\" : "/";
-  const 切 = 文档路径.lastIndexOf(斜杠);
-  if (切 < 0) return null;
-  const 目录 = 文档路径.slice(0, 切);
-  const 段 = `${目录}${斜杠}${原}`.split(/[\\/]+/);
-  const 归并: string[] = [];
-  for (const 一 of 段) {
-    if (!一 || 一 === ".") continue;
-    if (一 === "..") {
-      归并.pop();
+  const slantBar = documentPath.includes("\\") ? "\\" : "/";
+  const split = documentPath.lastIndexOf(slantBar);
+  if (split < 0) return null;
+  const itemRecord = documentPath.slice(0, split);
+  const paragraph2 = `${itemRecord}${slantBar}${original}`.split(/[\\/]+/);
+  const returnAnd: string[] = [];
+  for (const value of paragraph2) {
+    if (!value || value === ".") continue;
+    if (value === "..") {
+      returnAnd.pop();
       continue;
     }
-    归并.push(一);
+    returnAnd.push(value);
   }
-  const 正文 = 归并.join(斜杠);
-  if (UNC) return `\\\\${正文}`;
-  return 文档路径.startsWith("/") ? `/${正文}` : 正文;
+  const body2 = returnAnd.join(slantBar);
+  if (UNC) return `\\\\${body2}`;
+  return documentPath.startsWith("/") ? `/${body2}` : body2;
 }
 
 /** 造出来的那一对：外面那层盒子 ＋ 里面那颗图片/视频元素。 */
-interface 视图件 {
+interface viewItem {
   /** 节点视图的根。ProseMirror 的选中高亮与 `draggable` 都挂在这一颗上。 */
   dom: HTMLElement;
   /** 图片或视频元素本身。 */
-  媒体: HTMLImageElement | HTMLVideoElement;
+  mediaBody: HTMLImageElement | HTMLVideoElement;
   /** 造的时候认定的是不是视频。**建成之后不再变**（变了就整个重建，见 `update`）。 */
-  是视频: boolean;
+  isVisionFrequency: boolean;
   /** 异步读图令牌：后一次 update 回来时，旧结果不许覆盖新节点。 */
-  代: number;
+  represent: number;
 }
 
 /**
  * 按"是不是视频"造一对元素。**只造壳，不写属性**——属性统一由 {@link 写属性}
  * 写，一处真相，`update` 那条路才不会漏掉某一颗。
  */
-function 造元素(是视频: boolean): 视图件 {
-  if (!是视频) {
+function createElement(isVisionFrequency: boolean): viewItem {
+  if (!isVisionFrequency) {
     // ⚠️ 图片这一支返回的是**裸 `<img>`**，不是包一层盒子：这是 preset
     // `toDOM` 今天给出的形状（`["img", {...imageAttr, ...node.attrs}]`，
     // 本仓没有覆盖 `imageAttr`），一模一样才不会动到别处对图片的假设。
     const img = document.createElement("img");
-    return { dom: img, 媒体: img, 是视频: false, 代: 0 };
+    return { dom: img, mediaBody: img, isVisionFrequency: false, represent: 0 };
   }
 
   // ⚠️ 视频这一支**要**包一层盒子，两个理由：
   // ① 选中高亮（`ProseMirror-selectednode`）与 `draggable` 是挂在根上的，
   //    让它们落在盒子上，就别去动视频自己那身原生控件；
   // ② CSS 有个稳的落点（类名会被导出那一步摘掉，但盒子的**结构**还在）。
-  const 盒 = document.createElement("span");
-  盒.className = "nota-video";
+  const box = document.createElement("span");
+  box.className = "nota-video";
   const video = document.createElement("video");
   // ⚠️ `preload="metadata"`：只要时长与第一帧，**不预下载整段**。一篇记满了
   // 视频的稿子用 `auto` 会把带宽和磁盘一起吃掉，而用户多半只是路过这一行。
@@ -171,8 +171,8 @@ function 造元素(是视频: boolean): 视图件 {
   video.controls = true;
   // 见文件头第 2 条：schema 是 `draggable: true`，这一行是"别把我当拖拽把手"。
   video.setAttribute("draggable", "false");
-  盒.appendChild(video);
-  return { dom: 盒, 媒体: video, 是视频: true, 代: 0 };
+  box.appendChild(video);
+  return { dom: box, mediaBody: video, isVisionFrequency: true, represent: 0 };
 }
 
 /**
@@ -187,35 +187,35 @@ function 造元素(是视频: boolean): 视图件 {
  *（`![](a.mp4 "演示")` 里那个 `alt` 说的就是"这段视频在讲什么"），而 `title`
  * 两边都是全局属性，照写当鼠标提示。
  */
-function 写属性(件: 视图件, 节点: PMNode, 文档路径: string | null): void {
-  const src = 文本(节点.attrs.src);
-  const alt = 文本(节点.attrs.alt);
-  const title = 文本(节点.attrs.title);
-  const 代 = ++件.代;
+function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | null): void {
+  const src = text2(node.attrs.src);
+  const alt = text2(node.attrs.alt);
+  const title = text2(node.attrs.title);
+  const represent = ++item3.represent;
 
-  const 本地 = 本地图片绝对路径(src, 文档路径);
-  if (!本地) {
-    件.媒体.setAttribute("src", src);
+  const localLocal = localLocalImageSliceAbsoluteCorrectPath(src, documentPath);
+  if (!localLocal) {
+    item3.mediaBody.setAttribute("src", src);
   } else {
     // 本地图片由宿主读成 data URL。asset 协议在中文路径 / SVG / dev server 下
     // 会静默失败，表现正是“只剩 alt 和一顆破图标”。
-    件.媒体.removeAttribute("src");
+    item3.mediaBody.removeAttribute("src");
     void api.image
-      .dataUrl(本地)
-      .then((地址) => {
-        if (件.代 === 代) 件.媒体.setAttribute("src", 地址);
+      .dataUrl(localLocal)
+      .then((address) => {
+        if (item3.represent === represent) item3.mediaBody.setAttribute("src", address);
       })
       .catch(() => {
         // 读不了就保留 alt；不要把 `src` 设回相对路径让浏览器再猜一次。
-        if (件.代 === 代) 件.媒体.removeAttribute("src");
+        if (item3.represent === represent) item3.mediaBody.removeAttribute("src");
       });
   }
- 件.媒体.setAttribute("title", title);
-  if (件.是视频) {
-    if (alt) 件.媒体.setAttribute("aria-label", alt);
-    else 件.媒体.removeAttribute("aria-label");
+ item3.mediaBody.setAttribute("title", title);
+  if (item3.isVisionFrequency) {
+    if (alt) item3.mediaBody.setAttribute("aria-label", alt);
+    else item3.mediaBody.removeAttribute("aria-label");
   } else {
-    件.媒体.setAttribute("alt", alt);
+    item3.mediaBody.setAttribute("alt", alt);
   }
 }
 
@@ -225,26 +225,26 @@ function 写属性(件: 视图件, 节点: PMNode, 文档路径: string | null):
  * ⚠️ **`$view` 收的是 `$Node`，不是 `$NodeSchema`**——要的是 `imageSchema.node`
  *（同 `code-block.ts` 顶上那条注释）。
  */
-export function 视频视图(文档路径: string | null = null) {
+export function visionFrequencyView(documentPath: string | null = null) {
   return $view(
     imageSchema.node,
     () =>
-      (初节点: PMNode): NodeView => {
-      const 初 = 造元素(是视频地址(文本(初节点.attrs.src)));
-      const 是视频 = 初.是视频;
-      写属性(初, 初节点, 文档路径);
+      (initialNode: PMNode): NodeView => {
+      const initial = createElement(IsVideoSource(text2(initialNode.attrs.src)));
+      const isVisionFrequency = initial.isVisionFrequency;
+      writeAttribute(initial, initialNode, documentPath);
 
       return {
-        dom: 初.dom,
-        update: (新节点: PMNode): boolean => {
+        dom: initial.dom,
+        update: (newValueNode: PMNode): boolean => {
           // ⚠️ **类别变了就 `return false`**：`<img>` 与 `<video>` 是两种元素，
           // 改属性改不过去（在一颗 `<video>` 上改 `src` 也变不成图）。返回
           // `false` 是告诉 ProseMirror"这个我处理不了，你重建一个"——它会拿新
           // 节点再调一次这里的构造函数，落到的就是对的元素。
           // ⚠️ 症状对照：不写这一条的话，用户把 `![](a.mp4)` 改成 `![](a.png)`
           // 之后**屏幕上还是一块播放器**（而且 `a.png` 播不出来，是黑的）。
-          if (是视频地址(文本(新节点.attrs.src)) !== 是视频) return false;
-          写属性(初, 新节点, 文档路径);
+          if (IsVideoSource(text2(newValueNode.attrs.src)) !== isVisionFrequency) return false;
+          writeAttribute(initial, newValueNode, documentPath);
           return true;
         },
         // 视频自己就会变 DOM（控件浮出来、封面帧画上去），告诉 ProseMirror

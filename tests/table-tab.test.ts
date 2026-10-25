@@ -44,35 +44,35 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import { tableNodes } from "@milkdown/kit/prose/tables";
 import {
-  建表格Tab插件,
-  新行起点,
-  首格落点,
-  表格Tab,
-  表格Tab处理,
-  表格Tab键,
-  表格Tab按键,
+  createTableTabPlugin,
+  newValueLineStart,
+  firstCellDrop,
+  tableTab,
+  handleTableTab,
+  tableTabKey2,
+  tableTabKey,
 } from "../src/editor/table-tab";
-import { 表格回车, 表格回车键 } from "../src/editor/table-enter";
+import { tableEnter, tableEnterKey } from "../src/editor/table-enter";
 
-let 过 = 0;
-let 败 = 0;
-const 失败: string[] = [];
+let pass = 0;
+let fail = 0;
+const failure: string[] = [];
 
-function 断言(名: string, 实: unknown, 期: unknown): void {
-  const a = JSON.stringify(实);
-  const b = JSON.stringify(期);
+function assertion(name3: string, actual2: unknown, period: unknown): void {
+  const a = JSON.stringify(actual2);
+  const b = JSON.stringify(period);
   if (a === b) {
-    过 += 1;
+    pass += 1;
   } else {
-    败 += 1;
-    失败.push(`${名}\n    实际 ${a}\n    期望 ${b}`);
+    fail += 1;
+    failure.push(`${name3}\n    实际 ${a}\n    期望 ${b}`);
   }
 }
 
 // ── 造一份"形状跟 preset-gfm 一样"的表 ────────────────────────
 // ⚠️ `cellContent: "paragraph"` 与 `cellAttributes.alignment` 都是抄 preset 的
 // （`node_modules/@milkdown/preset-gfm/lib/index.js:88`）。
-const 表格规格 = tableNodes({
+const tableSpec = tableNodes({
   tableGroup: "block",
   cellContent: "paragraph",
   cellAttributes: { alignment: { default: "left" } },
@@ -93,8 +93,8 @@ const 表格规格 = tableNodes({
 // ③ `table` 的内容是 **`"table_header_row table_row+"`**：表头行**是必需的、
 //    而且必须第一条**，数据行至少一条。所以这份测试里每张表都有表头行——
 //    "只有表头行的表"在真 schema 里**根本不存在**。
-const 表头行规格: Record<string, unknown> = {
-  ...表格规格.table_row,
+const headerRowSpec: Record<string, unknown> = {
+  ...tableSpec.table_row,
   content: "(table_header)*",
 };
 
@@ -103,224 +103,224 @@ const schema = new Schema({
     doc: { content: "block+" },
     paragraph: { group: "block", content: "inline*" },
     text: { group: "inline" },
-    table: { ...表格规格.table, content: "table_header_row table_row+" },
-    table_row: { ...表格规格.table_row, content: "(table_cell)*" },
-    table_header_row: 表头行规格,
-    table_cell: 表格规格.table_cell,
-    table_header: 表格规格.table_header,
+    table: { ...tableSpec.table, content: "table_header_row table_row+" },
+    table_row: { ...tableSpec.table_row, content: "(table_cell)*" },
+    table_header_row: headerRowSpec,
+    table_cell: tableSpec.table_cell,
+    table_header: tableSpec.table_header,
   } as never,
   marks: {},
 });
 
-const 段 = (t: string): PMNode =>
+const paragraph2 = (t: string): PMNode =>
   schema.nodes.paragraph.create(null, t ? schema.text(t) : null);
-const 格 = (t: string): PMNode => schema.nodes.table_cell.create(null, 段(t));
-const 头格 = (t: string): PMNode => schema.nodes.table_header.create(null, 段(t));
-const 行 = (...格们: PMNode[]): PMNode => schema.nodes.table_row.create(null, 格们);
-const 头行 = (...格们: PMNode[]): PMNode => schema.nodes.table_header_row.create(null, 格们);
-const 表 = (...行们: PMNode[]): PMNode => schema.nodes.table.create(null, 行们);
+const cell2 = (t: string): PMNode => schema.nodes.table_cell.create(null, paragraph2(t));
+const headCell = (t: string): PMNode => schema.nodes.table_header.create(null, paragraph2(t));
+const line3 = (...cells: PMNode[]): PMNode => schema.nodes.table_row.create(null, cells);
+const headLine = (...cells: PMNode[]): PMNode => schema.nodes.table_header_row.create(null, cells);
+const table2 = (...rows: PMNode[]): PMNode => schema.nodes.table.create(null, rows);
 
 /** 光标放进"写着这段文字的那一格"。 */
-function 造状态(doc: PMNode, 文字: string): EditorState {
-  let 落 = -1;
+function createState2(doc: PMNode, text3: string): EditorState {
+  let drop = -1;
   doc.descendants((node, pos) => {
-    if (node.isText && node.text === 文字 && 落 < 0) {
-      落 = pos;
+    if (node.isText && node.text === text3 && drop < 0) {
+      drop = pos;
       return false;
     }
     return true;
   });
-  if (落 < 0) throw new Error(`造状态：文档里没有写着「${文字}」的那一格`);
+  if (drop < 0) throw new Error(`造状态：文档里没有写着「${text3}」的那一格`);
   return EditorState.create({
     schema,
     doc,
-    selection: TextSelection.near(doc.resolve(落)),
+    selection: TextSelection.near(doc.resolve(drop)),
   });
 }
 
 /** 光标所在那一格（没有就是 `null`）。 */
-function 所在格(state: EditorState): PMNode | null {
-  const $头 = state.selection.$head;
-  for (let d = $头.depth; d > 0; d--) {
-    const n = $头.node(d);
-    const 角 = n.type.spec.tableRole;
-    if (角 === "cell" || 角 === "header_cell") return n;
+function placeAtCell(state: EditorState): PMNode | null {
+  const head = state.selection.$head;
+  for (let d = head.depth; d > 0; d--) {
+    const n = head.node(d);
+    const corner = n.type.spec.tableRole;
+    if (corner === "cell" || corner === "header_cell") return n;
   }
   return null;
 }
 
 /** 文档里第一张表。 */
-function 第一张表(doc: PMNode): PMNode {
-  let 找: PMNode | null = null;
+function ordinalOneImageTable(doc: PMNode): PMNode {
+  let find: PMNode | null = null;
   doc.descendants((node) => {
-    if (!找 && node.type.spec.tableRole === "table") {
-      找 = node;
+    if (!find && node.type.spec.tableRole === "table") {
+      find = node;
       return false;
     }
     return true;
   });
-  if (!找) throw new Error("文档里没有表");
-  return 找;
+  if (!find) throw new Error("文档里没有表");
+  return find;
 }
 
 /** 按下 `Tab`（`反向` 为真则是 `Shift+Tab`），把事务真 apply 一遍。 */
-function 按Tab(state: EditorState, 反向 = false): { 接了: boolean; 状态: EditorState } {
-  let 新 = state;
-  const 接了 = 表格Tab处理(state, (tr) => {
-    新 = state.apply(tr);
-  }, 反向);
-  return { 接了, 状态: 新 };
+function pressTab(state: EditorState, reverseToward = false): { connected: boolean; state: EditorState } {
+  let newValue = state;
+  const connected = handleTableTab(state, (tr) => {
+    newValue = state.apply(tr);
+  }, reverseToward);
+  return { connected, state: newValue };
 }
 
-function 按回车(state: EditorState): { 接了: boolean; 状态: EditorState } {
-  let 新 = state;
-  const 接了 = 表格回车(state, (tr) => {
-    新 = state.apply(tr);
+function pressReturnCar(state: EditorState): { connected: boolean; state: EditorState } {
+  let newValue = state;
+  const connected = tableEnter(state, (tr) => {
+    newValue = state.apply(tr);
   });
-  return { 接了, 状态: 新 };
+  return { connected, state: newValue };
 }
 
 // ── 造几张"合法性照真 schema"的表 ─────────────────────────────
 // ⚠️ 真 schema 里**表头行是必需的、且必须第一条**，数据行至少一条
 // （`table` 的内容表达式是 `"table_header_row table_row+"`）——所以下面每张表
 // 都有表头行，"只有表头行的表"那种东西在真 schema 里根本不存在。
-const 文 = (...块: PMNode[]): PMNode => schema.nodes.doc.create(null, 块);
-const 两列表 = (...数据行: PMNode[]): PMNode => 表(头行(头格("h1"), 头格("h2")), ...数据行);
-const 三列表 = (...数据行: PMNode[]): PMNode =>
-  表(头行(头格("h1"), 头格("h2"), 头格("h3")), ...数据行);
+const text4 = (...block: PMNode[]): PMNode => schema.nodes.doc.create(null, block);
+const twoColumnsTable = (...dataRow: PMNode[]): PMNode => table2(headLine(headCell("h1"), headCell("h2")), ...dataRow);
+const threeColumnsTable = (...dataRow: PMNode[]): PMNode =>
+  table2(headLine(headCell("h1"), headCell("h2"), headCell("h3")), ...dataRow);
 
 // ── 一、两个纯函数 ────────────────────────────────────────────
 // ⚠️ **这一组才是 `+2` 的判据**。第三组那几条"光标落在新行第一格"**证不了 `+2`**：
 // `TextSelection.near()` 带容差，落点差一位它会自己挪进最近的那个文字位置
 // （实测把 `+2` 改成 `+1`，第三组照样全绿、只有这一组红）。算术归算术、容差归
 // 容差，两件事分开钉着。
-断言("新行起点＝表内容起点＋前面各行高", 新行起点(10, [5, 7]), 22);
-断言("前面没有行时就是表内容起点", 新行起点(10, []), 10);
-断言("首格落点＝新行起点＋2（进格、进段）", 首格落点(10, [5, 7]), 24);
-断言("两行高一样时落点只跟序号走", 首格落点(0, [3, 3]), 8);
+assertion("新行起点＝表内容起点＋前面各行高", newValueLineStart(10, [5, 7]), 22);
+assertion("前面没有行时就是表内容起点", newValueLineStart(10, []), 10);
+assertion("首格落点＝新行起点＋2（进格、进段）", firstCellDrop(10, [5, 7]), 24);
+assertion("两行高一样时落点只跟序号走", firstCellDrop(0, [3, 3]), 8);
 
 // ── 二、中格挪一格 ────────────────────────────────────────────
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "a");
-  const r = 按Tab(状态);
-  断言("中格按 Tab 接了", r.接了, true);
-  断言("中格按 Tab 落到下一格", 所在格(r.状态)?.textContent, "b");
-  断言("中格按 Tab 不动文档", r.状态.doc.eq(状态.doc), true);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "a");
+  const r = pressTab(state);
+  assertion("中格按 Tab 接了", r.connected, true);
+  assertion("中格按 Tab 落到下一格", placeAtCell(r.state)?.textContent, "b");
+  assertion("中格按 Tab 不动文档", r.state.doc.eq(state.doc), true);
 }
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "b");
-  const r = 按Tab(状态, true);
-  断言("中格按 Shift+Tab 接了", r.接了, true);
-  断言("中格按 Shift+Tab 落到上一格", 所在格(r.状态)?.textContent, "a");
-  断言("中格按 Shift+Tab 不动文档", r.状态.doc.eq(状态.doc), true);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "b");
+  const r = pressTab(state, true);
+  assertion("中格按 Shift+Tab 接了", r.connected, true);
+  assertion("中格按 Shift+Tab 落到上一格", placeAtCell(r.state)?.textContent, "a");
+  assertion("中格按 Shift+Tab 不动文档", r.state.doc.eq(state.doc), true);
 }
 {
   // 跨行：数据行末格按 Tab 该落到**下一行第一格**（不是原地加行）。
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")), 行(格("c"), 格("d")))), "b");
-  const r = 按Tab(状态);
-  断言("行末按 Tab 跨到下一行行首", 所在格(r.状态)?.textContent, "c");
-  断言("跨行时没多出一行", 第一张表(r.状态.doc).childCount, 3);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")), line3(cell2("c"), cell2("d")))), "b");
+  const r = pressTab(state);
+  assertion("行末按 Tab 跨到下一行行首", placeAtCell(r.state)?.textContent, "c");
+  assertion("跨行时没多出一行", ordinalOneImageTable(r.state.doc).childCount, 3);
 }
 {
   // ⚠️ 表头行**最后一格**按 `Tab` 走的是同一条路（下游还有数据行）。
   // 这一格正是"上游 `addRow` 会去抄上面那行"的那种现场，而它在这里**根本走不到**
   // 加行那一支——加行只可能发生在最后一条数据行上。
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "h2");
-  const r = 按Tab(状态);
-  断言("表头末格按 Tab 落到数据行第一格", 所在格(r.状态)?.textContent, "a");
-  断言("表头末格按 Tab 没加行", 第一张表(r.状态.doc).childCount, 2);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "h2");
+  const r = pressTab(state);
+  assertion("表头末格按 Tab 落到数据行第一格", placeAtCell(r.state)?.textContent, "a");
+  assertion("表头末格按 Tab 没加行", ordinalOneImageTable(r.state.doc).childCount, 2);
 }
 
 // ── 三、最后一格（＝最后一条数据行的末格）：加一行 ────────────
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "b");
-  const r = 按Tab(状态);
-  断言("末格按 Tab 接了", r.接了, true);
-  断言("末格按 Tab 多出一行", 第一张表(r.状态.doc).childCount, 3);
-  断言("新行格数与原行一致", 第一张表(r.状态.doc).lastChild?.childCount, 2);
-  断言("新行那一行是 table_row", 第一张表(r.状态.doc).lastChild?.type.name, "table_row");
-  断言("新行里的格子是 table_cell", 第一张表(r.状态.doc).lastChild?.firstChild?.type.name, "table_cell");
-  断言("新行不在表头的位置（表头还在最上面）", 第一张表(r.状态.doc).firstChild?.type.name, "table_header_row");
-  断言("光标落在新行第一格", 所在格(r.状态)?.textContent, "");
-  断言("光标那一格是空的 table_cell", 所在格(r.状态)?.type.name, "table_cell");
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "b");
+  const r = pressTab(state);
+  assertion("末格按 Tab 接了", r.connected, true);
+  assertion("末格按 Tab 多出一行", ordinalOneImageTable(r.state.doc).childCount, 3);
+  assertion("新行格数与原行一致", ordinalOneImageTable(r.state.doc).lastChild?.childCount, 2);
+  assertion("新行那一行是 table_row", ordinalOneImageTable(r.state.doc).lastChild?.type.name, "table_row");
+  assertion("新行里的格子是 table_cell", ordinalOneImageTable(r.state.doc).lastChild?.firstChild?.type.name, "table_cell");
+  assertion("新行不在表头的位置（表头还在最上面）", ordinalOneImageTable(r.state.doc).firstChild?.type.name, "table_header_row");
+  assertion("光标落在新行第一格", placeAtCell(r.state)?.textContent, "");
+  assertion("光标那一格是空的 table_cell", placeAtCell(r.state)?.type.name, "table_cell");
   // ⚠️ 这条是"光标真的在新行里"的硬判据：它必须**晚于**原来那个 `b` 的位置。
-  let 原b = -1;
-  状态.doc.descendants((node, pos) => {
-    if (node.isText && node.text === "b") 原b = pos;
+  let originalb = -1;
+  state.doc.descendants((node, pos) => {
+    if (node.isText && node.text === "b") originalb = pos;
     return true;
   });
-  断言("光标位置在原来那一格之后", r.状态.selection.from > 原b, true);
+  assertion("光标位置在原来那一格之后", r.state.selection.from > originalb, true);
 }
 {
   // 三列表：新行也得是三格（要是写成"照抄当前行的格子数"就看不出来，
   // 但写成"永远两格"会当场红）。
-  const 状态 = 造状态(文(三列表(行(格("a"), 格("b"), 格("c")))), "c");
-  const r = 按Tab(状态);
-  断言("三列表加出来还是三格", 第一张表(r.状态.doc).lastChild?.childCount, 3);
+  const state = createState2(text4(threeColumnsTable(line3(cell2("a"), cell2("b"), cell2("c")))), "c");
+  const r = pressTab(state);
+  assertion("三列表加出来还是三格", ordinalOneImageTable(r.state.doc).lastChild?.childCount, 3);
 }
 {
   // 两条数据行：光标在**最后一条**的末格时，新行加在表尾（不是插到第一条后面）。
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")), 行(格("c"), 格("d")))), "d");
-  const r = 按Tab(状态);
-  const 表新 = 第一张表(r.状态.doc);
-  断言("加在表尾", 表新.childCount, 4);
-  断言("表头还在最上面", 表新.firstChild?.type.name, "table_header_row");
-  断言("表尾那一行是 table_row", 表新.lastChild?.type.name, "table_row");
-  断言("表尾那一行的格子是 table_cell", 表新.lastChild?.firstChild?.type.name, "table_cell");
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")), line3(cell2("c"), cell2("d")))), "d");
+  const r = pressTab(state);
+  const newTable = ordinalOneImageTable(r.state.doc);
+  assertion("加在表尾", newTable.childCount, 4);
+  assertion("表头还在最上面", newTable.firstChild?.type.name, "table_header_row");
+  assertion("表尾那一行是 table_row", newTable.lastChild?.type.name, "table_row");
+  assertion("表尾那一行的格子是 table_cell", newTable.lastChild?.firstChild?.type.name, "table_cell");
 }
 
 // ── 四、第一格 Shift+Tab：吃掉但不许动文档 ────────────────────
 {
   // ⚠️ 真 schema 下的"第一格"就是**表头行第一格**（表头行永远是第一条）。
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "h1");
-  const r = 按Tab(状态, true);
-  断言("第一格 Shift+Tab 也要吃掉这颗键（否则焦点飞出编辑器）", r.接了, true);
-  断言("第一格 Shift+Tab 不加行", 第一张表(r.状态.doc).childCount, 2);
-  断言("第一格 Shift+Tab 光标不动", r.状态.selection.from, 状态.selection.from);
-  断言("第一格 Shift+Tab 文档一个字节没动", r.状态.doc.eq(状态.doc), true);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "h1");
+  const r = pressTab(state, true);
+  assertion("第一格 Shift+Tab 也要吃掉这颗键（否则焦点飞出编辑器）", r.connected, true);
+  assertion("第一格 Shift+Tab 不加行", ordinalOneImageTable(r.state.doc).childCount, 2);
+  assertion("第一格 Shift+Tab 光标不动", r.state.selection.from, state.selection.from);
+  assertion("第一格 Shift+Tab 文档一个字节没动", r.state.doc.eq(state.doc), true);
 }
 {
   // 数据行的第一格按 Shift+Tab 要回到**表头行的最后一格**（跨行回头）。
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "a");
-  const r = 按Tab(状态, true);
-  断言("数据行行首按 Shift+Tab 回到表头行行尾", 所在格(r.状态)?.textContent, "h2");
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "a");
+  const r = pressTab(state, true);
+  assertion("数据行行首按 Shift+Tab 回到表头行行尾", placeAtCell(r.state)?.textContent, "h2");
 }
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")), 行(格("c"), 格("d")))), "c");
-  const r = 按Tab(状态, true);
-  断言("第二条数据行行首按 Shift+Tab 回到上一行行尾", 所在格(r.状态)?.textContent, "b");
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")), line3(cell2("c"), cell2("d")))), "c");
+  const r = pressTab(state, true);
+  assertion("第二条数据行行首按 Shift+Tab 回到上一行行尾", placeAtCell(r.state)?.textContent, "b");
 }
 
 // ── 五、表格外一律放行 ────────────────────────────────────────
 {
-  const 状态 = 造状态(文(段("一段普通的正文")), "一段普通的正文");
-  断言("表格外按 Tab 放行", 按Tab(状态).接了, false);
-  断言("表格外按 Shift+Tab 放行", 按Tab(状态, true).接了, false);
+  const state = createState2(text4(paragraph2("一段普通的正文")), "一段普通的正文");
+  assertion("表格外按 Tab 放行", pressTab(state).connected, false);
+  assertion("表格外按 Shift+Tab 放行", pressTab(state, true).connected, false);
 }
 {
   // 表**后面**那一段也是"表格外"（`isInTable` 看的是选区所在的祖先链）。
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b"))), 段("表后正文")), "表后正文");
-  断言("表格后面那一段按 Tab 放行", 按Tab(状态).接了, false);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b"))), paragraph2("表后正文")), "表后正文");
+  assertion("表格后面那一段按 Tab 放行", pressTab(state).connected, false);
 }
 {
   // 表**前面**那一段同理（祖先链里没有 `tableRole: "row"` 的东西）。
-  const 状态 = 造状态(文(段("表前正文"), 两列表(行(格("a"), 格("b")))), "表前正文");
-  断言("表格前面那一段按 Tab 放行", 按Tab(状态).接了, false);
+  const state = createState2(text4(paragraph2("表前正文"), twoColumnsTable(line3(cell2("a"), cell2("b")))), "表前正文");
+  assertion("表格前面那一段按 Tab 放行", pressTab(state).connected, false);
 }
 
 // ── 六、表头行 ────────────────────────────────────────────────
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "h1");
-  const r = 按Tab(状态);
-  断言("表头第一格按 Tab 落到表头第二格", 所在格(r.状态)?.textContent, "h2");
-  断言("表头里按 Tab 没多出行", 第一张表(r.状态.doc).childCount, 2);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "h1");
+  const r = pressTab(state);
+  assertion("表头第一格按 Tab 落到表头第二格", placeAtCell(r.state)?.textContent, "h2");
+  assertion("表头里按 Tab 没多出行", ordinalOneImageTable(r.state.doc).childCount, 2);
 }
 
 // ── 七、按键那一道门 与 装配 ──────────────────────────────────
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "a");
-  const 键 = (
-    改: Partial<{
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "a");
+  const key = (
+    change2: Partial<{
       key: string;
       keyCode: number;
       shiftKey: boolean;
@@ -335,79 +335,79 @@ const 三列表 = (...数据行: PMNode[]): PMNode =>
     ctrlKey: false,
     altKey: false,
     metaKey: false,
-    ...改,
+    ...change2,
   });
-  const 按 = (改 = {}, composing = false): boolean => {
-    let 新 = 状态;
-    return 表格Tab按键(状态, (tr) => {
-      新 = 状态.apply(tr);
-    }, 键(改), composing);
+  const press = (change2 = {}, composing = false): boolean => {
+    let newValue = state;
+    return tableTabKey(state, (tr) => {
+      newValue = state.apply(tr);
+    }, key(change2), composing);
   };
-  断言("门：表格里普通 Tab 接", 按(), true);
-  断言("门：`Shift+Tab` 也接（Shift 不算修饰键）", 按({ shiftKey: true }), true);
-  断言("门：`Ctrl+Tab` 放行（那是窗口管理器的）", 按({ ctrlKey: true }), false);
-  断言("门：`Alt+Tab` 放行", 按({ altKey: true }), false);
-  断言("门：`Cmd+Tab` 放行", 按({ metaKey: true }), false);
-  断言("门：别的键放行", 按({ key: "Enter", keyCode: 13 }), false);
-  断言("门：组字期间一律放行", 按({}, true), false);
-  断言("门：组字期间 Shift+Tab 也放行", 按({ shiftKey: true }, true), false);
+  assertion("门：表格里普通 Tab 接", press(), true);
+  assertion("门：`Shift+Tab` 也接（Shift 不算修饰键）", press({ shiftKey: true }), true);
+  assertion("门：`Ctrl+Tab` 放行（那是窗口管理器的）", press({ ctrlKey: true }), false);
+  assertion("门：`Alt+Tab` 放行", press({ altKey: true }), false);
+  assertion("门：`Cmd+Tab` 放行", press({ metaKey: true }), false);
+  assertion("门：别的键放行", press({ key: "Enter", keyCode: 13 }), false);
+  assertion("门：组字期间一律放行", press({}, true), false);
+  assertion("门：组字期间 Shift+Tab 也放行", press({ shiftKey: true }, true), false);
   // ⚠️ 下面这几条是 **GTK/X11 上真发生的事**，不是假想（`docs/06` §5.x 目检）：
   // `Shift+Tab` 在 X 里发的是 `ISO_Left_Tab`，WebKit 给不出名字，
   // `event.key` 是 `"Unidentified"`，只有 `keyCode` 还是 9。
-  断言(
+  assertion(
     "门：X11 的 `Shift+Tab`（key=Unidentified, keyCode=9）必须接住",
-    按({ key: "Unidentified", keyCode: 9, shiftKey: true }),
+    press({ key: "Unidentified", keyCode: 9, shiftKey: true }),
     true,
   );
-  断言(
+  assertion(
     "门：`key` 认不出来、`keyCode` 也不是 9 的，放行",
-    按({ key: "Unidentified", keyCode: 65 }),
+    press({ key: "Unidentified", keyCode: 65 }),
     false,
   );
-  断言("门：字母 a 放行（keyCode 65）", 按({ key: "a", keyCode: 65 }), false);
+  assertion("门：字母 a 放行（keyCode 65）", press({ key: "a", keyCode: 65 }), false);
 }
 {
   // ⚠️ dry-run（`dispatch` 缺省）时只回答接不接，**一个字节都不改**：
   // ProseMirror 问"这颗键接不接"时会不带 `dispatch` 调一次。
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "b");
-  const 前 = 状态.doc;
-  断言("dry-run 也回答接", 表格Tab处理(状态, undefined, false), true);
-  断言("dry-run 没加行", 状态.doc.child(0).childCount, 2);
-  断言("dry-run 之后文档还是原来那一个", 状态.doc.eq(前), true);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "b");
+  const before2 = state.doc;
+  assertion("dry-run 也回答接", handleTableTab(state, undefined, false), true);
+  assertion("dry-run 没加行", state.doc.child(0).childCount, 2);
+  assertion("dry-run 之后文档还是原来那一个", state.doc.eq(before2), true);
 }
 {
   // 装配：只能证明"插件造得出来、键位是那一个"——真挂进编辑器要靠开窗目检。
-  const 插件 = 建表格Tab插件();
-  断言("插件造得出来", typeof 插件 === "object" && 插件 !== null, true);
-  断言("槽位名对上", 插件.spec.key, 表格Tab键);
-  断言("工厂每次给新的一份", 建表格Tab插件() === 插件, false);
-  断言("`$prose` 那条也造得出来", typeof 表格Tab(), "function");
+  const plugin = createTableTabPlugin();
+  assertion("插件造得出来", typeof plugin === "object" && plugin !== null, true);
+  assertion("槽位名对上", plugin.spec.key, tableTabKey2);
+  assertion("工厂每次给新的一份", createTableTabPlugin() === plugin, false);
+  assertion("`$prose` 那条也造得出来", typeof tableTab(), "function");
 }
 
 // ── 八、普通回车：下一格 / 表尾加行 ───────────────────────────
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "a");
-  const r = 按回车(状态);
-  断言("中格按回车接了", r.接了, true);
-  断言("中格按回车走到下一格", 所在格(r.状态)?.textContent, "b");
-  断言("中格按回车不动文档", r.状态.doc.eq(状态.doc), true);
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "a");
+  const r = pressReturnCar(state);
+  assertion("中格按回车接了", r.connected, true);
+  assertion("中格按回车走到下一格", placeAtCell(r.state)?.textContent, "b");
+  assertion("中格按回车不动文档", r.state.doc.eq(state.doc), true);
 }
 {
-  const 状态 = 造状态(文(两列表(行(格("a"), 格("b")))), "b");
-  const r = 按回车(状态);
-  断言("末格按回车接了", r.接了, true);
-  断言("末格按回车加一行", 第一张表(r.状态.doc).childCount, 3);
-  断言("末格按回车落到新行第一格", 所在格(r.状态)?.textContent, "");
-  断言("加出来的是数据行", 第一张表(r.状态.doc).lastChild?.type.name, "table_row");
+  const state = createState2(text4(twoColumnsTable(line3(cell2("a"), cell2("b")))), "b");
+  const r = pressReturnCar(state);
+  assertion("末格按回车接了", r.connected, true);
+  assertion("末格按回车加一行", ordinalOneImageTable(r.state.doc).childCount, 3);
+  assertion("末格按回车落到新行第一格", placeAtCell(r.state)?.textContent, "");
+  assertion("加出来的是数据行", ordinalOneImageTable(r.state.doc).lastChild?.type.name, "table_row");
 }
 {
-  const 状态 = 造状态(文(段("表格外")), "表格外");
-  断言("表格外按回车放行", 按回车(状态).接了, false);
-  断言("回车键位对象造得出来", typeof 表格回车键, "function");
+  const state = createState2(text4(paragraph2("表格外")), "表格外");
+  assertion("表格外按回车放行", pressReturnCar(state).connected, false);
+  assertion("回车键位对象造得出来", typeof tableEnterKey, "function");
 }
 
 // ── 汇总 ──────────────────────────────────────────────────────
-if (失败.length) {
-  console.log(失败.join("\n"));
+if (failure.length) {
+  console.log(failure.join("\n"));
 }
-console.log(`${败 === 0 ? "通过" : "有失败"} ${过} 条，失败 ${败} 条`);
+console.log(`${fail === 0 ? "通过" : "有失败"} ${pass} 条，失败 ${fail} 条`);

@@ -40,121 +40,121 @@
  */
 
 import {
-  错拼表,
-  改词,
-  词尾正则,
-  自动更正输入,
+  errorCombineTable,
+  replaceWord,
+  wordTailCorrectRule,
+  selfActionMoreCorrectInput,
 } from "../src/editor/auto-correct";
 
 /* ── 一支极小的测试工装（与 `inline-marks.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
 /* ── 一、整张表 ─────────────────────────────────────────────────────── */
 
-组("一、整张表（防死行）");
+group("一、整张表（防死行）");
 
-测("每一条的键都能被改出它自己的值", () => {
+testCase("每一条的键都能被改出它自己的值", () => {
   // ⚠️ 防死行：键写歪了、值写反了、值里混进大写字母，都会在这里现形。
   // 一张"看着有四十条、其实十条不生效"的表是最难被发现的坏法。
-  const 坏的: string[] = [];
-  for (const [错, 正] of Object.entries(错拼表)) {
-    if (改词(错) !== 正) 坏的.push(`${错} → ${正}（实际 ${改词(错)}）`);
+  const bad: string[] = [];
+  for (const [error2, correct2] of Object.entries(errorCombineTable)) {
+    if (replaceWord(error2) !== correct2) bad.push(`${error2} → ${correct2}（实际 ${replaceWord(error2)}）`);
   }
-  if (坏的.length) throw new Error(`表里有 ${坏的.length} 条不生效：\n      ${坏的.join("\n      ")}`);
+  if (bad.length) throw new Error(`表里有 ${bad.length} 条不生效：\n      ${bad.join("\n      ")}`);
 });
 
-测("键一律小写、值一律小写", () => {
+testCase("键一律小写、值一律小写", () => {
   // ⚠️ 这两条是硬约定（文件头写了"键一律小写、值一律小写"），
   // 破了不会报错，只会静默失效——因为查表用的是 `词.toLowerCase()`：
   // 一个含大写的**键**永远查不到，一个含大写的**值**会在首字母大写那一档
   // 被拼出 `The` 这种半截大写的怪东西。
-  const 坏的 = Object.entries(错拼表).filter(([错, 正]) => 错 !== 错.toLowerCase() || 正 !== 正.toLowerCase());
-  if (坏的.length) throw new Error(`有 ${坏的.length} 条不是全小写：${JSON.stringify(坏的)}`);
+  const bad = Object.entries(errorCombineTable).filter(([error2, correct2]) => error2 !== error2.toLowerCase() || correct2 !== correct2.toLowerCase());
+  if (bad.length) throw new Error(`有 ${bad.length} 条不是全小写：${JSON.stringify(bad)}`);
 });
 
-测("没有一条是把自己改成自己", () => {
-  const 同的 = Object.entries(错拼表).filter(([错, 正]) => 错 === 正).map(([错]) => 错);
-  if (同的.length) throw new Error(`自己改自己：${同的.join("、")}`);
+testCase("没有一条是把自己改成自己", () => {
+  const sameOf = Object.entries(errorCombineTable).filter(([error2, correct2]) => error2 === correct2).map(([error2]) => error2);
+  if (sameOf.length) throw new Error(`自己改自己：${sameOf.join("、")}`);
 });
 
-测("表不是空的，而且规模在「几十条」这个量级", () => {
+testCase("表不是空的，而且规模在「几十条」这个量级", () => {
   // ⚠️ 上界那一半是**防手滑**：这张表是"固定的一小张"，不是词库。
   // 真有人想把英文字典搬进来时，这一条会先拦住他。
-  const n = Object.keys(错拼表).length;
+  const n = Object.keys(errorCombineTable).length;
   if (n < 20) throw new Error(`只有 ${n} 条，是不是被误删了？`);
   if (n > 120) throw new Error(`有 ${n} 条，这张表该是"一小张固定表"，不是词库`);
 });
 
 /* ── 二、改词：大小写三档 ───────────────────────────────────────────── */
 
-组("二、改词：大小写跟着原词走");
+group("二、改词：大小写跟着原词走");
 
-测("全小写：照搬表里的值", () => {
-  等(改词("teh"), "the", "teh");
-  等(改词("dont"), "don't", "dont");
+testCase("全小写：照搬表里的值", () => {
+  equal(replaceWord("teh"), "the", "teh");
+  equal(replaceWord("dont"), "don't", "dont");
 });
 
-测("只有首字母大写：值的首字母也大写", () => {
-  等(改词("Teh"), "The", "Teh");
-  等(改词("Dont"), "Don't", "Dont");
-  等(改词("Recieve"), "Receive", "Recieve");
+testCase("只有首字母大写：值的首字母也大写", () => {
+  equal(replaceWord("Teh"), "The", "Teh");
+  equal(replaceWord("Dont"), "Don't", "Dont");
+  equal(replaceWord("Recieve"), "Receive", "Recieve");
 });
 
-测("全大写：值整个大写", () => {
-  等(改词("TEH"), "THE", "TEH");
-  等(改词("DOESNT"), "DOESN'T", "DOESNT");
+testCase("全大写：值整个大写", () => {
+  equal(replaceWord("TEH"), "THE", "TEH");
+  equal(replaceWord("DOESNT"), "DOESN'T", "DOESNT");
 });
 
-测("大小写混着写的不猜（原样放过）", () => {
+testCase("大小写混着写的不猜（原样放过）", () => {
   // `tEh` 是用户**故意**写的（驼峰标识符、玩梗）。把它改成 `The` 是这份表
   // 最不该做的事，所以这一档恒为 null。
-  等(改词("tEh"), null, "tEh");
-  等(改词("TeH"), null, "TeH");
-  等(改词("DonT"), null, "DonT");
+  equal(replaceWord("tEh"), null, "tEh");
+  equal(replaceWord("TeH"), null, "TeH");
+  equal(replaceWord("DonT"), null, "DonT");
 });
 
-测("不在表里的词原样放过", () => {
-  等(改词("the"), null, "the 本来就是对的不该再改");
-  等(改词("hello"), null, "hello");
-  等(改词(""), null, "空串");
-  等(改词("123"), null, "数字");
+testCase("不在表里的词原样放过", () => {
+  equal(replaceWord("the"), null, "the 本来就是对的不该再改");
+  equal(replaceWord("hello"), null, "hello");
+  equal(replaceWord(""), null, "空串");
+  equal(replaceWord("123"), null, "数字");
 });
 
 /* ── 三、入表判据 ─────────────────────────────────────────────────── */
 
-组("三、入表判据：小写形式是合法英文词的一个都不收");
+group("三、入表判据：小写形式是合法英文词的一个都不收");
 
-测("本身是合法英文词的一律不在表里", () => {
+testCase("本身是合法英文词的一律不在表里", () => {
   // ⚠️ 这是本文件**最要紧**的一条：收进去的症状是"把对的改成错的"，
   // 而那是这份表唯一不能犯的错（`wont` 是"习惯"、`wether` 是"阉羊"、
   // `cant` 是"伪善的言语"、`lets` 是"出租"、`its` 是"它的"）。
-  const 禁 = [
+  const ban = [
     "cant",
     "wont",
     "wether",
@@ -167,90 +167,90 @@ function 等(实际: unknown, 期望: unknown, 说明: string): void {
     "from",
     "alot",
   ];
-  const 漏的 = 禁.filter((w) => w in 错拼表);
-  if (漏的.length) throw new Error(`这些是合法英文词（或不是"一词换一词"），不该入表：${漏的.join("、")}`);
+  const leakOf = ban.filter((w) => w in errorCombineTable);
+  if (leakOf.length) throw new Error(`这些是合法英文词（或不是"一词换一词"），不该入表：${leakOf.join("、")}`);
 });
 
-测("表里没有「一变二」的条目", () => {
+testCase("表里没有「一变二」的条目", () => {
   // 判据：值里不含空格。`alot` → `a lot` 那种会让"换了几个字符"和
   // "插入了几个字符"分开算，处理器得为它改形状（见文件头）。
-  const 带空的 = Object.entries(错拼表).filter(([, 正]) => /\s/.test(正)).map(([错]) => 错);
-  if (带空的.length) throw new Error(`"一变二"的条目：${带空的.join("、")}`);
+  const withEmpty = Object.entries(errorCombineTable).filter(([, correct2]) => /\s/.test(correct2)).map(([error2]) => error2);
+  if (withEmpty.length) throw new Error(`"一变二"的条目：${withEmpty.join("、")}`);
 });
 
 /* ── 四、词尾正则的边界 ─────────────────────────────────────────────── */
 
-组("四、词尾正则的边界");
+group("四、词尾正则的边界");
 
 /** 取匹配到的那个词（没匹配上给 null）。 */
-function 命中(文: string): string | null {
-  const m = 词尾正则.exec(文);
+function match(text4: string): string | null {
+  const m = wordTailCorrectRule.exec(text4);
   return m ? m[1]! : null;
 }
 
-测("空格与制表符触发", () => {
-  等(命中("teh "), "teh", "空格");
-  等(命中("teh\t"), "teh", "制表符");
-  等(命中("I said teh "), "teh", "在一句话末尾");
+testCase("空格与制表符触发", () => {
+  equal(match("teh "), "teh", "空格");
+  equal(match("teh\t"), "teh", "制表符");
+  equal(match("I said teh "), "teh", "在一句话末尾");
 });
 
-测("没有词尾空白就不触发", () => {
-  等(命中("teh"), null, "还没打空格");
-  等(命中(""), null, "空串");
-  等(命中(" "), null, "只有空格");
+testCase("没有词尾空白就不触发", () => {
+  equal(match("teh"), null, "还没打空格");
+  equal(match(""), null, "空串");
+  equal(match(" "), null, "只有空格");
 });
 
-测("逗号句号那一族不触发（已知边界）", () => {
+testCase("逗号句号那一族不触发（已知边界）", () => {
   // ⚠️ 这条是**有意**挡住的：触发字符只有空格与制表符，所以 `teh,` 得
   // 等用户敲空格才更正。文件头"已知边界"第一条写的就是它。
-  等(命中("teh,"), null, "逗号");
-  等(命中("teh."), null, "句号");
-  等(命中("teh)"), null, "右括号");
+  equal(match("teh,"), null, "逗号");
+  equal(match("teh."), null, "句号");
+  equal(match("teh)"), null, "右括号");
 });
 
-测("更长的字母串整个算一个词，查表会落空", () => {
+testCase("更长的字母串整个算一个词，查表会落空", () => {
   // ⚠️ **不加 `\b`** 的后果就是这个：`xthe ` 拿出的是 `xthe`，
   // 查表落空、什么都不做。这正是想要的（加了 `\b` 反而会挑出里面的 `the`）。
-  等(命中("xthe "), "xthe", "前缀");
-  等(改词("xthe"), null, "查表落空");
+  equal(match("xthe "), "xthe", "前缀");
+  equal(replaceWord("xthe"), null, "查表落空");
 });
 
-测("中文不碰", () => {
-  等(命中("中文 "), null, "纯中文");
-  等(
-    命中("说teh "),
+testCase("中文不碰", () => {
+  equal(match("中文 "), null, "纯中文");
+  equal(
+    match("说teh "),
     "teh",
     "⚠️ 中文紧挨着也算一个词（中文之间没有空格，所以这里不额外挡——"
       + "挡了会让「打完中文接着打英文」时永远不更正）",
   );
 });
 
-测("带撇号的词整个算一个词", () => {
-  等(命中("don't "), "don't", "已有撇号");
-  等(改词("don't"), null, "已经在表之外");
+testCase("带撇号的词整个算一个词", () => {
+  equal(match("don't "), "don't", "已有撇号");
+  equal(replaceWord("don't"), null, "已经在表之外");
 });
 
-测("很长的一串也照拿（由 `改词` 落空，不在这里挡）", () => {
-  等(命中("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "长串");
+testCase("很长的一串也照拿（由 `改词` 落空，不在这里挡）", () => {
+  equal(match("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "长串");
 });
 
 /* ── 五、装配 ───────────────────────────────────────────────────────── */
 
-组("五、装配");
+group("五、装配");
 
-测("关着的时候一条规则都不挂", () => {
-  等(自动更正输入(false).length, 0, "关");
+testCase("关着的时候一条规则都不挂", () => {
+  equal(selfActionMoreCorrectInput(false).length, 0, "关");
 });
 
-测("开着的时候挂 1 条", () => {
-  等(自动更正输入(true).length, 1, "条数");
+testCase("开着的时候挂 1 条", () => {
+  equal(selfActionMoreCorrectInput(true).length, 1, "条数");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) {
-  console.log(`失败的：\n  - ${败的.join("\n  - ")}`);
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) {
+  console.log(`失败的：\n  - ${failed.join("\n  - ")}`);
   process.exitCode = 1;
 }

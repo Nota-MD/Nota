@@ -40,48 +40,48 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { 正文排版变量, 字号范围, 段距范围, 行距范围 } from "../src/styles/doc-typography";
+import { DocumentTypographyVars, characterNumberScopeEnclose, paragraphDistanceScopeEnclose, lineDistanceScopeEnclose } from "../src/styles/doc-typography";
 import type { DocumentSettings } from "../src/bridge/types";
 
 /* ── 一支极小的测试工装（与 `accent.test.ts` / `atom-space.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 断言(条件: unknown, 说明: string): void {
-  if (!条件) throw new Error(说明);
+function assertion(condition: unknown, description: string): void {
+  if (!condition) throw new Error(description);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
 /* ── 两份"别处"的默认值，现读现用 ───────────────────────────────────── */
 
-const 仓库 = process.cwd();
+const repositoryLibrary = process.cwd();
 
 /** 一份"四项全关"的设置。 */
-function 全关(): DocumentSettings {
+function allClosed(): DocumentSettings {
   return {
     custom_line_height: false,
     line_height: 175,
@@ -95,86 +95,86 @@ function 全关(): DocumentSettings {
 }
 
 /** 从 CSS 里抠出 `var(--名字, 兜底)` 的那个兜底值。抠不到就抛（那说明这条规则没了）。 */
-function css兜底(变量: string): string {
-  const css = readFileSync(resolve(仓库, "src/styles/editor.css"), "utf8");
+function cssFallback(changeMeasure: string): string {
+  const css = readFileSync(resolve(repositoryLibrary, "src/styles/editor.css"), "utf8");
   // ⚠️ 用**正则找那一处**而不是把整份 CSS 解析一遍：这里要的就是那三个已知的
   // 兜底值，解析器只会多一层会坏的机器。
-  const m = new RegExp(`var\\(\\s*${变量}\\s*,\\s*([^)]+?)\\s*\\)`).exec(css);
-  if (!m?.[1]) throw new Error(`editor.css 里找不到 var(${变量}, …) 的兜底值`);
+  const m = new RegExp(`var\\(\\s*${changeMeasure}\\s*,\\s*([^)]+?)\\s*\\)`).exec(css);
+  if (!m?.[1]) throw new Error(`editor.css 里找不到 var(${changeMeasure}, …) 的兜底值`);
   return m[1];
 }
 
 /** 从 Rust 那份默认值里抠出某个字段的字面量。 */
-function rust默认值(字段: string): number {
-  const 源码 = readFileSync(resolve(仓库, "src-tauri/src/settings/document.rs"), "utf8");
-  const m = new RegExp(`\\b${字段}:\\s*(\\d+)`).exec(源码);
-  if (!m?.[1]) throw new Error(`settings/document.rs 里找不到 ${字段} 的默认值`);
+function rustDefaultValue(field: string): number {
+  const source2 = readFileSync(resolve(repositoryLibrary, "src-tauri/src/settings/document.rs"), "utf8");
+  const m = new RegExp(`\\b${field}:\\s*(\\d+)`).exec(source2);
+  if (!m?.[1]) throw new Error(`settings/document.rs 里找不到 ${field} 的默认值`);
   return Number(m[1]);
 }
 
 /* ── 第 1 组：默认全关 = 一个变量都不写 ─────────────────────────────── */
 
-组("默认（四项全关）");
+group("默认（四项全关）");
 
-测("四项全关时返回空对象——让文档主题说话", () => {
-  等(Object.keys(正文排版变量(全关())).length, 0, "关着就不该写变量");
+testCase("四项全关时返回空对象——让文档主题说话", () => {
+  equal(Object.keys(DocumentTypographyVars(allClosed())).length, 0, "关着就不该写变量");
 });
 
-测("设置还没读回来（undefined）时也什么都不写", () => {
+testCase("设置还没读回来（undefined）时也什么都不写", () => {
   // ⚠️ 不是"按默认值写一遍"：启动那一小会儿写下去的排版，是真设置到达之前
   // 用户没选过的东西。
-  等(Object.keys(正文排版变量(undefined)).length, 0, "不知道就别写");
+  equal(Object.keys(DocumentTypographyVars(undefined)).length, 0, "不知道就别写");
 });
 
 /* ── 第 2 组：默认值与别处的默认值**必须一致**（这一组是这份测试的重点）── */
 
-组("默认值不许分叉");
+group("默认值不许分叉");
 
-测("CSS 兜底值就是 Rust 默认值（同一个数，两个写法）", () => {
+testCase("CSS 兜底值就是 Rust 默认值（同一个数，两个写法）", () => {
   // 行距：Rust 175 ↔ CSS 1.75
-  等(css兜底("--doc-line-height"), "1.75", "CSS 里行距的兜底值");
-  等(rust默认值("line_height"), 175, "Rust 里行距的默认值");
-  等(rust默认值("line_height") / 100, 1.75, "两处要指同一个数");
+  equal(cssFallback("--doc-line-height"), "1.75", "CSS 里行距的兜底值");
+  equal(rustDefaultValue("line_height"), 175, "Rust 里行距的默认值");
+  equal(rustDefaultValue("line_height") / 100, 1.75, "两处要指同一个数");
 
   // 段距：Rust 85 ↔ CSS 0.85em
-  等(css兜底("--doc-para-gap"), "0.85em", "CSS 里段距的兜底值");
-  等(rust默认值("paragraph_gap"), 85, "Rust 里段距的默认值");
-  等(rust默认值("paragraph_gap") / 100, 0.85, "两处要指同一个数");
+  equal(cssFallback("--doc-para-gap"), "0.85em", "CSS 里段距的兜底值");
+  equal(rustDefaultValue("paragraph_gap"), 85, "Rust 里段距的默认值");
+  equal(rustDefaultValue("paragraph_gap") / 100, 0.85, "两处要指同一个数");
 
   // 字号：Rust 102 ↔ CSS 1.02em
-  等(css兜底("--doc-font-size"), "1.02em", "CSS 里字号的兜底值");
-  等(rust默认值("font_size"), 102, "Rust 里字号的默认值");
-  等(rust默认值("font_size") / 100, 1.02, "两处要指同一个数");
+  equal(cssFallback("--doc-font-size"), "1.02em", "CSS 里字号的兜底值");
+  equal(rustDefaultValue("font_size"), 102, "Rust 里字号的默认值");
+  equal(rustDefaultValue("font_size") / 100, 1.02, "两处要指同一个数");
 });
 
-测("把默认值原样打开，算出来的值**与 CSS 兜底值逐字相同**", () => {
+testCase("把默认值原样打开，算出来的值**与 CSS 兜底值逐字相同**", () => {
   // ⚠️ 这一条比上面那一条更狠：上面比的是"数"，这条比的是**算出来的字符串**。
   // `175 / 100` 在 JS 里是 `1.75`，但换成 `1.7` / `1.7500000000000002` 这种
   // 写法一样能过上面那条（前者是四舍五入的错、后者是浮点尾巴），
   // 而它们都会让"打开开关"这个动作在视觉上出问题（前者真的会变矮）。
-  const 出 = 正文排版变量({
-    ...全关(),
+  const output2 = DocumentTypographyVars({
+    ...allClosed(),
     custom_line_height: true,
     custom_paragraph_gap: true,
     custom_font_size: true,
   });
-  等(出["--doc-line-height"], "1.75", "行距");
-  等(出["--doc-para-gap"], "0.85em", "段距");
-  等(出["--doc-font-size"], "1.02em", "字号");
+  equal(output2["--doc-line-height"], "1.75", "行距");
+  equal(output2["--doc-para-gap"], "0.85em", "段距");
+  equal(output2["--doc-font-size"], "1.02em", "字号");
 });
 
 /* ── 第 3 组：每一项各写各的变量，关着的那项不写 ───────────────────── */
 
-组("四项各写各的");
+group("四项各写各的");
 
-测("只开行距时，只有 `--doc-line-height` 出现", () => {
-  const 出 = 正文排版变量({ ...全关(), custom_line_height: true, line_height: 200 });
-  等(Object.keys(出).length, 1, "只该有一个变量");
-  等(出["--doc-line-height"], "2", "200 → 2");
+testCase("只开行距时，只有 `--doc-line-height` 出现", () => {
+  const output2 = DocumentTypographyVars({ ...allClosed(), custom_line_height: true, line_height: 200 });
+  equal(Object.keys(output2).length, 1, "只该有一个变量");
+  equal(output2["--doc-line-height"], "2", "200 → 2");
 });
 
-测("四项全开时四个变量都在，且不串门", () => {
-  const 出 = 正文排版变量({
+testCase("四项全开时四个变量都在，且不串门", () => {
+  const output2 = DocumentTypographyVars({
     custom_line_height: true,
     line_height: 160,
     custom_paragraph_gap: true,
@@ -184,39 +184,39 @@ function rust默认值(字段: string): number {
     custom_font_size: true,
     font_size: 115,
   });
-  等(出["--doc-line-height"], "1.6", "行距");
-  等(出["--doc-para-gap"], "1.2em", "段距");
-  等(出["--doc-font-size"], "1.15em", "字号");
-  断言((出["--font-doc"] ?? "").includes("serif"), `字体该是衬线栈，实际 ${出["--font-doc"]}`);
+  equal(output2["--doc-line-height"], "1.6", "行距");
+  equal(output2["--doc-para-gap"], "1.2em", "段距");
+  equal(output2["--doc-font-size"], "1.15em", "字号");
+  assertion((output2["--font-doc"] ?? "").includes("serif"), `字体该是衬线栈，实际 ${output2["--font-doc"]}`);
 });
 
-测("三档字体各自成栈，且**每档都带通用族兜底**", () => {
-  for (const [档, 兜底] of [
+testCase("三档字体各自成栈，且**每档都带通用族兜底**", () => {
+  for (const [level, fallback] of [
     ["sans", "sans-serif"],
     ["serif", "serif"],
     ["mono", "monospace"],
   ] as const) {
-    const 出 = 正文排版变量({ ...全关(), custom_font: true, font: 档 });
-    const 栈 = 出["--font-doc"] ?? "";
-    断言(栈.length > 0, `${档} 该有一个栈`);
+    const output2 = DocumentTypographyVars({ ...allClosed(), custom_font: true, font: level });
+    const stack = output2["--font-doc"] ?? "";
+    assertion(stack.length > 0, `${level} 该有一个栈`);
     // ⚠️ 兜底那一段是**必须**的：前面那些具名字体在这台机器上多半不存在，
     // 没有兜底就落到浏览器的默认字体上——不报错，只是看着不对。
-    const 认 = 档 === "mono" ? 栈.includes("--font-mono") : 栈.endsWith(兜底);
-    断言(认, `${档} 这一档没有兜底：${栈}`);
+    const recognize = level === "mono" ? stack.includes("--font-mono") : stack.endsWith(fallback);
+    assertion(recognize, `${level} 这一档没有兜底：${stack}`);
   }
 });
 
-测("等宽那一档交给外壳的代码字体（不抄一份字体栈过来）", () => {
+testCase("等宽那一档交给外壳的代码字体（不抄一份字体栈过来）", () => {
   // ⚠️ 抄一份过来的话，哪天 `--font-mono` 换了，正文和代码块就各走各的。
-  等(正文排版变量({ ...全关(), custom_font: true, font: "mono" })["--font-doc"], "var(--font-mono)", "等宽");
+  equal(DocumentTypographyVars({ ...allClosed(), custom_font: true, font: "mono" })["--font-doc"], "var(--font-mono)", "等宽");
 });
 
 /* ── 第 4 组：越界的值不许把正文推坏 ───────────────────────────────── */
 
-组("夹范围");
+group("夹范围");
 
-测("手改 settings.toml 写出来的越界值会被夹回去", () => {
-  const 出 = 正文排版变量({
+testCase("手改 settings.toml 写出来的越界值会被夹回去", () => {
+  const output2 = DocumentTypographyVars({
     custom_line_height: true,
     line_height: 9999,
     custom_paragraph_gap: true,
@@ -226,28 +226,28 @@ function rust默认值(字段: string): number {
     custom_font_size: true,
     font_size: 9999,
   });
-  等(出["--doc-line-height"], String(行距范围.max / 100), "行距夹到上限");
-  等(出["--doc-para-gap"], `${段距范围.max / 100}em`, "段距夹到上限");
-  等(出["--doc-font-size"], `${字号范围.max / 100}em`, "字号夹到上限");
+  equal(output2["--doc-line-height"], String(lineDistanceScopeEnclose.max / 100), "行距夹到上限");
+  equal(output2["--doc-para-gap"], `${paragraphDistanceScopeEnclose.max / 100}em`, "段距夹到上限");
+  equal(output2["--doc-font-size"], `${characterNumberScopeEnclose.max / 100}em`, "字号夹到上限");
 });
 
-测("段距 0 是**正当取值**，不许被当成「没设」", () => {
+testCase("段距 0 是**正当取值**，不许被当成「没设」", () => {
   // ⚠️ 这一条盯的是"拿 0 当哨兵"那种改法：段距 0（段落挨着）与"跟随主题"
   // 是两件事，撞在同一个数上就会让选紧凑排版的人得到主题的间距。
-  const 出 = 正文排版变量({ ...全关(), custom_paragraph_gap: true, paragraph_gap: 0 });
-  等(出["--doc-para-gap"], "0em", "0 就该是 0");
+  const output2 = DocumentTypographyVars({ ...allClosed(), custom_paragraph_gap: true, paragraph_gap: 0 });
+  equal(output2["--doc-para-gap"], "0em", "0 就该是 0");
 });
 
-测("负数/小数会被夹回去（`-5` → 下限，`102.6` → 103）", () => {
-  等(正文排版变量({ ...全关(), custom_line_height: true, line_height: -5 })["--doc-line-height"], String(行距范围.min / 100), "负数夹到下限");
-  等(正文排版变量({ ...全关(), custom_font_size: true, font_size: 102.6 })["--doc-font-size"], "1.03em", "小数四舍五入");
+testCase("负数/小数会被夹回去（`-5` → 下限，`102.6` → 103）", () => {
+  equal(DocumentTypographyVars({ ...allClosed(), custom_line_height: true, line_height: -5 })["--doc-line-height"], String(lineDistanceScopeEnclose.min / 100), "负数夹到下限");
+  equal(DocumentTypographyVars({ ...allClosed(), custom_font_size: true, font_size: 102.6 })["--doc-font-size"], "1.03em", "小数四舍五入");
 });
 
 /* ── 收尾 ──────────────────────────────────────────────────────────── */
 
-console.log(`\n通过 ${过}，失败 ${败}`);
-if (败 > 0) {
+console.log(`\n通过 ${pass}，失败 ${fail}`);
+if (fail > 0) {
   console.log("失败的是：");
-  for (const n of 败的) console.log(`  - ${n}`);
+  for (const n of failed) console.log(`  - ${n}`);
   process.exit(1);
 }

@@ -39,7 +39,7 @@ import { $prose } from "@milkdown/kit/utils";
 
 // ⚠️ 命中的滚动是自己算的（`滚动到可见`），不用事务上的 `scrollIntoView`：
 // 理由写在那边文件头，以及 `选中` 里那段。
-import { 滚动到可见 } from "./scroll-into-view";
+import { rollActionToCanSee } from "./scroll-into-view";
 
 /** 查找开关。三个布尔，界面上就是查找条里那三颗可以拨的开关。 */
 export interface FindOptions {
@@ -58,7 +58,7 @@ export interface FindOptions {
   wildcard: boolean;
 }
 
-export const 默认查找选项: FindOptions = {
+export const defaultFindOptions: FindOptions = {
   caseSensitive: false,
   wholeWord: false,
   regex: false,
@@ -66,17 +66,17 @@ export const 默认查找选项: FindOptions = {
 };
 
 /** 一段文本里的一个命中。`start`/`end` 是**这段文本**里的下标。 */
-export interface 文本命中 {
+export interface TextMatch {
   start: number;
   end: number;
 }
 
 /** 词字符。⚠️ 用 `\p{L}`/`\p{N}` 而不是 `\w`：中文汉字属于 `\p{L}`，
  * 而 `\w` 只认 ASCII——用 `\w` 的话「全字匹配」在中文里等于没开。 */
-const 词字符 = /[\p{L}\p{N}_]/u;
+const wordCharacter = /[\p{L}\p{N}_]/u;
 
 /** 正则里的元字符。非正则模式下要先转义掉，否则用户查 `1.` 会当成"1 加任意字符"。 */
-const 元字符 = /[.*+?^${}()|[\]\\]/g;
+const dollarCharacter = /[.*+?^${}()|[\]\\]/g;
 
 /**
  * **通配符写法 → 正则源**（`*` = 任意多个字符、`?` = 恰好一个字符）。
@@ -91,21 +91,21 @@ const 元字符 = /[.*+?^${}()|[\]\\]/g;
  * 会吃掉段落分隔——那是另一件事（. 加 `s` 旗标）。这一条与"逐节点问"
  * 那个设计（见文件头）也是同一个口径。
  */
-function 通配符转正则(query: string): string {
+function throughConfigureSymbolConvertCorrectRule(query: string): string {
   return query
-    .replace(元字符, "\\$&")
+    .replace(dollarCharacter, "\\$&")
     .replace(/\\\*/g, ".*")
     .replace(/\\\?/g, ".");
 }
 
-function 编译(query: string, opts: FindOptions): RegExp | null {
+function editTranslate(query: string, opts: FindOptions): RegExp | null {
   let source: string;
   if (opts.regex) {
     source = query;
   } else if (opts.wildcard) {
-    source = 通配符转正则(query);
+    source = throughConfigureSymbolConvertCorrectRule(query);
   } else {
-    source = query.replace(元字符, "\\$&");
+    source = query.replace(dollarCharacter, "\\$&");
   }
   // ⚠️ 正则写坏了（比如用户正在敲 `[`）**不是错误**，是"这一次查不到"。
   // 抛出去会打断用户打字——他只是在把那个括号打完。
@@ -141,8 +141,8 @@ function 编译(query: string, opts: FindOptions): RegExp | null {
  * ⚠️ **空查询不算写坏**：那是"还没开始查"（刚 `Ctrl+F` 打开的框就是空的），
  * 而 `new RegExp("")` 本来就合法。不排掉的话，一按 `Ctrl+F` 就红着脸。
  */
-export function 正则写坏了(query: string, opts: FindOptions): boolean {
-  return opts.regex && query !== "" && 编译(query, opts) === null;
+export function correctRuleWriteBrokenDone(query: string, opts: FindOptions): boolean {
+  return opts.regex && query !== "" && editTranslate(query, opts) === null;
 }
 
 /**
@@ -155,16 +155,16 @@ export function 正则写坏了(query: string, opts: FindOptions): boolean {
  * **高亮不出来、也替换不出东西**，一律丢掉，否则 `replaceAll` 会在同一个
  * 位置上原地打转（用户会看到"替换全部"点了没反应，或者更糟：死循环）。
  */
-export function 在文本里找匹配(
+export function findMatchesInText(
   text: string,
   query: string,
   opts: FindOptions,
-): 文本命中[] {
+): TextMatch[] {
   if (query === "") return [];
-  const re = 编译(query, opts);
+  const re = editTranslate(query, opts);
   if (!re) return [];
 
-  const out: 文本命中[] = [];
+  const out: TextMatch[] = [];
   for (;;) {
     const m = re.exec(text);
     if (!m) break;
@@ -177,30 +177,30 @@ export function 在文本里找匹配(
     }
     const start = m.index;
     const end = start + m[0].length;
-    if (!opts.wholeWord || 是整词(text, start, end)) out.push({ start, end });
+    if (!opts.wholeWord || isWholeWord(text, start, end)) out.push({ start, end });
   }
   return out;
 }
 
 /** 命中两侧都不是词字符。⚠️ 边界**可能落在文本之外**（段首/段尾），那算通过。 */
-function 是整词(text: string, start: number, end: number): boolean {
-  const 左 = start > 0 ? text[start - 1]! : "";
-  const 右 = end < text.length ? text[end]! : "";
-  return !(左 && 词字符.test(左)) && !(右 && 词字符.test(右));
+function isWholeWord(text: string, start: number, end: number): boolean {
+  const left = start > 0 ? text[start - 1]! : "";
+  const right = end < text.length ? text[end]! : "";
+  return !(left && wordCharacter.test(left)) && !(right && wordCharacter.test(right));
 }
 
 /* ── 文档树 → 命中列表 ─────────────────────────────────────────────────── */
 
 /** 整个文档里的命中，位置是**文档偏移**。 */
-export function 算匹配(doc: PMNode, query: string, opts: FindOptions): 文本命中[] {
+export function computeMatch(doc: PMNode, query: string, opts: FindOptions): TextMatch[] {
   if (query === "") return [];
-  const out: 文本命中[] = [];
+  const out: TextMatch[] = [];
   doc.descendants((node, pos) => {
     // ⚠️ 只在文本节点上找。`node.text` 对非文本节点是 `undefined`，
     // 而**不能**用 `node.textContent`——那会把整棵子树的文字连起来，
     // 于是"跨节点命中"又回来了（见文件头）。
     if (!node.isText || !node.text) return true;
-    for (const m of 在文本里找匹配(node.text, query, opts)) {
+    for (const m of findMatchesInText(node.text, query, opts)) {
       // ⚠️⚠️ **文本节点里第 i 个字符就在 `pos + i`**——不是 `pos + 1 + i`。
       //
       // `pos` 是 `descendants` 给的"**节点之前**那个位置"，而对**文本节点**来说
@@ -234,15 +234,15 @@ export interface FindStatus {
   current: number;
 }
 
-interface 插件状态 {
+interface pluginState {
   query: string;
   options: FindOptions;
-  matches: 文本命中[];
+  matches: TextMatch[];
   /** 当前命中在 `matches` 里的下标。没有命中时是 -1。 */
   index: number;
 }
 
-const 空状态: 插件状态 = { query: "", options: 默认查找选项, matches: [], index: -1 };
+const emptyState: pluginState = { query: "", options: defaultFindOptions, matches: [], index: -1 };
 
 /**
  * 「什么都没在查」。
@@ -251,19 +251,19 @@ const 空状态: 插件状态 = { query: "", options: 默认查找选项, matche
  * 与"查了但没有命中"（`query` 非空、`total === 0`）是两回事——
  * 查找条对这两种情况的说法不一样（一个留空，一个写「无结果」）。
  */
-export const 空查找状态: FindStatus = { query: "", total: 0, current: 0 };
+export const emptyFindState: FindStatus = { query: "", total: 0, current: 0 };
 
-export const 查找键 = new PluginKey<插件状态>("nota-find");
+export const findKey = new PluginKey<pluginState>("nota-find");
 
 /** 改查询/选项。`current` 从哪开始找由 `从后面` 决定（见 `下一个`）。 */
-export const 设置查询元 = "nota-find-set";
+export const settingsQueryMetadata = "nota-find-set";
 /** 走到下一个 / 上一个。`from` 是 -1 表示上一步。 */
-export const 走动元 = "nota-find-step";
+export const walkActionDollar = "nota-find-step";
 /** 清空（关掉查找条）。 */
-export const 清除元 = "nota-find-clear";
+export const clearRemoveDollar = "nota-find-clear";
 
 /** 从光标位置起找**第一个不早于**它的命中；没有就绕回第一个（环形）。 */
-function 就近命中(s: 插件状态, pos: number): number {
+function thenNearMatch(s: pluginState, pos: number): number {
   if (s.matches.length === 0) return -1;
   const hit = s.matches.findIndex((m) => m.start >= pos);
   return hit === -1 ? 0 : hit;
@@ -276,7 +276,7 @@ function 就近命中(s: 插件状态, pos: number): number {
  * 就是替换它——那是查找最常用的下一步。也正因为要选区，这条必须派事务，
  * 不能只改装饰。
  */
-function 选中(view: EditorView, m: 文本命中): void {
+function selected(view: EditorView, m: TextMatch): void {
   const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, m.start, m.end));
   view.dispatch(tr);
   // ⚠️ 事务上原本挂了 `.scrollIntoView()`，**但它在这条路上不生效**：点查找
@@ -285,40 +285,40 @@ function 选中(view: EditorView, m: 文本命中): void {
   // 表现是命中明明选了、视图却一动不动——长文档里等于看不见结果。
   // 改成自己滚，且**只要能看见就够**（查找是连续动作，每敲一个字都重设一次
   // 查询，顶到最上面会让正文跟着每个字乱跳）。
-  滚动到可见(view, m.start, m.end);
+  rollActionToCanSee(view, m.start, m.end);
 }
 
-function 应用(tr: Transaction, prev: 插件状态, 新state: EditorState): 插件状态 {
-  if (tr.getMeta(清除元)) return 空状态;
+function shouldUse(tr: Transaction, prev: pluginState, newValuestate: EditorState): pluginState {
+  if (tr.getMeta(clearRemoveDollar)) return emptyState;
 
-  const 设置 = tr.getMeta(设置查询元) as
+  const settings = tr.getMeta(settingsQueryMetadata) as
     | { query: string; options: FindOptions }
     | undefined;
-  const 走 = tr.getMeta(走动元) as number | undefined;
+  const walk = tr.getMeta(walkActionDollar) as number | undefined;
 
   let query = prev.query;
   let options = prev.options;
-  if (设置) {
-    query = 设置.query;
-    options = 设置.options;
+  if (settings) {
+    query = settings.query;
+    options = settings.options;
   }
 
   // ⚠️ **文档变了就必须重算**：匹配位置是文档偏移，用户在前面插一个字，
   // 后面所有的命中位置就全错位了。不重算的话高亮会画在别的字上。
-  const 要重算 = 设置 !== undefined || tr.docChanged;
-  const matches = 要重算 ? 算匹配(新state.doc, query, options) : prev.matches;
+  const wantHeavyCompute = settings !== undefined || tr.docChanged;
+  const matches = wantHeavyCompute ? computeMatch(newValuestate.doc, query, options) : prev.matches;
 
   let index = prev.index;
   if (matches.length === 0) {
     index = -1;
-  } else if (设置) {
+  } else if (settings) {
     // 新查询：从当前光标位置往后找最近的一个。
-    index = 就近命中({ query, options, matches, index: -1 }, 新state.selection.from);
-  } else if (走 !== undefined) {
+    index = thenNearMatch({ query, options, matches, index: -1 }, newValuestate.selection.from);
+  } else if (walk !== undefined) {
     // 上下走一格。**环形**：走到最后一个再按"下一个"回到第一个。
     const n = matches.length;
-    index = 走 > 0 ? (index + 1 + n) % n : (index - 1 + n) % n;
-  } else if (要重算) {
+    index = walk > 0 ? (index + 1 + n) % n : (index - 1 + n) % n;
+  } else if (wantHeavyCompute) {
     // 文档变了、命中表重算了：把下标夹回合法范围（原来那一项可能已经没了）。
     index = Math.min(Math.max(index, 0), matches.length - 1);
   }
@@ -327,13 +327,13 @@ function 应用(tr: Transaction, prev: 插件状态, 新state: EditorState): 插
 }
 
 /** 命中高亮的 class。⚠️ 颜色写在 `styles/bars.css` 里，这里只给名字。 */
-const 命中类 = "nota-find-hit";
-const 当前类 = "nota-find-current";
+const matchClass = "nota-find-hit";
+const currentClass = "nota-find-current";
 
-export function 查找插件(onStatus: (s: FindStatus) => void) {
+export function findPlugin(onStatus: (s: FindStatus) => void) {
   return $prose(() => {
-    let 上次 = "";
-    const 报 = (s: 插件状态) => {
+    let aboveCount = "";
+    const report = (s: pluginState) => {
       const status: FindStatus = {
         query: s.query,
         total: s.matches.length,
@@ -341,26 +341,26 @@ export function 查找插件(onStatus: (s: FindStatus) => void) {
       };
       // 签名比对，避免每敲一个字都让 React 重渲染（同 `command-state.ts`）。
       const sig = `${status.query}|${status.total}|${status.current}`;
-      if (sig === 上次) return;
-      上次 = sig;
+      if (sig === aboveCount) return;
+      aboveCount = sig;
       onStatus(status);
     };
 
-    return new Plugin<插件状态>({
-      key: 查找键,
+    return new Plugin<pluginState>({
+      key: findKey,
       state: {
-        init: () => 空状态,
-        apply: (tr, prev, _old, 新state) => 应用(tr, prev, 新state),
+        init: () => emptyState,
+        apply: (tr, prev, _old, newValuestate) => shouldUse(tr, prev, newValuestate),
       },
       props: {
         decorations(state) {
-          const s = 查找键.getState(state);
+          const s = findKey.getState(state);
           if (!s || s.matches.length === 0) return null;
           return DecorationSet.create(
             state.doc,
             s.matches.map((m, i) =>
               Decoration.inline(m.start, m.end, {
-                class: i === s.index ? `${命中类} ${当前类}` : 命中类,
+                class: i === s.index ? `${matchClass} ${currentClass}` : matchClass,
               }),
             ),
           );
@@ -368,8 +368,8 @@ export function 查找插件(onStatus: (s: FindStatus) => void) {
       },
       view: () => ({
         update: (view) => {
-          const s = 查找键.getState(view.state);
-          if (s) 报(s);
+          const s = findKey.getState(view.state);
+          if (s) report(s);
           return false;
         },
       }),
@@ -380,30 +380,30 @@ export function 查找插件(onStatus: (s: FindStatus) => void) {
 /* ── 命令 ──────────────────────────────────────────────────────────────── */
 
 /** 取当前那份状态。没挂插件时给空状态。 */
-function 状态(view: EditorView): 插件状态 {
-  return 查找键.getState(view.state) ?? 空状态;
+function state(view: EditorView): pluginState {
+  return findKey.getState(view.state) ?? emptyState;
 }
 
-export function 设查询(view: EditorView, query: string, options: FindOptions): void {
-  view.dispatch(view.state.tr.setMeta(设置查询元, { query, options }));
+export function setQuery(view: EditorView, query: string, options: FindOptions): void {
+  view.dispatch(view.state.tr.setMeta(settingsQueryMetadata, { query, options }));
   // ⚠️ **设完立刻选中第一个命中**：只画高亮不移动光标的话，用户按
   // 「下一个」是从"第一个"跳到"第二个"，而他眼睛还停在原来的光标那里——
   // 看起来像是跳过了开头那一个。
-  const s = 状态(view);
-  if (s.index >= 0) 选中(view, s.matches[s.index]!);
+  const s = state(view);
+  if (s.index >= 0) selected(view, s.matches[s.index]!);
 }
 
 /** 走上一个/下一个。`方向` 大于 0 是"下一个"。 */
-export function 走(view: EditorView, 方向: 1 | -1): void {
-  const 前 = 状态(view);
-  if (前.matches.length === 0) return;
-  view.dispatch(view.state.tr.setMeta(走动元, 方向));
-  const 后 = 状态(view);
-  if (后.index >= 0) 选中(view, 后.matches[后.index]!);
+export function walk(view: EditorView, direction: 1 | -1): void {
+  const before2 = state(view);
+  if (before2.matches.length === 0) return;
+  view.dispatch(view.state.tr.setMeta(walkActionDollar, direction));
+  const after = state(view);
+  if (after.index >= 0) selected(view, after.matches[after.index]!);
 }
 
-export function 清除(view: EditorView): void {
-  view.dispatch(view.state.tr.setMeta(清除元, true));
+export function clearRemove(view: EditorView): void {
+  view.dispatch(view.state.tr.setMeta(clearRemoveDollar, true));
 }
 
 /**
@@ -414,16 +414,16 @@ export function 清除(view: EditorView): void {
  * （`tr.docChanged`），而"下一个"必须从**新的**命中表上取——拿旧的算
  * 会跳错一格（被替换掉的那个位置后面，所有命中都往前挪了）。
  */
-export function 替换当前(view: EditorView, 替换成: string): boolean {
-  const s = 状态(view);
+export function replaceReplaceCurrent(view: EditorView, replaceReplaceBecome: string): boolean {
+  const s = state(view);
   if (s.index < 0) return false;
   const m = s.matches[s.index]!;
-  const tr = view.state.tr.insertText(替换成, m.start, m.end);
+  const tr = view.state.tr.insertText(replaceReplaceBecome, m.start, m.end);
   view.dispatch(tr);
   // 替换之后 `index` 还停在同一格上，而那一格现在是**下一个**命中了
   // （因为被替换掉的那个已经不在表里）。所以这里不能再 +1。
-  const 后 = 状态(view);
-  if (后.index >= 0 && 后.matches[后.index]) 选中(view, 后.matches[后.index]!);
+  const after = state(view);
+  if (after.index >= 0 && after.matches[after.index]) selected(view, after.matches[after.index]!);
   return true;
 }
 
@@ -434,13 +434,13 @@ export function 替换当前(view: EditorView, 替换成: string): boolean {
  * 从前往后换的话，第二个命中的位置会被第一个的改动推着走——换了三个之后
  * 后面全错位。从后往前时，前面那些命中还没被碰过，位置仍然准。
  */
-export function 全部替换(view: EditorView, 替换成: string): number {
-  const s = 状态(view);
+export function replaceAll(view: EditorView, replaceReplaceBecome: string): number {
+  const s = state(view);
   if (s.matches.length === 0) return 0;
   const n = s.matches.length;
   let tr = view.state.tr;
   for (const m of [...s.matches].reverse()) {
-    tr = tr.insertText(替换成, m.start, m.end);
+    tr = tr.insertText(replaceReplaceBecome, m.start, m.end);
   }
   view.dispatch(tr);
   return n;

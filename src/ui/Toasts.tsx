@@ -40,20 +40,20 @@ export function Toasts({ items, onDismiss, position }: Props) {
           `t("Dismiss")` 会变成"拿一个 toast 对象当函数调"。所以改叫 `项`。
           ⚠️ `项.message` **不翻**：那句话是调用方**已经拼好**的（见 `useExport.ts`
           那几处 `toast(t("…"))`），这里再翻一次等于翻一条已经不认识的句子。 */}
-      {items.map((项) => (
-        <div key={项.id} className={`toast toast-${项.level}`}>
+      {items.map((item5) => (
+        <div key={item5.id} className={`toast toast-${item5.level}`}>
           <div className="toast-content">
-            <span className="toast-message">{项.message}</span>
-            {项.action && (
+            <span className="toast-message">{item5.message}</span>
+            {item5.action && (
               <button
                 type="button"
                 className="toast-action"
                 onClick={() => {
-                  onDismiss(项.id);
-                  项.action?.onClick();
+                  onDismiss(item5.id);
+                  item5.action?.onClick();
                 }}
               >
-                {项.action.label}
+                {item5.action.label}
               </button>
             )}
           </div>
@@ -62,7 +62,7 @@ export function Toasts({ items, onDismiss, position }: Props) {
             className="toast-close"
             title={t("Dismiss")}
             aria-label={t("Dismiss this notification")}
-            onClick={() => onDismiss(项.id)}
+            onClick={() => onDismiss(item5.id)}
           >
             <Icon name="folio-close-symbolic" />
           </button>

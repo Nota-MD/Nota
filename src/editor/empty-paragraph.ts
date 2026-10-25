@@ -124,18 +124,18 @@ import { $nodeSchema } from "@milkdown/kit/utils";
  * 而 `$nodeSchema` 收的就是那个函数。少写一层箭头函数的症状是**建实例时炸**，
  * 不是"没生效"，所以它骗不了人。
  */
-export const 段落不写空行 = paragraphSchema.extendSchema(
-  (上一版) => (ctx) => {
-    const 原 = 上一版(ctx);
+export const paragraphWithoutBlankLine = paragraphSchema.extendSchema(
+  (aboveValueVersion) => (ctx) => {
+    const original = aboveValueVersion(ctx);
     return {
-      ...原,
+      ...original,
       toMarkdown: {
-        ...原.toMarkdown,
+        ...original.toMarkdown,
         runner: (state, node) => {
           // ⚠️ 判据是**内容为空**，不是"文本为空"：`<br />` 之外还有另一种空
           // ——段里只有一个空的行内节点。`!node.content` 那半句照抄上游。
           if (!node.content || node.content.size === 0) return;
-          return 原.toMarkdown.runner(state, node);
+          return original.toMarkdown.runner(state, node);
         },
       },
     };
@@ -179,38 +179,38 @@ export const 段落不写空行 = paragraphSchema.extendSchema(
  * 于是**顺序成了硬要求**：`.use(文档别导出空根)` 必须在 `.use(commonmark)` 之后。
  * 顺序错了会**当场抛错**（不是悄悄失效）：一打开就白屏，很好认。
  */
-export const 文档别导出空根 = $nodeSchema("doc", (ctx) => {
-  const 上游 = ctx.get(nodesCtx).find(([id]) => id === "doc")?.[1];
-  if (!上游) {
+export const documentMustNotExportEmptyRoot = $nodeSchema("doc", (ctx) => {
+  const upstream = ctx.get(nodesCtx).find(([id]) => id === "doc")?.[1];
+  if (!upstream) {
     // ⚠️ 只有"注册顺序写反了"会走到这儿（见上面那一段）。抛一条认得出来的错，
     // 而不是拿一个残缺的 spec 硬撑。
     throw new Error("[nota] 文档别导出空根：注册表里没有 doc（它必须排在 commonmark 之后）");
   }
   // ⚠️ 从**上游那一条**的签名里取类型，不手写结构（`SerializerState` 那一串
   // 泛型手抄一遍只会抄错，而且上游一改就对不上）。
-  type 序列化状态 = Parameters<typeof 上游.toMarkdown.runner>[0];
-  type 文档节点 = Parameters<typeof 上游.toMarkdown.runner>[1];
+  type SerializeState = Parameters<typeof upstream.toMarkdown.runner>[0];
+  type documentNode = Parameters<typeof upstream.toMarkdown.runner>[1];
 
   /** 这一篇的顶层块**是不是全是空段落**（含"一个块都没有"）。 */
-  const 全篇都是空段落 = (doc: 文档节点): boolean => {
+  const allParagraphsEmpty = (doc: documentNode): boolean => {
     if (doc.content.size === 0) return true;
-    let 全空 = true;
-    doc.content.forEach((块) => {
-      if (块.type.name !== "paragraph" || 块.content.size !== 0) 全空 = false;
+    let allEmpty = true;
+    doc.content.forEach((block) => {
+      if (block.type.name !== "paragraph" || block.content.size !== 0) allEmpty = false;
     });
-    return 全空;
+    return allEmpty;
   };
 
   return {
-    ...上游,
+    ...upstream,
     toMarkdown: {
-      ...上游.toMarkdown,
-      runner: (state: 序列化状态, node: 文档节点) => {
+      ...upstream.toMarkdown,
+      runner: (state: SerializeState, node: documentNode) => {
         // ⚠️ 先 `openNode`：上游那一条也是这个顺序（`openNode("root")` 之后才
         // `next`）。`closeNode` 上游本来就没有——文档这一层的收尾由
         // `SerializerState.toString` 那边做，这里照着不来。
         state.openNode("root");
-        if (!全篇都是空段落(node)) {
+        if (!allParagraphsEmpty(node)) {
           state.next(node.content);
           return;
         }

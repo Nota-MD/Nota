@@ -32,40 +32,40 @@
  * 开窗那一半里量（`docs/06` §5.67）。
  */
 
-import { 是HTML } from "@/editor/code-preview";
+import { isHtml } from "@/editor/code-preview";
 
-let 过 = 0;
-let 败 = 0;
+let pass = 0;
+let fail = 0;
 
-function 判(条件: boolean, 说明: string) {
-  if (条件) {
-    过++;
+function determine(condition: boolean, description: string) {
+  if (condition) {
+    pass++;
   } else {
-    败++;
-    console.log(`  ✘ ${说明}`);
+    fail++;
+    console.log(`  ✘ ${description}`);
   }
 }
 
 console.log("【一、认得出的那三个】");
-for (const 语 of ["html", "htm", "xhtml"]) {
-  判(是HTML(语), `${语} 算 HTML`);
+for (const language2 of ["html", "htm", "xhtml"]) {
+  determine(isHtml(language2), `${language2} 算 HTML`);
 }
 
 console.log("【二、大小写与空白】");
-判(是HTML("HTML"), "全大写算");
-判(是HTML("Html"), "首字母大写算");
-判(是HTML("  html  "), "两端有空白算");
-判(是HTML("XHTML"), "XHTML 大写算");
+determine(isHtml("HTML"), "全大写算");
+determine(isHtml("Html"), "首字母大写算");
+determine(isHtml("  html  "), "两端有空白算");
+determine(isHtml("XHTML"), "XHTML 大写算");
 
 console.log("【三、不该认的那些】");
-判(!是HTML(""), "空串不算（没选语言）");
-判(!是HTML("htmlbars"), "htmlbars **不算**——`startsWith` 那种写法会把它认进来");
-判(!是HTML("htmlish"), "htmlish 不算");
-判(!是HTML("markdown"), "markdown 不算");
-判(!是HTML("vue"), "vue 不算（今天不认 SFC）");
-判(!是HTML("xml"), "xml 不算——它不是网页，渲染出来是一张错误页");
-判(!是HTML("javascript"), "javascript 不算");
+determine(!isHtml(""), "空串不算（没选语言）");
+determine(!isHtml("htmlbars"), "htmlbars **不算**——`startsWith` 那种写法会把它认进来");
+determine(!isHtml("htmlish"), "htmlish 不算");
+determine(!isHtml("markdown"), "markdown 不算");
+determine(!isHtml("vue"), "vue 不算（今天不认 SFC）");
+determine(!isHtml("xml"), "xml 不算——它不是网页，渲染出来是一张错误页");
+determine(!isHtml("javascript"), "javascript 不算");
 
 console.log("────────────────────────────────────────────────────────────────");
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-process.exit(败 === 0 ? 0 : 1);
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+process.exit(fail === 0 ? 0 : 1);

@@ -36,39 +36,39 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { Settings } from "@/bridge/ipc";
-import { 口径键, 读口径, 缺省口径 } from "@/ui/tree-options";
+import { optionKey, readMouthPath, fallbackOptions } from "@/ui/tree-options";
 
 /* ── 一支极小的测试工装（与 `auto-correct.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
 /** 造一份只带 `files` 那一格的设置（这个模块只读那一格）。 */
-function 假设置(files: {
+function fakeSettings(files: {
   tree_sort: string;
   tree_filter: string;
   show_hidden: boolean;
@@ -78,67 +78,67 @@ function 假设置(files: {
 
 /* ── 一、读口径 ─────────────────────────────────────────────────────── */
 
-组("一、读口径");
+group("一、读口径");
 
-测("设置还没到时给缺省口径（不是抛、也不是 undefined）", () => {
-  等(读口径(null).sort, 缺省口径.sort, "排序");
-  等(读口径(null).filter, 缺省口径.filter, "过滤");
-  等(读口径(null).showHidden, 缺省口径.showHidden, "隐藏文件");
+testCase("设置还没到时给缺省口径（不是抛、也不是 undefined）", () => {
+  equal(readMouthPath(null).sort, fallbackOptions.sort, "排序");
+  equal(readMouthPath(null).filter, fallbackOptions.filter, "过滤");
+  equal(readMouthPath(null).showHidden, fallbackOptions.showHidden, "隐藏文件");
 });
 
-测("设置到了就逐格照抄，一个都不漏", () => {
-  const 口径 = 读口径(
-    假设置({ tree_sort: "modified", tree_filter: "all", show_hidden: true }),
+testCase("设置到了就逐格照抄，一个都不漏", () => {
+  const mouthPath = readMouthPath(
+    fakeSettings({ tree_sort: "modified", tree_filter: "all", show_hidden: true }),
   );
-  等(口径.sort, "modified", "排序");
-  等(口径.filter, "all", "过滤");
-  等(口径.showHidden, true, "隐藏文件");
+  equal(mouthPath.sort, "modified", "排序");
+  equal(mouthPath.filter, "all", "过滤");
+  equal(mouthPath.showHidden, true, "隐藏文件");
 });
 
-测("⚠️ 三格是**照抄**不是拼装：`show_hidden: false` 不能被 `??` 之类的兜底吃掉", () => {
+testCase("⚠️ 三格是**照抄**不是拼装：`show_hidden: false` 不能被 `??` 之类的兜底吃掉", () => {
   // ⚠️ 写成 `settings?.files.show_hidden ?? true` 这类兜底的话，
   // **用户主动关掉**的那一格会被当成"没填"——症状是"隐藏文件关不掉"。
-  const 口径 = 读口径(
-    假设置({ tree_sort: "name", tree_filter: "supported", show_hidden: false }),
+  const mouthPath = readMouthPath(
+    fakeSettings({ tree_sort: "name", tree_filter: "supported", show_hidden: false }),
   );
-  等(口径.showHidden, false, "显式的 false 要留住");
+  equal(mouthPath.showHidden, false, "显式的 false 要留住");
 });
 
 /* ── 二、口径键 ─────────────────────────────────────────────────────── */
 
-组("二、口径键（给 `useEffect` 的依赖数组用）");
+group("二、口径键（给 `useEffect` 的依赖数组用）");
 
-测("三格任一不同，键就不同", () => {
-  const 基 = { sort: "name", filter: "supported", showHidden: false } as const;
-  const 键 = 口径键(基);
-  for (const 变 of [
-    { ...基, sort: "modified" },
-    { ...基, filter: "all" },
-    { ...基, showHidden: true },
-  ] as Array<typeof 基>) {
-    if (口径键(变) === 键) throw new Error(`这一格变了但键没变：${JSON.stringify(变)}`);
+testCase("三格任一不同，键就不同", () => {
+  const base = { sort: "name", filter: "supported", showHidden: false } as const;
+  const key = optionKey(base);
+  for (const change of [
+    { ...base, sort: "modified" },
+    { ...base, filter: "all" },
+    { ...base, showHidden: true },
+  ] as Array<typeof base>) {
+    if (optionKey(change) === key) throw new Error(`这一格变了但键没变：${JSON.stringify(change)}`);
   }
 });
 
-测("⚠️ 内容一样的两个对象给**同一个键**（这才是它存在的理由）", () => {
+testCase("⚠️ 内容一样的两个对象给**同一个键**（这才是它存在的理由）", () => {
   // ⚠️ `读口径` 每次返回一个新对象，所以它的**身份**每次渲染都变——直接拿它
   // 当依赖等于"每次渲染都重取一遍已经展开的目录"。键是值比较，这才是那一行
   // 依赖数组能用的原因。
-  const 甲 = 读口径(假设置({ tree_sort: "name", tree_filter: "all", show_hidden: true }));
-  const 乙 = 读口径(假设置({ tree_sort: "name", tree_filter: "all", show_hidden: true }));
-  if (甲 === 乙) throw new Error("前提不成立：这两个该是两个对象");
-  等(口径键(甲), 口径键(乙), "同样的内容该给同一个键");
+  const alpha = readMouthPath(fakeSettings({ tree_sort: "name", tree_filter: "all", show_hidden: true }));
+  const beta = readMouthPath(fakeSettings({ tree_sort: "name", tree_filter: "all", show_hidden: true }));
+  if (alpha === beta) throw new Error("前提不成立：这两个该是两个对象");
+  equal(optionKey(alpha), optionKey(beta), "同样的内容该给同一个键");
 });
 
 /* ── 三、⚠️ 与宿主那三档对名字（改枚举就得重跑这一组）────────────── */
 
-组("三、⚠️ 档位名字与宿主逐个对齐");
+group("三、⚠️ 档位名字与宿主逐个对齐");
 
-const RUST源 = readFileSync(join("src-tauri", "src", "settings", "files.rs"), "utf8");
+const rUSTSource = readFileSync(join("src-tauri", "src", "settings", "files.rs"), "utf8");
 
 /** 把 `TreeSort` 那样的 CamelCase 变体名转成线上的 kebab-case 取值。 */
-function 转kebab(变体: string): string {
-  return 变体.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+function convertkebab(changeBody: string): string {
+  return changeBody.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 /**
@@ -149,71 +149,71 @@ function 转kebab(变体: string): string {
  * 断言都是"读出来的集合必须**正好等于**期望的那几个"，读少了会当场 FAIL，
  * 不会静默放过。
  */
-function 读枚举(名: string): { kebab: boolean; 变体: string[]; 缺省: string | null } {
+function readTokenEnumerate(name3: string): { kebab: boolean; changeBody: string[]; fallback2: string | null } {
   // ⚠️ `((?:#[^\n]*\n)*)` 要**把几条属性行全收进来**：`derive` 一条、`serde`
   // 一条，第 2 条才是 `rename_all`。只抓第一行的话这条断言会**永远说"没写
   // kebab-case"**——这正是它第一版踩的那一脚（测试自己错了，比不写还糟：
   // 它会逼着下一个人去"修"一段本来正确的代码）。
-  const 枚举 = new RegExp(`((?:#[^\\n]*\\n)*)pub enum ${名} \\{([\\s\\S]*?)\\n\\}`).exec(RUST源);
-  if (!枚举) throw new Error(`源码里找不到 pub enum ${名}`);
-  const 变体: string[] = [];
-  for (const 行 of 枚举[2]!.split("\n")) {
-    const 去 = 行.trim();
-    if (去 === "" || 去.startsWith("///") || 去.startsWith("#[")) continue;
-    const 名去逗号 = 去.replace(/,$/, "");
-    if (/^[A-Za-z][A-Za-z0-9]*$/.test(名去逗号)) 变体.push(名去逗号);
+  const tokenEnumerate = new RegExp(`((?:#[^\\n]*\\n)*)pub enum ${name3} \\{([\\s\\S]*?)\\n\\}`).exec(rUSTSource);
+  if (!tokenEnumerate) throw new Error(`源码里找不到 pub enum ${name3}`);
+  const changeBody: string[] = [];
+  for (const line3 of tokenEnumerate[2]!.split("\n")) {
+    const go = line3.trim();
+    if (go === "" || go.startsWith("///") || go.startsWith("#[")) continue;
+    const nameGoCommaNumber = go.replace(/,$/, "");
+    if (/^[A-Za-z][A-Za-z0-9]*$/.test(nameGoCommaNumber)) changeBody.push(nameGoCommaNumber);
   }
   // ⚠️ 本仓两种写法都有（`Self::Name` 与 `TreeSort::Name`），两个都认——
   // 只认一种的话，哪天有人换个写法，这条断言会**静默落空**（`缺省` 变成
   // `null`），而下面那条"默认档一致"的断言只会说"实际是空串"，看不出所以然。
-  const 缺省 = new RegExp(
-    `impl Default for ${名} \\{[\\s\\S]*?(?:Self|${名})::([A-Za-z0-9]+)`,
-  ).exec(RUST源);
+  const fallback2 = new RegExp(
+    `impl Default for ${name3} \\{[\\s\\S]*?(?:Self|${name3})::([A-Za-z0-9]+)`,
+  ).exec(rUSTSource);
   return {
-    kebab: /rename_all\s*=\s*"kebab-case"/.test(枚举[1]!),
-    变体,
-    缺省: 缺省 ? 缺省[1]! : null,
+    kebab: /rename_all\s*=\s*"kebab-case"/.test(tokenEnumerate[1]!),
+    changeBody,
+    fallback2: fallback2 ? fallback2[1]! : null,
   };
 }
 
-测("⚠️ 两个枚举都写着 `kebab-case`（没有它，线上取值会变成 `TreeSort.Name`）", () => {
+testCase("⚠️ 两个枚举都写着 `kebab-case`（没有它，线上取值会变成 `TreeSort.Name`）", () => {
   // ⚠️ Tauri 命令的参数是 JSON 过去的，serde 默认用的是**变体名原样**
   // （`"Modified"`）。少了 `rename_all`，这边发 `"modified"` 会反序列化失败，
   // 而失败的那一格是 `Option<TreeSort>`——整条 `tree` 命令报错，症状是
   // **整个文件树打不开**，却和"排序"这个动作看不出关系。
-  for (const 名 of ["TreeSort", "FileFilter"]) {
-    if (!读枚举(名).kebab) throw new Error(`${名} 上没有 rename_all = "kebab-case"`);
+  for (const name3 of ["TreeSort", "FileFilter"]) {
+    if (!readTokenEnumerate(name3).kebab) throw new Error(`${name3} 上没有 rename_all = "kebab-case"`);
   }
 });
 
-测("`TreeSort` 的三档与 `src/ui/tree-options.ts` 一字不差", () => {
-  const { 变体 } = 读枚举("TreeSort");
-  const 线上 = 变体.map(转kebab).sort();
-  等(线上.join(","), "created,modified,name", "三档的名字");
+testCase("`TreeSort` 的三档与 `src/ui/tree-options.ts` 一字不差", () => {
+  const { changeBody } = readTokenEnumerate("TreeSort");
+  const lineAbove = changeBody.map(convertkebab).sort();
+  equal(lineAbove.join(","), "created,modified,name", "三档的名字");
 });
 
-测("`FileFilter` 的两档也一字不差", () => {
-  const { 变体 } = 读枚举("FileFilter");
-  等(变体.map(转kebab).sort().join(","), "all,supported", "两档的名字");
+testCase("`FileFilter` 的两档也一字不差", () => {
+  const { changeBody } = readTokenEnumerate("FileFilter");
+  equal(changeBody.map(convertkebab).sort().join(","), "all,supported", "两档的名字");
 });
 
-测("⚠️ 缺省口径必须与宿主的默认值**逐格**一致", () => {
+testCase("⚠️ 缺省口径必须与宿主的默认值**逐格**一致", () => {
   // ⚠️ 不一致的症状是启动那几百毫秒里树按一种规则排、设置一到又按另一种重排。
-  等(转kebab(读枚举("TreeSort").缺省 ?? ""), 缺省口径.sort, "排序的默认档");
-  等(转kebab(读枚举("FileFilter").缺省 ?? ""), 缺省口径.filter, "过滤的默认档");
+  equal(convertkebab(readTokenEnumerate("TreeSort").fallback2 ?? ""), fallbackOptions.sort, "排序的默认档");
+  equal(convertkebab(readTokenEnumerate("FileFilter").fallback2 ?? ""), fallbackOptions.filter, "过滤的默认档");
   // `show_hidden` 是个布尔，没有枚举可读——直接盯宿主 `Files` 的默认实现。
-  const 缺省段 = /impl Default for Files \{[\s\S]*?\n    \}/.exec(RUST源);
-  if (!缺省段) throw new Error("源码里找不到 impl Default for Files");
-  if (!/show_hidden:\s*false/.test(缺省段[0]))
-    throw new Error(`宿主那边 show_hidden 的默认值变了：\n${缺省段[0]}`);
-  等(缺省口径.showHidden, false, "隐藏文件的默认档");
+  const fallbackParagraph = /impl Default for Files \{[\s\S]*?\n    \}/.exec(rUSTSource);
+  if (!fallbackParagraph) throw new Error("源码里找不到 impl Default for Files");
+  if (!/show_hidden:\s*false/.test(fallbackParagraph[0]))
+    throw new Error(`宿主那边 show_hidden 的默认值变了：\n${fallbackParagraph[0]}`);
+  equal(fallbackOptions.showHidden, false, "隐藏文件的默认档");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) {
-  console.log(`失败的：\n  - ${败的.join("\n  - ")}`);
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) {
+  console.log(`失败的：\n  - ${failed.join("\n  - ")}`);
   process.exitCode = 1;
 }

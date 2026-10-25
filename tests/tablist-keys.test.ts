@@ -29,85 +29,85 @@
 
 /* ── 最小工装（与 `toc.test.ts` 同一套，本仓没有测试框架）──────────────── */
 
-let 通过 = 0;
-let 失败 = 0;
-const 失败清单: string[] = [];
-let 当前组 = "";
+let passed = 0;
+let failure = 0;
+const failureList: string[] = [];
+let currentGroup = "";
 
-function 组(名: string): void {
-  当前组 = 名;
-  console.log(`\n── ${名} ${"─".repeat(Math.max(0, 56 - 名.length))}`);
+function group(name3: string): void {
+  currentGroup = name3;
+  console.log(`\n── ${name3} ${"─".repeat(Math.max(0, 56 - name3.length))}`);
 }
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    通过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    passed++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    失败++;
-    失败清单.push(`${当前组} / ${名称}`);
-    console.log(`  ✘ ${名称}`);
+    failure++;
+    failureList.push(`${currentGroup} / ${name}`);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  const a = JSON.stringify(实际);
-  const b = JSON.stringify(期望);
-  if (a !== b) throw new Error(`${说明}：期望 ${b}，实际 ${a}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  const a = JSON.stringify(actual);
+  const b = JSON.stringify(expected);
+  if (a !== b) throw new Error(`${description}：期望 ${b}，实际 ${a}`);
 }
 
 /* ── 被测 ─────────────────────────────────────────────────────────────── */
 
-import { 页签下一个 } from "../src/ui/useTablistKeys";
+import { pageKeyBelowValueItem } from "../src/ui/useTablistKeys";
 
 /* ── 一、边界 ─────────────────────────────────────────────────────────── */
 
-组("一、边界");
+group("一、边界");
 
-测("没有页签 → -1", () => {
-  等(页签下一个(0, 0, "ArrowRight"), -1, "空 tablist");
+testCase("没有页签 → -1", () => {
+  equal(pageKeyBelowValueItem(0, 0, "ArrowRight"), -1, "空 tablist");
 });
 
-测("不认的键 → -1（调用方据此早退，不拦）", () => {
-  等(页签下一个(3, 1, "ArrowDown"), -1, "方向键只有左右");
-  等(页签下一个(3, 1, "Escape"), -1, "别的键更不该接");
+testCase("不认的键 → -1（调用方据此早退，不拦）", () => {
+  equal(pageKeyBelowValueItem(3, 1, "ArrowDown"), -1, "方向键只有左右");
+  equal(pageKeyBelowValueItem(3, 1, "Escape"), -1, "别的键更不该接");
 });
 
 /* ── 二、Home / End ───────────────────────────────────────────────────── */
 
-组("二、Home / End 跳头尾");
+group("二、Home / End 跳头尾");
 
-测("Home 回第一颗、End 到最后一颗（不管现在在哪）", () => {
-  等(页签下一个(5, 3, "Home"), 0, "Home");
-  等(页签下一个(5, 0, "End"), 4, "End");
+testCase("Home 回第一颗、End 到最后一颗（不管现在在哪）", () => {
+  equal(pageKeyBelowValueItem(5, 3, "Home"), 0, "Home");
+  equal(pageKeyBelowValueItem(5, 0, "End"), 4, "End");
 });
 
 /* ── 三、左右与绕圈 ───────────────────────────────────────────────────── */
 
-组("三、左右与绕圈");
+group("三、左右与绕圈");
 
-测("右/左各走一步", () => {
-  等(页签下一个(5, 1, "ArrowRight"), 2, "向右");
-  等(页签下一个(5, 3, "ArrowLeft"), 2, "向左");
+testCase("右/左各走一步", () => {
+  equal(pageKeyBelowValueItem(5, 1, "ArrowRight"), 2, "向右");
+  equal(pageKeyBelowValueItem(5, 3, "ArrowLeft"), 2, "向左");
 });
 
-测("两端绕圈：最后一颗再往右回第一颗，第一颗往左到最后一颗", () => {
-  等(页签下一个(5, 4, "ArrowRight"), 0, "尾部绕回头部");
-  等(页签下一个(5, 0, "ArrowLeft"), 4, "头部绕到尾部");
+testCase("两端绕圈：最后一颗再往右回第一颗，第一颗往左到最后一颗", () => {
+  equal(pageKeyBelowValueItem(5, 4, "ArrowRight"), 0, "尾部绕回头部");
+  equal(pageKeyBelowValueItem(5, 0, "ArrowLeft"), 4, "头部绕到尾部");
 });
 
-测("只有一颗：怎么按都还在原地（下标 0）", () => {
-  等(页签下一个(1, 0, "ArrowRight"), 0, "右");
-  等(页签下一个(1, 0, "ArrowLeft"), 0, "左");
+testCase("只有一颗：怎么按都还在原地（下标 0）", () => {
+  equal(pageKeyBelowValueItem(1, 0, "ArrowRight"), 0, "右");
+  equal(pageKeyBelowValueItem(1, 0, "ArrowLeft"), 0, "左");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
 console.log(`\n${"═".repeat(56)}`);
-console.log(`通过 ${通过}，失败 ${失败}`);
-if (失败 > 0) {
-  console.log(`失败清单：\n  ${失败清单.join("\n  ")}`);
+console.log(`通过 ${passed}，失败 ${failure}`);
+if (failure > 0) {
+  console.log(`失败清单：\n  ${failureList.join("\n  ")}`);
   process.exit(1);
 }

@@ -58,183 +58,183 @@ import { readFileSync } from "node:fs";
 
 /* ── 一支极小的测试工装（与 `status-metric.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 组(名: string): void {
-  console.log(`\n${名}`);
+function group(name3: string): void {
+  console.log(`\n${name3}`);
 }
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  const a = JSON.stringify(实际);
-  const b = JSON.stringify(期望);
-  if (a !== b) throw new Error(`${说明}\n      实际：${a}\n      期望：${b}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  const a = JSON.stringify(actual);
+  const b = JSON.stringify(expected);
+  if (a !== b) throw new Error(`${description}\n      实际：${a}\n      期望：${b}`);
 }
 
-function 真(值: unknown, 说明: string): void {
-  if (!值) throw new Error(说明);
+function assertValue(value2: unknown, description: string): void {
+  if (!value2) throw new Error(description);
 }
 
 /** 读一份仓库里的源码。⚠️ 路径相对 `process.cwd()`（见文件头"要在仓库里跑"）。 */
-function 读(相对: string): string {
-  return readFileSync(相对, "utf8");
+function read(phaseCorrect: string): string {
+  return readFileSync(phaseCorrect, "utf8");
 }
 
-const 三个词 = ["standard", "strong", "stronger"] as const;
+const threeItemWord = ["standard", "strong", "stronger"] as const;
 
 /* ── 组一：Rust 那一侧 ─────────────────────────────────────────────── */
 
-组("组一 Rust：枚举三个变体、默认标准、落盘三个词");
+group("组一 Rust：枚举三个变体、默认标准、落盘三个词");
 
-const rust = 读("src-tauri/src/settings/appearance.rs");
+const rust = read("src-tauri/src/settings/appearance.rs");
 
-测("`FocusDim` 三个变体在（大小写照 Rust 的写法）", () => {
-  for (const 变体 of ["Standard", "Strong", "Stronger"]) {
-    真(new RegExp(`\\b${变体},`).test(rust), `枚举里该有 \`${变体}\``);
+testCase("`FocusDim` 三个变体在（大小写照 Rust 的写法）", () => {
+  for (const changeBody of ["Standard", "Strong", "Stronger"]) {
+    assertValue(new RegExp(`\\b${changeBody},`).test(rust), `枚举里该有 \`${changeBody}\``);
   }
 });
 
-测("`#[default]` 在 `Standard` 那一档上（不是 Stronger）", () => {
+testCase("`#[default]` 在 `Standard` 那一档上（不是 Stronger）", () => {
   // ⚠️ 挪到 `Stronger` 上就是"升级之后专注模式突然更暗了"，而用户没做过这个选择。
-  const 段 = rust.slice(rust.indexOf("pub enum FocusDim"));
-  const 到默认 = 段.indexOf("#[default]");
-  真(到默认 >= 0, "该有 `#[default]`");
-  const 默认之后 = 段.slice(到默认, 段.indexOf("Strong,"));
-  真(/Standard,/.test(默认之后), "`#[default]` 该紧挨着 `Standard`");
+  const paragraph2 = rust.slice(rust.indexOf("pub enum FocusDim"));
+  const toDefault = paragraph2.indexOf("#[default]");
+  assertValue(toDefault >= 0, "该有 `#[default]`");
+  const afterDefault = paragraph2.slice(toDefault, paragraph2.indexOf("Strong,"));
+  assertValue(/Standard,/.test(afterDefault), "`#[default]` 该紧挨着 `Standard`");
 });
 
-测("枚举上有 `rename_all = \"snake_case\"`（否则落盘是 `\"Standard\"`）", () => {
-  const 段 = rust.slice(rust.indexOf("/// **专注模式下非聚焦内容压多暗**"));
-  const 到枚举 = 段.slice(0, 段.indexOf("pub enum FocusDim"));
-  真(/rename_all = "snake_case"/.test(到枚举), "那一行 `serde` 属性该在枚举前面");
+testCase("枚举上有 `rename_all = \"snake_case\"`（否则落盘是 `\"Standard\"`）", () => {
+  const paragraph2 = rust.slice(rust.indexOf("/// **专注模式下非聚焦内容压多暗**"));
+  const toTokenEnumerate = paragraph2.slice(0, paragraph2.indexOf("pub enum FocusDim"));
+  assertValue(/rename_all = "snake_case"/.test(toTokenEnumerate), "那一行 `serde` 属性该在枚举前面");
 });
 
-测("`Appearance` 上有 `focus_mode_dim` 这一格，默认是标准", () => {
-  真(/pub focus_mode_dim: FocusDim,/.test(rust), "字段该在 `Appearance` 上");
-  const 默认段 = rust.slice(rust.indexOf("impl Default for Appearance"));
-  真(
-    /focus_mode_dim: FocusDim::Standard,/.test(默认段),
+testCase("`Appearance` 上有 `focus_mode_dim` 这一格，默认是标准", () => {
+  assertValue(/pub focus_mode_dim: FocusDim,/.test(rust), "字段该在 `Appearance` 上");
+  const defaultParagraph = rust.slice(rust.indexOf("impl Default for Appearance"));
+  assertValue(
+    /focus_mode_dim: FocusDim::Standard,/.test(defaultParagraph),
     "默认值该写 `FocusDim::Standard`",
   );
 });
 
-测("它**不在** `[focus]` 那张表里（那是强制专注那本账）", () => {
+testCase("它**不在** `[focus]` 那张表里（那是强制专注那本账）", () => {
   // ⚠️ 两件同名不同物的事：`[focus]` 是番茄钟/余额那套记账（`settings/focus.rs`），
   // 这一档是 `F8` 那条写作模式的外观。放进 `[focus]` 会让"改外观"去动一本账。
-  const 焦点表 = 读("src-tauri/src/settings/focus.rs");
-  真(
-    !/focus_mode_dim/.test(焦点表),
+  const focusPointTable = read("src-tauri/src/settings/focus.rs");
+  assertValue(
+    !/focus_mode_dim/.test(focusPointTable),
     "`focus.rs` 里不该出现 `focus_mode_dim`（它是 `[appearance]` 的字段）",
   );
 });
 
 /* ── 组二：前端类型与默认值的兜底 ─────────────────────────────────── */
 
-组("组二 前端：类型三个词、兜底与 Rust 默认同值");
+group("组二 前端：类型三个词、兜底与 Rust 默认同值");
 
-const 类型 = 读("src/bridge/types-settings.ts");
+const type = read("src/bridge/types-settings.ts");
 
-测("`FocusModeDim` 就是那三个词", () => {
-  const m = /export type FocusModeDim = ([^;]+);/.exec(类型);
-  真(m, "该有 `export type FocusModeDim = …`");
-  for (const 词 of 三个词) {
-    真(m![1]!.includes(`"${词}"`), `类型里该有 \`"${词}"\``);
+testCase("`FocusModeDim` 就是那三个词", () => {
+  const m = /export type FocusModeDim = ([^;]+);/.exec(type);
+  assertValue(m, "该有 `export type FocusModeDim = …`");
+  for (const word of threeItemWord) {
+    assertValue(m![1]!.includes(`"${word}"`), `类型里该有 \`"${word}"\``);
   }
 });
 
-测("`AppearanceSettings` 上有这一格，且类型是 `FocusModeDim`", () => {
-  真(/focus_mode_dim: FocusModeDim;/.test(类型), "字段该在 `AppearanceSettings` 上");
+testCase("`AppearanceSettings` 上有这一格，且类型是 `FocusModeDim`", () => {
+  assertValue(/focus_mode_dim: FocusModeDim;/.test(type), "字段该在 `AppearanceSettings` 上");
 });
 
-测("`useFocusDim.ts` 的兜底档与 Rust 的默认**同名**", () => {
+testCase("`useFocusDim.ts` 的兜底档与 Rust 的默认**同名**", () => {
   // ⚠️ 兜底那条走的是 `settings` 还没读回来（`null`）那一瞬间：两边不一致的话，
   // 启动第一帧按一个值画、读回来再跳一下——那种"闪一下"用户说得出症状，
   // 但没人会想到是这两处对不上。
-  const hook = 读("src/ui/useFocusDim.ts");
-  const m = /const 默认档 = "([a-z_]+)"/.exec(hook);
-  真(m, "该有 `const 默认档 = \"…\"`");
-  等(m![1], "standard", "兜底档该是标准那一档");
+  const hook = read("src/ui/useFocusDim.ts");
+  const m = /const defaultLevel = "([a-z_]+)"/.exec(hook);
+  assertValue(m, "该有 `const defaultLevel = \"…\"`");
+  equal(m![1], "standard", "兜底档该是标准那一档");
 });
 
-测("hook 把非默认档写成 `data-focus-dim`（属性名与 CSS 逐字对应）", () => {
-  const hook = 读("src/ui/useFocusDim.ts");
-  真(/setAttribute\("data-focus-dim", 档\)/.test(hook), "该往 `<html>` 上写 `data-focus-dim`");
-  真(/removeAttribute\("data-focus-dim"\)/.test(hook), "默认档该把属性摘掉（DOM 才干净）");
+testCase("hook 把非默认档写成 `data-focus-dim`（属性名与 CSS 逐字对应）", () => {
+  const hook = read("src/ui/useFocusDim.ts");
+  assertValue(/setAttribute\("data-focus-dim", level\)/.test(hook), "该往 `<html>` 上写 `data-focus-dim`");
+  assertValue(/removeAttribute\("data-focus-dim"\)/.test(hook), "默认档该把属性摘掉（DOM 才干净）");
 });
 
 /* ── 组三：设置页那三颗单选 ───────────────────────────────────────── */
 
-组("组三 设置页：三颗单选的**值**与**顺序**");
+group("组三 设置页：三颗单选的**值**与**顺序**");
 
-测("选项表里就是那三个词，顺序是 标准 → 强 → 更强", () => {
+testCase("选项表里就是那三个词，顺序是 标准 → 强 → 更强", () => {
   // ⚠️ 顺序也要钉（截图里就是这三档由浅到深），而且在 `AppearancePane.tsx` 里
   // 逐个写出来的字面量**没有类型约束**——拼错一个是静默的（选了没反应）。
-  const pane = 读("src/ui/settings/panes/AppearancePane.tsx");
-  const 段 = pane.slice(pane.indexOf("focus_mode_dim"));
-  const m = /options=\{\[([\s\S]*?)\]\}/.exec(段);
-  真(m, "该能找到 `focus_mode_dim` 那个 `Radio` 的 `options`");
-  const 值们 = [...m![1]!.matchAll(/value: "([a-z_]+)"/g)].map((x) => x[1]);
-  等(值们, [...三个词], "三个值逐字对上、顺序也一样");
+  const pane = read("src/ui/settings/panes/AppearancePane.tsx");
+  const paragraph2 = pane.slice(pane.indexOf("focus_mode_dim"));
+  const m = /options=\{\[([\s\S]*?)\]\}/.exec(paragraph2);
+  assertValue(m, "该能找到 `focus_mode_dim` 那个 `Radio` 的 `options`");
+  const values = [...m![1]!.matchAll(/value: "([a-z_]+)"/g)].map((x) => x[1]);
+  equal(values, [...threeItemWord], "三个值逐字对上、顺序也一样");
 });
 
-测("写回去的是同一格（`写({ focus_mode_dim })`）", () => {
-  const pane = 读("src/ui/settings/panes/AppearancePane.tsx");
-  真(
-    /onChange=\{\(focus_mode_dim\) => 写\(\{ focus_mode_dim \}\)\}/.test(pane),
+testCase("写回去的是同一格（`写({ focus_mode_dim })`）", () => {
+  const pane = read("src/ui/settings/panes/AppearancePane.tsx");
+  assertValue(
+    /onChange=\{\(focus_mode_dim\) => write\(\{ focus_mode_dim \}\)\}/.test(pane),
     "单选框的 `onChange` 该原样写回那一格",
   );
 });
 
 /* ── 组四：CSS 那三个数 ───────────────────────────────────────────── */
 
-组("组四 CSS：三档都有值，两条选择器都读同一个变量");
+group("组四 CSS：三档都有值，两条选择器都读同一个变量");
 
-const css = 读("src/styles/editor.css");
+const css = read("src/styles/editor.css");
 
-测("标准那一档写在 `:root` 上（默认态不落属性，值只写这一份）", () => {
+testCase("标准那一档写在 `:root` 上（默认态不落属性，值只写这一份）", () => {
   const m = /:root \{\s*--focus-dim: ([\d.]+);\s*\}/.exec(css);
-  真(m, "该有 `:root { --focus-dim: …; }`");
-  const 值 = Number(m![1]);
-  真(值 > 0 && 值 <= 1, `该是个透明度（0~1），实际 ${值}`);
+  assertValue(m, "该有 `:root { --focus-dim: …; }`");
+  const value2 = Number(m![1]);
+  assertValue(value2 > 0 && value2 <= 1, `该是个透明度（0~1），实际 ${value2}`);
 });
 
-测("另两档各有一条 `html[data-focus-dim=\"…\"]`，三个数由大到小", () => {
+testCase("另两档各有一条 `html[data-focus-dim=\"…\"]`，三个数由大到小", () => {
   // ⚠️ "由大到小"就是"由浅到深"：`opacity` 越大越不暗。标准 > 强 > 更强
   // 这个次序反了的话，用户选"更强"会看到变浅——而那看着像功能坏了。
-  const 标准 = Number(/:root \{\s*--focus-dim: ([\d.]+);/.exec(css)![1]);
-  const 强 = Number(/html\[data-focus-dim="strong"\] \{\s*--focus-dim: ([\d.]+);/.exec(css)![1]);
-  const 更强 = Number(
+  const markAccurate = Number(/:root \{\s*--focus-dim: ([\d.]+);/.exec(css)![1]);
+  const strong = Number(/html\[data-focus-dim="strong"\] \{\s*--focus-dim: ([\d.]+);/.exec(css)![1]);
+  const moreStrong = Number(
     /html\[data-focus-dim="stronger"\] \{\s*--focus-dim: ([\d.]+);/.exec(css)![1],
   );
-  真(标准 > 强, `标准（${标准}）该比强（${强}）浅`);
-  真(强 > 更强, `强（${强}）该比更强（${更强}）浅`);
-  真(更强 > 0, "最暗那一档也**看得见**（压到 0 就成了另一回事）");
+  assertValue(markAccurate > strong, `标准（${markAccurate}）该比强（${strong}）浅`);
+  assertValue(strong > moreStrong, `强（${strong}）该比更强（${moreStrong}）浅`);
+  assertValue(moreStrong > 0, "最暗那一档也**看得见**（压到 0 就成了另一回事）");
 });
 
-测("`data-focus-dim` 的三条规则都用**同一个**属性名（拼错就是整档失灵）", () => {
-  for (const 词 of ["strong", "stronger"]) {
-    真(
-      css.includes(`html[data-focus-dim="${词}"]`),
-      `CSS 里该有 \`html[data-focus-dim="${词}"]\``,
+testCase("`data-focus-dim` 的三条规则都用**同一个**属性名（拼错就是整档失灵）", () => {
+  for (const word of ["strong", "stronger"]) {
+    assertValue(
+      css.includes(`html[data-focus-dim="${word}"]`),
+      `CSS 里该有 \`html[data-focus-dim="${word}"]\``,
     );
   }
 });
 
-测("两条压暗选择器都读 `var(--focus-dim)`（不能一条写死数值）", () => {
+testCase("两条压暗选择器都读 `var(--focus-dim)`（不能一条写死数值）", () => {
   // ⚠️ 这是本组最要紧的一条：`.nota-dim`（所见即所得）与
   // `.cm-editor.nota-focus .cm-line:not(.nota-focus-on)`（源码模式）**各写一个
   // 数**的话，症状是"拨了开关只有一半跟着变"——用户得把同一条路走两遍才发现。
@@ -243,21 +243,21 @@ const css = 读("src/styles/editor.css");
   // 那一节与两条选择器之间还隔着注释，而 `.nota-focus-on` 这个名字**先**出现在
   // 第二条选择器的 `:not(…)` 里——按名字找尾，切出来只有一条，测试自己会误报。
   // 改成全文件数数：这个文件里 `var(--focus-dim)` 只该有那两处。
-  const 用变量 = [...css.matchAll(/opacity: var\(--focus-dim\);/g)].length;
-  等(用变量, 2, "两条选择器都该读变量");
+  const useChangeMeasure = [...css.matchAll(/opacity: var\(--focus-dim\);/g)].length;
+  equal(useChangeMeasure, 2, "两条选择器都该读变量");
   // 原来那两个写死的 `0.32` 一个都不该剩（只剩 `:root` 那一处声明，
    // 那一处的写法是 `--focus-dim: 0.32;`，不是 `opacity: 0.32`）。
-  真(!/opacity: 0\.\d+;/.test(css), "不该再有写死的 `opacity: 0.x`");
+  assertValue(!/opacity: 0\.\d+;/.test(css), "不该再有写死的 `opacity: 0.x`");
   // 标准那一档的数值只该出现**一次**（`:root` 那行）。多出来的那一次就是
   // 有人把它又抄进了某条选择器里。
-  等([...css.matchAll(/0\.32/g)].length, 1, "`0.32` 只该在 `:root` 那一行出现");
+  equal([...css.matchAll(/0\.32/g)].length, 1, "`0.32` 只该在 `:root` 那一行出现");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────── */
 
-console.log(`\n过 ${过}，败 ${败}`);
-if (败 > 0) {
+console.log(`\n过 ${pass}，败 ${fail}`);
+if (fail > 0) {
   console.log("没过的：");
-  for (const 名 of 败的) console.log(`  · ${名}`);
+  for (const name3 of failed) console.log(`  · ${name3}`);
   process.exit(1);
 }

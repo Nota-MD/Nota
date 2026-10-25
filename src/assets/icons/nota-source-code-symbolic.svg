@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 代码围栏的源码标记：左右尖括号与中斜线。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <g fill="none" stroke="#2e3436" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.55">
+    <path d="M4.75 4.25 1.8 8l2.95 3.75"/>
+    <path d="M11.25 4.25 14.2 8l-2.95 3.75"/>
+    <path d="m9.35 3.25-2.7 9.5"/>
+  </g>
+</svg>

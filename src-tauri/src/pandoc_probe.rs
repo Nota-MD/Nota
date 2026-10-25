@@ -8,7 +8,7 @@
 //! | 文件 | 管什么 |
 //! |---|---|
 //! | **本文件** `pandoc_probe.rs` | 跑一次 `--version` 看装没装、在 PATH 里找排版引擎、把结论说成人话 |
-//! | `pandoc.rs` | 导出那七种格式：拼参数、喂标准输入、收报错 |
+//! | `pandoc.rs` | 按格式表导出：拼参数、喂标准输入、收报错 |
 //!
 //! ⚠️ 这条线不是按行数切的一半：探测那半边**不碰文档**（唯一的输入是一条命令名），
 //! 导出那半边**不判断装没装**（它把探测结论当既成事实）。两边的失败通道都不一样
@@ -29,7 +29,7 @@ use serde::Serialize;
 
 use crate::proc::{command_or_default, run_capture, split_command, Ran, RunOpts};
 // ⚠️ 这两份在 `pandoc.rs` 里（**留在那边**）：`Format` / `FormatInfo` / `格式表`
-// 是七种格式的词汇表（真正那份在 `pandoc_format.rs`），`ENV_CMD` / `DEFAULT_CMD`
+// 是格式表词汇（真正那份在 `pandoc_format.rs`），`ENV_CMD` / `DEFAULT_CMD`
 // 是命令名——探测与导出都要用，所以它们的主场是那一半，这里借过来。
 use super::pandoc::{import_formats, DEFAULT_CMD, ENV_CMD, ImportFormatInfo};
 use crate::pandoc_format::{FormatInfo, 格式表};
@@ -332,7 +332,7 @@ pub struct PandocProbe {
     /// ⚠️ 问 `pdf_print` 而不是在这儿再写一遍平台名：两处各写一份，
     /// 迟早会出现"面板说有兜底、真导时那句'没有'"。
     pub fallback_pdf: bool,
-    /// 七种格式的 id / 中文名 / 后缀。前端拿它拼保存对话框的过滤器与默认文件名。
+    /// 全部格式的 id / 中文名 / 后缀。前端拿它拼保存对话框的过滤器与默认文件名。
     pub formats: Vec<FormatInfo>,
     /// 可导入的五种文档格式。前端拿它拼打开对话框的过滤器。
     pub import_formats: Vec<ImportFormatInfo>,
@@ -408,8 +408,9 @@ pub(crate) fn probe_with(command: &str) -> PandocProbe {
         Ran::NoProgram => {
             out.state = ProbeState::Missing;
             out.message = format!(
-                "没找到 `{program}`。七种文档格式（PDF / Word / RTF / EPUB / LaTeX / \
-                 OpenDocument / OPML）都由它来转，装好之后这一项就能用。"
+                "没找到 `{program}`。Pandoc 文档格式（PDF / Word / RTF / EPUB / LaTeX / \
+                 OpenDocument / OPML / MediaWiki / reStructuredText / Textile）都由它来转，\
+                 装好之后这一项就能用。"
             );
             out.detail = "装法见 pandoc 官网（pandoc.org/installing.html）：\n\
                           Debian/Ubuntu: sudo apt install pandoc\n\
@@ -436,7 +437,7 @@ pub(crate) fn probe_with(command: &str) -> PandocProbe {
 /// 一句话把整块功能说成"能用"或"不能用"都是在骗人。
 pub(crate) fn 装好了那句(out: &PandocProbe) -> String {
     let version = out.version.as_deref().unwrap_or("版本未知");
-    let mut s = format!("找到 pandoc（{version}），七种格式可以导出。");
+    let mut s = format!("找到 pandoc（{version}），格式表里的导出器可以使用。");
     if let Some(engine) = &out.pdf_engine {
         s.push_str(&format!("PDF 的排版引擎用 `{engine}`。"));
     } else if out.fallback_pdf {

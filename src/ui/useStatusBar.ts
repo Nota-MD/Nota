@@ -41,9 +41,9 @@ import type { StatusMetric } from "@/bridge/types-settings";
 import { StatusBar } from "@/ui/StatusBar";
 
 /** `StatusBar` 要的全部 props。**别手抄**，见文件头最后那段。 */
-type 栏的props = ComponentProps<typeof StatusBar>;
+type BarOfprops = ComponentProps<typeof StatusBar>;
 
-export function useStatusBar(接线: {
+export function useStatusBar(wiring: {
   /** 读回来的设置。`null` = 还没读回来（那几格各自走自己的兜底）。 */
   settings: Settings | null;
   /** 改设置并落盘（`App.tsx` 那个 `updateSettings`，**顶层浅合并**）。 */
@@ -51,7 +51,7 @@ export function useStatusBar(接线: {
   /** 当前**实际**编辑模式（`App.tsx` 的 `viewMode`：偏见过降级之后的那一个）。 */
   viewMode: ViewMode;
   /** 切编辑模式（`App.tsx` 的 `设模式`）。⚠️ 会话内状态，不落盘。 */
-  设模式: (m: ViewMode) => void;
+  setMode: (m: ViewMode) => void;
   /** 当前文档。没打开文档时是 `null`。 */
   doc: Document | null;
   /** 侧栏开合（`App.tsx` 的 `sidebarOpen`）。 */
@@ -68,39 +68,39 @@ export function useStatusBar(接线: {
    * 一起写回"这条规矩每多一份抄本就多一次漏抄的机会。第 49 项的口径正是
    * **四条入口（菜单 / 快捷键 / × / 设置页）汇到同一个 setter**。
    */
-  设界面: (patch: Partial<Settings["appearance"]>) => void;
+  setUi: (patch: Partial<Settings["appearance"]>) => void;
   /**
    * 光标那一份状态（`App.tsx` 的 `commandState`）。状态栏只吃它**一格**：
    * `overtype`（覆写模式开着没有，画那个 `OVR`）。`null` = 读不出来
    * （源码模式 / 还没打开文档）——那时不画。
    */
-  光标: CommandState | null;
+  cursor: CommandState | null;
   /**
    * 顶上那一条画不画（`usingNativeMenu || !show_menu_bar`，与 `App.tsx` 给
    * `TopBar` 的是**同一个布尔**）。⚠️ 这里**故意由调用方算好递进来**：
    * 那是"外壳上那几条开关"的口径（`ui/useChromeVisibility.ts`），在这一层
    * 再判一次就是同一个判断的第二份抄本。
    */
-  插件栏: { 开: boolean; 切换: () => void } | null;
-}): 栏的props {
+  pluginDock: { open2: boolean; splitReplace: () => void } | null;
+}): BarOfprops {
   const {
     settings,
     updateSettings,
     viewMode,
-    设模式,
+    setMode,
     doc,
     sidebarOpen,
     setSidebarOpen,
     focus,
-    设界面,
-    光标,
-    插件栏,
-  } = 接线;
+    setUi,
+    cursor,
+    pluginDock,
+  } = wiring;
 
   return {
     doc,
-    光标,
-    插件栏,
+    cursor,
+    pluginDock,
     mode: viewMode,
     sidebarOpen,
     // 强制专注的余额。**没在跑时那一格不画**（见 `ui/FocusMeter.tsx`）。
@@ -124,7 +124,7 @@ export function useStatusBar(接线: {
     // ⚠️ 这一格必须**原样**递过去：空数组是"跟随系统"那一档，而 `?? null` 只吃
     // `null` / `undefined`，正合用（不许写成 `.length ? … : null`——那会把
     // "跟随系统"和"还没读回来"变成同一件事）。
-    拼写语言: settings?.editor.spellcheck_langs ?? null,
+    combineWriteLanguage: settings?.editor.spellcheck_langs ?? null,
 
     // ⚠️ 下面两条 patch 都**先把那张表铺开**：`updateSettings` 只做**顶层**
     // 浅合并，`{ appearance: { status_metric } }` 会把 appearance 里另外
@@ -150,13 +150,13 @@ export function useStatusBar(接线: {
      * 写的**就是设置页那两格**（`editor.spellcheck` / `editor.spellcheck_langs`）：
      * 两处都是"空数组＝跟随系统 ＋ 能勾多门"，规则一个字都不许分岔。
      */
-    onChangeSpell: (补: { 开?: boolean; 语言?: string[] }) => {
+    onChangeSpell: (fill: { open2?: boolean; language?: string[] }) => {
       if (!settings) return;
       void updateSettings({
         editor: {
           ...settings.editor,
-          ...(补.开 === undefined ? {} : { spellcheck: 补.开 }),
-          ...(补.语言 === undefined ? {} : { spellcheck_langs: 补.语言 }),
+          ...(fill.open2 === undefined ? {} : { spellcheck: fill.open2 }),
+          ...(fill.language === undefined ? {} : { spellcheck_langs: fill.language }),
         },
       });
     },
@@ -171,12 +171,12 @@ export function useStatusBar(接线: {
     // 这里走 `设模式` 而不是 `updateSettings`。
     // 分屏点它 → 进源码模式（那一颗的语义是"是不是源码"）。
     onToggleSource: () => {
-      设模式(viewMode === "source" ? "wysiwyg" : "source");
+      setMode(viewMode === "source" ? "wysiwyg" : "source");
     },
 
     // **最右端那颗 ×**（2026-10-04，第 49 项）。⚠️ **只收不切换**：菜单里那条
     // （`useCommandTable.ts` 的 `view.statusBar`）才是开关，而两条走的是
     // **同一个 `setChrome`**（就是上面那个 `设界面`）。
-    onHide: () => 设界面({ show_status_bar: false }),
+    onHide: () => setUi({ show_status_bar: false }),
   };
 }

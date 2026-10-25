@@ -35,10 +35,10 @@
  * 它也读设置。
  */
 
-import type { PluginInfo, PluginUpdateInfo, 信任记录 } from "@/bridge/ipc";
+import type { PluginInfo, PluginUpdateInfo, trustRecord } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { 来源说明, 能力名, 语言对不上, 语言提示, 语言标签名 } from "@/ui/pluginText";
-import type { 插件动作 } from "@/ui/usePlugins";
+import { comeSourceDescription, ableForceName, languageMismatch, languageHint, languageTag } from "@/ui/pluginText";
+import type { pluginAction } from "@/ui/usePlugins";
 import { ActionButton, Note, SettingRow, SettingsGroup, Value } from "../primitives";
 
 /**
@@ -47,28 +47,28 @@ import { ActionButton, Note, SettingRow, SettingsGroup, Value } from "../primiti
  * ⚠️ 单独一个接口而不是 `PaneProps`（理由见文件头最后一段）。三样都是
  * `usePlugins` 那一份（`App.tsx` 里同一个 hook 同时喂给这一页和右侧插件栏）。
  */
-export interface 拓展页入参 {
+export interface ExpandExtendPageEnterParameter {
   /** 已装插件清单（含停用与加载失败的）。 */
   plugins: PluginInfo[];
   /** 信任库里那几把钥匙。⚠️ 要**摆出来**：信任按指纹判，看不见的表等于没有表。 */
-  信任: 信任记录[];
+  messageTask: trustRecord[];
   /** 已声明更新源的插件及最近一次检查结果。 */
   updates: PluginUpdateInfo[];
   /** 装 / 导出 / 卸 / 启停 / 信任那几颗按钮的实现。见 `ui/usePlugins.ts`。 */
-  动作: 插件动作;
+  action: pluginAction;
 }
 
-export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页入参) {
+export function ExtensionsPane({ plugins, messageTask, updates, action }: ExpandExtendPageEnterParameter) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
   // 正忙的那一个（插件 id 或 `"装"` / `"目录"`）。忙的时候**所有**按钮都灰掉：
   // 装的途中再点一次卸载，那两件事会撞在宿主那把 `plugins` 锁上，用户看到的是
   // "点了没反应，过一会儿又好了"。
-  const 忙 = 动作.忙;
-  const 灰 = 忙 !== null;
-  const 更新表 = new Map(updates.map((update) => [update.id, update]));
-  const 可更新 = updates.filter((update) => update.available);
+  const busy = action.busy;
+  const disabled2 = busy !== null;
+  const updateTable = new Map(updates.map((update) => [update.id, update]));
+  const updatable = updates.filter((update) => update.available);
 
   return (
     <>
@@ -80,25 +80,25 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
           )}
         >
           <div className="stg-inline">
-            <ActionButton disabled={灰} onClick={() => void 动作.检查更新()}>
-              {忙 === "更新检查" ? t("Checking…") : t("Check for Updates")}
+            <ActionButton disabled={disabled2} onClick={() => void action.checkForUpdates()}>
+              {busy === "更新检查" ? t("Checking…") : t("Check for Updates")}
             </ActionButton>
-            <ActionButton disabled={灰 || 可更新.length === 0} onClick={() => void 动作.全部更新()}>
-              {忙 === "全部更新"
+            <ActionButton disabled={disabled2 || updatable.length === 0} onClick={() => void action.updateAll()}>
+              {busy === "全部更新"
                 ? t("Updating…")
-                : t("Update All ({0})", 可更新.length)}
+                : t("Update All ({0})", updatable.length)}
             </ActionButton>
           </div>
         </SettingRow>
 
         <SettingRow label={t("Install from file…")}>
-          <ActionButton disabled={灰} onClick={() => void 动作.装()}>
-            {忙 === "装" ? t("Installing…") : t("Choose an extension package…")}
+          <ActionButton disabled={disabled2} onClick={() => void action.install()}>
+            {busy === "装" ? t("Installing…") : t("Choose an extension package…")}
           </ActionButton>
         </SettingRow>
 
         <SettingRow label={t("Extension folder")}>
-          <ActionButton disabled={灰} onClick={() => void 动作.打开目录()}>
+          <ActionButton disabled={disabled2} onClick={() => void action.openDirectory2()}>
             {t("Open Folder…")}
           </ActionButton>
         </SettingRow>
@@ -121,34 +121,34 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
               // 而 id 画在下面那段小字里，**那段小字是 JSX**（`description` 是
               // 字符串才会自动进搜索）。所以这里显式补一遍。
               searchText={`${p.id} ${p.version}`}
-              description={<拓展说明 p={p} update={更新表.get(p.id)} />}
+              description={<ExpandExtendDescription p={p} update={updateTable.get(p.id)} />}
             >
               <div className="stg-inline">
-                {更新表.get(p.id)?.available && (
+                {updateTable.get(p.id)?.available && (
                   <ActionButton
-                    disabled={灰}
+                    disabled={disabled2}
                     title={t(
                       "Replace {0} with version {1} from its declared update repository.",
                       p.name,
-                      更新表.get(p.id)?.latestVersion ?? "",
+                      updateTable.get(p.id)?.latestVersion ?? "",
                     )}
-                    onClick={() => void 动作.更新(p.id)}
+                    onClick={() => void action.update(p.id)}
                   >
-                    {忙 === p.id
+                    {busy === p.id
                       ? t("Updating…")
-                      : t("Update to {0}", 更新表.get(p.id)?.latestVersion ?? "")}
+                      : t("Update to {0}", updateTable.get(p.id)?.latestVersion ?? "")}
                   </ActionButton>
                 )}
                 <ActionButton
-                  disabled={灰}
-                  onClick={() => void 动作.启停(p.id, p.state === "disabled")}
+                  disabled={disabled2}
+                  onClick={() => void action.toggle(p.id, p.state === "disabled")}
                 >
-                  {忙 === p.id ? t("Working…") : p.state === "disabled" ? t("Enable") : t("Disable")}
+                  {busy === p.id ? t("Working…") : p.state === "disabled" ? t("Enable") : t("Disable")}
                 </ActionButton>
                 <ActionButton
-                  disabled={灰}
+                  disabled={disabled2}
                   title={t("Save as a .nota-plugin package — to hand to someone else to install, or as a backup.")}
-                  onClick={() => void 动作.导出(p.id)}
+                  onClick={() => void action.export(p.id)}
                 >
                   {t("Export…")}
                 </ActionButton>
@@ -159,9 +159,9 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
                 {p.removable && (
                   <ActionButton
                     danger
-                    disabled={灰}
+                    disabled={disabled2}
                     title={t("Delete this extension from disk. Its settings file is kept.")}
-                    onClick={() => void 动作.卸(p.id)}
+                    onClick={() => void action.unload(p.id)}
                   >
                     {t("Uninstall")}
                   </ActionButton>
@@ -169,9 +169,9 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
                 {/* 只在"签名对上了但签名者没见过"时出现——正是用户该做决定的时候。 */}
                 {p.signature === "unknown" && (
                   <ActionButton
-                    disabled={灰}
+                    disabled={disabled2}
                     title={t("Trust {0}", p.key_id ?? t("this signer"))}
-                    onClick={() => void 动作.信任(p.id, p.key_id)}
+                    onClick={() => void action.messageTask(p.id, p.key_id)}
                   >
                     {t("Trust")}
                   </ActionButton>
@@ -186,9 +186,9 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
           核对的，藏在配置文件里的指纹等于没记。⚠️ 这里只有列、没有删——
           撤销信任是改 `trusted-keys.toml` 的事，摆一颗"删除"在这儿会被当成
           "卸载这个插件"（右侧那一栏的同一条注释里写着同样的理由）。 */}
-      {信任.length > 0 && (
+      {messageTask.length > 0 && (
         <SettingsGroup title={t("Trusted signers")}>
-          {信任.map((k) => (
+          {messageTask.map((k) => (
             <SettingRow key={k.key_id} label={k.name}>
               {/* ⚠️ 指纹用 `<code>`：它是一串十六进制，等宽才**对得齐**——
                   用户是拿着作者公布的那一份**逐位核**的，比例字体下核起来很累。 */}
@@ -222,7 +222,7 @@ export function ExtensionsPane({ plugins, 信任, updates, 动作 }: 拓展页�
  * ⚠️ **别再抄一份 `.stg-ext-*` 出来**：`settings.css` 那天离 1000 行只剩几十行，
  * 而这两处要的本来就是同一种样子。
  */
-function 拓展说明({ p, update }: { p: PluginInfo; update?: PluginUpdateInfo }) {
+function ExpandExtendDescription({ p, update }: { p: PluginInfo; update?: PluginUpdateInfo }) {
   const t = useT();
   return (
     <>
@@ -230,7 +230,7 @@ function 拓展说明({ p, update }: { p: PluginInfo; update?: PluginUpdateInfo 
         {p.id} {p.version}
         {/* ⚠️ 来路与签名结论来自 `来源说明`，与插件栏**同一个函数**——
             两边说法不一致的话，用户只会觉得自己看错了。 */}
-        <span className="plugin-origin">{来源说明(p)}</span>
+        <span className="plugin-origin">{comeSourceDescription(p)}</span>
       </span>
 
       {p.description && <span className="plugin-desc">{p.description}</span>}
@@ -247,11 +247,11 @@ function 拓展说明({ p, update }: { p: PluginInfo; update?: PluginUpdateInfo 
 
       {/* 语言对不上那句。⚠️ 判据是宿主算好的两格，不在前端猜（见 `pluginText.ts`），
           摆法与插件栏那一段逐字一致（连"用哪一份文案"那个小标签也照搬）。 */}
-      {语言对不上(p) && (
+      {languageMismatch(p) && (
         <span className="plugin-lang">
-          {语言提示()}
+          {languageHint()}
           <span className="plugin-lang-now">
-            {语言标签名(p.lang ?? "en") ?? (p.lang ?? "en")}
+            {languageTag(p.lang ?? "en") ?? (p.lang ?? "en")}
           </span>
         </span>
       )}
@@ -266,7 +266,7 @@ function 拓展说明({ p, update }: { p: PluginInfo; update?: PluginUpdateInfo 
             // ⚠️ `title` 留着**原始 id**：中文名是给用户看的，id 是给写清单的人
             // 对照 `docs/11` 那张能力表用的，两个都要在。
             <span key={c} className="cap" title={c}>
-              {能力名(c) ?? c}
+              {ableForceName(c) ?? c}
             </span>
           ))}
         </span>

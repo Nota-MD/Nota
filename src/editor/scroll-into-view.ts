@@ -49,7 +49,7 @@
 import type { EditorView } from "@milkdown/kit/prose/view";
 
 /** 滚到位之后标题离容器顶部留的空隙（px）。纯粹为好看：贴边像被裁掉了一截。 */
-const 顶部间隙 = 8;
+const topPartIntervalGap = 8;
 
 /**
  * 从 `节点` 往上找**第一层真正能滚**的祖先。找不到给 `null`（那说明是整页在滚）。
@@ -68,17 +68,17 @@ const 顶部间隙 = 8;
  * ⚠️ 那个 `+ 1` 是**容差**，不是笔误：亚像素的溢出（`scrollHeight` 比
  * `clientHeight` 大 0.4px 之类）算不出滚动量，当成"能滚"会让调用方白滚一趟。
  */
-export function 找滚动容器(el: HTMLElement | null): HTMLElement | null {
-  for (let 当前 = el?.parentElement ?? null; 当前; 当前 = 当前.parentElement) {
-    if (能滚吗(当前)) return 当前;
+export function findRollActionContainer(el: HTMLElement | null): HTMLElement | null {
+  for (let current = el?.parentElement ?? null; current; current = current.parentElement) {
+    if (ableRollQuestion(current)) return current;
   }
   return null;
 }
 
 /** 这一层现在真的能滚吗（`overflow-y` 允许 + 内容确实溢出）。 */
-function 能滚吗(el: HTMLElement): boolean {
-  const 样式 = getComputedStyle(el);
-  return /^(auto|scroll)$/.test(样式.overflowY) && el.scrollHeight > el.clientHeight + 1;
+function ableRollQuestion(el: HTMLElement): boolean {
+  const styleStyle = getComputedStyle(el);
+  return /^(auto|scroll)$/.test(styleStyle.overflowY) && el.scrollHeight > el.clientHeight + 1;
 }
 
 /**
@@ -97,13 +97,13 @@ function 能滚吗(el: HTMLElement): boolean {
  * 就是顶上"是个有意义的值（见 [`读滚动比例`]）。所以这里第二档只看
  * `overflow-y`，不看溢没溢出——溢出与否是调用方的事。
  */
-export function 找编辑区滚动容器(挂载点: HTMLElement | null): HTMLElement | null {
-  if (!挂载点) return null;
-  const 源码壳 = 挂载点.querySelector<HTMLElement>(".cm-scroller");
-  if (源码壳 && 能滚吗(源码壳)) return 源码壳;
-  if (/^(auto|scroll)$/.test(getComputedStyle(挂载点).overflowY)) return 挂载点;
-  const 首 = 挂载点.firstElementChild as HTMLElement | null;
-  return 找滚动容器(首);
+export function findEditorAreaRollActionContainer(attachLoadPoint: HTMLElement | null): HTMLElement | null {
+  if (!attachLoadPoint) return null;
+  const sourceShell = attachLoadPoint.querySelector<HTMLElement>(".cm-scroller");
+  if (sourceShell && ableRollQuestion(sourceShell)) return sourceShell;
+  if (/^(auto|scroll)$/.test(getComputedStyle(attachLoadPoint).overflowY)) return attachLoadPoint;
+  const first = attachLoadPoint.firstElementChild as HTMLElement | null;
+  return findRollActionContainer(first);
 }
 
 /**
@@ -116,14 +116,23 @@ export function 找编辑区滚动容器(挂载点: HTMLElement | null): HTMLEle
  * ⚠️ **用 `scrollHeight - clientHeight` 当分母**，不是 `scrollHeight`：前者才是
  * "能滚多远"，后者在 `scrollTop = 0` 时永远算不出 `0`，两端就对不上了。
  */
-export function 读滚动比例(挂载点: HTMLElement | null): number | null {
-  const 容器 = 找编辑区滚动容器(挂载点);
-  if (!容器) return null;
-  const 可滚 = 容器.scrollHeight - 容器.clientHeight;
+export function readRollActionCompareExample(attachLoadPoint: HTMLElement | null): number | null {
+  const container = findEditorAreaRollActionContainer(attachLoadPoint);
+  if (!container) return null;
+  return readElementRollActionCompareExample(container);
+}
+
+/** 直接从**正在滚的那个元素**读比例，不反查容器、不读计算样式。 */
+export function readElementRollActionCompareExample(container: {
+  scrollHeight: number;
+  clientHeight: number;
+  scrollTop: number;
+}): number {
+  const scrollable = container.scrollHeight - container.clientHeight;
   // ⚠️ 可滚为 0 时**给 `0` 而不是 `null`**：这不是"读不出来"，是"这份文档短到
   // 不用滚"，它的比例就是 0。给 `null` 的话调用方会以为这种文档不该记位置。
-  if (可滚 <= 0) return 0;
-  return 容器.scrollTop / 可滚;
+  if (scrollable <= 0) return 0;
+  return container.scrollTop / scrollable;
 }
 
 /**
@@ -134,13 +143,13 @@ export function 读滚动比例(挂载点: HTMLElement | null): number | null {
  * `scrollHeight` 还是初值，那时滚过去会落在错的地方，而且**看起来像没生效**
  * （滚了一下又被后面的布局拉回去）。`ui/EditorPane.tsx` 那边是隔一帧调的。
  */
-export function 恢复滚动比例(挂载点: HTMLElement | null, 比例: number): void {
-  const 容器 = 找编辑区滚动容器(挂载点);
-  if (!容器) return;
-  const 可滚 = 容器.scrollHeight - 容器.clientHeight;
-  if (可滚 <= 0) return;
-  const 夹 = Math.min(1, Math.max(0, 比例));
-  容器.scrollTop = 可滚 * 夹;
+export function restoreRestoreRollActionCompareExample(attachLoadPoint: HTMLElement | null, compareExample: number): void {
+  const container = findEditorAreaRollActionContainer(attachLoadPoint);
+  if (!container) return;
+  const scrollable = container.scrollHeight - container.clientHeight;
+  if (scrollable <= 0) return;
+  const clamp = Math.min(1, Math.max(0, compareExample));
+  container.scrollTop = scrollable * clamp;
 }
 
 /**
@@ -149,15 +158,15 @@ export function 恢复滚动比例(挂载点: HTMLElement | null, 比例: number
  * ⚠️ 找不到就**什么也不做**（位置越界、元素还没挂上 DOM、没有可滚祖先）——
  * 这是"让用户看得见"的辅助动作，失败时不该抛错，更不该把调用方整个动作带塌。
  */
-export function 滚动到位置(view: EditorView, pos: number): void {
+export function rollActionToPosition(view: EditorView, pos: number): void {
   if (pos < 0 || pos > view.state.doc.content.size) return;
   const { node } = view.domAtPos(pos);
-  const 元素 = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
-  if (!元素) return;
-  const 容器 = 找滚动容器(元素);
-  if (!容器) return;
-  const 差 = 元素.getBoundingClientRect().top - 容器.getBoundingClientRect().top;
-  容器.scrollTop += 差 - 顶部间隙;
+  const element = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
+  if (!element) return;
+  const container = findRollActionContainer(element);
+  if (!container) return;
+  const difference = element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+  container.scrollTop += difference - topPartIntervalGap;
 }
 
 /**
@@ -167,15 +176,15 @@ export function 滚动到位置(view: EditorView, pos: number): void {
  * **视口坐标**，和 `getBoundingClientRect()` 同一套，直接减就行。
  * `from` 取 `1` 侧、`to` 取 `-1` 侧，量的是那一段的**外沿**。
  */
-export function 滚动到可见(view: EditorView, from: number, to: number): void {
-  const 容器 = 找滚动容器(view.dom);
-  if (!容器) return;
-  const 上 = view.coordsAtPos(from, 1).top;
-  const 下 = view.coordsAtPos(to, -1).bottom;
-  const 框 = 容器.getBoundingClientRect();
-  if (上 < 框.top + 顶部间隙) {
-    容器.scrollTop -= 框.top + 顶部间隙 - 上;
-  } else if (下 > 框.bottom - 顶部间隙) {
-    容器.scrollTop += 下 - 框.bottom + 顶部间隙;
+export function rollActionToCanSee(view: EditorView, from: number, to: number): void {
+  const container = findRollActionContainer(view.dom);
+  if (!container) return;
+  const above = view.coordsAtPos(from, 1).top;
+  const below = view.coordsAtPos(to, -1).bottom;
+  const box2 = container.getBoundingClientRect();
+  if (above < box2.top + topPartIntervalGap) {
+    container.scrollTop -= box2.top + topPartIntervalGap - above;
+  } else if (below > box2.bottom - topPartIntervalGap) {
+    container.scrollTop += below - box2.bottom + topPartIntervalGap;
   }
 }

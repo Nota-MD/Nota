@@ -35,70 +35,70 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FocusState } from "@/bridge/types";
 import {
-  造总结,
-  值得总结,
-  记一笔,
-  type 采样点,
-  type 总结,
+  createTotalJoin,
+  valueObtainTotalJoin,
+  recordValueStroke,
+  type AdoptStylePoint,
+  type TotalJoin,
 } from "@/ui/focus-summary";
 
-export interface 专注轨迹 {
+export interface DedicatedNoteTrackTrace {
   /**
    * 刚刚结束的那一轮的总结；**没有就是 `null`**。
    *
    * ⚠️ `null` 有三种来源，调用方不需要分辨：还没跑过、这一轮太短
    * （[`值得总结`]）、以及用户已经把它看过了（[`收起`]）。
    */
-  结算: 总结 | null;
+  joinCompute: TotalJoin | null;
   /** 结算发生的时刻。卡片右上角那个时间戳用它，**不是**"现在"。 */
-  结算于: Date | null;
+  joinComputeAt: Date | null;
   /** 用户把总结关掉了。下一轮开始之前不会再有新的。 */
-  收起: () => void;
+  collapse: () => void;
 }
 
-export function useFocusTrace(状态: FocusState | null): 专注轨迹 {
-  const 序列 = useRef<采样点[]>([]);
-  const 末状态 = useRef<FocusState | null>(null);
-  const 在跑 = useRef(false);
+export function useFocusTrace(state: FocusState | null): DedicatedNoteTrackTrace {
+  const orderColumn = useRef<AdoptStylePoint[]>([]);
+  const endState = useRef<FocusState | null>(null);
+  const atRun = useRef(false);
 
-  const [结算, set结算] = useState<总结 | null>(null);
-  const [结算于, set结算于] = useState<Date | null>(null);
+  const [joinCompute, setJoinCompute] = useState<TotalJoin | null>(null);
+  const [joinComputeAt, setJoinComputeAt] = useState<Date | null>(null);
 
   useEffect(() => {
-    if (!状态) return;
+    if (!state) return;
 
-    if (!状态.running) {
+    if (!state.running) {
       // ⚠️ `在跑` 这个 ref 是必需的，不是防守性代码：主窗挂载时会拉一次
       // `nota_focus_get`（`useForceFocus` 那个 effect），没跑过的人拿到的就是
       // 一份 `running: false` 的空快照。没有它的话每一次 app 启动都会"结束
       // 一轮"，而那一轮什么都没发生过——总结框会弹出一张全 0 的卡。
-      if (!在跑.current) return;
-      在跑.current = false;
+      if (!atRun.current) return;
+      atRun.current = false;
 
-      const 快照 = 末状态.current;
-      末状态.current = null;
-      const 点 = 序列.current; // ← 清空**之前**那一条
-      序列.current = [];
+      const snapshot = endState.current;
+      endState.current = null;
+      const point = orderColumn.current; // ← 清空**之前**那一条
+      orderColumn.current = [];
 
-      if (!快照) return;
-      const 总 = 造总结(快照, 点);
+      if (!snapshot) return;
+      const total = createTotalJoin(snapshot, point);
       // ⚠️ 太短就不弹（`focus-summary.ts::最短总结秒` 那段注释记了理由）：
       // 点错按钮、或者只是想看看这功能长什么样，不该收到一张"你专注了 3 秒"。
-      if (!值得总结(总)) return;
-      set结算(总);
-      set结算于(new Date());
+      if (!valueObtainTotalJoin(total)) return;
+      setJoinCompute(total);
+      setJoinComputeAt(new Date());
       return;
     }
 
-    序列.current = 记一笔(序列.current, 状态);
-    末状态.current = 状态;
-    在跑.current = true;
-  }, [状态]);
+    orderColumn.current = recordValueStroke(orderColumn.current, state);
+    endState.current = state;
+    atRun.current = true;
+  }, [state]);
 
-  const 收起 = useCallback(() => {
-    set结算(null);
-    set结算于(null);
+  const collapse = useCallback(() => {
+    setJoinCompute(null);
+    setJoinComputeAt(null);
   }, []);
 
-  return { 结算, 结算于, 收起 };
+  return { joinCompute, joinComputeAt, collapse };
 }

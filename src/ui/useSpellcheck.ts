@@ -38,13 +38,13 @@
 import { useEffect } from "react";
 
 import { api } from "@/bridge/ipc";
-import { 当前语言标签, 设拼写开关, 设拼写语言 } from "@/editor/spell-check";
+import { currentLanguageLabel, setCombineWriteFlag, setCombineWriteLanguage } from "@/editor/spell-check";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 拼写接线 {
+export interface CombineWriteWiring {
   /** 设置里那个开关（`settings.editor.spellcheck`）。`null` = 设置还没读回来。 */
-  开: boolean | null;
+  open2: boolean | null;
   /**
    * 设置里那几门语言（`settings.editor.spellcheck_langs`，`en_US` 那种标签）。
    * **空数组 = 跟随系统**（那是**有含义的一档**）；`null` = 设置还没读回来。
@@ -53,40 +53,40 @@ export interface 拼写接线 {
    * `settings.editor.spellcheck_langs`）。每帧现造一个 `["en_US"]` 会让下面那条
    * effect 每帧重跑一次（每次都过一次 IPC）。
    */
-  语言: string[] | null;
+  language: string[] | null;
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
 /** 语言标签的归一化：`en-US` 与 `en_US` 是同一门（与 `spell/store.rs::归一` 一致）。 */
-function 归一(标签: string): string {
-  return 标签.toLowerCase().replace(/-/g, "_");
+function normalize(label: string): string {
+  return label.toLowerCase().replace(/-/g, "_");
 }
 
-const 缺词典提示记录 = "nota.spell.missing-dictionary-alerts.v1";
+const missingDictionaryNotice = "nota.spell.missing-dictionary-alerts.v1";
 
-function 读过提示记录(): Set<string> {
+function readPassNoticeRecordRecord(): Set<string> {
   try {
-    const 原文 = localStorage.getItem(缺词典提示记录);
-    const 表: unknown = 原文 ? JSON.parse(原文) : [];
-    return new Set(Array.isArray(表) ? 表.filter((v): v is string => typeof v === "string") : []);
+    const source = localStorage.getItem(missingDictionaryNotice);
+    const table2: unknown = source ? JSON.parse(source) : [];
+    return new Set(Array.isArray(table2) ? table2.filter((v): v is string => typeof v === "string") : []);
   } catch {
     return new Set();
   }
 }
 
-function 写提示记录(标签们: Set<string>): void {
+function writeNoticeRecordRecord(labels: Set<string>): void {
   try {
-    localStorage.setItem(缺词典提示记录, JSON.stringify([...标签们].sort()));
+    localStorage.setItem(missingDictionaryNotice, JSON.stringify([...labels].sort()));
   } catch {
     // 存不了就退回本进程内不重复；提示本身不能因为 localStorage 不可用而消失。
   }
 }
 
-export function useSpellcheck(w: 拼写接线): void {
+export function useSpellcheck(w: CombineWriteWiring): void {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，
   // 见 `i18n/index.ts::useT`）。
   const t = useT();
-  const { 开, 语言, toast } = w;
+  const { open2, language, toast } = w;
 
   // ── 内核那条路：**关掉**，并且顺手关掉它的平滑滚动 ──────────────────────
   //
@@ -100,12 +100,12 @@ export function useSpellcheck(w: 拼写接线): void {
 
     // ⚠️ **内核的拼写检查从今天起一律关**（理由见文件头）：波浪线由我们自己画。
     // 重试的理由也在文件头（启动那一枪打空是常事）。
-    let 算了 = false;
+    let computeDone = false;
     void (async () => {
-      for (let i = 1; i <= 6 && !算了; i++) {
+      for (let i = 1; i <= 6 && !computeDone; i++) {
         try {
-          const 实际 = await api.webview.spellcheckSet(false);
-          if (实际 === false) return; // 关上了
+          const actual = await api.webview.spellcheckSet(false);
+          if (actual === false) return; // 关上了
         } catch {
           // 非 Linux 上没有这个接口 —— 那也**没问题**：那边本来就没有内核画线。
           return;
@@ -115,7 +115,7 @@ export function useSpellcheck(w: 拼写接线): void {
     })();
 
     return () => {
-      算了 = true;
+      computeDone = true;
     };
   }, []);
 
@@ -123,30 +123,30 @@ export function useSpellcheck(w: 拼写接线): void {
   useEffect(() => {
     // 设置还没读回来（启动那一小会儿）：**什么都别做**。拿一个假设的默认值去
     // 拨，等真值到了再拨一次，中间那一拨是用户的设置文件说了不算的一瞬间。
-    if (开 === null) return;
-    设拼写开关(开);
-  }, [开]);
+    if (open2 === null) return;
+    setCombineWriteFlag(open2);
+  }, [open2]);
 
   // ── 语言那一条 ────────────────────────────────────────────────────────
   useEffect(() => {
     // 同上面那一条：设置还没读回来时**什么都别做**。
-    if (语言 === null) return;
+    if (language === null) return;
     // ⚠️ 同一门语言还要给**编辑器里那条插件**（它自己画波浪线）。
     // `""` = 跟随系统（那时插件按界面语言猜一个，见 `当前语言标签`）。
-    设拼写语言(语言[0] ?? "");
+    setCombineWriteLanguage(language[0] ?? "");
 
-    let 算了 = false;
+    let computeDone = false;
     void (async () => {
-      let 有: Awaited<ReturnType<typeof api.spell.dictionaries>>;
+      let has: Awaited<ReturnType<typeof api.spell.dictionaries>>;
       try {
-        有 = await api.spell.dictionaries();
+        has = await api.spell.dictionaries();
       } catch {
         // 列不出来（命令没接上、配置目录读不了）：**不说话**。
         // ⚠️ 这里不能猜——猜错了会让用户看到一句"你没有这本词典"而它明明有。
         return;
       }
-      if (算了) return;
-      const 装着的 = new Set(有.map((d) => 归一(d.tag)));
+      if (computeDone) return;
+      const installActiveOf = new Set(has.map((d) => normalize(d.tag)));
       // ⚠️ **"跟随系统"那一档也要比**（2026-10-10 补的那条的修正版）：
       // 那一档实际用的是界面语言猜出来的标签（`当前语言标签()`），所以问的是
       // 同一个问题。从前那版**故意**在空列表时不说话，于是"这台机器一本词典
@@ -157,31 +157,31 @@ export function useSpellcheck(w: 拼写接线): void {
       // 而 hunspell 那套**根本没有中文词典**（`store.rs` 文件头写着为什么）——
       // 逐门比的话**每次启动都弹一句"没有 zh_CN 的词典"**，而用户什么都没选，
       // 那也不是他能修的一件事。他真勾了中文才该说（下面那个分支）。
-      const 没有的 =
-        语言.length > 0
-          ? 语言.filter((tag) => !装着的.has(归一(tag)))
-          : 有.length === 0
-            ? [当前语言标签()]
+      const noneHasOf =
+        language.length > 0
+          ? language.filter((tag) => !installActiveOf.has(normalize(tag)))
+          : has.length === 0
+            ? [currentLanguageLabel()]
             : [];
-      const 提示过 = 读过提示记录();
-      const 装上的 = [...提示过].filter((tag) => 装着的.has(tag));
-      for (const tag of 装上的) 提示过.delete(tag);
-      const 还没说 = 没有的.filter((tag) => !提示过.has(归一(tag)));
-      if (还没说.length > 0) {
+      const noticePass = readPassNoticeRecordRecord();
+      const installAboveOf = [...noticePass].filter((tag) => installActiveOf.has(tag));
+      for (const tag of installAboveOf) noticePass.delete(tag);
+      const returnNoneSay = noneHasOf.filter((tag) => !noticePass.has(normalize(tag)));
+      if (returnNoneSay.length > 0) {
         toast(
           t(
             "This machine has no dictionary for {0}, so words in that language will not be checked. Nota ships no dictionaries of its own — install one, or import a .zip under Settings → Editor → Spell check.",
-            还没说.join(", "),
+            returnNoneSay.join(", "),
           ),
           "error",
         );
-        for (const tag of 还没说) 提示过.add(归一(tag));
+        for (const tag of returnNoneSay) noticePass.add(normalize(tag));
       }
-      if (还没说.length > 0 || 装上的.length > 0) 写提示记录(提示过);
+      if (returnNoneSay.length > 0 || installAboveOf.length > 0) writeNoticeRecordRecord(noticePass);
     })();
 
     return () => {
-      算了 = true;
+      computeDone = true;
     };
-  }, [语言, t, toast]);
+  }, [language, t, toast]);
 }

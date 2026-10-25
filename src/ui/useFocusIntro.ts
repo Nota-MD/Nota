@@ -48,7 +48,7 @@ import type { ConfirmAnswer, ConfirmRequest } from "@/ui/useDialogs";
  */
 export function useFocusIntro(
   askConfirm: (req: ConfirmRequest) => Promise<ConfirmAnswer>,
-  设置: Settings | null,
+  settings: Settings | null,
   onChange: (patch: Partial<Settings>) => void,
 ) {
   /**
@@ -60,10 +60,10 @@ export function useFocusIntro(
    * 反过来缓存一个本地 `true`，就会在落盘失败时**永久**跳过这段说明。
    */
   return useCallback(
-    async (开始: () => Promise<void>) => {
-      if (!设置) return;
-      if (!设置.focus.introduced) {
-        const 答 = await askConfirm({
+    async (start3: () => Promise<void>) => {
+      if (!settings) return;
+      if (!settings.focus.introduced) {
+        const answer = await askConfirm({
           title: t("Force Focus: Before You Begin"),
           message: [
             t(
@@ -89,7 +89,7 @@ export function useFocusIntro(
           // 答案，用户没有任何办法在看完之后反悔。
         });
 
-        if (答 !== "confirm") return;
+        if (answer !== "confirm") return;
 
         // ⚠️ 这一枪**不 await**（`paneWriter` 的返回值是 `void`），而这没关系：
         // 它写的是一个"以后别再问了"的标志位，用户点过"我明白了"之后这一枪
@@ -102,10 +102,10 @@ export function useFocusIntro(
         // ⚠️ 合并用 `paneWriter`，**不要手写 `{ focus: { introduced: true } }`**：
         // 那样写会把其余六格悄悄打回默认值（用户明明把警报时长调成了 45 分钟，
         // 一进说明弹窗就变回 20）。为什么是整份替换，见 `panes/props.ts`。
-        paneWriter(设置, onChange, "focus")({ introduced: true });
+        paneWriter(settings, onChange, "focus")({ introduced: true });
       }
-      await 开始();
+      await start3();
     },
-    [askConfirm, 设置, onChange],
+    [askConfirm, settings, onChange],
   );
 }

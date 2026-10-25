@@ -62,12 +62,12 @@ import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
-import { 猜代码语言, 像代码 } from "./lang-guess";
-import { 清理粘贴HTML } from "./paste-clean";
-import { 贴上网址事务 } from "./url-link";
+import { guessCodeLanguage, looksLikeCode } from "./lang-guess";
+import { clearManagePastePasteHTML } from "./paste-clean";
+import { pasteAboveUrlTransaction } from "./url-link";
 
 /** 插件键。⚠️ 起了名字才好在上游那一串里认出自己（调试时 `state.plugins` 上看）。 */
-export const 粘贴键 = new PluginKey("notaPaste");
+export const pastePasteKey = new PluginKey("notaPaste");
 
 /**
  * 第 ④ 条接手的**体积上限**（字符数，也就是 `text/plain` 的 `length`）。
@@ -77,7 +77,7 @@ export const 粘贴键 = new PluginKey("notaPaste");
  * 并**如实记在这里**：它的依据是"比这个大的东西更应该走 Markdown / HTML 那一路"，
  * 而不是"本仓测出来 50KB 是拐点"。
  */
-export const 代码粘贴上限 = 50 * 1024;
+export const codePasteLimit = 50 * 1024;
 
 /**
  * 插一个代码块，语言是猜出来的那一个。
@@ -91,20 +91,20 @@ export const 代码粘贴上限 = 50 * 1024;
  * `code-block.ts` 那个 NodeView 会在建视图时把光标摆好，两边都设就是
  * 两套规则打架（症状是"粘完光标跳到别处"）。
  */
-function 粘成代码块(view: EditorView, 文本: string): boolean {
+function pasteBecomeCodeBlock(view: EditorView, text2: string): boolean {
   const schema = view.state.schema;
-  const 代码块 = schema.nodes.code_block;
-  if (!代码块) return false;
-  const 语言 = 猜代码语言(文本);
-  const 节点 = 代码块.create({ language: 语言 }, 文本 === "" ? undefined : schema.text(文本));
-  view.dispatch(view.state.tr.replaceSelectionWith(节点).scrollIntoView());
+  const codeBlock = schema.nodes.code_block;
+  if (!codeBlock) return false;
+  const language = guessCodeLanguage(text2);
+  const node = codeBlock.create({ language: language }, text2 === "" ? undefined : schema.text(text2));
+  view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
   return true;
 }
 
 /**
  * 挂进 `.use()` 的那一条。**必须排在 `clipboard` 之前**（理由见文件头）。
  */
-export function 粘贴处理() {
+export function pastePastePlaceManage() {
   return $prose((ctx) => {
     // ⚠️ **洗 HTML 走 `transformPastedHTML`，不走 `handlePaste`**：
     // 上游那条也是这么写的（`editorViewOptionsCtx.update`），两处都改的话
@@ -119,45 +119,45 @@ export function 粘贴处理() {
     ctx.update(editorViewOptionsCtx, (prev) => ({
       ...prev,
       transformPastedHTML: (html: string, view: EditorView) => {
-        const 先 = prev.transformPastedHTML ? prev.transformPastedHTML(html, view) : html;
-        return 清理粘贴HTML(先).html;
+        const first2 = prev.transformPastedHTML ? prev.transformPastedHTML(html, view) : html;
+        return clearManagePastePasteHTML(first2).html;
       },
     }));
 
     return new Plugin({
-      key: 粘贴键,
+      key: pastePasteKey,
       props: {
         handlePaste: (view, event) => {
-          const 数据 = event.clipboardData;
-          if (!数据) return false;
+          const numberEvidence = event.clipboardData;
+          if (!numberEvidence) return false;
           if (!view.props.editable?.(view.state)) return false;
           // ── ① 代码块 / 行内代码里：原样贴，什么都不接管
-          const 起点 = view.state.selection.$from;
-          if (起点.parent.type.spec.code) return false;
-          if (起点.marks().some((m) => m.type.spec.code)) return false;
+          const start4 = view.state.selection.$from;
+          if (start4.parent.type.spec.code) return false;
+          if (start4.marks().some((m) => m.type.spec.code)) return false;
 
-          const 纯文本 = 数据.getData("text/plain");
-          const html = 数据.getData("text/html");
-          const 元数据 = 数据.getData("vscode-editor-data");
+          const plainText = numberEvidence.getData("text/plain");
+          const html = numberEvidence.getData("text/html");
+          const dollarNumberEvidence = numberEvidence.getData("vscode-editor-data");
 
           // ── ② 干干净净一条网址
           if (html.length === 0) {
-            const 事务 = 贴上网址事务(view.state, 纯文本);
-            if (事务) {
-              view.dispatch(事务.scrollIntoView());
+            const transaction = pasteAboveUrlTransaction(view.state, plainText);
+            if (transaction) {
+              view.dispatch(transaction.scrollIntoView());
               return true;
             }
           }
           // ── ③ 编辑器自带元数据的复制（VS Code 那边认语言）：让上游接
-          if (元数据) return false;
+          if (dollarNumberEvidence) return false;
           // ── ④ 看着像代码的**纯文本**（超上限的不碰，理由见文件头）
           if (
             html.length === 0 &&
-            纯文本.length <= 代码粘贴上限 &&
-            纯文本.trim() !== "" &&
-            像代码(纯文本)
+            plainText.length <= codePasteLimit &&
+            plainText.trim() !== "" &&
+            looksLikeCode(plainText)
           ) {
-            return 粘成代码块(view, 纯文本.replace(/\r\n?/g, "\n"));
+            return pasteBecomeCodeBlock(view, plainText.replace(/\r\n?/g, "\n"));
           }
           // ── ⑤ 其余交给上游（HTML 走 DOM；纯文本被当 Markdown 解析）
           return false;

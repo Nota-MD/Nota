@@ -22,15 +22,15 @@
  *    没有最近文件"——不报错，只是少一半。
  */
 
-import { 清除最近项, type MenuEntry, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
-import { 最近条目名 } from "@/ui/useSession";
+import { clearRemoveRecentItem, type MenuEntry, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
+import { recentItemName } from "@/ui/useSession";
 
 /** 合成 id 的前缀。⚠️ 与主题那套（`THEME_PREFIX`）同理，改动要连着 `resolvePick` 一起想。 */
-const 前缀 = "file.recent:";
+const prefix = "file.recent:";
 
 /** 这一条是不是某个最近文件（而不是普通命令）。 */
-export function 是最近条目(id: string): boolean {
-  return id.startsWith(前缀);
+export function isRecentItem(id: string): boolean {
+  return id.startsWith(prefix);
 }
 
 /**
@@ -41,8 +41,8 @@ export function 是最近条目(id: string): boolean {
  * 症状是**条目亮着、点了什么都不发生**——而这个仓库里"点了没反应"式的失效
  * 已经记过好几条了（`docs/07`），判据都是"同一件事有没有两个真相源"。
  */
-export function 最近条目id(路径: string): string {
-  return `${前缀}${路径}`;
+export function recentItemid(path: string): string {
+  return `${prefix}${path}`;
 }
 
 /**
@@ -50,8 +50,8 @@ export function 最近条目id(路径: string): string {
  * 冒号、空格、中文，它们都是 id 的合法部分（`id` 只在两处比字符串，
  * 谁都没把它当"结构"用）。
  */
-export function 最近路径(id: string): string {
-  return id.slice(前缀.length);
+export function recentPath(id: string): string {
+  return id.slice(prefix.length);
 }
 
 /**
@@ -61,10 +61,10 @@ export function 最近路径(id: string): string {
  * 两处各有一个上限时，改了一处而漏改另一处，界面上的条数会跟设置页说明的
  * 数字对不上——而那种不一致只能靠数数发现。
  */
-export function 最近条目(最近: readonly string[]): MenuEntry[] {
-  const 条目: MenuEntry[] = 最近.map((路径) => ({
-    id: 最近条目id(路径),
-    label: 最近条目名(路径),
+export function recentItem(recent: readonly string[]): MenuEntry[] {
+  const item: MenuEntry[] = recent.map((path) => ({
+    id: recentItemid(path),
+    label: recentItemName(path),
   }));
   // ⚠️ 分隔线与「清除」**编进同一个数组**，不另外渲染：分开的话它们不参与
   // 键盘漫游焦点（`ui/useMenuRovingFocus.ts`），键盘用户按 End 到不了它。
@@ -73,26 +73,26 @@ export function 最近条目(最近: readonly string[]): MenuEntry[] {
   // ⚠️ 那一条的**全文写在 `commands.ts`**（`清除最近项`），不在这儿现写：
   // 中文标签留在本文件里的话 i18n 那道闸数不到它，中文表里那条译文会被判成
   // 废键。理由在那边那条常量的注释里。
-  条目.push("sep", 清除最近项);
-  return 条目;
+  item.push("sep", clearRemoveRecentItem);
+  return item;
 }
 
 /**
  * 把「文件」栏里那条占位项换成真子菜单。**其余菜单原样返回**（引用也原样，
  * 好让 `useMemo` 的依赖尽量少变）。
  */
-export function 注入最近文件(
+export function noteEnterRecentTextItem(
   menus: readonly MenuSpec[],
-  最近: readonly string[],
+  recent: readonly string[],
 ): MenuSpec[] {
-  if (最近.length === 0) return menus as MenuSpec[];
-  return menus.map((栏) => {
-    if (栏.id !== "file") return 栏;
+  if (recent.length === 0) return menus as MenuSpec[];
+  return menus.map((bar) => {
+    if (bar.id !== "file") return bar;
     return {
-      ...栏,
-      items: 栏.items.map((项): MenuEntry => {
-        if (项 === "sep" || 项.id !== "file.recent") return 项;
-        return { ...项, submenu: 最近条目(最近) } satisfies MenuItemSpec;
+      ...bar,
+      items: bar.items.map((item5): MenuEntry => {
+        if (item5 === "sep" || item5.id !== "file.recent") return item5;
+        return { ...item5, submenu: recentItem(recent) } satisfies MenuItemSpec;
       }),
     };
   });

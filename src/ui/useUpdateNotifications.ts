@@ -12,7 +12,7 @@ import { api, type Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { Toast, ToastAction } from "@/ui/Toasts";
 
-interface 接线 {
+interface wiring {
   settings: Settings | null;
   toast: (
     message: string,
@@ -23,7 +23,7 @@ interface 接线 {
   openUpdateSettings: () => void;
 }
 
-export function useUpdateNotifications({ settings, toast, openUpdateSettings }: 接线): void {
+export function useUpdateNotifications({ settings, toast, openUpdateSettings }: wiring): void {
   const t = useT();
   const started = useRef(false);
 

@@ -60,6 +60,9 @@ pub const 新窗口选项: &str = "--new-window";
 /// 2026-09-29 起，理由见那里「为什么形态 2 不开窗」）。
 pub const MCP选项: &str = "--mcp";
 
+/// 不启动 Tauri，只把调试日志交给系统文本查看器。
+pub const 调试日志选项: &str = "--debug-log";
+
 /// 从参数表里挑出"要打开的文件"，没有就是 `None`。
 ///
 /// `args` **含零号参数**（程序自己的路径），要跳掉——不跳的话每次启动都会
@@ -107,6 +110,13 @@ pub fn 要开_mcp(args: impl IntoIterator<Item = OsString>) -> bool {
     args.into_iter()
         .skip(1)
         .any(|a| a.as_os_str() == OsStr::new(MCP选项))
+}
+
+/// 这次启动是不是独立的调试报告模式。
+pub fn 要查看调试日志(args: impl IntoIterator<Item = OsString>) -> bool {
+    args.into_iter()
+        .skip(1)
+        .any(|arg| arg.as_os_str() == OsStr::new(调试日志选项))
 }
 
 /// 一个参数**当什么用**：`nota://` 链接要先把里面的路径解出来，别的原样当路径。
@@ -467,5 +477,12 @@ mod tests {
             首个要打开的文件(参数表(&["/usr/bin/nota", "--mcp", "/tmp/笔记.md"])),
             Some(PathBuf::from("/tmp/笔记.md"))
         );
+    }
+
+    #[test]
+    fn 调试日志选项认得出来且不把零号参数算进去() {
+        assert!(要查看调试日志(参数表(&["nota", "--debug-log"])));
+        assert!(!要查看调试日志(参数表(&["--debug-log"])));
+        assert!(!要查看调试日志(参数表(&["nota", "--debug-log-extra"])));
     }
 }

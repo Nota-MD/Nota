@@ -122,7 +122,7 @@ import { mathToMarkdown } from "mdast-util-math";
  * 中文键名在 JSON 里合法，但没必要在**跨进程的数据**里用中文——Lua 那三条
  * 「标识符一律 ASCII」讲的是另一件事（那边是语法错误）。
  */
-export const 美元数属性 = "dollars";
+export const dollarCountAttribute = "dollars";
 
 /**
  * 源码里 `起` 那个偏移往前数，**开头连着几个 `$`**（结果只给 1 或 2）。
@@ -131,9 +131,9 @@ export const 美元数属性 = "dollars";
  * 那时保守写回 `$x$` —— 后果只是"这次没保留住"，不会丢字、也不会写出两个 `$`
  * 把公式拆成两半。3 及以上同理（那种源码 micromark 就不当公式读）。
  */
-export function 数开头美元(源: string, 起: number): number {
+export function numberOpenHeadDollarDollar(source3: string, start5: number): number {
   let n = 0;
-  while (源[起 + n] === "$") n++;
+  while (source3[start5 + n] === "$") n++;
   return n >= 2 ? 2 : 1;
 }
 
@@ -143,17 +143,17 @@ export function 数开头美元(源: string, 起: number): number {
  * ⚠️ 默认必须是 1：老剪贴板数据、`parseDOM` 那条路、别处手工 `create()` 出来的节点
  * 上都没有这个属性，而"没有"最合理的解释就是"用户写的是 `$x$`"。
  */
-export function 读美元数(持有者: { attrs?: unknown; data?: unknown }): number {
-  const 甲 = (持有者.attrs ?? {}) as Record<string, unknown>;
-  const 乙 = (持有者.data ?? {}) as Record<string, unknown>;
-  const 值 = 甲[美元数属性] ?? 乙[美元数属性];
-  return 值 === 2 ? 2 : 1;
+export function readDollarCount(holdHasActor: { attrs?: unknown; data?: unknown }): number {
+  const alpha = (holdHasActor.attrs ?? {}) as Record<string, unknown>;
+  const beta = (holdHasActor.data ?? {}) as Record<string, unknown>;
+  const value2 = alpha[dollarCountAttribute] ?? beta[dollarCountAttribute];
+  return value2 === 2 ? 2 : 1;
 }
 
 /* ── 第一格：文件 → mdast（数出源码里那几个 `$`）───────────────────────── */
 
 /** `$remark` 那个工厂的类型（**从它自己的参数里反推**，不引额外类型）。 */
-type 转换器工厂 = Parameters<typeof $remark<"标美元数", undefined>>[1];
+type ConvertReplaceDeviceWorkFactory = Parameters<typeof $remark<"标美元数", undefined>>[1];
 
 /**
  * 标注插件：把"开头几个 `$`"写进每颗 `inlineMath` 节点的 `data`。
@@ -181,30 +181,30 @@ type 转换器工厂 = Parameters<typeof $remark<"标美元数", undefined>>[1];
  * ⚠️ 单独导出来是**给测试用的**：`tests/math-delim.test.ts` 要把它挂到一台真
  * `unified()` 处理机上（走 `$remark` 那一层只有建整个 `Editor` 才跑得到）。
  */
-export const 标美元数插件: ReturnType<转换器工厂> = () => (树, 文件) => {
-  const 源 = typeof 文件?.value === "string" ? 文件.value : "";
-  if (!源) return;
+export const markDollarDollarNumberPlugin: ReturnType<ConvertReplaceDeviceWorkFactory> = () => (tree, textItem) => {
+  const source3 = typeof textItem?.value === "string" ? textItem.value : "";
+  if (!source3) return;
 
-  const 走 = (节点: (typeof 树)["children"][number]): void => {
-    if (节点.type === "inlineMath") {
-      const 起 = 节点.position?.start?.offset;
-      if (typeof 起 === "number") {
-        节点.data = { ...节点.data, [美元数属性]: 数开头美元(源, 起) };
+  const walk = (node: (typeof tree)["children"][number]): void => {
+    if (node.type === "inlineMath") {
+      const start5 = node.position?.start?.offset;
+      if (typeof start5 === "number") {
+        node.data = { ...node.data, [dollarCountAttribute]: numberOpenHeadDollarDollar(source3, start5) };
       }
     }
     // ⚠️ 收窄成"有 children 的那些"：`RootContent` 里有 `text` 这种没有孩子的，
     // 不收窄直接取 `.children` 编译不过（mdast 的类型是准的，别去 `as any`）。
-    if ("children" in 节点) for (const 孩 of 节点.children ?? []) 走(孩);
+    if ("children" in node) for (const child2 of node.children ?? []) walk(child2);
   };
 
-  for (const 孩 of 树.children ?? []) 走(孩);
+  for (const child2 of tree.children ?? []) walk(child2);
 };
 
 /** 那个插件本体（三层里的**后两层**：选项 → 转换器）。 */
-const 标美元数工厂: 转换器工厂 = () => 标美元数插件;
+const markDollarDollarNumberWorkFactory: ConvertReplaceDeviceWorkFactory = () => markDollarDollarNumberPlugin;
 
 /** 挂给 milkdown 的那一份：`.use()` 得**排在 `math` 后面**（转换器按注册顺序跑，晚的在后）。 */
-export const 标美元数 = $remark("标美元数", 标美元数工厂);
+export const markDollarDollarNumber = $remark("标美元数", markDollarDollarNumberWorkFactory);
 
 /* ── 第二格：mdast ↔ PM 节点（搬进 attrs，再搬回去）───────────────────── */
 
@@ -244,26 +244,26 @@ export const 标美元数 = $remark("标美元数", 标美元数工厂);
  * 兜一下（**幂等**：`create.ts` 里 `math` 那条本来就会注入），这样这个插件单独用
  * 也不会因为缺切片而炸。
  */
-export const 行内公式规格 = $nodeSchema("math_inline", (ctx) => {
+export const inlineMathSpec = $nodeSchema("math_inline", (ctx) => {
   mathInlineSchema.ctx(ctx);
-  const 原 = ctx.get(mathInlineSchema.key)(ctx);
+  const original = ctx.get(mathInlineSchema.key)(ctx);
   return {
-    ...原,
-    attrs: { ...原.attrs, [美元数属性]: { default: 1 } },
+    ...original,
+    attrs: { ...original.attrs, [dollarCountAttribute]: { default: 1 } },
     parseMarkdown: {
-      ...原.parseMarkdown,
+      ...original.parseMarkdown,
       runner: (state, node, type) => {
         state
-          .openNode(type, { [美元数属性]: 读美元数({ data: node.data }) })
+          .openNode(type, { [dollarCountAttribute]: readDollarCount({ data: node.data }) })
           .addText(node.value as string)
           .closeNode();
       },
     },
     toMarkdown: {
-      ...原.toMarkdown,
+      ...original.toMarkdown,
       runner: (state, node) => {
         state.addNode("inlineMath", undefined, node.textContent, {
-          data: { [美元数属性]: 读美元数(node) },
+          data: { [dollarCountAttribute]: readDollarCount(node) },
         });
       },
     },
@@ -273,14 +273,14 @@ export const 行内公式规格 = $nodeSchema("math_inline", (ctx) => {
 /* ── 第三格：mdast → 文字（按数选一条上游处理器）──────────────────────── */
 
 /** 序列化选项的类型：**从 ctx 反推出来**（与 `lax-heading.ts` / `atom-space.ts` 同一套写法）。 */
-type 串化选项 = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
+type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
 /** mdast 的行内公式处理器（`handlers.inlineMath` 那一条）。 */
-type 行内处理器 = NonNullable<NonNullable<串化选项["handlers"]>["inlineMath"]>;
+type InlinePlaceManageDevice = NonNullable<NonNullable<StringConvertOption["handlers"]>["inlineMath"]>;
 
 /** 上游那份，`singleDollarTextMath` 用默认值（1 个 `$`）。**建一次就够**，它是纯的。 */
-const 上游单美元 = mathToMarkdown();
+const upstreamSingleDollarDollar = mathToMarkdown();
 /** 上游那份，显式关掉单美元 ⇒ 一律 2 个 `$`。 */
-const 上游双美元 = mathToMarkdown({ singleDollarTextMath: false });
+const upstreamDoubleDollarDollar = mathToMarkdown({ singleDollarTextMath: false });
 
 /**
  * 本仓的行内公式处理器：**按 `dollars` 选上游那一份**，一个字都不自己拼。
@@ -289,12 +289,12 @@ const 上游双美元 = mathToMarkdown({ singleDollarTextMath: false });
  * 只能"选"，不能"传参"——换个写法（比如自己拼 `'$'.repeat(n)`）就绕开了上游那两段
  * 边界处理（首尾补空格、值里的换行防块级陷阱），那正是这个文件要避免的事。
  */
-export function 行内公式处理器(): 行内处理器 {
+export function inlineMathHandler(): InlinePlaceManageDevice {
   return (node, parent, state, info) => {
-    const 选 = 读美元数(node) >= 2 ? 上游双美元 : 上游单美元;
-    const 处理 = 选.handlers?.inlineMath;
-    if (!处理) return "";
-    return 处理(node, parent, state, info);
+    const select = readDollarCount(node) >= 2 ? upstreamDoubleDollarDollar : upstreamSingleDollarDollar;
+    const placeManage = select.handlers?.inlineMath;
+    if (!placeManage) return "";
+    return placeManage(node, parent, state, info);
   };
 }
 
@@ -369,13 +369,13 @@ export function 行内公式处理器(): 行内处理器 {
 
 /** mdast 的文本处理器（`handlers.text` 那一条）。⚠️ 不引 `text-handlers.ts` 那份：
  *  那个文件 import 本文件，引回来就是绕圈。同一套 `串化选项` 反推写法。 */
-type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]>;
+type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
 /** mdast 节点里我们真正会读的那几个字段（不引 `@types/mdast`，够用就好）。 */
-type Mdast节点 = { type: string; value?: string; children?: Mdast节点[] };
+type MdastNode = { type: string; value?: string; children?: MdastNode[] };
 
 /** 本层认得的"行内内容的家"：段落、标题、表格格子。 */
-const 认得的父 = new Set(["paragraph", "heading", "tableCell"]);
+const recognizeObtainOfParent = new Set(["paragraph", "heading", "tableCell"]);
 
 /**
  * 一串东西（递归地）写进文件时会带几颗 `$`。**往多处数**（数多了不动手，安全）。
@@ -384,35 +384,35 @@ const 认得的父 = new Set(["paragraph", "heading", "tableCell"]);
  * 所以要单独按 `dollars` 补回来——不补的话"兄弟是一颗公式"会被数成 0 颗，
  * 判据 2 就放行了，那可就是替用户改字节了。
  */
-export function 数美元(件: unknown): number {
-  if (typeof 件 === "string") return 件.split("$").length - 1;
-  if (Array.isArray(件)) return 件.reduce<number>((和, 颗) => 和 + 数美元(颗), 0);
-  if (件 && typeof 件 === "object") {
-    const 节 = 件 as { type?: string };
-    let 和 = 0;
-    for (const 值 of Object.values(件)) 和 += 数美元(值);
-    if (节.type === "inlineMath") 和 += 2 * 读美元数(件 as { attrs?: unknown; data?: unknown });
-    return 和;
+export function countDollars(item3: unknown): number {
+  if (typeof item3 === "string") return item3.split("$").length - 1;
+  if (Array.isArray(item3)) return item3.reduce<number>((and, token) => and + countDollars(token), 0);
+  if (item3 && typeof item3 === "object") {
+    const section = item3 as { type?: string };
+    let and = 0;
+    for (const value2 of Object.values(item3)) and += countDollars(value2);
+    if (section.type === "inlineMath") and += 2 * readDollarCount(item3 as { attrs?: unknown; data?: unknown });
+    return and;
   }
   return 0;
 }
 
 /** 上游写出来的那一颗转义美元（前面**不是**反斜杠的那种，见文件头）。 */
-const 被转义的美元 = /(^|[^\\])\\\$/g;
+const isConvertMeaningOfDollarDollar = /(^|[^\\])\\\$/g;
 
 /**
  * 包一层：把正文里被上游转义掉的 `\$` 放回 `$`（判据见文件头）。
  *
  * `原文` 是 Milkdown 自己那条文本处理器（`handlers.text`）；**没有它就原样返回**。
  */
-export function 不转义美元(原文?: 文本处理器): 文本处理器 {
+export function notConvertMeaningDollarDollar(source?: textHandler): textHandler {
   return (node, parent, state, info) => {
-    if (!原文) return node.value ?? "";
-    const 输出 = 原文(node, parent, state, info);
-    if (!输出.includes("\\$")) return 输出;
-    const 父 = parent as Mdast节点 | undefined;
-    if (!父 || !认得的父.has(父.type)) return 输出; // 判据 1
-    if (数美元(父.children) !== 数美元((node as Mdast节点).value)) return 输出; // 判据 2
-    return 输出.replace(被转义的美元, "$1$");
+    if (!source) return node.value ?? "";
+    const output = source(node, parent, state, info);
+    if (!output.includes("\\$")) return output;
+    const parentNode = parent as MdastNode | undefined;
+    if (!parentNode || !recognizeObtainOfParent.has(parentNode.type)) return output; // 判据 1
+    if (countDollars(parentNode.children) !== countDollars((node as MdastNode).value)) return output; // 判据 2
+    return output.replace(isConvertMeaningOfDollarDollar, "$1$");
   };
 }

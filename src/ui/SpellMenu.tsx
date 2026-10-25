@@ -41,47 +41,47 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { api, type 拼写词典 } from "@/bridge/ipc";
+import { api, type CombineWriteWordDictionary } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { MenuPopup } from "@/ui/MenuPopup";
 import type { MenuEntry } from "@/ui/commands";
-import { 语言名, 语言短码 } from "@/ui/spell-langs";
+import { languageName, languageCode } from "@/ui/spell-langs";
 
 /** 归一：`en-US` 与 `en_US` 是同一门（与 `spell-langs.ts` 那条一致）。 */
-function 归一(标签: string): string {
-  return 标签.trim().toLowerCase().replace(/-/g, "_");
+function normalize(label: string): string {
+  return label.trim().toLowerCase().replace(/-/g, "_");
 }
 
 export function SpellMenu({
   spellcheck,
-  语言,
+  language,
   onChangeSpell,
   onDismiss,
 }: {
   /** `settings.editor.spellcheck`。`null` = 设置还没读回来（那两行就灰着）。 */
   spellcheck: boolean | null;
   /** `settings.editor.spellcheck_langs`。**空数组 = 跟随系统**。`null` = 还没读回来。 */
-  语言: string[] | null;
+  language: string[] | null;
   /**
    * 改点什么。**一次写入**——⚠️ "勾一门语言"这一下要同时改两样（开 ＋ 语言列表），
    * 拆成两次写的话后一次会拿旧快照把前一次抹掉（见 `ui/useStatusBar.ts::onChangeSpell`）。
    */
-  onChangeSpell: (补: { 开?: boolean; 语言?: string[] }) => void;
+  onChangeSpell: (fill: { open2?: boolean; language?: string[] }) => void;
   onDismiss: () => void;
 }) {
   const t = useT();
   /** 这台机器上的词典（`null` = 还在问）。 */
-  const [词典们, 设词典们] = useState<拼写词典[] | null>(null);
+  const [wordDictionaryPlural, setWordDictionaryPlural] = useState<CombineWriteWordDictionary[] | null>(null);
   /**
    * 顶上那个搜索框里打的东西（2026-10-11 收尾时用户点名加的：
    * 「上面还应该有个搜索框」——他贴的那张 Typora 截图里最上面那个圆角框**不是
    * 标题、是搜索框**）。
    */
-  const [查询, 设查询] = useState("");
+  const [query, setQuery] = useState("");
   /** 顶上那个搜索框。**菜单一开就要把焦点放进去**（理由见下面那条 effect）。 */
-  const 搜索框 = useRef<HTMLInputElement>(null);
+  const searchSearchBox = useRef<HTMLInputElement>(null);
   /** 用户已经把焦点走进下面那一列了（那之后**不许**再抢回来）。 */
-  const 让位 = useRef(false);
+  const letPosition = useRef(false);
 
   useEffect(() => {
     // ⚠️⚠️ **必须自己把焦点抢过来**：`MenuPopup` 的漫游钩子开菜单时会把焦点
@@ -89,35 +89,35 @@ export function SpellMenu({
     // **正文**（2026-10-11 实测：菜单开着，正文里多出一串 `deu`，而搜索框里
     // 一个字符都没有）。父组件的 effect 在子组件之后跑，所以这一句抢得过它。
     // ⚠️ 键盘走这条路进来的人想要的也是"先打字找语言"，不是"从第一项往下按"。
-    const 抢 = () => {
-      if (!让位.current) 搜索框.current?.focus();
+    const steal = () => {
+      if (!letPosition.current) searchSearchBox.current?.focus();
     };
-    抢();
+    steal();
     // ⚠️ **下一帧还要再抢一次**：词典那一列是**异步**拉回来的，到手时 `SpellMenu`
     // 会再渲染一遍，而 `MenuPopup` 那边（漫游钩子）会在 layout 阶段把焦点按到
     // 第一条条目上——2026-10-11 实测就是这样：effect 里 `focus()` 过了，可 1.8 秒
     // 后打字**还是打在条目上**（搜索框空的、正文也没变）。
     // ⚠️ `让位` 那面旗子是**必须**的：用户一旦按 ↓ / 点进列表，就再也不能被抢回来
     //（否则方向键走一步、焦点跳回搜索框，等于键盘走不通）。
-    const 下一帧 = window.setTimeout(抢, 0);
-    return () => window.clearTimeout(下一帧);
+    const belowValueFrame = window.setTimeout(steal, 0);
+    return () => window.clearTimeout(belowValueFrame);
   }, []);
 
   useEffect(() => {
     // ⚠️ 拿不到就当**空**：菜单照画（说明 ＋ 出口），不因此不弹菜单——
     // "弹不出来"与"弹出来是空的"里，前者更像坏了。
-    void api.spell.dictionaries().then(设词典们).catch(() => 设词典们([]));
+    void api.spell.dictionaries().then(setWordDictionaryPlural).catch(() => setWordDictionaryPlural([]));
   }, []);
 
-  const 选中的 = (语言 ?? []).map(归一);
-  const 已装 = 词典们 ?? [];
+  const selectedOf = (language ?? []).map(normalize);
+  const alreadyInstall = wordDictionaryPlural ?? [];
   // 候选＝装着的那些 ＋ **已经勾了但没装的**那些（不然他勾过的那一门会从菜单里
   // 消失，而设置页那一格还写着它——两处对不上）。
-  const 候选: string[] = 已装.map((d) => d.tag);
-  for (const tag of 语言 ?? []) {
-    if (!候选.some((c) => 归一(c) === 归一(tag))) 候选.push(tag);
+  const candidate: string[] = alreadyInstall.map((d) => d.tag);
+  for (const tag of language ?? []) {
+    if (!candidate.some((c) => normalize(c) === normalize(tag))) candidate.push(tag);
   }
-  候选.sort((a, b) => 语言名(a).localeCompare(语言名(b)));
+  candidate.sort((a, b) => languageName(a).localeCompare(languageName(b)));
 
   /**
    * 搜索框挑出来的那几门。
@@ -127,18 +127,18 @@ export function SpellMenu({
    * ——三种都真实存在，少比一样就有一类人搜不到自己那门。
    * ⚠️ 大小写与连字符/下划线**一律归一**（`de-ch` 也要能搜到 `de_DE` 那一族）。
    */
-  const 净查 = 归一(查询.trim());
-  const 命中的 = 净查 === ""
-    ? 候选
-    : 候选.filter(
+  const cleanCheck = normalize(query.trim());
+  const matchOf = cleanCheck === ""
+    ? candidate
+    : candidate.filter(
         (tag) =>
-          归一(tag).includes(净查) ||
-          归一(语言名(tag)).includes(净查) ||
-          归一(语言短码(tag)).includes(净查),
+          normalize(tag).includes(cleanCheck) ||
+          normalize(languageName(tag)).includes(cleanCheck) ||
+          normalize(languageCode(tag)).includes(cleanCheck),
       );
 
   /** 一条可勾的条目。`right` 是右端那个短码（见 `commands.ts::MenuItemSpec.right`）。 */
-  const 条 = (id: string, label: string, right?: string): MenuEntry => ({
+  const item4 = (id: string, label: string, right?: string): MenuEntry => ({
     id,
     label,
     checkable: true,
@@ -146,41 +146,41 @@ export function SpellMenu({
   });
 
   // 顶上两项：与 Typora 那份一一对应，而且**互斥**（见文件头那张表）。
-  const 条目: MenuEntry[] = [
-    条("spell.auto", t("Auto-detect language")),
-    条("spell.off", t("Do not check spelling")),
+  const item: MenuEntry[] = [
+    item4("spell.auto", t("Auto-detect language")),
+    item4("spell.off", t("Do not check spelling")),
     "sep",
   ];
 
-  if (词典们 !== null && 候选.length === 0) {
+  if (wordDictionaryPlural !== null && candidate.length === 0) {
     // ⚠️ 一本都没有时**也要说一句**（下面那条出口就是给它的）。
-    条目.push({
+    item.push({
       id: "spell.none",
       label: t("No dictionaries on this machine"),
       checkable: false,
     });
-  } else if (词典们 !== null && 命中的.length === 0) {
+  } else if (wordDictionaryPlural !== null && matchOf.length === 0) {
     // ⚠️ 搜了但一个都没中：**说出来**。一句话不说是最坏的那种界面——
     // 下面那两行"模式"条目还在，用户会以为"这台机器一门语言都没有"。
-    条目.push({ id: "spell.nomatch", label: t("No matching languages"), checkable: false });
+    item.push({ id: "spell.nomatch", label: t("No matching languages"), checkable: false });
   } else {
-    for (const tag of 命中的) {
+    for (const tag of matchOf) {
       // ⚠️ id 带上标签（`spell.lang:de_DE`）：这一列是**现算的**，而漫游焦点与
       // `checks` 都按 id 认路。
-      条目.push(条(`spell.lang:${tag}`, 语言名(tag), 语言短码(tag)));
+      item.push(item4(`spell.lang:${tag}`, languageName(tag), languageCode(tag)));
     }
   }
 
-  const 勾: Record<string, boolean> = {
+  const check: Record<string, boolean> = {
     // ⚠️ 「自动检测」与「不使用」是**同一个布尔的两种说法**（后端只有"跟随系统"
     // 这一种语言状态）：一个勾着另一个必不勾，而且语言非空时"自动检测"不勾。
-    "spell.auto": spellcheck === true && (语言 ?? []).length === 0,
+    "spell.auto": spellcheck === true && (language ?? []).length === 0,
     "spell.off": spellcheck === false,
   };
-  for (const tag of 候选) 勾[`spell.lang:${tag}`] = 选中的.includes(归一(tag));
+  for (const tag of candidate) check[`spell.lang:${tag}`] = selectedOf.includes(normalize(tag));
 
-  const 灰 = new Set<string>(
-    spellcheck === null || 语言 === null ? ["spell.auto", "spell.off"] : [],
+  const disabled2 = new Set<string>(
+    spellcheck === null || language === null ? ["spell.auto", "spell.off"] : [],
   );
 
   return (
@@ -199,60 +199,60 @@ export function SpellMenu({
           // 回调 ref 在**提交阶段**跑（比两个 effect 都早），加上下面那条下一帧的
           // 兜底，才把这颗焦点坐稳。
           ref={(n) => {
-            搜索框.current = n;
-            if (n && !让位.current) n.focus();
+            searchSearchBox.current = n;
+            if (n && !letPosition.current) n.focus();
           }}
           type="search"
           className="menu-search"
-          value={查询}
+          value={query}
           placeholder={t("Select spell check language")}
           aria-label={t("Select spell check language")}
-          onChange={(e) => 设查询(e.target.value)}
+          onChange={(e) => setQuery(e.target.value)}
           // ⚠️ 焦点**走进了这一层**（点条目、按 ↓ 都算）就把搜索框让掉；
           // 只是窗口失焦（`relatedTarget` 是 null）不算——那种时候还得抢回来。
           onBlur={(e) => {
-            const 去哪 = e.relatedTarget as Node | null;
-            const 层 = e.currentTarget.closest(".menu-popup");
-            if (去哪 && 层?.contains(去哪)) 让位.current = true;
+            const goWhich = e.relatedTarget as Node | null;
+            const layer = e.currentTarget.closest(".menu-popup");
+            if (goWhich && layer?.contains(goWhich)) letPosition.current = true;
           }}
           // ⚠️ ↑↓ 从输入框走进下面那一列：不给这条路的话，键盘用户**永远**只能在
           // 输入框里打字、选不了任何一门（这一层不是"点得动就行"的那种菜单）。
           onKeyDown={(e) => {
             if (e.key === "ArrowDown" || e.key === "Enter") {
               e.preventDefault();
-              让位.current = true;
+              letPosition.current = true;
               // ⚠️ 拿 DOM 找第一颗按钮（不引 ref 穿透 `MenuPopup`）：那一层的
               // 漫游钩子挂在每颗按钮的 `onFocus` 上，所以直接 `focus()` 就等于
               // 把漫游焦点放到它身上——两条路汇到同一处。
-              const 层 = e.currentTarget.closest(".menu-popup");
-              层?.querySelector<HTMLButtonElement>("button.menu-item:not(:disabled)")?.focus();
+              const layer = e.currentTarget.closest(".menu-popup");
+              layer?.querySelector<HTMLButtonElement>("button.menu-item:not(:disabled)")?.focus();
             }
           }}
         />
       }
-      entries={条目}
-      disabled={灰}
-      checks={勾}
+      entries={item}
+      disabled={disabled2}
+      checks={check}
       onPick={(id) => {
         if (id === "spell.auto") {
           // 跟随系统：**清空语言那一格**（它俩是同一条口径的两半）。
-          onChangeSpell({ 语言: [], 开: true });
+          onChangeSpell({ language: [], open2: true });
           return;
         }
         if (id === "spell.off") {
           // ⚠️ 关的时候**不动语言那一格**（关掉不等于忘掉他选过什么）。
-          onChangeSpell({ 开: false });
+          onChangeSpell({ open2: false });
           return;
         }
         if (!id.startsWith("spell.lang:")) return;
         const tag = id.slice("spell.lang:".length);
-        const 命中 = (语言 ?? []).find((x) => 归一(x) === 归一(tag));
-        const 新 = 命中 ? (语言 ?? []).filter((x) => x !== 命中) : [...(语言 ?? []), tag];
+        const match = (language ?? []).find((x) => normalize(x) === normalize(tag));
+        const newValue = match ? (language ?? []).filter((x) => x !== match) : [...(language ?? []), tag];
         // ⚠️ **一次写入**：勾了语言就把拼写检查也**打开**——他点这一下是要用这门
         // 语言查词，不是"选着玩"。⚠️ 这两样必须走同一次 `updateSettings`，否则后
         // 一次会拿旧快照把前一次抹回去（这一条踩过，见 `useStatusBar` 那段）。
         // ⚠️ 勾掉最后一门时落回 `[]` ＝ 跟随系统，那也是有含义的一档，不是"关掉"。
-        onChangeSpell({ 语言: 新, 开: true });
+        onChangeSpell({ language: newValue, open2: true });
       }}
       onDismiss={onDismiss}
       // ⚠️ `←` `→` 在这一层什么都不做（同 `StatusBar.tsx` 那个计数菜单）：

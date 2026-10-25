@@ -39,7 +39,7 @@
  * 会静默盖掉前面那条（TS 的 `Record<string, string>` 字面量里重复键**是报错的**，
  * 所以这一点靠编译器兜着，不必自己盯）。
  */
-export const 扩展名表: Readonly<Record<string, string>> = {
+export const extensionExtendNameTable: Readonly<Record<string, string>> = {
   /* 脚本语言 */
   js: "javascript",
   mjs: "javascript",
@@ -267,19 +267,19 @@ export const 扩展名表: Readonly<Record<string, string>> = {
  * 整名、再试最后一段，顺序不能反——反了 `.gitignore` 会落到一个"扩展名
  * `gitignore`"的怪路上（那条恰好也存在，所以看不出来，但 `Makefile` 就露馅）。
  */
-export function 按扩展名推语言(路径: string): string | null {
+export function LanguageFromExtension(path: string): string | null {
   // 路径分隔符两种都认（用户在别的系统上拷过来的路径照样能认）。
-  const 名 = 路径.trim().split(/[/\\]/).pop() ?? "";
-  if (名 === "") return null;
-  const 小写名 = 名.toLowerCase();
+  const name3 = path.trim().split(/[/\\]/).pop() ?? "";
+  if (name3 === "") return null;
+  const smallWriteName = name3.toLowerCase();
   // ① 整名（`makefile` / `dockerfile` / `.gitignore` / `dockerfile.dev` 不算）
-  const 整 = 扩展名表[小写名];
-  if (整) return 整;
+  const whole = extensionExtendNameTable[smallWriteName];
+  if (whole) return whole;
   // ② 最后一段（`.gitignore` 那类"点开头、没别的点"的名字这里会切出
   //    `gitignore`，与 ① 的结果一样，所以两条都留着不冲突）
-  const 点 = 小写名.lastIndexOf(".");
-  if (点 < 0) return null;
-  return 扩展名表[小写名.slice(点 + 1)] ?? null;
+  const point = smallWriteName.lastIndexOf(".");
+  if (point < 0) return null;
+  return extensionExtendNameTable[smallWriteName.slice(point + 1)] ?? null;
 }
 
 /* ── 按内容猜 ─────────────────────────────────────────────────────────── */
@@ -302,17 +302,17 @@ export function 按扩展名推语言(路径: string): string | null {
  *   也救不回一行**。VMark 的 `codePaste` 也是这一条（它的判据里写着
  *   `行数 < 2 → 放弃`），本仓独立选到同一条路上。
  */
-export function 像代码(文: string): boolean {
-  const 行 = 文.split(/\r\n?|\n/).filter((l) => l.trim() !== "");
-  if (行.length < 2) return false;
+export function looksLikeCode(text4: string): boolean {
+  const line3 = text4.split(/\r\n?|\n/).filter((l) => l.trim() !== "");
+  if (line3.length < 2) return false;
   // ── 否决：中文正文
-  const 非空白 = 文.replace(/\s/g, "");
-  if (非空白.length === 0) return false;
-  const 汉字 = (非空白.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) ?? []).length;
-  if (汉字 / 非空白.length >= 0.2) return false;
-  if (/[。，！？；：、「」『』（）]/.test(文)) return false;
+  const nonWhitespace = text4.replace(/\s/g, "");
+  if (nonWhitespace.length === 0) return false;
+  const chineseCharacter = (nonWhitespace.match(/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/g) ?? []).length;
+  if (chineseCharacter / nonWhitespace.length >= 0.2) return false;
+  if (/[。，！？；：、「」『』（）]/.test(text4)) return false;
 
-  return 计分(文) >= 代码阈值;
+  return countShare(text4) >= codeThreshold;
 }
 
 /**
@@ -323,17 +323,17 @@ export function 像代码(文: string): boolean {
  * 改 `lastIndex`，同一个正则第二次调用从上次的位置接着找——那种"跑第一次
  * 对、跑第二次错"的毛病是最难查的一类。所以带 `g` 的一律走 `match`。
  */
-function 计分(文: string): number {
-  let 分 = 0;
-  for (const [判据, 加] of 代码信号) {
-    if (!判据.global) {
-      if (判据.test(文)) 分 += 加;
+function countShare(text4: string): number {
+  let share = 0;
+  for (const [determineEvidence, add] of codeSignal) {
+    if (!determineEvidence.global) {
+      if (determineEvidence.test(text4)) share += add;
       continue;
     }
-    const 次 = 文.match(判据)?.length ?? 0;
-    分 += 加 * Math.min(次, 重复计分上限);
+    const count2 = text4.match(determineEvidence)?.length ?? 0;
+    share += add * Math.min(count2, heavyRestoreCountShareLimit);
   }
-  return 分;
+  return share;
 }
 
 /**
@@ -341,7 +341,7 @@ function 计分(文: string): number {
  * （shebang、`<?php`、`#include`）值 80 分，**一条就能过阈值**；
  * 一条"散文里也偶尔有"的特征（缩进、括号）只值 25–30 分，要几条凑一起。
  */
-const 代码信号: readonly (readonly [RegExp, number])[] = [
+const codeSignal: readonly (readonly [RegExp, number])[] = [
   [/^#![^\n]*\/(?:ba|z|k)?sh/, 90], // shebang
   [/^#![^\n]*python/, 90],
   [/<\?php/, 90],
@@ -380,7 +380,7 @@ const 代码信号: readonly (readonly [RegExp, number])[] = [
  * ⚠️ 定 3 是"够用就停"：命令行那条值 20 分，三次刚好过 60 的线；再多也不加分，
  * 免得"一大段命令行"把分数堆到把旁边那条判据的权重差异淹掉。
  */
-const 重复计分上限 = 3;
+const heavyRestoreCountShareLimit = 3;
 
 /**
  * 及格线。⚠️ 定在 60 是照下面这两个真实样本量的：
@@ -398,7 +398,7 @@ const 重复计分上限 = 3;
  * ⚠️ **改动这个数之前先跑 `tests/lang-guess.test.ts` 第三组**——那一组里
  * 正反两面的样本（散文、命令行、真的代码）就是照这个数配的。
  */
-const 代码阈值 = 60;
+const codeThreshold = 60;
 
 /**
  * **按内容猜语言**；猜不出给 `null`（调用方据此建一个"没有语言"的代码块）。
@@ -407,14 +407,14 @@ const 代码阈值 = 60;
  * ⚠️ **顺序有讲究**：先判那些"长相独一无二"的（shebang / `<?php` / DOCTYPE），
  * 再判语族。反过来的话，一段 Python 里出现的 `<` 会被当成 HTML。
  */
-export function 按内容猜语言(文: string): string | null {
-  const 样本 = 文.split(/\r\n?|\n/).slice(0, 取样行数).join("\n");
-  for (const [判据, 语言] of 内容判据) if (判据.test(样本)) return 语言;
+export function GuessLanguageFromContent(text4: string): string | null {
+  const sample = text4.split(/\r\n?|\n/).slice(0, getStyleRowCount).join("\n");
+  for (const [determineEvidence, language] of contentDetermineEvidence) if (determineEvidence.test(sample)) return language;
   return null;
 }
 
 /** 只看前这么多行（见 {@link 按内容猜语言} 的说明）。 */
-const 取样行数 = 40;
+const getStyleRowCount = 40;
 
 /**
  * 内容判据表。**顺序即优先级**（先中者赢）。
@@ -422,7 +422,7 @@ const 取样行数 = 40;
  * ⚠️ 每一条的正则都要"独占一行"或"带足够上下文"，否则会互相抢——
  * 比如 `/def /` 用不加锚点的写法会把 `define` 也吃掉。
  */
-const 内容判据: readonly (readonly [RegExp, string])[] = [
+const contentDetermineEvidence: readonly (readonly [RegExp, string])[] = [
   [/^#![^\n]*\b(?:python[23]?)\b/m, "python"],
   [/^#![^\n]*\b(?:ba|z|k)?sh\b/m, "bash"],
   [/^#![^\n]*\bnode\b/m, "javascript"],
@@ -480,18 +480,18 @@ const 内容判据: readonly (readonly [RegExp, string])[] = [
  * （`//` / `#` / `--` / `;` / `/*` / `<!--`）——不这么收紧的话，正文里随便
  * 一个 `a.b` 形状的词都会被抓成文件名。
  */
-export function 按文件名线索(文: string): string | null {
-  for (const 行 of 文.split(/\r\n?|\n/).slice(0, 线索行数)) {
-    const 找 = /^\s*(?:\/\/+|#+|--+|;+|\/\*+|<!--+)\s*([A-Za-z0-9_][\w./-]*\.[A-Za-z0-9]{1,8})\b/.exec(行);
-    if (!找) continue;
-    const 语言 = 按扩展名推语言(找[1]!);
-    if (语言) return 语言;
+export function LanguageFromFilename(text4: string): string | null {
+  for (const line3 of text4.split(/\r\n?|\n/).slice(0, lineSearchRowCount)) {
+    const find = /^\s*(?:\/\/+|#+|--+|;+|\/\*+|<!--+)\s*([A-Za-z0-9_][\w./-]*\.[A-Za-z0-9]{1,8})\b/.exec(line3);
+    if (!find) continue;
+    const language = LanguageFromExtension(find[1]!);
+    if (language) return language;
   }
   return null;
 }
 
 /** 找文件名线索只看开头这么多行。 */
-const 线索行数 = 5;
+const lineSearchRowCount = 5;
 
 /**
  * **三个入口合起来的那一个**：粘贴一段代码时用它。
@@ -502,6 +502,6 @@ const 线索行数 = 5;
  * 分开的理由：`像代码` 是个**否决制**的判断（宁可说不是），而这里是
  * **排序制**的（给个最好的猜测），两者的口径正相反，混在一起两边都会写歪。
  */
-export function 猜代码语言(文: string): string {
-  return 按文件名线索(文) ?? 按内容猜语言(文) ?? "";
+export function guessCodeLanguage(text4: string): string {
+  return LanguageFromFilename(text4) ?? GuessLanguageFromContent(text4) ?? "";
 }

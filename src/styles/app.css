@@ -51,6 +51,43 @@ body {
   overflow: hidden; /* 滚动条交给各自的面板，body 不滚 */
 }
 
+/* ── 滚动条 ─────────────────────────────────────────────────────────────
+ * WebKitGTK 默认画一条实心方角滑块，和圆角、半透明的主题控件不是一套语言。
+ * 轨道保持透明，滑块用正文弱化色兑透明；3px 透明边框把真实可见宽度收到
+ * 4px，命中区仍有 10px。悬停 / 拖动时只加深，不突然加宽，避免正文横跳。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg-faint) 38%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 28px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-faint) 38%, transparent);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  background: color-mix(in srgb, var(--fg-faint) 60%, transparent);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+}
+
 /* ── 界面字号**真的管到整个界面**（2026-10-16 修）──────────────────────
  *
  * 用户报的：「这里的字体控制只能控制编辑区的，而不是整个界面的所有文字。」
@@ -205,15 +242,41 @@ button {
   align-items: center;
   gap: var(--spacing);
   height: var(--toolbar-height);
+  /* 顶栏只承载一行紧凑菜单。按钮、菜单项再高也不允许把整条栏撑开； */
+  /* 外置主题仍可把它设得更矮，但不能突破这个上限。 */
+  max-height: 28px;
   padding: 0 var(--spacing);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--toolbar-border);
+  background: var(--toolbar-surface);
+  color: var(--toolbar-fg);
   box-shadow: var(--toolbar-shadow);
   flex: none;
   /* ⚠️ 这两行是给菜单弹层用的。工具条在 DOM 里排在 `.app-body` **前面**，
      不提升层级的话，展开的菜单会被下面的侧栏和正文盖住一截。 */
   position: relative;
   z-index: 30;
+}
+
+/* 顶栏里的普通按钮与菜单标题共用同一套前景 / 悬停色。放在这里而不是每个
+   主题各写一遍，保证浅色 Adwaita 的深色菜单栏上文字仍然可读。 */
+.toolbar > .btn {
+  height: calc(var(--toolbar-height) - 4px);
+  padding: 0 8px;
+  font-size: 0.9333rem;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--toolbar-fg);
+}
+
+.toolbar > .btn:hover:not(:disabled) {
+  background: var(--toolbar-hover);
+  color: var(--toolbar-fg);
+}
+
+.toolbar > .btn-on {
+  background: var(--toolbar-active);
+  color: var(--toolbar-fg);
 }
 
 /* ⚠️ 这里曾经有一个 `.toolbar-brand`（工具条最左边那两个字 "Nota"）。

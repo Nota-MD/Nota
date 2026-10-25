@@ -19,47 +19,47 @@
  */
 
 import { editorViewCtx, serializerCtx } from "@milkdown/kit/core";
-import { replaceAll } from "@milkdown/kit/utils";
+import { replaceAll as replaceAllContent } from "@milkdown/kit/utils";
 import { TextSelection } from "@milkdown/kit/prose/state";
 
 // 开头那段 YAML front matter 的拆分/拼回/改写。**只在这个文件与 `assemble.ts`
 // 的边界上用**，别处不许各自去切一刀（判据只有一份）。理由见它的文件头。
 // ⚠️ 装配那一侧只要 `拼回前置块`（`markdownUpdated` 报出去的是整篇）；切分与
 // 改写都在这儿——"活的那一段"住在本函数的闭包里。
-import { 拆前置块, 拼回前置块, 换前置块, 新建前置块模板 } from "@/editor/front-matter";
+import { splitFrontMatter, joinFrontMatter, replaceFrontMatter, newFrontMatterTemplate } from "@/editor/front-matter";
 
 // ⚠️ **装配（`.config()` ＋ 整条 `.use()` 插件链）2026-10-07 整块搬去了
 // `./assemble`**（本文件那天 1006 行，`docs/07` 第 89 项）：那边只管"一次性把
 // 一切装上去"，本文件只剩"实例建好之后怎么用"（句柄、front matter 的读写、
 // 存盘拼回）。⚠️ 那条链的**顺序就是语义**，别在那边随手挪 `.use()`。
-import { 装配实例 } from "./assemble";
+import { installConfigureActualExample } from "./assemble";
 // ⚠️ 命令表里那几条"先看一眼光标在哪、再一笔事务里改两处"的实现
 //（`insert.ts` 的任务列表 / 清除格式 / 表格增删 / 公式块 / 目录，`footnote.ts`
 // 的插脚注）2026-09-28 **跟着表一起搬去了 `./command-table`**——本文件不再直接
 // 引它们，对 `insert.ts` 也不再是"唯一的调用点"了。
-import { 跑命令 } from "./command-table";
-import { 滚动到位置 } from "./scroll-into-view";
+import { runCommand } from "./command-table";
+import { rollActionToPosition } from "./scroll-into-view";
 // 就地改动预览（`nota.ui.review_diff`）。⚠️ 算法与两种看法在 `review.ts` 里，
 // 这里只用它那一侧的适配层。
-import { 摘看法, 设看法, type 改动预览, type 预览看法 } from "./review";
+import { removeViewMode, setViewMode2, type changePreview, type previewMode } from "./review";
 // ⚠️ `预览插件` / `预览中吗` 跟着装配那一块走了；这里只剩"换文档时推给
 // 活着的实例"那一条路要用的 `设预览`。
-import { 设预览 } from "./review-prose";
+import { setPreview } from "./review-prose";
 // ⚠️ 三种行内扩展的默认值在这儿：`options.inlineMarks` 没传时就是它。
-import { 默认行内扩展开关 } from "./inline-marks";
+import { DefaultInlineExtensionFlags } from "./inline-marks";
 // ⚠️ `undefined` 落到它（`input` 档），与 Rust 那边的 `Default` 一致。
-import { 默认标点设置 } from "./smart-punctuation";
+import { DefaultPunctuationSettings } from "./smart-punctuation";
 // 写作模式（专注 / 打字机）：装配在 `assemble.ts`，这里管"开关被拨动时推给
 // 活着的实例"。
-import { 滚到当前行, 设写作模式, type 写作模式 } from "./writing-modes";
+import { rollToCurrentLine, setWritingMode, type WritingMode } from "./writing-modes";
 // 查找与替换。**匹配逻辑在那边**，这里只把它的命令接到句柄上；
 // 源码模式那一侧共用同一个纯函数（见那个文件头）。
 import {
-  设查询,
-  走,
-  清除,
-  替换当前,
-  全部替换,
+  setQuery,
+  walk,
+  clearRemove,
+  replaceReplaceCurrent,
+  replaceAll as replaceAllMatches,
   type FindOptions,
 } from "./find";
 
@@ -74,7 +74,7 @@ import {
 export type {
   EditorCommand,
   CommandPayload,
-  选区内容,
+  SelectionContent,
   EditorHandle,
   CreateOptions,
 } from "./create-types";
@@ -106,7 +106,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     root,
     initialMarkdown,
     onChange,
-    文档路径 = null,
+    documentPath = null,
     readOnly = false,
     physics = false,
     // ⚠️ 默认 `false` = **宽松档**，与 `Settings.strict_markdown` 的默认值一致
@@ -121,16 +121,16 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   // 三种行内扩展语法的开关。**建实例时取一次**（下面 `.use()` 那几行要它，
   // 而转换器是捕获式地拿着它的）——改设置要重建编辑器，与 `physics` 同一条
   // 口径，理由见 `create-types.ts` 的 `inlineMarks` 那一格。
-  const 行内扩展 = options.inlineMarks ?? 默认行内扩展开关;
+  const inlineExtensions = options.inlineMarks ?? DefaultInlineExtensionFlags;
 
   // 智能标点那一组。**同样建实例时取一次**（输入规则是注册制的），
   // 改设置要重建编辑器——理由见 `create-types.ts` 的 `标点` 那一格。
   // ⚠️ `undefined` 落到 `默认标点设置`（`input`），与 Rust 那边的 `Default` 一致。
-  const 标点 = options.标点 ?? 默认标点设置;
+  const punctuation = options.punctuation ?? DefaultPunctuationSettings;
 
   // 自动更正开不开。⚠️ `undefined` **不等于关**：Rust 那边的默认是 `true`，
   // 这里跟着取 `true`（见 `create-types.ts` 的 `自动更正` 那一格）。
-  const 自动更正 = options.自动更正 ?? true;
+  const selfActionMoreCorrect = options.selfActionMoreCorrect ?? true;
 
   // Emoji（短代码替换 ＋ 输入补全）。⚠️ 同样是**建实例时取一次**：
   // 输入规则是注册制的、补全面板那条插件也建在这里，改设置要重建编辑器
@@ -140,7 +140,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   // 智能符号补全（`ui/pane-editors.ts` 传进来，来自 `settings.editor.smart_symbols`）。
   // ⚠️ `undefined` **不等于关**：Rust 那边的默认是 `true`（用户 2026-09-28
   // 点名「默认为开」），这里跟着取 `true`——见 `create-types.ts` 的 `智能符号` 那一格。
-  const 智能符号 = options.智能符号 ?? true;
+  const smartAbleSymbolNumber = options.smartAbleSymbolNumber ?? true;
 
   // ── 开头那段 front matter：切下来存住，出去的时候原样拼回 ──────────────
   //
@@ -151,37 +151,37 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   // ⚠️ **只读实例也切**（分屏右侧预览、导出用的离屏实例）：那两个同样只该
   // 画**正文**，front matter 是元数据，不该出现在预览和导出的 HTML 里。
   // 它们不读 `getMarkdown`，所以拼回那一步对它们是空跑。
-  const 首部 = 拆前置块(initialMarkdown);
-  let 前置块 = 首部.前置块;
+  const header2 = splitFrontMatter(initialMarkdown);
+  let frontMatter = header2.frontMatter;
 
   /**
    * 上一次设进去的那份预览。**按对象身份去重**用的（见 `setReview`）。
    * 初值是建实例时那一份，与插件 `init` 里算的是同一个对象。
    */
-  let 上次预览: 改动预览 | null = options.review ?? null;
+  let aboveCountPreview: changePreview | null = options.review ?? null;
 
   // 装配（`.config()` ＋ 整条 `.use()` 链）2026-10-07 整块搬去了 `./assemble`
   //（本文件那天 1006 行，`docs/07` 第 89 项）。这里只把"装什么"列成一张清单：
   // 下面每一项为什么是回调、为什么是这个值，见 `assemble.ts` 与 `create-types.ts`。
-  const editor = await 装配实例({
+  const editor = await installConfigureActualExample({
     root,
-    正文: 首部.正文,
+    body2: header2.body2,
     physics,
     readOnly,
-    文档路径,
+    documentPath,
     strict,
-    行内扩展,
-    标点,
-    自动更正,
+    inlineExtensions,
+    punctuation,
+    selfActionMoreCorrect,
     emoji,
-    智能符号,
+    smartAbleSymbolNumber,
     onChange,
     // ⚠️ 取的是**这一刻**那一段：`markdownUpdated` 拼回去时它可能已经换了
     //（换文档、源码模式切回来都走 `setMarkdown`，那里会重新切一刀）。
-    取前置块: () => 前置块,
+    getFrontMatter: () => frontMatter,
     // ⚠️ 斜杠菜单那条路要的是 `跑一条命令`**本身**（它是本文件的函数声明，
     // 会被提升，所以这里包一层不影响它"在 `.use()` 之后才定义"）。
-    跑一条命令: (name, payload) => 跑一条命令(name, payload),
+    runOneItemCommand: (name, payload) => runOneItemCommand(name, payload),
     options,
   });
 
@@ -189,10 +189,10 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   // 插件那个 `view.update` 在"建好那一刻"不会跑（没有事务），不补这一下
   // 的话用户得先打个字才看得到居中效果。
   if (!readOnly && options.writingModes?.typewriter) {
-    editor.action((ctx) => 滚到当前行(ctx.get(editorViewCtx)));
+    editor.action((ctx) => rollToCurrentLine(ctx.get(editorViewCtx)));
   }
 
-  const 聚焦 = () =>
+  const clusterFocus = () =>
     editor.action((ctx) => {
       ctx.get(editorViewCtx).focus();
     });
@@ -213,17 +213,17 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
    * 在源码里排在它前面。提升让这件事成立；它里面用的 `editor`（`const`）
    * 到真正被调用时早已赋值，不存在暂时性死区那一类问题。
    */
-  function 跑一条命令(name: EditorCommand, payload?: CommandPayload): void {
+  function runOneItemCommand(name: EditorCommand, payload?: CommandPayload): void {
     // ⚠️ **front matter 那一条在这一层拦下来**，不进 `command-table`：那张表
     // 只吃 `(editor, payload)`，够不着这个闭包里的 `前置块`，也够不着
     // `onChange`（见 `command-table.ts` 里 `Exclude` 那一段）。
     if (name === "frontMatter") {
-      写前置块(payload?.frontMatter);
+      writeFrontMatter(payload?.frontMatter);
       return;
     }
     // ⚠️ 表与派发逻辑 2026-09-28 搬去了 `./command-table`（行数），这里只剩
     // 一层薄壳——两个用家（`runCommand` 与斜杠菜单）仍然走同一个入口。
-    跑命令(editor, name, payload);
+    runCommand(editor, name, payload);
   }
 
   /**
@@ -243,26 +243,26 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
    * ⚠️ 只读实例（分屏右侧预览、导出用的离屏实例）**什么都不做**：那两份连
    * `onChange` 都没有，改了也传不出去，只会在自己的闭包里留下一份假的文本。
    */
-  function 写前置块(内文: string | null | undefined): void {
+  function writeFrontMatter(body: string | null | undefined): void {
     if (readOnly) return;
-    const 新块 =
-      内文 === undefined
-        ? 前置块 ?? 换前置块(null, 新建前置块模板)
-        : 换前置块(前置块, 内文 ?? ""); // `null` 与空白串一个意思：删掉这一段
-    if (新块 === 前置块) return; // 一个字都没变（含"本来就有、这次只是确保"）
-    前置块 = 新块;
+    const newValueBlock =
+      body === undefined
+        ? frontMatter ?? replaceFrontMatter(null, newFrontMatterTemplate)
+        : replaceFrontMatter(frontMatter, body ?? ""); // `null` 与空白串一个意思：删掉这一段
+    if (newValueBlock === frontMatter) return; // 一个字都没变（含"本来就有、这次只是确保"）
+    frontMatter = newValueBlock;
     // ⚠️ 报出去的是**整篇**（拼回前置块），与 `getMarkdown`、`markdownUpdated`
     // 那两条路同一个口径——调用方手里那份文本永远要跟磁盘上那份对得上。
     onChange?.(
-      拼回前置块(
-        前置块,
+      joinFrontMatter(
+        frontMatter,
         editor.action((ctx) => ctx.get(serializerCtx)(ctx.get(editorViewCtx).state.doc)),
       ),
     );
   }
 
   /** 把插入点挪到文档最开头。⚠️ 只给"刚打开一篇文档"，见接口上那条长注释。 */
-  const 光标到开头 = () =>
+  const cursorToOpenHead = () =>
     editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       const { state } = view;
@@ -285,7 +285,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         const serializer = ctx.get(serializerCtx);
-        return 拼回前置块(前置块, serializer(view.state.doc));
+        return joinFrontMatter(frontMatter, serializer(view.state.doc));
       }),
 
     setMarkdown: (markdown: string) => {
@@ -306,11 +306,11 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       // 换文档、插件改文档、源码模式切回来都走这条路，front matter 可能
       // 已经换成另一段了。忘了这一下的话症状是"切一次模式，开头那几行换成
       // 上一份文档的"——比丢掉还难查。
-      const 新的 = 拆前置块(markdown);
-      前置块 = 新的.前置块;
-      const 替换 = replaceAll(新的.正文);
+      const newValueOf = splitFrontMatter(markdown);
+      frontMatter = newValueOf.frontMatter;
+      const replaceReplace = replaceAllContent(newValueOf.body2);
       editor.action((ctx) => {
-        替换(ctx);
+        replaceReplace(ctx);
         if (readOnly) return;
         const view = ctx.get(editorViewCtx);
         view.dispatch(
@@ -319,8 +319,8 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       });
     },
 
-    focus: 聚焦,
-    focusAtStart: 光标到开头,
+    focus: clusterFocus,
+    focusAtStart: cursorToOpenHead,
 
     // **在光标处插一段**（插件的 `nota.document.insert_at_cursor`，`docs/07`
     // 第 14 项）。⚠️ 守卫与 `脚本里的插入` 同一个形状：少判 `readOnly` 会在
@@ -334,7 +334,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // ⚠️ 焦点不抢过来：这条路是**插件**发起的，用户可能正在别处（面板里）
     // 点着，把焦点抢回正文会让他刚点的那一下白点。要抢的是"用户主动按了
     // 某个按钮"那类动作，不在这一条里。
-    插入在光标处: (text: string) => {
+    insertAtCursorPlace: (text: string) => {
       if (readOnly) return false;
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
@@ -344,33 +344,33 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       return true;
     },
 
-    setWritingModes: (模式: 写作模式) =>
-      editor.action((ctx) => 设写作模式(ctx.get(editorViewCtx), 模式)),
+    setWritingModes: (mode2: WritingMode) =>
+      editor.action((ctx) => setWritingMode(ctx.get(editorViewCtx), mode2)),
 
-    setReview: (预览: 改动预览 | null, 看法: 预览看法) =>
+    setReview: (preview: changePreview | null, viewMode: previewMode) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         // ⚠️ 只有**预览换了**才派事务：派一次要序列化整篇 + 解析整篇目标文本，
         // 光切看法不该付这个代价（看法是纯 CSS 的开关）。
-        if (预览 !== 上次预览) {
-          上次预览 = 预览;
-          设预览(view, 预览);
+        if (preview !== aboveCountPreview) {
+          aboveCountPreview = preview;
+          setPreview(view, preview);
         }
-        if (预览) 设看法(view.dom, 看法);
-        else 摘看法(view.dom);
+        if (preview) setViewMode2(view.dom, viewMode);
+        else removeViewMode(view.dom);
       }),
 
     // ── 查找与替换。每条就是"拿到 view，交给 `find.ts` 里的函数"──────
     // ⚠️ 不在这里写任何匹配逻辑：口径只有 `find.ts` 一份（见它的文件头）。
     setFind: (query: string, options: FindOptions) =>
-      editor.action((ctx) => 设查询(ctx.get(editorViewCtx), query, options)),
-    findStep: (方向: 1 | -1) =>
-      editor.action((ctx) => 走(ctx.get(editorViewCtx), 方向)),
-    clearFind: () => editor.action((ctx) => 清除(ctx.get(editorViewCtx))),
+      editor.action((ctx) => setQuery(ctx.get(editorViewCtx), query, options)),
+    findStep: (direction: 1 | -1) =>
+      editor.action((ctx) => walk(ctx.get(editorViewCtx), direction)),
+    clearFind: () => editor.action((ctx) => clearRemove(ctx.get(editorViewCtx))),
     replaceCurrent: (text: string) =>
-      editor.action((ctx) => 替换当前(ctx.get(editorViewCtx), text)),
+      editor.action((ctx) => replaceReplaceCurrent(ctx.get(editorViewCtx), text)),
     replaceAll: (text: string) =>
-      editor.action((ctx) => 全部替换(ctx.get(editorViewCtx), text)),
+      editor.action((ctx) => replaceAllMatches(ctx.get(editorViewCtx), text)),
 
     // 选区那一份交给 ProseMirror 自己序列化（`serializeForClipboard`）：
     // 它给出的 HTML 与按 Ctrl+C 时写进剪贴板的**是同一份**，所以菜单里点
@@ -379,7 +379,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     // ⚠️ 这里刻意不接 `transformCopied` 之类的钩子：复制出去的内容该是什么样，
     // 唯一的口径是 PM 那一份。想改就改 `clipboardTextSerializer`（全局一处），
     // 在调用点各写一份的话，两种复制方式迟早分叉。
-    选区: () =>
+    selection: () =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         const sel = view.state.selection;
@@ -388,7 +388,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
         return { text, html: dom.innerHTML };
       }),
 
-    跳到标题: ({ index }) =>
+    jumpToMarkTitle: ({ index }) =>
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         // 数到第 `index` 个 heading 的**起始位置**（即它前面那个边界，
@@ -419,13 +419,13 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
         view.focus();
         // ⚠️ 滚放在 `focus()` **之后**：焦点一交，浏览器会按自己的规矩把 DOM 选区
         // 拉进视野（可能只滚一点点），最后这一下才是"标题落在顶部"的那一下。
-        滚动到位置(view, pos + 1);
+        rollActionToPosition(view, pos + 1);
       }),
 
     runCommand: (name: EditorCommand, payload?: CommandPayload) => {
       // ⚠️ 命令本身在 `跑一条命令` 里（与斜杠菜单共用一份实现），这里只多
       // 一件"把焦点交回正文"的收尾——见那条函数上的注释。
-      跑一条命令(name, payload);
+      runOneItemCommand(name, payload);
 
       // ⚠️ 跑完必须把焦点交回编辑区。命令是从**菜单按钮**上点下去的，
       // 那一刻 DOM 焦点在按钮上；命令本身改的是 ProseMirror 的 state
@@ -439,7 +439,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       // 理由与"斜杠菜单不走这一层"是同一条：**焦点本来就在该在的地方**。
       // （从菜单栏点那一条进来的情形代价也小：焦点留在菜单上，用户点一下
       // 编辑框就行——反过来"光标不知什么时候被夺走"要难查得多。）
-      if (name !== "frontMatter") 聚焦();
+      if (name !== "frontMatter") clusterFocus();
 
       // 这一侧恒为 `true`（见 `EditorHandle.runCommand` 那段）。
       return true;

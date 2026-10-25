@@ -91,7 +91,7 @@ import type { MarkType } from "@milkdown/kit/prose/model";
 /* ── 一张表：四种标记的全部差异都在这里 ─────────────────────────────── */
 
 /** 本仓自造的四个 mdast 节点类型名。 */
-export type 标记节点名 =
+export type MarkNodeName =
   | "notaHighlight"
   | "notaSuperscript"
   | "notaSubscript"
@@ -111,9 +111,9 @@ export type 标记节点名 =
  * 合成一个字段，代价是编辑区里出现 `<highlight>` 这种浏览器不认识的元素，
  * 2026-09-27 拆开（详见 [`标记规格.html标签`] 上那段）。
  */
-interface 标记规格 {
+interface MarkSpec {
   /** PM schema 里的 mark 名，也是 `CommandState` / `FormatBar` 的键。 */
-  标签: string;
+  label: string;
   /**
    * 编辑区里真正渲染出来的 HTML 标签名（`parseDOM` / `toDOM` 认的那个）。
    *
@@ -127,21 +127,21 @@ interface 标记规格 {
    * `highlight { … }` 这种没人读得懂的规则，而且 `<sup>` / `<sub>` 自带的那套
    * 上下标排版也全丢了（自己写一遍必然和浏览器的对不齐）。2026-09-27 拆开。
    */
-  html标签: string;
+  htmlLabel: string;
   /** 本仓自造的 mdast 节点类型。 */
-  mdast: 标记节点名;
+  mdast: MarkNodeName;
   /** 源码里的左符号。 */
-  左: string;
+  left: string;
   /** 源码里的右符号。 */
-  右: string;
+  right: string;
   /**
    * 在**一个文本节点的内部**找一对符号。**sticky（`y` 标志）**，理由见
    * `切文本` 顶上那段——`y` 让 `lastIndex` 说了算，于是下标那条用到的
    * `(?<!~)` **能看到前一个真实字符**。
    */
-  正则: RegExp;
+  correctRule: RegExp;
   /** 对应 `settings/markdown.rs` 里哪一个开关；`null` = 恒开（下划线）。 */
-  设置键: keyof 行内扩展开关 | null;
+  settingKey: keyof InlineExtensionFlags | null;
 }
 
 /**
@@ -149,59 +149,59 @@ interface 标记规格 {
  * 四条的正则互不相交（符号各不相同），所以现在换顺序也不会有差别——
  * 但将来若加一条前缀重叠的（比如有人想要 `~~~x~~~`），就得想清楚谁先。
  */
-export const 标记表: readonly 标记规格[] = [
+export const markTable: readonly MarkSpec[] = [
   {
-    标签: "highlight",
-    html标签: "mark",
+    label: "highlight",
+    htmlLabel: "mark",
     mdast: "notaHighlight",
-    左: "==",
-    右: "==",
+    left: "==",
+    right: "==",
     // 内容里不许出现 `=`，也不许跨行（一个文本节点本来也不跨行）。
-    正则: /==(?=\S)([^=\n]*?\S)==/y,
-    设置键: "highlight",
+    correctRule: /==(?=\S)([^=\n]*?\S)==/y,
+    settingKey: "highlight",
   },
   {
-    标签: "superscript",
-    html标签: "sup",
+    label: "superscript",
+    htmlLabel: "sup",
     mdast: "notaSuperscript",
-    左: "^",
-    右: "^",
-    正则: /\^(?=\S)([^\^\n]*?\S)\^/y,
-    设置键: "superscript",
+    left: "^",
+    right: "^",
+    correctRule: /\^(?=\S)([^\^\n]*?\S)\^/y,
+    settingKey: "superscript",
   },
   {
-    标签: "subscript",
-    html标签: "sub",
+    label: "subscript",
+    htmlLabel: "sub",
     mdast: "notaSubscript",
-    左: "~",
-    右: "~",
+    left: "~",
+    right: "~",
     // ⚠️ 前后各一个"邻居不是 `~`"的断言：没有它，删除线的 `~~x~~` 会被本仓
     // 这条从中间咬掉一层（退化成"一个下标里包着一个波浪号"）。删除线是
     // `preset-gfm` 的 `delete` 节点，**在解析阶段就已经从文本里拿走了**，
     // 正常情况下根本轮不到这里；这个断言防的是"没被 gfm 认出来的那种写法"
     //（比如前后贴着中文的 `张~~三~~`——`\w` 不含中文，gfm 那条漏得掉）。
-    正则: /(?<!~)~(?=\S)([^~\n]*?\S)~(?!~)/y,
-    设置键: "subscript",
+    correctRule: /(?<!~)~(?=\S)([^~\n]*?\S)~(?!~)/y,
+    settingKey: "subscript",
   },
   {
-    标签: "underline",
-    html标签: "u",
+    label: "underline",
+    htmlLabel: "u",
     mdast: "notaUnderline",
-    左: "<u>",
-    右: "</u>",
+    left: "<u>",
+    right: "</u>",
     // 下划线走 HTML 标签（Typora 也是这个写法）。⚠️ **它这一条根本不经过
     // `切文本`**：remark-parse 把 `<u>` 认成**裸 HTML 节点**，所以
     // `x</u>` 的左右两半在 mdast 里是两颗 `html` 节点、中间夹着文本。
     // 这里那条正则只给**输入规则**用（用户现敲 `<u>x</u>`）。解析那一侧
     // 走的是 `并下划线`，见下面。
-    正则: /<u>(?=\S)([^<\n]*?\S)<\/u>/y,
-    设置键: null,
+    correctRule: /<u>(?=\S)([^<\n]*?\S)<\/u>/y,
+    settingKey: null,
   },
 ];
 
 /** PM mark 名 → 规格。`command-state.ts` / `FormatBar` 那一侧要按键查。 */
-export function 按标签查(标签: string): 标记规格 | undefined {
-  return 标记表.find((一) => 一.标签 === 标签);
+export function pressLabelCheck(label: string): MarkSpec | undefined {
+  return markTable.find((value) => value.label === label);
 }
 
 /**
@@ -223,7 +223,7 @@ export function 按标签查(标签: string): 标记规格 | undefined {
  * 于是关掉高亮之后存盘会多出两个反斜杠——**又是一次"自动修复"**。
  * 这一半由本文件的 `不转义行首等号` 兜住，理由见那个函数。
  */
-export interface 行内扩展开关 {
+export interface InlineExtensionFlags {
   highlight: boolean;
   superscript: boolean;
   subscript: boolean;
@@ -237,14 +237,14 @@ export interface 行内扩展开关 {
  * ⚠️ 下划线**不在这张表里**：它没有开关，恒开。理由见文件头那段
  *（与 Typora 一致，`<u>x</u>` 本来就是裸 HTML，关掉它等于关掉 HTML 标签）。
  */
-export const 默认行内扩展开关: 行内扩展开关 = {
+export const DefaultInlineExtensionFlags: InlineExtensionFlags = {
   highlight: true,
   superscript: true,
   subscript: true,
 };
 
 /** 四条序列化 handler 的类型。**从 ctx 反推**（与 `math-delim.ts` 同一套写法）。 */
-type 串化选项 = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
+type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
 /**
  * 一条序列化处理器。
  *
@@ -255,17 +255,17 @@ type 串化选项 = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
  * 的名字当然不在那个联合里，但它们与 `text` 是**同一个** `Handle` 形状
  * （`Handlers` 里每个值都是 `Handle`），拿 `text` 那一条当代表是准的。
  */
-type 处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]>;
+type PlaceManageDevice = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 /** `$remark` 工厂的类型（从它自己的参数反推，不引额外类型）。 */
-type 转换器工厂 = Parameters<typeof $remark<"行内标记", undefined>>[1];
+type ConvertReplaceDeviceWorkFactory = Parameters<typeof $remark<"行内标记", undefined>>[1];
 
 /* ── 第一格：文本 → mdast 片段（把一个文本节点切成几段）─────────────── */
 
 /** 切出来的一段：要么是纯文字，要么是"某种标记包着几段"。 */
-export interface 片段 {
-  类型?: 标记节点名;
-  文?: string;
-  孩子们?: 片段[];
+export interface fragment {
+  type?: MarkNodeName;
+  text4?: string;
+  children?: fragment[];
 }
 
 /**
@@ -283,63 +283,63 @@ export interface 片段 {
  * ⚠️ 递归一层：内容里还能套着**别的**标记（`==a^2^==`）。深度由内容长度兜着，
  * 每次递归都吃掉至少一个字符，有限。
  */
-export function 切文本(文: string, 要: ReadonlySet<标记节点名>): 片段[] | null {
-  let 出: 片段[] | null = null;
-  let 待切 = 0;
+export function splitText(text4: string, want: ReadonlySet<MarkNodeName>): fragment[] | null {
+  let output2: fragment[] | null = null;
+  let pendingSplit = 0;
   let i = 0;
 
-  while (i < 文.length) {
-    let 中了: { 规格: 标记规格; 到: number; 内容: string } | null = null;
-    for (const 规格 of 标记表) {
+  while (i < text4.length) {
+    let middleDone: { spec: MarkSpec; to2: number; content: string } | null = null;
+    for (const spec of markTable) {
       // 下划线不走这里（它是 HTML 节点，见 `并下划线`）。
-      if (规格.设置键 === null || !要.has(规格.mdast)) continue;
-      规格.正则.lastIndex = i;
-      const m = 规格.正则.exec(文);
+      if (spec.settingKey === null || !want.has(spec.mdast)) continue;
+      spec.correctRule.lastIndex = i;
+      const m = spec.correctRule.exec(text4);
       if (m) {
-        中了 = { 规格, 到: 规格.正则.lastIndex, 内容: m[1] ?? "" };
+        middleDone = { spec, to2: spec.correctRule.lastIndex, content: m[1] ?? "" };
         break;
       }
     }
 
-    if (!中了) {
+    if (!middleDone) {
       i++;
       continue;
     }
 
-    出 ??= [];
-    if (i > 待切) 出.push({ 文: 文.slice(待切, i) });
-    出.push({
-      类型: 中了.规格.mdast,
-      孩子们: 切文本(中了.内容, 要) ?? [{ 文: 中了.内容 }],
+    output2 ??= [];
+    if (i > pendingSplit) output2.push({ text4: text4.slice(pendingSplit, i) });
+    output2.push({
+      type: middleDone.spec.mdast,
+      children: splitText(middleDone.content, want) ?? [{ text4: middleDone.content }],
     });
-    i = 中了.到;
-    待切 = i;
+    i = middleDone.to2;
+    pendingSplit = i;
   }
 
-  if (出 && 待切 < 文.length) 出.push({ 文: 文.slice(待切) });
-  return 出;
+  if (output2 && pendingSplit < text4.length) output2.push({ text4: text4.slice(pendingSplit) });
+  return output2;
 }
 
 /* ── 第二格：mdast 树 → 换成自造节点（$remark）──────────────────────── */
 
 /** 从一条片段造一条 mdast 节点。 */
-function 造节点(片: 片段): MarkdownNode {
-  if (片.类型) {
+function createNode(slice: fragment): MarkdownNode {
+  if (slice.type) {
     return {
-      type: 片.类型,
-      children: (片.孩子们 ?? []).map(造节点),
+      type: slice.type,
+      children: (slice.children ?? []).map(createNode),
     } as unknown as MarkdownNode;
   }
-  return { type: "text", value: 片.文 ?? "" };
+  return { type: "text", value: slice.text4 ?? "" };
 }
 
 /** 有 `children` 的那种节点。 */
-interface 有孩子 extends MarkdownNode {
+interface HasChild extends MarkdownNode {
   children: MarkdownNode[];
 }
 
-function 是容器(节: MarkdownNode): 节 is 有孩子 {
-  return Array.isArray((节 as 有孩子).children);
+function isContainer(section: MarkdownNode): section is HasChild {
+  return Array.isArray((section as HasChild).children);
 }
 
 /**
@@ -350,16 +350,16 @@ function 是容器(节: MarkdownNode): 节 is 有孩子 {
  * `tsc --noEmit` 会连着报好几处 "Type '{}' is not assignable to type 'string'"。
  * 这里收一次，全文件都用它。
  */
-function 读值(节: MarkdownNode): string {
-  return typeof 节.value === "string" ? 节.value : "";
+function readValue(section: MarkdownNode): string {
+  return typeof section.value === "string" ? section.value : "";
 }
 
 /** 读一条节点的纯文字（配不成对时要用它把内容退回去）。 */
-function 纯文字(节: MarkdownNode): string {
-  if (节.type === "text") return 读值(节);
-  const 孩子们 = (节 as 有孩子).children;
-  if (!Array.isArray(孩子们)) return "";
-  return 孩子们.map(纯文字).join("");
+function plainText2(section: MarkdownNode): string {
+  if (section.type === "text") return readValue(section);
+  const children = (section as HasChild).children;
+  if (!Array.isArray(children)) return "";
+  return children.map(plainText2).join("");
 }
 
 /**
@@ -391,7 +391,7 @@ function 纯文字(节: MarkdownNode): string {
  * 文字不在同一个 `children` 里（`html-block.ts` 那张 `块级容器` 表管的就是它）。
  */
 /** mdast 里**确定是块级**的节点名。见 `并下划线` 里那段注释。 */
-const 块级节点: ReadonlySet<string> = new Set([
+const blockLevelNode: ReadonlySet<string> = new Set([
   "paragraph",
   "heading",
   "blockquote",
@@ -407,56 +407,56 @@ const 块级节点: ReadonlySet<string> = new Set([
   "yaml",
 ]);
 
-function 并下划线(孩子: MarkdownNode[]): MarkdownNode[] {
-  const 出: MarkdownNode[] = [];
+function andBelowDrawLine(child: MarkdownNode[]): MarkdownNode[] {
+  const output2: MarkdownNode[] = [];
   let i = 0;
-  while (i < 孩子.length) {
-    const 头 = 孩子[i]!;
-    if (头.type === "html" && /^<u>\s*$/i.test(读值(头))) {
+  while (i < child.length) {
+    const head2 = child[i]!;
+    if (head2.type === "html" && /^<u>\s*$/i.test(readValue(head2))) {
       let j = i + 1;
-      let 找着 = -1;
-      for (; j < 孩子.length; j++) {
-        const 一 = 孩子[j]!;
-        if (一.type === "html" && /^<\/u>\s*$/i.test(读值(一))) {
-          找着 = j;
+      let findActive = -1;
+      for (; j < child.length; j++) {
+        const value = child[j]!;
+        if (value.type === "html" && /^<\/u>\s*$/i.test(readValue(value))) {
+          findActive = j;
           break;
         }
         // ⚠️ **判据是"块级"而不是"有 `children`"**（2026-09-27 修，见下面那段）。
-        if (块级节点.has(一.type)) break;
+        if (blockLevelNode.has(value.type)) break;
       }
-      if (找着 > i + 1) {
-        const 中 = 孩子.slice(i + 1, 找着);
-        出.push({
+      if (findActive > i + 1) {
+        const middle = child.slice(i + 1, findActive);
+        output2.push({
           type: "notaUnderline",
-          children: 中,
+          children: middle,
         } as unknown as MarkdownNode);
-        i = 找着 + 1;
+        i = findActive + 1;
         continue;
       }
     }
-    出.push(头);
+    output2.push(head2);
     i++;
   }
-  return 出;
+  return output2;
 }
 
 /** 走一遍整棵树：文本节点切片、相邻的 `<u>` 配对。 */
-function 重写(孩子: MarkdownNode[], 要: ReadonlySet<标记节点名>): MarkdownNode[] {
-  const 出: MarkdownNode[] = [];
-  for (const 孩 of 孩子) {
-    if (孩.type === "text") {
-      const 片 = 切文本(读值(孩), 要);
-      if (片) {
-        for (const 一 of 片) 出.push(造节点(一));
+function heavyWrite(child: MarkdownNode[], want: ReadonlySet<MarkNodeName>): MarkdownNode[] {
+  const output2: MarkdownNode[] = [];
+  for (const child2 of child) {
+    if (child2.type === "text") {
+      const slice = splitText(readValue(child2), want);
+      if (slice) {
+        for (const value of slice) output2.push(createNode(value));
         continue;
       }
-      出.push(孩);
+      output2.push(child2);
       continue;
     }
-    if (是容器(孩)) 孩.children = 重写(孩.children, 要);
-    出.push(孩);
+    if (isContainer(child2)) child2.children = heavyWrite(child2.children, want);
+    output2.push(child2);
   }
-  return 并下划线(出);
+  return andBelowDrawLine(output2);
 }
 
 /**
@@ -467,14 +467,14 @@ function 重写(孩子: MarkdownNode[], 要: ReadonlySet<标记节点名>): Mark
  * 要**重建编辑器**才生效——这与 `physics` / `strict` 是同一条口径，理由也一样
  *（"设置像没生效"的毛病最难被当成 bug 报上来）。
  */
-export function 行内标记转换器(开关: 行内扩展开关) {
-  const 要 = new Set<标记节点名>(
-    标记表
-      .filter((一) => 一.设置键 === null || 开关[一.设置键])
-      .map((一) => 一.mdast),
+export function inlineMarkTransformer(flag: InlineExtensionFlags) {
+  const want = new Set<MarkNodeName>(
+    markTable
+      .filter((value) => value.settingKey === null || flag[value.settingKey])
+      .map((value) => value.mdast),
   );
-  return (树: MarkdownNode): void => {
-    树.children = 重写(树.children ?? [], 要);
+  return (tree: MarkdownNode): void => {
+    tree.children = heavyWrite(tree.children ?? [], want);
   };
 }
 
@@ -487,29 +487,29 @@ export function 行内标记转换器(开关: 行内扩展开关) {
  * 的树参数是 unified 的 `Root`，与 `MarkdownNode` 不是同一个东西，得让
  * 推断自己去接（所以下面那条箭头函数**不写参数类型**）。
  */
-export function 行内标记解析(开关: 行内扩展开关) {
+export function inlineMarkParse(flag: InlineExtensionFlags) {
   // ⚠️ 拆成"插件本体 ＋ 工厂"两步，**照抄 `math-delim.ts` 的
   // `标美元数插件` ＋ `标美元数工厂`**。⚠️ 别把它简化成
   // `const 工厂: 转换器工厂 = (树) => …`——`转换器工厂` 的返回类型是**插件**
   // （`Plugin<[选项], Root>`，吃的是**选项**），不是转换器，写成那样 `树`
   // 会被推断成选项的类型（这里是 `undefined`），而报错要到 `树 as MarkdownNode`
   // 那一行才出现，看着像"类型断言写错了"。写这份时踩过一次。
-  const 转换器插件: ReturnType<转换器工厂> = () => (树) => {
-    行内标记转换器(开关)(树 as MarkdownNode);
+  const convertReplaceDevicePlugin: ReturnType<ConvertReplaceDeviceWorkFactory> = () => (tree) => {
+    inlineMarkTransformer(flag)(tree as MarkdownNode);
   };
-  const 工厂: 转换器工厂 = () => 转换器插件;
-  return $remark("行内标记", 工厂);
+  const workFactory: ConvertReplaceDeviceWorkFactory = () => convertReplaceDevicePlugin;
+  return $remark("行内标记", workFactory);
 }
 
 /* ── 第三格：schema（四条 mark）＋ 命令 ＋ 输入规则 ──────────────────── */
 
 /** 四条 mark 的公共规格：认 HTML 标签、跟 mdast 节点互相翻译。 */
-function 造规格(一: 标记规格) {
+function createSpec(value: MarkSpec) {
   return {
-    parseDOM: [{ tag: 一.html标签 }],
-    toDOM: () => [一.html标签, 0] as [string, 0],
+    parseDOM: [{ tag: value.htmlLabel }],
+    toDOM: () => [value.htmlLabel, 0] as [string, 0],
     parseMarkdown: {
-      match: (node: MarkdownNode) => node.type === 一.mdast,
+      match: (node: MarkdownNode) => node.type === value.mdast,
       runner: (state: ParserState, node: MarkdownNode, type: MarkType) => {
         state.openMark(type);
         state.next(node.children);
@@ -517,24 +517,24 @@ function 造规格(一: 标记规格) {
       },
     },
     toMarkdown: {
-      match: (mark: { type: { name: string } }) => mark.type.name === 一.标签,
+      match: (mark: { type: { name: string } }) => mark.type.name === value.label,
       runner: (state: SerializerState, mark: unknown) => {
-        state.withMark(mark as never, 一.mdast);
+        state.withMark(mark as never, value.mdast);
       },
     },
   };
 }
 
-export const 高亮规格 = $markSchema("highlight", () => 造规格(标记表[0]!));
-export const 上标规格 = $markSchema("superscript", () => 造规格(标记表[1]!));
-export const 下标规格 = $markSchema("subscript", () => 造规格(标记表[2]!));
-export const 下划线规格 = $markSchema("underline", () => 造规格(标记表[3]!));
+export const highlightSpec = $markSchema("highlight", () => createSpec(markTable[0]!));
+export const superscriptSpec = $markSchema("superscript", () => createSpec(markTable[1]!));
+export const subscriptSpec = $markSchema("subscript", () => createSpec(markTable[2]!));
+export const underlineSpec = $markSchema("underline", () => createSpec(markTable[3]!));
 
 /**
  * 四条 `$markSchema`（`[ctx, 插件]` 那种两元组）。**测试要它**——测试直接
  * `一.ctx(ctx)` 把规格登记进一颗手搓的 Ctx，见 `tests/inline-marks.test.ts`。
  */
-export const 行内标记规格 = [高亮规格, 上标规格, 下标规格, 下划线规格];
+export const inlineMarkSpec = [highlightSpec, superscriptSpec, subscriptSpec, underlineSpec];
 
 /**
  * 交给 `create.ts` 的 `.use()` 那一份。
@@ -567,18 +567,18 @@ export const 行内标记规格 = [高亮规格, 上标规格, 下标规格, 下
  * 不是 `MilkdownPlugin`），所以这里显式 `as unknown as` ——**别把它当成
  * 可疑的强转删掉**，上下游的元组类型本来就不是同一个。
  */
-export const 行内标记规格插件 = 行内标记规格.flat() as unknown as MilkdownPlugin[];
+export const inlineMarkSpecPlugin = inlineMarkSpec.flat() as unknown as MilkdownPlugin[];
 
 /** 四条 toggle 命令。名字与 `命令名表` 一一对应。 */
-export const 行内标记命令 = [
-  $command("ToggleHighlight", (ctx) => () => toggleMark(高亮规格.type(ctx))),
-  $command("ToggleSuperscript", (ctx) => () => toggleMark(上标规格.type(ctx))),
-  $command("ToggleSubscript", (ctx) => () => toggleMark(下标规格.type(ctx))),
-  $command("ToggleUnderline", (ctx) => () => toggleMark(下划线规格.type(ctx))),
+export const inlineMarkCommand = [
+  $command("ToggleHighlight", (ctx) => () => toggleMark(highlightSpec.type(ctx))),
+  $command("ToggleSuperscript", (ctx) => () => toggleMark(superscriptSpec.type(ctx))),
+  $command("ToggleSubscript", (ctx) => () => toggleMark(subscriptSpec.type(ctx))),
+  $command("ToggleUnderline", (ctx) => () => toggleMark(underlineSpec.type(ctx))),
 ];
 
 /** PM mark 名 → toggle 命令的名字。`command-table.ts` 的 `COMMANDS` 表按它派发。 */
-export const 命令名表: Record<string, string> = {
+export const commandNameTable: Record<string, string> = {
   highlight: "ToggleHighlight",
   superscript: "ToggleSuperscript",
   subscript: "ToggleSubscript",
@@ -598,21 +598,21 @@ export const 命令名表: Record<string, string> = {
  * 就会在句子中间乱触发。⚠️ 也不能直接把 `标记表` 里那条拿来用——那是
  * **sticky 的扫描正则**（`lastIndex` 说话），两个用途对不上，所以这里另建一份。
  */
-export function 行内标记输入规则(开关: 行内扩展开关) {
-  return 标记表
-    .filter((一) => 一.设置键 === null || 开关[一.设置键])
-    .map((一) =>
+export function inlineMarkInputRuleRule(flag: InlineExtensionFlags) {
+  return markTable
+    .filter((value) => value.settingKey === null || flag[value.settingKey])
+    .map((value) =>
       $inputRule((ctx) => {
-        const 类型 =
-          一.标签 === "highlight"
-            ? 高亮规格.type(ctx)
-            : 一.标签 === "superscript"
-              ? 上标规格.type(ctx)
-              : 一.标签 === "subscript"
-                ? 下标规格.type(ctx)
-                : 下划线规格.type(ctx);
-        const 源 = 一.正则.source.replace(/\$$/, "");
-        return markRule(new RegExp(`${源}$`), 类型);
+        const type =
+          value.label === "highlight"
+            ? highlightSpec.type(ctx)
+            : value.label === "superscript"
+              ? superscriptSpec.type(ctx)
+              : value.label === "subscript"
+                ? subscriptSpec.type(ctx)
+                : underlineSpec.type(ctx);
+        const source3 = value.correctRule.source.replace(/\$$/, "");
+        return markRule(new RegExp(`${source3}$`), type);
       }),
     );
 }
@@ -638,20 +638,20 @@ export function 行内标记输入规则(开关: 行内扩展开关) {
  * 个形状（将来真要用 unsafe 规则时不必回来补），转一下类型比开一处
  * `declare module` 轻。
  */
-function 造处理器(一: 标记规格): 处理器 {
-  return (node, _父, state, info) => {
+function createPlaceManageDevice(value: MarkSpec): PlaceManageDevice {
+  return (node, _Parent, state, info) => {
     const tracker = state.createTracker(info);
-    const 入栈 = state.enter as unknown as (名: string) => () => void;
-    const exit = 入栈(一.mdast);
-    let 值 = tracker.move(一.左);
-    值 += state.containerPhrasing(node, {
+    const enterStack = state.enter as unknown as (name3: string) => () => void;
+    const exit = enterStack(value.mdast);
+    let value2 = tracker.move(value.left);
+    value2 += state.containerPhrasing(node, {
       ...tracker.current(),
-      before: 值,
-      after: 一.右[0] ?? " ",
+      before: value2,
+      after: value.right[0] ?? " ",
     });
-    值 += tracker.move(一.右);
+    value2 += tracker.move(value.right);
     exit();
-    return 值;
+    return value2;
   };
 }
 
@@ -662,16 +662,16 @@ function 造处理器(一: 标记规格): 处理器 {
  * `handlers: { ...prev.handlers, ...行内标记处理器() }` 每次建实例都要一份，
  * 共用一个对象在将来"某个实例想改一条"时会串味。
  */
-export function 行内标记处理器(): Record<string, 处理器> {
-  const 出: Record<string, 处理器> = {};
-  for (const 一 of 标记表) 出[一.mdast] = 造处理器(一);
-  return 出;
+export function inlineMarkHandler(): Record<string, PlaceManageDevice> {
+  const output2: Record<string, PlaceManageDevice> = {};
+  for (const value of markTable) output2[value.mdast] = createPlaceManageDevice(value);
+  return output2;
 }
 
 /* ── 第五格：关掉语法之后那一条字节兜底（`handlers.text`）───────────── */
 
 /** mdast 的文本处理器（`handlers.text` 那一条）。 */
-type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]>;
+type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
 /**
  * 行首被转义掉的那个 `==…==`。`m[2]` 是整个 `==重点==`。
@@ -681,7 +681,7 @@ type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]
  * `== 空格 ==`）**照旧转义**——不做"凡是 `=` 都不转义"那种大赦，
  * 那会把 setext 标题下划线的防线拆掉。
  */
-const 被转义的行首等号 = /(^|\n)\\(==(?=\S)[^=\n]*?\S==)/g;
+const isConvertMeaningOfLineFirstEqualNumber = /(^|\n)\\(==(?=\S)[^=\n]*?\S==)/g;
 
 /**
  * 包一层：把行首那个多余的 `\` 去掉。
@@ -714,10 +714,10 @@ const 被转义的行首等号 = /(^|\n)\\(==(?=\S)[^=\n]*?\S==)/g;
  * 串起来（顺序见那里）。**恒挂**，不分模式、不分开关：它只在"本来就该是
  * 普通文字"的那种写法上生效，开关打开时压根碰不到。
  */
-export function 不转义行首等号(原文?: 文本处理器): 文本处理器 {
+export function notConvertMeaningLineFirstEqualNumber(source?: textHandler): textHandler {
   return (node, parent, state, info) => {
-    if (!原文) return node.value ?? "";
-    return 原文(node, parent, state, info).replace(被转义的行首等号, "$1$2");
+    if (!source) return node.value ?? "";
+    return source(node, parent, state, info).replace(isConvertMeaningOfLineFirstEqualNumber, "$1$2");
   };
 }
 
@@ -782,7 +782,7 @@ export function 不转义行首等号(原文?: 文本处理器): 文本处理器
  * `造处理机` 用它 `.use(remarkGfm, GFM选项)`）——两边各写一份字面量的话，
  * 改了产品没改测试，或者反过来，都会让这份测试变成假的。
  */
-export const GFM选项 = { singleTilde: false };
+export const gFMOption = { singleTilde: false };
 
 /**
  * 把 `GFM选项` 落到编辑器上（`create.ts` 的 `.config()` 里那一行调的就是它）。
@@ -799,10 +799,10 @@ export const GFM选项 = { singleTilde: false };
  * （见 `preset-gfm/lib/plugin/remark-gfm-plugin.d.ts`），直接展开一个可能是
  * `null` 的值，`tsc` 报 TS2698「Spread types may only be created from object types」。
  */
-export function 关掉单波浪号删除线(ctx: Ctx): void {
+export function closeSingleWaveWaveNumberRemoveRemoveLine(ctx: Ctx): void {
   // ⚠️ 是 `.options.key` 而不是 `.options`（`$Ctx` = 插件 ＋ 钥匙，不是切片；
   // 同 `create.ts` 里 katex 那条）。少一个 `.key` 就是 TS2345。
-  ctx.update(remarkGFMPlugin.options.key, (prev) => ({ ...(prev ?? {}), ...GFM选项 }));
+  ctx.update(remarkGFMPlugin.options.key, (prev) => ({ ...(prev ?? {}), ...gFMOption }));
 }
 
 /**
@@ -811,21 +811,21 @@ export function 关掉单波浪号删除线(ctx: Ctx): void {
  * ⚠️ 在 `标记表` **之后**求值——`标记表` 是本模块顶部的 `const`，早于它会拿到
  * `undefined`（症状是这条恒不命中，于是转义照旧留着，看着像"补丁没生效"）。
  */
-const 下标语法 = new RegExp(标记表[2]!.正则.source);
+const belowMarkLanguageMethod = new RegExp(markTable[2]!.correctRule.source);
 
 /** 文本节点的**兄弟**里，有没有会自己吐出一个裸 `~` 的那种（现在只有下标）。 */
-function 贴边有波浪号定界符(parent: unknown, node: MarkdownNode, 取前一个: boolean): boolean {
-  const 孩子们 = (parent as 有孩子 | undefined)?.children;
-  if (!Array.isArray(孩子们)) return false;
-  const i = 孩子们.indexOf(node);
+function pasteEdgeHasWaveWaveNumberFixedBoundarySymbol(parent: unknown, node: MarkdownNode, getPrevious: boolean): boolean {
+  const children = (parent as HasChild | undefined)?.children;
+  if (!Array.isArray(children)) return false;
+  const i = children.indexOf(node);
   if (i < 0) return false;
-  const 邻 = 孩子们[取前一个 ? i - 1 : i + 1];
-  return 邻?.type === 标记表[2]!.mdast;
+  const neighbor = children[getPrevious ? i - 1 : i + 1];
+  return neighbor?.type === markTable[2]!.mdast;
 }
 
 /** 这一颗文本节点**就是下标的内容**吗（那样它的两头直接贴着自己那个定界符）。 */
-function 父是波浪号标记(parent: unknown): boolean {
-  return (parent as MarkdownNode | undefined)?.type === 标记表[2]!.mdast;
+function parentIsWaveWaveNumberMark(parent: unknown): boolean {
+  return (parent as MarkdownNode | undefined)?.type === markTable[2]!.mdast;
 }
 
 /**
@@ -883,19 +883,19 @@ function 父是波浪号标记(parent: unknown): boolean {
  * 它要看这一颗文本节点**最终**写出什么，得等里面那几条（`原子后的空格` 会把
  * U+00A0 换成普通空格）都改完。
  */
-export function 不转义孤立波浪号(原文?: 文本处理器): 文本处理器 {
+export function notConvertMeaningIsolatedStandaloneWaveWaveNumber(source?: textHandler): textHandler {
   return (node, parent, state, info) => {
-    if (!原文) return node.value ?? "";
-    const 出 = 原文(node, parent, state, info);
-    if (!出.includes("\\~")) return 出;
-    const 无转义 = 出.replace(/\\~/g, "~");
-    if (无转义.includes("~~") || 下标语法.test(无转义)) return 出;
-    const 两头另有定界符 = 父是波浪号标记(parent);
-    if (无转义.startsWith("~") && (两头另有定界符 || 贴边有波浪号定界符(parent, node, true))) return 出;
-    if (无转义.endsWith("~") && (两头另有定界符 || 贴边有波浪号定界符(parent, node, false))) return 出;
-    return 无转义;
+    if (!source) return node.value ?? "";
+    const output2 = source(node, parent, state, info);
+    if (!output2.includes("\\~")) return output2;
+    const withoutConvertMeaning = output2.replace(/\\~/g, "~");
+    if (withoutConvertMeaning.includes("~~") || belowMarkLanguageMethod.test(withoutConvertMeaning)) return output2;
+    const twoHeadOtherHasFixedBoundarySymbol = parentIsWaveWaveNumberMark(parent);
+    if (withoutConvertMeaning.startsWith("~") && (twoHeadOtherHasFixedBoundarySymbol || pasteEdgeHasWaveWaveNumberFixedBoundarySymbol(parent, node, true))) return output2;
+    if (withoutConvertMeaning.endsWith("~") && (twoHeadOtherHasFixedBoundarySymbol || pasteEdgeHasWaveWaveNumberFixedBoundarySymbol(parent, node, false))) return output2;
+    return withoutConvertMeaning;
   };
 }
 
 /** 纯文字那一份也导出去（测试要拿它对比"关掉开关时是不是退回了字面"）。 */
-export { 纯文字 as 读纯文字 };
+export { plainText2 as readPlainText };

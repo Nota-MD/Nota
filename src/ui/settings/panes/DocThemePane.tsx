@@ -44,7 +44,7 @@ import {
   Value,
 } from "../primitives";
 import { useUiMode } from "@/ui/useUiMode";
-import { 生效的文档主题, 深色专用在生效 } from "@/ui/useDocTheme";
+import { generateEffectOfDocumentTheme, darkDedicatedUseAtGenerateEffect } from "@/ui/useDocTheme";
 import { paneWriter, type PaneProps } from "./props";
 
 export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }: PaneProps) {
@@ -55,7 +55,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
   // 改本页里的一项（`document` 那张表）。⚠️ 走 `paneWriter` 而不是自己展开
   // `settings.document`：漏展开一次就是"改了这一项、别的四项全落回默认"。
   const d = settings.document;
-  const 写 = paneWriter(settings, onChange, "document");
+  const write = paneWriter(settings, onChange, "document");
   // ⚠️ **显示的必须是"现在生效的那一套"**，而不是 `settings.document_theme`。
   // 2026-09-25 起「外观 → 深色模式」里那两档真的会换主题：深色下如果指定了
   // 独立的一套，生效的是它——照 `document_theme` 显示的话，这一页会当着面
@@ -63,16 +63,16 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
   //
   // ⚠️ 判据走 `useDocTheme` 里那两个**导出的纯函数**，不在本文件里再写一遍：
   // 同一个问题两处各答一次，迟早会出现"这一页说 A、菜单换的是 B"。
-  const 明暗 = useUiMode(settings.ui_mode);
-  const 生效id = 生效的文档主题(settings, 明暗);
-  const 深色那一套在生效 = 深色专用在生效(settings, 明暗);
+  const mode = useUiMode(settings.ui_mode);
+  const generateEffectid = generateEffectOfDocumentTheme(settings, mode);
+  const darkThatValueSetAtGenerateEffect = darkDedicatedUseAtGenerateEffect(settings, mode);
 
   /** 主题 id → 给人看的名字。**一处口径**：空串是「无主题（内置）」，
    *  清单里没有的 id（比如主题文件被删了）就照原样显示 id，不假装它没名字。 */
-  const 显示名 = (id: string) => {
+  const showName = (id: string) => {
     if (!id) return t("No Theme (Built-in)");
-    const 有 = docThemes.find((t) => t.id === id);
-    if (有) return 有.name;
+    const has = docThemes.find((t) => t.id === id);
+    if (has) return has.name;
     // ⚠️ 认不出的 id **照原样显示**（原始 id 是线索），但后面要**说清它此刻没生效**。
     //
     // 2026-09-26 内置主题换过一批（用户要求「删掉所有默认主题」），老机器上
@@ -89,7 +89,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     <>
     <SettingsGroup title={t("Document Themes")}>
       <SettingRow label={t("Current theme")}>
-        <Value>{显示名(生效id)}</Value>
+        <Value>{showName(generateEffectid)}</Value>
       </SettingRow>
 
       <SettingRow label={t("Themes folder")}>
@@ -113,7 +113,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
       <SettingRow>
         <Toggle
           checked={d.custom_line_height}
-          onChange={(custom_line_height) => 写({ custom_line_height })}
+          onChange={(custom_line_height) => write({ custom_line_height })}
         />
       </SettingRow>
       <SettingRow label={t("Line-height multiple")}>
@@ -124,7 +124,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
           step={5}
           suffix="%"
           disabled={!d.custom_line_height}
-          onChange={(line_height) => 写({ line_height })}
+          onChange={(line_height) => write({ line_height })}
         />
       </SettingRow>
     </SettingsGroup>
@@ -133,7 +133,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
       <SettingRow>
         <Toggle
           checked={d.custom_paragraph_gap}
-          onChange={(custom_paragraph_gap) => 写({ custom_paragraph_gap })}
+          onChange={(custom_paragraph_gap) => write({ custom_paragraph_gap })}
         />
       </SettingRow>
       <SettingRow label={t("Spacing size")}>
@@ -144,14 +144,14 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
           step={5}
           suffix="%"
           disabled={!d.custom_paragraph_gap}
-          onChange={(paragraph_gap) => 写({ paragraph_gap })}
+          onChange={(paragraph_gap) => write({ paragraph_gap })}
         />
       </SettingRow>
     </SettingsGroup>
 
     <SettingsGroup title={t("Body font")}>
       <SettingRow>
-        <Toggle checked={d.custom_font} onChange={(custom_font) => 写({ custom_font })} />
+        <Toggle checked={d.custom_font} onChange={(custom_font) => write({ custom_font })} />
       </SettingRow>
       <SettingRow label={t("Font family")}>
         <Select
@@ -162,7 +162,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
             { value: "mono", label: t("Monospace") },
           ]}
           disabled={!d.custom_font}
-          onChange={(font) => 写({ font })}
+          onChange={(font) => write({ font })}
         />
       </SettingRow>
     </SettingsGroup>
@@ -171,7 +171,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
       <SettingRow>
         <Toggle
           checked={d.custom_font_size}
-          onChange={(custom_font_size) => 写({ custom_font_size })}
+          onChange={(custom_font_size) => write({ custom_font_size })}
         />
       </SettingRow>
       <SettingRow label={t("Size multiple")}>
@@ -182,7 +182,7 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
           step={2}
           suffix="%"
           disabled={!d.custom_font_size}
-          onChange={(font_size) => 写({ font_size })}
+          onChange={(font_size) => write({ font_size })}
         />
       </SettingRow>
     </SettingsGroup>
@@ -200,13 +200,13 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
       </SettingRow>
     </SettingsGroup>
 
-    {深色那一套在生效 && (
+    {darkThatValueSetAtGenerateEffect && (
       <SettingsGroup title={t("Dark mode uses a separate set of settings")}>
         {/* ⚠️ 这一行是这个组**画得出来的前提**，不是装饰：组里一行 `.stg-row`
             都没有时 `settings.css` 会把整组 `display: none` 掉（搜索那一套规则的
             副作用）。理由和实测经过见本文件顶上的文件头。 */}
         <SettingRow label={t("Light mode uses")}>
-          <Value>{显示名(settings.document_theme)}</Value>
+          <Value>{showName(settings.document_theme)}</Value>
         </SettingRow>
       </SettingsGroup>
     )}

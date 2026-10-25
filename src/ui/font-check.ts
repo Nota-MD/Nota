@@ -25,10 +25,10 @@
  */
 
 /** 量宽度用的样本：拉丁（含宽窄不一的字母）＋ 中文 ＋ 数字。 */
-const 样本 = "mmmmWWQ0123ili中文测试字体";
+const sample = "mmmmWWQ0123ili中文测试字体";
 
 /** 只拿这三种通用族当基准（浏览器一定认识它们）。 */
-const 兜底族 = ["monospace", "serif", "sans-serif"] as const;
+const fallbackFamily = ["monospace", "serif", "sans-serif"] as const;
 
 /**
  * 应用核心随包提供的字体。
@@ -36,11 +36,11 @@ const 兜底族 = ["monospace", "serif", "sans-serif"] as const;
  * ⚠️ 现在是空集：CDE 的 WQY 点阵字体属于外部 CDE 主题包，不再进 Nota
  * 二进制。外部主题自己的 `@font-face` 由 WebKit 的 FontFaceSet 负责。
  */
-const 随包字体 = new Set<string>();
+const followPackageCharacterBody = new Set<string>();
 
 /** 这支字体是不是应用核心随包提供的（不是系统或外部主题字体）。 */
-export function 是随包字体(名字: string): boolean {
-  return 随包字体.has(名字.trim().replace(/^["']|["']$/g, "").trim());
+export function isFollowPackageCharacterBody(name2: string): boolean {
+  return followPackageCharacterBody.has(name2.trim().replace(/^["']|["']$/g, "").trim());
 }
 
 /**
@@ -49,59 +49,59 @@ export function 是随包字体(名字: string): boolean {
  * ⚠️ **拿不到 canvas 就当"有"**：判不了的时候宁可**不打扰**用户，
  * 也不要用一个可能错的提示去打一次（那是"狼来了"）。
  */
-export function 字体可用(名字: string): boolean {
-  const 名 = 名字.trim().replace(/^["']|["']$/g, "").trim();
-  if (!名) return true;
+export function characterBodyCanUse(name2: string): boolean {
+  const name3 = name2.trim().replace(/^["']|["']$/g, "").trim();
+  if (!name3) return true;
   // 随包字体由应用自己的 `@font-face` 提供；它缺失是构建错误，不该在用户
   // 启动时提示“系统没装”。`document.fonts.check()` 在这里反而比系统探测准。
-  if (是随包字体(名)) {
-    void document.fonts.load(`16px "${名}"`, 样本);
+  if (isFollowPackageCharacterBody(name3)) {
+    void document.fonts.load(`16px "${name3}"`, sample);
     return true;
   }
-  const 画布 = document.createElement("canvas").getContext("2d");
-  if (!画布) return true;
+  const drawDistribute = document.createElement("canvas").getContext("2d");
+  if (!drawDistribute) return true;
   // ⚠️ **要试几个字号，不能只试一个**（2026-10-17 踩到的）：
   // `WenQuanYi Bitmap Song` 那种**纯点阵**字体只在几个固定像素尺寸上有字形
   // （9/10/11/12/13pt…）。用 72px 去量时它根本没有那个尺寸的点阵，浏览器于是
   // 退回兜底 ⇒ 被误判成"没装"。正文实际用的是 16–17px，所以从 16 起试。
-  const 画布有 = 字号们.some((字号) =>
-    兜底族.some((兜底) => {
-      画布.font = `${字号}px ${兜底}`;
-      const 基准 = 画布.measureText(样本).width;
-      画布.font = `${字号}px "${名}", ${兜底}`;
-      const 试过 = 画布.measureText(样本).width;
+  const drawDistributeHas = fontSizes.some((characterNumber2) =>
+    fallbackFamily.some((fallback) => {
+      drawDistribute.font = `${characterNumber2}px ${fallback}`;
+      const baseAccurate = drawDistribute.measureText(sample).width;
+      drawDistribute.font = `${characterNumber2}px "${name3}", ${fallback}`;
+      const tryPass = drawDistribute.measureText(sample).width;
       // 0.5px 的容差：同一个字体在不同兜底下会有亚像素级的抖动。
-      return Math.abs(试过 - 基准) > 0.5;
+      return Math.abs(tryPass - baseAccurate) > 0.5;
     }),
   );
-  if (画布有) return true;
+  if (drawDistributeHas) return true;
   // ⚠️ **纯点阵字体（PCF）canvas 量不出来**（2026-10-17 实测：文泉驿点阵宋
   // 在布局里画得好好的，`measureText` 却一直等于兜底宽）——canvas 那条路走的是
   // 不同的一套字体回退。所以再拿**真正的 DOM 布局**量一次：两个等宽的 span，
   // 一个用兜底、一个用"候选, 兜底"，宽度不同就是有。
-  return 布局量得到(名);
+  return layoutMeasureObtainTo(name3);
 }
 
 /** 用真实 DOM 再量一次（见 `字体可用` 末尾那条注释）。 */
-function 布局量得到(名: string): boolean {
-  const 甲 = document.createElement("span");
-  const 乙 = document.createElement("span");
-  for (const el of [甲, 乙]) {
-    el.textContent = 样本;
+function layoutMeasureObtainTo(name3: string): boolean {
+  const alpha = document.createElement("span");
+  const beta = document.createElement("span");
+  for (const el of [alpha, beta]) {
+    el.textContent = sample;
     el.style.cssText =
       "position:absolute;left:-9999px;top:0;visibility:hidden;white-space:pre;font-size:16px";
   }
-  甲.style.fontFamily = "monospace";
-  乙.style.fontFamily = `"${名}", monospace`;
-  document.body.append(甲, 乙);
-  const 差 = Math.abs(甲.getBoundingClientRect().width - 乙.getBoundingClientRect().width);
-  甲.remove();
-  乙.remove();
-  return 差 > 0.5;
+  alpha.style.fontFamily = "monospace";
+  beta.style.fontFamily = `"${name3}", monospace`;
+  document.body.append(alpha, beta);
+  const difference = Math.abs(alpha.getBoundingClientRect().width - beta.getBoundingClientRect().width);
+  alpha.remove();
+  beta.remove();
+  return difference > 0.5;
 }
 
 /** 探测字号（px）。⚠️ 见 `字体可用` 里那条：点阵字体按"固定像素尺寸"出字形。 */
-const 字号们 = [16, 24, 32] as const;
+const fontSizes = [16, 24, 32] as const;
 
 /**
  * 从一份主题 CSS 里挑出**首选字体**（`--font-doc` 的第一个家族）。
@@ -111,9 +111,9 @@ const 字号们 = [16, 24, 32] as const;
  * 2. 第一个家族是**通用族**（`serif` / `system-ui` / `monospace` …）——
  *    那些一定存在，不算"缺字体"。
  */
-export function 首选字体(css: string): string | null {
-  const 候选 = 可选字体(css);
-  return 候选[0] ?? null;
+export function firstSelectCharacterBody(css: string): string | null {
+  const candidate = canSelectCharacterBody(css);
+  return candidate[0] ?? null;
 }
 
 /**
@@ -123,10 +123,10 @@ export function 首选字体(css: string): string | null {
  * CDE 那一套点的是 `WenQuanYi Bitmap Song` / `Zpix` / `Fusion Pixel` 三支
  * 点宋，**装上任一支就够**。只看第一支会把"装了 Zpix 的机器"也报成缺字体。
  */
-export function 可选字体(css: string): string[] {
-  const 命中 = /--font-doc\s*:\s*([^;]+);/.exec(css);
-  if (!命中?.[1]) return [];
-  const 通用 = new Set([
+export function canSelectCharacterBody(css: string): string[] {
+  const match = /--font-doc\s*:\s*([^;]+);/.exec(css);
+  if (!match?.[1]) return [];
+  const throughUse = new Set([
     "serif",
     "sans-serif",
     "monospace",
@@ -143,8 +143,8 @@ export function 可选字体(css: string): string[] {
     "-apple-system",
     "",
   ]);
-  return 命中[1]
+  return match[1]
     .split(",")
     .map((x) => x.trim().replace(/^["']|["']$/g, "").trim())
-    .filter((x) => x.length > 0 && !通用.has(x.toLowerCase()));
+    .filter((x) => x.length > 0 && !throughUse.has(x.toLowerCase()));
 }

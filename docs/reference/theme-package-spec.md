@@ -1,6 +1,6 @@
 # Nota 主题包规范
 
-最后同步：2026-10-21
+最后同步：2026-10-25
 
 本规范参考 Typora 自定义主题的核心模型：
 
@@ -200,6 +200,26 @@ Nota 编辑区里的正文根等价于 Typora 的 `#write`。主题可以写：
 ```
 
 允许在**主题包目录内部**使用 `../` 共享素材，但不能逃出主题包根目录。
+
+### 4.3 编辑器源码标记
+
+编辑器左侧装订线里的块级源码标记也由主题变量提供图形。当前可覆盖项：
+
+```css
+[data-ui-style="dusk"] {
+  --icon-nota-heading-1-symbolic: url("./icons/heading-1.svg");
+  --icon-nota-heading-2-symbolic: url("./icons/heading-2.svg");
+  --icon-nota-heading-3-symbolic: url("./icons/heading-3.svg");
+  --nota-source-quote-icon: url("./icons/source-quote.svg");
+  --nota-source-bullet-icon: url("./icons/source-bullet.svg");
+  --nota-source-code-icon: url("./icons/source-code.svg");
+}
+```
+
+`--icon-nota-heading-*` 给格式工具栏的 H1–H3 按钮；`--nota-source-*` 给
+引用、无序列表和代码围栏的左侧标记。图形只取形状，颜色由
+`--fg-faint` 或按钮 `currentColor` 提供。程序统一把源码标记放在块正左方并
+垂直居中，主题不能要求程序识别自己的 id 来调整位置。
 
 ## 5. 字体
 

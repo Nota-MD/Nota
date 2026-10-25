@@ -30,26 +30,28 @@
 import { useT } from "@/i18n";
 import { PanelBody } from "@/ui/PanelBody";
 import type { PanelNode } from "@/ui/panel-nodes";
-import type { 外部对照 } from "@/ui/useExternalChanges";
+import type { ExternalPartCorrectAccording } from "@/ui/useExternalChanges";
 
 interface Props {
-  对照: 外部对照;
+  correctAccording: ExternalPartCorrectAccording;
   /** 用户按了「回到正文」。**只收这一块，不碰文档**。 */
   onClose: () => void;
 }
 
 /** 这份对照里唯一的一种内容块。**写死**：它的形状由这个组件决定，不来自插件。 */
-const 只有差异块 = (行: 外部对照["行"]): PanelNode[] => [{ kind: "diff", items: 行 }];
+const onlyHasDifferenceExceptionBlock = (
+  line3: ExternalPartCorrectAccording["line3"],
+): PanelNode[] => [{ kind: "diff", items: line3 }];
 
-export function ExternalDiffPane({ 对照, onClose }: Props) {
+export function ExternalDiffPane({ correctAccording, onClose }: Props) {
   // ⚠️ 这一行不只是取值：它订阅了语言（宿主报来语言之后这一块要重画）。
   const t = useT();
 
   return (
     <div className="review-pane external-diff-pane">
       <div className="review-bar">
-        <span className="review-title" title={对照.title}>
-          {t("Changes on disk")} · {对照.title}
+        <span className="review-title" title={correctAccording.title}>
+          {t("Changes on disk")} · {correctAccording.title}
         </span>
         <span className="review-spacer" />
         <button
@@ -63,7 +65,7 @@ export function ExternalDiffPane({ 对照, onClose }: Props) {
       </div>
 
       <div className="review-body">
-        {对照.行.length === 0 ? (
+        {correctAccording.line3.length === 0 ? (
           // ⚠️ 空差异**不是错误**，而且它是真会发生的：别人存了一份内容和我们
           // 手上一模一样的文件（或者我们刚存过、那边又原样写回）。这时候画一个
           // 空框子会让人以为界面上少了点东西，所以如实说一句。
@@ -81,7 +83,7 @@ export function ExternalDiffPane({ 对照, onClose }: Props) {
             // 会让人以为"核心也是一个插件"（不是，见 `AGENTS.md` §1），也会让
             // 排查插件问题时多出这样一条查不到的东西。
             plugin=""
-            nodes={只有差异块(对照.行)}
+            nodes={onlyHasDifferenceExceptionBlock(correctAccording.line3)}
             onCall={async () => {}}
             askPrompt={async () => null}
             busy={null}

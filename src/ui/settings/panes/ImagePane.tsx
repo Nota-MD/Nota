@@ -33,7 +33,7 @@ export function ImagePane(props: PaneProps) {
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
   const { settings, onChange } = props;
-  const 写 = paneWriter(settings, onChange, "image");
+  const write = paneWriter(settings, onChange, "image");
   const i = settings.image;
 
   /**
@@ -70,7 +70,7 @@ export function ImagePane(props: PaneProps) {
           <Select
             value={i.insert_action}
             options={INSERT}
-            onChange={(insert_action) => 写({ insert_action })}
+            onChange={(insert_action) => write({ insert_action })}
           />
         </SettingRow>
 
@@ -80,7 +80,7 @@ export function ImagePane(props: PaneProps) {
               value={i.custom_dir}
               width="lg"
               placeholder={t("e.g. /home/me/Pictures, or ./img")}
-              onChange={(custom_dir) => 写({ custom_dir })}
+              onChange={(custom_dir) => write({ custom_dir })}
             />
           </SettingRow>
         )}
@@ -90,14 +90,14 @@ export function ImagePane(props: PaneProps) {
         <SettingRow label={t("Images from local paths")}>
           <Toggle
             checked={i.apply_to_local}
-            onChange={(apply_to_local) => 写({ apply_to_local })}
+            onChange={(apply_to_local) => write({ apply_to_local })}
           />
         </SettingRow>
 
         <SettingRow label={t("Images from web URLs")}>
           <Toggle
             checked={i.apply_to_remote}
-            onChange={(apply_to_remote) => 写({ apply_to_remote })}
+            onChange={(apply_to_remote) => write({ apply_to_remote })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -106,16 +106,16 @@ export function ImagePane(props: PaneProps) {
         <SettingRow label={t("Prefer relative paths")}>
           <Toggle
             checked={i.prefer_relative}
-            onChange={(prefer_relative) => 写({ prefer_relative })}
+            onChange={(prefer_relative) => write({ prefer_relative })}
           />
         </SettingRow>
 
         <SettingRow label={t("Add ./ to relative paths")}>
-          <Toggle checked={i.add_dot_slash} onChange={(add_dot_slash) => 写({ add_dot_slash })} />
+          <Toggle checked={i.add_dot_slash} onChange={(add_dot_slash) => write({ add_dot_slash })} />
         </SettingRow>
 
         <SettingRow label={t("Escape URLs when inserting")}>
-          <Toggle checked={i.escape_url} onChange={(escape_url) => 写({ escape_url })} />
+          <Toggle checked={i.escape_url} onChange={(escape_url) => write({ escape_url })} />
         </SettingRow>
       </SettingsGroup>
 

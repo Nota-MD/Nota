@@ -63,14 +63,14 @@ import type {
   PluginUpdateInfo,
   Settings,
   UiStyleInfo,
-  信任记录,
+  trustRecord,
 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { MenuSpec } from "@/ui/commands";
 import { DialogClose } from "@/ui/DialogClose";
-import { Icon, type 图标名 } from "@/ui/Icon";
+import { Icon, type iconName } from "@/ui/Icon";
 import { useModalTrap } from "@/ui/useModalTrap";
-import type { 插件动作 } from "@/ui/usePlugins";
+import type { pluginAction } from "@/ui/usePlugins";
 import { QueryProvider, SearchField } from "./primitives";
 import { AppearancePane } from "./panes/AppearancePane";
 import { DebugPane } from "./panes/DebugPane";
@@ -119,7 +119,7 @@ export type SectionId =
  * ⚠️ 写成 `Record`：加一页时漏了下面那条 `ORDER`，症状是"这一页点不到"
  * ——不报错。两处都在同一个文件里，改一处时看得见另一处。
  */
-const SECTIONS: Record<SectionId, 图标名> = {
+const SECTIONS: Record<SectionId, iconName> = {
   // ⚠️ 这里**只有图标**。页面**名字**是界面文案，挪到组件体里的 `页名` 表去了
   // （模块级求值时 `t` 还没订阅，而且 `tools/i18n-check.sh` 只认源码里的字面量
   // `t("…")`——那一对理由写在 `页名` 上面）。别把名字搬回这张表。
@@ -214,11 +214,11 @@ interface Props {
    */
   plugins: PluginInfo[];
   /** 信任库里那几把钥匙（指纹 + 名字）。⚠️ **要摆出来**：信任按指纹判，看不见的表等于没有表。 */
-  插件信任: 信任记录[];
+  pluginTrust: trustRecord[];
   /** 插件仓库的最近一次检查结果。 */
-  插件更新: PluginUpdateInfo[];
+  pluginUpdate: PluginUpdateInfo[];
   /** 装 / 导出 / 卸 / 启停 / 信任那几颗按钮的实现。见 `ui/usePlugins.ts`。 */
-  插件动作: 插件动作;
+  pluginAction: pluginAction;
   /** 调试模式；只有开启时才让「高级设置」进入左栏和搜索。 */
   debugMode: boolean;
   /** 外部请求打开某一页；通知的「查看更新」用。 */
@@ -238,9 +238,9 @@ export function SettingsDialog({
   onClearRecent,
   menus,
   plugins,
-  插件信任,
-  插件更新,
-  插件动作,
+  pluginTrust,
+  pluginUpdate,
+  pluginAction,
   debugMode,
   initialSection,
 }: Props) {
@@ -257,7 +257,7 @@ export function SettingsDialog({
    * 重画）；另外 `tools/i18n-check.sh` 数的是**源码里字面写出来的 `t("…")`**，
    * 写成模块级的 `t(表[id])` 就不算调用，`en.ts` 里那几条会算"废键"→ 闸门 FAIL。
    */
-  const 页名: Record<SectionId, string> = {
+  const pageName: Record<SectionId, string> = {
     files: t("File"),
     editor: t("Editor"),
     image: t("Image"),
@@ -361,16 +361,16 @@ export function SettingsDialog({
       case "focus":
         return <FocusPane {...props} />;
       case "pluginSettings":
-        return <PluginSettingsPane plugins={plugins} 动作={插件动作} />;
+        return <PluginSettingsPane plugins={plugins} action={pluginAction} />;
       // ⚠️ 拓展页**不吃 `{...props}`**（同「快捷键」那一条，理由也一样）：
       // 它要的是插件清单、信任表、插件动作那三样，与设置项一个字节都不沾。
       case "extensions":
         return (
           <ExtensionsPane
             plugins={plugins}
-            信任={插件信任}
-            updates={插件更新}
-            动作={插件动作}
+            messageTask={pluginTrust}
+            updates={pluginUpdate}
+            action={pluginAction}
           />
         );
       case "general":
@@ -421,7 +421,7 @@ export function SettingsDialog({
                     16 格塞不下两个字母——实测过，缩到 16 是两个黑团。
                     20 格时才读得出来，而 20 也正好配得上 15px 的标签。 */}
                 <Icon name={SECTIONS[id]} size={20} />
-                {页名[id]}
+                {pageName[id]}
               </button>
             ))}
           </nav>

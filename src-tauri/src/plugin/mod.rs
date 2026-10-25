@@ -125,7 +125,7 @@ impl DeferredDiscovery {
             // 给首帧编辑器一个很短的无争用窗口；这不是启动门禁，前端不会等它。
             std::thread::sleep(std::time::Duration::from_millis(350));
             let loaded = PluginHost::discover(resource_dir, &base);
-            crate::日志!("[nota] 载入 {} 个拓展", loaded.count());
+            crate::日志!("[nota] loaded {} plugins", loaded.count());
             let state = 插件线程.state::<crate::state::AppState>();
             if let Ok(mut slot) = state.plugins.lock() {
                 *slot = loaded;
@@ -243,10 +243,26 @@ impl PluginHost {
         for e in errors {
             // 单个插件清单坏了不该拖住启动（其余插件照常加载），所以这里只记不抛。
             // 界面上"少了一个插件"未必看得出来 → 开发者的线索，走调试闸门。
-            crate::日志!("[nota] 拓展清单读不了：{e}");
+            crate::日志!("[nota] plugin manifest unreadable: {e}");
         }
 
         plugins.sort_by(|a, b| a.manifest.meta.id.cmp(&b.manifest.meta.id));
+        for plugin in &plugins {
+            match &plugin.state {
+                crate::lua::PluginState::Loaded => {
+                    crate::日志!("[nota] plugin loaded: {}", plugin.manifest.meta.id);
+                }
+                crate::lua::PluginState::Disabled => {
+                    crate::日志!("[nota] plugin disabled: {}", plugin.manifest.meta.id);
+                }
+                crate::lua::PluginState::Failed(reason) => {
+                    crate::日志!(
+                        "[nota] plugin failed: {}: {reason}",
+                        plugin.manifest.meta.id
+                    );
+                }
+            }
+        }
 
         Self {
             plugins,

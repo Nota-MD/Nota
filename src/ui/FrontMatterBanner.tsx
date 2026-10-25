@@ -43,7 +43,7 @@ import { useT } from "@/i18n";
 // 判据、模板都在 `front-matter.ts` 那一份里——这里只**读**它、**改**它，
 // 绝不自己再切一刀（判据两处各写一份的话，编辑器藏起来的那几行与横幅里
 // 显示的那几行迟早不是同一段）。
-import { 拆前置块, 拆前置块内文, 换前置块, 新建前置块模板 } from "@/editor/front-matter";
+import { splitFrontMatter, splitFrontMatterBody, replaceFrontMatter, newFrontMatterTemplate } from "@/editor/front-matter";
 
 /**
  * 横幅里那颗「删除」等第二下的时间窗（`docs/07` 第 64 项）。
@@ -56,7 +56,7 @@ import { 拆前置块, 拆前置块内文, 换前置块, 新建前置块模板 }
  * 那行字再点第二下。它与 `EditorPane` 里 `SYNC_DEBOUNCE_MS` 那几档没有关系
  *（不是同一类时间）。
  */
-const 删除确认毫秒 = 4000;
+const removeRemoveConfirmRecognizeMilliSeconds = 4000;
 
 /** 外面（`EditorPane`）递进来的三样东西。 */
 export interface FrontMatterBannerProps {
@@ -64,11 +64,11 @@ export interface FrontMatterBannerProps {
    * 现在是不是**所见即所得**那一档。⚠️ 这是"要不要**露面**"，不是"要不要
    * 挂载"——组件一直挂在那儿（理由见文件头），源码模式下它渲染 `null`。
    */
-  显示: boolean;
+  show: boolean;
   /** 读"编辑器最后报来的那份文本"（那几个动作要现取那段内文）。 */
-  读文本: () => string;
+  readText: () => string;
   /** 把输入框里那段 YAML 交给编辑器。`null` = **删掉**那一段。 */
-  写前置块: (内文: string | null) => void;
+  writeFrontMatter: (body: string | null) => void;
 }
 
 /** 外面用它把编辑器报来的文本推给横幅，见文件头。 */
@@ -82,13 +82,13 @@ export interface FrontMatterBannerHandle {
    *   不挡的话，开头正好写着 `title: ` 的文档一打开就会弹出一个输入框，
    *   看着像编辑器自己动了他的文件。
    */
-  同步: (markdown: string, 允许摊开?: boolean) => void;
+  sameStep: (markdown: string, allowAllowExpand?: boolean) => void;
 }
 
 export function FrontMatterBanner({
-  显示,
-  读文本,
-  写前置块,
+  show,
+  readText,
+  writeFrontMatter,
   ref,
 }: FrontMatterBannerProps & { ref?: Ref<FrontMatterBannerHandle> }) {
   const t = useT();
@@ -100,7 +100,7 @@ export function FrontMatterBanner({
    * 又能把它删掉——那是两个中途翻转的时刻，只算一次的话横幅要么不出现、
    * 要么删完了还挂在那儿。现在它跟着**每一次报来的文本**重算（同值不引起重画）。
    */
-  const [有前置块, set有前置块] = useState(false);
+  const [hasFrontMatter, setHasFrontMatter] = useState(false);
   /**
    * 横幅里那个 YAML 输入框的**内容**。
    *
@@ -108,13 +108,13 @@ export function FrontMatterBanner({
    * 报文本都无脑覆盖它的话，我们**自己提交出去的那一笔回声**会把用户正在打的
    * 字顶掉——他打第三个字母的时候光标会当场跳一下（见 [`提交`]）。
    */
-  const [前置块内文, set前置块内文] = useState("");
-  const [前置块展开, set前置块展开] = useState(false);
+  const [frontMatterBody, setFrontMatterBody] = useState("");
+  const [frontMatterExpanded, setFrontMatterExpanded] = useState(false);
   /** 「删除」按了第一下，正等着第二下。4 秒后自己变回去，见 [`删除`]。 */
-  const [删前置块待确认, set删前置块待确认] = useState(false);
-  const 前置块框Ref = useRef<HTMLTextAreaElement>(null);
+  const [removeFrontMatterPendingConfirmRecognize, setRemoveFrontMatterPendingConfirmRecognize] = useState(false);
+  const frontMatterBoxRef = useRef<HTMLTextAreaElement>(null);
   /** 两击确认那个定时器。 */
-  const 待确认定时Ref = useRef<number | null>(null);
+  const pendingConfirmRecognizeFixedTimeRef = useRef<number | null>(null);
   /**
    * **文档里**那段 front matter 的内文（`null` = 没有这一段）。
    *
@@ -122,14 +122,14 @@ export function FrontMatterBanner({
    * 区分的话，每次提交都会绕回来覆盖一遍输入框——而规范化（内文末尾的空行）
    * 会让那份覆盖**与用户手里那份差一个字节**，症状就是他正打着字、光标跳回行尾。
    */
-  const 前置块基准Ref = useRef<string | null>(null);
+  const frontMatterBaselineRef = useRef<string | null>(null);
   /**
    * 上一次**见到**的内文（含建实例那一刻那一份）。
    *
    * 用处也只有一个：认出"这一次是**从没有到有**"——那一定是菜单里刚点出来的
    * 那一条，用户下一步准是去填它，所以顺手把输入框摊开。
    */
-  const 上一次内文Ref = useRef<string | null>(null);
+  const aboveOnceBodyRef = useRef<string | null>(null);
 
   /**
    * 把"编辑器手里这份文本"里那段 front matter 反映到横幅上
@@ -141,32 +141,32 @@ export function FrontMatterBanner({
    * 不区分这两件事的话，用户每打一个字母都会被自己那一笔写回来的规范化结果
    * 覆盖一次，光标当场跳到末尾。
    */
-  const 同步 = (markdown: string, 允许摊开 = true) => {
-    const 块 = 拆前置块(markdown).前置块;
-    const 内文 = 块 === null ? null : 拆前置块内文(块);
+  const sameStep = (markdown: string, allowAllowExpand = true) => {
+    const block = splitFrontMatter(markdown).frontMatter;
+    const body = block === null ? null : splitFrontMatterBody(block);
     // "从没有到有"＝这一段是刚冒出来的。会这么干的只有两处：菜单里那条
     //「YAML Front Matter」（建的是模板）和插件整篇替换文本。
-    const 刚冒出来 = 内文 !== null && 上一次内文Ref.current === null;
-    上一次内文Ref.current = 内文;
-    set有前置块(内文 !== null);
-    if (内文 === null) set前置块展开(false); // 删掉了（或插件拿掉了）就合上
-    if (内文 === 前置块基准Ref.current && !刚冒出来) return; // 自己那一笔回声
-    前置块基准Ref.current = 内文;
-    set前置块内文(内文 ?? "");
+    const justEmergeResult = body !== null && aboveOnceBodyRef.current === null;
+    aboveOnceBodyRef.current = body;
+    setHasFrontMatter(body !== null);
+    if (body === null) setFrontMatterExpanded(false); // 删掉了（或插件拿掉了）就合上
+    if (body === frontMatterBaselineRef.current && !justEmergeResult) return; // 自己那一笔回声
+    frontMatterBaselineRef.current = body;
+    setFrontMatterBody(body ?? "");
     // 刚建出来的那一段是用户点"插入 YAML Front Matter"点出来的，下一步准是
     // 去填它——顺手摊开（省掉一次"再点一下编辑"）。⚠️ 只认模板：插件塞进来的
     // 那一段内容多半是它自己管的，把输入框弹出来只是噪声。
     // ⚠️ 建实例那一次**不算**（`允许摊开` 传 `false`），理由见句柄那一条。
-    if (允许摊开 && 刚冒出来 && 内文 === 新建前置块模板) set前置块展开(true);
+    if (allowAllowExpand && justEmergeResult && body === newFrontMatterTemplate) setFrontMatterExpanded(true);
   };
 
   // ⚠️ 空依赖：它只碰 ref 与 setState（`同步` 这份闭包不读任何 prop）。
-  useImperativeHandle(ref, () => ({ 同步 }), []);
+  useImperativeHandle(ref, () => ({ sameStep }), []);
 
   /** 从"最后一次知道的文本"里现取那段内文（`null` = 这份没有 front matter）。 */
-  const 现取内文 = (): string | null => {
-    const 块 = 拆前置块(读文本()).前置块;
-    return 块 === null ? null : 拆前置块内文(块);
+  const currentGetBody = (): string | null => {
+    const block = splitFrontMatter(readText()).frontMatter;
+    return block === null ? null : splitFrontMatterBody(block);
   };
 
   /**
@@ -175,24 +175,24 @@ export function FrontMatterBanner({
    * ⚠️ 读的是外面那个"编辑器最后报来的那一份"，不是属性传进来的初值：
    * 编辑器自己规范化过的结果不在后者里。
    */
-  const 打开框 = () => {
-    const 内文 = 现取内文() ?? "";
+  const openBox = () => {
+    const body = currentGetBody() ?? "";
     // ⚠️ 基准**先摆好**：这一刻起输入框里那份就是"文档里那份"，接下来任何一次
     // 报回来的相同内文都算回声，不会再把框重填一遍。
-    前置块基准Ref.current = 内文;
-    set前置块内文(内文);
-    set删前置块待确认(false);
-    set前置块展开(true);
+    frontMatterBaselineRef.current = body;
+    setFrontMatterBody(body);
+    setRemoveFrontMatterPendingConfirmRecognize(false);
+    setFrontMatterExpanded(true);
   };
 
   /** 合上输入框。**不提交任何东西**——每一次按键都已经提交过了（见下）。 */
-  const 合上框 = () => {
-    if (待确认定时Ref.current !== null) {
-      window.clearTimeout(待确认定时Ref.current);
-      待确认定时Ref.current = null;
+  const closeBox = () => {
+    if (pendingConfirmRecognizeFixedTimeRef.current !== null) {
+      window.clearTimeout(pendingConfirmRecognizeFixedTimeRef.current);
+      pendingConfirmRecognizeFixedTimeRef.current = null;
     }
-    set删前置块待确认(false);
-    set前置块展开(false);
+    setRemoveFrontMatterPendingConfirmRecognize(false);
+    setFrontMatterExpanded(false);
   };
 
   /**
@@ -203,17 +203,17 @@ export function FrontMatterBanner({
    * 后端那一跳本来就有 300ms 去抖。少一层去抖也就少一个坑——"打完最后一个字
    * 就关标签页，那一笔还在定时器里"。
    */
-  const 提交 = (内文: string) => {
+  const raiseHandoff = (body: string) => {
     // ⚠️ **清空不等于删除**：清掉一个输入框是极容易误触的动作，而这份文档是
     // 自动保存的。空的就一个字都不写；要删那一段走「删除」（它还要按两下）。
-    if (内文.trim() === "") return;
-    const 原块 = 拆前置块(读文本()).前置块;
-    const 新块 = 换前置块(原块, 内文);
-    if (新块 === null || 新块 === 原块) return; // 一个字都不会变，别惊动编辑器
+    if (body.trim() === "") return;
+    const originalBlock = splitFrontMatter(readText()).frontMatter;
+    const newValueBlock = replaceFrontMatter(originalBlock, body);
+    if (newValueBlock === null || newValueBlock === originalBlock) return; // 一个字都不会变，别惊动编辑器
     // 基准挪到**规范化之后**的那一份（内文末尾的空行会被收掉一个）：等会儿
     // 编辑器报回来的回声要与它逐字相同，才认得出"这是我自己刚写的那一笔"。
-    前置块基准Ref.current = 拆前置块内文(新块);
-    写前置块(内文);
+    frontMatterBaselineRef.current = splitFrontMatterBody(newValueBlock);
+    writeFrontMatter(body);
   };
 
   /**
@@ -223,39 +223,39 @@ export function FrontMatterBanner({
    * ——但为一行 YAML 把 `useDialogs` 那一套从 `App` 一路传进来也不值当。
    * 两击确认不需要任何新通道，代价是那行小字要写清楚（见下面那个 `title`）。
    */
-  const 删除 = () => {
-    if (!删前置块待确认) {
-      if (待确认定时Ref.current !== null) window.clearTimeout(待确认定时Ref.current);
-      set删前置块待确认(true);
-      待确认定时Ref.current = window.setTimeout(() => {
-        待确认定时Ref.current = null;
-        set删前置块待确认(false);
-      }, 删除确认毫秒);
+  const removeRemove = () => {
+    if (!removeFrontMatterPendingConfirmRecognize) {
+      if (pendingConfirmRecognizeFixedTimeRef.current !== null) window.clearTimeout(pendingConfirmRecognizeFixedTimeRef.current);
+      setRemoveFrontMatterPendingConfirmRecognize(true);
+      pendingConfirmRecognizeFixedTimeRef.current = window.setTimeout(() => {
+        pendingConfirmRecognizeFixedTimeRef.current = null;
+        setRemoveFrontMatterPendingConfirmRecognize(false);
+      }, removeRemoveConfirmRecognizeMilliSeconds);
       return;
     }
-    合上框();
+    closeBox();
     // 基准**先**挪到 `null`：等会儿报回来的是"没有这一段"，与它相等 ⇒ 输入框
     // 不会被重新填上（否则那一段刚删掉又出现在框里，看着像没删掉）。
-    前置块基准Ref.current = null;
-    写前置块(null);
+    frontMatterBaselineRef.current = null;
+    writeFrontMatter(null);
   };
 
   // 输入框摊开之后把焦点交进去、插入点落到末尾：这一段是用户刚点出来要填的
   //（「编辑」或者菜单里那条「YAML Front Matter」），不接焦点的话他得再点一下；
   // 光标落在末尾是因为新建出来的模板就一句 `title: `，紧接着要打的是值。
   useEffect(() => {
-    if (!前置块展开) return;
-    const 框 = 前置块框Ref.current;
-    if (!框) return;
-    框.focus();
-    框.setSelectionRange(框.value.length, 框.value.length);
-  }, [前置块展开]);
+    if (!frontMatterExpanded) return;
+    const box2 = frontMatterBoxRef.current;
+    if (!box2) return;
+    box2.focus();
+    box2.setSelectionRange(box2.value.length, box2.value.length);
+  }, [frontMatterExpanded]);
 
   // ⚠️ 走的时候把那个定时器按掉：它只是把按钮上的字变回去，但留着的话那一下
   // 会打在**下一份文档**的横幅上（换文档 = 这个组件跟着 `key={doc.id}` 重挂）。
   useEffect(
     () => () => {
-      if (待确认定时Ref.current !== null) window.clearTimeout(待确认定时Ref.current);
+      if (pendingConfirmRecognizeFixedTimeRef.current !== null) window.clearTimeout(pendingConfirmRecognizeFixedTimeRef.current);
     },
     [],
   );
@@ -266,18 +266,18 @@ export function FrontMatterBanner({
   // - `有前置块`：没有这一段的时候不摆一条空横幅——那会变成一块常驻的装饰，
   //   而"这里本来没有东西"不该占一行。要**加**那一段走菜单里那条
   //   「YAML Front Matter」（`create.ts::写前置块` 里 `payload` 缺省的那一支）。
-  if (!显示 || !有前置块) return null;
+  if (!show || !hasFrontMatter) return null;
 
   return (
     <div className="editor-frontmatter" role="region" aria-label={t("Front matter")}>
       <div className="editor-frontmatter-head">
         <span className="editor-frontmatter-title">{t("Front matter")}</span>
-        {前置块展开 ? (
-          <button type="button" className="editor-frontmatter-btn" onClick={合上框}>
+        {frontMatterExpanded ? (
+          <button type="button" className="editor-frontmatter-btn" onClick={closeBox}>
             {t("Done")}
           </button>
         ) : (
-          <button type="button" className="editor-frontmatter-btn" onClick={打开框}>
+          <button type="button" className="editor-frontmatter-btn" onClick={openBox}>
             {t("Edit")}
           </button>
         )}
@@ -286,41 +286,41 @@ export function FrontMatterBanner({
         <button
           type="button"
           className="editor-frontmatter-btn editor-frontmatter-del"
-          data-arming={删前置块待确认 ? "true" : undefined}
+          data-arming={removeFrontMatterPendingConfirmRecognize ? "true" : undefined}
           title={t("The line itself goes away too — this one takes two clicks.")}
-          onClick={删除}
+          onClick={removeRemove}
         >
-          {删前置块待确认 ? t("Confirm delete") : t("Delete")}
+          {removeFrontMatterPendingConfirmRecognize ? t("Confirm delete") : t("Delete")}
         </button>
       </div>
-      {前置块展开 && (
+      {frontMatterExpanded && (
         // ⚠️ **受控**输入框（`value` 绑在 `前置块内文` 上）：编辑器规范化过
         // 的结果（末尾空行收掉一个）要能回填到框里，否则用户看到的与盘上的
         // 差一行。回声识别在 [`提交`] 与那个基准 ref 里。
         // ⚠️ 打字**当场**提交，不按回车也不失焦才提交：关了标签页/切了文档
         // 就跑掉的那一笔，是最难查的一类丢字。
         <textarea
-          ref={前置块框Ref}
+          ref={frontMatterBoxRef}
           className="editor-frontmatter-text"
-          value={前置块内文}
+          value={frontMatterBody}
           spellCheck={false}
-          rows={Math.min(12, Math.max(2, 前置块内文.split("\n").length + 1))}
+          rows={Math.min(12, Math.max(2, frontMatterBody.split("\n").length + 1))}
           onChange={(e) => {
-            set前置块内文(e.target.value);
-            提交(e.target.value);
+            setFrontMatterBody(e.target.value);
+            raiseHandoff(e.target.value);
           }}
           onKeyDown={(e) => {
             // Esc 合上（不撤销——每一笔都已经进去了）。⚠️ 只在这里拦 Esc：
             // 这个框是 `textarea`，别指望外层的快捷键还会轮到它。
             if (e.key === "Escape") {
               e.preventDefault();
-              合上框();
+              closeBox();
             }
           }}
         />
       )}
       <div className="editor-frontmatter-hint">
-        {前置块展开
+        {frontMatterExpanded
           ? t(
               "Kept as-is at the very top of the file, outside the text you edit below — clearing this box will not delete it.",
             )

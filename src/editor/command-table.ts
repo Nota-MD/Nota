@@ -53,7 +53,6 @@ import {
   addRowAfterCommand,
   addColBeforeCommand,
   addColAfterCommand,
-  setAlignCommand,
 } from "@milkdown/kit/preset/gfm";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import { lift } from "@milkdown/kit/prose/commands";
@@ -63,18 +62,19 @@ import type { NodeType } from "@milkdown/kit/prose/model";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { callCommand } from "@milkdown/kit/utils";
 
-import { 行内标记命令 } from "./inline-marks";
-import { 转成任务列表, 清除格式, 表格删行, 表格删列, 表格删表, 插公式块, 插目录 } from "./insert";
-import { 插脚注 } from "./footnote";
-import { 选行, 选词, 选句, 删词 } from "./select";
-import { 移动块 } from "./move-block";
-import { 装链接, 摘链接 } from "./link-edit";
+import { inlineMarkCommand } from "./inline-marks";
+import { convertBecomeTaskTaskColumnTable, clearRemoveCellStyle, deleteTableRow, deleteTableColumn, deleteWholeTable, insertCommonStyleBlock, insertItemRecord } from "./insert";
+import { insertFootNote } from "./footnote";
+import { selectLine, selectWord, selectSentence, removeWord } from "./select";
+import { moveBlock } from "./move-block";
+import { installLink, removeLink } from "./link-edit";
 import {
-  复制当前表格,
-  格式化当前表格,
-  调整当前表格,
-  移动当前表列,
-  移动当前表行,
+  duplicateCurrentTable,
+  alignCurrentTableColumn,
+  formatCurrentTable,
+  resizeCurrentTable,
+  moveCurrentTableColumn,
+  moveCurrentTableRow,
 } from "./table-context";
 import type { CommandPayload, EditorCommand } from "./create-types";
 
@@ -95,7 +95,7 @@ type BlockCommand = Exclude<EditorCommand, HeadingCommand | "frontMatter">;
  * 调用方（`create.ts::跑一条命令`）先把 `frontMatter` 那一条拦走，剩下的才能
  * 进来——这个类型让"拦没拦"在编译期就查得出来。
  */
-export type 表内命令 = Exclude<EditorCommand, "frontMatter">;
+export type tableCommand = Exclude<EditorCommand, "frontMatter">;
 
 const HEADING_RE = /^h([1-6])$/;
 
@@ -114,13 +114,13 @@ function isHeading(name: EditorCommand): name is HeadingCommand {
  * 菜单和工具栏上的 H1/H2/H3 是开关：已经在 H1 时再点 H1 应退回正文；
  * 在 H2 时点 H1 仍应改成 H1。判据只看当前最内层文本块，列表/引用里的标题也成立。
  */
-export function 同层标题(state: EditorState, level: number): boolean {
+export function sameLayerMarkTitle(state: EditorState, level: number): boolean {
   const { $from } = state.selection;
   return $from.parent.type.name === "heading" && $from.parent.attrs.level === level;
 }
 
 /** 光标当前是否落在代码块里（含代码块里的 NodeSelection）。 */
-export function 光标在代码块(state: EditorState): boolean {
+export function cursorAtCodeBlock(state: EditorState): boolean {
   const { $from } = state.selection;
   for (let depth = $from.depth; depth > 0; depth--) {
     if ($from.node(depth).type.name === "code_block") return true;
@@ -135,39 +135,39 @@ export function 光标在代码块(state: EditorState): boolean {
  * 看着能按、命令却立刻被报成“当前模式不可用”。这里按编辑器通行语义处理：
  * 空选区时改 `storedMarks`，下一次输入带行内代码；再点一次则取消待输入标记。
  */
-export function 切换行内代码(
+export function splitReplaceInlineCode(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
 ): boolean {
-  const 类型 = state.schema.marks.inlineCode;
-  if (!类型) return false;
+  const type = state.schema.marks.inlineCode;
+  if (!type) return false;
   const { from, to, empty, $from } = state.selection;
 
   if (empty) {
-    const 已开 = (state.storedMarks ?? $from.marks()).some((m) => m.type === 类型);
+    const alreadyOpen = (state.storedMarks ?? $from.marks()).some((m) => m.type === type);
     const tr = state.tr;
-    if (已开) {
-      tr.removeStoredMark(类型);
+    if (alreadyOpen) {
+      tr.removeStoredMark(type);
     } else {
       for (const mark of Object.values(state.schema.marks)) {
-        if (mark !== 类型) tr.removeStoredMark(mark);
+        if (mark !== type) tr.removeStoredMark(mark);
       }
-      tr.addStoredMark(类型.create());
+      tr.addStoredMark(type.create());
     }
     dispatch?.(tr.scrollIntoView());
     return true;
   }
 
-  if (state.doc.rangeHasMark(from, to, 类型)) {
-    dispatch?.(state.tr.removeMark(from, to, 类型).scrollIntoView());
+  if (state.doc.rangeHasMark(from, to, type)) {
+    dispatch?.(state.tr.removeMark(from, to, type).scrollIntoView());
     return true;
   }
 
   const tr = state.tr;
   for (const mark of Object.values(state.schema.marks)) {
-    if (mark !== 类型) tr.removeMark(from, to, mark);
+    if (mark !== type) tr.removeMark(from, to, mark);
   }
-  dispatch?.(tr.addMark(from, to, 类型.create()).scrollIntoView());
+  dispatch?.(tr.addMark(from, to, type.create()).scrollIntoView());
   return true;
 }
 
@@ -187,7 +187,7 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   inlineCode: (e) =>
     e.action((ctx) => {
       const view = ctx.get(editorViewCtx);
-      return 切换行内代码(view.state, (tr) => view.dispatch(tr));
+      return splitReplaceInlineCode(view.state, (tr) => view.dispatch(tr));
     }),
   strike: (e) => e.action(callCommand(toggleStrikethroughCommand.key)),
   // 行内标记四条（高亮 / 上标 / 下标 / 下划线）。**不跟开关走**：命令表是
@@ -195,27 +195,40 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   // ——那是另一件事（`ui/commands.ts` 的 `命令能否用`）。关掉高亮的用户
   // 从格式化工具栏点一下，读到的是"这条通路上没实现"，那是个谎。
   // 真相是：**关掉的是解析与输入，不是这条能力**。
-  highlight: (e) => e.action(callCommand(行内标记命令[0]!.key)),
-  superscript: (e) => e.action(callCommand(行内标记命令[1]!.key)),
-  subscript: (e) => e.action(callCommand(行内标记命令[2]!.key)),
-  underline: (e) => e.action(callCommand(行内标记命令[3]!.key)),
+  highlight: (e) => e.action(callCommand(inlineMarkCommand[0]!.key)),
+  superscript: (e) => e.action(callCommand(inlineMarkCommand[1]!.key)),
+  subscript: (e) => e.action(callCommand(inlineMarkCommand[2]!.key)),
+  underline: (e) => e.action(callCommand(inlineMarkCommand[3]!.key)),
+  comment: (e) =>
+    e.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const { from, to } = view.state.selection;
+      const text = view.state.doc.textBetween(from, to, "\n");
+      const html = view.state.schema.nodes.html;
+      if (!html) return;
+      const tr = view.state.tr.replaceSelectionWith(
+        html.create({ value: `<!-- ${text} -->` }),
+      );
+      view.dispatch(tr);
+      view.focus();
+    }),
   text: (e) => e.action(callCommand(turnIntoTextCommand.key)),
   // ⚠️⚠️ **这三条是「切换」不是「再包一层」**（2026-10-16 修的用户报的缺陷）：
   // 上游那三条（`wrapInBlockquote` / `wrapInBulletList` / `wrapInOrderedList`）
   // 走的是 `prosemirror-commands` 的 `wrapIn`，那个**无条件往外面再裹一层**
   // ——用户连点五下「引用」，正文里就长出五层引用（他报的截图正是那样：
   // 左边一排套着的竖线）。菜单/工具栏那一颗按钮的语义是**开关**，不是"再包一层"。
-  quote: (e) => 切换包裹(e, "blockquote", () => e.action(callCommand(wrapInBlockquoteCommand.key))),
-  ul: (e) => 切换包裹(e, "bullet_list", () => e.action(callCommand(wrapInBulletListCommand.key))),
-  ol: (e) => 切换包裹(e, "ordered_list", () => e.action(callCommand(wrapInOrderedListCommand.key))),
-  task: (e) => 转成任务列表(e),
+  quote: (e) => splitReplacePackageWrap(e, "blockquote", () => e.action(callCommand(wrapInBlockquoteCommand.key))),
+  ul: (e) => splitReplacePackageWrap(e, "bullet_list", () => e.action(callCommand(wrapInBulletListCommand.key))),
+  ol: (e) => splitReplacePackageWrap(e, "ordered_list", () => e.action(callCommand(wrapInOrderedListCommand.key))),
+  task: (e) => convertBecomeTaskTaskColumnTable(e),
   // 与其他块级按钮一致：在代码块里再按一次退回普通段落。上游
   // `createCodeBlockCommand` 在“已经是代码块”时返回 false，图标看着能点却完全没有
   // 反馈；工具栏按钮必须始终是一次可见的切换。
   codeBlock: (e) =>
     e.action(
       callCommand(
-        (光标在代码块(e.ctx.get(editorViewCtx).state)
+        (cursorAtCodeBlock(e.ctx.get(editorViewCtx).state)
           ? turnIntoTextCommand
           : createCodeBlockCommand
         ).key,
@@ -223,13 +236,13 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
     ),
   hr: (e) => e.action(callCommand(insertHrCommand.key)),
   // 公式块：`plugin-math` 没有插入命令，见 `insert.ts` 的 `插公式块`（2026-09-26）。
-  mathBlock: (e) => 插公式块(e),
+  mathBlock: (e) => insertCommonStyleBlock(e),
   // 内容目录：插一段普通 markdown 列表，两头用注释夹住；已有就原地更新。
   // ⚠️ `strict` 由上面带进来（缺省 = 宽松），编辑器实例自己不知道这个设置——
   // 理由写在 `create-types.ts::CommandPayload.strict`。
-  toc: (e, p) => 插目录(e, p?.strict ?? false),
+  toc: (e, p) => insertItemRecord(e, p?.strict ?? false),
   // 脚注：gfm 给了节点与解析/序列化，缺"从零插一条"，见 `footnote.ts`（2026-09-27）。
-  footnote: (e) => 插脚注(e),
+  footnote: (e) => insertFootNote(e),
 
   // ⚠️ **表格插的是 3 × 3**，而不是"先弹个框问行列数"。
   // `insertTableCommand` 的 `row`/`col` 缺省也能用，但缺省值不写出来就成了
@@ -239,19 +252,19 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   tableRowBelow: (e) => e.action(callCommand(addRowAfterCommand.key)),
   tableColLeft: (e) => e.action(callCommand(addColBeforeCommand.key)),
   tableColRight: (e) => e.action(callCommand(addColAfterCommand.key)),
-  tableDelRow: (e) => 表格删行(e),
-  tableDelCol: (e) => 表格删列(e),
-  tableDel: (e) => 表格删表(e),
-  tableAlignLeft: (e) => e.action(callCommand(setAlignCommand.key, "left")),
-  tableAlignCenter: (e) => e.action(callCommand(setAlignCommand.key, "center")),
-  tableAlignRight: (e) => e.action(callCommand(setAlignCommand.key, "right")),
-  tableResize: (e, p) => 调整当前表格(e, p?.columns ?? 3, p?.rows ?? 3),
-  tableMoveRowUp: (e) => 移动当前表行(e, -1),
-  tableMoveRowDown: (e) => 移动当前表行(e, 1),
-  tableMoveColLeft: (e) => 移动当前表列(e, -1),
-  tableMoveColRight: (e) => 移动当前表列(e, 1),
-  tableCopy: (e) => 复制当前表格(e),
-  tableFormat: (e) => 格式化当前表格(e),
+  tableDelRow: (e) => deleteTableRow(e),
+  tableDelCol: (e) => deleteTableColumn(e),
+  tableDel: (e) => deleteWholeTable(e),
+  tableAlignLeft: (e) => alignCurrentTableColumn(e, "left"),
+  tableAlignCenter: (e) => alignCurrentTableColumn(e, "center"),
+  tableAlignRight: (e) => alignCurrentTableColumn(e, "right"),
+  tableResize: (e, p) => resizeCurrentTable(e, p?.columns ?? 3, p?.rows ?? 3),
+  tableMoveRowUp: (e) => moveCurrentTableRow(e, -1),
+  tableMoveRowDown: (e) => moveCurrentTableRow(e, 1),
+  tableMoveColLeft: (e) => moveCurrentTableColumn(e, -1),
+  tableMoveColRight: (e) => moveCurrentTableColumn(e, 1),
+  tableCopy: (e) => duplicateCurrentTable(e),
+  tableFormat: (e) => formatCurrentTable(e),
 
   // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/ImageDialog.tsx`）。
   // 缺省值给空串而不是"不执行"——空串的语义是"插一个还没填地址的链接/图片"，
@@ -267,23 +280,23 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
 
   // 「插入链接」与「去掉链接」那两条（`docs/07` 第 96 / 102 项，2026-10-07）。
   // ⚠️ 实现全在 `link-edit.ts`（找光标处那条链接、把新文字拼出来），这里只挂名。
-  linkSet: (e, p) => 装链接(e, p),
-  linkRemove: (e) => 摘链接(e),
+  linkSet: (e, p) => installLink(e, p),
+  linkRemove: (e) => removeLink(e),
 
-  clearFormat: (e) => 清除格式(e),
+  clearFormat: (e) => clearRemoveCellStyle(e),
 
   // 「选择」这一族（2026-10-07）。⚠️ 四条共用 `select.ts` 第一组那几个纯函数
   // （哪个字算一个词、哪一段算一句），**那边实现、这里只挂名**——判据塞进这张
   // 表就成了"清单里夹着算法"（`select.ts` 文件头）。⚠️ 源码模式走的是**同一套
   // 判据**（`source-commands.ts`），别在那里另写一份。
-  selectLine: (e) => 选行(e),
-  selectWord: (e) => 选词(e),
-  selectSentence: (e) => 选句(e),
-  deleteWord: (e) => 删词(e),
+  selectLine: (e) => selectLine(e),
+  selectWord: (e) => selectWord(e),
+  selectSentence: (e) => selectSentence(e),
+  deleteWord: (e) => removeWord(e),
   // `Alt+↑` / `Alt+↓`（2026-10-07）。⚠️ 搬的是**列表项**（光标在列表里时）或
   // **顶层块**，表格里不做、到边不动——理由在 `move-block.ts` 文件头。
-  moveLineUp: (e) => 移动块(e, -1),
-  moveLineDown: (e) => 移动块(e, 1),
+  moveLineUp: (e) => moveBlock(e, -1),
+  moveLineDown: (e) => moveBlock(e, 1),
 
   /**
    * 用文本替换当前选区（空串 = 删掉选区）。
@@ -313,10 +326,10 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
  * ⚠️ 判据看**祖先链**而不是"父节点是不是它"：`> > x` 这种套着的引用里也要算"在"，
  * 否则第二次点就成了"再包一层"，正是要修的那个缺陷。
  */
-function 在包裹里(state: EditorState, 类型: NodeType): boolean {
+function atPackageWrapInside(state: EditorState, type: NodeType): boolean {
   const { $from } = state.selection;
-  for (let 层 = $from.depth; 层 >= 0; 层--) {
-    if ($from.node(层).type === 类型) return true;
+  for (let layer = $from.depth; layer >= 0; layer--) {
+    if ($from.node(layer).type === type) return true;
   }
   return false;
 }
@@ -338,14 +351,14 @@ function 在包裹里(state: EditorState, 类型: NodeType): boolean {
  * ⚠️ 抬不动时（`lift` 给 `false`，比如光标在文档最外层的引用里、再往上没地方了）
  * **什么都不做**：那时"再包一层"更不是用户要的。
  */
-function 切换包裹(e: Editor, 容器名: string, 包: () => void): void {
-  const 视图 = e.ctx.get(editorViewCtx);
-  const 类型 = 视图.state.schema.nodes[容器名];
-  if (类型 && 在包裹里(视图.state, 类型)) {
-    抬一层(视图, 容器名);
+function splitReplacePackageWrap(e: Editor, containerName: string, packageValue: () => void): void {
+  const view = e.ctx.get(editorViewCtx);
+  const type = view.state.schema.nodes[containerName];
+  if (type && atPackageWrapInside(view.state, type)) {
+    liftValueLayer(view, containerName);
     return;
   }
-  包();
+  packageValue();
 }
 
 /**
@@ -359,13 +372,13 @@ function 切换包裹(e: Editor, 容器名: string, 包: () => void): void {
  *   而 `liftListItem` 正是为这一格准备的（顶层的项会被拆成普通段落＝关掉列表，
  *   嵌套的项会抬到上一层）。两者都来自 prosemirror 那一套。
  */
-function 抬一层(视图: EditorView, 容器名: string): void {
-  if (容器名 === "blockquote") {
-    lift(视图.state, 视图.dispatch);
+function liftValueLayer(view: EditorView, containerName: string): void {
+  if (containerName === "blockquote") {
+    lift(view.state, view.dispatch);
     return;
   }
-  const 项 = 视图.state.schema.nodes.list_item;
-  if (项) liftListItem(项)(视图.state, 视图.dispatch);
+  const item5 = view.state.schema.nodes.list_item;
+  if (item5) liftListItem(item5)(view.state, view.dispatch);
 }
 
 /**
@@ -380,11 +393,11 @@ function 抬一层(视图: EditorView, 容器名: string): void {
  * ⚠️ 类型谓词而不是 `as`（见 {@link isHeading}）——写成 `as` 的话，表里漏了
  * 一项这种错误也会被一起放过去。
  */
-export function 跑命令(editor: Editor, name: 表内命令, payload?: CommandPayload): void {
+export function runCommand(editor: Editor, name: tableCommand, payload?: CommandPayload): void {
   if (isHeading(name)) {
     const level = Number(HEADING_RE.exec(name)![1]);
     const view = editor.ctx.get(editorViewCtx);
-    if (同层标题(view.state, level)) {
+    if (sameLayerMarkTitle(view.state, level)) {
       editor.action(callCommand(turnIntoTextCommand.key));
     } else {
       editor.action(callCommand(wrapInHeadingCommand.key, level));

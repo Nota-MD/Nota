@@ -44,7 +44,13 @@ mod 编译期 {
 #[cfg(not(target_os = "windows"))]
 fn 问一行(程序: &str, 参数: &[&str]) -> String {
     let 参数: Vec<String> = 参数.iter().map(|s| s.to_string()).collect();
-    match run_capture(程序, &参数, RunOpts::timeout(Duration::from_secs(2))) {
+    match run_capture(
+        程序,
+        &参数,
+        RunOpts::timeout(Duration::from_secs(2))
+            .env("LC_ALL", "C")
+            .env("LANG", "C"),
+    ) {
         Ran::Done { ok: true, stdout, .. } => stdout.lines().next().unwrap_or("").trim().to_string(),
         _ => String::new(),
     }
@@ -72,12 +78,7 @@ fn 发行版() -> String {
         Ok(它) => 它,
         Err(_) => return String::new(),
     };
-    for 行 in 内容.lines() {
-        if let Some(值) = 行.strip_prefix("PRETTY_NAME=") {
-            return 值.trim().trim_matches('"').to_string();
-        }
-    }
-    String::new()
+    linux_发行版(&内容)
 }
 
 /// macOS：`macOS 14.5`（两个 `sw_vers` 字段拼起来）。
@@ -86,14 +87,8 @@ fn 发行版() -> String {
 /// 是两个开关），所以这里问两次。两次都在 `问一行` 的超时里，取不到就是空串。
 #[cfg(target_os = "macos")]
 fn 发行版() -> String {
-    let 名 = 问一行("sw_vers", &["-productName"]);
     let 版本 = 问一行("sw_vers", &["-productVersion"]);
-    match (名.is_empty(), 版本.is_empty()) {
-        (true, true) => String::new(),
-        (true, false) => 版本,
-        (false, true) => 名,
-        (false, false) => format!("{名} {版本}"),
-    }
+    if 版本.is_empty() { "macOS".into() } else { format!("macOS {版本}") }
 }
 
 /// Windows：`cmd /C ver` 的那一行。
@@ -107,7 +102,7 @@ fn 发行版() -> String {
 /// ——那会拿到空串。所以这里用 `问一行非空`（见那个函数）。
 #[cfg(target_os = "windows")]
 fn 发行版() -> String {
-    问一行非空("cmd", &["/C", "ver"])
+    windows_发行版(&问一行非空("cmd", &["/C", "ver"]))
 }
 
 /// 内核 / 内部版本号。
@@ -127,12 +122,7 @@ fn 内核版本() -> String {
 #[cfg(target_os = "windows")]
 fn 内核版本() -> String {
     let 原 = 问一行非空("cmd", &["/C", "ver"]);
-    // `Microsoft Windows [Version 10.0.22631.4169]` → `10.0.22631.4169`
-    match (原.find("[Version "), 原.rfind(']')) {
-        (Some(起), Some(止)) if 止 > 起 + 9 => 原[起 + 9..止].to_string(),
-        // 认不出来就给**原串**：这一格是"排查时看一眼"，给半句也比空着强。
-        _ => 原,
-    }
+    windows_内核(&原)
 }
 
 /// 同 [`问一行`]，但**跳过空行**取第一行有内容的前面那一段。
@@ -147,7 +137,13 @@ fn 内核版本() -> String {
 #[cfg(target_os = "windows")]
 fn 问一行非空(程序: &str, 参数: &[&str]) -> String {
     let 参数: Vec<String> = 参数.iter().map(|s| s.to_string()).collect();
-    match run_capture(程序, &参数, RunOpts::timeout(Duration::from_secs(2))) {
+    match run_capture(
+        程序,
+        &参数,
+        RunOpts::timeout(Duration::from_secs(2))
+            .env("LC_ALL", "C")
+            .env("LANG", "C"),
+    ) {
         Ran::Done { ok: true, stdout, .. } => stdout
             .lines()
             .map(str::trim)
@@ -156,6 +152,49 @@ fn 问一行非空(程序: &str, 参数: &[&str]) -> String {
             .to_string(),
         _ => String::new(),
     }
+}
+
+fn linux_发行版(内容: &str) -> String {
+    let mut name = "";
+    let mut version = "";
+    for line in 内容.lines() {
+        let value = |prefix: &str| {
+            line.strip_prefix(prefix)
+                .map(|value| value.trim().trim_matches('"'))
+        };
+        if let Some(value) = value("NAME=") {
+            name = value;
+        } else if let Some(value) = value("VERSION_ID=") {
+            version = value;
+        }
+    }
+    match (name.is_empty(), version.is_empty()) {
+        (false, false) => format!("{name} {version}"),
+        (false, true) => name.to_string(),
+        _ => "Linux".to_string(),
+    }
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn version_token(text: &str) -> String {
+    text.split(|c: char| c.is_whitespace() || matches!(c, '[' | ']' | '(' | ')'))
+        .find(|part| {
+            part.chars().next().is_some_and(|c| c.is_ascii_digit()) && part.contains('.')
+        })
+        .unwrap_or("")
+        .trim_matches(|c: char| !c.is_ascii_digit() && c != '.')
+        .to_string()
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn windows_发行版(raw: &str) -> String {
+    let version = version_token(raw);
+    if version.is_empty() { "Windows".into() } else { format!("Windows {version}") }
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn windows_内核(raw: &str) -> String {
+    version_token(raw)
 }
 
 /// GTK 的**运行时**版本（`major.minor.micro`）。
@@ -309,5 +348,24 @@ mod tests {
     fn 编译时刻是个像样的秒数() {
         // 2020-01-01 之后的秒数。比这更早只可能是 build.rs 拿到了一个假时间。
         assert!(收集().build_time > 1_577_836_800);
+    }
+
+    #[test]
+    fn linux_系统名固定英文组成() {
+        let text = "NAME=\"Fedora Linux\"\nVERSION_ID=44\nPRETTY_NAME=\"本地化名称\"\n";
+        assert_eq!(linux_发行版(text), "Fedora Linux 44");
+    }
+
+    #[test]
+    fn windows_本地化ver仍归一化为英文系统名和版本() {
+        let text = "Microsoft Windows [版本 10.0.26100.3915]";
+        assert_eq!(windows_发行版(text), "Windows 10.0.26100.3915");
+        assert_eq!(windows_内核(text), "10.0.26100.3915");
+    }
+
+    #[test]
+    fn 无法解析的windows输出也不会泄漏本地化原文() {
+        assert_eq!(windows_发行版("Microsoft Windows [版本 未知]"), "Windows");
+        assert_eq!(windows_内核("Microsoft Windows [版本 未知]"), "");
     }
 }

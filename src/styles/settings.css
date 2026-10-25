@@ -236,6 +236,188 @@
   --stg-col-label: 190px; /* 子标签 */
 }
 
+/* ── 导出设置（2026-10-25，按 Typora 的固定项 / 自定义导出器两段）────── */
+
+.export-settings-head {
+  margin-bottom: 14px;
+}
+
+.export-settings-head h2 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.export-settings-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.export-nav {
+  display: flex;
+  min-height: 520px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export-nav-fixed,
+.export-nav-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.export-nav button {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.export-nav button:hover,
+.export-nav button:focus-visible {
+  background: var(--bg-hover);
+}
+
+.export-nav button.is-current {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.export-nav-sep {
+  height: 1px;
+  margin: 7px 6px;
+  background: var(--border);
+}
+
+.export-nav-tools {
+  display: grid;
+  grid-template-columns: 30px 30px 1fr 30px 30px 30px;
+  gap: 2px;
+  margin-top: 10px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.export-nav-tools button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  place-items: center;
+  padding: 0;
+  color: var(--fg-muted);
+}
+
+.export-nav-tools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.export-nav-tools svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.export-settings-body {
+  min-width: 0;
+  min-height: 520px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.export-settings-body .stg-group {
+  margin-bottom: 18px;
+}
+
+.export-template-backdrop {
+  position: fixed;
+  z-index: 260;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding-top: 18vh;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+
+.export-template-dialog {
+  width: min(430px, calc(100vw - 32px));
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  box-shadow: var(--popup-shadow);
+}
+
+.export-template-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.export-template-dialog h3 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.export-template-close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-muted);
+}
+
+.export-template-close:hover,
+.export-template-close:focus-visible {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.export-template-dialog select {
+  width: 100%;
+  min-height: 32px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input, var(--bg));
+  color: var(--fg);
+  font: inherit;
+}
+
+.export-template-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 /* ── 一组 ────────────────────────────────────────────────────────────────
  *
  * 版式见文件头。三条要一起读：

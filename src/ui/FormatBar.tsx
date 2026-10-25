@@ -28,18 +28,18 @@
  * # 图标
  *
  * 2026-09-24 起有一半按钮画的是图标（`ui/Icon.tsx` 里那套从 Folio 搬来的）。
- * **另一半仍是文字字形**（`H1`/`引`/`任`），理由写在 `按钮.icon` 那段注释里。
- * 两种长相共用一套按钮样式，高亮/悬停的颜色也是同一条 `color` 链。
+ * 标题与正文专用操作也使用 Nota 自绘的 SVG。所有按钮共用一套尺寸、
+ * 高亮与悬停颜色。
  */
 
 import type { Ref } from "react";
 
 import type { CommandState } from "@/editor/command-state";
 import type { EditorCommand } from "@/editor/create";
-import { useT, 语言 } from "@/i18n";
+import { useT, language } from "@/i18n";
 import { formatAccel } from "@/ui/accel";
 import { MENUS, walkMenuItems } from "@/ui/commands";
-import { Icon, type 图标名 } from "@/ui/Icon";
+import { Icon, type iconName } from "@/ui/Icon";
 
 interface Props {
   /**
@@ -79,7 +79,7 @@ interface Props {
 }
 
 /** 菜单 id → 快捷键文本。**从 `MENUS` 派生，不手写**（见文件头）。 */
-const 键位表 = (() => {
+const keyPositionTable = (() => {
   const m = new Map<string, string>();
   walkMenuItems(MENUS, (item) => {
     if (item.accel) m.set(item.id, item.accel);
@@ -99,11 +99,11 @@ const 键位表 = (() => {
  * 按钮的 `title` 和 `aria-label` 要的是**同一句话**；各自拼一份的话，中文界面
  * 上会出现半角括号，而且是那种没人会当成 bug 报上来的不一致。
  */
-export function 提示(menu: string, 名字: string): string {
-  const a = 键位表.get(menu);
-  if (!a) return 名字;
-  const 键 = formatAccel(a);
-  return 语言() === "zh-CN" ? `${名字}（${键}）` : `${名字} (${键})`;
+export function notice(menu: string, name2: string): string {
+  const a = keyPositionTable.get(menu);
+  if (!a) return name2;
+  const key = formatAccel(a);
+  return language() === "zh-CN" ? `${name2}（${key}）` : `${name2} (${key})`;
 }
 
 /**
@@ -118,7 +118,7 @@ export function 提示(menu: string, 名字: string): string {
  * 它们的按钮**不受设置里那三个开关影响**：关掉的是"解析与输入"，不是这条
  * 能力（见 `command-table.ts` 的 `COMMANDS` 那四条注释）。
  */
-type 行内位 =
+type InlinePosition =
   | "bold"
   | "italic"
   | "strike"
@@ -132,15 +132,15 @@ type 行内位 =
  * 一颗按钮。`menu` 是它在菜单表里的对应条目——**只用来取快捷键提示**，
  * 点了跑的还是 `cmd`。
  */
-export interface 按钮 {
+export interface PressButton {
   cmd: EditorCommand;
   menu: string;
   label: string;
   /**
    * 有它就用图标，没有就用 `label` 那个文字字形。
    *
-   * ⚠️ **"文字字形"只留给拉丁字母**（`H1`/`H2`/`H3`、`</>`）：
-   * `H1` 这个字形比任何小图标都清楚，而且它本来就是两个字母，16px 下不糊。
+   * 标题按钮的三枚图标由 Nota 自绘（`nota-heading-{1,2,3}-symbolic`）：
+   * 字母 H 与数字用轮廓路径画成，不依赖界面字体，也不会因主题字体换脸。
    *
    * ⚠️ **汉字不许当图标**。原先引用和任务列表写的是 `引`/`任`——汉字笔画密，
    * 缩到 16px 是一团黑，而且和左右两边真正的图形摆在一起像是没对齐。
@@ -148,15 +148,15 @@ export interface 按钮 {
    * 见 `src/assets/icons/`）。Folio 那 96 枚里没有现成的，但为这一处开两枚
    * 是值得的：工具栏是**整条一起看**的，混着文字和图形最扎眼。
    */
-  icon?: 图标名;
+  icon?: iconName;
   /** 块级那一组用：`state.block` 等于它时高亮。 */
   block?: CommandState["block"];
   /** 行内那一组用：`state[key]` 为真时高亮。 */
-  on?: 行内位;
+  on?: InlinePosition;
 }
 
 /** 行内标记。可以同时亮（粗体 + 斜体是真的同时成立的）。 */
-const 行内组: 按钮[] = [
+const inlineGroup: PressButton[] = [
   { cmd: "bold", menu: "fmt.bold", label: "B", icon: "folio-format-text-bold-symbolic", on: "bold" },
   { cmd: "italic", menu: "fmt.italic", label: "I", icon: "folio-format-text-italic-symbolic", on: "italic" },
   { cmd: "strike", menu: "fmt.strike", label: "S", icon: "folio-format-text-strikethrough-symbolic", on: "strike" },
@@ -177,7 +177,7 @@ const 行内组: 按钮[] = [
 ];
 
 /** 链接与图片。它们要弹框问地址，所以没有"亮不亮"这一说。 */
-const 链接组: 按钮[] = [
+const linkGroup: PressButton[] = [
   { cmd: "link", menu: "fmt.link", label: "Link", icon: "folio-insert-link-symbolic" },
   { cmd: "image", menu: "fmt.image", label: "Image", icon: "folio-insert-image-symbolic" },
 ];
@@ -190,10 +190,10 @@ const 链接组: 按钮[] = [
  * （`list_item.checked` 是不是 `null`）。合成一颗的话，光标在任务项里
  * 时亮的是"无序列表"，用户会以为自己没转成功。
  */
-const 块组: 按钮[] = [
-  { cmd: "h1", menu: "para.h1", label: "H1", block: "h1" },
-  { cmd: "h2", menu: "para.h2", label: "H2", block: "h2" },
-  { cmd: "h3", menu: "para.h3", label: "H3", block: "h3" },
+const blockGroup: PressButton[] = [
+  { cmd: "h1", menu: "para.h1", label: "H1", icon: "nota-heading-1-symbolic", block: "h1" },
+  { cmd: "h2", menu: "para.h2", label: "H2", icon: "nota-heading-2-symbolic", block: "h2" },
+  { cmd: "h3", menu: "para.h3", label: "H3", icon: "nota-heading-3-symbolic", block: "h3" },
   { cmd: "quote", menu: "para.quote", label: "Quote", icon: "nota-quote-symbolic", block: "quote" },
   { cmd: "ul", menu: "para.ul", label: "•", icon: "folio-view-list-bullet-symbolic", block: "ul" },
   { cmd: "ol", menu: "para.ol", label: "1.", icon: "folio-view-list-ordered-symbolic", block: "ol" },
@@ -217,15 +217,15 @@ const 块组: 按钮[] = [
  * ⚠️ `state` 为 `null`（源码模式 / 还没有文档）时**一颗都不亮**——那时候
  * 「当前选区是不是粗体」这件事根本读不出来，见 `editor/command-state.ts`。
  */
-export function 按钮亮着(b: 按钮, state: CommandState | null): boolean {
+export function isButtonActive(b: PressButton, state: CommandState | null): boolean {
   if (!state) return false;
   return b.on ? state[b.on] === true : b.block ? state.block === b.block : false;
 }
 
 /** 菜单 id → 那一颗按钮。 */
-export const 按钮表: ReadonlyMap<string, 按钮> = (() => {
-  const m = new Map<string, 按钮>();
-  for (const b of [...行内组, ...链接组, ...块组]) m.set(b.menu, b);
+export const pressButtonTable: ReadonlyMap<string, PressButton> = (() => {
+  const m = new Map<string, PressButton>();
+  for (const b of [...inlineGroup, ...linkGroup, ...blockGroup]) m.set(b.menu, b);
   return m;
 })();
 
@@ -241,8 +241,8 @@ export const 按钮表: ReadonlyMap<string, 按钮> = (() => {
  * ⚠️ 这里读的是 `按钮.cmd`，但**只拿来拼 class 名**，不是拿去执行
  * （执行那条禁令见 `按钮表` 上面那段）。
  */
-export function 字形类(menu: string): string {
-  const b = 按钮表.get(menu);
+export function characterShapeClass(menu: string): string {
+  const b = pressButtonTable.get(menu);
   return b ? `format-glyph format-glyph-${b.cmd}` : "format-glyph";
 }
 
@@ -308,27 +308,27 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
   };
 
   /** 一颗按钮。三组共用这一处渲染，免得三份 JSX 各自漂移。 */
-  const 画 = (b: 按钮) => {
+  const draw = (b: PressButton) => {
     // ⚠️ 判据搬去了模块级的 `按钮亮着`（2026-10-04）：右键菜单那边也要问
     // 同一个问题（"这一颗亮不亮"），留在组件体里它就只能是第二份。
-    const 亮 = 按钮亮着(b, state);
-    const 可亮 = Boolean(b.on || b.block);
+    const bright = isButtonActive(b, state);
+    const canActivate = Boolean(b.on || b.block);
     // 提示语与可读名字同**一句**（拼一次，两处用）：名字先翻，括号由 `提示` 拼。
-    const 提示语 = 提示(b.menu, TITLES[b.cmd] ?? b.label);
+    const noticeLanguage = notice(b.menu, TITLES[b.cmd] ?? b.label);
     return (
       <button
         key={b.cmd}
         type="button"
         className="format-btn"
-        data-on={亮}
+        data-on={bright}
         // ⚠️ `aria-pressed` 只在**已知状态**时给：源码模式下给 `false`
         // 等于断言"现在不是粗体"——而这里并不知道。
-        aria-pressed={state && 可亮 ? 亮 : undefined}
-        title={提示语}
+        aria-pressed={state && canActivate ? bright : undefined}
+        title={noticeLanguage}
         // ⚠️ 图标按钮**必须**再给一个 `aria-label`：`.icon` 是 `aria-hidden` 的，
         // 按钮里于是没有一个字，读屏只拿 `title`（最弱的那种可读名字）。
         // 给的和 `title` 同一句，所以念出来也带着快捷键。
-        aria-label={b.icon ? 提示语 : undefined}
+        aria-label={b.icon ? noticeLanguage : undefined}
         // ⚠️ `onMouseDown` 里 `preventDefault`：不拦的话，按钮会把编辑区的
         // 选区**先抢走**（浏览器的默认行为是让被点的元素获得焦点），于是命令
         // 跑在一个已经塌掉的光标上——「加粗」会变成"在原地插两个星号"。
@@ -347,18 +347,18 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
         //（`fmt.link` / `fmt.image` 那两条在 `useCommandTable` 里就是弹框）。
         onClick={() => onCommand(b.cmd)}
       >
-        {b.icon ? <Icon name={b.icon} /> : <span className={字形类(b.menu)}>{b.label}</span>}
+        {b.icon ? <Icon name={b.icon} /> : <span className={characterShapeClass(b.menu)}>{b.label}</span>}
       </button>
     );
   };
 
   return (
     <div className="format-bar" role="toolbar" aria-label={t("Formatting")} ref={ref}>
-      {行内组.map(画)}
+      {inlineGroup.map(draw)}
       <span className="format-sep" />
-      {链接组.map(画)}
+      {linkGroup.map(draw)}
       <span className="format-sep" />
-      {块组.map(画)}
+      {blockGroup.map(draw)}
       {/* 右端那颗 ×（2026-10-04，第 49 项）。
           ⚠️ **在 `.format-bar` 里面**（不是外面另起一条）：这一条是
           `overflow-x: auto` 的，而 `.format-bar-close` 靠 `position: sticky;

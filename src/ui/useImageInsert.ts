@@ -60,7 +60,7 @@ import type { Dialogs } from "@/ui/useDialogs";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 插图接线 {
+export interface InsertImageWiring {
   /**
    * 转交一条编辑命令（`useEditorCommands` 那条）。
    *
@@ -77,9 +77,9 @@ export interface 插图接线 {
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
-export interface 插图出口 {
+export interface InsertImageOutputMouth {
   /** 「图像」：问来源与替代文字，交给宿主落地，再把地址插进正文。 */
-  插入图像: () => Promise<void>;
+  insertImageLike: () => Promise<void>;
   /**
    * **把一张图插到当前光标**——三样东西的共用动作（对话框那条路内部也用它）。
    *
@@ -90,11 +90,11 @@ export interface 插图出口 {
    *（拖入是"手上正拿着一坨东西、直接扔进来"，中间插一个对话框等于把最顺手的
    * 那个动作变慢，理由见 `settings` 那一头）。自动上传不归它管。
    */
-  落一张: (source: ImageSourceArg, alt: string, 要上传?: boolean) => Promise<void>;
+  dropOneImage: (source: ImageSourceArg, alt: string, wantAbovePass?: boolean) => Promise<void>;
 }
 
 /** 认得的图片后缀。⚠️ 与 `src-tauri/src/image.rs` 的 `认得的后缀` 同一套。 */
-const 图片后缀 = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
+const imageSliceExtension = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
 
 /**
  * 这条路径看着像图片吗。
@@ -103,14 +103,14 @@ const 图片后缀 = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"]
  * 打开"）：图片后缀这张单子**只能有一份**——两处各写一张，加一种格式时改了一处
  * 漏了另一处，症状是"拖 .avif 进来它去当文本打开"。所以导出的判据，不是表。
  */
-export function 是图片文件(路径: string): boolean {
-  const 尾 = 路径.split(".").pop()?.toLowerCase() ?? "";
-  return 图片后缀.includes(尾);
+export function isImageSliceTextItem(path: string): boolean {
+  const tail = path.split(".").pop()?.toLowerCase() ?? "";
+  return imageSliceExtension.includes(tail);
 }
 
 /** 事件的目标在编辑区里吗。 */
-function 在编辑区里(目标: EventTarget | null): boolean {
-  const el = 目标 as HTMLElement | null;
+function atEditorAreaInside(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
   return !!el?.closest?.(".editor-pane");
 }
 
@@ -121,23 +121,23 @@ function 在编辑区里(目标: EventTarget | null): boolean {
  * 参数太多直接爆栈（`RangeError: Maximum call stack size exceeded`），
  * 而那个报错出现在"粘贴一张大截图"时，看起来跟图片本身有关。
  */
-async function 编成_base64(blob: Blob): Promise<string> {
+async function editBecome_base64(blob: Blob): Promise<string> {
   const buf = new Uint8Array(await blob.arrayBuffer());
   let s = "";
-  const 块 = 0x8000;
-  for (let i = 0; i < buf.length; i += 块) {
-    s += String.fromCharCode(...buf.subarray(i, i + 块));
+  const block = 0x8000;
+  for (let i = 0; i < buf.length; i += block) {
+    s += String.fromCharCode(...buf.subarray(i, i + block));
   }
   return btoa(s);
 }
 
 /** `image/png` → `png`。认不出的给 `png`（宿主那边还会再认一次）。 */
-function 从MIME取后缀(类型: string): string {
-  const 尾 = (类型.split("/")[1] ?? "").toLowerCase();
-  return 图片后缀.includes(尾) ? 尾 : "png";
+function fromMIMEGetExtension(type: string): string {
+  const tail = (type.split("/")[1] ?? "").toLowerCase();
+  return imageSliceExtension.includes(tail) ? tail : "png";
 }
 
-export function useImageInsert(w: 插图接线): 插图出口 {
+export function useImageInsert(w: InsertImageWiring): InsertImageOutputMouth {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -157,10 +157,10 @@ export function useImageInsert(w: 插图接线): 插图出口 {
    *   做的事，这里只管把结果说给用户听（见 `r.upload`）。
    * 两条路的结果一样：**正文里总有一条能用的地址**。
    */
-  const 落一张 = useCallback(
-    async (source: ImageSourceArg, alt: string, 要上传 = false) => {
+  const dropOneImage = useCallback(
+    async (source: ImageSourceArg, alt: string, wantAbovePass = false) => {
       // ── 手动上传：勾了才走这一步 ──────────────────────────────────────
-      if (要上传) {
+      if (wantAbovePass) {
         try {
           const { url } = await api.image.uploadOne(docId, source);
           run("image", { src: url, alt });
@@ -181,14 +181,14 @@ export function useImageInsert(w: 插图接线): 插图出口 {
         // 就是用户要的，再弹一条"图片留在原处"是噪音。
         // ⚠️ 这张表的**键**是宿主回的原始值（`r.did`），值才是给用户看的话——
         // 所以中文只出现在右边，而且必须在这一层（组件渲染期间）现翻。
-        const 一句: Record<string, string> = {
+        const oneSentence: Record<string, string> = {
           copied: t("Image copied to {0}", r.src),
           downloaded: t("Image downloaded from the web to {0}", r.src),
           written: t("Image written to {0}", r.src),
           existing: t("{0} already has this image, so it is referenced directly (nothing was saved twice).", r.src),
         };
-        const 话 = 一句[r.did];
-        if (话) toast(话, "info");
+        const speech = oneSentence[r.did];
+        if (speech) toast(speech, "info");
         // ⚠️ 剪贴板来的图**必须落盘**：设置是「无特殊操作」时宿主退回了
         // 「复制到 ./assets」。这是全仓唯一一处"设置说的和做的不一样"，
         // 所以要说出来——不说的话，用户会以为设置没生效。
@@ -221,57 +221,57 @@ export function useImageInsert(w: 插图接线): 插图出口 {
   );
 
   /** 剪贴板里那张图 → 落盘 → 插进正文。⚠️ 这条路**没有手动上传**（见文件头）。 */
-  const 收下剪贴板 = useCallback(
+  const receiveBelowCutPasteBoard = useCallback(
     async (blob: Blob) => {
       if (!docId) {
         toast(t("Open a document before pasting an image."), "info");
         return;
       }
       try {
-        const data = await 编成_base64(blob);
-        await 落一张({ kind: "base64", data, ext: 从MIME取后缀(blob.type) }, "");
+        const data = await editBecome_base64(blob);
+        await dropOneImage({ kind: "base64", data, ext: fromMIMEGetExtension(blob.type) }, "");
       } catch (e) {
         toast(t("Could not read the image from the clipboard: {0}", String(e)), "error");
       }
     },
-    [docId, 落一张, toast],
+    [docId, dropOneImage, toast],
   );
 
   // ── 粘贴 ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      if (!在编辑区里(e.target)) return;
-      const 项 = Array.from(e.clipboardData?.items ?? []);
-      const 图 = 项.find((i) => i.kind === "file" && i.type.startsWith("image/"));
-      const blob = 图?.getAsFile();
+      if (!atEditorAreaInside(e.target)) return;
+      const item5 = Array.from(e.clipboardData?.items ?? []);
+      const image = item5.find((i) => i.kind === "file" && i.type.startsWith("image/"));
+      const blob = image?.getAsFile();
       if (!blob) return; // 不是图片：放行，让编辑器按它自己的规矩处理文本
       // ⚠️ 必须拦住：不拦的话编辑器会把这次粘贴当成"没有可插入的内容"，
       // 而我们已经异步去落盘了——两条路都在跑，谁先到看运气。
       e.preventDefault();
-      void 收下剪贴板(blob);
+      void receiveBelowCutPasteBoard(blob);
     };
     document.addEventListener("paste", onPaste, true);
     return () => document.removeEventListener("paste", onPaste, true);
-  }, [收下剪贴板]);
+  }, [receiveBelowCutPasteBoard]);
 
-  const 插入图像 = useCallback(async () => {
+  const insertImageLike = useCallback(async () => {
     // ⚠️ 先问一次宿主"这台机器配了上传服务器吗、这份文档要不要自动传"，
     // 再拿它决定框里那一行长什么样（`ImageRequest` 那两条注释）。读失败
     // **不让插图这条整体挂掉**：当成没配服务器——最坏是勾选框不出现，
     // 而插图本身照旧能用（这条路上唯一"绝不能失败"的事是插图）。
-    let 能上传 = false;
-    let 会自动上传 = false;
+    let ableAbovePass = false;
+    let meetingSelfActionAbovePass = false;
     try {
       const s = await api.image.uploadGet(docId);
-      能上传 = s.canUpload;
-      会自动上传 = s.willAutoUpload;
+      ableAbovePass = s.canUpload;
+      meetingSelfActionAbovePass = s.willAutoUpload;
     } catch (e) {
       console.warn("[nota] 读上传设置失败，按没配服务器处理：", e);
     }
-    const a = await askImage({ 文档存过盘: docSaved, 能上传, 会自动上传 });
+    const a = await askImage({ documentSaved: docSaved, ableAbovePass, meetingSelfActionAbovePass });
     if (!a) return; // 用户取消了，不是错误
-    await 落一张(a.source as ImageSourceArg, a.alt, a.上传);
-  }, [askImage, docId, docSaved, 落一张]);
+    await dropOneImage(a.source as ImageSourceArg, a.alt, a.abovePass);
+  }, [askImage, docId, docSaved, dropOneImage]);
 
-  return { 插入图像, 落一张 };
+  return { insertImageLike, dropOneImage };
 }

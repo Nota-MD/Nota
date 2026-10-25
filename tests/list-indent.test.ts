@@ -102,30 +102,30 @@ import remarkStringify from "remark-stringify";
 
 /* ── 一支极小的测试工装（与 `math-currency.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
@@ -278,39 +278,39 @@ const schema = new Schema({
  * 那条死规矩的落点。⚠️ 不设它的话 remark 的默认是 `*`，`- 甲` 会变成 `* 甲`，
  * 本文件量出来的字节就与产品无关了。
  */
-const 串化 = { bullet: "-" as const, rule: "-" as const };
+const stringConvert = { bullet: "-" as const, rule: "-" as const };
 
-const 处理机 = unified().use(remarkParse).use(remarkGfm).use(remarkStringify, 串化);
+const placeManageMachine = unified().use(remarkParse).use(remarkGfm).use(remarkStringify, stringConvert);
 
-const 解析 = ParserState.create(schema, 处理机);
-const 序列化 = SerializerState.create(schema, 处理机);
+const parse = ParserState.create(schema, placeManageMachine);
+const serialize = SerializerState.create(schema, placeManageMachine);
 
 /** 一份源码 → 文档树 → 再序列化出去的字节。 */
-const 往返 = (源: string): string => 序列化(解析(源));
+const roundtrip = (source3: string): string => serialize(parse(source3));
 
 /** 把那棵树画成缩进文本，用来**逐字**钉结构（比一串下标好读、也好改）。 */
-function 树形(节点: PMNode, 深 = 0): string {
-  const 头 = `${"  ".repeat(深)}${节点.type.name}`;
-  const 自己 = 节点.isText ? `${头}(${JSON.stringify(节点.text)})` : 头;
-  const 孩子们: string[] = [];
-  for (let i = 0; i < 节点.childCount; i++) 孩子们.push(树形(节点.child(i), 深 + 1));
-  return [自己, ...孩子们].join("\n");
+function treeShape(node: PMNode, dark2 = 0): string {
+  const head2 = `${"  ".repeat(dark2)}${node.type.name}`;
+  const selfSelf = node.isText ? `${head2}(${JSON.stringify(node.text)})` : head2;
+  const children: string[] = [];
+  for (let i = 0; i < node.childCount; i++) children.push(treeShape(node.child(i), dark2 + 1));
+  return [selfSelf, ...children].join("\n");
 }
 
 /** 顶层那一颗列表节点（本文件每个形状都只有一颗顶层块）。 */
-function 首块(doc: PMNode): PMNode {
+function firstBlock(doc: PMNode): PMNode {
   if (doc.childCount !== 1) throw new Error(`顶层块数不是 1，是 ${doc.childCount}`);
   return doc.child(0);
 }
 
 /* ── 一、子列表那一例（Typora 文档里那个 `10.` 例）──────────────────── */
 
-组("一、`10. aaa` 后面接几格才算子列表（Typora 严格档那个例子）");
+group("一、`10. aaa` 后面接几格才算子列表（Typora 严格档那个例子）");
 
-测("接 **2 格** ⇒ **不是子列表**：两个同级项（编号顺排成 `11.`）", () => {
-  const doc = 解析("10. aaa\n  1. ccc");
-  等(
-    树形(doc),
+testCase("接 **2 格** ⇒ **不是子列表**：两个同级项（编号顺排成 `11.`）", () => {
+  const doc = parse("10. aaa\n  1. ccc");
+  equal(
+    treeShape(doc),
     [
       "doc",
       "  ordered_list",
@@ -323,13 +323,13 @@ function 首块(doc: PMNode): PMNode {
     ].join("\n"),
     "2 格 < 内容首列（4）⇒ 那一行不在第一项里面",
   );
-  等(首块(doc).childCount, 2, "同级项数");
+  equal(firstBlock(doc).childCount, 2, "同级项数");
 });
 
-测("接 **4 格** ⇒ **是子列表**（4 = `10. ` 的内容首列）", () => {
-  const doc = 解析("10. aaa\n    1. ccc");
-  等(
-    树形(doc),
+testCase("接 **4 格** ⇒ **是子列表**（4 = `10. ` 的内容首列）", () => {
+  const doc = parse("10. aaa\n    1. ccc");
+  equal(
+    treeShape(doc),
     [
       "doc",
       "  ordered_list",
@@ -343,32 +343,32 @@ function 首块(doc: PMNode): PMNode {
     ].join("\n"),
     "4 格 = 内容首列 ⇒ 那一行是第一项里的第二块",
   );
-  等(首块(doc).childCount, 1, "同级项数");
+  equal(firstBlock(doc).childCount, 1, "同级项数");
 });
 
-测("无序列表同理：`- ` 的内容首列是 2，**2 格**算子列表、**1 格**不算", () => {
-  const 两格 = 解析("- aaa\n  - bbb");
-  等(首块(两格).childCount, 1, "2 格：一个项");
-  等(首块(两格).child(0).childCount, 2, "2 格：项里两块（正文 ＋ 子列表）");
-  const 一格 = 解析("- aaa\n - bbb");
-  等(首块(一格).childCount, 2, "1 格：两个同级项");
-  等(首块(一格).child(0).childCount, 1, "1 格：第一项里只有正文");
+testCase("无序列表同理：`- ` 的内容首列是 2，**2 格**算子列表、**1 格**不算", () => {
+  const twoCells = parse("- aaa\n  - bbb");
+  equal(firstBlock(twoCells).childCount, 1, "2 格：一个项");
+  equal(firstBlock(twoCells).child(0).childCount, 2, "2 格：项里两块（正文 ＋ 子列表）");
+  const valueCell = parse("- aaa\n - bbb");
+  equal(firstBlock(valueCell).childCount, 2, "1 格：两个同级项");
+  equal(firstBlock(valueCell).child(0).childCount, 1, "1 格：第一项里只有正文");
 });
 
-测("⚠️ 那一格不够时**不只是「不成列表」**：编号会被重排（`1.` → `11.`）", () => {
-  等(往返("10. aaa\n  1. ccc"), "10. aaa\n11. ccc\n", "同级项按 start 顺排");
+testCase("⚠️ 那一格不够时**不只是「不成列表」**：编号会被重排（`1.` → `11.`）", () => {
+  equal(roundtrip("10. aaa\n  1. ccc"), "10. aaa\n11. ccc\n", "同级项按 start 顺排");
 });
 
 /* ── 二、缩进**不在文档树里**（所以"改 content 表达式"这条路够不着）──── */
 
-组("二、缩进不是文档树里的量：同一棵树、两种缩进");
+group("二、缩进不是文档树里的量：同一棵树、两种缩进");
 
-测("`1. aaa` 接 2 格与接 3 格的 **`bbb` 解析出同一棵树**", () => {
-  const 二 = 解析("1. aaa\n  bbb");
-  const 三 = 解析("1. aaa\n   bbb");
-  等(树形(二), 树形(三), "2 格与 3 格在树里长得一模一样");
-  等(
-    树形(二),
+testCase("`1. aaa` 接 2 格与接 3 格的 **`bbb` 解析出同一棵树**", () => {
+  const two = parse("1. aaa\n  bbb");
+  const three = parse("1. aaa\n   bbb");
+  equal(treeShape(two), treeShape(three), "2 格与 3 格在树里长得一模一样");
+  equal(
+    treeShape(two),
     [
       "doc",
       "  ordered_list",
@@ -380,25 +380,25 @@ function 首块(doc: PMNode): PMNode {
   );
 });
 
-测("`list_item` 的 content 表达式里没有「缩到第几格」这个量", () => {
-  等(schema.nodes.list_item.spec.content, "paragraph block*", "照 `preset-commonmark` 抄的那一句");
-  等(schema.nodes.list_item.spec.attrs?.indent, undefined, "没有 `indent` 这个属性");
-  等(schema.nodes.doc.spec.content, "block+", "文档那一层也没有");
+testCase("`list_item` 的 content 表达式里没有「缩到第几格」这个量", () => {
+  equal(schema.nodes.list_item.spec.content, "paragraph block*", "照 `preset-commonmark` 抄的那一句");
+  equal(schema.nodes.list_item.spec.attrs?.indent, undefined, "没有 `indent` 这个属性");
+  equal(schema.nodes.doc.spec.content, "block+", "文档那一层也没有");
 });
 
-测("⚠️ 所以 Nota 在「续行」这一例上比 Typora 严格档**宽松**：`bbb` 不掉出列表", () => {
+testCase("⚠️ 所以 Nota 在「续行」这一例上比 Typora 严格档**宽松**：`bbb` 不掉出列表", () => {
   // Typora 严格档说 2 格的那一行"不在同一列表里"；Nota 这里是同一段落的一部分
   // （CommonMark 的 lazy continuation）。事实如实钉住，**不修**——理由在文件头。
-  等(首块(解析("1. aaa\n  bbb")).childCount, 1, "还是一个项");
-  等(首块(解析("1. aaa\n  bbb")).child(0).childCount, 1, "项里还只有一块");
+  equal(firstBlock(parse("1. aaa\n  bbb")).childCount, 1, "还是一个项");
+  equal(firstBlock(parse("1. aaa\n  bbb")).child(0).childCount, 1, "项里还只有一块");
 });
 
 /* ── 三、序列化：缩进 = **内容首列**，不是标记宽度 ──────────────────── */
 
-组("三、序列化那一侧：子块缩到**内容首列**（标记宽度 ＋ 1），不是标记宽度");
+group("三、序列化那一侧：子块缩到**内容首列**（标记宽度 ＋ 1），不是标记宽度");
 
 /** 手造一棵"某一项里挂着子列表"的真文档，`order` 就是那一层的编号。 */
-function 造(order: number): PMNode {
+function create2(order: number): PMNode {
   return schema.node("doc", null, [
     schema.node("ordered_list", { order, spread: false }, [
       schema.node("list_item", { spread: false, listType: "ordered", label: `${order}.` }, [
@@ -413,44 +413,44 @@ function 造(order: number): PMNode {
   ]);
 }
 
-测("`1.` 那一档：标记 2 格宽，子块缩 **3** 格", () => {
-  等(序列化(造(1)), "1. aaa\n   1. ccc\n", "3 = 「1. 」那一列的下一格");
+testCase("`1.` 那一档：标记 2 格宽，子块缩 **3** 格", () => {
+  equal(serialize(create2(1)), "1. aaa\n   1. ccc\n", "3 = 「1. 」那一列的下一格");
 });
 
-测("`10.` 那一档：标记 3 格宽，子块缩 **4** 格（⚠️ 不是 3）", () => {
-  等(序列化(造(10)), "10. aaa\n    1. ccc\n", "4 = 「10. 」的内容首列");
+testCase("`10.` 那一档：标记 3 格宽，子块缩 **4** 格（⚠️ 不是 3）", () => {
+  equal(serialize(create2(10)), "10. aaa\n    1. ccc\n", "4 = 「10. 」的内容首列");
 });
 
-测("`100.` 那一档：标记 4 格宽，子块缩 **5** 格（⚠️ 不是 4）", () => {
-  等(序列化(造(100)), "100. aaa\n     1. ccc\n", "5 = 「100. 」的内容首列");
+testCase("`100.` 那一档：标记 4 格宽，子块缩 **5** 格（⚠️ 不是 4）", () => {
+  equal(serialize(create2(100)), "100. aaa\n     1. ccc\n", "5 = 「100. 」的内容首列");
 });
 
 /* ── 四、往返：逐字节不变的那两条 ＋ 改字的那三条（第 56 项那一族）──── */
 
-组("四、打开再存：哪些逐字节不变、哪些会改字");
+group("四、打开再存：哪些逐字节不变、哪些会改字");
 
-测("✅ 对齐到内容首列的那两条：**逐字节不变**", () => {
-  等(往返("10. aaa\n    1. ccc\n"), "10. aaa\n    1. ccc\n", "4 格进、4 格出");
-  等(往返("- aaa\n  - bbb\n"), "- aaa\n  - bbb\n", "2 格进、2 格出");
+testCase("✅ 对齐到内容首列的那两条：**逐字节不变**", () => {
+  equal(roundtrip("10. aaa\n    1. ccc\n"), "10. aaa\n    1. ccc\n", "4 格进、4 格出");
+  equal(roundtrip("- aaa\n  - bbb\n"), "- aaa\n  - bbb\n", "2 格进、2 格出");
 });
 
-测("⚠️ 改字①：`1. aaa` ＋ 2 格续行 ⇒ 出 3 格", () => {
-  等(往返("1. aaa\n  bbb\n"), "1. aaa\n   bbb\n", "对齐到内容首列（3）");
+testCase("⚠️ 改字①：`1. aaa` ＋ 2 格续行 ⇒ 出 3 格", () => {
+  equal(roundtrip("1. aaa\n  bbb\n"), "1. aaa\n   bbb\n", "对齐到内容首列（3）");
 });
 
-测("⚠️ 改字②：`10. aaa` ＋ 2 格续行 ⇒ 出 4 格", () => {
-  等(往返("10. aaa\n  正文\n"), "10. aaa\n    正文\n", "对齐到内容首列（4）");
+testCase("⚠️ 改字②：`10. aaa` ＋ 2 格续行 ⇒ 出 4 格", () => {
+  equal(roundtrip("10. aaa\n  正文\n"), "10. aaa\n    正文\n", "对齐到内容首列（4）");
 });
 
-测("⚠️ 改字③：`10. aaa` ＋ 2 格 `1. ccc` ⇒ 那一行成了 `11. ccc`", () => {
+testCase("⚠️ 改字③：`10. aaa` ＋ 2 格 `1. ccc` ⇒ 那一行成了 `11. ccc`", () => {
   // 这三种都归 `docs/07` 第 56 项那一族（「打开再存，字节变了」的遗留四条）。
   // 根只有一个：**缩进不存，是序列化算出来的**。
-  等(往返("10. aaa\n  1. ccc\n"), "10. aaa\n11. ccc\n", "同级项顺排");
+  equal(roundtrip("10. aaa\n  1. ccc\n"), "10. aaa\n11. ccc\n", "同级项顺排");
 });
 
 /* ── 五、结构性证据：`strict` 没有一处接到列表 / 缩进 ────────────────── */
 
-组("五、为什么没有第二个开关：`assemble.ts` 里 `strict` 就没往这一族接");
+group("五、为什么没有第二个开关：`assemble.ts` 里 `strict` 就没往这一族接");
 
 /**
  * ⚠️ 这一组量的是**源码文本**，不是把 `createEditor` 跑起来（那要建整个
@@ -461,26 +461,28 @@ function 造(order: number): PMNode {
  */
 // ⚠️ 2026-10-07：读的文件从 `create.ts` 换成了 `assemble.ts`——`.use(标题回车成块(strict))`
 //    那一整段装配搬去了那边（`docs/07` 第 89 项），判据跟着它走。
-const create源 = readFileSync(resolve(process.cwd(), "src/editor/assemble.ts"), "utf8");
-const 含strict的行 = create源
+const createSource = readFileSync(resolve(process.cwd(), "src/editor/assemble.ts"), "utf8");
+const containsstrictOfLine = createSource
   .split("\n")
-  .map((行, i) => [i + 1, 行] as const)
-  .filter(([, 行]) => /strict/i.test(行));
+  .map((line3, i) => [i + 1, line3] as const)
+  .filter(([, line3]) => /strict/i.test(line3));
 
-测("`strict` 确实在 `assemble.ts` 里被用着（不然这一组就是空转）", () => {
-  const 有标题的 = 含strict的行.filter(([, 行]) => 行.includes("标题回车成块"));
-  if (有标题的.length === 0) {
-    throw new Error("没找到 `.use(标题回车成块(strict))`——这一组的判据失效了，先修它");
+testCase("`strict` 确实在 `assemble.ts` 里被用着（不然这一组就是空转）", () => {
+  const hasMarkTitleOf = containsstrictOfLine.filter(([, line3]) =>
+    line3.includes("markTitleReturnCarBecomeBlock"),
+  );
+  if (hasMarkTitleOf.length === 0) {
+    throw new Error("没找到 `.use(markTitleReturnCarBecomeBlock(strict))`——这一组的判据失效了");
   }
 });
 
-测("⚠️ 没有一行同时提到 `strict` 与列表 / 缩进（所以没有「第二个开关」）", () => {
-  const 接线 = 含strict的行.filter(([, 行]) =>
-    /(indent|list_item|bullet_list|ordered_list)/.test(行),
+testCase("⚠️ 没有一行同时提到 `strict` 与列表 / 缩进（所以没有「第二个开关」）", () => {
+  const wiring = containsstrictOfLine.filter(([, line3]) =>
+    /(indent|list_item|bullet_list|ordered_list)/.test(line3),
   );
   // ⚠️ 数组不能直接喂 `等`（两个空数组也不 `===`），比 JSON 串。
-  等(
-    JSON.stringify(接线.map(([号, 行]) => `${号}: ${行.trim()}`)),
+  equal(
+    JSON.stringify(wiring.map(([number, line3]) => `${number}: ${line3.trim()}`)),
     "[]",
     "`strict` 的落点只该有标题那几处",
   );
@@ -488,9 +490,9 @@ const 含strict的行 = create源
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */
 
-console.log(`\n${过} 过 / ${败} 败`);
-if (败 > 0) {
+console.log(`\n${pass} 过 / ${fail} 败`);
+if (fail > 0) {
   console.log("不过的：");
-  for (const 名 of 败的) console.log(`  - ${名}`);
+  for (const name3 of failed) console.log(`  - ${name3}`);
   process.exit(1);
 }

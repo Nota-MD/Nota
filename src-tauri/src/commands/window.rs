@@ -24,9 +24,10 @@
 //! 再起一份进程天然就是独立的（文档、工作区、插件各一份），代价只有一处：
 //! **跳过单实例那一关**（`cli.rs` 的 `--new-window`，判据与代价写在 `lib.rs` ⓿'）。
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use crate::error::{NotaError, Result};
+use crate::state::AppState;
 
 /// 主窗口的 label。⚠️ 与 `tauri.conf.json` 里那个窗口的 `label` **必须一致**；
 /// 写错了的症状是"点了没反应"（命令报"找不到窗口"，而按钮看着是亮的）。
@@ -44,40 +45,107 @@ pub fn nota_window_show_main(app: tauri::AppHandle) -> Result<()> {
         .ok_or_else(|| NotaError::other(format!("找不到窗口 `{主窗口}`")))?;
     窗.set_skip_taskbar(false)
         .map_err(|e| NotaError::other(format!("显示任务栏入口失败：{e}")))?;
+    // 窗口此前在屏幕外保持可见，以便 WebView 正常初始化。Windows 的 DWM
+    // 会把从 -10000,-10000 到屏幕中央的长距离移动演成开场动画；先收起再
+    // 定位显示可以只提交一次静态帧。X11 上这一对 hide/show 反而会多花近
+    // 一秒，因此只在 Windows 走这条路。
+    #[cfg(target_os = "windows")]
+    窗.hide()
+        .map_err(|e| NotaError::other(format!("收起预热窗口失败：{e}")))?;
     窗.center()
         .map_err(|e| NotaError::other(format!("居中主窗口失败：{e}")))?;
     窗.show()
         .map_err(|e| NotaError::other(format!("显示主窗口失败：{e}")))?;
     窗.set_focus()
         .map_err(|e| NotaError::other(format!("聚焦主窗口失败：{e}")))?;
-    crate::日志!("[nota] 编辑器已就绪，显示主窗口");
+    crate::日志!("[nota] editor ready; showing main window");
     Ok(())
 }
 
-/// 打开（或聚焦）一个只显示运行诊断信息的小窗口。
-///
-/// 这个窗口属于同一个进程，和主窗口共用设置与宿主状态；它不挂完整编辑器，
-/// 只读取 `nota_diagnostics`。重复点击时复用已有窗口。
+/// 打开独立的原始调试日志窗口；创建失败时退回纯 Rust 系统查看器。
 #[tauri::command]
-pub fn nota_window_open_debug_info(app: tauri::AppHandle) -> Result<()> {
-    if let Some(窗) = app.get_webview_window("debug-info") {
+pub fn nota_window_open_debug_log(app: tauri::AppHandle) -> Result<()> {
+    crate::日志!("[nota] opening debug log");
+    if let Some(窗) = app.get_webview_window("debug-log") {
         窗.show()
-            .map_err(|e| NotaError::other(format!("显示调试信息窗口失败：{e}")))?;
+            .map_err(|e| NotaError::other(format!("显示调试日志窗口失败：{e}")))?;
         窗.set_focus()
-            .map_err(|e| NotaError::other(format!("聚焦调试信息窗口失败：{e}")))?;
+            .map_err(|e| NotaError::other(format!("聚焦调试日志窗口失败：{e}")))?;
+        return Ok(());
+    }
+    let built = WebviewWindowBuilder::new(
+        &app,
+        "debug-log",
+        WebviewUrl::App("index.html#debug-log".into()),
+    )
+    .title("Nota Debug Log")
+    .inner_size(920.0, 620.0)
+    .min_inner_size(560.0, 320.0)
+    .build();
+    if built.is_ok() {
+        return Ok(());
+    }
+    let 程序 = std::env::current_exe()
+        .map_err(|e| NotaError::other(format!("找不到 Nota 自己的可执行文件：{e}")))?;
+    std::process::Command::new(&程序)
+        .arg(crate::cli::调试日志选项)
+        .spawn()
+        .map_err(|e| NotaError::other(format!("启动调试日志失败：{e}")))?;
+    Ok(())
+}
+
+/// 打开或聚焦编入前端的帮助窗口。
+///
+/// 帮助正文由 `ui/HelpWindow.tsx` 生成 HTML，并与其他界面文字共用翻译表。
+/// 它不挂 `<App />`、不加载 Markdown 渲染器，也不读取当前文档或插件状态。
+/// `section` 只接受帮助页认识的几个锚点，避免把任意字符串塞进窗口 URL。
+#[tauri::command]
+pub fn nota_window_open_help(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    section: Option<String>,
+) -> Result<()> {
+    let hash = 帮助哈希(section.as_deref());
+    let 标题 = if state.app_lang.to_ascii_lowercase().starts_with("zh") {
+        "Nota 帮助"
+    } else {
+        "Nota Help"
+    };
+    if let Some(窗) = app.get_webview_window("help") {
+        let mut url = 窗
+            .url()
+            .map_err(|e| NotaError::other(format!("读取帮助窗口地址失败：{e}")))?;
+        url.set_fragment(Some(hash.trim_start_matches('#')));
+        窗.navigate(url)
+            .map_err(|e| NotaError::other(format!("切换到帮助章节失败：{e}")))?;
+        窗.show()
+            .map_err(|e| NotaError::other(format!("显示帮助窗口失败：{e}")))?;
+        窗.set_focus()
+            .map_err(|e| NotaError::other(format!("聚焦帮助窗口失败：{e}")))?;
         return Ok(());
     }
     WebviewWindowBuilder::new(
         &app,
-        "debug-info",
-        WebviewUrl::App("index.html#debug-info".into()),
+        "help",
+        WebviewUrl::App(format!("index.html{hash}").into()),
     )
-    .title("Nota Debug Information")
-    .inner_size(720.0, 520.0)
-    .min_inner_size(520.0, 360.0)
+    .title(标题)
+    .inner_size(980.0, 720.0)
+    .min_inner_size(620.0, 440.0)
+    .center()
     .build()
-    .map_err(|e| NotaError::other(format!("打开调试信息窗口失败：{e}")))?;
+    .map_err(|e| NotaError::other(format!("打开帮助窗口失败：{e}")))?;
     Ok(())
+}
+
+/// 上下文帮助只允许跳到已知章节；未知值回落到帮助首页。
+fn 帮助哈希(section: Option<&str>) -> &'static str {
+    match section {
+        Some("pandoc") => "#help/pandoc",
+        Some("printing") => "#help/printing",
+        Some("shortcuts") => "#help/shortcuts",
+        _ => "#help/start",
+    }
 }
 
 /// 打开主窗口的开发者工具（菜单「视图 → 开发者工具」/ `Shift+F12`）。
@@ -94,33 +162,28 @@ pub fn nota_window_open_devtools(app: tauri::AppHandle) -> Result<()> {
     Ok(())
 }
 
-/// 把一份文档**在新窗口里打开**（标签页右键那一条，2026-09-27）。
+/// 开一个新进程窗口；有路径时顺便打开那份文档，没有路径时打开空白工作区。
 ///
-/// ⚠️ **`path` 是必需参数，没有"新开一个空白窗口"这一档**：这条命令的入口是
-/// 一个**已经存在的标签页**，而一个没有路径的标签页（新建的、从没存过盘的）
-/// 在那份菜单里是**灰的**——"在新窗口里打开一份不存在于磁盘上的东西"没有意义
-/// （新进程只能按路径去读，它拿不到这一份内存里的正文）。⚠️ 界面上判一次、
-/// 这里也判一次，不是重复：命令是对外开着的一条路，前端哪天多一个调用点
-/// 就会漏。
+/// 标签页右键传路径；「文件 → 新建窗口」不传路径。未保存的内存文档仍只能
+/// 留在原进程，不能跨进程复制。
 ///
 /// ⚠️ **不 `wait()`**：等它退出等于把主窗口一起卡住，而新窗口活多久与这里无关。
 /// 但 `spawn` 的失败**如实报错**（可执行文件没了、权限不对），别静默——
 /// "点了菜单什么都没发生"是最难查的一种症状。
 #[tauri::command]
-pub fn nota_window_open_new(path: String) -> Result<()> {
-    if path.trim().is_empty() {
-        return Err(NotaError::other("这份文档还没有路径，先保存它再开新窗口"));
-    }
+pub fn nota_window_open_new(path: Option<String>) -> Result<()> {
     let 程序 = std::env::current_exe()
         .map_err(|e| NotaError::other(format!("找不到 Nota 自己的可执行文件：{e}")))?;
-    std::process::Command::new(&程序)
-        .arg(crate::cli::新窗口选项)
-        .arg(&path)
-        .spawn()
+    let mut command = std::process::Command::new(&程序);
+    command.arg(crate::cli::新窗口选项);
+    if let Some(path) = path.filter(|path| !path.trim().is_empty()) {
+        command.arg(&path);
+    }
+    command.spawn()
         .map_err(|e| {
             NotaError::other(format!("起不了新窗口（{}）：{e}", 程序.display()))
         })?;
-    crate::日志!("[nota] 新窗口：{} {path}", 程序.display());
+    crate::日志!("[nota] new window: {}", 程序.display());
     Ok(())
 }
 
@@ -145,6 +208,20 @@ pub fn nota_window_open_new(path: String) -> Result<()> {
 /// ⚠️ **它不给参数、也没有"退出码"这一格**：正常退出就是 0。
 #[tauri::command]
 pub fn nota_quit(app: tauri::AppHandle) {
-    crate::日志!("[nota] 退出（前端确认过）");
+    crate::日志!("[nota] quit confirmed by frontend");
     app.exit(0);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::帮助哈希;
+
+    #[test]
+    fn 帮助章节只落到白名单() {
+        assert_eq!(帮助哈希(Some("pandoc")), "#help/pandoc");
+        assert_eq!(帮助哈希(Some("printing")), "#help/printing");
+        assert_eq!(帮助哈希(Some("shortcuts")), "#help/shortcuts");
+        assert_eq!(帮助哈希(Some("../settings")), "#help/start");
+        assert_eq!(帮助哈希(None), "#help/start");
+    }
 }

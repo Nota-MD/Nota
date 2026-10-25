@@ -28,7 +28,7 @@
 import type { FileFilter, Settings, TreeSort } from "@/bridge/ipc";
 
 /** 一份齐全的口径。三格都不缺，可以直接拼进请求。 */
-export interface 树口径 {
+export interface TreeMouthPath {
   sort: TreeSort;
   filter: FileFilter;
   showHidden: boolean;
@@ -42,7 +42,7 @@ export interface 树口径 {
  * 会按这一份来，之后设置到了再按设置来——用户看到的是**树先按一种规则排、
  * 眨一下眼又按另一种规则重排**。
  */
-export const 缺省口径: 树口径 = {
+export const fallbackOptions: TreeMouthPath = {
   sort: "name",
   filter: "supported",
   showHidden: false,
@@ -55,8 +55,8 @@ export const 缺省口径: 树口径 = {
  * `useCallback` 的依赖数组看着，返回一个新对象是**它该有的行为**——
  * 缓存反而会让依赖数组判不出变化（见 {@link 口径键}，那个才是给比较用的）。
  */
-export function 读口径(settings: Settings | null): 树口径 {
-  if (!settings) return 缺省口径;
+export function readMouthPath(settings: Settings | null): TreeMouthPath {
+  if (!settings) return fallbackOptions;
   return {
     sort: settings.files.tree_sort,
     filter: settings.files.tree_filter,
@@ -71,6 +71,6 @@ export function 读口径(settings: Settings | null): 树口径 {
  * 依赖它等于每次渲染都重取一遍文件树——展开十几个目录之后每次敲字都在
  * 重取。比字符串没有这个问题。
  */
-export function 口径键(口径: 树口径): string {
-  return `${口径.sort}|${口径.filter}|${口径.showHidden}`;
+export function optionKey(mouthPath: TreeMouthPath): string {
+  return `${mouthPath.sort}|${mouthPath.filter}|${mouthPath.showHidden}`;
 }

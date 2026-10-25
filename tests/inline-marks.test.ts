@@ -50,45 +50,45 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import {
-  切文本,
-  行内标记处理器,
-  行内标记转换器,
-  高亮规格,
-  上标规格,
-  下标规格,
-  下划线规格,
-  type 行内扩展开关,
-  不转义行首等号,
-  不转义孤立波浪号,
-  GFM选项,
+  splitText,
+  inlineMarkHandler,
+  inlineMarkTransformer,
+  highlightSpec,
+  superscriptSpec,
+  subscriptSpec,
+  underlineSpec,
+  type InlineExtensionFlags,
+  notConvertMeaningLineFirstEqualNumber,
+  notConvertMeaningIsolatedStandaloneWaveWaveNumber,
+  gFMOption,
 } from "../src/editor/inline-marks";
 
 /* ── 一支极小的测试工装（与 `math-delim.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
@@ -97,32 +97,32 @@ function 等(实际: unknown, 期望: unknown, 说明: string): void {
  * 数组也会判不等——而报错信息里 `JSON.stringify` 之后两边**看起来完全一样**，
  * 是那种"盯着看半天不知道哪里错"的假红。写这份测试时先踩过一次。
  */
-function 等列(实际: unknown, 期望: unknown, 说明: string): void {
-  const a = JSON.stringify(实际);
-  const b = JSON.stringify(期望);
-  if (a !== b) throw new Error(`${说明}：期望 ${b}，实际 ${a}`);
+function equalColumns(actual: unknown, expected: unknown, description: string): void {
+  const a = JSON.stringify(actual);
+  const b = JSON.stringify(expected);
+  if (a !== b) throw new Error(`${description}：期望 ${b}，实际 ${a}`);
 }
 
 /* ── 真规格 → 真 Schema → 真两台状态机 ─────────────────────────────────── */
 
 const ctx = new Ctx(new Container(), {} as never);
 ctx.inject(marksCtx);
-for (const 一 of [高亮规格, 上标规格, 下标规格, 下划线规格]) 一.ctx(ctx);
+for (const value of [highlightSpec, superscriptSpec, subscriptSpec, underlineSpec]) value.ctx(ctx);
 // ⚠️ gfm 的删除线也要**真规格**（BUG-48 那张矩阵里有 `~~下<u>下</u>下~~`，
 // 而"`~下~` 会不会被改写成 `~~下~~`"那条判据正是它说了算）。
 strikethroughSchema.ctx(ctx);
 
 /** 五条 mark 的**真**规格（`$markSchema` 注入进去的那一份）。 */
-const 四规格 = {
-  highlight: ctx.get(高亮规格.key)(ctx),
-  superscript: ctx.get(上标规格.key)(ctx),
-  subscript: ctx.get(下标规格.key)(ctx),
-  underline: ctx.get(下划线规格.key)(ctx),
+const fourSpec = {
+  highlight: ctx.get(highlightSpec.key)(ctx),
+  superscript: ctx.get(superscriptSpec.key)(ctx),
+  subscript: ctx.get(subscriptSpec.key)(ctx),
+  underline: ctx.get(underlineSpec.key)(ctx),
   strike_through: ctx.get(strikethroughSchema.key)(ctx),
 };
 
 /** 全开的那一份开关。 */
-const 全开: 行内扩展开关 = { highlight: true, superscript: true, subscript: true };
+const allOpen: InlineExtensionFlags = { highlight: true, superscript: true, subscript: true };
 
 /**
  * 一台够用的 schema：`doc` / `paragraph` / `text` 三个**照上游那份抄形状**
@@ -204,11 +204,11 @@ const schema = new Schema({
     },
   },
   marks: {
-    highlight: 四规格.highlight,
-    superscript: 四规格.superscript,
-    subscript: 四规格.subscript,
-    underline: 四规格.underline,
-    strike_through: 四规格.strike_through,
+    highlight: fourSpec.highlight,
+    superscript: fourSpec.superscript,
+    subscript: fourSpec.subscript,
+    underline: fourSpec.underline,
+    strike_through: fourSpec.strike_through,
   },
 });
 
@@ -221,8 +221,8 @@ const schema = new Schema({
  * 只能 `as` 一下。产品代码不用抄这一手——`create.ts` 那边拿到的是
  * `prev.handlers?.text`，**真的默认实现**。
  */
-const 默认文本 = ((node: MarkdownNode, _父: unknown, 状态: unknown, info: unknown) =>
-  (状态 as { safe(值: string, i: unknown): string }).safe(node.value ?? "", info)) as never;
+const defaultText = ((node: MarkdownNode, _Parent: unknown, state: unknown, info: unknown) =>
+  (state as { safe(value2: string, i: unknown): string }).safe(node.value ?? "", info)) as never;
 
 /**
  * 一台真处理机：**与 `create.ts` 那条链同形**——`remark-parse` ＋ 本仓那个
@@ -236,7 +236,7 @@ const 默认文本 = ((node: MarkdownNode, _父: unknown, 状态: unknown, info:
  * ⚠️ 每条往返都用**新的一台**：转换器是建实例时捕获开关的（`行内标记转换器`），
  * 来回换开关时共用一台会把上一轮的状态带过来。
  */
-function 造处理机(开关: 行内扩展开关) {
+function createPlaceManageMachine(flag: InlineExtensionFlags) {
   return unified()
     .use(remarkParse)
     // ⚠️ gfm **必须排在本题那个转换器前面**（`create.ts` 里 `.use(gfm)` 在
@@ -246,83 +246,83 @@ function 造处理机(开关: 行内扩展开关) {
     // ⚠️ **选项与产品用的是同一个常量**（`GFM选项`，`create.ts` 的 `.config()`
     // 里 `ctx.update(remarkGFMPlugin.options, …)` 喂的就是它）。两边各写一份
     // 字面量的话，改了一边另一边不会跟着变——这份测试就成了自说自话。
-    .use(remarkGfm, GFM选项)
-    .use(() => 行内标记转换器(开关))
+    .use(remarkGfm, gFMOption)
+    .use(() => inlineMarkTransformer(flag))
     .use(remarkStringify, {
       // ⚠️ 与 `create.ts` 的 `.config()` **同一串**（顺序也一样）：
       // `不转义孤立波浪号(不转义行首等号(原子后的空格(不转义行首井号(…))))`。
       // 这里省掉的 `原子后的空格` / `不转义行首井号` 只认 U+00A0 与 `#`，
       // 本文件一个都不碰——但**波浪号那一条必须在**，BUG-48 就是它。
-      handlers: { ...行内标记处理器(), text: 不转义孤立波浪号(不转义行首等号(默认文本)) },
+      handlers: { ...inlineMarkHandler(), text: notConvertMeaningIsolatedStandaloneWaveWaveNumber(notConvertMeaningLineFirstEqualNumber(defaultText)) },
     });
 }
 
 /** 一整趟：markdown → 文档 → markdown。**两个方向都是真代码**。 */
-function 往返(源: string, 开关: 行内扩展开关 = 全开): string {
-  const 机 = 造处理机(开关);
-  return SerializerState.create(schema, 机)(ParserState.create(schema, 机)(源));
+function roundtrip(source3: string, flag: InlineExtensionFlags = allOpen): string {
+  const machine = createPlaceManageMachine(flag);
+  return SerializerState.create(schema, machine)(ParserState.create(schema, machine)(source3));
 }
 
 /* ── 一、`切文本`（纯函数）────────────────────────────────────────────── */
 
-组("一、`切文本`（纯函数：一个文本节点怎么切成几段）");
+group("一、`切文本`（纯函数：一个文本节点怎么切成几段）");
 
-测("四种写法各切一刀", () => {
-  等(切文本("==重点==", new Set(["notaHighlight"]))?.length, 1, "一整段就是一颗高亮");
-  等(切文本("甲==重点==乙", new Set(["notaHighlight"]))?.length, 3, "前中后三段");
-  等(切文本("X^2^", new Set(["notaSuperscript"]))?.length, 2, "文字 ＋ 上标");
-  等(切文本("H~2~O", new Set(["notaSubscript"]))?.length, 3, "H ＋ 下标 ＋ O");
+testCase("四种写法各切一刀", () => {
+  equal(splitText("==重点==", new Set(["notaHighlight"]))?.length, 1, "一整段就是一颗高亮");
+  equal(splitText("甲==重点==乙", new Set(["notaHighlight"]))?.length, 3, "前中后三段");
+  equal(splitText("X^2^", new Set(["notaSuperscript"]))?.length, 2, "文字 ＋ 上标");
+  equal(splitText("H~2~O", new Set(["notaSubscript"]))?.length, 3, "H ＋ 下标 ＋ O");
 });
 
-测("⚠️ 两边贴空白不转换（`2 == 3` 这种普通文字不许变半截高亮）", () => {
-  等(切文本("== 重点 ==", new Set(["notaHighlight"])), null, "两边都有空格");
-  等(切文本("==重点 ==", new Set(["notaHighlight"])), null, "只有右边有");
-  等(切文本("== 重点==", new Set(["notaHighlight"])), null, "只有左边有");
+testCase("⚠️ 两边贴空白不转换（`2 == 3` 这种普通文字不许变半截高亮）", () => {
+  equal(splitText("== 重点 ==", new Set(["notaHighlight"])), null, "两边都有空格");
+  equal(splitText("==重点 ==", new Set(["notaHighlight"])), null, "只有右边有");
+  equal(splitText("== 重点==", new Set(["notaHighlight"])), null, "只有左边有");
 });
 
-测("⚠️ 内容里不许再出现同一个符号（`a == b == c` 不许从中间切走一段）", () => {
-  等(切文本("==a=b==", new Set(["notaHighlight"])), null, "内容里有 `=`");
+testCase("⚠️ 内容里不许再出现同一个符号（`a == b == c` 不许从中间切走一段）", () => {
+  equal(splitText("==a=b==", new Set(["notaHighlight"])), null, "内容里有 `=`");
 });
 
-测("⚠️⚠️ 下标不许咬删除线：`~~x~~` 里一个 `notaSubscript` 都不许出现", () => {
+testCase("⚠️⚠️ 下标不许咬删除线：`~~x~~` 里一个 `notaSubscript` 都不许出现", () => {
   // 这一条是那份 `(?<!~)…(?!~)` 断言的机器判据。没有它，`~~x~~` 会被从
   // 第二个波浪号开始咬出一个下标（"+一个下标里包着一个波浪号"）。
-  const 片 = 切文本("张~~三~~", new Set(["notaSubscript"]));
-  等(片, null, "整串没被切");
+  const slice = splitText("张~~三~~", new Set(["notaSubscript"]));
+  equal(slice, null, "整串没被切");
 });
 
-测("⚠️ 但**单个**波浪号照切（`H~2~O` 是下标的写法）", () => {
-  const 片 = 切文本("H~2~O", new Set(["notaSubscript"]));
-  等(片?.length, 3, "三段");
-  等(片?.[1]?.类型, "notaSubscript", "中间那颗是下标");
+testCase("⚠️ 但**单个**波浪号照切（`H~2~O` 是下标的写法）", () => {
+  const slice = splitText("H~2~O", new Set(["notaSubscript"]));
+  equal(slice?.length, 3, "三段");
+  equal(slice?.[1]?.type, "notaSubscript", "中间那颗是下标");
 });
 
-测("⚠️ 前缀重叠时**先中的赢**（`==` 排在表里第一个）", () => {
+testCase("⚠️ 前缀重叠时**先中的赢**（`==` 排在表里第一个）", () => {
   // `==x==` 里没有 `^`/`~`，所以这条现在只会命中高亮；钉的是"扫描器按表顺序试"
   // 这件事实本身——将来加一条前缀重叠的语法时，这一条会当场变红。
-  等(切文本("==x==", new Set(["notaHighlight", "notaSuperscript"]))?.[0]?.类型, "notaHighlight", "高亮");
+  equal(splitText("==x==", new Set(["notaHighlight", "notaSuperscript"]))?.[0]?.type, "notaHighlight", "高亮");
 });
 
-测("内容是空的时候不算（`====` 不是一对空高亮）", () => {
-  等(切文本("====", new Set(["notaHighlight"])), null, "四个等号");
+testCase("内容是空的时候不算（`====` 不是一对空高亮）", () => {
+  equal(splitText("====", new Set(["notaHighlight"])), null, "四个等号");
 });
 
-测("内容里套着另一种标记：递归一层", () => {
-  const 片 = 切文本("==a^2^==", new Set(["notaHighlight", "notaSuperscript"]));
-  等(片?.[0]?.类型, "notaHighlight", "外层是高亮");
-  等(片?.[0]?.孩子们?.[1]?.类型, "notaSuperscript", "里头那颗是上标");
+testCase("内容里套着另一种标记：递归一层", () => {
+  const slice = splitText("==a^2^==", new Set(["notaHighlight", "notaSuperscript"]));
+  equal(slice?.[0]?.type, "notaHighlight", "外层是高亮");
+  equal(slice?.[0]?.children?.[1]?.type, "notaSuperscript", "里头那颗是上标");
 });
 
-测("这一段里一个都没有 → 返回 `null`（好让调用方**原样保留**那个文本节点）", () => {
+testCase("这一段里一个都没有 → 返回 `null`（好让调用方**原样保留**那个文本节点）", () => {
   // ⚠️ 返回空数组与返回 `null` 不是一回事：空数组会把原来那颗文本节点
   // 连同它的 `position` 一起丢掉，而 `position` 是 `math-delim.ts` 那边
   // 数源码偏移时要用的东西。
-  等(切文本("一句普通话", new Set(["notaHighlight"])), null, "没命中");
+  equal(splitText("一句普通话", new Set(["notaHighlight"])), null, "没命中");
 });
 
 /* ── 二、`行内标记转换器`（mdast 上真的换了节点）───────────────────────── */
 
-组("二、`行内标记转换器`（mdast 上的节点类型）");
+group("二、`行内标记转换器`（mdast 上的节点类型）");
 
 /**
  * 手搓一小棵 mdast 树，跑一遍转换器，回读**带内容**的类型序列。
@@ -333,32 +333,32 @@ function 往返(源: string, 开关: 行内扩展开关 = 全开): string {
  * `html:<u>`。写这份测试时先栽过一次（期望里漏了标记内部那颗 `text`，
  * 盯着两串"看起来差不多"的名字看了半天）。
  */
-function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): string[] {
-  const 树: MarkdownNode = { type: "root", children: 源 } as unknown as MarkdownNode;
-  行内标记转换器(开关)(树);
-  const 出: string[] = [];
-  const 走 = (节: MarkdownNode): void => {
-    const 值 = (节 as { value?: string }).value;
-    if (节.type === "text" || 节.type === "html") 出.push(`${节.type}:${值 ?? ""}`);
-    else 出.push(节.type);
-    const 孩子们 = (节 as { children?: MarkdownNode[] }).children;
-    if (Array.isArray(孩子们)) for (const 孩 of 孩子们) 走(孩);
+function convertReplace(source3: MarkdownNode[], flag: InlineExtensionFlags = allOpen): string[] {
+  const tree: MarkdownNode = { type: "root", children: source3 } as unknown as MarkdownNode;
+  inlineMarkTransformer(flag)(tree);
+  const output2: string[] = [];
+  const walk = (section: MarkdownNode): void => {
+    const value2 = (section as { value?: string }).value;
+    if (section.type === "text" || section.type === "html") output2.push(`${section.type}:${value2 ?? ""}`);
+    else output2.push(section.type);
+    const children = (section as { children?: MarkdownNode[] }).children;
+    if (Array.isArray(children)) for (const child2 of children) walk(child2);
   };
-  走(树);
-  return 出;
+  walk(tree);
+  return output2;
 }
 
-测("文本里的 `==x==` 换成了一颗 `notaHighlight`", () => {
-  等列(
-    转换([{ type: "paragraph", children: [{ type: "text", value: "甲==重点==乙" }] } as never]),
+testCase("文本里的 `==x==` 换成了一颗 `notaHighlight`", () => {
+  equalColumns(
+    convertReplace([{ type: "paragraph", children: [{ type: "text", value: "甲==重点==乙" }] } as never]),
     ["root", "paragraph", "text:甲", "notaHighlight", "text:重点", "text:乙"],
     "类型序列（高亮**里面**那颗 `text:重点` 也是它的一部分）",
   );
 });
 
-测("⚠️ 关掉高亮 → **一个 `notaHighlight` 都不出现**（原样留成文字）", () => {
-  等列(
-    转换([{ type: "paragraph", children: [{ type: "text", value: "甲==重点==乙" }] } as never], {
+testCase("⚠️ 关掉高亮 → **一个 `notaHighlight` 都不出现**（原样留成文字）", () => {
+  equalColumns(
+    convertReplace([{ type: "paragraph", children: [{ type: "text", value: "甲==重点==乙" }] } as never], {
       highlight: false,
       superscript: true,
       subscript: true,
@@ -368,11 +368,11 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
   );
 });
 
-测("下划线走的是**另一边**：三颗节点（html ＋ text ＋ html）并成一颗", () => {
+testCase("下划线走的是**另一边**：三颗节点（html ＋ text ＋ html）并成一颗", () => {
   // ⚠️ remark-parse 把 `<u>` 认成裸 HTML，所以它在 mdast 上是三颗节点。
   // 这一条钉的就是"配对成功了"，不是"正则匹配上了"。
-  等列(
-    转换([
+  equalColumns(
+    convertReplace([
       {
         type: "paragraph",
         children: [
@@ -387,10 +387,10 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
   );
 });
 
-测("⚠️ 只有 `<u>` 没有 `</u>` → 原样留下，不许吃掉", () => {
+testCase("⚠️ 只有 `<u>` 没有 `</u>` → 原样留下，不许吃掉", () => {
   // 半截 HTML 保持它的本来面目，比把它吞掉强：用户可能真的在写 HTML。
-  等列(
-    转换([
+  equalColumns(
+    convertReplace([
       {
         type: "paragraph",
         children: [{ type: "html", value: "<u>" }, { type: "text", value: "重点" }],
@@ -401,9 +401,9 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
   );
 });
 
-测("⚠️ 中间隔着块级节点（换段了）→ 不配", () => {
-  等列(
-    转换([
+testCase("⚠️ 中间隔着块级节点（换段了）→ 不配", () => {
+  equalColumns(
+    convertReplace([
       {
         type: "blockquote",
         children: [
@@ -417,7 +417,7 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
   );
 });
 
-测("⚠️ 下划线里夹一层**行内**标记 → 照样配成下划线（BUG-48 那一族，2026-09-27 修）", () => {
+testCase("⚠️ 下划线里夹一层**行内**标记 → 照样配成下划线（BUG-48 那一族，2026-09-27 修）", () => {
   // ⚠️ 这一条钉的是一个**真缺陷**：配对原来的判据是"有 `children` 就算边界"，
   // 而 `notaHighlight`（以及 `strong` / `link`）**也带 children** ⇒ 配不成，
   // `<u>` 与 `</u>` 退回成两颗裸 HTML 节点，真下划线 mark 一颗都没有。
@@ -425,8 +425,8 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
   // "打开再存字节不变"照样绿），丢的是编辑器里那一层——用户看到的是字面的
   // `<u>` 与 `</u>`。而本仓自己就写得出这种源文（下划线＋高亮合法），
   // 于是"自己写的文件读不回来"。
-  等列(
-    转换([
+  equalColumns(
+    convertReplace([
       {
         type: "paragraph",
         children: [
@@ -442,12 +442,12 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
   );
 });
 
-测("⚠️ 反过来：`**粗**` 这种上游行内节点（`strong`）也不算边界", () => {
+testCase("⚠️ 反过来：`**粗**` 这种上游行内节点（`strong`）也不算边界", () => {
   // 与上一条同一个根因（`strong` 也带 children），只是它来自 remark-parse
   // 而不是本仓——这里用 mdast 直接喂一颗 `strong`，钉住"判据看的是块级，
   // 不是看谁造的"。
-  等列(
-    转换([
+  equalColumns(
+    convertReplace([
       {
         type: "paragraph",
         children: [
@@ -464,48 +464,48 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
 
 /* ── 三、往返：打开再存，字节不变 ─────────────────────────────────────── */
 
-组("三、往返（真 `unified()` ＋ 真 `ParserState`/`SerializerState`）");
+group("三、往返（真 `unified()` ＋ 真 `ParserState`/`SerializerState`）");
 
-测("高亮：`==重点==` 一字不差地存回来", () => {
-  等(往返("==重点==").trim(), "==重点==", "独占一段");
-  等(往返("甲 ==重点== 乙").trim(), "甲 ==重点== 乙", "夹在中间");
+testCase("高亮：`==重点==` 一字不差地存回来", () => {
+  equal(roundtrip("==重点==").trim(), "==重点==", "独占一段");
+  equal(roundtrip("甲 ==重点== 乙").trim(), "甲 ==重点== 乙", "夹在中间");
 });
 
-测("上标 / 下标：`X^2^` 与 `H~2~O` 一字不差", () => {
-  等(往返("X^2^").trim(), "X^2^", "上标");
-  等(往返("H~2~O").trim(), "H~2~O", "下标");
+testCase("上标 / 下标：`X^2^` 与 `H~2~O` 一字不差", () => {
+  equal(roundtrip("X^2^").trim(), "X^2^", "上标");
+  equal(roundtrip("H~2~O").trim(), "H~2~O", "下标");
 });
 
-测("下划线：`<u>x</u>` 一字不差（**这是最容易漏的一格**）", () => {
+testCase("下划线：`<u>x</u>` 一字不差（**这是最容易漏的一格**）", () => {
   // 它的左半边是 html 节点、右半边也是，中间夹着文本——两头都得顾上。
-  等(往返("<u>重点</u>").trim(), "<u>重点</u>", "独占一段");
-  等(往返("甲 <u>重点</u> 乙").trim(), "甲 <u>重点</u> 乙", "夹在中间");
+  equal(roundtrip("<u>重点</u>").trim(), "<u>重点</u>", "独占一段");
+  equal(roundtrip("甲 <u>重点</u> 乙").trim(), "甲 <u>重点</u> 乙", "夹在中间");
 });
 
-测("一段里四种混着，各回各的", () => {
-  const 源 = "甲 ==高== 乙 X^2^ 丙 H~2~O 丁 <u>下</u> 戊";
-  等(往返(源).trim(), 源, "四种混排");
+testCase("一段里四种混着，各回各的", () => {
+  const source3 = "甲 ==高== 乙 X^2^ 丙 H~2~O 丁 <u>下</u> 戊";
+  equal(roundtrip(source3).trim(), source3, "四种混排");
 });
 
-测("⚠️ 文案里带标记符号但不成对 → 一个字都不动", () => {
+testCase("⚠️ 文案里带标记符号但不成对 → 一个字都不动", () => {
   // 这类文本在真实文档里到处都是（`a == b`、`2^3`、`x ~ y`、`<u>` 单着写）。
   // 它们**必须**原样回来——序列化器不许"顺手修一下"。
-  for (const 源 of ["a == b == c", "2^3 与 2^4", "甲 ~ 乙", "单着一个 <u> 标签"]) {
-    等(往返(源).trim(), 源, `原样：${源}`);
+  for (const source3 of ["a == b == c", "2^3 与 2^4", "甲 ~ 乙", "单着一个 <u> 标签"]) {
+    equal(roundtrip(source3).trim(), source3, `原样：${source3}`);
   }
 });
 
-测("⚠️ 关掉某项之后，**序列化仍然认得它**（这是不丢字节的兜底）", () => {
+testCase("⚠️ 关掉某项之后，**序列化仍然认得它**（这是不丢字节的兜底）", () => {
   // 场景：用户开着高亮打开一份老文件（已经是 highlight 标记了），中途把开关
   // 关掉，再存盘。这条链子上"解析"已经跑完了，只剩序列化——如果它跟着开关走，
   // 六个字符连同标记一起消失。本文件的开关只管解析与输入，序列化恒开。
-  const 关掉: 行内扩展开关 = { highlight: false, superscript: true, subscript: true };
-  等(往返("==重点==", 关掉).trim(), "==重点==", "关掉解析之后，已经是标记的那一段仍存得回来");
+  const close2: InlineExtensionFlags = { highlight: false, superscript: true, subscript: true };
+  equal(roundtrip("==重点==", close2).trim(), "==重点==", "关掉解析之后，已经是标记的那一段仍存得回来");
 });
 
-测("空段落、纯空白、超短串、半截符号：不许抛", () => {
-  for (const 源 of ["", " ", "== ", " ==", "^", "~", "==^~"]) {
-    往返(源);
+testCase("空段落、纯空白、超短串、半截符号：不许抛", () => {
+  for (const source3 of ["", " ", "== ", " ==", "^", "~", "==^~"]) {
+    roundtrip(source3);
   }
 });
 
@@ -533,7 +533,7 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
 
 /* ── 四、叠加：BUG-48 那张矩阵（2026-09-27 晚补）───────────────────────── */
 
-组("四、叠加（BUG-48：两种标记叠在一起时，打开再存字节不变）");
+group("四、叠加（BUG-48：两种标记叠在一起时，打开再存字节不变）");
 
 /**
  * ⚠️ 这一组是 **BUG-48 的验收判据**，来源是 2026-09-27 开窗按一张组合矩阵量出来的
@@ -543,41 +543,41 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
  *
  * ⚠️ 判据仍旧是**字节**（`.trim()` 只抹掉段落末尾那个换行，与第三组同一口径）。
  */
-测("对照：单个标记往返正常（所以这不是「整体不工作」）", () => {
-  等(往返("普通 ==高亮== 普通").trim(), "普通 ==高亮== 普通", "夹在中间的单个高亮");
+testCase("对照：单个标记往返正常（所以这不是「整体不工作」）", () => {
+  equal(roundtrip("普通 ==高亮== 普通").trim(), "普通 ==高亮== 普通", "夹在中间的单个高亮");
 });
 
-测("`==高^上^亮==`（高亮里套上标）", () => {
-  等(往返("==高^上^亮==").trim(), "==高^上^亮==", "高亮套上标");
+testCase("`==高^上^亮==`（高亮里套上标）", () => {
+  equal(roundtrip("==高^上^亮==").trim(), "==高^上^亮==", "高亮套上标");
 });
 
-测("`==^高上^==`（上标外再包高亮）", () => {
-  等(往返("==^高上^==").trim(), "==^高上^==", "上标外包高亮");
+testCase("`==^高上^==`（上标外再包高亮）", () => {
+  equal(roundtrip("==^高上^==").trim(), "==^高上^==", "上标外包高亮");
 });
 
-测("`^上<u>下</u>上^`（上标里夹一段下划线）", () => {
-  等(往返("^上<u>下</u>上^").trim(), "^上<u>下</u>上^", "上标夹下划线");
+testCase("`^上<u>下</u>上^`（上标里夹一段下划线）", () => {
+  equal(roundtrip("^上<u>下</u>上^").trim(), "^上<u>下</u>上^", "上标夹下划线");
 });
 
-测("`<u>下==高==下</u>`（下划线里夹一段高亮）", () => {
-  等(往返("<u>下==高==下</u>").trim(), "<u>下==高==下</u>", "下划线夹高亮");
+testCase("`<u>下==高==下</u>`（下划线里夹一段高亮）", () => {
+  equal(roundtrip("<u>下==高==下</u>").trim(), "<u>下==高==下</u>", "下划线夹高亮");
 });
 
-测("`F ~~下<u>下</u>下~~ F`（删除线里夹一段下划线）", () => {
-  等(往返("F ~~下<u>下</u>下~~ F").trim(), "F ~~下<u>下</u>下~~ F", "删除线夹下划线");
+testCase("`F ~~下<u>下</u>下~~ F`（删除线里夹一段下划线）", () => {
+  equal(roundtrip("F ~~下<u>下</u>下~~ F").trim(), "F ~~下<u>下</u>下~~ F", "删除线夹下划线");
 });
 
-测("⚠️ `~下~` 不许被改写成 `~~下~~`（这是数据被改了，不只是显示不对）", () => {
-  等(往返("~下~").trim(), "~下~", "单个波浪号的下标");
+testCase("⚠️ `~下~` 不许被改写成 `~~下~~`（这是数据被改了，不只是显示不对）", () => {
+  equal(roundtrip("~下~").trim(), "~下~", "单个波浪号的下标");
 });
 
-测("`==高==^上^`（并排相邻、不嵌套）", () => {
-  等(往返("==高==^上^").trim(), "==高==^上^", "两种标记并排");
+testCase("`==高==^上^`（并排相邻、不嵌套）", () => {
+  equal(roundtrip("==高==^上^").trim(), "==高==^上^", "两种标记并排");
 });
 
 /* ── 五、"打字"那条路：PM 上真的叠了两层 mark，存盘会吐成什么 ────────────── */
 
-组("五、手工建的叠加文档（用户在窗口里打字时落到的形状）");
+group("五、手工建的叠加文档（用户在窗口里打字时落到的形状）");
 
 /**
  * ⚠️ **这一组与第四组测的是两条不同的路，别以为重复**：
@@ -591,35 +591,35 @@ function 转换(源: MarkdownNode[], 开关: 行内扩展开关 = 全开): strin
  *
  * 两种形状**在文件里长得一样**（同一串 markdown），所以两边都得钉。
  */
-function 段落(...跑: [string, string[]][]): PMNode {
-  return schema.node("paragraph", null, 跑.map(([文, 标记]) =>
-    schema.text(文, 标记.map((名) => schema.marks[名]!.create())),
+function paragraph(...run: [string, string[]][]): PMNode {
+  return schema.node("paragraph", null, run.map(([text4, mark]) =>
+    schema.text(text4, mark.map((name3) => schema.marks[name3]!.create())),
   ));
 }
 
-function 存盘(...跑: [string, string[]][]): string {
-  const 机 = 造处理机(全开);
-  const 文档 = schema.node("doc", null, [段落(...跑)]);
-  return String(SerializerState.create(schema, 机)(文档)).trim();
+function saveToDisk(...run: [string, string[]][]): string {
+  const machine = createPlaceManageMachine(allOpen);
+  const document = schema.node("doc", null, [paragraph(...run)]);
+  return String(SerializerState.create(schema, machine)(document)).trim();
 }
 
-测("高亮 ＋ 上标叠在中间那一个字上 → `==高^上^亮==`", () => {
-  等(存盘(["高", ["highlight"]], ["上", ["highlight", "superscript"]], ["亮", ["highlight"]]),
+testCase("高亮 ＋ 上标叠在中间那一个字上 → `==高^上^亮==`", () => {
+  equal(saveToDisk(["高", ["highlight"]], ["上", ["highlight", "superscript"]], ["亮", ["highlight"]]),
      "==高^上^亮==", "高亮套上标（打字那条路）");
 });
 
-测("上标里夹一段下划线 → `^上<u>下</u>上^`", () => {
-  等(存盘(["上", ["superscript"]], ["下", ["superscript", "underline"]], ["上", ["superscript"]]),
+testCase("上标里夹一段下划线 → `^上<u>下</u>上^`", () => {
+  equal(saveToDisk(["上", ["superscript"]], ["下", ["superscript", "underline"]], ["上", ["superscript"]]),
      "^上<u>下</u>上^", "上标夹下划线（打字那条路）");
 });
 
-测("下划线里夹一段高亮 → `<u>下==高==下</u>`", () => {
-  等(存盘(["下", ["underline"]], ["高", ["underline", "highlight"]], ["下", ["underline"]]),
+testCase("下划线里夹一段高亮 → `<u>下==高==下</u>`", () => {
+  equal(saveToDisk(["下", ["underline"]], ["高", ["underline", "highlight"]], ["下", ["underline"]]),
      "<u>下==高==下</u>", "下划线夹高亮（打字那条路）");
 });
 
-测("删除线里夹一段下划线 → `~~下<u>下</u>下~~`", () => {
-  等(存盘(["下", ["strike_through"]], ["下", ["strike_through", "underline"]], ["下", ["strike_through"]]),
+testCase("删除线里夹一段下划线 → `~~下<u>下</u>下~~`", () => {
+  equal(saveToDisk(["下", ["strike_through"]], ["下", ["strike_through", "underline"]], ["下", ["strike_through"]]),
      "~~下<u>下</u>下~~", "删除线夹下划线（打字那条路）");
 });
 
@@ -627,38 +627,38 @@ function 存盘(...跑: [string, string[]][]): string {
  * 一颗文档里段落上每一段的「文字 ＋ 标记名集合」，用来比对**再打开之后
  * 标记有没有挪窝**——只比字符串的话，"文案一样但标记换了层"这种会被漏掉。
  */
-function 跑集(文档: PMNode): string[] {
-  const 出: string[] = [];
-  文档.firstChild?.forEach((一) => {
-    出.push(`${一.text}|${一.marks.map((m) => m.type.name).sort().join("+")}`);
+function runCollection(document: PMNode): string[] {
+  const output2: string[] = [];
+  document.firstChild?.forEach((value) => {
+    output2.push(`${value.text}|${value.marks.map((m) => m.type.name).sort().join("+")}`);
   });
-  return 出;
+  return output2;
 }
 
-测("⚠️ **半重叠**（不是嵌套）：拆成相邻两组，且第二趟一个字都不动", () => {
+testCase("⚠️ **半重叠**（不是嵌套）：拆成相邻两组，且第二趟一个字都不动", () => {
   // ⚠️ 这一条与上面几条**不是同一个形状**：上面是"一颗套一颗"（`==a^b^==`,
   // 高亮把上标整个包住），这里两层是**错开的**——高亮落在 [0,2)、上标落在 [1,3)，
   // 中间那一个字两层都有。用户在窗口里很容易造出来（选 `ab` 点高亮，再选 `bc`
   // 点粗体），而 markdown 的语法**表达不了错开**，所以序列化器必须自己拆成
   // 相邻的两组。2026-09-27 量出来的结论是：**它拆得对，而且拆完是稳定的**
   //（这一点事先没人知道，所以钉住；它不属于 BUG-48 报的那条，但同属"叠加"这一族）。
-  const 例: [string, [string, string[]][], string][] = [
+  const example: [string, [string, string[]][], string][] = [
     ["高亮[0,2) ＋ 上标[1,3)", [["a", ["highlight"]], ["b", ["highlight", "superscript"]], ["c", ["superscript"]]], "==a^b^==^c^"],
     ["下划线[0,2) ＋ 高亮[1,3)", [["a", ["underline"]], ["b", ["underline", "highlight"]], ["c", ["highlight"]]], "<u>a==b==</u>==c=="],
     ["下标[0,2) ＋ 上标[1,3)", [["a", ["subscript"]], ["b", ["subscript", "superscript"]], ["c", ["superscript"]]], "~a^b^~^c^"],
   ];
-  for (const [名, 跑, 期望源] of 例) {
-    const 原 = schema.node("doc", null, [段落(...跑)]);
-    const 一 = String(SerializerState.create(schema, 造处理机(全开))(原)).trim();
-    等(一, 期望源, `${名} 的拆法`);
+  for (const [name3, run, expectedSource] of example) {
+    const original = schema.node("doc", null, [paragraph(...run)]);
+    const value = String(SerializerState.create(schema, createPlaceManageMachine(allOpen))(original)).trim();
+    equal(value, expectedSource, `${name3} 的拆法`);
     // 再打开一趟：源文与**标记集合**都必须与原来一致。
-    const 回 = ParserState.create(schema, 造处理机(全开))(一);
-    等列(跑集(回), 跑集(原), `${名} 再打开后的标记集合`);
-    等(往返(一).trim(), 一, `${名} 再开再存：一字不差`);
+    const returnValue = ParserState.create(schema, createPlaceManageMachine(allOpen))(value);
+    equalColumns(runCollection(returnValue), runCollection(original), `${name3} 再打开后的标记集合`);
+    equal(roundtrip(value).trim(), value, `${name3} 再开再存：一字不差`);
   }
 });
 
-测("⚠️ 已知边界：内容**本身就是定界符** → 不往返（文件头边界 3，钉的是现状）", () => {
+testCase("⚠️ 已知边界：内容**本身就是定界符** → 不往返（文件头边界 3，钉的是现状）", () => {
   // ⚠️⚠️ 这条**不是**在断言"这样是对的"，而是把现状钉住、免得下次有人以为它好了。
   // 原因在 `inline-marks.ts` 文件头边界 3：那颗正则里内容不许再出现同一个符号，
   // 而它也不认识反斜杠转义 ⇒ **一个内容为 `~` 的下标、内容为 `=` 的高亮，
@@ -670,16 +670,16 @@ function 跑集(文档: PMNode): string[] {
   // 与切文本都不会产出它），真实的来源只有一条：**手工把源码改成这样再打开**。
   // 要真修得让那颗正则认识 `\` 转义（那是"自己写一台行内解析器"那个量级的事），
   // 不在本轮。所以这里如实钉住，并把数字写出来给后来的人当路标。
-  等(存盘(["~", ["subscript"]]), "~\\~~", "下标内容为 `~`（现状：不往返）");
-  等(存盘(["=", ["highlight"]]), "=====", "高亮内容为 `=`（现状：不往返）");
-  等(存盘(["^", ["superscript"]]), "^^^", "上标内容为 `^`（现状：不往返）");
+  equal(saveToDisk(["~", ["subscript"]]), "~\\~~", "下标内容为 `~`（现状：不往返）");
+  equal(saveToDisk(["=", ["highlight"]]), "=====", "高亮内容为 `=`（现状：不往返）");
+  equal(saveToDisk(["^", ["superscript"]]), "^^^", "上标内容为 `^`（现状：不往返）");
 });
 
 /* ── 收尾 ───────────────────────────────────────────────────────────── */
 
 console.log(`\n${"─".repeat(64)}`);
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) {
-  console.log(`失败的：\n  - ${败的.join("\n  - ")}`);
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) {
+  console.log(`失败的：\n  - ${failed.join("\n  - ")}`);
   process.exitCode = 1;
 }

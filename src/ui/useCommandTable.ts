@@ -36,28 +36,30 @@
 import { useMemo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
-import type { DocId, Settings, ViewMode } from "@/bridge/ipc";
+import type { CustomExporter, DocId, Settings, ViewMode } from "@/bridge/ipc";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
-import { 清除最近项 } from "@/ui/commands";
-import { 最近条目id } from "@/ui/recentMenu";
+import { clearRemoveRecentItem } from "@/ui/commands";
+import { recentItemid } from "@/ui/recentMenu";
 import type { SidebarTab } from "@/ui/Sidebar";
-import type { 缩放动作 } from "@/ui/useZoom";
+import type { ShrinkReleaseAction } from "@/ui/useZoom";
+import type { menuFeatureApi } from "@/ui/useMenuFeatures";
+import { customExportCommand } from "@/ui/export-templates";
 
-export interface 命令表输入 {
+export interface CommandTableInput {
   /**
    * 此刻摊着一份改动预览吗。`true` 时**整张表返回空**——用户 2026-09-26
    * 要的「预览的时候禁止操作」就靠这一个开关（见下面 `useMemo` 里那一段）。
    */
-  预览中: boolean;
+  previewMiddle: boolean;
   /**
    * 插件声明的那些条目（`ui/pluginMenus.ts` 合成的栏）。**并进同一张表**，
    * 于是"灰不灰"的判据对插件项和普通项是同一条——没有为插件单开的分支。
    */
-  插件处理: Record<string, () => void>;
+  pluginHandler: Record<string, () => void>;
 
   // ── 文档 ──────────────────────────────────────────────────────────────
-  新建文档: () => Promise<void>;
-  打开文件: () => Promise<void>;
+  newDocument: () => Promise<void>;
+  openFile: () => Promise<void>;
   /**
    * 最近打开过的文件（新的在前）。**它在这里的用处只有一个**：给
    * 「打开最近文件」那层子菜单里的每一条现生成一个处理函数。
@@ -66,13 +68,13 @@ export interface 命令表输入 {
    * 于是整层是灰的——而它明明列着文件名。那种"看得见、点不动"正是这张表
    * 要防的失效（见文件头）。
    */
-  最近: readonly string[];
+  recent: readonly string[];
   /** 打开一条最近记录（`ui/useSession.ts`）。**打不开时它自己会摘掉那一条。** */
-  打开最近: (路径: string) => Promise<void>;
+  openRecent: (path: string) => Promise<void>;
   /** 清空整份会话（`file.clearRecent`）。**不删任何文件。** */
-  清空最近: () => Promise<void>;
-  打开文件夹: () => Promise<void>;
-  重载文档: (id: DocId) => Promise<void>;
+  clearEmptyRecent: () => Promise<void>;
+  openFolder: () => Promise<void>;
+  reloadDocument: (id: DocId) => Promise<void>;
   /**
    * **重命名**：同一个目录下换个名字（`ui/useDocuments.ts::renameDoc`）。
    *
@@ -81,44 +83,48 @@ export interface 命令表输入 {
    * 它们失败时**盘上什么都没发生**（判据在 `file_move.rs`），所以这里
    * 不需要任何回滚，也不能在失败后重试一次。
    */
-  重命名文档: (id: DocId) => Promise<void>;
+  renameDocument: (id: DocId) => Promise<void>;
   /** **移动**：挪到另一个目录里（文件名不变），走目录选择框。 */
-  移动文档: (id: DocId) => Promise<void>;
+  moveDocument: (id: DocId) => Promise<void>;
   /** 第三个参数是"静默存"（不动标签、不弹提示），自动保存走它。 */
-  保存文档: (id: DocId, 另存为?: boolean, 静默?: boolean) => Promise<boolean>;
-  关闭文档: (id: DocId) => Promise<void>;
+  saveDocument: (id: DocId, otherSaveAs?: boolean, staticSilent?: boolean) => Promise<boolean>;
+  closeDocument: (id: DocId) => Promise<void>;
   /** 此刻活动的那一份。`null` = 没有打开的文档（那几条一律不做事）。 */
-  活动文档: DocId | null;
+  activityDocument: DocId | null;
   /** 打开偏好设置那一页（`App` 的 `setSettingsOpen`）。 */
-  打开设置页: Dispatch<SetStateAction<boolean>>;
+  openSettingsPage: Dispatch<SetStateAction<boolean>>;
 
   // ── 导出 / 打印 ───────────────────────────────────────────────────────
   /** `true` = 带样式那一档。两档的差别在 `ui/useExport.ts`。 */
-  导出: (带样式: boolean) => Promise<void>;
-  导出为: (格式: string) => Promise<void>;
-  导入为: (格式: string) => Promise<void>;
-  打印: () => Promise<void>;
+  export: (withStyleStyle: boolean) => Promise<void>;
+  exportImage: () => Promise<void>;
+  exportAs: (cellStyle: string) => Promise<void>;
+  exportCustom: (id: string) => Promise<void>;
+  customExporter: readonly CustomExporter[];
+  guideEnterAs: (cellStyle: string) => Promise<void>;
+  print: () => Promise<void>;
 
   // ── 编辑 ──────────────────────────────────────────────────────────────
   /** 转交一条编辑命令给编辑器（`ui/useEditorCommands.ts`）。 */
-  运行: (c: EditorCommand, payload?: CommandPayload) => void;
+  moveLine: (c: EditorCommand, payload?: CommandPayload) => void;
   /** ⚠️ 收一个参数：`false` = 只找（`Ctrl+F`）、`true` = 带替换（`Ctrl+H`）。 */
-  切查找: (带替换?: boolean) => void;
-  插入链接: () => Promise<void>;
-  插入图像: () => Promise<void>;
+  splitCheckFind: (withReplaceReplace?: boolean) => void;
+  insertLink: () => Promise<void>;
+  insertImageLike: () => Promise<void>;
   /** 打开 Emoji 选择器，选中的字符插到光标处（`ui/EmojiDialog.tsx`）。 */
-  插入Emoji: () => Promise<void>;
+  insertEmoji: () => Promise<void>;
   /**
    * 剪贴板四件。⚠️ **四个函数分开传**，不是一个 `剪贴板` 对象：那个对象每次
    * 渲染都是新的（`useClipboard` 的返回值），当依赖就等于这张表每帧重建。
    */
-  剪贴板剪切: () => Promise<void>;
-  剪贴板复制: () => Promise<boolean>;
-  剪贴板粘贴: () => Promise<void>;
-  剪贴板复制为Markdown: () => Promise<void>;
+  cutPasteBoardCutSplit: () => Promise<void>;
+  cutPasteBoardCopy: () => Promise<boolean>;
+  cutPasteBoardPastePaste: () => Promise<void>;
+  cutPasteBoardCopyAsMarkdown: () => Promise<void>;
   /** 「复制为纯文本」/「复制为 HTML 源码」（2026-10-04 补，见 `ui/useClipboard.ts`）。 */
-  剪贴板复制为纯文本: () => Promise<void>;
-  剪贴板复制为HTML: () => Promise<void>;
+  cutPasteBoardCopyAsPlainText: () => Promise<void>;
+  cutPasteBoardCopyAsHTML: () => Promise<void>;
+  cutPasteBoardCopyImageSlice: () => Promise<void>;
 
   // ── 视图 ──────────────────────────────────────────────────────────────
   /**
@@ -128,22 +134,22 @@ export interface 命令表输入 {
    * 差别在**身份稳不稳**：那个对象每次渲染都是新的，这只对象是 `useZoom` 里
    * `useMemo` 出来的。判据不是"看起来像不像"，是这一行。
    */
-  缩放动作: 缩放动作;
-  设侧栏打开: Dispatch<SetStateAction<boolean>>;
-  设侧栏页: Dispatch<SetStateAction<SidebarTab>>;
-  设右栏打开: Dispatch<SetStateAction<boolean>>;
-  设打字机: Dispatch<SetStateAction<boolean>>;
+  ShrinkReleaseAction: ShrinkReleaseAction;
+  setSideBarOpen: Dispatch<SetStateAction<boolean>>;
+  setSideBarPage: Dispatch<SetStateAction<SidebarTab>>;
+  setRightBarOpen: Dispatch<SetStateAction<boolean>>;
+  setHitCharacterMachine: Dispatch<SetStateAction<boolean>>;
   /** 界面那几档（状态栏 / 工具栏 / 缩放的写入口，`ui/useChromeVisibility.ts`）。 */
-  设界面: (patch: Partial<Settings["appearance"]>) => void;
+  setUi: (patch: Partial<Settings["appearance"]>) => void;
   /** 状态栏此刻显示着吗。⚠️ 它是 [`命令表输入`] 存在的理由之一，见文件头。 */
-  状态栏开着: boolean;
+  stateBarOpen: boolean;
   /**
    * 菜单栏此刻显示着吗。**同上面那一条**——`view.menuBar` 那条命令是"取反再
    * 写回"，读的必须是**这一帧**的值，不能靠闭包捕获（理由见文件头那段：
    * 捕获上一帧的值会让"连着点两次"的第二次按同一个方向再来一次，于是关掉
    * 之后再也开不回来）。
    */
-  菜单栏开着: boolean;
+  menuBarOpen: boolean;
   /**
    * 严格模式（`Settings.strict_markdown`）。只有「内容目录」用得上。
    *
@@ -152,14 +158,14 @@ export interface 命令表输入 {
    * 那一页拿的是同一份真值，两处必须同源（理由见
    * `create-types.ts::CommandPayload.strict`）。
    */
-  严格模式: boolean;
-  切换专注: () => void;
+  strictCellMode: boolean;
+  splitReplaceDedicatedNote: () => void;
   /**
    * 「视图 → 强制专注」。⚠️ 与上面那个 `切换专注` **是两件事**：
    * 那个收拾界面，这个记账（`commands.ts` 里那两条的注释）。
    */
-  切换强制专注: () => void;
-  切换全屏: () => void;
+  splitReplaceStrongMakeDedicatedNote: () => void;
+  toggleFullscreen: () => void;
   /**
    * 窗口那两件（`ui/useWindowControls.ts` 的出口）。
    *
@@ -167,8 +173,8 @@ export interface 命令表输入 {
    * 包的箭头每帧换身份，而这张表的依赖是 `Object.values(输入)`——表就会每帧重建。
    * 下面表里那个 `() => void 切换置顶()` 是**建表时**写进去的，不在此列。
    */
-  切换置顶: () => Promise<void>;
-  开开发者工具: () => Promise<void>;
+  toggleAlwaysOnTop: () => Promise<void>;
+  openDevTools: () => Promise<void>;
   /**
    * 切编辑模式（`App.tsx` 的 `设模式`）。
    *
@@ -178,75 +184,84 @@ export interface 命令表输入 {
    * `ui/useFileKindMode.ts` 文件头。⚠️ 也正因为这一条，「改设置」那个输入
    * 在这张表里**没有读者了**，同批删掉（写设置走 `设界面` 那一条）。
    */
-  设模式: (m: ViewMode) => void;
+  setMode: (m: ViewMode) => void;
 
   // ── 帮助 ──────────────────────────────────────────────────────────────
-  关于: () => void;
+  openHelp: () => void;
+  about: () => void;
+  /** 文档、侧栏与窗口之间的组合动作（会话内只读状态也在这里）。 */
+  menuFeatures: menuFeatureApi;
 }
 
 /**
  * 那张表。返回值的身份**只随输入变**——原生菜单栏按它判"要不要重推一遍"。
  */
-export function useCommandTable(输入: 命令表输入): Record<string, () => void> {
+export function useCommandTable(input: CommandTableInput): Record<string, () => void> {
   // ⚠️ 名字在这一层对齐回原来的短名（`输入.新建文档` → `newDoc`），为的是
   // 下面那张表**一字节不改地搬过来**：那份 diff 里除了"从哪儿取"以外没有别的
   // 改动，读的人不必逐行核对有没有抄错。
   const {
-    预览中,
-    插件处理,
-    新建文档: newDoc,
-    打开文件: openViaDialog,
-    打开文件夹: openFolder,
-    最近,
-    打开最近,
-    清空最近,
-    重载文档: reloadDoc,
-    重命名文档: renameDoc,
-    移动文档: moveDoc,
-    保存文档: saveDoc,
-    关闭文档: closeDoc,
-    活动文档: activeId,
-    打开设置页: setSettingsOpen,
-    导出,
-    导出为,
-    导入为,
-    打印,
-    运行: run,
-    切查找,
-    插入链接,
-    插入图像,
-    插入Emoji,
-    剪贴板剪切,
-    剪贴板复制,
-    剪贴板粘贴,
-    剪贴板复制为Markdown,
-   剪贴板复制为纯文本,
-   剪贴板复制为HTML,
-    缩放动作,
-    设侧栏打开: setSidebarOpen,
-    设侧栏页: setSidebarTab,
-    设右栏打开: setDockOpen,
-    设打字机: setTypewriter,
-    设界面: setChrome,
-    状态栏开着: statusBarOpen,
-    菜单栏开着: menuBarOpen,
-    严格模式: strictMarkdown,
-    切换专注,
-    切换强制专注,
-    切换全屏,
-    切换置顶,
-    开开发者工具,
-    设模式,
-    关于: showAbout,
-  } = 输入;
+    previewMiddle,
+    pluginHandler,
+    newDocument: newDoc,
+    openFile: openViaDialog,
+    openFolder: openFolder,
+    recent,
+    openRecent,
+    clearEmptyRecent,
+    reloadDocument: reloadDoc,
+    renameDocument: renameDoc,
+    moveDocument: moveDoc,
+    saveDocument: saveDoc,
+    closeDocument: closeDoc,
+    activityDocument: activeId,
+    openSettingsPage: setSettingsOpen,
+    export: exportAction,
+    exportImage,
+    exportAs,
+    exportCustom,
+    customExporter,
+    guideEnterAs,
+    print,
+    moveLine: run,
+    splitCheckFind,
+    insertLink,
+    insertImageLike,
+    insertEmoji,
+    cutPasteBoardCutSplit,
+    cutPasteBoardCopy,
+    cutPasteBoardPastePaste,
+    cutPasteBoardCopyAsMarkdown,
+   cutPasteBoardCopyAsPlainText,
+   cutPasteBoardCopyAsHTML,
+    cutPasteBoardCopyImageSlice,
+    ShrinkReleaseAction,
+    setSideBarOpen: setSidebarOpen,
+    setSideBarPage: setSidebarTab,
+    setRightBarOpen: setDockOpen,
+    setHitCharacterMachine: setTypewriter,
+    setUi: setChrome,
+    stateBarOpen: statusBarOpen,
+    menuBarOpen: menuBarOpen,
+    strictCellMode: strictMarkdown,
+    splitReplaceDedicatedNote,
+    splitReplaceStrongMakeDedicatedNote,
+    toggleFullscreen,
+    toggleAlwaysOnTop,
+    openDevTools,
+    setMode,
+    openHelp,
+    about: showAbout,
+    menuFeatures,
+  } = input;
   /** 剪贴板四件的**局部包装**：只为让下面那张表里的写法与搬来之前一致。 */
-  const 剪贴板 = {
-    剪切: 剪贴板剪切,
-    复制: 剪贴板复制,
-    粘贴: 剪贴板粘贴,
-    复制为Markdown: 剪贴板复制为Markdown,
-    复制为纯文本: 剪贴板复制为纯文本,
-    复制为HTML: 剪贴板复制为HTML,
+  const cutPasteBoard = {
+    cutSplit: cutPasteBoardCutSplit,
+    copy: cutPasteBoardCopy,
+    pastePaste: cutPasteBoardPastePaste,
+    copyAsMarkdown: cutPasteBoardCopyAsMarkdown,
+    copyAsPlainText: cutPasteBoardCopyAsPlainText,
+    copyAsHTML: cutPasteBoardCopyAsHTML,
   };
 
   return useMemo<Record<string, () => void>>(() => {
@@ -263,23 +278,25 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
     //
     // ⚠️ 这条只管菜单与快捷键。右侧栏、左栏、页签那三块另算（`inert`，
     // 见 `App.tsx`），它们不走这张表。
-    if (预览中) return {};
+    if (previewMiddle) return {};
 
     return {
       // 插件那些条目（`ui/pluginMenus.ts` 合成的栏）。**并进同一张表**，
       // 于是"灰不灰"的判据对插件项和普通项是同一条——没有为插件单开的分支。
-      ...插件处理,
+      ...pluginHandler,
 
       "file.new": () => void newDoc(),
+      "file.newWindow": () => menuFeatures.newWindow(),
       "file.open": () => void openViaDialog(),
       "file.openFolder": () => void openFolder(),
+      "file.quickOpen": () => menuFeatures.quickOpen(),
       // 最近文件那层子菜单（`ui/recentMenu.ts` 在运行时合成的那几条）。
       // ⚠️ **id 是路径拼出来的**，所以只能现生成——那层的条数与内容随
       // `最近` 变，静态写不进这张表。生成用的前缀在那份文件里，这里不重拼。
-      ...Object.fromEntries(最近.map((路径) => [最近条目id(路径), () => void 打开最近(路径)])),
+      ...Object.fromEntries(recent.map((path) => [recentItemid(path), () => void openRecent(path)])),
       // ⚠️ 键取自那条菜单项**自己**（`commands.ts::清除最近项`），不在这儿
       // 重打一遍字面量：两处各写一次的话，改了一边就是"条目亮着、点了没反应"。
-      [清除最近项.id]: () => void 清空最近(),
+      [clearRemoveRecentItem.id]: () => void clearEmptyRecent(),
       "file.reload": () => activeId !== null && void reloadDoc(activeId),
       // ⚠️ 改的是**盘上那个文件名**，不是文档里的内容。两条都先问再动
       // （一个新名字 / 一个目录），取消时**一个字节都不写**。
@@ -287,6 +304,10 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "file.move": () => activeId !== null && void moveDoc(activeId),
       "file.save": () => activeId !== null && void saveDoc(activeId),
       "file.saveAs": () => activeId !== null && void saveDoc(activeId, true),
+      "file.saveAll": () => menuFeatures.saveAll(),
+      "file.revealInFolder": () => menuFeatures.revealActive(),
+      "file.showInSidebar": () => menuFeatures.showActiveInSidebar(),
+      "file.delete": () => menuFeatures.deleteActive(),
       "file.close": () => activeId !== null && void closeDoc(activeId),
       "file.preferences": () => setSettingsOpen(true),
 
@@ -294,21 +315,28 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       // ⚠️ 那七种点下去**先探测**：没装就出面板说清楚，装好了直接进保存对话框
       // （判据在 `useExport.ts`，面板是 `ui/PandocPanel.tsx`）。子菜单里**仍然
       // 灰着**的只有「图片…」（要光栅渲染器）和「其他格式…」（入口未定）。
-      "file.exportHtmlPlain": () => void 导出(false),
-      "file.exportHtmlStyled": () => void 导出(true),
-      "file.exportPdf": () => void 导出为("pdf"),
-      "file.exportDocx": () => void 导出为("docx"),
-      "file.exportOdt": () => void 导出为("odt"),
-      "file.exportRtf": () => void 导出为("rtf"),
-      "file.exportLatex": () => void 导出为("latex"),
-      "file.exportEpub": () => void 导出为("epub"),
-      "file.exportOpml": () => void 导出为("opml"),
-      "file.importDocx": () => void 导入为("docx"),
-      "file.importRtf": () => void 导入为("rtf"),
-      "file.importLatex": () => void 导入为("latex"),
-      "file.importEpub": () => void 导入为("epub"),
-      "file.importOdt": () => void 导入为("odt"),
-      "file.print": () => void 打印(),
+      "file.exportHtmlPlain": () => void exportAction(false),
+      "file.exportHtmlStyled": () => void exportAction(true),
+      "file.exportImage": () => void exportImage(),
+      "file.exportPdf": () => void exportAs("pdf"),
+      "file.exportDocx": () => void exportAs("docx"),
+      "file.exportOdt": () => void exportAs("odt"),
+      "file.exportRtf": () => void exportAs("rtf"),
+      "file.exportLatex": () => void exportAs("latex"),
+      "file.exportEpub": () => void exportAs("epub"),
+      "file.exportOpml": () => void exportAs("opml"),
+      ...Object.fromEntries(
+        customExporter.map((exporter) => [
+          customExportCommand(exporter.id),
+          () => void exportCustom(exporter.id),
+        ]),
+      ),
+      "file.importDocx": () => void guideEnterAs("docx"),
+      "file.importRtf": () => void guideEnterAs("rtf"),
+      "file.importLatex": () => void guideEnterAs("latex"),
+      "file.importEpub": () => void guideEnterAs("epub"),
+      "file.importOdt": () => void guideEnterAs("odt"),
+      "file.print": () => void print(),
 
       "edit.undo": () => run("undo"),
       "edit.redo": () => run("redo"),
@@ -316,16 +344,16 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       // 里自己干的活（读选区 / 读写系统剪贴板）。接之前它们是灰的，而快捷键
       // 一直是好的——菜单上于是同时写着"按不了"和 `Ctrl+C`。接上之后
       // "看不出灰 = 按得动"这条规矩才在**整栏**成立。见那个文件的文件头。
-      "edit.cut": () => void 剪贴板.剪切(),
-      "edit.copy": () => void 剪贴板.复制(),
-      "edit.paste": () => void 剪贴板.粘贴(),
+      "edit.cut": () => void cutPasteBoard.cutSplit(),
+      "edit.copy": () => void cutPasteBoard.copy(),
+      "edit.paste": () => void cutPasteBoard.pastePaste(),
       // 「粘贴为纯文本」（`Ctrl+Shift+V`，2026-10-07）。⚠️ **与上面那条共用同一段
       // 代码**：本仓的粘贴本来就是纯文本（`readText()` → `insertText` → PM 的
       // `pasteText`，Milkdown 的剪贴板插件没有定义 `clipboardParser`）。
       // 这不是省事——真另写一条"剥格式"的路，剥的是一个本来就不存在的东西；
       // 留着这颗键是因为它到处都有（Word/VSCode/浏览器），按了没反应会被当成
       // "不支持"。整段理由写在 `ui/commands.ts::edit.pastePlain` 那一条上。
-      "edit.pastePlain": () => void 剪贴板.粘贴(),
+      "edit.pastePlain": () => void cutPasteBoard.pastePaste(),
       // 「删除」＝ 把选区换成空串。**和「剪切」差的就是那一步写剪贴板**
       // （见 `ui/useClipboard.ts` 的 `剪切`）——所以它没有自己的实现，
       // 就是 `insertText` 传空串。右键菜单那排图标里的 🗑 走的也是这一条。
@@ -335,12 +363,13 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "edit.delete": () => run("insertText", { text: "" }),
       // ⚠️ 这一条不读选区，拿的是**整篇源码**——所以它和上面三件放在同一个
       // 文件里（同一个 hook 的出口），但不共用那条"先选中再说"的判据。
-      "edit.copyAsMarkdown": () => void 剪贴板.复制为Markdown(),
+      "edit.copyAsMarkdown": () => void cutPasteBoard.copyAsMarkdown(),
       // ⚠️ 这两条**2026-10-04 才补的实现**（在那之前它们在菜单栏里就是灰的）。
       // 补的原因见 `ui/useClipboard.ts` 那一段：右键菜单照 Typora 抄了
       // 「复制为」这一栏，不补就得画两条永久灰条。
-      "edit.copyAsPlain": () => void 剪贴板.复制为纯文本(),
-      "edit.copyAsHtml": () => void 剪贴板.复制为HTML(),
+      "edit.copyAsPlain": () => void cutPasteBoard.copyAsPlainText(),
+      "edit.copyAsHtml": () => void cutPasteBoard.copyAsHTML(),
+      "edit.copyImage": () => void cutPasteBoardCopyImageSlice(),
       // 「选择」那一族（2026-10-07，`commands.ts` 里那个子菜单的四条）。
       // ⚠️ 四条**共用一套判据**（`editor/select.ts` 第一组那几个纯函数），
       // 源码模式也调它——所以这里只是转发，不带任何参数。
@@ -357,8 +386,8 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "edit.moveLineDown": () => run("moveLineDown"),
       // ⚠️ `Ctrl+F` 与 `Ctrl+H` 开的是**同一个条子**，差别在"要不要画替换那一行"
       // （2026-10-06，第 95 项）。⚠️ 在此之前 `Ctrl+F` **根本没有绑定**。
-      "edit.find": () => 切查找(false),
-      "edit.findReplace": () => 切查找(true),
+      "edit.find": () => splitCheckFind(false),
+      "edit.findReplace": () => splitCheckFind(true),
 
       "para.h1": () => run("h1"),
       "para.h2": () => run("h2"),
@@ -415,12 +444,15 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "fmt.highlight": () => run("highlight"),
       "fmt.superscript": () => run("superscript"),
       "fmt.subscript": () => run("subscript"),
-      "fmt.link": () => void 插入链接(),
-      "fmt.image": () => void 插入图像(),
-      "fmt.emoji": () => void 插入Emoji(),
+      "fmt.comment": () => run("comment"),
+      "fmt.link": () => void insertLink(),
+      "fmt.image": () => void insertImageLike(),
+      "fmt.emoji": () => void insertEmoji(),
       "fmt.clear": () => run("clearFormat"),
 
       "view.toggleSidebar": () => setSidebarOpen((v) => !v),
+      "view.search": () => menuFeatures.search(),
+      "view.readOnly": () => menuFeatures.toggleReadOnly(),
       "view.outline": () => {
         setSidebarOpen(true);
         setSidebarTab("outline");
@@ -450,34 +482,35 @@ export function useCommandTable(输入: 命令表输入): Record<string, () => v
       "view.menuBar": () => setChrome({ show_menu_bar: !menuBarOpen }),
       // 沉浸那两条。⚠️ 直接引 `ui/useImmersive.ts` 的出口函数，不现写箭头
       // ——现写每帧换身份，这张表就每帧重建。
-      "view.focusMode": 切换专注,
+      "view.focusMode": splitReplaceDedicatedNote,
       // ⚠️ 和上面那条**长得像，做的事毫无关系**（一个是收界面、一个是记账）。
       // 判断逻辑在 `ui/useForceFocus.ts` 那边，这里只是转发——包括"第一次要
       // 先说清楚"那一步（`ui/useFocusIntro.ts`），它包在 `切换强制专注` 里面。
-      "view.forceFocus": 切换强制专注,
+      "view.forceFocus": splitReplaceStrongMakeDedicatedNote,
       "view.typewriter": () => setTypewriter((v) => !v),
-      "view.fullscreen": 切换全屏,
+      "view.fullscreen": toggleFullscreen,
       // 窗口那两件（2026-09-27）。⚠️ 同上面那两条：直接引出口函数，不现写箭头。
       // ⚠️ 置顶那一条的**勾**不在这张表里算（表只管"能不能点"），判据在
       // `ui/useMenus.ts` 的 `menuChecks`，值从窗口读回来。
-      "view.alwaysOnTop": () => void 切换置顶(),
-      "view.devtools": () => void 开开发者工具(),
+      "view.alwaysOnTop": () => void toggleAlwaysOnTop(),
+      "view.devtools": () => void openDevTools(),
       // 缩放三档（2026-09-27）。⚠️ 三条**都不带 `needsDoc`**：缩放是应用级的，
       // 一篇文档都没打开时按 `Ctrl+=` 也该有用。
-      "view.zoomIn": 缩放动作.放大,
-      "view.zoomOut": 缩放动作.缩小,
-      "view.zoomReset": 缩放动作.复位,
+      "view.zoomIn": ShrinkReleaseAction.releaseLarge,
+      "view.zoomOut": ShrinkReleaseAction.shrinkSmall,
+      "view.zoomReset": ShrinkReleaseAction.restorePosition,
 
       // 三种编辑模式。⚠️ **2026-10-07 起它们是会话内状态、不落盘**（以前走
       // `updateSettings({ view_mode })`）：每次启动一律所见即所得——用户原话
       // 「请设置默认启动为 WYSIWYG」，理由是停在源码模式退出再打开，
       // 屏幕上是一片 Markdown 原文，看起来就像"代码块坏了"。
-      "view.modeWysiwyg": () => 设模式("wysiwyg"),
-      "view.modeSource": () => 设模式("source"),
-      "view.modeSplit": () => 设模式("split"),
+      "view.modeWysiwyg": () => setMode("wysiwyg"),
+      "view.modeSource": () => setMode("source"),
+      "view.modeSplit": () => setMode("split"),
 
+      "help.help": () => openHelp(),
       "help.about": () => void showAbout(),
     };
     // ⚠️ 依赖不给数组字面量，给 `Object.values(输入)`：理由在文件头那一节。
-  }, Object.values(输入));
+  }, Object.values(input));
 }

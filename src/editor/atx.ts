@@ -106,8 +106,8 @@ export function atxPrefixRe(strict: boolean): RegExp {
  * 两个数一起返回，是因为**从同一个匹配里出来**——分成两个函数各 exec 一次，
  * 两份结果哪天对不上就是"字号和井号个数不一样"。
  */
-export function atxPrefix(文本: string, strict: boolean): { 层数: number; 长度: number } | null {
-  const m = atxTextRe(strict).exec(文本);
+export function atxPrefix(text2: string, strict: boolean): { layerNumber: number; lengthDegree: number } | null {
+  const m = atxTextRe(strict).exec(text2);
   if (!m) return null;
-  return { 层数: m[1]!.length, 长度: m[0].length - (m[2] ?? "").length };
+  return { layerNumber: m[1]!.length, lengthDegree: m[0].length - (m[2] ?? "").length };
 }

@@ -68,7 +68,7 @@
  * 文件头（unified 的 `stringify()` **不跑转换器**）。
  */
 
-import type { 文本处理器 } from "./text-handlers";
+import type { textHandler } from "./text-handlers";
 
 /**
  * 行首被转义掉的那两种语法。`m[2]` 是整个 `[...]`。
@@ -76,7 +76,7 @@ import type { 文本处理器 } from "./text-handlers";
  * ⚠️ 名字表**一个都不能多**：多放一个进去，那种写法的反斜杠就再也回不来了
  *（而"该转义的被放过"正是这一族最容易做错的地方，见 `docs/07` 第 56 项）。
  */
-const 被转义的已知语法 =
+const isConvertMeaningOfAlreadyKnownLanguageMethod =
   /(^|\n)\\(\[(?:TOC|toc)\]|\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])/g;
 
 /**
@@ -85,9 +85,9 @@ const 被转义的已知语法 =
  * ⚠️ `原文` 缺失时按本仓惯例**原值交出**（不自己拼），否则连上游的转义
  * 一起省了——那会写出坏字节（`text-handlers.ts` 文件头最后一段记着）。
  */
-export function 不转义已知语法(原文?: 文本处理器): 文本处理器 {
+export function notConvertMeaningAlreadyKnownLanguageMethod(source?: textHandler): textHandler {
   return (node, parent, state, info) => {
-    if (!原文) return node.value ?? "";
-    return 原文(node, parent, state, info).replace(被转义的已知语法, "$1$2");
+    if (!source) return node.value ?? "";
+    return source(node, parent, state, info).replace(isConvertMeaningOfAlreadyKnownLanguageMethod, "$1$2");
   };
 }

@@ -31,19 +31,19 @@ import { atxPrefixRe } from "@/editor/atx";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 // 脚注的**编号分配**与所见即所得那边共用一份（`editor/footnote.ts`）——
 // 两处各写一份的话，"最小未用数"这种规则迟早漂开。
-import { 下一个脚注标签, 扫源文标签 } from "@/editor/footnote";
+import { belowValueItemFootNoteLabel, scanSourceTextLabel } from "@/editor/footnote";
 // 开头那段 front matter（`docs/07` 第 64 项）。⚠️ 与所见即所得那一侧**同一个
 // 判据文件**：两处各切一刀的话，"哪几行算 front matter"就有了两个答案。
-import { 拆前置块, 换前置块, 新建前置块模板 } from "@/editor/front-matter";
+import { splitFrontMatter, replaceFrontMatter, newFrontMatterTemplate } from "@/editor/front-matter";
 // 行内标记的**开关**判据（纯函数，2026-09-30 分出来的，BUG-57）。判据是纯
 // 字符串的事，与视图无关，所以单开一个文件好让 `tests/source-mark.test.ts` 直接测。
-import { 试摘定界符 } from "@/editor/source-mark";
+import { tryRemoveFixedBoundarySymbol } from "@/editor/source-mark";
 // 「选择」那一族（选行/词/句、选词并删）的**判据**。⚠️ 与所见即所得那边**同一个
 // 文件**：同一颗键在两种模式下选出来的东西必须一样，理由写在 `select.ts` 文件头。
-import { 选词区间, 选句区间 } from "@/editor/select";
+import { wordRange, sentenceRange } from "@/editor/select";
 // 「链接」那两条的**纯文本判据**（`docs/07` 第 96 / 102 项）。⚠️ 同样与所见即所得
 // 那边共用一份"地址危险就只落文字"的口径（`link-edit.ts` 文件头那道闸）。
-import { 摘源文链接, 源文链接, 源文链接区间 } from "@/editor/link-edit";
+import { removeSourceLink, sourceLink, sourceLinkRange } from "@/editor/link-edit";
 // 界面文案。⚠️ 源码模式里有几处**写进文档的占位词**（`t("Bold")` 那几串：
 // 空选区按下加粗时插进正文的就是它），见下面用到的那些行——
 // 用户自己的正文当然不进翻译。
@@ -119,7 +119,7 @@ function setLinePrefix(
 }
 
 /** 选区里的每个非空行是否都已经以**同一串**标题标记开头。 */
-function 全部是这一级标题(view: EditorView, prefix: string, strict: boolean): boolean {
+function allIsThisValueLevelMarkTitle(view: EditorView, prefix: string, strict: boolean): boolean {
   const re = atxPrefixRe(strict);
   const lines = selectedLines(view).filter((line) => view.state.doc.sliceString(line.from, line.to).trim() !== "");
   if (lines.length === 0) return false;
@@ -162,23 +162,23 @@ function wrapSelection(
  * （`](地址)`），"再插一次链接"该不该算开关得单独拍板，不是这里顺手决定的。
  * 它仍旧走 `wrapSelection`。
  */
-function 切换行内标记(
+function splitReplaceInlineMark(
   view: EditorView,
   before: string,
   after: string,
   placeholderText: string,
 ): void {
   const { from, to } = view.state.selection.main;
-  const 摘 = 试摘定界符(view.state.doc.toString(), from, to, before, after);
-  if (摘 === null) {
+  const remove2 = tryRemoveFixedBoundarySymbol(view.state.doc.toString(), from, to, before, after);
+  if (remove2 === null) {
     // 没带着这一对 ⇒ 照旧包一层（空选区插占位词也在这一支里）。
     wrapSelection(view, before, after, placeholderText);
     return;
   }
-  if (摘.结果 === "不动") return;
+  if (remove2.result2 === "不动") return;
   // 选区也在纯函数里算好了：摘掉之后要盖住**原来那段正文**，否则光标会落在
   // 定界符原来的位置上，接着敲一个字就把刚摘干净的地方又弄脏。
-  view.dispatch({ changes: 摘.改动, selection: 摘.选区 });
+  view.dispatch({ changes: remove2.changeAction, selection: remove2.selection });
 }
 
 /**
@@ -191,11 +191,11 @@ function 切换行内标记(
  * ⚠️ 正则里的 `[\s\S]` 而不是 `.`：选区里**可能跨行**，而 `.` 默认不匹配
  * 换行；用 `.` 的话跨行的粗体会整段漏掉。
  */
-function 清除行内标记(view: EditorView): void {
+function clearRemoveInlineMark(view: EditorView): void {
   const { from, to } = view.state.selection.main;
   if (from === to) return;
-  const 原 = view.state.sliceDoc(from, to);
-  const 净 = 原
+  const original = view.state.sliceDoc(from, to);
+  const clean = original
     // ⚠️ **图片必须排在链接前面**：`![替代文字](地址)` 里也含着一个
     // `[替代文字](地址)`，链接那条先跑的话会把它削成 `!替代文字`，
     // 多出一个叹号——而叹号再也回不去了。
@@ -220,8 +220,8 @@ function 清除行内标记(view: EditorView): void {
     // 是没错，但也会把 `***x***` 拆坏。
     .replace(/\*([^*\n]+?)\*/g, "$1")
     .replace(/(^|[\s(])_([^_\n]+?)_(?=[\s).,，。]|$)/g, "$1$2");
-  if (净 === 原) return;
-  view.dispatch({ changes: { from, to, insert: 净 } });
+  if (clean === original) return;
+  view.dispatch({ changes: { from, to, insert: clean } });
 }
 
 /** 在光标处插一段文字（图片用：它没有"包一层"这种形态）。 */
@@ -285,16 +285,16 @@ export function applyCommand(
     // ⚠️ 这四家与下面四种扩展标记走的都是 `切换行内标记`（**开关**，不是
     // "只会包"）：选中的文字已经带着这一对就摘掉。理由与边界见它那段注释。
     case "bold":
-      切换行内标记(view, "**", "**", t("Bold"));
+      splitReplaceInlineMark(view, "**", "**", t("Bold"));
       return true;
     case "italic":
-      切换行内标记(view, "*", "*", t("Italic"));
+      splitReplaceInlineMark(view, "*", "*", t("Italic"));
       return true;
     case "strike":
-      切换行内标记(view, "~~", "~~", t("Strikethrough"));
+      splitReplaceInlineMark(view, "~~", "~~", t("Strikethrough"));
       return true;
     case "inlineCode":
-      切换行内标记(view, "`", "`", t("Code"));
+      splitReplaceInlineMark(view, "`", "`", t("Code"));
       return true;
     // 三种**扩展**行内标记（`editor/inline-marks.ts`）。源码模式手里就是
     // Markdown 原文，所以"包一层符号"就是这条命令的全部——所见即所得那边
@@ -302,16 +302,19 @@ export function applyCommand(
     // ⚠️ 下划线的写法是**裸 HTML** `<u>x</u>`，与 Typora 一致（没有 `__`
     // 那种歧义写法：`__` 在 CommonMark 里是加粗）。
     case "highlight":
-      切换行内标记(view, "==", "==", t("Highlight"));
+      splitReplaceInlineMark(view, "==", "==", t("Highlight"));
       return true;
     case "superscript":
-      切换行内标记(view, "^", "^", t("Superscript"));
+      splitReplaceInlineMark(view, "^", "^", t("Superscript"));
       return true;
     case "subscript":
-      切换行内标记(view, "~", "~", t("Subscript"));
+      splitReplaceInlineMark(view, "~", "~", t("Subscript"));
       return true;
     case "underline":
-      切换行内标记(view, "<u>", "</u>", t("Underline"));
+      splitReplaceInlineMark(view, "<u>", "</u>", t("Underline"));
+      return true;
+    case "comment":
+      splitReplaceInlineMark(view, "<!-- ", " -->", t("Comment"));
       return true;
     // 标题：`text` 是"正文段落"，也就是清掉标题标记。
     case "h1":
@@ -322,7 +325,7 @@ export function applyCommand(
     case "h6": {
       const level = Number(name.slice(1));
       const prefix = "#".repeat(level) + " ";
-      setLinePrefix(view, "heading", 全部是这一级标题(view, prefix, strict) ? null : prefix, strict);
+      setLinePrefix(view, "heading", allIsThisValueLevelMarkTitle(view, prefix, strict) ? null : prefix, strict);
       return true;
     }
     case "text":
@@ -348,19 +351,19 @@ export function applyCommand(
     // 菜单在两种模式下插出来的东西不一样——用户多半不会想到"脚注还跟模式有关"。
     case "footnote": {
       const { from, to } = view.state.selection.main;
-      const 标签 = 下一个脚注标签(扫源文标签(view.state.doc.toString()));
-      const 片段 = `[^${标签}]`;
-      const 末 = view.state.doc.length;
+      const label = belowValueItemFootNoteLabel(scanSourceTextLabel(view.state.doc.toString()));
+      const fragment = `[^${label}]`;
+      const end = view.state.doc.length;
       // ⚠️ 文档空的时候**不补那个空行**：一整篇只有一条脚注定义时，前面顶着
       // 两个空行是纯垃圾（所见即所得那边的序列化器也不会写它）。
-      const 定义片段 = (末 === 0 ? "" : "\n\n") + `[^${标签}]: `;
-      if (to === 末) {
+      const fixedMeaningFragment = (end === 0 ? "" : "\n\n") + `[^${label}]: `;
+      if (to === end) {
         // ⚠️ **光标（或选区）一直顶到文末**时两段合并成一笔：分开写的话两段
         // 插入落在同一个位置上，CodeMirror 会判"改动重叠"。
-        const 合 = 片段 + 定义片段;
+        const combine = fragment + fixedMeaningFragment;
         view.dispatch({
-          changes: { from, to, insert: 合 },
-          selection: { anchor: from + 合.length },
+          changes: { from, to, insert: combine },
+          selection: { anchor: from + combine.length },
         });
       } else {
         // 两处改动**一笔事务**：分两笔的话按一次 Ctrl+Z 只会退掉"补定义"那半步
@@ -368,10 +371,10 @@ export function applyCommand(
         // 选区的左端，所以第一处改动的坐标不会因为第二处而被推移。
         view.dispatch({
           changes: [
-            { from, to, insert: 片段 },
-            { from: 末, insert: 定义片段 },
+            { from, to, insert: fragment },
+            { from: end, insert: fixedMeaningFragment },
           ],
-          selection: { anchor: 末 + 定义片段.length },
+          selection: { anchor: end + fixedMeaningFragment.length },
         });
       }
       return true;
@@ -411,16 +414,16 @@ export function applyCommand(
     // 光标处已经有一条 → **整条换掉**；有选区 → 换掉选区；空光标 → 插一条新的。
     case "linkSet": {
       const { from, to } = view.state.selection.main;
-      const 现 = from === to ? 源文链接区间(view.state.doc.toString(), from) : null;
-      const 区 = 现 ?? { from, to };
-      const 新 = 源文链接(payload?.label ?? "", payload?.href ?? "");
+      const current2 = from === to ? sourceLinkRange(view.state.doc.toString(), from) : null;
+      const area = current2 ?? { from, to };
+      const newValue = sourceLink(payload?.label ?? "", payload?.href ?? "");
       // ⚠️ 两头都空时**什么都不做**（不是插一对空括号）：框那边本来就把它当取消。
-      if (新 === "") return true;
+      if (newValue === "") return true;
       view.dispatch({
-        changes: { from: 区.from, to: 区.to, insert: 新 },
+        changes: { from: area.from, to: area.to, insert: newValue },
         // 光标落在新链接**之后**——与所见即所得那边派完事务的落点一致（PM 会把
         // 落在被替换段里的光标映射到替换段的末尾）。
-        selection: { anchor: 区.from + 新.length },
+        selection: { anchor: area.from + newValue.length },
       });
       return true;
     }
@@ -429,18 +432,18 @@ export function applyCommand(
     // 每一条都摘成纯文字，判据是 `link-edit.ts::摘源文链接`）。
     case "linkRemove": {
       const { from, to } = view.state.selection.main;
-      const 现 = from === to ? 源文链接区间(view.state.doc.toString(), from) : null;
-      if (现) {
+      const current2 = from === to ? sourceLinkRange(view.state.doc.toString(), from) : null;
+      if (current2) {
         view.dispatch({
-          changes: { from: 现.from, to: 现.to, insert: 现.label },
-          selection: { anchor: 现.from + 现.label.length },
+          changes: { from: current2.from, to: current2.to, insert: current2.label },
+          selection: { anchor: current2.from + current2.label.length },
         });
         return true;
       }
       if (from === to) return true; // 空光标、又不在链接里：没有可摘的
-      const 原 = view.state.sliceDoc(from, to);
-      const 净 = 摘源文链接(原);
-      if (净 !== 原) view.dispatch({ changes: { from, to, insert: 净 } });
+      const original = view.state.sliceDoc(from, to);
+      const clean = removeSourceLink(original);
+      if (clean !== original) view.dispatch({ changes: { from, to, insert: clean } });
       return true;
     }
     case "image": {
@@ -449,7 +452,7 @@ export function applyCommand(
       return true;
     }
     case "clearFormat":
-      清除行内标记(view);
+      clearRemoveInlineMark(view);
       return true;
     // 「选择」这一族（2026-10-07）。⚠️ **判据与所见即所得共用**（`select.ts`
     // 第一组的两个纯函数）——同一颗键在两种模式下选出来的东西必须一样，
@@ -470,15 +473,15 @@ export function applyCommand(
     // 那边的"块"到不了别的段落去。
     case "selectWord":
     case "selectSentence": {
-      const 头 = view.state.selection.main.head;
-      const 行 = view.state.doc.lineAt(头);
-      const 区 =
+      const head2 = view.state.selection.main.head;
+      const line3 = view.state.doc.lineAt(head2);
+      const area =
         name === "selectWord"
-          ? 选词区间(行.text, 头 - 行.from)
-          : 选句区间(行.text, 头 - 行.from);
-      if (区 && 区.from < 区.to) {
-        const from = 行.from + 区.from;
-        const to = 行.from + 区.to;
+          ? wordRange(line3.text, head2 - line3.from)
+          : sentenceRange(line3.text, head2 - line3.from);
+      if (area && area.from < area.to) {
+        const from = line3.from + area.from;
+        const to = line3.from + area.to;
         view.dispatch({ selection: { anchor: from, head: to } });
       }
       return true;
@@ -486,20 +489,20 @@ export function applyCommand(
     // 选当前词并删（`Ctrl+Shift+D`）。⚠️ **已经有选区时删的是那个选区**，不再
     // 去找词——与所见即所得那边同一条判据（`select.ts::删词`），理由写在那里。
     case "deleteWord": {
-      const 选 = view.state.selection.main;
-      const 区 = 选.empty
+      const select = view.state.selection.main;
+      const area = select.empty
         ? (() => {
-            const 行 = view.state.doc.lineAt(选.head);
-            const 词 = 选词区间(行.text, 选.head - 行.from);
-            return 词 && { from: 行.from + 词.from, to: 行.from + 词.to };
+            const line3 = view.state.doc.lineAt(select.head);
+            const word = wordRange(line3.text, select.head - line3.from);
+            return word && { from: line3.from + word.from, to: line3.from + word.to };
           })()
-        : { from: 选.from, to: 选.to };
+        : { from: select.from, to: select.to };
       // ⚠️ 光标落在删掉那一段的**开头**（不是结尾）：所见即所得那边同一条，
       // 理由写在 `select.ts::删词`。
-      if (区 && 区.from < 区.to) {
+      if (area && area.from < area.to) {
         view.dispatch({
-          changes: { from: 区.from, to: 区.to },
-          selection: { anchor: 区.from },
+          changes: { from: area.from, to: area.to },
+          selection: { anchor: area.from },
         });
       }
       return true;
@@ -535,17 +538,17 @@ export function applyCommand(
     // ⚠️ 界面上的编辑框只在所见即所得那一侧有（源码模式自己就是编辑框），
     // 所以这里实际只有菜单那一条路进来。
     case "frontMatter": {
-      const 原块 = 拆前置块(view.state.doc.toString()).前置块;
-      const 要 = payload?.frontMatter;
-      const 新块 =
-        要 === undefined
-          ? 原块 ?? 换前置块(null, 新建前置块模板)
-          : 换前置块(原块, 要 ?? "");
-      if (新块 === 原块) return true; // 一个字都不会变，别派空事务
+      const originalBlock = splitFrontMatter(view.state.doc.toString()).frontMatter;
+      const want = payload?.frontMatter;
+      const newValueBlock =
+        want === undefined
+          ? originalBlock ?? replaceFrontMatter(null, newFrontMatterTemplate)
+          : replaceFrontMatter(originalBlock, want ?? "");
+      if (newValueBlock === originalBlock) return true; // 一个字都不会变，别派空事务
       // ⚠️ 只换开头那一段，别处的字符一个都不动（`from: 0, to: 原块.length`）。
       // 光标与滚动由 CodeMirror 自己按位置映射，这里不另设选区——设了反而会
       // 把用户正在别处看的位置拽回来。
-      view.dispatch({ changes: { from: 0, to: 原块?.length ?? 0, insert: 新块 ?? "" } });
+      view.dispatch({ changes: { from: 0, to: originalBlock?.length ?? 0, insert: newValueBlock ?? "" } });
       return true;
     }
     // 表格那十条：见上面那段"语义对不上"。

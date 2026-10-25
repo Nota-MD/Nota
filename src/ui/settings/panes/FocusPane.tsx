@@ -34,7 +34,7 @@ import { paneWriter, type PaneProps } from "./props";
 
 export function FocusPane({ settings, onChange }: PaneProps) {
   const t = useT();
-  const 写 = paneWriter(settings, onChange, "focus");
+  const write = paneWriter(settings, onChange, "focus");
   const f = settings.focus;
 
   return (
@@ -46,7 +46,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
             min={1}
             max={600}
             suffix={t("min")}
-            onChange={(total_minutes) => 写({ total_minutes })}
+            onChange={(total_minutes) => write({ total_minutes })}
           />
         </SettingRow>
 
@@ -56,7 +56,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
             min={1}
             max={600}
             suffix={t("min")}
-            onChange={(alarm_minutes) => 写({ alarm_minutes })}
+            onChange={(alarm_minutes) => write({ alarm_minutes })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -69,7 +69,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
             max={10}
             step={0.5}
             suffix={t("min")}
-            onChange={(gain_per_minute) => 写({ gain_per_minute })}
+            onChange={(gain_per_minute) => write({ gain_per_minute })}
           />
         </SettingRow>
 
@@ -80,7 +80,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
             max={10}
             step={0.5}
             suffix={t("min")}
-            onChange={(drain_per_minute) => 写({ drain_per_minute })}
+            onChange={(drain_per_minute) => write({ drain_per_minute })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -92,7 +92,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
             min={0}
             max={300}
             suffix={t("sec")}
-            onChange={(grace_seconds) => 写({ grace_seconds })}
+            onChange={(grace_seconds) => write({ grace_seconds })}
           />
         </SettingRow>
 
@@ -116,7 +116,7 @@ export function FocusPane({ settings, onChange }: PaneProps) {
 
       <SettingsGroup title={t("Alarm")}>
         <SettingRow label={t("Play the alarm")}>
-          <Toggle checked={f.sound} onChange={(sound) => 写({ sound })} />
+          <Toggle checked={f.sound} onChange={(sound) => write({ sound })} />
         </SettingRow>
       </SettingsGroup>
 

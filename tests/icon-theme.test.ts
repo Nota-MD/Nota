@@ -9,82 +9,96 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 
-let 过 = 0;
-let 败 = 0;
-const 失败: string[] = [];
+let pass = 0;
+let fail = 0;
+const failure: string[] = [];
 
-function 测(名: string, 体: () => void): void {
+function testCase(name3: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name3}`);
   } catch (e) {
-    败++;
-    失败.push(名);
-    console.log(`  ✘ ${名}\n      ${e instanceof Error ? e.message : String(e)}`);
+    fail++;
+    failure.push(name3);
+    console.log(`  ✘ ${name3}\n      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 真(条件: boolean, 说明: string): void {
-  if (!条件) throw new Error(说明);
+function assertValue(condition: boolean, description: string): void {
+  if (!condition) throw new Error(description);
 }
 
-function 读(...段: string[]): string {
-  return readFileSync(join(...段), "utf8");
+function read(...paragraph2: string[]): string {
+  return readFileSync(join(...paragraph2), "utf8");
 }
 
-const Icon = 读("src", "ui", "Icon.tsx");
-const iconsCss = 读("src", "styles", "icons.css");
-const cdeCss = 读("src", "styles", "external-themes", "cde", "theme.css");
-const mainTsx = 读("src", "main.tsx");
-const assetsRs = 读("src-tauri", "src", "theme_assets.rs");
-const uiStylesRs = 读("src-tauri", "src", "ui_styles.rs");
+const Icon = read("src", "ui", "Icon.tsx");
+const iconsCss = read("src", "styles", "icons.css");
+const marksCss = read("src", "styles", "marks.css");
+const cdeCss = read("src", "styles", "external-themes", "cde", "theme.css");
+const mainTsx = read("src", "main.tsx");
+const assetsRs = read("src-tauri", "src", "theme_assets.rs");
+const uiStylesRs = read("src-tauri", "src", "ui_styles.rs");
 
-测("Icon 把逻辑名拼成 --icon-<id> 并由默认图兜底", () => {
-  真(Icon.includes("data-icon={name}"), "Icon 没有输出 data-icon");
-  真(
+testCase("Icon 把逻辑名拼成 --icon-<id> 并由默认图兜底", () => {
+  assertValue(Icon.includes("data-icon={name}"), "Icon 没有输出 data-icon");
+  assertValue(
     Icon.includes("`var(--icon-${name}, var(--icon-base))`"),
     "逻辑名没有拼成 --icon-<id>，或者默认图没有兜底",
   );
-  真(iconsCss.includes("var(--icon-override, var(--icon-base))"), "遮罩没有消费覆盖变量");
+  assertValue(iconsCss.includes("var(--icon-override, var(--icon-base))"), "遮罩没有消费覆盖变量");
 });
 
-测("CDE 只声明图标 ID → 地址，不写 per-icon 组件规则", () => {
-  真(
+testCase("CDE 只声明图标 ID → 地址，不写 per-icon 组件规则", () => {
+  assertValue(
     cdeCss.includes(
       '--icon-folio-close-symbolic: url("./assets/icons/close.svg")',
     ),
     "缺少 CDE 的 close 映射",
   );
-  真(cdeCss.includes("--icon-folio-format-text-bold-symbolic"), "缺少加粗图标映射");
-  真(!cdeCss.includes('.icon[data-icon="folio-close-symbolic"]'), "又退回选择器硬编码了");
+  assertValue(cdeCss.includes("--icon-folio-format-text-bold-symbolic"), "缺少加粗图标映射");
+  assertValue(cdeCss.includes("--icon-nota-heading-1-symbolic"), "缺少 CDE 一级标题图标映射");
+  assertValue(cdeCss.includes("--nota-source-quote-icon"), "缺少 CDE 引用源码图标映射");
+  assertValue(!cdeCss.includes('.icon[data-icon="folio-close-symbolic"]'), "又退回选择器硬编码了");
 });
 
-测("CDE 外部主题不进入程序内置风格和静态样式导入", () => {
-  真(!uiStylesRs.includes('"cde"'), "ui_styles.rs 仍把 cde 列为内置风格");
-  真(!mainTsx.includes('"./styles/external-themes/cde/theme.css"'), "main.tsx 静态导入了 CDE");
-  真(!mainTsx.includes('"./styles/cde.css"'), "main.tsx 仍在导入旧 CDE 样式");
+testCase("编辑器块标记使用自绘 SVG，位置由 50% 垂直居中", () => {
+  assertValue(marksCss.includes('--nota-source-quote-icon'), "缺少引用源码图标变量");
+  assertValue(marksCss.includes('data-srcmark=">"'), "引用块没有接到 SVG");
+  assertValue(marksCss.includes('data-srcmark="-"]'), "无序列表没有接到 SVG");
+  assertValue(marksCss.includes('data-srcmark="```"'), "代码围栏没有接到 SVG");
+  assertValue(
+    marksCss.includes("top: 50%") && marksCss.includes("transform: translateY(-50%)"),
+    "块标记没有相对块垂直居中",
+  );
 });
 
-测("核心 CSS 不再包含 CDE 专用选择器", () => {
-  const 根 = join(process.cwd(), "src", "styles");
-  const 外置 = join(根, "external-themes");
-  const css文件 = (目录: string): string[] =>
-    readdirSync(目录, { withFileTypes: true }).flatMap((项) => {
-      const 路径 = join(目录, 项.name);
-      if (项.isDirectory()) return 路径 === 外置 ? [] : css文件(路径);
-      return 项.isFile() && 项.name.endsWith(".css") ? [路径] : [];
+testCase("CDE 外部主题不进入程序内置风格和静态样式导入", () => {
+  assertValue(!uiStylesRs.includes('"cde"'), "ui_styles.rs 仍把 cde 列为内置风格");
+  assertValue(!mainTsx.includes('"./styles/external-themes/cde/theme.css"'), "main.tsx 静态导入了 CDE");
+  assertValue(!mainTsx.includes('"./styles/cde.css"'), "main.tsx 仍在导入旧 CDE 样式");
+});
+
+testCase("核心 CSS 不再包含 CDE 专用选择器", () => {
+  const root = join(process.cwd(), "src", "styles");
+  const externalPlace = join(root, "external-themes");
+  const cssTextItem = (itemRecord: string): string[] =>
+    readdirSync(itemRecord, { withFileTypes: true }).flatMap((item5) => {
+      const path = join(itemRecord, item5.name);
+      if (item5.isDirectory()) return path === externalPlace ? [] : cssTextItem(path);
+      return item5.isFile() && item5.name.endsWith(".css") ? [path] : [];
     });
-  for (const 路径 of css文件(根)) {
-    真(
-      !readFileSync(路径, "utf8").includes('data-ui-style="cde"'),
-      `${relative(process.cwd(), 路径)} 仍含 CDE 专用选择器`,
+  for (const path of cssTextItem(root)) {
+    assertValue(
+      !readFileSync(path, "utf8").includes('data-ui-style="cde"'),
+      `${relative(process.cwd(), path)} 仍含 CDE 专用选择器`,
     );
   }
 });
 
-测("自绘 CDE 图标都存在且是 16 格源", () => {
-  for (const 名 of [
+testCase("自绘 CDE 图标都存在且是 16 格源", () => {
+  for (const name3 of [
     "document-open",
     "document-new",
     "document-save",
@@ -107,23 +121,29 @@ const uiStylesRs = 读("src-tauri", "src", "ui_styles.rs");
     "unfold-more",
     "sidebar-collapse",
     "sidebar-toggle",
+    "heading-1",
+    "heading-2",
+    "heading-3",
+    "source-quote",
+    "source-bullet",
+    "source-code",
   ]) {
-    const 路径 = join("src", "styles", "external-themes", "cde", "assets", "icons", `${名}.svg`);
-    真(existsSync(路径), `缺少 ${路径}`);
-    const 源 = readFileSync(路径, "utf8");
-    真(源.includes('width="16"') && 源.includes('height="16"'), `${名} 不是 16×16`);
+    const path = join("src", "styles", "external-themes", "cde", "assets", "icons", `${name3}.svg`);
+    assertValue(existsSync(path), `缺少 ${path}`);
+    const source3 = readFileSync(path, "utf8");
+    assertValue(source3.includes('width="16"') && source3.includes('height="16"'), `${name3} 不是 16×16`);
   }
 });
 
-测("用户资源相对 CSS 文件解析且不绑定固定目录", () => {
-  真(assetsRs.includes('find("url(")'), "后端没有解析 CSS 相对 url()");
-  真(assetsRs.includes("font/ttf") && assetsRs.includes("image/svg+xml"), "字体/图标 MIME 缺失");
-  真(!uiStylesRs.includes('join("icons")'), "ui_styles.rs 又写死了 主题id/icons 目录");
+testCase("用户资源相对 CSS 文件解析且不绑定固定目录", () => {
+  assertValue(assetsRs.includes('find("url(")'), "后端没有解析 CSS 相对 url()");
+  assertValue(assetsRs.includes("font/ttf") && assetsRs.includes("image/svg+xml"), "字体/图标 MIME 缺失");
+  assertValue(!uiStylesRs.includes('join("icons")'), "ui_styles.rs 又写死了 主题id/icons 目录");
 });
 
-if (败) {
-  console.error(`\n${败} 条失败`);
+if (fail) {
+  console.error(`\n${fail} 条失败`);
   process.exitCode = 1;
 } else {
-  console.log(`\n${过} 条全过`);
+  console.log(`\n${pass} 条全过`);
 }

@@ -39,17 +39,12 @@
   /* 稿子：浮动窗口圆角 15px。落在这里（`--radius-lg`）是因为本仓拿它画的是
      对话框/弹出层——那正好是"浮动窗口"这个角色（真正的窗口边框归窗口管理器）。 */
   --radius-lg: 15px;
-  /* 稿子：普通按钮高 36px。原来是 32。 */
-  --control-height: 36px;
-  --spacing: 10px;
-  /* ⚠️ 顶栏高度 38 → 44（稿子：headerbar 44px）。
-     **这是那几份稿子里唯一一档照用了"标题栏高度"的**，理由：稿子给的
-     44px 比我们现在的 38px **大**，控件 36px 放进去上下各留 4px、正合适；
-     而 Breeze(32) / Win11(32) / Win10(30) 那三份给的都比 38 小，
-     照用会把我们自己的按钮挤出去（Win11 那档控件本身就 32px，等于零余量），
-     所以那三档**只取控件尺寸、不取标题栏高度**。macOS 那份给的正好是 38px，
-     不用动。 */
-  --toolbar-height: 44px;
+  /* 2026-10-25 按 Typora 的紧凑菜单栏重新收口：顶栏不是系统 titlebar，
+     不需要 LibAdwaita headerbar 的 44px。控件保持完整点击高度，菜单项
+     在 32px 栏内使用 24px 高、7px 横向内边距。 */
+  --control-height: 32px;
+  --spacing: 8px;
+  --toolbar-height: 28px;
   --toolbar-shadow: none;
   --btn-font-weight: 500;
 

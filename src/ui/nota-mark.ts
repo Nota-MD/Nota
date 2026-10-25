@@ -31,13 +31,13 @@
  * 那一块，看着就是个 app 图标。
  */
 
-import 源 from "../../src-tauri/icons/nota.svg?raw";
+import source3 from "../../src-tauri/icons/nota.svg?raw";
 
 /**
  * 标识自己的坐标系。⚠️ 是 **1254×1254**，不是常见的 1024——那是照原图像素量的
  * （`nota.svg` 里所有几何都落在这个空间里），所以这里必须跟着它，别写 1024。
  */
-export const 标识视图 = "0 0 1254 1254";
+export const markRecognizeView = "0 0 1254 1254";
 
 /**
  * 底衬（那张圆角"瓷砖"）在标识坐标系里的位置，抄自 `nota.svg` 里那个
@@ -50,35 +50,35 @@ export const 标识视图 = "0 0 1254 1254";
  * ⚠️ 抄一份数在这是**有意的取舍**：裁剪框要跟着它走。图标那边改了几何，这里的
  * 裁剪框就会错位——错位的表现是"图标缺一个角"，一眼能看出来，不会静默。
  */
-const 底衬 = { x: 92, y: 95, 宽: 1070, 高: 1066, 圆角: 255 };
+const bottomLiner = { x: 92, y: 95, width: 1070, height: 1066, circleCorner: 255 };
 
 /** 图标那串路径（不含外层 `<svg>`）。模块加载时算一次，之后只做改名。 */
-const 内芯 = (() => {
-  const 去壳 = 源
+const insideCore = (() => {
+  const goShell = source3
     // XML 声明：嵌进别人的 SVG 之后它出现在文档中间，是无效字节。
     .replace(/<\?xml[\s\S]*?\?>/g, "")
     // 注释：`nota.svg` 头上那几十行说明是给改图标的人看的，不该跟着进分享图。
     .replace(/<!--[\s\S]*?-->/g, "");
-  const 匹配 = 去壳.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
+  const match2 = goShell.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
   // 匹配不上说明那份文件不再是"一个 svg 包着内容"的形状——那时**只留空**，
   // 让分享图上少一个图标，而不是把半段 XML 灌进 SVG 里（那会整张图不渲染）。
-  return (匹配?.[1] ?? "").trim();
+  return (match2?.[1] ?? "").trim();
 })();
 
 /** 给一段 SVG 里的 id 与引用统一加前缀（理由见文件头）。 */
-function 加前缀(片段: string, 前缀: string): string {
-  const 叫法 = new Map<string, string>();
+function addPrefix(fragment: string, prefix: string): string {
+  const callMethod = new Map<string, string>();
   // 先收集一遍 id：`url(#tile)` 要改成 `url(#<前缀>tile)`，改名规则只有一处。
-  for (const m of 片段.matchAll(/\bid="([^"]+)"/g)) {
+  for (const m of fragment.matchAll(/\bid="([^"]+)"/g)) {
     // ⚠️ 捕获组在类型上是 `string | undefined`（`noUncheckedIndexedAccess`）。
     // 这条正则只会匹配到"有一个非空捕获组的 id"，所以那个 `if` 永远成立——
     // 留着它是为了让类型收窄，而不是在防一个真会出现的情况。
-    const 名 = m[1];
-    if (名) 叫法.set(名, 前缀 + 名);
+    const name3 = m[1];
+    if (name3) callMethod.set(name3, prefix + name3);
   }
-  return 片段
-    .replace(/\bid="([^"]+)"/g, (_全, 名: string) => `id="${叫法.get(名) ?? 名}"`)
-    .replace(/url\(#([^)]+)\)/g, (_全, 名: string) => `url(#${叫法.get(名) ?? 名})`);
+  return fragment
+    .replace(/\bid="([^"]+)"/g, (_All, name3: string) => `id="${callMethod.get(name3) ?? name3}"`)
+    .replace(/url\(#([^)]+)\)/g, (_All, name3: string) => `url(#${callMethod.get(name3) ?? name3})`);
 }
 
 /**
@@ -90,14 +90,14 @@ function 加前缀(片段: string, 前缀: string): string {
  *   1254——`viewBox` 会自己按比例缩放，调用方不必换算。
  * @param 前缀 这一份实例的 id 前缀。**同一张图上两个实例必须传不同的值**。
  */
-export function 标识(左: number, 上: number, 尺寸: number, 前缀: string): string {
-  const 内 = 加前缀(内芯, 前缀);
+export function markRecognize(left: number, above: number, rulerInch: number, prefix: string): string {
+  const inside = addPrefix(insideCore, prefix);
   return (
-    `<svg x="${左}" y="${上}" width="${尺寸}" height="${尺寸}" viewBox="${标识视图}">` +
-    `<defs><clipPath id="${前缀}裁">` +
-    `<rect x="${底衬.x}" y="${底衬.y}" width="${底衬.宽}" height="${底衬.高}" rx="${底衬.圆角}"/>` +
+    `<svg x="${left}" y="${above}" width="${rulerInch}" height="${rulerInch}" viewBox="${markRecognizeView}">` +
+    `<defs><clipPath id="${prefix}裁">` +
+    `<rect x="${bottomLiner.x}" y="${bottomLiner.y}" width="${bottomLiner.width}" height="${bottomLiner.height}" rx="${bottomLiner.circleCorner}"/>` +
     `</clipPath></defs>` +
-    `<g clip-path="url(#${前缀}裁)">${内}</g>` +
+    `<g clip-path="url(#${prefix}裁)">${inside}</g>` +
     `</svg>`
   );
 }

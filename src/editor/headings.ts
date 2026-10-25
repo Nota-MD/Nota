@@ -38,7 +38,7 @@
  */
 
 import { atxTextRe } from "@/editor/atx";
-import { 前置块行数 } from "@/editor/front-matter";
+import { frontMatterLineCount } from "@/editor/front-matter";
 
 export interface OutlineItem {
   level: number;
@@ -58,8 +58,8 @@ export function extractOutline(markdown: string, strict = false): OutlineItem[] 
   // 当正文数"的对不上。合完之后**大纲藏的与编辑器藏的是同一段**；为什么
   // 不用自己再兜"残缺文件"，见 `front-matter.ts` 文件头。跳过的是行**数**，
   // `i` 仍是整篇文档的行号（`line` 字段的口径没有变）。
-  const 跳过 = 前置块行数(markdown);
-  for (let i = 跳过; i < lines.length; i++) {
+  const jumpPass = frontMatterLineCount(markdown);
+  for (let i = jumpPass; i < lines.length; i++) {
     const line = lines[i]!;
 
     const trimmed = line.trimStart();

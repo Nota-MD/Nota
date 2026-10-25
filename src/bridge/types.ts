@@ -38,7 +38,7 @@ export interface Document {
  * ⚠️ **没有"其它"这一档**：只有目录、文件、不在了三种。别把"能不能打开"
  * 也塞进来——那是前端的路由（`ui/useFileDrop.ts`），宿主只回答事实。
  */
-export type 路径种类 = "dir" | "file" | "missing";
+export type PathKindClass = "dir" | "file" | "missing";
 
 /**
  * 一本**我们的引擎真读得了**的词典（`spell::nota_spell_dictionaries` 回的那种）。
@@ -49,12 +49,12 @@ export type 路径种类 = "dir" | "file" | "missing";
  *
  * ⚠️ **安装包不带任何词典**（用户 2026-10-11 拍板），所以没有第三种来源。
  */
-export interface 拼写词典 {
+export interface CombineWriteWordDictionary {
   /** 语言标签，`en_US` 这种（文件名去掉后缀）。 */
   tag: string;
-  来源: "user" | "system";
+  comeSource: "user" | "system";
   /** 在哪个目录（"打开文件夹"那条路用）。 */
-  目录: string;
+  itemRecord: string;
 }
 
 /**
@@ -124,7 +124,7 @@ export interface TreeOptions {
  * ⚠️ 宿主**读的时候会把已经不存在的路径滤掉**（但不顺手落盘，见
  * `commands/session.rs`）：所以这里拿到的 `recent` 是"现在点得动的那些"。
  */
-export interface 会话 {
+export interface MeetingSpeech {
   /** 上次开着的那几份（标签顺序），只留现在还存在的。 */
   open: string[];
   /** 上次前台是哪一份。**可能已经不在 `open` 里**（文件没了），兜底由前端做。 */
@@ -576,7 +576,7 @@ export interface AppLang {
 }
 
 /** 信任库里的一把钥匙。见 `plugin/package.rs` 里信任库那一段。 */
-export interface 信任记录 {
+export interface trustRecord {
   key_id: string;
   /** 记下它时那个插件的名字。**只是给人看的**——信任是按指纹判的。 */
   name: string;
@@ -588,7 +588,7 @@ export interface 信任记录 {
  * ⚠️ 字段名跟着 Rust 那边走（`files` / `bytes` / `signature`），不汉化：
  * 这是跨进程的线格式，两边同名才好对。
  */
-export interface 导出报告 {
+export interface exportReport {
   id: string;
   /** 包里装了几个文件（**不含**签名块）。 */
   files: number;

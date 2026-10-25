@@ -12,14 +12,14 @@ export interface Rgb {
   b: number;
 }
 
-const 具名颜色: Record<string, Rgb> = {
+const namedColor: Record<string, Rgb> = {
   black: { r: 0, g: 0, b: 0 },
   white: { r: 255, g: 255, b: 255 },
   gray: { r: 128, g: 128, b: 128 },
   grey: { r: 128, g: 128, b: 128 },
 };
 
-function 字节(value: string, scale = 255): number | null {
+function byte(value: string, scale = 255): number | null {
   const raw = value.trim();
   if (!raw) return null;
   const number = raw.endsWith("%")
@@ -32,7 +32,7 @@ function 字节(value: string, scale = 255): number | null {
 /** 解析主题里最常见的 CSS 颜色写法；认不出时返回 `null`，不猜。 */
 export function parseCssColor(value: string): Rgb | null {
   const text = value.trim().toLowerCase();
-  const named = 具名颜色[text];
+  const named = namedColor[text];
   if (named) return named;
 
   const hex = text.match(/^#([0-9a-f]{3,8})$/i)?.[1];
@@ -52,9 +52,9 @@ export function parseCssColor(value: string): Rgb | null {
   if (!rgb) return null;
   const parts = rgb.replaceAll(",", " ").split("/")[0]?.trim().split(/\s+/) ?? [];
   if (parts.length < 3) return null;
-  const r = 字节(parts[0] ?? "");
-  const g = 字节(parts[1] ?? "");
-  const b = 字节(parts[2] ?? "");
+  const r = byte(parts[0] ?? "");
+  const g = byte(parts[1] ?? "");
+  const b = byte(parts[2] ?? "");
   return r === null || g === null || b === null ? null : { r, g, b };
 }
 

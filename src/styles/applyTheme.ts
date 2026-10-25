@@ -95,9 +95,9 @@ export function applyTheme(settings: Settings): () => void {
     // `accent.ts::accentVars` 那段），不碰其余颜色：配色协调由明暗那条轴保证。
     // 前景色是 `accentFg()` 按对比度当场算的——**不存**，理由见
     // `settings/appearance.rs` 的 `accent` 那段。
-    const 强调 = accentVars(settings.appearance.accent);
-    if (强调) {
-      for (const [变量, 值] of Object.entries(强调)) root.style.setProperty(变量, 值);
+    const strongConfigure = accentVars(settings.appearance.accent);
+    if (strongConfigure) {
+      for (const [changeMeasure, value2] of Object.entries(strongConfigure)) root.style.setProperty(changeMeasure, value2);
     } else {
       // ⚠️ **这三个必须一起摘**。`--switch-on` 摘漏了的症状很隐蔽：用户点
       // 「跟随风格」之后 `--accent` 回去了、开关**留在上一个主题色上**——
@@ -117,8 +117,8 @@ export function applyTheme(settings: Settings): () => void {
     // ⚠️ 1~8 这个区间在这里**夹一道**（设置页那个 `NumberInput` 也写着同样的
     // min/max）：手改 `settings.toml` 写成 `999` 的人，不该把一行推到屏幕外面。
     if (settings.editor.paragraph_indent) {
-      const 宽 = Math.min(8, Math.max(1, Math.round(settings.editor.paragraph_indent_chars)));
-      root.style.setProperty("--para-indent", `${宽}em`);
+      const width = Math.min(8, Math.max(1, Math.round(settings.editor.paragraph_indent_chars)));
+      root.style.setProperty("--para-indent", `${width}em`);
     } else {
       root.style.removeProperty("--para-indent");
     }
@@ -141,19 +141,19 @@ export function applyTheme(settings: Settings): () => void {
     // 它把那格出厂值 240 顶掉、自己又不合法，于是 `width` 整条声明失效、
     // 退回 `auto`，侧栏宽度改由内容（那句 "No folder is open yet…"）撑开。
     // 看着既不像 240 也不像报错，只像"侧栏宽度不听使唤"。
-    const 原宽 = settings.appearance.sidebar_width;
-    const 侧栏宽 = Number.isFinite(原宽)
-      ? Math.min(480, Math.max(180, Math.round(原宽)))
+    const originalWidth = settings.appearance.sidebar_width;
+    const sideBarWidth = Number.isFinite(originalWidth)
+      ? Math.min(480, Math.max(180, Math.round(originalWidth)))
       : 240;
-    root.style.setProperty("--sidebar-width", `${侧栏宽}px`);
+    root.style.setProperty("--sidebar-width", `${sideBarWidth}px`);
 
     // ⚠️ 右侧插件栏那一条同理（2026-10-11）：出厂 260 与 `theme/base.css`、
     // `DockResizer.右栏宽默认` 三处同值；不是数就退回出厂值（理由同上那一段）。
-    const 原右 = settings.appearance.dock_width;
-    const 右栏宽 = Number.isFinite(原右)
-      ? Math.min(560, Math.max(200, Math.round(原右)))
+    const originalRight = settings.appearance.dock_width;
+    const rightBarWidth = Number.isFinite(originalRight)
+      ? Math.min(560, Math.max(200, Math.round(originalRight)))
       : 260;
-    root.style.setProperty("--dock-width", `${右栏宽}px`);
+    root.style.setProperty("--dock-width", `${rightBarWidth}px`);
   };
 
   paint();

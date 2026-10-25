@@ -23,7 +23,7 @@
  */
 
 /** 一档刻度。 */
-export interface 刻度 {
+export interface tick {
   /** 位置，**0 = 顶/左**（与 SVG 的坐标系一致）。取值夹在 0~1。 */
   at: number;
   /** 显示的文字。是字符串不是数：插件可以写 `"10:30"`，也可以写 `"现在"`。 */
@@ -39,13 +39,13 @@ export interface 刻度 {
    * **怎么显示**——同本文件头那张表）。所以这里不是 `fontSize`，而是一个真假值；
    * 面板那边的刻度永远不带它，是 `undefined`，行为与加这个字段之前完全一样。
    */
-  大单位?: boolean;
+  largeSinglePosition?: boolean;
 }
 
 /** 一次最多认几档。再多就成一排糊字了。 */
-const 刻度上限 = 8;
+const tickLimit = 8;
 /** 一档标签最多几个字。防的是"插件把一整句话塞进刻度里"。 */
-const 标签上限 = 12;
+const labelLimit = 12;
 
 /**
  * 读插件给的刻度（`x_ticks` / `y_ticks`）。
@@ -54,33 +54,33 @@ const 标签上限 = 12;
  * 那几档，而不是整块图不画。但**丢掉的档不会补**——补一档等于替插件编一个
  * 位置，那比少一档更难发现。
  */
-export function 读刻度(raw: unknown, 上限: number = 刻度上限): 刻度[] {
+export function readTick(raw: unknown, limit: number = tickLimit): tick[] {
   if (!Array.isArray(raw)) return [];
-  const out: 刻度[] = [];
-  for (const 项 of raw) {
-    if (typeof 项 !== "object" || 项 === null) continue;
-    const { at, label, 大单位 } = 项 as {
+  const out: tick[] = [];
+  for (const item5 of raw) {
+    if (typeof item5 !== "object" || item5 === null) continue;
+    const { at, label, largeSinglePosition } = item5 as {
       at?: unknown;
       label?: unknown;
-      大单位?: unknown;
+      largeSinglePosition?: unknown;
     };
     if (typeof at !== "number" || !Number.isFinite(at)) continue;
     if (typeof label !== "string") continue;
-    const 字 = label.trim();
-    if (!字) continue;
+    const character2 = label.trim();
+    if (!character2) continue;
     out.push({
       // 夹在 0~1：跑到画布外面的刻度看不见，看不见的刻度等于没写，
       // 而"没写"比"写了个越界的数"更好排查（前者是漏，后者是错）。
       at: Math.min(1, Math.max(0, at)),
-      label: 字.slice(0, 标签上限),
+      label: character2.slice(0, labelLimit),
       // ⚠️ 只在**恰好是 `true`** 时给这个字段：`大单位: false` 与"没写"是同一件事，
       // 而多出来的那个键会让快照/目检里那串 JSON 凭白长一截（同上"按位置排"那条）。
-      ...(大单位 === true ? { 大单位: true } : {}),
+      ...(largeSinglePosition === true ? { largeSinglePosition: true } : {}),
     });
   }
   // 按位置排：画的顺序不影响结果，但**顺序稳定**能让快照/目检对得上。
   out.sort((a, b) => a.at - b.at);
-  return out.slice(0, Math.max(0, 上限));
+  return out.slice(0, Math.max(0, limit));
 }
 
 /**
@@ -93,24 +93,24 @@ export function 读刻度(raw: unknown, 上限: number = 刻度上限): 刻度[]
  * ⚠️ 上下界相等（这一段一直平着）时**只给一档**、摆在中间：给两档相同数字会
  * 让人以为上下差着点什么。
  */
-export function 推纵刻度(点: number[]): 刻度[] {
-  const 首 = 点[0];
+export function pushVerticalTick(point: number[]): tick[] {
+  const first = point[0];
   // ⚠️ `点[0]` 在严格模式下是 `number | undefined`，这一句是给它收窄用的，
   // 不是"多余的判空"：空数组下面就用不到这几个数了。
-  if (首 === undefined) return [];
-  let 大 = 首;
-  let 小 = 首;
-  for (const v of 点) {
-    if (v > 大) 大 = v;
-    if (v < 小) 小 = v;
+  if (first === undefined) return [];
+  let large = first;
+  let small = first;
+  for (const v of point) {
+    if (v > large) large = v;
+    if (v < small) small = v;
   }
-  if (大 === 小) return [{ at: 0.5, label: 格式化数(大) }];
+  if (large === small) return [{ at: 0.5, label: formatNumber(large) }];
   // ⚠️ `at` 是**位置**：0 在顶上，所以极大值配 0、极小值配 1（与
   // `PanelBody.tsx` 里 `纵向()` 那条公式同一个方向）。
   return [
-    { at: 0, label: 格式化数(大) },
-    { at: 0.5, label: 格式化数((大 + 小) / 2) },
-    { at: 1, label: 格式化数(小) },
+    { at: 0, label: formatNumber(large) },
+    { at: 0.5, label: formatNumber((large + small) / 2) },
+    { at: 1, label: formatNumber(small) },
   ];
 }
 
@@ -121,17 +121,17 @@ export function 推纵刻度(点: number[]): 刻度[] {
  * 末尾的零去掉。⚠️ `-0` 要写成 `0`——它在数轴上不是一个特别的位置，
  * 但字符串里是另一个字，会让人盯着看一眼。
  */
-export function 格式化数(v: number): string {
+export function formatNumber(v: number): string {
   if (!Number.isFinite(v)) return "";
   if (Number.isInteger(v)) return Object.is(v, -0) ? "0" : String(v);
   const a = Math.abs(v);
-  const 位 = a >= 100 ? 0 : a >= 10 ? 1 : 2;
+  const position3 = a >= 100 ? 0 : a >= 10 ? 1 : 2;
   // ⚠️⚠️ **`位 === 0` 时不许去尾零**——`toFixed(0)` 根本没有小数部分，
   // 那条正则（`\.?0+$`）去掉的就成了**整数末尾的零**：
   // `(109.5).toFixed(0)` 是 `"110"`，去尾零 → `"11"`。
   // 后果不是"字写得难看"，是**刻度上的数差十倍**：一条标着 11 的线其实在 110。
   // （2026-09-27 目检时发现，当时在给分享图看纵轴刻度。）
   // 去尾零只对**小数部分**有意义，所以只在有小数位时才走那一步。
-  const 字 = 位 === 0 ? v.toFixed(0) : v.toFixed(位).replace(/\.?0+$/, "");
-  return 字 === "-0" || 字 === "" ? "0" : 字;
+  const character2 = position3 === 0 ? v.toFixed(0) : v.toFixed(position3).replace(/\.?0+$/, "");
+  return character2 === "-0" || character2 === "" ? "0" : character2;
 }

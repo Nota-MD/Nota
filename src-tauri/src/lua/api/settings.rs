@@ -234,7 +234,7 @@ pub fn 读全部(plugin_id: &str) -> BTreeMap<String, toml::Value> {
     let 出 = match 格.lock() {
         Ok(s) => s.值们.clone(),
         Err(e) => {
-            crate::日志!("[nota] 拓展设置状态坏了：{}", 锁报错(e));
+            crate::日志!("[nota] plugin settings state poisoned: {}", 锁报错(e));
             BTreeMap::new()
         }
     };
@@ -257,7 +257,7 @@ fn 读(路径: &Path) -> BTreeMap<String, toml::Value> {
     match toml::from_str::<BTreeMap<String, toml::Value>>(&text) {
         Ok(m) => m,
         Err(e) => {
-            crate::日志!("[nota] 拓展设置文件读不了（本次当空的用）：{}：{e}", 路径.display());
+            crate::日志!("[nota] plugin settings file unreadable; using empty state: {}: {e}", 路径.display());
             BTreeMap::new()
         }
     }

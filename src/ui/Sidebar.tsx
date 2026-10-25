@@ -66,6 +66,7 @@ import { extractOutline, type OutlineItem } from "@/editor/headings";
 // 右缘那条可以拖的把手（2026-09-30）。⚠️ 它**渲染在这一栏里面**，理由见那边文件头。
 import { SidebarResizer } from "@/ui/SidebarResizer";
 import { FileList } from "@/ui/SidebarFiles";
+import { SidebarContextMenu } from "@/ui/SidebarContextMenu";
 import { useTablistKeys } from "@/ui/useTablistKeys";
 
 export type SidebarTab = "tree" | "outline";
@@ -99,7 +100,7 @@ interface Props {
    * 里的**序号**（所见即所得用，ProseMirror 的文档树里没有"行"）。
    * 这一层**不替调用方挑**——两种坐标在两种模式下各自精确，挑错了就是跳错地方。
    */
-  onJumpOutline: (目标: { line: number; index: number }) => void;
+  onJumpOutline: (target: { line: number; index: number }) => void;
   /** 展开某个子目录时按需取它那一层（`depth = 1`）。 */
   loadDir: (path: string) => Promise<TreeNode[]>;
   /**
@@ -109,7 +110,7 @@ interface Props {
    * 等于每次渲染都重取一遍已经展开的目录。指纹只在"排序 / 过滤 / 隐藏文件"
    * 真的变了之后才换一个值。
    */
-  口径键: string;
+  optionKey: string;
   /**
    * 收起这一栏（右上角那颗 ×）。
    *
@@ -131,6 +132,8 @@ interface Props {
   onNewFolder: () => void;
   /** 底栏更多菜单：重新读取当前工作区。 */
   onRefresh: () => void;
+  /** 每次自增都把文件页切到搜索框并聚焦。 */
+  searchRequest?: number;
   /**
    * 摊着改动预览时把整栏锁掉（`inert`：点不动、也聚焦不了）。
    *
@@ -146,7 +149,7 @@ interface Props {
    * `--sidebar-width` 那条变量，一秒几十次派发 `updateSettings` 会把设置
    * 文件写穿。这里只接"拖完了，就这个数"。
    */
-  onResize: (宽: number) => void;
+  onResize: (width: number) => void;
   /**
    * 收起来了（用户点的「显示/隐藏侧边栏」那三个入口之一，2026-09-30 加）。
    *
@@ -158,7 +161,7 @@ interface Props {
    * ⚠️ **`inert` 不能省**：宽度归零之后里头那些按钮、树的行**还在 DOM 里**，
    * 不加的话 Tab 键会走进一个看不见的侧栏里（读屏也会念它）。
    */
-  折叠?: boolean;
+  collapse2?: boolean;
 }
 
 export function Sidebar({
@@ -172,14 +175,15 @@ export function Sidebar({
   onOpenFile,
   onJumpOutline,
   loadDir,
-  口径键,
+  optionKey,
   onOpenFolder,
   onNewFile,
   onNewFolder,
   onRefresh,
+  searchRequest = 0,
   inert,
   onResize,
-  折叠,
+  collapse2,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   const t = useT();
@@ -200,10 +204,10 @@ export function Sidebar({
     return parts[parts.length - 1] || workspace;
   }, [workspace]);
   // 页签的方向键（第 50 项，2026-10-04）。
-  const 页签栏 = useRef<HTMLElement>(null);
-  useTablistKeys(页签栏);
+  const pageKeyBar = useRef<HTMLElement>(null);
+  useTablistKeys(pageKeyBar);
 
-  const 开始新建文件 = useCallback(() => {
+  const startNewFile = useCallback(() => {
     if (!workspace) {
       onNewFile();
       return;
@@ -213,42 +217,48 @@ export function Sidebar({
   }, [onNewFile, workspace]);
 
   useEffect(() => {
+    if (!searchRequest) return;
+    setFileView("list");
+    setSearching(true);
+  }, [searchRequest]);
+
+  useEffect(() => {
     if (!footerMenu) return;
-    const 点别处 = (e: PointerEvent) => {
-      const 目标 = e.target;
-      if (目标 instanceof Node && footer.current?.contains(目标)) return;
+    const pointDistinguishPlace = (e: PointerEvent) => {
+      const target = e.target;
+      if (target instanceof Node && footer.current?.contains(target)) return;
       setFooterMenu(false);
     };
-    const 按键 = (e: KeyboardEvent) => {
+    const keypress = (e: KeyboardEvent) => {
       if (e.key === "Escape") setFooterMenu(false);
     };
-    document.addEventListener("pointerdown", 点别处);
-    document.addEventListener("keydown", 按键);
+    document.addEventListener("pointerdown", pointDistinguishPlace);
+    document.addEventListener("keydown", keypress);
     return () => {
-      document.removeEventListener("pointerdown", 点别处);
-      document.removeEventListener("keydown", 按键);
+      document.removeEventListener("pointerdown", pointDistinguishPlace);
+      document.removeEventListener("keydown", keypress);
     };
   }, [footerMenu]);
 
   useEffect(() => {
     if (!contextMenu) return;
-    const 关闭 = () => setContextMenu(null);
-    const 按键 = (e: KeyboardEvent) => {
+    const close = () => setContextMenu(null);
+    const keypress = (e: KeyboardEvent) => {
       if (e.key === "Escape") setContextMenu(null);
     };
-    document.addEventListener("pointerdown", 关闭);
-    document.addEventListener("keydown", 按键);
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", keypress);
     return () => {
-      document.removeEventListener("pointerdown", 关闭);
-      document.removeEventListener("keydown", 按键);
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", keypress);
     };
   }, [contextMenu]);
 
   return (
     <aside
       // ⚠️ 折叠**不卸载**，只加类（宽度动画到 0）——见 `折叠` 那个 prop 的注释。
-      className={折叠 ? "sidebar sidebar-collapsed" : "sidebar"}
-      inert={inert || 折叠 || undefined}
+      className={collapse2 ? "sidebar sidebar-collapsed" : "sidebar"}
+      inert={inert || collapse2 || undefined}
       data-controls-open={footerMenu || contextMenu ? "true" : undefined}
     >
       {/* ⚠️ 页签与外层的 `role="tablist"` 之间**不能夹别的按钮**：tablist 的
@@ -257,7 +267,7 @@ export function Sidebar({
       <div className="sidebar-head">
         {/* ⚠️ 方向键（←→/Home/End）走 `useTablistKeys`（第 50 项，2026-10-04）：
             挪焦点不切换，Enter 由 `TabButton` 的 `<button>` 自己点。 */}
-        <nav ref={页签栏} className="sidebar-tabs" role="tablist">
+        <nav ref={pageKeyBar} className="sidebar-tabs" role="tablist">
           <TabButton id="tree" current={tab} onSelect={onTab} label={t("File")} />
           {/* ⚠️ 顺序照「视图」菜单里那两条（`Ctrl+Shift+3` 文件树、
               `Ctrl+Shift+1` 大纲）：菜单里从上往下是文件树 → 大纲，
@@ -277,16 +287,15 @@ export function Sidebar({
           role="tabpanel"
           hidden={tab !== "tree"}
           onContextMenu={(e) => {
-            if (!workspace) return;
             e.preventDefault();
             const target = e.target as Element;
-            const 行 = target.closest<HTMLElement>("[data-absolute-path]");
-            const width = 220;
-            const height = 270;
+            const line3 = target.closest<HTMLElement>("[data-absolute-path]");
+            const width = 272;
+            const height = 472;
             setContextMenu({
-              x: Math.min(e.clientX, window.innerWidth - width - 8),
-              y: Math.min(e.clientY, window.innerHeight - height - 8),
-              path: 行?.dataset.absolutePath ?? activePath ?? null,
+              x: Math.max(8, Math.min(e.clientX, window.innerWidth - width - 8)),
+              y: Math.max(8, Math.min(e.clientY, window.innerHeight - height - 8)),
+              path: line3?.dataset.absolutePath ?? activePath ?? null,
             });
           }}
         >
@@ -298,7 +307,7 @@ export function Sidebar({
                 activePath={activePath ?? null}
                 onOpenFile={onOpenFile}
                 loadDir={loadDir}
-                active={!折叠 && tab === "tree"}
+                active={!collapse2 && tab === "tree"}
                 creating={creatingFile}
                 searching={searching}
                 onCloseSearch={() => setSearching(false)}
@@ -315,7 +324,7 @@ export function Sidebar({
                 activePath={activePath ?? null}
                 onOpenFile={onOpenFile}
                 loadDir={loadDir}
-                口径键={口径键}
+                optionKey={optionKey}
               />
             )
           ) : (
@@ -341,7 +350,7 @@ export function Sidebar({
                 role="menuitem"
                 onClick={() => {
                   setFooterMenu(false);
-                  开始新建文件();
+                  startNewFile();
                 }}
               >
                 {t("New Document")}
@@ -375,7 +384,7 @@ export function Sidebar({
                 className="sidebar-footer-btn"
                 title={t("New Document")}
                 aria-label={t("New Document")}
-                onClick={开始新建文件}
+                onClick={startNewFile}
               >
                 <Icon name="folio-add-symbolic" />
               </button>
@@ -424,102 +433,38 @@ export function Sidebar({
       )}
 
       {contextMenu && (
-        <div
-          className="sidebar-context-menu"
-          role="menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setContextMenu(null);
-              开始新建文件();
-            }}
-          >
-            {t("New File")}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setContextMenu(null);
-              onNewFolder();
-            }}
-          >
-            {t("New Folder")}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => {
-              setContextMenu(null);
-              setFileView("list");
-              setSearching(true);
-            }}
-          >
-            {t("Search")}
-          </button>
-          <div className="sidebar-context-sep" role="separator" />
-          <button
-            type="button"
-            role="menuitemradio"
-            aria-checked={fileView === "list"}
-            onClick={() => {
-              setContextMenu(null);
-              setSearching(false);
-              setFileView("list");
-            }}
-          >
-            <span className="sidebar-context-check" aria-hidden="true">
-              {fileView === "list" ? "✓" : ""}
-            </span>
-            {t("Document List")}
-          </button>
-          <button
-            type="button"
-            role="menuitemradio"
-            aria-checked={fileView === "tree"}
-            onClick={() => {
-              setContextMenu(null);
-              setSearching(false);
-              setFileView("tree");
-            }}
-          >
-            <span className="sidebar-context-check" aria-hidden="true">
-              {fileView === "tree" ? "✓" : ""}
-            </span>
-            {t("Document Tree")}
-          </button>
-          <div className="sidebar-context-sep" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!contextMenu.path}
-            onClick={() => {
-              if (contextMenu.path) void navigator.clipboard.writeText(contextMenu.path);
-              setContextMenu(null);
-            }}
-          >
-            {t("Copy File Path")}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!contextMenu.path}
-            onClick={() => {
-              if (contextMenu.path) {
-                void api.export.reveal(contextMenu.path).catch((e) => {
-                  console.warn("[nota] 打开文件位置失败：", e);
-                });
-              }
-              setContextMenu(null);
-            }}
-          >
-            {t("Open File Location")}
-          </button>
-        </div>
+        <SidebarContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          path={contextMenu.path}
+          workspace={workspace}
+          listMode={fileView === "list"}
+          onClose={() => setContextMenu(null)}
+          onNewFile={startNewFile}
+          onNewFolder={onNewFolder}
+          onSearch={() => {
+            setFileView("list");
+            setSearching(true);
+          }}
+          onOpenFolder={onOpenFolder}
+          onRefresh={onRefresh}
+          onList={() => {
+            setSearching(false);
+            setFileView("list");
+          }}
+          onTree={() => {
+            setSearching(false);
+            setFileView("tree");
+          }}
+          onCopyPath={(path) => {
+            void navigator.clipboard.writeText(path);
+          }}
+          onReveal={(path) => {
+            void api.export.reveal(path).catch((e) => {
+              console.warn("[nota] 打开文件位置失败：", e);
+            });
+          }}
+        />
       )}
 
       {/* 右缘那条可以拖的把手（2026-09-30）。⚠️ **必须是 `.sidebar` 的最后一个
@@ -576,7 +521,7 @@ function Outline({
 }: {
   items: OutlineItem[];
   /** 点一个标题跳过去。坐标口径见 `Props.onJumpOutline`。 */
-  onJump: (目标: { line: number; index: number }) => void;
+  onJump: (target: { line: number; index: number }) => void;
 }) {
   // 订阅语言。⚠️ 这是**另一个组件**，`Sidebar` 里那个 `t` 它够不着，得自己订阅一次
   //（`useT` 是 hook，不能在两个组件之间借用）。
@@ -636,7 +581,13 @@ function Outline({
     });
   }, [items, folded]);
 
-  if (!items.length) return <p className="sidebar-empty">{t("This document has no headings yet.")}</p>;
+  if (!items.length) {
+    return (
+      <div className="sidebar-empty-state">
+        <p>{t("Outline is empty")}</p>
+      </div>
+    );
+  }
 
   const toggle = (line: number) =>
     setFolded((prev) => {
@@ -701,7 +652,7 @@ function FileTree(props: {
   activePath: string | null;
   onOpenFile: (path: string) => void;
   loadDir: (path: string) => Promise<TreeNode[]>;
-  口径键: string;
+  optionKey: string;
 }) {
   // 订阅语言（同 `Outline`：每个组件各自订阅一次）。
   const t = useT();
@@ -731,7 +682,7 @@ function FileTree(props: {
   loadDirRef.current = props.loadDir;
 
   /** 取一层子目录放进缓存。展开、以及"口径变了要重取"两条路共用。 */
-  const 取一层 = useCallback((path: string) => {
+  const getValueLayer = useCallback((path: string) => {
     void loadDirRef
       .current(path)
       .then((nodes) => setKids((prev) => ({ ...prev, [path]: nodes })))
@@ -757,15 +708,15 @@ function FileTree(props: {
    * ⚠️ **清缓存、逐条重取，但不收回 `open`**：用户的展开状态与排序偏好无关，
    * 为了换个排序把树收回去，等于每次改设置都要重新展开一遍。
    */
-  const 上次口径 = useRef(props.口径键);
+  const aboveCountMouthPath = useRef(props.optionKey);
   useEffect(() => {
-    if (上次口径.current === props.口径键) return;
-    上次口径.current = props.口径键;
-    const 还开着的 = [...open];
+    if (aboveCountMouthPath.current === props.optionKey) return;
+    aboveCountMouthPath.current = props.optionKey;
+    const returnOpen = [...open];
     setKids({});
     setErrors({});
-    for (const path of 还开着的) 取一层(path);
-  }, [props.口径键, open, 取一层]);
+    for (const path of returnOpen) getValueLayer(path);
+  }, [props.optionKey, open, getValueLayer]);
 
   const toggle = (path: string) => {
     if (open.has(path)) {
@@ -782,7 +733,7 @@ function FileTree(props: {
     setOpen((prev) => new Set(prev).add(path));
     if (kids[path]) return;
 
-    取一层(path);
+    getValueLayer(path);
   };
 
   useEffect(() => {
@@ -801,12 +752,16 @@ function FileTree(props: {
       return next;
     });
     for (const path of parents) {
-      if (!kidsRef.current[path]) 取一层(path);
+      if (!kidsRef.current[path]) getValueLayer(path);
     }
-  }, [props.activePath, props.workspace, 取一层]);
+  }, [props.activePath, props.workspace, getValueLayer]);
 
   if (!props.nodes.length) {
-    return <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>;
+    return (
+      <div className="sidebar-empty-state">
+        <p>{t("File list is empty")}</p>
+      </div>
+    );
   }
 
   /**

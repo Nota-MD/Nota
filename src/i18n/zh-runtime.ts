@@ -13,7 +13,7 @@
  *    `tools/i18n-check.sh` 按这个标记切表体，多一个就会把条数错。
  */
 
-export const 运行表: Record<string, string> = {
+export const moveLineTable: Record<string, string> = {
   "Saved to {0}": "已保存到 {0}",
   "Copied to clipboard": "已复制到剪贴板",
   "Could not read extension status: {0}": "读取拓展状态失败：{0}",

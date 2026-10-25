@@ -9,26 +9,26 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-let 过 = 0;
-let 败 = 0;
+let pass = 0;
+let fail = 0;
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 真(值: unknown, 说明: string): asserts 值 {
-  if (!值) throw new Error(说明);
+function assertValue(value2: unknown, description: string): asserts value2 {
+  if (!value2) throw new Error(description);
 }
 
-const 对话框 = [
+const dialog = [
   "src/ui/AboutDialog.tsx",
   "src/ui/ConfirmDialog.tsx",
   "src/ui/EmojiDialog.tsx",
@@ -46,37 +46,37 @@ const 对话框 = [
 
 console.log("\n【对话框统一关闭入口】");
 
-测("每个模态对话框都渲染 DialogClose", () => {
-  for (const 路径 of 对话框) {
-    const 源 = readFileSync(join(process.cwd(), 路径), "utf8");
-    真(
-      源.includes('from "@/ui/DialogClose"') && 源.includes("<DialogClose"),
-      `${路径} 缺少导入或渲染 DialogClose`,
+testCase("每个模态对话框都渲染 DialogClose", () => {
+  for (const path of dialog) {
+    const source3 = readFileSync(join(process.cwd(), path), "utf8");
+    assertValue(
+      source3.includes('from "@/ui/DialogClose"') && source3.includes("<DialogClose"),
+      `${path} 缺少导入或渲染 DialogClose`,
     );
   }
 });
 
-测("DialogClose 有可读名称、标题和统一图标", () => {
-  const 源 = readFileSync(join(process.cwd(), "src/ui/DialogClose.tsx"), "utf8");
-  真(源.includes('aria-label={t("Close")}'), "缺少 aria-label");
-  真(源.includes('title={t("Close")}'), "缺少 title");
-  真(源.includes('name="folio-close-symbolic"'), "关闭图标不统一");
-  真(源.includes("size={16}"), "关闭图标没有使用官方 16px 尺寸");
+testCase("DialogClose 有可读名称、标题和统一图标", () => {
+  const source3 = readFileSync(join(process.cwd(), "src/ui/DialogClose.tsx"), "utf8");
+  assertValue(source3.includes('aria-label={t("Close")}'), "缺少 aria-label");
+  assertValue(source3.includes('title={t("Close")}'), "缺少 title");
+  assertValue(source3.includes('name="folio-close-symbolic"'), "关闭图标不统一");
+  assertValue(source3.includes("size={16}"), "关闭图标没有使用官方 16px 尺寸");
 });
 
-测("独立对话框壳都给绝对定位的关闭按钮提供定位上下文", () => {
+testCase("独立对话框壳都给绝对定位的关闭按钮提供定位上下文", () => {
   const overlay = readFileSync(join(process.cwd(), "src/styles/overlay.css"), "utf8");
   const print = readFileSync(join(process.cwd(), "src/styles/print-dialog.css"), "utf8");
   const picker = readFileSync(join(process.cwd(), "src/styles/file-picker.css"), "utf8");
   const settings = readFileSync(join(process.cwd(), "src/styles/settings.css"), "utf8");
-  真(/\.confirm-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "确认框壳缺少 position");
-  真(/\.print-dialog\s*\{[^}]*position:\s*relative/s.test(print), "打印框缺少 position");
-  真(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "文件选择器缺少 position");
-  真(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "设置框缺少 position");
-  真(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(overlay), "关闭按钮不是绝对定位");
-  真(/\.dialog-close\s*\{[^}]*width:\s*32px/s.test(overlay), "关闭按钮点击区不是 32px");
-  真(/\.dialog-close:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s.test(overlay), "关闭按钮缺少统一焦点环");
+  assertValue(/\.confirm-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "确认框壳缺少 position");
+  assertValue(/\.print-dialog\s*\{[^}]*position:\s*relative/s.test(print), "打印框缺少 position");
+  assertValue(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "文件选择器缺少 position");
+  assertValue(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "设置框缺少 position");
+  assertValue(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(overlay), "关闭按钮不是绝对定位");
+  assertValue(/\.dialog-close\s*\{[^}]*width:\s*32px/s.test(overlay), "关闭按钮点击区不是 32px");
+  assertValue(/\.dialog-close:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s.test(overlay), "关闭按钮缺少统一焦点环");
 });
 
-console.log(`\n通过 ${过} 条，失败 ${败} 条`);
-if (败 > 0) process.exitCode = 1;
+console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+if (fail > 0) process.exitCode = 1;

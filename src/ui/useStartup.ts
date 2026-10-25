@@ -56,11 +56,12 @@
 import { useEffect } from "react";
 
 import { api, type DocThemeInfo, type Settings, type StartupAction } from "@/bridge/ipc";
-import { 定语言, t } from "@/i18n";
+import { setLanguage, t } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 import { markStartupReady } from "@/ui/useBootReveal";
+import { debugError, debugEvent } from "@/ui/debug-log";
 
-export interface 启动接线 {
+export interface StartActionWiring {
   setSettings: (s: Settings) => void;
   setWorkspace: (w: string | null) => void;
   setThemes: (t: DocThemeInfo[]) => void;
@@ -78,12 +79,12 @@ export interface 启动接线 {
    * 一次（见文件头最后一段）——设置一改、`接上会话` 的身份跟着变，那条 effect
    * 就会重跑，把命令行那份文件**再开一遍**。
    */
-  接上会话: (启动文件: string | null, 启动档: StartupAction) => Promise<void>;
+  connectAboveMeetingSpeech: (startActionTextItem: string | null, startActionLevel: StartupAction) => Promise<void>;
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
 }
 
-export function useStartup(w: 启动接线): void {
-  const { setSettings, setWorkspace, setThemes, openPath, 接上会话, toast } = w;
+export function useStartup(w: StartActionWiring): void {
+  const { setSettings, setWorkspace, setThemes, openPath, connectAboveMeetingSpeech, toast } = w;
 
   useEffect(() => {
     let alive = true;
@@ -103,21 +104,22 @@ export function useStartup(w: 启动接线): void {
         // 主题 CSS 的第一帧只依赖设置里的 `ui_style`。所以先让设置/语言/设置问题
         // 到岸，立刻 `setSettings` 触发主题装载。工作区与主题清单只影响菜单和
         // 侧栏，不参与编辑器首帧，到了就各自写入，不再挡在主路径上。
-        const 工作区任务 = api.workspace.get();
+        const workWorkAreaTaskTask = api.workspace.get();
         // 主题扫目录。目录不存在、一个主题都没有都是**正常结果**（返回空表），
         // 不是错误——主题目录还没建起来的机器就是这种情况。
-        const 主题任务 = api.theme.list();
+        const themeTask = api.theme.list();
         // 命令行带来的文件（`nota 笔记.md`、"用 Nota 打开"）。宿主只转告路径。
         //
         // ⚠️ 这一枪**自带 `catch`**（2026-09-25）：文件名不是合法 UTF-8 时
         // 宿主会如实报错，而它一旦把后面那组 `Promise.all` 整体掀翻，
         // 工作区 / 主题 / 文档列表就**全都不会生效**——一个打不开的文件
         // 不该拖垮整个启动。报错本身还是要给用户看，所以就地弹一条。
-        const 启动文件任务 = api.startupFile().catch((e) => {
+        const startActionTextItemTaskTask = api.startupFile().catch((e) => {
+          debugError("startup", "command-line file lookup failed", e);
           toast(t("Could not open the file from the command line: {0}", String(e)), "error");
           return null;
         });
-        const [s, 设置问题, 界面语言] = await Promise.all([
+        const [s, settingsIssue, uiLanguage] = await Promise.all([
           api.settings.get(),
           // 开机读设置有没有出问题（解析不了 `settings.toml` 时宿主退回默认值
           // 继续跑）。**这条不是可选的**，理由见文件头。
@@ -127,33 +129,56 @@ export function useStartup(w: 启动接线): void {
         ]);
         if (!alive) return;
         // ⚠️ 在 `setSettings` 之前定语言（理由见文件头第 1 条）。
-        if (界面语言) 定语言(界面语言.effective);
+        if (uiLanguage) setLanguage(uiLanguage.effective);
         setSettings(s);
-        void 工作区任务
+        debugEvent("startup", "settings ready", {
+          language: uiLanguage?.effective ?? "unknown",
+          ui_style: s.ui_style,
+          ui_mode: s.ui_mode,
+          document_theme: s.document_theme,
+          startup: s.files?.startup ?? "new-file",
+        });
+        void workWorkAreaTaskTask
           .then((ws) => {
-            if (alive) setWorkspace(ws);
+            if (alive) {
+              setWorkspace(ws);
+              debugEvent("startup", "workspace restored", { path: ws ?? "" });
+            }
           })
           .catch((e) => {
-            if (alive) console.warn("[nota] 工作区状态读取失败：", e);
+            if (alive) debugError("startup", "workspace lookup failed", e);
           });
-        void 主题任务
+        void themeTask
           .then((themeList) => {
-            if (alive) setThemes(themeList);
+            if (alive) {
+              setThemes(themeList);
+              debugEvent("startup", "document theme inventory ready", {
+                count: themeList.length,
+              });
+            }
           })
           .catch((e) => {
-            if (alive) console.warn("[nota] 主题清单读取失败：", e);
+            if (alive) debugError("startup", "document theme inventory failed", e);
           });
 
-        const 启动文件 = await 启动文件任务;
+        const startActionTextItem = await startActionTextItemTaskTask;
         if (!alive) return;
+        debugEvent("startup", "command-line file resolved", {
+          present: Boolean(startActionTextItem),
+        });
         // 不自动消失（`0`）：这是状态，不是一次操作的结果。见 `ui/useToasts.ts`。
-        if (设置问题) toast(t("The settings could not be read; starting with defaults this time. {0}", String(设置问题)), "error", 0);
+        if (settingsIssue) toast(t("The settings could not be read; starting with defaults this time. {0}", String(settingsIssue)), "error", 0);
         // ⚠️ 那个 `?.` 是给**旧后端**留的（同上面那段）：真正缺了这一截时按第一档
         // 办——那正是这一档的词义，也是 `StartupAction` 的 `Default`。
-        const 启动档: StartupAction = s.files?.startup ?? "new-file";
+        const startActionLevel: StartupAction = s.files?.startup ?? "new-file";
         // 命令行指名的文件可以先开；开失败时把 `null` 交给会话恢复，
         // 让默认的「新建空白文档」仍有一条兜底。
-        const 已开启动文件 = 启动文件 ? await openPath(启动文件) : false;
+        const alreadyEnableActionTextItem = startActionTextItem ? await openPath(startActionTextItem) : false;
+        if (startActionTextItem) {
+          debugEvent("startup", "command-line file open finished", {
+            opened: Boolean(alreadyEnableActionTextItem),
+          });
+        }
         // ⚠️ **恢复会话排在最后**，而且两步的顺序不能反：`接上会话` 在没有
         // 命令行文件时会把上次那几个标签逐个开回来，而它自己也要**先**读到
         // 那份侧车才知道该开谁。放到 `openPath` 前面的话，命令行给的那一份
@@ -167,17 +192,20 @@ export function useStartup(w: 启动接线): void {
         // 而这一段无条件恢复标签和工作区，也就是永远按第三档办。
         // 那个 `?.` 与 `App.tsx` 里 `keys?.` 那条同一个理由：跑起来的后端
         // 可能是旧的，缺了这一截就是启动即白屏。
-        await 接上会话(已开启动文件 ? 启动文件 : null, 启动档);
+        await connectAboveMeetingSpeech(alreadyEnableActionTextItem ? startActionTextItem : null, startActionLevel);
+        debugEvent("startup", "session restore finished");
         markStartupReady();
       } catch (e) {
+        debugError("startup", "startup state failed", e);
         toast(t("Could not read the state at startup: {0}", String(e)), "error");
       }
 
       // 握手（见 `lib.rs` 里那段"为什么需要"）。失败不影响使用，只记一笔。
       try {
         await api.frontendReady();
+        debugEvent("startup", "frontend ready handshake sent");
       } catch (e) {
-        console.warn("[nota] frontendReady 失败：", e);
+        debugError("startup", "frontend ready handshake failed", e);
       }
     })();
 
@@ -187,5 +215,5 @@ export function useStartup(w: 启动接线): void {
     // ⚠️ 这三个 `set*` 是 `useState` 给的稳定身份（React 保证），列进来是为了
     // 这条 effect 的依赖看起来是完整的；真正会变的是那三个回调，而它们**必须**
     // 是稳定的——理由见文件头最后一段。
-  }, [toast, openPath, 接上会话, setSettings, setWorkspace, setThemes]);
+  }, [toast, openPath, connectAboveMeetingSpeech, setSettings, setWorkspace, setThemes]);
 }

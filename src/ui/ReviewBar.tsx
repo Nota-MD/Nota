@@ -29,14 +29,14 @@ import { useEffect } from "react";
 
 import { useT } from "@/i18n";
 import type { PluginReviewDiff } from "@/bridge/ipc";
-import type { 预览看法 } from "@/editor/review";
+import type { previewMode } from "@/editor/review";
 
 interface Props {
   /** 摊着的那一份改动。 */
   review: PluginReviewDiff;
   /** 现在看哪一面。状态在 `App` 手里（编辑区也要用同一份，见 `EditorPane` 那条）。 */
-  看法: 预览看法;
-  on看法: (看法: 预览看法) => void;
+  viewMode: previewMode;
+  onViewMode: (viewMode: previewMode) => void;
   /** 跑插件命令（接受/放弃）。错误由调用方说给用户听。 */
   onCall: (command: string) => void;
   /** 收起预览。**不动文档**。 */
@@ -49,7 +49,7 @@ interface Props {
   onEscape: () => void;
 }
 
-export function ReviewBar({ review, 看法, on看法, onCall, onClose, onEscape }: Props) {
+export function ReviewBar({ review, viewMode, onViewMode, onCall, onClose, onEscape }: Props) {
   const t = useT();
 
   /**
@@ -67,15 +67,15 @@ export function ReviewBar({ review, 看法, on看法, onCall, onClose, onEscape 
    * 「放弃」命令被调两次）。
    */
   useEffect(() => {
-    const 判 = (e: KeyboardEvent) => {
+    const determine = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented) return;
       // 组字期间一概不接（同 `useMenus` / `useImmersive` 里那条判据）。
       if (e.isComposing || e.keyCode === 229) return;
       e.preventDefault();
       onEscape();
     };
-    window.addEventListener("keydown", 判);
-    return () => window.removeEventListener("keydown", 判);
+    window.addEventListener("keydown", determine);
+    return () => window.removeEventListener("keydown", determine);
   }, [onEscape]);
 
   return (
@@ -91,16 +91,16 @@ export function ReviewBar({ review, 看法, on看法, onCall, onClose, onEscape 
         <button
           type="button"
           className="btn review-view"
-          aria-pressed={看法 === "diff"}
-          onClick={() => on看法("diff")}
+          aria-pressed={viewMode === "diff"}
+          onClick={() => onViewMode("diff")}
         >
           {t("Diff")}
         </button>
         <button
           type="button"
           className="btn review-view"
-          aria-pressed={看法 === "result"}
-          onClick={() => on看法("result")}
+          aria-pressed={viewMode === "result"}
+          onClick={() => onViewMode("result")}
         >
           {t("Result")}
         </button>

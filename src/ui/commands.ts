@@ -158,29 +158,29 @@ export function walkMenuItems(
  * ⚠️ 只按 `id` 查，**不区分顶层还是子菜单**——`walkMenuItems` 那种逐层下钻的
  * 写法在这里不需要，因为查表本身就是按 id 的，子菜单里的项和顶层的项没有区别。
  */
-export function 应用键位覆盖(
+export function ApplyKeyOverrides(
   menus: readonly MenuSpec[],
   overrides: Readonly<Record<string, string>>,
 ): readonly MenuSpec[] {
   if (!Object.keys(overrides).length) return menus;
 
-  const 叠一项 = (item: MenuItemSpec): MenuItemSpec => {
+  const stackValueItem = (item: MenuItemSpec): MenuItemSpec => {
     if (!(item.id in overrides)) return item;
-    const 值 = overrides[item.id];
-    if (值 === "") {
-      const 复制 = { ...item };
-      delete 复制.accel;
-      return 复制;
+    const value2 = overrides[item.id];
+    if (value2 === "") {
+      const copy = { ...item };
+      delete copy.accel;
+      return copy;
     }
-    return { ...item, accel: 值 };
+    return { ...item, accel: value2 };
   };
 
-  const 走一层 = (entries: readonly MenuEntry[]): MenuEntry[] =>
+  const walkValueLayer = (entries: readonly MenuEntry[]): MenuEntry[] =>
     entries.map((e) =>
-      e === "sep" ? e : { ...叠一项(e), ...(e.submenu ? { submenu: 走一层(e.submenu) } : {}) },
+      e === "sep" ? e : { ...stackValueItem(e), ...(e.submenu ? { submenu: walkValueLayer(e.submenu) } : {}) },
     );
 
-  return menus.map((m) => ({ ...m, items: 走一层(m.items) }));
+  return menus.map((m) => ({ ...m, items: walkValueLayer(m.items) }));
 }
 
 /** 「无主题（内置）」那一项的 id。**不是命令**，是合成出来的。 */
@@ -278,7 +278,7 @@ export function resolvePick(id: string): MenuPick {
  * ⚠️ 它的 `id` 是**真命令**（`ui/useCommandTable.ts` 里有实现），与上面
  * 「打开最近文件」那个占位项不同——那个是"表存键"的位置标记，没有实现。
  */
-export const 清除最近项: MenuItemSpec = { id: "file.clearRecent", label: "Clear Recent Files" };
+export const clearRemoveRecentItem: MenuItemSpec = { id: "file.clearRecent", label: "Clear Recent Files" };
 
 export const MENUS: MenuSpec[] = [
   {
@@ -337,7 +337,6 @@ export const MENUS: MenuSpec[] = [
           { id: "file.exportOpml", label: "OPML…", needsDoc: true },
           "sep",
           { id: "file.exportImage", label: "Image…", needsDoc: true },
-          { id: "file.exportOther", label: "Other Formats…", needsDoc: true },
         ],
       },
       { id: "file.print", label: "Print…", accel: "Ctrl+P", needsDoc: true },
@@ -709,8 +708,10 @@ export const MENUS: MenuSpec[] = [
     id: "help",
     label: "Help",
     items: [
-      // 「新功能 / 快速上手 / Markdown 参考…」那一排都是外链，而本仓离线优先，
-      // 外链既打不开也不该假装能打开。只留真正能兑现的那条。
+      // 帮助正文是编在应用里的 Markdown，由只读正文渲染器和当前文档主题显示。
+      // 它离线可用，也不会带进当前文档或插件状态。
+      { id: "help.help", label: "Nota Help…", accel: "F1" },
+      "sep",
       { id: "help.about", label: "About Nota" },
     ],
   },
@@ -723,7 +724,7 @@ export const MENUS: MenuSpec[] = [
  * ⚠️ 用 `walkMenuItems` 而不是自己写两层 `for`——那正是那个函数存在的原因
  * （子菜单里那一层最容易漏，见它的文档）。
  */
-const 条目索引 = (() => {
+const itemIndex = (() => {
   const m = new Map<string, MenuItemSpec>();
   walkMenuItems(MENUS, (item) => {
     if (!m.has(item.id)) m.set(item.id, item);
@@ -732,8 +733,8 @@ const 条目索引 = (() => {
 })();
 
 /** 按 id 取条目。取不到返回 `undefined`——**不抛**（调用方拿它建表，见 `摊条目`）。 */
-export function 取条目(id: string): MenuItemSpec | undefined {
-  return 条目索引.get(id);
+export function getItem(id: string): MenuItemSpec | undefined {
+  return itemIndex.get(id);
 }
 
 /**
@@ -746,14 +747,14 @@ export function 取条目(id: string): MenuItemSpec | undefined {
  * ⚠️ 返回的是**和 `MENUS` 里同一个对象**（不是拷贝）。这是有意的：
  * 一份数据两处引用，改 `MENUS` 那边这里跟着变。⚠️ 所以调用方**不许改**它们。
  */
-export function 摊条目(ids: readonly string[]): MenuEntry[] {
+export function flattenItem(ids: readonly string[]): MenuEntry[] {
   const out: MenuEntry[] = [];
   for (const id of ids) {
     if (id === "sep") {
       out.push("sep");
       continue;
     }
-    const hit = 条目索引.get(id);
+    const hit = itemIndex.get(id);
     if (hit) out.push(hit);
   }
   return out;
@@ -772,10 +773,10 @@ export function 摊条目(ids: readonly string[]): MenuEntry[] {
  * "废键"的样子报 FAIL（表里有、代码里"没调用"）——`FormatBar.tsx::TITLES`
  * 那段注释记着同一条坑。
  */
-export const 右键段落项: MenuItemSpec = {
+export const contextParagraphItems: MenuItemSpec = {
   id: "ctx.paragraph",
   label: "Paragraph",
-  submenu: 摊条目([
+  submenu: flattenItem([
     "para.h1",
     "para.h2",
     "para.h3",
@@ -797,11 +798,11 @@ export const 右键段落项: MenuItemSpec = {
  * 表格内的右键子菜单。前四条与工具栏共用已有命令；移动、复制、格式化与删除
  * 是这一层专用的入口，但仍是 `EditorCommand` 白名单里的正式命令。
  */
-export const 右键表格项: MenuItemSpec = {
+export const contextTableItems: MenuItemSpec = {
   id: "ctx.table",
   label: "Table",
   submenu: [
-    ...摊条目([
+    ...flattenItem([
       "para.tableRowAbove",
       "para.tableRowBelow",
       "para.tableColLeft",
@@ -813,20 +814,20 @@ export const 右键表格项: MenuItemSpec = {
     { id: "para.tableMoveColLeft", label: "Move Column Left", needsDoc: true },
     { id: "para.tableMoveColRight", label: "Move Column Right", needsDoc: true },
     "sep",
-    ...摊条目(["para.tableDelRow", "para.tableDelCol"]),
+    ...flattenItem(["para.tableDelRow", "para.tableDelCol"]),
     "sep",
     { id: "para.tableCopy", label: "Copy Table", needsDoc: true },
     { id: "para.tableFormat", label: "Format Table Source", needsDoc: true },
     "sep",
-    ...摊条目(["para.tableDel"]),
+    ...flattenItem(["para.tableDel"]),
   ],
 };
 
 /** 见 {@link 右键段落项}。 */
-export const 右键插入项: MenuItemSpec = {
+export const contextInsertItems: MenuItemSpec = {
   id: "ctx.insert",
   label: "Insert",
-  submenu: 摊条目([
+  submenu: flattenItem([
     "para.table",
     "fmt.image",
     "fmt.link",

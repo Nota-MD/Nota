@@ -46,8 +46,8 @@ import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
  * 拼错了的话 `state.schema.nodes[…]` 取到 `undefined`，症状是"插脚注点了没反应"
  * ——一个不报错的失败。所以名字只在这里写一次，全仓从这里引。
  */
-export const 脚注引用名 = "footnote_reference";
-export const 脚注定义名 = "footnote_definition";
+export const footNoteReferenceUseName = "footnote_reference";
+export const footNoteFixedMeaningName = "footnote_definition";
 
 /**
  * 从一段 markdown **源文**里把用掉的标签全捞出来（引用与定义都算）。
@@ -59,24 +59,24 @@ export const 脚注定义名 = "footnote_definition";
  * ⚠️ 正则**不要求 `]` 后面跟 `:`**：引用那半没有冒号，定义那半有，两个都要认。
  * 标签里不许有空白与 `]`（`[^goo bar]` 不是脚注，是普通方括号文字）。
  */
-export function 扫源文标签(源文: string): string[] {
-  const 出: string[] = [];
-  for (const 命中 of 源文.matchAll(/\[\^([^\]\s]+)\]/g)) {
-    if (命中[1]) 出.push(命中[1]);
+export function scanSourceTextLabel(sourceText: string): string[] {
+  const output2: string[] = [];
+  for (const match of sourceText.matchAll(/\[\^([^\]\s]+)\]/g)) {
+    if (match[1]) output2.push(match[1]);
   }
-  return 出;
+  return output2;
 }
 
 /** 从一棵 **ProseMirror 文档树**里把用掉的标签全捞出来（引用与定义都算，同样不去重）。 */
-export function 扫脚注标签(doc: PMNode): string[] {
-  const 出: string[] = [];
-  doc.descendants((节点) => {
-    if (节点.type.name !== 脚注引用名 && 节点.type.name !== 脚注定义名) return true;
-    const 标签 = 节点.attrs.label;
-    if (typeof 标签 === "string" && 标签 !== "") 出.push(标签);
+export function scanFootNoteLabel(doc: PMNode): string[] {
+  const output2: string[] = [];
+  doc.descendants((node) => {
+    if (node.type.name !== footNoteReferenceUseName && node.type.name !== footNoteFixedMeaningName) return true;
+    const label = node.attrs.label;
+    if (typeof label === "string" && label !== "") output2.push(label);
     return true;
   });
-  return 出;
+  return output2;
 }
 
 /**
@@ -92,11 +92,11 @@ export function 扫脚注标签(doc: PMNode): string[] {
  *
  * 循环一定会停：`已用` 是有限集合，最多试 `|已用| + 1` 次就有一个空位。
  */
-export function 下一个脚注标签(已用: Iterable<string>): string {
-  const 集 = new Set(已用);
+export function belowValueItemFootNoteLabel(alreadyUse: Iterable<string>): string {
+  const collection = new Set(alreadyUse);
   for (let n = 1; ; n++) {
-    const 候选 = String(n);
-    if (!集.has(候选)) return 候选;
+    const candidate = String(n);
+    if (!collection.has(candidate)) return candidate;
   }
 }
 
@@ -123,27 +123,27 @@ export function 下一个脚注标签(已用: Iterable<string>): string {
  * 用户接着写，把光标留在原处的话，用户得自己滚到底下去——而"刚插的东西在哪"
  * 比"刚才写到哪"更急。Typora 同此。
  */
-export function 脚注事务(state: EditorState): Transaction | null {
-  const 引用类型 = state.schema.nodes[脚注引用名];
-  const 定义类型 = state.schema.nodes[脚注定义名];
-  const 段类型 = state.schema.nodes.paragraph;
-  if (!引用类型 || !定义类型 || !段类型) return null;
+export function footNoteTransaction(state: EditorState): Transaction | null {
+  const referenceUseType = state.schema.nodes[footNoteReferenceUseName];
+  const fixedMeaningType = state.schema.nodes[footNoteFixedMeaningName];
+  const paragraphType2 = state.schema.nodes.paragraph;
+  if (!referenceUseType || !fixedMeaningType || !paragraphType2) return null;
   if (state.selection.$from.parent.type.name === "code_block") return null;
 
-  const 标签 = 下一个脚注标签(扫脚注标签(state.doc));
-  const 引用 = 引用类型.create({ label: 标签 });
-  const 定义 = 定义类型.create({ label: 标签 }, 段类型.create());
+  const label = belowValueItemFootNoteLabel(scanFootNoteLabel(state.doc));
+  const referenceUse = referenceUseType.create({ label: label });
+  const fixedMeaning = fixedMeaningType.create({ label: label }, paragraphType2.create());
 
-  const tr = state.tr.replaceSelectionWith(引用);
+  const tr = state.tr.replaceSelectionWith(referenceUse);
 
   // ⚠️ 位置在**替换之后**取：替换可能改动了文档长度（选中一段文字再插时），
   // 用替换前的 `state.doc.content.size` 会落错地方。
-  const 定义位置 = tr.doc.content.size;
-  tr.insert(定义位置, 定义);
+  const fixedMeaningPosition = tr.doc.content.size;
+  tr.insert(fixedMeaningPosition, fixedMeaning);
 
   // 进定义（+1）、进里面那个空段落（+1）。`near` 而不是硬造一个坐标：越界时
   // 它自己会找最近的合法位置，不会抛。
-  tr.setSelection(TextSelection.near(tr.doc.resolve(定义位置 + 2)));
+  tr.setSelection(TextSelection.near(tr.doc.resolve(fixedMeaningPosition + 2)));
   tr.scrollIntoView();
   return tr;
 }
@@ -155,10 +155,10 @@ export function 脚注事务(state: EditorState): Transaction | null {
  * 派事务，一律走 `command-table.ts` 的 `COMMANDS` 表派进来（那张表 2026-09-28 从
  * `create.ts` 搬了出去，见那个文件的头）。
  */
-export function 插脚注(editor: Editor): void {
+export function insertFootNote(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
-    const tr = 脚注事务(view.state);
+    const tr = footNoteTransaction(view.state);
     if (!tr) return;
     view.dispatch(tr);
     view.focus();

@@ -36,8 +36,8 @@ import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { deleteColumn, deleteRow, deleteTable } from "@milkdown/kit/prose/tables";
 
-import { 块HTML节点名 } from "./html-block";
-import { 目录结束标记, 目录开始标记, 算目录块 } from "./toc";
+import { blockHtmlNodeName } from "./html-block";
+import { tocEndMarker, tocStartMarker, computeItemRecordBlock } from "./toc";
 
 /**
  * 从 `$pos` 往上找第一层名字叫 `name` 的祖先，返回它的**深度**（找不到返回 -1）。
@@ -47,7 +47,7 @@ import { 目录结束标记, 目录开始标记, 算目录块 } from "./toc";
  * 那边是插件内部的热路径，这边是菜单命令，合并的话得把 `$pos` 的类型也抽出来，
  * 换来的只是少十行。
  */
-function 祖先深度($pos: { depth: number; node: (d: number) => { type: { name: string } } }, name: string): number {
+function ancestorFirstDarkDegree($pos: { depth: number; node: (d: number) => { type: { name: string } } }, name: string): number {
   for (let d = $pos.depth; d > 0; d--) {
     if ($pos.node(d).type.name === name) return d;
   }
@@ -76,14 +76,14 @@ function 祖先深度($pos: { depth: number; node: (d: number) => { type: { name
  * `extendListItemSchemaForTask` 造的是**另一个**同名节点对象，拿旧的那个去
  * `canReplaceWith` 会被拒（`task-list.ts` 顶上记过这一条）。
  */
-export function 转成任务列表(editor: Editor): void {
+export function convertBecomeTaskTaskColumnTable(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     const { state } = view;
     const { $from } = state.selection;
 
     // ── 情况 1：已经在列表项里 ──────────────────────────────────────────
-    const itemDepth = 祖先深度($from, "list_item");
+    const itemDepth = ancestorFirstDarkDegree($from, "list_item");
     if (itemDepth > 0) {
       const item = $from.node(itemDepth);
       view.dispatch(
@@ -127,7 +127,7 @@ export function 转成任务列表(editor: Editor): void {
  * 光标是空的（没有选中任何东西）时什么都不做：那时光标的位置不代表"要清哪一段"，
  * 直接清掉整段更容易被当成误操作。
  */
-export function 清除格式(editor: Editor): void {
+export function clearRemoveCellStyle(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     const { state } = view;
@@ -149,21 +149,21 @@ export function 清除格式(editor: Editor): void {
  * 直接把它当函数传出去 `this` 就丢了（有些实现里它是绑过的，有些不是——
  * 不赌这个）。
  */
-export function 表格删行(editor: Editor): void {
+export function deleteTableRow(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     deleteRow(view.state, (tr) => view.dispatch(tr));
   });
 }
 
-export function 表格删列(editor: Editor): void {
+export function deleteTableColumn(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     deleteColumn(view.state, (tr) => view.dispatch(tr));
   });
 }
 
-export function 表格删表(editor: Editor): void {
+export function deleteWholeTable(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     deleteTable(view.state, (tr) => view.dispatch(tr));
@@ -192,7 +192,7 @@ export function 表格删表(editor: Editor): void {
  * 读的是 `attrs.value`、不看内容——于是用户写的那段字**从文件里消失**，
  * 屏幕上却还在。空段落那一路用 `replaceWith` 换掉整块，正是为了避开这个。
  */
-export function 插公式块(editor: Editor): void {
+export function insertCommonStyleBlock(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
 
@@ -212,28 +212,28 @@ export function 插公式块(editor: Editor): void {
     view.focus();
 
     const { state } = view;
-    const 类型 = state.schema.nodes.math_block;
+    const type = state.schema.nodes.math_block;
     // schema 里没有这个名字（插件被摘掉之类）→ 静默不动。菜单项那时本来
     // 也不该能点到，这里只是不让它炸。
-    if (!类型) return;
+    if (!type) return;
 
     const { $from } = state.selection;
     // "光标孤零零地待在一个空的顶层段落里"→ 就地变成公式块。
     // ⚠️ 必须限定 `depth === 1`：列表项里那个空段落若也走这一路，
     // `before(1)` 指的是**整个列表**的起点，`replaceWith` 会把整张列表
     // 连内容一起换成公式块。
-    const 就位 =
+    const thenPosition =
       $from.depth === 1 && $from.parent.type.name === "paragraph" && $from.parent.content.size === 0;
 
     const tr = state.tr;
     // 插在**当前所在的那个顶层块之后**（不是"光标之后"）：光标在段中间时，
     // 公式块不该把那句话劈成两半。
-    const 位置 = 就位 ? $from.before(1) : $from.after(1);
-    const 公式 = 类型.create({ value: "" });
-    if (就位) tr.replaceWith($from.before(1), $from.after(1), 公式);
-    else tr.insert(位置, 公式);
+    const position2 = thenPosition ? $from.before(1) : $from.after(1);
+    const commonStyle = type.create({ value: "" });
+    if (thenPosition) tr.replaceWith($from.before(1), $from.after(1), commonStyle);
+    else tr.insert(position2, commonStyle);
 
-    tr.setSelection(NodeSelection.create(tr.doc, 位置));
+    tr.setSelection(NodeSelection.create(tr.doc, position2));
     view.dispatch(tr.scrollIntoView());
   });
 }
@@ -254,21 +254,21 @@ export function 插公式块(editor: Editor): void {
  * （列表该从这儿起），`止` 是结束标记那颗节点的**开头**。两者相等（空目录，
  * 用户把中间删光了）是合法情形，`replaceWith(起, 止, …)` 在那时就是插入。
  */
-function 找目录段(doc: PMNode): { 起: number; 止: number } | null {
-  let 起 = -1;
-  let 止 = -1;
-  doc.forEach((节点, 偏移) => {
-    if (止 !== -1 || 节点.type.name !== 块HTML节点名) return;
-    const 值 = (节点.attrs as { value?: unknown }).value;
-    if (typeof 值 !== "string") return;
-    const 净 = 值.trim();
-    if (净 === 目录开始标记 && 起 === -1) 起 = 偏移 + 节点.nodeSize;
-    else if (净 === 目录结束标记 && 起 !== -1) 止 = 偏移;
+function findItemRecordParagraph(doc: PMNode): { start5: number; end2: number } | null {
+  let start5 = -1;
+  let end2 = -1;
+  doc.forEach((node, offset) => {
+    if (end2 !== -1 || node.type.name !== blockHtmlNodeName) return;
+    const value2 = (node.attrs as { value?: unknown }).value;
+    if (typeof value2 !== "string") return;
+    const clean = value2.trim();
+    if (clean === tocStartMarker && start5 === -1) start5 = offset + node.nodeSize;
+    else if (clean === tocEndMarker && start5 !== -1) end2 = offset;
   });
   // ⚠️ `止 < 起` 说明两颗标记的**顺序**反了（用户手工把结尾那条挪到了开头
   // 上面），那不是一份目录。按"没有"处理——这里若硬来，`replaceWith` 会抛。
-  if (起 === -1 || 止 === -1 || 止 < 起) return null;
-  return { 起, 止 };
+  if (start5 === -1 || end2 === -1 || end2 < start5) return null;
+  return { start5, end2 };
 }
 
 /**
@@ -291,36 +291,36 @@ function 找目录段(doc: PMNode): { 起: number; 止: number } | null {
  * 3. 解析出来的东西不是"标记 ＋ 列表 ＋ 标记"三颗（上游换了写法）——
  *    与其插半份，不如不动。
  */
-export function 目录事务(
+export function tocTransaction(
   state: EditorState,
-  序列化: (节点: PMNode) => string,
-  解析: (markdown: string) => PMNode,
+  serialize: (node: PMNode) => string,
+  parse: (markdown: string) => PMNode,
   strict: boolean,
 ): Transaction | null {
-  const 块 = 算目录块(序列化(state.doc), strict);
-  if (块 === null) return null;
-  if (!state.schema.nodes[块HTML节点名]) return null;
+  const block = computeItemRecordBlock(serialize(state.doc), strict);
+  if (block === null) return null;
+  if (!state.schema.nodes[blockHtmlNodeName]) return null;
 
-  const 新doc = 解析(块);
-  const 新节点们 = 新doc.content.content;
+  const newValuedoc = parse(block);
+  const newNodes = newValuedoc.content.content;
   // 首尾各一颗标记，中间是列表。少一颗就说明解析出来的形状与预期不符。
-  if (新节点们.length < 3) return null;
-  const 新中段 = 新doc.content.cut(新节点们[0]!.nodeSize, 新doc.content.size - 新节点们[新节点们.length - 1]!.nodeSize);
+  if (newNodes.length < 3) return null;
+  const newValueMiddleParagraph = newValuedoc.content.cut(newNodes[0]!.nodeSize, newValuedoc.content.size - newNodes[newNodes.length - 1]!.nodeSize);
 
-  const 段 = 找目录段(state.doc);
+  const paragraph2 = findItemRecordParagraph(state.doc);
   const tr = state.tr;
 
-  if (段) {
+  if (paragraph2) {
     // ⚠️ **一样就不派事务**：`tr.replaceWith` 换成一模一样的内容照样会写进
     // 撤销栈，用户按一次 Ctrl+Z 会看到"什么都没变"——一次白按的撤销。
-    if (state.doc.slice(段.起, 段.止).content.eq(新中段)) return null;
-    tr.replaceWith(段.起, 段.止, 新中段);
+    if (state.doc.slice(paragraph2.start5, paragraph2.end2).content.eq(newValueMiddleParagraph)) return null;
+    tr.replaceWith(paragraph2.start5, paragraph2.end2, newValueMiddleParagraph);
     return tr.scrollIntoView();
   }
 
   const { $from } = state.selection;
-  const 位置 = $from.depth >= 1 ? $from.after(1) : state.doc.content.size;
-  tr.insert(位置, 新doc.content);
+  const position2 = $from.depth >= 1 ? $from.after(1) : state.doc.content.size;
+  tr.insert(position2, newValuedoc.content);
   return tr.scrollIntoView();
 }
 
@@ -334,11 +334,11 @@ export function 目录事务(
  * 从菜单点下来的那一刻焦点还在按钮上，`scrollIntoView` 与收尾都会怪。这里没有
  * 公式块那种"NodeView 看焦点"的死结，所以只是顺着同一条规矩做。
  */
-export function 插目录(editor: Editor, strict: boolean): void {
+export function insertItemRecord(editor: Editor, strict: boolean): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     view.focus();
-    const tr = 目录事务(
+    const tr = tocTransaction(
       view.state,
       (n) => ctx.get(serializerCtx)(n),
       (md) => ctx.get(parserCtx)(md) as unknown as PMNode,

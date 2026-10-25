@@ -31,26 +31,39 @@
 
 import { useMemo } from "react";
 
-import { 应用键位覆盖, type MenuSpec } from "@/ui/commands";
-import { 注入最近文件 } from "@/ui/recentMenu";
+import type { CustomExporter } from "@/bridge/ipc";
+import { ApplyKeyOverrides, type MenuSpec } from "@/ui/commands";
+import { injectExporter } from "@/ui/export-menu";
+import { noteEnterRecentTextItem } from "@/ui/recentMenu";
 
-export interface 菜单表输入 {
+export interface menuTableInput {
   /** 内置菜单 ＋ 插件自报的菜单（`ui/usePlugins.ts`，已经是 `useMemo` 过的）。 */
-  全部菜单: MenuSpec[];
+  allMenus: MenuSpec[];
   /**
    * 「最近文件」那一层要插进去的条目（`ui/useSession.ts` 的 state）。
    *
    * ⚠️ `readonly` **不是可选的**：`useSession` 那个 state 就是只读的，
    * 而 `注入最近文件` 也照只读收（`ui/recentMenu.ts`）。
    */
-  最近: readonly string[];
+  recent: readonly string[];
   /** 用户改过的键位。后端太旧时整个 `keys` 都可能是 `undefined`。 */
-  覆盖: Record<string, string> | undefined;
+  coverCover: Record<string, string> | undefined;
+  /** 分隔线以下的自定义导出器；它们要按用户顺序出现在「文件 → 导出」。 */
+  exporter: readonly CustomExporter[];
 }
 
-export function useMenuTable({ 全部菜单, 最近, 覆盖 }: 菜单表输入): readonly MenuSpec[] {
+export function useMenuTable({
+  allMenus,
+  recent,
+  coverCover,
+  exporter,
+}: menuTableInput): readonly MenuSpec[] {
   return useMemo(
-    () => 应用键位覆盖(注入最近文件(全部菜单, 最近), 覆盖 ?? {}),
-    [全部菜单, 最近, 覆盖],
+    () =>
+      ApplyKeyOverrides(
+        noteEnterRecentTextItem(injectExporter(allMenus, exporter), recent),
+        coverCover ?? {},
+      ),
+    [allMenus, recent, coverCover, exporter],
   );
 }

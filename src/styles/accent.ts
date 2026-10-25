@@ -35,7 +35,7 @@
  */
 
 /** 强调色上的**白**字。与 `theme/color.css` 里各家用的那个白一致。 */
-export const 白 = "#ffffff";
+export const white = "#ffffff";
 
 /**
  * 强调色上的**近黑**字。
@@ -44,7 +44,7 @@ export const 白 = "#ffffff";
  * 而那 14 格也是这个值（`theme/color.css` 里 `--accent-fg` 的深色那一半）。
  * **这里跟着抄它是可以的**——它是一条判据的取值，不是一份配色表。
  */
-export const 近黑 = "#10131a";
+export const nearBlack = "#10131a";
 
 /**
  * 把设置里那一格解析成 `#rrggbb`（**小写**）；认不出来返回 `null`。
@@ -75,17 +75,17 @@ export function parseAccent(raw: string): string | null {
  * 感知亮度的近似，在**黄**这类颜色上偏得最厉害，而黄恰恰是用户最爱挑的强调色
  * 之一（`#ffd400` 用平均法会算出"该配白字"，实际白字排上去几乎看不见）。
  */
-export function 相对亮度(hex: string): number {
+export function RelativeLuminance(hex: string): number {
   const n = Number.parseInt(hex.slice(1), 16);
   // ⚠️ 三个通道**当场摊开算**（而不是 `map` 成一个数组再按下标取）：本仓开着
   // `noUncheckedIndexedAccess`，按下标取要写 `!` 或兜底，而这里摊开既不用取下标、
   // 也让 0.2126 / 0.7152 / 0.0722 这三个权重各自对着哪个通道**一眼可查**。
-  const 通道 = (v: number): number => {
+  const throughWay = (v: number): number => {
     const c = v / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
   return (
-    0.2126 * 通道((n >> 16) & 0xff) + 0.7152 * 通道((n >> 8) & 0xff) + 0.0722 * 通道(n & 0xff)
+    0.2126 * throughWay((n >> 16) & 0xff) + 0.7152 * throughWay((n >> 8) & 0xff) + 0.0722 * throughWay(n & 0xff)
   );
 }
 
@@ -97,9 +97,9 @@ export function 相对亮度(hex: string): number {
  * 以及给将来想把判据换成"永远挑对比度高的那个"的人一个现成的工具。
  * 仓库里没有第二份对比度实现——**别在别处再写一遍**。
  */
-export function 对比度(a: number, b: number): number {
-  const [高, 低] = a > b ? [a, b] : [b, a];
-  return (高 + 0.05) / (低 + 0.05);
+export function correctCompareDegree(a: number, b: number): number {
+  const [height, low] = a > b ? [a, b] : [b, a];
+  return (height + 0.05) / (low + 0.05);
 }
 
 /**
@@ -130,7 +130,7 @@ export function 对比度(a: number, b: number): number {
  * Yaru 橙 `#e95420` 也是同一档）。
  * 用户挑了浅色（黄、浅绿、白）时这条线会翻到深字，那种组合都在 4.5:1 以上。
  */
-const 分界亮度 = 0.25;
+const luminanceCutoff = 0.25;
 
 /**
  * 强调色上面那行字该用黑还是白。
@@ -144,7 +144,7 @@ const 分界亮度 = 0.25;
  * 动手改之前先读它。
  */
 export function accentFg(accent: string): string {
-  return 相对亮度(accent) < 分界亮度 ? 白 : 近黑;
+  return RelativeLuminance(accent) < luminanceCutoff ? white : nearBlack;
 }
 
 /**
@@ -154,8 +154,8 @@ export function accentFg(accent: string): string {
  * 而那条断言必须有一个**独立于被测代码**的取值方式——在测试里再抄一份 HSL
  * 换算是本仓明确不干的事（`对比度` 那段写着同一条理由：**别在别处再写一遍**）。
  */
-export function 色相(hex: string): number {
-  return 转hsl(hex).h;
+export function hue(hex: string): number {
+  return toHsl(hex).h;
 }
 
 // ── 分享卡上的强调色（2026-09-27）────────────────────────────────────────────
@@ -167,8 +167,8 @@ export function 色相(hex: string): number {
 // **调整**（底色深浅差得太远时把它挪到看得清的那一段）。
 
 /** 分享图那张卡片的默认强调色（照设计稿）。⚠️ 深浅两套**本来就不同值**：深底要更亮才看得清。 */
-const 设计深底主色 = "#4f82fb";
-const 设计浅底主色 = "#2f63d8";
+const darkCardAccent = "#4f82fb";
+const lightCardAccent = "#2f63d8";
 
 /**
  * 卡片上强调色的**亮度下限 / 上限**（深底要够亮、浅底要够暗）。
@@ -187,37 +187,37 @@ const 设计浅底主色 = "#2f63d8";
  * 以及 Adwaita 那个 `#3584e4`（0.229）都不动，只拦真正排不出来的（黄 `#ffd400`
  * 是 0.684，白底上对比度 1.4:1，不压下去等于没画）。
  */
-const 卡片深底下限 = 0.2;
-const 卡片浅底上限 = 0.28;
+const cardSliceDarkBackgroundBelowLimit = 0.2;
+const cardSliceLightBackgroundLimit = 0.28;
 
 /** `#rrggbb` → `{h: 0~360, s: 0~1, l: 0~1}`。 */
-export function 转hsl(hex: string): { h: number; s: number; l: number } {
+export function toHsl(hex: string): { h: number; s: number; l: number } {
   const n = Number.parseInt(hex.slice(1), 16);
   const r = ((n >> 16) & 0xff) / 255;
   const g = ((n >> 8) & 0xff) / 255;
   const b = (n & 0xff) / 255;
-  const 大 = Math.max(r, g, b);
-  const 小 = Math.min(r, g, b);
-  const 和 = 大 + 小;
-  const 差 = 大 - 小;
-  const l = 和 / 2;
-  if (差 === 0) return { h: 0, s: 0, l };
-  const s = l > 0.5 ? 差 / (2 - 和) : 差 / 和;
+  const large = Math.max(r, g, b);
+  const small = Math.min(r, g, b);
+  const and = large + small;
+  const difference = large - small;
+  const l = and / 2;
+  if (difference === 0) return { h: 0, s: 0, l };
+  const s = l > 0.5 ? difference / (2 - and) : difference / and;
   // ⚠️ 三个分支**摊开写**而不是查表按下标取：本仓开着 `noUncheckedIndexedAccess`
   // （同 `相对亮度` 那段里说的那条理由）。
   let h: number;
-  if (大 === r) h = ((g - b) / 差 + (g < b ? 6 : 0)) / 6;
-  else if (大 === g) h = ((b - r) / 差 + 2) / 6;
-  else h = ((r - g) / 差 + 4) / 6;
+  if (large === r) h = ((g - b) / difference + (g < b ? 6 : 0)) / 6;
+  else if (large === g) h = ((b - r) / difference + 2) / 6;
+  else h = ((r - g) / difference + 4) / 6;
   return { h: h * 360, s, l };
 }
 
 /** `{h,s,l}` → `#rrggbb`。`s` / `l` 是 0~1。 */
-function 转hex(h: number, s: number, l: number): string {
-  const 色相 = ((h % 360) + 360) % 360 / 360;
+function toHex(h: number, s: number, l: number): string {
+  const hue = ((h % 360) + 360) % 360 / 360;
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
   const p = 2 * l - q;
-  const 分量 = (t0: number): number => {
+  const shareMeasure = (t0: number): number => {
     let t = t0;
     if (t < 0) t += 1;
     if (t > 1) t -= 1;
@@ -226,9 +226,9 @@ function 转hex(h: number, s: number, l: number): string {
     if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
     return p;
   };
-  const 取 = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
-  const 两位 = (v: number) => 取(v).toString(16).padStart(2, "0");
-  return `#${两位(分量(色相 + 1 / 3))}${两位(分量(色相))}${两位(分量(色相 - 1 / 3))}`;
+  const get = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+  const twoDigits = (v: number) => get(v).toString(16).padStart(2, "0");
+  return `#${twoDigits(shareMeasure(hue + 1 / 3))}${twoDigits(shareMeasure(hue))}${twoDigits(shareMeasure(hue - 1 / 3))}`;
 }
 
 /**
@@ -245,24 +245,24 @@ function 转hex(h: number, s: number, l: number): string {
  * 我们只负责让它在另一种底色上站得住——把一个橙色调成棕色是必要的，
  * 把它调成另一个色相就是"没跟随"了。
  */
-export function 卡片主色(强调色: string | null, 深底: boolean): string {
-  const 起 = 强调色 ? parseAccent(强调色) : null;
-  if (!起) return 深底 ? 设计深底主色 : 设计浅底主色;
+export function cardAccent(accent: string | null, darkBackground: boolean): string {
+  const start5 = accent ? parseAccent(accent) : null;
+  if (!start5) return darkBackground ? darkCardAccent : lightCardAccent;
 
-  const 目标 = 深底 ? 卡片深底下限 : 卡片浅底上限;
-  if (深底 ? 相对亮度(起) >= 目标 : 相对亮度(起) <= 目标) return 起;
+  const target = darkBackground ? cardSliceDarkBackgroundBelowLimit : cardSliceLightBackgroundLimit;
+  if (darkBackground ? RelativeLuminance(start5) >= target : RelativeLuminance(start5) <= target) return start5;
 
-  const { h, s, l } = 转hsl(起);
+  const { h, s, l } = toHsl(start5);
   // 一步步挪（1% 一档）：比解方程好读，而且**一定停在"刚够"的那一档**附近，
   // 不会把颜色甩过头。最多 100 档就是 0 → 1 走满，走不到就返回最后那次。
-  let 现值 = 起;
+  let currentValue = start5;
   for (let i = 1; i <= 100; i++) {
-    const 下一 = l + (深底 ? i : -i) / 100;
-    if (下一 > 1 || 下一 < 0) break;
-    现值 = 转hex(h, s, 下一);
-    if (深底 ? 相对亮度(现值) >= 目标 : 相对亮度(现值) <= 目标) return 现值;
+    const belowValue = l + (darkBackground ? i : -i) / 100;
+    if (belowValue > 1 || belowValue < 0) break;
+    currentValue = toHex(h, s, belowValue);
+    if (darkBackground ? RelativeLuminance(currentValue) >= target : RelativeLuminance(currentValue) <= target) return currentValue;
   }
-  return 现值;
+  return currentValue;
 }
 
 /**
@@ -272,10 +272,10 @@ export function 卡片主色(强调色: string | null, 深底: boolean): string 
  * 纯 `vite` 开着看页面、或者将来某个环境没把那个变量铺上，都不该让分享图
  * 画不出来。
  */
-export function 界面强调色(): string | null {
+export function uiAccent(): string | null {
   try {
-    const 值 = getComputedStyle(document.documentElement).getPropertyValue("--accent");
-    return 值.trim() || null;
+    const value2 = getComputedStyle(document.documentElement).getPropertyValue("--accent");
+    return value2.trim() || null;
   } catch {
     return null;
   }

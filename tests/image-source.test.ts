@@ -5,75 +5,75 @@
  * 从哪个本机绝对路径加载”。真正转成 Tauri asset URL 的一步不在这里测（要真宿主）。
  */
 
-import { 本地图片绝对路径 } from "../src/editor/video-view";
+import { localLocalImageSliceAbsoluteCorrectPath } from "../src/editor/video-view";
 
-let 过 = 0;
-let 败 = 0;
+let pass = 0;
+let fail = 0;
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
 }
 
 console.log("\n【图片本地路径】");
 
-测("Unix 绝对路径原样交给宿主读成 data URL", () => {
-  等(本地图片绝对路径("/home/lqy/下载/monoton_n.svg", null), "/home/lqy/下载/monoton_n.svg", "绝对路径");
+testCase("Unix 绝对路径原样交给宿主读成 data URL", () => {
+  equal(localLocalImageSliceAbsoluteCorrectPath("/home/lqy/下载/monoton_n.svg", null), "/home/lqy/下载/monoton_n.svg", "绝对路径");
 });
 
-测("相对路径按当前文档目录解析", () => {
-  等(
-    本地图片绝对路径("./assets/a.png", "/home/lqy/稿子/甲.md"),
+testCase("相对路径按当前文档目录解析", () => {
+  equal(
+    localLocalImageSliceAbsoluteCorrectPath("./assets/a.png", "/home/lqy/稿子/甲.md"),
     "/home/lqy/稿子/assets/a.png",
     "当前目录",
   );
-  等(
-    本地图片绝对路径("../img/a.png", "/home/lqy/稿子/甲.md"),
+  equal(
+    localLocalImageSliceAbsoluteCorrectPath("../img/a.png", "/home/lqy/稿子/甲.md"),
     "/home/lqy/img/a.png",
     "上级目录",
   );
 });
 
-测("Windows 盘符与反斜杠相对路径", () => {
-  等(本地图片绝对路径("C:\\图\\a.png", null), "C:\\图\\a.png", "盘符绝对路径");
-  等(
-    本地图片绝对路径("assets\\a.png", "C:\\稿子\\甲.md"),
+testCase("Windows 盘符与反斜杠相对路径", () => {
+  equal(localLocalImageSliceAbsoluteCorrectPath("C:\\图\\a.png", null), "C:\\图\\a.png", "盘符绝对路径");
+  equal(
+    localLocalImageSliceAbsoluteCorrectPath("assets\\a.png", "C:\\稿子\\甲.md"),
     "C:\\稿子\\assets\\a.png",
     "Windows 相对路径",
   );
 });
 
-测("file:// 地址去掉协议并解码", () => {
-  等(本地图片绝对路径("file:///home/lqy/a%20b.png", null), "/home/lqy/a b.png", "file URL");
+testCase("file:// 地址去掉协议并解码", () => {
+  equal(localLocalImageSliceAbsoluteCorrectPath("file:///home/lqy/a%20b.png", null), "/home/lqy/a b.png", "file URL");
 });
 
-测("网络 / data / blob / asset 地址不碰", () => {
-  for (const 地址 of [
+testCase("网络 / data / blob / asset 地址不碰", () => {
+  for (const address of [
     "https://example.com/a.png",
     "http://localhost/a.png",
     "data:image/png;base64,AA==",
     "blob:http://localhost/x",
     "asset://localhost/a.png",
   ]) {
-    等(本地图片绝对路径(地址, "/home/lqy/甲.md"), null, 地址);
+    equal(localLocalImageSliceAbsoluteCorrectPath(address, "/home/lqy/甲.md"), null, address);
   }
 });
 
-测("没存过盘的文档无法猜相对路径", () => {
-  等(本地图片绝对路径("./a.png", null), null, "没有文档路径");
-  等(本地图片绝对路径("", "/home/lqy/a.md"), null, "空地址");
+testCase("没存过盘的文档无法猜相对路径", () => {
+  equal(localLocalImageSliceAbsoluteCorrectPath("./a.png", null), null, "没有文档路径");
+  equal(localLocalImageSliceAbsoluteCorrectPath("", "/home/lqy/a.md"), null, "空地址");
 });
 
-console.log(`\n通过 ${过} 条，失败 ${败} 条`);
-if (败 > 0) process.exitCode = 1;
+console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
+if (fail > 0) process.exitCode = 1;

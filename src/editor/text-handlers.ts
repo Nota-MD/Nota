@@ -58,26 +58,26 @@
 
 import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 
-import { 原子后的空格 } from "./atom-space";
-import { 不转义行首等号, 不转义孤立波浪号 } from "./inline-marks";
-import { 不转义行首井号 } from "./lax-heading";
-import { 不转义美元 } from "./math-delim";
-import { 不转义已知语法 } from "./syntax-escape";
-import { 不转义行首竖线 } from "./table-pipe";
+import { SpaceAfterAtom } from "./atom-space";
+import { notConvertMeaningLineFirstEqualNumber, notConvertMeaningIsolatedStandaloneWaveWaveNumber } from "./inline-marks";
+import { notConvertMeaningLineFirstHashNumber } from "./lax-heading";
+import { notConvertMeaningDollarDollar } from "./math-delim";
+import { notConvertMeaningAlreadyKnownLanguageMethod } from "./syntax-escape";
+import { notConvertMeaningLineFirstVerticalLine } from "./table-pipe";
 
 /** remark 序列化选项的类型：**从 ctx 反推出来**（同 `lax-heading.ts`）。 */
-type 串化选项 = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
+type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
 /** mdast 的文本处理器（`handlers.text` 那一条）。 */
-export type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]>;
+export type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
 /**
  * 把七层套起来。`原文` 是 Milkdown 自己那条文本处理器
  * （`prev.handlers?.text`），**透传给最内层**。
  */
-export function 文本处理器链(原文?: 文本处理器): 文本处理器 {
-  return 不转义行首竖线(
-    不转义美元(
-      不转义孤立波浪号(不转义已知语法(不转义行首等号(原子后的空格(不转义行首井号(原文))))),
+export function textHandlerChain(source?: textHandler): textHandler {
+  return notConvertMeaningLineFirstVerticalLine(
+    notConvertMeaningDollarDollar(
+      notConvertMeaningIsolatedStandaloneWaveWaveNumber(notConvertMeaningAlreadyKnownLanguageMethod(notConvertMeaningLineFirstEqualNumber(SpaceAfterAtom(notConvertMeaningLineFirstHashNumber(source))))),
     ),
   );
 }

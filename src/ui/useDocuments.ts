@@ -51,15 +51,16 @@ import {
   type TreeNode,
   type ViewMode,
 } from "@/bridge/ipc";
-import { MARKDOWN后缀 } from "@/editor/file-kind";
+import { mARKDOWNExtension } from "@/editor/file-kind";
 import { useT } from "@/i18n";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
-import { 口径键, 读口径 } from "@/ui/tree-options";
+import { optionKey, readMouthPath } from "@/ui/tree-options";
 import { useAutosave } from "@/ui/useAutosave";
 import type { Dialogs } from "@/ui/useDialogs";
 import { useQuitGuard } from "@/ui/useQuitGuard";
-import { 所在目录, 拼路径 } from "@/ui/useExport";
+import { placeAtItemRecord, combinePath } from "@/ui/useExport";
 import type { Toast } from "@/ui/Toasts";
+import { debugError, debugEvent } from "@/ui/debug-log";
 
 /**
  * 「上一次另存到哪一层目录了」。
@@ -73,7 +74,7 @@ import type { Toast } from "@/ui/Toasts";
  * ⚠️ 它是**模块级**的，不是 `useRef`：`useDocuments` 只挂一次，但模块级更直白
  * ——这个值和"哪个组件"无关，它是"这个进程干过什么"。
  */
-let 上次另存目录: string | null = null;
+let aboveCountOtherSaveItemRecord: string | null = null;
 
 /**
  * 「另存为」对话框的默认落点，**两档**：（用户 2026-09-27 点名，原话是
@@ -95,10 +96,10 @@ let 上次另存目录: string | null = null;
  * 那个 `default_folder`（另存为**没有**这一档，它换的是文档自己的路径）。
  * 两个函数共用 `拼路径`，就这一处是共用的。
  */
-function 另存落点(doc: { path: string | null; title: string }): string {
+function otherSaveDropPoint(doc: { path: string | null; title: string }): string {
   if (doc.path) return doc.path;
   const name = `${doc.title}.md`;
-  return 上次另存目录 ? 拼路径(上次另存目录, name) : name;
+  return aboveCountOtherSaveItemRecord ? combinePath(aboveCountOtherSaveItemRecord, name) : name;
 }
 
 /**
@@ -108,12 +109,12 @@ function 另存落点(doc: { path: string | null; title: string }): string {
  * **取消掉**的那次选择不该变成下次的默认——那样一点「另存为」再点「取消」，
  * 也会把落点挪到对话框自己打开的那个位置去。
  */
-function 记另存目录(picked: string): void {
-  const dir = 所在目录(picked);
-  if (dir) 上次另存目录 = dir;
+function recordOtherSaveItemRecord(picked: string): void {
+  const dir = placeAtItemRecord(picked);
+  if (dir) aboveCountOtherSaveItemRecord = dir;
 }
 
-export interface 文档接线 {
+export interface documentWiring {
   /** 打开的文档列表（`App.tsx` 的 `docs`）。**读的是当前这一份快照。** */
   docs: readonly Document[];
   /** 活动文档 id。⚠️ 用 `setActiveId`，不是"打开完就完了"——界面要跟着翻页。 */
@@ -134,7 +135,7 @@ export interface 文档接线 {
    * ⚠️ 这里只读它算下面那个 `所见即所得`——**实际**模式（过完降级的那一个）
    * 是 `App.tsx` 的 `viewMode`，那是编辑区的事，不是这一份的。
    */
-  模式偏好: ViewMode;
+  modePreference: ViewMode;
   toast: (message: string, level?: Toast["level"]) => void;
   /** ⚠️ 类型**从 `useDialogs` 借**，不在这里另写一份。 */
   askConfirm: Dialogs["askConfirm"];
@@ -142,7 +143,7 @@ export interface 文档接线 {
   askPrompt: Dialogs["askPrompt"];
 }
 
-export interface 文档出口 {
+export interface documentApi {
   /**
    * 打开一份**磁盘上已有**的文档：对话框、文件树、命令行参数都走这里。
    *
@@ -180,7 +181,7 @@ export interface 文档出口 {
    * 开发热重载会重新挂载前端，但宿主的 `DocumentStore` 还在；启动恢复先问
    * 这一条，能避免每次热更新都追加一张“未命名 N”。返回是否接回了至少一份。
    */
-  接上现有: () => Promise<boolean>;
+  connectAboveCurrentHas: () => Promise<boolean>;
   /**
    * 把一个文件夹当工作区。
    *
@@ -201,9 +202,9 @@ export interface 文档出口 {
    * 切到另一份文档。**界面上的切换一律走这里**，不要直接调 `setActiveId`——
    * 「切换文件时自动保存」要赶在编辑器换人**之前**把上一份写盘（见下面那段）。
    */
-  切换文档: (id: DocId | null) => Promise<void>;
+  switchDocument: (id: DocId | null) => Promise<void>;
   /** 记一次"用户在打字"（自动保存的停笔判据）。接到 `EditorPane` 的 `onActivity` 上。 */
-  记活动: () => void;
+  recordActivity: () => void;
   /** 关掉一份文档。有未保存改动时先问，三个答案见 `useDialogs`。 */
   closeDoc: (id: DocId) => Promise<void>;
   /** 从磁盘重新载入（丢弃内存里的改动）。 */
@@ -214,7 +215,7 @@ export interface 文档出口 {
   moveDoc: (id: DocId) => Promise<void>;
 }
 
-export function useDocuments(w: 文档接线): 文档出口 {
+export function useDocuments(w: documentWiring): documentApi {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -228,7 +229,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
     setTree,
     editorRef,
     settings,
-    模式偏好,
+    modePreference,
     toast,
     askConfirm,
     askPrompt,
@@ -285,11 +286,11 @@ export function useDocuments(w: 文档接线): 文档出口 {
         const picked = await saveDialog({
           title: t("Save As"),
           // ⚠️ 落点那两档见 `另存落点` 头上那段（用户 2026-09-27 点名改的）。
-          defaultPath: 另存落点(doc),
+          defaultPath: otherSaveDropPoint(doc),
           filters: [{ name: "Markdown", extensions: ["md", "markdown", "mdx"] }],
         });
         if (!picked) return false; // 用户取消了，不是错误——但确实没存上
-        记另存目录(picked);
+        recordOtherSaveItemRecord(picked);
         target = picked;
       }
 
@@ -306,8 +307,17 @@ export function useDocuments(w: 文档接线): 文档出口 {
         // 「已保存到 …」反而把别的提示挤掉。**失败那一条不静音**——
         // 存不上是必须当场知道的事。
         if (!quiet) toast(t("Saved to {0}", written), "success");
+        debugEvent("document", "save finished", {
+          document: doc.path ?? "untitled",
+          save_as: Boolean(target),
+          chars: text?.length ?? 0,
+        });
         return true;
       } catch (e) {
+        debugError("document", "save failed", e, {
+          document: doc.path ?? "untitled",
+          save_as: Boolean(target),
+        });
         toast(String(e), "error");
         return false;
       }
@@ -331,20 +341,20 @@ export function useDocuments(w: 文档接线): 文档出口 {
    * ⚠️ **依赖数组里没有 `docs`，理由同 `saveDoc`**（见 `docsRef`）——
    * 这一条比 `saveDoc` 那条更要紧：`openPath` 直接捕获本函数。
    */
-  const 切换文档 = useCallback(
+  const switchDocument = useCallback(
     async (id: DocId | null) => {
-      const 当前 = activeIdRef.current;
-      const 切页前先存 = settingsRef.current?.files.autosave_on_switch ?? false;
-      if (切页前先存 && 当前 !== null && 当前 !== id) {
-        const doc = docsRef.current.find((d) => d.id === 当前);
-        if (doc?.dirty && doc.path) await saveDoc(当前, false, true);
+      const current = activeIdRef.current;
+      const splitPageBeforeFirstSave = settingsRef.current?.files.autosave_on_switch ?? false;
+      if (splitPageBeforeFirstSave && current !== null && current !== id) {
+        const doc = docsRef.current.find((d) => d.id === current);
+        if (doc?.dirty && doc.path) await saveDoc(current, false, true);
       }
       setActiveId(id);
     },
     [activeIdRef, saveDoc, setActiveId],
   );
-  const 切换文档Ref = useRef(切换文档);
-  切换文档Ref.current = 切换文档;
+  const switchDocumentRef = useRef(switchDocument);
+  switchDocumentRef.current = switchDocument;
 
   /**
    * 打开一份文档。**返回值是"开上了没有"**（`false` 时提示条已经弹过了）。
@@ -357,14 +367,15 @@ export function useDocuments(w: 文档接线): 文档出口 {
       try {
         const id = await api.doc.open(path);
         await refreshDocs();
-        await 切换文档(id);
+        await switchDocument(id);
         return true;
       } catch (e) {
+        debugError("document", "open failed", e, { path });
         toast(String(e), "error");
         return false;
       }
     },
-    [refreshDocs, 切换文档, toast],
+    [refreshDocs, switchDocument, toast],
   );
 
   /**
@@ -384,11 +395,11 @@ export function useDocuments(w: 文档接线): 文档出口 {
    * 三格真的变了之后才换值，所以"闭包里的 `settings` 旧了"这件事**只可能发生在
    * 三格没变的时候**，那时旧值与新值本来就是一回事。
    */
-  const 树指纹 = 口径键(读口径(settings));
+  const treePointTexture = optionKey(readMouthPath(settings));
   const loadDir = useCallback(
-    (subPath: string) => api.workspace.tree(subPath, 1, 读口径(settings)),
+    (subPath: string) => api.workspace.tree(subPath, 1, readMouthPath(settings)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 见上面那段（依赖的是指纹，不是整份 settings）
-    [树指纹],
+    [treePointTexture],
   );
 
   const newDoc = useCallback(async (workspaceFileName?: string) => {
@@ -396,55 +407,58 @@ export function useDocuments(w: 文档接线): 文档出口 {
     try {
       id = await api.doc.create();
 
-      const 当前工作区 = workspaceRef.current;
-      if (workspaceFileName && 当前工作区) {
-        let 文件名 = workspaceFileName.trim();
-        if (!文件名 || /[\\/]/.test(文件名) || 文件名 === "." || 文件名 === "..") {
+      const currentWorkWorkArea = workspaceRef.current;
+      if (workspaceFileName && currentWorkWorkArea) {
+        let textItemName = workspaceFileName.trim();
+        if (!textItemName || /[\\/]/.test(textItemName) || textItemName === "." || textItemName === "..") {
           throw new Error(t("Enter a valid file name."));
         }
-        if (!MARKDOWN后缀.some((ext) => 文件名.toLowerCase().endsWith(`.${ext}`))) {
-          文件名 += ".md";
+        if (!mARKDOWNExtension.some((ext) => textItemName.toLowerCase().endsWith(`.${ext}`))) {
+          textItemName += ".md";
         }
-        const 落点 = 拼路径(当前工作区, 文件名);
-        const [已存在] = await api.pathKind([落点]);
-        if (已存在 !== "missing") {
+        const DropPoint = combinePath(currentWorkWorkArea, textItemName);
+        const [savedAt] = await api.pathKind([DropPoint]);
+        if (savedAt !== "missing") {
           throw new Error(t("A file with this name already exists."));
         }
-        await api.doc.save(id, 落点);
-        setTree(await api.workspace.tree(undefined, 1, 读口径(settingsRef.current)));
+        await api.doc.save(id, DropPoint);
+        setTree(await api.workspace.tree(undefined, 1, readMouthPath(settingsRef.current)));
       }
 
       await refreshDocs();
-      await 切换文档Ref.current(id);
+      await switchDocumentRef.current(id);
     } catch (e) {
       if (id !== null) {
         await api.doc.close(id).catch(() => undefined);
         await refreshDocs().catch(() => undefined);
       }
+      debugError("document", "new document failed", e, {
+        has_workspace_name: Boolean(workspaceFileName),
+      });
       toast(String(e), "error");
     }
   }, [refreshDocs, setTree, toast]);
 
-  const 接上现有 = useCallback(async (): Promise<boolean> => {
+  const connectAboveCurrentHas = useCallback(async (): Promise<boolean> => {
     const list = await refreshDocs();
-    const 最后一份 = list.at(-1);
-    if (!最后一份) return false;
-    setActiveId(最后一份.id);
+    const mostAfterOneDocument = list.at(-1);
+    if (!mostAfterOneDocument) return false;
+    setActiveId(mostAfterOneDocument.id);
     return true;
   }, [refreshDocs, setActiveId]);
 
   const newFolder = useCallback(async () => {
     const root = workspaceRef.current;
     if (!root) return;
-    const 答 = await askPrompt({
+    const answer = await askPrompt({
       title: t("New Folder"),
       label: t("Folder name"),
       confirmLabel: t("Create"),
     });
-    if (!答) return;
+    if (!answer) return;
     try {
-      await api.picker.createDir(root, 答.value.trim());
-      setTree(await api.workspace.tree(undefined, 1, 读口径(settingsRef.current)));
+      await api.picker.createDir(root, answer.value.trim());
+      setTree(await api.workspace.tree(undefined, 1, readMouthPath(settingsRef.current)));
     } catch (e) {
       toast(String(e), "error");
     }
@@ -455,12 +469,12 @@ export function useDocuments(w: 文档接线): 文档出口 {
       try {
         const id = await api.doc.createWithText(text, titleHint);
         await refreshDocs();
-        await 切换文档(id);
+        await switchDocument(id);
       } catch (e) {
         toast(String(e), "error");
       }
     },
-    [refreshDocs, 切换文档, toast],
+    [refreshDocs, switchDocument, toast],
   );
 
   const openViaDialog = useCallback(async () => {
@@ -472,7 +486,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
       // ——`tests/file-kind.test.ts` 第一组读那份 Rust 源码逐个对。
       // ⚠️ 以前这里抄了一份、漏掉过 `.mdx`：文件**打得开**（拖进来、从文件树点），
       // 只是在对话框里筛不出来，用户会以为打不开（backlog 第 28 项）。
-      filters: [{ name: "Markdown", extensions: [...MARKDOWN后缀] }],
+      filters: [{ name: "Markdown", extensions: [...mARKDOWNExtension] }],
     });
     if (typeof picked === "string") await openPath(picked);
   }, [openPath]);
@@ -482,14 +496,14 @@ export function useDocuments(w: 文档接线): 文档出口 {
       // ⚠️ 有路径就直接开（拖放那条路），没路径才弹对话框（工具栏那条）。
       let picked = path;
       if (picked === undefined) {
-        const 选的 = await openDialog({ title: t("Open Folder"), directory: true });
-        if (typeof 选的 !== "string") return;
-        picked = 选的;
+        const selectOf = await openDialog({ title: t("Open Folder"), directory: true });
+        if (typeof selectOf !== "string") return;
+        picked = selectOf;
       }
       try {
         const canonical = await api.workspace.open(picked);
         setWorkspace(canonical);
-        setTree(await api.workspace.tree(undefined, 1, 读口径(settings)));
+        setTree(await api.workspace.tree(undefined, 1, readMouthPath(settings)));
       } catch (e) {
         // ⚠️ 消息里带上目录名：拖放那条路走的是**用户没挑过**的路径，
         // 只说"不是目录 / 没有权限"他不知道自己拖的是什么了。
@@ -498,7 +512,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
     },
     // ⚠️ 依赖的是那个**指纹**，不是 `settings`：见 `loadDir` 上面那段。
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 同上
-    [setTree, setWorkspace, t, toast, 树指纹],
+    [setTree, setWorkspace, t, toast, treePointTexture],
   );
 
   const closeDoc = useCallback(
@@ -550,7 +564,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
    * ⚠️ 2026-10-07 起它读的是 `模式偏好`（会话内状态），不再从 `settings` 里取
    * ——那一格已经退休。
    */
-  const 所见即所得 = 模式偏好 === "wysiwyg";
+  const Wysiwyg = modePreference === "wysiwyg";
 
   const reloadDoc = useCallback(
     async (id: DocId) => {
@@ -565,19 +579,19 @@ export function useDocuments(w: 文档接线): 文档出口 {
       // ⚠️ 判脏读的是**刚刷回来的那份列表**（`refreshDocs()` 的返回值），不是渲染
       // 时闭包抓住的 `docs`——同步刚推上去的改动只有在刷新之后才看得见。
       // ⚠️ 同步失败不上报错条、也不中断：按后端手里那份判脏，最坏的结果是少问一句。
-      let 列表 = docsRef.current;
+      let columnTable = docsRef.current;
       if (id === activeIdRef.current) {
-        const 手头 = editorRef.current?.getMarkdown();
-        if (手头 !== undefined) {
+        const handHead = editorRef.current?.getMarkdown();
+        if (handHead !== undefined) {
           try {
-            await api.doc.sync(id, 手头);
+            await api.doc.sync(id, handHead);
           } catch (e) {
             console.warn("[nota] 重载前同步文本失败：", e);
           }
-          列表 = await refreshDocs();
+          columnTable = await refreshDocs();
         }
       }
-      if (列表.find((d) => d.id === id)?.dirty) {
+      if (columnTable.find((d) => d.id === id)?.dirty) {
         // ⚠️ 这里**不给** `extraLabel`：重载的语义就是"以磁盘上那份为准"，
         // "先存再重载"等于什么都没做（存下去的正是要丢掉的那份）。
         const answer = await askConfirm({
@@ -592,8 +606,8 @@ export function useDocuments(w: 文档接线): 文档出口 {
         const fresh = await api.doc.reload(id);
         // 只有它正显示着才需要动编辑器——编辑器一次只挂一份（见 App 的 key）。
         if (id === activeIdRef.current) {
-          const 编辑器 = editorRef.current;
-          编辑器?.setMarkdown(fresh.text);
+          const editor = editorRef.current;
+          editor?.setMarkdown(fresh.text);
           // ⚠️ **重载之后要认领一次**（`api.doc.settle`），跟 `EditorPane` 装载完
           // 那一段是同一件事、同一套判据。不做的症状（2026-09-26 目检抓到的）：
           // `nota_doc_reload` 把**磁盘原文**记成 `clean_text`，而编辑器手里那份是
@@ -610,11 +624,11 @@ export function useDocuments(w: 文档接线): 文档出口 {
           //      多写一次状态（`settle` 落的是后端的库，不动磁盘上的文件）；
           //   3. **认领失败不该挡住重载**——最坏的结果是脏标记虚报一次，所以下面
           //      单独 try 住、只 `console.warn`，不上报错条也不跳过后面的刷新。
-          if (所见即所得) {
-            const 规范化 = 编辑器?.getMarkdown();
-            if (规范化 !== undefined && 规范化 !== fresh.text) {
+          if (Wysiwyg) {
+            const ruleScopeConvert = editor?.getMarkdown();
+            if (ruleScopeConvert !== undefined && ruleScopeConvert !== fresh.text) {
               try {
-                await api.doc.settle(id, 规范化);
+                await api.doc.settle(id, ruleScopeConvert);
               } catch (e) {
                 console.warn("[nota] 重载后认领文本失败：", e);
               }
@@ -628,7 +642,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
     },
     // ⚠️ 依赖数组里没有 `docs`（2026-09-26 起）：判脏读的是 `docsRef` 与刚刷回来的
     // 那份列表，理由与 `saveDoc` / `切换文档` 完全相同（见文件头第 4 条 + `docsRef`）。
-    [activeIdRef, editorRef, askConfirm, refreshDocs, toast, 所见即所得],
+    [activeIdRef, editorRef, askConfirm, refreshDocs, toast, Wysiwyg],
   );
 
   /**
@@ -653,26 +667,26 @@ export function useDocuments(w: 文档接线): 文档出口 {
         toast(t("This document has not been saved yet — use Save As to give it a location first"), "error");
         return;
       }
-      const 当前名 = doc.path.split("/").pop() ?? doc.path;
-      const 答 = await askPrompt({
+      const currentName = doc.path.split("/").pop() ?? doc.path;
+      const answer = await askPrompt({
         title: t("Rename"),
         label: t("New name"),
-        initial: 当前名,
+        initial: currentName,
         confirmLabel: t("Rename"),
       });
-      if (!答) return; // 取消
-      const 新名 = 答.value.trim();
+      if (!answer) return; // 取消
+      const newValueName = answer.value.trim();
       // ⚠️ 名字没变就**不惊动磁盘**：宿主的改名是"绝不覆盖"的，同一个名字撞上
       // 自己那条判据（`同一个文件`）虽然放行，但没必要先把「最近」和列宽
       // 搬一遍再回来。这里挡掉，用户顺手按回车也不会多出一次写盘。
-      if (新名 === 当前名) return;
+      if (newValueName === currentName) return;
       try {
-        await api.doc.rename(id, 新名);
+        await api.doc.rename(id, newValueName);
         // ⚠️ 刷列表这一步是**监视基准**跟着走的关键：前端重报"现在开着哪些
         // 文档"时按新路径去盘上读基准（见 `useExternalChanges` 与
         // `commands/document.rs::挪过去` 那段）。
         await refreshDocs();
-        toast(t("Renamed to “{0}”", 新名), "success");
+        toast(t("Renamed to “{0}”", newValueName), "success");
       } catch (e) {
         toast(String(e), "error");
       }
@@ -695,12 +709,12 @@ export function useDocuments(w: 文档接线): 文档出口 {
         toast(t("This document has not been saved yet — use Save As to give it a location first"), "error");
         return;
       }
-      const 选的 = await openDialog({ title: t("Move to Folder…"), directory: true });
-      if (typeof 选的 !== "string") return;
+      const selectOf = await openDialog({ title: t("Move to Folder…"), directory: true });
+      if (typeof selectOf !== "string") return;
       try {
-        await api.doc.move(id, 选的);
+        await api.doc.move(id, selectOf);
         await refreshDocs();
-        toast(t("Moved to “{0}”", 选的), "success");
+        toast(t("Moved to “{0}”", selectOf), "success");
       } catch (e) {
         toast(String(e), "error");
       }
@@ -718,7 +732,7 @@ export function useDocuments(w: 文档接线): 文档出口 {
    * ⚠️ 传进去的存盘**必须走 `quiet`**：理由见 `saveDoc` 那段。这里包一层
    * 箭头函数是给它**固定住参数**（hook 里只认 `(id) => Promise`）。
    */
-  const 记活动 = useAutosave({
+  const recordActivity = useAutosave({
     seconds: settings?.autosave_seconds ?? 0,
     docs,
     activeIdRef,
@@ -741,13 +755,13 @@ export function useDocuments(w: 文档接线): 文档出口 {
     newDoc,
     newDocWithText,
     newFolder,
-    接上现有,
+    connectAboveCurrentHas,
     openViaDialog,
     openFolder,
     loadDir,
     saveDoc,
-    切换文档,
-    记活动,
+    switchDocument,
+    recordActivity,
     closeDoc,
     reloadDoc,
     renameDoc,

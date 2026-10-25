@@ -3,25 +3,25 @@
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 
-import { 切换行内代码 } from "../src/editor/command-table";
+import { splitReplaceInlineCode } from "../src/editor/command-table";
 
-let 过 = 0;
-let 败 = 0;
+let pass = 0;
+let fail = 0;
 
-function 测(名: string, 体: () => void): void {
+function testCase(name3: string, body3: () => void): void {
   try {
-    体();
-    过 += 1;
-    console.log(`  ✔ ${名}`);
+    body3();
+    pass += 1;
+    console.log(`  ✔ ${name3}`);
   } catch (error) {
-    败 += 1;
-    console.log(`  ✘ ${名}`);
+    fail += 1;
+    console.log(`  ✘ ${name3}`);
     console.log(`      ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function 真(值: unknown, 说明: string): asserts 值 {
-  if (!值) throw new Error(说明);
+function assertValue(value2: unknown, description: string): asserts value2 {
+  if (!value2) throw new Error(description);
 }
 
 const schema = new Schema({
@@ -36,13 +36,13 @@ const schema = new Schema({
   },
 });
 
-function 有(状态: EditorState, 名: string): boolean {
-  return (状态.storedMarks ?? []).some((m) => m.type.name === 名);
+function has(state: EditorState, name3: string): boolean {
+  return (state.storedMarks ?? []).some((m) => m.type.name === name3);
 }
 
 console.log("\n【行内代码工具栏】");
 
-测("空选区点击会打开下一次输入的行内代码标记", () => {
+testCase("空选区点击会打开下一次输入的行内代码标记", () => {
   const doc = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text("x")));
   const state = EditorState.create({
     schema,
@@ -50,49 +50,49 @@ console.log("\n【行内代码工具栏】");
     selection: TextSelection.create(doc, 2),
   });
   let next = state;
-  const accepted = 切换行内代码(state, (tr) => {
+  const accepted = splitReplaceInlineCode(state, (tr) => {
     next = state.apply(tr);
   });
-  真(accepted, "空选区应被接受");
-  真(有(next, "inlineCode"), "storedMarks 应带 inlineCode");
+  assertValue(accepted, "空选区应被接受");
+  assertValue(has(next, "inlineCode"), "storedMarks 应带 inlineCode");
 });
 
-测("再点一次会关闭待输入标记", () => {
+testCase("再点一次会关闭待输入标记", () => {
   const doc = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text("x")));
   let state = EditorState.create({
     schema,
     doc,
     selection: TextSelection.create(doc, 2),
   });
-  切换行内代码(state, (tr) => {
+  splitReplaceInlineCode(state, (tr) => {
     state = state.apply(tr);
   });
-  切换行内代码(state, (tr) => {
+  splitReplaceInlineCode(state, (tr) => {
     state = state.apply(tr);
   });
-  真(!有(state, "inlineCode"), "storedMarks 不应再带 inlineCode");
+  assertValue(!has(state, "inlineCode"), "storedMarks 不应再带 inlineCode");
 });
 
-测("有选区时给文字挂上行内代码标记", () => {
+testCase("有选区时给文字挂上行内代码标记", () => {
   const doc = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text("abc")));
   let state = EditorState.create({
     schema,
     doc,
     selection: TextSelection.create(doc, 1, 4),
   });
-  切换行内代码(state, (tr) => {
+  splitReplaceInlineCode(state, (tr) => {
     state = state.apply(tr);
   });
   let marked = false;
   state.doc.descendants((node) => {
     if (node.isText && node.marks.some((m) => m.type.name === "inlineCode")) marked = true;
   });
-  真(marked, "选中的文字应带 inlineCode");
+  assertValue(marked, "选中的文字应带 inlineCode");
 });
 
-if (败 > 0) {
-  console.error(`\n${败} 项失败`);
+if (fail > 0) {
+  console.error(`\n${fail} 项失败`);
   process.exitCode = 1;
 } else {
-  console.log(`\n${过} passed, 0 failed`);
+  console.log(`\n${pass} passed, 0 failed`);
 }

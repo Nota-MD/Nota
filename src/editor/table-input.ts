@@ -141,10 +141,10 @@ import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { $inputRule, $prose } from "@milkdown/kit/utils";
 // 全仓这个码点只在 `atom-space.ts` 写一次，要用就引这个名字（那个文件头的规矩）。
-import { 不换行空格 } from "./atom-space";
+import { Nbsp } from "./atom-space";
 
 /** 一列的对齐。这三个字符串就是 gfm 的 `alignment` attr 的取值域。 */
-export type 对齐值 = "left" | "center" | "right";
+export type alignmentValue = "left" | "center" | "right";
 
 /**
  * 一列在 attr 里**真正要填**的值。
@@ -152,13 +152,13 @@ export type 对齐值 = "left" | "center" | "right";
  * ⚠️ `null` 是第四个可能值（分隔行里没写冒号），**不是 `'left'`**——填错的后果
  * 是存盘多出冒号，见文件头。
  */
-export type 列对齐 = 对齐值 | null;
+export type columnAlignment = alignmentValue | null;
 
 /** 从一行里拆出来的一个格子。`文本` 是去掉两侧空白后的内容，`起点`/`终点` 是**相对这一行**的字符偏移。 */
-export type 格子 = { 文本: string; 起点: number; 终点: number };
+export type cell = { text2: string; start4: number; endPoint: number };
 
 /** 判据成立时给出的东西：表头每格的内容，以及每列的对齐。 */
-export type 表格判据 = { 表头: 格子[]; 对齐: 列对齐[] };
+export type tablePredicate = { header: cell[]; align: columnAlignment[] };
 
 /**
  * 表格行内算**空白**的字符。
@@ -166,8 +166,8 @@ export type 表格判据 = { 表头: 格子[]; 对齐: 列对齐[] };
  * ⚠️ NBSP 必须算进来，@see 文件头那一节。这里只服务于**判据**：拆格子时两侧
  * 用来 trim 的就是它，放宽之后 WebKit 塞的那一串 NBSP 才吃得掉。
  */
-function 是空白(字符: string): boolean {
-  return 字符 === " " || 字符 === "\t" || 字符 === 不换行空格;
+function isWhitespace(character: string): boolean {
+  return character === " " || character === "\t" || character === Nbsp;
 }
 
 /**
@@ -176,15 +176,15 @@ function 是空白(字符: string): boolean {
  * ⚠️ 这不是"把 NBSP 当空白"的又一处——`是空白` 管的是拆格子，这里管的是一次
  * 字符串比较。来路见 `表格输入规则` 里那道闸的注释（BUG-51 的真凶）。
  */
-const 归一空白 = (文: string): string => 文.replaceAll(不换行空格, " ");
+const normalizeWhitespace = (text4: string): string => text4.replaceAll(Nbsp, " ");
 
 /**
  * 输入规则那道闸的判据：**匹配有没有盖住整段**（导出只为测试）。
  *
  * 为什么不是简单的 `匹配.startsWith(段文)`：见 `表格输入规则` 里那道闸的注释。
  */
-export function 匹配盖住整段(匹配: string, 段文: string): boolean {
-  return 归一空白(匹配).startsWith(归一空白(段文));
+export function matchCoverHoldWholeParagraph(match2: string, paragraphText: string): boolean {
+  return normalizeWhitespace(match2).startsWith(normalizeWhitespace(paragraphText));
 }
 
 /**
@@ -192,14 +192,14 @@ export function 匹配盖住整段(匹配: string, 段文: string): boolean {
  * （`micromark` 是在 flow 那一层把行前缀吃掉的）。这边自己判一遍，免得把用户
  * 缩进过的两行正文吃成表格。
  */
-export function 缩进过深(行: string): boolean {
-  let 宽 = 0;
-  for (let i = 0; i < 行.length; i++) {
-    const 字符 = 行.charAt(i);
-    if (字符 === " ") 宽 += 1;
-    else if (字符 === "\t") 宽 += 4;
+export function shrinkEnterPassDark(line3: string): boolean {
+  let width = 0;
+  for (let i = 0; i < line3.length; i++) {
+    const character = line3.charAt(i);
+    if (character === " ") width += 1;
+    else if (character === "\t") width += 4;
     else break;
-    if (宽 >= 4) return true;
+    if (width >= 4) return true;
   }
   return false;
 }
@@ -214,37 +214,37 @@ export function 缩进过深(行: string): boolean {
  *   ⚠️ 但 `| a ||` 是 **2** 格（末尾那个空格子要留着），所以判据是"切出来那段
  *   空白才算边框"，而不是"切出来是空串才算"。
  */
-export function 拆单元格(行: string): 格子[] {
-  const 区间: { 起: number; 止: number }[] = [];
-  let 起 = 0;
-  for (let i = 0; i < 行.length; i++) {
-    const 字符 = 行.charAt(i);
-    if (字符 === "\\") {
+export function splitTableCells(line3: string): cell[] {
+  const range: { start5: number; end2: number }[] = [];
+  let start5 = 0;
+  for (let i = 0; i < line3.length; i++) {
+    const character = line3.charAt(i);
+    if (character === "\\") {
       i += 1; // 转义：连着的下一个字符属于内容
       continue;
     }
-    if (字符 === "|") {
-      区间.push({ 起, 止: i });
-      起 = i + 1;
+    if (character === "|") {
+      range.push({ start5, end2: i });
+      start5 = i + 1;
     }
   }
-  区间.push({ 起, 止: 行.length });
+  range.push({ start5, end2: line3.length });
 
-  const 是空白段 = (段: { 起: number; 止: number }) => 行.slice(段.起, 段.止).trim() === "";
+  const isWhitespaceParagraph = (paragraph2: { start5: number; end2: number }) => line3.slice(paragraph2.start5, paragraph2.end2).trim() === "";
 
   // 首尾那两根竖线是**边框**：切出来是空白的那一头不算格子（`| a | b |` 是 2 格）。
   // ⚠️ 两头要**各判各的**，不能"丢了一头就收手"：孤零零一根 `|` 切出两段空白，
   //    两头都丢干净才是 0 格 —— GFM 里 `|` 自己不成行，不是"一个空格子"
   //    （这一条是拿 remark 逐例对出来的：`|` ＋ `| --- |` 那边不认）。
-  if (区间.length > 0 && 是空白段(区间[0]!)) 区间.shift();
-  if (区间.length > 0 && 是空白段(区间[区间.length - 1]!)) 区间.pop();
+  if (range.length > 0 && isWhitespaceParagraph(range[0]!)) range.shift();
+  if (range.length > 0 && isWhitespaceParagraph(range[range.length - 1]!)) range.pop();
 
-  return 区间.map((段) => {
-    let 左 = 段.起;
-    let 右 = 段.止;
-    while (左 < 右 && 是空白(行.charAt(左))) 左 += 1;
-    while (右 > 左 && 是空白(行.charAt(右 - 1))) 右 -= 1;
-    return { 文本: 行.slice(左, 右), 起点: 左, 终点: 右 };
+  return range.map((paragraph2) => {
+    let left = paragraph2.start5;
+    let right = paragraph2.end2;
+    while (left < right && isWhitespace(line3.charAt(left))) left += 1;
+    while (right > left && isWhitespace(line3.charAt(right - 1))) right -= 1;
+    return { text2: line3.slice(left, right), start4: left, endPoint: right };
   });
 }
 
@@ -254,18 +254,18 @@ export function 拆单元格(行: string): 格子[] {
  * 表头行本身几乎没有限制（GFM 里就是"一行文字"，格子可以是空的），只有两条：
  * 不能是空行（空行在 markdown 里不是段落），以及不能缩进成代码块。
  */
-export function 判表头行(行: string): 格子[] | null {
-  if (缩进过深(行)) return null;
-  if (行.trim() === "") return null;
-  const 格子 = 拆单元格(行);
-  return 格子.length > 0 ? 格子 : null;
+export function isHeaderRow(line3: string): cell[] | null {
+  if (shrinkEnterPassDark(line3)) return null;
+  if (line3.trim() === "") return null;
+  const cell = splitTableCells(line3);
+  return cell.length > 0 ? cell : null;
 }
 
 /** 一行 pipe 文本能否直接成为表头。至少两列，避免把普通 `|` 正文当成表格。 */
-export function 判单行表格(行: string): 格子[] | null {
-  if (判分隔行(行) !== null) return null;
-  const 格 = 判表头行(行);
-  return 格 && 格.length >= 2 ? 格 : null;
+export function isSingleLineTable(line3: string): cell[] | null {
+  if (determineSeparatorLine(line3) !== null) return null;
+  const cell2 = isHeaderRow(line3);
+  return cell2 && cell2.length >= 2 ? cell2 : null;
 }
 
 /**
@@ -275,41 +275,41 @@ export function 判单行表格(行: string): 格子[] | null {
  * 格子数 ≥ 1、每个格子是 `:?-+:?`、整行至少有一个 `|` 或 `:`。
  * ⚠️ 最后那一条是"别把分隔线当表格"的那道闸：`---` 自己不是分隔行。
  */
-export function 判分隔行(行: string): 列对齐[] | null {
-  if (缩进过深(行)) return null;
-  if (!行.includes("|") && !行.includes(":")) return null;
+export function determineSeparatorLine(line3: string): columnAlignment[] | null {
+  if (shrinkEnterPassDark(line3)) return null;
+  if (!line3.includes("|") && !line3.includes(":")) return null;
 
-  const 格子 = 拆单元格(行);
-  if (格子.length === 0) return null;
+  const cell = splitTableCells(line3);
+  if (cell.length === 0) return null;
 
-  const 对齐: 列对齐[] = [];
-  for (const 格 of 格子) {
-    const 命中 = /^(:?)(-+)(:?)$/.exec(格.文本);
-    if (!命中) return null;
-    const 有左冒号 = 命中[1] === ":";
-    const 有右冒号 = 命中[3] === ":";
+  const align: columnAlignment[] = [];
+  for (const cell2 of cell) {
+    const match = /^(:?)(-+)(:?)$/.exec(cell2.text2);
+    if (!match) return null;
+    const hasLeftEmergeNumber = match[1] === ":";
+    const hasRightEmergeNumber = match[3] === ":";
     // ⚠️ 没冒号是 `null` 不是 `'left'`（存盘字节不同，见文件头）。
-    对齐.push(有左冒号 && 有右冒号 ? "center" : 有左冒号 ? "left" : 有右冒号 ? "right" : null);
+    align.push(hasLeftEmergeNumber && hasRightEmergeNumber ? "center" : hasLeftEmergeNumber ? "left" : hasRightEmergeNumber ? "right" : null);
   }
-  return 对齐;
+  return align;
 }
 
 /**
  * 两行合起来能不能成一张表。列数对不上就 `null`——remark 那边也不认
  * （`syntax.js` 的 `size !== sizeB`）。
  */
-export function 判两行(表头行: string, 分隔行: string): 表格判据 | null {
-  const 表头 = 判表头行(表头行);
-  const 对齐 = 判分隔行(分隔行);
-  if (!表头 || !对齐) return null;
-  if (表头.length !== 对齐.length) return null;
-  return { 表头, 对齐 };
+export function isTwoRowTable(headerRow: string, separatorLine: string): tablePredicate | null {
+  const header = isHeaderRow(headerRow);
+  const align = determineSeparatorLine(separatorLine);
+  if (!header || !align) return null;
+  if (header.length !== align.length) return null;
+  return { header, align };
 }
 
 /** 一段是不是**纯文字**（没有硬换行、图片、公式这类非文字的行内节点）。理由见文件头。 */
-function 全为文字(段: PMNode): boolean {
-  for (let i = 0; i < 段.childCount; i++) {
-    if (!段.child(i).isText) return false;
+function allPlainText(paragraph2: PMNode): boolean {
+  for (let i = 0; i < paragraph2.childCount; i++) {
+    if (!paragraph2.child(i).isText) return false;
   }
   return true;
 }
@@ -322,18 +322,18 @@ function 全为文字(段: PMNode): boolean {
  * 名字来自 `preset-gfm/src/node/table/schema.ts:24/70/130/173/207` 那五处
  * `$nodeSchema('…')` 的 id。
  */
-function 取类型(schema: Schema) {
+function getType(schema: Schema) {
   const { table, table_header_row, table_header, table_row, table_cell, paragraph } = schema.nodes;
   if (!table || !table_header_row || !table_header || !table_row || !table_cell || !paragraph) {
     return null;
   }
   return {
-    表: table,
-    表头行: table_header_row,
-    表头: table_header,
-    行: table_row,
-    格: table_cell,
-    段落: paragraph,
+    table2: table,
+    headerRow: table_header_row,
+    header: table_header,
+    line3: table_row,
+    cell2: table_cell,
+    paragraph: paragraph,
   };
 }
 
@@ -346,58 +346,58 @@ function 取类型(schema: Schema) {
  * 造出来的表：**表头行（文字按格子搬过来，标记一起搬）＋ 一行空数据行**，
  * 光标落在第一行数据格里——用户敲完分隔行之后本来要打的就是数据。
  */
-function 试换表格(state: EditorState, $分隔: ResolvedPos, 分隔行: string): Transaction | null {
+function tryConvertTable(state: EditorState, separator: ResolvedPos, separatorLine: string): Transaction | null {
   // 只认顶层块，见文件头"边界"。
-  if ($分隔.depth !== 1) return null;
+  if (separator.depth !== 1) return null;
 
-  const 本段 = $分隔.parent;
-  if (!本段.isTextblock || !全为文字(本段)) return null;
+  const localParagraph = separator.parent;
+  if (!localParagraph.isTextblock || !allPlainText(localParagraph)) return null;
 
-  const 段前 = $分隔.before(1);
-  if (段前 <= 0) return null; // 顶上没有上一段
-  const 上段 = state.doc.resolve(段前).nodeBefore;
-  if (!上段 || 上段.type.name !== "paragraph" || !全为文字(上段)) return null;
+  const paragraphBefore = separator.before(1);
+  if (paragraphBefore <= 0) return null; // 顶上没有上一段
+  const aboveParagraph = state.doc.resolve(paragraphBefore).nodeBefore;
+  if (!aboveParagraph || aboveParagraph.type.name !== "paragraph" || !allPlainText(aboveParagraph)) return null;
 
-  const 判据 = 判两行(上段.textContent, 分隔行);
-  if (!判据) return null;
+  const determineEvidence = isTwoRowTable(aboveParagraph.textContent, separatorLine);
+  if (!determineEvidence) return null;
 
-  const 类型 = 取类型(state.schema);
-  if (!类型) return null;
+  const type = getType(state.schema);
+  if (!type) return null;
 
-  const 上段起点 = 段前 - 上段.nodeSize;
+  const aboveParagraphStart = paragraphBefore - aboveParagraph.nodeSize;
   // ⚠️ 是**上段**的内容起点，不是 `段前 + 1`（那是分隔段自己的内容起点）。
   //    这两者差一个段落的宽度，混了就会拿分隔行的字去当表头文字——
   //    无头测试里真踩过：`| --- | ---` 被切出 `-` 和 `|` 两格。
-  const 上段内容起点 = 上段起点 + 1;
+  const aboveParagraphContentStart = aboveParagraphStart + 1;
 
   // 表头格：把原来那一段里对应格子的**行内内容**（含标记）整块搬过来。
   // ⚠️ 用 `doc.slice` 取，不自己拼文字：拼文字会把粗体/斜体/链接丢掉，
   //    而"丢字"正是这里最不能出的错。
   // ⚠️ `?? null` 是给类型看的（`noUncheckedIndexedAccess` 下索引可能缺），
   //    等长由 `判两行` 保证；真要缺了，也宁可当"没写冒号"，不能退化成 `'left'`。
-  const 表头格 = 判据.表头.map((格, 序) =>
-    类型.表头.create(
-      { alignment: 判据.对齐[序] ?? null },
-      类型.段落.create(
+  const headerCell = determineEvidence.header.map((cell2, order) =>
+    type.header.create(
+      { alignment: determineEvidence.align[order] ?? null },
+      type.paragraph.create(
         null,
-        state.doc.slice(上段内容起点 + 格.起点, 上段内容起点 + 格.终点).content,
+        state.doc.slice(aboveParagraphContentStart + cell2.start4, aboveParagraphContentStart + cell2.endPoint).content,
       ),
     ),
   );
 
-  const 数据格 = 判据.对齐.map((对齐) =>
-    类型.格.create({ alignment: 对齐 }, 类型.段落.create()),
+  const dataCell = determineEvidence.align.map((align) =>
+    type.cell2.create({ alignment: align }, type.paragraph.create()),
   );
 
-  const 表头行节点 = 类型.表头行.create(null, 表头格);
-  const 表格 = 类型.表.create(null, [表头行节点, 类型.行.create(null, 数据格)]);
+  const headerRowNode = type.headerRow.create(null, headerCell);
+  const table = type.table2.create(null, [headerRowNode, type.line3.create(null, dataCell)]);
 
-  const tr = state.tr.replaceWith(上段起点, $分隔.after(1), 表格);
+  const tr = state.tr.replaceWith(aboveParagraphStart, separator.after(1), table);
 
   // 光标进第一行数据格：进 table（+1）→ 跨过表头行 → 进 table_row/table_cell/
   // paragraph（各 +1）。⚠️ 用 `表头行节点.nodeSize` 而不是魔法数字，行高变了也不会错。
-  const 数据格内容起点 = 上段起点 + 1 + 表头行节点.nodeSize + 3;
-  tr.setSelection(TextSelection.near(tr.doc.resolve(数据格内容起点)));
+  const dataCellContentStart = aboveParagraphStart + 1 + headerRowNode.nodeSize + 3;
+  tr.setSelection(TextSelection.near(tr.doc.resolve(dataCellContentStart)));
   return tr.scrollIntoView();
 }
 
@@ -408,37 +408,37 @@ function 试换表格(state: EditorState, $分隔: ResolvedPos, 分隔行: strin
  * 无对齐（`null`），并额外生成一行空数据格。输入仍然先经过
  * {@link 判单行表格}，所以普通段落里的竖线不会触发。
  */
-export function 试单行表格(state: EditorState, $行: ResolvedPos): Transaction | null {
-  if ($行.depth !== 1) return null;
-  const 本段 = $行.parent;
-  if (!本段.isTextblock || !全为文字(本段)) return null;
+export function trySingleLineTable(state: EditorState, line: ResolvedPos): Transaction | null {
+  if (line.depth !== 1) return null;
+  const localParagraph = line.parent;
+  if (!localParagraph.isTextblock || !allPlainText(localParagraph)) return null;
 
-  const 格 = 判单行表格(本段.textContent);
-  if (!格) return null;
-  const 类型 = 取类型(state.schema);
-  if (!类型) return null;
+  const cell2 = isSingleLineTable(localParagraph.textContent);
+  if (!cell2) return null;
+  const type = getType(state.schema);
+  if (!type) return null;
 
-  const 段起点 = $行.before(1);
-  const 内容起点 = 段起点 + 1;
-  const 表头格 = 格.map((一格) =>
-    类型.表头.create(
+  const paragraphStart = line.before(1);
+  const contentStart = paragraphStart + 1;
+  const headerCell = cell2.map((valueCell) =>
+    type.header.create(
       { alignment: null },
-      类型.段落.create(
+      type.paragraph.create(
         null,
-        state.doc.slice(内容起点 + 一格.起点, 内容起点 + 一格.终点).content,
+        state.doc.slice(contentStart + valueCell.start4, contentStart + valueCell.endPoint).content,
       ),
     ),
   );
-  const 数据格 = 格.map(() => 类型.格.create({ alignment: null }, 类型.段落.create()));
-  const 表头行节点 = 类型.表头行.create(null, 表头格);
-  const 表格 = 类型.表.create(null, [
-    表头行节点,
-    类型.行.create(null, 数据格),
+  const dataCell = cell2.map(() => type.cell2.create({ alignment: null }, type.paragraph.create()));
+  const headerRowNode = type.headerRow.create(null, headerCell);
+  const table = type.table2.create(null, [
+    headerRowNode,
+    type.line3.create(null, dataCell),
   ]);
 
-  const tr = state.tr.replaceWith(段起点, $行.after(1), 表格);
-  const 数据格内容起点 = 段起点 + 1 + 表头行节点.nodeSize + 3;
-  tr.setSelection(TextSelection.near(tr.doc.resolve(数据格内容起点)));
+  const tr = state.tr.replaceWith(paragraphStart, line.after(1), table);
+  const dataCellContentStart = paragraphStart + 1 + headerRowNode.nodeSize + 3;
+  tr.setSelection(TextSelection.near(tr.doc.resolve(dataCellContentStart)));
   return tr.scrollIntoView();
 }
 
@@ -455,7 +455,7 @@ export function 试单行表格(state: EditorState, $行: ResolvedPos): Transact
  *
  * 导出只为测试（`tests/table-input.test.ts` 逐字对 NBSP 那几例）。
  */
-export const 收尾的分隔行 = /^[ \t\u00a0]*\|?[ \t\u00a0]*(?::?-+:?[ \t\u00a0]*\|[ \t\u00a0]*)+$/;
+export const receiveTailOfSeparatorLine = /^[ \t\u00a0]*\|?[ \t\u00a0]*(?::?-+:?[ \t\u00a0]*\|[ \t\u00a0]*)+$/;
 
 /**
  * 路 1：分隔行敲完那一下（含输入法把 `|` 送进来的那条路）。
@@ -467,12 +467,12 @@ export const 收尾的分隔行 = /^[ \t\u00a0]*\|?[ \t\u00a0]*(?::?-+:?[ \t\u00
  * 3. `match[0]` 以这段文字开头——即匹配覆盖了整段（1、3 合起来才敢用 `match[0]`
  *    当"用户最终想要的那一行"）。
  */
-export const 表格输入规则 = $inputRule(
+export const tableInputRule = $inputRule(
   () =>
-    new InputRule(收尾的分隔行, (state, match, _start, end) => {
-      const $分隔 = state.doc.resolve(end);
-      if ($分隔.depth !== 1) return null;
-      if ($分隔.parentOffset !== $分隔.parent.content.size) return null;
+    new InputRule(receiveTailOfSeparatorLine, (state, match, _start, end) => {
+      const separator = state.doc.resolve(end);
+      if (separator.depth !== 1) return null;
+      if (separator.parentOffset !== separator.parent.content.size) return null;
       // ⚠️ **归一之后再比**：这一闸问的是"匹配有没有覆盖整段"，而 `match[0]` 是
       //    `prosemirror-inputrules` 拿「文档文字 ＋ 刚敲进去那颗字符」拼出来的
       //    （`dist/index.js` 的 `run()`）。手打的分隔行里，文档那一颗在**行末**
@@ -480,8 +480,8 @@ export const 表格输入规则 = $inputRule(
       //    翻车，规则静默退场（BUG-51 的真凶：探针实测「段=`| ---\u00a0`、
       //    配=`| --- |`」两个串只差这一颗）。归一之后它照样挡得住它本来要挡的
       //    事：段落长过 500 字时窗口从中间截断，`match[0]` 只是尾巴，长度对不上。
-      if (!匹配盖住整段(match[0], $分隔.parent.textContent)) return null;
-      return 试换表格(state, $分隔, match[0]);
+      if (!matchCoverHoldWholeParagraph(match[0], separator.parent.textContent)) return null;
+      return tryConvertTable(state, separator, match[0]);
     }),
 );
 
@@ -491,7 +491,7 @@ export const 表格输入规则 = $inputRule(
  * ⚠️ 为什么不是键位表：见文件头。这里只认**光秃秃的回车**——Shift+Enter
  * （软换行）的绑定在 `commonmark` 那边，别抢（`task-list.ts` 同一句话）。
  */
-export const 表格输入 = $prose(
+export const tableInput = $prose(
   () =>
     new Plugin({
       key: new PluginKey("nota-table-input"),
@@ -503,14 +503,14 @@ export const 表格输入 = $prose(
           const { state } = view;
           const { selection } = state;
           if (!selection.empty) return false;
-          const $分隔 = selection.$from;
-          if ($分隔.depth !== 1) return false;
-          if ($分隔.parentOffset !== $分隔.parent.content.size) return false;
+          const separator = selection.$from;
+          if (separator.depth !== 1) return false;
+          if (separator.parentOffset !== separator.parent.content.size) return false;
 
-          const 分隔 = 判分隔行($分隔.parent.textContent);
+          const separator2 = determineSeparatorLine(separator.parent.textContent);
           const tr =
-            (分隔 ? 试换表格(state, $分隔, $分隔.parent.textContent) : null) ??
-            试单行表格(state, $分隔);
+            (separator2 ? tryConvertTable(state, separator, separator.parent.textContent) : null) ??
+            trySingleLineTable(state, separator);
           if (!tr) return false;
           view.dispatch(tr);
           return true;

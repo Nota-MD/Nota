@@ -41,169 +41,169 @@
 
 import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import { 句区间, 行区间, 词区间, 选句区间, 选词区间 } from "../src/editor/select";
+import { sentenceRange2, lineRange, wordRange2, sentenceRange, wordRange } from "../src/editor/select";
 
 /* ── 极小的测试工装（与 `heading-on-enter.test.ts` 同一套长相）───────────── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
-function 真(条件: unknown, 说明: string): void {
-  if (!条件) throw new Error(说明);
+function assertValue(condition: unknown, description: string): void {
+  if (!condition) throw new Error(description);
 }
 
 /** 区间 → `"from-to"`（用例里写起来短，读起来也不绕）。 */
-function 形(区: { from: number; to: number } | null): string {
-  return 区 ? `${区.from}-${区.to}` : "null";
+function shape2(area: { from: number; to: number } | null): string {
+  return area ? `${area.from}-${area.to}` : "null";
 }
 
 /** 把一段文字切片出来（"选中的到底是哪几个字"）。 */
-function 切(文本: string, 区: { from: number; to: number } | null): string | null {
-  return 区 ? 文本.slice(区.from, 区.to) : null;
+function split(text2: string, area: { from: number; to: number } | null): string | null {
+  return area ? text2.slice(area.from, area.to) : null;
 }
 
 /* ── 第一组：选词 ─────────────────────────────────────────────────────── */
 
-组("一、选词区间：三条判据（词里 / 贴词尾 / 空白里）");
+group("一、选词区间：三条判据（词里 / 贴词尾 / 空白里）");
 
-const 英文 = "hello world";
+const englishText = "hello world";
 
-测("光标在词**里面** → 就是它", () => {
-  等(形(选词区间(英文, 2)), "0-5", "hello");
-  等(形(选词区间(英文, 8)), "6-11", "world");
+testCase("光标在词**里面** → 就是它", () => {
+  equal(shape2(wordRange(englishText, 2)), "0-5", "hello");
+  equal(shape2(wordRange(englishText, 8)), "6-11", "world");
 });
 
-测("光标**贴着词尾**（刚敲完那个词）→ 还是它", () => {
+testCase("光标**贴着词尾**（刚敲完那个词）→ 还是它", () => {
   // ⚠️ 这一条是 `Ctrl+D` 最常撞上的位置：半开区间 `[from, to)` 里，词尾那一点
   // **不在**词里，少了这条判据就会去选下一个词（见 `选词区间` 的注释）。
-  等(形(选词区间(英文, 5)), "0-5", "hello 的尾巴");
-  等(形(选词区间(英文, 11)), "6-11", "world 的尾巴");
+  equal(shape2(wordRange(englishText, 5)), "0-5", "hello 的尾巴");
+  equal(shape2(wordRange(englishText, 11)), "6-11", "world 的尾巴");
 });
 
-测("光标在空白里 → 拿**前一个**词", () => {
+testCase("光标在空白里 → 拿**前一个**词", () => {
   // ⚠️ 半开区间 `[from, to)`：`"hello world"` 里的空格只有第 5 那一格，
   // 而第 6 格**已经是 `world` 的第一个字符**（`选词区间(英文, 6)` 该给 world）。
   // 所以"落在空白里"这一条要用双空格的串来验。
-  等(形(选词区间("hello  world", 6)), "0-5", "两个空格之间（前一个词是 hello）");
-  等(形(选词区间(英文, 6)), "6-11", "第 6 格是 world 的开头，不是空白");
+  equal(shape2(wordRange("hello  world", 6)), "0-5", "两个空格之间（前一个词是 hello）");
+  equal(shape2(wordRange(englishText, 6)), "6-11", "第 6 格是 world 的开头，不是空白");
 });
 
-测("前面没有词（行首的空白里）→ 拿后面那一个", () => {
-  等(形(选词区间("  hello", 0)), "2-7", "行首两个空格处");
-  等(形(选词区间("  hello", 1)), "2-7", "第二个空格处");
+testCase("前面没有词（行首的空白里）→ 拿后面那一个", () => {
+  equal(shape2(wordRange("  hello", 0)), "2-7", "行首两个空格处");
+  equal(shape2(wordRange("  hello", 1)), "2-7", "第二个空格处");
 });
 
-测("空文 / 纯空白 / 纯标点 → 没有词", () => {
-  等(形(选词区间("", 0)), "null", "空文");
-  等(形(选词区间("   ", 1)), "null", "纯空白");
-  等(形(选词区间("。，！", 1)), "null", "纯标点");
+testCase("空文 / 纯空白 / 纯标点 → 没有词", () => {
+  equal(shape2(wordRange("", 0)), "null", "空文");
+  equal(shape2(wordRange("   ", 1)), "null", "纯空白");
+  equal(shape2(wordRange("。，！", 1)), "null", "纯标点");
 });
 
-测("位置越界 → 夹回两端（不抛）", () => {
-  等(形(选词区间(英文, -5)), "0-5", "负数");
-  等(形(选词区间(英文, 999)), "6-11", "超出长度");
+testCase("位置越界 → 夹回两端（不抛）", () => {
+  equal(shape2(wordRange(englishText, -5)), "0-5", "负数");
+  equal(shape2(wordRange(englishText, 999)), "6-11", "超出长度");
 });
 
-测("连字符两边是两个词（`a-b`：光标落在 `-` 上算 a）", () => {
-  等(形(选词区间("a-b", 1)), "0-1", "贴着 a 的尾巴");
-  等(形(选词区间("a-b", 2)), "2-3", "b 的开头");
+testCase("连字符两边是两个词（`a-b`：光标落在 `-` 上算 a）", () => {
+  equal(shape2(wordRange("a-b", 1)), "0-1", "贴着 a 的尾巴");
+  equal(shape2(wordRange("a-b", 2)), "2-3", "b 的开头");
 });
 
-测("数字串与小数点不分家（`3.14` 是一个词）", () => {
-  等(切("3.14 is pi", 选词区间("3.14 is pi", 2)), "3.14", "小数点那一点");
+testCase("数字串与小数点不分家（`3.14` 是一个词）", () => {
+  equal(split("3.14 is pi", wordRange("3.14 is pi", 2)), "3.14", "小数点那一点");
 });
 
-测("中文：选的区间**包含**那个字，且落在同一个词里（不钉几个字——那是 ICU 的事）", () => {
-  const 文 = "你好世界";
-  const 区 = 选词区间(文, 1);
-  真(区 !== null, "中文该选得出词来");
-  真(区!.from <= 1 && 区!.to > 1, "要包含光标那一个字");
-  真(区!.from >= 0 && 区!.to <= 文.length, "不能越界");
+testCase("中文：选的区间**包含**那个字，且落在同一个词里（不钉几个字——那是 ICU 的事）", () => {
+  const text4 = "你好世界";
+  const area = wordRange(text4, 1);
+  assertValue(area !== null, "中文该选得出词来");
+  assertValue(area!.from <= 1 && area!.to > 1, "要包含光标那一个字");
+  assertValue(area!.from >= 0 && area!.to <= text4.length, "不能越界");
 });
 
-测("下划线连成一个词（`snake_case`）", () => {
-  等(切("snake_case 名", 选词区间("snake_case 名", 4)), "snake_case", "下划线那一段");
+testCase("下划线连成一个词（`snake_case`）", () => {
+  equal(split("snake_case 名", wordRange("snake_case 名", 4)), "snake_case", "下划线那一段");
 });
 
 /* ── 第二组：选句 ─────────────────────────────────────────────────────── */
 
-组("二、选句区间：句读、刚写完那一句、小数点要躲开");
+group("二、选句区间：句读、刚写完那一句、小数点要躲开");
 
-const 中句 = "你好。再见。";
+const middleSentence = "你好。再见。";
 
-测("光标在句**里面** → 往两边找到句读（含结尾那个）", () => {
-  等(切(中句, 选句区间(中句, 4)), "再见。", "第二句");
-  等(切(中句, 选句区间(中句, 0)), "你好。", "第一句");
+testCase("光标在句**里面** → 往两边找到句读（含结尾那个）", () => {
+  equal(split(middleSentence, sentenceRange(middleSentence, 4)), "再见。", "第二句");
+  equal(split(middleSentence, sentenceRange(middleSentence, 0)), "你好。", "第一句");
 });
 
-测("光标**正好贴着句读后面**（刚写完一句）→ 收**刚过去**那一句", () => {
+testCase("光标**正好贴着句读后面**（刚写完一句）→ 收**刚过去**那一句", () => {
   // ⚠️ 这是 `Ctrl+E` 最常撞上的位置：敲完 `你好。` 立刻按，选的必须是刚写完的
   // 那句，而不是下一句（见 `选句区间` 的注释）。
-  等(切(中句, 选句区间(中句, 3)), "你好。", "`。` 的后面");
-  等(切(中句, 选句区间(中句, 6)), "再见。", "最后那个 `。` 的后面");
+  equal(split(middleSentence, sentenceRange(middleSentence, 3)), "你好。", "`。` 的后面");
+  equal(split(middleSentence, sentenceRange(middleSentence, 6)), "再见。", "最后那个 `。` 的后面");
 });
 
-测("半角 `!` / `?` / `;` 也算句读（用户可能中英混排）", () => {
-  等(切("a!b?", 选句区间("a!b?", 0)), "a!", "感叹号");
-  等(切("a;b;", 选句区间("a;b;", 3)), "b;", "分号（光标在 b 上）");
-  等(切("a;b;", 选句区间("a;b;", 2)), "a;", "光标贴着分号后面 → 刚过去那一句");
+testCase("半角 `!` / `?` / `;` 也算句读（用户可能中英混排）", () => {
+  equal(split("a!b?", sentenceRange("a!b?", 0)), "a!", "感叹号");
+  equal(split("a;b;", sentenceRange("a;b;", 3)), "b;", "分号（光标在 b 上）");
+  equal(split("a;b;", sentenceRange("a;b;", 2)), "a;", "光标贴着分号后面 → 刚过去那一句");
 });
 
-测("逗号**不算**句读（它分的是短语）", () => {
-  等(切("一，二，三。", 选句区间("一，二，三。", 4)), "一，二，三。", "整句一起");
+testCase("逗号**不算**句读（它分的是短语）", () => {
+  equal(split("一，二，三。", sentenceRange("一，二，三。", 4)), "一，二，三。", "整句一起");
 });
 
-测("小数点不算句读（`3.14` 不许在中间断开）", () => {
-  等(切("3.14 是圆周率。", 选句区间("3.14 是圆周率。", 2)), "3.14 是圆周率。", "小数点躲开了");
+testCase("小数点不算句读（`3.14` 不许在中间断开）", () => {
+  equal(split("3.14 是圆周率。", sentenceRange("3.14 是圆周率。", 2)), "3.14 是圆周率。", "小数点躲开了");
 });
 
-测("换行算句读，但**不跟着选进去**（`\\n` 不留在区间里）", () => {
-  const 文 = "第一行\n第二行";
-  const 二 = 选句区间(文, 5);
-  等(切(文, 二), "第二行", "第二行（不含前面那个换行）");
+testCase("换行算句读，但**不跟着选进去**（`\\n` 不留在区间里）", () => {
+  const text4 = "第一行\n第二行";
+  const two = sentenceRange(text4, 5);
+  equal(split(text4, two), "第二行", "第二行（不含前面那个换行）");
   // 光标贴着换行后面 → 收刚过去那一行（同样不带那个换行）。
-  const 一 = 选句区间(文, 4);
-  等(切(文, 一), "第一行", "刚过换行 → 上一行");
+  const value = sentenceRange(text4, 4);
+  equal(split(text4, value), "第一行", "刚过换行 → 上一行");
 });
 
-测("全是空白 / 空文 → 没有句子", () => {
-  等(形(选句区间("", 0)), "null", "空文");
-  等(形(选句区间("   ", 2)), "null", "纯空白");
+testCase("全是空白 / 空文 → 没有句子", () => {
+  equal(shape2(sentenceRange("", 0)), "null", "空文");
+  equal(shape2(sentenceRange("   ", 2)), "null", "纯空白");
 });
 
-测("两头的空白切干净（区间不含首尾空白）", () => {
-  const 文 = "  你好。  ";
-  const 区 = 选句区间(文, 3);
-  等(切(文, 区), "你好。", "首尾的空白都不进区间");
+testCase("两头的空白切干净（区间不含首尾空白）", () => {
+  const text4 = "  你好。  ";
+  const area = sentenceRange(text4, 3);
+  equal(split(text4, area), "你好。", "首尾的空白都不进区间");
 });
 
 /* ── 第三组：ProseMirror 层的换算 ─────────────────────────────────────── */
 
-组("三、行 / 词 / 句区间：块内偏移 → 文档位置");
+group("三、行 / 词 / 句区间：块内偏移 → 文档位置");
 
 const schema = new Schema({
   nodes: {
@@ -221,8 +221,8 @@ const schema = new Schema({
 });
 
 /** 一棵"一个段落"的文档。 */
-function 一段(字: string): PMNode {
-  return schema.node("doc", null, [schema.node("paragraph", null, [schema.text(字)])]);
+function oneParagraph(character2: string): PMNode {
+  return schema.node("doc", null, [schema.node("paragraph", null, [schema.text(character2)])]);
 }
 
 /**
@@ -231,10 +231,10 @@ function 一段(字: string): PMNode {
  * 另写一个口径（比如叶子给空串），算出来的偏移就和选区对不上了——而那种错
  * **不会报错，只会切错位置**，正好是这份测试要抓的东西。
  */
-function 摊平(doc: PMNode): string {
-  const 块 = doc.firstChild!;
-  return 块.textBetween(0, 块.content.size, undefined, (叶) =>
-    叶.type.name === "hardbreak" ? "\n" : "￼",
+function flattenFlat(doc: PMNode): string {
+  const block = doc.firstChild!;
+  return block.textBetween(0, block.content.size, undefined, (leaf) =>
+    leaf.type.name === "hardbreak" ? "\n" : "￼",
   );
 }
 
@@ -245,50 +245,50 @@ function 摊平(doc: PMNode): string {
  * 所以换算时要减掉这个"块首那几个字符的差"——这正是 `词区间` 那一族在做的
  * 唯一一件事。
  */
-function 切段(doc: PMNode, 区: { from: number; to: number } | null): string | null {
-  const 文 = 摊平(doc);
-  return 区 ? 文.slice(区.from - 1, 区.to - 1) : null;
+function splitParagraph(doc: PMNode, area: { from: number; to: number } | null): string | null {
+  const text4 = flattenFlat(doc);
+  return area ? text4.slice(area.from - 1, area.to - 1) : null;
 }
 
-测("段落里：行区间是整段（不含两头）", () => {
-  const doc = 一段("hello world");
+testCase("段落里：行区间是整段（不含两头）", () => {
+  const doc = oneParagraph("hello world");
   // ⚠️ 段落的**内容**从位置 1 开始（doc 起点 0、段落开括号占 1、内容长度 11）。
-  等(形(行区间(doc, 3)), "1-12", "整段文字");
-  const 文 = doc.textBetween(1, 12, undefined, () => "");
-  等(文, "hello world", "切出来正好是那段文字");
+  equal(shape2(lineRange(doc, 3)), "1-12", "整段文字");
+  const text4 = doc.textBetween(1, 12, undefined, () => "");
+  equal(text4, "hello world", "切出来正好是那段文字");
 });
 
-测("段落里：词 / 句区间都跟着走", () => {
-  const doc = 一段("hello world");
-  等(形(词区间(doc, 1 + 2)), "1-6", "hello（块首那 1 个位置补上了）");
-  const 句文 = 一段("你好。再见。");
-  等(形(句区间(句文, 1 + 4)), "4-7", "再见。");
+testCase("段落里：词 / 句区间都跟着走", () => {
+  const doc = oneParagraph("hello world");
+  equal(shape2(wordRange2(doc, 1 + 2)), "1-6", "hello（块首那 1 个位置补上了）");
+  const sentenceText = oneParagraph("你好。再见。");
+  equal(shape2(sentenceRange2(sentenceText, 1 + 4)), "4-7", "再见。");
 });
 
-测("空段落 → 行 / 词 / 句都是 null（没有可选的）", () => {
+testCase("空段落 → 行 / 词 / 句都是 null（没有可选的）", () => {
   const doc = schema.node("doc", null, [schema.node("paragraph")]);
-  等(形(行区间(doc, 1)), "null", "空段落");
-  等(形(词区间(doc, 1)), "null", "空段落");
+  equal(shape2(lineRange(doc, 1)), "null", "空段落");
+  equal(shape2(wordRange2(doc, 1)), "null", "空段落");
 });
 
-测("代码块 → 一律 null（那一段的选区归块里那颗 CodeMirror）", () => {
+testCase("代码块 → 一律 null（那一段的选区归块里那颗 CodeMirror）", () => {
   const doc = schema.node("doc", null, [schema.node("code_block", null, [schema.text("const a = 1;")])]);
-  等(形(行区间(doc, 3)), "null", "行");
-  等(形(词区间(doc, 5)), "null", "词");
-  等(形(句区间(doc, 5)), "null", "句");
+  equal(shape2(lineRange(doc, 3)), "null", "行");
+  equal(shape2(wordRange2(doc, 5)), "null", "词");
+  equal(shape2(sentenceRange2(doc, 5)), "null", "句");
 });
 
-测("行内原子**占一个字符**（`leafText` 给的替身字符），偏移不许错位", () => {
+testCase("行内原子**占一个字符**（`leafText` 给的替身字符），偏移不许错位", () => {
   // 段落 = [atom][text "ab"]：原子占位置 1，`a` 在位置 2，`b` 在位置 3。
   const doc = schema.node("doc", null, [
     schema.node("paragraph", null, [schema.node("atom"), schema.text("ab")]),
   ]);
   // 原子那个替身字符（U+FFFC）不是词 —— 光标贴在它后面时给的是后面那个词。
   // ⚠️ 这一条的**判据**是"位置没错位"：`ab` 必须对上文档里的位置 2-4。
-  等(形(词区间(doc, 2)), "2-4", "原子之后的 ab（若替身少算一个字符，这里会偏一格）");
+  equal(shape2(wordRange2(doc, 2)), "2-4", "原子之后的 ab（若替身少算一个字符，这里会偏一格）");
 });
 
-测("硬换行在句读扫描里算一个换行（`\\n`），但不留在区间里", () => {
+testCase("硬换行在句读扫描里算一个换行（`\\n`），但不留在区间里", () => {
   // 段落 = [text "ab"][hardbreak][text "cd"]：a=1 b=2 换行=3 c=4 d=5。
   const doc = schema.node("doc", null, [
     schema.node("paragraph", null, [
@@ -300,25 +300,25 @@ function 切段(doc: PMNode, 区: { from: number; to: number } | null): string |
   // ⚠️ 位置 4 是**换行之后那一格的"c"**——光标贴在换行后面，按"刚写完那一句"
   // 那条判据收的是**上一行**（`ab`），与 `你好。|` 那一格同一个道理：换行
   // 也是句读（见 `选句区间`）。这一条是**故意**钉住的，别看到"c"就改成 cd。
-  等(切段(doc, 句区间(doc, 4)), "ab", "光标贴在换行后面 → 上一行");
-  等(切段(doc, 句区间(doc, 1)), "ab", "换行之前那一句（`a` 上）");
-  等(切段(doc, 句区间(doc, 5)), "cd", "`d` 上 → 换行之后那一句");
-  等(切段(doc, 句区间(doc, 6)), "cd", "段落末尾（贴着 `d` 的尾巴）→ 还是那一句");
+  equal(splitParagraph(doc, sentenceRange2(doc, 4)), "ab", "光标贴在换行后面 → 上一行");
+  equal(splitParagraph(doc, sentenceRange2(doc, 1)), "ab", "换行之前那一句（`a` 上）");
+  equal(splitParagraph(doc, sentenceRange2(doc, 5)), "cd", "`d` 上 → 换行之后那一句");
+  equal(splitParagraph(doc, sentenceRange2(doc, 6)), "cd", "段落末尾（贴着 `d` 的尾巴）→ 还是那一句");
 });
 
-测("位置落在**非文本块**上（doc 自己那层）→ null", () => {
+testCase("位置落在**非文本块**上（doc 自己那层）→ null", () => {
   // `摊开块` 那条出口：`$pos.parent.isTextblock` 为假时说"这里没有可选的文字"。
   // 位置 0 的父节点就是 doc（顶层），它不是文本块。
-  const doc = 一段("hello");
-  等(形(行区间(doc, 0)), "null", "doc 那一层");
+  const doc = oneParagraph("hello");
+  equal(shape2(lineRange(doc, 0)), "null", "doc 那一层");
 });
 
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */
 
 console.log("\n" + "─".repeat(64));
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败) {
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail) {
   console.log("失败的：");
-  for (const n of 败的) console.log(`  - ${n}`);
+  for (const n of failed) console.log(`  - ${n}`);
   process.exit(1);
 }

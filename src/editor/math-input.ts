@@ -91,17 +91,17 @@ import { NodeSelection, Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { mathBlockSchema, mathInlineSchema } from "./math-schema";
 
-import { 美元数属性 } from "./math-delim";
+import { dollarCountAttribute } from "./math-delim";
 
 /**
  * `$…$` 的正则。
  * ⚠️ 与上游 `mathInlineInputRule` 那条**逐字一样**（好对照）：判断"哪一截算公式"
  * 这件事没有变，变的只是前面多了一道守卫。
  */
-export const 单美元 = /(?:\$)([^$]+)(?:\$)$/;
+export const singleDollarDollar = /(?:\$)([^$]+)(?:\$)$/;
 
 /** `$$…$$` 的正则。 */
-export const 双美元 = /\$\$([^$]+)\$\$$/;
+export const doubleDollarDollar = /\$\$([^$]+)\$\$$/;
 
 /**
  * 尾巴上这一截该不该变成公式？（**目前只有一道守卫**，见文件头「守卫一」）
@@ -112,8 +112,8 @@ export const 双美元 = /\$\$([^$]+)\$\$$/;
  * ⚠️ 曾经还有第二个参数 `值`（2026-10-04 的"守卫二"：值两端紧挨空格就不转），
  * 当天与解析那一侧的第五格一起撤回了——留着这个参数会让两边尺子重新分家。
  */
-export function 该变公式(前: string): boolean {
-  return 前 !== "$";
+export function shouldChangeCommonStyle(before2: string): boolean {
+  return before2 !== "$";
 }
 
 /**
@@ -123,7 +123,7 @@ export function 该变公式(前: string): boolean {
  * 这时不能去 `textBetween(start - 1, start)`——那个位置已经出了这一段，
  * 拿到的是空串或者上一块的边界，判出来没意义。
  */
-function 前一个字符(state: EditorState, start: number): string {
+function previousChar(state: EditorState, start: number): string {
   if (state.doc.resolve(start).parentOffset === 0) return "";
   return state.doc.textBetween(start - 1, start);
 }
@@ -141,18 +141,18 @@ function 前一个字符(state: EditorState, start: number): string {
  * 顺手记下来，存盘才写得回去。⚠️ 别把 `createAndFill()` 写回空的：那等于把
  * `$$x$$` 又降级一次，而且**没有任何报错**。
  */
-function 换成公式(
-  规格: NodeType,
+function replaceBecomeCommonStyle(
+  spec: NodeType,
   state: EditorState,
-  起: number,
+  start5: number,
   end: number,
-  源: string,
-  美元: number,
+  source3: string,
+  dollarDollar: number,
 ): Transaction | null {
-  const 节点 = 规格.createAndFill({ [美元数属性]: 美元 });
-  if (!节点) return null;
-  const tr = state.tr.replaceRangeWith(起, end, 节点);
-  tr.insertText(源, 起 + 1);
+  const node = spec.createAndFill({ [dollarCountAttribute]: dollarDollar });
+  if (!node) return null;
+  const tr = state.tr.replaceRangeWith(start5, end, node);
+  tr.insertText(source3, start5 + 1);
   return tr;
 }
 
@@ -163,16 +163,16 @@ function 换成公式(
  * （`[^$]+` 中间的 `$` 过不去），所以两条其实撞不上——但万一以后有人放宽了
  * 正则，"长的先试"是唯一不会出错的那种排法。
  */
-export const 公式输入 = [
+export const commonStyleInput = [
   $inputRule((ctx) =>
-    new InputRule(双美元, (state, match, start, end) =>
-      换成公式(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 2),
+    new InputRule(doubleDollarDollar, (state, match, start, end) =>
+      replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 2),
     ),
   ),
   $inputRule((ctx) =>
-    new InputRule(单美元, (state, match, start, end) =>
-      该变公式(前一个字符(state, start))
-        ? 换成公式(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 1)
+    new InputRule(singleDollarDollar, (state, match, start, end) =>
+      shouldChangeCommonStyle(previousChar(state, start))
+        ? replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 1)
         : null,
     ),
   ),
@@ -189,7 +189,7 @@ export const 公式输入 = [
  * （行内那条守卫二（"值的两边有空格 ⇒ 这不是公式"）2026-10-04 当天撤回，
  * 这条判据不受影响：这里根本没有"值"，`$$` 是**块的开头**。）
  */
-export const 空块头 = /^\$\$\s*$/;
+export const emptyBlockHeader = /^\$\$\s*$/;
 
 /**
  * 回车：把「一行光秃秃的 `$$`」变成一块**空的**块公式，并且**当场打开源码框**。
@@ -218,32 +218,32 @@ export const 空块头 = /^\$\$\s*$/;
  * ——`math-view.ts::取源码` 那里有一整段讲这个差别。所以新建的这块是
  * `value: ""`，源码框里空着，占位卡由 NodeView 自己画。
  */
-export function 回车成公式块(view: EditorView, 块类型: NodeType): boolean {
+export function returnCarBecomeCommonStyleBlock(view: EditorView, blockType: NodeType): boolean {
   if (!view.editable) return false;
 
   const { state } = view;
   const { $from, empty } = state.selection;
   if (!empty) return false;
 
-  const 段 = $from.parent;
-  if (段.type.name !== "paragraph") return false;
+  const paragraph2 = $from.parent;
+  if (paragraph2.type.name !== "paragraph") return false;
 
   for (let d = $from.depth - 1; d > 0; d--) {
-    const 名 = $from.node(d).type.name;
-    if (名 === "table_cell" || 名 === "table_header") return false;
+    const name3 = $from.node(d).type.name;
+    if (name3 === "table_cell" || name3 === "table_header") return false;
   }
 
-  if (!空块头.test(段.textContent)) return false;
+  if (!emptyBlockHeader.test(paragraph2.textContent)) return false;
 
   // 守卫 2（见上）。`parentOffset` 就是光标在这一段里的偏移。
-  if ($from.parentOffset !== 段.content.size) return false;
+  if ($from.parentOffset !== paragraph2.content.size) return false;
 
-  const 空块 = 块类型.createAndFill({ value: "" });
-  if (!空块) return false;
+  const emptyBlock = blockType.createAndFill({ value: "" });
+  if (!emptyBlock) return false;
 
-  const 起 = $from.before($from.depth);
-  const tr = state.tr.replaceWith(起, 起 + 段.nodeSize, 空块);
-  tr.setSelection(NodeSelection.create(tr.doc, 起));
+  const start5 = $from.before($from.depth);
+  const tr = state.tr.replaceWith(start5, start5 + paragraph2.nodeSize, emptyBlock);
+  tr.setSelection(NodeSelection.create(tr.doc, start5));
   tr.scrollIntoView();
   view.dispatch(tr);
   return true;
@@ -265,7 +265,7 @@ export function 回车成公式块(view: EditorView, 块类型: NodeType): boole
  * ⚠️ 光秃秃的回车才认（Shift+Enter 是硬换行、Ctrl/Alt+Enter 各有绑定、
  * 输入法组合中的那一下是"选词"），与标题那条**逐字相同**的一套守卫。
  */
-export const 公式块回车 = $prose(
+export const commonStyleBlockReturnCar = $prose(
   (ctx) =>
     new Plugin({
       key: new PluginKey("nota-math-block-on-enter"),
@@ -281,7 +281,7 @@ export const 公式块回车 = $prose(
           ) {
             return false;
           }
-          return 回车成公式块(view, mathBlockSchema.type(ctx));
+          return returnCarBecomeCommonStyleBlock(view, mathBlockSchema.type(ctx));
         },
       },
     }),

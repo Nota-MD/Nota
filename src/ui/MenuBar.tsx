@@ -88,7 +88,7 @@ export function MenuBar(props: Props) {
    * 同一段代码在真实窗口里可能画不出 Motif 的 armed 凹槽。这一格只服务键盘
    * 导航；鼠标点击会立即清掉它。
    */
-  const [键盘落点, set键盘落点] = useState<string | null>(null);
+  const [keyDiskDropPoint, setKeyDiskDropPoint] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -98,7 +98,7 @@ export function MenuBar(props: Props) {
    *（BUG-17）：方向键可以在栏间移动，而鼠标无论是否划过另一栏、都不会自动
    * 切菜单。只有点击才改变当前打开的顶层菜单。
    */
-  const 点开的 = useRef<string | null>(null);
+  const pointOpenOf = useRef<string | null>(null);
 
   /** 把焦点还给某一栏的按钮。 */
   const focusTitle = (menuId: string) => {
@@ -106,14 +106,14 @@ export function MenuBar(props: Props) {
   };
 
   /** 关掉菜单，并把"这一栏是点开的"一并清掉。**每个关闭路径都要走这里。** */
-  const 关栏 = () => {
-    点开的.current = null;
+  const closeBar2 = () => {
+    pointOpenOf.current = null;
     setOpen(null);
   };
 
   /** 开一栏。`来源` 决定"再点一下"是收起还是确认，见上面 `点开的`。 */
-  const 开栏 = (id: string, 来源: "点" | "划" | "键") => {
-    点开的.current = 来源 === "点" ? id : null;
+  const openBar = (id: string, comeSource: "点" | "划" | "键") => {
+    pointOpenOf.current = comeSource === "点" ? id : null;
     setOpen(id);
   };
 
@@ -129,7 +129,7 @@ export function MenuBar(props: Props) {
       // 于是 mouseup / click 落在一个已经被卸载的按钮上——
       // **子菜单里的项永远点不动**，而键盘走得通，看着像"鼠标坏了"。
       if (t?.closest?.(".menu-sub")) return;
-      关栏();
+      closeBar2();
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -158,8 +158,8 @@ export function MenuBar(props: Props) {
       e.preventDefault();
       e.stopPropagation();
       if (open) {
-        set键盘落点(null);
-        关栏();
+        setKeyDiskDropPoint(null);
+        closeBar2();
         focusTitle(open);
         return;
       }
@@ -168,7 +168,7 @@ export function MenuBar(props: Props) {
         active instanceof HTMLElement ? active.closest<HTMLElement>("[data-menu]")?.dataset.menu : undefined;
       const target = props.menus.find((m) => m.id === activeMenu) ?? props.menus[0];
       if (target) {
-        set键盘落点(target.id);
+        setKeyDiskDropPoint(target.id);
         focusTitle(target.id);
       }
     };
@@ -184,9 +184,9 @@ export function MenuBar(props: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
-      const 来自键盘 = 点开的.current === null;
-      关栏();
-      if (来自键盘) set键盘落点(open);
+      const comeSelfKeyDisk = pointOpenOf.current === null;
+      closeBar2();
+      if (comeSelfKeyDisk) setKeyDiskDropPoint(open);
       // 焦点还给那一栏的按钮。不还的话键盘用户在菜单关掉后
       // 就没有落点了，下一次 Tab 会从页面开头重新数。
       focusTitle(open);
@@ -208,12 +208,12 @@ export function MenuBar(props: Props) {
     // 方向键就断在切栏这一步了。
     // ⚠️ 来源记"键"：方向键切过来的那一栏，鼠标点一下算"确认"不是"收起"，
     // 理由同上面 `点开的` 那段——它不是点出来的。
-    开栏(next.id, "键");
+    openBar(next.id, "键");
   };
 
   /** 点一项：主题那几条走 `onTheme`，其余走 `onCommand`。两条路都关菜单。 */
   const pick = (id: string) => {
-    关栏();
+    closeBar2();
     // ⚠️ "这个 id 是命令还是主题那三条"只有 `resolvePick` 一处判据，
     // 原生菜单那条路也走它。见 `commands.ts` 里那段。
     const p = resolvePick(id);
@@ -247,7 +247,7 @@ export function MenuBar(props: Props) {
               type="button"
               data-menu={menu.id}
               className={`menu-title ${isOpen ? "menu-title-open" : ""} ${
-                键盘落点 === menu.id ? "menu-title-keyboard" : ""
+                keyDiskDropPoint === menu.id ? "menu-title-keyboard" : ""
               }`}
               aria-haspopup="menu"
               aria-expanded={isOpen}
@@ -259,7 +259,7 @@ export function MenuBar(props: Props) {
                   const direction = e.key === "ArrowRight" ? 1 : -1;
                   const next = props.menus[menuIndex + direction];
                   if (next) {
-                    set键盘落点(next.id);
+                    setKeyDiskDropPoint(next.id);
                     focusTitle(next.id);
                   }
                   return;
@@ -269,7 +269,7 @@ export function MenuBar(props: Props) {
                   e.stopPropagation();
                   const target = e.key === "Home" ? props.menus[0] : props.menus[props.menus.length - 1];
                   if (target) {
-                    set键盘落点(target.id);
+                    setKeyDiskDropPoint(target.id);
                     focusTitle(target.id);
                   }
                   return;
@@ -277,17 +277,17 @@ export function MenuBar(props: Props) {
                 if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   e.stopPropagation();
-                  开栏(menu.id, "键");
+                  openBar(menu.id, "键");
                 }
               }}
               // 点这一栏：关着就开，开着就关（再点一次收起是桌面惯例）。
               onClick={() => {
-                set键盘落点(null);
+                setKeyDiskDropPoint(null);
                 // ⚠️ 开着的那一栏点一下收起；方向键切过来的那一栏先用一次
                 // 点击确认，避免键盘切栏后指针恰好落下就立刻关掉。
-                if (!isOpen) 开栏(menu.id, "点");
-                else if (点开的.current === menu.id) 关栏();
-                else 开栏(menu.id, "点");
+                if (!isOpen) openBar(menu.id, "点");
+                else if (pointOpenOf.current === menu.id) closeBar2();
+                else openBar(menu.id, "点");
               }}
             >
               {t(menu.label)}
@@ -305,9 +305,9 @@ export function MenuBar(props: Props) {
                 checks={checks}
                 onPick={pick}
                 onDismiss={() => {
-                  const 来自键盘 = 点开的.current === null;
-                  关栏();
-                  if (来自键盘) set键盘落点(menu.id);
+                  const comeSelfKeyDisk = pointOpenOf.current === null;
+                  closeBar2();
+                  if (comeSelfKeyDisk) setKeyDiskDropPoint(menu.id);
                   focusTitle(menu.id);
                 }}
                 onArrowOut={arrowAcross}

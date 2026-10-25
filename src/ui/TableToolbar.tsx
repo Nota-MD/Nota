@@ -16,6 +16,7 @@ interface Props {
 interface Position {
   top: number;
   left: number;
+  width: number;
 }
 
 export function TableToolbar({ visible, documentKey, run }: Props) {
@@ -35,7 +36,9 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
       setPicker(false);
       return;
     }
-    const locate = () => {
+    let frame = 0;
+    const standaloneImmediatelyFixedPosition = () => {
+      frame = 0;
       const selection = window.getSelection();
       const anchor = selection?.anchorNode;
       const element =
@@ -50,16 +53,29 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
       const rows = table.rows.length;
       setCurrent({ columns, rows });
       setHover({ columns, rows });
+      const width = Math.max(
+        180,
+        Math.min(rect.width, window.innerWidth - 16),
+      );
       setPosition({
         top: rect.top >= 44 ? rect.top - 34 : rect.bottom + 4,
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - 180)),
+        left: Math.max(
+          8,
+          Math.min(rect.left, window.innerWidth - width - 8),
+        ),
+        width,
       });
+    };
+    const locate = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(standaloneImmediatelyFixedPosition);
     };
     locate();
     document.addEventListener("selectionchange", locate);
     window.addEventListener("resize", locate);
     window.addEventListener("scroll", locate, true);
     return () => {
+      if (frame) cancelAnimationFrame(frame);
       document.removeEventListener("selectionchange", locate);
       window.removeEventListener("resize", locate);
       window.removeEventListener("scroll", locate, true);
@@ -76,7 +92,11 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
   return createPortal(
     <div
       className="table-toolbar"
-      style={{ top: position.top, left: position.left }}
+      style={{
+        top: position.top,
+        left: position.left,
+        width: position.width,
+      }}
       onMouseDown={(event) => event.preventDefault()}
       role="toolbar"
       aria-label={t("Table")}
@@ -99,8 +119,8 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
       <button
         type="button"
         className="table-toolbar-btn"
-        title={t("Align Left")}
-        aria-label={t("Align Left")}
+        title={t("Align current column left")}
+        aria-label={t("Align current column left")}
         onClick={() => action("tableAlignLeft")}
       >
         <span className="table-align-glyph is-left" aria-hidden="true"><i /><i /><i /></span>
@@ -108,8 +128,8 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
       <button
         type="button"
         className="table-toolbar-btn"
-        title={t("Align Center")}
-        aria-label={t("Align Center")}
+        title={t("Align current column center")}
+        aria-label={t("Align current column center")}
         onClick={() => action("tableAlignCenter")}
       >
         <span className="table-align-glyph is-center" aria-hidden="true"><i /><i /><i /></span>
@@ -117,8 +137,8 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
       <button
         type="button"
         className="table-toolbar-btn"
-        title={t("Align Right")}
-        aria-label={t("Align Right")}
+        title={t("Align current column right")}
+        aria-label={t("Align current column right")}
         onClick={() => action("tableAlignRight")}
       >
         <span className="table-align-glyph is-right" aria-hidden="true"><i /><i /><i /></span>

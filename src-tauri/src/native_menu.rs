@@ -222,7 +222,7 @@ fn leaf_accel(node: &MenuNode) -> Option<String> {
         // 而"这一项没快捷键"用户在界面上是看不出异常的（菜单项照样能点），
         // 所以这句只是开发者的线索，走调试闸门。
         crate::日志!(
-            "[nota] 原生菜单：菜单项 {} 的快捷键 \"{raw}\" 转不成原生写法，这一项不带快捷键",
+            "[nota] native menu: accelerator \"{raw}\" for {} could not be converted; item has no shortcut",
             node.id
         );
     }

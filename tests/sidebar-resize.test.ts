@@ -39,54 +39,54 @@ import { join } from "node:path";
 
 import {
   SidebarResizer,
-  夹侧栏宽,
-  侧栏宽最大,
-  侧栏宽最小,
-  侧栏宽默认,
+  clampSidebarWidth,
+  sideBarWidthMostLarge,
+  sideBarWidthMostSmall,
+  sideBarWidthDefault,
 } from "@/ui/SidebarResizer";
 
 /* ── 一支极小的测试工装（与 `file-kind.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
 /* ── 一、⚠️ 三个 240 逐个对齐 ───────────────────────────────────────── */
 
-组("一、⚠️ 出厂宽度在 CSS / TS / Rust 三处同值");
+group("一、⚠️ 出厂宽度在 CSS / TS / Rust 三处同值");
 
-const CSS源 = readFileSync(join("src", "styles", "theme", "base.css"), "utf8");
-const Rust源 = readFileSync(
+const cSSSource = readFileSync(join("src", "styles", "theme", "base.css"), "utf8");
+const rustSource = readFileSync(
   join("src-tauri", "src", "settings", "appearance.rs"),
   "utf8",
 );
 
 /** 从 `base.css` 里抠出 `--sidebar-width: 240px;` 的那个数。 */
-function CSS里的侧栏宽(): number {
-  const m = /--sidebar-width:\s*(\d+)px\s*;/.exec(CSS源);
+function cSSInsideOfSideBarWidth(): number {
+  const m = /--sidebar-width:\s*(\d+)px\s*;/.exec(cSSSource);
   if (!m) throw new Error("`base.css` 里找不到 `--sidebar-width: <数>px;`");
   return Number(m[1]);
 }
@@ -98,111 +98,111 @@ function CSS里的侧栏宽(): number {
  * 那次、默认值那次），不加范围的话会先撞上字段定义那一行。所以先定位
  * `impl Default for Appearance`，从那儿往后找第一个赋值。
  */
-function Rust里的侧栏宽(): number {
-  const 起 = Rust源.indexOf("impl Default for Appearance");
-  if (起 < 0) throw new Error("`appearance.rs` 里找不到 `impl Default for Appearance`");
-  const m = /sidebar_width:\s*(\d+)\s*,/.exec(Rust源.slice(起));
+function rustInsideOfSideBarWidth(): number {
+  const start5 = rustSource.indexOf("impl Default for Appearance");
+  if (start5 < 0) throw new Error("`appearance.rs` 里找不到 `impl Default for Appearance`");
+  const m = /sidebar_width:\s*(\d+)\s*,/.exec(rustSource.slice(start5));
   if (!m) throw new Error("`Default for Appearance` 里没有 `sidebar_width: <数>,`");
   return Number(m[1]);
 }
 
-测("CSS 里的 `--sidebar-width` 与 `侧栏宽默认` 同值", () => {
-  等(CSS里的侧栏宽(), 侧栏宽默认, "CSS 出厂宽度");
+testCase("CSS 里的 `--sidebar-width` 与 `侧栏宽默认` 同值", () => {
+  equal(cSSInsideOfSideBarWidth(), sideBarWidthDefault, "CSS 出厂宽度");
 });
 
-测("Rust 的 `Default` 与 `侧栏宽默认` 同值", () => {
-  等(Rust里的侧栏宽(), 侧栏宽默认, "Rust 出厂宽度");
+testCase("Rust 的 `Default` 与 `侧栏宽默认` 同值", () => {
+  equal(rustInsideOfSideBarWidth(), sideBarWidthDefault, "Rust 出厂宽度");
 });
 
-测("⚠️ Tauri 命令里的 `appearance` 认得 `sidebar_width`（不是只加了个 Rust 字段）", () => {
+testCase("⚠️ Tauri 命令里的 `appearance` 认得 `sidebar_width`（不是只加了个 Rust 字段）", () => {
   // 这一条拦的是"字段加了、但序列化那条路上没有它"——那种情况下设置存下去
   // 再读回来会**丢掉这一项**（`serde` 默认值补上 240），症状是"拖完重开又回
   // 到 240"，而设置页里看不出任何异常（它不显示这个字段）。
   //
   // ⚠️ 判据是"`Appearance` 那个结构体上有 `#[serde(default)]` 或 derive 里
   // 带 `Default`"——本仓是前者（见 `appearance.rs` 结构体顶上那一行）。
-  等(
-    /#\[serde\(default[^)]*\)\]\s*pub struct Appearance/.test(Rust源),
+  equal(
+    /#\[serde\(default[^)]*\)\]\s*pub struct Appearance/.test(rustSource),
     true,
     "`Appearance` 上有 `#[serde(default)]`（加字段才不会把老设置文件读崩）",
   );
 });
 
-测("⚠️ 三处默认值必须落在合法区间**里面**（不是边界上）", () => {
+testCase("⚠️ 三处默认值必须落在合法区间**里面**（不是边界上）", () => {
   // 默认值正好等于最小值的话，"出厂的样子"和"拖到最窄"看起来一模一样，
   // 而那是两件不同的事——用户拖到最窄再拖回来，分不出回到了出厂没有。
-  if (!(侧栏宽最小 < 侧栏宽默认 && 侧栏宽默认 < 侧栏宽最大)) {
+  if (!(sideBarWidthMostSmall < sideBarWidthDefault && sideBarWidthDefault < sideBarWidthMostLarge)) {
     throw new Error(
-      `区间不合法：最小 ${侧栏宽最小} / 默认 ${侧栏宽默认} / 最大 ${侧栏宽最大}`,
+      `区间不合法：最小 ${sideBarWidthMostSmall} / 默认 ${sideBarWidthDefault} / 最大 ${sideBarWidthMostLarge}`,
     );
   }
 });
 
 /* ── 二、夹宽度 ─────────────────────────────────────────────────────── */
 
-组("二、`夹侧栏宽`");
+group("二、`夹侧栏宽`");
 
-测("区间内的值**原样**通过", () => {
-  等(夹侧栏宽(300), 300, "300 在 180~480 里");
-  等(夹侧栏宽(360), 360, "360 在 180~480 里");
+testCase("区间内的值**原样**通过", () => {
+  equal(clampSidebarWidth(300), 300, "300 在 180~480 里");
+  equal(clampSidebarWidth(360), 360, "360 在 180~480 里");
 });
 
-测("两个边界本身**算合法**（不是被夹掉）", () => {
-  等(夹侧栏宽(侧栏宽最小), 侧栏宽最小, "正好最小");
-  等(夹侧栏宽(侧栏宽最大), 侧栏宽最大, "正好最大");
+testCase("两个边界本身**算合法**（不是被夹掉）", () => {
+  equal(clampSidebarWidth(sideBarWidthMostSmall), sideBarWidthMostSmall, "正好最小");
+  equal(clampSidebarWidth(sideBarWidthMostLarge), sideBarWidthMostLarge, "正好最大");
 });
 
-测("太窄 → 夹到最小：⚠️ 不能拖成 0", () => {
+testCase("太窄 → 夹到最小：⚠️ 不能拖成 0", () => {
   // 拖成 0 宽等于把侧栏弄丢了，而丢的方式是"看不见"——用户找不回来。
-  等(夹侧栏宽(0), 侧栏宽最小, "0");
-  等(夹侧栏宽(179), 侧栏宽最小, "比最小少 1");
+  equal(clampSidebarWidth(0), sideBarWidthMostSmall, "0");
+  equal(clampSidebarWidth(179), sideBarWidthMostSmall, "比最小少 1");
   // 指针跑到这一栏**左缘以外**时 `ev.clientX - 左缘` 是负数。
-  等(夹侧栏宽(-500), 侧栏宽最小, "负数");
+  equal(clampSidebarWidth(-500), sideBarWidthMostSmall, "负数");
 });
 
-测("太宽 → 夹到最大：⚠️ 不能把正文挤没", () => {
-  等(夹侧栏宽(481), 侧栏宽最大, "比最大多 1");
-  等(夹侧栏宽(99999), 侧栏宽最大, "窗口就算拉到 8K 也不给这么宽");
+testCase("太宽 → 夹到最大：⚠️ 不能把正文挤没", () => {
+  equal(clampSidebarWidth(481), sideBarWidthMostLarge, "比最大多 1");
+  equal(clampSidebarWidth(99999), sideBarWidthMostLarge, "窗口就算拉到 8K 也不给这么宽");
 });
 
-测("小数点四舍五入到整数像素", () => {
+testCase("小数点四舍五入到整数像素", () => {
   // 指针位置是浮点数，而 CSS 里写 `300.4999px` 只是白搭——`clientX` 本身
   // 就是整数，取整是为了让落盘的那个数**读起来是人写的**。
-  等(夹侧栏宽(300.4), 300, "舍");
-  等(夹侧栏宽(300.6), 301, "入");
+  equal(clampSidebarWidth(300.4), 300, "舍");
+  equal(clampSidebarWidth(300.6), 301, "入");
 });
 
-测("⚠️ `NaN` → 退回默认（不是 `NaN`）", () => {
+testCase("⚠️ `NaN` → 退回默认（不是 `NaN`）", () => {
   // `Math.min/max` 遇到 `NaN` 会安静地返回 `NaN`，而 `NaN` 写进 CSS 变量
   // 等于那一格失效 → 侧栏退回 CSS 里那个 240。**看着像"拖动没生效"，
   // 不像报错**——所以这里必须挡住。
-  等(夹侧栏宽(NaN), 侧栏宽默认, "NaN");
-  等(夹侧栏宽(Infinity), 侧栏宽默认, "Infinity");
-  等(夹侧栏宽(-Infinity), 侧栏宽默认, "-Infinity");
+  equal(clampSidebarWidth(NaN), sideBarWidthDefault, "NaN");
+  equal(clampSidebarWidth(Infinity), sideBarWidthDefault, "Infinity");
+  equal(clampSidebarWidth(-Infinity), sideBarWidthDefault, "-Infinity");
 });
 
-测("夹两次是**幂等**的（松手那次拿到的值再夹一遍不变）", () => {
+testCase("夹两次是**幂等**的（松手那次拿到的值再夹一遍不变）", () => {
   // 拖动期间每个 `pointermove` 夹一次、`pointerup` 又夹一次。幂等不成立的话，
   // "拖到最窄停手"会落在和"拖到最窄再往下拖"不同的值上。
-  for (const 原 of [0, 179, 240, 300.6, 480, 481, 99999, NaN]) {
-    等(夹侧栏宽(夹侧栏宽(原)), 夹侧栏宽(原), `夹两次 ${String(原)}`);
+  for (const original of [0, 179, 240, 300.6, 480, 481, 99999, NaN]) {
+    equal(clampSidebarWidth(clampSidebarWidth(original)), clampSidebarWidth(original), `夹两次 ${String(original)}`);
   }
 });
 
 /* ── 三、那个组件确实导出了 ─────────────────────────────────────────── */
 
-组("三、组件本身");
+group("三、组件本身");
 
-测("`SidebarResizer` 是个组件（`Sidebar.tsx` 要 import 它）", () => {
+testCase("`SidebarResizer` 是个组件（`Sidebar.tsx` 要 import 它）", () => {
   // ⚠️ 这一条**弱得几乎没用**，写在这里只是为了让"这个文件测的是同一个模块"
   // 这件事有个显式的锚：真正的拖动行为要开窗目检（文件头写着）。
-  等(typeof SidebarResizer, "function", "导出的类型");
+  equal(typeof SidebarResizer, "function", "导出的类型");
 });
 
 /* ── 收尾 ───────────────────────────────────────────────────────────── */
 
-console.log(`\n${过} 过 / ${败} 败`);
-if (败) {
-  console.log(`败的：${败的.join("、")}`);
+console.log(`\n${pass} 过 / ${fail} 败`);
+if (fail) {
+  console.log(`败的：${failed.join("、")}`);
   process.exitCode = 1;
 }

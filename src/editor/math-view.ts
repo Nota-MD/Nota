@@ -1,7 +1,7 @@
 /**
  * 数学公式（`$x$` / `$$ … $$`）的 NodeView：**能就地改**。
  *
- * # 长相：正文里**没有框**，编辑时正文就是源码，公式在下面一个悬浮框里预览
+ * # 长相：正文里没有框，块公式编辑时是源码框加下方预览框
  *
  * 用户 2026-09-26 的原话：
  *
@@ -14,7 +14,7 @@
  * | 态 | 正文里那一段 | 渲染出来的公式 |
  * |---|---|---|
  * | 不在编辑（光标不在它上面） | KaTeX 的排版结果，**行内直接渲染**，一根线都没有 | —— |
- * | 编辑中（整块选中／源码框拿着焦点） | **源码原文**，就是普通正文的长相：同样的字体、同样的字号、同样的行高，`$` / `$$` 用 `--fg-faint` 画（同 `.nota-srcmark` 那张配方） | 下面一个**悬浮框**（`.nota-math-preview`，绝对定位挂在这一块的 `top: 100%`）里实时跟打跟渲染 |
+ * | 编辑中（整块选中／源码框拿着焦点） | **源码原文**；块公式上方是浅色源码区，下面独立一块预览区 | 块公式的 `.nota-math-preview` 在文档流里占位；行内公式仍用浮层，避免把一行正文拆开 |
  *
  * ⚠️ **源码框不是"框"**：它是一颗 `<input>` / `<textarea>`，但样式上
  * `border: none`、`background: transparent`、`font: inherit`、`padding: 0`
@@ -24,9 +24,8 @@
  * `background` 的卡片，用户看到的就是"一个框框"。改这一版时**先读 `math.css`
  * 的文件头**——那里面写着"哪些线是有意不加的"。
  *
- * ⚠️ 悬浮预览 **`pointer-events: none`**（`math.css`）：它压在下文上面，
- * 能点的话就成了"鼠标底下一块点不透的透明玻璃"。它也没有交互——要改就回
- * 源码框里改。
+ * ⚠️ 预览区 **`pointer-events: none`**（`math.css`）：它没有交互——要改就回
+ * 源码框里改。块公式那块现在参与文档流，不再盖住下一段正文。
  *
  * # 为什么这个文件非得存在（用户 2026-09-26 报的 bug）
  *
@@ -169,21 +168,21 @@ import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "./math-schem
 import type { KatexOptions } from "katex";
 
 import { t } from "@/i18n";
-import { 渲染公式 } from "./katex-runtime";
-import { 建命令表, type 收下 } from "./math-commands";
-import { 建建议框, 用选项画预览 } from "./math-suggest";
+import { renderCommonStyle } from "./katex-runtime";
+import { createCommandTable, type ReceiveBelow } from "./math-commands";
+import { createCreateProposalBox, useOptionDrawPreview } from "./math-suggest";
 
 /** 行内公式的节点名（与 plugin 里 `const c = "math_inline"` 一致）。 */
-const 行内名 = "math_inline";
+const inlineName = "math_inline";
 
 /** 块公式的节点名（与 plugin 里 `const p = "math_block"` 一致）。 */
-const 块名 = "math_block";
+const blockName = "math_block";
 
 /**
  * 「当前」这个 class。装饰把它挂到节点上（由 ProseMirror 自己 patch），
  * CSS 按它决定面板显不显示。样式只此一处：`src/styles/math.css`。
  */
-const 当前类 = "nota-math-current";
+const currentClass = "nota-math-current";
 
 /**
  * 装饰 `spec` 上的标记。
@@ -192,25 +191,25 @@ const 当前类 = "nota-math-current";
  * 会随设计改；而 `outerDeco` 里还会混着别的插件给这个节点的装饰
  * （`instant-render` 给块挂的那条就长得很像），按字符串比会认错人。
  */
-const 当前标记 = "数学当前";
+const currentMark = "数学当前";
 
 /** 面板的 class。`是我的挂件` 按它判"这个事件归不归我"。 */
-const 面板类 = "nota-math-panel";
+const panelClass = "nota-math-panel";
 
 /** 输入控件的 class（`<input>` 或 `<textarea>`，行内与块只差这一个）。 */
-const 源码类 = "nota-math-source";
+const sourceClass = "nota-math-source";
 
 /** 分隔符的 class。 */
-const 分隔类 = "nota-math-delim";
+const separatorClass = "nota-math-delim";
 
 /** 渲染出来的公式那棵树的 class。 */
-const 渲染类 = "nota-math-render";
+const renderClass = "nota-math-render";
 
 /** 只读实例里那棵"上游树"的标记（仅供 CSS 与调试辨认）。 */
-const 上游类 = "nota-math-upstream";
+const upstreamClass = "nota-math-upstream";
 
 /** 空源码占位卡的 class。 */
-const 占位类 = "nota-math-note";
+const occupyPositionClass = "nota-math-note";
 
 /**
  * 悬浮预览框的 class（编辑时挂在下面那一格）。
@@ -219,7 +218,10 @@ const 占位类 = "nota-math-note";
  * 会让"正文里那棵"和"预览里那棵"互相牵扯（`katex.render` 是**直接改**元素，
  * 不返回字符串）。KaTeX 是同步的、毫秒级，一个键敲两棵树不心疼。
  */
-const 预览类 = "nota-math-preview";
+const previewClass = "nota-math-preview";
+
+/** 块公式源码区右上角的类型标签。行内公式不画。 */
+const numberLearnLabelClass = "nota-math-kind";
 
 /**
  * 量文字宽度用的隐藏尺子（行内公式的输入框宽度跟它走）。
@@ -228,16 +230,16 @@ const 预览类 = "nota-math-preview";
  * （比例字体），一个 `\frac` 和一个"中文"占的宽度差得远，按字符数估出来的
  * 宽度不是偏宽就是偏窄，而偏窄会出现横向滚动条——那正是"看着像个框"。
  */
-const 尺类 = "nota-math-ruler";
+const rulerClass = "nota-math-ruler";
 
 /* ── 一、纯函数：认节点、取源码、写回 ────────────────────────────────────
    这几条是**这个 bug 的全部**（源码在哪、写回哪去），所以它们不碰 DOM、
    不碰 view，能被 `tests/math-view.test.ts` 直接喂真节点验证。 */
 
 /** 公式的种类。认不出来返回 `null`（别的节点类型走到这里就当没看见）。 */
-export function 认节点(node: PMNode): "inline" | "block" | null {
-  if (node.type.name === 行内名) return "inline";
-  if (node.type.name === 块名) return "block";
+export function recognizeNode(node: PMNode): "inline" | "block" | null {
+  if (node.type.name === inlineName) return "inline";
+  if (node.type.name === blockName) return "block";
   return null;
 }
 
@@ -248,10 +250,10 @@ export function 认节点(node: PMNode): "inline" | "block" | null {
  * 行内在 `node.textContent`（`toMarkdown` 读 `a.textContent`），
  * 块在 `attrs.value`（`toMarkdown` 读 `a.attrs.value`）。
  */
-export function 取源码(node: PMNode): string {
-  if (node.type.name === 块名) {
-    const 值: unknown = node.attrs.value;
-    return typeof 值 === "string" ? 值 : "";
+export function readSource(node: PMNode): string {
+  if (node.type.name === blockName) {
+    const value2: unknown = node.attrs.value;
+    return typeof value2 === "string" ? value2 : "";
   }
   return node.textContent;
 }
@@ -269,24 +271,24 @@ export function 取源码(node: PMNode): string {
  * ⚠️ 行内的空串要取 `Fragment.empty` 当内容：`replaceWith` 收的就是"片段/节点"，
  * 而 `schema.text("")` 会直接抛（ProseMirror 不接受空文本节点）。
  */
-export function 写入源码(tr: Transaction, 位置: number, 节点: PMNode, 源码: string): boolean {
-  if (取源码(节点) === 源码) return false;
+export function writeEnterSource(tr: Transaction, position2: number, node: PMNode, source2: string): boolean {
+  if (readSource(node) === source2) return false;
 
-  if (节点.type.name === 块名) {
-    tr.setNodeMarkup(位置, undefined, { ...节点.attrs, value: 源码 });
+  if (node.type.name === blockName) {
+    tr.setNodeMarkup(position2, undefined, { ...node.attrs, value: source2 });
     return true;
   }
 
-  const 片段 = 源码 === "" ? Fragment.empty : tr.doc.type.schema.text(源码);
-  tr.replaceWith(位置 + 1, 位置 + 节点.nodeSize - 1, 片段);
+  const fragment = source2 === "" ? Fragment.empty : tr.doc.type.schema.text(source2);
+  tr.replaceWith(position2 + 1, position2 + node.nodeSize - 1, fragment);
   return true;
 }
 
 /* ── 二、「当前」这件事：装饰 + 归位 ───────────────────────────────────── */
 
 /** 造一条"当前"装饰。 */
-function 造当前装饰(位置: number, 尺寸: number): Decoration {
-  return Decoration.node(位置, 位置 + 尺寸, { class: 当前类 }, { [当前标记]: true });
+function createCurrentDecoration(position2: number, rulerInch: number): Decoration {
+  return Decoration.node(position2, position2 + rulerInch, { class: currentClass }, { [currentMark]: true });
 }
 
 /**
@@ -303,11 +305,11 @@ function 造当前装饰(位置: number, 尺寸: number): Decoration {
  * 缓存要自己判断"这次变化影响不影响结果"，判错就是面板不跟着选区走，
  * 而那正是这个插件唯一要做对的事）。代价是 O(1)：只看选区，不扫文档。
  */
-export function 算装饰(state: EditorState): DecorationSet {
-  const 选 = state.selection;
-  if (!(选 instanceof NodeSelection)) return DecorationSet.empty;
-  if (认节点(选.node) === null) return DecorationSet.empty;
-  return DecorationSet.create(state.doc, [造当前装饰(选.from, 选.node.nodeSize)]);
+export function computeDecorations(state: EditorState): DecorationSet {
+  const select = state.selection;
+  if (!(select instanceof NodeSelection)) return DecorationSet.empty;
+  if (recognizeNode(select.node) === null) return DecorationSet.empty;
+  return DecorationSet.create(state.doc, [createCurrentDecoration(select.from, select.node.nodeSize)]);
 }
 
 /**
@@ -318,18 +320,18 @@ export function 算装饰(state: EditorState): DecorationSet {
  * ⚠️ 改完之后的选区是 `NodeSelection`，本函数下次就不匹配了，不会来回改
  * （而且 ProseMirror 只在插件返回了非空事务时才再跑一轮 `appendTransaction`）。
  */
-export function 归位选区(state: EditorState): Transaction | null {
-  const 选 = state.selection;
-  if (选 instanceof NodeSelection) return null;
+export function returnPositionSelection(state: EditorState): Transaction | null {
+  const select = state.selection;
+  if (select instanceof NodeSelection) return null;
 
-  const $从 = 选.$from;
-  for (let d = $从.depth; d > 0; d--) {
-    const 节点 = $从.node(d);
-    if (节点.type.name !== 块名) continue;
+  const fromValue = select.$from;
+  for (let d = fromValue.depth; d > 0; d--) {
+    const node = fromValue.node(d);
+    if (node.type.name !== blockName) continue;
 
-    const 位置 = $从.before(d);
-    if (选.from <= 位置 || 选.to >= 位置 + 节点.nodeSize) return null;
-    return state.tr.setSelection(NodeSelection.create(state.doc, 位置));
+    const position2 = fromValue.before(d);
+    if (select.from <= position2 || select.to >= position2 + node.nodeSize) return null;
+    return state.tr.setSelection(NodeSelection.create(state.doc, position2));
   }
   return null;
 }
@@ -341,21 +343,21 @@ export function 归位选区(state: EditorState): Transaction | null {
  * 归位把选区变成"整块选中"，装饰就按"整块选中"发信号；分成两个插件的话，
  * 两边各写一遍判断，早晚会岔开。
  */
-export const 公式当前 = $prose(
+export const commonStyleCurrent = $prose(
   () =>
     new Plugin({
       key: new PluginKey("nota-math-current"),
       props: {
-        decorations: (state) => 算装饰(state),
+        decorations: (state) => computeDecorations(state),
       },
-      appendTransaction: (_事务们, _旧状态, 新状态) => 归位选区(新状态),
+      appendTransaction: (_Transactions, _OldValueState, newValueState) => returnPositionSelection(newValueState),
     }),
 );
 
 /* ── 三、NodeView ─────────────────────────────────────────────────────── */
 
 /** 从异常里抠一句人能读的话。`katex` 的解析错是 `ParseError`，但别赌它。 */
-function 提取消息(e: unknown): string {
+function raiseGetClearMessage(e: unknown): string {
   if (e instanceof Error && e.message) return e.message;
   if (typeof e === "string") return e;
   return String(e);
@@ -370,24 +372,24 @@ function 提取消息(e: unknown): string {
  * 结果与今天预览格里的**逐字节相同**（含 `data-type` / `data-value`，
  * 而且上游 `toDOM` 自己会按同一份 `katexOptions` 调一次 `katex.render`）。
  */
-function 画上游(node: PMNode): HTMLElement {
+function drawUpstream(node: PMNode): HTMLElement {
   try {
-    const 描述 = node.type.spec.toDOM?.(node);
-    if (描述) {
-      const { dom } = DOMSerializer.renderSpec(document, 描述);
-      dom.classList.add(上游类);
+    const traceDescribe = node.type.spec.toDOM?.(node);
+    if (traceDescribe) {
+      const { dom } = DOMSerializer.renderSpec(document, traceDescribe);
+      dom.classList.add(upstreamClass);
       return dom;
     }
   } catch {
     // 上游的画法炸了就退回一句原文：宁可难看，也别在预览格里留一块空白。
   }
-  const 兜底 = document.createElement(node.isInline ? "span" : "div");
-  兜底.className = 上游类;
-  兜底.textContent = 取源码(node);
-  return 兜底;
+  const fallback = document.createElement(node.isInline ? "span" : "div");
+  fallback.className = upstreamClass;
+  fallback.textContent = readSource(node);
+  return fallback;
 }
 
-const 画进代号 = new WeakMap<HTMLElement, number>();
+const drawEnterRepresentNumber = new WeakMap<HTMLElement, number>();
 
 /**
  * 建一个公式的 NodeView。行内与块共用这一份，只差输入控件和写回路径。
@@ -398,22 +400,22 @@ const 画进代号 = new WeakMap<HTMLElement, number>();
  * 那会让 physics 那套宏失效（KaTeX 会把不认识的宏原样画出来/标红），
  * 但**不会**让编辑器整个建不起来；两害相权，这个更轻。
  */
-function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): NodeViewConstructor {
-  const 行内 = 种类 === "inline";
-  const 分隔文字 = 行内 ? "$" : "$$";
+function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptions): NodeViewConstructor {
+  const inline = kindClass === "inline";
+  const separatorText = inline ? "$" : "$$";
 
   // ⚠️ 命令候选表**在这里建一次**（工厂那一层），不是每个 NodeView 建一次：
   //    宏表（`选项.macros`）在编辑器装配时就定了，`enable_physics` 一开一关
   //    要重启才生效（`math-macros.ts`），所以同一份表在整场会话里都成立。
   //    判据就用"宏表空不空"——physics 那九十来条是**唯一**往 `macros` 里塞东西的
   //    地方（`katexOptionsFor`），空表就意味着没开。
-  const 表 = 建命令表(Object.keys(选项.macros ?? {}).length > 0);
+  const table2 = createCommandTable(Object.keys(option.macros ?? {}).length > 0);
 
   return (
-    初始: PMNode,
+    initialStart: PMNode,
     view: EditorView,
     getPos: () => number | undefined,
-    装饰们: readonly Decoration[],
+    decorations: readonly Decoration[],
   ): NodeView => {
     // ── 骨架 ──────────────────────────────────────────────────────────
     // 块：                                  行内：
@@ -435,46 +437,53 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
     //    所以行内用 `span`、块用 `div`，面板、渲染区、悬浮预览同理。
     // ⚠️ **一个 `data-type` / `data-value` 都不给可编辑实例的树**（只读那棵给，
     //    因为那棵要的就是"与上游相同"，见 `画上游`）。
-    const dom = document.createElement(行内 ? "span" : "div");
-    dom.className = `nota-math nota-math-${行内 ? "inline" : "block"}`;
-    if (!行内) dom.classList.add("md-math-block");
+    const dom = document.createElement(inline ? "span" : "div");
+    dom.className = `nota-math nota-math-${inline ? "inline" : "block"}`;
+    if (!inline) dom.classList.add("md-math-block");
     dom.classList.toggle("nota-math-readonly", !view.editable);
 
-    const 渲染 = document.createElement(行内 ? "span" : "div");
-    渲染.className = 渲染类;
+    const render = document.createElement(inline ? "span" : "div");
+    render.className = renderClass;
 
-    /** 悬浮预览那一格。⚠️ 只往**编辑态**里画，见 `重画`。 */
-    const 预览 = document.createElement(行内 ? "span" : "div");
-    预览.className = 预览类;
+    /** 预览那一格。块公式在文档流中占位；行内公式仍是浮层。 */
+    const preview = document.createElement(inline ? "span" : "div");
+    preview.className = previewClass;
     // 给浏览器看的：这几颗元素不是正文。ProseMirror 那边另有 `stopEvent`。
-    预览.contentEditable = "false";
+    preview.contentEditable = "false";
 
-    const 面板 = document.createElement(行内 ? "span" : "div");
-    面板.className = 面板类;
-    面板.contentEditable = "false";
+    const panel = document.createElement(inline ? "span" : "div");
+    panel.className = panelClass;
+    panel.contentEditable = "false";
 
-    const 造分隔 = (): HTMLElement => {
+    const numberLearnLabel = document.createElement("button");
+    numberLearnLabel.type = "button";
+    numberLearnLabel.className = numberLearnLabelClass;
+    numberLearnLabel.textContent = t("Formula");
+    numberLearnLabel.title = t("Finish editing");
+    numberLearnLabel.setAttribute("aria-label", t("Finish editing"));
+
+    const createSeparator = (): HTMLElement => {
       const el = document.createElement("span");
-      el.className = 分隔类;
-      el.textContent = 分隔文字;
+      el.className = separatorClass;
+      el.textContent = separatorText;
       // 是给眼睛看的方位指示、不是内容：读屏器不必念它。
       el.setAttribute("aria-hidden", "true");
       return el;
     };
 
-    const 输入: HTMLInputElement | HTMLTextAreaElement = 行内
+    const input: HTMLInputElement | HTMLTextAreaElement = inline
       ? document.createElement("input")
       : document.createElement("textarea");
-    输入.className = 源码类;
-    输入.spellcheck = false;
-    输入.setAttribute("aria-label", t("Math Source (LaTeX)"));
-    输入.placeholder = 行内 ? t("e.g. E=mc^2") : t("e.g. \\frac{a}{b}");
-    if (行内) (输入 as HTMLInputElement).type = "text";
-    else (输入 as HTMLTextAreaElement).rows = 1;
+    input.className = sourceClass;
+    input.spellcheck = false;
+    input.setAttribute("aria-label", t("Math Source (LaTeX)"));
+    input.placeholder = inline ? t("e.g. E=mc^2") : t("e.g. \\frac{a}{b}");
+    if (inline) (input as HTMLInputElement).type = "text";
+    else (input as HTMLTextAreaElement).rows = 1;
 
-    const 尺 = document.createElement("span");
-    尺.className = 尺类;
-    尺.setAttribute("aria-hidden", "true");
+    const ruler = document.createElement("span");
+    ruler.className = rulerClass;
+    ruler.setAttribute("aria-hidden", "true");
 
     // ── 命令补全弹窗 ──────────────────────────────────────────────────
     /**
@@ -486,48 +495,49 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * ⚠️ 写回文档的唯一口子是 `派发`（它维护 `最后派发` 那条"是不是我派的"）。
      *    弹窗只给"源码框该换成什么"，一个字都不碰文档。
      */
-    function 应用建议(果: 收下): void {
-      输入.value = 果.源;
-      输入.setSelectionRange(果.光标, 果.光标);
-      跟源码改尺寸();
-      派发(果.源);
+    function shouldUseCreateProposal(result3: ReceiveBelow): void {
+      input.value = result3.source3;
+      input.setSelectionRange(result3.cursor, result3.cursor);
+      followSourceChangeRulerInch();
+      dispatch(result3.source3);
     }
 
     // ⚠️ **挂在面板里**（不是 `document.body`，像 `lang-picker.ts` 那样）：
     //    理由、白拿的三样、代价那一处，都写在 `math-suggest.ts` 的文件头。
-    const 建议 = 建建议框({
-      表,
-      行内,
+    const createProposal = createCreateProposalBox({
+      table2,
+      inline,
       // 预览用**同一份** KaTeX 选项：宏表跟着 `enable_physics` 走，弹窗里
       // 画出来的 `\vb` 与正文里画出来的得是同一个东西。
-      画预览: 用选项画预览(选项),
-      收下后: 应用建议,
-      报活动: (id) => {
+      drawPreview: useOptionDrawPreview(option),
+      receiveBelowAfter: shouldUseCreateProposal,
+      reportActivity: (id) => {
         // 焦点始终在源码框里，所以 `aria-activedescendant` 得写在**它**上面
         // （弹窗那一层碰不到这个元素，只能把 id 报回来）。
-        if (id) 输入.setAttribute("aria-activedescendant", id);
-        else 输入.removeAttribute("aria-activedescendant");
+        if (id) input.setAttribute("aria-activedescendant", id);
+        else input.removeAttribute("aria-activedescendant");
       },
     });
 
-    面板.append(造分隔(), 输入, 造分隔(), 尺, 建议.元素);
+    panel.append(createSeparator(), input, createSeparator(), ruler, createProposal.element);
+    if (!inline) panel.append(numberLearnLabel);
 
-    dom.append(渲染);
+    dom.append(render);
     // ⚠️ 只读实例**不挂面板、也不挂悬浮预览**（连挂件都不给它）。元素照样
     //    建出来只是为了少写一堆 `null` 判断：没挂进文档的元素收不到任何事件，
     //    `面板.contains()` 也永远为假，而下面的 `面板该开()` 又硬性要求
     //    `view.editable`。
-    if (view.editable) dom.append(面板, 预览);
+    if (view.editable) dom.append(panel, preview);
 
     // ── 这个视图的状态（都不进文档）──────────────────────────────────
     /** 当前服务的节点。**必须是活的**（拿住旧节点是这类视图的经典坑）。 */
-    let 当前 = 初始;
+    let current = initialStart;
     /** 最近一次**由本视图**写进文档的源码：用来分清"这变化是我派的还是外面改的"。 */
-    let 最后派发 = 取源码(初始);
+    let mostAfterDispatch = readSource(initialStart);
     /** 装饰说"当前"。⚠️ 只给下面那条"是不是刚变当前"的边沿判断用。 */
-    let 装饰当前 = 读装饰(装饰们);
+    let decorationCurrent = readDecoration(decorations);
     /** 输入框是不是拿着焦点。第二道保险，理由见文件头。 */
-    let 框里有焦点 = false;
+    let boxInsideHasFocusPoint = false;
 
     // ── 画 ────────────────────────────────────────────────────────────
 
@@ -538,16 +548,16 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * 用户正在框里写字，这期间**不许**因为选区动了（比如点了别处又点回来）
      * 把框收走。
      */
-    function 面板该开(): boolean {
-      return view.editable && (装饰当前 || 框里有焦点);
+    function panelShouldOpen(): boolean {
+      return view.editable && (decorationCurrent || boxInsideHasFocusPoint);
     }
 
     /** 空源码时那张占位卡：文档里那一块不能是彻底空白的一片。 */
-    function 造占位(): HTMLElement {
-      const 卡 = document.createElement(行内 ? "span" : "div");
-      卡.className = 占位类;
-      卡.textContent = 行内 ? t("Empty inline math") : t("Empty math block — click to write LaTeX");
-      return 卡;
+    function createOccupyPosition(): HTMLElement {
+      const card = document.createElement(inline ? "span" : "div");
+      card.className = occupyPositionClass;
+      card.textContent = inline ? t("Empty inline math") : t("Empty math block — click to write LaTeX");
+      return card;
     }
 
     /**
@@ -556,18 +566,18 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * ⚠️ `data-state` 的值是**英文**（CSS 要按它选），卡里的字才是中文——
      * 这条分界与全仓一致（同 `diagram-view.ts`）。
      */
-    function 画进(目标: HTMLElement, 源码: string): void {
-      const 代号 = (画进代号.get(目标) ?? 0) + 1;
-      画进代号.set(目标, 代号);
-      目标.dataset.state = "loading";
-      void 渲染公式(源码, 目标, 选项)
+    function drawEnter(target: HTMLElement, source2: string): void {
+      const representNumber = (drawEnterRepresentNumber.get(target) ?? 0) + 1;
+      drawEnterRepresentNumber.set(target, representNumber);
+      target.dataset.state = "loading";
+      void renderCommonStyle(source2, target, option)
         .then(() => {
-          if (画进代号.get(目标) === 代号) 目标.dataset.state = "ok";
+          if (drawEnterRepresentNumber.get(target) === representNumber) target.dataset.state = "ok";
         })
         .catch((e: unknown) => {
-          if (画进代号.get(目标) !== 代号) return;
-          目标.dataset.state = "error";
-          目标.textContent = 提取消息(e);
+          if (drawEnterRepresentNumber.get(target) !== representNumber) return;
+          target.dataset.state = "error";
+          target.textContent = raiseGetClearMessage(e);
         });
     }
 
@@ -582,43 +592,43 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * ⚠️ 每次重画**两格都要清**：`替换` 只清当前这条分支管的那一格，另一格里
      * 还留着上一次的 KaTeX 树（`katex.render` 是追加式的，不清就会越叠越多）。
      */
-    function 重画(): void {
-      渲染.replaceChildren();
-      预览.replaceChildren();
+    function heavyDraw(): void {
+      render.replaceChildren();
+      preview.replaceChildren();
       // `data-state` 是给 CSS 看的，每轮跟着重定，不然会留下上一轮的值。
-      渲染.dataset.state = "";
-      预览.dataset.state = "";
+      render.dataset.state = "";
+      preview.dataset.state = "";
 
       if (!view.editable) {
-        const 上游 = 画上游(当前);
-        渲染.append(上游);
-        画进(上游, 取源码(当前));
+        const upstream = drawUpstream(current);
+        render.append(upstream);
+        drawEnter(upstream, readSource(current));
         return;
       }
 
-      const 源码 = 取源码(当前);
-      const 空 = 源码.trim() === "";
+      const source2 = readSource(current);
+      const emptyValue = source2.trim() === "";
 
-      if (面板该开()) {
+      if (panelShouldOpen()) {
         // 编辑态：正文那一格空着（源码由面板顶上来），渲染结果去悬浮预览。
         // ⚠️ 空源码时摆**占位卡**而不是什么都不画：那一格是用户唯一的反馈
         //    （`$$␣` 敲下去之后正文里那两个 `$$` 之间是空的，不必再添乱）。
-        if (空) {
-          预览.dataset.state = "empty";
-          预览.append(造占位());
+        if (emptyValue) {
+          preview.dataset.state = "empty";
+          preview.append(createOccupyPosition());
         } else {
-          画进(预览, 源码);
+          drawEnter(preview, source2);
         }
         return;
       }
 
-      if (空) {
-        渲染.dataset.state = "empty";
-        渲染.append(造占位());
+      if (emptyValue) {
+        render.dataset.state = "empty";
+        render.append(createOccupyPosition());
         return;
       }
 
-      画进(渲染, 源码);
+      drawEnter(render, source2);
     }
 
     /**
@@ -632,20 +642,20 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      *   （比例字体），`\frac{a}{b}` 和 `中文` 的"字符数"一样但宽度差一倍。
      * ⚠️ 空源码时量 `placeholder`：不量的话框会缩成 0 宽，用户连点都点不到。
      */
-    function 跟源码改尺寸(): void {
-      if (行内) {
-        尺.textContent = 输入.value || 输入.placeholder || "";
-        输入.style.width = `${尺.getBoundingClientRect().width + 1}px`;
+    function followSourceChangeRulerInch(): void {
+      if (inline) {
+        ruler.textContent = input.value || input.placeholder || "";
+        input.style.width = `${ruler.getBoundingClientRect().width + 1}px`;
         return;
       }
       // 块：`<textarea>` 自己不会长个。先归零再读 `scrollHeight`——不归零的话
       // 上一轮设的高度就是这一轮的下限，删字时高度不会收回去。
-      const 框 = 输入 as HTMLTextAreaElement;
-      框.style.height = "0px";
-      const 高 = 框.scrollHeight;
+      const box2 = input as HTMLTextAreaElement;
+      box2.style.height = "0px";
+      const height = box2.scrollHeight;
       // ⚠️ 假 DOM（`tests/fake-dom.ts`）量出来是 0，那时不写高度——
       //    写一个 `NaNpx` / `0px` 进去只会把测试里的断言弄得没法读。
-      if (typeof 高 === "number" && Number.isFinite(高) && 高 > 0) 框.style.height = `${高}px`;
+      if (typeof height === "number" && Number.isFinite(height) && height > 0) box2.style.height = `${height}px`;
     }
 
     // ── 开合 ──────────────────────────────────────────────────────────
@@ -660,15 +670,21 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * （`createViewDesc` 是先调工厂、后 `renderDescs`），所以这里要再判一次
      * `isConnected`。
      */
-    function 排聚焦(): void {
-      queueMicrotask(() => {
-        if (!面板该开()) return;
-        if (!输入.isConnected) return;
-        输入.focus();
+    function arrangeClusterFocus(): void {
+      const clusterFocus = () => {
+        if (!panelShouldOpen()) return;
+        if (!input.isConnected) return;
+        // ProseMirror 在本次更新末尾还会同步一次 DOM 选区；若它刚刚把焦点
+        // 抢回正文，第二次聚焦会把焦点稳定地交给源码框。已经在框里时不重置
+        // 选区，避免用户第一帧就输入后光标被拽回末尾。
+        if (document.activeElement === input) return;
+        input.focus();
         // 光标放到**末尾**：点一下公式通常是要接着写，放开头会让下一个字插在最前面。
-        const 长 = 输入.value.length;
-        输入.setSelectionRange(长, 长);
-      });
+        const length = input.value.length;
+        input.setSelectionRange(length, length);
+      };
+      queueMicrotask(clusterFocus);
+      globalThis.requestAnimationFrame?.(clusterFocus);
     }
 
     /**
@@ -680,50 +696,50 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * 正文，`handleSingleClick` 才建 `NodeSelection`），于是接着敲的字落进源码框，
      * 而不是像上游那样把整块公式替换掉。
      */
-    function 同步面板(要到焦点: boolean): void {
-      const 开 = 面板该开();
-      dom.classList.toggle("nota-math-editing", 开);
-      if (开) {
-        跟源码改尺寸();
-        if (要到焦点 && view.hasFocus()) 排聚焦();
+    function sameStepPanel(wantToFocusPoint: boolean): void {
+      const open2 = panelShouldOpen();
+      dom.classList.toggle("nota-math-editing", open2);
+      if (open2) {
+        followSourceChangeRulerInch();
+        if (wantToFocusPoint && view.hasFocus()) arrangeClusterFocus();
       } else {
         // ⚠️ 面板一收，弹窗必须跟着收：它俩是**一棵树**，留着一个没有框的
         //    候选列表，下一次开面板会看到上次那几条还挂在那儿。
-        建议.关();
-        if (输入.value !== 取源码(当前)) {
+        createProposal.close4();
+        if (input.value !== readSource(current)) {
           // 收起来时把框里的内容对齐文档（正常路径下两者本就一样，这条是兜底）。
-          输入.value = 取源码(当前);
+          input.value = readSource(current);
         }
       }
-      重画();
+      heavyDraw();
     }
 
     // ── 写回 ──────────────────────────────────────────────────────────
 
     /** 把源码框里的内容写回节点。⚠️ 走 `写入源码`，两条路都在那边。 */
-    function 派发(新源码: string): void {
-      const 位置 = getPos();
-      if (typeof 位置 !== "number") return;
+    function dispatch(newValueSource: string): void {
+      const position2 = getPos();
+      if (typeof position2 !== "number") return;
 
-      const 节点 = view.state.doc.nodeAt(位置);
-      if (!节点 || 认节点(节点) !== 种类) return;
+      const node = view.state.doc.nodeAt(position2);
+      if (!node || recognizeNode(node) !== kindClass) return;
 
       // ⚠️ 先记下来再派：事务回来时 `update` 要靠它分清"这次是我派的"
       //    （是的话就不能把源码框里的内容再写一遍——每敲一个字把光标拽回开头，
       //     那个框就没法用了，同 `diagram-view.ts` 那条）。
-      最后派发 = 新源码;
+      mostAfterDispatch = newValueSource;
 
       const tr = view.state.tr;
-      if (!写入源码(tr, 位置, 节点, 新源码)) return;
+      if (!writeEnterSource(tr, position2, node, newValueSource)) return;
       view.dispatch(tr);
     }
 
     /** 退出编辑：把光标搬到节点**后面**，面板随之收起来。 */
-    function 退出编辑(): void {
-      const 位置 = getPos();
-      if (typeof 位置 !== "number") return;
-      const 节点 = view.state.doc.nodeAt(位置);
-      if (!节点) return;
+    function backOutputEditEdit(): void {
+      const position2 = getPos();
+      if (typeof position2 !== "number") return;
+      const node = view.state.doc.nodeAt(position2);
+      if (!node) return;
 
       // ⚠️ 顺序：先搬选区（装饰随之灭掉），再 focus 回正文。
       //    反过来的话面板会因为"装饰还说当前"而留在屏幕上。
@@ -734,97 +750,105 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
       //    为这种选区 warn 一句）。
       // ⚠️ 文档末尾那一块公式后面**没有**这样的位置，`near` 会退回"选中它自己"
       //    （等于 Escape 白按），所以那时用落在文档末尾的文本光标。
-      const 到 = 位置 + 节点.nodeSize;
-      const 找的 = TextSelection.near(view.state.doc.resolve(到), 1);
+      const to2 = position2 + node.nodeSize;
+      const findOf = TextSelection.near(view.state.doc.resolve(to2), 1);
       view.dispatch(
-        view.state.tr.setSelection(找的 instanceof TextSelection ? 找的 : TextSelection.create(view.state.doc, 到)),
+        view.state.tr.setSelection(findOf instanceof TextSelection ? findOf : TextSelection.create(view.state.doc, to2)),
       );
       view.focus();
     }
 
     /** 整块删掉（源码空着时按退格用）。 */
-    function 删掉自己(): void {
-      const 位置 = getPos();
-      if (typeof 位置 !== "number") return;
-      const 节点 = view.state.doc.nodeAt(位置);
-      if (!节点) return;
+    function removeRemoveSelfSelf(): void {
+      const position2 = getPos();
+      if (typeof position2 !== "number") return;
+      const node = view.state.doc.nodeAt(position2);
+      if (!node) return;
 
-      const tr = view.state.tr.delete(位置, 位置 + 节点.nodeSize);
+      const tr = view.state.tr.delete(position2, position2 + node.nodeSize);
       // ⚠️ 光标退回**前**一处：用户是在"退格"，视觉上就不该往前跳。
-      tr.setSelection(TextSelection.near(tr.doc.resolve(位置), -1));
+      tr.setSelection(TextSelection.near(tr.doc.resolve(position2), -1));
       view.dispatch(tr);
       view.focus();
     }
 
     // ── 事件 ──────────────────────────────────────────────────────────
 
-    输入.addEventListener("input", () => {
-      跟源码改尺寸();
+    input.addEventListener("input", () => {
+      followSourceChangeRulerInch();
       // ⚠️ 光标位置要**在派发之前**读：`派发` 会同步跑一趟 `update`，
       //    眼下那条路不会碰 `输入.value`，但把"读光标"压在它前面就不必
       //    依赖那个前提（`?? 长度` 兜的是"框还没量过选区"那一帧）。
-      const 光标 = 输入.selectionStart ?? 输入.value.length;
-      派发(输入.value);
+      const cursor = input.selectionStart ?? input.value.length;
+      dispatch(input.value);
       // 补全跟着**正文**走：敲 `\` 弹、接着敲字母一条条筛、删到空就收。
-      建议.喂(输入.value, 光标);
+      createProposal.feed(input.value, cursor);
     });
 
-    输入.addEventListener("focus", () => {
-      框里有焦点 = true;
-      同步面板(false);
+    input.addEventListener("focus", () => {
+      boxInsideHasFocusPoint = true;
+      sameStepPanel(false);
     });
 
-    输入.addEventListener("blur", () => {
-      框里有焦点 = false;
+    input.addEventListener("blur", () => {
+      boxInsideHasFocusPoint = false;
       // ⚠️ 先收弹窗再收面板：`同步面板` 里那条"关了就对齐内容"不该被
       //    一个还开着的列表挡着（视觉上就是"框没了、候选还挂在半空"）。
-      建议.关();
-      同步面板(false);
+      createProposal.close4();
+      sameStepPanel(false);
     });
 
     // ⚠️ 收件人写成 `HTMLElement` 是为了让 `keydown` 那颗 `e` 有 `KeyboardEvent`
     //    类型：`输入` 是 `HTMLInputElement | HTMLTextAreaElement` 的联合，
     //    联合上按 `addEventListener` 的重载会退化成 `Event`，`e.key` 就没法读。
-    (输入 as HTMLElement).addEventListener("keydown", (e) => {
+    (input as HTMLElement).addEventListener("keydown", (e) => {
       // ⚠️ **弹窗优先于下面每一条**。开着的时候：`Escape` 是"收候选"而不是
       //    "退出编辑"、`Enter` 是"收下这条命令"而不是（行内的）"退出编辑"。
       //    顺序反过来的话这两个键全走偏——用户按 Enter 想补全，面板却关了。
       // ⚠️ `按键` 自己不碰事件（它只认键名），`preventDefault` 归这里；
       //    收下的那一条由 `收下后` 那一路落进源码框（见 `应用建议`）。
-      const 果 = 建议.按键(e.key);
-      if (果.吃了) {
+      const result3 = createProposal.keypress(e.key);
+      if (result3.consume) {
         e.preventDefault();
         return;
       }
 
       if (e.key === "Escape") {
         e.preventDefault();
-        退出编辑();
+        backOutputEditEdit();
         return;
       }
       // 行内公式没有"多行"这回事：Enter 当"确认"（同 `diagram-view.ts` 那条）。
-      if (行内 && e.key === "Enter") {
+      if (inline && e.key === "Enter") {
         e.preventDefault();
-        退出编辑();
+        backOutputEditEdit();
         return;
       }
       // ⚠️ 块公式的 Enter **不拦**：`$$ … $$` 里的换行是常态（多行推导）。
       // 空源码里按退格 = 删掉这一块：`$$␣` 敲错之后总要有一条退路，
       // 而光标在这个框里时退格到不了 ProseMirror（`stopEvent` 拦着）。
-      if (e.key === "Backspace" && 输入.value === "") {
+      if (e.key === "Backspace" && input.value === "") {
         e.preventDefault();
-        删掉自己();
+        removeRemoveSelfSelf();
       }
     });
 
     // 点分隔符也当"点源码框"：那两个 `$` 是唯一"看着能点、其实是挂件"的地方
     //（CSS 给了它们 `pointer-events: none`，所以事件目标是面板自己）。
-    面板.addEventListener("mousedown", (e) => {
-      if (e.target === 输入) return;
+    panel.addEventListener("mousedown", (e) => {
+      if (e.target === input) return;
+      if (numberLearnLabel.contains(e.target as Node | null)) return;
       // ⚠️ 必须 preventDefault：不拦的话浏览器会把焦点交给正文，
       //    面板下一帧就收走了（用户会觉得"点一下框就没了"）。
       e.preventDefault();
-      输入.focus();
+      input.focus();
+    });
+
+    numberLearnLabel.addEventListener("mousedown", (e) => e.preventDefault());
+    numberLearnLabel.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      backOutputEditEdit();
     });
 
     // ⚠️ **渲染区不在面板里**（见上面那棵树），所以它得有自己的那一条
@@ -844,10 +868,18 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
     // 整块选中），而那正是"当前"的信号（同 `diagram-view.ts` 的判据——那边
     // 反过来，预览区**永远**不算挂件，点图就是选块，因为图表的源码框常驻、
     // 没有"编辑态"这回事）。
-    渲染.addEventListener("mousedown", (e) => {
-      if (!装饰当前) return;
+    render.addEventListener("mousedown", (e) => {
+      if (!decorationCurrent) return;
       e.preventDefault();
-      输入.focus();
+      input.focus();
+    });
+
+    // 块公式的预览区现在参与文档流；点它等价于回到上方源码框，不能把焦点
+    // 丢给正文后让下一颗字替换整块公式。
+    preview.addEventListener("mousedown", (e) => {
+      if (inline || !panelShouldOpen()) return;
+      e.preventDefault();
+      input.focus();
     });
 
     // ── 与 ProseMirror 的边界 ─────────────────────────────────────────
@@ -861,39 +893,40 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
      * 项报的那个）。还不是当前时返回假，让 ProseMirror 去点——它会把这个原子
      * 节点整块选中，那正是"当前"的信号（同 `diagram-view.ts` 那条）。
      */
-    const 是我的挂件 = (目标: EventTarget | null): boolean => {
-      if (!(目标 instanceof Node)) return false;
-      if (面板.contains(目标)) return true;
-      return 装饰当前 && 渲染.contains(目标);
+    const isSelfOfAttachItem = (target: EventTarget | null): boolean => {
+      if (!(target instanceof Node)) return false;
+      if (panel.contains(target)) return true;
+      if (!inline && panelShouldOpen() && preview.contains(target)) return true;
+      return decorationCurrent && render.contains(target);
     };
 
     // ── 起手 ──────────────────────────────────────────────────────────
 
-    输入.value = 取源码(初始);
+    input.value = readSource(initialStart);
     // 建视图那一帧就"刚变当前"（敲 `$$␣` 那条路正是如此）→ 该排一次聚焦。
-    同步面板(装饰当前);
+    sameStepPanel(decorationCurrent);
 
     return {
       dom,
 
-      update: (更新后, 装饰们新) => {
-        const 新源码 = 取源码(更新后);
+      update: (afterUpdate, newDecorations) => {
+        const newValueSource = readSource(afterUpdate);
         // ⚠️ 这条判据是"**外面**改的"：撤销、源码模式里手改文档、插件改文档、
         //    整篇被换掉……都会走到这儿。只认这一类，因为本视图自己派的那次
         //    不能再写回源码框（每敲一个字把光标拽回开头，那个框没法用）。
-        const 外面改的 = 新源码 !== 最后派发;
-        当前 = 更新后;
+        const externalSurfaceChangeOf = newValueSource !== mostAfterDispatch;
+        current = afterUpdate;
 
-        if (外面改的) {
-          最后派发 = 新源码;
-          if (输入.value !== 新源码) 输入.value = 新源码;
+        if (externalSurfaceChangeOf) {
+          mostAfterDispatch = newValueSource;
+          if (input.value !== newValueSource) input.value = newValueSource;
         }
 
-        const 新装饰当前 = 读装饰(装饰们新);
-        const 刚变当前 = 新装饰当前 && !装饰当前;
-        装饰当前 = 新装饰当前;
+        const newValueDecorationCurrent = readDecoration(newDecorations);
+        const justChangeCurrent = newValueDecorationCurrent && !decorationCurrent;
+        decorationCurrent = newValueDecorationCurrent;
 
-        同步面板(刚变当前);
+        sameStepPanel(justChangeCurrent);
         return true;
       },
 
@@ -902,7 +935,7 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
       // 告诉 ProseMirror。少了后者，"KaTeX 重画了一遍"会被当成"用户在编辑区里
       // 改了东西"，PM 接着去重解析这段 DOM——而它认得的 `data-type` 一个都没有，
       // 结果是节点被判成脏的、光标乱飞。
-      stopEvent: (e) => 是我的挂件(e.target),
+      stopEvent: (e) => isSelfOfAttachItem(e.target),
 
       ignoreMutation: () => true,
 
@@ -920,25 +953,25 @@ function 建公式视图(种类: "inline" | "block", 选项: KatexOptions): Node
         // （`updateChildren` → `destroyBetween`），那时派事务会抛
         // `Calls to EditorView.update are not allowed while an update is in progress`。
         // 不防抖（见文件头）正是为了不必在这里补救。
-        框里有焦点 = false;
+        boxInsideHasFocusPoint = false;
         // 弹窗里没有定时器、也没有全局监听器（它只听自己那几行元素的
         // mousedown，树一散就跟着没了），所以这里只把内容清掉——
         // 免得一个正要被丢掉的行元素上还挂着闭包。
-        建议.关();
+        createProposal.close4();
       },
     };
   };
 }
 
 /** 从 `update` / 工厂给的那串装饰里，读"这个节点当前不当前"。 */
-function 读装饰(装饰们: readonly Decoration[]): boolean {
-  return 装饰们.some((d) => d.spec?.[当前标记] === true);
+function readDecoration(decorations: readonly Decoration[]): boolean {
+  return decorations.some((d) => d.spec?.[currentMark] === true);
 }
 
 /* ── 四、挂到编辑器上 ─────────────────────────────────────────────────── */
 
 /** 读 KaTeX 选项（宏表）。读不到就退回空选项，理由见 `建公式视图` 顶上那段。 */
-function 读选项(ctx: Ctx): KatexOptions {
+function readOption(ctx: Ctx): KatexOptions {
   try {
     return ctx.get(katexOptionsCtx.key) ?? {};
   } catch {
@@ -947,12 +980,12 @@ function 读选项(ctx: Ctx): KatexOptions {
 }
 
 /** 行内公式的 NodeView。 */
-export const 公式行内视图 = $view(mathInlineSchema.node, (ctx) =>
-  建公式视图("inline", 读选项(ctx)),
+export const commonStyleInlineView = $view(mathInlineSchema.node, (ctx) =>
+  createCommonStyleView("inline", readOption(ctx)),
 );
 
 /** 块公式的 NodeView。 */
-export const 公式块视图 = $view(mathBlockSchema.node, (ctx) => 建公式视图("block", 读选项(ctx)));
+export const commonStyleBlockView = $view(mathBlockSchema.node, (ctx) => createCommonStyleView("block", readOption(ctx)));
 
 /**
  * 这一整套（两个 NodeView + 「当前」插件）。
@@ -961,4 +994,4 @@ export const 公式块视图 = $view(mathBlockSchema.node, (ctx) => 建公式视
  * 后面：`$view` 的工厂要等 `SchemaReady`（插件自己会等），而 `.use()` 收数组，
  * 所以整包挂一处就够。
  */
-export const mathView = [公式行内视图, 公式块视图, 公式当前];
+export const mathView = [commonStyleInlineView, commonStyleBlockView, commonStyleCurrent];

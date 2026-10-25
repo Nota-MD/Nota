@@ -22,11 +22,12 @@ import { useCallback, useEffect } from "react";
 
 import { api, type DocThemeInfo, type Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { 字体可用, 可选字体 } from "@/ui/font-check";
+import { characterBodyCanUse, canSelectCharacterBody } from "@/ui/font-check";
 import type { Dialogs } from "@/ui/useDialogs";
 import { applyDocTheme } from "@/styles/doc-theme";
 import type { Toast } from "@/ui/Toasts";
 import { useUiMode } from "@/ui/useUiMode";
+import { debugError, debugEvent } from "@/ui/debug-log";
 
 /**
  * 这一帧**该用**的文档主题 id，以及**该写**到哪个槽。
@@ -46,35 +47,35 @@ import { useUiMode } from "@/ui/useUiMode";
  * ⚠️ `useUiMode` 是**订阅过系统明暗**的（`ui_mode = "auto"` 时用户在系统里
  * 切了深浅，这里要跟着换槽），别改成直接读 `settings.ui_mode`。
  */
-export interface 主题槽 {
+export interface themeSlot {
   /** 现在生效的那套。**空串 = 无主题**（不是 `null`，两处口径要对齐）。 */
   id: string;
   /** 把主题换成 `新id`——**写进当前生效的那个槽**。 */
-  写: (新id: string) => void;
+  write: (newValueid: string) => void;
 }
 
 export function useDocThemeSlot(
   settings: Settings | null,
   updateSettings: (patch: Partial<Settings>) => Promise<void>,
-): 主题槽 {
-  const 明暗 = useUiMode(settings?.ui_mode ?? "auto");
-  const 深色那一套在生效 = 深色专用在生效(settings, 明暗);
+): themeSlot {
+  const mode = useUiMode(settings?.ui_mode ?? "auto");
+  const darkThatValueSetAtGenerateEffect = darkDedicatedUseAtGenerateEffect(settings, mode);
 
-  const id = 生效的文档主题(settings, 明暗);
+  const id = generateEffectOfDocumentTheme(settings, mode);
   const a = settings?.appearance ?? null;
 
-  const 写 = useCallback(
-    (新id: string) => {
-      if (深色那一套在生效 && a) {
-        void updateSettings({ appearance: { ...a, dark_document_theme: 新id } });
+  const write = useCallback(
+    (newValueid: string) => {
+      if (darkThatValueSetAtGenerateEffect && a) {
+        void updateSettings({ appearance: { ...a, dark_document_theme: newValueid } });
       } else {
-        void updateSettings({ document_theme: 新id });
+        void updateSettings({ document_theme: newValueid });
       }
     },
-    [深色那一套在生效, a, updateSettings],
+    [darkThatValueSetAtGenerateEffect, a, updateSettings],
   );
 
-  return { id, 写 };
+  return { id, write };
 }
 
 /**
@@ -85,51 +86,28 @@ export function useDocThemeSlot(
  * "现在生效的是哪一套"，它不该为了这个走一遍 hook（更不该自己再写一遍这条判据——
  * 两处一旦分叉，那一页会用很确定的口气报一个错的主题名）。
  */
-export function 深色专用在生效(settings: Settings | null, 明暗: "light" | "dark"): boolean {
+export function darkDedicatedUseAtGenerateEffect(settings: Settings | null, mode: "light" | "dark"): boolean {
   const a = settings?.appearance;
-  return !!a && a.dark_theme_separate && a.dark_document_theme !== "" && 明暗 === "dark";
+  return !!a && a.dark_theme_separate && a.dark_document_theme !== "" && mode === "dark";
 }
-
-/**
- * 「跟随界面明暗」时，把哪一套换成哪一套（2026-10-16）。
- *
- * ⚠️ 只有**内置的三套**有配对的深色档（`极简 ↔ 极简（深色）`…），所以这张表
- * 是一张**写死的对照**，不是"给 id 加个后缀"。⚠️ 别改成"拼 `-dark` 后缀"那种
- * 写法：用户自己的主题文件叫什么都可能，拼出来的 id **加载不到**就等于
- * "选了个主题反而没主题了"（`读主题CSS` 拿不到 → 空样式）。
- */
-const 深色配对: Record<string, string> = {
-  minimal: "minimal-dark",
-  adwaita: "adwaita-dark",
-  latex: "latex-dark",
-};
 
 /**
  * 此刻**生效**的文档主题 id。与 `深色专用在生效` 是同一套判据的正面。
  *
- * ⚠️ **2026-10-16 多了一条"跟随"**（用户朋友报的「功能:编辑器暗色/浅色跟随主题」，
- * 他的截图是深色界面配一整张白纸）：**深色下**、用户又**没**单独指定深色那一套
- * 时，如果当前这套内置主题有配对的深色档，就用深色那份。
- *
- * ⚠️ **它只在"有深色档的"主题上生效**（见 `深色配对`）。安装包目前只内置
- * Adwaita；极简 / LaTeX 条目留给用户或未来的官方主题仓库：
- * 用户自己的主题、以及本来就没有深色档的那些，一个字都不动——猜错的表现是
- * "我选的主题不见了"，比"深色下纸是白的"严重得多。
- * ⚠️ 显式指定（`dark_theme_separate`）**永远优先**：用户明确说过的事，不许被
- * 这条自动规则盖掉。
+ * ⚠️ **不做隐式深色配对**。用户选了 `adwaita`，即使界面是深色，文档也使用
+ * `adwaita`；要深色文档必须显式选择 `adwaita-dark`，或打开「深色模式下单独
+ * 用一套」并指定那一套。主题 id 原样生效，避免“选浅色却得到深色”的假状态。
  */
-export function 生效的文档主题(settings: Settings | null, 明暗: "light" | "dark"): string {
-  if (深色专用在生效(settings, 明暗)) return settings?.appearance.dark_document_theme ?? "";
-  const id = settings?.document_theme ?? "";
-  if (明暗 === "dark") return 深色配对[id] ?? id;
-  return id;
+export function generateEffectOfDocumentTheme(settings: Settings | null, _Mode: "light" | "dark"): string {
+  if (darkDedicatedUseAtGenerateEffect(settings, _Mode)) return settings?.appearance.dark_document_theme ?? "";
+  return settings?.document_theme ?? "";
 }
 
-export interface 主题接线 {
+export interface themeWiring {
   /** 设置里的文档主题 id。**空串 = 无主题**（不是 `null`，两处口径要对齐）。 */
   themeId: string;
   /** 选主题时写哪一份——由 `useDocThemeSlot` 给出，见那边文件头那段。 */
-  写主题: (id: string) => void;
+  writeTheme: (id: string) => void;
   /**
    * 主题清单。
    *
@@ -144,7 +122,7 @@ export interface 主题接线 {
    * 不重扫的话，新主题要重启应用才出现。
    * ⚠️ **不做轮询**——主题是"用户偶尔动一次"的东西（`docs/07` 第 41 项的口径）。
    */
-  重扫: () => void;
+  heavyScan: () => void;
   toast: (message: string, level?: Toast["level"]) => void;
   /**
    * 问一句（2026-10-17）：**首选字体没装时弹一条**。
@@ -153,7 +131,7 @@ export interface 主题接线 {
   askConfirm: Dialogs["askConfirm"];
 }
 
-export interface 主题出口 {
+export interface themeApi {
   /** 换一套文档主题。**存进设置的是 id，提示里用的是显示名**。 */
   pickTheme: (id: string) => void;
   /** 打开（必要时先建出来的）用户主题目录。 */
@@ -165,13 +143,13 @@ export interface 主题出口 {
  * ⚠️ 挂在**模块级**：用户来回切主题时不该每分钟被同一句话说一次；而换一支字体
  * （主题更新了）仍然要重新提示，所以键是 `id|字体` 而不是只有 id。
  */
-const 说过的缺字体 = new Set<string>();
+const sayPassOfMissingCharacterBody = new Set<string>();
 
-export function useDocTheme(w: 主题接线): 主题出口 {
+export function useDocTheme(w: themeWiring): themeApi {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const { themeId, 写主题, themes, 重扫, toast, askConfirm } = w;
+  const { themeId, writeTheme, themes, heavyScan, toast, askConfirm } = w;
 
   useEffect(() => {
     let alive = true;
@@ -180,7 +158,13 @@ export function useDocTheme(w: 主题接线): 主题出口 {
       try {
         // 空串 = 无主题，直接把 style 摘掉，编辑区回中性样式。
         const css = themeId ? await api.theme.css(themeId) : null;
-        if (alive) applyDocTheme(css);
+        if (alive) {
+          applyDocTheme(css);
+          debugEvent("theme", "document theme applied", {
+            theme: themeId || "none",
+            css_bytes: css?.length ?? 0,
+          });
+        }
 
         // ── 首选字体在不在（2026-10-17，用户点名要的那句提示）────────────
         // ⚠️ 查的是**主题自己写的** `--font-doc` 第一项，不是生效的计算值：
@@ -188,19 +172,19 @@ export function useDocTheme(w: 主题接线): 主题出口 {
         // ⚠️ 判的是"**这一族**里有没有一支能用"，不是只看第一支：字体栈本来就是
         // "首选不在就用下一个"的语义（2026-10-17：装了 Zpix 的机器不该被
         // 因为没装文泉驿点阵宋而报警）。一支都没有才叫"退回系统字体"。
-        const 候选 = css ? 可选字体(css) : [];
-        const 首 = 候选[0] ?? null;
-        if (alive && 首 && !候选.some(字体可用)) {
-          const 键 = `${themeId}|${首}`;
-          if (!说过的缺字体.has(键)) {
-            说过的缺字体.add(键);
-            const 名 = themes.find((x) => x.id === themeId)?.name ?? themeId;
+        const candidate = css ? canSelectCharacterBody(css) : [];
+        const first = candidate[0] ?? null;
+        if (alive && first && !candidate.some(characterBodyCanUse)) {
+          const key = `${themeId}|${first}`;
+          if (!sayPassOfMissingCharacterBody.has(key)) {
+            sayPassOfMissingCharacterBody.add(key);
+            const name3 = themes.find((x) => x.id === themeId)?.name ?? themeId;
             void askConfirm({
               title: t("Missing font"),
               message: t(
                 "The “{0}” theme prefers “{1}”, which is not installed on this machine. The editor is using a fallback font.",
-                名,
-                首,
+                name3,
+                first,
               ),
               confirmLabel: t("OK"),
               hideCancel: true,
@@ -211,7 +195,9 @@ export function useDocTheme(w: 主题接线): 主题出口 {
         // ⚠️ **安静地退回无主题，不弹错**：settings 里记着一个 id、而那份
         // `.css` 被删了，是很平常的事（换机器、清理磁盘），不是需要打断
         // 用户的错误。用户看到的是"主题回到了中性样式"，那正是事实。
-        if (alive) console.warn("[nota] 应用文档主题失败：", e);
+        if (alive) {
+          debugError("theme", "document theme failed", e, { theme: themeId || "none" });
+        }
       }
     })();
 
@@ -227,13 +213,13 @@ export function useDocTheme(w: 主题接线): 主题出口 {
       // ⚠️ 走的**不是** `updateSettings({ document_theme })`：深色专用那套在生效时
       // 要写 `appearance.dark_document_theme`。选哪一份由 `useDocThemeSlot` 判，
       // 理由（以及"写错槽会当场撒什么谎"）写在那边。
-      写主题(id);
+      writeTheme(id);
       // ⚠️ 提示里用**显示名**（中文），存进设置的是 id。两者别混——
       // 混了就变成"提示里说换成「极简」，设置里存着一个 `minimal`"。
       const name = id ? (themes.find((x) => x.id === id)?.name ?? id) : "";
       toast(name ? t("Document theme switched to “{0}”", name) : t("Document theme turned off."), "success");
     },
-    [写主题, toast, themes],
+    [writeTheme, toast, themes],
   );
 
   const openThemesDir = useCallback(async () => {
@@ -246,11 +232,11 @@ export function useDocTheme(w: 主题接线): 主题出口 {
       // ⚠️ 第 41 项：打开**成功**才重扫（失败时多半目录都没开成，白拉一把）。
       // 只要把新清单拉回来就行——`themes` 进了上面那个 effect 的依赖，
       // CSS 那一步会自己跟着重取，这里不用管。
-      重扫();
+      heavyScan();
     } catch (e) {
       toast(t("Could not open the themes folder: {0}", String(e)), "error");
     }
-  }, [toast, 重扫]);
+  }, [toast, heavyScan]);
 
   return { pickTheme, openThemesDir };
 }

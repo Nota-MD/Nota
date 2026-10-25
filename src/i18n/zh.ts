@@ -20,12 +20,12 @@
  * **就近加进对应那一份**，不要往回堆。三份的变量名分别是
  * `界面表` / `设置表` / `运行表`。
  */
-import { 界面表 } from "./zh-ui";
-import { 设置表 } from "./zh-settings";
-import { 运行表 } from "./zh-runtime";
+import { uiMessages } from "./zh-ui";
+import { settingsTable } from "./zh-settings";
+import { moveLineTable } from "./zh-runtime";
 
-export const 中文表: Record<string, string> = {
-  ...界面表,
-  ...设置表,
-  ...运行表,
+export const middleTextTable: Record<string, string> = {
+  ...uiMessages,
+  ...settingsTable,
+  ...moveLineTable,
 };

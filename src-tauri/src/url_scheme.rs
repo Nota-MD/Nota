@@ -107,7 +107,7 @@ pub fn 关联参数() -> Vec<String> {
 pub fn 注册() {
     match 注册内部() {
         Ok(()) => {}
-        Err(e) => crate::日志!("[nota] 注册 nota:// 链接失败（不影响启动）：{e}"),
+        Err(e) => crate::日志!("[nota] failed to register nota:// handler (startup continues): {e}"),
     }
 }
 
@@ -133,7 +133,7 @@ fn 注册内部() -> crate::error::Result<()> {
         path: 落点.clone(),
         source: e,
     })?;
-    crate::日志!("[nota] 写好桌面项 {}", 落点.display());
+    crate::日志!("[nota] wrote desktop entry {}", 落点.display());
 
     // 关联那一枪。⚠️ "找不到 xdg-mime"是正常情况（极简的容器、
     // 没装 xdg-utils 的发行版），不当地错误看——桌面项已经写好了，
@@ -142,9 +142,9 @@ fn 注册内部() -> crate::error::Result<()> {
         .args(关联参数())
         .status()
     {
-        Ok(状) if 状.success() => crate::日志!("[nota] 已把 nota:// 关联到 {桌面项名}"),
-        Ok(状) => crate::日志!("[nota] xdg-mime 退出码 {:?}，关联没成", 状.code()),
-        Err(e) => crate::日志!("[nota] 没跑起 xdg-mime（{e}），桌面项写了但没关联"),
+        Ok(状) if 状.success() => crate::日志!("[nota] associated nota:// with {桌面项名}"),
+        Ok(状) => crate::日志!("[nota] xdg-mime exited with {:?}; association failed", 状.code()),
+        Err(e) => crate::日志!("[nota] could not start xdg-mime ({e}); desktop entry written without association"),
     }
     Ok(())
 }

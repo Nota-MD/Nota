@@ -18,7 +18,7 @@
 .menubar {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 0;
 }
 
 /* 弹层的定位基准。**每栏各自一个**，这样弹层从自己那一栏的左边缘展开。 */
@@ -27,25 +27,26 @@
 }
 
 .menu-title {
-  height: 26px;
-  padding: 0 9px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 0.9333rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--fg);
+  color: var(--toolbar-fg);
   font: inherit;
   cursor: pointer;
 }
 
 .menu-title:hover {
-  background: var(--bg-hover);
+  background: var(--toolbar-hover);
 }
 
 /* 菜单开着时那一栏保持高亮——不然鼠标移开就不知道自己刚才点的是哪个。
    ⚠️ 用 `--bg-active` 而不是 `--bg-hover`：悬停和"这一栏开着"是两种状态，
    画成一样的话，鼠标停在别的栏上时会有两栏同时亮着，看不出哪个是开的。 */
 .menu-title-open {
-  background: var(--bg-active);
+  background: var(--toolbar-active);
 }
 
 /* 菜单开着的那一栏：**凹下去**（`--bevel-sunken`），这就是"按着"的长相。 */
@@ -60,7 +61,7 @@
   overflow-y: auto;
   padding: 5px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   box-shadow: var(--popup-shadow);
   /* 弹出。⚠️ `transform-origin` 钉在左上角，让它**从菜单栏那一栏长出来**，
@@ -219,7 +220,7 @@
   overflow-y: auto;
   padding: 5px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   box-shadow: var(--popup-shadow);
   transform-origin: top left;

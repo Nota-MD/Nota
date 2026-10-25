@@ -32,7 +32,7 @@ import { t } from "@/i18n";
  * （已验证 / 未知签名者 / 未签名）——两处不一致的话，同一个状态在 toast 里、
  * 在插件行上、在后端日志里会是三种说法。
  */
-export function 签名说明(s: PluginInfo["signature"]): string {
+export function keyNameDescription(s: PluginInfo["signature"]): string {
   switch (s) {
     case "verified":
       return t("verified");
@@ -53,9 +53,9 @@ export function 签名说明(s: PluginInfo["signature"]): string {
  * ⚠️ 判据是**目录落点**（`origin` 由宿主算好），不是"谁先扫到"——
  * 内置插件卸不掉，界面靠这一格决定给不给「卸载」那颗按钮。
  */
-export function 来源说明(p: PluginInfo): string {
-  const 来路 = p.origin === "user" ? t("user") : t("builtin");
-  return `${来路} · ${签名说明(p.signature)}`;
+export function comeSourceDescription(p: PluginInfo): string {
+  const comePath = p.origin === "user" ? t("user") : t("builtin");
+  return `${comePath} · ${keyNameDescription(p.signature)}`;
 }
 
 /**
@@ -66,12 +66,12 @@ export function 来源说明(p: PluginInfo): string {
  * `src-tauri/src/lua/api/i18n.rs`）。没声明 `langs` 的插件（`langs` 空）
  * 不参与协商，也就没有这句话——它是"只用一种语言写的"，不是"不支持你"。
  */
-export function 语言对不上(p: PluginInfo): boolean {
+export function languageMismatch(p: PluginInfo): boolean {
   return p.langs.length > 0 && !p.lang_ok;
 }
 
 /** 那句提示。**一模一样的一句话**在三个地方（插件行、面板、编辑区预览）。 */
-export function 语言提示(): string {
+export function languageHint(): string {
   return t("This extension does not support your language");
 }
 
@@ -83,12 +83,12 @@ export function 语言提示(): string {
  * （见 `src-tauri/src/lang.rs::语言名` 那段：语言名要**用它自己那门语言写**，
  * 那件事只有插件的语言文件知道）。
  */
-export function 语言标签名(tag: string): string | undefined {
-  const 表: Record<string, string> = {
+export function languageTag(tag: string): string | undefined {
+  const table2: Record<string, string> = {
     en: t("English"),
     "zh-CN": t("Chinese (Simplified)"),
   };
-  return 表[tag];
+  return table2[tag];
 }
 
 /**
@@ -99,8 +99,8 @@ export function 语言标签名(tag: string): string | undefined {
  * 中文名是给用户看的，id 是给写清单的人对照文档用的。表在
  * `src-tauri/src/lua/api/mod.rs` 里校验，加一条能力要**两个文件一起改**。
  */
-export function 能力名(tag: string): string | undefined {
-  const 表: Record<string, string> = {
+export function ableForceName(tag: string): string | undefined {
+  const table2: Record<string, string> = {
     "document.read": t("Read the document"),
     "document.write": t("Edit the document"),
     "fs.read": t("Read workspace files"),
@@ -118,7 +118,7 @@ export function 能力名(tag: string): string | undefined {
     // 界面上只能看到一个生 id——2026-09-27 集中到本文件时补上。
     "data.own": t("Read/write its own data"),
   };
-  return 表[tag];
+  return table2[tag];
 }
 
 /**
@@ -127,10 +127,10 @@ export function 能力名(tag: string): string | undefined {
  * ⚠️ 目前只有两处落脚（右栏 / 编辑区），别的地方**还没有对应的地方**——
  * `PluginDock` 会给那些面板单列一段"哪儿都没显示"，理由写在那儿。
  */
-export function 位置名(location: PluginPanel["location"]): string | undefined {
-  const 表: Record<string, string> = {
+export function positionName(location: PluginPanel["location"]): string | undefined {
+  const table2: Record<string, string> = {
     right: t("right dock"),
     main: t("editing area"),
   };
-  return 表[location];
+  return table2[location];
 }

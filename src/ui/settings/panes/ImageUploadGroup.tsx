@@ -65,7 +65,7 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
    * `tools/i18n-check.sh` 数的是**源码里字面写出来的 `t("…")`**，写成模块级的
    * `t(表[i])` 就不算调用，`en.ts` 里那几条会算"废键"→ 闸门 FAIL。
    */
-  const 方法表: Array<{ value: ImageUploadMethod; label: string }> = [
+  const squareMethodTable: Array<{ value: ImageUploadMethod; label: string }> = [
     // ⚠️ 这一条也包了：句子里那个括号是**全角**的，英文界面上不该原样露出来。
     { value: "post", label: t("POST (multipart/form-data)") },
     { value: "put", label: t("PUT (raw bytes)") },
@@ -73,10 +73,10 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
 
   // ⚠️ `null` = 还没读回来。读之前**什么都不画**：先画一份默认值再被真值替换，
   // 用户会看见"地址栏里的字闪了一下就没了"。
-  const [设置, set设置] = useState<ImageUploadSettings | null>(null);
+  const [settings, setSettings] = useState<ImageUploadSettings | null>(null);
   /** 与 `设置` 同一份值，但**读得到最新的**——写失败时要退回的是它。
    *  （不能靠 state 的闭包：`写` 是个稳定的 callback，闭包里的 `设置` 是旧的。） */
-  const 当前 = useRef<ImageUploadSettings | null>(null);
+  const current = useRef<ImageUploadSettings | null>(null);
 
   /**
    * 两条**报错**（2026-10-04）。
@@ -90,27 +90,27 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
    * ⚠️ 存的是**原始错误串、不是翻译好的句子**：`t` 要在**渲染时**取，不然
    * 用户中途换语言，这条已经算好的旧句子会留在屏幕上。
    */
-  const [读错误, set读错误] = useState<string | null>(null);
-  const [写错误, set写错误] = useState<string | null>(null);
+  const [readError, setReadError] = useState<string | null>(null);
+  const [writeError, setWriteError] = useState<string | null>(null);
 
   useEffect(() => {
-    let 拆了 = false;
+    let splitDone = false;
     // ⚠️ `docId` 给 `null`：这一页**不知道当前是哪份文档**（设置框不收 docId），
     // 而它要的只是配置本身。返回值里那个 `willAutoUpload` 是"这份文档要不要
     // 自动传"，在这一页上没有意义（那张勾选框在插图框里，见 `ImageDialog`）。
     api.image
       .uploadGet(null)
       .then((s) => {
-        if (拆了) return;
-        当前.current = s.settings;
-        set设置(s.settings);
+        if (splitDone) return;
+        current.current = s.settings;
+        setSettings(s.settings);
       })
       .catch((e: unknown) => {
-        if (拆了) return;
-        set读错误(String(e));
+        if (splitDone) return;
+        setReadError(String(e));
       });
     return () => {
-      拆了 = true;
+      splitDone = true;
     };
   }, []);
 
@@ -122,91 +122,91 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
    * `uploadSet`——一次成功一次的报错看起来像"保存偶尔失败"。
    * 所以值从 `当前` 那个 ref 上取，更新函数只负责算出新的一份。
    */
-  const 写 = useCallback((补丁: Partial<ImageUploadSettings>) => {
-    const 旧 = 当前.current;
-    if (!旧) return;
-    const 新 = { ...旧, ...补丁 };
-    当前.current = 新;
-    set设置(新);
+  const write = useCallback((fillSmall: Partial<ImageUploadSettings>) => {
+    const oldValue = current.current;
+    if (!oldValue) return;
+    const newValue = { ...oldValue, ...fillSmall };
+    current.current = newValue;
+    setSettings(newValue);
     api.image
-      .uploadSet(新)
-      .then(() => set写错误(null))
+      .uploadSet(newValue)
+      .then(() => setWriteError(null))
       .catch((e: unknown) => {
         // 退回**上一个值**（不是默认值）：写失败只说明这一次没成，
         // 前面那几次改动还在盘上。
-        当前.current = 旧;
-        set设置(旧);
+        current.current = oldValue;
+        setSettings(oldValue);
         // ⚠️ **退回的同时必须说一句**（见上面 `写错误` 那段）：光弹回去，
         // 用户看到的是"我改的东西自己变回来了"，查不出是权限、是盘满、还是坏了。
-        set写错误(String(e));
+        setWriteError(String(e));
       });
   }, []);
 
-  if (!设置) {
+  if (!settings) {
     // ⚠️ 读失败时说一句，**不画**一组灰控件：那些控件按下去也是往一个读不出来的
     // 路径里写。⚠️ 也**不能什么都不画**——那样这一组看起来就像"不在这台机器上"。
     // 读成功但还没回来时什么都不画（见上面那条注释）。
-    if (读错误 === null) return null;
-    return <Note>{t("Could not read the upload settings: ") + 读错误}</Note>;
+    if (readError === null) return null;
+    return <Note>{t("Could not read the upload settings: ") + readError}</Note>;
   }
 
   return (
     <SettingsGroup title={t("Upload server")}>
-      {写错误 !== null && <Note>{t("That last save did not work: ") + 写错误}</Note>}
+      {writeError !== null && <Note>{t("That last save did not work: ") + writeError}</Note>}
       <SettingRow label={t("Enable upload")}>
-        <Toggle checked={设置.enabled} onChange={(enabled) => 写({ enabled })} />
+        <Toggle checked={settings.enabled} onChange={(enabled) => write({ enabled })} />
       </SettingRow>
 
-      {设置.enabled && (
+      {settings.enabled && (
         <>
           <SettingRow label={t("Server URL")}>
             <TextInput
-              value={设置.url}
+              value={settings.url}
               width="lg"
               placeholder={t("https://images.example.com/upload")}
-              onChange={(url) => 写({ url })}
+              onChange={(url) => write({ url })}
             />
           </SettingRow>
 
           <SettingRow label={t("Upload method")}>
-            <Select value={设置.method} options={方法表} onChange={(method) => 写({ method })} />
+            <Select value={settings.method} options={squareMethodTable} onChange={(method) => write({ method })} />
           </SettingRow>
 
-          {设置.method === "post" && (
+          {settings.method === "post" && (
             <SettingRow label={t("File field name")}>
-              <TextInput value={设置.field} onChange={(field) => 写({ field })} />
+              <TextInput value={settings.field} onChange={(field) => write({ field })} />
             </SettingRow>
           )}
 
           <SettingRow label={t("Request headers")}>
             <TextArea
-              value={设置.headers}
+              value={settings.headers}
               mono
               rows={4}
               placeholder={t("Authorization: Bearer your-token")}
-              onChange={(headers) => 写({ headers })}
+              onChange={(headers) => write({ headers })}
             />
           </SettingRow>
 
           <SettingRow label={t("Read the URL from the response")}>
             <TextInput
-              value={设置.url_path}
+              value={settings.url_path}
               width="lg"
               placeholder="data.url"
-              onChange={(url_path) => 写({ url_path })}
+              onChange={(url_path) => write({ url_path })}
             />
           </SettingRow>
 
           <SettingRow label={t("Field name for remote images")}>
             <TextInput
-              value={设置.remote_field}
+              value={settings.remote_field}
               placeholder="src"
-              onChange={(remote_field) => 写({ remote_field })}
+              onChange={(remote_field) => write({ remote_field })}
             />
           </SettingRow>
 
           <SettingRow label={t("Allow automatic upload via YAML")}>
-            <Toggle checked={设置.auto} onChange={(auto) => 写({ auto })} />
+            <Toggle checked={settings.auto} onChange={(auto) => write({ auto })} />
           </SettingRow>
         </>
       )}

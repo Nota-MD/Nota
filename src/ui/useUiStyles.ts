@@ -35,7 +35,7 @@ import { applyUiStyleCss } from "@/styles/ui-style";
 import type { Toast } from "@/ui/Toasts";
 import { useBootReveal } from "@/ui/useBootReveal";
 
-export interface 风格出口 {
+export interface WindCellOutputMouth {
   /** 清单：内置的 ＋ 用户导入的。**空数组 = 还没拉到（或拉失败了）**。 */
   styles: UiStyleInfo[];
   /**
@@ -50,7 +50,7 @@ export interface 风格出口 {
 export function useUiStyles(
   settings: Settings | null,
   toast: (message: string, level?: Toast["level"]) => void,
-): 风格出口 {
+): WindCellOutputMouth {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画）。
   const t = useT();
   const [styles, setStyles] = useState<UiStyleInfo[]>([]);
@@ -72,8 +72,8 @@ export function useUiStyles(
         const list = await api.uiStyle.list();
         if (!alive) return;
         setStyles(list);
-        const 有文件 = list.some((style) => style.id === id && !style.builtin);
-        const css = 有文件 ? await api.uiStyle.css(id) : null;
+        const hasTextItem = list.some((style) => style.id === id && !style.builtin);
+        const css = hasTextItem ? await api.uiStyle.css(id) : null;
         if (!alive) return;
         applyUiStyleCss(css);
       } catch (e) {

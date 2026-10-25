@@ -54,7 +54,7 @@ import type { Toast } from "@/ui/Toasts";
 
 
 /** 一份待处理的改动。 */
-export interface 外部改动 {
+export interface ExternalPartChangeAction {
   id: DocId;
   /** 磁盘上那份的路径（事件发出来那一刻的）。 */
   path: string;
@@ -65,14 +65,14 @@ export interface 外部改动 {
 }
 
 /** 「查看修改」摊在编辑区里的那一份对照。 */
-export interface 外部对照 {
+export interface ExternalPartCorrectAccording {
   id: DocId;
   title: string;
   /** 统一格式的逐行差异（`api.diff.texts`）。空数组 = 两边其实一样。 */
-  行: DiffLine[];
+  line3: DiffLine[];
 }
 
-interface 接线 {
+interface wiring {
   /** 打开的文档列表（`App.tsx` 的 `docs`）。 */
   docs: readonly Document[];
   /** 活动文档 id 的 ref 快照（判"这份正显示在编辑器里吗"）。 */
@@ -83,28 +83,28 @@ interface 接线 {
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
-export interface 外部改动出口 {
+export interface ExternalPartChangeActionOutputMouth {
   /** 有待处理外部改动的文档。**可能不止一份**（几份文件都被改了）。 */
-  改动: 外部改动[];
+  changeAction: ExternalPartChangeAction[];
   /** 用户点了「忽略」。**零动作**，只把这条从列表里划掉（见文件头）。 */
-  忽略: (id: DocId) => void;
+  ignoreOmit: (id: DocId) => void;
   /** 用户点了「重新载入」。走既有的 `reloadDoc`（它自己会问未保存那句）。 */
-  重新载入: (id: DocId) => Promise<void>;
+  heavyNewValueLoadEnter: (id: DocId) => Promise<void>;
   /** 用户点了「查看修改」。失败会弹提示条，返回 `null`。 */
-  查看修改: (id: DocId) => Promise<外部对照 | null>;
+  checkSeeFixChange: (id: DocId) => Promise<ExternalPartCorrectAccording | null>;
   /** 此刻摊着的对照（`null` = 没摊）。 */
-  对照: 外部对照 | null;
+  correctAccording: ExternalPartCorrectAccording | null;
   /** 收起对照，回到正文。 */
-  关对照: () => void;
+  closeCorrectAccording: () => void;
 }
 
-export function useExternalChanges(w: 接线): 外部改动出口 {
+export function useExternalChanges(w: wiring): ExternalPartChangeActionOutputMouth {
   // ⚠️ 本文件**不翻文案**（这里一句界面文字都没有）：提示条那块自己 `useT`
   // （它是组件），三个动作的名字也在那儿。这里只报事实。
   const { docs, activeIdRef, editorRef, reloadDoc, toast } = w;
 
-  const [改动, set改动] = useState<外部改动[]>([]);
-  const [对照, set对照] = useState<外部对照 | null>(null);
+  const [changeAction, setChangeAction] = useState<ExternalPartChangeAction[]>([]);
+  const [correctAccording, setCorrectAccording] = useState<ExternalPartCorrectAccording | null>(null);
 
   /**
    * 文档列表的 ref 快照。**事件回调里要读它，但不能进订阅的依赖**——
@@ -120,80 +120,80 @@ export function useExternalChanges(w: 接线): 外部改动出口 {
   // `refreshDocs()` 每次都给一个新数组，直接依赖它会让这里每刷新一次就调一遍
   // `nota_watch_sync`（宿主那边是整份重来，虽然不贵，但没必要）。
   // 拼串之后只有**真的变了**（开了/关了/另存为）才会重来。
-  const 路径键 = useMemo(
+  const pathKey = useMemo(
     () => docs.map((d) => `${d.id}:${d.path ?? ""}`).join("|"),
     [docs],
   );
 
   useEffect(() => {
-    const 表 = docs
+    const table2 = docs
       .filter((d): d is Document & { path: string } => !!d.path)
       .map((d) => ({ id: d.id, path: d.path }));
     // ⚠️ 失败只记一笔、不弹提示条：盯不上就是"外部改动不报"，用户此刻并没有
     // 在做一件"失败了要重试"的事（他只是打开了几个文件）。宿主那边对
     // "哪个目录盯不上"有一行调试日志（`NOTA_DEBUG=1` 可见）。
-    void api.watch.sync(表).catch((e) => {
+    void api.watch.sync(table2).catch((e) => {
       console.warn("[nota] 同步外部改动监视清单失败：", e);
     });
-  }, [路径键]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pathKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 收到事件 ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    let 退订: (() => void) | null = null;
-    let 还活着 = true;
+    let unsubscribe: (() => void) | null = null;
+    let returnActiveActive = true;
 
     void on<FileChangedPayload>(events.fileChanged, ({ id, path, hash }) => {
       // ⚠️ 同一份文档连着报两次（用户点了忽略之后别人又改了一次）是**两件事**，
       // 但列表里只需要一条：按 id 换掉旧的，不要堆成两条一模一样的提示。
-      set改动((旧) => {
-        const 那一条 = 旧.find((c) => c.id === id);
+      setChangeAction((oldValue) => {
+        const thatOneItem = oldValue.find((c) => c.id === id);
         // 摘要一样 = 还是同一次改动（重复事件），原地不动，免得白白重画。
-        if (那一条?.hash === hash) return 旧;
-        const 文档 = docsRef.current.find((d) => d.id === id);
-        const 新条: 外部改动 = {
+        if (thatOneItem?.hash === hash) return oldValue;
+        const document = docsRef.current.find((d) => d.id === id);
+        const newValueItem: ExternalPartChangeAction = {
           id,
           path,
           hash,
           // ⚠️ 文档已经关了（事件和我们删列表之间有窗口）也要画出来：
           // 退到路径最后那一段，而不是整条不显示——"有个文件被改了"
           // 是用户此刻唯一能拿到的信息，藏掉它比名字难看严重得多。
-          title: 文档?.title ?? path.split("/").pop() ?? path,
+          title: document?.title ?? path.split("/").pop() ?? path,
         };
-        return 那一条 ? 旧.map((c) => (c.id === id ? 新条 : c)) : [...旧, 新条];
+        return thatOneItem ? oldValue.map((c) => (c.id === id ? newValueItem : c)) : [...oldValue, newValueItem];
       });
     }).then((u) => {
-      if (还活着) 退订 = u;
+      if (returnActiveActive) unsubscribe = u;
       else u(); // 订阅回来时组件已经没了——当场退掉，别留监听者
     });
 
     return () => {
-      还活着 = false;
-      退订?.();
+      returnActiveActive = false;
+      unsubscribe?.();
     };
   }, []);
 
   // ── 三个动作 ─────────────────────────────────────────────────────────────
 
-  const 忽略 = useCallback((id: DocId) => {
-    set改动((旧) => 旧.filter((c) => c.id !== id));
+  const ignoreOmit = useCallback((id: DocId) => {
+    setChangeAction((oldValue) => oldValue.filter((c) => c.id !== id));
   }, []);
 
-  const 重新载入 = useCallback(
+  const heavyNewValueLoadEnter = useCallback(
     async (id: DocId) => {
       // ⚠️ **重载成功之后才把这条划掉**。`reloadDoc` 里那道围栏——"有未保存的
       // 改动"的确认框——用户可能在那儿选「取消」；划早了的话，取消之后提示条
       // 已经没了，而磁盘上那份**确实还改着**，用户就再没有处理它的入口了。
       await reloadDoc(id);
-      set改动((旧) => 旧.filter((c) => c.id !== id));
+      setChangeAction((oldValue) => oldValue.filter((c) => c.id !== id));
       // ⚠️ 正看着的那份被重载了 → 对照里的"编辑器那一侧"已经变了，
       // 那份 diff 成了过期的东西。收掉它，别让用户对着一份不算数的对照看。
-      set对照((旧) => (旧?.id === id ? null : 旧));
+      setCorrectAccording((oldValue) => (oldValue?.id === id ? null : oldValue));
     },
     [reloadDoc],
   );
 
-  const 查看修改 = useCallback(
-    async (id: DocId): Promise<外部对照 | null> => {
+  const checkSeeFixChange = useCallback(
+    async (id: DocId): Promise<ExternalPartCorrectAccording | null> => {
       try {
         // 左边（old）= **我们手里这份**，右边（new）= 磁盘上那份。
         // 于是"绿的那些行"就是**别人加进来的**——那正是用户要看的东西。
@@ -202,17 +202,17 @@ export function useExternalChanges(w: 接线): 外部改动出口 {
         // `doc.text`：后者被 300ms 去抖拖着，用户刚敲的字不在里面。而不在
         // 编辑器里的那几份（改的不是当前标签）只有镜像可读——那时也没有
         // "还没推上去的击键"这回事，两者等价。
-        const 手头 =
+        const handHead =
           id === activeIdRef.current
             ? editorRef.current?.getMarkdown()
             : undefined;
-        const 我们的 = 手头 ?? docsRef.current.find((d) => d.id === id)?.text ?? "";
-        const 磁盘 = await api.doc.diskText(id);
-        const 行 = await api.diff.texts(我们的, 磁盘);
-        const 标题 = docsRef.current.find((d) => d.id === id)?.title ?? "";
-        const 一份: 外部对照 = { id, title: 标题, 行 };
-        set对照(一份);
-        return 一份;
+        const selfPluralOf = handHead ?? docsRef.current.find((d) => d.id === id)?.text ?? "";
+        const disk = await api.doc.diskText(id);
+        const line3 = await api.diff.texts(selfPluralOf, disk);
+        const markTitle = docsRef.current.find((d) => d.id === id)?.title ?? "";
+        const oneDocument: ExternalPartCorrectAccording = { id, title: markTitle, line3 };
+        setCorrectAccording(oneDocument);
+        return oneDocument;
       } catch (e) {
         toast(String(e), "error");
         return null;
@@ -221,7 +221,7 @@ export function useExternalChanges(w: 接线): 外部改动出口 {
     [activeIdRef, editorRef, toast],
   );
 
-  const 关对照 = useCallback(() => set对照(null), []);
+  const closeCorrectAccording = useCallback(() => setCorrectAccording(null), []);
 
-  return { 改动, 忽略, 重新载入, 查看修改, 对照, 关对照 };
+  return { changeAction, ignoreOmit, heavyNewValueLoadEnter, checkSeeFixChange, correctAccording, closeCorrectAccording };
 }

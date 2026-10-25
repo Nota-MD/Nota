@@ -33,20 +33,20 @@ import { api } from "@/bridge/ipc";
 const SETTLE_MS = 600;
 
 /** 一次最多送多少词。⚠️ 与 `src-tauri/src/spell/mod.rs` 的 `一次最多` 同值。 */
-const 一次最多 = 2000;
+const maxPerCall = 2000;
 
 /** 这一刻用哪门语言。`""` = 跟随系统（这时按界面语言挑一个最接近的标签）。 */
-let 语言 = "";
+let language = "";
 
 /** 拼写检查开着没有（`settings.editor.spellcheck`）。关着时**一条线都不画**。 */
-let 开着 = true;
+let isOpen = true;
 
 /** 还活着的编辑器实例（`view()` 里加、`destroy()` 里删）。 */
-const 活着的 = new Set<EditorView>();
+const activeActiveOf = new Set<EditorView>();
 
 /** 由 `ui/useSpellcheck.ts` 在设置变了的时候调一次。 */
-export function 设拼写语言(next: string): void {
-  语言 = next;
+export function setCombineWriteLanguage(next: string): void {
+  language = next;
 }
 
 /**
@@ -56,14 +56,14 @@ export function 设拼写语言(next: string): void {
  * 打字时不画"——用户拨这个开关的时候正文是**静止**的，不回头的症状是
  * "开关关了，红波浪线一条不少地留在那儿"，看着就是没生效。
  */
-export function 设拼写开关(on: boolean): void {
-  if (开着 === on) return;
-  开着 = on;
-  for (const 视图 of 活着的) 重查们.get(视图)?.();
+export function setCombineWriteFlag(on: boolean): void {
+  if (isOpen === on) return;
+  isOpen = on;
+  for (const view of activeActiveOf) rechecks.get(view)?.();
 }
 
 /** 波浪线那个类名。**只此一处**——`marks.css` 与右键命中的判据都用它。 */
-const 类名 = "nota-spell-error";
+const className2 = "nota-spell-error";
 
 /**
  * 从一段 DOM 找回它是**哪一个编辑器实例**（右键菜单那条路要用）。
@@ -72,9 +72,9 @@ const 类名 = "nota-spell-error";
  * 好几个（正文 / 分屏预览），而"记最后一个"在分屏下是错的——用户在**左边**右键，
  * 那条 transaction 会打到右边去。DOM 包含关系是唯一没有歧义的判据。
  */
-export function 找视图(节点: Node): EditorView | null {
-  for (const 视图 of 活着的) {
-    if (视图.dom.contains(节点)) return 视图;
+export function findView(node: Node): EditorView | null {
+  for (const view of activeActiveOf) {
+    if (view.dom.contains(node)) return view;
   }
   return null;
 }
@@ -85,38 +85,38 @@ export function 找视图(节点: Node): EditorView | null {
  * ⚠️ 键是**视图本身**：一个窗口里好几个实例，而"加入了词典"这件事要在
  * **用户右键的那一个**上立刻生效（别的实例下次文档变化时自己会跟上）。
  */
-const 重查们 = new WeakMap<EditorView, () => void>();
+const rechecks = new WeakMap<EditorView, () => void>();
 
 /** 立刻重跑一遍拼写检查（用户刚「加入词典」/「忽略」时叫它）。 */
-export function 重新查拼写(视图: EditorView): void {
-  重查们.get(视图)?.();
+export function heavyNewValueCheckCombineWrite(view: EditorView): void {
+  rechecks.get(view)?.();
 }
 
 /** 把 `从..到` 那段换成别的字（右键菜单里点一条建议）。 */
-export function 替换拼写(视图: EditorView, 从: number, 到: number, 建议: string): void {
-  视图.dispatch(视图.state.tr.insertText(建议, 从, 到).scrollIntoView());
+export function replaceReplaceCombineWrite(view: EditorView, from: number, to2: number, createProposal: string): void {
+  view.dispatch(view.state.tr.insertText(createProposal, from, to2).scrollIntoView());
 }
 
 /** 真正送给后端的那门语言：设置里写了就用它，没写（跟随系统）就按界面语言猜一个。 */
-export function 当前语言标签(): string {
-  if (语言) return 语言;
+export function currentLanguageLabel(): string {
+  if (language) return language;
   // ⚠️ 后端要的是 enchant 那套 `zh_CN`（下划线），而 `navigator.language` 给的是
   // `zh-CN`——这一步转换不是可有可无的（写成连字符时 enchant 查不到词典，
   // 症状是"一个字都不检查"，见 `commands/webview.rs` 文件头）。
-  const 猜 = (typeof navigator !== "undefined" && navigator.language) || "";
+  const guess = (typeof navigator !== "undefined" && navigator.language) || "";
   // ⚠️⚠️ **`navigator.language` 不一定是一门语言**：`LANG=C` / `LANG=POSIX`
   // 的环境里它报的是 `C`（2026-10-11 在容器里实测：无头那一枪发出去的是
   // `nota_spell_check(lang="C")`，而"没有 `C` 这门语言" ⇒ 一条波浪线都没有，
   // 看着像"拼写检查整个坏了"）。所以这里**只认长得像语言标签的**，
   // 认不出来就退到 `en_US`——那是最保守的一档（英语词表遍地都是），
   // 而且**总比拿一个不存在的标签去问强**。
-  const 像语言 = /^[A-Za-z]{2,3}([_-][A-Za-z0-9]+)*$/;
-  const 净 = 猜.replace(/-/g, "_");
-  return 像语言.test(净) ? 净 : "en_US";
+  const likeLanguage = /^[A-Za-z]{2,3}([_-][A-Za-z0-9]+)*$/;
+  const clean = guess.replace(/-/g, "_");
+  return likeLanguage.test(clean) ? clean : "en_US";
 }
 
 /** 哪些文本要查。⚠️ 排除法：**代码 / 公式 / 链接**一律跳过（见文件头那张表）。 */
-function 该跳过(nodeName: string): boolean {
+function shouldJumpPass(nodeName: string): boolean {
   return (
     nodeName === "code_block" ||
     nodeName === "code_inline" ||
@@ -143,55 +143,55 @@ function 该跳过(nodeName: string): boolean {
  * 两字母的真错词本来就极少，而"把一个好端端的 `Wi-Fi` 标红"是**每次都会遇到**
  * 的那种假阳性——两边不对称，所以这么选。
  */
-function 切词(文本: string): Array<{ 词: string; 起: number; 止: number }> {
-  const 出: Array<{ 词: string; 起: number; 止: number }> = [];
+function splitWord(text2: string): Array<{ word: string; start5: number; end2: number }> {
+  const output2: Array<{ word: string; start5: number; end2: number }> = [];
   // ⚠️ 只认"字母 + 撇号 + 连字符"（`don't` 是一个词，`state-of-the-art` 整段
   // 先抓进来再拆）；数字与 CJK 一律不算——没有中文词典时把汉字标成错的是
   // 最刺眼的那种假阳性。
-  const 整段 = /[A-Za-z][A-Za-z'’]*(?:-[A-Za-z][A-Za-z'’]*)*/g;
-  const 一段 = /[A-Za-z][A-Za-z'’]*/g;
-  for (const m of 文本.matchAll(整段)) {
-    const 整段文字 = m[0];
-    const 基 = m.index ?? 0;
+  const wholeParagraph = /[A-Za-z][A-Za-z'’]*(?:-[A-Za-z][A-Za-z'’]*)*/g;
+  const oneParagraph = /[A-Za-z][A-Za-z'’]*/g;
+  for (const m of text2.matchAll(wholeParagraph)) {
+    const wholeParagraphText = m[0];
+    const base = m.index ?? 0;
     // 没有连字符：整段就是一个词（判据同以前——两个字母起才查）。
-    if (!整段文字.includes("-")) {
-      const 词 = 整段文字.replace(/['’]+$/, "");
-      if (词.length >= 2) 出.push({ 词, 起: 基, 止: 基 + 词.length });
+    if (!wholeParagraphText.includes("-")) {
+      const word = wholeParagraphText.replace(/['’]+$/, "");
+      if (word.length >= 2) output2.push({ word, start5: base, end2: base + word.length });
       continue;
     }
     // 有连字符：按 `-` 拆开，每一段各自定位（这样波浪线只画在坏的那一段上）。
-    for (const p of 整段文字.matchAll(一段)) {
-      const 词 = p[0].replace(/['’]+$/, "");
-      if (词.length < 3) continue;
-      const 起 = 基 + (p.index ?? 0);
-      出.push({ 词, 起, 止: 起 + 词.length });
+    for (const p of wholeParagraphText.matchAll(oneParagraph)) {
+      const word = p[0].replace(/['’]+$/, "");
+      if (word.length < 3) continue;
+      const start5 = base + (p.index ?? 0);
+      output2.push({ word, start5, end2: start5 + word.length });
     }
   }
-  return 出;
+  return output2;
 }
 
 /** 这一刻文档里所有值得查的词（含它在文档里的绝对位置）。 */
-function 取词(state: EditorState) {
-  const 出: Array<{ 词: string; 从: number; 到: number }> = [];
+function getWord(state: EditorState) {
+  const output2: Array<{ word: string; from: number; to2: number }> = [];
   state.doc.descendants((node, pos, parent) => {
     if (!node.isText || !node.text) return true;
-    if (parent && 该跳过(parent.type.name)) return false;
-    for (const { 词, 起, 止 } of 切词(node.text)) {
-      出.push({ 词, 从: pos + 起, 到: pos + 止 });
+    if (parent && shouldJumpPass(parent.type.name)) return false;
+    for (const { word, start5, end2 } of splitWord(node.text)) {
+      output2.push({ word, from: pos + start5, to2: pos + end2 });
     }
     return true;
   });
-  return 出;
+  return output2;
 }
 
-function 去重(list: Array<{ 词: string; 从: number; 到: number }>) {
-  const 索引 = new Map<string, Array<{ 从: number; 到: number }>>();
-  for (const { 词, 从, 到 } of list) {
-    const 们 = 索引.get(词);
-    if (们) 们.push({ 从, 到 });
-    else 索引.set(词, [{ 从, 到 }]);
+function goHeavy(list: Array<{ word: string; from: number; to2: number }>) {
+  const searchReference = new Map<string, Array<{ from: number; to2: number }>>();
+  for (const { word, from, to2 } of list) {
+    const plural = searchReference.get(word);
+    if (plural) plural.push({ from, to2 });
+    else searchReference.set(word, [{ from, to2 }]);
   }
-  return 索引;
+  return searchReference;
 }
 
 /**
@@ -201,99 +201,99 @@ function 去重(list: Array<{ 词: string; 从: number; 到: number }>) {
  * 里放东西——用 `$prose` 会把一件纯显示的事塞进编辑器内核那条链子里。
  */
 /** 插件自己的 key：DecorationSet 存在**它自己的 state** 里（ProseMirror 的正规做法）。 */
-const 键 = new PluginKey<DecorationSet>("nota-spell");
+const key = new PluginKey<DecorationSet>("nota-spell");
 
-export function 拼写检查插件(): Plugin<DecorationSet> {
+export function combineWriteCheckCheckPlugin(): Plugin<DecorationSet> {
   return new Plugin<DecorationSet>({
-    key: 键,
+    key: key,
     state: {
       init: () => DecorationSet.empty,
-      apply(tr, 旧) {
+      apply(tr, oldValue) {
         // ⚠️ 我们自己算出来的那一份是**通过 meta 递进来的**（见下面 `问` 里那次
         // dispatch）——插件 state 只能由 transaction 推，不能从外面塞。
-        const 新 = tr.getMeta(键) as DecorationSet | undefined;
-        if (新) return 新;
+        const newValue = tr.getMeta(key) as DecorationSet | undefined;
+        if (newValue) return newValue;
         // 其余情况：跟着文档位移映射一遍（不映射的话波浪线会留在上一句的位置）。
-        return 旧.map(tr.mapping, tr.doc);
+        return oldValue.map(tr.mapping, tr.doc);
       },
     },
     props: {
       decorations(state) {
-        return 键.getState(state) ?? DecorationSet.empty;
+        return key.getState(state) ?? DecorationSet.empty;
       },
     },
-    view(视图) {
-      let 定时: number | null = null;
-      let 这一轮 = 0;
+    view(view) {
+      let fixedTime: number | null = null;
+      let thisValueWheel = 0;
 
       /** 把已经画上的线全擦掉（关掉开关、或文档里一个词都没有了）。 */
-      const 清空 = () => {
-        视图.dispatch(视图.state.tr.setMeta(键, DecorationSet.empty).setMeta("addToHistory", false));
+      const clearEmpty = () => {
+        view.dispatch(view.state.tr.setMeta(key, DecorationSet.empty).setMeta("addToHistory", false));
       };
 
-      const 问 = async () => {
+      const ask = async () => {
         // 开关关着：**一条线都不画**，而且要把上一轮画的擦掉（见 `设拼写开关` 那段）。
-        if (!开着) {
-          清空();
+        if (!isOpen) {
+          clearEmpty();
           return;
         }
-        const 这一趟 = ++这一轮;
-        const 位置 = 取词(视图.state);
-        if (位置.length === 0) {
-          清空();
+        const thisOnePass = ++thisValueWheel;
+        const position2 = getWord(view.state);
+        if (position2.length === 0) {
+          clearEmpty();
           return;
         }
-        const 索引 = 去重(位置);
-        const 词们 = [...索引.keys()].slice(0, 一次最多);
-        let 错的下标: number[];
+        const searchReference = goHeavy(position2);
+        const words = [...searchReference.keys()].slice(0, maxPerCall);
+        let errorOfBelowMark: number[];
         try {
-          错的下标 = await api.spell.check(当前语言标签(), 词们);
+          errorOfBelowMark = await api.spell.check(currentLanguageLabel(), words);
         } catch {
           // 后端没装 / 词典没有：**一个人都不标**（见文件头最后一段）。
           return;
         }
         // ⚠️ **迟到的那一趟要丢掉**：打字快的时候好几趟在飞，先发的后回来会把
         // 波浪线画到旧位置上。
-        if (这一趟 !== 这一轮) return;
-        const 错的词 = new Set(错的下标.map((i) => 词们[i]));
-        const 装饰: Decoration[] = [];
-        for (const [词, 段们] of 索引) {
-          if (!错的词.has(词)) continue;
-          for (const { 从, 到 } of 段们) {
-            装饰.push(Decoration.inline(从, 到, { class: 类名 }));
+        if (thisOnePass !== thisValueWheel) return;
+        const errorOfWord = new Set(errorOfBelowMark.map((i) => words[i]));
+        const decoration: Decoration[] = [];
+        for (const [word, paragraphs] of searchReference) {
+          if (!errorOfWord.has(word)) continue;
+          for (const { from, to2 } of paragraphs) {
+            decoration.push(Decoration.inline(from, to2, { class: className2 }));
           }
         }
-        const 集 = DecorationSet.create(视图.state.doc, 装饰);
+        const collection = DecorationSet.create(view.state.doc, decoration);
         // ⚠️ **不比对"和上次一样就不派"**：`DecorationSet` 在这个版本里没有 `eq`，
         // 而"多派一次"的代价只是重画一遍（`addToHistory: false`，撤销栈不受影响）。
         // ⚠️ 也**不会打转**：下面那次 dispatch 不改文档，而 `update` 只在 `doc` 变了时
         // 才重新排期——所以"派一次 → 再排一次"这条回路不存在。
-        视图.dispatch(视图.state.tr.setMeta(键, 集).setMeta("addToHistory", false));
+        view.dispatch(view.state.tr.setMeta(key, collection).setMeta("addToHistory", false));
       };
 
-      const 排 = () => {
-        if (定时 !== null) window.clearTimeout(定时);
-        定时 = window.setTimeout(() => void 问(), SETTLE_MS);
+      const arrange = () => {
+        if (fixedTime !== null) window.clearTimeout(fixedTime);
+        fixedTime = window.setTimeout(() => void ask(), SETTLE_MS);
       };
 
       // ⚠️ 立刻重查那一档**不走去抖**：用户刚点完「加入词典」/「忽略」，
       // 他要的是"这一下就没了"，再等 600 毫秒看着像没反应。
-      重查们.set(视图, () => {
-        if (定时 !== null) window.clearTimeout(定时);
-        void 问();
+      rechecks.set(view, () => {
+        if (fixedTime !== null) window.clearTimeout(fixedTime);
+        void ask();
       });
-      活着的.add(视图);
+      activeActiveOf.add(view);
 
       // 头一次进来先问一遍（打开时就有一篇现成的文档，不该等到敲第一个键）。
-      排();
+      arrange();
       return {
-        update(view, 旧状态) {
-          if (!view.state.doc.eq(旧状态.doc)) 排();
+        update(view, oldValueState) {
+          if (!view.state.doc.eq(oldValueState.doc)) arrange();
         },
         destroy() {
-          if (定时 !== null) window.clearTimeout(定时);
-          重查们.delete(视图);
-          活着的.delete(视图);
+          if (fixedTime !== null) window.clearTimeout(fixedTime);
+          rechecks.delete(view);
+          activeActiveOf.delete(view);
         },
       };
     },

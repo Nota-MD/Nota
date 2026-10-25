@@ -25,7 +25,7 @@ import {
 } from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView, WidgetType, keymap } from "@codemirror/view";
 
-import { 按行差异, 造增框, 删类, type 改动预览 } from "@/editor/review";
+import { pressLineDifferenceException, createIncreaseBox, removeClass, type changePreview } from "@/editor/review";
 
 /* ── 与所见即所得那一侧的差别（`review-prose.ts`）────────────────────────
  *
@@ -38,7 +38,7 @@ import { 按行差异, 造增框, 删类, type 改动预览 } from "@/editor/rev
  */
 
 /** 改预览那一格状态用的效果。 */
-export const 预览效果 = StateEffect.define<改动预览 | null>();
+export const previewEffectResult = StateEffect.define<changePreview | null>();
 
 /**
  * 一个"新增"块的 widget。
@@ -47,18 +47,18 @@ export const 预览效果 = StateEffect.define<改动预览 | null>();
  * 判等的那些**不会重建 DOM**。不写的话默认是引用比较，每次重算装饰都会把
  * 整段新增 DOM 拆了重建——预览期间每敲一次键（比如按方向键）都重建一遍。
  */
-class 增件 extends WidgetType {
-  constructor(readonly 行: string[]) {
+class IncreaseItem extends WidgetType {
+  constructor(readonly line3: string[]) {
     super();
   }
-  eq(别的: 增件): boolean {
+  eq(distinguishOf: IncreaseItem): boolean {
     return (
-      别的.行.length === this.行.length &&
-      别的.行.every((x, i) => x === this.行[i])
+      distinguishOf.line3.length === this.line3.length &&
+      distinguishOf.line3.every((x, i) => x === this.line3[i])
     );
   }
   toDOM(): HTMLElement {
-    return 造增框(this.行);
+    return createIncreaseBox(this.line3);
   }
   /** 这个 widget 里的东西不参与编辑器的鼠标/键盘处理（它不在文档里）。 */
   ignoreEvent(): boolean {
@@ -72,33 +72,33 @@ class 增件 extends WidgetType {
  * ⚠️ 删掉的行发的是 `Decoration.line`（挂在 `行.from` 上，长度为零）——
  * CodeMirror 的行装饰**只能**落在行首那一个位置，这跟"整行变色"的效果是一回事。
  */
-function 算预览装饰(state: EditorState, 预览: 改动预览 | null): DecorationSet {
-  if (!预览) return Decoration.none;
-  const 单元 = 按行差异(state.doc.toString(), 预览.text);
-  const 装饰: Range<Decoration>[] = [];
+function computePreviewDecoration(state: EditorState, preview: changePreview | null): DecorationSet {
+  if (!preview) return Decoration.none;
+  const singleDollar = pressLineDifferenceException(state.doc.toString(), preview.text);
+  const decoration: Range<Decoration>[] = [];
   /** 上一个 `同` / `删` 的行号（0 起）。`-1` = 新增落在最前面。 */
-  let 落点 = -1;
+  let DropPoint = -1;
 
-  for (const 项 of 单元) {
-    if (项.类 === "同") {
-      落点 = 项.位;
-    } else if (项.类 === "删") {
-      const 行 = state.doc.line(项.位 + 1);
-      装饰.push(Decoration.line({ class: 删类 }).range(行.from));
-      落点 = 项.位;
+  for (const item5 of singleDollar) {
+    if (item5.class === "同") {
+      DropPoint = item5.position3;
+    } else if (item5.class === "删") {
+      const line3 = state.doc.line(item5.position3 + 1);
+      decoration.push(Decoration.line({ class: removeClass }).range(line3.from));
+      DropPoint = item5.position3;
     } else {
       // ⚠️ 锚在**锚点那一行的行尾**（`行.to` 不含换行符），不是下一行的行首：
       // 锚点已经是最后一行时（`to === doc.length`）行首那种算法就没有下一行了。
-      const 位 = 落点 < 0 ? 0 : state.doc.line(落点 + 1).to;
-      装饰.push(
-        Decoration.widget({ widget: new 增件(项.行), block: true, side: 1 }).range(位),
+      const position3 = DropPoint < 0 ? 0 : state.doc.line(DropPoint + 1).to;
+      decoration.push(
+        Decoration.widget({ widget: new IncreaseItem(item5.line3), block: true, side: 1 }).range(position3),
       );
     }
   }
 
   // ⚠️ `sort: true`：`Decoration.set` 要求区间按位置排好，而行装饰与 widget
   // 是交替产生的（`writing-modes.ts` 那边发查找装饰时也用了它）。
-  return 装饰.length ? Decoration.set(装饰, true) : Decoration.none;
+  return decoration.length ? Decoration.set(decoration, true) : Decoration.none;
 }
 
 /**
@@ -110,13 +110,13 @@ function 算预览装饰(state: EditorState, 预览: 改动预览 | null): Decor
  * 里的**先后**抢的——这一套是最后推进去的，不给优先级就永远轮不到它，
  * 症状是"按 `Esc` 什么都不发生"，而且看起来跟"没接这个键"一模一样。
  */
-export function 预览扩展集(初始: 改动预览 | null, 退出?: () => void) {
-  const 字段 = StateField.define<改动预览 | null>({
-    create: () => 初始,
+export function previewExtensionExtendCollection(initialStart: changePreview | null, backOutput?: () => void) {
+  const field = StateField.define<changePreview | null>({
+    create: () => initialStart,
     update(v, tr) {
-      let 出 = v;
-      for (const e of tr.effects) if (e.is(预览效果)) 出 = e.value;
-      return 出;
+      let output2 = v;
+      for (const e of tr.effects) if (e.is(previewEffectResult)) output2 = e.value;
+      return output2;
     },
   });
 
@@ -125,13 +125,13 @@ export function 预览扩展集(初始: 改动预览 | null, 退出?: () => void
   // 时先 `set_text`、随后 `review(nil)`），但那是**两条**消息，中间有一帧
   // 是"文档换了、预览还在"——不加这一条，那一帧里发出去的就是一批越界的
   // 装饰（CodeMirror 会当成烂装饰集抛出来）。
-  const 装饰 = EditorView.decorations.compute([字段, "doc"], (state) =>
-    算预览装饰(state, state.field(字段)),
+  const decoration = EditorView.decorations.compute([field, "doc"], (state) =>
+    computePreviewDecoration(state, state.field(field)),
   );
 
-  const 扩展: Extension[] = [字段, 装饰];
-  if (退出) {
-    扩展.unshift(
+  const extensionExtend: Extension[] = [field, decoration];
+  if (backOutput) {
+    extensionExtend.unshift(
       Prec.highest(
         keymap.of([
           {
@@ -141,9 +141,9 @@ export function 预览扩展集(初始: 改动预览 | null, 退出?: () => void
             // 按一下 `Esc` 会**同时**退出沉浸模式。同 `review-prose.ts` 那条。
             stopPropagation: true,
             run: (view) => {
-              const 现 = view.state.field(字段, false);
-              if (!现) return false;
-              退出();
+              const current2 = view.state.field(field, false);
+              if (!current2) return false;
+              backOutput();
               return true;
             },
           },
@@ -151,5 +151,5 @@ export function 预览扩展集(初始: 改动预览 | null, 退出?: () => void
       ),
     );
   }
-  return { 字段, 扩展 };
+  return { field, extensionExtend };
 }

@@ -54,54 +54,54 @@ import { join } from "node:path";
 
 /* ── 一支极小的测试工装（与 `sidebar-resize.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
-function 相同(实际: readonly string[], 期望: readonly string[], 说明: string): void {
-  const a = [...实际].sort().join(",");
-  const b = [...期望].sort().join(",");
+function phaseSame(actual: readonly string[], expected: readonly string[], description: string): void {
+  const a = [...actual].sort().join(",");
+  const b = [...expected].sort().join(",");
   if (a !== b) {
-    throw new Error(`${说明}：期望 {${b}}，实际 {${a}}`);
+    throw new Error(`${description}：期望 {${b}}，实际 {${a}}`);
   }
 }
 
 /* ── 四个源码文件 ─────────────────────────────────────────────────── */
 
-const Rust源 = readFileSync(
+const rustSource = readFileSync(
   join("src-tauri", "src", "settings", "appearance.rs"),
   "utf8",
 );
-const 类型源 = readFileSync(join("src", "bridge", "types-settings.ts"), "utf8");
-const 状态栏源 = readFileSync(join("src", "ui", "StatusBar.tsx"), "utf8");
+const typeSource = readFileSync(join("src", "bridge", "types-settings.ts"), "utf8");
+const stateBarSource = readFileSync(join("src", "ui", "StatusBar.tsx"), "utf8");
 // ⚠️ 读的是 `useStatusBar.ts` 而**不是** `App.tsx`：那一格 2026-09-30 晚从
 // App 搬到了这个 hook 里（`App.tsx` 那天越过了 1000 行硬线）。搬到别处时
 // **这份测试要跟着改**，症状是它报"找不到 `appearance.status_metric ?? …`"
 // ——那句红不是误报，是搬家的人忘了带它。
-const 接线源 = readFileSync(join("src", "ui", "useStatusBar.ts"), "utf8");
+const wiringSource = readFileSync(join("src", "ui", "useStatusBar.ts"), "utf8");
 
 /**
  * 从 `appearance.rs` 里抠出 `pub enum StatusMetric { … }` 那一段的**变体名**
@@ -112,78 +112,78 @@ const 接线源 = readFileSync(join("src", "ui", "useStatusBar.ts"), "utf8");
  * （`ToolbarMode` 在它**前面**，而 `StatusMetric` 之后紧跟的是
  * `Appearance` 结构体）不能被吃进来。
  */
-function Rust变体(): string[] {
-  const m = /pub enum StatusMetric\s*\{([\s\S]*?)\n\}/.exec(Rust源);
+function rustChangeBody(): string[] {
+  const m = /pub enum StatusMetric\s*\{([\s\S]*?)\n\}/.exec(rustSource);
   if (!m) throw new Error("`appearance.rs` 里找不到 `pub enum StatusMetric { … }`");
-  const 名: string[] = [];
-  for (const 行 of m[1].split("\n")) {
+  const name3: string[] = [];
+  for (const line3 of m[1].split("\n")) {
     // 去掉行尾注释（注释里写过 `Words` 这种词，留着会被当成变体）。
-    const 净 = 行.split("//")[0].trim();
-    const v = /^([A-Z][A-Za-z0-9]*)\s*,?$/.exec(净);
-    if (v) 名.push(v[1]);
+    const clean = line3.split("//")[0].trim();
+    const v = /^([A-Z][A-Za-z0-9]*)\s*,?$/.exec(clean);
+    if (v) name3.push(v[1]);
   }
-  return 名;
+  return name3;
 }
 
 /** 大驼峰 → snake_case（`Characters` → `characters`）。 */
-function 下划线(名: string): string {
-  return 名.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+function belowDrawLine(name3: string): string {
+  return name3.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
 }
 
 /** 从 `types-settings.ts` 里抠出 `export type StatusMetric = "…" | …;` 的字面量。 */
-function TS字面量(): string[] {
-  const m = /export type StatusMetric =([^;]+);/.exec(类型源);
+function tSCharacterSurfaceMeasure(): string[] {
+  const m = /export type StatusMetric =([^;]+);/.exec(typeSource);
   if (!m) throw new Error("`types-settings.ts` 里找不到 `export type StatusMetric = …;`");
   return [...m[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]);
 }
 
 /** 从 `StatusBar.tsx` 里抠出 `菜单次序: StatusMetric[] = [ … ]` 的四个字面量。 */
-function 菜单次序(): string[] {
-  const m = /const 菜单次序: StatusMetric\[\] = \[([^\]]+)\]/.exec(状态栏源);
-  if (!m) throw new Error("`StatusBar.tsx` 里找不到 `const 菜单次序: StatusMetric[] = […]`");
+function menuOrder(): string[] {
+  const m = /const menuOrder: StatusMetric\[\] = \[([^\]]+)\]/.exec(stateBarSource);
+  if (!m) throw new Error("`StatusBar.tsx` 里找不到 `const menuOrder: StatusMetric[] = […]`");
   return [...m[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]);
 }
 
 /* ── 一、名字的两头 ─────────────────────────────────────────────────── */
 
-组("一、Rust 枚举与前端类型逐字对齐");
+group("一、Rust 枚举与前端类型逐字对齐");
 
-测("`StatusMetric` 的四个变体与 TS 那四个字面量同集合", () => {
+testCase("`StatusMetric` 的四个变体与 TS 那四个字面量同集合", () => {
   // ⚠️ 这一条是**承重的**：对不上的症状是"菜单里选了没反应"或者"整份设置
   // 读不进来"，两种都不报错、不在控制台留痕（见文件头）。
-  相同(
-    Rust变体().map(下划线),
-    TS字面量(),
+  phaseSame(
+    rustChangeBody().map(belowDrawLine),
+    tSCharacterSurfaceMeasure(),
     "Rust `StatusMetric` 的变体（转 snake_case 后）与 TS 的字面量",
   );
 });
 
-测("`StatusMetric` 上有 `#[serde(rename_all = \"snake_case\")]`", () => {
+testCase("`StatusMetric` 上有 `#[serde(rename_all = \"snake_case\")]`", () => {
   // ⚠️ 没有这一条的话，序列化出来是 `"Words"`（大驼峰），而前端读写的是
   // `"words"`——**落盘的值前端认不出**，表现是"选完重启又弹回默认"，
   // 而设置文件里明明躺着 `status_metric = "Words"`。
-  const 段 = /#\[serde\(rename_all = "snake_case"\)\]\s*pub enum StatusMetric/.test(Rust源);
-  等(段, true, "`StatusMetric` 头上的 `rename_all`");
+  const paragraph2 = /#\[serde\(rename_all = "snake_case"\)\]\s*pub enum StatusMetric/.test(rustSource);
+  equal(paragraph2, true, "`StatusMetric` 头上的 `rename_all`");
 });
 
-测("`Appearance` 上有 `#[serde(default)]`", () => {
+testCase("`Appearance` 上有 `#[serde(default)]`", () => {
   // 加字段才不会把老设置文件读崩（结构体级那个 `#[serde(default)]`）。
-  等(
-    /#\[serde\(default[^)]*\)\]\s*pub struct Appearance/.test(Rust源),
+  equal(
+    /#\[serde\(default[^)]*\)\]\s*pub struct Appearance/.test(rustSource),
     true,
     "`Appearance` 头上的 `#[serde(default)]`",
   );
 });
 
-测("`Appearance` 里那一格叫 `status_metric`（前后端同名字段）", () => {
+testCase("`Appearance` 里那一格叫 `status_metric`（前后端同名字段）", () => {
   // 字段名是 JSON 的键，两边必须逐字相同。
-  等(
-    /pub status_metric:\s*StatusMetric\s*,/.test(Rust源),
+  equal(
+    /pub status_metric:\s*StatusMetric\s*,/.test(rustSource),
     true,
     "Rust 侧的字段声明",
   );
-  等(
-    /^\s*status_metric: StatusMetric;/m.test(类型源),
+  equal(
+    /^\s*status_metric: StatusMetric;/m.test(typeSource),
     true,
     "TS 侧的字段声明",
   );
@@ -191,7 +191,7 @@ function 菜单次序(): string[] {
 
 /* ── 二、默认值与兜底值 ─────────────────────────────────────────────── */
 
-组("二、默认值：Rust 的 `#[default]` 与接线里的兜底同值");
+group("二、默认值：Rust 的 `#[default]` 与接线里的兜底同值");
 
 /**
  * Rust 里标着 `#[default]` 的那个变体（转 snake_case）。
@@ -199,80 +199,80 @@ function 菜单次序(): string[] {
  * ⚠️ 那个属性写在**变体头上那一行**，所以要回头看上一行——直接找
  * `#[default]` 后面的第一个变体名是错的（它下面隔着一行注释）。
  */
-function Rust默认(): string {
-  const m = /pub enum StatusMetric\s*\{([\s\S]*?)\n\}/.exec(Rust源);
+function rustDefault(): string {
+  const m = /pub enum StatusMetric\s*\{([\s\S]*?)\n\}/.exec(rustSource);
   if (!m) throw new Error("`appearance.rs` 里找不到 `pub enum StatusMetric { … }`");
-  const 行们 = m[1].split("\n");
-  for (let i = 0; i < 行们.length; i++) {
-    if (!行们[i].includes("#[default]")) continue;
-    for (let j = i + 1; j < 行们.length; j++) {
-      const 净 = 行们[j].split("//")[0].trim();
-      const v = /^([A-Z][A-Za-z0-9]*)\s*,?$/.exec(净);
-      if (v) return 下划线(v[1]);
+  const rows = m[1].split("\n");
+  for (let i = 0; i < rows.length; i++) {
+    if (!rows[i].includes("#[default]")) continue;
+    for (let j = i + 1; j < rows.length; j++) {
+      const clean = rows[j].split("//")[0].trim();
+      const v = /^([A-Z][A-Za-z0-9]*)\s*,?$/.exec(clean);
+      if (v) return belowDrawLine(v[1]);
     }
   }
   throw new Error("`StatusMetric` 里没有任何变体标着 `#[default]`");
 }
 
 /** 界的兜底值：`ui/useStatusBar.ts` 里读那一格时写的那个。 */
-function App兜底(): string {
-  const m = /appearance\.status_metric \?\? "([a-z_]+)"/.exec(接线源);
+function appFallback(): string {
+  const m = /appearance\.status_metric \?\? "([a-z_]+)"/.exec(wiringSource);
   if (!m) throw new Error("`ui/useStatusBar.ts` 里找不到 `appearance.status_metric ?? \"…\"`");
   return m[1];
 }
 
-测("Rust 的默认项与 `useStatusBar` 的兜底项是同一个", () => {
+testCase("Rust 的默认项与 `useStatusBar` 的兜底项是同一个", () => {
   // ⚠️ 这两个值管的是两个时刻的同一件事：设置**读回来之前**那一瞬间显示哪一个。
   // 不一致的症状是"启动时先显示字符数、几十毫秒后跳成词数"——不报错，
   // 只在慢机器上看得见，而看见了也不会有人当成 bug。
-  等(App兜底(), Rust默认(), "useStatusBar 的兜底与 Rust 的默认");
+  equal(appFallback(), rustDefault(), "useStatusBar 的兜底与 Rust 的默认");
 });
 
-测("默认项是 `words`", () => {
+testCase("默认项是 `words`", () => {
   // 用户给的参考图里平时显示的就是「N 词」（`StatusMetric::Words` 那段）。
   // ⚠️ 这条是**意图**的钉，不是推导出来的——改默认值的人该看见它红。
-  等(Rust默认(), "words", "默认统计量");
+  equal(rustDefault(), "words", "默认统计量");
 });
 
 /* ── 三、菜单里四项齐全 ─────────────────────────────────────────────── */
 
-组("三、菜单里四项一个不少");
+group("三、菜单里四项一个不少");
 
-测("`菜单次序` 覆盖全部四项", () => {
+testCase("`菜单次序` 覆盖全部四项", () => {
   // ⚠️ 少一项的症状是那一项**在菜单里根本没有**，而其余三项照常好用——
   // 用户只会以为"这个功能就是没有分钟"。多一项则永远没有对应的勾。
-  相同(菜单次序(), TS字面量(), "菜单里的四项");
+  phaseSame(menuOrder(), tSCharacterSurfaceMeasure(), "菜单里的四项");
 });
 
-测("四项在菜单里不重复", () => {
-  const 个 = 菜单次序();
-  等(new Set(个).size, 个.length, "去重之后的项数");
+testCase("四项在菜单里不重复", () => {
+  const item2 = menuOrder();
+  equal(new Set(item2).size, item2.length, "去重之后的项数");
 });
 
-测("菜单四项的 i18n 键都在代码里以字面量出现", () => {
+testCase("菜单四项的 i18n 键都在代码里以字面量出现", () => {
   // ⚠️⚠️ 这一条拦的是一种**已经发生过**的坏法：把四个键收进一张表、
   // 用的时候 `t(表[m], 数)`。那样 `tools/i18n-check.sh`（它扫的是代码里的
   // 字符串字面量）再也看不见这四条，于是中文表里那四行会被判成"废键"、
   // 整个闸门 FAIL。实测踩过一次。
-  for (const 名 of ["words", "characters", "lines", "minutes"]) {
-    const 句 = `t("{0} ${名}"`;
-    if (!状态栏源.includes(句)) {
-      throw new Error(`\`StatusBar.tsx\` 里找不到字面量 ${句}…）——键别收进表里`);
+  for (const name3 of ["words", "characters", "lines", "minutes"]) {
+    const sentence = `t("{0} ${name3}"`;
+    if (!stateBarSource.includes(sentence)) {
+      throw new Error(`\`StatusBar.tsx\` 里找不到字面量 ${sentence}…）——键别收进表里`);
     }
   }
 });
 
-测("那一格与菜单用的是同一份文案表", () => {
+testCase("那一格与菜单用的是同一份文案表", () => {
   // 同一件事不要两处各写一份。`四个` 既是菜单标签的来源，也是那一格的来源。
-  if (!/\{\s*四个\[metric\]\s*\}/.test(状态栏源)) {
-    throw new Error("`StatusBar.tsx` 里那一格没在用 `四个[metric]`——两处文案又分家了？");
+  if (!/\{\s*fourItem\[metric\]\s*\}/.test(stateBarSource)) {
+    throw new Error("`StatusBar.tsx` 里那一格没在用 `fourItem[metric]`——两处文案又分家了？");
   }
 });
 
 /* ── 收尾 ───────────────────────────────────────────────────────────── */
 
-console.log(`\n${过} 通过 / ${败} 失败`);
-if (败 > 0) {
-  console.log(`失败的是：\n  · ${败的.join("\n  · ")}`);
+console.log(`\n${pass} 通过 / ${fail} 失败`);
+if (fail > 0) {
+  console.log(`失败的是：\n  · ${failed.join("\n  · ")}`);
   process.exit(1);
 }

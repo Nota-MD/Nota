@@ -64,15 +64,15 @@
 import { $remark } from "@milkdown/kit/utils";
 
 /** mdast 节点里本仓要用到的那几个字段（不引 `@types/mdast`，只取用得到的）。 */
-interface Mdast节点 {
+interface MdastNode {
   type?: string;
   alt?: string | null;
   title?: string | null;
-  children?: Mdast节点[];
+  children?: MdastNode[];
 }
 
 /** 就地把一棵 mdast 里所有 image 的 `null` 属性抹成 `""`。 */
-function 抹掉图片的空属性(node: Mdast节点): void {
+function eraseRemoveImageSliceOfEmptyAttribute(node: MdastNode): void {
   if (node.type === "image") {
     if (node.alt === null || node.alt === undefined) node.alt = "";
     if (node.title === null || node.title === undefined) node.title = "";
@@ -80,7 +80,7 @@ function 抹掉图片的空属性(node: Mdast节点): void {
   // ⚠️ 递归下去而不是只看顶层：图片在列表项、引用块、表格单元格里都是常见的，
   // 只扫 `tree.children` 那一层会漏掉绝大多数真实文档。
   if (Array.isArray(node.children)) {
-    for (const 孩子 of node.children) 抹掉图片的空属性(孩子);
+    for (const child of node.children) eraseRemoveImageSliceOfEmptyAttribute(child);
   }
 }
 
@@ -88,6 +88,6 @@ function 抹掉图片的空属性(node: Mdast节点): void {
  * 挂进 `.use(...)` 的插件。**两档（宽松/严格）、只读实例都要挂**——
  * 它管的是"装得进来"，与那两件事无关。
  */
-export const 补全图片属性 = $remark("nota-image-attrs", () => () => (tree: Mdast节点) => {
-  抹掉图片的空属性(tree);
+export const fillAllImageSliceAttribute = $remark("nota-image-attrs", () => () => (tree: MdastNode) => {
+  eraseRemoveImageSliceOfEmptyAttribute(tree);
 });

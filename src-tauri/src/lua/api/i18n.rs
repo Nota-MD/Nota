@@ -184,7 +184,7 @@ pub fn 装(manifest: &Manifest, 应用语言: &str) -> 语言包 {
     // 换成别的 tag 还出现这行，才是真问题——声明了却少那份表。
     let 表 = 读(&manifest.dir, &tag).unwrap_or_else(|原因| {
         crate::日志!(
-            "[nota:{id}] 没有可用的 lang/{}.toml（{原因}）——这个语言下全部退回原文",
+            "[nota:{id}] missing lang/{}.toml ({原因}); falling back to source strings",
             lang::规范(&tag)
         );
         HashMap::new()

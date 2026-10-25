@@ -41,20 +41,20 @@
 
 import { defaultKeymap, historyKeymap } from "@codemirror/commands";
 
-import { 撞车键位 } from "@/editor/key-conflicts";
+import { collideCarKeyPosition } from "@/editor/key-conflicts";
 import { accelSig, parseAccel } from "@/ui/accel";
 import { MENUS, walkMenuItems } from "@/ui/commands";
 
-let 过 = 0;
-let 败 = 0;
-const 失败明细: string[] = [];
+let pass = 0;
+let fail = 0;
+const failureDetails: string[] = [];
 
-function 判(条件: boolean, 说明: string) {
-  if (条件) {
-    过++;
+function determine(condition: boolean, description: string) {
+  if (condition) {
+    pass++;
   } else {
-    败++;
-    失败明细.push(说明);
+    fail++;
+    failureDetails.push(description);
   }
 }
 
@@ -68,15 +68,15 @@ function 判(条件: boolean, 说明: string) {
  * 而 `ui/accel.ts` 把 `Cmd` / `Meta` / `Super` **一律归到 `ctrl` 这一维**，
  * 所以这里一视同仁——两边同一个约定。
  */
-function 码镜键位签名(文本: string): string | null {
-  const 段 = 文本.split("-");
-  const 名 = 段.pop();
-  if (!名) return null;
+function codeMirrorKeyPositionKeyName(text2: string): string | null {
+  const paragraph2 = text2.split("-");
+  const name3 = paragraph2.pop();
+  if (!name3) return null;
   let ctrl = false;
   let shift = false;
   let alt = false;
-  for (const 一 of 段) {
-    switch (一.toLowerCase()) {
+  for (const value of paragraph2) {
+    switch (value.toLowerCase()) {
       case "mod":
       case "ctrl":
       case "control":
@@ -94,52 +94,52 @@ function 码镜键位签名(文本: string): string | null {
         return null;
     }
   }
-  return `${ctrl ? "c" : "-"}${shift ? "s" : "-"}${alt ? "a" : "-"}:${名.toLowerCase()}`;
+  return `${ctrl ? "c" : "-"}${shift ? "s" : "-"}${alt ? "a" : "-"}:${name3.toLowerCase()}`;
 }
 
 /** CodeMirror 那两张表里的全部键位（只取 Linux 上生效的那一支）。 */
-function 码镜键位(): string[] {
-  const 出: string[] = [];
-  for (const 条 of [...defaultKeymap, ...historyKeymap] as Array<{
+function codeMirrorKeyPosition(): string[] {
+  const output2: string[] = [];
+  for (const item4 of [...defaultKeymap, ...historyKeymap] as Array<{
     key?: string;
     linux?: string;
     mac?: string;
   }>) {
-    if (条.key) 出.push(条.key);
+    if (item4.key) output2.push(item4.key);
     // ⚠️ `linux:` 那一条**替代** `key`（`historyKeymap` 的 `Ctrl-Shift-z` 就是
     // 这种），要一起收——不收的话它在 Linux 上的那一次覆盖就漏掉了。
-    if (条.linux) 出.push(条.linux);
+    if (item4.linux) output2.push(item4.linux);
   }
-  return 出;
+  return output2;
 }
 
 /** 菜单上真正绑着的键位（含子菜单、含插件那一栏不在此列——那是运行时的）。 */
-function 菜单键位(): Map<string, string> {
-  const 出 = new Map<string, string>();
-  walkMenuItems(MENUS, (项) => {
-    if (!项.accel) return;
-    const a = parseAccel(项.accel);
+function menuKeyPosition(): Map<string, string> {
+  const output2 = new Map<string, string>();
+  walkMenuItems(MENUS, (item5) => {
+    if (!item5.accel) return;
+    const a = parseAccel(item5.accel);
     if (!a) return;
-    if (!出.has(accelSig(a))) 出.set(accelSig(a), 项.id);
+    if (!output2.has(accelSig(a))) output2.set(accelSig(a), item5.id);
   });
-  return 出;
+  return output2;
 }
 
 // ── 一、承重的那条：撞了就必须在名单里 ────────────────────────────────────
 
-const 菜单 = 菜单键位();
-const 码镜 = 码镜键位();
+const menu = menuKeyPosition();
+const codeMirror = codeMirrorKeyPosition();
 
-let 撞车数 = 0;
-for (const 键 of 码镜) {
-  const 签名 = 码镜键位签名(键);
-  if (!签名) continue;
-  const 菜单项 = 菜单.get(签名);
-  if (!菜单项) continue;
-  撞车数++;
-  判(
-    撞车键位.has(键),
-    `CodeMirror 的 "${键}" 与菜单项 ${菜单项} 撞了，但它不在 editor/key-conflicts.ts 的` +
+let collideCarNumber = 0;
+for (const key of codeMirror) {
+  const keyName = codeMirrorKeyPositionKeyName(key);
+  if (!keyName) continue;
+  const menuItem = menu.get(keyName);
+  if (!menuItem) continue;
+  collideCarNumber++;
+  determine(
+    collideCarKeyPosition.has(key),
+    `CodeMirror 的 "${key}" 与菜单项 ${menuItem} 撞了，但它不在 editor/key-conflicts.ts 的` +
       ` 撞车键位 里——源码模式里那颗键会静默失灵（或执行两遍）`,
   );
 }
@@ -147,17 +147,17 @@ for (const 键 of 码镜) {
 // ⚠️ 这条是"判据本身还能用"的自检：如果哪天 `defaultKeymap` 换了导出形状、
 // 或者本仓的菜单表被改成全都不带 `accel`，上面那个循环会**一条都不报**，
 // 看着全绿。所以钉住"至少查得到几处真撞车"。
-判(撞车数 >= 5, `本该查到至少 5 处真撞车，实际只查到 ${撞车数} 处（判据本身是不是失效了？）`);
+determine(collideCarNumber >= 5, `本该查到至少 5 处真撞车，实际只查到 ${collideCarNumber} 处（判据本身是不是失效了？）`);
 
 // ── 二、反向：名单里不许有死条目 ──────────────────────────────────────────
 
 // 名单比的是 `b.key`，而那串文本来自 CodeMirror。**写错一个字母就静默不摘**
 // ——多写一条的代价是"以后 CodeMirror 真绑了它，我们却不摘"，比漏一条轻，
 // 但同样是没人看得见的偏差。
-for (const 键 of 撞车键位) {
-  判(
-    码镜.includes(键),
-    `名单里的 "${键}" 在 CodeMirror 的 defaultKeymap / historyKeymap 里根本没有——` +
+for (const key of collideCarKeyPosition) {
+  determine(
+    codeMirror.includes(key),
+    `名单里的 "${key}" 在 CodeMirror 的 defaultKeymap / historyKeymap 里根本没有——` +
       `要么是拼错了，要么是上游改名了（改完就得跟着改）`,
   );
 }
@@ -174,17 +174,17 @@ for (const 键 of 撞车键位) {
 
 // 上面那两条已经覆盖它了，这里再钉一次**指名道姓**的：这条回来的时候，
 // 报错信息里会直接写着"就是 BUG-58 那颗键"，不必再去比对两张表。
-判(撞车键位.has("Mod-u"), "BUG-58：Mod-u（CodeMirror 的 undoSelection）必须在名单里");
-判(
-  菜单.get("c--:u") === "fmt.underline",
+determine(collideCarKeyPosition.has("Mod-u"), "BUG-58：Mod-u（CodeMirror 的 undoSelection）必须在名单里");
+determine(
+  menu.get("c--:u") === "fmt.underline",
   "菜单上 c--:u 该是 fmt.underline（下划线）——判据变了的话上面这条也就没意义了",
 );
 
 // ── 汇总 ──────────────────────────────────────────────────────────────────
 
-if (失败明细.length) {
+if (failureDetails.length) {
   console.log("失败明细：");
-  for (const 条 of 失败明细) console.log("  · " + 条);
+  for (const item4 of failureDetails) console.log("  · " + item4);
 }
-console.log(`通过 ${过} 条，失败 ${败} 条`);
-if (败 > 0) process.exitCode = 1;
+console.log(`通过 ${pass} 条，失败 ${fail} 条`);
+if (fail > 0) process.exitCode = 1;

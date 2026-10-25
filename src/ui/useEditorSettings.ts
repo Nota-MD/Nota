@@ -33,30 +33,30 @@
 import { useMemo } from "react";
 
 import type { MarkdownSettings } from "@/bridge/ipc";
-import { 默认行内扩展开关 } from "@/editor/inline-marks";
-import { 默认标点设置, type 标点设置 } from "@/editor/smart-punctuation";
+import { DefaultInlineExtensionFlags } from "@/editor/inline-marks";
+import { DefaultPunctuationSettings, type punctuationSettings } from "@/editor/smart-punctuation";
 
 /** 编辑器那两个开关对象，外加上面那一格布尔。 */
-export interface 编辑器开关 {
-  行内扩展: { highlight: boolean; superscript: boolean; subscript: boolean };
-  标点: 标点设置;
-  自动更正: boolean;
+export interface editorSettings {
+  inlineExtensions: { highlight: boolean; superscript: boolean; subscript: boolean };
+  punctuation: punctuationSettings;
+  selfActionMoreCorrect: boolean;
 }
 
 /**
  * ⚠️ 这三个值就是 `EditorPane` **建实例时**读的那一份：拨设置要重建编辑器，
  * 所以它不该也不能热更新（理由见文件头）。
  */
-export function use编辑器开关(markdown: MarkdownSettings | undefined): 编辑器开关 {
+export function useEditorSettings(markdown: MarkdownSettings | undefined): editorSettings {
   // ── 三种行内扩展的开关（`Props.markdown` 那一条讲了为什么要这么包）──
   // ⚠️ 依赖给的是**三个布尔值**，不是 `markdown` 这个对象：设置对象每次从后端
   // 回来都是新的（改任何一项都换一个），拿它当依赖会让"改了字号"也顺手把
   // 编辑器重建一遍。三个布尔值没变，下面那个对象身份就不变，effect 不重跑。
-  const 行内扩展 = useMemo(
+  const inlineExtensions = useMemo(
     () => ({
-      highlight: markdown?.highlight ?? 默认行内扩展开关.highlight,
-      superscript: markdown?.superscript ?? 默认行内扩展开关.superscript,
-      subscript: markdown?.subscript ?? 默认行内扩展开关.subscript,
+      highlight: markdown?.highlight ?? DefaultInlineExtensionFlags.highlight,
+      superscript: markdown?.superscript ?? DefaultInlineExtensionFlags.superscript,
+      subscript: markdown?.subscript ?? DefaultInlineExtensionFlags.subscript,
     }),
     [markdown?.highlight, markdown?.superscript, markdown?.subscript],
   );
@@ -64,15 +64,15 @@ export function use编辑器开关(markdown: MarkdownSettings | undefined): 编�
   // ── 智能标点那一组（同上：拼成对象、依赖给逐项）──
   // ⚠️ 依赖给的是**六个字段**，不是 `markdown` 对象——理由同上：改任何一项
   // 设置都会换一个新的 `markdown`，拿它当依赖等于"改了字号也重建编辑器"。
-  const 标点 = useMemo<标点设置>(
+  const punctuation = useMemo<punctuationSettings>(
     () => ({
-      模式: markdown?.smart_punctuation ?? 默认标点设置.模式,
-      引号: markdown?.smart_quotes ?? 默认标点设置.引号,
-      双引号: markdown?.smart_quotes_double ?? 默认标点设置.双引号,
-      单引号: markdown?.smart_quotes_single ?? 默认标点设置.单引号,
-      破折号: markdown?.smart_dashes ?? 默认标点设置.破折号,
-      风格: markdown?.dash_style ?? 默认标点设置.风格,
-      省略号: 默认标点设置.省略号,
+      mode2: markdown?.smart_punctuation ?? DefaultPunctuationSettings.mode2,
+      referenceNumber: markdown?.smart_quotes ?? DefaultPunctuationSettings.referenceNumber,
+      doubleReferenceNumber: markdown?.smart_quotes_double ?? DefaultPunctuationSettings.doubleReferenceNumber,
+      singleReferenceNumber: markdown?.smart_quotes_single ?? DefaultPunctuationSettings.singleReferenceNumber,
+      dash: markdown?.smart_dashes ?? DefaultPunctuationSettings.dash,
+      windCell: markdown?.dash_style ?? DefaultPunctuationSettings.windCell,
+      saveOmitNumber: DefaultPunctuationSettings.saveOmitNumber,
     }),
     [
       markdown?.smart_punctuation,
@@ -86,7 +86,7 @@ export function use编辑器开关(markdown: MarkdownSettings | undefined): 编�
 
   // 自动更正那一格。⚠️ `undefined` **不等于关**：Rust 那边的默认是 `true`，
   // 设置还没从后端回来时按默认走（`create-types.ts` 的 `自动更正` 那一格）。
-  const 自动更正 = markdown?.auto_correct ?? true;
+  const selfActionMoreCorrect = markdown?.auto_correct ?? true;
 
-  return { 行内扩展, 标点, 自动更正 };
+  return { inlineExtensions, punctuation, selfActionMoreCorrect };
 }

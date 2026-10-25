@@ -35,37 +35,61 @@ function isCjk(cp: number): boolean {
   );
 }
 
-export function countText(markdown: string, readingSpeed: number): Counts {
-  const characters = [...markdown].length;
+/**
+ * 非 ASCII 文字与数字的判断。ASCII 在扫描器里走整数快路径，避免为大文件
+ * 每个字符构造临时字符串并执行 Unicode 正则。
+ */
+const nonASCIISingleWordCharacter = /[\p{L}\p{N}'’-]/u;
 
+export function countText(markdown: string, readingSpeed: number): Counts {
+  let characters = 0;
   let words = 0;
-  // 先按"非letter/数字/空白"切成块，再在块里数 CJK 与非 CJK 词。
-  const runs = markdown.split(/\s+/);
-  for (const run of runs) {
-    if (!run) continue;
-    let latinBuf = "";
-    for (const ch of run) {
-      const cp = ch.codePointAt(0)!;
-      if (isCjk(cp)) {
-        if (latinBuf) {
-          words += 1;
-          latinBuf = "";
-        }
-        words += 1;
-      } else if (/[\p{L}\p{N}'’-]/u.test(ch)) {
-        latinBuf += ch;
-      } else {
-        // 标点：把攒着的那个词收掉
-        if (latinBuf) {
-          words += 1;
-          latinBuf = "";
-        }
+  let lines = markdown === "" ? 0 : 1;
+  let inWord = false;
+
+  // 一遍扫描同时得到码点数、词数与行数。大文件上不能先 spread 成数组，
+  // 也不能给每个 ASCII 字母创建一个临时字符串。
+  for (let i = 0; i < markdown.length; i += 1) {
+    let cp = markdown.charCodeAt(i);
+    characters += 1;
+    // 代理对算一个码点。只有这一支需要合并两个 UTF-16 码元；绝大多数
+    // 中英文文档仍走整数比较，不调用 codePointAt 或构造字符。
+    if (cp >= 0xd800 && cp <= 0xdbff && i + 1 < markdown.length) {
+      const low = markdown.charCodeAt(i + 1);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        cp = 0x10000 + ((cp - 0xd800) << 10) + (low - 0xdc00);
+        i += 1;
       }
     }
-    if (latinBuf) words += 1;
-  }
 
-  const lines = markdown === "" ? 0 : markdown.split("\n").length;
+    if (cp === 0x0a) {
+      lines += 1;
+      if (inWord) {
+        words += 1;
+        inWord = false;
+      }
+    } else if (isCjk(cp)) {
+      if (inWord) {
+        words += 1;
+        inWord = false;
+      }
+      words += 1;
+    } else if (
+      cp < 0x80
+        ? (cp >= 0x30 && cp <= 0x39) ||
+          (cp >= 0x41 && cp <= 0x5a) ||
+          (cp >= 0x61 && cp <= 0x7a) ||
+          cp === 0x27 ||
+          cp === 0x2d
+        : nonASCIISingleWordCharacter.test(String.fromCodePoint(cp))
+    ) {
+      inWord = true;
+    } else if (inWord) {
+      words += 1;
+      inWord = false;
+    }
+  }
+  if (inWord) words += 1;
   // ⚠️ 这个除数**曾经是写死的 250**（"200 是英文、300 更贴中文，取折中"）。
   // 2026-09-25 起改用设置里的「阅读速度」（`appearance.reading_speed`，
   // 默认 382——中文常见取值）：那一条自己的说明写着"只用于把总字数换算成
@@ -74,8 +98,8 @@ export function countText(markdown: string, readingSpeed: number): Counts {
   //
   // ⚠️ 兜底：手改过设置文件的人可能写一个 0 进来（除以 0 会得到 Infinity，
   // 状态栏上就是「约 Infinity 分钟」）。低于 1 一律按默认值算。
-  const 速度 = Number.isFinite(readingSpeed) && readingSpeed >= 1 ? readingSpeed : 382;
-  const readingMinutes = Math.max(1, Math.round(words / 速度));
+  const speedDegree = Number.isFinite(readingSpeed) && readingSpeed >= 1 ? readingSpeed : 382;
+  const readingMinutes = Math.max(1, Math.round(words / speedDegree));
 
   return { characters, words, lines, readingMinutes };
 }

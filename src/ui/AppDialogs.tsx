@@ -22,9 +22,9 @@
 
 import { lazy, Suspense } from "react";
 
-import type { 总结 } from "@/ui/focus-summary";
+import type { TotalJoin } from "@/ui/focus-summary";
 import type { Dialogs } from "@/ui/useDialogs";
-import type { 导出出口, PandocGate } from "@/ui/useExport";
+import type { exportApi, PandocGate } from "@/ui/useExport";
 
 const AboutDialog = lazy(() =>
   import("@/ui/AboutDialog").then((m) => ({ default: m.AboutDialog })),
@@ -55,19 +55,19 @@ const PandocPanel = lazy(() =>
 );
 
 export function AppDialogs({
-  对话框,
+  dialog,
   pandocGate,
   pandocGateActions,
-  专注总结,
-  关掉专注总结,
+  dedicatedNoteTotalJoin,
+  closeDedicatedNoteTotalJoin,
   debugMode,
   onSetDebugMode,
 }: {
-  对话框: Dialogs;
+  dialog: Dialogs;
   /** 缺外部工具那张面板；`null` = 不显示（探通了就直接进保存对话框）。 */
   pandocGate: PandocGate | null;
   /** 摊给那张面板的几条动作（`{...pandocGateActions}`，来自 `useExport`）。 */
-  pandocGateActions: 导出出口["pandocGateActions"];
+  pandocGateActions: exportApi["pandocGateActions"];
   /**
    * 强制专注这一轮的总结；`null` = 不显示。
    *
@@ -76,16 +76,16 @@ export function AppDialogs({
    * （理由写在 `ui/FocusSummaryDialog.tsx` 的文件头）。硬塞进去就得凭空造一个
    * 谁也不读的返回值。
    */
-  专注总结: { 总: 总结; 现在: Date } | null;
+  dedicatedNoteTotalJoin: { total: TotalJoin; now: Date } | null;
   /** 用户把总结关掉了。 */
-  关掉专注总结: () => void;
+  closeDedicatedNoteTotalJoin: () => void;
   debugMode: boolean;
   onSetDebugMode: (enabled: boolean) => void;
 }) {
-  const { confirmReq, answerConfirm, promptReq, answerPrompt } = 对话框;
-  const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = 对话框;
-  const { 关于开着, 关关于 } = 对话框;
-  const { printReq, closePrint } = 对话框;
+  const { confirmReq, answerConfirm, promptReq, answerPrompt } = dialog;
+  const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = dialog;
+  const { aboutOpen, closeAbout } = dialog;
+  const { printReq, closePrint } = dialog;
 
   return (
     <Suspense fallback={null}>
@@ -139,18 +139,18 @@ export function AppDialogs({
           所以判的是 `emojiOpen` 那个布尔，不是某个请求对象。 */}
       {emojiOpen && <EmojiDialog onAnswer={answerEmoji} />}
 
-      {关于开着 && (
-        <AboutDialog onClose={关关于} debugMode={debugMode} onSetDebugMode={onSetDebugMode} />
+      {aboutOpen && (
+        <AboutDialog onClose={closeAbout} debugMode={debugMode} onSetDebugMode={onSetDebugMode} />
       )}
 
       {/* 强制专注这一轮的总结。⚠️ 排在最后＝**盖在最上面**：它是一份"你看完
           就关"的报告，不该被别的浮层压在下面（实际上它们不会同时出现，
           这一条只是别让人随手改动顺序时踩空——同文件头那段）。 */}
-      {专注总结 && (
+      {dedicatedNoteTotalJoin && (
         <FocusSummaryDialog
-          总={专注总结.总}
-          现在={专注总结.现在}
-          onClose={关掉专注总结}
+          total={dedicatedNoteTotalJoin.total}
+          now={dedicatedNoteTotalJoin.now}
+          onClose={closeDedicatedNoteTotalJoin}
         />
       )}
     </Suspense>

@@ -41,11 +41,11 @@
  */
 
 /** 一条鸣谢。界面上画成"名字（外链）／用处／许可"三行。 */
-export interface 致谢条目 {
-  名: string;
-  用处: string;
-  链接: string;
-  许可: string;
+export interface SendThanksItem {
+  name3: string;
+  purpose: string;
+  link: string;
+  license: string;
 }
 
 /**
@@ -55,62 +55,62 @@ export interface 致谢条目 {
  * 段与段之间**不留小标题**：GNOME 那个关于窗就没有，而多一行小标题会让人
  * 以为每一段可以单独折叠。
  */
-export function 致谢名单(t: (键: string) => string): 致谢条目[] {
+export function sendThanksNameSingle(t: (key: string) => string): SendThanksItem[] {
   return [
     // ── 骨架：没有它们就没有这个程序 ────────────────────────────────
     {
-      名: "Tauri",
-      用处: t("Desktop shell and windows"),
-      链接: "https://github.com/tauri-apps/tauri",
-      许可: "Apache-2.0 OR MIT",
+      name3: "Tauri",
+      purpose: t("Desktop shell and windows"),
+      link: "https://github.com/tauri-apps/tauri",
+      license: "Apache-2.0 OR MIT",
     },
     {
-      名: "React",
-      用处: t("Interface"),
-      链接: "https://github.com/facebook/react",
-      许可: "MIT",
+      name3: "React",
+      purpose: t("Interface"),
+      link: "https://github.com/facebook/react",
+      license: "MIT",
     },
     // ── 编辑器：正文（所见即所得）与代码块（CodeMirror）────────────────
     {
-      名: "Milkdown / ProseMirror",
-      用处: t("Editor core"),
-      链接: "https://github.com/Milkdown/milkdown",
-      许可: "MIT",
+      name3: "Milkdown / ProseMirror",
+      purpose: t("Editor core"),
+      link: "https://github.com/Milkdown/milkdown",
+      license: "MIT",
     },
     {
       // 2026-10-06 起**代码块**由它编辑（`src/editor/code-block-cm.ts`）：
       // 缩进、括号配对、行内高亮都是它那几套。用户点名要补的就是这一条。
-      名: "CodeMirror",
-      用处: t("Code block editor"),
-      链接: "https://github.com/codemirror/dev",
-      许可: "MIT",
+      name3: "CodeMirror",
+      purpose: t("Code block editor"),
+      link: "https://github.com/codemirror/dev",
+      license: "MIT",
     },
     {
       // CodeMirror 的语法树那一层（`@lezer/highlight` 是我们直接引的）。
-      名: "Lezer",
-      用处: t("Syntax trees behind the code editor"),
-      链接: "https://github.com/lezer-parser/lezer",
-      许可: "MIT",
+      name3: "Lezer",
+      purpose: t("Syntax trees behind the code editor"),
+      link: "https://github.com/lezer-parser/lezer",
+      license: "MIT",
     },
     {
       // 所见即所得里代码块的高亮走 `@milkdown/plugin-prism`，它底下是 refractor
       // （Prism 那套语法表的移植）。
-      名: "Prism (refractor)",
-      用处: t("Syntax highlighting in the editor"),
-      链接: "https://github.com/wooorm/refractor",
-      许可: "MIT",
+      name3: "Prism (refractor)",
+      purpose: t("Syntax highlighting in the editor"),
+      link: "https://github.com/wooorm/refractor",
+      license: "MIT",
     },
     {
-      名: "mdast-util-math",
-      用处: t("Serialising math delimiters"),
-      链接: "https://github.com/syntax-tree/mdast-util-math",
-      许可: "MIT",
+      name3: "mdast-util-math",
+      purpose: t("Serialising math delimiters"),
+      link: "https://github.com/syntax-tree/mdast-util-math",
+      license: "MIT",
     },
     {
-      名: "KaTeX",
-      用处: t("Math typesetting"),
-      链接: "https://github.com/KaTeX/KaTeX",
-      许可: "MIT",
+      name3: "KaTeX",
+      purpose: t("Math typesetting"),
+      link: "https://github.com/KaTeX/KaTeX",
+      license: "MIT",
     },
     {
       // 「Nota」那三个字的字标（2026-10-16 用户点名：「文字徽标用"Nota"，
@@ -118,145 +118,145 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       // ⚠️ **2026-10-17 起不再随包带字体**（用户：「最好不要搞任何随包字体……把这
       // 几个字换成 svg 就可以了」）：字形已经转成 `src/assets/nota-wordmark.svg` 的
       // **矢量轮廓**，仓库里没有 `.ttf` 了。这一行保留是 OFL 的出处要求。
-      名: "Monoton",
-      用处: t("The “Nota” wordmark (vector outlines — no font file is shipped)"),
-      链接: "https://fonts.google.com/specimen/Monoton",
-      许可: "OFL-1.1",
+      name3: "Monoton",
+      purpose: t("The “Nota” wordmark (vector outlines — no font file is shipped)"),
+      link: "https://fonts.google.com/specimen/Monoton",
+      license: "OFL-1.1",
     },
     {
       // 2026-10-11 起**拼写检查的引擎**就是它（`src-tauri/src/spell/native.rs`）：
       // 纯 Rust 的 hunspell 实现，编进程序里。⚠️ 许可那一栏写 **Apache-2.0** 是
       // 照它仓库里那份 `LICENSE` 抄的——**不是**选型时拿到的第二手材料说的 MIT
       // （`THIRD-PARTY.md` §7.2 记着这笔更正）。
-      名: "zspell",
-      用处: t("Spell checking engine"),
-      链接: "https://github.com/pluots/zspell",
-      许可: "Apache-2.0",
+      name3: "zspell",
+      purpose: t("Spell checking engine"),
+      link: "https://github.com/pluots/zspell",
+      license: "Apache-2.0",
     },
     {
-      名: "Mermaid",
-      用处: t("Diagrams"),
-      链接: "https://github.com/mermaid-js/mermaid",
-      许可: "MIT",
+      name3: "Mermaid",
+      purpose: t("Diagrams"),
+      link: "https://github.com/mermaid-js/mermaid",
+      license: "MIT",
     },
     {
       // ⚠️ 这一条与别条不同：图标是**直接搬进仓库**的（`src/assets/lang-icons/`），
       // 不是"引了个依赖"——所以 MIT 要的那份版权声明必须随源码走，
       // 正文在 `THIRD-PARTY.md` §6。
-      名: "vscode-icons",
-      用处: t("Language icons for code blocks"),
-      链接: "https://github.com/vscode-icons/vscode-icons",
-      许可: "MIT",
+      name3: "vscode-icons",
+      purpose: t("Language icons for code blocks"),
+      link: "https://github.com/vscode-icons/vscode-icons",
+      license: "MIT",
     },
 
     // ── 拓展运行时，以及它要的那条网络与验签的路 ───────────────────────
     {
-      名: "mlua / Lua",
-      用处: t("Extension runtime"),
-      链接: "https://github.com/mlua-rs/mlua",
-      许可: "MIT",
+      name3: "mlua / Lua",
+      purpose: t("Extension runtime"),
+      link: "https://github.com/mlua-rs/mlua",
+      license: "MIT",
     },
     {
-      名: "ureq",
-      用处: t("HTTP requests for extensions"),
-      链接: "https://github.com/algesten/ureq",
-      许可: "MIT OR Apache-2.0",
+      name3: "ureq",
+      purpose: t("HTTP requests for extensions"),
+      link: "https://github.com/algesten/ureq",
+      license: "MIT OR Apache-2.0",
     },
     {
-      名: "rustls",
-      用处: t("TLS"),
-      链接: "https://github.com/rustls/rustls",
-      许可: "Apache-2.0 OR ISC OR MIT",
+      name3: "rustls",
+      purpose: t("TLS"),
+      link: "https://github.com/rustls/rustls",
+      license: "Apache-2.0 OR ISC OR MIT",
     },
     {
-      名: "ring",
-      用处: t("Cryptographic primitives"),
-      链接: "https://github.com/briansmith/ring",
+      name3: "ring",
+      purpose: t("Cryptographic primitives"),
+      link: "https://github.com/briansmith/ring",
       // ⚠️ **AND**，不是 OR：两份都得满足（`THIRD-PARTY.md` §1 那张小表）。
-      许可: "Apache-2.0 AND ISC",
+      license: "Apache-2.0 AND ISC",
     },
     {
-      名: "webpki-roots",
-      用处: t("Trusted root certificates"),
-      链接: "https://github.com/rustls/webpki-roots",
+      name3: "webpki-roots",
+      purpose: t("Trusted root certificates"),
+      link: "https://github.com/rustls/webpki-roots",
       // ⚠️ 这一条**不是** MIT/Apache：一个"数据许可"，要求保留出处。
-      许可: "CDLA-Permissive-2.0",
+      license: "CDLA-Permissive-2.0",
     },
     {
-      名: "ed25519-dalek",
-      用处: t("Verifying extension signatures"),
-      链接: "https://github.com/dalek-cryptography/curve25519-dalek/tree/main/ed25519-dalek",
-      许可: "BSD-3-Clause",
+      name3: "ed25519-dalek",
+      purpose: t("Verifying extension signatures"),
+      link: "https://github.com/dalek-cryptography/curve25519-dalek/tree/main/ed25519-dalek",
+      license: "BSD-3-Clause",
     },
 
     // ── 数据与系统：一串"干脏活的" ─────────────────────────────────────
     {
-      名: "serde / serde_json",
-      用处: t("Reading and writing data"),
-      链接: "https://github.com/serde-rs/serde",
-      许可: "MIT OR Apache-2.0",
+      name3: "serde / serde_json",
+      purpose: t("Reading and writing data"),
+      link: "https://github.com/serde-rs/serde",
+      license: "MIT OR Apache-2.0",
     },
     {
-      名: "toml",
-      用处: t("Settings and extension manifests"),
-      链接: "https://github.com/toml-rs/toml",
-      许可: "MIT OR Apache-2.0",
+      name3: "toml",
+      purpose: t("Settings and extension manifests"),
+      link: "https://github.com/toml-rs/toml",
+      license: "MIT OR Apache-2.0",
     },
     {
-      名: "sha2",
-      用处: t("Hashes"),
-      链接: "https://github.com/RustCrypto/hashes",
-      许可: "MIT OR Apache-2.0",
+      name3: "sha2",
+      purpose: t("Hashes"),
+      link: "https://github.com/RustCrypto/hashes",
+      license: "MIT OR Apache-2.0",
     },
     {
-      名: "base64",
-      用处: t("Encoding"),
-      链接: "https://github.com/marshallpierce/rust-base64",
-      许可: "MIT OR Apache-2.0",
+      name3: "base64",
+      purpose: t("Encoding"),
+      link: "https://github.com/marshallpierce/rust-base64",
+      license: "MIT OR Apache-2.0",
     },
     {
-      名: "chrono",
-      用处: t("Dates and times"),
-      链接: "https://github.com/chronotope/chrono",
-      许可: "MIT OR Apache-2.0",
+      name3: "chrono",
+      purpose: t("Dates and times"),
+      link: "https://github.com/chronotope/chrono",
+      license: "MIT OR Apache-2.0",
     },
     {
-      名: "zip",
-      用处: t("Extension packages"),
-      链接: "https://github.com/zip-rs/zip2",
-      许可: "MIT",
+      name3: "zip",
+      purpose: t("Extension packages"),
+      link: "https://github.com/zip-rs/zip2",
+      license: "MIT",
     },
     {
       // 2026-10-11 起 `ui/useClipboard.ts` 走它读剪贴板（菜单里的「粘贴」那条路）。
       // ⚠️ 它是 2026-10-11 那一批加进来的，`THIRD-PARTY.md` §1 **当时漏登记了**，
       // 同一批补上——两张表必须同批改，理由见文件头。
-      名: "tauri-plugin-clipboard-manager",
-      用处: t("Reading the clipboard"),
-      链接: "https://github.com/tauri-apps/plugins-workspace",
-      许可: "Apache-2.0 OR MIT",
+      name3: "tauri-plugin-clipboard-manager",
+      purpose: t("Reading the clipboard"),
+      link: "https://github.com/tauri-apps/plugins-workspace",
+      license: "Apache-2.0 OR MIT",
     },
     {
-      名: "dirs",
-      用处: t("Finding the system folders"),
-      链接: "https://github.com/soc/dirs-rs",
-      许可: "MIT OR Apache-2.0",
+      name3: "dirs",
+      purpose: t("Finding the system folders"),
+      link: "https://github.com/soc/dirs-rs",
+      license: "MIT OR Apache-2.0",
     },
     {
-      名: "thiserror",
-      用处: t("Error plumbing"),
-      链接: "https://github.com/dtolnay/thiserror",
-      许可: "MIT OR Apache-2.0",
+      name3: "thiserror",
+      purpose: t("Error plumbing"),
+      link: "https://github.com/dtolnay/thiserror",
+      license: "MIT OR Apache-2.0",
     },
 
     // ── 外部程序与数据：**Nota 不分发它们** ─────────────────────────────
     {
-      名: "Pandoc",
-      用处: t("Export (external, optional)"),
-      链接: "https://github.com/jgm/pandoc",
+      name3: "Pandoc",
+      purpose: t("Export (external, optional)"),
+      link: "https://github.com/jgm/pandoc",
       // ⚠️ Pandoc 是 **GPL-2.0-or-later**，而 Nota 是 BSD-2——两者能并存，是因为
       //    **Nota 不分发它**：只在用户机器上装着的时候调一次它的命令行。这一行
       //    把"外部、可选、不分发"说清楚，别让人以为 GPL 传染进来了。
-      许可: t("GPL-2.0-or-later (external program — Nota does not bundle it)"),
+      license: t("GPL-2.0-or-later (external program — Nota does not bundle it)"),
     },
     {
       // ⚠️ 这一条是**拼写检查的词典**那一半（2026-09-28 加，用户点名：
@@ -264,10 +264,10 @@ export function 致谢名单(t: (键: string) => string): 致谢条目[] {
       // 整条链子是「WebKitGTK → libenchant → hunspell → 系统装的字典」，所以这一行
       // 的义务落点在**打包**那一侧（谁把字典打进安装包，谁得随包附上那段声明）。
       // BSD 的那一件是 SCOWL（Kevin Atkinson），正文在 `THIRD-PARTY.md` §7。
-      名: "SCOWL",
-      用处: t("Spell checking word lists"),
-      链接: "http://wordlist.aspell.net/",
-      许可: "MIT-like (see THIRD-PARTY.md §7)",
+      name3: "SCOWL",
+      purpose: t("Spell checking word lists"),
+      link: "http://wordlist.aspell.net/",
+      license: "MIT-like (see THIRD-PARTY.md §7)",
     },
   ];
 }

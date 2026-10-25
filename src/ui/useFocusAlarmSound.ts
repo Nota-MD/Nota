@@ -39,25 +39,25 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import { api, events, on } from "@/bridge/ipc";
 
 /** 响一段多久（秒）。 */
-const 时长 = 2.4;
+const timeLength = 2.4;
 /** 频率来回跳的间隔（秒）。 */
-const 跳间隔 = 0.22;
+const jumpIntervalSeparate = 0.22;
 /** 两个频率（Hz）。⚠️ 别用八度关系（2:1）——那听起来是"悦耳的和弦"，不是警报。 */
-const 甲 = 880;
-const 乙 = 1245;
+const alpha = 880;
+const beta = 1245;
 /** 峰值音量。见文件头最后一段。 */
-const 音量 = 0.28;
+const soundMeasure = 0.28;
 
 /** 复用同一个 context。⚠️ 每次新建会在几轮之后撞上浏览器的 context 数量上限。 */
-let 音频: AudioContext | null = null;
+let soundFrequency: AudioContext | null = null;
 
-function 取音频(): AudioContext | null {
-  if (音频) return 音频;
+function getSoundFrequency(): AudioContext | null {
+  if (soundFrequency) return soundFrequency;
   try {
     // ⚠️ 只认标准的 `AudioContext`。WebKitGTK 支持它，而 `webkitAudioContext`
     // 那个前缀写法是给老 Safari 的——多写一条路就多一条没人测过的分支。
-    音频 = new AudioContext();
-    return 音频;
+    soundFrequency = new AudioContext();
+    return soundFrequency;
   } catch {
     return null;
   }
@@ -72,8 +72,8 @@ function 取音频(): AudioContext | null {
  *
  * 失败了不报错、不提示：它只是"让后面那一声更可能响"，不响还有宿主的兜底路。
  */
-export function 预热音频(): void {
-  const ctx = 取音频();
+export function preHotSoundFrequency(): void {
+  const ctx = getSoundFrequency();
   if (!ctx) return;
   if (ctx.state === "suspended") {
     void ctx.resume().catch(() => {});
@@ -86,8 +86,8 @@ export function 预热音频(): void {
  * ⚠️ 返回 `false` 不等于"用户听不见"：那意味着"这一条路没走通"。
  * 别把它当成错误弹提示——用户此刻在别的窗口，弹什么他都看不见。
  */
-export async function 响警报(): Promise<boolean> {
-  const ctx = 取音频();
+export async function soundWarnReport(): Promise<boolean> {
+  const ctx = getSoundFrequency();
   if (!ctx) return false;
 
   // ⚠️ `resume()` 是异步的，而且**可能解不开**（没有手势时就是解不开）。
@@ -103,28 +103,28 @@ export async function 响警报(): Promise<boolean> {
   if (ctx.state !== "running") return false;
 
   try {
-    const 起 = ctx.currentTime;
-    const 振荡 = ctx.createOscillator();
-    const 增益 = ctx.createGain();
-    振荡.type = "square";
-    振荡.connect(增益);
-    增益.connect(ctx.destination);
+    const start5 = ctx.currentTime;
+    const vibrateSwing = ctx.createOscillator();
+    const increaseBenefit = ctx.createGain();
+    vibrateSwing.type = "square";
+    vibrateSwing.connect(increaseBenefit);
+    increaseBenefit.connect(ctx.destination);
 
     // 频率在两个音之间来回跳。
-    for (let i = 0; i * 跳间隔 < 时长; i++) {
-      振荡.frequency.setValueAtTime(i % 2 === 0 ? 甲 : 乙, 起 + i * 跳间隔);
+    for (let i = 0; i * jumpIntervalSeparate < timeLength; i++) {
+      vibrateSwing.frequency.setValueAtTime(i % 2 === 0 ? alpha : beta, start5 + i * jumpIntervalSeparate);
     }
 
     // 包络：猛起（30 毫秒）→ 保持 → 收尾淡出（200 毫秒）。
     // ⚠️ 两头都要渐变：直接 `start()` / `stop()` 会在波形中间切一刀，
     // 那一下是"啪"的一声爆音，比警报本身还吓人。
-    增益.gain.setValueAtTime(0, 起);
-    增益.gain.linearRampToValueAtTime(音量, 起 + 0.03);
-    增益.gain.setValueAtTime(音量, 起 + 时长 - 0.2);
-    增益.gain.linearRampToValueAtTime(0, 起 + 时长);
+    increaseBenefit.gain.setValueAtTime(0, start5);
+    increaseBenefit.gain.linearRampToValueAtTime(soundMeasure, start5 + 0.03);
+    increaseBenefit.gain.setValueAtTime(soundMeasure, start5 + timeLength - 0.2);
+    increaseBenefit.gain.linearRampToValueAtTime(0, start5 + timeLength);
 
-    振荡.start(起);
-    振荡.stop(起 + 时长 + 0.02);
+    vibrateSwing.start(start5);
+    vibrateSwing.stop(start5 + timeLength + 0.02);
     return true;
   } catch {
     return false;
@@ -143,23 +143,23 @@ export async function 响警报(): Promise<boolean> {
  */
 export function useFocusAlarmSound(): void {
   useEffect(() => {
-    let 已卸载 = false;
-    let 退订: UnlistenFn | null = null;
+    let alreadyUninstall = false;
+    let unsubscribe: UnlistenFn | null = null;
 
     on(events.focusBeep, () => {
-      void 响警报().then((成功) => {
+      void soundWarnReport().then((success) => {
         // ⚠️ 前端播不出来才叫宿主。两条都响（比如前端其实响了、
         // 只是返回值不对）也只是"响两遍"，而漏响是这个功能里最糟的失败。
-        if (!成功) void api.focus.beep().catch(() => {});
+        if (!success) void api.focus.beep().catch(() => {});
       });
     }).then((f) => {
-      if (已卸载) f();
-      else 退订 = f;
+      if (alreadyUninstall) f();
+      else unsubscribe = f;
     });
 
     return () => {
-      已卸载 = true;
-      退订?.();
+      alreadyUninstall = true;
+      unsubscribe?.();
     };
   }, []);
 }

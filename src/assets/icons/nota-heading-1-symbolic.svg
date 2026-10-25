@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 一级标题：H 与不依赖字体的数字 1。 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <path fill="#2e3436" d="M2.1 3.1h1.55v3.95h3.1V3.1h1.55v9.8H6.75V8.7h-3.1v4.2H2.1z"/>
+  <path fill="#2e3436" d="M10.2 5.05 11.75 4v8.9H10.2z"/>
+</svg>

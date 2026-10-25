@@ -1,4 +1,4 @@
-//! 借 pandoc 转的那**七种格式**——菜单 id、`pandoc --to=` 的名字、存盘后缀、中文名。
+//! 借 pandoc 转的**十种格式**——菜单 id、`pandoc --to=` 的名字、存盘后缀、中文名。
 //!
 //! ⚠️ 从 `pandoc.rs` 拆出来的（2026-09-25，那边当时 985 行，`docs/09` §4 的规矩是
 //! "900 行就该想怎么拆"）。判据是**功能**：这是**一份词汇表**——探测和导出两边都要
@@ -12,11 +12,10 @@
 
 use serde::Serialize;
 
-/// 借 pandoc 转的七种格式。
+/// 借 pandoc 转的十种格式。
 ///
-/// ⚠️ 只有这七种有 `from_id`。菜单上别的格式（Media Wiki、reStructuredText、
-/// Textile…）pandoc 也支持，但**没在界面上列**——列了就要有人负责它到底长什么样，
-/// 而这份名单是"Typora 有的那些"（见 `docs/10` §6）。
+/// ⚠️ 这十种有 `from_id`，覆盖内置固定导出项与默认自定义导出模板。
+/// 用户还可以用同一套模板新增多个副本并改名；底层 pandoc 格式仍是这十种之一。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Format {
     Pdf,
@@ -26,6 +25,9 @@ pub(crate) enum Format {
     Latex,
     Odt,
     Opml,
+    MediaWiki,
+    Rst,
+    Textile,
 }
 
 impl Format {
@@ -39,6 +41,9 @@ impl Format {
             "latex" => Self::Latex,
             "odt" => Self::Odt,
             "opml" => Self::Opml,
+            "mediawiki" => Self::MediaWiki,
+            "rst" => Self::Rst,
+            "textile" => Self::Textile,
             _ => return None,
         })
     }
@@ -53,6 +58,9 @@ impl Format {
             Self::Latex => "latex",
             Self::Odt => "odt",
             Self::Opml => "opml",
+            Self::MediaWiki => "mediawiki",
+            Self::Rst => "rst",
+            Self::Textile => "textile",
         }
     }
 
@@ -66,6 +74,9 @@ impl Format {
             Self::Latex => "latex",
             Self::Odt => "odt",
             Self::Opml => "opml",
+            Self::MediaWiki => "mediawiki",
+            Self::Rst => "rst",
+            Self::Textile => "textile",
         }
     }
 
@@ -79,6 +90,9 @@ impl Format {
             Self::Latex => "tex",
             Self::Odt => "odt",
             Self::Opml => "opml",
+            Self::MediaWiki => "wiki",
+            Self::Rst => "rst",
+            Self::Textile => "textile",
         }
     }
 
@@ -93,12 +107,15 @@ impl Format {
             Self::Latex => "LaTeX",
             Self::Odt => "OpenDocument",
             Self::Opml => "OPML",
+            Self::MediaWiki => "MediaWiki",
+            Self::Rst => "reStructuredText",
+            Self::Textile => "Textile",
         }
     }
 }
 
-/// 七种格式的**全部**（顺序就是菜单/面板里该有的顺序）。
-pub(crate) const ALL: [Format; 7] = [
+/// 十种格式的**全部**（顺序就是探测报告里的顺序）。
+pub(crate) const ALL: [Format; 10] = [
     Format::Pdf,
     Format::Docx,
     Format::Rtf,
@@ -106,6 +123,9 @@ pub(crate) const ALL: [Format; 7] = [
     Format::Latex,
     Format::Odt,
     Format::Opml,
+    Format::MediaWiki,
+    Format::Rst,
+    Format::Textile,
 ];
 
 /// 一种格式"给人看的样子"，随探测结果一起交给前端。
@@ -134,7 +154,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 七种格式的名字与后缀对得上() {
+    fn 十种格式的名字与后缀对得上() {
         // ⚠️ 这条盯的是"菜单 id → pandoc 名字 → 后缀"三处别写岔：LaTeX 的后缀是
         // `tex`（不是 `latex`），写错了用户会得到一个存不进去的文件名。
         let 表 = [
@@ -145,6 +165,9 @@ mod tests {
             ("latex", "latex", "tex"),
             ("odt", "odt", "odt"),
             ("opml", "opml", "opml"),
+            ("mediawiki", "mediawiki", "wiki"),
+            ("rst", "rst", "rst"),
+            ("textile", "textile", "textile"),
         ];
         for (id, to, ext) in 表 {
             let f = Format::from_id(id).unwrap_or_else(|| panic!("认不出 {id}"));
@@ -153,14 +176,13 @@ mod tests {
             assert!(!f.名字().is_empty());
         }
         // 界面上没列的格式不许悄悄被认出来——认出来就意味着有人指望它工作。
-        assert!(Format::from_id("mediawiki").is_none());
         assert!(Format::from_id("").is_none());
 
-        // 交给前端那张表：七种一个不少，而且 id 能和 `from_id` 对上
+        // 交给前端那张表：十种一个不少，而且 id 能和 `from_id` 对上
         //（对不上就会出现"菜单点得开、导出说不认识这个格式"）。
         let 表 = 格式表();
         assert_eq!(表.len(), ALL.len());
-        assert_eq!(表.len(), 7);
+        assert_eq!(表.len(), 10);
         for info in &表 {
             let f = Format::from_id(&info.id).unwrap_or_else(|| panic!("表里有 {} 但认不出", info.id));
             assert_eq!(f.名字(), info.name);

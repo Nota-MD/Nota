@@ -15,13 +15,13 @@
  * 语言）捆在一起，那是一次打包体积上的倒退。
  */
 
-import type { 选区快照 } from "./caret-snapshot";
+import type { SelectionSnapshot } from "./caret-snapshot";
 import type { CommandState } from "./command-state";
 import type { FindOptions, FindStatus } from "./find";
-import type { 行内扩展开关 } from "./inline-marks";
-import type { 标点设置 } from "./smart-punctuation";
-import type { 改动预览, 预览看法 } from "./review";
-import type { 写作模式 } from "./writing-modes";
+import type { InlineExtensionFlags } from "./inline-marks";
+import type { punctuationSettings } from "./smart-punctuation";
+import type { changePreview, previewMode } from "./review";
+import type { WritingMode } from "./writing-modes";
 
 
 /**
@@ -45,6 +45,7 @@ export type EditorCommand =
   | "superscript"
   | "subscript"
   | "underline"
+  | "comment"
   | "h1"
   | "h2"
   | "h3"
@@ -201,7 +202,7 @@ export interface CommandPayload {
  * 两个字段都是**编辑器给的**，不是这边拼的：从菜单按下「复制」和按 Ctrl+C
  * 必须得到同一份内容，唯一的保证是两条路都问编辑器要同一份东西。
  */
-export interface 选区内容 {
+export interface SelectionContent {
   text: string;
   /** 空串 = 这一侧给不出 HTML（源码模式手里只有文本）。 */
   html: string;
@@ -238,7 +239,7 @@ export interface EditorHandle {
    */
   focusAtStart: () => void;
   /** 拨专注/打字机模式。**随时可拨，不重建实例**（见 `writing-modes.ts`）。 */
-  setWritingModes: (模式: 写作模式) => void;
+  setWritingModes: (mode2: WritingMode) => void;
 
   /**
    * 摊开 / 收起**就地改动预览**（`nota.ui.review_diff`，见 `review.ts` 文件头）。
@@ -250,7 +251,7 @@ export interface EditorHandle {
    * 看法变了而预览没变时，只换 class。调用方（`ui/EditorPane.tsx`）不必自己
    * 记住"上一次传的是什么"——那种记账放在两个调用点上一定会漏一处。
    */
-  setReview: (预览: 改动预览 | null, 看法: 预览看法) => void;
+  setReview: (preview: changePreview | null, viewMode: previewMode) => void;
 
   /**
    * 跑一条编辑命令。菜单栏和快捷键都走这里，**不认识 ProseMirror**。
@@ -277,7 +278,7 @@ export interface EditorHandle {
    * ⚠️ **返回值是"这一侧有没有实现"**（同 `runCommand`）：只读实例
    * （分屏右侧预览、导出用的离屏实例）返回 `false`。
    */
-  插入在光标处: (text: string) => boolean;
+  insertAtCursorPlace: (text: string) => boolean;
 
   /* ── 查找与替换（`editor/find.ts`）────────────────────────────────────
    *
@@ -290,7 +291,7 @@ export interface EditorHandle {
   /** 设查询与三个开关。**空串 = 关掉查找的高亮**（不清光标）。 */
   setFind: (query: string, options: FindOptions) => void;
   /** 跳到下一个（`1`）或上一个（`-1`）命中。 */
-  findStep: (方向: 1 | -1) => void;
+  findStep: (direction: 1 | -1) => void;
   /** 清掉查找状态与全部高亮。关查找条时调。 */
   clearFind: () => void;
   /** 替换当前命中。**没停在任何命中上时返回 `false`**（调用方据此提示）。 */
@@ -317,7 +318,7 @@ export interface EditorHandle {
    * 启发式（见 `ui/outline.ts` 文件头），而这里是真解析的结果，两者在
    * HTML 块、缩进代码块这些边角上会不一致。跳不过去就当没点过。
    */
-  跳到标题: (目标: { line: number; index: number }) => void;
+  jumpToMarkTitle: (target: { line: number; index: number }) => void;
 
   /**
    * 当前选中的内容（`ui/useClipboard.ts` 的「复制」「剪切」要它）。
@@ -330,7 +331,7 @@ export interface EditorHandle {
    * ⚠️ **空选区返回 `null`**，不是一对空串：调用方要能区分"没选中东西"
    *（该提示用户）和"选中了一段恰好为空的内容"（不存在这种事）。
    */
-  选区: () => 选区内容 | null;
+  selection: () => SelectionContent | null;
 
   /** 销毁。组件卸载时**必须**调，否则 ProseMirror 的 DOM 监听会留着。 */
   destroy: () => void;
@@ -347,7 +348,7 @@ export interface CreateOptions {
    * ⚠️ 只用于**把图片地址显示成 asset URL**，不写回文档：绝对路径直接转换，
    * 相对路径以它所在目录为基准；节点 `attrs.src` 和存盘字节保持原样。
    */
-  文档路径?: string | null;
+  documentPath?: string | null;
   /**
    * 文档变化回调。**已经在 Milkdown 的 `updated` 钩子里**——
    * 调用方拿到后仍要做去抖（见 `docs/03` §真相在哪）。
@@ -407,7 +408,7 @@ export interface CreateOptions {
    * 而序列化器不在"会吞掉标记，所以恒开是唯一安全的取法——完整的推理
    * 在 `inline-marks.ts` 的 `行内扩展开关` 那一格。
    */
-  inlineMarks?: 行内扩展开关;
+  inlineMarks?: InlineExtensionFlags;
   /**
    * **智能标点**（`Settings.markdown` 里那一组，`ui/EditorPane.tsx` 传进来）。
    *
@@ -422,7 +423,7 @@ export interface CreateOptions {
    * 只读预览**要传**：它显示的是编辑区那一份的样子，与 `inlineMarks`
    * 同一条口径（那份 DOM 不拿去导出）。
    */
-  标点?: 标点设置;
+  punctuation?: punctuationSettings;
   /**
    * **自动更正**（`Settings.markdown.auto_correct`，2026-09-27 新加的一格）。
    *
@@ -430,7 +431,7 @@ export interface CreateOptions {
    * 注册的）。⚠️ **默认取 `true`**——与 Rust 那边 `Default` 一致，
    * `undefined` 时不等于"关"。
    */
-  自动更正?: boolean;
+  selfActionMoreCorrect?: boolean;
   /**
    * **Emoji**：短代码替换（`:smile:` 敲完当场变 😄）＋ 输入补全面板
    * （打 `:smi` 弹出候选，上下键选）。
@@ -464,7 +465,7 @@ export interface CreateOptions {
    * ⚠️ 它 2026-09-28 **取代了 `match_brackets` / `match_markdown` 两条死开关**
    * （存了值、从来没有代码读过），改这一格时不必回头兼容那两个名字。
    */
-  智能符号?: boolean;
+  smartAbleSymbolNumber?: boolean;
   /**
    * 光标状态变化的通知（工具栏高亮、菜单里表格那十条的灰/亮）。
    *
@@ -486,7 +487,7 @@ export interface CreateOptions {
    * 字都会派一次事务，不去重的话这里就是"每敲一颗字跨一次 IPC"。
    * 传进来的已经是**去重之后**的那些次。
    */
-  onSelection?: (快照: 选区快照) => void;
+  onSelection?: (snapshot: SelectionSnapshot) => void;
   /**
    * 建实例时两个写作开关（专注 / 打字机）的状态。**默认两个都关**。
    *
@@ -494,7 +495,7 @@ export interface CreateOptions {
    * `setWritingModes`，**不重建实例**——重建会丢撤销栈和光标，而这两个
    * 开关是写到一半才会想去拨的。这里只是"切编辑模式时新实例的初值"。
    */
-  writingModes?: 写作模式;
+  writingModes?: WritingMode;
   /**
    * 建实例时**已经开着**的那一份就地改动预览（`setReview` 的初值）。
    *
@@ -502,7 +503,7 @@ export interface CreateOptions {
    * 预览可能正开着。不走这个口子的话，那一次重建会把预览吞掉——用户看到的
    * 是"切一下模式，改动预览没了"。
    */
-  review?: 改动预览 | null;
+  review?: changePreview | null;
   /**
    * 用户在正文里按 `Esc` 要退出预览时喊一声。
    *

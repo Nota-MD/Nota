@@ -43,7 +43,7 @@ import type { DocFont, DocumentSettings } from "@/bridge/types";
  * 现有的字体**，中文字体优先点 Noto / 思源那两个常见族（与内置主题同一套
  * 写法，见 `src/styles/themes/adwaita/theme.css`）。
  */
-const 字体栈: Record<DocFont, string> = {
+const characterBodyStack: Record<DocFont, string> = {
   sans: 'system-ui, "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
   serif: 'Georgia, "Noto Serif CJK SC", "Source Han Serif SC", "Times New Roman", serif',
   // ⚠️ 等宽这一档**交给外壳的代码字体**（`theme/base.css` 里的 `--font-mono`）：
@@ -53,17 +53,17 @@ const 字体栈: Record<DocFont, string> = {
 };
 
 /** 行距的生效区间（百分比）。⚠️ 与 `DocThemePane` 那个数字框的 min/max 同一对数。 */
-export const 行距范围 = { min: 100, max: 300 } as const;
+export const lineDistanceScopeEnclose = { min: 100, max: 300 } as const;
 /** 段距的生效区间（百分之一 em）。⚠️ `0` 是正当取值：段落之间不留空。 */
-export const 段距范围 = { min: 0, max: 300 } as const;
+export const paragraphDistanceScopeEnclose = { min: 0, max: 300 } as const;
 /** 字号的生效区间（相对界面字号的百分比）。 */
-export const 字号范围 = { min: 80, max: 200 } as const;
+export const characterNumberScopeEnclose = { min: 80, max: 200 } as const;
 
 /** 夹一道 + 取整。手改 `settings.toml` 写成 `9999` 的人，不该把一行推到屏幕外。 */
-function 夹(值: number, 范围: { min: number; max: number }): number {
-  const 整 = Math.round(值);
-  if (!Number.isFinite(整)) return 范围.max;
-  return Math.min(范围.max, Math.max(范围.min, 整));
+function clamp(value2: number, scopeEnclose: { min: number; max: number }): number {
+  const whole = Math.round(value2);
+  if (!Number.isFinite(whole)) return scopeEnclose.max;
+  return Math.min(scopeEnclose.max, Math.max(scopeEnclose.min, whole));
 }
 
 /**
@@ -73,26 +73,26 @@ function 夹(值: number, 范围: { min: number; max: number }): number {
  * 不能按默认值写一遍：启动那一小会儿写下去的东西，会在真设置到达之前闪一下
  * 用户没选过的排版。
  */
-export function 正文排版变量(文档: DocumentSettings | undefined): Record<string, string> {
-  if (!文档) return {};
-  const 出: Record<string, string> = {};
-  if (文档.custom_line_height) {
+export function DocumentTypographyVars(document: DocumentSettings | undefined): Record<string, string> {
+  if (!document) return {};
+  const output2: Record<string, string> = {};
+  if (document.custom_line_height) {
     // 175 → `1.75`。⚠️ 除以 100 之后的浮点尾巴走 `数()` 抹掉（本文件末尾）。
-    出["--doc-line-height"] = 数(夹(文档.line_height, 行距范围) / 100);
+    output2["--doc-line-height"] = number2(clamp(document.line_height, lineDistanceScopeEnclose) / 100);
   }
-  if (文档.custom_paragraph_gap) {
-    出["--doc-para-gap"] = `${数(夹(文档.paragraph_gap, 段距范围) / 100)}em`;
+  if (document.custom_paragraph_gap) {
+    output2["--doc-para-gap"] = `${number2(clamp(document.paragraph_gap, paragraphDistanceScopeEnclose) / 100)}em`;
   }
-  if (文档.custom_font) {
-    出["--font-doc"] = 字体栈[文档.font] ?? 字体栈.sans;
+  if (document.custom_font) {
+    output2["--font-doc"] = characterBodyStack[document.font] ?? characterBodyStack.sans;
   }
-  if (文档.custom_font_size) {
-    出["--doc-font-size"] = `${数(夹(文档.font_size, 字号范围) / 100)}em`;
+  if (document.custom_font_size) {
+    output2["--doc-font-size"] = `${number2(clamp(document.font_size, characterNumberScopeEnclose) / 100)}em`;
   }
-  return 出;
+  return output2;
 }
 
 /** `1.75` 而不是 `1.7500000000000002`：除以 100 会带出浮点尾巴。 */
-function 数(x: number): string {
+function number2(x: number): string {
   return String(Math.round(x * 100) / 100);
 }

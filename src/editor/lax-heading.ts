@@ -64,9 +64,9 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
  * `@milkdown/core` 的间接依赖，真正需要它的类型定义的是那边。这里顺着
  * `SliceType` 上那个 `_typeInfo` 把类型拿回来，一分钱不多花。
  */
-type 串化选项 = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
+type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
 /** mdast 的文本处理器（`handlers.text` 那一条）。 */
-type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]>;
+type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
 /**
  * 行首（或整串开头）被转义掉的那个井号。`m[2]` 是井号本身。
@@ -74,7 +74,7 @@ type 文本处理器 = NonNullable<NonNullable<串化选项["handlers"]>["text"]
  * ⚠️ 收得紧是故意的：`(?=[^\s#])` 要求紧跟的是**非空白非井号**，
  * 也就是"CommonMark 里当不成标题"的那种。见上面那一段。
  */
-const 被转义的行首井号 = /(^|\n)\\(#{1,6})(?=[^\s#])/g;
+const isConvertMeaningOfLineFirstHashNumber = /(^|\n)\\(#{1,6})(?=[^\s#])/g;
 
 /**
  * 包一层：把这个文本节点输出里的 `\#` 放回 `#`。
@@ -82,9 +82,9 @@ const 被转义的行首井号 = /(^|\n)\\(#{1,6})(?=[^\s#])/g;
  * `原文` 是 Milkdown 自己那条文本处理器（`remarkStringifyOptionsCtx` 的默认值里
  * 就有）；**没有它就原样返回**，不自己造一条——序列化器是核心路径，宁可什么都不做。
  */
-export function 不转义行首井号(原文?: 文本处理器): 文本处理器 {
+export function notConvertMeaningLineFirstHashNumber(source?: textHandler): textHandler {
   return (node, parent, state, info) => {
-    if (!原文) return node.value ?? "";
-    return 原文(node, parent, state, info).replace(被转义的行首井号, "$1$2");
+    if (!source) return node.value ?? "";
+    return source(node, parent, state, info).replace(isConvertMeaningOfLineFirstHashNumber, "$1$2");
   };
 }

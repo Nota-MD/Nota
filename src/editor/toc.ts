@@ -57,9 +57,9 @@
 import { extractOutline, type OutlineItem } from "@/editor/headings";
 
 /** 目录开头的那个标记（一整行，前后不能有别的东西）。 */
-export const 目录开始标记 = "<!-- nota:toc -->";
+export const tocStartMarker = "<!-- nota:toc -->";
 /** 目录结尾的那个标记。 */
-export const 目录结束标记 = "<!-- /nota:toc -->";
+export const tocEndMarker = "<!-- /nota:toc -->";
 
 /**
  * 认一个节点的原文是不是这两个标记之一。
@@ -67,9 +67,9 @@ export const 目录结束标记 = "<!-- /nota:toc -->";
  * ⚠️ 比对的是 `trim()` 之后的结果：mdast 往返一趟回来，注释两边的空白是
  * remark 说了算的，本仓不靠"一个空格都不差"来认自己的标记。
  */
-export function 是目录标记(原文: string): boolean {
-  const 净 = 原文.trim();
-  return 净 === 目录开始标记 || 净 === 目录结束标记;
+export function isItemRecordMark(source: string): boolean {
+  const clean = source.trim();
+  return clean === tocStartMarker || clean === tocEndMarker;
 }
 
 /**
@@ -91,18 +91,18 @@ export function 是目录标记(原文: string): boolean {
  * 全被滤掉时（标题只有一个 emoji 之类）兜底给 `"section"`，理由是**空串锚点
  * 在 HTML 里等于没写**（`id=""` 谁都不匹配，而且 `#` 会跳到页面顶部）。
  */
-export function 锚点(文本: string, 已用: Set<string>): string {
-  const 净 = 文本
+export function anchor(text2: string, alreadyUse: Set<string>): string {
+  const clean = text2
     .trim()
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\s_-]/gu, "")
     .replace(/\s+/g, "-");
-  const 底 = 净 === "" ? "section" : 净;
+  const bottom = clean === "" ? "section" : clean;
 
-  let 名 = 底;
-  for (let n = 1; 已用.has(名); n++) 名 = `${底}-${n}`;
-  已用.add(名);
-  return 名;
+  let name3 = bottom;
+  for (let n = 1; alreadyUse.has(name3); n++) name3 = `${bottom}-${n}`;
+  alreadyUse.add(name3);
+  return name3;
 }
 
 /**
@@ -119,15 +119,15 @@ export function 锚点(文本: string, 已用: Set<string>): string {
  * 同一份 `已用` 复用两次（比如"先试算再真插"），第二次会得到一堆 `-1`
  * 后缀。导出那边也是自己新建一份（见 `export.ts`）。
  */
-export function 生成目录(标题们: readonly OutlineItem[]): string | null {
-  if (标题们.length === 0) return null;
-  const 最浅 = Math.min(...标题们.map((t) => t.level));
-  const 已用 = new Set<string>();
-  return 标题们
+export function generateBecomeItemRecord(headings: readonly OutlineItem[]): string | null {
+  if (headings.length === 0) return null;
+  const mostLight = Math.min(...headings.map((t) => t.level));
+  const alreadyUse = new Set<string>();
+  return headings
     .map((t) => {
-      const 缩进 = "  ".repeat(Math.max(0, t.level - 最浅));
-      const 名 = t.text.replace(/[[\]]/g, "\\$&"); // 方括号会把链接拆散
-      return `${缩进}- [${名}](#${锚点(t.text, 已用)})`;
+      const shrinkEnter = "  ".repeat(Math.max(0, t.level - mostLight));
+      const name3 = t.text.replace(/[[\]]/g, "\\$&"); // 方括号会把链接拆散
+      return `${shrinkEnter}- [${name3}](#${anchor(t.text, alreadyUse)})`;
     })
     .join("\n");
 }
@@ -143,8 +143,8 @@ export function 生成目录(标题们: readonly OutlineItem[]): string | null {
  * ⚠️ 前后那两个换成对：`\n\n` 是"与上下段落隔开"。插在段落正中间时
  * （光标在一段话中间），没有它们的话列表会跟那一段粘成同一块。
  */
-export function 目录块文本(列表: string): string {
-  return `${目录开始标记}\n\n${列表}\n\n${目录结束标记}`;
+export function tocBlockText(columnTable: string): string {
+  return `${tocStartMarker}\n\n${columnTable}\n\n${tocEndMarker}`;
 }
 
 /**
@@ -156,9 +156,9 @@ export function 目录块文本(列表: string): string {
  *
  * ⚠️ `strict` 从设置来（`Settings.strict_markdown`），与侧栏那一路同源。
  */
-export function 算目录块(markdown: string, strict: boolean): string | null {
-  const 列表 = 生成目录(extractOutline(markdown, strict));
-  return 列表 === null ? null : 目录块文本(列表);
+export function computeItemRecordBlock(markdown: string, strict: boolean): string | null {
+  const columnTable = generateBecomeItemRecord(extractOutline(markdown, strict));
+  return columnTable === null ? null : tocBlockText(columnTable);
 }
 
 /**
@@ -172,12 +172,12 @@ export function 算目录块(markdown: string, strict: boolean): string | null {
  * 找不到、或者只有开头没有结尾（用户删了一半）都返回 `null`——那时
  * **按"没有目录"处理**：再点一次会插一份新的，而不是去猜那半份该补在哪。
  */
-export function 找目录(markdown: string): { 起: number; 止: number } | null {
-  const 起 = markdown.indexOf(目录开始标记);
-  if (起 === -1) return null;
-  const 尾起 = markdown.indexOf(目录结束标记, 起 + 目录开始标记.length);
-  if (尾起 === -1) return null;
-  return { 起, 止: 尾起 + 目录结束标记.length };
+export function findItemRecord(markdown: string): { start5: number; end2: number } | null {
+  const start5 = markdown.indexOf(tocStartMarker);
+  if (start5 === -1) return null;
+  const tailStart = markdown.indexOf(tocEndMarker, start5 + tocStartMarker.length);
+  if (tailStart === -1) return null;
+  return { start5, end2: tailStart + tocEndMarker.length };
 }
 
 /**
@@ -186,8 +186,8 @@ export function 找目录(markdown: string): { 起: number; 止: number } | null
  * ⚠️ 替换范围**含两头的标记**（`[起, 止)` 到结束标记的尾巴），所以替换之后
  * 整篇文档里那对标记仍然只有一对。
  */
-export function 替换目录(markdown: string, 新块: string): string | null {
-  const 区间 = 找目录(markdown);
-  if (!区间) return null;
-  return markdown.slice(0, 区间.起) + 新块 + markdown.slice(区间.止);
+export function replaceReplaceItemRecord(markdown: string, newValueBlock: string): string | null {
+  const range = findItemRecord(markdown);
+  if (!range) return null;
+  return markdown.slice(0, range.start5) + newValueBlock + markdown.slice(range.end2);
 }

@@ -51,7 +51,7 @@
 import { useRef } from "react";
 
 import { api, type DocId } from "@/bridge/ipc";
-import type { 选区快照 } from "@/editor/caret-snapshot";
+import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 
 /**
  * 把**选区快照**推给后端的去抖（跨 IPC，所以比本地那条慢）。
@@ -62,42 +62,42 @@ import type { 选区快照 } from "@/editor/caret-snapshot";
 const CURSOR_DEBOUNCE_MS = 250;
 
 /** [`use选区快照`] 交出去的两件事。 */
-export interface 选区快照接线 {
+export interface SelectionSnapshotWiring {
   /** 编辑器报来一份选区时调它（两种模式都接在 `onSelection` 上）。 */
-  记快照: (快照: 选区快照) => void;
+  recordSnapshot: (snapshot: SelectionSnapshot) => void;
   /** 拆编辑器时调它。⚠️ 为什么必须调，见文件头最后一段。 */
-  清快照定时: () => void;
+  clearSnapshotFixedTime: () => void;
 }
 
 /**
  * @param 文档id 这一份文档的 id。⚠️ 它是**调用那一刻**读的（`记快照` 闭包里
  *               那一份），所以定时器一定打在"报来这份快照的那份文档"上。
  */
-export function use选区快照(文档id: DocId): 选区快照接线 {
+export function useSelectionSnapshot(documentId: DocId): SelectionSnapshotWiring {
   /**
    * 选区快照那条去抖的定时器。
    *
    * ⚠️ **与 `sync` 那条分开**：理由见文件头。
    */
-  const 快照定时Ref = useRef<number | null>(null);
+  const snapshotFixedTimeRef = useRef<number | null>(null);
 
-  const 清快照定时 = () => {
-    if (快照定时Ref.current !== null) {
-      window.clearTimeout(快照定时Ref.current);
-      快照定时Ref.current = null;
+  const clearSnapshotFixedTime = () => {
+    if (snapshotFixedTimeRef.current !== null) {
+      window.clearTimeout(snapshotFixedTimeRef.current);
+      snapshotFixedTimeRef.current = null;
     }
   };
 
-  const 记快照 = (快照: 选区快照) => {
+  const recordSnapshot = (snapshot: SelectionSnapshot) => {
     // 先把上一笔按掉：连续打字时每一下都重新起算 250ms，推出去的是"停手那一刻"
     // 的选区（而不是中间某一份）。
-    if (快照定时Ref.current !== null) window.clearTimeout(快照定时Ref.current);
-    快照定时Ref.current = window.setTimeout(() => {
-      快照定时Ref.current = null;
+    if (snapshotFixedTimeRef.current !== null) window.clearTimeout(snapshotFixedTimeRef.current);
+    snapshotFixedTimeRef.current = window.setTimeout(() => {
+      snapshotFixedTimeRef.current = null;
       // ⚠️ `catch` 里是空的，理由见文件头（推失败只吞掉，不弹提示条）。
-      void api.doc.cursor(文档id, 快照).catch(() => {});
+      void api.doc.cursor(documentId, snapshot).catch(() => {});
     }, CURSOR_DEBOUNCE_MS);
   };
 
-  return { 记快照, 清快照定时 };
+  return { recordSnapshot, clearSnapshotFixedTime };
 }

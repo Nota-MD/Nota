@@ -46,11 +46,11 @@ import { useEffect } from "react";
 import type { Settings } from "@/bridge/ipc";
 
 /** 一条开关的落法：属性名、当前值、默认值。 */
-interface 一条开关 {
+interface OneItemFlag {
   /** `data-` 后面那半截（kebab-case，与 CSS 里逐字对应）。 */
-  属性: string;
-  当前: boolean;
-  默认: boolean;
+  attribute: string;
+  current: boolean;
+  default: boolean;
 }
 
 export function useCodeBlockPrefs(settings: Settings | null): void {
@@ -60,18 +60,18 @@ export function useCodeBlockPrefs(settings: Settings | null): void {
     // 也就是把属性全摘掉。不要"什么都不做"——那会让上一份设置的属性留在
     // `<html>` 上：换设置文件（或恢复默认）之后界面还带着老值，"设置没生效"
     // 的症状里最难查的那一种。
-    const 开关们: 一条开关[] = [
-      { 属性: "code-line-numbers", 当前: m?.code_line_numbers ?? false, 默认: false },
-      { 属性: "code-wrap", 当前: m?.code_wrap ?? true, 默认: true },
-      { 属性: "code-toolbar", 当前: m?.code_toolbar ?? true, 默认: true },
-      { 属性: "code-lang-picker", 当前: m?.code_language_picker ?? true, 默认: true },
+    const flags: OneItemFlag[] = [
+      { attribute: "code-line-numbers", current: m?.code_line_numbers ?? false, default: false },
+      { attribute: "code-wrap", current: m?.code_wrap ?? true, default: true },
+      { attribute: "code-toolbar", current: m?.code_toolbar ?? true, default: true },
+      { attribute: "code-lang-picker", current: m?.code_language_picker ?? true, default: true },
     ];
 
     const root = document.documentElement;
-    for (const 条 of 开关们) {
-      const 名 = `data-${条.属性}`;
-      if (条.当前 === 条.默认) root.removeAttribute(名);
-      else root.setAttribute(名, 条.当前 ? "on" : "off");
+    for (const item4 of flags) {
+      const name3 = `data-${item4.attribute}`;
+      if (item4.current === item4.default) root.removeAttribute(name3);
+      else root.setAttribute(name3, item4.current ? "on" : "off");
     }
   }, [settings]);
 }

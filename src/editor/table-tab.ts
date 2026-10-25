@@ -95,16 +95,16 @@ import type { Transaction } from "@milkdown/kit/prose/state";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { goToNextCell, isInTable, selectedRect, tableNodeTypes } from "@milkdown/kit/prose/tables";
 
-export const 表格Tab键 = new PluginKey("nota-table-tab");
+export const tableTabKey2 = new PluginKey("nota-table-tab");
 
 /**
  * **新行（那条 `table_row` 节点）自己的起点**：表内容起点往后越过 `前面各行高`
  * 那几行。⚠️ 与 `selectedRect().tableStart` 同一套坐标（都是"表内容里的偏移"）。
  */
-export function 新行起点(表内容起点: number, 前面各行高: readonly number[]): number {
-  let 走 = 表内容起点;
-  for (const 高 of 前面各行高) 走 += 高;
-  return 走;
+export function newValueLineStart(tableContentStart: number, beforeSurfaceEachLineHeight: readonly number[]): number {
+  let walk = tableContentStart;
+  for (const height of beforeSurfaceEachLineHeight) walk += height;
+  return walk;
 }
 
 /**
@@ -115,8 +115,8 @@ export function 新行起点(表内容起点: number, 前面各行高: readonly 
  * 症状是"加了新行、光标却在原地"），所以单独拆成纯函数，由
  * `tests/table-tab.test.ts` 拿真 schema 的坐标钉着——不是算着好看。
  */
-export function 首格落点(表内容起点: number, 前面各行高: readonly number[]): number {
-  return 新行起点(表内容起点, 前面各行高) + 2;
+export function firstCellDrop(tableContentStart: number, beforeSurfaceEachLineHeight: readonly number[]): number {
+  return newValueLineStart(tableContentStart, beforeSurfaceEachLineHeight) + 2;
 }
 
 /**
@@ -130,11 +130,11 @@ export function 首格落点(表内容起点: number, 前面各行高: readonly 
  * ⚠️ `NodeType` 是惰性取的吗？不是——`schema.nodes.x` 在 `Schema` 建好那一刻
  * 就有，所以这里随手取也来得及。
  */
-export function 行格类型(schema: Schema): { 行: NodeType; 格: NodeType } {
-  const 角色 = tableNodeTypes(schema);
+export function rowCellType(schema: Schema): { line3: NodeType; cell2: NodeType } {
+  const cornerColor = tableNodeTypes(schema);
   return {
-    行: schema.nodes.table_row ?? 角色.row,
-    格: schema.nodes.table_cell ?? 角色.cell,
+    line3: schema.nodes.table_row ?? cornerColor.row,
+    cell2: schema.nodes.table_cell ?? cornerColor.cell,
   };
 }
 
@@ -156,36 +156,36 @@ export function 行格类型(schema: Schema): { 行: NodeType; 格: NodeType } {
  * ⚠️ `dispatch` 可以缺省（ProseMirror 问"这颗键接不接"时会不带它调一次）：
  * 缺省时只回答接不接，**一个字节都不改**。
  */
-export function 表格Tab处理(
+export function handleTableTab(
   state: EditorState,
   dispatch: ((tr: Transaction) => void) | undefined,
-  反向: boolean,
+  reverseToward: boolean,
 ): boolean {
   if (!isInTable(state)) return false;
-  if (goToNextCell(反向 ? -1 : 1)(state, dispatch)) return true;
+  if (goToNextCell(reverseToward ? -1 : 1)(state, dispatch)) return true;
   // 落到这儿只剩两种现场：最后一格（正向）与第一格（反向）。
-  if (反向) return true;
+  if (reverseToward) return true;
   if (!dispatch) return true;
-  const 表 = selectedRect(state);
-  const 前面各行高: number[] = [];
-  for (let i = 0; i < 表.bottom; i++) 前面各行高.push(表.table.child(i).nodeSize);
-  const { 行: 行型, 格: 格型 } = 行格类型(state.schema);
-  const 新格: PMNode[] = [];
-  for (let i = 0; i < 表.map.width; i++) {
-    const 一格 = 格型.createAndFill();
+  const table2 = selectedRect(state);
+  const beforeSurfaceEachLineHeight: number[] = [];
+  for (let i = 0; i < table2.bottom; i++) beforeSurfaceEachLineHeight.push(table2.table.child(i).nodeSize);
+  const { line3: rowType2, cell2: cellType2 } = rowCellType(state.schema);
+  const newValueCell: PMNode[] = [];
+  for (let i = 0; i < table2.map.width; i++) {
+    const valueCell = cellType2.createAndFill();
     // ⚠️ 造不出空格子就**别动手**：`createAndFill()` 只在"内容表达式填不满"时
     // 给 `null`（GFM 的格子填得满，所以这一支正常走不到）——真走到了，
     // 加一行半截格子更糟，这里吃掉这颗键、什么都不做。
-    if (!一格) return true;
-    新格.push(一格);
+    if (!valueCell) return true;
+    newValueCell.push(valueCell);
   }
   const tr = state.tr.insert(
-    新行起点(表.tableStart, 前面各行高),
-    行型.create(null, 新格),
+    newValueLineStart(table2.tableStart, beforeSurfaceEachLineHeight),
+    rowType2.create(null, newValueCell),
   );
   // ⚠️ 选区要用**插完之后**的 `tr.doc` 解析：新行之后的那些位置全被这次插入
   // 推后了，拿旧 doc 去 resolve 会落到别的地方。
-  tr.setSelection(TextSelection.near(tr.doc.resolve(首格落点(表.tableStart, 前面各行高))));
+  tr.setSelection(TextSelection.near(tr.doc.resolve(firstCellDrop(table2.tableStart, beforeSurfaceEachLineHeight))));
   dispatch(tr.scrollIntoView());
   return true;
 }
@@ -218,7 +218,7 @@ export function 表格Tab处理(
  * ⚠️ `keyCode` 是过时的属性，这里用它是**照抄上游的判据**：本仓要跟
  * `prosemirror-keymap` 对同一颗键得出同一个结论，就不能另起一套。
  */
-export function 表格Tab按键(
+export function tableTabKey(
   state: EditorState,
   dispatch: ((tr: Transaction) => void) | undefined,
   event: {
@@ -236,19 +236,19 @@ export function 表格Tab按键(
   // ⚠️ 两道都留着：`event.key` 是"正规"判据（别的平台/别的输入栈给得出来），
   // `keyCode === 9` 是 GTK/X11 上 `Shift+Tab`（`ISO_Left_Tab`）唯一还认得的痕迹。
   if (event.key !== "Tab" && event.keyCode !== 9) return false;
-  return 表格Tab处理(state, dispatch, event.shiftKey);
+  return handleTableTab(state, dispatch, event.shiftKey);
 }
 
 /**
  * 造那条 `Plugin`。**工厂不是常量**：每个编辑器实例要一份自己的插件
  * （ProseMirror 的插件带实例状态，共用一份是踩过的坑）。
  */
-export function 建表格Tab插件(): Plugin {
+export function createTableTabPlugin(): Plugin {
   return new Plugin({
-    key: 表格Tab键,
+    key: tableTabKey2,
     props: {
       handleKeyDown: (view, event) =>
-        表格Tab按键(view.state, (tr) => view.dispatch(tr), event, view.composing),
+        tableTabKey(view.state, (tr) => view.dispatch(tr), event, view.composing),
     },
   });
 }
@@ -259,6 +259,6 @@ export function 建表格Tab插件(): Plugin {
  * ⚠️ 走 `handleKeyDown`（本仓口径，`table-input.ts` 顶上写过为什么不能用
  * `$useKeymap` 抢 priority），靠 `.use()` 的顺序排在 `indent` 前面。
  */
-export function 表格Tab() {
-  return $prose(() => 建表格Tab插件());
+export function tableTab() {
+  return $prose(() => createTableTabPlugin());
 }

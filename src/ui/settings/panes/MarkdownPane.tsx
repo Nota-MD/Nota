@@ -105,9 +105,9 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
     { value: "as-html", label: t("Treat as HTML (collapse to a single space)") },
   ];
 
-  const 写 = paneWriter(settings, onChange, "markdown");
+  const write = paneWriter(settings, onChange, "markdown");
   const m = settings.markdown;
-  const 智能标点关着 = m.smart_punctuation === "off";
+  const smartAblePunctuationCloseActive = m.smart_punctuation === "off";
 
   return (
     <>
@@ -123,7 +123,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.heading_style}
             options={HEADING}
-            onChange={(heading_style) => 写({ heading_style })}
+            onChange={(heading_style) => write({ heading_style })}
           />
         </SettingRow>
 
@@ -131,7 +131,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.bullet_mark}
             options={BULLET}
-            onChange={(bullet_mark) => 写({ bullet_mark })}
+            onChange={(bullet_mark) => write({ bullet_mark })}
           />
         </SettingRow>
 
@@ -139,38 +139,38 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.ordered_mark}
             options={ORDERED}
-            onChange={(ordered_mark) => 写({ ordered_mark })}
+            onChange={(ordered_mark) => write({ ordered_mark })}
           />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Markdown extensions")}>
         <SettingRow label={t("Autodetect links")}>
-          <Toggle checked={m.autolink} onChange={(autolink) => 写({ autolink })} />
+          <Toggle checked={m.autolink} onChange={(autolink) => write({ autolink })} />
         </SettingRow>
 
         <SettingRow label={t("Inline math")}>
-          <Toggle checked={m.inline_math} onChange={(inline_math) => 写({ inline_math })} />
+          <Toggle checked={m.inline_math} onChange={(inline_math) => write({ inline_math })} />
         </SettingRow>
 
         <SettingRow label={t("Subscript")}>
-          <Toggle checked={m.subscript} onChange={(subscript) => 写({ subscript })} />
+          <Toggle checked={m.subscript} onChange={(subscript) => write({ subscript })} />
         </SettingRow>
 
         <SettingRow label={t("Superscript")}>
-          <Toggle checked={m.superscript} onChange={(superscript) => 写({ superscript })} />
+          <Toggle checked={m.superscript} onChange={(superscript) => write({ superscript })} />
         </SettingRow>
 
         <SettingRow label={t("Highlight")}>
-          <Toggle checked={m.highlight} onChange={(highlight) => 写({ highlight })} />
+          <Toggle checked={m.highlight} onChange={(highlight) => write({ highlight })} />
         </SettingRow>
 
         <SettingRow label={t("GitHub alerts")}>
-          <Toggle checked={m.github_alerts} onChange={(github_alerts) => 写({ github_alerts })} />
+          <Toggle checked={m.github_alerts} onChange={(github_alerts) => write({ github_alerts })} />
         </SettingRow>
 
         <SettingRow label={t("Diagrams")}>
-          <Toggle checked={m.diagrams} onChange={(diagrams) => 写({ diagrams })} />
+          <Toggle checked={m.diagrams} onChange={(diagrams) => write({ diagrams })} />
         </SettingRow>
       </SettingsGroup>
 
@@ -179,14 +179,14 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.smart_punctuation}
             options={SMART}
-            onChange={(smart_punctuation) => 写({ smart_punctuation })}
+            onChange={(smart_punctuation) => write({ smart_punctuation })}
           />
         </SettingRow>
 
         <SettingRow label={t("Smart quotes")}>
           <Toggle
             checked={m.smart_quotes}
-            onChange={(smart_quotes) => 写({ smart_quotes })}
+            onChange={(smart_quotes) => write({ smart_quotes })}
           />
         </SettingRow>
 
@@ -194,7 +194,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.smart_quotes_double}
             options={QUOTE}
-            onChange={(smart_quotes_double) => 写({ smart_quotes_double })}
+            onChange={(smart_quotes_double) => write({ smart_quotes_double })}
           />
         </SettingRow>
 
@@ -202,14 +202,14 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.smart_quotes_single}
             options={QUOTE}
-            onChange={(smart_quotes_single) => 写({ smart_quotes_single })}
+            onChange={(smart_quotes_single) => write({ smart_quotes_single })}
           />
         </SettingRow>
 
         <SettingRow label={t("Smart dashes")}>
           <Toggle
             checked={m.smart_dashes}
-            onChange={(smart_dashes) => 写({ smart_dashes })}
+            onChange={(smart_dashes) => write({ smart_dashes })}
           />
         </SettingRow>
 
@@ -217,22 +217,22 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.dash_style}
             options={DASH}
-            onChange={(dash_style) => 写({ dash_style })}
+            onChange={(dash_style) => write({ dash_style })}
           />
         </SettingRow>
 
         <SettingRow label={t("Allow converting Unicode punctuation")}>
           <Toggle
             checked={m.unicode_punctuation}
-            disabled={智能标点关着}
-            onChange={(unicode_punctuation) => 写({ unicode_punctuation })}
+            disabled={smartAblePunctuationCloseActive}
+            onChange={(unicode_punctuation) => write({ unicode_punctuation })}
           />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Auto-correct")}>
         <SettingRow label={t("Auto-correct misspelled English words")}>
-          <Toggle checked={m.auto_correct} onChange={(auto_correct) => 写({ auto_correct })} />
+          <Toggle checked={m.auto_correct} onChange={(auto_correct) => write({ auto_correct })} />
         </SettingRow>
       </SettingsGroup>
 
@@ -240,32 +240,32 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         <SettingRow label={t("Show line numbers")}>
           <Toggle
             checked={m.code_line_numbers}
-            onChange={(code_line_numbers) => 写({ code_line_numbers })}
+            onChange={(code_line_numbers) => write({ code_line_numbers })}
           />
         </SettingRow>
 
         <SettingRow label={t("Word wrap")}>
-          <Toggle checked={m.code_wrap} onChange={(code_wrap) => 写({ code_wrap })} />
+          <Toggle checked={m.code_wrap} onChange={(code_wrap) => write({ code_wrap })} />
         </SettingRow>
 
         <SettingRow label={t("Show toolbar")}>
           <Toggle
             checked={m.code_toolbar}
-            onChange={(code_toolbar) => 写({ code_toolbar })}
+            onChange={(code_toolbar) => write({ code_toolbar })}
           />
         </SettingRow>
 
         <SettingRow label={t("Show language picker")}>
           <Toggle
             checked={m.code_language_picker}
-            onChange={(code_language_picker) => 写({ code_language_picker })}
+            onChange={(code_language_picker) => write({ code_language_picker })}
           />
         </SettingRow>
 
         <SettingRow label={t("Use Shift+Tab to indent selected code")}>
           <Toggle
             checked={m.code_shift_tab_indent}
-            onChange={(code_shift_tab_indent) => 写({ code_shift_tab_indent })}
+            onChange={(code_shift_tab_indent) => write({ code_shift_tab_indent })}
           />
         </SettingRow>
 
@@ -274,7 +274,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
             value={m.code_indent}
             min={1}
             max={8}
-            onChange={(code_indent) => 写({ code_indent })}
+            onChange={(code_indent) => write({ code_indent })}
           />
         </SettingRow>
 
@@ -283,7 +283,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
             value={m.code_default_language}
             width="md"
             placeholder={t("Empty = write nothing")}
-            onChange={(code_default_language) => 写({ code_default_language })}
+            onChange={(code_default_language) => write({ code_default_language })}
           />
         </SettingRow>
 
@@ -291,27 +291,27 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.code_auto_language}
             options={AUTO_LANG}
-            onChange={(code_auto_language) => 写({ code_auto_language })}
+            onChange={(code_auto_language) => write({ code_auto_language })}
           />
         </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Math")}>
         <SettingRow label={t("Inline math")}>
-          <Toggle checked={m.inline_math} onChange={(inline_math) => 写({ inline_math })} />
+          <Toggle checked={m.inline_math} onChange={(inline_math) => write({ inline_math })} />
         </SettingRow>
 
         <SettingRow label={t("Recognize the \\\\( \\\\) and \\\\[ \\\\] delimiters")}>
           <Toggle
             checked={m.latex_delimiters}
-            onChange={(latex_delimiters) => 写({ latex_delimiters })}
+            onChange={(latex_delimiters) => write({ latex_delimiters })}
           />
         </SettingRow>
 
         <SettingRow label={t("Treat ```math blocks as math")}>
           <Toggle
             checked={m.code_block_math}
-            onChange={(code_block_math) => 写({ code_block_math })}
+            onChange={(code_block_math) => write({ code_block_math })}
           />
         </SettingRow>
 
@@ -325,7 +325,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         <SettingRow label={t("Use the legacy inline math parser")}>
           <Toggle
             checked={m.legacy_inline_math}
-            onChange={(legacy_inline_math) => 写({ legacy_inline_math })}
+            onChange={(legacy_inline_math) => write({ legacy_inline_math })}
           />
         </SettingRow>
 
@@ -333,7 +333,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.equation_numbering}
             options={EQUATION}
-            onChange={(equation_numbering) => 写({ equation_numbering })}
+            onChange={(equation_numbering) => write({ equation_numbering })}
           />
         </SettingRow>
 
@@ -341,7 +341,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.math_output}
             options={MATH_OUT}
-            onChange={(math_output) => 写({ math_output })}
+            onChange={(math_output) => write({ math_output })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -350,19 +350,19 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
         <SettingRow label={t("First-line indent")}>
           <Toggle
             checked={m.first_line_indent}
-            onChange={(first_line_indent) => 写({ first_line_indent })}
+            onChange={(first_line_indent) => write({ first_line_indent })}
           />
         </SettingRow>
 
         <SettingRow label={t("Show <br/> while editing")}>
-          <Toggle checked={m.show_br} onChange={(show_br) => 写({ show_br })} />
+          <Toggle checked={m.show_br} onChange={(show_br) => write({ show_br })} />
         </SettingRow>
 
         <SettingRow label={t("While editing")}>
           <Select
             value={m.whitespace_editing}
             options={WS}
-            onChange={(whitespace_editing) => 写({ whitespace_editing })}
+            onChange={(whitespace_editing) => write({ whitespace_editing })}
           />
         </SettingRow>
 
@@ -370,7 +370,7 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Select
             value={m.whitespace_export}
             options={WS}
-            onChange={(whitespace_export) => 写({ whitespace_export })}
+            onChange={(whitespace_export) => write({ whitespace_export })}
           />
         </SettingRow>
       </SettingsGroup>

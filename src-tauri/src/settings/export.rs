@@ -40,6 +40,50 @@
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomExporter {
+    /// 稳定 id；菜单命令从这里生成。
+    pub id: String,
+    /// 菜单与设置页显示的名称，可由用户修改。
+    pub name: String,
+    /// 后端 `Format::from_id` 认得的 pandoc 输出格式。
+    pub format: String,
+    /// 这一份导出器自己的额外参数。
+    pub args: String,
+    /// Word/ODT 的参考文档、EPUB 的 CSS 或 LaTeX/PDF 的头文件。
+    pub style_file: String,
+    /// 完成这一种导出后是否在文件管理器中定位结果。
+    pub open_after_export: bool,
+}
+
+impl CustomExporter {
+    fn new(id: &str, name: &str, format: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            format: format.to_string(),
+            args: String::new(),
+            style_file: String::new(),
+            open_after_export: false,
+        }
+    }
+}
+
+fn 默认导出器() -> Vec<CustomExporter> {
+    vec![
+        CustomExporter::new("template-docx", "Word (.docx)", "docx"),
+        CustomExporter::new("template-odt", "OpenDocument", "odt"),
+        CustomExporter::new("template-rtf", "RTF", "rtf"),
+        CustomExporter::new("template-epub", "EPUB", "epub"),
+        CustomExporter::new("template-latex", "LaTeX", "latex"),
+        CustomExporter::new("template-mediawiki", "MediaWiki", "mediawiki"),
+        CustomExporter::new("template-rst", "reStructuredText", "rst"),
+        CustomExporter::new("template-textile", "Textile", "textile"),
+        CustomExporter::new("template-opml", "OPML", "opml"),
+    ]
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Export {
@@ -63,6 +107,10 @@ pub struct Export {
     /// 反过来说，用户**能**用它覆盖掉我们给的默认值之外的东西（比如
     /// `--reference-doc=` `--css=` `-V mainfont=`），这正是这一格存在的理由。
     pub pandoc_args: String,
+    /// 分隔线以下的自定义导出器。默认给 Typora 同款九种模板；用户可以增删、
+    /// 排序和改名。固定项（通用 / PDF / HTML 两档 / 图片）不在这个数组里。
+    #[serde(default = "默认导出器")]
+    pub custom_exporters: Vec<CustomExporter>,
 }
 
 impl Default for Export {
@@ -73,6 +121,7 @@ impl Default for Export {
             open_after_export: false,
             // 默认不给：额外参数是"用户自己知道要什么"才写的东西。
             pandoc_args: String::new(),
+            custom_exporters: 默认导出器(),
         }
     }
 }
@@ -127,5 +176,24 @@ mod tests {
         // 不是"读不出整份设置"。serde 的 `default` 那一行管着这件事。
         let 老: Export = toml::from_str("default_folder = \"\"\nopen_after_export = false\n").unwrap();
         assert_eq!(老.pandoc_args, "");
+    }
+
+    #[test]
+    fn 默认导出器可删除且旧设置自动补齐() {
+        let e = Export::default();
+        assert_eq!(e.custom_exporters.len(), 9);
+        assert_eq!(e.custom_exporters[0].format, "docx");
+
+        let empty: Export = toml::from_str(
+            "default_folder = \"\"\nopen_after_export = false\npandoc_args = \"\"\ncustom_exporters = []\n",
+        )
+        .unwrap();
+        assert!(empty.custom_exporters.is_empty());
+
+        let old: Export = toml::from_str(
+            "default_folder = \"\"\nopen_after_export = false\npandoc_args = \"\"\n",
+        )
+        .unwrap();
+        assert_eq!(old.custom_exporters.len(), 9);
     }
 }

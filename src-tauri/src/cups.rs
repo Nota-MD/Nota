@@ -366,7 +366,7 @@ fn 发请求(
     };
     let 总长 = ipp.len() as u64 + 文件长;
     crate::日志!(
-        "[cups] POST {path}：IPP {} 字节，文档 {} 字节",
+        "[cups] POST {path}: IPP {} bytes, document {} bytes",
         ipp.len(),
         文件长
     );
@@ -384,7 +384,7 @@ fn 发请求(
     // 把 `Content-Length` 指着的 IPP 正文省掉。实测同一请求不关写半边就正常。
     let mut 响应 = Vec::new();
     流.read_to_end(&mut 响应)?;
-    crate::日志!("[cups] 响应 {} 字节", 响应.len());
+    crate::日志!("[cups] response body: {} bytes", 响应.len());
     http正文(响应)
 }
 
@@ -409,7 +409,7 @@ fn http正文(响应: Vec<u8>) -> io::Result<Vec<u8>> {
     }
     let 体 = &响应[分隔 + 4..];
     crate::日志!(
-        "[cups] HTTP 头 {} 字节，正文 {} 字节，总 {} 字节",
+        "[cups] HTTP header {} bytes, body {} bytes, total {} bytes",
         分隔,
         体.len(),
         响应.len()

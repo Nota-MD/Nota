@@ -66,7 +66,7 @@
 
 import { useSyncExternalStore } from "react";
 
-import { 中文表 } from "@/i18n/zh";
+import { middleTextTable } from "@/i18n/zh";
 
 /**
  * 兜底语言。⚠️ 与宿主那边（`src-tauri/src/lang.rs::应用兜底`）是同一个值。
@@ -78,26 +78,26 @@ import { 中文表 } from "@/i18n/zh";
  * ⚠️ 它**不是**"默认语言"：中文语区的用户照旧拿到中文界面（宿主按系统语区
  * 算，`zh-CN` 在支持列表里）。这里是兜底，只在**认不出来**时才用上。
  */
-const 兜底 = "en";
+const fallback = "en";
 
 /** 语言 → 表。⚠️ 英语**不在**这张表里：它的表是空的（缺键用原文）。 */
-const 表: Record<string, Record<string, string>> = {
-  "zh-CN": 中文表,
+const table2: Record<string, Record<string, string>> = {
+  "zh-CN": middleTextTable,
 };
 
-let 当前 = 兜底;
-const 听众 = new Set<() => void>();
+let current = fallback;
+const listenMany = new Set<() => void>();
 
 /** 宿主报了语言之后调这一下。**只该由 `App.tsx` 启动那一段调**。 */
-export function 定语言(语言: string): void {
-  if (语言 === 当前) return;
-  当前 = 语言;
-  听众.forEach((f) => f());
+export function setLanguage(language: string): void {
+  if (language === current) return;
+  current = language;
+  listenMany.forEach((f) => f());
 }
 
 /** 此刻在说哪种语言（`zh-CN` / `en`）。 */
-export function 语言(): string {
-  return 当前;
+export function language(): string {
+  return current;
 }
 
 /**
@@ -107,18 +107,18 @@ export function 语言(): string {
  * 查到的只有一条。真遇到那种情况就把原文改成两句不同的话（键不同，译法自然不同）
  * ——2026-09-28 翻转时按这条裁过 13 组冲突，其中含义不同的那几组就是这么拆开的。
  */
-export function t(原文: string, ...参数: (string | number)[]): string {
-  const 句 = 表[当前]?.[原文] ?? 原文;
-  if (参数.length === 0) return 句;
-  return 句.replace(/\{(\d+)\}/g, (整, i: string) => {
-    const v = 参数[Number(i)];
-    return v === undefined ? 整 : String(v);
+export function t(source: string, ...parameter: (string | number)[]): string {
+  const sentence = table2[current]?.[source] ?? source;
+  if (parameter.length === 0) return sentence;
+  return sentence.replace(/\{(\d+)\}/g, (whole, i: string) => {
+    const v = parameter[Number(i)];
+    return v === undefined ? whole : String(v);
   });
 }
 
-function 订阅(f: () => void): () => void {
-  听众.add(f);
-  return () => 听众.delete(f);
+function subscribeRead(f: () => void): () => void {
+  listenMany.add(f);
+  return () => listenMany.delete(f);
 }
 
 /**
@@ -129,7 +129,7 @@ function 订阅(f: () => void): () => void {
  * 首帧与宿主答话之间只差几毫秒，但那几毫秒里画出来的字是错的。
  */
 export function useT(): typeof t {
-  useSyncExternalStore(订阅, 语言, 语言);
+  useSyncExternalStore(subscribeRead, language, language);
   return t;
 }
 
@@ -144,6 +144,6 @@ export function useT(): typeof t {
  * "那就别订阅了"的理由：写死一个不动的依赖，等哪天热切语言真做了，症状是
  * **原生菜单栏还是旧语言**——而那种地方没人会想到去查依赖数组。
  */
-export function use语言(): string {
-  return useSyncExternalStore(订阅, 语言, 语言);
+export function useLanguage(): string {
+  return useSyncExternalStore(subscribeRead, language, language);
 }

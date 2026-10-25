@@ -10,8 +10,8 @@
  * 一支 2.1 MB 的多字符集点阵字体；等整套字体解析完再揭幕，会把每次冷启动硬拖长
  * 最多 2 秒（旧实现还真有一个 2 秒超时）。字体是主题样式的一部分，但它的装载
  * **不需要挡住应用窗口的第一帧**：`@font-face` 已经由浏览器并行获取，样式与布局
- * 也已经在 CSS 注入时确定。这里只等两个渲染帧，确保主题属性先落到 DOM，再换掉
- * 启动层。
+ * 也已经在 CSS 注入时确定。编辑器就绪后直接移入视野；不能用 rAF 等首帧，
+ * 因为屏幕外 WebView 的帧与计时器可能被 WebKit 暂停。
  */
 
 import { useEffect } from "react";
@@ -43,8 +43,6 @@ export function useBootReveal(ready: boolean): void {
       if (cancelled) return;
       for (const [event, fn] of listeners) window.removeEventListener(event, fn);
       if (timer) window.clearTimeout(timer);
-      // ⚠️ 不能等 rAF：窗口隐藏时 WebKit 会暂停它，ready 之后永远等不到下一帧。
-      // 编辑器在此刻已经挂载并聚焦，直接显示原生窗口即可。
       document.documentElement.dataset.booted = "true";
       void api.window
         .showMain()
@@ -55,7 +53,7 @@ export function useBootReveal(ready: boolean): void {
           window.dispatchEvent(new Event("nota-window-shown"));
           window.setTimeout(() => {
             if (cancelled) return;
-            void import("@/editor/katex-runtime").then((m) => m.预热Katex());
+            void import("@/editor/katex-runtime").then((m) => m.preHotKatex());
           }, 0);
         })
         .catch((error) => {

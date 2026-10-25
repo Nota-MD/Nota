@@ -43,18 +43,18 @@
  * 弄脏，`toBlob` 直接抛——那是"图做出来了但存不下去"。
  */
 
-import type { 刻度 } from "@/ui/chart-ticks";
-import type { 热力图 } from "@/ui/heatmap";
+import type { tick } from "@/ui/chart-ticks";
+import type { HotForceImage } from "@/ui/heatmap";
 import type { PanelShare } from "@/ui/panel-nodes";
-import { 标识 } from "@/ui/nota-mark";
-import { 卡片主色, 界面强调色 } from "@/styles/accent";
+import { markRecognize } from "@/ui/nota-mark";
+import { cardAccent, uiAccent } from "@/styles/accent";
 
 /** 卡片尺寸（设计稿就是这两个数）。 */
-export const 卡宽 = 1080;
-export const 卡高 = 1350;
+export const cardWidth = 1080;
+export const cardHeight = 1350;
 
 /** 字体：与界面同一套（只用系统装了的，不捆字体，见 `docs/10` §11.2）。 */
-const 字体 = `"Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft YaHei",sans-serif`;
+const characterBody = `"Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft YaHei",sans-serif`;
 
 // ── 配色 ─────────────────────────────────────────────────────────────────
 //
@@ -70,39 +70,39 @@ const 字体 = `"Noto Sans CJK SC","Source Han Sans SC","PingFang SC","Microsoft
 // 改回来了（看 `plugins/stats/design/分享图-深色.png` 里那个 124 的颜色就知道）。
 
 /** 一张卡片的配色。 */
-export interface 卡色 {
-  底1: string;
-  底2: string;
-  字: string;
-  淡: string;
-  线: string;
+export interface cardColor {
+  bottom1: string;
+  bottom2: string;
+  character2: string;
+  faint: string;
+  line2: string;
   /** 那三格指标的底色，配合 `块透` 用（半透明靠 `fill-opacity`，不用 8 位 hex）。 */
-  块: string;
-  块透: number;
+  block: string;
+  blockTransparent: number;
   /** 强调色：大数字与曲线。 */
-  主: string;
+  main: string;
 }
 
-export const 深色卡: 卡色 = {
-  底1: "#0b0f16",
-  底2: "#151d2b",
-  字: "#f2f5fa",
-  淡: "#8b97ab",
-  线: "#222c3d",
-  块: "#ffffff",
-  块透: 0.045,
-  主: "#4f82fb",
+export const darkCard: cardColor = {
+  bottom1: "#0b0f16",
+  bottom2: "#151d2b",
+  character2: "#f2f5fa",
+  faint: "#8b97ab",
+  line2: "#222c3d",
+  block: "#ffffff",
+  blockTransparent: 0.045,
+  main: "#4f82fb",
 };
 
-export const 浅色卡: 卡色 = {
-  底1: "#f7f9fc",
-  底2: "#eef2f8",
-  字: "#131922",
-  淡: "#6b7688",
-  线: "#dde4ee",
-  块: "#131922",
-  块透: 0.035,
-  主: "#2f63d8",
+export const lightCard: cardColor = {
+  bottom1: "#f7f9fc",
+  bottom2: "#eef2f8",
+  character2: "#131922",
+  faint: "#6b7688",
+  line2: "#dde4ee",
+  block: "#131922",
+  blockTransparent: 0.035,
+  main: "#2f63d8",
 };
 
 /**
@@ -117,29 +117,29 @@ export const 浅色卡: 卡色 = {
  * ⚠️ 两套底色各自那一份 `主` 会被**覆盖掉**（返回的是新对象，不动常量）——
  * 直接改常量的话，同一个页面里先做浅色卡再做深色卡就会串味。
  */
-export function 当前卡色(): 卡色 {
-  const 模式 = document?.documentElement?.dataset?.uiMode;
-  const 底 = 模式 === "light" ? 浅色卡 : 深色卡;
-  return { ...底, 主: 卡片主色(界面强调色(), 模式 !== "light") };
+export function currentCardColor(): cardColor {
+  const mode2 = document?.documentElement?.dataset?.uiMode;
+  const bottom = mode2 === "light" ? lightCard : darkCard;
+  return { ...bottom, main: cardAccent(uiAccent(), mode2 !== "light") };
 }
 
 // ── 版式（照设计稿量的）──────────────────────────────────────────────────
 
-const 页边 = 80;
+const pageEdge = 80;
 /** 图区四边。左边界让开了 60px 给纵轴那几个数字（见文件头第 2 条）。 */
-const 图左 = 140;
-const 图右 = 卡宽 - 页边;
-const 图上 = 551;
-const 图下 = 871;
+const imageLeft = 140;
+const imageRight = cardWidth - pageEdge;
+const imageAbove = 551;
+const imageBelow = 871;
 /** 曲线**不贴边**：斜率大的那一段贴着上下边会看不清哪里是峰（设计稿也是 8）。 */
-const 图内边 = 8;
+const imageInsideEdge = 8;
 /** 页脚那条横线的高度。 */
-const 页脚线 = 1226;
+const pageFootLine = 1226;
 
 // ── 一段一段拼 ───────────────────────────────────────────────────────────
 
 /** XML 里那几个不能直接写的字符。⚠️ `&` 必须第一个换，不然会把别处换出来的 `&` 再换一遍。 */
-function 转义(s: string): string {
+function convertMeaning(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -147,51 +147,51 @@ function 转义(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-interface 字参 {
-  号: number;
-  粗?: number;
-  色?: string;
-  锚?: "start" | "middle" | "end";
+interface CharacterParameter {
+  number: number;
+  coarse?: number;
+  color?: string;
+  anchor2?: "start" | "middle" | "end";
   /** 字距（设计稿里副标题与页脚那两处是散开的）。 */
-  距?: number;
+  distance?: number;
 }
 
 /** 一行字。坐标是**基线**（SVG 的规矩），不是左上角。 */
-function 字(内容: string, x: number, y: number, 参: 字参): string {
-  if (!内容) return "";
-  const 锚 = 参.锚 && 参.锚 !== "start" ? ` text-anchor="${参.锚}"` : "";
-  const 距 = 参.距 ? ` letter-spacing="${参.距}"` : "";
+function character2(content: string, x: number, y: number, parameter2: CharacterParameter): string {
+  if (!content) return "";
+  const anchor2 = parameter2.anchor2 && parameter2.anchor2 !== "start" ? ` text-anchor="${parameter2.anchor2}"` : "";
+  const distance = parameter2.distance ? ` letter-spacing="${parameter2.distance}"` : "";
   return (
-    `<text x="${x}" y="${y}" font-family='${字体}' font-size="${参.号}"` +
-    ` font-weight="${参.粗 ?? 400}" fill="${参.色 ?? "#000"}"${锚}${距}>${转义(内容)}</text>`
+    `<text x="${x}" y="${y}" font-family='${characterBody}' font-size="${parameter2.number}"` +
+    ` font-weight="${parameter2.coarse ?? 400}" fill="${parameter2.color ?? "#000"}"${anchor2}${distance}>${convertMeaning(content)}</text>`
   );
 }
 
 /** 量一段字有多宽（大数字后面那颗单位要紧挨着它，SVG 自己排不了版）。 */
-export type 量宽器 = (文: string, 号: number, 粗: number) => number;
+export type MeasureWidthDevice = (text4: string, number: number, coarse: number) => number;
 
 /**
  * 量不到字宽时的估法：数字与小数点窄一点，别的按"一个全角"算。
  * ⚠️ 是**估**的：真量不到时（没有 canvas）位置会差几个像素，而差几像素的后果
  * 只是大数字和单位之间宽一点或挤一点——比"不画单位"轻得多。
  */
-const 估宽: 量宽器 = (文, 号, 粗) => {
-  let 宽 = 0;
-  for (const 个 of 文) 宽 += /[0-9.\-]/.test(个) ? 0.55 : 0.62;
-  return 宽 * 号 * (粗 >= 700 ? 1.02 : 1);
+const estimateWidth: MeasureWidthDevice = (text4, number, coarse) => {
+  let width = 0;
+  for (const item2 of text4) width += /[0-9.\-]/.test(item2) ? 0.55 : 0.62;
+  return width * number * (coarse >= 700 ? 1.02 : 1);
 };
 
 /** 用 canvas 量，量不到退回 `估宽`。 */
-function 默认量宽(): 量宽器 {
+function defaultMeasureWidth(): MeasureWidthDevice {
   try {
     const ctx = document.createElement("canvas").getContext("2d");
-    if (!ctx) return 估宽;
-    return (文, 号, 粗) => {
-      ctx.font = `${粗} ${号}px ${字体}`;
-      return ctx.measureText(文).width;
+    if (!ctx) return estimateWidth;
+    return (text4, number, coarse) => {
+      ctx.font = `${coarse} ${number}px ${characterBody}`;
+      return ctx.measureText(text4).width;
     };
   } catch {
-    return 估宽;
+    return estimateWidth;
   }
 }
 
@@ -203,11 +203,11 @@ function 默认量宽(): 量宽器 {
  * 压过之后刻度**位置**是不等距的，但每一个位置都还对应一个**真的值**——
  * 这跟对数轴是一回事，不是"随便摆三个数"。
  */
-function 纵位置(v: number, 大: number, 小: number): number {
-  const 跨 = 大 - 小;
-  const 比 = 跨 > 0 ? (v - 小) / 跨 : 0.5;
-  const 压 = Math.pow(Math.min(1, Math.max(0, 比)), 0.42);
-  const y = 图下 - 图内边 - 压 * (图下 - 图上 - 2 * 图内边);
+function verticalPosition(v: number, large: number, small: number): number {
+  const cross = large - small;
+  const compare = cross > 0 ? (v - small) / cross : 0.5;
+  const press2 = Math.pow(Math.min(1, Math.max(0, compare)), 0.42);
+  const y = imageBelow - imageInsideEdge - press2 * (imageBelow - imageAbove - 2 * imageInsideEdge);
   // ⚠️ 就地**收到一位小数**：这一个数会被用两次（刻度线画在哪、那行字画在哪），
   // 不收敛的话两处各带一串 17 位小数——线和对它的字可能差出半像素，而且那串
   // 数字白白进 SVG（一张图 3 档，进 PNG 之前先长了几百个字节）。
@@ -215,7 +215,7 @@ function 纵位置(v: number, 大: number, 小: number): number {
 }
 
 /** 横轴一档刻度摆在哪（`at` 是 0~1 的比例）。 */
-const 横位置 = (at: number) => 图左 + at * (图右 - 图左);
+const horizontalPosition = (at: number) => imageLeft + at * (imageRight - imageLeft);
 
 /**
  * 横轴标签的锚点：贴左端那档左对齐、贴右端那档右对齐，免得文字跑出卡片。
@@ -224,7 +224,7 @@ const 横位置 = (at: number) => 图左 + at * (图右 - 图左);
  * 字符的标签（24px 下约 62px 宽）会有一半跑到图区外面——它不会出卡片，但会**压到
  * 纵轴那几个数上**。左对齐就没这个问题（文字往右长）。
  */
-function 横锚(at: number): 字参["锚"] {
+function horizontalAnchor(at: number): CharacterParameter["anchor2"] {
   if (at <= 0.045) return "start";
   if (at >= 0.955) return "end";
   return "middle";
@@ -256,38 +256,38 @@ function 横锚(at: number): 字参["锚"] {
  * ⚠️ 步长**从候选里挑**而不是 `跨 ÷ 目标` 算出来：算出来会是 24 这种数，档位
  * 就成了 0、24、48——那串数字在仪器上不会出现。
  */
-const 纵步长候选 = [1, 2, 5, 10, 20, 25, 40, 50, 100, 200, 250, 500, 1000, 2000];
+const verticalStepLengthCandidate = [1, 2, 5, 10, 20, 25, 40, 50, 100, 200, 250, 500, 1000, 2000];
 /** 纵轴最多几档有字的。再多就是一排竖着的数字了。 */
-const 纵主档上限 = 6;
+const verticalMainLevelLimit = 6;
 /** 相邻两档之间分几小格（仪器上那种没字的短线）。 */
-const 纵细分 = 5;
+const verticalThinShare = 5;
 /** 量程最多撑到峰顶之上这么多。再多就是"曲线缩在图上头半截"。 */
-const 纵撑上限 = 0.3;
+const verticalSupportLimit = 0.3;
 
 /** 一条纵轴：标尺本身 ＋ 画曲线要用的上下界。 */
-interface 纵轴 {
-  主: { y: number; 文: string }[];
+interface VerticalAxis {
+  main: { y: number; text4: string }[];
   /** 没字那几档的位置（仪器上的小格）。 */
-  次: number[];
+  count2: number[];
   /** 量程上界（≥ 数据最大值）。曲线按它归一化。 */
-  上: number;
+  above: number;
   /** 量程下界（≤ 数据最小值）。 */
-  下: number;
+  below: number;
 }
 
 /** 步长的整数倍里，第一个 ≥ `大` 的那个（`上界`）。 */
-const 上界 = (大: number, 步: number) => Math.ceil(大 / 步 - 1e-9) * 步;
-const 下界 = (小: number, 步: number) => Math.floor(小 / 步 + 1e-9) * 步;
+const aboveBoundary = (large: number, step: number) => Math.ceil(large / step - 1e-9) * step;
+const belowBoundary = (small: number, step: number) => Math.floor(small / step + 1e-9) * step;
 
-function 纵刻度尺(大: number, 小: number): 纵轴 {
+function verticalTickRuler(large: number, small: number): VerticalAxis {
   // 一段一直平着（极值相等）时只给一档、摆在中间：给两档相同的数会让人以为
   // 上下差着点什么（与 `chart-ticks.ts::推纵刻度` 同一条规矩）。
-  if (!(大 > 小)) {
-    return { 主: [{ y: 纵位置(大, 大, 小), 文: String(Math.round(大)) }], 次: [], 上: 大, 下: 小 };
+  if (!(large > small)) {
+    return { main: [{ y: verticalPosition(large, large, small), text4: String(Math.round(large)) }], count2: [], above: large, below: small };
   }
 
   /** 按这个步长，量程撑开之后一共几档。 */
-  const 档数 = (步: number) => Math.round((上界(大, 步) - 下界(小, 步)) / 步) + 1;
+  const levelNumber = (step: number) => Math.round((aboveBoundary(large, step) - belowBoundary(small, step)) / step) + 1;
 
   // 挑**最小的那个够用的步长**（= 档最密），但要"撑得不过分"。
   //
@@ -295,55 +295,55 @@ function 纵刻度尺(大: number, 小: number): 纵轴 {
   // 步长 40/50/100/200 都撑到 200（2.6%），而步长 250 撑到 250（28%）、500 撑到
   // 500（156%）。所以撑过头的那一档要 `continue` 跳过、**不能 `break`**——
   // 后面还可能有一个刚好合适的。
-  let 步 = 0;
-  let 撑 = false;
-  for (const s of 纵步长候选) {
-    if (档数(s) > 纵主档上限) continue;
-    if (上界(大, s) / 大 - 1 > 纵撑上限) continue;
-    步 = s;
-    撑 = true;
+  let step = 0;
+  let support = false;
+  for (const s of verticalStepLengthCandidate) {
+    if (levelNumber(s) > verticalMainLevelLimit) continue;
+    if (aboveBoundary(large, s) / large - 1 > verticalSupportLimit) continue;
+    step = s;
+    support = true;
     break;
   }
   // 一个都撑不了（峰顶跟哪个整数倍都差着三成以上）→ 退一步：**不撑**，只要档够密。
-  if (!步) 步 = 纵步长候选.find((s) => 大 / s < 纵主档上限) ?? 1;
+  if (!step) step = verticalStepLengthCandidate.find((s) => large / s < verticalMainLevelLimit) ?? 1;
 
-  const 上 = 撑 ? Math.max(大, 上界(大, 步)) : 大;
-  const 下 = 撑 ? Math.min(小, 下界(小, 步)) : 小;
+  const above = support ? Math.max(large, aboveBoundary(large, step)) : large;
+  const below = support ? Math.min(small, belowBoundary(small, step)) : small;
 
-  const 主: { y: number; 文: string }[] = [];
+  const main: { y: number; text4: string }[] = [];
   // ⚠️ 起点算 `ceil(小 ÷ 步 − 1e-9)` 而**不是** `ceil(小 ÷ 步)`：浮点的 `小 ÷ 步`
   // 在正好整除时可能算出 `2.0000000000000004`，于是**恰好落在极值上的那一档被
   // 自己跳过去**，标尺最下面凭空空出一格。
-  for (let k = Math.ceil(下 / 步 - 1e-9); k * 步 <= 上 + 1e-9; k++) {
-    const v = k * 步;
-    主.push({ y: 纵位置(v, 上, 下), 文: String(Math.round(v)) });
+  for (let k = Math.ceil(below / step - 1e-9); k * step <= above + 1e-9; k++) {
+    const v = k * step;
+    main.push({ y: verticalPosition(v, above, below), text4: String(Math.round(v)) });
   }
 
   // 一条线都取不到（步长比量程还大）：退回原来那三档并**收成整数**。总比整张图
   // 一条刻度线都没有强——那样看着像图画坏了。
-  if (主.length === 0) {
-    const 三 = [大, (大 + 小) / 2, 小];
+  if (main.length === 0) {
+    const three = [large, (large + small) / 2, small];
     return {
-      主: 三.map((v) => ({ y: 纵位置(v, 大, 小), 文: String(Math.round(v)) })),
-      次: [],
-      上: 大,
-      下: 小,
+      main: three.map((v) => ({ y: verticalPosition(v, large, small), text4: String(Math.round(v)) })),
+      count2: [],
+      above: large,
+      below: small,
     };
   }
 
   // 细分：步长太小（`< 纵细分`）时**不细分**——0.2 一格对"字/分钟"这种整数
   // 物理量没有意义，画出来只是一排糊在一起的短线。
-  const 次: number[] = [];
-  if (步 >= 纵细分) {
-    const 小步 = 步 / 纵细分;
-    for (let k = Math.ceil(下 / 小步 - 1e-9); k * 小步 <= 上 + 1e-9; k++) {
-      const v = k * 小步;
+  const count2: number[] = [];
+  if (step >= verticalThinShare) {
+    const smallStep = step / verticalThinShare;
+    for (let k = Math.ceil(below / smallStep - 1e-9); k * smallStep <= above + 1e-9; k++) {
+      const v = k * smallStep;
       // 主档上已经有线了就不再来一条：同位置叠两条线只是白费字节。
-      if (Math.abs(v / 步 - Math.round(v / 步)) < 1e-9) continue;
-      次.push(纵位置(v, 上, 下));
+      if (Math.abs(v / step - Math.round(v / step)) < 1e-9) continue;
+      count2.push(verticalPosition(v, above, below));
     }
   }
-  return { 主, 次, 上, 下 };
+  return { main, count2, above, below };
 }
 
 /**
@@ -353,11 +353,11 @@ function 纵刻度尺(大: number, 小: number): 纵轴 {
  * ⚠️ 平滑用设计稿那套"相邻点取中点做二次贝塞尔"：采样点之间本来是折线，
  * 折线在 200 点的图上看不出差别，在卡片这种大尺寸上能看出棱角。
  */
-function 曲线段(点: number[], 色: 卡色, 刻度们: 刻度[], 横细分: number): string {
-  if (点.length === 0) return "";
-  const 大 = Math.max(...点);
-  const 小 = Math.min(...点);
-  const 跨 = 点.length - 1;
+function curveLineParagraph(point: number[], color: cardColor, ticks: tick[], horizontalThinShare: number): string {
+  if (point.length === 0) return "";
+  const large = Math.max(...point);
+  const small = Math.min(...point);
+  const cross = point.length - 1;
   // 纵轴那条标尺（先画，被曲线压着）。
   //
   // ⚠️ **一个点都没有**时整段返回空（连两轴刻度一起不画）：只有刻度没有曲线，
@@ -365,31 +365,31 @@ function 曲线段(点: number[], 色: 卡色, 刻度们: 刻度[], 横细分: n
   // ⚠️ 但**恰好一个点**时两轴照画：这时那颗点需要一个框（"开始那一刻是 20 字/分"
   // 是读得出来的），而"一直平着"那种横贯全图的假曲线才是要躲的
   // （对比 `PanelChartBlock`：少于两个点不画图，那边没有横轴刻度这回事）。
-  const 尺 = 纵刻度尺(大, 小);
+  const ruler = verticalTickRuler(large, small);
   // ⚠️⚠️ 曲线**按标尺的量程**归一化（`尺.上` / `尺.下`），**不是**按数据的极值：
   // 标尺会把量程撑到步长的整数倍上，两个上下界一旦不同，刻度线就不在它标的高度
   // 上——那正是本文件最该躲的那种错（见 `纵刻度尺` 那段）。
-  const 轴大 = 尺.上;
-  const 轴小 = 尺.下;
-  const x = (i: number) => (跨 > 0 ? 图左 + (i * (图右 - 图左)) / 跨 : (图左 + 图右) / 2);
-  const y = (v: number) => 纵位置(v, 轴大, 轴小);
+  const axisLarge = ruler.above;
+  const axisSmall = ruler.below;
+  const x = (i: number) => (cross > 0 ? imageLeft + (i * (imageRight - imageLeft)) / cross : (imageLeft + imageRight) / 2);
+  const y = (v: number) => verticalPosition(v, axisLarge, axisSmall);
 
-  const 部件: string[] = [];
+  const part: string[] = [];
 
   // 没字的短线（仪器上那一排小格）：**只贴在图区左边**，不横贯——横贯的那几条
   // 已经有主档了，再画满短线会把曲线切成一段段看不清。
-  for (const y of 尺.次) {
-    部件.push(
-      `<line x1="${图左}" y1="${y}" x2="${图左 + 12}" y2="${y}"` +
-        ` stroke="${色.线}" stroke-width="2"/>`,
+  for (const y of ruler.count2) {
+    part.push(
+      `<line x1="${imageLeft}" y1="${y}" x2="${imageLeft + 12}" y2="${y}"` +
+        ` stroke="${color.line2}" stroke-width="2"/>`,
     );
   }
-  for (const k of 尺.主) {
-    部件.push(
-      `<line x1="${图左}" y1="${k.y}" x2="${图右}" y2="${k.y}"` +
-        ` stroke="${色.线}" stroke-width="2" stroke-dasharray="6 8"/>`,
+  for (const k of ruler.main) {
+    part.push(
+      `<line x1="${imageLeft}" y1="${k.y}" x2="${imageRight}" y2="${k.y}"` +
+        ` stroke="${color.line2}" stroke-width="2" stroke-dasharray="6 8"/>`,
       // 纵轴那几个数：右对齐贴在图区左边那条线上。
-      字(k.文, 图左 - 16, k.y + 7, { 号: 24, 色: 色.淡, 锚: "end" }),
+      character2(k.text4, imageLeft - 16, k.y + 7, { number: 24, color: color.faint, anchor2: "end" }),
     );
   }
 
@@ -400,58 +400,58 @@ function 曲线段(点: number[], 色: 卡色, 刻度们: 刻度[], 横细分: n
   // 段内**均匀分**：卡片横轴是按"第几个点"等距画的，两档主刻度之间是线性的。
   // ⚠️ 只在两档之间分，**两头不补**：主刻度是插件摆的，往两头续就得假设
   // "主刻度是等距的"，而插件完全可以摆一组不等距的（"开始 / 峰值 / 结束"）。
-  if (横细分 > 0) {
-    for (let i = 0; i + 1 < 刻度们.length; i++) {
-      const a = 刻度们[i];
-      const b = 刻度们[i + 1];
+  if (horizontalThinShare > 0) {
+    for (let i = 0; i + 1 < ticks.length; i++) {
+      const a = ticks[i];
+      const b = ticks[i + 1];
       if (!a || !b) continue;
-      const 左 = 横位置(a.at);
-      const 右 = 横位置(b.at);
-      for (let k = 1; k < 横细分; k++) {
-        const px = 左 + ((右 - 左) * k) / 横细分;
-        部件.push(
-          `<line x1="${px.toFixed(1)}" y1="${图下}" x2="${px.toFixed(1)}" y2="${图下 + 10}"` +
-            ` stroke="${色.线}" stroke-width="2"/>`,
+      const left = horizontalPosition(a.at);
+      const right = horizontalPosition(b.at);
+      for (let k = 1; k < horizontalThinShare; k++) {
+        const px = left + ((right - left) * k) / horizontalThinShare;
+        part.push(
+          `<line x1="${px.toFixed(1)}" y1="${imageBelow}" x2="${px.toFixed(1)}" y2="${imageBelow + 10}"` +
+            ` stroke="${color.line2}" stroke-width="2"/>`,
         );
       }
     }
   }
-  for (const t of 刻度们) {
+  for (const t of ticks) {
     // ⚠️ **大单位那一档画大一号**：用户原话「到小时就用稍微大一点的字体标出来是
     // 几小时」。字号是宿主定的（插件只说"这一档是大单位"，见 `chart-ticks.ts`
     // 的 `大单位` 那段）；颜色照旧用淡色——"稍微大一点"，不是"变成重点"。
-    部件.push(
-      字(t.label, 横位置(t.at), 图下 + 34, {
-        号: t.大单位 ? 30 : 24,
-        色: 色.淡,
-        锚: 横锚(t.at),
+    part.push(
+      character2(t.label, horizontalPosition(t.at), imageBelow + 34, {
+        number: t.largeSinglePosition ? 30 : 24,
+        color: color.faint,
+        anchor2: horizontalAnchor(t.at),
       }),
     );
   }
 
-  if (点.length === 1) {
-    部件.push(`<circle cx="${x(0)}" cy="${y(点[0] ?? 0).toFixed(1)}" r="9" fill="${色.主}"/>`);
-    return 部件.join("");
+  if (point.length === 1) {
+    part.push(`<circle cx="${x(0)}" cy="${y(point[0] ?? 0).toFixed(1)}" r="9" fill="${color.main}"/>`);
+    return part.join("");
   }
 
-  let d = `M ${x(0).toFixed(1)} ${y(点[0] ?? 0).toFixed(1)}`;
-  for (let i = 0; i < 跨; i++) {
+  let d = `M ${x(0).toFixed(1)} ${y(point[0] ?? 0).toFixed(1)}`;
+  for (let i = 0; i < cross; i++) {
     const x0 = x(i);
-    const y0 = y(点[i] ?? 0);
+    const y0 = y(point[i] ?? 0);
     const x1 = x(i + 1);
-    const y1 = y(点[i + 1] ?? 0);
+    const y1 = y(point[i + 1] ?? 0);
     d += ` Q ${x0.toFixed(1)} ${y0.toFixed(1)} ${((x0 + x1) / 2).toFixed(1)} ${((y0 + y1) / 2).toFixed(1)}`;
   }
-  const 末x = x(跨).toFixed(1);
-  const 末y = y(点[跨] ?? 0).toFixed(1);
-  d += ` Q ${末x} ${末y} ${末x} ${末y}`;
+  const endx = x(cross).toFixed(1);
+  const endy = y(point[cross] ?? 0).toFixed(1);
+  d += ` Q ${endx} ${endy} ${endx} ${endy}`;
 
-  部件.push(
-    `<path d="${d} L ${图右} ${图下} L ${图左} ${图下} Z" fill="url(#卡面)"/>`,
-    `<path d="${d}" fill="none" stroke="${色.主}" stroke-width="6"` +
+  part.push(
+    `<path d="${d} L ${imageRight} ${imageBelow} L ${imageLeft} ${imageBelow} Z" fill="url(#卡面)"/>`,
+    `<path d="${d}" fill="none" stroke="${color.main}" stroke-width="6"` +
       ` stroke-linejoin="round" stroke-linecap="round"/>`,
   );
-  return 部件.join("");
+  return part.join("");
 }
 
 // ── 热力图那一段（长期那本账）─────────────────────────────────────────────
@@ -464,10 +464,10 @@ function 曲线段(点: number[], 色: 卡色, 刻度们: 刻度[], 横细分: n
 // 里算好了（那份是纯函数，单独测）。这里只把格子摆进图区。
 
 /** 热力图占的版面：顶上让出月份那行、底下让出深浅标尺那排。 */
-const 热左 = 图左;
-const 热右 = 图右;
-const 热上 = 图上 + 32;
-const 热下 = 图下 - 44;
+const hotLeft = imageLeft;
+const hotRight = imageRight;
+const hotAbove = imageAbove + 32;
+const hotBelow = imageBelow - 44;
 
 /**
  * 深的那四档：**用强调色的透明度分**，不写死四个颜色。
@@ -476,7 +476,7 @@ const 热下 = 图下 - 44;
  * ⚠️ `0` 是"没写"那一档，它不用主色——用**线色**：一层淡淡的底灰，与"写了
  * 一点点"（0.20）一眼能分开，这才是这张图要读的东西。
  */
-const 档透明 = [0, 0.2, 0.42, 0.66, 0.92];
+const levelTransparentClear = [0, 0.2, 0.42, 0.66, 0.92];
 
 /**
  * 图区里那一块小方格。
@@ -489,28 +489,28 @@ const 档透明 = [0, 0.2, 0.42, 0.66, 0.92];
  * ⚠️ 一个月只标一次（`月` 是空串就是"不标"），靠右那几个标签放不下就**不标**：
  * 宁可少一个月份，也不要它压出卡片右页边。
  */
-function 热力段(
-  图: 热力图,
-  色: 卡色,
-  少: string,
-  多: string,
-  量宽: 量宽器,
+function hotForceParagraph(
+  image: HotForceImage,
+  color: cardColor,
+  less: string,
+  many: string,
+  measureWidth: MeasureWidthDevice,
 ): string {
-  const 列们 = 图.列;
-  if (列们.length === 0) return "";
+  const columns = image.column;
+  if (columns.length === 0) return "";
 
-  const 宽 = 热右 - 热左;
-  const 高 = 热下 - 热上;
-  const 缝 = 列们.length > 30 ? 4 : 6;
-  const 边 = Math.min(
-    (宽 - (列们.length - 1) * 缝) / 列们.length,
-    (高 - 6 * 缝) / 7,
+  const width = hotRight - hotLeft;
+  const height = hotBelow - hotAbove;
+  const seam = columns.length > 30 ? 4 : 6;
+  const edge = Math.min(
+    (width - (columns.length - 1) * seam) / columns.length,
+    (height - 6 * seam) / 7,
   );
-  const 左0 = 热左 + (宽 - (列们.length * 边 + (列们.length - 1) * 缝)) / 2;
-  const 上0 = 热上 + (高 - (7 * 边 + 6 * 缝)) / 2;
-  const 圆角 = Math.max(2, Math.min(6, 边 * 0.28)).toFixed(1);
+  const left0 = hotLeft + (width - (columns.length * edge + (columns.length - 1) * seam)) / 2;
+  const above0 = hotAbove + (height - (7 * edge + 6 * seam)) / 2;
+  const circleCorner = Math.max(2, Math.min(6, edge * 0.28)).toFixed(1);
 
-  const 部件: string[] = [];
+  const part: string[] = [];
 
   // 月份那行（在图区顶上）。
   //
@@ -519,78 +519,78 @@ function 热力段(
   // 那一列标「3月」、紧挨着的下一列标「4月」，两个标签就挤在同一处（第一版出的
   // 宣传图上印着 `MaApr`，就是这么来的）。所以分成两步：先把摆得下的挑出来，
   // 再**从右往左**定谁留下。
-  const 候选: { x: number; 宽: number; 月: string }[] = [];
-  for (let c = 0; c < 列们.length; c++) {
-    const 一列 = 列们[c];
-    if (!一列) continue;
-    const 月 = 一列.月;
-    if (!月) continue;
-    const x = 左0 + c * (边 + 缝);
-    const 宽 = 量宽(月, 24, 400);
-    if (x > 热右 - 宽) continue; // 右端戳出图区就整个不画
-    候选.push({ x, 宽, 月 });
+  const candidate: { x: number; width: number; month: string }[] = [];
+  for (let c = 0; c < columns.length; c++) {
+    const oneColumn = columns[c];
+    if (!oneColumn) continue;
+    const month = oneColumn.month;
+    if (!month) continue;
+    const x = left0 + c * (edge + seam);
+    const width = measureWidth(month, 24, 400);
+    if (x > hotRight - width) continue; // 右端戳出图区就整个不画
+    candidate.push({ x, width, month });
   }
   // 从右往左定：挤不下就丢**左边**那个。理由是月份标签标在它那一段格子的**左端**，
   // 丢掉右边那个的话，它左边那一整月就没标签了；丢掉左边这个（多半只是上个月的
   // 一两天）损失最小。
-  const 留下: typeof 候选 = [];
-  let 右下 = Infinity;
-  for (let i = 候选.length - 1; i >= 0; i--) {
-    const 项 = 候选[i];
-    if (!项) continue;
-    if (项.x + 项.宽 > 右下 - 8) continue;
-    留下.push(项);
-    右下 = 项.x;
+  const keepBelow: typeof candidate = [];
+  let rightBelow = Infinity;
+  for (let i = candidate.length - 1; i >= 0; i--) {
+    const item5 = candidate[i];
+    if (!item5) continue;
+    if (item5.x + item5.width > rightBelow - 8) continue;
+    keepBelow.push(item5);
+    rightBelow = item5.x;
   }
-  for (const 项 of 留下.reverse()) {
-    部件.push(字(项.月, 项.x, 热上 - 12, { 号: 24, 色: 色.淡 }));
+  for (const item5 of keepBelow.reverse()) {
+    part.push(character2(item5.month, item5.x, hotAbove - 12, { number: 24, color: color.faint }));
   }
 
   // 格子。⚠️ 最后一列常常不满 7 格（今天才周三就是 3 格）——那不是"没数据"，
   // 是**还没到**，所以下面那几行**不画**（`heatmap.ts` 那边就没生成）。
-  for (let c = 0; c < 列们.length; c++) {
-    const 一列 = 列们[c];
-    if (!一列) continue;
-    for (let r = 0; r < 一列.格.length; r++) {
-      const 档 = 一列.格[r]?.档 ?? 0;
-      const x = (左0 + c * (边 + 缝)).toFixed(1);
-      const y = (上0 + r * (边 + 缝)).toFixed(1);
+  for (let c = 0; c < columns.length; c++) {
+    const oneColumn = columns[c];
+    if (!oneColumn) continue;
+    for (let r = 0; r < oneColumn.cell2.length; r++) {
+      const level = oneColumn.cell2[r]?.level ?? 0;
+      const x = (left0 + c * (edge + seam)).toFixed(1);
+      const y = (above0 + r * (edge + seam)).toFixed(1);
       // ⚠️ `class` 是**给测试认的**（卡片里没有任何样式表，它不会影响好看不好看）：
       // 这串 SVG 里还有两个 Nota 标识，它们自己也画方块，光数 `<rect>` 数不清。
-      const 方 = `<rect class="heat-cell" x="${x}" y="${y}" width="${边.toFixed(1)}"` +
-        ` height="${边.toFixed(1)}" rx="${圆角}"`;
-      部件.push(
-        档 === 0
-          ? `${方} fill="${色.线}"/>`
-          : `${方} fill="${色.主}" fill-opacity="${档透明[档]}"/>`,
+      const square = `<rect class="heat-cell" x="${x}" y="${y}" width="${edge.toFixed(1)}"` +
+        ` height="${edge.toFixed(1)}" rx="${circleCorner}"`;
+      part.push(
+        level === 0
+          ? `${square} fill="${color.line2}"/>`
+          : `${square} fill="${color.main}" fill-opacity="${levelTransparentClear[level]}"/>`,
       );
     }
   }
 
   // 右下角那排标尺：少 ▢▢▢▢▢ 多。
-  const 标 = 22;
-  const 标缝 = 6;
-  const 号 = 24;
-  const 留白 = 14;
-  const 少宽 = 少 ? 量宽(少, 号, 400) : 0;
-  const 多宽 = 多 ? 量宽(多, 号, 400) : 0;
-  let x = 热右 - (少宽 + (少 ? 留白 : 0) + 5 * 标 + 4 * 标缝 + (多 ? 留白 : 0) + 多宽);
-  const y = 图下 - 标 - 2;
-  if (少) {
-    部件.push(字(少, x, y + 标 - 4, { 号, 色: 色.淡 }));
-    x += 少宽 + 留白;
+  const mark2 = 22;
+  const markSeam = 6;
+  const number = 24;
+  const keepWhite = 14;
+  const lessWidth = less ? measureWidth(less, number, 400) : 0;
+  const manyWidth = many ? measureWidth(many, number, 400) : 0;
+  let x = hotRight - (lessWidth + (less ? keepWhite : 0) + 5 * mark2 + 4 * markSeam + (many ? keepWhite : 0) + manyWidth);
+  const y = imageBelow - mark2 - 2;
+  if (less) {
+    part.push(character2(less, x, y + mark2 - 4, { number, color: color.faint }));
+    x += lessWidth + keepWhite;
   }
   for (let i = 0; i <= 4; i++) {
-    部件.push(
+    part.push(
       i === 0
-        ? `<rect class="heat-legend" x="${x.toFixed(1)}" y="${y}" width="${标}" height="${标}" rx="5" fill="${色.线}"/>`
-        : `<rect class="heat-legend" x="${x.toFixed(1)}" y="${y}" width="${标}" height="${标}" rx="5" fill="${色.主}" fill-opacity="${档透明[i]}"/>`,
+        ? `<rect class="heat-legend" x="${x.toFixed(1)}" y="${y}" width="${mark2}" height="${mark2}" rx="5" fill="${color.line2}"/>`
+        : `<rect class="heat-legend" x="${x.toFixed(1)}" y="${y}" width="${mark2}" height="${mark2}" rx="5" fill="${color.main}" fill-opacity="${levelTransparentClear[i]}"/>`,
     );
-    x += 标 + 标缝;
+    x += mark2 + markSeam;
   }
-  if (多) 部件.push(字(多, x - 标缝 + 留白, y + 标 - 4, { 号, 色: 色.淡 }));
+  if (many) part.push(character2(many, x - markSeam + keepWhite, y + mark2 - 4, { number, color: color.faint }));
 
-  return 部件.join("");
+  return part.join("");
 }
 
 /**
@@ -602,69 +602,69 @@ function 热力段(
  * @param 量 量字宽用的（大数字后面那颗单位要紧挨着它）。测试传一个固定的，
  *   线上不传（用 canvas 真量）。
  */
-export function 分享图SVG(卡: PanelShare, 色: 卡色, 量?: 量宽器): string {
-  const 点 = 卡.points;
-  const 量宽 = 量 ?? 默认量宽();
+export function shareCardSvg(card: PanelShare, color: cardColor, measure?: MeasureWidthDevice): string {
+  const point = card.points;
+  const measureWidth = measure ?? defaultMeasureWidth();
 
-  const 部件: string[] = [];
+  const part: string[] = [];
 
   // 底：一条 160° 的渐变（设计稿是 `linear-gradient(160deg,…)`，≈ 从左上下到右下）。
-  部件.push(
+  part.push(
     `<defs><linearGradient id="卡底" x1="0" y1="0" x2="0.36" y2="1">` +
-      `<stop offset="0" stop-color="${色.底1}"/><stop offset="1" stop-color="${色.底2}"/>` +
+      `<stop offset="0" stop-color="${color.bottom1}"/><stop offset="1" stop-color="${color.bottom2}"/>` +
       `</linearGradient>` +
       `<linearGradient id="卡面" x1="0" y1="0" x2="0" y2="1">` +
-      `<stop offset="0" stop-color="${色.主}" stop-opacity="0.30"/>` +
-      `<stop offset="1" stop-color="${色.主}" stop-opacity="0"/>` +
+      `<stop offset="0" stop-color="${color.main}" stop-opacity="0.30"/>` +
+      `<stop offset="1" stop-color="${color.main}" stop-opacity="0"/>` +
       `</linearGradient></defs>`,
-    `<rect width="${卡宽}" height="${卡高}" fill="url(#卡底)"/>`,
+    `<rect width="${cardWidth}" height="${cardHeight}" fill="url(#卡底)"/>`,
   );
 
   // 顶行：图标 ＋ 产品名 ＋ 右边那个日期时间。
-  const 顶行中 = 76 + 58 / 2;
-  部件.push(
-    标识(页边, 76, 58, "顶"),
-    字("Nota", 页边 + 58 + 18, 顶行中 + 12, { 号: 34, 粗: 700, 色: 色.字 }),
-    字(卡.date, 卡宽 - 页边, 顶行中 + 9, { 号: 24, 色: 色.淡, 锚: "end" }),
+  const topLineMiddle = 76 + 58 / 2;
+  part.push(
+    markRecognize(pageEdge, 76, 58, "顶"),
+    character2("Nota", pageEdge + 58 + 18, topLineMiddle + 12, { number: 34, coarse: 700, color: color.character2 }),
+    character2(card.date, cardWidth - pageEdge, topLineMiddle + 9, { number: 24, color: color.faint, anchor2: "end" }),
     // 标题与副标题
-    字(卡.title, 页边, 250, { 号: 52, 粗: 700, 色: 色.字, 距: 2 }),
+    character2(card.title, pageEdge, 250, { number: 52, coarse: 700, color: color.character2, distance: 2 }),
     // ⚠️ **转大写是在这里做的**，不是让插件送大写：设计稿那句副标题在 CSS 里是
     // `text-transform:uppercase`（`分享图-深色.html` 第 30 行），而 SVG 的
     // `<text>` 不吃 `text-transform`（SVG 1.1 没这个属性），照原样送就少了那一档。
     // 插件继续送人能读的 `Writing Stats`——将来真翻译成中文时，转大写是个空操作。
-    字(卡.subtitle.toUpperCase(), 页边, 301, { 号: 24, 色: 色.淡, 距: 3 }),
+    character2(card.subtitle.toUpperCase(), pageEdge, 301, { number: 24, color: color.faint, distance: 3 }),
   );
 
   // 大数字 ＋ 单位（单位紧跟在大数字右边、基线抬高 22px——设计稿那套 `align-items:flex-end`）。
-  const 大号 = 210;
-  const 数宽 = 量宽(卡.value || "—", 大号, 800);
-  部件.push(
-    字(卡.value || "—", 页边, 500, { 号: 大号, 粗: 800, 色: 色.主 }),
-    字(卡.unit, 页边 + 数宽 + 20, 478, { 号: 40, 粗: 600, 色: 色.淡 }),
+  const largeNumber = 210;
+  const numberWidth = measureWidth(card.value || "—", largeNumber, 800);
+  part.push(
+    character2(card.value || "—", pageEdge, 500, { number: largeNumber, coarse: 800, color: color.main }),
+    character2(card.unit, pageEdge + numberWidth + 20, 478, { number: 40, coarse: 600, color: color.faint }),
   );
 
   // 图区那一整段（含两轴刻度 / 月份那行）。**两种形态只在这里分岔**——
   // 上面的大数字、下面的三格指标与页脚两张卡一模一样。
-  if (卡.shape === "heat" && 卡.heat) {
-    部件.push(热力段(卡.heat, 色, 卡.less, 卡.more, 量宽));
+  if (card.shape === "heat" && card.heat) {
+    part.push(hotForceParagraph(card.heat, color, card.less, card.more, measureWidth));
   } else {
-    部件.push(曲线段(点, 色, 卡.xTicks, 卡.xMinor));
+    part.push(curveLineParagraph(point, color, card.xTicks, card.xMinor));
   }
 
   // 三格指标。
-  const 格数 = Math.max(1, Math.min(3, 卡.stats.length));
-  const 格宽 = (图右 - 页边 - (格数 - 1) * 20) / 格数;
-  for (let i = 0; i < 格数; i++) {
-    const 项 = 卡.stats[i];
-    if (!项) continue;
-    const 左 = 页边 + i * (格宽 + 20);
-    const 上 = 935;
-    部件.push(
-      `<rect x="${左.toFixed(1)}" y="${上}" width="${格宽.toFixed(1)}" height="150" rx="22"` +
-        ` fill="${色.块}" fill-opacity="${色.块透}" stroke="${色.线}" stroke-width="2"/>`,
-      字(项.k, 左 + 30, 上 + 50, { 号: 23, 色: 色.淡, 距: 1 }),
-      字(项.v, 左 + 30, 上 + 112, { 号: 52, 粗: 700, 色: 色.字 }),
-      字(项.small, 左 + 30 + 量宽(项.v, 52, 700) + 6, 上 + 112, { 号: 24, 色: 色.淡 }),
+  const cellCount = Math.max(1, Math.min(3, card.stats.length));
+  const cellWidth = (imageRight - pageEdge - (cellCount - 1) * 20) / cellCount;
+  for (let i = 0; i < cellCount; i++) {
+    const item5 = card.stats[i];
+    if (!item5) continue;
+    const left = pageEdge + i * (cellWidth + 20);
+    const above = 935;
+    part.push(
+      `<rect x="${left.toFixed(1)}" y="${above}" width="${cellWidth.toFixed(1)}" height="150" rx="22"` +
+        ` fill="${color.block}" fill-opacity="${color.blockTransparent}" stroke="${color.line2}" stroke-width="2"/>`,
+      character2(item5.k, left + 30, above + 50, { number: 23, color: color.faint, distance: 1 }),
+      character2(item5.v, left + 30, above + 112, { number: 52, coarse: 700, color: color.character2 }),
+      character2(item5.small, left + 30 + measureWidth(item5.v, 52, 700) + 6, above + 112, { number: 24, color: color.faint }),
     );
   }
 
@@ -676,19 +676,19 @@ export function 分享图SVG(卡: PanelShare, 色: 卡色, 量?: 量宽器): str
   //   · 图标被推到"页边 − 字宽 − 12"之外的更左边（多让出了一整个字宽），
   //   · 而字本身越过了右页边（与顶行那个日期不再对齐，卡边窄一点就被切掉）。
   // `品牌宽` 那个算式本来是对的，只是从来没被用对——图标的位置要**减去**它。
-  const 品牌 = "Nota";
-  const 品牌宽 = 量宽(品牌, 26, 600);
-  const 标宽 = 30;
-  部件.push(
-    `<line x1="${页边}" y1="${页脚线}" x2="${卡宽 - 页边}" y2="${页脚线}" stroke="${色.线}" stroke-width="2"/>`,
-    字(卡.foot, 页边, 1280, { 号: 25, 色: 色.淡 }),
-    标识(卡宽 - 页边 - 品牌宽 - 12 - 标宽, 1256, 标宽, "脚"),
-    字(品牌, 卡宽 - 页边, 1280, { 号: 26, 粗: 600, 色: 色.字, 锚: "end" }),
+  const productCard = "Nota";
+  const productCardWidth = measureWidth(productCard, 26, 600);
+  const markerWidth = 30;
+  part.push(
+    `<line x1="${pageEdge}" y1="${pageFootLine}" x2="${cardWidth - pageEdge}" y2="${pageFootLine}" stroke="${color.line2}" stroke-width="2"/>`,
+    character2(card.foot, pageEdge, 1280, { number: 25, color: color.faint }),
+    markRecognize(cardWidth - pageEdge - productCardWidth - 12 - markerWidth, 1256, markerWidth, "脚"),
+    character2(productCard, cardWidth - pageEdge, 1280, { number: 26, coarse: 600, color: color.character2, anchor2: "end" }),
   );
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${卡宽}" height="${卡高}"` +
-    ` viewBox="0 0 ${卡宽} ${卡高}">${部件.join("")}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${cardWidth}" height="${cardHeight}"` +
+    ` viewBox="0 0 ${cardWidth} ${cardHeight}">${part.join("")}</svg>`
   );
 }
 
@@ -704,29 +704,29 @@ export function 分享图SVG(卡: PanelShare, 色: 卡色, 量?: 量宽器): str
  * ⚠️ 用 `img.decode()` 等**解码完**再画：`onload` 早于解码完成的实现（老
  * WebKit）会让 `drawImage` 画出空白图。
  */
-export async function 光栅化(卡: PanelShare, 色: 卡色): Promise<Blob> {
-  const svg = 分享图SVG(卡, 色);
-  const 地址 = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+export async function lightGridConvert(card: PanelShare, color: cardColor): Promise<Blob> {
+  const svg = shareCardSvg(card, color);
+  const address = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
   try {
-    const 图 = new Image();
-    图.width = 卡宽;
-    图.height = 卡高;
-    图.src = 地址;
-    await 图.decode();
+    const image = new Image();
+    image.width = cardWidth;
+    image.height = cardHeight;
+    image.src = address;
+    await image.decode();
 
-    const 布 = document.createElement("canvas");
-    布.width = 卡宽;
-    布.height = 卡高;
-    const ctx = 布.getContext("2d");
+    const distribute = document.createElement("canvas");
+    distribute.width = cardWidth;
+    distribute.height = cardHeight;
+    const ctx = distribute.getContext("2d");
     if (!ctx) throw new Error("拿不到 2d 画布");
-    ctx.drawImage(图, 0, 0, 卡宽, 卡高);
+    ctx.drawImage(image, 0, 0, cardWidth, cardHeight);
 
-    const 块 = await new Promise<Blob | null>((好) => 布.toBlob(好, "image/png"));
-    if (!块) throw new Error("toBlob 没给出图片");
-    return 块;
+    const block = await new Promise<Blob | null>((good) => distribute.toBlob(good, "image/png"));
+    if (!block) throw new Error("toBlob 没给出图片");
+    return block;
   } finally {
     // ⚠️ 用完就放：一张 1080×1350 的 SVG 对象 URL 留着只是占内存。
-    URL.revokeObjectURL(地址);
+    URL.revokeObjectURL(address);
   }
 }
 
@@ -736,14 +736,14 @@ export async function 光栅化(卡: PanelShare, 色: 卡色): Promise<Blob> {
  * ⚠️ 分块拼 `String.fromCharCode`：一次传整个数组给 `apply` 会顶到引擎的
  * 参数个数上限，而那个失败**取决于图多大**——偶尔能过、偶尔抛，最难查。
  */
-export async function 转base64(块: Blob): Promise<string> {
-  const 字节 = new Uint8Array(await 块.arrayBuffer());
-  const 片: string[] = [];
-  const 每片 = 0x8000;
-  for (let i = 0; i < 字节.length; i += 每片) {
-    片.push(String.fromCharCode(...字节.subarray(i, i + 每片)));
+export async function toBase64(block: Blob): Promise<string> {
+  const byte = new Uint8Array(await block.arrayBuffer());
+  const slice: string[] = [];
+  const eachSlice = 0x8000;
+  for (let i = 0; i < byte.length; i += eachSlice) {
+    slice.push(String.fromCharCode(...byte.subarray(i, i + eachSlice)));
   }
-  return btoa(片.join(""));
+  return btoa(slice.join(""));
 }
 
 /**
@@ -753,8 +753,8 @@ export async function 转base64(块: Blob): Promise<string> {
  * 当作"另存为"对话框的默认名，而那里出现 `../` 或 `:` 是能真的写到别处去的。
  * 只留文件名那一段，再砍掉路径分隔符与那几个在 Windows 上是保留字符的符号。
  */
-export function 安全文件名(名: string): string {
-  const 干净 = (名 || "")
+export function SafeFileName(name3: string): string {
+  const doClean = (name3 || "")
     // ⚠️ 先**只留最后一段**，再把剩下的符号换掉。顺序不能反：反了的话
     // `../../x.png` 会先变成 `..-..-x.png` ——安全是安全（没有分隔符了），
     // 但名字里那串莫名其妙的东西用户看不懂，而这里本来就知道该留哪一段。
@@ -774,7 +774,7 @@ export function 安全文件名(名: string): string {
   //   · 先拼后缀再截长度 → 截到 120 时可能**把 `.png` 截掉**，存出来的文件
   //     没有后缀，双击它没有任何程序认领。
   // 所以：判空看的是**基名**，截长度截的也是**基名**（115 + 4 ≤ 120）。
-  const 基 = 干净.replace(/\.png$/i, "");
-  if (!基) return "nota-stats.png";
-  return `${基.slice(0, 115)}.png`;
+  const base = doClean.replace(/\.png$/i, "");
+  if (!base) return "nota-stats.png";
+  return `${base.slice(0, 115)}.png`;
 }

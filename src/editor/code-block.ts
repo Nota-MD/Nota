@@ -36,18 +36,19 @@ import { refractor } from "refractor";
 
 import { t } from "@/i18n";
 
-import { 创建代码块编辑器, 算最小改动 } from "./code-block-cm";
-import { 建HTML预览 } from "./code-preview";
-import { 创建语言选择器 } from "./lang-picker";
-import { 有专属图标 } from "./lang-icon";
-import { 图标组, 代表语言 } from "./lang-icons-real";
-import { 建数学代码输出, 是数学代码语言 } from "./math-code";
+import { createCodeBlockEditor, computeMostSmallChangeAction } from "./code-block-cm";
+import { liftCodeBlockToParagraphs } from "./code-block-lift";
+import { createHTMLPreview } from "./code-preview";
+import { createLanguagePicker } from "./lang-picker";
+import { hasDedicatedBelongIcon } from "./lang-icon";
+import { iconGroup, representTableLanguage } from "./lang-icons-real";
+import { createNumberLearnCodeOutput, isMathCodeLanguage } from "./math-code";
 
 /** 下拉第一项：不指定语言。与 `code_block` 的 `language` 默认值一致。 */
 const NO_LANGUAGE = "";
 
 /** `math` 是 Nota 的数学围栏别名；refractor 没有同名语言，所以单独列入下拉。 */
-const 数学语言别名 = "math";
+const numberLearnLanguageDistinguishName = "math";
 
 /** 复制按钮显示"已复制"多久。 */
 const COPY_FEEDBACK_MS = 1200;
@@ -76,9 +77,9 @@ let sortedLanguages: string[] | null = null;
 // （`plugin-prism/lib/index.js` 的 `apply` 第一行就判它，点一下不算）。
 // 编辑那个块、或改任何一个代码块，整篇的重算就发生了，高亮随即补上。
 // 判据：这个窗口只在"冷启动第一帧还没到 + 文档里正好有长尾语言块"时存在。
-let 全量表已到 = false;
-const 全量表到了 = import("refractor/all").then(() => {
-  全量表已到 = true;
+let fullTableReady2 = false;
+const fullTableReady = import("refractor/all").then(() => {
+  fullTableReady2 = true;
   // 下拉那份名字算过一次就缓存了（`sortedLanguages`），全量表到了要重算。
   sortedLanguages = null;
   searchableLanguages = null;
@@ -89,13 +90,13 @@ const 全量表到了 = import("refractor/all").then(() => {
  * 每个语言都注册成功——`refractor/all` 里个别语言的自注册是会抛的
  * （上游就那样），这里只反映"那一整包代码跑过了"。
  */
-export function 语言表就绪(): boolean {
-  return 全量表已到;
+export function languageTableReady(): boolean {
+  return fullTableReady2;
 }
 
 /** 等全量表加载完（测试用；界面里没有 await 它的地方）。 */
-export function 等语言表(): Promise<void> {
-  return 全量表到了.then(() => undefined);
+export function awaitLanguageTable(): Promise<void> {
+  return fullTableReady.then(() => undefined);
 }
 
 /**
@@ -119,7 +120,7 @@ export function allLanguages(): string[] {
   if (sortedLanguages === null) {
     sortedLanguages = refractor
       .listLanguages()
-      .filter((名) => 有专属图标(名) || 名 === 数学语言别名)
+      .filter((name3) => hasDedicatedBelongIcon(name3) || name3 === numberLearnLanguageDistinguishName)
       // ⚠️⚠️ **同一门语言只留一行**（2026-10-16，朋友报的「代码块语言类型重复」）：
       // 真图那张表里每一组就是"同一门语言的不同写法"（`markdown`/`md`、
       // `plaintext`/`plain`/`text`/`txt`、`nasm`/`armasm`/`asm6502`/`arm-asm`…），
@@ -128,7 +129,7 @@ export function allLanguages(): string[] {
       // ⚠️ **一个都没少**：`refractor` 那 400 个 id 照旧全部支持，用户手打
       // `armasm` 一样能用（输入框那条路，`lang-picker.ts`）；变的只是"摆出来的
       // 那几行"。
-      .filter((名) => 代表语言(名) === 名)
+      .filter((name3) => representTableLanguage(name3) === name3)
       .sort((a, b) => a.localeCompare(b));
   }
   return sortedLanguages;
@@ -141,7 +142,7 @@ export function searchLanguages(): string[] {
   if (searchableLanguages === null) {
     searchableLanguages = [
       ...new Set([
-        ...refractor.listLanguages().filter((名) => 名.trim() !== ""),
+        ...refractor.listLanguages().filter((name3) => name3.trim() !== ""),
         "math",
         "latex",
         "tex",
@@ -158,10 +159,10 @@ export function searchLanguages(): string[] {
  * 可能按 `armasm` / `md` / `plain` 这些**别名**找——它们和代表名是同一门语言。
  * ⚠️ 表里没有的（用户自己敲的那种）原样给一个。
  */
-export function 同族语言(id: string): readonly string[] {
-  if (id === 数学语言别名) return ["math", "latex", "tex"];
-  const 代表 = 代表语言(id);
-  return 图标组.find((g) => g.语言.includes(代表))?.语言 ?? [id];
+export function relatedLanguages(id: string): readonly string[] {
+  if (id === numberLearnLanguageDistinguishName) return ["math", "latex", "tex"];
+  const representTable = representTableLanguage(id);
+  return iconGroup.find((g) => g.language.includes(representTable))?.language ?? [id];
 }
 
 /**
@@ -212,9 +213,9 @@ export const codeBlockView = $view(
   // 的合成体，类型上不是 `$Node`。
   codeBlockSchema.node,
   (ctx) => {
-    let 数学选项: KatexOptions = {};
+    let numberLearnOption: KatexOptions = {};
     try {
-      数学选项 = ctx.get(katexOptionsCtx.key) ?? {};
+      numberLearnOption = ctx.get(katexOptionsCtx.key) ?? {};
     } catch {
       // 选项没准备好时仍显示公式，只是 physics 宏不可用。
     }
@@ -353,23 +354,23 @@ export const codeBlockView = $view(
       //  ② 开场高亮的是旧语言那一项，用户按 Enter 就把它又选回去了。
       // 而"选语言"那条路是好的（`applyLanguage` 走 `getPos()`＋`nodeAt()` 读活文档），
       // 所以症状是"改成 A 之后框上写着 B、再点开还是高亮 B"——一半对一半错。
-      let 当前节点 = initialNode;
+      let currentNode = initialNode;
 
-      const 语言选择器 = 创建语言选择器({
-        全部语言: allLanguages,
-        搜索语言: searchLanguages,
+      const languagePicker = createLanguagePicker({
+        allLanguages: allLanguages,
+        searchSearchLanguage: searchLanguages,
         // ⚠️ 搜索要连**别名**一起认（2026-10-16）：下拉一行一个语言族，
         // 而 `armasm` / `md` / `plain` 这些别名也得能筛出那一行。见 `代表语言`。
-        别名: 同族语言,
-        当前语言: () => languageOf(当前节点),
-        选语言: applyLanguage,
+        distinguishName: relatedLanguages,
+        currentLanguage: () => languageOf(currentNode),
+        selectLanguage: applyLanguage,
       });
-      langWrap.appendChild(语言选择器.dom);
+      langWrap.appendChild(languagePicker.dom);
 
       /** `math` / `latex` / `tex` 围栏的渲染结果。普通代码语言时整块隐藏。 */
-      const 数学 = 建数学代码输出(数学选项);
-      const 设数学编辑 = (开: boolean) => {
-        wrap.classList.toggle("nota-code-math-editing", 开);
+      const numberLearn = createNumberLearnCodeOutput(numberLearnOption);
+      const setNumberLearnEditEdit = (open2: boolean) => {
+        wrap.classList.toggle("nota-code-math-editing", open2);
       };
 
       // ── CodeMirror：这一段的输入面 ─────────────────────────────────────
@@ -377,32 +378,47 @@ export const codeBlockView = $view(
       // 那三个坑的第一个）：这一把管"PM 收到的改动是不是自己刚推出去的那一笔"，
       // CM 那边同名的那一把管"CM 收到的改动是不是自己刚推回来的一笔"。
       // 少任何一把，光标都会跳、撤销栈都会被拆碎。
-      let 同步中 = false;
+      let sameStepMiddle = false;
 
       /** 把一条 ProseMirror 命令当函数调。（撤销/重做要它。） */
-      const 走命令 = (命令: Command) => {
-        命令(view.state, view.dispatch, view);
+      const walkCommand = (command: Command) => {
+        command(view.state, view.dispatch, view);
       };
 
       // ⚠️ **撤销归 ProseMirror**（第 101 项点名的第二个坑）：CM 那一侧
       // **刻意没装 `history()`**，代码块里的 Ctrl+Z 转给 PM 走。
       // 装两套的话，两边各记一份、互相看不见对方——"在代码块里改一个字、
       // 点到正文再按 Ctrl+Z"就会只撤销正文那一步，而用户以为撤销的是刚才那次编辑。
-      const 代码编辑器 = 创建代码块编辑器({
-        初始文本: initialNode.textContent,
-        初始语言: languageOf(initialNode),
-        文本变化: (新文) => 推回文档(新文),
-        聚焦: () => {
-          设数学编辑(true);
-          认领选区();
+      const codeEditor = createCodeBlockEditor({
+        initialStartText: initialNode.textContent,
+        initialStartLanguage: languageOf(initialNode),
+        textChangeConvert: (newText) => pushReturnDocument(newText),
+        clusterFocus: () => {
+          setNumberLearnEditEdit(true);
+          recognizeLeadSelection();
         },
-        失焦: () => {
+        loseFocus: () => {
           queueMicrotask(() => {
-            if (!wrap.contains(document.activeElement)) 设数学编辑(false);
+            if (!wrap.contains(document.activeElement)) setNumberLearnEditEdit(false);
           });
         },
-        撤销: () => 走命令(undo),
-        重做: () => 走命令(redo),
+        undoCancel: () => walkCommand(undo),
+        heavyDo: () => walkCommand(redo),
+        openHeadBackCell: () => {
+          const pos = getPos();
+          if (typeof pos !== "number") return;
+          const current = view.state.doc.nodeAt(pos);
+          if (!current || current.type.name !== "code_block") return;
+          // 在代码框最开头按退格，表示"去掉这个代码框"。非空代码按行拆成
+          // 普通段落，文字一个不丢；空代码块变成一个空段落。整段替换放在
+          // 一笔事务里，所以一次撤销就能恢复原代码框。
+          const paragraph = liftCodeBlockToParagraphs(current, view.state.schema);
+          if (!paragraph) return;
+          const tr = view.state.tr.replaceWith(pos, pos + current.nodeSize, paragraph);
+          tr.setSelection(TextSelection.near(tr.doc.resolve(pos + 1)));
+          view.dispatch(tr.scrollIntoView());
+          view.focus();
+        },
       });
 
       /**
@@ -416,37 +432,37 @@ export const codeBlockView = $view(
        * ——不跟的话，"在代码块里打字时按 Ctrl+B"这类命令会作用到别处去，
        * 而那是一种**界面上看不出来**的错。
        */
-      function 推回文档(新文: string) {
-        if (同步中) return;
+      function pushReturnDocument(newText: string) {
+        if (sameStepMiddle) return;
         const pos = getPos();
         if (typeof pos !== "number") return;
-        const 旧文 = 当前节点.textContent;
-        if (旧文 === 新文) return;
+        const oldText = currentNode.textContent;
+        if (oldText === newText) return;
 
-        const { 删起, 删到, 插入 } = 算最小改动(旧文, 新文);
-        if (删起 === 删到 && !插入) return;
+        const { deleteStart, deleteEnd, insert } = computeMostSmallChangeAction(oldText, newText);
+        if (deleteStart === deleteEnd && !insert) return;
 
-        const 基 = pos + 1;
-        let 事务 = view.state.tr;
-        if (删起 < 删到) {
-          事务 = 插入
-            ? 事务.replaceWith(基 + 删起, 基 + 删到, view.state.schema.text(插入))
-            : 事务.delete(基 + 删起, 基 + 删到);
+        const base = pos + 1;
+        let transaction = view.state.tr;
+        if (deleteStart < deleteEnd) {
+          transaction = insert
+            ? transaction.replaceWith(base + deleteStart, base + deleteEnd, view.state.schema.text(insert))
+            : transaction.delete(base + deleteStart, base + deleteEnd);
         } else {
-          事务 = 事务.insertText(插入, 基 + 删起);
+          transaction = transaction.insertText(insert, base + deleteStart);
         }
 
         try {
-          事务 = 事务.setSelection(TextSelection.create(事务.doc, 基 + 代码编辑器.取光标()));
+          transaction = transaction.setSelection(TextSelection.create(transaction.doc, base + codeEditor.getCursor()));
         } catch {
           // 位置落不进去（极端情况）就只改文本。下一次按键选区会自己修正。
         }
 
-        同步中 = true;
+        sameStepMiddle = true;
         try {
-          view.dispatch(事务);
+          view.dispatch(transaction);
         } finally {
-          同步中 = false;
+          sameStepMiddle = false;
         }
       }
 
@@ -458,14 +474,14 @@ export const codeBlockView = $view(
        * 那一段——用户在代码块里看着自己的光标，命令却作用在别处。
        * ⚠️ `addToHistory: false`：这只是"光标挪了一下"，不该占一格撤销。
        */
-      function 认领选区() {
+      function recognizeLeadSelection() {
         const pos = getPos();
         if (typeof pos !== "number") return;
         try {
-          const 到 = pos + 1 + 代码编辑器.取光标();
+          const to2 = pos + 1 + codeEditor.getCursor();
           view.dispatch(
             view.state.tr
-              .setSelection(TextSelection.create(view.state.doc, 到))
+              .setSelection(TextSelection.create(view.state.doc, to2))
               .setMeta("addToHistory", false),
           );
         } catch {
@@ -489,21 +505,21 @@ export const codeBlockView = $view(
       // ⚠️ 预览语言不是 HTML 时它 `hidden`，**一个像素都不占**（见 `code-preview.ts`）。
       const wrap = document.createElement("div");
       wrap.className = "nota-code-wrap";
-      const 预览 = 建HTML预览();
+      const preview = createHTMLPreview();
 
       // ⚠️ 顺序：`code`（隐藏的 contentDOM）与 CM 的根一起放在最前，三个挂件随后。
       // 挂件都是绝对定位，顺序上不敏感，但 contentDOM 必须是 `pre` 的子元素。
-      pre.append(code, 代码编辑器.视图.dom, gutter, bar, langWrap);
+      pre.append(code, codeEditor.view.dom, gutter, bar, langWrap);
       // ⚠️ 当前顺序是**源码在上、生成物在下**：普通代码块后面接 HTML 预览，
       // `math` / `latex` / `tex` 后面接 KaTeX。数学预览曾经排在 `pre` 前面，
       // 结果是“上方公式、下方源码”，与 Mermaid、HTML 预览的方向相反。
-      wrap.append(pre, 数学.元素, 预览.元素);
+      wrap.append(pre, numberLearn.element, preview.element);
 
       // 收起态只看见渲染结果；点它进入“上面源码、下面公式”的编辑态。
-      数学.元素.addEventListener("mousedown", (event) => {
+      numberLearn.element.addEventListener("mousedown", (event) => {
         event.preventDefault();
-        设数学编辑(true);
-        代码编辑器.聚焦();
+        setNumberLearnEditEdit(true);
+        codeEditor.clusterFocus();
       });
 
       // 点在 `pre` 的**内边距**上（不在 CM 的内容里）时，把焦点交给 CM。
@@ -511,10 +527,10 @@ export const codeBlockView = $view(
       // "点了没反应"。⚠️ 只认 `pre` 与 `code` 两个目标：工具栏那几颗按钮
       // 也是 `pre` 的后代，一律聚焦的话点「复制」会把焦点抢走。
       pre.addEventListener("mousedown", (e) => {
-        const 目标 = e.target;
-        if (!(目标 instanceof Node)) return;
-        if (inChrome(目标)) return;
-        代码编辑器.聚焦();
+        const target = e.target;
+        if (!(target instanceof Node)) return;
+        if (inChrome(target)) return;
+        codeEditor.clusterFocus();
       }, true);
 
       // ── 复制 ──────────────────────────────────────────────────────────
@@ -526,7 +542,7 @@ export const codeBlockView = $view(
           // ⚠️ 取的是 **CodeMirror 那一份**，不是 `code.textContent`：
           // 隐藏的 contentDOM 里还挂着一层 prism 的行内装饰（`<span class="token">`），
           // 虽然 `textContent` 碰巧也是对的，但"复制"该走**用户眼前那一份**。
-          const ok = await writeClipboard(代码编辑器.取文本());
+          const ok = await writeClipboard(codeEditor.getText());
           copyBtn.textContent = ok ? t("Copied") : t("Copy Failed");
           window.setTimeout(() => {
             copyBtn.textContent = t("Copy");
@@ -556,7 +572,7 @@ export const codeBlockView = $view(
         (bar.contains(target) ||
           langWrap.contains(target) ||
           gutter.contains(target) ||
-          数学.元素.contains(target));
+          numberLearn.element.contains(target));
 
       const syncChrome = (node: PMNode) => {
         const lang = languageOf(node);
@@ -566,36 +582,43 @@ export const codeBlockView = $view(
         // 闭合状态显示的就是当前语言。⚠️ 这一句**不能省**：在源码模式里把
         // 围栏的语言改了、再切回所见即所得，走的就是这条路——
         // 少了它，框上写的还是旧语言。
-        语言选择器.设语言(lang);
+        languagePicker.setLanguage2(lang);
         // ⚠️ 同一句话还要转给 CodeMirror：代码块里那一段的着色是它画的
         // （见 `code-block-cm.ts` 的分色插件）。**语言没变时它自己会短路**，
         // 所以这里不用先比一次。
-        代码编辑器.设语言(lang);
+        codeEditor.setLanguage2(lang);
         // 行号要跟着**内容**走，而这个函数在 `update` 里每次都被调，正好是
         // 那条通路。⚠️ 判一下再写：`textContent` 的赋值会把整段文本重排一次，
         // 而上游的 `update` 是**每次光标移动、每次节点属性变化**都会来的
         //（改语言、拖列宽…），那种"内容没变也要重排一遍行号"的开销在小文档上
         // 看不出来，长代码块上会变成打字时的卡顿。
-        const 号 = 行号(node);
-        if (gutter.textContent !== 号) gutter.textContent = 号;
-        const 是数学 = 是数学代码语言(lang);
-        wrap.classList.toggle("nota-code-math", 是数学);
-        数学.元素.hidden = !是数学;
-        if (是数学) {
-          数学.同步(node.textContent);
-          if (wrap.contains(document.activeElement) || view.hasFocus()) 设数学编辑(true);
+        const number = lineNumber(node);
+        if (gutter.textContent !== number) gutter.textContent = number;
+        const isMath = isMathCodeLanguage(lang);
+        wrap.classList.toggle("nota-code-math", isMath);
+        numberLearn.element.hidden = !isMath;
+        if (isMath) {
+          numberLearn.sameStep(node.textContent);
+          const pos = getPos();
+          const selection = view.state.selection;
+          const selectionAtBlockInside =
+            typeof pos === "number" &&
+            selection.from >= pos &&
+            selection.to <= pos + node.nodeSize;
+          if (wrap.contains(document.activeElement) || selectionAtBlockInside) setNumberLearnEditEdit(true);
+          else setNumberLearnEditEdit(false);
         } else {
-          设数学编辑(false);
+          setNumberLearnEditEdit(false);
         }
         // ⚠️ 预览跟着**语言**决定露不露脸、跟着**内容**换 `srcdoc`
         // （内部去抖，见 `code-preview.ts` 文件头第 3 条）。
-        预览.同步(node);
+        preview.sameStep(node);
       };
 
       // ⚠️ 首帧**立刻写**（不去抖）：块刚挂上来时不存在"用户还在打字"这回事，
       // 攒 300ms 只会让刚打开的文档里那段 HTML 慢半拍才出来。
       syncChrome(initialNode);
-      预览.同步(initialNode, true);
+      preview.sameStep(initialNode, true);
 
       return {
         dom: wrap,
@@ -606,19 +629,19 @@ export const codeBlockView = $view(
           if (updated.type !== initialNode.type) return false;
           // ⚠️ 这两句的顺序不能反：先把活引用换掉，`syncChrome` 里那条
           // `设语言()` 和之后任何一次 `当前语言()` 才读得到新节点。
-          当前节点 = updated;
+          currentNode = updated;
           syncChrome(updated);
           // ⚠️ CodeMirror 那一侧也要跟上：源码模式里改这段、撤销、
           // 后端整篇替换文档，进代码块的**只有这一条路**。
           // ⚠️ `同步中` 在这里**必须判**——不判的话"CM 推给 PM、PM 又推回 CM"
           // 就成环了（第 101 项点名的第一个坑）。
-          const 文 = updated.textContent;
-          if (!同步中 && 文 !== 代码编辑器.取文本()) {
-            同步中 = true;
+          const text4 = updated.textContent;
+          if (!sameStepMiddle && text4 !== codeEditor.getText()) {
+            sameStepMiddle = true;
             try {
-              代码编辑器.设文本(文);
+              codeEditor.setText(text4);
             } finally {
-              同步中 = false;
+              sameStepMiddle = false;
             }
           }
           return true;
@@ -639,8 +662,8 @@ export const codeBlockView = $view(
         stopEvent: (e) =>
           e.target instanceof Node &&
           (pre.contains(e.target) ||
-            数学.元素.contains(e.target) ||
-            预览.元素.contains(e.target)),
+            numberLearn.element.contains(e.target) ||
+            preview.element.contains(e.target)),
 
         // ⚠️ 一律 `true`：这个节点里的 DOM 变化**没有一件**是 PM 该关心的
         // ——文本的唯一入口是 `推回文档` 那条事务，不靠它从 DOM 里读。
@@ -649,12 +672,12 @@ export const codeBlockView = $view(
         // ProseMirror 要把光标放进这个代码块时（从上面一段按 ↓ 进来、或者点它），
         // 把光标交给 CodeMirror。⚠️ 坐标是**相对这个节点内容起点**的
         //（PM 的 `ViewDesc` 逐层把节点起点减掉了），所以减 1 才是文本偏移。
-        setSelection: (锚, 头) => {
-          设数学编辑(true);
-          const 长 = 代码编辑器.取文本().length;
-          const 夹 = (n: number) => Math.max(0, Math.min(长, n - 1));
-          代码编辑器.设选区(夹(锚), 夹(头));
-          代码编辑器.聚焦();
+        setSelection: (anchor2, head2) => {
+          setNumberLearnEditEdit(true);
+          const length = codeEditor.getText().length;
+          const clamp = (n: number) => Math.max(0, Math.min(length, n - 1));
+          codeEditor.setSelection(clamp(anchor2), clamp(head2));
+          codeEditor.clusterFocus();
         },
 
         // ⚠️ **必须有**：语言下拉的弹层挂在 `document.body` 上（理由见
@@ -664,10 +687,10 @@ export const codeBlockView = $view(
         // ⚠️ CodeMirror 实例同理：它的 DOM 随 `pre` 一起消失，但它的
         // MutationObserver 与内部状态得显式收掉。
         destroy: () => {
-          语言选择器.销毁();
-          代码编辑器.销毁();
+          languagePicker.cancelDestroy();
+          codeEditor.cancelDestroy();
           // ⚠️ 预览自己那条待写的定时器也要撤（见 `code-preview.ts` 文件头）。
-          预览.销毁();
+          preview.cancelDestroy();
         },
       };
     };
@@ -696,9 +719,9 @@ function languageOf(node: PMNode): string {
  * 逻辑行折成两行显示时，它仍然只占一个行号——这是编辑器里的通行口径
  *（VSCode 亦然），因为行号指的是**文件里的第几行**，不是屏幕上的第几行。
  */
-function 行号(node: PMNode): string {
-  const 行数 = node.textContent.split("\n").length;
-  const 出: string[] = [];
-  for (let i = 1; i <= 行数; i++) 出.push(String(i));
-  return 出.join("\n");
+function lineNumber(node: PMNode): string {
+  const rowCount = node.textContent.split("\n").length;
+  const output2: string[] = [];
+  for (let i = 1; i <= rowCount; i++) output2.push(String(i));
+  return output2.join("\n");
 }

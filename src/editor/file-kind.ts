@@ -56,7 +56,7 @@ import type { ViewMode } from "@/bridge/ipc";
  *（写作时先生成 `.txt` 再改名的人多得是），而它走的是同一条解析路径。
  * `mdx` 也在——那条是 backlog 第 28 项定的（它认 `.mdx`，对话框也得筛得出来）。
  */
-export const MARKDOWN后缀: readonly string[] = [
+export const mARKDOWNExtension: readonly string[] = [
   "md",
   "markdown",
   "mdown",
@@ -77,33 +77,33 @@ export const MARKDOWN后缀: readonly string[] = [
  * - ⚠️ 阈值仍高于"正常长文"：用户可以在「视图」菜单手动切回富文本；自动
  *   降级只负责避免默认进入必然卡顿的模式。
  */
-export const 大文件阈值 = 200_000;
+export const largeTextItemThresholdValue = 200_000;
 
 /** 路径的后缀（小写、不带点）。没有后缀、或名字以点开头且没有别的点时给空串。 */
-export function 后缀(路径: string): string {
-  const 名 = 路径.split(/[/\\]/).pop() ?? "";
-  const 点 = 名.lastIndexOf(".");
+export function extension(path: string): string {
+  const name3 = path.split(/[/\\]/).pop() ?? "";
+  const point = name3.lastIndexOf(".");
   // ⚠️ `点 <= 0` 一并挡住 `.bashrc` 那种"点开头就是整个名字"的情形：
   // 取出来会得到 `bashrc`，而那是**名字**不是后缀。
-  if (点 <= 0) return "";
-  return 名.slice(点 + 1).toLowerCase();
+  if (point <= 0) return "";
+  return name3.slice(point + 1).toLowerCase();
 }
 
 /** 名字说是 Markdown 吗。 */
-export function 是Markdown后缀(路径: string): boolean {
-  return MARKDOWN后缀.includes(后缀(路径));
+export function isMarkdownExtension(path: string): boolean {
+  return mARKDOWNExtension.includes(extension(path));
 }
 
 /** 这份文件是什么类型。`text` = 不是 Markdown 的文本（照样能开，只是不按 Markdown 解析）。 */
-export type 文件类型 = "markdown" | "text";
+export type TextItemType = "markdown" | "text";
 
-export function 认文件类型(路径: string): 文件类型 {
-  return 是Markdown后缀(路径) ? "markdown" : "text";
+export function recognizeTextItemType(path: string): TextItemType {
+  return isMarkdownExtension(path) ? "markdown" : "text";
 }
 
 /** 这份文档太大了吗（`字符数` 是 `String.length`）。 */
-export function 是大文件(字符数: number): boolean {
-  return 字符数 > 大文件阈值;
+export function isLargeTextItem(characterNumber: number): boolean {
+  return characterNumber > largeTextItemThresholdValue;
 }
 
 /**
@@ -115,7 +115,7 @@ export function 是大文件(字符数: number): boolean {
  * 模式。合成一个的话，用户拖一篇 3 MB 的 `.md` 进来，看到的是一句
  * "这不是 Markdown" —— 而它明明是。
  */
-export type 降级缘由 = "text" | "large";
+export type LowerLevelReason = "text" | "large";
 
 /**
  * ⚠️ `路径` 可以是 `null`，那是"**还没存盘的新文档**"（`Document.path` 就是
@@ -123,9 +123,9 @@ export type 降级缘由 = "text" | "large";
  * Markdown，名字还没起而已。但**大小那一条照判**：从剪贴板粘一篇 200 万字符的
  * 东西进来，它一样会把编辑器拖垮，跟有没有名字没关系。
  */
-export function 降级缘由(路径: string | null, 字符数: number): 降级缘由 | null {
-  if (路径 !== null && 认文件类型(路径) === "text") return "text";
-  if (是大文件(字符数)) return "large";
+export function LowerLevelReason(path: string | null, characterNumber: number): LowerLevelReason | null {
+  if (path !== null && recognizeTextItemType(path) === "text") return "text";
+  if (isLargeTextItem(characterNumber)) return "large";
   return null;
 }
 
@@ -142,6 +142,6 @@ export function 降级缘由(路径: string | null, 字符数: number): 降级�
  * 它纹丝不动"——那是把用户锁在外面。合成本函数时**只管规则**，
  * 解除那一步在调用方。
  */
-export function 实际模式(偏好: ViewMode, 缘由: 降级缘由 | null): ViewMode {
-  return 缘由 === null ? 偏好 : "source";
+export function actualMode(preference: ViewMode, reason: LowerLevelReason | null): ViewMode {
+  return reason === null ? preference : "source";
 }

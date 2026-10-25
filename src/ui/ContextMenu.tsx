@@ -61,35 +61,35 @@ import { writeClipboard } from "@/editor/code-block";
 import type { CommandState } from "@/editor/command-state";
 import { useT } from "@/i18n";
 import { formatAccel } from "@/ui/accel";
-import { 取条目 } from "@/ui/commands";
-import { 弹层自己在滚 } from "@/ui/popup-scroll";
+import { getItem } from "@/ui/commands";
+import { popupSelfSelfAtRoll } from "@/ui/popup-scroll";
 import { api } from "@/bridge/ipc";
 import {
-  当前语言标签,
-  找视图,
-  替换拼写,
-  重新查拼写,
+  currentLanguageLabel,
+  findView,
+  replaceReplaceCombineWrite,
+  heavyNewValueCheckCombineWrite,
 } from "@/editor/spell-check";
 import {
-  拼写加词典,
-  拼写忽略,
-  拼写替换前缀,
-  给行,
-  行内下一格,
-  判落点,
-  整行灰,
-  这一档的灰,
-  type 行,
-  type 落点,
+  combineWriteAddWordDictionary,
+  combineWriteIgnoreOmit,
+  combineWriteReplaceReplacePrefix,
+  buildRows,
+  inlineBelowValueCell,
+  determineDropPoint,
+  wholeLineDisabled,
+  disabledForLocation,
+  type line3,
+  type DropPoint,
 } from "@/ui/context-menu";
-import { 按钮表, 按钮亮着, 提示, 字形类 } from "@/ui/FormatBar";
-import { Icon, type 图标名 } from "@/ui/Icon";
+import { pressButtonTable, isButtonActive, notice, characterShapeClass } from "@/ui/FormatBar";
+import { Icon, type iconName } from "@/ui/Icon";
 import { SubMenu } from "@/ui/MenuPopup";
 import type { Toast } from "@/ui/Toasts";
 import { findEdgeEnabled, useMenuRovingFocus } from "@/ui/useMenuRovingFocus";
 
 /** 翻译函数。`useT()` 的返回值——写在这里免得每处再抄一遍它的类型。 */
-type 翻译 = ReturnType<typeof useT>;
+type FlipTranslate = ReturnType<typeof useT>;
 
 /**
  * 剪贴板那四颗的图标。
@@ -98,7 +98,7 @@ type 翻译 = ReturnType<typeof useT>;
  * 而这四条是剪贴板动作——分界是"是不是一条格式命令"，不是"长得像不像按钮"。
  * 所以这一小张表住在这里，是**唯一**一份，不是第二份。
  */
-const 剪贴板图标: Record<string, 图标名> = {
+const cutPasteBoardIcon: Record<string, iconName> = {
   "edit.cut": "folio-edit-cut-symbolic",
   "edit.copy": "folio-edit-copy-symbolic",
   "edit.paste": "folio-edit-paste-symbolic",
@@ -115,8 +115,8 @@ const 剪贴板图标: Record<string, 图标名> = {
  * 形状，而它本来就该画 `</>` 这个**文字字形**（`FormatBar.tsx` 那条写着
  * "文字字形只留给拉丁字母"）。调用方据此退到字形，不是当错误处理。
  */
-function 取图标(id: string): 图标名 | undefined {
-  return 按钮表.get(id)?.icon ?? 剪贴板图标[id];
+function getIcon(id: string): iconName | undefined {
+  return pressButtonTable.get(id)?.icon ?? cutPasteBoardIcon[id];
 }
 
 /**
@@ -126,15 +126,15 @@ function 取图标(id: string): 图标名 | undefined {
  * 拿不到才退到 `MENUS` 的 `label`。反过来的话，`fmt.code` 会画成英文单词
  * "Code"——那个 16px 的方格里塞不下，而且和旁边两颗真图标对不上号。
  */
-function 取字形(id: string): string {
-  return 按钮表.get(id)?.label ?? 取条目(id)?.label ?? "?";
+function getCharacterShape(id: string): string {
+  return pressButtonTable.get(id)?.label ?? getItem(id)?.label ?? "?";
 }
 
 // ── 输入框那一档 ───────────────────────────────────────────────────────────
 
 /** 右键那一刻的输入框，以及它的选区。 */
-interface 输入框现场 {
-  元素: HTMLInputElement | HTMLTextAreaElement;
+interface InputBoxScene {
+  element: HTMLInputElement | HTMLTextAreaElement;
   /**
    * 右键那一刻的选区。
    *
@@ -144,8 +144,8 @@ interface 输入框现场 {
    * **当前聚焦的那个可编辑元素**上——焦点跑了，那三条就作用在菜单按钮上，
    * 等于全废。所以点条目时先把焦点和选区**复原**（`还焦`）。
    */
-  起: number | null;
-  止: number | null;
+  start5: number | null;
+  end2: number | null;
 }
 
 /**
@@ -163,28 +163,28 @@ interface 输入框现场 {
  * **先**收到同一个按键，于是它收下语言、收起自己、把那个输入框**卸载**掉。
  * `focus()` 一个已经从文档里摘掉的节点是空操作，`activeElement` 还停在别处。
  */
-function 还焦(场: 输入框现场): boolean {
-  if (!场.元素.isConnected) return false;
-  if (document.activeElement !== 场.元素) 场.元素.focus();
+function returnFocus(scene2: InputBoxScene): boolean {
+  if (!scene2.element.isConnected) return false;
+  if (document.activeElement !== scene2.element) scene2.element.focus();
   // ⚠️ 焦点回来了还不够：`blur` 那一下会把输入框里的选区**清掉**，而
   // 剪切/复制要用的正是"用户右键那一刻选中的那一段"（`选中了` 读的是活选区）。
-  if (场.起 !== null && 场.止 !== null) {
+  if (scene2.start5 !== null && scene2.end2 !== null) {
     try {
-      场.元素.setSelectionRange(场.起, 场.止);
+      scene2.element.setSelectionRange(scene2.start5, scene2.end2);
     } catch {
       // ⚠️ 有些 `type`（number / email…）不支持选中，会**抛**。那不是错误，
       // 只是这一类输入框里没有"选中一段"这回事——上面 `选中了` 也早就返回空了。
     }
   }
-  return document.activeElement === 场.元素;
+  return document.activeElement === scene2.element;
 }
 
 /** 现在选中的那一段。没选中返回 `null`（**不是错误**，是"还没选"）。 */
-function 选中了(场: 输入框现场): { 文: string; 起: number; 止: number } | null {
-  const a = 场.元素.selectionStart;
-  const b = 场.元素.selectionEnd;
+function selectedDone(scene2: InputBoxScene): { text4: string; start5: number; end2: number } | null {
+  const a = scene2.element.selectionStart;
+  const b = scene2.element.selectionEnd;
   if (a === null || b === null || a === b) return null;
-  return { 文: 场.元素.value.slice(a, b), 起: a, 止: b };
+  return { text4: scene2.element.value.slice(a, b), start5: a, end2: b };
 }
 
 /**
@@ -194,13 +194,13 @@ function 选中了(场: 输入框现场): { 文: string; 起: number; 止: numbe
  * 而这个输入框多半是 React 的受控组件（比如设置面板里那些），不派事件的话
  * **值改了、界面不更新**——用户看到的是"点了剪切，字还在"，比不做还糟。
  */
-function 换掉(场: 输入框现场, 文: string, 起: number, 止: number): void {
+function replaceRemove(scene2: InputBoxScene, text4: string, start5: number, end2: number): void {
   // ⚠️ **还不成焦点就什么都别做**（理由见 `还焦`）：`setRangeText` 本身不会
   // 误伤文档，但同一条路上下面那些 `execCommand` 会——两道口子用同一个守卫，
   // 免得"这条守了、那条忘了"。
-  if (!还焦(场)) return;
-  场.元素.setRangeText(文, 起, 止, "end");
-  场.元素.dispatchEvent(new Event("input", { bubbles: true }));
+  if (!returnFocus(scene2)) return;
+  scene2.element.setRangeText(text4, start5, end2, "end");
+  scene2.element.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 /**
@@ -215,64 +215,64 @@ function 换掉(场: 输入框现场, 文: string, 起: number, 止: number): vo
  * 一条写剪贴板的路。另写一条（比如 `execCommand("copy")`）的症状是"同一个
  * 动作两个结果"，而那种毛病极难被当成同一个 bug 报上来（那条头注写着）。
  */
-async function 落到输入框(id: string, 场: 输入框现场, t: 翻译, toast: 提示): Promise<void> {
+async function dropToInputBox(id: string, scene2: InputBoxScene, t: FlipTranslate, toast: notice): Promise<void> {
   switch (id) {
     case "edit.undo":
     case "edit.redo":
     case "edit.select": {
       // ⚠️ **还不成焦点就什么都别做**：焦点没回来，`execCommand` 作用的是
       // **整个文档**——量到过一次"全篇被选蓝"（见 `还焦` 那段）。
-      if (!还焦(场)) return;
-      const 命令 = id === "edit.undo" ? "undo" : id === "edit.redo" ? "redo" : "selectAll";
+      if (!returnFocus(scene2)) return;
+      const command = id === "edit.undo" ? "undo" : id === "edit.redo" ? "redo" : "selectAll";
       // ⚠️ `execCommand` 被标了弃用，但输入框上的撤销/重做/全选**没有替代品**：
       // 那是浏览器自己的编辑历史，JS 侧根本拿不到。仓库里已有先例
       // （`code-block.ts` 的 `writeClipboard` 就靠它兜底，注释写着"它是唯一
       // 不依赖权限的写法"）。⚠️ 这一段是否真能用**必须开窗实测**，见 `docs/06`。
-      document.execCommand(命令);
+      document.execCommand(command);
       return;
     }
     case "edit.copy": {
-      const s = 选中了(场);
+      const s = selectedDone(scene2);
       if (!s) {
         toast(t("Select some text first."), "info");
         return;
       }
-      const 成 = await writeClipboard(s.文);
-      toast(成 ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."), 成 ? "success" : "error");
+      const become = await writeClipboard(s.text4);
+      toast(become ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."), become ? "success" : "error");
       return;
     }
     case "edit.cut": {
-      const s = 选中了(场);
+      const s = selectedDone(scene2);
       if (!s) {
         toast(t("Select some text first."), "info");
         return;
       }
       // ⚠️ **顺序不能反**：先复制、成功了再删。反过来一旦写剪贴板失败，
       // 用户选中的那段字就没了（`useClipboard.ts::剪切` 那段写着为什么）。
-      const 成 = await writeClipboard(s.文);
-      if (!成) {
+      const become = await writeClipboard(s.text4);
+      if (!become) {
         toast(t("Could not copy: the system refused to write to the clipboard."), "error");
         return;
       }
-      换掉(场, "", s.起, s.止);
+      replaceRemove(scene2, "", s.start5, s.end2);
       return;
     }
     case "edit.paste": {
-      if (!还焦(场)) return;
-      let 文: string;
+      if (!returnFocus(scene2)) return;
+      let text4: string;
       // ⚠️ 连属性访问都要包在 try 里：不是安全上下文时 `navigator.clipboard`
       // **整个对象都不存在**（同 `useClipboard.ts::粘贴` 那一段）。
       try {
-        文 = await navigator.clipboard.readText();
+        text4 = await navigator.clipboard.readText();
       } catch {
         toast(t("The system does not allow reading the clipboard from the menu — press Ctrl+V to paste."), "warn");
         return;
       }
-      if (!文) {
+      if (!text4) {
         toast(t("There is no text in the clipboard."), "info");
         return;
       }
-      换掉(场, 文, 场.元素.selectionStart ?? 0, 场.元素.selectionEnd ?? 0);
+      replaceRemove(scene2, text4, scene2.element.selectionStart ?? 0, scene2.element.selectionEnd ?? 0);
       return;
     }
     default:
@@ -281,7 +281,7 @@ async function 落到输入框(id: string, 场: 输入框现场, t: 翻译, toas
 }
 
 /** `toast` 的形状。写成别名只是为了上面那个函数签名短一点。 */
-type 提示 = (message: string, level?: Toast["level"]) => void;
+type notice = (message: string, level?: Toast["level"]) => void;
 
 /**
  * 拼写那一段的三条（建议 / 加入词典 / 忽略）。
@@ -294,21 +294,21 @@ type 提示 = (message: string, level?: Toast["level"]) => void;
  * 前者落盘（`dictionaries/user-words.txt`，以后一直算对），后者只在本次运行里
  * 算对（重开软件照旧标）。并成一个的话用户点哪一次都是猜。
  */
-function 落到拼写(id: string, 现场: 拼写现场 | null, toast: 提示): void {
-  if (!现场) return;
+function dropToCombineWrite(id: string, scene: CombineWriteScene | null, toast: notice): void {
+  if (!scene) return;
   // ⚠️ 菜单开着这几百毫秒里文档可能被改过（外部改动、自动保存那一路会重画
   // 正文）。节点已经不在文档里时 `posAtDOM` 会抛——先查一下，什么都不做
   // 也比抛出去强（用户看到的是"点了一下没反应"，不是一屏红字）。
-  if (!现场.元素.isConnected) return;
-  const 视图 = 找视图(现场.元素);
-  if (!视图) return;
+  if (!scene.element.isConnected) return;
+  const view = findView(scene.element);
+  if (!view) return;
 
-  if (id === 拼写加词典 || id === 拼写忽略) {
-    const 做 = id === 拼写加词典 ? api.spell.wordAdd(现场.词) : api.spell.wordIgnore(现场.词);
-    void 做
+  if (id === combineWriteAddWordDictionary || id === combineWriteIgnoreOmit) {
+    const doValue2 = id === combineWriteAddWordDictionary ? api.spell.wordAdd(scene.word) : api.spell.wordIgnore(scene.word);
+    void doValue2
       // ⚠️ 做完**立刻重查**（不走去抖）：用户要的是"这一下就没了"，
       // 再等 600 毫秒看着像没生效（`重新查拼写` 那段写着）。
-      .then(() => 重新查拼写(视图))
+      .then(() => heavyNewValueCheckCombineWrite(view))
       .catch((e) => {
         // ⚠️ 写用户词表失败（配置目录只读那种）**要说出来**：静默吞掉的话
         // "加入词典"在用户眼里就是个坏掉的功能。
@@ -317,29 +317,29 @@ function 落到拼写(id: string, 现场: 拼写现场 | null, toast: 提示): v
     return;
   }
 
-  if (!id.startsWith(拼写替换前缀)) return;
-  const 下标 = Number(id.slice(拼写替换前缀.length));
-  const 建议 = 现场.建议们[下标];
-  if (!建议) return; // 理论上到不了：那一列的下标就是这一刻刚拉回来的
+  if (!id.startsWith(combineWriteReplaceReplacePrefix)) return;
+  const belowMark = Number(id.slice(combineWriteReplaceReplacePrefix.length));
+  const createProposal = scene.createProposalPlural[belowMark];
+  if (!createProposal) return; // 理论上到不了：那一列的下标就是这一刻刚拉回来的
   // ⚠️ 范围是**这一刻**从 DOM 上算的，不是菜单打开时算的：文档在这之间可能
   // 移过位，而那个 span 是跟着文档重画的——拿现在这个算，画到的才是用户
   // 眼睛看到的那个词。
-  const 从 = 视图.posAtDOM(现场.元素, 0);
-  替换拼写(视图, 从, 从 + 现场.词.length, 建议);
+  const from = view.posAtDOM(scene.element, 0);
+  replaceReplaceCombineWrite(view, from, from + scene.word.length, createProposal);
 }
 
 // ── 画 ─────────────────────────────────────────────────────────────────────
 
-interface 面板接线 {
-  行: 行[];
+interface PanelWiring {
+  line3: line3[];
   /** 右键那一下的位置（视口坐标）。 */
-  落点: { top: number; left: number };
+  DropPoint: { top: number; left: number };
   /** 灰名单，原样从 `ui/useMenus.ts` 来。见 `context-menu.ts::整行灰`。 */
-  灰: ReadonlySet<string>;
+  disabled2: ReadonlySet<string>;
   /** 可勾选项的状态（子菜单里那些带勾的要用）。 */
-  勾: Record<string, boolean>;
+  check: Record<string, boolean>;
   /** 光标状态。只用来决定图标亮不亮（`null` = 读不出来，源码模式）。 */
-  光标: CommandState | null;
+  cursor: CommandState | null;
   /** 选中一条真命令。子菜单父项**不会**走到这里。 */
   onPick: (id: string) => void;
   /** 关掉整条链（Esc / Tab / 点到别处）。 */
@@ -348,8 +348,8 @@ interface 面板接线 {
   label: string;
 }
 
-function ContextMenuPanel(p: 面板接线) {
-  const { 行: 行们, 落点, 灰, 勾, 光标, onPick, onDismiss, label } = p;
+function ContextMenuPanel(p: PanelWiring) {
+  const { line3: rows, DropPoint, disabled2, check, cursor, onPick, onDismiss, label } = p;
   const t = useT();
 
   /**
@@ -359,30 +359,30 @@ function ContextMenuPanel(p: 面板接线) {
    * "按行号查一张对照表"。`ui/MenuPopup.tsx::layout` 是同一条理由，那边的
    * 注释把代价说全了（`noUncheckedIndexedAccess` 下每处都得再判一次空）。
    */
-  const { 条目, 下标 } = useMemo(() => {
-    const 条目: 行[] = [];
-    const 下标 = new Map<string, number>();
-    for (const r of 行们) {
+  const { item, belowMark } = useMemo(() => {
+    const item: line3[] = [];
+    const belowMark = new Map<string, number>();
+    for (const r of rows) {
       if (r.kind === "sep") continue;
-      下标.set(r.key, 条目.length);
-      条目.push(r);
+      belowMark.set(r.key, item.length);
+      item.push(r);
     }
-    return { 条目, 下标 };
-  }, [行们]);
+    return { item, belowMark };
+  }, [rows]);
 
   /** 图标行里当前落在第几颗（按**行的 key** 记，不是按行号）。 */
-  const [行内位, set行内位] = useState<Record<string, number>>({});
+  const [InlinePosition, setInlinePosition] = useState<Record<string, number>>({});
   /** 哪个子菜单开着（漫游下标）。`null` = 没开。 */
-  const [子开, set子开] = useState<number | null>(null);
-  const [子锚, set子锚] = useState<{
+  const [childOpen, setChildOpen] = useState<number | null>(null);
+  const [childAnchor, setChildAnchor] = useState<{
     top: number;
     left: number;
     parentLeft: number;
   } | null>(null);
 
-  const 面板 = useRef<HTMLDivElement>(null);
-  const 行钮 = useRef(new Map<string, HTMLElement | null>());
-  const 格钮 = useRef(new Map<string, HTMLButtonElement | null>());
+  const panel = useRef<HTMLDivElement>(null);
+  const lineButton = useRef(new Map<string, HTMLElement | null>());
+  const cellButton = useRef(new Map<string, HTMLButtonElement | null>());
   /**
    * `roving.focusedIndex` 的镜像。
    *
@@ -390,66 +390,66 @@ function ContextMenuPanel(p: 面板接线) {
    * `(item, index)`，而 `onLeft` **一个参数都没有**（见那个 hook 的签名）。
    * 排内往左翻要问"现在这一排是哪一排"，只能从这里拿。
    */
-  const 焦点 = useRef(-1);
+  const focusPoint = useRef(-1);
 
-  const [位置, set位置] = useState(落点);
+  const [position2, setPosition] = useState(DropPoint);
   // 量一下自己多大，再夹回视口里：底下放不下就往上提，右边放不下就往左挪。
   // ⚠️ 必须**量**，不能按"行数 × 行高"算——行高是 CSS 说了算的（跟着界面风格
   // 的 `--control-height` 走）。这段照抄 `MenuPopup.tsx::SubMenu` 那一条。
   useLayoutEffect(() => {
-    const el = 面板.current;
+    const el = panel.current;
     if (!el) return;
-    set位置({
-      top: Math.max(8, Math.min(落点.top, window.innerHeight - el.offsetHeight - 8)),
-      left: Math.max(8, Math.min(落点.left, window.innerWidth - el.offsetWidth - 8)),
+    setPosition({
+      top: Math.max(8, Math.min(DropPoint.top, window.innerHeight - el.offsetHeight - 8)),
+      left: Math.max(8, Math.min(DropPoint.left, window.innerWidth - el.offsetWidth - 8)),
     });
-  }, [落点]);
+  }, [DropPoint]);
 
   /** 这一排里当前该落哪一颗。**必落在能用的一颗上**（全灰则 -1）。 */
-  function 行内落点(r: 行): number {
+  function inlineDropPoint(r: line3): number {
     if (r.kind !== "icons") return -1;
-    const 可用 = r.ids.map((id) => ({ disabled: 灰.has(id) }));
-    const 已 = 行内位[r.key];
-    if (已 !== undefined && !可用[已]?.disabled) return 已;
-    return findEdgeEnabled(可用, 1);
+    const canUse = r.ids.map((id) => ({ disabled: disabled2.has(id) }));
+    const already = InlinePosition[r.key];
+    if (already !== undefined && !canUse[already]?.disabled) return already;
+    return findEdgeEnabled(canUse, 1);
   }
 
   /** 把这一排的落点挪到第 `格` 颗，并**真的**把焦点移过去。 */
-  function 落格(r: 行, 格: number): void {
+  function dropCell(r: line3, cell2: number): void {
     if (r.kind !== "icons") return;
-    set行内位((m) => ({ ...m, [r.key]: 格 }));
+    setInlinePosition((m) => ({ ...m, [r.key]: cell2 }));
     // ⚠️ 自己 `focus()`，不指望下面那条跟着 `focusedIndex` 走的 effect：
     // 排内翻格**不改** `focusedIndex`（还是同一排），state 没变 → 不重渲染
     // → effect 根本不跑。同一个坑 `useMenuRovingFocus.ts::focusItem` 记过一次。
-    格钮.current.get(`${r.key}:${格}`)?.focus();
+    cellButton.current.get(`${r.key}:${cell2}`)?.focus();
   }
 
-  function 关子(): void {
-    set子开(null);
-    set子锚(null);
+  function closeChildren(): void {
+    setChildOpen(null);
+    setChildAnchor(null);
   }
 
   /** 展开第 `行下标` 条的子菜单，并把锚点记在**父项右边沿**。 */
-  function 开子(行下标: number): void {
-    const r = 条目[行下标];
+  function openChild(rowIndex: number): void {
+    const r = item[rowIndex];
     if (!r || r.kind !== "item" || !r.spec.submenu) return;
-    const el = 行钮.current.get(r.key);
+    const el = lineButton.current.get(r.key);
     if (!el) return;
     const b = el.getBoundingClientRect();
     // 左边缘**减去 4px 叠到父项上**，中间不留缝——留缝的话鼠标从父项移到子菜单
     // 的路上会经过一条"谁都不属于"的带子，菜单自己就关了（`MenuPopup` 那段）。
-    set子锚({ top: b.top, left: b.right - 4, parentLeft: b.left });
-    set子开(行下标);
+    setChildAnchor({ top: b.top, left: b.right - 4, parentLeft: b.left });
+    setChildOpen(rowIndex);
   }
 
   const roving = useMenuRovingFocus<{ disabled?: boolean }>({
-    items: 条目.map((r) => ({ disabled: 整行灰(r, 灰) })),
+    items: item.map((r) => ({ disabled: wholeLineDisabled(r, disabled2) })),
     onActivate: (_it, i) => {
-      const r = 条目[i];
+      const r = item[i];
       if (!r) return;
       if (r.kind === "icons") {
-        const id = r.ids[行内落点(r)];
-        if (id && !灰.has(id)) onPick(id);
+        const id = r.ids[inlineDropPoint(r)];
+        if (id && !disabled2.has(id)) onPick(id);
         return;
       }
       // ⚠️ 这一行不能省：`条目` 的类型里还留着 `sep`（摊平时滤掉的是**运行时**
@@ -458,41 +458,41 @@ function ContextMenuPanel(p: 面板接线) {
       if (r.kind !== "item") return;
       if (r.spec.submenu) {
         // 有子菜单的那条：回车是"展开/收起"，不是"执行"（同 `MenuPopup`）。
-        if (子开 === i) 关子();
-        else 开子(i);
+        if (childOpen === i) closeChildren();
+        else openChild(i);
         return;
       }
-      if (!灰.has(r.spec.id)) onPick(r.spec.id);
+      if (!disabled2.has(r.spec.id)) onPick(r.spec.id);
     },
     onDismiss,
     onRight: (_it, i) => {
-      const r = 条目[i];
+      const r = item[i];
       if (!r) return;
       if (r.kind === "icons") {
-        const 可用 = r.ids.map((id) => ({ disabled: 灰.has(id) }));
-        const 当前 = 行内落点(r);
-        const 下一格 = 行内下一格(可用, 当前, 1);
-        if (下一格 !== 当前) 落格(r, 下一格);
+        const canUse = r.ids.map((id) => ({ disabled: disabled2.has(id) }));
+        const current = inlineDropPoint(r);
+        const belowValueCell = inlineBelowValueCell(canUse, current, 1);
+        if (belowValueCell !== current) dropCell(r, belowValueCell);
         return;
       }
       if (r.kind !== "item") return; // 同上：类型上还留着 `sep`
-      if (r.spec.submenu) 开子(i);
+      if (r.spec.submenu) openChild(i);
     },
     onLeft: () => {
       // ⚠️ `onLeft` 收不到下标（hook 的签名就那样），只能照镜子拿。
-      const r = 条目[焦点.current];
+      const r = item[focusPoint.current];
       if (!r || r.kind !== "icons") return;
-      const 可用 = r.ids.map((id) => ({ disabled: 灰.has(id) }));
-      const 当前 = 行内落点(r);
-      const 上一格 = 行内下一格(可用, 当前, -1);
-      if (上一格 !== 当前) 落格(r, 上一格);
+      const canUse = r.ids.map((id) => ({ disabled: disabled2.has(id) }));
+      const current = inlineDropPoint(r);
+      const aboveValueCell = inlineBelowValueCell(canUse, current, -1);
+      if (aboveValueCell !== current) dropCell(r, aboveValueCell);
     },
   });
-  焦点.current = roving.focusedIndex;
+  focusPoint.current = roving.focusedIndex;
 
   return (
     <div
-      ref={面板}
+      ref={panel}
       // ⚠️ `menu-sub` 那一套类名是**借**的（不是 `menu-popup`）：`.menu-sub` 是
       // `position: fixed` ＋ 坐标自己给 ＋ 没有"挂在某个东西下面"的假设，正好是
       // 右键菜单要的；`.menu-popup` 的 `top: calc(100% + 5px)` 是"挂在菜单栏
@@ -505,33 +505,33 @@ function ContextMenuPanel(p: 面板接线) {
       data-context-menu=""
       role="menu"
       aria-label={label}
-      style={{ top: 位置.top, left: 位置.left }}
+      style={{ top: position2.top, left: position2.left }}
       onKeyDown={roving.handleKeyDown}
     >
-      {行们.map((r) => {
+      {rows.map((r) => {
         if (r.kind === "sep") {
           return <div className="menu-sep" key={r.key} role="separator" />;
         }
 
-        const 序号 = 下标.get(r.key) ?? -1;
+        const index = belowMark.get(r.key) ?? -1;
 
         if (r.kind === "icons") {
-          const 当前 = 行内落点(r);
+          const current = inlineDropPoint(r);
           return (
             <div
               className="menu-icon-row"
               key={r.key}
               role="group"
               ref={(n) => {
-                行钮.current.set(r.key, n);
+                lineButton.current.set(r.key, n);
               }}
             >
               {r.ids.map((id, i) => {
-                const spec = 取条目(id);
-                const 按钮 = 按钮表.get(id);
-                const 形状 = 取图标(id);
-                const 这条灰 = 灰.has(id);
-                const 是当前 = i === 当前;
+                const spec = getItem(id);
+                const PressButton = pressButtonTable.get(id);
+                const shape = getIcon(id);
+                const thisDisabled = disabled2.has(id);
+                const isCurrent = i === current;
                 // ⚠️ **整排算一个漫游落点，所以"停在哪一颗"得自己画**（见文件头）。
                 // 不能借 `bars.css` 给工具栏那条 `:focus-visible` 的焦点圈：菜单一开
                 // 是**我们用脚本**把焦点放上去的，WebKit 不把它当"键盘操作"，那一圈
@@ -539,14 +539,14 @@ function ContextMenuPanel(p: 面板接线) {
                 // 于是键盘走到这一排上时屏幕上什么都没有。所以自己挂属性（见
                 // `styles/menubar.css` 里 `.menu-icon-row .format-btn[data-current]`）。
                 // ⚠️ 只在**这一排有漫游焦点**时画：焦点去了别行，这一块就是噪音。
-                const 是焦点行 = roving.focusedIndex === 序号;
+                const isFocusPointLine = roving.focusedIndex === index;
                 // ⚠️ 只有**当前那一颗**挂漫游属性：整排算一个落点（见文件头）。
-                const 漫游 = 是当前 ? roving.itemProps(序号) : null;
-                const 名字 = spec ? t(spec.label) : id;
+                const roamNavigate = isCurrent ? roving.itemProps(index) : null;
+                const name2 = spec ? t(spec.label) : id;
                 // ⚠️ 拼法走 `FormatBar` 的 `提示`，**不自己拼**：它管着"括号随
                 // 语言变"（中文全角、英文半角）。这里再拼一次的话，中文界面上
                 // 这个提示会是半角括号，和隔壁工具栏对不上。
-                const 提示语 = 提示(id, 名字);
+                const noticeLanguage = notice(id, name2);
                 return (
                   <button
                     key={id}
@@ -554,38 +554,38 @@ function ContextMenuPanel(p: 面板接线) {
                     className="format-btn"
                     // 亮不亮＝当前光标那一位（`FormatBar.tsx::按钮亮着`，
                     // 和工具栏**同一份判据**，不是各判各的）。
-                    data-on={按钮 ? 按钮亮着(按钮, 光标) : false}
-                    data-current={是焦点行 && 是当前 ? true : undefined}
-                    disabled={这条灰}
-                    tabIndex={漫游 ? 漫游.tabIndex : -1}
-                    title={提示语}
+                    data-on={PressButton ? isButtonActive(PressButton, cursor) : false}
+                    data-current={isFocusPointLine && isCurrent ? true : undefined}
+                    disabled={thisDisabled}
+                    tabIndex={roamNavigate ? roamNavigate.tabIndex : -1}
+                    title={noticeLanguage}
                     // ⚠️ 图标按钮必须自己带名字：`.icon` 是 `aria-hidden` 的，
                     // 按钮里一个字都没有（`FormatBar.tsx` 那一段同款）。
-                    aria-label={提示语}
+                    aria-label={noticeLanguage}
                     ref={(n) => {
-                      格钮.current.set(`${r.key}:${i}`, n);
-                      if (是当前) roving.registerItem(序号, n);
+                      cellButton.current.set(`${r.key}:${i}`, n);
+                      if (isCurrent) roving.registerItem(index, n);
                     }}
-                    onFocus={漫游?.onFocus}
+                    onFocus={roamNavigate?.onFocus}
                     onMouseEnter={() => {
-                      if (这条灰) return;
-                      roving.setFocusedIndex(序号);
-                      set行内位((m) => ({ ...m, [r.key]: i }));
-                      格钮.current.get(`${r.key}:${i}`)?.focus();
+                      if (thisDisabled) return;
+                      roving.setFocusedIndex(index);
+                      setInlinePosition((m) => ({ ...m, [r.key]: i }));
+                      cellButton.current.get(`${r.key}:${i}`)?.focus();
                     }}
                     // ⚠️ 见文件头第 1 条：不拦的话编辑区的选区会被这一下抢走，
                     // 于是"右键 → 加粗"变成"在原地插两个星号"。
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
-                      if (!这条灰) onPick(id);
+                      if (!thisDisabled) onPick(id);
                     }}
                   >
-                    {形状 ? (
-                      <Icon name={形状} />
+                    {shape ? (
+                      <Icon name={shape} />
                     ) : (
                       // ⚠️ class 走 `字形类`，**不自己拼**：`</>` 的等宽体在
                       // `format-glyph-${cmd}` 那个修饰类上，见那边的注释。
-                      <span className={字形类(id)}>{取字形(id)}</span>
+                      <span className={characterShapeClass(id)}>{getCharacterShape(id)}</span>
                     )}
                   </button>
                 );
@@ -594,15 +594,15 @@ function ContextMenuPanel(p: 面板接线) {
           );
         }
 
-        const 这条灰 = 整行灰(r, 灰);
-        const 是子开 = 子开 === 序号;
+        const thisDisabled = wholeLineDisabled(r, disabled2);
+        const isChildOpen = childOpen === index;
         // ⚠️ **键盘走到的那一项必须画出来**，否则 ↑↓ 是一套"看不见的漫游"——
         // 2026-10-04 开窗口检抓到的：菜单开着、按 `↓` 也确实在走（`Esc` 能关掉
         // 就是证据），但屏幕上一格高亮都没有，用户根本不知道自己停在哪儿。
         // 这里把漫游下标也算进 `.menu-item-open`（那一族的注释本来就写着
         // "键盘走到哪一项、以及哪一项的子菜单开着"画同一种底色）。
-        const 是焦点 = roving.focusedIndex === 序号;
-        const 漫游 = roving.itemProps(序号);
+        const isFocusPoint = roving.focusedIndex === index;
+        const roamNavigate = roving.itemProps(index);
 
         // 拼写那一段（建议 / 加入词典 / 忽略）。⚠️ 形状与上面的 `item` 一致
         //（同一条 `.menu-item`），差的是**标签原样用、不过 `t()`**——那是从
@@ -613,16 +613,16 @@ function ContextMenuPanel(p: 面板接线) {
               <button
                 type="button"
                 role="menuitem"
-                className={`menu-item ${是焦点 ? "menu-item-open" : ""}`}
-                tabIndex={漫游.tabIndex}
+                className={`menu-item ${isFocusPoint ? "menu-item-open" : ""}`}
+                tabIndex={roamNavigate.tabIndex}
                 ref={(n) => {
-                  行钮.current.set(r.key, n);
-                  roving.registerItem(序号, n);
+                  lineButton.current.set(r.key, n);
+                  roving.registerItem(index, n);
                 }}
-                onFocus={漫游.onFocus}
+                onFocus={roamNavigate.onFocus}
                 onMouseEnter={() => {
-                  漫游.onMouseEnter();
-                  关子();
+                  roamNavigate.onMouseEnter();
+                  closeChildren();
                 }}
                 // ⚠️ 与上面那一排同一条：不拦的话编辑区的选区会被右键抢走，
                 // 于是"换成 hello"作用在一个已经塌掉的光标上（见文件头第 1 条）。
@@ -645,55 +645,55 @@ function ContextMenuPanel(p: 面板接线) {
             <button
               type="button"
               role="menuitem"
-              className={`menu-item ${r.spec.danger ? "menu-item-danger" : ""} ${是子开 || 是焦点 ? "menu-item-open" : ""}`}
-              disabled={这条灰}
-              aria-checked={r.spec.checkable ? !!勾[r.spec.id] : undefined}
+              className={`menu-item ${r.spec.danger ? "menu-item-danger" : ""} ${isChildOpen || isFocusPoint ? "menu-item-open" : ""}`}
+              disabled={thisDisabled}
+              aria-checked={r.spec.checkable ? !!check[r.spec.id] : undefined}
               aria-haspopup={r.spec.submenu ? "menu" : undefined}
-              aria-expanded={r.spec.submenu ? 是子开 : undefined}
-              tabIndex={漫游.tabIndex}
+              aria-expanded={r.spec.submenu ? isChildOpen : undefined}
+              tabIndex={roamNavigate.tabIndex}
               ref={(n) => {
-                行钮.current.set(r.key, n);
-                roving.registerItem(序号, n);
+                lineButton.current.set(r.key, n);
+                roving.registerItem(index, n);
               }}
-              onFocus={漫游.onFocus}
+              onFocus={roamNavigate.onFocus}
               onMouseEnter={() => {
-                漫游.onMouseEnter();
+                roamNavigate.onMouseEnter();
                 // 划过就展开（子菜单是另一层，这里那两条 `openSub` 的规矩照旧）。
-                if (r.spec.submenu) 开子(序号);
-                else 关子();
+                if (r.spec.submenu) openChild(index);
+                else closeChildren();
               }}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 if (r.spec.submenu) {
-                  if (是子开) 关子();
-                  else 开子(序号);
+                  if (isChildOpen) closeChildren();
+                  else openChild(index);
                   return;
                 }
-                if (!这条灰) onPick(r.spec.id);
+                if (!thisDisabled) onPick(r.spec.id);
               }}
             >
-              <span className="menu-check">{r.spec.checkable && 勾[r.spec.id] ? "✓" : ""}</span>
+              <span className="menu-check">{r.spec.checkable && check[r.spec.id] ? "✓" : ""}</span>
               <span className="menu-label">{t(r.spec.label)}</span>
               {/* 灰掉的不印快捷键——"看得见快捷键 = 按得动"（`MenuPopup` 那条）。 */}
-              {r.spec.accel && !这条灰 && (
+              {r.spec.accel && !thisDisabled && (
                 <span className="menu-accel">{formatAccel(r.spec.accel)}</span>
               )}
               <span className="menu-arrow">{r.spec.submenu ? "▸" : ""}</span>
             </button>
 
             {r.spec.submenu &&
-              是子开 &&
-              子锚 &&
+              isChildOpen &&
+              childAnchor &&
               createPortal(
                 <div data-context-menu="">
                   <SubMenu
                     entries={r.spec.submenu}
-                    disabled={new Set(灰) as Set<string>}
-                    checks={勾}
+                    disabled={new Set(disabled2) as Set<string>}
+                    checks={check}
                     onPick={onPick}
                     onDismiss={onDismiss}
-                    onClose={关子}
-                    anchor={子锚}
+                    onClose={closeChildren}
+                    anchor={childAnchor}
                     // ⚠️ 抬层级：子菜单 portal 到 `body`，继承不到本体那个
                     // `z-index`（`styles/menubar.css` 的 `.context-sub`）。
                     className="context-sub"
@@ -710,7 +710,7 @@ function ContextMenuPanel(p: 面板接线) {
 
 // ── 听 ─────────────────────────────────────────────────────────────────────
 
-export interface 右键接线 {
+export interface contextMenuWiring {
   /**
    * 命令表**本身**（`App.tsx` 里 `useCommandTable` 那张 `menuHandlers`）。
    *
@@ -719,21 +719,21 @@ export interface 右键接线 {
    * 而且分发的写法必须**和 `App.tsx` 里 `onCommand` 那处逐字相同**——那就
    * 是全应用唯一的派发口，两个入口两种写法是"同一个动作两个结果"的老病。
    */
-  命令表: Record<string, (() => void) | undefined>;
+  commandTable: Record<string, (() => void) | undefined>;
   /** 灰名单（`App.tsx` 从 `ui/useMenus.ts` 拿到的 `disabledCommands`）。 */
-  灰: ReadonlySet<string>;
+  disabled2: ReadonlySet<string>;
   /** 勾选状态（同上，`menuChecks`）。 */
-  勾: Record<string, boolean>;
+  check: Record<string, boolean>;
   /** 光标状态。图标亮不亮看它（`null` ＝ 读不出来，源码模式）。 */
-  光标: CommandState | null;
+  cursor: CommandState | null;
   /** 提示条。输入框那一档失败时要说话。 */
-  toast: 提示;
+  toast: notice;
 }
 
 /** 现在开着的那一份。`null` = 没开。 */
-interface 开着 {
-  位置: { top: number; left: number };
-  行: 行[];
+interface isOpen {
+  position2: { top: number; left: number };
+  line3: line3[];
   /**
    * 这一份是哪一档。
    *
@@ -742,9 +742,9 @@ interface 开着 {
    * 现场"，两件事碰巧同源，哪天输入框那一档多条别的入口（比如给
    * `contenteditable` 也做一条），判据就会悄悄错开。
    */
-  落点: 落点;
+  DropPoint: DropPoint;
   /** 输入框那一档才有。 */
-  场: 输入框现场 | null;
+  scene2: InputBoxScene | null;
   /**
    * 这一下右键落在**一个拼错的词**上时才有：那个 `<span class="nota-spell-error">`
    * 元素，以及它里面的词、这一刻拿到的那一列建议。
@@ -755,7 +755,7 @@ interface 开着 {
    * 了。⚠️ 走回调那条路**在这里行不通**：这个监听挂在 **window 捕获阶段**，
    * 它比编辑器 DOM 上任何监听都先跑——菜单已经开完了，编辑器那边才醒。
    */
-  拼写: 拼写现场 | null;
+  combineWrite: CombineWriteScene | null;
 }
 
 /**
@@ -765,10 +765,10 @@ interface 开着 {
  * （自动保存、外部改动），所以用它之前要查 `isConnected`——对着一个已经不在
  * 文档里的节点算位置，`posAtDOM` 会抛。
  */
-interface 拼写现场 {
-  元素: HTMLElement;
-  词: string;
-  建议们: string[];
+interface CombineWriteScene {
+  element: HTMLElement;
+  word: string;
+  createProposalPlural: string[];
 }
 
 /**
@@ -788,10 +788,10 @@ interface 拼写现场 {
  * `onContextMenu`，那是冒泡阶段）之前判"这一下是不是别人的"，判完立刻放行。
  * 见 `ui/context-menu.ts` 文件头那张表。
  */
-export function ContextMenu(接线: 右键接线) {
-  const { 命令表, 灰, 勾, 光标, toast } = 接线;
+export function ContextMenu(wiring: contextMenuWiring) {
+  const { commandTable, disabled2, check, cursor, toast } = wiring;
   const t = useT();
-  const [开, set开] = useState<开着 | null>(null);
+  const [open2, setOpen] = useState<isOpen | null>(null);
 
   /**
    * **菜单抢焦点之前**，焦点在谁身上。收起时还给它（见 `收起`）。
@@ -803,81 +803,81 @@ export function ContextMenu(接线: 右键接线) {
    * 字数统计一动不动）。**原生那份菜单没有这个毛病**：它关掉之后焦点还在网页里。
    * 也就是说这是我们接管之后自己带出来的，必须自己收干净。
    */
-  const 原焦点 = useRef<HTMLElement | null>(null);
+  const originalFocusPoint = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    const 听 = (e: MouseEvent) => {
+    const listen = (e: MouseEvent) => {
       const el = e.target as Element | null;
       if (!el || typeof el.closest !== "function") return;
 
-      const 落 = 判落点({
+      const drop = determineDropPoint({
         // ⚠️ **顺序见 `context-menu.ts` 文件头**：`.tabbar` 先让路，
         // 输入框排在编辑器前面（编辑区里真有输入框——公式源码框那些）。
-        已被认领: Boolean(el.closest(".tabbar")),
-        是输入框: Boolean(el.closest("input, textarea")),
-        在编辑器里: Boolean(el.closest(".ProseMirror, .cm-editor, .editor-pane")),
+        alreadyIsRecognizeLead: Boolean(el.closest(".tabbar")),
+        isInputBox: Boolean(el.closest("input, textarea")),
+        atEditorInside: Boolean(el.closest(".ProseMirror, .cm-editor, .editor-pane")),
       });
 
       // ⚠️ 「不弹」那一档**连 `preventDefault` 都不做**：那是标签栏自己认领的
       // 一下，拦了它那份菜单就没了（见 `context-menu.ts` 文件头）。
-      if (落 === "不弹") return;
+      if (drop === "不弹") return;
 
       // 到这儿一律拦下：全接管，WebKit 那份英文菜单从此不再出现。
       e.preventDefault();
 
       // 这一下是不是落在**一个拼错的词**上（波浪线是 `span.nota-spell-error`，
       // 那一段的来历见 `拼写现场`）。
-      const 拼写元素 = el.closest(".nota-spell-error") as HTMLElement | null;
-      const 拼写词 = 拼写元素?.textContent?.trim() ?? "";
-      const 拼写线索 =
-        拼写元素 && 拼写词 !== ""
-          ? { 建议们: [] as string[], 加词典: t("Add to dictionary"), 忽略: t("Ignore") }
+      const combineWriteElement = el.closest(".nota-spell-error") as HTMLElement | null;
+      const combineWriteWord = combineWriteElement?.textContent?.trim() ?? "";
+      const CombineWriteLineSearch =
+        combineWriteElement && combineWriteWord !== ""
+          ? { createProposalPlural: [] as string[], addWordDictionary: t("Add to dictionary"), ignoreOmit: t("Ignore") }
           : null;
 
-      const 行们 = 给行(落, import.meta.env.DEV, 拼写线索);
-      if (行们.length === 0) {
+      const rows = buildRows(drop, import.meta.env.DEV, CombineWriteLineSearch);
+      if (rows.length === 0) {
         // 外壳：只拦不弹（用户 2026-10-04 选的，见 `context-menu.ts`）。
-        set开(null);
+        setOpen(null);
         return;
       }
 
-      let 场: 输入框现场 | null = null;
-      if (落 === "输入框") {
-        const 框 = el.closest("input, textarea") as HTMLInputElement | HTMLTextAreaElement | null;
+      let scene2: InputBoxScene | null = null;
+      if (drop === "输入框") {
+        const box2 = el.closest("input, textarea") as HTMLInputElement | HTMLTextAreaElement | null;
         // 把选区**先记下来**：菜单一开焦点就被漫游钩子挪走了（见 `输入框现场`）。
-        场 = 框 ? { 元素: 框, 起: 框.selectionStart, 止: 框.selectionEnd } : null;
+        scene2 = box2 ? { element: box2, start5: box2.selectionStart, end2: box2.selectionEnd } : null;
       }
       // ⚠️ 记下"收起时焦点该还给谁"（见 `原焦点`）。**按落在哪一档挑**，
       // 不要去读 `document.activeElement`：右键**不会**让正文先拿到焦点
       // （ProseMirror 只认左键那一下的 `mousedown`），照 `activeElement` 记，
       // 记到的常常是 `<body>`，还回去等于没还——2026-10-04 就这么错过一次。
-      原焦点.current = 场
-        ? 场.元素
+      originalFocusPoint.current = scene2
+        ? scene2.element
         : ((el.closest(".ProseMirror, .cm-editor") as HTMLElement | null) ?? null);
 
-      const 现场: 拼写现场 | null =
-        拼写元素 && 拼写词 !== "" ? { 元素: 拼写元素, 词: 拼写词, 建议们: [] } : null;
+      const scene: CombineWriteScene | null =
+        combineWriteElement && combineWriteWord !== "" ? { element: combineWriteElement, word: combineWriteWord, createProposalPlural: [] } : null;
 
-      set开({ 位置: { top: e.clientY, left: e.clientX }, 行: 行们, 落点: 落, 场, 拼写: 现场 });
+      setOpen({ position2: { top: e.clientY, left: e.clientX }, line3: rows, DropPoint: drop, scene2, combineWrite: scene });
 
       // ⚠️ 建议是**过 IPC 现拉的**（一次词典查询）：菜单先按"没有建议"那一版画出来
       //（两个动作当场就能点），拿到之后**只把这前半段补上**。
       // ⚠️ 用户可能在等待期间把它关掉（或点了别处）：下面那个 `if (旧?.拼写)` 就是在
       // 防这个——`set开` 的回调拿到的是**那一刻**的 state，`null` 就什么都不做。
-      if (现场) {
+      if (scene) {
         void api.spell
-          .suggest(当前语言标签(), 现场.词)
-          .then((建议们) => {
-            set开((旧) => {
-              if (!旧?.拼写) return 旧;
-              const 新拼写 = { ...旧.拼写, 建议们 };
+          .suggest(currentLanguageLabel(), scene.word)
+          .then((createProposalPlural) => {
+            setOpen((oldValue) => {
+              if (!oldValue?.combineWrite) return oldValue;
+              const newValueCombineWrite = { ...oldValue.combineWrite, createProposalPlural };
               return {
-                ...旧,
-                拼写: 新拼写,
-                行: 给行(
-                  旧.落点,
+                ...oldValue,
+                combineWrite: newValueCombineWrite,
+                line3: buildRows(
+                  oldValue.DropPoint,
                   import.meta.env.DEV,
-                  { 建议们, 加词典: t("Add to dictionary"), 忽略: t("Ignore") },
+                  { createProposalPlural, addWordDictionary: t("Add to dictionary"), ignoreOmit: t("Ignore") },
                 ),
               };
             });
@@ -887,59 +887,59 @@ export function ContextMenu(接线: 右键接线) {
           });
       }
     };
-    window.addEventListener("contextmenu", 听, true);
-    return () => window.removeEventListener("contextmenu", 听, true);
+    window.addEventListener("contextmenu", listen, true);
+    return () => window.removeEventListener("contextmenu", listen, true);
     // ⚠️ 依赖是**空的**（`t` 是模块级那一个稳定的函数，`i18n/index.ts::useT`）：
     // 那两句动作名虽然是在这个监听里翻的，但 `t` **每次被调用时才读当前语言**，
     // 所以不用重挂。⚠️ 别把 `t` 写进依赖数组假装它是个依赖——它永远不会变，
     // 写了只会让人以为这里跟语言有关而漏掉真正该重挂的那一处。
   }, []);
 
-  const 收起 = useCallback(() => {
-    set开(null);
+  const collapse = useCallback(() => {
+    setOpen(null);
     // ⚠️ **把焦点还回去**（理由与量到的症状见 `原焦点` 那段）。
     // ⚠️ `isConnected` 要查：打开菜单的那个输入框可能在这一段时间里被卸载了
     // （设置面板换页、对话框关掉），focus 一个已经不在文档里的节点是空操作，
     // 但查一下更直白。⚠️ 已经在它身上了就不要再 focus 一次——那会把用户
     // 刚点进去的位置又抢回来。
-    const 谁 = 原焦点.current;
-    原焦点.current = null;
-    if (谁 && 谁.isConnected && document.activeElement !== 谁) 谁.focus();
+    const who = originalFocusPoint.current;
+    originalFocusPoint.current = null;
+    if (who && who.isConnected && document.activeElement !== who) who.focus();
   }, []);
 
-  const 选 = useCallback(
+  const select = useCallback(
     (id: string) => {
-      const 这一份 = 开;
-      收起();
-      if (!这一份) return;
+      const thisOneDocument = open2;
+      collapse();
+      if (!thisOneDocument) return;
       // 输入框那一档走**另一套**实现（见 `落到输入框` 那段）。
-      if (这一份.场) {
-        void 落到输入框(id, 这一份.场, t, toast);
+      if (thisOneDocument.scene2) {
+        void dropToInputBox(id, thisOneDocument.scene2, t, toast);
         return;
       }
       // 拼写那一段也走自己的实现（理由：它是**现场造出来的 id**，
       // 命令表里没有它们，见 `context-menu.ts::拼写加词典` 那段）。
       if (id.startsWith("spell.")) {
-        落到拼写(id, 这一份.拼写, toast);
+        dropToCombineWrite(id, thisOneDocument.combineWrite, toast);
         return;
       }
       // ⚠️ 与 `App.tsx` 的 `onCommand` 逐字相同：全应用只此一个派发口。
-      命令表[id]?.();
+      commandTable[id]?.();
     },
-    [开, 命令表, 收起, t, toast],
+    [open2, commandTable, collapse, t, toast],
   );
 
   useEffect(() => {
-    if (!开) return;
+    if (!open2) return;
     // ⚠️ 用 `mousedown` 不是 `click`（`click` 要等鼠标抬起，期间菜单还开着）。
     // ⚠️ 判据是 `data-context-menu`，**不是**面板那个 ref：子菜单 portal 到
     // `document.body`，和面板没有 DOM 亲缘关系（见面板那一段的注释）。
-    const 点别处 = (e: MouseEvent) => {
+    const pointDistinguishPlace = (e: MouseEvent) => {
       const el = e.target as Element | null;
       if (el?.closest?.("[data-context-menu]")) return;
-      set开(null);
+      setOpen(null);
     };
-    const 关 = () => set开(null);
+    const close4 = () => setOpen(null);
     /**
      * 底下的东西滚了 → 关掉（同 `ui/TabBar.tsx` 那一段：`fixed` 的菜单会与
      * 它指着的位置脱节，浮在已经滚走的正文上）。
@@ -949,34 +949,34 @@ export function ContextMenu(接线: 右键接线) {
      * 而里面的滚动事件照样冒到 `window` 的捕获相——不判这一下的话，用户在子菜单里
      * 往下拨一下滚轮，整份右键菜单当场消失。判据在 `ui/popup-scroll.ts`。
      */
-    const 关滚 = (e: Event) => {
-      if (弹层自己在滚(e.target)) return;
-      关();
+    const closeRoll = (e: Event) => {
+      if (popupSelfSelfAtRoll(e.target)) return;
+      close4();
     };
-    document.addEventListener("mousedown", 点别处);
-    window.addEventListener("resize", 关);
+    document.addEventListener("mousedown", pointDistinguishPlace);
+    window.addEventListener("resize", close4);
     // ⚠️ `scroll` 要挂**捕获**：编辑区自己的滚动容器也要能关掉菜单。
-    window.addEventListener("scroll", 关滚, true);
+    window.addEventListener("scroll", closeRoll, true);
     return () => {
-      document.removeEventListener("mousedown", 点别处);
-      window.removeEventListener("resize", 关);
-      window.removeEventListener("scroll", 关滚, true);
+      document.removeEventListener("mousedown", pointDistinguishPlace);
+      window.removeEventListener("resize", close4);
+      window.removeEventListener("scroll", closeRoll, true);
     };
-  }, [开]);
+  }, [open2]);
 
-  if (!开) return;
+  if (!open2) return;
   return createPortal(
     <ContextMenuPanel
-      行={开.行}
-      落点={开.位置}
+      line3={open2.line3}
+      DropPoint={open2.position2}
       // ⚠️ **进来的时候挑一次**（`这一档的灰`）：输入框那一档一个都不灰。
       // 拿外面那份原样的 `灰` 会把它那条**有实现**的「全选」按成灰的
       // ——2026-10-04 开窗口检抓到的，理由与量到的画面见那个函数。
-      灰={这一档的灰(开.落点, 灰)}
-      勾={勾}
-      光标={光标}
-      onPick={选}
-      onDismiss={收起}
+      disabled2={disabledForLocation(open2.DropPoint, disabled2)}
+      check={check}
+      cursor={cursor}
+      onPick={select}
+      onDismiss={collapse}
       label={t("Context Menu")}
     />,
     document.body,

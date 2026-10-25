@@ -221,6 +221,8 @@ PAIRS=(
   "src/editor/image-attrs.ts                      05,04"
   "src/editor/math-macros.ts                      05,10,04"
   "src/editor/source.ts                           05,04,10"
+  # 2026-10-25：源码模式大文件输入不在每个事务里复制全文；去抖结束后只读一次。
+  "src/editor/deferred-snapshot.ts                02,03,05,06"
   # 2026-10-07：源码模式的**编辑命令**那一块（行内标记 / 链接 / 缩进 / 表格那十条）
   # 搬出去（`source.ts` 1048 → 637，第 89 项）。
   "src/editor/source-commands.ts                  05,04"
@@ -232,6 +234,8 @@ PAIRS=(
   "src/editor/move-block.ts                      05,02,04,10"
   "tests/select.test.ts                          02,06"
   "tests/move-block.test.ts                      02,06"
+  "tests/deferred-snapshot.test.ts               02,05,06"
+  "tests/count-text.test.ts                      02,06,07A"
   # 2026-10-07（第 96 ＋ 102 项：「链接」那个框）：三份新源码 ＋ 一份新测试。
   # ⚠️ `link-edit.ts` 是**纯函数优先**的那一份（判据两种模式共用），所以它进
   # `05`（内部）、`02`（模块清单）、`04`（菜单与界面那一格）、`10`（功能矩阵）；

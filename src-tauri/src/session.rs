@@ -286,7 +286,7 @@ fn 读存档(文件: &Path) -> 会话 {
     match toml::from_str::<存档>(&text) {
         Ok(档) => 从存档(档),
         Err(e) => {
-            crate::日志!("[nota] 会话读不了（本次当「没有会话」用）：{}：{e}", 文件.display());
+            crate::日志!("[nota] session file unreadable; using empty session: {}: {e}", 文件.display());
             会话::default()
         }
     }
@@ -318,7 +318,7 @@ pub fn 读() -> 会话 {
     match paths::session_file() {
         Ok(文件) => 读文件(&文件),
         Err(e) => {
-            crate::日志!("[nota] 找不到会话的落点（本次当「没有会话」用）：{e}");
+            crate::日志!("[nota] session path unavailable; using empty session: {e}");
             会话::default()
         }
     }

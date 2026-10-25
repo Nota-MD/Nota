@@ -22,9 +22,9 @@ import type {
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocImport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, WorkspaceExcerpt,
-  信任记录, 导出报告,
+  trustRecord, exportReport,
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
-  会话, 路径种类, 拼写词典, PrintEnvironment, PrintPreview,
+  MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintEnvironment, PrintPreview,
 } from "./types";
 import type {
   SettingsExportInventory,
@@ -36,7 +36,7 @@ import type {
 // 不搬进 `bridge/types.ts`——搬过去会让"桥"这个模块变成选区的定义者，
 // 而桥对这一格的全部职责只是**转手**（`text`／`empty` 两个字段照抄给 Rust）。
 // `import type` 编译后整行消失，所以不会把 ProseMirror 拖进桥里。
-import type { 选区快照 } from "@/editor/caret-snapshot";
+import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 
 export * from "./types";
 export { events, on } from "./ipc-events";
@@ -68,6 +68,16 @@ export const api = {
   diagnostics: {
     /** 采一份编译信息 ＋ 本机信息。取不到的格子是空串，不报错。 */
     collect: () => invoke<Diagnostics>("nota_diagnostics"),
+  },
+
+  /** 实时调试日志（仅开发者模式使用）。 */
+  debugLog: {
+    read: (offset: number) =>
+      invoke<{ text: string; offset: number; reset: boolean }>("nota_debug_log_read", {
+        offset,
+      }),
+    write: (scope: string, message: string) =>
+      invoke<void>("nota_debug_log_write", { scope, message }),
   },
 
   /**
@@ -102,8 +112,8 @@ export const api = {
      * ⚠️ 它是**旁路**：宿主那份只是镜像的一份快照，推丢了不影响正文，
      * 下一笔事务会补上（`ui/EditorPane.tsx` 的 `记快照` 里那条注解）。
      */
-    cursor: (id: DocId, 快照: 选区快照) =>
-      invoke<void>("nota_doc_cursor", { id, text: 快照.text, empty: 快照.empty }),
+    cursor: (id: DocId, snapshot: SelectionSnapshot) =>
+      invoke<void>("nota_doc_cursor", { id, text: snapshot.text, empty: snapshot.empty }),
     save: (id: DocId, path?: string) =>
       invoke<string>("nota_doc_save", { id, path: path ?? null }),
     /**
@@ -122,6 +132,8 @@ export const api = {
       invoke<string>("nota_doc_rename", { id, name }),
     move: (id: DocId, dir: string) => invoke<string>("nota_doc_move", { id, dir }),
     close: (id: DocId) => invoke<void>("nota_doc_close", { id }),
+    /** 删除磁盘文件并关闭标签。前端必须先确认；失败时文件保持不变。 */
+    delete: (id: DocId) => invoke<void>("nota_doc_delete", { id }),
     setActive: (id: DocId) => invoke<void>("nota_doc_set_active", { id }),
     get: (id: DocId) => invoke<Document>("nota_doc_get", { id }),
     list: () => invoke<Document[]>("nota_doc_list"),
@@ -195,7 +207,7 @@ export const api = {
      * 不是"enchant 认哪些标签"——两个问题的答案不一样，理由写在
      * `src-tauri/src/spell/store.rs::列出` 那段。
      */
-    dictionaries: () => invoke<拼写词典[]>("nota_spell_dictionaries"),
+    dictionaries: () => invoke<CombineWriteWordDictionary[]>("nota_spell_dictionaries"),
     /** 用户词典目录（设置页那一行"打开文件夹"用）。 */
     dictDir: () => invoke<string>("nota_spell_dict_dir"),
     /**
@@ -225,7 +237,7 @@ export const api = {
     wordIgnore: (word: string) => invoke<string>("nota_spell_word_ignore", { word }),
   },
   pathKind: (paths: string[]) =>
-    invoke<路径种类[]>("nota_paths_kind", { paths }),
+    invoke<PathKindClass[]>("nota_paths_kind", { paths }),
   workspace: {
     open: (path: string) => invoke<string>("nota_workspace_open", { path }),
     close: () => invoke<void>("nota_workspace_close"),
@@ -502,7 +514,7 @@ export const api = {
    */
   session: {
     /** 取整份会话。**文件不在是正常的**（第一次启动），返回的是空的那一份。 */
-    get: () => invoke<会话>("nota_session_get"),
+    get: () => invoke<MeetingSpeech>("nota_session_get"),
     /**
      * 记下"现在开着哪几份、前台是哪一份"。
      *
@@ -633,7 +645,7 @@ export const api = {
      * 装不上，而且报的是"这个包被改过"。
      */
     export: (id: string, path: string) =>
-      invoke<导出报告>("nota_plugin_export", { id, path }),
+      invoke<exportReport>("nota_plugin_export", { id, path }),
 
     /**
      * 保存对话框里那个默认文件名（`<名字>-<版本>.nota-plugin`）。
@@ -677,7 +689,7 @@ export const api = {
       invoke<void>("nota_plugin_setting_set", { plugin, key, value }),
 
     /** 信任库里现在有哪几把钥匙。 */
-    trustList: () => invoke<信任记录[]>("nota_plugin_trust_list"),
+    trustList: () => invoke<trustRecord[]>("nota_plugin_trust_list"),
 
     /**
      * 检查所有声明了 `[update] manifest` 的插件。
@@ -821,8 +833,14 @@ export const api = {
     showMain: () => invoke<void>("nota_window_show_main"),
     /** 打开开发者工具。⚠️ 已经开着时是**调到前面**，不是关掉。 */
     openDevtools: () => invoke<void>("nota_window_open_devtools"),
-    /** 在独立窗口显示运行诊断信息。重复调用会聚焦已有窗口。 */
-    openDebugInfo: () => invoke<void>("nota_window_open_debug_info"),
+    /**
+     * 在独立窗口打开编入前端的 HTML 帮助页。重复调用会聚焦已有窗口，并按
+     * `section` 切换章节。未知章节由宿主回落到帮助首页。
+     */
+    openHelp: (section?: "start" | "pandoc" | "printing" | "shortcuts") =>
+      invoke<void>("nota_window_open_help", { section: section ?? null }),
+    /** 启动纯 Rust 子进程，把当前调试日志交给系统文本查看器。 */
+    openDebugLog: () => invoke<void>("nota_window_open_debug_log"),
     /**
      * 把一份文档**在新窗口里打开**（标签页右键那一条，2026-09-27）。
      *
@@ -834,7 +852,7 @@ export const api = {
      * ⚠️ `path` **必需**：没有路径的标签（新建的、没存过盘的）新进程读不到它的
      * 正文，界面上那一条是**灰的**（`ui/TabBar.tsx`）。
      */
-    openNew: (path: string) => invoke<void>("nota_window_open_new", { path }),
+    openNew: (path?: string) => invoke<void>("nota_window_open_new", { path: path ?? null }),
     /**
      * **真的退出**（2026-10-16 加）。⚠️ **只在"该问的都问过了、答案是退"时才调**：
      * 它是最后那一下，调完进程就没了，没有任何回调、也没有第二次机会。

@@ -9,19 +9,19 @@
 import type { KatexOptions } from "katex";
 
 let katexPromise: Promise<typeof import("katex").default> | null = null;
-let 窗口显示Promise: Promise<void> | null = null;
+let windowShownPromise: Promise<void> | null = null;
 
-function 等窗口显示(): Promise<void> {
+function awaitWindowShown(): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   if (document.documentElement.dataset.windowShown === "true") return Promise.resolve();
-  窗口显示Promise ??= new Promise((resolve) => {
+  windowShownPromise ??= new Promise((resolve) => {
     window.addEventListener("nota-window-shown", () => resolve(), { once: true });
   });
-  return 窗口显示Promise;
+  return windowShownPromise;
 }
 
-function 取Katex(): Promise<typeof import("katex").default> {
-  katexPromise ??= 等窗口显示().then(() =>
+function getKatex(): Promise<typeof import("katex").default> {
+  katexPromise ??= awaitWindowShown().then(() =>
     // @ts-expect-error KaTeX 的 mhchem 入口没有随包提供 TypeScript 声明。
     Promise.all([import("katex/dist/contrib/mhchem.mjs"), import("katex")]).then(
       ([, module]) => module.default,
@@ -34,20 +34,20 @@ function 取Katex(): Promise<typeof import("katex").default> {
  * 编辑器首帧已经完成后再预热。不要在 `createEditor()` 前调用：
  * 这里的目的就是让核心窗口先出现并接受输入，数学排版引擎随后在后台到货。
  */
-export function 预热Katex(): void {
-  void 取Katex().catch((e: unknown) => {
+export function preHotKatex(): void {
+  void getKatex().catch((e: unknown) => {
     console.warn("[nota] KaTeX 预热失败；首次渲染时将重试：", e);
     katexPromise = null;
   });
 }
 
 /** 画一次公式；调用方负责处理自己那棵 DOM 的过期与错误状态。 */
-export async function 渲染公式(
-  源码: string,
-  目标: HTMLElement,
-  选项: KatexOptions = {},
+export async function renderCommonStyle(
+  source2: string,
+  target: HTMLElement,
+  option: KatexOptions = {},
 ): Promise<void> {
-  const katex = await 取Katex();
-  目标.replaceChildren();
-  katex.render(源码, 目标, 选项);
+  const katex = await getKatex();
+  target.replaceChildren();
+  katex.render(source2, target, option);
 }

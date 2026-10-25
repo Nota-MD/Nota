@@ -72,16 +72,16 @@ import {
   type PluginReviewDiff,
   type ViewMode,
 } from "@/bridge/ipc";
-import { 正文排版变量 } from "@/styles/doc-typography";
+import { DocumentTypographyVars } from "@/styles/doc-typography";
 import { useT } from "@/i18n";
 import { markEditorReady } from "@/ui/useBootReveal";
-import { 大文件阈值 } from "@/editor/file-kind";
-import type { 预览看法 } from "@/editor/review";
+import { largeTextItemThresholdValue } from "@/editor/file-kind";
+import type { previewMode } from "@/editor/review";
 import {
   type CommandPayload,
   type EditorCommand,
   type EditorHandle,
-  type 选区内容,
+  type SelectionContent,
 } from "@/editor/create";
 // 开头那段 front matter 的横幅（`docs/07` 第 64 项）。⚠️ 那一段的切片、拼回、
 // 判据、模板在 `editor/front-matter.ts` 里，横幅本身（读、改、删、两击确认）
@@ -92,18 +92,20 @@ import type { CommandState } from "@/editor/command-state";
 // 拼装与记忆化都在 `useEditorSettings.ts` 那一份里（⚠️ 2026-10-07 整块搬过去的，
 // `docs/07` 第 89 项），这里只收结果——**为什么要收整份设置、为什么要 `useMemo`，
 // 写在那边文件头**。
-import { use编辑器开关 } from "@/ui/useEditorSettings";
+import { useEditorSettings } from "@/ui/useEditorSettings";
 // 13 条命令的转发（`EditorPaneHandle`）。⚠️ 2026-10-07 搬出去的，见那边文件头。
-import { use编辑器句柄 } from "@/ui/useEditorHandle";
+import { useEditorSentenceHandle } from "@/ui/useEditorHandle";
 // 选区快照 → 后端（那条 250ms 的去抖与"拆的时候要清定时器"都在里面）。
-import { use选区快照 } from "@/ui/useCursorSnapshot";
-import type { 写作模式 } from "@/editor/writing-modes";
-import { 空查找状态, type FindOptions, type FindStatus } from "@/editor/find";
-import { 恢复滚动比例, 读滚动比例 } from "@/editor/scroll-into-view";
+import { useSelectionSnapshot } from "@/ui/useCursorSnapshot";
+import type { WritingMode } from "@/editor/writing-modes";
+import { emptyFindState, type FindOptions, type FindStatus } from "@/editor/find";
+import { restoreRestoreRollActionCompareExample, readElementRollActionCompareExample, readRollActionCompareExample } from "@/editor/scroll-into-view";
+import { createDeferredSnapshot } from "@/editor/deferred-snapshot";
+import { debugError, debugEvent } from "@/ui/debug-log";
 import type { SourceHandle } from "@/editor/source";
 // 三个实例各传哪些选项（"哪一侧要 `physics`、哪一侧不传 `自动更正`"那些判断）。
 // ⚠️ 2026-10-07 从下面那个大 effect 里整块搬出去的，见那边文件头。
-import { 建源码编辑器, 建所见即所得编辑器, 建预览编辑器 } from "@/ui/pane-editors";
+import { createSourceEditingDevice, createWysiwygEditor, createPreviewEditor } from "@/ui/pane-editors";
 
 export interface EditorPaneHandle {
   getMarkdown: () => string | undefined;
@@ -121,7 +123,7 @@ export interface EditorPaneHandle {
    * `editor/source.ts` 里那套 CM 状态字段），所以这里不必判模式。
    * 口径只有一份：匹配逻辑都在 `find.ts` 的纯函数里。 */
   setFind: (query: string, options: FindOptions) => void;
-  findStep: (方向: 1 | -1) => void;
+  findStep: (direction: 1 | -1) => void;
   clearFind: () => void;
   replaceCurrent: (text: string) => boolean;
   replaceAll: (text: string) => number;
@@ -133,13 +135,13 @@ export interface EditorPaneHandle {
    * ⚠️ 两个坐标都要给：源码模式用 `line`、所见即所得用 `index`，
    * 理由写在 `create.ts` 的 `EditorHandle.跳到标题` 那段。
    */
-  跳到标题: (目标: { line: number; index: number }) => void;
+  jumpToMarkTitle: (target: { line: number; index: number }) => void;
 
   /**
    * 当前选中的内容（「复制」「剪切」要它，见 `ui/useClipboard.ts`）。
    * 没选中东西给 `null`。
    */
-  选区: () => 选区内容 | null;
+  selection: () => SelectionContent | null;
 
   /**
    * **在光标处插一段**（替换选区）。给插件的 `nota.document.insert_at_cursor`
@@ -148,7 +150,7 @@ export interface EditorPaneHandle {
    * ⚠️ 与 `runCommand` 同一套契约：**返回值是"这一侧有没有实现"**，
    * 没实现（只读实例）或编辑器还没建好时给 `false`，不抛错。
    */
-  插入在光标处: (text: string) => boolean;
+  insertAtCursorPlace: (text: string) => boolean;
 
   /** 把焦点交回编辑区。关查找条、关菜单之后要用（焦点在别处时打的字是白打）。 */
   focus: () => void;
@@ -192,7 +194,7 @@ interface Props {
    * 但它**仍要进下面那个 effect 的依赖**：文法与配色是建实例时挂上去的，
    * 不重建的话这份文件得先切一次文档才换过来。
    */
-  纯文本?: boolean;
+  plainText?: boolean;
   /**
    * **Emoji 输入辅助**，来自 `settings.editor.emoji_autocomplete`。
    *
@@ -217,7 +219,7 @@ interface Props {
    * 而那串链是建实例时定死的。不进依赖的话，用户拨了开关得先关掉这份文档
    * 再打开才生效——"设置像没生效"。
    */
-  智能符号: boolean;
+  smartAbleSymbolNumber: boolean;
   /**
    * **整整一页 Markdown 设置**（`settings.markdown`），`undefined` = 设置还没
    * 从后端读回来。
@@ -250,6 +252,7 @@ interface Props {
    */
   focusMode: boolean;
   typewriter: boolean;
+  /** 正文只读模式（`view.readOnly`）。 */ onlyReadMode: boolean;
   /**
    * 这份文档**上次滚到哪儿**（`0.0`~`1.0` 的比例），`undefined` = 没记过。
    *
@@ -259,7 +262,7 @@ interface Props {
    *
    * ⚠️ 存在外面的是**比例不是像素**，理由见 `editor/scroll-into-view.ts`。
    */
-  初始滚动?: number;
+  initialStartRollAction?: number;
   /**
    * 用户滚动时报告当前位置（比例）。
    *
@@ -267,7 +270,7 @@ interface Props {
    * 那边去抖 500ms 再写侧车）。这里每滚一下就报一次，走的是 ref，
    * 所以调用方的函数身份换了也不会重建编辑器。
    */
-  onScroll?: (比例: number) => void;
+  onScroll?: (compareExample: number) => void;
   /**
    * 「正文宽度」那一格（px，`settings.content_width`）。
    * ⚠️ **它只在 `limitTextWidth` 开着时才写进 CSS**——见下面那个 prop。
@@ -290,7 +293,7 @@ interface Props {
    *
    * `undefined` = 设置还没读回来（那时不写这个属性）。
    */
-  拼写语言?: string;
+  combineWriteLanguage?: string;
   /**
    * **限制正文宽度**（`settings.limit_text_width`，2026-10-09）。默认 `false`。
    *
@@ -317,7 +320,7 @@ interface Props {
    * 就在 `.editor-pane` 这一层，靠继承盖不过它。理由见 `settings/document.rs`
    * 文件头最后一段，别改到 `applyTheme.ts` 里去。
    */
-  文档排版?: DocumentSettings;
+  documentTypography?: DocumentSettings;
   /**
    * 光标状态变化（工具栏高亮、菜单里表格那十条的灰/亮）。
    *
@@ -357,7 +360,7 @@ interface Props {
    * 是它的按钮，而细条与编辑区是兄弟——两边都得知道现在哪一面，
    * 那份状态就只能在他们共同的那一层。
    */
-  预览看法: 预览看法;
+  previewMode: previewMode;
   /** 用户在正文里按了 `Esc`。收起来那件事由 `App` 决定怎么做（见那边）。 */
   onReviewEscape?: () => void;
   ref?: Ref<EditorPaneHandle>;
@@ -380,31 +383,32 @@ export function EditorPane({
   mode,
   strict,
   physics,
-  纯文本 = false,
+  plainText = false,
   emoji,
   /* 说明书在 `Props` 上那一份 `智能符号` 里（这里不抄第二份）。 */
-  智能符号,
+  smartAbleSymbolNumber,
   markdown,
   focusMode,
   typewriter,
-  初始滚动,
+  onlyReadMode,
+  initialStartRollAction,
   onScroll,
   contentWidth,
   limitTextWidth,
-  拼写语言,
-  文档排版,
+  combineWriteLanguage,
+  documentTypography,
   onCommandState,
   onFindStatus,
   onToast,
   onDocsChanged,
   onActivity,
   review,
-  预览看法,
+  previewMode,
   onReviewEscape,
   ref,
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
-  const previewRef = useRef<HTMLDivElement>(null);
+  const previewMountRef = useRef<HTMLDivElement>(null);
   const handleRef = useRef<EditorHandle | SourceHandle | null>(null);
   const previewHandleRef = useRef<EditorHandle | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -415,15 +419,15 @@ export function EditorPane({
    * 打开这一刻是不是大文件。与自动降级用同一阈值，之后不再因正文增长而改变，
    * 避免“写着写着同步节奏自己变了”。
    */
-  const 大文件Ref = useRef(doc.text.length > 大文件阈值);
+  const largeTextItemRef = useRef(doc.text.length > largeTextItemThresholdValue);
   /** 上一次用 `onDocsChanged` 整表回拉的时间。只影响大文件。 */
-  const 上次刷新文档Ref = useRef(0);
+  const aboveCountRefreshNewTextLevelRef = useRef(0);
   const [ready, setReady] = useState(false);
   // ── 正文上方那条 front matter 横幅（`docs/07` 第 64 项）──────────────
   // ⚠️ 它自己那份状态（输入框里正在打的字、两击确认、基准）全在
   // `FrontMatterBanner.tsx` 里（2026-10-07 搬出去的）。这里只留一根管子：
   // 把"编辑器报来的文本"推给它、把"用户改了那一段"转成一条编辑器命令。
-  const 横幅Ref = useRef<FrontMatterBannerHandle>(null);
+  const horizontalWidthRef = useRef<FrontMatterBannerHandle>(null);
   const t = useT();
 
   // ⚠️ 光标状态那条回调**走 ref 读**，不进下面那个 effect 的依赖：
@@ -436,29 +440,37 @@ export function EditorPane({
   findStatusRef.current = onFindStatus;
   // 活动那条同理（`useAutosave` 返回的那个函数是 `useCallback`，但这条规矩
   // 不该靠调用方去守——照上面两条走）。
-  const 活动Ref = useRef(onActivity);
-  活动Ref.current = onActivity;
+  const activityRef = useRef(onActivity);
+  activityRef.current = onActivity;
 
   // 选区快照 → 后端（`docs/07` 第 14 项）。⚠️ 去抖、那次推送、以及"拆的时候
   // 为什么必须清掉那个定时器"，都在 `useCursorSnapshot.ts` 里（2026-10-07 搬
   // 出去的）；这里只拿两件事：报一份快照、拆的时候清一次。
-  const { 记快照, 清快照定时 } = use选区快照(doc.id);
+  const { recordSnapshot, clearSnapshotFixedTime } = useSelectionSnapshot(doc.id);
 
   // 滚动那两条同理（`初始滚动` 只在建实例那一刻读一次，见 `Props` 那条）。
-  const 初始滚动Ref = useRef(初始滚动);
-  初始滚动Ref.current = 初始滚动;
-  const 滚动回调Ref = useRef(onScroll);
-  滚动回调Ref.current = onScroll;
+  const initialStartRollActionRef = useRef(initialStartRollAction);
+  initialStartRollActionRef.current = initialStartRollAction;
+  /**
+   * 切换编辑模式时从旧实例读到的滚动比例。
+   *
+   * ⚠️ 它必须比会话里的 `初始滚动` 优先：那个值描述“打开文档时回到哪”，
+   * 而这里描述“刚刚从另一种模式切过来时在哪”。两者混成一份，短时间连续
+   * WYSIWYG → 源码 → WYSIWYG 就会跳回打开时的位置。
+   */
+  const splitReplaceRollActionRef = useRef<number | null>(null);
+  const rollActionReturnConfigureRef = useRef(onScroll);
+  rollActionReturnConfigureRef.current = onScroll;
 
   // ── 设置 → 编辑器要的三个值（`useEditorSettings.ts`，2026-10-07 搬出去的）──
   // ⚠️ 这两个对象只有**内容真的变了**才换身份——下面那个建实例的 effect 拿它们
   // 当依赖，每帧新建一个的话会每帧重建编辑器（丢撤销栈、丢光标）。这条纪律
   // 现在归 `useEditorSettings.ts` 文件头管，这里只管用。
-  const { 行内扩展, 标点, 自动更正 } = use编辑器开关(markdown);
+  const { inlineExtensions, punctuation, selfActionMoreCorrect } = useEditorSettings(markdown);
 
   // 两个写作开关。⚠️ 同上：拨开关**不重建实例**，所以它只能走 ref 读。
-  const 写作模式Ref = useRef<写作模式>({ focus: focusMode, typewriter });
-  写作模式Ref.current = { focus: focusMode, typewriter };
+  const writingModeRef = useRef<WritingMode>({ focus: focusMode, typewriter });
+  writingModeRef.current = { focus: focusMode, typewriter };
 
   // 拨开关 → 通知活着的那个实例。⚠️ **建实例那一刻是没 handle 的**，
   // 所以这一句在挂载时是空跑——那种情况由"建实例时把当前值传进去"兜住
@@ -471,17 +483,17 @@ export function EditorPane({
   // 里 `review` 那条）：不进下面那个 effect 的依赖，不然每来一次预览都要重建
   // 编辑器。⚠️ 退出那条也走 ref：句柄活着的时候会一直攥着建实例时那个闭包，
   // 直接传函数的话，`App` 每次重渲染给的新身份它都用不上。
-  const 预览Ref = useRef<PluginReviewDiff | null>(review ?? null);
-  预览Ref.current = review ?? null;
-  const 退出Ref = useRef(onReviewEscape);
-  退出Ref.current = onReviewEscape;
+  const reviewDataRef = useRef<PluginReviewDiff | null>(review ?? null);
+  reviewDataRef.current = review ?? null;
+  const backOutputRef = useRef(onReviewEscape);
+  backOutputRef.current = onReviewEscape;
 
   // 预览来了 / 收了 / 换看法了 → 推给活着的那个实例。
   // ⚠️ 依赖里**没有 `ready`**：重建之后那一份由"建实例时的初值"接手（`预览Ref`），
   // 加了 `ready` 反而会在"实例还没建好"那一帧里对着 null 空跑一次。
   useEffect(() => {
-    handleRef.current?.setReview(review ?? null, 预览看法);
-  }, [review, 预览看法]);
+    handleRef.current?.setReview(review ?? null, previewMode);
+  }, [review, previewMode]);
 
   // ⚠️ **分屏右格（预览）也要跟着 review 走**（2026-09-26，用户截图那句
   // 「这里的小问题，修复下」：切到「改后效果」之后，右格只有一个空标题的
@@ -511,11 +523,11 @@ export function EditorPane({
   // 把 handle 暴露给 App（存盘前要强制同步、插件改文档时整篇替换）。
   // ⚠️ 13 条命令的转发与"没实例时给什么"那套兜底都在 `useEditorHandle.ts`
   // 那一份里（2026-10-07 搬出去的）；这里只把三个 ref 交进去。
-  use编辑器句柄({
+  useEditorSentenceHandle({
     ref,
-    主句柄Ref: handleRef,
-    预览句柄Ref: previewHandleRef,
-    最新文本Ref: latestRef,
+    mainSentenceHandleRef: handleRef,
+    previewSentenceHandleRef: previewHandleRef,
+    mostNewTextLocalRef: latestRef,
   });
 
   useEffect(() => {
@@ -535,39 +547,64 @@ export function EditorPane({
       }, PREVIEW_DEBOUNCE_MS);
     };
 
-    /**
-     * 编辑器报来"文本变了" → 认下来、跟前端说一声、并去抖推给后端。
-     *
-     * ⚠️ **两种模式共用这一份**（2026-10-04 合并）：原来所见即所得与源码各写
-     * 一遍，差别只在"分屏那一侧要不要推预览"——而那一条按 `mode` 判得出来。
-     * 两遍的代价是"往这条路里加一件事就得加两处"，第 64 项那一段正是第一件。
-     *
-     * ⚠️ 这条路上还有两件事**不在这里**：横幅（那段 front matter 的显示）推给
-     * `FrontMatterBanner`（`横幅Ref.current?.同步`），选区快照推给
-     * `useCursorSnapshot`（编辑器那一侧直接接在 `onSelection` 上）。
-     */
-    const 认改动 = (markdown: string) => {
-      latestRef.current = markdown;
-      活动Ref.current();
-      横幅Ref.current?.同步(markdown);
-      if (mode === "split") pushPreview(markdown);
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      timerRef.current = window.setTimeout(async () => {
-        timerRef.current = null;
-        try {
-          await api.doc.sync(doc.id, markdown);
-          const 现在 = Date.now();
-          if (
-            !大文件Ref.current ||
-            现在 - 上次刷新文档Ref.current >= LARGE_DOCS_REFRESH_MS
-          ) {
-            await onDocsChanged();
-            上次刷新文档Ref.current = 现在;
-          }
-        } catch (e) {
-          onToast(t("Could not sync to the backend: {0}", String(e)), "error");
+    /** 将一份完整快照交给后端，并按大文件策略刷新标签栏。 */
+    const pushGiveAfterEnd = async (markdown: string) => {
+      try {
+        await api.doc.sync(doc.id, markdown);
+        const now = Date.now();
+        if (
+          !largeTextItemRef.current ||
+          now - aboveCountRefreshNewTextLevelRef.current >= LARGE_DOCS_REFRESH_MS
+        ) {
+          await onDocsChanged();
+          aboveCountRefreshNewTextLevelRef.current = now;
         }
-      }, 大文件Ref.current ? LARGE_SYNC_DEBOUNCE_MS : SYNC_DEBOUNCE_MS);
+      } catch (e) {
+        onToast(t("Could not sync to the backend: {0}", String(e)), "error");
+      }
+    };
+
+    const safeArrangeAfterEndSameStep = (getFullText: () => string | null) => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        const markdown = getFullText();
+        if (markdown === null) return;
+        void pushGiveAfterEnd(markdown);
+      }, largeTextItemRef.current ? LARGE_SYNC_DEBOUNCE_MS : SYNC_DEBOUNCE_MS);
+    };
+
+    const sourceSnapshot = createDeferredSnapshot({
+      delayMs: largeTextItemRef.current ? LARGE_SYNC_DEBOUNCE_MS : SYNC_DEBOUNCE_MS,
+      read: () => handle?.getMarkdown() ?? null,
+      deliver: (markdown) => {
+        latestRef.current = markdown;
+        horizontalWidthRef.current?.sameStep(markdown);
+        if (mode === "split") pushPreview(markdown);
+        void pushGiveAfterEnd(markdown);
+      },
+    });
+
+    /**
+     * 所见即所得报来完整 Markdown。Milkdown 在 `markdownUpdated` 时已经完成了
+     * 序列化，这里直接记录它，再安排跨 IPC 同步。
+     */
+    const recognizeWysiwygChangeAction = (markdown: string) => {
+      latestRef.current = markdown;
+      activityRef.current();
+      horizontalWidthRef.current?.sameStep(markdown);
+      if (mode === "split") pushPreview(markdown);
+      safeArrangeAfterEndSameStep(() => markdown);
+    };
+
+    /**
+     * 源码模式只先报“内容变了”。CodeMirror 的文档已经是最新状态，完整字符串
+     * 留到去抖结束时取一次；否则大文件每按一个键都会复制整篇文本，并让
+     * Markdown 字符串的旧版本不断进入垃圾回收。
+     */
+    const recognizeSourceActivity = () => {
+      activityRef.current();
+      sourceSnapshot.touch();
     };
 
     (async () => {
@@ -580,45 +617,47 @@ export function EditorPane({
         // 判据只有一份）。⚠️ 基准与"上一次见到的"都要一起摆好（那边摆）：摆漏了
         // 的话，编辑器报回来的第一笔就会被当成"文档里那一段变了"，把输入框重填
         // 一遍。⚠️ 这里给的第二个实参 `false` = **不要摊开**，理由见那一条。
-        横幅Ref.current?.同步(initial, false);
+        horizontalWidthRef.current?.sameStep(initial, false);
 
         if (mode === "wysiwyg") {
-          handle = await 建所见即所得编辑器({
+          handle = await createWysiwygEditor({
             root: mount,
             initial,
-            文档路径: doc.path,
+            documentPath: doc.path,
             strict,
             physics,
-            行内扩展,
-            标点,
-            自动更正,
+            inlineExtensions,
+            punctuation,
+            selfActionMoreCorrect,
             emoji,
-            智能符号,
-            写作模式: 写作模式Ref.current,
-            预览: 预览Ref.current,
-            onReviewEscape: () => 退出Ref.current?.(),
+            smartAbleSymbolNumber,
+            WritingMode: writingModeRef.current,
+            preview: reviewDataRef.current,
+            onReviewEscape: () => backOutputRef.current?.(),
             onCommandState: (s) => commandStateRef.current(s),
             onFindStatus: (s) => findStatusRef.current(s),
-            onSelection: 记快照,
-            onChange: 认改动,
+            onSelection: recordSnapshot,
+            onChange: recognizeWysiwygChangeAction,
+            readOnly: onlyReadMode,
           });
         } else {
           // source 与 split 的左侧是同一个东西，只是 split 多一个预览窗格。
           // ⚠️ 源码这一侧**明确报 `null`**（不是空状态）：CodeMirror 手里
           // 就是文本，没有文档树可读，工具栏据此不画任何高亮。
           commandStateRef.current(null);
-          handle = 建源码编辑器({
+          handle = createSourceEditingDevice({
             root: mount,
             initial,
-            文档路径: doc.path,
+            documentPath: doc.path,
             strict,
-            纯文本,
-            写作模式: 写作模式Ref.current,
-            预览: 预览Ref.current,
-            onReviewEscape: () => 退出Ref.current?.(),
+            plainText,
+            WritingMode: writingModeRef.current,
+            preview: reviewDataRef.current,
+            onReviewEscape: () => backOutputRef.current?.(),
             onFindStatus: (s) => findStatusRef.current(s),
-            onSelection: 记快照,
-            onChange: 认改动,
+            onSelection: recordSnapshot,
+            onDocumentActivity: recognizeSourceActivity,
+            readOnly: onlyReadMode,
           });
         }
 
@@ -634,15 +673,15 @@ export function EditorPane({
         // ── 分屏右侧那个只读预览 ──────────────────────────────────────
         // ⚠️ 它**不接 onChange、不 settle、不 focus**：它是显示端，不是输入端。
         // 接了 onChange 就会形成回声（见 `create.ts` 里 `readOnly` 那段）。
-        if (mode === "split" && previewRef.current) {
-          preview = await 建预览编辑器({
-            root: previewRef.current,
+        if (mode === "split" && previewMountRef.current) {
+          preview = await createPreviewEditor({
+            root: previewMountRef.current,
             initial,
-            文档路径: doc.path,
+            documentPath: doc.path,
             strict,
             physics,
-            行内扩展,
-            标点,
+            inlineExtensions,
+            punctuation,
           });
           if (disposed) {
             preview.destroy();
@@ -662,7 +701,6 @@ export function EditorPane({
         // 窗口只在这一刻之后显示：实例已挂载、编辑区已聚焦，用户看到的第一帧
         // 就能直接输入。
         markEditorReady();
-
         // ── 回到上次滚到的地方（`docs/07` 第 76 项）──────────────────────
         // ⚠️ **必须在 `focusAtStart()` 之后**：聚焦会派一次事务、把插入点放到
         // 文档开头，浏览器顺手会把视口拉到那儿——先滚的话会被它当场盖掉。
@@ -671,11 +709,19 @@ export function EditorPane({
         // 滚了一下又被后面的布局拉回去）。
         // ⚠️ 读的是 `初始滚动Ref.current`（而不是外面那个 prop）：这一帧之后
         // 用户自己滚一下，回调把 prop 换了，但"打开时回到哪儿"已经定下来了。
-        const 要回到 = 初始滚动Ref.current;
-        if (要回到 !== undefined) {
+        const wantReturnTo = splitReplaceRollActionRef.current ?? initialStartRollActionRef.current;
+        splitReplaceRollActionRef.current = null;
+        debugEvent("editor", "editor ready", {
+          mode,
+          read_only: onlyReadMode,
+          path: doc.path ?? "",
+          chars: latestRef.current.length,
+          scroll_ratio: wantReturnTo ?? 0,
+        });
+        if (wantReturnTo !== undefined) {
           requestAnimationFrame(() => {
             if (disposed) return;
-            恢复滚动比例(mount, 要回到);
+            restoreRestoreRollActionCompareExample(mount, wantReturnTo);
           });
         }
 
@@ -700,30 +746,43 @@ export function EditorPane({
           try {
             await api.doc.settle(doc.id, settled);
             await onDocsChanged();
-            上次刷新文档Ref.current = Date.now();
+            aboveCountRefreshNewTextLevelRef.current = Date.now();
           } catch (e) {
             // 认领失败不该挡住编辑——最坏的结果是脏标记虚报一次。
             console.warn("[nota] 装载后认领文本失败：", e);
           }
         }
       } catch (e) {
+        debugError("editor", "editor startup failed", e, {
+          mode,
+          path: doc.path ?? "",
+        });
         onToast(t("The editor failed to start: {0}", String(e)), "error");
       }
     })();
 
     return () => {
       disposed = true;
+      const splitReplaceBeforePosition = readRollActionCompareExample(mount);
+      if (splitReplaceBeforePosition !== null) splitReplaceRollActionRef.current = splitReplaceBeforePosition;
+      debugEvent("editor", "editor disposed", {
+        mode,
+        path: doc.path ?? "",
+        chars: latestRef.current.length,
+        scroll_ratio: splitReplaceBeforePosition ?? 0,
+      });
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      sourceSnapshot.cancel();
       if (previewTimerRef.current !== null) {
         window.clearTimeout(previewTimerRef.current);
         previewTimerRef.current = null;
       }
       // ⚠️ 选区快照那条**只清定时器，不补推**（理由见 `useCursorSnapshot.ts`
       // 文件头最后一段）：那一笔会打在**已经换掉的那份文档**的 id 上。
-      清快照定时();
+      clearSnapshotFixedTime();
       // ⚠️ 拆之前**再从活着的实例读一次**：去抖窗口里那最后一截（用户打完字
       // 不到 300ms 就切了模式）还没推给后端，而它已经不在 `latestRef` 之外
       // 的任何地方了。丢掉它 = 用户亲眼看着自己刚打的字消失。
@@ -740,7 +799,7 @@ export function EditorPane({
       commandStateRef.current(null);
       // 查找那边同理：新实例手里一个命中都没有，留着旧的那份命中数
       // （比如"3 / 12"）就是界面在报一个**已经不存在**的查找。
-      findStatusRef.current(空查找状态);
+      findStatusRef.current(emptyFindState);
     };
     // doc.id 变 = 换文档 = 重挂（App 那边也带了 key，双保险）；
     // mode 变 = 换编辑器（见文件头第 3 条）；
@@ -757,7 +816,7 @@ export function EditorPane({
     // 任何人重建编辑器。
     // 刻意**不**依赖 doc.text：那是初始值，不是要跟随的状态。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, mode, strict, physics, 纯文本, 行内扩展, 标点, 自动更正, emoji, 智能符号]);
+  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, punctuation, selfActionMoreCorrect, emoji, smartAbleSymbolNumber, onlyReadMode]);
 
   /* ── 正文上方那条 front matter 横幅（`docs/07` 第 64 项）──────────────
    *
@@ -771,9 +830,9 @@ export function EditorPane({
    */
 
   /** 横幅要的那两样：读"最后知道的文本"、把那段 YAML 写回编辑器。 */
-  const 读最新文本 = () => latestRef.current;
-  const 写前置块 = (内文: string | null) =>
-    handleRef.current?.runCommand("frontMatter", { frontMatter: 内文 });
+  const readMostNewTextLocal = () => latestRef.current;
+  const writeFrontMatter = (body: string | null) =>
+    handleRef.current?.runCommand("frontMatter", { frontMatter: body });
 
   // ── 记滚动位置 ──────────────────────────────────────────────────────
   // ⚠️ **监听挂在捕获阶段**：滚动事件不冒泡（`scroll` 只在自己那个元素上派），
@@ -787,12 +846,24 @@ export function EditorPane({
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
-    const 报 = () => {
-      const 比例 = 读滚动比例(mount);
-      if (比例 !== null) 滚动回调Ref.current?.(比例);
+    let frame = 0;
+    let currentContainer: HTMLElement | null = null;
+    const report = (event: Event) => {
+      const container = event.target;
+      if (!(container instanceof HTMLElement)) return;
+      currentContainer = container;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (!currentContainer?.isConnected) return;
+        rollActionReturnConfigureRef.current?.(readElementRollActionCompareExample(currentContainer));
+      });
     };
-    mount.addEventListener("scroll", 报, { capture: true, passive: true });
-    return () => mount.removeEventListener("scroll", 报, { capture: true });
+    mount.addEventListener("scroll", report, { capture: true, passive: true });
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      mount.removeEventListener("scroll", report, { capture: true });
+    };
   }, []);
 
   // ⚠️ 换文档时 `latestRef` 要跟着换，否则会把上一份文档的文本当成本份的初始值。
@@ -815,7 +886,7 @@ export function EditorPane({
     //   两半长得不一样。
     // 内联样式优先级高于任何选择器，所以这一层是"用户显式盖过主题"的唯一落点。
     // 理由与来历见 `styles/doc-typography.ts` 与 `settings/document.rs`。
-    <div className={`editor-pane editor-pane-${mode}`} style={正文排版变量(文档排版) as CSSProperties}>
+    <div className={`editor-pane editor-pane-${mode}`} style={DocumentTypographyVars(documentTypography) as CSSProperties}>
       {!ready && <div className="editor-loading">{t("Preparing the editor…")}</div>}
       {/* front matter 横幅（`docs/07` 第 64 项）。⚠️ **它一直挂在这儿**，
           由它自己按 `显示` 决定露不露面（源码模式下渲染 `null`）——不是这里
@@ -823,10 +894,10 @@ export function EditorPane({
           连同组件一起扔掉，切回所见即所得时横幅里是切走那一刻的旧内容。
           为什么它在文档树之外、以及"读/改/删"三条路的归属，见它的文件头。 */}
       <FrontMatterBanner
-        ref={横幅Ref}
-        显示={mode === "wysiwyg"}
-        读文本={读最新文本}
-        写前置块={写前置块}
+        ref={horizontalWidthRef}
+        show={mode === "wysiwyg"}
+        readText={readMostNewTextLocal}
+        writeFrontMatter={writeFrontMatter}
       />
       {/* ⚠️ 这两块 div 的内容由编辑器独占，React 永不往里渲染。 */}
       <div
@@ -838,7 +909,7 @@ export function EditorPane({
         // ⚠️ `lang` 是**文档语言**（2026-10-10）。它写的是**连字符**形式：
         // `spellcheck_lang` 里那个下划线是 enchant 的写法，`lang` 那条 HTML 属性
         // 按 BCP-47 认（`zh-CN`）；两者的分工见 `Props` 上那一格。
-        lang={拼写语言 ? 拼写语言.replace(/_/g, "-") : undefined}
+        lang={combineWriteLanguage ? combineWriteLanguage.replace(/_/g, "-") : undefined}
         style={
           limitTextWidth ? { ["--content-width" as string]: `${contentWidth}px` } : undefined
         }
@@ -846,7 +917,7 @@ export function EditorPane({
       {mode === "split" && (
         // 右侧预览。`aria-readonly` 是**如实告知**——它真的改不了。
         // 预览**永远不给** `--content-width`：那一半本来就窄，再限宽会剩一条缝。
-        <div ref={previewRef} className="editor-mount editor-preview" aria-readonly="true" />
+        <div ref={previewMountRef} className="editor-mount editor-preview" aria-readonly="true" />
       )}
     </div>
   );

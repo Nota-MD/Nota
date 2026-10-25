@@ -156,7 +156,9 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { atxPrefix } from "@/editor/atx";
 
 /** 待成块的段落里，井号**后面**那段文字挂的 class。样式在 `styles/marks.css`。 */
-export const 待成块类名 = "nota-heading-pending";
+export const pendingBecomeBlockClassName = "nota-heading-pending";
+/** 待成块段落里，井号与空格组成的前缀。样式在 `styles/marks.css`。 */
+export const pendingBecomeBlockPrefixClassName = "nota-heading-prefix";
 
 /**
  * 回车：把「带 ATX 前缀的段落」换成真标题。换不了就返回 `false`（交给别人）。
@@ -173,59 +175,59 @@ export const 待成块类名 = "nota-heading-pending";
  *    `table-input.ts`（敲表头行＋分隔行时它要把两段吃成一张表）。
  * 3. **只读的不干**。分屏右边那个预览窗格用的是同一个编辑器，它不可编辑。
  */
-function 回车成标题(view: EditorView, strict: boolean): boolean {
+function returnCarBecomeMarkTitle(view: EditorView, strict: boolean): boolean {
   if (!view.editable) return false;
 
   const { state } = view;
   const { $from, empty } = state.selection;
   if (!empty) return false;
 
-  const 段 = $from.parent;
-  if (段.type.name !== "paragraph") return false;
+  const paragraph2 = $from.parent;
+  if (paragraph2.type.name !== "paragraph") return false;
 
   for (let d = $from.depth - 1; d > 0; d--) {
-    const 名 = $from.node(d).type.name;
-    if (名 === "table_cell" || 名 === "table_header") return false;
+    const name3 = $from.node(d).type.name;
+    if (name3 === "table_cell" || name3 === "table_header") return false;
   }
 
   // ⚠️ 走**共用判据**，不再本地写一条"井号 ＋ 空格"。2026-09-29 之前本地那条
   // 是对的（宽松档成块会塞空格，所以只让它认无损的 `# 你好`），但用户
   // 2026-09-30 明确要了"回车变成标题"，那颗空格就是他按下去要的结果——
   // 于是两条路合一，判据只剩 `atx.ts` 那一份（同 `算装饰条目`）。
-  const 头 = atxPrefix(段.textContent, strict);
-  if (头 === null) return false;
+  const head2 = atxPrefix(paragraph2.textContent, strict);
+  if (head2 === null) return false;
 
   // 守卫 1（见上）。`parentOffset` 就是光标在这一段里的偏移。
-  if ($from.parentOffset !== 段.content.size) return false;
+  if ($from.parentOffset !== paragraph2.content.size) return false;
 
-  const 标题类型 = state.schema.nodes.heading;
-  if (!标题类型) return false;
+  const markTitleType = state.schema.nodes.heading;
+  if (!markTitleType) return false;
 
-  const 层 = 头.层数;
-  const 前缀长 = 头.长度;
-  const 起 = $from.before($from.depth);
+  const layer = head2.layerNumber;
+  const prefixLength = head2.lengthDegree;
+  const start5 = $from.before($from.depth);
 
   // 正文照搬（含粗体之类的行内标记一起搬），只是掐掉行首那一段前缀。
   // `content.cut` 的偏移与文档位置同一套算法，所以直接拿字符数当偏移用。
-  const 新块 = 标题类型.create({ level: 层 }, 段.content.cut(前缀长));
+  const newValueBlock = markTitleType.create({ level: layer }, paragraph2.content.cut(prefixLength));
 
-  const tr = state.tr.replaceWith(起, 起 + 段.nodeSize, 新块);
+  const tr = state.tr.replaceWith(start5, start5 + paragraph2.nodeSize, newValueBlock);
 
   // 再把**下一段**开出来，光标落进去（见文件头那段：这一下不换行，
   // 接着敲的字会全接进标题里）。空段落用 `createAndFill()` 而不是 `create()`：
   // 前者会走一遍内容表达式，节点类型将来加了必填内容也不会造出非法文档。
   // ⚠️ **不要**改成调 `splitBlock`：那个命令要一份完整的 state，而这里手上是
   // 一笔还没派发的事务，把两条命令拼起来只会让"撤销"变成两步。
-  const 空段 = state.schema.nodes.paragraph?.createAndFill();
-  if (空段) {
-    const 位 = 起 + 新块.nodeSize;
-    tr.insert(位, 空段);
+  const emptyParagraph = state.schema.nodes.paragraph?.createAndFill();
+  if (emptyParagraph) {
+    const position3 = start5 + newValueBlock.nodeSize;
+    tr.insert(position3, emptyParagraph);
     // `位 + 1` 就是那个空段落里的第一个（也是唯一一个）光标位。
-    tr.setSelection(TextSelection.near(tr.doc.resolve(位 + 1)));
+    tr.setSelection(TextSelection.near(tr.doc.resolve(position3 + 1)));
   } else {
     // 造不出空段落（理论上到不了这儿）：退回到"光标落在标题末尾"，
     // 至少那一下回车不是白按的。
-    tr.setSelection(TextSelection.near(tr.doc.resolve(起 + 新块.nodeSize - 1)));
+    tr.setSelection(TextSelection.near(tr.doc.resolve(start5 + newValueBlock.nodeSize - 1)));
   }
 
   tr.scrollIntoView();
@@ -246,9 +248,14 @@ function 回车成标题(view: EditorView, strict: boolean): boolean {
  * ——**所有**标题写法的段落从现在起挂同一个类。见文件头那句
  * 「严格档与宽松档走同一条路」。
  */
-export type 待装饰 = {
-  起: number;
-  止: number;
+export type PendingDecoration = {
+  blockStart2: number;
+  blockEnd: number;
+  layerNumber: number;
+  prefixStart: number;
+  prefixEnd: number;
+  start5: number;
+  end2: number;
 };
 
 /**
@@ -261,8 +268,8 @@ export type 待装饰 = {
  * 点名的"作为标识符的 `#` 不要变换位置和大小"，在这一版里就是"只有井号后面
  * 那段文字加粗"。
  */
-export function 算装饰条目(doc: PMNode, strict: boolean): 待装饰[] {
-  const 条目: 待装饰[] = [];
+export function computeDecorationsItem(doc: PMNode, strict: boolean): PendingDecoration[] {
+  const item: PendingDecoration[] = [];
 
   doc.descendants((node, pos) => {
     // ⚠️ 只认**段落**，且第一个孩子必须是**纯文本**节点：`#` 在行内代码
@@ -276,33 +283,59 @@ export function 算装饰条目(doc: PMNode, strict: boolean): 待装饰[] {
     const first = node.firstChild;
     if (!first || !first.isText || !first.text) return true;
 
-    const 头 = atxPrefix(first.text, strict);
-    if (头 === null) return true;
+    const head2 = atxPrefix(first.text, strict);
+    if (head2 === null) return true;
 
-    const 正文起 = pos + 1 + 头.长度;
-    const 正文止 = pos + 1 + node.content.size;
+    const bodyStart2 = pos + 1 + head2.lengthDegree;
+    const bodyEnd = pos + 1 + node.content.size;
     // 只敲了 `# ` 还没写正文：没有可装饰的范围，`inline` 传空区间没有意义。
-    if (正文止 <= 正文起) return true;
+    if (bodyEnd <= bodyStart2) return true;
 
-    条目.push({ 起: 正文起, 止: 正文止 });
+    item.push({
+      blockStart2: pos,
+      blockEnd: pos + node.nodeSize,
+      layerNumber: head2.layerNumber,
+      prefixStart: pos + 1,
+      prefixEnd: bodyStart2,
+      start5: bodyStart2,
+      end2: bodyEnd,
+    });
     return true;
   });
 
-  return 条目;
+  return item;
 }
 
 /**
- * 把条目拼成装饰集。所有条目**一视同仁**：井号后面那段文字加粗
- * （`待成块类名`，样式在 `marks.css`）。
+ * 把条目拼成装饰集。光标还在这一段时，井号后面那段文字只加粗
+ * （`待成块类名`）；光标离开后，整段按该级标题排版，前缀藏起来。
  *
  * ⚠️ 2026-09-30 之前这里还有一个 `正在写的段` 参数，用来"跳过光标所在那一段"
  * （宽松档"输入时先不放大"）。那条路删掉之后参数和判据一起没了：
  * 现在的判据是**是不是标题块**，不看光标在哪儿。见文件头那张对照表。
  */
-export function 建装饰集(doc: PMNode, 条目: readonly 待装饰[]): DecorationSet {
-  const decos = 条目.map((条) =>
-    Decoration.inline(条.起, 条.止, { class: 待成块类名 }),
-  );
+export function createDecorationCollection(
+  doc: PMNode,
+  item: readonly PendingDecoration[],
+  cursor = -1,
+): DecorationSet {
+  const decos = item.flatMap((item4) => {
+    const correctAtEditEdit = cursor < 0 || (cursor >= item4.blockStart2 + 1 && cursor <= item4.blockEnd - 1);
+    const decoration: Decoration[] = [
+      Decoration.inline(item4.prefixStart, item4.prefixEnd, { class: pendingBecomeBlockPrefixClassName }),
+    ];
+    if (correctAtEditEdit) {
+      decoration.push(Decoration.inline(item4.start5, item4.end2, { class: pendingBecomeBlockClassName }));
+    } else {
+      decoration.push(
+        Decoration.node(item4.blockStart2, item4.blockEnd, {
+          class: "nota-heading-rendered-block",
+          "data-heading-level": String(item4.layerNumber),
+        }),
+      );
+    }
+    return decoration;
+  });
   return decos.length ? DecorationSet.create(doc, decos) : DecorationSet.empty;
 }
 
@@ -330,21 +363,21 @@ export function 建装饰集(doc: PMNode, 条目: readonly 待装饰[]): Decorat
  * 要的就是 `Command`；`view` 在类型上可选，拿不到就当"做不了"返回 `false`，
  * 让上游那条去答——**别在这里造一个假的 view**。
  */
-const 行首退格: Command = (state, dispatch, view) => {
+const lineFirstBackCell: Command = (state, dispatch, view) => {
   if (!view?.editable) return false;
 
   const { $from, empty } = state.selection;
   if (!empty) return false;
 
-  const 块 = $from.parent;
-  if (块.type.name !== "heading") return false;
+  const block = $from.parent;
+  if (block.type.name !== "heading") return false;
   if ($from.parentOffset !== 0) return false;
 
-  const 段类型 = state.schema.nodes.paragraph;
-  if (!段类型) return false;
+  const paragraphType2 = state.schema.nodes.paragraph;
+  if (!paragraphType2) return false;
 
   if (!dispatch) return true;
-  dispatch(state.tr.setNodeMarkup($from.before($from.depth), 段类型));
+  dispatch(state.tr.setNodeMarkup($from.before($from.depth), paragraphType2));
   return true;
 };
 
@@ -360,9 +393,9 @@ const 行首退格: Command = (state, dispatch, view) => {
  * 只给 `Backspace` 的话，同一个位置按 Delete 还是逐级降级——同一个动作
  * 两个答案，是用户最难描述的那类不一致。
  */
-export const 标题行首退格 = $shortcut(() => ({
-  Backspace: { key: "Backspace", onRun: () => 行首退格, priority: 60 },
-  Delete: { key: "Delete", onRun: () => 行首退格, priority: 60 },
+export const markTitleLineFirstBackCell = $shortcut(() => ({
+  Backspace: { key: "Backspace", onRun: () => lineFirstBackCell, priority: 60 },
+  Delete: { key: "Delete", onRun: () => lineFirstBackCell, priority: 60 },
 }));
 
 /**
@@ -382,8 +415,8 @@ export const 标题行首退格 = $shortcut(() => ({
  * 写的那一段"，而那个判据连同它要服务的长相一起被删了（见文件头「这一版推翻了
  * 什么」）。所以现在本插件**没有 `state` 分节**，也没有闭包变量跟着事务走。
  */
-export const 标题回车成块 = (strict: boolean) => $prose(() => {
-  let 缓存: { doc: PMNode; 条目: 待装饰[] } | null = null;
+export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
+  let bufferSave: { doc: PMNode; item: PendingDecoration[] } | null = null;
 
   return new Plugin({
     key: new PluginKey("nota-heading-on-enter"),
@@ -401,14 +434,14 @@ export const 标题回车成块 = (strict: boolean) => $prose(() => {
         ) {
           return false;
         }
-        return 回车成标题(view, strict);
+        return returnCarBecomeMarkTitle(view, strict);
       },
 
       decorations: (state) => {
-        if (!缓存 || 缓存.doc !== state.doc) {
-          缓存 = { doc: state.doc, 条目: 算装饰条目(state.doc, strict) };
+        if (!bufferSave || bufferSave.doc !== state.doc) {
+          bufferSave = { doc: state.doc, item: computeDecorationsItem(state.doc, strict) };
         }
-        return 建装饰集(state.doc, 缓存.条目);
+        return createDecorationCollection(state.doc, bufferSave.item, state.selection.from);
       },
     },
   });

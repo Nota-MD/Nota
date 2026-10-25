@@ -25,22 +25,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { 预览看法 } from "@/editor/review";
+import type { previewMode } from "@/editor/review";
 import type { PluginReview, PluginReviewDiff, PluginReviewPanel } from "@/bridge/types";
 
-export interface 预览看法接线 {
+export interface PreviewModeWiring {
   /** 宿主推来的那一份预览（`ui/usePlugins.ts` 的 `review`）。`null` = 没有。 */
-  预览: PluginReview | null;
+  preview: PluginReview | null;
   /**
    * 跑一条插件命令（`ui/usePlugins.ts` 的 `调`）。**签名是 `(插件, 命令)`
    * 不是 `(命令)`**：命令名只在插件内部唯一。
    */
-  调插件: (plugin: string, command: string) => void;
+  invokePlugin: (plugin: string, command: string) => void;
   /** 把预览收起来（`ui/usePlugins.ts` 的 `收预览`）。 */
-  收预览: () => void;
+  receivePreview: () => void;
 }
 
-export interface 预览看法出口 {
+export interface PreviewModeOutputMouth {
   /**
    * `kind === "diff"` 的那一份（图画在编辑区自己身上）。没有就是 `null`。
    *
@@ -49,27 +49,27 @@ export interface 预览看法出口 {
    *（`PluginReviewPanel` 一个都没有）。写成宽的那种，每个用它的地方都要自己
    * 再判一次 `kind`——那就等于把"分派只做一次"这条规矩原地作废。
    */
-  活跃预览: PluginReviewDiff | null;
+  activeJumpPreview: PluginReviewDiff | null;
   /** `kind === "panel"` 的那一份（占编辑区的一块面板）。类型同理是窄的那个。 */
-  面板预览: PluginReviewPanel | null;
+  panelPreview: PluginReviewPanel | null;
   /** 现在看哪一面。传给 `EditorPane` 与 `ReviewBar`（**两处必须同源**）。 */
-  看法: 预览看法;
-  set看法: (v: 预览看法) => void;
+  viewMode: previewMode;
+  setViewMode: (v: previewMode) => void;
   /** 用户在正文里按了 `Esc`，或在预览那条细条上点了叉/按了 `Esc`。 */
-  退出预览: () => void;
+  backOutputPreview: () => void;
 }
 
-export function useReviewView(w: 预览看法接线): 预览看法出口 {
-  const { 预览, 调插件, 收预览 } = w;
+export function useReviewView(w: PreviewModeWiring): PreviewModeOutputMouth {
+  const { preview, invokePlugin, receivePreview } = w;
 
   // ⚠️ 分派**只做一次、就在这里**（见文件头第 1 条）。
-  const 活跃预览 = 预览?.kind === "diff" ? 预览 : null;
-  const 面板预览 = 预览?.kind === "panel" ? 预览 : null;
+  const activeJumpPreview = preview?.kind === "diff" ? preview : null;
+  const panelPreview = preview?.kind === "panel" ? preview : null;
 
-  const [看法, set看法] = useState<预览看法>("diff");
+  const [viewMode, setViewMode] = useState<previewMode>("diff");
 
   /** 现在这份改动的目标文本。**只用来判"换了一份改动"**，见下面那个 effect。 */
-  const 改动文本 = 活跃预览?.text ?? null;
+  const changeActionText = activeJumpPreview?.text ?? null;
   useEffect(() => {
     // 换了一份改动 → 回到「改动对比」。用户点开预览第一眼要看的是"改了哪儿"，
     // 而上一份留下的"改后"会让人以为没什么变化。
@@ -77,14 +77,14 @@ export function useReviewView(w: 预览看法接线): 预览看法出口 {
     // ⚠️ 依赖是**文本**不是 `预览` 那个对象：宿主每拉一次都给一个新对象
     //（`api.plugin.review()` 的返回值），拿对象当依赖会在"同一份改动被重拉
     // 一次"时把用户切过去的那一面顶回来。
-    set看法("diff");
-  }, [改动文本]);
+    setViewMode("diff");
+  }, [changeActionText]);
 
-  const 退出预览 = useCallback(() => {
-    const 放弃 = 活跃预览?.reject;
-    if (放弃 && 活跃预览) void 调插件(活跃预览.plugin, 放弃.command);
-    else void 收预览();
-  }, [活跃预览, 调插件, 收预览]);
+  const backOutputPreview = useCallback(() => {
+    const releaseDiscard = activeJumpPreview?.reject;
+    if (releaseDiscard && activeJumpPreview) void invokePlugin(activeJumpPreview.plugin, releaseDiscard.command);
+    else void receivePreview();
+  }, [activeJumpPreview, invokePlugin, receivePreview]);
 
-  return { 活跃预览, 面板预览, 看法, set看法, 退出预览 };
+  return { activeJumpPreview, panelPreview, viewMode, setViewMode, backOutputPreview };
 }

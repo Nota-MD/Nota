@@ -56,34 +56,34 @@ import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified } from "unified";
 
-import { 文本处理器链 } from "../src/editor/text-handlers";
+import { textHandlerChain } from "../src/editor/text-handlers";
 
 /* ── 一支极小的测试工装（与 `tree-options.test.ts` 同一套长相）── */
 
-let 过 = 0;
-let 败 = 0;
-const 败的: string[] = [];
+let pass = 0;
+let fail = 0;
+const failed: string[] = [];
 
-function 测(名称: string, 体: () => void): void {
+function testCase(name: string, body3: () => void): void {
   try {
-    体();
-    过++;
-    console.log(`  ✔ ${名称}`);
+    body3();
+    pass++;
+    console.log(`  ✔ ${name}`);
   } catch (e) {
-    败++;
-    败的.push(名称);
-    console.log(`  ✘ ${名称}`);
+    fail++;
+    failed.push(name);
+    console.log(`  ✘ ${name}`);
     console.log(`      ${e instanceof Error ? e.message : String(e)}`);
   }
 }
 
-function 组(名: string): void {
-  console.log(`\n【${名}】`);
+function group(name3: string): void {
+  console.log(`\n【${name3}】`);
 }
 
-function 等(实际: unknown, 期望: unknown, 说明: string): void {
-  if (实际 !== 期望) {
-    throw new Error(`${说明}：期望 ${JSON.stringify(期望)}，实际 ${JSON.stringify(实际)}`);
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
 
@@ -93,115 +93,115 @@ function 等(实际: unknown, 期望: unknown, 说明: string): void {
  * ⚠️ `text` 那一条**必须**把 `defaultHandlers.text` 传进去：不传的话本仓那几层
  * 会把上游的转义一起省掉，测出来的东西与产品不一致（"别把原文弄丢"那条）。
  */
-function 往返(源: string): string {
-  const 树 = unified().use(remarkParse).use(remarkGfm).parse(源);
+function roundtrip(source3: string): string {
+  const tree = unified().use(remarkParse).use(remarkGfm).parse(source3);
   return unified()
     .use(remarkStringify, {
       bullet: "-" as const,
       rule: "-" as const,
-      handlers: { text: 文本处理器链(defaultHandlers.text as never) as never },
+      handlers: { text: textHandlerChain(defaultHandlers.text as never) as never },
     })
     .use(remarkGfm)
-    .stringify(树 as never);
+    .stringify(tree as never);
 }
 
 /* ── 一、该放回来的放回来了 ─────────────────────────────────────────── */
 
-组("一、行首那两种语法不再被加反斜杠");
+group("一、行首那两种语法不再被加反斜杠");
 
-测("`[TOC]` 独占一行 ⇒ 一个字节都不多", () => {
-  等(往返("[TOC]\n"), "[TOC]\n", "Typora 的目录标记");
+testCase("`[TOC]` 独占一行 ⇒ 一个字节都不多", () => {
+  equal(roundtrip("[TOC]\n"), "[TOC]\n", "Typora 的目录标记");
 });
 
-测("`[toc]` 小写也认（大小写两种写法都常见）", () => {
-  等(往返("[toc]\n"), "[toc]\n", "小写");
+testCase("`[toc]` 小写也认（大小写两种写法都常见）", () => {
+  equal(roundtrip("[toc]\n"), "[toc]\n", "小写");
 });
 
-测("`> [!NOTE]` 不再变成 `> \\[!NOTE]`", () => {
+testCase("`> [!NOTE]` 不再变成 `> \\[!NOTE]`", () => {
   // ⚠️ 文本节点自己那个字符串是从 `[` 开始的（`>` 是引用块的外壳），
   // 所以"行首"这条判据在文本节点上仍然成立——与 `不转义行首等号` 那条注解同理。
-  等(往返("> [!NOTE]\n> 内容\n"), "> [!NOTE]\n> 内容\n", "GitHub 提示块");
+  equal(roundtrip("> [!NOTE]\n> 内容\n"), "> [!NOTE]\n> 内容\n", "GitHub 提示块");
 });
 
-测("五种 `[!TYPE]` 一个不落", () => {
-  for (const 型 of ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]) {
-    const 源 = `> [!${型}]\n> 甲\n`;
-    等(往返(源), 源, `${型} 那一型`);
+testCase("五种 `[!TYPE]` 一个不落", () => {
+  for (const typeValue2 of ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]) {
+    const source3 = `> [!${typeValue2}]\n> 甲\n`;
+    equal(roundtrip(source3), source3, `${typeValue2} 那一型`);
   }
 });
 
-测("提示块前面还有别的话、它在段落中间那一行时也认（行首是相对文本节点说的）", () => {
-  const 源 = "[TOC]\n\n甲 [TOC] 乙\n";
+testCase("提示块前面还有别的话、它在段落中间那一行时也认（行首是相对文本节点说的）", () => {
+  const source3 = "[TOC]\n\n甲 [TOC] 乙\n";
   // ⚠️ 第二段那颗 `[TOC]` **不在行首** ⇒ 照旧转义（见第二组）。
-  等(往返(源), "[TOC]\n\n甲 \\[TOC] 乙\n", "第一段放回来、第二段照旧转义");
+  equal(roundtrip(source3), "[TOC]\n\n甲 \\[TOC] 乙\n", "第一段放回来、第二段照旧转义");
 });
 
 /* ── 二、不该碰的一个字节都不碰 ─────────────────────────────────────── */
 
-组("二、名字不在册的一律照旧");
+group("二、名字不在册的一律照旧");
 
-测("`[foo]` 这类随便什么方括号**照旧转义**（不做大赦）", () => {
-  等(往返("[foo]\n"), "\\[foo]\n", "不认识就别动");
+testCase("`[foo]` 这类随便什么方括号**照旧转义**（不做大赦）", () => {
+  equal(roundtrip("[foo]\n"), "\\[foo]\n", "不认识就别动");
 });
 
-测("行中间的 `[TOC]` 照旧转义（它不是语法，是普通文字）", () => {
-  等(往返("甲 [TOC] 乙\n"), "甲 \\[TOC] 乙\n", "块首语法只在块首");
+testCase("行中间的 `[TOC]` 照旧转义（它不是语法，是普通文字）", () => {
+  equal(roundtrip("甲 [TOC] 乙\n"), "甲 \\[TOC] 乙\n", "块首语法只在块首");
 });
 
-测("`[!NOTE]` 少了一头/多了一头都不认", () => {
-  等(往返("[!NOTE\n"), "\\[!NOTE\n", "只有左中括号");
-  等(往返("[!NOPE]\n"), "\\[!NOPE]\n", "不是那五种之一");
-  等(往返("[!note]\n"), "\\[!note]\n", "小写的提示块名不算（GitHub 那边也是大写）");
+testCase("`[!NOTE]` 少了一头/多了一头都不认", () => {
+  equal(roundtrip("[!NOTE\n"), "\\[!NOTE\n", "只有左中括号");
+  equal(roundtrip("[!NOPE]\n"), "\\[!NOPE]\n", "不是那五种之一");
+  equal(roundtrip("[!note]\n"), "\\[!note]\n", "小写的提示块名不算（GitHub 那边也是大写）");
 });
 
-测("脚注引用与真链接**一个字节都不动**（它们本来就该是它们的样子）", () => {
-  等(往返("文字[^1]\n\n[^1]: 注\n"), "文字[^1]\n\n[^1]: 注\n", "脚注");
-  等(往返("[甲](http://x)\n"), "[甲](http://x)\n", "行内链接");
-  等(往返("[甲]: http://x\n\n[甲]\n"), "[甲]: http://x\n\n[甲]\n", "引用式链接");
+testCase("脚注引用与真链接**一个字节都不动**（它们本来就该是它们的样子）", () => {
+  equal(roundtrip("文字[^1]\n\n[^1]: 注\n"), "文字[^1]\n\n[^1]: 注\n", "脚注");
+  equal(roundtrip("[甲](http://x)\n"), "[甲](http://x)\n", "行内链接");
+  equal(roundtrip("[甲]: http://x\n\n[甲]\n"), "[甲]: http://x\n\n[甲]\n", "引用式链接");
 });
 
-测("别的层管的那些字符不受影响（本层只认 `[`）", () => {
-  等(往返("==重点==\n"), "==重点==\n", "行首等号那一层");
-  等(往返("#标签\n"), "#标签\n", "行首井号那一层");
-  等(往返("甲 ~ 乙\n"), "甲 ~ 乙\n", "孤立波浪号那一层");
+testCase("别的层管的那些字符不受影响（本层只认 `[`）", () => {
+  equal(roundtrip("==重点==\n"), "==重点==\n", "行首等号那一层");
+  equal(roundtrip("#标签\n"), "#标签\n", "行首井号那一层");
+  equal(roundtrip("甲 ~ 乙\n"), "甲 ~ 乙\n", "孤立波浪号那一层");
 });
 
 /* ── 三、判据的立足点：有定义时根本走不到这一层 ─────────────────────── */
 
-组("三、`[TOC]:` 有定义时它是链接，不是文本");
+group("三、`[TOC]:` 有定义时它是链接，不是文本");
 
-测("文档里有 `[TOC]: http://x` ⇒ 正文那颗 `[TOC]` 是 `link` 节点、本层碰不到", () => {
-  const 源 = "[TOC]: http://x\n\n[TOC]\n";
+testCase("文档里有 `[TOC]: http://x` ⇒ 正文那颗 `[TOC]` 是 `link` 节点、本层碰不到", () => {
+  const source3 = "[TOC]: http://x\n\n[TOC]\n";
   // ⚠️ 这一条**必须**逐字节相同，而且**不是靠本层**——上游的 `linkReference`
   // 处理器本来就写 `[TOC]`（它自己知道那是链接）。⚠️ 本层在这里**看不到文本**。
-  等(往返(源), 源, "定义与引用都在");
+  equal(roundtrip(source3), source3, "定义与引用都在");
 
   // ⚠️ 反过来验一遍"真走到本层了"：没有定义那一份，本层动过手。
-  const 无定义 = "[TOC]\n";
-  等(往返(无定义), 无定义, "没有定义 ⇒ 是文本 ⇒ 本层去掉反斜杠");
+  const withoutFixedMeaning = "[TOC]\n";
+  equal(roundtrip(withoutFixedMeaning), withoutFixedMeaning, "没有定义 ⇒ 是文本 ⇒ 本层去掉反斜杠");
 });
 
-测("⚠️ 定义一出现，**整篇**的 `[TOC]` 都成链接——连行中间那颗也是", () => {
+testCase("⚠️ 定义一出现，**整篇**的 `[TOC]` 都成链接——连行中间那颗也是", () => {
   // ⚠️ 这一条最初被我写反了（我以为"行中间那颗仍是文本、照旧转义"）。
   // 实测：只要文档里有 `[TOC]:`，`甲 [TOC] 乙` 里那颗**也**是 `linkReference`
   // ——CommonMark 的 label 配对是**全文档**的、与位置无关。
   // ⚠️ 所以它照样逐字节相同，但**这条相同不是本层的功劳**（本层看不到文本）。
-  等(往返("甲 [TOC] 乙\n\n[TOC]: http://x\n"), "甲 [TOC] 乙\n\n[TOC]: http://x\n", "行中间那颗也成链接");
+  equal(roundtrip("甲 [TOC] 乙\n\n[TOC]: http://x\n"), "甲 [TOC] 乙\n\n[TOC]: http://x\n", "行中间那颗也成链接");
 });
 
-测("同一份文档里三种形态：提示块（本层动手）＋ 定义 ＋ 引用（本层碰不到）", () => {
-  const 源 = "> [!NOTE]\n> 甲\n\n[TOC]: http://x\n\n[TOC]\n";
+testCase("同一份文档里三种形态：提示块（本层动手）＋ 定义 ＋ 引用（本层碰不到）", () => {
+  const source3 = "> [!NOTE]\n> 甲\n\n[TOC]: http://x\n\n[TOC]\n";
   // ⚠️ 第一段走本层（`[!NOTE]` 是文本）、后两段走上游的 `definition` /
   // `linkReference` 处理器。三处答案都对，而**只有第一处是本层做的**——
   // 所以这一组才有意义：本层的动手范围就限定在"真的是文本"的那些节点上。
-  等(往返(源), 源, "三种形态各一份");
+  equal(roundtrip(source3), source3, "三种形态各一份");
 });
 
 /* ── 收尾 ───────────────────────────────────────────────────────────── */
 
-console.log(`\n———— 通过 ${过} 条，失败 ${败} 条 ————`);
-if (败) {
+console.log(`\n———— 通过 ${pass} 条，失败 ${fail} 条 ————`);
+if (fail) {
   console.log("失败清单：");
-  for (const 名 of 败的) console.log(`  · ${名}`);
+  for (const name3 of failed) console.log(`  · ${name3}`);
   process.exit(1);
 }

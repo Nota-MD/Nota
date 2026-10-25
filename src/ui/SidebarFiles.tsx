@@ -22,18 +22,18 @@ interface FlatFile {
   parent: string | null;
 }
 
-function 取顶层文件(nodes: TreeNode[]): FlatFile[] {
+function getTopLayerTextItem(nodes: TreeNode[]): FlatFile[] {
   return nodes
     .filter((node) => !node.is_dir)
     .map((node) => {
-      const 斜杠 = node.path.lastIndexOf("/");
-      const 点 = node.name.lastIndexOf(".");
+      const slantBar = node.path.lastIndexOf("/");
+      const point = node.name.lastIndexOf(".");
       return {
         name: node.name,
-        base: 点 > 0 ? node.name.slice(0, 点) : node.name,
-        extension: 点 > 0 ? node.name.slice(点) : "",
+        base: point > 0 ? node.name.slice(0, point) : node.name,
+        extension: point > 0 ? node.name.slice(point) : "",
         path: node.path,
-        parent: 斜杠 >= 0 ? node.path.slice(0, 斜杠) : null,
+        parent: slantBar >= 0 ? node.path.slice(0, slantBar) : null,
       };
     });
 }
@@ -53,20 +53,20 @@ export function FileList(props: {
   onCreateFile: (name: string) => void;
 }) {
   const t = useT();
-  const [files, setFiles] = useState<FlatFile[]>(() => 取顶层文件(props.nodes));
+  const [files, setFiles] = useState<FlatFile[]>(() => getTopLayerTextItem(props.nodes));
   const [excerpts, setExcerpts] = useState<Record<string, WorkspaceExcerpt>>({});
   const [loading, setLoading] = useState(false);
   const [partial, setPartial] = useState(false);
   const [query, setQuery] = useState("");
   const loadDir = useRef(props.loadDir);
   loadDir.current = props.loadDir;
-  const 请求过摘要 = useRef(new Set<string>());
-  const 搜索框 = useRef<HTMLInputElement>(null);
+  const pleaseRequestPassRemoveWant = useRef(new Set<string>());
+  const searchSearchBox = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (props.searching) {
-      搜索框.current?.focus();
-      搜索框.current?.select();
+      searchSearchBox.current?.focus();
+      searchSearchBox.current?.select();
     } else {
       setQuery("");
     }
@@ -74,26 +74,26 @@ export function FileList(props: {
 
   useEffect(() => {
     setExcerpts({});
-    请求过摘要.current.clear();
+    pleaseRequestPassRemoveWant.current.clear();
   }, [props.workspace]);
 
   useEffect(() => {
-    const 待读 = files
+    const pendingRead = files
       .map((file) => file.path)
-      .filter((path) => !请求过摘要.current.has(path));
-    if (!待读.length) return;
-    let 取消 = false;
+      .filter((path) => !pleaseRequestPassRemoveWant.current.has(path));
+    if (!pendingRead.length) return;
+    let getClear = false;
 
-    const 读摘要 = async () => {
-      for (let i = 0; i < 待读.length; i += 24) {
-        const 一批 = 待读.slice(i, i + 24);
-        for (const path of 一批) 请求过摘要.current.add(path);
+    const readRemoveWant = async () => {
+      for (let i = 0; i < pendingRead.length; i += 24) {
+        const batch = pendingRead.slice(i, i + 24);
+        for (const path of batch) pleaseRequestPassRemoveWant.current.add(path);
         try {
-          const 结果 = await api.workspace.excerpts(一批);
-          if (取消) return;
+          const result2 = await api.workspace.excerpts(batch);
+          if (getClear) return;
           setExcerpts((prev) => {
             const next = { ...prev };
-            for (const item of 结果) next[item.path] = item;
+            for (const item of result2) next[item.path] = item;
             return next;
           });
         } catch {
@@ -101,34 +101,34 @@ export function FileList(props: {
         }
       }
     };
-    void 读摘要();
+    void readRemoveWant();
     return () => {
-      取消 = true;
+      getClear = true;
     };
   }, [files]);
 
   useEffect(() => {
-    let 取消 = false;
-    const 首次 = 取顶层文件(props.nodes);
-    setFiles(首次);
+    let getClear = false;
+    const firstCount = getTopLayerTextItem(props.nodes);
+    setFiles(firstCount);
     setPartial(false);
     if (!props.active) {
       setLoading(false);
       return;
     }
 
-    const 队列 = props.nodes.filter((node) => node.is_dir).map((node) => node.path);
-    setLoading(队列.length > 0);
-    if (!队列.length) return;
+    const queueColumn = props.nodes.filter((node) => node.is_dir).map((node) => node.path);
+    setLoading(queueColumn.length > 0);
+    if (!queueColumn.length) return;
 
-    const 已访问 = new Set<string>();
-    const 最多目录 = 512;
+    const alreadyVisitAsk = new Set<string>();
+    const mostManyItemRecord = 512;
     const walk = async () => {
-      while (队列.length && 已访问.size < 最多目录) {
-        const 一批 = 队列.splice(0, 8).filter((path) => !已访问.has(path));
-        for (const dir of 一批) 已访问.add(dir);
-        const 结果 = await Promise.all(
-          一批.map(async (dir) => {
+      while (queueColumn.length && alreadyVisitAsk.size < mostManyItemRecord) {
+        const batch = queueColumn.splice(0, 8).filter((path) => !alreadyVisitAsk.has(path));
+        for (const dir of batch) alreadyVisitAsk.add(dir);
+        const result2 = await Promise.all(
+          batch.map(async (dir) => {
             try {
               return { children: await loadDir.current(dir), ok: true as const };
             } catch {
@@ -136,31 +136,31 @@ export function FileList(props: {
             }
           }),
         );
-        if (取消) return;
+        if (getClear) return;
 
-        for (const { children, ok } of 结果) {
+        for (const { children, ok } of result2) {
           if (!ok) setPartial(true);
-          const 新文件 = 取顶层文件(children);
-          if (新文件.length) {
+          const newTextItem = getTopLayerTextItem(children);
+          if (newTextItem.length) {
             setFiles((prev) => {
-              const 已有 = new Set(prev.map((file) => file.path));
-              return [...prev, ...新文件.filter((file) => !已有.has(file.path))];
+              const alreadyHas = new Set(prev.map((file) => file.path));
+              return [...prev, ...newTextItem.filter((file) => !alreadyHas.has(file.path))];
             });
           }
           for (const child of children) {
-            if (child.is_dir && !已访问.has(child.path)) 队列.push(child.path);
+            if (child.is_dir && !alreadyVisitAsk.has(child.path)) queueColumn.push(child.path);
           }
         }
       }
-      if (!取消) {
-        if (队列.length) setPartial(true);
+      if (!getClear) {
+        if (queueColumn.length) setPartial(true);
         setLoading(false);
       }
     };
     void walk();
 
     return () => {
-      取消 = true;
+      getClear = true;
     };
   }, [props.nodes, props.active]);
 
@@ -174,13 +174,13 @@ export function FileList(props: {
   const workspaceName =
     props.workspace.replaceAll("\\", "/").replace(/\/+$/, "").split("/").pop() ||
     props.workspace;
-  const 查询 = query.trim().toLocaleLowerCase();
-  const visibleFiles = 查询
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleFiles = normalizedQuery
     ? files.filter((file) => {
         const excerpt = excerpts[file.path];
         return [file.path, excerpt?.title, excerpt?.detail]
           .filter(Boolean)
-          .some((text) => String(text).toLocaleLowerCase().includes(查询));
+          .some((text) => String(text).toLocaleLowerCase().includes(normalizedQuery));
       })
     : files;
 
@@ -190,7 +190,7 @@ export function FileList(props: {
         <div className="file-list-search">
           <Icon name="folio-edit-find-symbolic" size={15} />
           <input
-            ref={搜索框}
+            ref={searchSearchBox}
             value={query}
             placeholder={t("Search files…")}
             aria-label={t("Search files")}
@@ -245,7 +245,9 @@ export function FileList(props: {
         })}
       </ul>
       {!files.length && !loading && !props.creating && (
-        <p className="sidebar-empty">{t("This folder has no Markdown files.")}</p>
+        <div className="sidebar-empty-state">
+          <p>{t("File list is empty")}</p>
+        </div>
       )}
       {files.length > 0 && !visibleFiles.length && (
         <p className="sidebar-empty">{t("No matching files.")}</p>

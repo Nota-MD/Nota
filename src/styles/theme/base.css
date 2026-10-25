@@ -53,6 +53,13 @@
   --sidebar-surface: var(--bg-subtle);
   --sidebar-selected-bg: var(--bg-hover);
   --sidebar-shadow: none;
+  /* 顶栏单独一层。外置主题可覆盖这五格；未覆盖时严格沿用原来的
+     `bg-subtle` / `fg` / `bg-hover`，不会改变旧主题。 */
+  --toolbar-surface: var(--bg-subtle);
+  --toolbar-fg: var(--fg);
+  --toolbar-hover: var(--bg-hover);
+  --toolbar-active: var(--bg-active);
+  --toolbar-border: var(--border);
   /* 右侧插件栏。**比左侧栏宽 20px**：插件卡片里有名称+版本+能力标签，
      跟文件树那种一行一个名字的密度不一样。 */
   --dock-width: 260px;

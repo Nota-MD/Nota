@@ -40,7 +40,7 @@ import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 /** 没有文档时的标题。和 `tauri.conf.json` 里那个初值保持一致。 */
-export const 应用名 = "Nota";
+export const shouldUseName = "Nota";
 
 /**
  * 按标题与脏标志拼出该写的窗口标题。**纯函数**，好单独验
@@ -50,9 +50,9 @@ export const 应用名 = "Nota";
  * `带文件名` 为假时只有一个应用名——⚠️ **不拼一个"空标题的短版本"**：
  * 那是另一句话，迟早会漂成 ` — Nota` 这种留着一个破折号的写法。
  */
-export function 窗口标题(标题: string | null, 脏: boolean, 带文件名 = true): string {
-  if (!标题 || !带文件名) return 应用名;
-  return `${标题}${脏 ? " •" : ""} — ${应用名}`;
+export function windowTitle(markTitle: string | null, dirty: boolean, withTextItemName = true): string {
+  if (!markTitle || !withTextItemName) return shouldUseName;
+  return `${markTitle}${dirty ? " •" : ""} — ${shouldUseName}`;
 }
 
 /**
@@ -63,15 +63,15 @@ export function 窗口标题(标题: string | null, 脏: boolean, 带文件名 =
  * ——和 `useImmersive.ts` 里 `同步全屏` 那条同一个口径。
  */
 export function useWindowTitle(
-  标题: string | null,
-  脏: boolean,
-  带文件名 = true,
+  markTitle: string | null,
+  dirty: boolean,
+  withTextItemName = true,
 ): void {
   useEffect(() => {
     void getCurrentWindow()
-      .setTitle(窗口标题(标题, 脏, 带文件名))
+      .setTitle(windowTitle(markTitle, dirty, withTextItemName))
       .catch(() => {
         // 见上面那段：静默。
       });
-  }, [标题, 脏, 带文件名]);
+  }, [markTitle, dirty, withTextItemName]);
 }

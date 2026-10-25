@@ -44,28 +44,28 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const 写 = paneWriter(settings, onChange, "general");
-  const 写下载 = paneWriter(settings, onChange, "download");
-  const 写更新 = paneWriter(settings, onChange, "updates");
+  const write = paneWriter(settings, onChange, "general");
+  const writeBelowLoad = paneWriter(settings, onChange, "download");
+  const writeUpdate = paneWriter(settings, onChange, "updates");
 
   // 可选的语言**由宿主给**（`nota_app_lang.available`），前端不列第二份。
   // 拉不到就只画「自动」——下拉少几项比画错标签好。
-  const [语言表, set语言表] = useState<AppLang | null>(null);
-  const [导出包开着, 设导出包开着] = useState(false);
-  const [导出结果, 设导出结果] = useState<SettingsExportReport | null>(null);
-  const [导出错误, 设导出错误] = useState<string | null>(null);
+  const [languageTable, setLanguageTable] = useState<AppLang | null>(null);
+  const [exportPackageOpen, setExportPackageOpen] = useState(false);
+  const [exportResult, setExportResult] = useState<SettingsExportReport | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   useEffect(() => {
-    let 还活着 = true;
+    let returnActiveActive = true;
     void api
       .appLang()
       .then((r) => {
-        if (还活着) set语言表(r);
+        if (returnActiveActive) setLanguageTable(r);
       })
       .catch(() => {
         // 拉不到不算错误：这一页其余部分照常能用，下拉里就只剩「自动」。
       });
     return () => {
-      还活着 = false;
+      returnActiveActive = false;
     };
   }, []);
 
@@ -80,20 +80,20 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
         <SettingRow
           label={t("Language")}
           description={
-            语言表
-              ? t("In use right now: {0} (this cell stores the setting, which may be “Automatic”)", 语言表.effective)
+            languageTable
+              ? t("In use right now: {0} (this cell stores the setting, which may be “Automatic”)", languageTable.effective)
               : t("Reading available languages…")
           }
         >
           <Select
             value={settings.general.language}
-            onChange={(language) => 写({ language })}
+            onChange={(language) => write({ language })}
             options={[
               { value: "auto", label: t("Automatic (follow the system)") },
               // ⚠️ `l.label` **不包 `t()`**：那是宿主送来的数据（`nota_app_lang`
               // 的 `available`），语言名要用**它自己那门语言**写，见
               // `src-tauri/src/lang.rs::语言名`。
-              ...(语言表?.available ?? []).map((l) => ({ value: l.tag, label: l.label })),
+              ...(languageTable?.available ?? []).map((l) => ({ value: l.tag, label: l.label })),
             ]}
           />
         </SettingRow>
@@ -107,7 +107,7 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
           <Select
             value={settings.updates.notification_position}
             options={POSITIONS}
-            onChange={(notification_position) => 写更新({ notification_position })}
+            onChange={(notification_position) => writeUpdate({ notification_position })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -125,7 +125,7 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
             mono
             spellCheck={false}
             placeholder={"github.com/ => gh-proxy.net/github.com/"}
-            onChange={(replacements) => 写下载({ replacements })}
+            onChange={(replacements) => writeBelowLoad({ replacements })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -137,31 +137,31 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
             "Choose program settings, user data, and each extension's settings or data independently. The result is a ZIP-based settings package, not an application installer.",
           )}
         >
-          <ActionButton onClick={() => 设导出包开着(true)}>
+          <ActionButton onClick={() => setExportPackageOpen(true)}>
             {t("Export settings package…")}
           </ActionButton>
         </SettingRow>
-        {导出结果 && (
+        {exportResult && (
           <SettingRow label={t("Last export")}>
-            <Value>{导出结果.path}</Value>
+            <Value>{exportResult.path}</Value>
           </SettingRow>
         )}
-        {导出错误 && (
+        {exportError && (
           <SettingRow label={t("Export failed")}>
-            <Value>{导出错误}</Value>
+            <Value>{exportError}</Value>
           </SettingRow>
         )}
       </SettingsGroup>
 
-      {导出包开着 && (
+      {exportPackageOpen && (
         <SettingsExportDialog
-          onClose={() => 设导出包开着(false)}
+          onClose={() => setExportPackageOpen(false)}
           onExported={(report) => {
-            设导出结果(report);
-            设导出错误(null);
-            设导出包开着(false);
+            setExportResult(report);
+            setExportError(null);
+            setExportPackageOpen(false);
           }}
-          onError={(message) => 设导出错误(message)}
+          onError={(message) => setExportError(message)}
         />
       )}
 

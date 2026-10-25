@@ -103,7 +103,7 @@ fn main() {
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    // 主机名：优先问 `hostname`（Linux 与 macOS 都有），取不到就读 `/etc/hostname`。
+    // 主机名：优先问 `hostname`，取不到再读 `/etc/hostname`。
     let mut 主机 = 取版本("hostname", &[]);
     if 主机.is_empty() {
         主机 = std::fs::read_to_string("/etc/hostname")
@@ -111,9 +111,27 @@ fn main() {
             .unwrap_or_default();
     }
 
-    // ⚠️ 这里问的是**编译机器**的内核与架构（`uname -srm`），不是运行时的。
-    // 那正是这一页想说的话：这个包是在一台什么样的机器上编出来的。
-    let 平台 = 取版本("uname", &["-srm"]);
+    // ⚠️ 这里说的是**编译机器**，不是运行机器。优先使用 Cargo 的 HOST
+    // 三元组，避免 Windows runner 上的 MSYS `uname` 被误报成 Linux；
+    // 非 Windows 再补内核信息，便于区分发行版构建机。
+    let 主机三元组 = std::env::var("HOST").unwrap_or_default();
+    let 平台 = if cfg!(windows) {
+        let 版本 = 取版本("cmd", &["/C", "ver"]);
+        match (版本.is_empty(), 主机三元组.is_empty()) {
+            (true, true) => String::new(),
+            (true, false) => 主机三元组,
+            (false, true) => 版本,
+            (false, false) => format!("{版本} [{主机三元组}]"),
+        }
+    } else {
+        let uname = 取版本("uname", &["-srm"]);
+        match (uname.is_empty(), 主机三元组.is_empty()) {
+            (true, true) => String::new(),
+            (true, false) => 主机三元组,
+            (false, true) => uname,
+            (false, false) => format!("{uname} [{主机三元组}]"),
+        }
+    };
 
     let 锁 = std::fs::read_to_string("Cargo.lock").unwrap_or_default();
 

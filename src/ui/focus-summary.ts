@@ -29,16 +29,16 @@
 
 import type { FocusState } from "@/bridge/types";
 import { t } from "@/i18n";
-import type { 刻度 } from "@/ui/chart-ticks";
+import type { tick } from "@/ui/chart-ticks";
 import type { PanelShare, PanelShareStat } from "@/ui/panel-nodes";
-import { 说时长 } from "@/ui/useForceFocus";
+import { sayTimeLength } from "@/ui/useForceFocus";
 
 /** 一次采样：这一轮开始后的第几秒，余额还剩几秒。 */
-export interface 采样点 {
+export interface AdoptStylePoint {
   /** 距开始多少秒（`elapsed_ms` 取整）。 */
-  秒: number;
+  seconds: number;
   /** 当时余额多少秒（`balance_ms` 取整）。 */
-  余额: number;
+  balance: number;
 }
 
 /**
@@ -48,7 +48,7 @@ export interface 采样点 {
  * 而是把间隔**翻倍**——见 [`抽稀`]。上限本身只是个内存阀门：每个点两个数，
  * 900 个点是十几 KB。
  */
-export const 采样上限 = 900;
+export const adoptStyleLimit = 900;
 
 /**
  * 这一轮的**硬下限**：短于它就不弹总结。
@@ -58,7 +58,7 @@ export const 采样上限 = 900;
  * 3 秒"的卡，是在嘲弄他。而这条线以下本来也没有可看的东西——
  * 一次采样都没有（第一拍要到 1 秒后才有）。
  */
-export const 最短总结秒 = 5;
+export const mostShortTotalJoinSeconds = 5;
 
 /**
  * 记一笔（每秒那一个事件调一次）。
@@ -71,20 +71,20 @@ export const 最短总结秒 = 5;
  * 会让下一轮的第一秒接在上一轮的尾巴上（曲线里会出现一根从 0 竖直跳到
  * 25 分钟前的线）。清空这件事必须发生在这里，命令层看不见它。
  */
-export function 记一笔(旧: 采样点[], 状态: FocusState): 采样点[] {
-  if (!状态.running) {
-    return 旧.length === 0 ? 旧 : [];
+export function recordValueStroke(oldValue: AdoptStylePoint[], state: FocusState): AdoptStylePoint[] {
+  if (!state.running) {
+    return oldValue.length === 0 ? oldValue : [];
   }
-  const 点: 采样点 = {
-    秒: Math.round(状态.elapsed_ms / 1000),
-    余额: Math.round(状态.balance_ms / 1000),
+  const point: AdoptStylePoint = {
+    seconds: Math.round(state.elapsed_ms / 1000),
+    balance: Math.round(state.balance_ms / 1000),
   };
-  const 末 = 旧[旧.length - 1];
-  if (末 && 末.秒 >= 点.秒) {
-    return [...旧.slice(0, -1), 点];
+  const end = oldValue[oldValue.length - 1];
+  if (end && end.seconds >= point.seconds) {
+    return [...oldValue.slice(0, -1), point];
   }
-  const 新 = [...旧, 点];
-  return 新.length <= 采样上限 ? 新 : 抽稀(新);
+  const newValue = [...oldValue, point];
+  return newValue.length <= adoptStyleLimit ? newValue : extractSparse(newValue);
 }
 
 /**
@@ -98,32 +98,32 @@ export function 记一笔(旧: 采样点[], 状态: FocusState): 采样点[] {
  * ⚠️ 单数的尾巴**原样留着**（不是丢掉）：丢掉的话横轴末尾会缺一小段，
  * 而"最后余额是多少"正是用户最想看的那个数。
  */
-export function 抽稀(点: 采样点[]): 采样点[] {
-  const 出: 采样点[] = [];
-  for (let i = 0; i < 点.length; i += 2) {
-    const 前 = 点[i]!;
-    const 后 = 点[i + 1];
-    if (!后) {
-      出.push(前);
+export function extractSparse(point: AdoptStylePoint[]): AdoptStylePoint[] {
+  const output2: AdoptStylePoint[] = [];
+  for (let i = 0; i < point.length; i += 2) {
+    const before2 = point[i]!;
+    const after = point[i + 1];
+    if (!after) {
+      output2.push(before2);
       break;
     }
-    出.push(后.余额 >= 前.余额 ? 后 : 前);
+    output2.push(after.balance >= before2.balance ? after : before2);
   }
-  return 出;
+  return output2;
 }
 
 /** 这一轮的全部读数（卡片、对话框都从它出发）。 */
-export interface 总结 {
+export interface TotalJoin {
   /** 这一轮总共持续多少秒（含警报冻住的那段）。 */
-  时长秒: number;
+  timeLengthSeconds: number;
   /** 真的在写的秒数。 */
-  专注秒: number;
+  dedicatedNoteSeconds: number;
   /** 走开被扣的秒数（**不含宽限期**，宽限那几秒不算离开也不欠账）。 */
-  离开秒: number;
+  leaveOpenSeconds: number;
   /** 响了几次警报。 */
-  警报: number;
+  warnReport: number;
   /** 余额曲线。 */
-  采样: 采样点[];
+  adoptStyle: AdoptStylePoint[];
 }
 
 /**
@@ -132,19 +132,19 @@ export interface 总结 {
  * ⚠️ `时长秒` 兜到至少 1：`elapsed_ms` 理论上不会是 0（有 [`最短总结秒`] 拦着），
  * 但它是宿主来的数，而这里拿它当除法的分母（专注率），0 会让那一格变成 `NaN`。
  */
-export function 造总结(状态: FocusState, 采样: 采样点[]): 总结 {
+export function createTotalJoin(state: FocusState, adoptStyle: AdoptStylePoint[]): TotalJoin {
   return {
-    时长秒: Math.max(1, Math.round(状态.elapsed_ms / 1000)),
-    专注秒: Math.max(0, Math.round(状态.focused_ms / 1000)),
-    离开秒: Math.max(0, Math.round(状态.away_total_ms / 1000)),
-    警报: 状态.alarms,
-    采样,
+    timeLengthSeconds: Math.max(1, Math.round(state.elapsed_ms / 1000)),
+    dedicatedNoteSeconds: Math.max(0, Math.round(state.focused_ms / 1000)),
+    leaveOpenSeconds: Math.max(0, Math.round(state.away_total_ms / 1000)),
+    warnReport: state.alarms,
+    adoptStyle,
   };
 }
 
 /** 够不够长到值得弹一张总结。见 [`最短总结秒`]。 */
-export function 值得总结(总: 总结): boolean {
-  return 总.时长秒 >= 最短总结秒;
+export function valueObtainTotalJoin(total: TotalJoin): boolean {
+  return total.timeLengthSeconds >= mostShortTotalJoinSeconds;
 }
 
 /**
@@ -156,10 +156,10 @@ export function 值得总结(总: 总结): boolean {
  * ⚠️ 两个都是 0 时返回 `null`（**"这一格没数"**，不是 0%）：卡片上那一格
  * 会画成破折号，而画成 0% 是在说他一次都没专注过——那是假话。
  */
-export function 专注率(总: 总结): number | null {
-  const 分母 = 总.专注秒 + 总.离开秒;
-  if (分母 <= 0) return null;
-  return Math.round((总.专注秒 / 分母) * 100);
+export function dedicatedNoteRate(total: TotalJoin): number | null {
+  const shareMother = total.dedicatedNoteSeconds + total.leaveOpenSeconds;
+  if (shareMother <= 0) return null;
+  return Math.round((total.dedicatedNoteSeconds / shareMother) * 100);
 }
 
 /**
@@ -171,23 +171,23 @@ export function 专注率(总: 总结): number | null {
  * ⚠️ 时分**在这里补好零**再传进去（`{3}` 是 `22:07` 不是 `22:7`）：
  * `t()` 只做占位符替换，不做数字格式化。
  */
-export function 说时刻(现在: Date): string {
-  const 补 = (n: number) => String(n).padStart(2, "0");
+export function sayTimeMoment(now: Date): string {
+  const fill = (n: number) => String(n).padStart(2, "0");
   return t(
     "{0}-{1}-{2} {3}",
-    String(现在.getFullYear()),
-    String(现在.getMonth() + 1),
-    String(现在.getDate()),
-    `${补(现在.getHours())}:${补(现在.getMinutes())}`,
+    String(now.getFullYear()),
+    String(now.getMonth() + 1),
+    String(now.getDate()),
+    `${fill(now.getHours())}:${fill(now.getMinutes())}`,
   );
 }
 
 /** 文件名里的时刻：`20260927-2207`。⚠️ 纯 ASCII——它要进文件系统。 */
-export function 文件时刻(现在: Date): string {
-  const 补 = (n: number) => String(n).padStart(2, "0");
+export function textItemTimeMoment(now: Date): string {
+  const fill = (n: number) => String(n).padStart(2, "0");
   return (
-    `${现在.getFullYear()}${补(现在.getMonth() + 1)}${补(现在.getDate())}` +
-    `-${补(现在.getHours())}${补(现在.getMinutes())}`
+    `${now.getFullYear()}${fill(now.getMonth() + 1)}${fill(now.getDate())}` +
+    `-${fill(now.getHours())}${fill(now.getMinutes())}`
   );
 }
 
@@ -201,13 +201,13 @@ export function 文件时刻(现在: Date): string {
  *
  * ⚠️ 只有**两档以上的点**才给刻度：一个点时摆三档等于摆三个一样的数。
  */
-export function 横刻度(采样: 采样点[]): 刻度[] {
-  if (采样.length < 2) return [];
-  const 总秒 = 采样[采样.length - 1]!.秒;
+export function horizontalTick(adoptStyle: AdoptStylePoint[]): tick[] {
+  if (adoptStyle.length < 2) return [];
+  const totalSeconds = adoptStyle[adoptStyle.length - 1]!.seconds;
   return [
-    { at: 0, label: 说时长(0) },
-    { at: 0.5, label: 说时长((总秒 / 2) * 1000) },
-    { at: 1, label: 说时长(总秒 * 1000) },
+    { at: 0, label: sayTimeLength(0) },
+    { at: 0.5, label: sayTimeLength((totalSeconds / 2) * 1000) },
+    { at: 1, label: sayTimeLength(totalSeconds * 1000) },
   ];
 }
 
@@ -221,23 +221,23 @@ export function 横刻度(采样: 采样点[]): 刻度[] {
  * ⚠️ 大数字选**专注时长**而不是总时长：用户关心的是"我写了多久"，
  * 而总时长里含他走开的时间——那张卡要能拿去给人看。
  */
-export function 造分享卡(总: 总结, 现在: Date): PanelShare {
+export function createShareEnjoyCard(total: TotalJoin, now: Date): PanelShare {
   // ⚠️ 曲线至少要两个点才画得出来。采样空/只有一个点时**兜成一条平线**：
   // 卡片那一侧按"点的序号"算横轴，一个点会让刻度与纵轴范围一起退化。
-  const 余额秒 = 总.采样.map((p) => p.余额);
-  const 点 = 余额秒.length >= 2 ? 余额秒 : [余额秒[0] ?? 0, 余额秒[0] ?? 0];
+  const balanceSeconds = total.adoptStyle.map((p) => p.balance);
+  const point = balanceSeconds.length >= 2 ? balanceSeconds : [balanceSeconds[0] ?? 0, balanceSeconds[0] ?? 0];
 
-  const 率 = 专注率(总);
-  const 三格: PanelShareStat[] = [
-    { k: t("Session Length"), v: 说时长(总.时长秒 * 1000), small: "" },
-    { k: t("Focus Share"), v: 率 === null ? "" : String(率), small: 率 === null ? "" : "%" },
+  const rate = dedicatedNoteRate(total);
+  const threeCells: PanelShareStat[] = [
+    { k: t("Session Length"), v: sayTimeLength(total.timeLengthSeconds * 1000), small: "" },
+    { k: t("Focus Share"), v: rate === null ? "" : String(rate), small: rate === null ? "" : "%" },
     // ⚠️ 单位写进**抬头**（「警报次数」）而不是单独一格 `small`（原来是「次」）。
     // 理由只有一条，但它是硬的：`small` 是个裸字符串，**表达不了单复数**——
     // 英文那边会印出 `Alarm 1 times`（真印出来过，见 `docs/06` §5.28 那一批）。
     // 挪进抬头之后两边都成立：`Alarms 1` / `警报次数 1`。
     // ⚠️ 顺带把三格的抬头拉齐成四字（本轮时长 / 专注占比 / 警报次数），
     // 它们本来就是并列的三格。
-    { k: t("Alarms"), v: String(总.警报), small: "" },
+    { k: t("Alarms"), v: String(total.warnReport), small: "" },
   ];
 
   return {
@@ -246,19 +246,19 @@ export function 造分享卡(总: 总结, 现在: Date): PanelShare {
     //（`plugins/stats/main.lua` 里 `subtitle = "Writing Stats"` 是个字面量）。
     // 包一层 `t()` 会凭空多出一个"原文即译文"的键，那是给翻译表添噪音。
     subtitle: "Focus Session",
-    date: 说时刻(现在),
+    date: sayTimeMoment(now),
     label: t("You Focused For"),
-    value: 说时长(总.专注秒 * 1000),
+    value: sayTimeLength(total.dedicatedNoteSeconds * 1000),
     unit: "",
-    points: 点,
-    xTicks: 横刻度(总.采样),
+    points: point,
+    xTicks: horizontalTick(total.adoptStyle),
     xMinor: 0,
     shape: "curve",
     heat: null,
     less: "",
     more: "",
-    stats: 三格,
-    foot: t("This session you were away for {0}.", 说时长(总.离开秒 * 1000)),
-    file: `nota-focus-${文件时刻(现在)}.png`,
+    stats: threeCells,
+    foot: t("This session you were away for {0}.", sayTimeLength(total.leaveOpenSeconds * 1000)),
+    file: `nota-focus-${textItemTimeMoment(now)}.png`,
   };
 }

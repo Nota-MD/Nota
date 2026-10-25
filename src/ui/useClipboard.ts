@@ -46,14 +46,14 @@ import { useCallback } from "react";
 import type { RefObject } from "react";
 
 import type { EditorPaneHandle } from "@/ui/EditorPane";
-import type { CommandPayload, EditorCommand, 选区内容 } from "@/editor/create";
+import type { CommandPayload, EditorCommand, SelectionContent } from "@/editor/create";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 
 import { writeClipboard } from "@/editor/code-block";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
-export interface 剪贴板接线 {
+export interface CutPasteBoardWiring {
   /** 编辑区句柄。⚠️ 传 **ref 本体**（身份稳定），不是 `ref.current`。 */
   editorRef: RefObject<EditorPaneHandle | null>;
   /** 把文本落到文档上（`ui/useEditorCommands.ts` 的 `run`）。 */
@@ -61,19 +61,21 @@ export interface 剪贴板接线 {
   toast: (message: string, level?: Toast["level"]) => void;
 }
 
-export interface 剪贴板出口 {
+export interface CutPasteBoardOutputMouth {
   /** 「复制」。返回**有没有真的复制到**——「剪切」据此决定删不删。 */
-  复制: () => Promise<boolean>;
+  copy: () => Promise<boolean>;
   /** 「剪切」。 */
-  剪切: () => Promise<void>;
+  cutSplit: () => Promise<void>;
   /** 「粘贴」。 */
-  粘贴: () => Promise<void>;
+  pastePaste: () => Promise<void>;
   /** 「复制为 Markdown」：整篇源码进剪贴板。见文件头最后那一节。 */
-  复制为Markdown: () => Promise<void>;
+  copyAsMarkdown: () => Promise<void>;
   /** 「复制为纯文本」：只要那几个字，不带任何格式。 */
-  复制为纯文本: () => Promise<void>;
+  copyAsPlainText: () => Promise<void>;
   /** 「复制为 HTML 源码」：选中那段渲染出来的 HTML。 */
-  复制为HTML: () => Promise<void>;
+  copyAsHTML: () => Promise<void>;
+  /** 复制光标所在或选区里唯一的一张图片。 */
+  copyImageSlice: () => Promise<void>;
 }
 
 /**
@@ -84,13 +86,13 @@ export interface 剪贴板出口 {
  * ② 拿不到 HTML（源码模式）或 `write` 不可用/被拒时，走 `writeClipboard`
  *    那条纯文本路（`editor/code-block.ts` 里那份，与代码块的复制按钮同一份实现）。
  */
-async function 写剪贴板(内容: 选区内容): Promise<boolean> {
-  if (内容.html && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+async function writeCutPasteBoard(content: SelectionContent): Promise<boolean> {
+  if (content.html && typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
-          "text/plain": new Blob([内容.text], { type: "text/plain" }),
-          "text/html": new Blob([内容.html], { type: "text/html" }),
+          "text/plain": new Blob([content.text], { type: "text/plain" }),
+          "text/html": new Blob([content.html], { type: "text/html" }),
         }),
       ]);
       return true;
@@ -99,24 +101,24 @@ async function 写剪贴板(内容: 选区内容): Promise<boolean> {
       // "复制"整个失败——用户要的首先是那几个字。
     }
   }
-  return writeClipboard(内容.text);
+  return writeClipboard(content.text);
 }
 
-export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
+export function useClipboard(w: CutPasteBoardWiring): CutPasteBoardOutputMouth {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
   const { editorRef, run, toast } = w;
 
-  const 复制 = useCallback(async () => {
-    const 内容 = editorRef.current?.选区() ?? null;
-    if (!内容) {
+  const copy = useCallback(async () => {
+    const content = editorRef.current?.selection() ?? null;
+    if (!content) {
       // ⚠️ 空选区**不是错误**，是"还没选中东西"。给 `info` 而不是 `error`：
       // 用户只是少做了一步，没做错什么。
       toast(t("Select some text first."), "info");
       return false;
     }
-    if (await 写剪贴板(内容)) {
+    if (await writeCutPasteBoard(content)) {
       // 和下面「复制为 Markdown」一样给一句回执：剪贴板是**看不见**的地方，
       // 不给回执的话用户只能靠"粘一下试试"来确认。
       toast(t("Copied to clipboard"), "success");
@@ -126,15 +128,15 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
     return false;
   }, [editorRef, toast]);
 
-  const 剪切 = useCallback(async () => {
+  const cutSplit = useCallback(async () => {
     // ⚠️ **顺序不能反**：先复制、成功了再删。反过来（先删后复制）一旦写剪贴板
     // 失败，用户选中的那段字就**没了**，而且撤销栈里也拿不回来原文之外的
     // 任何东西——那是"剪切"最不该有的后果。
-    if (!(await 复制())) return;
+    if (!(await copy())) return;
     run("insertText", { text: "" }); // 空串 = 删掉选区（见 `CommandPayload.text`）
-  }, [复制, run]);
+  }, [copy, run]);
 
-  const 粘贴 = useCallback(async () => {
+  const pastePaste = useCallback(async () => {
     // ⚠️ `navigator.clipboard` 本身可能不存在（不是安全上下文时整个对象都没有），
     // 所以连属性访问都要包在 try 里，不能写成 `navigator.clipboard?.readText`
     // 之后再单独 catch 一次——那样漏掉的就是"对象不存在"这一种。
@@ -163,7 +165,7 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
    * 文档）。那不是失败，所以**静默返回**——这时候菜单项本身也是灰的，正常路径
    * 上根本点不到这里；真点到了，弹一句"没有文档"也只是在说用户已经看见的事。
    */
-  const 复制为Markdown = useCallback(async () => {
+  const copyAsMarkdown = useCallback(async () => {
     const text = editorRef.current?.getMarkdown();
     if (text === undefined) return;
     try {
@@ -191,38 +193,66 @@ export function useClipboard(w: 剪贴板接线): 剪贴板出口 {
    * ⚠️ 与「复制」的差别只有**给剪贴板什么**：那条给 `选区内容`（HTML + 纯文本
    * 两份都带上，粘到富文本编辑器里还留着格式），这两条各给一份。
    */
-  const 复制为纯文本 = useCallback(async () => {
-    const 内容 = editorRef.current?.选区() ?? null;
-    if (!内容) {
+  const copyAsPlainText = useCallback(async () => {
+    const content = editorRef.current?.selection() ?? null;
+    if (!content) {
       toast(t("Select some text first."), "info");
       return;
     }
-    const 成 = await writeClipboard(内容.text);
+    const become = await writeClipboard(content.text);
     toast(
-      成 ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."),
-      成 ? "success" : "error",
+      become ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."),
+      become ? "success" : "error",
     );
   }, [editorRef, toast]);
 
-  const 复制为HTML = useCallback(async () => {
-    const 内容 = editorRef.current?.选区() ?? null;
-    if (!内容) {
+  const copyAsHTML = useCallback(async () => {
+    const content = editorRef.current?.selection() ?? null;
+    if (!content) {
       toast(t("Select some text first."), "info");
       return;
     }
     // ⚠️ 源码模式下选区**没有 HTML**（CodeMirror 手里是文本，见 `选区内容`）。
     // 那不是失败，所以给 `info` 说清楚，而不是拿纯文本顶替——顶替的话
     // 用户拿到的东西和他点的那一条不是一个东西，而且看不出来。
-    if (!内容.html) {
+    if (!content.html) {
       toast(t("That selection has no HTML to copy."), "info");
       return;
     }
-    const 成 = await writeClipboard(内容.html);
+    const become = await writeClipboard(content.html);
     toast(
-      成 ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."),
-      成 ? "success" : "error",
+      become ? t("Copied to clipboard") : t("Could not copy: the system refused to write to the clipboard."),
+      become ? "success" : "error",
     );
   }, [editorRef, toast]);
 
-  return { 复制, 剪切, 粘贴, 复制为Markdown, 复制为纯文本, 复制为HTML };
+  const copyImageSlice = useCallback(async () => {
+    const selection = window.getSelection();
+    const anchor = selection?.anchorNode;
+    const start4 = anchor instanceof Element ? anchor : anchor?.parentElement;
+    let image = start4?.closest("img") ?? null;
+    if (!image && selection && selection.rangeCount) {
+      const range = selection.getRangeAt(0);
+      const common = range.commonAncestorContainer;
+      const root = common instanceof Element ? common : common.parentElement;
+      const found = root?.querySelectorAll("img") ?? [];
+      if (found.length === 1) image = found[0] ?? null;
+    }
+    if (!image) {
+      toast(t("Place the cursor on an image or select exactly one image first."), "info");
+      return;
+    }
+    try {
+      const response = await fetch(image.currentSrc || image.src);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const blob = await response.blob();
+      const type = blob.type.startsWith("image/") ? blob.type : "image/png";
+      await navigator.clipboard.write([new ClipboardItem({ [type]: blob })]);
+      toast(t("Copied the image to the clipboard."), "success");
+    } catch (e) {
+      toast(t("Could not copy the image: {0}", String(e)), "error");
+    }
+  }, [t, toast]);
+
+  return { copy, cutSplit, pastePaste, copyAsMarkdown, copyAsPlainText, copyAsHTML, copyImageSlice };
 }

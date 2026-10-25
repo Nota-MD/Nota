@@ -56,7 +56,7 @@ import { InputRule } from "@milkdown/kit/prose/inputrules";
  *
  * ⚠️ 加词之前先过一遍入表判据（文件头那条）：**小写形式在英文里不是一个词**。
  */
-export const 错拼表: Readonly<Record<string, string>> = {
+export const errorCombineTable: Readonly<Record<string, string>> = {
   /* 高频打错（字母顺序颠倒 / 少打多打一颗） */
   teh: "the",
   adn: "and",
@@ -167,14 +167,14 @@ export const 错拼表: Readonly<Record<string, string>> = {
  * ⚠️ **纯函数**，不碰文档、不碰 DOM——测试（`tests/auto-correct.test.ts`）
  * 与输入规则用的是**同一个**它。表里那几十条的大小写三档也就都能单测。
  */
-export function 改词(词: string): string | null {
-  const 正 = 错拼表[词.toLowerCase()];
-  if (!正) return null;
-  if (词 === 词.toLowerCase()) return 正;
-  if (词 === 词.toUpperCase()) return 正.toUpperCase();
-  const 首 = 词[0]!;
-  const 尾 = 词.slice(1);
-  if (首 === 首.toUpperCase() && 尾 === 尾.toLowerCase()) return 首 + 正.slice(1);
+export function replaceWord(word: string): string | null {
+  const correct2 = errorCombineTable[word.toLowerCase()];
+  if (!correct2) return null;
+  if (word === word.toLowerCase()) return correct2;
+  if (word === word.toUpperCase()) return correct2.toUpperCase();
+  const first = word[0]!;
+  const tail = word.slice(1);
+  if (first === first.toUpperCase() && tail === tail.toLowerCase()) return first + correct2.slice(1);
   return null;
 }
 
@@ -183,7 +183,7 @@ export function 改词(词: string): string | null {
  * **完全一样**（`inCodeMark` 的默认值是 `true`，不写这一句行内代码里也会生效），
  * 那段长注释在那边，这里不重复。
  */
-const 规则选项 = { inCodeMark: false } as const;
+const ruleRuleOption = { inCodeMark: false } as const;
 
 /**
  * 词尾那一下的触发字符。**只有空格与制表符**，理由在文件头"已知边界"里。
@@ -196,7 +196,7 @@ const 规则选项 = { inCodeMark: false } as const;
  * ⚠️ **导出是给测试用的**：文件头那几条"触发字符只有空格、中文不碰、`teh,` 不更正"
  * 都只能在这一层钉住（输入规则本身要真 `Editor.make()` 才跑得起来）。
  */
-export const 词尾正则 = /([A-Za-z][A-Za-z']*)[ \t]$/;
+export const wordTailCorrectRule = /([A-Za-z][A-Za-z']*)[ \t]$/;
 
 /**
  * 挂进 `.use()` 的那一条输入规则。**关着的时候返回空数组**（不是"挂上去再
@@ -208,19 +208,19 @@ export const 词尾正则 = /([A-Za-z][A-Za-z']*)[ \t]$/;
  * 所以抢不起来。排在后面是零代价的保险——万一将来上游多一条认字母的规则，
  * 让上游先中总是对的。
  */
-export function 自动更正输入(开: boolean) {
-  if (!开) return [];
+export function selfActionMoreCorrectInput(open2: boolean) {
+  if (!open2) return [];
   return [
     $inputRule(() =>
-      new InputRule(词尾正则, (state, 匹配, 始, 终) => {
-        const 替 = 改词(匹配[1]!);
-        if (!替) return null;
+      new InputRule(wordTailCorrectRule, (state, match2, start6, end3) => {
+        const replace = replaceWord(match2[1]!);
+        if (!replace) return null;
         // ⚠️ **只换那个词，不碰后面那颗空格**：`终` 是光标（在空格之后），
         // 而 `匹配[0]` 是"词 ＋ 一颗空白"，所以词尾落在 `终 - 1`。
         // 连空白一起换掉的话，用户敲的那颗空格会被这一步吃掉，
         // 表现为"打完词按空格，空格没了"——那是最容易被当成"编辑器坏了"的症状。
-        return state.tr.insertText(替, 始, 终 - 1);
-      }, 规则选项),
+        return state.tr.insertText(replace, start6, end3 - 1);
+      }, ruleRuleOption),
     ),
   ];
 }

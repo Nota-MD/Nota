@@ -3,6 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      /* 应用样式尚未解出设置前，窗口已经有像素。这里只跟随系统明暗填一层
+         中性底色，避免深色桌面上先闪一张白纸；具体主题随后由 applyTheme 覆盖。 */
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+        background: #fafafb;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body,
+        #root {
+          background: #222226;
+        }
+      }
+    </style>
     <!--
       CSP 不写在这里：Tauri 会在 src-tauri/tauri.conf.json 的
       `app.security.csp` 注入一条更完整的策略（含 ipc: 源）。

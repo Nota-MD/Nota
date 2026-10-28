@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import {
   api,
@@ -25,9 +26,11 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(autoCheck);
   const [installing, setInstalling] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
   const safeInstallMiddle = useRef(false);
+  const cancelRequested = useRef(false);
   const hundredShareCompare =
     progress?.total && progress.total > 0
       ? Math.min(100, Math.max(0, Math.round((progress.downloaded / progress.total) * 100)))
@@ -67,18 +70,48 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
     if (safeInstallMiddle.current) return;
     safeInstallMiddle.current = true;
     setInstalling(true);
+    setCanceling(false);
+    cancelRequested.current = false;
     setError(null);
     setProgress(null);
     try {
       const installed = await api.update.install();
-      setResult(installed.message);
+      if (installed.restartRequired) {
+        setResult(t("Nota will now close and restart to finish installing the update."));
+        window.setTimeout(() => {
+          void getCurrentWindow().close().catch((closeError: unknown) => {
+            setError(t("Could not restart Nota: {0}", String(closeError)));
+          });
+        }, 700);
+      } else {
+        setResult(installed.message);
+      }
     } catch (e) {
-      setError(String(e));
+      if (cancelRequested.current) {
+        setResult(t("Update download canceled."));
+      } else {
+        setError(String(e));
+      }
     } finally {
       safeInstallMiddle.current = false;
       setInstalling(false);
+      setCanceling(false);
     }
-  }, []);
+  }, [t]);
+
+  const cancel = useCallback(async () => {
+    if (!installing || canceling) return;
+    cancelRequested.current = true;
+    setCanceling(true);
+    setError(null);
+    try {
+      await api.update.cancel();
+    } catch (e) {
+      cancelRequested.current = false;
+      setCanceling(false);
+      setError(String(e));
+    }
+  }, [canceling, installing]);
 
   if (checking && status === null) {
     return <p className="about-lead">{t("Checking for updates…")}</p>;
@@ -86,12 +119,6 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
 
   return (
     <>
-      <p className="about-lead">
-        {t(
-          "Application updates are experimental. Nota verifies the published SHA-256 digest before handing a package to the operating system.",
-        )}
-      </p>
-
       {status && (
         <table className="about-table update-table">
           <tbody>
@@ -120,8 +147,6 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
           </tbody>
         </table>
       )}
-
-      {status?.notes && <p className="about-update-notes">{status.notes}</p>}
 
       {status?.available === false && (
         <p className="about-lead">{t("Nota is up to date.")}</p>
@@ -180,6 +205,16 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
         {status?.canInstall && (
           <button type="button" className="btn btn-primary" disabled={installing} onClick={() => void install()}>
             {installing ? t("Downloading…") : t("Download and Install")}
+          </button>
+        )}
+        {installing && progress?.phase !== "installing" && (
+          <button
+            type="button"
+            className="btn"
+            disabled={canceling}
+            onClick={() => void cancel()}
+          >
+            {canceling ? t("Canceling…") : t("Cancel Download")}
           </button>
         )}
         {status?.releaseUrl && (

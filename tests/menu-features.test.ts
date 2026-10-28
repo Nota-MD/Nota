@@ -98,6 +98,19 @@ testCase("注释、复制图片和图片导出使用真实编辑器/导出链", 
   contains(read("src/ui/useExport.ts"), "exportImage", "图片导出接线");
 });
 
+testCase("图片右键复制直接使用命中的图片，并有原生剪贴板兜底", () => {
+  const menu = read("src/ui/ContextMenu.tsx");
+  const clipboard = read("src/ui/useClipboard.ts");
+  const app = read("src/App.tsx");
+  const capability = read("src-tauri/capabilities/default.json");
+  contains(menu, 'const contextImage = el.closest("img")', "右键图片没有保存命中元素");
+  contains(menu, "copyImage(thisOneDocument.image)", "复制命令仍从 DOM 选区重新猜图片");
+  contains(app, "copyImage: cutPasteBoard.copyImageSlice", "右键菜单没有拿到复制图片实现");
+  contains(clipboard, "writeImageNative", "没有 Tauri 原生图片剪贴板兜底");
+  contains(clipboard, "writeImage(imageResource)", "没有调用原生图片剪贴板写入");
+  contains(capability, "clipboard-manager:allow-write-image", "没有开放原生图片剪贴板权限");
+});
+
 testCase("无定义的其他格式占位已移除，不再伪装成功能", () => {
   const commands = read("src/ui/commands.ts");
   assertValue(!commands.includes("file.exportOther"), "仍保留 Other Formats 占位");

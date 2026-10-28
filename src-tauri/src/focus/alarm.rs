@@ -79,10 +79,8 @@ pub fn 开窗(app: &tauri::AppHandle) {
         return;
     }
 
-    // ⚠️ `index.html#focus-alarm`：前端入口按这个 hash 分叉（`src/main.tsx`）。
-    // 用 hash 而不是另开一个 HTML 文件，是为了**只构建一个入口**——
-    // 多入口会让 `vite` 配置、`tauri.conf.json` 的 `frontendDist` 都要跟着改，
-    // 而这条路上的收益只是"少判一个 if"。
+    // 独立 HTML 入口。Windows/WebView2 对自定义协议下初始 URL 的 fragment
+    // 保留行为与 WebKit 不一致，依赖 hash 会让入口落回主应用并显示白屏。
     let 结果 = tauri::WebviewWindowBuilder::new(
         app,
         // ⚠️ **必须全屏 + 无边框**：有标题栏就带一个叉，用户会去点那个叉
@@ -90,7 +88,7 @@ pub fn 开窗(app: &tauri::AppHandle) {
         // 而这里要传达的是"回去写字"。一整块红屏没有别的出口。
         // ⚠️ 也**不给关闭按钮、不给最小化**：留一个"稍后再说"就等于留一个后门。
         窗_LABEL,
-        tauri::WebviewUrl::App("index.html#focus-alarm".into()),
+        tauri::WebviewUrl::App("focus-alarm.html".into()),
     )
     // ⚠️ 标题跟着**界面语言**走（`AppState::app_lang`，启动时算好的那一个）。
     // 原来这里写死 `"Back to writing"`：中文界面的用户拿到的是一屏中文正文配

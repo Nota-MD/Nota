@@ -256,6 +256,10 @@ export function buildRows(
    * `null` = 没落在错词上，菜单照旧。
    */
   combineWrite: CombineWriteLineSearch | null = null,
+  /** 右键是否落在一个图片节点上。 */
+  onImage = false,
+  /** 当前是否有选中的文本。没有选区时不显示只对选区有意义的「复制为」。 */
+  hasSelection = true,
 ): line3[] {
   if (position2 === "输入框") {
     // ⚠️ **摊平**（见 `条目行` 那第三个参数）：`edit.select` 在编辑菜单里
@@ -270,8 +274,9 @@ export function buildRows(
 
   const rows: line3[] = [
     ...(combineWrite ? combineWriteLine(combineWrite) : []),
+    ...(onImage ? itemLine(["edit.copyImage"], "图片") : []),
     { kind: "icons", key: "icons-clip", ids: cutPasteIcon },
-    ...itemLine(["edit.copyAs"], "复制为"),
+    ...(hasSelection && !onImage ? itemLine(["edit.copyAs"], "复制为") : []),
     { kind: "sep", key: "sep-1" },
     { kind: "icons", key: "icons-inline", ids: inlineIcon },
     { kind: "icons", key: "icons-block", ids: blockIcon },

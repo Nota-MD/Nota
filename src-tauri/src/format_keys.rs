@@ -99,7 +99,7 @@ pub const EVENT: &str = "nota:format-key";
 /// 收这条事件的窗口 label。
 ///
 /// ⚠️ 只有主窗的 `App` 挂 `useMenus`（警报窗走 `main.tsx` 里
-/// `#focus-alarm` 那条岔路，渲染的是 `FocusAlarmWindow`），所以定向发就够了。
+/// `focus-alarm.html` 那条岔路，渲染的是 `FocusAlarmWindow`），所以定向发就够了。
 /// 定向而不是广播是为了**将来**：多一个跑完整 `App` 的窗口时，广播会让两个窗口
 /// 一起执行同一条命令。
 // ⚠️ 只有 Linux 那一半用得上（2026-10-10 做 Windows 编译尝试时量到的：

@@ -94,7 +94,7 @@ interface PopupProps {
   /** 这一栏的条目（**含**分隔线 `"sep"`）。 */
   entries: MenuEntry[];
   /** 当前用不了的命令 id。 */
-  disabled: Set<string>;
+  disabled: ReadonlySet<string>;
   /** 可勾选项的状态，键是命令 id。 */
   checks: Record<string, boolean>;
   /** 选中一条真命令。子菜单父项**不会**走到这里（它只负责展开）。 */
@@ -378,7 +378,7 @@ export function MenuPopup(props: PopupProps) {
 
 export interface SubMenuProps {
   entries: MenuEntry[];
-  disabled: Set<string>;
+  disabled: ReadonlySet<string>;
   checks: Record<string, boolean>;
   onPick: (id: string) => void;
   onDismiss: () => void;

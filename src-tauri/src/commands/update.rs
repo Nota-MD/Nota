@@ -8,6 +8,7 @@ pub const EVENT_UPDATE_PROGRESS: &str = "nota:update-progress";
 
 static 检查中: AtomicBool = AtomicBool::new(false);
 static 安装中: AtomicBool = AtomicBool::new(false);
+static 取消下载: AtomicBool = AtomicBool::new(false);
 
 struct 单飞<'a>(&'a AtomicBool);
 
@@ -38,15 +39,29 @@ pub async fn nota_update_check(app: tauri::AppHandle) -> crate::error::Result<�
 #[tauri::command]
 pub async fn nota_update_install(app: tauri::AppHandle) -> crate::error::Result<安装结果> {
     let _单飞 = 单飞::拿(&安装中, "更新正在下载或安装，请稍候")?;
+    取消下载.store(false, Ordering::Release);
     let 替换规则 = 下载规则(&app);
     let 推送 = app.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        update::安装(&替换规则, |进度: 下载进度| {
-            let _ = 推送.emit(EVENT_UPDATE_PROGRESS, 进度);
-        })
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        update::安装(
+            &替换规则,
+            |进度: 下载进度| {
+                let _ = 推送.emit(EVENT_UPDATE_PROGRESS, 进度);
+            },
+            || 取消下载.load(Ordering::Acquire),
+        )
     })
-        .await
-        .map_err(|e| crate::error::NotaError::other(format!("更新安装线程挂了：{e}")))?
+    .await
+    .map_err(|e| crate::error::NotaError::other(format!("更新安装线程挂了：{e}")))?;
+    取消下载.store(false, Ordering::Release);
+    result
+}
+
+/// 请求中止正在下载的更新。真正的检查在下载循环每读一块之前执行，
+/// 已经下载的临时包不会进入校验或安装阶段。
+#[tauri::command]
+pub fn nota_update_cancel() {
+    取消下载.store(true, Ordering::Release);
 }
 
 fn 下载规则(app: &tauri::AppHandle) -> String {

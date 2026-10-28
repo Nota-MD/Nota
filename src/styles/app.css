@@ -260,7 +260,12 @@ button {
 /* 顶栏里的普通按钮与菜单标题共用同一套前景 / 悬停色。放在这里而不是每个
    主题各写一遍，保证浅色 Adwaita 的深色菜单栏上文字仍然可读。 */
 .toolbar > .btn {
-  height: calc(var(--toolbar-height) - 4px);
+  /* 顶栏容器固定不超过 28px；按钮高度不能继续跟随主题里的
+     `--toolbar-height`，否则外置主题设一个大值时按钮会穿出顶栏。 */
+  height: 24px;
+  min-height: 0;
+  max-height: 24px;
+  align-self: center;
   padding: 0 8px;
   font-size: 0.9333rem;
   background: transparent;

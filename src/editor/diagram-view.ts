@@ -175,6 +175,15 @@ async function render(source2: string, theme: ImageTableTheme): Promise<RenderRe
       startOnLoad: false,
       theme: mindmap ? "base" : theme.mode === "dark" ? "dark" : "default",
       themeVariables: mindmap ? thinkDimensionGuideImageConfigureColor(theme.mode, theme.accent) : undefined,
+      // Mermaid 10 的 mindmap 把连线颜色绑到节点填充色（`cScale*`）；浅色纸面上
+      // 那些粉彩色块接近白色，连线随之“消失”。mindmap 的源码样式后面再补一条
+      // 高对比连线的 CSS，节点仍保留柔和的邻近色。
+      themeCSS: mindmap
+        ? `.mindmap-edges path, .mindmap-edges .edge {
+             stroke: ${theme.mode === "dark" ? "#9dadbf" : "#60768c"} !important;
+             stroke-width: 3px !important;
+           }`
+        : undefined,
     });
 
     const editNumber = `nota-mermaid-${++renderIndex}`;
@@ -338,9 +347,10 @@ function imageTableType(source2: string): string {
  *
  * ⚠️ Mermaid 在 `base` 主题里会再次把 `cScale*` 调暗（浅色 -25、深色 -75
  * 个亮度点），所以这里的输入亮度要先把这一步补回去；否则深色模式会得到
- * 近黑色块。这个补偿只影响最终颜色，不改变文档里的任何源码。
+ * 近黑色块。`darkMode` 也必须显式传进去，不能只靠 `theme: "base"` 猜——否则
+ * Mermaid 会按浅色公式处理深色纸面。这个补偿只影响最终颜色，不改变源码。
  */
-function thinkDimensionGuideImageConfigureColor(mode: mode, accent: string): Record<string, string> {
+function thinkDimensionGuideImageConfigureColor(mode: mode, accent: string): Record<string, string | boolean> {
   const throughWay = normalizeColor(accent) ?? [0.208, 0.518, 0.894];
   const { h, s } = colorToHsl(throughWay);
   const saturation = Math.min(0.42, Math.max(0.2, s * 0.72 + 0.08));
@@ -349,23 +359,45 @@ function thinkDimensionGuideImageConfigureColor(mode: mode, accent: string): Rec
   const lightLuminance = [0.76, 0.81, 0.78, 0.84, 0.79, 0.82, 0.77, 0.83, 0.8, 0.75, 0.82, 0.78];
   const darkLuminance = [0.23, 0.27, 0.2, 0.29, 0.25, 0.22, 0.31, 0.24, 0.28, 0.19, 0.26, 0.21];
   const text3 = dark ? "#f4f2ee" : "#202124";
-  const rootBottom = hslColor(h, Math.min(0.48, saturation + 0.08), dark ? 0.67 : 0.46);
-  const rootCharacter = dark ? "#16181b" : "#ffffff";
-  const changeMeasure: Record<string, string> = {
-    background: "transparent",
+  const border = dark ? "#718094" : "#9aa9b8";
+  const rootBottom = hslColor(h, Math.min(0.48, saturation + 0.08), dark ? 0.38 : 0.68);
+  const rootCharacter = text3;
+  const paper = dark ? "#202327" : "#ffffff";
+  const surface = dark ? "#292e34" : "#f5f7f9";
+  const changeMeasure: Record<string, string | boolean> = {
+    darkMode: dark,
     fontFamily: "var(--font-ui), sans-serif",
     fontSize: "14px",
+    background: "transparent",
     primaryColor: rootBottom,
     primaryTextColor: text3,
-    primaryBorderColor: hslColor(h, Math.min(0.48, saturation + 0.12), dark ? 0.54 : 0.35),
-    secondaryColor: hslColor(h + 24, saturation, dark ? 0.22 : 0.8),
-    tertiaryColor: hslColor(h - 28, saturation, dark ? 0.26 : 0.8),
-    textColor: text3,
+    primaryBorderColor: border,
+    mainBkg: surface,
+    nodeBkg: surface,
+    nodeBorder: border,
     nodeTextColor: text3,
+    lineColor: dark ? "#9dadbf" : "#60768c",
+    defaultLinkColor: dark ? "#9dadbf" : "#60768c",
+    edgeLabelBackground: paper,
+    clusterBkg: surface,
+    clusterBorder: border,
+    titleColor: text3,
+    secondaryColor: hslColor(h + 24, saturation, dark ? 0.22 : 0.8),
+    secondaryTextColor: text3,
+    secondaryBorderColor: border,
+    tertiaryColor: hslColor(h - 28, saturation, dark ? 0.26 : 0.8),
+    tertiaryTextColor: text3,
+    tertiaryBorderColor: border,
+    noteBkgColor: dark ? "#393b2c" : "#fff7c9",
+    noteTextColor: dark ? "#f7f1c7" : "#3d3420",
+    noteBorderColor: dark ? "#77734d" : "#d8ca82",
+    textColor: text3,
     labelTextColor: text3,
     scaleLabelColor: text3,
     git0: rootBottom,
     gitBranchLabel0: rootCharacter,
+    git1: hslColor(h + 24, saturation, dark ? 0.64 : 0.7),
+    git2: hslColor(h - 28, saturation, dark ? 0.56 : 0.74),
   };
 
   for (let i = 0; i < branchHue.length; i += 1) {

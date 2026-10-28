@@ -39,10 +39,10 @@
  *
  * # 长相：widget 内的真实文字
  *
- * 符号直接写进 `textContent`。字体与字号跟随正文，颜色使用主题的
- * `--fg-faint`：它们是可辨认的实体字符，但视觉层级仍属于 Markdown 语法，
- * 不能伪装成正文内容。每个符号字符各是一颗 widget，`**` / `</u>` 不再被
- * 当成一个不可分的文字块。
+ * 符号直接写进 `textContent`。字体与字号跟随正文，默认颜色与正文相同、
+ * 完全不透明，是清楚的实体字符。主题可以通过 `--mark-hint-fg` 与
+ * `--mark-hint-opacity` 调整语法提示的强弱。每个符号字符各是一颗 widget，
+ * `**` / `</u>` 不再被当成一个不可分的文字块。
  *
  * ⚠️ **代价讲清楚**：这两个符号是**占宽度**的（它们是文档流里的真实 `<span>`，
  * 不是绝对定位的浮标）。所以光标进出加粗段时，那一行会横向动
@@ -65,15 +65,21 @@
  * 将来真改成恒挂，**先在那边登记 `提示属性`**，否则环星号会跟着进导出文件。
  */
 
-import { $prose } from "@milkdown/kit/utils";
+import { $nodeSchema, $prose } from "@milkdown/kit/utils";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
-import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
-import type { Mark, MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
+import {
+  Fragment,
+  Mark,
+  type MarkType,
+  type Node as PMNode,
+  type NodeType,
+} from "@milkdown/kit/prose/model";
+import type { MilkdownPlugin } from "@milkdown/kit/ctx";
 
 import { markTable } from "./inline-marks";
 
-/** 加在左右两颗标记 widget 上的 class。CSS 见 `src/styles/marks.css`。 */
-export const noticeClass = "nota-markhint";
+/** 真实语法字符节点上的 class。CSS 见 `src/styles/marks.css`。 */
+export const noticeClass = "nota-syntax-marker";
 
 /**
  * 提示哪几种标记、各画什么左右符号。**就这一张表**；本仓自造的高亮 / 上下标 /
@@ -107,6 +113,66 @@ export const noticeTable: readonly { name3: string; left: string; right: string 
     right: spec.right,
   })),
 ];
+
+interface SyntaxNodeAttribute {
+  syntax: string;
+  side: "left" | "right";
+  symbol: string;
+}
+
+/**
+ * 临时语法字符节点。
+ *
+ * 每个星号是一颗独立行内原子节点：它有真实文档位置，光标可以停在任意两颗
+ * 星号之间，但它自己**不能承载输入文字**。这一点必须用 atom；带内容的行内
+ * 节点会把外层边界的输入吸进星号节点，导致“在右星号后面打字”反而钻进标记。
+ * `toMarkdown.runner` 不 `addNode`，所以它不会被重复写回文件。
+ */
+export const inlineSyntaxNodeSpec = $nodeSchema("notaSyntax", () => ({
+  inline: true,
+  group: "inline",
+  atom: true,
+  marks: "",
+  selectable: false,
+  attrs: {
+    syntax: { default: "" },
+    side: { default: "left" },
+    symbol: { default: "*" },
+  },
+  parseDOM: [
+    {
+      tag: `span.${noticeClass}`,
+      getAttrs: (dom: HTMLElement | string) => ({
+        syntax: typeof dom === "string" ? dom : (dom.dataset.syntax ?? ""),
+        side: typeof dom === "string" ? "left" : (dom.dataset.side ?? "left"),
+        symbol: typeof dom === "string" ? "*" : dom.textContent ?? "*",
+      }),
+    },
+  ],
+  toDOM: (node: PMNode) => {
+    const attrs = node.attrs as SyntaxNodeAttribute;
+    return [
+      "span",
+      {
+        class: noticeClass,
+        "data-syntax": attrs.syntax,
+        "data-side": attrs.side,
+      },
+      attrs.symbol,
+    ];
+  },
+  parseMarkdown: {
+    match: () => false,
+    runner: () => {},
+  },
+  toMarkdown: {
+    match: (node: PMNode) => node.type.name === "notaSyntax",
+    runner: () => {},
+  },
+}));
+
+/** `$nodeSchema` 的两元组必须整份摊平，同其他 schema。 */
+export const inlineSyntaxNodePlugins = inlineSyntaxNodeSpec.flat() as unknown as MilkdownPlugin[];
 
 /**
  * 从 `位置` 往两边扫，找出**连续带这个标记**的那一整段。扫不到返回 `null`。
@@ -226,68 +292,170 @@ export function splitMarkCharacter(symbolNumber: string): string[] {
   return Array.from(symbolNumber);
 }
 
-function createMarkCharacter(character: string): HTMLElement {
-  const element = document.createElement("span");
-  element.className = noticeClass;
-  element.textContent = character;
-  element.setAttribute("aria-hidden", "true");
-  return element;
+interface SyntaxMarkerRange {
+  from: number;
+  to2: number;
+  text4: string;
+  syntax: string;
+  side: "left" | "right";
 }
 
-/**
- * 每种符号复用同一个无参构造函数。装饰会在每次选区变化时重算，稳定的构造器
- * 让 ProseMirror 认出 widget 没有变，不会在每次输入时重建 DOM、重播淡入。
- */
-const characterConstructCreateDevice = new Map<string, () => HTMLElement>();
-for (const { left, right } of noticeTable) {
-  for (const character of [...splitMarkCharacter(left), ...splitMarkCharacter(right)]) {
-    if (!characterConstructCreateDevice.has(character)) characterConstructCreateDevice.set(character, () => createMarkCharacter(character));
+interface ActiveMarkRange {
+  name: string;
+  left: string;
+  right: string;
+  from: number;
+  to2: number;
+  leftMarker: SyntaxMarkerRange | null;
+  rightMarker: SyntaxMarkerRange | null;
+}
+
+interface MarkHintState {
+  /** 收起标记后，暂不重新显示的那个折叠光标位置。 */
+  suppressedAt: number | null;
+}
+
+const markHintKey = new PluginKey<MarkHintState>("nota-mark-hint");
+
+/** 当前文档里的全部临时语法字符。 */
+export function listSyntaxMarkers(doc: PMNode, syntaxType: NodeType): SyntaxMarkerRange[] {
+  const single: SyntaxMarkerRange[] = [];
+  doc.descendants((node, position2) => {
+    if (node.type !== syntaxType) return true;
+    const attrs = node.attrs as Partial<SyntaxNodeAttribute>;
+    single.push({
+      from: position2,
+      to2: position2 + node.nodeSize,
+      text4: typeof attrs.symbol === "string" ? attrs.symbol : "*",
+      syntax: typeof attrs.syntax === "string" ? attrs.syntax : "",
+      side: attrs.side === "right" ? "right" : "left",
+    });
+    return false;
+  });
+  const output2: SyntaxMarkerRange[] = [];
+  for (const marker of single) {
+    const last = output2.at(-1);
+    if (
+      last &&
+      last.to2 === marker.from &&
+      last.syntax === marker.syntax &&
+      last.side === marker.side
+    ) {
+      last.to2 = marker.to2;
+      last.text4 += marker.text4;
+    } else {
+      output2.push({ ...marker });
+    }
   }
+  return output2;
 }
 
-/** 显式空 mark 集：widget 既不继承左侧粗体，也不继承右侧斜体。 */
-const withoutInlineMark: readonly Mark[] = [];
-
 /**
- * 按当前选区算装饰集。
+ * 找光标当前所在、且与光标相邻的那一段同一行内标记。
  *
- * ⚠️ 只有"光标是一个点"时才显示（`sel.empty`）。框选一片时不显示——
- * 那时候用户的注意力在"选中了什么"，多两个符号只会让选区看起来变长。
- * 这条判据与 `instant-render.ts` 一致。
+ * 与旧的 `scanOneParagraph` 不同，这里的文档允许已经存在真实语法字符。
+ * 光标停在 `**|粗体**`、`**粗体|**`、`**粗体**|` 三个位置时都算命中；
+ * 只有再向外走进普通正文时，语法字符才会收起。
  */
-function computeNotice(state: { selection: unknown; doc: PMNode; schema: unknown }): DecorationSet {
-  const select = state.selection as { empty: boolean; from: number };
-  if (!select.empty) return DecorationSet.empty;
+export function findActiveMarkRange(
+  doc: PMNode,
+  position2: number,
+  type: MarkType,
+  syntaxType: NodeType,
+): ActiveMarkRange | null {
+  const at = doc.resolve(position2);
+  let depth = at.depth;
+  // 光标停在临时语法节点的文字里时，`$from.parent` 是 `notaSyntax` 自己；
+  // 真正要找的带格式文本与相邻节点在上一层段落里。
+  while (depth > 0 && at.node(depth).type === syntaxType) depth--;
+  const parent = at.node(depth);
+  if (!parent.inlineContent) return null;
 
-  const doc = state.doc;
-  const position2 = select.from;
-  const marks = (state.schema as { marks: Record<string, MarkType | undefined> }).marks;
-  const decoration: Decoration[] = [];
-  checkMissingName(marks);
-
-  for (const { name3, left, right } of noticeTable) {
-    const type = marks[name3];
-    if (!type) continue;
-
-    // "光标在这一段里 / 紧贴在段尾"两条判据都在 `扫一段` 里（见那一格）。
-    const paragraph2 = scanOneParagraph(doc, position2, type);
-    if (!paragraph2 || paragraph2.from >= paragraph2.to2) continue;
-
-    // 一个 mark 两颗真实文本 widget。`***又粗又斜***` 会拿到两套，并排起来
-    // 仍是 `***`。`side:-1` 让光标落在 widget 右侧，同时明确 `marks:[]`，
-    // 让符号完全脱离被强调文字的字重与倾斜。
-    const widgetSpec = { side: -1, marks: withoutInlineMark };
-    for (const character of splitMarkCharacter(left)) {
-      const createCharacter = characterConstructCreateDevice.get(character);
-      if (createCharacter) decoration.push(Decoration.widget(paragraph2.from, createCharacter, widgetSpec));
-    }
-    for (const character of splitMarkCharacter(right)) {
-      const createCharacter = characterConstructCreateDevice.get(character);
-      if (createCharacter) decoration.push(Decoration.widget(paragraph2.to2, createCharacter, widgetSpec));
-    }
+  const rows: Array<{
+    from: number;
+    to2: number;
+    marked: boolean;
+    syntax: SyntaxNodeAttribute | null;
+  }> = [];
+  let offset = at.start(depth);
+  for (let i = 0; i < parent.childCount; i++) {
+    const child = parent.child(i);
+    const syntax = child.type === syntaxType ? child : null;
+    const attrs = syntax?.attrs as Partial<SyntaxNodeAttribute> | undefined;
+    rows.push({
+      from: offset,
+      to2: offset + child.nodeSize,
+      marked: child.isText && !syntax && type.isInSet(child.marks) !== undefined,
+      syntax: syntax
+        ? {
+            syntax: typeof attrs?.syntax === "string" ? attrs.syntax : "",
+            side: attrs?.side === "right" ? "right" : "left",
+            symbol: typeof attrs?.symbol === "string" ? attrs.symbol : "*",
+          }
+        : null,
+    });
+    offset += child.nodeSize;
   }
 
-  return decoration.length ? DecorationSet.create(doc, decoration) : DecorationSet.empty;
+  for (let i = 0; i < rows.length; i++) {
+    if (!rows[i]!.marked) continue;
+    const begin = i;
+    let end = i;
+    while (end + 1 < rows.length && rows[end + 1]!.marked) end++;
+
+    const contentFrom = rows[begin]!.from;
+    const contentTo = rows[end]!.to2;
+    const markerGroup = (
+      index: number,
+      direction: -1 | 1,
+      side: "left" | "right",
+    ): SyntaxMarkerRange | null => {
+      const first = rows[index];
+      if (
+        first?.syntax?.syntax !== type.name ||
+        first.syntax.side !== side
+      ) {
+        return null;
+      }
+      let edge = index;
+      while (
+        rows[edge + direction]?.syntax?.syntax === type.name &&
+        rows[edge + direction]?.syntax?.side === side
+      ) {
+        edge += direction;
+      }
+      const ordered =
+        direction < 0
+          ? rows.slice(edge, index + 1)
+          : rows.slice(index, edge + 1);
+      return {
+        from: ordered[0]!.from,
+        to2: ordered.at(-1)!.to2,
+        text4: ordered.map((row) => row.syntax?.symbol ?? "*").join(""),
+        syntax: type.name,
+        side,
+      };
+    };
+    const leftMarker = begin > 0 ? markerGroup(begin - 1, -1, "left") : null;
+    const rightMarker = end + 1 < rows.length ? markerGroup(end + 1, 1, "right") : null;
+    const leftBoundary = leftMarker?.from ?? contentFrom;
+    const rightBoundary = rightMarker?.to2 ?? contentTo;
+    if (position2 >= leftBoundary && position2 <= rightBoundary) {
+      const spec = noticeTable.find((item) => item.name3 === type.name);
+      if (!spec) return null;
+      return {
+        name: spec.name3,
+        left: spec.left,
+        right: spec.right,
+        from: contentFrom,
+        to2: contentTo,
+        leftMarker,
+        rightMarker,
+      };
+    }
+    i = end;
+  }
+  return null;
 }
 
 /**
@@ -298,12 +466,124 @@ function computeNotice(state: { selection: unknown; doc: PMNode; schema: unknown
  * 判错的代价是提示不跟着光标走，而"跟着光标走"是这个功能唯一要做对的事。
  * 代价是 O(1)：只看光标那两处相邻位置。
  */
-export const markHint = $prose(
-  () =>
-    new Plugin({
-      key: new PluginKey("nota-mark-hint"),
-      props: {
-        decorations: (state) => computeNotice(state as never),
+export function createMarkHintPlugin(syntaxType: NodeType): Plugin {
+  return new Plugin({
+      key: markHintKey,
+      state: {
+        init: (): MarkHintState => ({ suppressedAt: null }),
+        apply: (tr, value): MarkHintState => {
+          const own = tr.getMeta(markHintKey) as number | null | undefined;
+          if (own !== undefined) return { suppressedAt: own };
+          if (tr.selectionSet || tr.docChanged) return { suppressedAt: null };
+          return value;
+        },
       },
-    }),
-);
+      appendTransaction: (_transactions, _oldState, newState) => {
+        const { doc, selection, schema } = newState;
+        const marks = schema.marks as Record<string, MarkType | undefined>;
+        checkMissingName(marks);
+
+        const targets: ActiveMarkRange[] = [];
+        const suppressedAt = markHintKey.getState(newState)?.suppressedAt ?? null;
+        if (selection.empty && selection.from !== suppressedAt) {
+          for (const { name3 } of noticeTable) {
+            const type = marks[name3];
+            if (!type) continue;
+            const found = findActiveMarkRange(doc, selection.from, type, syntaxType);
+            if (found) targets.push(found);
+          }
+        }
+
+        const markers = listSyntaxMarkers(doc, syntaxType);
+        const keep = new Set<string>();
+        const missing: Array<{
+          position2: number;
+          text4: string;
+          syntax: string;
+          side: "left" | "right";
+        }> = [];
+
+        for (const target of targets) {
+          if (target.leftMarker?.text4 === target.left) {
+            keep.add(
+              `${target.leftMarker.from}:${target.leftMarker.to2}:${target.name}:left:${target.left}`,
+            );
+          } else {
+            missing.push({
+              position2: target.from,
+              text4: target.left,
+              syntax: target.name,
+              side: "left",
+            });
+          }
+          if (target.rightMarker?.text4 === target.right) {
+            keep.add(
+              `${target.rightMarker.from}:${target.rightMarker.to2}:${target.name}:right:${target.right}`,
+            );
+          } else {
+            missing.push({
+              position2: target.to2,
+              text4: target.right,
+              syntax: target.name,
+              side: "right",
+            });
+          }
+        }
+
+        const boundaryMarks: Mark[] = [];
+        for (const target of targets) {
+          if (selection.from !== target.from && selection.from !== target.to2) continue;
+          const type = marks[target.name];
+          if (type) boundaryMarks.push(type.create());
+        }
+        const uniqueBoundaryMarks = boundaryMarks.filter(
+          (mark, index, all) => all.findIndex((other) => other.eq(mark)) === index,
+        );
+        const storedChanged = !Mark.sameSet(newState.storedMarks ?? [], uniqueBoundaryMarks);
+
+        const removals = markers
+          .filter(
+            (marker) =>
+              !keep.has(`${marker.from}:${marker.to2}:${marker.syntax}:${marker.side}:${marker.text4}`),
+          )
+          .sort((a, b) => b.from - a.from);
+
+        if (removals.length === 0 && missing.length === 0 && !storedChanged) return null;
+        const tr = newState.tr;
+        tr.setMeta("addToHistory", false);
+
+        for (const marker of removals) tr.delete(marker.from, marker.to2);
+
+        const removedAtCursor = removals.some(
+          (marker) =>
+            selection.from === marker.from || selection.from === marker.to2,
+        );
+        const suppressionAfterDelete = removedAtCursor
+          ? tr.mapping.map(selection.from, 1)
+          : null;
+
+        const inserts = missing
+          .map((item) => ({
+            ...item,
+            position2: tr.mapping.map(item.position2, 1),
+          }))
+          .sort((a, b) => b.position2 - a.position2);
+
+        for (const item of inserts) {
+          const syntaxNodes = Array.from(item.text4).map((symbol) =>
+            syntaxType.create({
+              syntax: item.syntax,
+              side: item.side,
+              symbol,
+            }),
+          );
+          tr.insert(item.position2, Fragment.fromArray(syntaxNodes));
+        }
+        if (storedChanged) tr.setStoredMarks(uniqueBoundaryMarks);
+        tr.setMeta(markHintKey, inserts.length > 0 ? null : suppressionAfterDelete);
+        return tr.docChanged || storedChanged ? tr : null;
+      },
+  });
+}
+
+export const markHint = $prose((ctx) => createMarkHintPlugin(inlineSyntaxNodeSpec.type(ctx)));

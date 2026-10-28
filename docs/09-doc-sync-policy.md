@@ -40,9 +40,9 @@
 | 源 | 必须同批更新 | 为什么 |
 |---|---|---|
 | `settings/download.rs` | `03` `07A` | 下载前缀替换规则：语法、顺序应用、应用与插件更新共用；界面入口在普通「设置 → 通用 → 下载」 |
-| `update.rs` / `remote.rs` / `commands/update.rs` | `01` `02` `04` `07A` | 应用更新：Release 内 `latest.json`、安装类型与架构分流、官方地址围栏、SHA-256、各平台覆盖安装；`remote.rs` 同时服务插件仓库 |
+| `update.rs` / `remote.rs` / `commands/update.rs` | `01` `02` `04` `07A` | 应用更新：Release 内 `latest.json`、安装类型与架构分流、官方地址围栏、SHA-256、可终止下载、各平台等待旧进程退出后的覆盖安装与自动重启；`remote.rs` 同时服务插件仓库 |
 | `plugin/updater.rs` | `02` `04` `11` | 插件更新：清单 `[update] manifest`、多插件仓库、版本比较、摘要与签名者连续性、原子替换 |
-| `ui/SoftwareUpdatePane.tsx` | `02` `04` `05` | 「关于 → 软件更新」界面；前端只触发命令，不持有可传 URL 的接口。订阅 `nota:update-progress`，显示百分比、已下载 / 总大小与阶段；总长度未知时使用不确定进度条，下载完成后切到安装阶段 |
+| `ui/SoftwareUpdatePane.tsx` | `02` `04` `05` | 「关于 → 软件更新」界面；前端只触发命令，不持有可传 URL 的接口。订阅 `nota:update-progress`，显示百分比、已下载 / 总大小与阶段；下载阶段提供终止按钮，安装成功后自动关闭当前窗口交给外部脚本重启 |
 | `src-tauri/src/main.rs` | `06` | 入口只有一个函数，变了说明启动方式变了 |
 | `src-tauri/src/lib.rs` | `01` `02` `04` `05` | 启动顺序、命令注册表、窗口事件——四份都记了。⚠️ `nota_frontend_ready` 的**用途**（不是「重放插件 UI 注册」，是「WebView 从这一刻起能收事件」）在 `02` 与 `05` 都有，改它要动两处 |
 | `src-tauri/src/error.rs` | `02` `03` | 枚举变体与 Display 文案是对外行为 |
@@ -70,7 +70,7 @@
 | `src-tauri/src/commands/plugin.rs` | `02` `04` | 加/改命令要同批改 `02` 的命令表与 `04` 的控件表 |
 | `src-tauri/src/commands/theme.rs` | `02` `04` `10` | 主题的列/取 CSS/拿目录三个命令。⚠️ **入参是 id 不是路径**——前端根本没有"让后端读任意文件"的能力，见 `themes.rs::check_id` |
 | `src-tauri/src/commands/menu.rs` | `02` `04` | 只有 `nota_native_menu_apply` 一条。⚠️ 返回值是**"挂上了没有"**，前端据此决定藏不藏自绘菜单栏——**不要**改成按平台判断（那样 macOS 上建失败会两道菜单都没了） |
-| `src-tauri/src/commands/window.rs` | `02` `04` `10` | **窗口自身的控制**：帮助页、调试日志、开发者工具、新进程窗口。⚠️ 调试日志打开独立的 `#debug-log` 窗口；创建失败时退回 `--debug-log` 纯 Rust 系统查看器。⚠️ 「在新窗口中打开」是再起一份进程，不是 `WebviewWindowBuilder`。⚠️ 帮助窗口走 `index.html#help/<section>`，复用正文只读 Milkdown 与当前文档主题。空路径在新窗口命令里也判一次。加/改命令要连带改 `02`、`04`、`10` 和命令总数 |
+| `src-tauri/src/commands/window.rs` | `02` `04` `10` | **窗口自身的控制**：帮助页、调试日志、开发者工具、新进程窗口。⚠️ 调试日志使用独立 `debug-log.html`；创建失败时退回 `--debug-log` 纯 Rust 系统查看器。⚠️ 「在新窗口中打开」是再起一份进程，不是 `WebviewWindowBuilder`。⚠️ 帮助窗口使用 `help.html?section=<section>`，复用正文只读 Milkdown 与当前文档主题。空路径在新窗口命令里也判一次。加/改命令要连带改 `02`、`04`、`10` 和命令总数 |
 | `src-tauri/src/proc.rs` | `02` `06` `07` | **跑外部程序的那一层**（2026-09-25 从 `slidev.rs` 抽出来——pandoc 导出也要跑外部程序，不该让「导出」依赖「有 Slidev 那个文件」）：`split_command`（⚠️ **只按空白分词**，不管引号）、`command_or_default`、`spawn_retrying`（⚠️ `ETXTBSY` 等一下再试，见 `docs/06` §3.9）、`run_capture(program, args, RunOpts)`（`process_group(0)` 起、可选喂 stdin、带超时，超时**杀整个进程组**）、`Ran` 四档、`kill_group`。⚠️ **`NoProgram` 单独一档**：「没装」和「跑砸了」是两件事，判据不同（前者给安装指引，后者把报错原文端出来）。⚠️ 写单测的假命令**必须是真脚本文件**：`sh -c '…'` 和 `printf` 都会被 `split_command` 拆坏 |
 | `src-tauri/src/pandoc.rs` | `02` `05` `06` `10` | **借系统里那个 pandoc 导出格式表所声明的格式**（当前十种，含自定义导出器可用的 MediaWiki / reStructuredText / Textile）。⚠️ Nota **不自带也不下载**它——只探测；⚠️ **不存路径**，每次现探；⚠️ 正文走 **stdin**、`cwd` 与 `--resource-path` 都指向文档目录，**不往用户目录里写中间文件**；⚠️ PDF 还要一个排版引擎，没找到**不等于**出不了 PDF；⚠️ 子进程补 UTF-8 环境并扫描成功时的 `WARNING` |
 | `src-tauri/src/pandoc_format.rs` | `02` `05` `06` `10` | **十种 Pandoc 输出格式的词汇表**：`Format` 及其 `from_id` / `to` / `id` / `extension` / `名字`、`ALL`、`FormatInfo`、`格式表()`。2026-10-25 追加 MediaWiki / reStructuredText / Textile，供自定义导出器使用。⚠️ **全仓只有这一份**——菜单 id、`pandoc --to=` 的名字、存盘后缀三处对不上，症状是「对话框说存 `.tex`、文件却是 `.latex`」，一处都不报错 |
@@ -308,7 +308,7 @@
 | `src/ui/accel.ts` | `04` `05` | **快捷键的唯一真相源**。⚠️ 判键名**优先 `e.code`**（Shift 之下 `e.key` 是上档字符，`Ctrl+Shift+1` 曾经因此永远不成立，见 `07` §4）；`Ctrl` 在 macOS 上指 ⌘。界面上的键位文字由 `formatAccel` 出，改它要连带改 `04` §4 那张表 |
 | `src/ui/PandocPanel.tsx` | `04` `02` | pandoc **没探通**时那个面板（2026-09-25，照着「装没装」那块写、**共用同一套 CSS 类**——`styles/gate.css`；2026-09-25 那套类从 `slidev-*` 改名为 `gate-*`，理由就在那份样式的文件头：形状不专属于 Slidev）。⚠️ 只在 `missing` / `unknown` 时出现：探通了**不弹面板**（那时面板上只有一个「开始导出」按钮，白点一下），直接进保存对话框。⚠️ 必须说清 **PDF 有第二条路**：没装 pandoc 但 `fallback_pdf` 为真时主按钮是**「用 Nota 自己排版导出」**而不是「去官网」——用户手上有能出 PDF 的工具，面板不该把它藏起来；⚠️ 其余情况**永远再留一条「仍然试一次」**（探测是有根据的猜测）。⚠️ 不用 `window.confirm`/`alert`（阻塞 WebView、打断输入法组合态） |
 | `src/ui/AboutDialog.tsx` | `04` `02` | 「帮助 → 关于 Nota」那张框（**2026-09-28 按 GNOME 的关于窗重做**，取代了 `ui/useAbout.ts`——那一份已删，见 §4）。首页 ＋ **四个**子页（故障排除 / 权限列表 / 鸣谢 / 法律信息）＋ 两行外链（网站 / 报告问题，**今天两个常量是空串所以不画**）。⚠️ **2026-10-04 改过一次**：故障排除从"权限清单"改成**编译信息 ＋ 本机信息两张表**（数据来自 `nota_diagnostics`，见 `src-tauri/src/diagnostics.rs`）；权限**搬到新开的「权限列表」页**、改成两列表格（权限说明 ｜ 备注）；法律信息里的许可证名成了**超链接**，点它开 `ui/LicenseDialog.tsx`；⚠️ **「什么没申请」那七条和鸣谢底下那句 THIRD-PARTY.md 的指引都删了**（用户这一轮的总口径是「全删」，见 `docs/02`）。⚠️ **取不到版本照样弹**（「关于」正是来查版本的地方）；⚠️ 用自绘框不用 `window.confirm`/`alert`（阻塞 WebView、打断输入法组合态）。⚠️ 壳（`.confirm-backdrop` / `.confirm-dialog`）与别的框**共用**，本文件只加 `.about-*`（`src/styles/overlay.css`）。⚠️ 两张表（致谢 / 权限）**在渲染里现建**，不是模块级常量（模块级求值时语言还没定）。⚠️ 助记键走 `accesskey`，**在 WebKitGTK 上认不认没开窗验过**（`07` 的账） |
-| `src/ui/HelpWindow.tsx` | `02` `04` `10` | **内嵌帮助窗口**：`index.html#help/<section>` 分支由 `main.tsx` 在挂载 `<App />` 之前分派。正文 Markdown 交给正文同一个只读 Milkdown 实例，加载当前文档主题和排版变量，因此与正文视觉一致；英文原文是 `t()` 键，中文译文与其他界面共用 `i18n/zh-ui.ts`。不依赖当前文档、插件或独立文档包。章节只允许 `start` / `pandoc` / `printing` / `shortcuts`，Pandoc 缺失面板直接打开 `pandoc`。 |
+| `src/ui/HelpWindow.tsx` | `02` `04` `10` | **内嵌帮助窗口**：独立 `help.html` 由 `main.tsx` 在挂载 `<App />` 之前分派，章节用查询参数传递。正文 Markdown 交给正文同一个只读 Milkdown 实例，加载当前文档主题和排版变量，因此与正文视觉一致；英文原文是 `t()` 键，中文译文与其他界面共用 `i18n/zh-ui.ts`。不依赖当前文档、插件或独立文档包。章节只允许 `start` / `pandoc` / `printing` / `shortcuts`，Pandoc 缺失面板直接打开 `pandoc`。 |
 | `src/styles/help-window.css` | `04` | **内嵌帮助窗口样式**：只作用于 `.help-window`，沿用界面主题变量；窄窗口把目录改为横排，影响范围不进入主编辑器。 |
 | `src/ui/LicenseDialog.tsx` | `04` `02` | **许可证全文那张框**（2026-10-04 新增）：「关于 → 法律信息」里点那个超链接打开它。⭐ **全文不抄第二份**：走 Vite 的 `?raw` 把**仓库根目录那份 `LICENSE`** 读成字符串（`ui/nota-mark.ts` 读 `nota.svg` 是同一个手法），所以改了 `LICENSE` 这个框跟着变、一行代码都不用动。⚠️ **开在进程内**（不是交系统浏览器、也不是新开 OS 窗口）：前者要走 `opener:allow-open-url`、后者要新加 `core:window:allow-create` 一类能力，这条路两样都不碰。⚠️ 壳（`.confirm-backdrop` / `.confirm-dialog`）与别的框**共用**，只加 `.lic-*`（`src/styles/overlay.css`）。⚠️ 它**盖在关于框上面**，`Esc` 的归属由 `AboutDialog` 那条 effect 让路（两层的 z-index 都是 200，靠 DOM 顺序分前后） |
 | `src/ui/useFocusSession.ts` | `04` `02` | **强制专注那一档的接线**（2026-09-28 从 `App.tsx` 整块搬出，见 §4）：`useForceFocus` ＋ `useFocusAlarmSound` ＋ `useFocusIntro` ＋ `useFocusTrace` → 一个出口。⚠️⚠️ **和 `ui/useImmersive.ts` 那个「专注」无关**（那边是收起外壳，这边是记账）；⚠️ 调用位置必须在 `askConfirm` / `updateSettings` **之后**、`useImmersive` **之前**；⚠️ `切换强制专注` 的身份稳定性是硬要求（要喂给原生菜单栏），依赖里只放 `专注运行中` 那个布尔 |
@@ -365,7 +365,7 @@
 | `src/ui/settings/panes/PluginSettingsPane.tsx` | `04` `11` | **「插件设置」页**：只按插件清单的 `[[settings]]` 画 `range` / `text` / `toggle`，不认插件 id，不写 `settings.toml` |
 | `src/ui/settings/panes/DebugPane.tsx` | `04` `07A` | **仅开发者模式显示的「开发者模式」页**：打开实时调试日志、设置文件目录与关闭开发者模式；下载替换规则在通用页 |
 | `src/ui/settings/panes/DebugPane.tsx` | `04` `07A` | **仅开发者模式显示的「开发者模式」页**：显示模式状态、诊断窗口入口与关闭按钮；与「高级设置」分开 |
-| `src/ui/DebugLogWindow.tsx` | `02` `04` | `index.html#debug-log` 独立窗口：每 400ms 拉日志增量并实时滚动。固定英文、黑底等宽、无主题继承、无翻译；支持全文复制与 `.log` 导出。 |
+| `src/ui/DebugLogWindow.tsx` | `02` `04` | `debug-log.html` 独立窗口：每 400ms 拉日志增量并实时滚动。固定英文、黑底等宽、无主题继承、无翻译；支持全文复制与 `.log` 导出。 |
 | `src/ui/diagnostics-text.ts` | `02` `04` | 调试日志窗口的 `Show Diagnostics` 覆盖层：把编译、工具链和运行时信息排成固定英文文本；Windows 显示 WebView2，Linux 显示 GTK/WebKitGTK，不把另一平台字段混进来。 |
 | `src/styles/debug-log.css` | `04` | 调试日志窗口专用样式：只使用纯黑 `#000`、纯白 `#fff` 和白色边框，方角、等宽、不读取任何界面或文档主题变量。 |
 | `src-tauri/src/debug_log.rs` | `02` `04` | 纯 Rust 保底模式：把持久调试日志复制为临时 `.log` 并交系统默认查看器，不初始化 Tauri/WebView。 |
@@ -495,7 +495,7 @@
 | ⚠️ `plugins/*`（**2026-10-09 起在插件仓库**） | —— | 插件源码与它的工装搬去了独立仓库 `Nota-plugins`（与主仓库同级、独立 git；那边自己的闸是 `tools/check.sh`，**按目录扫**所以不会漏登记）。⇒ 这三行原本的映射（清单/入口/文案表 ↔ `11`/`13`）**从本表删掉**：文件不在本仓库，`tools/doc-sync-check.sh` 的 ② 会静默跳过它们。⚠️ 插件改动与 `docs/11`–`13` 的同步从那天起**靠人**（那三份讲的是宿主给插件的 API，插件实现改动很少推翻它们） |
 | `src-tauri/Cargo.toml` / `package.json` | `06` `THIRD-PARTY.md` | 依赖与版本。⚠️ 加/删依赖就要同步第三方清单（它记了每个直接依赖的**许可证**） |
 | `src-tauri/tauri.conf.json` | `01` `06` | ⚠️ CSP 只在这儿写，见 `AGENTS.md` §4b。📌 `bundle.resources` 把字体版权与修改说明复制到安装包 `licenses/`；字体本体由前端 dist 打包。 |
-| `vite.config.ts` / `tsconfig.json` | `06` | ⚠️ `@/` 别名两处必须一致 |
+| `vite.config.ts` / `tsconfig.json` | `06` | ⚠️ `@/` 别名两处必须一致；Vite 使用相对基址、独立 HTML 入口并关闭 modulepreload 包装，兼容 Windows WebView2 的自定义协议 |
 | `index.html` | `06` | |
 | `.github/workflows/release.yml` | `06` | 六格打包矩阵。⚠️ 平台/架构/`--bundles` 为什么是这么分的，`06` §2.4 有一整节，两边要一起改 |
 | `tools/*` | `06` `09`（工具自己改规则时） | |

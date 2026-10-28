@@ -34,7 +34,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { visionFrequencyExtension, IsVideoSource } from "@/editor/video-view";
+import {
+  visionFrequencyExtension,
+  IsVideoSource,
+  parseImageMarkdownSource,
+} from "@/editor/video-view";
 
 /* ── 一支极小的测试工装（与 `file-kind.test.ts` 同一套长相）── */
 
@@ -170,6 +174,60 @@ testCase("⚠️ 内置文档主题里有那条 `video`（导出那条路全靠�
   const source3 = read("src/styles/themes/adwaita/theme.css");
   if (!/^video \{/m.test(source3) && !/^img,\nvideo \{/m.test(source3))
     throw new Error("themes/adwaita/theme.css 里没有 video 那条");
+});
+
+group("四、图片的 Markdown 源文行");
+
+testCase("点击后显示、离开后隐藏", () => {
+  const source3 = read("src/editor/video-view.ts");
+  if (!source3.includes('source.className = "nota-image-source"'))
+    throw new Error("没有图片源文输入框");
+  if (!source3.includes('initial.mediaBody.addEventListener("mousedown"'))
+    throw new Error("图片点击仍交给 ProseMirror 绘制节点选区");
+  if (!source3.includes("initial.isVisionFrequency || !(event instanceof MouseEvent) || event.button !== 0"))
+    throw new Error("右键仍会触发图片隐藏源文的显示或隐藏");
+  if (source3.includes("sourceBody?.select()"))
+    throw new Error("图片源文仍会全选并产生蓝色文本选区");
+  if (!source3.includes("selectNode: () =>")) throw new Error("图片没有单独的选中分支");
+  if (!source3.includes('initial.dom.classList.remove("is-selected")'))
+    throw new Error("程序化选中仍会把隐藏源文打开");
+  if (!source3.includes("deselectNode: ()")) throw new Error("图片取消选中时没有收起源文");
+});
+
+testCase("隐藏源文不使用输入框外框或焦点色", () => {
+  const source3 = read("src/styles/video.css");
+  if (
+    !/\.nota-image-source\s*\{[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;/s.test(
+      source3,
+    )
+  )
+    throw new Error("图片源文仍带输入框外观");
+  if (
+    !/\.nota-image-source:focus-visible\s*\{[^}]*outline:\s*none;[^}]*box-shadow:\s*none;/s.test(
+      source3,
+    )
+  )
+    throw new Error("图片源文聚焦时仍有轮廓");
+  if (!/\.nota-image-source\s*\{[\s\S]*?font:\s*inherit;/s.test(source3))
+    throw new Error("图片源文仍使用代码字体而不是正文样式");
+  if (!/\.nota-image-source\s*\{[\s\S]*?caret-color:\s*var\(--accent\);/s.test(source3))
+    throw new Error("图片源文没有恢复被编辑区隐藏的光标颜色");
+  if (/\.nota-image-source\s*\{[\s\S]*?font-family:\s*var\(--font-mono\)/s.test(source3))
+    throw new Error("图片源文仍被固定为等宽字体");
+});
+
+testCase("源文解析保留 alt、地址和可选标题", () => {
+  equal(
+    JSON.stringify(parseImageMarkdownSource('![图](docs/a.png "标题")')),
+    JSON.stringify({ alt: "图", src: "docs/a.png", title: "标题" }),
+    "完整图片语法",
+  );
+  equal(
+    JSON.stringify(parseImageMarkdownSource("![](a.png)")),
+    JSON.stringify({ alt: "", src: "a.png", title: "" }),
+    "空 alt/标题",
+  );
+  equal(parseImageMarkdownSource("not an image"), null, "坏语法必须拒绝");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

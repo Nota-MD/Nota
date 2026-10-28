@@ -1,6 +1,6 @@
 # Nota 主题包规范
 
-最后同步：2026-10-25
+最后同步：2026-10-27
 
 本规范参考 Typora 自定义主题的核心模型：
 
@@ -220,6 +220,49 @@ Nota 编辑区里的正文根等价于 Typora 的 `#write`。主题可以写：
 引用、无序列表和代码围栏的左侧标记。图形只取形状，颜色由
 `--fg-faint` 或按钮 `currentColor` 提供。程序统一把源码标记放在块正左方并
 垂直居中，主题不能要求程序识别自己的 id 来调整位置。
+
+### 4.4 下拉选择框
+
+设置页的下拉选择框是自绘 combobox，不再使用原生 `<select>`。收起状态与
+展开列表都由界面主题 CSS 控制：
+
+```css
+[data-ui-style="dusk"] {
+  --select-bg: var(--bg);
+  --select-bg-hover: var(--bg-hover);
+  --select-fg: var(--fg);
+  --select-border: var(--border);
+  --select-popup-bg: var(--bg-raised);
+  --select-popup-fg: var(--fg);
+  --select-popup-border: var(--border);
+  --select-option-hover-bg: var(--bg-hover);
+  --select-option-active-bg: var(--bg-active);
+  --select-option-selected-bg: var(--accent);
+  --select-option-selected-fg: var(--accent-fg);
+}
+```
+
+需要改变结构尺寸时，可以覆盖以下组件选择器；每条都必须带主题 id：
+
+```css
+[data-ui-style="dusk"] .stg-select-trigger {
+  border-radius: 0;
+}
+
+[data-ui-style="dusk"] .stg-select-popup {
+  border-radius: 0;
+  padding: 2px;
+}
+
+[data-ui-style="dusk"] .stg-select-option {
+  min-height: 30px;
+  padding-inline: 10px;
+}
+```
+
+`data-active="true"` 是鼠标或键盘当前停留项；`aria-selected="true"` 是已经
+选中的值。弹层 portal 到 `body`，但仍在 `[data-ui-style]` 根节点之下，因此
+主题变量和带主题 id 的选择器都能生效。
 
 ## 5. 字体
 

@@ -728,6 +728,8 @@ export interface contextMenuWiring {
   cursor: CommandState | null;
   /** 提示条。输入框那一档失败时要说话。 */
   toast: notice;
+  /** 复制这一下右键命中的图片。不能等到命令表里再猜 DOM 选区。 */
+  copyImage: (image: HTMLImageElement) => Promise<void>;
 }
 
 /** 现在开着的那一份。`null` = 没开。 */
@@ -745,6 +747,8 @@ interface isOpen {
   DropPoint: DropPoint;
   /** 输入框那一档才有。 */
   scene2: InputBoxScene | null;
+  /** 这一下右键命中的图片；右键不会替它建立 DOM 选区，必须当场记下。 */
+  image: HTMLImageElement | null;
   /**
    * 这一下右键落在**一个拼错的词**上时才有：那个 `<span class="nota-spell-error">`
    * 元素，以及它里面的词、这一刻拿到的那一列建议。
@@ -789,7 +793,7 @@ interface CombineWriteScene {
  * 见 `ui/context-menu.ts` 文件头那张表。
  */
 export function ContextMenu(wiring: contextMenuWiring) {
-  const { commandTable, disabled2, check, cursor, toast } = wiring;
+  const { commandTable, disabled2, check, cursor, toast, copyImage } = wiring;
   const t = useT();
   const [open2, setOpen] = useState<isOpen | null>(null);
 
@@ -834,12 +838,12 @@ export function ContextMenu(wiring: contextMenuWiring) {
           ? { createProposalPlural: [] as string[], addWordDictionary: t("Add to dictionary"), ignoreOmit: t("Ignore") }
           : null;
 
-      const rows = buildRows(drop, import.meta.env.DEV, CombineWriteLineSearch);
-      if (rows.length === 0) {
-        // 外壳：只拦不弹（用户 2026-10-04 选的，见 `context-menu.ts`）。
-        setOpen(null);
-        return;
-      }
+      const contextImage = el.closest("img");
+      const onImage = contextImage instanceof HTMLImageElement ? contextImage : null;
+      const hasSelection = cursor?.hasSelection ?? Boolean(window.getSelection()?.toString());
+      const rows = buildRows(drop, import.meta.env.DEV, CombineWriteLineSearch, Boolean(onImage), hasSelection);
+      // 外壳：只拦不弹（用户 2026-10-04 选的，见 `context-menu.ts`）。
+      if (rows.length === 0) return setOpen(null);
 
       let scene2: InputBoxScene | null = null;
       if (drop === "输入框") {
@@ -858,7 +862,14 @@ export function ContextMenu(wiring: contextMenuWiring) {
       const scene: CombineWriteScene | null =
         combineWriteElement && combineWriteWord !== "" ? { element: combineWriteElement, word: combineWriteWord, createProposalPlural: [] } : null;
 
-      setOpen({ position2: { top: e.clientY, left: e.clientX }, line3: rows, DropPoint: drop, scene2, combineWrite: scene });
+      setOpen({
+        position2: { top: e.clientY, left: e.clientX },
+        line3: rows,
+        DropPoint: drop,
+        scene2,
+        image: onImage,
+        combineWrite: scene,
+      });
 
       // ⚠️ 建议是**过 IPC 现拉的**（一次词典查询）：菜单先按"没有建议"那一版画出来
       //（两个动作当场就能点），拿到之后**只把这前半段补上**。
@@ -878,6 +889,8 @@ export function ContextMenu(wiring: contextMenuWiring) {
                   oldValue.DropPoint,
                   import.meta.env.DEV,
                   { createProposalPlural, addWordDictionary: t("Add to dictionary"), ignoreOmit: t("Ignore") },
+                  false,
+                  hasSelection,
                 ),
               };
             });
@@ -923,10 +936,11 @@ export function ContextMenu(wiring: contextMenuWiring) {
         dropToCombineWrite(id, thisOneDocument.combineWrite, toast);
         return;
       }
+      if (id === "edit.copyImage" && thisOneDocument.image) return void copyImage(thisOneDocument.image);
       // ⚠️ 与 `App.tsx` 的 `onCommand` 逐字相同：全应用只此一个派发口。
       commandTable[id]?.();
     },
-    [open2, commandTable, collapse, t, toast],
+    [open2, commandTable, collapse, copyImage, t, toast],
   );
 
   useEffect(() => {

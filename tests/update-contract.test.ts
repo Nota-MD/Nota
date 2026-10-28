@@ -41,8 +41,8 @@ testCase("应用清单覆盖五种安装包，开发构建走重建命令", () =
   ).version;
   assertValue(manifest.schema === 1, "schema 不是 1");
   assertValue(
-    manifest.version === currentVersionLocal,
-    `清单版本 ${manifest.version} 与当前包版本 ${currentVersionLocal} 不一致`,
+    manifest.release_url.endsWith(`/v${manifest.version}`),
+    `清单版本 ${manifest.version} 与 release_url 不一致；当前包版本为 ${currentVersionLocal}`,
   );
   for (const kind of ["deb", "rpm", "appimage", "exe", "exeinstall"]) {
     assertValue(manifest.packages[`${kind}-x86_64`], `缺少 ${kind}-x86_64`);
@@ -68,6 +68,23 @@ testCase("宿主固定清单地址且不信任前端 URL", () => {
   assertValue(!bridge.includes('invoke<UpdateStatus>("nota_update_check", { url'), "前端仍可传 URL");
 });
 
+testCase("应用更新可终止，并在安装后自动重启", () => {
+  const source = read("src-tauri", "src", "update.rs");
+  const commands = read("src-tauri", "src", "commands", "update.rs");
+  const bridge = read("src", "bridge", "ipc.ts");
+  const pane = read("src", "ui", "SoftwareUpdatePane.tsx");
+  const remote = read("src-tauri", "src", "remote.rs");
+  assertValue(remote.includes("取_带进度_可取消"), "下载循环没有取消检查");
+  assertValue(commands.includes("nota_update_cancel"), "缺少取消命令");
+  assertValue(bridge.includes('cancel: () => invoke<void>("nota_update_cancel")'), "前端取消桥缺失");
+  assertValue(pane.includes('t("Cancel Download")'), "更新页没有终止下载按钮");
+  assertValue(pane.includes("getCurrentWindow().close()"), "安装后没有自动关闭重启路径");
+  assertValue(source.includes("' /UPDATE'") || source.includes("'/UPDATE'"), "Windows 安装器未使用 UPDATE 模式");
+  assertValue(source.includes("'/R'"), "Windows 安装器安装后不会自动重启");
+  assertValue(source.includes("while kill -0"), "Linux 包更新没有等待旧进程退出");
+  assertValue(source.includes("nohup"), "Linux 包更新没有重新启动应用");
+});
+
 testCase("插件清单声明更新源且复用现有包校验", () => {
   const manifest = read("src-tauri", "src", "plugin", "manifest.rs");
   const updater = read("src-tauri", "src", "plugin", "updater.rs");
@@ -84,6 +101,18 @@ testCase("主题没有接入自动更新命令", () => {
   const themeEnd = bridge.indexOf("uiStyle: {", themeStart);
   assertValue(themeStart >= 0 && themeEnd > themeStart, "找不到主题 API 段");
   assertValue(!bridge.slice(themeStart, themeEnd).includes("update"), "主题 API 出现了更新入口");
+});
+
+testCase("Release 资产按平台分组，latest.json 最后上传", () => {
+  const workflow = read(".github", "workflows", "release.yml");
+  const order = read("tools", "order-release-assets.sh");
+  assertValue(workflow.includes("order-release-assets.sh"), "Release 工作流没有调用排序脚本");
+  const win = order.indexOf('upload_group "${win_x64[@]}"');
+  const linux = order.indexOf('upload_group "${linux_x64[@]}"');
+  const winArm = order.indexOf('upload_group "${win_arm64[@]}"');
+  const linuxArm = order.indexOf('upload_group "${linux_arm64[@]}"');
+  const latest = order.lastIndexOf('upload_group "$dir/latest.json"');
+  assertValue(win >= 0 && win < linux && linux < winArm && winArm < linuxArm && linuxArm < latest, "平台上传顺序不正确");
 });
 
 if (fail > 0) {

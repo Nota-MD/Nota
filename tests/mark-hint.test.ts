@@ -37,8 +37,17 @@
 
 import { Schema } from "@milkdown/kit/prose/model";
 import type { MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
+import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import { emphasisSchema, inlineCodeSchema, strongSchema } from "@milkdown/preset-commonmark";
-import { scanOneParagraph, splitMarkCharacter, noticeTable } from "../src/editor/mark-hint";
+import { readFileSync } from "node:fs";
+import {
+  findActiveMarkRange,
+  createMarkHintPlugin,
+  listSyntaxMarkers,
+  scanOneParagraph,
+  splitMarkCharacter,
+  noticeTable,
+} from "../src/editor/mark-hint";
 
 /* ── 极小的测试工装（与 `math-view.test.ts` 同一套长相）───────────────── */
 
@@ -77,6 +86,18 @@ function contains(actual: string, fragment: string, description: string): void {
   if (!actual.includes(fragment)) {
     throw new Error(`${description}：${JSON.stringify(actual)} 里没有 ${JSON.stringify(fragment)}`);
   }
+}
+
+function read(path: string): string {
+  return readFileSync(path, "utf8");
+}
+
+function renderDocument(node: PMNode): string {
+  if (node.isText) return node.text ?? "";
+  if (node.type.name === "notaSyntax") return String(node.attrs.symbol ?? "*");
+  const output2: string[] = [];
+  node.forEach((child) => output2.push(renderDocument(child)));
+  return output2.join("");
 }
 
 /* ── 一颗够用的真 Schema（只要 strong / em 两个 mark）────────────────── */
@@ -333,6 +354,256 @@ testCase("多字符标记拆成独立字符，`**` 不是一颗不可分的文�
       equal(Array.from(character).length, 1, `${left} / ${right} 里有非单字符项`);
     }
   }
+});
+
+testCase("行内标记默认是正文实色的实体字符，不是灰色鬼影", () => {
+  const css = read("src/styles/marks.css");
+  const block = /\.nota-syntax-marker\s*\{([\s\S]*?)\}/.exec(css)?.[1] ?? "";
+  assertion(block.includes("color: var(--mark-hint-fg, inherit);"), "标记仍使用弱化前景色");
+  assertion(block.includes("opacity: var(--mark-hint-opacity, 1);"), "标记默认透明度不是 1");
+  assertion(!block.includes("animation:"), "标记仍会从透明淡入成鬼影");
+  assertion(!block.includes("pointer-events: none"), "标记仍不可点击");
+  assertion(!block.includes("user-select: none"), "标记仍不可选中");
+});
+
+testCase("`**` 是文档里的真实文本，光标可以停在标记与正文之间", () => {
+  const markerSchema = new Schema({
+    nodes: {
+      text: { group: "inline" },
+      paragraph: { group: "block", content: "inline*" },
+      notaSyntax: {
+        inline: true,
+        group: "inline",
+        atom: true,
+        marks: "",
+        attrs: {
+          syntax: { default: "" },
+          side: { default: "left" },
+          symbol: { default: "*" },
+        },
+      },
+      doc: { content: "block+" },
+    },
+    marks: {
+      strong: {},
+    },
+  });
+  const strong = markerSchema.marks.strong!;
+  const syntax = markerSchema.nodes.notaSyntax!;
+  const marker = (text4: string, side: "left" | "right") =>
+    Array.from(text4).map((symbol) =>
+      syntax.create({ syntax: "strong", side, symbol }),
+    );
+  const document = markerSchema.node("doc", null, [
+    markerSchema.node("paragraph", null, [
+      markerSchema.text("甲"),
+      ...marker("**", "left"),
+      markerSchema.text("1111", [strong.create()]),
+      ...marker("**", "right"),
+      markerSchema.text("乙"),
+    ]),
+  ]);
+
+  equal(listSyntaxMarkers(document, syntax).length, 2, "左右语法文本不是真实节点");
+  const active = findActiveMarkRange(document, 4, strong, syntax);
+  assertion(active !== null, "光标停在标记与正文之间时没有识别到活动标记");
+  equal(active.from, 4, "正文起点");
+  equal(active.to2, 8, "正文终点");
+  equal(active.leftMarker?.text4, "**", "左标记不是实体文本");
+  equal(active.rightMarker?.text4, "**", "右标记不是实体文本");
+  assertion(
+    findActiveMarkRange(document, 2, strong, syntax) !== null,
+    "光标停在左标记左侧时不应立即收起",
+  );
+  assertion(
+    findActiveMarkRange(document, 11, strong, syntax) === null,
+    "光标已经进入后面正文时右标记仍显示",
+  );
+});
+
+testCase("真实语法文字通过 mark serializer 排除，不会重复写进 Markdown", () => {
+  const source = read("src/editor/mark-hint.ts");
+  const assembly = read("src/editor/assemble.ts");
+  contains(source, "match: (node: PMNode) => node.type.name === \"notaSyntax\"", "语法节点没有序列化匹配");
+  contains(source, "atom: true", "语法节点仍能吸收边界输入");
+  contains(source, "symbol: { default: \"*\" }", "语法节点没有真实星号字形");
+  contains(assembly, "[...inlineSyntaxNodePlugins, markHint]", "语法节点没有装进可编辑实例");
+});
+
+testCase("左键移出标记后不会把光标映射回起点并立刻重插", () => {
+  const source = read("src/editor/mark-hint.ts");
+  contains(source, "interface MarkHintState", "没有记录边界抑制状态");
+  contains(source, "suppressedAt", "没有保存已收起的边界位置");
+  contains(source, "selection.from !== suppressedAt", "收起后的边界仍会立刻重插");
+  contains(source, "tr.selectionSet || tr.docChanged", "光标再次移动或输入时没有解除抑制");
+});
+
+testCase("真实 EditorState 连续按左键：标记只收起一次，不在边界来回闪动", () => {
+  const markerSchema = new Schema({
+    nodes: {
+      text: { group: "inline" },
+      paragraph: { group: "block", content: "inline*" },
+      notaSyntax: {
+        inline: true,
+        group: "inline",
+        atom: true,
+        marks: "",
+        attrs: {
+          syntax: { default: "" },
+          side: { default: "left" },
+          symbol: { default: "*" },
+        },
+      },
+      doc: { content: "block+" },
+    },
+    marks: {
+      strong: {},
+    },
+  });
+  const strong = markerSchema.marks.strong!;
+  const syntax = markerSchema.nodes.notaSyntax!;
+  const doc = markerSchema.node("doc", null, [
+    markerSchema.node("paragraph", null, [
+      markerSchema.text("甲"),
+      markerSchema.text("1111", [strong.create()]),
+    ]),
+  ]);
+  let state = EditorState.create({
+    schema: markerSchema,
+    doc,
+    selection: TextSelection.create(doc, 4),
+    plugins: [createMarkHintPlugin(syntax)],
+  });
+  state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, 4)));
+  equal(listSyntaxMarkers(state.doc, syntax).length, 2, "光标进入加粗段后没有生成左右实体标记");
+
+  const counts: number[] = [2];
+  for (let step = 0; step < 8 && state.selection.from > 1; step++) {
+    state = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, state.selection.from - 1)),
+    );
+    counts.push(listSyntaxMarkers(state.doc, syntax).length);
+  }
+  const firstHidden = counts.indexOf(0);
+  assertion(firstHidden >= 0, `连续左移没有收起标记：${counts.join(",")}`);
+  assertion(
+    counts.slice(firstHidden).every((count) => count === 0),
+    `左移越过边界后标记又闪回来了：${counts.join(",")}`,
+  );
+
+  const beforeReturn = state.selection.from;
+  state = state.apply(
+    state.tr.setSelection(TextSelection.create(state.doc, beforeReturn + 1)),
+  );
+  equal(listSyntaxMarkers(state.doc, syntax).length, 2, "右移回到加粗段时没有重新显示实体标记");
+
+  const rightMarker = listSyntaxMarkers(state.doc, syntax).find((item) => item.side === "right");
+  assertion(!!rightMarker, "右侧星号节点不存在");
+  state = state.apply(
+    state.tr.setSelection(TextSelection.create(state.doc, rightMarker.to2)),
+  );
+  const rightSteps: number[] = [];
+  for (let step = 0; step < 4; step++) {
+    state = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, state.selection.from - 1)),
+    );
+    rightSteps.push(state.selection.from);
+  }
+  equal(
+    JSON.stringify(rightSteps),
+    JSON.stringify([
+      rightMarker.to2 - 1,
+      rightMarker.to2 - 2,
+      rightMarker.to2 - 3,
+      rightMarker.to2 - 4,
+    ]),
+    "从右侧星号向左必须逐格经过 `文本|**`，不能吸附回星号末尾",
+  );
+});
+
+testCase("临时星号两侧仍是正常可输入的正文边界", () => {
+  const markerSchema = new Schema({
+    nodes: {
+      text: { group: "inline" },
+      paragraph: { group: "block", content: "inline*" },
+      notaSyntax: {
+        inline: true,
+        group: "inline",
+        atom: true,
+        marks: "",
+        attrs: {
+          syntax: { default: "" },
+          side: { default: "left" },
+          symbol: { default: "*" },
+        },
+      },
+      doc: { content: "block+" },
+    },
+    marks: { strong: {} },
+  });
+  const strong = markerSchema.marks.strong!;
+  const syntax = markerSchema.nodes.notaSyntax!;
+  const doc = markerSchema.node("doc", null, [
+    markerSchema.node("paragraph", null, [
+      markerSchema.text("1111", [strong.create()]),
+    ]),
+  ]);
+  let state = EditorState.create({
+    schema: markerSchema,
+    doc,
+    selection: TextSelection.create(doc, 3),
+    plugins: [createMarkHintPlugin(syntax)],
+  });
+  state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, 3)));
+  const existing = listSyntaxMarkers(state.doc, syntax);
+  const left = existing.find((item) => item.side === "left");
+  const right = existing.find((item) => item.side === "right");
+  assertion(!!left && !!right, "没有生成左右星号");
+
+  const before = state;
+  state = state.apply(state.tr.insertText("前", left.from));
+  assertion(
+    renderDocument(state.doc).includes("前**1111**"),
+    `左星号之前无法输入：${renderDocument(state.doc)}`,
+  );
+
+  const leftInside = before.apply(
+    before.tr.setSelection(TextSelection.create(before.doc, left.to2)),
+  );
+  const innerRange = findActiveMarkRange(
+    leftInside.doc,
+    leftInside.selection.from,
+    strong,
+    syntax,
+  );
+  assertion(
+    innerRange?.from === leftInside.selection.from,
+    `左内侧没有识别成正文起点：${JSON.stringify(innerRange)} / ${leftInside.selection.from}`,
+  );
+  assertion(
+    leftInside.storedMarks?.some((mark) => mark.type === strong) === true,
+    `左内侧没有设置相邻格式：${JSON.stringify(leftInside.storedMarks?.map((mark) => mark.type.name))}`,
+  );
+  state = leftInside.apply(leftInside.tr.insertText("内"));
+  assertion(
+    renderDocument(state.doc).includes("**内1111**"),
+    `正文开头无法输入：${renderDocument(state.doc)}`,
+  );
+
+  const rightInside = before.apply(
+    before.tr.setSelection(TextSelection.create(before.doc, right.from)),
+  );
+  state = rightInside.apply(rightInside.tr.insertText("尾"));
+  assertion(
+    renderDocument(state.doc).includes("**1111尾**"),
+    `正文结尾无法输入：${renderDocument(state.doc)}`,
+  );
+
+  state = before.apply(before.tr.insertText("后", right.to2));
+  assertion(
+    renderDocument(state.doc).includes("**1111**后"),
+    `右星号之后无法输入：${renderDocument(state.doc)}`,
+  );
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

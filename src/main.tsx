@@ -185,7 +185,7 @@ window.setTimeout(() => {
  * ⚠️⚠️ **本应用有多个入口，靠 hash 分叉。**
  *
  * 主窗是 `index.html`（没有 hash）；焦点警报窗、诊断窗口与帮助窗口分别使用
- * `#focus-alarm`、`#debug-log`、`#help/...`。
+ * 独立的 `focus-alarm.html`、`debug-log.html`、`help.html`。
  *
  * # 为什么是 hash 而不是另开一个 HTML 文件
  *
@@ -200,11 +200,18 @@ window.setTimeout(() => {
  * 挂上 `useFocusAlarmSound`——宿主那一枪 `emit` 是发给所有窗口的，两边都订阅
  * 就是同一段警报响两遍（理由写在 `ui/useFocusAlarmSound.ts` 文件头）。
  *
- * ⚠️ `location.hash` 里带 `#`，所以比的是 `"#focus-alarm"`，不是 `"focus-alarm"`。
+ * Windows 的 WebView2 在自定义应用协议下不能稳定保留宿主创建窗口时塞进
+ * 初始 URL 的 fragment；旧写法会让入口判断落回 `<App />`，随后子窗因缺少
+ * 主窗上下文而呈现白屏。现在入口类型由各自 HTML 的 `data-window` 标明，
+ * 不再依赖 URL 解析。旧 hash 只作为开发时直接打开 `index.html` 的兼容入口。
  */
-const isWarnReportWindow = location.hash === "#focus-alarm";
-const isDebugLogWindow = location.hash === "#debug-log";
-const isHelpWindow = location.hash === "#help" || location.hash.startsWith("#help/");
+const windowEntry = document.documentElement.dataset.window;
+const isWarnReportWindow = windowEntry === "focus-alarm" || location.hash === "#focus-alarm";
+const isDebugLogWindow = windowEntry === "debug-log" || location.hash === "#debug-log";
+const isHelpWindow =
+  windowEntry === "help" ||
+  location.hash === "#help" ||
+  location.hash.startsWith("#help/");
 
 /**
  * ⚠️⚠️ **警报窗那一支要自己把界面语言拉回来**（2026-09-27 补）。

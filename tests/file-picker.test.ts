@@ -67,7 +67,7 @@ testCase("筛选与保存后缀", () => {
   );
 });
 
-testCase("前端源码不再直接引用原生 dialog 插件", () => {
+testCase("原生选择器走 XDG Desktop Portal，而不是进程内 GTK3", () => {
   const root = join("src");
   const stack = [root];
   while (stack.length) {
@@ -92,6 +92,8 @@ testCase("前端源码不再直接引用原生 dialog 插件", () => {
   );
   const cargo = readFileSync("src-tauri/Cargo.toml", "utf8");
   assertValue(!cargo.includes("tauri-plugin-dialog"), "Cargo.toml 仍依赖原生文件对话框");
+  assertValue(cargo.includes('"xdg-portal"'), "rfd 没有启用 XDG Desktop Portal");
+  assertValue(!cargo.includes('features = ["gtk3"]'), "rfd 仍强制进程内 GTK3 选择器");
   const lib = readFileSync("src-tauri/src/lib.rs", "utf8");
   assertValue(!lib.includes("tauri_plugin_dialog"), "宿主仍注册原生文件对话框");
   const capability = readFileSync("src-tauri/capabilities/default.json", "utf8");

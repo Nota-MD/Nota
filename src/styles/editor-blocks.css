@@ -34,8 +34,8 @@
      互相提醒"改的时候要一起改"；换成变量之后那件事由 CSS 自己保证了。
      ⚠️ **上下那两条不参与**：这里管的是左右。 */
   --nota-code-pad-l: 14px;
-  /* ⚠️ **上下都是 18px**（2026-09-26 从 34 降下来的）。用户原话：
-     「还有就是代码块有点宽，上下距离太长」。
+  /* ⚠️ **上下都是 12px**（2026-10-28 从 18 收紧）。用户原话：
+     「代码框上下边距太长」。
      原来那 34 有两个来历，**两个都已经不成立**，所以一起降：
      1. **下面那 34 是给右下角那条按钮条留的槽**（2026-09-25 补，用户体验评估
         抓出来的）。在那之前是 `padding: 14px`，而 `.nota-code-bar` 就
@@ -48,15 +48,18 @@
      2. **上面那 34 是 2026-09-26 补的，为的是"上下一样"**——只留下面的时候，
         一行代码看着是"贴着上边框、下面空一大截"（量出来是上 19px 对下 39px；
         那 5px 是行高 1.6 的半个行距，两边都有），块越矮越明显。
-        ⚠️ **这条理由现在仍然成立**：上下还是相等的（都是 18）。别只看到
+        ⚠️ **这条理由现在仍然成立**：上下还是相等的（都是 12）。别只看到
         "上面那个 34 被砍了"就以为是回退——砍的是**两边一起**。
-     为什么落在 18 而不是回到 14：14 时上下比正文段落之间的间距（0.85em ≈ 13.6px）
-     还紧，一行代码在块里就不像"块"了；18 是"比段落松、但不空"的那一档。
+     为什么落在 12：代码行本身有 1.6 行高，已经提供了一圈呼吸空间；再叠 18
+     会让单行代码块显得像上下各塞了一个空行。12 仍能与边框分开。
      ⚠️ 行号装订线那 40px 是加在**左**边（`--nota-code-pad-l`），上下不受影响。 */
-  padding: 18px var(--nota-code-pad-l);
-  /* ⚠️ **上下都是 30px**（2026-09-26 改的，原来是 `0 0 30px`）。
+  padding: 12px var(--nota-code-pad-l);
+  /* ⚠️ **上方 14px、下方 30px**。下方不是普通留白：块外那排 22px 高的
+     折叠/复制与语言选择框住在这条槽里，30px 才能避免压住下一段。
      用户原话：「代码框不论上下，和其他文本的间距。Typora 是那样的」——
-     也就是**上下要一样**：在这之前上面只有兄弟规则那条 `margin-top: 0.85em`
+     历史上这里曾把上下都设成 30；现在上方收紧到 14，避免单行代码块飘得太远，
+     同时保留下方挂件所需的真实高度。
+     在这之前上面只有兄弟规则那条 `margin-top: 0.85em`
      （约 13.6px，和"两段之间"一个数），下面 30px，于是代码块看起来是
      "贴着上一段、甩开下一段"，而且上一段越短越明显。
 
@@ -68,15 +71,11 @@
        由来：2026-09-25 用户要求「增大一下代码框和下面的另外的其他东西的间隔，
        这样才能保证那个语言选择框能塞得下」。
        ⚠️ 改那两颗的高（`.nota-code-btn` 那条 `height`）时这个数要回来算。
-     - **上面那个 30** 是照下面那个写的，就为了对上 Typora 的"上下一样"。
-       它比"两段之间"（0.85em）大得多，这是**有意的**：Typora 里代码块
-       本来就比段落间距更"隔离"。
-
      ⚠️ 折叠：这个 `margin-bottom` 和下个块那条 `margin-top: 0.85em` 会**折叠**，
      取大的那个，所以实际是 30px 而不是两者相加，别按"再加一个 0.85em"去算。
      ⚠️ 左右内边距那笔账见上面那条注释（现在是 `--nota-code-pad-l` 这个变量，
      上下那两个数不参与）。 */
-  margin: 30px 0;
+  margin: 14px 0 30px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-subtle);
@@ -92,6 +91,20 @@
   overflow: visible;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* CodeMirror 的 token 是 `.cm-line` 里的嵌套 span。容器上的等宽字体在
+   WebKitGTK + 某些文档主题组合下不能可靠地穿透到这些 span，聚焦后会退回
+   正文衬线字体。这里补一层静态兜底；`code-block-cm.ts` 的 CM 主题里也有
+   容器规则，二者防止生成样式与文档主题的加载顺序互相盖掉。
+   `math` / `latex` / `tex` 围栏要求源码使用衬线数学字体，因此这里明确排除
+   数学编辑态；`code-block.css` 后面那条高权重规则继续负责它们。 */
+.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-editor,
+.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-scroller,
+.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-content,
+.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-line,
+.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-line span {
+  font-family: var(--font-mono);
 }
 
 /* 设置里关掉「代码块 → 自动换行」（`markdown.code_wrap`，默认开）。

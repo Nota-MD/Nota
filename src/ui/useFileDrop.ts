@@ -56,7 +56,7 @@ import type { FilesSettings } from "@/bridge/types";
 import { t as FlipTranslate, useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 import { isMarkdownExtension } from "@/editor/file-kind";
-import { isImageSliceTextItem } from "@/ui/useImageInsert";
+import { isImageSliceTextItem } from "@/editor/image-kind";
 
 /** 一次拖进来的文件最多处理几个。⚠️ 超出的会如实说一句（见文件头）。 */
 const maxPerCall = 12;
@@ -296,4 +296,3 @@ async function handoffGiveTextItemManageManageDevice(
     toast(t("Could not open “{0}” in the file manager: {1}", path.split("/").pop() ?? path, String(e)), "error");
   }
 }
-

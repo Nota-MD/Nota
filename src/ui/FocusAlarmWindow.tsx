@@ -8,8 +8,8 @@
  * 盖在主窗里的红布他根本看不见。所以这里的样式要按"整块屏幕"来写，
  * 不能借主窗那套 `.app-shell` 的布局。
  *
- * ⚠️ **它不在 `App.tsx` 那棵树里**。`main.tsx` 按 `location.hash` 分叉，
- * `#focus-alarm` 走这里，别的走 `<App />`。所以：
+ * ⚠️ **它不在 `App.tsx` 那棵树里**。`focus-alarm.html` 先给根元素写入
+ * `data-window="focus-alarm"`，`main.tsx` 在挂载前据此分叉。所以：
  *
  * - 这里**不要**取任何文档 / 插件 / 设置状态——那个窗口里根本没有编辑器；
  * - 这里**不要**挂 [`useFocusAlarmSound`](useFocusAlarmSound)：

@@ -58,6 +58,7 @@ import { api, type DocId, type ImageSourceArg } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { Dialogs } from "@/ui/useDialogs";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
+import { imageExtensionFromMime } from "@/editor/image-kind";
 import type { Toast } from "@/ui/Toasts";
 
 export interface InsertImageWiring {
@@ -93,21 +94,6 @@ export interface InsertImageOutputMouth {
   dropOneImage: (source: ImageSourceArg, alt: string, wantAbovePass?: boolean) => Promise<void>;
 }
 
-/** 认得的图片后缀。⚠️ 与 `src-tauri/src/image.rs` 的 `认得的后缀` 同一套。 */
-const imageSliceExtension = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
-
-/**
- * 这条路径看着像图片吗。
- *
- * ⚠️ **导出去**（`ui/useFileDrop.ts` 要它来分派"这张该插进正文"而不是"该当文档
- * 打开"）：图片后缀这张单子**只能有一份**——两处各写一张，加一种格式时改了一处
- * 漏了另一处，症状是"拖 .avif 进来它去当文本打开"。所以导出的判据，不是表。
- */
-export function isImageSliceTextItem(path: string): boolean {
-  const tail = path.split(".").pop()?.toLowerCase() ?? "";
-  return imageSliceExtension.includes(tail);
-}
-
 /** 事件的目标在编辑区里吗。 */
 function atEditorAreaInside(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
@@ -129,12 +115,6 @@ async function editBecome_base64(blob: Blob): Promise<string> {
     s += String.fromCharCode(...buf.subarray(i, i + block));
   }
   return btoa(s);
-}
-
-/** `image/png` → `png`。认不出的给 `png`（宿主那边还会再认一次）。 */
-function fromMIMEGetExtension(type: string): string {
-  const tail = (type.split("/")[1] ?? "").toLowerCase();
-  return imageSliceExtension.includes(tail) ? tail : "png";
 }
 
 export function useImageInsert(w: InsertImageWiring): InsertImageOutputMouth {
@@ -229,7 +209,7 @@ export function useImageInsert(w: InsertImageWiring): InsertImageOutputMouth {
       }
       try {
         const data = await editBecome_base64(blob);
-        await dropOneImage({ kind: "base64", data, ext: fromMIMEGetExtension(blob.type) }, "");
+        await dropOneImage({ kind: "base64", data, ext: imageExtensionFromMime(blob.type) }, "");
       } catch (e) {
         toast(t("Could not read the image from the clipboard: {0}", String(e)), "error");
       }

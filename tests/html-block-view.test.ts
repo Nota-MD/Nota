@@ -16,6 +16,8 @@ import {
   allowedHtmlTags,
   isSafeHtmlUrl,
 } from "../src/editor/html-block-view";
+import { Schema } from "@milkdown/kit/prose/model";
+import { NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 import { readFileSync } from "node:fs";
 
 let passed = 0;
@@ -140,6 +142,89 @@ testCase("整块渲染区域进入编辑，编辑态右上角显示结束编辑�
     ),
     "HTML 源码框没有在垂直方向居中",
   );
+});
+
+testCase("HTML 标签和边框只在悬停或块内获得焦点时出现", () => {
+  const css = readFileSync("src/styles/editor-inline.css", "utf8");
+  assertValue(
+    /\.nota-html-block\s*\{[^}]*outline:\s*1px solid transparent;/s.test(css),
+    "HTML 块没有预留透明边框",
+  );
+  assertValue(
+    /\.nota-html-block:hover,\s*\.editor-mount \.ProseMirror\) \.nota-html-block:focus-within\s*\{[^}]*outline-color:\s*var\(--border\)/s.test(
+      css,
+    ) ||
+      /\.nota-html-block:hover,[\s\S]*?\.nota-html-block:focus-within\s*\{[^}]*outline-color:\s*var\(--border\)/s.test(
+        css,
+      ),
+    "悬停或块内聚焦时没有显示边框",
+  );
+  assertValue(
+    !/\.nota-html-block\.ProseMirror-selectednode \.nota-html-source-toggle/.test(css),
+    "整块选中后仍会脱离鼠标悬停显示 HTML 标签",
+  );
+});
+
+testCase("HTML 渲染块在启动与拖动时都不会产生原生蓝色选区", () => {
+  const css = readFileSync("src/styles/editor-inline.css", "utf8");
+  const view = readFileSync("src/editor/html-block-view.ts", "utf8");
+  const create = readFileSync("src/editor/create.ts", "utf8");
+  assertValue(
+    /\.nota-html-render\s*\{[^}]*user-select:\s*none;[^}]*\}?/s.test(css) &&
+      css.includes("-webkit-user-select: none"),
+    "HTML 渲染区仍允许浏览器生成原生选区",
+  );
+  assertValue(
+    /\.nota-html-source\s*\{[\s\S]*?user-select:\s*text;/s.test(css),
+    "源码编辑框没有恢复文本选择",
+  );
+  assertValue(
+    /\.nota-html-block\.ProseMirror-selectednode[\s\S]*?outline-color:\s*transparent/s.test(
+      css,
+    ),
+    "程序化 NodeSelection 仍会显示轮廓",
+  );
+  assertValue(
+    view.includes('show.addEventListener("mousedown"') &&
+      view.includes("event.preventDefault();") &&
+      view.includes("if (!sourceMode) setSourceMode(true);"),
+    "渲染区鼠标按下时没有阻断选区并进入源码编辑",
+  );
+  assertValue(
+    view.includes("if (event.button !== 0) return;") &&
+      view.includes("if (event.button === 0) event.preventDefault();"),
+    "HTML 块没有区分左右键",
+  );
+  assertValue(
+    create.includes("TextSelection.between(state.doc.resolve(0), state.doc.resolve(0))") &&
+      !/state\.tr\.setSelection\(\s*TextSelection\.atStart/.test(
+        create.slice(create.indexOf("const cursorToOpenHead"), create.indexOf("return {")),
+      ),
+    "启动落点仍可能退化为 HTML 原子块的 NodeSelection",
+  );
+});
+
+testCase("文档以 HTML 原子块开头时，打开位置会越过它落到文本节点", () => {
+  const schema = new Schema({
+    nodes: {
+      text: { group: "inline" },
+      paragraph: { group: "block", content: "inline*" },
+      html: { group: "block", atom: true, selectable: true },
+      doc: { content: "block+" },
+    },
+  });
+  const doc = schema.node("doc", null, [
+    schema.node("html", { value: "<p>badge</p>" }),
+    schema.node("paragraph", null, [schema.text("正文")]),
+  ]);
+  const oldOpening = TextSelection.atStart(doc);
+  const opening = TextSelection.between(doc.resolve(0), doc.resolve(0));
+  assertValue(
+    oldOpening instanceof NodeSelection,
+    "前置条件不成立：atStart 没有复现 HTML 原子块整块选中",
+  );
+  assertValue(opening instanceof TextSelection, "打开位置仍停在 HTML 原子块上");
+  equal(opening.from, 2, "打开位置没有落到第一个文本节点");
 });
 
 testCase("HTML 链接优先打开，不把点击吞成进入源码编辑", () => {

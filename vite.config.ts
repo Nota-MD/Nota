@@ -9,6 +9,11 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [react()],
 
+  // Tauri 在 Windows 上通过 `http://tauri.localhost` 提供内置资源。相对基址
+  // 让入口 HTML、静态资源和按需加载的模块都从当前页面解析，不依赖协议处理
+  // 器如何重写以 `/` 开头的路径。
+  base: "./",
+
   resolve: {
     // `@/…` → `src/…`。**必须与 tsconfig.json 的 paths 保持一致**——
     // 两处不一致时的表现是：`tsc` 过了、`vite build` 挂了（或者反过来）。
@@ -49,5 +54,18 @@ export default defineConfig({
     target: "es2021",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // 设置与 KaTeX 都是按需模块。Vite 默认会为它们注入 `<link rel=modulepreload>`
+    // 与一层预加载断言；Windows/WebView2 在自定义协议下只要预加载链接的处理
+    // 与模块 URL 有任何差异，真正需要该模块时就会整块静默失败。原生动态
+    // `import()` 已经由浏览器并行取依赖，这里不需要这层包装。
+    modulePreload: false,
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        help: fileURLToPath(new URL("./help.html", import.meta.url)),
+        debugLog: fileURLToPath(new URL("./debug-log.html", import.meta.url)),
+        focusAlarm: fileURLToPath(new URL("./focus-alarm.html", import.meta.url)),
+      },
+    },
   },
 });

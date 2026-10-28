@@ -4,27 +4,31 @@
  * 粘贴 HTML/Word→转干净 Markdown，粘贴 Markdown 源码→解析成富文本，
  * **粘贴代码→认语言包成代码块**」。
  *
- * # 四条路，判据的顺序是**这份文件的主要设计**
+ * # 六条路，判据的顺序是**这份文件的主要设计**
  *
  * | 先判 | 粘的是什么 | 变成什么 |
  * |---|---|---|
  * | ① | 代码块 / 行内代码里 | **什么都不做**（交给浏览器默认的纯文本粘贴） |
- * | ② | 干干净净一条网址 | 链接（选区非空 = 给选中那段挂标记） |
- * | ③ | VS Code 那种带元数据的复制 | **放过**，交给上游 `clipboard` 插件（它认那个格式） |
- * | ④ | 看着像代码的纯文本 | 带语言的代码块 |
- * | ⑤ | 其余 | 交给上游：有 HTML 走 HTML，没有就把纯文本**当 Markdown 解析** |
+ * | ② | 干干净净一条图片网址 | 图片节点 |
+ * | ③ | 干干净净一条普通网址 | 链接（选区非空 = 给选中那段挂标记） |
+ * | ④ | VS Code 那种带元数据的复制 | **放过**，交给上游 `clipboard` 插件（它认那个格式） |
+ * | ⑤ | 看着像代码的纯文本 | 带语言的代码块 |
+ * | ⑥ | 其余 | 交给上游：有 HTML 走 HTML，没有就把纯文本**当 Markdown 解析** |
  *
  * ⚠️ **顺序不能换**，每一条都有人踩过：
  *
  * - ① **必须在最前**：代码块里粘网址、粘一段看着像代码的东西，用户要的
  *   就是**原样贴进去**。少了这一条，往 `code_block` 里粘 URL 会得到一个
  *   里面套链接的代码块（存盘出来是 `[https://a](https://a)`，没法看）。
- * - ② 在 ④ **之前**：一条网址当然不"像代码"（单行短句那条否决就挡住了），
+ * - ② 在 ③ **之前**：图片后缀、图片 CDN 与普通网页都可能是合法网址，先判
+ *   图片才能把 `photo.png` 放进 image 节点而不是链接。只有空选区自动变图；
+ *   选中文字后仍按 ③ 给选中文本挂链接。
+ * - ③ 在 ⑤ **之前**：一条网址当然不"像代码"（单行短句那条否决就挡住了），
  *   但把它排前面读起来才不必去推"这两条会不会打架"。
- * - ③ 在 ④ **之前**：VS Code 复制的那份 `text/plain` 是**裸代码**，
- *   第 ④ 条的启发式也能认出来，但上游那条**认识它的语言**（`vscode-editor-data`
+ * - ④ 在 ⑤ **之前**：VS Code 复制的那份 `text/plain` 是**裸代码**，
+ *   第 ⑤ 条的启发式也能认出来，但上游那条**认识它的语言**（`vscode-editor-data`
  *   里就写着 `mode: "typescript"`），比我们猜得准。**让准的先来。**
- * - ④ 在 ⑤ **之后会失效**：上游 `clipboard` 的 `handlePaste` 只要
+ * - ⑤ 在 ⑥ **之后会失效**：上游 `clipboard` 的 `handlePaste` 只要
  *   `text` 或 `html` 非空就 **`return true`**——它会吃掉每一次粘贴。
  *   所以本插件必须**排在上游前面**（`create.ts` 的 `.use()` 顺序）才轮得到。
  *
@@ -39,14 +43,14 @@
  *
  * # 已知边界（如实记着）
  *
- * - ⚠️ **第 ④ 条是启发式，会漏也会错**。判据与代价在 `lang-guess.ts` 的
+ * - ⚠️ **第 ⑤ 条是启发式，会漏也会错**。判据与代价在 `lang-guess.ts` 的
  *   {@link 像代码} 上（它是个"宁可说不是"的否决制判据）。**猜不出语言
  *   仍然建代码块**（只是不着色，用户点一下选择器就能挑）——
  *   比"猜错了染成八种颜色"好收拾。
- * - ⚠️ **`text/html` 存在时一律不走第 ④ 条**：从网页上复制代码会同时带上
+ * - ⚠️ **`text/html` 存在时一律不走第 ⑤ 条**：从网页上复制代码会同时带上
  *   `text/html` 与 `text/plain`，那时 HTML 那一份更全（有 `<pre>`、
  *   有语言 class）。走第 ④ 条反而会把富文本降级成"一坨纯文本进代码块"。
- * - ⚠️ **第 ④ 条有个体积上限**（{@link 代码粘贴上限}）：超过就**不接管**，
+ * - ⚠️ **第 ⑤ 条有个体积上限**（{@link 代码粘贴上限}）：超过就**不接管**，
  *   交给上游按 Markdown 贴。上限的理由是**代价不对称**——一小段命令猜错了，
  *   用户按一次 `Ctrl+Z` 就回来了；一份几百 KB 的东西被整块塞进代码块，
  *   那一下先是卡住（`像代码` 要扫全文）、再把整篇文档变成一个代码块，
@@ -63,6 +67,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
 import { guessCodeLanguage, looksLikeCode } from "./lang-guess";
+import { imageAddressOfPastedText } from "./image-kind";
 import { clearManagePastePasteHTML } from "./paste-clean";
 import { pasteAboveUrlTransaction } from "./url-link";
 
@@ -97,6 +102,16 @@ function pasteBecomeCodeBlock(view: EditorView, text2: string): boolean {
   if (!codeBlock) return false;
   const language = guessCodeLanguage(text2);
   const node = codeBlock.create({ language: language }, text2 === "" ? undefined : schema.text(text2));
+  view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
+  return true;
+}
+
+/** 把一条图片网址换成一个真正的 image 节点。 */
+function pasteBecomeImage(view: EditorView, address: string): boolean {
+  const image = view.state.schema.nodes.image;
+  const { selection } = view.state;
+  if (!image || !selection.empty || !selection.$from.parent.inlineContent) return false;
+  const node = image.create({ src: address, alt: "", title: "" });
   view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());
   return true;
 }
@@ -136,11 +151,24 @@ export function pastePastePlaceManage() {
           if (start4.parent.type.spec.code) return false;
           if (start4.marks().some((m) => m.type.spec.code)) return false;
 
-          const plainText = numberEvidence.getData("text/plain");
+          const uriList = (numberEvidence.getData("text/uri-list") ?? "")
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line !== "" && !line.startsWith("#"));
+          const plainTextData = numberEvidence.getData("text/plain") ?? "";
+          const plainText = plainTextData || (uriList.length === 1 ? (uriList[0] ?? "") : "");
           const html = numberEvidence.getData("text/html");
           const dollarNumberEvidence = numberEvidence.getData("vscode-editor-data");
 
-          // ── ② 干干净净一条网址
+          // ── ② 干干净净一条图片网址：直接变成图片
+          // 只有空选区自动转换；选中文字后粘网址仍沿用下面的“给选中文本加链接”，
+          // 避免把用户明确选中的一句话替换掉。
+          if (html.length === 0) {
+            const imageAddress = imageAddressOfPastedText(plainText);
+            if (imageAddress && pasteBecomeImage(view, imageAddress)) return true;
+          }
+
+          // ── ③ 干干净净一条普通网址
           if (html.length === 0) {
             const transaction = pasteAboveUrlTransaction(view.state, plainText);
             if (transaction) {
@@ -148,9 +176,9 @@ export function pastePastePlaceManage() {
               return true;
             }
           }
-          // ── ③ 编辑器自带元数据的复制（VS Code 那边认语言）：让上游接
+          // ── ④ 编辑器自带元数据的复制（VS Code 那边认语言）：让上游接
           if (dollarNumberEvidence) return false;
-          // ── ④ 看着像代码的**纯文本**（超上限的不碰，理由见文件头）
+          // ── ⑤ 看着像代码的**纯文本**（超上限的不碰，理由见文件头）
           if (
             html.length === 0 &&
             plainText.length <= codePasteLimit &&
@@ -159,7 +187,7 @@ export function pastePastePlaceManage() {
           ) {
             return pasteBecomeCodeBlock(view, plainText.replace(/\r\n?/g, "\n"));
           }
-          // ── ⑤ 其余交给上游（HTML 走 DOM；纯文本被当 Markdown 解析）
+          // ── ⑥ 其余交给上游（HTML 走 DOM；纯文本被当 Markdown 解析）
           return false;
         },
       },

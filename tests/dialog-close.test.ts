@@ -69,12 +69,16 @@ testCase("独立对话框壳都给绝对定位的关闭按钮提供定位上下�
   const print = readFileSync(join(process.cwd(), "src/styles/print-dialog.css"), "utf8");
   const picker = readFileSync(join(process.cwd(), "src/styles/file-picker.css"), "utf8");
   const settings = readFileSync(join(process.cwd(), "src/styles/settings.css"), "utf8");
+  const shape = readFileSync(join(process.cwd(), "src/styles/theme/shape.css"), "utf8");
   assertValue(/\.confirm-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "确认框壳缺少 position");
   assertValue(/\.print-dialog\s*\{[^}]*position:\s*relative/s.test(print), "打印框缺少 position");
   assertValue(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "文件选择器缺少 position");
   assertValue(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "设置框缺少 position");
   assertValue(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(overlay), "关闭按钮不是绝对定位");
-  assertValue(/\.dialog-close\s*\{[^}]*width:\s*32px/s.test(overlay), "关闭按钮点击区不是 32px");
+  assertValue(/\.dialog-close\s*\{[^}]*width:\s*var\(--dialog-close-size\)/s.test(overlay), "关闭按钮尺寸没有由主题 CSS 决定");
+  assertValue(/\.dialog-close\s*\{[^}]*border-radius:\s*var\(--dialog-close-radius\)/s.test(overlay), "关闭按钮圆角没有由主题 CSS 决定");
+  assertValue(/\[data-ui-style="adwaita"\]\s*\{[^}]*--dialog-close-radius:\s*999px/s.test(shape), "Adwaita 没有圆形关闭控件");
+  assertValue(/\[data-ui-style="windows10"\]\s*\{[^}]*--dialog-close-radius:\s*0/s.test(shape), "Windows 10 没有方形关闭控件");
   assertValue(/\.dialog-close:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s.test(overlay), "关闭按钮缺少统一焦点环");
 });
 

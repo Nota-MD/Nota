@@ -96,20 +96,32 @@
   display: block;
   margin: 0.8em 0;
   background: transparent;
+  border-radius: var(--radius-sm);
+  outline: 1px solid transparent;
+  outline-offset: 4px;
+  transition:
+    outline-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode,
 :where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode .nota-html-render {
-  /* 选中只负责显示右上角源码按钮，不把整块刷成灰色。 */
+  /* 程序化 NodeSelection 不应画出轮廓或底色。 */
+  outline-color: transparent;
   background: transparent;
   color: inherit;
 }
 
-:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode::selection,
-:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode ::selection {
-  /* 原子节点被整块选中时，浏览器会把内部渲染文本一并涂上选择色。 */
+:where(.editor-mount .ProseMirror) .nota-html-block:not(.nota-html-source-mode)::selection,
+:where(.editor-mount .ProseMirror) .nota-html-block:not(.nota-html-source-mode) ::selection {
+  /* 原子节点被程序或拖选覆盖时，禁止把内部渲染文本涂成系统选择色。 */
   background: transparent;
   color: inherit;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-block:hover,
+:where(.editor-mount .ProseMirror) .nota-html-block:focus-within {
+  outline-color: var(--border);
 }
 
 /* 渲染内容就是文档内容。这里不画灰底、不改字体，也不额外加边框；HTML 自己
@@ -124,6 +136,8 @@
 
 :where(.editor-mount .ProseMirror) .nota-html-render {
   cursor: text;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-render img {
@@ -169,6 +183,8 @@
   overflow-wrap: anywhere;
   /* 同公式源码框：覆盖层光标把父级原生光标设为透明，表单控件必须恢复。 */
   caret-color: var(--accent);
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-source .cm-editor,
@@ -229,8 +245,7 @@
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-block:hover .nota-html-source-toggle,
-:where(.editor-mount .ProseMirror) .nota-html-block:focus-within .nota-html-source-toggle,
-:where(.editor-mount .ProseMirror) .nota-html-block.ProseMirror-selectednode .nota-html-source-toggle {
+:where(.editor-mount .ProseMirror) .nota-html-block:focus-within .nota-html-source-toggle {
   opacity: 1;
   pointer-events: auto;
 }

@@ -672,6 +672,7 @@ Win10 与 Win11 的 UA 是同一串 `Windows NT 10.0`）——它们只能手选
 |---|---|---|
 | `--btn-bg` / `--btn-bg-hover` / `--btn-bg-active` / `--btn-border` | `styles/app.css` 的 `.btn` | 落到默认（原来的样子）。⚠️ **Adwaita 给的是 `transparent`**——它那套稿子要求普通按钮扁平无底 |
 | `--switch-w/h/knob/travel/on/off/knob-bg` | `styles/settings.css` 的 `.stg-switch` | 同上落到默认（36×14、行走 16px）。⚠️ 只有设置页用得上，**菜单里没有开关** |
+| `--select-*` | `styles/settings-controls.css` 的自绘下拉 | 落到默认控件色。⚠️ 收起态和 portal 出来的展开列表**都**读这组变量；不要再按原生 `<option>` 写主题 |
 | `--material-bg` / `--material-blur` / `--material-saturate` | `theme/extras.css` 的 `@supports` 块（只有四个材质风格在名单里） | 落到 `var(--bg-raised)`，也就是**不糊**——这是本机的实际观感，理由见 `docs/04` §3.2c |
 
 ⚠️⚠️ **`--material-bg` 的透明度不要照稿子写**。那六份稿子给的是 0.90–0.98，

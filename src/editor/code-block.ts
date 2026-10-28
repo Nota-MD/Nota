@@ -355,6 +355,7 @@ export const codeBlockView = $view(
       // 而"选语言"那条路是好的（`applyLanguage` 走 `getPos()`＋`nodeAt()` 读活文档），
       // 所以症状是"改成 A 之后框上写着 B、再点开还是高亮 B"——一半对一半错。
       let currentNode = initialNode;
+      let codeEditor: ReturnType<typeof createCodeBlockEditor>;
 
       const languagePicker = createLanguagePicker({
         allLanguages: allLanguages,
@@ -364,6 +365,7 @@ export const codeBlockView = $view(
         distinguishName: relatedLanguages,
         currentLanguage: () => languageOf(currentNode),
         selectLanguage: applyLanguage,
+        restoreFocus: () => codeEditor.clusterFocus(),
       });
       langWrap.appendChild(languagePicker.dom);
 
@@ -389,7 +391,7 @@ export const codeBlockView = $view(
       // **刻意没装 `history()`**，代码块里的 Ctrl+Z 转给 PM 走。
       // 装两套的话，两边各记一份、互相看不见对方——"在代码块里改一个字、
       // 点到正文再按 Ctrl+Z"就会只撤销正文那一步，而用户以为撤销的是刚才那次编辑。
-      const codeEditor = createCodeBlockEditor({
+      codeEditor = createCodeBlockEditor({
         initialStartText: initialNode.textContent,
         initialStartLanguage: languageOf(initialNode),
         textChangeConvert: (newText) => pushReturnDocument(newText),

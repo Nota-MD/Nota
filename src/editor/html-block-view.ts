@@ -347,7 +347,9 @@ export function blockHTMLView(documentPath: string | null = null) {
           }
         }
 
-        splitReplace.addEventListener("mousedown", (event) => event.preventDefault());
+        splitReplace.addEventListener("mousedown", (event) => {
+          if (event.button === 0) event.preventDefault();
+        });
         splitReplace.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -357,6 +359,18 @@ export function blockHTMLView(documentPath: string | null = null) {
           } else {
             setSourceMode(true);
           }
+        });
+
+        // 渲染区本身不是可选文本，而是进入源码编辑的命中区域。必须在
+        // `mousedown` 就直接切换：WebKit 在原子块里的图片上可能吞掉后续 click，
+        // 只靠根节点那条 click 兜底会表现为“点图片没有任何反应”。链接和按钮
+        // 仍由各自的分支处理。
+        show.addEventListener("mousedown", (event) => {
+          if (event.button !== 0) return;
+          const target = event.target;
+          if (target instanceof Element && target.closest("a[href], button")) return;
+          event.preventDefault();
+          if (!sourceMode) setSourceMode(true);
         });
 
         source2.addEventListener("keydown", (event) => {
@@ -372,6 +386,7 @@ export function blockHTMLView(documentPath: string | null = null) {
         // 整块渲染区域都是“进入源码编辑”的命中范围。链接不在这里导航，图片、
         // 徽章和空白处也都算同一块；右上角勾号负责结束编辑。
         root.addEventListener("click", (event) => {
+          if (event.button !== 0) return;
           const target = event.target;
           if (!(target instanceof Element)) return;
           if (target.closest("button, textarea")) return;
@@ -408,7 +423,9 @@ export function blockHTMLView(documentPath: string | null = null) {
             const target = event.target;
             return (
               target instanceof Node &&
-              (source2.contains(target) || splitReplace.contains(target))
+              (source2.contains(target) ||
+                splitReplace.contains(target) ||
+                (show.contains(target) && event.type === "mousedown"))
             );
           },
           ignoreMutation: () => true,

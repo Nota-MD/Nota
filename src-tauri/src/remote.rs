@@ -29,10 +29,29 @@ pub(crate) fn 取_带进度(
     替换规则: &str,
     上限: u64,
     超时: Duration,
+    进度: impl FnMut(u64, Option<u64>),
+) -> Result<Vec<u8>> {
+    取_带进度_可取消(地址, 替换规则, 上限, 超时, || false, 进度)
+}
+
+/// 与 [`取_带进度`] 相同，但每个数据块之前都询问一次是否取消。
+///
+/// `cancelled` 在每次 `read` 前调用，因此按钮按下后最多等到当前 64 KiB
+/// 数据块返回就会退出。已经收下的字节只留在本次调用的局部变量里，取消或
+/// 失败都不会写出半个安装包。
+pub(crate) fn 取_带进度_可取消(
+    地址: &str,
+    替换规则: &str,
+    上限: u64,
+    超时: Duration,
+    cancelled: impl Fn() -> bool,
     mut 进度: impl FnMut(u64, Option<u64>),
 ) -> Result<Vec<u8>> {
     use std::io::Read as _;
 
+    if cancelled() {
+        return Err(NotaError::other("更新下载已取消"));
+    }
     let 地址 = crate::settings::download::改写地址(地址, 替换规则)?;
     if !地址可信(&地址) {
         return Err(NotaError::other(format!(
@@ -43,6 +62,9 @@ pub(crate) fn 取_带进度(
         .http_status_as_error(false)
         .max_redirects(5)
         .timeout_global(Some(超时))
+        // 取消只能在一次阻塞读取返回后生效。给响应体读取单独设一个有界的
+        // 停顿上限，服务器卡住时“终止下载”也不会一直等到十分钟总时限。
+        .timeout_recv_body(Some(Duration::from_secs(15)))
         .user_agent(format!("Nota/{}", env!("CARGO_PKG_VERSION")))
         .build();
     let 请求 = ureq::http::Request::builder()
@@ -69,6 +91,9 @@ pub(crate) fn 取_带进度(
         if 读入 == 0 {
             break;
         }
+        if cancelled() {
+            return Err(NotaError::other("更新下载已取消"));
+        }
         字节.extend_from_slice(&块[..读入]);
         进度(字节.len() as u64, 总长);
     }
@@ -82,4 +107,22 @@ pub(crate) fn 地址可信(地址: &str) -> bool {
         || 地址.starts_with("http://127.0.0.1:")
         || 地址.starts_with("http://localhost:")
         || 地址.starts_with("http://[::1]:")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn 取消标记在发请求前就生效() {
+        let result = 取_带进度_可取消(
+            "https://example.invalid/nota.pkg",
+            "",
+            1024,
+            Duration::from_secs(1),
+            || true,
+            |_, _| {},
+        );
+        assert!(result.unwrap_err().to_string().contains("取消"));
+    }
 }

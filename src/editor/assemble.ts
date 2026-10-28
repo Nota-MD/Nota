@@ -70,7 +70,7 @@ import { instantRender } from "./instant-render";
 // 光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 半透明画在那段文字两边。
 // 块级标记归上面那个（画在装订线里），行内没有装订线，所以是另一份插件；
 // 两边的分工与"为什么占宽度"写在它自己的文件头上。
-import { markHint } from "./mark-hint";
+import { inlineSyntaxNodePlugins, markHint } from "./mark-hint";
 // 任务项的复选框：画出来 + 点它勾上。DOM 钩子（`data-checked`）是
 // `preset-gfm` 早就给了的，缺的是 CSS 和点击，理由写在它自己的文件头上。
 import { taskList } from "./task-list";
@@ -630,7 +630,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 行内标记的提示（加粗/斜体的 `*`）。⚠️ **只给可编辑实例**：它是编辑时的
     // 提示，不是文档的一部分——只读实例有两个（分屏预览、导出用的离屏实例），
     // 装上就会在预览和导出文件里多出一对星号。理由写在 `mark-hint.ts` 文件头。
-    .use(readOnly ? [] : [markHint])
+    .use(readOnly ? [] : [...inlineSyntaxNodePlugins, markHint])
     // 斜杠菜单（行首敲 `/` 弹插入列表）。⚠️ **只给可编辑实例**——与上面那条
     // （`markHint`）同一个理由，只为它多一层：只读实例有两个，在那儿弹一块
     // "想插入什么"的面板纯属噪声。

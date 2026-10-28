@@ -29,13 +29,32 @@ testCase("主窗口先在屏幕外预热，且不占任务栏", () => {
     readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8"),
   ) as {
     app: {
-      windows: Array<{ label: string; visible?: boolean; skipTaskbar?: boolean; x?: number; y?: number }>;
+      windows: Array<{
+        label: string;
+        visible?: boolean;
+        skipTaskbar?: boolean;
+        x?: number;
+        y?: number;
+        minWidth?: number;
+        minHeight?: number;
+      }>;
     };
   };
   const main = config.app.windows.find((window) => window.label === "main");
   assertValue(main?.visible === true, "窗口必须在屏幕外保持可渲染");
   assertValue(main?.skipTaskbar === true, "预热时不能出现在任务栏");
   assertValue((main?.x ?? 0) < 0 && (main?.y ?? 0) < 0, "预热位置必须在屏幕外");
+});
+
+testCase("主窗口保留设置页与编辑区所需的最小尺寸", () => {
+  const config = JSON.parse(
+    readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8"),
+  ) as {
+    app: { windows: Array<{ label: string; minWidth?: number; minHeight?: number }> };
+  };
+  const main = config.app.windows.find((window) => window.label === "main");
+  assertValue(main?.minWidth === 720, "主窗口最小宽度不是 720px");
+  assertValue(main?.minHeight === 520, "主窗口最小高度不是 520px");
 });
 
 testCase("入口不再绘制 Nota 加载动画", () => {

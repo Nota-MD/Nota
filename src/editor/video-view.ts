@@ -56,7 +56,7 @@
 
 import { imageSchema } from "@milkdown/kit/preset/commonmark";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import type { NodeView } from "@milkdown/kit/prose/view";
+import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
 
 import { api } from "@/bridge/ipc";
@@ -139,6 +139,8 @@ interface viewItem {
   dom: HTMLElement;
   /** 图片或视频元素本身。 */
   mediaBody: HTMLImageElement | HTMLVideoElement;
+  /** 图片选中后显示的 Markdown 源文输入框；视频没有。 */
+  sourceBody: HTMLInputElement | null;
   /** 造的时候认定的是不是视频。**建成之后不再变**（变了就整个重建，见 `update`）。 */
   isVisionFrequency: boolean;
   /** 异步读图令牌：后一次 update 回来时，旧结果不许覆盖新节点。 */
@@ -151,11 +153,19 @@ interface viewItem {
  */
 function createElement(isVisionFrequency: boolean): viewItem {
   if (!isVisionFrequency) {
-    // ⚠️ 图片这一支返回的是**裸 `<img>`**，不是包一层盒子：这是 preset
-    // `toDOM` 今天给出的形状（`["img", {...imageAttr, ...node.attrs}]`，
-    // 本仓没有覆盖 `imageAttr`），一模一样才不会动到别处对图片的假设。
+    // 图片外面这一层只在编辑时承载 Markdown 源码输入框；渲染内容仍是裸
+    // `<img>`，导出时源码框会被删除，这一层也会被展开。
+    const box = document.createElement("span");
+    box.className = "nota-image";
+    const source = document.createElement("input");
+    source.type = "text";
+    source.className = "nota-image-source";
+    source.spellcheck = false;
+    source.autocomplete = "off";
+    source.setAttribute("aria-label", "Image Markdown source");
     const img = document.createElement("img");
-    return { dom: img, mediaBody: img, isVisionFrequency: false, represent: 0 };
+    box.append(source, img);
+    return { dom: box, mediaBody: img, sourceBody: source, isVisionFrequency: false, represent: 0 };
   }
 
   // ⚠️ 视频这一支**要**包一层盒子，两个理由：
@@ -172,7 +182,7 @@ function createElement(isVisionFrequency: boolean): viewItem {
   // 见文件头第 2 条：schema 是 `draggable: true`，这一行是"别把我当拖拽把手"。
   video.setAttribute("draggable", "false");
   box.appendChild(video);
-  return { dom: box, mediaBody: video, isVisionFrequency: true, represent: 0 };
+  return { dom: box, mediaBody: video, sourceBody: null, isVisionFrequency: true, represent: 0 };
 }
 
 /**
@@ -216,7 +226,31 @@ function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | nu
     else item3.mediaBody.removeAttribute("aria-label");
   } else {
     item3.mediaBody.setAttribute("alt", alt);
+    if (item3.sourceBody && document.activeElement !== item3.sourceBody) {
+      item3.sourceBody.value = imageMarkdownSource(node);
+    }
   }
+}
+
+/** 当前图片节点的 Markdown 源文。 */
+export function imageMarkdownSource(node: PMNode): string {
+  const src = text2(node.attrs.src);
+  const alt = text2(node.attrs.alt).replaceAll("]", "\\]");
+  const title = text2(node.attrs.title).replaceAll('"', '\\"');
+  return title ? `![${alt}](${src} "${title}")` : `![${alt}](${src})`;
+}
+
+/** 解析用户改过的图片 Markdown；认不出来时给 `null`，绝不猜测或吞掉内容。 */
+export function parseImageMarkdownSource(
+  source: string,
+): { src: string; alt: string; title: string } | null {
+  const match = /^\s*!\[((?:\\.|[^\]])*)\]\(\s*(\S+?)(?:\s+["']((?:\\.|[^"'])*)["'])?\s*\)\s*$/.exec(source);
+  if (!match) return null;
+  return {
+    alt: match[1]!.replaceAll("\\]", "]"),
+    src: match[2]!,
+    title: (match[3] ?? "").replaceAll('\\"', '"'),
+  };
 }
 
 /**
@@ -229,10 +263,66 @@ export function visionFrequencyView(documentPath: string | null = null) {
   return $view(
     imageSchema.node,
     () =>
-      (initialNode: PMNode): NodeView => {
+      (
+        initialNode: PMNode,
+        view: EditorView,
+        getPos: () => number | undefined,
+      ): NodeView => {
       const initial = createElement(IsVideoSource(text2(initialNode.attrs.src)));
       const isVisionFrequency = initial.isVisionFrequency;
       writeAttribute(initial, initialNode, documentPath);
+      let currentNode = initialNode;
+
+      const showSource = (): void => {
+        initial.dom.classList.add("is-selected");
+        if (!initial.sourceBody) return;
+        initial.sourceBody.value = imageMarkdownSource(currentNode);
+        requestAnimationFrame(() => initial.sourceBody?.focus());
+      };
+
+      initial.mediaBody.addEventListener("mousedown", (event) => {
+        if (initial.isVisionFrequency || !(event instanceof MouseEvent) || event.button !== 0) return;
+        event.preventDefault();
+        showSource();
+      });
+
+      const commitSource = (): void => {
+        const source = initial.sourceBody;
+        if (!source) return;
+        const parsed = parseImageMarkdownSource(source.value);
+        if (!parsed) {
+          source.value = imageMarkdownSource(currentNode);
+          return;
+        }
+        const position2 = getPos();
+        if (position2 === undefined) return;
+        view.dispatch(
+          view.state.tr.setNodeMarkup(position2, undefined, {
+            ...currentNode.attrs,
+            ...parsed,
+          }),
+        );
+      };
+
+      initial.sourceBody?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          commitSource();
+          view.focus();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          initial.sourceBody!.value = imageMarkdownSource(currentNode);
+          view.focus();
+        }
+      });
+      initial.sourceBody?.addEventListener("blur", commitSource);
+      initial.sourceBody?.addEventListener("blur", () => {
+        queueMicrotask(() => {
+          if (initial.dom.isConnected && !initial.dom.contains(document.activeElement)) {
+            initial.dom.classList.remove("is-selected");
+          }
+        });
+      });
 
       return {
         dom: initial.dom,
@@ -244,13 +334,29 @@ export function visionFrequencyView(documentPath: string | null = null) {
           // ⚠️ 症状对照：不写这一条的话，用户把 `![](a.mp4)` 改成 `![](a.png)`
           // 之后**屏幕上还是一块播放器**（而且 `a.png` 播不出来，是黑的）。
           if (IsVideoSource(text2(newValueNode.attrs.src)) !== isVisionFrequency) return false;
+          currentNode = newValueNode;
           writeAttribute(initial, newValueNode, documentPath);
           return true;
         },
-        // 视频自己就会变 DOM（控件浮出来、封面帧画上去），告诉 ProseMirror
-        // **别把这些当成"用户编辑了文档"**。图片那一支同样返回 `true`：它的
-        // 属性全由上面那个 `update` 写，用不着观察器再看一眼。
+        stopEvent: (event) =>
+          event.target === initial.sourceBody ||
+          (!initial.isVisionFrequency && event.target === initial.mediaBody),
+        // NodeView 内部所有 DOM 都由这里自己写：图片异步拿到 data URL 后设置
+        // `src` 也是内部更新。放给 ProseMirror 观察会被误判成用户编辑，
+        // 随后整颗节点重绘时图片会退回只有 alt 的空壳。
         ignoreMutation: () => true,
+        // Programmatic focusAtStart / reload may create a NodeSelection at an
+        // image without any user intent. Keep the source editor closed in that
+        // case; only an explicit click on the image opens it.
+        selectNode: () => {
+          initial.dom.classList.remove("is-selected");
+        },
+        deselectNode: () => {
+          initial.dom.classList.remove("is-selected");
+          if (initial.sourceBody) {
+            initial.sourceBody.value = imageMarkdownSource(currentNode);
+          }
+        },
         };
       },
   );

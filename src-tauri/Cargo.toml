@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.10.0-beta"
+version = "0.10.1-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota — 所见即所得的 Markdown 编辑器，带 Lua 插件系统"
@@ -46,11 +46,11 @@ mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"]
 # ── 杂项 ──────────────────────────────────────────────────────────────────
 thiserror = "2"
 dirs = "6"
-# 系统原生文件选择器。Linux 用 GTK 的 `GtkFileChooserNative`：桌面提供
-# xdg-desktop-portal 时由系统绘制，因此 GNOME/KDE 的搜索、最近文件与书签都可用；
+# 系统原生文件选择器。Linux 经 XDG Desktop Portal 调用桌面自己的选择器：
+# GNOME 下由 GTK4 portal 呈现，KDE 下由 Plasma 呈现，搜索、最近文件与书签均来自系统；
 # Windows 走 Common Item Dialog，macOS 走 NSOpenPanel/NSSavePanel。
 # 应用内选择器保留为命令不可用时的回退。
-rfd = { version = "0.16", default-features = false, features = ["gtk3"] }
+rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "async-std"] }
 # `sys-locale`：**这台机器的系统语言**（`src-tauri/src/lang.rs::系统语言`）。
 #
 # ⚠️ 2026-10-16 提成直接依赖，理由与上面 `chrono` / `sha2` 那两条同源：**借别人的

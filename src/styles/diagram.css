@@ -141,7 +141,9 @@
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--bg);
+  /* 图表画在文档纸面上，不是界面外壳上。深色外壳 + 浅色 Adwaita 文档时，
+     `--bg` 是近黑色，会把透明底的 Mermaid SVG 整体衬成黑块。 */
+  background: var(--doc-bg, var(--bg));
   /* 窄窗格里让图自己横向滚，而不是把正文列顶宽。 */
   overflow-x: auto;
 }

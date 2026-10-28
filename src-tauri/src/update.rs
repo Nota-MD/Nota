@@ -209,8 +209,15 @@ pub fn 检查(替换规则: &str) -> Result<更新状态> {
 pub fn 安装(
     替换规则: &str,
     进度: impl FnMut(下载进度),
+    cancelled: impl Fn() -> bool,
 ) -> Result<安装结果> {
+    if cancelled() {
+        return Err(NotaError::other("更新下载已取消"));
+    }
     let 清单 = 取清单(替换规则)?;
+    if cancelled() {
+        return Err(NotaError::other("更新下载已取消"));
+    }
     验证清单(&清单)?;
     let 类型 = 当前安装类型();
     if 类型 == 安装类型::Dev {
@@ -226,7 +233,7 @@ pub fn 安装(
     if !合法下载地址(&包.url) {
         return Err(NotaError::other("更新包地址不属于 Nota 官方 Release"));
     }
-    执行(类型, 包, 替换规则, 进度)
+    执行(类型, 包, 替换规则, 进度, cancelled)
 }
 
 fn 验证清单(清单: &清单) -> Result<()> {
@@ -269,13 +276,21 @@ fn 选包<'a>(清单: &'a 清单, 类型: 安装类型) -> Option<&'a 安装包>
     })
 }
 
-fn 执行(
+fn 执行<F>(
     类型: 安装类型,
     包: &安装包,
     替换规则: &str,
     mut 进度: impl FnMut(下载进度),
-) -> Result<安装结果> {
-    let 文件 = 下载到临时(包, 替换规则, &mut 进度)?;
+    cancelled: F,
+) -> Result<安装结果>
+where
+    F: Fn() -> bool,
+{
+    let 文件 = 下载到临时(包, 替换规则, &mut 进度, &cancelled)?;
+    if cancelled() {
+        let _ = fs::remove_file(&文件);
+        return Err(NotaError::other("更新下载已取消"));
+    }
     进度(下载进度 {
         phase: "installing".to_string(),
         downloaded: fs::metadata(&文件).map(|m| m.len()).unwrap_or(0),
@@ -283,16 +298,16 @@ fn 执行(
     });
     match 类型 {
         安装类型::Deb => {
-            启动特权("apt-get", &["install", "-y"], &文件)?;
+            安排_deb_安装(&文件)?;
             Ok(安装结果 {
-                message: "系统包管理器正在安装更新。完成后重新启动 Nota。".to_string(),
+                message: "更新已准备。Nota 退出后将安装并重新启动。".to_string(),
                 restart_required: true,
             })
         }
         安装类型::Rpm => {
-            启动特权脚本(&文件)?;
+            安排_rpm_安装(&文件)?;
             Ok(安装结果 {
-                message: "系统包管理器正在安装更新。完成后重新启动 Nota。".to_string(),
+                message: "更新已准备。Nota 退出后将安装并重新启动。".to_string(),
                 restart_required: true,
             })
         }
@@ -306,7 +321,7 @@ fn 执行(
         安装类型::ExeInstall => {
             启动_windows_安装器(&文件)?;
             Ok(安装结果 {
-                message: "Windows 安装程序已启动。退出 Nota 后按提示完成替换。".to_string(),
+                message: "更新已准备。Nota 退出后将以静默覆盖模式安装并重新启动。".to_string(),
                 restart_required: true,
             })
         }
@@ -324,25 +339,36 @@ fn 执行(
 const MAIN_DEV_UPDATE_COMMAND: &str =
     "git pull --ff-only && npm ci && npm run build && cd src-tauri && cargo build --release";
 
-fn 下载到临时(
+fn 下载到临时<F>(
     包: &安装包,
     替换规则: &str,
     进度: &mut impl FnMut(下载进度),
-) -> Result<PathBuf> {
+    cancelled: &F,
+) -> Result<PathBuf>
+where
+    F: Fn() -> bool,
+{
     if !合法下载地址(&包.url) {
         return Err(NotaError::other("更新包地址不属于 Nota 官方 Release"));
     }
     let mut 上次报告 = 0_u64;
-    let 字节 = remote::取_带进度(&包.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT, |下载, 总长| {
-        if 值得报告进度(下载, 上次报告, 总长) {
-            上次报告 = 下载;
-            进度(下载进度 {
-                phase: "downloading".to_string(),
-                downloaded: 下载,
-                total: 总长,
-            });
-        }
-    })?;
+    let 字节 = remote::取_带进度_可取消(
+        &包.url,
+        替换规则,
+        PACKAGE_LIMIT,
+        PACKAGE_TIMEOUT,
+        || cancelled(),
+        |下载, 总长| {
+            if 值得报告进度(下载, 上次报告, 总长) {
+                上次报告 = 下载;
+                进度(下载进度 {
+                    phase: "downloading".to_string(),
+                    downloaded: 下载,
+                    total: 总长,
+                });
+            }
+        },
+    )?;
     let 摘要 = format!("{:x}", Sha256::digest(&字节));
     if 摘要 != 包.sha256.to_ascii_lowercase() {
         return Err(NotaError::other(format!(
@@ -380,23 +406,56 @@ fn 安全文件名(名: &str) -> String {
         .collect()
 }
 
-fn 启动特权(程序: &str, 参数: &[&str], 文件: &Path) -> Result<()> {
-    let mut 命令 = Command::new("pkexec");
-    命令.arg(程序).args(参数).arg(文件);
-    crate::proc::spawn_retrying(&mut 命令)
-        .map(|_| ())
-        .map_err(|e| NotaError::other(format!("无法启动 pkexec 安装更新：{e}")))
+#[cfg(target_os = "linux")]
+fn 安排_deb_安装(文件: &Path) -> Result<()> {
+    安排_linux_包安装("pkexec apt-get install -y \"$2\"", 文件)
 }
 
-fn 启动特权脚本(文件: &Path) -> Result<()> {
-    let 脚本 = "if command -v dnf >/dev/null 2>&1; then dnf install -y \"$1\"; \
-                elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install \"$1\"; \
-                else rpm -Uvh --replacepkgs \"$1\"; fi";
-    let mut 命令 = Command::new("pkexec");
-    命令.args(["sh", "-c", 脚本, "nota-update"]).arg(文件);
-    crate::proc::spawn_retrying(&mut 命令)
+#[cfg(not(target_os = "linux"))]
+fn 安排_deb_安装(_文件: &Path) -> Result<()> {
+    Err(NotaError::other("Debian 安装包只能在 Linux 上安装"))
+}
+
+#[cfg(target_os = "linux")]
+fn 安排_rpm_安装(文件: &Path) -> Result<()> {
+    let 安装 = "if command -v dnf >/dev/null 2>&1; then \
+                pkexec dnf install -y \"$2\"; \
+                elif command -v zypper >/dev/null 2>&1; then \
+                pkexec zypper --non-interactive install \"$2\"; \
+                else pkexec rpm -Uvh --replacepkgs \"$2\"; fi";
+    安排_linux_包安装(安装, 文件)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn 安排_rpm_安装(_文件: &Path) -> Result<()> {
+    Err(NotaError::other("RPM 安装包只能在 Linux 上安装"))
+}
+
+/// 让包管理器与重启进程离开当前 Nota 的生命周期：先等这个进程退出，
+/// 再授权安装，成功后原路径重新启动。这样安装器不会覆盖正在执行的二进制，
+/// 也不会出现“界面提示更新完成、内存里其实还是旧版”的情况。
+#[cfg(target_os = "linux")]
+fn 安排_linux_包安装(安装动作: &str, 文件: &Path) -> Result<()> {
+    let exe = std::env::current_exe()
+        .map_err(|e| NotaError::other(format!("读不到当前可执行文件：{e}")))?;
+    let 脚本 = format!(
+        "while kill -0 \"$1\" 2>/dev/null; do sleep 1; done; \
+         {安装动作} >>\"$4\" 2>&1 && \
+         nohup \"$3\" >>\"$4\" 2>&1 &"
+    );
+    let 日志 = std::env::temp_dir().join("nota-update-install.log");
+    Command::new("sh")
+        .args(["-c", &脚本, "nota-update"])
+        .arg(std::process::id().to_string())
+        .arg(文件)
+        .arg(exe)
+        .arg(日志)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
         .map(|_| ())
-        .map_err(|e| NotaError::other(format!("无法启动 pkexec 安装 RPM：{e}")))
+        .map_err(|e| NotaError::other(format!("更新安装进程起不来：{e}")))
 }
 
 fn 替换_app_image(新文件: &Path) -> Result<()> {
@@ -461,7 +520,8 @@ fn 启动_power_shell_文件替换(文件: &Path, 便携版: bool) -> Result<()>
         )
     } else {
         format!(
-            "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; Start-Process -FilePath '{}' -ArgumentList '/S' -Wait",
+            "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; \
+             Start-Process -FilePath '{}' -ArgumentList '/S','/UPDATE','/R' -Wait",
             std::process::id(),
             ps(文件),
         )
@@ -606,5 +666,11 @@ mod tests {
             assert!(!package.sha256.is_empty(), "{kind} 缺少 SHA-256");
             assert!(!package.file.is_empty(), "{kind} 缺少文件名");
         }
+    }
+
+    #[test]
+    fn 已请求取消时不访问更新清单() {
+        let result = 安装("", |_| {}, || true);
+        assert!(result.unwrap_err().to_string().contains("取消"));
     }
 }

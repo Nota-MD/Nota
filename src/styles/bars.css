@@ -176,6 +176,237 @@
   outline-offset: -1px;
 }
 
+/* ── 居底悬浮工具栏（2026-10-27 重设计）────────────────────────────────
+ *
+ * 参考 Typora 的编辑态工具栏：一条不占正文流空间的胶囊，停靠在状态栏上方，
+ * 只保留高频动作；标题、列表与扩展格式收进向上展开的菜单。旧版 CSS 仍留在
+ * 上面解释历史取舍，这里用同样的定位属性完整覆盖，不依赖删除历史注释。
+ */
+.app-main > .format-bar,
+.app-main[data-toolbar="hover"] > .format-bar,
+.app[data-zen="true"] .app-main[data-toolbar="hover"] > .format-bar {
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: calc(var(--nota-bottom-bar-height, 0px) + 14px);
+  left: 50%;
+  z-index: 30;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  overflow: visible;
+  gap: 2px;
+  padding: 5px 7px;
+  border: 1px solid var(--format-bar-border);
+  border-radius: var(--format-bar-radius);
+  background: var(--format-bar-bg);
+  box-shadow: var(--format-bar-shadow);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.app-main[data-toolbar="hover"] > .format-bar {
+  animation: format-bar-rise var(--duration-fast) var(--ease-out);
+}
+
+@keyframes format-bar-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.format-group {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 1px;
+}
+
+.format-selector {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+  min-width: 92px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.format-selector:hover,
+.format-selector[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.format-selector:focus-visible,
+.format-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.format-caret {
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.app-main > .format-bar .format-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border-radius: 999px;
+  color: var(--fg-muted);
+  gap: 4px;
+}
+
+.app-main > .format-bar .format-btn:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.app-main > .format-bar .format-btn:active {
+  background: var(--bg-active);
+}
+
+.app-main > .format-bar .format-btn[data-on="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.format-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.format-more-dots {
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  transform: translateX(0.04em);
+}
+
+.app-main > .format-bar .format-sep {
+  height: 18px;
+  margin: 0 5px;
+  background: var(--border);
+}
+
+.format-menu {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-width: 210px;
+  max-height: min(360px, 52vh);
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--popup-shadow);
+}
+
+.format-menu[data-align="end"] {
+  right: 0;
+  left: auto;
+}
+
+.format-bar .menu-popup {
+  top: auto;
+  bottom: calc(100% + 7px);
+  left: 0;
+  max-height: min(420px, 58vh);
+  transform-origin: bottom left;
+}
+
+.format-bar .format-menu-align-end > .menu-popup {
+  right: 0;
+  left: auto;
+  transform-origin: bottom right;
+}
+
+.format-menu-item {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.86rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.format-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.format-menu-item[data-on="true"] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.format-menu-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.format-menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.format-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+.format-menu-item.format-bar-close {
+  position: static;
+  height: auto;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--danger);
+}
+
+.format-menu-item.format-bar-close:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
 /* ── 查找与替换条 ─────────────────────────────────────────────────────── */
 
 .find-bar {

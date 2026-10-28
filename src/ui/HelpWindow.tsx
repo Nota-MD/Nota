@@ -28,6 +28,19 @@ export function helpSectionFromHash(hash: string): HelpSection {
     : "start";
 }
 
+/**
+ * 独立帮助页用查询参数指定章节。查询参数会随真实文档请求一起交给协议处理器，
+ * 不依赖 WebView2 对初始 fragment 的保留行为；旧 hash 仍然接受，方便开发时
+ * 直接打开 `index.html#help/...`。
+ */
+export function helpSectionFromLocation(search: string, hash = ""): HelpSection {
+  const candidate = new URLSearchParams(search).get("section");
+  if (HELP_SECTIONS.includes(candidate as HelpSection)) {
+    return candidate as HelpSection;
+  }
+  return helpSectionFromHash(hash);
+}
+
 export function buildHelpMarkdown(t: (text: string) => string): string {
   return `# ${t("Nota Help")}
 
@@ -91,7 +104,9 @@ export function HelpWindow() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [section] = useState<HelpSection>(() => helpSectionFromHash(location.hash));
+  const [section] = useState<HelpSection>(() =>
+    helpSectionFromLocation(location.search, location.hash),
+  );
   const mode = useUiMode(settings?.ui_mode ?? "auto");
 
   useEffect(() => {

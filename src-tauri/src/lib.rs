@@ -519,6 +519,7 @@ pub fn run() {
             commands::ui_style::nota_ui_styles_open_dir,
             commands::update::nota_update_check,
             commands::update::nota_update_install,
+            commands::update::nota_update_cancel,
             commands::plugin::nota_plugins_list,
             commands::plugin::nota_plugin_set_enabled,
             commands::plugin::nota_plugin_call,

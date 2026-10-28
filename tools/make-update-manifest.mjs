@@ -57,8 +57,7 @@ const manifest = {
   schema: 1,
   version,
   release_url: `https://github.com/Nota-MD/Nota/releases/tag/${tag}`,
-  notes:
-    "Application updates are experimental. Windows support is new and has limited testing. Package selection follows the installation type and CPU architecture.",
+  notes: "",
   packages,
 };
 

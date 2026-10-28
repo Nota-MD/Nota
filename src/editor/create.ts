@@ -266,10 +266,13 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       const { state } = view;
-      // `TextSelection.atStart`：文档开头第一个**合法**的文本位置（空文档、
-      // 第一块是代码块/表格都成立，不会抛）。
+      // ⚠️ 不能用 `TextSelection.atStart`：它遇到文档开头的 HTML、图片或其它
+      // 原子块时，会返回 `NodeSelection`。README 顶部恰好是一组 HTML 徽章，
+      // 启动时因此把整块刷成蓝色原生选区。`between` 会先向后找第一个真正的
+      // 文本位置，只有整篇没有任何可编辑文本时才退回邻近节点。
+      const opening = TextSelection.between(state.doc.resolve(0), state.doc.resolve(0));
       view.dispatch(
-        state.tr.setSelection(TextSelection.atStart(state.doc)).scrollIntoView(),
+        state.tr.setSelection(opening).scrollIntoView(),
       );
       // ⚠️ `focus()` 必须在**派完事务之后**：聚焦本身会派一次事务（`trailing`
       // 补尾段那一条），先聚焦再设选区的话，那笔事务的

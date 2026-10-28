@@ -77,7 +77,7 @@ export const uiMessages: Record<string, string> = {
   "Heading 4": "四级标题",
   "Heading 5": "五级标题",
   "Heading 6": "六级标题",
-  "Body text": "正文段落",
+  "Body text": "普通文本",
   "Table": "表格",
   "Insert Table (3 × 3)": "插入表格（3 × 3）",
   "Add Row Above": "上方插入行",
@@ -114,6 +114,8 @@ export const uiMessages: Record<string, string> = {
   "Strikethrough": "删除线",
   "Comment": "注释",
   "Link": "超链接",
+  "Lists": "列表",
+  "More formatting options": "更多格式选项",
   "Link Text": "链接文字",
   // 「链接」那个框（第 96 ＋ 102 项）：两个字段的名字，以及那颗第三条路。
   // ⚠️ 地址那一格的标签复用 `zh-runtime.ts` 的 `"Link URL"`（「链接地址」），
@@ -228,7 +230,6 @@ export const uiMessages: Record<string, string> = {
   "Loading…": "正在读取…",
   "Could not read the information.": "没读到这些信息。",
   "Checking for updates…": "正在检查更新…",
-  "Application updates are experimental. Nota verifies the published SHA-256 digest before handing a package to the operating system.": "应用更新目前为实验功能。Nota 会在把安装包交给操作系统前校验发布方提供的 SHA-256 摘要。",
   "Nota {0} is available.": "Nota {0} 已可用。",
   "Review Update": "查看更新",
   "Save PDF": "保存 PDF",
@@ -287,6 +288,12 @@ export const uiMessages: Record<string, string> = {
   "Windows portable build": "Windows 便携版",
   "Extract and replace the portable application folder after Nota exits.": "退出 Nota 后解压并覆盖便携版程序目录。",
   "Windows installer": "Windows 安装程序",
+  "Cancel Download": "终止下载",
+  "Canceling…": "正在终止…",
+  "Update download canceled.": "已终止更新下载。",
+  "Nota will now close and restart to finish installing the update.":
+    "Nota 即将关闭并重新启动，以完成更新。",
+  "Could not restart Nota: {0}": "无法重新启动 Nota：{0}",
   "Run the new installer in silent overwrite mode.": "运行新的安装程序并静默覆盖安装。",
   "Development build": "开发构建",
   "Rebuild from source; development builds are not replaced automatically.": "从源码重新构建；开发构建不会自动替换。",

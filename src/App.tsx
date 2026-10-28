@@ -447,7 +447,7 @@ export default function App() {
   // ⚠️ `toast` 是给菜单栏那条提示用的（它身份稳定，`useToasts` 里包的 `useCallback`）。
   const mainRef = useRef<HTMLElement | null>(null);
   const formatBarRef = useRef<HTMLDivElement | null>(null);
-  const { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome, hideToolbar } =
+  const { statusBarOpen, formatBarOpen, menuBarOpen, toolbarMode, setChrome } =
     useChromeVisibility(settings, updateSettings, { mainArea: mainRef, workToolBar: formatBarRef, toast });
 
   // ── 强制专注（核心功能，不是插件）──────────────────────────────────────
@@ -767,7 +767,7 @@ export default function App() {
 
   const { openConfigDir, resetSettings } = useSettingsFile({ setSettings, toast });
 
-  // 右键菜单（2026-10-04）的接线。⚠️ 五样都**原样传下去**，一件也不在这里
+  // 右键菜单（2026-10-04）的接线。⚠️ 六样都**原样传下去**，一件也不在这里
   // 加工：分类、形状、键盘路径全在 `ui/ContextMenu.tsx` 头上。
   const contextMenuWiring = {
     commandTable: menuHandlers,
@@ -775,6 +775,7 @@ export default function App() {
     check: menuChecks,
     cursor: commandState,
     toast,
+    copyImage: cutPasteBoard.copyImageSlice,
   };
 
   return (
@@ -866,13 +867,12 @@ export default function App() {
               typewriter,
               onlyReadMode: menuFeatures.readOnly,
               cellStyleConvertBarOpen: formatBarOpen,
-              // 右端那颗 ×（2026-10-04，第 49 项）。⚠️ 给的是**同一个 setter
-              // 的同一格**（`setChrome({ toolbar: "never" })`，见
-              // `ui/useChromeVisibility.ts` 里那个回调），不是第四个档位。
-              hideFormatBar: hideToolbar,
               commandState: commandState,
               setCommandState: setCommandState,
               runCommand: run,
+              runMenuCommand: (id) => menuHandlers[id]?.(),
+              disabledCommands,
+              menuChecks,
               insertImageLike,
               documentApi,
               findBar,

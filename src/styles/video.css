@@ -2,7 +2,7 @@
  * 视频（`![](a.mp4)`）：`editor/video-view.ts` 造出来的那两颗元素。
  * 2026-09-28 与那个文件同批落地。
  *
- * # ⚠️ 这个文件里只有三条规则，而且每一条都有它非在不可的理由
+ * # ⚠️ 这个文件只画编辑期的媒体节点
  *
  * 视频的**长相是浏览器给的**（原生控件），本仓管得着的只有"多大、圆不圆、
  * 全屏之后还管不管"。改这几条之前先想清楚：任何一条都可能盖住控件自己的定位
@@ -34,6 +34,81 @@
  * 而真出问题时用户看到的是全屏坏了。**无头环境验不了全屏**，这一条记在
  * `docs/07` 第 87 项的账里。
  */
+
+/* ── 编辑区里的图片与 Markdown 源文行 ────────────────────────────────── */
+
+.editor-mount .ProseMirror .nota-image {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  vertical-align: top;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.editor-mount .ProseMirror .nota-image > img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* NodeSelection paints a native browser selection across the whole inline
+   atom, including preceding whitespace. The image and its wrapper stay
+   transparent until they are actually edited. */
+.editor-mount .ProseMirror .nota-image.ProseMirror-selectednode,
+.editor-mount .ProseMirror .nota-image.ProseMirror-selectednode > img {
+  background: transparent;
+  outline: none;
+}
+
+.editor-mount .ProseMirror .nota-image.ProseMirror-selectednode::selection,
+.editor-mount .ProseMirror .nota-image.ProseMirror-selectednode > img::selection {
+  background: transparent;
+  color: inherit;
+}
+
+.editor-mount
+  .ProseMirror
+  .nota-image.ProseMirror-selectednode:not(.is-selected)
+  .nota-image-source {
+  /* 启动和重新载入可能产生程序化 NodeSelection；隐藏源文只由真实点击打开。 */
+  display: none;
+}
+
+.editor-mount .ProseMirror .nota-image-source {
+  display: none;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.3em;
+  padding: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  color: var(--doc-fg, var(--fg));
+  caret-color: var(--accent);
+  font: inherit;
+  letter-spacing: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.editor-mount .ProseMirror .nota-image.is-selected .nota-image-source {
+  display: block;
+}
+
+.editor-mount .ProseMirror .nota-image-source:focus,
+.editor-mount .ProseMirror .nota-image-source:focus-visible {
+  /* 与 Typora 一样，隐藏源文只以文本本身出现，不套输入框或焦点圈。 */
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
 
 /* ── 编辑区里的那颗视频 ───────────────────────────────────────────────── */
 

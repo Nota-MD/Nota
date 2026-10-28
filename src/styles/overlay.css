@@ -52,19 +52,19 @@
    `.settings-shell` 或 `.print-dialog`，不依赖各页面自己的标题栏结构。 */
 .dialog-close {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
   z-index: 6;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--dialog-close-size);
+  height: var(--dialog-close-size);
   padding: 0;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
+  border: 1px solid var(--dialog-close-border);
+  border-radius: var(--dialog-close-radius);
+  background: var(--dialog-close-bg);
+  color: var(--dialog-close-fg);
   cursor: pointer;
   transition:
     background-color var(--duration-fast) ease,
@@ -72,12 +72,12 @@
 }
 
 .dialog-close:hover {
-  background: var(--bg-hover);
+  background: var(--btn-bg-hover);
   color: var(--fg);
 }
 
 .dialog-close:active {
-  background: var(--bg-active);
+  background: var(--btn-bg-active);
 }
 
 .dialog-close:focus-visible {

@@ -30,6 +30,8 @@
  * ⚠️ 所以这里和 GNOME 的真实取值**不再逐值相同**（GNOME 自己的原值是
  * 4/6/10 + 控件高 30 + 间距 8，git 历史里也在）。改之前先想清楚上面那句话。 */
 [data-ui-style="adwaita"] {
+  --dialog-close-size: 32px;
+  --dialog-close-radius: 999px;
   --font-ui: "Adwaita Sans", "Noto Sans CJK SC", "Source Han Sans SC",
     "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "Adwaita Mono", "Noto Sans Mono CJK SC", monospace;
@@ -57,6 +59,8 @@
 
 /* GitHub：紧凑、直角感强、无阴影，靠 1px 边框分层 */
 [data-ui-style="ghub"] {
+  --dialog-close-size: 28px;
+  --dialog-close-radius: 6px;
   --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 12px;
@@ -90,6 +94,10 @@
  *    「macos 专属」那一节——那是本文件里唯一带组件选择器的地方。
  */
 [data-ui-style="macos"] {
+  --dialog-close-size: 24px;
+  --dialog-close-radius: 999px;
+  --dialog-close-bg: transparent;
+  --dialog-close-border: transparent;
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
@@ -133,6 +141,8 @@
  * 我们画不出来（见 `docs/04` 外观一节）。我们的顶栏是**内容行**，
  * 把它压到 32px 只会挤自己的按钮，换不来"更像 Breeze"。 */
 [data-ui-style="plasma"] {
+  --dialog-close-size: 28px;
+  --dialog-close-radius: 999px;
   --radius-sm: 3px;
   --radius: 4px;
   --radius-lg: 8px;
@@ -161,6 +171,10 @@
  * ⚠️ 2026-09-26 按用户那份 Win11 Mica 稿子重取过：圆角 5 → 4（稿子：控件 4px、
  * 窗口 8px），控件高 30 → 32（稿子的 32px），开关 36×20 → 40×20。 */
 [data-ui-style="windows"] {
+  --dialog-close-size: 32px;
+  --dialog-close-radius: 4px;
+  --dialog-close-bg: transparent;
+  --dialog-close-border: transparent;
   --radius-sm: 3px;
   --radius: 4px;
   --radius-lg: 8px;
@@ -198,6 +212,10 @@
  * ⚠️ 稿子里的「窗口圆角 0px」**我们做不到**：窗口边框归窗口管理器
  * （`decorations: true`），`--radius-sm: 2px` 管的是我们自己画的小控件。 */
 [data-ui-style="windows10"] {
+  --dialog-close-size: 32px;
+  --dialog-close-radius: 0;
+  --dialog-close-bg: transparent;
+  --dialog-close-border: transparent;
   --radius-sm: 2px;
   --radius: 2px;
   --radius-lg: 4px;
@@ -232,6 +250,8 @@
  * 原来那组大圆角是"Yaru 圆角更大"这个印象来的，稿子给的不是那个数——
  * 稿子新，按稿子走。 */
 [data-ui-style="yaru"] {
+  --dialog-close-size: 32px;
+  --dialog-close-radius: 999px;
   --radius-sm: 4px;
   --radius: 4px;
   --radius-lg: 6px;

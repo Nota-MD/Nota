@@ -125,7 +125,6 @@ group("一、两颗 ×：各栏恰好一颗，长相一致");
  * 同键、译文同句式"——**少的那两栏是从这个名单里去掉的**，不是把检查跳过。
  */
 const twoColumns = [
-  { name3: "格式化工具栏", textItem: ["ui", "FormatBar.tsx"], className: "format-bar-close", css: ["styles", "bars.css"] },
   { name3: "状态栏", textItem: ["ui", "StatusBar.tsx"], className: "statusbar-close", css: ["styles", "tabs-status.css"] },
 ] as const;
 
@@ -139,7 +138,7 @@ testCase("每一栏里带 `close` 的 className 都**恰好一个**", () => {
   }
 });
 
-testCase("两颗 × 画的是**同一个图标**（`folio-close-symbolic`）", () => {
+testCase("保留下来的状态栏 × 使用统一关闭图标", () => {
   for (const bar of twoColumns) {
     const block = pickPressButton(sourceTable.get(bar.className)!, bar.className);
     assertValue(
@@ -149,7 +148,7 @@ testCase("两颗 × 画的是**同一个图标**（`folio-close-symbolic`）", (
   }
 });
 
-testCase("⚠️ 每颗的 `title` 与 `aria-label` 是**同一个键**", () => {
+testCase("⚠️ 状态栏 × 的 `title` 与 `aria-label` 是**同一个键**", () => {
   // 读屏念的和鼠标悬停弹的必须是同一句话——两处分开写的话，改一处忘一处，
   // 症状是"看得见的人关得掉、看不见的人关不掉"（而且没人会报这个 bug）。
   for (const bar of twoColumns) {
@@ -161,7 +160,7 @@ testCase("⚠️ 每颗的 `title` 与 `aria-label` 是**同一个键**", () => 
   }
 });
 
-testCase("⚠️ 两条 i18n 键在中文表里都译了、而且**同一个句式**", () => {
+testCase("状态栏关闭文案仍在中文表里", () => {
   // 两条里一条写「收起…」另一条写「隐藏…」的话，两颗按钮读起来像两个人加的。
   // ⚠️ 只能验"开头两个字一样"，验不出"这句话好不好听"——那是眼睛的事。
   const middleTextTable = read("i18n", "zh-ui.ts");
@@ -178,7 +177,7 @@ testCase("⚠️ 两条 i18n 键在中文表里都译了、而且**同一个句�
       `\`${m![1]}\` 的译文是「${translateText![1]}」，不是「收起…」——两颗 × 必须同句式`,
     );
   }
-  equal(new Set(key).size, 2, "两条键互不相同（两栏各一条，不能共用）");
+  equal(new Set(key).size, 1, "状态栏关闭键数量");
 });
 
 testCase("两个 class 在各自那份 CSS 里都有规则", () => {
@@ -195,7 +194,7 @@ testCase("两个 class 在各自那份 CSS 里都有规则", () => {
 
 group("二、菜单那条与 × 那颗走的是同一个 setter");
 
-const cellStyleBarSource = sourceTable.get("format-bar-close")!;
+const cellStyleBarSource = read("ui", "FormatBar.tsx");
 const stateBarSource = sourceTable.get("statusbar-close")!;
 const wiringSource = read("ui", "EditorArea.tsx");
 const barFlagSource = read("ui", "useChromeVisibility.ts");
@@ -203,38 +202,34 @@ const commandTableSource = read("ui", "useCommandTable.ts");
 const stateBarHookChildSource = read("ui", "useStatusBar.ts");
 const appSource = read("App.tsx");
 
-testCase("格式化工具栏：× → `onHide`（不走 `onCommand`）", () => {
-  // ⚠️ 这条是**故意不接 `onCommand`** 的：那颗 × 不是一条编辑命令
-  //（`commands.ts` 里没有"收起格式化工具栏"这一项），走命令表的话要点名一个
-  // 不存在的 id。所以它直接调 prop。
-  const block = pickPressButton(cellStyleBarSource, "format-bar-close");
-  assertValue(block.includes("onClick={onHide}"), `那颗 × 没接 onHide：\n${block}`);
-  assertValue(!block.includes("onCommand"), `那颗 × 接了 onCommand —— 它不是一条编辑命令：\n${block}`);
+testCase("格式化工具栏：隐藏入口复用菜单 `view.toolbarNever`", () => {
+  assertValue(
+    cellStyleBarSource.includes('id: "view.toolbarNever"'),
+    "更多菜单没有复用 `view.toolbarNever`",
+  );
+  assertValue(
+    cellStyleBarSource.includes('label: "Hide the formatting toolbar"'),
+    "更多菜单没有显示明确的隐藏工具栏文案",
+  );
+  assertValue(!cellStyleBarSource.includes("onHide"), "工具栏仍维护第二套隐藏回调");
 });
 
-testCase("格式化工具栏：`onHide` 一路接到 `收起工具栏`（三处都对得上）", () => {
-  // 链条：`FormatBar` 的 `onHide` → `EditorArea` 的 `收起格式化栏` → `App` 把它
-  // 接成 `useChromeVisibility` 的 `收起工具栏` → 那一头写 `setChrome`。
-  // ⚠️ 断在哪一环的症状都是**同一个**：按钮在、点了没反应（不报错）。
+testCase("格式化工具栏：菜单命令一路接到 App 的命令表", () => {
   assertValue(
-    wiringSource.includes("onHide={hideFormatBar}"),
-    "`EditorArea.tsx` 没把 `hideFormatBar` 接到 `<FormatBar onHide=…>` 上",
+    wiringSource.includes("onMenuCommand={runMenuCommand}"),
+    "`EditorArea.tsx` 没把菜单命令接到 `<FormatBar>` 上",
   );
   assertValue(
-    wiringSource.includes("hideFormatBar: () => void;"),
-    "`EditorArea.tsx` 的 `编辑区接线` 接口里没有 `hideFormatBar` 这一格",
+    wiringSource.includes("runMenuCommand: (id: string) => void;"),
+    "`EditorArea.tsx` 的接线接口里没有 `runMenuCommand`",
   );
   assertValue(
-    wiringSource.includes("hideFormatBar"),
-    "`EditorArea.tsx` 没有解出 `hideFormatBar`",
+    appSource.includes("runMenuCommand: (id) => menuHandlers[id]?.()"),
+    "`App.tsx` 没有把菜单命令表交给编辑区",
   );
   assertValue(
-    appSource.includes("hideFormatBar: hideToolbar"),
-    "`App.tsx` 那个接线的字面量里没有 `hideFormatBar: hideToolbar`",
-  );
-  assertValue(
-    appSource.includes("hideToolbar") && appSource.includes("useChromeVisibility"),
-    "`App.tsx` 没有从 `useChromeVisibility` 里取 `hideToolbar`",
+    commandTableSource.includes('"view.toolbarNever": () => setChrome({ toolbar: "never" })'),
+    "`view.toolbarNever` 没有落到唯一的工具栏 setter 上",
   );
 });
 

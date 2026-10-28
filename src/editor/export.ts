@@ -175,6 +175,7 @@ const wholeBlockRemoveRemove = [
   // 摘掉，元素本身还在；因此两个容器必须登记在这里。
   ".nota-html-source",
   ".nota-html-source-toggle",
+  ".nota-image-source",
   // ── 代码块（`code-block.ts`）──────────────────────────────────────────
   /** 行号。内容就是 `1\n2\n3`，不带类名之后看着像正文里混进去的一串数字。 */
   ".nota-code-gutter",

@@ -80,6 +80,8 @@
   /* 弹层的层级。**只有一处定义**：菜单、子菜单、将来的右键菜单都引它，
      不然"右键菜单被下拉菜单盖住"这类问题会变成逐个比数字。 */
   --z-popup: 40;
+  /* 自绘下拉的 portal 必须越过设置框遮罩（200），但仍低于右键菜单（300）。 */
+  --z-select-popup: 260;
   /* 右键菜单（`ui/ContextMenu.tsx`）的层级。
    ⚠️ 它**故意比 `--z-popup` 高一档、而且比模态那一层（`.confirm-backdrop`
    的 200）还高**：右键菜单得在**任何**东西之上。2026-10-04 开窗口检时量到
@@ -105,6 +107,34 @@
   --btn-bg-hover: var(--bg-hover);
   --btn-bg-active: var(--bg-active);
   --btn-border: var(--border);
+  /* Dialog close follows the active interface language. Themes may make it a
+     GNOME-style circle, a Windows caption square, or a CDE hard-edged button. */
+  --dialog-close-size: 32px;
+  --dialog-close-radius: var(--radius-sm);
+  --dialog-close-bg: var(--btn-bg);
+  --dialog-close-border: var(--btn-border);
+  --dialog-close-fg: var(--fg);
+  /* 自绘下拉。收起态和展开态都由主题 CSS 控制；列表 portal 到 body 后仍读
+     这些根变量，所以外部界面主题只改这一组就能同时覆盖 trigger 与弹层。 */
+  --select-bg: var(--bg);
+  --select-bg-hover: var(--bg-hover);
+  --select-fg: var(--fg);
+  --select-border: var(--border);
+  --select-popup-bg: var(--bg-raised);
+  --select-popup-fg: var(--fg);
+  --select-popup-border: var(--border);
+  --select-option-hover-bg: var(--bg-hover);
+  --select-option-active-bg: var(--bg-active);
+  --select-option-selected-bg: var(--accent);
+  --select-option-selected-fg: var(--accent-fg);
+  /* 行内 Markdown 标记（** / * / ` / ~~ 等）默认继承文档正文色，避免界面
+     前景色较浅的主题把语法字符冲淡。主题可显式覆盖 `--mark-hint-fg`。 */
+  --mark-hint-opacity: 1;
+  /* 居底悬浮的格式化工具栏。主题可改材质、边框、阴影与圆角。 */
+  --format-bar-bg: var(--bg-raised);
+  --format-bar-border: var(--border);
+  --format-bar-shadow: var(--popup-shadow);
+  --format-bar-radius: 999px;
   /* 开关"打开"时的轨道色。默认跟强调色走（改之前就是 `--accent`）。 */
   --switch-on: var(--accent);
   /* 正文里链接的颜色。⚠️ **必须有个默认值**（2026-10-06，用户报的）：

@@ -182,23 +182,21 @@
 }
 
 /* ── 行内标记的提示（`editor/mark-hint.ts`）─────────────────────────────────
-   光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 半透明画在那段文字两边。
-   用户 2026-09-26 的原话：「我认为如果光标在黑体/斜体内容内，可否半透明显示*？」
+   光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 作为真实字符画在那段文字两边。
 
    ⚠️ **这是 `.nota-srcmark` 配方的第二份使用者**（那份在上面）：颜色、
-   字号基准、不可选中、不吃鼠标事件、淡入——五条**逐条对齐**，别在这儿另立
-   一套数值。两处不一致的症状是"标题的 `#` 和加粗的 `*` 深浅不一样"，
-   而用户对标记浓淡的原话是「只半透明哦，不是消失」（2026-09-22）。
+   字号基准、不可选中、不吃鼠标事件——四条**逐条对齐**，别在这儿另立
+   一套数值。行内标记使用独立主题变量，默认是正文实色；主题可以显式降低
+   `--mark-hint-opacity`，但不许在程序里替所有主题写死成灰色。
 
    ⚠️ 与 `.nota-srcmark` **唯一的故意不同**：那两个伪元素**占宽度**。
    上头那份画在块左边的 56px 装订线里（`right: 100%`，不占正文宽度），
    行内没有装订线可用——绝对定位会压在前一个字上面，比"动两格"难看得多。
    取舍写在 `mark-hint.ts` 的文件头里。 */
-/* 每个符号字符都是 `mark-hint.ts` 单独插入 DOM 的真实文字 widget。
-   字体与字号跟随正文，颜色使用 `--fg-faint`：符号是实体，但不是正文内容。
-   只切断行内 mark，避免 `**` 自己也被加粗；`side:-1` 保持 BUG-65 定下的
-   光标位置。2026-10-25 起 `**` / `</u>` 不再合成一个不可分文字块。 */
-.editor-mount .ProseMirror .nota-markhint {
+/* 语法字符是文档里的真实文字节点，不是 Decoration.widget。因此光标可以
+   停在 `**|粗体**`、`**粗体|**` 等任意位置，也能选中和删除它们。
+   字体与字号跟随正文；颜色和透明度来自 `--mark-hint-*`，默认正文实色。 */
+.editor-mount .ProseMirror .nota-syntax-marker {
   font-family: inherit;
   font-size: inherit;
   font-weight: 400;
@@ -210,19 +208,8 @@
   text-decoration: none;
   text-transform: none;
   white-space: pre;
-  color: var(--fg-faint);
-  user-select: none;
-  pointer-events: none;
-  animation: nota-markhint-in 0.16s ease-out;
-}
-
-@keyframes nota-markhint-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  color: var(--mark-hint-fg, inherit);
+  opacity: var(--mark-hint-opacity, 1);
 }
 
 /* 「待成块」的标题：段落行首敲了 `#` 加空格，**还**没按回车。

@@ -154,6 +154,7 @@ fn 问一行非空(程序: &str, 参数: &[&str]) -> String {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn linux_发行版(内容: &str) -> String {
     let mut name = "";
     let mut version = "";

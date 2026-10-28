@@ -57,7 +57,8 @@ testCase("WebView 窗口失败时有纯 Rust 系统查看器兜底", () => {
   const rust = read("src-tauri/src/commands/window.rs");
   const cli = read("src-tauri/src/cli.rs");
   const helper = read("src-tauri/src/debug_log.rs");
-  contains(rust, 'WebviewUrl::App("index.html#debug-log"', "独立日志窗口");
+  contains(rust, 'WebviewUrl::App("debug-log.html"', "独立日志页");
+  contains(read("debug-log.html"), 'data-window="debug-log"', "日志入口标记");
   contains(rust, ".arg(crate::cli::调试日志选项)", "WebView 失败保底");
   contains(cli, '--debug-log', "命令行模式");
   contains(helper, "open::that", "系统默认查看器");

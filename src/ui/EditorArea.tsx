@@ -74,18 +74,15 @@ export interface editorAreaWiring {
   /** 正文只读模式（视图菜单）。 */ onlyReadMode: boolean;
   /** 格式化工具栏此刻该不该画（三档里由 `ui/useChromeVisibility.ts` 算出来）。 */
   cellStyleConvertBarOpen: boolean;
-  /**
-   * 收起格式工具栏（**它右端那颗 ×**，2026-10-04 补，`docs/07` 第 49 项）。
-   *
-   * ⚠️ 由 `App.tsx` 交下来，落点就是上面那个 `格式化栏开着` 的**同一个 setter**
-   * （`setChrome({ toolbar: "never" })`）——这里只负责把它接到那颗按钮上。
-   */
-  hideFormatBar: () => void;
   /** 光标那儿的格式状态（工具栏那排按钮亮不亮）。 */
   commandState: CommandState | null;
   setCommandState: Dispatch<SetStateAction<CommandState | null>>;
   /** 转交一条编辑命令（`ui/useEditorCommands.ts`）。 */
   runCommand: commandApi["run"];
+  /** 菜单栏命令表（源代码模式、复制粘贴、工具栏设置等）。 */
+  runMenuCommand: (id: string) => void;
+  disabledCommands: ReadonlySet<string>;
+  menuChecks: Record<string, boolean>;
   /**
    * 「插入图像」那一条（`ui/useImageInsert.ts` 的 `插入图像`）。
    *
@@ -136,7 +133,7 @@ export interface editorAreaWiring {
  */
 export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
   const { mainArea, cellStyleConvertBar, editor, activeDoc, settings, viewMode, focusMode, typewriter, onlyReadMode } = wiring;
-  const { cellStyleConvertBarOpen, hideFormatBar, commandState, setCommandState, runCommand, insertImageLike, refreshDocs, toast } =
+  const { cellStyleConvertBarOpen, commandState, setCommandState, runCommand, runMenuCommand, disabledCommands, menuChecks, insertImageLike, refreshDocs, toast } =
     wiring;
   const { documentApi, findBar, previewOutputMouth, changeActionOutputMouth, MeetingSpeechOutputMouth, plugin, dialog } = wiring;
 
@@ -234,7 +231,10 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           // ⚠️ 图片那颗走"先弹框问地址/文件、再落笔"那条路（见上面 `插入图像` 那段注释）；
           // 其余照旧交给编辑器命令那一侧（链接那颗由 `useEditorCommands` 自己改道）。
           onCommand={(id) => (id === "image" ? void insertImageLike() : runCommand(id))}
-          onHide={hideFormatBar}
+          onMenuCommand={runMenuCommand}
+          disabled={disabledCommands}
+          checks={menuChecks}
+          focusEditor={() => editor.current?.focus()}
         />
       )}
       <TableToolbar

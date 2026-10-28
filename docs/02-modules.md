@@ -42,7 +42,7 @@
 | `upload/` | **「把一张图送到用户自己填的那台服务器上」的唯一一份实现**（2026-09-26 第二批）：`upload.rs`（707 行，算式与设置——拼多部件体 / 解析请求头 / 从响应按点路径取地址 / `nota-auto-upload` 前件 / 文件 0600 建）· `upload/net.rs`（181 行，**唯一碰网络的地方**）· `upload/tests.rs`（747 行，28 条用例）。⚠️ **不并进 `image.rs`**：那边最远只到磁盘，这边要**把用户的字节送出这台机器**。⚠️ **不预设任何服务商**（测试里钉着这件事）；**配置在 `~/.config/nota/image-upload.toml`，0600**，不许并进 0644 的 `settings.toml` |
 | `commands/mod.rs` | 只是各命令域子模块的声明（2026-10-23 现数：`diff` / `document` / **`file_picker`** / `export` / **`focus`** / `image` / `image_upload` / `menu` / **`native_dialog`** / `pandoc` / `plugin` / `print` / `settings` / `table_width` / `theme` / `ui_style` / `watch` / `workspace`）+ 命令层的分工说明（无函数） |
 | `commands/file_picker.rs` | **应用内文件选择器的宿主半边**：`nota_picker_places` 列主目录 / 桌面 / 文档 / 下载与文件系统根，`nota_picker_list` 读取一层目录并返回名称、路径、大小和修改时间，`nota_picker_create_dir` 新建文件夹。它不读文件内容、不保存文件；业务命令仍由文档、导出、插件等域处理。路径分隔符与隐藏文件判断按平台处理。 |
-| `commands/native_dialog.rs` | **系统原生文件选择器**（2026-10-23）：`nota_dialog_native` 统一处理打开、保存和选择目录。Linux 使用 GTK `GtkFileChooserNative`；桌面提供 xdg-desktop-portal 时由 GNOME/KDE 的系统对话框绘制，搜索、最近文件、书签和常用位置都由系统维护。Windows/macOS 由 `rfd` 调用各自原生对话框。命令运行在 `spawn_blocking`，不阻塞 Tauri 主线程。 |
+| `commands/native_dialog.rs` | **系统原生文件选择器**（2026-10-23）：`nota_dialog_native` 统一处理打开、保存和选择目录。Linux 使用 `rfd` 的 XDG Desktop Portal 后端：GNOME 下由 GTK4 portal 绘制，KDE 下跟随 Plasma，搜索、最近文件、书签和常用位置都由系统维护。Windows/macOS 由 `rfd` 调用各自原生对话框。命令运行在 `spawn_blocking`，不阻塞 Tauri 主线程。 |
 | `commands/image.rs` | `nota_image_place` 与 `nota_image_data_url`，都异步走 `spawn_blocking`。前者按宿主规则落图并返回 Markdown 地址；后者给编辑区显示本地图，限 32MB、只读主目录/文档/桌面/下载，返回 data URL。规则与文档位置不由前端提供。 |
 | `commands/image_upload.rs` | 「上传图片」那三条（`nota_image_upload_get` / `_set` / `_one`），**都是异步 ＋ `spawn_blocking`**（读盘、联网最长 60 秒）。⚠️ **手动与自动两条路共用同一次上传**，但方向相反：手动**先传、失败才落盘**，自动**先落盘、失败就保留本地地址**。⚠️ **三道闸缺一不可**（`enabled` / `auto` / 文档 YAML 里的 `nota-auto-upload`） |
 | `commands/document.rs` | `nota_doc_*` **十五个**命令（⚠️ **2026-10-04 现数**（第 14 项那一批）：十四 → **十五**，新增 `nota_doc_cursor`，编辑器把**选区**报上来——⚠️ 它**什么都不改**（不碰 `text` / `revision` / `dirty`，见 `docs/03` §4.2）。⚠️ 上一次第十遍是十二 → 十四（`nota_doc_rename` / `nota_doc_move`），第九遍把"十一"改成"十二"（多出的是 `nota_doc_disk_text`，给外部改动提示条的「查看修改」用）——⚠️ ⚠️ `AGENTS.md` §2 那格当时停在"十二"，**两处对不上有一阵子了**，这一批各现数一遍才对齐）。⚠️ **这一层收的是"名字一段"或"目录一条"，不是整条路径**——前端手里的 `path` 是有损的（非 UTF-8 目录名会变成 `?`），详见下面 `nota_doc_rename` 那一节 |
@@ -101,7 +101,7 @@
 | `bridge/types.ts` | **所有跨边界的形状**（2026-09-26 从 `ipc.ts` 拆出）：文档 / 设置 / 插件 / 导出 / 图像。⚠️ **纯类型文件**——不 import `@tauri-apps/api`、不写运行时值，所以谁都能引它而不背上副作用。⚠️ **2026-09-27 又拆了一次**（本文件 1009 行、① 行数闸 FAIL）：事件载荷那四个去了 `payloads.ts`，拆完 **967 行** |
 | `bridge/payloads.ts` | **事件载荷的形状**（2026-09-27 从 `types.ts` 拆出，69 行）：`NotifyPayload` / `PanelDirtyPayload` / `DocumentChangedPayload` / `FileChangedPayload`。⚠️ **拆的线**＝"命令的返回类型"（上面那份）vs"推过来的事件"（这份）——`events.*` 是**发生了一件事**，不是回答 |
 | `ui/file-picker.ts` | **文件选择入口与回退队列**：`pickFile` 先调用 `nota_dialog_native`；只有 IPC 本身失败时才把请求放进应用内队列。`matchesFileFilters` 与 `resolveSavePath` 继续负责回退界面的筛选和保存后缀。路径拆分覆盖 Unix、Windows 盘符根与 UNC 路径。 |
-| `ui/FilePickerDialog.tsx` | **应用内文件选择器的回退界面**：打开 / 保存 / 选择文件夹三种模式共用左侧位置栏、路径栏、文件列表、隐藏文件开关、新建文件夹与覆盖确认。支持鼠标双击、方向键、Home / End 和 Enter；保存模式会补筛选后缀。正常路径优先使用系统对话框，GNOME/KDE 的搜索、最近与书签不在这里重做。 |
+| `ui/FilePickerDialog.tsx` | **应用内文件选择器的回退界面**：打开 / 保存 / 选择文件夹三种模式共用左侧位置栏、路径栏、文件列表、隐藏文件开关、新建文件夹与覆盖确认。支持鼠标双击、方向键、Home / End 和 Enter；保存模式会补筛选后缀。正常路径优先使用 XDG Desktop Portal；GNOME 下即 GTK4 系统选择器，系统搜索、最近与书签不在这里重做。 |
 | `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 ⚠️ **2026-10-07 拆过（第 89 项）：1006 → 502 行**——「一次性把一切装上去」那一段整块搬去了 `editor/assemble.ts`（620 行），这边只留「实例建好之后怎么用」。 |
 | `editor/assemble.ts` | **「把一切装上去」那一段**（**635 行**，2026-10-07 从 `create.ts` 拆出，`docs/07` 第 89 项）：`.config()` ＋ 整条 `.use()` 插件链——ctx 初值、序列化器、输入规则、NodeView、各种可选插件。参数收**一个对象**（`装配参数`），不收一长串位置参数（同一条理由见 `ui/pane-editors.ts`）。⚠️ **顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问）：**搬的时候一字未改**，要动顺序先把那一条注释读完。⚠️ `取前置块` / `记账列宽` 两样必须走**回调**不能传值——前者要"这一刻"那一段（换文档、源码切回来都会换），后者要调用方手里**活的那张表**。📌 **2026-10-07 同日加 `移动键位`**（`.use(readOnly ? [] : [移动键位])`，`editor/move-block.ts`）：`Alt+↑/↓` 必须抢在 `baseKeymap` 的 `joinUp`/`joinDown` **前面**接（那条链里 `[...prosePlugins, …, createKeymap(…)]` 的顺序就是这条键位能生效的原因） |
 | `editor/source.ts` | **源码模式**的编辑器：CodeMirror 6，对外只有 `SourceHandle`（十六条与 `EditorHandle` 同名同义，所以 `EditorPane` 两边通用）。⚠️ 它不是"高亮版 textarea"，也**不做任何规范化**。⚠️ 建编辑器时要**摘掉与界面快捷键撞车的 CodeMirror 默认键位**（`撞车键位`，2026-09-25；⚠️ **2026-10-04 那份名单搬去了 `editor/key-conflicts.ts`**，因为 BUG-58 正是"名单漏了一条"——搬出来才能被测试读到） ⚠️ **2026-10-07 又拆一次（第 89 项）：1048 → 637 行**——「一条命令落到文本上」那一块搬去了 `editor/source-commands.ts`（443 行），这边只留编辑器本身（扩展、主题、句柄、查找/写作模式接线）。⚠️ 两次拆的落点见 `tools/doc-sync-check.sh` 的 `PAIRS`。⚠️ **同一天傍晚（BUG-71）`notaTheme` 里补了两段注释 ＋ 把当前行那一档换成半透明配方，现在 652 行**（理由见 `docs/07` BUG-71——不透明的当前行底色会把选区整条盖住）。 |
@@ -297,7 +297,7 @@
 | `ui/useClipboard.ts` | **剪贴板四件**（2026-09-25 从 `App.tsx` 搬出，164 行）：复制 / 剪切 / 粘贴 ＋ **复制为 Markdown**。⚠️ 前三个读**选区**，第四个取**整篇源码**（`getMarkdown()`）——它跟另外三个不是一类，文件头有说明 |
 | `ui/useForceFocus.ts` | **强制专注的接线**（2026-09-26，126 行）：订阅 `nota:focus-state` ＋ `get` / `start` / `stop` / `ack` 四条命令；另导出 `说时长(毫秒)`（`mm:ss` / `h:mm:ss`，`Math.max(0, …)`）。⚠️ 状态有**两档空**：`null`（还没拉回来）与 `running: false`（拉回来了但没在跑）——界面别把两者合成一个"没在跑" |
 | `ui/FocusMeter.tsx` | **状态栏那一格余额**（2026-09-26，75 行，**只读**）：只在 `state?.running` 时渲染（没在跑就**整格不在**，不是显一个 `0:00`）；三档阶段各有颜色与 `title` 说明。⚠️ 它每秒重画，这也是**设置页不许显示会话状态**的理由（同一个值两处显示 ＝ 两处每秒重画） |
-| `ui/FocusAlarmWindow.tsx` | **警报窗那一棵树**（2026-09-26，94 行，`index.html#focus-alarm` 的根）：整块红屏 ＋ 大白字 ＋ `I'm Back`。⚠️ **它不自己 `close()`**——"这个窗等着宿主来关"，收窗在 `focus/alarm.rs::对账`；⚠️ Esc 与按钮走同一条 `ack`；⚠️ 按钮按过就锁成「这就回去…」（防连点，也防"按下去了但其实没生效"那种错觉） |
+| `ui/FocusAlarmWindow.tsx` | **警报窗那一棵树**（2026-09-26，94 行，`focus-alarm.html` 的根）：整块红屏 ＋ 大白字 ＋ `I'm Back`。⚠️ **它不自己 `close()`**——"这个窗等着宿主来关"，收窗在 `focus/alarm.rs::对账`；⚠️ Esc 与按钮走同一条 `ack`；⚠️ 按钮按过就锁成「这就回去…」（防连点，也防"按下去了但其实没生效"那种错觉） |
 | `ui/useFocusAlarmSound.ts` | **警报声（主路径）**（2026-09-26，165 行）：Web Audio 合成——方波（谐波最丰富，听起来"尖"）× 880 / 1245 Hz 来回跳，每 0.22 秒一跳、共 11 跳 ≈ 2.4 秒，⚠️ **不是一声"哔"**而是一段"停不下来"的东西；音量封顶 0.28（再大在笔记本内置喇叭上会削波，听着像坏掉而不是更响）。⚠️ WebKit 的自动播放策略会把没有用户手势的 `AudioContext` 摁住，所以开始专注那一下先 `预热音频()`；万一还是播不出来就转宿主兜底。⚠️ **只在主窗挂**（那条 emit 发给所有窗口，警报窗也挂就是同一段响两遍） |
 | `ui/useFocusIntro.ts` | **首次说明**（2026-09-26，111 行）：判据是 `settings.focus.introduced`（**要落盘**——只在内存里的话每次重启都拦一次，用户很快就学会闭眼点掉，那正好把这次说明的意义抵消掉）。⚠️ **取消 ＝ 不开始**，不是"关掉一个提示"（点确定/点取消都会开始的功能，等于没问）。⚠️ 同一份话在 `FocusPane.tsx` 末尾还有一个 `Note`，**改一处要改两处** |
 | `ui/focus-summary.ts` | **一轮专注的读数与那张卡**（2026-09-27 新增，265 行）：`记一笔` / `抽稀` / `造总结` / `专注率` / `说时刻` / `文件时刻` / `横刻度` / `造分享卡`。⚠️ **宿主一行没改、这是有意的**——计时线程每秒广播的那份快照里已经有这一轮的全部账目（`elapsed_ms` / `focused_ms` / `away_total_ms` / `alarms` / `balance_ms`），真正缺的只有一条曲线。⚠️ 三条判据：**采样上限 900（＝15 分钟）之后把间隔翻倍、相邻两点取余额大的那个**（保峰；代价是"扣到底"可能记成"还没到底"，所以卡片上另有**警报次数**当判据）· **专注率的分母是「专注＋离开」**（警报冻住那段账本不动，算进去等于因为"警报响了"而拉低专注率，而警报恰恰是他**回来过**的证据）· **分母为 0 时返回 `null` 而不是 0%**（画破折号；画 0% 是假话）。⚠️ 卡片右上的时刻走 `t()` 一条格式串（`{0}年{1}月{2}日 {3}`），不按语言写 `if`。⚠️ `subtitle` 是字面量 `"Focus Session"`、**不过 `t()`**（同写作统计那张卡）。用例 **34** 条在 `tests/focus-summary.test.ts`（跑它要 `--alias:@=./src`） |
@@ -1944,7 +1944,7 @@ std::process::Command::new(&程序)
 
 ### `nota_window_open_debug_log() -> Result<()>`
 
-打开或聚焦 `debug-log` 窗口。窗口加载 `index.html#debug-log`，只挂
+打开或聚焦 `debug-log` 窗口。窗口加载独立的 `debug-log.html`，只挂
 `ui/DebugLogWindow.tsx`，每 400ms 拉取 `nota_debug_log_read` 的增量并实时跟随
 滚动。界面固定英文黑底等宽样式，不继承主题、不翻译，支持全文复制和导出 `.log`。
 日志粒度是生命周期级：启动阶段、设置、工作区、文档打开/保存、编辑器模式切换、
@@ -1954,7 +1954,7 @@ std::process::Command::new(&程序)
 
 ### `nota_window_open_help() -> Result<()>`
 
-打开或聚焦 `help` 窗口，加载 `index.html#help/<section>`。帮助正文是一份由
+打开或聚焦 `help` 窗口，加载 `help.html?section=<section>`。帮助正文是一份由
 `ui/HelpWindow.tsx` 编入应用的 Markdown，交给正文同一个只读 Milkdown 实例
 渲染，并应用当前文档主题与文档排版变量；英文原文作 `t()` 键，中文译文与其他
 界面共用 `i18n/zh-ui.ts`。它不挂 `<App />`、当前文档或插件状态。入口是
@@ -4551,7 +4551,8 @@ fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value  // 私有，�
 主窗在那些窗口**后面**。盖在主窗里的红布再大再红，他在别的应用上什么都看不见，
 只会听见声音却找不到是谁在叫。所以那是一个真的系统级窗口：
 `decorations(false)` ＋ `always_on_top(true)` ＋ `fullscreen(true)` ＋ `focused(true)`，
-标题 `Back to writing`，前端入口按 `index.html#focus-alarm` 分叉（`src/main.tsx`）。
+标题 `Back to writing`，前端入口是独立的 `focus-alarm.html`（`src/main.tsx`
+读取根元素的 `data-window="focus-alarm"` 后分叉）。
 
 ⚠️ **不给关闭按钮、不给最小化**：留一个"稍后再说"就等于留一个后门。
 
@@ -9155,7 +9156,7 @@ A/B 量到的 CPU 数在 `docs/07` §4。
 
 ## `src/ui/FocusAlarmWindow.tsx`（94 行）
 
-**警报窗那一棵树**（`index.html#focus-alarm` 的根，见 `src/main.tsx` 的分叉）：
+**警报窗那一棵树**（`focus-alarm.html` 的根，见 `src/main.tsx` 的分叉）：
 整块红屏 ＋ 大白字 ＋ `I'm Back`。
 
 ⚠️ **它不自己 `close()`**：文件头写着"这个窗**等着宿主来关**，这里什么都不做，尤其**不要**

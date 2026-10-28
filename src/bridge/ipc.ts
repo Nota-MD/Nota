@@ -87,6 +87,7 @@ export const api = {
   update: {
     check: () => invoke<UpdateStatus>("nota_update_check"),
     install: () => invoke<UpdateInstallResult>("nota_update_install"),
+    cancel: () => invoke<void>("nota_update_cancel"),
   },
 
   doc: {

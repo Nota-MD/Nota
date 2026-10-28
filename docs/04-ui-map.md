@@ -430,7 +430,7 @@ App.tsx 的 menuHandlers 里有没有这个 id ──有──> 能点
 文档或插件状态。窗口重复打开时只聚焦已有实例。内容压缩为四个必要章节：
 开始使用、Pandoc 与 TeX、打印、快捷键；可选拓展的安装说明不进入核心帮助。
 英文原文是 `t()` 键，中文译文与其他界面共用 `i18n/zh-ui.ts`，不维护独立
-文档包。Pandoc 缺失面板的安装帮助按钮直接打开 `#help/pandoc`。
+文档包。Pandoc 缺失面板的安装帮助按钮直接打开 `help.html?section=pandoc`。
 
 #### 「插件」那一栏（2026-09-24，`docs/07` 第 42 项）
 
@@ -1475,7 +1475,7 @@ pandoc 那条路还在用（§2.6e），只是 CSS 类从那时的 `slidev-*` �
 | 首页 | 标识（128×128，走 `ui/nota-mark.ts` 那一套嵌法）＋ `Nota` ＋ **`Leo Lee`** ＋ **版本药丸** | ✅ 版本号取不到先画「Unknown」。📌 **2026-10-19：版本药丸在 2.5 秒内连续点击五次切换开发者模式**；开启后设置左栏分别出现「高级设置」和「开发者模式」两页，关闭后两页立即退出可见导航。人名与版权四处同源（本页 / 法律信息 / LICENSE / Cargo authors） |
 | 首页那两**行** | 「网站 `(W)`」「报告问题 `(R)`」，行尾 `↗`，点了交给系统浏览器（`openUrl`） | 🟡 **今天两个网址常量是空串，所以两行根本不画**（口径 ②：画一颗点了什么都不发生的按钮比少一行更像是坏了）。填上 `src/ui/AboutDialog.tsx` 顶上那两个常量就出现；⚠️ 打不开时**不弹提示**（这一条不改变文档、也不影响用户正在做的事） |
 | 首页那五**行** | 「软件更新 `(U)`」「故障排除 `(T)`」「权限列表 `(P)`」「鸣谢 `(C)`」「法律信息 `(L)`」，行尾 `›`，翻进子页 | ✅ 子页里顶上一行是「‹ 返回」，右上角那颗 × 一直在 |
-| 首页 · 软件更新 | 「软件更新 `(U)`」翻进 `ui/SoftwareUpdatePane.tsx`；显示当前版本、清单版本、安装类型、下载进度与更新方式 | 🧪 0.8.0-beta 实验功能。检查与应用替换都走宿主 `nota_update_check` / `nota_update_install`；前端不能传 URL，开发构建只显示重建命令。清单从当前 Release 的 `latest.json` 资产读取，固定入口为 `releases/latest/download/latest.json`。宿主通过 `nota:update-progress` 推送分块下载进度；检查与安装各有进程内单飞闸。下载替换规则在普通「设置 → 通用 → 下载」中。 |
+| 首页 · 软件更新 | 「软件更新 `(U)`」翻进 `ui/SoftwareUpdatePane.tsx`；显示当前版本、清单版本、安装类型、下载进度与更新方式 | 🧪 实验功能。检查与应用替换都走宿主 `nota_update_check` / `nota_update_install`；下载阶段可调用 `nota_update_cancel` 终止，前端不能传 URL，开发构建只显示重建命令。清单从当前 Release 的 `latest.json` 资产读取，固定入口为 `releases/latest/download/latest.json`。宿主通过 `nota:update-progress` 推送分块下载进度；检查与安装各有进程内单飞闸。安装包准备完成后应用自动关闭，由外部进程等待旧实例退出、完成覆盖并重新启动。下载替换规则在普通「设置 → 通用 → 下载」中。 |
 | 子页 · 故障排除 | **两张表**：**编译信息**（包版本 / 编译时间 / 编译主机 / 编译平台 / 目标三元组 / 构建档案 ＋ `rustc` `cargo` `node` `npm` `tauri` `webkit2gtk` `gtk` `mlua` 八行版本）与**本机信息**（操作系统 / 内核 / 架构 / GTK 版本 / WebKitGTK 版本） | ✅ 2026-10-04 换成这个（用户：「记录编译信息（比如编译时间戳，机器，各编译工具依赖）」＋「用于存放编译信息和本机信息」）。⚠️ 数据来自 `api.diagnostics.collect()`（`src-tauri/src/diagnostics.rs`），**翻到这一页时才拉**（进框就拉是白拉），拉过一次就不重拉。⚠️ **空串画成「—」**——这一页的存在理由是"出事时一次问清楚"，绝不能因为缺一条整页空白。⚠️ 左列那八个**程序名与包名故意不翻**。⚠️ 它以前装的是权限清单，**整块搬去「权限列表」了** |
 | 子页 · 权限列表 | **一张两列表**（**权限说明** ｜ **备注**），十条，口径与出处在表下面 | ✅ 2026-10-04 新开的一页（用户：「专门新开一栏叫做权限列表。用表格的形式展示权限说明和备注」）。⚠️ 以前它是"名字 ＋ 一段话"的清单，在故障排除里。⚠️⚠️ **这张表必须 `table-layout: fixed` ＋ 给左列 `width`**（`.about-table-2col`，`overlay.css`）：光靠默认的 auto 布局，那条共用的 `overflow-wrap: anywhere` 会把每格的 min-content 宽压到一个字，两列**挤成一坨、右列紧贴着左列**（2026-10-04 目检抓到的，现场记在 `docs/06` §5.49） |
 | 子页 · 鸣谢 | 一张**表**（Tauri / React / Milkdown·ProseMirror / KaTeX / Mermaid / mlua·Lua / vscode-icons / Pandoc / **SCOWL**） | ✅ ⚠️ 加一个在**那张表**里添一行，别去改拼装。⚠️ 只写**真的用了、而且是用户看得见的那种**，传递依赖闭包有几百个（清单在根目录 `THIRD-PARTY.md`）。⚠️ **2026-09-28 加了 SCOWL**（拼写检查的词表，用户点名「拼写检查找一个 BSD 开源的属个名」）。⚠️ **2026-10-19：`GTK / WebKitGTK` 从应用内鸣谢移除**——不同平台的窗口与 WebView 实现不同，应用内只把跨平台外壳 **Tauri** 列为用户可见的依赖；GTK/WebKit 的许可证义务仍完整保留在 `THIRD-PARTY.md`。⚠️ **2026-10-17 起不再随包带 Monoton 字体**，字标使用 SVG 轮廓；鸣谢中的 OFL 出处保留。 |
@@ -1846,11 +1846,11 @@ CSS 在 `styles/app.css` 的「沉浸模式」一节，状态与三条出口在 
 
 ⚠️ **设置页一个字都不显示会话状态**（此刻余额多少、响过几次），理由见 §3.5 那一行。
 
-**警报窗（`ui/FocusAlarmWindow.tsx`，`index.html#focus-alarm`）**
+**警报窗（`ui/FocusAlarmWindow.tsx`，`focus-alarm.html`）**
 
-⚠️ 它是**第二个窗口**，不在 §1 那棵树里——`main.tsx` 按 URL 上的 `#focus-alarm` 分叉，
-**只构建一个入口**（多入口要连 `vite` 配置和 `tauri.conf.json` 的 `frontendDist` 一起改，
-而这条路上的收益只是"少判一个 if"）。
+⚠️ 它是**第二个窗口**，不在 §1 那棵树里——`main.tsx` 读取独立 HTML 上的
+`data-window="focus-alarm"` 后分叉。帮助、日志和警报各有独立入口，避免 Windows
+WebView2 在自定义协议下丢失宿主创建窗口时附带的初始 fragment。
 
 | 控件 | 文案 | 回调 → 最终动作 | 当前状态 |
 |---|---|---|---|
@@ -2350,7 +2350,8 @@ Adwaita 的 headerbar 是 44px、Yaru 的是 40px。它现在**默认值仍在 `
 **别自己写字号**——那套排版是标签自带的，见 `docs/05` §4.13 那条"`标签` 与 `html标签`
 是两个东西"）、`u`（下划线色走 `--fg-faint`）、
 `.nota-html-block`（裸 HTML 块，由安全白名单渲染；只有注释与源码编辑态继续使用
-等宽 ＋ `--bg-subtle` 底。悬浮的 `HTML` 按钮切换源码编辑与渲染预览）、
+等宽 ＋ `--bg-subtle` 底。静止态不显示块边框和 `HTML` 按钮；鼠标进入或块内获得
+键盘焦点时才显示细边框与源码切换按钮）、
 `span[data-type="html"]`（行内 HTML）、
 `sup[data-type="footnote_reference"]` / `dl[data-type="footnote_definition"]`（脚注）。
 ✅ **2026-09-27 晚开窗确认过这一族真画出来了**（高亮黄底、下划线、上标升高、下标降低、

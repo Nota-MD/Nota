@@ -32,25 +32,33 @@
  * 高亮与悬停颜色。
  */
 
-import type { Ref } from "react";
+import { useEffect, useState, type Ref } from "react";
 
 import type { CommandState } from "@/editor/command-state";
 import type { EditorCommand } from "@/editor/create";
 import { useT, language } from "@/i18n";
 import { formatAccel } from "@/ui/accel";
-import { MENUS, walkMenuItems } from "@/ui/commands";
+import { getItem, MENUS, walkMenuItems, type MenuEntry, type MenuItemSpec } from "@/ui/commands";
 import { Icon, type iconName } from "@/ui/Icon";
+import { MenuPopup } from "@/ui/MenuPopup";
 
 interface Props {
   /**
    * 当前光标状态。`null` = **这条通路读不出来**（源码模式、或还没有文档）。
    *
-   * ⚠️ 与"空状态"不同：`null` 时一颗都不高亮，而空状态时"正文段落"
+   * ⚠️ 与"空状态"不同：`null` 时一颗都不高亮，而空状态时"普通文本"
    * 那颗**是亮的**（光标真的在普通段落上）。
    */
   state: CommandState | null;
   /** 跑一条命令。返回值同 `EditorPaneHandle.runCommand`（有没有实现）。 */
   onCommand: (name: EditorCommand) => void;
+  /** 有菜单处理器、但不是 `EditorCommand` 的动作（复制、粘贴、源代码模式等）。 */
+  onMenuCommand: (id: string) => void;
+  /** 菜单项的可用状态与勾选状态，直接沿用菜单栏那一份。 */
+  disabled: ReadonlySet<string>;
+  checks: Record<string, boolean>;
+  /** 菜单收起后把键盘焦点还给正文。 */
+  focusEditor: () => void;
   /**
    * 那一整条 DOM（`.format-bar` 自己）。
    *
@@ -62,20 +70,6 @@ interface Props {
    * 现在就是一个普通 prop，不再需要 `forwardRef`（同 `ui/EditorPane.tsx`）。
    */
   ref?: Ref<HTMLDivElement>;
-  /**
-   * 收起这一条（**右端那颗 ×**，2026-10-04 补，`docs/07` 第 49 项）。
-   *
-   * ⚠️ **与「视图 → 格式化工具栏 → 始终不显示」是同一个 setter**
-   * （`App.tsx` 那颗传下来的是 `setChrome({ toolbar: "never" })`）：
-   * 三档那个设置仍然是唯一真相源，这颗 × **不是第二份状态**
-   * （同 `ui/Sidebar.tsx` 那颗 × 的口径，那边写着"自己 `useState` 一份的症状
-   * 是用 × 关掉、菜单里那一项还勾着"）。
-   *
-   * ⚠️ 收起来之后**这一条自己就没了**，"怎么再打开"在菜单里（视图 → 格式化
-   * 工具栏）与设置里（外观 → 工具栏）各有入口——所以这里**不发提示**，
-   * 与菜单栏那条不同（`ui/useChromeVisibility.ts` 头上写着为什么菜单栏必须发）。
-   */
-  onHide: () => void;
 }
 
 /** 菜单 id → 快捷键文本。**从 `MENUS` 派生，不手写**（见文件头）。 */
@@ -191,9 +185,13 @@ const linkGroup: PressButton[] = [
  * 时亮的是"无序列表"，用户会以为自己没转成功。
  */
 const blockGroup: PressButton[] = [
+  { cmd: "text", menu: "para.text", label: "Paragraph", block: "text" },
   { cmd: "h1", menu: "para.h1", label: "H1", icon: "nota-heading-1-symbolic", block: "h1" },
   { cmd: "h2", menu: "para.h2", label: "H2", icon: "nota-heading-2-symbolic", block: "h2" },
   { cmd: "h3", menu: "para.h3", label: "H3", icon: "nota-heading-3-symbolic", block: "h3" },
+  { cmd: "h4", menu: "para.h4", label: "H4", block: "h4" },
+  { cmd: "h5", menu: "para.h5", label: "H5", block: "h5" },
+  { cmd: "h6", menu: "para.h6", label: "H6", block: "h6" },
   { cmd: "quote", menu: "para.quote", label: "Quote", icon: "nota-quote-symbolic", block: "quote" },
   { cmd: "ul", menu: "para.ul", label: "•", icon: "folio-view-list-bullet-symbolic", block: "ul" },
   { cmd: "ol", menu: "para.ol", label: "1.", icon: "folio-view-list-ordered-symbolic", block: "ol" },
@@ -207,6 +205,64 @@ const blockGroup: PressButton[] = [
   },
   { cmd: "clearFormat", menu: "fmt.clear", label: "Clear", icon: "folio-eraser-symbolic" },
 ];
+
+/** 把固定 id 顺序变成菜单项；查不到的整条跳过，不在界面上制造空命令。 */
+function pickMenuEntries(items: ReadonlyArray<string | MenuItemSpec>): MenuEntry[] {
+  const entries: MenuEntry[] = [];
+  for (const id of items) {
+    if (typeof id !== "string") {
+      entries.push(id);
+      continue;
+    }
+    if (id === "sep") {
+      entries.push("sep");
+      continue;
+    }
+    const item = getItem(id);
+    if (item) entries.push(item);
+  }
+  return entries;
+}
+
+const paragraphMenuEntries = pickMenuEntries([
+  "para.h1",
+  "para.h2",
+  "para.h3",
+  "para.h4",
+  "para.h5",
+  "para.h6",
+  "para.text",
+  "sep",
+  { ...(getItem("para.table") ?? { id: "para.table", label: "Table" }), label: "Table" } as MenuItemSpec,
+  "para.codeBlock",
+  "para.mathBlock",
+  "para.hr",
+]);
+
+const listMenuEntries = pickMenuEntries(["para.ul", "para.ol", "para.task"]);
+
+const hideToolbarItem: MenuItemSpec = {
+  id: "view.toolbarNever",
+  label: "Hide the formatting toolbar",
+};
+
+const moreMenuEntries = pickMenuEntries([
+  "fmt.strike",
+  "fmt.highlight",
+  "fmt.superscript",
+  "fmt.subscript",
+  "fmt.underline",
+  "sep",
+  "view.modeSource",
+  "sep",
+  "edit.copy",
+  "edit.paste",
+  "edit.copyAs",
+  "fmt.clear",
+  "sep",
+  "edit.delete",
+  "sep",
+]).concat(hideToolbarItem);
 
 /**
  * 这一颗按钮现在亮不亮。**两处（工具栏、右键菜单）共用这一份**。
@@ -263,7 +319,15 @@ export function characterShapeClass(menu: string): string {
  * 理由见下面那一段。右键菜单要显示名字时**从 `MENUS` 按 id 取 `label`**
  * （`ui/context-menu.ts` 的 `取条目`）——同一批键、同一份译文，不是第二份。
  */
-export function FormatBar({ state, onCommand, ref, onHide }: Props) {
+export function FormatBar({
+  state,
+  onCommand,
+  onMenuCommand,
+  disabled,
+  checks,
+  focusEditor,
+  ref,
+}: Props) {
   // 订阅语言：宿主报来语言之后这一条要重画（见 `i18n/index.ts::useT`）。
   const t = useT();
 
@@ -286,6 +350,7 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
    * 会叫两个名字。加新键之前先 `grep -rn 't("那句原文")' src/`。
    */
   const TITLES: Partial<Record<EditorCommand, string>> = {
+    text: t("Body text"),
     bold: t("Bold"),
     italic: t("Italic"),
     strike: t("Strikethrough"),
@@ -299,6 +364,9 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
     h1: t("Heading 1"),
     h2: t("Heading 2"),
     h3: t("Heading 3"),
+    h4: t("Heading 4"),
+    h5: t("Heading 5"),
+    h6: t("Heading 6"),
     quote: t("Blockquote"),
     ul: t("Bullet List"),
     ol: t("Ordered List"),
@@ -306,6 +374,98 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
     codeBlock: t("Code Block"),
     clearFormat: t("Clear Formatting"),
   };
+
+  const [openMenu, setOpenMenu] = useState<"paragraph" | "list" | "more" | null>(null);
+
+  useEffect(() => {
+    if (!openMenu) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".format-bar")) return;
+      setOpenMenu(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpenMenu(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [openMenu]);
+
+  const byCommand = (command: EditorCommand): PressButton => {
+    const found = pressButtonTable.get(
+      [...pressButtonTable.values()].find((button) => button.cmd === command)?.menu ?? "",
+    );
+    if (!found) throw new Error(`Formatting toolbar is missing button ${command}`);
+    return found;
+  };
+
+  const primaryInline = ["bold", "italic", "inlineCode"].map((name) =>
+    byCommand(name as EditorCommand),
+  );
+  const pickFormatMenu = (id: string) => {
+    setOpenMenu(null);
+    queueMicrotask(focusEditor);
+    const direct = pressButtonTable.get(id);
+    if (direct) onCommand(direct.cmd);
+    else onMenuCommand(id);
+  };
+  const dismissFormatMenu = () => {
+    setOpenMenu(null);
+    queueMicrotask(focusEditor);
+  };
+
+  const currentBlockLabel = (() => {
+    switch (state?.block) {
+      case "h1":
+        return TITLES.h1!;
+      case "h2":
+        return TITLES.h2!;
+      case "h3":
+        return TITLES.h3!;
+      case "h4":
+        return TITLES.h4!;
+      case "h5":
+        return TITLES.h5!;
+      case "h6":
+        return TITLES.h6!;
+      case "quote":
+        return TITLES.quote!;
+      case "ul":
+        return TITLES.ul!;
+      case "ol":
+        return TITLES.ol!;
+      case "task":
+        return TITLES.task!;
+      case "codeBlock":
+        return TITLES.codeBlock!;
+      default:
+        return t("Paragraph");
+    }
+  })();
+  const hideToolbarLabel = t("Hide the formatting toolbar");
+  const moreEntriesWithLabel = moreMenuEntries.map((entry) =>
+    typeof entry !== "string" && entry.id === "view.toolbarNever"
+      ? { ...entry, label: hideToolbarLabel }
+      : entry,
+  );
+  const formatChecks = state
+    ? {
+        ...checks,
+        "para.h1": state.block === "h1",
+        "para.h2": state.block === "h2",
+        "para.h3": state.block === "h3",
+        "para.h4": state.block === "h4",
+        "para.h5": state.block === "h5",
+        "para.h6": state.block === "h6",
+        "para.text": state.block === "text",
+      }
+    : checks;
 
   /** 一颗按钮。三组共用这一处渲染，免得三份 JSX 各自漂移。 */
   const draw = (b: PressButton) => {
@@ -354,27 +514,98 @@ export function FormatBar({ state, onCommand, ref, onHide }: Props) {
 
   return (
     <div className="format-bar" role="toolbar" aria-label={t("Formatting")} ref={ref}>
-      {inlineGroup.map(draw)}
+      <div className="format-group">
+        <button
+          type="button"
+          className="format-selector"
+          aria-haspopup="menu"
+          aria-expanded={openMenu === "paragraph"}
+          title={currentBlockLabel}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setOpenMenu((current) => (current === "paragraph" ? null : "paragraph"))}
+        >
+          <span>{currentBlockLabel}</span>
+          <span className="format-caret" aria-hidden="true" />
+        </button>
+        {openMenu === "paragraph" && (
+          <MenuPopup
+            label={t("Paragraph")}
+            entries={paragraphMenuEntries}
+            disabled={disabled}
+            checks={formatChecks}
+            onPick={pickFormatMenu}
+            onDismiss={dismissFormatMenu}
+            onArrowOut={dismissFormatMenu}
+          />
+        )}
+      </div>
+
       <span className="format-sep" />
-      {linkGroup.map(draw)}
+
+      {primaryInline.map(draw)}
+      {draw(byCommand("link"))}
+
       <span className="format-sep" />
-      {blockGroup.map(draw)}
-      {/* 右端那颗 ×（2026-10-04，第 49 项）。
-          ⚠️ **在 `.format-bar` 里面**（不是外面另起一条）：这一条是
-          `overflow-x: auto` 的，而 `.format-bar-close` 靠 `position: sticky;
-          right: 0` 钉在右端——窄窗口下按钮超宽时，**正是这种时候最需要它**
-          （那时它要是跟着滚出去就白加了）。
-          ⚠️ 与那三颗开关按钮**不同**：它不走 `onCommand`（没有这条命令），
-          直接调 `onHide`。 */}
-      <button
-        type="button"
-        className="format-bar-close"
-        title={t("Hide the formatting toolbar")}
-        aria-label={t("Hide the formatting toolbar")}
-        onClick={onHide}
-      >
-        <Icon name="folio-close-symbolic" />
-      </button>
+
+      {draw(byCommand("image"))}
+      {draw(byCommand("quote"))}
+      <div className="format-group">
+        <button
+          type="button"
+          className="format-btn format-menu-trigger"
+          aria-haspopup="menu"
+          aria-expanded={openMenu === "list"}
+          title={t("Lists")}
+          aria-label={t("Lists")}
+          data-on={state?.block === "ul" || state?.block === "ol" || state?.block === "task"}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setOpenMenu((current) => (current === "list" ? null : "list"))}
+        >
+          <Icon name="folio-view-list-bullet-symbolic" />
+          <span className="format-caret" aria-hidden="true" />
+        </button>
+        {openMenu === "list" && (
+          <MenuPopup
+            label={t("Lists")}
+            entries={listMenuEntries}
+            disabled={disabled}
+            checks={formatChecks}
+            onPick={pickFormatMenu}
+            onDismiss={dismissFormatMenu}
+            onArrowOut={dismissFormatMenu}
+          />
+        )}
+      </div>
+
+      <span className="format-sep" />
+
+      <div className="format-group format-menu-align-end">
+        <button
+          type="button"
+          className="format-btn format-menu-trigger format-more-trigger"
+          aria-haspopup="menu"
+          aria-expanded={openMenu === "more"}
+          title={t("More formatting options")}
+          aria-label={t("More formatting options")}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setOpenMenu((current) => (current === "more" ? null : "more"))}
+        >
+          <span className="format-more-dots" aria-hidden="true">
+            •••
+          </span>
+        </button>
+        {openMenu === "more" && (
+          <MenuPopup
+            label={t("More formatting options")}
+            entries={moreEntriesWithLabel}
+            disabled={disabled}
+            checks={formatChecks}
+            onPick={pickFormatMenu}
+            onDismiss={dismissFormatMenu}
+            onArrowOut={dismissFormatMenu}
+          />
+        )}
+      </div>
     </div>
   );
 }

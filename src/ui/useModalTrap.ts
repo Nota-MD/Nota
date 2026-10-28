@@ -154,6 +154,18 @@ export function useModalTrap(
       if (mostInsideLayer && mostInsideLayer !== panelRef.current && !panelRef.current?.contains(mostInsideLayer)) {
         return;
       }
+      // 自绘 combobox 的列表 portal 到 body，但焦点仍停在 trigger 上。Esc
+      // 必须先收起列表；否则捕获阶段会直接把整个设置框关掉。用一次 click
+      // 走组件自己的开关，不在这里猜它的内部状态。
+      const expandedCombobox = (e.target as Element | null)?.closest?.(
+        '[role="combobox"][aria-haspopup="listbox"][aria-expanded="true"]',
+      );
+      if (expandedCombobox instanceof HTMLElement && e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        expandedCombobox.click();
+        return;
+      }
       // ⚠️ **焦点在浮层里就整个让路**（`Esc` 与 `Tab` 都让）：右键菜单开着时
       // 它自己那套漫游在管焦点，`Esc` 该关的是菜单、`Tab` 该关掉菜单放行。
       // 这里不 return 的话，`Esc` 会被下面那条 `stopPropagation` 掐死在捕获

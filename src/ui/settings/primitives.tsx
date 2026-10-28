@@ -46,13 +46,20 @@ import {
   cloneElement,
   createContext,
   isValidElement,
+  useCallback,
   useContext,
+  useEffect,
   useId,
+  useLayoutEffect,
+  useRef,
   useState,
   type ComponentPropsWithoutRef,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { useT } from "@/i18n";
 
@@ -102,42 +109,257 @@ function nodeText(node: ReactNode): string {
  * 不报错、不显示异常，只是"别的行点标签能切换，这行不能"。
  */
 
-const LABELABLE_TAGS = new Set(["input", "select", "textarea"]);
+const LABELABLE_TAGS = new Set(["input", "textarea"]);
 
 /**
- * 下拉选择。
+ * 自绘下拉选择。
  *
- * ⚠️ 外层那个 `<span>` 是**必须的**：原生的箭头外观去不掉（`appearance: none`
- * 之后得自己画一根），而 `<select>` 上挂不住可靠的伪元素，所以箭头画在
- * 包裹层上，见 `settings.css`。
+ * 不使用原生 `<select>`：它的展开列表、悬浮色和选中行由 WebKitGTK/系统主题
+ * 绘制，CSS 只能控制一部分。这里用 button + portal listbox，收起态与展开态
+ * 都走 `.stg-select-*`，界面主题可以完整指定颜色、圆角、间距与高亮。
  *
  * 多出来的 `...rest` 就是给 `SettingRow` 塞 `id` / `aria-*` 用的，
- * 直接摊到 `<select>` 上——**别摊到外层 `<span>` 上**，那样 id 就指错了地方。
+ * 直接摊到 trigger button 上——**别摊到外层 `<span>` 上**，那样 id 就指错了地方。
  */
 export function Select<T extends string>({
   value,
   options,
   onChange,
+  className,
   ...rest
 }: {
   value: T;
   options: ReadonlyArray<{ value: T; label: string }>;
   onChange: (value: T) => void;
-} & Omit<ComponentPropsWithoutRef<"select">, "value" | "onChange" | "children">) {
+} & Omit<
+  ComponentPropsWithoutRef<"button">,
+  "value" | "onChange" | "children" | "onClick" | "onKeyDown" | "type" | "role"
+>) {
+  const id = useId();
+  const listboxId = `${id}-listbox`;
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const typeaheadRef = useRef({ text: "", at: 0 });
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [popupPlace, setPopupPlace] = useState<CSSProperties | null>(null);
+
+  const selectedIndex = options.findIndex((option) => option.value === value);
+  const activeOption = options[activeIndex];
+  const optionId = (index: number) => `${id}-option-${index}`;
+
+  const placePopup = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const box = trigger.getBoundingClientRect();
+    const viewportGap = 8;
+    const width = Math.min(
+      Math.max(box.width, 180),
+      Math.max(0, window.innerWidth - viewportGap * 2),
+    );
+    const left = Math.min(
+      Math.max(viewportGap, box.left),
+      Math.max(viewportGap, window.innerWidth - width - viewportGap),
+    );
+    const below = window.innerHeight - box.bottom;
+    const above = box.top;
+    const openAbove = below < 220 && above > below;
+    setPopupPlace(
+      openAbove
+        ? { left, width, bottom: window.innerHeight - box.top + 4 }
+        : { left, width, top: box.bottom + 4 },
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    placePopup();
+    window.addEventListener("resize", placePopup);
+    return () => window.removeEventListener("resize", placePopup);
+  }, [open, placePopup]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (triggerRef.current?.contains(target) || popupRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Node && popupRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveIndex((current) => Math.min(Math.max(0, current), Math.max(0, options.length - 1)));
+  }, [open, options.length]);
+
+  useEffect(() => {
+    if (!open) return;
+    const popup = popupRef.current;
+    const active = popup?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!popup || !active) return;
+    const popupBox = popup.getBoundingClientRect();
+    const activeBox = active.getBoundingClientRect();
+    if (activeBox.top < popupBox.top) popup.scrollTop -= popupBox.top - activeBox.top;
+    else if (activeBox.bottom > popupBox.bottom) {
+      popup.scrollTop += activeBox.bottom - popupBox.bottom;
+    }
+  }, [open, activeIndex]);
+
+  const showAt = (index: number) => {
+    setActiveIndex(Math.max(0, Math.min(index, options.length - 1)));
+    setOpen(true);
+  };
+
+  const choose = (index: number) => {
+    const option = options[index];
+    if (!option) return;
+    onChange(option.value);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const move = (step: number) => {
+    if (options.length === 0) return;
+    setActiveIndex((current) => (current + step + options.length) % options.length);
+  };
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (!open) {
+      if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        showAt(selectedIndex >= 0 ? selectedIndex : 0);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        showAt(selectedIndex >= 0 ? selectedIndex : options.length - 1);
+        return;
+      }
+    } else {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        move(1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        move(-1);
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        setActiveIndex(0);
+        return;
+      }
+      if (event.key === "End") {
+        event.preventDefault();
+        setActiveIndex(Math.max(0, options.length - 1));
+        return;
+      }
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        choose(activeIndex);
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key === "Tab") {
+        setOpen(false);
+        return;
+      }
+    }
+
+    if (
+      event.key.length === 1 &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      options.length > 0
+    ) {
+      const now = Date.now();
+      const previous = typeaheadRef.current;
+      const query = now - previous.at > 600 ? event.key : previous.text + event.key;
+      typeaheadRef.current = { text: query, at: now };
+      const start = open ? activeIndex + 1 : Math.max(0, selectedIndex);
+      const found = options.findIndex((_, index) => {
+        const wrapped = (start + index) % options.length;
+        return options[wrapped]?.label.toLowerCase().startsWith(query.toLowerCase());
+      });
+      if (found >= 0) {
+        event.preventDefault();
+        const target = (start + found) % options.length;
+        if (open) setActiveIndex(target);
+        else showAt(target);
+      }
+    }
+  };
+
   return (
-    <span className="stg-select">
-      <select
+    <span className="stg-select" data-open={open ? "true" : undefined}>
+      <button
         {...rest}
-        className="stg-select-native"
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
+        ref={triggerRef}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-activedescendant={open && activeOption ? optionId(activeIndex) : undefined}
+        className={`stg-select-trigger${className ? ` ${className}` : ""}`}
+        onClick={() => {
+          if (open) setOpen(false);
+          else showAt(selectedIndex >= 0 ? selectedIndex : 0);
+        }}
+        onKeyDown={onKeyDown}
       >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+        <span className="stg-select-value">
+          {options.find((option) => option.value === value)?.label ?? ""}
+        </span>
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={popupRef}
+            id={listboxId}
+            role="listbox"
+            className="stg-select-popup"
+            style={popupPlace ?? { visibility: "hidden" }}
+          >
+            {options.map((option, index) => (
+              <button
+                key={option.value}
+                id={optionId(index)}
+                type="button"
+                role="option"
+                tabIndex={-1}
+                className="stg-select-option"
+                data-active={index === activeIndex ? "true" : undefined}
+                aria-selected={option.value === value}
+                onPointerEnter={() => setActiveIndex(index)}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => choose(index)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }

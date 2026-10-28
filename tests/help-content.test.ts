@@ -7,7 +7,12 @@
 
 import { existsSync, readFileSync } from "node:fs";
 
-import { HELP_SECTIONS, buildHelpMarkdown, helpSectionFromHash } from "../src/ui/HelpWindow";
+import {
+  HELP_SECTIONS,
+  buildHelpMarkdown,
+  helpSectionFromHash,
+  helpSectionFromLocation,
+} from "../src/ui/HelpWindow";
 import { MENUS, walkMenuItems } from "../src/ui/commands";
 
 let pass = 0;
@@ -59,7 +64,8 @@ testCase("菜单、IPC、Rust 命令和独立窗口入口已经连通", () => {
   contains(main, "<HelpWindow />", "HelpWindow 挂载");
   contains(ipc, 'invoke<void>("nota_window_open_help"', "前端 IPC");
   contains(rustWindow, "pub fn nota_window_open_help", "Rust 命令");
-  contains(rustWindow, 'WebviewUrl::App(format!("index.html{hash}").into())', "内部窗口地址");
+  contains(rustWindow, 'WebviewUrl::App(format!("help.html?section={section}").into())', "独立帮助页地址");
+  contains(read("help.html"), 'data-window="help"', "帮助入口标记");
   contains(rustNoteBook, "commands::window::nota_window_open_help", "命令注册");
 });
 
@@ -90,8 +96,10 @@ testCase("内置 Markdown 是四个必要章节，地址只能落到白名单", 
   contains(markdown, "```text", "Markdown 代码块");
   for (const id of HELP_SECTIONS) {
     assertValue(helpSectionFromHash(`#help/${id}`) === id, `#help/${id} 解析失败`);
+    assertValue(helpSectionFromLocation(`?section=${id}`) === id, `?section=${id} 解析失败`);
   }
   assertValue(helpSectionFromHash("#help/../../../etc") === "start", "未知章节应回落到首页");
+  assertValue(helpSectionFromLocation("?section=../../etc") === "start", "未知查询章节应回落到首页");
 });
 
 testCase("中文译文与界面国际化共用同一张表", () => {

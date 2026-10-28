@@ -27,13 +27,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { open as selectTextItem } from "@/ui/file-picker";
 
+import { imageSliceExtension } from "@/editor/image-kind";
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
 import type { ImageAnswer, ImageRequest } from "@/ui/useDialogs";
 import { useTablistKeys } from "@/ui/useTablistKeys";
-
-/** 文件对话框的过滤器。⚠️ 与 `src-tauri/src/image.rs` 的 `认得的后缀` 同一套。 */
-const imageSliceExtension = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
 
 /** 从一条路径上取文件名（不带目录）。 */
 function textItemName(path: string): string {

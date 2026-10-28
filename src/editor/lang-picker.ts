@@ -92,6 +92,8 @@ export function createLanguagePicker(option: {
   currentLanguage: () => string;
   /** 用户选定了某个语言。 */
   selectLanguage: (lang: string) => void;
+  /** 选择完成、弹层移除后，把焦点交回代码编辑器。 */
+  restoreFocus?: () => void;
 }): languagePicker {
   // ── 闭合状态那颗按钮 ────────────────────────────────────────────────
   // ⚠️ 用 `<button>` 而不是 `<div>`：键盘 Tab 能到、Enter/Space 天然可点。
@@ -173,7 +175,10 @@ export function createLanguagePicker(option: {
       option.selectLanguage(lang);
       drawCloseCombine(lang);
       close();
-      btn.focus();
+      queueMicrotask(() => {
+        if (option.restoreFocus) option.restoreFocus();
+        else btn.focus();
+      });
     });
     return opt;
   }
@@ -469,7 +474,10 @@ export function createLanguagePicker(option: {
           drawCloseCombine(lang);
         }
         close();
-        btn.focus();
+        queueMicrotask(() => {
+          if (option.restoreFocus) option.restoreFocus();
+          else btn.focus();
+        });
         e.preventDefault();
         return;
       }

@@ -76,7 +76,7 @@ pub fn nota_window_open_debug_log(app: tauri::AppHandle) -> Result<()> {
     let built = WebviewWindowBuilder::new(
         &app,
         "debug-log",
-        WebviewUrl::App("index.html#debug-log".into()),
+        WebviewUrl::App("debug-log.html".into()),
     )
     .title("Nota Debug Log")
     .inner_size(920.0, 620.0)
@@ -105,7 +105,7 @@ pub fn nota_window_open_help(
     state: State<'_, AppState>,
     section: Option<String>,
 ) -> Result<()> {
-    let hash = 帮助哈希(section.as_deref());
+    let section = 帮助章节(section.as_deref());
     let 标题 = if state.app_lang.to_ascii_lowercase().starts_with("zh") {
         "Nota 帮助"
     } else {
@@ -115,7 +115,8 @@ pub fn nota_window_open_help(
         let mut url = 窗
             .url()
             .map_err(|e| NotaError::other(format!("读取帮助窗口地址失败：{e}")))?;
-        url.set_fragment(Some(hash.trim_start_matches('#')));
+        url.set_fragment(None);
+        url.set_query(Some(&format!("section={section}")));
         窗.navigate(url)
             .map_err(|e| NotaError::other(format!("切换到帮助章节失败：{e}")))?;
         窗.show()
@@ -127,7 +128,7 @@ pub fn nota_window_open_help(
     WebviewWindowBuilder::new(
         &app,
         "help",
-        WebviewUrl::App(format!("index.html{hash}").into()),
+        WebviewUrl::App(format!("help.html?section={section}").into()),
     )
     .title(标题)
     .inner_size(980.0, 720.0)
@@ -139,12 +140,12 @@ pub fn nota_window_open_help(
 }
 
 /// 上下文帮助只允许跳到已知章节；未知值回落到帮助首页。
-fn 帮助哈希(section: Option<&str>) -> &'static str {
+fn 帮助章节(section: Option<&str>) -> &'static str {
     match section {
-        Some("pandoc") => "#help/pandoc",
-        Some("printing") => "#help/printing",
-        Some("shortcuts") => "#help/shortcuts",
-        _ => "#help/start",
+        Some("pandoc") => "pandoc",
+        Some("printing") => "printing",
+        Some("shortcuts") => "shortcuts",
+        _ => "start",
     }
 }
 
@@ -214,14 +215,14 @@ pub fn nota_quit(app: tauri::AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::帮助哈希;
+    use super::帮助章节;
 
     #[test]
     fn 帮助章节只落到白名单() {
-        assert_eq!(帮助哈希(Some("pandoc")), "#help/pandoc");
-        assert_eq!(帮助哈希(Some("printing")), "#help/printing");
-        assert_eq!(帮助哈希(Some("shortcuts")), "#help/shortcuts");
-        assert_eq!(帮助哈希(Some("../settings")), "#help/start");
-        assert_eq!(帮助哈希(None), "#help/start");
+        assert_eq!(帮助章节(Some("pandoc")), "pandoc");
+        assert_eq!(帮助章节(Some("printing")), "printing");
+        assert_eq!(帮助章节(Some("shortcuts")), "shortcuts");
+        assert_eq!(帮助章节(Some("../settings")), "start");
+        assert_eq!(帮助章节(None), "start");
     }
 }

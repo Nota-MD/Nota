@@ -183,6 +183,8 @@
    和插件页签之间留一道空隙，免得看起来像是某个插件的页。 */
 .dock-tab-plugins {
   margin-left: auto;
+  padding: 3px 6px;
+  font-size: 0.72em;
   font-style: italic;
 }
 

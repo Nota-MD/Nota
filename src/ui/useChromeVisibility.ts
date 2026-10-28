@@ -91,7 +91,7 @@ import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 
 /** 触发带的高度（px）。见文件头"悬停那一档的判据"。 */
-const topPartTriggerSendWith = 8;
+const bottomPartTriggerBand = 64;
 
 
 export interface ExternalShellWiring {
@@ -150,6 +150,45 @@ export function useChromeVisibility(
   }, []);
 
   useEffect(() => {
+    const main = refs.mainArea.current;
+    if (!main) return;
+    let frame = 0;
+    const resize = new ResizeObserver(() => schedule());
+    const history = new MutationObserver(() => {
+      observeBottomBars();
+      schedule();
+    });
+
+    const measure = () => {
+      frame = 0;
+      const bars = main.querySelectorAll<HTMLElement>(":scope > .tabbar, :scope > .statusbar");
+      let height = 0;
+      for (const bar of bars) height += bar.getBoundingClientRect().height;
+      main.style.setProperty("--nota-bottom-bar-height", `${height}px`);
+    };
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(measure);
+    };
+    const observeBottomBars = () => {
+      resize.disconnect();
+      for (const bar of main.querySelectorAll(":scope > .tabbar, :scope > .statusbar")) {
+        resize.observe(bar);
+      }
+    };
+
+    observeBottomBars();
+    history.observe(main, { childList: true });
+    schedule();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      resize.disconnect();
+      history.disconnect();
+      main.style.removeProperty("--nota-bottom-bar-height");
+    };
+  }, [refs.mainArea]);
+
+  useEffect(() => {
     // ⚠️ **档位写到 `.app-main` 上给 CSS 认**（2026-10-11，用户报的"悬停时文本随之下移"）：
     // 悬停那一档要按**浮层**摆（详见 `styles/bars.css` 里那条规则），而 CSS 认不出
     // "这一条是悬停弹出来的"——"画不画"（`formatBarOpen`）在"始终显示"那一档里恒为真。
@@ -163,12 +202,36 @@ export function useChromeVisibility(
     const determine = (e: PointerEvent) => {
       const bar = refs.workToolBar.current;
       if (bar) {
-        // 已经露出来了：指针在它下沿以上就算还在上面（见文件头那张表）。
-        updatePeek(e.clientY <= bar.getBoundingClientRect().bottom);
+        const main = refs.mainArea.current?.getBoundingClientRect();
+        const barBox = bar.getBoundingClientRect();
+        const menuBoxes = Array.from(bar.querySelectorAll(".format-menu")).map((menu) =>
+          menu.getBoundingClientRect(),
+        );
+        const insideBar =
+          e.clientX >= barBox.left &&
+          e.clientX <= barBox.right &&
+          e.clientY >= barBox.top - 8 &&
+          e.clientY <= barBox.bottom + 8;
+        const insideMenu = menuBoxes.some(
+          (box) =>
+            e.clientX >= box.left &&
+            e.clientX <= box.right &&
+            e.clientY >= box.top &&
+            e.clientY <= box.bottom,
+        );
+        const nearBottomBand =
+          !!main &&
+          e.clientY >= main.bottom - bottomPartTriggerBand &&
+          e.clientY <= main.bottom;
+        updatePeek(insideBar || insideMenu || nearBottomBand);
         return;
       }
-      const mainAreaTop = refs.mainArea.current?.getBoundingClientRect().top ?? 0;
-      updatePeek(e.clientY >= mainAreaTop && e.clientY <= mainAreaTop + topPartTriggerSendWith);
+      const mainArea = refs.mainArea.current?.getBoundingClientRect();
+      if (!mainArea) {
+        updatePeek(false);
+        return;
+      }
+      updatePeek(e.clientY >= mainArea.bottom - bottomPartTriggerBand && e.clientY <= mainArea.bottom);
     };
 
     const store = () => updatePeek(false);

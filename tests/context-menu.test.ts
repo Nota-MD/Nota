@@ -417,6 +417,14 @@ testCase("编辑器 → 三排图标 ＋ 三个子菜单父项", () => {
   assertValue(rows.some((r) => r.kind === "item" && r.spec.id === "ctx.table"), "少了「表格」那一栏");
 });
 
+testCase("没有选中文本时隐藏「复制为」", () => {
+  const rows = buildRows("编辑器", false, null, false, false);
+  assertValue(
+    !rows.some((r) => r.kind === "item" && r.spec.id === "edit.copyAs"),
+    "没有选区仍显示「复制为」",
+  );
+});
+
 testCase("⚠️ 开发者工具只在开发模式里出现", () => {
   const has = buildRows("编辑器", true).some((r) => r.kind === "item" && r.spec.id === "view.devtools");
   const without = buildRows("编辑器", false).some((r) => r.kind === "item" && r.spec.id === "view.devtools");

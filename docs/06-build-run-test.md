@@ -246,6 +246,11 @@ glibc 是**向前兼容、不向后兼容**的，在新系统上编的二进制�
 | `icon` | 6 个（见 `icons/`） | Tauri 各平台各取所需：Windows 要 `.ico`、macOS 要 `.icns`、Linux 要 `.png` |
 | `windows.nsis` | `languages: [SimpChinese, English]` + 语言选择器 | 中文用户双击安装看到中文。⚠️ 界面文案一律中文，但**安装器的是语言选择器**，两种都列出来让用户选 |
 | `windows.nsis.installMode` | `currentUser` | 免 UAC 提权。装到用户目录，卸载干净 |
+
+应用内更新调用 NSIS 时使用 `/S /UPDATE /R`。`/UPDATE` 跳过“是否卸载旧版本”
+的交互，`/R` 在静默覆盖完成后启动新版本；外部 PowerShell 先等待当前 Nota
+进程退出，因此不会覆盖仍在运行的二进制。Linux deb/rpm 同样先等待进程退出，
+再经 `pkexec` 安装并启动原路径；AppImage 与便携 ZIP 由替换脚本完成同一流程。
 | `macOS.minimumSystemVersion` | `10.15` | 与 `tauri` 2.x 的 WebView 要求对齐 |
 | `linux.deb.depends` | `libwebkit2gtk-4.1-0` / `libgtk-3-0` | Tauri 会自动填大部分，Nota 补的是**运行期真正要的那两个 soname** |
 | `linux.rpm.depends` | `webkit2gtk4.1` / `gtk3` | 同上，rpm 的包名和 deb 不一样 |
@@ -6718,7 +6723,7 @@ CSS 文件目录解析相对资源，而不是要求 `<主题id>/icons/`。
 
 ### 5.71 验「调试终端、灰项接线与图片导出」（2026-10-25）
 
-调试日志窗口用真实前端入口 `index.html#debug-log` 在 Chromium 中渲染；宿主调用由
+调试日志窗口用真实前端入口 `debug-log.html` 在 Chromium 中渲染；宿主调用由
 隔离注入返回一份诊断样例。目检结果是固定英文报告、等宽只读区域、顶部
 “Copy All”与“Export .log”两个动作，以及深色界面下可读的滚动区。
 

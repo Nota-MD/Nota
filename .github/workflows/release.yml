@@ -101,8 +101,6 @@ jobs:
             源码提交：${{ github.sha }}
             CI 运行：${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-            Windows 版本尚属新增支持，测试范围有限。欢迎通过 GitHub Issues 提交问题与建议。
-
             这是自动生成的草稿 Release。SHA256SUMS.txt 与 BUILD-INFO.json 由 checksums job 追加。
 
       - name: 生成 Windows 便携 ZIP
@@ -155,6 +153,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -186,7 +186,7 @@ jobs:
           fs.writeFileSync("dist/BUILD-INFO.json", JSON.stringify(info, null, 2) + "\n");
           NODE
 
-      - name: 追加到草稿 Release
+      - name: 按平台顺序整理 Release 资源
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/latest.json dist/SHA256SUMS.txt dist/BUILD-INFO.json --clobber
+        run: bash tools/order-release-assets.sh "$GITHUB_REF_NAME" dist

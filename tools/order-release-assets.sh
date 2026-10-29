@@ -14,8 +14,13 @@ find_group() {
   find "$dir" -type f \( "$@" \) -print0 | sort -z
 }
 
-mapfile -d '' win_x64 < <(find_group -name '*_x64-setup.exe' -o -name '*_x64-portable.exe' -o -name '*_x64-portable.zip')
-mapfile -d '' linux_x64 < <(find_group -name '*_amd64.deb' -o -name '*x86_64.rpm' -o -name '*_amd64.AppImage')
+mapfile -d '' win_x64_setup < <(find_group -name '*_x64-setup.exe')
+mapfile -d '' win_x64_portable < <(find_group -name '*_x64-portable.exe' -o -name '*_x64-portable.zip')
+win_x64=("${win_x64_setup[@]}" "${win_x64_portable[@]}")
+mapfile -d '' linux_x64_deb < <(find_group -name '*_amd64.deb')
+mapfile -d '' linux_x64_rpm < <(find_group -name '*x86_64.rpm')
+mapfile -d '' linux_x64_appimage < <(find_group -name '*_amd64.AppImage')
+linux_x64=("${linux_x64_deb[@]}" "${linux_x64_rpm[@]}" "${linux_x64_appimage[@]}")
 mapfile -d '' win_arm64 < <(find_group -name '*_arm64-setup.exe' -o -name '*_arm64-portable.zip')
 mapfile -d '' linux_arm64 < <(find_group -name '*_arm64.deb' -o -name '*aarch64.rpm' -o -name '*_aarch64.AppImage')
 
@@ -53,7 +58,7 @@ while IFS=$'\t' read -r id name; do
     exit 1
   fi
   gh api --method DELETE "repos/$repo/releases/assets/$id" >/dev/null
-done < <(gh release view "$tag" --repo "$repo" --json assets \
+done < <(gh api "repos/$repo/releases/tags/$tag" \
   --jq '.assets[] | [.id, .name] | @tsv')
 
 upload_group() {

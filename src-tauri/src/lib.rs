@@ -125,6 +125,8 @@ fn 配置_webkit_渲染器() {
 }
 
 pub fn run() {
+    let 独立调试窗口 = cli::要开调试窗口(std::env::args_os());
+
     // 闸门开着就先自报一句：不然"我设了 NOTA_DEBUG 怎么什么都没有"和
     // "日志真的干净"从终端上看不出区别。这一行本身也走闸门，所以默认照旧静默。
     crate::日志!("[nota] debug mode enabled (NOTA_DEBUG); log output is normally suppressed");
@@ -215,7 +217,10 @@ pub fn run() {
     // ⚠️ **代价如实记一笔**：新窗口这一份**收不到** `nota:second-instance`
     // 事件（它没有 socket）。所以"把这个标签页送回原来那个窗口"这种操作
     // 做不了——用户明确说了不用考虑拖回来（原话「不用考虑拖回来的情况了」）。
-    let 单实例 = if cli::要开新窗口(std::env::args_os()) {
+    let 单实例 = if 独立调试窗口 {
+        crate::日志!("[nota] debug log viewer: bypassing single instance");
+        None
+    } else if cli::要开新窗口(std::env::args_os()) {
         crate::日志!("[nota] --new-window: bypassing single instance");
         None
     } else {
@@ -239,7 +244,14 @@ pub fn run() {
         // "请按 Ctrl+V"（用户：「剪切板始终显示要CtrlV粘贴，但是我已经是CtrlV了」）。
         // 现在读剪贴板走**宿主**（这个插件），菜单那条就真的能粘了。
         .plugin(tauri_plugin_clipboard_manager::init())
-        .setup(|app| {
+        .setup(move |app| {
+            // 日志查看器是独立进程，只承载诊断页；不读文档、不跑插件、不抢
+            // 单实例 socket。初始主窗口保持藏在屏幕外，页面切到 debug-log.html
+            // 并由 `on_page_load` 显示，避免用户先看到主应用的半成品。
+            if 独立调试窗口 {
+                return Ok(());
+            }
+
             // ── ① 设置 ────────────────────────────────────────────────────
             // 读失败**不回滚启动**：一份坏掉的 settings.toml 不该让人连界面都进不去。
             // 退回默认值，用户至少能打开应用去改回来。
@@ -289,6 +301,12 @@ pub fn run() {
             );
             if let Ok(path) = crate::paths::settings_file() {
                 crate::日志!("[nota] settings file: {}", path.display());
+            }
+            if let Err(error) = crate::paths::ensure_theme_directories() {
+                crate::日志!("[nota] theme directories could not be prepared: {error}");
+            }
+            if let Err(error) = crate::paths::migrate_legacy_theme_directories() {
+                crate::日志!("[nota] legacy theme migration skipped: {error}");
             }
 
             // ── ② 插件 ────────────────────────────────────────────────────
@@ -449,6 +467,7 @@ pub fn run() {
             commands::export::nota_export_reveal,
             // 应用内打印（2026-10-17）：列打印机 / 出 PDF＋预览 / 投递。
             commands::print::nota_print_supported,
+            commands::print::nota_print_backend,
             commands::print::nota_print_printers,
             commands::print::nota_print_prepare,
             commands::print::nota_print_system,
@@ -470,7 +489,6 @@ pub fn run() {
             commands::settings::nota_settings_get,
             commands::settings::nota_settings_set,
             commands::window::nota_window_open_devtools,
-            commands::window::nota_window_open_help,
             commands::window::nota_window_open_debug_log,
             commands::window::nota_window_show_main,
             commands::window::nota_quit,
@@ -653,7 +671,29 @@ pub fn run() {
         // 而它挂了顶多是回到修复前的样子——绝不能因此让人进不去界面。
         // 这正是 BUG-49 那一条的处境（`docs/07`）；BUG-49 的完整来龙去脉
         // 写在 `format_keys.rs` 的文件头。
-        .on_page_load(|webview, _| {
+        .on_page_load(move |webview, payload| {
+            if 独立调试窗口 {
+                if webview.label() != "main" {
+                    return;
+                }
+                if payload.url().path().ends_with("/debug-log.html")
+                    || payload.url().path().ends_with("debug-log.html")
+                {
+                    let window = webview.window();
+                    let _ = window.set_title("Nota Debug Log");
+                    let _ = window.set_size(tauri::LogicalSize::new(920.0, 620.0));
+                    let _ = window.set_min_size(Some(tauri::LogicalSize::new(560.0, 320.0)));
+                    let _ = window.set_skip_taskbar(false);
+                    let _ = window.center();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                } else if let Err(e) =
+                    webview.eval("window.location.replace('debug-log.html')")
+                {
+                    eprintln!("[nota] could not open debug log page: {e}");
+                }
+                return;
+            }
             if let Err(e) = format_keys::装上(webview) {
                 crate::日志!("[nota] format shortcut hook unavailable (Ctrl+B uses fallback): {e}");
             }

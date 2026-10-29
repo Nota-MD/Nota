@@ -66,7 +66,7 @@ const IMPLEMENTED = new Set([
   "view.toggleDock",
   "view.statusBar",
   "view.fullscreen",
-  "help.about",
+  "about.about",
   // ⚠️ 子菜单**至少要有一个子项是"已实现"**，否则按 `App.tsx` 那条规则
   // （子项全灰 → 父项灰）整条飞出都是灰的、键盘**走不进去**。
   // 第一次跑试验台就栽在这儿：夹具里一个导出格式都没实现，于是

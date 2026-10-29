@@ -53,6 +53,15 @@
   box-shadow: 0 2px 12px rgb(0 0 0 / 26%);
 }
 
+.print-browser-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #fff;
+}
+
 .print-blank {
   flex: 1;
   display: flex;

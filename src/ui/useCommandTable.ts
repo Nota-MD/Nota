@@ -109,6 +109,7 @@ export interface CommandTableInput {
   moveLine: (c: EditorCommand, payload?: CommandPayload) => void;
   /** ⚠️ 收一个参数：`false` = 只找（`Ctrl+F`）、`true` = 带替换（`Ctrl+H`）。 */
   splitCheckFind: (withReplaceReplace?: boolean) => void;
+  checkDocument: () => Promise<void>;
   insertLink: () => Promise<void>;
   insertImageLike: () => Promise<void>;
   /** 打开 Emoji 选择器，选中的字符插到光标处（`ui/EmojiDialog.tsx`）。 */
@@ -186,8 +187,7 @@ export interface CommandTableInput {
    */
   setMode: (m: ViewMode) => void;
 
-  // ── 帮助 ──────────────────────────────────────────────────────────────
-  openHelp: () => void;
+  // ── 关于 ──────────────────────────────────────────────────────────────
   about: () => void;
   /** 文档、侧栏与窗口之间的组合动作（会话内只读状态也在这里）。 */
   menuFeatures: menuFeatureApi;
@@ -225,6 +225,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
     print,
     moveLine: run,
     splitCheckFind,
+    checkDocument,
     insertLink,
     insertImageLike,
     insertEmoji,
@@ -250,7 +251,6 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
     toggleAlwaysOnTop,
     openDevTools,
     setMode,
-    openHelp,
     about: showAbout,
     menuFeatures,
   } = input;
@@ -388,6 +388,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
       // （2026-10-06，第 95 项）。⚠️ 在此之前 `Ctrl+F` **根本没有绑定**。
       "edit.find": () => splitCheckFind(false),
       "edit.findReplace": () => splitCheckFind(true),
+      "edit.checkDocument": () => void checkDocument(),
 
       "para.h1": () => run("h1"),
       "para.h2": () => run("h2"),
@@ -410,6 +411,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
       "para.tableDel": () => run("tableDel"),
       "para.tableCopy": () => run("tableCopy"),
       "para.tableFormat": () => run("tableFormat"),
+      "para.tableRowHeaders": () => run("tableRowHeaders"),
       "para.tableAlignLeft": () => run("tableAlignLeft"),
       "para.tableAlignCenter": () => run("tableAlignCenter"),
       "para.tableAlignRight": () => run("tableAlignRight"),
@@ -425,6 +427,11 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
       // `光标条件`），所以这里不必再判一次。
       "para.toc": () => run("toc", { strict: strictMarkdown }),
       "para.footnote": () => run("footnote"),
+      "para.alertNote": () => run("alertNote"),
+      "para.alertTip": () => run("alertTip"),
+      "para.alertImportant": () => run("alertImportant"),
+      "para.alertWarning": () => run("alertWarning"),
+      "para.alertCaution": () => run("alertCaution"),
       // front matter（`docs/07` 第 64 项）。⚠️ **不带 payload**——那正是"确保
       // 有一段"的意思（有就一个字不动，没有就建一段模板出来），判据写在
       // `create-types.ts::CommandPayload.frontMatter`。
@@ -441,6 +448,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
       // 没有它**，所以那一项是灰的、而 `Ctrl+U` 一直是好的——菜单上同时写着
       // "按不了"和 `Ctrl+U`。现在补上（与 `edit.cut/copy/paste` 同一类）。
       "fmt.underline": () => run("underline"),
+      "fmt.kbd": () => run("kbd"),
       "fmt.highlight": () => run("highlight"),
       "fmt.superscript": () => run("superscript"),
       "fmt.subscript": () => run("subscript"),
@@ -508,8 +516,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
       "view.modeSource": () => setMode("source"),
       "view.modeSplit": () => setMode("split"),
 
-      "help.help": () => openHelp(),
-      "help.about": () => void showAbout(),
+      "about.about": () => void showAbout(),
     };
     // ⚠️ 依赖不给数组字面量，给 `Object.values(输入)`：理由在文件头那一节。
   }, Object.values(input));

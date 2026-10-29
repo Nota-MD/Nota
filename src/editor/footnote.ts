@@ -22,9 +22,8 @@
  * 1. **不重排编号**。删掉第 2 条脚注之后，第 3 条**仍然是 3**。理由：markdown 里
  *    `[^1]` 的 `1` 是**标识符**，不是序号——重排等于替用户改他写的字节。想重排
  *    得先有一套"哪些引用指向哪条定义"的索引，而那正是这个文件**故意不做**的事。
- * 2. **不跳转**。点角标不会滚到定义那儿（`editor.css` 里那句 `cursor: pointer`
- *    只表示"这里能点"，是给将来留的位置）。做跳转要同一套索引，另加一层
- *    点击拦截——不在这一格里。
+ * 2. **编号不重排，但引用与定义双向跳转**。点击角标跳到同 label 的定义；
+ *    点击定义标签回到第一条引用。跳转只移动编辑选区，不改源码。
  * 3. **定义一律补在文末**。用户自己写在文档中间的 `[^1]: 说明` 一个字节不动
  *    （markdown 允许定义出现在任意位置，`docs/05` 记着这一条），但**新插的
  *    那条**总落在最后——因为那是最常见的写法，也是 Typora 的做法。
@@ -36,8 +35,9 @@
 import { editorViewCtx } from "@milkdown/kit/core";
 import type { Editor } from "@milkdown/kit/core";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import { TextSelection } from "@milkdown/kit/prose/state";
+import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
+import { $prose } from "@milkdown/kit/utils";
 
 /**
  * 两颗节点的**名字**（PM schema 的节点名，不是 HTML 标签）。
@@ -164,3 +164,88 @@ export function insertFootNote(editor: Editor): void {
     view.focus();
   });
 }
+
+/** 在一棵树里找一条脚注节点；找不到给 `null`。 */
+export function footnotePosition(
+  doc: PMNode,
+  kind: typeof footNoteReferenceUseName | typeof footNoteFixedMeaningName,
+  label: string,
+): number | null {
+  let found: number | null = null;
+  doc.descendants((node, position) => {
+    if (
+      node.type.name === kind &&
+      String(node.attrs.label ?? "") === label
+    ) {
+      found = position;
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+const footnoteNavigationKey = new PluginKey("nota-footnote-navigation");
+
+/**
+ * 引用角标与定义之间双向跳转。
+ *
+ * 定义正文（`dd`）里点击仍是正常编辑；只有定义标签（`dt`）承担“返回引用”的
+ * 语义，避免用户想改说明时一点就被带走。
+ */
+export const footnoteNavigation = $prose(
+  () =>
+    new Plugin({
+      key: footnoteNavigationKey,
+      props: {
+        handleClick(view, _position, event) {
+          const target = event.target;
+          if (!(target instanceof Element)) return false;
+          const reference = target.closest(
+            `sup[data-type="${footNoteReferenceUseName}"]`,
+          );
+          if (reference instanceof HTMLElement) {
+            const label = reference.dataset.label ?? "";
+            const destination = footnotePosition(
+              view.state.doc,
+              footNoteFixedMeaningName,
+              label,
+            );
+            if (destination === null) return false;
+            view.dispatch(
+              view.state.tr
+                .setSelection(
+                  TextSelection.near(
+                    view.state.doc.resolve(destination + 2),
+                  ),
+                )
+                .scrollIntoView(),
+            );
+            view.focus();
+            return true;
+          }
+
+          const definition = target.closest(
+            `dl[data-type="${footNoteFixedMeaningName}"]`,
+          );
+          if (!(definition instanceof HTMLElement) || !target.closest("dt")) {
+            return false;
+          }
+          const label = definition.dataset.label ?? "";
+          const destination = footnotePosition(
+            view.state.doc,
+            footNoteReferenceUseName,
+            label,
+          );
+          if (destination === null) return false;
+          view.dispatch(
+            view.state.tr
+              .setSelection(NodeSelection.create(view.state.doc, destination))
+              .scrollIntoView(),
+          );
+          view.focus();
+          return true;
+        },
+      },
+    }),
+);

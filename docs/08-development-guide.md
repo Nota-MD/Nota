@@ -468,8 +468,8 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 
 ### ⚠️ 先问一句：这一档要不要**做成内置**？
 
-**2026-09-26 起用户自己能加风格**——往 `~/.config/nota/ui-styles/` 丢一个
-`<id>.css` 就多出一档（同名则覆盖内置），**一行源码都不用改**。所以：
+**2026-09-26 起用户自己能加风格**——往 `~/.config/nota/themes/ui/` 放一个
+`<id>/theme.css` 主题包就多出一档（同名则覆盖内置），**一行源码都不用改**。所以：
 
 | 你想要的是 | 走哪条路 |
 |---|---|
@@ -484,13 +484,13 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 ## §A · 导入档：用户自己加一档
 
 ```text
-~/.config/nota/ui-styles/<id>.css      ← id 就是文件名去掉 .css，也是下拉里的取值
+~/.config/nota/themes/ui/<id>/theme.css  ← id 就是目录名，也是下拉里的取值
 ```
 
 文件格式（**必须**按 id 起头写选择器，因为注入时**一个字节都不改写**）：
 
 ```css
-/* ~/.config/nota/ui-styles/my-style.css —— 重启应用后「外观」页多出一档 my-style */
+/* ~/.config/nota/themes/ui/my-style/theme.css —— 重启应用后「外观」页多出一档 my-style */
 [data-ui-style="my-style"] {
   --radius: 6px;
   --radius-sm: 4px;
@@ -523,16 +523,16 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 
 图标 ID 就是 `Icon` 组件的逻辑名（`data-icon`），主题只声明
 `--icon-<逻辑名>: url(...)`；没声明的图标继续用 Nota 默认图。后端会把
-`ui-styles/` 或 `themes/` 根目录内的相对资源转成 data URI，所以不碰 WebKit 的
+`themes/ui/` 或 `themes/document/` 根目录内的相对资源转成 data URI，所以不碰 WebKit 的
 `asset:` 字体限制。允许在根内用 `../` 共享；逃出主题根、绝对路径、未知后缀、
 单件超过 8 MiB 或合计超过 24 MiB 的那一条资源会保持原样（不生效），不会让整份
 主题失败。
 
-文档主题也在自己的 `themes/` 根内使用同一套相对 `url()` 规则，适合放
-`@font-face`；但文档主题仍然**不能**覆盖界面图标，界面资源归 `ui-styles/`。
+文档主题也在自己的 `themes/document/` 根内使用同一套相对 `url()` 规则，适合放
+`@font-face`；但文档主题仍然**不能**覆盖界面图标，界面资源归 `themes/ui/`。
 
-📌 **2026-10-21 起推荐自包含主题包**：`themes/<id>/theme.css` 或
-`ui-styles/<id>/theme.css`，资源与主 CSS 放在同一主题目录。根目录里的扁平
+📌 **2026-10-21 起只接受自包含主题包**：`themes/document/<id>/theme.css` 或
+`themes/ui/<id>/theme.css`，资源与主 CSS 放在同一主题目录。根目录里的扁平
 `<id>.css` 不再接受。文档主题可以用 Typora 常见的 `#write`
 选择正文根；限域器会把它映射到 `.editor-pane .ProseMirror`。完整规范见
 `docs/reference/theme-package-spec.md`。
@@ -551,7 +551,7 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 2026-09-26 用户把它定成了「这个主题只包含一个 UI 的设计样式……而不包含主题颜色」。
 所以写导入档时请按这条分工：
 
-| 该写进 `<id>.css` 的 | 不该写、交给别人的 |
+| 该写进 `<id>/theme.css` 的 | 不该写、交给别人的 |
 |---|---|
 | 圆角（`--radius*`）、间距、控件与工具栏高度、描边宽度、动效时长曲线、字体栈 | **强调色**——用户随时会用「主题色」那条轴把它顶掉，你写的那个值在那之后**一点都不剩**；要改基本配色请走「明暗」 |
 
@@ -742,15 +742,15 @@ TS 联合类型三处）；这一节写的是**文档主题**——一份 CSS �
 
 ### 放哪儿
 
-**只有一个目录**：`~/.config/nota/themes/`（**按 XDG 算**，`~/.config` 只是默认值）。
-文件名就是主题的 **id**：`minimal.css` → id `minimal`。
+**只有一个目录**：`~/.config/nota/themes/document/`（**按 XDG 算**，`~/.config` 只是默认值）。
+主题包的目录名就是 **id**：`minimal/theme.css` → id `minimal`。
 
 ⚠️ **id 的形状有硬约束**：只放行 ASCII 字母数字与 `-` `_`（长度 1–64），
-因为后端是拿它拼路径的（`<主题目录>/<id>.css`）。**中文文件名用不了**——
+因为后端是拿它拼路径的（`<主题目录>/<id>/theme.css`）。**中文文件名用不了**——
 这是有意的取舍，显示名写在文件里，文件名只是个键。
 ⚠️ 同名**覆盖内置**（想改「极简」就复制一份 `minimal.css` 出来改，升级不会冲掉）。
 ⚠️ 菜单栏「主题 → 打开主题文件夹…」会把目录建出来。
-⚠️ **改了之后要重启**：主题清单只在启动时拉一次（`docs/07` 第 41 项）。
+⚠️ **不用重启**：打开主题菜单或点击外观页的刷新按钮会重新扫描目录。
 
 ### 长什么样
 

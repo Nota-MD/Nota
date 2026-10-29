@@ -36,6 +36,7 @@ import type { Dialogs } from "@/ui/useDialogs";
 import type { Toast } from "@/ui/Toasts";
 import { useT } from "@/i18n";
 import { localLocalImageSliceAbsoluteCorrectPath } from "@/editor/video-view";
+import { anchor } from "@/editor/toc";
 
 /** 一条 DOM 锚点上的链接：它显示的那几个字 ＋ 它的地址。 */
 export interface LinkTarget {
@@ -108,6 +109,49 @@ function openRawHtmlLink(
   if (localLocal) void openDocument(localLocal);
 }
 
+/**
+ * 跳到同一篇文档里的标题或命名锚点。
+ *
+ * 标题沿用导出时的同一个 `锚点()` 算法；手写 `<a name="…">` 也会被识别。
+ * 找不到时保持安静，由 Markdown 源文负责说明它指向哪里。
+ */
+export function jumpToInternalAnchor(
+  host: HTMLElement | null,
+  rawHref: string,
+): boolean {
+  if (!host || !rawHref.startsWith("#")) return false;
+  let id = rawHref.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // 保留原字符串；无效百分号不应该让导航本身失效。
+  }
+  if (!id) return false;
+  const root = host.querySelector(".ProseMirror");
+  if (!root) return false;
+  let target = Array.from(root.querySelectorAll("[name]")).find(
+    (element) => element.getAttribute("name") === id,
+  );
+  if (!target) {
+    const used = new Set<string>();
+    for (const heading of Array.from(
+      root.querySelectorAll("h1, h2, h3, h4, h5, h6"),
+    )) {
+      if (anchor(heading.textContent ?? "", used) === id) {
+        target = heading;
+        break;
+      }
+    }
+  }
+  if (!target) return false;
+  target.scrollIntoView({ block: "start" });
+  target.classList.remove("nota-anchor-flash");
+  void target.getBoundingClientRect();
+  target.classList.add("nota-anchor-flash");
+  window.setTimeout(() => target?.classList.remove("nota-anchor-flash"), 900);
+  return true;
+}
+
 export function usePointLink({
   mainArea,
   askLink,
@@ -134,6 +178,10 @@ export function usePointLink({
         (e.target as Node | null)?.nodeType === Node.ELEMENT_NODE
           ? (e.target as Element)
           : (e.target as Node | null)?.parentElement;
+      if (chain.href.trim().startsWith("#")) {
+        e.preventDefault();
+        if (jumpToInternalAnchor(mainArea.current, chain.href.trim())) return;
+      }
       if (element?.closest('[data-type="html-block"]')) {
         e.preventDefault();
         openRawHtmlLink(chain.href, documentPath, openDocument, toast, t);

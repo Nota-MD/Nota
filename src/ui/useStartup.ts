@@ -61,6 +61,15 @@ import type { Toast } from "@/ui/Toasts";
 import { markStartupReady } from "@/ui/useBootReveal";
 import { debugError, debugEvent } from "@/ui/debug-log";
 
+/**
+ * 编译进二进制的 Adwaita 文档主题。它同时是宿主清单的第一帧兜底：
+ * Windows 首次启动或主题目录暂不可读时，下拉与「主题」菜单也不能空着。
+ */
+export const BUILTIN_DOC_THEMES: DocThemeInfo[] = [
+  { id: "adwaita", name: "Adwaita", builtin: true },
+  { id: "adwaita-dark", name: "Adwaita（深色）", builtin: true },
+];
+
 export interface StartActionWiring {
   setSettings: (s: Settings) => void;
   setWorkspace: (w: string | null) => void;
@@ -151,14 +160,17 @@ export function useStartup(w: StartActionWiring): void {
         void themeTask
           .then((themeList) => {
             if (alive) {
-              setThemes(themeList);
+              setThemes(themeList.length > 0 ? themeList : BUILTIN_DOC_THEMES);
               debugEvent("startup", "document theme inventory ready", {
-                count: themeList.length,
+                count: themeList.length || BUILTIN_DOC_THEMES.length,
               });
             }
           })
           .catch((e) => {
-            if (alive) debugError("startup", "document theme inventory failed", e);
+            if (alive) {
+              setThemes(BUILTIN_DOC_THEMES);
+              debugError("startup", "document theme inventory failed", e);
+            }
           });
 
         const startActionTextItem = await startActionTextItemTaskTask;

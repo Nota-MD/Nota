@@ -1,0 +1,15 @@
+{
+  "product": "Nota",
+  "version": "0.9.0-beta",
+  "tag": "v0.9.0-beta",
+  "commit": "3f22986034807df064b3ca097632a62a00463006",
+  "workflowRun": null,
+  "runId": null,
+  "generatedAt": "2026-10-24T11:45:53Z",
+  "buildMode": "local",
+  "platforms": [
+    "linux-x86_64"
+  ],
+  "pluginsBundled": false,
+  "notes": "Linux packages built locally from the recorded commit. The AppImage was finalized with NO_STRIP=1 because the bundled linuxdeploy strip cannot parse .relr.dyn sections in Debian forky host libraries."
+}

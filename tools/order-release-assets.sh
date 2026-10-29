@@ -14,7 +14,7 @@ find_group() {
   find "$dir" -type f \( "$@" \) -print0 | sort -z
 }
 
-mapfile -d '' win_x64 < <(find_group -name '*_x64-setup.exe' -o -name '*_x64-portable.zip')
+mapfile -d '' win_x64 < <(find_group -name '*_x64-setup.exe' -o -name '*_x64-portable.exe' -o -name '*_x64-portable.zip')
 mapfile -d '' linux_x64 < <(find_group -name '*_amd64.deb' -o -name '*x86_64.rpm' -o -name '*_amd64.AppImage')
 mapfile -d '' win_arm64 < <(find_group -name '*_arm64-setup.exe' -o -name '*_arm64-portable.zip')
 mapfile -d '' linux_arm64 < <(find_group -name '*_arm64.deb' -o -name '*aarch64.rpm' -o -name '*_aarch64.AppImage')

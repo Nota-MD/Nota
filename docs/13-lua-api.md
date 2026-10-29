@@ -843,7 +843,7 @@ nota.ui.register_menu({ label = "提交…", command = "commit", menu = "plugins
 落在 `nota_menus`，由 `nota_plugin_menus` 拉。
 
 **✅ 2026-09-24 接进菜单栏了**（`docs/07` 第 42 项）：拉回来的条目合成
-**一栏「插件」**，插在「帮助」前面。合成与摆放的规则在
+**一栏「插件」**，插在「关于」前面。合成与摆放的规则在
 `src/ui/pluginMenus.ts`（含"`menu` 写别的值怎么办"），要点三条：
 
 | 事 | 规矩 |
@@ -855,7 +855,7 @@ nota.ui.register_menu({ label = "提交…", command = "commit", menu = "plugins
 ⚠️ **键位冲突的处理**：`accelerator` 走的是内置菜单**同一条**索引
 （`ui/accel.ts::buildAccelIndex`，因为它拿到的就是同一份菜单数组），
 规则因此也是同一条：**先到先得**，撞了在 `console.warn` 里点名两条命令、
-**前一条生效**。「插件」栏排在「帮助」之前、也就是排在所有内置栏之后，
+**前一条生效**。「插件」栏排在「关于」之前、也就是排在所有内置栏之后，
 所以**内置键位永远赢**——插件无法占用 `Ctrl+B`，只会得到一条警告。
 
 ⚠️ `command` 那个字段**不做校验**：写一个没注册过的名字不会当场报错，

@@ -33,7 +33,7 @@
  *   只测了段落这一种；`脚注事务` 拿真 schema 跑也不在这里。
  * - **`toDOM` 没验**：一颗 DOM 都没有，所以"角标画成上标、定义画成小一号"
  *   是 CSS 的事（`src/styles/editor.css` 的「脚注」那一节）。
- * - **跳转没验**：它压根没做（见那个文件头的第 2 条边界）。
+ * - **DOM 点击跳转没验**：位置查找这一半在这里验；真点击事件仍要开窗。
  * - **源码模式那条路没验**：`src/editor/source.ts` 的 `case "footnote"` 动的是
  *   纯文本，与这里的事务是两套实现——它只共用**编号分配**（`扫源文标签` ＋
  *   `下一个脚注标签`），那两样在第一组里验了。
@@ -56,6 +56,7 @@ import {
   footNoteTransaction,
   footNoteFixedMeaningName,
   footNoteReferenceUseName,
+  footnotePosition,
 } from "../src/editor/footnote";
 
 /* ── 最小工装 ─────────────────────────────────────────────────────────── */
@@ -449,6 +450,23 @@ const withoutFootNoteschema = new Schema({
 const withoutFootNoteDocument = withoutFootNoteschema.nodes.doc!.create(null, [withoutFootNoteschema.nodes.paragraph!.create()]);
 
 group("做不了的时候要**说得出来**（返回 null，不抛）");
+
+testCase("按 label 能找到引用与定义的位置，供双向跳转使用", () => {
+  const document = createDocument("[^a] 正文\n\n[^a]: 说明\n");
+  assertValue(
+    footnotePosition(document, footNoteReferenceUseName, "a") !== null,
+    "找不到引用位置",
+  );
+  assertValue(
+    footnotePosition(document, footNoteFixedMeaningName, "a") !== null,
+    "找不到定义位置",
+  );
+  equal(
+    footnotePosition(document, footNoteReferenceUseName, "missing"),
+    null,
+    "不存在的 label 应给 null",
+  );
+});
 
 testCase("⚠️ 光标在代码块里 → null（`code_block` 的 content 是 `text*`，插不进去）", () => {
   const document = createDocument("```\n甲\n```\n");

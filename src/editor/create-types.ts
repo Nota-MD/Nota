@@ -45,6 +45,7 @@ export type EditorCommand =
   | "superscript"
   | "subscript"
   | "underline"
+  | "kbd"
   | "comment"
   | "h1"
   | "h2"
@@ -62,6 +63,11 @@ export type EditorCommand =
   | "mathBlock"
   | "toc"
   | "footnote"
+  | "alertNote"
+  | "alertTip"
+  | "alertImportant"
+  | "alertWarning"
+  | "alertCaution"
   | "table"
   | "link"
   | "image"
@@ -83,6 +89,7 @@ export type EditorCommand =
   | "tableMoveColRight"
   | "tableCopy"
   | "tableFormat"
+  | "tableRowHeaders"
   | "insertText"
   /**
    * **写一条链接 / 去掉一条链接**（2026-10-07）。

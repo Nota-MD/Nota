@@ -323,7 +323,7 @@ testCase("每一个名字都是当前 schema 真有的 mark id", () => {
   //     `"emphasis"`——加粗的 `**` 出来了，斜体的 `*` 死活不出来，不报错。
   for (const { name3, left, right } of noticeTable) {
     assertion(
-      assertValueName.has(name3) || ["strike_through", "highlight", "superscript", "subscript", "underline"].includes(name3),
+      assertValueName.has(name3) || ["strike_through", "highlight", "superscript", "subscript", "underline", "kbd"].includes(name3),
       `提示表里的「${name3}」（画 ${left}…${right}）不是已知 mark id`,
     );
   }

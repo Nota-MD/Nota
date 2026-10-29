@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="Release" src="https://img.shields.io/badge/release-v0.10.1--beta-e95420?style=flat-square">
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.12.0--beta-e95420?style=flat-square">
   </a>
   <a href="LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
@@ -52,7 +52,8 @@ for decades without a proprietary database.
 | | |
 |---|---|
 | **True WYSIWYG** | Headings, emphasis, lists, quotes, code, math and diagrams render in place. Source and split modes remain available. |
-| **GitHub Markdown** | GitHub Flavored Markdown, footnotes, alerts, task lists, badges, math and Mermaid are supported; remote HTTPS/HTTP images can load directly. |
+| **GitHub Markdown** | GitHub Flavored Markdown, footnotes with two-way navigation, all five alert types, task lists, badges, math and Mermaid 12 are supported. |
+| **GitHub Docs compatibility** | Named anchors, `<kbd>` keys, `{% rowheaders %}`, common Octicons, data variables and reusable tokens are rendered without executing Liquid; document checks catch missing alt text and structural issues. |
 | **Plain files** | Every document is saved as standard `.md`. There is no hidden JSON layer or private document format. |
 | **A real workspace** | Tabs, folder tree, outline, autosave, external-change detection and distraction-free writing modes share one focused interface. |
 | **Extensible in Lua** | AI, Git, presentation and writing-statistics extensions are installed separately and receive capabilities from an explicit manifest. |

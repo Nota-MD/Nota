@@ -119,6 +119,11 @@ export const slashTable: SlantBarItem[] = [
   { id: "table", label: "Table", closeKeyWord: "table grid biaoge" },
   { id: "hr", label: "Divider", closeKeyWord: "hr line divider fengexian" },
   { id: "footnote", label: "Footnote", closeKeyWord: "footnote note jiaozhu" },
+  { id: "alertNote", label: "GitHub Note", closeKeyWord: "alert note github tishi" },
+  { id: "alertTip", label: "GitHub Tip", closeKeyWord: "alert tip github tishi" },
+  { id: "alertImportant", label: "GitHub Important", closeKeyWord: "alert important github zhongyao" },
+  { id: "alertWarning", label: "GitHub Warning", closeKeyWord: "alert warning github jinggao" },
+  { id: "alertCaution", label: "GitHub Caution", closeKeyWord: "alert caution github zhuyi" },
   { id: "toc", label: "Table of Contents", closeKeyWord: "toc outline contents mulu" },
 ];
 

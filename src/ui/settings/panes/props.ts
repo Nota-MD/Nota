@@ -41,8 +41,10 @@ export interface PaneProps {
   uiStyles: UiStyleInfo[];
   /** 打开用户主题目录（`~/.config/nota/themes`）。 */
   onOpenThemesDir: () => void;
-  /** 打开用户**界面风格**目录（`~/.config/nota/ui-styles`）。⚠️ 与上面那个是两个目录。 */
+  /** 打开用户**界面风格**目录（`~/.config/nota/themes/ui`）。⚠️ 与上面那个是两个目录。 */
   onOpenStylesDir: () => void;
+  /** 用户放入新的界面风格文件后立即重扫。 */
+  onRefreshUiStyles: () => void;
   /** 打开设置文件所在的目录（`~/.config/nota`）。 */
   onOpenConfigDir: () => void;
   /** 恢复出厂默认。**整份替换**，落盘在后端做，新的那一份从返回值拿。 */

@@ -225,7 +225,7 @@ export function themeEntries(themes: readonly DocThemeInfo[]): MenuEntry[] {
 
   // ⚠️ 这一条**编进 entries** 而不是单独渲染：那样它不参与漫游焦点，
   // 键盘用户按 End 到不了它、↑↓ 会从它头上跳过去。踩过。
-  items.push("sep", { id: THEMES_DIR, label: "Open Themes Folder…" });
+  items.push("sep", { id: THEMES_DIR, label: "Open Document Themes Folder…" });
   return items;
 }
 
@@ -424,6 +424,7 @@ export const MENUS: MenuSpec[] = [
       // 缺的**只是这颗键**。
       { id: "edit.find", label: "Find…", accel: "Ctrl+F", needsDoc: true },
       { id: "edit.findReplace", label: "Find and Replace…", accel: "Ctrl+H", needsDoc: true },
+      { id: "edit.checkDocument", label: "Check Document…", needsDoc: true },
     ],
   },
   {
@@ -465,6 +466,7 @@ export const MENUS: MenuSpec[] = [
           { id: "para.tableAlignLeft", label: "Align Left", needsDoc: true },
           { id: "para.tableAlignCenter", label: "Align Center", needsDoc: true },
           { id: "para.tableAlignRight", label: "Align Right", needsDoc: true },
+          { id: "para.tableRowHeaders", label: "Use First Column as Row Headers", needsDoc: true },
         ],
       },
       { id: "para.mathBlock", label: "Math Block", accel: "Ctrl+Shift+M", needsDoc: true },
@@ -478,6 +480,17 @@ export const MENUS: MenuSpec[] = [
       "sep",
       { id: "para.hr", label: "Horizontal Line", needsDoc: true },
       { id: "para.toc", label: "Table of Contents", needsDoc: true },
+      {
+        id: "para.alertMenu",
+        label: "GitHub Alert",
+        submenu: [
+          { id: "para.alertNote", label: "Note", needsDoc: true },
+          { id: "para.alertTip", label: "Tip", needsDoc: true },
+          { id: "para.alertImportant", label: "Important", needsDoc: true },
+          { id: "para.alertWarning", label: "Warning", needsDoc: true },
+          { id: "para.alertCaution", label: "Caution", needsDoc: true },
+        ],
+      },
       // 脚注（`editor/footnote.ts`）。⚠️ **没有加速键**：它一次动两处（引用 ＋
       // 文末的定义）并把光标带到文末，是"写完一段回头补注"这种动作，不在打字
       // 流的手指上；随手编一个键位就会在别的应用里按出别的东西来（与
@@ -493,6 +506,7 @@ export const MENUS: MenuSpec[] = [
       { id: "fmt.bold", label: "Bold", accel: "Ctrl+B", needsDoc: true },
       { id: "fmt.italic", label: "Italic", accel: "Ctrl+I", needsDoc: true },
       { id: "fmt.underline", label: "Underline", accel: "Ctrl+U", needsDoc: true },
+      { id: "fmt.kbd", label: "Keyboard Key", needsDoc: true },
       { id: "fmt.code", label: "Code", accel: "Ctrl+Shift+`", needsDoc: true },
       "sep",
       { id: "fmt.strike", label: "Strikethrough", accel: "Alt+Shift+5", needsDoc: true },
@@ -705,15 +719,9 @@ export const MENUS: MenuSpec[] = [
     dynamic: "themes",
   },
   {
-    id: "help",
-    label: "Help",
-    items: [
-      // 帮助正文是编在应用里的 Markdown，由只读正文渲染器和当前文档主题显示。
-      // 它离线可用，也不会带进当前文档或插件状态。
-      { id: "help.help", label: "Nota Help…", accel: "F1" },
-      "sep",
-      { id: "help.about", label: "About Nota" },
-    ],
+    id: "about",
+    label: "About",
+    items: [{ id: "about.about", label: "About Nota" }],
   },
 ];
 
@@ -818,6 +826,7 @@ export const contextTableItems: MenuItemSpec = {
     "sep",
     { id: "para.tableCopy", label: "Copy Table", needsDoc: true },
     { id: "para.tableFormat", label: "Format Table Source", needsDoc: true },
+    { id: "para.tableRowHeaders", label: "Use First Column as Row Headers", needsDoc: true },
     "sep",
     ...flattenItem(["para.tableDel"]),
   ],
@@ -838,6 +847,11 @@ export const contextInsertItems: MenuItemSpec = {
     "para.hr",
     "para.toc",
     "para.footnote",
+    "para.alertNote",
+    "para.alertTip",
+    "para.alertImportant",
+    "para.alertWarning",
+    "para.alertCaution",
     "fmt.emoji",
   ]),
 };

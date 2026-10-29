@@ -6,7 +6,7 @@
 
 ## 自定义文档主题放哪里
 
-文档主题只管编辑区正文，不等同于界面风格。界面风格另有独立的 `ui-styles`
+文档主题只管编辑区正文，不等同于界面风格。界面风格另有独立的 `themes/ui`
 目录。
 
 ### Linux / 其他 XDG Unix-like 系统
@@ -14,31 +14,31 @@
 默认目录：
 
 ```text
-~/.config/nota/themes/
+~/.config/nota/themes/document/
 ```
 
 设置了 `XDG_CONFIG_HOME` 时：
 
 ```text
-$XDG_CONFIG_HOME/nota/themes/
+$XDG_CONFIG_HOME/nota/themes/document/
 ```
 
 ### macOS
 
 ```text
-~/Library/Application Support/nota/themes/
+~/Library/Application Support/nota/themes/document/
 ```
 
 ### Windows
 
 ```text
-%APPDATA%\nota\themes\
+%APPDATA%\nota\themes\document\
 ```
 
 通常展开为：
 
 ```text
-C:\Users\<用户名>\AppData\Roaming\nota\themes\
+C:\Users\<用户名>\AppData\Roaming\nota\themes\document\
 ```
 
 ## 用户主题格式
@@ -68,5 +68,5 @@ Unix-like 系统路径使用 `/`，Windows CSS URL 应使用 `/` 或正确转义
 不要写死 `C:\...` 这类本机绝对路径。字体等第三方资源必须把许可证放在资源旁边。
 
 `adwaita` 和 `adwaita-dark` 是保留 id，用户主题不能覆盖。
-界面风格不是文档主题，不要放进 `themes/`；界面风格使用独立的
-`ui-styles/` 目录。
+界面风格不是文档主题，不要放进 `themes/document/`；界面风格使用
+`themes/ui/` 目录。

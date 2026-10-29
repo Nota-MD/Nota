@@ -45,6 +45,8 @@ export interface WindCellOutputMouth {
   ready: boolean;
   /** 打开（必要时先建出来的）用户风格目录。 */
   openStylesDir: () => Promise<void>;
+  /** 用户往目录里放完文件后，立即重新扫描并重新注入。 */
+  refreshStyles: () => Promise<void>;
 }
 
 export function useUiStyles(
@@ -55,6 +57,7 @@ export function useUiStyles(
   const t = useT();
   const [styles, setStyles] = useState<UiStyleInfo[]>([]);
   const [ready, setReady] = useState(false);
+  const [scan, setScan] = useState(0);
   const id = settings?.ui_style ?? "";
   const hasSettings = settings !== null;
   useBootReveal(settings !== null && ready);
@@ -90,7 +93,7 @@ export function useUiStyles(
     return () => {
       alive = false;
     };
-  }, [hasSettings, id]);
+  }, [hasSettings, id, scan]);
 
   const openStylesDir = useCallback(async () => {
     try {
@@ -102,5 +105,9 @@ export function useUiStyles(
     }
   }, [toast, t]);
 
-  return { styles, ready, openStylesDir };
+  const refreshStyles = useCallback(async () => {
+    setScan((value) => value + 1);
+  }, []);
+
+  return { styles, ready, openStylesDir, refreshStyles };
 }

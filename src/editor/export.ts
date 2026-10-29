@@ -52,6 +52,7 @@ import { createEditor } from "@/editor/create";
 import { inlineCssAssets } from "@/editor/export-assets";
 import { isMathCodeLanguage } from "@/editor/math-code";
 import { isItemRecordMark, anchor } from "@/editor/toc";
+import { applyGithubDocsToExport } from "@/editor/github-docs";
 import { t } from "@/i18n";
 import { scopeDocThemeCss } from "@/styles/doc-theme";
 
@@ -176,6 +177,7 @@ const wholeBlockRemoveRemove = [
   ".nota-html-source",
   ".nota-html-source-toggle",
   ".nota-image-source",
+  ".nota-github-alert-marker",
   // ── 代码块（`code-block.ts`）──────────────────────────────────────────
   /** 行号。内容就是 `1\n2\n3`，不带类名之后看着像正文里混进去的一串数字。 */
   ".nota-code-gutter",
@@ -280,6 +282,7 @@ async function removeBody(markdown: string, includeHtmlPreviews = false): Promis
       // ⚠️ **先等，后摘**。反过来（先摘再等）会连 mermaid 拿去比对的那棵树都
       // 一起改了，而它的渲染是异步的——那一头拿的就是我们摘过的 DOM。
       await equalExceptionStepRender(pm);
+      applyGithubDocsToExport(pm);
 
       // ⚠️ 在**还挂着的 DOM 上**摘零件，不是先把 HTML 拼成字符串再拿正则洗：
       // 正则会碰到正文里恰好出现 `contenteditable` 这几个字之类的意外，
@@ -399,7 +402,13 @@ async function removeBody(markdown: string, includeHtmlPreviews = false): Promis
         "nota-diagram-preview",
         "nota-diagram-note",
         "nota-diagram-note-title",
-        "nota-diagram-note-detail",
+    "nota-diagram-note-detail",
+    "nota-github-alert",
+    "nota-github-alert-note",
+    "nota-github-alert-tip",
+    "nota-github-alert-important",
+    "nota-github-alert-warning",
+    "nota-github-alert-caution",
         ...(includeHtmlPreviews ? ["nota-code-preview", "nota-code-preview-frame"] : []),
       ]);
       for (const n of [pm, ...pm.querySelectorAll("*")]) {
@@ -498,11 +507,12 @@ export async function exportHtml(markdown: string, opts: exportOptions): Promise
     //    `katex-mathml`），平时靠这一份里那句 `.katex-mathml { position:
     //    absolute; clip: … }` 把后一棵藏起来。少了它，导出的公式在页面上
     //    **画两遍**（一遍好看的、一遍 MathML 的原样），打印出来像排错了版。
-    const [themeBase, editorArea, inlineLayer, blockLevelLayer, imageTable, commonStyle] = await Promise.all([
+    const [themeBase, editorArea, inlineLayer, blockLevelLayer, alertLayer, imageTable, commonStyle] = await Promise.all([
       import("@/styles/theme/base.css?inline"),
       import("@/styles/editor.css?inline"),
       import("@/styles/editor-inline.css?inline"),
       import("@/styles/editor-blocks.css?inline"),
+      import("@/styles/github-alert.css?inline"),
       import("@/styles/diagram.css?inline"),
       import("katex/dist/katex.min.css?inline"),
     ]);
@@ -511,6 +521,7 @@ export async function exportHtml(markdown: string, opts: exportOptions): Promise
       editorArea.default,
       inlineLayer.default,
       blockLevelLayer.default,
+      alertLayer.default,
       imageTable.default,
       await inlineCssAssets(commonStyle.default),
     );

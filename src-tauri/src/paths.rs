@@ -257,20 +257,51 @@ mod tests {
         assert_eq!(安全文件名("nota.ai"), "nota.ai");
         assert_eq!(安全文件名("nota_git-2"), "nota_git-2");
     }
+
+    #[test]
+    fn 旧主题包复制到新目录且不覆盖已有内容() {
+        let root = std::env::temp_dir().join(format!(
+            "nota-theme-migrate-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let old = root.join("old");
+        let current = root.join("current");
+        std::fs::create_dir_all(old.join("cde/assets")).unwrap();
+        std::fs::create_dir_all(current.join("cde")).unwrap();
+        std::fs::write(old.join("cde/theme.css"), "new").unwrap();
+        std::fs::write(old.join("cde/assets/font.ttf"), "font").unwrap();
+        std::fs::write(current.join("cde/theme.css"), "keep").unwrap();
+        std::fs::create_dir_all(old.join("latex")).unwrap();
+        std::fs::write(old.join("latex/theme.css"), "latex").unwrap();
+
+        migrate_theme_children(&old, &current, &[]).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(current.join("cde/theme.css")).unwrap(),
+            "keep",
+            "规范目录已有主题时不能覆盖"
+        );
+        assert_eq!(
+            std::fs::read_to_string(current.join("latex/theme.css")).unwrap(),
+            "latex"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 
-/// 用户自己的文档主题目录（`~/.config/nota/themes`）。
-///
-/// ⚠️ 这个目录**用到时才建**，所以这里只算路径不建目录——
-/// 首次启动就凭空造一个空目录，用户会以为里面该有什么东西。
+/// 用户自己的文档主题目录（`~/.config/nota/themes/document`）。
 ///
 /// ⚠️ **只扫这一个目录**。此前还会扫描外部编辑器的主题安装位置，那条路径
 /// 已按用户要求删除（版权问题，见 `src-tauri/src/themes.rs` 文件头）。
 pub fn user_themes_dir() -> Result<PathBuf> {
-    Ok(config_dir()?.join("themes"))
+    Ok(config_dir()?.join("themes").join("document"))
 }
 
-/// 用户自己的**界面风格**目录（`~/.config/nota/ui-styles`）。
+/// 用户自己的**界面风格**目录（`~/.config/nota/themes/ui`）。
 ///
 /// ⚠️ 与 `user_themes_dir`（文档主题）是**两个目录，故意不合并**：
 /// 文档主题只作用编辑区、界面风格作用整个外壳，两者的 CSS **写法要求完全不同**
@@ -278,9 +309,100 @@ pub fn user_themes_dir() -> Result<PathBuf> {
 /// 不限域）。混在一个目录里，用户迟早会把两者当成同一种东西放错位置，
 /// 而放错的后果是"整个界面变了"或"一个字都没变"——都不报错。
 ///
-/// ⚠️ 同样**用到时才建**（`ui_styles::user_styles_dir` 负责建），理由同上面那条。
 pub fn user_ui_styles_dir() -> Result<PathBuf> {
-    Ok(config_dir()?.join("ui-styles"))
+    Ok(config_dir()?.join("themes").join("ui"))
+}
+
+/// 启动时准备好两个主题根目录。
+///
+/// 用户明确要求软件打开时就创建 `themes/document` 与 `themes/ui`，让两个“打开主题
+/// 文件夹”入口第一次点击时都有明确落点，也避免用户猜目录名。
+pub fn ensure_theme_directories() -> Result<()> {
+    ensure_dir(&user_themes_dir()?)?;
+    ensure_dir(&user_ui_styles_dir()?)?;
+    Ok(())
+}
+
+/// 把旧版两个落点里的主题包复制到当前规范目录。
+///
+/// 旧版文档主题在 `themes/<id>`，界面主题在 `ui-styles/<id>`；当前规范是
+/// `themes/document/<id>` 与 `themes/ui/<id>`。只复制缺失的主题包，不覆盖
+/// 新目录里已有内容，不跟随符号链接，也不删除旧文件。
+pub fn migrate_legacy_theme_directories() -> Result<()> {
+    let config = config_dir()?;
+    let themes = config.join("themes");
+    let document = user_themes_dir()?;
+    let ui = user_ui_styles_dir()?;
+    let old_ui = config.join("ui-styles");
+
+    migrate_theme_children(&themes, &document, &["document", "ui"])?;
+    migrate_theme_children(&old_ui, &ui, &[])?;
+    Ok(())
+}
+
+fn migrate_theme_children(from: &Path, to: &Path, skip: &[&str]) -> Result<()> {
+    let entries = match std::fs::read_dir(from) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(source) => {
+            return Err(NotaError::Read {
+                path: from.to_path_buf(),
+                source,
+            })
+        }
+    };
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else { continue };
+        if !kind.is_dir() || kind.is_symlink() {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(id) = name.to_str() else { continue };
+        if skip.contains(&id) || crate::themes::check_id(id).is_err() {
+            continue;
+        }
+        let source = entry.path();
+        if !source.join("theme.css").is_file() && !source.join(format!("{id}.css")).is_file() {
+            continue;
+        }
+        let target = to.join(id);
+        if target.exists() {
+            continue;
+        }
+        let staging = to.join(format!(".migrating-{id}-{}", std::process::id()));
+        let _ = remove_tree(&staging);
+        if copy_theme_tree(&source, &staging).is_ok() {
+            let _ = std::fs::rename(&staging, &target);
+        }
+        let _ = remove_tree(&staging);
+    }
+    Ok(())
+}
+
+fn copy_theme_tree(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        if kind.is_symlink() {
+            continue;
+        }
+        let target = to.join(entry.file_name());
+        if kind.is_dir() {
+            copy_theme_tree(&entry.path(), &target)?;
+        } else if kind.is_file() {
+            std::fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
+fn remove_tree(path: &Path) -> std::io::Result<()> {
+    match std::fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+    }
 }
 
 /// **开发态**那几档插件源码目录，按优先级（整张表在 [`builtin_plugins_dirs`] 上）。

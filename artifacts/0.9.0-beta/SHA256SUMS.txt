@@ -1,0 +1,3 @@
+e7e0745c9ea648807bd016dfe1f4dca07d6bf2bdd2ed325e061ecc9132d60b86  Nota_0.9.0-beta_amd64.deb
+fe4aa3e50747dfc7d3e1b00a9e958713612f959a529e9c3d4a794c5f9e659c35  Nota-0.9.0-beta-1.x86_64.rpm
+cfb7f6f948dcddc191eb6e7bef6517f2076e42e0f69c9bd410ce9cb846a79f29  Nota_0.9.0-beta_amd64.AppImage

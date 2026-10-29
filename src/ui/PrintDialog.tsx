@@ -24,12 +24,13 @@
  * 而是一段有自己状态的流程。
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { save as saveDialog } from "@/ui/file-picker";
 
-import { api, type PrintEnvironment, type PrintPreview } from "@/bridge/ipc";
+import { api, type PrintBackend, type PrintEnvironment, type PrintPreview } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
+import { browserPrintHtml } from "@/ui/print-browser";
 import { useModalTrap } from "@/ui/useModalTrap";
 
 export interface PrintRequest {
@@ -58,6 +59,7 @@ export function PrintDialog({
   const box2 = useRef<HTMLDivElement>(null);
   useModalTrap(box2, { onEscape: onClose });
 
+  const [backend, setBackend] = useState<PrintBackend | null>(null);
   const [printEnvironment, setPrintEnvironment] = useState<PrintEnvironment | null>(null);
   const [printer, setPrinter] = useState("");
   const [paper, setPaper] = useState<string>("a4");
@@ -72,29 +74,47 @@ export function PrintDialog({
   const [error2, setError] = useState<string | null>(null);
   const [taskTaskNumber, setTaskTaskNumber] = useState<string | null>(null);
   const [savedPdf, setSavedPdf] = useState<string | null>(null);
+  const [browserReady, setBrowserReady] = useState(false);
+  const browserFrame = useRef<HTMLIFrameElement>(null);
   /** ⚠️ 见文件头最后一段：过期结果不许覆盖新的。 */
   const commandCard = useRef(0);
 
   // ── 打印机（只拉一次）──────────────────────────────────────────────────
   useEffect(() => {
     let active = true;
-    void api.print
-      .printers()
-      .then((ringEnvironment) => {
+    void api.print.backend()
+      .then(async (nextBackend) => {
         if (!active) return;
-        setPrintEnvironment(ringEnvironment);
-        const selectedPrinter =
-          ringEnvironment.printers.find((p) => p.is_default) ??
-          ringEnvironment.printers[0];
-        setPrinter(selectedPrinter?.name ?? "");
-      })
-      .catch(() => {
-        if (active)
+        setBackend(nextBackend);
+        if (nextBackend === "browser") {
           setPrintEnvironment({
-            cups_available: false,
+            cups_available: true,
             problem: null,
-            printers: [],
+            printers: [{ name: "system", description: "", is_default: true }],
           });
+          setPrinter("system");
+          return;
+        }
+        try {
+          const ringEnvironment = await api.print.printers();
+          if (!active) return;
+          setPrintEnvironment(ringEnvironment);
+          const selectedPrinter =
+            ringEnvironment.printers.find((p) => p.is_default) ??
+            ringEnvironment.printers[0];
+          setPrinter(selectedPrinter?.name ?? "");
+        } catch {
+          if (active) {
+            setPrintEnvironment({
+              cups_available: false,
+              problem: null,
+              printers: [],
+            });
+          }
+        }
+      })
+      .catch((e: unknown) => {
+        if (active) setError(String(e));
       });
     return () => {
       active = false;
@@ -103,6 +123,14 @@ export function PrintDialog({
 
   // ── 出 PDF ＋ 出预览（版面一变就重来，去抖 350ms）────────────────────────
   useEffect(() => {
+    if (backend === null) return;
+    if (backend === "browser") {
+      setBusy2(false);
+      setError(null);
+      setPreview(null);
+      setBrowserReady(false);
+      return;
+    }
     const selfOf = ++commandCard.current;
     setBusy2(true);
     setError(null);
@@ -130,7 +158,15 @@ export function PrintDialog({
         });
     }, 350);
     return () => window.clearTimeout(countTime);
-  }, [request, paper, horizontalToward, edgeDistance]);
+  }, [backend, request, paper, horizontalToward, edgeDistance]);
+
+  const browserHtml = useMemo(
+    () =>
+      backend === "browser"
+        ? browserPrintHtml(request.html, paper, horizontalToward, edgeDistance)
+        : "",
+    [backend, request.html, paper, horizontalToward, edgeDistance],
+  );
 
   const start2 = useCallback(async () => {
     if (!preview || !printer) return;
@@ -171,6 +207,26 @@ export function PrintDialog({
     }
   }, [request, paper, horizontalToward, edgeDistance, onClose, t]);
 
+  const browserBrowserStart = useCallback(() => {
+    const frame = browserFrame.current;
+    if (!frame?.contentWindow) {
+      setError(t("The print preview is not ready."));
+      return;
+    }
+    setBusy2(true);
+    setError(null);
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      setTaskTaskNumber(t("System print dialog"));
+      setBusy2(false);
+      window.setTimeout(onClose, 500);
+    } catch (e) {
+      setError(String(e));
+      setBusy2(false);
+    }
+  }, [onClose, t]);
+
   const savePdf = useCallback(async () => {
     if (!preview) return;
     const target = await saveDialog({
@@ -193,10 +249,12 @@ export function PrintDialog({
 
   const totalPage = preview?.page_count ?? 0;
   const currentImage = preview?.pages[ordinalHowManyPage - 1];
+  const browserMode = backend === "browser";
+  const previewReady = browserMode ? browserReady : preview !== null;
   const noCups = printEnvironment !== null && !printEnvironment.cups_available;
   const listError = printEnvironment?.problem != null;
   const noPrinter = printEnvironment !== null && printEnvironment.printers.length === 0;
-  const walkSystemSystemDialog = noCups || listError || noPrinter;
+  const walkSystemSystemDialog = !browserMode && (noCups || listError || noPrinter);
 
   return (
     <div className="print-backdrop" onMouseDown={onClose}>
@@ -216,7 +274,16 @@ export function PrintDialog({
               比这块区域还高，`overflow: auto` 会把页码条一起滚出屏幕——
               而那正是"第几页 / 上一页"的家（2026-10-17 第一次开窗就撞上了）。 */}
           <div className="print-canvas">
-            {currentImage ? (
+            {browserMode ? (
+              <iframe
+                ref={browserFrame}
+                className="print-browser-frame"
+                title={t("Print preview")}
+                sandbox="allow-same-origin allow-modals"
+                srcDoc={browserHtml}
+                onLoad={() => setBrowserReady(true)}
+              />
+            ) : currentImage ? (
               <img className="print-page" src={currentImage} alt={t("Page {0} of {1}", ordinalHowManyPage, totalPage)} />
             ) : (
               <div className="print-blank">
@@ -224,7 +291,7 @@ export function PrintDialog({
               </div>
             )}
           </div>
-          <div className="print-pager">
+          {!browserMode && <div className="print-pager">
             <button
               type="button"
               className="btn"
@@ -249,7 +316,7 @@ export function PrintDialog({
             {preview?.truncated && (
               <span className="print-hint">{t("Only the first {0} pages are previewed", preview.pages.length)}</span>
             )}
-          </div>
+          </div>}
         </section>
 
         {/* ── 右：参数 ─────────────────────────────────────────────────── */}
@@ -258,7 +325,11 @@ export function PrintDialog({
 
           <label className="print-field">
             <span>{t("Printer")}</span>
-            {printEnvironment === null ? (
+            {browserMode ? (
+              <span className="print-hint">
+                {t("Choose the printer, copies, and page range in the system print dialog.")}
+              </span>
+            ) : printEnvironment === null ? (
               <span className="print-hint">{t("Reading the printers…")}</span>
             ) : noCups ? (
               <span className="print-hint print-warning">
@@ -325,26 +396,30 @@ export function PrintDialog({
             />
           </label>
 
-          <label className="print-field">
-            <span>{t("Copies")}</span>
-            <input
-              type="number"
-              min={1}
-              max={99}
-              value={partNumber}
-              onChange={(e) => setPartNumber(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
-            />
-          </label>
+          {!browserMode && (
+            <>
+              <label className="print-field">
+                <span>{t("Copies")}</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={partNumber}
+                  onChange={(e) => setPartNumber(Math.max(1, Math.min(99, Number(e.target.value) || 1)))}
+                />
+              </label>
 
-          <label className="print-field">
-            <span>{t("Page range (empty = all)")}</span>
-            <input
-              type="text"
-              placeholder="1-3, 5"
-              value={scopeEnclose}
-              onChange={(e) => setScopeEnclose(e.target.value)}
-            />
-          </label>
+              <label className="print-field">
+                <span>{t("Page range (empty = all)")}</span>
+                <input
+                  type="text"
+                  placeholder="1-3, 5"
+                  value={scopeEnclose}
+                  onChange={(e) => setScopeEnclose(e.target.value)}
+                />
+              </label>
+            </>
+          )}
 
           {error2 && <p className="print-error">{error2}</p>}
           {savedPdf && <p className="print-ok">{t("Saved PDF: {0}", savedPdf)}</p>}
@@ -354,21 +429,29 @@ export function PrintDialog({
             <button type="button" className="btn" onClick={onClose}>
               {t("Cancel")}
             </button>
+            {!browserMode && (
+              <button
+                type="button"
+                className={walkSystemSystemDialog ? "btn btn-primary" : "btn"}
+                disabled={busy || !preview}
+                onClick={() => void savePdf()}
+              >
+                {t("Save PDF…")}
+              </button>
+            )}
             <button
               type="button"
-              className={walkSystemSystemDialog ? "btn btn-primary" : "btn"}
-              disabled={busy || !preview}
-              onClick={() => void savePdf()}
+              className={browserMode || !walkSystemSystemDialog ? "btn btn-primary" : "btn"}
+              disabled={busy || taskTaskNumber !== null || !previewReady || (!walkSystemSystemDialog && !browserMode && !printer)}
+              onClick={() =>
+                void (browserMode
+                  ? browserBrowserStart()
+                  : walkSystemSystemDialog
+                    ? systemSystemStart()
+                    : start2())
+              }
             >
-              {t("Save PDF…")}
-            </button>
-            <button
-              type="button"
-              className={walkSystemSystemDialog ? "btn" : "btn btn-primary"}
-              disabled={busy || taskTaskNumber !== null || (!walkSystemSystemDialog && (!preview || !printer))}
-              onClick={() => void (walkSystemSystemDialog ? systemSystemStart() : start2())}
-            >
-              {walkSystemSystemDialog ? t("System print…") : t("Print")}
+              {browserMode ? t("Print…") : walkSystemSystemDialog ? t("System print…") : t("Print")}
             </button>
           </div>
         </section>

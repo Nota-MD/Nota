@@ -9,7 +9,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/bridge/ipc";
 import { formatDiagnosticText } from "@/ui/diagnostics-text";
-import { save as saveDialog } from "@/ui/file-picker";
 
 export function DebugLogWindow() {
   const [text, setText] = useState("Connecting to debug log…\n");
@@ -69,6 +68,7 @@ export function DebugLogWindow() {
 
   const exportLog = async () => {
     try {
+      const { save: saveDialog } = await import("@/ui/file-picker");
       const path = await saveDialog({
         title: "Export debug log",
         defaultPath: `nota-debug-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
@@ -109,14 +109,16 @@ export function DebugLogWindow() {
       <header className="raw-debug-bar">
         <strong>RAW DEBUG LOG</strong>
         <button type="button" onClick={() => void showDiagnostics()}>
-          {view === "log" ? "Show Diagnostics" : "Show Log"}
+          {view === "log" ? "SHOW DIAGNOSTICS" : "SHOW LOG"}
         </button>
-        <button type="button" onClick={() => void copy()}>
-          Copy All
-        </button>
-        <button type="button" onClick={() => void exportLog()}>
-          Export .log
-        </button>
+        <span className="raw-debug-actions">
+          <button type="button" onClick={() => void copy()}>
+            COPY ALL
+          </button>
+          <button type="button" onClick={() => void exportLog()}>
+            EXPORT .LOG
+          </button>
+        </span>
       </header>
       {view === "log" ? (
         <pre

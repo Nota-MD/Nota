@@ -63,8 +63,9 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import { callCommand } from "@milkdown/kit/utils";
 
 import { inlineMarkCommand } from "./inline-marks";
-import { convertBecomeTaskTaskColumnTable, clearRemoveCellStyle, deleteTableRow, deleteTableColumn, deleteWholeTable, insertCommonStyleBlock, insertItemRecord } from "./insert";
+import { convertBecomeTaskTaskColumnTable, clearRemoveCellStyle, deleteTableRow, deleteTableColumn, deleteWholeTable, insertCommonStyleBlock, insertItemRecord, toggleTableRowHeaders } from "./insert";
 import { insertFootNote } from "./footnote";
+import { githubAlertNode } from "./github-alert-edit";
 import { selectLine, selectWord, selectSentence, removeWord } from "./select";
 import { moveBlock } from "./move-block";
 import { installLink, removeLink } from "./link-edit";
@@ -199,6 +200,7 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   superscript: (e) => e.action(callCommand(inlineMarkCommand[1]!.key)),
   subscript: (e) => e.action(callCommand(inlineMarkCommand[2]!.key)),
   underline: (e) => e.action(callCommand(inlineMarkCommand[3]!.key)),
+  kbd: (e) => e.action(callCommand(inlineMarkCommand[4]!.key)),
   comment: (e) =>
     e.action((ctx) => {
       const view = ctx.get(editorViewCtx);
@@ -243,6 +245,11 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   toc: (e, p) => insertItemRecord(e, p?.strict ?? false),
   // 脚注：gfm 给了节点与解析/序列化，缺"从零插一条"，见 `footnote.ts`（2026-09-27）。
   footnote: (e) => insertFootNote(e),
+  alertNote: (e) => githubAlertNode(e, "note"),
+  alertTip: (e) => githubAlertNode(e, "tip"),
+  alertImportant: (e) => githubAlertNode(e, "important"),
+  alertWarning: (e) => githubAlertNode(e, "warning"),
+  alertCaution: (e) => githubAlertNode(e, "caution"),
 
   // ⚠️ **表格插的是 3 × 3**，而不是"先弹个框问行列数"。
   // `insertTableCommand` 的 `row`/`col` 缺省也能用，但缺省值不写出来就成了
@@ -265,6 +272,7 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   tableMoveColRight: (e) => moveCurrentTableColumn(e, 1),
   tableCopy: (e) => duplicateCurrentTable(e),
   tableFormat: (e) => formatCurrentTable(e),
+  tableRowHeaders: (e) => toggleTableRowHeaders(e),
 
   // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/ImageDialog.tsx`）。
   // 缺省值给空串而不是"不执行"——空串的语义是"插一个还没填地址的链接/图片"，

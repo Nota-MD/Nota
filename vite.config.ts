@@ -62,7 +62,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
-        help: fileURLToPath(new URL("./help.html", import.meta.url)),
         debugLog: fileURLToPath(new URL("./debug-log.html", import.meta.url)),
         focusAlarm: fileURLToPath(new URL("./focus-alarm.html", import.meta.url)),
       },

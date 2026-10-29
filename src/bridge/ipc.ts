@@ -24,7 +24,7 @@ import type {
   PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, WorkspaceExcerpt,
   trustRecord, exportReport,
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
-  MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintEnvironment, PrintPreview,
+  MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintBackend, PrintEnvironment, PrintPreview,
 } from "./types";
 import type {
   SettingsExportInventory,
@@ -350,10 +350,12 @@ export const api = {
     reveal: (path: string) => invoke<string>("nota_export_reveal", { path }),
   },
 
-  /** 应用内打印（2026-10-17）：先印 PDF → 拿同一份 PDF 出预览 → 投给打印机。⚠️ 只有 Linux（PDF 靠 WebKitGTK），别处走 `export.print` 老路。 */
+  /** 自绘打印框。Linux 走 PDF/CUPS，Windows 走受限 iframe + WebView2 最终确认。 */
   print: {
-    /** 有没有应用内打印（Linux 才有）。⚠️ 没有就走 `export.print` 那条老路，**不是**报错。 */
+    /** 是否支持自绘打印流程。 */
     supported: () => invoke<boolean>("nota_print_supported"),
+    /** 当前平台实际使用的打印后端。 */
+    backend: () => invoke<PrintBackend>("nota_print_backend"),
     /** 这台机器上有哪些打印机。**空数组不是错**：没装 CUPS 的机器上就是没有。 */
     printers: () => invoke<PrintEnvironment>("nota_print_printers"),
     /** 出 PDF ＋ 逐页预览图（data URL）。⚠️ 参数扁平；JS 的 camelCase 由 Tauri 映射到 snake_case。 */
@@ -592,7 +594,7 @@ export const api = {
      * ⚠️ 入参是 **id 不是路径**：路径由后端自己拼，前端拿不到"读任意文件"的能力。
      */
     css: (id: string) => invoke<string>("nota_ui_style_css", { id }),
-    /** 建好用户风格目录（`~/.config/nota/ui-styles`）并在文件管理器里打开它。 */
+    /** 建好用户界面主题目录（`~/.config/nota/themes/ui`）并在文件管理器里打开它。 */
     openDir: () => invoke<string>("nota_ui_styles_open_dir"),
   },
 
@@ -834,12 +836,6 @@ export const api = {
     showMain: () => invoke<void>("nota_window_show_main"),
     /** 打开开发者工具。⚠️ 已经开着时是**调到前面**，不是关掉。 */
     openDevtools: () => invoke<void>("nota_window_open_devtools"),
-    /**
-     * 在独立窗口打开编入前端的 HTML 帮助页。重复调用会聚焦已有窗口，并按
-     * `section` 切换章节。未知章节由宿主回落到帮助首页。
-     */
-    openHelp: (section?: "start" | "pandoc" | "printing" | "shortcuts") =>
-      invoke<void>("nota_window_open_help", { section: section ?? null }),
     /** 启动纯 Rust 子进程，把当前调试日志交给系统文本查看器。 */
     openDebugLog: () => invoke<void>("nota_window_open_debug_log"),
     /**

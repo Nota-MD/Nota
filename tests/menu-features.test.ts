@@ -32,7 +32,7 @@ console.log("\n【菜单灰项接线】");
 
 testCase("除按状态出现的最近文件外，不再有永久灰项", () => {
   const implemented = new Set(
-    [...commandTable.matchAll(/"((?:file|edit|para|fmt|view|help)\.[^"]+)":/g)].map((m) => m[1]),
+    [...commandTable.matchAll(/"((?:file|edit|para|fmt|view|about)\.[^"]+)":/g)].map((m) => m[1]),
   );
   const items = [];
   walkMenuItems(MENUS, (item) => items.push(item));

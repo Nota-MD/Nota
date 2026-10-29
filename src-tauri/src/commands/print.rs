@@ -112,5 +112,16 @@ pub async fn nota_print_save_pdf(pdf: String, target: String) -> Result<String> 
 /// "写成 HTML 交给系统默认程序"（Windows / macOS 上那条一直是能用的）。
 #[tauri::command]
 pub fn nota_print_supported() -> bool {
-    cfg!(target_os = "linux")
+    cfg!(target_os = "linux") || cfg!(target_os = "windows")
+}
+
+/// 当前平台的自绘打印后端。Linux 出 PDF 后经 CUPS/IPP 投递；Windows 把同一份
+/// 导出 HTML 放进受限 iframe，由 WebView2 打开最终的系统打印确认框。
+#[tauri::command]
+pub fn nota_print_backend() -> &'static str {
+    if cfg!(target_os = "linux") {
+        "pdf"
+    } else {
+        "browser"
+    }
 }

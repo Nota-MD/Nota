@@ -6,8 +6,6 @@ import { api } from "./bridge/ipc";
 import { t, setLanguage } from "./i18n";
 import { installErrorHooks } from "./ui/ErrorBoundary";
 import { FocusAlarmWindow } from "./ui/FocusAlarmWindow";
-import { HelpWindow } from "./ui/HelpWindow";
-import { DebugLogWindow } from "./ui/DebugLogWindow";
 import adwaitaFontLicense from "./assets/fonts/adwaita/LICENSE.txt?url";
 
 import "./styles/theme.css";
@@ -35,8 +33,6 @@ import "./styles/overlay.css";
 import "./styles/print-dialog.css";
 import "./styles/file-picker.css";
 import "./styles/update-debug.css";
-import "./styles/help-window.css";
-import "./styles/debug-log.css";
 // 左侧栏（栏本身 + 文件树 + 大纲）。⚠️ **必须在 `app.css` 之后**——折叠三角、
 // 缩进那几条比 `app.css` 里的通用行规则更具体，靠顺序而不是 `!important` 压过去。
 import "./styles/sidebar.css";
@@ -184,8 +180,8 @@ window.setTimeout(() => {
 /**
  * ⚠️⚠️ **本应用有多个入口，靠 hash 分叉。**
  *
- * 主窗是 `index.html`（没有 hash）；焦点警报窗、诊断窗口与帮助窗口分别使用
- * 独立的 `focus-alarm.html`、`debug-log.html`、`help.html`。
+ * 主窗是 `index.html`（没有 hash）；焦点警报窗与诊断窗口分别使用
+ * 独立的 `focus-alarm.html`、`debug-log.html`。
  *
  * # 为什么是 hash 而不是另开一个 HTML 文件
  *
@@ -207,12 +203,6 @@ window.setTimeout(() => {
  */
 const windowEntry = document.documentElement.dataset.window;
 const isWarnReportWindow = windowEntry === "focus-alarm" || location.hash === "#focus-alarm";
-const isDebugLogWindow = windowEntry === "debug-log" || location.hash === "#debug-log";
-const isHelpWindow =
-  windowEntry === "help" ||
-  location.hash === "#help" ||
-  location.hash.startsWith("#help/");
-
 /**
  * ⚠️⚠️ **警报窗那一支要自己把界面语言拉回来**（2026-09-27 补）。
  *
@@ -244,10 +234,6 @@ ReactDOM.createRoot(root).render(
   <React.StrictMode>
     {isWarnReportWindow ? (
       <FocusAlarmWindow />
-    ) : isDebugLogWindow ? (
-      <DebugLogWindow />
-    ) : isHelpWindow ? (
-      <HelpWindow />
     ) : (
       <App />
     )}

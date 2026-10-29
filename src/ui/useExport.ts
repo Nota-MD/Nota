@@ -112,7 +112,6 @@ export interface exportApi {
     /** 照导（`unknown` 的"仍然试一次"，或走了自带 PDF 那条路）。 */
     onExport: () => void;
     onRecheck: () => void;
-    onHelp: () => void;
     onClose: () => void;
   };
 }
@@ -313,12 +312,9 @@ export function useExport(w: exportWiring): exportApi {
         lightOutput: true,
         title: doc.title,
       });
-      // ⚠️ **两条路，按系统分**（2026-10-17）：
-      // - **有**应用内打印（Linux：WebKitGTK 的打印后端）→ 开打印框：宿主把这份
-      //   HTML 静默印成 PDF、拿 PDF 出预览、再把**同一份 PDF** 投给打印机
-      //   （用户拍板的那条路：「让它做成PDF然后再预览」）；
-      // - **没有**（Windows / macOS）→ **退回老那条**"写成 HTML 交给系统默认程序"。
-      //   ⚠️ 那条一直是能用的，别因为新功能在那些平台上把它挡掉。
+      // 自绘打印框在 Linux 与 Windows 上都可用。Linux 走宿主 PDF/CUPS；
+      // Windows 由前端 iframe 预览同一份导出 HTML，最后由 WebView2 打开
+      // 系统确认框。macOS 暂未接这套后端，仍保留旧的 HTML 系统查看器路径。
       if (await api.print.supported()) {
         // ⚠️ 基准目录必须是**文档所在的目录**：正文里 `![](./img.png)` 是相对路径，
         // 换个目录就全是裂图。
@@ -556,12 +552,6 @@ export function useExport(w: exportWiring): exportApi {
             setPandocGate(null);
           }
         })();
-      },
-      onHelp: () => {
-        // 上下文入口直接落到帮助的 Pandoc 章节；失败仍按用户动作报错。
-        void api.window.openHelp("pandoc").catch((e: unknown) =>
-          toast(t("Could not open help: {0}", String(e)), "error"),
-        );
       },
       onClose: () => setPandocGate(null),
     }),

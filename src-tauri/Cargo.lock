@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "nota"
-version = "0.10.1-beta"
+version = "0.12.0-beta"
 dependencies = [
  "base64 0.22.1",
  "chardetng",

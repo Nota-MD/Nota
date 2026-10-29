@@ -61,9 +61,10 @@ export const settingsTable: Record<string, string> = {
   "Follow the system preference": "跟随系统偏好",
   "Follow the light theme": "跟随浅色主题",
   "Use a separate set of document themes": "用一套独立的文档主题",
-  "Themes folder": "主题文件夹",
-  "Themes folder…": "主题文件夹…",
-  "Open the themes folder. Put a .css file in it and it becomes selectable.": "打开主题文件夹。把 .css 文件放入其中即可选用。",
+  "Document themes folder": "文档主题文件夹",
+  "Document themes folder…": "文档主题文件夹…",
+  "Open the document themes folder. Put a theme package in it and it becomes selectable.":
+    "打开文档主题文件夹。放入主题包即可选用。",
   "Current {0}: {1}. The appearance of the whole interface follows.": "当前 {0}：{1}。界面各处外观随之变化。",
   "Accent color": "主题色",
   "Follow the style": "跟随风格",
@@ -74,8 +75,9 @@ export const settingsTable: Record<string, string> = {
   // 不需要 Yaru Blue 了」，那一档连 id 一起从内置清单里删了——译文留着就是
   // 废键（`tools/i18n-check.sh` ③ 会 FAIL），所以同批删掉。
   "Currently using “{0}”, the style you imported. The whole interface follows it.": "当前用的是你导入的「{0}」，整个界面外壳随它变化。",
-  "Open the styles folder. Drop a <name>.css in it to add a style.": "打开风格文件夹。放一个 <名字>.css 进去即可多出一档。",
-  "Styles folder…": "风格文件夹…",
+  "Open the interface themes folder. Drop a theme package in it to add a style.":
+    "打开界面主题文件夹。放入主题包即可多出一档。",
+  "Interface themes folder…": "界面主题文件夹…",
   "overridden": "已覆盖",
   "(“{0}” not found)": "（找不到「{0}」）",
   "Could not open the styles folder: {0}": "打开风格文件夹失败：{0}",

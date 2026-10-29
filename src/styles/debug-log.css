@@ -1,5 +1,6 @@
 html:has(.raw-debug-log),
-body:has(.raw-debug-log) {
+body:has(.raw-debug-log),
+#root {
   margin: 0;
   height: 100%;
   overflow: hidden;
@@ -39,9 +40,10 @@ body:has(.raw-debug-log) {
   font-size: 13px;
 }
 
-.raw-debug-bar::after {
-  content: "";
-  flex: 1;
+.raw-debug-actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
 }
 
 .raw-debug-bar button {

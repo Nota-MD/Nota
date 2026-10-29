@@ -26,7 +26,7 @@
 | `settings/mod.rs` | `Settings` 与三条互相独立的外观轴，kebab-case 落盘；解析不了的原文件先备份成 `.bak`。2026-09-24 拆成模块目录；2026-10-18 新增 `download.rs`（高级下载替换规则），现在共十一个设置域文件 |
 | `themes.rs` | **文档主题**的发现与读盘：`DocThemeInfo` / `discover()` / `css_of()` / `user_themes_dir()` / 围栏 `check_id()`。用户 CSS 里的相对 `url()` 交给 `theme_assets.rs` 内联，字体可自由放在主题根目录内的任意相对位置。⛔ **不内置外部编辑器主题**。⚠️ 入参是 **id 不是路径**。📌 **2026-10-18 起 `BUILTIN` 只有 Adwaita 浅色/深色**；其他官方主题迁去独立仓库，源码可留作迁移源但不随包 |
 | `ui_styles.rs` | **界面风格**的发现与读盘，与 `themes.rs` 并行：`UiStyleInfo { id, builtin }` / `discover()` / `css_of()` / `user_styles_dir()` / `BUILTIN_IDS`。⚠️ **不限域**（它要改的就是整个外壳）。用户 CSS 的相对图标、字体与图片统一由 `theme_assets.rs` 内联；不再强制 `主题id/icons/` 目录。内置七档具体风格没有独立 CSS 文件；CDE 等外置风格不登记进 `BUILTIN_IDS` |
-| `theme_assets.rs` | **用户主题资源自由声明**（2026-10-17）：解析 CSS `url()`，按 CSS 文件所在目录找相对资源，把 svg/png/webp/woff/woff2/ttf/otf 等转成 data URI。⚠️ 允许在 `ui-styles/` / `themes/` 根内用 `../` 共享资源，拒绝逃逸根目录和绝对路径；失败单条保留原文，不拖垮整套主题 |
+| `theme_assets.rs` | **用户主题资源自由声明**（2026-10-17）：解析 CSS `url()`，按 CSS 文件所在目录找相对资源，把 svg/png/webp/woff/woff2/ttf/otf 等转成 data URI。⚠️ 允许在 `themes/ui/` / `themes/` 根内用 `../` 共享资源，拒绝逃逸根目录和绝对路径；失败单条保留原文，不拖垮整套主题 |
 | `focus/mod.rs` | **强制专注的账本**（2026-09-26，657 行）：`阶段`（`专注` / `走神 { 起于 }` / `警报`，`名字()` 给前端分叉用）、`会话`、跨边界的 `快照`、`FocusState`，以及那个**一秒一拍的裸线程**（`起`）。⚠️ **它不是插件，是核心功能**（用户原话「注意啊，这不是插件。这是核心功能」）——它要窗口焦点、要开置顶窗、要出声，三样都在插件沙箱之外。三条不变量在文件头：**宽限期内不欠账** / **警报中账本冻结** / **冷却要攒回复活线**（`复活线最小` 10s ～ `复活线最大` 60s）。⚠️ `FocusState` **单独 `manage`、不进 `AppState`**（同 `Heartbeat` / `DevServerState` / `ReviewState` / `ProbeCache`），账本自己一把锁。⚠️ 发事件与开窗都在**放开锁之后**（锁序）。13 条用例 |
 | `focus/alarm.rs` | **警报窗与那一声响**（2026-09-26，191 行）：`窗_LABEL = "focus-alarm"`（`lib.rs` 两处分派靠它）、`EVENT_BEEP`、`响` / `开窗` / `关窗` / **`对账`** / `系统提示音`。⚠️ 为什么必须是**另一个真窗口**（置顶 ＋ 全屏 ＋ 抢焦点）而不是主窗里盖一层红布：警报响时用户**已经切走了**，主窗在他背后。⚠️ **开与关都认 `阶段` 一个真相源**——计时线程每一拍 `对账` 一次；`关窗` 别在 `确认` 里再调一次。⚠️ `对账` 是 **BUG-41** 的修法：这一段设计原先只写在文件头里、计时线程里从没实现过，所以**改这里先去 `super::起` 数一眼调用点，别只读注释** |
 | `proc.rs` | **跑外部程序的那一层**（2026-09-25 从 `slidev.rs` 抽出来，判据是**依赖方向**——pandoc 导出要用同样三件，不该让 `pandoc.rs` → `slidev.rs`）：`split_command`（⚠️ **只按空白分词**、不认引号）· `command_or_default` · `kill_group` · `spawn_retrying`（⚠️ `ETXTBSY` 等一下再试，见本文件里那一节）· `run_capture(program, args, RunOpts)`（自成进程组、可选喂 stdin、带超时，超时**杀整个进程组**）· `Ran` 四档 |
@@ -52,8 +52,8 @@
 | `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir`（2026-09-26 新增）——**界面风格**那三条，与 `commands/theme.rs` 一一对应、同一套口径（id 不是路径；"打开"在宿主做；目录用到时才建） |
 | `commands/plugin.rs` | `nota_plugins_list` / `set_enabled` / `call` / `find_command` / `panels` / `panel_content` / **`review`** / **`review_close`** / `menus` / `install` / `uninstall` / `trust` / `trust_list` —— **13 条**（2026-09-25 多了装卸信任那四条；随后又多了 `review` 两条：**编辑区里摊着的那块面板**）。⚠️ **异步的是这五条**：`set_enabled` / `install` / `uninstall` / `call` / `panel_content`（都要跑 Lua 或解包，走 `spawn_blocking`）；⚠️ `review` / `review_close` 拿的是 `ReviewState`，**不碰 `plugins` 锁**——理由见 `docs/01` §第四条链路 |
 | `cups.rs` | **最小 CUPS/IPP 客户端**：直连 CUPS Unix socket；`CUPS-Get-Printers` 列打印机、`CUPS-Get-Default` 找默认项、`Print-Job` 投递 PDF。⚠️ 不依赖 `lpstat` / `lp`；只实现本机标量属性与页码范围，不扩展成通用 IPP 引擎。 |
-| `print_job.rs` | **应用内打印**：`列打印机()` 把 CUPS/IPP 结果转成 `打印环境`；`准备()` 出 PDF 与预览；`系统打印()` 起系统对话框；`投递()` 走 CUPS/IPP。系统 poppler 只调用不打包。⚠️ 预览专用的 poppler 调用与常量只在 Linux 编译，Windows 构建保留「改用导出 PDF」的明确错误且不产生死代码警告。 |
-| `commands/print.rs` | 打印命令：`supported` / `printers` / `prepare` / `system` / `send`。⚠️ `prepare` 与 `system` 必须 `async`。 |
+| `print_job.rs` | **Linux 应用内打印后端**：`列打印机()` 把 CUPS/IPP 结果转成 `打印环境`；`准备()` 出 PDF 与预览；`系统打印()` 起系统对话框；`投递()` 走 CUPS/IPP。Windows 前端使用 `ui/print-browser.ts` 的 iframe 预览与 WebView2 打印。系统 poppler 只调用不打包。 |
+| `commands/print.rs` | 打印命令：`supported` / `backend` / `printers` / `prepare` / `system` / `send`。Linux 后端为 `pdf`，Windows 为 `browser`；`prepare` 与 `system` 必须 `async`。 |
 | `commands/export.rs` | 导出与打印的**落盘那一步**（**四条**：`nota_export_write` 写文本、`nota_export_write_bytes` 写**二进制**——前端先 base64、宿主解码再落盘，分享卡存 PNG 走它、`nota_export_print` 写到 `.nota-print.html` 再交给系统默认程序、`nota_export_reveal` 在文件管理器里定位）。⚠️ 本题**不生成 HTML**——HTML 由前端生成（`editor/export.ts`），这一层只管 IO 与落点 |
 | `commands/pandoc.rs` | `nota_pandoc_probe` / `nota_pandoc_export` 两条，**都异步**（探测起进程、导出最长 180 秒，走 `spawn_blocking`）。⚠️ PDF **两条路**：pandoc 不通且 `pdf_print::available()` 时改走自带那套，返回值 `route` 说明走的哪条 |
 | `commands/focus.rs` | 强制专注那**六条**（2026-09-26，95 行）：`nota_focus_get` / `_start` / `_stop` / `_ack` / `_beep` / `_close_alarm`。⚠️ **无判据层**：只转给 `focus::*`、再 `广播`一份，规则一条都不在这儿（判据全在 `focus/mod.rs`）。⚠️ 在 **`FocusState` 与 `AppState` 两份**托管状态上操作（设置在后者）。⚠️ `close_alarm` 是给调试和退出用的，**前端一个调用点都没有**——前端明说了不自己关窗，收窗靠 `alarm::对账` |
@@ -948,10 +948,10 @@ XDG 目录下的子目录名。
 | `pub fn data_dir() -> Result<PathBuf>` | `$XDG_DATA_HOME/nota`（一般 `~/.local/share/nota`） | 同上 |
 | `pub fn settings_file() -> Result<PathBuf>` | `config_dir()?.join("settings.toml")` | 透传 `config_dir` 的错 |
 | `pub fn user_plugins_dir() -> Result<PathBuf>` | `data_dir()?.join("plugins")`，用户自装插件目录，也是插件状态的落点 | 透传 `data_dir` 的错 |
-| `pub fn user_themes_dir() -> Result<PathBuf>` | `config_dir()?.join("themes")`（一般 `~/.config/nota/themes`） | 透传 `config_dir` 的错 |
+| `pub fn user_themes_dir() -> Result<PathBuf>` | `config_dir()?.join("themes").join("document")`（一般 `~/.config/nota/themes/document`） | 透传 `config_dir` 的错 |
 
-⚠️ `user_themes_dir()` **只算路径不建目录**——`nota_doc_themes_open_dir` 命令那侧才 `ensure_dir`。
-理由：首次启动就凭空造一个空目录，用户会以为里面该有什么东西。
+⚠️ 应用启动时由 `ensure_theme_directories()` 自动创建 `themes/document` 与 `themes/ui`；
+两个“打开主题文件夹”入口分别只打开自己的那一层。
 
 ⚠️ **它是当前唯一的主题目录**。2026-09-23 之前这里还有个 `theme_dirs()`（三条来源，
 含外部编辑器的两个主题目录），那版整个删了，理由见上面那一节。
@@ -967,7 +967,7 @@ XDG 目录下的子目录名。
 用户 2026-09-23 定下「不要内置外部编辑器的主题，会侵权」「外部编辑器的主题先不用兼容」之后，
 **这个函数连同 `check_scope()` 一起删了**——扫描外部编辑器主题目录这件事本身就不做了。
 
-现在只扫**一个**目录：`user_themes_dir()` = `~/.config/nota/themes`（**按 XDG 算**，
+现在只扫**一个**文档主题目录：`user_themes_dir()` = `~/.config/nota/themes/document`（**按 XDG 算**，
 不写死 `~/.config`）。围栏也跟着换了一种做法，见 `themes.rs::check_id`。
 （`builtin_plugins_dirs()` 那条围栏是另一套，两者都从 `paths.rs` 出去，但服务的对象不同。）
 
@@ -1108,7 +1108,7 @@ Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走
    ⚠️ 它的落点与前两条**同源但不同形状**：不写 `data-*`，改的是 `<html>` 上的**内联**
    `--accent` / `--accent-fg`（1600 万种取值做不成选择器格子）。空串 = 跟随风格。
 4. `document_theme` —— **文档主题**，只管正文那一块。
-   纯 CSS，用户往 `~/.config/nota/themes/` 里丢一份 `<id>.css` 就能覆盖同名的内置主题，
+   纯 CSS，用户往 `~/.config/nota/themes/document/` 放 `<id>/theme.css` 就能增加用户主题，
    **不动应用外壳一分**。
 
 ⚠️ **前三条是"界面轴"，第四条不是**（用户 2026-09-23 划的线，原话「这是文档风格，
@@ -1155,8 +1155,8 @@ Yaru、GitHub、Breeze、macOS、Windows、CDE 等从 `Nota-themes` 安装为外
 
 ⚠️ 加新风格时**形状可以共用**：`theme/shape.css` 里形状段写成并列选择器就行（2026-10-07 之前 `yaru-blue` 与 `yaru` 就是这么共用的——那一档当天删了，用户「只需要 Yaru，不需要 Yaru Blue 了」；写法本身留着当范例），
 只覆盖颜色那几个变量，不必把圆角复制一遍。
-⚠️ 加新风格有**两条路**：①**用户导入**——往 `~/.config/nota/ui-styles/<id>.css` 里丢
-一份文件，**不用改任何源码**（这是给用户的路，格式与规则见 `docs/08`）；
+⚠️ 加新风格有**两条路**：①**用户导入**——往 `~/.config/nota/themes/ui/<id>/theme.css`
+放一个主题包，**不用改任何源码**（这是给用户的路，格式与规则见 `docs/08`）；
 ②**做成内置**——那要改**五处**：`ui_styles.rs::BUILTIN_IDS`、
 `src/styles/theme/shape.css` 里的形状段、`src/styles/theme/color.css` 里
 **两种模式各一段**的颜色块、`src/styles/applyTheme.ts` 的探测表（只在想让 `auto`
@@ -1223,7 +1223,7 @@ pub struct Settings {
 |---|---|---|
 | `ui_style` | `Auto` | 界面风格轴 |
 | `ui_mode` | `Auto` | 明暗轴 |
-| `document_theme` | `""` | 主题 **id**（不是显示名），对应 `themes/<id>.css`。⚠️ 存 id 不存名称：显示名是中文、随时可能改，改了不该让用户的设置失效。**空串表示"无主题"**，即 `editor.css` 那套中性样式 |
+| `document_theme` | `""` | 主题 **id**（不是显示名），对应 `themes/document/<id>/theme.css`。⚠️ 存 id 不存名称：显示名是中文、随时可能改，改了不该让用户的设置失效。**空串表示"无主题"**，即 `editor.css` 那套中性样式 |
 | `ui_font_size` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
 | `content_width` | `760` | 内容区宽度上限（px）。⚠️ **只有 `limit_text_width` 开着时才生效** |
 | `limit_text_width` | `false` | **限制正文宽度**（2026-10-09 加）。默认**关**＝`content_width` 不生效、正文列铺满编辑区（左右各 56px 装订线）。理由见 `docs/03` §5.1 那一行 |
@@ -1810,7 +1810,7 @@ pub struct TreeOptions {
 ### `fn check_id(id: &str) -> Result<()>`（私有）
 
 **这是文档主题唯一的围栏。** 只放行 **ASCII 字母数字与 `-` `_`**（长度 1..=64），
-因为路径是拿它拼出来的（`<主题目录>/<id>.css`）。
+因为路径是拿它拼出来的（`<主题目录>/<id>/theme.css`）。
 
 ⚠️ **白名单而不是黑名单**："过滤掉 `..`"那种写法要考虑分隔符、编码、大小写各种花样，
 白名单是"不在表里的一个都不放行"，**结构上更难绕过**。
@@ -1944,28 +1944,20 @@ std::process::Command::new(&程序)
 
 ### `nota_window_open_debug_log() -> Result<()>`
 
-打开或聚焦 `debug-log` 窗口。窗口加载独立的 `debug-log.html`，只挂
-`ui/DebugLogWindow.tsx`，每 400ms 拉取 `nota_debug_log_read` 的增量并实时跟随
+永远启动新的 `nota --debug-log-window` 子进程。子进程只承载
+`debug-log.html`，不读取文档、不加载插件、不抢单实例 socket；辅助 WebView
+因此与编辑器进程完全隔离，Windows/WebView2 上不会再把主窗口一起拖死。
+`ui/DebugLogWindow.tsx` 每 400ms 拉取 `nota_debug_log_read` 的增量并实时跟随
 滚动。界面固定英文黑底等宽样式，不继承主题、不翻译，支持全文复制和导出 `.log`。
 日志粒度是生命周期级：启动阶段、设置、工作区、文档打开/保存、编辑器模式切换、
 主题装载、插件加载与失败各一条；按键、滚动、正文、选区和凭据不进入日志。
-如果 WebView 窗口创建失败，命令退回 `--debug-log` 纯 Rust 子进程，由系统默认
-文本查看器打开日志快照。
-
-### `nota_window_open_help() -> Result<()>`
-
-打开或聚焦 `help` 窗口，加载 `help.html?section=<section>`。帮助正文是一份由
-`ui/HelpWindow.tsx` 编入应用的 Markdown，交给正文同一个只读 Milkdown 实例
-渲染，并应用当前文档主题与文档排版变量；英文原文作 `t()` 键，中文译文与其他
-界面共用 `i18n/zh-ui.ts`。它不挂 `<App />`、当前文档或插件状态。入口是
-「帮助 → Nota 帮助…」与 `F1`；重复调用会聚焦已有窗口并按 `section` 切换章节。
-Pandoc 缺失面板直接打开 `pandoc` 章节。
+`--debug-log` 仍保留为完全不启动 WebView 的快照模式：写入临时 `.log` 后交给
+系统默认文本查看器，供 WebView 本身无法初始化时排障。
 
 ### 测试
 
 新建进程那条命令没有单元测试（它起进程、碰 `current_exe()`，不是纯函数）。
-帮助窗口的组件、翻译、菜单、IPC 与命令注册由 `tests/help-content.test.ts` 对账；
-帮助章节白名单由本文件的 Rust 单元测试覆盖。
+顶层「关于」菜单和已删除的帮助入口由 `tests/about-menu.test.ts` 对账。
 挑参数那一半的规则在
 `cli.rs`，那边有 16 条；**常量必须是同一个串**这件事靠"两处都引同一个常量"保证，
 用例钉不住。
@@ -6259,10 +6251,10 @@ Nota 的 DOM 契约与外部编辑器不同，不应假装相同。
 | `MenuEntry` | `MenuItemSpec \| "sep"` |
 | `MenuSpec` | `{ id, label, items: MenuEntry[], dynamic?: "themes" }` |
 
-`export const MENUS: MenuSpec[]` —— **七栏**：文件 / 编辑 / 段落 / 格式 / 视图 / 主题 / 帮助。
+`export const MENUS: MenuSpec[]` —— **七栏**：文件 / 编辑 / 段落 / 格式 / 视图 / 主题 / 关于。
 
 ⚠️📌 **这一份是"内置的那七栏"，不是菜单栏最终的样子。** 插件声明的那一栏由
-`ui/pluginMenus.ts::带插件栏(MENUS, 菜单项们)` **拼在「帮助」前面**，
+`ui/pluginMenus.ts::带插件栏(MENUS, 菜单项们)` **拼在「关于」前面**，
 拼的结果在 `ui/usePlugins.ts::menus`（`useMemo`）里。所以：
 **要拿"菜单栏现在长什么样"请用 `usePlugins().menus`，不是 `MENUS`。**
 ⚠️ **两类消费者用的不是同一份**：
@@ -6311,9 +6303,8 @@ Control 键**，直接用会让用户按 ⌘ 没反应。
 规矩：**菜单项、按钮、提示语一律中文**；`Markdown` / `LaTeX` / `Pandoc`
 这种**专有名词**照写原文（它们是名字不是词）。
 
-⚠️ 「帮助」那一栏**只留了「关于 Nota」一条**：「What's New / Quick Start /
-Markdown Reference…」这类外链一条都没有——Nota 离线优先，
-外链既打不开也不该假装能打开。
+⚠️ 「关于」那一栏**只留了「关于 Nota」一条**：独立帮助页与外部指南链接
+都已移除。
 
 ### 菜单树里的三种形状
 
@@ -7683,7 +7674,7 @@ Graph 那样的热力图，记录长期数据。仅记录打字数」——所�
 | 函数 | 行为 |
 |---|---|
 | `插件菜单栏(items)` | 合成那一栏。**一条插件菜单都没有时返回 `null`**——那时不该出现一栏空的「插件」。一条都没有"无处安放的"时**不摆分隔线**（一栏里只有一条分隔线看着像坏了） |
-| `带插件栏(menus, items)` | 插在**「帮助」前面**——最后那一栏是"关于这个应用"，按惯例待在末尾。找不到「帮助」（`commands.ts` 里改了 id）就接在最后，**不静默丢掉**：一栏菜单凭空消失比位置不对难查得多 |
+| `带插件栏(menus, items)` | 插在**「关于」前面**——最后那一栏是"关于这个应用"，按惯例待在末尾。找不到「关于」（`commands.ts` 里改了 id）就接在最后，**不静默丢掉**：一栏菜单凭空消失比位置不对难查得多 |
 
 ⚠️ 调用方**必须**把它包在 `useMemo` 里：返回值每次都是新数组，而它下游牵着三条
 `useMemo`／`useEffect`（`ui/useMenus.ts` 顶上那张表），其中最后一条会

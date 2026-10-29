@@ -102,6 +102,8 @@ export const allowedHtmlTags = [
 export const allowedHtmlAttributes = [
   "align",
   "alt",
+  "aria-hidden",
+  "aria-label",
   "border",
   "cellpadding",
   "cellspacing",
@@ -109,6 +111,7 @@ export const allowedHtmlAttributes = [
   "height",
   "href",
   "loading",
+  "name",
   "referrerpolicy",
   "rel",
   "role",

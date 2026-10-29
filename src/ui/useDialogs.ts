@@ -229,7 +229,7 @@ export interface Dialogs {
    * 要逐条列出来（见 `ui/useImmersive.ts` 那一格），多一个来源就多一处要记得改。
    */
   aboutOpen: boolean;
-  /** 打开它（菜单「帮助 → 关于 Nota」）。 */
+  /** 打开它（菜单「关于 → 关于 Nota」）。 */
   openAbout: () => void;
   /** 关掉它（× 键、`Esc`、点遮罩）。 */
   closeAbout: () => void;

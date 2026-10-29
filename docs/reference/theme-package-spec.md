@@ -15,8 +15,8 @@ Nota 在此基础上拆成两条**互不越界**的主题轴。
 
 | 轴 | 用户目录 | 作用范围 | 能否修改外壳 | 能否修改正文 |
 |---|---|---|---|---|
-| 文档主题 | `~/.config/nota/themes/` | 编辑区与导出的文档 | 否 | 是 |
-| 界面主题 | `~/.config/nota/ui-styles/` | 菜单、侧栏、按钮、标签、状态栏、界面字体 | 是 | 不负责 |
+| 文档主题 | `~/.config/nota/themes/document/` | 编辑区与导出的文档 | 否 | 是 |
+| 界面主题 | `~/.config/nota/themes/ui/` | 菜单、侧栏、按钮、标签、状态栏、界面字体 | 是 | 不负责 |
 
 切换界面主题不会改变文档主题，切换文档主题也不会改变界面。
 
@@ -25,7 +25,7 @@ Nota 在此基础上拆成两条**互不越界**的主题轴。
 新主题推荐使用自包含目录：
 
 ```text
-themes/
+themes/document/
 └── focus/
     ├── theme.css
     ├── assets/
@@ -39,7 +39,7 @@ themes/
 界面主题形状相同：
 
 ```text
-ui-styles/
+themes/ui/
 └── dusk/
     ├── theme.css
     ├── icons/

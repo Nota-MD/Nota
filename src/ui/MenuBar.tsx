@@ -45,7 +45,7 @@ interface Props {
   /**
    * 摆哪几栏、每栏里有什么。**不是常量了**（2026-09-24 起）——插件的菜单项
    * 是运行时才知道的（`api.plugin.menus()`），那一栏由 `ui/pluginMenus.ts`
-   * 合成，`App.tsx` 拼在「主题」和「帮助」之间。
+   * 合成，`App.tsx` 拼在「主题」和「关于」之间。
    *
    * ⚠️ 别的几栏仍然是 `ui/commands.ts` 里那张静态表，一个字没动。
    * 这里收成参数是**为了不改判据**：`←` `→` 走的是这张列表的**顺序**，
@@ -64,6 +64,8 @@ interface Props {
   /** 换文档主题。传空串表示"无主题"。 */
   onTheme: (id: string) => void;
   onOpenThemesDir: () => void;
+  /** 动态主题栏打开时重扫用户主题目录。 */
+  onRefreshThemes: () => void;
 }
 
 export function MenuBar(props: Props) {
@@ -113,6 +115,9 @@ export function MenuBar(props: Props) {
 
   /** 开一栏。`来源` 决定"再点一下"是收起还是确认，见上面 `点开的`。 */
   const openBar = (id: string, comeSource: "点" | "划" | "键") => {
+    if (props.menus.find((menu) => menu.id === id)?.dynamic === "themes") {
+      props.onRefreshThemes();
+    }
     pointOpenOf.current = comeSource === "点" ? id : null;
     setOpen(id);
   };

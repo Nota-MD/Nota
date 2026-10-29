@@ -95,7 +95,8 @@ export type MarkNodeName =
   | "notaHighlight"
   | "notaSuperscript"
   | "notaSubscript"
-  | "notaUnderline";
+  | "notaUnderline"
+  | "notaKbd";
 
 /**
  * 一种行内标记的规格。
@@ -195,6 +196,15 @@ export const markTable: readonly MarkSpec[] = [
     // 这里那条正则只给**输入规则**用（用户现敲 `<u>x</u>`）。解析那一侧
     // 走的是 `并下划线`，见下面。
     correctRule: /<u>(?=\S)([^<\n]*?\S)<\/u>/y,
+    settingKey: null,
+  },
+  {
+    label: "kbd",
+    htmlLabel: "kbd",
+    mdast: "notaKbd",
+    left: "<kbd>",
+    right: "</kbd>",
+    correctRule: /<kbd>(?=\S)([^<\n]*?\S)<\/kbd>/y,
     settingKey: null,
   },
 ];
@@ -412,12 +422,25 @@ function andBelowDrawLine(child: MarkdownNode[]): MarkdownNode[] {
   let i = 0;
   while (i < child.length) {
     const head2 = child[i]!;
-    if (head2.type === "html" && /^<u>\s*$/i.test(readValue(head2))) {
+    const htmlSpec = markTable.find(
+      (spec) =>
+        spec.left.startsWith("<") &&
+        head2.type === "html" &&
+        new RegExp(`^${escapeRegExp(spec.left)}\\s*$`, "i").test(
+          readValue(head2),
+        ),
+    );
+    if (htmlSpec) {
       let j = i + 1;
       let findActive = -1;
       for (; j < child.length; j++) {
         const value = child[j]!;
-        if (value.type === "html" && /^<\/u>\s*$/i.test(readValue(value))) {
+        if (
+          value.type === "html" &&
+          new RegExp(`^${escapeRegExp(htmlSpec.right)}\\s*$`, "i").test(
+            readValue(value),
+          )
+        ) {
           findActive = j;
           break;
         }
@@ -427,7 +450,7 @@ function andBelowDrawLine(child: MarkdownNode[]): MarkdownNode[] {
       if (findActive > i + 1) {
         const middle = child.slice(i + 1, findActive);
         output2.push({
-          type: "notaUnderline",
+          type: htmlSpec.mdast,
           children: middle,
         } as unknown as MarkdownNode);
         i = findActive + 1;
@@ -438,6 +461,10 @@ function andBelowDrawLine(child: MarkdownNode[]): MarkdownNode[] {
     i++;
   }
   return output2;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** 走一遍整棵树：文本节点切片、相邻的 `<u>` 配对。 */
@@ -529,12 +556,13 @@ export const highlightSpec = $markSchema("highlight", () => createSpec(markTable
 export const superscriptSpec = $markSchema("superscript", () => createSpec(markTable[1]!));
 export const subscriptSpec = $markSchema("subscript", () => createSpec(markTable[2]!));
 export const underlineSpec = $markSchema("underline", () => createSpec(markTable[3]!));
+export const kbdSpec = $markSchema("kbd", () => createSpec(markTable[4]!));
 
 /**
  * 四条 `$markSchema`（`[ctx, 插件]` 那种两元组）。**测试要它**——测试直接
  * `一.ctx(ctx)` 把规格登记进一颗手搓的 Ctx，见 `tests/inline-marks.test.ts`。
  */
-export const inlineMarkSpec = [highlightSpec, superscriptSpec, subscriptSpec, underlineSpec];
+export const inlineMarkSpec = [highlightSpec, superscriptSpec, subscriptSpec, underlineSpec, kbdSpec];
 
 /**
  * 交给 `create.ts` 的 `.use()` 那一份。
@@ -575,6 +603,7 @@ export const inlineMarkCommand = [
   $command("ToggleSuperscript", (ctx) => () => toggleMark(superscriptSpec.type(ctx))),
   $command("ToggleSubscript", (ctx) => () => toggleMark(subscriptSpec.type(ctx))),
   $command("ToggleUnderline", (ctx) => () => toggleMark(underlineSpec.type(ctx))),
+  $command("ToggleKbd", (ctx) => () => toggleMark(kbdSpec.type(ctx))),
 ];
 
 /** PM mark 名 → toggle 命令的名字。`command-table.ts` 的 `COMMANDS` 表按它派发。 */
@@ -583,6 +612,7 @@ export const commandNameTable: Record<string, string> = {
   superscript: "ToggleSuperscript",
   subscript: "ToggleSubscript",
   underline: "ToggleUnderline",
+  kbd: "ToggleKbd",
 };
 
 /**
@@ -610,7 +640,9 @@ export function inlineMarkInputRuleRule(flag: InlineExtensionFlags) {
               ? superscriptSpec.type(ctx)
               : value.label === "subscript"
                 ? subscriptSpec.type(ctx)
-                : underlineSpec.type(ctx);
+                : value.label === "underline"
+                  ? underlineSpec.type(ctx)
+                  : kbdSpec.type(ctx);
         const source3 = value.correctRule.source.replace(/\$$/, "");
         return markRule(new RegExp(`${source3}$`), type);
       }),

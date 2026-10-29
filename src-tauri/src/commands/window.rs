@@ -24,10 +24,9 @@
 //! 再起一份进程天然就是独立的（文档、工作区、插件各一份），代价只有一处：
 //! **跳过单实例那一关**（`cli.rs` 的 `--new-window`，判据与代价写在 `lib.rs` ⓿'）。
 
-use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::Manager;
 
 use crate::error::{NotaError, Result};
-use crate::state::AppState;
 
 /// 主窗口的 label。⚠️ 与 `tauri.conf.json` 里那个窗口的 `label` **必须一致**；
 /// 写错了的症状是"点了没反应"（命令报"找不到窗口"，而按钮看着是亮的）。
@@ -62,91 +61,21 @@ pub fn nota_window_show_main(app: tauri::AppHandle) -> Result<()> {
     Ok(())
 }
 
-/// 打开独立的原始调试日志窗口；创建失败时退回纯 Rust 系统查看器。
+/// 打开独立的原始调试日志窗口。
+///
+/// ⚠️ 永远启动新进程，不在主进程里再建一个 WebView。Windows/WebView2 上
+/// 在主进程里追加辅助 WebView 曾表现为白屏和整窗无响应；日志查看器本身坏掉
+/// 也不能拖住正在编辑的文档。
 #[tauri::command]
-pub fn nota_window_open_debug_log(app: tauri::AppHandle) -> Result<()> {
+pub fn nota_window_open_debug_log() -> Result<()> {
     crate::日志!("[nota] opening debug log");
-    if let Some(窗) = app.get_webview_window("debug-log") {
-        窗.show()
-            .map_err(|e| NotaError::other(format!("显示调试日志窗口失败：{e}")))?;
-        窗.set_focus()
-            .map_err(|e| NotaError::other(format!("聚焦调试日志窗口失败：{e}")))?;
-        return Ok(());
-    }
-    let built = WebviewWindowBuilder::new(
-        &app,
-        "debug-log",
-        WebviewUrl::App("debug-log.html".into()),
-    )
-    .title("Nota Debug Log")
-    .inner_size(920.0, 620.0)
-    .min_inner_size(560.0, 320.0)
-    .build();
-    if built.is_ok() {
-        return Ok(());
-    }
     let 程序 = std::env::current_exe()
         .map_err(|e| NotaError::other(format!("找不到 Nota 自己的可执行文件：{e}")))?;
     std::process::Command::new(&程序)
-        .arg(crate::cli::调试日志选项)
+        .arg(crate::cli::调试窗口选项)
         .spawn()
         .map_err(|e| NotaError::other(format!("启动调试日志失败：{e}")))?;
     Ok(())
-}
-
-/// 打开或聚焦编入前端的帮助窗口。
-///
-/// 帮助正文由 `ui/HelpWindow.tsx` 生成 HTML，并与其他界面文字共用翻译表。
-/// 它不挂 `<App />`、不加载 Markdown 渲染器，也不读取当前文档或插件状态。
-/// `section` 只接受帮助页认识的几个锚点，避免把任意字符串塞进窗口 URL。
-#[tauri::command]
-pub fn nota_window_open_help(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    section: Option<String>,
-) -> Result<()> {
-    let section = 帮助章节(section.as_deref());
-    let 标题 = if state.app_lang.to_ascii_lowercase().starts_with("zh") {
-        "Nota 帮助"
-    } else {
-        "Nota Help"
-    };
-    if let Some(窗) = app.get_webview_window("help") {
-        let mut url = 窗
-            .url()
-            .map_err(|e| NotaError::other(format!("读取帮助窗口地址失败：{e}")))?;
-        url.set_fragment(None);
-        url.set_query(Some(&format!("section={section}")));
-        窗.navigate(url)
-            .map_err(|e| NotaError::other(format!("切换到帮助章节失败：{e}")))?;
-        窗.show()
-            .map_err(|e| NotaError::other(format!("显示帮助窗口失败：{e}")))?;
-        窗.set_focus()
-            .map_err(|e| NotaError::other(format!("聚焦帮助窗口失败：{e}")))?;
-        return Ok(());
-    }
-    WebviewWindowBuilder::new(
-        &app,
-        "help",
-        WebviewUrl::App(format!("help.html?section={section}").into()),
-    )
-    .title(标题)
-    .inner_size(980.0, 720.0)
-    .min_inner_size(620.0, 440.0)
-    .center()
-    .build()
-    .map_err(|e| NotaError::other(format!("打开帮助窗口失败：{e}")))?;
-    Ok(())
-}
-
-/// 上下文帮助只允许跳到已知章节；未知值回落到帮助首页。
-fn 帮助章节(section: Option<&str>) -> &'static str {
-    match section {
-        Some("pandoc") => "pandoc",
-        Some("printing") => "printing",
-        Some("shortcuts") => "shortcuts",
-        _ => "start",
-    }
 }
 
 /// 打开主窗口的开发者工具（菜单「视图 → 开发者工具」/ `Shift+F12`）。
@@ -211,18 +140,4 @@ pub fn nota_window_open_new(path: Option<String>) -> Result<()> {
 pub fn nota_quit(app: tauri::AppHandle) {
     crate::日志!("[nota] quit confirmed by frontend");
     app.exit(0);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::帮助章节;
-
-    #[test]
-    fn 帮助章节只落到白名单() {
-        assert_eq!(帮助章节(Some("pandoc")), "pandoc");
-        assert_eq!(帮助章节(Some("printing")), "printing");
-        assert_eq!(帮助章节(Some("shortcuts")), "shortcuts");
-        assert_eq!(帮助章节(Some("../settings")), "start");
-        assert_eq!(帮助章节(None), "start");
-    }
 }

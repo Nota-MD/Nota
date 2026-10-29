@@ -3572,7 +3572,7 @@ Ctrl+W 确认关闭"这条路里，最后几次击键不进后端。
 |---|---|---|---|
 | `nota.ui.notify` | 一件**此刻发生**的事 | **推** | 事件 `nota:notify` → `App.tsx` → toast ✅ |
 | `nota.ui.register_panel` | 一份**启动时声明、之后一直成立**的状态 | **拉** | registry `nota_panels` → `nota_plugin_panels` ✅（内容另走 `nota_plugin_panel_content`，见下） |
-| `nota.ui.register_menu` | 同上 | **拉** | registry `nota_menus` → `nota_plugin_menus` ✅ **2026-09-24 起塞进菜单栏了**：前端合出一栏「插件」插在「帮助」前（`ui/pluginMenus.ts`），条目 id 是合成的 `__plugin:<插件>:<命令>`，走的是既有的 `menuHandlers` / `resolvePick` 那条老路（`docs/07` 第 42 项） |
+| `nota.ui.register_menu` | 同上 | **拉** | registry `nota_menus` → `nota_plugin_menus` ✅ **2026-09-24 起塞进菜单栏了**：前端合出一栏「插件」插在「关于」前（`ui/pluginMenus.ts`），条目 id 是合成的 `__plugin:<插件>:<命令>`，走的是既有的 `menuHandlers` / `resolvePick` 那条老路（`docs/07` 第 42 项） |
 | 插件自己的 `nota.event.emit(x, …)` | 多半是**数据**（Git 的改动列表之类） | **推** | `plugin:<id>:x` ⚠️ 前端仍然没有订阅插件频道，见 `docs/07` 第 17 项 |
 
 ⚠️ **面板内容为什么是第三条路**（2026-09-24 补）：面板**清单**是状态（拉一次就够），

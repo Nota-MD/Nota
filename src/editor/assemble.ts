@@ -153,6 +153,8 @@ import {
 // 后面**（它改的也是解析完的树）。
 import { blockHTMLParse, blockHTMLSpecPlugin } from "./html-block";
 import { blockHTMLDiagnostics, blockHTMLView } from "./html-block-view";
+import { footnoteNavigation } from "./footnote";
+import { githubDocsCompat } from "./github-docs";
 import { gitHubNoticePlugin } from "./github-alert";
 // **智能标点**（`--` → `–`、`"` → `“ ”` 那一组，`settings/markdown.rs` 里
 // 六个字段的消费者）。⚠️ 两条都要，而且**只有 `Input` 档挂输入规则、
@@ -460,6 +462,12 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // NodeView 不参与保存，所以渲染结果不会反向污染 Markdown。
     .use(blockHTMLView(documentPath))
     .use(blockHTMLDiagnostics)
+    // 脚注引用角标与文末定义之间双向跳转。只接 DOM 点击，不改 schema
+    // 或 Markdown 字节；点定义正文仍是正常编辑，点定义标签才返回引用。
+    .use(footnoteNavigation)
+    // GitHub Docs 的 Liquid 标记兼容层：不改源文，只把 rowheaders、常见
+    // Octicon 与 data/reusables 变量显示成可读语义；导出时再转成标准 HTML。
+    .use(githubDocsCompat)
     // ⚠️ 在 `commonmark` 之后即可（它只是往 mdast 上多挂一个变换），
     // 但**必须在 `.create()` 之前**：mdast → ProseMirror 那一步发生在建实例时，
     // 建完了再挂就等于没挂。**只读的那一份也要挂**（分屏预览、导出），

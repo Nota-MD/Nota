@@ -363,6 +363,92 @@
   margin: 0.2em 0 0;
 }
 
+/* GitHub Docs Liquid 兼容层。源文保留，屏幕上只呈现语义。 */
+:where(.editor-mount .ProseMirror) .nota-github-directive {
+  display: none !important;
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-rowheaders tr > :first-child {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-octicon {
+  display: inline-block;
+  width: 1.35em;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 0;
+  line-height: 1;
+  text-align: center;
+  vertical-align: -0.08em;
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-octicon::before {
+  content: "◇";
+  font-size: 0.94rem;
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="check"]::before,
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="check-circle"]::before {
+  content: "✓";
+  color: var(--accent);
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="x"]::before,
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="x-circle"]::before {
+  content: "✕";
+  color: var(--fg-muted);
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="alert"]::before {
+  content: "⚠";
+  color: #b87900;
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="info"]::before,
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="note"]::before {
+  content: "ℹ";
+  color: #2374c6;
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-octicon[data-octicon="light-bulb"]::before {
+  content: "💡";
+}
+
+:where(.editor-mount .ProseMirror) .nota-github-liquid {
+  padding: 0 0.18em;
+  border-radius: 3px;
+  background: var(--code-bg);
+  color: var(--code-keyword);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+:where(.editor-mount .ProseMirror) kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0.05em 0.38em;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  line-height: 1.35;
+  text-align: center;
+}
+
+@keyframes nota-anchor-flash {
+  from { background-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+  to { background-color: transparent; }
+}
+
+:where(.editor-mount .ProseMirror) .nota-anchor-flash {
+  animation: nota-anchor-flash 850ms ease-out;
+}
+
 /* ── 智能标点的「仅显示时转换」（2026-09-27）────────────────────────────────
  *
  * ⚠️ **只有「仅显示时转换」那一档用得上这一段**。另两档不需要 CSS：

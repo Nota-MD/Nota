@@ -21,7 +21,6 @@ import {
   type DocId,
   type Document,
   type Settings,
-  type DocThemeInfo,
   type TreeNode,
 } from "@/bridge/ipc";
 import { ErrorBoundary } from "@/ui/ErrorBoundary";
@@ -42,6 +41,7 @@ import { useToasts } from "@/ui/useToasts";
 import { TabBar } from "@/ui/TabBar";
 import { TopBar } from "@/ui/TopBar";
 import { useDialogs } from "@/ui/useDialogs";
+import { useDocumentCheck } from "@/ui/useDocumentCheck";
 import { useEditorCommands } from "@/ui/useEditorCommands";
 import { AppDialogs } from "@/ui/AppDialogs";
 import { useFileDrop } from "@/ui/useFileDrop";
@@ -69,6 +69,7 @@ import { useAppearance } from "@/ui/useAppearance";
 import { useCodeBlockPrefs } from "@/ui/useCodeBlockPrefs";
 import { useFocusDim } from "@/ui/useFocusDim";
 import { useStartup } from "@/ui/useStartup";
+import { useDocThemeInventory } from "@/ui/useDocThemeInventory";
 import { useAppEvents } from "@/ui/useAppEvents";
 import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
@@ -128,7 +129,7 @@ export default function App() {
   // 用户在应用运行期间往主题目录里丢文件不会触发通知，想让新主题出现就重开应用。
   // ⚠️ 这里**没有**界面主题——那两条轴在 `settings` 里，由 `applyTheme` 落进
   // `<html>` 的属性，不经过这份清单。
-  const [themes, setThemes] = useState<DocThemeInfo[]>([]);
+  const { themes, setThemes, refresh: refreshThemes } = useDocThemeInventory();
 
   // 事件订阅里要读"当前是哪份"，但**不能把它写进依赖数组**——那会让每次切标签都
   // 退订再订一遍，中间那一刻的事件是丢的。用 ref 读最新值，订阅只发生一次。
@@ -480,7 +481,7 @@ export default function App() {
 
   // 窗口自身那两件（置顶 / 开发者工具）。整块在 `ui/useWindowControls.ts`
   // ——连"置顶那个勾为什么要从窗口读回来"一起说清楚了，这里只接线。
-  const { alwaysOnTop, toggleAlwaysOnTop, openDevTools, openHelp, openNewWindow } = useWindowControls({ toast });
+  const { alwaysOnTop, toggleAlwaysOnTop, openDevTools, openNewWindow } = useWindowControls({ toast });
   const activeDoc = docs.find((d) => d.id === activeId) ?? null;
   const menuFeatures = useMenuFeatures({ docs, activeDoc, activeId, workspace, setActiveId, setSidebarOpen, setSidebarTab, refreshDocs, saveDoc, openFolder, openViaDialog, openNewWindow: openNewWindow, askConfirm, toast });
 
@@ -505,7 +506,7 @@ export default function App() {
   // 用户**导入的**界面风格（取 CSS 注入 / 打开风格文件夹）在
   // `ui/useUiStyles.ts`（2026-09-26）。⚠️ 与上面那条不是一伙的：文档主题只管
   // 编辑区、它管整个外壳，注入方式还正好相反——细节在那边文件头。
-  const { styles: uiStyles, openStylesDir } = useUiStyles(settings, toast);
+  const { styles: uiStyles, openStylesDir, refreshStyles } = useUiStyles(settings, toast);
 
   // 「复制为 Markdown」（`edit.copyAsMarkdown`）也搬去了 `ui/useClipboard.ts`
   // （2026-09-25），理由在那个文件的文件头；接线在下面 `剪贴板` 那一行。
@@ -583,8 +584,7 @@ export default function App() {
   });
   // ⚠️ 条子自己要的那几样（开着/命中/回报/关/替换）全在 `ui/EditorArea.tsx`
   // 里读；这边留的 `切查找` 是菜单那条 `edit.find`（它要开/关来回切）。
-  const { splitCheckFind } = findBar;
-
+  const { splitCheckFind } = findBar; const checkDocument = useDocumentCheck(editorRef, activeDoc, askConfirm);
   /**
    * 命令 id → 实现。**这张表就是"菜单项能不能点"的唯一真相源。**
    *
@@ -631,6 +631,7 @@ export default function App() {
     print,
     moveLine: run,
     splitCheckFind,
+    checkDocument,
     insertLink,
     insertImageLike,
     insertEmoji,
@@ -658,7 +659,6 @@ export default function App() {
     toggleAlwaysOnTop,
     openDevTools,
     setMode: TextItemType.setMode,
-    openHelp: () => void openHelp(),
     about: showAbout,
     menuFeatures,
   });
@@ -796,6 +796,7 @@ export default function App() {
             onCommand={(id) => menuHandlers[id]?.()}
             onTheme={pickTheme}
             onOpenThemesDir={() => void openThemesDir()}
+            onRefreshThemes={refreshThemes}
             dockOpen={dockOpen}
             onToggleDock={() => setDockOpen((v) => !v)}
             // ⚠️ 两条理由都让菜单栏让位，**写法必须合成一个布尔**给 `TopBar`：
@@ -961,6 +962,7 @@ export default function App() {
             onOpenThemesDir={() => void openThemesDir()}
             uiStyles={uiStyles}
             onOpenStylesDir={() => void openStylesDir()}
+            onRefreshUiStyles={() => void refreshStyles()}
             onOpenConfigDir={() => void openConfigDir()}
             onResetSettings={() => void resetSettings()}
             onClearRecent={() => void clearEmptyRecent()}

@@ -10,7 +10,7 @@
  *
  * 那些格式 Nota 自己不会转，是借系统里那个 pandoc 转的。所以点下去第一件事是
  * **探测**：没装就先说清楚，别让用户白等一次失败，并且给一条能走下去的路
- * （应用内帮助的 Pandoc 章节）。装好了**不出这个面板**（那种情形面板上只有一个
+ * （给出可复制的命令和版本信息）。装好了**不出这个面板**（那种情形面板上只有一个
  * "开始导出"按钮），只有 `missing` / `unknown` 才轮到它——见 `useExport.ts`。
  *
  * # ⚠️ 它必须说清 PDF 有第二条路
@@ -43,11 +43,6 @@ interface Props {
   format: PandocFormatInfo | null;
   /** 照导（`unknown` 的"仍然试一次"，或走了自带 PDF 那条路）。 */
   onExport: () => void;
-  /**
-   * 打开应用内帮助的 Pandoc 章节。帮助正文与界面共用翻译表，不需要浏览器或
-   * 独立文档包。
-   */
-  onHelp: () => void;
   onRecheck: () => void;
   onClose: () => void;
 }
@@ -56,7 +51,6 @@ export function PandocPanel({
   probe,
   format,
   onExport,
-  onHelp,
   onRecheck,
   onClose,
 }: Props) {
@@ -83,7 +77,7 @@ export function PandocPanel({
       : probe?.state === "missing"
         ? hasBuiltInPdf
           ? { label: t("Typeset and export with Nota itself"), run: onExport }
-          : { label: t("Open installation help"), run: onHelp }
+          : { label: t("Try Anyway"), run: onExport }
         : probe?.state === "unknown"
           ? { label: t("Try Anyway"), run: onExport }
           : null;
@@ -116,9 +110,6 @@ export function PandocPanel({
       : probe.state === "missing"
         ? { className: "is-warn", glyph: "!" }
         : { className: "is-ask", glyph: "?" };
-
-  // 「仍然试一次」只在主按钮**不是**它的时候出现——否则同一件事两颗按钮。
-  const keepOneItemPath = probe !== null && primary?.run !== onExport;
 
   return (
     // 点遮罩 = 关掉，和 `ConfirmDialog` 同一条约定。
@@ -177,13 +168,6 @@ export function PandocPanel({
             <button type="button" className="btn" onClick={onRecheck} disabled={busy}>
               {t("Check Again")}
             </button>
-            {/* ⚠️ 探测是**有根据的猜测**，不是证明。判定错了的时候用户得能自己
-                走下去——所以除了主按钮那条路，**永远再留一条**。 */}
-            {keepOneItemPath && (
-              <button type="button" className="btn" onClick={onExport}>
-                {t("Try Anyway")}
-              </button>
-            )}
           </div>
           <button type="button" className="btn" onClick={onClose}>
             {t("Cancel")}

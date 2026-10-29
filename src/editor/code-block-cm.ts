@@ -411,10 +411,13 @@ const theme = EditorView.theme({
     overflow: "visible",
   },
   ".cm-content": {
-    padding: "0",
+    padding: "0 !important",
     minHeight: "0",
     fontFamily: "var(--font-mono)",
     caretColor: "var(--accent)",
+    // WebView2 的 contenteditable 会画一圈平台默认焦点框；代码块自己已有
+    // 边框与当前行反馈，不再叠这一圈黑框。
+    outline: "none !important",
   },
   ".cm-line": { padding: "0", fontFamily: "var(--font-mono)" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)", borderLeftWidth: "2px" },

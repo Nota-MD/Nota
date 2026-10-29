@@ -137,6 +137,7 @@ export function AppearancePane({
   onChange,
   uiStyles,
   onOpenStylesDir,
+  onRefreshUiStyles,
   // ⚠️ 这两样是**文档主题**那一组的（本页最底下「深色下用哪套」）——
   // 它们和上面的 `uiStyles` / `onOpenStylesDir` 是两个不同的东西：
   // 一个是正文的主题、一个是外壳的风格。两个目录也是分开的（`paths.rs`）。
@@ -265,9 +266,10 @@ export function AppearancePane({
         <SettingRow>
           <div className="stg-inline">
             <Select value={settings.ui_style} options={option} onChange={(ui_style) => onChange({ ui_style })} />
-            <ActionButton onClick={onOpenStylesDir} title={t("Open the styles folder. Drop a <name>.css in it to add a style.")}>
-              {t("Styles folder…")}
+            <ActionButton onClick={onOpenStylesDir} title={t("Open the interface themes folder. Drop a theme package in it to add a style.")}>
+              {t("Interface themes folder…")}
             </ActionButton>
+            <ActionButton onClick={onRefreshUiStyles}>{t("Refresh")}</ActionButton>
           </div>
         </SettingRow>
       </SettingsGroup>
@@ -513,8 +515,8 @@ export function AppearancePane({
               disabled={!a.dark_theme_separate}
               onChange={(dark_document_theme) => write({ dark_document_theme })}
             />
-            <ActionButton onClick={onOpenThemesDir} title={t("Open the themes folder. Put a .css file in it and it becomes selectable.")}>
-              {t("Themes folder…")}
+            <ActionButton onClick={onOpenThemesDir} title={t("Open the document themes folder. Put a theme package in it and it becomes selectable.")}>
+              {t("Document themes folder…")}
             </ActionButton>
           </div>
         </SettingRow>

@@ -164,7 +164,7 @@ export type BuiltinUiStyle = "adwaita";
  * 界面风格。**这是外壳的设计语言**，与文档主题是两回事。
  *
  * ⚠️ 2026-09-26 起它是**开放的字符串**，不再是封闭的联合类型：
- * 用户把一个 `<id>.css` 丢进 `~/.config/nota/ui-styles/` 就多出一档风格
+ * 用户把一个主题包放进 `~/.config/nota/themes/ui/` 就多出一档风格
  * （`src-tauri/src/ui_styles.rs`，用户原话「本来主题应该就是拆成多个文件的。
  * 加一个就是允许用户导入」）。这与 `document_theme` 那一格是同一种做法。
  *
@@ -185,7 +185,7 @@ export interface UiStyleInfo {
   id: string;
   /**
    * 是不是本仓内置的那几档。`false` 有两种：用户新加的、或用户**覆盖了内置的**
-   * （放了个同名的 `<id>.css`）。⚠️ 后者要用 `id` 去 `STYLES` 里查中文名，
+   * （放了个同名的 `<id>/theme.css` 主题包）。⚠️ 后者要用 `id` 去 `STYLES` 里查中文名，
    * 只当导入档显示的话，用户会看到"Adwaita"变成了"adwaita"。
    */
   builtin: boolean;
@@ -924,3 +924,12 @@ export interface PrintPreview {
   pages: string[];
   truncated: boolean;
 }
+
+/**
+ * 自绘打印框最终怎样把页面交给系统。
+ *
+ * - `pdf`：宿主生成 PDF 与逐页预览，再通过 CUPS/IPP 投递（Linux）。
+ * - `browser`：前端把同一份导出 HTML 放进受限 iframe，用 WebView2 的打印
+ *   能力显示系统最终确认框（Windows）。Nota 的版面、预览和选项仍由自绘框提供。
+ */
+export type PrintBackend = "pdf" | "browser";

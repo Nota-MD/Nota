@@ -184,8 +184,10 @@ interface Props {
   onOpenThemesDir: () => void;
   /** 只读：界面风格的清单（内置的 ＋ 用户导入的），「外观」那一页的下拉用。 */
   uiStyles: UiStyleInfo[];
-  /** 打开用户界面风格目录（`~/.config/nota/ui-styles`）。 */
+  /** 打开用户界面风格目录（`~/.config/nota/themes/ui`）。 */
   onOpenStylesDir: () => void;
+  /** 用户放入界面主题后立即重新扫描。 */
+  onRefreshUiStyles: () => void;
   /** 打开设置文件所在的目录（`~/.config/nota`）。通用页的「高级设置」。 */
   onOpenConfigDir: () => void;
   /** 恢复出厂默认。整份替换，新的那一份由后端返回。 */
@@ -233,6 +235,7 @@ export function SettingsDialog({
   onOpenThemesDir,
   uiStyles,
   onOpenStylesDir,
+  onRefreshUiStyles,
   onOpenConfigDir,
   onResetSettings,
   onClearRecent,
@@ -332,6 +335,7 @@ export function SettingsDialog({
       onOpenThemesDir,
       uiStyles,
       onOpenStylesDir,
+      onRefreshUiStyles,
       onOpenConfigDir,
       onResetSettings,
       onClearRecent,

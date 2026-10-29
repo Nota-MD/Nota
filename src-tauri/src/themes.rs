@@ -36,7 +36,7 @@
 //!
 //! # 用户主题放哪儿
 //!
-//! `~/.config/nota/themes/<id>/theme.css`。**只扫这一个目录**。
+//! `~/.config/nota/themes/document/<id>/theme.css`。**只扫这一个目录**。
 //! 目录名就是 id。**Adwaita / Adwaita Dark 是只读内置主题**：
 //! 用户目录里的同名文件会被忽略；其他 id 才能作为用户主题加入。
 //!
@@ -175,9 +175,9 @@ pub fn css_of(id: &str) -> Result<String> {
 /// 用户主题只接受 Typora 式的自包含目录：
 ///
 /// ```text
-/// themes/<id>/theme.css
-/// themes/<id>/<id>.css
-/// themes/<id>/assets/...
+/// themes/document/<id>/theme.css
+/// themes/document/<id>/<id>.css
+/// themes/document/<id>/assets/...
 /// ```
 ///
 /// 资源内联的允许根是主题目录自身，不允许一个主题穿过 `../` 读取别的主题资源。

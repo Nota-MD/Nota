@@ -57,6 +57,7 @@ import {
   superscriptSpec,
   subscriptSpec,
   underlineSpec,
+  kbdSpec,
   type InlineExtensionFlags,
   notConvertMeaningLineFirstEqualNumber,
   notConvertMeaningIsolatedStandaloneWaveWaveNumber,
@@ -107,7 +108,7 @@ function equalColumns(actual: unknown, expected: unknown, description: string): 
 
 const ctx = new Ctx(new Container(), {} as never);
 ctx.inject(marksCtx);
-for (const value of [highlightSpec, superscriptSpec, subscriptSpec, underlineSpec]) value.ctx(ctx);
+for (const value of [highlightSpec, superscriptSpec, subscriptSpec, underlineSpec, kbdSpec]) value.ctx(ctx);
 // ⚠️ gfm 的删除线也要**真规格**（BUG-48 那张矩阵里有 `~~下<u>下</u>下~~`，
 // 而"`~下~` 会不会被改写成 `~~下~~`"那条判据正是它说了算）。
 strikethroughSchema.ctx(ctx);
@@ -118,6 +119,7 @@ const fourSpec = {
   superscript: ctx.get(superscriptSpec.key)(ctx),
   subscript: ctx.get(subscriptSpec.key)(ctx),
   underline: ctx.get(underlineSpec.key)(ctx),
+  kbd: ctx.get(kbdSpec.key)(ctx),
   strike_through: ctx.get(strikethroughSchema.key)(ctx),
 };
 
@@ -208,6 +210,7 @@ const schema = new Schema({
     superscript: fourSpec.superscript,
     subscript: fourSpec.subscript,
     underline: fourSpec.underline,
+    kbd: fourSpec.kbd,
     strike_through: fourSpec.strike_through,
   },
 });
@@ -387,6 +390,27 @@ testCase("下划线走的是**另一边**：三颗节点（html ＋ text ＋ htm
   );
 });
 
+testCase("按键标签 `<kbd>` 也并成一颗真标记", () => {
+  equalColumns(
+    convertReplace([
+      {
+        type: "paragraph",
+        children: [
+          { type: "html", value: "<kbd>" },
+          { type: "text", value: "Ctrl" },
+          { type: "html", value: "</kbd>" },
+          { type: "text", value: "+" },
+          { type: "html", value: "<kbd>" },
+          { type: "text", value: "B" },
+          { type: "html", value: "</kbd>" },
+        ],
+      } as never,
+    ]),
+    ["root", "paragraph", "notaKbd", "text:Ctrl", "text:+", "notaKbd", "text:B"],
+    "两组按键标签",
+  );
+});
+
 testCase("⚠️ 只有 `<u>` 没有 `</u>` → 原样留下，不许吃掉", () => {
   // 半截 HTML 保持它的本来面目，比把它吞掉强：用户可能真的在写 HTML。
   equalColumns(
@@ -480,6 +504,14 @@ testCase("下划线：`<u>x</u>` 一字不差（**这是最容易漏的一格**�
   // 它的左半边是 html 节点、右半边也是，中间夹着文本——两头都得顾上。
   equal(roundtrip("<u>重点</u>").trim(), "<u>重点</u>", "独占一段");
   equal(roundtrip("甲 <u>重点</u> 乙").trim(), "甲 <u>重点</u> 乙", "夹在中间");
+});
+
+testCase("按键标签：`<kbd>` 一字不差地存回来", () => {
+  equal(
+    roundtrip("<kbd>Ctrl</kbd>+<kbd>B</kbd>").trim(),
+    "<kbd>Ctrl</kbd>+<kbd>B</kbd>",
+    "快捷键",
+  );
 });
 
 testCase("一段里四种混着，各回各的", () => {

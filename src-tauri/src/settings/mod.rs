@@ -102,7 +102,7 @@ pub use updates::Updates;
 ///
 /// ⚠️⚠️ **`ui_style` 是一个 `String`，不是枚举**——这是 2026-09-26 改的口径，
 /// 用户原话：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」。
-/// 用户把一个 `<id>.css` 丢进 `~/.config/nota/ui-styles/` 就多出一档风格
+/// 用户把一个 `<id>/theme.css` 主题包放进 `~/.config/nota/themes/ui/` 就多出一档风格
 /// （`ui_styles.rs`），所以**它能取的值是开放的**，枚举写不下。
 /// 这与 `document_theme` 那一格是同一种做法（那一格早就是 `String`）。
 ///

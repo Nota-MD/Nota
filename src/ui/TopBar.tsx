@@ -33,6 +33,7 @@ export function TopBar(props: {
   onCommand: (id: string) => void;
   onTheme: (id: string) => void;
   onOpenThemesDir: () => void;
+  onRefreshThemes: () => void;
   dockOpen: boolean;
   onToggleDock: () => void;
   /**
@@ -74,6 +75,7 @@ export function TopBar(props: {
           onCommand={props.onCommand}
           onTheme={props.onTheme}
           onOpenThemesDir={props.onOpenThemesDir}
+          onRefreshThemes={props.onRefreshThemes}
         />
       )}
 

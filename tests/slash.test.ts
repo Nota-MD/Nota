@@ -226,6 +226,7 @@ testCase("id 都是 `EditorCommand` 白名单里的（编译期由类型兜，�
   const whiteNameSingle: EditorCommand[] = [
     "h1", "h2", "h3", "ul", "ol", "task", "quote",
     "codeBlock", "mathBlock", "table", "hr", "footnote", "toc",
+    "alertNote", "alertTip", "alertImportant", "alertWarning", "alertCaution",
   ];
   const notAt = slashTable.map((item5) => item5.id).filter((id) => !whiteNameSingle.includes(id));
   equal(notAt, [], "表里有白名单外的 id");
@@ -239,10 +240,10 @@ testCase("**故意不在**表里的那些 id 确实不在", () => {
   const notShouldAt: EditorCommand[] = [
     "link", "image",
     "bold", "italic", "inlineCode", "strike", "highlight",
-    "superscript", "subscript", "underline", "clearFormat",
+    "superscript", "subscript", "underline", "kbd", "clearFormat",
     "undo", "redo",
     "tableRowAbove", "tableRowBelow", "tableColLeft", "tableColRight",
-    "tableDelRow", "tableDelCol", "tableDel",
+    "tableDelRow", "tableDelCol", "tableDel", "tableRowHeaders",
     "tableAlignLeft", "tableAlignCenter", "tableAlignRight",
     "insertText", "text",
   ];

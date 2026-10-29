@@ -63,6 +63,9 @@ pub const MCP选项: &str = "--mcp";
 /// 不启动 Tauri，只把调试日志交给系统文本查看器。
 pub const 调试日志选项: &str = "--debug-log";
 
+/// 独立的日志查看器进程。由主进程启动，避免辅助 WebView 拖住主进程。
+pub const 调试窗口选项: &str = "--debug-log-window";
+
 /// 从参数表里挑出"要打开的文件"，没有就是 `None`。
 ///
 /// `args` **含零号参数**（程序自己的路径），要跳掉——不跳的话每次启动都会
@@ -117,6 +120,13 @@ pub fn 要查看调试日志(args: impl IntoIterator<Item = OsString>) -> bool {
     args.into_iter()
         .skip(1)
         .any(|arg| arg.as_os_str() == OsStr::new(调试日志选项))
+}
+
+/// 这次启动是不是独立的实时日志窗口进程。
+pub fn 要开调试窗口(args: impl IntoIterator<Item = OsString>) -> bool {
+    args.into_iter()
+        .skip(1)
+        .any(|arg| arg.as_os_str() == OsStr::new(调试窗口选项))
 }
 
 /// 一个参数**当什么用**：`nota://` 链接要先把里面的路径解出来，别的原样当路径。
@@ -484,5 +494,12 @@ mod tests {
         assert!(要查看调试日志(参数表(&["nota", "--debug-log"])));
         assert!(!要查看调试日志(参数表(&["--debug-log"])));
         assert!(!要查看调试日志(参数表(&["nota", "--debug-log-extra"])));
+    }
+
+    #[test]
+    fn 调试窗口选项与快照选项分开认出() {
+        assert!(要开调试窗口(参数表(&["nota", "--debug-log-window"])));
+        assert!(!要查看调试日志(参数表(&["nota", "--debug-log-window"])));
+        assert!(!要开调试窗口(参数表(&["nota", "--debug-log"])));
     }
 }

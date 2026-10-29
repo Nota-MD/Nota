@@ -61,24 +61,28 @@ testCase("空代码块只保留一个真实空行，语言选择器独立于代�
 testCase("代码块编辑态与 token 后代始终使用主题等宽字体", () => {
   assertValue(cm.includes('fontFamily: "var(--font-mono)"'), "CodeMirror 根没有绑定主题等宽字体");
   assertValue(
-    /\.cm-line span\s*\{[^}]*font-family:\s*var\(--font-mono\)/s.test(blocksCss),
-    "token span 没有等宽字体兜底",
+    /pre \.cm-editor \*\s*\{[^}]*font-family:\s*var\(--font-mono\)/s.test(blocksCss),
+    "CodeMirror 后代没有全量等宽字体兜底",
   );
   assertValue(
-    blocksCss.includes(".nota-code-wrap:not(.nota-code-math-editing) pre .cm-line span"),
+    blocksCss.includes(".nota-code-wrap:not(.nota-code-math-editing) pre .cm-editor *"),
     "等宽字体兜底没有排除数学源码框",
+  );
+  assertValue(
+    /\.cm-content:focus-visible\s*\{[^}]*outline:\s*none !important/s.test(blocksCss),
+    "CodeMirror 的 contenteditable 焦点框仍会出现",
   );
 });
 
 testCase("代码框上下留白收紧且行号装订线保持逐行对齐", () => {
   assertValue(
-    /\.editor-mount \.ProseMirror pre\s*\{[\s\S]*?padding:\s*12px var\(--nota-code-pad-l\);[\s\S]*?margin:\s*14px 0 30px;/s.test(
+    /\.editor-mount \.ProseMirror pre\s*\{[\s\S]*?padding:\s*8px var\(--nota-code-pad-l\);[\s\S]*?margin:\s*12px 0 24px;/s.test(
       blocksCss,
     ),
     "代码框仍使用过大的上下留白",
   );
   assertValue(
-    /\.nota-code-gutter\s*\{[\s\S]*?padding:\s*12px 8px 12px 14px;/s.test(chromeCss),
+    /\.nota-code-gutter\s*\{[\s\S]*?padding:\s*8px 8px 8px 14px;/s.test(chromeCss),
     "行号装订线的纵向 padding 与代码框不一致",
   );
 });

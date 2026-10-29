@@ -449,7 +449,7 @@ html[data-code-lang-picker="off"] .nota-code-lang-wrap {
    （宽与左内边距都是从同一个变量/同一个数推出来的），但**改这两个数中任意一个
    都要回来核一遍下表**。
 
-   ⚠️ 上下的 `padding: 12px` 与 `pre` 的上下内边距（`editor-blocks.css`）**必须相等**，
+   ⚠️ 上下的 `padding: 8px` 与 `pre` 的上下内边距（`editor-blocks.css`）**必须相等**，
    否则第一行行号会与第一行代码错开——这是本元素唯一会对不齐的地方，
    而那正是行号最不能出的错。 */
 .nota-code-gutter {
@@ -459,7 +459,7 @@ html[data-code-lang-picker="off"] .nota-code-lang-wrap {
   left: 0;
   box-sizing: border-box;
   width: var(--nota-code-pad-l, 14px);
-  padding: 12px 8px 12px 14px;
+  padding: 8px 8px 8px 14px;
   /* 行号逐行一个，**不能被折叠换行**（`pre` 的默认行为是保留空白，
      但 `pre` 上那条 `white-space: pre-wrap` 会继承下来——必须显式改回去，
      否则窄窗口下行号自己会折行、与代码彻底错位）。 */

@@ -92,10 +92,10 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
         <Value>{showName(generateEffectid)}</Value>
       </SettingRow>
 
-      <SettingRow label={t("Themes folder")}>
+      <SettingRow label={t("Document themes folder")}>
         {/* ⚠️ 这一行故意**没有** `htmlFor`：`<button>` 不是可标注控件，
             点标签文字会意外触发一次「打开文件夹」（见 `primitives.tsx`）。 */}
-        <ActionButton onClick={onOpenThemesDir}>{t("Open…")}</ActionButton>
+        <ActionButton onClick={onOpenThemesDir}>{t("Document themes folder…")}</ActionButton>
       </SettingRow>
     </SettingsGroup>
 

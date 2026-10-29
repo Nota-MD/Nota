@@ -91,8 +91,8 @@ export function pluginMenuBar(items: PluginMenuItem[]): MenuSpec | null {
 /**
  * 把「插件」栏拼进菜单栏。
  *
- * 插在**「帮助」前面**：最后那一栏是"关于这个应用"，它按惯例待在末尾。
- * 找不到「帮助」（`commands.ts` 里改了 id）就接在最后——**不静默丢掉**，
+ * 插在**「关于」前面**：最后那一栏是"关于这个应用"，它按惯例待在末尾。
+ * 找不到「关于」（`commands.ts` 里改了 id）就接在最后——**不静默丢掉**，
  * 一栏菜单凭空消失比位置不对难查得多。
  *
  * ⚠️ 调用方**必须**把它包在 `useMemo` 里：返回值每次都是新数组，而它下游
@@ -104,7 +104,7 @@ export function withPluginDock(menus: readonly MenuSpec[], items: PluginMenuItem
   if (!bar) return [...menus];
 
   const out = [...menus];
-  const helpHelp = out.findIndex((m) => m.id === "help");
-  out.splice(helpHelp < 0 ? out.length : helpHelp, 0, bar);
+  const aboutIndex = out.findIndex((m) => m.id === "about");
+  out.splice(aboutIndex < 0 ? out.length : aboutIndex, 0, bar);
   return out;
 }

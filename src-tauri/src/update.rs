@@ -549,7 +549,7 @@ fn 安装命令说明(类型: 安装类型) -> String {
         安装类型::Deb => "pkexec apt-get install -y <下载的 .deb>".to_string(),
         安装类型::Rpm => "pkexec dnf install -y <下载的 .rpm>".to_string(),
         安装类型::AppImage => "退出后替换当前 AppImage 并重新启动".to_string(),
-        安装类型::Exe => "退出后解压并覆盖便携版目录".to_string(),
+        安装类型::Exe => "退出后替换便携版启动器并重新启动".to_string(),
         安装类型::ExeInstall => "运行 NSIS 安装程序 /S 覆盖安装".to_string(),
         安装类型::Dev => MAIN_DEV_UPDATE_COMMAND.to_string(),
     }

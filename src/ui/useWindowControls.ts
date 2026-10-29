@@ -48,8 +48,6 @@ export interface windowControlApi {
   toggleAlwaysOnTop: () => Promise<void>;
   /** 打开开发者工具。 */
   openDevTools: () => Promise<void>;
-  /** 在独立窗口打开编入前端的 HTML 帮助，可指定章节。 */
-  openHelp: (section?: "start" | "pandoc" | "printing" | "shortcuts") => Promise<void>;
   /**
    * 把一份**磁盘上的**文档在新窗口里打开（标签页右键那一条）。
    *
@@ -118,14 +116,6 @@ export function useWindowControls(w: windowControlWiring): windowControlApi {
     }
   }, [toast, t]);
 
-  const openHelp = useCallback(async (section?: "start" | "pandoc" | "printing" | "shortcuts") => {
-    try {
-      await api.window.openHelp(section);
-    } catch (e) {
-      toast(t("Could not open help: {0}", String(e)), "error");
-    }
-  }, [toast, t]);
-
   const openNewWindow = useCallback(
     async (path?: string) => {
       try {
@@ -140,5 +130,5 @@ export function useWindowControls(w: windowControlWiring): windowControlApi {
     [toast, t],
   );
 
-  return { alwaysOnTop, toggleAlwaysOnTop, openDevTools, openHelp, openNewWindow };
+  return { alwaysOnTop, toggleAlwaysOnTop, openDevTools, openNewWindow };
 }

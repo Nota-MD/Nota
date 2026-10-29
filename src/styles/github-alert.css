@@ -6,7 +6,8 @@
   border: 1px solid color-mix(in srgb, var(--github-alert-color) 42%, var(--border));
   border-left: 4px solid var(--github-alert-color);
   border-radius: var(--radius);
-  background: color-mix(in srgb, var(--github-alert-color) 8%, var(--bg));
+  background: color-mix(in srgb, var(--github-alert-color) 8%, var(--doc-bg));
+  color: var(--doc-fg);
 }
 
 .editor-mount .ProseMirror .nota-github-alert-marker {
@@ -19,6 +20,10 @@
 
 .editor-mount .ProseMirror .nota-github-alert > p:last-child {
   margin-bottom: 0;
+}
+
+.editor-mount .ProseMirror .nota-github-alert > p {
+  color: var(--doc-fg);
 }
 
 .editor-mount .ProseMirror .nota-github-alert::before {
@@ -34,7 +39,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-note::before {
-  content: "Note";
+  content: "ⓘ  Note";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-tip {
@@ -42,7 +47,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-tip::before {
-  content: "Tip";
+  content: "◆  Tip";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-important {
@@ -50,7 +55,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-important::before {
-  content: "Important";
+  content: "❗  Important";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-warning {
@@ -58,7 +63,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-warning::before {
-  content: "Warning";
+  content: "⚠  Warning";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-caution {
@@ -66,5 +71,5 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-caution::before {
-  content: "Caution";
+  content: "⛔  Caution";
 }

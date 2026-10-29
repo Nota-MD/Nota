@@ -171,6 +171,52 @@ export function deleteWholeTable(editor: Editor): void {
 }
 
 /**
+ * 给当前 Markdown 表格加/去 GitHub Docs 的 `{% rowheaders %}` 边界。
+ *
+ * 边界在源文里是两根独立段落，表格本身仍是标准 GFM。编辑器把边界视觉隐藏
+ * 并加粗第一列；导出时再把数据行首格转成 `<th scope="row">`。
+ */
+export function toggleTableRowHeaders(editor: Editor): void {
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const { state } = view;
+    const { $from } = state.selection;
+    const tableDepth = ancestorFirstDarkDegree($from, "table");
+    if (tableDepth < 1) return;
+    const paragraph = state.schema.nodes.paragraph;
+    if (!paragraph) return;
+    const before = $from.before(tableDepth);
+    const after = $from.after(tableDepth);
+    const marker = (value: string) =>
+      paragraph.create(null, state.schema.text(value));
+    const startText = "{% rowheaders %}";
+    const endText = "{% endrowheaders %}";
+    const nodeBefore = state.doc.resolve(before).nodeBefore;
+    const nodeAfter = state.doc.resolve(after).nodeAfter;
+    const hasStart =
+      nodeBefore?.type.name === "paragraph" &&
+      nodeBefore.textContent.trim() === startText;
+    const hasEnd =
+      nodeAfter?.type.name === "paragraph" &&
+      nodeAfter.textContent.trim() === endText;
+
+    const tr = state.tr;
+    if (hasStart && hasEnd) {
+      tr.delete(after, after + nodeAfter!.nodeSize);
+      tr.delete(before - nodeBefore!.nodeSize, before);
+    } else {
+      tr.insert(after, marker(endText));
+      tr.insert(before, marker(startText));
+    }
+    tr.setSelection(
+      TextSelection.near(tr.doc.resolve(tr.mapping.map($from.pos))),
+    );
+    view.dispatch(tr.scrollIntoView());
+    view.focus();
+  });
+}
+
+/**
  * 插一个**空公式块**，并把光标落成"整块选中"。
  *
  * # 为什么要有这一条（`docs/07` 第 52 项）

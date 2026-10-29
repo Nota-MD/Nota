@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nota UI typography misuse</title>
+    <style>
+      @font-face {
+        font-family: "Adwaita Sans";
+        src: url("../../src/assets/fonts/adwaita/AdwaitaSans-Regular.ttf") format("truetype");
+        font-style: normal;
+        font-weight: 100 900;
+        font-display: block;
+      }
+
+      :root {
+        --ink: #171b20;
+        --muted: #737b86;
+        --faint: #a4abb5;
+        --line: #dfe3e8;
+        --surface: #ffffff;
+        --subtle: #f4f6f8;
+        --accent: #3584e4;
+        --danger: #d63649;
+        --ui-font: "Noto Sans CJK SC", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1600px;
+        height: 1000px;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        background: #dfe3e8;
+        color: var(--ink);
+        font-family: var(--ui-font);
+      }
+
+      body[data-example="serif"] {
+        --ui-font: "Noto Serif CJK SC", "Songti SC", serif;
+      }
+
+      body[data-example="black"] {
+        --ui-font: "Noto Sans CJK SC Black", "Noto Sans CJK SC", sans-serif;
+      }
+
+      body[data-example="adwaita"] {
+        --ui-font: "Adwaita Sans", "Noto Sans CJK SC", sans-serif;
+      }
+
+      .desktop {
+        width: 1600px;
+        height: 1000px;
+        padding: 34px;
+      }
+
+      .window {
+        height: 932px;
+        overflow: hidden;
+        border: 1px solid #bfc5cd;
+        border-radius: 12px;
+        background: var(--surface);
+        box-shadow: 0 22px 58px rgb(21 30 42 / 22%);
+      }
+
+      .titlebar {
+        display: flex;
+        align-items: center;
+        height: 38px;
+        padding: 0 14px;
+        border-bottom: 1px solid #cdd2d9;
+        background: linear-gradient(#f5f6f8, #e9ecf0);
+      }
+
+      .traffic {
+        display: flex;
+        gap: 8px;
+      }
+
+      .traffic i {
+        width: 12px;
+        height: 12px;
+        border: 1px solid rgb(0 0 0 / 12%);
+        border-radius: 50%;
+        background: #d8dce2;
+      }
+
+      .window-title {
+        margin-left: 22px;
+        color: #5f6670;
+        font-size: 13px;
+      }
+
+      .menubar {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        height: 42px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+        background: var(--surface);
+      }
+
+      .menubar .right {
+        margin-left: auto;
+        color: var(--muted);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 304px 1fr;
+        height: calc(100% - 80px);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid var(--line);
+        background: #fbfcfd;
+      }
+
+      .tabs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        height: 58px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .tab {
+        position: relative;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .tab.active {
+        color: var(--ink);
+      }
+
+      .tab.active::after {
+        content: "";
+        position: absolute;
+        bottom: 8px;
+        left: 50%;
+        width: 52px;
+        height: 3px;
+        border-radius: 2px;
+        background: currentColor;
+        transform: translateX(-50%);
+      }
+
+      .sidebar-tools {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 42px;
+        padding: 0 16px;
+        border-bottom: 1px solid #edf0f3;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .plus {
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      .tree {
+        padding: 10px 8px;
+        font-size: 14px;
+      }
+
+      .tree-row {
+        display: flex;
+        align-items: center;
+        height: 34px;
+        padding: 0 10px;
+        border-radius: 7px;
+        color: var(--muted);
+      }
+
+      .tree-row.folder {
+        color: var(--ink);
+      }
+
+      .tree-row.child {
+        padding-left: 28px;
+      }
+
+      .tree-row.selected {
+        background: #eef1f4;
+        color: var(--ink);
+      }
+
+      .twisty {
+        width: 18px;
+        color: var(--faint);
+      }
+
+      .editor {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        background: #fff;
+      }
+
+      .tabs-docs {
+        display: flex;
+        align-items: flex-end;
+        height: 42px;
+        padding-left: 16px;
+        border-bottom: 1px solid var(--line);
+        background: #fafbfc;
+      }
+
+      .doc-tab {
+        padding: 10px 18px 9px;
+        border: 1px solid var(--line);
+        border-bottom: 0;
+        border-radius: 8px 8px 0 0;
+        color: var(--muted);
+        background: #f4f6f8;
+        font-size: 13px;
+      }
+
+      .doc-tab.active {
+        color: var(--ink);
+        background: white;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 7px;
+        padding: 10px 28px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .tool {
+        min-width: 32px;
+        height: 30px;
+        padding: 0 9px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: #fff;
+        color: #505760;
+        text-align: center;
+        line-height: 28px;
+        font-size: 13px;
+      }
+
+      .paper {
+        flex: 1;
+        padding: 42px 70px;
+        overflow: hidden;
+      }
+
+      .paper h1 {
+        margin: 0 0 26px;
+        font-size: 34px;
+        font-weight: 700;
+      }
+
+      .paper h2 {
+        margin: 30px 0 12px;
+        font-size: 22px;
+        font-weight: 700;
+      }
+
+      .paper p,
+      .paper li {
+        font-size: 16px;
+        line-height: 1.9;
+      }
+
+      .paper p {
+        margin: 0 0 14px;
+      }
+
+      .paper ul {
+        margin: 8px 0 20px;
+        padding-left: 24px;
+      }
+
+      .quote {
+        margin: 20px 0;
+        padding: 13px 18px;
+        border-left: 3px solid #9aa1aa;
+        background: #f6f7f8;
+      }
+
+      .status {
+        display: flex;
+        justify-content: space-between;
+        height: 28px;
+        padding: 0 16px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 28px;
+      }
+
+      .callout {
+        position: fixed;
+        top: 54px;
+        right: 54px;
+        width: 390px;
+        padding: 18px 20px;
+        border: 1px solid rgb(214 54 73 / 35%);
+        border-radius: 10px;
+        background: rgb(255 255 255 / 94%);
+        box-shadow: 0 12px 32px rgb(18 23 30 / 18%);
+        color: #20242a;
+        font-family: "Noto Sans CJK SC", sans-serif;
+      }
+
+      .callout strong {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--danger);
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .callout span {
+        color: #4f5661;
+        font-size: 13px;
+        line-height: 1.65;
+      }
+
+      body[data-example="adwaita"] .callout {
+        border-color: rgb(38 128 78 / 38%);
+      }
+
+      body[data-example="adwaita"] .callout strong {
+        color: #207446;
+      }
+
+      body[data-mode="adwaita-sidebar"] .window {
+        transform: scale(1.34);
+        transform-origin: top left;
+      }
+
+      body[data-mode="adwaita-sidebar"] .callout {
+        top: auto;
+        right: 44px;
+        bottom: 44px;
+        width: 430px;
+      }
+
+      body[data-example="serif"] .menubar,
+      body[data-example="serif"] .tab,
+      body[data-example="serif"] .sidebar-tools,
+      body[data-example="serif"] .tree,
+      body[data-example="serif"] .doc-tab,
+      body[data-example="serif"] .tool,
+      body[data-example="serif"] .status,
+      body[data-example="serif"] .window-title {
+        font-family: "Noto Serif CJK SC", "Songti SC", serif;
+      }
+
+      body[data-example="black"] .menubar,
+      body[data-example="black"] .tab,
+      body[data-example="black"] .sidebar-tools,
+      body[data-example="black"] .tree,
+      body[data-example="black"] .doc-tab,
+      body[data-example="black"] .tool,
+      body[data-example="black"] .status,
+      body[data-example="black"] .window-title,
+      body[data-example="black"] .paper h1,
+      body[data-example="black"] .paper h2,
+      body[data-example="black"] .paper p,
+      body[data-example="black"] .paper li,
+      body[data-example="black"] .quote {
+        font-weight: 900;
+        letter-spacing: 0.015em;
+      }
+    </style>
+  </head>
+  <body data-example="serif" data-mode="serif">
+    <div class="desktop">
+      <section class="window">
+        <div class="titlebar">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="window-title">项目备忘录 — Nota</div>
+        </div>
+        <nav class="menubar">
+          <span>文件</span><span>编辑</span><span>段落</span><span>格式</span>
+          <span>视图</span><span>主题</span><span>帮助</span>
+          <span class="right">扩展</span>
+        </nav>
+        <div class="workspace">
+          <aside class="sidebar">
+            <div class="tabs"><div class="tab active">文件</div><div class="tab">大纲</div></div>
+            <div class="sidebar-tools"><span class="plus">＋</span><span>新建文件</span><span style="margin-left:auto">⋯</span></div>
+            <div class="tree">
+              <div class="tree-row folder"><span class="twisty">▾</span>项目资料</div>
+              <div class="tree-row child selected">项目备忘录.md</div>
+              <div class="tree-row child">发布检查表.md</div>
+              <div class="tree-row folder"><span class="twisty">▸</span>归档</div>
+            </div>
+          </aside>
+          <main class="editor">
+            <div class="tabs-docs"><div class="doc-tab active">项目备忘录</div></div>
+            <div class="toolbar">
+              <span class="tool">B</span><span class="tool">I</span><span class="tool">H1</span>
+              <span class="tool">“ ”</span><span class="tool">• 列表</span><span class="tool">链接</span>
+            </div>
+            <article class="paper">
+              <h1>项目备忘录</h1>
+              <p>当界面文字使用衬线字体时，菜单、按钮、页签和状态栏都会带上明显的书写感。</p>
+              <h2>本周事项</h2>
+              <ul>
+                <li>核对桌面端发布清单</li>
+                <li>整理文档主题示例</li>
+                <li>确认小字号状态栏是否仍然清晰</li>
+              </ul>
+              <div class="quote">界面文字的首要任务是快速识别和操作，而不是模拟纸面正文的阅读节奏。</div>
+            </article>
+            <div class="status"><span>26 字 · 3 行</span><span>已保存</span></div>
+          </main>
+        </div>
+      </section>
+    </div>
+    <aside class="callout">
+      <strong data-callout-title>错误示范 01 · 界面文字使用衬线体</strong>
+      <span data-callout-body>菜单、页签、按钮和状态信息都变成了宋体。小字号笔画变碎，操作密度高的地方显得迟缓，界面与正文的职责也混在一起。</span>
+    </aside>
+    <script>
+      const mode = new URLSearchParams(location.search).get("example") || "serif";
+      document.body.dataset.example =
+        mode === "black" ? "black" : mode.startsWith("adwaita") ? "adwaita" : "serif";
+      document.body.dataset.mode = mode;
+      const title = document.querySelector("[data-callout-title]");
+      const body = document.querySelector("[data-callout-body]");
+      if (mode === "black") {
+        title.textContent = "错误示范 02 · 界面文字滥用超粗黑体";
+        body.textContent =
+          "菜单、正文、按钮和辅助信息全部使用最高字重。所有层级一起变黑，主次关系消失，小字号也变得拥挤、沉重。";
+      } else if (mode.startsWith("adwaita")) {
+        title.textContent =
+          mode === "adwaita-sidebar"
+            ? "正确示范 · Adwaita 侧栏层级"
+            : "正确示范 · Adwaita 界面字体";
+        body.textContent =
+          mode === "adwaita-sidebar"
+            ? "界面使用无衬线体，靠字号、留白、缩进和低对比色建立层级；当前文件使用柔和整行底色，而不是额外加粗或高饱和强调。"
+            : "Adwaita 的界面文字使用无衬线体，常规字重承担操作与导航；层级由字号、间距和色调建立，页面保持安静而清晰。";
+      }
+    </script>
+  </body>
+</html>

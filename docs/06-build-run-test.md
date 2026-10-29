@@ -433,8 +433,11 @@ podman exec -u 1000 -w /work/nota tauri-dev \
 ```
 
 这样 `std::env::current_dir()` 和生成的 `installer.nsi` 都是 `/work/nota/...`，
-0.8.0-beta 的 `Nota_0.8.0-beta_x64-setup.exe` 已用这条路径实际生成。便携 ZIP
-另带顶层 `Nota/` 与 `nota-portable.marker`。
+0.8.0-beta 的 `Nota_0.8.0-beta_x64_setup.exe` 已用这条路径实际生成。便携版由
+`tools/make-windows-portable.sh` 生成：Nota 自己的 Win32 启动器嵌入运行时归档，
+带 Nota 图标与 `asInvoker` 清单，首次运行解到当前用户的
+`%LOCALAPPDATA%\Nota\Portable\<版本>`，不请求管理员权限，也不显示 7-Zip
+安装器身份。
 
 `aarch64-pc-windows-*` 的 std 在 Fedora 仓库里仍没有，Windows arm64 继续交给 CI。
 CI 仍是签名与 arm64 的权威出处；本地 gnu 包用于功能验收和更新链路测试。
@@ -2624,7 +2627,7 @@ convert 跟随风格.png -format %c histogram:info: | grep -i '3584e4'  # → 58
 #### ★ 顺带验掉的：内联强调色**打不打得过"用户导入的风格"**
 
 这一条是**同批真跑过**的（`docs/08` §A 那条"导入的样式只管形状、颜色交给轴"的契约
-不能只写在文档里）：造一份导入档 `~/.config/nota/ui-styles/zz-check.css`
+不能只写在文档里）：造一份导入档 `~/.config/nota/themes/ui/zz-check.css`
 （品红 `--accent: #c2185b` ＋ 大圆角 `--radius: 16px`），把 `ui_style` 指到 `zz-check`，
 再分两次跑：
 
@@ -5622,7 +5625,7 @@ podman exec -u 1000 -w <仓库> \
 ⚠️ 收工**必须把自己这份实例退掉**，否则下次开窗的人（通常是用户本人）会把窗口
 交给那个看不见的实例然后 `exit(0)`（§5.28 那条）。
 
-进「关于」的路：菜单栏 `帮助 → 关于 Nota`（`help.about` **没有助记键**，
+进「关于」的路：菜单栏 `关于 → 关于 Nota`（`about.about` **没有助记键**，
 所以只能点菜单——`Alt+M` 先开菜单栏不必要，那一栏默认就画着）。
 
 #### ① 「关于」首页 ＋ 三个子页
@@ -6696,7 +6699,7 @@ FreeType 对“中 / 文 / A”返回 `pixel_mode=1`（MONO）。无头 `:99` �
 
 📌 **同日主题图标目检**：CDE 格式栏换成 22 枚自绘 16 格硬边图标；粗体、斜体、
 下划线、代码、链接、图片、列表、引用、任务与关闭键均在真窗口里看过。
-另做一次反证：在隔离配置的 `ui-styles/` 下新建一个测试风格，把
+另做一次反证：在隔离配置的 `themes/ui/` 下新建一个测试风格，把
 `--icon-folio-close-symbolic: url("./shared-assets/custom-close.svg")` 指向
 **与主题 ID 不同名**的共享目录；重启后状态栏关闭键变成方框 + 叉，证明后端确实按
 CSS 文件目录解析相对资源，而不是要求 `<主题id>/icons/`。

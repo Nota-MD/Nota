@@ -45,6 +45,8 @@
  * 换主题失败不该带崩编辑器。
  */
 
+import { replaceInlineStyle } from "./inline-style";
+
 /** 限域的锚点：整块文档区（含左右留白），不是外壳。见 `EditorPane.tsx`。 */
 const ANCHOR = ".editor-pane";
 
@@ -218,17 +220,7 @@ function splitTop(text: string): string[] {
  * 里，权重和主题规则相当（都是两条选择器），靠的就是后者覆盖前者。
  */
 export function applyDocTheme(css: string | null): void {
-  const existing = document.getElementById(STYLE_ID);
-
-  if (!css) {
-    existing?.remove();
-    return;
-  }
-
-  const el = (existing as HTMLStyleElement | null) ?? document.createElement("style");
-  el.id = STYLE_ID;
-  el.textContent = scopeDocThemeCss(css) + "\n" + SELECTION_RULE;
-  if (!existing) document.head.appendChild(el);
+  replaceInlineStyle(STYLE_ID, css ? scopeDocThemeCss(css) + "\n" + SELECTION_RULE : null);
 }
 
 /**

@@ -97,8 +97,11 @@ worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost
   CORS 模式的请求，结果是 `document.fonts.load()` 抛 `NetworkError`、字体静默退回
   系统字体。判据与实测过程记在 `src-tauri/src/themes.rs` 顶上。
   ⚠️ 所以**为了"统一"把 `font-src` 加回 `asset:` 是错的**——那一条无效。
-- **`style-src` 里的 `'unsafe-inline'`** 是文档主题的**前提**：主题 CSS 是运行时
-  注入 `<style id="nota-doc-theme">` 的（`styles/doc-theme.ts`），没有它主题一律不生效。
+- **`style-src` 里的 `'unsafe-inline'`** 是开发态文档主题的前提。Tauri 打包时会
+  为内联样式注入 CSP nonce 并收窄策略；运行时创建
+  `<style id="nota-doc-theme">` / `<style id="nota-user-ui-style">` 时必须复制
+  页面现有 nonce（`styles/inline-style.ts`），否则样式元素在 DOM 里但
+  `style.sheet === null`，主题会静默不生效。
 - **`img-src` 的 `https:` / `http:`** 服务于 GitHub Markdown 徽章和远程图片。
   它只放行图片，不放行脚本、iframe 或通用网络请求；文档第一次打开时，远程图片
   仍可能向图片服务器暴露访问时间与 IP。

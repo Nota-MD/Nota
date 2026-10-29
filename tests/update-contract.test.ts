@@ -85,6 +85,16 @@ testCase("应用更新可终止，并在安装后自动重启", () => {
   assertValue(source.includes("nohup"), "Linux 包更新没有重新启动应用");
 });
 
+testCase("安装完成后的自动关闭拥有窗口 ACL 权限", () => {
+  const capabilities = JSON.parse(read("src-tauri/capabilities/default.json")) as {
+    permissions: string[];
+  };
+  assertValue(
+    capabilities.permissions.includes("core:window:allow-close"),
+    "缺少 core:window:allow-close，更新后会停在重启步骤",
+  );
+});
+
 testCase("插件清单声明更新源且复用现有包校验", () => {
   const manifest = read("src-tauri", "src", "plugin", "manifest.rs");
   const updater = read("src-tauri", "src", "plugin", "updater.rs");
@@ -113,6 +123,9 @@ testCase("Release 资产按平台分组，latest.json 最后上传", () => {
   const linuxArm = order.indexOf('upload_group "${linux_arm64[@]}"');
   const latest = order.lastIndexOf('upload_group "$dir/latest.json"');
   assertValue(win >= 0 && win < linux && linux < winArm && winArm < linuxArm && linuxArm < latest, "平台上传顺序不正确");
+  assertValue(order.includes('gh release view "$tag"'), "草稿 Release 没有通过 gh 解析 id");
+  assertValue(order.includes('releases/$release_id'), "草稿 Release 资源没有使用数字 id 查询");
+  assertValue(!order.includes('releases/tags/$tag'), "草稿 Release 仍在调用会返回 404 的 tags 接口");
 });
 
 if (fail > 0) {

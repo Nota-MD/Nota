@@ -51,6 +51,15 @@ for file in "${win_x64[@]}" "${linux_x64[@]}" "${win_arm64[@]}" "${linux_arm64[@
   expected[$(basename "$file")]=1
 done
 
+# Draft Releases are not addressable through `/releases/tags/<tag>` on GitHub's
+# REST API (that endpoint returns 404 until publication). Resolve the draft by
+# tag through `gh release view`, then use its numeric id for the asset API.
+release_id=$(gh release view "$tag" --repo "$repo" --json databaseId --jq '.databaseId')
+[[ -n "$release_id" ]] || {
+  echo "release ordering: could not resolve release $tag" >&2
+  exit 1
+}
+
 while IFS=$'\t' read -r id name; do
   [[ -n "$id" ]] || continue
   if [[ -z "${expected[$name]:-}" ]]; then
@@ -58,7 +67,7 @@ while IFS=$'\t' read -r id name; do
     exit 1
   fi
   gh api --method DELETE "repos/$repo/releases/assets/$id" >/dev/null
-done < <(gh api "repos/$repo/releases/tags/$tag" \
+done < <(gh api "repos/$repo/releases/$release_id" \
   --jq '.assets[] | [.id, .name] | @tsv')
 
 upload_group() {

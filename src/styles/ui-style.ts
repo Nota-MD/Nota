@@ -27,6 +27,8 @@
  * 上面那份把下面的盖掉，一条冲突检测代码都不用写。
  */
 
+import { replaceInlineStyle } from "./inline-style";
+
 /** 用户风格自己的 `<style>` 元素的 id。 */
 const STYLE_ID = "nota-user-ui-style";
 
@@ -40,17 +42,7 @@ const STYLE_ID = "nota-user-ui-style";
  * 重启之后没生效"，查不动。（`applyDocTheme` 是同一条理由。）
  */
 export function applyUiStyleCss(css: string | null): void {
-  const existing = document.getElementById(STYLE_ID);
-
-  if (!css) {
-    existing?.remove();
-    return;
-  }
-
-  const el = (existing as HTMLStyleElement | null) ?? document.createElement("style");
-  el.id = STYLE_ID;
-  // ⚠️ `textContent` 而不是解析后重建：原样注入是这份文件的设计（见上），
-  // 中间插一道解析/序列化只会在出问题时让人分不清是谁改的。
-  el.textContent = css;
-  if (!existing) document.head.appendChild(el);
+  // ⚠️ 原样注入；`replaceInlineStyle` 只处理 CSP nonce 与固定元素复用，
+  // 不解析、不序列化，见本文件头。
+  replaceInlineStyle(STYLE_ID, css);
 }

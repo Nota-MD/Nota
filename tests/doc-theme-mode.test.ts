@@ -65,5 +65,15 @@ testCase("Adwaita 深色补丁覆盖浅色表头、隔行底色和行内代码�
   assertValue(!css.includes("#f0f0ef"), "深色补丁仍引用浅色表头值");
 });
 
+testCase("正文高亮色不继承深色界面主题", () => {
+  const css = readFileSync("src/styles/editor.css", "utf8");
+  const pane = /\.editor-pane\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+  assertValue(pane.includes("--find-hit:"), "编辑区没有自己的查找普通命中色");
+  assertValue(pane.includes("--find-current:"), "编辑区没有自己的查找当前命中色");
+  assertValue(pane.includes("--mark-bg:"), "编辑区没有自己的 ==高亮== 底色");
+  assertValue(pane.includes("--mark-bg: #ffd84d;"), "==高亮== 没有使用清晰的黄色");
+  assertValue(pane.includes("--mark-fg: #1a1a1a;"), "黄色高亮没有使用可读的深色文字");
+});
+
 if (failure > 0) process.exit(1);
 console.log(`\n${passed} passed, 0 failed`);

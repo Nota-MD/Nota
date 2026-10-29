@@ -49,6 +49,15 @@
   overflow: auto;
   background: var(--doc-bg);
   position: relative;
+  /* 正文里的高亮属于文档，不属于外壳。界面用深色、文档用浅色是合法组合；
+     若让这里的变量继续从 <html> 继承，暗色界面的橄榄绿会直接铺到白纸上。
+     查找命中用半透明色与当前 --doc-bg 合成；用户写进文档的 ==高亮==
+     固定用清晰黄底和深字，保证在任何文档底色上都容易辨认。
+     文档主题若定义同名变量，会在后注入的限域 CSS 里自然覆盖这里。 */
+  --find-hit: rgba(255, 199, 64, 0.22);
+  --find-current: rgba(255, 164, 32, 0.5);
+  --mark-bg: #ffd84d;
+  --mark-fg: #1a1a1a;
 }
 
 .editor-loading {

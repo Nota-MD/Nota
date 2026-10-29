@@ -170,7 +170,13 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           node tools/make-update-manifest.mjs dist "$GITHUB_REF_NAME"
-          find dist -type f -print0 | sort -z | xargs -0 sha256sum > dist/SHA256SUMS.txt
+          # Release downloads are flat. Hash basenames, not CI's nested
+          # `dist/...` paths, and never include the checksum file in itself.
+          find dist -type f ! -name SHA256SUMS.txt -print0 \
+            | sort -z \
+            | while IFS= read -r -d '' file; do
+                printf '%s  %s\n' "$(sha256sum "$file" | cut -d' ' -f1)" "$(basename "$file")"
+              done > dist/SHA256SUMS.txt
           node - <<'NODE'
           const fs = require("fs");
           const info = {

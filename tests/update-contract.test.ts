@@ -126,6 +126,14 @@ testCase("Release 资产按平台分组，latest.json 最后上传", () => {
   assertValue(order.includes('gh release view "$tag"'), "草稿 Release 没有通过 gh 解析 id");
   assertValue(order.includes('releases/$release_id'), "草稿 Release 资源没有使用数字 id 查询");
   assertValue(!order.includes('releases/tags/$tag'), "草稿 Release 仍在调用会返回 404 的 tags 接口");
+  assertValue(
+    workflow.includes("find dist -type f ! -name SHA256SUMS.txt"),
+    "校验清单仍包含自身",
+  );
+  assertValue(
+    workflow.includes('"$(basename "$file")"'),
+    "校验清单仍使用 CI 内部的目录路径，下载后无法直接校验",
+  );
 });
 
 if (fail > 0) {

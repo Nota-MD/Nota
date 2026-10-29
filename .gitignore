@@ -15,6 +15,7 @@ src-tauri/gen/
 .vscode/
 
 # 构建产物
+artifacts/
 build/
 *.AppImage
 *.deb

@@ -217,6 +217,26 @@ const schema = new Schema({
     math_inline: inlineSpec,
     math_block: ctx.get(mathBlockSchema.key)(ctx),
   },
+  marks: {
+    strong: {
+      parseDOM: [{ tag: "strong" }],
+      toDOM: () => ["strong", 0],
+      parseMarkdown: {
+        match: (node) => node.type === "strong",
+        runner: (state, node, type) => {
+          state.openMark(type);
+          state.next(node.children);
+          state.closeMark(type);
+        },
+      },
+      toMarkdown: {
+        match: (mark) => mark.type.name === "strong",
+        runner: (state, mark) => {
+          state.withMark(mark as never, "strong");
+        },
+      },
+    },
+  },
 });
 
 /**
@@ -359,6 +379,20 @@ testCase("已有文件里的 `\\[\\LaTeX\\]` 解析成带分隔符信息的公�
 testCase("`$$x$$` → 那颗节点上标着 2；`$x$` → 1", () => {
   equal(readDollarCount(headOneTokenInline(parse("$$x$$"))!), 2, "两个 `$`");
   equal(readDollarCount(headOneTokenInline(parse("$x$"))!), 1, "一个 `$`");
+});
+
+testCase("加粗段里的行内公式解析后仍带 strong，不会截断 mark", () => {
+  const doc = parse("**a$x$b**");
+  const paragraph = doc.child(0);
+  equal(paragraph.childCount, 3, "a、公式、b 三颗行内孩子");
+  equal(paragraph.child(0).marks[0]?.type.name, "strong", "a 带 strong");
+  equal(paragraph.child(1).type.name, "math_inline", "中间是公式");
+  equal(paragraph.child(1).marks[0]?.type.name, "strong", "公式自己带 strong");
+  equal(paragraph.child(2).marks[0]?.type.name, "strong", "公式后的文字仍带 strong");
+});
+
+testCase("加粗里的行内公式逐字往返，不被拆成 `**a**$x$b`", () => {
+  equal(roundtrip("**a$x$b**\n"), "**a$x$b**\n", "strong + inline math");
 });
 
 testCase("标的是**源码里那几个字节**，跟公式里写什么无关", () => {

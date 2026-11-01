@@ -115,8 +115,21 @@ async function requestNativeKey(name: string): Promise<void> {
   await nextFrames();
 }
 
-async function openInlineMath(): Promise<HTMLInputElement> {
-  const render = await waitFor<HTMLElement>(".nota-math-inline .nota-math-render");
+async function openInlineMath(index = 0): Promise<HTMLInputElement> {
+  const deadline = performance.now() + 5000;
+  let render: HTMLElement | undefined;
+  for (;;) {
+    render = document.querySelectorAll<HTMLElement>(
+      ".nota-math-inline .nota-math-render",
+    )[index];
+    if (render || performance.now() > deadline) break;
+    await sleep(20);
+  }
+  assert(
+    render,
+    `inline math ${index} did not render; markdown=${JSON.stringify(editor?.getMarkdown())}; ` +
+      `html=${JSON.stringify(document.querySelector(".ProseMirror")?.innerHTML)}`,
+  );
   render.dispatchEvent(
     new MouseEvent("mousedown", {
       bubbles: true,
@@ -233,6 +246,142 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         await nextFrames();
         assertEqual(serialized(), expected, `${source} did not keep its delimiter or left boundary`);
       }
+    },
+  },
+  {
+    name: "Escape exits inline math before the next input",
+    async run() {
+      await mount("$x$");
+      const input = await openInlineMath();
+      press(input, "Escape");
+      await nextFrames();
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(serialized(), "$x$Z", "Escape did not move the caret outside the formula");
+    },
+  },
+  {
+    name: "inline math inside a bold span keeps following text in that span",
+    async run() {
+      await mount("**a$x$b**");
+      const input = await openInlineMath();
+      press(input, "ArrowRight");
+      await nextFrames();
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "**a$x$Zb**",
+        "text typed after the formula escaped its enclosing bold span; " +
+          `formula-parent=${JSON.stringify(document.querySelector(".nota-math-inline")?.parentElement?.outerHTML)}`,
+      );
+    },
+  },
+  {
+    name: "bold spans keep embedded inline code and links intact",
+    async run() {
+      await mount("**a `code` b**");
+      assert(
+        document.querySelector("strong code") !== null,
+        "inline code moved outside the bold span",
+      );
+      assertEqual(serialized(), "**a `code` b**", "bold span with inline code changed");
+
+      await mount("**a [链接](https://example.com) b**");
+      assert(
+        document.querySelector("strong a[href]") !== null,
+        "link moved outside the bold span",
+      );
+      assertEqual(
+        serialized(),
+        "**a [链接](https://example.com) b**",
+        "bold span with link changed",
+      );
+    },
+  },
+  {
+    name: "leaving inline math inside link text keeps following text linked",
+    async run() {
+      await mount("[$x$](https://example.com)");
+      const input = await openInlineMath();
+      press(input, "ArrowRight");
+      await nextFrames();
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "[$x$Z](https://example.com)",
+        "text after the formula escaped its enclosing link",
+      );
+    },
+  },
+  {
+    name: "right at the end of adjacent inline math stops between formulas",
+    async run() {
+      await mount("$a$\\(b\\)");
+      const input = await openInlineMath();
+      press(input, "ArrowRight");
+      await nextFrames();
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "$a$Z\\(b\\)",
+        "leaving the first formula skipped or entered the adjacent formula",
+      );
+    },
+  },
+  {
+    name: "Home exits an inline formula and reaches the paragraph content start",
+    async run() {
+      const prose = await mount("**$x$**");
+      const input = await openInlineMath();
+      press(input, "ArrowRight");
+      await nextFrames();
+      press(prose, "Home");
+      await nextFrames();
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "**Z$x$**",
+        "Home stopped at the formula instead of the paragraph content start",
+      );
+    },
+  },
+  {
+    name: "Backspace at a heading content start returns it to a paragraph",
+    async run() {
+      const prose = await mount("### 标题");
+      press(prose, "Backspace");
+      await nextFrames();
+      await typeText("Z");
+      assertEqual(serialized(), "Z标题", "the heading marker was not removed in one step");
+    },
+  },
+  {
+    name: "Space at a quote open head removes every quote layer",
+    async run() {
+      const prose = await mount("> > 引用");
+      press(prose, " ");
+      await nextFrames();
+      await typeText("Z");
+      assertEqual(serialized(), "Z引用", "quote layers remained, or the space leaked into text");
+    },
+  },
+  {
+    name: "Enter commits a pending heading prefix and starts the next paragraph",
+    async run() {
+      const prose = await mount("");
+      await typeText("# 标题");
+      press(prose, "Enter");
+      await nextFrames();
+      await typeText("next");
+      assertEqual(
+        serialized(),
+        "# 标题\n\nnext",
+        "pending heading did not commit on Enter or swallowed the following paragraph",
+      );
     },
   },
   {

@@ -391,13 +391,16 @@ export const inlineMathSpec = $nodeSchema("math_inline", (ctx) => {
     parseMarkdown: {
       ...original.parseMarkdown,
       runner: (state, node, type) => {
-        state
-          .openNode(type, {
+        // `closeNode()` resets every active mark in Milkdown's parser. Add the
+        // inline atom directly so an enclosing strong/emphasis survives it.
+        state.addNode(
+          type,
+          {
             [dollarCountAttribute]: readDollarCount({ data: node.data }),
             [mathDelimiterAttribute]: readMathDelimiter({ data: node.data }),
-          })
-          .addText(node.value as string)
-          .closeNode();
+          },
+          [state.schema.text(node.value as string)],
+        );
       },
     },
     toMarkdown: {

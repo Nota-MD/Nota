@@ -39,7 +39,14 @@ export const mathInlineSchema = $nodeSchema(inlineName, () => ({
   parseMarkdown: {
     match: (node) => node.type === "inlineMath",
     runner: (state, node, type) => {
-      state.openNode(type).addText(String(node.value ?? "")).closeNode();
+      // Inline atoms must not close a nested parser node here: Milkdown clears
+      // active marks after every closeNode. Closing math would split
+      // `**a$x$b**` into `**a**$x$b`.
+      state.addNode(
+        type,
+        undefined,
+        [state.schema.text(String(node.value ?? ""))],
+      );
     },
   },
   toMarkdown: {

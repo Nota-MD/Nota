@@ -1,4 +1,6 @@
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { mathFromMarkdown } from "mdast-util-math";
+import { math } from "micromark-extension-math";
 import { normalizeInlineDelimiterTree } from "../src/editor/inline-delimiter-tree";
 
 let pass = 0;
@@ -22,8 +24,13 @@ function equal(actual: unknown, expected: unknown, label: string): void {
   }
 }
 
-function inlineTree(source: string) {
-  const tree = fromMarkdown(source);
+function inlineTree(source: string, withMath = false) {
+  const tree = fromMarkdown(
+    source,
+    withMath
+      ? { extensions: [math()], mdastExtensions: [mathFromMarkdown()] }
+      : undefined,
+  );
   normalizeInlineDelimiterTree(tree, source);
   return tree.children[0]?.children ?? [];
 }
@@ -77,6 +84,37 @@ testCase("三星号保留粗斜体嵌套", () => {
     [{ type: "strong", children: ["emphasis"] }],
     "nested strong/emphasis",
   );
+});
+
+testCase("加粗内部的公式不被原始字符串重建吃掉", () => {
+  const tree = inlineTree("**a$x$b**", true);
+  equal(
+    tree.map((node) => ({
+      type: node.type,
+      children: node.type === "strong" && "children" in node
+        ? node.children.map((child) => child.type)
+        : undefined,
+    })),
+    [{ type: "strong", children: ["text", "inlineMath", "text"] }],
+    "inline math inside strong",
+  );
+});
+
+testCase("强调容器里的链接、行内代码和图片同样整段跳过", () => {
+  for (const source of [
+    "**a [链接](https://example.com) b**",
+    "**a `code` b**",
+    "**a ![图](image.png) b**",
+  ]) {
+    const tree = inlineTree(source);
+    equal(tree.map((node) => node.type), ["strong"], `${source} must remain untouched`);
+    const children = "children" in tree[0]! ? tree[0]!.children : [];
+    equal(
+      children.some((child) => child.type !== "text"),
+      true,
+      `${source} must keep its non-text descendant`,
+    );
+  }
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);

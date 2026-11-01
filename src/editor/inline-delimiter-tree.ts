@@ -22,10 +22,14 @@ interface MarkdownNode {
 
 const emphasisMarks = new Set<InlineMarkName>(["strong", "emphasis"]);
 
+function eligibleInline(node: MarkdownNode): boolean {
+  if (node.type === "text") return true;
+  if (node.type !== "strong" && node.type !== "emphasis") return false;
+  return (node.children ?? []).every(eligibleInline);
+}
+
 function eligibleParagraph(node: MarkdownNode): boolean {
-  return (node.children ?? []).every(
-    (child) => child.type === "text" || child.type === "strong" || child.type === "emphasis",
-  );
+  return (node.children ?? []).every(eligibleInline);
 }
 
 function wrap(

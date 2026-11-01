@@ -202,6 +202,7 @@ PAIRS=(
   # 2026-09-28：命令白名单（COMMANDS 表）整块搬出 `create.ts`（那边到 1010 行、破了硬线）。
   "src/editor/command-table.ts                    05"
   "src/editor/inline-caret.ts                     02,05,06"
+  "src/editor/inline-delimiter-tree.ts            02,05,06"
   # 2026-10-07：`createEditor` 那一长串**选项怎么装配**搬出去（`create.ts` 1006 → 502，
   # 第 89 项）。⚠️ 它管的是"哪一格接哪一份、谁不许传谁"，改一处就要看 `docs/05`。
   "src/editor/assemble.ts                         05"
@@ -529,6 +530,7 @@ PAIRS=(
   "tests/github-markdown.test.ts                 04,06"
   "tests/smart-punctuation.test.ts              02,06"
   "tests/auto-correct.test.ts                   02,06"
+  "tests/inline-delimiter-tree.test.ts          02,06"
   "tests/woff2-fonts.test.ts                    02,06"
   "tests/emoji.test.ts                          02,06"
   "tests/footnote.test.ts                       02,06"

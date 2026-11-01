@@ -42,6 +42,7 @@ import {
   findActiveMarkRange,
   createMarkHintPlugin,
   listSyntaxMarkers,
+  moveInlineCaret,
   scanOneParagraph,
   splitMarkCharacter,
   noticeTable,
@@ -418,6 +419,57 @@ testCase("真实 EditorState 连续按左键：标记只收起一次，不在边
     ]),
     "从右侧星号向左必须逐格经过 `文本|**`，不能吸附回星号末尾",
   );
+});
+
+testCase("Left 和 Home 能跨过行内语法原子到达行首", () => {
+  const markerSchema = new Schema({
+    nodes: {
+      text: { group: "inline" },
+      paragraph: { group: "block", content: "inline*" },
+      notaSyntax: {
+        inline: true,
+        group: "inline",
+        atom: true,
+        marks: "",
+        attrs: {
+          syntax: { default: "" },
+          side: { default: "left" },
+          symbol: { default: "*" },
+        },
+      },
+      doc: { content: "block+" },
+    },
+    marks: { strong: {} },
+  });
+  const syntax = markerSchema.nodes.notaSyntax!;
+  const marker = (side: "left" | "right") =>
+    syntax.create({ syntax: "strong", side, symbol: "*" });
+  const doc = markerSchema.node("doc", null, [
+    markerSchema.node("paragraph", null, [
+      marker("left"),
+      marker("left"),
+      markerSchema.text("1", [markerSchema.marks.strong!.create()]),
+      marker("right"),
+      marker("right"),
+    ]),
+  ]);
+  let state = EditorState.create({
+    schema: markerSchema,
+    doc,
+    selection: TextSelection.create(doc, 2),
+    plugins: [createMarkHintPlugin(syntax)],
+  });
+
+  const left = moveInlineCaret(state, syntax, "ArrowLeft");
+  assertion(!!left, "Left did not cross the opening marker atom");
+  state = state.apply(left);
+  equal(state.selection.from, 1, "Left should reach the true paragraph start");
+
+  state = state.apply(state.tr.setSelection(TextSelection.create(state.doc, 3)));
+  const home = moveInlineCaret(state, syntax, "Home");
+  assertion(!!home, "Home did not produce a line-start transaction");
+  state = state.apply(home);
+  equal(state.selection.from, 1, "Home should reach the true paragraph start");
 });
 
 testCase("临时星号两侧仍是正常可输入的正文边界", () => {

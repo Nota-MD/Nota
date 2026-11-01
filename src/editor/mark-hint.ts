@@ -367,6 +367,44 @@ export function listSyntaxMarkers(doc: PMNode, syntaxType: NodeType): SyntaxMark
   return output2;
 }
 
+/**
+ * Keyboard caret navigation around real syntax atoms.
+ *
+ * WebKit does not reliably move a collapsed DOM caret across an inline atom
+ * whose wrapper uses `display: contents`. At `**|1**` Left could therefore
+ * stop between the two opening stars instead of reaching the paragraph start.
+ * Handle only the immediate atom boundary and the line-edge keys here; all
+ * ordinary caret movement stays with ProseMirror and the browser.
+ */
+export function moveInlineCaret(
+  state: EditorState,
+  syntaxType: NodeType,
+  key: "ArrowLeft" | "ArrowRight" | "Home" | "End",
+): Transaction | null {
+  if (!state.selection.empty) return null;
+  const { $from } = state.selection;
+  let depth = $from.depth;
+  while (depth > 0 && !$from.node(depth).isTextblock) depth--;
+  const block = $from.node(depth);
+  if (!block.isTextblock || block.type.spec.code) return null;
+
+  let target: number | null = null;
+  if (key === "Home") {
+    target = $from.start(depth);
+  } else if (key === "End") {
+    target = $from.end(depth);
+  } else {
+    const sibling =
+      key === "ArrowLeft" ? $from.nodeBefore : $from.nodeAfter;
+    if (sibling?.type !== syntaxType) return null;
+    target = state.selection.from + (key === "ArrowLeft" ? -1 : 1);
+  }
+  if (target === null || target === state.selection.from) return null;
+  return state.tr
+    .setSelection(TextSelection.create(state.doc, target))
+    .scrollIntoView();
+}
+
 
 /**
  * Backspace at any editable delimiter restarts from the paragraph's visible
@@ -581,7 +619,24 @@ export function createMarkHintPlugin(
           return true;
         },
         handleKeyDown: (view, event) => {
-          if (event.key !== "Backspace" || event.isComposing || view.composing) return false;
+          if (event.isComposing || view.composing) return false;
+          if (
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            (event.key === "ArrowLeft" ||
+              event.key === "ArrowRight" ||
+              event.key === "Home" ||
+              event.key === "End")
+          ) {
+            const tr = moveInlineCaret(view.state, syntaxType, event.key);
+            if (tr) {
+              view.dispatch(tr);
+              return true;
+            }
+          }
+          if (event.key !== "Backspace") return false;
           const tr = backspaceInlineDelimiter(view.state, syntaxType, escapeType);
           if (!tr) return false;
           view.dispatch(tr);

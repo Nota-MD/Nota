@@ -8,12 +8,22 @@ const schema = new Schema({
   nodes: {
     doc: { content: "paragraph+" },
     paragraph: {
-      content: "text*",
+      content: "inline*",
       group: "block",
       parseDOM: [{ tag: "p" }],
       toDOM: () => ["p", 0],
     },
-    text: {},
+    text: { group: "inline" },
+    notaSyntax: {
+      inline: true,
+      group: "inline",
+      atom: true,
+      attrs: {
+        syntax: { default: "" },
+        side: { default: "left" },
+        symbol: { default: "*" },
+      },
+    },
   },
 });
 
@@ -81,6 +91,49 @@ const chars = viewFor("abcdef");
 const charOps = new VimEditorOps(chars.view, () => {});
 charOps.run({ op: "deleteChars", count: 2 });
 equal(chars.text(), "cdef", "x deletes the character under the cursor");
+
+{
+  const syntax = schema.nodes.notaSyntax!;
+  const marker = () => syntax.create({ syntax: "strong", side: "left", symbol: "*" });
+  let state = EditorState.create({
+    schema,
+    doc: schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        marker(),
+        marker(),
+        schema.text("1"),
+        marker(),
+        marker(),
+      ]),
+    ]),
+    selection: TextSelection.create(
+      schema.nodes.doc.create(null, [
+        schema.nodes.paragraph.create(null, [
+          marker(),
+          marker(),
+          schema.text("1"),
+          marker(),
+          marker(),
+        ]),
+      ]),
+      2,
+    ),
+  });
+  const view = {
+    get state() {
+      return state;
+    },
+    get isDestroyed() {
+      return false;
+    },
+    dispatch(tr: EditorState["tr"]) {
+      state = state.apply(tr);
+    },
+  };
+  const syntaxOps = new VimEditorOps(view as unknown as EditorView, () => {});
+  syntaxOps.run({ op: "move", unit: "left" });
+  equal(state.selection.from, 1, "Vim left crosses the opening syntax atom to line start");
+}
 
 if (failed) {
   console.error(`${failed} failed, ${passed} passed`);

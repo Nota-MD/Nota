@@ -118,7 +118,13 @@ export class VimEditorOps {
       const head =
         action.visual && this.visual ? this.visual.head : state.selection.head;
       let to = head;
-      if (action.unit === "up" || action.unit === "down") {
+      const syntaxStep =
+        action.unit === "left" || action.unit === "right"
+          ? state.doc.resolve(head)[action.unit === "left" ? "nodeBefore" : "nodeAfter"]
+          : null;
+      if (syntaxStep?.type.name === "notaSyntax" && !action.visual) {
+        to = head + (action.unit === "left" ? -1 : 1);
+      } else if (action.unit === "up" || action.unit === "down") {
         this.goalX ??= view.coordsAtPos(head, 1).left;
         for (let n = 0; n < count; n++)
           to = verticalMove(view, to, action.unit === "down" ? 1 : -1, this.goalX);
@@ -158,7 +164,9 @@ export class VimEditorOps {
       this.visual = null;
       const sel = action.select
         ? TextSelection.between(state.doc.resolve(anchor), $to)
-        : TextSelection.near($to);
+        : syntaxStep?.type.name === "notaSyntax"
+          ? TextSelection.create(state.doc, to)
+          : TextSelection.near($to);
       dispatch(state.tr.setSelection(sel));
       break;
     }

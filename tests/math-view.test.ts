@@ -594,15 +594,19 @@ await testCase("行内那一棵也有悬浮预览（两种公式一套长相）"
   equal(find(dom, "nota-math-render")?.dataset.state, "", "编辑态：行内正文那格同样空着");
 });
 
-await testCase("行内源码没有独立框，源码用强调色，预览是下方深色浮层", () => {
+await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览是下方深色浮层", () => {
   const css = readFileSync("src/styles/math.css", "utf8");
   assertion(
     /\.nota-math-inline\.nota-math-editing\s*\{[^}]*background:\s*transparent/s.test(css),
     "行内编辑态仍有选中底色",
   );
   assertion(
+    /\.nota-math-editing\.nota-math-inline \.nota-math-delim\s*\{[^}]*color:\s*var\(--fg-faint\)/s.test(css),
+    "行内 `$` 没有使用弱化前景色",
+  );
+  assertion(
     /\.nota-math-editing\.nota-math-inline \.nota-math-source\s*\{[^}]*color:\s*var\(--accent\)/s.test(css),
-    "行内源码没有使用强调色",
+    "行内源码没有保持强调色",
   );
   assertion(
     /\.nota-math-editing\.nota-math-inline \.nota-math-preview\s*\{[^}]*border:\s*0;[^}]*background:\s*#202124/s.test(css),
@@ -647,6 +651,35 @@ await testCase("行内：Enter 当「确认」，别的键不拦", () => {
   equal(box2.dispatch("keydown", { key: "a" }).defaultPrevented, false, "普通键不许拦");
   equal(box2.dispatch("keydown", { key: "Enter" }).defaultPrevented, true, "Enter 要拦");
   equal(getState().doc.nodeAt(inlinePosition)?.textContent, "x", "文档没变");
+});
+
+await testCase("行内：源码末尾按 Right 退出公式，后续输入留在 `$…$` 外", () => {
+  const { view, perspective, getState } = create(inline("x"), inlinePosition);
+  const box2 = find(perspective.view!.dom, "nota-math-source");
+  if (!box2) throw new Error("没有源码框");
+  box2.setSelectionRange(1, 1);
+  equal(box2.dispatch("keydown", { key: "ArrowRight" }).defaultPrevented, true, "Right 要退出公式");
+  assertion(getState().selection instanceof TextSelection, "退出后应是正文文本光标");
+  view.dispatch(getState().tr.insertText("你"));
+  equal(getState().doc.nodeAt(inlinePosition)?.textContent, "x", "公式源码里没有混入正文");
+  assertion(getState().doc.textContent.includes("你"), "正文输入没有落到公式外");
+});
+
+await testCase("行内：源码末尾反斜杠与右侧 `$` 有纯展示间距", () => {
+  const { perspective } = create(inline("x"), inlinePosition);
+  const dom = perspective.view!.dom;
+  const box2 = find(dom, "nota-math-source");
+  if (!box2) throw new Error("没有源码框");
+  box2.value = "\\";
+  box2.dispatch("input");
+  assertion(dom.classList.contains("nota-math-trailing-backslash"), "末尾反斜杠没有触发间距态");
+  const closing = find(dom, "nota-math-delim-close");
+  assertion(!!closing, "闭分隔符没有专用类");
+  const css = readFileSync("src/styles/math.css", "utf8");
+  assertion(
+    /nota-math-trailing-backslash[^}]+nota-math-delim-close\s*\{[^}]*margin-inline-start/s.test(css),
+    "末尾反斜杠没有与右侧 `$` 分开",
+  );
 });
 
 await testCase("只读实例：**不给面板**（连挂件都不挂），也不抢焦点", async () => {

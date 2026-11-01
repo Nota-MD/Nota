@@ -61,6 +61,7 @@
 
 | 日期 | 批次 | 计数变化 | 同批其他改动 / 判据 |
 |---|---|---|---|
+| 2026-11-01（**行首导航与行内公式源码样式急修**） | **没有新增功能点，四态计数一格不动**（✅70 / 🟡62 / ⬜0 / ➖6 ＝ **138**） | Left / Right / Home / End 显式跨过真实行内语法原子，修复 `**|1**` 到不了行首；行内公式编辑态只弱化 `$`，LaTeX 源码保持强调色 | `mark-hint-syntax` 22 条、`math-view` 37 条、TypeScript 通过；隔离窗口确认光标到行首及 `$` / 源码两种颜色 |
 | 2026-11-01（**GitHub Alert 对齐 Typora**） | **没有新增功能点，四态计数一格不动**（✅70 / 🟡62 / ⬜0 / ➖6 ＝ **138**） | Alert 与普通引用改为单一左边线，不再叠 `>` / `»` 源码角标和圆角灰卡片；编辑 `[!TYPE]` 时显示纯源码，光标进入正文后立即恢复类型标题。标题编辑态用选区父节点判定，修复正文光标仍错误显示源码的问题 | 隔离窗口实际确认完成态、标题编辑态、未完成 `[!NOT]` 与正文光标；`instant-render` 4 条、`github-alert-edit` 4 条、TypeScript 与全量前端 **125 套 exit=0** 通过，生产构建通过 |
 | 2026-11-01（**Windows 后台命令无窗启动**） | **没有新增功能点，四态计数一格不动**（✅70 / 🟡62 / ⬜0 / ➖6 ＝ **138**） | 获取系统信息、Git、Pandoc、开发服务器、更新器与进程树清理统一经 `proc::background_command` 启动；Windows 使用 `CREATE_NO_WINDOW`，不再连续闪出 `cmd` 控制台窗口。`spawn_retrying` 对自定义 `Command` 再兜底一次，并新增静态检查禁止运行期直接 `Command::new` | Linux `cargo test --lib` **710 / 0**、前端 **125 套全部 exit=0**、TypeScript 与国际化通过；Windows GNU `cargo check --lib` **0 error / 0 warning**；`tests/windows-process.test.ts` 3 条通过 |
 | 2026-10-29（**0.12.0-beta：GitHub Docs 完整兼容层**） | **不改功能矩阵计数；补齐文档生态互操作**（✅70 / 🟡62 / ⬜0 / ➖6 ＝ **138**） | 五种 GitHub Alerts 可通过菜单和 `/` 插入并带类型图标；脚注引用/定义双向跳转；支持命名锚点与文内导航、`<kbd>`、表格行标题、GitHub Docs `{% rowheaders %}` / Octicon / data / reusables 标记；新增文档检查；Mermaid 升至 12.2.0 | 前端 **110 套 / 至少 1853 条**；Rust **693 / 0**；TypeScript、生产构建、国际化、版本校验通过；真实窗口目检 Alert、脚注、按键、行标题和浅色主题；真实 Chromium 渲染 Mermaid 12 flowchart 与 mindmap |

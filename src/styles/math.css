@@ -290,12 +290,22 @@
   min-width: 2ch;
 }
 
-/* Typora 的行内编辑态：`$` 与源码同色，作为正文里的一段临时源码，
-   不使用输入框边框或浅色底。 */
-.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-delim,
+/* Typora 的行内编辑态：源码保持强调色，只有两颗 `$` 像其他 Markdown
+   定界符一样使用主题的弱化前景色。 */
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-delim {
+  color: var(--fg-faint);
+  opacity: 1;
+}
+
 .editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-source {
   color: var(--accent);
   opacity: 1;
+}
+
+/* A trailing backslash is still LaTeX source, not an escape for the closing
+   Markdown delimiter. Keep a visual gap without adding a byte to the file. */
+.editor-mount .ProseMirror .nota-math-inline.nota-math-trailing-backslash .nota-math-delim-close {
+  margin-inline-start: 0.18em;
 }
 
 /* 块那颗是 `<textarea>`：**宽度铺满正文列**（高度才由 JS 按源码量）。

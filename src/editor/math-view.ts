@@ -314,6 +314,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     const createSeparator = (closing = false): HTMLElement => {
       const el = document.createElement("span");
       el.className = separatorClass;
+      if (inline && closing) el.classList.add("nota-math-delim-close");
       el.textContent = inline ? mathDelimiterText(current, closing) : "$$";
       // 是给眼睛看的方位指示、不是内容：读屏器不必念它。
       el.setAttribute("aria-hidden", "true");
@@ -346,6 +347,12 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     let blockEditorStarted = false;
 
     const editingSource = () => blockCodeEditor?.getText() ?? input.value;
+    const refreshInlineEdge = () => {
+      dom.classList.toggle(
+        "nota-math-trailing-backslash",
+        inline && input.value.endsWith("\\"),
+      );
+    };
 
     const replaceEditingSource = (text: string, cursor?: number) => {
       input.value = text;
@@ -650,6 +657,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
      * 而不是像上游那样把整块公式替换掉。
      */
     function sameStepPanel(wantToFocusPoint: boolean): void {
+      refreshInlineEdge();
       const open2 = panelShouldOpen();
       dom.classList.toggle("nota-math-editing", open2);
       if (open2) {
@@ -730,6 +738,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     // ── 事件 ──────────────────────────────────────────────────────────
 
     input.addEventListener("input", () => {
+      refreshInlineEdge();
       followSourceChangeRulerInch();
       // ⚠️ 光标位置要**在派发之前**读：`派发` 会同步跑一趟 `update`，
       //    眼下那条路不会碰 `输入.value`，但把"读光标"压在它前面就不必
@@ -769,6 +778,19 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       }
 
       if (e.key === "Escape") {
+        e.preventDefault();
+        backOutputEditEdit();
+        return;
+      }
+      // At the right edge of inline source, Right leaves the formula instead
+      // of moving inside its `<input>`. The next typed text must become normal
+      // paragraph text after `$…$`, not part of the LaTeX source.
+      if (
+        inline &&
+        e.key === "ArrowRight" &&
+        input.selectionStart === input.value.length &&
+        input.selectionEnd === input.value.length
+      ) {
         e.preventDefault();
         backOutputEditEdit();
         return;
@@ -875,6 +897,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     // ── 起手 ──────────────────────────────────────────────────────────
 
     input.value = readSource(initialStart);
+    refreshInlineEdge();
     // 建视图那一帧就"刚变当前"（敲 `$$␣` 那条路正是如此）→ 该排一次聚焦。
     sameStepPanel(decorationCurrent);
 

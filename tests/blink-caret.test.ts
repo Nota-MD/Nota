@@ -10,7 +10,13 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import { readFileSync } from "node:fs";
 
-import { isNoShowCursor, flashSparkCursor } from "../src/editor/blink-caret";
+import {
+  caretHeightInLine,
+  caretTopInLine,
+  flashSparkCursor,
+  isNoShowCursor,
+  usableCaretCoordinate,
+} from "../src/editor/blink-caret";
 
 let pass = 0;
 let fail = 0;
@@ -44,6 +50,7 @@ const schema = new Schema({
     heading: { group: "block", content: "inline*", attrs: { level: { default: 1 } } },
     code_block: { group: "block", content: "text*", code: true, marks: "" },
     math_block: { group: "block", content: "text*", atom: true, marks: "" },
+    notaSyntax: { group: "inline", inline: true, atom: true, selectable: false, marks: "" },
     text: { group: "inline" },
   },
 });
@@ -78,6 +85,35 @@ testCase("标题里的空选区同样产生光标", () => {
   equal(isNoShowCursor(editorState), true, "标题应该显示光标");
 });
 
+testCase("标题光标不继承整个大字号行盒，正文保持原行高", () => {
+  equal(caretHeightInLine("heading", 48, 18), 22, "标题光标没有收到 1.2em 以内");
+  equal(caretHeightInLine("paragraph", 30, 18), 30, "正文光标被错误缩短");
+  equal(caretHeightInLine("heading", 12, 18), 12, "小行盒不应被继续压缩");
+});
+
+testCase("图片等超高行内原子的边界光标只画一行", () => {
+  equal(caretHeightInLine("paragraph", 720, 18), 22, "图片高度被误当成光标高度");
+  equal(caretTopInLine(720, 22, 180, 18), 180, "超高原子前光标没有贴着顶部");
+  equal(caretTopInLine(30, 30, 180, 18), 180, "普通正文光标顶部发生偏移");
+});
+
+testCase("正文与行内标记交界时光标回退到正文侧坐标", () => {
+  equal(
+    usableCaretCoordinate([
+      { left: 100, top: 20, bottom: 20 },
+      { left: 98, top: 18, bottom: 42 },
+    ])?.left,
+    98,
+    "零高度标记坐标没有触发向前回退",
+  );
+  equal(
+    usableCaretCoordinate([null, { left: 10, top: 0, bottom: 18 }])?.bottom,
+    18,
+    "有效坐标被丢掉",
+  );
+  equal(usableCaretCoordinate([null, undefined]), null, "没有有效坐标时不该猜");
+});
+
 testCase("选中文字时不额外画一条光标", () => {
   const doc = document(paragraph2("选中我"));
   const editorState = makeEditorState(doc);
@@ -94,6 +130,15 @@ testCase("代码块与公式块交给内部编辑器画光标", () => {
   equal(isNoShowCursor(math), false, "公式块不应显示正文光标");
 });
 
+testCase("行内语法标记之间的光标仍由正文层显示", () => {
+  const marker = schema.nodes.notaSyntax.create();
+  const state = makeEditorState(
+    document(schema.nodes.paragraph.create(null, [schema.text("Typora"), marker, marker])),
+    8,
+  );
+  equal(isNoShowCursor(state), true, "`Typora|**` 边界仍把光标藏掉");
+});
+
 testCase("插件使用 view 覆盖层，不注册 ProseMirror 装饰", () => {
   const plugin = flashSparkCursor();
   assertValue(typeof plugin.spec.view === "function", "插件没有 view");
@@ -104,12 +149,13 @@ console.log("\n【光标样式】");
 
 const css = readFileSync(`${process.cwd()}/src/styles/editor.css`, "utf8");
 const assemble = readFileSync(`${process.cwd()}/src/editor/assemble.ts`, "utf8");
+const blinkSource = readFileSync(`${process.cwd()}/src/editor/blink-caret.ts`, "utf8");
 
 testCase("原生光标隐藏，装饰光标随主题强调色闪烁", () => {
   assertValue(css.includes("caret-color: transparent"), "原生光标没有隐藏");
   assertValue(css.includes("background: var(--accent)"), "光标没有跟随主题强调色");
-  assertValue(css.includes("animation: nota-caret-blink 1.06s"), "缺少闪烁动画");
-  assertValue(css.includes("@keyframes nota-caret-blink"), "缺少动画关键帧");
+  assertValue(css.includes(".nota-blink-caret-dim"), "缺少低功耗闪烁状态");
+  assertValue(blinkSource.includes("setInterval"), "缺少低频闪烁定时器");
 });
 
 testCase("覆盖层不进入正文 DOM，并由焦点和选区控制", () => {
@@ -124,7 +170,7 @@ testCase("覆盖层不进入正文 DOM，并由焦点和选区控制", () => {
 
 testCase("减少动态效果时保持静态可见", () => {
   const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
-  assertValue(reduced.includes("animation: none"), "未关闭动画");
+  assertValue(reduced.includes("opacity: 1"), "未保持光标常亮");
   assertValue(reduced.includes("opacity: 1"), "静态光标不可见");
 });
 

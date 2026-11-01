@@ -66,11 +66,13 @@ import { combineWriteCheckCheckPlugin } from "./spell-check";
 // 覆写模式（`Insert` 键，2026-10-16）。⚠️ 它**有状态**（开关住在插件 state 里，
 // 理由在那边文件头），所以与 `spell-check` 那种"只加 decoration"的不是一类。
 import { coverWritePlugin } from "./overtype";
+import { vimInputPlugin } from "./plugin-vim-input";
 import { instantRender } from "./instant-render";
 // 光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 半透明画在那段文字两边。
 // 块级标记归上面那个（画在装订线里），行内没有装订线，所以是另一份插件；
 // 两边的分工与"为什么占宽度"写在它自己的文件头上。
 import { inlineSyntaxNodePlugins, markHint } from "./mark-hint";
+import { inlineEscapeNodePlugins } from "./inline-escape";
 // 任务项的复选框：画出来 + 点它勾上。DOM 钩子（`data-checked`）是
 // `preset-gfm` 早就给了的，缺的是 CSS 和点击，理由写在它自己的文件头上。
 import { taskList } from "./task-list";
@@ -106,7 +108,7 @@ import { visionFrequencyView } from "./video-view";
 // 公式的**打字**规则，三条：`$x$`、`$$x$$` 当场变行内公式；`$$` ＋**回车**建一块
 // 空块公式。上游那两条（行内、块）都被这里换掉了，理由与实测对照表在它自己的
 // 文件头上。
-import { commonStyleBlockReturnCar, commonStyleInput } from "./math-input";
+import { commonStyleBlockReturnCar, commonStyleCommit, commonStyleInput } from "./math-input";
 // 行内公式**用了几个 `$`**：用户敲两个就存两个（2026-09-27 用户拍板「保留」）。
 // ⚠️ 三件事在这个文件里：`math_inline` 的规格**加了一个 `dollars` 属性**（用官方的
 // `extendSchema`，不复制上游规格）、一个 `$remark` 插件把源码里那个数标进 mdast、
@@ -115,7 +117,12 @@ import { commonStyleBlockReturnCar, commonStyleInput } from "./math-input";
 //
 // ⚠️ 挂在下面那条链**紧挨着的三条，顺序不能动**：`math`（登记上游规格）
 // → `行内公式规格`（`extendSchema` 同 id 就地替换）→ `标美元数`。
-import { markDollarDollarNumber, inlineMathHandler, inlineMathSpec } from "./math-delim";
+import {
+  markDollarDollarNumber,
+  inlineMathHandler,
+  inlineMathSpec,
+  latexMathDelimiter,
+} from "./math-delim";
 // ⚠️ `$` 当钱写的口径（第 54 项）：那条规则**包在分词器上**，不是 mdast 后处理，
 // 理由（要 micromark 自己重扫）见那个文件头。**必须排在 `math` 后面**。
 import { receiveStrictDollarDollar } from "./math-currency";
@@ -156,14 +163,14 @@ import { blockHTMLDiagnostics, blockHTMLView } from "./html-block-view";
 import { footnoteNavigation } from "./footnote";
 import { githubDocsCompat } from "./github-docs";
 import { gitHubNoticePlugin } from "./github-alert";
-// **智能标点**（`--` → `–`、`"` → `“ ”` 那一组，`settings/markdown.rs` 里
+// **智能标点**（`--` → `–`、`"` → `“` / `”` 的单字符转换那一组，`settings/markdown.rs` 里
 // 六个字段的消费者）。⚠️ 两条都要，而且**只有 `Input` 档挂输入规则、
 // 只有 `Render` 档挂装饰**——两个函数内部各自判模式并返回空数组，
 // 这里不必写分支（理由与"为什么返回空数组而不是挂上去返回 null"在那个文件的
 // `标点输入` 上）。排在这里＝排在 `commonmark` / `gfm` **之后**：
 // 上游的分割线规则（`/^(?:---|___\s|\*\*\*\s)$/`）要求整块只有三个减号，
 // 让先中者赢的那一侧是上游，本文件这边另有一道守卫兜着（`是横线骨架行`，它还保着**表格输入**，见 BUG-51）。
-import { referenceNumberConfigureCorrect, punctuationInput, punctuationDecoration, type punctuationSettings } from "./smart-punctuation";
+import { punctuationInput, punctuationDecoration, type punctuationSettings } from "./smart-punctuation";
 // **自动更正**（英文错拼那一张固定表）。⚠️ 只有一条输入规则，**排在整串
 // `.use()` 的最后**——理由见那个文件的 `自动更正输入`。
 import { selfActionMoreCorrectInput } from "./auto-correct";
@@ -172,16 +179,8 @@ import { selfActionMoreCorrectInput } from "./auto-correct";
 import { selfActionLinkInput } from "./url-link";
 // **粘贴那一路**（洗 HTML / 认语言的代码块）。⚠️ 必须排在 `clipboard` 前面。
 import { pastePastePlaceManage } from "./paste";
-// **自动配对 ＋ Tab 跳出右半边**（`(` ⇒ `()`，`Tab` 跨过右边那颗闭括号）。
-// ⚠️ 它也要抢 `Tab`，必须排在 `indent` 前面。
-import { configureCorrectPlaceManage } from "./auto-pair";
-// **选区标记包裹**：选中一段再按 `*` / `_` / `~` / `^` / 反引号时不覆盖选区，
-// 而是在两侧放一对标记并继续选中原文。必须排在 `配对处理` 前面，先把“有选区”
-// 这条路接住；空选区仍交给自动配对。
-import { selectionMarkFillAll } from "./selection-marks";
 // **表格里的 `Tab` / `Shift+Tab`**（走到下一格 / 上一格；最后一格再按 `Tab`
-// 就加一行）。⚠️ 它抢的也是 `Tab`，所以**必须排在 `indent` 前面、`配对处理`
-// 后面**——理由与那张表在 `./table-tab` 的文件头。
+// 就加一行）。⚠️ 它抢的也是 `Tab`，所以必须排在 `indent` 前面。
 import { tableTab } from "./table-tab";
 // **表格里的普通回车**：走到下一格；最后一格加一行。上游把裸 `Enter` 也绑成
 // “退出表格”，这一条用更高优先级改回填表手感；`Mod+Enter` 仍可退出。
@@ -196,10 +195,6 @@ import { moveKeymap } from "./move-block";
 // 面板**只画不改**（`Plugin.view` ＋ 挂在 body 上的 fixed 浮层，文档树一个
 // 字都不动）。⚠️ 补全面板**只读实例不挂**（见下面 `.use()` 那一段）。
 import { emojiInputRuleRule, emojiFillAll } from "./emoji";
-// **斜杠菜单**（行首敲 `/` 弹一张"插入什么"的列表）。⚠️ 与 Emoji 补全面板
-// 同一条手法（自绘浮层、只画不改），理由与"为什么不装 `@milkdown/plugin-slash`"
-// 写在那个文件的文件头。⚠️ 它**只读实例不挂**。
-import { slantBarMenu } from "./slash";
 // ⚠️ **不许删**：没有它，**不带 title 的图片会在装载时被整节点丢掉**
 // （打开含图文档 → 存盘 → 图片从文件里消失）。上游 schema 的毛病、
 // 症状与实测记录都在它自己的文件头上。
@@ -212,7 +207,7 @@ import { cursorStatePlugin } from "./command-state";
 import { writingModePlugin } from "./writing-modes";
 // 查找与替换。**匹配逻辑在那边**，这里只把它的插件挂上。
 import { findPlugin } from "./find";
-import type { CommandPayload, CreateOptions, EditorCommand } from "./create-types";
+import type { CreateOptions } from "./create-types";
 
 /**
  * 装配一份实例要的那些东西。
@@ -238,18 +233,17 @@ export interface InstallConfigureParameter {
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
   emoji: boolean;
-  smartAbleSymbolNumber: boolean;
   /** 文档变了（**整篇**、已拼回 front matter）。⚠️ 只读实例从来不报。 */
   onChange?: (markdown: string) => void;
   /** **这一刻**那一段 front matter，`null` = 没有。⚠️ 见文件头"为什么是回调"。 */
   getFrontMatter: () => string | null;
-  /** 斜杠菜单选中一条要走的那条路（`create.ts` 的 `跑一条命令`）。 */
-  runOneItemCommand: (name: EditorCommand, payload?: CommandPayload) => void;
   /** `CreateOptions` 里那几条"不传就不挂"的可选回调——原样转给对应插件。 */
   options: Pick<
     CreateOptions,
     "onCommandState" | "onFindStatus" | "onSelection" | "writingModes" | "review" | "onReviewEscape"
   >;
+  /** Optional editor-wide input adapter contributed by an extension. */
+  vimInput: CreateOptions["vimInput"];
 }
 
 /** 把一份实例装起来。⚠️ 顺序就是语义，见文件头。 */
@@ -265,7 +259,6 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     punctuation,
     selfActionMoreCorrect,
     emoji,
-    smartAbleSymbolNumber,
     onChange,
     options,
   } = parameter;
@@ -427,10 +420,10 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     .use(inlineMarkInputRuleRule(inlineExtensions))
     .use(gfm)
     .use(gitHubNoticePlugin)
-    // 智能标点的输入规则（`--` → `–` 那一族）与显示装饰（`Render` 档）。
+    // 智能标点的输入规则（`--` → `–`、单颗引号字形转换）与显示装饰
+    // （`Render` 档）。⚠️ 引号不再补另一边，也不再跨过已有引号。
     // ⚠️ **两个函数各自判模式**：`off` / `render` 时输入规则返回空数组，
     // `off` / `input` 时装饰返回空数组——这里不写分支，读的人只需要看那两处。
-    .use(referenceNumberConfigureCorrect(punctuation))
     .use(punctuationInput(punctuation))
     .use(punctuationDecoration(punctuation))
     // 自动更正的输入规则（`teh` → `the` 那一族）。⚠️ 它与上游任何输入规则
@@ -490,6 +483,15 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // `insertText` 那条默认路已经先把字插进去了，覆写就成了"插一个、再删一个"
     //（撤销栈里多出一笔，用户按一下 Ctrl+Z 只退半个动作）。
     .use($prose(() => coverWritePlugin()))
+    // 引用开头空格/退格退出、空表格开头退格删表。⚠️ **必须排在 Vim 输入
+    // 适配器前面**：Vim 的普通模式把 Backspace 当“左移”，插入模式也会自己
+    // 删字符；排在它后面时引用框开头的退格永远到不了这里。
+    .use(readOnly ? [] : [blockContainerKeypress])
+    .use(
+      readOnly || !parameter.vimInput
+        ? []
+        : [vimInputPlugin(parameter.vimInput.config, parameter.vimInput.hooks)],
+    )
     .use(history)
     .use(listener)
     .use(cursor)
@@ -497,11 +499,6 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // ⚠️⚠️ **必须排在下面这条 `clipboard` 前面，不能挪**：PM 按插件顺序问
     // `handlePaste`，第一个返回 `true` 的赢，而上游那条**总会**返回 `true`。
     .use(pastePastePlaceManage())
-    // ⚠️ **智能符号补全那一条**（括号 / `[` / `*` 自配对 ＋ `Tab` 跳出右半边
-    // ＋ 空对退格）。关掉开关时它返回 `[]`（同 `标点输入` 那一条的做法），
-    // 也就是"这条插件不装"——`docs/05` §4.20c。
-    .use(selectionMarkFillAll(smartAbleSymbolNumber, inlineExtensions))
-    .use(configureCorrectPlaceManage(smartAbleSymbolNumber, inlineExtensions))
     .use(clipboard)
     // ⚠️ **必须排在下面那条 `indent` 前面**：`@milkdown/plugin-indent` 绑的
     // 就是 `Tab`，而且它不认表格（不分位置地往格子里塞两颗空格，那两颗会写进
@@ -524,9 +521,6 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     .use(taskList)
     .use(tableInputRule)
     .use(tableInput)
-    // 引用开头空格退出、空表格开头退格删表。两条都在 `handleKeyDown` 里，
-    // 因此比输入规则和 `baseKeymap` 先拿到这一下。
-    .use(readOnly ? [] : [blockContainerKeypress])
     // ⚠️ **它是个工厂，要收 `strict`**（2026-09-29 起）：那份"标题写法"的
     // 加粗提示在宽松档下要认 `#你好`、严格档下不认——判据一处
     // （`atx.ts::atxPrefix`），四个消费者一起守。详见 `heading-on-enter.ts` 文件头。
@@ -535,7 +529,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 不逐级降级。它是 `$shortcut`（走 keymap 的 `priority` 排序），
     // **不是**上面那条 `$prose`——为什么非得这样、为什么放在这个位置都
     // 无所谓，见 `heading-on-enter.ts` 文件头那一节。
-    .use(markTitleLineFirstBackCell)
+    .use(markTitleLineFirstBackCell(strict))
     // ⚠️ **空段落不写 `<br />`**（2026-09-26 第二轮，用户：「enter 默认是真 enter
     // 而非 `<br>`」）。它必须在 `commonmark` **之后**——schema 按名字拼、
     // 同名后来者盖先前的（理由与实测在 `empty-paragraph.ts` 文件头）。
@@ -562,6 +556,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // `[…].flat()`），所以按引用滤得掉，**摘一条不影响别的**。
     .use(math)
     .use(commonStyleInput)
+    .use(commonStyleCommit)
     // ⚠️ **块公式的回车**（2026-10-04）：`$$` 那一段按回车 → 一块空的
     // `math_block`，源码框当场打开。放在这里只是为了挨着上面那两条（同一个
     // 话题），**顺序上没有讲究**——上游那条挂在输入规则上，跟回车撞不上。
@@ -576,6 +571,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 只要不排到 ① 前面。（2026-10-04 曾经在这两条中间夹过第四条 `收严公式`，
     // 并对 ③ 有"必须排在它前面"的要求；那条当天就被用户拍了撤回，一起撤掉的。）
     .use(inlineMathSpec)
+    .use(latexMathDelimiter)
     .use(markDollarDollarNumber)
     // ⚠️ **`$` 当钱写的时候不算公式**（`docs/07` 第 54 项，2026-10-04）：这一条
     // **必须排在 `math` 后面**——它要做的第一件事是**从处理机上把 `remark-math`
@@ -638,15 +634,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 行内标记的提示（加粗/斜体的 `*`）。⚠️ **只给可编辑实例**：它是编辑时的
     // 提示，不是文档的一部分——只读实例有两个（分屏预览、导出用的离屏实例），
     // 装上就会在预览和导出文件里多出一对星号。理由写在 `mark-hint.ts` 文件头。
-    .use(readOnly ? [] : [...inlineSyntaxNodePlugins, markHint])
-    // 斜杠菜单（行首敲 `/` 弹插入列表）。⚠️ **只给可编辑实例**——与上面那条
-    // （`markHint`）同一个理由，只为它多一层：只读实例有两个，在那儿弹一块
-    // "想插入什么"的面板纯属噪声。
-    // ⚠️ 执行那条路走 `跑一条命令`，而它**正是 `runCommand` 的下半个**——
-    // 于是斜杠菜单与菜单栏点同一项，落点必然是同一份代码，不会出现
-    // "菜单里能插、斜杠里插出来是另一样"。`跑一条命令` 是函数声明（会被提升），
-    // 所以写在这一行后面也调得到；它里面用的 `editor` 到那一刻早就建好了。
-    .use(readOnly ? [] : slantBarMenu(true, (id) => parameter.runOneItemCommand(id)))
+    .use(readOnly ? [] : [...inlineSyntaxNodePlugins, ...inlineEscapeNodePlugins, markHint])
     // 就地改动预览。**恒挂**（可编辑那一份）：预览随时可能被插件喊起来，
     // 而"挂不挂插件"一旦绑进 `EditorPane` 的依赖，喊一次就得重建编辑器。
     // 不传 `onReviewEscape` 时给一个空函数——`Esc` 那一下没人接就是了，

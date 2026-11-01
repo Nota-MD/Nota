@@ -57,6 +57,11 @@ export interface PanelButton {
   disabled: boolean;
 }
 
+export interface PanelSelectOption {
+  label: string;
+  value: string;
+}
+
 /**
  * 一行上的一颗"点得动的东西"（`kind = "graph"` 用，2026-09-26 加）。
  *
@@ -96,12 +101,65 @@ export interface PanelGraphLine {
   picked: boolean;
 }
 
+/** One note or unresolved link in a knowledge-graph panel. */
+export interface PanelNetworkNode {
+  id: string;
+  label: string;
+  kind: "note" | "missing";
+  /** Stable grouping key, usually the first folder below the workspace root. */
+  group: string;
+  /** The active document, drawn with the accent colour. */
+  focus: boolean;
+  /** Present when clicking the node should open a document. */
+  action: PanelAction | null;
+}
+
+/** One directed link between two graph nodes. */
+export interface PanelNetworkEdge {
+  source: string;
+  target: string;
+  /** Both notes link to each other. */
+  both: boolean;
+}
+
+/** Data for the host-rendered, interactive note graph. */
+export interface PanelNetwork {
+  nodes: PanelNetworkNode[];
+  edges: PanelNetworkEdge[];
+}
+
 export type PanelNode =
   | { kind: "heading"; text: string }
   | { kind: "text"; text: string; tone: PanelTone }
   | { kind: "fields"; items: PanelField[] }
   | { kind: "list"; items: PanelListItem[] }
   | { kind: "buttons"; items: PanelButton[] }
+  | {
+      kind: "toggle";
+      label: string;
+      value: boolean;
+      command: string;
+      args: unknown;
+      arg: string;
+    }
+  | {
+      kind: "select";
+      label: string;
+      value: string;
+      options: PanelSelectOption[];
+      command: string;
+      args: unknown;
+      arg: string;
+    }
+  | {
+      kind: "file";
+      label: string;
+      buttonLabel: string;
+      accept: string;
+      command: string;
+      args: unknown;
+      arg: string;
+    }
   | { kind: "empty"; text: string }
   | { kind: "separator" }
   /**
@@ -119,6 +177,15 @@ export type PanelNode =
    * 条目内容全是插件给的字符串、由 React 转义。
    */
   | { kind: "graph"; items: PanelGraphLine[] }
+  /**
+   * An interactive force-directed note graph.
+   *
+   * Unlike the git commit `graph` block above, this is a real canvas with
+   * zoom, pan, node dragging, hover highlighting and click-to-open actions.
+   * The plugin supplies facts only; layout, colours and hit testing stay in
+   * the host.
+   */
+  | { kind: "network"; spec: PanelNetwork }
   /**
    * 一排**标签页**（`kind = "tabs"`，2026-10-10 加，AI 插件的对话要的）。
    * 用户原话是「**对话用标签页管理，在上方**」。⚠️ 一颗标签是**两件事**（点字面切过去、
@@ -303,6 +370,9 @@ import type {
 
 /** 一块内容最多这么多项（和宿主的 `面板节点上限` 同量级，但**各自把关**）。 */
 const eachBlockLimit = 200;
+
+/** Graph datasets are larger than ordinary panel lists, but still bounded. */
+const networkItemLimit = 800;
 
 /** 分享卡上最多几格指标。多出来的丢掉：版式只有三格，第四格没地方放。 */
 const pointMarkLimit = 3;
@@ -677,6 +747,33 @@ function heightDegree(v: unknown): number {
   return Math.min(2000, Math.max(120, Math.round(n)));
 }
 
+function networkBlock(raw: Record<string, unknown>): PanelNetwork {
+  const rawNodes = Array.isArray(raw.nodes) ? raw.nodes.filter(isTable) : [];
+  const nodes: PanelNetworkNode[] = rawNodes
+    .slice(0, networkItemLimit)
+    .map((item, index) => ({
+      id: text2(item.id) || `node-${index}`,
+      label: text2(item.label, 160),
+      kind: item.kind === "missing" ? "missing" : "note",
+      group: text2(item.group, 160),
+      focus: item.focus === true,
+      action: action(item.action),
+    }));
+
+  const known = new Set(nodes.map((node) => node.id));
+  const rawEdges = Array.isArray(raw.edges) ? raw.edges.filter(isTable) : [];
+  const edges: PanelNetworkEdge[] = rawEdges
+    .slice(0, networkItemLimit)
+    .map((item) => ({
+      source: text2(item.source),
+      target: text2(item.target),
+      both: item.both === true,
+    }))
+    .filter((edge) => edge.source !== edge.target && known.has(edge.source) && known.has(edge.target));
+
+  return { nodes, edges };
+}
+
 function oneBlock(raw: Record<string, unknown>): PanelNode {
   const kind = text2(raw.kind);
   switch (kind) {
@@ -717,6 +814,37 @@ function oneBlock(raw: Record<string, unknown>): PanelNode {
           disabled: it.disabled === true,
         })),
       };
+    case "toggle":
+      return {
+        kind: "toggle",
+        label: text2(raw.label),
+        value: raw.value === true,
+        command: text2(raw.command),
+        args: raw.args ?? null,
+        arg: text2(raw.arg),
+      };
+    case "select":
+      return {
+        kind: "select",
+        label: text2(raw.label),
+        value: text2(raw.value),
+        options: tableArray(raw.options)
+          .map((it) => ({ label: text2(it.label), value: text2(it.value) }))
+          .filter((it) => it.value !== ""),
+        command: text2(raw.command),
+        args: raw.args ?? null,
+        arg: text2(raw.arg),
+      };
+    case "file":
+      return {
+        kind: "file",
+        label: text2(raw.label),
+        buttonLabel: text2(raw.buttonLabel) || "Choose…",
+        accept: text2(raw.accept) || ".json,application/json",
+        command: text2(raw.command),
+        args: raw.args ?? null,
+        arg: text2(raw.arg) || "file",
+      };
     case "empty":
       return { kind: "empty", text: text2(raw.text) };
     case "separator":
@@ -738,6 +866,8 @@ function oneBlock(raw: Record<string, unknown>): PanelNode {
       };
     case "graph":
       return { kind: "graph", items: tableArray(raw.items).map(imageLine) };
+    case "network":
+      return { kind: "network", spec: networkBlock(raw) };
     case "tabs":
       return {
         kind: "tabs",

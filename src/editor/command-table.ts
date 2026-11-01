@@ -20,8 +20,7 @@
  *
  * ⚠️ **加一条新命令要改两处**：`create-types.ts` 的 `EditorCommand`（类型）
  * 与这里的表（实现）。⚠️ 少改前者的症状是"命令根本传不进来"，少改后者的
- * 症状是**编译错**（`Record` 缺键）——后者反而好办。⚠️ 斜杠菜单那张表
- * （`editor/slash.ts`）的 id 与这里的键**同名**，加命令时它也要看一眼。
+ * 症状是**编译错**（`Record` 缺键）——后者反而好办。
  *
  * ⚠️ 表里存的是 `$Command` 的**回调**而不是 `$Command` 本身：Milkdown 的
  * `callCommand` 要的是 `slice.key`，直接传 `$Command` 过不了类型
@@ -34,8 +33,6 @@
 
 import { editorViewCtx, type Editor } from "@milkdown/kit/core";
 import {
-  toggleStrongCommand,
-  toggleEmphasisCommand,
   wrapInHeadingCommand,
   turnIntoTextCommand,
   wrapInBlockquoteCommand,
@@ -47,7 +44,6 @@ import {
   toggleLinkCommand,
 } from "@milkdown/kit/preset/commonmark";
 import {
-  toggleStrikethroughCommand,
   insertTableCommand,
   addRowBeforeCommand,
   addRowAfterCommand,
@@ -55,19 +51,20 @@ import {
   addColAfterCommand,
 } from "@milkdown/kit/preset/gfm";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
-import { lift } from "@milkdown/kit/prose/commands";
+import { lift, toggleMark } from "@milkdown/kit/prose/commands";
 import { liftListItem } from "@milkdown/kit/prose/schema-list";
-import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
+import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import type { NodeType } from "@milkdown/kit/prose/model";
+import type { Step } from "@milkdown/kit/prose/transform";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { callCommand } from "@milkdown/kit/utils";
 
-import { inlineMarkCommand } from "./inline-marks";
 import { convertBecomeTaskTaskColumnTable, clearRemoveCellStyle, deleteTableRow, deleteTableColumn, deleteWholeTable, insertCommonStyleBlock, insertItemRecord, toggleTableRowHeaders } from "./insert";
 import { insertFootNote } from "./footnote";
 import { githubAlertNode } from "./github-alert-edit";
 import { selectLine, selectWord, selectSentence, removeWord } from "./select";
 import { moveBlock } from "./move-block";
+import { automaticImageName } from "./image-kind";
 import { installLink, removeLink } from "./link-edit";
 import {
   duplicateCurrentTable,
@@ -173,6 +170,59 @@ export function splitReplaceInlineCode(
 }
 
 /**
+ * 行内标记的工具栏语义：有选区时切换整段，没有选区时切换“下一次输入”的标记。
+ *
+ * ProseMirror 自带的 toggleMark 本来支持 storedMarks，但数学/图片这类原子形成的
+ * NodeSelection 并不是空文本选区。工具栏那一下应当把光标落到原子旁，再把标记
+ * 记到下一次输入上，而不是静默无反应。选区和标记被合并进同一笔事务，撤销时
+ * 仍是一步。
+ */
+export function toggleMarkAtSelection(
+  state: EditorState,
+  markName: string,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const type = state.schema.marks[markName];
+  if (!type) return false;
+
+  const tr = state.tr;
+  if (!(state.selection instanceof TextSelection)) {
+    const position = Math.min(Math.max(1, state.selection.head), state.doc.content.size - 1);
+    tr.setSelection(TextSelection.near(state.doc.resolve(position), 1));
+  }
+
+  const normalized = state.apply(tr);
+  if (normalized.selection.empty) {
+    const mark = type.create();
+    if (type.isInSet(normalized.storedMarks ?? normalized.selection.$from.marks())) {
+      tr.removeStoredMark(type);
+    } else {
+      tr.addStoredMark(mark);
+    }
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  }
+
+  const markedSteps: Step[] = [];
+  if (!toggleMark(type)(normalized, (next) => {
+    markedSteps.push(...next.steps);
+  })) {
+    return false;
+  }
+  if (markedSteps.length === 0) return false;
+  for (const step of markedSteps) tr.step(step);
+  dispatch?.(tr.scrollIntoView());
+  return true;
+}
+
+export function toggleMarkForToolbar(editor: Editor, markName: string): boolean {
+  return editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    return toggleMarkAtSelection(view.state, markName, (tr) => view.dispatch(tr));
+  });
+}
+
+/**
  * 命令白名单的**实体**。
  *
  * ⚠️ 存的是 `$Command` 的**回调**而不是 `$Command` 本身：Milkdown 的
@@ -183,24 +233,24 @@ export function splitReplaceInlineCode(
 const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) => void> = {
   undo: (e) => e.action(callCommand(undoCommand.key)),
   redo: (e) => e.action(callCommand(redoCommand.key)),
-  bold: (e) => e.action(callCommand(toggleStrongCommand.key)),
-  italic: (e) => e.action(callCommand(toggleEmphasisCommand.key)),
+  bold: (e) => toggleMarkForToolbar(e, "strong"),
+  italic: (e) => toggleMarkForToolbar(e, "emphasis"),
   inlineCode: (e) =>
     e.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       return splitReplaceInlineCode(view.state, (tr) => view.dispatch(tr));
     }),
-  strike: (e) => e.action(callCommand(toggleStrikethroughCommand.key)),
+  strike: (e) => toggleMarkForToolbar(e, "strike_through"),
   // 行内标记四条（高亮 / 上标 / 下标 / 下划线）。**不跟开关走**：命令表是
   // 静态的，而"这条命令能不能跑"取决于开关的话，菜单项的灰/亮就得跟着设置变
   // ——那是另一件事（`ui/commands.ts` 的 `命令能否用`）。关掉高亮的用户
   // 从格式化工具栏点一下，读到的是"这条通路上没实现"，那是个谎。
   // 真相是：**关掉的是解析与输入，不是这条能力**。
-  highlight: (e) => e.action(callCommand(inlineMarkCommand[0]!.key)),
-  superscript: (e) => e.action(callCommand(inlineMarkCommand[1]!.key)),
-  subscript: (e) => e.action(callCommand(inlineMarkCommand[2]!.key)),
-  underline: (e) => e.action(callCommand(inlineMarkCommand[3]!.key)),
-  kbd: (e) => e.action(callCommand(inlineMarkCommand[4]!.key)),
+  highlight: (e) => toggleMarkForToolbar(e, "highlight"),
+  superscript: (e) => toggleMarkForToolbar(e, "superscript"),
+  subscript: (e) => toggleMarkForToolbar(e, "subscript"),
+  underline: (e) => toggleMarkForToolbar(e, "underline"),
+  kbd: (e) => toggleMarkForToolbar(e, "kbd"),
   comment: (e) =>
     e.action((ctx) => {
       const view = ctx.get(editorViewCtx);
@@ -284,7 +334,12 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   // 说的正是"已经是一条链接时再点一次"。真要删，先想清楚谁来顶它。
   link: (e, p) => e.action(callCommand(toggleLinkCommand.key, { href: p?.href ?? "" })),
   image: (e, p) =>
-    e.action(callCommand(insertImageCommand.key, { src: p?.src ?? "", alt: p?.alt ?? "" })),
+    e.action(
+      callCommand(insertImageCommand.key, {
+        src: p?.src ?? "",
+        alt: p?.alt || automaticImageName(p?.src ?? ""),
+      }),
+    ),
 
   // 「插入链接」与「去掉链接」那两条（`docs/07` 第 96 / 102 项，2026-10-07）。
   // ⚠️ 实现全在 `link-edit.ts`（找光标处那条链接、把新文字拼出来），这里只挂名。
@@ -392,8 +447,8 @@ function liftValueLayer(view: EditorView, containerName: string): void {
 /**
  * 跑一条编辑命令，**只管命令、不管焦点**。
  *
- * ⚠️ 焦点那件事留在 `create.ts` 里（两个用家的焦点处境正好相反：菜单栏点出来
- * 的要把焦点交回正文，斜杠菜单那边焦点本来就在编辑区），这里只管派发。
+ * ⚠️ 焦点那件事留在 `create.ts` 里（菜单栏点出来的要把焦点交回正文），
+ * 这里只管派发。
  *
  * ⚠️ `h1`~`h6` 走的是**另一条命令**（`wrapInHeadingCommand` 带一个层数参数），
  * 所以它们不在 {@link COMMANDS} 表里，得先在这里分一下。

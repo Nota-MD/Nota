@@ -278,7 +278,7 @@ const notaTheme = EditorView.theme({
     height: "100%",
     backgroundColor: "var(--doc-bg)",
     color: "var(--doc-fg)",
-    fontSize: "var(--ui-font-size, 15px)",
+    fontSize: "var(--editor-font-size, var(--ui-font-size, 15px))",
   },
   ".cm-scroller": {
     fontFamily: "var(--font-mono)",

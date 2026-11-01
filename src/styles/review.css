@@ -64,6 +64,13 @@
   flex: none;
 }
 
+.review-sidebar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+}
+
 .review-body {
   flex: 1;
   min-height: 0;

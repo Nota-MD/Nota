@@ -32,9 +32,6 @@ const AboutDialog = lazy(() =>
 const ConfirmDialog = lazy(() =>
   import("@/ui/ConfirmDialog").then((m) => ({ default: m.ConfirmDialog })),
 );
-const PrintDialog = lazy(() =>
-  import("@/ui/PrintDialog").then((m) => ({ default: m.PrintDialog })),
-);
 const PromptDialog = lazy(() =>
   import("@/ui/PromptDialog").then((m) => ({ default: m.PromptDialog })),
 );
@@ -85,7 +82,6 @@ export function AppDialogs({
   const { confirmReq, answerConfirm, promptReq, answerPrompt } = dialog;
   const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = dialog;
   const { aboutOpen, closeAbout } = dialog;
-  const { printReq, closePrint } = dialog;
 
   return (
     <Suspense fallback={null}>
@@ -93,12 +89,6 @@ export function AppDialogs({
       {pandocGate && (
         <PandocPanel probe={pandocGate.probe} format={pandocGate.format} {...pandocGateActions} />
       )}
-
-      {/**
-        * 应用内打印框（2026-10-17）。⚠️ 它**排在最前面**：打印途中用户还能看到
-        * 别的框是不合理的（那会盖在预览上），所以它是这一族里层级最高的一张。
-        */}
-      {printReq && <PrintDialog request={printReq} onClose={closePrint} />}
 
       {confirmReq && (
         <ConfirmDialog

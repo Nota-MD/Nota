@@ -177,7 +177,7 @@ export function moveBlockView(view: EditorView, direction: -1 | 1): boolean {
   return true;
 }
 
-/** 菜单 / 斜杠菜单那条路（`command-table.ts` 那张表的下游）。 */
+/** 菜单那条路（`command-table.ts` 那张表的下游）。 */
 export function moveBlock(editor: Editor, direction: -1 | 1): void {
   editor.action((ctx) => {
     moveBlockView(ctx.get(editorViewCtx), direction);
@@ -213,7 +213,7 @@ export function moveBlock(editor: Editor, direction: -1 | 1): void {
  *   `joinUp` 就会接管——用户在第一段按 `Alt+↑`，看到的会是两段被合并。
  *
  * ⚠️ 组字期间（`view.composing`）一概不碰：中文输入法在组字时会用方向键挑候选，
- * 那时候动文档是抢键盘（`auto-pair.ts` / `table-tab.ts` 同一条纪律）。
+ * 那时候动文档是抢键盘（与 `table-tab.ts` 同一条纪律）。
  */
 export function createMoveKeymap(): Plugin {
   return new Plugin({

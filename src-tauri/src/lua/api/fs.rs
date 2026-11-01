@@ -23,6 +23,13 @@ use crate::error::{NotaError, Result as NotaResult};
 use crate::lua::HostContext;
 use crate::plugin::manifest::{Capability, Manifest};
 
+/// A plugin asks the host to open one file inside its existing workspace fence.
+///
+/// This is deliberately an event instead of a new Tauri command: document tabs
+/// already go through the frontend's `openPath`, and keeping that as the only
+/// opener avoids a second document-loading path.
+pub const EVENT_OPEN_DOCUMENT: &str = "nota:open-document";
+
 pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Table> {
     let t = lua.create_table().map_err(mlua_to_nota)?;
     let can_read = manifest.has(Capability::FsRead);
@@ -70,6 +77,54 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
             })
             .map_err(mlua_to_nota)?;
         t.set("list", list).map_err(mlua_to_nota)?;
+
+        let ctx2 = ctx.clone();
+        let root = lua
+            .create_function(move |_, ()| {
+                let root = 工作根(&ctx2).map_err(lua_err)?;
+                root.to_str().map(str::to_owned).ok_or_else(|| {
+                    lua_err(NotaError::other(
+                        "工作区根路径不是合法的 UTF-8，插件无法用字符串引用它",
+                    ))
+                })
+            })
+            .map_err(mlua_to_nota)?;
+        t.set("root", root).map_err(mlua_to_nota)?;
+
+        let ctx2 = ctx.clone();
+        let relative = lua
+            .create_function(move |_, path: String| {
+                let root = 工作根(&ctx2).map_err(lua_err)?;
+                Ok(relative_in(&root, &path))
+            })
+            .map_err(mlua_to_nota)?;
+        t.set("relative", relative).map_err(mlua_to_nota)?;
+
+        let ctx2 = ctx.clone();
+        let open = lua
+            .create_function(move |_, path: String| {
+                use tauri::Emitter;
+
+                let full = resolve(&ctx2, &path)?;
+                if !full.is_file() {
+                    return Err(lua_err(NotaError::other(format!(
+                        "nota.fs.open 只能打开工作区内的文件，`{path}` 不是文件"
+                    ))));
+                }
+                let path_text = full.to_str().ok_or_else(|| {
+                    lua_err(NotaError::other(
+                        "目标文件路径不是合法的 UTF-8，无法交给编辑器打开",
+                    ))
+                })?;
+                ctx2
+                    .app
+                    .emit(EVENT_OPEN_DOCUMENT, serde_json::json!({ "path": path_text }))
+                    .map_err(|e| {
+                        lua_err(NotaError::other(format!("请求编辑器打开文件失败：{e}")))
+                    })
+            })
+            .map_err(mlua_to_nota)?;
+        t.set("open", open).map_err(mlua_to_nota)?;
     }
 
     if can_write {
@@ -99,6 +154,25 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
     }
 
     Ok(t)
+}
+
+/// Return a slash-separated path relative to the workspace root.
+///
+/// Absolute paths are accepted because callers normally pass the active
+/// document path from `nota.document.get_path()`. Relative paths are resolved
+/// through the same fence as every other filesystem operation.
+fn relative_in(root: &Path, given: &str) -> Option<String> {
+    let path = Path::new(given);
+    let full = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        resolve_in(root, given).ok()?
+    };
+    let real_root = root.canonicalize().ok()?;
+    let real_full = full.canonicalize().ok()?;
+    let relative = real_full.strip_prefix(&real_root).ok()?;
+    let text = relative.to_string_lossy().replace('\\', "/");
+    (!text.is_empty()).then_some(text)
 }
 
 /// 从共享状态里取工作区根，再交给 `resolve_in` 裁决。
@@ -278,5 +352,24 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[test]
+    fn 相对路径报告同时接受当前文档绝对路径与工作区相对路径() {
+        let root = 临时工作区("relative");
+        let file = root.join("子目录/a.md");
+        std::fs::write(&file, "# A").unwrap();
+
+        assert_eq!(
+            relative_in(&root, file.to_str().unwrap()).as_deref(),
+            Some("子目录/a.md")
+        );
+        assert_eq!(
+            relative_in(&root, "子目录/a.md").as_deref(),
+            Some("子目录/a.md")
+        );
+        assert_eq!(relative_in(&root, "/etc/passwd"), None);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

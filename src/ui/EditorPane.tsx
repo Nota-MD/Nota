@@ -106,6 +106,12 @@ import type { SourceHandle } from "@/editor/source";
 // 三个实例各传哪些选项（"哪一侧要 `physics`、哪一侧不传 `自动更正`"那些判断）。
 // ⚠️ 2026-10-07 从下面那个大 effect 里整块搬出去的，见那边文件头。
 import { createSourceEditingDevice, createWysiwygEditor, createPreviewEditor } from "@/ui/pane-editors";
+import {
+  initialVimStatus,
+  type VimInputConfig,
+  type VimInputStatus,
+} from "@/editor/plugin-vim-types";
+import { VimStatusOverlay } from "@/ui/VimStatusOverlay";
 
 export interface EditorPaneHandle {
   getMarkdown: () => string | undefined;
@@ -208,19 +214,6 @@ interface Props {
    */
   emoji: boolean;
   /**
-   * **智能符号补全**，来自 `settings.editor.smart_symbols`（2026-09-28，**默认开**）。
-   *
-   * ⚠️ 同 `emoji` 那一格：只收一个布尔，原样喂给 `createEditor` 的
-   * `智能符号` 那一格——关掉是 `editor/auto-pair.ts` **整条插件不装**
-   * （补一对 / 跳过 / 空对退格 / `Tab` 跳出右半边四件事一起走，理由见
-   * `create-types.ts` 的 `智能符号` 那一格）。
-   *
-   * ⚠️ **必须进下面那个 effect 的依赖**：它换的是 `.use()` 链上的一条插件，
-   * 而那串链是建实例时定死的。不进依赖的话，用户拨了开关得先关掉这份文档
-   * 再打开才生效——"设置像没生效"。
-   */
-  smartAbleSymbolNumber: boolean;
-  /**
    * **整整一页 Markdown 设置**（`settings.markdown`），`undefined` = 设置还没
    * 从后端读回来。
    *
@@ -253,6 +246,10 @@ interface Props {
   focusMode: boolean;
   typewriter: boolean;
   /** 正文只读模式（`view.readOnly`）。 */ onlyReadMode: boolean;
+  /** Optional keyboard adapter contributed by a loaded extension. */
+  vimInput?: VimInputConfig | null;
+  /** Ex/command-line actions that belong to the document host. */
+  onVimCommand?: (command: "save" | "close") => void;
   /**
    * 这份文档**上次滚到哪儿**（`0.0`~`1.0` 的比例），`undefined` = 没记过。
    *
@@ -385,12 +382,12 @@ export function EditorPane({
   physics,
   plainText = false,
   emoji,
-  /* 说明书在 `Props` 上那一份 `智能符号` 里（这里不抄第二份）。 */
-  smartAbleSymbolNumber,
   markdown,
   focusMode,
   typewriter,
   onlyReadMode,
+  vimInput = null,
+  onVimCommand,
   initialStartRollAction,
   onScroll,
   contentWidth,
@@ -442,6 +439,16 @@ export function EditorPane({
   // 不该靠调用方去守——照上面两条走）。
   const activityRef = useRef(onActivity);
   activityRef.current = onActivity;
+  const vimInputRef = useRef(vimInput);
+  vimInputRef.current = vimInput;
+  const onVimCommandRef = useRef(onVimCommand);
+  onVimCommandRef.current = onVimCommand;
+  const [vimStatus, setVimStatus] = useState<VimInputStatus | null>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
+  const displayedVimStatus: VimInputStatus | null =
+    vimStatus?.enabled === true
+      ? vimStatus
+      : initialVimStatus(vimInput);
 
   // 选区快照 → 后端（`docs/07` 第 14 项）。⚠️ 去抖、那次推送、以及"拆的时候
   // 为什么必须清掉那个定时器"，都在 `useCursorSnapshot.ts` 里（2026-10-07 搬
@@ -478,6 +485,25 @@ export function EditorPane({
   useEffect(() => {
     handleRef.current?.setWritingModes({ focus: focusMode, typewriter });
   }, [focusMode, typewriter]);
+
+  /**
+   * Focus the contenteditable again once the native window is actually shown.
+   *
+   * WebKitGTK can keep the DOM focus away from an element focused while its
+   * window is still off-screen. `focusAtStart()` runs before `showMain()`, so
+   * without this second handoff the cursor may be visible while the first
+   * keystrokes go nowhere. This only moves focus; it deliberately preserves
+   * the caret position established by `focusAtStart()`.
+   */
+  useEffect(() => {
+    const focusAfterReveal = () => {
+      requestAnimationFrame(() => {
+        handleRef.current?.focus();
+      });
+    };
+    window.addEventListener("nota-window-shown", focusAfterReveal);
+    return () => window.removeEventListener("nota-window-shown", focusAfterReveal);
+  }, []);
 
   // 预览那一份的"建实例时的初值"。⚠️ 同 `写作模式Ref` 的理由与写法（见 `Props`
   // 里 `review` 那条）：不进下面那个 effect 的依赖，不然每来一次预览都要重建
@@ -630,7 +656,16 @@ export function EditorPane({
             punctuation,
             selfActionMoreCorrect,
             emoji,
-            smartAbleSymbolNumber,
+            vimInput:
+              vimInputRef.current?.enabled === true
+                ? {
+                    config: vimInputRef.current,
+                    hooks: {
+                      onStatus: setVimStatus,
+                      onCommand: (command) => onVimCommandRef.current?.(command),
+                    },
+                  }
+                : undefined,
             WritingMode: writingModeRef.current,
             preview: reviewDataRef.current,
             onReviewEscape: () => backOutputRef.current?.(),
@@ -645,7 +680,7 @@ export function EditorPane({
           // ⚠️ 源码这一侧**明确报 `null`**（不是空状态）：CodeMirror 手里
           // 就是文本，没有文档树可读，工具栏据此不画任何高亮。
           commandStateRef.current(null);
-          handle = createSourceEditingDevice({
+          handle = await createSourceEditingDevice({
             root: mount,
             initial,
             documentPath: doc.path,
@@ -816,7 +851,14 @@ export function EditorPane({
     // 任何人重建编辑器。
     // 刻意**不**依赖 doc.text：那是初始值，不是要跟随的状态。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, punctuation, selfActionMoreCorrect, emoji, smartAbleSymbolNumber, onlyReadMode]);
+  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, punctuation, selfActionMoreCorrect, emoji, onlyReadMode, vimInput?.enabled]);
+
+  useEffect(() => {
+    if (handleRef.current && "setVimInput" in handleRef.current) {
+      handleRef.current.setVimInput(vimInput);
+    }
+    if (!vimInput?.enabled) setVimStatus(null);
+  }, [vimInput]);
 
   /* ── 正文上方那条 front matter 横幅（`docs/07` 第 64 项）──────────────
    *
@@ -886,7 +928,12 @@ export function EditorPane({
     //   两半长得不一样。
     // 内联样式优先级高于任何选择器，所以这一层是"用户显式盖过主题"的唯一落点。
     // 理由与来历见 `styles/doc-typography.ts` 与 `settings/document.rs`。
-    <div className={`editor-pane editor-pane-${mode}`} style={DocumentTypographyVars(documentTypography) as CSSProperties}>
+    <div
+      ref={paneRef}
+      className={`editor-pane editor-pane-${mode}`}
+      data-doc-font-size={documentTypography?.custom_font_size ? "custom" : undefined}
+      style={DocumentTypographyVars(documentTypography) as CSSProperties}
+    >
       {!ready && <div className="editor-loading">{t("Preparing the editor…")}</div>}
       {/* front matter 横幅（`docs/07` 第 64 项）。⚠️ **它一直挂在这儿**，
           由它自己按 `显示` 决定露不露面（源码模式下渲染 `null`）——不是这里
@@ -914,6 +961,7 @@ export function EditorPane({
           limitTextWidth ? { ["--content-width" as string]: `${contentWidth}px` } : undefined
         }
       />
+      <VimStatusOverlay status={displayedVimStatus} anchor={paneRef} />
       {mode === "split" && (
         // 右侧预览。`aria-readonly` 是**如实告知**——它真的改不了。
         // 预览**永远不给** `--content-width`：那一半本来就窄，再限宽会剩一条缝。

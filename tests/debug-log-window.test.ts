@@ -76,6 +76,26 @@ testCase("日志窗口在独立进程启动，不再给主进程追加 WebView",
   contains(helper, "open::that", "系统默认查看器");
 });
 
+testCase("Linux 调试窗口显式把 GTK 输入焦点交给 WebView", () => {
+  const rust = read("src-tauri/src/commands/window.rs");
+  const lib = read("src-tauri/src/lib.rs");
+  contains(
+    rust,
+    "pub(crate) fn focus_linux_webview",
+    "主窗口与调试窗口不能共用 Linux WebView 聚焦逻辑",
+  );
+  contains(
+    lib,
+    "commands::window::focus_linux_webview(&platform.inner())",
+    "调试窗口没有 grab_focus，Rime/XIM 会拿不到输入上下文",
+  );
+  contains(
+    lib,
+    "timeout_add_local_once",
+    "调试窗口没有在 XWayland 激活后重试聚焦",
+  );
+});
+
 testCase("后端日志同时写入持久文件，并提供增量读取命令", () => {
   const log = read("src-tauri/src/log.rs");
   const commands = read("src-tauri/src/commands/diagnostics.rs");

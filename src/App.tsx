@@ -30,7 +30,7 @@ import { useFileKind } from "@/ui/useFileKindMode";
 // 当成"没用上的组件"清掉。
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import { resolvePick } from "@/ui/commands";
-import { useT } from "@/i18n";
+import { localizedDocumentTitle, useT } from "@/i18n";
 import { DeferredFilePickerDialog, DeferredPluginDock, DeferredSettingsDialog } from "@/ui/DeferredUi";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
 import { optionKey, readMouthPath } from "@/ui/tree-options";
@@ -73,6 +73,7 @@ import { useDocThemeInventory } from "@/ui/useDocThemeInventory";
 import { useAppEvents } from "@/ui/useAppEvents";
 import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
+import { ElementInspector } from "@/ui/element-inspector";
 import { useMenuTable } from "@/ui/useMenuTable";
 import { ContextMenu } from "@/ui/ContextMenu";
 import { useSettingsWindow } from "@/ui/useSettingsWindow";
@@ -83,6 +84,7 @@ export default function App() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [activeId, setActiveId] = useState<DocId | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const extensionsEnabled = settings?.general.extensions_enabled ?? true;
   const [workspace, setWorkspace] = useState<string | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
   // 右侧插件栏开着没有。**默认关**。
@@ -162,8 +164,9 @@ export default function App() {
 
   const refreshDocs = useCallback(async () => {
     const list = await api.doc.list();
-    setDocs(list);
-    return list;
+    const localized = list.map((doc) => ({ ...doc, title: localizedDocumentTitle(doc.title) }));
+    setDocs(localized);
+    return localized;
   }, []);
 
   // "编辑器里现在的正文"。导出、打印、借 pandoc 那些都用它。
@@ -197,20 +200,14 @@ export default function App() {
   // ⚠️ 位置**必须在 `useDialogs` 之后**：菜单项上声明的"先问一句"要借
   // `askPrompt`，而那个函数是上面那个 hook 产出的；装/卸插件之前那句
   // "确定吗"同理（`askConfirm`，宿主自己画的框，不是 `window.confirm`）。
-  const plugin = usePlugins({ toast, askPrompt, askConfirm });
+  const plugin = usePlugins({ toast, askPrompt, askConfirm, setDockOpen, extensionsEnabled });
+  // 编辑区里此刻摊着的插件面板（`nota.ui.review` 放进去的那一格）＋收起它。
+  // ⚠️ **归宿主**（`plugin::ReviewState`），不是这里的一份 `useState`：
+  // 刷新一次界面 / 热重载一次，"我正在看 AI 提的那份改动"不该就这么没了。
   const {
-    plugins, panels,
-    messageTask: trustTable,
-    pluginUpdate,
-    // 编辑区里此刻摊着的插件面板（`nota.ui.review` 放进去的那一格）＋收起它。
-    // ⚠️ **归宿主**（`plugin::ReviewState`），不是这里的一份 `useState`：
-    // 刷新一次界面 / 热重载一次，"我正在看 AI 提的那份改动"不该就这么没了。
-    review: preview,
-    receivePreview,
-    menus: allMenus,
-    handlers: pluginHandler,
-    configure: invokePlugin,
-    action: pluginAction,
+    plugins, panels, panelFocus, openPanelFull, messageTask: trustTable, pluginUpdate,
+    review: preview, receivePreview, menus: allMenus, handlers: pluginHandler,
+    configure: invokePlugin, action: pluginAction,
   } = plugin;
   // ── 编辑区那一格的两种形态与"看哪一面"（2026-09-27 搬到 `ui/useReviewView.ts`）
   //
@@ -433,7 +430,7 @@ export default function App() {
     themeId: slot.id,
     exportSettings: settings?.export,
     toast,
-    askConfirm, openPrint: dialog.openPrint, // 打印浅色闸门与应用内打印框
+    askConfirm,
     openImported: newDocWithText,
   });
 
@@ -473,7 +470,7 @@ export default function App() {
       promptReq !== null ||
       imageReq !== null ||
       linkReq !== null || // 「链接」框（第 96 ＋ 102 项）
-      emojiOpen || dialog.printReq !== null || // 应用内打印框（2026-10-17）
+      emojiOpen ||
       dialog.aboutOpen ||
       pandocGate !== null || dedicatedNoteTotalJoin !== null,
     toast,
@@ -506,7 +503,7 @@ export default function App() {
   // 用户**导入的**界面风格（取 CSS 注入 / 打开风格文件夹）在
   // `ui/useUiStyles.ts`（2026-09-26）。⚠️ 与上面那条不是一伙的：文档主题只管
   // 编辑区、它管整个外壳，注入方式还正好相反——细节在那边文件头。
-  const { styles: uiStyles, openStylesDir, refreshStyles } = useUiStyles(settings, toast);
+  const { styles: uiStyles, openStylesDir, refreshStyles, importTheme } = useUiStyles(settings, toast, refreshThemes);
 
   // 「复制为 Markdown」（`edit.copyAsMarkdown`）也搬去了 `ui/useClipboard.ts`
   // （2026-09-25），理由在那个文件的文件头；接线在下面 `剪贴板` 那一行。
@@ -523,7 +520,7 @@ export default function App() {
   // 「插入图像」那一条（含**粘贴**，`ui/useImageInsert.ts`，2026-09-26）。
   // ⚠️ **必须在 `run` 之后**：它把宿主落好盘的地址通过 `run("image", …)` 插进正文。
   // ⚠️ 也要在 `useDialogs` 之后（`askImage` / `imageReq` 是那边产出的）。
-  const { insertImageLike, dropOneImage } = useImageInsert({
+  const { insertImageLike, dropOneImage, pasteClipboardImage } = useImageInsert({
     run,
     docId: activeId,
     // ⚠️ 用 `docs` 现查而不是 `activeDoc`：那个常量在本文件**下面**才算出来，
@@ -572,9 +569,8 @@ export default function App() {
     if (character !== null) run("insertText", { text: character });
   }, [askEmoji, run]);
 
-  // 剪贴板四件（`ui/useClipboard.ts`，2026-09-25）。⚠️ **在 `run` 之后**取：
-  // 它内部用 `run` 把文本落到文档上。
-  const cutPasteBoard = useClipboard({ editorRef, run, toast });
+  // 剪贴板在 `run` 之后接线；图片走与普通插图相同的落盘链。
+  const cutPasteBoard = useClipboard({ editorRef, run, toast, pasteImage: pasteClipboardImage });
 
   // ⚠️ 传的是 `editorRef` **本体**（身份稳定），不是 `editorRef.current`。
   const findBar = useFindBar({
@@ -748,7 +744,10 @@ export default function App() {
     setUi: setChrome,
     cursor: commandState,
     // ⚠️ 顶栏整条不画时（见 `TopBar`），插件栏那颗开关落到状态栏——`null` = 顶栏在。
-    pluginDock: usingNativeMenu || !menuBarOpen ? { open2: dockOpen, splitReplace: () => setDockOpen((v) => !v) } : null,
+    pluginDock:
+      extensionsEnabled && (usingNativeMenu || !menuBarOpen)
+        ? { open2: dockOpen, splitReplace: () => setDockOpen((v) => !v) }
+        : null,
   });
 
   // 窗口标题跟着**当前文档**走（第 51 项）：任务栏里几份文档要分得出来，
@@ -799,6 +798,7 @@ export default function App() {
             onRefreshThemes={refreshThemes}
             dockOpen={dockOpen}
             onToggleDock={() => setDockOpen((v) => !v)}
+            showDock={extensionsEnabled}
             // ⚠️ 两条理由都让菜单栏让位，**写法必须合成一个布尔**给 `TopBar`：
             // 一是 macOS 上原生菜单已经挂在屏幕顶端（`usingNativeMenu`），
             // 二是用户自己在外观设置里关掉了（`menuBarOpen`，2026-09-28）。
@@ -929,10 +929,9 @@ export default function App() {
             }}
           />
 
-          {dockOpen && (
+          {extensionsEnabled && dockOpen && (
             <DeferredPluginDock
-              plugins={plugins}
-              panels={panels}
+              plugins={plugins} panels={panels} focusRequest={panelFocus} onOpenFull={openPanelFull}
               messageTask={trustTable} onResize={(width: number) => void updateSettings({ appearance: { ...settings!.appearance, dock_width: width } })}
               // ⚠️ 这里原来还给 `PluginDock` 塞一份 `slidev={…}`（预览那一页的
               // 接线）。2026-09-25 删了：预览现在是**插件自己的一个面板**，
@@ -962,7 +961,7 @@ export default function App() {
             onOpenThemesDir={() => void openThemesDir()}
             uiStyles={uiStyles}
             onOpenStylesDir={() => void openStylesDir()}
-            onRefreshUiStyles={() => void refreshStyles()}
+            onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()}
             onOpenConfigDir={() => void openConfigDir()}
             onResetSettings={() => void resetSettings()}
             onClearRecent={() => void clearEmptyRecent()}
@@ -975,6 +974,7 @@ export default function App() {
             initialSection={settingsWindow.initialSection}
           />
         )}
+        <ElementInspector enabled={(settings?.general.debug_mode ?? false) && (settings?.general.element_inspector ?? false)} />
 
         {/* 浮层那一族（pandoc 面板 ＋ 四个对话框 ＋ 专注总结）。⚠️ 整块 2026-09-27
             搬去了 `ui/AppDialogs.tsx`（当时本文件 1024 行，顶破硬线）；那里收的是

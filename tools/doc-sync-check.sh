@@ -61,6 +61,7 @@ mtime_of() { stat -c %Y "$1" 2>/dev/null || echo 0; }
 PAIRS=(
   # 后端
   "src-tauri/src/main.rs                          06"
+  "src-tauri/build.rs                             01,06"
   "src-tauri/src/lib.rs                           01,02,04"
   "src-tauri/src/cli.rs                           01,02,10"
   "src-tauri/src/error.rs                         02,03"
@@ -213,7 +214,11 @@ PAIRS=(
   "src/editor/command-state.ts                    05,04"
   "src/editor/insert.ts                           05"
   "src/editor/lang-icon.ts                        05,04"
+  "src/editor/lang-icon-registry.ts               02,05"
   "src/editor/lang-picker.ts                      05,04"
+  "src/editor/refractor-runtime.ts                05,02,07A"
+  "src/editor/html-sanitize-policy.ts             02,05"
+  "src/editor/html-sanitize.ts                    02,05"
   "src/editor/fence-lang.ts                       05,04,02,10"
   "src/editor/find.ts                             05,04"
   "src/editor/scroll-into-view.ts                 05,04,10"
@@ -259,11 +264,13 @@ PAIRS=(
   "src/editor/instant-render.ts                   05,04,10"
   "src/editor/task-list.ts                        05,04,10"
   "src/editor/code-block.ts                       05,04,10"
+  "src/editor/code-block-change.ts                05,02"
   # 2026-10-06（第 101 项：代码块换成 CodeMirror 编辑）。⚠️ 两份一起进——
   # 那一份纯函数的判据就是下面那行测试，改了 `算最小改动` / `回车续行` 而不同步
   # `docs/02` 与 `docs/06` 的话，这里会提醒。
   "src/editor/code-block-cm.ts                    05,07,02"
   "tests/code-block-editing.test.ts               02,06"
+  "tests/refractor-runtime.test.ts                02,06"
   "src/editor/heading-on-enter.ts                 05,04,02"
   # 2026-10-16（用户朋友清单第 12 条「INSERT 键无法使用」）：新文件。
   # ⚠️ 它和 `command-state.ts` 是一对——开关住在插件 state 里、状态栏那个
@@ -292,7 +299,9 @@ PAIRS=(
   "src/editor/table-enter.ts                     05,07,02"
   "src/editor/table-context.ts                   05,04,02"
   "src/editor/diagram-view.ts                     05,04,10"
+  "src/editor/diagram-render.ts                   05,02"
   "src/editor/math-view.ts                      05,04,10"
+  "src/editor/math-view-source.ts               05,02"
   "src/editor/math-schema.ts                    05,10"
   "src/editor/katex-runtime.ts                  05,10"
   "src/editor/micromark-math-html-placeholder.ts 02,05"
@@ -308,6 +317,7 @@ PAIRS=(
   "src/editor/math-commands.ts                  05,02,10"
   "src/editor/math-suggest.ts                   05,02,10"
   "src/editor/mark-hint.ts                      05,04,10"
+  "src/editor/mark-hint-source.ts               05,02"
   "src/editor/atom-space.ts                     05,04,10"
   # 2026-09-27：那五层文本处理器的"谁在外层"（加第五层时 `create.ts` 顶破 1000 行，把这串拆了出去）。
   "src/editor/text-handlers.ts                   05"
@@ -363,6 +373,7 @@ PAIRS=(
   "src/ui/ContextMenu.tsx 02,04"
   "src/ui/useMenuTable.ts 02,04"
   "src/ui/useExport.ts 02,04,10"
+  "src/ui/print-browser.ts 04,06"
   "src/ui/useDocTheme.ts 02,04,10"
   "src/ui/useUiStyles.ts 02,04,08"
   "src/ui/useChromeVisibility.ts 02,04"
@@ -396,6 +407,8 @@ PAIRS=(
   # 2026-09-27：插件在两个界面上那几句人话（右侧栏 ＋ 设置里的「扩展」页）。
   "src/ui/pluginText.ts                          04"
   "src/ui/PanelBody.tsx                           04,11"
+  "src/ui/CardIcon.tsx                            04,02"
+  "src/ui/PanelNetwork.tsx                        04,05,13"
   "src/ui/panel-nodes.ts                          11,13"
   "src/ui/panel-data-nodes.ts                     13"
   # 2026-10-10（第 111 / 112 项那批）：插件栏的记忆 ＋ 鸣谢名单。
@@ -405,6 +418,9 @@ PAIRS=(
   # ⚠️ 2026-09-27 补的三行：写作统计分享图那一批（`docs/07` 第 65 项第三轮）。
   # ⑤ 只扫 `src-tauri/src` 与 `src`，所以下面这三个新文件是**靠这张表**被管的。
   "src/ui/share-card.ts                           02,04,06"
+  "src/ui/share-card-identity.ts                  02,04"
+  "src/ui/avatar-crop.ts                         02,04"
+  "src/ui/AvatarCropDialog.tsx                   02,04"
   "src/ui/nota-mark.ts                            02,04"
   "src/ui/chart-ticks.ts                          02,04"
   "src/ui/pluginMenus.ts                          04,13"
@@ -478,10 +494,12 @@ PAIRS=(
   "tests/video-view.test.ts                       02,06"
   "tests/fake-dom.ts                            02,06"
   "tests/mark-hint.test.ts                      02,06"
+  "tests/mark-hint-syntax.test.ts               02,06"
   "tests/math-input.test.ts                     02,06"
   "tests/math-delim.test.ts                     02,06"
   "tests/math-currency.test.ts                  02,06"
   "tests/panel-cards.test.ts                    02,06"
+  "tests/panel-controls.test.ts                 02,06"
   "tests/syntax-escape.test.ts                  02,06"
   "tests/list-indent.test.ts                    02,06"
   # 2026-10-04（第 64 / 45 项那批）。
@@ -499,7 +517,6 @@ PAIRS=(
   "tests/html-block.test.ts                     02,06"
   "tests/github-markdown.test.ts                 04,06"
   "tests/smart-punctuation.test.ts              02,06"
-  "tests/selection-marks.test.ts                02,06"
   "tests/auto-correct.test.ts                   02,06"
   "tests/emoji.test.ts                          02,06"
   "tests/footnote.test.ts                       02,06"
@@ -611,11 +628,9 @@ PAIRS=(
   "src-tauri/src/focus/alarm.rs                  02,06,07"
   "src-tauri/src/commands/focus.rs               02,04,10"
   "src-tauri/src/commands/window.rs              02,04,10"
+  "src-tauri/src/lua/api/assets.rs               13,11"
   # ── 前端（20）────────────────────────────────────────────────────────
   "src/editor/url-link.ts                        05,04,10"
-  "src/editor/auto-pair.ts                       05,04,10"
-  # 2026-10-23：选中文字后的 Markdown 标记包裹。
-  "src/editor/selection-marks.ts                 05,04,10"
   "src/ui/TableToolbar.tsx                       04,05"
   "src/styles/table-toolbar.css                  04"
   "src/editor/paste.ts                           05,04,10"
@@ -625,11 +640,11 @@ PAIRS=(
   "src/editor/empty-paragraph.ts                 05,06"
   "src/editor/headings.ts                        02,05,10"
   "src/editor/toc.ts                             05,02,10"
-  "src/editor/slash.ts                           02,04,05,10"
   "src/ui/tree-options.ts                        02,04,07,10"
   "src/ui/useFileKindMode.ts                     04,07"
   "src/ui/useWindowControls.ts                   02,04,10"
   "src/ui/heatmap.ts                             02,04,06"
+  "src/ui/PanelControls.tsx                      04,13"
   "src/ui/ShareCard.tsx                          02,04,06"
   "src/ui/focus-summary.ts                       02,04,06,07"
   "src/ui/useFocusTrace.ts                       02,04,07"
@@ -643,10 +658,8 @@ PAIRS=(
   "tests/focus-summary.test.ts                   06,07"
   "tests/heatmap.test.ts                         02,06"
   "tests/keymap.test.ts                          02,06"
-  "tests/slash.test.ts                           02,06"
   "tests/table-input.test.ts                     02,06"
   "tests/toc.test.ts                             02,06"
-  "tests/auto-pair.test.ts                       02,06"
   "tests/lang-guess.test.ts                      02,06"
   "tests/paste-clean.test.ts                     02,06"
   "tests/url-link.test.ts                        02,06"

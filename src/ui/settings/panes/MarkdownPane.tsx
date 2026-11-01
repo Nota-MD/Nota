@@ -248,13 +248,6 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           <Toggle checked={m.code_wrap} onChange={(code_wrap) => write({ code_wrap })} />
         </SettingRow>
 
-        <SettingRow label={t("Show toolbar")}>
-          <Toggle
-            checked={m.code_toolbar}
-            onChange={(code_toolbar) => write({ code_toolbar })}
-          />
-        </SettingRow>
-
         <SettingRow label={t("Show language picker")}>
           <Toggle
             checked={m.code_language_picker}

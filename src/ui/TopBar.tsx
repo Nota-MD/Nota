@@ -36,6 +36,8 @@ export function TopBar(props: {
   onRefreshThemes: () => void;
   dockOpen: boolean;
   onToggleDock: () => void;
+  /** 拓展功能总开关。关闭时连入口一起隐藏。 */
+  showDock: boolean;
   /**
    * 原生菜单已经挂上了，**这一条让位**。
    *
@@ -81,15 +83,17 @@ export function TopBar(props: {
 
       {/* 插件栏的开关推到最右。`margin-left: auto` 让它在 flex 里吃满剩余空间——
           这是**唯一**的定位手段，别加什么 spacer 元素。 */}
-      <button
-        type="button"
-        className={`btn toolbar-dock-toggle ${props.dockOpen ? "btn-on" : ""}`}
-        onClick={props.onToggleDock}
-        title={props.dockOpen ? t("Hide the extension dock") : t("Show the extension dock")}
-        aria-pressed={props.dockOpen}
-      >
-        {t("Extensions")}
-      </button>
+      {props.showDock && (
+        <button
+          type="button"
+          className={`btn toolbar-dock-toggle ${props.dockOpen ? "btn-on" : ""}`}
+          onClick={props.onToggleDock}
+          title={props.dockOpen ? t("Hide the extension dock") : t("Show the extension dock")}
+          aria-pressed={props.dockOpen}
+        >
+          {t("Extensions")}
+        </button>
+      )}
     </header>
   );
 }

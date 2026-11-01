@@ -162,8 +162,8 @@ const removeRemoveOfAttribute = [
  *
  * 这条边界是 **2026-09-27 用户报上来的**：他打了一份 PDF，代码块里带着行号和
  * 右上角那颗语言选择器（连带里面那张几十 KB 的 base64 语言图标）。原先这份名单
- * 只有 `.nota-code-bar` 一条，所以"复制 / 折叠"那两颗按钮没漏，而**同一条路子上
- * 的另外两件漏了**——漏的从来不是"忘了登记某一个"，是**以为那条前缀规则会兜住**。
+ * 原先只登记了少数几个容器，代码块行号与语言框漏了出去——漏的从来不是
+ * "忘了登记某一个"，是**以为那条前缀规则会兜住**。
  * 所以：新加一个 `nota-xxx` 零件时先问一句**它是不是元素**，是就登记到这儿来。
  *
  * ⚠️ 只登记**住在编辑区里的**那些。语言下拉弹层（`.nota-lang-popup`）挂在
@@ -177,14 +177,10 @@ const wholeBlockRemoveRemove = [
   ".nota-html-source",
   ".nota-html-source-toggle",
   ".nota-image-source",
-  ".nota-github-alert-marker",
   // ── 代码块（`code-block.ts`）──────────────────────────────────────────
   /** 行号。内容就是 `1\n2\n3`，不带类名之后看着像正文里混进去的一串数字。 */
   ".nota-code-gutter",
-  /** 右上角"折叠 / 复制"。 */
-  ".nota-code-bar",
-  /** 语言选择器那一格。⚠️ 它**不住在 `.nota-code-bar` 里**（2026-09-25 移出，
-   *  见 `code-block.ts`），所以这前两条谁都盖不住它，必须单独登记。 */
+  /** 语言选择器那一格（见 `code-block.ts`）。 */
   ".nota-code-lang-wrap",
   /**
    * **HTML 代码块下面那块预览**（2026-10-16 加）。
@@ -317,7 +313,6 @@ async function removeBody(markdown: string, includeHtmlPreviews = false): Promis
       //     <code class="nota-code-text">…</code>   ← ProseMirror 的 contentDOM（零尺寸藏着）
       //     <div class="cm-editor">…</div>          ← CM 那一层，用户真正看着的
       //     <div class="nota-code-gutter">…</div>   ← 行号
-      //     <div class="nota-code-bar">…</div>      ← 折叠 / 复制
       //     <span class="nota-code-lang-wrap">…</span> ← 语言选择器
       //
       // 中间那三层零件由上面 `整块删掉` 收走，但**下面两件事它管不了**：
@@ -409,6 +404,12 @@ async function removeBody(markdown: string, includeHtmlPreviews = false): Promis
     "nota-github-alert-important",
     "nota-github-alert-warning",
     "nota-github-alert-caution",
+    "nota-github-alert-marker",
+    "nota-github-alert-marker-note",
+    "nota-github-alert-marker-tip",
+    "nota-github-alert-marker-important",
+    "nota-github-alert-marker-warning",
+    "nota-github-alert-marker-caution",
         ...(includeHtmlPreviews ? ["nota-code-preview", "nota-code-preview-frame"] : []),
       ]);
       for (const n of [pm, ...pm.querySelectorAll("*")]) {

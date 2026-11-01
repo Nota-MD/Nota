@@ -42,7 +42,7 @@ function plainText(): string {
 }
 
 /** 弹层最多这么高，超了内部滚动。 */
-const popupMostLargeHeight = 260;
+const popupMostLargeHeight = 360;
 
 /**
  * 开场要从按钮身上抄到弹层上的 token。**只列真正用到的那些**，别整份抄——
@@ -56,6 +56,7 @@ const popupMostLargeHeight = 260;
 const continueCarryOftoken = [
   "--bg-raised",
   "--bg-subtle",
+  "--doc-bg",
   "--fg",
   "--fg-muted",
   "--border-strong",
@@ -79,6 +80,8 @@ export function createLanguagePicker(option: {
   allLanguages: () => string[];
   /** 输入查询时可搜索的完整语言表；允许比默认下拉更多。 */
   searchSearchLanguage: () => string[];
+  /** 打开弹层时按需准备的扩展语言表；完成后重画当前列表。 */
+  prepare?: () => Promise<void>;
   /**
    * 这一门语言的**全部写法**（含别名），用于搜索。
    *
@@ -349,6 +352,20 @@ export function createLanguagePicker(option: {
 
     popup = pop;
     document.body.appendChild(pop);
+
+    // 完整语言表只在这里需要。加载完成后若弹层仍开着，就原地重画；
+    // 用户已经关掉或换了另一个代码块时，不能把旧弹层复活。
+    if (option.prepare) {
+      const openedPopup = pop;
+      void option
+        .prepare()
+        .then(() => {
+          if (popup === openedPopup && input) refreshNewValue();
+        })
+        .catch((error: unknown) => {
+          console.warn("[nota] 完整代码语言表加载失败；保留基础语言列表：", error);
+        });
+    }
 
     // ── 把文档主题的 token 抄过来 ──────────────────────────────────────
     // ⚠️ 这一步不能省。弹层挂在 `document.body` 上，**在 `.editor-pane` 之外**

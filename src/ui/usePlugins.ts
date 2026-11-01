@@ -36,6 +36,7 @@ import {
   type PluginInfo,
   type PluginMenuItem,
   type PluginPanel,
+  type PluginPanelFocusPayload,
   type PluginSetting,
   type PluginReview,
   type PluginUpdateInfo,
@@ -49,12 +50,23 @@ import { askParameter } from "@/ui/plugin-prompt";
 import { keyNameDescription } from "@/ui/pluginText";
 import type { Toast } from "@/ui/Toasts";
 import type { ConfirmAnswer, ConfirmRequest, PromptRequest } from "@/ui/useDialogs";
+import type { VimInputConfig } from "@/editor/plugin-vim-types";
+import { useEditorInput } from "@/ui/useEditorInput";
 
 export interface PluginsWiring {
   toast: (message: string, level?: Toast["level"]) => void;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
   /** 是/否框（宿主自己画的那个，不是 `window.confirm`）。装/卸之前要问一句。 */
   askConfirm: (req: ConfirmRequest) => Promise<ConfirmAnswer>;
+  /** 插件请求把某个面板摊到侧栏时，把右侧插件栏打开。 */
+  setDockOpen: (open: boolean) => void;
+  /** 通用设置里的拓展功能总开关。关闭时同时隐藏所有拓展入口并清空运行态。 */
+  extensionsEnabled: boolean;
+}
+
+/** One panel reveal request. `serial` distinguishes repeated requests for the same panel. */
+export interface PluginPanelFocus extends PluginPanelFocusPayload {
+  serial: number;
 }
 
 /**
@@ -114,6 +126,8 @@ export interface pluginAction {
 export interface PluginsState {
   /** 已装插件清单。`Home` 与 `PluginDock` 那道诊断清单用它。 */
   plugins: PluginInfo[];
+  /** Keyboard adapter currently contributed by a loaded extension. */
+  editorInput: VimInputConfig | null;
   /** 插件声明的面板（清单，不是内容）。 */
   panels: PluginPanel[];
   /**
@@ -155,9 +169,21 @@ export interface PluginsState {
   review: PluginReview | null;
   /** 收起编辑区里那一块、切回正文。用户点「回到正文」。 */
   receivePreview: () => Promise<void>;
+  /** 最近一次侧栏面板定位请求；由 `PluginDock` 消费。 */
+  panelFocus: PluginPanelFocus | null;
+  /** 在侧栏中显示某个已声明的面板，并打开插件栏。 */
+  focusPanel: (plugin: string, id: string) => void;
+  /** 把某个已声明的面板摊到编辑区；不需要插件额外提供命令。 */
+  openPanelFull: (plugin: string, id: string) => Promise<void>;
 }
 
-export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): PluginsState {
+export function usePlugins({
+  toast,
+  askPrompt,
+  askConfirm,
+  setDockOpen,
+  extensionsEnabled,
+}: PluginsWiring): PluginsState {
   // ⚠️ 这一层的文案一律走**模块级的 `t`**，不是 `useT()`：它们全是在动作发生的那
   // 一刻现取的（toast、确认框），那一下 `t` 读到的就是当前语言；而这个 hook
   // **几乎不往外返回"存下来"的字符串**，所以没有哪一块会因为语言变了而需要
@@ -194,6 +220,15 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   }, []);
 
   const heavyPull = useCallback(async () => {
+    if (!extensionsEnabled) {
+      setPlugins([]);
+      setPanels([]);
+      setMenuItems([]);
+      setTrustTable([]);
+      setPluginUpdate([]);
+      setDockOpen(false);
+      return;
+    }
     const [ps, pn, mn, tk] = await Promise.all([
       api.plugin.list(),
       api.plugin.panels(),
@@ -205,7 +240,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     setPanels(pn);
     setMenuItems(mn);
     setTrustTable(tk);
-  }, []);
+  }, [extensionsEnabled, setDockOpen]);
 
   // 启动拉一次。四样一起拉——它们回答的是同一个问题（"现在装了什么、
   // 信了谁"），分开四次只会让"读了插件清单但菜单还没到"这种中间态多出几种。
@@ -227,6 +262,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
 
   // 启动后静默检查一次。离线时不打扰用户，手动点「检查更新」才显示错误。
   useEffect(() => {
+    if (!extensionsEnabled) return;
     let returnAt = true;
     api.plugin
       .updates()
@@ -239,7 +275,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     return () => {
       returnAt = false;
     };
-  }, []);
+  }, [extensionsEnabled]);
 
   /**
    * 编辑区里摊着的那一块。**拉一次 + 订阅"变了"**，两条都要：
@@ -254,13 +290,20 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   const [review, setReview] = useState<PluginReview | null>(null);
 
   useEffect(() => {
+    if (!extensionsEnabled) {
+      setReview(null);
+      return;
+    }
     let unsubscribe: (() => void) | null = null;
     let returnActiveActive = true;
 
     const pullPreview = async () => {
       try {
         const now = await api.plugin.review();
-        if (returnActiveActive) setReview(now);
+        if (returnActiveActive) {
+          setReview(now);
+          if (now) setDockOpen(false);
+        }
       } catch (e) {
         if (returnActiveActive) toast(t("Could not read the in-editor preview status: {0}", String(e)), "error");
       }
@@ -278,7 +321,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       returnActiveActive = false;
       unsubscribe?.();
     };
-  }, [toast]);
+  }, [extensionsEnabled, setDockOpen, toast]);
 
   const receivePreview = useCallback(async () => {
     if (!review) return;
@@ -294,8 +337,57 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     }
   }, [review, toast]);
 
+  const focusSerial = useRef(0);
+  const [panelFocus, setPanelFocus] = useState<PluginPanelFocus | null>(null);
+  const focusPanel = useCallback(
+    (plugin: string, id: string) => {
+      if (!extensionsEnabled) return;
+      focusSerial.current += 1;
+      setPanelFocus({ plugin, id, serial: focusSerial.current });
+      setDockOpen(true);
+      if (review) {
+        void api.plugin.reviewClose(review.plugin)
+          .then(() => setReview(null))
+          .catch(() => {
+            /* Opening the sidebar must still work if closing the review fails. */
+          });
+      }
+    },
+    [extensionsEnabled, review, setDockOpen],
+  );
+
+  useEffect(() => {
+    if (!extensionsEnabled) return;
+    let unsubscribe: (() => void) | null = null;
+    let alive = true;
+    void on<PluginPanelFocusPayload>(events.pluginPanelFocus, ({ plugin, id }) => {
+      focusPanel(plugin, id);
+    }).then((u) => {
+      if (alive) unsubscribe = u;
+      else u();
+    });
+    return () => {
+      alive = false;
+      unsubscribe?.();
+    };
+  }, [extensionsEnabled, focusPanel]);
+
+  const openPanelFull = useCallback(
+    async (plugin: string, id: string) => {
+      if (!extensionsEnabled) return;
+      try {
+        await api.plugin.reviewOpen(plugin, id);
+        setDockOpen(false);
+      } catch (e) {
+        toast(t("Could not open extension panel {0}: {1}", `${plugin}/${id}`, String(e)), "error");
+      }
+    },
+    [extensionsEnabled, setDockOpen, toast],
+  );
+
   const configure = useCallback(
     async (plugin: string, command: string, args?: unknown) => {
+      if (!extensionsEnabled) return;
       try {
         await api.plugin.call(plugin, command, args);
       } catch (e) {
@@ -303,13 +395,18 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
         toast(t("Could not run “{1}” from extension {0}: {2}", plugin, command, String(e)), "error");
       }
     },
-    [toast],
+    [extensionsEnabled, toast],
   );
+
+  const editorInput = useEditorInput(extensionsEnabled ? plugins : []);
 
   // ⚠️ `语` 在依赖里：`pluginMenus.ts` 那两处 `t(...)`（栏名「插件」、以及
   // "想挂到别的栏"那句后缀）是在**算这一份的时候**翻好的，语言换了不重算
   // 就还是旧语言。同一条理由见 `useMenus.ts` 推原生菜单那个 effect。
-  const menus = useMemo(() => withPluginDock(MENUS, menuItems), [menuItems, language2]);
+  const menus = useMemo(
+    () => withPluginDock(MENUS, extensionsEnabled ? menuItems : [], extensionsEnabled),
+    [extensionsEnabled, menuItems, language2],
+  );
 
   /**
    * 菜单项 → 实现。
@@ -321,6 +418,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
    */
   const handlers = useMemo(() => {
     const out: Record<string, () => void> = {};
+    if (!extensionsEnabled) return out;
     for (const it of menuItems) {
       if (it.menu !== recognizeRecognizeOfMenu) continue;
       out[pluginItemId(it.plugin, it.command)] = () => {
@@ -332,7 +430,7 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
       };
     }
     return out;
-  }, [menuItems, askPrompt, configure]);
+  }, [extensionsEnabled, menuItems, askPrompt, configure]);
 
   /**
    * 「插件」页那几颗按钮的实现。四件事的共同形状：**忙什么 → 干 → 重拉 → 报错**。
@@ -653,7 +751,8 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
   );
 
   return {
-    plugins,
+    plugins: extensionsEnabled ? plugins : [],
+    editorInput,
     panels,
     messageTask: trustTable,
     pluginUpdate,
@@ -661,8 +760,11 @@ export function usePlugins({ toast, askPrompt, askConfirm }: PluginsWiring): Plu
     handlers,
     configure,
     action,
-    review,
+    review: extensionsEnabled ? review : null,
     receivePreview,
+    panelFocus,
+    focusPanel,
+    openPanelFull,
   };
 }
 

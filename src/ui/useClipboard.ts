@@ -60,6 +60,8 @@ export interface CutPasteBoardWiring {
   /** 把文本落到文档上（`ui/useEditorCommands.ts` 的 `run`）。 */
   run: (c: EditorCommand, payload?: CommandPayload) => void;
   toast: (message: string, level?: Toast["level"]) => void;
+  /** 菜单粘贴时剪贴板里没有文字，再试着按图片读取。 */
+  pasteImage: () => Promise<boolean>;
 }
 
 export interface CutPasteBoardOutputMouth {
@@ -137,7 +139,7 @@ export function useClipboard(w: CutPasteBoardWiring): CutPasteBoardOutputMouth {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
-  const { editorRef, run, toast } = w;
+  const { editorRef, run, toast, pasteImage } = w;
 
   const copy = useCallback(async () => {
     const content = editorRef.current?.selection() ?? null;
@@ -166,10 +168,15 @@ export function useClipboard(w: CutPasteBoardWiring): CutPasteBoardOutputMouth {
   }, [copy, run]);
 
   const pastePaste = useCallback(async () => {
+    // 图片优先：很多应用复制图片时还会在 `text/plain` 里放一条临时 URL
+    //（浏览器尤其常见）。先读文字会把它当正文插进来，用户看到的就是一整条
+    // `localhost:…`。`readImage` 失败才说明剪贴板不是图片。
+    if (await pasteImage()) return;
+
     // ⚠️ `navigator.clipboard` 本身可能不存在（不是安全上下文时整个对象都没有），
     // 所以连属性访问都要包在 try 里，不能写成 `navigator.clipboard?.readText`
     // 之后再单独 catch 一次——那样漏掉的就是"对象不存在"这一种。
-    let text: string;
+    let text = "";
     try {
       // ⚠️ **读剪贴板走宿主**（`@tauri-apps/plugin-clipboard-manager`，权限只有
       // `allow-read-text` 那一条）：WebKit 把 `navigator.clipboard.readText()` 挡在
@@ -177,15 +184,15 @@ export function useClipboard(w: CutPasteBoardWiring): CutPasteBoardOutputMouth {
       //「剪切板始终显示要CtrlV粘贴，但是我已经是CtrlV了」。宿主没这个限制。
       text = await readText();
     } catch {
-      toast(t("The system does not allow reading the clipboard from the menu — press Ctrl+V to paste."), "warn");
+      // 图片剪贴板的纯文本表示通常为空；读文字失败不应抢在图片回退之前
+      // 弹一条“请按 Ctrl+V”。下面的图片通道失败后才给一条中性提示。
+    }
+    if (text) {
+      run("insertText", { text });
       return;
     }
-    if (!text) {
-      toast(t("There is no text in the clipboard."), "info");
-      return;
-    }
-    run("insertText", { text });
-  }, [run, toast]);
+    toast(t("There is no text or image in the clipboard."), "info");
+  }, [pasteImage, run, t, toast]);
 
   /**
    * 「复制为 Markdown」。

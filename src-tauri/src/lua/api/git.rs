@@ -46,7 +46,6 @@
 //! 侧栏里赫然一行「失败」，而插件本身一个字都没写错。见 `docs/07` 第一轮 BUG-2。
 
 use std::path::PathBuf;
-use std::process::Command;
 
 use mlua::{Lua, Table, Value};
 
@@ -271,7 +270,7 @@ fn run_git<S: AsRef<str>>(cwd: &PathBuf, argv: &[S]) -> NotaResult<GitOutput> {
         }
     }
 
-    let out = Command::new("git")
+    let out = crate::proc::background_command("git")
         // ⚠️ `core.quotePath=false` **是给界面用的，不是给 git 用的**：
         // 默认开着的时候，一个叫 `中文.md` 的文件在 diff 里写成
         // `"\344\270\255\346\226\207.md"`，而这串转义会原样画在插件面板上

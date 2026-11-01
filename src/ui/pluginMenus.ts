@@ -27,7 +27,7 @@
 
 import type { PluginMenuItem } from "@/bridge/ipc";
 import { t } from "@/i18n";
-import type { MenuEntry, MenuSpec } from "@/ui/commands";
+import { isMenuItem, type MenuEntry, type MenuSpec } from "@/ui/commands";
 
 /** 本仓认得的那一栏。**只有它**——`menu` 写别的值无处安放（见文件头）。 */
 export const recognizeRecognizeOfMenu = "plugins";
@@ -99,7 +99,19 @@ export function pluginMenuBar(items: PluginMenuItem[]): MenuSpec | null {
  * 牵着三条 `useMemo`／`useEffect`（`ui/useMenus.ts` 顶上那张表），其中
  * 最后一条会**每渲染重推一次原生菜单**（一次 IPC ＋ 一次重建）。
  */
-export function withPluginDock(menus: readonly MenuSpec[], items: PluginMenuItem[]): MenuSpec[] {
+export function withPluginDock(
+  menus: readonly MenuSpec[],
+  items: PluginMenuItem[],
+  extensionsEnabled = true,
+): MenuSpec[] {
+  if (!extensionsEnabled) {
+    return menus.map((menu) => {
+      const entries = menu.items.filter(
+        (entry) => !isMenuItem(entry) || entry.id !== "view.toggleDock",
+      );
+      return entries.length === menu.items.length ? menu : { ...menu, items: entries };
+    });
+  }
   const bar = pluginMenuBar(items);
   if (!bar) return [...menus];
 

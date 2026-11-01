@@ -388,6 +388,10 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 | 锁的语义 | ⚠️ **搬出去没改变锁**：仍旧是"跑这个插件的代码时一直握着 `plugins` 锁"，所以 `docs/03` 的锁序不变量照旧 |
 | 一次调用多久 | **没有超时看门狗**（§6）。Lua 死循环会永久挂住那条 IPC，表现是按钮一直转，而且没有取消入口 |
 
+📌 **Windows 子进程窗口**：`render` 里的 `git`、`nota.devserver` 会话和其它宿主外部命令
+统一从 `proc::background_command` 启动，使用 `CREATE_NO_WINDOW`。因此后台工作不会在
+Windows 桌面连续闪出控制台黑框；线程与锁的语义不变。
+
 ⚠️ **推论：多个插件的命令是排着队跑的。** 一个插件的 `render` 卡住
 （比如 git 在一个巨大的仓库上），别的插件的命令都得等——**这不是 bug，
 是"一个 `plugins` 锁"的直接后果**，但它决定了"面板里不做重活"这条经验。

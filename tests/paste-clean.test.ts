@@ -34,12 +34,19 @@
 
 import { clearManagePastePasteHTML, findLanguageClue, languageNameTable } from "../src/editor/paste-clean";
 import { extensionExtendNameTable } from "../src/editor/lang-guess";
+import { readFileSync } from "node:fs";
+import {
+  looksLikeMarkdownSource,
+  looksLikeSingleLineCode,
+  recognizePastedTable,
+} from "../src/editor/paste";
 
 /* ── 一支极小的测试工装（与 `auto-correct.test.ts` 同一套长相）── */
 
 let pass = 0;
 let fail = 0;
 const failed: string[] = [];
+const read = (path: string) => readFileSync(path, "utf8");
 
 function testCase(name: string, body3: () => void): void {
   try {
@@ -192,6 +199,26 @@ testCase("`<b>` / `<i>` / `<strike>` 换成 schema 认的那几个", () => {
   contains(clean2("<p><strike>甲</strike></p>"), "<s>", "strike → s");
 });
 
+testCase("OnlyOffice 写在段落或 div 上的格式进入段落内部", () => {
+  const cleaned = clean2(
+    '<p style="font-family:Arial;font-size:11pt;font-weight:700;font-style:italic;text-decoration:underline"><span style="font-family:宋体">111</span></p>',
+  );
+  equal(
+    cleaned,
+    "<p><strong><em><u>111</u></em></strong></p>",
+    "OnlyOffice 段落样式",
+  );
+
+  const divStyle = clean2('<div style="font-weight:bold"><span style="font-style:italic">222</span></div>');
+  equal(divStyle, "<div><strong><em>222</em></strong></div>", "div 段落样式");
+});
+
+testCase("OnlyOffice 的上下标与高亮样式映射为语义标签", () => {
+  contains(clean2('<p><span style="vertical-align:super">2</span></p>'), "<sup>2</sup>", "上标");
+  contains(clean2('<p><span style="vertical-align:sub">2</span></p>'), "<sub>2</sub>", "下标");
+  contains(clean2('<p><span style="background-color:#fff2a8">重点</span></p>'), "<mark>重点</mark>", "高亮");
+});
+
 /* ── 四、代码块的语言线索 ───────────────────────────────────────────── */
 
 group("四、代码块的 `data-language`");
@@ -270,6 +297,88 @@ testCase("⚠️ `<table>` 只留结构不留样式", () => {
   contains(cleaned, "<table>", "table");
   contains(cleaned, 'colspan="2"', "colspan 留");
   notContains(cleaned, "color", "样式丢");
+});
+
+/* ── 六、粘贴前的纯文本识别 ─────────────────────────────────────────── */
+
+group("六、粘贴前的纯文本识别");
+
+testCase("表格软件复制的 TSV 识别成二维表", () => {
+  const table = recognizePastedTable("姓名\t年龄\t城市\n甲\t18\t北京\n乙\t20\t上海");
+  equal(table?.delimiter, "tab", "分隔符");
+  equal(table?.rows.length, 3, "行数");
+  equal(table?.rows[1]?.join("|"), "甲|18|北京", "数据");
+});
+
+testCase("CSV 的引号、逗号与转义引号都按表格解析", () => {
+  const table = recognizePastedTable('name,note\n"Sindre, S.","He said ""hi"""\nAda,Compiler');
+  equal(table?.delimiter, "comma", "分隔符");
+  equal(table?.rows[1]?.[0], "Sindre, S.", "引号里的逗号");
+  equal(table?.rows[1]?.[1], 'He said "hi"', "双引号转义");
+});
+
+testCase("分号 CSV 与末尾空列一起处理", () => {
+  const table = recognizePastedTable("a;b;\n1;2;\n3;4;");
+  equal(table?.delimiter, "semicolon", "分隔符");
+  equal(table?.rows[0]?.join("|"), "a|b", "末尾空列被去掉");
+});
+
+testCase("GFM Markdown 表格直接识别为表格并保留列对齐", () => {
+  const table = recognizePastedTable("| a | b |\n| :-- | --: |\n| 1 | 2 |");
+  equal(table?.delimiter, "markdown", "Markdown table");
+  equal(table?.rows[0]?.join("|"), "a|b", "表头");
+  equal(table?.rows[1]?.join("|"), "1|2", "数据");
+  equal(JSON.stringify(table?.align), JSON.stringify(["left", "right"]), "列对齐");
+});
+
+testCase("表格单元格再走行内解析，不把 `*周期*` 存成 `\\*周期\\*`", () => {
+  const source3 = read("src/editor/paste.ts");
+  contains(source3, "const inlineCell = (text4: string)", "单元格没有行内解析入口");
+  contains(
+    source3,
+    'if (first2?.type.name === "paragraph") return first2.content',
+    "没有取回单元格的行内标记",
+  );
+  contains(
+    source3,
+    "pasteBecomeMarkdown(view, ctx.get(parserCtx), plainText)",
+    "Markdown 表格没有整表交给真实解析器",
+  );
+  contains(
+    source3,
+    "pasteBecomeTable(view, pasted, ctx.get(parserCtx))",
+    "TSV/CSV 表格没有接真实解析器",
+  );
+});
+
+testCase("单行代码只接管高置信形状", () => {
+  equal(looksLikeSingleLineCode('{"a":1}'), true, "JSON");
+  equal(looksLikeSingleLineCode("SELECT id FROM users;"), true, "SQL");
+  equal(looksLikeSingleLineCode("const answer = 42;"), true, "声明");
+  equal(looksLikeSingleLineCode("git status"), false, "普通命令");
+  equal(looksLikeSingleLineCode("The answer, obviously."), false, "英文正文");
+});
+
+testCase("Markdown 源码优先交给上游解析", () => {
+  equal(looksLikeMarkdownSource("```ts\nconst x = 1\n```"), true, "围栏");
+  equal(looksLikeMarkdownSource("```math\n\n```"), true, "空 math 围栏");
+  equal(looksLikeMarkdownSource("---\ntitle: A\n---\n正文"), true, "Front Matter");
+  equal(looksLikeMarkdownSource("| a | b |\n| --- | --- |"), true, "Markdown 表格");
+  equal(looksLikeMarkdownSource("# 标题\n- 项目\n[链接](https://example.com)"), true, "成组 Markdown");
+  equal(looksLikeMarkdownSource("普通的两行\n文字内容"), false, "普通正文");
+});
+
+testCase("粘贴分流顺序：Markdown 表格 → 其他 Markdown → 代码", () => {
+  const source3 = read("src/editor/paste.ts");
+  const table = source3.indexOf('markdownTable?.delimiter === "markdown"');
+  const markdown = source3.indexOf("pasteBecomeMarkdown(view, ctx.get(parserCtx)");
+  const code = source3.indexOf("looksLikeCode(plainText)");
+  if (!(table >= 0 && table < markdown && markdown < code)) {
+    throw new Error(`分流顺序不对：${markdown}, ${table}, ${code}`);
+  }
+  if (source3.includes("html.length === 0 && looksLikeMarkdownSource(plainText)")) {
+    throw new Error("Markdown 仍被限制为只能在没有 text/html 时生效");
+  }
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

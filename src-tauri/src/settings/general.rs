@@ -50,6 +50,12 @@ pub struct General {
     /// ⚠️ 它**只加日志，不改行为**。任何"开着调试模式就换一套代码路径"的设计
     /// 都会让"在我这里没问题"这句话失去意义。
     pub debug_mode: bool,
+    /// 全局拓展总开关。关闭后不扫描运行插件代码，但保留所有已安装文件和每个
+    /// 拓展自己的启停账本；重新开启时按原账本恢复。默认开启。
+    pub extensions_enabled: bool,
+    /// 开发者模式的元素悬停检查。开启后指针经过界面元素时显示计算后的字体、
+    /// 颜色、尺寸和内边距。默认关闭，并且只在 `debug_mode` 同时开启时生效。
+    pub element_inspector: bool,
 }
 
 impl Default for General {
@@ -57,6 +63,8 @@ impl Default for General {
         Self {
             language: crate::lang::自动.to_owned(),
             debug_mode: false,
+            extensions_enabled: true,
+            element_inspector: false,
         }
     }
 }
@@ -82,6 +90,20 @@ mod tests {
     #[test]
     fn 调试模式默认关() {
         assert!(!General::default().debug_mode);
+    }
+
+    #[test]
+    fn 拓展默认开启且旧设置补默认值() {
+        assert!(General::default().extensions_enabled);
+        let old: General = toml::from_str("language = \"auto\"").unwrap();
+        assert!(old.extensions_enabled);
+    }
+
+    #[test]
+    fn 元素悬停检查默认关闭且旧设置补默认值() {
+        assert!(!General::default().element_inspector);
+        let old: General = toml::from_str("language = \"auto\"").unwrap();
+        assert!(!old.element_inspector);
     }
 
     #[test]

@@ -8,7 +8,7 @@
 
 import { api } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { ActionButton, SettingRow, SettingsGroup, Value } from "../primitives";
+import { ActionButton, SettingRow, SettingsGroup, Toggle, Value } from "../primitives";
 import type { PaneProps } from "./props";
 
 export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
@@ -34,6 +34,21 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
           <ActionButton onClick={() => void api.window.openDebugLog()}>
             {t("Open Log")}
           </ActionButton>
+        </SettingRow>
+        <SettingRow
+          label={t("Element hover inspector")}
+          description={t(
+            "Show the computed font, colors, box size and padding below the interface element under the pointer.",
+          )}
+        >
+          <Toggle
+            checked={settings.general.element_inspector}
+            onChange={(element_inspector) =>
+              onChange({
+                general: { ...settings.general, element_inspector },
+              })
+            }
+          />
         </SettingRow>
         <SettingRow label={t("Settings file")}>
           <ActionButton onClick={onOpenConfigDir}>{t("Open Folder…")}</ActionButton>

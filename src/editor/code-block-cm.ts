@@ -2,19 +2,15 @@
  * 代码块里那个 **CodeMirror 实例**（backlog 第 101 项）。
  *
  * 用户 2026-10-06 定的做法：「**引入开源项目：CodeMirror。解决代码框。记得鸣谢。**」
- * ——也就是说，代码块不再靠给 ProseMirror 的 `code_block` 打补丁去凑手感
- * （`auto-pair.ts` 那边只能补"配对"这一件，缩进与 `Tab` 补不进去），
- * 而是**换一个真的编辑器来管那一段文本**。
+ * ——也就是说，代码块不再靠给 ProseMirror 的 `code_block` 打补丁去凑手感，
+ * 而是换一个真正的编辑器来管那一段文本。
  *
  * # 为什么这就不是"新引一个库"
  *
  * `@codemirror/state` / `view` / `commands` / `language` 本仓**早就在用**
- * （源码模式 `editor/source.ts`，2026-09 起）。这一批只多了一个
- * `@codemirror/autocomplete`——它是**唯一**新登记的依赖，为的是它里面的
- * `closeBrackets()`（真正的代码编辑器那套配对：成对补右半边、再打闭符号跨过去、
- * 夹在空对中间退格两颗一起删）。⚠️ 那一份不许自己手写：配对看着简单，
- * 但"选中一段再打括号""引号里的引号""退格删一对"三件事的边界条件很碎，
- * 手写的版本一定会在某个语言上出洋相。
+ * （源码模式 `editor/source.ts`，2026-09 起）。代码块使用 CodeMirror 官方的
+ * `closeBrackets()`：括号、引号与反引号自动成对，键入已有闭符时跨过，
+ * 光标夹在空对中间时退格整体删除。普通正文的符号输入规则不受影响。
  *
  * # 谁拥有这段文本（**这是本文件最要紧的一条**）
  *
@@ -75,12 +71,15 @@ import {
   drawSelection,
   highlightActiveLine,
   keymap,
+  lineNumbers,
   type Command,
   type DecorationSet,
   type KeyBinding,
   type ViewUpdate,
 } from "@codemirror/view";
 import { refractor } from "refractor";
+import { ensureFullLanguageTable } from "./refractor-runtime";
+import { isMathCodeLanguage } from "./math-code";
 
 // ⚠️ 「哪个字算一个词」的判据**与所见即所得、源码模式是同一份**（`select.ts`
 // 第一组那几个纯函数）：同一颗 `Ctrl+D` 在三处选出来的东西必须一样。
@@ -104,56 +103,9 @@ const shrinkEnterWidthDegree = "    ";
  * 括号配对）得靠用例钉。
  */
 
-function isHeightPosition(c: number): boolean {
-  return c >= 0xd800 && c <= 0xdbff;
-}
+import { computeMostSmallChangeAction } from "./code-block-change";
 
-function isLowPosition(c: number): boolean {
-  return c >= 0xdc00 && c <= 0xdfff;
-}
-
-/**
- * 两版文本之间**最小的那一段改动**（只用一处替换表达）。
- *
- * 算法是"抠掉公共前缀、再抠掉公共后缀"，看着朴素，但**两条边界必须处理**，
- * 否则会切出半个字符来：
- *
- * - **代理对**：`"😀"` 与 `"😁"` 的高位是同一个码元（`0xD83D`），
- *   逐码元比前缀会停在**两个码元中间**——照那个位置切，切完剩下一个孤立的
- *   高位代理，文本就坏了。所以两条边界都要往回退到**完整的字符**上。
- * - **前后缀重叠**：前缀和后缀都别越过对方（`前 + 尾 <= 短`），
- *   否则 `"aa"` → `"a"` 这种会被算成"删掉一个 a 又插回一个 a"。
- *
- * 判据在 `tests/code-block-editing.test.ts`：相等、纯插入、纯删除、中间替换、
- * 整段替换、以及上面那两种边界。
- */
-export function computeMostSmallChangeAction(
-  oldText: string,
-  newText: string,
-): { deleteStart: number; deleteEnd: number; insert: string } {
-  const short = Math.min(oldText.length, newText.length);
-
-  let before2 = 0;
-  while (before2 < short && oldText.charCodeAt(before2) === newText.charCodeAt(before2)) before2++;
-  // ⚠️ 退到完整字符上：`前` 若正好落在（高位, 低位）之间，两边一起退一格。
-  while (before2 > 0 && (isLowPosition(oldText.charCodeAt(before2)) || isLowPosition(newText.charCodeAt(before2)))) {
-    if (isHeightPosition(oldText.charCodeAt(before2 - 1)) || isHeightPosition(newText.charCodeAt(before2 - 1))) before2--;
-    else break;
-  }
-
-  const returnAbleBack = () => tail < short - before2;
-  const tailBreakAtCharacterInside = (text4: string) => {
-    const i = text4.length - tail;
-    return i > 0 && i < text4.length && isHeightPosition(text4.charCodeAt(i - 1)) && isLowPosition(text4.charCodeAt(i));
-  };
-
-  let tail = 0;
-  while (returnAbleBack() && oldText.charCodeAt(oldText.length - 1 - tail) === newText.charCodeAt(newText.length - 1 - tail))
-    tail++;
-  while (returnAbleBack() && (tailBreakAtCharacterInside(oldText) || tailBreakAtCharacterInside(newText))) tail++;
-
-  return { deleteStart: before2, deleteEnd: oldText.length - tail, insert: newText.slice(before2, newText.length - tail) };
-}
+export { computeMostSmallChangeAction } from "./code-block-change";
 
 /** hast 里我们要用到的那几个字段。⚠️ refractor 的类型很宽，这里自己收窄。 */
 type ShareWordNode = {
@@ -209,7 +161,7 @@ export function shareColor(text2: string, language: string): ColorBlock[] {
   return output2;
 }
 
-/** 三种括号的配对表（与 `closeBrackets` 那份表同源）。 */
+/** 回车缩进判断使用的三组括号。 */
 const openBracketNumber = "([{";
 const closeBracketNumber = ")]}";
 
@@ -453,8 +405,11 @@ const theme = EditorView.theme({
   "&.cm-focused .cm-activeLine": { backgroundColor: "color-mix(in srgb, var(--fg) 5%, transparent)" },
 });
 
-/** 配对表。⚠️ CM 出厂那份**没有反引号**，代码块里必须有（`` ` `` 是常用符号）。 */
-const configureCorrectTable = EditorState.languageData.of(() => [
+/**
+ * CodeMirror's default bracket table omits backticks. Embedded source editors
+ * need the pair because Markdown code frequently contains inline backticks.
+ */
+const codeBracketLanguageData = EditorState.languageData.of(() => [
   { closeBrackets: { brackets: ["(", "[", "{", "'", '"', "`"], before: ")]}:;>`" } },
 ]);
 
@@ -572,8 +527,10 @@ export type codeBlockEditor = {
 export type codeBlockEditorOptions = {
   initialStartText: string;
   initialStartLanguage: string;
+  /** Use CodeMirror's native gutter for embedded editors without a host gutter. */
+  nativeLineNumbers?: boolean;
   /** CM 里的文本变了（**已经去掉了回声**：由调用方的 `同步中` 那把锁保证）。 */
-  textChangeConvert: (newText: string) => void;
+  textChangeConvert: (newText: string, cursor: number) => void;
   clusterFocus: () => void;
   loseFocus: () => void;
   /** 代码块里按了 Ctrl+Z / Ctrl+Shift+Z。⚠️ 撤销归 ProseMirror，见文件头。 */
@@ -685,12 +642,16 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
   // 这样那颗开关在代码块里**真的**是活的——不然就是又一个"拨了不生效的开关"。
   const replaceLineCabin = new Compartment();
   const wantReplaceLine = () => document.documentElement.dataset.codeWrap !== "off";
+  const lineNumberCabin = new Compartment();
+  const wantLineNumbers = () =>
+    option.nativeLineNumbers === true &&
+    document.documentElement.dataset.codeLineNumbers === "on";
 
   const view = new EditorView({
     state: EditorState.create({
       doc: option.initialStartText,
       extensions: [
-        configureCorrectTable,
+        codeBracketLanguageData,
         // ⚠️ 顺序既管优先级也管"谁先试"：我们自己那两条撤销键要在最前
         //（`defaultKeymap` 里没有 `Mod-z`，但先写能保证将来它加了也不打架）。
         keymap.of([
@@ -733,10 +694,16 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
         // 当前行那一层淡底（配色在同文件那条 `主题` 里，**与源码模式不是一个色**，
         // 理由见那条注释）。
         highlightActiveLine(),
+        lineNumberCabin.of(wantLineNumbers() ? lineNumbers() : []),
         replaceLineCabin.of(wantReplaceLine() ? EditorView.lineWrapping : []),
         theme,
         EditorView.updateListener.of((u) => {
-          if (u.docChanged) option.textChangeConvert(u.state.doc.toString());
+          if (u.docChanged) {
+            option.textChangeConvert(
+              u.state.doc.toString(),
+              u.state.selection.main.head,
+            );
+          }
           if (u.focusChanged) (u.view.hasFocus ? option.clusterFocus : option.loseFocus)();
         }),
       ],
@@ -745,25 +712,37 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
 
   const watchSettings = new MutationObserver(() => {
     if (alreadyCancelDestroy) return;
-    view.dispatch({ effects: replaceLineCabin.reconfigure(wantReplaceLine() ? EditorView.lineWrapping : []) });
+    view.dispatch({
+      effects: [
+        replaceLineCabin.reconfigure(
+          wantReplaceLine() ? EditorView.lineWrapping : [],
+        ),
+        lineNumberCabin.reconfigure(wantLineNumbers() ? lineNumbers() : []),
+      ],
+    });
   });
   watchSettings.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ["data-code-wrap"],
+    attributeFilter: ["data-code-wrap", "data-code-line-numbers"],
   });
 
-  // ⚠️ 长尾语言那一份表（`refractor/all`，~500 kB）是**异步**到的（见
-  // `code-block.ts` 顶上那段）。本插件只在文档变化时重算，所以"开机时正开着
-  // 一份长尾语言的文档"这一格要靠这条通知补上。⚠️ `import()` 有缓存，
-  // 每个代码块各挂一次不会重复下载。
-  void import("refractor/all").then(() => {
-    if (alreadyCancelDestroy) return;
-    try {
-      view.dispatch({ effects: heavyComputeEffectResult.of(null) });
-    } catch {
-      // 视图可能在 resolve 之前就被销毁了（整块被删掉）。不理它。
-    }
-  });
+  // 只有这个代码块确实使用基础表尚未注册的语言时才加载长尾表。
+  // 普通 c/js/ts/python/rust 等文档不再因为出现代码块就承担数百个解析器。
+  const initialLanguage = option.initialStartLanguage;
+  if (
+    initialLanguage &&
+    !isMathCodeLanguage(initialLanguage) &&
+    !refractor.registered(initialLanguage)
+  ) {
+    void ensureFullLanguageTable().then(() => {
+      if (alreadyCancelDestroy) return;
+      try {
+        view.dispatch({ effects: heavyComputeEffectResult.of(null) });
+      } catch {
+        // 视图可能在 resolve 之前就被销毁了（整块被删掉）。不理它。
+      }
+    });
+  }
 
   return {
     view,

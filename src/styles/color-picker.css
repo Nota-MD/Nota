@@ -1,0 +1,116 @@
+/* Self-drawn accent color picker. */
+
+.stg-color-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.stg-color-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  height: var(--control-height);
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.92em;
+  cursor: pointer;
+}
+
+.stg-color-trigger:hover,
+.stg-color-picker[data-open="true"] .stg-color-trigger {
+  background: var(--bg-hover);
+}
+
+.stg-color-picker[data-open="true"] .stg-color-trigger,
+.stg-color-trigger:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.stg-color-chip {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.stg-color-hex {
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.stg-color-popup {
+  position: fixed;
+  z-index: var(--z-select-popup);
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: var(--popup-shadow);
+}
+
+.stg-color-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+.stg-color-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+
+.stg-color-grid:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stg-color-cell {
+  aspect-ratio: 1.15;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.stg-color-cell:hover,
+.stg-color-cell[data-active="true"] {
+  outline: 2px solid var(--fg);
+  outline-offset: 1px;
+}
+
+.stg-color-cell[data-selected="true"] {
+  box-shadow: inset 0 0 0 2px var(--bg-raised);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stg-color-custom {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.stg-color-custom label {
+  color: var(--fg-muted);
+  font-size: 0.9em;
+}

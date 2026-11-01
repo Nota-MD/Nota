@@ -656,6 +656,12 @@ export interface PluginPanel {
   live: boolean;
 }
 
+/** One request from an extension to reveal a registered panel in the dock. */
+export interface PluginPanelFocusPayload {
+  plugin: string;
+  id: string;
+}
+
 /**
  * 编辑区（中间那一大块）里此刻摊着的那一格。
  *
@@ -795,6 +801,12 @@ export interface DocThemeInfo {
   name: string;
   /** 是不是本仓内置的那几套。false 有两种：用户新加的、或用户覆盖了内置的。 */
   builtin: boolean;
+}
+
+/** Themes imported together from one ZIP package. */
+export interface ThemeImportReport {
+  ui: string[];
+  document: string[];
 }
 
 /**

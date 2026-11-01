@@ -1,6 +1,6 @@
 /**
  * 块容器开场键的应用测试：
- * - 引用最开头按空格拆掉全部引用层；
+ * - 引用最开头按空格或退格拆掉全部引用层；
  * - 空表格开头按退格删除整张表。
  */
 
@@ -8,6 +8,7 @@ import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import { tableNodes } from "@milkdown/kit/prose/tables";
+import { readFileSync } from "node:fs";
 
 import {
   getClearAllReferenceUse,
@@ -15,6 +16,7 @@ import {
   atEmptyTableCellOpenHead,
   deleteEmptyTable,
 } from "../src/editor/block-keys";
+import { VIM_ALLOW_STRUCTURE_META } from "../src/editor/plugin-vim-ops";
 
 let pass = 0;
 let fail = 0;
@@ -80,10 +82,13 @@ function stateAt(doc: PMNode, pos: number): EditorState {
 
 function transactionShouldUseTo(state: EditorState, command: typeof getClearAllReferenceUse): EditorState {
   let current = state;
+  let structurallyAllowed = false;
   const accepted = command(state, (tr) => {
+    structurallyAllowed = tr.getMeta(VIM_ALLOW_STRUCTURE_META) === true;
     current = current.apply(tr);
   });
   assertValue(accepted, "命令应当接受这一下");
+  assertValue(structurallyAllowed, "结构事务必须带 Vim 普通模式放行标记");
   return current;
 }
 
@@ -104,6 +109,39 @@ testCase("嵌套引用最开头可一次退出全部引用", () => {
   const after = transactionShouldUseTo(state, getClearAllReferenceUse);
   assertValue(!hasReferenceUseNode(after.doc), "引用层应全部消失");
   assertValue(after.doc.textContent === "正文", "正文应原样保留");
+});
+
+testCase("引用最开头按退格同样拆掉全部引用层", () => {
+  const doc = document(referenceUse(referenceUse(paragraph2("正文"))));
+  const state = stateAt(doc, 3);
+  const after = transactionShouldUseTo(state, getClearAllReferenceUse);
+  assertValue(!hasReferenceUseNode(after.doc), "退格命令应拆掉引用层");
+  assertValue(after.doc.textContent === "正文", "正文应原样保留");
+  const keys = readFileSync("src/editor/block-keys.ts", "utf8");
+  assertValue(
+    keys.includes("if (atReferenceUseMostOpenHead(view.state))") &&
+      keys.includes("getClearAllReferenceUse(view.state"),
+    "Backspace 分支没有接到取消引用命令",
+  );
+  const assembly = readFileSync("src/editor/assemble.ts", "utf8");
+  const blockKeys = assembly.indexOf("[blockContainerKeypress]");
+  const vimInput = assembly.indexOf("vimInputPlugin(parameter.vimInput.config");
+  assertValue(
+    blockKeys >= 0 && vimInput >= 0 && blockKeys < vimInput,
+    "块键插件必须排在 Vim 输入适配器之前，否则 Backspace 会被 Vim 吃掉",
+  );
+  assertValue(
+    readFileSync("src/editor/plugin-vim-input.ts", "utf8").includes(
+      "atReferenceUseMostOpenHead(view.state)",
+    ),
+    "Vim 适配器没有在引用框开头让出 Backspace",
+  );
+  assertValue(
+    readFileSync("src/editor/plugin-vim-input.ts", "utf8").includes(
+      "tr.getMeta(VIM_ALLOW_STRUCTURE_META)",
+    ),
+    "Vim 事务过滤器没有放行块结构编辑",
+  );
 });
 
 testCase("引用中间或非开头不消费空格", () => {

@@ -159,7 +159,7 @@ pub struct Settings {
     ///
     /// ⚠️ 存 id 不存名称：显示名是中文、随时可能改，改了不该让用户的设置失效。
     pub document_theme: String,
-    /// 界面字号（px）。文档字号是文档主题的事，不在这里。
+    /// 编辑区基准字号（px）；字段名沿用历史值。外壳 UI 由整体缩放负责。
     pub ui_font_size: u32,
     /// 内容区宽度上限（px）。⚠️ **只有 [`Self::limit_text_width`] 开着时才生效**。
     pub content_width: u32,

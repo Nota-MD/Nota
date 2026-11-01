@@ -18,7 +18,7 @@
  * 宿主没实现、还是自己写错了字段名，而界面上一点线索都没有。
  */
 
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { useT } from "@/i18n";
 import { pushVerticalTick, formatNumber } from "@/ui/chart-ticks";
@@ -28,9 +28,10 @@ import { askParameter } from "@/ui/plugin-prompt";
 // 私有组件。`.panel-share*` 那几个类名没变（仍在 `share.css`）。
 import { ShareCardBlock } from "@/ui/ShareCard";
 import type { PromptRequest } from "@/ui/useDialogs";
+import { PanelControlBlock, type PanelControl } from "@/ui/PanelControls";
+import { CardIcon } from "@/ui/CardIcon";
 import type {
   PanelAction,
-  PanelCardIcon,
   PanelCards,
   PanelChart,
   PanelDiffOp,
@@ -39,6 +40,10 @@ import type {
   PanelInput as PanelInputSpec,
   PanelNode,
 } from "@/ui/panel-nodes";
+
+const PanelNetworkBlock = lazy(() =>
+  import("@/ui/PanelNetwork").then((module) => ({ default: module.PanelNetworkBlock })),
+);
 
 /**
  * 差异行**行首那一列标记**。
@@ -177,6 +182,20 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
               </div>
             );
 
+          case "toggle":
+          case "select":
+          case "file":
+            return (
+              <PanelControlBlock
+                key={i}
+                node={node as PanelControl}
+                busy={busy !== null}
+                onCall={(command, arg, args, value) => {
+                  if (arg) void onCall(plugin, command, { ...(args as object), [arg]: value });
+                }}
+              />
+            );
+
           case "empty":
             return (
               <p key={i} className="panel-empty">
@@ -277,6 +296,20 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
               </div>
             );
 
+          case "network":
+            return (
+              <Suspense
+                key={i}
+                fallback={<p className="panel-empty">{t("Preparing the note graph…")}</p>}
+              >
+                <PanelNetworkBlock
+                  spec={node.spec}
+                  disabled={busy !== null}
+                  onAction={pointAction}
+                />
+              </Suspense>
+            );
+
           case "chart":
             return <PanelChartBlock key={i} spec={node.spec} />;
 
@@ -329,6 +362,8 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
                 // 所以跨来源那道墙还在，那条页面够不着 Nota 的 DOM。
                 // 这一条只是把"自己的来源"还给那个页面。
                 sandbox="allow-scripts allow-same-origin"
+                allow="fullscreen; autoplay"
+                allowFullScreen
                 // 地址已经过 `本机地址()`（协议 + 主机名两道），
                 // 浏览器那头还有 CSP 的 `frame-src` 兜一层。
                 src={node.url}
@@ -856,75 +891,6 @@ function PanelCardsBlock({ spec }: { spec: PanelCards }) {
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * 记录卡左边那颗圆图标。
- *
- * ⚠️ **画出来的形状由本文件说了算**，插件只在 `panel-nodes.ts::图标名` 那张
- * 白名单里报一个语义（"这一条是本轮 / 今天 / 长期 / 整篇"）。这样换一套图标
- * 不用动任何插件——与 `share` 那条"插件说什么、宿主说怎么显示"同规矩。
- * ⚠️ 认不出的名字在解析层就已经被换成 `"record"` 了，所以这里那个兜底
- * 分支是"兜到底"，不是"日常会走到"。
- */
-function CardIcon({ name }: { name: PanelCardIcon }) {
-  return (
-    <span className="panel-card-icon" aria-hidden="true">
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.7}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {name === "today" ? (
-          // 今天：一页日历。
-          <>
-            <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
-            <path d="M3.5 9.75h17" />
-            <path d="M8 3v3.5M16 3v3.5" />
-          </>
-        ) : name === "long" ? (
-          // 长期：一格格的日子（就是热力图那个形状）。⚠️ 深浅不一，看着才像
-          // "有的天写得多、有的少"；全一样就成了一块砖。
-          <g fill="currentColor" stroke="none">
-            {[0, 1, 2].map((line3) =>
-              [0, 1, 2].map((column) => (
-                <rect
-                  key={`${line3}-${column}`}
-                  x={3.6 + column * 6}
-                  y={3.6 + line3 * 6}
-                  width={4.6}
-                  height={4.6}
-                  rx={1.2}
-                  opacity={0.32 + ((line3 + column) % 3) * 0.26}
-                />
-              )),
-            )}
-          </g>
-        ) : name === "doc" ? (
-          // 整篇：一张有折角的纸。
-          <>
-            <path d="M6.5 3.5h7l4.5 4.5v12.5a1 1 0 0 1-1 1h-10a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1Z" />
-            <path d="M13.5 3.5V8h4.5" />
-            <path d="M8.5 13h7M8.5 16.5h4.5" />
-          </>
-        ) : name === "record" ? (
-          // 兜底：一颗中性的圆点，不表态。
-          <circle cx="12" cy="12" r="7.5" />
-        ) : (
-          // 本轮：一块秒表（"按下开始到按下结束"的那一段）。
-          <>
-            <circle cx="12" cy="13.5" r="7" />
-            <path d="M12 10.5v3.2l2.2 1.4" />
-            <path d="M9.5 2.5h5" />
-            <path d="M12 2.5v3.4" />
-          </>
-        )}
-      </svg>
-    </span>
   );
 }
 

@@ -350,7 +350,7 @@ export function FormatBar({
    * 会叫两个名字。加新键之前先 `grep -rn 't("那句原文")' src/`。
    */
   const TITLES: Partial<Record<EditorCommand, string>> = {
-    text: t("Body text"),
+    text: t("Normal text"),
     bold: t("Bold"),
     italic: t("Italic"),
     strike: t("Strikethrough"),
@@ -445,9 +445,15 @@ export function FormatBar({
       case "codeBlock":
         return TITLES.codeBlock!;
       default:
-        return t("Paragraph");
+        return TITLES.text!;
     }
   })();
+  const currentListIcon =
+    state?.block === "ol"
+      ? "folio-view-list-ordered-symbolic"
+      : state?.block === "task"
+        ? "nota-task-symbolic"
+        : "folio-view-list-bullet-symbolic";
   const hideToolbarLabel = t("Hide the formatting toolbar");
   const moreEntriesWithLabel = moreMenuEntries.map((entry) =>
     typeof entry !== "string" && entry.id === "view.toolbarNever"
@@ -561,7 +567,7 @@ export function FormatBar({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => setOpenMenu((current) => (current === "list" ? null : "list"))}
         >
-          <Icon name="folio-view-list-bullet-symbolic" />
+          <Icon name={currentListIcon} />
           <span className="format-caret" aria-hidden="true" />
         </button>
         {openMenu === "list" && (
@@ -590,9 +596,7 @@ export function FormatBar({
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => setOpenMenu((current) => (current === "more" ? null : "more"))}
         >
-          <span className="format-more-dots" aria-hidden="true">
-            •••
-          </span>
+          <Icon name="folio-view-more-horizontal-symbolic" />
         </button>
         {openMenu === "more" && (
           <MenuPopup

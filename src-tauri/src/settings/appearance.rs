@@ -5,7 +5,7 @@
 //! ⚠️⚠️ **这一页有一半的东西不在这里，在顶层。** 那是有意的：
 //!
 //! - `ui_style`（界面风格）、`ui_mode`（明暗）—— 顶层
-//! - `ui_font_size`（界面字号）—— 顶层，对应界面上的「字体大小」那一组
+//! - `ui_font_size`（历史字段名；现在表示编辑区基准字号）—— 顶层
 //! - `document_theme`（主题）—— 顶层，对应界面上的「主题」那一组
 //!
 //! 它们是 2026-09-22 / 09-23 就定下来的**三条互相独立的外观轴**，位置在
@@ -70,7 +70,7 @@ pub enum ToolbarMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CtrlWheelTarget {
-    /// 改**界面字号**（`ui_font_size`，顶层那个）。**默认**。
+    /// 改**编辑区基准字号**（`ui_font_size`，顶层那个）。**默认**。
     #[default]
     FontSize,
     /// 改**界面缩放**（`zoom`，走 `webview.setZoom()`）。
@@ -166,15 +166,14 @@ pub enum MenuBarRenderer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Appearance {
-    /// 「自定义」界面字号。**关**时字号自动，
+    /// 「自定义」编辑区字号。**关**时跟随编辑区默认基准，
     /// 此时 `ui_font_size` 那一格在界面上是灰的。
     ///
-    /// ⚠️ 这**不是**第二个字号字段——字号只有 `ui_font_size` 一个。
-    /// 这个布尔只是"那个值算不算数"。
+    /// 字段 `ui_font_size` 是历史名字；它现在只喂编辑区，不喂外壳 UI。
     pub custom_font_size: bool,
     /// 缩放百分比。100 是原始大小。
-    /// ⚠️ 它缩的是**整个界面**（外壳 + 编辑区），而 `ui_font_size` 只缩外壳的
-    /// 文字。两者会叠乘，这是有意的：缩放动的是整个界面，字号只动外壳的文字。
+    /// ⚠️ 它缩的是**整个界面**（外壳 + 编辑区），而 `ui_font_size` 只改
+    /// 编辑区正文基准；两者叠乘。
     pub zoom: u32,
     /// 按住 Ctrl 时用鼠标滚轮**生效**（改什么由下面那条定）。
     ///

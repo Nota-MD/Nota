@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.12.0-beta"
+version = "0.13.0-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota — 所见即所得的 Markdown 编辑器，带 Lua 插件系统"
@@ -157,6 +157,7 @@ version = "3"
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", features = ["v3_24"] }
 webkit2gtk = "2.0"
+libc = "0.2"
 
 # ── 只有 Windows 用到：**让"打印"真的去打印**（2026-10-16）────────────────────
 #
@@ -180,3 +181,11 @@ windows-sys = { version = "0.59", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+# Release binaries are a distribution artifact, not a debugging target.
+# Thin LTO removes cross-crate duplication without the full-LTO link-time cost;
+# stripping symbols keeps the installed binary materially smaller.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"

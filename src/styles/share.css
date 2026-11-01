@@ -19,7 +19,7 @@
   margin: 0 0 10px;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 0;
   background: var(--bg-subtle);
 }
 
@@ -28,11 +28,116 @@
  * 决定（SVG 自带 `viewBox`），不必再写一个高度。 */
 .panel-share-img {
   display: block;
-  width: 100%;
-  border-radius: 3px;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(58vh, 680px);
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: 0;
   /* ⚠️ 图是浅色的、面板底色是深的（或者反过来）时，边界得看得见。
    * 用一条内阴影而不是边框：边框会占掉宽度，让下面的按钮和图左右不对齐。 */
   box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.panel-share-profile {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.panel-share-avatar {
+  display: grid;
+  grid-column: 1;
+  grid-row: 1;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 650 13px var(--font-ui);
+  cursor: pointer;
+}
+
+.panel-share-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.panel-share-name {
+  display: grid;
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.panel-share-name > span {
+  color: var(--fg-muted);
+  font-size: 0.72em;
+  line-height: 1;
+}
+
+.panel-share-name input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 3px 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--fg);
+  font: 600 0.92em var(--font-ui);
+}
+
+.panel-share-name input:focus {
+  border-bottom-color: var(--accent);
+  outline: none;
+}
+
+.panel-share-remove {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: end;
+  padding: 1px 0;
+  font-size: 0.72em;
+}
+
+.panel-share-promo {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 0.82em;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.panel-share-promo input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.panel-share-promo small {
+  display: block;
+  color: var(--fg-faint);
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
 }
 
 .panel-share-actions {
@@ -58,4 +163,103 @@
    * `anywhere` 而不是 `break-all`：前者只在**真的放不下**时才断，中文那种
    * 本来就随处可断的行不会被打散。 */
   overflow-wrap: anywhere;
+}
+
+.avatar-crop-backdrop {
+  z-index: 260;
+}
+
+.avatar-crop-dialog {
+  width: min(440px, calc(100vw - 36px));
+  min-width: 0;
+  max-width: 440px;
+}
+
+.avatar-crop-dialog h2 {
+  margin: 0 38px 6px 0;
+  font-size: 1.1em;
+}
+
+.avatar-crop-hint,
+.avatar-crop-file {
+  color: var(--fg-muted);
+  font-size: 0.84em;
+  line-height: 1.45;
+}
+
+.avatar-crop-hint {
+  margin: 0 0 12px;
+}
+
+.avatar-crop-stage {
+  position: relative;
+  width: 320px;
+  height: 320px;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #1d1f1c;
+  cursor: grab;
+  touch-action: none;
+}
+
+.avatar-crop-stage:active {
+  cursor: grabbing;
+}
+
+.avatar-crop-stage img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.avatar-crop-mask {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 999px rgb(0 0 0 / 54%);
+  pointer-events: none;
+}
+
+.avatar-crop-zoom {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+  font-size: 0.86em;
+}
+
+.avatar-crop-zoom input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.avatar-crop-zoom output {
+  color: var(--fg-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.avatar-crop-facts {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--fg-muted);
+  font-size: 0.78em;
+}
+
+.avatar-crop-file {
+  margin: 8px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar-crop-dialog .confirm-actions {
+  margin-top: 16px;
 }

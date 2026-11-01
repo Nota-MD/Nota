@@ -194,12 +194,14 @@
   width: max-content;
   max-width: calc(100% - 24px);
   overflow: visible;
-  gap: 2px;
-  padding: 5px 7px;
-  border: 1px solid var(--format-bar-border);
+  gap: 1px;
+  padding: 5px 6px;
+  border: 1px solid color-mix(in srgb, var(--format-bar-border) 72%, transparent);
   border-radius: var(--format-bar-radius);
-  background: var(--format-bar-bg);
-  box-shadow: var(--format-bar-shadow);
+  background: color-mix(in srgb, var(--format-bar-bg) 96%, transparent);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.13),
+    0 2px 7px rgba(0, 0, 0, 0.08);
   transform: translateX(-50%);
   white-space: nowrap;
 }
@@ -232,17 +234,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 7px;
-  min-width: 92px;
-  height: 30px;
-  padding: 0 10px;
+  min-width: 88px;
+  height: 32px;
+  padding: 0 9px;
   border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--fg-muted);
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
+  font-weight: 500;
   cursor: pointer;
   user-select: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 
 .format-selector:hover,
@@ -267,12 +273,16 @@
 }
 
 .app-main > .format-bar .format-btn {
-  min-width: 30px;
-  height: 30px;
+  min-width: 32px;
+  height: 32px;
   padding: 0 7px;
   border-radius: 999px;
   color: var(--fg-muted);
   gap: 4px;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 
 .app-main > .format-bar .format-btn:hover {
@@ -285,9 +295,10 @@
 }
 
 .app-main > .format-bar .format-btn[data-on="true"] {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-fg);
+  border-color: var(--border);
+  background: var(--bg-active);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 45%, transparent);
 }
 
 .format-menu-trigger {
@@ -305,9 +316,9 @@
 }
 
 .app-main > .format-bar .format-sep {
-  height: 18px;
-  margin: 0 5px;
-  background: var(--border);
+  height: 20px;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--border) 80%, transparent);
 }
 
 .format-menu {
@@ -334,9 +345,15 @@
 
 .format-bar .menu-popup {
   top: auto;
-  bottom: calc(100% + 7px);
+  bottom: calc(100% + 9px);
   left: 0;
   max-height: min(420px, 58vh);
+  padding: 6px;
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow:
+    0 14px 38px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.08);
   transform-origin: bottom left;
 }
 
@@ -352,14 +369,14 @@
   align-items: center;
   gap: 9px;
   width: 100%;
-  min-height: 30px;
-  padding: 4px 8px;
+  min-height: 34px;
+  padding: 5px 9px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: calc(var(--radius-sm) + 1px);
   background: transparent;
   color: var(--fg);
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.875rem;
   text-align: start;
   cursor: pointer;
 }

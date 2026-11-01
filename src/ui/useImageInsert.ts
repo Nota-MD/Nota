@@ -60,6 +60,7 @@ import type { Dialogs } from "@/ui/useDialogs";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import { imageExtensionFromMime } from "@/editor/image-kind";
 import type { Toast } from "@/ui/Toasts";
+import { readImage } from "@tauri-apps/plugin-clipboard-manager";
 
 export interface InsertImageWiring {
   /**
@@ -92,6 +93,11 @@ export interface InsertImageOutputMouth {
    * 那个动作变慢，理由见 `settings` 那一头）。自动上传不归它管。
    */
   dropOneImage: (source: ImageSourceArg, alt: string, wantAbovePass?: boolean) => Promise<void>;
+  /**
+   * 菜单「粘贴」在剪贴板没有文字时调用：从宿主剪贴板取图，经同一套
+   * `dropOneImage` 落盘后插入。返回 `false` 表示剪贴板里没有图片。
+   */
+  pasteClipboardImage: () => Promise<boolean>;
 }
 
 /** 事件的目标在编辑区里吗。 */
@@ -253,5 +259,32 @@ export function useImageInsert(w: InsertImageWiring): InsertImageOutputMouth {
     await dropOneImage(a.source as ImageSourceArg, a.alt, a.abovePass);
   }, [askImage, docId, docSaved, dropOneImage]);
 
-  return { insertImageLike, dropOneImage };
+  const pasteClipboardImage = useCallback(async (): Promise<boolean> => {
+    let image: Awaited<ReturnType<typeof readImage>>;
+    try {
+      image = await readImage();
+    } catch {
+      return false;
+    }
+    try {
+      const { width, height } = await image.size();
+      const rgba = await image.rgba();
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas 2D context is unavailable");
+      context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
+      const data = canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+      await dropOneImage({ kind: "base64", data, ext: "png" }, "");
+      return true;
+    } catch (e) {
+      toast(t("Could not read the image from the clipboard: {0}", String(e)), "error");
+      return true;
+    } finally {
+      await image.close();
+    }
+  }, [dropOneImage, t, toast]);
+
+  return { insertImageLike, dropOneImage, pasteClipboardImage };
 }

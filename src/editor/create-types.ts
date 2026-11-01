@@ -22,6 +22,7 @@ import type { InlineExtensionFlags } from "./inline-marks";
 import type { punctuationSettings } from "./smart-punctuation";
 import type { changePreview, previewMode } from "./review";
 import type { WritingMode } from "./writing-modes";
+import type { VimInputConfig, VimInputHooks } from "./plugin-vim-types";
 
 
 /**
@@ -247,6 +248,8 @@ export interface EditorHandle {
   focusAtStart: () => void;
   /** 拨专注/打字机模式。**随时可拨，不重建实例**（见 `writing-modes.ts`）。 */
   setWritingModes: (mode2: WritingMode) => void;
+  /** Replace the active input adapter without rebuilding the editor. */
+  setVimInput: (config: VimInputConfig | null) => void;
 
   /**
    * 摊开 / 收起**就地改动预览**（`nota.ui.review_diff`，见 `review.ts` 文件头）。
@@ -454,25 +457,11 @@ export interface CreateOptions {
    * 一致（`emoji_autocomplete` 默认开），`undefined` 不等于"关"。
    */
   emoji?: boolean;
-  /**
-   * **智能符号补全**（`Settings.editor.smart_symbols`，用户 2026-09-28 点名要的
-   * 那个开关，**默认开**）：打一颗开符号当场补上它那一半（`(` `{` `（【「『《〈`
-   * 与 **`[`**）、打一颗 `*` 自配对、`Tab` 跳出右半边、光标夹在一对**空的**
-   * 括号里按退格两颗一起删。
-   *
-   * ⚠️ **四件事一个开关**，因为它们互相咬着：`Tab` 要跨过的那颗闭括号正是
-   * 补出来的那一颗，拆成四个开关只会让用户遇到"关掉一个，另一半还在动"。
-   * ⚠️ 关掉是**整条插件不装**（`配对处理(开)` 返回 `[]`，同 `标点输入` 那条），
-   * 不是"补得少一点"。
-   *
-   * ⚠️ 改它要**重建编辑器**（同 `自动更正`：`handleTextInput` 是建实例那一刻
-   * 注册的）。⚠️ **默认取 `true`**——与 Rust 那边 `Default` 一致，
-   * `undefined` 不等于"关"。
-   *
-   * ⚠️ 它 2026-09-28 **取代了 `match_brackets` / `match_markdown` 两条死开关**
-   * （存了值、从来没有代码读过），改这一格时不必回头兼容那两个名字。
-   */
-  smartAbleSymbolNumber?: boolean;
+  /** Optional editor-wide input adapter contributed by an extension. */
+  vimInput?: {
+    config: VimInputConfig | null;
+    hooks?: VimInputHooks;
+  };
   /**
    * 光标状态变化的通知（工具栏高亮、菜单里表格那十条的灰/亮）。
    *

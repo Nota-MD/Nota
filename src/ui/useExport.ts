@@ -15,11 +15,11 @@
  *    是很平常的事（换机器、清理磁盘）——为它中断一次导出不值。退回"不带主题"
  *    继续导，只在控制台留一句。
  *
- * # ⚠️ 打印为什么不是"在应用里打印"
+ * # ⚠️ 打印为什么不是自绘打印
  *
- * 写成一份 HTML 交给系统默认程序，用户在那边按 `Ctrl+P`。**如实把两步都说给
- * 用户听**——假装在应用里完成才是撒谎。理由（WebKitGTK 的 `window.print()`
- * 在容器里点不出来、而且它不是同步返回）写在 `commands/export.rs` 文件头。
+ * Linux 把完整 HTML 交给 WebKitGTK 的 `PrintOperation::run_dialog`；Windows
+ * 把同一份 HTML 放进离屏 iframe，调 WebView2/Chromium 的原生打印。两端都不再
+ * 显示 Nota 自绘的打印参数与 PDF 缩略图框。
  *
  * # 借 pandoc 那七种（2026-09-25 加）
  *
@@ -50,11 +50,11 @@ import { exportHtml, defaultExportName } from "@/editor/export";
 import { htmlToPngBase64 } from "@/ui/export-image";
 import { numberLearnCodeBlockConvertCommonStyle } from "@/editor/math-code";
 import { documentThemeLooksDark } from "@/styles/theme-contrast";
-import type { PrintRequest } from "@/ui/PrintDialog";
 import type { Dialogs } from "@/ui/useDialogs";
 import { useT } from "@/i18n";
 import type { Toast } from "@/ui/Toasts";
 import { styleStyleTextItemParameter } from "@/ui/export-templates";
+import { openBrowserSystemPrint } from "@/ui/print-browser";
 
 /** 探测不通时那个闸门面板要的东西。 */
 export interface PandocGate {
@@ -80,11 +80,6 @@ export interface exportWiring {
   toast: (message: string, level?: Toast["level"]) => void;
   /** 深色主题下阻止打印或 PDF 导出时，用来显示只报信的弹窗。 */
   askConfirm: Dialogs["askConfirm"];
-  /**
-   * 打开**应用内打印框**（2026-10-17）。⚠️ 只递"要打哪一份"——那个框自己
-   * 负责版面、预览与投递（状态全在 `ui/PrintDialog.tsx` 里）。
-   */
-  openPrint: (req: PrintRequest) => void;
   /** 用导入转换得到的 Markdown 新建一份未命名文档。 */
   openImported: (markdown: string, titleHint: string | null) => Promise<void>;
 }
@@ -157,7 +152,6 @@ export function useExport(w: exportWiring): exportApi {
     exportSettings,
     toast,
     askConfirm,
-    openPrint,
     openImported,
   } = w;
   const [pandocGate, setPandocGate] = useState<PandocGate | null>(null);
@@ -312,17 +306,23 @@ export function useExport(w: exportWiring): exportApi {
         lightOutput: true,
         title: doc.title,
       });
-      // 自绘打印框在 Linux 与 Windows 上都可用。Linux 走宿主 PDF/CUPS；
-      // Windows 由前端 iframe 预览同一份导出 HTML，最后由 WebView2 打开
-      // 系统确认框。macOS 暂未接这套后端，仍保留旧的 HTML 系统查看器路径。
+      // Linux 用 GTK 原生打印对话框；Windows 用 WebView2/Chromium 原生打印
+      // 预览。macOS 暂未接入原生后端，仍保留旧的文件交给系统程序路径。
       if (await api.print.supported()) {
         // ⚠️ 基准目录必须是**文档所在的目录**：正文里 `![](./img.png)` 是相对路径，
         // 换个目录就全是裂图。
-        openPrint({
-          html,
-          baseDir: doc.path ? placeAtItemRecord(doc.path) : null,
-          title: doc.title,
-        });
+        const backend = await api.print.backend();
+        if (backend === "pdf") {
+          await api.print.system({
+            html,
+            baseDir: doc.path ? placeAtItemRecord(doc.path) : null,
+            paper: "a4",
+            landscape: false,
+            marginMm: 12,
+          });
+        } else {
+          await openBrowserSystemPrint(html);
+        }
       } else {
         const path = await api.export.print(doc.path, doc.title, html);
         toast(
@@ -333,7 +333,7 @@ export function useExport(w: exportWiring): exportApi {
     } catch (e) {
       toast(t("Could not print: {0}", String(e)), "error");
     }
-  }, [activeId, docs, getMarkdown, getPrintThemeCSS, toast, openPrint]);
+  }, [activeId, docs, getMarkdown, getPrintThemeCSS, toast]);
 
   /**
    * 真的导一次（闸门放行之后走这条）。`format` 来自探测报告那张表。

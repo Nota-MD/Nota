@@ -4,7 +4,7 @@ use mlua::LuaSerdeExt;
 use tauri::{Manager, State};
 
 use crate::error::{NotaError, Result};
-use crate::plugin::{PluginInfo, PluginMenuItem, PluginPanel, ReviewState};
+use crate::plugin::{PluginInfo, PluginMenuItem, PluginPanel, ReviewKind, ReviewState};
 use crate::state::AppState;
 
 /// 启动时插件目录扫描在后台执行。只让插件读取命令短暂等它完成；窗口与
@@ -425,6 +425,28 @@ pub fn nota_plugin_review(review: State<'_, ReviewState>) -> Result<Option<Plugi
     Ok(review
         .current()
         .map(|(plugin, kind)| PluginReview { plugin, kind }))
+}
+
+/// Opens one registered extension panel in the editor-wide review area.
+///
+/// The dock uses this to offer a full-screen view without asking the extension
+/// to register another command. The caller is the frontend, which just listed
+/// the registered panels. This command deliberately does not take the plugins
+/// lock: expanding a panel must stay responsive even while a long extension
+/// command is running.
+#[tauri::command]
+pub fn nota_plugin_review_open(
+    app: tauri::AppHandle,
+    plugin: String,
+    id: String,
+) -> Result<()> {
+    use tauri::Emitter;
+
+    app.state::<ReviewState>()
+        .set(&plugin, Some(ReviewKind::Panel { panel: id }));
+    app.emit(crate::plugin::EVENT_REVIEW, serde_json::json!({}))
+        .map_err(|e| NotaError::other(format!("发预览事件失败：{e}")))?;
+    Ok(())
 }
 
 /// 收起编辑区里那一块。**用户可以点「回到正文」/「收起」**——那一下不该绕道

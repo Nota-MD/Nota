@@ -54,6 +54,7 @@ pub mod single_instance;
 pub mod state;
 pub mod table_width;
 pub mod theme_assets;
+pub mod theme_import;
 pub mod themes;
 pub mod ui_styles;
 pub mod update;
@@ -124,6 +125,57 @@ fn 配置_webkit_渲染器() {
     );
 }
 
+/// Report which display backend GTK can select without forcing one.
+///
+/// `auto` remains the default: forcing Wayland on a stale socket would make the
+/// application fail even when XWayland is usable. The log is what lets Wayland
+/// and XWayland performance reports identify their actual backend.
+fn 记录_linux_display_backend() {
+    if !cfg!(target_os = "linux") {
+        return;
+    }
+    let requested = std::env::var("GDK_BACKEND").unwrap_or_else(|_| "auto".to_owned());
+    let wayland = std::env::var("WAYLAND_DISPLAY").unwrap_or_default();
+    let display = std::env::var("DISPLAY").unwrap_or_default();
+    crate::日志!(
+        "[nota] display backend requested={requested} WAYLAND_DISPLAY={} DISPLAY={}",
+        if wayland.is_empty() { "(unset)" } else { &wayland },
+        if display.is_empty() { "(unset)" } else { &display }
+    );
+}
+
+/// Keep WebKit's memory and disk cache tuned for a single-document editor.
+#[cfg(target_os = "linux")]
+fn 配置_webview_缓存(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if let Err(error) = window.with_webview(|webview| {
+        use webkit2gtk::{CacheModel, WebContextExt as _, WebViewExt as _};
+        if let Some(context) = webview.inner().context() {
+            let requested = std::env::var("NOTA_WEBKIT_CACHE_MODEL")
+                .unwrap_or_else(|_| "document".to_owned());
+            let model = match requested.trim().to_ascii_lowercase().as_str() {
+                "browser" => Some(CacheModel::WebBrowser),
+                "default" => None,
+                _ => Some(CacheModel::DocumentViewer),
+            };
+            if let Some(model) = model {
+                context.set_cache_model(model);
+            }
+            crate::日志!(
+                "[nota] WebKit cache model requested={requested} applied={}",
+                if model.is_some() { "yes" } else { "default" }
+            );
+        }
+    }) {
+        crate::日志!("[nota] webview cache tuning unavailable: {error}");
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn 配置_webview_缓存(_app: &tauri::AppHandle) {}
+
 pub fn run() {
     let 独立调试窗口 = cli::要开调试窗口(std::env::args_os());
 
@@ -131,6 +183,7 @@ pub fn run() {
     // "日志真的干净"从终端上看不出区别。这一行本身也走闸门，所以默认照旧静默。
     crate::日志!("[nota] debug mode enabled (NOTA_DEBUG); log output is normally suppressed");
     配置_webkit_渲染器();
+    记录_linux_display_backend();
 
     // 独立调试报告模式：完全不建 Tauri/WebView，前端白屏或 WebKit 初始化失败
     // 时仍能生成日志并交给系统文本查看器。
@@ -406,6 +459,7 @@ pub fn run() {
                 single_instance::起(app.handle().clone(), 听);
             }
             app.manage(plugin::DeferredDiscovery::new(resource_dir, base));
+            配置_webview_缓存(app.handle());
             // ⑧ 把 `nota://` 接到本程序上（2026-09-27 加，"从 URL scheme 打开"
             //    那一格的注册那一半，解析在 `cli.rs`）。⚠️ 失败**不拦启动**：
             //    注册不上就是"点链接打不开"，那不该让应用起不来。
@@ -530,6 +584,7 @@ pub fn run() {
             commands::theme::nota_doc_themes,
             commands::theme::nota_doc_theme_css,
             commands::theme::nota_doc_themes_open_dir,
+            commands::theme::nota_theme_import,
             // 界面风格里"用户导入的那一半"。⚠️ 内置档没有文件，
             // 所以 `nota_ui_style_css` 只对导入的 id 有效（`ui_styles.rs` 文件头）。
             commands::ui_style::nota_ui_styles,
@@ -545,6 +600,7 @@ pub fn run() {
             commands::plugin::nota_plugin_panels,
             commands::plugin::nota_plugin_panel_content,
             commands::plugin::nota_plugin_review,
+            commands::plugin::nota_plugin_review_open,
             commands::plugin::nota_plugin_review_close,
             commands::plugin::nota_plugin_menus,
             commands::plugin::nota_plugin_install,
@@ -687,6 +743,27 @@ pub fn run() {
                     let _ = window.center();
                     let _ = window.show();
                     let _ = window.set_focus();
+                    // XWayland can activate the toplevel while leaving keyboard
+                    // and GTK input-method focus on no child. The main window
+                    // already compensates for this; the independently spawned
+                    // debug page needs the same hand-off or fcitx5/Rime receives
+                    // no input context even though the log window looks active.
+                    #[cfg(target_os = "linux")]
+                    {
+                        let _ = webview.with_webview(|platform| {
+                            commands::window::focus_linux_webview(&platform.inner())
+                        });
+                        let focused = webview.clone();
+                        gtk::glib::timeout_add_local_once(
+                            std::time::Duration::from_millis(60),
+                            move || {
+                                let _ = focused.window().set_focus();
+                                let _ = focused.with_webview(|platform| {
+                                    commands::window::focus_linux_webview(&platform.inner())
+                                });
+                            },
+                        );
+                    }
                 } else if let Err(e) =
                     webview.eval("window.location.replace('debug-log.html')")
                 {

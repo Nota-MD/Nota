@@ -68,8 +68,14 @@ import {
   shouldChangeCommonStyle,
   returnCarBecomeCommonStyleBlock,
   emptyBlockHeader,
+  completeInlineMathAtCursor,
 } from "../src/editor/math-input";
-import { inlineMathHandler, inlineMathSpec, readDollarCount } from "../src/editor/math-delim";
+import {
+  inlineMathHandler,
+  inlineMathSpec,
+  readDollarCount,
+  readMathDelimiter,
+} from "../src/editor/math-delim";
 
 /* ── 一支极小的测试工装（与 `math-view.test.ts` / `mark-hint.test.ts` 同一套长相）── */
 
@@ -343,6 +349,55 @@ testCase("`$$ab$$`（段落最前面）⇒ 就是一颗公式", () => {
 
 testCase("`C$dd$ D`（单美元那条照旧能用）⇒ 文(C) ＋ 公式(dd) ＋ 文( D)", () => {
   equalColumns(appearance(typed("C$dd$ D")), ['文("C")', 'math_inline("dd")', '文(" D")'], "整段长相");
+});
+
+testCase("带反斜杠的 `$\\LaTeX$` 逐字输入会立即成为公式", () => {
+  equalColumns(appearance(typed("$\\LaTeX$")), ['math_inline("\\\\LaTeX")'], "反斜杠不应阻止提交");
+});
+
+testCase("`\\[\\LaTeX\\]` 立即成为公式，并记住括号分隔符", () => {
+  const state = typed("\\[\\LaTeX\\]");
+  equalColumns(appearance(state), ['math_inline("\\\\LaTeX")'], "整段应只剩一颗公式");
+  const node = headOneTokenCommonStyle(state)!;
+  equal(readMathDelimiter(node), "bracket", "分隔符");
+  equal(saveToDisk(state), "\\[\\LaTeX\\]", "存盘保持新标记");
+});
+
+testCase("`\\(\\LaTeX\\)` 立即成为公式，并记住圆括号分隔符", () => {
+  const state = typed("\\(\\LaTeX\\)");
+  equalColumns(appearance(state), ['math_inline("\\\\LaTeX")'], "整段应只剩一颗公式");
+  const node = headOneTokenCommonStyle(state)!;
+  equal(readMathDelimiter(node), "paren", "分隔符");
+  equal(saveToDisk(state), "\\(\\LaTeX\\)", "存盘保持新标记");
+});
+
+testCase("输入法或粘贴形成完整美元段时，appendTransaction 会补齐公式提交", () => {
+  const paragraph2 = schema.nodes.paragraph.create(null, schema.text("$\\LaTeX$"));
+  const doc = schema.nodes.doc.create(null, paragraph2);
+  let state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, doc.content.size - 1),
+  });
+  const tr = completeInlineMathAtCursor(state, schema.nodes.math_inline);
+  assertion(tr, "完整 `$…$` 应生成提交事务");
+  state = state.apply(tr);
+  equalColumns(appearance(state), ['math_inline("\\\\LaTeX")'], "整段应只剩一颗公式");
+});
+
+testCase("输入法或粘贴形成完整 `\\[\\LaTeX\\]` 时也会补齐提交", () => {
+  const paragraph2 = schema.nodes.paragraph.create(null, schema.text("\\[\\LaTeX\\]"));
+  const doc = schema.nodes.doc.create(null, paragraph2);
+  let state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, doc.content.size - 1),
+  });
+  const tr = completeInlineMathAtCursor(state, schema.nodes.math_inline);
+  assertion(tr, "完整 `\\[…\\]` 应生成提交事务");
+  state = state.apply(tr);
+  equalColumns(appearance(state), ['math_inline("\\\\LaTeX")'], "整段应只剩一颗公式");
+  equal(readMathDelimiter(headOneTokenCommonStyle(state)!), "bracket", "分隔符");
 });
 
 testCase("**敲到一半**：`A$$bb$` 停手 ⇒ 全是字面文字，一颗公式都没有", () => {

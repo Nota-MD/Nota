@@ -120,7 +120,7 @@ testCase("Windows 本地图片路径可以交给宿主读取", () => {
   equal(isSafeHtmlUrl("C:\\图\\nota.png", "href"), false, "路径不能变成链接");
 });
 
-testCase("整块渲染区域进入编辑，编辑态右上角显示结束编辑勾号", () => {
+testCase("整块渲染区域进入编辑，右上角使用统一源码标签", () => {
   const source = readFileSync("src/editor/html-block-view.ts", "utf8");
   const css = readFileSync("src/styles/editor-inline.css", "utf8");
   assertValue(source.includes("if (!sourceMode) setSourceMode(true)"), "渲染区域没有整块编辑入口");
@@ -131,16 +131,25 @@ testCase("整块渲染区域进入编辑，编辑态右上角显示结束编辑�
     "焦点离开整块后没有自动结束编辑",
   );
   assertValue(
-    /\.nota-html-source-toggle\[aria-pressed="true"\]::after\s*\{[^}]*transform:\s*rotate\(45deg\)/s.test(
-      css,
+    /\.nota-block-kind::after\s*\{[^}]*content:\s*"<\/>"/s.test(css),
+    "HTML 与 LaTeX 没有共用 `</>` 标签字形",
+  );
+  assertValue(source.includes('nota-html-source-toggle nota-block-kind'), "HTML 标签没有接入统一样式");
+  assertValue(
+    source.includes(
+      'nota-html-source md-fences ty-contain-cm nota-source-surface',
     ),
-    "编辑态按钮没有矢量勾号",
+    "HTML 编辑框没有复用代码/LaTeX 源码外壳",
   );
   assertValue(
-    /\.nota-html-source-mode \.nota-html-source\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*justify-content:\s*center;/s.test(
+    /\.nota-html-source-mode \.nota-html-source\s*\{[^}]*display:\s*block;/s.test(
       css,
     ),
-    "HTML 源码框没有在垂直方向居中",
+    "HTML 源码框仍使用 HTML 专用的居中容器",
+  );
+  assertValue(
+    !/\.nota-html-source\s*\{[^}]*min-height:\s*5\.5em;/s.test(css),
+    "HTML 源码框仍保留比代码块更高的小框最小高度",
   );
 });
 
@@ -160,6 +169,12 @@ testCase("HTML 标签和边框只在悬停或块内获得焦点时出现", () =>
     "悬停或块内聚焦时没有显示边框",
   );
   assertValue(
+    /\.nota-html-block:hover,[\s\S]*?\.nota-html-block:focus-within\s*\{[^}]*background:\s*color-mix/s.test(
+      css,
+    ),
+    "HTML 悬停时没有显示灰底",
+  );
+  assertValue(
     !/\.nota-html-block\.ProseMirror-selectednode \.nota-html-source-toggle/.test(css),
     "整块选中后仍会脱离鼠标悬停显示 HTML 标签",
   );
@@ -173,6 +188,10 @@ testCase("HTML 渲染块在启动与拖动时都不会产生原生蓝色选区",
     /\.nota-html-render\s*\{[^}]*user-select:\s*none;[^}]*\}?/s.test(css) &&
       css.includes("-webkit-user-select: none"),
     "HTML 渲染区仍允许浏览器生成原生选区",
+  );
+  assertValue(
+    /\.nota-html-render\s*\{[^}]*cursor:\s*default;/s.test(css),
+    "HTML 渲染区仍显示文本 I-beam 光标",
   );
   assertValue(
     /\.nota-html-source\s*\{[\s\S]*?user-select:\s*text;/s.test(css),
@@ -238,6 +257,15 @@ testCase("HTML 链接优先打开，不把点击吞成进入源码编辑", () =>
   assertValue(links.includes("openRawHtmlLink(chain.href"), "HTML 链接没有进入打开流程");
   assertValue(links.includes("openUrl(address)"), "外部链接没有交给系统浏览器");
   assertValue(links.includes("openDocument(localLocal)"), "相对链接没有交给文档打开流程");
+});
+
+testCase("HTML 远程图片加载后缓存为 data URL，返回文档时复用", () => {
+  const view = readFileSync("src/editor/html-block-view.ts", "utf8");
+  assertValue(view.includes("remoteHtmlImages"), "没有远程图片缓存");
+  assertValue(view.includes('cache: "force-cache"'), "缓存请求没有复用已加载资源");
+  assertValue(view.includes("reader.readAsDataURL(blob)"), "已加载图片没有转成 data URL");
+  assertValue(view.includes("restoreRemoteHtmlImages(fragment)"), "渲染 HTML 前没有恢复缓存图片");
+  assertValue(view.includes('image.setAttribute("src", cached)'), "没有用缓存资源替换远程地址");
 });
 
 console.log(`\n${"─".repeat(64)}`);

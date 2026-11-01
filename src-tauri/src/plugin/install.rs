@@ -154,7 +154,11 @@ impl PluginHost {
             self.plugins.remove(i);
         }
         let ctx = self.上下文(id);
-        self.plugins.push(LuaPlugin::load(清单, ctx));
+        self.plugins.push(if self.extensions_enabled {
+            LuaPlugin::load(清单, ctx)
+        } else {
+            LuaPlugin::disabled(清单, &self.base.应用语言)
+        });
         self.plugins
             .sort_by(|a, b| a.manifest.meta.id.cmp(&b.manifest.meta.id));
         Ok(())

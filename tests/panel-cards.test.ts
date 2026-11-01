@@ -168,6 +168,8 @@ function block(spec: Record<string, unknown>) {
 
 /* ── 收工 ───────────────────────────────────────────────────────── */
 
+/* ── 收工 ───────────────────────────────────────────────────────── */
+
 console.log(`\n面板记录卡（cards）：${pass} 条通过、${fail} 条失败`);
 for (const m of failed) console.log("  FAIL " + m);
 if (fail > 0) process.exit(1);

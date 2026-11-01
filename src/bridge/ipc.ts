@@ -21,7 +21,7 @@ import type {
   AppLang, Diagnostics, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocImport, PandocProbe, PluginInfo, PluginMenuItem,
-  PluginPanel, PluginReview, Settings, TreeNode, TreeOptions, UiStyleInfo, WorkspaceExcerpt,
+  PluginPanel, PluginReview, Settings, ThemeImportReport, TreeNode, TreeOptions, UiStyleInfo, WorkspaceExcerpt,
   trustRecord, exportReport,
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintBackend, PrintEnvironment, PrintPreview,
@@ -571,6 +571,9 @@ export const api = {
      * 不让前端拿路径去调 plugin-opener。
      */
     openDir: () => invoke<string>("nota_doc_themes_open_dir"),
+    /** Import interface and/or document themes from one ZIP package. */
+    importZip: (path: string) =>
+      invoke<ThemeImportReport>("nota_theme_import", { path }),
   },
 
   /**
@@ -756,6 +759,10 @@ export const api = {
      * 「回到正文」那颗按钮也照样能按。
      */
     review: () => invoke<PluginReview | null>("nota_plugin_review"),
+
+    /** Open one registered extension panel in the editor-wide review area. */
+    reviewOpen: (plugin: string, id: string) =>
+      invoke<void>("nota_plugin_review_open", { plugin, id }),
 
     /**
      * 把编辑区里那一块收起来，切回正文。

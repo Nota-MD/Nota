@@ -122,6 +122,8 @@
 :where(.editor-mount .ProseMirror) .nota-html-block:hover,
 :where(.editor-mount .ProseMirror) .nota-html-block:focus-within {
   outline-color: var(--border);
+  background: color-mix(in srgb, var(--bg-subtle) 62%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--bg-subtle) 62%, transparent);
 }
 
 /* 渲染内容就是文档内容。这里不画灰底、不改字体，也不额外加边框；HTML 自己
@@ -135,7 +137,7 @@
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-render {
-  cursor: text;
+  cursor: default;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -165,20 +167,13 @@
   font-weight: 600;
 }
 
-/* 源码回退与注释共用同一套外观。普通 HTML 只有切到源码模式时才显示 textarea。 */
+/* 源码回退与注释共用同一套外观。普通 HTML 只有切到源码模式时才显示编辑器。
+   外层显式复用代码块的 `md-fences ty-contain-cm nota-source-surface` 三件套；
+   这里不再给 HTML 单独加最小高度或垂直居中，单行和多行都和代码/LaTeX 源码框
+   使用同一套内边距、圆角、行高与行号布局。 */
 :where(.editor-mount .ProseMirror) .nota-html-source {
   display: none;
   width: 100%;
-  min-height: 5.5em;
-  box-sizing: border-box;
-  font-family: var(--font-mono);
-  font-size: 0.85em;
-  line-height: 1.5;
-  color: var(--fg-muted);
-  background: var(--bg-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.5em 0.75em;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   /* 同公式源码框：覆盖层光标把父级原生光标设为透明，表单控件必须恢复。 */
@@ -198,12 +193,15 @@
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-source-mode .nota-html-source {
-  /* 单行源码在 5.5em 高的框里默认贴顶，看起来像上方被截住。源码框是
-     flex 列容器，CodeMirror 作为一个整体在垂直方向居中；多行内容超过
-     最小高度时自然撑开，不限制滚动。 */
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  display: block;
+}
+
+/* 源码态只需要 CodeMirror 这一层画出代码框；不要再叠加 HTML 渲染态的
+   悬停灰底与外轮廓，否则会像“框里套框”。 */
+:where(.editor-mount .ProseMirror) .nota-html-block.nota-html-source-mode {
+  outline-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-comment {
@@ -223,25 +221,28 @@
 /* 切换按钮只在鼠标经过、键盘进入或整块选中时出现，避免压住居中的徽章。 */
 :where(.editor-mount .ProseMirror) .nota-html-source-toggle {
   position: absolute;
-  top: 0.45em;
-  inset-inline-end: 0.55em;
-  z-index: 1;
+  top: 0;
+  inset-inline-end: 0;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  height: 1.65em;
-  padding: 0 0.5em;
+  height: 26px;
+  padding: 0 8px;
   border: 1px solid var(--border);
-  border-radius: 0;
-  background: var(--bg);
+  border-radius: 4px;
+  background: var(--bg-raised);
   color: var(--fg-muted);
   font-family: var(--font-ui);
-  font-size: 0.72em;
+  font-size: 0.75rem;
   line-height: 1;
   opacity: 0;
   pointer-events: none;
   cursor: pointer;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-block:hover .nota-html-source-toggle,
@@ -251,20 +252,21 @@
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-source-toggle:hover,
-:where(.editor-mount .ProseMirror) .nota-html-source-toggle[aria-pressed="true"] {
+:where(.editor-mount .ProseMirror) .nota-html-source-toggle[aria-pressed="true"],
+:where(.editor-mount .ProseMirror) .nota-math-kind:hover,
+:where(.editor-mount .ProseMirror) .nota-math-kind:focus-visible {
   background: var(--bg-hover);
   color: var(--fg);
 }
 
-:where(.editor-mount .ProseMirror) .nota-html-source-toggle[aria-pressed="true"]::after {
+:where(.editor-mount .ProseMirror) .nota-block-kind::after {
   display: inline-block;
-  width: 4px;
-  height: 8px;
-  margin: 0 0 1px 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  content: "";
-  transform: rotate(45deg);
+  margin-inline-start: 8px;
+  color: currentColor;
+  content: "</>";
+  font-family: var(--font-mono);
+  font-style: normal;
+  letter-spacing: -0.08em;
 }
 
 /* 注释没有可切换的渲染态，不显示 HTML 按钮。 */

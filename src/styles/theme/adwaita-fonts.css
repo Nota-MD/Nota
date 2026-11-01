@@ -2,28 +2,28 @@
    许可证在同目录 `src/assets/fonts/adwaita/LICENSE.txt`。 */
 @font-face {
   font-family: "Adwaita Sans";
-  src: url("../../assets/fonts/adwaita/AdwaitaSans-Regular.ttf") format("truetype");
+  src: url("../../assets/fonts/adwaita/AdwaitaSans-Regular.woff2") format("woff2");
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Adwaita Sans";
-  src: url("../../assets/fonts/adwaita/AdwaitaSans-Italic.ttf") format("truetype");
+  src: url("../../assets/fonts/adwaita/AdwaitaSans-Italic.woff2") format("woff2");
   font-style: italic;
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Adwaita Mono";
-  src: url("../../assets/fonts/adwaita/AdwaitaMono-Regular.ttf") format("truetype");
+  src: url("../../assets/fonts/adwaita/AdwaitaMono-Regular.woff2") format("woff2");
   font-style: normal;
   font-weight: 100 900;
   font-display: swap;
 }
 @font-face {
   font-family: "Adwaita Mono";
-  src: url("../../assets/fonts/adwaita/AdwaitaMono-Italic.ttf") format("truetype");
+  src: url("../../assets/fonts/adwaita/AdwaitaMono-Italic.woff2") format("woff2");
   font-style: italic;
   font-weight: 100 900;
   font-display: swap;

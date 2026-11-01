@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -176,7 +176,7 @@ fn 平台安装类型() -> 安装类型 {
 
 #[cfg(target_os = "linux")]
 fn 命令成功(程序: &str, 参数: &[&str]) -> bool {
-    Command::new(程序)
+    crate::proc::background_command(程序)
         .args(参数)
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -444,7 +444,7 @@ fn 安排_linux_包安装(安装动作: &str, 文件: &Path) -> Result<()> {
          nohup \"$3\" >>\"$4\" 2>&1 &"
     );
     let 日志 = std::env::temp_dir().join("nota-update-install.log");
-    Command::new("sh")
+    crate::proc::background_command("sh")
         .args(["-c", &脚本, "nota-update"])
         .arg(std::process::id().to_string())
         .arg(文件)
@@ -465,7 +465,7 @@ fn 替换_app_image(新文件: &Path) -> Result<()> {
     let 脚本 = "while kill -0 \"$1\" 2>/dev/null; do sleep 1; done; \
                 mv -f \"$3\" \"$2\" && chmod +x \"$2\" && \
                 nohup \"$2\" >/tmp/nota-update-restart.log 2>&1 &";
-    let mut 命令 = Command::new("sh");
+    let mut 命令 = crate::proc::background_command("sh");
     命令
         .args(["-c", 脚本, "nota-update"])
         .arg(std::process::id().to_string())
@@ -528,7 +528,7 @@ fn 启动_power_shell_文件替换(文件: &Path, 便携版: bool) -> Result<()>
     };
     fs::write(&脚本路径, 脚本)
         .map_err(|e| NotaError::other(format!("更新脚本写不出来：{e}")))?;
-    let mut 命令 = Command::new("powershell");
+    let mut 命令 = crate::proc::background_command("powershell");
     命令
         .args(["-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(脚本路径)

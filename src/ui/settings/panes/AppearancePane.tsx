@@ -5,7 +5,7 @@
  * ⚠️⚠️ **这一页有一半的东西不在这张表里，在顶层**：
  *
  * - `ui_style`（界面风格）、`ui_mode`（明暗）—— 顶层，对应「界面风格」「明暗」两组
- * - `ui_font_size`（界面字号）—— 顶层，对应「字体大小」那一组
+ * - `ui_font_size`（历史字段名，现在是编辑区基准字号）—— 顶层
  *
  * 它们是 2026-09-22 / 09-23 定下来的**三条互相独立的外观轴**。搬进
  * `[appearance]` 表会让**老设置文件里的值静默丢回默认**——用户选好的 macOS
@@ -23,6 +23,7 @@ import { useT } from "@/i18n";
 import { accentVars, parseAccent } from "@/styles/accent";
 import { resolveStyle } from "@/styles/applyTheme";
 import { useUiMode } from "@/ui/useUiMode";
+import { ColorPicker } from "../ColorPicker";
 import { ActionButton, NumberInput, Radio, Range, Select, SettingRow, SettingsGroup, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
@@ -138,6 +139,7 @@ export function AppearancePane({
   uiStyles,
   onOpenStylesDir,
   onRefreshUiStyles,
+  onImportTheme,
   // ⚠️ 这两样是**文档主题**那一组的（本页最底下「深色下用哪套」）——
   // 它们和上面的 `uiStyles` / `onOpenStylesDir` 是两个不同的东西：
   // 一个是正文的主题、一个是外壳的风格。两个目录也是分开的（`paths.rs`）。
@@ -270,6 +272,7 @@ export function AppearancePane({
               {t("Interface themes folder…")}
             </ActionButton>
             <ActionButton onClick={onRefreshUiStyles}>{t("Refresh")}</ActionButton>
+            <ActionButton onClick={onImportTheme}>{t("Import theme ZIP…")}</ActionButton>
           </div>
         </SettingRow>
       </SettingsGroup>
@@ -304,18 +307,9 @@ export function AppearancePane({
       <SettingsGroup title={t("Accent color")}>
         <SettingRow>
           <div className="stg-inline">
-            {/* ⚠️ 用原生 `<input type="color">`，**不自己写一个取色器**：系统取色器
-                能吸屏幕上的颜色、能存色板、能在装了无障碍工具时被念出来，
-                自己画一个这三样白送。这里的类名只负责尺寸与边框。 */}
-            <input
-              type="color"
-              className="stg-color"
-              aria-label={t("Accent color")}
-              // ⚠️ `type="color"` **只认 `#rrggbb`**，给空串它自己会退回黑色——
-              // 那会让"跟随风格"看起来像"用户选了黑"，所以这里退到此刻真正在用的
-              // 那个色（`有效强调色`），让色块**始终显示当前生效的颜色**。
+            <ColorPicker
               value={effectiveAccent(a) || "#000000"}
-              onChange={(e) => write({ accent: e.target.value })}
+              onChange={(accent) => write({ accent })}
             />
             <ActionButton
               onClick={() => write({ accent: "" })}
@@ -361,14 +355,18 @@ export function AppearancePane({
           />
         </SettingRow>
 
-        <SettingRow label={t("Interface font size")}>
+        <SettingRow label={t("Editor font size")}>
           <Range
             value={settings.ui_font_size}
             min={12}
-            max={20}
+            max={32}
             suffix="px"
-            disabled={!a.custom_font_size}
-            onChange={(ui_font_size) => onChange({ ui_font_size })}
+            onChange={(ui_font_size) =>
+              onChange({
+                ui_font_size,
+                appearance: { ...a, custom_font_size: true },
+              })
+            }
           />
         </SettingRow>
       </SettingsGroup>
@@ -396,8 +394,8 @@ export function AppearancePane({
           <Radio
             value={a.ctrl_wheel_target}
             options={[
-              { value: "font_size", label: t("Font size") },
-              { value: "zoom", label: t("Interface zoom") },
+              { value: "font_size", label: t("Editor font size") },
+              { value: "zoom", label: t("Whole interface zoom") },
             ]}
             onChange={(ctrl_wheel_target) => write({ ctrl_wheel_target })}
           />

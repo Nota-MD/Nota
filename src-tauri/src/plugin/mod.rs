@@ -77,6 +77,13 @@ pub const EVENT_PANEL_DIRTY: &str = "nota:plugin-panel";
 /// 加 `ui/usePlugins.ts` 的订阅。**三处必须说同一个字符串**，所以只在这里定一次。
 pub const EVENT_REVIEW: &str = "nota:plugin-review";
 
+/// `nota.ui.show(id)` asks the host to reveal one registered panel in the
+/// right-hand extension dock.
+///
+/// This is an intent, not panel content: the frontend selects the tab and
+/// opens the dock, then pulls content through the existing panel-content path.
+pub const EVENT_PANEL_FOCUS: &str = "nota:plugin-panel-focus";
+
 /// 「插件正在往外吐的那段文字」那条事件的频道名（2026-10-04 加，`docs/07` 第 58 项）。
 ///
 /// ⚠️ **这一条与上面两条的规矩相反**：它的载荷**带着内容**（那段文字本身）。
@@ -149,6 +156,9 @@ pub struct PluginHost {
     base: HostContext,
     /// 启动时先托管空宿主，后台发现完成后再置真。插件读取命令会短暂等待它。
     ready: bool,
+    /// 拓展功能总开关。关闭时保留清单与每个拓展自己的启停账本，但不建立
+    /// 任何 Lua 状态，也不派发命令、面板或菜单。
+    extensions_enabled: bool,
 }
 
 impl PluginHost {
@@ -159,6 +169,7 @@ impl PluginHost {
             installed: Installed::load(),
             base: base.clone(),
             ready: false,
+            extensions_enabled: extensions_enabled_from(base),
         }
     }
 
@@ -174,6 +185,7 @@ impl PluginHost {
         // "关了它就当它不存在"必须从现在开始算——等到派发命令时才拦，
         // 插件的 on_load 已经跑过了，副作用（计时器、后台线程、改过的东西）都在了。
         let installed = Installed::load();
+        let extensions_enabled = extensions_enabled_from(base);
         let mut seen: HashSet<String> = HashSet::new();
         // 事件通道名 → 已经占了它的那个插件 id。见下面的撞名一节。
         let mut channels: HashMap<String, String> = HashMap::new();
@@ -231,7 +243,7 @@ impl PluginHost {
                 // ⚠️ 停用的走 `disabled()`：清单留着（界面上还要列它、还要能重新启用），
                 // 但一行插件代码都不跑。判据在 `Installed::is_enabled` 里，它管着
                 // 那条"没记过时按构建档"的默认值（调试档开、发布档关）。
-                let 插件 = if installed.is_enabled(&manifest.meta.id) {
+                let 插件 = if extensions_enabled && installed.is_enabled(&manifest.meta.id) {
                     LuaPlugin::load(manifest, ctx)
                 } else {
                     LuaPlugin::disabled(manifest, &base.应用语言)
@@ -264,12 +276,21 @@ impl PluginHost {
             }
         }
 
-        Self {
+        let mut host = Self {
             plugins,
             installed,
             base: base.clone(),
             ready: true,
+            extensions_enabled,
+        };
+
+        // 发现期间用户可能已经拨过总开关。读一次最新设置，避免后台线程拿启动
+        // 那一刻的旧值把已关闭的拓展重新加载出来。
+        let latest = extensions_enabled_from(base);
+        if latest != host.extensions_enabled() {
+            host.set_extensions_enabled(latest);
         }
+        host
     }
 
     pub fn list_info(&self) -> Vec<PluginInfo> {
@@ -279,7 +300,7 @@ impl PluginHost {
                 let m = &p.manifest.meta;
                 let 记的 = self.installed.record(&m.id);
                 let removable = 在用户目录里(&p.manifest.dir);
-                let (state, error) = match (&p.state, self.installed.is_enabled(&m.id)) {
+                let (state, error) = match (&p.state, self.is_enabled(&m.id)) {
                     // 用户停用**先于**加载状态判：它是用户的显式动作，
                     // 说"已停用"比说"加载失败"更接近用户看到的事实。
                     (_, false) => ("disabled", None),
@@ -345,7 +366,49 @@ impl PluginHost {
     }
 
     pub fn is_enabled(&self, id: &str) -> bool {
-        self.installed.is_enabled(id)
+        self.extensions_enabled && self.installed.is_enabled(id)
+    }
+
+    pub fn extensions_enabled(&self) -> bool {
+        self.extensions_enabled
+    }
+
+    /// 切换拓展功能总开关。**不改 `plugins.toml`**：每个拓展自己的启停选择
+    /// 是用户账本，总开关只决定这一刻要不要运行它们。关闭时真的丢掉 Lua 状态
+    /// 并收回开发服务器与编辑区预览；重新开启时按原账本逐个恢复。
+    pub fn set_extensions_enabled(&mut self, enabled: bool) {
+        if self.extensions_enabled == enabled {
+            return;
+        }
+        self.extensions_enabled = enabled;
+        let mut changed = 0usize;
+
+        for i in 0..self.plugins.len() {
+            let id = self.plugins[i].manifest.meta.id.clone();
+            if enabled {
+                if self.installed.is_enabled(&id)
+                    && self.plugins[i].state != PluginState::Loaded
+                {
+                    let manifest = self.plugins[i].manifest.clone();
+                    let ctx = self.上下文(&id);
+                    self.plugins[i] = LuaPlugin::load(manifest, ctx);
+                    changed += 1;
+                }
+            } else {
+                if self.plugins[i].state == PluginState::Loaded {
+                    self.plugins[i].unload();
+                    changed += 1;
+                }
+                self.收摊(&id);
+                let manifest = self.plugins[i].manifest.clone();
+                self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.应用语言);
+            }
+        }
+        crate::日志!(
+            "[nota] extensions {}: {} plugin states changed",
+            if enabled { "enabled" } else { "disabled" },
+            changed
+        );
     }
 
     /// 启用 / 停用。**两个方向都落盘**（`plugins.toml`），而且**都是真的装卸**。
@@ -363,6 +426,11 @@ impl PluginHost {
     /// ⚠️ 与"删掉插件"的差别只在**磁盘上还在不在**：停用留下文件（下次还能启用），
     /// 卸载（[`Self::卸`]）把目录删掉。两者都不跑它的代码。
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<()> {
+        if !self.extensions_enabled {
+            return Err(NotaError::other(
+                "拓展功能已在「通用」中关闭；先开启总开关再调整单个拓展",
+            ));
+        }
         let i = self
             .位置(id)
             .ok_or_else(|| NotaError::other(format!("没有这个拓展：{id}")))?;
@@ -575,6 +643,13 @@ impl PluginHost {
             .find(|p| p.manifest.meta.id != id && manifest::channel_id(&p.manifest.meta.id) == 我的)
             .map(|p| p.manifest.meta.id.clone())
     }
+}
+
+fn extensions_enabled_from(base: &HostContext) -> bool {
+    base.settings
+        .lock()
+        .map(|settings| settings.general.extensions_enabled)
+        .unwrap_or(true)
 }
 
 // ⚠️ 装 / 卸 / 停用 / 信任那几段**不在这里**，在 `plugin/install.rs`：

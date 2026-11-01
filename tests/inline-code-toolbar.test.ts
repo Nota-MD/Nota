@@ -1,9 +1,9 @@
 /** 行内代码工具栏：空选区也要真的切换待输入标记。 */
 
 import { Schema } from "@milkdown/kit/prose/model";
-import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
+import { EditorState, NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 
-import { splitReplaceInlineCode } from "../src/editor/command-table";
+import { splitReplaceInlineCode, toggleMarkAtSelection } from "../src/editor/command-table";
 
 let pass = 0;
 let fail = 0;
@@ -29,6 +29,7 @@ const schema = new Schema({
     doc: { content: "block+" },
     paragraph: { group: "block", content: "inline*" },
     text: { group: "inline" },
+    atom: { inline: true, group: "inline", atom: true },
   },
   marks: {
     strong: {},
@@ -88,6 +89,58 @@ testCase("有选区时给文字挂上行内代码标记", () => {
     if (node.isText && node.marks.some((m) => m.type.name === "inlineCode")) marked = true;
   });
   assertValue(marked, "选中的文字应带 inlineCode");
+});
+
+testCase("空选区点击粗体会打开下一次输入的 strong 标记", () => {
+  const doc = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text("x")));
+  let state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 2),
+  });
+  assertValue(
+    toggleMarkAtSelection(state, "strong", (tr) => {
+      state = state.apply(tr);
+    }),
+    "空选区应接受粗体命令",
+  );
+  assertValue(has(state, "strong"), "storedMarks 应带 strong");
+});
+
+testCase("再次点击粗体会关闭待输入标记", () => {
+  const doc = schema.nodes.doc.create(null, schema.nodes.paragraph.create(null, schema.text("x")));
+  let state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 2),
+  });
+  toggleMarkAtSelection(state, "strong", (tr) => {
+    state = state.apply(tr);
+  });
+  toggleMarkAtSelection(state, "strong", (tr) => {
+    state = state.apply(tr);
+  });
+  assertValue(!has(state, "strong"), "storedMarks 不应再带 strong");
+});
+
+testCase("原子节点被整块选中时，粗体会落到旁边下一次输入", () => {
+  const doc = schema.nodes.doc.create(
+    null,
+    schema.nodes.paragraph.create(null, [schema.nodes.atom.create(), schema.text("x")]),
+  );
+  let state = EditorState.create({
+    schema,
+    doc,
+    selection: NodeSelection.create(doc, 1),
+  });
+  assertValue(
+    toggleMarkAtSelection(state, "strong", (tr) => {
+      state = state.apply(tr);
+    }),
+    "原子选区也应接受粗体命令",
+  );
+  assertValue(state.selection instanceof TextSelection, "选区应改成可输入的文本光标");
+  assertValue(has(state, "strong"), "storedMarks 应带 strong");
 });
 
 if (fail > 0) {

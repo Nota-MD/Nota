@@ -34,6 +34,7 @@ import {
   type DocumentChangedPayload,
   type DocumentEditPayload,
   type NotifyPayload,
+  type OpenDocumentPayload,
   type SecondInstancePayload,
 } from "@/bridge/ipc";
 // ⚠️ 用**模块级**的 `t` 而不是 `useT()`：这一条订阅只订一次（文件头第 1 条），
@@ -117,6 +118,13 @@ export function useAppEvents(w: EventWiring): void {
           // 而"没做成"本来就是这条路允许的结果之一（见 `payloads.ts` 那条）。
           // 拿一条 toast 告诉用户"插件没能替你插进去"只会让他莫名其妙。
           editorRef.current?.insertAtCursorPlace(p.text);
+        }),
+
+        // A plugin graph or index can ask to open a document it already listed
+        // through `nota.fs`. The backend validated that the path remains inside
+        // the workspace fence; tab reuse and unsaved work stay in `openPath`.
+        on<OpenDocumentPayload>(events.openDocument, (p) => {
+          void openPath(p.path);
         }),
 
         // **用户又启动了一次 Nota**（2026-09-27 加，单实例那一格）。

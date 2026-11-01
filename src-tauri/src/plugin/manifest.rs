@@ -164,6 +164,13 @@ pub enum Capability {
     /// 往菜单里加条目。
     #[serde(rename = "ui.menu")]
     UiMenu,
+    /// Own the editor's keyboard through a host-provided input adapter.
+    ///
+    /// This is intentionally additive: older plugins never request it, and
+    /// the editor still validates that only a loaded extension can register
+    /// an adapter.
+    #[serde(rename = "editor.input")]
+    EditorInput,
     /// 读写插件自己的设置段。
     #[serde(rename = "settings.own")]
     SettingsOwn,
@@ -196,6 +203,7 @@ impl Capability {
             "ui.open_url" => Self::UiOpenUrl,
             "ui.panel" => Self::UiPanel,
             "ui.menu" => Self::UiMenu,
+            "editor.input" => Self::EditorInput,
             "settings.own" => Self::SettingsOwn,
             "data.own" => Self::DataOwn,
             other => {

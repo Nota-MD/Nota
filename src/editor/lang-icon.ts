@@ -36,7 +36,11 @@
  * 的话，会把 93 颗彩色 logo 全变成一片纯色——那是把"真图标"这件事取消掉。
  */
 
-import { iconName, assertValueIconURI } from "./lang-icons-real";
+import {
+  ensureLanguageIcons,
+  hasDedicatedBelongIcon as hasLoadedLanguageIcon,
+  realLanguageIconURI,
+} from "./lang-icon-registry";
 
 /** 不指定语言（`NO_LANGUAGE`，与 `code-block.ts` 同一个值）。 */
 const NO_LANGUAGE = "";
@@ -236,24 +240,33 @@ export function languageIcon(lang: string): HTMLElement {
   // 图标本身没有语义（语言名就写在旁边），别让读屏器把它念一遍。
   el.setAttribute("aria-hidden", "true");
 
-  const image = assertValueIconURI(lang);
-  if (image !== null) {
+  const drawBadge = () => {
+    el.classList.remove("nota-lang-icon--logo");
+    el.style.backgroundImage = "";
+    el.textContent = shrinkWrite(lang);
+    const color = colorTable[lang] ?? middlePropertyColor;
+    el.style.setProperty("--nota-lang-color", color);
+    el.style.setProperty("--nota-lang-on", correctCompareColor(color));
+  };
+  const drawLogo = (image: string) => {
     el.classList.add("nota-lang-icon--logo");
     el.style.backgroundImage = image;
-    // ⚠️ 真图那条路**不留文字**（`textContent` 一个字符都没有）：留着的话
-    //    徽章的缩写会压在图上面，而 `--logo` 那条已经把底色改成透明——
-    //    于是"图 + 一个孤零零的字母"叠在一起，只在真图的语言上看得到。
-    return el;
-  }
+    el.textContent = "";
+  };
 
-  el.textContent = shrinkWrite(lang);
-  const color = colorTable[lang] ?? middlePropertyColor;
-  // ⚠️ 底色和字色**一起给**（都是内联的 CSS 变量，样式全在
-  // `editor.css` 的 `.nota-lang-icon` 里）。分两处算的话，将来加一个语言
-  // 忘了补对比色，那颗徽章就是"浅色底 + 白字"——而且只在那一个语言上出错，
-  // 极难被发现。
-  el.style.setProperty("--nota-lang-color", color);
-  el.style.setProperty("--nota-lang-on", correctCompareColor(color));
+  const image = realLanguageIconURI(lang);
+  if (image !== null) drawLogo(image);
+  else {
+    drawBadge();
+    void ensureLanguageIcons()
+      .then(() => {
+        const later = realLanguageIconURI(lang);
+        if (later !== null) drawLogo(later);
+      })
+      .catch((error: unknown) => {
+        console.warn("[nota] language icons failed to load; using badges", error);
+      });
+  }
   return el;
 }
 
@@ -267,5 +280,5 @@ export function languageIcon(lang: string): HTMLElement {
  * 两个问题没关系。
  */
 export function hasDedicatedBelongIcon(lang: string): boolean {
-  return iconName(lang) !== null;
+  return hasLoadedLanguageIcon(lang);
 }

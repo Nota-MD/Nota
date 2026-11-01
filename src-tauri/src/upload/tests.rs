@@ -421,6 +421,78 @@ fn 前件的边界与标题那边一致() {
     assert!(!前件开着吗(&format!("---\n# {自动上传键}: true\n---\n")));
 }
 
+#[test]
+fn 自动上传必须同时开着三道闸() {
+    let 图 = crate::image::来源::剪贴板 {
+        字节: vec![0x89, 0x50, 0x4e, 0x47],
+        后缀: "png".to_string(),
+    };
+    let 设置 = 上传设置 {
+        auto: true,
+        ..配好了("http://127.0.0.1:9/upload")
+    };
+    assert!(crate::commands::image_upload::自动上传适用(
+        &设置, &图, true
+    ));
+    assert!(!crate::commands::image_upload::自动上传适用(
+        &设置, &图, false
+    ));
+    let 没开自动 = 上传设置 {
+        auto: false,
+        ..设置.clone()
+    };
+    assert!(!crate::commands::image_upload::自动上传适用(
+        &没开自动,
+        &图,
+        true
+    ));
+    let 网络图 = crate::image::来源::网络地址("https://example.com/a.png".to_string());
+    assert!(
+        !crate::commands::image_upload::自动上传适用(&设置, &网络图, true),
+        "网络图片永远不走自动上传"
+    );
+}
+
+/// 本地回环图床上的自动上传全链路：前件开闸 → multipart 真发 → 取回 URL。
+#[test]
+fn 自动上传对着本地图床真发一次() {
+    let (基地址, 收) = 起个服务器(
+        "HTTP/1.1 200 OK",
+        r#"{"data":{"url":"http://127.0.0.1/assets/auto.png"}}"#,
+    );
+    let 设置 = 上传设置 {
+        auto: true,
+        ..配好了(&format!("{基地址}/upload"))
+    };
+    let 来源 = crate::image::来源::剪贴板 {
+        字节: vec![0x89, 0x50, 0x4e, 0x47],
+        后缀: "png".to_string(),
+    };
+    let 前件 = format!("---\n{自动上传键}: true\n---\n正文\n");
+    assert!(前件开着吗(&前件));
+    assert!(crate::commands::image_upload::自动上传适用(
+        &设置, &来源, true
+    ));
+
+    let url = 传一次(
+        &设置,
+        传什么::本地 {
+            字节: vec![0x89, 0x50, 0x4e, 0x47],
+            文件名: "image.png".to_string(),
+        },
+    )
+    .unwrap();
+    assert_eq!(url, "http://127.0.0.1/assets/auto.png");
+
+    let 原始 = 收.recv_timeout(Duration::from_secs(10)).expect("本地图床没收到请求");
+    let 头 = String::from_utf8_lossy(&原始[..找双换行(&原始).unwrap()]).to_string();
+    let 体 = String::from_utf8_lossy(&原始[找双换行(&原始).unwrap() + 4..]).to_string();
+    assert!(头.starts_with("POST /upload"), "请求路径不对：{头}");
+    assert!(头.contains("multipart/form-data"), "自动上传应发 multipart：{头}");
+    assert!(体.contains("name=\"file\""), "文件字段不对：{体}");
+    assert!(体.contains("filename=\"image.png\""), "文件名不对：{体}");
+}
+
 /* ── 多部件体 ──────────────────────────────────────────────────────────── */
 
 #[test]

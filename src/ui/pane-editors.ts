@@ -39,9 +39,10 @@ import type { CommandState } from "@/editor/command-state";
 import { createEditor, type EditorHandle } from "@/editor/create";
 import type { FindStatus } from "@/editor/find";
 import type { InlineExtensionFlags } from "@/editor/inline-marks";
-import { createSourceEditor, type SourceHandle } from "@/editor/source";
+import type { SourceHandle } from "@/editor/source";
 import type { punctuationSettings } from "@/editor/smart-punctuation";
 import type { WritingMode } from "@/editor/writing-modes";
+import type { VimInputConfig, VimInputHooks } from "@/editor/plugin-vim-types";
 
 /** 主窗格那两份建法**都要**的那几样。 */
 export interface MainWindowCellCommonCommon {
@@ -74,7 +75,10 @@ export interface WysiwygParameter extends MainWindowCellCommonCommon {
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
   emoji: boolean;
-  smartAbleSymbolNumber: boolean;
+  vimInput?: {
+    config: VimInputConfig | null;
+    hooks?: VimInputHooks;
+  };
 }
 
 export interface sourceOptions extends Omit<MainWindowCellCommonCommon, "onChange"> {
@@ -104,7 +108,7 @@ export async function createWysiwygEditor(parameter: WysiwygParameter): Promise<
     punctuation,
     selfActionMoreCorrect,
     emoji,
-    smartAbleSymbolNumber,
+    vimInput,
     WritingMode,
     preview,
     onReviewEscape,
@@ -146,10 +150,7 @@ export async function createWysiwygEditor(parameter: WysiwygParameter): Promise<
     //（源码模式没有"短代码"这回事）；分屏预览那一侧**不传**——它是只读的，
     // 补全面板在只读里弹出来只是噪声（`create.ts` 里另有一道 `readOnly` 兜底）。
     emoji,
-    // **智能符号补全**（`settings.editor.smart_symbols`，默认开）。⚠️ **所见即
-    // 所得这一侧才传**（源码模式是 CodeMirror，它没有"打一颗字符顺手补另一半"
-    // 这回事）；分屏预览那一侧**不传**——它是只读的，补进来也只是噪声。
-    smartAbleSymbolNumber,
+    vimInput,
     writingModes: WritingMode,
     // 预览那一份，理由见 `EditorPane` 里 `预览Ref`。
     review: preview,
@@ -171,7 +172,7 @@ export async function createWysiwygEditor(parameter: WysiwygParameter): Promise<
  * 就是文本，没有文档树可读，工具栏据此不画任何高亮。这一句留给调用方是因为
  * 它是"这一刻光标状态读不出来了"的对外声明，不是建实例的一部分。
  */
-export function createSourceEditingDevice(parameter: sourceOptions): SourceHandle {
+export async function createSourceEditingDevice(parameter: sourceOptions): Promise<SourceHandle> {
   const {
     root,
     initial,
@@ -184,6 +185,7 @@ export function createSourceEditingDevice(parameter: sourceOptions): SourceHandl
     onSelection,
     onDocumentActivity,
   } = parameter;
+  const { createSourceEditor } = await import("@/editor/source");
   return createSourceEditor({
     root,
     initialMarkdown: initial,

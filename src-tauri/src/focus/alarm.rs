@@ -181,8 +181,6 @@ pub(super) fn 对账(app: &tauri::AppHandle, 阶段: super::阶段) {
 /// ⚠️ **本机（无声卡的 Xvfb）验不了这个函数有没有声音**。验过的是
 /// "这些程序在不在、调不调得起来"——`canberra-gtk-play` 与 `aplay` 都在宿主上。
 pub fn 系统提示音() {
-    use std::process::Command;
-
     // ⚠️ `alarm-clock-elapsed` 是 freedesktop 音效规范里最像"警报"的一个。
     // 依次往下试，第一个成功就收工。
     const 候选: &[&[&str]] = &[
@@ -198,7 +196,7 @@ pub fn 系统提示音() {
         let Some((程序, 参数)) = 命令.split_first() else {
             continue;
         };
-        let 起 = Command::new(程序)
+        let 起 = crate::proc::background_command(程序)
             .args(参数)
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())

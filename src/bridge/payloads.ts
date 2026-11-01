@@ -129,3 +129,15 @@ export interface SecondInstancePayload {
   path: string | null;
   error: string | null;
 }
+
+/**
+ * A plugin asked the host to open one document inside its workspace fence.
+ *
+ * The backend resolves and validates the relative path before emitting this
+ * event. The frontend still uses the ordinary `openPath` route, so plugin
+ * document opening shares tab reuse, dirty-document handling and error
+ * reporting with every other entry point.
+ */
+export interface OpenDocumentPayload {
+  path: string;
+}

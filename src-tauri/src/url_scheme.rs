@@ -138,7 +138,7 @@ fn 注册内部() -> crate::error::Result<()> {
     // 关联那一枪。⚠️ "找不到 xdg-mime"是正常情况（极简的容器、
     // 没装 xdg-utils 的发行版），不当地错误看——桌面项已经写好了，
     // 缺的只是那一条默认关联，用户在桌面环境里自己选一次也就有了。
-    match std::process::Command::new("xdg-mime")
+    match crate::proc::background_command("xdg-mime")
         .args(关联参数())
         .status()
     {

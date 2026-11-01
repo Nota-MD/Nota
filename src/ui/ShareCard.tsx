@@ -25,12 +25,28 @@
  * 结构不同是真实的需求差异，硬统一只会多出一堆开关参数。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { save as saveDialog } from "@/ui/file-picker";
 
 import { api } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { shareCardSvg, currentCardColor, SafeFileName, toBase64, lightGridConvert } from "@/ui/share-card";
+import { AvatarCropDialog } from "@/ui/AvatarCropDialog";
+import {
+  currentCardColor,
+  lightGridConvert,
+  SafeFileName,
+  shareCardSvg,
+  toBase64,
+  type ShareQrMatrix,
+} from "@/ui/share-card";
+import {
+  NOTA_PROMOTION_URL,
+  readShareIdentity,
+  shareInitials,
+  subscribeShareIdentity,
+  writeShareIdentity,
+  type ShareCardIdentity,
+} from "@/ui/share-card-identity";
 import type { PanelShare } from "@/ui/panel-nodes";
 
 /**
@@ -102,21 +118,57 @@ export interface ShareEnjoyImageOutputMouth {
 export function useShareCard(spec: PanelShare): ShareEnjoyImageOutputMouth {
   const t = useT();
   const color = useCardPalette();
+  const identity = useSyncExternalStore(
+    subscribeShareIdentity,
+    readShareIdentity,
+    readShareIdentity,
+  );
+  const [qr, setQr] = useState<ShareQrMatrix | null>(null);
   const [busy, setBusy] = useState<"" | "save" | "copy">("");
   const [result2, setResult] = useState("");
+
+  useEffect(() => {
+    if (!identity.includePromotion) {
+      setQr(null);
+      return;
+    }
+    let alive = true;
+    void import("qrcode")
+      .then((module) => {
+        const matrix = module.create(NOTA_PROMOTION_URL, { errorCorrectionLevel: "M" }).modules;
+        const rows: ShareQrMatrix = [];
+        for (let row = 0; row < matrix.size; row++) {
+          const cells: boolean[] = [];
+          for (let column = 0; column < matrix.size; column++) {
+            cells.push(matrix.get(row, column) !== 0);
+          }
+          rows.push(cells);
+        }
+        if (alive) setQr(rows);
+      })
+      .catch(() => {
+        if (alive) setQr(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [identity.includePromotion]);
 
   // ⚠️ 依赖用**内容签名**而不是 `spec` 这个对象：活面板每秒重画一次，插件每次
   // 递上来的都是一份全新的对象，`spec` 这个身份每秒都变。不这么写的话这串 SVG
   // 每秒重建、`encodeURIComponent` 每秒扫一遍、`<img>` 每秒重新解码——图根本
   // 没变，白转 CPU，而且会闪。
   const keyName = JSON.stringify(spec);
-  const image = useMemo(() => shareCardSvg(spec, color), [keyName, color]);
+  const image = useMemo(
+    () => shareCardSvg(spec, color, undefined, { identity, qr }),
+    [keyName, color, identity, qr],
+  );
 
   const saveAsImageSlice = async () => {
     setBusy("save");
     setResult("");
     try {
-      const block = await lightGridConvert(spec, color);
+      const block = await lightGridConvert(spec, color, { identity, qr });
       const path = await saveDialog({
         title: t("Save share image"),
         // ⚠️ 默认名用调用方给的那个（`nota-stats-day-2026-09-27.png`）——它认识
@@ -144,7 +196,7 @@ export function useShareCard(spec: PanelShare): ShareEnjoyImageOutputMouth {
       if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
         throw new Error(t("This environment cannot put images on the clipboard"));
       }
-      const block = await lightGridConvert(spec, color);
+      const block = await lightGridConvert(spec, color, { identity, qr });
       await navigator.clipboard.write([new ClipboardItem({ "image/png": block })]);
       setResult(t("Copied to clipboard"));
     } catch (e) {
@@ -193,11 +245,92 @@ export function ShareCardPreview({
  */
 export function ShareCardBlock({ spec }: { spec: PanelShare }) {
   const t = useT();
+  const identity = useSyncExternalStore(
+    subscribeShareIdentity,
+    readShareIdentity,
+    readShareIdentity,
+  );
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const [avatarError, setAvatarError] = useState("");
+  const [cropSource, setCropSource] = useState<{ source: string; fileName: string } | null>(null);
   const { image, busy, result2, saveAsImageSlice, enterCutPasteBoard } = useShareCard(spec);
+  const update = (next: Partial<ShareCardIdentity>) =>
+    writeShareIdentity({ ...identity, ...next });
 
   return (
     <div className="panel-share">
       <ShareCardPreview spec={spec} image={image} className="panel-share-img" />
+
+      <div className="panel-share-profile">
+        <button
+          type="button"
+          className="panel-share-avatar"
+          title={t("Choose profile image")}
+          aria-label={t("Choose profile image")}
+          onClick={() => avatarInput.current?.click()}
+        >
+          {identity.avatar ? (
+            <img src={identity.avatar} alt="" />
+          ) : (
+            <span>{shareInitials(identity.name || "Nota writer")}</span>
+          )}
+        </button>
+        <input
+          ref={avatarInput}
+          hidden
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            if (!file) return;
+            if (!/^image\/(png|jpeg|webp)$/i.test(file.type) || file.size > 8 * 1024 * 1024) {
+              setAvatarError(t("Choose a PNG, JPEG or WebP image smaller than 8 MiB."));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              const avatar = typeof reader.result === "string" ? reader.result : "";
+              if (!avatar) {
+                setAvatarError(t("Could not read that image."));
+                return;
+              }
+              setAvatarError("");
+              setCropSource({ source: avatar, fileName: file.name });
+            };
+            reader.onerror = () => setAvatarError(t("Could not read that image."));
+            reader.readAsDataURL(file);
+          }}
+        />
+        <label className="panel-share-name">
+          <span>{t("Creator")}</span>
+          <input
+            type="text"
+            value={identity.name}
+            maxLength={48}
+            placeholder={t("Nota writer")}
+            onChange={(event) => update({ name: event.target.value })}
+          />
+        </label>
+        {identity.avatar && (
+          <button type="button" className="btn panel-share-remove" onClick={() => update({ avatar: "" })}>
+            {t("Remove")}
+          </button>
+        )}
+      </div>
+      {avatarError && <p className="panel-share-note">{avatarError}</p>}
+
+      <label className="panel-share-promo">
+        <input
+          type="checkbox"
+          checked={identity.includePromotion}
+          onChange={(event) => update({ includePromotion: event.target.checked })}
+        />
+        <span>
+          {t("Include Nota website QR code")}
+          <small>{NOTA_PROMOTION_URL}</small>
+        </span>
+      </label>
 
       <div className="panel-share-actions">
         <button
@@ -224,6 +357,17 @@ export function ShareCardBlock({ spec }: { spec: PanelShare }) {
         <p className="panel-share-note" role="status">
           {result2}
         </p>
+      )}
+      {cropSource && (
+        <AvatarCropDialog
+          source={cropSource.source}
+          fileName={cropSource.fileName}
+          onCancel={() => setCropSource(null)}
+          onConfirm={(avatar) => {
+            update({ avatar });
+            setCropSource(null);
+          }}
+        />
       )}
     </div>
   );

@@ -1,0 +1,49 @@
+.nota-vim-active.nota-vim-normal .ProseMirror,
+.nota-vim-active.nota-vim-visual .ProseMirror,
+.nota-vim-active.nota-vim-vline .ProseMirror {
+  caret-color: transparent;
+}
+
+.nota-vim-block-cursor {
+  color: Canvas;
+  background: CanvasText;
+  border-radius: 1px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.nota-vim-block-cursor-empty {
+  display: inline-block;
+  width: 0.58em;
+  height: 1.05em;
+  vertical-align: -0.16em;
+  opacity: 0.82;
+}
+
+.nota-vim-status {
+  /* `.editor-pane` 自己就是滚动容器：绝对定位的徽标会跟着正文滚走，而且
+     `z-index: 8` 会被编辑区里的浮层盖住。实际坐标由 `VimStatusOverlay`
+     按编辑区可视矩形计算：左下角、避开标签栏和状态栏。 */
+  position: fixed;
+  z-index: 190;
+  min-width: 72px;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, CanvasText 24%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, Canvas 94%, transparent);
+  color: CanvasText;
+  font: 600 10px/1.5 var(--mono-font, monospace);
+  letter-spacing: 0.08em;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 2px 10px color-mix(in srgb, #000 8%, transparent);
+}
+
+.nota-vim-status-insert {
+  color: #2f6fd8;
+}
+
+.nota-vim-status-visual,
+.nota-vim-status-vline {
+  color: #a85c00;
+}

@@ -111,7 +111,8 @@ testCase("当前列已是对齐值时不再派空事务", () => {
 testCase("表格单元格里的段落继承列对齐，不被主题的段落规则压回左侧", () => {
   const css = readFileSync("src/styles/editor-blocks.css", "utf8");
   assertValue(
-    /:is\(th, td\)\s*>\s*p\s*\{[^}]*text-align:\s*inherit/s.test(css),
+    css.includes(":is(th, td) > p") &&
+      css.includes("text-align: inherit !important"),
     "缺少单元格段落继承规则",
   );
 });

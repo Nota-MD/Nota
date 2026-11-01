@@ -10,7 +10,11 @@
 //! 那一路要起外部进程、要探测、PDF 还有第二条路，和这里"写一段文本"不是一回事。
 //! 两边共用的只有"文档目录当基准"这条判断（理由见下面打印那一段）。
 //!
-//! # 为什么打印是"写个文件交给系统"而不是 `window.print()`
+//! # 默认打印已经改走系统打印（2026-11-01）
+//!
+//! Linux 使用 `print_job::系统打印` 的 GTK `PrintOperation`，Windows 由前端把
+//! 完整 HTML 放进离屏 iframe 调 WebView2 原生打印。本文件这条"写 HTML 再交给
+//! 系统默认程序"只保留给尚未接入原生后端的平台兜底。
 //!
 //! WebKitGTK 里 `window.print()` 会弹一个**原生**打印对话框，而它：
 //! ① 在容器里点不出来（没有 GTK 打印后端），**验不了**；
@@ -216,7 +220,7 @@ fn 打印落点(doc_path: Option<&str>, title: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{PRINT_FILE_TMP}-{}.html", 清文件名(title)))
 }
 
-/** 把一段文字变成"能当文件名"的样子。空 → `未命名`。 */
+/** 把一段文字变成"能当文件名"的样子。空 → `Untitled`。 */
 fn 清文件名(title: &str) -> String {
     let cleaned: String = title
         .trim()
@@ -230,7 +234,7 @@ fn 清文件名(title: &str) -> String {
     //（标题全是非法字符，一个个都被换成了 `-`）。**不能返回空串**——空串拼出来
     // 的名字是 `.html`，那是个藏起来的文件，用户根本找不到它。
     if cleaned.is_empty() || cleaned.chars().all(|c| c == '-') {
-        "未命名".to_string()
+        "Untitled".to_string()
     } else {
         cleaned
     }
@@ -270,7 +274,7 @@ mod tests {
         for 原 in ["", "   ", "///"] {
             let p = 打印落点(None, 原);
             let name = p.file_name().unwrap().to_string_lossy().to_string();
-            assert!(name.contains("未命名"), "「{原}」→ {name}");
+            assert!(name.contains("Untitled"), "「{原}」→ {name}");
         }
     }
 

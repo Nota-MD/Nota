@@ -45,6 +45,8 @@ export interface PaneProps {
   onOpenStylesDir: () => void;
   /** 用户放入新的界面风格文件后立即重扫。 */
   onRefreshUiStyles: () => void;
+  /** Pick and import one ZIP containing interface and/or document themes. */
+  onImportTheme: () => void;
   /** 打开设置文件所在的目录（`~/.config/nota`）。 */
   onOpenConfigDir: () => void;
   /** 恢复出厂默认。**整份替换**，落盘在后端做，新的那一份从返回值拿。 */

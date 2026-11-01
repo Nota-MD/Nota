@@ -17,7 +17,7 @@ import { $prose } from "@milkdown/kit/utils";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
-import { searchLanguages, relatedLanguages } from "./code-block";
+import { awaitLanguageTable, searchLanguages, relatedLanguages } from "./code-block";
 import { languageIcon } from "./lang-icon";
 
 const candidateLimit = 3;
@@ -142,6 +142,7 @@ export const encloseBarLanguageFillAll = $prose(
         let candidate: string[] = [];
         let currentItem = 0;
         let paragraph: { from: number; to: number; query: string } | null = null;
+        let fullTableRequested = false;
 
         const options = () =>
           popup
@@ -229,6 +230,16 @@ export const encloseBarLanguageFillAll = $prose(
           }
           paragraph = newValueParagraph;
           candidate = encloseBarLanguageCandidate(newValueParagraph.query, searchLanguages(), relatedLanguages);
+          if (!fullTableRequested) {
+            fullTableRequested = true;
+            void awaitLanguageTable()
+              .then(() => {
+                if (popup && paragraph) heavyDraw();
+              })
+              .catch((error: unknown) => {
+                console.warn("[nota] 完整代码语言表加载失败；围栏提示保留基础语言：", error);
+              });
+          }
           if (candidate.length === 0) {
             close();
             return;

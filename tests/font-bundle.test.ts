@@ -119,12 +119,12 @@ testCase("第三方清单登记 CDE 主题字体，根许可证仍是 BSD-2-Clau
 testCase("安装包唯一主题字体 Adwaita Sans / Mono 与 OFL 随包存在", () => {
   const characterRoot = "src/assets/fonts/adwaita";
   for (const name3 of [
-    "AdwaitaSans-Regular.ttf",
-    "AdwaitaSans-Italic.ttf",
-    "AdwaitaMono-Regular.ttf",
-    "AdwaitaMono-Italic.ttf",
+    "AdwaitaSans-Regular.woff2",
+    "AdwaitaSans-Italic.woff2",
+    "AdwaitaMono-Regular.woff2",
+    "AdwaitaMono-Italic.woff2",
   ]) {
-    assertValue(statSync(`${root}/${characterRoot}/${name3}`).size > 500_000, `${name3} 缺失或体积异常`);
+    assertValue(statSync(`${root}/${characterRoot}/${name3}`).size > 250_000, `${name3} 缺失或体积异常`);
   }
   contains(read(`${characterRoot}/LICENSE.txt`), "SIL OPEN FONT LICENSE", "Adwaita 字体许可");
   contains(read("src/styles/theme/adwaita-fonts.css"), '"Adwaita Sans"', "界面字体声明");
@@ -201,7 +201,8 @@ testCase("块公式的源码与预览是上下两块，预览参与文档流", (
   const ruleRule = math.slice(openHead, tail + 1);
   contains(ruleRule, "position: relative", "块预览应参与布局");
   contains(ruleRule, "width: 100%", "块预览应占满正文列");
-  contains(ruleRule, "border-radius: 0 0 var(--radius-sm) var(--radius-sm)", "下方预览框的下圆角");
+  contains(ruleRule, "border-radius: var(--radius)", "下方预览框与源码框使用一致圆角");
+  contains(ruleRule, "margin-top: 12px", "下方预览框与源码框分开显示");
   assertValue(!ruleRule.includes("position: absolute"), "块公式预览仍是绝对定位浮层");
 });
 

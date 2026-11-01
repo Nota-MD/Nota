@@ -62,11 +62,26 @@ testCase("标题块不再显示 H1–H6 徽标", () => {
   }
 });
 
-testCase("引用、无序列表、有序列表和代码块仍回显各自标记", () => {
-  equal(blockMark(block("blockquote"), null, 0), ">", "引用");
+testCase("引用只显示左边线、其余容器仍回显各自标记", () => {
+  equal(blockMark(block("blockquote"), null, 0), null, "引用");
   equal(blockMark(block("list_item"), block("bullet_list"), 0), "-", "无序列表");
   equal(blockMark(block("list_item"), block("ordered_list", { order: 3 }), 2), "5.", "有序列表从 3 起、第三项");
   equal(blockMark(block("code_block"), null, 0), "```", "代码围栏");
+});
+
+testCase("普通引用与 GitHub Alert 都不重复引用源码角标", () => {
+  const paragraph = (text: string) =>
+    schema.nodes.paragraph!.create(null, text ? schema.text(text) : undefined);
+  equal(
+    blockMark(schema.nodes.blockquote!.create(null, [paragraph("[!NOTE]")]), null, 0),
+    null,
+    "完整 Alert",
+  );
+  equal(
+    blockMark(schema.nodes.blockquote!.create(null, [paragraph("[!NOT]")]), null, 0),
+    null,
+    "尚未完成的引用源码",
+  );
 });
 
 testCase("任务项不额外叠短横，普通段落不显示标记", () => {

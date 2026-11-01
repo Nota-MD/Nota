@@ -377,6 +377,22 @@ fn 一层的项数有上限() {
     assert_eq!(v[0]["items"].as_array().unwrap().len(), 面板节点上限);
 }
 
+#[test]
+fn 网络面板的节点数组使用更高的专用上限() {
+    let lua = 带渲染的面板(&format!(
+        r#"local nodes = {{}}
+           for i = 1, {} do nodes[i] = {{ id = tostring(i), label = "x" }} end
+           return {{ {{ kind = "network", nodes = nodes, edges = {{}} }} }}"#,
+        网络元素上限 + 50
+    ));
+    let v = 面板内容(&lua, "nota.t", "p").unwrap();
+    assert_eq!(
+        v[0]["nodes"].as_array().unwrap().len(),
+        网络元素上限,
+        "network nodes should use the graph-specific limit"
+    );
+}
+
 // ───────────────────────── `nota.ui.stream`（2026-10-04） ─────────────────────────
 //
 // ⚠️ **这条只钉得住纯的那一半**：`实时表` 本体要一个真的 `tauri::AppHandle` 才

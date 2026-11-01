@@ -90,6 +90,7 @@ podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
 | `@codemirror/lang-markdown` · `@lezer/highlight` | Markdown 的语法切分与高亮标签。`language` 那半边（`syntaxHighlighting` / `HighlightStyle`）也从 `@codemirror/language` 进 |
 | `@codemirror/language` | 把 token 映射成样式的机制（`notaHighlight`） |
 | `react` / `react-dom` | 界面框架（React 19，`main.tsx` 用 `createRoot`） |
+| `qrcode` | 分享图中可选的 Nota 官网二维码。用户打开开关后才动态加载；二维码矩阵写成 SVG path，不请求外部服务 |
 | `@tauri-apps/api` | `invoke` / `listen`。**只在 `src/bridge/ipc.ts` 里用** |
 | `@tauri-apps/plugin-fs` | ⚠️ 装了但**没给权限**，与上面对应的 Rust 侧同理 |
 | `@tauri-apps/plugin-opener` | 用系统程序打开链接 |
@@ -97,7 +98,7 @@ podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
 | `@vitejs/plugin-react`(dev) | Vite 的 React 支持（快刷新） |
 | `vite`(dev) | 构建器。⚠️ 固定端口 `5273`、`strictPort: true`，理由见 §2.3 |
 | `typescript`(dev) | `tsc --noEmit`。开了 `noUnusedLocals` / `noUnusedParameters` / `noUncheckedIndexedAccess` |
-| `@types/node` / `@types/react` / `@types/react-dom`(dev) | 类型 |
+| `@types/node` / `@types/react` / `@types/react-dom` / `@types/qrcode`(dev) | 类型 |
 
 ### 1.4 ⚠️ 三个声明了但没用上的 crate
 
@@ -560,9 +561,15 @@ NOTA_DEBUG=1 npm run tauri dev
 `FOLIO_*` 变量，这边的口径是**每加一个都要有"不改代码就能验一条链"的理由**，
 而不是留一堆旋钮。排查主要靠 §3.1（开 `NOTA_DEBUG`）与 §5 的抓图。
 
-> `tools/open-window.sh` 自己还认四个（`NOTA_CONTAINER` / `NOTA_DISPLAY` /
-> `NOTA_PORT` / `NOTA_WINDOW_LOG`）——那些是**脚本的参数**，应用不知道它们存在，
-> 用法写在那个脚本的文件头。
+> `tools/open-window.sh` 自己还认 `NOTA_CONTAINER` / `NOTA_DISPLAY` /
+> `NOTA_PORT` / `NOTA_WINDOW_LOG` / `NOTA_GDK_BACKEND`。宿主有 Wayland socket 时
+> 默认走原生 Wayland，`--wayland` / `--x11` 可强制；`--stop` 保存实际 Nota PID，
+> 不会因 `podman exec` 外层进程先退出而漏杀。
+> 📌 **2026-11-01 容器内必须加 `NO_AT_BRIDGE=1`**：容器虽然能看到宿主 D-Bus
+> socket，但 AT-SPI 握手可能收不到回复；GTK 打一条 `dbind-WARNING` 后，Wayland
+> 下的 WebKit 进程会继续段错误（实测退出码 139）。`tools/open-window.sh` 只对
+> 容器开发实例关闭无障碍桥；正式安装包不受影响。开窗成功应以
+> `editor ready; showing main window` 和窗口可见为准，不能只看前面的日志行。
 
 ### 3.5 前端热重载（HMR）
 
@@ -3568,12 +3575,13 @@ npm test
 ```
 
 2026-10-17 起测试名册**自动扫** `tests/*.test.ts`，不再维护手抄 `for` 名单；
+📌 2026-10-31 新增长尾代码语言表测试 `tests/refractor-runtime.test.ts`（5 条）：它直接钉住“导入运行层不加载 `refractor/all`、主动请求后扩展到 400 个名字”。完整名册由脚本自动发现；分享图重做后本次实跑为 **115 套 / 至少 1792 条**（`share-card` 从旧版式的 46 条改为 18 条结构与裁切几何判据）。
 CI 的 `verify.yml` 跑的就是这一份。下面保留早期逐名列表作为历史跑法。
 
 ```sh
 cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
 mkdir -p /tmp/nota-测试
-for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc slash doc-typography empty-doc-save table-input table-pipe auto-pair selection-marks lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing code-preview find select move-block link-edit panel-dock-state; do
+for n in math-view math-wiring math-commands math-suggest mark-hint math-input math-currency lang-icons atom-space accent chart-ticks instant-render math-delim inline-marks html-block smart-punctuation auto-correct emoji footnote toc doc-typography empty-doc-save table-input table-pipe lang-guess paste-clean url-link file-kind tree-options video-view heading-on-enter sidebar-resize status-metric source-mark modal-trap tablist-keys list-indent key-conflicts syntax-escape table-tab bar-close caret-snapshot front-matter focus-dim window-title panel-cards context-menu hints code-block-editing code-preview find select move-block link-edit panel-dock-state; do
   npx esbuild tests/$n.test.ts --bundle --platform=node --format=esm \
     --outfile=/tmp/nota-测试/$n.mjs && node /tmp/nota-测试/$n.mjs
 done       # 全过退出码 0；有不过的列出名字并退 1
@@ -3770,7 +3778,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 本轮新增 HTML 安全渲染、当前列对齐、模式切换滚动恢复、文档主题明暗选择与日志
 生命周期判据；TypeScript、`cargo check --lib`、国际化、文档同步和生产构建同批通过。
 
-`keymap` **54** · `auto-pair` **57** · `slash` **49** · `share-card` **46** ·
+`keymap` **54** · `auto-pair` **57** · `share-card` **46** ·
 `math-view` **33** · `math-wiring` **20** · `math-delim` **47** · `find` **48** · `table-input` **39** · `inline-marks` **37** ·
 `smart-punctuation` **36** · `focus-summary` **34** · `math-commands` **35** · `emoji` **32** · `front-matter` **32** ·
 `lang-guess` **31** · `footnote` **30** · `url-link` **29** · `paste-clean` **25** ·
@@ -3778,7 +3786,7 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 `math-suggest` **27** · `auto-correct` **20** ·
 `heatmap` **20** · `atom-space` **19** · `heading-on-enter` **19** ·
 `accent` **18** · `mark-hint` **18** · `instant-render` **17** ·
-`file-kind` **14** · `html-block` **18** · `html-block-view` **8** · `deferred-snapshot` **9** · `count-text` **9** · `lang-icons` **17** · `focus-dim` **15** ·
+`file-kind` **14** · `html-block` **18** · `html-block-view` **12** · `element-inspector` **16** · `color-picker` **4** · `theme-import` **3** · `block-keys` **5** · `deferred-snapshot` **9** · `count-text` **9** · `lang-icons` **17** · `focus-dim` **15** ·
 `chart-ticks` **12** · `video-view` **12** · `sidebar-resize` **12** ·
 `doc-typography` **11** · `status-metric` **10** · `tree-options` **9** ·
 `empty-doc-save` **8** · `window-title` **8** · `modal-trap` **9** · `tablist-keys` **6** · `key-conflicts` **19** ·
@@ -6253,6 +6261,14 @@ podman exec -u 1000 -e CARGO_TARGET_DIR=/tmp/nota-win-check \
 ⚠️ 另外两条：**前端要先在宿主上 `npx vite build`**（它被 `generate_context!` 在编译期嵌进 exe），
 而 `bundle.resources` 那份映射**只有 `tauri build` 的打包器会做**——纯 `cargo build` 出来的
 exe，插件得**手动把 `Nota-plugins/plugins` 拷到 exe 旁边**（运行期按 `resource_dir()` 找）。
+
+📌 **2026-11-01 Windows 后台命令必须无窗启动**：GUI 进程启动 `git`、`cmd /C ver`、
+Pandoc、PowerShell 或 `taskkill` 时，Windows 默认会给控制台程序新建一个黑框。所有运行期
+命令现在统一走 `proc::background_command`，Windows 分支设置 `CREATE_NO_WINDOW`；
+`spawn_retrying` 再兜底设置一次。新增运行期进程时**不要直接写 `Command::new`**，
+`tests/windows-process.test.ts` 会拒绝绕过。交叉编译判据：
+`cargo check --target x86_64-pc-windows-gnu --lib` **0 error / 0 warning**。
+
 ### 5.61 验「跑着的时候关掉插件栏、再打开」（第 111 项，2026-10-10，⚠️ **一半验成、一半没验成**）
 
 **要验的是什么**：插件（这里用 AI）的一条命令正在跑的时候关掉右侧插件栏、再打开，
@@ -6505,10 +6521,11 @@ XSendEvent(dpy, wid, 0, 0, byref(缓冲))
 ⚠️ **这一条给下一轮的教训**：`ConfirmRequest` 加字段就回来补一行；更稳的写法是
 `{...confirmReq}`（两份形状只差一个 `onAnswer`）。
 
-⚠️ **改前端之后必须走**：`npx vite build` → `touch src-tauri/build.rs` → `cargo build`
-（`tauri-build` 只认"构建脚本重新跑过"，光改 `dist` 它不重编；本批第一轮就是拿旧
-前端跑出来的，症状是"新加的那句话在、另一个改动没生效"——**两次不同的读数是
-两套代码，别把它们当成同一个 bug**）。
+⚠️ **改前端之后仍必须重新链接**：`npm run build`（或 `npx vite build`）→
+`cargo build --release`。📌 **2026-10-31 起** `build.rs` 已声明
+`cargo:rerun-if-changed=../dist`，不再需要手工 `touch src-tauri/build.rs`；
+此前 `tauri-build` 只看构建脚本是否重跑，光改 `dist` 会继续嵌入旧资源，症状是
+“某个前端改动在、另一个改动没生效”——**两次不同的读数是两套代码**。
 
 #### ④ 「打开那一栏」的动效怎么量（2026-10-16 加）
 
@@ -6560,6 +6577,10 @@ magick /tmp/dock$i.png -crop 1100x1+250+520 +repage txt:- |
 （`sandbox="allow-scripts"` 且**没有** `allow-same-origin`，见 `docs/05` §4.28 ②）。
 
 ### 5.68 验「应用内打印框」（2026-10-17，✅ 开窗走完预览与翻页）
+
+> 📌 **2026-11-01 已改默认路径**：下面的自绘框不再由 `Ctrl+P` 打开；Linux 直接使用
+> GTK 原生打印，Windows 直接使用 WebView2 原生打印。该节保留为自绘打印与 PDF 预览的
+> 历史实测记录；当前入口与代码判据见 `tests/windows-print.test.ts`。
 
 用户拍板的路：「**你让它做成PDF然后再预览**，这样问题就基本解决了」。
 
@@ -6736,11 +6757,17 @@ CSS 文件目录解析相对资源，而不是要求 `<主题id>/icons/`。
 改成 SVG data URL 后通过；这是该实现必须保留的细节。
 
 **判据**：`tests/menu-features.test.ts` 6 条、`tests/debug-log-window.test.ts`
-5 条与 `tests/diagnostics-text.test.ts` 3 条；全量前端 90 份、至少 1722 条通过。
+8 条与 `tests/diagnostics-text.test.ts` 3 条；全量前端 90 份、至少 1722 条通过。
 `tsc`、生产构建、国际化、
 文档同步与 `cargo check` 通过。实时日志截图见 `/tmp/nota-debug-log.png`；
 `Show Diagnostics` 的 Windows 字段截图见
 `/tmp/nota-debug-diagnostics-windows.png`。
+
+📌 **2026-11-01 Linux 输入焦点复验**：直接启动隔离的
+`nota --debug-log-window`，窗口出现后按 `Tab`、`Enter` 能从日志页切到诊断页，
+证明键盘事件确实进入 WebView。此前只调用顶层 `set_focus()`，XWayland 下会出现
+窗口标题已激活但 GTK 输入法上下文没有落到子 WebView 的状态；现在与主窗口共用
+`grab_focus()`，并延迟 60ms 再确认一次。
 
 **启动门限**：在空 `XDG_*`、`DISPLAY=:98`、无窗口管理器的隔离环境里轮询
 `xwininfo`，只认主窗口几何从 `-10000,-10000` 变成屏幕内坐标的时刻。当前前端

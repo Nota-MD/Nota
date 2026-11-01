@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tauri::State;
 
-use crate::commands::image_upload::{自动传, 文档位置, 文档写着键吗, 读设置};
+use crate::commands::image_upload::{自动上传适用, 自动传, 文档位置, 文档写着键吗, 读设置};
 use crate::document::DocId;
 use crate::error::{NotaError, Result};
 use crate::image::{self, 来源, 规则};
@@ -135,10 +135,7 @@ pub async fn nota_image_place(
     // 于是没开上传的机器上，插入图片这条路的开销与以前**一模一样**。
     // 三道闸见 `commands/image_upload.rs` 文件头；网络来源在这里就出局。
     let 上传设置 = 读设置().await?;
-    let 要自动 = 上传设置.可用()
-        && 上传设置.auto
-        && !来源.是网络()
-        && 文档写着键吗(&state, doc_id)?;
+    let 要自动 = 自动上传适用(&上传设置, &来源, 文档写着键吗(&state, doc_id)?);
 
     // ⚠️ 闭包把 `来源` **原样还回来**（返回元组），不是克隆一份：剪贴板那条路上
     // 它可能是几 MB 的图片字节，而副本在这里没有任何用处。`spawn_blocking` 要

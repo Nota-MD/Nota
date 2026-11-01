@@ -92,6 +92,11 @@ fn main() {
     // 依赖版本号。
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=Cargo.lock");
+    // Tauri embeds `frontendDist` from this repository-relative directory.
+    // Without this line `cargo build --release` can keep the previous asset
+    // bundle even after `npm run build`, producing a binary whose hashed chunk
+    // files no longer exist.
+    println!("cargo:rerun-if-changed=../dist");
     // ⚠️ **`src/` 整棵也要声明**，为的是那个"编译时间戳"。
     // `rerun-if-changed` 只在文件**真变了**的时候才重跑脚本——所以源码没动时它不跑，
     // 时间戳也不会自己往前走（不会每次 `cargo build` 都白重编一遍）；而源码一动、

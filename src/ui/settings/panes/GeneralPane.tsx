@@ -36,7 +36,15 @@ import { useEffect, useState } from "react";
 import { api, type AppLang, type NotificationPosition } from "@/bridge/ipc";
 import type { SettingsExportReport } from "@/bridge/types-settings-export";
 import { useT } from "@/i18n";
-import { ActionButton, SettingRow, SettingsGroup, Select, TextArea, Value } from "../primitives";
+import {
+  ActionButton,
+  SettingRow,
+  SettingsGroup,
+  Select,
+  TextArea,
+  Toggle,
+  Value,
+} from "../primitives";
 import { SettingsExportDialog } from "../SettingsExportDialog";
 import { paneWriter, type PaneProps } from "./props";
 
@@ -95,6 +103,20 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
               // `src-tauri/src/lang.rs::语言名`。
               ...(languageTable?.available ?? []).map((l) => ({ value: l.tag, label: l.label })),
             ]}
+          />
+        </SettingRow>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("Extensions")}>
+        <SettingRow
+          label={t("Enable extensions")}
+          description={t(
+            "When off, every extension stops running and its menus, panels and settings pages are hidden. Installed extensions and their individual enabled states are kept.",
+          )}
+        >
+          <Toggle
+            checked={settings.general.extensions_enabled}
+            onChange={(extensions_enabled) => write({ extensions_enabled })}
           />
         </SettingRow>
       </SettingsGroup>

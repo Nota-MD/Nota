@@ -403,13 +403,19 @@ export function useDocuments(w: documentWiring): documentApi {
   );
 
   const newDoc = useCallback(async (workspaceFileName?: string) => {
+    // Some generic UI callbacks pass their click event here despite the public
+    // signature accepting only a filename. Treat every non-string as absent;
+    // otherwise the event object reaches `.trim()` and every click creates an
+    // error toast instead of a new document.
+    const requestedName =
+      typeof workspaceFileName === "string" ? workspaceFileName.trim() : "";
     let id: DocId | null = null;
     try {
       id = await api.doc.create();
 
       const currentWorkWorkArea = workspaceRef.current;
-      if (workspaceFileName && currentWorkWorkArea) {
-        let textItemName = workspaceFileName.trim();
+      if (requestedName && currentWorkWorkArea) {
+        let textItemName = requestedName;
         if (!textItemName || /[\\/]/.test(textItemName) || textItemName === "." || textItemName === "..") {
           throw new Error(t("Enter a valid file name."));
         }
@@ -433,7 +439,7 @@ export function useDocuments(w: documentWiring): documentApi {
         await refreshDocs().catch(() => undefined);
       }
       debugError("document", "new document failed", e, {
-        has_workspace_name: Boolean(workspaceFileName),
+        has_workspace_name: Boolean(requestedName),
       });
       toast(String(e), "error");
     }

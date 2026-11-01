@@ -86,6 +86,35 @@ testCase("调试设置会动态打开后端日志闸门", () => {
   assertValue(logs.includes("pub fn 设置调试模式"), "日志模块没有运行期开关");
 });
 
+testCase("拓展功能总开关隐藏入口、停止运行并保留安装与单项启停账本", () => {
+  const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
+  assertValue(general.includes('t("Enable extensions")'), "通用页没有拓展功能总开关");
+  assertValue(general.includes("settings.general.extensions_enabled"), "总开关没有接到设置字段");
+
+  const dialog = read("src", "ui", "settings", "SettingsDialog.tsx");
+  assertValue(dialog.includes("extensionsEnabled ||"), "设置页没有按总开关收放");
+  assertValue(dialog.includes('id !== "pluginSettings"'), "关闭后仍显示插件设置页");
+  assertValue(dialog.includes('id !== "extensions"'), "关闭后仍显示拓展管理页");
+
+  const plugins = read("src", "ui", "usePlugins.ts");
+  assertValue(plugins.includes("if (!extensionsEnabled)"), "关闭后没有清空拓展运行态");
+  assertValue(plugins.includes("withPluginDock(MENUS, extensionsEnabled ? menuItems : [], extensionsEnabled)"), "拓展菜单没有受总开关控制");
+  assertValue(plugins.includes("useEditorInput(extensionsEnabled ? plugins : [])"), "关闭后编辑器输入适配器仍然生效");
+
+  const app = read("src", "App.tsx");
+  assertValue(app.includes("extensionsEnabled && dockOpen"), "关闭后右侧拓展栏仍可渲染");
+  assertValue(app.includes("showDock={extensionsEnabled}"), "关闭后顶栏拓展入口仍可渲染");
+
+  const host = read("src-tauri", "src", "plugin", "mod.rs");
+  assertValue(host.includes("pub fn set_extensions_enabled"), "宿主没有全局拓展开关");
+  assertValue(host.includes("self.extensions_enabled && self.installed.is_enabled(id)"), "总开关没有参与可调用判据");
+  assertValue(host.includes("LuaPlugin::disabled(manifest, &self.base.应用语言)"), "关闭后没有卸载 Lua 状态");
+  assertValue(host.includes("self.installed.is_enabled(&id)"), "重新开启时没有按原账本恢复");
+
+  const settings = read("src-tauri", "src", "settings", "general.rs");
+  assertValue(settings.includes("extensions_enabled: true"), "拓展功能默认没有开启");
+});
+
 if (fail > 0) {
   console.error(`\n${fail} 项失败`);
   process.exitCode = 1;

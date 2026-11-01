@@ -91,7 +91,11 @@ import { NodeSelection, Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { mathBlockSchema, mathInlineSchema } from "./math-schema";
 
-import { dollarCountAttribute } from "./math-delim";
+import {
+  dollarCountAttribute,
+  mathDelimiterAttribute,
+  type MathDelimiter,
+} from "./math-delim";
 
 /**
  * `$…$` 的正则。
@@ -102,6 +106,12 @@ export const singleDollarDollar = /(?:\$)([^$]+)(?:\$)$/;
 
 /** `$$…$$` 的正则。 */
 export const doubleDollarDollar = /\$\$([^$]+)\$\$$/;
+
+/** LaTeX 常见的行内分隔符：`\(…\)`。 */
+export const latexParenMath = /\\\(([\s\S]*?)\\\)$/;
+
+/** LaTeX 常见的显示分隔符；在 Nota 中按行内公式节点处理并保留下方预览。 */
+export const latexBracketMath = /\\\[([\s\S]*?)\\\]$/;
 
 /**
  * 尾巴上这一截该不该变成公式？（**目前只有一道守卫**，见文件头「守卫一」）
@@ -148,8 +158,12 @@ function replaceBecomeCommonStyle(
   end: number,
   source3: string,
   dollarDollar: number,
+  delimiter: MathDelimiter = "dollar",
 ): Transaction | null {
-  const node = spec.createAndFill({ [dollarCountAttribute]: dollarDollar });
+  const node = spec.createAndFill({
+    [dollarCountAttribute]: dollarDollar,
+    [mathDelimiterAttribute]: delimiter,
+  });
   if (!node) return null;
   const tr = state.tr.replaceRangeWith(start5, end, node);
   tr.insertText(source3, start5 + 1);
@@ -165,18 +179,96 @@ function replaceBecomeCommonStyle(
  */
 export const commonStyleInput = [
   $inputRule((ctx) =>
+    new InputRule(latexBracketMath, (state, match, start, end) =>
+      replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 1, "bracket"),
+    ),
+  ),
+  $inputRule((ctx) =>
+    new InputRule(latexParenMath, (state, match, start, end) =>
+      replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 1, "paren"),
+    ),
+  ),
+  $inputRule((ctx) =>
     new InputRule(doubleDollarDollar, (state, match, start, end) =>
-      replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 2),
+      replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 2, "dollar"),
     ),
   ),
   $inputRule((ctx) =>
     new InputRule(singleDollarDollar, (state, match, start, end) =>
       shouldChangeCommonStyle(previousChar(state, start))
-        ? replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 1)
+        ? replaceBecomeCommonStyle(mathInlineSchema.type(ctx), state, start, end, match[1] ?? "", 1, "dollar")
         : null,
     ),
   ),
 ];
+
+/**
+ * 输入规则有时收不到整段文字：输入法上屏、粘贴或 WebKit 把反斜杠后的字符
+ * 合成一笔事务时，文档已经形成 `$…$`，但 InputRule 的逐字匹配没有执行。
+ * 这一层只在新状态光标前正好以 `$…$` 收尾时补一次提交；转换完成后公式节点
+ * 的 textContent 不含美元符，因此不会被重复处理。
+ */
+export function completeInlineMathAtCursor(state: EditorState, spec: NodeType): Transaction | null {
+  const { empty, $from } = state.selection;
+  if (!empty || !$from.parent.inlineContent) return null;
+  if ($from.marks().some((mark) => mark.type.spec.code)) return null;
+  for (let depth = $from.depth - 1; depth > 0; depth--) {
+    if ($from.node(depth).type.spec.code) return null;
+  }
+
+  const before2 = $from.parent.textBetween(0, $from.parentOffset, "\n", "\n");
+  let source3 = "";
+  let dollars = 0;
+  let delimiter: MathDelimiter = "dollar";
+  let startInParagraph = -1;
+
+  const latexBracket = latexBracketMath.exec(before2);
+  const latexParen = latexParenMath.exec(before2);
+  const double = doubleDollarDollar.exec(before2);
+  if (latexBracket?.index !== undefined) {
+    source3 = latexBracket[1] ?? "";
+    dollars = 1;
+    delimiter = "bracket";
+    startInParagraph = latexBracket.index;
+  } else if (latexParen?.index !== undefined) {
+    source3 = latexParen[1] ?? "";
+    dollars = 1;
+    delimiter = "paren";
+    startInParagraph = latexParen.index;
+  } else if (double?.index !== undefined) {
+    source3 = double[1] ?? "";
+    dollars = 2;
+    delimiter = "dollar";
+    startInParagraph = double.index;
+  } else {
+    const single = singleDollarDollar.exec(before2);
+    if (
+      single?.index !== undefined &&
+      shouldChangeCommonStyle(startInParagraph === 0 ? "" : before2[single.index - 1] ?? "")
+    ) {
+      source3 = single[1] ?? "";
+      dollars = 1;
+      delimiter = "dollar";
+      startInParagraph = single.index;
+    }
+  }
+  if (startInParagraph < 0) return null;
+
+  const start5 = $from.start() + startInParagraph;
+  const end = $from.start() + $from.parentOffset;
+  return replaceBecomeCommonStyle(spec, state, start5, end, source3, dollars, delimiter);
+}
+
+export const commonStyleCommit = $prose(
+  (ctx) =>
+    new Plugin({
+      key: new PluginKey("nota-math-inline-commit"),
+      appendTransaction: (transactions, _oldState, newState) => {
+        if (!transactions.some((tr) => tr.docChanged)) return null;
+        return completeInlineMathAtCursor(newState, mathInlineSchema.type(ctx));
+      },
+    }),
+);
 
 /* ── 块公式：回车才建（2026-10-04）────────────────────────────────────── */
 

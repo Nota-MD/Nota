@@ -6,7 +6,7 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/.." && pwd)
 release=${1:?usage: tools/make-windows-portable.sh <release-dir> <output.exe> [version]}
 out=${2:?usage: tools/make-windows-portable.sh <release-dir> <output.exe> [version]}
-version=${3:-0.12.0-beta}
+version=${3:-0.13.0-beta}
 seven_zipr=${NOTA_7ZR_EXE:-/tmp/lzmasdk/bin/7zr.exe}
 
 for tool in 7z x86_64-w64-mingw32-gcc x86_64-w64-mingw32-windres; do

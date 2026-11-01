@@ -93,6 +93,9 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
         // 同属"面板"，所以同一条能力管着它。
         let 流 = 实时表(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
         t.set("stream", 流).map_err(mlua_to_nota)?;
+        let show =
+            show_panel_table(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
+        t.set("show", show).map_err(mlua_to_nota)?;
         // `nota.ui.review(id)` —— 把**已经在册的这个面板**摊到编辑区里（`nil` 收起来）。
         // 同属"面板"这件事，所以同一条能力管着它。
         let 预览 =
@@ -124,6 +127,34 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
     }
 
     Ok(t)
+}
+
+/// `nota.ui.show(id)` activates one registered panel in the right-hand dock.
+///
+/// The backend validates the panel id before emitting the intent. The
+/// frontend owns the dock's visibility and active tab, so no second copy of
+/// that state is stored here.
+pub(crate) fn show_panel_table(
+    lua: &Lua,
+    plugin_id: &str,
+    app: tauri::AppHandle,
+) -> mlua::Result<mlua::Function> {
+    let plugin_id = plugin_id.to_owned();
+
+    lua.create_function(move |lua, id: String| {
+        use tauri::Emitter;
+        if !有面板吗(lua, &id) {
+            return Err(mlua::Error::RuntimeError(format!(
+                "拓展 {plugin_id} 没有声明面板 `{id}`，无法在侧栏中显示"
+            )));
+        }
+        app.emit(
+            crate::plugin::EVENT_PANEL_FOCUS,
+            serde_json::json!({ "plugin": plugin_id, "id": id }),
+        )
+        .map_err(|e| mlua::Error::RuntimeError(format!("发面板显示事件失败：{e}")))?;
+        Ok(())
+    })
 }
 
 /// `nota.ui.open_url(url)` —— 交给系统默认浏览器。
@@ -416,7 +447,7 @@ pub(crate) fn 面板内容(lua: &Lua, plugin_id: &str, panel_id: &str) -> NotaRe
             message: format!("面板 `{panel_id}` 渲染失败：{e}"),
         })?;
 
-        return Ok(剥成_json(&值, 0));
+        return Ok(剥成_json(&值, 0, 面板节点上限));
     }
 
     Err(NotaError::other(format!(
@@ -436,11 +467,16 @@ const 面板文本上限: usize = 20000;
 /// 一个数组最多这么多项，一个字典最多这么多键。
 const 面板节点上限: usize = 200;
 
+/// Network panels may carry a whole small workspace. Their `nodes`/`edges`
+/// arrays get this higher bound; every other panel list keeps the 200-item
+/// limit above.
+const 网络元素上限: usize = 800;
+
 /// 最多往下走这么多层。
 const 面板层数上限: usize = 6;
 
 /// Lua 值 → JSON，**带上限**。递归。
-fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value {
+fn 剥成_json(v: &mlua::Value, 层: usize, 数组上限: usize) -> serde_json::Value {
     use serde_json::Value as J;
 
     if 层 > 面板层数上限 {
@@ -458,21 +494,29 @@ fn 剥成_json(v: &mlua::Value, 层: usize) -> serde_json::Value {
         mlua::Value::Table(t) => {
             let len = t.raw_len();
             if len > 0 {
-                let mut arr = Vec::with_capacity(len.min(面板节点上限));
-                for i in 1..=len.min(面板节点上限) {
+                let mut arr = Vec::with_capacity(len.min(数组上限));
+                for i in 1..=len.min(数组上限) {
                     if let Ok(x) = t.raw_get::<mlua::Value>(i) {
-                        arr.push(剥成_json(&x, 层 + 1));
+                        arr.push(剥成_json(&x, 层 + 1, 数组上限));
                     }
                 }
                 J::Array(arr)
             } else {
                 let mut map = serde_json::Map::new();
+                let is_network = matches!(t.get::<String>("kind"), Ok(kind) if kind == "network");
                 for pair in t.pairs::<mlua::Value, mlua::Value>() {
                     let Ok((k, val)) = pair else { continue };
                     // 键只认字符串。数字键的表会被上面那条 `raw_len()` 当成数组，
                     // 走到这里来的表本来就该是"字符串键的字典"。
                     if let mlua::Value::String(ks) = k {
-                        map.insert(截断(&ks.to_string_lossy()), 剥成_json(&val, 层 + 1));
+                        let key = ks.to_string_lossy();
+                        let child_limit =
+                            if is_network && matches!(key.as_ref(), "nodes" | "edges") {
+                                网络元素上限
+                            } else {
+                                面板节点上限
+                            };
+                        map.insert(截断(&key), 剥成_json(&val, 层 + 1, child_limit));
                     }
                     if map.len() >= 面板节点上限 {
                         break;

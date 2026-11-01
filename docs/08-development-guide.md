@@ -73,7 +73,6 @@
 | `src/editor/math-view.ts` | 958 | 公式那一块；能搬的是**面板与悬浮预览那两格**（`docs/09` §4 2026-10-04 那条） |
 | `tools/menu-harness/main.tsx` | 949 | 菜单目检工装，不是产品代码 |
 | `src/editor/emoji.ts` | 924 | 503 条短代码那张表的体积摆在那儿 |
-| `src/editor/auto-pair.ts` | 912 | 缝写在 `docs/09` §4（括号配对那一族 / `*` 落标记那一族），**还没人真拆过** |
 | `src/ui/panel-nodes.ts` | 908 | |
 | `src/editor/inline-marks.ts` | 901 | |
 | `plugins/stats/main.lua` | 902 | |

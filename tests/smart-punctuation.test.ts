@@ -51,15 +51,9 @@
 
 import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import {
   curveReferenceNumber,
   dash,
-  getReferenceNumberConfigureMethod,
-  isOpenReferenceNumberPosition,
-  hasNotCloseCombineReferenceNumber,
-  referenceNumberInputTransaction,
-  referenceNumberConfigureCorrect,
   scanPunctuation,
   decorationClearSingle,
   punctuationInput,
@@ -104,10 +98,6 @@ function same(actual: unknown, expected: unknown, description: string): void {
   if (a !== b) throw new Error(`${description}：\n      期望 ${b}\n      实际 ${a}`);
 }
 
-function assertValue(value2: unknown, description: string): asserts value2 {
-  if (!value2) throw new Error(description);
-}
-
 /** 在默认设置上改几格。 */
 function set(change2: Partial<punctuationSettings>): punctuationSettings {
   return { ...DefaultPunctuationSettings, ...change2 };
@@ -133,15 +123,6 @@ function document(...paragraph: string[]): PMNode {
     null,
     paragraph.map((t) => schema.node("paragraph", null, t ? [schema.text(t)] : [])),
   );
-}
-
-function referenceNumberState(text4: string, from = text4.length, to2 = from): EditorState {
-  const doc = document(text4);
-  return EditorState.create({
-    schema,
-    doc,
-    selection: TextSelection.create(doc, 1 + from, 1 + to2),
-  });
 }
 
 /* ── 一、三个纯函数 ──────────────────────────────────────────────────── */
@@ -180,16 +161,6 @@ testCase("破折号：en-em 风格下两个是短横、三个是长横", () => {
 testCase("破折号：em 风格下两个也是长横", () => {
   equal(dash("em", 2), "—", "两个");
   equal(dash("em", 3), "—", "三个");
-});
-
-testCase("引号对与开引号位置共用智能标点的方向判据", () => {
-  same(getReferenceNumberConfigureMethod(true, "curly"), { open2: "“", close3: "”" }, "弯双引号");
-  same(getReferenceNumberConfigureMethod(false, "curly"), { open2: "‘", close3: "’" }, "弯单引号");
-  same(getReferenceNumberConfigureMethod(true, "straight"), { open2: '"', close3: '"' }, "直双引号");
-  equal(isOpenReferenceNumberPosition(""), true, "行首");
-  equal(isOpenReferenceNumberPosition("甲"), false, "文字后");
-  equal(hasNotCloseCombineReferenceNumber("“甲", "“", "”"), true, "弯引号未闭");
-  equal(hasNotCloseCombineReferenceNumber('"甲"', '"', '"'), false, "直引号已配平");
 });
 
 testCase("默认设置与 Rust 那边的 Default 逐条一致", () => {
@@ -284,61 +255,6 @@ testCase("替身与原文一样时不产生命中", () => {
   same(scanPunctuation("a'b", set({ singleReferenceNumber: "straight" })), [], "无命中");
 });
 
-/* ── 三½、引号配对事务 ─────────────────────────────────────────────── */
-
-group("三½、引号配对事务");
-
-testCase("行首开双引号：一次放进一对，光标在中间", () => {
-  const state = referenceNumberState("");
-  const tr = referenceNumberInputTransaction(state, 1, 1, '"', DefaultPunctuationSettings);
-  assertValue(tr, "应当接管开引号");
-  const after = state.apply(tr);
-  equal(after.doc.textContent, "“”", "成对");
-  equal(after.selection.from, 2, "光标在中间");
-  const againPress = referenceNumberInputTransaction(after, after.selection.from, after.selection.from, '"', DefaultPunctuationSettings);
-  assertValue(againPress, "闭引号应当被接住");
-  const againPressAfter = after.apply(againPress);
-  equal(againPressAfter.doc.textContent, "“”", "连按两次也不叠成两组");
-  equal(againPressAfter.selection.from, 3, "跨到闭引号之后");
-});
-
-testCase("自动补出的闭引号前再敲引号：只跨过去", () => {
-  const state = referenceNumberState("“甲”", 2);
-  const tr = referenceNumberInputTransaction(state, 3, 3, '"', DefaultPunctuationSettings);
-  assertValue(tr, "闭引号应当被接住");
-  const after = state.apply(tr);
-  equal(after.doc.textContent, "“甲”", "不改字");
-  equal(after.selection.from, 4, "跨过闭引号");
-});
-
-testCase("选中文字再敲引号：包住并保留选区", () => {
-  const state = referenceNumberState("甲乙", 0, 2);
-  const tr = referenceNumberInputTransaction(state, 1, 3, '"', DefaultPunctuationSettings);
-  assertValue(tr, "应当包住选区");
-  const after = state.apply(tr);
-  equal(after.doc.textContent, "“甲乙”", "两侧各一颗");
-  equal(after.selection.from, 2, "选区起点仍在原文");
-  equal(after.selection.to, 4, "选区终点仍在原文");
-});
-
-testCase("字母后的单引号是撒号，不补另一边", () => {
-  const state = referenceNumberState("don");
-  const tr = referenceNumberInputTransaction(state, 4, 4, "'", DefaultPunctuationSettings);
-  assertValue(tr, "应当落撒号");
-  const after = state.apply(tr);
-  equal(after.doc.textContent, "don’", "弯撒号");
-});
-
-testCase("直引号字形也遵守同一套配对与跳过", () => {
-  const settings = set({ doubleReferenceNumber: "straight" });
-  const state = referenceNumberState("");
-  const opened = state.apply(referenceNumberInputTransaction(state, 1, 1, '"', settings)!);
-  equal(opened.doc.textContent, '""', "直引号成对");
-  const closed = referenceNumberInputTransaction(opened, 2, 2, '"', settings);
-  assertValue(closed, "直闭引号应被接住");
-  equal(opened.apply(closed).doc.textContent, '""', "不再多插一颗");
-});
-
 /* ── 三、装饰清单：位置换算 ─────────────────────────────────────────── */
 
 group("三、装饰清单（文本内偏移 → 文档位置）");
@@ -382,10 +298,10 @@ testCase("off / render 模式一条输入规则都不挂", () => {
   equal(punctuationInput(set({ mode2: "render" })).length, 0, "render");
 });
 
-testCase("input 模式的输入规则只负责横线与省略号", () => {
-  // 2（`---` / `--`）＋ 1（`...`）；引号由 `引号配对` 接管。
-  equal(punctuationInput(set({ mode2: "input" })).length, 3, "条数");
-  equal(punctuationInput(set({ mode2: "input", saveOmitNumber: false })).length, 2, "关省略号：少一条");
+testCase("input 模式挂单字符引号、横线与省略号规则", () => {
+  // 2（双 / 单引号的单字符转换）＋ 2（`---` / `--`）＋ 1（`...`）。
+  equal(punctuationInput(set({ mode2: "input" })).length, 5, "条数");
+  equal(punctuationInput(set({ mode2: "input", saveOmitNumber: false })).length, 4, "关省略号：少一条");
 });
 
 testCase("off / input 模式不挂装饰插件", () => {
@@ -402,16 +318,9 @@ testCase("模式变了之后挂的规则条数跟着变", () => {
   // 挂在 `.use()` 链上的东西随模式而变，所以 `EditorPane` 必须把六个字段
   // 全放进那个 `useMemo` 的依赖里（只放"模式"那三项的话，改了字形——
   // 它也是被闭包捕获的——活着的实例里还是旧的，屏幕上什么都不变）。
-  equal(punctuationInput(set({ mode2: "input", referenceNumber: false })).length, 3, "关引号：输入规则条数不变");
-  equal(punctuationInput(set({ mode2: "input", dash: false })).length, 0, "关破折号：横线规则全部不挂");
+  equal(punctuationInput(set({ mode2: "input", referenceNumber: false })).length, 3, "关引号：只剩横线与省略号");
+  equal(punctuationInput(set({ mode2: "input", dash: false })).length, 2, "关破折号：只剩两条引号字形");
   equal(punctuationInput(set({ mode2: "input", referenceNumber: false, dash: false })).length, 0, "两项都关：0");
-});
-
-testCase("引号配对只在 Input 且引号开启时安装", () => {
-  equal((referenceNumberConfigureCorrect(set({ mode2: "off" })) as unknown[]).length, 0, "off");
-  equal((referenceNumberConfigureCorrect(set({ mode2: "render" })) as unknown[]).length, 0, "render");
-  equal((referenceNumberConfigureCorrect(set({ referenceNumber: false })) as unknown[]).length, 0, "关闭引号");
-  equal(Array.isArray(referenceNumberConfigureCorrect(DefaultPunctuationSettings)), false, "input 开引号时是插件");
 });
 
 /* ── 五、横线骨架那道守卫（BUG-51）────────────────────────────────────── */

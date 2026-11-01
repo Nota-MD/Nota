@@ -271,7 +271,7 @@ testCase("没有真图 ≠ 没有图标：`lang-icon.ts` 那边照旧会画一�
   //     判据是"`languageIcon` 里真图那条路后面还有一条兜底分支"——真有人把
   //     兜底删掉、只留真图的话，400 个语言里 300 多个会连一颗图标都没有。
   const source3 = readFileSync(join(repositoryLibraryRoot, "src", "editor", "lang-icon.ts"), "utf8");
-  assertion(source3.includes("assertValueIconURI("), "`lang-icon.ts` 应当先问真图");
+  assertion(source3.includes("realLanguageIconURI("), "`lang-icon.ts` 应当先问真图");
   assertion(source3.includes("shrinkWrite(lang)"), "`lang-icon.ts` 应当留着徽章那条兜底");
 });
 

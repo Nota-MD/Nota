@@ -158,6 +158,8 @@ pub async fn nota_settings_export(
 fn 落盘(state: &AppState, next: Settings) -> Result<()> {
     let strict = next.strict_markdown;
     let debug_mode = next.general.debug_mode;
+    let extensions_enabled = next.general.extensions_enabled;
+    let extensions_changed;
 
     // ⚠️ 这一对花括号不是装饰：`documents` 在锁序里**排在 `settings` 前面**
     // （`plugins → documents → settings`，见 `state.rs` 顶上），所以下面那段
@@ -166,6 +168,7 @@ fn 落盘(state: &AppState, next: Settings) -> Result<()> {
     {
         let mut current = state.settings.lock().unwrap();
         let previous = current.clone();
+        extensions_changed = previous.general.extensions_enabled != extensions_enabled;
         *current = next;
 
         // 先落盘，落盘失败就把内存里的改回去——否则会出现"界面上是新的、
@@ -182,5 +185,15 @@ fn 落盘(state: &AppState, next: Settings) -> Result<()> {
     // 而两种模式对"这一行算不算标题"看法不同（`#标签`）。不重算的话，
     // 用户改完设置盯着标签页看，会以为设置没生效。
     state.documents.lock().unwrap().set_strict_markdown(strict);
+
+    // 「拓展功能」是唯一会让插件真正装卸的设置项。保存成功后按最新值同步宿主；
+    // 单个拓展自己的启停账本不动，重新开启时仍按用户原来的选择恢复。
+    if extensions_changed {
+        state
+            .plugins
+            .lock()
+            .unwrap()
+            .set_extensions_enabled(extensions_enabled);
+    }
     Ok(())
 }

@@ -132,9 +132,13 @@ export const paragraphWithoutBlankLine = paragraphSchema.extendSchema(
       toMarkdown: {
         ...original.toMarkdown,
         runner: (state, node) => {
-          // ⚠️ 判据是**内容为空**，不是"文本为空"：`<br />` 之外还有另一种空
-          // ——段里只有一个空的行内节点。`!node.content` 那半句照抄上游。
-          if (!node.content || node.content.size === 0) return;
+          // 只跳过**顶层**空段落。列表项/引用/表格单元格里必须保留这个空段落：
+          // GFM 的列表序列化会读取 `listItem.children[0]`，把唯一的空段落也省掉
+          // 会在用户输入 `1. ` 的那一瞬抛 `undefined is not an object`。
+          const parentType = (
+            state as unknown as { top?: () => { type?: string } | undefined }
+          ).top?.()?.type;
+          if (parentType === "root" && (!node.content || node.content.size === 0)) return;
           return original.toMarkdown.runner(state, node);
         },
       },

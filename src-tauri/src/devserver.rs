@@ -44,7 +44,9 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Stdio};
+#[cfg(test)]
+use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -395,7 +397,7 @@ fn spawn(spec: &DevServerSpec, entry: Option<&Path>, port: u16) -> Result<(Child
     // 项目根 = 入口文件的父目录；没有入口文件就不改工作目录（继承本进程的）。
     let cwd = entry.and_then(|p| p.parent().map(Path::to_path_buf));
 
-    let mut command = Command::new(&program);
+    let mut command = crate::proc::background_command(&program);
     command
         .args(&args)
         .stdin(Stdio::null())

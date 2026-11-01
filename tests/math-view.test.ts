@@ -357,6 +357,21 @@ await testCase("算装饰：行内那条会落进**段落的子集**里（视图
   equal(paragraphCollection[0]?.to, insidePosition - 1 + paragraph2.child(1).nodeSize, "段落子集里的装饰终点");
 });
 
+await testCase("行内公式刚打完或光标贴边时进入源码态，退出位置暂时抑制", () => {
+  const paragraph2 = paragraph("前", inline("x^2"), "后");
+  const doc = schema.topNodeType.create(null, [paragraph2]);
+  const formulaPosition = 1 + paragraph2.child(0).nodeSize;
+  const formulaEnd = formulaPosition + paragraph2.child(1).nodeSize;
+  for (const position2 of [formulaPosition, formulaEnd]) {
+    const state = EditorState.create({ doc, selection: TextSelection.create(doc, position2) });
+    const found = computeDecorations(state).find();
+    equal(found.length, 1, `位置 ${position2} 的公式源码态`);
+    equal(found[0]?.from, formulaPosition, `位置 ${position2} 的公式起点`);
+  }
+  const suppressed = EditorState.create({ doc, selection: TextSelection.create(doc, formulaEnd) });
+  equal(computeDecorations(suppressed, formulaEnd).find().length, 0, "同一退出位置应暂时抑制");
+});
+
 /* ── 五、NodeView：面板开合、写回、按键（假 DOM，只跑逻辑）─────────────── */
 
 // ⚠️ 这一组用的工装——真插件那份 `$view` 构造器、假 `EditorView`、`建`——2026-10-07
@@ -509,18 +524,16 @@ await testCase("⚠️ 两态：编辑时**正文那格空着**、渲染结果�
 
 await testCase("块公式编辑面板有可点击的结束编辑按钮，行内公式没有", () => {
   const blockView = create(block("E=mc^2"), blockPosition, false, true);
-  const blockPanel = find(blockView.perspective.view!.dom, "nota-math-panel");
-  if (!blockPanel) throw new Error("块公式没有编辑面板");
-  const label = find(blockPanel, "nota-math-kind");
+  const blockRoot = blockView.perspective.view!.dom;
+  const label = find(blockRoot, "nota-math-kind");
   equal(label?.textContent, "Formula", "块公式类型标签");
   equal(label?.tagName, "BUTTON", "结束编辑必须是按钮");
   equal(label?.getAttribute("aria-label"), "Finish editing", "按钮语义");
   label?.dispatch("click");
   assertion(blockView.getState().selection instanceof TextSelection, "点击后退出公式编辑");
 
-  const inlinePanel = find(create(inline("x^2"), inlinePosition, false, true).perspective.view!.dom, "nota-math-panel");
-  if (!inlinePanel) throw new Error("行内公式没有编辑面板");
-  equal(number2(inlinePanel, "nota-math-kind"), 0, "行内公式不画类型标签");
+  const inlineRoot = create(inline("x^2"), inlinePosition, false, true).perspective.view!.dom;
+  equal(number2(inlineRoot, "nota-math-kind"), 0, "行内公式不画类型标签");
 });
 
 await testCase("公式与 HTML 源码框恢复可见的原生光标", () => {
@@ -530,10 +543,71 @@ await testCase("公式与 HTML 源码框恢复可见的原生光标", () => {
   assertion(/\.nota-html-source\s*\{[^}]*caret-color:\s*var\(--accent\)/s.test(inline), "HTML 源码框光标仍透明");
 });
 
+await testCase("块公式预览居中，源码复用与 Mermaid 相同的 CodeMirror 外壳", () => {
+  const math = readFileSync("src/styles/math.css", "utf8");
+  const view = readFileSync("src/editor/math-view.ts", "utf8");
+  assertion(
+    /\.nota-math-block:not\(\.nota-math-editing\)\s+\.nota-math-render\s*\{[^}]*text-align:\s*center/s.test(math),
+    "块公式非编辑态没有居中",
+  );
+  assertion(
+    /\.nota-math-render\s+\.katex-display\s*\{[^}]*text-align:\s*center/s.test(math),
+    "KaTeX display 树没有居中",
+  );
+  assertion(view.includes("document.createElement(\"pre\")"), "块公式没有使用统一源码外壳元素");
+  assertion(view.includes("nota-source-surface"), "块公式源码没有接入统一源码表面");
+  assertion(
+    view.includes('initialStartLanguage: "latex"'),
+    "块公式源码没有使用 LaTeX CodeMirror 语言",
+  );
+  assertion(
+    view.includes("nativeLineNumbers: true"),
+    "块公式 CodeMirror 没有接入全局行号设置",
+  );
+});
+
+await testCase("块公式悬停标签与 HTML 共用灰色源码框", () => {
+  const math = readFileSync("src/styles/math.css", "utf8");
+  const inline = readFileSync("src/styles/editor-inline.css", "utf8");
+  const dom = create(block("E=mc^2"), blockPosition, false, false).perspective.view!.dom;
+  const kind = find(dom, "nota-math-kind");
+  assertion(kind, "块公式缺少类型标签");
+  assertion(kind?.classList.contains("nota-block-kind"), "块公式标签没有接入统一样式");
+  assertion(kind?.parentNode === dom, "块公式标签仍被藏在不可见的面板里");
+  assertion(
+    /\.nota-math-block:not\(\.nota-math-editing\):hover[\s\S]*?background:\s*color-mix/s.test(math),
+    "块公式悬停时没有灰底",
+  );
+  assertion(
+    /\.nota-block-kind::after\s*\{[^}]*content:\s*"<\/>"/s.test(inline),
+    "HTML 与 LaTeX 标签字形不一致",
+  );
+  assertion(
+    /\.nota-math-render\s*\{[^}]*cursor:\s*default;/s.test(math),
+    "公式渲染区仍使用文本 I-beam 光标",
+  );
+});
+
 await testCase("行内那一棵也有悬浮预览（两种公式一套长相）", () => {
   const dom = create(inline("x^2"), inlinePosition, false, true).perspective.view!.dom;
   assertion(find(dom, "nota-math-preview"), "行内也要有悬浮预览那一格");
   equal(find(dom, "nota-math-render")?.dataset.state, "", "编辑态：行内正文那格同样空着");
+});
+
+await testCase("行内源码没有独立框，源码用强调色，预览是下方深色浮层", () => {
+  const css = readFileSync("src/styles/math.css", "utf8");
+  assertion(
+    /\.nota-math-inline\.nota-math-editing\s*\{[^}]*background:\s*transparent/s.test(css),
+    "行内编辑态仍有选中底色",
+  );
+  assertion(
+    /\.nota-math-editing\.nota-math-inline \.nota-math-source\s*\{[^}]*color:\s*var\(--accent\)/s.test(css),
+    "行内源码没有使用强调色",
+  );
+  assertion(
+    /\.nota-math-editing\.nota-math-inline \.nota-math-preview\s*\{[^}]*border:\s*0;[^}]*background:\s*#202124/s.test(css),
+    "行内预览仍像独立输入框",
+  );
 });
 
 await testCase("空公式在编辑态：占位卡落在**悬浮预览**里，正文那格仍然是空的", () => {

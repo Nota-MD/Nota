@@ -71,6 +71,26 @@ testCase("编辑器聚焦后才宣告 ready", () => {
   assertValue(ready > focus, "markEditorReady 必须排在聚焦之后");
 });
 
+testCase("窗口真正显示后重新把焦点交给正文", () => {
+  const source = readFileSync(join(process.cwd(), "src/ui/EditorPane.tsx"), "utf8");
+  const handler = source.indexOf("const focusAfterReveal");
+  assertValue(
+    source.includes('window.addEventListener("nota-window-shown"'),
+    "没有监听窗口显示完成事件",
+  );
+  assertValue(
+    handler >= 0 && source.indexOf("handleRef.current?.focus()", handler) > handler,
+    "原生窗口显示后没有重新聚焦正文",
+  );
+});
+
+testCase("源码模式挂载点有确定高度，CodeMirror 不会收成空白", () => {
+  const css = readFileSync(join(process.cwd(), "src/styles/editor.css"), "utf8");
+  const rule = /\.editor-pane-source\s+\.editor-mount\s*\{([\s\S]*?)\}/.exec(css)?.[1] ?? "";
+  assertValue(rule.includes("height: 100%;"), "源码模式挂载点没有占满编辑区");
+  assertValue(rule.includes("min-height: 0;"), "源码模式挂载点缺少可收缩高度");
+});
+
 testCase("揭幕动作是显示原生窗口，而不是播放网页动画", () => {
   const source = readFileSync(join(process.cwd(), "src/ui/useBootReveal.ts"), "utf8");
   assertValue(/api\.window\s*\.showMain\(\)/.test(source), "没有调用宿主显示窗口");

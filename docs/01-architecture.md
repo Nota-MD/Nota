@@ -117,7 +117,7 @@ tauri::Builder::default()
     .plugin(tauri_plugin_fs::init())       // ① 只装确实需要的前端插件
     .plugin(tauri_plugin_opener::init())
     .setup(|app| { /* ② 载设置 → 建共享状态 → 发现并加载插件 → manage */ })
-    .invoke_handler(tauri::generate_handler![ …45 项… ])          // ③
+    .invoke_handler(tauri::generate_handler![ …46 项… ])          // ③
     .on_window_event(|window, event| { /* ④ 焦点与销毁都按 label 分派（main / 警报窗） */ })
     .run(tauri::generate_context!())
     .expect("Nota 启动失败");                                  // ⑤
@@ -129,6 +129,12 @@ WebKit 随机退出而默认设 `WEBKIT_DISABLE_DMABUF_RENDERER=1`，但实机�
 滚动和代码块打字压到 15–30Hz。现在只有显式 `NOTA_SAFE_RENDERING=1` 才进入旧兼容回退；
 用户自己给 `WEBKIT_DISABLE_DMABUF_RENDERER` 任何值时仍完全听用户的。容器目检那套配方
 （`docs/06` §5）仍可**另外**开 `WEBKIT_DISABLE_COMPOSITING_MODE`，两者不是一回事。
+
+Linux 显示后端默认交给 GDK 自动选择；启动日志会记录
+`display backend requested=… WAYLAND_DISPLAY=… DISPLAY=…`，便于区分原生 Wayland
+与 XWayland。程序不会强制 Wayland，避免 Wayland socket 失效时连 X11 回退也一起
+失去。开发工装 `tools/open-window.sh` 在会话有 Wayland socket 时默认选 Wayland，
+可用 `--wayland` / `--x11` 显式覆盖。
 
 ### ⓿ `Builder::build()` 之前那三步（单实例 / `--mcp` / `--new-window`）
 
@@ -162,7 +168,7 @@ WebKit 随机退出而默认设 `WEBKIT_DISABLE_DMABUF_RENDERER=1`，但实机�
 |---|---|---|
 | ① 载设置 | `Settings::load()` | 插件可能要读设置，得先有 |
 | ② 算**界面语言** | `lang::有效语言(设置里那一格, lang::系统语言())` → `应用语言`（`lib.rs:140-152`） | ⚠️ **一次算清、之后不再变**：插件在加载时按这个语言挑好了自己的文案表，运行中再变就会出现"外壳中文、插件英文"那种中间态。所以改语言要**重启**（见 §界面语言） |
-| ③ 建共享状态 + 加载插件 | 三个 `Arc<Mutex<_>>` → 拼 `HostContext`（带上 `应用语言`）→ `PluginHost::discover(resource_dir, &base)` | 插件的 `nota.ui.*` 要发事件给前端，那需要 `AppHandle`——所以**必须在 Tauri 起来之后** |
+| ③ 建共享状态 + 加载插件 | 三个 `Arc<Mutex<_>>` → 拼 `HostContext`（带上 `应用语言`）→ `PluginHost::discover(resource_dir, &base)` | 插件的 `nota.ui.*` 要发事件给前端，那需要 `AppHandle`——所以**必须在 Tauri 起来之后**。⚠️ `general.extensions_enabled = false` 时仍扫描清单，但全部以 `LuaPlugin::disabled` 收下，**一行插件代码都不执行**；运行期拨动总开关时原 `plugins.toml` 单项账本不改 |
 | ④ 托管 | `app.manage(AppState { documents, settings, workspace, plugins, settings_problem, app_lang })` | 命令层与 `unload_all` 都从托管状态里取句柄，必须最后做。⚠️ `AppState` 是**手写字面量**——它**没有构造函数**（2026-09-24 删了那个没人调用的 `AppState::new`，理由见 `docs/02`）。⚠️ `app_lang` 与插件加载时用的是**同一个值**（③ 算的那个），不是各算一遍 |
 | ⑤ 另外**五个**托管状态 | `DevServerState`（开发服务器）＋ `ReviewState`（编辑区里摊着的那块面板）＋ `ProbeCache`（探测结论的缓存）＋ **`Heartbeat`**（面板心跳，2026-09-26 加）＋ **`FocusState`**（强制专注的账本，2026-09-26 加） | ⚠️ **它们都不进 `AppState`**：五个都不在「plugins → documents → settings」那条锁序上，谁也不该拿它们去排进那条队伍。`ReviewState` 尤其明确——**拿它不需要 `plugins` 锁**，因为插件正跑着（宿主握着那把锁）的时候「回到正文」那颗按钮还得能按。⚠️ `ProbeCache` 同理，而且**它必须是另外一把锁**：面板的 `render` 跑在 `plugins` 锁里面，探测的收尾（后台线程 `收下` 结论）**不能去等那把锁**——不然"不阻塞"就白做了（`docs/12`）。⚠️ `Heartbeat` 与 `FocusState` 同理——`Heartbeat` **一秒握一下 `plugins` 锁、读完就放**，`FocusState` 的账本自己一把锁（每拍读一次设置，也是「读了就放开、再动自己的账本」），两条都没排进那条序 |
 | ⑥ 起两个**后台线程** | `heartbeat::起()`（面板心跳，每秒一拍）＋ `focus::起()`（强制专注的账本，每秒一拍） | ⚠️ **两个都是裸 `std::thread`，不是 `tokio::time`**（这个仓里没有一处 tokio 定时器）。⚠️ **起线程这一步只做一次**，没有「重启」这一说；心跳退出靠 `Heartbeat::stop()`（`RunEvent::Exit`，最多晚一拍），账本线程自己检查托管状态还在不在。⚠️ **强制专注不是插件**——用户原话「注意啊，这不是插件。这是核心功能」，它要窗口焦点、要开置顶窗、要出声，三样都在插件沙箱之外 |
@@ -250,6 +256,10 @@ WebKit 随机退出而默认设 `WEBKIT_DISABLE_DMABUF_RENDERER=1`，但实机�
 `AppState` 那四个句柄的锁序不变量（见下一节）是给文档与插件用的，而这里是一堆子进程。
 它单独 `manage`，锁也只有一把（`HashMap<插件 id, 会话>`——**一个插件最多一场会话**，
 而且它的键是**插件 id 而不是文档 id**：同一个插件的第二次 `start` 先把上一场收掉）。
+
+所有运行期外部命令（系统信息、Git、Pandoc、开发服务器、更新器、`taskkill` 等）
+统一从 `proc::background_command` 启动；Windows 使用 `CREATE_NO_WINDOW`，防止 GUI
+进程为控制台子程序额外弹出 `cmd` 黑框。`spawn_retrying` 对自定义 `Command` 再兜底一次。
 
 **④ 点菜单先问一句「装没装」，问完才起进程。**
 这是插件自己的流程（`plugins/slidev/main.lua` 的 `probe` → `start`），
@@ -383,12 +393,12 @@ state.rs 里给的原始理由（"存盘流程要读设置"）是这条规则要
 
 ### 通道 A：前端 → 后端（`invoke` 命令）
 
-注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 95 项**：
-`commands::*` 下的 **85 条** ＋ **`spell::*` 那 8 条** ＋ `lib.rs` 自己那两条
+注册表在 `lib.rs` 的 `.invoke_handler(tauri::generate_handler![…])`，**一共 96 项**：
+`commands::*` 下的 **86 条** ＋ **`spell::*` 那 8 条** ＋ `lib.rs` 自己那两条
 （前端就绪握手 `nota_frontend_ready`、启动参数 `nota_startup_file`）。
-⚠️ **第十四遍（2026-10-16，退出前那一问那一批时重数的）**：真值 **95 = 85 ＋ 8 ＋ 2**，
-唯一动的是**窗口那一组 2 → 3**（新增 `nota_quit`：前端确认过之后**真的退出**，
-见 `docs/02` 的 `commands/window.rs` 一节）。⚠️ 数的配方与上一遍一样
+⚠️ **第十五遍（2026-10-31，侧栏 / 全屏切换时重数的）**：真值 **96 = 86 ＋ 8 ＋ 2**。
+相对第十四遍，插件组新增 `nota_plugin_review_open`；窗口组仍是第十四遍记下的
+3 条（含 `nota_quit`）。⚠️ 数的配方与上一遍一样
 （`grep -oE 'commands::[a-z_]*::' src-tauri/src/lib.rs | wc -l`，**先去注释**）。
 ⚠️ **第十三遍（2026-10-11，拼写检查换引擎那一批时重数的）**：真值 **94 = 84 ＋ 8 ＋ 2**，
 按模块是 文档 15 ＋ 工作区 4 ＋ 设置 6 ＋ 主题 3 ＋ **插件 17** ＋ 导出 4 ＋
@@ -508,6 +518,10 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 ⚠️ **这一遍最容易再错的地方是"组数"**——减掉一整组之后，上面那些"九组之和"
 的旧句子会原地留着，而它们现在已经没有主语了。
 
+⚠️ 2026-10-31 **第八遍**（加 `nota_plugin_review_open`）：插件组 13 → **14**，
+总数变为 **46 项 = 八组之和 44 ＋ `lib.rs` 两条**。这条命令让右侧面板可以打开到
+编辑区，且**不拿 `plugins` 锁**，所以插件正在跑长命令时仍能切换视图。
+
 ⚠️ 2026-09-26 **第八遍**（本轮，**今天这一版**）：改动是"一组加、一组长"——
 **加**「上传图片」整组三条（`nota_image_upload_get` / `_set` / `_one`，见 `docs/07`
 第 62 项第二批）、**长**「插入图片」那组先前的 1 条（`nota_image_place`，同一天第一批）。
@@ -581,7 +595,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 ⛔ 同时**不兼容也不内置外部编辑器的主题**（版权，用户 2026-09-23 定的），
 所以那两个主题目录连同 `theme_dirs()` 一起删了。
 
-**插件（13 个）**
+**插件（14 个）**
 
 | 命令 | 签名要点 |
 |---|---|
@@ -591,7 +605,8 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 | `nota_plugin_find_command` | `(command: String) -> Option<String>`，某个命令是哪个插件注册的 |
 | `nota_plugin_panels` | `() -> Vec<PanelInfo>`，**拉**面板清单（BUG-13 之后改走这里，不再发事件） |
 | `nota_plugin_panel_content` | `(plugin, id) -> Value`，**现算**某个面板的内容（不是开机就备好的），走 `spawn_blocking` |
-| `nota_plugin_review` | `(plugin, id) -> Value`，把某个面板**摊到编辑区**（`nota.ui.review(id)` 的宿主那半） |
+| `nota_plugin_review` | `() -> Value`，拉编辑区里此刻摊着哪一格（没有就是 `null`） |
+| `nota_plugin_review_open` | `(plugin, id)`，右侧插件栏的通用放大按钮；把已列出的面板摊到编辑区。⚠️ **不取 `plugins` 锁** |
 | `nota_plugin_review_close` | `()`，收起编辑区里那块面板。⚠️ **面板自己负责收起**（用户点「完成」→ 插件调 `nota.ui.review(nil)`）：宿主不知道那些按钮是什么意思（`docs/13` §8.6） |
 | `nota_plugin_menus` | `() -> Vec<MenuInfo>`，**拉**菜单清单，同上 |
 | `nota_plugin_install` | `(path: String) -> String`，装一个 `.nota-plugin` / `.zip` / 目录，返回插件 id。**异步**（要解包、验签、落盘）。⚠️ 没有"信不信任"这个入参：未知签名者也装得进来（`docs/11` §1.6.5） |
@@ -681,8 +696,8 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 
 ### 通道 B：后端 → 前端（Tauri 事件）
 
-**一共 10 个宿主事件名 + 1 条插件自定义的通道**（前端 `events` 表在
-`src/bridge/ipc.ts:654-772`，十个都在里面有常量）。
+**一共 11 个宿主事件名 + 1 条插件自定义的通道**（前端 `events` 表在
+`src/bridge/ipc-events.ts`，十一个都在里面有常量）。
 
 ⚠️ **2026-09-28 重数过一次，此前这里写的是「5 个」。** 那五个就是下面这张表的前五行；
 中间陆续补进来的**五条**（`focus-state` / `focus-beep` / `file-changed` /
@@ -697,6 +712,7 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 | `nota:document-changed` | `lua/api/document.rs:126`（`nota.document.set_text` / `append_text`） | `{id, text, origin: "plugin"}` | ✅ 订阅了 → `editorRef.setMarkdown` |
 | `nota:document-edit` | `lua/api/document.rs`（`nota.document.insert_at_cursor`，第 14 项，2026-10-04） | `{id, op: "insert-at-cursor", text}`——⚠️ **是一条「意图」，不是「发生」**：宿主**改不动**，请编辑器落一笔真事务 | ✅ 订阅了 → `ui/useAppEvents.ts` → `editorRef.插入在光标处`（⚠️ **允许丢掉**：编辑器没挂、或已切走那份文档就作废） |
 | `nota:plugin-panel` | `lua/api/ui.rs:249`（`nota.ui.refresh`） | **空**——"这个面板的内容变了，去重拉" | ✅ 订阅了 → `pluginPanelContent(…)` |
+| `nota:plugin-panel-focus` | `lua/api/ui.rs`（`nota.ui.show`） | `{plugin, id}`——"请打开右栏并切到这一页" | ✅ 订阅了 → `ui/usePlugins.ts` → `PluginDock` |
 | `nota:plugin-review` | `lua/api/ui.rs:300`（`nota.ui.review`）＋ `commands/plugin.rs:209` ＋ `plugin/mod.rs:456` | **空**——"编辑区摊的那一块换了" | ✅ 订阅了 → `api.plugin.review()` |
 | `nota:native-menu` | `lib.rs:243`（Tauri 的菜单回调） | 命令 **id** 字符串 | ✅ 订阅了 → 查 `menuHandlers` |
 | `nota:focus-state` | `focus/mod.rs:422`（那一拍的循环）＋ `commands/focus.rs:27`（`get` / `start` / `stop` 各先回一份） | `FocusState` 快照 | ✅ 订阅了 → `ui/useForceFocus.ts`（状态栏那一格） |

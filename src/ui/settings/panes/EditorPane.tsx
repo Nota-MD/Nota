@@ -107,15 +107,6 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Smart symbol completion")}>
-        <SettingRow>
-          <Toggle
-            checked={e.smart_symbols}
-            onChange={(smart_symbols) => write({ smart_symbols })}
-          />
-        </SettingRow>
-      </SettingsGroup>
-
       <SettingsGroup title={t("Emoji autocomplete")}>
         <SettingRow>
           <Toggle

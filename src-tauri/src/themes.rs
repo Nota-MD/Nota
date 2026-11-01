@@ -141,6 +141,10 @@ pub fn discover() -> Vec<DocThemeInfo> {
     out
 }
 
+pub(crate) fn is_builtin(id: &str) -> bool {
+    BUILTIN.iter().any(|theme| theme.id == id)
+}
+
 /// 取一份主题的 CSS 文本。
 ///
 /// 内置主题永远优先且不可覆盖；其他 id 再从用户目录读取。找不到就报错——

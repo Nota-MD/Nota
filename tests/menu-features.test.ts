@@ -2,7 +2,15 @@
 
 import { readFileSync } from "node:fs";
 
-import { MENUS, walkMenuItems } from "../src/ui/commands";
+import {
+  MENUS,
+  NO_THEME,
+  THEMES_DIR,
+  resolvePick,
+  themeEntries,
+  walkMenuItems,
+} from "../src/ui/commands";
+import { recentItem, recentPath } from "../src/ui/recentMenu";
 
 let pass = 0;
 let fail = 0;
@@ -111,9 +119,63 @@ testCase("图片右键复制直接使用命中的图片，并有原生剪贴板�
   contains(capability, "clipboard-manager:allow-write-image", "没有开放原生图片剪贴板权限");
 });
 
+testCase("粘贴优先识别图片，剪贴板快捷键不绕进菜单文本通道", () => {
+  const clipboard = read("src/ui/useClipboard.ts");
+  const images = read("src/ui/useImageInsert.ts");
+  const menus = read("src/ui/useMenus.ts");
+  const capability = read("src-tauri/capabilities/default.json");
+  contains(clipboard, "if (await pasteImage()) return;", "菜单粘贴没有先识别图片");
+  contains(images, "await readImage()", "没有从宿主读取图片剪贴板");
+  contains(images, "dropOneImage({ kind: \"base64\"", "剪贴板图片没有走落盘链");
+  contains(menus, "if (cutPasteBoardKey.has(id)) return;", "快捷键仍被菜单文本粘贴通道截获");
+  contains(capability, "clipboard-manager:allow-read-image", "没有开放原生图片剪贴板读取权限");
+});
+
 testCase("无定义的其他格式占位已移除，不再伪装成功能", () => {
   const commands = read("src/ui/commands.ts");
   assertValue(!commands.includes("file.exportOther"), "仍保留 Other Formats 占位");
+});
+
+testCase("GitHub Alert children are wired and work in nested textblocks", () => {
+  const alert = read("src/editor/github-alert-edit.ts");
+  assertValue(!alert.includes("$from.depth !== 1"), "Alert still rejects paragraphs inside lists or quotes");
+  contains(alert, "githubAlertTransaction(view.state, kind)", "menu does not use the testable transaction path");
+  contains(alert, "const depth = $from.depth", "Alert does not use the current textblock depth");
+  for (const id of [
+    "para.alertNote",
+    "para.alertTip",
+    "para.alertImportant",
+    "para.alertWarning",
+    "para.alertCaution",
+  ]) {
+    contains(commandTable, `"${id}":`, `Alert child ${id} has no real handler`);
+  }
+});
+
+testCase("list conversion keeps the only empty paragraph in a list item", () => {
+  const empty = read("src/editor/empty-paragraph.ts");
+  contains(empty, 'parentType === "root"', "empty-paragraph patch still breaks list item structure");
+});
+
+testCase("dynamic theme and recent entries all resolve to executable routes", () => {
+  const themes = themeEntries([
+    { id: "adwaita", name: "Adwaita", builtin: true },
+    { id: "custom", name: "Custom", builtin: false },
+  ]).filter((entry): entry is Exclude<typeof entry, "sep"> => entry !== "sep");
+  for (const entry of themes) {
+    assertValue(resolvePick(entry.id).kind !== "command", `theme entry ${entry.id} has no route`);
+  }
+  assertValue(resolvePick(NO_THEME).kind === "theme", "No Theme route is missing");
+  assertValue(resolvePick(THEMES_DIR).kind === "themes-dir", "theme folder route is missing");
+
+  const recent = recentItem(["/tmp/a.md"]).filter(
+    (entry): entry is Exclude<typeof entry, "sep"> => entry !== "sep",
+  );
+  for (const entry of recent) {
+    if (!entry.id.startsWith("file.recent:")) continue;
+    assertValue(recentPath(entry.id) === "/tmp/a.md", "recent route lost its path");
+  }
+  contains(commandTable, "recent.map((path) => [recentItemid(path)", "recent routes have no handlers");
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);

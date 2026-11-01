@@ -49,7 +49,7 @@
 }
 
 /* 所有自绘对话框共用同一颗右上角关闭按钮。位置相对 `.confirm-dialog`、
-   `.settings-shell` 或 `.print-dialog`，不依赖各页面自己的标题栏结构。 */
+   `.settings-shell` 等对话框壳，不依赖各页面自己的标题栏结构。 */
 .dialog-close {
   position: absolute;
   top: 10px;
@@ -354,53 +354,6 @@
 .nota-emoji-name {
   color: var(--fg-muted);
 }
-
-/* ── 斜杠菜单（`editor/slash.ts` 的 `斜杠菜单`）────────────────────────────
-   ⚠️ 与上面那块 emoji 补全面板是**同一族**（`position: fixed`、挂在
-   `document.body` 上、不上导出那条路），但两处不同：
-   ① **行是整行文字**，没有 emoji 那种"一个字符当主角"的层级，所以字号
-      按界面正文走、不加粗；
-   ② **给每一行一个最小宽度**——名字最长的是「内容目录」四个字，而`replaceChildren`
-      重画时面板宽度会跟着当前筛出来的那几条变，鼠标没动、面板却在脚下变宽变窄
-      很难看。`min-width` 把它钉住。
-   ⚠️ 同样的：挂在 `body` 下 ⇒ 那些 `var(--…)` 拿的是**界面主题**，
-   与文档主题无关（这正是要的）。 */
-
-.nota-slash-pop {
-  position: fixed;
-  z-index: var(--z-popup);
-  overflow-y: auto;
-  max-height: 260px;
-  min-width: 132px;
-  padding: 3px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg-raised);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
-  font-family: var(--font-ui, inherit);
-  font-size: 0.8rem;
-  color: var(--fg);
-}
-
-.nota-slash-item {
-  padding: 4px 8px;
-  border-radius: 3px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-/* 高亮那一条。⚠️ 与 emoji 面板同一条理由：底色在某些界面风格里淡到看不出来，
-   所以**底色 ＋ 一道强调色内边**两样都给——"当前选的是哪条"是这块浮层里
-   唯一要传达的状态。 */
-.nota-slash-item.is-on {
-  background: var(--bg-active);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.nota-slash-item:hover:not(.is-on) {
-  background: var(--bg-hover);
-}
-
 
 /* ── 关于框（`ui/AboutDialog.tsx`）──────────────────────────────────────────
    2026-09-28 按 GNOME 的关于窗重做（用户原话「关于界面这么做」＋一张截图）。

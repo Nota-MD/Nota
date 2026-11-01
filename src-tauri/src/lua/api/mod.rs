@@ -17,6 +17,7 @@
 //!
 //! 见 `plugin/manifest.rs` 顶上那段：**加成员不动 API 版本号，改语义/改名才动**。
 
+pub mod assets;
 pub mod data;
 pub mod devserver;
 pub mod diff;
@@ -56,6 +57,13 @@ pub fn build(
     set(nota.set("version", env!("CARGO_PKG_VERSION")), lua)?;
     set(nota.set("api_version", NOTA_PLUGIN_API_VERSION), lua)?;
     set(nota.set("plugin_id", manifest.meta.id.clone()), lua)?;
+
+    // ── 永远可用：拓展自带的只读资源 ─────────────────────────────────────
+    //
+    // JSON presets, templates and small static data files live beside the
+    // plugin. The API is rooted at the installed plugin directory and cannot
+    // escape it, so it reveals nothing outside the package itself.
+    set(nota.set("assets", assets::build(lua, manifest)?), lua)?;
 
     // ── 永远可用：日志 ────────────────────────────────────────────────────
     // 前缀统一加上插件 id，多插件同时刷输出时分得清是谁。

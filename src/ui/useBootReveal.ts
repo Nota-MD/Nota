@@ -51,10 +51,24 @@ export function useBootReveal(ready: boolean): void {
           // 一拍，确保 WebKit 先提交首帧；失败时同样放行，不能把公式永远卡住。
           document.documentElement.dataset.windowShown = "true";
           window.dispatchEvent(new Event("nota-window-shown"));
-          window.setTimeout(() => {
+          const preheatOptionalEditors = () => {
             if (cancelled) return;
-            void import("@/editor/katex-runtime").then((m) => m.preHotKatex());
-          }, 0);
+            void Promise.allSettled([
+              import("@/editor/katex-runtime").then((m) => m.preHotKatex()),
+              import("@/editor/code-block-cm"),
+              import("@/editor/source"),
+              import("@/editor/html-sanitize"),
+              import("@/editor/lang-icons-real"),
+            ]);
+          };
+          const idleWindow = window as Window & {
+            requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+          };
+          if (idleWindow.requestIdleCallback) {
+            idleWindow.requestIdleCallback(preheatOptionalEditors, { timeout: 500 });
+          } else {
+            window.setTimeout(preheatOptionalEditors, 120);
+          }
         })
         .catch((error) => {
           console.error("[nota] 显示主窗口失败：", error);

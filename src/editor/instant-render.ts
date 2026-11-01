@@ -64,7 +64,10 @@ export function blockMark(node: PMNode, parent: PMNode | null, index: number): s
       return null;
 
     case "blockquote":
-      return ">";
+      // Typora expresses quotations with the block's own left rule. Drawing a
+      // second `>` source marker beside it makes a plain quote and an Alert in
+      // progress look like two nested gutters.
+      return null;
 
     case "list_item": {
       // 任务项（`- [x] …`）**不给短横**：它的方框已经画在同一个装订线里了

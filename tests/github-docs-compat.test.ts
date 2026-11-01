@@ -61,7 +61,7 @@ testCase("五种 Alert、脚注、按键、表格行标题与文档检查都有�
 });
 
 testCase("命名锚点与无障碍属性已进入 HTML 白名单", () => {
-  const html = read("src/editor/html-block-view.ts");
+  const html = read("src/editor/html-sanitize-policy.ts");
   for (const attribute of ["name", "aria-label", "aria-hidden"]) {
     assert(html.includes(`"${attribute}"`), `缺少 ${attribute}`);
   }
@@ -70,9 +70,11 @@ testCase("命名锚点与无障碍属性已进入 HTML 白名单", () => {
 
 testCase("五种 GitHub Alert 标题都有类型图标", () => {
   const css = read("src/styles/github-alert.css");
-  for (const marker of ["ⓘ  Note", "◆  Tip", "❗  Important", "⚠  Warning", "⛔  Caution"]) {
+  for (const marker of ["ⓘ Note", "◆ Tip", "❗ Important", "⚠ Warning", "⛔ Caution"]) {
     assert(css.includes(marker), `缺少 ${marker}`);
   }
+  assert(css.includes(".nota-github-alert-editing-title .nota-github-alert-marker"), "标题编辑态没有展开源码");
+  assert(css.includes(".nota-github-alert-marker::before"), "非编辑态没有显示类型标题");
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);

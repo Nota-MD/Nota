@@ -106,6 +106,14 @@ export const events = {
    */
   pluginReview: "nota:plugin-review",
   /**
+   * An extension asked the host to reveal one of its registered panels in the
+   * right-hand dock.
+   *
+   * The event carries an intent only. Visibility and the active tab belong to
+   * the frontend; panel content is still pulled through the ordinary path.
+   */
+  pluginPanelFocus: "nota:plugin-panel-focus",
+  /**
    * **插件正在往外吐字，先画出来**（插件喊了 `nota.ui.stream(text)`，
    * 2026-10-04 加，`docs/07` 第 58 项）。
    *
@@ -175,6 +183,15 @@ export const events = {
    * 字符串**，改一边不报错、只是收不到（Tauri 对没有监听者的频道 emit 是静默成功的）。
    */
   fileChanged: "nota:file-changed",
+  /**
+   * **插件请求打开工作区内的一份文档**。
+   *
+   * The Rust side resolves the plugin-supplied relative path through
+   * `lua/api/fs.rs` before emitting. The frontend then calls the ordinary
+   * document-opening path, so this event grants no filesystem access beyond
+   * the plugin's existing `fs.read` capability.
+   */
+  openDocument: "nota:open-document",
   /**
    * **用户又启动了一次 Nota**（2026-09-27，单实例那一格）。
    *

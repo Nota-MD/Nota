@@ -15,6 +15,16 @@ use tauri_plugin_opener::OpenerExt;
 use crate::error::{NotaError, Result};
 use crate::themes::{self, DocThemeInfo};
 
+/// Import one ZIP containing interface and/or document themes.
+#[tauri::command]
+pub async fn nota_theme_import(path: String) -> Result<crate::theme_import::ThemeImportReport> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::theme_import::import_zip(std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|error| NotaError::other(format!("导入主题的线程挂了：{error}")))?
+}
+
 /// 列出所有可用的文档主题。用户目录不存在不算错，内置那几套照样在。
 #[tauri::command]
 pub fn nota_doc_themes() -> Vec<DocThemeInfo> {

@@ -75,5 +75,19 @@ testCase("正文高亮色不继承深色界面主题", () => {
   assertValue(pane.includes("--mark-fg: #1a1a1a;"), "黄色高亮没有使用可读的深色文字");
 });
 
+testCase("front matter 编辑区使用外壳配色，不继承浅色文档主题", () => {
+  const css = readFileSync("src/styles/editor.css", "utf8");
+  const banner = /\.editor-frontmatter\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+  const text = /\.editor-frontmatter-text\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+  const base = readFileSync("src/styles/theme/base.css", "utf8");
+  assertValue(banner.includes("background: color-mix(in srgb, CanvasText 6%, Canvas);"), "横幅仍使用文档底色");
+  assertValue(banner.includes("color: CanvasText;"), "横幅仍使用文档文字色");
+  assertValue(text.includes("background: Canvas;"), "输入框仍使用文档底色");
+  assertValue(text.includes("color: CanvasText;"), "输入框仍使用文档文字色");
+  assertValue(text.includes("appearance: none;"), "输入框仍交给 GTK 绘制原生外观");
+  assertValue(base.includes("color-scheme: light;"), "浅色外壳没有声明 color-scheme");
+  assertValue(base.includes("color-scheme: dark;"), "深色外壳没有声明 color-scheme");
+});
+
 if (failure > 0) process.exit(1);
 console.log(`\n${passed} passed, 0 failed`);

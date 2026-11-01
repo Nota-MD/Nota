@@ -74,7 +74,10 @@ import {
   countDollars,
   inlineMathHandler,
   inlineMathSpec,
+  latexMathDelimiterPlugin,
+  mathDelimiterAttribute,
   readDollarCount,
+  readMathDelimiter,
 } from "../src/editor/math-delim";
 
 /* ── 一支极小的测试工装（与 `math-input.test.ts` / `math-view.test.ts` 同一套长相）── */
@@ -278,7 +281,14 @@ testCase("`读美元数`：没有这个属性就是 1（老数据、粘贴、手
   equal(readDollarCount({ attrs: { [dollarCountAttribute]: 3 } }), 1, "歪了的值 → 1");
 });
 
-/* ── 二、规格：只多了 `dollars`，别的字段一个没动 ─────────────────────── */
+testCase("`读分隔符`：没有这一格就是美元；新标记原样读出", () => {
+  equal(readMathDelimiter({}), "dollar", "空对象");
+  equal(readMathDelimiter({ attrs: { [mathDelimiterAttribute]: "bracket" } }), "bracket", "attrs");
+  equal(readMathDelimiter({ data: { [mathDelimiterAttribute]: "paren" } }), "paren", "mdast data");
+  equal(readMathDelimiter({ attrs: { [mathDelimiterAttribute]: "bogus" } }), "dollar", "歪值");
+});
+
+/* ── 二、规格：只多了 `dollars` 与分隔符，别的字段一个没动 ───────────── */
 
 group("二、`行内公式规格`（真 `$nodeSchema`，两个插件都真跑了一遍）");
 
@@ -306,6 +316,7 @@ testCase("替换之后 `nodesCtx` 里那一份**就是本仓这份**（带 `doll
 testCase("上游那份**没有** attrs；本仓这份多了一个 `dollars`，默认 1", () => {
   equal(upstreamSpec.attrs, undefined, "上游：连属性都没有");
   equal(inlineSpec.attrs?.[dollarCountAttribute]?.default, 1, "本仓：dollars 默认 1");
+  equal(inlineSpec.attrs?.[mathDelimiterAttribute]?.default, "dollar", "本仓：分隔符默认美元");
 });
 
 testCase("别的字段一个没丢：atom / inline / content / parseDOM / toDOM 都还在", () => {
@@ -327,6 +338,23 @@ testCase("两个 runner 还在，而且**源码那条没写错**：行内的源�
 /* ── 三、解析那一趟：源码里那几个 `$` 真的标上去了 ─────────────────────── */
 
 group("三、解析（真 `remark-parse` ＋ `remark-math` ＋ 真 `ParserState`）");
+
+testCase("已有文件里的 `\\[\\LaTeX\\]` 解析成带分隔符信息的公式", () => {
+  const source3 = "甲 \\[\\LaTeX\\] 乙";
+  const tree = unified().use(remarkParse).parse(source3) as {
+    children: Array<{ children?: Array<Record<string, unknown>> }>;
+  };
+  latexMathDelimiterPlugin()(tree as never, { value: source3 });
+  markDollarDollarNumberPlugin(tree as never, { value: source3 });
+  const children = tree.children[0]?.children ?? [];
+  equal(children[1]?.type, "inlineMath", "中间那颗是公式");
+  equal(children[1]?.value, "\\LaTeX", "公式源码");
+  equal(
+    (children[1]?.data as Record<string, unknown> | undefined)?.[mathDelimiterAttribute],
+    "bracket",
+    "分隔符",
+  );
+});
 
 testCase("`$$x$$` → 那颗节点上标着 2；`$x$` → 1", () => {
   equal(readDollarCount(headOneTokenInline(parse("$$x$$"))!), 2, "两个 `$`");

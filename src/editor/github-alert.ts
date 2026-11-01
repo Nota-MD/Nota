@@ -6,8 +6,8 @@
  * 不会多出任何字符。
  */
 
+import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
@@ -23,18 +23,35 @@ export function recognizeDistinguishGitHubNotice(value2: string): GitHubNotice |
   return match ? (match[1]!.toLowerCase() as GitHubNotice) : null;
 }
 
-function createDecoration(doc: PMNode): DecorationSet {
+/** Which GitHub Alert a blockquote represents, if any. */
+export function gitHubAlertOf(node: PMNode): GitHubNotice | null {
+  if (node.type.name !== "blockquote") return null;
+  const first = node.firstChild;
+  if (!first || first.type.name !== "paragraph") return null;
+  return recognizeDistinguishGitHubNotice(first.textContent);
+}
+
+export function createGitHubAlertDecorations(state: EditorState): DecorationSet {
+  const { doc, selection } = state;
   const decoration: Decoration[] = [];
   doc.descendants((node, pos) => {
-    if (node.type.name !== "blockquote") return;
-    const firstParagraph = node.firstChild;
-    if (!firstParagraph || firstParagraph.type.name !== "paragraph") return;
-    const type = recognizeDistinguishGitHubNotice(firstParagraph.textContent);
+    const type = gitHubAlertOf(node);
     if (!type) return;
+    const firstParagraph = node.firstChild;
+    if (!firstParagraph) return;
+    const titleStart = pos + 1;
+    const titleEditing = selection.$from.parent === firstParagraph;
     decoration.push(
       Decoration.node(pos, pos + node.nodeSize, {
-        class: `nota-github-alert nota-github-alert-${type}`,
+        class: `nota-github-alert nota-github-alert-${type}${
+          titleEditing ? " nota-github-alert-editing-title" : ""
+        }`,
         "data-github-alert": type,
+      }),
+    );
+    decoration.push(
+      Decoration.node(titleStart, titleStart + firstParagraph.nodeSize, {
+        class: "nota-github-alert-title",
       }),
     );
     const firstToken = firstParagraph.firstChild;
@@ -44,7 +61,7 @@ function createDecoration(doc: PMNode): DecorationSet {
       const markLengthDegree = `[!${type.toUpperCase()}]`.length;
       decoration.push(
         Decoration.inline(pos + 2 + beforeGuideWhitespace, pos + 2 + beforeGuideWhitespace + markLengthDegree, {
-          class: "nota-github-alert-marker",
+          class: `nota-github-alert-marker nota-github-alert-marker-${type}`,
         }),
       );
     }
@@ -62,9 +79,9 @@ export const gitHubNoticePlugin = $prose(
     new Plugin<DecorationSet>({
       key: pluginKey,
       state: {
-        init: (_ConfigurePlace, state) => createDecoration(state.doc),
+        init: (_ConfigurePlace, state) => createGitHubAlertDecorations(state),
         apply: (tr, oldValue, _OldValueState, newValueState) =>
-          tr.docChanged ? createDecoration(newValueState.doc) : oldValue,
+          tr.docChanged || tr.selectionSet ? createGitHubAlertDecorations(newValueState) : oldValue,
       },
       props: {
         decorations(state) {

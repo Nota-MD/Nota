@@ -1,6 +1,6 @@
 # 第三方组件
 
-> 最后核对：**2026-10-17**
+> 最后核对：**2026-10-31**
 >
 > ⚠️ **2026-10-06 那一次：每一项都补上了仓库/主页链接**（用户：「**鸣谢里加上各个项目的仓库**」，并贴了 Typora 的鸣谢页当参照）。
 > 链接**不是凭印象写的**：Rust 那半从 `cargo metadata` 里读每个 crate 的 `repository` 字段，前端那半读 `node_modules/<包>/package.json` 的 `repository`。
@@ -29,6 +29,7 @@
 | [`dirs`](https://github.com/soc/dirs-rs) | 6.0.0 | MIT OR Apache-2.0 | XDG 目录 |
 | [`ed25519-dalek`](https://github.com/dalek-cryptography/curve25519-dalek/tree/main/ed25519-dalek) | 2.2.0 | BSD-3-Clause | **插件签名验证**（`plugin/package.rs`：验签与公钥指纹） |
 | [`gtk`](https://github.com/gtk-rs/gtk3-rs) | 0.18.2 | MIT | **Linux 那一侧的 GTK 绑定**。⚠️ 版本必须与 tauri 拖进来的同一大版本（0.18）；开 `v3_24` 是为了 `EventControllerKey`（捕获阶段拦 `Ctrl+B`/`Ctrl+I`，见 `format_keys.rs` 文件头） |
+| [`libc`](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 | Linux 原生打印框打开前，把 GTK/gettext 的 `LC_MESSAGES` 切到 Nota 当前语言，避免 `LC_ALL=C.UTF-8` 启动时系统打印框固定显示英语 |
 | [`mlua`](https://github.com/mlua-rs/mlua) | 0.12.1 | MIT | Lua 插件运行时 |
 | [`notify`](https://github.com/notify-rs/notify) | 8.2.0 | CC0-1.0 | ⚠️ **目前没用到**，见 §4 |
 | [`serde`](https://github.com/serde-rs/serde) | 1.0.229 | MIT OR Apache-2.0 | 序列化 |
@@ -101,6 +102,7 @@
 | [`katex`](https://github.com/KaTeX/KaTeX) | 0.16.47 | MIT | 公式渲染 |
 | [`mdast-util-math`](https://github.com/syntax-tree/mdast-util-math) | 3.0.0 | MIT | 行内公式**用几个 `$`** 的序列化（2026-09-27 起显式列出）。⚠️ 它本来是 `remark-math` 的传递依赖，之所以写进 `package.json`，是因为 `src/editor/math-delim.ts` **直接 import 了它**（用 `mathToMarkdown({singleDollarTextMath:false})` 那条上游现成的处理器）。另一条路是自己抄一份 handler，那样会漏掉上游那两段边界处理——理由在那个文件头 |
 | [`mermaid`](https://github.com/mermaid-js/mermaid) | 10.9.8 | MIT | 图表渲染。⚠️ **显式列在 `package.json` 里**（`src/editor/diagram-view.ts` 里动态 `import()`，只在真的出图时加载）。⚠️ 2026-10-04 起 `@milkdown/plugin-diagram`（7.7.0，MIT）**退役**：它只做"围栏→节点"那四件不含 mermaid 的小活，却把 mermaid 静态打进首屏——那四件如今是本仓自己的 `src/editor/diagram-node.ts`（判据逐条照抄，第 27 项） |
+| [`qrcode`](https://github.com/soldair/node-qrcode) | 1.5.4 | MIT | 分享图里可选的 Nota 官网二维码。**只在用户打开“包含官网二维码”时动态加载**；二维码矩阵由宿主生成并内嵌为 SVG 路径，不请求外部图片服务 |
 | [`react`](https://github.com/react/react) | 19.3.0 | MIT | 界面框架 |
 | [`react-dom`](https://github.com/react/react) | 19.3.0 | MIT | — |
 | [`refractor`](https://github.com/wooorm/refractor) | 5.0.0 | MIT | — |
@@ -113,6 +115,7 @@
 | [`@types/node`](https://github.com/DefinitelyTyped/DefinitelyTyped) | 26.6.2 | MIT | — |
 | [`@types/react`](https://github.com/DefinitelyTyped/DefinitelyTyped) | 19.3.0 | MIT | — |
 | [`@types/react-dom`](https://github.com/DefinitelyTyped/DefinitelyTyped) | 19.3.0 | MIT | — |
+| [`@types/qrcode`](https://github.com/DefinitelyTyped/DefinitelyTyped) | 1.5.5 | MIT | 二维码模块的类型声明，只在构建期使用 |
 | [`@vitejs/plugin-react`](https://github.com/vitejs/vite-plugin-react) | 5.2.0 | MIT | — |
 | [`typescript`](https://github.com/microsoft/TypeScript) | 5.9.3 | Apache-2.0 | — |
 | [`vite`](https://github.com/vitejs/vite) | 7.3.6 | MIT | — |
@@ -468,3 +471,53 @@ Adwaita 主题资源随包分发。
 
 ⚠️ 这些字体鸣谢**不进入软件的“关于 → 鸣谢”窗口**。Yaru、LaTeX 等其他主题的
 字体只存在于各自的主题包内，由主题包自己的 `assets/fonts/` 目录保留许可。
+
+## 12. 分享图二维码：qrcode（MIT）
+
+写作统计分享图的官网二维码使用 `qrcode@1.5.4`。它只在用户主动开启
+「包含 Nota 官网二维码」时动态加载；二维码以 SVG 路径写入分享图，不请求外部
+二维码服务。
+
+Copyright (c) 2012 Ryan Day
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## 13. Vim input adapter (Textus, MIT)
+
+The Vim adapter under `src/editor/plugin-vim-*` adapts the editor-operation and
+Vim state-machine design from the CatVinci Studio Textus `catvinci.vim`
+extension.
+
+Copyright (c) 2026 CatVinci Studio
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

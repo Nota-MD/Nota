@@ -437,7 +437,7 @@ export const MENUS: MenuSpec[] = [
       { id: "para.h4", label: "Heading 4", accel: "Ctrl+4", needsDoc: true },
       { id: "para.h5", label: "Heading 5", accel: "Ctrl+5", needsDoc: true },
       { id: "para.h6", label: "Heading 6", accel: "Ctrl+6", needsDoc: true },
-      { id: "para.text", label: "Body text", accel: "Ctrl+0", needsDoc: true },
+      { id: "para.text", label: "Normal text", accel: "Ctrl+0", needsDoc: true },
       "sep",
       {
         // ⚠️ 父项**换了新 id**（`para.table` → `para.tableMenu`），而原来那个

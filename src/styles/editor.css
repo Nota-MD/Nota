@@ -44,6 +44,8 @@
 /* ── 编辑区 ───────────────────────────────────────────────────────────── */
 
 .editor-pane {
+  /* 编辑区字号基准；外壳字号仍由根上的 `--ui-font-size` 控制。 */
+  font-size: var(--editor-font-size, var(--ui-font-size, 15px));
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -88,9 +90,13 @@
   top: 0;
   z-index: 3;
   padding: calc(var(--spacing) / 2) var(--spacing);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
-  color: var(--fg-faint);
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
+  /* 这一段属于编辑器外壳，不属于文档主题。`--fg` / `--bg` 会在
+     `.editor-pane` 上被浅色文档主题覆盖，于是“深色界面 + 浅色文档”会得到
+     黑字压深底。Canvas/CanvasText 跟随根元素的 color-scheme，不被文档主题
+     的 CSS 变量改写。 */
+  background: color-mix(in srgb, CanvasText 6%, Canvas);
+  color: CanvasText;
   font-size: 0.85em;
 }
 
@@ -106,31 +112,31 @@
 .editor-frontmatter-title {
   margin-right: auto;
   font-weight: 600;
-  color: var(--fg-muted);
+  color: color-mix(in srgb, CanvasText 72%, Canvas);
 }
 
 .editor-frontmatter-btn {
   height: 22px;
   padding: 0 8px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, CanvasText 18%, Canvas);
   border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--fg-muted);
+  background: Canvas;
+  color: color-mix(in srgb, CanvasText 74%, Canvas);
   cursor: pointer;
   /* ⚠️ 同 `.format-btn` 那条：连点几下时手会拖到，被选中之后看起来像坏了。 */
   user-select: none;
 }
 
 .editor-frontmatter-btn:hover {
-  background: var(--bg-hover);
-  color: var(--fg);
+  background: color-mix(in srgb, CanvasText 10%, Canvas);
+  color: CanvasText;
 }
 
 /* 「删除」在等第二下的时候（`EditorPane` 那条两击确认）。⚠️ 用文字而不是
  * 只换颜色：这一颗真要删东西，状态得看得见，不能靠颜色暗示。 */
 .editor-frontmatter-del[data-arming="true"] {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+  color: light-dark(#c01c28, #ff7b72);
+  border-color: color-mix(in srgb, light-dark(#c01c28, #ff7b72) 45%, Canvas);
 }
 
 /* 那个 YAML 输入框。⚠️ 等宽字体：这几行是 YAML，缩进与冒号的位置就是它的
@@ -141,14 +147,23 @@
   width: 100%;
   margin-top: calc(var(--spacing) / 2);
   padding: calc(var(--spacing) / 2);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
   border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--fg);
+  background: Canvas;
+  color: CanvasText;
   font-family: var(--font-mono);
   line-height: 1.5;
+  appearance: none;
+  outline: none;
+  box-shadow: none;
+  caret-color: var(--accent);
   /* ⚠️ 只让纵向拖（同 `.stg-textarea` 那条理由）。 */
   resize: vertical;
+}
+
+.editor-frontmatter-text:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 65%, Canvas);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .editor-frontmatter-hint {
@@ -241,6 +256,14 @@
   flex-direction: column;
 }
 
+/* CodeMirror 自己负责滚动，但它仍需要一个有确定高度的父级；否则
+   `.cm-editor { height: 100% }` 在部分 WebKitGTK 版本里会落成 0，
+   用户切到源码模式只看到一片空白。 */
+.editor-pane-source .editor-mount {
+  height: 100%;
+  min-height: 0;
+}
+
 .editor-mount .milkdown {
   /* ⚠️ **限宽不挂在这一层了**（2026-09-26）。原先写的是
      `max-width: var(--content-width, 760px); margin: 0 auto 0 0`——正文列到
@@ -328,6 +351,10 @@
   font-family: var(--font-doc);
   color: var(--doc-fg);
   line-height: var(--doc-line-height, 1.75);
+  /* The editor-size preference changes the inherited base on `.editor-pane`.
+     Document themes express their body size as a relative `em`, so this keeps
+     both theme defaults and the user preference live without relying on
+     `calc(length * number)`, which WebKitGTK does not consistently support. */
   font-size: var(--doc-font-size, 1.02em);
   /* ⚠️ **纵向留白挂在这一层，不是 `.milkdown` 那一层**（2026-09-24，BUG-15）。
      这一条是内容可编辑区本身，点它的内边距**等于点在正文里**——ProseMirror 会把
@@ -347,6 +374,26 @@
   padding: 48px 0 120px;
 }
 
+/* 用户显式调字号时，用户设置必须压过文档主题的正文根字号。
+ *
+ * 有些主题同时定义 `--doc-font-size: 16px`，还直接给正文根写
+ * `font-size: 16px`（安装的 GitHub 主题两处都有）。只覆盖变量或只改
+ * `.editor-pane` 的基准字号都不够：主题后面注入的那条规则会把两者都截断，
+ * 于是滑杆和正文大小倍数看起来完全没反应。
+ *
+ * 这里只在用户明确调过字号时接管，不改变主题自己的默认排版：
+ * - “外观 → 字号”打开后，正文基准变成 1em，跟随 `.editor-pane`；
+ * - “文档主题 → 正文大小倍数”会以内联变量写更具体的 em 倍数；
+ * - 两处都关着时，主题仍拥有完整的默认字号控制权。 */
+:root[data-editor-font-size="custom"] .editor-pane {
+  --doc-font-size: 1em;
+}
+
+:root[data-editor-font-size="custom"] .editor-pane .ProseMirror,
+.editor-pane[data-doc-font-size="custom"] .ProseMirror {
+  font-size: var(--doc-font-size, 1.02em) !important;
+}
+
 /* WebKitGTK 在部分环境下会画出一条不闪烁的原生插入光标。正文的插入光标
  * 由 `editor/blink-caret.ts` 在编辑区 DOM 之外画，避免 contenteditable=false
  * 的装饰节点干扰 WebKitGTK 的文字输入。 */
@@ -358,28 +405,20 @@
   background: var(--accent);
   pointer-events: none;
   user-select: none;
+  will-change: opacity;
+  transform: translateZ(0);
 }
 
 .nota-blink-caret.nota-blink-caret-on {
   display: block;
-  animation: nota-caret-blink 1.06s steps(1, end) infinite;
 }
 
-@keyframes nota-caret-blink {
-  0%,
-  49% {
-    opacity: 1;
-  }
-
-  50%,
-  100% {
-    opacity: 0;
-  }
+.nota-blink-caret.nota-blink-caret-on.nota-blink-caret-dim {
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .nota-blink-caret.nota-blink-caret-on {
-    animation: none;
     opacity: 1;
   }
 }

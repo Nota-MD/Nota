@@ -45,48 +45,77 @@
 /* ── 源码外壳：独立代码框 ─────────────────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-diagram-source-shell {
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
+  display: none;
+}
+
+/* 与块公式一致：平时只显示渲染结果，当前块进入编辑后才展开源码。 */
+.editor-mount .ProseMirror .nota-diagram-editing .nota-diagram-source-shell {
+  display: block;
 }
 
 .editor-mount .ProseMirror .nota-diagram-source {
   display: block;
   box-sizing: border-box;
   width: 100%;
-  min-height: 120px;
+  min-height: 0;
   margin: 0;
-  overflow: auto;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-subtle);
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
   color: var(--fg);
-  font-family: var(--font-mono);
-  font-size: 0.86em;
-  line-height: 1.55;
-  resize: vertical;
+  font: inherit;
+  resize: none;
 }
 
 .editor-mount .ProseMirror .nota-diagram-source .cm-editor {
-  min-height: 118px;
+  min-height: 0;
   background: transparent;
   color: inherit;
   font: inherit;
 }
 
+.editor-mount .ProseMirror .nota-diagram-source-bootstrap {
+  display: block;
+  width: 100%;
+  min-height: 1.45em;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.55;
+  tab-size: 4;
+}
+
 .editor-mount .ProseMirror .nota-diagram-source .cm-scroller {
-  min-height: 118px;
+  min-height: 0;
   overflow: visible;
 }
 
 .editor-mount .ProseMirror .nota-diagram-source .cm-content {
-  min-height: 118px;
-  padding: 10px 12px;
+  min-height: 0;
+  padding: 0;
   caret-color: var(--accent);
 }
 
 .editor-mount .ProseMirror .nota-diagram-source .cm-line {
   padding: 0;
+}
+
+.editor-mount .ProseMirror .nota-diagram-source .cm-gutters {
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  opacity: 0.62;
+}
+
+.editor-mount .ProseMirror .nota-diagram-source .cm-lineNumbers .cm-gutterElement {
+  padding: 0 8px 0 0;
 }
 
 .editor-mount .ProseMirror .nota-diagram-source-shell.is-collapsed .nota-diagram-source {
@@ -102,12 +131,16 @@
   min-height: 34px;
 }
 
+.editor-mount .ProseMirror .nota-diagram-source-shell.is-collapsed .nota-diagram-source-bootstrap {
+  min-height: 34px;
+  height: 34px;
+  padding-block: 5px;
+  overflow: hidden;
+  resize: none;
+}
+
 .editor-mount .ProseMirror .nota-diagram-source-bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 30px;
-  padding: 3px 5px;
+  display: none;
 }
 
 .editor-mount .ProseMirror .nota-diagram-language {

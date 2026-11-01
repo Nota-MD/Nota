@@ -81,3 +81,17 @@ export function imageAddressOfPastedText(candidate: string): string | null {
   if (straightImageHosts.has(parsed.hostname.toLowerCase())) return address;
   return null;
 }
+
+/** A stable fallback for an image inserted without explicit alt text. */
+export function automaticImageName(address: string): string {
+  const clean = address.trim();
+  if (!clean || /^(?:blob|data):/i.test(clean)) return "Image";
+  const path = clean.split(/[?#]/, 1)[0] ?? "";
+  let leaf = path.split(/[\\/]/).at(-1) ?? "";
+  try {
+    leaf = decodeURIComponent(leaf);
+  } catch {
+    /* Keep the encoded filename when percent-decoding fails. */
+  }
+  return leaf.replace(/\.[^.]+$/, "").trim() || "Image";
+}

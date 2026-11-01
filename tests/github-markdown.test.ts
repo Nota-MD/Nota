@@ -102,6 +102,11 @@ testCase("远程 HTTPS/HTTP 图片已加入 CSP img-src", () => {
   const imgSrc = /img-src ([^;]+);/.exec(csp)?.[1] ?? "";
   assertValue(imgSrc.split(/\s+/).includes("https:"), "CSP 未允许 https 图片");
   assertValue(imgSrc.split(/\s+/).includes("http:"), "CSP 未允许 http 图片");
+  const connectSrc = /connect-src ([^;]+);/.exec(csp)?.[1] ?? "";
+  assertValue(
+    connectSrc.split(/\s+/).includes("https:") && connectSrc.split(/\s+/).includes("http:"),
+    "CSP 未允许把已加载的远程 HTML 图片缓存成 data URL",
+  );
 });
 
 testCase("五种 GitHub Alert 都能识别，普通引用不误判", () => {

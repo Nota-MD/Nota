@@ -1,17 +1,17 @@
 /**
- * 界面缩放与界面字号：把 `appearance.zoom` 落到 webview 上、把 `ui_font_size`
- * 落到 `<html>` 的内联变量上，并管住 Ctrl+滚轮那一档。
+ * 整体缩放与编辑区字号：把 `appearance.zoom` 落到 webview 上、把历史字段
+ * `ui_font_size` 落到编辑区专用变量上，并管住 Ctrl+滚轮那一档。
  *
  * # 为什么走 Tauri 的 webview 缩放，而不是 CSS
  *
  * 「缩放」那一组自己的 help 写着**它缩的是整个界面（外壳 ＋ 编辑区）**，
- * 而「字体大小」只缩外壳的文字，两者**叠乘**。要的就是这个意思，所以：
+ * 而「字体大小」只改编辑区正文，两者**叠乘**。所以：
  *
  * | 做法 | 结果 |
  * |---|---|
  * | `webview.setZoom()` | 整个页面按比例放大，**视口单位跟着换算**，`100vh` 的外壳仍然正好一屏（本项采用） |
  * | CSS `zoom` 写在 `<html>` 上 | 这条应用是 `100vh` 撑满的，放大之后内容比窗口高 → 滚动条 ＋ 底边被切 |
- * | CSS 里放大 `--ui-font-size` | 那就成了第二个"字体大小"，与上面那条口径直接冲突 |
+ * | CSS 里放大 `--ui-font-size` | 会把外壳一起放大，违反“字体大小只管编辑区” |
  *
  * ⚠️ **`appearance.zoom` 这一项 2026-09-25 之前存了值没人读**：设置里从 100 改到
  * 300，界面一个像素不动（实测 AE = 50.25，同批已接线的控件做标尺是 8124~11864）。
@@ -34,12 +34,12 @@
  *
  * | `ctrl_wheel_target` | 滚一格动的是 | 立刻见效靠 | 落盘写的是 |
  * |---|---|---|---|
- * | `"font_size"`（默认） | 界面字号 `ui_font_size`（12~20px，一格 1px） | 直接写 `<html>` 上那个 `--ui-font-size`（与 `applyTheme` 同一格变量） | 顶层 `ui_font_size`，**并且顺手把 `custom_font_size` 打开** |
+ * | `"font_size"`（默认） | 编辑区基准 `ui_font_size`（12~20px，一格 1px） | 写 `<html>` 上的 `--editor-font-size`（与 `applyTheme` 同一变量） | 顶层 `ui_font_size`，并打开 `custom_font_size` |
  * | `"zoom"` | 整个界面 `zoom`（50~300%，一格 10%） | `webview.setZoom()` | `appearance.zoom` |
  *
  * ⚠️ **改字号必须顺手打开 `custom_font_size`**：那一格是"这个数算不算数"的开关
  * （`applyTheme.ts` 里那一支写着）。不打开的话滚轮**看起来一点用都没有**——
- * `ui_font_size` 从 15 滚到 18，界面一个像素不动，而设置里那个数确实变了。
+ * `ui_font_size` 从 15 滚到 18，编辑区一个像素不动，而设置里那个数确实变了。
  * 这不是"替用户多做一步"，这就是"滚轮改字号"这件事本身的意思。
  *
  * ⚠️ **两个上下界与步长必须与设置界面里那两个控件一致**（`AppearancePane.tsx`：
@@ -98,9 +98,9 @@ const shrinkReleaseMostSmall = 50;
 const shrinkReleaseMostLarge = 300;
 const shrinkReleaseStepLength = 10;
 
-/** 界面字号的上下限与一格滚轮的步长。⚠️ 与 `AppearancePane` 里那个 `Range` **必须一致**。 */
+/** 编辑区基准字号的上下限与一格滚轮的步长。⚠️ 与 `AppearancePane` 那个 `Range` **必须一致**。 */
 const characterNumberMostSmall = 12;
-const characterNumberMostLarge = 20;
+const characterNumberMostLarge = 32;
 const characterNumberStepLength = 1;
 /** 字号算不出来时的兜底。⚠️ 与后端 `Settings::default()` 的 `ui_font_size` 对齐（15）。 */
 const defaultFontSize = 15;
@@ -134,15 +134,17 @@ async function setShrinkRelease(hundredShareCompare: number) {
 }
 
 /**
- * 把界面字号写进 `<html>`，**与 `applyTheme` 写的是同一格变量**。
+ * 把编辑区基准字号写进 `<html>`，**与 `applyTheme` 写的是同一格变量**。
  *
  * ⚠️ 这里**不判** `custom_font_size`：调用它的人是滚轮那一支，而滚轮改字号
  * 的意思就是把那一格打开（见文件头）。设置那边的那一支仍然由 `applyTheme`
  * 说了算——两处写同一个变量，谁后写谁生效，这正是"立刻见效"要的。
  */
 function setCharacterNumber(px: number) {
-  document.documentElement.style.setProperty(
-    "--ui-font-size",
+  const root = document.documentElement;
+  root.dataset.editorFontSize = "custom";
+  root.style.setProperty(
+    "--editor-font-size",
     `${clamp(px, characterNumberMostSmall, characterNumberMostLarge, defaultFontSize)}px`,
   );
 }

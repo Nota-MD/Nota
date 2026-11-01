@@ -28,7 +28,7 @@
  *
  * ⚠️ **界面缩放（`appearance.zoom`）也不在这里**，它要调 Tauri 的 webview 缩放，
  * 是异步的，走 `ui/useZoom.ts`（那边也管 Ctrl+滚轮那一档）。这里只落**同步写
- * 属性 / 内联变量**的那几样：两条轴 ＋ 界面字号 ＋ 主题色 ＋ 段首缩进 ＋
+ * 属性 / 内联变量**的那几样：两条轴 ＋ 编辑区基准字号 ＋ 主题色 ＋ 段首缩进 ＋
  * 侧栏宽度（2026-09-30 加的最后一条，拖动那条路见 `ui/SidebarResizer.tsx`）。
  *
  * ⚠️ **`resolveStyle` / `resolveMode` 是导出的**：`ui/useUiMode.ts` 要在同一个
@@ -68,18 +68,18 @@ export function applyTheme(settings: Settings): () => void {
     root.dataset.uiStyle = resolveStyle(settings.ui_style);
     root.dataset.uiMode = resolveMode(settings.ui_mode);
 
-    // ⚠️ 「字体大小」那一组是**自动 / 自定义**两档，`ui_font_size` 这个数只有
-    // 选「自定义」时才算数（`appearance.custom_font_size` 就是那个"算不算数"）。
-    //
-    // 自动 → 把内联值**摘掉**，让 `theme.css` 里 `:root` 那条默认值生效
-    //（今后某套风格想有自己的一套默认字号，改那一处就行）。
-    //
-    // ⚠️ 2026-09-25 之前这里是无条件写死 `ui_font_size` 的，于是**那个单选
-    // 拨到"自动"和"自定义"效果完全一样**——一个拨了不生效的开关。
-    if (settings.appearance.custom_font_size) {
-      root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
+    // 「字体大小」只写编辑区基准变量。自动档摘掉内联值，让编辑区回到
+    // `--ui-font-size` 的主题默认基准；外壳 UI 永远不读 `--editor-font-size`。
+    // 整体放大由 `appearance.zoom` 的 webview 缩放负责。
+    const customEditorFont = settings.appearance.custom_font_size;
+    // 文档主题可能把正文根字号写成绝对 `px`（已安装的 GitHub 主题就是
+    // `16px`）。这个属性让 `editor.css` 在用户显式调字号时接管正文根字号；
+    // Ctrl+滚轮也会立刻写它，避免等设置落盘后才生效。
+    root.dataset.editorFontSize = customEditorFont ? "custom" : "auto";
+    if (customEditorFont) {
+      root.style.setProperty("--editor-font-size", `${settings.ui_font_size}px`);
     } else {
-      root.style.removeProperty("--ui-font-size");
+      root.style.removeProperty("--editor-font-size");
     }
 
     // ⚠️ 「主题色」是**第三条轴**（前两条：`ui_style` 形状、`ui_mode` 明暗），

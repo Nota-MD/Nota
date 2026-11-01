@@ -101,15 +101,6 @@ export interface EditorSettings {
   paragraph_indent: boolean;
   /** 缩进宽度，单位是**字符**（`em`，不是像素）。实际生效值夹在 1~8。 */
   paragraph_indent_chars: number;
-  /**
-   * **智能符号补全**（用户 2026-09-28 点名要的那个开关，**默认开**）：打一颗
-   * 符号当场补上另一半，`Tab` 跳出右半边、夹在一对空括号里按退格两颗一起删。
-   *
-   * ⚠️ 它 2026-09-28 **取代了 `match_brackets` / `match_markdown` 两条死开关**
-   * （那两条存了值但从没有代码读过）。⚠️ 用户老设置文件里那两行还在，前端这边
-   * 读不到它们——**不必兼容**（`Settings` 那一侧也只认自己认识的键）。
-   */
-  smart_symbols: boolean;
   emoji_autocomplete: boolean;
   show_block_source: boolean;
   copy_markdown_source: boolean;
@@ -345,19 +336,17 @@ export interface MarkdownSettings {
    * 这一组四条**全是所见即所得里代码块的外观**，落地方式是 `<html>` 上的
    * `data-code-*` 属性 + CSS（`ui/useCodeBlockPrefs.ts`），**不进文档、不影响导出**。
    *
-   * ⚠️ **四条都只作用于本机**：同一份 .md 在别人机器上长什么样，跟这四条无关。
+   * ⚠️ **三条都只作用于本机**：同一份 .md 在别人机器上长什么样，跟这三条无关。
    * 与表格列宽那类侧车（`~/.local/share/nota/table-widths.toml`）也不是一回事
    * ——那个记的是**某一份文档的某一张表**。
    *
    * ⚠️ **`code_line_numbers` / `code_wrap` 从 2026-09-22 起就是字段，但到
    * 2026-09-26 之前没有任何消费者**（界面上有开关、点了没反应）。那天接线时
-   * 才发现，四条一起做完了。
+   * 才发现。
    */
   code_line_numbers: boolean;
   code_wrap: boolean;
-  /** 代码块**下面**那条工具栏（折叠 / 复制），在左。 */
-  code_toolbar: boolean;
-  /** 代码块**下面**那颗语言选择框，在右（与工具栏同一行）。 */
+  /** 代码块**下面**那颗语言选择框。 */
   code_language_picker: boolean;
   code_shift_tab_indent: boolean;
   /** ⚠️ 与 `editor.default_indent` 是两回事（这里默认 4，那里默认 2）。 */
@@ -569,6 +558,16 @@ export interface GeneralSettings {
   language: string;
   /** 把内部诊断信息也打到控制台。⚠️ **只加日志，不改行为**。 */
   debug_mode: boolean;
+  /**
+   * 拓展功能总开关。关闭后不加载或执行任何拓展，并隐藏拓展菜单、拓展栏与
+   * 拓展设置入口；已安装文件和每个拓展自己的启停记录都保留。
+   */
+  extensions_enabled: boolean;
+  /**
+   * 开发者模式的元素悬停检查。只在 `debug_mode` 同时开启时生效；悬停界面
+   * 元素会显示计算后的字体、颜色、尺寸和内边距。默认关闭。
+   */
+  element_inspector: boolean;
   /* ⚠️ 这里**不会有**遥测、许可证、外部服务器。`settings/general.rs`
    * 里有一条测试盯着这些字符串。 */
 }

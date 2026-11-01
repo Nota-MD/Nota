@@ -30,7 +30,7 @@ import "./styles/toast.css";
 // 那排分类按钮会静默变回全尺寸。（2026-09-27 从 `app.css` 里按职责拆出来的，
 // 理由见那份文件头。）
 import "./styles/overlay.css";
-import "./styles/print-dialog.css";
+import "./styles/element-inspector.css";
 import "./styles/file-picker.css";
 import "./styles/update-debug.css";
 // 左侧栏（栏本身 + 文件树 + 大纲）。⚠️ **必须在 `app.css` 之后**——折叠三角、
@@ -61,6 +61,7 @@ import "./styles/settings.css";
 import "./styles/settings-controls.css";
 import "./styles/settings-widgets.css";
 import "./styles/settings-export.css";
+import "./styles/color-picker.css";
 // 正文编辑区的**外壳与版式**。⚠️ **必须在 `app.css` 之后**。两份文件的选择器有
 // 重叠的部分（比如都碰过 `.ProseMirror` 那棵树），靠后者覆盖前者。顺序反过来，
 // 正文区的字号、行高、代码块底色就都会被外壳那几条盖掉。这条约束写在
@@ -74,7 +75,7 @@ import "./styles/github-alert.css";
 import "./styles/editor-inline.css";
 // 块级那一层：代码块、任务列表复选框、表格、分隔线与引用。
 import "./styles/editor-blocks.css";
-// 代码块上的**挂件**（折叠/复制条、语言图标、语言下拉）。⚠️ **必须在
+// 代码块上的**挂件**（语言图标与语言下拉）。⚠️ **必须在
 // `editor.css` 之后**：这一份里那几条选择器要盖住那边对 `pre` / `code` 的
 // 通用规则。2026-09-26 从 `editor.css` 里整段搬出来的，搬的原因只有行数一个
 // （那一份当时 961 行，离 1000 行硬上限只剩 39 行），内容一个字节没改。
@@ -118,6 +119,8 @@ import "./styles/heatmap.css";
 // 格式化工具栏 / 查找替换条。⚠️ **必须在 `app.css` 之后**：这几条横条
 // 贴在 `.app-main` 里，和外壳的骨架有重叠的选择器（`flex`、边框）。
 import "./styles/bars.css";
+// Vim input adapter: block cursor, disabled native caret, and the mode chip.
+import "./styles/vim.css";
 import "./styles/table-toolbar.css";
 // 从 Folio 搬来的那套图标（`.icon` 的遮罩画法）。
 // ⚠️ 这一份与上面几份**没有重叠的选择器**，所以顺序不影响结果——

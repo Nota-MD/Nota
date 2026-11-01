@@ -356,28 +356,14 @@ export function useMenus(w: MenuWiring): MenuState {
       const id = accelIndex.get(accelSig(eventAccel(e)));
       if (!id) return;
 
-      // ⚠️ **代码块里那颗 CodeMirror 是另一个编辑器**：剪贴板那几键归它自己
-      // （2026-10-07 开窗量出来的，`docs/06` §5.55）。
+      // ⚠️ **剪贴板键一律交给 WebView 的原生 copy / cut / paste 事件**。
       //
-      // 里层那颗的 `copy` / `cut` 由 `code-block-cm.ts` 自己接（空选区按一下
-      // 拿走整行——VS Code 那个手感），`paste` 由 CodeMirror 自己接（它认得
-      // 光标在哪一格里）。不放过的话，下面那句 `preventDefault()` 会把
-      // **浏览器的默认动作**一起按死：`copy` / `cut` / `paste` 这三个事件
-      // 根本发不出来，里层挂的 handler 一次都跑不到。
-      //
-      // 症状（实测）：在代码块里按 `Ctrl+C`，拿到的还是**上一次在外面复制的那
-      // 一篇**（外层 PM 的选区），界面上一点异常都看不出来。⚠️ 这与 BUG-49 /
-      // BUG-58 / `Alt+↑` 是同族的第四例：**编辑器抢先 + 全局这条 `preventDefault`**。
-      //
-      // ⚠️ 判据按 **id**（不是按按键）：`Ctrl+Shift+V`（`edit.pastePlain`）也要
-      // 一起放行——在代码块里它更该走 CodeMirror 那条。
-      // ⚠️ 类名 `nota-code-cm` 只有代码块那颗挂（`code-block-cm.ts` 里那个
-      // `editorAttributes`）：源码模式也是 `.cm-editor`，按那个认会把源码模式
-      // 一起放进来，而源码模式的这几颗键一直好用（CM 自己那份默认行为）。
-      if (cutPasteBoardKey.has(id)) {
-        const target = e.target as HTMLElement | null;
-        if (typeof target?.closest === "function" && target.closest(".nota-code-cm")) return;
-      }
+      // 这四颗键不能走 `menuHandlers`：`navigator.clipboard.readText()` 只认
+      // 文字，会把图片、HTML、Markdown 一起挡在“请按 Ctrl+V”提示后面；而
+      // 键盘事件被 `preventDefault()` 之后，WebView 自己的 `paste` 事件就
+      // 发不出来了。菜单项仍走各自处理器，键盘则始终保留浏览器的原生权限
+      // 与完整 ClipboardData。
+      if (cutPasteBoardKey.has(id)) return;
 
       // 焦点在**编辑器之外的输入框**里（设置对话框那个文本框、查找条）时不接。
       // 不拦的话，在文本框里按 Ctrl+Z 撤的是**文档**，不是刚打的字。

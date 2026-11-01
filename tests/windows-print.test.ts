@@ -1,4 +1,4 @@
-/** Windows 自绘打印框：iframe 预览与浏览器打印后端。 */
+/** Linux/Windows 原生打印：版面 HTML 与 WebView2 打印入口。 */
 
 import { readFileSync } from "node:fs";
 
@@ -40,22 +40,21 @@ testCase("浏览器打印 HTML 注入纸张、方向、边距与颜色调整", (
   assertValue(clamped.startsWith("<style data-nota-browser-print>"), "没有 head 时样式应放最前面");
 });
 
-testCase("PrintDialog 在浏览器后端用同一份 HTML 做 iframe 预览", () => {
-  const dialog = read("src/ui/PrintDialog.tsx");
-  contains(dialog, "api.print.backend()", "没有读取打印后端");
-  contains(dialog, "sandbox=\"allow-same-origin allow-modals\"", "iframe 缺少打印所需的受限沙箱");
-  contains(dialog, "srcDoc={browserHtml}", "没有把导出 HTML 放进预览");
-  contains(dialog, "frame.contentWindow.print()", "没有调用 WebView2 打印");
-  contains(dialog, "backend === \"browser\"", "没有平台分支");
+testCase("Ctrl+P 直接进入两端系统打印，不再打开自绘框", () => {
+  const exportSource = read("src/ui/useExport.ts");
+  const browser = read("src/ui/print-browser.ts");
+  contains(exportSource, "await api.print.backend()", "没有读取原生打印后端");
+  contains(exportSource, "await api.print.system({", "Linux 没有调用 GTK 系统打印");
+  contains(exportSource, "await openBrowserSystemPrint(html)", "Windows 没有调用 WebView2 原生打印");
+  contains(exportSource, "backend === \"pdf\"", "没有区分 Linux 原生后端");
+  assertValue(!exportSource.includes("openPrint("), "打印入口仍在打开自绘打印框");
+  contains(browser, "popup.print()", "WebView2 iframe 没有调用系统打印");
+  contains(browser, "addEventListener(\"afterprint\"", "打印 iframe 未等原生对话框结束");
 });
 
-testCase("Windows 使用自绘打印框，不再落回旧系统 HTML 查看器", () => {
+testCase("Windows 使用 WebView2 原生打印，不再落回旧系统 HTML 查看器", () => {
   const exportSource = read("src/ui/useExport.ts");
   contains(exportSource, "if (await api.print.supported())", "打印入口没有检查后端");
-  assertValue(
-    !exportSource.includes("Windows / macOS）→ **退回老那条**"),
-    "导出流程仍把 Windows 排出自绘打印",
-  );
   const bridge = read("src/bridge/ipc.ts");
   contains(bridge, 'invoke<PrintBackend>("nota_print_backend")', "IPC 没有后端查询");
   const rust = read("src-tauri/src/commands/print.rs");

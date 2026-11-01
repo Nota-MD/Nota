@@ -64,13 +64,10 @@ import { InputRule } from "@milkdown/kit/prose/inputrules";
 import {
   Plugin,
   PluginKey,
-  TextSelection,
   type EditorState,
-  type Transaction,
 } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import type { EditorView } from "@milkdown/kit/prose/view";
 
 /* ── 设置（`Settings.markdown` 那六格的投影）──────────────────────────── */
 
@@ -134,59 +131,6 @@ export function curveReferenceNumber(previous: string, isDoubleReferenceNumber: 
   const open2 = previous === "" || /[\s([{<（【「『“‘]/.test(previous);
   if (characterShape === "straight") return isDoubleReferenceNumber ? '"' : "'";
   return isDoubleReferenceNumber ? (open2 ? "“" : "”") : open2 ? "‘" : "’";
-}
-
-/** 一对引号的开头与结尾。直引号两边相同，弯引号分开。 */
-export interface ReferenceNumberConfigureMethod {
-  open2: string;
-  close3: string;
-}
-
-/** 当前字形下的一对引号。 */
-export function getReferenceNumberConfigureMethod(isDoubleReferenceNumber: boolean, characterShape: ReferenceNumberCharacterShape): ReferenceNumberConfigureMethod {
-  return {
-    open2: curveReferenceNumber("", isDoubleReferenceNumber, characterShape),
-    close3: curveReferenceNumber("甲", isDoubleReferenceNumber, characterShape),
-  };
-}
-
-/**
- * 这个位置按引号键时，是“开始一段引文”还是“结束/撒号”。
- *
- * 与输入规则共用同一份前文判据，避免自动补对和智能标点把同一颗按键理解成
- * 两个方向。
- */
-export function isOpenReferenceNumberPosition(previous: string): boolean {
-  return previous === "" || /[\s([{<（【「『“‘]/.test(previous);
-}
-
-/**
- * 前文里是否还有一个没有闭合的开引号。
- *
- * 直引号的开闭是同一颗，只能按奇偶判断；弯引号分别计数。反斜杠后的引号不计数。
- */
-export function hasNotCloseCombineReferenceNumber(prefixText: string, open2: string, close3: string): boolean {
-  let layer = 0;
-  let convertMeaning = false;
-  for (const character2 of prefixText) {
-    if (convertMeaning) {
-      convertMeaning = false;
-      continue;
-    }
-    if (character2 === "\\") {
-      convertMeaning = true;
-      continue;
-    }
-    if (open2 === close3 && character2 === open2) {
-      // 直引号没有方向，只能按奇偶成对。
-      layer = layer === 0 ? 1 : 0;
-    } else if (character2 === open2) {
-      layer += 1;
-    } else if (character2 === close3 && layer > 0) {
-      layer -= 1;
-    }
-  }
-  return layer > 0;
 }
 
 /**
@@ -369,9 +313,8 @@ function replaceRemove(state: EditorState, start6: number, end3: number, replace
  * 挂进 `.use()` 的输入规则（**`Input` 模式专用**），最多三条：
  * `---` / `--` / `...`。
  *
- * 引号不走输入规则：它们要同时完成“开引号补另一边、闭引号跳过去、选中文字
- * 时包起来”，这些都需要 `handleTextInput` 拿到选区。`引号配对` 接管全部
- * 引号字形转换，本函数不再注册 `"` / `'`。
+ * 引号只做**单字符字形转换**：敲一颗直引号，按前文决定弯向；不补另一边，
+ * 不跳过已有引号，也不包裹选区。
  *
  * ⚠️ **该关的一律不注册**，不是在处理器里返回 `null`——两处判据只留一处：
  *
@@ -380,7 +323,7 @@ function replaceRemove(state: EditorState, start6: number, end3: number, replace
  * | 模式不是 `input` | **0**（一条都不挂） |
  * | `破折号 = false` | 少掉 `---` / `--` / `...` 三条（省略号挂靠在破折号上） |
  * | `省略号 = false` | 少掉 `...` 一条 |
- * | `引号 = false` | 输入规则条数不变；`引号配对` 不安装 |
+ * | `引号 = false` | 少掉 `"` / `'` 两条 |
  *
  * 理由有两条：① 输入规则**每敲一个字符都要跑一遍全部正则**，关掉的不该还在跑；
  * ② 条数本身是个可测的判据（`tests/smart-punctuation.test.ts` 第四组拿它钉
@@ -395,6 +338,9 @@ function replaceRemove(state: EditorState, start6: number, end3: number, replace
 export function punctuationInput(settings: punctuationSettings) {
   if (settings.mode2 !== "input") return [];
   const output2 = [];
+  if (settings.referenceNumber) {
+    output2.push(referenceNumberRule(settings, true), referenceNumberRule(settings, false));
+  }
   // ⚠️ 省略号**挂靠在破折号那一格上**（`标点设置.省略号` 那条注释讲了为什么）。
   if (settings.dash) {
     output2.push(...dashRuleRule(settings));
@@ -402,10 +348,6 @@ export function punctuationInput(settings: punctuationSettings) {
   }
   return output2;
 }
-
-/* ── 第三½格：引号自动配成对（`Input` 模式）──────────────────────────── */
-
-export const referenceNumberConfigureCorrectKey = new PluginKey("nota-smart-quote-pair");
 
 function atCodeInside(state: EditorState, position2: number): boolean {
   const position = state.doc.resolve(position2);
@@ -415,93 +357,25 @@ function atCodeInside(state: EditorState, position2: number): boolean {
   return position.marks().some((mark) => mark.type.spec.code);
 }
 
-/**
- * 处理敲下的一颗直引号。
- *
- * 返回 `null` 表示不接管，让智能标点输入规则按旧路处理。这里负责的是浏览器
- * 本身不会提供、而且输入规则也很难补上的三种手感：
- * - 在空位置敲开引号：一次得到 `“|”`；
- * - 光标停在自动补出的闭引号前：再敲引号只跨过去；
- * - 选中一段再敲引号：用一对引号包住选区，并保留选区。
- */
-export function referenceNumberInputTransaction(
-  state: EditorState,
-  from: number,
-  to2: number,
-  character2: string,
-  settings: punctuationSettings,
-): Transaction | null {
-  if (settings.mode2 !== "input" || !settings.referenceNumber || (character2 !== '"' && character2 !== "'")) return null;
-  const isDouble = character2 === '"';
-  const characterShape = isDouble ? settings.doubleReferenceNumber : settings.singleReferenceNumber;
-  const { open2, close3 } = getReferenceNumberConfigureMethod(isDouble, characterShape);
-  const fromValue = state.doc.resolve(from);
-  if (!fromValue.parent.inlineContent || atCodeInside(state, from)) return null;
-
-  if (from !== to2) {
-    const to = state.doc.resolve(to2);
-    if (!fromValue.sameParent(to) || atCodeInside(state, to2)) return null;
-    const tr = state.tr;
-    tr.insertText(close3, to2, to2);
-    tr.insertText(open2, from, from);
-    tr.setSelection(TextSelection.create(tr.doc, from + open2.length, to2 + open2.length));
-    return tr.scrollIntoView();
-  }
-
-  const parent = fromValue.parent;
-  const offset = fromValue.parentOffset;
-  const before2 = offset > 0 ? parent.textBetween(offset - 1, offset, "") : "";
-  const after = offset < parent.content.size ? parent.textBetween(offset, offset + 1, "") : "";
-  const prefixText = parent.textBetween(0, offset, "");
-
-  // `don't` 里的单引号是撒号，要落成 `’`，但不要再补一对。
-  if (!isDouble && /[\p{L}\p{N}]$/u.test(before2) && !isOpenReferenceNumberPosition(before2)) {
-    return state.tr.insertText(close3, from);
-  }
-  if (before2 === "\\") return null;
-
-  // 先判“越过我们补出来的闭引号”，再判“这里算不算开引号位置”：
-  // 光标夹在 `“|”` 中间时，前一颗本身就是开引号，后判会再补一对。
-  if (after === close3 && hasNotCloseCombineReferenceNumber(prefixText, open2, close3)) {
-    return state.tr
-      .setSelection(TextSelection.create(state.doc, from + 1))
-      .setMeta("addToHistory", false);
-  }
-
-  if (isOpenReferenceNumberPosition(before2)) {
-    const tr = state.tr.insertText(open2 + close3, from);
-    tr.setSelection(TextSelection.create(tr.doc, from + open2.length));
-    return tr;
-  }
-
-  return state.tr.insertText(close3, from);
-}
-
-/** 引号配对的 ProseMirror 插件。导出是为了让测试直接驱动 `handleTextInput`。 */
-export function createReferenceNumberConfigureCorrectPlugin(settings: punctuationSettings): Plugin {
-  return new Plugin({
-    key: referenceNumberConfigureCorrectKey,
-    props: {
-      handleTextInput: (view: EditorView, from, to2, text4) => {
-        if (view.composing || text4.length !== 1) return false;
-        const tr = referenceNumberInputTransaction(view.state, from, to2, text4, settings);
-        if (!tr) return false;
-        view.dispatch(tr);
-        return true;
-      },
-    },
-  });
-}
-
-/**
- * 挂进 `.use()` 的引号配对插件。
- *
- * 必须在 `标点输入` **前面**：两者都听 `handleTextInput`，本插件先接管时才能
- * 一次放进成对引号；排到输入规则后面就只能看到已经被替换过的单颗字符。
- */
-export function referenceNumberConfigureCorrect(settings: punctuationSettings) {
-  if (settings.mode2 !== "input" || !settings.referenceNumber) return [];
-  return $prose(() => createReferenceNumberConfigureCorrectPlugin(settings));
+/** 引号的单字符输入规则。绝不插入第二颗引号。 */
+function referenceNumberRule(settings: punctuationSettings, isDouble: boolean) {
+  const character = isDouble ? '"' : "'";
+  const pattern = isDouble ? /"$/ : /'$/;
+  return $inputRule(() =>
+    new InputRule(pattern, (state, _match, start6, end3) => {
+      if (atCodeInside(state, start6)) return null;
+      const resolved = state.doc.resolve(start6);
+      if (!resolved.parent.inlineContent) return null;
+      const prefixText = resolved.parent.textBetween(0, resolved.parentOffset, "");
+      if (prefixText.endsWith("\\")) return null;
+      const characterShape = isDouble ? settings.doubleReferenceNumber : settings.singleReferenceNumber;
+      const replace =
+        !isDouble && isApostropheNumber(prefixText)
+          ? "’"
+          : curveReferenceNumber(prefixText.slice(-1), isDouble, characterShape);
+      return replace === character ? null : replaceRemove(state, start6, end3, replace);
+    }, ruleRuleOption),
+  );
 }
 
 /* ── 第四格：显示装饰（`Render` 模式）──────────────────────────────── */

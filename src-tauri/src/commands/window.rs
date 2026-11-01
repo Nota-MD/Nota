@@ -32,6 +32,30 @@ use crate::error::{NotaError, Result};
 /// 写错了的症状是"点了没反应"（命令报"找不到窗口"，而按钮看着是亮的）。
 const 主窗口: &str = "main";
 
+/// Put keyboard focus on Nota's GTK toplevel and then on the WebView child.
+///
+/// `WebviewWindow::set_focus()` is not enough on XWayland: it can report
+/// success while the compositor keeps another toplevel active. Move through
+/// every layer explicitly before the frontend restores ProseMirror's caret.
+#[cfg(target_os = "linux")]
+pub(crate) fn focus_linux_webview(webview: &webkit2gtk::WebView) {
+    use gtk::prelude::{Cast as _, GtkWindowExt as _, WidgetExt as _};
+
+    if let Some(toplevel) = webview
+        .toplevel()
+        .and_then(|widget| widget.downcast::<gtk::Window>().ok())
+    {
+        toplevel.set_accept_focus(true);
+        toplevel.deiconify();
+        toplevel.present();
+        if let Some(window) = toplevel.window() {
+            window.raise();
+            window.focus(gtk::current_event_time());
+        }
+    }
+    webview.grab_focus();
+}
+
 /// 编辑器和界面主题都就绪后，把预热窗口移到屏幕中央并显示。
 ///
 /// 窗口在 `tauri.conf.json` 里先创建在屏幕外、隐藏任务栏按钮。隐藏窗口的
@@ -57,6 +81,33 @@ pub fn nota_window_show_main(app: tauri::AppHandle) -> Result<()> {
         .map_err(|e| NotaError::other(format!("显示主窗口失败：{e}")))?;
     窗.set_focus()
         .map_err(|e| NotaError::other(format!("聚焦主窗口失败：{e}")))?;
+
+    // A focused native window does not necessarily mean GTK has handed keyboard
+    // focus to its WebView. On Linux the window can be active while the view
+    // still ignores keys until it is clicked. Grab the child explicitly before
+    // returning; the frontend then restores ProseMirror's own selection focus.
+    #[cfg(target_os = "linux")]
+    窗.with_webview(|webview| focus_linux_webview(&webview.inner()))
+    .map_err(|e| NotaError::other(format!("聚焦正文 WebView 失败：{e}")))?;
+
+    // Wayland/XWayland activation is asynchronous: the first `present()` can
+    // run before the compositor has declared the surface active. Re-present
+    // once after the show request has crossed the event loop, then ask the
+    // frontend to restore ProseMirror's selection focus again.
+    #[cfg(target_os = "linux")]
+    {
+        let app2 = app.clone();
+        gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || {
+            let Some(window) = app2.get_webview_window(主窗口) else {
+                return;
+            };
+            let _ = window.set_focus();
+            let _ =
+                window.with_webview(|webview| focus_linux_webview(&webview.inner()));
+            let _ = window.eval("window.dispatchEvent(new Event('nota-window-shown'))");
+        });
+    }
+
     crate::日志!("[nota] editor ready; showing main window");
     Ok(())
 }
@@ -71,7 +122,7 @@ pub fn nota_window_open_debug_log() -> Result<()> {
     crate::日志!("[nota] opening debug log");
     let 程序 = std::env::current_exe()
         .map_err(|e| NotaError::other(format!("找不到 Nota 自己的可执行文件：{e}")))?;
-    std::process::Command::new(&程序)
+    crate::proc::background_command(&程序)
         .arg(crate::cli::调试窗口选项)
         .spawn()
         .map_err(|e| NotaError::other(format!("启动调试日志失败：{e}")))?;
@@ -104,7 +155,7 @@ pub fn nota_window_open_devtools(app: tauri::AppHandle) -> Result<()> {
 pub fn nota_window_open_new(path: Option<String>) -> Result<()> {
     let 程序 = std::env::current_exe()
         .map_err(|e| NotaError::other(format!("找不到 Nota 自己的可执行文件：{e}")))?;
-    let mut command = std::process::Command::new(&程序);
+    let mut command = crate::proc::background_command(&程序);
     command.arg(crate::cli::新窗口选项);
     if let Some(path) = path.filter(|path| !path.trim().is_empty()) {
         command.arg(&path);

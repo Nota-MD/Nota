@@ -1,0 +1,78 @@
+/*
+ * Developer-mode element inspector.
+ *
+ * The outline and information card live above every app surface but below
+ * native menus. They are pointer-events:none so moving toward the card never
+ * changes the element under the pointer.
+ */
+
+.nota-element-inspector-outline {
+  position: fixed;
+  z-index: 499;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+}
+
+.nota-element-inspector {
+  position: fixed;
+  z-index: 500;
+  box-sizing: border-box;
+  max-height: min(220px, calc(100vh - 16px));
+  padding: 9px 11px 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--fg);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 30%);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.nota-element-inspector-selector {
+  margin-bottom: 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.nota-element-inspector-grid {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.nota-element-inspector-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.nota-element-inspector-row dt {
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.nota-element-inspector-row dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

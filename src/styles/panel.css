@@ -68,6 +68,43 @@
   margin-bottom: 0;
 }
 
+.panel-control {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 0.87em;
+}
+
+.panel-control > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.panel-control-select .stg-select {
+  min-width: 0;
+  flex: 0 1 150px;
+}
+
+.panel-control-file {
+  flex-wrap: wrap;
+}
+
+.panel-control-file .panel-btn {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-control-error {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: 0.92em;
+}
+
 .panel-fields {
   margin: 0 0 6px;
   font-size: 0.85em;
@@ -404,6 +441,104 @@
      ⚠️ 代价写在 `plugins/git/main.lua` 那段注释里：窄栏里一行只见小半截。 */
   white-space: pre;
   overflow-x: auto;
+}
+
+/* Interactive note relationship graph (`kind = "network"`). */
+.panel-network {
+  margin: 2px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.panel-network-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-size: 0.8em;
+}
+
+.panel-network-toolbar > span {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-network-toolbar input {
+  min-width: 48px;
+  flex: 1;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.panel-network-toolbar input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.panel-network-toolbar .btn {
+  flex: none;
+  padding: 3px 8px;
+  font-size: inherit;
+}
+
+.panel-network-canvas-wrap {
+  position: relative;
+  height: clamp(440px, 60vh, 680px);
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--fg) 9%, transparent) 1px, transparent 0)
+    0 0 / 18px 18px,
+    var(--bg-raised);
+}
+
+.panel-network-canvas-wrap canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.panel-network-canvas-wrap canvas:active {
+  cursor: grabbing;
+}
+
+.panel-network-canvas-wrap canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.panel-network-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  color: var(--fg-muted);
+  font-size: 0.86em;
+  text-align: center;
+  pointer-events: none;
+}
+
+.panel-network-help {
+  margin: 0;
+  padding: 5px 7px 6px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-faint);
+  font-size: 0.76em;
+  line-height: 1.4;
 }
 
 /* ⚠️ 每一行的长相（底色、删除线、下划线）**不在这份文件里**——

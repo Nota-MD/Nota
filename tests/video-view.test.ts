@@ -216,6 +216,39 @@ testCase("隐藏源文不使用输入框外框或焦点色", () => {
     throw new Error("图片源文仍被固定为等宽字体");
 });
 
+testCase("图片源码使用可自动换行的 textarea，长地址不会被截断", () => {
+  const view = read("src/editor/video-view.ts");
+  const css = read("src/styles/video.css");
+  if (!view.includes('document.createElement("textarea")'))
+    throw new Error("图片源码仍是单行 input");
+  if (!view.includes('source.wrap = "soft"'))
+    throw new Error("图片源码没有启用软换行");
+  if (!view.includes("resizeImageSource(initial.sourceBody)"))
+    throw new Error("图片源码没有按内容调整高度");
+  if (!/\.nota-image-source\s*\{[\s\S]*?white-space:\s*pre-wrap;[\s\S]*?overflow-wrap:\s*anywhere;/s.test(css))
+    throw new Error("图片源码样式不能自然换行");
+});
+
+testCase("点击无 alt 图片会生成名称并选中源码里的名称", () => {
+  const view = read("src/editor/video-view.ts");
+  if (!view.includes("alt: automaticImageName(text2(currentNode.attrs.src))"))
+    throw new Error("点击图片没有生成自动名称");
+  if (!view.includes("initial.sourceBody.setSelectionRange(2, 2 + selectedAlt.length)"))
+    throw new Error("点击图片没有选中 Markdown 源文中的名称");
+});
+
+testCase("图片源码实时刷新；清空源码时删除整张图片", () => {
+  const view = read("src/editor/video-view.ts");
+  if (!view.includes('addEventListener("input"'))
+    throw new Error("图片源码没有 input 实时监听");
+  if (!view.includes("parseImageMarkdownSource(initial.sourceBody.value)"))
+    throw new Error("图片源码没有在输入时实时解析");
+  if (!view.includes("removeImageFromEmptySource();"))
+    throw new Error("清空源码时没有删除图片");
+  if (!view.includes("view.state.tr.delete(position2, position2 + node.nodeSize)"))
+    throw new Error("图片节点删除事务缺失");
+});
+
 testCase("源文解析保留 alt、地址和可选标题", () => {
   equal(
     JSON.stringify(parseImageMarkdownSource('![图](docs/a.png "标题")')),

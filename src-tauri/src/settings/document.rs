@@ -24,7 +24,7 @@
 //! ——段距取 0（段落挨着）是一个**正当的**取值，跟"跟随主题"撞在同一个数上。
 //!
 //! 这与 `[editor]` 的「段首缩进」（`paragraph_indent` ＋ `paragraph_indent_chars`）
-//! 和 `[appearance]` 的「字体大小」（`custom_font_size` ＋ `ui_font_size`）
+//! 和 `[appearance]` 的编辑区基准字号（`custom_font_size` ＋ `ui_font_size`）
 //! 是**同一个姿势**，别另发明一种。
 //!
 //! # ⚠️ 这一页的东西**一个字节都不写进文档**
@@ -103,11 +103,11 @@ pub struct Document {
     pub font: DocFont,
     /// 正文字号：是否覆盖文档主题。**默认关**。
     pub custom_font_size: bool,
-    /// 正文字号，**相对界面字号**的百分比（102 = 1.02 倍）。
+    /// 正文字号，**相对编辑区基准字号**的百分比（102 = 1.02 倍）。
     ///
     /// ⚠️ 它是 `em`（相对父层），不是 `px`：文档主题给的就是 `1.02em`
-    /// （`src/styles/themes/*.css`），用户在「外观」页调大界面字号时正文跟着
-    /// 变大——那是既有的行为，这里不改变它，只让它可以被覆盖。
+    /// （`src/styles/themes/*.css`），用户在「外观」页调大文字时正文跟着
+    /// 变大；外壳 UI 不跟着这一格变化。
     /// 实际生效值夹在 **80..=200**。
     pub font_size: u32,
 }

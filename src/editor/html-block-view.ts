@@ -16,7 +16,6 @@
  * 文档真相。
  */
 
-import DOMPurify from "dompurify";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { redo, undo } from "@milkdown/kit/prose/history";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
@@ -26,171 +25,17 @@ import { $prose, $view } from "@milkdown/kit/utils";
 import { api } from "@/bridge/ipc";
 import { t } from "@/i18n";
 import { debugEvent } from "@/ui/debug-log";
-
-import {
-  createCodeBlockEditor,
-  type codeBlockEditor,
-} from "./code-block-cm";
+import type { codeBlockEditor } from "./code-block-cm";
 import { blockHTMLSpec, isNoteRelease } from "./html-block";
 import { localLocalImageSliceAbsoluteCorrectPath } from "./video-view";
 
-/** GitHub README 与普通文档中常见、且不提供脚本执行能力的标签。 */
-export const allowedHtmlTags = [
-  "a",
-  "abbr",
-  "b",
-  "blockquote",
-  "br",
-  "caption",
-  "center",
-  "code",
-  "dd",
-  "del",
-  "details",
-  "div",
-  "dl",
-  "dt",
-  "em",
-  "figcaption",
-  "figure",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "hr",
-  "i",
-  "img",
-  "ins",
-  "kbd",
-  "li",
-  "mark",
-  "ol",
-  "p",
-  "picture",
-  "pre",
-  "q",
-  "s",
-  "samp",
-  "small",
-  "source",
-  "span",
-  "strong",
-  "sub",
-  "summary",
-  "sup",
-  "table",
-  "tbody",
-  "td",
-  "tfoot",
-  "th",
-  "thead",
-  "tr",
-  "u",
-  "ul",
-  "var",
-] as const;
-
-/**
- * 允许保留的属性。
- *
- * ⚠️ `style` / `class` / `id` 故意不在表里。它们看起来只是排版信息，实际可以
- * 覆盖编辑器外壳、伪造选中态，或与文档主题的选择器相撞。README 的居中标题与
- * 徽章使用 `align`、`src`、`href`、`width` 就够。
- */
-export const allowedHtmlAttributes = [
-  "align",
-  "alt",
-  "aria-hidden",
-  "aria-label",
-  "border",
-  "cellpadding",
-  "cellspacing",
-  "colspan",
-  "height",
-  "href",
-  "loading",
-  "name",
-  "referrerpolicy",
-  "rel",
-  "role",
-  "rowspan",
-  "scope",
-  "src",
-  "target",
-  "title",
-  "valign",
-  "width",
-] as const;
-
-/** DOMPurify 的唯一配置。测试直接读这一份，避免实现与判据各写一张表。 */
-export const hTMLCleanConvertConfigurePlace = {
-  ALLOWED_TAGS: [...allowedHtmlTags],
-  ALLOWED_ATTR: [...allowedHtmlAttributes],
-  ALLOW_ARIA_ATTR: false,
-  ALLOW_DATA_ATTR: false,
-  ALLOW_UNKNOWN_PROTOCOLS: false,
-  KEEP_CONTENT: true,
-  RETURN_TRUSTED_TYPE: false,
-  FORBID_TAGS: [
-    "audio",
-    "base",
-    "button",
-    "embed",
-    "form",
-    "iframe",
-    "input",
-    "link",
-    "math",
-    "meta",
-    "object",
-    "option",
-    "script",
-    "select",
-    "style",
-    "svg",
-    "template",
-    "textarea",
-    "video",
-  ],
-  FORBID_ATTR: ["class", "id", "srcdoc", "style"],
-};
-
-/**
- * 一条 HTML 地址是否允许保留。
- *
- * DOMPurify 已处理已知协议绕过；这里再按用途收一次口。相对路径、片段、
- * `http(s)` 与协议相对地址保留。`mailto:` / `tel:` 只给链接；`asset:` 与
- * `file:` 只给图片，交给宿主读成 data URL。`data:` 一律拒绝。
- */
-export function isSafeHtmlUrl(address: string, attribute: "href" | "src" = "src"): boolean {
-  const clean = address.replace(/[\s\u0000-\u001f\u007f]/g, "");
-  if (!clean) return true;
-
-  const smallWrite = clean.toLowerCase();
-  if (attribute === "src" && (/^[a-z]:[\\/]/i.test(clean) || clean.startsWith("\\\\"))) {
-    return true;
-  }
-  if (/^https?:/i.test(clean)) return true;
-  if (attribute === "href" && /^(?:mailto:|tel:)/i.test(clean)) return true;
-  if (attribute === "src" && /^(?:asset:|file:)/i.test(clean)) return true;
-
-  // 只要出现了协议名就必须已经被上面的白名单接住。没有协议的相对地址
-  // （`assets/a.png`、`./a`、`/a`、`#anchor`、`//host/a`）可以保留。
-  if (/^[a-z][a-z0-9+.-]*:/i.test(smallWrite)) return false;
-  return true;
-}
-
-/** 清理一棵已解析 DOM 里的 href/src。它是净化后的第二道独立闸门。 */
-export function clearManageHTMLAddress(root: ParentNode): void {
-  for (const element of Array.from(root.querySelectorAll("[href], [src]"))) {
-    for (const attribute of ["href", "src"] as const) {
-      const value2 = element.getAttribute(attribute);
-      if (value2 !== null && !isSafeHtmlUrl(value2, attribute)) element.removeAttribute(attribute);
-    }
-  }
-}
+export {
+  allowedHtmlAttributes,
+  allowedHtmlTags,
+  clearManageHTMLAddress,
+  hTMLCleanConvertConfigurePlace,
+  isSafeHtmlUrl,
+} from "./html-sanitize-policy";
 
 interface BlockAttribute {
   value: string;
@@ -201,12 +46,74 @@ interface PendingReadImageSlice {
   path: string;
 }
 
-/** 造一个 DOM。DOMPurify 已执行；这里只追加宿主读图的 data URL。 */
-function safeAllFragment(source2: string): DocumentFragment {
-  const modelBoard = document.createElement("template");
-  modelBoard.innerHTML = DOMPurify.sanitize(source2, hTMLCleanConvertConfigurePlace);
-  clearManageHTMLAddress(modelBoard.content);
-  return modelBoard.content;
+const remoteHtmlImageLimit = 32;
+const remoteHtmlImages = new Map<string, string>();
+const remoteHtmlImagePending = new Set<string>();
+
+function remoteHtmlAddress(image: HTMLImageElement): string | null {
+  const address = image.getAttribute("src")?.trim() ?? "";
+  return /^(?:https?:)?\/\//i.test(address) ? address : null;
+}
+
+function rememberRemoteHtmlImage(image: HTMLImageElement): void {
+  const address = remoteHtmlAddress(image);
+  if (!address || !image.complete || image.naturalWidth <= 0) return;
+  if (remoteHtmlImages.has(address) || remoteHtmlImagePending.has(address)) return;
+
+  // 单纯把已解码的 `<img>` 留在内存里，WebKitGTK 在编辑区重建后仍会重新
+  // 请求图片。这里在原图成功加载后读取同一份资源，缓存成 data URL；不支持
+  // CORS 的服务器仍照常显示远程图片，只是不进入这份缓存。
+  remoteHtmlImagePending.add(address);
+  void fetch(address, {
+    mode: "cors",
+    credentials: "omit",
+    cache: "force-cache",
+  })
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.blob();
+    })
+    .then(
+      (blob) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.addEventListener("load", () => resolve(String(reader.result)), { once: true });
+          reader.addEventListener("error", () => reject(reader.error), { once: true });
+          reader.readAsDataURL(blob);
+        }),
+    )
+    .then((dataUrl) => {
+      remoteHtmlImages.delete(address);
+      remoteHtmlImages.set(address, dataUrl);
+      while (remoteHtmlImages.size > remoteHtmlImageLimit) {
+        const oldest = remoteHtmlImages.keys().next().value;
+        if (oldest === undefined) break;
+        remoteHtmlImages.delete(oldest);
+      }
+    })
+    .catch(() => {
+      // 不支持 CORS 的资源无法读成字节；原图照常显示，继续走 WebView 缓存。
+    })
+    .finally(() => remoteHtmlImagePending.delete(address));
+}
+
+function rememberRemoteHtmlImages(root: ParentNode): void {
+  for (const image of Array.from(root.querySelectorAll("img"))) {
+    if (image instanceof HTMLImageElement) rememberRemoteHtmlImage(image);
+  }
+}
+
+function restoreRemoteHtmlImages(root: ParentNode): void {
+  for (const image of Array.from(root.querySelectorAll("img"))) {
+    if (!(image instanceof HTMLImageElement)) continue;
+    const address = remoteHtmlAddress(image);
+    if (!address) continue;
+    const cached = remoteHtmlImages.get(address);
+    if (!cached) continue;
+    image.setAttribute("src", cached);
+    remoteHtmlImages.delete(address);
+    remoteHtmlImages.set(address, cached);
+  }
 }
 
 /** 本地图片在插入文档前先摘掉 src，避免 WebView 对相对路径发一次无用请求。 */
@@ -261,6 +168,7 @@ export function blockHTMLView(documentPath: string | null = null) {
         let current = initialNode;
         let represent = 0;
         let sourceMode = false;
+        let sanitizeRuntime: Promise<typeof import("./html-sanitize")> | null = null;
 
         const root = document.createElement("div");
         root.className = "nota-html-block";
@@ -270,7 +178,8 @@ export function blockHTMLView(documentPath: string | null = null) {
         show.className = "nota-html-render";
 
         const source2 = document.createElement("div");
-        source2.className = "nota-html-source";
+        source2.className =
+          "nota-html-source md-fences ty-contain-cm nota-source-surface";
         source2.setAttribute("aria-label", t("HTML source"));
 
         const writeReturnSource = (newValueValue: string): void => {
@@ -284,30 +193,49 @@ export function blockHTMLView(documentPath: string | null = null) {
           );
         };
 
-        const sourceEditing: codeBlockEditor = createCodeBlockEditor({
-          initialStartText: (current.attrs as BlockAttribute).value,
-          initialStartLanguage: "html",
-          textChangeConvert: writeReturnSource,
-          clusterFocus: () => {
-            sourceMode = true;
-            root.classList.add("nota-html-source-mode");
-          },
-          loseFocus: () => {
-            // 焦点移到同一块里的 HTML 按钮时不算离开；真正离开整个块后
-            // 自动结束编辑，不必强制用户再点一次勾号。
-            queueMicrotask(() => {
-              if (!root.isConnected || root.contains(document.activeElement)) return;
-              if (sourceMode) setSourceMode(false);
+        let sourceEditing: codeBlockEditor | null = null;
+        let sourceLoading: Promise<void> | null = null;
+
+        const ensureSourceEditor = (): void => {
+          if (sourceEditing || sourceLoading) return;
+          source2.textContent = t("Loading code editor…");
+          sourceLoading = import("./code-block-cm")
+            .then(({ createCodeBlockEditor }) => {
+              if (!root.isConnected) return;
+              const editor = createCodeBlockEditor({
+                initialStartText: (current.attrs as BlockAttribute).value,
+                initialStartLanguage: "html",
+                nativeLineNumbers: true,
+                textChangeConvert: writeReturnSource,
+                clusterFocus: () => {
+                  sourceMode = true;
+                  root.classList.add("nota-html-source-mode");
+                },
+                loseFocus: () => {
+                  // Focus moving to the HTML toggle is still inside this block.
+                  queueMicrotask(() => {
+                    if (!root.isConnected || root.contains(document.activeElement)) return;
+                    if (sourceMode) setSourceMode(false);
+                  });
+                },
+                undoCancel: () => undo(view.state, view.dispatch, view),
+                heavyDo: () => redo(view.state, view.dispatch, view),
+              });
+              sourceEditing = editor;
+              source2.replaceChildren(editor.view.dom);
+              editor.setText((current.attrs as BlockAttribute).value);
+              if (sourceMode) editor.clusterFocus();
+            })
+            .catch((error: unknown) => {
+              sourceLoading = null;
+              console.error("[nota] HTML source editor failed to load", error);
+              source2.textContent = t("The HTML source editor could not be loaded.");
             });
-          },
-          undoCancel: () => undo(view.state, view.dispatch, view),
-          heavyDo: () => redo(view.state, view.dispatch, view),
-        });
-        source2.append(sourceEditing.view.dom);
+        };
 
         const splitReplace = document.createElement("button");
         splitReplace.type = "button";
-        splitReplace.className = "nota-html-source-toggle";
+        splitReplace.className = "nota-html-source-toggle nota-block-kind";
         splitReplace.textContent = "HTML";
         splitReplace.setAttribute("aria-pressed", "false");
         splitReplace.title = t("Edit HTML source");
@@ -330,21 +258,47 @@ export function blockHTMLView(documentPath: string | null = null) {
             return;
           }
           show.classList.remove("nota-html-comment");
-          const fragment = safeAllFragment(value2);
-          const imageSlice = removeOutputLocalLocalImageSlice(fragment, documentPath);
-          show.replaceChildren(fragment);
-          for (const oneImage of imageSlice) writeImageSlice(oneImage, oneImage.path, activeActive);
+          show.dataset.state = "loading";
+          show.textContent = t("Rendering HTML…");
+          sanitizeRuntime ??= import("./html-sanitize");
+          void sanitizeRuntime
+            .then(({ safeHtmlFragment }) => {
+              if (!activeActive()) return;
+              const fragment = safeHtmlFragment(value2);
+              const imageSlice = removeOutputLocalLocalImageSlice(fragment, documentPath);
+              rememberRemoteHtmlImages(show);
+              restoreRemoteHtmlImages(fragment);
+              show.replaceChildren(fragment);
+              show.dataset.state = "ready";
+              for (const image of Array.from(show.querySelectorAll("img"))) {
+                if (image instanceof HTMLImageElement && remoteHtmlAddress(image)) {
+                  image.addEventListener(
+                    "load",
+                    () => rememberRemoteHtmlImage(image),
+                    { once: true },
+                  );
+                }
+              }
+              for (const oneImage of imageSlice) writeImageSlice(oneImage, oneImage.path, activeActive);
+            })
+            .catch((error: unknown) => {
+              if (!activeActive()) return;
+              show.dataset.state = "error";
+              show.textContent = t("The HTML preview could not be loaded.");
+              console.error("[nota] HTML sanitizer failed to load", error);
+            });
         };
 
         function setSourceMode(open2: boolean): void {
           sourceMode = open2;
           root.classList.toggle("nota-html-source-mode", open2);
-          sourceEditing.setText((current.attrs as BlockAttribute).value);
+          sourceEditing?.setText((current.attrs as BlockAttribute).value);
           splitReplace.textContent = "HTML";
           splitReplace.title = open2 ? t("Finish editing") : t("Edit HTML source");
           splitReplace.setAttribute("aria-pressed", open2 ? "true" : "false");
           if (open2) {
-            sourceEditing.clusterFocus();
+            ensureSourceEditor();
+            sourceEditing?.clusterFocus();
           } else {
             draw();
           }
@@ -404,7 +358,6 @@ export function blockHTMLView(documentPath: string | null = null) {
 
         root.append(show, source2, splitReplace);
         writeAttribute(current);
-        sourceEditing.setText((current.attrs as BlockAttribute).value);
         draw();
 
         return {
@@ -416,7 +369,9 @@ export function blockHTMLView(documentPath: string | null = null) {
             writeAttribute(current);
             if (sourceMode) {
               const newValueValue = (current.attrs as BlockAttribute).value;
-              if (sourceEditing.getText() !== newValueValue) sourceEditing.setText(newValueValue);
+              if (sourceEditing && sourceEditing.getText() !== newValueValue) {
+                sourceEditing.setText(newValueValue);
+              }
             } else if (valueChangeDone) {
               draw();
             }
@@ -434,7 +389,8 @@ export function blockHTMLView(documentPath: string | null = null) {
           ignoreMutation: () => true,
           destroy: () => {
             represent++;
-            sourceEditing.cancelDestroy();
+            rememberRemoteHtmlImages(show);
+            sourceEditing?.cancelDestroy();
           },
         };
       };

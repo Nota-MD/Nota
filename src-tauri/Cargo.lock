@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "nota"
-version = "0.12.0-beta"
+version = "0.13.0-beta"
 dependencies = [
  "base64 0.22.1",
  "chardetng",
@@ -2618,6 +2618,7 @@ dependencies = [
  "ed25519-dalek",
  "encoding_rs",
  "gtk",
+ "libc",
  "mlua",
  "notify",
  "open",

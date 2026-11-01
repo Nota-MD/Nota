@@ -8,10 +8,11 @@
  * UI 主题」）。所以这两件事在界面上也分开摆：**外观**管整个应用，
  * **文档主题**只管编辑区。
  *
- * # ⚠️ 这一页没有**主题选择器**
+ * # 主题选择器
  *
- * 只显示现在用的是哪套、以及去哪儿换。放一个下拉在这儿就会和「主题」菜单
- * 变成**两个真相源**——菜单换了一套、这一页还显示着旧的，谁都不报错。
+ * 「当前主题」是一个下拉框，和「主题」菜单读写同一份设置：在浅色模式改
+ * `document_theme`，在启用独立深色主题的深色模式下改
+ * `appearance.dark_document_theme`。显示值始终取“当前实际生效”的主题。
  *
  * ⚠️ 唯一的例外是「深色模式下单独用一套」，它在**外观**那一页（那条偏好和
  * 明暗绑在一起，放这边反而要跨页解释）。
@@ -47,7 +48,13 @@ import { useUiMode } from "@/ui/useUiMode";
 import { generateEffectOfDocumentTheme, darkDedicatedUseAtGenerateEffect } from "@/ui/useDocTheme";
 import { paneWriter, type PaneProps } from "./props";
 
-export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }: PaneProps) {
+export function DocThemePane({
+  settings,
+  docThemes,
+  onOpenThemesDir,
+  onImportTheme,
+  onChange,
+}: PaneProps) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -85,17 +92,45 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
     return t("{0} (theme not found — showing No Theme instead)", id);
   };
 
+  const themeOptions = [
+    { value: "", label: t("No Theme (Built-in)") },
+    ...docThemes.map((theme) => ({ value: theme.id, label: theme.name })),
+    ...(generateEffectid && !docThemes.some((theme) => theme.id === generateEffectid)
+      ? [{ value: generateEffectid, label: showName(generateEffectid) }]
+      : []),
+  ];
+
+  const chooseTheme = (id: string) => {
+    if (darkThatValueSetAtGenerateEffect) {
+      onChange({
+        appearance: {
+          ...settings.appearance,
+          dark_document_theme: id,
+        },
+      });
+    } else {
+      onChange({ document_theme: id });
+    }
+  };
+
   return (
     <>
     <SettingsGroup title={t("Document Themes")}>
       <SettingRow label={t("Current theme")}>
-        <Value>{showName(generateEffectid)}</Value>
+        <Select
+          value={generateEffectid}
+          options={themeOptions}
+          onChange={chooseTheme}
+        />
       </SettingRow>
 
       <SettingRow label={t("Document themes folder")}>
         {/* ⚠️ 这一行故意**没有** `htmlFor`：`<button>` 不是可标注控件，
             点标签文字会意外触发一次「打开文件夹」（见 `primitives.tsx`）。 */}
-        <ActionButton onClick={onOpenThemesDir}>{t("Document themes folder…")}</ActionButton>
+        <div className="stg-inline">
+          <ActionButton onClick={onOpenThemesDir}>{t("Document themes folder…")}</ActionButton>
+          <ActionButton onClick={onImportTheme}>{t("Import theme ZIP…")}</ActionButton>
+        </div>
       </SettingRow>
     </SettingsGroup>
 
@@ -181,8 +216,9 @@ export function DocThemePane({ settings, docThemes, onOpenThemesDir, onChange }:
           max={200}
           step={2}
           suffix="%"
-          disabled={!d.custom_font_size}
-          onChange={(font_size) => write({ font_size })}
+          onChange={(font_size) =>
+            write({ font_size, custom_font_size: true })
+          }
         />
       </SettingRow>
     </SettingsGroup>

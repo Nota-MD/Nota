@@ -125,6 +125,33 @@ import { mathToMarkdown } from "mdast-util-math";
 export const dollarCountAttribute = "dollars";
 
 /**
+ * 行内公式在源码里使用的分隔符。
+ *
+ * `dollar` 是 `$…$` / `$$…$$`；`paren` / `bracket` 是 LaTeX 常见的
+ * `\(…\)` / `\[…\]`。三个写法都落成 `math_inline`，但存盘时保持原样。
+ */
+export type MathDelimiter = "dollar" | "paren" | "bracket";
+
+/** 存在 PM 节点 `attrs` 或 mdast `data` 上的分隔符字段。 */
+export const mathDelimiterAttribute = "delimiter";
+
+/** 读取公式分隔符；旧数据没有这一格时按 `$…$` 处理。 */
+export function readMathDelimiter(holdHasActor: { attrs?: unknown; data?: unknown }): MathDelimiter {
+  const alpha = (holdHasActor.attrs ?? {}) as Record<string, unknown>;
+  const beta = (holdHasActor.data ?? {}) as Record<string, unknown>;
+  const value2 = alpha[mathDelimiterAttribute] ?? beta[mathDelimiterAttribute];
+  return value2 === "paren" || value2 === "bracket" ? value2 : "dollar";
+}
+
+/** 编辑面板里显示当前公式分隔符；`closing` 只影响成对符号的右侧。 */
+export function mathDelimiterText(node: { attrs?: unknown; data?: unknown }, closing = false): string {
+  const delimiter = readMathDelimiter(node);
+  if (delimiter === "bracket") return closing ? "\\]" : "\\[";
+  if (delimiter === "paren") return closing ? "\\)" : "\\(";
+  return readDollarCount(node) >= 2 ? "$$" : "$";
+}
+
+/**
  * 源码里 `起` 那个偏移往前数，**开头连着几个 `$`**（结果只给 1 或 2）。
  *
  * ⚠️ 数出来是 0 或 1 一律**退回 1**：0 说明这个偏移上压根不是 `$`（位置算歪了），
@@ -189,7 +216,16 @@ export const markDollarDollarNumberPlugin: ReturnType<ConvertReplaceDeviceWorkFa
     if (node.type === "inlineMath") {
       const start5 = node.position?.start?.offset;
       if (typeof start5 === "number") {
-        node.data = { ...node.data, [dollarCountAttribute]: numberOpenHeadDollarDollar(source3, start5) };
+        const delimiter: MathDelimiter = source3.startsWith("\\[", start5)
+          ? "bracket"
+          : source3.startsWith("\\(", start5)
+            ? "paren"
+            : "dollar";
+        node.data = {
+          ...node.data,
+          [dollarCountAttribute]: numberOpenHeadDollarDollar(source3, start5),
+          [mathDelimiterAttribute]: delimiter,
+        };
       }
     }
     // ⚠️ 收窄成"有 children 的那些"：`RootContent` 里有 `text` 这种没有孩子的，
@@ -205,6 +241,104 @@ const markDollarDollarNumberWorkFactory: ConvertReplaceDeviceWorkFactory = () =>
 
 /** 挂给 milkdown 的那一份：`.use()` 得**排在 `math` 后面**（转换器按注册顺序跑，晚的在后）。 */
 export const markDollarDollarNumber = $remark("标美元数", markDollarDollarNumberWorkFactory);
+
+/* ── 第一½格：`\(…\)` / `\[…\]` → `inlineMath` ───────────────────────── */
+
+type MdastMathNode = {
+  type: string;
+  value?: string;
+  data?: Record<string, unknown>;
+  children?: MdastMathNode[];
+  position?: {
+    start?: { offset?: number };
+    end?: { offset?: number };
+  };
+};
+
+function belongsToConvertMeaning(source3: string, index: number): boolean {
+  let slash = 0;
+  for (let i = index - 1; i >= 0 && source3[i] === "\\"; i--) slash++;
+  return slash % 2 === 1;
+}
+
+/** 把源码里普通文本那几段还原成 mdast 文字节点该有的值。 */
+function sourceTextValue(source3: string): string {
+  return source3.replace(/\\([!-/:-@[-`{-~])/g, "$1");
+}
+
+function latexMathChildren(node: MdastMathNode, source3: string): MdastMathNode[] {
+  const start5 = node.position?.start?.offset;
+  const end = node.position?.end?.offset;
+  if (typeof start5 !== "number" || typeof end !== "number") return [node];
+  const raw = source3.slice(start5, end);
+  const output2: MdastMathNode[] = [];
+  let textStart = 0;
+  let i = 0;
+
+  while (i < raw.length - 1) {
+    const opener = raw.slice(i, i + 2);
+    if ((opener !== "\\(" && opener !== "\\[") || belongsToConvertMeaning(raw, i)) {
+      i++;
+      continue;
+    }
+    const closer = opener === "\\(" ? "\\)" : "\\]";
+    let close = i + 2;
+    while (close < raw.length - 1) {
+      if (raw.slice(close, close + 2) === closer && !belongsToConvertMeaning(raw, close)) break;
+      close++;
+    }
+    if (close >= raw.length - 1) break;
+
+    if (i > textStart) output2.push({ type: "text", value: sourceTextValue(raw.slice(textStart, i)) });
+    output2.push({
+      type: "inlineMath",
+      value: raw.slice(i + 2, close),
+      data: {
+        [dollarCountAttribute]: 1,
+        [mathDelimiterAttribute]: opener === "\\(" ? "paren" : "bracket",
+      },
+      position: {
+        start: { offset: start5 + i },
+        end: { offset: start5 + close + 2 },
+      },
+    });
+    i = close + 2;
+    textStart = i;
+  }
+
+  if (!output2.length) return [node];
+  if (textStart < raw.length) output2.push({ type: "text", value: sourceTextValue(raw.slice(textStart)) });
+  return output2;
+}
+
+/**
+ * 在解析后的 mdast 文字节点里识别 LaTeX 分隔符，把它换成 `inlineMath`。
+ *
+ * 只看 `text` 节点，因此代码围栏、行内代码与链接目标不会被改；读取原文件
+ * 切片而不是 `node.value`，因为 CommonMark 解析时会先吃掉 `\[` / `\]` 的
+ * 反斜杠。转换后由 `标美元数` 在同一趟里补上分隔符与美元计数。
+ */
+type LatexMathDelimiterWorkFactory = Parameters<
+  typeof $remark<"latex-math-delimiters", undefined>
+>[1];
+
+export const latexMathDelimiterPlugin: ReturnType<LatexMathDelimiterWorkFactory> = () => (tree, textItem) => {
+  const source3 = typeof textItem?.value === "string" ? textItem.value : "";
+  if (!source3) return;
+  const walk = (node: MdastMathNode): void => {
+    if (node.type === "text") return;
+    if (!node.children) return;
+    node.children = node.children.flatMap((child2) =>
+      child2.type === "text" ? latexMathChildren(child2, source3) : (walk(child2), [child2]),
+    );
+  };
+  walk(tree as MdastMathNode);
+};
+
+const latexMathDelimiterWorkFactory: LatexMathDelimiterWorkFactory = () => latexMathDelimiterPlugin;
+
+/** 挂给 Milkdown：必须排在 `remark-math` 后面、`标美元数` 前面。 */
+export const latexMathDelimiter = $remark("latex-math-delimiters", latexMathDelimiterWorkFactory);
 
 /* ── 第二格：mdast ↔ PM 节点（搬进 attrs，再搬回去）───────────────────── */
 
@@ -249,12 +383,19 @@ export const inlineMathSpec = $nodeSchema("math_inline", (ctx) => {
   const original = ctx.get(mathInlineSchema.key)(ctx);
   return {
     ...original,
-    attrs: { ...original.attrs, [dollarCountAttribute]: { default: 1 } },
+    attrs: {
+      ...original.attrs,
+      [dollarCountAttribute]: { default: 1 },
+      [mathDelimiterAttribute]: { default: "dollar" },
+    },
     parseMarkdown: {
       ...original.parseMarkdown,
       runner: (state, node, type) => {
         state
-          .openNode(type, { [dollarCountAttribute]: readDollarCount({ data: node.data }) })
+          .openNode(type, {
+            [dollarCountAttribute]: readDollarCount({ data: node.data }),
+            [mathDelimiterAttribute]: readMathDelimiter({ data: node.data }),
+          })
           .addText(node.value as string)
           .closeNode();
       },
@@ -263,7 +404,10 @@ export const inlineMathSpec = $nodeSchema("math_inline", (ctx) => {
       ...original.toMarkdown,
       runner: (state, node) => {
         state.addNode("inlineMath", undefined, node.textContent, {
-          data: { [dollarCountAttribute]: readDollarCount(node) },
+          data: {
+            [dollarCountAttribute]: readDollarCount(node),
+            [mathDelimiterAttribute]: readMathDelimiter(node),
+          },
         });
       },
     },
@@ -291,6 +435,10 @@ const upstreamDoubleDollarDollar = mathToMarkdown({ singleDollarTextMath: false 
  */
 export function inlineMathHandler(): InlinePlaceManageDevice {
   return (node, parent, state, info) => {
+    const delimiter = readMathDelimiter(node);
+    const value2 = String(node.value ?? "");
+    if (delimiter === "paren") return `\\(${value2}\\)`;
+    if (delimiter === "bracket") return `\\[${value2}\\]`;
     const select = readDollarCount(node) >= 2 ? upstreamDoubleDollarDollar : upstreamSingleDollarDollar;
     const placeManage = select.handlers?.inlineMath;
     if (!placeManage) return "";

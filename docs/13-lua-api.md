@@ -1,6 +1,6 @@
 # 13 · Lua API 参考
 
-> 最后同步：2026-09-26
+> 最后同步：2026-10-31
 >
 > **这份是参考手册**：逐表逐函数——签名、参数、返回值、**失败时到底发生什么**。
 >
@@ -170,6 +170,22 @@ local kit   = require("kit")         -- <插件目录>/kit/init.lua
 
 ⚠️ `nota.plugin_id` 与事件通道里那段 id **不是一个字符串**：
 `nota.git` 在通道里是 `nota-git`（§4.1）。
+
+---
+
+## 1.1 `nota.assets`（永远可用，只读）
+
+插件自带的 JSON、模板和其他文本资源通过这里读取：
+
+```lua
+local text = nota.assets.read("profiles/modern-vim.json")
+local profile, why = nota.json.decode(text)
+```
+
+- 路径只能是**插件安装目录内的相对路径**；绝对路径、`..` 和逃出目录的符号链接都拒绝。
+- 只读，不提供写入；单个文件上限 1 MiB。
+- 不读取用户工作区。工作区文件仍然只能走 `nota.fs`。
+- 增加这个成员不改变 `nota.api_version = 2`；它没有扩大对用户数据的访问范围。
 
 ---
 
@@ -468,7 +484,8 @@ AI 助手按这个路径写回就会**改错文档**。写会改文档的插件�
 
 ## 6. `nota.fs`（需 `fs.read` 或 `fs.write`）
 
-⚠️ 表要 `fs.read | fs.write`（`api/mod.rs:94`）；`read` / `exists` / `list` 归
+⚠️ 表要 `fs.read | fs.write`（`api/mod.rs:94`）；`read` / `exists` / `list` /
+`root` / `relative` / `open` 归
 `fs.read`，`write` / `remove` 归 `fs.write`（`fs.rs:27-28` 起的两个 `if`）。
 
 ### 6.1 ⭐ 围栏：这是宿主**唯一**的安全边界
@@ -518,8 +535,23 @@ nota.fs.read("a.md")
 | `nota.fs.read(path)` | `fs.read` | string（文件全文） | 路径裁决不过 → 抛（§6.1 的三句之一）；读不到 / 不是合法 UTF-8 → 抛 `读文件失败 {path}：{source}` |
 | `nota.fs.exists(path)` | `fs.read` | boolean | ⚠️ **路径裁决先跑**：越界照样抛错，不会返回 `false` |
 | `nota.fs.list(path)` | `fs.read` | **已排序**的 string 数组 | 不是目录 / 读不到 → 抛 `读文件失败 {path}：{source}` |
+| `nota.fs.root()` | `fs.read` | string（围栏根的绝对路径） | 没有工作区、活动文档也没存过盘 → 抛 `没有工作区、当前文档也没存过盘，nota.fs 不可用` |
+| `nota.fs.relative(path)` | `fs.read` | string \| nil（`/` 分隔的工作区相对路径） | 没有围栏根、路径不存在、越界或不是合法 UTF-8 → `nil` |
+| `nota.fs.open(path)` | `fs.read` | 无 | 路径裁决不过或不是文件 → 抛；事件发不出去 → 抛 |
 | `nota.fs.write(path, text)` | `fs.write` | 无 | **会自动建父目录**（`fs.rs:79-82` 调 `ensure_dir`）；写不了 → 抛 `写文件失败 {path}：{source}` |
 | `nota.fs.remove(path)` | `fs.write` | 无 | 删不了 → 抛 `写文件失败 {path}：{source}` |
+
+⚠️ **`root` / `relative` / `open` 是为插件打开工作区内文档加的一组接口，能力仍是
+`fs.read`，没有扩大围栏**：
+
+- `root()` 返回的是 §6.1 那棵围栏树的绝对路径；插件应当把它当**显示或调试信息**，
+  不要自己拼接绝对路径再交给别的接口。
+- `relative(path)` 接受 `nota.document.get_path()` 给出的**绝对路径**，也接受工作区内
+  相对路径。它走同一套围栏，只返回规范化后的相对路径；无法证明在围栏内时返回 `nil`。
+- `open(path)` 不直接加载文档，也不绕过前端。它先按 §6.1 验证目标确实是围栏内的文件，
+  再发 `nota:open-document`，载荷为 `{ "path": "<绝对路径>" }`。前端收到后走普通
+  `openPath` 路径，因此保存提示、标签页和最近文档等行为与用户手动打开完全一致。
+- 这三个函数只改 ABI 的**成员集合**，不升 `api_version`：旧插件不调用就不受影响。
 
 ⚠️ **`list` 的排序是 Rust 的字节序**（`fs.rs:67` 的 `out.sort()`），
 对中文名就是 UTF-8 字节序（≈ 码位序），不是拼音。**不要假定"目录在前"**——
@@ -558,6 +590,7 @@ nota.fs.read("a.md")
 ## 7. `nota.git`（需 `process.git`）
 
 单层判据：`manifest.has(Capability::ProcessGit)` → `nota.git` 整张表（`api/mod.rs:98`）。
+Windows 上所有 `nota.git` 操作都由宿主无窗启动，不会闪出 `cmd` 控制台窗口。
 
 ### 7.1 围栏三条
 
@@ -910,7 +943,7 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 
 ### 8.5 面板 DSL：`render` 返回什么
 
-一块内容是一个表，`kind` 字段决定它是哪一种。**只有下面十六种**
+一块内容是一个表，`kind` 字段决定它是哪一种。**只有下面这些**
 （`src/ui/panel-nodes.ts::normalise` 是真相源）：
 
 | `kind` | 字段 | 画成 |
@@ -920,6 +953,9 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 | `fields` | `items = { { label, value, tone } … }` | 左标签右值的几行（设置、状态） |
 | `list` | `items = { { title, subtitle, badge, tone } … }` | 一列条目，`subtitle` / `badge` 可省 |
 | `buttons` | `items = { { label, command, args, prompt, style, disabled } … }` | 一排按钮，点了调 `command` |
+| `toggle` | `label`，`value`，`command`，`arg`，`args` | 一行开关；切换时把布尔值放进 `args[arg]` 并调用 `command`。 |
+| `select` | `label`，`value`，`options = { { label, value } … }`，`command`，`arg`，`args` | 一行自绘选择框；选择后把值放进 `args[arg]` 并调用 `command`。 |
+| `file` | `label`，`buttonLabel`，`accept`，`command`，`arg`，`args` | 用户主动选择本地文本文件后，把 `{ name, text }` 放进 `args[arg]`；不扩大插件的文件系统权限。 |
 | `empty` | `text` | 居中的一句"这里没有东西" |
 | `separator` | — | 一条分隔线 |
 | `message` | `text`，`from`，`copy` | 一问一答里的一条消息（2026-09-24，AI 对话框要的）。⚠️ `copy = true` → 宿主在那一句底下画一颗「复制」（2026-10-10 加：插件那套 API 里没有剪贴板，而"把这段回答拿走"是现代对话框里最常用的一颗按钮） |
@@ -927,9 +963,10 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 | `input` | `arg`，`submit`，`submit_label`，`placeholder`，`hint`，`multiline`，`chips` | 输入框 ＋ 发送键（2026-09-24）。⚠️ `chips`（2026-10-10 加）是卡片里那排小按钮，形状与 `buttons` 的 `items` 一模一样 |
 | `tabs` | `items = { { label, active, pick, close } … }`，`new = { command, args, title }` | **一排标签页**（2026-10-10 加，AI 插件的对话要的）：点字面切过去、点右边那颗小叉关掉它，末尾那颗「＋」是"再来一个"。⚠️ 一颗标签是**两件事**（切 / 关），所以它是一个 `kind`（同 `graph` 当初的理由）；`close = null` 就是**不画那颗叉** |
 | `hero` | `title`，`subtitle` | 空态那行**大字 ＋ 小字**（2026-10-10 加）：现代 AI 对话框在一句都没聊时画的就是这个。⚠️ 与 `empty` 的差别是**份量**：那个是"这里没有东西"的小灰字，这个是"这一屏现在就是让你开始" |
-| `frame` | `url`，`alive`，`height` | 嵌一块**本机开发服务器**的画面（2026-09-25，`nota.devserver` 要的，§13） |
+| `frame` | `url`，`alive`，`height` | 嵌一块**本机开发服务器**的画面（2026-09-25，`nota.devserver` 要的，§13）。2026-10-31 起 iframe 允许 `fullscreen` / `autoplay`，并用 `contain: layout paint style` 把持续动画隔离在框内 |
 | `heatmap` | `title`，`unit`，`days`，`to`，`weeks` | 一格一天的**热力图**（2026-09-27，写作统计的长期那本账要的）：一列一周、从周一起，最后一列画到 `to` 那天为止。⚠️ `days` 是**一个字符串**，不是一天一项——宿主那个面板节点上限（200）装不下 26 周；形状见 `ui/heatmap.ts::读热力记录`。⚠️ 它**不认识“今天”**，右端由 `to` 定 |
 | `graph` | `items = { { art, text, tone, picked, bond, pick } … }` | 一棵**提交树**（2026-09-26，git 插件要的，见下） |
+| `network` | `nodes = { { id, label, kind, group, focus, action } … }`，`edges = { { source, target, both } … }` | 一张**笔记关系图**（2026-10-31，知识图谱插件要的）：宿主负责力导向布局、缩放、平移、节点拖动、搜索、邻接高亮和点击动作。⚠️ `kind` 只认 `note` / `missing`；`action` 与普通按钮动作同形，可为 `null` |
 | `chart` | `value`，`unit`，`label`，`caption`，`points`，`xTicks`，`yTicks` | 一块**会动的数字 ＋ 曲线**（2026-09-26，写作统计要的，§14.4）。⚠️ `points` 是**纯数字数组**、不是坐标对：x 按下标等分，y 按**这一串自己的 min/max** 归一（**不写死 0**——"速度从 0 起跳"和"累计字数从某个非零值起跳"两种曲线，底本来就不一样）。⚠️ **少于两个点不画曲线**（一个点画出来是条横贯的直线，读着像"速度恒定"）。⚠️ 这一段**最大值＝最小值**时曲线摆在中线，不是贴着底（贴底读着像"掉到零了"）。⚠️ `value = ""` 是"这一格**没有数**"（画破折号），**不是 `0`**——写 `0` 的意思是"有结论，就是没在打"。⚠️ **两轴刻度**（2026-09-27 加，用户：「横纵坐标的刻度要标」）：`xTicks` 是 `{ { at = 0.5, label = "-3 分" } … }`，`at` 是 **0~1 的比例**、`label` 是插件自己的一句话（时刻、`-N 分`、`现在`）；不写就是没有横轴刻度（**正常状态，不是坏掉**）。`yTicks` **通常不用写**——空着时宿主按 `points` 的极值推三档（`ui/chart-ticks.ts`），写给那些"纵轴不是数据本身"的图。⚠️ 刻度画成**真值**：位置由数据算，标签是真数——标着 100 的那条线就在 100 的高度上 |
 | `cards` | `title`，`items = { { icon, value, unit, caption, points } … }`，`total = { label, value, unit }` | 一串**记录卡**（2026-10-04 加，写作统计要的，§14.4）。版式出自用户当天给的两张运动手表「运动记录」截图：**一条记录一个圆角框**，左边一颗圆图标（`icon` 取 `round` / `today` / `long` / `doc` / `record`，认不出的画成秒表）、右边一个大数 ＋ 一行小字；框底下那行 `total` 是**汇总**。⚠️ 与 `fields` 的分工是**主次**：一个大数配一行小字用 `cards`，几行平级的读数用 `fields`；与 `share` 的分工是**去处**：`cards` 画在面板里，`share` 是那张能发出去的图。⚠️ `total` **不是各条之和**——三条记录的区间互相包着（长期 ⊇ 今日 ⊇ 本轮），加起来是个没有意义的数（写作统计给的是「整篇文档」，标签**故意不写「总计」**）。⚠️ `points` 与 `chart` 同一个形状（**纯数字数组**），折成一张 36px 高的**窄曲线**、**没有刻度**（那个高度摆不下）；少于两个点不画（同 `chart` 那条）。⚠️ `title` 是空串时**不画那行小标题**——`items` 空着的屏幕上没有框给它当标题，但 `total` 照画（那是那种屏上唯一的数） |
 | `share` | `title`，`subtitle`，`date`，`label`，`value`，`unit`，`points`，`xTicks`，`stats`，`foot`，`file` | 一张**分享图**（1080×1350 的卡片，2026-09-27 加，写作统计要的，§14.4）。⚠️ **插件只给字段，画的全是宿主**（`ui/share-card.ts`）：版式、配色、品牌、那条被幂函数压过的曲线都在宿主里——理由与"宿主不认识 Markdown"同一条（插件说**什么**、宿主说**怎么显示**）。⚠️ `stats` 是**最多三格** `{ { k, v, small } … }`（版式就是三格，第四格没地方放，多出来的丢掉）；`v` 是**字符串**（怎么格式化是插件的事，同 `chart.value`）。⚠️ `file` 只是**建议**文件名，宿主还要消毒一遍（插件给的字符串会进"另存为"对话框）。⚠️ 卡片上的**纵轴刻度是宿主按 `points` 推的**（`xTicks` 才是插件给的），因为那条轴被 `pow(比, 0.42)` 压过——不压的话一片 20–30 字/分钟的平台会贴着底压成一条直线 |
@@ -945,6 +982,7 @@ fn 装_ui吗(manifest: &Manifest) -> bool { UI能力.iter().any(|c| manifest.has
 | `diff` | 五种 `op`（见 §11.3 那张表）：`del` 红底 `-`、`add` 绿底 `+`、`ctx` 上下文（不上色）、`hunk` 蓝字、`meta` 灰字——**认不出的 `op` 当 `add`**。是 `<pre>`：**行首空格保留**、长了**不折行**（横向滚动，2026-09-26 起；编辑区那份同样）。⚠️ 它**只是一块显示**——不认识 `nota-diff` 那份格式，也不知道点了按钮会怎样 |
 | `input` | `arg` / `submit` **缺一个整块就不画**（跟 `prompt` 同一条规矩：问了也送不出去，不如不弹）。`multiline = true` → `textarea`（**回车换行、Ctrl/Cmd+Enter 发送**）；否则单行（**回车发送**）。发出去的动作就是"调 `submit` 命令，参数 `{ [arg] = 输入 }`"——**与按钮无区别**，只是值来自输入框。⚠️ **画成一张圆角卡片**（2026-10-10）：框、那排 `chips`、发送键装在同一个壳里（`.panel-input-wrap`），发送键是**一颗圆钮 ＋ 一个箭头**（`submit_label` 成了它的 `title` / `aria-label`）。⚠️ `chips` 里的每一颗**与 `buttons` 一样是"点了就跑一条命令"**，不是"开关这一轮的模式"——要那种效果得由插件自己记住状态并画成 `style = "primary"` |
 | `graph` | **唯一一种"一行的两头各是一颗可点的东西"**的块（2026-09-26 加，git 插件那棵提交树要的）：`art` 是左边那截图线（**等宽原样画，空格不折**）、`text` 是右边那串字、`picked = true` 的行加一层底色；`bond` / `pick` 是两颗动作，**各自可以为 `null`**（那一头就画成纯文字——⚠️ 与 `buttons` 那条"没写 `command` 也画成灰的"**故意不同**：树上"这一头没有动作"是正常状态，画成灰的会让整棵树布满灰块）。一颗动作是 `{ command, args, title }`：**没有 `prompt`**（树上的点击都是"看一眼"），**没有 `label`**（那串字是内容不是按钮名），`title` 只当鼠标提示。⚠️ 它**不是画布**：条目内容仍然全是插件给的字符串、由 React 转义，没有任何一条路能把它们变成 HTML 或属性 |
+| `network` | **宿主自绘的 canvas 关系图**（2026-10-31 加，知识图谱插件要的）。插件只提交节点与边；颜色由文档/界面主题推导，第一层目录决定色相，`missing` 节点画空心圆，`focus` 节点用强调色。交互包括滚轮缩放、拖背景平移、拖动节点、搜索淡化、悬停高亮相邻节点，以及点击 / Enter 执行 `action`。⚠️ **`nodes` / `edges` 各自最多 800 项**，其余面板数组仍是 200；悬空边与自环由前端丢弃。⚠️ canvas 里只画插件给的标签文字，没有任何 HTML 注入路径 |
 | `frame` | **唯一一处"把外部内容嵌进 DOM"**，所以口子开在这儿、也只开到这么大。⚠️⚠️ **`url` 只能由宿主填**：插件在自己的 `render` 里写 `url` 没用——宿主会把它整个抹掉，再按"**这个插件自己那场 devserver 会话**"填上（`lua/api/devserver.rs::填_frame`）。所以"嵌别人的页面"这条路由**不存在**：没有会话就没有地址。⚠️ 前端还会再判一次（只认 `http://localhost:…` / `127.0.0.1`，别的当"没有地址"）——那不是用来防插件的，是因为这份 JSON 也可能来自别处（手改过的数据、测试）。⚠️ CSP 那边也钉着（`tauri.conf.json` 的 `frame-src` 只列了这两个主机）。⚠️ `alive = false` 表示会话已经收了；`height` 只认数字、夹在 120–2000 之间 |
 
 ⚠️ `message` / `diff` / `input` **在插件里看起来是"能说话、能改文档"的东西，
@@ -1017,7 +1055,7 @@ prompt = {
 }
 ```
 
-### 8.6 `nota.ui.refresh(id)` / `nota.ui.review(id)` / `nota.ui.stream(text)` —— 同上，都需 `ui.panel`
+### 8.6 `nota.ui.refresh(id)` / `nota.ui.show(id)` / `nota.ui.review(id)` / `nota.ui.stream(text)` —— 同上，都需 `ui.panel`
 
 前两条是"声明是状态 → 拉"那条路上的补充（同 §8.2）：**它们不推内容，只推"该重拉了"**。
 第三条是**唯一一条推内容的**，下面单独说。
@@ -1025,8 +1063,13 @@ prompt = {
 | 函数 | 参数 | 干什么 |
 |---|---|---|
 | `refresh(id)` | 面板 id（可省，省略 = 你这个插件唯一那块） | 告诉界面"我这边的面板内容变了"——前端收到就**重拉**一次 `nota_plugin_panel_content`（`render` 现跑，§8.2）。⚠️ 面板那一页**没开着**时不必调：切过去时会现拉（`ui/PluginDock.tsx`）。⚠️ 它是**失效信号，不带内容**：判据是"丢掉它，打开面板仍然对" |
-| `review([id])` | 面板 id；**传 `nil` 收起来** | 把**已经在册的**这块面板摊到**编辑区**里看（`ui/ReviewPane.tsx`）——插件栏那 260px 宽，预览、长对话在那儿都嫌窄。⚠️ **同一个面板两处可以同时画**（插件栏那一页与编辑区那一片），内容仍是每次现拉。⚠️ **收起来也得插件自己说**（`review(nil)`）：宿主收不了，它不知道面板上那些按钮是什么意思。⚠️ `register_panel` 里的 `wide` 决定摊开时占多宽（§8.2） |
+| `show(id)` | 面板 id（必填） | 打开右侧插件栏并切到这个面板。宿主先确认它是本插件**已经在册**的面板，再发 `nota:plugin-panel-focus`；前端只负责切页，内容仍按普通 `panel_content` 拉。插件打开自己的主面板时默认用这条，例如知识图谱菜单项。⚠️ 不需要新能力，仍归 `ui.panel` |
+| `review([id])` | 面板 id；**传 `nil` 收起来** | 把**已经在册的**这块面板摊到**编辑区**里看（`ui/ReviewPane.tsx`）——插件栏那 260px 宽，预览、长对话在那儿都嫌窄。⚠️ 从宿主界面切换视图时，放大动作会收起侧栏、切回侧栏会收起编辑区；插件直接调用本函数只改编辑区那一格。⚠️ **收起来也得插件自己说**（`review(nil)`）：宿主收不了，它不知道面板上那些按钮是什么意思。⚠️ `register_panel` 里的 `wide` 决定摊开时占多宽（§8.2） |
 | `stream(text)` | 一段文本；**空串 = 收工** | ⚠️⚠️ **这个会真的送内容过去**——它就是"边生成边显示"（`docs/07` 第 58 项，2026-10-04 加）。见下面那一段 |
+
+⚠️ **侧栏与编辑区可以互相切换，而且不需要插件另写命令**：右侧面板标题栏有一颗
+「在编辑区中打开」，编辑区面板标题栏有一颗「侧栏」。后者调宿主自己的
+`nota_plugin_review_close` 并定位到同一个面板，所以插件卡在长命令里时也退得回来。
 
 #### ⚠️⚠️ `stream` 是「声明走拉、发生走推」的**唯一例外**（BUG-13）
 
@@ -1510,6 +1553,8 @@ plugins/你的插件id/
 
 > 2026-09-25 新增。机制的实现在 `src-tauri/src/devserver.rs`（946 行），
 > 这张表在 `src-tauri/src/lua/api/devserver.rs`。
+> Windows 上的开发服务器进程同样从 `proc::background_command` 启动并使用
+> `CREATE_NO_WINDOW`，不会再为后台 Node / npm / npx 弹出控制台窗口。
 
 ### 13.1 它是**通用机制**，不是给某个插件开的后门
 
@@ -1876,17 +1921,17 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 
 | 能力（清单里的字面量） | 解锁 |
 |---|---|
-| *(不需要)* | `nota.version` / `nota.api_version` / `nota.plugin_id` / `nota.log.{info,warn,error}` / `nota.command.register` / `nota.event.emit` / `nota.diff.parse` / `nota.diff.apply` / `nota.diff.parse_unified` （§11） / **`nota.i18n.*`** （§12） / **`nota.time.now()`** （§16.1） / **`nota.json.decode`** （§17） |
+| *(不需要)* | `nota.version` / `nota.api_version` / `nota.plugin_id` / **`nota.assets.read`**（§1.1） / `nota.log.{info,warn,error}` / `nota.command.register` / `nota.event.emit` / `nota.diff.parse` / `nota.diff.apply` / `nota.diff.parse_unified` （§11） / **`nota.i18n.*`** （§12） / **`nota.time.now()`** （§16.1） / **`nota.json.decode`** （§17） |
 | **`data.own`** | **`nota.data.dir` / `read` / `write` / `remove`**（§16.2）——⚠️ 只放行**插件自己的**那个目录，与 `fs.*` 不是一回事 |
 | `document.read` | `nota.document.get_text` / `get_path` / `get_title` / `get_revision` / `is_dirty` / **`stats`** / **`get_selection`**（§5.1；⚠️ 返的是**选中的那段字**，不是偏移量） |
 | `document.write` | `nota.document.set_text` / `append_text`（**整篇替换**）／ **`insert_at_cursor`**（⚠️ **不改镜像**——发编辑意图，由编辑器落一笔真事务，§5.2 ＋ `docs/05` §5.2b） |
-| `fs.read` | `nota.fs.read` / `exists` / `list` |
+| `fs.read` | `nota.fs.read` / `exists` / `list` / `root` / `relative` / `open` |
 | `fs.write` | `nota.fs.write` / `remove` |
 | `process.git` | `nota.git.run` / `status` / `parse_status` / `log_graph` / `diff` / `repo_root` |
 | **`process.devserver`** | **`nota.devserver.probe`（`{}` 不等、`{force=true}` 等，§13.3a）/ `start` / `status` / `open_in_browser` / `log` / `stop`** （§13；⚠️ 放行的是**清单里那一条命令**） |
 | `network.http` | `nota.http.request` / `get` / `post` （§9）／ **`stream`**（§9.1，2026-10-04 加） |
 | `ui.notify` | `nota.ui.notify` |
-| `ui.panel` | `nota.ui.register_panel` / `refresh` / `review` / **`stream`** （+ `render` 面板 DSL，§8.5；+ `wide`；+ **`live`**） |
+| `ui.panel` | `nota.ui.register_panel` / `refresh` / **`show`** / `review` / **`stream`** （+ `render` 面板 DSL，§8.5；+ `wide`；+ **`live`**） |
 | `ui.menu` | `nota.ui.register_menu` （+ `prompt`） |
 | `settings.own` | `nota.settings.get` / `set` / `all` （§10） |
 

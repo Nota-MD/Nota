@@ -214,6 +214,11 @@ pub(crate) async fn 读设置() -> Result<上传设置> {
         .map_err(|e| NotaError::other(format!("读上传设置的任务没跑起来：{e}")))
 }
 
+/// 自动上传的三道闸（以及网络来源排除）的唯一判据。
+pub(crate) fn 自动上传适用(设置: &上传设置, 来源: &image::来源, 前件开着: bool) -> bool {
+    设置.可用() && 设置.auto && !来源.是网络() && 前件开着
+}
+
 /// 当前文档在哪个目录、叫什么名（自动上传要用它去定相对路径）。
 pub(crate) fn 文档位置(
     state: &AppState,

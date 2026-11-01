@@ -188,6 +188,7 @@ interface Props {
   onOpenStylesDir: () => void;
   /** 用户放入界面主题后立即重新扫描。 */
   onRefreshUiStyles: () => void;
+  onImportTheme: () => void;
   /** 打开设置文件所在的目录（`~/.config/nota`）。通用页的「高级设置」。 */
   onOpenConfigDir: () => void;
   /** 恢复出厂默认。整份替换，新的那一份由后端返回。 */
@@ -236,6 +237,7 @@ export function SettingsDialog({
   uiStyles,
   onOpenStylesDir,
   onRefreshUiStyles,
+  onImportTheme,
   onOpenConfigDir,
   onResetSettings,
   onClearRecent,
@@ -283,7 +285,11 @@ export function SettingsDialog({
     general: t("General"),
     debug: t("Developer Mode"),
   };
-  const visibleOrder: SectionId[] = debugMode ? [...ORDER, "debug"] : ORDER;
+  const extensionsEnabled = settings.general.extensions_enabled;
+  const allOrder: SectionId[] = debugMode ? [...ORDER, "debug"] : ORDER;
+  const visibleOrder = allOrder.filter(
+    (id) => extensionsEnabled || (id !== "pluginSettings" && id !== "extensions"),
+  );
 
   const panelRef = useRef<HTMLDivElement>(null);
   /**
@@ -307,6 +313,12 @@ export function SettingsDialog({
   useEffect(() => {
     if (!debugMode && section === "debug") setSection("general");
   }, [debugMode, section]);
+  useEffect(() => {
+    if (!extensionsEnabled && (section === "pluginSettings" || section === "extensions")) {
+      setSection("general");
+    }
+  }, [extensionsEnabled, section]);
+  const currentSection = visibleOrder.includes(section) ? section : "general";
 
   // 查询先小写化再进 context：`hits()` 只做一次 `includes`，
   // 不该让每一行都自己 `toLowerCase` 一遍。
@@ -336,6 +348,7 @@ export function SettingsDialog({
       uiStyles,
       onOpenStylesDir,
       onRefreshUiStyles,
+      onImportTheme,
       onOpenConfigDir,
       onResetSettings,
       onClearRecent,
@@ -412,7 +425,7 @@ export function SettingsDialog({
                 className="stg-nav-item"
                 // ⚠️ 搜索态下**不高亮**：那时候右栏显示的是全部分页的结果，
                 // 高亮哪一页都是假的。
-                data-active={!searching && section === id}
+                data-active={!searching && currentSection === id}
                 onClick={() => {
                   // 点一页 = 退出搜索。留着查询的话，切过去看到的还是空壳
                   // （那一页里没有匹配项），看着像"这一页是空的"。
@@ -441,7 +454,7 @@ export function SettingsDialog({
           <QueryProvider value={normalized}>
             {searching
               ? visibleOrder.map((id) => <div key={id}>{paneFor(id)}</div>)
-              : paneFor(section)}
+              : paneFor(currentSection)}
           </QueryProvider>
         </div>
       </div>

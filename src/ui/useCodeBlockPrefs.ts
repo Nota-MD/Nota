@@ -1,27 +1,26 @@
 /**
- * 代码块那四条外观偏好，**落到 `<html>` 的 `data-*` 上**：
+ * 代码块那三条外观偏好，**落到 `<html>` 的 `data-*` 上**：
  *
  * ```text
  * <html data-code-line-numbers="on" data-code-wrap="off"
- *       data-code-toolbar="off" data-code-lang-picker="off">
+ *       data-code-lang-picker="off">
  * ```
  *
  * | 开关（都在 `[markdown]` 表） | 属性 | 默认 | 管什么 |
  * |---|---|---|---|
  * | `code_line_numbers` | `data-code-line-numbers` | **关** | 块内左边那条行号装订线 |
  * | `code_wrap` | `data-code-wrap` | 开 | 长行自动换行（关掉则横向滚动） |
- * | `code_toolbar` | `data-code-toolbar` | 开 | 块**下面**那条「折叠 / 复制」，在左 |
  * | `code_language_picker` | `data-code-lang-picker` | 开 | 块**下面**那颗语言选择框，在右 |
  *
- * ⚠️ 四条**都在 `[markdown]` 表**、也**都画在「Markdown」页那组「代码块」里**——
+ * ⚠️ 三条**都在 `[markdown]` 表**、也**都画在「Markdown」页那组「代码块」里**——
  * 它们是同一组设置，落地方式也是同一个（本文件）。1980 行那句话——
  * "一组设置住一起"——在这里指的是**表、界面、消费者三处同页**。
  *
  * # 为什么是 DOM 属性，不是编辑器参数
  *
- * ⚠️ **拨这四条开关不重建编辑器**。走 `createEditor` 的参数就得进
+ * ⚠️ **拨这三条开关不重建编辑器**。走 `createEditor` 的参数就得进
  * `EditorPane` 那个 effect 的依赖，一进依赖就是"拨一下开关 = 拆掉重装"——
- * 撤销栈清空、光标回到文首。而这四条是**边看边调**的东西：用户会开着代码块
+ * 撤销栈清空、光标回到文首。而这三条是**边看边调**的东西：用户会开着代码块
  * 把行号试着打开看看合不合适。所以状态落在 DOM 上，由 CSS 当场生效
  * （同 `ui/useAppearance.ts` 那两条轴、`ui/useChromeVisibility.ts` 那几个开关
  * 的做法）。
@@ -63,7 +62,6 @@ export function useCodeBlockPrefs(settings: Settings | null): void {
     const flags: OneItemFlag[] = [
       { attribute: "code-line-numbers", current: m?.code_line_numbers ?? false, default: false },
       { attribute: "code-wrap", current: m?.code_wrap ?? true, default: true },
-      { attribute: "code-toolbar", current: m?.code_toolbar ?? true, default: true },
       { attribute: "code-lang-picker", current: m?.code_language_picker ?? true, default: true },
     ];
 

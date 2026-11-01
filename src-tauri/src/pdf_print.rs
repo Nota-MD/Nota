@@ -129,10 +129,12 @@ pub fn print_html_dialog_with(
 mod linux {
     use super::*;
     use std::cell::RefCell;
+    use std::ffi::CString;
     use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 
     use gtk::glib;
     use gtk::prelude::*;
+    use tauri::Manager;
     // ⚠️ WebKit 那两个 trait 得**点名**引进来（这个 crate 没有 prelude）：
     // `load_html` / `print` / `connect_finished` 全在它们身上，不引入的话
     // 编译期报的是"没有这个方法"，而提示会指向 trait —— 一开始很容易看岔。
@@ -158,6 +160,30 @@ mod linux {
     /// 绑定的 .rs 声明存不存在**，要 `nm -D --defined-only <so> | grep`。
     const KEY_URI: &str = "output-uri";
     const KEY_FORMAT: &str = "output-file-format";
+
+    /// Native GTK print dialogs use gettext, not Nota's React language store.
+    /// The process may be launched under `LC_ALL=C.UTF-8` (common for desktop
+    /// launchers and containers), so explicitly select the locale that matches
+    /// the application language before constructing the dialog.
+    fn 同步对话框语言(language: &str) {
+        let (locale, fallback, language_list) = if language.starts_with("zh") {
+            ("zh_CN.UTF-8", "zh_CN.utf8", "zh_CN:zh")
+        } else {
+            ("en_US.UTF-8", "C.UTF-8", "en")
+        };
+        std::env::set_var("LANGUAGE", language_list);
+        for candidate in [locale, fallback] {
+            let Ok(value) = CString::new(candidate) else {
+                continue;
+            };
+            let selected = unsafe {
+                libc::setlocale(libc::LC_MESSAGES, value.as_ptr())
+            };
+            if !selected.is_null() {
+                return;
+            }
+        }
+    }
 
     // 印刷途中必须活着的对象。**只能放 thread_local**（理由见文件头）。
     thread_local! {
@@ -248,6 +274,7 @@ mod linux {
         base_dir: Option<&Path>,
         版面: super::版面,
     ) -> Result<()> {
+        let language = app.state::<crate::state::AppState>().app_lang.clone();
         let base_uri = match base_dir {
             Some(dir) => {
                 let mut uri = 转地址(dir)?;
@@ -260,7 +287,10 @@ mod linux {
         };
         let (tx, rx) = mpsc::channel::<std::result::Result<(), String>>();
         let html = html.to_string();
-        app.run_on_main_thread(move || 起对话框(&html, base_uri.as_deref(), 版面, tx))
+        app.run_on_main_thread(move || {
+            同步对话框语言(&language);
+            起对话框(&html, base_uri.as_deref(), 版面, tx);
+        })
             .map_err(|e| NotaError::other(format!("把系统打印任务交给主线程失败：{e}")))?;
 
         match rx.recv_timeout(Duration::from_secs(15 * 60)) {

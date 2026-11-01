@@ -13,10 +13,34 @@
 //! 底下真正在干活的会留下来变成孤儿进程，而且**占着端口**。
 //! 所以凡是自己起进程的地方一律 `process_group(0)` + 超时杀组。
 
+use std::ffi::OsStr;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
+
+/// Create a runtime child process without opening a console window.
+///
+/// On Windows, console programs such as `git`, `cmd`, `powershell`, `pandoc`
+/// and `taskkill` otherwise flash a black `cmd` window when launched by a GUI
+/// application. `CREATE_NO_WINDOW` suppresses only that auxiliary console; GUI
+/// programs and installers can still show their own windows.
+pub(crate) fn background_command(program: impl AsRef<OsStr>) -> Command {
+    let mut command = Command::new(program);
+    hide_console_window(&mut command);
+    command
+}
+
+#[cfg(windows)]
+pub(crate) fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+pub(crate) fn hide_console_window(_command: &mut Command) {}
 
 /// 把"一行命令"拆成程序名 + 参数。
 ///
@@ -38,7 +62,7 @@ pub(crate) fn command_or_default(key: &str, default: &str) -> String {
 ///
 /// ⚠️ 只发给组**不负责收尸**：`wait` 由起了这个进程的那一侧做（这里连 child 都没有）。
 pub(crate) fn kill_group(pid: u32) {
-    let _ = Command::new(kill_program())
+    let _ = background_command(kill_program())
         .args(kill_args(pid))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -135,6 +159,10 @@ pub(crate) fn spawn_retrying(command: &mut Command) -> std::io::Result<Child> {
         Duration::from_millis(20),
         Duration::from_millis(60),
     ];
+    // All runtime callers are background work. Keep this guard here as well as
+    // in `background_command`: a caller that builds a custom `Command` must not
+    // accidentally reintroduce a console flash on Windows.
+    hide_console_window(command);
     let mut 第几次 = 0;
     loop {
         // ⚠️ `Command` 可以反复 `spawn`（标准库明确允许），所以不用重建。
@@ -189,7 +217,7 @@ pub(crate) enum Ran {
 /// 喂标准输入另起一个线程：正文可能有几 MB，而"边写边等"在管道满时会和子进程
 /// 互相卡住——两个线程各干各的就绕开了整类死锁。
 pub(crate) fn run_capture(program: &str, args: &[String], opts: RunOpts) -> Ran {
-    let mut command = Command::new(program);
+    let mut command = background_command(program);
     command
         .args(args)
         .stdout(Stdio::piped())

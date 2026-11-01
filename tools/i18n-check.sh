@@ -126,7 +126,7 @@ for f in 调用方:
 #
 # ⚠️ 加字段名之前先确认它在那儿真的是文案。往里塞一个"英文当数据的表"
 # （比如 id → 英文名的映射），那条数据就会被算成键。
-文案表文件 = ["src/ui/commands.ts", "src/ui/view-modes.ts", "src/editor/slash.ts"]
+文案表文件 = ["src/ui/commands.ts", "src/ui/view-modes.ts"]
 for f in 文案表文件:
     文本 = 去注释_前端(open(f, encoding="utf-8").read())
     # ① 含中文的字面量（兜底：中文不该出现在这些文件里，出了就是漏网）。
@@ -134,7 +134,7 @@ for f in 文案表文件:
         值 = 解转义(m.group(1))
         if re.search(r"[一-鿿]", 值):
             调用键.add(值)
-    # ② 文案字段。⚠️ `label:` / `名称:`（`slash.ts`）/ `short:` / `full:`
+    # ② 文案字段。⚠️ `label:` / `名称:` / `short:` / `full:`
     #   （`view-modes.ts` 那三行）——凡是"给人看的字"都挂在这几个字段名下。
     for m in re.finditer(r'\b(?:label|名称|short|full):\s*"((?:[^"\\]|\\.)*)"', 文本):
         调用键.add(解转义(m.group(1)))

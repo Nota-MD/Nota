@@ -50,7 +50,7 @@ pub struct Document {
     pub id: DocId,
     /// 还没存过盘的新文档是 `None`。
     pub path: Option<PathBuf>,
-    /// 标题。取自路径的文件名；新文档是"未命名 N"。
+    /// 标题。取自路径的文件名；新文档是语言中立的 `Untitled N`。
     pub title: String,
     /// 文本镜像。见模块头的说明。
     pub text: String,
@@ -186,7 +186,7 @@ impl DocumentStore {
         let id = self.alloc_id();
         let idx = self.untitled_count;
         let mut title = derive_title(&text, None, idx, self.strict_markdown);
-        if title.starts_with("未命名 ") {
+        if title.starts_with("Untitled ") {
             if let Some(hint) = title_hint.filter(|hint| !hint.trim().is_empty()) {
                 title = hint;
             }
@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn 井号后没空格严格模式不算标题() {
         let text = "#标签 不是标题\n";
-        assert_eq!(derive_title(text, None, 7, STRICT), "未命名 7");
+        assert_eq!(derive_title(text, None, 7, STRICT), "Untitled 7");
         // 宽松（默认）时它就是标题。
         assert_eq!(derive_title(text, None, 7, LAX), "标签 不是标题");
     }
@@ -493,7 +493,7 @@ mod tests {
         let mut 严格 = 严格;
         let id = 严格.create_untitled();
         严格.sync(id, "#标签\n".to_owned()).unwrap();
-        assert_eq!(严格.get(id).unwrap().title, "未命名 1", "严格仓里这行不是标题");
+        assert_eq!(严格.get(id).unwrap().title, "Untitled 1", "严格仓里这行不是标题");
 
         let mut 宽松 = DocumentStore::new(LAX);
         let id = 宽松.create_untitled();
@@ -535,7 +535,7 @@ mod tests {
             derive_title("正文而已", Some(Path::new("/tmp/我的文档.md")), 1, LAX),
             "我的文档"
         );
-        assert_eq!(derive_title("正文而已", None, 3, LAX), "未命名 3");
+        assert_eq!(derive_title("正文而已", None, 3, LAX), "Untitled 3");
     }
 
     /// 改「严格模式」要**当场**把已打开文档的标题重算一遍：标题是从正文猜的，
@@ -553,7 +553,7 @@ mod tests {
         let dirty = s.get(id).unwrap().dirty;
 
         s.set_strict_markdown(STRICT);
-        assert_eq!(s.get(id).unwrap().title, "未命名 1", "严格之后这行不是标题了");
+        assert_eq!(s.get(id).unwrap().title, "Untitled 1", "严格之后这行不是标题了");
 
         s.set_strict_markdown(LAX);
         assert_eq!(s.get(id).unwrap().title, "标签", "改回来要跟着回来");
@@ -709,14 +709,14 @@ mod tests {
         let mut s = DocumentStore::new(LAX);
         let a = s.create_untitled();
         let b = s.create_untitled();
-        assert_eq!(s.get(a).unwrap().title, "未命名 1");
-        assert_eq!(s.get(b).unwrap().title, "未命名 2");
+        assert_eq!(s.get(a).unwrap().title, "Untitled 1");
+        assert_eq!(s.get(b).unwrap().title, "Untitled 2");
 
         // 打一行**不含标题**的正文——`derive_title` 会走"未命名 N"那个回退分支。
         s.sync(a, "只是正文".to_owned()).unwrap();
         s.sync(b, "另一份正文".to_owned()).unwrap();
-        assert_eq!(s.get(a).unwrap().title, "未命名 1");
-        assert_eq!(s.get(b).unwrap().title, "未命名 2");
+        assert_eq!(s.get(a).unwrap().title, "Untitled 1");
+        assert_eq!(s.get(b).unwrap().title, "Untitled 2");
     }
 
     /// BUG-12：编辑器装载文件时会做一次规范化，那不是用户改动。

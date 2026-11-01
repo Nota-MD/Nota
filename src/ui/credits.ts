@@ -140,6 +140,12 @@ export function sendThanksNameSingle(t: (key: string) => string): SendThanksItem
       license: "MIT",
     },
     {
+      name3: "qrcode",
+      purpose: t("Website QR codes in share images"),
+      link: "https://github.com/soldair/node-qrcode",
+      license: "MIT",
+    },
+    {
       // ⚠️ 这一条与别条不同：图标是**直接搬进仓库**的（`src/assets/lang-icons/`），
       // 不是"引了个依赖"——所以 MIT 要的那份版权声明必须随源码走，
       // 正文在 `THIRD-PARTY.md` §6。

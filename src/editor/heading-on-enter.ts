@@ -318,9 +318,18 @@ export function createDecorationCollection(
   doc: PMNode,
   item: readonly PendingDecoration[],
   cursor = -1,
+  settled?: WeakSet<PMNode>,
 ): DecorationSet {
   const decos = item.flatMap((item4) => {
-    const correctAtEditEdit = cursor < 0 || (cursor >= item4.blockStart2 + 1 && cursor <= item4.blockEnd - 1);
+    const block = doc.nodeAt(item4.blockStart2);
+    const inside = cursor >= item4.blockStart2 + 1 && cursor <= item4.blockEnd - 1;
+    if (!inside && block) settled?.add(block);
+    const correctAtEditEdit =
+      cursor < 0 ||
+      (inside &&
+        cursor === item4.blockEnd - 1 &&
+        !!block &&
+        !settled?.has(block));
     const decoration: Decoration[] = [
       Decoration.inline(item4.prefixStart, item4.prefixEnd, { class: pendingBecomeBlockPrefixClassName }),
     ];
@@ -363,23 +372,35 @@ export function createDecorationCollection(
  * 要的就是 `Command`；`view` 在类型上可选，拿不到就当"做不了"返回 `false`，
  * 让上游那条去答——**别在这里造一个假的 view**。
  */
-const lineFirstBackCell: Command = (state, dispatch, view) => {
-  if (!view?.editable) return false;
+export const lineFirstBackCell =
+  (strict: boolean): Command =>
+  (state, dispatch, view) => {
+    if (!view?.editable) return false;
 
-  const { $from, empty } = state.selection;
-  if (!empty) return false;
+    const { $from, empty } = state.selection;
+    if (!empty) return false;
 
-  const block = $from.parent;
-  if (block.type.name !== "heading") return false;
-  if ($from.parentOffset !== 0) return false;
+    const block = $from.parent;
+    if (block.type.name === "heading") {
+      if ($from.parentOffset !== 0) return false;
+      const paragraphType2 = state.schema.nodes.paragraph;
+      if (!paragraphType2) return false;
+      if (!dispatch) return true;
+      dispatch(state.tr.setNodeMarkup($from.before($from.depth), paragraphType2));
+      return true;
+    }
 
-  const paragraphType2 = state.schema.nodes.paragraph;
-  if (!paragraphType2) return false;
+    if (block.type.name !== "paragraph") return false;
+    const prefix2 = atxPrefix(block.textContent, strict);
+    if (!prefix2 || $from.parentOffset !== prefix2.lengthDegree) return false;
 
-  if (!dispatch) return true;
-  dispatch(state.tr.setNodeMarkup($from.before($from.depth), paragraphType2));
-  return true;
-};
+    if (!dispatch) return true;
+    const start5 = $from.start($from.depth);
+    const tr = state.tr.delete(start5, start5 + prefix2.lengthDegree);
+    tr.setSelection(TextSelection.create(tr.doc, start5));
+    dispatch(tr.scrollIntoView());
+    return true;
+  };
 
 /**
  * 把 [`行首退格`] 挂到 `Backspace` / `Delete` 上，**优先级压过上游那条**。
@@ -393,9 +414,9 @@ const lineFirstBackCell: Command = (state, dispatch, view) => {
  * 只给 `Backspace` 的话，同一个位置按 Delete 还是逐级降级——同一个动作
  * 两个答案，是用户最难描述的那类不一致。
  */
-export const markTitleLineFirstBackCell = $shortcut(() => ({
-  Backspace: { key: "Backspace", onRun: () => lineFirstBackCell, priority: 60 },
-  Delete: { key: "Delete", onRun: () => lineFirstBackCell, priority: 60 },
+export const markTitleLineFirstBackCell = (strict: boolean) => $shortcut(() => ({
+  Backspace: { key: "Backspace", onRun: () => lineFirstBackCell(strict), priority: 60 },
+  Delete: { key: "Delete", onRun: () => lineFirstBackCell(strict), priority: 60 },
 }));
 
 /**
@@ -417,6 +438,7 @@ export const markTitleLineFirstBackCell = $shortcut(() => ({
  */
 export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
   let bufferSave: { doc: PMNode; item: PendingDecoration[] } | null = null;
+  const settled = new WeakSet<PMNode>();
 
   return new Plugin({
     key: new PluginKey("nota-heading-on-enter"),
@@ -441,7 +463,12 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
         if (!bufferSave || bufferSave.doc !== state.doc) {
           bufferSave = { doc: state.doc, item: computeDecorationsItem(state.doc, strict) };
         }
-        return createDecorationCollection(state.doc, bufferSave.item, state.selection.from);
+        return createDecorationCollection(
+          state.doc,
+          bufferSave.item,
+          state.selection.from,
+          settled,
+        );
       },
     },
   });

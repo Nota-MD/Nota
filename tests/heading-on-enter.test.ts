@@ -52,8 +52,13 @@
 
 import { Schema } from "@milkdown/kit/prose/model";
 import type { MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
+import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 import type { Decoration } from "@milkdown/kit/prose/view";
-import { createDecorationCollection, computeDecorationsItem } from "../src/editor/heading-on-enter";
+import {
+  createDecorationCollection,
+  computeDecorationsItem,
+  lineFirstBackCell,
+} from "../src/editor/heading-on-enter";
 
 /* ── 极小的测试工装（与 `mark-hint.test.ts` 同一套长相）───────────────── */
 
@@ -288,6 +293,38 @@ testCase("前缀与正文分别套 `nota-heading-prefix` / `nota-heading-pending
   );
 });
 
+testCase("已经离开过的标题段落再点回来：仍是完整标题，不缩回待成块正文", () => {
+  const doc = combine2(paragraphGroup("# 已完成的标题"));
+  const items = computeDecorationsItem(doc, false);
+  const settled = new WeakSet<typeof doc>();
+  settled.add(doc.firstChild!);
+
+  const collection = createDecorationCollection(doc, items, 4, settled);
+  const classes = setAboveOf(collection).join(" ");
+  assertion(
+    classes.includes("nota-heading-rendered-block"),
+    `点回已完成的标题后仍在使用待成块正文样式：${classes}`,
+  );
+  assertion(
+    !classes.includes("nota-heading-pending"),
+    `点回已完成的标题后仍加了待成块加粗：${classes}`,
+  );
+});
+
+testCase("点击标题正文内部：即使第一次进入也按完整标题显示", () => {
+  const doc = combine2(paragraphGroup("# 已完成的标题"));
+  const collection = createDecorationCollection(
+    doc,
+    computeDecorationsItem(doc, false),
+    5,
+  );
+  const classes = setAboveOf(collection).join(" ");
+  assertion(
+    classes.includes("nota-heading-rendered-block"),
+    `点击标题内部后仍缩回待成块正文：${classes}`,
+  );
+});
+
 testCase("光标离开待成块段落：整段按标题排版，前缀仍在但由 CSS 隐藏", () => {
   const doc = combine2(paragraphGroup("# 你好"));
   const collection = createDecorationCollection(doc, computeDecorationsItem(doc, false), 6);
@@ -296,6 +333,52 @@ testCase("光标离开待成块段落：整段按标题排版，前缀仍在但�
     "0-6:nota-heading-rendered-block 1-3:nota-heading-prefix",
     "离开后的装饰",
   );
+});
+
+group("六、标题头退格");
+
+testCase("真标题块在第一个字符前退格：一次变回普通段落", () => {
+  const heading = schema.nodes.heading!.create(
+    { level: 1 },
+    schema.text("Nota"),
+  );
+  const document = schema.nodes.doc!.create(null, [heading]);
+  const state = EditorState.create({
+    schema,
+    doc: document,
+    selection: TextSelection.create(document, 1),
+  });
+  let next = state;
+  const handled = lineFirstBackCell(false)(
+    state,
+    (tr) => {
+      next = state.apply(tr);
+    },
+    { editable: true } as never,
+  );
+  assertion(handled, "标题头退格没有接管");
+  equal(next.doc.firstChild?.type.name, "paragraph", "标题没有变回段落");
+  equal(next.doc.textContent, "Nota", "标题正文被误删");
+});
+
+testCase("待成块段落在正文头退格：删掉 `# ` 并保留正文", () => {
+  const paragraph = schema.nodes.paragraph!.create(null, schema.text("# Nota"));
+  const document = schema.nodes.doc!.create(null, [paragraph]);
+  const state = EditorState.create({
+    schema,
+    doc: document,
+    selection: TextSelection.create(document, 3),
+  });
+  let next = state;
+  const handled = lineFirstBackCell(false)(
+    state,
+    (tr) => {
+      next = state.apply(tr);
+    },
+    { editable: true } as never,
+  );
+  assertion(handled, "待成块段落头退格没有接管");
+  equal(next.doc.textContent, "Nota", "没有删掉完整的标题前缀");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

@@ -75,6 +75,13 @@
   border-radius: var(--radius-sm);
 }
 
+/* 行内公式编辑时源码就是正文的一部分，不再额外套选中底色或圆角。 */
+.editor-mount .ProseMirror .nota-math-inline.ProseMirror-selectednode,
+.editor-mount .ProseMirror .nota-math-inline.nota-math-editing {
+  background: transparent;
+  border-radius: 0;
+}
+
 /* 块公式编辑态自己有源码面与预览面，不让外层选中色再套一圈底色。 */
 .editor-mount .ProseMirror .nota-math-block.nota-math-editing.ProseMirror-selectednode {
   background: transparent;
@@ -111,50 +118,61 @@
 .editor-mount .ProseMirror .nota-math-editing.nota-math-block .nota-math-panel {
   display: block;
   position: relative;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-bottom: 0;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: var(--bg-subtle);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
-/* 块公式源码区右上角的类型标签。它是界面标签，不参与选择，也不抢焦点。 */
+/* 块公式的类型标签与 HTML 共用同一套位置、底色和悬停显示规则。 */
 .editor-mount .ProseMirror .nota-math-kind {
   position: absolute;
-  top: 7px;
-  right: 12px;
+  top: 0;
+  inset-inline-end: 0;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-raised);
   color: var(--fg-muted);
-  font-family: var(--font-ui);
-  font-size: 0.8rem;
-  line-height: 1;
-  padding: 3px 5px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
+  font: 400 0.75rem/1 var(--font-ui);
+  opacity: 0;
+  pointer-events: none;
   cursor: pointer;
-  user-select: none;
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
 }
 
-.editor-mount .ProseMirror .nota-math-kind:hover,
-.editor-mount .ProseMirror .nota-math-kind:focus-visible {
-  background: var(--bg-hover);
-  color: var(--fg);
+.editor-mount .ProseMirror .nota-math-block:hover .nota-math-kind,
+.editor-mount .ProseMirror .nota-math-block:focus-within .nota-math-kind,
+.editor-mount .ProseMirror .nota-math-editing .nota-math-kind {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.editor-mount .ProseMirror .nota-math-kind::after {
-  display: inline-block;
-  width: 4px;
-  height: 8px;
-  margin: 0 0 2px 8px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  content: "";
-  transform: rotate(45deg);
+.editor-mount .ProseMirror .nota-math-block:not(.nota-math-editing) {
+  border-radius: var(--radius-sm);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.editor-mount .ProseMirror .nota-math-block:not(.nota-math-editing):hover,
+.editor-mount .ProseMirror .nota-math-block:not(.nota-math-editing):focus-within {
+  background: color-mix(in srgb, var(--bg-subtle) 62%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--bg-subtle) 62%, transparent);
+}
+
+.editor-mount .ProseMirror .nota-math-render {
+  cursor: default;
 }
 
 /* 分隔符：`.nota-srcmark` 那张配方（见文件头）。 */
 .editor-mount .ProseMirror .nota-math-delim {
-  font-size: calc(var(--ui-font-size, 15px) * 0.85);
+  font-size: calc(var(--editor-font-size, var(--ui-font-size, 15px)) * 0.85);
   line-height: 1;
   white-space: nowrap;
   color: var(--fg-faint);
@@ -168,7 +186,50 @@
 }
 
 .editor-mount .ProseMirror .nota-math-block .nota-math-delim {
-  display: block;
+  display: none;
+}
+
+.editor-mount .ProseMirror .nota-math-source-shell {
+  box-sizing: border-box;
+  min-height: 0;
+  margin: 12px 0;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  border-radius: max(6px, var(--radius));
+  background: color-mix(in srgb, var(--bg-subtle) 76%, var(--doc-bg));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--doc-bg) 46%, transparent);
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  line-height: 1.6;
+}
+
+.editor-mount .ProseMirror .nota-math-source-shell .cm-editor,
+.editor-mount .ProseMirror .nota-math-source-shell .cm-scroller,
+.editor-mount .ProseMirror .nota-math-source-shell .cm-content {
+  min-height: 0;
+}
+
+.editor-mount .ProseMirror .nota-math-source-shell .cm-content {
+  padding: 0;
+}
+
+.editor-mount .ProseMirror .nota-math-source-shell .cm-gutters {
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  opacity: 0.62;
+}
+
+.editor-mount .ProseMirror .nota-math-source-shell .cm-lineNumbers .cm-gutterElement {
+  padding: 0 8px 0 0;
+}
+
+.editor-mount .ProseMirror .nota-math-source-shell textarea {
+  min-height: 1.45em;
+  padding: 0;
+  resize: none;
 }
 
 @keyframes nota-math-delim-in {
@@ -229,6 +290,14 @@
   min-width: 2ch;
 }
 
+/* Typora 的行内编辑态：`$` 与源码同色，作为正文里的一段临时源码，
+   不使用输入框边框或浅色底。 */
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-delim,
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-source {
+  color: var(--accent);
+  opacity: 1;
+}
+
 /* 块那颗是 `<textarea>`：**宽度铺满正文列**（高度才由 JS 按源码量）。
    ⚠️ 不写这条的话它用浏览器给的默认宽度（`cols=20` 那一档，约 20 个字符），
    `\sum_{i=1}^{n} i = \frac{n(n+1)}{2}` 这种会被折成两行——而下面那个 `$$`
@@ -267,10 +336,16 @@
    调个个儿就会当场复发（上面面板那块正是这么栽的）。写成互斥就没有顺序问题。 */
 .editor-mount .ProseMirror .nota-math-block:not(.nota-math-editing) .nota-math-render {
   display: block;
+  text-align: center;
   /* 窄窗格里让公式自己横向滚，而不是把正文列顶宽（同 `.nota-diagram-preview`）。
      ⚠️ 只给块：行内是段落里的一截，套一层滚动容器会把那一截变成 `overflow`
      上下文，前后的文字排版行为跟着变。 */
   overflow-x: auto;
+}
+
+.editor-mount .ProseMirror .nota-math-block:not(.nota-math-editing) .nota-math-render .katex-display {
+  margin: 0;
+  text-align: center;
 }
 
 /* ⚠️ **编辑态下正文那一格一律不显示**（行内与块都是）：那时正文里显示的是
@@ -332,15 +407,33 @@
 /* 行内公式仍用短暂的浮层，否则会在段落中间撑出一整块，拆散前后文。 */
 .editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 7px);
   left: 0;
   z-index: 3;
   width: max-content;
-  padding: 6px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg-raised);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 6px;
+  background: #202124;
+  color: #fff;
+  box-shadow: 0 7px 22px rgb(0 0 0 / 28%);
+}
+
+/* 预览像一张从源码下方展开的临时卡片；小三角指向公式，而不是指向窗口边角。 */
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview::before {
+  position: absolute;
+  bottom: 100%;
+  left: 12px;
+  width: 0;
+  height: 0;
+  border-right: 6px solid transparent;
+  border-bottom: 7px solid #202124;
+  border-left: 6px solid transparent;
+  content: "";
+}
+
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview .katex {
+  color: #fff;
 }
 
 /* 块公式采用 Typora 式上下分区：源码区在上，预览框在下，预览占文档流。 */
@@ -349,14 +442,14 @@
   display: flex;
   width: 100%;
   min-height: 76px;
+  margin-top: 12px;
   box-sizing: border-box;
   align-items: center;
   justify-content: center;
-  padding: 18px 16px;
+  padding: 16px;
   border: 1px solid var(--border);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  background: var(--doc-bg, var(--bg-raised));
+  border-radius: var(--radius);
+  background: var(--doc-bg, var(--bg));
   box-shadow: none;
   text-align: center;
   overflow-x: auto;

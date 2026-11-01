@@ -203,6 +203,27 @@ const notPackageWrap = new Set([
 ]);
 
 /**
+ * 可以把行内语义标记放进内部内容的块。OnlyOffice 和 Word 经常把
+ * `font-weight` / `font-style` / `text-decoration` 写在 `<p>` 或 `<div>` 上；
+ * 直接把 `<strong>` 包在 `<p>` 外不合法，正确做法是先开块，再在块内开标记。
+ */
+const packageValueContainer = new Set([
+  "p",
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "td",
+  "th",
+  "dt",
+  "dd",
+]);
+
+/**
  * 同义词换名。写得不一样、语义一样的标签，统一成**本仓 schema 认的那一个**。
  *
  * ⚠️ `ins` → `u` 是要紧的一条：Nota 的下划线写法就是裸 HTML `<u>x</u>`
@@ -228,6 +249,9 @@ const styleStyleLanguageMeaning: readonly (readonly [RegExp, string])[] = [
   [/font-style\s*:\s*italic\b/i, "em"],
   [/text-decoration(?:-line)?\s*:[^;]*\bunderline\b/i, "u"],
   [/text-decoration(?:-line)?\s*:[^;]*\bline-through\b/i, "s"],
+  [/vertical-align\s*:\s*super\b/i, "sup"],
+  [/vertical-align\s*:\s*sub\b/i, "sub"],
+  [/background(?:-color)?\s*:\s*(?!transparent|none|inherit|initial|unset)[^;]+/i, "mark"],
 ];
 
 /* ── 扫 ──────────────────────────────────────────────────────────────── */
@@ -333,13 +357,13 @@ export function clearManagePastePasteHTML(html: string): ClearManageResult {
     }
 
     // ── 开始标签
-    const packageValue = readLanguageMeaningPackageWrap(parse2, isCommandNameEmptyInterval);
-    for (const t of packageValue) output2 += `<${t}>`;
     const isEmpty = emptyElement.has(parse2.name3) || parse2.selfCloseCombine;
     // 三件互不冲突的事，分开写：① 命名空间标签与"壳"标签都**不输出标签本身**；
     // ② 不是壳的才输出（过了白名单）；③ 不是空元素的进栈等着被闭合。
     const outputLabel2 = !isCommandNameEmptyInterval && !loseShell.has(parse2.name3);
+    const packageValue = readLanguageMeaningPackageWrap(parse2, isCommandNameEmptyInterval);
     if (outputLabel2) output2 += outputLabel(parse2, fullTextLineSearch);
+    for (const t of packageValue) output2 += `<${t}>`;
     if (!isEmpty) stack.push({ name3: parse2.name3, outputLabel2, packageValue });
   }
 
@@ -420,7 +444,11 @@ function readLanguageMeaningPackageWrap(parse2: label, isCommandNameEmptyInterva
   //（多半是把 `<strong>` 提到 `<p>` 外面、只裹住前半句）。
   // ⚠️ 命名空间标签（`<SPAN style='font-weight:bold'>` 在 Word 里也可能
   // 写成 `<w:r>` 包着）不受这条限制——它本来就是要拆的壳。
-  if (!isCommandNameEmptyInterval && notPackageWrap.has(parse2.name3)) return [];
+  if (
+    !isCommandNameEmptyInterval &&
+    notPackageWrap.has(parse2.name3) &&
+    !packageValueContainer.has(parse2.name3)
+  ) return [];
   const styleStyle = parseAttribute(parse2.attributeString).find(([k]) => k === "style")?.[1];
   if (!styleStyle) return [];
   const output2: string[] = [];

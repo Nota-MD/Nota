@@ -332,12 +332,6 @@ pub struct Markdown {
     /// Markdown 源码」开着时可见）。两件事在那个组合下不能同时成立，取舍写在
     /// `editor.css` 代码块那一段。
     pub code_wrap: bool,
-    /// 显示代码块**下面**那条工具栏（折叠 / 复制）。
-    ///
-    /// ⚠️ 与下面那条是**两个**开关，不合并：只想要其中一个的人两种都有。
-    /// 两条都关掉之后代码块里外一件挂件都不剩。
-    /// ⚠️ 2026-09-26 新增（用户：「你在设置中加允许代码行号**等内容**」）。
-    pub code_toolbar: bool,
     /// 显示代码块**下面**那颗语言选择框（与工具栏同一行，它在右、工具栏在左）。
     ///
     /// ⚠️ 关掉**不等于改不了语言**：语言仍是节点属性，源码模式里改围栏上那串字
@@ -419,7 +413,6 @@ impl Default for Markdown {
             // 📌 这一次改默认值是安全的：**还没发过版**，没有老设置文件需要照顾。
             code_line_numbers: false,
             code_wrap: true,
-            code_toolbar: true,
             code_language_picker: true,
             code_shift_tab_indent: false,
             code_indent: 4,
@@ -509,11 +502,11 @@ mod tests {
         assert!(!m.unicode_punctuation);
         // 自动更正：开（2026-09-27 新加的一格）。
         assert!(m.auto_correct);
-        // 代码块：行号关、自动换行开、两条挂件开、Shift+Tab 关。
+        // 代码块：行号关、自动换行开、语言选择框开、Shift+Tab 关。
         // ⚠️ 行号那条是 2026-09-26 从 `true` 改下来的（理由在 `Default` 那段）。
         assert!(!m.code_line_numbers);
         assert!(m.code_wrap);
-        assert!(m.code_toolbar && m.code_language_picker);
+        assert!(m.code_language_picker);
         assert!(!m.code_shift_tab_indent);
         assert_eq!(m.code_default_language, "");
         // 公式：三条开，physics 在顶层且默认关，兼容模式和编号关。

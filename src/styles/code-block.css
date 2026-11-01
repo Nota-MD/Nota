@@ -8,77 +8,34 @@
  * 顺序仍然要紧：这一份里那几条选择器要盖住 `editor.css` 里对 `pre` / `code`
  * 的通用规则，所以 `main.tsx` 里**必须排在 `editor.css` 之后**。
  */
-/* ── 代码块下面那条工具栏（`editor/code-block.ts`）────────────────────
-   折叠 / 复制。
-
-   ⚠️ **2026-09-26 从块内右下角搬到了块下沿之外**（原来是
-   `right: 6px; bottom: 4px`）。搬家的理由是一条连锁账：
-   用户那天说「代码块有点宽，上下距离太长」，根子在 `pre` 的上下内边距——
-   下边那 34px 当初就是给这条按钮条留的槽（`bottom: 4px` + 高 22px + 8px 气），
-   上面那 34px 又为了"上下一样"跟着抬起来，于是块内白白多出 68px。
-   搬出来之后那 68px 降到 36px（上下各 18），而这条槽改由 `pre` 的
-   `margin-bottom: 30px` 承担——它本来就在给块外的语言选择框留位子，
-   现在两者排在同一行：**左下角是它，右下角是语言框**。
-
-   ⚠️ 与 `.nota-code-lang-wrap` 一样是**绝对定位挂在 `pre` 上、落在块外**，
-   所以它也靠 `pre` 的 `overflow: visible` 才画得出来（那条为围栏标记留的）。
-   ⚠️ `:hover` 那两条选择器照旧管用：它仍是 `pre` 的后代，鼠标停在它上面时
-   `pre` 也处于 `:hover`（CSS 的 `:hover` 会向祖先传递），所以不必单写
-   `.nota-code-bar:hover`——语言框那条单写是因为它 `top: 100%` 之后常被误以为
-   要写，其实同理。 */
-.nota-code-bar {
-  position: absolute;
-  left: 6px;
-  /* 贴着下边框，**中间不留缝**（同语言框那条）：留了缝，鼠标从块里往下走会
-     经过一段"pre 也不 hover、它也不 hover"的空档，条子会先淡掉再亮回来。 */
-  top: 100%;
-  /* 盖住下面的正文——它不占文档流，所以悬停时会压在下一段第一行上。 */
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  /* 平时淡到几乎看不见，鼠标进代码块才亮起来，否则满屏都是按钮。 */
-  opacity: 0;
-  transition: opacity 0.12s ease-out;
-}
-
-/* 设置里关掉「代码块工具栏」（`editor.code_toolbar`）。⚠️ 属性由
-   `ui/useCodeBlockPrefs.ts` 落在 `<html>` 上，只在**非默认值**时才写。 */
-html[data-code-toolbar="off"] .nota-code-bar {
-  display: none;
-}
-
-/* ⚠️ 两条选择器管的**不是**同一件事，没有哪一条是多余的：
-   - `:hover` 是主要那条：鼠标进代码块就亮；
-   - `:focus-within` 只在**键盘 Tab 到那条上的按钮**时才成立。
-     ⚠️ **光标在代码里打字时它是不成立的**——contenteditable 的焦点在
-     `.ProseMirror` 上，`<code>` 拿不到 `document.activeElement`，于是
-     `pre:focus-within` 永远是假。实际试一下会发现它像是没生效，
-     而它不是写错，是**管不着那件事**。真要让"光标在块里就亮"，得在 NodeView 里
-     监听选区——那是另一件事，没做。 */
-.editor-mount .ProseMirror pre:hover .nota-code-bar,
-.editor-mount .ProseMirror pre:focus-within .nota-code-bar {
-  opacity: 1;
-}
-
 .nota-code-btn,
 .nota-code-lang {
-  height: 22px;
-  padding: 0 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg-raised);
+  height: 24px;
+  border-radius: max(4px, var(--radius-sm));
   color: var(--fg-muted);
   font-family: var(--font-ui, inherit);
-  font-size: 0.7333rem;
+  font-size: 0.75rem;
   line-height: 1;
   cursor: pointer;
+}
+
+.nota-code-btn {
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.nota-code-lang {
+  padding: 0 24px;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  background: color-mix(in srgb, var(--bg-raised) 82%, var(--doc-bg));
 }
 
 .nota-code-btn:hover,
 .nota-code-lang:hover {
   color: var(--fg);
   border-color: var(--border-strong);
+  background: var(--bg-hover);
 }
 
 /* ⚠️⚠️ `appearance: none` **不能省**。它的由来是原生 `<select>`（少了它，
@@ -92,23 +49,25 @@ html[data-code-toolbar="off"] .nota-code-bar {
    `appearance: none`**。 */
 .nota-code-lang {
   appearance: none;
+  box-sizing: border-box;
   /* 图标 + 语言名横排。⚠️ `<button>` 默认是 `inline-block`，不给这一条
      里面的图标和文字会按基线对齐、还带一截行高。 */
   display: inline-flex;
   align-items: center;
   gap: 5px;
   /* 右边给箭头留出位子（箭头在包裹层上，见下一条）。 */
-  padding-right: 18px;
+  justify-content: center;
   /* 下限那一条是给**闭合状态**兜底的：里面的文字是语言名，短起来只有一个
      `c`，而这条子整体是按内容收缩的（`position: absolute`），不兜底就会
      缩成一个小方块。⚠️ 里面的文字由 `lang-picker.ts` 的 `画闭合()` 写。 */
-  min-width: 62px;
+  width: 100%;
+  min-width: 0;
   /* ⚠️ 上限要留够：语言名最长的有 `apacheconf`（10 个字符），加上图标和
      箭头约 100px。原本是 140px，同时 `text-overflow` 挂在本条上——
      **那是错的**：`text-overflow` 只对**块容器里溢出的行盒**生效，
      而这里是个 flex 容器，它里面的文字在 `.nota-lang-name` 那条子自己身上。
      所以省略号移到了下面 `.nota-lang-name` 里。 */
-  max-width: 150px;
+  max-width: none;
 }
 
 /* 语言名。省略号挂在这一条上（理由见上）。 */
@@ -198,12 +157,12 @@ html[data-code-toolbar="off"] .nota-code-bar {
   /* 跟其他下拉同一个层（`theme.css` 的 `--z-popup: 40`）。 */
   z-index: var(--z-popup);
   overflow-y: auto;
-  min-width: 168px;
-  max-width: min(280px, calc(100vw - 16px));
-  padding: 5px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-raised);
+  min-width: 240px;
+  max-width: min(340px, calc(100vw - 16px));
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg-raised) 96%, transparent);
   /* 投影用写死的黑：它在浅色和深色下都成立，而拿主题色去做投影会在
      深色主题下变成一圈看不见的灰。 */
   box-shadow:
@@ -226,7 +185,7 @@ html[data-code-toolbar="off"] .nota-code-bar {
   /* ⚠️ 压在选项之上（选项的 hover 底色会盖住它）；`z-index` 要正整数，
      因为 `.nota-lang-opt` 没有自己的层，`0` 也够，但写 `1` 更明确。 */
   z-index: 1;
-  padding: 0 0 5px;
+  padding: 0 0 7px;
   background: var(--bg-raised);
 }
 
@@ -234,11 +193,11 @@ html[data-code-toolbar="off"] .nota-code-bar {
   display: block;
   width: 100%;
   box-sizing: border-box;
-  height: 30px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: var(--bg-subtle);
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-subtle) 88%, var(--doc-bg));
   color: var(--fg);
   font: inherit;
   /* ⚠️ `appearance: none` 与代码块那颗语言按钮同一条理由（2026-09-25 那笔
@@ -255,9 +214,9 @@ html[data-code-toolbar="off"] .nota-code-bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: 5px;
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 6px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -302,7 +261,7 @@ html[data-code-toolbar="off"] .nota-code-bar {
      `overflow` 必须是 `visible`（那条是为围栏标记留的，见代码块那一段），
      否则 `top: 100%` 划出来的框会被裁掉。 */
   position: absolute;
-  right: 6px;
+  right: 8px;
   /* 贴着下边框，**中间不留缝**：留了缝，鼠标从块里往下走会经过一段
      "pre 也不 hover、它也不 hover"的空档，框会先淡掉再亮回来，看着闪。 */
   top: 100%;
@@ -310,13 +269,12 @@ html[data-code-toolbar="off"] .nota-code-bar {
      ⚠️ 这是有意的：改成常驻占位，等于每个代码块下面都空出一截。 */
   z-index: 3;
   display: inline-flex;
-  min-width: 0;
+  width: clamp(148px, 28%, 280px);
   opacity: 0;
   transition: opacity 0.12s ease-out;
 }
 
-/* 与 `.nota-code-bar` 同样两条、同样理由（见上面那段注释）：`:hover` 是主要那条，
-   `:focus-within` 只在键盘 Tab 到它上面时才成立。 */
+/* 鼠标进入代码块或键盘焦点落到语言按钮时显示。 */
 .editor-mount .ProseMirror pre:hover .nota-code-lang-wrap,
 .nota-code-lang-wrap:hover,
 .editor-mount .ProseMirror pre:focus-within .nota-code-lang-wrap {
@@ -403,100 +361,6 @@ html[data-code-lang-picker="off"] .nota-code-lang-wrap {
   pointer-events: none;
 }
 
-/* 折叠：靠 `max-height` 收起来，**不是 `display: none`**。
-   理由见 `code-block.ts`：藏起来的 contentDOM 会让 ProseMirror 没法在里面
-   放光标。留一点高度（1.6em 约等于一行）当作"这儿有东西"的提示。
-
-   ⚠️⚠️ **2026-10-06（第 101 项收尾）：这条选择器从 `> code` 改成 `> .cm-editor`**。
-   原来它收的是 `pre` 里那个 `<code>`——那时 `<code>` **就是用户看得见的那一层**，
-   收它等于收整块。第 101 项之后 `<code>` 换成了**零尺寸、藏起来的 ProseMirror
-   contentDOM**（上面那一条），于是这条规则收的是一个**本来就没有高度**的元素：
-   点「折叠」按钮状态确实翻了（按钮变成「展开」），**画面上一个像素都不动**。
-   真正该收的是 `.cm-editor`（CodeMirror 那一层，用户眼前的那一份）。
-
-   ⚠️ 原来那句 `display: block` **删掉了**：它是为 `<code>` 补的（`code` 是行内元素，
-   行内元素不吃 `max-height`）。`.cm-editor` 本来就是块级的，再写一次反而会跟
-   CodeMirror 自己那条 `display: flex; flex-direction: column` 打架。
-   ⚠️ `1.6em` 一个字没动：它的参照是 `pre` 的字号（0.88em），
-   而 CM 那一层的 `line-height` 是 `inherit`（1.6）——一个行高，正好一行。 */
-.editor-mount .ProseMirror pre.nota-code-folded > .cm-editor {
-  max-height: 1.6em;
-  overflow: hidden;
-}
-
-/* ⚠️ 2026-09-26 **删掉了这里原来的 `padding-bottom: 34px`**：它的作用是
-   "折叠时把右下角那一条留在原地，用户得有地方点展开"——而那条（现在的
-   `.nota-code-bar`）已经搬到块外下沿了，块内不再需要给它留槽。
-   折叠时那条子照旧悬在块下面（`top: 100%`），位置与未折叠时**一模一样**，
-   反而是好事：展开 / 折叠不会让按钮跳位置。 */
-
-/* ── 行号装订线（`editor/code-block.ts`）───────────────────────────────
-   `<div class="nota-code-gutter">1\n2\n3</div>`，绝对定位在块的左内边距里。
-
-   ⚠️ **默认不显示**：显不显示只由 `<html data-code-line-numbers="on">` 决定
-   （设置里那一条 `editor.code_line_numbers`，默认关）。DOM **常驻生成**，
-   CSS 决定露不露——理由写在 `code-block.ts` 建这个元素那一段
-   （拨开关不重建编辑器）。
-
-   ⚠️ **几何是跟 `--nota-code-pad-l` 绑死的**，两边一起读那个变量：
-   | | 关了行号 | 开了行号 |
-   |---|---|---|
-   | `--nota-code-pad-l`（`editor.css`） | 14px | **54px** |
-   | 代码文字左边界 | 14px | 54px |
-   | 本元素宽 | （不显示） | 54px |
-   | 本元素内容区 | （不显示） | 14px → 46px（宽 32px，数字右对齐） |
-   即：数字右边界离代码文字 8px。改 `--nota-code-pad-l` 时不必动这里
-   （宽与左内边距都是从同一个变量/同一个数推出来的），但**改这两个数中任意一个
-   都要回来核一遍下表**。
-
-   ⚠️ 上下的 `padding: 8px` 与 `pre` 的上下内边距（`editor-blocks.css`）**必须相等**，
-   否则第一行行号会与第一行代码错开——这是本元素唯一会对不齐的地方，
-   而那正是行号最不能出的错。 */
-.nota-code-gutter {
-  display: none;
-  position: absolute;
-  top: 0;
-  left: 0;
-  box-sizing: border-box;
-  width: var(--nota-code-pad-l, 14px);
-  padding: 8px 8px 8px 14px;
-  /* 行号逐行一个，**不能被折叠换行**（`pre` 的默认行为是保留空白，
-     但 `pre` 上那条 `white-space: pre-wrap` 会继承下来——必须显式改回去，
-     否则窄窗口下行号自己会折行、与代码彻底错位）。 */
-  white-space: pre;
-  text-align: right;
-  /* ⚠️ 三条都得跟着 `pre` 走：行号与代码"逐行对齐"全部押在行高上，
-     自己另立一套字号/行高 = 错位。 */
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  color: var(--fg-muted);
-  /* 淡一点：它是参考刻度，不是内容。 */
-  opacity: 0.5;
-  /* 不许选中、不吃鼠标事件：它在代码左边的空位上，用户在那儿拖选文字时
-     不该把一串数字拖进去；点击穿透给 `pre`，PM 照常把光标放到行首。 */
-  user-select: none;
-  pointer-events: none;
-}
-
-html[data-code-line-numbers="on"] .editor-mount .ProseMirror pre {
-  /* ⚠️ 54 = 14（代码与装订线之间的气）＋ 32（数字区）＋ 8（数字与代码之间的气）。
-     它同时是"gutter 的宽"与"代码的左内边距"，见上面那张表。 */
-  --nota-code-pad-l: 54px;
-}
-
-html[data-code-line-numbers="on"] .nota-code-gutter {
-  display: block;
-}
-
-/* 折叠时行号跟着收起来。
-   ⚠️ **不是**给 gutter 也套一个 `max-height`：折叠状态下代码只露第一行，
-   底下露着 2、3、4… 一串行号会让人以为那些行还在。
-   ⚠️ 那条子（`.nota-code-bar`）不受影响——它在块外，位置与未折叠时一致。 */
-.editor-mount .ProseMirror pre.nota-code-folded .nota-code-gutter {
-  display: none;
-}
-
 /* ── CodeMirror（backlog 第 101 项，2026-10-06）─────────────────────────
    代码块里那一段现在是**两个 DOM 并排**（结构说明在 `editor/code-block.ts`
    顶上那段注释里）：
@@ -515,16 +379,57 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
    是按"生成类名 + 后代选择器"出的，从本文件去压它要靠层层加码的选择器，
    而 `EditorView.theme` 就是官方留给这件事的口子。 */
 .editor-mount .ProseMirror pre .nota-code-text {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  opacity: 0;
+  position: absolute !important;
+  top: 0 !important;
+  /*
+   * Keep the ProseMirror contentDOM laid out but outside the document. A
+   * zero-sized box at the origin is still a valid native selection target in
+   * WebKitGTK: selecting from that code block into the next paragraph paints
+   * the hidden code text below the visible CodeMirror surface. Moving the
+   * layer off-canvas fixes the visual leak while ProseMirror can still map
+   * text offsets inside it.
+   */
+  left: -100000px !important;
+  display: block !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  clip-path: inset(50%) !important;
   /* ⚠️ 它零尺寸、又正压在 `pre` 的左上内边距上，不给这一条的话那里会有
-    一小块"点了没反应"的死区——事件落进一个看不见的节点里。 */
-  pointer-events: none;
+    一小块"点了没反应"的死区——事件落进一个看不见的节点里。现在它已移出
+    画布，这两条继续防止透明层参与原生选区和命中测试。 */
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* The first frame of a code block uses a native textarea until the lazy
+   CodeMirror chunk arrives. It stays editable, so a slow disk does not turn
+   an early click into a dead area. */
+.editor-mount .ProseMirror pre .nota-code-bootstrap {
+  display: block;
+  width: 100%;
+  min-height: 1.45em;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  line-height: inherit;
+  tab-size: 4;
+  white-space: pre-wrap;
+}
+
+.editor-mount .ProseMirror pre .nota-code-bootstrap-error {
+  color: var(--danger);
 }
 
 /* ── HTML 代码块下面那块预览（2026-10-16）─────────────────────────────
@@ -539,6 +444,7 @@ html[data-code-line-numbers="on"] .nota-code-gutter {
 .nota-code-wrap {
   /* ⚠️ 不给 `overflow`：`pre` 上那三样挂件全靠"块外可见"才画得出来。 */
   display: block;
+  overflow: visible;
 }
 
 .nota-code-preview {

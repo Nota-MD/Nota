@@ -21,7 +21,7 @@
  * | 形态 | 什么时候出现 | 例子 |
  * |---|---|---|
  * | **当场** | 条件成立就出现，条件一消失就收起 | 链接、代码块、表格 |
- * | **首次** | 一辈子只来一次（除非去设置里重新打开） | 斜杠菜单、标题回车、自动保存 |
+ * | **首次** | 一辈子只来一次（除非去设置里重新打开） | 标题回车、自动保存 |
  *
  * # ⚠️ 哪些东西**不进**这张表（有意排除，不是漏了）
  *
@@ -94,13 +94,6 @@ export const noticeTable: readonly NoticeSoundClear[] = [
     condition: "光标在表格第一行的单元格里（这时 Shift+Tab 挪不出去）",
     default: true,
     copy2: () => t("Shift+Tab goes back to the previous cell."),
-  },
-  {
-    id: "slashMenu",
-    type: "首次",
-    condition: "用户第二次新建文档、且光标停在一个空段落上时（第一次不弹——那时他还在看界面）",
-    default: true,
-    copy2: () => t("Type / at the start of an empty line to insert tables, math, emoji and more."),
   },
   {
     id: "headingEnter",

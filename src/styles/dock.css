@@ -115,6 +115,17 @@
   flex: none;
 }
 
+.dock-head-action {
+  display: inline-flex;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  margin-right: 5px;
+  padding: 0;
+}
+
 .dock-title {
   font-weight: 600;
   font-size: 0.92em;
@@ -283,6 +294,9 @@
   border: 0;
   border-radius: var(--radius);
   background: var(--bg-subtle);
+  /* The slide is an independent viewport. Isolate its layout and paint so its
+     animation loop does not invalidate the surrounding plugin dock. */
+  contain: layout paint style;
   /* ⚠️ 底色**故意留浅底而不是 `#fff`**：给纯白的话，深色界面里每次重载都闪
      一块白；留浅底，载入完成前看着就是"还没内容"，比闪一下白诚实。 */
 }

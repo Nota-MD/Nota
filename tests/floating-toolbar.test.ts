@@ -24,6 +24,7 @@ function assertValue(value: unknown, message: string): asserts value {
 const bar = readFileSync("src/ui/FormatBar.tsx", "utf8");
 const css = readFileSync("src/styles/bars.css", "utf8");
 const chrome = readFileSync("src/ui/useChromeVisibility.ts", "utf8");
+const iconTable = readFileSync("src/ui/Icon.tsx", "utf8");
 
 console.log("\n【悬浮工具栏】");
 
@@ -99,6 +100,29 @@ testCase("更多菜单保留收起入口，不依赖最右侧叉号", () => {
   assertValue(!bar.includes('className="format-bar-close"\n        title'), "工具栏仍保留右侧独立叉号");
 });
 
+testCase("列表入口跟随当前类型，更多入口使用真正的省略号图标", () => {
+  assertValue(bar.includes("const currentListIcon"), "列表入口仍是固定圆点图标");
+  assertValue(bar.includes('state?.block === "ol"'), "有序列表没有切换为编号图标");
+  assertValue(bar.includes('state?.block === "task"'), "任务列表没有切换为任务图标");
+  assertValue(
+    bar.includes('Icon name="folio-view-more-horizontal-symbolic"'),
+    "更多入口仍在用三个文字圆点",
+  );
+  assertValue(
+    iconTable.includes('"folio-view-more-horizontal-symbolic"'),
+    "省略号图标没有登记到图标表",
+  );
+});
+
+testCase("工具栏选中态使用克制的中性底色，而不是整颗强调色", () => {
+  assertValue(
+    /\.app-main > \.format-bar \.format-btn\[data-on="true"\]\s*\{[\s\S]*?background:\s*var\(--bg-active\)/.test(
+      css,
+    ),
+    "选中态仍用大面积强调色",
+  );
+});
+
 testCase("段落菜单不重复绘制 Paragraph 字形，避免与中文标签重叠", () => {
   assertValue(
     bar.includes('b.cmd === "text" ? null') ||
@@ -110,7 +134,7 @@ testCase("段落菜单不重复绘制 Paragraph 字形，避免与中文标签�
 testCase("普通文本是 Ctrl+0，并跟随当前块显示勾选", () => {
   assertValue(bar.includes('"para.text": state.block === "text"'), "普通文本没有当前项勾选");
   const translation = readFileSync("src/i18n/zh-ui.ts", "utf8");
-  assertValue(translation.includes('"Body text": "普通文本"'), "正文项没有统一命名为普通文本");
+  assertValue(translation.includes('"Normal text": "普通文字"'), "正文项没有统一命名为普通文字");
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);

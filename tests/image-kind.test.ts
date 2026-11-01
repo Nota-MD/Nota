@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 
 import {
+  automaticImageName,
   imageAddressOfPastedText,
   imageExtensionFromMime,
   imageSliceExtension,
@@ -99,6 +100,13 @@ testCase("粘贴流程先认图片、兼容 text/uri-list，并保持选中文�
   const linkIndex = source.indexOf("pasteAboveUrlTransaction(view.state, plainText)");
   assertValue(imageIndex >= 0 && imageIndex < linkIndex, "图片判定没有排在普通链接之前");
   assertValue(source.includes("!selection.empty"), "选中文字时仍会替换成图片");
+});
+
+testCase("自动图片名优先使用文件名，blob/data 回退为 Image", () => {
+  equal(automaticImageName("/tmp/截图 2026.png"), "截图 2026", "本地文件名");
+  equal(automaticImageName("https://example.com/a/photo.webp?raw=1"), "photo", "网络文件名");
+  equal(automaticImageName("blob:http://localhost:5273/1234"), "Image", "blob");
+  equal(automaticImageName("data:image/png;base64,AAAA"), "Image", "data URL");
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);

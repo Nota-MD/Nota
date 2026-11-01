@@ -116,6 +116,16 @@ export function t(source: string, ...parameter: (string | number)[]): string {
   });
 }
 
+/**
+ * 未命名文档的标题由宿主按语言中立的形式生成：`Untitled 1`。
+ * 显示前在这里按当前界面语言翻译；同时接受旧版宿主生成的 `未命名 1`，
+ * 这样升级后已经开着的标签页也不会露出另一种语言。
+ */
+export function localizedDocumentTitle(title: string): string {
+  const untitled = /^(?:Untitled|未命名) (\d+)$/.exec(title);
+  return untitled ? t("Untitled {0}", untitled[1] ?? "") : title;
+}
+
 function subscribeRead(f: () => void): () => void {
   listenMany.add(f);
   return () => listenMany.delete(f);

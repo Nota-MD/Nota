@@ -88,6 +88,7 @@ import { useTablistKeys } from "@/ui/useTablistKeys";
 import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type PluginInfo, type PluginPanel, type trustRecord } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { DockResizer } from "@/ui/DockResizer";
+import { Icon } from "@/ui/Icon";
 import { PanelBody } from "@/ui/PanelBody";
 import {
   recordRecall,
@@ -101,7 +102,7 @@ import {
 import { normalise } from "@/ui/panel-nodes";
 import { positionName, ableForceName, comeSourceDescription, languageTag, languageMismatch, languageHint } from "@/ui/pluginText";
 import type { PromptRequest } from "@/ui/useDialogs";
-import type { pluginAction } from "@/ui/usePlugins";
+import type { PluginPanelFocus, pluginAction } from "@/ui/usePlugins";
 
 interface Props {
   plugins: PluginInfo[];
@@ -117,6 +118,10 @@ interface Props {
   /** 拖动**左缘**改宽（用户 2026-10-11：「拓展菜单左侧也可以拖动」）。 */
   onResize: (width: number) => void;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
+  /** A pending request to reveal one panel in this dock. */
+  focusRequest: PluginPanelFocus | null;
+  /** Open the active panel in the editor-wide review area. */
+  onOpenFull: (plugin: string, id: string) => Promise<void>;
   /**
    * 「插件」页那几颗按钮（装 / 卸 / 启停 / 信任）。**实现全在
    * `ui/usePlugins.ts`**，这里只画——那一层要弹文件框、弹确认框、弹 toast，
@@ -152,6 +157,8 @@ export function PluginDock({
   onCall,
   onResize,
   askPrompt,
+  focusRequest,
+  onOpenFull,
   action,
   inert,
 }: Props) {
@@ -256,6 +263,16 @@ export function PluginDock({
 
   const activity = current !== null && keys.includes(current) ? current : null;
   const activityPanel = rightSideOf.find((p) => coordinate(p) === activity) ?? null;
+  const handledFocus = useRef(0);
+
+  useEffect(() => {
+    if (!focusRequest || focusRequest.serial === handledFocus.current) return;
+    const key = `${focusRequest.plugin}/${focusRequest.id}`;
+    if (!keys.includes(key)) return;
+    handledFocus.current = focusRequest.serial;
+    handActionSelectPass.current = true;
+    setCurrent(key);
+  }, [focusRequest, keyString, keys]);
 
   /**
    * 每次请求的序号，按面板记。
@@ -617,6 +634,17 @@ export function PluginDock({
         <span className="dock-title">
           {activityPanel ? activityPanel.title || activityPanel.id : t("Extensions")}
         </span>
+        {activityPanel && (
+          <button
+            type="button"
+            className="btn dock-head-action"
+            title={t("Open in the editing area")}
+            aria-label={t("Open in the editing area")}
+            onClick={() => void onOpenFull(activityPanel.plugin, activityPanel.id)}
+          >
+            <Icon name="nota-expand-symbolic" />
+          </button>
+        )}
         {/* ⚠️ **这颗 × 2026-10-11 按用户点名去掉了**（「拓展的那个叉也可以关掉」）：
             收起拓展栏仍有两条路——顶部那颗 `Extensions` 开关（`TopBar`）与
             菜单「视图 → 拓展栏」。⚠️ 它是**和左侧栏那颗 × 一起摘的**：两栏并排站着，

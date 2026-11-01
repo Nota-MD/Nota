@@ -56,6 +56,7 @@ import {
   type PluginReviewPanel,
 } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { Icon } from "@/ui/Icon";
 import { PanelBody } from "@/ui/PanelBody";
 import { normalise, type PanelNode } from "@/ui/panel-nodes";
 import type { PromptRequest } from "@/ui/useDialogs";
@@ -107,6 +108,8 @@ interface Props {
   panels: PluginPanel[];
   /** 用户按了「回到正文」。 */
   onClose: () => void;
+  /** 把这个面板移回右侧插件栏。 */
+  onOpenSidebar: () => void;
   /** 跑一条插件命令（面板上的按钮）。错误由调用方负责说给用户听。 */
   onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
@@ -124,6 +127,7 @@ export function ReviewPane({
   plugins,
   panels,
   onClose,
+  onOpenSidebar,
   onCall,
   askPrompt,
 }: Props) {
@@ -209,6 +213,15 @@ export function ReviewPane({
           {markTitle}
         </span>
         <span className="review-spacer" />
+        <button
+          type="button"
+          className="btn review-sidebar"
+          onClick={onOpenSidebar}
+          title={t("Open in sidebar")}
+        >
+          <Icon name="folio-columns-symbolic" />
+          <span>{t("Sidebar")}</span>
+        </button>
         <button
           type="button"
           className="btn review-back"

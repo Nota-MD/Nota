@@ -4,13 +4,85 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 
 const cursorClass = "nota-blink-caret";
 const showClass = "nota-blink-caret-on";
+const dimClass = "nota-blink-caret-dim";
+const blinkHalfPeriodMs = 530;
+
+/**
+ * Keep carets inside a text line.
+ *
+ * Headings use a 1.2em caret so they do not inherit a display-sized line box.
+ * Inline images and other tall atoms can make `coordsAtPos` report the whole
+ * atom height; that is not a caret. Fall back to the same 1.2em body line when
+ * the natural height is pathologically larger than ordinary prose.
+ */
+export function caretHeightInLine(
+  nodeType: string,
+  naturalHeight: number,
+  baseFontSize: number,
+): number {
+  const safeHeight = Number.isFinite(naturalHeight) ? Math.max(12, naturalHeight) : 12;
+  if (!Number.isFinite(baseFontSize) || baseFontSize <= 0) {
+    return safeHeight;
+  }
+  const bodyLineHeight = Math.max(12, baseFontSize * 1.2);
+  if (nodeType === "heading" || safeHeight > Math.max(64, baseFontSize * 3)) {
+    return Math.round(Math.min(safeHeight, bodyLineHeight));
+  }
+  return safeHeight;
+}
+
+/**
+ * Pathological caret heights are anchored at the top of the atom instead of
+ * being centered inside it. Centering a text-height caret in a tall image puts
+ * it halfway down the image, far from the text boundary the user is editing.
+ */
+export function caretTopInLine(
+  naturalHeight: number,
+  caretHeight: number,
+  coordinateTop: number,
+  baseFontSize: number,
+): number {
+  if (
+    !Number.isFinite(naturalHeight) ||
+    !Number.isFinite(baseFontSize) ||
+    baseFontSize <= 0 ||
+    naturalHeight > Math.max(64, baseFontSize * 3)
+  ) {
+    return coordinateTop;
+  }
+  return coordinateTop + (naturalHeight - caretHeight) / 2;
+}
+
+export interface CaretCoordinate {
+  left: number;
+  top: number;
+  bottom: number;
+}
+
+/** Pick the first coordinate that has a real horizontal and vertical box. */
+export function usableCaretCoordinate(
+  candidates: readonly (CaretCoordinate | null | undefined)[],
+): CaretCoordinate | null {
+  for (const coordinate of candidates) {
+    if (!coordinate) continue;
+    if (![coordinate.left, coordinate.top, coordinate.bottom].every(Number.isFinite)) {
+      continue;
+    }
+    if (coordinate.bottom > coordinate.top) return coordinate;
+  }
+  return null;
+}
 
 /** 当前选区是否应该由正文层绘制插入光标。 */
 export function isNoShowCursor(state: EditorState): boolean {
   const selection = state.selection;
   if (!selection.empty) return false;
   const parent = selection.$head.parent;
-  return !(parent.type.spec.code || parent.type.spec.atom);
+  if (parent.type.spec.code) return false;
+  // `notaSyntax` is an inline marker atom owned by the paragraph. The caret
+  // legitimately sits between two marker characters there, so it must still
+  // be drawn by the document layer.
+  return !parent.type.spec.atom || parent.type.name === "notaSyntax";
 }
 
 function hideCursor(cursor: HTMLElement): void {
@@ -24,15 +96,60 @@ function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
   }
 
   try {
-    const coordinate = view.coordsAtPos(view.state.selection.head, 1);
+    const head = view.state.selection.head;
+    const candidates: (CaretCoordinate | null | undefined)[] = [];
+    for (const assoc of [1, -1]) {
+      try {
+        candidates.push(view.coordsAtPos(head, assoc));
+      } catch {
+        candidates.push(null);
+      }
+    }
+    // Inline syntax atoms use `display: contents`, so the exact boundary can
+    // have no DOM box in WebKit. Walk onto the nearest real text character.
+    for (let delta = 1; delta <= 4; delta++) {
+      for (const [position2, assoc] of [
+        [head - delta, -1],
+        [head + delta, 1],
+      ] as const) {
+        if (position2 < 0 || position2 > view.state.doc.content.size) continue;
+        try {
+          candidates.push(view.coordsAtPos(position2, assoc));
+        } catch {
+          candidates.push(null);
+        }
+      }
+    }
+    const coordinate = usableCaretCoordinate(candidates);
+    if (!coordinate) {
+      hideCursor(cursor);
+      return;
+    }
     const editorArea = view.dom.getBoundingClientRect();
     if (coordinate.bottom < editorArea.top || coordinate.top > editorArea.bottom) {
       hideCursor(cursor);
       return;
     }
+    const naturalHeight = Math.max(12, coordinate.bottom - coordinate.top);
+    const baseFontSize = Number.parseFloat(getComputedStyle(view.dom).fontSize);
+    const height = caretHeightInLine(
+      view.state.selection.$head.parent.type.name,
+      naturalHeight,
+      baseFontSize,
+    );
+    const top = caretTopInLine(
+      naturalHeight,
+      height,
+      coordinate.top,
+      baseFontSize,
+    );
+    const boundedTop = Math.max(
+      editorArea.top,
+      Math.min(top, editorArea.bottom - height),
+    );
     cursor.style.left = `${Math.round(coordinate.left)}px`;
-    cursor.style.top = `${Math.round(coordinate.top)}px`;
-    cursor.style.height = `${Math.max(12, coordinate.bottom - coordinate.top)}px`;
+    cursor.style.top = `${Math.round(boundedTop)}px`;
+    cursor.style.height = `${height}px`;
     cursor.classList.add(showClass);
   } catch {
     hideCursor(cursor);
@@ -56,14 +173,34 @@ export function flashSparkCursor(): Plugin {
       host2.append(cursor);
 
       let frame = 0;
+      let blinkTimer = 0;
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const stopBlink = () => {
+        if (blinkTimer) window.clearInterval(blinkTimer);
+        blinkTimer = 0;
+        cursor.classList.remove(dimClass);
+      };
+      const restartBlink = () => {
+        stopBlink();
+        if (reducedMotion || !cursor.classList.contains(showClass)) return;
+        blinkTimer = window.setInterval(() => {
+          cursor.classList.toggle(dimClass);
+        }, blinkHalfPeriodMs);
+      };
       const refreshNewValue = () => {
         frame = 0;
-        if (!view.isDestroyed) arrangeCursor(cursor, view);
+        if (!view.isDestroyed) {
+          arrangeCursor(cursor, view);
+          restartBlink();
+        }
       };
       const safeArrange = () => {
         if (!frame) frame = requestAnimationFrame(refreshNewValue);
       };
-      const windowBlur = () => hideCursor(cursor);
+      const windowBlur = () => {
+        hideCursor(cursor);
+        stopBlink();
+      };
       const rollActionContainer = view.dom.closest(".editor-pane");
       const rulerInchWatchListen =
         typeof ResizeObserver === "undefined" ? null : new ResizeObserver(safeArrange);
@@ -83,6 +220,7 @@ export function flashSparkCursor(): Plugin {
         update: safeArrange,
         destroy() {
           if (frame) cancelAnimationFrame(frame);
+          stopBlink();
           view.dom.removeEventListener("focusin", safeArrange);
           view.dom.removeEventListener("focusout", safeArrange);
           rollActionContainer?.removeEventListener("scroll", safeArrange);

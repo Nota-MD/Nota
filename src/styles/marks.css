@@ -88,7 +88,7 @@
      ⚠️ 代价讲清楚：**不再跟文档主题的 `--doc-font-size` 联动**（主题把正文
      调到 1.08em 时标记不动）。这是有意的取舍——"不跳"是用户明确要的，
      "标记跟着正文字号缩放"没人要求过。要调就改 `0.85` 这个系数，全文件一处。 */
-  font-size: calc(var(--ui-font-size, 15px) * 0.85);
+  font-size: calc(var(--editor-font-size, var(--ui-font-size, 15px)) * 0.85);
   font-weight: 400;
   /* ⚠️ 行高**不给 inherit**（原先写的就是 `line-height: inherit`）。
      继承下来的是**无单位数字**（主题里的 `--doc-line-height: 1.85` 这类），
@@ -99,10 +99,9 @@
   line-height: 1;
   white-space: nowrap;
   color: var(--fg-faint);
-  /* ⚠️ 这里**曾经有一条 `opacity: 0.55`**，2026-09-25 去掉。理由：淡到什么程度
-     是**文档主题**里定的事（`themes/paper.css` 那行写着"要淡但不能看不见"），
-     再乘一个 0.55 等于把主题的选择砍掉一半——同一个主题在不同地方浓淡不一，
-     看起来像主题没生效。要更淡就改 `--fg-faint`，那是**一处**。 */
+  /* 只有已经确认是块语法标记的块才会挂 `.nota-srcmark`。默认半透明，
+     文档主题仍可通过 `--source-marker-opacity` 调整。 */
+  opacity: var(--source-marker-opacity, 0.55);
   user-select: none;
   pointer-events: none;
   /* 淡入。⚠️ **只有进入有过渡**：伪元素是跟着 class 一起被摘掉的，
@@ -134,10 +133,26 @@
 }
 
 .editor-mount .ProseMirror .nota-srcmark[data-srcmark="-"]::before {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   -webkit-mask-image: var(--nota-source-bullet-icon);
   mask-image: var(--nota-source-bullet-icon);
+}
+
+/* 列表项的第一行才是标记的对齐基准；整个 li 的高度还会包含子列表。 */
+.editor-mount .ProseMirror li.nota-srcmark::before {
+  top: calc(var(--doc-line-height, 1.75) * 0.5em);
+  opacity: 1;
+}
+
+.editor-mount .ProseMirror li.nota-srcmark[data-srcmark="-"]::before {
+  background-color: var(--fg);
+}
+
+.editor-mount .ProseMirror li.nota-srcmark:not([data-srcmark="-"])::before {
+  color: var(--fg);
+  font-family: inherit;
+  font-size: inherit;
 }
 
 .editor-mount .ProseMirror .nota-srcmark[data-srcmark="```"]::before {
@@ -177,7 +192,7 @@
     opacity: 0;
   }
   to {
-    opacity: 0.55;
+    opacity: var(--source-marker-opacity, 0.55);
   }
 }
 
@@ -185,9 +200,8 @@
    光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 作为真实字符画在那段文字两边。
 
    ⚠️ **这是 `.nota-srcmark` 配方的第二份使用者**（那份在上面）：颜色、
-   字号基准、不可选中、不吃鼠标事件——四条**逐条对齐**，别在这儿另立
-   一套数值。行内标记使用独立主题变量，默认是正文实色；主题可以显式降低
-   `--mark-hint-opacity`，但不许在程序里替所有主题写死成灰色。
+   字号基准、不可选中、不吃鼠标事件——四条**逐条对齐**。行内标记默认
+   半透明；只有已确认是语法边界的字符才带这个类，普通正文里的同形字符不变。
 
    ⚠️ 与 `.nota-srcmark` **唯一的故意不同**：那两个伪元素**占宽度**。
    上头那份画在块左边的 56px 装订线里（`right: 100%`，不占正文宽度），
@@ -195,21 +209,60 @@
    取舍写在 `mark-hint.ts` 的文件头里。 */
 /* 语法字符是文档里的真实文字节点，不是 Decoration.widget。因此光标可以
    停在 `**|粗体**`、`**粗体|**` 等任意位置，也能选中和删除它们。
-   字体与字号跟随正文；颜色和透明度来自 `--mark-hint-*`，默认正文实色。 */
+   字体与字号跟随正文；颜色和透明度来自 `--mark-hint-*`。 */
 .editor-mount .ProseMirror .nota-syntax-marker {
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: 400;
-  font-style: normal;
-  font-variant: normal;
-  font-synthesis: none;
+  /* Suppress the atom wrapper's own box entirely. The delimiter glyph then joins
+     the paragraph's normal inline formatting context, so caret movement cannot
+     make WebKit choose a different baseline for the same character. */
+  display: contents !important;
+  position: relative !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 !important;
+  /* `font` 简写一次继承全部字体度量。拆成 family / size / weight / style
+     之后，WebKit 会在语法节点与相邻正文之间走不同的字形栅格化路径，星号和
+     等号就会在“普通字符 / 提示字符”之间看起来忽高忽低。 */
+  font: inherit !important;
+  font-synthesis: inherit;
   letter-spacing: normal;
-  line-height: 1;
+  line-height: inherit !important;
+  vertical-align: baseline !important;
+  text-rendering: auto;
   text-decoration: none;
   text-transform: none;
   white-space: pre;
-  color: var(--mark-hint-fg, inherit);
-  opacity: var(--mark-hint-opacity, 1);
+  /* 视觉上仍是 45% 的标记色，但先与纸面混成不透明颜色。透明字形会被
+     WebKitGTK 单独栅格化，抗锯齿边界随底图变化，正是上下“弹一下”的来源。 */
+  color: color-mix(in srgb, var(--mark-hint-fg, currentColor) 45%, var(--doc-bg));
+  opacity: 1;
+}
+
+/* Escaped punctuation stays literal. Its source backslash is revealed only
+   while the caret touches the escape, matching source editing on demand. */
+.editor-mount .ProseMirror .nota-escape-char {
+  display: inline;
+  font: inherit;
+  line-height: inherit;
+  white-space: pre;
+}
+
+.editor-mount .ProseMirror .nota-escape-slash {
+  display: none;
+  color: color-mix(in srgb, var(--mark-hint-fg, currentColor) 45%, var(--doc-bg));
+}
+
+.editor-mount .ProseMirror .nota-escape-active .nota-escape-slash {
+  display: inline;
+}
+
+/* Adwaita Sans applies contextual substitutions to repeated Markdown symbols.
+   WebKitGTK then rasterizes adjacent asterisks/equals with different LCD
+   weights, which reads as vertical bouncing while the caret moves. Restrict
+   the deterministic shaping path to delimiter runs, not ordinary prose. */
+.editor-mount .ProseMirror .nota-syntax-text,
+.editor-mount .ProseMirror .nota-syntax-marker {
+  font-variant-ligatures: none;
+  font-kerning: none;
 }
 
 /* 「待成块」的标题：段落行首敲了 `#` 加空格，**还**没按回车。
@@ -235,6 +288,7 @@
 .editor-mount .ProseMirror .nota-heading-prefix {
   color: var(--fg-faint);
   font-weight: 400;
+  opacity: var(--source-marker-opacity, 0.55);
 }
 
 /* 未按回车、但光标已经离开该段的标题写法：按真标题的排版显示。

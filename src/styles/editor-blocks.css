@@ -23,11 +23,12 @@
    着色由 `@milkdown/plugin-prism` 加的 `span.token.*` 承担（它读的是节点属性，
    不是 DOM），所以下面这些选择器**只认 class**，不要去匹配语言。 */
 
-.editor-mount .ProseMirror pre {
+.editor-mount .ProseMirror pre,
+.editor-mount .ProseMirror .nota-source-surface {
   position: relative;
-  /* ⚠️ **代码区左边的内边距从一个变量来**，不再是写死的 14：
-     开了行号（设置里那一条 `editor.code_line_numbers`）之后它要变成 54px，
-     好给左边那条行号装订线（40px）腾出位子。
+  box-sizing: border-box;
+  /* 所有源码表面共用 14px 左内边距。行号列由 CodeMirror 自己画在内容盒
+     内部，不再由外层额外预留 40px 或改造这一格。
      ⚠️ `marks.css` 里 `.nota-srcmark` 那条围栏标记的 `right: calc(100% + …)`
      读的是**同一个变量**（`--nota-code-pad-l`）——它要退到 `pre` 的边框外面去，
      退多少正好等于"左边内边距 + 1px 边框"。以前两边各写一份写死的 14，注释里
@@ -52,10 +53,10 @@
         "上面那个 34 被砍了"就以为是回退——砍的是**两边一起**。
      为什么落在 8：代码行本身有 1.6 行高，已经提供了一圈呼吸空间；8 只负责
      让第一行/最后一行不要贴住边框。
-     ⚠️ 行号装订线那 40px 是加在**左**边（`--nota-code-pad-l`），上下不受影响。 */
-  padding: 8px var(--nota-code-pad-l);
-  /* ⚠️ **上方 12px、下方 24px**。下方不是普通留白：块外那排 22px 高的
-     折叠/复制与语言选择框住在这条槽里，24px 足以容纳挂件并保留 2px 视觉间隔。
+     ⚠️ 行号开关不会改变这一圈内边距。 */
+  padding: 8px 14px;
+  /* ⚠️ **上方 12px、下方 30px**。下方不是普通留白：块外的语言选择框
+     住在这条槽里，30px 足以容纳 24px 控件并保留视觉间隔。
      用户原话：「代码框不论上下，和其他文本的间距。Typora 是那样的」——
      历史上这里曾把上下都设成 30；现在上方收紧到 12，避免单行代码块飘得太远，
      同时保留下方挂件所需的真实高度。
@@ -64,31 +65,33 @@
      "贴着上一段、甩开下一段"，而且上一段越短越明显。
 
      这两个数各有来历，**别只看到一个**：
-     - **下面那个 24** 不只是留白，它是给块外那条挂件留的槽。**2026-09-26 起
-       这条槽里住着两颗**：左边是工具栏（`.nota-code-bar`，折叠 / 复制），
-       右边是语言选择框（`.nota-code-lang-wrap`）——两颗都是 22px 高、
-       `top: 100%` 贴着下边框，所以 24 = 22（条子高）＋ 2（留给下一段的气）。
+     - **下面那个 30** 不只是留白，它是给块外语言选择框留的槽。
+       语言框高 24px、`top: 100%` 贴着下边框，30 = 24 + 6px 间隔。
        由来：2026-09-25 用户要求「增大一下代码框和下面的另外的其他东西的间隔，
        这样才能保证那个语言选择框能塞得下」。
-       ⚠️ 改那两颗的高（`.nota-code-btn` 那条 `height`）时这个数要回来算。
+       ⚠️ 改语言框高度时这个数要回来算。
      ⚠️ 折叠：这个 `margin-bottom` 和下个块那条 `margin-top: 0.85em` 会**折叠**，
-     取大的那个，所以实际是 24px 而不是两者相加，别按"再加一个 0.85em"去算。
+     取大的那个，所以实际是 30px 而不是两者相加，别按"再加一个 0.85em"去算。
      ⚠️ 左右内边距那笔账见上面那条注释（现在是 `--nota-code-pad-l` 这个变量，
      上下那两个数不参与）。 */
-  margin: 12px 0 24px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
+  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  border-radius: max(6px, var(--radius));
+  background: color-mix(in srgb, var(--bg-subtle) 76%, var(--doc-bg));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--doc-bg) 46%, transparent);
   font-family: var(--font-mono);
   font-size: 0.88em;
   line-height: 1.6;
+}
+
+.editor-mount .ProseMirror pre {
+  margin: 12px 0 30px;
   /* ⚠️ `overflow` 必须留 `visible`，**这一条不会因为任何设置而变**：
      画在 `pre` **外侧**的东西有三样——围栏标记（`instant-render.ts`，左外侧）、
      代码块下面那条工具栏和语言选择框（`code-block.css`，下沿之外）。
      `overflow-x: auto` 会同时把它们裁掉（而且 CSS 规定：一个方向不是
      `visible` 时，另一个方向的 `visible` 会被算成 `auto`，所以只写 `-x` 也一样）。
      代价是长行不横向滚动 —— 所以默认改成自动换行（见下面 `code_wrap` 那条）。 */
-  overflow: visible;
+  overflow: visible !important;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -99,12 +102,36 @@
    容器规则，二者防止生成样式与文档主题的加载顺序互相盖掉。
    `math` / `latex` / `tex` 围栏要求源码使用衬线数学字体，因此这里明确排除
    数学编辑态；`code-block.css` 后面那条高权重规则继续负责它们。 */
-.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-editor,
-.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-scroller,
-.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-content,
-.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-line,
-.editor-mount .ProseMirror .nota-code-wrap:not(.nota-code-math-editing) pre .cm-editor * {
+.editor-mount .ProseMirror .nota-source-surface .cm-editor,
+.editor-mount .ProseMirror .nota-source-surface .cm-scroller,
+.editor-mount .ProseMirror .nota-source-surface .cm-content,
+.editor-mount .ProseMirror .nota-source-surface .cm-line,
+.editor-mount .ProseMirror .nota-source-surface .cm-editor * {
   font-family: var(--font-mono);
+}
+
+.editor-mount .ProseMirror .nota-source-surface .cm-gutters {
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  opacity: 0.62;
+  font-family: var(--font-mono);
+}
+
+.editor-mount .ProseMirror .nota-source-surface .cm-lineNumbers .cm-gutterElement {
+  padding: 0 8px 0 0;
+}
+
+/* Comments remain semantic through color. Italic synthesis is forbidden here:
+   the active theme may name a mono family without an italic face, and WebKit
+   then falls back to a proportional face for that token alone. */
+.editor-mount .ProseMirror .nota-source-surface .token.comment,
+.editor-mount .ProseMirror .nota-source-surface .token.prolog,
+.editor-mount .ProseMirror .nota-source-surface .token.doctype,
+.editor-mount .ProseMirror .nota-source-surface .token.cdata {
+  font-family: var(--font-mono);
+  font-synthesis: none;
+  font-style: normal;
 }
 
 /* Windows/WebView2 给 contenteditable 元素加的平台焦点框。CodeMirror 的根、
@@ -148,7 +175,7 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
 .editor-mount .ProseMirror .token.doctype,
 .editor-mount .ProseMirror .token.cdata {
   color: var(--code-comment);
-  font-style: italic;
+  font-style: normal;
 }
 .editor-mount .ProseMirror .token.keyword,
 .editor-mount .ProseMirror .token.atrule,
@@ -188,6 +215,77 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
 .editor-mount .ProseMirror .token.entity,
 .editor-mount .ProseMirror .token.url {
   color: var(--fg-muted);
+}
+
+/* ── 列表标记 ─────────────────────────────────────────────────────────────
+ *
+ * 浏览器原生 `::marker` 的圆点大小跟字体实现走；光标进入某一项后，源码提示又
+ * 改用 12px 的 SVG。两种绘制混在同一张列表里，就会出现“一级大点、二级小点”
+ * 的跳变。这里统一改成 CSS 生成标记：普通项与源码提示共用同一尺寸、同一
+ * 基线，有序编号也共用源码提示的等宽字号。
+ *
+ * `list-style: none` 只去掉默认画法，不改 ul / ol 的语义或 DOM。任务列表另有
+ * 自己的复选框规则，所以明确排除它，避免再画一颗圆点。
+ */
+.editor-mount .ProseMirror :is(ul, ol) {
+  list-style: none;
+  /* Browser defaults give lists a 1em block margin. Paragraphs have none, so
+     typing the space in `1. ` would move the whole first line down. */
+  margin-block: 0;
+}
+
+.editor-mount .ProseMirror :is(ul, ol) > li {
+  position: relative;
+}
+
+.editor-mount .ProseMirror ul > li:not([data-item-type="task"])::before {
+  content: "";
+  position: absolute;
+  right: 100%;
+  top: calc(var(--doc-line-height, 1.75) * 0.5em);
+  width: 10px;
+  height: 10px;
+  padding-right: 0.5em;
+  transform: translateY(-50%);
+  background-color: var(--fg);
+  opacity: 1;
+  -webkit-mask-image: var(--nota-source-bullet-icon);
+  mask-image: var(--nota-source-bullet-icon);
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.editor-mount .ProseMirror ol {
+  counter-reset: nota-list-item;
+}
+
+.editor-mount .ProseMirror ol > li {
+  counter-increment: nota-list-item;
+}
+
+.editor-mount .ProseMirror ol > li::before {
+  content: counter(nota-list-item) ".";
+  position: absolute;
+  right: 100%;
+  top: calc(var(--doc-line-height, 1.75) * 0.5em);
+  padding-right: 0.5em;
+  transform: translateY(-50%);
+  color: var(--fg);
+  /* 编号和普通正文字形保持同一套字体度量。等宽小字会让 `1. ` 在按下空格、
+     从普通文字变成列表的一瞬缩小、下沉。 */
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1;
+  opacity: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* ── 任务列表的复选框 ─────────────────────────────────────────────────────
@@ -329,8 +427,11 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
  * 行内对齐不会传下去，命令看起来就完全没效果。这里只让表格直属段落继承
  * 单元格值；普通正文段落仍由各文档主题决定。
  */
-:where(.editor-mount .ProseMirror) :is(th, td) > p {
-  text-align: inherit;
+.editor-mount .ProseMirror :is(th, td) > p {
+  /* 文档主题会写 `.editor-pane p { text-align: left }`，动态主题样式又在
+     这张表之后注入，普通继承声明压不住它。单元格本身由 GFM schema 写成
+     行内 `text-align`，这里必须用 `!important` 把该值继续传给段落。 */
+  text-align: inherit !important;
 }
 
 /* 表头：底色 + 加粗。⚠️ `--fg` 而不是 `--fg-muted`——表头是**列的名字**，
@@ -393,8 +494,9 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
      承担"这是一段引用"的表达，左边线也才能和正文、和 `hr` 对齐在同一条
      左边缘上（上边距那半边仍归 `> * + *` 管，那条权重 (0,2,0)，这条管不着）。 */
   margin: 1.2em 0;
-  padding: 0.5em 1em;
-  border-left: 2px solid var(--fg-faint);
-  background: var(--bg-subtle);
+  padding: 0.5em 0 0.5em 1.1em;
+  border-left: 3px solid var(--border-strong);
+  border-radius: 0;
+  background: transparent;
   color: var(--fg-muted);
 }

@@ -21,7 +21,7 @@ use std::path::Path;
 /// 1. YAML front matter 里的 `title:`；
 /// 2. 第一个 ATX 标题（`# ` ~ `###### `）；
 /// 3. 文件名的 stem；
-/// 4. "未命名 N"。
+/// 4. `Untitled N`（显示层再按界面语言翻译）。
 ///
 /// `strict` = 严格模式（`Settings::strict_markdown`）：它只影响第 2 条认哪些行
 /// ——严格时井号后面**必须**有空格，宽松（默认）时 `#标题` 也算。见 `strip_atx`。
@@ -44,7 +44,7 @@ pub fn derive_title(
             }
         }
     }
-    format!("未命名 {untitled_index}")
+    format!("Untitled {untitled_index}")
 }
 
 /// 取 YAML front matter 里的 `title:`。front matter 必须**在文件最开头**，

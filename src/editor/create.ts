@@ -33,6 +33,7 @@ import { splitFrontMatter, joinFrontMatter, replaceFrontMatter, newFrontMatterTe
 // 一切装上去"，本文件只剩"实例建好之后怎么用"（句柄、front matter 的读写、
 // 存盘拼回）。⚠️ 那条链的**顺序就是语义**，别在那边随手挪 `.use()`。
 import { installConfigureActualExample } from "./assemble";
+import { setVimInputConfig } from "./plugin-vim-input";
 // ⚠️ 命令表里那几条"先看一眼光标在哪、再一笔事务里改两处"的实现
 //（`insert.ts` 的任务列表 / 清除格式 / 表格增删 / 公式块 / 目录，`footnote.ts`
 // 的插脚注）2026-09-28 **跟着表一起搬去了 `./command-table`**——本文件不再直接
@@ -94,12 +95,9 @@ import type {
  * - 没有 `block`（块手柄）、没有 `tooltip` ——这些是交互糖，排在后面的轮次里
  *   （见 `docs/07`）。先装它们会在交互口径还没定下来时就被它们的默认行为绑住。
  *
- * ⚠️ **`slash`（斜杠菜单）已经不在这张"没有"清单里了**（2026-09-27）：它做了，
- * 装在上面 `.use(readOnly ? [] : 斜杠菜单(...))` 那一行。
- * ⚠️ 而且装的是**自己写的那一份**（`editor/slash.ts`），**不是**
- * `@milkdown/plugin-slash`——那份要拖 `@floating-ui/dom` ＋ `lodash-es`
- * 两条依赖链进来，而这里要的只是"行首敲 `/` 弹一张表"。理由写在
- * `editor/slash.ts` 的文件头。
+ * ⚠️ **行首 `/` 的斜杠菜单已移除**（2026-10-31）：它和 Vim normal/visual
+ * 模式的 `/` 搜索直接冲突。`/` 现在始终是普通输入，由未来的 Vim 插件在
+ * normal/visual 模式下解释为搜索。
  */
 export async function createEditor(options: CreateOptions): Promise<EditorHandle> {
   const {
@@ -137,11 +135,6 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   // ——理由见 `create-types.ts` 的 `emoji` 那一格。
   const emoji = options.emoji ?? true;
 
-  // 智能符号补全（`ui/pane-editors.ts` 传进来，来自 `settings.editor.smart_symbols`）。
-  // ⚠️ `undefined` **不等于关**：Rust 那边的默认是 `true`（用户 2026-09-28
-  // 点名「默认为开」），这里跟着取 `true`——见 `create-types.ts` 的 `智能符号` 那一格。
-  const smartAbleSymbolNumber = options.smartAbleSymbolNumber ?? true;
-
   // ── 开头那段 front matter：切下来存住，出去的时候原样拼回 ──────────────
   //
   // ⚠️ 编辑器**读不懂**它（CommonMark 里 `---` 是分割线），不切的话"打开再
@@ -174,15 +167,12 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     punctuation,
     selfActionMoreCorrect,
     emoji,
-    smartAbleSymbolNumber,
     onChange,
     // ⚠️ 取的是**这一刻**那一段：`markdownUpdated` 拼回去时它可能已经换了
     //（换文档、源码模式切回来都走 `setMarkdown`，那里会重新切一刀）。
     getFrontMatter: () => frontMatter,
-    // ⚠️ 斜杠菜单那条路要的是 `跑一条命令`**本身**（它是本文件的函数声明，
-    // 会被提升，所以这里包一层不影响它"在 `.use()` 之后才定义"）。
-    runOneItemCommand: (name, payload) => runOneItemCommand(name, payload),
     options,
+    vimInput: options.vimInput,
   });
 
   // 实例建好时如果打字机模式已经开着，先把当前行摆正再交给调用方——
@@ -200,18 +190,10 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   /**
    * 跑一条编辑命令，**只管命令、不管焦点**。
    *
-   * ⚠️ 抽出来是因为它有**两个用家**，而两者的焦点处境正好相反：
-   * - `runCommand`（菜单栏 / 快捷键）：命令是从**按钮**上点下去的，那一刻
-   *   DOM 焦点在按钮上，所以跑完必须 `聚焦()` 把它交回正文；
-   * - 斜杠菜单：焦点**本来就在编辑区里**（面板那两条 `preventDefault` 保的
-   *   就是它），不必也不该多转一圈。
+   * 命令入口统一走这里；调用方 `runCommand` 负责在按钮路径上把焦点交回正文。
    *
-   * 各写一份的话，症状是"菜单里点了是这样、斜杠里选出来是另一样"——
-   * 而那种差别没人会想到去查。
-   *
-   * ⚠️ 写成函数声明是**有意**的：它被上面 `.use()` 那一行引用到，而那行
-   * 在源码里排在它前面。提升让这件事成立；它里面用的 `editor`（`const`）
-   * 到真正被调用时早已赋值，不存在暂时性死区那一类问题。
+   * 函数声明让下面的命令句柄可以在定义之前引用它；真正调用时 `editor`
+   * 早已完成赋值，不存在暂时性死区。
    */
   function runOneItemCommand(name: EditorCommand, payload?: CommandPayload): void {
     // ⚠️ **front matter 那一条在这一层拦下来**，不进 `command-table`：那张表
@@ -222,7 +204,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       return;
     }
     // ⚠️ 表与派发逻辑 2026-09-28 搬去了 `./command-table`（行数），这里只剩
-    // 一层薄壳——两个用家（`runCommand` 与斜杠菜单）仍然走同一个入口。
+    // 一层薄壳——调用方仍然走同一个命令入口。
     runCommand(editor, name, payload);
   }
 
@@ -349,6 +331,8 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
 
     setWritingModes: (mode2: WritingMode) =>
       editor.action((ctx) => setWritingMode(ctx.get(editorViewCtx), mode2)),
+    setVimInput: (config) =>
+      editor.action((ctx) => setVimInputConfig(ctx.get(editorViewCtx), config)),
 
     setReview: (preview: changePreview | null, viewMode: previewMode) =>
       editor.action((ctx) => {
@@ -426,7 +410,7 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       }),
 
     runCommand: (name: EditorCommand, payload?: CommandPayload) => {
-      // ⚠️ 命令本身在 `跑一条命令` 里（与斜杠菜单共用一份实现），这里只多
+      // ⚠️ 命令本身在 `跑一条命令` 里，这里只多
       // 一件"把焦点交回正文"的收尾——见那条函数上的注释。
       runOneItemCommand(name, payload);
 
@@ -439,7 +423,6 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       // ⚠️ **`frontMatter` 那一条不抢焦点**：它多半是从正文上方那个 YAML
       // 编辑框里发出来的（`ui/FrontMatterBanner.tsx` 每次提交都发一条），每次提交
       // 都把光标从输入框里拽回正文的话，用户根本没法在框里连着打第二个字。
-      // 理由与"斜杠菜单不走这一层"是同一条：**焦点本来就在该在的地方**。
       // （从菜单栏点那一条进来的情形代价也小：焦点留在菜单上，用户点一下
       // 编辑框就行——反过来"光标不知什么时候被夺走"要难查得多。）
       if (name !== "frontMatter") clusterFocus();

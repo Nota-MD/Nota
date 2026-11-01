@@ -94,12 +94,21 @@
   caret-color: var(--accent);
   font: inherit;
   letter-spacing: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  resize: none;
   user-select: text;
   -webkit-user-select: text;
 }
 
 .editor-mount .ProseMirror .nota-image.is-selected .nota-image-source {
   display: block;
+}
+
+.editor-mount .ProseMirror .nota-image.is-selected {
+  width: 100%;
 }
 
 .editor-mount .ProseMirror .nota-image-source:focus,

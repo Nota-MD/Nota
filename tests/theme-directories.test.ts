@@ -43,6 +43,14 @@ testCase("两个入口分别打开文档主题与界面主题目录", () => {
   contains(docPane, "Document themes folder…", "文档主题页入口不明确");
 });
 
+testCase("文档主题页用自绘选择框，并按明暗模式写对应设置", () => {
+  const docPane = read("src/ui/settings/panes/DocThemePane.tsx");
+  contains(docPane, "<Select", "当前主题不是选择框");
+  contains(docPane, "value={generateEffectid}", "选择框没有显示当前生效主题");
+  contains(docPane, "dark_document_theme: id", "深色模式没有写独立深色主题");
+  contains(docPane, "onChange({ document_theme: id })", "浅色模式没有写普通文档主题");
+});
+
 testCase("内置 Adwaita 先显示，目录打开时重扫，界面主题可手动刷新", () => {
   const startup = read("src/ui/useStartup.ts");
   contains(startup, "BUILTIN_DOC_THEMES", "没有内置主题首帧兜底");

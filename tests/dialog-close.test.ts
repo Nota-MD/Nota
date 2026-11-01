@@ -38,7 +38,6 @@ const dialog = [
   "src/ui/LicenseDialog.tsx",
   "src/ui/LinkDialog.tsx",
   "src/ui/PandocPanel.tsx",
-  "src/ui/PrintDialog.tsx",
   "src/ui/PromptDialog.tsx",
   "src/ui/settings/SettingsDialog.tsx",
   "src/ui/settings/SettingsExportDialog.tsx",
@@ -66,12 +65,10 @@ testCase("DialogClose 有可读名称、标题和统一图标", () => {
 
 testCase("独立对话框壳都给绝对定位的关闭按钮提供定位上下文", () => {
   const overlay = readFileSync(join(process.cwd(), "src/styles/overlay.css"), "utf8");
-  const print = readFileSync(join(process.cwd(), "src/styles/print-dialog.css"), "utf8");
   const picker = readFileSync(join(process.cwd(), "src/styles/file-picker.css"), "utf8");
   const settings = readFileSync(join(process.cwd(), "src/styles/settings.css"), "utf8");
   const shape = readFileSync(join(process.cwd(), "src/styles/theme/shape.css"), "utf8");
   assertValue(/\.confirm-dialog\s*\{[^}]*position:\s*relative/s.test(overlay), "确认框壳缺少 position");
-  assertValue(/\.print-dialog\s*\{[^}]*position:\s*relative/s.test(print), "打印框缺少 position");
   assertValue(/\.file-picker\s*\{[^}]*position:\s*relative/s.test(picker), "文件选择器缺少 position");
   assertValue(/\.settings-shell\s*\{[^}]*position:\s*relative/s.test(settings), "设置框缺少 position");
   assertValue(/\.dialog-close\s*\{[^}]*position:\s*absolute/s.test(overlay), "关闭按钮不是绝对定位");

@@ -5,11 +5,12 @@
  *
  * 用户当天说：「你可不可以给我几张虚构的打字图？深色主题。大概就是我一天打了
  * 非常多的字儿。我要提前在小红书上发一下，吸引一点用户。」——**当天晚些时候改成
- * 了「只需要浅色就好」，并且要「包含热力图和写作图」**，所以现在出的是四张浅色卡：
- * 全天那张＋本轮两张（写作图）＋长期那张（热力图）。
+ * 了「只需要浅色就好」，并且要「包含热力图和写作图」**，所以现在出的是五张
+ * 浅色卡：全天那张＋本轮两张（写作图）＋长期那张（热力图）＋一张带官网二维码
+ * 的国际主义示例。
  *
  * 所以这里造的是**假数据**，但**一个像素都不假**：卡片本身走的是线上的
- * `ui/share-card.ts::分享图SVG`，与插件点「制作今日分享图」时画的是同一段代码。
+ * `ui/share-card.ts::shareCardSvg`，与插件点「制作今日分享图」时画的是同一段代码。
  * 好处是宣传图和真产物同款——设计改了，重跑一次就重新出图；不会出现"海报上是
  * 旧版式、应用里是新的"。
  *
@@ -30,19 +31,31 @@
  * `--loader:.svg=text`）与 `tests/share-card.test.ts` 文件头写的是同两个，理由
  * 见那一份。**别**直接 `node tools/share-preview.ts`。
  *
- * ⚠️ 与测试那几份**故意不同**的一点：这里的 `量宽器` 是**自己写的一张表**，
+ * ⚠️ 与测试那几份**故意不同**的一点：这里的 `MeasureWidthDevice` 是**自己写的一张表**，
  * 不是 `share-card.ts` 里那个 `估宽`。理由：`估宽` 是"线上没有 canvas 时的兜底"，
  * 它把所有非数字字符都按 0.62 个全角算；宣传图要贴到社交媒体上，大数字后面
  * 那颗单位错开十几个像素是看得出来的。真浏览器里走的是 canvas 实测，**这里
  * 只是把"实测"换成一张够准的表**——它不是产品行为，是这份工装的输入。
  */
 
-import { 分享图SVG, 深色卡, 浅色卡, 卡宽, 卡高, type 卡色, type 量宽器 } from "../src/ui/share-card";
+import {
+  shareCardSvg,
+  darkCard,
+  lightCard,
+  cardWidth,
+  cardHeight,
+  type cardColor,
+  type MeasureWidthDevice,
+  type ShareCardDecoration,
+  type ShareQrMatrix,
+} from "../src/ui/share-card";
+import { NOTA_PROMOTION_URL, type ShareCardIdentity } from "../src/ui/share-card-identity";
 import type { PanelShare, PanelShareStat } from "../src/ui/panel-nodes";
-import type { 刻度 } from "../src/ui/chart-ticks";
-import { 算热力, type 热力记录 } from "../src/ui/heatmap";
-import { 定语言 } from "../src/i18n";
+import type { tick } from "../src/ui/chart-ticks";
+import { computeHeatmap, type HotForceRecordRecord } from "../src/ui/heatmap";
+import { setLanguage } from "../src/i18n";
 import { writeFileSync, mkdirSync } from "node:fs";
+import QRCode from "qrcode/lib/browser.js";
 
 /* ── 量宽：一张照 Noto Sans CJK 量的表 ────────────────────────────────── */
 
@@ -72,7 +85,7 @@ const 每字宽 = (字: string): number => {
 };
 
 /** 粗体比常规宽一点（`800` 那档最明显）。 */
-const 量: 量宽器 = (文, 号, 粗) => {
+const 量: MeasureWidthDevice = (文, 号, 粗) => {
   let 宽 = 0;
   for (const 字 of 文) 宽 += 每字宽(字);
   return 宽 * 号 * (粗 >= 700 ? 1.0 : 0.98);
@@ -409,7 +422,7 @@ function 冲刺图(): PanelShare {
 // 等它求完值再点这一下就晚了，宣传图上印出来的还是英文兜底的 `Apr May Jun`
 // （第一版就是这样，中文的图配一串英文月份）。
 // ⚠️ 语言**默认是英文兜底**（`i18n/index.ts` 的 `兜底`），没挂宿主时就是它。
-定语言("zh-CN");
+setLanguage("zh-CN");
 
 /** `2026-09-27` → 本地那一天（同 `ui/heatmap.ts::日号` 的写法：**不**用 `new Date(串)`，那按 UTC 解析，东八区会整体偏一格）。 */
 function 日(d: string): Date {
@@ -427,7 +440,7 @@ function 移(d: Date, 天: number): Date {
 }
 
 /**
- * 造一本**像真的**半年账：`止` 那天往回 `周数` 周（与 `算热力` 铺的窗口同一个月一节）。
+ * 造一本**像真的**半年账：`止` 那天往回 `周数` 周（与 `computeHeatmap` 铺的窗口同一个月一节）。
  *
  * ⚠️ 这里的"像真的"不是随手写几个随机数，是四条能一眼看穿的规律：
  *
@@ -441,9 +454,9 @@ function 移(d: Date, 天: number): Date {
  * ⚠️ 返回的是**窗口里每一天**（没写的那天也在，值为 0）——插件发的就是这种
  * "打开一本账，从头到尾每天一行"的串，图的空白格正来自那些 0。
  */
-function 造长期账(止: string, 周数: number): 热力记录[] {
+function 造长期账(止: string, 周数: number): HotForceRecordRecord[] {
   const 末 = 日(止);
-  // 末列的周一（与 `算热力` 同一个退回法），再往前数满 `周数 - 1` 行。
+  // 末列的周一（与 `computeHeatmap` 同一个退回法），再往前数满 `周数 - 1` 行。
   const 末列一 = 移(末, -((末.getDay() + 6) % 7));
   const 首 = 移(末列一, -(周数 - 1) * 7);
   const 乱 = 伪随机(20260406);
@@ -455,7 +468,7 @@ function 造长期账(止: string, 周数: number): 热力记录[] {
     for (let k = 0; k < 长; k++) 断档.add(串(移(日(从), k)));
   }
 
-  const out: 热力记录[] = [];
+  const out: HotForceRecordRecord[] = [];
   let 大日子倒 = 0;
   for (let d = new Date(首); d <= 末; d = 移(d, 1)) {
     const 日串 = 串(d);
@@ -479,7 +492,7 @@ function 造长期账(止: string, 周数: number): 热力记录[] {
       // 开头四周打七折（习惯还没养成那阵子）。
       if (d < 移(首, 28)) 值 = Math.round(值 * 0.7);
     }
-    out.push({ 日: 日串, 值 });
+    out.push({ date: 日串, value2: 值 });
   }
   return out;
 }
@@ -495,7 +508,7 @@ function 造长期账(止: string, 周数: number): 热力记录[] {
  * 在 ICU 齐全的机器上（宿主那个 node 24 就是）标签本来就是中文，**这张表一个字
  * 都不会用上**。
  *
- * ⚠️ 只翻标签、**不动"哪几列有标签"**：那件事由 `算热力` 按标签串比出来（同一个月
+ * ⚠️ 只翻标签、**不动"哪几列有标签"**：那件事由 `computeHeatmap` 按标签串比出来（同一个月
  * 只标一次），而每个月的中文名与英文名一样是独一无二的，翻完还是同一批列。
  */
 const 中文月: Record<string, string> = {
@@ -506,16 +519,22 @@ const 中文月: Record<string, string> = {
 /**
  * 热力图那张卡（`shape = "heat"`）。
  *
- * ⚠️ 格子是**真的铺出来的**：走 `ui/heatmap.ts::算热力`——与 `panel-nodes.ts`
+ * ⚠️ 格子是**真的铺出来的**：走 `ui/heatmap.ts::computeHeatmap`——与 `panel-nodes.ts`
  * 解析插件那串 `days` 之后调的是同一个函数。这里只是把"插件算出来的那串字"
  * 换成一本编的账，铺法一个字节都没假。
  */
 function 热力图卡(): PanelShare {
   const 止 = "2026-09-27";
   const 周数 = 26;
-  const 铺好的 = 算热力(造长期账(止, 周数), 止, 周数);
+  const 铺好的 = computeHeatmap(造长期账(止, 周数), 止, 周数);
   // 补齐运行环境缺的那一步（理由见 `中文月` 那段）。
-  const 图 = { ...铺好的, 列: 铺好的.列.map((列) => ({ ...列, 月: 中文月[列.月] ?? 列.月 })) };
+  const 图 = {
+    ...铺好的,
+    column: 铺好的.column.map((column) => ({
+      ...column,
+      month: 中文月[column.month] ?? column.month,
+    })),
+  };
   return 卡({
     title: "写作统计",
     subtitle: "Writing Stats · 半年",
@@ -526,14 +545,14 @@ function 热力图卡(): PanelShare {
     more: "多",
     points: [],
     label: "长期总字数",
-    value: 分组(图.总计),
+    value: 分组(图.totalCount),
     unit: "字",
     stats: [
-      格("有字的天数", String(图.天数), "天"),
-      格("日均", 分组(图.天数 > 0 ? 图.总计 / 图.天数 : 0), "字/天"),
-      格("单日最多", 分组(图.最大), "字"),
+      格("有字的天数", String(图.dayNumber), "天"),
+      格("日均", 分组(图.dayNumber > 0 ? 图.totalCount / 图.dayNumber : 0), "字/天"),
+      格("单日最多", 分组(图.mostLarge), "字"),
     ],
-    foot: `最近 ${周数} 周，你在 ${图.天数} 天里写下了 ${分组(图.总计)} 个字`,
+    foot: `最近 ${周数} 周，你在 ${图.dayNumber} 天里写下了 ${分组(图.totalCount)} 个字`,
     file: `nota-stats-long-${止}.png`,
   });
 }
@@ -543,30 +562,50 @@ function 热力图卡(): PanelShare {
 interface 场景 {
   名: string;
   卡: PanelShare;
-  色: 卡色;
+  色: cardColor;
+  装饰?: ShareCardDecoration;
+}
+
+const 身份: ShareCardIdentity = {
+  name: "Leo Lee",
+  avatar: "",
+  includePromotion: false,
+};
+
+function 二维码(): ShareQrMatrix {
+  const modules = QRCode.create(NOTA_PROMOTION_URL, { errorCorrectionLevel: "M" }).modules;
+  return Array.from({ length: modules.size }, (_, row) =>
+    Array.from({ length: modules.size }, (_, column) => modules.get(row, column) !== 0),
+  );
 }
 
 // ⚠️ **只出浅色**：用户 2026-09-27 说「只需要浅色就好」（早先要的是小红书那种
-// 深色图）。`深色卡` 那套底色留着没删——它是宿主的两套主题之一，加回来只需
+// 深色图）。`darkCard` 那套底色留着没删——它是宿主的两套主题之一，加回来只需
 // 往这张表里再塞一行。
 const 场景们: 场景[] = [
-  { 名: "01-今日-浅色", 卡: 全日图(), 色: 浅色卡 },
-  { 名: "02-本轮2小时-浅色", 卡: 本轮图(), 色: 浅色卡 },
-  { 名: "03-短轮6分钟-浅色", 卡: 冲刺图(), 色: 浅色卡 },
-  { 名: "04-热力图-浅色", 卡: 热力图卡(), 色: 浅色卡 },
+  { 名: "01-今日-浅色", 卡: 全日图(), 色: lightCard, 装饰: { identity: 身份 } },
+  { 名: "02-本轮2小时-浅色", 卡: 本轮图(), 色: lightCard, 装饰: { identity: 身份 } },
+  { 名: "03-短轮6分钟-浅色", 卡: 冲刺图(), 色: lightCard, 装饰: { identity: 身份 } },
+  { 名: "04-热力图-浅色", 卡: 热力图卡(), 色: lightCard, 装饰: { identity: 身份 } },
+  {
+    名: "05-今日-含官网二维码",
+    卡: 全日图(),
+    色: lightCard,
+    装饰: { identity: { ...身份, includePromotion: true }, qr: 二维码() },
+  },
 ];
 
 const 出 = process.argv[2] ?? "/tmp/nota-preview";
 mkdirSync(出, { recursive: true });
 
 for (const s of 场景们) {
-  const svg = 分享图SVG(s.卡, s.色, 量);
+  const svg = shareCardSvg(s.卡, s.色, 量, s.装饰);
   writeFileSync(`${出}/${s.名}.svg`, svg, "utf8");
   // 打一行摘要：几次改版式时，靠这几个数一眼看出"数字对不对"。
   const 格数 = s.卡.stats.map((x) => `${x.k}=${x.v}${x.small}`).join(" ");
-  const 图 = s.卡.heat ? ` 格子${s.卡.heat.列.length}列/最大${s.卡.heat.最大}` : ` 点${s.卡.points.length} 主刻度${s.卡.xTicks.length} 细${s.卡.xMinor}`;
+  const 图 = s.卡.heat ? ` 格子${s.卡.heat.column.length}列/最大${s.卡.heat.mostLarge}` : ` 点${s.卡.points.length} 主刻度${s.卡.xTicks.length} 细${s.卡.xMinor}`;
   console.log(
-    `${s.名}: ${卡宽}×${卡高}${图} | ${s.卡.label}=${s.卡.value} | ${格数}`,
+    `${s.名}: ${cardWidth}×${cardHeight}${图} | ${s.卡.label}=${s.卡.value} | ${格数}`,
   );
 }
 console.log(`\n写出 ${场景们.length} 张 SVG → ${出}`);

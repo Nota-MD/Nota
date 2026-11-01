@@ -149,7 +149,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
     documentPath: activeDoc?.path ?? null,
   });
 
-  const { newDoc, openViaDialog, openFolder, recordActivity } = documentApi;
+  const { newDoc, openViaDialog, openFolder, recordActivity, saveDoc, closeDoc } = documentApi;
   const { findOpen, replaceReplaceLine, matchSituationSituation, reportMatch, closeFind, replaceReplaceCurrent, replaceAll } = findBar;
   const {
     activeJumpPreview,
@@ -277,12 +277,11 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           // 布尔而不是整整一页设置：`EditorPane` 只把它原样喂给 `createEditor`
           // 的 `emoji` 那一格（理由见 `create-types.ts`）。
           emoji={settings?.editor?.emoji_autocomplete ?? false}
-          // **智能符号补全**（`settings.editor.smart_symbols`，2026-09-28，
-          // **默认开**）。⚠️ 同 `emoji` 那条：一个布尔，原样喂给 `createEditor`
-          // 的 `智能符号` 那一格（关掉 = `editor/auto-pair.ts` 整条不装）。
-          // ⚠️ **兜底取 `true`**，与 Rust 那边 `smart_symbols` 的默认值一致——
-          // 取 `false` 的话，设置还没读回来那一小会儿编辑器是不补的。
-          smartAbleSymbolNumber={settings?.editor?.smart_symbols ?? true}
+          vimInput={plugin.editorInput}
+          onVimCommand={(command) => {
+            if (command === "save") void saveDoc(activeDoc.id);
+            else void closeDoc(activeDoc.id);
+          }}
           // 整整一页 Markdown 设置。⚠️ 只有 `editor/inline-marks.ts` 那三个
           // 开关用得上（高亮/上标/下标），挑字段与记忆化都在 `EditorPane`
           // 里做——`App.tsx` 在 1000 行硬线上，这里只给一行。
@@ -356,6 +355,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           plugins={plugin.plugins}
           panels={plugin.panels}
           onClose={() => void plugin.receivePreview()}
+          onOpenSidebar={() => plugin.focusPanel(panelPreview.plugin, panelPreview.panel)}
           onCall={plugin.configure}
           askPrompt={dialog.askPrompt}
         />

@@ -1,7 +1,8 @@
 /**
- * 块容器开头的两个退出动作。
+ * 块容器开头的三个退出动作。
  *
  * - 引用块最开头按空格：拆掉光标外的**全部**引用层，空格本身不再插入；
+ * - 引用块最开头按退格：同样拆掉全部引用层，光标留在正文原来的位置；
  * - 空表格里任一空段落开头按退格：删掉整张表。
  *
  * 两件事都是 ProseMirror 的命令判据，不按主题或文档内容写特殊分支。键位挂在
@@ -18,6 +19,8 @@ import {
 import { lift } from "@milkdown/kit/prose/commands";
 import { deleteTable, findTable } from "@milkdown/kit/prose/tables";
 import { $prose } from "@milkdown/kit/utils";
+import { debugEvent } from "@/ui/debug-log";
+import { VIM_ALLOW_STRUCTURE_META } from "./plugin-vim-ops";
 
 /** 光标是否在最外层引用框的绝对开头。 */
 export function atReferenceUseMostOpenHead(state: EditorState): boolean {
@@ -49,12 +52,21 @@ export function getClearAllReferenceUse(
   if (!dispatch) return true;
 
   let current = state;
+  let changed = false;
   for (let count2 = 0; count2 < 32; count2 += 1) {
     let liftOutput: Transaction | null = null;
-    if (!lift(current, (tr) => (liftOutput = tr))) break;
+    const lifted = lift(current, (tr) => (liftOutput = tr));
+    debugEvent("editor", "blockquote lift probe", {
+      lifted,
+      has_transaction: liftOutput !== null,
+    });
+    if (!lifted) break;
     if (!liftOutput) break;
-    dispatch(liftOutput);
-    current = current.apply(liftOutput);
+    const output = liftOutput as Transaction;
+    output.setMeta(VIM_ALLOW_STRUCTURE_META, true);
+    dispatch(output);
+    changed = true;
+    current = current.apply(output);
     const $from = current.selection.$from;
     let returnHasReferenceUse = false;
     for (let layer = 1; layer <= $from.depth; layer += 1) {
@@ -65,7 +77,7 @@ export function getClearAllReferenceUse(
     }
     if (!returnHasReferenceUse) break;
   }
-  return true;
+  return changed;
 }
 
 /** 单元格、行、段落等容器是否完全没有文字或原子内容。 */
@@ -94,7 +106,12 @@ export function deleteEmptyTable(
   dispatch?: (tr: Transaction) => void,
 ): boolean {
   if (!atEmptyTableCellOpenHead(state)) return false;
-  return deleteTable(state, dispatch);
+  return deleteTable(state, dispatch
+    ? (tr) => {
+        tr.setMeta(VIM_ALLOW_STRUCTURE_META, true);
+        dispatch(tr);
+      }
+    : undefined);
 }
 
 export const blockContainerKeypress = $prose(
@@ -113,6 +130,13 @@ export const blockContainerKeypress = $prose(
             return true;
           }
           if (event.key === "Backspace" && !event.shiftKey) {
+            if (atReferenceUseMostOpenHead(view.state)) {
+              debugEvent("editor", "blockquote backspace accepted", {
+                depth: view.state.selection.$from.depth,
+              });
+              event.preventDefault();
+              return getClearAllReferenceUse(view.state, (tr) => view.dispatch(tr));
+            }
             if (!atEmptyTableCellOpenHead(view.state)) return false;
             event.preventDefault();
             return deleteEmptyTable(view.state, (tr) => view.dispatch(tr));

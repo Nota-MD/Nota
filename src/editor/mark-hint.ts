@@ -94,6 +94,7 @@ import {
   type SyntaxNodeAttribute,
 } from "./mark-hint-source";
 import { inlineEscapeSpec } from "./inline-escape";
+import { adjacentSyntaxTarget, exactTextSelection, textblockDepthFrom } from "./inline-caret";
 
 export {
   findActiveMarkRange,
@@ -383,8 +384,7 @@ export function moveInlineCaret(
 ): Transaction | null {
   if (!state.selection.empty) return null;
   const { $from } = state.selection;
-  let depth = $from.depth;
-  while (depth > 0 && !$from.node(depth).isTextblock) depth--;
+  const depth = textblockDepthFrom($from);
   const block = $from.node(depth);
   if (!block.isTextblock || block.type.spec.code) return null;
 
@@ -394,14 +394,15 @@ export function moveInlineCaret(
   } else if (key === "End") {
     target = $from.end(depth);
   } else {
-    const sibling =
-      key === "ArrowLeft" ? $from.nodeBefore : $from.nodeAfter;
-    if (sibling?.type !== syntaxType) return null;
-    target = state.selection.from + (key === "ArrowLeft" ? -1 : 1);
+    target = adjacentSyntaxTarget(
+      $from,
+      syntaxType,
+      key === "ArrowLeft" ? "left" : "right",
+    );
   }
   if (target === null || target === state.selection.from) return null;
   return state.tr
-    .setSelection(TextSelection.create(state.doc, target))
+    .setSelection(exactTextSelection(state, target))
     .scrollIntoView();
 }
 
@@ -419,8 +420,7 @@ export function backspaceInlineDelimiter(
 ): Transaction | null {
   if (!state.selection.empty) return null;
   const { $from } = state.selection;
-  let depth = $from.depth;
-  while (depth > 0 && !$from.node(depth).isTextblock) depth--;
+  const depth = textblockDepthFrom($from);
   const parent = $from.node(depth);
   if (!parent.isTextblock || parent.type.spec.code) return null;
   const marks = state.schema.marks as Record<string, MarkType | undefined>;

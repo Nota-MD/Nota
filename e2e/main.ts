@@ -205,6 +205,37 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "Left at inline math source start exits before the formula",
+    async run() {
+      await mount("$x$");
+      const input = await openInlineMath();
+      input.setSelectionRange(0, 0);
+      press(input, "ArrowLeft");
+      await nextFrames();
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(serialized(), "Z$x$", "text before the formula was appended inside the formula");
+    },
+  },
+  {
+    name: "alternate inline math delimiters share the same caret boundaries",
+    async run() {
+      for (const [source, expected] of [
+        ["\\(x\\)", "Z\\(x\\)"],
+        ["\\[x\\]", "Z\\[x\\]"],
+      ] as const) {
+        await mount(source);
+        const input = await openInlineMath();
+        input.setSelectionRange(0, 0);
+        press(input, "ArrowLeft");
+        await nextFrames();
+        editor!.insertAtCursorPlace("Z");
+        await nextFrames();
+        assertEqual(serialized(), expected, `${source} did not keep its delimiter or left boundary`);
+      }
+    },
+  },
+  {
     name: "trailing backslash adds only a visual gap before closing dollar",
     async run() {
       await mount("$x$");

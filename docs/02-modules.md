@@ -124,6 +124,7 @@
 | `editor/link-edit.ts` | **链接**这一族（256 行，2026-10-07 新建，第 96 ＋ 102 项）：`装链接`（`linkSet`：把"名称 ＋ 地址"写进文档）与 `摘链接`（`linkRemove`：只摘标记、文字不动）。**三层**：纯字符串（`链接落点` / `源文链接区间` / `源文链接` / `摘源文链接`）→ PM 文档（`链接区间` / `建链接事务` / `摘链接事务`）→ 一个 `Editor`。⚠️ **上游那条 `toggleLinkCommand` 只挂标记、一个字符都不插**（空光标时只设 `storedMarks`），所以"光标停在空处点插入链接，屏幕上什么都不会出现"——这一份补的正是"把文字一起写进去"。⚠️⚠️ **地址为空或危险协议（`javascript:` 那一族）时不写链接、落纯文字**（用户填的字不丢，能执行的链接一条都不进文档；与 `url-link.ts` 的自动识别**同一个答案**）。⚠️ **连续的同地址兄弟节点合成一条**、**代码块给 `null`**。⚠️ 源码模式调的是**同一组纯函数**（`source-commands.ts` 的两个 `case`）。用例 **34 条**在 `tests/link-edit.test.ts` |
 | `editor/instant-render.ts` | 「光标所在块的 Markdown 标记淡化显示」那个 ProseMirror 插件。2026-10-25 起标题块不显示 `H1`…`H6` 徽标；标题语法只在回车前以 `.nota-heading-prefix` 出现。引用、无序列表与代码围栏改用可主题覆盖的自绘 SVG，位置相对块垂直居中 |
 | `editor/mark-hint.ts` | **全部行内标记的提示插件与事务编排**：粗体、斜体、行内代码、删除线、高亮、上标、下标、下划线都用有文档位置的真实原子节点显示左右源码符号。2026-10-31 起每个字符各是一颗节点，`**` / `</u>` 可逐字符移动、删除；字体和字号继承正文，颜色使用 `--fg-faint`。⚠️ 与 `instant-render.ts` 分工为行内 vs 块级；serializer 为空，只挂可编辑实例。2026-11-01 起组字事务不重写当前段落，组字结束后才规范化；WebKit 把中文上屏误塞进高亮／粗体内侧时，按组字起点与 `event.data` 精确移回闭合标记外侧，正常在标记内输入不动。活动标记组按语法要求的字符数截取最近一组，撤销时不会把历史里的旧原子叠成 `====`。用例在 `tests/mark-hint.test.ts`、`tests/mark-hint-syntax.test.ts` 与 `tests/inline-editing-rewrite.test.ts` |
+| `editor/inline-caret.ts` | **行内原子边界坐标的唯一入口**（2026-11-01）：`exactTextSelection` / `textblockDepthFrom` / `adjacentSyntaxTarget`。⚠️ `TextSelection.near()` 对 `content:"text*"` 的行内原子可能合法地吸进节点内部；公式源码在节点前后退出、语法原子跨越必须用精确坐标。`mark-hint.ts` 与 `math-view.ts` 共用这一层。 |
 | `editor/mark-hint-source.ts` | **行内语法节点与整段源码重建**：`notaSyntax` 规格、可见节点序列化、转义节点、禁用标记过滤与整段重解析。无视图状态，供 `mark-hint.ts` 调用并供 Node 测试直接验证 |
 | `editor/plain-syntax.ts` | **未完成 Markdown 标点段的字形稳定层**（2026-10-31 新建）：`plainSyntaxRanges` 识别当前文本块里未被转义的连续 `*` / `_` / `~` / `=` / `^` / 反引号 / `$`，`inlineSyntaxDecorations` 只发临时 inline decoration。CSS 对 `.nota-syntax-text` 与已确认的 `.nota-syntax-marker` 关闭 `font-variant-ligatures` / `font-kerning`，避免 WebKitGTK 对相邻标点采用不同上下文字形与 LCD 栅格化相位。不改文档、不改变语义，代码与链接内容明确跳过 |
 | `editor/atx.ts` | **「什么算标题」的唯一判据**（宽松/严格两套正则 ＋ `atxPrefix()` 这个给文本用的入口）。⚠️ 所有调用点都往这儿问（大纲、源码模式、标签页标题、正文装饰、回车成块），**别处不许自己数井号**（前缀长度是现算的）。📌 **2026-09-30 起正文那两处也走它**——宽松档 `#你好` 因此和 `# 你好` 并成一条路，见 `docs/05` §4.9c |
@@ -425,9 +426,9 @@
 `tests/*.test.ts`；下面旧段里的 56 份 / 1398 条与手抄名单只作为历史。
 
 📌 **2026-11-01 浏览器 E2E**：`npm run test:e2e` 用系统 Chrome 加载真实
-`createEditor()`、真实 CSS / NodeView 与 Tauri IPC 替身，共 **8 个场景**：
-行内标记 Left / Home、公式末尾 Right、末尾反斜杠间距、智能标点与分割线、
-自动更正与一次撤销、Emoji 补全、脚注插入。它不是 Tauri/WebKitGTK 窗口测试，
+`createEditor()`、真实 CSS / NodeView 与 Tauri IPC 替身，共 **10 个场景**：
+行内标记 Left / Home、公式左右边界、三种行内公式分隔符、末尾反斜杠间距、
+智能标点与分割线、自动更正与一次撤销、Emoji 补全、脚注插入。它不是 Tauri/WebKitGTK 窗口测试，
 平台原生对话框、真实输入法与 OS 级快捷键仍以 `docs/06` 的开窗记录为准。
 
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
@@ -443,7 +444,7 @@
 `source-mark.test.ts` **28** · `math-suggest.test.ts` **27** · `toc.test.ts` **27**
 `paste-clean.test.ts` **25** · `math-currency.test.ts` **23**
 `code-block-editing.test.ts` **21** · `key-conflicts.test.ts` **21**
-`auto-correct.test.ts` **21** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20**
+`auto-correct.test.ts` **21** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20** · `woff2-fonts.test.ts` **3**
 `atom-space.test.ts` **19** · `heading-on-enter.test.ts` **20** · `heading-toggle.test.ts` **5** · `font-bundle.test.ts` **7** · `cde-menu-fidelity.test.ts` **11** · `settings-export.test.ts` **5** · `accent.test.ts` **18**
 `mark-hint.test.ts` **17** · `mark-hint-syntax.test.ts` **20** · `instant-render.test.ts` **3** · `list-indent.test.ts` **16**
 `focus-dim.test.ts` **15** · `file-kind.test.ts` **14** · `html-block.test.ts` **15**

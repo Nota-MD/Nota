@@ -119,6 +119,7 @@
 | [`@vitejs/plugin-react`](https://github.com/vitejs/vite-plugin-react) | 5.2.0 | MIT | — |
 | [`typescript`](https://github.com/microsoft/TypeScript) | 5.9.3 | Apache-2.0 | — |
 | [`vite`](https://github.com/vitejs/vite) | 7.3.6 | MIT | — |
+| [`wawoff2`](https://github.com/fontello/wawoff2) | 2.0.1 | MIT | 构建期把仍被 `@font-face` 引用的 TTF/OTF 转成 WOFF2；产物不携带旧字体格式 |
 
 ## 3. 系统依赖（Linux）
 

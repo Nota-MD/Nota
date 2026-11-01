@@ -178,6 +178,7 @@ import {
   readDecoration,
   recognizeNode,
 } from "./math-current";
+import { exactTextSelection } from "./inline-caret";
 import {
   drawUpstream,
   raiseGetClearMessage,
@@ -696,25 +697,22 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       view.dispatch(tr);
     }
 
-    /** 退出编辑：把光标搬到节点**后面**，面板随之收起来。 */
-    function backOutputEditEdit(): void {
+    /** 退出编辑：把光标搬到公式节点前侧或后侧。 */
+    function backOutputEditEdit(side: "before" | "after" = "after"): void {
       const position2 = getPos();
       if (typeof position2 !== "number") return;
       const node = view.state.doc.nodeAt(position2);
       if (!node) return;
 
-      // ⚠️ 顺序：先搬选区（装饰随之灭掉），再 focus 回正文。
-      //    反过来的话面板会因为"装饰还说当前"而留在屏幕上。
-      //
-      // ⚠️ "后面"得落到**下一个文本块里**（`TextSelection.near` 干的正是"找最近
-      //    一个能放光标的地方"）：直接给一个"两块之间"的位置，它的 parent 是文档、
-      //    没有行内内容，浏览器把光标放在哪儿是不定的（prosemirror-state 自己都会
-      //    为这种选区 warn 一句）。
-      // ⚠️ 文档末尾那一块公式后面**没有**这样的位置，`near` 会退回"选中它自己"
-      //    （等于 Escape 白按），所以那时用落在文档末尾的文本光标。
-      const to2 = position2 + node.nodeSize;
-      const findOf = TextSelection.near(view.state.doc.resolve(to2), 1);
-      const selection = findOf instanceof TextSelection ? findOf : TextSelection.create(view.state.doc, to2);
+      // 先搬选区再 focus；块级位置用 near，文档末尾退回末尾文本光标。
+      const to2 = side === "after" ? position2 + node.nodeSize : position2;
+      // 行内原子带 text* 内容，near 可能吸进公式内部；节点前后用精确坐标。
+      const selection = inline
+        ? exactTextSelection(view.state, to2)
+        : (() => {
+            const findOf = TextSelection.near(view.state.doc.resolve(to2), side === "after" ? 1 : -1);
+            return findOf instanceof TextSelection ? findOf : TextSelection.create(view.state.doc, to2);
+          })();
       const tr = view.state.tr.setSelection(selection);
       tr.setMeta(commonStyleCurrentKey, selection.from);
       view.dispatch(tr);
@@ -782,9 +780,17 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         backOutputEditEdit();
         return;
       }
-      // At the right edge of inline source, Right leaves the formula instead
-      // of moving inside its `<input>`. The next typed text must become normal
-      // paragraph text after `$…$`, not part of the LaTeX source.
+      // 源码框左右边缘和普通正文一致：越过边界就退出公式。
+      if (
+        inline &&
+        e.key === "ArrowLeft" &&
+        input.selectionStart === 0 &&
+        input.selectionEnd === 0
+      ) {
+        e.preventDefault();
+        backOutputEditEdit("before");
+        return;
+      }
       if (
         inline &&
         e.key === "ArrowRight" &&
@@ -792,7 +798,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         input.selectionEnd === input.value.length
       ) {
         e.preventDefault();
-        backOutputEditEdit();
+        backOutputEditEdit("after");
         return;
       }
       // 行内公式没有"多行"这回事：Enter 当"确认"（同 `diagram-view.ts` 那条）。

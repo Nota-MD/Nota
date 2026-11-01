@@ -665,6 +665,22 @@ await testCase("行内：源码末尾按 Right 退出公式，后续输入留在
   assertion(getState().doc.textContent.includes("你"), "正文输入没有落到公式外");
 });
 
+await testCase("行内：源码开头按 Left 退出公式，后续输入留在 `$…$` 前", () => {
+  const { view, perspective, getState } = create(inline("x"), inlinePosition);
+  const box2 = find(perspective.view!.dom, "nota-math-source");
+  if (!box2) throw new Error("没有源码框");
+  box2.setSelectionRange(0, 0);
+  equal(box2.dispatch("keydown", { key: "ArrowLeft" }).defaultPrevented, true, "Left 要退出公式");
+  assertion(getState().selection instanceof TextSelection, "退出后应是正文文本光标");
+  view.dispatch(getState().tr.insertText("你"));
+  equal(
+    getState().doc.nodeAt(inlinePosition + 1)?.textContent,
+    "x",
+    "公式源码里没有混入正文",
+  );
+  equal(getState().doc.child(1).textContent, "你x", "正文输入应落在公式前");
+});
+
 await testCase("行内：源码末尾反斜杠与右侧 `$` 有纯展示间距", () => {
   const { perspective } = create(inline("x"), inlinePosition);
   const dom = perspective.view!.dom;

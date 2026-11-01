@@ -3,11 +3,13 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+import { woff2OnlyFonts } from "./tools/woff2-fonts";
+
 // Tauri 约定：dev 时固定端口，供 src-tauri/tauri.conf.json 的 devUrl 指向。
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), woff2OnlyFonts()],
 
   // Tauri 在 Windows 上通过 `http://tauri.localhost` 提供内置资源。相对基址
   // 让入口 HTML、静态资源和按需加载的模块都从当前页面解析，不依赖协议处理

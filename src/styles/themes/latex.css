@@ -21,8 +21,9 @@
  * # 字体
  *
  * 正文仍优先使用系统里的 New Computer Modern / Latin Modern，并用完整衬线
- * 回退链保证中文可读。等宽字体例外：`latex-fonts/cmunt.ttf` 是 CM Unicode
- * 0.7.0 的原版 `cmuntt.ttf`，采用 SIL OFL 1.1，许可证与字体同目录保存。
+ * 回退链保证中文可读。等宽字体例外：主题携带 CM Unicode 0.7.0 的
+ * `cmuntt.ttf` 源文件，构建时统一转换成 WOFF2；采用 SIL OFL 1.1，
+ * 许可证与字体同目录保存。
  * 这样代码块不必碰运气等系统恰好安装了 CMU Typewriter Text。
  *
  * # 写法约定

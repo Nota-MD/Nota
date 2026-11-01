@@ -7,7 +7,7 @@
   "license": "BSD-2-Clause",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node tools/check-woff2-assets.mjs",
     "preview": "vite preview",
     "test": "bash tools/test-frontend.sh",
     "test:e2e": "node e2e/run.mjs",
@@ -51,7 +51,8 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
     "typescript": "^5.9.0",
-    "vite": "^7"
+    "vite": "^7",
+    "wawoff2": "^2.0.1"
   },
   "overrides": {
     "source-map-js": "1.2.2"

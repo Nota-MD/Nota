@@ -422,7 +422,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 输入规则（`==x==` 敲完当场变高亮那类）。**只读实例也挂**——只读时
     // 压根没有输入，挂上去是零成本的死代码；分一个跟 `markHint` 那样的
     // 分支反而多一处"哪个模式装了哪个没装"要说清楚的东西。
-    .use(readOnly || !autoPair ? [] : [autoPairPlugin()])
+    .use(readOnly || !autoPair ? [] : [autoPairPlugin(true, punctuation)])
     .use(inlineMarkInputRuleRule(inlineExtensions))
     .use(gfm)
     .use(gitHubNoticePlugin)

@@ -682,6 +682,7 @@ PAIRS=(
   "tests/lang-guess.test.ts                      02,06"
   "tests/paste-clean.test.ts                     02,06"
   "tests/url-link.test.ts                        02,06"
+  "tests/auto-pair.test.ts                       02,06"
   "tests/file-kind.test.ts                       02,06"
   "tests/file-icon.test.ts                       04,06"
   "tests/tree-options.test.ts                    02,06"

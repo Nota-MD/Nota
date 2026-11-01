@@ -353,6 +353,26 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "smart quote pairing keeps apostrophes and original closers intact",
+    async run() {
+      await mount("");
+      await typeText('"hello"');
+      assertEqual(serialized(), "“hello”", "straight quote keys did not form one curly pair");
+
+      await mount("");
+      await typeText("don't");
+      assertEqual(serialized(), "don’t", "single quote after a word became a pair instead of an apostrophe");
+
+      await mount("");
+      await typeText("https://example.com/a(b");
+      assertEqual(
+        document.querySelector(".ProseMirror")?.textContent,
+        "https://example.com/a(b",
+        "bracket pairing changed a URL",
+      );
+    },
+  },
+  {
     name: "Right at inline math source end exits before following text",
     async run() {
       await mount("$x$");

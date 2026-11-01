@@ -10,7 +10,7 @@
  * 理由、顺序的讲究、"为什么不能挂 `$remark`"全是同一条知识，散在 `.config()`
  * 里反而更难看懂。`create.ts` 那边只剩一行调用。
  *
- * # 这七层是谁、为什么是这个顺序
+ * # 这八层是谁、为什么是这个顺序
  *
  * ⚠️ **最外层**要看的是"这一颗节点最终要落盘成什么"，所以排在最外面；
  * 里面几层只看自己认的那个字符：
@@ -31,9 +31,11 @@
  * 6. `原子后的空格`——把 WebKit 塞在行内原子（公式/图片/硬换行）后面的那颗
  *    U+00A0 换回普通空格（`atom-space.ts`）；
  * 7. **最内层 `不转义行首井号`**（`lax-heading.ts`）——把行首 `#` 前面那颗多余的
- *    反斜杠去掉。
+ *    反斜杠去掉；
+ * 8. **协议冒号**——去掉 `https\:` / `ftp\:` / `mailto\:` 中序列化器自动补上的
+ *    反斜杠。只影响语义相同的冒号转义，不改链接节点或正文里的其他反斜杠。
  *
- * 七条各自只看自己认的那个字符、各自把原文传下去，互不干扰（1、2、3 三层还要
+ * 八条各自只看自己认的那个字符、各自把原文传下去，互不干扰（1、2、3 三层还要
  * 看上下文，但判据互不相干：一个看的是"下一行是什么"，一个看的是"这一段的
  * `$` 都在哪儿"，一个看的是"这颗波浪号挨着谁"）。⚠️ 顺序**可以**换（这几条判据
  * 不相交），但每次换都要重跑 `tests/table-pipe.test.ts`、`tests/math-delim.test.ts`
@@ -70,14 +72,26 @@ type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo
 /** mdast 的文本处理器（`handlers.text` 那一条）。 */
 export type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
+const escapedProtocolColon = /\b(https?|ftp|mailto)\\:/gi;
+
+/** Remove the serializer's automatic escape in protocol prefixes. */
+function restoreProtocolColon(source?: textHandler): textHandler {
+  return (node, parent, state, info) => {
+    if (!source) return node.value ?? "";
+    return source(node, parent, state, info).replace(escapedProtocolColon, "$1:");
+  };
+}
+
 /**
- * 把七层套起来。`原文` 是 Milkdown 自己那条文本处理器
+ * 把八层套起来。`原文` 是 Milkdown 自己那条文本处理器
  * （`prev.handlers?.text`），**透传给最内层**。
  */
 export function textHandlerChain(source?: textHandler): textHandler {
-  return notConvertMeaningLineFirstVerticalLine(
-    notConvertMeaningDollarDollar(
-      notConvertMeaningIsolatedStandaloneWaveWaveNumber(notConvertMeaningAlreadyKnownLanguageMethod(notConvertMeaningLineFirstEqualNumber(SpaceAfterAtom(notConvertMeaningLineFirstHashNumber(source))))),
+  return restoreProtocolColon(
+    notConvertMeaningLineFirstVerticalLine(
+      notConvertMeaningDollarDollar(
+        notConvertMeaningIsolatedStandaloneWaveWaveNumber(notConvertMeaningAlreadyKnownLanguageMethod(notConvertMeaningLineFirstEqualNumber(SpaceAfterAtom(notConvertMeaningLineFirstHashNumber(source))))),
+      ),
     ),
   );
 }

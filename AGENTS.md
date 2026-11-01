@@ -445,7 +445,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `tools/doc-sync-check.sh` | 文档同步与行数上限的启发式检查（见 `docs/09`） |
 | `tools/check-version.sh` | 钉住三份版本文件，并校验发布 tag |
 | `tools/test-frontend.sh` | 从 `tests/*.test.ts` 自动生成前端测试名册 |
-| `e2e/` | **浏览器端到端工装**（2026-11-01）：`npm run test:e2e` 类型检查并构建真实编辑器页面，再由系统 Chrome 通过 CDP 执行 31 个场景。覆盖行内标记、公式边界与嵌套、自动链接、基础括号配对、代码块光标/字体、图片失败告警与删除、智能标点、自动更正、Emoji、脚注、标题、引用框等。⚠️ 它不启动 Tauri/WebKitGTK，不能替代原生对话框、IME、系统打印、Lua 热重载与 OS 快捷键的手工验收；场景和边界见 `docs/06` §5.74 |
+| `e2e/` | **浏览器端到端工装**（2026-11-01）：`npm run test:e2e` 类型检查并构建真实编辑器页面，再由系统 Chrome 通过 CDP 执行 32 个场景。覆盖行内标记、公式边界与嵌套、自动链接、基础括号与弯引号配对、代码块光标/字体、图片失败告警与删除、智能标点、自动更正、Emoji、脚注、标题、引用框等。⚠️ 它不启动 Tauri/WebKitGTK，不能替代原生对话框、IME、系统打印、Lua 热重载与 OS 快捷键的手工验收；场景和边界见 `docs/06` §5.74 |
 | `tools/woff2-fonts.ts` | **构建期字体收敛**（2026-11-01）：把被 CSS 引用的 TTF/OTF 转成 WOFF2，每个 `@font-face` 只留一个 WOFF2 源，并删除 WOFF/TTF 回退；`check-woff2-assets.mjs` 在 `npm run build` 末尾复核产物。源码母版可保留，安装包只带 WOFF2 |
 | `tools/i18n-check.sh` | **界面文案的账**（2026-09-25）：前端 `t("…")` 的键 ↔ **`src/i18n/en*.ts` 那四份表**（`en.ts` 汇总 ＋ `en-ui` / `en-settings` / `en-runtime`；⚠️ 判据是"取每个文件第一个 `= {` 之后的内容当表体"）、插件 `T("…")` ↔ `lang/*.toml`。⚠️ **废键（表里有、代码里找不到）是 FAIL**——那意味着原文被改过、那条翻译已经失效，而失效的样子是**静默退回原文**，不报错。⚠️ 2026-09-26 起第 ④ 栏「**硬编码中文泄漏**」（`t(...)` 压根没包的那一类）**从"只打印"改成计入 FAIL**——改的时机是当天把最后两条真漏网（`FormatBar.tsx` 的 `aria-label="格式化"`、`EditorPane.tsx` 的 `正在准备编辑器…`）清掉之后；理由：闸门不拦的规矩等于没这条规矩。另查两条插件硬伤：声明了 `langs` 却没有 `lang/en.toml`、有 `lang/` 却**没声明** `langs`（后者宿主根本不会读那张表） |
 | ⚠️ `tools/pack-plugin.py`（**2026-10-09 起在插件仓库**） | **打包 `.nota-plugin`（zip）＋签名**（2026-09-25）：摘要算法是两份实现，改它要同批改 `src-tauri/src/plugin/package.rs` 与 `docs/11` §1.6.2

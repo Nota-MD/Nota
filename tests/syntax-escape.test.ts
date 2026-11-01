@@ -105,6 +105,24 @@ function roundtrip(source3: string): string {
     .stringify(tree as never);
 }
 
+function stringify(text: string): string {
+  return unified()
+    .use(remarkStringify, {
+      bullet: "-" as const,
+      rule: "-" as const,
+      handlers: { text: textHandlerChain(defaultHandlers.text as never) as never },
+    })
+    .stringify({
+      type: "root",
+      children: [
+        {
+          type: "paragraph",
+          children: [{ type: "text", value: text }],
+        },
+      ],
+    } as never);
+}
+
 /* ── 一、该放回来的放回来了 ─────────────────────────────────────────── */
 
 group("一、行首那两种语法不再被加反斜杠");
@@ -164,6 +182,11 @@ testCase("别的层管的那些字符不受影响（本层只认 `[`）", () => 
   equal(roundtrip("==重点==\n"), "==重点==\n", "行首等号那一层");
   equal(roundtrip("#标签\n"), "#标签\n", "行首井号那一层");
   equal(roundtrip("甲 ~ 乙\n"), "甲 ~ 乙\n", "孤立波浪号那一层");
+  equal(
+    stringify("https://example.com/a(b"),
+    "https://example.com/a(b\n",
+    "普通文本里的协议冒号不该被自动写成反斜杠",
+  );
 });
 
 /* ── 三、判据的立足点：有定义时根本走不到这一层 ─────────────────────── */

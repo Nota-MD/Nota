@@ -25,6 +25,8 @@ export interface Document {
   path: string | null;
   title: string;
   text: string;
+  /** 这份文件在磁盘上的编码；保存时按同一个编码写回。 */
+  encoding: string;
   dirty: boolean;
   revision: number;
 }

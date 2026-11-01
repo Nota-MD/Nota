@@ -1,6 +1,6 @@
 //! 设置相关命令。
 
-use tauri::State;
+use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{NotaError, Result};
@@ -19,8 +19,12 @@ pub fn nota_settings_get(state: State<'_, AppState>) -> Result<Settings> {
 /// 还是"没给的字段恢复默认"）会变成一个新的、没人想要的理解负担。
 /// 等设置项多到前端改一项要传一大坨时再改成分项，那时也有真实的理由了。
 #[tauri::command]
-pub fn nota_settings_set(state: State<'_, AppState>, settings: Settings) -> Result<()> {
-    落盘(&state, settings)
+pub fn nota_settings_set(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    settings: Settings,
+) -> Result<()> {
+    落盘(&app, &state, settings)
 }
 
 /// 开机读设置时出的问题。读成功返回 `null`。
@@ -125,9 +129,12 @@ pub fn nota_settings_open_dir(app: tauri::AppHandle) -> Result<String> {
 /// 调用方得再 `nota_settings_get` 一次，中间那一小段窗口里界面还是旧的
 /// ——而"恢复默认之后有几行没跟着变回去"是最让人不信任设置的东西。
 #[tauri::command]
-pub fn nota_settings_reset(state: State<'_, AppState>) -> Result<Settings> {
+pub fn nota_settings_reset(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Settings> {
     let next = Settings::default();
-    落盘(&state, next.clone())?;
+    落盘(&app, &state, next.clone())?;
     Ok(next)
 }
 
@@ -155,10 +162,12 @@ pub async fn nota_settings_export(
 ///
 /// ⚠️ **两处都必须走这里**：各写一遍就会漏掉下面那段锁序（先 `settings`、
 /// 放掉、再 `documents`），而它是**承重**的，漏掉一半就是死锁。
-fn 落盘(state: &AppState, next: Settings) -> Result<()> {
+fn 落盘(app: &tauri::AppHandle, state: &AppState, next: Settings) -> Result<()> {
     let strict = next.strict_markdown;
     let debug_mode = next.general.debug_mode;
     let extensions_enabled = next.general.extensions_enabled;
+    let lua_hot_reload = next.general.debug_mode && next.general.lua_hot_reload;
+    let lua_hot_reload_changed;
     let extensions_changed;
 
     // ⚠️ 这一对花括号不是装饰：`documents` 在锁序里**排在 `settings` 前面**
@@ -169,6 +178,8 @@ fn 落盘(state: &AppState, next: Settings) -> Result<()> {
         let mut current = state.settings.lock().unwrap();
         let previous = current.clone();
         extensions_changed = previous.general.extensions_enabled != extensions_enabled;
+        lua_hot_reload_changed =
+            (previous.general.debug_mode && previous.general.lua_hot_reload) != lua_hot_reload;
         *current = next;
 
         // 先落盘，落盘失败就把内存里的改回去——否则会出现"界面上是新的、
@@ -194,6 +205,11 @@ fn 落盘(state: &AppState, next: Settings) -> Result<()> {
             .lock()
             .unwrap()
             .set_extensions_enabled(extensions_enabled);
+    }
+    if lua_hot_reload_changed {
+        if let Some(watch) = app.try_state::<crate::plugin::watch::PluginWatch>() {
+            watch.set_enabled(app, lua_hot_reload);
+        }
     }
     Ok(())
 }

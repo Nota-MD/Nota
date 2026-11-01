@@ -33,6 +33,7 @@
 import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
 
 import type { CommandState } from "@/editor/command-state";
+import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 import type { Document, ViewMode } from "@/bridge/ipc";
 import type { Settings } from "@/bridge/types";
 import type { Toast } from "@/ui/Toasts";
@@ -93,6 +94,8 @@ export interface editorAreaWiring {
    * 那条改道）。
    */
   insertImageLike: () => Promise<void>;
+  /** 当前选区快照；状态栏在选中文字时显示选区字数。 */
+  onSelectionSnapshot: (snapshot: SelectionSnapshot | null) => void;
   /** 几个 hook 的出口。⚠️ 整个给，不挑字段（见文件头）。 */
   documentApi: documentApi;
   findBar: findBar;
@@ -133,7 +136,7 @@ export interface editorAreaWiring {
  */
 export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
   const { mainArea, cellStyleConvertBar, editor, activeDoc, settings, viewMode, focusMode, typewriter, onlyReadMode } = wiring;
-  const { cellStyleConvertBarOpen, commandState, setCommandState, runCommand, runMenuCommand, disabledCommands, menuChecks, insertImageLike, refreshDocs, toast } =
+  const { cellStyleConvertBarOpen, commandState, setCommandState, runCommand, runMenuCommand, disabledCommands, menuChecks, insertImageLike, onSelectionSnapshot, refreshDocs, toast } =
     wiring;
   const { documentApi, findBar, previewOutputMouth, changeActionOutputMouth, MeetingSpeechOutputMouth, plugin, dialog } = wiring;
 
@@ -319,6 +322,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
             if (activeDoc.path) recordRollAction(activeDoc.path, compareExample);
           }}
           onCommandState={setCommandState}
+          onSelectionSnapshot={onSelectionSnapshot}
           onFindStatus={reportMatch}
           onToast={toast}
           onDocsChanged={refreshDocs}

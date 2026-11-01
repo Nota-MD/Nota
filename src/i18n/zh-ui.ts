@@ -333,6 +333,7 @@ export const uiMessages: Record<string, string> = {
   "Sidebar": "侧栏",
   "Close the preview and go back to the document (this does not apply the changes)": "收起预览，回到正文（改动不会因此被应用）",
   "Could not open extension panel {0}: {1}": "无法打开拓展面板 {0}：{1}",
+  "Could not refresh reloaded extension: {0}": "刷新已重载的拓展失败：{0}",
   "Diff": "改动对比",
   "Result": "改后效果",
   "Esc to close": "Esc 收起",
@@ -548,6 +549,11 @@ export const uiMessages: Record<string, string> = {
   // 从"废键"变回"正在用的键"——**删它们的理由没了**（那时没有任何地方显示
   // 这三个数）。上面那一串里剩下的仍是废键，别一起搬回来。
   "{0} words": "{0} 词",
+  "{0} selected words": "已选 {0} 词",
+  "{0} selected words · {1} selected characters": "已选 {0} 词 · {1} 字符",
+  "Delete image": "删除图片",
+  "Delete video": "删除视频",
+  "Image could not be loaded: {0}": "图片无法加载：{0}",
   "{0} words · {1} characters · {2} lines · about {3} min": "{0} 词 · {1} 字符 · {2} 行 · 约 {3} 分钟",
   "{0} characters": "{0} 字符",
   "{0} lines": "{0} 行",

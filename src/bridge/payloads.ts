@@ -35,6 +35,12 @@ export interface PanelDirtyPayload {
   id: string | null;
 }
 
+/** Result of an opt-in Lua hot reload. An error means the previous state stayed active. */
+export interface PluginReloadedPayload {
+  plugin: string;
+  error: string | null;
+}
+
 /**
  * `events.pluginStream` 的载荷（2026-10-04 加，`docs/07` 第 58 项）。
  *

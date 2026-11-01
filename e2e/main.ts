@@ -300,6 +300,70 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "code blocks keep a visible caret and a stable mono font",
+    async run() {
+      await mount("```js\nconst x = 1;\n```");
+      const content = await waitFor<HTMLElement>(".nota-code-cm .cm-content");
+      const line = await waitFor<HTMLElement>(".nota-code-cm .cm-line");
+      const before = getComputedStyle(line);
+      const beforeSize = before.fontSize;
+      const beforeFamily = before.fontFamily;
+      content.focus();
+      content.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          clientX: line.getBoundingClientRect().left + 4,
+          clientY: line.getBoundingClientRect().top + 4,
+        }),
+      );
+      await nextFrames();
+      const cursor = await waitFor<HTMLElement>(".nota-code-cm .cm-cursor");
+      content.focus();
+      await nextFrames();
+      const after = getComputedStyle(line);
+      const cursorStyle = getComputedStyle(cursor);
+      assertEqual(after.fontSize, beforeSize, "code font size changed when the block gained focus");
+      assertEqual(after.fontFamily, beforeFamily, "code font family changed when the block gained focus");
+      assert(cursorStyle.display !== "none", "focused code block did not draw a caret");
+      assert(cursorStyle.visibility !== "hidden", "focused code block caret is hidden");
+      assert(
+        parseFloat(cursorStyle.borderLeftWidth) >= 1,
+        "focused code block caret has no visible stroke",
+      );
+    },
+  },
+  {
+    name: "failed images show an inline warning",
+    async run() {
+      await mount("![bad-image](data:image/png;base64,not-an-image)");
+      const warning = await waitFor<HTMLElement>(".nota-media-error:not([hidden])");
+      assert(
+        warning.textContent?.includes("data:image/png"),
+        `image failure warning did not identify the source: ${warning.textContent}`,
+      );
+      assertEqual(serialized(), "![bad-image](data:image/png;base64,not-an-image)", "warning changed Markdown");
+    },
+  },
+  {
+    name: "selected image has a direct delete control",
+    async run() {
+      await mount(
+        "![pixel](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z8WQAAAAASUVORK5CYII=)",
+      );
+      const image = await waitFor<HTMLImageElement>(".nota-image img");
+      image.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 }),
+      );
+      await nextFrames();
+      const remove = await waitFor<HTMLButtonElement>(".nota-image.is-selected .nota-media-delete");
+      remove.click();
+      await nextFrames();
+      assertEqual(serialized(), "", "delete button did not remove the image node");
+    },
+  },
+  {
     name: "leaving inline math inside link text keeps following text linked",
     async run() {
       await mount("[$x$](https://example.com)");

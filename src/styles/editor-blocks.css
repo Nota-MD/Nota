@@ -108,6 +108,19 @@
 .editor-mount .ProseMirror .nota-source-surface .cm-line,
 .editor-mount .ProseMirror .nota-source-surface .cm-editor * {
   font-family: var(--font-mono);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* CodeMirror draws selection and caret through a generated layer. WebKitGTK
+   can inherit the surrounding `caret-color: transparent` from ProseMirror;
+   make the focused code-block caret explicit instead of relying on the
+   generated theme rule winning the cascade. */
+.editor-mount .ProseMirror .nota-code-cm.cm-focused .cm-cursorLayer .cm-cursor {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  border-left: 2px solid var(--accent) !important;
 }
 
 .editor-mount .ProseMirror .nota-source-surface .cm-gutters {

@@ -56,6 +56,9 @@ pub struct General {
     /// 开发者模式的元素悬停检查。开启后指针经过界面元素时显示计算后的字体、
     /// 颜色、尺寸和内边距。默认关闭，并且只在 `debug_mode` 同时开启时生效。
     pub element_inspector: bool,
+    /// 开发者模式下监听插件目录，并在 `.lua` / `plugin.toml` 保存后热重载。
+    /// 默认关闭；关闭时不启动文件轮询线程。
+    pub lua_hot_reload: bool,
 }
 
 impl Default for General {
@@ -65,6 +68,7 @@ impl Default for General {
             debug_mode: false,
             extensions_enabled: true,
             element_inspector: false,
+            lua_hot_reload: false,
         }
     }
 }
@@ -102,8 +106,10 @@ mod tests {
     #[test]
     fn 元素悬停检查默认关闭且旧设置补默认值() {
         assert!(!General::default().element_inspector);
+        assert!(!General::default().lua_hot_reload);
         let old: General = toml::from_str("language = \"auto\"").unwrap();
         assert!(!old.element_inspector);
+        assert!(!old.lua_hot_reload);
     }
 
     #[test]

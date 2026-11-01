@@ -57,6 +57,7 @@ import type { CommandState } from "@/editor/command-state";
 import { useDocTheme, useDocThemeSlot } from "@/ui/useDocTheme";
 import { useUiStyles } from "@/ui/useUiStyles";
 import { useSettingsFile } from "@/ui/useSettingsFile";
+import { useLiveSelection } from "@/ui/useLiveSelection";
 import { useChromeVisibility } from "@/ui/useChromeVisibility";
 import { useImmersive } from "@/ui/useImmersive";
 import { useWindowControls } from "@/ui/useWindowControls";
@@ -117,7 +118,6 @@ export default function App() {
   // `editor/writing-modes.ts`。⚠️ 和它成对的**专注模式不在这里**（2026-09-25
   // 起）：专注与全屏共用一套外壳规则，整块在 `ui/useImmersive.ts`。
   const [typewriter, setTypewriter] = useState(false);
-
   /**
    * 光标状态（`null` = 读不出来：源码模式 / 还没打开文档）。
    *
@@ -126,17 +126,15 @@ export default function App() {
    * ——「删除行」在光标不在表格里时按下去什么都没有，而菜单上它是亮的。
    */
   const [commandState, setCommandState] = useState<CommandState | null>(null);
-
+  const [selectionSnapshot, setSelectionSnapshot] = useLiveSelection(activeId);
   // 扫到的文档主题。启动时拉一次——它是**状态不是事件**，同 `panels` 的道理（BUG-13）：
   // 用户在应用运行期间往主题目录里丢文件不会触发通知，想让新主题出现就重开应用。
   // ⚠️ 这里**没有**界面主题——那两条轴在 `settings` 里，由 `applyTheme` 落进
   // `<html>` 的属性，不经过这份清单。
   const { themes, setThemes, refresh: refreshThemes } = useDocThemeInventory();
-
   // 事件订阅里要读"当前是哪份"，但**不能把它写进依赖数组**——那会让每次切标签都
   // 退订再订一遍，中间那一刻的事件是丢的。用 ref 读最新值，订阅只发生一次。
   const activeIdRef = useRef<DocId | null>(null);
-
   const editorRef = useRef<EditorPaneHandle>(null);
 
   // ── 提示 ────────────────────────────────────────────────────────────────
@@ -743,6 +741,7 @@ export default function App() {
     // 不在 `useStatusBar` 里另写一份 `appearance` 的整表铺开。
     setUi: setChrome,
     cursor: commandState,
+    selection: selectionSnapshot,
     // ⚠️ 顶栏整条不画时（见 `TopBar`），插件栏那颗开关落到状态栏——`null` = 顶栏在。
     pluginDock:
       extensionsEnabled && (usingNativeMenu || !menuBarOpen)
@@ -875,6 +874,7 @@ export default function App() {
               disabledCommands,
               menuChecks,
               insertImageLike,
+              onSelectionSnapshot: setSelectionSnapshot,
               documentApi,
               findBar,
               previewOutputMouth,

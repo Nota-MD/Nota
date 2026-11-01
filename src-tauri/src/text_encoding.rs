@@ -97,7 +97,7 @@ pub fn 按编码读(path: &Path, label: &str) -> Result<String> {
         path: path.to_path_buf(),
         source,
     })?;
-    let (文本, _, _) = 编码.decode_without_bom_handling(&字节);
+    let (文本, _) = 编码.decode_without_bom_handling(&字节);
     Ok(文本.into_owned())
 }
 
@@ -119,9 +119,9 @@ pub fn 按编码写(path: &Path, 文本: &str, label: &str) -> Result<()> {
 ///    猜成别的（它的统计模型吃"长文本"这一口），而"这份文件本来就是 UTF-8"是
 ///    本世纪最常见的情形；
 /// 3. 剩下的才交给 `chardetng`。
-fn 猜着解码(字节: &[u8]) -> (String, String) {
-    if let Some((编码, _)) = Encoding::for_bom(字节) {
-        let (文本, _, _) = 编码.decode(字节);
+pub fn 猜着解码(字节: &[u8]) -> (String, String) {
+    if let Some((编码, bom_len)) = Encoding::for_bom(字节) {
+        let (文本, _) = 编码.decode_without_bom_handling(&字节[bom_len..]);
         return (文本.into_owned(), 编码.name().to_string());
     }
     if let Ok(文本) = std::str::from_utf8(字节) {
@@ -136,19 +136,28 @@ fn 猜着解码(字节: &[u8]) -> (String, String) {
 
 /// 把文本编成字节。⚠️ UTF-16 补 BOM（理由在文件头最后一条）。
 fn 编码后的字节(编码: &'static Encoding, 文本: &str) -> Vec<u8> {
-    let (体, _, _) = 编码.encode(文本);
-    let 补不补 = 编码 == UTF_16LE || 编码 == UTF_16BE;
-    let mut 出: Vec<u8> = Vec::with_capacity(体.len() + if 补不补 { 2 } else { 0 });
-    if 补不补 {
-        // ⚠️ 只有 UTF-16 走到这儿（见上面那个布尔），所以这两支就够了。
+    // encoding_rs deliberately exposes UTF-16 only for decoding; its generic
+    // `encode` method emits UTF-8 for UTF-16 outputs. Encode the code units
+    // explicitly so choosing UTF-16 actually writes UTF-16.
+    if 编码 == UTF_16LE || 编码 == UTF_16BE {
+        let mut 出 = Vec::with_capacity(文本.len() * 2 + 2);
         出.extend_from_slice(if 编码 == UTF_16BE {
             &[0xFE, 0xFF]
         } else {
             &[0xFF, 0xFE]
         });
+        for unit in 文本.encode_utf16() {
+            let bytes = if 编码 == UTF_16BE {
+                unit.to_be_bytes()
+            } else {
+                unit.to_le_bytes()
+            };
+            出.extend_from_slice(&bytes);
+        }
+        return 出;
     }
-    出.extend_from_slice(&体);
-    出
+    let (体, _, _) = 编码.encode(文本);
+    体.into_owned()
 }
 
 #[cfg(test)]

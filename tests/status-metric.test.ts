@@ -102,6 +102,7 @@ const stateBarSource = readFileSync(join("src", "ui", "StatusBar.tsx"), "utf8");
 // **这份测试要跟着改**，症状是它报"找不到 `appearance.status_metric ?? …`"
 // ——那句红不是误报，是搬家的人忘了带它。
 const wiringSource = readFileSync(join("src", "ui", "useStatusBar.ts"), "utf8");
+const appSource = readFileSync(join("src", "App.tsx"), "utf8");
 
 /**
  * 从 `appearance.rs` 里抠出 `pub enum StatusMetric { … }` 那一段的**变体名**
@@ -262,10 +263,25 @@ testCase("菜单四项的 i18n 键都在代码里以字面量出现", () => {
   }
 });
 
+testCase("status bar switches to selection word count", () => {
+  if (!stateBarSource.includes('t("{0} selected words", selectionCounts.words)')) {
+    throw new Error("selection word count is not wired to the main count");
+  }
+  if (!stateBarSource.includes("selection?.empty === false && selection.text.length > 0")) {
+    throw new Error("empty caret and non-empty selection are not distinguished");
+  }
+  if (!wiringSource.includes("selection: SelectionSnapshot | null") || !wiringSource.includes("    selection,")) {
+    throw new Error("selection snapshot is not wired from App");
+  }
+  if (!appSource.includes("selection: selectionSnapshot")) {
+    throw new Error("App does not pass the live selection to StatusBar");
+  }
+});
+
 testCase("那一格与菜单用的是同一份文案表", () => {
   // 同一件事不要两处各写一份。`四个` 既是菜单标签的来源，也是那一格的来源。
-  if (!/\{\s*fourItem\[metric\]\s*\}/.test(stateBarSource)) {
-    throw new Error("`StatusBar.tsx` 里那一格没在用 `fourItem[metric]`——两处文案又分家了？");
+  if (!/\{\s*countLabel\s*\}/.test(stateBarSource) || !stateBarSource.includes(": fourItem[metric]")) {
+    throw new Error("StatusBar count cell and selection fallback do not share fourItem[metric]");
   }
 });
 

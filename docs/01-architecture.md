@@ -918,6 +918,9 @@ lua/api::build(lua, manifest, ctx)  -> Result<Table, NotaError>   lua/api/mod.rs
 - ⚠️ **当前安装包不含插件**：`tauri.conf.json` 的 `bundle.resources = {}`，
   四个官方插件从独立仓库单独发布并在用户目录安装。开发态仍从同级
   `Nota-plugins/plugins` 加载；不要把“开发态能发现四个插件”误读成“发布包随附四个插件”。
+- 📌 **2026-11-01 开发期热重载**：开发者模式可开启 `general.lua_hot_reload`，
+  宿主监听 `.lua` / `plugin.toml` 并以事务式新实例替换；失败保留旧 Lua 状态。
+  默认关闭，关闭开发者模式也会停止监听。
 
 ### 通道名归一化（`plugin::manifest::channel_id()`）
 

@@ -38,6 +38,7 @@
 /* ── 编辑区里的图片与 Markdown 源文行 ────────────────────────────────── */
 
 .editor-mount .ProseMirror .nota-image {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
@@ -45,6 +46,12 @@
   vertical-align: top;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.editor-mount .ProseMirror .nota-video {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
 }
 
 .editor-mount .ProseMirror .nota-image > img {
@@ -126,6 +133,57 @@
   max-width: 100%;
   height: auto;
   border-radius: var(--radius-sm);
+}
+
+.editor-mount .ProseMirror .nota-media-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
+  color: var(--fg-muted);
+  font: 16px/1 var(--font-ui);
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+}
+
+.editor-mount .ProseMirror .nota-image:hover .nota-media-delete,
+.editor-mount .ProseMirror .nota-video:hover .nota-media-delete,
+.editor-mount .ProseMirror .nota-image.is-selected .nota-media-delete,
+.editor-mount .ProseMirror .nota-video.ProseMirror-selectednode .nota-media-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.editor-mount .ProseMirror .nota-media-delete:hover {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
+}
+
+.editor-mount .ProseMirror .nota-media-error {
+  display: block;
+  max-width: min(100%, 42em);
+  margin-top: 4px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  font-size: 0.78em;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.editor-mount .ProseMirror .nota-media-error[hidden] {
+  display: none;
 }
 
 /* ── 全屏（保险，见文件头最后一段）───────────────────────────────────── */

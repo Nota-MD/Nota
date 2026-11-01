@@ -88,6 +88,7 @@ import {
 // 在下面这一份里——2026-10-07 整块搬出去的，见那边文件头。
 import { FrontMatterBanner, type FrontMatterBannerHandle } from "@/ui/FrontMatterBanner";
 import type { CommandState } from "@/editor/command-state";
+import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 // 三种行内扩展的开关（`==高亮==` / `^上标^` / `~下标~`）与智能标点那六个字段：
 // 拼装与记忆化都在 `useEditorSettings.ts` 那一份里（⚠️ 2026-10-07 整块搬过去的，
 // `docs/07` 第 89 项），这里只收结果——**为什么要收整份设置、为什么要 `useMemo`，
@@ -326,6 +327,8 @@ interface Props {
    * 光标在普通段落上"。工具栏对这两种情况的反应不一样（见 `FormatBar.tsx`）。
    */
   onCommandState: (state: CommandState | null) => void;
+  /** 将选区同步给状态栏；与后端快照使用同一个源头。 */
+  onSelectionSnapshot?: (snapshot: SelectionSnapshot | null) => void;
   /** 查找状态（命中数、当前第几个）。关掉查找条时调用方自己清。 */
   onFindStatus: (status: FindStatus) => void;
   onToast: (message: string, level?: "info" | "warn" | "error" | "success") => void;
@@ -395,6 +398,7 @@ export function EditorPane({
   combineWriteLanguage,
   documentTypography,
   onCommandState,
+  onSelectionSnapshot,
   onFindStatus,
   onToast,
   onDocsChanged,
@@ -432,6 +436,8 @@ export function EditorPane({
   // 进了依赖就等于"每次光标动一下都重建编辑器"——灾难。
   const commandStateRef = useRef(onCommandState);
   commandStateRef.current = onCommandState;
+  const selectionSnapshotRef = useRef(onSelectionSnapshot);
+  selectionSnapshotRef.current = onSelectionSnapshot;
   // 查找那条同理（同一份理由：它是 `App` 每次渲染新建的函数）。
   const findStatusRef = useRef(onFindStatus);
   findStatusRef.current = onFindStatus;
@@ -454,6 +460,10 @@ export function EditorPane({
   // 为什么必须清掉那个定时器"，都在 `useCursorSnapshot.ts` 里（2026-10-07 搬
   // 出去的）；这里只拿两件事：报一份快照、拆的时候清一次。
   const { recordSnapshot, clearSnapshotFixedTime } = useSelectionSnapshot(doc.id);
+  const reportSelection = (snapshot: SelectionSnapshot) => {
+    selectionSnapshotRef.current?.(snapshot);
+    recordSnapshot(snapshot);
+  };
 
   // 滚动那两条同理（`初始滚动` 只在建实例那一刻读一次，见 `Props` 那条）。
   const initialStartRollActionRef = useRef(initialStartRollAction);
@@ -671,7 +681,7 @@ export function EditorPane({
             onReviewEscape: () => backOutputRef.current?.(),
             onCommandState: (s) => commandStateRef.current(s),
             onFindStatus: (s) => findStatusRef.current(s),
-            onSelection: recordSnapshot,
+            onSelection: reportSelection,
             onChange: recognizeWysiwygChangeAction,
             readOnly: onlyReadMode,
           });
@@ -690,7 +700,7 @@ export function EditorPane({
             preview: reviewDataRef.current,
             onReviewEscape: () => backOutputRef.current?.(),
             onFindStatus: (s) => findStatusRef.current(s),
-            onSelection: recordSnapshot,
+            onSelection: reportSelection,
             onDocumentActivity: recognizeSourceActivity,
             readOnly: onlyReadMode,
           });

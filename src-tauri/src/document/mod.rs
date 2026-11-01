@@ -54,6 +54,12 @@ pub struct Document {
     pub title: String,
     /// 文本镜像。见模块头的说明。
     pub text: String,
+    /// 这份文件在磁盘上使用的编码（规范名，如 `UTF-8` / `GBK`）。
+    ///
+    /// 打开时探测一次，保存时按同一个编码写回；否则 GBK 文档打开后随便保存
+    /// 一次就会被静默改成 UTF-8。
+    #[serde(default = "default_encoding")]
+    pub encoding: String,
     /// 相对上次落盘有无改动。
     pub dirty: bool,
     /// 每次 `sync` / `save` 递增。插件与前端靠它判断"我拿到的是不是旧的"。
@@ -84,6 +90,10 @@ pub struct Document {
     /// 不进 `revision`、不落盘，`serde(skip)` 让它也别进任何序列化输出。
     #[serde(skip)]
     pub 选区: Option<选区快照>,
+}
+
+fn default_encoding() -> String {
+    crate::text_encoding::兜底编码.to_string()
 }
 
 /// 编辑器报上来的选区快照。
@@ -197,6 +207,7 @@ impl DocumentStore {
             path: None,
             title,
             text,
+            encoding: crate::text_encoding::兜底编码.to_string(),
             dirty,
             revision: 0,
             untitled_index: idx,
@@ -216,10 +227,7 @@ impl DocumentStore {
             return Ok(id);
         }
 
-        let text = std::fs::read_to_string(path).map_err(|source| NotaError::Read {
-            path: path.to_path_buf(),
-            source,
-        })?;
+        let (text, encoding) = crate::text_encoding::读文件(path)?;
 
         let clean = text.clone();
         let id = self.alloc_id();
@@ -228,6 +236,7 @@ impl DocumentStore {
             path: Some(path.to_path_buf()),
             title: derive_title(&text, Some(path), 0, self.strict_markdown),
             text,
+            encoding,
             dirty: false,
             revision: 0,
             // 有路径的文档走不到"未命名 N"那个回退分支（除非文件名是空的），
@@ -247,13 +256,11 @@ impl DocumentStore {
             .get(id)
             .and_then(|d| d.path.clone())
             .ok_or(NotaError::NoActiveDocument)?;
-        let text = std::fs::read_to_string(&path).map_err(|source| NotaError::Read {
-            path: path.clone(),
-            source,
-        })?;
+        let (text, encoding) = crate::text_encoding::读文件(&path)?;
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
         let idx = doc.untitled_index;
         doc.title = derive_title(&text, Some(&path), idx, strict);
+        doc.encoding = encoding;
         doc.clean_text = text.clone();
         doc.text = text;
         doc.dirty = false;
@@ -332,10 +339,7 @@ impl DocumentStore {
         if let Some(parent) = path.parent() {
             crate::paths::ensure_dir(parent)?;
         }
-        std::fs::write(&path, &doc.text).map_err(|source| NotaError::Write {
-            path: path.clone(),
-            source,
-        })?;
+        crate::text_encoding::按编码写(&path, &doc.text, &doc.encoding)?;
 
         doc.dirty = false;
         doc.clean_text = doc.text.clone(); // 磁盘上现在就是这份，它成了新的"干净"
@@ -609,6 +613,31 @@ mod tests {
         assert!(!s.has_unsaved());
         assert_eq!(std::fs::read_to_string(&target).unwrap(), "# 你好\n");
         assert_eq!(s.get(id).unwrap().path.as_deref(), Some(target.as_path()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn gbk_document_roundtrips_as_gbk() {
+        let dir = std::env::temp_dir().join("nota-docstore-gbk");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("gbk.md");
+        crate::text_encoding::按编码写(&path, "# 初始中文\n", "GBK").unwrap();
+
+        let mut s = DocumentStore::new(LAX);
+        let id = s.open(&path).unwrap();
+        let opened = s.get(id).unwrap();
+        assert_eq!(opened.text, "# 初始中文\n");
+        assert_eq!(opened.encoding, "GBK");
+
+        s.sync(id, "# 修改后的中文\n".to_owned()).unwrap();
+        s.save(id, None).unwrap();
+
+        let raw = std::fs::read(&path).unwrap();
+        let (decoded, encoding) = crate::text_encoding::猜着解码(&raw);
+        assert_eq!(encoding, "GBK", "saving changed the encoding");
+        assert_eq!(decoded, "# 修改后的中文\n");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -46,6 +46,7 @@
 | `commands/image.rs` | `nota_image_place` 与 `nota_image_data_url`，都异步走 `spawn_blocking`。前者按宿主规则落图并返回 Markdown 地址；后者给编辑区显示本地图，限 32MB、只读主目录/文档/桌面/下载，返回 data URL。规则与文档位置不由前端提供。 |
 | `commands/image_upload.rs` | 「上传图片」那三条（`nota_image_upload_get` / `_set` / `_one`），**都是异步 ＋ `spawn_blocking`**（读盘、联网最长 60 秒）。⚠️ **手动与自动两条路共用同一次上传**，但方向相反：手动**先传、失败才落盘**，自动**先落盘、失败就保留本地地址**。⚠️ **三道闸缺一不可**（`enabled` / `auto` / 文档 YAML 里的 `nota-auto-upload`） |
 | `commands/document.rs` | `nota_doc_*` **十五个**命令（⚠️ **2026-10-04 现数**（第 14 项那一批）：十四 → **十五**，新增 `nota_doc_cursor`，编辑器把**选区**报上来——⚠️ 它**什么都不改**（不碰 `text` / `revision` / `dirty`，见 `docs/03` §4.2）。⚠️ 上一次第十遍是十二 → 十四（`nota_doc_rename` / `nota_doc_move`），第九遍把"十一"改成"十二"（多出的是 `nota_doc_disk_text`，给外部改动提示条的「查看修改」用）——⚠️ ⚠️ `AGENTS.md` §2 那格当时停在"十二"，**两处对不上有一阵子了**，这一批各现数一遍才对齐）。⚠️ **这一层收的是"名字一段"或"目录一条"，不是整条路径**——前端手里的 `path` 是有损的（非 UTF-8 目录名会变成 `?`），详见下面 `nota_doc_rename` 那一节 |
+| `text_encoding.rs` | **文档编码探测与编解码**（2026-10-16 建，2026-11-01 接入）：BOM、合法 UTF-8、`chardetng` 依次判断；`Document.encoding` 保存规范编码名，打开/重载自动探测，保存按原编码写回。UTF-16 显式编码并写 BOM。 |
 | `commands/workspace.rs` | `nota_workspace_*` 五个命令 + `TreeNode` / `WorkspaceExcerpt` + 文件树遍历。⚠️ 2026-09-28 起 `tree` 多收一个 `TreeOptions`（排序 / 过滤 / 隐藏文件），并把 `show_hidden` / `tree_filter` 那两个死开关接上了线。📌 **2026-10-23 加 `nota_workspace_excerpts`**：文件列表按可见的 24 个一批请求标题与下一段文字；只读每份文件开头 16 KiB、走 `spawn_blocking` 和工作区围栏，不把整篇正文读进启动路径。 |
 | `commands/settings.rs` | `nota_settings_get/set/reset` ＋ `nota_settings_problem` ＋ `nota_settings_open_dir`（2026-09-25 由 `nota_settings_dir` 改名：**「打开」这一步也在宿主**，见 `docs/07` BUG-27）＋ `nota_app_lang`（2026-09-25 加：**前端 i18n 的唯一真相源**，返回 `AppLang { setting, effective, available }`——设置里那一格可能是 `auto`，前端要知道**实际生效**的是哪个；而 `available` **由宿主给**，前端不许自己列一份语言清单，那样多一门语言就要改两处） |
 | `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir` / `nota_theme_import`（最后一条异步解 ZIP） |
@@ -67,6 +68,7 @@
 | `proc.rs`（补充） | ⚠️ 2026-09-25 之前 `proc.rs` 是"从 `slidev.rs` 抽出来"的，现在那句话要改成"**从 `devserver.rs` 的前身抽出来**"——`slidev.rs` 已经不在了，但这一层的归属没变 |
 | `heartbeat.rs` | **面板心跳**（2026-09-26，105 行）：声明了 `live = true` 的面板（`register_panel{ live = true }`），宿主**每秒**发一条 `EVENT_PANEL_DIRTY` 叫前端重拉——"实时"的全部机制就是这个。⚠️ **不给 Lua 加 timer** 是刻意的：那会把"插件被叫起来跑"换成"插件自己能醒来"，锁 / 线程 / 抛错 / 停用四条全要重定（`docs/12` §4.7a）。⚠️ 心跳**不是内容通道**（把这条事件整个丢掉，面板打开时显示的东西照样是对的）；⚠️ 只叫 `live` 的那几页（全叫的话 git 那种面板每秒起一个子进程）；⚠️ `plugins` 锁**只在取名单那一刻握一下**，绝不带进 `sleep`；⚠️ 裸 `std::thread`，退出靠 `Heartbeat::stop()`（`RunEvent::Exit`），最多晚一拍 |
 | `plugin/mod.rs` | `PluginHost`：发现 → 加载 → 派发 → 停用/卸载的**入口**。装卸与签名那一段拆去了 `plugin/install.rs`（2026-09-25），`PluginInfo` / `PluginPanel` / `PluginMenuItem` 那批形状拆去了 `plugin/types.rs`（2026-09-29）。📌 **2026-11-01 加全局拓展总开关**：`set_extensions_enabled(false)` 真的卸载所有已加载 Lua 状态并收回开发服务器/编辑区预览，但**不修改 `Installed` 里的单项启停账本**；重新开启时按原账本恢复 |
+| `plugin/watch.rs` | **Lua 拓展自刷新**（2026-11-01）：只在开发者模式且「Lua 拓展自刷新」开启时启动；轮询用户插件目录和调试构建的仓库插件目录，`.lua` / `plugin.toml` 改变后防抖重载。新版本不能加载时保留旧 Lua 状态并发送错误事件。 |
 | `plugin/updater.rs` | **插件仓库更新**：从已装插件清单收集 `[update] manifest`，同地址去重读取多插件 `latest.json`，比较版本，校验 HTTPS、SHA-256 与原签名者连续性；0.8 起与主更新共用下载替换规则。安装仍复用 `PluginHost::装` |
 | `plugin/install.rs` | 装卸一条龙：`装` / `装_检查完再搬` / `装_记账并加载` / `卸` / `信` / `信任表`；纯函数 `把包写进` / `搬进落点`（先把旧的挪开让位、失败要回滚）|
 | `plugin/package.rs` | `.nota-plugin` 包（就是个 zip）：解包、算摘要、验 `[signature]`、给三种结论。**不打包也不签名**（作者侧在 `tools/pack-plugin.py` 里）；**只有「签名验不过」是硬拒**，没签名的照装 |
@@ -241,6 +243,7 @@
 | `ui/TableToolbar.tsx` | **当前表格上方的浮动快捷栏**（2026-10-23 新建）：调整行列数、当前列左 / 中 / 右对齐、删除表格。只在所见即所得且光标位于表格时出现，宽度跟随当前表格并铺满上方空隙，删除按钮固定在右端；点击按钮不抢编辑器选区。滚动与选区触发的重新定位按动画帧合并，避免触摸板高频事件反复测量。 |
 | `ui/Sidebar.tsx` | 左侧栏两页（文件 / 大纲）。文件页默认是 **扁平列表**，按当前口径递归列出工作区内的 Markdown，并保留列表/树形切换；大纲页随正文选区标记当前章节。列表按 24 个一批向宿主读取 `WorkspaceExcerpt`，显示“去后缀标题 ＋ 淡色后缀 ＋ 首标题 ＋ 下一段”；读取失败静默回落到目录。树形页用 `nota-tree-folder[-open]` / `nota-tree-file` 三个可被主题覆盖的 SVG 图标。底栏「＋」在已有工作区时插入 `Untitled.md` 内联输入行，确认后创建真实文件并刷新树。 |
 | `ui/SidebarFiles.tsx` | **侧栏文件页的扁平列表**（2026-10-23 从 `Sidebar.tsx` 拆出）：递归扫描工作区、24 个一批加载 `WorkspaceExcerpt`、新文件输入行，以及文件名/摘要搜索框。右键菜单在 `Sidebar.tsx`，负责新建文件/文件夹、搜索、列表/树形切换和文件路径动作。 |
+| `ui/file-icon.ts` | **侧栏文件类型图标**（2026-11-01）：Markdown、代码、图片、普通文档、未知文件五类映射到现有内置 SVG，并保留隐藏文件与无后缀文件的兜底。 |
 | `ui/DeferredUi.tsx` | 首屏按需加载的大型界面：设置对话框、右侧拓展栏和文件选择器。只有真正打开时才请求对应 chunk |
 | `ui/PluginDock.tsx` | 右侧插件栏（⚠️ 2026-10-04 起页签有 ←→/Home/End，`useTablistKeys`，第 50 项）：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。2026-10-31 起活动面板标题栏有通用的「在编辑区中打开」按钮，走宿主 `nota_plugin_review_open`，插件不必为自己再加一条放大命令。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
 | `ui/pluginText.ts` | **插件在界面上那几句人话**（2026-09-27 新建，136 行）：来源 / 签名 / 语言 / 能力名 / 位置名。⚠️ 起因是同一句「自装 · 已验证」要在**两个界面**上出现（右侧插件栏 ＋ 设置里的「拓展」页），谁抄第二份，往后就是"改一处、另一处不动"，而那种不一致**不报错**。⚠️ **只有文案**（没有 JSX、没有状态、不碰 `api`）；⚠️ **全是函数不是模块级常量表**——模块级求值时 `t` 还没订阅，且 `tools/i18n-check.sh` 只数为字面量写出来的 `t(…)` |
@@ -312,6 +315,7 @@
 | `ui/useAutosave.ts` | **自动保存的定时那一半**（2026-09-25，98 行）：`autosave_seconds`（停笔 N 秒）到点判该不该写盘。⚠️ **它只管"该不该存"，不管"怎么存"**——真写盘交给传进来的 `saveDoc`，所以自动存与 `Ctrl+S` 是同一条路。⚠️ 三条**有意留的口子**：没存过盘的文档不存、不脏不存、失败后不重试到疯。⚠️ 活动信号是 `EditorPane` 每次内容变化报一次，**不许**改成轮询 `getMarkdown()`（那是每秒把整篇复制一遍） |
 | `ui/useClipboard.ts` | **剪贴板四件**（2026-09-25 从 `App.tsx` 搬出，164 行）：复制 / 剪切 / 粘贴 ＋ **复制为 Markdown**。⚠️ 前三个读**选区**，第四个取**整篇源码**（`getMarkdown()`）——它跟另外三个不是一类，文件头有说明 |
 | `ui/useForceFocus.ts` | **强制专注的接线**（2026-09-26，126 行）：订阅 `nota:focus-state` ＋ `get` / `start` / `stop` / `ack` 四条命令；另导出 `说时长(毫秒)`（`mm:ss` / `h:mm:ss`，`Math.max(0, …)`）。⚠️ 状态有**两档空**：`null`（还没拉回来）与 `running: false`（拉回来了但没在跑）——界面别把两者合成一个"没在跑" |
+| `ui/useLiveSelection.ts` | **实时选区快照的 UI 状态**（2026-11-01）：保存当前编辑器的 `SelectionSnapshot`，切文档时清空。状态栏用它显示选区词数；后端镜像仍由 `useCursorSnapshot` 单独去抖推送。 |
 | `ui/FocusMeter.tsx` | **状态栏那一格余额**（2026-09-26，75 行，**只读**）：只在 `state?.running` 时渲染（没在跑就**整格不在**，不是显一个 `0:00`）；三档阶段各有颜色与 `title` 说明。⚠️ 它每秒重画，这也是**设置页不许显示会话状态**的理由（同一个值两处显示 ＝ 两处每秒重画） |
 | `ui/FocusAlarmWindow.tsx` | **警报窗那一棵树**（2026-09-26，94 行，`focus-alarm.html` 的根）：整块红屏 ＋ 大白字 ＋ `I'm Back`。⚠️ **它不自己 `close()`**——"这个窗等着宿主来关"，收窗在 `focus/alarm.rs::对账`；⚠️ Esc 与按钮走同一条 `ack`；⚠️ 按钮按过就锁成「这就回去…」（防连点，也防"按下去了但其实没生效"那种错觉） |
 | `ui/useFocusAlarmSound.ts` | **警报声（主路径）**（2026-09-26，165 行）：Web Audio 合成——方波（谐波最丰富，听起来"尖"）× 880 / 1245 Hz 来回跳，每 0.22 秒一跳、共 11 跳 ≈ 2.4 秒，⚠️ **不是一声"哔"**而是一段"停不下来"的东西；音量封顶 0.28（再大在笔记本内置喇叭上会削波，听着像坏掉而不是更响）。⚠️ WebKit 的自动播放策略会把没有用户手势的 `AudioContext` 摁住，所以开始专注那一下先 `预热音频()`；万一还是播不出来就转宿主兜底。⚠️ **只在主窗挂**（那条 emit 发给所有窗口，警报窗也挂就是同一段响两遍） |
@@ -9404,6 +9408,10 @@ MCP 的**工具清单**：`nota_info` / `nota_documents` / `nota_read` / `nota_w
 ---
 
 ## `src/editor/video-view.ts`（193 行）
+
+📌 **2026-11-01**：图片/视频节点增加两类编辑期控件——加载失败的就地告警，
+以及悬停/选中时出现的直接删除按钮。两者都登记在 `editor/export.ts` 的整块删除名单里，
+不会进入导出 HTML/PDF。
 
 **图片语法里的地址指向视频时，画成播放器**（2026-09-28 新建，用户原话
 「…**图片语法指向 `.mp4` 当视频**…都是简单的小功能」）。

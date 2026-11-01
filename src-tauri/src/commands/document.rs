@@ -401,7 +401,7 @@ pub fn nota_doc_disk_text(state: State<'_, AppState>, id: DocId) -> Result<Strin
             .and_then(|d| d.path.clone())
             .ok_or_else(|| NotaError::other("这份文档还没有路径"))?
     };
-    std::fs::read_to_string(&路径).map_err(|source| NotaError::Read { path: 路径, source })
+    Ok(crate::text_encoding::读文件(&路径)?.0)
 }
 
 /// 有没有未保存的改动。退出前前端拿它决定要不要弹框。

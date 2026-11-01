@@ -7,6 +7,7 @@
 import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
+import { addListNodes } from "@milkdown/kit/prose/schema-list";
 import { tableNodes } from "@milkdown/kit/prose/tables";
 import { readFileSync } from "node:fs";
 
@@ -15,6 +16,7 @@ import {
   atReferenceUseMostOpenHead,
   atEmptyTableCellOpenHead,
   deleteEmptyTable,
+  exitEmptyListItem,
 } from "../src/editor/block-keys";
 import { VIM_ALLOW_STRUCTURE_META } from "../src/editor/plugin-vim-ops";
 
@@ -71,6 +73,30 @@ const table2 = (): PMNode =>
     line3(cell2(), cell2()),
   ]);
 const document = (...blocks: PMNode[]): PMNode => schema.nodes.doc.create(null, blocks);
+
+const listSchema = new Schema({
+  nodes: addListNodes(schema.spec.nodes, "paragraph block*", "block"),
+  marks: {},
+});
+
+function emptyListItemDocument(): PMNode {
+  const item = (text: string) =>
+    listSchema.nodes.list_item.create(null, listSchema.nodes.paragraph.create(null, text ? listSchema.text(text) : null));
+  return listSchema.nodes.doc.create(
+    null,
+    listSchema.nodes.bullet_list.create(null, [item("第一项"), item("")]),
+  );
+}
+
+function firstEmptyParagraphPosition(doc: PMNode): number {
+  let found = -1;
+  doc.descendants((node, pos) => {
+    if (found >= 0) return false;
+    if (node.type.name === "paragraph" && node.content.size === 0) found = pos + 1;
+    return found < 0;
+  });
+  return found;
+}
 
 function stateAt(doc: PMNode, pos: number): EditorState {
   return EditorState.create({
@@ -153,6 +179,46 @@ testCase("引用中间或非开头不消费空格", () => {
   });
   assertValue(!atReferenceUseMostOpenHead(state), "非绝对开头不应命中");
   assertValue(!getClearAllReferenceUse(state, () => {}), "命令应放行");
+});
+
+testCase("Backspace on a later empty quote line exits every quote layer", () => {
+  const doc = document(referenceUse(paragraph2("前文"), paragraph2()));
+  const pos = firstEmptyParagraphPosition(doc);
+  const state = stateAt(doc, pos);
+  assertValue(atReferenceUseMostOpenHead(state), "empty line should be an exit point");
+  const after = transactionShouldUseTo(state, getClearAllReferenceUse);
+  assertValue(after.doc.childCount === 2, "empty line should become a paragraph outside the quote");
+  assertValue(after.doc.child(0).type.name === "blockquote", "existing quote content should remain");
+  assertValue(after.doc.child(0).textContent === "前文", "existing quote text should remain");
+  assertValue(after.doc.child(1).type.name === "paragraph", "caret should land outside the quote");
+});
+
+testCase("Backspace on an empty-only quote removes the quote", () => {
+  const doc = document(referenceUse(paragraph2()));
+  const pos = firstEmptyParagraphPosition(doc);
+  const after = transactionShouldUseTo(stateAt(doc, pos), getClearAllReferenceUse);
+  assertValue(!hasReferenceUseNode(after.doc), "empty quote should disappear");
+  assertValue(after.doc.firstChild?.type.name === "paragraph", "a paragraph should remain");
+});
+
+testCase("Enter on an empty list item leaves the list", () => {
+  const doc = emptyListItemDocument();
+  const pos = firstEmptyParagraphPosition(doc);
+  const state = EditorState.create({
+    schema: listSchema,
+    doc,
+    selection: TextSelection.near(doc.resolve(pos)),
+  });
+  let after = state;
+  const accepted = exitEmptyListItem(state, (tr) => {
+    after = state.apply(tr);
+  });
+  assertValue(accepted, "empty list item should accept Enter");
+  let listCount = 0;
+  after.doc.descendants((node) => {
+    if (node.type.name === "bullet_list") listCount++;
+  });
+  assertValue(listCount === 0 || after.doc.childCount > 1, "empty item should leave its list level");
 });
 
 testCase("空表格开头退格删除整张表", () => {

@@ -53,6 +53,7 @@ pub mod settings;
 pub mod single_instance;
 pub mod state;
 pub mod table_width;
+pub mod text_encoding;
 pub mod theme_assets;
 pub mod theme_import;
 pub mod themes;
@@ -423,6 +424,7 @@ pub fn run() {
             //    ⚠️ 拿它**不需要** `plugins` 锁——插件正跑着（宿主握着那把锁）
             //    的时候，「回到正文」这个按钮还得能按（见 `commands/plugin.rs`）。
             app.manage(plugin::ReviewState::new());
+            app.manage(plugin::watch::PluginWatch::default());
             // ③ 探测结论的缓存（`nota.devserver.probe`）：让面板的 `render`
             //    **不必等**一次 `npx`——有结论就回，没有就回一句「正在检查」
             //    并在后台探（探完发事件叫前端重拉）。见 `lua/api/devserver.rs`
@@ -801,6 +803,9 @@ pub fn run() {
                 // 对着正在收摊的应用敲一秒的门，没有必要。
                 if let Some(hb) = app.try_state::<heartbeat::Heartbeat>() {
                     hb.stop();
+                }
+                if let Some(watch) = app.try_state::<plugin::watch::PluginWatch>() {
+                    watch.set_enabled(app, false);
                 }
                 // 单实例那个 socket 文件（2026-09-27 加）。⚠️ 不删的后果是
                 // **下一次启动会多问一句**（连上去发现没人听），谈不上故障；

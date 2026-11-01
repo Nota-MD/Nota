@@ -86,6 +86,20 @@ testCase("调试设置会动态打开后端日志闸门", () => {
   assertValue(logs.includes("pub fn 设置调试模式"), "日志模块没有运行期开关");
 });
 
+testCase("Lua hot reload is an opt-in developer setting", () => {
+  const debug = read("src", "ui", "settings", "panes", "DebugPane.tsx");
+  const general = read("src-tauri", "src", "settings", "general.rs");
+  const settings = read("src-tauri", "src", "commands", "settings.rs");
+  const watcher = read("src-tauri", "src", "plugin", "watch.rs");
+  assertValue(debug.includes('t("Lua extension auto-reload")'), "developer pane is missing the hot-reload switch");
+  assertValue(debug.includes("settings.general.lua_hot_reload"), "switch does not write the setting");
+  assertValue(general.includes("pub lua_hot_reload: bool"), "Rust setting field is missing");
+  assertValue(general.includes("lua_hot_reload: false"), "hot reload is not disabled by default");
+  assertValue(settings.includes("previous.general.debug_mode && previous.general.lua_hot_reload"), "developer mode is not part of listener control");
+  assertValue(settings.includes("watch.set_enabled(app, lua_hot_reload)"), "settings do not control the listener");
+  assertValue(watcher.includes("host.reload_dir(&dir)"), "watcher is not connected to transactional reload");
+});
+
 testCase("拓展功能总开关隐藏入口、停止运行并保留安装与单项启停账本", () => {
   const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
   assertValue(general.includes('t("Enable extensions")'), "通用页没有拓展功能总开关");

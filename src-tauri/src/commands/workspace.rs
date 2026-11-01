@@ -191,6 +191,13 @@ pub async fn nota_workspace_excerpts(
             .into_iter()
             .map(|path| {
                 let full = crate::lua::api::fs::resolve_in(&root, &path)?;
+                if has_binary_suffix(&full) {
+                    return Ok(WorkspaceExcerpt {
+                        path,
+                        title: None,
+                        detail: None,
+                    });
+                }
                 let mut bytes = Vec::with_capacity(16 * 1024);
                 let file = std::fs::File::open(&full).map_err(|source| NotaError::Read {
                     path: full.clone(),
@@ -202,7 +209,14 @@ pub async fn nota_workspace_excerpts(
                         path: full,
                         source,
                     })?;
-                let text = String::from_utf8_lossy(&bytes);
+                if !can_extract_text_excerpt(&bytes) {
+                    return Ok(WorkspaceExcerpt {
+                        path,
+                        title: None,
+                        detail: None,
+                    });
+                }
+                let (text, _) = crate::text_encoding::猜着解码(&bytes);
                 let (title, detail) = 取摘要(&text);
                 Ok(WorkspaceExcerpt {
                     path,
@@ -214,6 +228,58 @@ pub async fn nota_workspace_excerpts(
     })
     .await
     .map_err(|e| NotaError::other(format!("读取文件摘要失败：{e}")))?
+}
+
+/// 文件开头这块字节能不能拿来做正文摘要。
+///
+/// 二进制文件不能被 `from_utf8_lossy` 洗成一串可读“内部信息”塞进侧栏。
+/// UTF-16 的 BOM 例外：它的正文天然带 NUL。
+fn can_extract_text_excerpt(bytes: &[u8]) -> bool {
+    if bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
+        return true;
+    }
+    if bytes.contains(&0) {
+        return false;
+    }
+    let bad = bytes
+        .iter()
+        .filter(|byte| **byte < 0x09 || (**byte > 0x0D && **byte < 0x20))
+        .count();
+    bad * 20 <= bytes.len()
+}
+
+fn has_binary_suffix(path: &Path) -> bool {
+    let suffix = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    matches!(
+        suffix.as_str(),
+        "png" | "jpg"
+            | "jpeg"
+            | "gif"
+            | "webp"
+            | "bmp"
+            | "avif"
+            | "ico"
+            | "pdf"
+            | "zip"
+            | "gz"
+            | "bz2"
+            | "xz"
+            | "7z"
+            | "rar"
+            | "mp3"
+            | "mp4"
+            | "m4v"
+            | "webm"
+            | "ogv"
+            | "woff"
+            | "woff2"
+            | "ttf"
+            | "otf"
+    )
 }
 
 fn 取摘要(text: &str) -> (Option<String>, Option<String>) {
@@ -749,6 +815,17 @@ mod tests {
         assert_eq!(名们(&全部), vec!["a.md", "b.png"]);
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn binary_files_have_no_sidebar_excerpt_but_text_and_utf16_do() {
+        assert!(!can_extract_text_excerpt(b"plain\0binary"));
+        assert!(can_extract_text_excerpt("中文摘要".as_bytes()));
+        assert!(can_extract_text_excerpt(&[0xFF, 0xFE, b'A', 0, b'B', 0]));
+        assert!(has_binary_suffix(Path::new("cover.PNG")));
+        assert!(has_binary_suffix(Path::new("manual.pdf")));
+        assert!(!has_binary_suffix(Path::new("notes.GBK.md")));
+        assert!(!has_binary_suffix(Path::new("README")));
     }
 
     /// ⚠️ **读不动要报 Err，不能是"空目录"**（2026-09-25 改的行为，见函数头那段）。

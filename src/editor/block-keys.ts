@@ -13,28 +13,48 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import {
   Plugin,
   PluginKey,
+  TextSelection,
   type EditorState,
   type Transaction,
 } from "@milkdown/kit/prose/state";
-import { lift } from "@milkdown/kit/prose/commands";
+import { lift, liftEmptyBlock } from "@milkdown/kit/prose/commands";
+import { liftListItem } from "@milkdown/kit/prose/schema-list";
 import { deleteTable, findTable } from "@milkdown/kit/prose/tables";
 import { $prose } from "@milkdown/kit/utils";
 import { debugEvent } from "@/ui/debug-log";
 import { VIM_ALLOW_STRUCTURE_META } from "./plugin-vim-ops";
 
-/** 光标是否在最外层引用框的绝对开头。 */
+/** 光标是否在引用框的一个合法退出点：绝对开头，或一条空正文行。 */
 export function atReferenceUseMostOpenHead(state: EditorState): boolean {
   const { selection } = state;
-  if (!selection.empty || selection.$from.parentOffset !== 0) return false;
+  if (!selection.empty) return false;
   const $from = selection.$from;
+  const emptyLine = $from.parent.isTextblock &&
+    $from.parent.content.size === 0 &&
+    $from.parentOffset === 0;
+  if (!emptyLine && $from.parentOffset !== 0) return false;
   let hasReferenceUse = false;
   for (let layer = 1; layer <= $from.depth; layer += 1) {
     if ($from.node(layer).type.name !== "blockquote") continue;
     hasReferenceUse = true;
-    // 当前段落、内层引用等每一级都必须是父节点的第一个孩子，才算“引用开头”。
-    if ($from.index(layer - 1) !== 0) return false;
+    // 有文字时仍要求它是每一级的第一个孩子；空行在引用中任何位置都允许退出。
+    if (!emptyLine && $from.index(layer - 1) !== 0) return false;
   }
   return hasReferenceUse;
+}
+
+/** 空列表项按 Enter：抬起一层；顶层项会回落成普通段落。 */
+export function exitEmptyListItem(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const { selection } = state;
+  if (!selection.empty || selection.$from.parent.content.size !== 0) return false;
+  const $from = selection.$from;
+  let depth = $from.depth;
+  while (depth > 0 && $from.node(depth).type.name !== "list_item") depth--;
+  if (depth === 0) return false;
+  return liftListItem($from.node(depth).type)(state, dispatch);
 }
 
 /**
@@ -51,11 +71,44 @@ export function getClearAllReferenceUse(
   if (!atReferenceUseMostOpenHead(state)) return false;
   if (!dispatch) return true;
 
+  const { $from } = state.selection;
+  const quoteDepth = $from.depth - 1;
+  if (
+    $from.parent.content.size === 0 &&
+    quoteDepth > 0 &&
+    $from.node(quoteDepth).type.name === "blockquote"
+  ) {
+    const quote = $from.node(quoteDepth);
+    const paragraph = state.schema.nodes.paragraph?.createAndFill();
+    if (paragraph) {
+      const paragraphStart = $from.before($from.depth);
+      const quoteStart = $from.before(quoteDepth);
+      if (quote.childCount === 1) {
+        const tr = state.tr
+          .replaceWith(quoteStart, quoteStart + quote.nodeSize, paragraph);
+        tr.setSelection(TextSelection.create(tr.doc, quoteStart + 1));
+        tr.scrollIntoView();
+        tr.setMeta(VIM_ALLOW_STRUCTURE_META, true);
+        dispatch(tr);
+        return true;
+      }
+      const tr = state.tr.delete(paragraphStart, paragraphStart + $from.parent.nodeSize);
+      const quoteEnd = tr.mapping.map(quoteStart + quote.nodeSize, 1);
+      tr.insert(quoteEnd, paragraph);
+      tr.setSelection(TextSelection.create(tr.doc, quoteEnd + 1));
+      tr.setMeta(VIM_ALLOW_STRUCTURE_META, true);
+      dispatch(tr.scrollIntoView());
+      return true;
+    }
+  }
+
   let current = state;
   let changed = false;
+  const emptyLine = state.selection.$from.parent.content.size === 0;
   for (let count2 = 0; count2 < 32; count2 += 1) {
     let liftOutput: Transaction | null = null;
-    const lifted = lift(current, (tr) => (liftOutput = tr));
+    const liftOne = emptyLine ? liftEmptyBlock : lift;
+    const lifted = liftOne(current, (tr) => (liftOutput = tr));
     debugEvent("editor", "blockquote lift probe", {
       lifted,
       has_transaction: liftOutput !== null,
@@ -140,6 +193,9 @@ export const blockContainerKeypress = $prose(
             if (!atEmptyTableCellOpenHead(view.state)) return false;
             event.preventDefault();
             return deleteEmptyTable(view.state, (tr) => view.dispatch(tr));
+          }
+          if (event.key === "Enter" && !event.shiftKey) {
+            return exitEmptyListItem(view.state, (tr) => view.dispatch(tr));
           }
           return false;
         },

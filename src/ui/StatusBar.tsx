@@ -106,6 +106,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Document, ViewMode } from "@/bridge/ipc";
 import type { FocusState } from "@/bridge/types";
 import type { CommandState } from "@/editor/command-state";
+import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 import type { StatusMetric } from "@/bridge/types-settings";
 import { useT } from "@/i18n";
 import { FocusMeter } from "@/ui/FocusMeter";
@@ -133,6 +134,7 @@ export function StatusBar({
   doc,
   /** 光标那一份状态（`App.tsx` 的 `commandState`）。状态栏只用它一格：`overtype`。 */
   cursor,
+  selection,
   mode,
   sidebarOpen,
   readingSpeed,
@@ -150,6 +152,7 @@ export function StatusBar({
   doc: Document | null;
   /** 光标那一份状态（`null` = 读不出来：源码模式 / 还没打开文档）。⚠️ 见上面 `overtype`。 */
   cursor: CommandState | null;
+  selection: SelectionSnapshot | null;
   /** 当前**实际**编辑模式（`App.tsx` 的 `viewMode`：家在那条会话内 `useState`，这里已经过完降级）。**只用来点亮那颗 `</>`。** */
   mode: ViewMode;
   /** 侧栏此刻开着没有（`App.tsx` 的 `sidebarOpen`）。**决定左一是圆圈还是折角。** */
@@ -241,6 +244,10 @@ export function StatusBar({
   const counts = useMemo(
     () => countText(doc?.text ?? "", readingSpeed),
     [doc?.text, readingSpeed],
+  );
+  const selectionCounts = useMemo(
+    () => countText(selection?.empty === false ? selection.text : "", readingSpeed),
+    [selection, readingSpeed],
   );
 
   /** 整个栏的 DOM。**开菜单时要拿它量锚点**（见 `开菜单`）。 */
@@ -355,6 +362,17 @@ export function StatusBar({
     counts.lines,
     counts.readingMinutes,
   );
+  const hasTextSelection = selection?.empty === false && selection.text.length > 0;
+  const countLabel = hasTextSelection
+    ? t("{0} selected words", selectionCounts.words)
+    : fourItem[metric];
+  const countDetail = hasTextSelection
+    ? t(
+        "{0} selected words · {1} selected characters",
+        selectionCounts.words,
+        selectionCounts.characters,
+      )
+    : detailThin;
 
   const left = (
     <span className="status-left">
@@ -438,8 +456,8 @@ export function StatusBar({
                 OVR
               </span>
             )}
-            <span className="status-count" title={detailThin}>
-              {fourItem[metric]}
+            <span className="status-count" title={doc ? `${countDetail} · ${doc.encoding}` : countDetail}>
+              {countLabel}
             </span>
             <button
               type="button"

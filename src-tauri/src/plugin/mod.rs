@@ -25,6 +25,8 @@ pub mod package;
 pub mod settings_decl;
 /// 插件仓库检查与更新。
 pub mod updater;
+/// Development-time Lua file watching and hot reload.
+pub mod watch;
 /// 信任的签名公钥表（TOFU，2026-09-29 从 `package.rs` 拆出，见那边的模块注释）。
 pub mod trust;
 /// 对外声明的形状（2026-09-29 从本文件拆出，见那边的模块注释）。
@@ -76,6 +78,10 @@ pub const EVENT_PANEL_DIRTY: &str = "nota:plugin-panel";
 /// ⚠️ 发射侧在 `lua/api/ui.rs::预览表`、收侧在 `ipc.ts` 的 `events.pluginReview`
 /// 加 `ui/usePlugins.ts` 的订阅。**三处必须说同一个字符串**，所以只在这里定一次。
 pub const EVENT_REVIEW: &str = "nota:plugin-review";
+
+/// A plugin was reloaded from disk, or a bad reload was rejected while the
+/// previous Lua state stayed alive.
+pub const EVENT_PLUGIN_RELOADED: &str = "nota:plugin-reloaded";
 
 /// `nota.ui.show(id)` asks the host to reveal one registered panel in the
 /// right-hand extension dock.
@@ -137,6 +143,17 @@ impl DeferredDiscovery {
             if let Ok(mut slot) = state.plugins.lock() {
                 *slot = loaded;
             };
+            let enabled = 插件线程
+                .state::<crate::state::AppState>()
+                .settings
+                .lock()
+                .map(|settings| {
+                    settings.general.debug_mode && settings.general.lua_hot_reload
+                })
+                .unwrap_or(false);
+            插件线程
+                .state::<watch::PluginWatch>()
+                .set_enabled(&插件线程, enabled);
         });
     }
 }
@@ -367,6 +384,44 @@ impl PluginHost {
 
     pub fn is_enabled(&self, id: &str) -> bool {
         self.extensions_enabled && self.installed.is_enabled(id)
+    }
+
+    /// Reload one plugin directory, keeping the old Lua state if the new
+    /// version cannot be loaded. The watcher and the manual command share this
+    /// transaction so they cannot diverge.
+    pub fn reload_dir(&mut self, dir: &Path) -> Result<Option<String>> {
+        let Some(i) = self.plugins.iter().position(|p| p.manifest.dir == dir) else {
+            return Ok(None);
+        };
+        let id = self.plugins[i].manifest.meta.id.clone();
+        let manifest = Manifest::load(&dir.join(package::清单文件))?;
+        if manifest.meta.id != id {
+            return Err(NotaError::other(format!(
+                "plugin directory {} changed id from {id} to {}; hot reload does not change identity",
+                dir.display(),
+                manifest.meta.id
+            )));
+        }
+
+        let enabled = self.extensions_enabled && self.installed.is_enabled(&id);
+        let replacement = if enabled {
+            LuaPlugin::load(manifest, self.上下文(&id))
+        } else {
+            LuaPlugin::disabled(manifest, &self.base.应用语言)
+        };
+        if let PluginState::Failed(reason) = &replacement.state {
+            return Err(NotaError::other(format!(
+                "extension {id} failed to hot reload; keeping the previous version: {reason}"
+            )));
+        }
+
+        let old = std::mem::replace(&mut self.plugins[i], replacement);
+        if old.state == PluginState::Loaded {
+            old.unload();
+        }
+        self.收摊(&id);
+        crate::日志!("[nota] plugin hot reloaded: {id}");
+        Ok(Some(id))
     }
 
     pub fn extensions_enabled(&self) -> bool {

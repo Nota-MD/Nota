@@ -26,6 +26,9 @@ export const settingsTable: Record<string, string> = {
   "When off, every extension stops running and its menus, panels and settings pages are hidden. Installed extensions and their individual enabled states are kept.":
     "关闭后，所有拓展都会停止运行，拓展菜单、面板和设置页也会一并隐藏。已安装的拓展及各自的启停状态都会保留。",
   "Element hover inspector": "元素悬停检查",
+  "Lua extension auto-reload": "Lua 拓展自刷新",
+  "Watch installed extension folders and reload after Lua or plugin.toml changes. Failed reloads keep the previous working extension.":
+    "监听已安装拓展目录；Lua 或 plugin.toml 改变后自动重载。重载失败时继续使用上一个可用版本。",
   "Show the computed font, colors, box size and padding below the interface element under the pointer.":
     "在指针所指界面元素的下方显示实际字体、颜色、尺寸和内边距。",
   "Appearance": "外观",

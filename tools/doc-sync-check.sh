@@ -102,6 +102,7 @@ PAIRS=(
   "src-tauri/src/image/tests.rs                02"
   "src-tauri/src/upload.rs                     02,03,10"
   "src-tauri/src/upload/net.rs                 02,10"
+  "src-tauri/src/text_encoding.rs                02,03"
   "src-tauri/src/upload/tests.rs               02"
   "src-tauri/src/commands/image_upload.rs      02,04,10"
   "src-tauri/src/native_menu.rs                   01,02,04"
@@ -110,6 +111,7 @@ PAIRS=(
   # `ui_styles.rs` 头上那张对照表里。⛔ 别把两份合成一份。
   "src-tauri/src/ui_styles.rs                     02,03,04,08"
   "src-tauri/src/plugin/mod.rs                    01,02,11"
+  "src-tauri/src/plugin/watch.rs                  04,06,11,12"
   # 2026-09-29：那一份当时 819 行，按"说给别人的形状 / 宿主自己的动作"拆出这一份。
   "src-tauri/src/plugin/types.rs                  03,05,11"
   "src-tauri/src/plugin/manifest.rs               03,11,12"
@@ -391,6 +393,7 @@ PAIRS=(
   "src/ui/useChromeVisibility.ts 02,04"
   # 2026-09-30 晚：状态栏那一堆 props 的接线（App.tsx 破 1000 行时拆出来的）。
   "src/ui/useStatusBar.ts 02,04"
+  "src/ui/useLiveSelection.ts 02,04,06"
   "src/ui/useImmersive.ts 02,04,05,07,10"
   "src/ui/useToasts.ts 02,04"
   # 2026-09-28：`useAbout.ts` 拆成两份 —— 界面在 `AboutDialog.tsx`，
@@ -404,6 +407,7 @@ PAIRS=(
   "src/ui/useClipboard.ts 02,04,05"
   "src/ui/useEditorCommands.ts 02,04,05"
   "src/ui/useImageInsert.ts 02,04,05"
+  "src/ui/file-icon.ts 04,06"
   "src/ui/ImageDialog.tsx 02,04"
   "src/ui/useAppearance.ts 02,04"
   "src/ui/useUiMode.ts 02,04"
@@ -678,6 +682,7 @@ PAIRS=(
   "tests/paste-clean.test.ts                     02,06"
   "tests/url-link.test.ts                        02,06"
   "tests/file-kind.test.ts                       02,06"
+  "tests/file-icon.test.ts                       04,06"
   "tests/tree-options.test.ts                    02,06"
   "tests/contribution-policy.test.ts             02,06"
   "tests/dock-resize.test.ts                     02,06"

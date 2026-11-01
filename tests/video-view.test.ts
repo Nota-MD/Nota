@@ -249,6 +249,26 @@ testCase("图片源码实时刷新；清空源码时删除整张图片", () => {
     throw new Error("图片节点删除事务缺失");
 });
 
+testCase("images expose a delete control and load-failure warning", () => {
+  const view = read("src/editor/video-view.ts");
+  const css = read("src/styles/video.css");
+  const exportSource = read("src/editor/export.ts");
+  if (!view.includes('document.createElement("button")'))
+    throw new Error("image delete control is missing");
+  if (!view.includes('className = "nota-media-delete"'))
+    throw new Error("image delete control has no stable class");
+  if (!view.includes("removeMedia();"))
+    throw new Error("image delete control does not delete the node");
+  if (!view.includes('className = "nota-media-error"'))
+    throw new Error("image load-failure warning node is missing");
+  if (!view.includes('addEventListener("error"'))
+    throw new Error("image load failure is not observed");
+  if (!css.includes(".nota-media-delete") || !css.includes(".nota-media-error"))
+    throw new Error("image delete and warning styles are not wired");
+  if (!exportSource.includes('".nota-media-delete"') || !exportSource.includes('".nota-media-error"'))
+    throw new Error("editing-only image controls remain in export");
+});
+
 testCase("源文解析保留 alt、地址和可选标题", () => {
   equal(
     JSON.stringify(parseImageMarkdownSource('![图](docs/a.png "标题")')),

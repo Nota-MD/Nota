@@ -37,6 +37,7 @@ import {
   type PluginMenuItem,
   type PluginPanel,
   type PluginPanelFocusPayload,
+  type PluginReloadedPayload,
   type PluginSetting,
   type PluginReview,
   type PluginUpdateInfo,
@@ -259,6 +260,29 @@ export function usePlugins({
       }
     })();
   }, [heavyPull, toast]);
+
+  useEffect(() => {
+    if (!extensionsEnabled) return;
+    let unsubscribe: (() => void) | null = null;
+    let active = true;
+    void on<PluginReloadedPayload>(events.pluginReloaded, (payload) => {
+      if (!active) return;
+      if (payload.error) {
+        toast(payload.error, "error");
+        return;
+      }
+      void heavyPull().catch((error) => {
+        if (active) toast(t("Could not refresh reloaded extension: {0}", String(error)), "error");
+      });
+    }).then((dispose) => {
+      if (active) unsubscribe = dispose;
+      else dispose();
+    });
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [extensionsEnabled, heavyPull, toast]);
 
   // 启动后静默检查一次。离线时不打扰用户，手动点「检查更新」才显示错误。
   useEffect(() => {

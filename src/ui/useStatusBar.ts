@@ -38,6 +38,7 @@ import type { Document, Settings, ViewMode } from "@/bridge/ipc";
 import type { CommandState } from "@/editor/command-state";
 import type { FocusState } from "@/bridge/types";
 import type { StatusMetric } from "@/bridge/types-settings";
+import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 import { StatusBar } from "@/ui/StatusBar";
 
 /** `StatusBar` 要的全部 props。**别手抄**，见文件头最后那段。 */
@@ -75,6 +76,7 @@ export function useStatusBar(wiring: {
    * （源码模式 / 还没打开文档）——那时不画。
    */
   cursor: CommandState | null;
+  selection: SelectionSnapshot | null;
   /**
    * 顶上那一条画不画（`usingNativeMenu || !show_menu_bar`，与 `App.tsx` 给
    * `TopBar` 的是**同一个布尔**）。⚠️ 这里**故意由调用方算好递进来**：
@@ -94,12 +96,14 @@ export function useStatusBar(wiring: {
     focus,
     setUi,
     cursor,
+    selection,
     pluginDock,
   } = wiring;
 
   return {
     doc,
     cursor,
+    selection,
     pluginDock,
     mode: viewMode,
     sidebarOpen,

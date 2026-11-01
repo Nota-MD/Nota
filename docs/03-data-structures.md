@@ -1399,6 +1399,9 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
 `IsADirectory` / `AlreadyExists` / `StorageFull` 翻成中文，**没见过的 kind 原样透出**
 （那句英文虽然夹生，但它说的是到底哪儿不对；换成一句笼统的"读文件失败"等于把线索丢了）。
 起因是打开一个非 UTF-8 文件时界面上弹的是 "stream did not contain valid UTF-8"。
+📌 **2026-11-01**：`Document` 增加 `encoding` 属性；打开/重载先看 BOM，再认合法
+UTF-8，最后用 `chardetng` 探测，保存按文档记着的编码写回。GBK / GB2312、Big5、
+Shift_JIS、UTF-16 等不再被强行当 UTF-8；编码名也会在状态栏统计提示里显示。
 
 前端还有两个 payload 类型（`NotifyPayload` / `DocumentChangedPayload`）与上面这些
 **不是**一一对应——它们对应的是事件里 `serde_json::json!` 现拼的对象（`PluginInfo`

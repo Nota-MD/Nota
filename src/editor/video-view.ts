@@ -61,6 +61,7 @@ import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
 import { $view } from "@milkdown/kit/utils";
 
 import { api } from "@/bridge/ipc";
+import { t } from "@/i18n";
 import { extension } from "./file-kind";
 import { automaticImageName } from "./image-kind";
 
@@ -143,6 +144,10 @@ interface viewItem {
   mediaBody: HTMLImageElement | HTMLVideoElement;
   /** 图片选中后显示的 Markdown 源文输入框；视频没有。 */
   sourceBody: HTMLTextAreaElement | null;
+  /** 加载失败时的就地告警，不把详情写进正文。 */
+  errorBody: HTMLSpanElement;
+  /** 普通悬停/选中即可看见的删除按钮。 */
+  deleteBody: HTMLButtonElement;
   /** 造的时候认定的是不是视频。**建成之后不再变**（变了就整个重建，见 `update`）。 */
   isVisionFrequency: boolean;
   /** 异步读图令牌：后一次 update 回来时，旧结果不许覆盖新节点。 */
@@ -154,6 +159,16 @@ interface viewItem {
  * 写，一处真相，`update` 那条路才不会漏掉某一颗。
  */
 function createElement(isVisionFrequency: boolean): viewItem {
+  const errorBody = document.createElement("span");
+  errorBody.className = "nota-media-error";
+  errorBody.hidden = true;
+  const deleteBody = document.createElement("button");
+  deleteBody.type = "button";
+  deleteBody.className = "nota-media-delete";
+  deleteBody.title = isVisionFrequency ? t("Delete video") : t("Delete image");
+  deleteBody.setAttribute("aria-label", deleteBody.title);
+  deleteBody.textContent = "×";
+
   if (!isVisionFrequency) {
     // 图片外面这一层只在编辑时承载 Markdown 源码输入框；渲染内容仍是裸
     // `<img>`，导出时源码框会被删除，这一层也会被展开。
@@ -167,8 +182,16 @@ function createElement(isVisionFrequency: boolean): viewItem {
     source.autocomplete = "off";
     source.setAttribute("aria-label", "Image Markdown source");
     const img = document.createElement("img");
-    box.append(source, img);
-    return { dom: box, mediaBody: img, sourceBody: source, isVisionFrequency: false, represent: 0 };
+    box.append(source, img, errorBody, deleteBody);
+    return {
+      dom: box,
+      mediaBody: img,
+      sourceBody: source,
+      errorBody,
+      deleteBody,
+      isVisionFrequency: false,
+      represent: 0,
+    };
   }
 
   // ⚠️ 视频这一支**要**包一层盒子，两个理由：
@@ -184,8 +207,22 @@ function createElement(isVisionFrequency: boolean): viewItem {
   video.controls = true;
   // 见文件头第 2 条：schema 是 `draggable: true`，这一行是"别把我当拖拽把手"。
   video.setAttribute("draggable", "false");
-  box.appendChild(video);
-  return { dom: box, mediaBody: video, sourceBody: null, isVisionFrequency: true, represent: 0 };
+  box.append(video, errorBody, deleteBody);
+  return {
+    dom: box,
+    mediaBody: video,
+    sourceBody: null,
+    errorBody,
+    deleteBody,
+    isVisionFrequency: true,
+    represent: 0,
+  };
+}
+
+function setMediaError(item3: viewItem, message: string | null): void {
+  item3.errorBody.textContent = message ?? "";
+  item3.errorBody.hidden = !message;
+  item3.dom.classList.toggle("has-media-error", Boolean(message));
 }
 
 /**
@@ -208,11 +245,13 @@ function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | nu
 
   const localLocal = localLocalImageSliceAbsoluteCorrectPath(src, documentPath);
   if (!localLocal) {
+    setMediaError(item3, null);
     item3.mediaBody.setAttribute("src", src);
   } else {
     // 本地图片由宿主读成 data URL。asset 协议在中文路径 / SVG / dev server 下
     // 会静默失败，表现正是“只剩 alt 和一顆破图标”。
     item3.mediaBody.removeAttribute("src");
+    setMediaError(item3, null);
     void api.image
       .dataUrl(localLocal)
       .then((address) => {
@@ -220,7 +259,10 @@ function writeAttribute(item3: viewItem, node: PMNode, documentPath: string | nu
       })
       .catch(() => {
         // 读不了就保留 alt；不要把 `src` 设回相对路径让浏览器再猜一次。
-        if (item3.represent === represent) item3.mediaBody.removeAttribute("src");
+        if (item3.represent === represent) {
+          item3.mediaBody.removeAttribute("src");
+          setMediaError(item3, t("Image could not be loaded: {0}", src));
+        }
       });
   }
  item3.mediaBody.setAttribute("title", title);
@@ -284,6 +326,31 @@ export function visionFrequencyView(documentPath: string | null = null) {
       writeAttribute(initial, initialNode, documentPath);
       let currentNode = initialNode;
 
+      const removeMedia = (): void => {
+        const position2 = getPos();
+        if (position2 === undefined) return;
+        const node = view.state.doc.nodeAt(position2);
+        if (!node || node.type.name !== "image") return;
+        const tr = view.state.tr.delete(position2, position2 + node.nodeSize);
+        tr.setSelection(TextSelection.near(tr.doc.resolve(position2), -1));
+        view.dispatch(tr.scrollIntoView());
+        view.focus();
+      };
+
+      initial.deleteBody.addEventListener("mousedown", (event) => event.preventDefault());
+      initial.deleteBody.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeMedia();
+      });
+      initial.mediaBody.addEventListener("error", () => {
+        setMediaError(
+          initial,
+          t("Image could not be loaded: {0}", text2(currentNode.attrs.src)),
+        );
+      });
+      initial.mediaBody.addEventListener("load", () => setMediaError(initial, null));
+
       const showSource = (): void => {
         initial.dom.classList.add("is-selected");
         if (!initial.sourceBody) return;
@@ -334,14 +401,7 @@ export function visionFrequencyView(documentPath: string | null = null) {
       };
 
       const removeImageFromEmptySource = (): void => {
-        const position2 = getPos();
-        if (position2 === undefined) return;
-        const node = view.state.doc.nodeAt(position2);
-        if (!node || node.type.name !== "image") return;
-        const tr = view.state.tr.delete(position2, position2 + node.nodeSize);
-        tr.setSelection(TextSelection.near(tr.doc.resolve(position2), -1));
-        view.dispatch(tr.scrollIntoView());
-        view.focus();
+        removeMedia();
       };
 
       initial.sourceBody?.addEventListener("keydown", (event) => {
@@ -399,6 +459,7 @@ export function visionFrequencyView(documentPath: string | null = null) {
         },
         stopEvent: (event) =>
           event.target === initial.sourceBody ||
+          event.target === initial.deleteBody ||
           (!initial.isVisionFrequency && event.target === initial.mediaBody),
         // NodeView 内部所有 DOM 都由这里自己写：图片异步拿到 data URL 后设置
         // `src` 也是内部更新。放给 ProseMirror 观察会被误判成用户编辑，

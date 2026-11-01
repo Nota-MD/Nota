@@ -93,6 +93,8 @@ export const events = {
    * 监听者的频道 emit 是静默成功的）。
    */
   pluginPanel: "nota:plugin-panel",
+  /** Developer-mode Lua hot reload completed or was rejected transactionally. */
+  pluginReloaded: "nota:plugin-reloaded",
   /**
    * 编辑区里摊的那一块**换了**（插件喊了 `nota.ui.review`，或者用户按了
    * 「回到正文」）。载荷是空的——**收到就重拉**（`api.plugin.review()`）。

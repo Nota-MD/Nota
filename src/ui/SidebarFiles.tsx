@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, type TreeNode, type WorkspaceExcerpt } from "@/bridge/ipc";
 import { useT } from "@/i18n";
+import { fileIconName } from "@/ui/file-icon";
 import { Icon } from "@/ui/Icon";
 
 interface FlatFile {
@@ -232,6 +233,9 @@ export function FileList(props: {
                 onClick={() => props.onOpenFile(absolute)}
               >
                 <span className="file-list-title">
+                  <span className="file-list-icon" aria-hidden="true">
+                    <Icon name={fileIconName(file.name)} size={15} />
+                  </span>
                   <span className="file-list-name">{file.base}</span>
                   {file.extension && <span className="file-list-ext">{file.extension}</span>}
                 </span>

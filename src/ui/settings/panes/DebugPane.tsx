@@ -50,6 +50,21 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
             }
           />
         </SettingRow>
+        <SettingRow
+          label={t("Lua extension auto-reload")}
+          description={t(
+            "Watch installed extension folders and reload after Lua or plugin.toml changes. Failed reloads keep the previous working extension.",
+          )}
+        >
+          <Toggle
+            checked={settings.general.lua_hot_reload}
+            onChange={(lua_hot_reload) =>
+              onChange({
+                general: { ...settings.general, lua_hot_reload },
+              })
+            }
+          />
+        </SettingRow>
         <SettingRow label={t("Settings file")}>
           <ActionButton onClick={onOpenConfigDir}>{t("Open Folder…")}</ActionButton>
         </SettingRow>
@@ -57,7 +72,11 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
           <ActionButton
             onClick={() =>
               onChange({
-                general: { ...settings.general, debug_mode: false },
+                general: {
+                  ...settings.general,
+                  debug_mode: false,
+                  lua_hot_reload: false,
+                },
               })
             }
           >

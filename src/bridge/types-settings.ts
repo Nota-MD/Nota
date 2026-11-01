@@ -568,6 +568,8 @@ export interface GeneralSettings {
    * 元素会显示计算后的字体、颜色、尺寸和内边距。默认关闭。
    */
   element_inspector: boolean;
+  /** Reload changed Lua plugins while this developer setting is enabled. */
+  lua_hot_reload: boolean;
   /* ⚠️ 这里**不会有**遥测、许可证、外部服务器。`settings/general.rs`
    * 里有一条测试盯着这些字符串。 */
 }

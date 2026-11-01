@@ -116,6 +116,7 @@ Useful checks:
 ```sh
 npm run typecheck
 npm test
+npm run test:e2e
 npm run build
 cd src-tauri && cargo test --lib
 ```

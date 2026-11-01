@@ -63,6 +63,9 @@ jobs:
       - name: 前端测试全集
         run: bash tools/test-frontend.sh
 
+      - name: 浏览器 E2E
+        run: npm run test:e2e
+
       - name: Rust 测试
         run: cargo test --lib --locked
         working-directory: src-tauri

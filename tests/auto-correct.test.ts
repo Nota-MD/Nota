@@ -22,7 +22,7 @@
  *   的（键大小写写歪、键与值写反、值里混进大写字母，都会在这儿现形）；
  * - 二、`改词` 的大小写三档，以及**混着写的不猜**；
  * - 三、**入表判据**：那批"本身是合法英文词"的一个都不许在表里；
- * - 四、`词尾正则` 的边界——触发字符只有空格与制表符、中文不碰、
+ * - 四、`词尾正则` 的边界——触发字符是普通空格、制表符与 NBSP、中文不碰、
  *   `xthe` 不会被挑成 `the`。
  *
  * # ⚠️ 这份测试**证明不了**什么
@@ -188,10 +188,22 @@ function match(text4: string): string | null {
   return m ? m[1]! : null;
 }
 
-testCase("空格与制表符触发", () => {
+function matchedWhitespace(text4: string): string | null {
+  const m = wordTailCorrectRule.exec(text4);
+  return m ? m[2]! : null;
+}
+
+testCase("普通空格、制表符与浏览器 NBSP 触发", () => {
   equal(match("teh "), "teh", "空格");
   equal(match("teh\t"), "teh", "制表符");
+  equal(match("teh\u00a0"), "teh", "contenteditable 生成的 NBSP");
   equal(match("I said teh "), "teh", "在一句话末尾");
+});
+
+testCase("触发空白必须被捕获并原样写回", () => {
+  equal(matchedWhitespace("teh "), " ", "普通空格");
+  equal(matchedWhitespace("teh\t"), "\t", "制表符");
+  equal(matchedWhitespace("teh\u00a0"), "\u00a0", "NBSP");
 });
 
 testCase("没有词尾空白就不触发", () => {
@@ -201,7 +213,7 @@ testCase("没有词尾空白就不触发", () => {
 });
 
 testCase("逗号句号那一族不触发（已知边界）", () => {
-  // ⚠️ 这条是**有意**挡住的：触发字符只有空格与制表符，所以 `teh,` 得
+  // ⚠️ 这条是**有意**挡住的：触发字符只有普通空白，所以 `teh,` 得
   // 等用户敲空格才更正。文件头"已知边界"第一条写的就是它。
   equal(match("teh,"), null, "逗号");
   equal(match("teh."), null, "句号");

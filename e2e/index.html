@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en" data-ui-style="adwaita" data-ui-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nota editor E2E</title>
+    <style>
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg, #fff);
+      }
+
+      .e2e-shell {
+        box-sizing: border-box;
+        min-height: 100vh;
+        padding: 32px;
+      }
+
+      .editor-pane,
+      .editor-mount,
+      #editor {
+        min-height: 520px;
+      }
+
+      #nota-e2e-report {
+        position: fixed;
+        right: 8px;
+        bottom: 8px;
+        max-width: 45vw;
+        margin: 0;
+        padding: 8px;
+        overflow: hidden;
+        color: #222;
+        background: #f3f3f5;
+        border: 1px solid #aaa;
+        font: 11px/1.35 monospace;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="e2e-shell">
+      <section class="editor-pane">
+        <div class="editor-mount">
+          <div id="editor"></div>
+        </div>
+      </section>
+    </main>
+    <pre id="nota-e2e-report" data-status="running">running</pre>
+    <script>
+      (() => {
+        const report = document.querySelector("#nota-e2e-report");
+        const fail = (message) => {
+          if (!report) return;
+          report.dataset.status = "failed";
+          report.dataset.count = "0";
+          report.dataset.report = "";
+          report.textContent = `FAIL E2E harness\n${message}`;
+        };
+        window.addEventListener("error", (event) => {
+          fail(event.error?.stack || event.message || "unknown window error");
+        });
+        window.addEventListener("unhandledrejection", (event) => {
+          fail(event.reason?.stack || String(event.reason));
+        });
+      })();
+    </script>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

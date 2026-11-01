@@ -14,7 +14,7 @@
  *    比改一个英文词严重得多。
  * 2. **只在敲下词尾那一下动手**，也就是只改**刚打完的那一个词**。既不回头改
  *    已有文本，也不改还没定型的词（`teh` 打到 `te` 时不能动手——用户可能想打的
- *    是 `tell`）。触发字符**只有空格与制表符**：逗号句号那一族要让"替换"与
+ *    是 `tell`）。触发字符**只有空白**：逗号句号那一族要让"替换"与
  *    "保留标点"两件事同时正确，而它们的收益比空格低得多（见下面"已知边界"）。
  * 3. **必须能撤销**：走 `inputRules`，`Ctrl+Z` 一步退回原文
  *   （`prosemirror-inputrules` 会把被替换掉的原文本记在插件状态里，
@@ -38,7 +38,7 @@
  *
  * # 已知边界（如实记着）
  *
- * - ⚠️ **触发字符只有空格与制表符**。所以 `teh,` 后面直接跟逗号**不更正**，
+ * - ⚠️ **触发字符只有普通空格、制表符与不换行空格（NBSP）**。所以 `teh,` 后面直接跟逗号**不更正**，
  *   得等用户敲空格。代价是漏几处；收益是"标点原样留在原地"这件事不需要
  *   任何额外代码，也不会出现"逗号被吃掉"这类难查的毛病。
  * - ⚠️ **中文语境里不会触发**：正则只认 `[A-Za-z]`，中文词一个都不碰。
@@ -186,17 +186,20 @@ export function replaceWord(word: string): string | null {
 const ruleRuleOption = { inCodeMark: false } as const;
 
 /**
- * 词尾那一下的触发字符。**只有空格与制表符**，理由在文件头"已知边界"里。
+ * 词尾那一下的触发字符。**普通空格、制表符与浏览器生成的 NBSP**，
  *
  * ⚠️ 正则前面**不加 `\b`**：`([A-Za-z][A-Za-z']*)` 是贪婪的，`xthe ` 匹配到的
  * 是 `xthe` 而不是 `the`，查表落空、什么都不做——**这正是想要的**，
  * 加 `\b` 反而会让 `xthe` 里的 `the` 被挑出来（而 `\b` 在 `x` 与 `t` 之间是成立的，
  * 它管的是"词字符与非词字符的边界"）。
  *
- * ⚠️ **导出是给测试用的**：文件头那几条"触发字符只有空格、中文不碰、`teh,` 不更正"
+ * ⚠️ WebKit/Chromium 在 contenteditable 里可能把空格记成 U+00A0；它和普通空格
+ * 对用户是同一个动作。漏掉它会表现成"打了空格但自动更正偶发不生效"。
+ *
+ * ⚠️ **导出是给测试用的**：文件头那几条"触发字符只有空白、中文不碰、`teh,` 不更正"
  * 都只能在这一层钉住（输入规则本身要真 `Editor.make()` 才跑得起来）。
  */
-export const wordTailCorrectRule = /([A-Za-z][A-Za-z']*)[ \t]$/;
+export const wordTailCorrectRule = /([A-Za-z][A-Za-z']*)([ \t\u00a0])$/;
 
 /**
  * 挂进 `.use()` 的那一条输入规则。**关着的时候返回空数组**（不是"挂上去再
@@ -215,11 +218,10 @@ export function selfActionMoreCorrectInput(open2: boolean) {
       new InputRule(wordTailCorrectRule, (state, match2, start6, end3) => {
         const replace = replaceWord(match2[1]!);
         if (!replace) return null;
-        // ⚠️ **只换那个词，不碰后面那颗空格**：`终` 是光标（在空格之后），
-        // 而 `匹配[0]` 是"词 ＋ 一颗空白"，所以词尾落在 `终 - 1`。
-        // 连空白一起换掉的话，用户敲的那颗空格会被这一步吃掉，
-        // 表现为"打完词按空格，空格没了"——那是最容易被当成"编辑器坏了"的症状。
-        return state.tr.insertText(replace, start6, end3 - 1);
+        // `InputRule` 的 `end` 是**触发字符插入前**的光标坐标；返回事务后那颗
+        // 空白不会被浏览器再插一次。因此要显式把捕获到的空白拼回去，否则
+        // `teh␠` 会变成 `the`（空格消失），按“插入后”减一还会留下半截 `h`。
+        return state.tr.insertText(replace + match2[2]!, start6, end3);
       }, ruleRuleOption),
     ),
   ];

@@ -3,6 +3,7 @@ node_modules/
 dist/
 *.local
 .vite/
+e2e/dist/
 
 # Rust / Tauri（旧后端，移植期间留着当参照）
 src-tauri/target/

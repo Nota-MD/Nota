@@ -147,7 +147,7 @@
 | `editor/html-sanitize.ts` | **DOMPurify 按需运行层**：首个 HTML 块渲染时才加载，避免净化库进入主启动路径 |
 | `editor/lang-icons-real.ts` | **真图那一半**（276 行，2026-09-26）：93 颗彩色 logo，**逐字节**从 vscode-icons tag `v12.19.0` 搬来（MIT，`THIRD-PARTY.md` §6），抓取与核对在 `tools/fetch-lang-icons.sh`（`--verify` 拿 `SHA256SUMS` 对账）。⚠️ **那批 `.svg` 一个字节都不许改**（连"顺手调颜色"也不行），能一眼核对的前提就是这个。⚠️ 本文件少一个语言**不是错**——400 个 id 里绝大多数一辈子不会有人贴 ⚠️ **2026-10-16 加了 `代表语言(id)`**：同一组里排第一的那个 id 就是这一族的代表（下拉一行一族靠它，解的是「语言类型重复」）。 |
 | `editor/smart-punctuation.ts` | **智能标点与引号配对**（2026-09-27 新建，2026-10-23 扩展）：`--` → `–` / `---` → `—` / `...` → `…`；引号在 `input` 档由 `handleTextInput` 统一接管：行首或左边界后一次放入成对引号，在自动补出的闭引号前再按一次只跨过去，选中文字时用一对引号包住并保留选区，字母后的单引号仍落撒号。⚠️ 横线与省略号仍是三条输入规则；引号**不再注册输入规则**，否则输入规则会先落成单颗字符、配对插件看不到原选区。⚠️ `render` 档仍然只画不写，导出那条路不许传；`off` / `render` 不安装引号配对。⚠️⚠️ **改之前先读 `是横线骨架行`**——没有它，敲 `---` 时第二颗减号就被换掉、分割线再也出不来。判据 `tests/smart-punctuation.test.ts` **43** 条 |
-| `editor/auto-correct.ts` | **自动更正**（2026-09-27）：一张固定的英文错拼表（四十来条）＋ 一条输入规则（只在词尾空格那一下动手）。⭐ 入表判据一条：**小写形式在英文里不是一个词**（所以 `cant`/`wont`/`wether`/`lets`/`its` 全不收）。⚠️ 不做语法检查、不做句首大写、不碰中文。判据 `tests/auto-correct.test.ts` **20** 条 |
+| `editor/auto-correct.ts` | **自动更正**（2026-09-27；2026-11-01 由浏览器 E2E 修掉两个旧缺陷）：一张固定的英文错拼表（四十来条）＋ 一条输入规则（只在词尾空白那一下动手）。⭐ 入表判据一条：**小写形式在英文里不是一个词**（所以 `cant`/`wont`/`wether`/`lets`/`its` 全不收）。⚠️ 不碰中文，也不做语法检查或句首大写。📌 触发字符现在包括普通空格、Tab 和浏览器 contenteditable 生成的 NBSP；替换时显式保留原空白。📌 `InputRule` 的 `end` 是触发字符插入前的坐标，不能按“插入后”再减一（BUG-80）。判据 `tests/auto-correct.test.ts` **21** 条，浏览器链路在 `e2e/main.ts`。 |
 | `editor/headings.ts` | **大纲抽取**（2026-09-27 新建，约 100 行）：`extractOutline` ＋ `OutlineItem` 从 `ui/outline.ts` **整段搬来**。⚠️ 理由是**依赖方向**——`src/editor/` 从不 import `@/ui/`，而「内容目录」（`editor/toc.ts`）与侧栏「大纲」页要同一份判据。两个消费者：`ui/Sidebar.tsx` / `editor/toc.ts`。⚠️ **2026-10-04（第 63 项）**：开头那段 front matter 的跳过改用 `editor/front-matter.ts` 的 `前置块行数()`——**判据只剩一份**（严的那份），“大纲藏的”与“编辑器藏的”不会再对不上；⚠️ 同批（第 32 项）把文件头那段“为什么不吃去抖镜像”的理据**改成了实情**：吃，这是取舍 |
 | `editor/toc.ts` | **内容目录（TOC）的纯文本那半**（2026-09-27 新建，约 200 行）：`生成目录` / `锚点` / `算目录块` / `找目录` / `替换目录` / `是目录标记`。⚠️ 形状是**一段普通 markdown 列表**、两头用注释标记（`<!-- nota:toc -->` / `<!-- /nota:toc -->`）夹住——不是粒子节点，不必动 schema，源码模式里也看得见。⚠️ **它是快照**（再点一次 = 原地更新，不是实时跟随；理由在文件头）。⚠️ 编辑区里点链接**不跳**，导出的 HTML 里能跳 |
 | `editor/emoji.ts` | **Emoji 短代码 ＋ 补全面板**（2026-09-27，约 924 行）：**503 条**短代码（十一个分类）＋ 一条输入规则（`:smile: ` ＋ 空格 → 😄）＋ 一颗挂 `document.body` 上的候选面板。⚠️ **一个开关管两件事**（`settings.editor.emoji_autocomplete`）——替换与面板都是"编辑器在用户的 emoji 输入上插手"，拆开只会让人"关掉一个还弹另一个"。⚠️ `输入规则正则` 是**导出常量**，测试拿同一条去核表里每一条短代码（防"面板选得到、永远敲不出来"的死行；量词 `{1,}`，因为表里有 `:x:` / `:v:`）。⚠️ **面板只画不改**（文档树一个字节都不动），坐标现算；鼠标 `mousedown` ＋ `preventDefault()`，键盘 `handleKeyDown`。⚠️ **`apply` 里先读 `tr.getMeta(emoji补全键)`**：上下键只改高亮、没改文档（不读 meta 就会被前缀重置回 0，症状"按 ↓ 没反应"）。⚠️ **只读实例不挂面板**。判据 `tests/emoji.test.ts` **32** 条 |
@@ -424,6 +424,12 @@
 📌 **2026-10-17 前端现跑**：`npm test` → **64 份 / 1574 条 / 全部 exit=0**。名册现在自动扫
 `tests/*.test.ts`；下面旧段里的 56 份 / 1398 条与手抄名单只作为历史。
 
+📌 **2026-11-01 浏览器 E2E**：`npm run test:e2e` 用系统 Chrome 加载真实
+`createEditor()`、真实 CSS / NodeView 与 Tauri IPC 替身，共 **8 个场景**：
+行内标记 Left / Home、公式末尾 Right、末尾反斜杠间距、智能标点与分割线、
+自动更正与一次撤销、Emoji 补全、脚注插入。它不是 Tauri/WebKitGTK 窗口测试，
+平台原生对话框、真实输入法与 OS 级快捷键仍以 `docs/06` 的开窗记录为准。
+
 ⚠️ **前端另有一批，与上面这个数不是一套**（本仓没有测试框架，跑法是 `esbuild` ＋ `node`，
 见 `docs/06` §6.3）：`tests/` 下 **五十六份、共 1398 条**（📌 **2026-10-07 现数**：一份一份跑出来的，56 份 **exit=0**、TOTAL **1398**；**本批的账只有两处**——① `math-view` 51 → **31**，另立 `math-wiring` **20 条**（第 89 项拆 `tests/math-view.test.ts`：那是一份 **1024 行**的测试，按**职责**切两半——这一份管「公式节点自己」的五组（真插件规格 / 取源码与写回 / 用户报的那串 `$$␣` / 真插件的两条线 / NodeView 的逻辑），`math-wiring` 管「公式之外围」的三组（插公式块那条命令 / 序列化不给行首井号加反斜杠 / 命令补全弹窗的接线）；两份共用的地基抽成 `math-fixture.ts`。⚠️ 拆的**触因是行数**不是速度：两条路都是 0.1 秒上下）；② `find` 42 → **48**（同批给 `正则写坏了` 那个新出口补的 6 条）。⚠️ 现数时又抓到一处**旧数写错**：`math-delim` 那份表里写着 **51**、现数是 **47**（不是本批动的，是更早某批之后没回头改），这一版一律按现数重排。⚠️ 上一版是五十五份、1392 条（📌 **2026-10-06 深夜现数**：一份一份跑出来的，55 份 0 失败——那份 `for` 里的**五十一份 1238 条** ＋ 另带开关的四份 **154 条**；本批新加 `find` **42 条**（查找与替换：`在文本里找匹配` 的三个开关与零宽 ／ **`算匹配` 的文档偏移**——BUG-67 那条判据写成 `doc.textBetween(命中.start, 命中.end)` 必须正好是查询串，⚠️ 对照组把 `pos + m.start` 改回 `pos + 1 + m.start` 重跑，**42 条里 16 条红**）；⚠️ **现数时才发现本节这张表落后了五批**：`panel-cards` 37 ／ `context-menu` 30 ／ `code-block-editing` 21 ／ `caret-snapshot` 10 ／ `hints` 10 **都建好了却没进过这张表**（`docs/06` §6.3 的名册与 `for` 里一直有它们），连同 `find` 一起补进来了——⚠️ 这正是下面那条"加一份要跟着改四处、闸门一处都扫不到"的老毛病；⚠️ 上一版是五十份、1252 条（📌 **2026-10-04 现数**：一份一份跑出来的，50 份 0 失败——那份 `for` 里的**四十六份 1098 条** ＋ 另带开关的四份 **154 条**；本批新加 `front-matter` **32 条**（`docs/07` 第 64 项，⭐ 它当场抓到一个老 off-by-one）、`focus-dim` **15 条**（第 45 项那条轴的五个名字对账）与 `window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同）；⚠️ 上一版是四十七份、1197 条（📌 **2026-10-04 深夜现数**：一份一份跑出来的，47 份 0 失败——那份 `for` 里的**四十三份 1043 条** ＋ 另带开关的四份 **154 条**；本批新加 `caret-snapshot` **10 条**（`docs/07` 第 14 项）；⚠️ 上一版是四十六份、1187 条，再上一版是四十五份、1174 条——那份 `for` 里的**四十二份 1033 条** ＋ 另带开关的四份 **154 条**；本批新加 `math-currency` **23 条**（`docs/07` 第 54 项）、`list-indent` **16 条**（第 47 项）与 `syntax-escape` **13 条**（第 56 项那一族的收尾）；⚠️ 上一版是四十三份、1135 条，再上一版是四十二份、1122 条）：
 `table-tab.test.ts` **67** · `keymap.test.ts` **54**
@@ -437,7 +443,7 @@
 `source-mark.test.ts` **28** · `math-suggest.test.ts` **27** · `toc.test.ts` **27**
 `paste-clean.test.ts` **25** · `math-currency.test.ts` **23**
 `code-block-editing.test.ts` **21** · `key-conflicts.test.ts` **21**
-`auto-correct.test.ts` **20** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20**
+`auto-correct.test.ts` **21** · `heatmap.test.ts` **20** · `math-wiring.test.ts` **20**
 `atom-space.test.ts` **19** · `heading-on-enter.test.ts` **20** · `heading-toggle.test.ts` **5** · `font-bundle.test.ts` **7** · `cde-menu-fidelity.test.ts` **11** · `settings-export.test.ts` **5** · `accent.test.ts` **18**
 `mark-hint.test.ts` **17** · `mark-hint-syntax.test.ts` **20** · `instant-render.test.ts` **3** · `list-indent.test.ts` **16**
 `focus-dim.test.ts` **15** · `file-kind.test.ts` **14** · `html-block.test.ts` **15**
@@ -5743,7 +5749,7 @@ export interface 选区快照 {
 
 ---
 
-## `src/editor/command-table.ts`（216 行）
+## `src/editor/command-table.ts`（479 行）
 
 **命令白名单的实体**：`EditorCommand` 的每一项落到哪个 Milkdown 命令上。
 
@@ -5758,7 +5764,7 @@ payload），搬走之后 `create.ts` 那边只剩一个 `跑命令` 的调用�
 
 | 名字 | 是什么 |
 |---|---|
-| `COMMANDS` | `Record<EditorCommand, (editor, payload?) => void>` 那张表。⚠️ **`h1`~`h6` 不在表里**——`跑命令` 单独分流；📌 **2026-10-17 起同层标题再按一次会退回正文**，跨层仍改成目标标题 |
+| `COMMANDS` | `Record<EditorCommand, (editor, payload?) => void>` 那张表。⚠️ **`h1`~`h6` 不在表里**——`跑命令` 单独分流；📌 **2026-10-17 起同层标题再按一次会退回正文**，跨层仍改成目标标题。📌 **`undo` 先调用 `undoInputRule`**：输入规则刚替换过文本时，一次撤销先恢复原文；没有可撤的输入规则才交给普通 history。否则会把刚打的整段字一起删掉（BUG-80） |
 | `跑命令(editor, name, payload?)` | 派发口。⚠️ **只管命令、不管焦点**——焦点交回正文的收尾留在 `create.ts` 的菜单/快捷键入口，见 `docs/05` §3 |
 | `HeadingCommand` / `BlockCommand` / `HEADING_RE` / `isHeading` | 上面那个分支要用的类型与判据。`isHeading` 写成**类型谓词**而不是 `as`：写成 `as` 的话，"表里漏了一项"这种错误也会被一起放过去 |
 

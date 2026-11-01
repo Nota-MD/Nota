@@ -52,6 +52,7 @@ import {
 } from "@milkdown/kit/preset/gfm";
 import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import { lift, toggleMark } from "@milkdown/kit/prose/commands";
+import { undoInputRule } from "@milkdown/kit/prose/inputrules";
 import { liftListItem } from "@milkdown/kit/prose/schema-list";
 import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import type { NodeType } from "@milkdown/kit/prose/model";
@@ -231,7 +232,14 @@ export function toggleMarkForToolbar(editor: Editor, markName: string): boolean 
  * 包成"吃一个 editor"的闭包之后，调用点也不必再碰 Milkdown 的类型。
  */
 const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) => void> = {
-  undo: (e) => e.action(callCommand(undoCommand.key)),
+  undo: (e) =>
+    e.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      // 输入规则会记下被替换的原文；先撤这一步，否则普通历史撤销会把刚打的整段字一起删掉。
+      if (!undoInputRule(view.state, view.dispatch, view)) {
+        callCommand(undoCommand.key)(ctx);
+      }
+    }),
   redo: (e) => e.action(callCommand(redoCommand.key)),
   bold: (e) => toggleMarkForToolbar(e, "strong"),
   italic: (e) => toggleMarkForToolbar(e, "emphasis"),

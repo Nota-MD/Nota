@@ -6815,3 +6815,40 @@ Rust 定向测试 `settings::export::tests` 4 条与 `pandoc_format::tests` 1 �
 `tsc --noEmit`、`cargo check --lib`、生产构建通过。实际窗口截图保存在本机
 `/tmp/nota-math-gap-fixed2-typed.png`、`/tmp/nota-export-settings.png` 与
 `/tmp/nota-export-menu.png`，不进入仓库。
+
+### 5.74 浏览器 E2E：编辑器边界与原先只有单测的功能（2026-11-01）
+
+**运行方式**：
+
+```sh
+npm run test:e2e
+```
+
+`e2e/run.mjs` 先对 `e2e/tsconfig.json` 做类型检查，再用仓库自己的 Vite 构建
+`e2e/` 页面，随后启动系统 Chrome/Chromium、通过 CDP 等待页面主动报告结果。
+页面加载的是真实 `createEditor()`、真实 CSS、ProseMirror、KaTeX、CodeMirror
+与 NodeView；Tauri IPC 只替换到编辑器启动所需的空命令，不复制编辑器逻辑。
+`CHROME_BIN` 可指定浏览器。
+
+本轮 8 个场景：
+
+| # | 场景 | 判据 |
+|---|---|---|
+| ① | `**1**` 中连续 Left | 跨过两颗真实语法原子，输入后得到 `Z**1**` |
+| ② | `**1**` 中按 Home | 到真正行首，输入后得到 `H**1**` |
+| ③ | 行内公式源码末尾按 Right | 退出公式，后续 `Z` 位于 `$…$` 外 |
+| ④ | 行内公式末尾输入 `\` | 闭 `$` 与源码至少隔开 1px；输入值和序列化字节都不增加空格 |
+| ⑤ | 输入 `a--b`，另开文档输入 `---` | 前者成为 `a–b`；后者仍生成 `<hr>`，没有被智能标点抢掉 |
+| ⑥ | 输入 `teh` 后按真实空格，再撤销一次 | 自动更正为 `the`，一次撤销恢复 `teh`；NBSP 同样触发 |
+| ⑦ | 输入 `:sm`，按 Down、Enter | 候选面板真实出现，键盘移动高亮并采用候选 |
+| ⑧ | 执行 `footnote` 命令并输入定义 | 角标与定义都进入 DOM，Markdown 往返保留 `[^1]` / `[^1]: 注` |
+
+自动更正这轮 E2E 抓出 **BUG-80** 的两处旧实现错误：规则只认普通空格/Tab，
+而浏览器会生成 NBSP；同时 `InputRule` 的结束坐标被当成“触发字符插入后”，
+导致 `teh` 会被替换成 `theh`。现在规则捕获并保留原空白，`undo` 也先执行
+`undoInputRule`，因此一次撤销不会删除整段刚输入的文字。
+
+⚠️ **边界**：这套 E2E 运行在 Chrome 的普通网页里，不启动 Rust/Tauri，
+也不替代 WebKitGTK 真窗口、系统文件选择器、原生打印、IME 与 OS 快捷键验证。
+它的用途是把“真实 DOM + 真实编辑器装配 + 键盘事件 + 序列化”这一段自动化；
+平台相关部分仍按 §5 的开窗配方记录。

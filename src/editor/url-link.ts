@@ -1,5 +1,6 @@
 /**
- * **裸 URL**：用户打出来（或粘进来）的那串 `https://…` / `www.…` 自动变成链接。
+ * **自动链接**：用户打出来（或粘进来）的 HTTP(S)、`www.`、邮箱和
+ * 显式 `mailto:` 地址自动变成链接。
  * 2026-09-28 落地，用户原话：「**裸 URL 自动识别成链接**」「粘贴 URL 到选中文字
  * → 自动包成链接」。
  *
@@ -7,7 +8,7 @@
  *
  * | 什么时候 | 怎么进 | 落到文档上的样子 |
  * |---|---|---|
- * | 打到**词尾**（空格 / 制表符） | 输入规则（{@link 自动链接输入}） | 那段文字挂上 `link` 标记 |
+ * | 打到**边界**（空格 / Tab / Enter） | 输入规则 ＋ `autoLinkBoundary` | 那段文字挂上 `link` 标记 |
  * | **粘**进来 | 粘贴插件（`editor/paste.ts` 调 {@link 贴上网址事务}） | 同上；**选区非空时是给选中那段挂标记** |
  *
  * ⚠️ **两路的"这是不是一个网址"必须是同一个答案**：判据只有
@@ -17,7 +18,7 @@
  *
  * # 口径（四条，都是取舍）
  *
- * 1. **只认有来头的写法**：带 `http(s)://` 的，与 `www.` 开头的。
+ * 1. **只认明确的链接形状**：带 `http(s)://`、`www.`、完整邮箱，或显式 `mailto:`。
  *    ⚠️ **裸域名（`example.com`）不认**——这一条是**故意**的，不是漏了。
  *    认了的话，`README.md` / `node.js` / `index.html` / `图.png` / `v1.2`
  *    全都变成链接，而"把用户写的普通文字改成一个链接"是这件事唯一不能犯的错
@@ -37,19 +38,19 @@
  *
  * # 已知边界（如实记着）
  *
- * - ⚠️ **行尾那颗回车不触发**：输入规则只在"打字"那一下跑，回车不是打字。
- *   所以一行结尾的 URL（后面直接换段）**要等下一个空格才成链接**。
- *   Typora 在回车时也转，本仓没做——那要在 `Enter` 的 keymap 里插一手、
- *   再和段落切分抢同一颗按键，收益（少打一个空格）远小于风险。
+ * - **空格和 Enter 共用边界插件**：链接先落标记，随后同一颗键再交给原有输入或
+ *   块级键位处理，所以不会绕开标题、列表、表格的分段语义。
  * - ⚠️ **行内代码与围栏代码块里不触发**（`规则选项` 那条注释讲了机制）。
  * - ⚠️ **不做"输入时把已有文本重扫一遍"**：只认刚敲的、刚粘的，老文档一个
  *   字节不改（Nota 那条"存盘不要自动修复"的铁律）。
  */
 
 import { $inputRule } from "@milkdown/kit/utils";
+import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import type { MarkType } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
+import { $prose } from "@milkdown/kit/utils";
 
 /* ── 第一格：判据（纯函数，测试只用这一层）──────────────────────────────── */
 
@@ -134,6 +135,32 @@ export function NormalizeUrl(candidate: string): string | null {
   return address;
 }
 
+/** A recognized bare link and the href that should back it. */
+export interface NormalizedLink {
+  text: string;
+  href: string;
+}
+
+const emailAddressPattern =
+  /^(?:(mailto:\/{0,2}))?([a-z0-9][a-z0-9._%+-]{0,63})@((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})$/i;
+
+/**
+ * Normalize an HTTP(S), www, email, or explicit mailto address.
+ *
+ * Bare domains remain excluded. Email recognition is separate from
+ * {@link NormalizeUrl} so image detection and link editing keep their existing
+ * URL-only contracts.
+ */
+export function NormalizeLink(candidate: string): NormalizedLink | null {
+  const text4 = candidate.trim();
+  const url = NormalizeUrl(text4);
+  if (url) return { text: text4, href: url };
+  if (text4 === "" || /\s/.test(text4) || DangerousProtocol(text4)) return null;
+  const email = emailAddressPattern.exec(text4);
+  if (!email) return null;
+  return { text: text4, href: /^mailto:/i.test(text4) ? text4 : `mailto:${text4}` };
+}
+
 /** {@link 是裸URL} 的判据出口（测试用）。 */
 export function isBareURL(candidate: string): boolean {
   return NormalizeUrl(candidate) !== null;
@@ -183,7 +210,7 @@ export function splitTailPunctuation(source: string): { url: string; tailPart: s
   let end3 = source.length;
   while (end3 > 0) {
     const end = source[end3 - 1]!;
-    if (".,;:!?".includes(end)) {
+    if (".,;:!?*_~，。；：！？、".includes(end)) {
       end3--;
       continue;
     }
@@ -221,7 +248,7 @@ const ruleRuleOption = { inCodeMark: false } as const;
  * | 段 | 作用 |
  * |---|---|
  * | `(?:^\|[\s([{（【「『"'“‘>\uFFFC])` | 前面必须是**行首 / 空白 / 左括号那一族**。⚠️ 末尾那颗 `\uFFFC` 是 `U+FFFC`（`textBetween` 给图片这类叶子节点的占位符）——网址紧跟在图片后面时前一个"字符"就是它 |
- * | `((?:https?:\/\/\|www\.)[^\s<>"'\`]+)` | 网址本体。⚠️ 收尾字符里排出 `<>"` 与反引号——它们在实际地址里一定得转义，出现即说明这不是地址 |
+ * | 第二组 | 网址或邮箱本体。⚠️ URL 收尾字符里排出 `<>"` 与反引号；邮箱必须含 `@` 和至少一级域名 |
  * | `[ \t]$` | 词尾的触发字符。⚠️ **只有空格与制表符**，与 `auto-correct.ts` 同一条口径 |
  *
  * ⚠️ 匹配式**必须在光标处收尾**（末尾那颗 `$`）：`prosemirror-inputrules` 用
@@ -229,19 +256,19 @@ const ruleRuleOption = { inCodeMark: false } as const;
  * 症状是"链接包住了 URL 前面那颗空格"。
  */
 export const bareURLCorrectRule =
-  /(?:^|[\s([{（【「『"'“‘>\uFFFC])((?:https?:\/\/|www\.)[^\s<>"'`]+)[ \t]$/;
+  /(?:^|[\s([{（【「『"'“‘>\uFFFC])((?:(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:mailto:\/{0,2})?[a-z0-9][a-z0-9._%+-]*@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+[?!.,:**_~;，。；：！？、]*))[ \t]$/i;
 
 /**
  * 挂进 `.use()` 的输入规则：**打到词尾那一下**把外面那串变成链接。
  *
- * ⚠️ **只有一条，而且没有开关**：这件事没有对应的设置项（用户要的就是它一直在），
- * 为它加一格控件只是多一个没人会去拨的开关。
+ * ⚠️ **由 `markdown.autolink` 控制**：关闭时连同边界插件与粘贴识别一起移除。
  *
  * ⚠️ **排在整串 `.use()` 的后面**（`create.ts` 里挂在自动更正旁边）：上游那些
  * 输入规则要的分隔符是 `#` / `>` / `-` / 数字 / 反引号 / `$`，与"字母冒号
  * 斜杠那一串"不重合，抢不起来；排后面是零代价的保险。
  */
-export function selfActionLinkInput() {
+export function selfActionLinkInput(enabled = true) {
+  if (!enabled) return [];
   return [
     $inputRule(() =>
       new InputRule(bareURLCorrectRule, (state, match2, start6, end3) => {
@@ -250,8 +277,8 @@ export function selfActionLinkInput() {
         // `new URL` 仍然成功，而 `https://a.com/b,` 里那颗逗号未必——顺序反了
         // 会出现"带逗号的不认、带句号的认"这种说不通的差别。
         const { url, tailPart } = splitTailPunctuation(original);
-        const address = NormalizeUrl(url);
-        if (!address) return null;
+        const normalized = NormalizeLink(url);
+        if (!normalized) return null;
         const link = state.schema.marks.link;
         if (!link) return null;
         // ⚠️ `匹配[0]` 是"**前缀字符 ＋ 网址 ＋ 触发空白**"，`始` 落在前缀
@@ -259,11 +286,110 @@ export function selfActionLinkInput() {
         // `[始 + 前缀长, 终 - 1)`。前缀长**只能这么算**，不能写死：
         // 行首时前缀是空的（`^` 那一支），写死 1 会把第一个字符切掉。
         const prefixLength = match2[0].length - original.length - 1;
-        return replaceLink(state, start6 + prefixLength, end3 - 1, url, tailPart, address, link);
+        const from = start6 + prefixLength;
+        const to = end3 - 1;
+        let alreadyLinked = false;
+        state.doc.nodesBetween(from, to, (node) => {
+          if (node.isText && link.isInSet(node.marks)) alreadyLinked = true;
+        });
+        return alreadyLinked
+          ? null
+          : replaceLink(state, from, to, url, tailPart, normalized.href, link);
       }, ruleRuleOption),
     ),
   ];
 }
+
+/** A link-shaped token immediately before the cursor in one text block. */
+export interface LinkBeforeCursor {
+  from: number;
+  to: number;
+  text: string;
+  href: string;
+  tail: string;
+}
+
+/**
+ * Find a link-shaped token ending at the cursor.
+ *
+ * This does not mutate the document. It exists so Enter can use the same
+ * normalization and trailing-punctuation rules as the space/Tab input rule.
+ */
+export function findLinkBeforeCursor(parentText: string): LinkBeforeCursor | null {
+  const match = /(\S+)$/u.exec(parentText);
+  if (!match) return null;
+  let token = match[1]!;
+  let from = parentText.length - token.length;
+  const boundaryPattern = /[\s([{（【「『"'“‘>\uFFFC]/u;
+  const before = from > 0 ? parentText[from - 1] : undefined;
+  if (before !== undefined && !boundaryPattern.test(before)) return null;
+  if (boundaryPattern.test(token[0] ?? "")) {
+    token = token.slice(1);
+    from += 1;
+  }
+  const { url, tailPart } = splitTailPunctuation(token);
+  const link = NormalizeLink(url);
+  if (!link) return null;
+  return {
+    from,
+    to: from + url.length,
+    text: link.text,
+    href: link.href,
+    tail: tailPart,
+  };
+}
+
+/** Convert the link token before the cursor without changing its visible text. */
+export function autoLinkBeforeCursor(state: EditorState): Transaction | null {
+  const { selection } = state;
+  if (!selection.empty || !selection.$from.parent.inlineContent) return null;
+  const { $from } = selection;
+  if ($from.parent.type.spec.code) return null;
+  const found = findLinkBeforeCursor($from.parent.textBetween(0, $from.parentOffset, "\n", "\uFFFC"));
+  if (!found) return null;
+  const linkType = state.schema.marks.link;
+  if (!linkType) return null;
+  const from = $from.start() + found.from;
+  const to = $from.start() + found.to;
+  let alreadyLinked = false;
+  state.doc.nodesBetween(from, to, (node) => {
+    if (node.isText && linkType.isInSet(node.marks)) alreadyLinked = true;
+  });
+  if (alreadyLinked) return null;
+  return replaceLink(state, from, to, found.text, "", found.href, linkType);
+}
+
+/**
+ * Recognize a link immediately before the cursor when Enter starts a new block.
+ *
+ * Returning `false` lets the normal block handlers process the same Enter after
+ * the link transaction has been dispatched.
+ */
+export const autoLinkBoundary = (enabled = true) =>
+  $prose(() =>
+    new Plugin({
+      key: new PluginKey("nota-auto-link-boundary"),
+      props: {
+        handleKeyDown: (view, event) => {
+          if (
+            !enabled ||
+            (event.key !== "Enter" && event.key !== " ") ||
+            event.shiftKey ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.altKey ||
+            view.composing
+          ) {
+            return false;
+          }
+          const transaction = autoLinkBeforeCursor(view.state);
+          if (!transaction) return false;
+          view.dispatch(transaction.scrollIntoView());
+          return false;
+        },
+      },
+    }),
+  );
 
 /**
  * 把 `[始, 终)` 那段文字换成"挂上链接标记的同一段文字（＋尾巴）"。
@@ -317,8 +443,8 @@ function replaceLink(
  * 存盘序列化出来没法看。所以只给 `inlineContent` 的两端挂。
  */
 export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: string): Transaction | null {
-  const address = NormalizeUrl(cutPasteBoardText);
-  if (!address) return null;
+  const normalized = NormalizeLink(cutPasteBoardText);
+  if (!normalized) return null;
   const link = state.schema.marks.link;
   if (!link) return null;
   const { selection } = state;
@@ -330,10 +456,10 @@ export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: 
       .replaceWith(
         selection.from,
         selection.to,
-        state.schema.text(cutPasteBoardText.trim(), [link.create({ href: address })]),
+        state.schema.text(normalized.text, [link.create({ href: normalized.href })]),
       )
       .removeStoredMark(link);
   }
   if (!selection.$from.parent.inlineContent || !selection.$to.parent.inlineContent) return null;
-  return state.tr.addMark(selection.from, selection.to, link.create({ href: address }));
+  return state.tr.addMark(selection.from, selection.to, link.create({ href: normalized.href }));
 }

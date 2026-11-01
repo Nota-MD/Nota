@@ -167,7 +167,7 @@ async function waitForReport(client) {
     if (state?.nativeKey && state.nativeKey !== handledNativeKey) {
       handledNativeKey = state.nativeKey;
       const parameters =
-        state.nativeKey === "space"
+        state.nativeKey.startsWith("space")
           ? {
               type: "keyDown",
               key: " ",

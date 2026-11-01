@@ -107,6 +107,12 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
+      <SettingsGroup title={t("Auto pair")}>
+        <SettingRow label={t("Pair brackets while typing")}>
+          <Toggle checked={e.auto_pair} onChange={(auto_pair) => write({ auto_pair })} />
+        </SettingRow>
+      </SettingsGroup>
+
       <SettingsGroup title={t("Emoji autocomplete")}>
         <SettingRow>
           <Toggle

@@ -121,6 +121,10 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   // 口径，理由见 `create-types.ts` 的 `inlineMarks` 那一格。
   const inlineExtensions = options.inlineMarks ?? DefaultInlineExtensionFlags;
 
+  // Automatic links are enabled unless the caller explicitly passes false.
+  const autoLinks = options.autoLinks ?? true;
+  const autoPair = options.autoPair ?? true;
+
   // 智能标点那一组。**同样建实例时取一次**（输入规则是注册制的），
   // 改设置要重建编辑器——理由见 `create-types.ts` 的 `标点` 那一格。
   // ⚠️ `undefined` 落到 `默认标点设置`（`input`），与 Rust 那边的 `Default` 一致。
@@ -164,6 +168,8 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     documentPath,
     strict,
     inlineExtensions,
+    autoLinks,
+    autoPair,
     punctuation,
     selfActionMoreCorrect,
     emoji,

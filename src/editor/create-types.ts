@@ -403,6 +403,19 @@ export interface CreateOptions {
    */
   physics?: boolean;
   /**
+   * Recognize bare HTTP(S), www, email and explicit mailto addresses while
+   * typing or when Enter starts the next block.
+   *
+   * This follows `Settings.markdown.autolink`; omitted values default to enabled.
+   */
+  autoLinks?: boolean;
+  /**
+   * Pair opening and closing brackets while typing ordinary text.
+   *
+   * Omitted values default to enabled. Code blocks and inline code are excluded.
+   */
+  autoPair?: boolean;
+  /**
    * 三种行内扩展语法开不开：**高亮** `==x==`、**上标** `^x^`、**下标** `~x~`
    *（`Settings.markdown` 的那三项，`ui/pane-editors.ts` 传进来）。
    *

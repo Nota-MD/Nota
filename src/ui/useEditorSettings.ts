@@ -41,13 +41,18 @@ export interface editorSettings {
   inlineExtensions: { highlight: boolean; superscript: boolean; subscript: boolean };
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
+  autoLinks: boolean;
+  autoPair: boolean;
 }
 
 /**
  * ⚠️ 这三个值就是 `EditorPane` **建实例时**读的那一份：拨设置要重建编辑器，
  * 所以它不该也不能热更新（理由见文件头）。
  */
-export function useEditorSettings(markdown: MarkdownSettings | undefined): editorSettings {
+export function useEditorSettings(
+  markdown: MarkdownSettings | undefined,
+  autoPairSetting = true,
+): editorSettings {
   // ── 三种行内扩展的开关（`Props.markdown` 那一条讲了为什么要这么包）──
   // ⚠️ 依赖给的是**三个布尔值**，不是 `markdown` 这个对象：设置对象每次从后端
   // 回来都是新的（改任何一项都换一个），拿它当依赖会让"改了字号"也顺手把
@@ -87,6 +92,8 @@ export function useEditorSettings(markdown: MarkdownSettings | undefined): edito
   // 自动更正那一格。⚠️ `undefined` **不等于关**：Rust 那边的默认是 `true`，
   // 设置还没从后端回来时按默认走（`create-types.ts` 的 `自动更正` 那一格）。
   const selfActionMoreCorrect = markdown?.auto_correct ?? true;
+  const autoLinks = markdown?.autolink ?? true;
+  const autoPair = autoPairSetting;
 
-  return { inlineExtensions, punctuation, selfActionMoreCorrect };
+  return { inlineExtensions, punctuation, selfActionMoreCorrect, autoLinks, autoPair };
 }

@@ -214,6 +214,8 @@ interface Props {
    * 开关得先关掉这份文档再打开才生效——"设置像没生效"。
    */
   emoji: boolean;
+  /** Pair brackets while typing (`settings.editor.auto_pair`). */
+  autoPair: boolean;
   /**
    * **整整一页 Markdown 设置**（`settings.markdown`），`undefined` = 设置还没
    * 从后端读回来。
@@ -385,6 +387,7 @@ export function EditorPane({
   physics,
   plainText = false,
   emoji,
+  autoPair,
   markdown,
   focusMode,
   typewriter,
@@ -483,7 +486,8 @@ export function EditorPane({
   // ⚠️ 这两个对象只有**内容真的变了**才换身份——下面那个建实例的 effect 拿它们
   // 当依赖，每帧新建一个的话会每帧重建编辑器（丢撤销栈、丢光标）。这条纪律
   // 现在归 `useEditorSettings.ts` 文件头管，这里只管用。
-  const { inlineExtensions, punctuation, selfActionMoreCorrect } = useEditorSettings(markdown);
+  const { inlineExtensions, autoLinks, autoPair: enabledAutoPair, punctuation, selfActionMoreCorrect } =
+    useEditorSettings(markdown, autoPair);
 
   // 两个写作开关。⚠️ 同上：拨开关**不重建实例**，所以它只能走 ref 读。
   const writingModeRef = useRef<WritingMode>({ focus: focusMode, typewriter });
@@ -663,6 +667,8 @@ export function EditorPane({
             strict,
             physics,
             inlineExtensions,
+            autoLinks,
+            autoPair: enabledAutoPair,
             punctuation,
             selfActionMoreCorrect,
             emoji,
@@ -861,7 +867,7 @@ export function EditorPane({
     // 任何人重建编辑器。
     // 刻意**不**依赖 doc.text：那是初始值，不是要跟随的状态。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, punctuation, selfActionMoreCorrect, emoji, onlyReadMode, vimInput?.enabled]);
+  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, autoLinks, enabledAutoPair, punctuation, selfActionMoreCorrect, emoji, onlyReadMode, vimInput?.enabled]);
 
   useEffect(() => {
     if (handleRef.current && "setVimInput" in handleRef.current) {

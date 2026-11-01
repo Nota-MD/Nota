@@ -174,9 +174,10 @@ import { punctuationInput, punctuationDecoration, type punctuationSettings } fro
 // **自动更正**（英文错拼那一张固定表）。⚠️ 只有一条输入规则，**排在整串
 // `.use()` 的最后**——理由见那个文件的 `自动更正输入`。
 import { selfActionMoreCorrectInput } from "./auto-correct";
+import { autoPair as autoPairPlugin } from "./auto-pair";
 // **裸 URL**（打到词尾那一下把 `https://…` / `www.…` 变成链接）。
 // ⚠️ "粘贴一条网址"那半截也在那个文件里（`贴上网址事务`）——**判据只有一份**。
-import { selfActionLinkInput } from "./url-link";
+import { autoLinkBoundary, selfActionLinkInput } from "./url-link";
 // **粘贴那一路**（洗 HTML / 认语言的代码块）。⚠️ 必须排在 `clipboard` 前面。
 import { pastePastePlaceManage } from "./paste";
 // **表格里的 `Tab` / `Shift+Tab`**（走到下一格 / 上一格；最后一格再按 `Tab`
@@ -230,6 +231,8 @@ export interface InstallConfigureParameter {
   /** 严格模式（`atx.ts` 那套判据的开关）。 */
   strict: boolean;
   inlineExtensions: InlineExtensionFlags;
+  autoLinks: boolean;
+  autoPair: boolean;
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
   emoji: boolean;
@@ -256,6 +259,8 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     documentPath,
     strict,
     inlineExtensions,
+    autoLinks,
+    autoPair,
     punctuation,
     selfActionMoreCorrect,
     emoji,
@@ -417,6 +422,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 输入规则（`==x==` 敲完当场变高亮那类）。**只读实例也挂**——只读时
     // 压根没有输入，挂上去是零成本的死代码；分一个跟 `markHint` 那样的
     // 分支反而多一处"哪个模式装了哪个没装"要说清楚的东西。
+    .use(readOnly || !autoPair ? [] : [autoPairPlugin()])
     .use(inlineMarkInputRuleRule(inlineExtensions))
     .use(gfm)
     .use(gitHubNoticePlugin)
@@ -430,8 +436,9 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 都不抢同一段文本（那些要的分隔符是 `#` / `>` / `-` / 数字，不是字母），
     // 所以位置其实无关紧要；放在这里只是让"标点那一家"挨在一起。
     .use(selfActionMoreCorrectInput(selfActionMoreCorrect))
-    // 裸 URL（用户原话：「**裸 URL 自动识别成链接**」）。判据见 `url-link.ts`。
-    .use(selfActionLinkInput())
+    // Bare URLs, email addresses and explicit mailto links. Enter and space/Tab
+    // share one normalization path; turning the setting off removes both.
+    .use(autoLinks ? [...selfActionLinkInput(), autoLinkBoundary()] : [])
     // Emoji：短代码替换（`:smile:` → 😄）与输入补全面板（打 `:smi` 弹候选）。
     // ⚠️ **两件事都由 `emoji` 一个开关管**（理由见 `create-types.ts` 那一格）。
     // ⚠️ 排在**最后**：短代码要以英文冒号起头、以冒号＋空白收尾，与上游那些
@@ -498,7 +505,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     .use(readOnly ? [] : [$prose(() => flashSparkCursor())])
     // ⚠️⚠️ **必须排在下面这条 `clipboard` 前面，不能挪**：PM 按插件顺序问
     // `handlePaste`，第一个返回 `true` 的赢，而上游那条**总会**返回 `true`。
-    .use(pastePastePlaceManage())
+    .use(pastePastePlaceManage(autoLinks))
     .use(clipboard)
     // ⚠️ **必须排在下面那条 `indent` 前面**：`@milkdown/plugin-indent` 绑的
     // 就是 `Tab`，而且它不认表格（不分位置地往格子里塞两颗空格，那两颗会写进

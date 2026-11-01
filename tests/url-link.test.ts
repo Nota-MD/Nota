@@ -36,10 +36,12 @@
 
 import {
   DangerousProtocol,
+  NormalizeLink,
   NormalizeUrl,
   isBareURL,
   splitTailPunctuation,
   bareURLCorrectRule,
+  findLinkBeforeCursor,
   selfActionLinkInput,
 } from "../src/editor/url-link";
 
@@ -119,6 +121,12 @@ testCase("`www.` 开头的补 https", () => {
   equal(NormalizeUrl("www.nota.app/a/b"), "https://www.nota.app/a/b", "带路径");
 });
 
+testCase("邮箱与显式 mailto 地址", () => {
+  equal(NormalizeLink("hi@nota.app")?.href, "mailto:hi@nota.app", "bare email");
+  equal(NormalizeLink("mailto:hi@nota.app")?.href, "mailto:hi@nota.app", "mailto");
+  equal(NormalizeLink("not-an-email@")?.href, undefined, "incomplete address");
+});
+
 testCase("前后的空白算干净（trim 掉）", () => {
   equal(NormalizeUrl("  https://a.com  "), "https://a.com", "两侧空白");
 });
@@ -194,6 +202,13 @@ testCase("中文的右引号 / 书名号那一族同样数着切", () => {
   equal(splitTailPunctuation("https://a.com”").url, "https://a.com", "右弯引号");
 });
 
+testCase("中文句读与 Markdown 收尾符号留在链接外", () => {
+  equal(splitTailPunctuation("https://a.com，").url, "https://a.com", "中文逗号");
+  equal(splitTailPunctuation("https://a.com。").url, "https://a.com", "中文句号");
+  equal(splitTailPunctuation("hi@nota.app！").url, "hi@nota.app", "邮箱后的中文叹号");
+  equal(splitTailPunctuation("https://a.com_").url, "https://a.com", "下划线标记");
+});
+
 testCase("没有尾巴时给空串", () => {
   equal(splitTailPunctuation("https://a.com").tailPart, "", "干净");
   equal(splitTailPunctuation("https://a.com").url, "https://a.com", "网址");
@@ -247,6 +262,11 @@ testCase("`www.` 开头的认", () => {
   equal(matchRange("www.nota.app "), "www.nota.app", "www");
 });
 
+testCase("邮箱与 mailto 在词尾成链", () => {
+  equal(matchRange("hi@nota.app "), "hi@nota.app", "email");
+  equal(matchRange("mailto:hi@nota.app "), "mailto:hi@nota.app", "mailto");
+});
+
 testCase("制表符也能当触发字符", () => {
   equal(matchRange("https://a.com\t"), "https://a.com", "tab");
 });
@@ -281,14 +301,29 @@ testCase("中文正文里夹一条网址：认（前缀是空白）", () => {
   equal(matchRange("地址是 https://a.com "), "https://a.com", "中文夹网址");
 });
 
+/* ── 五½、Enter 边界 ─────────────────────────────────────────────────── */
+
+group("五½、Enter 边界");
+
+testCase("行尾链接与邮箱能在光标前识别", () => {
+  equal(findLinkBeforeCursor("见 https://a.com")?.href, "https://a.com", "url");
+  equal(findLinkBeforeCursor("联系 hi@nota.app")?.href, "mailto:hi@nota.app", "email");
+  equal(findLinkBeforeCursor("(https://a.com)")?.tail, ")", "closing punctuation");
+});
+
+testCase("行尾标点与裸域名不会被 Enter 误识别", () => {
+  equal(findLinkBeforeCursor("https://a.com。")?.href, "https://a.com", "Chinese period");
+  equal(findLinkBeforeCursor("README.md"), null, "bare filename");
+  equal(findLinkBeforeCursor("https://a.com next"), null, "following text");
+});
+
 /* ── 六、装配 ───────────────────────────────────────────────────────── */
 
 group("六、装配");
 
-testCase("`自动链接输入()` 挂 1 条规则（没有开关，一直挂着）", () => {
-  // ⚠️ 这一件事没有对应的设置项（用户要的就是它一直在），所以**没有**"关着
-  // 返回空数组"那一档——`auto-correct.ts` 那个 `自动更正输入(false)` 才是。
+testCase("自动链接开关控制输入规则", () => {
   equal(selfActionLinkInput().length, 1, "条数");
+  equal(selfActionLinkInput(false).length, 0, "disabled");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

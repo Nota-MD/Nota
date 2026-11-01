@@ -68,12 +68,17 @@ async function waitFor<T extends Element>(selector: string, timeout = 5000): Pro
   }
 }
 
-async function mount(markdown: string): Promise<HTMLElement> {
+async function mount(
+  markdown: string,
+  options: { autoLinks?: boolean; autoPair?: boolean } = {},
+): Promise<HTMLElement> {
   editor?.destroy();
   editorHost.replaceChildren();
   editor = await createEditor({
     root: editorHost,
     initialMarkdown: markdown,
+    autoLinks: options.autoLinks ?? true,
+    autoPair: options.autoPair ?? true,
     emoji: true,
     selfActionMoreCorrect: true,
   });
@@ -83,12 +88,13 @@ async function mount(markdown: string): Promise<HTMLElement> {
   return prose;
 }
 
-function press(target: EventTarget, key: string): boolean {
+function press(target: EventTarget, key: string, init: KeyboardEventInit = {}): boolean {
   const event = new KeyboardEvent("keydown", {
     key,
     code: key,
     bubbles: true,
     cancelable: true,
+    ...init,
   });
   return target.dispatchEvent(event);
 }
@@ -103,6 +109,20 @@ async function typeText(text: string): Promise<void> {
   await nextFrames();
 }
 
+async function pasteText(text: string): Promise<void> {
+  const data = new DataTransfer();
+  data.setData("text/plain", text);
+  const event = new ClipboardEvent("paste", {
+    bubbles: true,
+    cancelable: true,
+    clipboardData: data,
+  });
+  const target = document.querySelector<HTMLElement>(".ProseMirror");
+  if (!target) throw new Error("The editor has no ProseMirror target");
+  target.dispatchEvent(event);
+  await nextFrames();
+}
+
 async function requestNativeKey(name: string): Promise<void> {
   document.documentElement.dataset.e2eNativeKey = name;
   if (nativeSignal === name) {
@@ -113,6 +133,7 @@ async function requestNativeKey(name: string): Promise<void> {
   nativeWaiters.delete(name);
   delete document.documentElement.dataset.e2eNativeKey;
   await nextFrames();
+  await sleep(150);
 }
 
 async function openInlineMath(index = 0): Promise<HTMLInputElement> {
@@ -202,6 +223,133 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       editor!.insertAtCursorPlace("H");
       await nextFrames();
       assertEqual(serialized(), "H**1**", "Home did not reach the paragraph start");
+    },
+  },
+  {
+    name: "Enter recognizes a bare URL before creating the next paragraph",
+    async run() {
+      const prose = await mount("");
+      await typeText("https://example.com");
+      press(prose, "Enter");
+      await nextFrames();
+      const link = await waitFor<HTMLAnchorElement>('a[href="https://example.com"]');
+      assertEqual(link.textContent, "https://example.com", "URL text changed during auto-linking");
+      await typeText("next");
+      await nextFrames();
+      assertEqual(link.textContent, "https://example.com", "following text joined the link");
+      assert(
+        serialized().includes("next"),
+        `following text was not inserted into the next paragraph: ${serialized()}`,
+      );
+    },
+  },
+  {
+    name: "Enter recognizes an email as a mailto link",
+    async run() {
+      const prose = await mount("");
+      await typeText("hi@nota.app");
+      press(prose, "Enter");
+      await nextFrames();
+      const link = await waitFor<HTMLAnchorElement>('a[href="mailto:hi@nota.app"]');
+      assertEqual(link.textContent, "hi@nota.app", "email display text changed");
+    },
+  },
+  {
+    name: "Space and paste use the same automatic-link rules",
+    async run() {
+      await mount("");
+      await typeText("www.example.com");
+      await requestNativeKey("space-auto-link");
+      const spaced = await waitFor<HTMLAnchorElement>(".ProseMirror a");
+      assertEqual(spaced.getAttribute("href"), "https://www.example.com", "www link href");
+      await mount("");
+      await pasteText("hi@nota.app");
+      const pasted = await waitFor<HTMLAnchorElement>('a[href="mailto:hi@nota.app"]');
+      assertEqual(pasted.textContent, "hi@nota.app", "pasted email display text changed");
+    },
+  },
+  {
+    name: "Enter keeps Chinese trailing punctuation outside an auto-link",
+    async run() {
+      const prose = await mount("");
+      await typeText("https://example.com，");
+      press(prose, "Enter");
+      await nextFrames();
+      const link = await waitFor<HTMLAnchorElement>('a[href="https://example.com"]');
+      assertEqual(link.textContent, "https://example.com", "Chinese comma joined the link");
+      assert(
+        serialized().includes("<https://example.com>，"),
+        `Chinese comma was lost from Markdown: ${serialized()}`,
+      );
+    },
+  },
+  {
+    name: "disabling automatic links leaves URL and email text unchanged",
+    async run() {
+      const prose = await mount("", { autoLinks: false });
+      await typeText("https://example.com hi@nota.app");
+      await pasteText("https://paste.example.com");
+      press(prose, "Enter");
+      await nextFrames();
+      assertEqual(document.querySelectorAll(".ProseMirror a").length, 0, "links were created while disabled");
+    },
+  },
+  {
+    name: "bracket pairing inserts, skips and wraps using one setting",
+    async run() {
+      await mount("");
+      await typeText("(");
+      assertEqual(serialized(), "()", "opening parenthesis did not insert its pair");
+      await typeText("x)");
+      assertEqual(serialized(), "(x)", "typed closing parenthesis duplicated the pair");
+
+      await mount("word");
+      editor!.runCommand("selectLine");
+      await nextFrames();
+      await typeText("(");
+      assertEqual(serialized(), "(word)", "bracket did not wrap the selected text");
+
+      await mount("");
+      await typeText("【");
+      await typeText("中");
+      assertEqual(serialized(), "【中】", "full-width bracket pairing failed");
+    },
+  },
+  {
+    name: "Backspace removes an empty auto-pair in one step",
+    async run() {
+      const prose = await mount("");
+      await typeText("(");
+      assertEqual(serialized(), "()", "test setup did not create an empty pair");
+      press(prose, "Backspace");
+      await nextFrames();
+      assertEqual(serialized(), "", "Backspace left half of the empty bracket pair");
+    },
+  },
+  {
+    name: "Tab and Shift+Tab cross an adjacent bracket without editing",
+    async run() {
+      const prose = await mount("");
+      await typeText("(");
+      await typeText("x");
+      press(prose, "Tab");
+      await typeText("Y");
+      assertEqual(serialized(), "(x)Y", "Tab did not cross the closing bracket");
+
+      const reversed = await mount("");
+      await typeText("(");
+      press(reversed, "Tab", { shiftKey: true });
+      await typeText("Z");
+      assertEqual(serialized(), "Z()", "Shift+Tab did not cross the opening bracket");
+    },
+  },
+  {
+    name: "disabling bracket pairing leaves typed brackets alone",
+    async run() {
+      await mount("", { autoPair: false });
+      await typeText("(");
+      await typeText("x");
+      assertEqual(serialized(), "(x", "brackets were paired while the setting was disabled");
     },
   },
   {

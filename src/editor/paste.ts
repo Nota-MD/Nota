@@ -73,7 +73,7 @@ import { $prose } from "@milkdown/kit/utils";
 import { guessCodeLanguage, looksLikeCode } from "./lang-guess";
 import { automaticImageName, imageAddressOfPastedText } from "./image-kind";
 import { clearManagePastePasteHTML } from "./paste-clean";
-import { pasteAboveUrlTransaction } from "./url-link";
+import { NormalizeLink, pasteAboveUrlTransaction } from "./url-link";
 import {
   determineSeparatorLine,
   isTwoRowTable,
@@ -328,7 +328,7 @@ function pasteBecomeImage(view: EditorView, address: string): boolean {
 /**
  * 挂进 `.use()` 的那一条。**必须排在 `clipboard` 之前**（理由见文件头）。
  */
-export function pastePastePlaceManage() {
+export function pastePastePlaceManage(autoLinks = true) {
   return $prose((ctx) => {
     // ⚠️ **洗 HTML 走 `transformPastedHTML`，不走 `handlePaste`**：
     // 上游那条也是这么写的（`editorViewOptionsCtx.update`），两处都改的话
@@ -378,12 +378,16 @@ export function pastePastePlaceManage() {
           }
 
           // ── ③ 干干净净一条普通网址
-          if (html.length === 0) {
+          if (autoLinks && html.length === 0) {
             const transaction = pasteAboveUrlTransaction(view.state, plainText);
             if (transaction) {
               view.dispatch(transaction.scrollIntoView());
               return true;
             }
+          }
+          if (!autoLinks && html.length === 0 && NormalizeLink(plainText)) {
+            view.dispatch(view.state.tr.insertText(plainText.trim()));
+            return true;
           }
           // ── ④ 编辑器自带元数据的复制（VS Code 那边认语言）：让上游接
           if (dollarNumberEvidence) return false;

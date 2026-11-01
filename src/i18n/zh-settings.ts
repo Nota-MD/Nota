@@ -385,4 +385,6 @@ export const settingsTable: Record<string, string> = {
   "Alarm": "警报",
   "Play the alarm": "响警报",
   "Charge per minute away": "离开 1 分钟扣多少",
+  "Auto pair": "自动配对",
+  "Pair brackets while typing": "输入时补全括号",
 };

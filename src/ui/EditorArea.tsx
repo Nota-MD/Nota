@@ -280,6 +280,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           // 布尔而不是整整一页设置：`EditorPane` 只把它原样喂给 `createEditor`
           // 的 `emoji` 那一格（理由见 `create-types.ts`）。
           emoji={settings?.editor?.emoji_autocomplete ?? false}
+          autoPair={settings?.editor?.auto_pair ?? true}
           vimInput={plugin.editorInput}
           onVimCommand={(command) => {
             if (command === "save") void saveDoc(activeDoc.id);

@@ -101,6 +101,8 @@ export interface EditorSettings {
   paragraph_indent: boolean;
   /** 缩进宽度，单位是**字符**（`em`，不是像素）。实际生效值夹在 1~8。 */
   paragraph_indent_chars: number;
+  /** Pair opening and closing brackets while typing ordinary text. */
+  auto_pair: boolean;
   emoji_autocomplete: boolean;
   show_block_source: boolean;
   copy_markdown_source: boolean;

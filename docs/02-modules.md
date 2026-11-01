@@ -152,6 +152,7 @@
 | `editor/lang-icons-real.ts` | **真图那一半**（276 行，2026-09-26）：93 颗彩色 logo，**逐字节**从 vscode-icons tag `v12.19.0` 搬来（MIT，`THIRD-PARTY.md` §6），抓取与核对在 `tools/fetch-lang-icons.sh`（`--verify` 拿 `SHA256SUMS` 对账）。⚠️ **那批 `.svg` 一个字节都不许改**（连"顺手调颜色"也不行），能一眼核对的前提就是这个。⚠️ 本文件少一个语言**不是错**——400 个 id 里绝大多数一辈子不会有人贴 ⚠️ **2026-10-16 加了 `代表语言(id)`**：同一组里排第一的那个 id 就是这一族的代表（下拉一行一族靠它，解的是「语言类型重复」）。 |
 | `editor/smart-punctuation.ts` | **智能标点与引号配对**（2026-09-27 新建，2026-10-23 扩展）：`--` → `–` / `---` → `—` / `...` → `…`；引号在 `input` 档由 `handleTextInput` 统一接管：行首或左边界后一次放入成对引号，在自动补出的闭引号前再按一次只跨过去，选中文字时用一对引号包住并保留选区，字母后的单引号仍落撒号。⚠️ 横线与省略号仍是三条输入规则；引号**不再注册输入规则**，否则输入规则会先落成单颗字符、配对插件看不到原选区。⚠️ `render` 档仍然只画不写，导出那条路不许传；`off` / `render` 不安装引号配对。⚠️⚠️ **改之前先读 `是横线骨架行`**——没有它，敲 `---` 时第二颗减号就被换掉、分割线再也出不来。判据 `tests/smart-punctuation.test.ts` **43** 条 |
 | `editor/auto-correct.ts` | **自动更正**（2026-09-27；2026-11-01 由浏览器 E2E 修掉两个旧缺陷）：一张固定的英文错拼表（四十来条）＋ 一条输入规则（只在词尾空白那一下动手）。⭐ 入表判据一条：**小写形式在英文里不是一个词**（所以 `cant`/`wont`/`wether`/`lets`/`its` 全不收）。⚠️ 不碰中文，也不做语法检查或句首大写。📌 触发字符现在包括普通空格、Tab 和浏览器 contenteditable 生成的 NBSP；替换时显式保留原空白。📌 `InputRule` 的 `end` 是触发字符插入前的坐标，不能按“插入后”再减一（BUG-80）。判据 `tests/auto-correct.test.ts` **21** 条，浏览器链路在 `e2e/main.ts`。 |
+| `editor/auto-pair.ts` | **基础括号配对**（2026-11-01）：半角 `()` `[]` `{}` 与常用全角括号自动补闭符；已有闭符跳过、空对退格、选区包裹、Tab/Shift+Tab 跨越。受 `settings.editor.auto_pair`（默认开）控制，代码区域和 IME 组字不介入。引号归智能标点，`*` `_` `~` 等 Markdown 扩展配对仍按 Typora 默认关闭。真实输入路径在 `e2e/main.ts`。 |
 | `editor/headings.ts` | **大纲抽取**（2026-09-27 新建，约 100 行）：`extractOutline` ＋ `OutlineItem` 从 `ui/outline.ts` **整段搬来**。⚠️ 理由是**依赖方向**——`src/editor/` 从不 import `@/ui/`，而「内容目录」（`editor/toc.ts`）与侧栏「大纲」页要同一份判据。两个消费者：`ui/Sidebar.tsx` / `editor/toc.ts`。⚠️ **2026-10-04（第 63 项）**：开头那段 front matter 的跳过改用 `editor/front-matter.ts` 的 `前置块行数()`——**判据只剩一份**（严的那份），“大纲藏的”与“编辑器藏的”不会再对不上；⚠️ 同批（第 32 项）把文件头那段“为什么不吃去抖镜像”的理据**改成了实情**：吃，这是取舍 |
 | `editor/toc.ts` | **内容目录（TOC）的纯文本那半**（2026-09-27 新建，约 200 行）：`生成目录` / `锚点` / `算目录块` / `找目录` / `替换目录` / `是目录标记`。⚠️ 形状是**一段普通 markdown 列表**、两头用注释标记（`<!-- nota:toc -->` / `<!-- /nota:toc -->`）夹住——不是粒子节点，不必动 schema，源码模式里也看得见。⚠️ **它是快照**（再点一次 = 原地更新，不是实时跟随；理由在文件头）。⚠️ 编辑区里点链接**不跳**，导出的 HTML 里能跳 |
 | `editor/emoji.ts` | **Emoji 短代码 ＋ 补全面板**（2026-09-27，约 924 行）：**503 条**短代码（十一个分类）＋ 一条输入规则（`:smile: ` ＋ 空格 → 😄）＋ 一颗挂 `document.body` 上的候选面板。⚠️ **一个开关管两件事**（`settings.editor.emoji_autocomplete`）——替换与面板都是"编辑器在用户的 emoji 输入上插手"，拆开只会让人"关掉一个还弹另一个"。⚠️ `输入规则正则` 是**导出常量**，测试拿同一条去核表里每一条短代码（防"面板选得到、永远敲不出来"的死行；量词 `{1,}`，因为表里有 `:x:` / `:v:`）。⚠️ **面板只画不改**（文档树一个字节都不动），坐标现算；鼠标 `mousedown` ＋ `preventDefault()`，键盘 `handleKeyDown`。⚠️ **`apply` 里先读 `tr.getMeta(emoji补全键)`**：上下键只改高亮、没改文档（不读 meta 就会被前缀重置回 0，症状"按 ↓ 没反应"）。⚠️ **只读实例不挂面板**。判据 `tests/emoji.test.ts` **32** 条 |
@@ -445,7 +446,7 @@
 `smart-punctuation.test.ts` **43** · `math-commands.test.ts` **35**
 `focus-summary.test.ts` **34** · `emoji.test.ts` **32** · `front-matter.test.ts` **32**
 `lang-guess.test.ts` **31** · `math-view.test.ts` **31** · `context-menu.test.ts` **30**
-`footnote.test.ts` **30** · `url-link.test.ts` **29** · `math-input.test.ts` **28**
+`footnote.test.ts` **30** · `url-link.test.ts` **34** · `math-input.test.ts` **28**
 `source-mark.test.ts` **28** · `math-suggest.test.ts` **27** · `toc.test.ts` **27**
 `paste-clean.test.ts` **25** · `math-currency.test.ts` **23**
 `code-block-editing.test.ts` **21** · `key-conflicts.test.ts` **21**

@@ -332,6 +332,7 @@ PAIRS=(
   "src/editor/github-alert.ts                   04,05,10"
   "src/editor/smart-punctuation.ts              05,04,10"
   "src/editor/auto-correct.ts                   05,04,10"
+  "src/editor/auto-pair.ts                      05,04,10"
   # 2026-11-01：浏览器 E2E 页面与调度器。它们加载真实编辑器，不是产品构建入口；
   # 改场景或运行方式时同步 docs/06 §5.74 与 docs/02 的测试说明。
   "e2e/main.ts                                  02,06"

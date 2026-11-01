@@ -67,6 +67,11 @@ pub struct Editor {
     /// 别的字号/字体时缩进跟着变，这正是「几个字符宽」该有的行为。
     /// 实际生效值夹在 **1..=8**（`ui/settings/panes/EditorPane.tsx` 那格同区间）。
     pub paragraph_indent_chars: u32,
+    /// Pair opening and closing brackets while typing ordinary text.
+    ///
+    /// This follows Typora's basic auto-pair option. Markdown delimiter pairing
+    /// remains separate because it interacts with inline-mark parsing.
+    pub auto_pair: bool,
     /// 开启 Emoji 自动补全（`:sm` → 候选面板）。
     pub emoji_autocomplete: bool,
     /// 显示当前块元素的 Markdown 源码（支持标题等块元素）。
@@ -127,6 +132,7 @@ impl Default for Editor {
             // 顶格，而且导出/别处都不跟这一条）。宽度先给中文惯例的 2。
             paragraph_indent: false,
             paragraph_indent_chars: 2,
+            auto_pair: true,
             emoji_autocomplete: true,
             show_block_source: false,
             copy_markdown_source: true,
@@ -160,6 +166,13 @@ mod tests {
         let e = Editor::default();
         assert!(!e.paragraph_indent);
         assert_eq!(e.paragraph_indent_chars, 2);
+    }
+
+    #[test]
+    fn auto_pair_defaults_on_and_old_settings_fill_it() {
+        assert!(Editor::default().auto_pair);
+        let old: Editor = toml::from_str("emoji_autocomplete = false\n").unwrap();
+        assert!(old.auto_pair);
     }
 
     #[test]

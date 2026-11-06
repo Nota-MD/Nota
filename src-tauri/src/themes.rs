@@ -50,9 +50,10 @@ use serde::Serialize;
 
 use crate::error::{NotaError, Result};
 use crate::paths;
+use crate::theme_import::typora;
 
 /// 主题 CSS 的体积上限。超过这个数基本可以断定不是在装主题。
-const MAX_CSS_BYTES: u64 = 2 * 1024 * 1024;
+const MAX_CSS_BYTES: u64 = 8 * 1024 * 1024;
 
 /// 一套内置主题。三个字段都是编译期常量。
 struct Builtin {
@@ -111,8 +112,6 @@ pub struct DocThemeInfo {
 ///
 /// 内置 Adwaita 是只读的；用户目录只能增加其他 id，不能覆盖内置主题。
 pub fn discover() -> Vec<DocThemeInfo> {
-    let user = user_ids();
-
     // 内置的在前，保持 `BUILTIN` 里排好的顺序，并永远标成只读内置。
     let mut out: Vec<DocThemeInfo> = BUILTIN
         .iter()
@@ -125,17 +124,14 @@ pub fn discover() -> Vec<DocThemeInfo> {
 
     // 然后是用户自己新加的（id 不与内置重合的那些）。
     // **排序**：`read_dir` 的顺序在不同文件系统上不一样，不排就是随机的。
-    let mut extra: Vec<&String> = user
-        .iter()
-        .filter(|id| !BUILTIN.iter().any(|b| &b.id == *id))
-        .collect();
-    extra.sort();
-    for id in extra {
-        out.push(DocThemeInfo {
-            id: id.clone(),
-            name: id.clone(),
-            builtin: false,
-        });
+    let mut seen: std::collections::HashSet<String> =
+        out.iter().map(|theme| theme.id.clone()).collect();
+    let mut extra = user_theme_infos();
+    extra.sort_by(|left, right| left.id.cmp(&right.id));
+    for theme in extra {
+        if seen.insert(theme.id.clone()) {
+            out.push(theme);
+        }
     }
 
     out
@@ -162,15 +158,7 @@ pub fn css_of(id: &str) -> Result<String> {
         .ok_or_else(|| NotaError::other(format!("没有名为 {id} 的文档主题")))?;
     if path.is_file() {
         check_size(&path, MAX_CSS_BYTES)?;
-        let css = std::fs::read_to_string(&path).map_err(|source| NotaError::Read {
-            path: path.clone(),
-            source,
-        })?;
-        return Ok(crate::theme_assets::inline(
-            &css,
-            &path,
-            &css_scope_root(&root, &path),
-        ));
+        return crate::theme_import::load_theme_css(&path);
     }
 
     Err(NotaError::other(format!("没有名为 {id} 的文档主题")))
@@ -195,7 +183,44 @@ pub(crate) fn resolve_user_css(root: &Path, id: &str) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return None;
+    };
+    for entry in entries.flatten() {
+        let package = entry.path();
+        if !package.is_dir() {
+            continue;
+        }
+        let Some(manifest) = typora::read_manifest(&package) else {
+            continue;
+        };
+        let Some(theme) = manifest.themes.into_iter().find(|theme| theme.id == id) else {
+            continue;
+        };
+        let Some(relative) = safe_relative_css(&theme.css) else {
+            continue;
+        };
+        let path = package.join(relative);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
     None
+}
+
+fn safe_relative_css(value: &str) -> Option<PathBuf> {
+    let path = Path::new(value);
+    if path.is_absolute()
+        || value.contains('\0')
+        || value
+            .replace('\\', "/")
+            .split('/')
+            .any(|part| part == "..")
+        || !value.to_ascii_lowercase().ends_with(".css")
+    {
+        return None;
+    }
+    Some(path.to_path_buf())
 }
 
 pub(crate) fn css_scope_root(root: &Path, css_path: &Path) -> PathBuf {
@@ -260,11 +285,51 @@ pub(crate) fn scan_user_css_ids(dir: &Path) -> Vec<String> {
     out
 }
 
-fn user_ids() -> Vec<String> {
-    let Ok(dir) = paths::user_themes_dir() else {
+fn user_theme_infos() -> Vec<DocThemeInfo> {
+    let Ok(root) = paths::user_themes_dir() else {
         return Vec::new();
     };
-    scan_user_css_ids(&dir)
+    let mut out = scan_user_css_ids(&root)
+        .into_iter()
+        .map(|id| DocThemeInfo {
+            id: id.clone(),
+            name: id,
+            builtin: false,
+        })
+        .collect::<Vec<_>>();
+    let Ok(entries) = std::fs::read_dir(&root) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let package = entry.path();
+        if !package.is_dir() {
+            continue;
+        }
+        let Some(manifest) = typora::read_manifest(&package) else {
+            continue;
+        };
+        for theme in manifest.themes {
+            if check_id(&theme.id).is_err() {
+                continue;
+            }
+            let Some(relative) = safe_relative_css(&theme.css) else {
+                continue;
+            };
+            if !package.join(relative).is_file() {
+                continue;
+            }
+            out.push(DocThemeInfo {
+                id: theme.id,
+                name: if theme.name.trim().is_empty() {
+                    "Typora".to_owned()
+                } else {
+                    theme.name
+                },
+                builtin: false,
+            });
+        }
+    }
+    out
 }
 
 /// 体积闸。⚠️ 与 `check_id` 一样是 `pub(crate)` 给 `ui_styles.rs` 复用的。

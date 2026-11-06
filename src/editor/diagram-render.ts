@@ -13,6 +13,8 @@ type mode = "light" | "dark";
 export interface ImageTableTheme {
   mode: mode;
   accent: string;
+  fontFamily: string;
+  fontSize: number;
   /** 缓存键与“主题变没变”判据共用的一份稳定指纹。 */
   key: string;
 }
@@ -86,19 +88,53 @@ export async function render(source2: string, theme: ImageTableTheme): Promise<R
   return arrangeQueue(async () => {
     const mermaid = (await import("mermaid")).default;
     const mindmap = imageTableType(source2) === "mindmap";
+    const diagramText = theme.mode === "dark" ? "#f4f2ee" : "#202124";
+    const diagramPaper = theme.mode === "dark" ? "#202327" : "#ffffff";
+    const labelCss = `
+      .edgeLabel,
+      .edgeLabel p,
+      .edgeLabel span,
+      .edgeLabel foreignObject div {
+        color: ${diagramText} !important;
+        fill: ${diagramText} !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
+      .edgeLabel rect,
+      .edgeLabel .labelBkg {
+        fill: ${diagramPaper} !important;
+        opacity: 1 !important;
+      }
+      foreignObject > div,
+      .nodeLabel,
+      .labelBkg {
+        overflow: visible !important;
+      }
+    `;
 
     // `startOnLoad` 这里重申一遍：`initialize` 是"整个配置表覆盖一次"，
     // 少给一条就落回默认值（默认 `true` 会让 mermaid 自己去扫页面上的
     // `.mermaid` 节点，那是另一条我们不要的路）。
     mermaid.initialize({
       startOnLoad: false,
-      theme: mindmap ? "base" : theme.mode === "dark" ? "dark" : "default",
-      themeVariables: mindmap ? thinkDimensionGuideImageConfigureColor(theme.mode, theme.accent) : undefined,
+      theme: "base",
+      fontFamily: theme.fontFamily,
+      fontSize: theme.fontSize,
+      flowchart: {
+        // WebKitGTK can keep a zero-sized foreignObject for edge labels even
+        // when Chrome reports a valid box. Native SVG text follows the same
+        // viewBox and remains visible across WebViews and document themes.
+        htmlLabels: false,
+      },
+      themeVariables: mindmap
+        ? thinkDimensionGuideImageConfigureColor(theme.mode, theme.accent)
+        : diagramThemeVariables(theme),
       // Mermaid 10 的 mindmap 把连线颜色绑到节点填充色（`cScale*`）；浅色纸面上
       // 那些粉彩色块接近白色，连线随之“消失”。mindmap 的源码样式后面再补一条
       // 高对比连线的 CSS，节点仍保留柔和的邻近色。
       themeCSS: mindmap
-        ? `.mindmap-edges path, .mindmap-edges .edge {
+        ? `${labelCss}
+           .mindmap-edges path, .mindmap-edges .edge {
              stroke: ${theme.mode === "dark" ? "#9dadbf" : "#60768c"} !important;
              stroke-width: 3px !important;
            }
@@ -113,7 +149,7 @@ export async function render(source2: string, theme: ImageTableTheme): Promise<R
              text-align: center !important;
              justify-content: center !important;
            }`
-        : undefined,
+        : labelCss,
     });
 
     const editNumber = `nota-mermaid-${++renderIndex}`;
@@ -296,7 +332,7 @@ function thinkDimensionGuideImageConfigureColor(mode: mode, accent: string): Rec
   const surface = dark ? "#292e34" : "#f5f7f9";
   const changeMeasure: Record<string, string | boolean> = {
     darkMode: dark,
-    fontFamily: "var(--font-ui), sans-serif",
+    fontFamily: "sans-serif",
     fontSize: "14px",
     background: "transparent",
     primaryColor: rootBottom,
@@ -341,6 +377,48 @@ function thinkDimensionGuideImageConfigureColor(mode: mode, accent: string): Rec
   return changeMeasure;
 }
 
+/** Shared flowchart/sequence palette derived from the active document theme. */
+function diagramThemeVariables(theme: ImageTableTheme): Record<string, string | boolean> {
+  const throughWay = normalizeColor(theme.accent) ?? [0.208, 0.518, 0.894];
+  const { h, s } = colorToHsl(throughWay);
+  const dark = theme.mode === "dark";
+  const text3 = dark ? "#f4f2ee" : "#202124";
+  const paper = dark ? "#202327" : "#ffffff";
+  const surface = dark ? "#292e34" : hslColor(h, Math.min(0.42, s * 0.35 + 0.08), 0.94);
+  const primary = dark ? hslColor(h, Math.min(0.48, s * 0.65 + 0.1), 0.28) : surface;
+  const border = dark ? hslColor(h, 0.32, 0.58) : hslColor(h, 0.42, 0.48);
+  return {
+    darkMode: dark,
+    fontFamily: theme.fontFamily,
+    fontSize: `${theme.fontSize}px`,
+    background: "transparent",
+    primaryColor: primary,
+    primaryTextColor: text3,
+    primaryBorderColor: border,
+    secondaryColor: surface,
+    secondaryTextColor: text3,
+    secondaryBorderColor: border,
+    tertiaryColor: surface,
+    tertiaryTextColor: text3,
+    tertiaryBorderColor: border,
+    mainBkg: primary,
+    nodeBkg: primary,
+    nodeBorder: border,
+    nodeTextColor: text3,
+    textColor: text3,
+    lineColor: dark ? "#9dadbf" : hslColor(h, 0.26, 0.42),
+    defaultLinkColor: dark ? "#9dadbf" : hslColor(h, 0.26, 0.42),
+    edgeLabelBackground: paper,
+    clusterBkg: paper,
+    clusterBorder: border,
+    titleColor: text3,
+    labelTextColor: text3,
+    noteBkgColor: dark ? "#393b2c" : "#fff7c9",
+    noteTextColor: dark ? "#f7f1c7" : "#3d3420",
+    noteBorderColor: dark ? "#77734d" : "#d8ca82",
+  };
+}
+
 /**
  * 从一棵树上读一个 CSS 变量的计算值。
  *
@@ -374,6 +452,10 @@ function readMode(selfSelfOfRoot: HTMLElement, viewRoot: HTMLElement | null | un
   const bottomColor =
     readChangeMeasure(selfSelfOfRoot, "--doc-bg") ||
     readChangeMeasure(viewRoot, "--doc-bg") ||
+    readChangeMeasure(selfSelfOfRoot, "--bg-color") ||
+    readChangeMeasure(viewRoot, "--bg-color") ||
+    readChangeMeasure(selfSelfOfRoot, "--surface-color") ||
+    readChangeMeasure(viewRoot, "--surface-color") ||
     readChangeMeasure(selfSelfOfRoot, "--bg") ||
     readChangeMeasure(viewRoot, "--bg");
   const throughWay = normalizeColor(bottomColor);
@@ -392,9 +474,29 @@ export function readDiagramTheme(selfSelfOfRoot: HTMLElement, viewRoot: HTMLElem
   const strongConfigure =
     normalizeColor(readChangeMeasure(selfSelfOfRoot, "--accent")) ??
     normalizeColor(readChangeMeasure(viewRoot, "--accent")) ??
+    normalizeColor(readChangeMeasure(selfSelfOfRoot, "--link-color")) ??
+    normalizeColor(readChangeMeasure(viewRoot, "--link-color")) ??
     ([0.208, 0.518, 0.894] as [number, number, number]);
   const accent = colorHex(strongConfigure);
-  return { mode, accent, key: `${mode}|${accent}` };
+  const style =
+    selfSelfOfRoot.isConnected
+      ? getComputedStyle(selfSelfOfRoot)
+      : getComputedStyle(viewRoot);
+  const fontFamily =
+    readChangeMeasure(selfSelfOfRoot, "--font-doc") ||
+    readChangeMeasure(viewRoot, "--font-doc") ||
+    readChangeMeasure(selfSelfOfRoot, "--font-family") ||
+    readChangeMeasure(viewRoot, "--font-family") ||
+    style.fontFamily ||
+    "sans-serif";
+  const fontSize = Math.max(10, Number.parseFloat(style.fontSize) || 16);
+  return {
+    mode,
+    accent,
+    fontFamily,
+    fontSize,
+    key: `${mode}|${accent}|${fontFamily}|${fontSize}`,
+  };
 }
 
 /**

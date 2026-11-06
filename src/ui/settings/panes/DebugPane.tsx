@@ -65,6 +65,21 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
             }
           />
         </SettingRow>
+        <SettingRow
+          label={t("Selectable interface text")}
+          description={t(
+            "Allow dragging to select labels and other interface text. Document content and input fields remain selectable either way.",
+          )}
+        >
+          <Toggle
+            checked={settings.general.select_ui_text ?? false}
+            onChange={(select_ui_text) =>
+              onChange({
+                general: { ...settings.general, select_ui_text },
+              })
+            }
+          />
+        </SettingRow>
         <SettingRow label={t("Settings file")}>
           <ActionButton onClick={onOpenConfigDir}>{t("Open Folder…")}</ActionButton>
         </SettingRow>

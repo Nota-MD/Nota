@@ -34,7 +34,7 @@ import { useT } from "@/i18n";
 import { applyUiStyleCss } from "@/styles/ui-style";
 import type { Toast } from "@/ui/Toasts";
 import { useBootReveal } from "@/ui/useBootReveal";
-import { open } from "@/ui/file-picker";
+import { chooseDirectory, open } from "@/ui/file-picker";
 
 export interface WindCellOutputMouth {
   /** 清单：内置的 ＋ 用户导入的。**空数组 = 还没拉到（或拉失败了）**。 */
@@ -48,8 +48,10 @@ export interface WindCellOutputMouth {
   openStylesDir: () => Promise<void>;
   /** 用户往目录里放完文件后，立即重新扫描并重新注入。 */
   refreshStyles: () => Promise<void>;
-  /** Pick and import one ZIP containing interface and/or document themes. */
+  /** Pick and import a theme ZIP or one Typora CSS file. */
   importTheme: () => Promise<void>;
+  /** Pick and import a flat Typora theme directory. */
+  importTyporaTheme: () => Promise<void>;
 }
 
 export function useUiStyles(
@@ -113,15 +115,9 @@ export function useUiStyles(
     setScan((value) => value + 1);
   }, []);
 
-  const importTheme = useCallback(async () => {
-    const path = await open({
-      title: t("Import theme package"),
-      multiple: false,
-      filters: [{ name: t("Theme package (.zip)"), extensions: ["zip"] }],
-    }).catch(() => null);
-    if (!path) return;
+  const importThemePath = useCallback(async (path: string) => {
     try {
-      const report = await api.theme.importZip(path);
+      const report = await api.theme.importPath(path);
       refreshDocumentThemes();
       setScan((value) => value + 1);
       const imported = [
@@ -134,5 +130,30 @@ export function useUiStyles(
     }
   }, [refreshDocumentThemes, t, toast]);
 
-  return { styles, ready, openStylesDir, refreshStyles, importTheme };
+  const importTheme = useCallback(async () => {
+    const path = await open({
+      title: t("Import theme package or Typora CSS"),
+      multiple: false,
+      filters: [
+        { name: t("Theme package or CSS"), extensions: ["zip", "css"] },
+      ],
+    }).catch(() => null);
+    if (path) await importThemePath(path);
+  }, [importThemePath, t]);
+
+  const importTyporaTheme = useCallback(async () => {
+    const path = await chooseDirectory({
+      title: t("Import Typora theme folder"),
+    }).catch(() => null);
+    if (path) await importThemePath(path);
+  }, [importThemePath, t]);
+
+  return {
+    styles,
+    ready,
+    openStylesDir,
+    refreshStyles,
+    importTheme,
+    importTyporaTheme,
+  };
 }

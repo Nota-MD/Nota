@@ -46,11 +46,33 @@
  */
 
 import { $inputRule } from "@milkdown/kit/utils";
-import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
+import { linkSchema } from "@milkdown/kit/preset/commonmark";
+import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import type { MarkType } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import { $prose } from "@milkdown/kit/utils";
+
+/**
+ * Links end at their last visible character.
+ *
+ * ProseMirror marks are inclusive by default: a caret at the tail of an existing
+ * link inherits that link for the next insertion. Milkdown's CommonMark link
+ * schema does not override that default, which makes every following character
+ * stick to the link. Marking the link explicitly non-inclusive fixes the rule at
+ * the schema boundary, so it covers parsed Markdown, typed links, pasted links
+ * and links written through the dialog instead of patching each transaction.
+ */
+export function linkBoundaryMarkSpec<T extends { inclusive?: boolean }>(previous: T): T {
+  return {
+    ...previous,
+    inclusive: false,
+  };
+}
+
+export const linkBoundarySpec = linkSchema.extendSchema(
+  (previous) => (ctx) => linkBoundaryMarkSpec(previous(ctx)),
+);
 
 /* ── 第一格：判据（纯函数，测试只用这一层）──────────────────────────────── */
 
@@ -164,6 +186,23 @@ export function NormalizeLink(candidate: string): NormalizedLink | null {
 /** {@link 是裸URL} 的判据出口（测试用）。 */
 export function isBareURL(candidate: string): boolean {
   return NormalizeUrl(candidate) !== null;
+}
+
+/**
+ * Destination normalization for explicit `[label](destination)` syntax.
+ *
+ * The bracket/parenthesis syntax removes the ambiguity that keeps bare domains
+ * out of plain-text auto-linking. `github.com` therefore becomes an HTTPS
+ * destination, while relative Markdown links and fragments remain unchanged.
+ */
+export function normalizeExplicitLinkDestination(candidate: string): string | null {
+  const text4 = candidate.trim();
+  if (text4 === "" || /\s/.test(text4) || DangerousProtocol(text4)) return null;
+  const normalized = NormalizeLink(text4);
+  if (normalized) return normalized.href;
+  if (/^(?:#|\/|\.{1,2}\/)/.test(text4)) return text4;
+  const host = text4.split(/[/?#]/, 1)[0] ?? "";
+  return isLikeMainMachineName(host) ? `https://${text4}` : text4;
 }
 
 /** 左括号 / 左引号 → 右括号 / 右引号。{@link 切尾标点} 第 ② 条用它配对。 */
@@ -298,6 +337,165 @@ export function selfActionLinkInput(enabled = true) {
       }, ruleRuleOption),
     ),
   ];
+}
+
+/** `[label](destination)` becomes a link as soon as `)` is typed. */
+export const explicitLinkSyntax = /\[([^\]\n]+)\]\(([^()\s]+)\)$/;
+
+function explicitLinkTransaction(
+  state: EditorState,
+  match2: RegExpMatchArray,
+  start6: number,
+  end3: number,
+): Transaction | null {
+  const label = match2[1] ?? "";
+  const href = normalizeExplicitLinkDestination(match2[2] ?? "");
+  const link = state.schema.marks.link;
+  if (!label || href === null || !link) return null;
+  const currentMarks = state.storedMarks ?? state.selection.$from.marks();
+  const textNode = state.schema.text(label, [
+    ...currentMarks.filter((mark) => mark.type !== link),
+    link.create({ href }),
+  ]);
+  const transaction = state.tr.replaceWith(start6, end3, textNode);
+  transaction.setSelection(TextSelection.create(transaction.doc, start6 + label.length));
+  transaction.removeStoredMark(link);
+  return transaction;
+}
+
+export function explicitLinkInput() {
+  return [
+    $inputRule(() =>
+      new InputRule(explicitLinkSyntax, (state, match2, start6, end3) => {
+        return explicitLinkTransaction(state, match2, start6, end3);
+      }),
+    ),
+  ];
+}
+
+/**
+ * Complete an explicit link when its closing `)` already exists in the
+ * document because the optional auto-pair plugin inserted it.
+ *
+ * In that case typing `)` is consumed by the auto-pair boundary step, so the
+ * normal InputRule never sees the character. The caret sits immediately before
+ * the auto-inserted closer; match the full source around that caret and consume
+ * the existing closer in the same transaction.
+ */
+export function explicitLinkAtClosingParenthesis(
+  state: EditorState,
+  position: number,
+): Transaction | null {
+  if (!state.selection.empty || state.selection.from !== position) return null;
+  const resolved = state.doc.resolve(position);
+  if (!resolved.parent.inlineContent || resolved.parent.type.spec.code) return null;
+  if (resolved.parentOffset >= resolved.parent.content.size) return null;
+  if (resolved.parent.textBetween(resolved.parentOffset, resolved.parentOffset + 1) !== ")") {
+    return null;
+  }
+  const before = resolved.parent.textBetween(0, resolved.parentOffset, "\n", "\uFFFC");
+  const match2 = explicitLinkSyntax.exec(`${before})`);
+  if (!match2) return null;
+  // `match[0]` includes the existing closer after the caret, while `before`
+  // ends immediately before it. Subtract one for that virtual suffix so the
+  // replacement starts at the real opening `[`, not one position too early.
+  const start6 = resolved.start() + before.length - match2[0].length + 1;
+  return explicitLinkTransaction(state, match2, start6, position + 1);
+}
+
+export function explicitLinkAtTypedParenthesis(
+  state: EditorState,
+  position: number,
+  typed: string,
+): Transaction | null {
+  if (typed !== ")" || !state.selection.empty || state.selection.from !== position) {
+    return null;
+  }
+  const autoInserted = explicitLinkAtClosingParenthesis(state, position);
+  if (autoInserted) return autoInserted;
+  const resolved = state.doc.resolve(position);
+  if (!resolved.parent.inlineContent || resolved.parent.type.spec.code) return null;
+  const before = resolved.parent.textBetween(
+    0,
+    resolved.parentOffset,
+    "\n",
+    "\uFFFC",
+  );
+  const match2 = explicitLinkSyntax.exec(`${before})`);
+  if (!match2) return null;
+  // The typed `)` is not in the document yet: `match[0]` adds one virtual
+  // character solely for recognition. Keep the transaction's start on the real
+  // opening bracket. Without this correction the next text input lands one
+  // character inside the label.
+  const start6 = resolved.start() + before.length - match2[0].length + 1;
+  return explicitLinkTransaction(state, match2, start6, position);
+}
+
+export function explicitLinkAtCursor(
+  state: EditorState,
+  position: number,
+): Transaction | null {
+  if (!state.selection.empty || state.selection.from !== position) return null;
+  const resolved = state.doc.resolve(position);
+  if (!resolved.parent.inlineContent || resolved.parent.type.spec.code) return null;
+  // Revealed source is already Markdown, not a freshly typed link.
+  const linkSourceType = state.schema.nodes.notaLinkSource;
+  if (
+    linkSourceType &&
+    (resolved.nodeBefore?.type === linkSourceType ||
+      resolved.nodeAfter?.type === linkSourceType)
+  ) {
+    return null;
+  }
+  const before = resolved.parent.textBetween(
+    0,
+    resolved.parentOffset,
+    "\n",
+    "\uFFFC",
+  );
+  const match2 = explicitLinkSyntax.exec(before);
+  if (!match2) return null;
+  const start6 = resolved.start() + before.length - match2[0].length;
+  return explicitLinkTransaction(state, match2, start6, position);
+}
+
+/**
+ * Complete explicit Markdown links directly from text input.
+ *
+ * This deliberately runs before auto-pair and the normal InputRule collection:
+ * the typed `)` may already exist as an auto-inserted closer, in which case the
+ * InputRule never sees it.
+ */
+export function explicitLinkTyping() {
+  const key = new PluginKey("nota-explicit-link-typing");
+  return $prose(
+    () =>
+      new Plugin({
+        key,
+        props: {
+          handleTextInput: (view, from, to, text4) => {
+            if (text4 !== ")" || view.composing) return false;
+            if (!view.state.selection.empty || from !== to) return false;
+            const transaction = explicitLinkAtTypedParenthesis(view.state, from, text4);
+            if (!transaction) return false;
+            view.dispatch(transaction);
+            return true;
+          },
+        },
+        appendTransaction: (transactions, _oldState, newState) => {
+          if (!transactions.some((transaction) => transaction.docChanged)) return null;
+          if (transactions.some((transaction) => transaction.getMeta(key))) return null;
+          if (transactions.some((transaction) => transaction.getMeta("composition") != null)) {
+            return null;
+          }
+          const transaction = explicitLinkAtCursor(
+            newState,
+            newState.selection.from,
+          );
+          return transaction?.setMeta(key, true) ?? null;
+        },
+      }),
+  );
 }
 
 /** A link-shaped token immediately before the cursor in one text block. */
@@ -461,5 +659,7 @@ export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: 
       .removeStoredMark(link);
   }
   if (!selection.$from.parent.inlineContent || !selection.$to.parent.inlineContent) return null;
-  return state.tr.addMark(selection.from, selection.to, link.create({ href: normalized.href }));
+  return state.tr
+    .addMark(selection.from, selection.to, link.create({ href: normalized.href }))
+    .removeStoredMark(link);
 }

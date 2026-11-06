@@ -128,6 +128,15 @@ pub fn session_file() -> Result<PathBuf> {
     Ok(data_dir()?.join("session.toml"))
 }
 
+/// Recoverable drafts live beside session state, never beside the source file.
+///
+/// A draft is an application safety copy, not a user document. Keeping it under
+/// the data directory prevents crash recovery from creating surprise files in
+/// the user's notes folder.
+pub fn drafts_dir() -> Result<PathBuf> {
+    Ok(data_dir()?.join("drafts"))
+}
+
 /// 插件自己的数据目录：`$XDG_DATA_HOME/nota/plugin-data/<id>/`。
 ///
 /// ⚠️ **放 `data` 不放 `config`**，判据就是本文件顶上那条：`config` 里放的是

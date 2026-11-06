@@ -23,6 +23,7 @@ import type { punctuationSettings } from "./smart-punctuation";
 import type { changePreview, previewMode } from "./review";
 import type { WritingMode } from "./writing-modes";
 import type { VimInputConfig, VimInputHooks } from "./plugin-vim-types";
+import type { EditorSelectionRange } from "./selection-range";
 
 
 /**
@@ -343,6 +344,11 @@ export interface EditorHandle {
    */
   selection: () => SelectionContent | null;
 
+  /** Current anchor/head positions in ProseMirror document coordinates. */
+  selectionRange: () => EditorSelectionRange;
+  /** Restore a remembered caret or selection and focus the editor. */
+  restoreSelection: (selection: EditorSelectionRange) => void;
+
   /** 销毁。组件卸载时**必须**调，否则 ProseMirror 的 DOM 监听会留着。 */
   destroy: () => void;
 }
@@ -415,6 +421,15 @@ export interface CreateOptions {
    * Omitted values default to enabled. Code blocks and inline code are excluded.
    */
   autoPair?: boolean;
+  /**
+   * Reveal Markdown source around a link or image when the caret reaches it.
+   *
+   * This is an optional editor interaction setting. It only adds ProseMirror
+   * decorations and never inserts source text into the document.
+   */
+  keyboardExperience?: boolean;
+  /** Number of spaces inserted by Tab in ordinary text. Defaults to 2. */
+  defaultIndent?: number;
   /**
    * 三种行内扩展语法开不开：**高亮** `==x==`、**上标** `^x^`、**下标** `~x~`
    *（`Settings.markdown` 的那三项，`ui/pane-editors.ts` 传进来）。

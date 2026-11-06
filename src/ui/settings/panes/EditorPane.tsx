@@ -84,9 +84,6 @@ export function EditorPane({ settings, onChange }: PaneProps) {
             onChange={(default_indent) => write({ default_indent })}
           />
         </SettingRow>
-        <SettingRow label={t("Aligned indent")}>
-          <Toggle checked={e.align_indent} onChange={(align_indent) => write({ align_indent })} />
-        </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("First-line indent")}>
@@ -108,8 +105,22 @@ export function EditorPane({ settings, onChange }: PaneProps) {
       </SettingsGroup>
 
       <SettingsGroup title={t("Auto pair")}>
-        <SettingRow label={t("Pair brackets and quotes while typing")}>
+        <SettingRow label={t("Pair brackets, quotes and Markdown markers while typing")}>
           <Toggle checked={e.auto_pair} onChange={(auto_pair) => write({ auto_pair })} />
+        </SettingRow>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("Keyboard experience optimization")}>
+        <SettingRow
+          label={t("Reveal link and image source at the caret")}
+          description={t(
+            "Show Markdown around links and images when the caret reaches them. Clicking a link also stays in the editor instead of opening the link dialog.",
+          )}
+        >
+          <Toggle
+            checked={e.keyboard_experience}
+            onChange={(keyboard_experience) => write({ keyboard_experience })}
+          />
         </SettingRow>
       </SettingsGroup>
 
@@ -118,33 +129,6 @@ export function EditorPane({ settings, onChange }: PaneProps) {
           <Toggle
             checked={e.emoji_autocomplete}
             onChange={(emoji_autocomplete) => write({ emoji_autocomplete })}
-          />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Show the Markdown source of the current block")}>
-        <SettingRow>
-          <Toggle
-            checked={e.show_block_source}
-            onChange={(show_block_source) => write({ show_block_source })}
-          />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Copy Markdown source when copying as plain text")}>
-        <SettingRow>
-          <Toggle
-            checked={e.copy_markdown_source}
-            onChange={(copy_markdown_source) => write({ copy_markdown_source })}
-          />
-        </SettingRow>
-      </SettingsGroup>
-
-      <SettingsGroup title={t("Copy/cut the whole line when nothing is selected")}>
-        <SettingRow>
-          <Toggle
-            checked={e.copy_line_when_empty}
-            onChange={(copy_line_when_empty) => write({ copy_line_when_empty })}
           />
         </SettingRow>
       </SettingsGroup>
@@ -183,14 +167,6 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         )}
       </SettingsGroup>
 
-      <SettingsGroup title={t("Typewriter Mode")}>
-        <SettingRow label={t("Keep the cursor in the middle of the screen")}>
-          <Toggle
-            checked={e.typewriter_keep_caret_centered}
-            onChange={(typewriter_keep_caret_centered) => write({ typewriter_keep_caret_centered })}
-          />
-        </SettingRow>
-      </SettingsGroup>
     </>
   );
 }

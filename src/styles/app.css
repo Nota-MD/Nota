@@ -49,6 +49,35 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   overflow: hidden; /* 滚动条交给各自的面板，body 不滚 */
+  /* Application chrome is operated, not copied as text. Individual controls
+     used to disable selection one by one, which always left gaps in menus,
+     labels, status cells and dialogs. Opt editable/user-owned surfaces back in
+     below instead of maintaining that deny-list forever. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Text the user owns or edits remains fully selectable: document content,
+   CodeMirror, form controls and contenteditable regions. */
+input,
+textarea,
+select,
+[contenteditable="true"],
+[contenteditable="plaintext-only"],
+.editor-pane,
+.ProseMirror,
+.cm-editor {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Developer-only escape hatch. The debug page exposes this as a persistent
+   setting so interface text can be inspected and copied without weakening the
+   production shell's default for everyone. */
+html[data-ui-text-selectable="true"] body,
+html[data-ui-text-selectable="true"] body * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 /* ── 滚动条 ─────────────────────────────────────────────────────────────

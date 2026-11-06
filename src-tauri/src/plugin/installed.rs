@@ -67,6 +67,11 @@ impl Signature {
 pub struct PluginRecord {
     #[serde(default)]
     pub enabled: bool,
+    /// A built-in extension the user removed from the visible catalogue.
+    /// The packaged files stay in place so the application can be repaired or
+    /// upgraded; reinstalling the same id clears this tombstone.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub removed: bool,
     /// 装进来时的验签结论。老记录里没有这一栏 = `None`（不是 `Unsigned`——
     /// 那会谎称"当初验过，是没签名的"）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -83,6 +88,10 @@ pub struct PluginRecord {
     /// 公钥不是秘密，存在这里没有风险；**私钥从来不在这台机器上**（`docs/11` §1.6）。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public_key: Option<String>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// 一个插件的**来路**：装进来的时候验出了什么，以及签名者是谁。
@@ -197,7 +206,20 @@ impl Installed {
     /// 开/关。**落盘**——不落盘的话下次启动它又按默认值回来了，
     /// 而用户看到的是"我明明关过它"。
     pub fn set_enabled(&mut self, id: &str, on: bool) -> Result<()> {
-        self.取或建(id).enabled = on;
+        let record = self.取或建(id);
+        record.enabled = on;
+        record.removed = false;
+        self.save()
+    }
+
+    pub fn is_removed(&self, id: &str) -> bool {
+        self.map.get(id).is_some_and(|record| record.removed)
+    }
+
+    pub fn mark_removed(&mut self, id: &str) -> Result<()> {
+        let record = self.取或建(id);
+        record.enabled = false;
+        record.removed = true;
         self.save()
     }
 

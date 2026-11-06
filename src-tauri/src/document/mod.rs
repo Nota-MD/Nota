@@ -19,6 +19,8 @@
 //! 这条口径写在 `docs/03-data-structures.md`，改之前先读那里。
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +50,9 @@ pub struct DocId(pub u64);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub id: DocId,
+    /// Stable identity used by the draft store. Unlike `DocId`, this survives a
+    /// process restart so a recovered draft can keep updating the same copy.
+    pub draft_id: String,
     /// 还没存过盘的新文档是 `None`。
     pub path: Option<PathBuf>,
     /// 标题。取自路径的文件名；新文档是语言中立的 `Untitled N`。
@@ -60,6 +65,10 @@ pub struct Document {
     /// 一次就会被静默改成 UTF-8。
     #[serde(default = "default_encoding")]
     pub encoding: String,
+    /// On-disk line ending style. Existing documents detect it on open; new
+    /// documents take it from `[editor].line_ending`.
+    #[serde(default = "default_line_ending")]
+    pub line_ending: String,
     /// 相对上次落盘有无改动。
     pub dirty: bool,
     /// 每次 `sync` / `save` 递增。插件与前端靠它判断"我拿到的是不是旧的"。
@@ -94,6 +103,37 @@ pub struct Document {
 
 fn default_encoding() -> String {
     crate::text_encoding::兜底编码.to_string()
+}
+
+fn default_line_ending() -> String {
+    "lf".to_string()
+}
+
+fn new_draft_id() -> String {
+    static NEXT_DRAFT_ID: AtomicU64 = AtomicU64::new(0);
+    let serial = NEXT_DRAFT_ID.fetch_add(1, Ordering::Relaxed);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    format!("{}-{nanos:x}-{serial:x}", std::process::id())
+}
+
+fn detect_line_ending(text: &str) -> String {
+    if text.contains("\r\n") {
+        "crlf".to_string()
+    } else {
+        "lf".to_string()
+    }
+}
+
+fn with_line_ending(text: &str, label: &str) -> String {
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    if label.eq_ignore_ascii_case("crlf") {
+        normalized.replace('\n', "\r\n")
+    } else {
+        normalized
+    }
 }
 
 /// 编辑器报上来的选区快照。
@@ -202,12 +242,15 @@ impl DocumentStore {
             }
         }
         let dirty = !text.is_empty();
+        let line_ending = detect_line_ending(&text);
         let doc = Document {
             id,
+            draft_id: new_draft_id(),
             path: None,
             title,
             text,
             encoding: crate::text_encoding::兜底编码.to_string(),
+            line_ending,
             dirty,
             revision: 0,
             untitled_index: idx,
@@ -228,15 +271,18 @@ impl DocumentStore {
         }
 
         let (text, encoding) = crate::text_encoding::读文件(path)?;
+        let line_ending = detect_line_ending(&text);
 
         let clean = text.clone();
         let id = self.alloc_id();
         self.docs.push(Document {
             id,
+            draft_id: new_draft_id(),
             path: Some(path.to_path_buf()),
             title: derive_title(&text, Some(path), 0, self.strict_markdown),
             text,
             encoding,
+            line_ending,
             dirty: false,
             revision: 0,
             // 有路径的文档走不到"未命名 N"那个回退分支（除非文件名是空的），
@@ -249,6 +295,45 @@ impl DocumentStore {
         Ok(id)
     }
 
+    /// Recover a draft into an open document.
+    ///
+    /// If the original file still exists it is opened first, then overlaid with
+    /// the draft body. A missing or unreadable source becomes an untitled
+    /// document; recovery never writes the source path.
+    pub fn restore_draft(&mut self, draft: &crate::draft::Draft) -> Result<DocId> {
+        if draft.version > 1 {
+            return Err(NotaError::other(format!(
+                "Draft version {} is newer than this version of Nota",
+                draft.version
+            )));
+        }
+
+        let source = draft.path.as_ref().map(PathBuf::from);
+        let id = source
+            .as_deref()
+            .filter(|path| path.is_file())
+            .and_then(|path| self.open(path).ok())
+            .unwrap_or_else(|| {
+                self.create_untitled_with_text(draft.text.clone(), Some(draft.title.clone()))
+            });
+
+        let strict = self.strict_markdown;
+        let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
+        doc.draft_id = draft.id.clone();
+        doc.encoding = draft.encoding.clone();
+        doc.line_ending = if draft.line_ending.eq_ignore_ascii_case("crlf") {
+            "crlf".to_string()
+        } else {
+            "lf".to_string()
+        };
+        doc.text = draft.text.clone();
+        doc.dirty = doc.text != doc.clean_text;
+        doc.revision += 1;
+        doc.title = derive_title(&doc.text, doc.path.as_deref(), doc.untitled_index, strict);
+        self.active = Some(id);
+        Ok(id)
+    }
+
     /// 用磁盘内容重载一份文档（外部改动 / 放弃修改后重读）。
     pub fn reload(&mut self, id: DocId) -> Result<()> {
         let strict = self.strict_markdown;
@@ -257,10 +342,12 @@ impl DocumentStore {
             .and_then(|d| d.path.clone())
             .ok_or(NotaError::NoActiveDocument)?;
         let (text, encoding) = crate::text_encoding::读文件(&path)?;
+        let line_ending = detect_line_ending(&text);
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
         let idx = doc.untitled_index;
         doc.title = derive_title(&text, Some(&path), idx, strict);
         doc.encoding = encoding;
+        doc.line_ending = line_ending;
         doc.clean_text = text.clone();
         doc.text = text;
         doc.dirty = false;
@@ -326,6 +413,7 @@ impl DocumentStore {
     pub fn save(&mut self, id: DocId, path_override: Option<PathBuf>) -> Result<PathBuf> {
         let strict = self.strict_markdown;
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
+        let previous_path = doc.path.clone();
         let path = match path_override {
             Some(p) => {
                 doc.path = Some(p.clone());
@@ -336,10 +424,18 @@ impl DocumentStore {
             })?,
         };
 
+        // Saving an untouched existing document must be byte-identical. Do not
+        // invoke the serializer or the writer at all; this also avoids silently
+        // normalizing table widths, trailing spaces, or other source details.
+        if !doc.dirty && previous_path.as_ref() == Some(&path) {
+            return Ok(path);
+        }
+
         if let Some(parent) = path.parent() {
             crate::paths::ensure_dir(parent)?;
         }
-        crate::text_encoding::按编码写(&path, &doc.text, &doc.encoding)?;
+        let disk_text = with_line_ending(&doc.text, &doc.line_ending);
+        crate::text_encoding::按编码写(&path, &disk_text, &doc.encoding)?;
 
         doc.dirty = false;
         doc.clean_text = doc.text.clone(); // 磁盘上现在就是这份，它成了新的"干净"
@@ -347,6 +443,17 @@ impl DocumentStore {
         doc.title = derive_title(&doc.text, Some(&path), idx, strict);
         doc.revision += 1;
         Ok(path)
+    }
+
+    /// Set the line ending used by a new document when it is first saved.
+    pub fn set_line_ending(&mut self, id: DocId, label: &str) -> Result<()> {
+        let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
+        doc.line_ending = if label.eq_ignore_ascii_case("crlf") {
+            "crlf".to_string()
+        } else {
+            "lf".to_string()
+        };
+        Ok(())
     }
 
     /// 把这份文档**挪到另一个路径**（重命名 / 移动，`docs/10` §2 那一格）。
@@ -453,6 +560,9 @@ impl DocumentStore {
         self.docs.iter().any(|d| d.dirty)
     }
 }
+
+#[cfg(test)]
+mod draft_tests;
 
 #[cfg(test)]
 mod tests {

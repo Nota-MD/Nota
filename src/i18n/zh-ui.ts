@@ -411,7 +411,6 @@ export const uiMessages: Record<string, string> = {
   "Empty Math Block": "空公式块",
   "Empty inline math": "空的行内公式",
   "Empty math block — click to write LaTeX": "空的公式块：点一下就能写 LaTeX",
-  "e.g. E=mc^2": "例如 E=mc^2",
   "e.g. \\frac{a}{b}": "例如 \\frac{a}{b}",
   "LaTeX commands": "LaTeX 命令",
   "physics": "物理",

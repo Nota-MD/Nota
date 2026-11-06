@@ -204,7 +204,6 @@ PAIRS=(
   # 2026-09-28：命令白名单（COMMANDS 表）整块搬出 `create.ts`（那边到 1010 行、破了硬线）。
   "src/editor/command-table.ts                    05"
   "src/editor/inline-caret.ts                     02,05,06"
-  "src/editor/inline-delimiter-tree.ts            02,05,06"
   # 2026-10-07：`createEditor` 那一长串**选项怎么装配**搬出去（`create.ts` 1006 → 502，
   # 第 89 项）。⚠️ 它管的是"哪一格接哪一份、谁不许传谁"，改一处就要看 `docs/05`。
   "src/editor/assemble.ts                         05"
@@ -269,6 +268,8 @@ PAIRS=(
   "src/editor/task-list.ts                        05,04,10"
   "src/editor/code-block.ts                       05,04,10"
   "src/editor/code-block-change.ts                05,02"
+  "src/editor/code-block-boundary.ts              05,02,06"
+  "src/editor/math-inline-events.ts               05,02"
   # 2026-10-06（第 101 项：代码块换成 CodeMirror 编辑）。⚠️ 两份一起进——
   # 那一份纯函数的判据就是下面那行测试，改了 `算最小改动` / `回车续行` 而不同步
   # `docs/02` 与 `docs/06` 的话，这里会提醒。
@@ -321,6 +322,7 @@ PAIRS=(
   "src/editor/math-commands.ts                  05,02,10"
   "src/editor/math-suggest.ts                   05,02,10"
   "src/editor/mark-hint.ts                      05,04,10"
+  "src/editor/inline-edit.ts                    05,02"
   "src/editor/mark-hint-source.ts               05,02"
   "src/editor/atom-space.ts                     05,04,10"
   # 2026-09-27：那五层文本处理器的"谁在外层"（加第五层时 `create.ts` 顶破 1000 行，把这串拆了出去）。
@@ -491,6 +493,7 @@ PAIRS=(
   "src/styles/settings-widgets.css                04"
   # ⚠️ 2026-09-29：`app.css` 836 行，按功能拆成五份（骨架 / 菜单栏 / 两条 / 主页 / 提示条）。
   "src/styles/app.css                             04"
+  "src/ui/useSelectableUiText.ts                  03,04"
   "src/styles/menubar.css                         04"
   "src/styles/tabs-status.css                     04"
   "src/styles/home.css                            04"
@@ -535,7 +538,6 @@ PAIRS=(
   "tests/github-markdown.test.ts                 04,06"
   "tests/smart-punctuation.test.ts              02,06"
   "tests/auto-correct.test.ts                   02,06"
-  "tests/inline-delimiter-tree.test.ts          02,06"
   "tests/woff2-fonts.test.ts                    02,06"
   "tests/emoji.test.ts                          02,06"
   "tests/footnote.test.ts                       02,06"
@@ -621,7 +623,6 @@ PAIRS=(
   "tsconfig.json                                  06"
   "index.html                                     06"
   ".github/workflows/release.yml                  06"
-
   # ⚠️⚠️ 2026-09-28 一次性补齐的一段。这张表自称是 `docs/09` §2 的机读副本，
   # 可它**长期只是个手抄的片段**：`docs/09` §2 里已经按字面登记、而这里没有的行
   # 有 37 条（后端 8 ＋ 前端 20 ＋ 测试 9），另有 6 份测试**两边都没有**。
@@ -650,6 +651,8 @@ PAIRS=(
   "src-tauri/src/lua/api/assets.rs               13,11"
   # ── 前端（20）────────────────────────────────────────────────────────
   "src/editor/url-link.ts                        05,04,10"
+  "src/editor/keyboard-experience.ts             05,04,10"
+  "src/editor/link-source-reveal.ts              05,02"
   "src/ui/TableToolbar.tsx                       04,05"
   "src/styles/table-toolbar.css                  04"
   "src/editor/paste.ts                           05,04,10"
@@ -682,6 +685,7 @@ PAIRS=(
   "tests/lang-guess.test.ts                      02,06"
   "tests/paste-clean.test.ts                     02,06"
   "tests/url-link.test.ts                        02,06"
+  "tests/keyboard-experience.test.ts             02,06"
   "tests/auto-pair.test.ts                       02,06"
   "tests/file-kind.test.ts                       02,06"
   "tests/file-icon.test.ts                       04,06"
@@ -879,7 +883,7 @@ fi
 # `serif` 都不含，上面那条查不到——而 2026-09-24 踩的正是这一脚。
 # 合法的去处只有三个：定义它的 `theme/`（2026-09-26 拆成四份之前是
 # `theme.css` 一份）、消费它的 `editor.css`（正文）、以及 `themes/` 自己。
-# 别的文件引它 = 拿文档字体画界面。
+# 别的文件引它 = 拿文档字体画界面；doc-theme.ts 只在 `.editor-pane` 桥接主题变量，是合法落点。
 # ⚠️ **白名单是路径前缀，必须跟着 `theme.css` 那次拆分走**：拆之前判据是
 # `'/(theme|editor)\.css$'`，拆分当天 `--font-doc` 的定义搬进了
 # `theme/base.css`，那条判据立刻从"放行"变成"误报"——`base.css` 就是
@@ -901,7 +905,7 @@ fi
 DOCFONT=$(grep -rn 'font-doc' src/styles --exclude-dir=themes 2>/dev/null \
   | grep -vE ':[0-9]+:[[:space:]]*(/\*|\*)' \
   | cut -d: -f1 | sort -u \
-  | grep -vE '^src/styles/(theme/|theme\.css$|editor\.css$|doc-typography\.ts$)' || true)
+  | grep -vE '^src/styles/(theme/|theme\.css$|editor\.css$|doc-typography\.ts$|doc-theme\.ts$)' || true)
 if [ -n "$DOCFONT" ]; then
   while IFS= read -r f; do
     [ -n "$f" ] && fail "$f references --font-doc; interface files may use it only for document body text"
@@ -993,4 +997,3 @@ if [ "$WARNS" -gt 0 ]; then
   exit 0
 fi
 printf '%sAll checks passed.%s\n' "$G" "$N"
-exit 0

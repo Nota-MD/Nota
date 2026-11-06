@@ -73,6 +73,12 @@ import { $view } from "@milkdown/kit/utils";
 import { t } from "@/i18n";
 import { writeClipboard } from "@/editor/code-block";
 import type { codeBlockEditor } from "@/editor/code-block-cm";
+import {
+  bootstrapCodeBlockExit,
+  codeBlockExitTransaction,
+  moveBootstrapCodeBlockCaret,
+  type CodeBlockExitSide,
+} from "@/editor/code-block-boundary";
 
 import { imageTableSpec } from "@/editor/diagram-node";
 import {
@@ -129,8 +135,7 @@ export const diagramView = $view(
       //    就会把**屏幕上的东西**当成文档的真相读回去——而屏幕上的东西里
       //    有 SVG、有错误提示。真相只有源码一份，不该有第二个入口。
       const dom = document.createElement("div");
-      dom.className = "nota-diagram";
-      dom.classList.add("md-diagram-panel");
+      dom.className = "nota-diagram md-diagram-panel md-fences-adv-panel";
 
       const body = document.createElement("div");
       body.className = "nota-diagram-body";
@@ -395,6 +400,22 @@ export const diagramView = $view(
         dispatch(codeEditor?.getText() ?? sourceBootstrap.value);
       }
 
+      function leaveDiagram(side: CodeBlockExitSide): void {
+        firstDispatch();
+        const pos = getPos();
+        if (typeof pos !== "number") return;
+        const node = view.state.doc.nodeAt(pos);
+        if (!node || node.type.name !== nodeName) return;
+        const transaction = codeBlockExitTransaction(view.state, pos, node, side);
+        if (!transaction) return;
+        leaveEditing();
+        view.dispatch(transaction.scrollIntoView());
+        view.focus();
+      }
+
+      const leaveHeadCell = () => leaveDiagram("before");
+      const leaveTailCell = () => leaveDiagram("after");
+
       // ── CodeMirror：Mermaid 源码的输入面 ─────────────────────────────
       // 节点正文始终在 PM 的 `attrs.value` 里；CM 只负责输入、选区、配对、
       // Tab 缩进与剪贴板。粘贴事件必须落在 CM 自己的 DOM 上，不能再交给
@@ -410,11 +431,30 @@ export const diagramView = $view(
       sourceBootstrap.addEventListener("input", () => convertSource(sourceBootstrap.value));
       sourceBootstrap.addEventListener("focusin", () => ensureDiagramEditor());
       sourceBootstrap.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        firstDispatch();
-        leaveEditing();
-        view.focus();
+        if (event.key === "Escape") {
+          event.preventDefault();
+          firstDispatch();
+          leaveEditing();
+          view.focus();
+          return;
+        }
+        if (event.isComposing || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
+        const caret = sourceBootstrap.selectionStart;
+        if (caret === null || caret !== sourceBootstrap.selectionEnd) return;
+        const exit = bootstrapCodeBlockExit(sourceBootstrap.value, caret, event.key);
+        if (exit) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (exit === "before") leaveHeadCell();
+          else leaveTailCell();
+          return;
+        }
+        if (["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const next = moveBootstrapCodeBlockCaret(sourceBootstrap.value, caret, event.key);
+          sourceBootstrap.setSelectionRange(next, next);
+        }
       });
 
       function ensureDiagramEditor(): void {
@@ -437,6 +477,8 @@ export const diagramView = $view(
               undoCancel: () => undo(view.state, view.dispatch, view),
               heavyDo: () => redo(view.state, view.dispatch, view),
               openHeadBackCell: () => view.focus(),
+              leaveHeadCell,
+              leaveTailCell,
             });
             codeEditor = editor;
             sourceBox.replaceChildren(editor.view.dom);

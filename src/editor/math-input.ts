@@ -126,6 +126,58 @@ export function shouldChangeCommonStyle(before2: string): boolean {
   return before2 !== "$";
 }
 
+export interface MathAroundCursor {
+  source: string;
+  start: number;
+  end: number;
+  dollars: number;
+  delimiter: MathDelimiter;
+}
+
+function escapedAt(text: string, index: number): boolean {
+  let slashes = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor--) {
+    slashes += 1;
+  }
+  return slashes % 2 === 1;
+}
+
+/** Recognize a formula whose closing delimiter is to the right of the caret. */
+export function mathSourceAroundCursor(
+  text: string,
+  cursor: number,
+): MathAroundCursor | null {
+  const right = text.slice(cursor);
+  const left = text.slice(0, cursor);
+  const closes: Array<{
+    close: string;
+    open: string;
+    delimiter: MathDelimiter;
+    dollars: number;
+  }> = [
+    { close: "$$", open: "$$", delimiter: "dollar", dollars: 2 },
+    { close: "$", open: "$", delimiter: "dollar", dollars: 1 },
+    { close: "\\)", open: "\\(", delimiter: "paren", dollars: 1 },
+    { close: "\\]", open: "\\[", delimiter: "bracket", dollars: 1 },
+  ];
+  for (const candidate of closes) {
+    if (!right.startsWith(candidate.close)) continue;
+    const start = left.lastIndexOf(candidate.open);
+    if (start < 0 || start + candidate.open.length >= cursor) continue;
+    if (escapedAt(text, start)) continue;
+    const source3 = text.slice(start + candidate.open.length, cursor);
+    if (!source3) continue;
+    return {
+      source: source3,
+      start,
+      end: cursor + candidate.close.length,
+      dollars: candidate.dollars,
+      delimiter: candidate.delimiter,
+    };
+  }
+  return null;
+}
+
 /**
  * `start` 前面那一个字符。
  *
@@ -252,7 +304,25 @@ export function completeInlineMathAtCursor(state: EditorState, spec: NodeType): 
       startInParagraph = single.index;
     }
   }
-  if (startInParagraph < 0) return null;
+  if (startInParagraph < 0) {
+    const whole = $from.parent.textBetween(
+      0,
+      $from.parent.content.size,
+      "\n",
+      "\n",
+    );
+    const around = mathSourceAroundCursor(whole, $from.parentOffset);
+    if (!around) return null;
+    return replaceBecomeCommonStyle(
+      spec,
+      state,
+      $from.start() + around.start,
+      $from.start() + around.end,
+      around.source,
+      around.dollars,
+      around.delimiter,
+    );
+  }
 
   const start5 = $from.start() + startInParagraph;
   const end = $from.start() + $from.parentOffset;

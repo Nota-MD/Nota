@@ -147,6 +147,23 @@
   height: auto;
 }
 
+:where(.editor-mount .ProseMirror) .nota-html-image-fallback {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.65em;
+  padding: 0 0.55em;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bg-subtle) 82%, var(--doc-bg));
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 0.78em;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
 :where(.editor-mount .ProseMirror) .nota-html-render a {
   color: var(--accent);
   text-decoration: underline;
@@ -154,8 +171,25 @@
   text-underline-offset: 0.15em;
 }
 
-:where(.editor-mount .ProseMirror) .nota-html-render [align="center"] {
-  text-align: center;
+/* HTML 的 `align` 是作者写在正文里的显式排版意图。文档主题常把 `p` 等
+   标签统一写成左对齐，若这里只按普通选择器声明，主题会因为它作用在更内层
+   的标签上而覆盖掉 `align="center"`。这三条 `!important` 只保护源码里已经
+   明确写出的对齐，不改变普通 Markdown 块，也不让正文根节点继承居中。 */
+:where(.editor-mount .ProseMirror) .nota-html-render [align="center"],
+:where(.editor-mount .ProseMirror) .nota-html-render center {
+  text-align: center !important;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render [align="right"] {
+  text-align: right !important;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render [align="justify"] {
+  text-align: justify !important;
+}
+
+:where(.editor-mount .ProseMirror) .nota-html-render center > :is(p, h1, h2, h3, h4, h5, h6, div) {
+  text-align: inherit !important;
 }
 
 :where(.editor-mount .ProseMirror) .nota-html-render details {

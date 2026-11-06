@@ -38,6 +38,15 @@ import {
   lineBoundary,
   needWantDelayDelayActiveColor,
 } from "../src/editor/code-block-cm";
+import {
+  bootstrapCodeBlockExit,
+  codeBlockExitTransaction,
+  codeBlockSourceEdge,
+  moveBootstrapCodeBlockCaret,
+} from "../src/editor/code-block-boundary";
+import { Schema } from "@milkdown/kit/prose/model";
+import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
+import { readFileSync } from "node:fs";
 
 /* ── 工装（与 `hints.test.ts` 同一套长相）────────────────────────────── */
 
@@ -349,6 +358,142 @@ testCase("2,000 字符以内仍即时重算", () => {
 testCase("超过 2,000 字符才进入 80ms 合并", () => {
   equal(needWantDelayDelayActiveColor(2_001), true, "刚过长块线");
   equal(needWantDelayDelayActiveColor(100_000), true, "超长块");
+});
+
+group("七、代码块首尾方向键显式退出");
+
+testCase("按源码绝对首尾判断：只有偏移 0 和末尾退出", () => {
+  const empty = { length: 0 };
+  equal(codeBlockSourceEdge(empty, 0), "both", "空源码同时属于首尾");
+
+  const source = { length: 12 };
+  equal(codeBlockSourceEdge(source, 0), "head", "绝对开头");
+  equal(codeBlockSourceEdge(source, 1), null, "第一行中间不放行");
+  equal(codeBlockSourceEdge(source, 11), null, "最后一行中间不放行");
+  equal(codeBlockSourceEdge(source, 12), "tail", "绝对末尾");
+});
+
+testCase("CodeMirror 加载前的 textarea 使用同一套按行判断", () => {
+  equal(bootstrapCodeBlockExit("abc", 0, "ArrowLeft"), "before", "开头 Left");
+  equal(bootstrapCodeBlockExit("abc", 0, "ArrowUp"), "before", "开头 Up");
+  equal(bootstrapCodeBlockExit("abc", 1, "ArrowLeft"), null, "中间 Left 不放行");
+  equal(bootstrapCodeBlockExit("abc", 1, "ArrowUp"), null, "中间 Up 不放行");
+  equal(bootstrapCodeBlockExit("abc", 3, "ArrowRight"), "after", "末尾 Right");
+  equal(bootstrapCodeBlockExit("abc", 3, "ArrowDown"), "after", "末尾 Down");
+  equal(bootstrapCodeBlockExit("abc", 1, "ArrowRight"), null, "中间 Right 不放行");
+  equal(bootstrapCodeBlockExit("abc", 1, "ArrowDown"), null, "中间 Down 不放行");
+  equal(bootstrapCodeBlockExit("a\nb", 1, "ArrowUp"), null, "第一行末尾但非源码开头不放行");
+  equal(bootstrapCodeBlockExit("a\nb", 3, "ArrowDown"), "after", "源码末尾 Down");
+});
+
+testCase("加载前的 textarea 在块内按原生方向键移动", () => {
+  equal(moveBootstrapCodeBlockCaret("abc", 1, "ArrowLeft"), 0, "Left");
+  equal(moveBootstrapCodeBlockCaret("abc", 1, "ArrowRight"), 2, "Right");
+  equal(moveBootstrapCodeBlockCaret("abc", 1, "ArrowUp"), 0, "首行 Up 停在行首");
+  equal(moveBootstrapCodeBlockCaret("abc", 1, "ArrowDown"), 3, "末行 Down 停到行尾");
+  equal(moveBootstrapCodeBlockCaret("abcd\nefgh", 6, "ArrowUp"), 1, "跨行 Up 保留列");
+  equal(moveBootstrapCodeBlockCaret("abcd\nefgh", 2, "ArrowDown"), 7, "跨行 Down 保留列");
+});
+
+testCase("ArrowLeft / ArrowUp / ArrowRight / ArrowDown 接到正确边界", () => {
+  const editor = readFileSync("src/editor/code-block-cm.ts", "utf8");
+  assertValue(editor.includes('key: "ArrowLeft"'), "ArrowLeft 没有接边界动作");
+  assertValue(editor.includes('key: "ArrowUp"'), "ArrowUp 没有接边界动作");
+  assertValue(editor.includes('key: "ArrowRight"'), "ArrowRight 没有接块尾动作");
+  assertValue(editor.includes('key: "ArrowDown"'), "ArrowDown 没有接块尾动作");
+  assertValue(editor.includes("option.leaveHeadCell()"), "边界键没有调用退出钩子");
+  assertValue(editor.includes("option.leaveTailCell()"), "块尾键没有调用退出钩子");
+  assertValue(!editor.includes("stayInsideCodeBlock"), "旧的“留在块内”分支仍存在");
+});
+
+testCase("NodeView 把首尾退出接到同一套文档选区事务", () => {
+  const node = readFileSync("src/editor/code-block.ts", "utf8");
+  const boundary = readFileSync("src/editor/code-block-boundary.ts", "utf8");
+  assertValue(node.includes('const leaveCodeBlock = (side: CodeBlockExitSide)'), "NodeView 没有首尾退出实现");
+  assertValue(node.includes('leaveHeadCell = () => leaveCodeBlock("before")'), "块首没有退出到块前");
+  assertValue(node.includes('leaveTailCell = () => leaveCodeBlock("after")'), "块尾没有退出到块后");
+  assertValue(boundary.includes("TextSelection.near("), "退出时没有移动 ProseMirror 选区");
+  assertValue(node.includes("codeBlockExitTransaction(view.state, pos, current, side)"), "NodeView 没有使用统一退出事务");
+  assertValue(node.includes("leaveHeadCell,"), "退出钩子没有传给 CodeMirror");
+  assertValue(node.includes("leaveTailCell,"), "块尾钩子没有传给 CodeMirror");
+  assertValue(node.includes('bootstrap.addEventListener("keydown"'), "加载中的代码块没有边界键");
+});
+
+testCase("Mermaid 图表源码框接入同一套首尾退出", () => {
+  const diagram = readFileSync("src/editor/diagram-view.ts", "utf8");
+  assertValue(diagram.includes("const leaveHeadCell = () => leaveDiagram(\"before\")"), "Mermaid 块首没有退出");
+  assertValue(diagram.includes("const leaveTailCell = () => leaveDiagram(\"after\")"), "Mermaid 块尾没有退出");
+  assertValue(diagram.includes("leaveHeadCell,"), "Mermaid 块首钩子没有传给 CodeMirror");
+  assertValue(diagram.includes("leaveTailCell,"), "Mermaid 块尾钩子没有传给 CodeMirror");
+  assertValue(diagram.includes("bootstrapCodeBlockExit"), "Mermaid 加载中的 textarea 没有边界键");
+});
+
+const boundarySchema = new Schema({
+  nodes: {
+    doc: { content: "block+" },
+    paragraph: {
+      group: "block",
+      content: "inline*",
+      parseDOM: [{ tag: "p" }],
+      toDOM: () => ["p", 0],
+    },
+    code_block: {
+      group: "block",
+      content: "text*",
+      code: true,
+      parseDOM: [{ tag: "pre" }],
+      toDOM: () => ["pre", 0],
+    },
+    text: { group: "inline" },
+  },
+});
+
+function boundaryDocument(blocks: readonly ReturnType<typeof boundarySchema.node>[]) {
+  return boundarySchema.node("doc", null, blocks);
+}
+
+function applyExit(document: ReturnType<typeof boundaryDocument>, position: number, side: "before" | "after") {
+  const node = document.nodeAt(position);
+  assertValue(node?.type.name === "code_block", "测试位置不是代码块");
+  const state = EditorState.create({
+    schema: boundarySchema,
+    doc: document,
+    selection: TextSelection.create(document, position + 1),
+  });
+  const transaction = codeBlockExitTransaction(state, position, node, side);
+  assertValue(transaction, "边界退出事务没有生成");
+  return state.apply(transaction);
+}
+
+testCase("代码块前后都有正文时，块首退到前文末尾、块尾退到后文开头", () => {
+  const before = boundarySchema.node("paragraph", null, boundarySchema.text("before"));
+  const code = boundarySchema.node("code_block", null, boundarySchema.text("x"));
+  const after = boundarySchema.node("paragraph", null, boundarySchema.text("after"));
+  const document = boundaryDocument([before, code, after]);
+  const codePosition = before.nodeSize;
+
+  const atHead = applyExit(document, codePosition, "before");
+  equal(atHead.selection.from, codePosition - 1, "块首 Left/Up 没有落到前文末尾");
+  equal(atHead.selection.$from.parent.type.name, "paragraph", "块首退出仍停在代码块里");
+
+  const atTail = applyExit(document, codePosition, "after");
+  equal(atTail.selection.from, codePosition + code.nodeSize + 1, "块尾 Right/Down 没有落到后文开头");
+  equal(atTail.selection.$from.parent.type.name, "paragraph", "块尾退出仍停在代码块里");
+});
+
+testCase("代码块是首块或末块时创建一个空段落作为真实退出落点", () => {
+  const code = boundarySchema.node("code_block", null, boundarySchema.text("x"));
+  const onlyCode = boundaryDocument([code]);
+
+  const atHead = applyExit(onlyCode, 0, "before");
+  equal(atHead.doc.childCount, 2, "首块退出没有创建落点段落");
+  equal(atHead.doc.child(0).type.name, "paragraph", "首块前面没有空段落");
+  equal(atHead.selection.from, 1, "首块退出后光标不在新段落里");
+
+  const atTail = applyExit(onlyCode, 0, "after");
+  equal(atTail.doc.childCount, 2, "末块退出没有创建落点段落");
+  equal(atTail.doc.child(1).type.name, "paragraph", "末块后面没有空段落");
+  equal(atTail.selection.from, code.nodeSize + 1, "末块退出后光标不在新段落里");
 });
 
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */

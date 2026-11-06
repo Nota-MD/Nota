@@ -24,6 +24,7 @@ pub mod debug_log;
 pub mod diagnostics;
 pub mod diff;
 pub mod document;
+pub mod draft;
 pub mod error;
 pub mod file_move;
 pub mod focus;
@@ -505,6 +506,11 @@ pub fn run() {
             commands::document::nota_doc_reload,
             commands::document::nota_doc_disk_text,
             commands::document::nota_doc_has_unsaved,
+            commands::draft::nota_draft_save,
+            commands::draft::nota_draft_list,
+            commands::draft::nota_draft_restore,
+            commands::draft::nota_draft_discard,
+            commands::draft::nota_draft_discard_document,
             commands::diff::nota_diff_texts,
             commands::table_width::nota_table_widths_get,
             commands::table_width::nota_table_widths_set,

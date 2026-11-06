@@ -49,6 +49,7 @@ interface PendingReadImageSlice {
 const remoteHtmlImageLimit = 32;
 const remoteHtmlImages = new Map<string, string>();
 const remoteHtmlImagePending = new Set<string>();
+const htmlImageFallbackClass = "nota-html-image-fallback";
 
 function remoteHtmlAddress(image: HTMLImageElement): string | null {
   const address = image.getAttribute("src")?.trim() ?? "";
@@ -116,6 +117,56 @@ function restoreRemoteHtmlImages(root: ParentNode): void {
   }
 }
 
+function clearHtmlImageFallback(image: HTMLImageElement): void {
+  const fallback = image.nextElementSibling;
+  if (fallback?.classList.contains(htmlImageFallbackClass)) fallback.remove();
+  image.hidden = false;
+}
+
+function showHtmlImageFallback(image: HTMLImageElement): void {
+  const fallback = image.nextElementSibling;
+  if (fallback?.classList.contains(htmlImageFallbackClass)) return;
+  image.hidden = true;
+  const label =
+    image.alt.trim() ||
+    image.getAttribute("title")?.trim() ||
+    t("Image");
+  const replacement = document.createElement("span");
+  replacement.className = htmlImageFallbackClass;
+  replacement.textContent = label;
+  replacement.setAttribute("role", "img");
+  replacement.setAttribute("aria-label", label);
+  image.after(replacement);
+}
+
+function observeHtmlImage(
+  image: HTMLImageElement,
+  active: () => boolean,
+): void {
+  if (image.dataset.notaImageObserved === "true") return;
+  image.dataset.notaImageObserved = "true";
+  const timeout = window.setTimeout(() => {
+    if (!active() || !image.isConnected || image.naturalWidth > 0) return;
+    showHtmlImageFallback(image);
+  }, 2200);
+  const settle = (): void => {
+    if (!active() || !image.isConnected) return;
+    window.clearTimeout(timeout);
+    if (image.naturalWidth > 0) clearHtmlImageFallback(image);
+    else showHtmlImageFallback(image);
+  };
+  image.addEventListener(
+    "load",
+    () => {
+      window.clearTimeout(timeout);
+      if (active()) clearHtmlImageFallback(image);
+    },
+    { once: true },
+  );
+  image.addEventListener("error", settle, { once: true });
+  if (image.complete) queueMicrotask(settle);
+}
+
 /** 本地图片在插入文档前先摘掉 src，避免 WebView 对相对路径发一次无用请求。 */
 function removeOutputLocalLocalImageSlice(root: DocumentFragment, documentPath: string | null): PendingReadImageSlice[] {
   const result2: PendingReadImageSlice[] = [];
@@ -138,11 +189,13 @@ function writeImageSlice(imageSlice: PendingReadImageSlice, path: string, afterW
       if (!afterWrite()) return;
       imageSlice.element.setAttribute("src", address);
       imageSlice.element.removeAttribute("data-nota-local-image");
+      observeHtmlImage(imageSlice.element, afterWrite);
     })
     .catch(() => {
       if (!afterWrite()) return;
       imageSlice.element.removeAttribute("src");
       imageSlice.element.removeAttribute("data-nota-local-image");
+      showHtmlImageFallback(imageSlice.element);
     });
 }
 
@@ -271,7 +324,10 @@ export function blockHTMLView(documentPath: string | null = null) {
               show.replaceChildren(fragment);
               show.dataset.state = "ready";
               for (const image of Array.from(show.querySelectorAll("img"))) {
-                if (image instanceof HTMLImageElement && remoteHtmlAddress(image)) {
+                if (!(image instanceof HTMLImageElement)) continue;
+                if (image.hasAttribute("data-nota-local-image")) continue;
+                observeHtmlImage(image, activeActive);
+                if (remoteHtmlAddress(image)) {
                   image.addEventListener(
                     "load",
                     () => rememberRemoteHtmlImage(image),

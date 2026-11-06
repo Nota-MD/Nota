@@ -107,6 +107,10 @@ export class fakeElement {
     return true;
   }
 
+  get ownerDocument(): unknown {
+    return (globalThis as unknown as { document?: unknown }).document ?? null;
+  }
+
   get firstChild(): fakeElement | null {
     return this.childNodes[0] ?? null;
   }
@@ -254,6 +258,7 @@ export type FakeEvent = {
 
 /** 现在拿着假焦点的那颗元素（`focus()` / `blur()` 会改它）。 */
 let fakeFocusPoint: fakeElement | null = null;
+const fakeBody = new fakeElement("body");
 
 /** 读现在拿着假焦点的那颗元素（不导出变量本身：跨模块读的是快照，不是活的）。 */
 export function currentFocusPoint(): fakeElement | null {
@@ -265,6 +270,15 @@ export function clearFocusPoint(): void {
   fakeFocusPoint = null;
 }
 
+/** Viewport-attached previews live on the fake document body. */
+export function fakeDocumentBody(): fakeElement {
+  return fakeBody;
+}
+
+export function clearFakeDocumentBody(): void {
+  fakeBody.replaceChildren();
+}
+
 /**
  * 把假 `document` 装到 `globalThis` 上。**每个测试文件开头调一次**，
  * 之后 `src/editor/math-view.ts` 里的裸 `document` 就指到它。
@@ -272,6 +286,7 @@ export function clearFocusPoint(): void {
 export function installFakedocument(): void {
   const create2 = (tag: string): fakeElement => new fakeElement(tag);
   (globalThis as unknown as { document: unknown }).document = {
+    body: fakeBody,
     createElement: create2,
     createElementNS: (ns: string, tag: string) => new fakeElement(tag, ns),
     createTextNode: (text2: string) => {

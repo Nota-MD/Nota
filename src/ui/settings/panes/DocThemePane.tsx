@@ -127,9 +127,9 @@ export function DocThemePane({
       <SettingRow label={t("Document themes folder")}>
         {/* ⚠️ 这一行故意**没有** `htmlFor`：`<button>` 不是可标注控件，
             点标签文字会意外触发一次「打开文件夹」（见 `primitives.tsx`）。 */}
-        <div className="stg-inline">
+        <div className="stg-inline stg-theme-actions">
           <ActionButton onClick={onOpenThemesDir}>{t("Document themes folder…")}</ActionButton>
-          <ActionButton onClick={onImportTheme}>{t("Import theme ZIP…")}</ActionButton>
+          <ActionButton onClick={onImportTheme}>{t("Import ZIP or CSS…")}</ActionButton>
         </div>
       </SettingRow>
     </SettingsGroup>

@@ -90,7 +90,6 @@ export type LineEnding = "lf" | "crlf";
 export interface EditorSettings {
   /** 列表 / 引用自动生成的缩进宽度。⚠️ 与 `markdown.code_indent` 是两回事。 */
   default_indent: number;
-  align_indent: boolean;
   /**
    * **段首缩进**：正文段落的第一行空出来。
    *
@@ -103,10 +102,9 @@ export interface EditorSettings {
   paragraph_indent_chars: number;
   /** Pair opening and closing brackets while typing ordinary text. */
   auto_pair: boolean;
+  /** Reveal link and image Markdown source when the caret reaches their boundary. */
+  keyboard_experience: boolean;
   emoji_autocomplete: boolean;
-  show_block_source: boolean;
-  copy_markdown_source: boolean;
-  copy_line_when_empty: boolean;
   line_ending: LineEnding;
   /** 拼写检查总开关（WebKitGTK 提供）。 */
   spellcheck: boolean;
@@ -124,7 +122,6 @@ export interface EditorSettings {
    * ⚠️ **顺序有意义**：它是用户勾选的顺序，别在读写两头各自排一次序。
    */
   spellcheck_langs: string[];
-  typewriter_keep_caret_centered: boolean;
 }
 
 /**
@@ -320,8 +317,6 @@ export interface MarkdownSettings {
   smart_quotes_single: QuoteStyle;
   smart_dashes: boolean;
   dash_style: DashStyle;
-  /** ⚠️ 只有 `smart_punctuation !== "off"` 时才有意义，界面上是灰的。 */
-  unicode_punctuation: boolean;
 
   /* 自动更正（2026-09-27 加的一格） */
   /**
@@ -572,6 +567,11 @@ export interface GeneralSettings {
   element_inspector: boolean;
   /** Reload changed Lua plugins while this developer setting is enabled. */
   lua_hot_reload: boolean;
+  /**
+   * 允许拖动选择菜单、状态栏、设置页和对话框等界面文字。
+   * 默认关闭，并且只在 developer mode 同时开启时生效。
+   */
+  select_ui_text: boolean;
   /* ⚠️ 这里**不会有**遥测、许可证、外部服务器。`settings/general.rs`
    * 里有一条测试盯着这些字符串。 */
 }

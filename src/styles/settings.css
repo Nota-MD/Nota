@@ -603,6 +603,15 @@
   min-width: 0;
 }
 
+.stg-theme-actions {
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.stg-theme-actions > .stg-select {
+  width: min(100%, 260px);
+}
+
 .stg-value {
   font-size: 0.92em;
   color: var(--fg-muted);

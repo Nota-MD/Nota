@@ -122,6 +122,21 @@ pub fn print_html_dialog_with(
     base_dir: Option<&Path>,
     版面: 版面,
 ) -> Result<()> {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_millis())
+        .unwrap_or(0);
+    let pdf = std::env::temp_dir().join(format!(
+        "nota-portal-print-{}-{stamp}.pdf",
+        std::process::id()
+    ));
+    if let Ok(_engine) = crate::pdf_render::渲染(app, html, base_dir, &pdf, 版面) {
+        let portal = linux::portal_print(&pdf);
+        let _ = std::fs::remove_file(&pdf);
+        if portal.is_ok() {
+            return portal;
+        }
+    }
     linux::对话框(app, html, base_dir, 版面)
 }
 
@@ -130,6 +145,7 @@ mod linux {
     use super::*;
     use std::cell::RefCell;
     use std::ffi::CString;
+    use std::os::fd::AsFd;
     use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 
     use gtk::glib;
@@ -140,6 +156,40 @@ mod linux {
     // 编译期报的是"没有这个方法"，而提示会指向 trait —— 一开始很容易看岔。
     // 用 `as _` 是为了不和 gtk 那边**同名**的 `PrintOperationExt` 撞上。
     use webkit2gtk::{PrintOperationExt as _, WebViewExt as _};
+
+    /// Prefer the desktop portal print dialog. On GNOME this is the GTK4
+    /// portal dialog; on other desktops it follows the system style instead
+    /// of embedding the GTK3 widget used by WebKitGTK 4.1.
+    pub(super) fn portal_print(pdf: &Path) -> Result<()> {
+        use ashpd::desktop::print::{PageSetup, PrintProxy};
+
+        let file = std::fs::File::open(pdf)
+            .map_err(|e| NotaError::other(format!("打开待打印 PDF 失败：{e}")))?;
+        tauri::async_runtime::block_on(async {
+            let proxy = PrintProxy::new()
+                .await
+                .map_err(|e| NotaError::other(format!("系统打印门户不可用：{e}")))?;
+            let prepared = proxy
+                .prepare_print(
+                    None,
+                    "Nota",
+                    Default::default(),
+                    PageSetup::default()
+                        .display_name("Nota"),
+                    None,
+                    true,
+                )
+                .await
+                .map_err(|e| NotaError::other(format!("打开系统打印对话框失败：{e}")))?
+                .response()
+                .map_err(|e| NotaError::other(format!("系统打印对话框没有返回结果：{e}")))?;
+            proxy
+                .print(None, "Nota", &file.as_fd(), Some(prepared.token), true)
+                .await
+                .map_err(|e| NotaError::other(format!("提交系统打印任务失败：{e}")))?;
+            Ok(())
+        })
+    }
 
     /// 「输出到文件」那台假打印机的名字。**必须给**，理由见文件头第 1 条。
     const PRINTER: &str = "Print to File";

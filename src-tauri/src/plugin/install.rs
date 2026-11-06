@@ -184,11 +184,11 @@ impl PluginHost {
             .ok_or_else(|| NotaError::other(format!("没有这个拓展：{id}")))?;
         let dir = self.plugins[i].manifest.dir.clone();
         if !在用户目录里(&dir) {
-            return Err(NotaError::other(format!(
-                "`{id}` 是内置拓展（{}），卸不掉——它在安装包里，删了下次启动还会回来。\
-                 要让它不起作用，用「停用」",
-                dir.display()
-            )));
+            self.plugins[i].unload();
+            self.收摊(id);
+            self.installed.mark_removed(id)?;
+            self.plugins.remove(i);
+            return Ok(());
         }
         self.plugins[i].unload();
         // ⚠️ 原来这里漏了这一步（2026-09-27 修）：卸载之后插件不在清单里了，

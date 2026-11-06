@@ -21,10 +21,7 @@ function createCurrentDecoration(position2: number, rulerInch: number): Decorati
   return Decoration.node(position2, position2 + rulerInch, { class: currentClass }, { [currentMark]: true });
 }
 
-/**
- * 按当前选区算“当前公式”。块公式认整块选中；行内公式还认光标紧贴左右边界，
- * 这样 `$x$` 刚打完时能立即显示源码和预览。
- */
+/** A formula is selected either as a node or through an adjacent text caret. */
 export function computeDecorations(
   state: EditorState,
   suppressedAt: number | null = null,
@@ -34,7 +31,8 @@ export function computeDecorations(
     if (recognizeNode(select.node) === null) return DecorationSet.empty;
     return DecorationSet.create(state.doc, [createCurrentDecoration(select.from, select.node.nodeSize)]);
   }
-  if (!select.empty || select.from === suppressedAt || !select.$from.parent.inlineContent) {
+  void suppressedAt;
+  if (!select.empty || !select.$from.parent.inlineContent) {
     return DecorationSet.empty;
   }
   const before2 = select.$from.nodeBefore;

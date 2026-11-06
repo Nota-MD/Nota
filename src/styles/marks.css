@@ -196,6 +196,135 @@
   }
 }
 
+/* ── 光标到达链接时显示的 Markdown 源文边界 ──────────────────────────────── */
+
+/* Textus-style link source: the linked run is replaced by real editable text
+   while the caret touches it, so selection, IME and undo stay native. */
+.editor-mount .ProseMirror .nota-link-source {
+  color: var(--link, var(--accent));
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.editor-mount .ProseMirror .nota-link-source-syntax {
+  color: var(--fg-muted);
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-source-wrap {
+  display: inline-grid;
+  grid-template-areas: "source";
+  position: relative;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-source-mirror,
+.editor-mount .ProseMirror .nota-keyboard-link-source {
+  grid-area: source;
+  box-sizing: content-box;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--doc-fg, var(--fg));
+  font: inherit;
+  line-height: inherit;
+  text-decoration: none;
+  white-space: pre;
+  caret-color: var(--accent) !important;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-source-mirror {
+  white-space: pre;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-source {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-source.is-composing {
+  color: var(--doc-fg, var(--fg));
+  -webkit-text-fill-color: currentColor;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-label,
+.editor-mount .ProseMirror .nota-keyboard-link-href {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-label {
+  color: var(--link);
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-href {
+  color: var(--doc-fg, var(--fg));
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-source-ruler {
+  position: absolute;
+  inset: 0 auto auto 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-source:focus,
+.editor-mount .ProseMirror .nota-keyboard-link-source:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-original {
+  display: none !important;
+}
+
+.editor-mount
+  .ProseMirror
+  .nota-keyboard-link-editing-block
+  .nota-vim-block-cursor {
+  display: none !important;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-preview::before {
+  content: "[";
+  color: var(--doc-fg, var(--fg));
+  text-decoration: none;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-preview {
+  cursor: text;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-preview::after {
+  content: "](" attr(data-nota-link-href) ")";
+  color: var(--doc-fg, var(--fg));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+  white-space: pre;
+}
+
+.editor-mount .ProseMirror .nota-keyboard-link-preview::before,
+.editor-mount .ProseMirror .nota-keyboard-link-preview::after {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 /* ── 行内标记的提示（`editor/mark-hint.ts`）─────────────────────────────────
    光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 作为真实字符画在那段文字两边。
 
@@ -223,6 +352,8 @@
      之后，WebKit 会在语法节点与相邻正文之间走不同的字形栅格化路径，星号和
      等号就会在“普通字符 / 提示字符”之间看起来忽高忽低。 */
   font: inherit !important;
+  /* Keep the source marker legible without changing the paragraph's line box. */
+  font-size: 1.08em !important;
   font-synthesis: inherit;
   letter-spacing: normal;
   line-height: inherit !important;
@@ -235,6 +366,25 @@
      WebKitGTK 单独栅格化，抗锯齿边界随底图变化，正是上下“弹一下”的来源。 */
   color: color-mix(in srgb, var(--mark-hint-fg, currentColor) 45%, var(--doc-bg));
   opacity: 1;
+}
+
+/* Keep inactive token nodes in the document so the caret has distinct
+   positions before and after each delimiter group, but collapse their visual
+   box exactly like Typedown's `.ag-hide` spans. */
+.editor-mount .ProseMirror .nota-syntax-marker.nota-syntax-hidden {
+  display: inline-block !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  vertical-align: middle !important;
+}
+
+.editor-mount .ProseMirror .nota-syntax-marker.nota-syntax-active {
+  display: contents !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  vertical-align: baseline !important;
 }
 
 /* Escaped punctuation stays literal. Its source backslash is revealed only

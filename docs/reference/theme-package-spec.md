@@ -48,8 +48,9 @@ themes/ui/
 
 ## 2.1 ZIP 导入
 
-设置中的「导入主题 ZIP…」接受上面的自包含目录，也接受官方发布包的
-`ui/<id>/…`、`ui-styles/<id>/…`、`document/<id>/…` 和 `themes/<id>/…`。
+设置中的「导入 ZIP 或 CSS…」接受上面的自包含目录，也接受官方发布包的
+`ui/<id>/…`、`ui-styles/<id>/…`、`document/<id>/…`、`themes/<id>/…`、
+`themes/ui/<id>/…` 和 `themes/document/<id>/…`。
 同一份 ZIP 可以同时包含界面主题和文档主题；允许最外层再包一层目录。
 
 导入会保留主题自己的 `assets/`、字体与许可证文件。目录名与主 CSS 同名时
@@ -57,11 +58,22 @@ themes/ui/
 真实的 `[data-ui-style="<id>"]` 为准，因此包内文件名可以是
 `breeze/plasma.css`，安装后仍以 `plasma` 出现在下拉中。官方主题给多个内置
 风格写共享覆盖时，目录名命中优先，否则选择出现最多的主作用域；CSS 注释中的
-示例选择器不参与判断。旧文档包里的 `document/dark/<name>.css` 会与浅色主文件
-合并成 `<name>-dark`。
+示例选择器不参与判断。旧文档包里的 `document/dark/<name>.css` 和
+`themes/document/dark/<name>.css` 会与浅色主文件合并成 `<name>-dark`。
 
 ZIP 路径穿越、符号链接、超过体积上限的包和缺少主 CSS 的主题会被拒绝。
 每个主题先写入暂存目录，再原子替换用户目录中的同名主题；内置只读文档主题不会被覆盖。
+
+### 2.2 Typora 原生主题
+
+「导入 Typora 主题…」可直接选择 Typora 的平铺主题目录。根目录中的多份
+`*.css`、相对 `@import`、字体与图片会原样复制，不在导入时合并或改名。导入器只写
+一份 `.nota-themes.json` 记录主题入口。单个 CSS 与同布局 ZIP 也走同一路径。
+
+加载时后端展开相对 import、内联本地资源，并优先保留字体自带的 WOFF2 data URI。
+前端的 `#write`、`html`、`body` 和无前缀选择器会稳定映射到
+`.editor-pane .editor-mount .ProseMirror`。Typora 自己的文件树、megamenu 等外壳
+选择器不会影响 Nota 外壳。
 
 主题 id 是目录名：
 
@@ -311,8 +323,8 @@ WebKitGTK 的字体 CORS 不可靠。
 当前限制：
 
 - 单份主题 CSS 最大 2 MiB；
-- 单个内联资源最大 8 MiB；
-- 一份 CSS 的内联资源合计最大 24 MiB；
+- 单个内联资源最大 32 MiB；
+- 一份 CSS 的内联资源合计最大 48 MiB；
 - 符号链接不进入主题发现，也不允许通过 canonical path 逃出主题包；
 - 外部 HTTP/HTTPS URL、绝对路径和未知协议原样保留，但不会替主题下载。
 

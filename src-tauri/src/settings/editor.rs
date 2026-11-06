@@ -47,8 +47,6 @@ pub struct Editor {
     /// 缩进块自动生成的缩进（界面上那一格右边的小预览框演示的正是它），
     /// 那一条管代码块里的缩进。两处分开放，是因为两者的合适取值不同。
     pub default_indent: u32,
-    /// 「对齐缩进」：让子项的文字与父项首行对齐，而不是固定宽度缩进。
-    pub align_indent: bool,
     /// **段首缩进**：正文段落的第一行空出来（用户 2026-09-27 要求）。
     ///
     /// ⚠️⚠️ 它是**显示层**的一件事，**一个空格都不往文件里写**。中文排版里
@@ -69,18 +67,17 @@ pub struct Editor {
     pub paragraph_indent_chars: u32,
     /// Pair opening and closing brackets while typing ordinary text.
     ///
-    /// This follows Typora's basic auto-pair option. Markdown delimiter pairing
-    /// remains separate because it interacts with inline-mark parsing.
+    /// Optional. Both bracket and Markdown delimiter pairing follow this switch;
+    /// the default is off so typing never inserts characters the user did not
+    /// press.
     pub auto_pair: bool,
+    /// Reveal Markdown source around a link or image when the caret reaches it.
+    ///
+    /// This is an optional interaction aid and defaults off. It only changes
+    /// editor decorations; the document never receives inserted brackets or URLs.
+    pub keyboard_experience: bool,
     /// 开启 Emoji 自动补全（`:sm` → 候选面板）。
     pub emoji_autocomplete: bool,
-    /// 显示当前块元素的 Markdown 源码（支持标题等块元素）。
-    /// 相当于即时渲染的反向开关：勾上后光标所在块会露出 `##` 这类标记。
-    pub show_block_source: bool,
-    /// 复制纯文本时，复制的是 Markdown 源码而不是渲染后的文字。
-    pub copy_markdown_source: bool,
-    /// 复制 / 剪切时若没有选中文字，就整行复制 / 剪切。
-    pub copy_line_when_empty: bool,
     /// 新文件的默认换行符。
     pub line_ending: LineEnding,
     /// 拼写检查开关。
@@ -117,8 +114,6 @@ pub struct Editor {
     /// 那些来自 `src-tauri/src/spellcheck.rs` 现扫出来的清单，没装的那些也列着
     /// （用户可以选，但旁边会说"这台机器上没有"）。
     pub spellcheck_langs: Vec<String>,
-    /// 打字机模式下让光标始终停在屏幕中间。
-    pub typewriter_keep_caret_centered: bool,
 }
 
 impl Default for Editor {
@@ -126,23 +121,19 @@ impl Default for Editor {
         Self {
             // 列表 / 引用的自动缩进，2 格。
             default_indent: 2,
-            align_indent: false,
             // ⚠️ 段首缩进**默认关**：这是新加的一项，默认打开等于替所有人改
             // 了排版（中文习惯是缩进两格，但 Markdown 写作的人多半已经习惯了
             // 顶格，而且导出/别处都不跟这一条）。宽度先给中文惯例的 2。
             paragraph_indent: false,
             paragraph_indent_chars: 2,
-            auto_pair: true,
+            auto_pair: false,
+            keyboard_experience: false,
             emoji_autocomplete: true,
-            show_block_source: false,
-            copy_markdown_source: true,
-            copy_line_when_empty: false,
             line_ending: LineEnding::default(),
             spellcheck: true,
             // ⚠️ 出厂**跟随系统**（空表）：给一个具体语言等于替所有人改了语言，
             // 而绝大多数人是单语的，系统语言就是他要的那个。
             spellcheck_langs: Vec::new(),
-            typewriter_keep_caret_centered: true,
         }
     }
 }
@@ -169,10 +160,27 @@ mod tests {
     }
 
     #[test]
-    fn auto_pair_defaults_on_and_old_settings_fill_it() {
-        assert!(Editor::default().auto_pair);
+    fn auto_pair_defaults_off_and_old_settings_fill_it() {
+        assert!(!Editor::default().auto_pair);
         let old: Editor = toml::from_str("emoji_autocomplete = false\n").unwrap();
-        assert!(old.auto_pair);
+        assert!(!old.auto_pair);
+        assert!(!old.keyboard_experience);
+    }
+
+    #[test]
+    fn keyboard_experience_defaults_off_and_old_settings_fill_it() {
+        assert!(!Editor::default().keyboard_experience);
+        let old: Editor = toml::from_str("auto_pair = true\n").unwrap();
+        assert!(!old.keyboard_experience);
+
+        let enabled = Editor {
+            keyboard_experience: true,
+            ..Default::default()
+        };
+        let text = toml::to_string_pretty(&enabled).unwrap();
+        assert!(text.contains("keyboard_experience = true"), "实际是：\n{text}");
+        let back: Editor = toml::from_str(&text).unwrap();
+        assert!(back.keyboard_experience, "开关没有活过一次 TOML 往返");
     }
 
     #[test]
@@ -192,10 +200,10 @@ mod tests {
     }
 
     #[test]
-    fn 老设置文件缺这两个键能补出默认() {
+    fn 老设置文件缺这个键能补出默认() {
         // 老 `settings.toml` 的 `[editor]` 表里没有这两项，读进来不许报错。
-        let back: Editor = toml::from_str("align_indent = true\n").unwrap();
-        assert!(back.align_indent);
+        let back: Editor = toml::from_str("line_ending = \"crlf\"\n").unwrap();
+        assert_eq!(back.default_indent, 2);
         assert!(!back.paragraph_indent);
         assert_eq!(back.paragraph_indent_chars, 2);
     }

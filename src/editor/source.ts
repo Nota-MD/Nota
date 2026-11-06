@@ -73,6 +73,10 @@ import type { SelectionSnapshot } from "@/editor/caret-snapshot";
 // 只为让**测试**读得到——BUG-58 就是漏了里面一条进来的，见那个文件头）。
 import { collideCarKeyPosition } from "@/editor/key-conflicts";
 import type { CommandPayload, EditorCommand, SelectionContent } from "@/editor/create";
+import {
+  clampSelectionRange,
+  type EditorSelectionRange,
+} from "@/editor/selection-range";
 // 查找：这里只要**两个类型**（接口上的 `setFind` / `onFindStatus`）。
 // 匹配的纯函数、状态、装饰都在别处：前者在 `find.ts`（一份匹配、两个适配器，
 // 见它的文件头），后者在 `source-find.ts`。
@@ -158,6 +162,10 @@ export interface SourceHandle {
   replaceAll: (text: string) => number;
   /** 当前选中的内容。形状同 `EditorHandle` 那条（`EditorPane` 才能两边通用）。 */
   selection: () => SelectionContent | null;
+  /** Current CodeMirror document offsets, including selection direction. */
+  selectionRange: () => EditorSelectionRange;
+  /** Restore a remembered caret or selection and focus the editor. */
+  restoreSelection: (selection: EditorSelectionRange) => void;
   /**
    * 跳到大纲里第 `index` 个标题。形状同 `EditorHandle` 那条
    * （`EditorPane` 才能两边通用），但**这里只用 `line`**。
@@ -594,6 +602,20 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
       const { from, to } = view.state.selection.main;
       if (from === to) return null;
       return { text: view.state.sliceDoc(from, to), html: "" };
+    },
+
+    selectionRange: () => {
+      const { anchor, head } = view.state.selection.main;
+      return { anchor, head };
+    },
+
+    restoreSelection: (selection: EditorSelectionRange) => {
+      const bounded = clampSelectionRange(selection, view.state.doc.length);
+      view.dispatch({
+        selection: { anchor: bounded.anchor, head: bounded.head },
+        scrollIntoView: true,
+      });
+      view.focus();
     },
 
     jumpToMarkTitle: ({ line }) => {

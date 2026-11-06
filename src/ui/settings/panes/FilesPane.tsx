@@ -15,7 +15,7 @@ import { useT } from "@/i18n";
 import { ActionButton, Select, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
-export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
+export function FilesPane({ settings, onChange, onClearRecent, onRestoreDrafts }: PaneProps) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
@@ -114,8 +114,8 @@ export function FilesPane({ settings, onChange, onClearRecent }: PaneProps) {
 
         <SettingRow label={t("Restore unsaved drafts")}>
           <ActionButton
-            disabled
-            title={t("Not implemented yet: this needs a separate copy made before writing to disk, while Auto Save currently writes straight to the original file — once written there is no draft left. See the note at the end of this group.")}
+            onClick={onRestoreDrafts}
+            title={t("Open recovery copies kept by Nota. Source files are not changed until you save.")}
           >
             {t("Restore drafts")}
           </ActionButton>

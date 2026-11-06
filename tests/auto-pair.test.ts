@@ -1,7 +1,10 @@
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 
-import { pairedInputTransaction } from "../src/editor/auto-pair";
+import {
+  compositionPairTransaction,
+  pairedInputTransaction,
+} from "../src/editor/auto-pair";
 import { DefaultPunctuationSettings } from "../src/editor/smart-punctuation";
 
 const schema = new Schema({
@@ -131,6 +134,65 @@ testCase("inline code is excluded from pairing", () => {
     null,
     "inline code must stay literal",
   );
+});
+
+console.log("\n[IME composition]");
+
+testCase("a bracket committed by an input method gets its partner", () => {
+  const composed = stateAt("（", 2);
+  const transaction = compositionPairTransaction(composed, "（");
+  assert(transaction, "composition pair transaction missing");
+  const next = composed.apply(transaction!);
+  assertEqual(next.doc.textContent, "（）", "committed bracket pair");
+  assertEqual(next.selection.from, 2, "caret between committed pair");
+});
+
+testCase("the partner follows the last bracket in a longer commit", () => {
+  const state = stateAt("书名《", 4);
+  const transaction = compositionPairTransaction(state, "书名《");
+  assert(transaction, "composition pair transaction missing");
+  assertEqual(state.apply(transaction!).doc.textContent, "书名《》", "last committed opener");
+});
+
+testCase("a committed closer steps over the existing partner", () => {
+  const composedOpener = stateAt("（", 2);
+  const opened = composedOpener.apply(
+    compositionPairTransaction(composedOpener, "（")!,
+  );
+  const typedCloser = opened.apply(
+    opened.tr.insertText("）", opened.selection.from),
+  );
+  const transaction = compositionPairTransaction(typedCloser, "）", undefined, [
+    { open: 1, close: 3, opener: "（", closer: "）" },
+  ]);
+  assert(transaction, "closer cleanup transaction missing");
+  const next = typedCloser.apply(transaction!);
+  assertEqual(next.doc.textContent, "（）", "only the original closer remains");
+  assertEqual(next.selection.from, 3, "caret after the pair");
+});
+
+testCase("committed brackets before a word stay literal", () => {
+  const state = stateAt("（文字", 2);
+  assertEqual(
+    compositionPairTransaction(state, "（"),
+    null,
+    "a committed opener before text must not pair",
+  );
+});
+
+testCase("a composition over a selection wraps the original text", () => {
+  const original = stateAt("看这本书吧", 2, 5);
+  const wrapped = {
+    from: 2,
+    content: original.doc.slice(2, 5),
+    sizeAfter: original.doc.content.size - 3 + 1,
+  };
+  const composed = original.apply(original.tr.insertText("《", 2, 5));
+  const transaction = compositionPairTransaction(composed, "《", wrapped);
+  assert(transaction, "wrapped composition transaction missing");
+  const next = composed.apply(transaction!);
+  assertEqual(next.doc.textContent, "看《这本书》吧", "committed text wrapped");
+  assertEqual(next.doc.textBetween(next.selection.from, next.selection.to), "这本书", "wrapped selection");
 });
 
 console.log(`\nAuto pair: ${passed} passed, ${failed} failed`);

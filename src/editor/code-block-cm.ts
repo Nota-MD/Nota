@@ -55,7 +55,15 @@
  */
 
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-import { defaultKeymap, indentWithTab, selectLine } from "@codemirror/commands";
+import {
+  cursorCharLeft,
+  cursorCharRight,
+  cursorLineDown,
+  cursorLineUp,
+  defaultKeymap,
+  indentWithTab,
+  selectLine,
+} from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
 import {
   Compartment,
@@ -84,6 +92,9 @@ import { isMathCodeLanguage } from "./math-code";
 // ⚠️ 「哪个字算一个词」的判据**与所见即所得、源码模式是同一份**（`select.ts`
 // 第一组那几个纯函数）：同一颗 `Ctrl+D` 在三处选出来的东西必须一样。
 import { wordRange, type range } from "./select";
+import { codeBlockSourceEdge } from "./code-block-boundary";
+
+export { codeBlockSourceEdge } from "./code-block-boundary";
 
 /**
  * 一级缩进的宽度。
@@ -543,6 +554,10 @@ export type codeBlockEditorOptions = {
    * 图表源码框仍可传自己的退出动作。
    */
   openHeadBackCell?: () => void;
+  /** Move the document caret before this block when Left/Up is pressed at offset zero. */
+  leaveHeadCell?: () => void;
+  /** Move the document caret after this block when Right/Down is pressed at the end. */
+  leaveTailCell?: () => void;
 };
 
 export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlockEditor {
@@ -635,6 +650,66 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
     { key: "Mod-Shift-d", run: removeWordKey },
   ];
 
+  const leaveHeadCodeBlock: KeyBinding[] = [
+    {
+      key: "ArrowLeft",
+      run: (target) => {
+        const { state } = target;
+        const selection = state.selection.main;
+        const edge = codeBlockSourceEdge(state.doc, selection.head);
+        if (selection.empty && (edge === "head" || edge === "both") && option.leaveHeadCell) {
+          option.leaveHeadCell();
+          return true;
+        }
+        return cursorCharLeft(target);
+      },
+    },
+    {
+      key: "ArrowUp",
+      run: (target) => {
+        const { state } = target;
+        const selection = state.selection.main;
+        const edge = codeBlockSourceEdge(state.doc, selection.head);
+        if (selection.empty && (edge === "head" || edge === "both") && option.leaveHeadCell) {
+          option.leaveHeadCell();
+          return true;
+        }
+        cursorLineUp(target);
+        return true;
+      },
+    },
+  ];
+
+  const leaveTailCodeBlock: KeyBinding[] = [
+    {
+      key: "ArrowRight",
+      run: (target) => {
+        const { state } = target;
+        const selection = state.selection.main;
+        const edge = codeBlockSourceEdge(state.doc, selection.head);
+        if (selection.empty && (edge === "tail" || edge === "both") && option.leaveTailCell) {
+          option.leaveTailCell();
+          return true;
+        }
+        return cursorCharRight(target);
+      },
+    },
+    {
+      key: "ArrowDown",
+      run: (target) => {
+        const { state } = target;
+        const selection = state.selection.main;
+        const edge = codeBlockSourceEdge(state.doc, selection.head);
+        if (selection.empty && (edge === "tail" || edge === "both") && option.leaveTailCell) {
+          option.leaveTailCell();
+          return true;
+        }
+        cursorLineDown(target);
+        return true;
+      },
+    },
+  ];
+
   // 自动换行那一格（设置 → 编辑器 → 「代码块 → 自动换行」，默认开）。
   // ⚠️ **必须走 CM 自己的开关，不能只靠 CSS**：`pre` 上那条
   // `html[data-code-wrap="off"] { white-space: pre }` 管不到 CM 内部
@@ -672,6 +747,8 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
           undoCancelKey,
           ...heavyDoKey,
           ...selectChooseKey,
+          ...leaveHeadCodeBlock,
+          ...leaveTailCodeBlock,
           // ⚠️ 这两条**只记账、不办事**（`记按键` 里有整段理由）：`return false`
           // 才能让浏览器照旧发出 `copy` / `cut`，那才是这两条键的正文。
           { key: "Mod-c", run: recordKeypress },

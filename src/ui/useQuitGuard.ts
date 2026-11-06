@@ -100,6 +100,10 @@ export function useQuitGuard(w: {
                   return;
                 }
               }
+            } else {
+              for (const d of dirtyOf) {
+                await api.draft.discardDocument(d.id).catch(() => undefined);
+              }
             }
           }
           await api.window.quit();

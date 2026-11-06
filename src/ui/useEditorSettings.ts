@@ -43,6 +43,7 @@ export interface editorSettings {
   selfActionMoreCorrect: boolean;
   autoLinks: boolean;
   autoPair: boolean;
+  defaultIndent: number;
 }
 
 /**
@@ -51,7 +52,8 @@ export interface editorSettings {
  */
 export function useEditorSettings(
   markdown: MarkdownSettings | undefined,
-  autoPairSetting = true,
+  autoPairSetting = false,
+  defaultIndentSetting = 2,
 ): editorSettings {
   // ── 三种行内扩展的开关（`Props.markdown` 那一条讲了为什么要这么包）──
   // ⚠️ 依赖给的是**三个布尔值**，不是 `markdown` 这个对象：设置对象每次从后端
@@ -94,6 +96,14 @@ export function useEditorSettings(
   const selfActionMoreCorrect = markdown?.auto_correct ?? true;
   const autoLinks = markdown?.autolink ?? true;
   const autoPair = autoPairSetting;
+  const defaultIndent = Math.max(1, Math.min(8, defaultIndentSetting));
 
-  return { inlineExtensions, punctuation, selfActionMoreCorrect, autoLinks, autoPair };
+  return {
+    inlineExtensions,
+    punctuation,
+    selfActionMoreCorrect,
+    autoLinks,
+    autoPair,
+    defaultIndent,
+  };
 }

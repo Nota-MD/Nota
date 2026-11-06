@@ -189,6 +189,7 @@ interface Props {
   /** 用户放入界面主题后立即重新扫描。 */
   onRefreshUiStyles: () => void;
   onImportTheme: () => void;
+  onImportTyporaTheme: () => void;
   /** 打开设置文件所在的目录（`~/.config/nota`）。通用页的「高级设置」。 */
   onOpenConfigDir: () => void;
   /** 恢复出厂默认。整份替换，新的那一份由后端返回。 */
@@ -201,6 +202,8 @@ interface Props {
    *（`ui/useSession.ts::清空最近` 里写了为什么不弹）。
    */
   onClearRecent: () => void;
+  /** Restore recovery copies from the application data directory. */
+  onRestoreDrafts: () => void;
   /**
    * 全应用那一份菜单表（**已经叠过用户的键位覆盖**），「快捷键」那一页用。
    * 见 `panes/props.ts` 里同名字段那一段。
@@ -238,9 +241,11 @@ export function SettingsDialog({
   onOpenStylesDir,
   onRefreshUiStyles,
   onImportTheme,
+  onImportTyporaTheme,
   onOpenConfigDir,
   onResetSettings,
   onClearRecent,
+  onRestoreDrafts,
   menus,
   plugins,
   pluginTrust,
@@ -349,9 +354,11 @@ export function SettingsDialog({
       onOpenStylesDir,
       onRefreshUiStyles,
       onImportTheme,
+      onImportTyporaTheme,
       onOpenConfigDir,
       onResetSettings,
       onClearRecent,
+      onRestoreDrafts,
       menus,
     };
     switch (id) {

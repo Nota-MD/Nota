@@ -167,31 +167,23 @@ import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "./math-schem
 import type { KatexOptions } from "katex";
 
 import { t } from "@/i18n";
-import { renderCommonStyle } from "./katex-runtime";
 import type { codeBlockEditor } from "./code-block-cm";
 import { createCommandTable, type ReceiveBelow } from "./math-commands";
 import { createCreateProposalBox, useOptionDrawPreview } from "./math-suggest";
 import { mathDelimiterText } from "./math-delim";
-import {
-  commonStyleCurrent,
-  commonStyleCurrentKey,
-  readDecoration,
-  recognizeNode,
-} from "./math-current";
+import { fitMathSourceSize, redrawAfterMount, watchFontMetrics } from "./math-inline-measure";
+import { mountInlinePreview, type InlinePreviewController } from "./math-inline-preview";
+import { inlineMathInputAtEdge, setInlineMathEditing, setInlineMathInputFocus } from "./math-inline-input";
+import { createEmptyMathPosition, drawLatestMath } from "./math-render-target";
+import { createInlineMathHitZones, inlineMathBoundaryEditing, inlineMathHitCaret, releaseInlineMathNodeSelection } from "./math-inline-boundary";
+import { commonStyleCurrent, commonStyleCurrentKey, readDecoration, recognizeNode } from "./math-current";
 import { exactTextSelection } from "./inline-caret";
-import {
-  drawUpstream,
-  raiseGetClearMessage,
-  readSource,
-  writeEnterSource,
-} from "./math-view-source";
+import { drawUpstream, readSource, writeEnterSource } from "./math-view-source";
+import { preserveInlineMathSourceFocus, scheduleInlineMathFocus } from "./math-inline-focus";
+import { createCodeBlockExitNavigator } from "./code-block-boundary";
+import { bindInlineMathSourceEvents, isImeComposingKey } from "./math-inline-events";
 
-export {
-  commonStyleCurrent,
-  computeDecorations,
-  recognizeNode,
-  returnPositionSelection,
-} from "./math-current";
+export { commonStyleCurrent, computeDecorations, recognizeNode, returnPositionSelection } from "./math-current";
 export { readSource, writeEnterSource } from "./math-view-source";
 
 /** 行内公式的节点名（与 plugin 里 `const c = "math_inline"` 一致）。 */
@@ -207,9 +199,6 @@ const separatorClass = "nota-math-delim";
 
 /** 渲染出来的公式那棵树的 class。 */
 const renderClass = "nota-math-render";
-
-/** 空源码占位卡的 class。 */
-const occupyPositionClass = "nota-math-note";
 
 /**
  * 悬浮预览框的 class（编辑时挂在下面那一格）。
@@ -237,8 +226,6 @@ const rulerClass = "nota-math-ruler";
    `math-view-source.ts`：不碰视图状态，能被 `tests/math-view.test.ts`
    直接喂真节点验证。 */
 
-const drawEnterRepresentNumber = new WeakMap<HTMLElement, number>();
-
 /**
  * 建一个公式的 NodeView。行内与块共用这一份，只差输入控件和写回路径。
  *
@@ -251,11 +238,7 @@ const drawEnterRepresentNumber = new WeakMap<HTMLElement, number>();
 function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptions): NodeViewConstructor {
   const inline = kindClass === "inline";
 
-  // ⚠️ 命令候选表**在这里建一次**（工厂那一层），不是每个 NodeView 建一次：
-  //    宏表（`选项.macros`）在编辑器装配时就定了，`enable_physics` 一开一关
-  //    要重启才生效（`math-macros.ts`），所以同一份表在整场会话里都成立。
-  //    判据就用"宏表空不空"——physics 那九十来条是**唯一**往 `macros` 里塞东西的
-  //    地方（`katexOptionsFor`），空表就意味着没开。
+  // The macro table is session-stable; build the command table once per view factory.
   const table2 = createCommandTable(Object.keys(option.macros ?? {}).length > 0);
 
   return (
@@ -329,13 +312,16 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     if (!inline) input.classList.add("nota-diagram-source-bootstrap");
     input.spellcheck = false;
     input.setAttribute("aria-label", t("Math Source (LaTeX)"));
-    input.placeholder = inline ? t("e.g. E=mc^2") : t("e.g. \\frac{a}{b}");
+    input.placeholder = inline ? "" : t("e.g. \\frac{a}{b}");
     if (inline) (input as HTMLInputElement).type = "text";
     else (input as HTMLTextAreaElement).rows = 1;
 
     const ruler = document.createElement("span");
     ruler.className = rulerClass;
     ruler.setAttribute("aria-hidden", "true");
+    const { before: hitBefore, after: hitAfter } = createInlineMathHitZones();
+    const inlinePreview: InlinePreviewController | null =
+      inline && view.editable ? mountInlinePreview(preview, panel) : null;
 
     const blockSourceShell = document.createElement("pre");
     blockSourceShell.className =
@@ -398,6 +384,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       },
     });
 
+    if (inline) panel.append(hitBefore);
     panel.append(
       createSeparator(),
       inline ? input : blockSourceShell,
@@ -405,26 +392,23 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       ruler,
       createProposal.element,
     );
+    if (inline) panel.append(hitAfter);
     dom.append(render);
     // ⚠️ 只读实例**不挂面板、也不挂悬浮预览**（连挂件都不给它）。元素照样
     //    建出来只是为了少写一堆 `null` 判断：没挂进文档的元素收不到任何事件，
     //    `面板.contains()` 也永远为假，而下面的 `面板该开()` 又硬性要求
     //    `view.editable`。
     if (view.editable) {
-      dom.append(panel, preview);
-      if (!inline) dom.append(numberLearnLabel);
+      dom.append(panel);
+      if (!inline) dom.append(preview, numberLearnLabel);
     }
 
     // ── 这个视图的状态（都不进文档）──────────────────────────────────
     /** 最近一次**由本视图**写进文档的源码：用来分清"这变化是我派的还是外面改的"。 */
-    let mostAfterDispatch = readSource(initialStart);
+    let mostAfterDispatch = readSource(initialStart); let decorationCurrent = readDecoration(decorations);
     /** 装饰说"当前"。⚠️ 只给下面那条"是不是刚变当前"的边沿判断用。 */
-    let decorationCurrent = readDecoration(decorations);
-    /** 输入框是不是拿着焦点。第二道保险，理由见文件头。 */
-    let boxInsideHasFocusPoint = false;
-
+    let nodeSelected = view.state.selection instanceof NodeSelection; let boxInsideHasFocusPoint = false;
     // ── 画 ────────────────────────────────────────────────────────────
-
     /**
      * 面板该不该开。⚠️ 只读实例永远是"不开"。
      *
@@ -437,12 +421,8 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     }
 
     /** 空源码时那张占位卡：文档里那一块不能是彻底空白的一片。 */
-    function createOccupyPosition(): HTMLElement {
-      const card = document.createElement(inline ? "span" : "div");
-      card.className = occupyPositionClass;
-      card.textContent = inline ? t("Empty inline math") : t("Empty math block — click to write LaTeX");
-      return card;
-    }
+    const createOccupyPosition = (): HTMLElement =>
+      createEmptyMathPosition(inline, inline ? t("Empty inline math") : t("Empty math block — click to write LaTeX"));
 
     /**
      * 往某一格（正文那格 `渲染` / 悬浮那格 `预览`）里画一次 KaTeX。
@@ -450,43 +430,16 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
      * ⚠️ `data-state` 的值是**英文**（CSS 要按它选），卡里的字才是中文——
      * 这条分界与全仓一致（同 `diagram-view.ts`）。
      */
-    function drawEnter(target: HTMLElement, source2: string): void {
-      const representNumber = (drawEnterRepresentNumber.get(target) ?? 0) + 1;
-      drawEnterRepresentNumber.set(target, representNumber);
-      target.dataset.state = "loading";
-      void renderCommonStyle(source2, target, option)
-        .then(() => {
-          if (drawEnterRepresentNumber.get(target) === representNumber) target.dataset.state = "ok";
-        })
-        .catch((e: unknown) => {
-          if (drawEnterRepresentNumber.get(target) !== representNumber) return;
-          target.dataset.state = "error";
-          target.textContent = raiseGetClearMessage(e);
-        });
-    }
+    const drawEnter = (target: HTMLElement, source2: string) => drawLatestMath(target, source2, option);
 
-    /**
-     * 按节点当前的样子重画这两格。**只碰 `渲染` 与 `预览`**，输入框一个字节都不动。
-     *
-     * ⚠️ 编辑态与非编辑态**画的地方不一样**（见文件头那张表）：编辑时正文里
-     * 显示的是源码本身（面板那三件），所以正文那格必须**空着**——两边都画的话
-     * 就成了"源码和公式一起显示"，那正是用户否掉的"搞一个框框"（行内公式
-     * 夹在文字里，凭空多出一截，后面的字全得重排）。渲染结果那时只在悬浮框里。
-     *
-     * ⚠️ 每次重画**两格都要清**：`替换` 只清当前这条分支管的那一格，另一格里
-     * 还留着上一次的 KaTeX 树（`katex.render` 是追加式的，不清就会越叠越多）。
-     */
+    /** Redraw formula targets without touching the source control. */
     function heavyDraw(): void {
-      render.replaceChildren();
-      preview.replaceChildren();
-      // `data-state` 是给 CSS 看的，每轮跟着重定，不然会留下上一轮的值。
-      render.dataset.state = "";
-      preview.dataset.state = "";
-
       if (!view.editable) {
+        render.replaceChildren(); preview.replaceChildren();
+        render.dataset.state = ""; preview.dataset.state = "";
+        delete render.dataset.source; delete preview.dataset.source;
         const upstream = drawUpstream(current);
-        render.append(upstream);
-        drawEnter(upstream, readSource(current));
+        render.append(upstream); drawEnter(upstream, readSource(current));
         return;
       }
 
@@ -494,21 +447,34 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       const emptyValue = source2.trim() === "";
 
       if (panelShouldOpen()) {
-        // 编辑态：正文那一格空着（源码由面板顶上来），渲染结果去悬浮预览。
-        // ⚠️ 空源码时摆**占位卡**而不是什么都不画：那一格是用户唯一的反馈
-        //    （`$$␣` 敲下去之后正文里那两个 `$$` 之间是空的，不必再添乱）。
+        render.replaceChildren(); render.dataset.state = ""; delete render.dataset.source;
+        // Editing keeps the body empty; empty inline math shows no preview card.
         if (emptyValue) {
-          preview.dataset.state = "empty";
-          preview.append(createOccupyPosition());
+          if (inline) {
+            preview.replaceChildren(); preview.dataset.state = "";
+            preview.dataset.source = source2;
+            inlinePreview?.setVisible(false);
+          } else if (preview.dataset.source !== source2 || preview.dataset.state !== "empty") {
+            preview.replaceChildren(createOccupyPosition());
+            preview.dataset.state = "empty";
+            preview.dataset.source = source2;
+          }
         } else {
+          if (inline) inlinePreview?.setVisible(true);
           drawEnter(preview, source2);
         }
         return;
       }
 
+      preview.replaceChildren();
+      preview.dataset.state = "";
+      delete preview.dataset.source;
       if (emptyValue) {
-        render.dataset.state = "empty";
-        render.append(createOccupyPosition());
+        if (render.dataset.source !== source2 || render.dataset.state !== "empty") {
+          render.replaceChildren(createOccupyPosition());
+          render.dataset.state = "empty";
+          render.dataset.source = source2;
+        }
         return;
       }
 
@@ -527,22 +493,23 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
      * ⚠️ 空源码时量 `placeholder`：不量的话框会缩成 0 宽，用户连点都点不到。
      */
     function followSourceChangeRulerInch(): void {
-      if (inline) {
-        ruler.textContent = editingSource() || input.placeholder || "";
-        input.style.width = `${ruler.getBoundingClientRect().width + 1}px`;
-        return;
-      }
-      if (blockCodeEditor) return;
-      // 块：`<textarea>` 自己不会长个。先归零再读 `scrollHeight`——不归零的话
-      // 上一轮设的高度就是这一轮的下限，删字时高度不会收回去。
-      const box2 = input as HTMLTextAreaElement;
-      box2.style.height = "0px";
-      const height = box2.scrollHeight;
-      // ⚠️ 假 DOM（`tests/fake-dom.ts`）量出来是 0，那时不写高度——
-      //    写一个 `NaNpx` / `0px` 进去只会把测试里的断言弄得没法读。
-      if (typeof height === "number" && Number.isFinite(height) && height > 0) box2.style.height = `${height}px`;
+      fitMathSourceSize(
+        input,
+        ruler,
+        inline,
+        editingSource(),
+        input.placeholder || "",
+        blockCodeEditor !== null,
+      );
+      inlinePreview?.reposition();
     }
 
+    const remeasureInlineAfterFonts = () => {
+      if (dom.isConnected) followSourceChangeRulerInch();
+    };
+    const stopWatchingFonts = inline
+      ? watchFontMetrics(remeasureInlineAfterFonts)
+      : () => {};
     // ── 开合 ──────────────────────────────────────────────────────────
 
     /**
@@ -556,24 +523,19 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
      * `isConnected`。
      */
     function arrangeClusterFocus(): void {
-      const clusterFocus = () => {
-        if (!panelShouldOpen()) return;
-        if (blockCodeEditor) {
+      scheduleInlineMathFocus({
+        shouldOpen: panelShouldOpen,
+        focusBlockEditor: () => {
+          if (!blockCodeEditor) return false;
           blockCodeEditor.clusterFocus();
-          return;
-        }
-        if (!input.isConnected) return;
-        // ProseMirror 在本次更新末尾还会同步一次 DOM 选区；若它刚刚把焦点
-        // 抢回正文，第二次聚焦会把焦点稳定地交给源码框。已经在框里时不重置
-        // 选区，避免用户第一帧就输入后光标被拽回末尾。
-        if (document.activeElement === input) return;
-        input.focus();
-        // 光标放到**末尾**：点一下公式通常是要接着写，放开头会让下一个字插在最前面。
-        const length = editingSource().length;
-        input.setSelectionRange(length, length);
-      };
-      queueMicrotask(clusterFocus);
-      globalThis.requestAnimationFrame?.(clusterFocus);
+          return true;
+        },
+        input: input as HTMLInputElement,
+        sourceLength: () => editingSource().length,
+        beforeInputFocus: () => {
+          if (inline) releaseInlineMathNodeSelection(view, getPos);
+        },
+      });
     }
 
     /**
@@ -587,6 +549,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       void import("./code-block-cm")
         .then(({ createCodeBlockEditor }) => {
           if (!dom.isConnected) return;
+          const exit = createCodeBlockExitNavigator(view, getPos, "math_block");
           const editor = createCodeBlockEditor({
             initialStartText: readSource(current),
             initialStartLanguage: "latex",
@@ -608,6 +571,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
             undoCancel: () => undo(view.state, view.dispatch, view),
             heavyDo: () => redo(view.state, view.dispatch, view),
             openHeadBackCell: () => view.focus(),
+            ...exit,
           });
           blockCodeEditor = editor;
           blockSourceShell.replaceChildren(editor.view.dom);
@@ -661,10 +625,16 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       refreshInlineEdge();
       const open2 = panelShouldOpen();
       dom.classList.toggle("nota-math-editing", open2);
+      if (inline) setInlineMathEditing(view.dom, open2 && boxInsideHasFocusPoint);
+      inlinePreview?.setVisible(open2);
       if (open2) {
         if (!inline) ensureBlockCodeEditor();
         followSourceChangeRulerInch();
-        if (wantToFocusPoint && view.hasFocus()) arrangeClusterFocus();
+        if (inline && editingSource().trim() === "") inlinePreview?.setVisible(false);
+        if (inline) globalThis.requestAnimationFrame?.(remeasureInlineAfterFonts);
+        if (wantToFocusPoint && (inline ? view.state.selection instanceof NodeSelection : view.hasFocus())) {
+          arrangeClusterFocus();
+        }
       } else {
         // ⚠️ 面板一收，弹窗必须跟着收：它俩是**一棵树**，留着一个没有框的
         //    候选列表，下一次开面板会看到上次那几条还挂在那儿。
@@ -703,6 +673,10 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       if (typeof position2 !== "number") return;
       const node = view.state.doc.nodeAt(position2);
       if (!node) return;
+      if (inline) {
+        setInlineMathEditing(view.dom, false);
+        setInlineMathInputFocus(view.dom, false);
+      }
 
       // 先搬选区再 focus；块级位置用 near，文档末尾退回末尾文本光标。
       const to2 = side === "after" ? position2 + node.nodeSize : position2;
@@ -714,6 +688,13 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
             return findOf instanceof TextSelection ? findOf : TextSelection.create(view.state.doc, to2);
           })();
       const tr = view.state.tr.setSelection(selection);
+      if (inline && side === "after") {
+        const resolved = view.state.doc.resolve(to2);
+        const beforeMarks = resolved.nodeBefore?.marks ?? [];
+        tr.setStoredMarks(
+          beforeMarks.length ? beforeMarks : (resolved.nodeAfter?.marks ?? []),
+        );
+      }
       tr.setMeta(commonStyleCurrentKey, selection.from);
       view.dispatch(tr);
       view.focus();
@@ -735,25 +716,31 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
 
     // ── 事件 ──────────────────────────────────────────────────────────
 
-    input.addEventListener("input", () => {
-      refreshInlineEdge();
-      followSourceChangeRulerInch();
-      // ⚠️ 光标位置要**在派发之前**读：`派发` 会同步跑一趟 `update`，
-      //    眼下那条路不会碰 `输入.value`，但把"读光标"压在它前面就不必
-      //    依赖那个前提（`?? 长度` 兜的是"框还没量过选区"那一帧）。
-      const cursor = input.selectionStart ?? input.value.length;
-      dispatch(input.value);
-      // 补全跟着**正文**走：敲 `\` 弹、接着敲字母一条条筛、删到空就收。
-      createProposal.feed(input.value, cursor);
+    bindInlineMathSourceEvents(input, {
+      updateLayout: () => {
+        refreshInlineEdge();
+        followSourceChangeRulerInch();
+      },
+      dispatchSource: dispatch,
+      feed: (value, cursor) => createProposal.feed(value, cursor),
+      preserveFocus: (cursor) => {
+        if (!inline) return;
+        preserveInlineMathSourceFocus(input as HTMLInputElement, cursor, () => {
+          setInlineMathInputFocus(view.dom, true);
+        });
+      },
     });
 
     input.addEventListener("focus", () => {
       boxInsideHasFocusPoint = true;
+      if (inline) setInlineMathInputFocus(view.dom, true);
+      if (inline) releaseInlineMathNodeSelection(view, getPos);
       sameStepPanel(false);
     });
 
     input.addEventListener("blur", () => {
       boxInsideHasFocusPoint = false;
+      if (inline) setInlineMathInputFocus(view.dom, false);
       // ⚠️ 先收弹窗再收面板：`同步面板` 里那条"关了就对齐内容"不该被
       //    一个还开着的列表挡着（视觉上就是"框没了、候选还挂在半空"）。
       createProposal.close4();
@@ -764,6 +751,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     //    类型：`输入` 是 `HTMLInputElement | HTMLTextAreaElement` 的联合，
     //    联合上按 `addEventListener` 的重载会退化成 `Event`，`e.key` 就没法读。
     (input as HTMLElement).addEventListener("keydown", (e) => {
+      if (isImeComposingKey(e)) return;
       // ⚠️ **弹窗优先于下面每一条**。开着的时候：`Escape` 是"收候选"而不是
       //    "退出编辑"、`Enter` 是"收下这条命令"而不是（行内的）"退出编辑"。
       //    顺序反过来的话这两个键全走偏——用户按 Enter 想补全，面板却关了。
@@ -784,20 +772,20 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
       if (
         inline &&
         e.key === "ArrowLeft" &&
-        input.selectionStart === 0 &&
-        input.selectionEnd === 0
+        inlineMathInputAtEdge(input as HTMLInputElement, "start")
       ) {
         e.preventDefault();
+        e.stopPropagation();
         backOutputEditEdit("before");
         return;
       }
       if (
         inline &&
         e.key === "ArrowRight" &&
-        input.selectionStart === input.value.length &&
-        input.selectionEnd === input.value.length
+        inlineMathInputAtEdge(input as HTMLInputElement, "end")
       ) {
         e.preventDefault();
+        e.stopPropagation();
         backOutputEditEdit("after");
         return;
       }
@@ -821,11 +809,16 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     panel.addEventListener("mousedown", (e) => {
       if (blockSourceShell.contains(e.target as Node | null)) return;
       if (numberLearnLabel.contains(e.target as Node | null)) return;
+      if (inline && (e.target === input || input.contains(e.target as Node | null))) return;
       // ⚠️ 必须 preventDefault：不拦的话浏览器会把焦点交给正文，
       //    面板下一帧就收走了（用户会觉得"点一下框就没了"）。
       e.preventDefault();
       if (blockCodeEditor) blockCodeEditor.clusterFocus();
-      else input.focus();
+      else {
+        input.focus();
+        const caret = inlineMathHitCaret(e.target, hitBefore, hitAfter, input.value.length);
+        if (caret !== null) input.setSelectionRange(caret, caret);
+      }
     });
 
     numberLearnLabel.addEventListener("mousedown", (e) => e.preventDefault());
@@ -906,6 +899,12 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
     refreshInlineEdge();
     // 建视图那一帧就"刚变当前"（敲 `$$␣` 那条路正是如此）→ 该排一次聚焦。
     sameStepPanel(decorationCurrent);
+    // First mount happens before insertion and selection settle: redraw once after both.
+    redrawAfterMount(() => dom.isConnected, () => {
+      if (blockCodeEditor?.view.hasFocus || document.activeElement === input) boxInsideHasFocusPoint = true;
+      sameStepPanel(false);
+      inlinePreview?.reposition();
+    });
 
     return {
       dom,
@@ -915,18 +914,18 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         // ⚠️ 这条判据是"**外面**改的"：撤销、源码模式里手改文档、插件改文档、
         //    整篇被换掉……都会走到这儿。只认这一类，因为本视图自己派的那次
         //    不能再写回源码框（每敲一个字把光标拽回开头，那个框没法用）。
-        const externalSurfaceChangeOf = newValueSource !== mostAfterDispatch;
-        current = afterUpdate;
+        const externalSurfaceChangeOf = newValueSource !== mostAfterDispatch; current = afterUpdate;
 
         if (externalSurfaceChangeOf) {
           mostAfterDispatch = newValueSource;
-          if (editingSource() !== newValueSource) {
-            replaceEditingSource(newValueSource);
-          }
+          if (editingSource() !== newValueSource) replaceEditingSource(newValueSource);
         }
 
-        const newValueDecorationCurrent = readDecoration(newDecorations);
-        const justChangeCurrent = newValueDecorationCurrent && !decorationCurrent;
+        const newValueDecorationCurrent = readDecoration(newDecorations); const nextNodeSelected = view.state.selection instanceof NodeSelection;
+        const justChangeCurrent =
+          (newValueDecorationCurrent && !decorationCurrent) ||
+          (inline && nextNodeSelected && !nodeSelected);
+        nodeSelected = nextNodeSelected;
         decorationCurrent = newValueDecorationCurrent;
 
         sameStepPanel(justChangeCurrent);
@@ -957,6 +956,10 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
         // `Calls to EditorView.update are not allowed while an update is in progress`。
         // 不防抖（见文件头）正是为了不必在这里补救。
         boxInsideHasFocusPoint = false;
+        if (inline) setInlineMathInputFocus(view.dom, false);
+        if (inline) setInlineMathEditing(view.dom, false);
+        stopWatchingFonts();
+        inlinePreview?.destroy();
         blockCodeEditor?.cancelDestroy();
         blockCodeEditor = null;
         // 弹窗里没有定时器、也没有全局监听器（它只听自己那几行元素的
@@ -983,7 +986,6 @@ function readOption(ctx: Ctx): KatexOptions {
 export const commonStyleInlineView = $view(mathInlineSchema.node, (ctx) =>
   createCommonStyleView("inline", readOption(ctx)),
 );
-
 /** 块公式的 NodeView。 */
 export const commonStyleBlockView = $view(mathBlockSchema.node, (ctx) => createCommonStyleView("block", readOption(ctx)));
 
@@ -994,4 +996,4 @@ export const commonStyleBlockView = $view(mathBlockSchema.node, (ctx) => createC
  * 后面：`$view` 的工厂要等 `SchemaReady`（插件自己会等），而 `.use()` 收数组，
  * 所以整包挂一处就够。
  */
-export const mathView = [commonStyleInlineView, commonStyleBlockView, commonStyleCurrent];
+export const mathView = [commonStyleInlineView, commonStyleBlockView, commonStyleCurrent, inlineMathBoundaryEditing];

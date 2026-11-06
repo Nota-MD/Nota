@@ -29,6 +29,9 @@ export const settingsTable: Record<string, string> = {
   "Lua extension auto-reload": "Lua 拓展自刷新",
   "Watch installed extension folders and reload after Lua or plugin.toml changes. Failed reloads keep the previous working extension.":
     "监听已安装拓展目录；Lua 或 plugin.toml 改变后自动重载。重载失败时继续使用上一个可用版本。",
+  "Selectable interface text": "界面文字可选中",
+  "Allow dragging to select labels and other interface text. Document content and input fields remain selectable either way.":
+    "允许拖动选择标签和其他界面文字。正文内容与输入框始终保持可选。",
   "Show the computed font, colors, box size and padding below the interface element under the pointer.":
     "在指针所指界面元素的下方显示实际字体、颜色、尺寸和内边距。",
   "Appearance": "外观",
@@ -36,6 +39,8 @@ export const settingsTable: Record<string, string> = {
   "Shortcuts": "快捷键",
   "Document Themes": "文档主题",
   "Interface style": "界面风格",
+  "Current interface style": "当前界面风格",
+  "Interface theme sources": "界面主题来源",
   "Editor font size": "编辑区字号",
   "Light/Dark": "明暗",
   "Light": "浅色",
@@ -77,9 +82,10 @@ export const settingsTable: Record<string, string> = {
   "Current {0}: {1}. The appearance of the whole interface follows.": "当前 {0}：{1}。界面各处外观随之变化。",
   "Accent color": "主题色",
   "Select Color": "选择颜色",
-  "Import theme package": "导入主题包",
-  "Theme package (.zip)": "主题包（.zip）",
-  "Import theme ZIP…": "导入主题 ZIP…",
+  "Import theme package or Typora CSS": "导入主题包或 Typora CSS",
+  "Theme package or CSS": "主题包或 CSS",
+  "Import Typora theme folder": "导入 Typora 主题文件夹",
+  "Import ZIP or CSS…": "导入 ZIP 或 CSS…",
   "Imported theme package: {0}": "已导入主题包：{0}",
   "Could not import the theme package: {0}": "导入主题包失败：{0}",
   "Follow the style": "跟随风格",
@@ -123,9 +129,7 @@ export const settingsTable: Record<string, string> = {
   // ⚠️ 2026-10-09 加的那一格：默认关着（关＝正文列铺满编辑区），开着才画下面
   // 那根滑杆。见 `settings/mod.rs::limit_text_width` 那段。
   "Limit text width": "限制正文宽度",
-  "Aligned indent": "对齐缩进",
   "Default indent": "默认缩进",
-  "Keep the cursor in the middle of the screen": "让光标始终停在屏幕中间",
   "First-line indent": "段首缩进",
   "Spell check": "拼写检查",
   // 拼写检查那一页底下那一格（2026-10-10 加的语言，当天晚些从"一门"改成"多门"）。
@@ -148,9 +152,6 @@ export const settingsTable: Record<string, string> = {
   "Imported {0}": "已导入 {0}",
   "Nota does not include dictionaries. Install a system dictionary (for example, {0}), import a ZIP archive containing an .aff and a .dic file, or place both files in the folder above.":
     "Nota 不附带词典。可安装系统词典（例如 {0}）、导入同时包含 .aff 与 .dic 文件的 ZIP 压缩包，或将这两个文件放入上述目录。",
-  "Show the Markdown source of the current block": "显示当前块的 Markdown 源码",
-  "Copy/cut the whole line when nothing is selected": "没有选中文字时整行复制 / 剪切",
-  "Copy Markdown source when copying as plain text": "复制纯文本时复制 Markdown 源码",
   "Emoji autocomplete": "Emoji 自动补全",
   "Default export folder": "默认导出文件夹",
   "Export settings": "导出设置",
@@ -197,9 +198,9 @@ export const settingsTable: Record<string, string> = {
   "5 minutes": "5 分钟",
   "Restore unsaved drafts": "恢复未保存的草稿",
   "Restore drafts": "恢复草稿",
+  "Open recovery copies kept by Nota. Source files are not changed until you save.": "打开 Nota 保留的恢复副本。在保存之前不会改动原文件。",
   "Clear recent files history": "清除历史文件记录",
   "Clear records": "清除记录",
-  "Not implemented yet: this needs a separate copy made before writing to disk, while Auto Save currently writes straight to the original file — once written there is no draft left. See the note at the end of this group.": "尚未实现：此功能需要在写入磁盘前保留一份独立副本，而自动保存目前直接写入原文件。写入完成后不会保留草稿。详见本组末尾的说明。",
   "Remember recent files and folders": "记录历史文件和文件夹",
   "Which files to show": "显示哪些文件",
   "Show only Markdown and plain text": "只显示 Markdown 和纯文本",
@@ -336,7 +337,6 @@ export const settingsTable: Record<string, string> = {
   "Dash glyph": "破折号的字形",
   "-- → –, --- → —": "-- → –，--- → —",
   "-- and --- both → —": "-- 和 --- 都 → —",
-  "Allow converting Unicode punctuation": "允许转换 Unicode 标点",
   "Auto-correct": "自动更正",
   "Auto-correct misspelled English words": "自动更正英文错拼",
   "Show line numbers": "显示行号",
@@ -386,5 +386,12 @@ export const settingsTable: Record<string, string> = {
   "Play the alarm": "响警报",
   "Charge per minute away": "离开 1 分钟扣多少",
   "Auto pair": "自动配对",
-  "Pair brackets and quotes while typing": "输入时补全括号和引号",
+  "Keyboard experience optimization": "键盘体验优化",
+  "Reveal link and image source at the caret": "光标到达链接和图片时显示源码",
+  "Show Markdown around links and images when the caret reaches them. Clicking a link also stays in the editor instead of opening the link dialog.":
+    "光标进入链接或图片附近时显示 Markdown 源码；点击链接也留在编辑器中，不打开链接设置框。",
+  "Automatic uses the recommended editor size of {0}px. Dragging the slider switches to Custom.":
+    "自动档采用推荐的编辑区字号 {0}px；拖动滑杆会切换到自定义。",
+  "Pair brackets, quotes and Markdown markers while typing":
+    "输入时补全括号、引号和 Markdown 符号",
 };

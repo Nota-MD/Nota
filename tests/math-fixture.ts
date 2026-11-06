@@ -40,8 +40,19 @@ import type { Transaction } from "@milkdown/kit/prose/state";
 import type { Decoration, NodeView } from "@milkdown/kit/prose/view";
 import { katexOptionsCtx, mathBlockSchema, mathInlineSchema } from "@milkdown/plugin-math";
 
-import { commonStyleBlockView, commonStyleInlineView, computeDecorations } from "../src/editor/math-view";
-import { fakeElement, currentFocusPoint, clearFocusPoint, installFakedocument } from "./fake-dom";
+import {
+  commonStyleBlockView,
+  commonStyleInlineView,
+  computeDecorations,
+} from "../src/editor/math-view";
+import { commonStyleCurrentKey } from "../src/editor/math-current";
+import {
+  fakeElement,
+  currentFocusPoint,
+  clearFakeDocumentBody,
+  clearFocusPoint,
+  installFakedocument,
+} from "./fake-dom";
 
 installFakedocument();
 
@@ -139,12 +150,14 @@ export function createFakeView3(
   selected: boolean,
   nodeType: PMNode["type"],
 ) {
+  const editorDom = new fakeElement("div");
   let state = EditorState.create({
     doc,
     selection: selected ? NodeSelection.create(doc, position2) : TextSelection.create(doc, position2),
   });
   const perspective: { view: NodeView | null } = { view: null };
   const view = {
+    dom: editorDom,
     editable: !onlyRead,
     // ⚠️ 与真 PM 一致：`hasFocus()` = "焦点就在 `view.dom` 上"。这里用假 DOM 的
     //    全局焦点代表它——源码框拿着焦点时，正文就不算拿着。
@@ -154,13 +167,17 @@ export function createFakeView3(
       return state;
     },
     dispatch: (tr: Transaction): void => {
+      const suppressedAt = tr.getMeta(commonStyleCurrentKey) as number | undefined;
       state = state.apply(tr);
       const newValueNode = state.doc.nodeAt(position2);
       // ⚠️ 节点被删掉、或者位置上换成了**别的类型**时，真 ProseMirror 是把
       //    这个视图 `destroy` 掉另建一个（`updateNextNode` 认的是同一个类型），
       //    所以这里绝不能拿新节点去喂 `update`。
       if (!newValueNode || newValueNode.type !== nodeType) return;
-      const decoration = computeDecorations(state).find(position2, position2 + newValueNode.nodeSize) as readonly Decoration[];
+      const decoration = computeDecorations(
+        state,
+        suppressedAt ?? null,
+      ).find(position2, position2 + newValueNode.nodeSize) as readonly Decoration[];
       perspective.view?.update?.(newValueNode, decoration);
     },
   };
@@ -168,8 +185,16 @@ export function createFakeView3(
 }
 
 /** 建一个 NodeView（真构造器，只是喂进去的 view 与 document 是假的）。 */
-export function create(node: PMNode, position2: number, onlyRead = false, selected = true, tailParagraph = true) {
+export function create(
+  node: PMNode,
+  position2: number,
+  onlyRead = false,
+  selected = true,
+  tailParagraph = true,
+  inlineAffixes: { before?: string; after?: string } = {},
+) {
   clearFocusPoint();
+  clearFakeDocumentBody();
   // ⚠️ 默认在块后面留一段正文：`退出编辑` 把光标搬到"块后面"时，落在文本块里
   //    才是常规情形（`尾段 = false` 用来试"公式块是文档最后一块"那条路）。
   //    行内那颗在段落里，后面有没有别的段落都一样。
@@ -179,15 +204,22 @@ export function create(node: PMNode, position2: number, onlyRead = false, select
       ? tailParagraph
         ? [paragraph("公式："), node, paragraph("后面")]
         : [paragraph("公式："), node]
-      : [paragraph("公式："), paragraph(node), paragraph("后面")],
+      : [
+          paragraph("公式："),
+          paragraph(inlineAffixes.before ?? "", node, inlineAffixes.after ?? ""),
+          paragraph("后面"),
+        ],
   );
-  const assertValueNode = doc.nodeAt(position2);
-  if (!assertValueNode) throw new Error(`位置 ${position2} 上没有节点`);
-  const { view, perspective, getState } = createFakeView3(doc, position2, onlyRead, selected, assertValueNode.type);
-  const decoration = computeDecorations(getState()).find(position2, position2 + assertValueNode.nodeSize) as readonly Decoration[];
+  const formulaPosition = node.type.name === "math_inline"
+    ? position2 + (inlineAffixes.before?.length ?? 0)
+    : position2;
+  const assertValueNode = doc.nodeAt(formulaPosition);
+  if (!assertValueNode) throw new Error(`位置 ${formulaPosition} 上没有节点`);
+  const { view, perspective, getState } = createFakeView3(doc, formulaPosition, onlyRead, selected, assertValueNode.type);
+  const decoration = computeDecorations(getState()).find(formulaPosition, formulaPosition + assertValueNode.nodeSize) as readonly Decoration[];
   const ConstructCreate = assertValueNode.type.name === "math_block" ? createBlockView : createInlineView;
-  perspective.view = ConstructCreate(assertValueNode, view as never, () => position2, decoration, null as never);
-  return { view, perspective, getState, position2 };
+  perspective.view = ConstructCreate(assertValueNode, view as never, () => formulaPosition, decoration, null as never);
+  return { view, perspective, getState, position2: formulaPosition };
 }
 
 /** ⚠️ 给读的人：`假元素` 在 `fake-dom.ts` 里，这里只 re-export 一下——

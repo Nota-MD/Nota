@@ -524,17 +524,18 @@ root.style.setProperty("--ui-font-size", `${settings.ui_font_size}px`);
 `--icon-<逻辑名>: url(...)`；没声明的图标继续用 Nota 默认图。后端会把
 `themes/ui/` 或 `themes/document/` 根目录内的相对资源转成 data URI，所以不碰 WebKit 的
 `asset:` 字体限制。允许在根内用 `../` 共享；逃出主题根、绝对路径、未知后缀、
-单件超过 8 MiB 或合计超过 24 MiB 的那一条资源会保持原样（不生效），不会让整份
+单件超过 32 MiB 或合计超过 48 MiB 的那一条资源会保持原样（不生效），不会让整份
 主题失败。
 
 文档主题也在自己的 `themes/document/` 根内使用同一套相对 `url()` 规则，适合放
 `@font-face`；但文档主题仍然**不能**覆盖界面图标，界面资源归 `themes/ui/`。
 
-📌 **2026-10-21 起只接受自包含主题包**：`themes/document/<id>/theme.css` 或
-`themes/ui/<id>/theme.css`，资源与主 CSS 放在同一主题目录。根目录里的扁平
-`<id>.css` 不再接受。文档主题可以用 Typora 常见的 `#write`
-选择正文根；限域器会把它映射到 `.editor-pane .ProseMirror`。完整规范见
-`docs/reference/theme-package-spec.md`。
+📌 **2026-11-01 起文档主题直接兼容 Typora 布局**：外观页和文档主题页可选择平铺
+Typora 主题文件夹、单个 CSS，或同布局 ZIP。导入器原样复制 CSS、`@import`、字体与
+图片，只写 `.nota-themes.json` 登记入口；不会把第三方 CSS 改写成 Nota 格式。
+传统 Nota 包仍使用 `themes/document/<id>/theme.css`。加载时 `#write` / `html` /
+`body` 会映射到 `.editor-pane .editor-mount .ProseMirror`。完整规范见
+`docs/reference/theme-package-spec.md` 与 `docs/reference/typora-theme-test-2026-11-01.md`。
 
 ⚠️ **规矩只有三条**，全在 `styles/ui-style.ts` 的文件头：
 ①选择器从 `[data-ui-style="<你的 id>"]` 起头（**不限域是有意的**——界面风格要改的
@@ -736,17 +737,18 @@ TS 联合类型三处）；这一节写的是**文档主题**——一份 CSS �
 | 界面风格（§5） | **整个应用** | `styles/theme.css` 的变量 |
 | 文档主题（本节） | **只有编辑区** | `<编辑区>` 里的排版与配色 |
 
-⛔ **不兼容也不内置外部编辑器的主题**（版权）。不要去扫描它们自己的主题目录
-（`~/.config/<外部编辑器>/themes/` 这类），也不要把它们自带的主题抄进来。
+⛔ **不随包内置外部编辑器的主题**（版权），也不主动扫描 Typora 的安装/配置目录。
+用户可以自己选择本机 Typora 主题目录并通过导入器复制到 Nota 数据目录；第三方 CSS
+不会进入仓库或安装包。
 
 ### 放哪儿
 
 **只有一个目录**：`~/.config/nota/themes/document/`（**按 XDG 算**，`~/.config` 只是默认值）。
 主题包的目录名就是 **id**：`minimal/theme.css` → id `minimal`。
 
-⚠️ **id 的形状有硬约束**：只放行 ASCII 字母数字与 `-` `_`（长度 1–64），
+⚠️ **内部 id 的形状有硬约束**：只放行 ASCII 字母数字与 `-` `_`（长度 1–64），
 因为后端是拿它拼路径的（`<主题目录>/<id>/theme.css`）。**中文文件名用不了**——
-这是有意的取舍，显示名写在文件里，文件名只是个键。
+这是有意的取舍；Typora 集合的原始 CSS 文件名和显示名原样保留，内部 id 由导入器生成。
 ⚠️ 同名**覆盖内置**（想改「极简」就复制一份 `minimal.css` 出来改，升级不会冲掉）。
 ⚠️ 菜单栏「主题 → 打开主题文件夹…」会把目录建出来。
 ⚠️ **不用重启**：打开主题菜单或点击外观页的刷新按钮会重新扫描目录。

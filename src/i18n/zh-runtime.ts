@@ -166,6 +166,11 @@ export const moveLineTable: Record<string, string> = {
   "{0} links": "{0} 条链接",
   "Note relationship graph with {0} notes and {1} links": "笔记关系图，共 {0} 篇笔记、{1} 条链接",
   "No linked notes were found in this workspace.": "这个工作区里没有找到可显示的笔记关系。",
+  "No unsaved drafts were found.": "没有找到未保存的草稿。",
+  "Restore {0} unsaved draft(s)? Each draft opens in a tab; source files are not changed until you save.": "要恢复 {0} 份未保存草稿吗？每份草稿都会在新标签页中打开；保存前不会改动原文件。",
+  "Restored {0} draft(s).": "已恢复 {0} 份草稿。",
+  "Restored {0} of {1} drafts.": "已恢复 {1} 份草稿中的 {0} 份。",
+  "Restore": "恢复",
 
   // 2026-09-28 补：下面这几句以前是裸字面量（或者模板串），从没进过表——
   // 翻转那天逐条揪出来的漏网。⚠️ 它们**真的会弹到用户脸上**，而闸门从前

@@ -113,6 +113,11 @@ fn 浏览器候选() -> Vec<(String, Vec<String>)> {
             "chromium",
             "chromium-browser",
             "microsoft-edge",
+            "/opt/google/chrome/chrome",
+            "/opt/google/chrome-beta/chrome",
+            "/opt/google/chrome-unstable/chrome",
+            "/opt/microsoft/msedge/msedge",
+            "/opt/chromium/chromium",
         ]
         .iter()
         .map(|s| (*s).to_string())
@@ -302,5 +307,20 @@ mod tests {
         assert!(路径.is_dir());
         drop(目录);
         assert!(!路径.exists(), "临时 HTML 与浏览器 profile 都必须清掉");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_browser_candidates_include_absolute_install_paths() {
+        let candidates = 浏览器候选();
+        for expected in [
+            "/opt/google/chrome/chrome",
+            "/opt/microsoft/msedge/msedge",
+        ] {
+            assert!(
+                candidates.iter().any(|(program, _)| program == expected),
+                "missing {expected}: {candidates:?}"
+            );
+        }
     }
 }

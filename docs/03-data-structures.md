@@ -280,7 +280,7 @@ pub struct Settings { … }
 |---|---|---|---|
 | `ui_style` | `String` | `"adwaita"` | **轴一**：界面风格的 **id**（设计语言）。⚠️ **2026-09-26 起是 `String` 不是枚举**（用户：「本来主题应该就是拆成多个文件的。加一个就是允许用户导入」）——取值**开放**。⚠️ **2026-10-21 起安装包只随附 Adwaita，并移除自动匹配系统桌面主题**；旧值 `auto` 兼容映射到 Adwaita。Yaru、GitHub、Breeze、macOS、Windows、CDE 等从 `Nota-themes` 安装。⚠️ **与 `document_theme` 同一个口径**：认不出的 id **不退回默认档**，`<html>` 上照写，外壳落到 `:root` 默认样式——「外观」页把它补成 `（找不到「…」）` 选项，让这件事看得见。完整理由在 `settings/mod.rs::DEFAULT_UI_STYLE` |
 | `ui_mode` | `UiMode` | `UiMode::Auto` | **轴二**：明暗 |
-| `document_theme` | `String` | `""` | **轴三**：文档主题的 **id**（**就是主题包目录名**，如 `minimal`）；**空串 = 无主题**。⚠️ 它是**键不是显示名**——内置 Adwaita 两档的对应关系在 `themes.rs` 的 `BUILTIN` 表里。⚠️ 老机器上这个字段可能是**悬空 id**：此时主题静默退回"无主题"，设置页会把 id 原样显示并注明它没生效。⚠️ 除内置外**只在 `~/.config/nota/themes/document/` 里扫**（见 §9.4），所以换机器、或者文件被删了，也可能"这个主题没了" |
+| `document_theme` | `String` | `""` | **轴三**：文档主题的 **id**；**空串 = 无主题**。内置 Adwaita 使用固定 id，用户主题使用目录 id 或 Typora 集合清单里的稳定 id。⚠️ 悬空 id 会退回无主题并在设置页标注。⚠️ 除内置外**只在 `~/.config/nota/themes/document/` 里扫**：传统包读 `<id>/theme.css`，Typora 集合读 `.nota-themes.json` |
 | `ui_font_size` | `u32` | `15` | 界面字号（px）。**文档字号是文档主题的事，不在这里** |
 | `content_width` | `u32` | `760` | 内容区宽度上限（px），即「正文宽度」。⚠️ 它只管**宽度**，不管对齐——正文列靠左，见 `docs/04` 的编辑器一节。⚠️ **2026-10-09 起只有 `limit_text_width` 开着时才生效** |
 | `limit_text_width` | `bool` | `false` | **限制正文宽度**（2026-10-09 新加）。⚠️ **默认关**＝`content_width` 不生效、正文列**铺满编辑区**（左右各 56px 装订线，两边一样多）。来由是用户那天报的「这个文字没有完全铺满屏幕。右侧还是有空隙。不应该有。应该两边边距一样。」：在那之前 `content_width` 一直生效、而正文列又是**贴左**的（用户 2026-09-25 明确要过「不是左对齐呒」），窗口一宽右边就剩一大条空档。⚠️ **做成独立开关、而不去改 `content_width` 的默认值**：老设置文件里躺着旧默认 `content_width = 760`，改默认值对它一点用都没有；"关掉这个开关"是一条不用碰用户文件就能生效的路。⚠️ **副作用（有意）**：正文列里那些本来就是 `width: 100%` 的块——表格（`table-layout: fixed`）、代码块、引用、图——跟着一起变宽；它们本来就是"正文列多宽就多宽"。⚠️ 这一档**是我按他那两句话拍的**，还等他拍"要不要改成居中"（记在 `docs/07` 第 107 项） |
@@ -344,6 +344,14 @@ pub struct Settings { … }
 `getComputedStyle()` 的实际字体、字号、字重、行高、前景色、背景色、盒尺寸、
 内边距和圆角，并把信息放在目标下方；下方空间不足时翻到上方。提示层是 body
 portal 且 `pointer-events: none`，不会参与命中测试，也不改变文档内容。
+
+### 5.1f 开发者界面文字选择
+
+`[general].select_ui_text` 默认 `false`，只在 `debug_mode = true` 时生效。
+前端 `useSelectableUiText()` 把两值同时为真写成根元素
+`data-ui-text-selectable="true"`；CSS 据此临时放开菜单、状态栏、设置页、对话框
+等外壳文字的拖动选择。关闭开发者模式或该开关后属性变回 `"false"`，外壳恢复
+不可选。正文、CodeMirror 与表单控件不受这个开关控制，两种状态下始终可编辑和复制。
 
 ### 5.2 为什么是四条轴而不是一条
 
@@ -655,12 +663,24 @@ ui_mode = "dark"
 
 ### 5.6d `[editor]` 里的基础括号配对
 
-📌 **2026-11-01**：新增 `auto_pair: bool`，默认 `true`。它控制正文基础括号与
+📌 **2026-11-01**：新增 `auto_pair: bool`，2026-11-02 起默认 `false`。它控制正文基础括号与
 引号配对：半角/常用全角括号、直引号或智能弯引号、补闭符、只跨插件插入的闭符、
-空对退格、选区包裹和 Tab/Shift+Tab 跨越。代码、链接、URL 与输入法组字期间不介入。
+空对退格、选区包裹和 Tab/Shift+Tab 跨越。代码、链接、URL 与输入法 preedit 期间不介入；
+`compositionend` 后等 ProseMirror 收回上屏文本，再按同样规则补闭符、越过闭符或包裹原选区。
 
-它**不是**旧 `smart_symbols` 的复活：引号继续由智能标点处理，`*` `_` `~`
-反引号 `$` 等 Markdown 定界符扩展配对的默认值仍与 Typora 一样是关闭。改这一格
+📌 **2026-11-05**：新增 `keyboard_experience: bool`，默认 `false`。开启后
+`editor/keyboard-experience.ts` 在链接光标内部或左右端点显示 Markdown 源码边界，
+图片在 NodeSelection 或相邻空光标时显示源码框；只加 ProseMirror decoration，
+不修改文档。旧设置文件缺这个键时由 `serde(default)` 补成关闭。
+
+同一批还接上了两格旧设置：`default_indent` 控制正文中 Tab 插入的空格数（1–8，
+默认 2）；`line_ending` 控制**新文件**首次保存时的 LF / CRLF。已有文件始终保留
+自己的换行风格。`align_indent`、`show_block_source`、`copy_markdown_source`、
+`copy_line_when_empty`、`typewriter_keep_caret_centered` 与 `unicode_punctuation`
+都没有消费者，已从设置结构与界面移除；旧设置文件里的未知键由 Serde 忽略。
+
+它**不是**旧 `smart_symbols` 的复活：引号继续由智能标点处理，同一个开关也授权
+`*` `_` `~` 反引号 `$` 等 Markdown 定界符配对；关闭时这些符号一律只写用户按下的字符。改这一格
 需要重建编辑器，因为输入插件是建实例时注册的。
 
 > ⚠️ **2026-10-30**：`smart_symbols` 与整条自动配对插件已经移除。旧
@@ -880,6 +900,15 @@ PDF / HTML 两档 / 图片是固定项，不在这个数组里，也不能通过
 不一致的症状是"滚轮能滚到设置里填不出来的值"。⚠️ **滚轮是热路径**，所以
 `useZoom.ts` 的做法是**立刻改、攒 400ms 再落盘**（每一格都 `updateSettings` 会把设置文件写穿）。
 
+⚠️ **自定义字号同时接管 `.editor-pane` 的基准字号**：导入的 Typora 主题常写
+`html { font-size: 11pt }`，限域后这条会落到编辑区根上；只覆盖
+`--doc-font-size` 仍会被这个绝对字号截断。`data-editor-font-size="custom"`
+因此同时设置编辑区根字号和正文相对倍数，自动档则把控制权完整交还主题。
+
+“自动（推荐）”不再展示上一次自定义值。推荐字号由
+`recommendedEditorFontSize = 15` 统一定义并直接显示；拖动滑杆会切到自定义，
+旧自定义值仍保留在 `ui_font_size`，但不会冒充推荐值。
+
 ---
 
 ### 5.6d `[markdown]` 里的两组：智能标点（**接线**）与自动更正（**新字段**）
@@ -1025,6 +1054,24 @@ ext4 要有 statx 才有 btime），**不是"排到最后"**：排到最后的�
 到 `[files]`），也就是**口径随请求走**。理由与"先改内存再写盘"那条有关：用户在下拉里换成
 "按修改时间"之后紧接着发出的那一次取树请求，完全可能赶在设置到达宿主**之前**，症状是
 "拨了没反应、过一会儿自己好了"。完整的取舍写在 `src/ui/tree-options.ts` 的文件头与 `docs/07` 第 85 项。
+
+### 5.6j 可恢复草稿：`data_dir()/drafts/`
+
+草稿不是 `settings.toml` 的一部分，也不写进用户文档目录。每个文档在创建时获得一个
+不对用户展示、跨进程稳定的 `draft_id`；脏正文在停笔 1.5 秒后或连续输入满 5 秒时
+写成独立 JSON 恢复副本，保留原路径、标题、编码、换行符与时间。
+
+三条边界：
+
+1. **恢复不改源文件**：原路径仍存在时先打开该文件，再把草稿正文放进编辑器并保持
+   `dirty`；原路径缺失或不可读时创建未命名脏标签。只有用户再次保存才写源文件。
+2. **明确丢弃会真删除**：保存、从磁盘重载、删除文件时清理草稿；“丢弃并关闭”与
+   “不保存直接退出”也清理对应副本。异常退出、崩溃或按窗口关闭流程取消时保留。
+3. **坏副本不拖垮有效副本**：读取时逐文件校验，坏 JSON 跳过；最多保留 100 份，
+   每次写入先写同目录临时文件再替换。
+
+入口在「设置 → 文件 → 保存与恢复 → 恢复草稿」。恢复会列出未打开副本并在确认后
+全部接回标签；列表按更新时间倒序，已恢复到当前标签的副本不会重复列出。
 
 ## 6. `Capability`：插件能申请什么
 
@@ -1333,6 +1380,7 @@ pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
 | `$XDG_DATA_HOME/nota/plugins/` | 用户自装插件（**覆盖内置同名**） | `paths::user_plugins_dir()` |
 | 资源目录的 `plugins/`，debug 构建额外加仓库根的 `plugins/` | 内置插件 | `paths::builtin_plugins_dirs()` |
 | `$XDG_CONFIG_HOME/nota/themes/document/<id>/theme.css` | **用户文档主题包**。应用启动时自动创建 `themes/document`；文档主题入口只打开这里 | `paths::user_themes_dir()` |
+| `$XDG_CONFIG_HOME/nota/themes/document/<collection>/.nota-themes.json` | **Typora 原生主题集合**。集合目录内原样保存多个根 CSS、`@import`、字体和图片；清单只登记主题 id、显示名与入口 CSS | `theme_import::typora` |
 | `$XDG_CONFIG_HOME/nota/themes/ui/<id>/theme.css` | **用户界面主题包**。应用启动时自动创建 `themes/ui`；外观页的界面主题入口只打开这里 | `paths::user_ui_styles_dir()` |
 | `$XDG_CONFIG_HOME/nota/plugins.toml` | **插件账本**：哪些插件开着、当初装进来时验签验出了什么（见 §7.6）。⚠️ **删掉它 = 恢复出厂**（这一点是刻意的）。⚠️ 与 `settings.toml` 分开两个文件：那份是一张**标量表**，这一份是一张 **id 名单**，形状与生命周期都不同 | `paths::plugin_state_file()` |
 | `$XDG_CONFIG_HOME/nota/image-upload.toml` | **图床上传的配置**（2026-09-26 第二批）：地址 / 方法 / 字段名 / 请求头 / 从响应取哪一格 / 内容类型 / 网络图片的字段名 / 总开关。⚠️ **明文，文件 `0600`、目录 `0700`**（`OpenOptions::mode` 建，不是"先建再 chmod"）——「请求头」那一栏里放的是 `Authorization: Bearer …`。⚠️ **它为什么不并进 `settings.toml`**：那一份走裸 `fs::write`、权限跟着 umask 走（通常 0644），而用户会同步它、备份它、排查问题时贴给别人看。⚠️ **这不是「安全存储」，只是「不给同机器的其他用户看」**——谁能读用户的家目录谁就能读到它（与 `plugin-settings/` 那句同义）。⚠️ **不预设任何服务商** | `paths::image_upload_file()` |
@@ -1438,7 +1486,7 @@ Shift_JIS、UTF-16 等不再被强行当 UTF-8；编码名也会在状态栏统�
 | 1 | ~~活动文档的后端副本可能与前端不一致~~ **✅ 已修（BUG-6）** | 原先是 `api.doc.setActive` **从未被调用**。现在 `App.tsx` 有一段盯 `activeId` 的 effect 去喊它，`open` / `new` / `close` 几条路一起兜住 | 当时的影响：插件读的是**后端 active**，用户点了别的标签后插件可能读错文档。现在不会再分叉了 |
 | 2 | ~~插件改了**非活动**文档时，改动会丢~~ **✅ 已修（backlog 第 33 项）** | 原先是 `nota:document-changed` 的处理器见 `p.id !== activeId` **直接丢弃**。现在非活动那份走 `refreshDocs()` 把 state 拉齐 | 当时的影响：下一次去抖 sync 会把旧文本推回后端、覆盖插件的改动 |
 | 3 | ~~**`parseMarkdown()` 没有调用点**~~ **✅ 已结清（2026-10-04，`docs/07` 第 31 项）** | `create.ts` 导出了它、却全仓没有调用点。**处置是删掉它**，不是补调用点：`replaceAll` 内部走的就是同一个解析器（remark 宽容、不抛错），"先手动解析一遍再把结果扔掉"可观测行为一个字节都不变 | 当时的影响：无实际影响（这正是它吊了很久的原因）——"语法坏掉的串只能靠肉眼发现"是 remark 的本性，不是这个没人调用的函数能治的。口径原文随函数一起退役，理由写在 `create.ts` 删除处的注释里 |
-| 4 | ~~`autosave_seconds` 是死设置~~ **✅ 已修（`docs/07` 第 20 项，2026-09-25）** | 原先是字段能存能读、**没有任何代码读它**（`grep autosave`：只有 `settings/mod.rs` 的字段、`ipc.ts` 的类型、`panes/FilesPane.tsx` 的下拉与文案，**零消费者**）。现在消费者是 `ui/useAutosave.ts`（停笔 N 秒）与 `ui/useDocuments.ts` 的 `切换文档`（切页前先存） | 当时的影响：用户改了它不会有任何效果。⚠️ 界面那处「目前还没接上」的如实标注已按承诺同批删掉，**「恢复未保存的草稿」「清除历史文件记录」两条仍然是真没接**——那两条的理由写在 `FilesPane` 那段 `.stg-note` 里，**别跟着这一条一起删** |
+| 4 | ~~`autosave_seconds` 是死设置~~ **✅ 已修（`docs/07` 第 20 项，2026-09-25）** | 原先是字段能存能读、**没有任何代码读它**。现在消费者是 `ui/useAutosave.ts`（停笔 N 秒）与 `ui/useDocuments.ts` 的 `切换文档`（切页前先存） | 当时的影响：用户改了它不会有任何效果。📌 **2026-11-01**：「恢复未保存的草稿」与「清除历史文件记录」也已接通，文件页不再留下灰着却说明未实现的按钮 |
 | 5 | ~~三条外观轴都只有设置项与 CSS~~ **✅ 已结清（2026-09-23）** | 三条轴现在都有入口：`document_theme` 走菜单栏「主题」，`ui_style` / `ui_mode` 走偏好设置 → 外观（`docs/07` 第 10/11 项已做）。`api.settings.set` 的调用者是 `updateSettings` | 当时的影响：明暗与界面风格只能手改 `settings.toml` 再重启 |
 | 6 | ~~`applyTheme()` 返回的退订函数被丢掉~~ **✅ 已修（BUG-7）** | 现在写的是 `if (settings) return applyTheme(settings);`——**退订函数交出去了** | 当时的影响：`ui_mode = "auto"` 时每次 `settings` 变化都会**再挂一个** `prefers-color-scheme` 监听器，旧监听器闭包里是旧设置。⚠️ 这条已经**不只是理论**了：主题切换会改 `settings`，所以那种情形现在已经会真发生 |
 | 7 | ~~`[markdown]` 里智能标点那六个字段是死设置~~ **✅ 已修（`docs/07` 第 72 项，2026-09-27）** | 原先是六个字段能存能读、界面上有整组控件，**全仓一个消费者都没有**（`grep` 过：只有 `settings/markdown.rs` 的字段、`bridge/types.ts` 的类型、`MarkdownPane.tsx` 的控件与文案）。现在消费者是 `src/editor/smart-punctuation.ts`，经 `create-types.ts` 的 `标点` 那一格进 `.use()` 链 | 当时的影响：用户把「模式」拨到「输入时转换」、开关全开，**打出来的 `--` 一个都不会变**。⚠️ **同组的 `unicode_punctuation` 到今天仍然没有消费者**（它管的是**解析**侧，与那天接线的**输入**侧不是一回事），所以这一条**不算全清**——剩下那一格的缺口在 `docs/10` §11.2 |

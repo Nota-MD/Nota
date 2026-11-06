@@ -3,7 +3,8 @@
  *
  * | 那一下 | 发生什么 |
  * |---|---|
- * | 单击 | 弹同一个「链接」框，两个框里都是**这条链接的现值**（改完写回是一笔真编辑） |
+ * | 单击（默认） | 弹同一个「链接」框，两个框里都是**这条链接的现值**（改完写回是一笔真编辑） |
+ * | 单击（键盘体验优化开着） | 不弹框，光标留在链接里，由 `editor/keyboard-experience.ts` 显示源码边界 |
  * | `Ctrl`（或 `⌘`）＋单击 | 交给系统浏览器（现成的 `opener:allow-open-url`，不新开能力） |
  * | 只读那一侧（分屏右侧预览） | **什么都不做**——那儿改不了，也不该弹框 |
  *
@@ -80,6 +81,8 @@ export interface PointLinkWiring {
   openDocument: (path: string) => Promise<boolean>;
   /** 当前文档路径；未保存文档为 `null`。 */
   documentPath: string | null;
+  /** Let a click place the caret in the link instead of opening the link dialog. */
+  keyboardExperience: boolean;
 }
 
 function openRawHtmlLink(
@@ -159,6 +162,7 @@ export function usePointLink({
   toast,
   openDocument,
   documentPath,
+  keyboardExperience,
 }: PointLinkWiring): void {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`。
@@ -206,6 +210,16 @@ export function usePointLink({
         return;
       }
 
+      // In keyboard-optimized mode an ordinary click behaves like placing the
+      // caret at the link boundary: the source reveal is driven by the editor
+      // selection, so opening a modal here would interrupt that interaction.
+      if (keyboardExperience) {
+        element?.dispatchEvent(
+          new CustomEvent("nota-focus-link-source", { bubbles: true }),
+        );
+        return;
+      }
+
       void (async () => {
         const answer = await askLink({ label: chain.label, href: chain.href, editing: true });
         if (!answer) return; // 取消：一个字都不动
@@ -216,5 +230,5 @@ export function usePointLink({
 
     host.addEventListener("click", pointHit);
     return () => host.removeEventListener("click", pointHit);
-  }, [mainArea, askLink, runCommand, toast, openDocument, documentPath, t]);
+  }, [mainArea, askLink, runCommand, toast, openDocument, documentPath, keyboardExperience, t]);
 }

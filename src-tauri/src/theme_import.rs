@@ -23,6 +23,8 @@ use crate::error::{NotaError, Result};
 use crate::paths;
 use crate::themes::check_id;
 
+pub(crate) mod typora;
+
 const MAX_FILES: usize = 2_048;
 const MAX_TOTAL_BYTES: usize = 128 * 1024 * 1024;
 const MAX_FILE_BYTES: usize = 64 * 1024 * 1024;
@@ -76,10 +78,10 @@ fn classify(path: &str) -> Option<(ThemeKind, String, String)> {
         "document" => (ThemeKind::Document, root_index + 1),
         "themes" => {
             let next = parts.get(root_index + 1).map(String::as_str);
-            if matches!(next, Some("ui" | "ui-styles")) {
-                (ThemeKind::Ui, root_index + 2)
-            } else {
-                (ThemeKind::Document, root_index + 1)
+            match next {
+                Some("ui" | "ui-styles") => (ThemeKind::Ui, root_index + 2),
+                Some("document") => (ThemeKind::Document, root_index + 2),
+                _ => (ThemeKind::Document, root_index + 1),
             }
         }
         _ => return None,
@@ -326,11 +328,6 @@ fn read_archive<R: Read + Seek>(reader: R) -> Result<BTreeMap<(ThemeKind, String
             .files
             .insert(relative, bytes);
     }
-    if packages.is_empty() {
-        return Err(NotaError::other(
-            "ZIP 里没有识别到主题。需要 ui/<id>/theme.css 或 document/<id>/theme.css",
-        ));
-    }
     Ok(packages)
 }
 
@@ -414,17 +411,50 @@ fn install_packages(
     Ok(report)
 }
 
+pub fn import_path(path: &Path) -> Result<ThemeImportReport> {
+    let is_css = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("css"));
+    if path.is_dir() || is_css {
+        return typora::install_source(path, &paths::user_themes_dir()?);
+    }
+    let file = File::open(path).map_err(|source| NotaError::Read {
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let packages = read_archive(file)?;
+    if packages.is_empty() {
+        return typora::install_zip(path, &paths::user_themes_dir()?);
+    }
+    install_packages(
+        prepare_packages(packages)?,
+        &paths::user_ui_styles_dir()?,
+        &paths::user_themes_dir()?,
+    )
+}
+
 pub fn import_zip(path: &Path) -> Result<ThemeImportReport> {
     let file = File::open(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
         source,
     })?;
     let packages = prepare_packages(read_archive(file)?)?;
+    if packages.is_empty() {
+        return Err(NotaError::other(
+            "ZIP 里没有识别到 Nota 主题布局；Typora 平铺主题请使用 import_path",
+        ));
+    }
     install_packages(
         packages,
         &paths::user_ui_styles_dir()?,
         &paths::user_themes_dir()?,
     )
+}
+
+/// Load any user theme CSS through the same native Typora-compatible path.
+pub fn load_theme_css(path: &Path) -> Result<String> {
+    typora::load_runtime_css(path)
 }
 
 #[cfg(test)]
@@ -445,6 +475,14 @@ mod tests {
         assert!(matches!(
             classify("themes/ui-styles/cde/assets/icon.svg"),
             Some((ThemeKind::Ui, id, path)) if id == "cde" && path == "assets/icon.svg"
+        ));
+        assert!(matches!(
+            classify("themes/document/paper/theme.css"),
+            Some((ThemeKind::Document, id, path)) if id == "paper" && path == "theme.css"
+        ));
+        assert!(matches!(
+            classify("themes/document/dark/paper.css"),
+            Some((ThemeKind::Document, id, path)) if id == "paper-dark" && path == "dark.css"
         ));
         assert!(matches!(
             classify("document/minimal.css"),
@@ -515,6 +553,28 @@ mod tests {
             ),
             vec!["plasma"]
         );
+    }
+
+    #[test]
+    fn audits_generated_theme_archives_from_environment() {
+        let Some(paths) = std::env::var_os("NOTA_THEME_ARCHIVE_AUDIT_PATHS") else {
+            return;
+        };
+        for path in std::env::split_paths(&paths) {
+            let file = File::open(&path).unwrap();
+            let packages = prepare_packages(read_archive(file).unwrap()).unwrap();
+            assert!(!packages.is_empty(), "{} contains no Nota theme", path.display());
+            for ((kind, id), package) in packages {
+                let css = package.files.get("theme.css").unwrap();
+                println!(
+                    "ARCHIVE_AUDIT\t{}\t{kind:?}\t{}\tbytes={}\tfiles={}",
+                    path.display(),
+                    id,
+                    css.len(),
+                    package.files.len()
+                );
+            }
+        }
     }
 
     #[test]

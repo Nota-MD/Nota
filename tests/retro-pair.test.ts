@@ -1,11 +1,7 @@
 import { Schema } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 
-import {
-  createMarkHintPlugin,
-  listSyntaxMarkers,
-  promotePairedMark,
-} from "../src/editor/mark-hint";
+import { normalizeInlineBlock } from "../src/editor/mark-hint-source";
 
 let pass = 0;
 let fail = 0;
@@ -23,7 +19,7 @@ function testCase(name: string, body: () => void): void {
 }
 
 function equal(actual: unknown, expected: unknown, message: string): void {
-  if (actual !== expected) throw new Error(`${message}: ${actual} !== ${expected}`);
+  if (actual !== expected) throw new Error(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
 }
 
 function assertValue(value: unknown, message: string): asserts value {
@@ -45,14 +41,6 @@ const schema = new Schema({
         symbol: { default: "*" },
       },
     },
-    notaEscape: {
-      inline: true,
-      group: "inline",
-      atom: true,
-      attrs: {
-        symbol: { default: "*" },
-      },
-    },
     doc: { content: "block+" },
   },
   marks: {
@@ -69,80 +57,68 @@ const schema = new Schema({
 });
 
 const syntax = schema.nodes.notaSyntax!;
-const escape = schema.nodes.notaEscape!;
 
-console.log("\n[Retroactive mark pairing]");
-
-testCase("typing an opening delimiter before an existing closer promotes the pair", () => {
-  const doc = schema.node("doc", null, [schema.node("paragraph", null, schema.text("18*"))]);
-  let state = EditorState.create({
+function stateFor(source: string): EditorState {
+  const doc = schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text(source)]),
+  ]);
+  return EditorState.create({
     schema,
     doc,
-    selection: TextSelection.create(doc, 1),
-    plugins: [createMarkHintPlugin(syntax)],
+    selection: TextSelection.create(doc, source.length + 1),
   });
-  state = state.apply(state.tr.insertText("*", 1));
-  equal(state.doc.firstChild?.textContent, "18", "visible source text changed");
-  equal(listSyntaxMarkers(state.doc, syntax).length, 2, "syntax markers missing");
-  let marked = false;
+}
+
+function normalize(source: string): EditorState | null {
+  const state = stateFor(source);
+  const tr = normalizeInlineBlock(state, syntax);
+  return tr ? state.apply(tr) : null;
+}
+
+function hasMark(state: EditorState, mark: string): boolean {
+  let found = false;
   state.doc.descendants((node) => {
-    if (node.isText && node.text === "18" && node.marks.some((mark) => mark.type.name === "emphasis")) {
-      marked = true;
+    if (node.isText && node.marks.some((item) => item.type.name === mark)) {
+      found = true;
       return false;
     }
     return true;
   });
-  assertValue(marked, "emphasis mark missing");
+  return found;
+}
+
+console.log("\n[Retroactive mark pairing]");
+
+testCase("a complete emphasis pair is promoted with character-level markers", () => {
+  const state = normalize("*18*");
+  assertValue(state, "emphasis pair was not promoted");
+  equal(state.doc.firstChild?.textContent, "18", "visible text");
+  assertValue(hasMark(state, "emphasis"), "emphasis mark missing");
+  let atoms = 0;
+  state.doc.descendants((node) => {
+    if (node.type === syntax) atoms++;
+  });
+  equal(atoms, 2, "expected one opening and one closing marker character");
 });
 
-testCase("the same recovery supports strong, strike and highlight", () => {
+testCase("strong, strike and highlight use the same delayed promotion path", () => {
   const cases = [
-    { before: "18**", inserted: "**", mark: "strong" },
-    { before: "18~~", inserted: "~~", mark: "strike_through" },
-    { before: "18==", inserted: "==", mark: "highlight" },
+    { source: "**18**", mark: "strong" },
+    { source: "~~18~~", mark: "strike_through" },
+    { source: "==18==", mark: "highlight" },
   ];
   for (const item of cases) {
-    const doc = schema.node("doc", null, [schema.node("paragraph", null, schema.text(item.before))]);
-    let state = EditorState.create({
-      schema,
-      doc,
-      selection: TextSelection.create(doc, 1),
-      plugins: [createMarkHintPlugin(syntax)],
-    });
-    state = state.apply(state.tr.insertText(item.inserted, 1));
-    equal(state.doc.firstChild?.textContent, "18", `${item.mark} visible source`);
-    equal(listSyntaxMarkers(state.doc, syntax).length, 2, `${item.mark} markers`);
-    let marked = false;
-    state.doc.descendants((node) => {
-      if (node.isText && node.text === "18" && node.marks.some((mark) => mark.type.name === item.mark)) {
-        marked = true;
-        return false;
-      }
-      return true;
-    });
-    assertValue(marked, `${item.mark} mark missing`);
+    const state = normalize(item.source);
+    assertValue(state, `${item.mark} pair was not promoted`);
+    equal(state.doc.firstChild?.textContent, "18", `${item.mark} visible text`);
+    assertValue(hasMark(state, item.mark), `${item.mark} mark missing`);
   }
 });
 
-testCase("an escaped opening delimiter is left literal", () => {
-  const doc = schema.node("doc", null, [schema.node("paragraph", null, schema.text("\\18*"))]);
-  let state = EditorState.create({
-    schema,
-    doc,
-    selection: TextSelection.create(doc, 2),
-    plugins: [createMarkHintPlugin(syntax, escape)],
-  });
-  state = state.apply(state.tr.insertText("*", 2));
-  let escaped = false;
-  let marked = false;
-  state.doc.descendants((node) => {
-    if (node.type === escape && node.attrs.symbol === "*") escaped = true;
-    if (node.isText && node.marks.some((mark) => mark.type.name === "emphasis")) marked = true;
-    return true;
-  });
-  assertValue(escaped, "escaped opener lost its escape node");
-  assertValue(!marked, "escaped opener was promoted");
-  assertValue(!promotePairedMark(state, syntax), "escaped pair was reported as promotable");
+testCase("an escaped opening delimiter stays literal", () => {
+  const state = normalize("\\*18*");
+  if (!state) return;
+  assertValue(!hasMark(state, "emphasis"), "escaped opener was promoted");
 });
 
 console.log(`\nPassed ${pass}; failed ${fail}`);

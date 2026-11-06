@@ -3779,25 +3779,28 @@ npx esbuild tests/keymap.test.ts --bundle --platform=node --format=esm \
 生命周期判据；TypeScript、`cargo check --lib`、国际化、文档同步和生产构建同批通过。
 
 `keymap` **54** · `auto-pair` **57** · `share-card` **46** ·
-`math-view` **33** · `math-wiring` **20** · `math-delim` **47** · `find` **48** · `table-input` **39** · `inline-marks` **37** ·
+`math-view` **48** · `math-inline-measure` **4** · `math-wiring` **20** · `math-delim` **47** · `find` **48** · `table-input` **39** · `inline-marks` **37** ·
 `smart-punctuation` **36** · `focus-summary` **34** · `math-commands` **35** · `emoji` **32** · `front-matter` **32** ·
 `lang-guess` **31** · `footnote` **30** · `url-link` **29** · `paste-clean` **25** ·
 `table-pipe` **39** · `math-input` **28** · `source-mark` **28** · `toc` **27** ·
 `math-suggest` **27** · `auto-correct` **20** ·
 `heatmap` **20** · `atom-space` **19** · `heading-on-enter` **19** ·
 `accent` **18** · `mark-hint` **18** · `instant-render` **17** ·
-`file-kind` **14** · `html-block` **18** · `html-block-view` **12** · `element-inspector` **16** · `color-picker` **4** · `theme-import` **3** · `block-keys` **5** · `deferred-snapshot` **9** · `count-text` **9** · `lang-icons` **17** · `focus-dim` **15** ·
+`file-kind` **14** · `html-block` **18** · `html-block-view` **12** · `element-inspector` **16** · `color-picker` **4** · `theme-import` **11** · `block-keys` **5** · `deferred-snapshot` **9** · `count-text` **9** · `lang-icons` **17** · `focus-dim` **15** ·
 `chart-ticks` **12** · `video-view` **12** · `sidebar-resize` **12** ·
 `doc-typography` **11** · `status-metric` **10** · `tree-options` **9** ·
 `empty-doc-save` **8** · `window-title` **8** · `modal-trap` **9** · `tablist-keys` **6** · `key-conflicts` **19** ·
 `table-align` **3** · `mode-scroll` **4** · `doc-theme-mode` **4** · `debug-log-window` **6** ·
 `list-indent` **16** · `syntax-escape` **13** · `math-currency` **23** ·
 `table-tab` **58** · `bar-close` **13** · `caret-snapshot` **10** · `panel-cards` **37** ·
-`code-block-editing` **31** · `select` **25** · `move-block` **20** ·
+`code-block-editing` **41** · `select` **25** · `move-block` **20** ·
 `link-edit` **34** ·
 `context-menu` **30**（⚠️ 2026-10-04 开窗口检那天从 **27** 长到 30，见本节顶上新加的那一条 📌）。
 ⚠️ `key-conflicts` **21 → 19**、`code-block-editing` **21 → 31**、`select` / `move-block` 是本批新增
 （📌 **2026-10-07**，见本节顶上那一条；⚠️ `code-block-editing` 此前**在 `for` 里、却漏在这张表里**，本批补上）。
+📌 **2026-11-04**：`code-block-editing` 实测 **41 条**，覆盖源码绝对首尾四向退出、
+首块/末块自动创建空段落、CodeMirror 加载前 textarea 的块内方向移动，以及普通代码、
+数学围栏、Mermaid 和 `$$` 公式块。定向浏览器场景同时验证块内中间位置不会退出。
 ⚠️ `link-edit` **34** 是本批新增（📌 **2026-10-07 当天更晚那一批「链接」那个框**，见本节顶上
 那一条；⚠️ 跑法与 `for` 里那几十份相同——**不需要** `--alias:@=./src`、也不要任何 loader）。
 📌 **2026-10-07 现数：五十六份、共 1398 条**（一份一份跑，56 份 **exit=0**；`for` 里那份数是
@@ -6816,7 +6819,7 @@ Rust 定向测试 `settings::export::tests` 4 条与 `pandoc_format::tests` 1 �
 `/tmp/nota-math-gap-fixed2-typed.png`、`/tmp/nota-export-settings.png` 与
 `/tmp/nota-export-menu.png`，不进入仓库。
 
-### 5.74 浏览器 E2E：编辑器边界与原先只有单测的功能（2026-11-01）
+### 5.74 浏览器 E2E：编辑器边界与原先只有单测的功能（2026-11-02）
 
 **运行方式**：
 
@@ -6830,11 +6833,13 @@ npm run test:e2e
 与 NodeView；Tauri IPC 只替换到编辑器启动所需的空命令，不复制编辑器逻辑。
 `CHROME_BIN` 可指定浏览器。
 
-本轮已扩到 32 个场景：
+本轮已扩到 **51 个场景**。表格保留首批 34 项；新增项覆盖：Vim 空文档插入、空段落 Tab、
+隐藏定界符的外侧停点与编辑后边界保持、起始定界符逐字符导航、左右组 Delete、起始组 Backspace、`*1*` 右侧新增星号、`**1*|*` 字符级光标、
+闭合标记左侧退格只删正文、闭合标记后单星回退、从右组外侧左移不钻入星号、边界 Delete 单星删除、Mermaid 文档字体与长箭头 `Yes`/`No` 标签、外部改动正文内预览等。
 
 | # | 场景 | 判据 |
 |---|---|---|
-| ① | `**1**` 中连续 Left | 跨过两颗真实语法原子，输入后得到 `Z**1**` |
+| ① | `**1**` 正文起点连续 Left | 先停在 `**|1**`，再跨过两颗真实语法原子；输入后得到 `Z**1**` |
 | ② | `**1**` 中按 Home | 到真正行首，输入后得到 `H**1**` |
 | ③ | 行内公式源码末尾按 Right | 退出公式，后续 `Z` 位于 `$…$` 外 |
 | ④ | 行内公式源码开头按 Left | 退出公式，后续 `Z` 位于 `$…$` 前 |
@@ -6866,6 +6871,8 @@ npm run test:e2e
 | ㉚ | 光标在括号边界按 Tab / Shift+Tab | 只移动光标，不修改文档 |
 | ㉛ | 关闭基础括号配对 | 输入左括号不再自动补右边 |
 | ㉜ | 输入双引号、英文撒号，并在 URL 中输入左括号 | 直引号生成一对弯引号，`don't` 保留撒号，URL 不被配对 |
+| ㉝ | 默认缩进改为 4 后按真实 Tab | 正文插入四个空格，而不是两格 |
+| ㉞ | 通过 composition 事件提交 `（`、中文、`）` | preedit 期间不改文档；上屏后先补 `）`，再输入 `）` 时跨过已有闭符 |
 
 自动更正这轮 E2E 抓出 **BUG-80** 的两处旧实现错误：规则只认普通空格/Tab，
 而浏览器会生成 NBSP；同时 `InputRule` 的结束坐标被当成“触发字符插入后”，
@@ -6877,9 +6884,9 @@ npm run test:e2e
 mark 集，把 `**a$x$b**` 截成 `**a**$x$b`。两处已同批修正，单测与 E2E 均有覆盖。
 
 ⚠️ **边界**：这套 E2E 运行在 Chrome 的普通网页里，不启动 Rust/Tauri，
-也不替代 WebKitGTK 真窗口、系统文件选择器、原生打印、IME 与 OS 快捷键验证。
+也不替代 WebKitGTK 真窗口、系统文件选择器、原生打印、真实输入法候选窗与 OS 快捷键验证。
 它的用途是把“真实 DOM + 真实编辑器装配 + 键盘事件 + 序列化”这一段自动化；
-平台相关部分仍按 §5 的开窗配方记录。
+composition 场景只模拟标准事件序列，平台相关部分仍按 §5 的开窗配方记录。
 
 ### 5.75 构建期字体只输出 WOFF2（2026-11-01）
 
@@ -6901,3 +6908,31 @@ mark 集，把 `**a$x$b**` 截成 `**a**$x$b`。两处已同批修正，单测�
 共 **15 项**，预计 **15–20 分钟**，每一项都写了可直接照做的输入、按键和通过标准。
 
 `docs/06` 不再内嵌这份清单，避免一份几千行的开发文档把实际只有一页的验收步骤埋掉。
+
+### 5.77 Typora 原生主题兼容测试（2026-11-01）
+
+测试对象来自本机已解包的 Typora 1.14.9 与下载的 `LatexTypora-2.1.4`，没有把第三方 CSS
+复制进仓库。
+
+1. 把 Typora 的整个 `resources/style/themes/` 目录作为原生主题文件夹导入。
+   系统识别出 `github`、`newsprint`、`night`、`pixyll`、`whitey` 五套。
+2. 对安装目录与源目录逐个计算 SHA-256：五份 CSS 全部 **BYTE-IDENTICAL**。
+3. 在隔离 Xvfb 窗口中依次切换五套主题并截图。`night` 初次测试发现正文颜色被
+   Nota 基础层压暗；把 Typora 的 `html` / `body` / `#write` / 普通选择器统一提升到
+   `.editor-pane .editor-mount .ProseMirror` 后复测，正文对比度和深色代码块恢复。
+4. 对 `LatexTypora-2.1.4` 整目录执行同样导入。识别 `latex`、`latex-dark`、
+   `latex-dev-dark` 三套；源 CSS 与安装副本同样逐字节一致。三套都实际加载，
+   LaTeX 字体、分节编号、版心、深浅配色和代码块正常。
+   WebKitGTK 的 `document.fonts` 状态逐项确认 `New Computer Modern`、
+   `New Computer Modern Sans` 与 `New Computer Modern Mono` 均为 `loaded`；
+   `pixyll` / `github` / `newsprint` 的 Merriweather / Open Sans / PT Serif 也均为
+   `loaded`，计算样式落在主题声明的首选字体上。
+5. 测试还覆盖 `@import` 链：`latex-dark.css → latex.css → latex_fonts/embedded-fonts.css`。
+   安装目录中的原始 import 语句没有改写；运行期加载时才展开并内联资源。
+
+证据截图在
+[showcase-2026-11-01/typora-themes](../artifacts/showcase-2026-11-01/typora-themes)。
+
+⚠️ **边界**：Typora 自己特有的文件树、megamenu、快速打开等外壳控件不会决定 Nota 外壳；
+导入主题只作用于正文。正文里的 Typora 类名与 `#write` 已映射，但第三方主题若专门依赖
+Typora 编辑器内部 DOM（例如独有的代码框工具栏节点），那部分会保留 Nota 自己的控件。

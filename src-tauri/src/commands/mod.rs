@@ -10,6 +10,7 @@
 pub mod diagnostics;
 pub mod diff;
 pub mod document;
+pub mod draft;
 pub mod export;
 pub mod file_picker;
 pub mod focus;

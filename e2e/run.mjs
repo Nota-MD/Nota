@@ -166,8 +166,19 @@ async function waitForReport(client) {
     const state = evaluated.result?.value;
     if (state?.nativeKey && state.nativeKey !== handledNativeKey) {
       handledNativeKey = state.nativeKey;
+      const isSpace = state.nativeKey.startsWith("space");
+      const isTab = state.nativeKey.startsWith("tab");
+      const isText = state.nativeKey.startsWith("text-");
+      const isArrowLeft = state.nativeKey.startsWith("arrow-left");
+      const isArrowRight = state.nativeKey.startsWith("arrow-right");
+      const isArrowUp = state.nativeKey.startsWith("arrow-up");
+      const isArrowDown = state.nativeKey.startsWith("arrow-down");
+      const isBackspace = state.nativeKey.startsWith("backspace");
+      const isDelete = state.nativeKey === "delete";
+      const isCtrlA = state.nativeKey === "ctrl-a";
+      const isCtrlB = state.nativeKey === "ctrl-b";
       const parameters =
-        state.nativeKey.startsWith("space")
+        isSpace
           ? {
               type: "keyDown",
               key: " ",
@@ -177,7 +188,92 @@ async function waitForReport(client) {
               windowsVirtualKeyCode: 32,
               nativeVirtualKeyCode: 32,
             }
-          : null;
+          : isTab
+            ? {
+                type: "rawKeyDown",
+                key: "Tab",
+                code: "Tab",
+                windowsVirtualKeyCode: 9,
+                nativeVirtualKeyCode: 9,
+              }
+            : isText
+              ? {
+                  type: "keyDown",
+                  key: state.nativeKey.slice(5),
+                  code:
+                    state.nativeKey.slice(5) === "\\"
+                      ? "Backslash"
+                      : `Key${state.nativeKey.slice(5).toUpperCase()}`,
+                  text: state.nativeKey.slice(5),
+                  unmodifiedText: state.nativeKey.slice(5),
+                }
+              : isArrowLeft
+                ? {
+                    type: "rawKeyDown",
+                    key: "ArrowLeft",
+                    code: "ArrowLeft",
+                    windowsVirtualKeyCode: 37,
+                    nativeVirtualKeyCode: 37,
+                  }
+                : isArrowRight
+                  ? {
+                      type: "rawKeyDown",
+                      key: "ArrowRight",
+                      code: "ArrowRight",
+                      windowsVirtualKeyCode: 39,
+                      nativeVirtualKeyCode: 39,
+                    }
+                  : isArrowUp
+                    ? {
+                        type: "rawKeyDown",
+                        key: "ArrowUp",
+                        code: "ArrowUp",
+                        windowsVirtualKeyCode: 38,
+                        nativeVirtualKeyCode: 38,
+                      }
+                    : isArrowDown
+                      ? {
+                          type: "rawKeyDown",
+                          key: "ArrowDown",
+                          code: "ArrowDown",
+                          windowsVirtualKeyCode: 40,
+                          nativeVirtualKeyCode: 40,
+                        }
+                  : isBackspace
+                    ? {
+                        type: "rawKeyDown",
+                        key: "Backspace",
+                        code: "Backspace",
+                        windowsVirtualKeyCode: 8,
+                        nativeVirtualKeyCode: 8,
+                      }
+                    : isDelete
+                      ? {
+                          type: "rawKeyDown",
+                          key: "Delete",
+                          code: "Delete",
+                          windowsVirtualKeyCode: 46,
+                          nativeVirtualKeyCode: 46,
+                        }
+                      : isCtrlA
+                        ? {
+                            type: "rawKeyDown",
+                            key: "a",
+                            code: "KeyA",
+                            windowsVirtualKeyCode: 65,
+                            nativeVirtualKeyCode: 65,
+                            modifiers: 2,
+                          }
+                      : isCtrlB
+                        ? {
+                            type: "rawKeyDown",
+                            key: "b",
+                            code: "KeyB",
+                            windowsVirtualKeyCode: 66,
+                            nativeVirtualKeyCode: 66,
+                            modifiers: 2,
+                          }
+              : null;
       if (!parameters) throw new Error(`Unknown native E2E key request: ${state.nativeKey}`);
       await client.send("Input.dispatchKeyEvent", parameters);
       await client.send("Input.dispatchKeyEvent", {
@@ -211,6 +307,9 @@ async function main() {
   const chrome = findChrome();
   const profile = await mkdtemp(join(tmpdir(), "nota-e2e-chrome."));
   const { server, url } = await serve();
+  const targetUrl = process.env.NOTA_E2E_ONLY
+    ? `${url}?only=${encodeURIComponent(process.env.NOTA_E2E_ONLY)}`
+    : url;
   const debugPort = await freePort();
   const browser = spawn(
     chrome,
@@ -224,7 +323,7 @@ async function main() {
       "--remote-debugging-address=127.0.0.1",
       "--window-size=1200,900",
       `--user-data-dir=${profile}`,
-      url,
+      targetUrl,
     ],
     { cwd: repo, stdio: "ignore" },
   );

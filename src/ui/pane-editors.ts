@@ -74,6 +74,8 @@ export interface WysiwygParameter extends MainWindowCellCommonCommon {
   inlineExtensions: InlineExtensionFlags;
   autoLinks: boolean;
   autoPair: boolean;
+  keyboardExperience: boolean;
+  defaultIndent: number;
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
   emoji: boolean;
@@ -109,6 +111,8 @@ export async function createWysiwygEditor(parameter: WysiwygParameter): Promise<
     inlineExtensions,
     autoLinks,
     autoPair,
+    keyboardExperience,
+    defaultIndent,
     punctuation,
     selfActionMoreCorrect,
     emoji,
@@ -147,6 +151,8 @@ export async function createWysiwygEditor(parameter: WysiwygParameter): Promise<
     inlineMarks: inlineExtensions,
     autoLinks,
     autoPair,
+    keyboardExperience,
+    defaultIndent,
     // 智能标点那一组 ＋ 自动更正。⚠️ **所见即所得这一侧才传**，理由见
     // `create-types.ts` 的 `标点` 那一格（导出那条路不许传）；分屏预览那一侧
     // **要传**（见 [`建预览编辑器`]），那一边只有标点、没有自动更正。

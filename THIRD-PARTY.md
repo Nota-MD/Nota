@@ -1,6 +1,6 @@
 # 第三方组件
 
-> 最后核对：**2026-10-31**
+> 最后核对：**2026-11-01**
 >
 > ⚠️ **2026-10-06 那一次：每一项都补上了仓库/主页链接**（用户：「**鸣谢里加上各个项目的仓库**」，并贴了 Typora 的鸣谢页当参照）。
 > 链接**不是凭印象写的**：Rust 那半从 `cargo metadata` 里读每个 crate 的 `repository` 字段，前端那半读 `node_modules/<包>/package.json` 的 `repository`。
@@ -24,6 +24,7 @@
 
 | crate | 版本 | 许可证 | 用来做什么 |
 |---|---|---|---|
+| [`ashpd`](https://github.com/bilelmoussaoui/ashpd) | 0.11.1 | MIT | **Linux XDG Desktop Portal 绑定**（2026-11-01 加）：系统打印先生成 PDF，再调用 `org.freedesktop.portal.Print`；GNOME 下由 GTK4 portal 画框，KDE 下跟随 Plasma。使用 `async-std` feature，与 Tauri 依赖树中的同一版本共享 |
 | [`base64`](https://github.com/marshallpierce/rust-base64) | 0.22.1 | MIT OR Apache-2.0 | base64 编解码（图片的 data URL、导出、插件账本里那几处） |
 | [`chrono`](https://github.com/chronotope/chrono) | 0.4.45 | MIT OR Apache-2.0 | 日期与时间（`nota.time`、信任记录的时间戳） |
 | [`dirs`](https://github.com/soc/dirs-rs) | 6.0.0 | MIT OR Apache-2.0 | XDG 目录 |
@@ -497,6 +498,15 @@ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
 AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## 14. In-place link source editing (Textus, MIT)
+
+The link-source replacement model in `src/editor/link-source-reveal.ts` is
+adapted from the CatVinci Studio Textus link reveal implementation. Nota uses
+its own schema, parser integration, comments, and tests.
+
+Copyright (c) 2026 CatVinci Studio. Licensed under the MIT text reproduced in
+section 13 above.
 
 ## 13. Vim input adapter (Textus, MIT)
 

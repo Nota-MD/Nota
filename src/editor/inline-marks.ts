@@ -87,7 +87,6 @@ import { markRule } from "@milkdown/kit/prose";
 import { toggleMark } from "@milkdown/kit/prose/commands";
 import type { MarkdownNode, ParserState, SerializerState } from "@milkdown/kit/transformer";
 import type { MarkType } from "@milkdown/kit/prose/model";
-import { normalizeInlineDelimiterTree } from "./inline-delimiter-tree";
 
 /* ── 一张表：四种标记的全部差异都在这里 ─────────────────────────────── */
 
@@ -523,13 +522,10 @@ export function inlineMarkParse(flag: InlineExtensionFlags) {
   // 会被推断成选项的类型（这里是 `undefined`），而报错要到 `树 as MarkdownNode`
   // 那一行才出现，看着像"类型断言写错了"。写这份时踩过一次。
   const convertReplaceDevicePlugin: ReturnType<ConvertReplaceDeviceWorkFactory> = () => (tree, file) => {
-    const source = typeof file?.value === "string" ? file.value : "";
-    if (source) {
-      normalizeInlineDelimiterTree(
-        tree as Parameters<typeof normalizeInlineDelimiterTree>[0],
-        source,
-      );
-    }
+    void file;
+    // CommonMark/GFM already applied the standard left/right-flanking
+    // delimiter-run algorithm while parsing. Keep that tree intact instead of
+    // replacing it with an editor-specific nearest-delimiter interpretation.
     inlineMarkTransformer(flag)(tree as MarkdownNode);
   };
   const workFactory: ConvertReplaceDeviceWorkFactory = () => convertReplaceDevicePlugin;

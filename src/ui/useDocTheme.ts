@@ -22,7 +22,11 @@ import { useCallback, useEffect } from "react";
 
 import { api, type DocThemeInfo, type Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
-import { characterBodyCanUse, canSelectCharacterBody } from "@/ui/font-check";
+import {
+  characterBodyCanUse,
+  canSelectCharacterBody,
+  declaredThemeFamilies,
+} from "@/ui/font-check";
 import type { Dialogs } from "@/ui/useDialogs";
 import { applyDocTheme } from "@/styles/doc-theme";
 import type { Toast } from "@/ui/Toasts";
@@ -158,21 +162,48 @@ export function useDocTheme(w: themeWiring): themeApi {
       try {
         // 空串 = 无主题，直接把 style 摘掉，编辑区回中性样式。
         const css = themeId ? await api.theme.css(themeId) : null;
+        const declaredFamilies = css ? declaredThemeFamilies(css) : [];
         if (alive) {
           applyDocTheme(css);
           debugEvent("theme", "document theme applied", {
             theme: themeId || "none",
             css_bytes: css?.length ?? 0,
           });
+          void Promise.allSettled(
+            declaredFamilies.map((family) => document.fonts.load(`16px "${family}"`)),
+          ).then(() => document.fonts.ready).then(() => {
+            if (!alive) return;
+            const body = document.querySelector<HTMLElement>(".ProseMirror");
+            const families = Array.from(document.fonts)
+              .map((font) => font.family.replace(/^["']|["']$/g, ""))
+              .filter((family, index, all) => all.indexOf(family) === index);
+            const fontStatuses = Array.from(document.fonts)
+              .filter((font) => !font.family.startsWith("KaTeX_"))
+              .map((font) => `${font.family}:${font.status}`)
+              .join(",");
+            debugEvent("theme", "document theme font state", {
+              theme: themeId || "none",
+              computed_family: body ? getComputedStyle(body).fontFamily : "",
+              font_faces: document.fonts.size,
+              font_statuses: fontStatuses,
+              available_families: families
+                .filter((family) => document.fonts.check(`16px "${family}"`))
+                .join(","),
+            });
+          });
         }
 
         // ── 首选字体在不在（2026-10-17，用户点名要的那句提示）────────────
-        // ⚠️ 查的是**主题自己写的** `--font-doc` 第一项，不是生效的计算值：
+        // ⚠️ 查的是**主题自己写的** `--font-doc` / Typora `--font-family` 第一项，
+        // 不是生效的计算值：
         // 计算值里已经是"候选, 兜底…"整串，查不出"谁是首选"。
         // ⚠️ 判的是"**这一族**里有没有一支能用"，不是只看第一支：字体栈本来就是
         // "首选不在就用下一个"的语义（2026-10-17：装了 Zpix 的机器不该被
         // 因为没装文泉驿点阵宋而报警）。一支都没有才叫"退回系统字体"。
-        const candidate = css ? canSelectCharacterBody(css) : [];
+        const declared = new Set(declaredFamilies);
+        const candidate = css
+          ? canSelectCharacterBody(css).filter((family) => !declared.has(family))
+          : [];
         const first = candidate[0] ?? null;
         if (alive && first && !candidate.some(characterBodyCanUse)) {
           const key = `${themeId}|${first}`;

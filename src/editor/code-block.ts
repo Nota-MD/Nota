@@ -38,6 +38,12 @@ import { t } from "@/i18n";
 import { computeMostSmallChangeAction } from "./code-block-change";
 import type { codeBlockEditor } from "./code-block-cm";
 import { liftCodeBlockToParagraphs } from "./code-block-lift";
+import {
+  bootstrapCodeBlockExit,
+  codeBlockExitTransaction,
+  moveBootstrapCodeBlockCaret,
+  type CodeBlockExitSide,
+} from "./code-block-boundary";
 import { createHTMLPreview } from "./code-preview";
 import { createLanguagePicker } from "./lang-picker";
 import { hasDedicatedBelongIcon } from "./lang-icon";
@@ -249,7 +255,7 @@ export const codeBlockView = $view(
       const pre = document.createElement("pre");
       // Typora 主题把代码块写成 `pre.md-fences`。这是结构兼容标记，不触发任何
       // 主题专用程序分支；没有外部主题时它也只是一个不会命中的 class。
-      pre.className = "md-fences ty-contain-cm nota-source-surface";
+      pre.className = "md-fences md-fences-with-lineno ty-contain-cm nota-source-surface";
       // ⚠️⚠️ **这一行是整件事的开关，删了它代码块就整个哑掉**（2026-10-06
       // 一路开窗量出来的）。
       //
@@ -403,6 +409,20 @@ export const codeBlockView = $view(
         view.focus();
       };
 
+      /** Leave through an explicit document selection move, never by blur alone. */
+      const leaveCodeBlock = (side: CodeBlockExitSide) => {
+        const pos = getPos();
+        if (typeof pos !== "number") return;
+        const current = view.state.doc.nodeAt(pos);
+        if (!current || current.type.name !== "code_block") return;
+        const transaction = codeBlockExitTransaction(view.state, pos, current, side);
+        if (!transaction) return;
+        view.dispatch(transaction.scrollIntoView());
+        view.focus();
+      };
+      const leaveHeadCell = () => leaveCodeBlock("before");
+      const leaveTailCell = () => leaveCodeBlock("after");
+
       /**
        * 把 CodeMirror 里的改动**推回文档**（一笔真事务）。
        *
@@ -512,6 +532,8 @@ export const codeBlockView = $view(
               undoCancel: () => walkCommand(undo),
               heavyDo: () => walkCommand(redo),
               openHeadBackCell: openHeadCell,
+              leaveHeadCell,
+              leaveTailCell,
             });
             codeEditor = editor;
             bootstrap.replaceWith(editor.view.dom);
@@ -526,6 +548,34 @@ export const codeBlockView = $view(
           });
       };
       bootstrap.addEventListener("focusin", ensureCodeBlockEditor);
+      bootstrap.addEventListener("keydown", (event) => {
+        if (
+          event.isComposing ||
+          event.shiftKey ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          bootstrap.selectionStart !== bootstrap.selectionEnd
+        ) {
+          return;
+        }
+        const caret = bootstrap.selectionStart;
+        if (caret === null) return;
+        const exit = bootstrapCodeBlockExit(bootstrap.value, caret, event.key);
+        if (exit) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (exit === "before") leaveHeadCell();
+          else leaveTailCell();
+          return;
+        }
+        if (["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          event.stopPropagation();
+          const next = moveBootstrapCodeBlockCaret(bootstrap.value, caret, event.key);
+          bootstrap.setSelectionRange(next, next);
+        }
+      });
 
       // ── HTML 预览（2026-10-16）───────────────────────────────────────
       // ⚠️ **它长在 `pre` 之外**（`wrap > pre ＋ 预览`），所以这一批多套了一层
@@ -576,10 +626,10 @@ export const codeBlockView = $view(
       // 收起态只看见渲染结果；点它进入“上面源码、下面公式”的编辑态。
       numberLearn.element.addEventListener("mousedown", (event) => {
         event.preventDefault();
+        startHeavyContent();
         setNumberLearnEditEdit(true);
         if (codeEditor) codeEditor.clusterFocus();
         else {
-          ensureCodeBlockEditor();
           waitingFocus = true;
           bootstrap.focus();
         }
@@ -592,9 +642,10 @@ export const codeBlockView = $view(
         const target = e.target;
         if (!(target instanceof Node)) return;
         if (inChrome(target)) return;
+        startHeavyContent();
+        setNumberLearnEditEdit(true);
         if (codeEditor) codeEditor.clusterFocus();
         else {
-          ensureCodeBlockEditor();
           waitingFocus = true;
           bootstrap.focus();
         }
@@ -702,6 +753,7 @@ export const codeBlockView = $view(
         // 把光标交给 CodeMirror。⚠️ 坐标是**相对这个节点内容起点**的
         //（PM 的 `ViewDesc` 逐层把节点起点减掉了），所以减 1 才是文本偏移。
         setSelection: (anchor2, head2) => {
+          startHeavyContent();
           setNumberLearnEditEdit(true);
           const length = codeEditor?.getText().length ?? currentNode.textContent.length;
           const clamp = (n: number) => Math.max(0, Math.min(length, n - 1));
@@ -711,8 +763,6 @@ export const codeBlockView = $view(
           if (codeEditor) {
             codeEditor.setSelection(anchor, head);
             codeEditor.clusterFocus();
-          } else {
-            ensureCodeBlockEditor();
           }
         },
 

@@ -75,6 +75,14 @@ testCase("代码块编辑态与 token 后代始终使用主题等宽字体", () 
   );
 });
 
+testCase("源码面强制左对齐，不让 Typora 图表主题把代码居中", () => {
+  const css = readFileSync(`${process.cwd()}/src/styles/editor-blocks.css`, "utf8");
+  assertValue(
+    /\.nota-source-surface[\s\S]*?\.cm-line\s*\{[^}]*text-align:\s*left\s*!important/s.test(css),
+    "源码面没有覆盖 Typora 图表面板继承的居中规则",
+  );
+});
+
 testCase("隐藏的 ProseMirror 文本层不参与可视选区和命中测试", () => {
   const rule = chromeCss.match(
     /\.editor-mount \.ProseMirror pre \.nota-code-text\s*\{([\s\S]*?)\n\}/,

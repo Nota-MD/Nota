@@ -72,7 +72,22 @@ import {
   computeDecorations,
   recognizeNode,
 } from "../src/editor/math-view";
-import { currentFocusPoint, find, number2 } from "./fake-dom";
+import {
+  currentFocusPoint,
+  fakeDocumentBody,
+  find,
+  number2,
+} from "./fake-dom";
+import { inlinePreviewCenter } from "../src/editor/math-inline-preview";
+import {
+  inlineMathAfterCaret,
+  inlineMathBeforeCaret,
+} from "../src/editor/math-inline-boundary";
+import {
+  inlineMathEditingClass,
+  inlineMathInputAtEdge,
+  inlineMathInputFocusClass,
+} from "../src/editor/math-inline-input";
 import {
   saveToDiskValueStroke,
   block,
@@ -357,7 +372,7 @@ await testCase("算装饰：行内那条会落进**段落的子集**里（视图
   equal(paragraphCollection[0]?.to, insidePosition - 1 + paragraph2.child(1).nodeSize, "段落子集里的装饰终点");
 });
 
-await testCase("行内公式刚打完或光标贴边时进入源码态，退出位置暂时抑制", () => {
+await testCase("行内公式前后边界显示源码态，但光标仍属于正文", () => {
   const paragraph2 = paragraph("前", inline("x^2"), "后");
   const doc = schema.topNodeType.create(null, [paragraph2]);
   const formulaPosition = 1 + paragraph2.child(0).nodeSize;
@@ -365,11 +380,56 @@ await testCase("行内公式刚打完或光标贴边时进入源码态，退出�
   for (const position2 of [formulaPosition, formulaEnd]) {
     const state = EditorState.create({ doc, selection: TextSelection.create(doc, position2) });
     const found = computeDecorations(state).find();
-    equal(found.length, 1, `位置 ${position2} 的公式源码态`);
+    equal(found.length, 1, `位置 ${position2} 应显示公式源码`);
     equal(found[0]?.from, formulaPosition, `位置 ${position2} 的公式起点`);
   }
-  const suppressed = EditorState.create({ doc, selection: TextSelection.create(doc, formulaEnd) });
-  equal(computeDecorations(suppressed, formulaEnd).find().length, 0, "同一退出位置应暂时抑制");
+});
+
+await testCase("公式右边界按 Left 直接进入源码框，不创建节点选区", async () => {
+  const paragraph2 = paragraph("ABC", inline("x"));
+  const doc = schema.topNodeType.create(null, [paragraph2]);
+  const afterFormula = 1 + paragraph2.content.size;
+  const state = EditorState.create({
+    doc,
+    selection: TextSelection.create(doc, afterFormula),
+  });
+  const formulaPosition = inlineMathBeforeCaret(state);
+  assertion(formulaPosition !== null, "公式右边界没有识别到前置公式");
+
+  const { view, perspective } = create(inline("x"), inlinePosition, false, false);
+  const box2 = find(perspective.view!.dom, "nota-math-source");
+  assertion(box2, "定位公式后没有源码框");
+  box2.focus();
+  box2.setSelectionRange(1, 1);
+  await flushRefresh();
+  assertion(currentFocusPoint() === box2, "定位公式后键盘焦点没有进入源码框");
+  assertion(
+    view.state.selection instanceof TextSelection,
+    "键盘进入源码框时仍创建了整颗公式的 NodeSelection",
+  );
+});
+
+await testCase("公式左边界按 Right 直接进入源码开头，不创建节点选区", async () => {
+  const paragraph2 = paragraph(inline("x"), "ABC");
+  const doc = schema.topNodeType.create(null, [paragraph2]);
+  const beforeFormula = 1;
+  const state = EditorState.create({
+    doc,
+    selection: TextSelection.create(doc, beforeFormula),
+  });
+  equal(inlineMathAfterCaret(state), beforeFormula, "公式左边界没有识别到后续公式");
+
+  const { view, perspective } = create(inline("x"), inlinePosition, false, false);
+  const box2 = find(perspective.view!.dom, "nota-math-source");
+  assertion(box2, "定位公式后没有源码框");
+  box2.focus();
+  box2.setSelectionRange(0, 0);
+  await flushRefresh();
+  assertion(currentFocusPoint() === box2, "公式左侧 Right 没有进入源码框");
+  assertion(
+    view.state.selection instanceof TextSelection,
+    "公式左侧 Right 创建了整颗公式的 NodeSelection",
+  );
 });
 
 /* ── 五、NodeView：面板开合、写回、按键（假 DOM，只跑逻辑）─────────────── */
@@ -590,7 +650,12 @@ await testCase("块公式悬停标签与 HTML 共用灰色源码框", () => {
 
 await testCase("行内那一棵也有悬浮预览（两种公式一套长相）", () => {
   const dom = create(inline("x^2"), inlinePosition, false, true).perspective.view!.dom;
-  assertion(find(dom, "nota-math-preview"), "行内也要有悬浮预览那一格");
+  const preview = find(fakeDocumentBody(), "nota-math-preview");
+  assertion(preview, "行内也要有悬浮预览那一格");
+  assertion(preview.classList.contains("nota-math-preview-floating"), "行内预览没有挂到视口层");
+  assertion(preview.classList.contains("nota-math-preview-visible"), "首次进入编辑态预览没有立刻显示");
+  equal(preview.style.top, "7px", "预览没有定位在当前公式下方");
+  equal(number2(dom, "nota-math-preview"), 0, "行内预览不能参与段落文档流");
   equal(find(dom, "nota-math-render")?.dataset.state, "", "编辑态：行内正文那格同样空着");
 });
 
@@ -605,12 +670,40 @@ await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览�
     "行内 `$` 没有使用弱化前景色",
   );
   assertion(
-    /\.nota-math-editing\.nota-math-inline \.nota-math-source\s*\{[^}]*color:\s*var\(--accent\)/s.test(css),
-    "行内源码没有保持强调色",
+    /\.nota-math-editing\.nota-math-inline \.nota-math-source\s*\{[^}]*font-family:\s*inherit;[^}]*font-size:\s*inherit;[^}]*line-height:\s*inherit;[^}]*vertical-align:\s*baseline;[^}]*color:\s*var\(--accent\)/s.test(css),
+    "行内源码没有与正文/分隔符共用字体基线",
   );
   assertion(
-    /\.nota-math-editing\.nota-math-inline \.nota-math-preview\s*\{[^}]*border:\s*0;[^}]*background:\s*#202124/s.test(css),
-    "行内预览仍像独立输入框",
+    /\.nota-math-delim\s*\{[^}]*font-family:\s*inherit;[^}]*font-size:\s*1em;[^}]*line-height:\s*inherit/s.test(css),
+    "行内 `$` 的字号或行高没有继承正文",
+  );
+  assertion(
+    /\.nota-math-inline,[\s\S]*?\.nota-math-inline \.nota-math-panel\s*\{[^}]*white-space:\s*nowrap;[^}]*overflow-wrap:\s*normal;[^}]*line-height:\s*inherit/s.test(css),
+    "LaTeX 主题的段落断行规则仍会拆开行内公式",
+  );
+  assertion(
+    /\.nota-math-editing\.nota-math-inline \.nota-math-panel\s*\{[^}]*display:\s*inline-flex;[^}]*width:\s*max-content/s.test(css),
+    "行内公式面板没有收紧到实际内容宽度",
+  );
+  assertion(
+    /\.nota-math-preview\.nota-math-preview-floating\s*\{[^}]*position:\s*fixed;[^}]*transform:\s*translateX\(-50%\);[^}]*align-items:\s*center;[^}]*justify-content:\s*center/s.test(css),
+    "行内预览没有脱离文档流，或没有按公式中心居中",
+  );
+  assertion(
+    /\.nota-math-preview-floating\.nota-math-preview-visible\s*\{[^}]*display:\s*flex/s.test(css),
+    "行内预览的打开态不是 flex 居中盒",
+  );
+  equal(
+    JSON.stringify(inlinePreviewCenter({
+      left: 100,
+      right: 150,
+      top: 0,
+      bottom: 20,
+      width: 50,
+      height: 20,
+    } as DOMRect)),
+    JSON.stringify({ left: 125, top: 27 }),
+    "预览锚点没有落在公式水平中心与下方 7px",
   );
 });
 
@@ -619,6 +712,24 @@ await testCase("空公式在编辑态：占位卡落在**悬浮预览**里，正
   equal(number2(dom, "nota-math-note"), 1, "空源码要有一张占位卡（不然屏幕上一片空）");
   equal(number2(find(dom, "nota-math-render")!, "nota-math-note"), 0, "正文那格不许有卡");
   equal(number2(find(dom, "nota-math-preview")!, "nota-math-note"), 1, "卡在悬浮预览里");
+});
+
+await testCase("空的行内公式不显示任何预览，内容出现后才创建预览", () => {
+  const { perspective } = create(inline(""), inlinePosition, false, true);
+  const dom = perspective.view!.dom;
+  const emptyPreview = find(fakeDocumentBody(), "nota-math-preview");
+  assertion(emptyPreview, "行内预览元素应存在但不可见");
+  equal(number2(emptyPreview, "nota-math-note"), 0, "空行内公式不应显示占位预览");
+  equal(emptyPreview.classList.contains("nota-math-preview-visible"), false, "空行内公式的预览仍可见");
+
+  const box2 = find(dom, "nota-math-source");
+  if (!box2) throw new Error("没有源码框");
+  box2.value = "\\L";
+  box2.dispatch("input");
+  const preview = find(fakeDocumentBody(), "nota-math-preview");
+  assertion(preview, "有源码后预览元素消失了");
+  assertion(preview.classList.contains("nota-math-preview-visible"), "有源码后预览仍不可见");
+  equal(preview.dataset.state, "loading", "有源码后没有启动 KaTeX 预览");
 });
 
 await testCase("行内：面板开、源码框是 input、整体是行内元素、敲字写进**内容**", () => {
@@ -631,17 +742,50 @@ await testCase("行内：面板开、源码框是 input、整体是行内元素�
   const box2 = find(dom, "nota-math-source");
   equal(box2?.tagName, "INPUT", "行内用的是 input");
   equal(box2?.value, "x^2", "框里是当前源码");
+  equal(box2?.placeholder, "", "行内空公式不应显示示例占位提示");
+  equal(box2?.getAttribute("size"), null, "行内源码框仍在用原生字符列数");
+  equal(box2?.style["--nota-math-source-width"], "1px", "行内源码框没有可测量的像素宽度");
+  equal(box2?.style.width, "1px", "行内源码框没有设置直接宽度");
   const separator2 = box2?.parentNode?.childNodes.filter((c) => c.classList.contains("nota-math-delim"));
   equal(separator2?.length, 2, "行内也是两颗分隔符");
   equal(separator2?.[0]?.textContent, "$", "行内分隔符是单个 `$`");
 
   box2!.value = "y_1+1";
   box2!.dispatch("input");
+  equal(box2?.getAttribute("size"), null, "输入后源码框又落回原生字符列数");
+  equal(box2?.style["--nota-math-source-width"], "1px", "脱离布局的假尺子不应伪造字符宽度");
+  equal(box2?.style.width, "1px", "输入后直接宽度没有更新");
   const changed = getState().doc.nodeAt(inlinePosition);
   if (!changed) throw new Error("改完之后节点不见了");
   equal(changed.textContent, "y_1+1", "内容");
   equal("value" in changed.attrs, false, "行内节点不许有 value 属性");
   equal(saveToDiskValueStroke(changed)[0]?.value2, "y_1+1", "存盘时交出去的是新源码");
+});
+
+await testCase("点击行内公式左右边缘会直接进入源码框对应边界", async () => {
+  const { perspective } = create(inline("x"), inlinePosition);
+  const dom = perspective.view!.dom;
+  const panel = find(dom, "nota-math-panel");
+  const before = find(dom, "nota-math-hit-before");
+  const after = find(dom, "nota-math-hit-after");
+  const box2 = find(dom, "nota-math-source");
+  assertion(panel && before && after && box2, "行内公式缺少边缘命中区或源码框");
+
+  panel.dispatch("mousedown", { target: before });
+  equal(box2.selection[0], 0, "点击左边缘后光标不在源码开头");
+  box2.blur();
+  panel.dispatch("mousedown", { target: after });
+  equal(box2.selection[0], 1, "点击右边缘后光标不在源码末尾");
+});
+
+await testCase("在行内源码框内按下鼠标不会阻断原生文本选择", () => {
+  const { perspective } = create(inline("x^2"), inlinePosition);
+  const dom = perspective.view!.dom;
+  const panel = find(dom, "nota-math-panel");
+  const box2 = find(dom, "nota-math-source");
+  assertion(panel && box2, "行内公式缺少面板或源码框");
+  const event = panel.dispatch("mousedown", { target: box2 });
+  equal(event.defaultPrevented, false, "源码框内的 mousedown 被面板拦截了");
 });
 
 await testCase("行内：Enter 当「确认」，别的键不拦", () => {
@@ -658,11 +802,97 @@ await testCase("行内：源码末尾按 Right 退出公式，后续输入留在
   const box2 = find(perspective.view!.dom, "nota-math-source");
   if (!box2) throw new Error("没有源码框");
   box2.setSelectionRange(1, 1);
+  box2.focus();
+  assertion(
+    view.dom.classList.contains(inlineMathEditingClass),
+    "源码框聚焦后没有让正文覆盖光标停绘",
+  );
+  assertion(
+    view.dom.classList.contains(inlineMathInputFocusClass),
+    "行内源码聚焦时没有标记内部编辑器焦点",
+  );
+  assertion(
+    getState().selection instanceof TextSelection,
+    "进入源码框后仍保留整颗公式的 NodeSelection",
+  );
   equal(box2.dispatch("keydown", { key: "ArrowRight" }).defaultPrevented, true, "Right 要退出公式");
+  assertion(
+    !view.dom.classList.contains(inlineMathInputFocusClass),
+    "退出公式后内部编辑器焦点标记没有清掉",
+  );
+  assertion(
+    perspective.view!.dom.classList.contains("nota-math-editing"),
+    "闭 `$` 外侧应继续显示源码",
+  );
+  assertion(
+    !view.dom.classList.contains(inlineMathEditingClass),
+    "闭 `$` 外侧不应由输入控件持有焦点",
+  );
   assertion(getState().selection instanceof TextSelection, "退出后应是正文文本光标");
   view.dispatch(getState().tr.insertText("你"));
   equal(getState().doc.nodeAt(inlinePosition)?.textContent, "x", "公式源码里没有混入正文");
   assertion(getState().doc.textContent.includes("你"), "正文输入没有落到公式外");
+});
+
+await testCase("仅贴住公式边界时显示源码，但不抢输入框焦点", async () => {
+  const { view, perspective } = create(inline("x"), inlinePosition, false, false);
+  assertion(perspective.view!.dom.classList.contains("nota-math-editing"), "边界没有显示源码");
+  await flushRefresh();
+  equal(currentFocusPoint(), null, "边界光标被输入框抢走了");
+  equal(
+    view.dom.classList.contains(inlineMathEditingClass),
+    false,
+    "边界态错误地隐藏了正文覆盖光标",
+  );
+});
+
+await testCase("行内源码边界判断不会因 WebKit 的空选区字段把 Right 吃掉", () => {
+  equal(
+    inlineMathInputAtEdge({ value: "\\LaTeX", selectionStart: 6, selectionEnd: 6 }, "end"),
+    true,
+    "末尾 Right 没有识别到闭 `$` 前的位置",
+  );
+  equal(
+    inlineMathInputAtEdge({ value: "\\LaTeX", selectionStart: 0, selectionEnd: 0 }, "start"),
+    true,
+    "开头 Left 没有识别到开 `$` 后的位置",
+  );
+  equal(
+    inlineMathInputAtEdge({ value: "\\LaTeX", selectionStart: 3, selectionEnd: 3 }, "end"),
+    false,
+    "正文中间的方向键被误判为退出公式",
+  );
+  equal(
+    inlineMathInputAtEdge({ value: "x", selectionStart: null, selectionEnd: null }, "end"),
+    false,
+    "未知选区不能被猜成公式边界",
+  );
+});
+
+await testCase("`1$…$2`：Right 能越过闭 `$`，2 前不生成新段落", () => {
+  const { view, perspective, getState, position2 } = create(
+    inline("x"),
+    inlinePosition,
+    false,
+    true,
+    true,
+    { before: "1", after: "2" },
+  );
+  const box2 = find(perspective.view!.dom, "nota-math-source");
+  if (!box2) throw new Error("没有源码框");
+  box2.setSelectionRange(1, 1);
+  box2.dispatch("keydown", { key: "ArrowRight" });
+  const node = getState().doc.nodeAt(position2);
+  if (!node) throw new Error("公式节点消失");
+  equal(
+    getState().selection.from,
+    position2 + node.nodeSize,
+    "光标没有落在闭 `$` 与 2 之间",
+  );
+  equal(getState().doc.childCount, 3, "公式前后文字不应生成额外段落");
+  equal(getState().doc.child(1).childCount, 3, "段落应仍是 1、公式、2 三颗行内节点");
+  view.dispatch(getState().tr.insertText("Z"));
+  equal(getState().doc.child(1).textContent, "1xZ2", "公式后的输入位置错误");
 });
 
 await testCase("行内：源码开头按 Left 退出公式，后续输入留在 `$…$` 前", () => {
@@ -681,20 +911,20 @@ await testCase("行内：源码开头按 Left 退出公式，后续输入留在 
   equal(getState().doc.child(1).textContent, "你x", "正文输入应落在公式前");
 });
 
-await testCase("行内：源码末尾反斜杠与右侧 `$` 有纯展示间距", () => {
+await testCase("行内：源码末尾反斜杠不会额外撑开右侧 `$`", () => {
   const { perspective } = create(inline("x"), inlinePosition);
   const dom = perspective.view!.dom;
   const box2 = find(dom, "nota-math-source");
   if (!box2) throw new Error("没有源码框");
   box2.value = "\\";
   box2.dispatch("input");
-  assertion(dom.classList.contains("nota-math-trailing-backslash"), "末尾反斜杠没有触发间距态");
+  assertion(dom.classList.contains("nota-math-trailing-backslash"), "末尾反斜杠状态没有更新");
   const closing = find(dom, "nota-math-delim-close");
   assertion(!!closing, "闭分隔符没有专用类");
   const css = readFileSync("src/styles/math.css", "utf8");
   assertion(
-    /nota-math-trailing-backslash[^}]+nota-math-delim-close\s*\{[^}]*margin-inline-start/s.test(css),
-    "末尾反斜杠没有与右侧 `$` 分开",
+    !/nota-math-trailing-backslash[^{]*nota-math-delim-close\s*\{[^}]*margin-inline-start/s.test(css),
+    "末尾反斜杠仍被 CSS 额外撑开，右侧 `$` 会出现空隙",
   );
 });
 

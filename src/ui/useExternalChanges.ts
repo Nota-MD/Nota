@@ -68,6 +68,8 @@ export interface ExternalPartChangeAction {
 export interface ExternalPartCorrectAccording {
   id: DocId;
   title: string;
+  /** Raw file contents currently on disk; the editor renders this as the target preview. */
+  diskText: string;
   /** 统一格式的逐行差异（`api.diff.texts`）。空数组 = 两边其实一样。 */
   line3: DiffLine[];
 }
@@ -210,7 +212,7 @@ export function useExternalChanges(w: wiring): ExternalPartChangeActionOutputMou
         const disk = await api.doc.diskText(id);
         const line3 = await api.diff.texts(selfPluralOf, disk);
         const markTitle = docsRef.current.find((d) => d.id === id)?.title ?? "";
-        const oneDocument: ExternalPartCorrectAccording = { id, title: markTitle, line3 };
+        const oneDocument: ExternalPartCorrectAccording = { id, title: markTitle, diskText: disk, line3 };
         setCorrectAccording(oneDocument);
         return oneDocument;
       } catch (e) {

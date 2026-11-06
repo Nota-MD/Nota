@@ -103,7 +103,7 @@ const characterNumberMostSmall = 12;
 const characterNumberMostLarge = 32;
 const characterNumberStepLength = 1;
 /** 字号算不出来时的兜底。⚠️ 与后端 `Settings::default()` 的 `ui_font_size` 对齐（15）。 */
-const defaultFontSize = 15;
+export const recommendedEditorFontSize = 15;
 
 /** 攒多久再落盘。太短等于没攒，太长会让"滚完马上关窗"丢掉最后一次。 */
 const dropDiskDelayDelay = 400;
@@ -145,7 +145,7 @@ function setCharacterNumber(px: number) {
   root.dataset.editorFontSize = "custom";
   root.style.setProperty(
     "--editor-font-size",
-    `${clamp(px, characterNumberMostSmall, characterNumberMostLarge, defaultFontSize)}px`,
+    `${clamp(px, characterNumberMostSmall, characterNumberMostLarge, recommendedEditorFontSize)}px`,
   );
 }
 
@@ -192,7 +192,7 @@ export function useZoom(
   // ⚠️ 字号在**顶层**（`settings.ui_font_size`），不在 `appearance` 里——这是
   // 「外观」那一页的老结构，理由写在 `settings/appearance.rs` 的文件头。
   // 兜底那个 15 与后端 `Settings::default()` 对齐。
-  const thinkCharacterNumber = settings?.ui_font_size ?? 15;
+  const thinkCharacterNumber = settings?.ui_font_size ?? recommendedEditorFontSize;
   const allowAllowRollWheel = a?.ctrl_wheel_zoom ?? false;
   const target = a?.ctrl_wheel_target ?? "font_size";
   // 设置到手了没有。**只用来挡住"还没读到设置就往 webview 上写"**：启动那一两百
@@ -203,7 +203,7 @@ export function useZoom(
   // 已经生效的那个值。滚轮的加减要按**它**算：落盘是去抖的，中间那几格设置里
   // 还没有，按设置算的话连滚五格会被算成同一个数。⚠️ 两条轴各记一个。
   const alreadyShouldUseShrinkRelease = useRef(clamp(thinkShrinkRelease, shrinkReleaseMostSmall, shrinkReleaseMostLarge, 100));
-  const alreadyShouldUseCharacterNumber = useRef(clamp(thinkCharacterNumber, characterNumberMostSmall, characterNumberMostLarge, defaultFontSize));
+  const alreadyShouldUseCharacterNumber = useRef(clamp(thinkCharacterNumber, characterNumberMostSmall, characterNumberMostLarge, recommendedEditorFontSize));
   // 去抖窗口里设置可能被别处改掉（换个界面风格、改个字号），所以补丁要带上
   // **最新**的那份外观，不能用手抽那一帧闭包里的那份——否则会把别人刚改的值写回去。
   const mostNewValueAppearance = useRef(a);
@@ -216,7 +216,7 @@ export function useZoom(
     // "自动"那一档——`custom_font_size` 为假时是把内联值**摘掉**）。这里要是
     // 也写一遍，用户选着「自动」而 `ui_font_size` 是 18，内联值会把自动档的
     // 效果整个盖掉，而设置里那两档看起来还是对的。
-    alreadyShouldUseCharacterNumber.current = clamp(thinkCharacterNumber, characterNumberMostSmall, characterNumberMostLarge, defaultFontSize);
+    alreadyShouldUseCharacterNumber.current = clamp(thinkCharacterNumber, characterNumberMostSmall, characterNumberMostLarge, recommendedEditorFontSize);
     void setShrinkRelease(thinkShrinkRelease);
   }, [settingsReady, thinkShrinkRelease, thinkCharacterNumber]);
 
@@ -287,7 +287,7 @@ export function useZoom(
           alreadyShouldUseCharacterNumber.current + (e.deltaY < 0 ? characterNumberStepLength : -characterNumberStepLength),
           characterNumberMostSmall,
           characterNumberMostLarge,
-          defaultFontSize,
+          recommendedEditorFontSize,
         );
         // 已经顶到 12px 或 20px 了：别再改，也别再排一次落盘。
         if (belowValueCell === alreadyShouldUseCharacterNumber.current) return;

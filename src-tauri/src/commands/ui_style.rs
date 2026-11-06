@@ -47,8 +47,12 @@ pub fn nota_ui_style_css(id: String) -> Result<String> {
 #[tauri::command]
 pub fn nota_ui_styles_open_dir(app: tauri::AppHandle) -> Result<String> {
     let shown = ui_styles::user_styles_dir()?;
-    app.opener()
-        .open_path(shown.clone(), None::<&str>)
-        .map_err(|e| NotaError::other(format!("调用系统打开器失败：{e}——目录是 {shown}")))?;
+    if let Err(primary) = app.opener().open_path(shown.clone(), None::<&str>) {
+        open::that_detached(&shown).map_err(|fallback| {
+            NotaError::other(format!(
+                "调用系统打开器失败：{primary}；备用打开器也失败：{fallback}——目录是 {shown}"
+            ))
+        })?;
+    }
     Ok(shown)
 }

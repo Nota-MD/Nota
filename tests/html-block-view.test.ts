@@ -215,11 +215,32 @@ testCase("HTML 渲染块在启动与拖动时都不会产生原生蓝色选区",
     "HTML 块没有区分左右键",
   );
   assertValue(
-    create.includes("TextSelection.between(state.doc.resolve(0), state.doc.resolve(0))") &&
+    create.includes("const openingSelection = () =>") &&
+      create.includes("TextSelection.between(doc.resolve(0), doc.resolve(0))") &&
       !/state\.tr\.setSelection\(\s*TextSelection\.atStart/.test(
         create.slice(create.indexOf("const cursorToOpenHead"), create.indexOf("return {")),
       ),
     "启动落点仍可能退化为 HTML 原子块的 NodeSelection",
+  );
+});
+
+testCase("HTML 源码里的 align 不被文档主题的普通标签对齐覆盖", () => {
+  const css = readFileSync("src/styles/editor-inline.css", "utf8");
+  assertValue(
+    /\.nota-html-render \[align="center"\][\s\S]*?text-align:\s*center\s*!important/s.test(css),
+    "显式居中的 HTML 块仍会被文档主题压成左对齐",
+  );
+  assertValue(
+    /\.nota-html-render \[align="right"\][\s\S]*?text-align:\s*right\s*!important/s.test(css),
+    "显式右对齐的 HTML 块没有保留作者意图",
+  );
+  assertValue(
+    /\.nota-html-render \[align="justify"\][\s\S]*?text-align:\s*justify\s*!important/s.test(css),
+    "显式两端对齐的 HTML 块没有保留作者意图",
+  );
+  assertValue(
+    /\.nota-html-render center > :is\(p, h1, h2, h3, h4, h5, h6, div\)[\s\S]*?text-align:\s*inherit\s*!important/s.test(css),
+    "`<center>` 内的块仍会被主题的 `p` 左对齐规则拆散",
   );
 });
 

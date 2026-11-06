@@ -68,7 +68,6 @@
 import { $prose } from "@milkdown/kit/utils";
 import {
   Plugin,
-  PluginKey,
   TextSelection,
   type EditorState,
   type Transaction,
@@ -85,16 +84,25 @@ import {
   findActiveMarkRange,
   inlineSyntaxAndEscapeDecorations,
   inlineSyntaxNodeSpec,
+  markHintLiteral,
   normalizeInlineBlock,
+  noticeClass,
   noticeTable,
-  rewriteInlineBlock,
-  serializeInlineBlock,
-  type ActiveMarkRange,
   type SyntaxMarkerRange,
   type SyntaxNodeAttribute,
 } from "./mark-hint-source";
 import { inlineEscapeSpec } from "./inline-escape";
-import { adjacentSyntaxTarget, exactTextSelection, textblockDepthFrom } from "./inline-caret";
+import {
+  backspaceEmptyInlinePair,
+  backspaceInlineDelimiter,
+  deleteEmptyInlinePairForward,
+  deleteInlineDelimiter,
+  inputInlineDelimiter,
+  insertPlainInlineText,
+  markHintKey,
+  moveInlineCaret,
+  type MarkHintState,
+} from "./inline-edit";
 
 export {
   findActiveMarkRange,
@@ -103,6 +111,16 @@ export {
   noticeClass,
   noticeTable,
 } from "./mark-hint-source";
+export {
+  backspaceEmptyInlinePair,
+  backspaceInlineDelimiter,
+  deleteEmptyInlinePairForward,
+  deleteInlineDelimiter,
+  inputInlineDelimiter,
+  insertPlainInlineText,
+  markHintKey,
+  moveInlineCaret,
+} from "./inline-edit";
 
 export function scanOneParagraph(
   doc: PMNode,
@@ -195,13 +213,6 @@ export function splitMarkCharacter(symbolNumber: string): string[] {
   return Array.from(symbolNumber);
 }
 
-
-interface MarkHintState {
-  /** 收起标记后，暂不重新显示的那个折叠光标位置。 */
-  suppressedAt: number | null;
-}
-
-export const markHintKey = new PluginKey<MarkHintState>("nota-mark-hint");
 
 /** Internal transaction flag: run the post-composition inline normalization. */
 export const markHintRefresh = "nota-mark-hint-refresh";
@@ -369,210 +380,142 @@ export function listSyntaxMarkers(doc: PMNode, syntaxType: NodeType): SyntaxMark
 }
 
 /**
- * Keyboard caret navigation around real syntax atoms.
+ * Ensure the current mark has delimiter atoms at both edges.
  *
- * WebKit does not reliably move a collapsed DOM caret across an inline atom
- * whose wrapper uses `display: contents`. At `**|1**` Left could therefore
- * stop between the two opening stars instead of reaching the paragraph start.
- * Handle only the immediate atom boundary and the line-edge keys here; all
- * ordinary caret movement stays with ProseMirror and the browser.
+ * Inactive delimiter atoms stay in the document and are hidden by a node
+ * decoration. Removing them collapses the two logical caret positions around
+ * a closing group into one DOM boundary, which made Left from following text
+ * jump straight into the bold content.
  */
-export function moveInlineCaret(
+function syncInlineMarkers(
   state: EditorState,
   syntaxType: NodeType,
-  key: "ArrowLeft" | "ArrowRight" | "Home" | "End",
+  allowSelection = false,
 ): Transaction | null {
-  if (!state.selection.empty) return null;
-  const { $from } = state.selection;
-  const depth = textblockDepthFrom($from);
-  const block = $from.node(depth);
-  if (!block.isTextblock || block.type.spec.code) return null;
-
-  let target: number | null = null;
-  if (key === "Home") {
-    target = $from.start(depth);
-  } else if (key === "End") {
-    target = $from.end(depth);
-  } else {
-    target = adjacentSyntaxTarget(
-      $from,
-      syntaxType,
-      key === "ArrowLeft" ? "left" : "right",
-    );
-  }
-  if (target === null || target === state.selection.from) return null;
-  return state.tr
-    .setSelection(exactTextSelection(state, target))
-    .scrollIntoView();
-}
-
-
-/**
- * Backspace at any editable delimiter restarts from the paragraph's visible
- * source. The old implementation tried to repair one local strong/emphasis
- * pair at a time; that cannot see an outer delimiter elsewhere in the same
- * paragraph and is the source of the `**1*` ping-pong family.
- */
-export function backspaceInlineDelimiter(
-  state: EditorState,
-  syntaxType: NodeType,
-  escapeType?: NodeType,
-): Transaction | null {
-  if (!state.selection.empty) return null;
-  const { $from } = state.selection;
-  const depth = textblockDepthFrom($from);
-  const parent = $from.node(depth);
-  if (!parent.isTextblock || parent.type.spec.code) return null;
+  if (!state.selection.empty && !allowSelection) return null;
   const marks = state.schema.marks as Record<string, MarkType | undefined>;
-  const snapshot = serializeInlineBlock(parent, syntaxType, marks);
-  if (!snapshot) return null;
-
-  for (const spec of noticeTable) {
-    const type = marks[spec.name3];
-    if (!type) continue;
-    const active = findActiveMarkRange(
-      state.doc,
-      state.selection.from,
-      type,
-      syntaxType,
-    );
-    if (!active) continue;
-
-    let markerStart: number | null = null;
-    let markerText = "";
-    let offset = 0;
-    if (
-      active.leftMarker &&
-      state.selection.from > active.leftMarker.from &&
-      state.selection.from <= active.leftMarker.to2
-    ) {
-      const contentStart = snapshot.at.get(active.from - $from.start(depth));
-      if (contentStart === undefined) continue;
-      markerStart = contentStart - active.leftMarker.text4.length;
-      markerText = active.leftMarker.text4;
-      offset = state.selection.from - active.leftMarker.from;
-    } else if (
-      active.rightMarker &&
-      state.selection.from > active.rightMarker.from &&
-      state.selection.from <= active.rightMarker.to2
-    ) {
-      const contentEnd = snapshot.at.get(active.to2 - $from.start(depth));
-      if (contentEnd === undefined) continue;
-      markerStart = contentEnd;
-      markerText = active.rightMarker.text4;
-      offset = state.selection.from - active.rightMarker.from;
-    }
-    if (markerStart === null || offset <= 0) continue;
-    if (
-      markerText &&
-      snapshot.source.slice(markerStart, markerStart + markerText.length) !== markerText
-    ) {
-      continue;
-    }
-    const sourceIndex = markerStart + offset - 1;
-    if (sourceIndex < 0 || sourceIndex >= snapshot.source.length) continue;
-    return rewriteInlineBlock(state, syntaxType, {
-      from: sourceIndex,
-      to2: sourceIndex + 1,
-      insert: "",
-    }, escapeType);
-  }
-  return null;
-}
-
-export function inputInlineDelimiter(
-  state: EditorState,
-  syntaxType: NodeType,
-  _from: number,
-  _to2: number,
-  text4: string,
-  escapeType?: NodeType,
-): Transaction | null {
-  const { $from } = state.selection;
-  let depth = $from.depth;
-  while (depth > 0 && !$from.node(depth).isTextblock) depth--;
-  const parent = $from.node(depth);
-  if (!parent.isTextblock || parent.type.spec.code) return null;
-  const marks = state.schema.marks as Record<string, MarkType | undefined>;
-  const snapshot = serializeInlineBlock(parent, syntaxType, marks);
-  if (!snapshot) return null;
-  // `handleTextInput`'s positions come from WebKit's DOM caret, which can
-  // normalize to the inner edge of an adjacent closing atom. The editor state
-  // has already resolved the logical caret; use that so typing after `==|`
-  // becomes `==text==~`, not `==text~==`.
-  const selectionFrom = state.selection.from;
-  const selectionTo = state.selection.to;
-  let sourceFrom = snapshot.at.get(selectionFrom - $from.start(depth));
-  let sourceTo = snapshot.at.get(selectionTo - $from.start(depth));
-  if (sourceFrom === undefined || sourceTo === undefined) return null;
-  // At the outer edge after `==|`, the ProseMirror position is after the
-  // closing atom while `serializeInlineBlock` maps the paragraph boundary to
-  // the source position *before* that atom. Move the insertion past the
-  // adjacent closing delimiter so a typed `~` becomes `==1==~`, not `==1~==`.
-  let closingLength = 0;
+  const activeMarks: Mark[] = [];
+  const missingByKey = new Map<string, {
+    position2: number;
+    text4: string;
+    syntax: string;
+    side: "left" | "right";
+  }>();
+  const cursors = state.selection.empty
+    ? [state.selection.from]
+    : [
+        state.selection.from,
+        state.selection.to,
+        state.selection.from + 1,
+        state.selection.to - 1,
+      ].filter(
+        (position2) =>
+          position2 >= 0 && position2 <= state.doc.content.size,
+      );
   for (const { name3 } of noticeTable) {
     const type = marks[name3];
     if (!type) continue;
-    const active = findActiveMarkRange(
-      state.doc,
-      selectionFrom,
-      type,
-      syntaxType,
-    );
-    if (active?.rightMarker && selectionFrom === active.rightMarker.to2) {
-      closingLength = Math.max(closingLength, active.rightMarker.text4.length);
+    for (const cursor of cursors) {
+      const active = findActiveMarkRange(
+        state.doc,
+        cursor,
+        type,
+        syntaxType,
+      );
+      if (!active) continue;
+      if (
+        state.selection.empty &&
+        state.selection.from >= active.from &&
+        state.selection.from <= active.to2
+      ) {
+        activeMarks.push(type.create());
+      }
+      if (!active.leftMarker) {
+        const item = {
+          position2: active.from,
+          text4: active.left,
+          syntax: name3,
+          side: "left" as const,
+        };
+        missingByKey.set(
+          `${item.syntax}:${item.position2}:${item.side}`,
+          item,
+        );
+      }
+      if (!active.rightMarker) {
+        const item = {
+          position2: active.to2,
+          text4: active.right,
+          syntax: name3,
+          side: "right" as const,
+        };
+        missingByKey.set(
+          `${item.syntax}:${item.position2}:${item.side}`,
+          item,
+        );
+      }
     }
   }
-  sourceFrom = Math.min(snapshot.source.length, sourceFrom + closingLength);
-  if (selectionFrom === selectionTo) sourceTo = sourceFrom;
-  return rewriteInlineBlock(state, syntaxType, {
-    from: sourceFrom,
-    to2: sourceTo,
-    insert: text4,
-  }, escapeType);
-}
+  const missing = Array.from(missingByKey.values());
 
-/** Compatibility entry for callers that specifically target a right marker. */
-export function backspaceAfterRightMarker(
-  state: EditorState,
-  syntaxType: NodeType,
-): Transaction | null {
-  return backspaceInlineDelimiter(state, syntaxType);
-}
-
-/** Compatibility entry for callers that specifically target a left marker. */
-export function backspaceAtLeftMarker(
-  state: EditorState,
-  syntaxType: NodeType,
-): Transaction | null {
-  return backspaceInlineDelimiter(state, syntaxType);
-}
-
-/** Compatibility entry for inserting one delimiter character at the caret. */
-export function restoreStrongAfterThirdStar(
-  state: EditorState,
-  syntaxType: NodeType,
-): Transaction | null {
-  if (!state.selection.empty) return null;
-  return inputInlineDelimiter(
-    state,
-    syntaxType,
-    state.selection.from,
-    state.selection.to,
-    "*",
+  const uniqueActiveMarks = activeMarks.filter(
+    (mark, index, all) => all.findIndex((other) => other.eq(mark)) === index,
   );
-}
+  const atomBefore = state.selection.$from.nodeBefore;
+  const atomAfter = state.selection.$from.nodeAfter;
+  const adjacentMarks =
+    atomBefore && !atomBefore.isText && atomBefore.marks.length
+      ? atomBefore.marks
+      : atomAfter && !atomAfter.isText
+        ? atomAfter.marks
+        : [];
+  const marksToStore =
+    uniqueActiveMarks.length > 0 ? uniqueActiveMarks : adjacentMarks;
+  const storedChanged = !Mark.sameSet(state.storedMarks ?? [], marksToStore);
+  if (!missing.length && !storedChanged) return null;
 
-/**
- * Promote a complete literal pair such as `*18*` into an inline mark after any
- * document change. The opening delimiter may have been typed after the closing
- * delimiter already existed, which normal input rules cannot observe.
- */
-export function promotePairedMark(
-  state: EditorState,
-  syntaxType: NodeType,
-): Transaction | null {
-  return normalizeInlineBlock(state, syntaxType);
+  const selectionFrom = state.selection.from;
+  const selectionTo = state.selection.to;
+  let fromShift = 0;
+  let toShift = 0;
+  const tr = state.tr;
+  for (const item of missing.sort((a, b) => b.position2 - a.position2)) {
+    const mapped = tr.mapping.map(item.position2, 1);
+    if (mapped < selectionFrom || (item.side === "left" && mapped === selectionFrom)) {
+      fromShift += item.text4.length;
+    }
+    if (mapped < selectionTo) toShift += item.text4.length;
+    const nodes = Array.from(item.text4).map((symbol) =>
+      syntaxType.create({
+        syntax: item.syntax,
+        side: item.side,
+        symbol,
+      }),
+    );
+    tr.insert(mapped, Fragment.fromArray(nodes));
+  }
+  if (tr.docChanged) {
+    const clampPosition = (position2: number): number =>
+      Math.max(0, Math.min(tr.doc.content.size, position2));
+    const from = TextSelection.near(
+      tr.doc.resolve(clampPosition(selectionFrom + fromShift)),
+      1,
+    );
+    const to = TextSelection.near(
+      tr.doc.resolve(clampPosition(selectionTo + toShift)),
+      -1,
+    );
+    tr.setSelection(
+      TextSelection.create(
+        tr.doc,
+        Math.min(from.from, to.from),
+        Math.max(from.from, to.from),
+      ),
+    );
+    tr.setMeta("addToHistory", false);
+  }
+  if (storedChanged) tr.setStoredMarks(marksToStore);
+  return tr.docChanged || storedChanged ? tr : null;
 }
 
 /**
@@ -589,37 +532,77 @@ export function createMarkHintPlugin(
 ): Plugin {
   let compositionAnchor: InlineCompositionAnchor | null = null;
   let compositionTimer: number | null = null;
+  const pinDomCaret = (view: EditorView, position2: number) => {
+    const markerAt = (pos: number): Element | null => {
+      const node = view.nodeDOM(pos);
+      return node instanceof Element && node.classList.contains(noticeClass) ? node : null;
+    };
+    const before = position2 > 0 ? markerAt(position2 - 1) : null;
+    const after = markerAt(position2);
+    const marker = before ?? after;
+    if (!marker?.parentNode) return;
+    const index = Array.prototype.indexOf.call(marker.parentNode.childNodes, marker);
+    if (index < 0) return;
+    const selection = window.getSelection();
+    const at = before ? index + 1 : index;
+    selection?.setBaseAndExtent(marker.parentNode, at, marker.parentNode, at);
+  };
   return new Plugin({
       key: markHintKey,
-      view: () => ({
-        destroy() {
-          if (compositionTimer !== null) {
-            window.clearTimeout(compositionTimer);
-            compositionTimer = null;
-          }
-        },
-      }),
+      view: () => {
+        return {
+          destroy() {
+            if (compositionTimer !== null) {
+              window.clearTimeout(compositionTimer);
+              compositionTimer = null;
+            }
+          },
+        };
+      },
       props: {
         decorations: (state) =>
-          inlineSyntaxAndEscapeDecorations(state, escapeType),
-        handleTextInput: (view, from, to2, text4) => {
-          if (view.composing || text4.length !== 1 || !"*_=~^`<>".includes(text4)) {
-            return false;
-          }
-          const tr = inputInlineDelimiter(
-            view.state,
+          inlineSyntaxAndEscapeDecorations(
+            state,
             syntaxType,
-            from,
-            to2,
-            text4,
             escapeType,
-          );
-          if (!tr) return false;
-          view.dispatch(tr);
-          return true;
-        },
+            markHintKey.getState(state)?.suppressedAt ?? null,
+          ),
         handleKeyDown: (view, event) => {
           if (event.isComposing || view.composing) return false;
+          if (
+            event.key === "\\" &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey
+          ) {
+            const syntaxType = view.state.schema.nodes.notaSyntax;
+            const escapeType = view.state.schema.nodes.notaEscape;
+            if (!syntaxType) return false;
+            const tr = inputInlineDelimiter(
+              view.state,
+              syntaxType,
+              view.state.selection.from,
+              view.state.selection.to,
+              "\\",
+              escapeType,
+              true,
+            );
+            if (tr) {
+              event.preventDefault();
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
+          }
+          if (event.key === "Delete") {
+            const tr =
+              deleteEmptyInlinePairForward(view.state, syntaxType) ??
+              deleteInlineDelimiter(view.state, syntaxType);
+            if (tr) {
+              event.preventDefault();
+              view.dispatch(tr);
+              return true;
+            }
+          }
           if (
             !event.shiftKey &&
             !event.ctrlKey &&
@@ -633,16 +616,71 @@ export function createMarkHintPlugin(
             const tr = moveInlineCaret(view.state, syntaxType, event.key);
             if (tr) {
               view.dispatch(tr);
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                requestAnimationFrame(() => {
+                  if (!view.isDestroyed) pinDomCaret(view, view.state.selection.from);
+                });
+              }
               return true;
             }
           }
           if (event.key !== "Backspace") return false;
-          const tr = backspaceInlineDelimiter(view.state, syntaxType, escapeType);
+          const literalBefore = view.state.selection.$from.nodeBefore;
+          if (
+            view.state.selection.empty &&
+            literalBefore?.type.name === "notaLiteral" &&
+            literalBefore.attrs.symbol === "\\"
+          ) {
+            event.preventDefault();
+            const caret = view.state.selection.from;
+            const tr = view.state.tr.delete(
+              caret - literalBefore.nodeSize,
+              caret,
+            );
+            tr.setSelection(
+              TextSelection.create(
+                tr.doc,
+                caret - literalBefore.nodeSize,
+              ),
+            );
+            view.dispatch(tr.scrollIntoView());
+            return true;
+          }
+          const tr =
+            backspaceEmptyInlinePair(view.state, syntaxType) ??
+            backspaceInlineDelimiter(view.state, syntaxType, escapeType);
           if (!tr) return false;
           view.dispatch(tr);
           return true;
         },
         handleDOMEvents: {
+          beforeinput: (view, rawEvent) => {
+            const event = rawEvent as InputEvent;
+            if (
+              view.composing ||
+              event.isComposing ||
+              event.inputType !== "insertText" ||
+              event.data !== "\\"
+            ) {
+              return false;
+            }
+            const syntaxType = view.state.schema.nodes.notaSyntax;
+            const escapeType = view.state.schema.nodes.notaEscape;
+            if (!syntaxType) return false;
+            const tr = inputInlineDelimiter(
+              view.state,
+              syntaxType,
+              view.state.selection.from,
+              view.state.selection.to,
+              event.data,
+              escapeType,
+              true,
+            );
+            if (!tr) return false;
+            event.preventDefault();
+            view.dispatch(tr.scrollIntoView());
+            return true;
+          },
           compositionstart: (view) => {
             compositionAnchor = inlineCompositionAnchor(view.state, syntaxType);
             if (compositionAnchor) {
@@ -701,14 +739,14 @@ export function createMarkHintPlugin(
         // ProseMirror tags every transaction produced while an IME owns the
         // editable DOM. Rewriting that textblock here mutates the DOM below the
         // active composition and is exactly how newly committed Chinese text
-        // used to inherit the preceding highlight. compositionend schedules a
-        // clean normalization after the browser has finished reading it.
+        // used to inherit the preceding highlight.
         if (transactions.some((tr) => tr.getMeta("composition") != null)) {
           return null;
         }
-        const documentChanged = transactions.some((tr) => tr.docChanged);
-        const { doc, selection, schema } = newState;
-        const marks = schema.marks as Record<string, MarkType | undefined>;
+        if (transactions.some((tr) => tr.getMeta(markHintLiteral) === true)) {
+          return null;
+        }
+        const marks = newState.schema.marks as Record<string, MarkType | undefined>;
         checkMissingName(marks);
 
         if (
@@ -719,125 +757,88 @@ export function createMarkHintPlugin(
           const normalized = normalizeInlineBlock(newState, syntaxType, escapeType);
           if (normalized) return normalized;
         }
-
-        const targets: ActiveMarkRange[] = [];
-        const suppressedAt = markHintKey.getState(newState)?.suppressedAt ?? null;
-        const suppressedAtCursor =
-          selection.empty && suppressedAt !== null && selection.from === suppressedAt;
-        if (selection.empty && selection.from !== suppressedAt) {
-          for (const { name3 } of noticeTable) {
-            const type = marks[name3];
-            if (!type) continue;
-            const found = findActiveMarkRange(doc, selection.from, type, syntaxType);
-            if (found) targets.push(found);
-          }
-        }
-
-        const markers = listSyntaxMarkers(doc, syntaxType);
-        const keep = new Set<string>();
-        const missing: Array<{
-          position2: number;
-          text4: string;
-          syntax: string;
-          side: "left" | "right";
-        }> = [];
-
-        for (const target of targets) {
-          if (target.leftMarker) {
-            keep.add(
-              `${target.leftMarker.from}:${target.leftMarker.to2}:${target.name}:left:${target.leftMarker.text4}`,
-            );
-          } else {
-            missing.push({
-              position2: target.from,
-              text4: target.left,
-              syntax: target.name,
-              side: "left",
-            });
-          }
-          if (target.rightMarker) {
-            keep.add(
-              `${target.rightMarker.from}:${target.rightMarker.to2}:${target.name}:right:${target.rightMarker.text4}`,
-            );
-          } else {
-            missing.push({
-              position2: target.to2,
-              text4: target.right,
-              syntax: target.name,
-              side: "right",
-            });
-          }
-        }
-
-        const boundaryMarks: Mark[] = [];
-        for (const target of targets) {
-          if (selection.from !== target.from && selection.from !== target.to2) continue;
-          const type = marks[target.name];
-          if (type) boundaryMarks.push(type.create());
-        }
-        const uniqueBoundaryMarks = boundaryMarks.filter(
-          (mark, index, all) => all.findIndex((other) => other.eq(mark)) === index,
+        const selectionMarkChanged = transactions.some((tr) =>
+          tr.steps.some(
+            (step) =>
+              step.toJSON().stepType === "addMark" ||
+              step.toJSON().stepType === "removeMark",
+          ),
         );
-        const storedChanged = !Mark.sameSet(newState.storedMarks ?? [], uniqueBoundaryMarks);
-
-        const removals = (suppressedAtCursor ? [] : markers)
-          .filter(
-            (marker) =>
-              !keep.has(`${marker.from}:${marker.to2}:${marker.syntax}:${marker.side}:${marker.text4}`),
-          )
-          .sort((a, b) => b.from - a.from);
-
-        if (removals.length === 0 && missing.length === 0 && !storedChanged) return null;
-        const tr = newState.tr;
-        // Marker maintenance caused by cursor movement is presentation only.
-        // When the same append pass follows a real edit, keep that cleanup in
-        // the same undo group. Marking it addToHistory:false leaves history
-        // mapped against a document that still contained the deleted marker
-        // atoms; undo then restores those stale atoms and produces `===1===`.
-        if (!documentChanged) tr.setMeta("addToHistory", false);
-
-        for (const marker of removals) tr.delete(marker.from, marker.to2);
-
-        const removedAtCursor = removals.some(
-          (marker) =>
-            selection.from === marker.from || selection.from === marker.to2,
+        return syncInlineMarkers(
+          newState,
+          syntaxType,
+          selectionMarkChanged,
         );
-        // 删除可能同时收起左右两组标记。`selection` 在 `tr.delete` 之后已经
-        // 被事务正确映射到正文末尾；再手工 `map(..., 1)` 会得到删除区间右侧
-        // 的旧坐标，和真实光标差两位，随后同位置选区同步就会误判为“移动了”。
-        const suppressionAfterDelete = removedAtCursor
-          ? tr.mapping.map(selection.from, -1)
-          : null;
-
-        const inserts = missing
-          .map((item) => ({
-            ...item,
-            position2: tr.mapping.map(item.position2, 1),
-          }))
-          .sort((a, b) => b.position2 - a.position2);
-
-        for (const item of inserts) {
-          const syntaxNodes = Array.from(item.text4).map((symbol) =>
-            syntaxType.create({
-              syntax: item.syntax,
-              side: item.side,
-              symbol,
-            }),
-          );
-          tr.insert(item.position2, Fragment.fromArray(syntaxNodes));
-        }
-        if (storedChanged) tr.setStoredMarks(uniqueBoundaryMarks);
-        // 这是 `appendTransaction` 的第二轮（例如只清理 storedMarks）：这一轮
-        // 没有删除任何标记，不能把上一轮刚记下的抑制位置覆盖成 `null`。
-        const previousSuppression = markHintKey.getState(newState)?.suppressedAt ?? null;
-        tr.setMeta(
-          markHintKey,
-          inserts.length > 0 ? null : (suppressionAfterDelete ?? previousSuppression),
-        );
-        return tr.docChanged || storedChanged ? tr : null;
       },
   });
 }
+
+/**
+ * Run every Markdown delimiter keystroke through the same source controller as
+ * Typedown. The transaction either auto-pairs the opener, steps over a closer,
+ * or inserts a literal delimiter. `autoPair=false` keeps the setting off while
+ * still preventing stock input rules from promoting a construct prematurely.
+ */
+export const literalInlineInput = (autoPair: boolean) => $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleTextInput: (view, from, to2, text4) => {
+          if (
+            view.composing ||
+            text4.length !== 1 ||
+            !"*_=~^`$\\".includes(text4) ||
+            view.state.selection.$from.parent.type.spec.code
+          ) {
+            return false;
+          }
+          const syntaxType = view.state.schema.nodes.notaSyntax;
+          const escapeType = view.state.schema.nodes.notaEscape;
+          if (text4 === "\\") {
+            // A backslash before a letter is ordinary text (`\LaTeX`), not a
+            // Markdown escape. Keep it in the normal text node so surrounding
+            // source characters remain visible to the math input rule.
+            if (syntaxType) {
+              const tr = inputInlineDelimiter(
+                view.state,
+                syntaxType,
+                from,
+                to2,
+                text4,
+                escapeType,
+                true,
+              );
+              if (tr) {
+                view.dispatch(tr.scrollIntoView());
+                return true;
+              }
+            }
+            const tr = insertPlainInlineText(view.state, from, to2, text4);
+            view.dispatch(tr.scrollIntoView());
+            return true;
+          }
+          if (syntaxType) {
+            const tr = inputInlineDelimiter(
+              view.state,
+              syntaxType,
+              from,
+              to2,
+              text4,
+              escapeType,
+              false,
+              autoPair,
+            );
+            if (tr) {
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
+          }
+          view.dispatch(view.state.tr.insertText(text4, from, to2).scrollIntoView());
+          return true;
+        },
+      },
+    }),
+);
 
 export const markHint = $prose((ctx) =>
   createMarkHintPlugin(inlineSyntaxNodeSpec.type(ctx), inlineEscapeSpec.type(ctx)),

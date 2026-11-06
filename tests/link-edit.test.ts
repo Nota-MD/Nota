@@ -324,6 +324,21 @@ testCase("空光标处插一条新的（一个字都还没有的时候）", () =
   assertValue(child3.marks.some((m) => m.type === linkType), "是链接、不是一个空标记");
 });
 
+testCase("链接完成后再输入：新字符留在链接外，既有文字一个字节不动", () => {
+  let next = state(document(paragraph2()));
+  const tr = createLinkTransaction(next, { from: 1, to: 1 }, "Nota", "https://a.b");
+  assertValue(tr !== null, "该派得出链接事务");
+  next = next.apply(tr!);
+  next = next.apply(next.tr.insertText("X"));
+
+  const paragraph3 = next.doc.firstChild!;
+  equal(paragraph3.childCount, 2, "链接后多出一个独立文本节点");
+  equal(paragraph3.child(0).text, "Nota", "链接文字");
+  assertValue(paragraph3.child(0).marks.some((m) => m.type === linkType), "原文字仍是链接");
+  equal(paragraph3.child(1).text, "X", "后输入字符");
+  equal(paragraph3.child(1).marks.length, 0, "后输入字符不带链接");
+});
+
 testCase("派完不留**存储标记**（不然紧接着敲的下一个字也带链接）", () => {
   const tr = createLinkTransaction(state(document(paragraph2())), { from: 1, to: 1 }, "Nota", "https://a.b");
   const keepOf = tr!.storedMarks ?? [];

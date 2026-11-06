@@ -1,9 +1,11 @@
 import { $prose } from "@milkdown/kit/utils";
+import type { Slice } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
 import type { punctuationSettings } from "./smart-punctuation";
+import { explicitLinkAtClosingParenthesis } from "./url-link";
 
 /** Opening characters paired by the basic Typora-style policy. */
 export const bracketPairs: Readonly<Record<string, string>> = {
@@ -32,6 +34,15 @@ interface PairRecord {
   opener: string;
   closer: string;
 }
+
+interface WrappedComposition {
+  from: number;
+  content: Slice;
+  sizeAfter: number;
+}
+
+/** Wait until ProseMirror has read the committed IME text back into state. */
+export const bracketCompositionDelayMs = 50;
 
 function isCodeContext(state: EditorState, position: number): boolean {
   const resolved = state.doc.resolve(position);
@@ -121,6 +132,93 @@ function trackedPairAtClose(
 
 function withPair(transaction: Transaction, pair: PairRecord): Transaction {
   return transaction.setMeta(pairStateKey, pair);
+}
+
+function wrapComposition(
+  transaction: Transaction,
+  from: number,
+  opener: string,
+  closer: string,
+  content: Slice,
+): Transaction {
+  transaction.replace(from, from, content);
+  const end = from + content.size;
+  transaction.insertText(closer, end);
+  transaction.insertText(opener, from);
+  transaction.setSelection(
+    TextSelection.create(
+      transaction.doc,
+      from + opener.length,
+      end + opener.length,
+    ),
+  );
+  return withPair(transaction, {
+    open: from,
+    close: end + opener.length,
+    opener,
+    closer,
+  });
+}
+
+/**
+ * Apply the pairing that ordinary text input would have done after an IME
+ * commits its text. ProseMirror deliberately bypasses `handleTextInput`
+ * during composition, so this reconciliation must happen after
+ * `compositionend` instead of mutating the document under the preedit.
+ */
+export function compositionPairTransaction(
+  state: EditorState,
+  committed: string,
+  wrapped?: WrappedComposition,
+  pairs = pairStateKey.getState(state) ?? [],
+): Transaction | null {
+  const { selection } = state;
+  if (!selection.empty || !committed) return null;
+  const typed = Array.from(committed).at(-1);
+  if (!typed) return null;
+
+  const caret = selection.from;
+  const open = caret - typed.length;
+  const typedBefore = characterBefore(state, caret) === typed;
+  const tracked = pairs.find((pair) => pair.close === caret);
+  if (
+    tracked?.closer === typed &&
+    characterAfter(state, caret) === typed &&
+    (typedBefore || tracked.opener === "")
+  ) {
+    const transaction = state.tr.delete(caret, caret + typed.length);
+    transaction.setSelection(TextSelection.create(transaction.doc, caret));
+    return transaction.scrollIntoView();
+  }
+  if (!typedBefore) return null;
+
+  const closer = bracketPairs[typed];
+  if (!closer) return null;
+  if (pairs.some((pair) => pair.open === open)) return null;
+
+  if (
+    wrapped &&
+    committed === typed &&
+    wrapped.from === open &&
+    state.doc.content.size === wrapped.sizeAfter
+  ) {
+    return wrapComposition(state.tr.delete(open, caret), open, typed, closer, wrapped.content)
+      .scrollIntoView();
+  }
+  if (isCodeContext(state, open)) return null;
+  if (characterBefore(state, open) === "\\") return null;
+  const after = characterAfter(state, caret);
+  if (after === inlineNode || wordCharacter.test(after)) return null;
+  if (urlBefore.test(textBefore(state, open))) return null;
+
+  const transaction = state.tr.insertText(closer, caret);
+  transaction.setSelection(TextSelection.create(transaction.doc, caret));
+  return withPair(transaction.scrollIntoView(), {
+    open,
+    close: caret,
+    opener: typed,
+    closer,
+  });
 }
 
 /** Create the pair transaction used by ordinary text input. */
@@ -216,8 +314,10 @@ export const autoPair = (
   enabled = true,
   punctuation: punctuationSettings,
 ) =>
-  $prose(() =>
-    new Plugin<PairRecord[]>({
+  $prose(() => {
+    let wrappedComposition: WrappedComposition | undefined;
+    let compositionTimer: number | null = null;
+    return new Plugin<PairRecord[]>({
       key: autoPairKey,
       state: {
         init: () => [],
@@ -258,6 +358,14 @@ export const autoPair = (
               (tracked.closer === "”" && text === '"') ||
               (tracked.closer === "’" && text === "'"))
           ) {
+            const explicitLink =
+              text === ")"
+                ? explicitLinkAtClosingParenthesis(view.state, from)
+                : null;
+            if (explicitLink) {
+              view.dispatch(explicitLink);
+              return true;
+            }
             const transaction = skipPairBoundaryTransaction(view.state, 1);
             if (!transaction) return false;
             view.dispatch(transaction);
@@ -297,6 +405,51 @@ export const autoPair = (
           }
           return false;
         },
+        handleDOMEvents: {
+          compositionstart(view) {
+            const { from, to, empty, $from, $to } = view.state.selection;
+            wrappedComposition =
+              enabled &&
+              !empty &&
+              view.state.selection instanceof TextSelection &&
+              $from.sameParent($to) &&
+              !isCodeContext(view.state, from)
+                ? {
+                    from,
+                    content: view.state.doc.slice(from, to),
+                    sizeAfter: view.state.doc.content.size - (to - from) + 1,
+                  }
+                : undefined;
+            return false;
+          },
+          compositionend(view, event) {
+            const committed = event.data ?? "";
+            const wrapped = wrappedComposition;
+            wrappedComposition = undefined;
+            if (compositionTimer !== null) window.clearTimeout(compositionTimer);
+            const settle = (attempt = 0) => {
+              compositionTimer = window.setTimeout(() => {
+                compositionTimer = null;
+                if (view.isDestroyed || !enabled) return;
+                if (view.composing && attempt < 5) {
+                  settle(attempt + 1);
+                  return;
+                }
+                const transaction = compositionPairTransaction(view.state, committed, wrapped);
+                if (transaction) view.dispatch(transaction);
+              }, bracketCompositionDelayMs);
+            };
+            settle();
+            return false;
+          },
+        },
       },
-    }),
-  );
+      view() {
+        return {
+          destroy() {
+            if (compositionTimer !== null) window.clearTimeout(compositionTimer);
+          },
+        };
+      },
+    });
+  });

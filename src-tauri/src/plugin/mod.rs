@@ -211,10 +211,14 @@ impl PluginHost {
 
         // 用户目录**先扫**：先到的进 `seen`，后到的内置同名插件会被跳过，
         // 于是"用户覆盖内置"是这条循环顺序自然的结果，不用额外判。
-        let mut roots = vec![crate::paths::user_plugins_dir().unwrap_or_default()];
-        roots.extend(crate::paths::builtin_plugins_dirs(resource_dir.as_deref()));
+        let mut roots = vec![(crate::paths::user_plugins_dir().unwrap_or_default(), true)];
+        roots.extend(
+            crate::paths::builtin_plugins_dirs(resource_dir.as_deref())
+                .into_iter()
+                .map(|root| (root, false)),
+        );
 
-        for root in roots {
+        for (root, removable) in roots {
             if !root.is_dir() {
                 continue;
             }
@@ -230,6 +234,9 @@ impl PluginHost {
 
                 if !seen.insert(manifest.meta.id.clone()) {
                     continue; // 同名插件，前面那个（用户的）优先
+                }
+                if !removable && installed.is_removed(&manifest.meta.id) {
+                    continue;
                 }
 
                 // ── 事件通道撞名 ─────────────────────────────────────────
@@ -316,7 +323,6 @@ impl PluginHost {
             .map(|p| {
                 let m = &p.manifest.meta;
                 let 记的 = self.installed.record(&m.id);
-                let removable = 在用户目录里(&p.manifest.dir);
                 let (state, error) = match (&p.state, self.is_enabled(&m.id)) {
                     // 用户停用**先于**加载状态判：它是用户的显式动作，
                     // 说"已停用"比说"加载失败"更接近用户看到的事实。
@@ -346,7 +352,7 @@ impl PluginHost {
                     langs: m.langs.clone(),
                     lang: p.语言.lang.clone(),
                     lang_ok: p.语言.ok,
-                    origin: if removable { "user" } else { "builtin" }.to_owned(),
+                    origin: if 在用户目录里(&p.manifest.dir) { "user" } else { "builtin" }.to_owned(),
                     signature: 记的.and_then(|r| r.signature).map(|s| {
                         match s {
                             Signature::Verified => "verified",
@@ -356,7 +362,7 @@ impl PluginHost {
                         .to_owned()
                     }),
                     key_id: 记的.and_then(|r| r.key_id.clone()),
-                    removable,
+                    removable: true,
                     // ⚠️ 这里会**读一次插件设置文件**（只有真声明了 `[[settings]]` 的
                     // 插件才读，见 `设置格`）。`list_info` 是"挂载时拉一次、动作后重拉"
                     // 那一类，不是每秒一次的东西——一次几 KB 的读不算事。

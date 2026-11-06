@@ -112,6 +112,17 @@
   line-height: inherit;
 }
 
+/* Typora diagram panels centre their rendered SVG. The same wrapper also
+   contains our CodeMirror source, so reset text alignment explicitly while
+   leaving the preview itself centred. */
+.editor-mount .ProseMirror .nota-source-surface,
+.editor-mount .ProseMirror .nota-source-surface .cm-editor,
+.editor-mount .ProseMirror .nota-source-surface .cm-scroller,
+.editor-mount .ProseMirror .nota-source-surface .cm-content,
+.editor-mount .ProseMirror .nota-source-surface .cm-line {
+  text-align: left !important;
+}
+
 /* CodeMirror draws selection and caret through a generated layer. WebKitGTK
    can inherit the surrounding `caret-color: transparent` from ProseMirror;
    make the focused code-block caret explicit instead of relying on the

@@ -30,17 +30,23 @@
  * 留着读原始对象也行，但那要多传一个字段，而多传的每一个字段都是一处会分叉的账。
  */
 
-import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
+import {
+  useEffect,
+  useMemo,
+  type Dispatch,
+  type ReactNode,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 
 import type { CommandState } from "@/editor/command-state";
 import type { SelectionSnapshot } from "@/editor/caret-snapshot";
-import type { Document, ViewMode } from "@/bridge/ipc";
+import type { Document, PluginReviewDiff, ViewMode } from "@/bridge/ipc";
 import type { Settings } from "@/bridge/types";
 import type { Toast } from "@/ui/Toasts";
 import { recognizeTextItemType } from "@/editor/file-kind";
 import { EditorPane, type EditorPaneHandle } from "@/ui/EditorPane";
 import { ExternalChangeBar } from "@/ui/ExternalChangeBar";
-import { ExternalDiffPane } from "@/ui/ExternalDiffPane";
 import { FindBar } from "@/ui/FindBar";
 import { FormatBar } from "@/ui/FormatBar";
 import { Home } from "@/ui/Home";
@@ -56,6 +62,7 @@ import type { PluginsState } from "@/ui/usePlugins";
 import type { PreviewModeOutputMouth } from "@/ui/useReviewView";
 import type { MeetingSpeechOutputMouth } from "@/ui/useSession";
 import { usePointLink } from "@/ui/useLinkClick";
+import { useT } from "@/i18n";
 
 /** 这一格要的全部东西。见文件头「为什么收一个对象」。 */
 export interface editorAreaWiring {
@@ -135,6 +142,7 @@ export interface editorAreaWiring {
  * ——调用处因此写成 `<EditorArea 接线={{ … }} />`，那一整个字面量是**一处**看得完的账。
  */
 export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
+  const t = useT();
   const { mainArea, cellStyleConvertBar, editor, activeDoc, settings, viewMode, focusMode, typewriter, onlyReadMode } = wiring;
   const { cellStyleConvertBarOpen, commandState, setCommandState, runCommand, runMenuCommand, disabledCommands, menuChecks, insertImageLike, onSelectionSnapshot, refreshDocs, toast } =
     wiring;
@@ -150,6 +158,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
     toast,
     openDocument: documentApi.openPath,
     documentPath: activeDoc?.path ?? null,
+    keyboardExperience: settings?.editor?.keyboard_experience ?? false,
   });
 
   const { newDoc, openViaDialog, openFolder, recordActivity, saveDoc, closeDoc } = documentApi;
@@ -163,6 +172,25 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
   } = previewOutputMouth;
   const { changeAction: ExternalPartChangeAction, ignoreOmit: ignoreOmitExternalPartChangeAction, heavyNewValueLoadEnter: heavyNewValueLoadEnterExternalPart, checkSeeFixChange, correctAccording: ExternalPartCorrectAccording, closeCorrectAccording } = changeActionOutputMouth;
   const { recent, openRecent, rollActionPosition, recordRollAction } = MeetingSpeechOutputMouth;
+  const externalReview = useMemo<PluginReviewDiff | null>(
+    () =>
+      ExternalPartCorrectAccording
+        ? {
+            kind: "diff",
+            plugin: "",
+            title: `${t("Changes on disk")} · ${ExternalPartCorrectAccording.title}`,
+            text: ExternalPartCorrectAccording.diskText,
+            accept: null,
+            reject: null,
+          }
+        : null,
+    [ExternalPartCorrectAccording, t],
+  );
+  const inlineReview = activeJumpPreview ?? externalReview;
+
+  useEffect(() => {
+    if (externalReview && !activeJumpPreview) setViewMode("result");
+  }, [activeJumpPreview, externalReview, setViewMode]);
 
   return (
     // ⚠️ `data-review` 是给 CSS 的开关（`styles/review.css`）：
@@ -173,15 +201,11 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
       className="app-main"
       ref={mainArea}
       data-review={
-        ExternalPartCorrectAccording
-          ? // 外部改动那份对照是**块**（占编辑区，正文让位），不是画在正文
-            // 身上的装饰——它跟插件面板同一形态，所以走 `"true"` 那一支。
-            "true"
-          : activeJumpPreview
-            ? "inline"
-            : panelPreview
-              ? "true"
-              : undefined
+        inlineReview
+          ? "inline"
+          : panelPreview
+            ? "true"
+            : undefined
       }
     >
       {/* 外部改动提示条（`ui/ExternalChangeBar.tsx`）。⚠️ **排在编辑区那两块
@@ -245,21 +269,31 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
         documentKey={activeDoc?.id ?? ""}
         run={runCommand}
       />
-      {activeJumpPreview && (
+      {inlineReview && (
         // 改动预览顶上那一条细条。⚠️ **排在编辑区前面**（同一个 flex
         // 列里的上一行），不是编辑区的子节点——分屏那两个窗格是横向
         // flex，塞进去会把它们挤下去（理由写在 `ui/ReviewBar.tsx` 顶上）。
         <ReviewBar
-          review={activeJumpPreview}
+          review={inlineReview}
           viewMode={reviewViewMode}
           onViewMode={setViewMode}
           // ⚠️ 包一层：`调插件` 要插件 id（`命令` 只在插件内部唯一），
           // 而按钮给的只是命令名。插件 id 在这一份预览里，闭包里取。
-          onCall={(command) => void plugin.configure(activeJumpPreview.plugin, command)}
-          onClose={() => void plugin.receivePreview()}
+          onCall={(command) => {
+            if (activeJumpPreview) {
+              void plugin.configure(activeJumpPreview.plugin, command);
+            }
+          }}
+          onClose={() => {
+            if (activeJumpPreview) void plugin.receivePreview();
+            else closeCorrectAccording();
+          }}
           // ⚠️ 与 `EditorPane` 那条 `onReviewEscape` **同一个函数**：焦点
           // 在正文里还是在这条工具栏上，按 `Esc` 应当做同一件事。
-          onEscape={backOutputPreview}
+          onEscape={() => {
+            if (activeJumpPreview) backOutputPreview();
+            else closeCorrectAccording();
+          }}
         />
       )}
       {activeDoc ? (
@@ -280,7 +314,9 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           // 布尔而不是整整一页设置：`EditorPane` 只把它原样喂给 `createEditor`
           // 的 `emoji` 那一格（理由见 `create-types.ts`）。
           emoji={settings?.editor?.emoji_autocomplete ?? false}
-          autoPair={settings?.editor?.auto_pair ?? true}
+          autoPair={settings?.editor?.auto_pair ?? false}
+          keyboardExperience={settings?.editor?.keyboard_experience ?? false}
+          defaultIndent={settings?.editor?.default_indent ?? 2}
           vimInput={plugin.editorInput}
           onVimCommand={(command) => {
             if (command === "save") void saveDoc(activeDoc.id);
@@ -331,9 +367,12 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           // 改动预览按**两种形态**分派：`diff` 这一形态的图画在编辑区
           // 自己身上，所以那一份要交给它；`panel` 形态跟它无关（那是
           // 下面那个 `ReviewPane` 的事）。
-          review={activeJumpPreview}
+          review={inlineReview}
           previewMode={reviewViewMode}
-          onReviewEscape={backOutputPreview}
+          onReviewEscape={() => {
+            if (activeJumpPreview) backOutputPreview();
+            else closeCorrectAccording();
+          }}
         />
       ) : (
         <Home
@@ -364,17 +403,6 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
           onCall={plugin.configure}
           askPrompt={dialog.askPrompt}
         />
-      )}
-
-      {ExternalPartCorrectAccording && (
-        // **磁盘上那份和编辑器里这份**的对照（用户点了提示条上的
-        // 「查看修改」）。⚠️ 它是**只读**的、一个可点节点都没有——理由
-        //（以及"为什么不给它一颗接受按钮"）写在 `ui/ExternalDiffPane.tsx` 顶上。
-        //
-        // ⚠️ 它和上面那块插件面板**可以同时摊着**（各占一半）。罕见，
-        // 但不必为它加优先级：两块都是用户自己点开的，替他把其中一块
-        // 藏起来，他会以为是刚点的那下没生效。
-        <ExternalDiffPane correctAccording={ExternalPartCorrectAccording} onClose={closeCorrectAccording} />
       )}
 
       {/* 底部那一条（标签栏 ＋ 状态栏）。⚠️ **排在最后**：它俩是这一列的

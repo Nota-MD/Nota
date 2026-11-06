@@ -148,28 +148,33 @@ testCase("五种 `[!TYPE]` 一个不落", () => {
   }
 });
 
-testCase("提示块前面还有别的话、它在段落中间那一行时也认（行首是相对文本节点说的）", () => {
+testCase("段落中间的方括号文本也按用户输入原样保存", () => {
   const source3 = "[TOC]\n\n甲 [TOC] 乙\n";
-  // ⚠️ 第二段那颗 `[TOC]` **不在行首** ⇒ 照旧转义（见第二组）。
-  equal(roundtrip(source3), "[TOC]\n\n甲 \\[TOC] 乙\n", "第一段放回来、第二段照旧转义");
+  equal(roundtrip(source3), source3, "编辑器不得替用户补反斜杠");
 });
 
 /* ── 二、不该碰的一个字节都不碰 ─────────────────────────────────────── */
 
-group("二、名字不在册的一律照旧");
+group("二、任何普通文本都不自动加反斜杠");
 
-testCase("`[foo]` 这类随便什么方括号**照旧转义**（不做大赦）", () => {
-  equal(roundtrip("[foo]\n"), "\\[foo]\n", "不认识就别动");
+testCase("Markdown 标点与用户已有的反斜杠都按原值写回", () => {
+  for (const text of ["*星*", "_下_", "$5", "#标签", "a\\*b", "[x](y)"]) {
+    equal(stringify(text), `${text}\n`, `普通文本被改写：${text}`);
+  }
 });
 
-testCase("行中间的 `[TOC]` 照旧转义（它不是语法，是普通文字）", () => {
-  equal(roundtrip("甲 [TOC] 乙\n"), "甲 \\[TOC] 乙\n", "块首语法只在块首");
+testCase("`[foo]` 保持原样", () => {
+  equal(roundtrip("[foo]\n"), "[foo]\n", "普通文本保持原样");
 });
 
-testCase("`[!NOTE]` 少了一头/多了一头都不认", () => {
-  equal(roundtrip("[!NOTE\n"), "\\[!NOTE\n", "只有左中括号");
-  equal(roundtrip("[!NOPE]\n"), "\\[!NOPE]\n", "不是那五种之一");
-  equal(roundtrip("[!note]\n"), "\\[!note]\n", "小写的提示块名不算（GitHub 那边也是大写）");
+testCase("行中间的 `[TOC]` 保持原样", () => {
+  equal(roundtrip("甲 [TOC] 乙\n"), "甲 [TOC] 乙\n", "普通文本保持原样");
+});
+
+testCase("残缺或不认识的提示块文本保持原字节", () => {
+  equal(roundtrip("[!NOTE\n"), "[!NOTE\n", "只有左中括号");
+  equal(roundtrip("[!NOPE]\n"), "[!NOPE]\n", "不是那五种之一");
+  equal(roundtrip("[!note]\n"), "[!note]\n", "小写文本保持原样");
 });
 
 testCase("脚注引用与真链接**一个字节都不动**（它们本来就该是它们的样子）", () => {
@@ -218,6 +223,41 @@ testCase("同一份文档里三种形态：提示块（本层动手）＋ 定义
   // `linkReference` 处理器。三处答案都对，而**只有第一处是本层做的**——
   // 所以这一组才有意义：本层的动手范围就限定在"真的是文本"的那些节点上。
   equal(roundtrip(source3), source3, "三种形态各一份");
+});
+
+testCase("GFM 表格单元格里的竖线用字符引用，不自动插入反斜杠", () => {
+  const output = unified()
+    .use(remarkStringify, {
+      bullet: "-" as const,
+      rule: "-" as const,
+      handlers: { text: textHandlerChain(defaultHandlers.text as never) as never },
+    })
+    .use(remarkGfm)
+    .stringify({
+      type: "root",
+      children: [{
+        type: "table",
+        align: [null, null],
+        children: [
+          {
+            type: "tableRow",
+            children: [
+              { type: "tableCell", children: [{ type: "text", value: "甲" }] },
+              { type: "tableCell", children: [{ type: "text", value: "乙" }] },
+            ],
+          },
+          {
+            type: "tableRow",
+            children: [
+              { type: "tableCell", children: [{ type: "text", value: "甲|乙" }] },
+              { type: "tableCell", children: [{ type: "text", value: "丙" }] },
+            ],
+          },
+        ],
+      }],
+    } as never);
+  equal(output.includes("\\|"), false, "表格路径仍自动插入了反斜杠");
+  equal(output.includes("甲&#124;乙"), true, "表格单元格没有使用字符引用保护竖线");
 });
 
 /* ── 收尾 ───────────────────────────────────────────────────────────── */

@@ -278,15 +278,6 @@ pub struct Markdown {
     pub smart_dashes: bool,
     /// `--` / `---` 变成什么。
     pub dash_style: DashStyle,
-    /// 解析 Markdown 时允许并转化 Unicode 标点。
-    /// ⚠️ 上面那档选「关闭」时本项在界面上呈灰色：没有转换发生时它无从生效。
-    ///
-    /// ⚠️⚠️ **本项到 2026-09-27 仍然没有消费者**（同组其余六项那天接上线了，
-    /// 见 `docs/07` 第 72 项）。它的说明管的是**解析**侧（"读一份文件时，
-    /// 里面的 Unicode 引号算不算 Markdown 标记"），而接线的那六项管的是
-    /// **输入**侧，两者不是一回事——所以它没跟着一起落地。缺口记在
-    /// `docs/10` §11.2。
-    pub unicode_punctuation: bool,
 
     // ── 自动更正 ────────────────────────────────────────────────────────
     /// **自动更正错拼的英文单词**（`teh` → `the`、`recieve` → `receive` 这一类）。
@@ -397,10 +388,6 @@ impl Default for Markdown {
             smart_quotes_single: QuoteStyle::default(),
             smart_dashes: true,
             dash_style: DashStyle::default(),
-            // ⚠️ 默认关。⚠️ 本项**尚未接线**：全仓没有解析器读它（只有设置字段与
-            // 界面上那个开关），因此"打开后会发生什么"目前没有可观察的结论，
-            // 此处不作行为断言。接线之后再把默认值的理由补在这里。
-            unicode_punctuation: false,
 
             // ⚠️ 默认开，理由见字段上那段注释（只改刚打完的那一个词，且可撤销）。
             auto_correct: true,
@@ -499,7 +486,6 @@ mod tests {
         assert!(m.highlight && m.github_alerts && m.diagrams);
         // 智能标点：引号和破折号开，Unicode 标点关。
         assert!(m.smart_quotes && m.smart_dashes);
-        assert!(!m.unicode_punctuation);
         // 自动更正：开（2026-09-27 新加的一格）。
         assert!(m.auto_correct);
         // 代码块：行号关、自动换行开、语言选择框开、Shift+Tab 关。

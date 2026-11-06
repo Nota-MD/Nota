@@ -9,6 +9,7 @@ import { $nodeSchema } from "@milkdown/kit/utils";
 import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
 import {
   Fragment,
+  Mark,
   type MarkType,
   type Node as PMNode,
   type NodeType,
@@ -99,7 +100,7 @@ export const inlineSyntaxNodeSpec = $nodeSchema("notaSyntax", () => ({
     return [
       "span",
       {
-        class: noticeClass,
+        class: `${noticeClass} nota-syntax-hidden`,
         "data-syntax": attrs.syntax,
         "data-side": attrs.side,
       },
@@ -147,17 +148,56 @@ function supportedInlineMarks(
 
 export function inlineSyntaxAndEscapeDecorations(
   state: EditorState,
+  syntaxType: NodeType,
   escapeType?: NodeType,
+  _suppressedAt: number | null = null,
 ): DecorationSet {
   const base = inlineSyntaxDecorations(state);
-  if (!escapeType) return base;
+  const decorations: Decoration[] = [];
+  const activeMarkers = new Set<number>();
+  const marks = state.schema.marks as Record<string, MarkType | undefined>;
+  const cursors = state.selection.empty
+    ? [state.selection.from]
+    : [
+        state.selection.from,
+        state.selection.to,
+        state.selection.from + 1,
+        state.selection.to - 1,
+      ].filter(
+        (position2) =>
+          position2 >= 0 && position2 <= state.doc.content.size,
+      );
+  for (const { name3 } of noticeTable) {
+    const type = marks[name3];
+    if (!type) continue;
+    for (const cursor of cursors) {
+      const active = findActiveMarkRange(state.doc, cursor, type, syntaxType);
+      for (const marker of [active?.leftMarker, active?.rightMarker]) {
+        if (!marker) continue;
+        for (let position2 = marker.from; position2 < marker.to2; position2++) {
+          activeMarkers.add(position2);
+        }
+      }
+    }
+  }
 
-  const active: Decoration[] = [];
+  for (const position2 of activeMarkers) {
+    decorations.push(
+      Decoration.node(position2, position2 + 1, {
+        class: "nota-syntax-active",
+      }),
+    );
+  }
+
+  if (!escapeType) {
+    return decorations.length ? base.add(state.doc, decorations) : base;
+  }
+
   state.doc.descendants((node, position2) => {
     if (node.type !== escapeType) return true;
     const caret = state.selection.from;
     if (caret >= position2 - 1 && caret <= position2 + node.nodeSize + 1) {
-      active.push(
+      decorations.push(
         Decoration.node(position2, position2 + node.nodeSize, {
           class: "nota-escape-active",
         }),
@@ -165,7 +205,7 @@ export function inlineSyntaxAndEscapeDecorations(
     }
     return false;
   });
-  return active.length ? base.add(state.doc, active) : base;
+  return decorations.length ? base.add(state.doc, decorations) : base;
 }
 
 function markNamesOn(
@@ -311,10 +351,9 @@ function inlineNodes(
 }
 
 /**
- * Immediately reveal the delimiters around the caret after a full paragraph
- * reparse. ProseMirror does not guarantee another append pass for a transaction
- * returned by `appendTransaction`, so the first visible frame must already
- * contain the marker atoms.
+ * Add the visible delimiter characters for the mark under the caret. These
+ * are character-sized inline nodes so the caret can stop on either side of a
+ * delimiter or between the two stars in `**`.
  */
 function addActiveMarkersToTransaction(
   tr: Transaction,
@@ -364,8 +403,7 @@ function addActiveMarkersToTransaction(
     );
     tr.insert(item.position2, Fragment.fromArray(nodes));
   }
-  const caret = caretBefore + caretShift;
-  tr.setSelection(TextSelection.near(tr.doc.resolve(caret), 1));
+  tr.setSelection(TextSelection.create(tr.doc, caretBefore + caretShift));
 }
 
 export interface InlineRewrite {
@@ -373,7 +411,11 @@ export interface InlineRewrite {
   from: number;
   to2: number;
   insert: string;
+  /** Optional source caret after the edit, used by paired delimiter input. */
+  caret?: number;
 }
+
+export const markHintLiteral = "nota-mark-hint-literal";
 
 export function rewriteInlineBlock(
   state: EditorState,
@@ -412,10 +454,102 @@ export function rewriteInlineBlock(
     parentStart + parent.content.size,
     Fragment.fromArray(nodes),
   );
-  const caretSource = Math.max(0, start5 + edit.insert.length);
+  const caretSource = Math.max(
+    0,
+    Math.min(nextSource.length, edit.caret ?? start5 + edit.insert.length),
+  );
   const caret = parentStart + (next.sourceToText[caretSource] ?? next.text.length);
   tr.setSelection(TextSelection.create(tr.doc, Math.max(0, Math.min(tr.doc.content.size, caret))));
+  addActiveMarkersToTransaction(tr, syntaxType);
+  const exactCaret = caretInsideMarkerFromSource(
+    tr,
+    parentStart,
+    caretSource,
+    syntaxType,
+  );
+  if (exactCaret !== null) {
+    tr.setSelection(TextSelection.create(tr.doc, exactCaret));
+  }
+  setStoredInlineMarks(tr, syntaxType);
   return tr;
+}
+
+function activeInlineMarks(
+  state: Pick<EditorState, "doc" | "schema" | "selection">,
+  syntaxType: NodeType,
+): Mark[] {
+  const marks = state.schema.marks as Record<string, MarkType | undefined>;
+  const activeMarks: Mark[] = [];
+  for (const { name3 } of noticeTable) {
+    const type = marks[name3];
+    if (!type) continue;
+    const active = findActiveMarkRange(
+      state.doc,
+      state.selection.from,
+      type,
+      syntaxType,
+    );
+    if (
+      active &&
+      state.selection.from >= active.from &&
+      state.selection.from <= active.to2
+    ) {
+      activeMarks.push(type.create());
+    }
+  }
+  return activeMarks.filter(
+    (mark, index, all) => all.findIndex((other) => other.eq(mark)) === index,
+  );
+}
+
+function setStoredInlineMarks(tr: Transaction, syntaxType: NodeType): void {
+  tr.setStoredMarks(
+    activeInlineMarks(
+      {
+        doc: tr.doc,
+        schema: tr.doc.type.schema,
+        selection: tr.selection,
+      },
+      syntaxType,
+    ),
+  );
+}
+
+function caretInsideMarkerFromSource(
+  tr: Transaction,
+  parentStart: number,
+  sourceOffset: number,
+  syntaxType: NodeType,
+): number | null {
+  const parent = tr.doc.nodeAt(parentStart - 1);
+  if (!parent?.isTextblock) return null;
+  const marks = tr.doc.type.schema.marks as Record<string, MarkType | undefined>;
+  const snapshot = serializeInlineBlock(parent, syntaxType, marks);
+  if (!snapshot) return null;
+  const near = Math.min(
+    Math.max(tr.selection.from, parentStart),
+    parentStart + parent.content.size,
+  );
+
+  for (const { name3 } of noticeTable) {
+    const type = marks[name3];
+    if (!type) continue;
+    const active = findActiveMarkRange(tr.doc, near, type, syntaxType);
+    if (!active) continue;
+    const contentStart = snapshot.at.get(active.from - parentStart);
+    const contentEnd = snapshot.at.get(active.to2 - parentStart);
+    if (contentStart === undefined || contentEnd === undefined) continue;
+
+    const right = active.rightMarker;
+    if (
+      right &&
+      sourceOffset >= contentEnd &&
+      sourceOffset <= contentEnd + right.text4.length
+    ) {
+      return right.from + sourceOffset - contentEnd;
+    }
+  }
+  return null;
 }
 
 /**
@@ -428,6 +562,7 @@ export function normalizeInlineBlock(
   syntaxType: NodeType,
   escapeType?: NodeType,
 ): Transaction | null {
+  if (!state.selection.empty) return null;
   const { $from } = state.selection;
   let depth = $from.depth;
   while (depth > 0 && !$from.node(depth).isTextblock) depth--;
@@ -453,6 +588,16 @@ export function normalizeInlineBlock(
     parentStart + (parsed.sourceToText[cursorSource] ?? parsed.text.length);
   tr.setSelection(TextSelection.create(tr.doc, Math.max(0, Math.min(tr.doc.content.size, caret))));
   addActiveMarkersToTransaction(tr, syntaxType);
+  const exactCaret = caretInsideMarkerFromSource(
+    tr,
+    parentStart,
+    cursorSource,
+    syntaxType,
+  );
+  if (exactCaret !== null) {
+    tr.setSelection(TextSelection.create(tr.doc, exactCaret));
+  }
+  setStoredInlineMarks(tr, syntaxType);
   return tr;
 }
 

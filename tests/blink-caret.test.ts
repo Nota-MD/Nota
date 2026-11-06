@@ -14,6 +14,7 @@ import {
   caretHeightInLine,
   caretTopInLine,
   flashSparkCursor,
+  inlineMathBoundary,
   isNoShowCursor,
   usableCaretCoordinate,
 } from "../src/editor/blink-caret";
@@ -50,6 +51,14 @@ const schema = new Schema({
     heading: { group: "block", content: "inline*", attrs: { level: { default: 1 } } },
     code_block: { group: "block", content: "text*", code: true, marks: "" },
     math_block: { group: "block", content: "text*", atom: true, marks: "" },
+    math_inline: { group: "inline", inline: true, content: "text*", atom: true, marks: "" },
+    notaLinkSource: {
+      group: "inline",
+      inline: true,
+      content: "text*",
+      code: true,
+      marks: "",
+    },
     notaSyntax: { group: "inline", inline: true, atom: true, selectable: false, marks: "" },
     text: { group: "inline" },
   },
@@ -85,8 +94,8 @@ testCase("标题里的空选区同样产生光标", () => {
   equal(isNoShowCursor(editorState), true, "标题应该显示光标");
 });
 
-testCase("标题光标不继承整个大字号行盒，正文保持原行高", () => {
-  equal(caretHeightInLine("heading", 48, 18), 22, "标题光标没有收到 1.2em 以内");
+testCase("标题光标跟随标题字号，正文保持原行高", () => {
+  equal(caretHeightInLine("heading", 48, 18), 48, "标题光标没有跟随标题文字高度");
   equal(caretHeightInLine("paragraph", 30, 18), 30, "正文光标被错误缩短");
   equal(caretHeightInLine("heading", 12, 18), 12, "小行盒不应被继续压缩");
 });
@@ -139,6 +148,47 @@ testCase("行内语法标记之间的光标仍由正文层显示", () => {
   equal(isNoShowCursor(state), true, "`Typora|**` 边界仍把光标藏掉");
 });
 
+testCase("链接源码节点仍由正文层显示光标", () => {
+  const source = schema.nodes.notaLinkSource.create(
+    null,
+    schema.text("[github](https://github.com)"),
+  );
+  const state = makeEditorState(
+    document(schema.nodes.paragraph.create(null, [source])),
+    3,
+  );
+  equal(isNoShowCursor(state), true, "链接源码节点把正文光标藏掉了");
+});
+
+testCase("公式边界光标使用公式节点坐标，而不是主题行盒坐标", () => {
+  const formula = schema.nodes.math_inline.create(null, schema.text("LaTeX"));
+  const paragraph2 = schema.nodes.paragraph.create(
+    null,
+    [schema.text("ABC"), formula],
+  );
+  const doc = document(paragraph2);
+  const after3 = 1 + paragraph2.content.size;
+  const after = EditorState.create({
+    doc,
+    selection: TextSelection.create(doc, after3),
+  });
+  equal(
+    JSON.stringify(inlineMathBoundary(after)),
+    JSON.stringify({ position: after3 - formula.nodeSize, side: "after" }),
+    "闭 `$` 右侧没有识别公式边界",
+  );
+  const before3 = after3 - formula.nodeSize;
+  const before = EditorState.create({
+    doc,
+    selection: TextSelection.create(doc, before3),
+  });
+  equal(
+    JSON.stringify(inlineMathBoundary(before)),
+    JSON.stringify({ position: before3, side: "before" }),
+    "开 `$` 左侧没有识别公式边界",
+  );
+});
+
 testCase("插件使用 view 覆盖层，不注册 ProseMirror 装饰", () => {
   const plugin = flashSparkCursor();
   assertValue(typeof plugin.spec.view === "function", "插件没有 view");
@@ -166,6 +216,27 @@ testCase("覆盖层不进入正文 DOM，并由焦点和选区控制", () => {
   assertValue(source.includes("view.dom.parentElement"), "覆盖层没有挂到正文 DOM 之外");
   assertValue(!source.includes("Decoration.widget("), "仍在使用 ProseMirror 装饰");
   assertValue(!source.includes("decorations("), "仍注册了 ProseMirror 装饰");
+});
+
+testCase("内部输入框自己画光标时隐藏正文覆盖层", () => {
+  assertValue(
+    blinkSource.includes("export function innerEditorOwnsCaret"),
+    "没有识别内部编辑器的焦点",
+  );
+  assertValue(
+    blinkSource.includes(
+      'active.matches("input, textarea, .cm-content, .nota-keyboard-link-source")',
+    ),
+    "输入框与 CodeMirror 不在内部光标判据里",
+  );
+  assertValue(
+    blinkSource.includes("innerEditorOwnsCaret(active, view.dom)"),
+    "绘制正文光标前没有检查内部编辑器焦点",
+  );
+  assertValue(
+    blinkSource.includes("nota-inline-math-input-focused"),
+    "公式源码框聚焦时没有显式隐藏正文覆盖光标",
+  );
 });
 
 testCase("减少动态效果时保持静态可见", () => {

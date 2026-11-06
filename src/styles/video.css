@@ -114,7 +114,22 @@
   display: block;
 }
 
+.editor-mount
+  .ProseMirror
+  .nota-image.nota-keyboard-media-source.ProseMirror-selectednode:not(.is-selected)
+  .nota-image-source,
+.editor-mount
+  .ProseMirror
+  .nota-image.nota-keyboard-media-source
+  .nota-image-source {
+  display: block;
+}
+
 .editor-mount .ProseMirror .nota-image.is-selected {
+  width: 100%;
+}
+
+.editor-mount .ProseMirror .nota-image.nota-keyboard-media-source {
   width: 100%;
 }
 

@@ -39,22 +39,39 @@ function shape(source: string) {
 
 console.log("\n【行内分隔符解析】");
 
-testCase("外层同宽标记优先，内部单星保持字面", () => {
+testCase("按 Typedown 最近闭合规则解析不规则的星号序列", () => {
   equal(shape("**Tauri 2*. Approach **Typora** spiritually."), {
     text: "Tauri 2*. Approach Typora** spiritually.",
-    ranges: [{ from: 0, to: 19, marks: ["strong"] }],
-  }, "outer strong");
+    ranges: [
+      { from: 0, to: 19, marks: ["strong"] },
+    ],
+  }, "Typedown nearest strong run");
+});
+
+testCase("带前文时仍采用 Typedown 的最近强闭符优先级", () => {
+  const parsed = parseInlineDelimiters(
+    "Based on **Tauri 2*. Approach **Typora** spiritually.",
+  );
+  equal(
+    inlineTextSegments(parsed),
+    [
+      { text: "Based on ", marks: [] as InlineMarkName[] },
+      { text: "Tauri 2*. Approach ", marks: ["strong"] as InlineMarkName[] },
+      { text: "Typora** spiritually.", marks: [] as InlineMarkName[] },
+    ],
+    "Typedown nearest strong with prefix",
+  );
 });
 
 testCase("强标记缺一颗闭符号时只保留最外层合法结构", () => {
   equal(shape("**1*"), {
     text: "*1",
-    ranges: [{ from: 0, to: 2, marks: ["emphasis"] }],
+    ranges: [{ from: 1, to: 2, marks: ["emphasis"] }],
   }, "strong fallback");
   equal(shape("*1**"), {
-    text: "*1**",
-    ranges: [],
-  }, "unmatched trailing strong");
+    text: "1*",
+    ranges: [{ from: 0, to: 1, marks: ["emphasis"] }],
+  }, "closing single run leaves the final star literal");
 });
 
 testCase("高亮必须有两个闭等号", () => {
@@ -73,7 +90,7 @@ testCase("三星号生成粗体与斜体嵌套", () => {
   equal(parsed.text, "1", "text");
   equal(
     inlineTextSegments(parsed),
-    [{ text: "1", marks: ["emphasis", "strong"] } as {
+    [{ text: "1", marks: ["strong", "emphasis"] } as {
       text: string;
       marks: readonly InlineMarkName[];
     }],
@@ -87,9 +104,20 @@ testCase("转义符号保持字面且不参与配对", () => {
     ranges: [],
   }, "escaped opener");
   equal(shape("*\\*Typora**"), {
-    text: "**Typora**",
+    text: "*Typora*",
+    ranges: [{ from: 0, to: 7, marks: ["emphasis"] }],
+  }, "escaped inner star remains literal inside the GFM emphasis run");
+});
+
+testCase("反斜杠只转义 ASCII 标点，LaTeX 命令的反斜杠保留", () => {
+  equal(shape("&\\LaTeX$"), {
+    text: "&\\LaTeX$",
     ranges: [],
-  }, "escaped star does not close with the following run");
+  }, "backslash before a letter");
+  equal(shape("\\LaTeX *x*"), {
+    text: "\\LaTeX x",
+    ranges: [{ from: 7, to: 8, marks: ["emphasis"] }],
+  }, "LaTeX command then emphasis");
 });
 
 testCase("禁用某类标记时对应分隔符原样保留", () => {

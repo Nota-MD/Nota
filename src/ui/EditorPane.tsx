@@ -113,6 +113,7 @@ import {
   type VimInputStatus,
 } from "@/editor/plugin-vim-types";
 import { VimStatusOverlay } from "@/ui/VimStatusOverlay";
+import { recallEditorSelection, rememberEditorSelection } from "@/ui/editor-selection-memory";
 
 export interface EditorPaneHandle {
   getMarkdown: () => string | undefined;
@@ -216,6 +217,10 @@ interface Props {
   emoji: boolean;
   /** Pair brackets while typing (`settings.editor.auto_pair`). */
   autoPair: boolean;
+  /** Reveal link/image Markdown source when the caret reaches their boundaries. */
+  keyboardExperience: boolean;
+  /** Spaces inserted by Tab in ordinary text. */
+  defaultIndent: number;
   /**
    * **整整一页 Markdown 设置**（`settings.markdown`），`undefined` = 设置还没
    * 从后端读回来。
@@ -388,6 +393,8 @@ export function EditorPane({
   plainText = false,
   emoji,
   autoPair,
+  keyboardExperience,
+  defaultIndent,
   markdown,
   focusMode,
   typewriter,
@@ -482,12 +489,14 @@ export function EditorPane({
   const rollActionReturnConfigureRef = useRef(onScroll);
   rollActionReturnConfigureRef.current = onScroll;
 
-  // ── 设置 → 编辑器要的三个值（`useEditorSettings.ts`，2026-10-07 搬出去的）──
-  // ⚠️ 这两个对象只有**内容真的变了**才换身份——下面那个建实例的 effect 拿它们
-  // 当依赖，每帧新建一个的话会每帧重建编辑器（丢撤销栈、丢光标）。这条纪律
-  // 现在归 `useEditorSettings.ts` 文件头管，这里只管用。
-  const { inlineExtensions, autoLinks, autoPair: enabledAutoPair, punctuation, selfActionMoreCorrect } =
-    useEditorSettings(markdown, autoPair);
+  const {
+    inlineExtensions,
+    autoLinks,
+    autoPair: enabledAutoPair,
+    defaultIndent: enabledDefaultIndent,
+    punctuation,
+    selfActionMoreCorrect,
+  } = useEditorSettings(markdown, autoPair, defaultIndent);
 
   // 两个写作开关。⚠️ 同上：拨开关**不重建实例**，所以它只能走 ref 读。
   const writingModeRef = useRef<WritingMode>({ focus: focusMode, typewriter });
@@ -669,6 +678,8 @@ export function EditorPane({
             inlineExtensions,
             autoLinks,
             autoPair: enabledAutoPair,
+            keyboardExperience,
+            defaultIndent: enabledDefaultIndent,
             punctuation,
             selfActionMoreCorrect,
             emoji,
@@ -748,7 +759,7 @@ export function EditorPane({
         // 插入点在哪儿由上一个事务决定——而 `trailing` 插尾段、`replaceAll`
         // 换全文**都会把插入点带到文末**，于是"打开一篇长文档，光标在屏幕外"。
         // 理由与两条机制写在 `EditorHandle.focusAtStart` 的注释里。
-        handle.focusAtStart();
+        const rememberedSelection = recallEditorSelection(doc.id, mode); rememberedSelection ? handle.restoreSelection(rememberedSelection) : handle.focusAtStart();
         // 窗口只在这一刻之后显示：实例已挂载、编辑区已聚焦，用户看到的第一帧
         // 就能直接输入。
         markEditorReady();
@@ -837,8 +848,8 @@ export function EditorPane({
       // ⚠️ 拆之前**再从活着的实例读一次**：去抖窗口里那最后一截（用户打完字
       // 不到 300ms 就切了模式）还没推给后端，而它已经不在 `latestRef` 之外
       // 的任何地方了。丢掉它 = 用户亲眼看着自己刚打的字消失。
-      const last = handleRef.current?.getMarkdown();
-      if (last !== undefined) latestRef.current = last;
+      const last = handleRef.current?.getMarkdown(); if (last !== undefined) latestRef.current = last;
+      rememberEditorSelection(doc.id, mode, handleRef.current?.selectionRange() ?? null);
 
       handleRef.current = null;
       previewHandleRef.current = null;
@@ -867,7 +878,7 @@ export function EditorPane({
     // 任何人重建编辑器。
     // 刻意**不**依赖 doc.text：那是初始值，不是要跟随的状态。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, autoLinks, enabledAutoPair, punctuation, selfActionMoreCorrect, emoji, onlyReadMode, vimInput?.enabled]);
+  }, [doc.id, mode, strict, physics, plainText, inlineExtensions, autoLinks, enabledAutoPair, keyboardExperience, enabledDefaultIndent, punctuation, selfActionMoreCorrect, emoji, onlyReadMode, vimInput?.enabled]);
 
   useEffect(() => {
     if (handleRef.current && "setVimInput" in handleRef.current) {

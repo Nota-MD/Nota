@@ -18,7 +18,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
-  AppLang, Diagnostics, DiffLine, DocId, DocThemeInfo, Document, FocusState, ImagePlaced,
+  AppLang, Diagnostics, DiffLine, DocId, DocThemeInfo, Document, DraftInfo, FocusState, ImagePlaced,
   ImageSourceArg, ImageUploadSettings, ImageUploadSnapshot, ImageUploaded,
   NativeMenuNode, PandocExport, PandocImport, PandocProbe, PluginInfo, PluginMenuItem,
   PluginPanel, PluginReview, Settings, ThemeImportReport, TreeNode, TreeOptions, UiStyleInfo, WorkspaceExcerpt,
@@ -147,6 +147,16 @@ export const api = {
      */
     diskText: (id: DocId) => invoke<string>("nota_doc_disk_text", { id }),
     hasUnsaved: () => invoke<boolean>("nota_doc_has_unsaved"),
+  },
+
+  /** Recovery copies written outside the source document. */
+  draft: {
+    save: (id: DocId, text: string) => invoke<boolean>("nota_draft_save", { id, text }),
+    list: () => invoke<DraftInfo[]>("nota_draft_list"),
+    restore: (id: string) => invoke<DocId>("nota_draft_restore", { id }),
+    discard: (id: string) => invoke<void>("nota_draft_discard", { id }),
+    discardDocument: (id: DocId) =>
+      invoke<void>("nota_draft_discard_document", { id }),
   },
 
   /**
@@ -571,7 +581,10 @@ export const api = {
      * 不让前端拿路径去调 plugin-opener。
      */
     openDir: () => invoke<string>("nota_doc_themes_open_dir"),
-    /** Import interface and/or document themes from one ZIP package. */
+    /** Import a ZIP, Typora theme directory, or Typora CSS file. */
+    importPath: (path: string) =>
+      invoke<ThemeImportReport>("nota_theme_import", { path }),
+    /** Backward-compatible alias for callers that only offer ZIP import. */
     importZip: (path: string) =>
       invoke<ThemeImportReport>("nota_theme_import", { path }),
   },

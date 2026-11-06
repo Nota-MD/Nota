@@ -47,6 +47,8 @@ export interface PaneProps {
   onRefreshUiStyles: () => void;
   /** Pick and import one ZIP containing interface and/or document themes. */
   onImportTheme: () => void;
+  /** Import a flat Typora theme directory. */
+  onImportTyporaTheme: () => void;
   /** 打开设置文件所在的目录（`~/.config/nota`）。 */
   onOpenConfigDir: () => void;
   /** 恢复出厂默认。**整份替换**，落盘在后端做，新的那一份从返回值拿。 */
@@ -59,6 +61,8 @@ export interface PaneProps {
    *（`~/.local/share/nota/session.toml`），与设置文件是两个地方。
    */
   onClearRecent: () => void;
+  /** Restore editor bodies kept outside their source files. */
+  onRestoreDrafts: () => void;
   /**
    * 全应用那一份菜单表（`App.tsx` 里那个 `菜单`），**已经叠过用户的键位覆盖**
    * （`ui/commands.ts::应用键位覆盖`）。2026-09-27 加，给「快捷键」那一页用。

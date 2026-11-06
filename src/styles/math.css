@@ -61,6 +61,56 @@
   position: relative;
 }
 
+/* A document theme may enable CJK line breaking, hyphenation and
+   overflow-wrap on paragraphs. Keep one inline formula as a single
+   unbreakable unit and let it share the paragraph's baseline. */
+.editor-mount .ProseMirror .nota-math-inline,
+.editor-mount .ProseMirror .nota-math-inline .nota-math-panel {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.editor-mount .ProseMirror .nota-math-inline .nota-math-source {
+  display: inline-block;
+  width: var(--nota-math-source-width, 1px) !important;
+  margin: 0;
+  padding-inline: 0;
+  text-indent: 0;
+  letter-spacing: normal;
+  word-spacing: normal;
+  vertical-align: baseline;
+}
+
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-panel {
+  position: relative;
+  display: inline-flex;
+  width: max-content;
+  max-width: none;
+  align-items: baseline;
+  gap: 0;
+  vertical-align: baseline;
+}
+
+.editor-mount .ProseMirror .nota-math-inline .nota-math-hit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  pointer-events: auto;
+  cursor: text;
+}
+
+.editor-mount .ProseMirror .nota-math-inline .nota-math-hit-before {
+  right: 100%;
+}
+
+.editor-mount .ProseMirror .nota-math-inline .nota-math-hit-after {
+  left: 100%;
+}
+
 /* ⚠️ 块公式**没有任何框**（见文件头那张表）。这里只留"一行"的语义。 */
 .editor-mount .ProseMirror .nota-math-block {
   display: block;
@@ -172,8 +222,9 @@
 
 /* 分隔符：`.nota-srcmark` 那张配方（见文件头）。 */
 .editor-mount .ProseMirror .nota-math-delim {
-  font-size: calc(var(--editor-font-size, var(--ui-font-size, 15px)) * 0.85);
-  line-height: 1;
+  font-family: inherit;
+  font-size: 1em;
+  line-height: inherit;
   white-space: nowrap;
   color: var(--fg-faint);
   user-select: none;
@@ -284,10 +335,13 @@
 }
 
 /* 行内那颗是 `<input>`：它**不能换行**（`<input>` 本来就不行），宽度由 JS
-   按源码量（`跟源码改尺寸`）。下限留给空框一个能点的面积（那时量的是
-   placeholder，实际宽度不会真等于这个值，这条是兜底）。 */
+   用隐藏尺子按实际字形量成像素。不能设成 `2ch` 之类的表单下限：那颗下限会
+   盖过空公式算出的宽度，在左右 `$` 之间留下一段永远删不掉的空隙。 */
 .editor-mount .ProseMirror .nota-math-inline .nota-math-source {
-  min-width: 2ch;
+  min-width: 0;
+  max-width: none;
+  flex: none;
+  box-sizing: content-box;
 }
 
 /* Typora 的行内编辑态：源码保持强调色，只有两颗 `$` 像其他 Markdown
@@ -298,14 +352,18 @@
 }
 
 .editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-source {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
   color: var(--accent);
   opacity: 1;
 }
 
-/* A trailing backslash is still LaTeX source, not an escape for the closing
-   Markdown delimiter. Keep a visual gap without adding a byte to the file. */
-.editor-mount .ProseMirror .nota-math-inline.nota-math-trailing-backslash .nota-math-delim-close {
-  margin-inline-start: 0.18em;
+.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-ruler {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
 }
 
 /* 块那颗是 `<textarea>`：**宽度铺满正文列**（高度才由 JS 按源码量）。
@@ -330,10 +388,24 @@
    兄弟节点、同一个父元素）。 */
 .editor-mount .ProseMirror .nota-math-ruler {
   position: absolute;
+  display: inline-block;
+  inset: 0 auto auto -100000px;
+  width: max-content;
+  max-width: none;
   visibility: hidden;
   white-space: pre;
   font-family: var(--font-mono);
   font-size: inherit;
+  font-style: inherit;
+  font-weight: inherit;
+  font-variant: inherit;
+  /* These two must match the source input exactly. A document theme may add
+     CJK punctuation spacing to paragraphs, which would otherwise make the
+     ruler wider than the text rendered by the form control. */
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-indent: 0;
+  text-transform: inherit;
   pointer-events: none;
 }
 
@@ -414,36 +486,64 @@
   animation: nota-math-preview-in 0.12s ease-out;
 }
 
-/* 行内公式仍用短暂的浮层，否则会在段落中间撑出一整块，拆散前后文。 */
-.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview {
-  position: absolute;
-  top: calc(100% + 7px);
-  left: 0;
+/* Inline previews are attached to the document body and positioned from the
+   formula's viewport rect. Keeping them outside ProseMirror makes them
+   independent of paragraph layout and prevents their height from expanding
+   the editor's scrollable overflow below the current line. */
+body > .nota-math-preview.nota-math-preview-floating {
+  position: fixed;
+  display: none !important;
   z-index: 3;
-  width: max-content;
+  width: fit-content !important;
+  min-width: 0 !important;
+  max-width: min(46ch, 90vw) !important;
   padding: 7px 11px;
   border: 0;
   border-radius: 6px;
   background: #202124;
   color: #fff;
+  transform: translateX(-50%);
   box-shadow: 0 7px 22px rgb(0 0 0 / 28%);
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  text-align: center;
+  pointer-events: none;
+}
+
+body > .nota-math-preview.nota-math-preview-floating.nota-math-preview-visible {
+  display: flex !important;
 }
 
 /* 预览像一张从源码下方展开的临时卡片；小三角指向公式，而不是指向窗口边角。 */
-.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview::before {
+body > .nota-math-preview.nota-math-preview-floating::before {
   position: absolute;
   bottom: 100%;
-  left: 12px;
+  left: 50%;
   width: 0;
   height: 0;
+  margin-left: -6px;
   border-right: 6px solid transparent;
   border-bottom: 7px solid #202124;
   border-left: 6px solid transparent;
   content: "";
 }
 
-.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview .katex {
+body > .nota-math-preview.nota-math-preview-floating > .katex,
+body > .nota-math-preview.nota-math-preview-floating > .nota-math-note {
+  display: inline-block !important;
+  width: auto !important;
+  max-width: 100%;
+  margin-inline: auto !important;
+  flex: none;
+  text-align: center !important;
+}
+
+body > .nota-math-preview.nota-math-preview-floating .katex-html,
+body > .nota-math-preview.nota-math-preview-floating .katex-display {
   color: #fff;
+  margin: 0;
+  text-align: center !important;
 }
 
 /* 块公式采用 Typora 式上下分区：源码区在上，预览框在下，预览占文档流。 */
@@ -487,7 +587,7 @@
    ⚠️ 选择器把 `nota-math-editing` 也写进去了：上面那条基础规则（0,4,0）与本条
    同特异度，只写 `.nota-math-inline` 就得靠先后顺序决胜负——那正是上面面板
    栽过的坑，别再来一次。 */
-.editor-mount .ProseMirror .nota-math-editing.nota-math-inline .nota-math-preview {
+body > .nota-math-preview.nota-math-preview-floating {
   white-space: normal;
   /* `width: max-content`（基础那条）先让它按内容量到自己该有的宽，这一条再封顶。
      46ch 是照 `editor.css` 里查找替换条那类浮层的宽度取的，别在这里改小

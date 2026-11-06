@@ -25,10 +25,22 @@ export interface Document {
   path: string | null;
   title: string;
   text: string;
+  /** Stable identity for the recovery copy associated with this document. */
+  draft_id: string;
   /** 这份文件在磁盘上的编码；保存时按同一个编码写回。 */
   encoding: string;
+  /** On-disk newline style (`lf` or `crlf`). */
+  line_ending: string;
   dirty: boolean;
   revision: number;
+}
+
+/** A recoverable editor body that has not been written to its source file. */
+export interface DraftInfo {
+  id: string;
+  path: string | null;
+  title: string;
+  updated_at: number;
 }
 
 /**

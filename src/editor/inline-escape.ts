@@ -58,5 +58,6 @@ export const inlineEscapeSpec = $nodeSchema("notaEscape", () => ({
   },
 }));
 
-export const inlineEscapeNodePlugins =
-  inlineEscapeSpec.flat() as unknown as MilkdownPlugin[];
+export const inlineEscapeNodePlugins = [
+  ...inlineEscapeSpec.flat(),
+] as unknown as MilkdownPlugin[];

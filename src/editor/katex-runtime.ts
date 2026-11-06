@@ -20,8 +20,8 @@ function awaitWindowShown(): Promise<void> {
   return windowShownPromise;
 }
 
-function getKatex(): Promise<typeof import("katex").default> {
-  katexPromise ??= awaitWindowShown().then(() =>
+function getKatex(afterWindow = false): Promise<typeof import("katex").default> {
+  katexPromise ??= (afterWindow ? awaitWindowShown() : Promise.resolve()).then(() =>
     // @ts-expect-error KaTeX 的 mhchem 入口没有随包提供 TypeScript 声明。
     Promise.all([import("katex/dist/contrib/mhchem.mjs"), import("katex")]).then(
       ([, module]) => module.default,
@@ -35,7 +35,7 @@ function getKatex(): Promise<typeof import("katex").default> {
  * 这里的目的就是让核心窗口先出现并接受输入，数学排版引擎随后在后台到货。
  */
 export function preHotKatex(): void {
-  void getKatex().catch((e: unknown) => {
+  void getKatex(true).catch((e: unknown) => {
     console.warn("[nota] KaTeX 预热失败；首次渲染时将重试：", e);
     katexPromise = null;
   });
@@ -47,7 +47,9 @@ export async function renderCommonStyle(
   target: HTMLElement,
   option: KatexOptions = {},
 ): Promise<void> {
-  const katex = await getKatex();
+  // A requested formula is already a definite demand. Do not let a missed
+  // startup reveal event leave the preview stuck on "loading" forever.
+  const katex = await getKatex(false);
   target.replaceChildren();
   katex.render(source2, target, option);
 }

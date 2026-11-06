@@ -50,10 +50,15 @@ export interface SelfActionSaveWiring {
   activeIdRef: RefObject<DocId | null>;
   /** 存盘（`useDocuments` 的 `saveDoc`）。⚠️ 只走这一条路。 */
   saveDoc: (id: DocId) => Promise<unknown>;
+  /** Persist a recovery copy without touching the source document. */
+  saveDraft: (id: DocId) => Promise<boolean>;
 }
 
 /** 看表的间隔。1 秒足够（最短的那档是 30 秒），而且这个回调非常便宜。 */
 const seeTableMilliSeconds = 1000;
+const DRAFT_STOP_MILLISECONDS = 1_500;
+const DRAFT_MAX_INTERVAL_MILLISECONDS = 5_000;
+const DRAFT_POLL_MILLISECONDS = 500;
 
 /**
  * 挂上自动保存。返回值是**"记一次活动"**——调用方要把它接到编辑器的内容变化
@@ -62,13 +67,18 @@ const seeTableMilliSeconds = 1000;
 export function useAutosave(w: SelfActionSaveWiring): () => void {
   /** 最后一次"用户在打字"的时刻。**0 = 这一轮还没动过**（别拿 Date.now() 当初始值）。 */
   const activity = useRef(0);
+  const draftActivity = useRef(0);
+  const draftSavedAt = useRef(0);
   // ⚠️ 接线走 ref 读，理由同 `EditorPane` 里那几条回调：它是每次渲染新建的对象，
   // 进依赖就等于"每次渲染重建定时器"。
   const resourceMaterial = useRef(w);
   resourceMaterial.current = w;
 
   const recordActivity = useCallback(() => {
-    activity.current = Date.now();
+    const now = Date.now();
+    activity.current = now;
+    draftActivity.current = now;
+    if (draftSavedAt.current === 0) draftSavedAt.current = now;
   }, []);
 
   useEffect(() => {
@@ -93,6 +103,28 @@ export function useAutosave(w: SelfActionSaveWiring): () => void {
     }, seeTableMilliSeconds);
     return () => window.clearInterval(table2);
   }, [w.seconds]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (draftActivity.current === 0) return;
+      const now = Date.now();
+      const stopped = now - draftActivity.current >= DRAFT_STOP_MILLISECONDS;
+      const stale = now - draftSavedAt.current >= DRAFT_MAX_INTERVAL_MILLISECONDS;
+      if (!stopped && !stale) return;
+      const id = resourceMaterial.current.activeIdRef.current;
+      if (id === null) {
+        draftActivity.current = 0;
+        return;
+      }
+      draftActivity.current = 0;
+      draftSavedAt.current = now;
+      void resourceMaterial.current.saveDraft(id).catch(() => {
+        // Keep this silent. A draft write failure must not interrupt typing,
+        // and the next edit will try again.
+      });
+    }, DRAFT_POLL_MILLISECONDS);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return recordActivity;
 }

@@ -39,6 +39,7 @@ import { setVimInputConfig } from "./plugin-vim-input";
 // 的插脚注）2026-09-28 **跟着表一起搬去了 `./command-table`**——本文件不再直接
 // 引它们，对 `insert.ts` 也不再是"唯一的调用点"了。
 import { runCommand } from "./command-table";
+import { normalizeInlineBlock } from "./mark-hint-source";
 import { rollActionToPosition } from "./scroll-into-view";
 // 就地改动预览（`nota.ui.review_diff`）。⚠️ 算法与两种看法在 `review.ts` 里，
 // 这里只用它那一侧的适配层。
@@ -86,6 +87,7 @@ import type {
   EditorHandle,
   CreateOptions,
 } from "./create-types";
+import { clampSelectionRange, type EditorSelectionRange } from "./selection-range";
 
 
 /**
@@ -123,7 +125,9 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
 
   // Automatic links are enabled unless the caller explicitly passes false.
   const autoLinks = options.autoLinks ?? true;
-  const autoPair = options.autoPair ?? true;
+  const autoPair = options.autoPair ?? false;
+  const keyboardExperience = options.keyboardExperience ?? false;
+  const defaultIndent = Math.max(1, Math.min(8, options.defaultIndent ?? 2));
 
   // 智能标点那一组。**同样建实例时取一次**（输入规则是注册制的），
   // 改设置要重建编辑器——理由见 `create-types.ts` 的 `标点` 那一格。
@@ -170,6 +174,8 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
     inlineExtensions,
     autoLinks,
     autoPair,
+    keyboardExperience,
+    defaultIndent,
     punctuation,
     selfActionMoreCorrect,
     emoji,
@@ -253,21 +259,72 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
   const cursorToOpenHead = () =>
     editor.action((ctx) => {
       const view = ctx.get(editorViewCtx);
-      const { state } = view;
+      const openingSelection = () => {
+        const { doc } = view.state;
+        let openingPosition: number | null = null;
+        doc.descendants((node, position2) => {
+          if (openingPosition !== null) return false;
+          if (!node.isTextblock) return true;
+          let position3 = position2 + 1;
+          for (let index = 0; index < node.childCount; index++) {
+            const child = node.child(index);
+            if (child.type.name !== "notaSyntax") break;
+            position3 += child.nodeSize;
+          }
+          openingPosition = position3;
+          return false;
+        });
+        return openingPosition === null
+          ? TextSelection.between(doc.resolve(0), doc.resolve(0))
+          : TextSelection.create(doc, openingPosition);
+      };
       // ⚠️ 不能用 `TextSelection.atStart`：它遇到文档开头的 HTML、图片或其它
       // 原子块时，会返回 `NodeSelection`。README 顶部恰好是一组 HTML 徽章，
-      // 启动时因此把整块刷成蓝色原生选区。`between` 会先向后找第一个真正的
-      // 文本位置，只有整篇没有任何可编辑文本时才退回邻近节点。
-      const opening = TextSelection.between(state.doc.resolve(0), state.doc.resolve(0));
+      // 启动时因此把整块刷成蓝色原生选区。进入第一个文本块后还要越过开头的
+      // `notaSyntax` token；否则 `between(0, 0)` 会把两颗原子星号选成 1..3。
+      const opening = openingSelection();
       view.dispatch(
-        state.tr.setSelection(opening).scrollIntoView(),
+        view.state.tr.setSelection(opening).scrollIntoView(),
       );
       // ⚠️ `focus()` 必须在**派完事务之后**：聚焦本身会派一次事务（`trailing`
       // 补尾段那一条），先聚焦再设选区的话，那笔事务的
       // `selectionToInsertionEnd` 会把刚设好的插入点又带回文末——顺序反了
       // 就等于没写，而且症状一模一样（光标还在文末），很难查。
       view.focus();
+      requestAnimationFrame(() => {
+        if (view.isDestroyed) return;
+        const syntaxType = view.state.schema.nodes.notaSyntax;
+        if (syntaxType) {
+          const normalized = normalizeInlineBlock(
+            view.state,
+            syntaxType,
+            view.state.schema.nodes.notaEscape,
+          );
+          if (normalized) view.dispatch(normalized);
+        }
+        view.dispatch(view.state.tr.setSelection(openingSelection()));
+      });
     });
+
+  const restoreSelection = (selection: EditorSelectionRange) => {
+    editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const { state } = view;
+      const bounded = clampSelectionRange(selection, state.doc.content.size);
+      let nextSelection = TextSelection.between(
+        state.doc.resolve(bounded.anchor),
+        state.doc.resolve(bounded.head),
+      );
+      try {
+        nextSelection = TextSelection.create(state.doc, bounded.anchor, bounded.head);
+      } catch {
+        // Atom boundaries can reject an exact text selection. `between` moves
+        // those endpoints to the nearest editable text position.
+      }
+      view.dispatch(state.tr.setSelection(nextSelection).scrollIntoView());
+      view.focus();
+    });
+  };
 
   return {
     // ⚠️ 出去的时候**把 front matter 拼回去**：调用方手里那份文本要跟磁盘上
@@ -330,7 +387,24 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);
         const { from, to } = view.state.selection;
-        view.dispatch(view.state.tr.insertText(text, from, to));
+        const resolved = view.state.doc.resolve(from);
+        const adjacentMarks =
+          resolved.nodeBefore?.marks.length
+            ? resolved.nodeBefore.marks
+            : (resolved.nodeAfter?.marks ?? []);
+        const marks =
+          view.state.storedMarks?.length
+            ? view.state.storedMarks
+            : adjacentMarks.length
+              ? adjacentMarks
+              : resolved.marks();
+        view.dispatch(
+          view.state.tr.replaceWith(
+            from,
+            to,
+            view.state.schema.text(text, marks),
+          ),
+        );
       });
       return true;
     },
@@ -380,6 +454,14 @@ export async function createEditor(options: CreateOptions): Promise<EditorHandle
         const { dom, text } = view.serializeForClipboard(sel.content());
         return { text, html: dom.innerHTML };
       }),
+
+    selectionRange: () =>
+      editor.action((ctx) => {
+        const { anchor, head } = ctx.get(editorViewCtx).state.selection;
+        return { anchor, head };
+      }),
+
+    restoreSelection,
 
     jumpToMarkTitle: ({ index }) =>
       editor.action((ctx) => {

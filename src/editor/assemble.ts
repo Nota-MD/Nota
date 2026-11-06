@@ -38,7 +38,7 @@ import { listener, listenerCtx } from "@milkdown/kit/plugin/listener";
 import { cursor } from "@milkdown/kit/plugin/cursor";
 import { flashSparkCursor } from "./blink-caret";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
-import { indent } from "@milkdown/kit/plugin/indent";
+import { indent, indentConfig } from "@milkdown/kit/plugin/indent";
 import { trailing } from "@milkdown/kit/plugin/trailing";
 // 这三个**不在** `@milkdown/kit` 的转发表里，得从各自的包进。
 // 前两个是 kit 的依赖（间接装上了），plugin-prism 不是——所以它在 package.json
@@ -51,7 +51,13 @@ import { katexOptionsCtx, math } from "./math-schema";
 // 整段搬去了 `./command-table`；这里只剩这一条：它**不是命令**，是一条输入
 // 规则，留着是为了把上游那条从 `commonmark` 里过滤掉
 //（见下面 `.use(commonmark.filter(...))`）。
-import { wrapInHeadingInputRule } from "@milkdown/kit/preset/commonmark";
+import {
+  emphasisStarInputRule,
+  emphasisUnderscoreInputRule,
+  inlineCodeInputRule,
+  strongInputRule,
+  wrapInHeadingInputRule,
+} from "@milkdown/kit/preset/commonmark";
 
 // 拼回开头那段 front matter（`markdownUpdated` 报出去的是**整篇**）。
 // ⚠️ 切分那一步在 `create.ts`（它手里才有"活的那一段"）。
@@ -71,7 +77,7 @@ import { instantRender } from "./instant-render";
 // 光标落在**加粗**／*斜体* 里时，把那两个 `**` / `*` 半透明画在那段文字两边。
 // 块级标记归上面那个（画在装订线里），行内没有装订线，所以是另一份插件；
 // 两边的分工与"为什么占宽度"写在它自己的文件头上。
-import { inlineSyntaxNodePlugins, markHint } from "./mark-hint";
+import { inlineSyntaxNodePlugins, literalInlineInput, markHint } from "./mark-hint";
 import { inlineEscapeNodePlugins } from "./inline-escape";
 // 任务项的复选框：画出来 + 点它勾上。DOM 钩子（`data-checked`）是
 // `preset-gfm` 早就给了的，缺的是 CSS 和点击，理由写在它自己的文件头上。
@@ -175,14 +181,25 @@ import { punctuationInput, punctuationDecoration, type punctuationSettings } fro
 // `.use()` 的最后**——理由见那个文件的 `自动更正输入`。
 import { selfActionMoreCorrectInput } from "./auto-correct";
 import { autoPair as autoPairPlugin } from "./auto-pair";
+import {
+  linkSourceNodePlugins,
+  linkSourceReveal,
+} from "./link-source-reveal";
 // **裸 URL**（打到词尾那一下把 `https://…` / `www.…` 变成链接）。
 // ⚠️ "粘贴一条网址"那半截也在那个文件里（`贴上网址事务`）——**判据只有一份**。
-import { autoLinkBoundary, selfActionLinkInput } from "./url-link";
+import {
+  autoLinkBoundary,
+  explicitLinkInput,
+  explicitLinkTyping,
+  linkBoundarySpec,
+  selfActionLinkInput,
+} from "./url-link";
 // **粘贴那一路**（洗 HTML / 认语言的代码块）。⚠️ 必须排在 `clipboard` 前面。
 import { pastePastePlaceManage } from "./paste";
 // **表格里的 `Tab` / `Shift+Tab`**（走到下一格 / 上一格；最后一格再按 `Tab`
 // 就加一行）。⚠️ 它抢的也是 `Tab`，所以必须排在 `indent` 前面。
 import { tableTab } from "./table-tab";
+import { textTab } from "./text-tab";
 // **表格里的普通回车**：走到下一格；最后一格加一行。上游把裸 `Enter` 也绑成
 // “退出表格”，这一条用更高优先级改回填表手感；`Mod+Enter` 仍可退出。
 import { tableEnterKey } from "./table-enter";
@@ -233,6 +250,8 @@ export interface InstallConfigureParameter {
   inlineExtensions: InlineExtensionFlags;
   autoLinks: boolean;
   autoPair: boolean;
+  keyboardExperience: boolean;
+  defaultIndent: number;
   punctuation: punctuationSettings;
   selfActionMoreCorrect: boolean;
   emoji: boolean;
@@ -261,6 +280,8 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     inlineExtensions,
     autoLinks,
     autoPair,
+    keyboardExperience: keyboardExperienceEnabled,
+    defaultIndent,
     punctuation,
     selfActionMoreCorrect,
     emoji,
@@ -272,6 +293,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     .config((ctx) => {
       ctx.set(rootCtx, root);
       ctx.set(defaultValueCtx, body2);
+      ctx.set(indentConfig.key, { type: "space" as const, size: defaultIndent });
 
       // 序列化时**不要把行首的井号转义掉**（`#标签` 存成 `\#标签` 也是
       // "自动修复"，只不过换副面孔，用户没打那个反斜杠）。理由、边界与残留
@@ -400,7 +422,17 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 那个 `[…].flat()`），所以按引用滤得掉；别处那几条输入规则（列表 `- `、
     // 引用 `> `、分割线 `---`）**照旧敲完就变**，只摘标题这一条。
     .use(encloseBarLanguageFillAll)
-    .use(commonmark.filter((p) => p !== wrapInHeadingInputRule))
+    .use(readOnly ? [] : [literalInlineInput(autoPair)])
+    .use(
+      commonmark.filter(
+        (plugin) =>
+          plugin !== wrapInHeadingInputRule &&
+          plugin !== emphasisStarInputRule &&
+          plugin !== emphasisUnderscoreInputRule &&
+          plugin !== inlineCodeInputRule &&
+          plugin !== strongInputRule,
+      ),
+    )
     // ⚠️ **这三条必须排在 `gfm` 前面**，理由见文件顶 `inline-marks` 那段 import
     // 注释（`$inputRule` 先中者赢，而 `gfm` 的删除线会抢中文的 `张~2~`）。
     // 规格要早于输入规则：输入规则命中的那一刻，`schema.marks` 里就得有那四种
@@ -422,7 +454,13 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 输入规则（`==x==` 敲完当场变高亮那类）。**只读实例也挂**——只读时
     // 压根没有输入，挂上去是零成本的死代码；分一个跟 `markHint` 那样的
     // 分支反而多一处"哪个模式装了哪个没装"要说清楚的东西。
+    .use(readOnly ? [] : [explicitLinkTyping()])
     .use(readOnly || !autoPair ? [] : [autoPairPlugin(true, punctuation)])
+    .use(
+      readOnly || !keyboardExperienceEnabled
+        ? []
+        : [...linkSourceNodePlugins, linkSourceReveal],
+    )
     .use(inlineMarkInputRuleRule(inlineExtensions))
     .use(gfm)
     .use(gitHubNoticePlugin)
@@ -439,6 +477,9 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // Bare URLs, email addresses and explicit mailto links. Enter and space/Tab
     // share one normalization path; turning the setting off removes both.
     .use(autoLinks ? [...selfActionLinkInput(), autoLinkBoundary()] : [])
+    // Explicit `[label](destination)` syntax is ordinary Markdown and remains
+    // independent of the bare-URL preference.
+    .use(explicitLinkInput())
     // Emoji：短代码替换（`:smile:` → 😄）与输入补全面板（打 `:smi` 弹候选）。
     // ⚠️ **两件事都由 `emoji` 一个开关管**（理由见 `create-types.ts` 那一格）。
     // ⚠️ 排在**最后**：短代码要以英文冒号起头、以冒号＋空白收尾，与上游那些
@@ -511,6 +552,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 就是 `Tab`，而且它不认表格（不分位置地往格子里塞两颗空格，那两颗会写进
     // 文件）。这一条只管"选区在表格某一行里"，其余一律放行——见 `./table-tab`。
     .use(tableTab())
+    .use(textTab(defaultIndent))
     .use(readOnly ? [] : [tableEnterKey])
     // **`Alt+↑` / `Alt+↓`：上移 / 下移光标所在的块**（2026-10-07）。
     // ⚠️ **必须自己接这一颗**：`baseKeymap` 把这两颗绑给了 `joinUp` / `joinDown`
@@ -562,6 +604,10 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // ⚠️ `math` 是**纯数组**（`plugin-math/lib/index.es.js` 尾部那个
     // `[…].flat()`），所以按引用滤得掉，**摘一条不影响别的**。
     .use(math)
+    // Links must end at their last visible character. Install the replacement
+    // after CommonMark so its inclusive mark cannot make newly typed text join
+    // the preceding link.
+    .use(linkBoundarySpec)
     .use(commonStyleInput)
     .use(commonStyleCommit)
     // ⚠️ **块公式的回车**（2026-10-04）：`$$` 那一段按回车 → 一块空的

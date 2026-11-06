@@ -489,6 +489,7 @@ mod tests {
         s.files.startup = files::StartupAction::LastSession;
         s.editor.default_indent = 8;
         s.editor.line_ending = editor::LineEnding::Crlf;
+        s.editor.keyboard_experience = true;
         s.image.insert_action = image::InsertImageAction::CopyToAssets;
         s.markdown.highlight = false;
         s.markdown.smart_punctuation = markdown::SmartPunctuation::Render;
@@ -505,6 +506,7 @@ mod tests {
         assert_eq!(back.files.startup, files::StartupAction::LastSession);
         assert_eq!(back.editor.default_indent, 8);
         assert_eq!(back.editor.line_ending, editor::LineEnding::Crlf);
+        assert!(back.editor.keyboard_experience, "键盘体验优化必须整份往返");
         assert_eq!(back.image.insert_action, image::InsertImageAction::CopyToAssets);
         assert!(!back.markdown.highlight);
         assert_eq!(

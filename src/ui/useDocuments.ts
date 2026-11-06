@@ -198,6 +198,10 @@ export interface documentApi {
   loadDir: (subPath: string) => Promise<TreeNode[]>;
   /** 存盘。**返回值是"存上了没有"**（见下面那条注释）。`quiet` 见 `saveDoc`。 */
   saveDoc: (id: DocId, forceDialog?: boolean, quiet?: boolean) => Promise<boolean>;
+  /** Persist an independent recovery copy without touching the source file. */
+  saveDraft: (id: DocId) => Promise<boolean>;
+  /** Restore every recovery copy into tabs and switch to the newest one. */
+  restoreDrafts: () => Promise<void>;
   /**
    * 切到另一份文档。**界面上的切换一律走这里**，不要直接调 `setActiveId`——
    * 「切换文件时自动保存」要赶在编辑器换人**之前**把上一份写盘（见下面那段）。
@@ -325,6 +329,21 @@ export function useDocuments(w: documentWiring): documentApi {
     [editorRef, refreshDocs, toast],
   );
 
+  const saveDraft = useCallback(
+    async (id: DocId): Promise<boolean> => {
+      if (activeIdRef.current !== id) return false;
+      const text = editorRef.current?.getMarkdown();
+      if (text === undefined) return false;
+      try {
+        return await api.draft.save(id, text);
+      } catch (e) {
+        debugError("document", "draft save failed", e, { document: id });
+        return false;
+      }
+    },
+    [activeIdRef, editorRef],
+  );
+
   /**
    * 切到另一份文档。
    *
@@ -347,11 +366,14 @@ export function useDocuments(w: documentWiring): documentApi {
       const splitPageBeforeFirstSave = settingsRef.current?.files.autosave_on_switch ?? false;
       if (splitPageBeforeFirstSave && current !== null && current !== id) {
         const doc = docsRef.current.find((d) => d.id === current);
-        if (doc?.dirty && doc.path) await saveDoc(current, false, true);
+        const saved = Boolean(doc?.dirty && doc.path && (await saveDoc(current, false, true)));
+        if (!saved) await saveDraft(current);
+      } else if (current !== null && current !== id) {
+        await saveDraft(current);
       }
       setActiveId(id);
     },
-    [activeIdRef, saveDoc, setActiveId],
+    [activeIdRef, saveDoc, saveDraft, setActiveId],
   );
   const switchDocumentRef = useRef(switchDocument);
   switchDocumentRef.current = switchDocument;
@@ -483,6 +505,48 @@ export function useDocuments(w: documentWiring): documentApi {
     [refreshDocs, switchDocument, toast],
   );
 
+  const restoreDrafts = useCallback(async () => {
+    try {
+      const drafts = await api.draft.list();
+      if (drafts.length === 0) {
+        toast(t("No unsaved drafts were found."), "info");
+        return;
+      }
+      const answer = await askConfirm({
+        title: t("Restore unsaved drafts"),
+        message: t(
+          "Restore {0} unsaved draft(s)? Each draft opens in a tab; source files are not changed until you save.",
+          drafts.length,
+        ),
+        confirmLabel: t("Restore"),
+      });
+      if (answer !== "confirm") return;
+
+      const restored: DocId[] = [];
+      for (const draft of drafts) {
+        try {
+          restored.push(await api.draft.restore(draft.id));
+        } catch (e) {
+          debugError("document", "draft restore failed", e, { draft: draft.id });
+        }
+      }
+      await refreshDocs();
+      const newest = restored[0];
+      if (newest !== undefined) await switchDocumentRef.current(newest);
+      if (restored.length === drafts.length) {
+        toast(t("Restored {0} draft(s).", restored.length), "success");
+      } else {
+        toast(
+          t("Restored {0} of {1} drafts.", restored.length, drafts.length),
+          "warn",
+        );
+      }
+    } catch (e) {
+      debugError("document", "draft listing failed", e);
+      toast(String(e), "error");
+    }
+  }, [askConfirm, refreshDocs, t, toast]);
+
   const openViaDialog = useCallback(async () => {
     const picked = await openDialog({
       title: t("Open"),
@@ -523,7 +587,20 @@ export function useDocuments(w: documentWiring): documentApi {
 
   const closeDoc = useCallback(
     async (id: DocId) => {
-      const doc = docs.find((d) => d.id === id);
+      let doc = docs.find((d) => d.id === id);
+      if (id === activeIdRef.current) {
+        const text = editorRef.current?.getMarkdown();
+        if (text !== undefined) {
+          try {
+            await api.doc.sync(id, text);
+            doc = (await refreshDocs()).find((item) => item.id === id);
+          } catch (e) {
+            toast(String(e), "error");
+            return;
+          }
+        }
+      }
+      let discardDraft = false;
       if (doc?.dirty && settings?.confirm_unsaved) {
         // ⚠️ 这里三个按钮上的字（`extraLabel` / `confirmLabel`）都是**给用户看的
         // 文案**，`ConfirmDialog` 原样画出来；回来的 `answer` 是 `"cancel"` /
@@ -543,8 +620,11 @@ export function useDocuments(w: documentWiring): documentApi {
         // "什么都没写"（另存为被取消、写盘报错），这里照关就等于把「保存并关闭」
         // 偷偷降级成「丢弃并关闭」——用户以为存住了，文件里却是旧的。
         if (answer === "extra" && !(await saveDoc(id))) return;
+        discardDraft = answer === "confirm";
       }
       try {
+        if (discardDraft) await api.draft.discardDocument(id);
+        else if (doc?.dirty) await saveDraft(id);
         await api.doc.close(id);
         const list = await refreshDocs();
         // ⚠️ **这里故意不绕 `切换文档`**：上面那段已经把"这份脏不脏"问过一遍了，
@@ -555,7 +635,18 @@ export function useDocuments(w: documentWiring): documentApi {
         toast(String(e), "error");
       }
     },
-    [docs, settings, refreshDocs, setActiveId, toast, askConfirm, saveDoc],
+    [
+      docs,
+      settings,
+      activeIdRef,
+      editorRef,
+      refreshDocs,
+      setActiveId,
+      toast,
+      askConfirm,
+      saveDoc,
+      saveDraft,
+    ],
   );
 
   /**
@@ -743,6 +834,7 @@ export function useDocuments(w: documentWiring): documentApi {
     docs,
     activeIdRef,
     saveDoc: (id) => saveDoc(id, false, true),
+    saveDraft,
   });
 
   /**
@@ -766,6 +858,8 @@ export function useDocuments(w: documentWiring): documentApi {
     openFolder,
     loadDir,
     saveDoc,
+    saveDraft,
+    restoreDrafts,
     switchDocument,
     recordActivity,
     closeDoc,

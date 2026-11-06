@@ -62,10 +62,12 @@ import remarkStringify from "remark-stringify";
 import remarkMath from "remark-math";
 import {
   commonStyleInput,
+  commonStyleCommit,
   commonStyleBlockReturnCar,
   singleDollarDollar,
   doubleDollarDollar,
   shouldChangeCommonStyle,
+  mathSourceAroundCursor,
   returnCarBecomeCommonStyleBlock,
   emptyBlockHeader,
   completeInlineMathAtCursor,
@@ -169,6 +171,12 @@ try {
   await commonStyleBlockReturnCar(ctx)();
 } catch (e) {
   blockPluginFailed = e;
+}
+let commitPluginFailed: unknown = null;
+try {
+  await commonStyleCommit(ctx)();
+} catch (e) {
+  commitPluginFailed = e;
 }
 
 /* ── 打字模拟：照抄 `prosemirror-inputrules` 的 `run()` ──────────────── */
@@ -286,6 +294,73 @@ function saveAsMdast(state: EditorState): Record<string, unknown>[] {
 
 group("一、正则与守卫");
 
+testCase("光标在闭符之前时也能认出两侧同类的行内公式", () => {
+  equal(
+    JSON.stringify(mathSourceAroundCursor("$\\LaTeX$", 7)),
+    JSON.stringify({
+      source: "\\LaTeX",
+      start: 0,
+      end: 8,
+      dollars: 1,
+      delimiter: "dollar",
+    }),
+    "single dollar",
+  );
+  equal(
+    JSON.stringify(mathSourceAroundCursor(
+      "前文 $$\\frac{a}{b}$$ 后文",
+      16,
+    )),
+    JSON.stringify({
+      source: "\\frac{a}{b}",
+      start: 3,
+      end: 18,
+      dollars: 2,
+      delimiter: "dollar",
+    }),
+    "double dollar",
+  );
+});
+
+testCase("手动先打两个 `$`、再从中间输入内容也会提交公式节点", () => {
+  const source = "$\\LaTeX$";
+  const paragraphNode = schema.nodes.paragraph.create(null, schema.text(source));
+  const doc = schema.nodes.doc.create(null, [paragraphNode]);
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 8),
+  });
+  const tr = completeInlineMathAtCursor(state, schema.nodes.math_inline);
+  assertion(tr, "光标在闭符前时没有生成公式事务");
+  equal(
+    JSON.stringify(appearance(state.apply(tr))),
+    JSON.stringify(['math_inline("\\\\LaTeX")']),
+    "公式没有在光标第一次经过闭符前时提交",
+  );
+});
+
+testCase("提交插件在闭符位于光标右侧时自动生成公式节点", () => {
+  assertion(!commitPluginFailed, "公式提交插件没有装配成功");
+  const commitPlugin = commonStyleCommit.plugin();
+  assertion(commitPlugin, "公式提交插件没有 plugin 实例");
+  const source = "$\\LaTeX$";
+  const paragraphNode = schema.nodes.paragraph.create(null, schema.text(source));
+  const doc = schema.nodes.doc.create(null, [paragraphNode]);
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 8),
+    plugins: [commitPlugin],
+  });
+  const next = state.apply(state.tr.insertText("X", state.selection.from));
+  equal(
+    JSON.stringify(appearance(next)),
+    JSON.stringify(['math_inline("\\\\LaTeXX")']),
+    "闭符在光标右侧时提交插件没有生成公式",
+  );
+});
+
 testCase("单美元 / 双美元 的正则与上游`mathInlineInputRule`同源（正则是拿掉它之后补上的）", () => {
   equal(singleDollarDollar.source, "(?:\\$)([^$]+)(?:\\$)$", "单美元正则");
   equal(doubleDollarDollar.source, "\\$\\$([^$]+)\\$\\$$", "双美元正则");
@@ -353,6 +428,16 @@ testCase("`C$dd$ D`（单美元那条照旧能用）⇒ 文(C) ＋ 公式(dd) �
 
 testCase("带反斜杠的 `$\\LaTeX$` 逐字输入会立即成为公式", () => {
   equalColumns(appearance(typed("$\\LaTeX$")), ['math_inline("\\\\LaTeX")'], "反斜杠不应阻止提交");
+});
+
+testCase("`1$\\LaTeX$2` 保持同一段，公式前后都能继续输入", () => {
+  const state = typed("1$\\LaTeX$2");
+  equal(state.doc.childCount, 1, "行内公式不得把前后文字拆成新段落");
+  equalColumns(
+    appearance(state),
+    ['文("1")', 'math_inline("\\\\LaTeX")', '文("2")'],
+    "公式前后应各是一颗普通文本",
+  );
 });
 
 testCase("`\\[\\LaTeX\\]` 立即成为公式，并记住括号分隔符", () => {

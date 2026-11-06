@@ -1,6 +1,8 @@
 import { mockIPC } from "@tauri-apps/api/mocks";
+import { EditorView } from "@codemirror/view";
 
 import { createEditor, type EditorHandle } from "@/editor/create";
+import { applyDocTheme } from "@/styles/doc-theme";
 
 import "@/styles/theme.css";
 import "@/styles/app.css";
@@ -70,7 +72,13 @@ async function waitFor<T extends Element>(selector: string, timeout = 5000): Pro
 
 async function mount(
   markdown: string,
-  options: { autoLinks?: boolean; autoPair?: boolean } = {},
+  options: {
+    autoLinks?: boolean;
+    autoPair?: boolean;
+    defaultIndent?: number;
+    keyboardExperience?: boolean;
+    vim?: boolean;
+  } = {},
 ): Promise<HTMLElement> {
   editor?.destroy();
   editorHost.replaceChildren();
@@ -78,9 +86,21 @@ async function mount(
     root: editorHost,
     initialMarkdown: markdown,
     autoLinks: options.autoLinks ?? true,
-    autoPair: options.autoPair ?? true,
+    autoPair: options.autoPair ?? false,
+    defaultIndent: options.defaultIndent ?? 2,
     emoji: true,
     selfActionMoreCorrect: true,
+    keyboardExperience: options.keyboardExperience ?? false,
+    vimInput: options.vim
+      ? {
+          config: {
+            kind: "vim",
+            enabled: true,
+            plugin: "nota.vim",
+            profile: null,
+          },
+        }
+      : undefined,
   });
   const prose = await waitFor<HTMLElement>(".ProseMirror");
   editor.focusAtStart();
@@ -123,10 +143,21 @@ async function pasteText(text: string): Promise<void> {
   await nextFrames();
 }
 
+async function composeText(text: string): Promise<void> {
+  const target = document.querySelector<HTMLElement>(".ProseMirror");
+  if (!target) throw new Error("The editor has no ProseMirror target");
+  target.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" }));
+  await typeText(text);
+  target.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: text }));
+  await sleep(140);
+  await nextFrames();
+}
+
 async function requestNativeKey(name: string): Promise<void> {
   document.documentElement.dataset.e2eNativeKey = name;
   if (nativeSignal === name) {
     delete document.documentElement.dataset.e2eNativeKey;
+    nativeSignal = "";
     return;
   }
   await new Promise<void>((resolveSignal) => nativeWaiters.set(name, resolveSignal));
@@ -201,16 +232,663 @@ function readableWhitespace(value: string): string {
 
 const tests: Array<{ name: string; run: () => Promise<void> }> = [
   {
-    name: "inline mark Left reaches the real paragraph start",
+    name: "Left from bold content start traverses both opening stars to paragraph start",
     async run() {
       const prose = await mount("**1**");
-      press(prose, "ArrowRight");
-      press(prose, "ArrowRight");
       press(prose, "ArrowLeft");
       press(prose, "ArrowLeft");
       editor!.insertAtCursorPlace("Z");
       await nextFrames();
-      assertEqual(serialized(), "Z**1**", "Left did not cross both opening syntax atoms");
+      assertEqual(
+        serialized(),
+        "Z**1**",
+        "Left did not traverse the opening marker in source character order",
+      );
+    },
+  },
+  {
+    name: "the nearest strong delimiter closes the run before later stars",
+    async run() {
+      const prose = await mount(
+        "**Tauri 2*. Approach **Typora** spiritually.",
+      );
+      const strong = prose.querySelector<HTMLElement>("p > strong");
+      assert(strong, "the nearest strong delimiter did not create strong text");
+      assertEqual(
+        strong.textContent,
+        "Tauri 2*. Approach ",
+        "the strong run ended at the wrong delimiter",
+      );
+      assert(
+        prose.textContent?.endsWith("Typora** spiritually."),
+        `the remaining stars were not preserved literally: ${
+          JSON.stringify(prose.textContent)
+        }`,
+      );
+    },
+  },
+  {
+    name: "Typora theme colours bridge into document paper and code tokens",
+    async run() {
+      applyDocTheme(`
+        :root {
+          --bg-color: #ffffff;
+          --text-color: #111111;
+          --code-bg-color: #fbfaf7;
+          --syntax-keyword-color: #2f3c61;
+        }
+        pre.md-fences .cm-keyword { color: var(--syntax-keyword-color); }
+      `);
+      document.documentElement.dataset.editorFontSize = "custom";
+      document.documentElement.style.setProperty("--editor-font-size", "26px");
+      try {
+        await mount("```js\nconst answer = 42;\n```\n\n```mermaid\ngraph TD; A[Start] --> B[End];\n```");
+        const keyword = await waitFor<HTMLElement>(
+          ".nota-code-cm .token.keyword",
+          10_000,
+        );
+        const preview = await waitFor<HTMLElement>(".nota-diagram-preview");
+        const paper = getComputedStyle(
+          document.querySelector<HTMLElement>(".editor-pane")!,
+        ).getPropertyValue("--doc-bg").trim();
+        const code = getComputedStyle(keyword.closest("pre")!)
+          .getPropertyValue("--code-bg-color")
+          .trim();
+        const token = getComputedStyle(keyword).color;
+        const diagramPaper = getComputedStyle(preview).backgroundColor;
+        const bodySize = getComputedStyle(
+          document.querySelector<HTMLElement>(".ProseMirror")!,
+        ).fontSize;
+        assertEqual(paper, "#ffffff", "Typora document paper was not bridged");
+        assertEqual(code, "#fbfaf7", "Typora code background was not bridged");
+        assertEqual(token, "rgb(47, 60, 97)", "Typora syntax colour was not applied");
+        assertEqual(diagramPaper, "rgb(255, 255, 255)", "diagram inherited the UI paper");
+        assertEqual(bodySize, "26px", "custom editor size lost to the Typora root");
+      } finally {
+        delete document.documentElement.dataset.editorFontSize;
+        document.documentElement.style.removeProperty("--editor-font-size");
+        applyDocTheme(null);
+      }
+    },
+  },
+  {
+    name: "bold closing markers render after the caret at the inner boundary",
+    async run() {
+      await mount("**1**");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 3, head: 3 }),
+        "caret did not start at the bold content boundary",
+      );
+      await requestNativeKey("arrow-right-inner");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 4, head: 4 }),
+        "Right did not stop between the two closing stars",
+      );
+      await requestNativeKey("arrow-right-outer");
+      await nextFrames();
+      editor!.insertAtCursorPlace("X");
+      await nextFrames();
+      assertEqual(serialized(), "**1**X", "Right did not exit the closing marker boundary");
+    },
+  },
+  {
+    name: "Backspace before a bold closing marker deletes text, not the marker group",
+    async run() {
+      await mount("**abc**");
+      await nextFrames();
+      for (let index = 0; index < 3; index++) {
+        await requestNativeKey(`arrow-right-${index}`);
+        await nextFrames();
+      }
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 6, head: 6 }),
+        "caret did not reach the bold content end",
+      );
+      await requestNativeKey("backspace");
+      await nextFrames();
+      assertEqual(serialized(), "**ab**", "Backspace removed the whole bold marker group");
+      assertEqual(
+        document.querySelector(".ProseMirror strong")?.textContent,
+        "ab",
+        "bold formatting was lost with the deleted character",
+      );
+    },
+  },
+  {
+    name: "Delete at a bold inner boundary does not flash the closing stars",
+    async run() {
+      await mount("**abc**");
+      await nextFrames();
+      for (let index = 0; index < 3; index++) {
+        await requestNativeKey(`arrow-right-delete-${index}`);
+        await nextFrames();
+      }
+      await requestNativeKey("delete");
+      await nextFrames();
+      await requestNativeKey("delete");
+      await nextFrames();
+      assertEqual(serialized(), "**abc*", "Delete did not remove exactly one closing star");
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 6, head: 6 }),
+        "Delete moved the caret away from the content boundary",
+      );
+    },
+  },
+  {
+    name: "Delete at a bold opening marker removes one source character",
+    async run() {
+      const prose = await mount("**the**");
+      press(prose, "Home");
+      await nextFrames();
+      await requestNativeKey("delete");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "*the**",
+        "Delete did not remove exactly one opening star",
+      );
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 2, head: 2 }),
+        "Delete did not leave the caret after the remaining literal star",
+      );
+    },
+  },
+  {
+    name: "Backspace at a bold opening marker removes one source character",
+    async run() {
+      await mount("**the**");
+      await nextFrames();
+      await requestNativeKey("backspace-opening-bold");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "*the**",
+        "Backspace did not remove exactly one opening star",
+      );
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 2, head: 2 }),
+        "Backspace did not leave the caret after the remaining literal star",
+      );
+    },
+  },
+  {
+    name: "Backspace after a closing marker removes exactly one star and keeps the caret after it",
+    async run() {
+      const prose = await mount("**men**");
+      press(prose, "End");
+      await nextFrames();
+      await requestNativeKey("backspace-after-bold");
+      await nextFrames();
+      assertEqual(serialized(), "**men*", "Backspace did not leave one literal closing star");
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 7, head: 7 }),
+        "caret jumped back into the bold content after deleting one closing star",
+      );
+    },
+  },
+  {
+    name: "Left from outside a bold mark, then through its closing group",
+    async run() {
+      const prose = await mount("**the**");
+      press(prose, "End");
+      await nextFrames();
+      await requestNativeKey("arrow-left-from-bold-end");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 7, head: 7 }),
+        "first Left did not stop between the two closing stars",
+      );
+      assertEqual(
+        document.querySelectorAll('.nota-syntax-marker[data-side="right"]').length,
+        2,
+        "closing marker pair disappeared on entering its inner side",
+      );
+      await requestNativeKey("arrow-left-into-bold");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 6, head: 6 }),
+        "second Left did not stop before the whole closing group",
+      );
+      await requestNativeKey("arrow-left-into-text");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 5, head: 5 }),
+        "third Left did not enter the bold text by one character",
+      );
+    },
+  },
+  {
+    name: "Left from following text reveals the closing group before entering it",
+    async run() {
+      const prose = await mount("**the**a");
+      press(prose, "End");
+      await nextFrames();
+      assert(
+        prose.querySelectorAll(
+          '.nota-syntax-marker[data-side="right"]:not(.nota-syntax-active)',
+        ).length > 0,
+        "closing delimiter nodes disappeared when the caret left the mark",
+      );
+      await requestNativeKey("arrow-left-following-bold");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 8, head: 8 }),
+        "first Left did not stop outside the revealed closing group",
+      );
+      assertEqual(
+        prose.querySelectorAll(
+          '.nota-syntax-marker[data-side="right"]:not(.nota-syntax-active)',
+        ).length,
+        0,
+        "revealed closing group remained visually hidden",
+      );
+      await requestNativeKey("arrow-left-inside-bold-close");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 7, head: 7 }),
+        "second Left did not stop between the closing stars",
+      );
+      await requestNativeKey("arrow-left-before-bold-close");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 6, head: 6 }),
+        "third Left did not stop before the closing group",
+      );
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "**theZ**a",
+        "Left did not traverse the closing group in Typedown source order",
+      );
+    },
+  },
+  {
+    name: "typing after bold preserves its hidden closing group boundaries",
+    async run() {
+      const prose = await mount("**the**a");
+      press(prose, "End");
+      await typeText("b");
+      await nextFrames();
+      assert(
+        prose.querySelectorAll(
+          '.nota-syntax-marker[data-side="right"]:not(.nota-syntax-active)',
+        ).length > 0,
+        "editing following text removed the hidden closing delimiter nodes",
+      );
+      await requestNativeKey("arrow-left-after-following-edit-1");
+      await nextFrames();
+      await requestNativeKey("arrow-left-after-following-edit-2");
+      await nextFrames();
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "**the**Zab",
+        "typing after bold collapsed the caret boundary outside its closing group",
+      );
+    },
+  },
+  {
+    name: "HTML source editor keeps its code beside the line-number gutter",
+    async run() {
+      const previousLineNumbers =
+        document.documentElement.dataset.codeLineNumbers;
+      document.documentElement.dataset.codeLineNumbers = "on";
+      try {
+      const html = `<p align="center">
+  <a href="https://github.com/Nota-MD/Nota/releases">
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.13.0--beta-e95420?style=flat-square">
+  </a>
+  <a href="LICENSE">
+    <img alt="License" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
+  </a>
+  <a href="https://github.com/Nota-MD/Nota/releases">
+    <img alt="Platforms" src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows-5e6272?style=flat-square">
+  </a>
+  <a href="https://github.com/Nota-MD/Nota-plugins">
+    <img alt="Extensions" src="https://img.shields.io/badge/extensions-Nota--plugins-6f42c1?style=flat-square">
+  </a>
+  <a href="https://github.com/Nota-MD/Nota-themes">
+    <img alt="Themes" src="https://img.shields.io/badge/themes-Nota--themes-eda870?style=flat-square">
+  </a>
+</p>`;
+      await mount(html);
+      const toggle = await waitFor<HTMLButtonElement>(".nota-html-source-toggle");
+      toggle.click();
+      await waitFor(".nota-html-source .cm-editor");
+      await nextFrames();
+      const source = document.querySelector<HTMLElement>(".nota-html-source");
+      const scroller = document.querySelector<HTMLElement>(
+        ".nota-html-source .cm-scroller",
+      );
+      const content = document.querySelector<HTMLElement>(
+        ".nota-html-source .cm-content",
+      );
+      const gutter = document.querySelector<HTMLElement>(
+        ".nota-html-source .cm-gutters",
+      );
+      assert(source && scroller && content && gutter, "HTML source editor is incomplete");
+      const sourceRect = source.getBoundingClientRect();
+      const contentRect = content.getBoundingClientRect();
+      const gutterRect = gutter.getBoundingClientRect();
+      assertEqual(scroller.scrollTop, 0, "HTML source editor opened scrolled away from line 1");
+      assert(
+        contentRect.top - sourceRect.top < 40,
+        `HTML code starts ${Math.round(contentRect.top - sourceRect.top)}px below its source surface`,
+      );
+      assert(
+        Math.abs(contentRect.top - gutterRect.top) < 40,
+        `HTML code and line numbers disagree: content=${Math.round(contentRect.top)}, gutter=${Math.round(gutterRect.top)}`,
+      );
+      } finally {
+        if (previousLineNumbers === undefined) {
+          delete document.documentElement.dataset.codeLineNumbers;
+        } else {
+          document.documentElement.dataset.codeLineNumbers = previousLineNumbers;
+        }
+      }
+    },
+  },
+  {
+    name: "failed HTML badge images fall back to their visible labels",
+    async run() {
+      await mount(`<p align="center">
+  <a href="https://example.com/releases"><img alt="Release" src="http://127.0.0.1:1/release.svg"></a>
+  <a href="https://example.com/platforms"><img alt="Platforms" src="http://127.0.0.1:1/platforms.svg"></a>
+</p>`);
+      await waitFor('.nota-html-render[data-state="ready"]');
+      const deadline = performance.now() + 3000;
+      while (
+        document.querySelectorAll(".nota-html-image-fallback").length < 2 &&
+        performance.now() < deadline
+      ) {
+        await sleep(25);
+      }
+      const fallbacks = Array.from(
+        document.querySelectorAll<HTMLElement>(".nota-html-image-fallback"),
+      ).map((element) => element.textContent);
+      assertEqual(
+        JSON.stringify(fallbacks),
+        JSON.stringify(["Release", "Platforms"]),
+        "failed HTML badge images did not expose their alt labels",
+      );
+      assertEqual(
+        document.querySelectorAll(".nota-html-render img:not([hidden])").length,
+        0,
+        "broken HTML image glyphs remained visible behind the labels",
+      );
+    },
+  },
+  {
+    name: "bold delimiters stay paired while typing inside a level-one heading",
+    async run() {
+      const prose = await mount("# ");
+      await typeText("**first**");
+      const strong = prose.querySelector<HTMLElement>("h1 strong");
+      assert(
+        strong,
+        `heading did not promote complete bold delimiters: ` +
+          `markdown=${JSON.stringify(serialized())} html=${JSON.stringify(prose.innerHTML)}`,
+      );
+      assertEqual(
+        strong.textContent,
+        "first",
+        `heading wrapped the wrong text as bold: markdown=${JSON.stringify(serialized())}`,
+      );
+      assertEqual(serialized(), "# **first**", "heading bold delimiters were split or duplicated");
+      assert(prose.querySelector("h1 strong") !== null, "heading no longer renders a strong span");
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 10, head: 10 }),
+        "caret did not settle after the complete closing marker",
+      );
+    },
+  },
+  {
+    name: "optional Markdown pairing inserts, skips and removes its closing marker",
+    async run() {
+      const prose = await mount("", { autoPair: true });
+      await typeText("*word");
+      await nextFrames();
+      assertEqual(serialized(), "*word*", "typed emphasis did not auto-pair");
+      const emphasis = prose.querySelector<HTMLElement>("em");
+      assert(emphasis, "auto-paired emphasis did not render");
+      assertEqual(emphasis.textContent, "word", "auto-pair wrapped the wrong text");
+
+      const empty = await mount("", { autoPair: true });
+      await typeText("*");
+      assertEqual(
+        empty.textContent,
+        "**",
+        "empty Markdown pair was not inserted",
+      );
+      press(empty, "Backspace");
+      await nextFrames();
+      assertEqual(serialized(), "", "Backspace left half of the empty Markdown pair");
+    },
+  },
+  {
+    name: "Left repeatedly reaches the start of a bold word inside a level-one heading",
+    async run() {
+      const prose = await mount("# **first**");
+      press(prose, "End");
+      await nextFrames();
+      for (let index = 0; index < 9; index++) {
+        await requestNativeKey(`arrow-left-${index}`);
+        await nextFrames();
+      }
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(serialized(), "# Z**first**", "heading caret got trapped inside the opening stars");
+    },
+  },
+  {
+    name: "heading and body expose the same strong delimiter boundaries",
+    async run() {
+      const snapshot = (root: HTMLElement) => ({
+        strong: root.querySelector<HTMLElement>("strong")?.textContent ?? null,
+        left: root.querySelectorAll(
+          '.nota-syntax-marker[data-side="left"]',
+        ).length,
+        right: root.querySelectorAll(
+          '.nota-syntax-marker[data-side="right"]',
+        ).length,
+        activeLeft: root.querySelectorAll(
+          '.nota-syntax-marker[data-side="left"].nota-syntax-active',
+        ).length,
+        activeRight: root.querySelectorAll(
+          '.nota-syntax-marker[data-side="right"].nota-syntax-active',
+        ).length,
+      });
+
+      const body = await mount("alpha **Markdown** omega");
+      press(body, "End");
+      await nextFrames();
+      for (let index = 0; index < 8; index++) {
+        await requestNativeKey(`arrow-left-heading-parity-body-${index}`);
+        await nextFrames();
+      }
+      const bodyState = snapshot(body);
+
+      const heading = await mount("# alpha **Markdown** omega");
+      press(heading, "End");
+      await nextFrames();
+      for (let index = 0; index < 8; index++) {
+        await requestNativeKey(`arrow-left-heading-parity-h1-${index}`);
+        await nextFrames();
+      }
+      const headingState = snapshot(heading);
+
+      assertEqual(headingState.strong, "Markdown", "heading strong text changed");
+      assertEqual(
+        JSON.stringify(headingState),
+        JSON.stringify(bodyState),
+        "heading used a different strong rendering or delimiter boundary state",
+      );
+      assertEqual(
+        headingState.activeRight,
+        2,
+        "heading did not expose both closing delimiter characters",
+      );
+    },
+  },
+  {
+    name: "highlight Left traverses opening delimiters in source order",
+    async run() {
+      await mount("==1==");
+      await nextFrames();
+      await requestNativeKey("arrow-left-highlight-inner");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 2, head: 2 }),
+        "first Left did not stop between the opening highlight markers",
+      );
+      await requestNativeKey("arrow-left-highlight-outer");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 1, head: 1 }),
+        "second Left did not leave the opening highlight marker",
+      );
+      editor!.insertAtCursorPlace("Z");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "Z==1==",
+        "Left did not traverse the highlight opening delimiter in source order",
+      );
+    },
+  },
+  {
+    name: "typing a star after an emphasis closing run keeps the new star",
+    async run() {
+      const prose = await mount("*1*");
+      press(prose, "End");
+      await nextFrames();
+      await typeText("*");
+      assert(
+        serialized().endsWith("*"),
+        `typing a second closing star swallowed it: ${JSON.stringify(serialized())}`,
+      );
+    },
+  },
+  {
+    name: "typing and deleting a backslash between closing stars keeps bold source",
+    async run() {
+      await mount("**Typora**");
+      editor!.restoreSelection({ anchor: 11, head: 11 });
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 11, head: 11 }),
+        "End did not collapse at the paragraph end",
+      );
+      await requestNativeKey("arrow-left-before-backslash");
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 10, head: 10 }),
+        "Left did not stop between the closing bold stars",
+      );
+      await requestNativeKey("text-\\");
+      await sleep(60);
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "**Typora*\\*",
+        "typing a backslash did not remain between the closing stars",
+      );
+      const typedSelection = editor!.selectionRange();
+      assert(
+        typedSelection.anchor === typedSelection.head,
+        `typing a backslash left a non-collapsed selection: ${JSON.stringify(typedSelection)}`,
+      );
+      await requestNativeKey("backspace-after-backslash");
+      await sleep(60);
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "**Typora**",
+        "Backspace did not restore the original bold source",
+      );
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 10, head: 10 }),
+        "Backspace did not leave the caret between the restored closing stars",
+      );
+    },
+  },
+  {
+    name: "Ctrl+B reveals both bold delimiter groups around the selected text",
+    async run() {
+      const prose = await mount("spiritually.");
+      editor!.restoreSelection({ anchor: 1, head: 13 });
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 1, head: 13 }),
+        "keyboard did not select the paragraph text before Ctrl+B",
+      );
+      await requestNativeKey("ctrl-b");
+      await sleep(60);
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "**spiritually.**",
+        "Ctrl+B did not apply bold to the selected text",
+      );
+      const visibleMarkers = prose.querySelectorAll(
+        ".nota-syntax-marker.nota-syntax-active",
+      );
+      assertEqual(
+        visibleMarkers.length,
+        4,
+        "Ctrl+B left one or both bold delimiter groups hidden",
+      );
+    },
+  },
+  {
+    name: "nested italic and bold keep all three delimiters on each side",
+    async run() {
+      const prose = await mount("***local***");
+      editor!.restoreSelection({ anchor: 9, head: 9 });
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "***local***",
+        "nested bold and italic source changed before navigation",
+      );
+      assertEqual(
+        prose.querySelectorAll(
+          '.nota-syntax-marker[data-side="left"].nota-syntax-active',
+        ).length,
+        3,
+        "the opening bold/italic delimiter run lost a character",
+      );
+      assertEqual(
+        prose.querySelectorAll(
+          '.nota-syntax-marker[data-side="right"].nota-syntax-active',
+        ).length,
+        3,
+        "the closing bold/italic delimiter run lost a character",
+      );
     },
   },
   {
@@ -223,6 +901,146 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       editor!.insertAtCursorPlace("H");
       await nextFrames();
       assertEqual(serialized(), "H**1**", "Home did not reach the paragraph start");
+    },
+  },
+  {
+    name: "holding Left through a link source exits without bouncing back inside",
+    async run() {
+      const prose = await mount("[github](https://github.com)你好", {
+        keyboardExperience: true,
+      });
+      editor!.restoreSelection({ anchor: 7, head: 7 });
+      await nextFrames();
+      for (let index = 0; index < 40; index++) {
+        await requestNativeKey(`arrow-left-link-${index}`);
+        await nextFrames();
+      }
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 1, head: 1 }),
+        "continuous Left did not settle at the paragraph start",
+      );
+      assertEqual(
+        serialized(),
+        "[github](https://github.com)你好",
+        "continuous Left changed the link source",
+      );
+      assert(
+        document.querySelector(".nota-keyboard-link-source") === null,
+        "continuous Left left focus trapped in the link source input",
+      );
+      assert(prose.isConnected, "continuous Left destroyed the editor");
+    },
+  },
+  {
+    name: "first Left at a link tail stays after the revealed source",
+    async run() {
+      await mount("[github](https://github.com)你", {
+        keyboardExperience: true,
+      });
+      await waitFor<HTMLElement>(".nota-link-source");
+      editor!.restoreSelection({ anchor: Number.MAX_SAFE_INTEGER, head: Number.MAX_SAFE_INTEGER });
+      await nextFrames();
+      assertEqual(
+        document.querySelector(".nota-link-source"),
+        null,
+        "moving outside the link did not restore its rendered form",
+      );
+      await requestNativeKey("arrow-left-to-link-tail");
+      await nextFrames();
+      await typeText("X");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "[github](https://github.com)X你",
+        "first Left entered the link source instead of stopping after it",
+      );
+      const trace: Array<Record<string, unknown>> = [
+        {
+          step: "after X",
+          selection: editor!.selectionRange(),
+          source: document.querySelector(".nota-link-source") !== null,
+        },
+      ];
+      await requestNativeKey("backspace-after-link-tail");
+      trace.push({
+        step: "after Backspace",
+        selection: editor!.selectionRange(),
+        source: document.querySelector(".nota-link-source") !== null,
+      });
+      await requestNativeKey("arrow-left-into-destination-end");
+      trace.push({
+        step: "after Left",
+        selection: editor!.selectionRange(),
+        source: document.querySelector(".nota-link-source") !== null,
+      });
+      await typeText("Y");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "[github](https://github.comY)你",
+        `second Left entered the link label instead of the destination end: ${JSON.stringify(trace)}`,
+      );
+    },
+  },
+  {
+    name: "link source is edited in place before the destination closes",
+    async run() {
+      await mount("[github](https://github.com)你好", {
+        keyboardExperience: true,
+      });
+      editor!.restoreSelection({ anchor: 4, head: 4 });
+      await nextFrames();
+      const source = await waitFor<HTMLElement>(".nota-link-source");
+      assertEqual(
+        source.textContent,
+        "[github](https://github.com)",
+        "the linked run was not replaced by editable Markdown source",
+      );
+      await nextFrames();
+      assert(
+        document.querySelector(".nota-blink-caret-on") !== null,
+        "link source editing hid the body caret",
+      );
+      editor!.restoreSelection({
+        anchor: 2 + (source.textContent?.length ?? 0) - 1,
+        head: 2 + (source.textContent?.length ?? 0) - 1,
+      });
+      await nextFrames();
+      await typeText("x");
+      await nextFrames();
+      assertEqual(
+        source.textContent,
+        "[github](https://github.comx)",
+        "typing before the closing parenthesis did not edit the destination",
+      );
+      editor!.restoreSelection({ anchor: 1, head: 1 });
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "[github](https://github.comx)你好",
+        "leaving the source did not parse the edited destination back into a link",
+      );
+    },
+  },
+  {
+    name: "Ctrl+A in a link source selects the whole document before delete",
+    async run() {
+      await mount("[github](https://github.com)你好", {
+        keyboardExperience: true,
+      });
+      editor!.restoreSelection({ anchor: 4, head: 4 });
+      await nextFrames();
+      await waitFor(".nota-link-source");
+      await requestNativeKey("ctrl-a");
+      await nextFrames();
+      await requestNativeKey("delete");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "",
+        "Ctrl+A inside link source selected only the link and left trailing text",
+      );
     },
   },
   {
@@ -240,6 +1058,33 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       assert(
         serialized().includes("next"),
         `following text was not inserted into the next paragraph: ${serialized()}`,
+      );
+    },
+  },
+  {
+    name: "typing explicit Markdown link syntax recognizes a bare domain",
+    async run() {
+      await mount("", { autoLinks: false });
+      await typeText("[GFM](github.com)");
+      await nextFrames();
+      const link = await waitFor<HTMLAnchorElement>('a[href="https://github.com"]');
+      assertEqual(link.textContent, "GFM", "link label changed");
+      assertEqual(
+        serialized(),
+        "[GFM](https://github.com)",
+        "typed bare-domain destination was not normalized",
+      );
+      assert(
+        document.activeElement !== link && !link.contains(document.activeElement),
+        "caret remained inside the completed link",
+      );
+      await typeText("f");
+      await nextFrames();
+      assertEqual(link.textContent, "GFM", "text typed after the link inherited the link mark");
+      assertEqual(
+        serialized(),
+        "[GFM](https://github.com)f",
+        "text typed after the completed link was absorbed into its label",
       );
     },
   },
@@ -295,21 +1140,81 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "Tab uses the configured indentation width",
+    async run() {
+      await mount("", { defaultIndent: 4 });
+      await typeText("x");
+      await requestNativeKey("tab-indent");
+      assertEqual(
+        readableWhitespace(serialized()),
+        "x    ",
+        "Tab did not insert four configured spaces",
+      );
+    },
+  },
+  {
+    name: "Tab on an empty paragraph keeps the line and inserts indentation",
+    async run() {
+      const prose = await mount("", { defaultIndent: 2, autoPair: false });
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 1, head: 1 }),
+        "empty document caret is not inside the first paragraph",
+      );
+      press(prose, "Tab");
+      assertEqual(readableWhitespace(serialized()), "  ", "empty Tab transaction was followed by another edit");
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 3, head: 3 }),
+        "Tab placed the caret before its indentation",
+      );
+      await nextFrames();
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 3, head: 3 }),
+        "a deferred editor transaction moved the caret back before typing",
+      );
+      const caretSelection = window.getSelection();
+      assertEqual(
+        caretSelection?.anchorOffset,
+        2,
+        `DOM caret stayed before Tab indentation: node=${caretSelection?.anchorNode?.nodeName} ` +
+          `parent=${(caretSelection?.anchorNode?.parentNode as HTMLElement | null)?.innerHTML}`,
+      );
+      await requestNativeKey("text-x");
+      assertEqual(
+        readableWhitespace(prose.textContent ?? ""),
+        "  x",
+        "Tab on an empty line removed or replaced the paragraph",
+      );
+    },
+  },
+  {
+    name: "Vim insert mode accepts text in an empty document",
+    async run() {
+      const prose = await mount("", { vim: true });
+      press(prose, "i");
+      await waitFor('.ProseMirror[data-vim-mode="insert"]');
+      await typeText("x");
+      assertEqual(serialized(), "x", "Vim insert mode rejected the first character");
+    },
+  },
+  {
     name: "bracket pairing inserts, skips and wraps using one setting",
     async run() {
-      await mount("");
+      await mount("", { autoPair: true });
       await typeText("(");
       assertEqual(serialized(), "()", "opening parenthesis did not insert its pair");
       await typeText("x)");
       assertEqual(serialized(), "(x)", "typed closing parenthesis duplicated the pair");
 
-      await mount("word");
+      await mount("word", { autoPair: true });
       editor!.runCommand("selectLine");
       await nextFrames();
       await typeText("(");
       assertEqual(serialized(), "(word)", "bracket did not wrap the selected text");
 
-      await mount("");
+      await mount("", { autoPair: true });
       await typeText("【");
       await typeText("中");
       assertEqual(serialized(), "【中】", "full-width bracket pairing failed");
@@ -318,7 +1223,7 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
   {
     name: "Backspace removes an empty auto-pair in one step",
     async run() {
-      const prose = await mount("");
+      const prose = await mount("", { autoPair: true });
       await typeText("(");
       assertEqual(serialized(), "()", "test setup did not create an empty pair");
       press(prose, "Backspace");
@@ -329,14 +1234,14 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
   {
     name: "Tab and Shift+Tab cross an adjacent bracket without editing",
     async run() {
-      const prose = await mount("");
+      const prose = await mount("", { autoPair: true });
       await typeText("(");
       await typeText("x");
       press(prose, "Tab");
       await typeText("Y");
       assertEqual(serialized(), "(x)Y", "Tab did not cross the closing bracket");
 
-      const reversed = await mount("");
+      const reversed = await mount("", { autoPair: true });
       await typeText("(");
       press(reversed, "Tab", { shiftKey: true });
       await typeText("Z");
@@ -353,17 +1258,28 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "input-method brackets pair after composition ends",
+    async run() {
+      await mount("", { autoPair: true });
+      await composeText("（");
+      assertEqual(serialized(), "（）", "committed opener did not get a partner");
+      await composeText("你好");
+      await composeText("）");
+      assertEqual(serialized(), "（你好）", "committed closer did not step over the partner");
+    },
+  },
+  {
     name: "smart quote pairing keeps apostrophes and original closers intact",
     async run() {
-      await mount("");
+      await mount("", { autoPair: true });
       await typeText('"hello"');
       assertEqual(serialized(), "“hello”", "straight quote keys did not form one curly pair");
 
-      await mount("");
+      await mount("", { autoPair: true });
       await typeText("don't");
       assertEqual(serialized(), "don’t", "single quote after a word became a pair instead of an apostrophe");
 
-      await mount("");
+      await mount("", { autoPair: true });
       await typeText("https://example.com/a(b");
       assertEqual(
         document.querySelector(".ProseMirror")?.textContent,
@@ -383,6 +1299,78 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       editor!.insertAtCursorPlace("Z");
       await nextFrames();
       assertEqual(serialized(), "$x$Z", "following text was appended inside the formula");
+    },
+  },
+  {
+    name: "backslash in empty inline math stays before the closing dollar",
+    async run() {
+      await mount("$ $");
+      const input = await openInlineMath();
+      input.value = "";
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          inputType: "deleteContentBackward",
+        }),
+      );
+      await nextFrames();
+      input.focus();
+      input.setSelectionRange(0, 0);
+      await requestNativeKey("text-\\");
+      await nextFrames();
+
+      assertEqual(input.value, "\\", "the source input gained or lost a backslash");
+      assertEqual(input.selectionStart, 1, "the source caret did not stay after the backslash");
+      assertEqual(document.activeElement, input, "typing a backslash moved focus out of the formula");
+      assertEqual(serialized(), "$\\$", "the closing dollar moved into the formula source");
+
+      const closing = document.querySelector<HTMLElement>(".nota-math-delim-close");
+      assert(closing, "the closing dollar is missing");
+      assert(
+        input.getBoundingClientRect().right <= closing.getBoundingClientRect().left + 1,
+        "the source input extends past the closing dollar",
+      );
+    },
+  },
+  {
+    name: "inline math commits IME text once after composition ends",
+    async run() {
+      await mount("$ $");
+      const input = await openInlineMath();
+      input.value = "";
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+      await nextFrames();
+      const before = serialized();
+
+      input.focus();
+      input.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "" }));
+      input.value = "\\LaTeX";
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          data: "\\LaTeX",
+          inputType: "insertCompositionText",
+          isComposing: true,
+        }),
+      );
+      const composingEnter = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+        isComposing: true,
+      });
+      input.dispatchEvent(composingEnter);
+      await nextFrames();
+      assertEqual(serialized(), before, "formula source was committed during IME composition");
+      assertEqual(composingEnter.defaultPrevented, false, "Enter was stolen from the IME");
+      assertEqual(document.activeElement, input, "IME composition lost the source input");
+
+      input.dispatchEvent(
+        new CompositionEvent("compositionend", { bubbles: true, data: "\\LaTeX" }),
+      );
+      await nextFrames();
+      assertEqual(serialized(), "$\\LaTeX$", "committed IME text was not written exactly once");
+      assertEqual(input.selectionStart, input.value.length, "caret did not remain after committed text");
     },
   },
   {
@@ -503,6 +1491,420 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "math and latex fenced code blocks render KaTeX previews",
+    async run() {
+      for (const language of ["math", "latex", "tex"]) {
+        await mount(`\`\`\`${language}\n\\\\LaTeX\n\`\`\``);
+        const pre = await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math > pre");
+        pre.dispatchEvent(
+          new MouseEvent("mousedown", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+          }),
+        );
+        await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math .cm-content", 10000);
+        const preview = await waitFor<HTMLElement>(
+          ".nota-code-wrap.nota-code-math .nota-code-math-preview",
+          5000,
+        );
+        await sleep(3000);
+        assertEqual(
+          preview.dataset.state,
+          "ready",
+          `${language} fence preview state; text=${JSON.stringify(preview.textContent)}; hidden=${preview.hidden}`,
+        );
+        const katex = preview.querySelector<HTMLElement>(".katex");
+        assert(katex, `${language} fence reached ready without a KaTeX tree`);
+        assert(
+          (preview.textContent ?? "").includes("LaTeX"),
+          `${language} fence preview lost the rendered LaTeX text`,
+        );
+      }
+    },
+  },
+  {
+    name: "Left and Up at the code block start move back to the document",
+    async run() {
+      for (const language of ["js", "latex", "tex", "mermaid"]) {
+        const body =
+          language === "js"
+            ? "const x = 1;"
+            : language === "mermaid"
+              ? "graph TD; A[Start] --> B[End];"
+              : "\\LaTeX";
+        await mount(`before\n\n\`\`\`${language}\n${body}\n\`\`\``);
+        const editorSelector =
+          language === "mermaid" ? ".nota-diagram-cm .cm-content" : ".nota-code-cm .cm-content";
+        if (language === "mermaid") {
+          const preview = await waitFor<HTMLElement>(
+            ".nota-diagram-preview",
+            5000,
+          );
+          preview.dispatchEvent(
+            new MouseEvent("mousedown", {
+              bubbles: true,
+              cancelable: true,
+              button: 0,
+            }),
+          );
+        } else if (language !== "js") {
+          const pre = await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math > pre");
+          pre.dispatchEvent(
+            new MouseEvent("mousedown", {
+              bubbles: true,
+              cancelable: true,
+              button: 0,
+            }),
+          );
+        }
+        const content = await waitFor<HTMLElement>(editorSelector, 10000);
+        const codeView = EditorView.findFromDOM(content);
+        assert(codeView, `could not find the ${language} CodeMirror view`);
+        const enterSourceEditor = async () => {
+          if (language === "mermaid") {
+            const preview = await waitFor<HTMLElement>(".nota-diagram-preview");
+            preview.dispatchEvent(
+              new MouseEvent("mousedown", {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+              }),
+            );
+          } else if (language !== "js") {
+            const pre = await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math > pre");
+            pre.dispatchEvent(
+              new MouseEvent("mousedown", {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+              }),
+            );
+          }
+          await nextFrames();
+          codeView.focus();
+        };
+        const focusAt = (position: number) => {
+          codeView.dispatch({ selection: { anchor: position } });
+          codeView.focus();
+        };
+        const middle = Math.min(1, Math.max(0, codeView.state.doc.length - 1));
+        await enterSourceEditor();
+        focusAt(middle);
+        await requestNativeKey(`arrow-left-${language}-code-block-middle`);
+        await nextFrames();
+        assert(
+          content.contains(document.activeElement),
+          `Left inside the ${language} code block escaped before the source head; ` +
+            `cursor=${codeView.state.selection.main.head}, active=${document.activeElement?.className}`,
+        );
+
+        focusAt(0);
+        const before = serialized();
+
+        await requestNativeKey(`arrow-left-${language}-code-block-start`);
+        await nextFrames();
+        assert(
+          document.activeElement !== content && !content.contains(document.activeElement),
+          `Left at the ${language} code block start did not leave CodeMirror`,
+        );
+        assertEqual(serialized(), before, `Left at the ${language} code block start changed the document`);
+
+        await enterSourceEditor();
+        focusAt(middle);
+        await requestNativeKey(`arrow-up-${language}-code-block-middle`);
+        await nextFrames();
+        assert(
+          content.contains(document.activeElement),
+          `Up inside the ${language} code block escaped before the source head; ` +
+            `cursor=${codeView.state.selection.main.head}, active=${document.activeElement?.className}`,
+        );
+
+        focusAt(0);
+        await requestNativeKey(`arrow-up-${language}-code-block-start`);
+        await nextFrames();
+        assert(
+          document.activeElement !== content && !content.contains(document.activeElement),
+          `Up at the ${language} code block start did not leave CodeMirror`,
+        );
+        assertEqual(serialized(), before, `Up at the ${language} code block start changed the document`);
+      }
+    },
+  },
+  {
+    name: "Right and Down at any code block end move forward to the document",
+    async run() {
+      for (const language of ["js", "latex", "tex", "mermaid"]) {
+        const body =
+          language === "js"
+            ? "const x = 1;"
+            : language === "mermaid"
+              ? "graph TD; A[Start] --> B[End];"
+              : "\\LaTeX";
+        await mount(`\`\`\`${language}\n${body}\n\`\`\`\n\nafter`);
+        const editorSelector =
+          language === "mermaid" ? ".nota-diagram-cm .cm-content" : ".nota-code-cm .cm-content";
+        if (language === "mermaid") {
+          const preview = await waitFor<HTMLElement>(
+            ".nota-diagram-preview",
+            5000,
+          );
+          preview.dispatchEvent(
+            new MouseEvent("mousedown", {
+              bubbles: true,
+              cancelable: true,
+              button: 0,
+            }),
+          );
+        } else if (language !== "js") {
+          const pre = await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math > pre");
+          pre.dispatchEvent(
+            new MouseEvent("mousedown", {
+              bubbles: true,
+              cancelable: true,
+              button: 0,
+            }),
+          );
+        }
+        const content = await waitFor<HTMLElement>(editorSelector, 10000);
+        const codeView = EditorView.findFromDOM(content);
+        assert(codeView, `${language} CodeMirror view is missing`);
+        const enterSourceEditor = async () => {
+          if (language === "mermaid") {
+            const preview = await waitFor<HTMLElement>(".nota-diagram-preview");
+            preview.dispatchEvent(
+              new MouseEvent("mousedown", {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+              }),
+            );
+          } else if (language !== "js") {
+            const pre = await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math > pre");
+            pre.dispatchEvent(
+              new MouseEvent("mousedown", {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+              }),
+            );
+          }
+          await nextFrames();
+          codeView.focus();
+        };
+        const focusAt = (position: number) => {
+          codeView.dispatch({ selection: { anchor: position } });
+          codeView.focus();
+        };
+        const sourceEnd = codeView.state.doc.length;
+        const lastInside = Math.max(0, sourceEnd - 1);
+
+        await enterSourceEditor();
+        focusAt(lastInside);
+        await requestNativeKey(`arrow-right-${language}-code-block-inside`);
+        await nextFrames();
+        assert(
+          content.contains(document.activeElement),
+          `Right inside the ${language} code block escaped before the source tail; ` +
+            `cursor=${codeView.state.selection.main.head}, active=${document.activeElement?.className}`,
+        );
+
+        focusAt(sourceEnd);
+        const before = serialized();
+        await requestNativeKey(`arrow-right-${language}-code-block-end`);
+        await nextFrames();
+        assert(
+          document.activeElement !== content && !content.contains(document.activeElement),
+          `Right at the ${language} code block end did not leave CodeMirror`,
+        );
+        assertEqual(serialized(), before, `Right at the ${language} code block end changed the document`);
+
+        await enterSourceEditor();
+        focusAt(lastInside);
+        await requestNativeKey(`arrow-down-${language}-code-block-inside`);
+        await nextFrames();
+        assert(
+          content.contains(document.activeElement),
+          `Down inside the ${language} code block escaped before the source tail; ` +
+            `cursor=${codeView.state.selection.main.head}, active=${document.activeElement?.className}`,
+        );
+
+        focusAt(sourceEnd);
+        await requestNativeKey(`arrow-down-${language}-code-block-end`);
+        await nextFrames();
+        assert(
+          document.activeElement !== content && !content.contains(document.activeElement),
+          `Down at the ${language} code block end did not leave CodeMirror`,
+        );
+        assertEqual(serialized(), before, `Down at the ${language} code block end changed the document`);
+      }
+    },
+  },
+  {
+    name: "double-dollar formula blocks use the same four-direction exits",
+    async run() {
+      const prose = await mount("before\n\n$$\nE=mc^2\n$$\n\nafter");
+      const selectFormula = async () => {
+        editor!.focusAtStart();
+        press(prose, "End");
+        await nextFrames();
+        await requestNativeKey(`arrow-down-into-double-dollar-${Math.random()}`);
+      };
+
+      await selectFormula();
+      const content = await waitFor<HTMLElement>(".nota-math-source-shell .cm-content", 10000);
+      const codeView = EditorView.findFromDOM(content);
+      assert(codeView, "double-dollar formula CodeMirror view is missing");
+      const before = serialized();
+      const focusAt = (position: number) => {
+        codeView.dispatch({ selection: { anchor: position } });
+        codeView.focus();
+      };
+      const sourceEnd = codeView.state.doc.length;
+
+      focusAt(0);
+      await requestNativeKey("arrow-left-double-dollar-start");
+      await nextFrames();
+      assert(
+        document.activeElement !== content && !content.contains(document.activeElement),
+        "Left at the double-dollar formula start did not leave its source editor",
+      );
+
+      await selectFormula();
+      await waitFor<HTMLElement>(".nota-math-source-shell .cm-content", 10000);
+      focusAt(0);
+      await requestNativeKey("arrow-up-double-dollar-start");
+      await nextFrames();
+      assert(
+        document.activeElement !== content && !content.contains(document.activeElement),
+        "Up at the double-dollar formula start did not leave its source editor",
+      );
+
+      await selectFormula();
+      await waitFor<HTMLElement>(".nota-math-source-shell .cm-content", 10000);
+      focusAt(sourceEnd);
+      await requestNativeKey("arrow-right-double-dollar-end");
+      await nextFrames();
+      assert(
+        document.activeElement !== content && !content.contains(document.activeElement),
+        "Right at the double-dollar formula end did not leave its source editor",
+      );
+
+      await selectFormula();
+      await waitFor<HTMLElement>(".nota-math-source-shell .cm-content", 10000);
+      focusAt(sourceEnd);
+      await requestNativeKey("arrow-down-double-dollar-end");
+      await nextFrames();
+      assert(
+        document.activeElement !== content && !content.contains(document.activeElement),
+        "Down at the double-dollar formula end did not leave its source editor",
+      );
+      assertEqual(serialized(), before, "double-dollar navigation changed the document");
+    },
+  },
+  {
+    name: "Mermaid labels use the document font without clipping theme colors",
+    async run() {
+      document.documentElement.style.setProperty(
+        "--font-doc",
+        '"Noto Serif", "Times New Roman", serif',
+      );
+      await mount(
+        [
+          "```mermaid",
+          "flowchart TD",
+          "  A[Choose Your Markdown Editor] --> B{Which}",
+          "  B -->|Nota| C[$0.00]",
+          "  B -->|Typora| D[$14.99]",
+          "```",
+        ].join("\n"),
+      );
+      const svg = await waitFor<SVGSVGElement>(
+        '.nota-diagram-preview[data-state="ok"] svg',
+        15000,
+      );
+      for (const label of ["Nota", "Typora", "$0.00", "$14.99"]) {
+        assert(
+          (svg.textContent ?? "").includes(label),
+          `Mermaid SVG lost label text ${JSON.stringify(label)}`,
+        );
+      }
+      const visibleLabel = Array.from(
+        svg.querySelectorAll<HTMLElement>("foreignObject div, .nodeLabel, .edgeLabel"),
+      ).find((element) => element.textContent?.includes("Choose Your Markdown Editor"));
+      assert(visibleLabel, "Mermaid did not render the themed html label");
+      assert(
+        getComputedStyle(visibleLabel).fontFamily.includes("Noto Serif"),
+        `Mermaid ignored the document font: ${getComputedStyle(visibleLabel).fontFamily}`,
+      );
+      document.documentElement.style.removeProperty("--font-doc");
+    },
+  },
+  {
+    name: "Mermaid long-arrow edge labels retain Yes and No text",
+    async run() {
+      await mount(
+        [
+          "```mermaid",
+          "flowchart TD",
+          "  A[Start] --> B{Condition?}",
+          "  B -- Yes --> C[Action 1]",
+          "  B -- No --> D[Action 2]",
+          "  C --> E[End]",
+          "  D --> E",
+          "```",
+        ].join("\n"),
+      );
+      const svg = await waitFor<SVGSVGElement>(
+        '.nota-diagram-preview[data-state="ok"] svg',
+        15000,
+      );
+      for (const label of ["Start", "Condition?", "Yes", "No", "Action 1", "Action 2", "End"]) {
+        assert(
+          (svg.textContent ?? "").includes(label),
+          `Mermaid long-arrow SVG lost label ${JSON.stringify(label)}: ${svg.innerHTML}`,
+        );
+      }
+      const edgeLabels = Array.from(svg.querySelectorAll<SVGGElement>("g.edgeLabel"));
+      assertEqual(
+        edgeLabels.filter((label) => /Yes|No/.test(label.textContent ?? "")).length,
+        2,
+        "Mermaid did not render two edge label groups",
+      );
+      for (const label of edgeLabels) {
+        const text = label.querySelector<HTMLElement>("span, div, text");
+        assert(text, "Mermaid edge label has no text element");
+        const style = getComputedStyle(text);
+        assert(style.visibility !== "hidden", "Mermaid edge label is hidden");
+        assert(style.opacity !== "0", "Mermaid edge label is transparent");
+        assert(style.color !== "rgba(0, 0, 0, 0)", "Mermaid edge label text is transparent");
+        const rect = label.getBoundingClientRect();
+        assert(
+          rect.width > 0 && rect.height > 0,
+          `Mermaid edge label collapsed to ${rect.width}x${rect.height}`,
+        );
+        const svgRect = svg.getBoundingClientRect();
+        assert(
+          rect.right > svgRect.left &&
+            rect.left < svgRect.right &&
+            rect.bottom > svgRect.top &&
+            rect.top < svgRect.bottom,
+          `Mermaid edge label lies outside the visible SVG: label=${JSON.stringify({
+            left: rect.left,
+            top: rect.top,
+            right: rect.right,
+            bottom: rect.bottom,
+          })} svg=${JSON.stringify({
+            left: svgRect.left,
+            top: svgRect.top,
+            right: svgRect.right,
+            bottom: svgRect.bottom,
+          })}`,
+        );
+      }
+    },
+  },
+  {
     name: "failed images show an inline warning",
     async run() {
       await mount("![bad-image](data:image/png;base64,not-an-image)");
@@ -617,7 +2019,7 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "trailing backslash adds only a visual gap before closing dollar",
+    name: "trailing backslash stays compact before the closing dollar",
     async run() {
       await mount("$x$");
       const input = await openInlineMath();
@@ -633,12 +2035,99 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       assert(root.classList.contains("nota-math-trailing-backslash"), "trailing-backslash state was not applied");
       assertEqual(input.value, "x\\", "the source input gained a display-only byte");
       assertEqual(closing.textContent, "$", "the closing delimiter changed text");
-      assert(closingLeft - sourceRight > 1, `no visual gap before closing dollar: ${closingLeft - sourceRight}px`);
+      assert(
+        closingLeft - sourceRight < 1.5,
+        `visual gap remains before closing dollar: ${closingLeft - sourceRight}px`,
+      );
       assertEqual(
         [...editor!.getMarkdown()].filter((character) => character === "\\").length,
         1,
         "the display gap changed the serialized source",
       );
+    },
+  },
+  {
+    name: "LaTeX typography keeps inline dollar-source-dollar tightly packed",
+    async run() {
+      applyDocTheme(`
+        html { font-size: 11pt; }
+        body { line-height: 1.38; }
+        #write {
+          text-align: justify;
+          line-break: auto;
+          overflow-wrap: break-word;
+          hyphens: auto;
+        }
+        p { margin: 0; text-indent: 1.55em; }
+        #write :is(p):lang(zh) { line-height: 1.68; line-break: strict; }
+      `);
+      try {
+        await mount("$\\LaTeX$");
+        await openInlineMath();
+        await nextFrames();
+        const panel = await waitFor<HTMLElement>(".nota-math-inline .nota-math-panel");
+        const delimiters = [...panel.querySelectorAll<HTMLElement>(".nota-math-delim")];
+        const input = await waitFor<HTMLInputElement>(".nota-math-inline .nota-math-source");
+        assertEqual(delimiters.length, 2, "inline formula did not expose two delimiters");
+        const left = delimiters[0]!.getBoundingClientRect();
+        const right = delimiters[1]!.getBoundingClientRect();
+        const source = input.getBoundingClientRect();
+        const leftGap = source.left - left.right;
+        const rightGap = right.left - source.right;
+        assert(
+          leftGap < 1.5 && rightGap < 1.5,
+          `inline formula has a layout gap: left=${leftGap.toFixed(2)}px right=${rightGap.toFixed(2)}px ` +
+            `source=${source.width.toFixed(2)}px`,
+        );
+        assert(source.width < 100, `source input kept a character-column width: ${source.width.toFixed(2)}px`);
+
+        input.value = "";
+        input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward" }));
+        await nextFrames();
+        const emptySource = input.getBoundingClientRect();
+        const emptyRight = delimiters[1]!.getBoundingClientRect();
+        const emptyRightGap = emptyRight.left - emptySource.right;
+        assert(emptySource.width <= 2, `empty source retained a blank slot: ${emptySource.width.toFixed(2)}px`);
+        assert(
+          emptyRightGap < 1.5,
+          `empty formula retained a gap before closing dollar: ${emptyRightGap.toFixed(2)}px`,
+        );
+      } finally {
+        applyDocTheme(null);
+      }
+    },
+  },
+  {
+    name: "Typora theme keeps headings centred and body text start-aligned",
+    async run() {
+      applyDocTheme(`
+        :root { --text-color: #222222; }
+        #write {
+          max-width: 420px;
+          margin: 0 auto;
+          text-align: center;
+        }
+        p { text-align: center; }
+        h1 { text-align: center; }
+      `);
+      try {
+        await mount("# Centred title\n\nLeft body");
+        await nextFrames();
+        const heading = await waitFor<HTMLElement>(".ProseMirror h1");
+        const paragraph = await waitFor<HTMLElement>(".ProseMirror p");
+        assertEqual(getComputedStyle(heading).textAlign, "center", "theme heading alignment was lost");
+        assertEqual(
+          getComputedStyle(paragraph).textAlign,
+          "start",
+          "Typora body paragraph inherited the theme's centre alignment",
+        );
+        assert(
+          document.querySelector<HTMLElement>(".ProseMirror")!.getBoundingClientRect().width > 0,
+          "themed ProseMirror root collapsed to zero-width content",
+        );
+      } finally {
+        applyDocTheme(null);
+      }
     },
   },
   {
@@ -732,7 +2221,10 @@ function writeReport(results: TestResult[]): void {
 
 async function main(): Promise<void> {
   const results: TestResult[] = [];
-  for (const test of tests) {
+  const only = new URLSearchParams(window.location.search).get("only")?.trim() ?? "";
+  const selected = only ? tests.filter((test) => test.name.includes(only)) : tests;
+  if (!selected.length) throw new Error(`No E2E scenario matched ${JSON.stringify(only)}`);
+  for (const test of selected) {
     try {
       await test.run();
       results.push({ name: test.name, passed: true, detail: "" });

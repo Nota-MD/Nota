@@ -107,7 +107,6 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
 
   const write = paneWriter(settings, onChange, "markdown");
   const m = settings.markdown;
-  const smartAblePunctuationCloseActive = m.smart_punctuation === "off";
 
   return (
     <>
@@ -221,13 +220,6 @@ export function MarkdownPane({ settings, onChange }: PaneProps) {
           />
         </SettingRow>
 
-        <SettingRow label={t("Allow converting Unicode punctuation")}>
-          <Toggle
-            checked={m.unicode_punctuation}
-            disabled={smartAblePunctuationCloseActive}
-            onChange={(unicode_punctuation) => write({ unicode_punctuation })}
-          />
-        </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Auto-correct")}>

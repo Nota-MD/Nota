@@ -21,13 +21,13 @@
 //!
 //! ⚠️ **失败单条跳过，不拖垮整份主题**：文件不存在、路径越界、后缀不认识时保留
 //! 原始 `url()`，WebKit 最终只是那一条不生效。主题里一枚图标没拷全，不该让整份
-//! 外观退回默认。单文件 8 MiB、整份 CSS 合计 24 MiB；超限同样跳过。
+//! 外观退回默认。单文件 32 MiB、整份 CSS 合计 48 MiB；超限同样跳过。
 
 use std::path::{Path, PathBuf};
 use base64::Engine as _;
 
-const MAX_ASSET_BYTES: u64 = 8 * 1024 * 1024;
-const MAX_TOTAL_BYTES: u64 = 24 * 1024 * 1024;
+const MAX_ASSET_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_TOTAL_BYTES: u64 = 48 * 1024 * 1024;
 
 /// 把 CSS 中以 `url(...)` 写出的相对资源内联成 data URI。
 ///
@@ -216,6 +216,22 @@ mod tests {
         let got = inline(css, &root.join("my.css"), &root);
         assert_eq!(got, css);
         std::fs::remove_file(parent.join("secret.svg")).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn large_local_fonts_are_inlined() {
+        let root = temp_dir("large-font");
+        std::fs::create_dir_all(root.join("fonts")).unwrap();
+        let font = root.join("fonts").join("large.ttf");
+        std::fs::File::create(&font)
+            .unwrap()
+            .set_len(9 * 1024 * 1024)
+            .unwrap();
+        let css_path = root.join("theme.css");
+        let css = "@font-face { src: url(\"fonts/large.ttf\") format(\"truetype\"); }";
+        let got = inline(css, &css_path, &root);
+        assert!(got.contains("url(\"data:font/ttf;base64,"));
         std::fs::remove_dir_all(root).unwrap();
     }
 }

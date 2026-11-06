@@ -13,8 +13,11 @@ use crate::watch::监视器;
 /// 新建一份空文档。
 #[tauri::command]
 pub fn nota_doc_new(state: State<'_, AppState>) -> Result<DocId> {
+    let line_ending = configured_line_ending(&state);
     let mut docs = state.documents.lock().unwrap();
-    Ok(docs.create_untitled())
+    let id = docs.create_untitled();
+    docs.set_line_ending(id, line_ending)?;
+    Ok(id)
 }
 
 /// 新建一份带初始正文的未命名文档，用于导入格式转换结果。
@@ -27,8 +30,21 @@ pub fn nota_doc_new_with_text(
     text: String,
     title_hint: Option<String>,
 ) -> Result<DocId> {
+    let use_configured_line_ending = text.is_empty();
+    let line_ending = configured_line_ending(&state);
     let mut docs = state.documents.lock().unwrap();
-    Ok(docs.create_untitled_with_text(text, title_hint))
+    let id = docs.create_untitled_with_text(text, title_hint);
+    if use_configured_line_ending {
+        docs.set_line_ending(id, line_ending)?;
+    }
+    Ok(id)
+}
+
+fn configured_line_ending(state: &AppState) -> &'static str {
+    match state.settings.lock().unwrap().editor.line_ending {
+        crate::settings::editor::LineEnding::Crlf => "crlf",
+        crate::settings::editor::LineEnding::Lf => "lf",
+    }
 }
 
 /// 打开一个文件。**已打开就复用**（不重复开标签），并把活动标签切过去。
@@ -171,15 +187,22 @@ pub fn nota_doc_save(
     // ⚠️ `docs.save` 会把 `path` **移走**，所以先在这里记一笔"用户指定了路径没有"
     // ——下面要据此决定记不记「最近」（见那一段的注释）。
     let 是另存为 = path.is_some();
-    let (written, 文本) = {
+    let (written, draft_id) = {
         let mut docs = state.documents.lock().unwrap();
         let written = docs.save(id, path.map(PathBuf::from))?;
-        // ⚠️ 取的是 `text`，也就是**刚写出去的那份**（`save` 写的就是它，
-        // 见 `DocumentStore::save`）。这里不能拿 `clean_text`——两者存盘后
-        // 虽然相等，但读 `text` 才是"磁盘上现在是什么"的直接对应。
-        let 文本 = docs.get(id).map(|d| d.text.clone()).unwrap_or_default();
-        (written, 文本)
+        let draft_id = docs.get(id).map(|doc| doc.draft_id.clone());
+        (written, draft_id)
     };
+    if let Some(draft_id) = draft_id {
+        if let Err(error) = crate::draft::delete(&draft_id) {
+            crate::日志!("[nota] draft cleanup after save failed: {error}");
+        }
+    }
+    // Monitor the bytes that were actually written. The editor mirror uses LF,
+    // while the document may intentionally save as CRLF.
+    let 文本 = crate::text_encoding::读文件(&written)
+        .map(|(text, _)| text)
+        .unwrap_or_default();
     监.记下(&written, &文本);
     // ⚠️ **只有「另存为」（`path` 有值）才记「最近」**，理由不是"省一次写盘"
     // 而是正确性：`Ctrl+S` 与自动保存在一份**已经打开**的文档上是高频动作
@@ -318,11 +341,14 @@ pub fn nota_doc_close(state: State<'_, AppState>, id: DocId) -> Result<()> {
 /// 未保存改动处理在前端；这里保证失败时文档仍开着、文件也没有被部分修改。
 #[tauri::command]
 pub fn nota_doc_delete(state: State<'_, AppState>, id: DocId) -> Result<()> {
-    let path = {
+    let (path, draft_id) = {
         let docs = state.documents.lock().unwrap();
-        docs.get(id)
+        let path = docs
+            .get(id)
             .and_then(|doc| doc.path.clone())
-            .ok_or_else(|| NotaError::other("这份文档还没有保存到磁盘"))?
+            .ok_or_else(|| NotaError::other("这份文档还没有保存到磁盘"))?;
+        let draft_id = docs.get(id).map(|doc| doc.draft_id.clone());
+        (path, draft_id)
     };
     std::fs::remove_file(&path).map_err(|source| NotaError::Delete {
         path: path.clone(),
@@ -331,6 +357,11 @@ pub fn nota_doc_delete(state: State<'_, AppState>, id: DocId) -> Result<()> {
     if let Ok(path_text) = crate::paths::path_to_string(&path) {
         if let Err(e) = crate::session::忘最近(&path_text) {
             crate::日志!("[nota] recent list not updated after delete: {e}");
+        }
+    }
+    if let Some(draft_id) = draft_id {
+        if let Err(error) = crate::draft::delete(&draft_id) {
+            crate::日志!("[nota] draft cleanup after delete failed: {error}");
         }
     }
     state.documents.lock().unwrap().close(id);
@@ -378,6 +409,17 @@ pub fn nota_doc_reload(
             .cloned()
             .ok_or_else(|| NotaError::other(format!("没有这份文档：{}", id.0)))?
     };
+    if let Some(draft_id) = state
+        .documents
+        .lock()
+        .unwrap()
+        .get(id)
+        .map(|doc| doc.draft_id.clone())
+    {
+        if let Err(error) = crate::draft::delete(&draft_id) {
+            crate::日志!("[nota] draft cleanup after reload failed: {error}");
+        }
+    }
     if let Some(路径) = 文档.path.as_deref() {
         监.记下(路径, &文档.text);
     }

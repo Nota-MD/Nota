@@ -49,6 +49,7 @@ import { replaceInlineStyle } from "./inline-style";
 
 /** 限域的锚点：整块文档区（含左右留白），不是外壳。见 `EditorPane.tsx`。 */
 const ANCHOR = ".editor-pane";
+const CONTENT = `${ANCHOR} .editor-mount .ProseMirror`;
 
 /** 主题自己的 `<style>` 元素的 id。 */
 const STYLE_ID = "nota-doc-theme";
@@ -57,7 +58,87 @@ const STYLE_ID = "nota-doc-theme";
 const ROOT_LIKE_RE = /^(:root|html|body)$/i;
 
 /** 认一下 `html body` / `body > p` 这种连续的前导 html/body。 */
-const LEADING_ROOT_RE = /^(?:html|body)\b[\s>+~]*/i;
+const LEADING_ROOT_RE = /^(?:html|body)\b\s*/i;
+
+const TYPORA_CODE_TOKEN_SELECTORS: readonly [RegExp, string][] = [
+  [/\.cm-keyword\b/g, ".token.keyword"],
+  [/\.cm-operator\b/g, ".token.operator"],
+  [/\.cm-tag\b/g, ".token.tag"],
+  [/\.cm-attr-name\b/g, ".token.attr-name"],
+  [/\.cm-attribute\b/g, ".token.attr-value"],
+  [/\.cm-property\b/g, ".token.property"],
+  [/\.cm-builtin\b/g, ".token.builtin"],
+  [/\.cm-def\b/g, ".token.function"],
+  [/\.cm-qualifier\b/g, ".token.class-name"],
+  [/\.cm-string(?:-2)?\b/g, ".token.string"],
+  [/\.cm-number\b/g, ".token.number"],
+  [/\.cm-atom\b/g, ".token.constant"],
+  [/\.cm-variable-(?:2|3)\b/g, ".token.class-name"],
+  [/\.cm-variable\b/g, ".token.variable"],
+  [/\.cm-type\b/g, ".token.class-name"],
+  [/\.cm-comment\b/g, ".token.comment"],
+  [/\.cm-meta\b/g, ".token.comment"],
+  [/\.cm-link\b/g, ".token.url"],
+  [/\.cm-punctuation\b/g, ".token.punctuation"],
+  [/\.cm-positive\b/g, ".token.inserted"],
+  [/\.cm-negative\b/g, ".token.deleted"],
+];
+
+/**
+ * Stable Typora structural aliases.
+ *
+ * These are DOM-shape differences, not theme-specific patches. Keep this list
+ * narrow: a selector that cannot be mapped without guessing is left unchanged.
+ */
+const TYPORA_STRUCTURE_SELECTORS: readonly [RegExp, string][] = [
+  // Milkdown keeps the GFM header row inside <tbody>, marked as data-is-header.
+  [/\bthead\b(?:\s*>?\s*tr\b)?/g, "tr[data-is-header]"],
+  [/\.md-inline-math\b/g, ".nota-math-inline"],
+  [/\.md-task-list-item\b/g, '[data-item-type="task"]'],
+  [/\.md-table-wrap\b/g, ".tableWrapper"],
+  [/\.md-alert\b/g, ".nota-github-alert"],
+  [/\.md-htmlblock\b/g, ".nota-html-block"],
+  [/\.md-rawblock-container\b/g, ".nota-html-render"],
+];
+
+/**
+ * Typora themes publish their document colours under Typora's own variable
+ * names. Nota's editor chrome consumes a smaller semantic set. Keep the
+ * source CSS untouched, then alias the variables only inside the document
+ * scope so third-party colours cannot leak into the application shell.
+ */
+export function typoraCompatibilityCss(css: string): string {
+  const hasTyporaVariables =
+    /--(?:bg-color|text-color|code-bg-color|syntax-keyword-color)\s*:/.test(css);
+  if (!hasTyporaVariables) return "";
+
+  return `${ANCHOR} {
+  --doc-bg: var(--bg-color, var(--surface-color, #ffffff));
+  --doc-fg: var(--text-color, #000000);
+  --fg: var(--text-color, #000000);
+  --fg-muted: var(--muted-text-color, var(--text-color, #4d4d4d));
+  --fg-faint: var(--meta-text-color, var(--muted-text-color, #707070));
+  --border: var(--line-color, var(--code-border-color, rgba(0, 0, 0, 0.16)));
+  --border-strong: var(--strong-line-color, var(--line-color, rgba(0, 0, 0, 0.32)));
+  --bg-subtle: var(--code-bg-color, var(--surface-color, #fbfaf7));
+  --bg-raised: var(--surface-color, var(--code-bg-color, #f7f4ee));
+  --accent: var(--link-color, var(--text-color, #1d12e2));
+  --font-doc: var(--font-family, serif);
+  --font-mono: var(--monospace, monospace);
+  --font-math: var(--math-font, var(--monospace, serif));
+  --code-comment: var(--syntax-comment-color, var(--muted-text-color));
+  --code-keyword: var(--syntax-keyword-color, var(--text-color));
+  --code-string: var(--syntax-string-color, var(--text-color));
+  --code-number: var(--syntax-number-color, var(--text-color));
+  --code-function: var(--syntax-type-color, var(--syntax-keyword-color, var(--text-color)));
+  --code-attr: var(--syntax-type-color, var(--syntax-keyword-color, var(--text-color)));
+  --code-tag: var(--syntax-keyword-color, var(--text-color));
+}
+
+${ANCHOR} .editor-mount .ProseMirror :is(p, li, blockquote, td, th) {
+  text-align: start;
+}`;
+}
 
 /**
  * 把一份文档主题 CSS 改造成"只作用于编辑区"的样式。**同步**，解析是同步的。
@@ -128,7 +209,7 @@ function walk(rules: CSSRuleList, out: string[]): void {
 
 /** 一条普通规则 → 一条限域后的规则。 */
 function emitStyleRule(rule: CSSStyleRule, out: string[]): void {
-  const selectors = splitTop(rule.selectorText).map(scopeSelector).filter(Boolean);
+  const selectors = splitTop(rule.selectorText).map(scopeDocThemeSelector).filter(Boolean);
   if (!selectors.length) return;
   out.push(`${selectors.join(", ")} {\n  ${rule.style.cssText}\n}`);
 }
@@ -136,14 +217,26 @@ function emitStyleRule(rule: CSSStyleRule, out: string[]): void {
 /**
  * 把一个选择器收拢到编辑区之下。四条规矩见文件头。
  */
-function scopeSelector(sel: string): string {
+export function scopeDocThemeSelector(sel: string): string {
   let s = sel.trim();
   if (!s) return "";
   if (s.includes(ANCHOR)) return s;
-  if (ROOT_LIKE_RE.test(s)) return ANCHOR;
+  if (ROOT_LIKE_RE.test(s)) {
+    return s.toLowerCase() === ":root"
+      ? ANCHOR
+      : `${ANCHOR}, ${CONTENT}`;
+  }
 
   // Typora 结构名 → Nota 语义结构。这里只做稳定的结构别名，不猜主题 id，
   // 也不为任何单个主题增加程序分支。
+  for (const [pattern, replacement] of TYPORA_STRUCTURE_SELECTORS) {
+    s = s.replace(pattern, replacement);
+  }
+  // Typora HTML export always adds this helper class to #write. Its selector
+  // means "use the theme's first-line indent", not a Nota-owned state.
+  s = s.replace(/#write\.first-line-indent\b/g, "#write");
+  // Typora wraps tables in <figure>; ProseMirror uses div.tableWrapper.
+  if (/\btable\b/.test(s)) s = s.replace(/\bfigure\b/g, ".tableWrapper");
   s = s
     .replace(/ul\.task-list(?=[\s>+~,:.#\[]|$)/g, 'ul:has(> li[data-item-type="task"])')
     .replace(/li\.task-list-item\.task-list-done(?=[\s>+~,:.#\[]|$)/g, 'li[data-checked="true"]')
@@ -151,12 +244,15 @@ function scopeSelector(sel: string): string {
     .replace(/\.md-math-block(?=[\s>+~,:.#\[]|$)/g, ".nota-math-block")
     .replace(/\.mathjax-block(?=[\s>+~,:.#\[]|$)/g, ".nota-math-block")
     .replace(/\.md-diagram-panel(?=[\s>+~,:.#\[]|$)/g, ".nota-diagram");
+  for (const [pattern, replacement] of TYPORA_CODE_TOKEN_SELECTORS) {
+    s = s.replace(pattern, replacement);
+  }
 
   // Typora 主题把正文根写成 `#write`。Nota 没有那个 id，但 ProseMirror 的
   // 内容根承担同一个角色。先做这一层兼容替换，其余资源与排版规则就能按
   // Typora 主题的常见写法落地；组件专用选择器仍需按 Nota DOM 改写。
   if (/(^|[\s>+~,(])#write(?![\w-])/.test(s)) {
-    const replaced = s.replace(/(^|[\s>+~,(])#write(?![\w-])/g, `$1${ANCHOR} .ProseMirror`);
+    const replaced = s.replace(/(^|[\s>+~,(])#write(?![\w-])/g, `$1${CONTENT}`);
     return replaced.includes(ANCHOR) ? replaced : `${ANCHOR} ${replaced}`;
   }
 
@@ -170,9 +266,13 @@ function scopeSelector(sel: string): string {
     rest = rest.slice(m[0].length);
     if (!rest) break;
   }
-  if (replaced) return rest ? `${ANCHOR} ${rest}` : ANCHOR;
+  if (replaced) {
+    return rest
+      ? `${CONTENT} ${rest.trimStart()}`
+      : `${ANCHOR}, ${CONTENT}`;
+  }
 
-  return `${ANCHOR} ${s}`;
+  return `${CONTENT} ${s}`;
 }
 
 /**
@@ -220,7 +320,15 @@ function splitTop(text: string): string[] {
  * 里，权重和主题规则相当（都是两条选择器），靠的就是后者覆盖前者。
  */
 export function applyDocTheme(css: string | null): void {
-  replaceInlineStyle(STYLE_ID, css ? scopeDocThemeCss(css) + "\n" + SELECTION_RULE : null);
+  const compatibility = css ? typoraCompatibilityCss(css) : "";
+  replaceInlineStyle(
+    STYLE_ID,
+    css
+      ? scopeDocThemeCss(css) +
+          (compatibility ? `\n${compatibility}` : "") +
+          `\n${SELECTION_RULE}`
+      : null,
+  );
 }
 
 /**

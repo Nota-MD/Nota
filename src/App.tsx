@@ -74,13 +74,13 @@ import { useDocThemeInventory } from "@/ui/useDocThemeInventory";
 import { useAppEvents } from "@/ui/useAppEvents";
 import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
+import { useSelectableUiText } from "@/ui/useSelectableUiText";
 import { ElementInspector } from "@/ui/element-inspector";
 import { useMenuTable } from "@/ui/useMenuTable";
 import { ContextMenu } from "@/ui/ContextMenu";
 import { useSettingsWindow } from "@/ui/useSettingsWindow";
 import { useMenuFeatures } from "@/ui/useMenuFeatures";
 import { defaultExporter } from "@/ui/export-templates";
-
 export default function App() {
   const [docs, setDocs] = useState<Document[]>([]);
   const [activeId, setActiveId] = useState<DocId | null>(null);
@@ -142,7 +142,7 @@ export default function App() {
   // `ui/useToasts.ts`——本文件当时 958 行、软上限 900。搬的是"什么时候消失"，
   // 文案照旧由这里给。那条 `ttlMs === 0` 的分支（不自动消失）见那个文件。
   const { toasts, toast, dismiss } = useToasts();
-
+  useSelectableUiText(settings);
   const settingsWindow = useSettingsWindow({ settings, toast });
 
   // ⚠️ 本文件里要翻的界面串只剩两处（下面「替换」那条提示、以及递给
@@ -501,7 +501,7 @@ export default function App() {
   // 用户**导入的**界面风格（取 CSS 注入 / 打开风格文件夹）在
   // `ui/useUiStyles.ts`（2026-09-26）。⚠️ 与上面那条不是一伙的：文档主题只管
   // 编辑区、它管整个外壳，注入方式还正好相反——细节在那边文件头。
-  const { styles: uiStyles, openStylesDir, refreshStyles, importTheme } = useUiStyles(settings, toast, refreshThemes);
+  const { styles: uiStyles, openStylesDir, refreshStyles, importTheme, importTyporaTheme } = useUiStyles(settings, toast, refreshThemes);
 
   // 「复制为 Markdown」（`edit.copyAsMarkdown`）也搬去了 `ui/useClipboard.ts`
   // （2026-09-25），理由在那个文件的文件头；接线在下面 `剪贴板` 那一行。
@@ -961,10 +961,10 @@ export default function App() {
             onOpenThemesDir={() => void openThemesDir()}
             uiStyles={uiStyles}
             onOpenStylesDir={() => void openStylesDir()}
-            onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()}
+            onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()} onImportTyporaTheme={() => void importTyporaTheme()}
             onOpenConfigDir={() => void openConfigDir()}
             onResetSettings={() => void resetSettings()}
-            onClearRecent={() => void clearEmptyRecent()}
+            onClearRecent={() => void clearEmptyRecent()} onRestoreDrafts={() => void documentApi.restoreDrafts()}
             menus={menu}
             plugins={plugins}
             pluginTrust={trustTable}

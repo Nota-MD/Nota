@@ -15,11 +15,11 @@ use tauri_plugin_opener::OpenerExt;
 use crate::error::{NotaError, Result};
 use crate::themes::{self, DocThemeInfo};
 
-/// Import one ZIP containing interface and/or document themes.
+/// Import a ZIP package, a flat Typora theme directory, or one Typora CSS file.
 #[tauri::command]
 pub async fn nota_theme_import(path: String) -> Result<crate::theme_import::ThemeImportReport> {
     tauri::async_runtime::spawn_blocking(move || {
-        crate::theme_import::import_zip(std::path::Path::new(&path))
+        crate::theme_import::import_path(std::path::Path::new(&path))
     })
     .await
     .map_err(|error| NotaError::other(format!("导入主题的线程挂了：{error}")))?
@@ -53,8 +53,12 @@ pub fn nota_doc_theme_css(id: String) -> Result<String> {
 #[tauri::command]
 pub fn nota_doc_themes_open_dir(app: tauri::AppHandle) -> Result<String> {
     let shown = themes::user_themes_dir()?;
-    app.opener()
-        .open_path(shown.clone(), None::<&str>)
-        .map_err(|e| NotaError::other(format!("调用系统打开器失败：{e}——目录是 {shown}")))?;
+    if let Err(primary) = app.opener().open_path(shown.clone(), None::<&str>) {
+        open::that_detached(&shown).map_err(|fallback| {
+            NotaError::other(format!(
+                "调用系统打开器失败：{primary}；备用打开器也失败：{fallback}——目录是 {shown}"
+            ))
+        })?;
+    }
     Ok(shown)
 }

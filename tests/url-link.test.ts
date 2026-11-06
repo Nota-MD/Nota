@@ -38,12 +38,22 @@ import {
   DangerousProtocol,
   NormalizeLink,
   NormalizeUrl,
+  normalizeExplicitLinkDestination,
   isBareURL,
   splitTailPunctuation,
   bareURLCorrectRule,
+  explicitLinkSyntax,
+  explicitLinkAtClosingParenthesis,
+  explicitLinkAtCursor,
+  explicitLinkAtTypedParenthesis,
   findLinkBeforeCursor,
+  linkBoundarySpec,
+  linkBoundaryMarkSpec,
   selfActionLinkInput,
 } from "../src/editor/url-link";
+import { Container, Ctx } from "@milkdown/kit/ctx";
+import { Schema } from "@milkdown/kit/prose/model";
+import { EditorState, TextSelection } from "@milkdown/kit/prose/state";
 
 /* ── 一支极小的测试工装（与 `auto-correct.test.ts` 同一套长相）── */
 
@@ -168,6 +178,20 @@ testCase("`是裸URL` 与 `正规化网址` 是同一个答案", () => {
   for (const text4 of ["https://a.com", "www.a.com", "a.com", "", "javascript:x"]) {
     equal(isBareURL(text4), NormalizeUrl(text4) !== null, text4);
   }
+});
+
+testCase("显式 Markdown 链接允许无协议域名并安全规范化", () => {
+  equal(normalizeExplicitLinkDestination("github.com"), "https://github.com", "裸域名");
+  equal(
+    normalizeExplicitLinkDestination("github.com/a?q=1"),
+    "https://github.com/a?q=1",
+    "带路径与查询",
+  );
+  equal(normalizeExplicitLinkDestination("./docs/a.md"), "./docs/a.md", "相对链接");
+  equal(normalizeExplicitLinkDestination("#section"), "#section", "文内锚点");
+  equal(normalizeExplicitLinkDestination("javascript:alert(1)"), null, "危险协议");
+  equal(explicitLinkSyntax.exec("[GFM](github.com)")?.[1], "GFM", "标签");
+  equal(explicitLinkSyntax.exec("[GFM](github.com)")?.[2], "github.com", "地址");
 });
 
 /* ── 三、切尾标点 ───────────────────────────────────────────────────── */
@@ -324,6 +348,202 @@ group("六、装配");
 testCase("自动链接开关控制输入规则", () => {
   equal(selfActionLinkInput().length, 1, "条数");
   equal(selfActionLinkInput(false).length, 0, "disabled");
+});
+
+testCase("链接标记在 schema 层不向后包容（保留原有规格）", () => {
+  const attrs = { href: {} };
+  const next = linkBoundaryMarkSpec({ attrs, inclusive: true });
+  equal(next.inclusive, false, "链接尾部不再吸收后输入字符");
+  equal(next.attrs, attrs, "原有属性表原样保留");
+});
+
+testCase("真插件注册后，link spec 仍保留 Markdown 转换并关闭尾部包容", () => {
+  const context = new Ctx(new Container(), {} as never);
+  linkBoundarySpec.ctx(context);
+  const spec = context.get(linkBoundarySpec.key)(context);
+  equal(spec.inclusive, false, "尾部包容");
+  equal(spec.toMarkdown !== undefined, true, "toMarkdown 没有丢");
+  equal(spec.parseMarkdown !== undefined, true, "parseMarkdown 没有丢");
+});
+
+testCase("自动配对已插入右括号时，输入的 `)` 仍能完成显式链接", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "[gfm](https://github.com)";
+  const paragraph = schema.node("paragraph", null, [schema.text(source)]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const caret = 1 + source.length - 1;
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, caret),
+  });
+  const transaction = explicitLinkAtClosingParenthesis(state, caret);
+  equal(transaction !== null, true, "该完成链接");
+  const label = transaction!.doc.firstChild!.firstChild!;
+  equal(label.text, "gfm", "显示文字");
+  equal(transaction!.doc.textContent, "gfm", "链接源码完整替换");
+  equal(String(label.marks[0]?.attrs.href), "https://github.com", "地址");
+  equal(transaction!.selection.from, 4, "光标落在链接后的正文边界");
+});
+
+testCase("普通手工输入 `)` 时由文本输入口直接完成显式链接", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "[gfm](https://github.com";
+  const paragraph = schema.node("paragraph", null, [schema.text(source)]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const caret = 1 + source.length;
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, caret),
+  });
+  const transaction = explicitLinkAtTypedParenthesis(state, caret, ")");
+  equal(transaction !== null, true, "该完成链接");
+  const label = transaction!.doc.firstChild!.firstChild!;
+  equal(label.text, "gfm", "显示文字");
+  equal(transaction!.doc.textContent, "gfm", "链接源码完整替换");
+  equal(String(label.marks[0]?.attrs.href), "https://github.com", "地址");
+  equal(transaction!.selection.from, 4, "光标落在链接后的正文边界");
+
+  const next = state.apply(transaction!).tr.insertText("X", 4);
+  equal(next.doc.textContent, "gfmX", "后续字符留在链接标签后面");
+  equal(next.doc.firstChild!.childCount, 2, "后续字符是独立正文节点");
+});
+
+testCase("文档变化后的兜底：光标前的完整链接语法也直接提交", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "[gfm](https://github.com)";
+  const paragraph = schema.node("paragraph", null, [schema.text(source)]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const caret = 1 + source.length;
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, caret),
+  });
+  const transaction = explicitLinkAtCursor(state, caret);
+  equal(transaction !== null, true, "该完成链接");
+  const label = transaction!.doc.firstChild!.firstChild!;
+  equal(label.text, "gfm", "显示文字");
+  equal(String(label.marks[0]?.attrs.href), "https://github.com", "地址");
+});
+
+testCase("link source nodes are not treated as freshly typed explicit links", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+      notaLinkSource: {
+        content: "text*",
+        group: "inline",
+        inline: true,
+        marks: "",
+        code: true,
+      },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "[gfm](https://github.com)";
+  const linkSource = schema.nodes.notaLinkSource!.create(
+    null,
+    schema.text(source),
+  );
+  const paragraph = schema.node("paragraph", null, [
+    linkSource,
+    schema.text("tail"),
+  ]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const caret = 1 + linkSource.nodeSize;
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, caret),
+  });
+  equal(
+    explicitLinkAtCursor(state, caret),
+    null,
+    "the editable source must not be collapsed back into a link",
+  );
+});
+
+testCase("自动预插的闭括号不算完成，不能把输入中的 `(g)` 提前变成链接", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "[github.com](g)";
+  const paragraph = schema.node("paragraph", null, [schema.text(source)]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const caret = 1 + source.length - 1;
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, caret),
+  });
+  equal(explicitLinkAtCursor(state, caret), null, "光标仍在自动预插的闭括号之前");
+  equal(
+    explicitLinkAtClosingParenthesis(state, caret) !== null,
+    true,
+    "用户真正敲下这个 `)` 时仍可提交",
+  );
+});
+
+testCase("自动闭括号补全不在完整链接尾部时不误转换", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const doc = schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text("plain (text)")]),
+  ]);
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 11),
+  });
+  equal(explicitLinkAtClosingParenthesis(state, 11), null, "普通括号");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

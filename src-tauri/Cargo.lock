@@ -2609,8 +2609,9 @@ dependencies = [
 
 [[package]]
 name = "nota"
-version = "0.13.0-beta"
+version = "0.14.0-beta"
 dependencies = [
+ "ashpd",
  "base64 0.22.1",
  "chardetng",
  "chrono",

@@ -583,8 +583,8 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 
 | 命令 | 签名要点 |
 |---|---|
-| `nota_doc_themes` | `() -> Vec<DocThemeInfo>`，内置**三套**（`minimal` / `adwaita` / `latex`，编进二进制；⚠️ 2026-09-26 从六套换成三套，见 `docs/10` §7）＋ 用户目录里多出来的；**用户目录空的也算正常** |
-| `nota_doc_theme_css` | `(id) -> String`，一份主题 CSS 的**文本**。⚠️ 返回文本而不是渲染结果——限域（把选择器收到 `.editor-pane` 之下）在**前端**做，见 `05` |
+| `nota_doc_themes` | `() -> Vec<DocThemeInfo>`，内置 **Adwaita 浅色/深色** ＋ 用户传统主题包或 Typora 原生主题集合；**用户目录空的也算正常** |
+| `nota_doc_theme_css` | `(id) -> String`，一份主题 CSS 的**文本**。加载时展开 Typora `@import`、内联资源；限域（把选择器收到正文根之下）在**前端**做，见 `05` |
 | `nota_doc_themes_open_dir` | `(app) -> String`，**建好**（不存在就建）用户主题目录并在系统文件管理器里打开它，给「打开主题文件夹」用。⚠️ 2026-09-25 由 `nota_doc_themes_dir` 改名而来（原来只返回路径、由前端去开，那条路撞 Tauri 的 ACL，见 `docs/07` BUG-27） |
 
 ⚠️⚠️ **入参是 id 不是路径**（`nota_doc_theme_css(id)`），所以前端**根本没有**
@@ -592,8 +592,8 @@ sed -n '/generate_handler/,/])/p' src-tauri/src/lib.rs |
 `paths::theme_dirs()` 逐个 `starts_with` 比对）——那一版没有漏洞，但这一版是
 **结构上不可能出错**：`themes.rs::check_id` 只放行 ASCII 字母数字与 `-` `_`，
 路径由后端自己拼。
-⛔ 同时**不兼容也不内置外部编辑器的主题**（版权，用户 2026-09-23 定的），
-所以那两个主题目录连同 `theme_dirs()` 一起删了。
+⛔ **不随包内置外部编辑器主题**（版权，用户 2026-09-23 定的）。Typora 主题可以由
+用户显式选择目录/CSS/ZIP 导入，原始文件复制到 Nota 数据目录；不扫描外部编辑器的安装目录。
 
 **插件（14 个）**
 

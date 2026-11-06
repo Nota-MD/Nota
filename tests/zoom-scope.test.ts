@@ -53,6 +53,11 @@ check("外壳根字号与编辑区基准字号来自不同变量", () => {
   );
   contains(
     editor,
+    ':root[data-editor-font-size="custom"] .editor-pane {',
+    "用户字号不能覆盖 Typora 主题写死的编辑区根字号",
+  );
+  contains(
+    editor,
     '.editor-pane[data-doc-font-size="custom"] .ProseMirror',
     "正文大小倍数不能覆盖主题写死的正文根字号",
   );
@@ -71,7 +76,7 @@ check("Ctrl+滚轮的字号档写编辑区变量，缩放档仍走 webview", () 
   contains(zoom, 'target === "font_size"', "滚轮目标分流不见了");
 });
 
-check("源码模式和公式源码的等宽字号跟随编辑区", () => {
+check("源码模式跟随编辑区字号，行内公式分隔符跟随正文", () => {
   const source3 = read("src/editor/source.ts");
   const math = read("src/styles/math.css");
   contains(
@@ -81,8 +86,13 @@ check("源码模式和公式源码的等宽字号跟随编辑区", () => {
   );
   contains(
     math,
-    "calc(var(--editor-font-size, var(--ui-font-size, 15px)) * 0.85)",
-    "公式分隔符没有跟随编辑区字号",
+    "font-size: 1em",
+    "行内公式分隔符没有继承正文字号",
+  );
+  contains(
+    math,
+    "font-family: inherit",
+    "行内公式分隔符没有继承正文字体",
   );
 });
 
@@ -117,6 +127,36 @@ check("编辑器会把正文大小倍数标成用户覆盖", () => {
     pane,
     'data-doc-font-size={documentTypography?.custom_font_size ? "custom" : undefined}',
     "编辑器没有标记正文大小倍数覆盖",
+  );
+});
+
+check("自动档展示真实推荐值，不把上次自定义值冒充推荐", () => {
+  const zoom = read("src/ui/useZoom.ts");
+  const appearance = read("src/ui/settings/panes/AppearancePane.tsx");
+  contains(
+    zoom,
+    "export const recommendedEditorFontSize = 15",
+    "推荐字号没有统一常量",
+  );
+  contains(
+    appearance,
+    "const shownFontSize = a.custom_font_size",
+    "设置页没有区分自动值与自定义值",
+  );
+  contains(
+    appearance,
+    "? settings.ui_font_size",
+    "自定义档没有显示保存值",
+  );
+  contains(
+    appearance,
+    ": recommendedEditorFontSize;",
+    "自动档没有显示推荐值",
+  );
+  contains(
+    appearance,
+    "Dragging the slider switches to Custom.",
+    "自动档帮助没有说明拖动会切到自定义",
   );
 });
 

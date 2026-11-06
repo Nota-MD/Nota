@@ -339,6 +339,11 @@
  * 逗号后面是"无文档主题"时的中性值，跟拆分之前一模一样。 */
 .editor-mount .ProseMirror {
   outline: none;
+  /* The editor root is a flex item. A Typora theme's `#write { margin: 0 auto;
+     max-width: … }` otherwise makes that item shrink-wrap its content, so an
+     empty paragraph starts at the centre. Fill the available column first;
+     the theme's max-width can still centre the column itself. */
+  width: 100%;
   /* ⚠️ **光标颜色要显式给**（2026-09-26）。在这之前整个所见即所得这一侧
      没有任何 `caret-color`，全靠浏览器默认——而源码模式那一半
      （`src/editor/source.ts`）早就写了 `caretColor: "var(--accent)"`，
@@ -347,7 +352,7 @@
      代码在 `src/editor/create.ts` 的 `光标到开头` 与 `setMarkdown` 里。 */
   /* 原生 caret 在 WebKitGTK 上不保证闪烁；可编辑实例由 ProseMirror 插件画
      `.nota-blink-caret`。这里隐藏原生光标，避免出现重影。 */
-  caret-color: transparent;
+  caret-color: transparent !important;
   font-family: var(--font-doc);
   color: var(--doc-fg);
   line-height: var(--doc-line-height, 1.75);
@@ -374,6 +379,18 @@
   padding: 48px 0 120px;
 }
 
+/* 公式源码框需要自己的可见插入点；其余正文一律只由覆盖层绘制，避免 WebKit
+   在 contenteditable 与内部 input 之间切换焦点时同时保留两条原生 caret。 */
+.editor-mount .ProseMirror input,
+.editor-mount .ProseMirror textarea,
+.editor-mount .ProseMirror .cm-content {
+  caret-color: var(--accent) !important;
+}
+
+.editor-mount .ProseMirror * {
+  caret-color: transparent !important;
+}
+
 /* 用户显式调字号时，用户设置必须压过文档主题的正文根字号。
  *
  * 有些主题同时定义 `--doc-font-size: 16px`，还直接给正文根写
@@ -387,6 +404,10 @@
  * - 两处都关着时，主题仍拥有完整的默认字号控制权。 */
 :root[data-editor-font-size="custom"] .editor-pane {
   --doc-font-size: 1em;
+  /* Typora themes commonly write `html { font-size: 11pt }`. The scoped
+     document theme lands on this element, so setting only the relative body
+     variable would still inherit the theme's absolute root. */
+  font-size: var(--editor-font-size, var(--ui-font-size, 15px)) !important;
 }
 
 :root[data-editor-font-size="custom"] .editor-pane .ProseMirror,

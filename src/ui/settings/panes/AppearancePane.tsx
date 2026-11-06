@@ -23,6 +23,7 @@ import { useT } from "@/i18n";
 import { accentVars, parseAccent } from "@/styles/accent";
 import { resolveStyle } from "@/styles/applyTheme";
 import { useUiMode } from "@/ui/useUiMode";
+import { recommendedEditorFontSize } from "@/ui/useZoom";
 import { ColorPicker } from "../ColorPicker";
 import { ActionButton, NumberInput, Radio, Range, Select, SettingRow, SettingsGroup, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
@@ -247,6 +248,9 @@ export function AppearancePane({
   }
 
   const current = STYLES[settings.ui_style as BuiltinUiStyle];
+  const shownFontSize = a.custom_font_size
+    ? settings.ui_font_size
+    : recommendedEditorFontSize;
 
   return (
     <>
@@ -265,14 +269,16 @@ export function AppearancePane({
             `<名字>.css`（用户 2026-09-26：「本来主题应该就是拆成多个文件的。
             加一个就是允许用户导入」）。没有这个按钮，那条路只存在于文档里——
             而"要读文档才发现"的入口等于没有。同「文档主题」那页的「主题文件夹…」。 */}
-        <SettingRow>
-          <div className="stg-inline">
-            <Select value={settings.ui_style} options={option} onChange={(ui_style) => onChange({ ui_style })} />
+        <SettingRow label={t("Current interface style")}>
+          <Select value={settings.ui_style} options={option} onChange={(ui_style) => onChange({ ui_style })} />
+        </SettingRow>
+        <SettingRow label={t("Interface theme sources")}>
+          <div className="stg-inline stg-theme-actions">
             <ActionButton onClick={onOpenStylesDir} title={t("Open the interface themes folder. Drop a theme package in it to add a style.")}>
               {t("Interface themes folder…")}
             </ActionButton>
             <ActionButton onClick={onRefreshUiStyles}>{t("Refresh")}</ActionButton>
-            <ActionButton onClick={onImportTheme}>{t("Import theme ZIP…")}</ActionButton>
+            <ActionButton onClick={onImportTheme}>{t("Import ZIP or CSS…")}</ActionButton>
           </div>
         </SettingRow>
       </SettingsGroup>
@@ -343,7 +349,13 @@ export function AppearancePane({
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Font size")}>
+      <SettingsGroup
+        title={t("Font size")}
+        help={t(
+          "Automatic uses the recommended editor size of {0}px. Dragging the slider switches to Custom.",
+          recommendedEditorFontSize,
+        )}
+      >
         <SettingRow>
           <Radio
             value={a.custom_font_size ? "custom" : "auto"}
@@ -357,7 +369,7 @@ export function AppearancePane({
 
         <SettingRow label={t("Editor font size")}>
           <Range
-            value={settings.ui_font_size}
+            value={shownFontSize}
             min={12}
             max={32}
             suffix="px"

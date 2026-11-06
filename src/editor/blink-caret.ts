@@ -10,13 +10,13 @@ const blinkHalfPeriodMs = 530;
 /**
  * Keep carets inside a text line.
  *
- * Headings use a 1.2em caret so they do not inherit a display-sized line box.
- * Inline images and other tall atoms can make `coordsAtPos` report the whole
- * atom height; that is not a caret. Fall back to the same 1.2em body line when
- * the natural height is pathologically larger than ordinary prose.
+ * Headings keep the caret proportional to their own text metrics. Inline
+ * images and other tall atoms can make `coordsAtPos` report the whole atom
+ * height; that is not a caret, so pathological heights fall back to one body
+ * text line.
  */
 export function caretHeightInLine(
-  nodeType: string,
+  _nodeType: string,
   naturalHeight: number,
   baseFontSize: number,
 ): number {
@@ -25,7 +25,7 @@ export function caretHeightInLine(
     return safeHeight;
   }
   const bodyLineHeight = Math.max(12, baseFontSize * 1.2);
-  if (nodeType === "heading" || safeHeight > Math.max(64, baseFontSize * 3)) {
+  if (safeHeight > Math.max(64, baseFontSize * 3)) {
     return Math.round(Math.min(safeHeight, bodyLineHeight));
   }
   return safeHeight;
@@ -59,6 +59,26 @@ export interface CaretCoordinate {
   bottom: number;
 }
 
+export interface InlineMathBoundary {
+  position: number;
+  side: "before" | "after";
+}
+
+/** Locate a collapsed caret immediately before or after inline math. */
+export function inlineMathBoundary(state: EditorState): InlineMathBoundary | null {
+  if (!state.selection.empty) return null;
+  const { $from } = state.selection;
+  const before = $from.nodeBefore;
+  if (before?.type.name === "math_inline") {
+    return { position: state.selection.from - before.nodeSize, side: "after" };
+  }
+  const after = $from.nodeAfter;
+  if (after?.type.name === "math_inline") {
+    return { position: state.selection.from, side: "before" };
+  }
+  return null;
+}
+
 /** Pick the first coordinate that has a real horizontal and vertical box. */
 export function usableCaretCoordinate(
   candidates: readonly (CaretCoordinate | null | undefined)[],
@@ -78,11 +98,32 @@ export function isNoShowCursor(state: EditorState): boolean {
   const selection = state.selection;
   if (!selection.empty) return false;
   const parent = selection.$head.parent;
-  if (parent.type.spec.code) return false;
+  // Link source text is code-like so Markdown punctuation stays literal, but
+  // it is edited directly in the document and still needs the body caret.
+  if (parent.type.spec.code && parent.type.name !== "notaLinkSource") return false;
   // `notaSyntax` is an inline marker atom owned by the paragraph. The caret
   // legitimately sits between two marker characters there, so it must still
   // be drawn by the document layer.
   return !parent.type.spec.atom || parent.type.name === "notaSyntax";
+}
+
+/** Inner editors (formula input, code-block CodeMirror) draw their own caret. */
+export function innerEditorOwnsCaret(
+  active: Element | null,
+  root: HTMLElement,
+): boolean {
+  if (
+    root.classList.contains("nota-inline-math-input-focused") ||
+    root.classList.contains("nota-inline-math-editing") ||
+    (root.ownerDocument.querySelector?.(".nota-inline-math-editing") ?? null) !== null
+  ) {
+    return true;
+  }
+  if (!active || active === root || !root.contains(active)) return false;
+  return (
+    active.matches("input, textarea, .cm-content, .nota-keyboard-link-source") ||
+    active.closest("input, textarea, .cm-content, .nota-keyboard-link-source") !== null
+  );
 }
 
 function hideCursor(cursor: HTMLElement): void {
@@ -90,12 +131,36 @@ function hideCursor(cursor: HTMLElement): void {
 }
 
 function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
-  if (view.isDestroyed || !view.hasFocus() || !isNoShowCursor(view.state)) {
+  const active = view.dom.ownerDocument.activeElement;
+  if (
+    view.isDestroyed ||
+    !view.hasFocus() ||
+    innerEditorOwnsCaret(active, view.dom) ||
+    !isNoShowCursor(view.state)
+  ) {
     hideCursor(cursor);
     return;
   }
 
   try {
+    const mathBoundary = inlineMathBoundary(view.state);
+    if (mathBoundary) {
+      const element = view.nodeDOM(mathBoundary.position);
+      if (element instanceof Element) {
+        const rects = Array.from(element.getClientRects());
+        const rect = mathBoundary.side === "after" ? rects.at(-1) : rects[0];
+        if (rect && rect.height > 0) {
+          const baseFontSize = Number.parseFloat(getComputedStyle(element).fontSize);
+          const height = caretHeightInLine("paragraph", rect.height, baseFontSize);
+          cursor.style.left = `${Math.round(mathBoundary.side === "after" ? rect.right : rect.left)}px`;
+          cursor.style.top = `${Math.round(rect.top)}px`;
+          cursor.style.height = `${height}px`;
+          cursor.classList.add(showClass);
+          return;
+        }
+      }
+    }
+
     const head = view.state.selection.head;
     const candidates: (CaretCoordinate | null | undefined)[] = [];
     for (const assoc of [1, -1]) {

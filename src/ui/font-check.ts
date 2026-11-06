@@ -124,7 +124,9 @@ export function firstSelectCharacterBody(css: string): string | null {
  * 点宋，**装上任一支就够**。只看第一支会把"装了 Zpix 的机器"也报成缺字体。
  */
 export function canSelectCharacterBody(css: string): string[] {
-  const match = /--font-doc\s*:\s*([^;]+);/.exec(css);
+  const match =
+    /--font-doc\s*:\s*([^;]+);/.exec(css) ??
+    /--font-family\s*:\s*([^;]+);/.exec(css);
   if (!match?.[1]) return [];
   const throughUse = new Set([
     "serif",
@@ -147,4 +149,16 @@ export function canSelectCharacterBody(css: string): string[] {
     .split(",")
     .map((x) => x.trim().replace(/^["']|["']$/g, "").trim())
     .filter((x) => x.length > 0 && !throughUse.has(x.toLowerCase()));
+}
+
+/** Font families supplied by `@font-face` rules in a theme stylesheet. */
+export function declaredThemeFamilies(css: string): string[] {
+  const families = new Set<string>();
+  const rules = /@font-face\s*\{([^}]*)\}/gi;
+  for (const match of css.matchAll(rules)) {
+    const family = /font-family\s*:\s*([^;]+);/i.exec(match[1] ?? "");
+    const name = family?.[1]?.trim().replace(/^["']|["']$/g, "").trim();
+    if (name) families.add(name);
+  }
+  return [...families];
 }

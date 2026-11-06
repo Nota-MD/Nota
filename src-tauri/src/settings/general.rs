@@ -59,6 +59,9 @@ pub struct General {
     /// 开发者模式下监听插件目录，并在 `.lua` / `plugin.toml` 保存后热重载。
     /// 默认关闭；关闭时不启动文件轮询线程。
     pub lua_hot_reload: bool,
+    /// 调试期间允许拖动选择菜单、状态栏、设置页和对话框等界面文字。
+    /// 默认关闭；只在 `debug_mode` 同时开启时生效。
+    pub select_ui_text: bool,
 }
 
 impl Default for General {
@@ -69,6 +72,7 @@ impl Default for General {
             extensions_enabled: true,
             element_inspector: false,
             lua_hot_reload: false,
+            select_ui_text: false,
         }
     }
 }
@@ -107,9 +111,11 @@ mod tests {
     fn 元素悬停检查默认关闭且旧设置补默认值() {
         assert!(!General::default().element_inspector);
         assert!(!General::default().lua_hot_reload);
+        assert!(!General::default().select_ui_text);
         let old: General = toml::from_str("language = \"auto\"").unwrap();
         assert!(!old.element_inspector);
         assert!(!old.lua_hot_reload);
+        assert!(!old.select_ui_text);
     }
 
     #[test]

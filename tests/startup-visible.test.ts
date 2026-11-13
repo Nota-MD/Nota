@@ -24,7 +24,7 @@ function assertValue(value: unknown, message: string): asserts value {
 
 console.log("\n【启动窗口可见性】");
 
-testCase("主窗口先在屏幕外预热，且不占任务栏", () => {
+testCase("主窗口使用合成器支持的普通可见窗口", () => {
   const config = JSON.parse(
     readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8"),
   ) as {
@@ -41,9 +41,9 @@ testCase("主窗口先在屏幕外预热，且不占任务栏", () => {
     };
   };
   const main = config.app.windows.find((window) => window.label === "main");
-  assertValue(main?.visible === true, "窗口必须在屏幕外保持可渲染");
-  assertValue(main?.skipTaskbar === true, "预热时不能出现在任务栏");
-  assertValue((main?.x ?? 0) < 0 && (main?.y ?? 0) < 0, "预热位置必须在屏幕外");
+  assertValue(main?.visible === true, "主窗口必须以可见方式创建");
+  assertValue(main?.skipTaskbar === false, "主窗口不能隐藏任务栏入口");
+  assertValue(main?.x === undefined && main?.y === undefined, "不能把主窗口预创建在屏幕外");
 });
 
 testCase("主窗口保留设置页与编辑区所需的最小尺寸", () => {

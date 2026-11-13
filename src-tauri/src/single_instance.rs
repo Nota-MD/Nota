@@ -228,6 +228,10 @@ pub fn 起(app: tauri::AppHandle, 听: 监听器) {
         // 抬窗：先取消最小化再抢焦点。⚠️ 顺序不能反——对最小化的窗口
         // `set_focus` 在多数窗口管理器上是不生效的。
         if let Some(窗) = app.get_webview_window("main") {
+            // Showing is mandatory: a Wayland compositor may have accepted the
+            // startup surface without making it visible. Focus alone cannot
+            // recover that state.
+            let _ = 窗.show();
             let _ = 窗.unminimize();
             let _ = 窗.set_focus();
         }

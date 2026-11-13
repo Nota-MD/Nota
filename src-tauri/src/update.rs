@@ -521,7 +521,7 @@ fn 启动_power_shell_文件替换(文件: &Path, 便携版: bool) -> Result<()>
     } else {
         format!(
             "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; \
-             Start-Process -FilePath '{}' -ArgumentList '/S','/UPDATE','/R' -Wait",
+             Start-Process -FilePath '{}' -ArgumentList '/UPDATE','/R' -Wait",
             std::process::id(),
             ps(文件),
         )
@@ -550,7 +550,7 @@ fn 安装命令说明(类型: 安装类型) -> String {
         安装类型::Rpm => "pkexec dnf install -y <下载的 .rpm>".to_string(),
         安装类型::AppImage => "退出后替换当前 AppImage 并重新启动".to_string(),
         安装类型::Exe => "退出后替换便携版启动器并重新启动".to_string(),
-        安装类型::ExeInstall => "运行 NSIS 安装程序 /S 覆盖安装".to_string(),
+        安装类型::ExeInstall => "显示 NSIS 安装向导并用 /UPDATE 覆盖安装".to_string(),
         安装类型::Dev => MAIN_DEV_UPDATE_COMMAND.to_string(),
     }
 }

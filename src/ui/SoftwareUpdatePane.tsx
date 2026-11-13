@@ -271,7 +271,7 @@ function safeInstallDescription(
     case "exeinstall":
       return {
         label: t("Windows installer"),
-        action: t("Run the new installer in silent overwrite mode."),
+        action: t("Open the installer and overwrite the current installation."),
       };
     case "dev":
       return {

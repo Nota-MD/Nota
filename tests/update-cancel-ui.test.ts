@@ -21,6 +21,10 @@ function contains(text: string, part: string, description: string): void {
   if (!text.includes(part)) throw new Error(`${description}：缺少 ${JSON.stringify(part)}`);
 }
 
+function assertValue(value: unknown, description: string): asserts value {
+  if (!value) throw new Error(description);
+}
+
 const read = (path: string) => readFileSync(path, "utf8");
 const pane = read("src/ui/SoftwareUpdatePane.tsx");
 const update = read("src-tauri/src/update.rs");
@@ -38,7 +42,8 @@ testCase("成功安装后关闭主窗并由更新脚本重启", () => {
   contains(pane, "installed.restartRequired", "读取重启要求");
   contains(pane, "getCurrentWindow().close()", "自动关闭当前窗口");
   contains(update, "Wait-Process -Id $p", "Windows 等待旧进程退出");
-  contains(update, "'/S','/UPDATE','/R'", "NSIS 静默覆盖并重启");
+  contains(update, "'/UPDATE','/R'", "NSIS 显示向导、覆盖并重启");
+  assertValue(!update.includes("'/S','/UPDATE','/R'"), "NSIS 更新仍是不可见的静默模式");
   contains(update, "while kill -0", "Linux 等待旧进程退出");
   contains(update, "nohup", "Linux 安装后启动新版本");
 });

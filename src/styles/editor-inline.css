@@ -35,6 +35,15 @@
  * ⚠️ 编辑区里的 `<mark>` **不是**查找命中（那个是 `.nota-find-hit` 的装饰，
  * 在 `bars.css` 里），两者底色是分开的两个变量，见 `theme/base.css` 里
  * `--mark-bg` 那一段。 */
+:where(.editor-mount .ProseMirror) :not(pre) > code {
+  /* Inline code uses a different font from prose, and its font metrics can
+     enlarge the line box by a pixel or two even when line-height is inherited.
+     Let the containing text line own the height; glyphs and horizontal styling
+     remain unchanged. Keep fenced blocks (pre > code) out of this rule. */
+  line-height: 0 !important;
+  vertical-align: baseline !important;
+}
+
 :where(.editor-mount .ProseMirror) mark {
   background: var(--mark-bg);
   color: var(--mark-fg);

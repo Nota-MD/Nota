@@ -8,7 +8,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import {
   api,
@@ -79,7 +78,10 @@ export function SoftwareUpdatePane({ autoCheck = true }: { autoCheck?: boolean }
       if (installed.restartRequired) {
         setResult(t("Nota will now close and restart to finish installing the update."));
         window.setTimeout(() => {
-          void getCurrentWindow().close().catch((closeError: unknown) => {
+          // Closing the main window is not enough: hidden Preferences/About
+          // WebViews keep the process alive and can keep installed files
+          // locked during replacement. Quit the application as a whole.
+          void api.window.quit().catch((closeError: unknown) => {
             setError(t("Could not restart Nota: {0}", String(closeError)));
           });
         }, 700);
@@ -271,7 +273,7 @@ function safeInstallDescription(
     case "exeinstall":
       return {
         label: t("Windows installer"),
-        action: t("Open the installer and overwrite the current installation."),
+        action: t("Launch the installer, overwrite the current installation, and restart."),
       };
     case "dev":
       return {

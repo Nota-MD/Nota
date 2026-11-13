@@ -260,7 +260,8 @@ export const uiMessages: Record<string, string> = {
   "Nota will now close and restart to finish installing the update.":
     "Nota 即将关闭并重新启动，以完成更新。",
   "Could not restart Nota: {0}": "无法重新启动 Nota：{0}",
-  "Open the installer and overwrite the current installation.": "显示安装程序，并覆盖当前安装。",
+  "Launch the installer, overwrite the current installation, and restart.":
+    "启动安装程序，覆盖当前安装并重新启动。",
   "Development build": "开发构建",
   "Rebuild from source; development builds are not replaced automatically.": "从源码重新构建；开发构建不会自动替换。",
   // ── 「权限列表」那张表的两列 ─────────────────────────────────────────────

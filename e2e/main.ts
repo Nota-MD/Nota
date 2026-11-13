@@ -1870,6 +1870,35 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "inline text types share one line height",
+    async run() {
+      applyDocTheme("code { line-height: 1.8; }");
+      try {
+        const prose = await mount(
+          "plain\n\n`code`\n\n$e=mc^2$\n\n**bold**\n\n*italic*\n\n==mark==\n\n~~strike~~\n\n[link](https://example.com)\n\n<kbd>K</kbd>\n\nH<sub>2</sub>O\n\nx<sup>2</sup>",
+        );
+        await waitFor<HTMLElement>(".nota-math-inline .nota-math-render");
+        await nextFrames(4);
+        const paragraphs = Array.from(prose.querySelectorAll<HTMLElement>(":scope > p"));
+        assertEqual(paragraphs.length, 11, "the inline-height fixture changed shape");
+        const heights = paragraphs.map((paragraph) => paragraph.getBoundingClientRect().height);
+        const baseline = heights[0]!;
+        const failures = heights
+          .map((height, index) => ({ index, height, delta: height - baseline }))
+          .filter(({ delta }) => Math.abs(delta) > 1)
+          .map(({ index, height, delta }) => `${index}:${height.toFixed(2)}(${delta.toFixed(2)})`);
+        assertEqual(
+          failures.join(","),
+          "",
+          `inline text changed paragraph line height; baseline=${baseline.toFixed(2)}, ` +
+            `html=${JSON.stringify(prose.innerHTML)}`,
+        );
+      } finally {
+        applyDocTheme(null);
+      }
+    },
+  },
+  {
     name: "code blocks keep a visible caret and a stable mono font",
     async run() {
       for (const zoom of [1, 1.25, 1.5]) {

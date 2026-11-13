@@ -78,9 +78,10 @@ testCase("应用更新可终止，并在安装后自动重启", () => {
   assertValue(commands.includes("nota_update_cancel"), "缺少取消命令");
   assertValue(bridge.includes('cancel: () => invoke<void>("nota_update_cancel")'), "前端取消桥缺失");
   assertValue(pane.includes('t("Cancel Download")'), "更新页没有终止下载按钮");
-  assertValue(pane.includes("getCurrentWindow().close()"), "安装后没有自动关闭重启路径");
-  assertValue(source.includes("' /UPDATE'") || source.includes("'/UPDATE'"), "Windows 安装器未使用 UPDATE 模式");
-  assertValue(source.includes("'/R'"), "Windows 安装器安装后不会自动重启");
+  assertValue(pane.includes("api.window.quit()"), "安装后没有退出整个应用进程");
+  assertValue(!pane.includes("getCurrentWindow().close()"), "安装后仍只关闭主窗口");
+  assertValue(source.includes("ShellExecuteW"), "Windows 安装器没有走原生 ShellExecuteW");
+  assertValue(source.includes('"/P /UPDATE /R"'), "Windows 安装器没有用被动进度、覆盖和重启参数");
   assertValue(source.includes("while kill -0"), "Linux 包更新没有等待旧进程退出");
   assertValue(source.includes("nohup"), "Linux 包更新没有重新启动应用");
 });

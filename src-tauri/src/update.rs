@@ -321,7 +321,7 @@ where
         安装类型::ExeInstall => {
             启动_windows_安装器(&文件)?;
             Ok(安装结果 {
-                message: "更新已准备。Nota 退出后将以静默覆盖模式安装并重新启动。".to_string(),
+                message: "安装程序已启动。Nota 将退出，安装完成后会自动重新启动。".to_string(),
                 restart_required: true,
             })
         }
@@ -480,7 +480,40 @@ fn 替换_app_image(新文件: &Path) -> Result<()> {
 
 #[cfg(target_os = "windows")]
 fn 启动_windows_安装器(文件: &Path) -> Result<()> {
-    启动_power_shell_文件替换(文件, false)
+    use std::ffi::c_void;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW;
+
+    fn wide(value: &std::ffi::OsStr) -> Vec<u16> {
+        use std::os::windows::ffi::OsStrExt;
+
+        value.encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    // Match Tauri's updater, which Textus uses: launch the NSIS installer
+    // directly with a visible passive progress UI, update in place, and
+    // restart. ShellExecuteW returns before the installer exits, so Nota can
+    // quit without a PowerShell child waiting on its PID.
+    let verb = wide(std::ffi::OsStr::new("open"));
+    let installer = wide(文件.as_os_str());
+    let parameters = wide(std::ffi::OsStr::new("/P /UPDATE /R"));
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut::<c_void>() as _,
+            verb.as_ptr(),
+            installer.as_ptr(),
+            parameters.as_ptr(),
+            std::ptr::null(),
+            SW_SHOW,
+        )
+    };
+    if result as isize <= 32 {
+        return Err(NotaError::other(format!(
+            "Windows 安装程序启动失败（ShellExecuteW 返回 {}）",
+            result as isize
+        )));
+    }
+    Ok(())
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -490,7 +523,7 @@ fn 启动_windows_安装器(_文件: &Path) -> Result<()> {
 
 #[cfg(target_os = "windows")]
 fn 替换_windows_便携版(文件: &Path) -> Result<()> {
-    启动_power_shell_文件替换(文件, true)
+    启动_power_shell_便携版替换(文件)
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -499,33 +532,24 @@ fn 替换_windows_便携版(_文件: &Path) -> Result<()> {
 }
 
 #[cfg(target_os = "windows")]
-fn 启动_power_shell_文件替换(文件: &Path, 便携版: bool) -> Result<()> {
+fn 启动_power_shell_便携版替换(文件: &Path) -> Result<()> {
     let exe = std::env::current_exe()
         .map_err(|e| NotaError::other(format!("读不到当前 exe：{e}")))?;
     let 目录 = exe
         .parent()
         .ok_or_else(|| NotaError::other("当前 exe 没有父目录"))?;
     let 脚本路径 = std::env::temp_dir().join("nota-apply-update.ps1");
-    let 脚本 = if 便携版 {
-        format!(
-            "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; \
-             $t=Join-Path $env:TEMP 'nota-update-extract'; Remove-Item $t -Recurse -Force -ErrorAction SilentlyContinue; \
-             Expand-Archive -LiteralPath '{}' -DestinationPath $t -Force; \
-             Copy-Item -Path (Join-Path $t 'Nota\\*') -Destination '{}' -Recurse -Force; \
-             Start-Process -FilePath '{}'",
-            std::process::id(),
-            ps(文件),
-            ps(目录),
-            ps(&exe),
-        )
-    } else {
-        format!(
-            "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; \
-             Start-Process -FilePath '{}' -ArgumentList '/UPDATE','/R' -Wait",
-            std::process::id(),
-            ps(文件),
-        )
-    };
+    let 脚本 = format!(
+        "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; \
+         $t=Join-Path $env:TEMP 'nota-update-extract'; Remove-Item $t -Recurse -Force -ErrorAction SilentlyContinue; \
+         Expand-Archive -LiteralPath '{}' -DestinationPath $t -Force; \
+         Copy-Item -Path (Join-Path $t 'Nota\\*') -Destination '{}' -Recurse -Force; \
+         Start-Process -FilePath '{}'",
+        std::process::id(),
+        ps(文件),
+        ps(目录),
+        ps(&exe),
+    );
     fs::write(&脚本路径, 脚本)
         .map_err(|e| NotaError::other(format!("更新脚本写不出来：{e}")))?;
     let mut 命令 = crate::proc::background_command("powershell");
@@ -550,7 +574,7 @@ fn 安装命令说明(类型: 安装类型) -> String {
         安装类型::Rpm => "pkexec dnf install -y <下载的 .rpm>".to_string(),
         安装类型::AppImage => "退出后替换当前 AppImage 并重新启动".to_string(),
         安装类型::Exe => "退出后替换便携版启动器并重新启动".to_string(),
-        安装类型::ExeInstall => "显示 NSIS 安装向导并用 /UPDATE 覆盖安装".to_string(),
+        安装类型::ExeInstall => "启动 NSIS 安装程序，用 /UPDATE 覆盖安装并重新启动".to_string(),
         安装类型::Dev => MAIN_DEV_UPDATE_COMMAND.to_string(),
     }
 }

@@ -174,6 +174,22 @@ grep -rnE '我们|咱们|本仓|你会|请在|记住|八竿子|白费|恰恰|偏
 
 ## 2. 新增一个后端命令
 
+### Special case: privileged developer bridge
+
+Host Control commands live in `src-tauri/src/commands/dev_bridge.rs` and the
+HTTP protocol in `src-tauri/src/dev_bridge.rs`. They are not ordinary UI
+commands:
+
+- Never start the listener from frontend state alone. Require both
+  `debug_mode` and `dev_bridge_enabled` in `AppState`.
+- Keep the password hash out of `settings.toml`.
+- Preserve loopback-only binding for the default whitelist.
+- Require JSON content type, a valid Host header and a live bearer session.
+- Add the method to `Nota-devkit/docs/PROTOCOL.md` in the same change.
+- Add a focused unit test for each pure security predicate. Do not use the
+  full browser E2E suite for a bridge-only change unless WebView behavior
+  actually changed.
+
 **三步，一步都不能少。** 下面用已有的 `nota_doc_has_unsaved` 当完整样例走一遍
 （它三步都在，是最短的活样板）。
 

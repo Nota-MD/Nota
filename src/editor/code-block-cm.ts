@@ -9,8 +9,9 @@
  *
  * `@codemirror/state` / `view` / `commands` / `language` 本仓**早就在用**
  * （源码模式 `editor/source.ts`，2026-09 起）。代码块使用 CodeMirror 官方的
- * `closeBrackets()`：括号、引号与反引号自动成对，键入已有闭符时跨过，
- * 光标夹在空对中间时退格整体删除。普通正文的符号输入规则不受影响。
+ * `closeBrackets()`：括号与引号自动成对，键入已有闭符时跨过，光标夹在空对
+ * 中间时退格整体删除。反引号保持字面输入，避免普通代码和 Markdown 片段被
+ * 擅自补成模板字符串或行内代码。普通正文的符号输入规则不受影响。
  *
  * # 谁拥有这段文本（**这是本文件最要紧的一条**）
  *
@@ -76,7 +77,6 @@ import {
   Decoration,
   EditorView,
   ViewPlugin,
-  drawSelection,
   highlightActiveLine,
   keymap,
   lineNumbers,
@@ -353,6 +353,96 @@ const shareColorPlugin = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations },
 );
 
+const caretBeforeClass = "nota-code-caret-before";
+const caretAfterClass = "nota-code-caret-after";
+const emptyCaretClass = "nota-code-empty-caret";
+
+/**
+ * Bind the caret to a real character in CodeMirror's text flow.
+ *
+ * A widget at the exact end position is ambiguous in WebKit: CodeMirror accepts
+ * it, but the browser can lay the zero-width box out on the following visual
+ * line. Mark decorations have no such ambiguity. The caret bar is painted from
+ * the neighbouring character, while an empty line uses a line decoration.
+ */
+class CodeBlockCaret {
+  decorations: DecorationSet;
+
+  constructor(readonly view: EditorView) {
+    this.decorations = this.build(view);
+  }
+
+  update(update: ViewUpdate): void {
+    if (
+      update.focusChanged ||
+      update.selectionSet ||
+      update.docChanged ||
+      update.viewportChanged
+    ) {
+      this.decorations = this.build(update.view);
+    }
+  }
+
+  private build(view: EditorView): DecorationSet {
+    const selection = view.state.selection.main;
+    if (!view.hasFocus || !selection.empty || view.composing) {
+      return Decoration.none;
+    }
+    const line = view.state.doc.lineAt(selection.head);
+    if (line.length === 0) {
+      return Decoration.set([
+        Decoration.line({ class: emptyCaretClass }).range(line.from),
+      ]);
+    }
+    if (selection.head === line.to) {
+      return Decoration.set([
+        Decoration.mark({ class: caretAfterClass }).range(line.to - 1, line.to),
+      ]);
+    }
+    return Decoration.set([
+      Decoration.mark({ class: caretBeforeClass }).range(
+        selection.head,
+        selection.head + 1,
+      ),
+    ]);
+  }
+}
+
+const codeBlockCaret = ViewPlugin.fromClass(CodeBlockCaret, {
+  decorations: (value) => value.decorations,
+});
+
+const transparentCaret = "rgba(0, 0, 0, 0)";
+const imeComposingClass = "nota-ime-composing";
+
+/**
+ * CodeMirror owns composition state, but its native caret is suppressed by the
+ * custom glyph-height decoration. Give the native caret back for the preedit so
+ * it follows IME candidates, then restore the decoration after the edit lands.
+ */
+const imeNativeCaret = EditorView.domEventHandlers({
+  compositionstart(_event, view) {
+    view.contentDOM.classList.add(imeComposingClass);
+    view.contentDOM.style.setProperty("caret-color", "var(--accent)", "important");
+    return false;
+  },
+  compositionupdate(_event, view) {
+    view.contentDOM.classList.add(imeComposingClass);
+    return false;
+  },
+  compositionend(_event, view) {
+    const contentDOM = view.contentDOM;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!contentDOM.isConnected) return;
+        contentDOM.classList.remove(imeComposingClass);
+        contentDOM.style.setProperty("caret-color", transparentCaret, "important");
+      });
+    });
+    return false;
+  },
+});
+
 /**
  * 外观。⚠️ **一个色值都不写**：颜色全走 `var(--…)`（和 `source.ts` 那条
  * 同一个理由——写死了之后换文档主题就会得到"深底深字"）。
@@ -377,13 +467,12 @@ const theme = EditorView.theme({
     padding: "0 !important",
     minHeight: "0",
     fontFamily: "var(--font-mono)",
-    caretColor: "var(--accent)",
+    caretColor: "transparent",
     // WebView2 的 contenteditable 会画一圈平台默认焦点框；代码块自己已有
     // 边框与当前行反馈，不再叠这一圈黑框。
     outline: "none !important",
   },
   ".cm-line": { padding: "0", fontFamily: "var(--font-mono)" },
-  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)", borderLeftWidth: "2px" },
   // ⚠️⚠️ **第一条选择器要照 CM 自己那条写全**（理由与 `source.ts` 那处一字不差，
   // 2026-10-07 一起量出来的）：写短了权重压不过 CM 出厂的聚焦色，画出来是它的
   // 淡紫而不是这里的 `--bg-active`，且聚焦紫、失焦灰两种色。
@@ -417,11 +506,12 @@ const theme = EditorView.theme({
 });
 
 /**
- * CodeMirror's default bracket table omits backticks. Embedded source editors
- * need the pair because Markdown code frequently contains inline backticks.
+ * Keep only structural brackets and quotes in the automatic pairing table.
+ * A backtick stays literal so one keystroke never becomes a template string
+ * or an unintended Markdown code span.
  */
 const codeBracketLanguageData = EditorState.languageData.of(() => [
-  { closeBrackets: { brackets: ["(", "[", "{", "'", '"', "`"], before: ")]}:;>`" } },
+  { closeBrackets: { brackets: ["(", "[", "{", "'", '"'], before: ")]}:;>" } },
 ]);
 
 /**
@@ -762,7 +852,6 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
         EditorState.tabSize.of(shrinkEnterWidthDegree.length),
         languageField.init(() => option.initialStartLanguage),
         shareColorPlugin,
-        drawSelection(),
         wholeLineCutPastePlaceManage,
         // ⚠️ 给这颗实例的根元素挂一个**只属于代码块**的类名：`ui/useMenus.ts`
         // 那条全局 accel 要认它，才知道"剪贴板那几键归里层这个编辑器"
@@ -774,6 +863,8 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
         lineNumberCabin.of(wantLineNumbers() ? lineNumbers() : []),
         replaceLineCabin.of(wantReplaceLine() ? EditorView.lineWrapping : []),
         theme,
+        imeNativeCaret,
+        codeBlockCaret,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) {
             option.textChangeConvert(
@@ -786,6 +877,16 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
       ],
     }),
   });
+
+  // WebView2 can retain a platform-drawn native caret even when an author
+  // stylesheet sets transparent. Inline !important is the final precedence
+  // layer above document themes and editor.css, and forced-color-adjust keeps
+  // Windows accessibility palettes from restoring it.
+  for (const element of [view.contentDOM, view.scrollDOM]) {
+    element.style.setProperty("caret-color", transparentCaret, "important");
+    element.style.setProperty("forced-color-adjust", "none", "important");
+  }
+  view.contentDOM.dataset.notaCaretBuild = "inline-mark-v8";
 
   const watchSettings = new MutationObserver(() => {
     if (alreadyCancelDestroy) return;
@@ -843,7 +944,13 @@ export function createCodeBlockEditor(option: codeBlockEditorOptions): codeBlock
       if (oldValue.anchor === newValue.anchor && oldValue.head === newValue.head) return;
       view.dispatch({ selection: newValue });
     },
-    clusterFocus: () => view.focus(),
+    clusterFocus: () => {
+      view.requestMeasure();
+      view.focus();
+      requestAnimationFrame(() => {
+        if (!alreadyCancelDestroy) view.requestMeasure();
+      });
+    },
     hasFocusPoint: () => view.hasFocus,
     cancelDestroy: () => {
       alreadyCancelDestroy = true;

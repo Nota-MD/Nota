@@ -26,6 +26,8 @@
 
 import { useEffect, type RefObject } from "react";
 
+export { useDevBridgePreview } from "./useDevBridgeHost";
+
 import {
   api,
   on,
@@ -36,6 +38,7 @@ import {
   type NotifyPayload,
   type OpenDocumentPayload,
   type SecondInstancePayload,
+  type Settings,
 } from "@/bridge/ipc";
 // ⚠️ 用**模块级**的 `t` 而不是 `useT()`：这一条订阅只订一次（文件头第 1 条），
 // 用一个"会随语言变而换身份"的 `t` 会逼着把语言写进依赖数组。模块级的 `t`
@@ -58,10 +61,11 @@ export interface EventWiring {
   activeIdRef: RefObject<DocId | null>;
   /** 编辑器的句柄。插件改了当前这份文档时要整篇换掉。 */
   editorRef: RefObject<EditorPaneHandle | null>;
+  setSettings: (settings: Settings) => void;
 }
 
 export function useAppEvents(w: EventWiring): void {
-  const { toast, refreshDocs, openPath, activeId, activeIdRef, editorRef } = w;
+  const { toast, refreshDocs, openPath, activeId, activeIdRef, editorRef, setSettings } = w;
 
   // ── 宿主推来的事件 ────────────────────────────────────────────────────
   useEffect(() => {
@@ -71,6 +75,7 @@ export function useAppEvents(w: EventWiring): void {
     (async () => {
       const subs = await Promise.all([
         on<NotifyPayload>(events.notify, (p) => toast(p.message, p.level)),
+        on<Settings>(events.settingsChanged, (next) => setSettings(next)),
 
         // 插件**或 MCP 客户端**改了文档 → 让编辑器整篇换掉。
         // ⚠️ 这里**不去比 revision**，直接覆盖：能走到这条分支就说明
@@ -163,7 +168,7 @@ export function useAppEvents(w: EventWiring): void {
     };
     // `refreshDocs` / `toast` / `openPath` 都是空依赖的 useCallback，这个 effect
     // 只跑一次（同一条约定的完整说明在 `ui/useStartup.ts` 文件头最后一段）。
-  }, [toast, refreshDocs, openPath, activeIdRef, editorRef]);
+  }, [toast, refreshDocs, openPath, activeIdRef, editorRef, setSettings]);
 
   // ── 活动文档变了就告诉后端 ────────────────────────────────────────────
   useEffect(() => {

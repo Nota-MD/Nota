@@ -57,6 +57,16 @@ body {
   -webkit-user-select: none;
 }
 
+.app[data-settings-only="true"] > :not(.confirm-backdrop):not(.settings-standalone-root) {
+  visibility: hidden;
+}
+
+.app[data-settings-only="true"] .settings-standalone-root {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+
 /* Text the user owns or edits remains fully selectable: document content,
    CodeMirror, form controls and contenteditable regions. */
 input,

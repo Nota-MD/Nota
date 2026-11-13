@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect } from "react";
 
-import { api, type DocThemeInfo, type Settings } from "@/bridge/ipc";
+import { api, events, on, type DocThemeInfo, type Settings } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import {
   characterBodyCanUse,
@@ -154,6 +154,21 @@ export function useDocTheme(w: themeWiring): themeApi {
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
   const t = useT();
   const { themeId, writeTheme, themes, heavyScan, toast, askConfirm } = w;
+
+  useEffect(() => {
+    let dispose: (() => void) | null = null;
+    void on<{ css: string }>(events.devBridgeTheme, (payload) => {
+      applyDocTheme(payload.css);
+      debugEvent("theme", "developer bridge theme applied", {
+        css_bytes: payload.css.length,
+      });
+    }).then((unlisten) => {
+      dispose = unlisten;
+    });
+    return () => {
+      dispose?.();
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;

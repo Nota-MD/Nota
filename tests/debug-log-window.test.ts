@@ -70,7 +70,14 @@ testCase("日志窗口在独立进程启动，不再给主进程追加 WebView",
   contains(read("debug-log.html"), 'src="/src/debug-log.tsx"', "日志页独立轻量入口");
   contains(read("src/debug-log.tsx"), "<DebugLogWindow />", "独立日志入口挂载");
   contains(rust, ".arg(crate::cli::调试窗口选项)", "独立日志进程");
-  assertValue(!rust.includes("WebviewWindowBuilder::new"), "主进程仍创建辅助 WebView");
+  const debugLogCommand = rust.slice(
+    rust.indexOf("pub fn nota_window_open_debug_log"),
+    rust.indexOf("pub fn nota_window_open_devtools"),
+  );
+  assertValue(
+    !debugLogCommand.includes("WebviewWindowBuilder::new"),
+    "调试日志命令仍在主进程追加辅助 WebView",
+  );
   contains(cli, '--debug-log-window', "实时日志窗口模式");
   contains(cli, '--debug-log', "快照模式保留");
   contains(helper, "open::that", "系统默认查看器");

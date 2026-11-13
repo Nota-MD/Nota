@@ -22,7 +22,7 @@ Examples:
 ```text
 EXP-EDIT-004-hidden-delimiter-tokens.md
 EXP-LINK-003-in-place-link-source.md
-EXP-IME-002-webkit-composition-anchor.md
+EXP-IME-002-caret-ownership.md
 ```
 
 ## Template

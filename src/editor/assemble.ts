@@ -52,12 +52,17 @@ import { katexOptionsCtx, math } from "./math-schema";
 // 规则，留着是为了把上游那条从 `commonmark` 里过滤掉
 //（见下面 `.use(commonmark.filter(...))`）。
 import {
+  emphasisKeymap,
   emphasisStarInputRule,
   emphasisUnderscoreInputRule,
   inlineCodeInputRule,
   strongInputRule,
+  strongKeymap,
   wrapInHeadingInputRule,
 } from "@milkdown/kit/preset/commonmark";
+import { inlineMarkKeymap } from "./command-table";
+
+const removedCommonmarkPlugins = new Set<unknown>([strongKeymap, emphasisKeymap]);
 
 // 拼回开头那段 front matter（`markdownUpdated` 报出去的是**整篇**）。
 // ⚠️ 切分那一步在 `create.ts`（它手里才有"活的那一段"）。
@@ -423,10 +428,12 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 引用 `> `、分割线 `---`）**照旧敲完就变**，只摘标题这一条。
     .use(encloseBarLanguageFillAll)
     .use(readOnly ? [] : [literalInlineInput(autoPair)])
+    .use(readOnly ? [] : [inlineMarkKeymap])
     .use(
       commonmark.filter(
         (plugin) =>
           plugin !== wrapInHeadingInputRule &&
+          !removedCommonmarkPlugins.has(plugin) &&
           plugin !== emphasisStarInputRule &&
           plugin !== emphasisUnderscoreInputRule &&
           plugin !== inlineCodeInputRule &&

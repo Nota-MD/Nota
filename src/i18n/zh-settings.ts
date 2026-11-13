@@ -53,6 +53,9 @@ export const settingsTable: Record<string, string> = {
   "Whole interface zoom": "整体缩放",
   "Menu bar rendering": "菜单栏样式",
   "Use Nota's built-in menu on every platform, or the native system menu. On macOS, the system menu appears at the top of the screen.": "使用 Nota 跨平台一致的自绘菜单，或交给系统原生菜单。macOS 中系统菜单位于屏幕顶部。",
+  "Force Nota menu when maximized or full screen": "最大化或全屏时强制使用 Nota 菜单",
+  "Keep the menu reachable when a window manager or macOS full-screen mode hides the system menu. The saved menu style returns after leaving maximized or full-screen mode.":
+    "当窗口管理器或 macOS 全屏模式隐藏系统菜单时，仍保留可访问的 Nota 菜单；退出最大化或全屏后恢复原本保存的菜单样式。",
   "Nota (self-drawn)": "Nota 自绘",
   "System native": "系统原生",
   "Show status bar": "显示状态栏",
@@ -63,6 +66,12 @@ export const settingsTable: Record<string, string> = {
   // 这句话也要跟着改（`ui/commands.ts` 的 `view.focusMode`）。
   "Window": "窗口",
   "Show the file name in the title bar": "在标题栏显示文件名",
+  "Preferences presentation": "设置窗口呈现方式",
+  "Full fills the current window, Embedded keeps the centered card, and Separate window opens native Preferences window. Changes take effect the next time Preferences opens.":
+    "“铺满”使用当前整个窗口，“内嵌”保留居中的设置卡片，“独立窗口”会打开一个原生设置窗口。修改会在下次打开设置时生效。",
+  "Full window": "铺满",
+  "Embedded card": "内嵌",
+  "Separate window": "独立窗口",
   "Dimming strength": "压暗强度",
   "Standard": "标准",
   "Strong": "强",
@@ -169,13 +178,13 @@ export const settingsTable: Record<string, string> = {
   "The image exporter uses the same styled document pipeline as HTML.": "图片导出使用与含样式 HTML 相同的文档渲染流程",
   "Exporter": "导出器",
   "Parameters": "参数",
-  "The built-in command for this template. It is shown for reference.": "此模板的内置命令，仅供查看",
+  "Base Pandoc arguments for this exporter. Nota still supplies --from, --to and the output path.":
+    "此导出器的 Pandoc 基础参数；--from、--to 和输出路径仍由 Nota 提供。",
   "Custom arguments": "自定义参数",
   "Separate arguments with spaces and quote values that contain spaces.": "参数之间用空格分隔，包含空格的值请使用引号",
   "Style file": "样式文件",
   "Choose a style file": "选择样式文件",
   "Add from Template": "从模板添加",
-  "Template": "模板",
   "Custom exporters": "自定义导出器",
   "Move Up": "上移",
   "Move Down": "下移",
@@ -394,4 +403,43 @@ export const settingsTable: Record<string, string> = {
     "自动档采用推荐的编辑区字号 {0}px；拖动滑杆会切换到自定义。",
   "Pair brackets, quotes and Markdown markers while typing":
     "输入时补全括号、引号和 Markdown 符号",
+  "Developer bridge": "开发者桥接",
+  "Expose the authenticated Host Control API to Nota DevKit. Access is protected by a password, a five-step confirmation and an IP whitelist.":
+    "向 Nota DevKit 开放经过认证的宿主控制接口；访问受调试密码、五步确认和 IP 白名单保护。",
+  "Developer Bridge": "开发者桥接",
+  "Security acknowledgement {0} of 5": "安全确认第 {0}/5 步",
+  "Configure developer access": "配置开发者访问",
+  "Close": "关闭",
+  "Confirmation keypad": "确认键盘",
+  "Press {0} to continue. Any other number cancels.":
+    "请按 {0} 继续；按其他任何数字将取消。",
+  "Debug password": "调试密码",
+  "Leave empty to keep the current password": "留空则保留当前密码",
+  "At least 8 characters": "至少 8 个字符",
+  "Port": "端口",
+  "Port must be an integer between 1 and 65535": "端口必须是 1 到 65535 之间的整数",
+  "Allowed IP addresses or CIDR ranges": "允许连接的 IP 地址或 CIDR 范围",
+  "The IP whitelist cannot be empty": "IP 白名单不能为空",
+  "Localhost is the default. Adding another address exposes the bridge to the local network; the password remains mandatory.":
+    "默认仅允许本机。添加其他地址会把桥接开放到局域网，调试密码仍然必需。",
+  "Cancel": "取消",
+  "Starting…": "正在启动…",
+  "Enable developer bridge": "启用开发者桥接",
+  "Developer bridge is running": "开发者桥接正在运行",
+  "Developer bridge is off": "开发者桥接已关闭",
+  "Port {0} · {1} active session(s)": "端口 {0} · {1} 个活动会话",
+  "No local developer API is listening.": "当前没有监听开发者接口。",
+  "Enable…": "启用…",
+  "Disconnect all": "断开全部连接",
+  "Developer bridge did not start": "开发者桥接未能启动",
+  "Connected clients can read and modify every open document.":
+    "连接后的客户端可以读取和修改所有已打开文档。",
+  "Connected clients can load themes and reload Lua extensions.":
+    "连接后的客户端可以加载主题并重载 Lua 拓展。",
+  "Connected clients can run editor commands and inspect diagnostics.":
+    "连接后的客户端可以执行编辑器命令并读取诊断信息。",
+  "The IP whitelist is not authentication; the debug password is still required.":
+    "IP 白名单不是身份认证，调试密码仍然必需。",
+  "I will connect only trusted Nota DevKit clients.":
+    "我只会连接可信的 Nota DevKit 客户端。",
 };

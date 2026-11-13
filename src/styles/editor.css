@@ -264,6 +264,19 @@
   min-height: 0;
 }
 
+/* Source mode is code and must not inherit a document theme's serif face. */
+.editor-pane-source .editor-mount .cm-editor,
+.editor-pane-source .editor-mount .cm-scroller,
+.editor-pane-source .editor-mount .cm-content,
+.editor-pane-source .editor-mount .cm-line,
+.editor-pane-source .editor-mount .cm-gutters {
+  font-family: var(--font-mono) !important;
+}
+
+.editor-pane-source .editor-mount .cm-scroller {
+  overflow-x: hidden !important;
+}
+
 .editor-mount .milkdown {
   /* ⚠️ **限宽不挂在这一层了**（2026-09-26）。原先写的是
      `max-width: var(--content-width, 760px); margin: 0 auto 0 0`——正文列到
@@ -387,8 +400,39 @@
   caret-color: var(--accent) !important;
 }
 
+/* Embedded code editors draw their own glyph-height caret. Keep the generic
+   CodeMirror caret rule above for source mode and formula inputs, but hide the
+   native WebView2 caret here; otherwise it overlays the custom caret at the
+   full line-height and the custom positioning appears to have no effect. */
+.editor-mount .ProseMirror .nota-code-cm .cm-content,
+.editor-mount .ProseMirror .nota-code-cm .cm-line {
+  caret-color: transparent !important;
+  forced-color-adjust: none;
+}
+
+.editor-mount
+  .ProseMirror
+  .nota-code-cm
+  .cm-content.nota-ime-composing
+  :is(.nota-code-caret-before, .nota-code-caret-after, .nota-code-empty-caret)::before,
+.editor-mount
+  .ProseMirror
+  .nota-code-cm
+  .cm-content.nota-ime-composing
+  .nota-code-caret-after::after {
+  display: none !important;
+}
+
 .editor-mount .ProseMirror * {
   caret-color: transparent !important;
+}
+
+/* IME preedits advance before ProseMirror receives a document transaction.
+   The detached overlay caret can stay at composition start, so restore the
+   browser caret while the input method owns the composition. */
+.editor-mount .ProseMirror.nota-ime-composing,
+.editor-mount .ProseMirror.nota-ime-composing * {
+  caret-color: var(--accent) !important;
 }
 
 /* 用户显式调字号时，用户设置必须压过文档主题的正文根字号。

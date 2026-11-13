@@ -9,7 +9,7 @@
  * 的通用规则，所以 `main.tsx` 里**必须排在 `editor.css` 之后**。
  */
 .nota-code-btn,
-.nota-code-lang {
+.nota-code-lang-input {
   height: 24px;
   border-radius: max(4px, var(--radius-sm));
   color: var(--fg-muted);
@@ -25,62 +25,38 @@
   background: var(--bg-raised);
 }
 
-.nota-code-lang {
-  padding: 0 24px;
-  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+.nota-code-lang-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--border) 86%, transparent);
+  background: var(--bg-raised);
   background: color-mix(in srgb, var(--bg-raised) 82%, var(--doc-bg));
+  font: inherit;
+  text-align: center;
+  text-overflow: ellipsis;
+  appearance: none;
 }
 
 .nota-code-btn:hover,
-.nota-code-lang:hover {
+.nota-code-lang-input:hover {
   color: var(--fg);
   border-color: var(--border-strong);
   background: var(--bg-hover);
 }
 
-/* ⚠️⚠️ `appearance: none` **不能省**。它的由来是原生 `<select>`（少了它，
-   深色模式下这个框整个画成纯白：WebKit 会把它交给 GTK 的原生 `menulist`
-   外观去画，而**原生外观盖得住 CSS**——上面那条 `background: var(--bg-raised)`
-   白写了。同一个坑在设置那边早就踩过，见 `settings.css` 的 `.stg-select`）。
-   ⚠️ **2026-09-25 这个框从 `<select>` 换成了 `<button>`**（理由见
-   `lang-picker.ts` 文件头：原生弹层里放不了图标），但这一条**留着**——
-   `<button>` 同样有原生外观，不给它的话边框和底色也不是这里写的这个样子。
-   📌 可迁移：**全仓每一个 `<select>`、`<button>` 只要自己画外观，都要
-   `appearance: none`**。 */
-.nota-code-lang {
-  appearance: none;
-  box-sizing: border-box;
-  /* 图标 + 语言名横排。⚠️ `<button>` 默认是 `inline-block`，不给这一条
-     里面的图标和文字会按基线对齐、还带一截行高。 */
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  /* 右边给箭头留出位子（箭头在包裹层上，见下一条）。 */
-  justify-content: center;
-  /* 下限那一条是给**闭合状态**兜底的：里面的文字是语言名，短起来只有一个
-     `c`，而这条子整体是按内容收缩的（`position: absolute`），不兜底就会
-     缩成一个小方块。⚠️ 里面的文字由 `lang-picker.ts` 的 `画闭合()` 写。 */
-  width: 100%;
-  min-width: 0;
-  /* ⚠️ 上限要留够：语言名最长的有 `apacheconf`（10 个字符），加上图标和
-     箭头约 100px。原本是 140px，同时 `text-overflow` 挂在本条上——
-     **那是错的**：`text-overflow` 只对**块容器里溢出的行盒**生效，
-     而这里是个 flex 容器，它里面的文字在 `.nota-lang-name` 那条子自己身上。
-     所以省略号移到了下面 `.nota-lang-name` 里。 */
-  max-width: none;
+.nota-code-lang-input:focus {
+  color: var(--fg);
+  border-color: var(--accent);
+  outline: none;
+  text-align: center;
+  text-overflow: clip;
 }
 
-/* 语言名。省略号挂在这一条上（理由见上）。 */
-.nota-lang-name {
-  /* ⚠️ `min-width: 0` 不能省：flex 子项默认 `min-width: auto`，
-     也就是"不小于内容的宽"，于是 `max-width` 到了它也不肯截，
-     整颗按钮会被语言名撑破。这是 flex 里做省略号的经典那一步。 */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
+/* WebKitGTK applies a native input appearance over author colors. Keep
+   `appearance: none` so the single language field follows the document tokens. */
 /* ── 语言图标（`editor/lang-icon.ts`）──────────────────────────────────
    两种长相，共用一个 15px 的方框（下面那条是兜底徽章，再下面带 `--logo`
    的那条是真图）：
@@ -156,12 +132,16 @@
   position: fixed;
   /* 跟其他下拉同一个层（`theme.css` 的 `--z-popup: 40`）。 */
   z-index: var(--z-popup);
+  box-sizing: border-box;
   overflow-y: auto;
-  min-width: 240px;
+  overflow-x: hidden;
+  min-width: 0;
   max-width: min(340px, calc(100vw - 16px));
   padding: 6px;
-  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
   border-radius: 9px;
+  background: var(--bg-raised);
   background: color-mix(in srgb, var(--bg-raised) 96%, transparent);
   /* 投影用写死的黑：它在浅色和深色下都成立，而拿主题色去做投影会在
      深色主题下变成一圈看不见的灰。 */
@@ -173,43 +153,6 @@
   color: var(--fg);
 }
 
-/* 顶上那个"搜索或输入语言"的框（用户 2026-09-26 要的）。
-   ⚠️ `sticky`：列表滚起来之后它要**留在顶上**——它是筛列表的唯一入口，
-   滚没了用户就得先滚回顶才能改一个字。
-   ⚠️ 底色必须显式给（`--bg-raised`，与 `.nota-lang-popup` 同一个值）：
-   `sticky` 只是"停住"，它**不挡后面的内容**，不给底色的话底下的选项会
-   从它背后透出来。 */
-.nota-lang-search {
-  position: sticky;
-  top: 0;
-  /* ⚠️ 压在选项之上（选项的 hover 底色会盖住它）；`z-index` 要正整数，
-     因为 `.nota-lang-opt` 没有自己的层，`0` 也够，但写 `1` 更明确。 */
-  z-index: 1;
-  padding: 0 0 7px;
-  background: var(--bg-raised);
-}
-
-.nota-lang-input {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--bg-subtle) 88%, var(--doc-bg));
-  color: var(--fg);
-  font: inherit;
-  /* ⚠️ `appearance: none` 与代码块那颗语言按钮同一条理由（2026-09-25 那笔
-     账）：WebKitGTK 会给原生输入框套上一层系统外观，深色主题下白得刺眼。 */
-  appearance: none;
-}
-
-.nota-lang-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
 .nota-lang-opt {
   display: flex;
   align-items: center;
@@ -219,6 +162,12 @@
   border-radius: 6px;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.nota-lang-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 「自定义」那一行右边的小字。⚠️ `margin-left: auto` 把它顶到最右，
@@ -248,11 +197,8 @@
   font-weight: 600;
 }
 
-/* 包裹层只为画箭头存在，**没有别的职责**。
-   ⚠️ 为什么不能画在里面的控件上：原先是因为 `<select>` 是替换元素、伪元素
-   挂不住；现在换成了 `<button>`（挂得住），但**仍然画在这一层**——
-   按钮自己的 `::after` 会和它里面的图标/文字抢同一个盒子，
-   而这一层是纯定位盒子，画在它上面不影响里面。 */
+/* The wrapper only positions the single editable language field below the
+   code block. It adds no separate trigger or decorative arrow. */
 .nota-code-lang-wrap {
   /* ⚠️ 这里从"bar 里的一个行内块"改成了"块外的绝对定位挂件"（2026-09-25）。
      用户点名：「调整一下语言选择框的位置。是代码块右下方，下面」——即这个框
@@ -262,9 +208,13 @@
      否则 `top: 100%` 划出来的框会被裁掉。 */
   position: absolute;
   right: 8px;
-  /* 贴着下边框，**中间不留缝**：留了缝，鼠标从块里往下走会经过一段
-     "pre 也不 hover、它也不 hover"的空档，框会先淡掉再亮回来，看着闪。 */
-  top: 100%;
+  /* Anchor to the painted bottom edge instead of using a percentage top.
+     WebView2 can place `top: 100%` below the code block's margin area while
+     WebKitGTK places it directly on the border, which creates a Windows-only
+     gap between the code block and the language picker. */
+  top: auto;
+  bottom: -24px;
+  height: 24px;
   /* 盖住下面的正文——它不占文档流，所以悬停时会压在下一段第一行上。
      ⚠️ 这是有意的：改成常驻占位，等于每个代码块下面都空出一截。 */
   z-index: 3;
@@ -274,21 +224,10 @@
   transition: opacity 0.12s ease-out;
 }
 
-/* 鼠标进入代码块或键盘焦点落到语言按钮时显示。 */
+/* Show while hovering the block or editing the language field. */
 .editor-mount .ProseMirror pre:hover .nota-code-lang-wrap,
 .nota-code-lang-wrap:hover,
 .editor-mount .ProseMirror pre:focus-within .nota-code-lang-wrap {
-  opacity: 1;
-}
-
-/* ⚠️ 下拉开着的时候框必须一直亮着（2026-09-25 补）。弹层挂在 `body` 上，
-   鼠标从按钮往弹层里走会离开代码块，上面那两条就都不成立了——框淡出、
-   弹层还在，看起来像一块没有主的浮层。`nota-lang-open` 由 `lang-picker.ts`
-   在开/关时挂到那颗按钮上。
-   📌 用 `:has()` 是有先例的（`settings.css` 里那几处），本仓的 WebKitGTK
-   是认的；别为它改成"由 JS 去操作包裹层的 class"——那会把"按钮住在哪个
-   包裹层里"这条约定从 CSS 搬进 JS，两个文件都得知道。 */
-.nota-code-lang-wrap:has(.nota-lang-open) {
   opacity: 1;
 }
 
@@ -342,23 +281,6 @@ html[data-code-lang-picker="off"] .nota-code-lang-wrap {
   flex: none;
   width: 16px;
   height: 16px;
-}
-
-/* 箭头 = 一个 6×6 的方块只留右边和下边两条线，转 45°。
-   ⚠️ 与 `.stg-select::after` 同一套画法、同一组数值——**改一个就改另一个**，
-   否则同一个应用里两处下拉的箭头会不一样。 */
-.nota-code-lang-wrap::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 7px;
-  width: 6px;
-  height: 6px;
-  margin-top: -4px;
-  border-right: 1.5px solid var(--fg-muted);
-  border-bottom: 1.5px solid var(--fg-muted);
-  transform: rotate(45deg);
-  pointer-events: none;
 }
 
 /* ── CodeMirror（backlog 第 101 项，2026-10-06）─────────────────────────

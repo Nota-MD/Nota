@@ -151,11 +151,9 @@ impl 宿主 for 应用宿主 {
         let 仓 = 状态.documents.lock().unwrap();
         let 活动 = 仓.active_id().map(|i| i.0);
         let 文档 = match id {
-            Some(要) => 仓
-                .list()
-                .iter()
-                .find(|d| d.id.0 == 要)
-                .ok_or_else(|| format!("没有 id 为 {要} 的文档（用 nota_documents 看现在开着哪些）"))?,
+            Some(要) => 仓.list().iter().find(|d| d.id.0 == 要).ok_or_else(|| {
+                format!("没有 id 为 {要} 的文档（用 nota_documents 看现在开着哪些）")
+            })?,
             None => 仓
                 .active()
                 .ok_or_else(|| "Nota 现在一份文档都没打开".to_string())?,

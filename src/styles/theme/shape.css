@@ -30,31 +30,31 @@
  * ⚠️ 所以这里和 GNOME 的真实取值**不再逐值相同**（GNOME 自己的原值是
  * 4/6/10 + 控件高 30 + 间距 8，git 历史里也在）。改之前先想清楚上面那句话。 */
 [data-ui-style="adwaita"] {
-  --dialog-close-size: 32px;
+  --dialog-close-size: 24px;
   --dialog-close-radius: 999px;
   --font-ui: "Adwaita Sans", "Noto Sans CJK SC", "Source Han Sans SC",
     "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: "Adwaita Mono", "Noto Sans Mono CJK SC", monospace;
-  --radius-sm: 5px;
+  --radius-sm: 6px;
   /* ⚠️ 稿子：普通按钮圆角 8px —— **和 2026-09-24 那次调的正好一样**，没动。 */
   --radius: 8px;
   /* 稿子：浮动窗口圆角 15px。落在这里（`--radius-lg`）是因为本仓拿它画的是
      对话框/弹出层——那正好是"浮动窗口"这个角色（真正的窗口边框归窗口管理器）。 */
-  --radius-lg: 15px;
+  --radius-lg: 12px;
   /* 2026-10-25 按 Typora 的紧凑菜单栏重新收口：顶栏不是系统 titlebar，
      不需要 LibAdwaita headerbar 的 44px。控件保持完整点击高度，菜单项
      在 32px 栏内使用 24px 高、7px 横向内边距。 */
-  --control-height: 32px;
+  --control-height: 34px;
   --spacing: 8px;
   --toolbar-height: 28px;
   --toolbar-shadow: none;
   --btn-font-weight: 500;
 
-  /* 开关：44×22、滑块 18（稿子的取值）。行走 20px = 44 − 2 − 18 − 4。 */
-  --switch-w: 44px;
-  --switch-h: 22px;
-  --switch-knob: 18px;
-  --switch-travel: 20px;
+  /* Switch measurements from the Adwaita Design Kit: 48×26 with a 22px knob. */
+  --switch-w: 48px;
+  --switch-h: 26px;
+  --switch-knob: 22px;
+  --switch-travel: 22px;
 }
 
 /* GitHub：紧凑、直角感强、无阴影，靠 1px 边框分层 */

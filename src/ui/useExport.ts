@@ -376,7 +376,7 @@ export function useExport(w: exportWiring): exportApi {
           ? styleStyleTextItemParameter(exporter.format, exporter.style_file)
           : "";
         const exportArguments = exporter
-          ? [exportSettings.pandoc_args, exporter.args, styleStyleParameter]
+          ? [exportSettings.pandoc_args, exporter.base_args, exporter.args, styleStyleParameter]
           : [exportSettings.pandoc_args];
         const result2 = await api.pandoc.export({
           format: format.id,

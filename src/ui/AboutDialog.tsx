@@ -127,10 +127,14 @@ export function AboutDialog({
   onClose,
   debugMode,
   onSetDebugMode,
+  presentation = "embedded",
+  standalone = false,
 }: {
   onClose: () => void;
   debugMode: boolean;
   onSetDebugMode: (enabled: boolean) => void;
+  presentation?: "embedded" | "full";
+  standalone?: boolean;
 }) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -438,18 +442,23 @@ export function AboutDialog({
       {/* 点遮罩 = 关掉，和别的框同一条约定（`ConfirmDialog` / `ImageDialog`）。 */}
       <div
         className="confirm-backdrop"
+        data-window-presentation={presentation}
         onMouseDown={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
       >
         <div
           className="confirm-dialog about-dialog"
+          data-window-presentation={presentation}
+          data-window-standalone={standalone || undefined}
           role="dialog"
           aria-modal="true"
           aria-label={t("About Nota")}
         >
           {/* 在首页，统一关闭按钮同时承担焦点落点；进入子页后焦点交给返回键。 */}
-          <DialogClose ref={page === null ? headOneToken : undefined} onClose={onClose} />
+          {!standalone && (
+            <DialogClose ref={page === null ? headOneToken : undefined} onClose={onClose} />
+          )}
 
           {page === null ? (
             <div className="about-home">

@@ -218,6 +218,34 @@ testCase("覆盖层不进入正文 DOM，并由焦点和选区控制", () => {
   assertValue(!source.includes("decorations("), "仍注册了 ProseMirror 装饰");
 });
 
+testCase("IME 组合态交还原生光标并暂停覆盖层闪烁", () => {
+  assertValue(
+    blinkSource.includes('const imeComposingClass = "nota-ime-composing"'),
+    "缺少 IME 组合态标记",
+  );
+  assertValue(
+    blinkSource.includes('addEventListener("compositionstart", beginComposition)'),
+    "compositionstart 没有交还原生光标",
+  );
+  assertValue(
+    blinkSource.includes('addEventListener("compositionupdate", beginComposition)'),
+    "compositionupdate 没有保持 IME 光标状态",
+  );
+  assertValue(
+    blinkSource.includes('addEventListener("compositionend", endComposition)'),
+    "compositionend 没有恢复覆盖层光标",
+  );
+  assertValue(
+    blinkSource.includes("view.dom.classList.contains(imeComposingClass)"),
+    "组合态后续刷新仍可能把覆盖层光标画回来",
+  );
+  assertValue(
+    css.includes(".ProseMirror.nota-ime-composing *") &&
+      css.includes("caret-color: var(--accent) !important"),
+    "IME 组合态没有恢复可移动的原生光标",
+  );
+});
+
 testCase("内部输入框自己画光标时隐藏正文覆盖层", () => {
   assertValue(
     blinkSource.includes("export function innerEditorOwnsCaret"),

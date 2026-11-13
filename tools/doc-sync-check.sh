@@ -79,8 +79,6 @@ PAIRS=(
   "src-tauri/src/settings/general.rs                03,04,10"
   "src-tauri/src/settings/download.rs               03,04,07"
   "src-tauri/src/document/mod.rs                  03,05"
-  # ⚠️ 2026-10-04 新建：`derive_title` 那一族从 `mod.rs` 拆出来的（那边过了 800 行）。
-  # 拆缝是「纯文本进、标题出」——不认识 `DocId`、不碰仓库、不取锁，谁都能调它。
   "src-tauri/src/document/title.rs                03,05"
   "src-tauri/src/commands/mod.rs                 02"
   "src-tauri/src/commands/document.rs             02,04,10"
@@ -115,8 +113,6 @@ PAIRS=(
   # 2026-09-29：那一份当时 819 行，按"说给别人的形状 / 宿主自己的动作"拆出这一份。
   "src-tauri/src/plugin/types.rs                  03,05,11"
   "src-tauri/src/plugin/manifest.rs               03,11,12"
-  # 2026-10-04：`[[settings]]` 那一格把 `manifest.rs` 顶到 1077 行，按"这一格自己的
-  # 全部（结构体 ＋ 夹紧 ＋ 校验）"拆出这一份。
   "src-tauri/src/plugin/settings_decl.rs          03,11,12"
   "src-tauri/src/plugin/install.rs                 02,11"
   "src-tauri/src/plugin/package.rs                 02,06,11"
@@ -157,12 +153,16 @@ PAIRS=(
   # 2026-09-27 拆出来的：`require` 那一组用例（`mod.rs` 加完 `装require` 之后
   # 顶破 1000 行，把"证明它装对了"的用例挪出去，只挪行数不挪内容）。
   "src-tauri/src/lua/require_tests.rs             01,12"
-  # 2026-09-27：MCP 三个文件一起落地（`nota --mcp`）。⚠️ 它们是**一个功能的三块**，拆开登记但别只改一块。
-  # ⚠️ `mod.rs` 原写 `01,02,12`——`12` 是**插件运行时**，而 MCP 连 Lua 都不碰，那是空指；
-  # 2026-09-27 更晚改成 `01,02,07,10`（启动三步在 `01` ⓿、状态在第 82 项、§9 有一行）。
-  "src-tauri/src/mcp/mod.rs                        01,02,07,10"
+  # 2026-11-07: authenticated Host Control replaces the public MCP transport.
+  "src-tauri/src/dev_bridge.rs                     01,02,03,05,07"
+  "src-tauri/src/dev_bridge/security.rs            02,03,07"
+  "src-tauri/src/commands/dev_bridge.rs            02,04,07"
+  "src/ui/DeveloperBridgeDialog.tsx                02,04,07"
+  "src/ui/useDevBridgeHost.ts                      02,05"
+  "src/styles/developer-bridge.css                 04"
+  "src-tauri/src/mcp/mod.rs                        01,02,07"
   "src-tauri/src/mcp/host.rs                       02"
-  "src-tauri/src/mcp/tools.rs                      02,07,10"
+  "src-tauri/src/mcp/tools.rs                      02,07"
   "src-tauri/src/lua/api/mod.rs                   12,13"
   "src-tauri/src/lua/api/document.rs              13,05"
   "src-tauri/src/lua/api/fs.rs                    13"

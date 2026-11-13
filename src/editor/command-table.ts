@@ -54,11 +54,20 @@ import { undoCommand, redoCommand } from "@milkdown/kit/plugin/history";
 import { lift, toggleMark } from "@milkdown/kit/prose/commands";
 import { undoInputRule } from "@milkdown/kit/prose/inputrules";
 import { liftListItem } from "@milkdown/kit/prose/schema-list";
-import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
-import type { NodeType } from "@milkdown/kit/prose/model";
+import {
+  Plugin,
+  TextSelection,
+  type EditorState,
+  type Transaction,
+} from "@milkdown/kit/prose/state";
+import {
+  Fragment,
+  type Node as PMNode,
+  type NodeType,
+} from "@milkdown/kit/prose/model";
 import type { Step } from "@milkdown/kit/prose/transform";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { callCommand } from "@milkdown/kit/utils";
+import { $prose, callCommand } from "@milkdown/kit/utils";
 
 import { convertBecomeTaskTaskColumnTable, clearRemoveCellStyle, deleteTableRow, deleteTableColumn, deleteWholeTable, insertCommonStyleBlock, insertItemRecord, toggleTableRowHeaders } from "./insert";
 import { insertFootNote } from "./footnote";
@@ -67,6 +76,13 @@ import { selectLine, selectWord, selectSentence, removeWord } from "./select";
 import { moveBlock } from "./move-block";
 import { automaticImageName } from "./image-kind";
 import { installLink, removeLink } from "./link-edit";
+import { textblockDepthFrom } from "./inline-caret";
+import {
+  findActiveMarkRange,
+  noticeTable,
+  rewriteInlineBlock,
+  serializeInlineBlock,
+} from "./mark-hint-source";
 import {
   duplicateCurrentTable,
   alignCurrentTableColumn,
@@ -128,6 +144,103 @@ export function cursorAtCodeBlock(state: EditorState): boolean {
 }
 
 /**
+ * Toggle a Markdown mark at a collapsed caret through the visible source.
+ *
+ * A toolbar click or Ctrl+B must have immediate feedback even when nothing is
+ * selected. Typedown and Textus create an empty delimiter span at the caret;
+ * Nota previously only changed storedMarks, which changed the next character
+ * but left the screen unchanged. This helper inserts the visible delimiter
+ * pair, removes an empty pair, and unwraps the whole current run when toggled
+ * from inside it.
+ */
+function toggleCollapsedSourceMark(
+  state: EditorState,
+  markName: string,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  if (!state.selection.empty) return false;
+  const syntaxType = state.schema.nodes.notaSyntax;
+  const type = state.schema.marks[markName];
+  const spec = noticeTable.find((item) => item.name3 === markName);
+  if (!syntaxType || !type || !spec) return false;
+
+  const { $from } = state.selection;
+  const depth = textblockDepthFrom($from);
+  const parent = $from.node(depth);
+  if (!parent.isTextblock || parent.type.spec.code) return false;
+  const marks = state.schema.marks as Record<string, typeof type | undefined>;
+  const snapshot = serializeInlineBlock(parent, syntaxType, marks);
+  if (!snapshot) return false;
+  const parentStart = $from.start(depth);
+  const caret = snapshot.at.get(state.selection.from - parentStart);
+  if (caret === undefined) return false;
+
+  const active = findActiveMarkRange(
+    state.doc,
+    state.selection.from,
+    type,
+    syntaxType,
+  );
+  if (active) {
+    const children: PMNode[] = [];
+    state.doc.slice(active.from, active.to2).content.forEach((node) => {
+      children.push(node.mark(type.removeFromSet(node.marks)));
+    });
+    const unwrapped = Fragment.fromArray(children);
+    const rangeFrom = active.leftMarker?.from ?? active.from;
+    const rangeTo = active.rightMarker?.to2 ?? active.to2;
+    const relativeCaret = Math.min(
+      Math.max(state.selection.from, active.from),
+      active.to2,
+    ) - active.from;
+    const tr = state.tr.replaceWith(
+      rangeFrom,
+      rangeTo,
+      unwrapped,
+    );
+    tr.setSelection(
+      TextSelection.create(
+        tr.doc,
+        Math.min(
+          rangeFrom + relativeCaret,
+          rangeFrom + unwrapped.size,
+        ),
+      ),
+    );
+    tr.setStoredMarks([]).scrollIntoView();
+    dispatch?.(tr);
+    return true;
+  }
+
+  const pairStart = caret - spec.left.length;
+  if (
+    pairStart >= 0 &&
+    snapshot.source.slice(pairStart, caret) === spec.left &&
+    snapshot.source.slice(caret, caret + spec.right.length) === spec.right
+  ) {
+    const tr = rewriteInlineBlock(state, syntaxType, {
+      from: pairStart,
+      to2: caret + spec.right.length,
+      insert: "",
+      caret: pairStart,
+    });
+    if (!tr) return false;
+    dispatch?.(tr.scrollIntoView());
+    return true;
+  }
+
+  const tr = rewriteInlineBlock(state, syntaxType, {
+    from: caret,
+    to2: caret,
+    insert: spec.left + spec.right,
+    caret: caret + spec.left.length,
+  });
+  if (!tr) return false;
+  dispatch?.(tr.scrollIntoView());
+  return true;
+}
+
+/**
  * 行内代码是**开关型标记**，并且必须支持“没有选区”的工具栏点击。
  *
  * 上游 `toggleInlineCodeCommand` 在空选区直接返回 `false`，于是工具栏那颗按钮
@@ -143,6 +256,7 @@ export function splitReplaceInlineCode(
   const { from, to, empty, $from } = state.selection;
 
   if (empty) {
+    if (toggleCollapsedSourceMark(state, "inlineCode", dispatch)) return true;
     const alreadyOpen = (state.storedMarks ?? $from.marks()).some((m) => m.type === type);
     const tr = state.tr;
     if (alreadyOpen) {
@@ -185,6 +299,7 @@ export function toggleMarkAtSelection(
 ): boolean {
   const type = state.schema.marks[markName];
   if (!type) return false;
+  if (toggleCollapsedSourceMark(state, markName, dispatch)) return true;
 
   const tr = state.tr;
   if (!(state.selection instanceof TextSelection)) {
@@ -222,6 +337,41 @@ export function toggleMarkForToolbar(editor: Editor, markName: string): boolean 
     return toggleMarkAtSelection(view.state, markName, (tr) => view.dispatch(tr));
   });
 }
+
+/** Route Ctrl/Cmd+B and Ctrl/Cmd+I through the visible source editor. */
+export const inlineMarkKeymap = $prose(
+  () =>
+    new Plugin({
+      props: {
+        handleKeyDown: (view, event) => {
+          if (
+            event.isComposing ||
+            view.composing ||
+            event.altKey ||
+            event.shiftKey ||
+            (!event.ctrlKey && !event.metaKey)
+          ) {
+            return false;
+          }
+          const markName =
+            event.key.toLowerCase() === "b"
+              ? "strong"
+              : event.key.toLowerCase() === "i"
+                ? "emphasis"
+                : null;
+          if (!markName) return false;
+          const handled = toggleMarkAtSelection(
+            view.state,
+            markName,
+            (tr) => view.dispatch(tr),
+          );
+          if (!handled) return false;
+          event.preventDefault();
+          return true;
+        },
+      },
+    }),
+);
 
 /**
  * 命令白名单的**实体**。

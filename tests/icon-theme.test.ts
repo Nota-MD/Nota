@@ -36,6 +36,7 @@ function read(...paragraph2: string[]): string {
 const Icon = read("src", "ui", "Icon.tsx");
 const iconsCss = read("src", "styles", "icons.css");
 const marksCss = read("src", "styles", "marks.css");
+const editorBlocksCss = read("src", "styles", "editor-blocks.css");
 const cdeCss = read("src", "styles", "external-themes", "cde", "theme.css");
 const mainTsx = read("src", "main.tsx");
 const assetsRs = read("src-tauri", "src", "theme_assets.rs");
@@ -63,11 +64,19 @@ testCase("CDE 只声明图标 ID → 地址，不写 per-icon 组件规则", () 
   assertValue(!cdeCss.includes('.icon[data-icon="folio-close-symbolic"]'), "又退回选择器硬编码了");
 });
 
-testCase("编辑器块标记使用自绘 SVG，位置由 50% 垂直居中", () => {
+testCase("编辑器块标记使用自绘 SVG，列表标记保持稳定", () => {
   assertValue(marksCss.includes('--nota-source-quote-icon'), "缺少引用源码图标变量");
   assertValue(marksCss.includes('data-srcmark=">"'), "引用块没有接到 SVG");
-  assertValue(marksCss.includes('data-srcmark="-"]'), "无序列表没有接到 SVG");
+  assertValue(!marksCss.includes('data-srcmark="-"]'), "列表仍会在编辑时切换源码标记");
   assertValue(marksCss.includes('data-srcmark="```"'), "代码围栏没有接到 SVG");
+  assertValue(
+    editorBlocksCss.includes('ul > li:not([data-item-type="task"])::before'),
+    "无序列表没有稳定绘制圆点",
+  );
+  assertValue(
+    editorBlocksCss.includes("--nota-source-bullet-icon"),
+    "无序列表圆点没有使用主题图标",
+  );
   assertValue(
     marksCss.includes("top: 50%") && marksCss.includes("transform: translateY(-50%)"),
     "块标记没有相对块垂直居中",

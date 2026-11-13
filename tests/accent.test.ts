@@ -186,13 +186,14 @@ testCase("分界亮度 0.25 正好卡在出厂两边的极值中间", () => {
   const whiteMaximum = Math.max(...whiteThatEdge);
   const darkMinimum = Math.min(...darkThatEdge);
   assertion(whiteMaximum < 0.25 && 0.25 <= darkMinimum, `白字那侧最高 ${whiteMaximum}，深字那侧最低 ${darkMinimum}，0.25 该夹在中间`);
-  // ⚠️ 这两个数就是 `分界亮度` 那段引用的那两个：`#e95420`／`#0a84ff` 与 `#f3732e`。
+  // ⚠️ 这两个数就是 `分界亮度` 那段引用的那两个：`#e95420`／`#0a84ff`
+  // 与当前深字侧里最暗的那支强调色。
   // 把具体值也钉住，是为了让"0.25 是从哪来的"这句话**可查**：
   // 出厂值哪天改了，这个断言会红，然后读那段注释的人会看到需要重新取线。
   equal(whiteMaximum.toFixed(3), "0.238", "白字那侧最高的一对（Yaru 橙 #e95420 ／ macOS 深色 #0a84ff，都是 0.238）");
-  // ⚠️ CDE 外置后不再计入核心出厂色。当前深字侧最低是 `#f3732e`
-  // （亮度 0.315）；0.25 仍在这条线下方，余量 0.065。
-  equal(darkMinimum.toFixed(3), "0.315", "深字那侧最低的一对（#f3732e）");
+  // Yaru dark now shares the same #e95420 accent as system chrome, so the
+  // darkest remaining dark-foreground pair is the Breeze accent.
+  equal(darkMinimum.toFixed(3), "0.404", "深字那侧最低的一对");
 });
 
 testCase("出厂 13 对里最低的对比度是 3.65:1（如实认账，不是新引入的）", () => {

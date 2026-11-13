@@ -61,6 +61,7 @@ import "./styles/settings.css";
 import "./styles/settings-controls.css";
 import "./styles/settings-widgets.css";
 import "./styles/settings-export.css";
+import "./styles/developer-bridge.css";
 import "./styles/color-picker.css";
 // 正文编辑区的**外壳与版式**。⚠️ **必须在 `app.css` 之后**。两份文件的选择器有
 // 重叠的部分（比如都碰过 `.ProseMirror` 那棵树），靠后者覆盖前者。顺序反过来，

@@ -230,12 +230,31 @@
 }
 
 .stg-radio-item input[type="radio"] {
-  /* 默认尺寸跟不上一行 0.92em 的字；给个整数让它和字高对得上。 */
-  width: 14px;
-  height: 14px;
+  /* Draw the control ourselves: WebKitGTK otherwise mixes the system accent
+     ring with a separately colored selection dot. */
+  appearance: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
   margin: 0;
-  accent-color: var(--accent);
+  border: 2px solid var(--fg-faint);
+  border-radius: 50%;
+  background: transparent;
   cursor: pointer;
+}
+
+.stg-radio-item input[type="radio"]:checked {
+  border-color: var(--radio-on);
+  background: radial-gradient(
+    circle,
+    var(--radio-on-fg) 0 3px,
+    var(--radio-on) 3.5px 100%
+  );
+}
+
+.stg-radio-item input[type="radio"]:focus-visible {
+  outline: 2px solid var(--radio-on);
+  outline-offset: 2px;
 }
 
 /* 单行文本 / 数字。宽度**按语义分档**，不写死像素——写死的那个数换一套

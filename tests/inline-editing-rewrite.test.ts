@@ -320,6 +320,16 @@ testCase("行内代码与公式扩展不自动补定界符", () => {
   equal(shouldStartInlinePair("", "*", true), false, "verbatim context");
 });
 
+testCase("反引号保持字面输入，不自动创建行内代码配对", () => {
+  for (const before of ["", " ", "中文", "a"]) {
+    equal(
+      shouldStartInlinePair(before, "`"),
+      false,
+      `backtick should stay literal after ${JSON.stringify(before)}`,
+    );
+  }
+});
+
 testCase("重复闭符按 Typedown 的窄条件跨过", () => {
   equal(shouldStepOverInlinePair("*x*", 2, "*"), true, "paired closing star");
   equal(shouldStepOverInlinePair("**", 1, "*"), false, "second opener star");

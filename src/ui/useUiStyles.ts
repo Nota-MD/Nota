@@ -58,6 +58,7 @@ export function useUiStyles(
   settings: Settings | null,
   toast: (message: string, level?: Toast["level"]) => void,
   refreshDocumentThemes: () => void,
+  revealMain = true,
 ): WindCellOutputMouth {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画）。
   const t = useT();
@@ -66,7 +67,7 @@ export function useUiStyles(
   const [scan, setScan] = useState(0);
   const id = settings?.ui_style ?? "";
   const hasSettings = settings !== null;
-  useBootReveal(settings !== null && ready);
+  useBootReveal(revealMain && settings !== null && ready);
 
   // 清单与当前导入样式一次拉齐。两步分开时，主窗口会在“清单到了、CSS 还没到”
   // 的那一帧误判为已就绪，于是又闪回默认配色。

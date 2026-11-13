@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.14.0-beta"
+version = "0.14.1-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota — 所见即所得的 Markdown 编辑器，带 Lua 插件系统"
@@ -28,6 +28,10 @@ open = "5"
 # ── 序列化 / 配置 ─────────────────────────────────────────────────────────
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+argon2 = "0.5"
+rand_core = { version = "0.6", features = ["getrandom"] }
+tiny_http = "0.12"
+tauri-plugin-screenshots = "2.2"
 toml = "0.9"
 # ⚠️ 曾经有个 `base64`，是给外部编辑器主题把字体内联成 data: URL 用的。
 # 那条兼容链已按用户要求整个拆掉（版权，见 `src/themes.rs` 文件头），依赖一起删。

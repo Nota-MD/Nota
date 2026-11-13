@@ -24,6 +24,12 @@ function assertValue(value2: unknown, description: string): asserts value2 {
   if (!value2) throw new Error(description);
 }
 
+function equal(actual: unknown, expected: unknown, description: string): void {
+  if (actual !== expected) {
+    throw new Error(`${description}：期望 ${String(expected)}，实际 ${String(actual)}`);
+  }
+}
+
 const schema = new Schema({
   nodes: {
     doc: { content: "block+" },
@@ -141,6 +147,41 @@ testCase("原子节点被整块选中时，粗体会落到旁边下一次输入"
   );
   assertValue(state.selection instanceof TextSelection, "选区应改成可输入的文本光标");
   assertValue(has(state, "strong"), "storedMarks 应带 strong");
+});
+
+testCase("跨段粗体只改文字标记，不增加空块", () => {
+  const doc = schema.nodes.doc.create(null, [
+    schema.nodes.paragraph.create(null, schema.text("Version 0.0")),
+    schema.nodes.paragraph.create(null, schema.text("Nota 是自由软件。")),
+    schema.nodes.paragraph.create(null, schema.text("这是用户须知。")),
+  ]);
+  const beforeBlocks = doc.childCount;
+  let state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 1, doc.content.size - 1),
+  });
+  assertValue(
+    toggleMarkAtSelection(state, "strong", (tr) => {
+      state = state.apply(tr);
+    }),
+    "跨段选区应接受粗体",
+  );
+  equal(state.doc.childCount, beforeBlocks, "粗体命令改变了块数量");
+  const paragraphs: Array<{ text: string; strong: boolean }> = [];
+  state.doc.forEach((node) => {
+    paragraphs.push({
+      text: node.textContent,
+      strong:
+        node.firstChild?.marks.some((mark) => mark.type.name === "strong") ??
+        false,
+    });
+  });
+  equal(JSON.stringify(paragraphs), JSON.stringify([
+    { text: "Version 0.0", strong: true },
+    { text: "Nota 是自由软件。", strong: true },
+    { text: "这是用户须知。", strong: true },
+  ]), "跨段粗体没有覆盖每一段");
 });
 
 if (fail > 0) {

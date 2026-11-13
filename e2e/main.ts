@@ -681,6 +681,20 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       press(empty, "Backspace");
       await nextFrames();
       assertEqual(serialized(), "", "Backspace left half of the empty Markdown pair");
+
+      const backtick = await mount("", { autoPair: true });
+      await typeText("`");
+      assertEqual(
+        backtick.textContent,
+        "`",
+        "a single backtick in ordinary Markdown was auto-completed",
+      );
+      await typeText("word`");
+      assertEqual(
+        serialized(),
+        "`word`",
+        "literal backticks did not form a code span after the closing keystroke",
+      );
     },
   },
   {
@@ -862,6 +876,374 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         4,
         "Ctrl+B left one or both bold delimiter groups hidden",
       );
+    },
+  },
+  {
+    name: "Ctrl+B over several paragraphs keeps the paragraph count",
+    async run() {
+      const lines = [
+        "Version 0.0",
+        "Nota 是完全的自由软件，使用 BSD 2 Clause 作为发行使用的许可证。",
+        "这是Nota软件的用户须知，您",
+      ];
+      const markdown = lines.join("\n\n");
+      const prose = await mount(markdown);
+      editor!.restoreSelection({
+        anchor: 1,
+        head:
+          1 +
+          lines.reduce((length, line) => length + Array.from(line).length, 0) +
+          2 * (lines.length - 1),
+      });
+      await nextFrames();
+      await requestNativeKey("ctrl-b");
+      await sleep(60);
+      await nextFrames();
+
+      assertEqual(
+        serialized(),
+        `**${[
+          "Version 0.0",
+          "Nota 是完全的自由软件，使用 BSD 2 Clause 作为发行使用的许可证。",
+          "这是Nota软件的用户须知，您",
+        ].join("**\n\n**")}**`,
+        "Ctrl+B changed the source or introduced a separator blank line",
+      );
+      assertEqual(
+        prose.querySelectorAll("p").length,
+        3,
+        "Ctrl+B changed the paragraph count",
+      );
+      const paragraphBoxes = Array.from(
+        prose.querySelectorAll<HTMLElement>("p"),
+      ).map((paragraph) => paragraph.getBoundingClientRect());
+      for (let index = 1; index < paragraphBoxes.length; index++) {
+        const gap = paragraphBoxes[index]!.top - paragraphBoxes[index - 1]!.bottom;
+        assert(
+          gap < 48,
+          `Ctrl+B introduced an oversized paragraph gap: ${JSON.stringify(
+            paragraphBoxes.map((box) => box.toJSON()),
+          )}`,
+        );
+      }
+    },
+  },
+  {
+    name: "Ctrl+B on the final paragraph does not append a blank block",
+    async run() {
+      const heading = "Nota 软件使用须知";
+      const version = "版本： Version 0.0（2026/11/12）";
+      const body =
+        "Nota 是完全的自由软件，采用 BSD 2 Clause 许可证发行。其原版本如下，相比之下，本文不具有法律效力，仅供参考：";
+      const prose = await mount(`# ${heading}\n\n${version}\n\n${body}`);
+      const bodyStart = heading.length + version.length + 5;
+      editor!.restoreSelection({
+        anchor: bodyStart,
+        head: bodyStart + body.length,
+      });
+      await nextFrames();
+      await requestNativeKey("ctrl-b");
+      await sleep(80);
+      await nextFrames();
+
+      assertEqual(
+        serialized(),
+        `# ${heading}\n\n${version}\n\n**${body}**`,
+        "Ctrl+B changed the final paragraph source",
+      );
+      assertEqual(
+        prose.children.length,
+        3,
+        `Ctrl+B appended a block: ${Array.from(prose.children)
+          .map((child) => child.tagName)
+          .join(",")}`,
+      );
+    },
+  },
+  {
+    name: "Ctrl+B through a trailing empty paragraph keeps one separator",
+    async run() {
+      const heading = "Nota 软件使用须知";
+      const version = "版本： Version 0.0（2026/11/12）";
+      const body =
+        "Nota 是完全的自由软件，采用 BSD 2 Clause 许可证发行。其原版本如下，相比之下，本文不具有法律效力，仅供参考：";
+      const prose = await mount(`# ${heading}\n\n${version}\n\n${body}\n\n`);
+      const bodyStart = heading.length + version.length + 5;
+      editor!.restoreSelection({
+        anchor: bodyStart,
+        head: Number.MAX_SAFE_INTEGER,
+      });
+      await nextFrames();
+      await requestNativeKey("ctrl-b");
+      await sleep(80);
+      await nextFrames();
+
+      assertEqual(
+        serialized(),
+        `# ${heading}\n\n${version}\n\n**${body}**`,
+        "Ctrl+B turned the trailing empty paragraph into visible content",
+      );
+      assertEqual(
+        prose.children.length,
+        3,
+        `the trailing empty block survived Ctrl+B: ${Array.from(prose.children)
+          .map((child) => child.tagName)
+          .join(",")}`,
+      );
+    },
+  },
+  {
+    name: "Ctrl+B does not expand an existing empty paragraph",
+    async run() {
+      const heading = "Nota 软件使用须知";
+      const version = "版本： Version 0.0（2026/11/12）";
+      const body =
+        "Nota 是完全的自由软件，采用 BSD 2 Clause 许可证发行。其原版本如下，相比之下，本文不具有法律效力，仅供参考：";
+      const prose = await mount(`# ${heading}\n\n${version}\n\n${body}`);
+      const versionStart = heading.length + 3;
+      editor!.restoreSelection({ anchor: versionStart, head: versionStart });
+      press(prose, "Enter");
+      await nextFrames();
+      const empty = prose.querySelectorAll<HTMLElement>("p")[0];
+      assert(empty && empty.textContent === "", "test setup did not create an empty paragraph");
+      const emptyBefore = empty.getBoundingClientRect();
+      const blocksBefore = prose.children.length;
+
+      const bodyStart = versionStart + version.length + 5;
+      editor!.restoreSelection({
+        anchor: bodyStart,
+        head: bodyStart + body.length,
+      });
+      await nextFrames();
+      await requestNativeKey("ctrl-b");
+      await sleep(80);
+      await nextFrames();
+
+      const emptyAfter = empty.getBoundingClientRect();
+      assertEqual(
+        prose.children.length,
+        blocksBefore,
+        "Ctrl+B added a block around the existing empty paragraph",
+      );
+      assert(
+        Math.abs(emptyAfter.height - emptyBefore.height) < 1,
+        `Ctrl+B expanded the existing empty paragraph: ` +
+          `before=${JSON.stringify(emptyBefore.toJSON())}, ` +
+          `after=${JSON.stringify(emptyAfter.toJSON())}`,
+      );
+    },
+  },
+  {
+    name: "Ctrl+B from a paragraph boundary does not create a blank paragraph",
+    async run() {
+      const heading = "Nota 软件使用须知";
+      const version = "版本： Version 0.0（2026/11/12）";
+      const body =
+        "Nota 是完全的自由软件，采用 BSD 2 Clause 许可证发行。其原版本如下，相比之下，本文不具有法律效力，仅供参考：";
+      const prose = await mount(`# ${heading}\n\n${version}\n\n${body}`);
+      const bodyStart = heading.length + version.length + 5;
+      editor!.restoreSelection({
+        anchor: bodyStart - 1,
+        head: bodyStart + body.length,
+      });
+      await nextFrames();
+      await requestNativeKey("ctrl-b");
+      await sleep(80);
+      await nextFrames();
+
+      assertEqual(
+        serialized(),
+        `# ${heading}\n\n${version}\n\n**${body}**`,
+        "a boundary-anchored selection changed the block separators",
+      );
+      assertEqual(
+        prose.children.length,
+        3,
+        "a boundary-anchored Ctrl+B inserted a blank paragraph",
+      );
+    },
+  },
+  {
+    name: "Ctrl+B above an existing empty paragraph keeps the gap stable",
+    async run() {
+      const heading = "Nota 软件使用须知";
+      const version = "版本： Version 0.0（2026/11/12）";
+      const body =
+        "Nota 是完全的自由软件，采用 BSD 2 Clause 许可证发行。其原版本如下，相比之下，本文不具有法律效力，仅供参考：";
+      const prose = await mount(`# ${heading}\n\n${version}\n\n${body}`);
+      const bodyStart = heading.length + version.length + 5;
+      editor!.restoreSelection({
+        anchor: bodyStart + body.length,
+        head: bodyStart + body.length,
+      });
+      press(prose, "Enter");
+      await nextFrames();
+
+      const blocksBefore = prose.children.length;
+      const bodyElement = prose.querySelectorAll<HTMLElement>("p")[1];
+      const emptyElement = prose.querySelectorAll<HTMLElement>("p")[2];
+      assert(bodyElement && bodyElement.textContent === body, "body paragraph is missing");
+      assert(emptyElement && emptyElement.textContent === "", "Enter did not add an empty paragraph");
+      const bodyBefore = bodyElement.getBoundingClientRect();
+      const emptyBefore = emptyElement.getBoundingClientRect();
+
+      editor!.restoreSelection({
+        anchor: bodyStart,
+        head: bodyStart + body.length,
+      });
+      await nextFrames();
+      await requestNativeKey("ctrl-b");
+      await sleep(80);
+      await nextFrames();
+
+      const bodyAfter = bodyElement.getBoundingClientRect();
+      const emptyAfter = emptyElement.getBoundingClientRect();
+      assertEqual(
+        prose.children.length,
+        blocksBefore,
+        "Ctrl+B inserted another paragraph above the existing empty one",
+      );
+      assert(
+        Math.abs(emptyAfter.height - emptyBefore.height) < 1 &&
+          Math.abs(
+            (emptyAfter.top - bodyAfter.bottom) -
+              (emptyBefore.top - bodyBefore.bottom),
+          ) < 1,
+        `Ctrl+B changed the existing paragraph gap: ` +
+          `bodyBefore=${JSON.stringify(bodyBefore.toJSON())}, ` +
+          `emptyBefore=${JSON.stringify(emptyBefore.toJSON())}, ` +
+          `bodyAfter=${JSON.stringify(bodyAfter.toJSON())}, ` +
+          `emptyAfter=${JSON.stringify(emptyAfter.toJSON())}`,
+      );
+    },
+  },
+  {
+    name: "Ctrl+B hides ProseMirror trailing helpers before the next paragraph",
+    async run() {
+      const heading = "Nota 软件使用须知";
+      const version = "版本： Version 0.0（2026/11/12）";
+      const body =
+        "Nota 是完全的自由软件，采用 BSD 2 Clause 许可证发行。其原版本如下，相比之下，本文不具有法律效力，仅供参考：";
+      const prose = await mount(
+        `# ${heading}\n\n${version}\n\n${body}\n\n下一段`,
+      );
+      const bodyStart = heading.length + version.length + 5;
+      editor!.restoreSelection({
+        anchor: bodyStart,
+        head: bodyStart + body.length,
+      });
+      await nextFrames();
+      await requestNativeKey("ctrl-b");
+      await sleep(80);
+      await nextFrames();
+
+      const bodyParagraph = prose.querySelectorAll<HTMLElement>("p")[1];
+      const nextParagraph = prose.querySelectorAll<HTMLElement>("p")[2];
+      assert(bodyParagraph && nextParagraph, "the paragraph fixture is incomplete");
+      const separator = bodyParagraph.querySelector<HTMLElement>(
+        "img.ProseMirror-separator",
+      );
+      const trailingBreak = bodyParagraph.querySelector<HTMLElement>(
+        "br.ProseMirror-trailingBreak",
+      );
+      assert(separator && trailingBreak, "ProseMirror did not create its trailing helpers");
+      assertEqual(
+        getComputedStyle(separator).display,
+        "none",
+        "the separator can still occupy a line under WebKit",
+      );
+      assertEqual(
+        getComputedStyle(trailingBreak).display,
+        "none",
+        "the trailing break can still occupy a line under WebKit",
+      );
+      const bodyRect = bodyParagraph.getBoundingClientRect();
+      const nextRect = nextParagraph.getBoundingClientRect();
+      assert(
+        nextRect.top - bodyRect.bottom < 20,
+        `the next paragraph gained a blank layout line: ` +
+          `body=${JSON.stringify(bodyRect.toJSON())}, ` +
+          `next=${JSON.stringify(nextRect.toJSON())}`,
+      );
+    },
+  },
+  {
+    name: "Ctrl+B and the Bold command create visible boundaries at a collapsed caret",
+    async run() {
+      await mount("ab");
+      editor!.restoreSelection({ anchor: 2, head: 2 });
+      await requestNativeKey("ctrl-b");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "a****b",
+        "Ctrl+B did not create a visible empty bold pair",
+      );
+      await typeText("x");
+      await nextFrames();
+      assertEqual(serialized(), "a**x**b", "bold did not wrap text typed inside the empty pair");
+      assert(editor!.runCommand("bold"), "Bold command did not toggle the active run");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "axb",
+        `Bold command from inside bold did not unwrap the whole run ` +
+          `(selection=${JSON.stringify(editor!.selectionRange())}, ` +
+          `strong=${document.querySelectorAll(".ProseMirror strong").length})`,
+      );
+
+      await mount("ab");
+      editor!.restoreSelection({ anchor: 2, head: 2 });
+      assert(editor!.runCommand("bold"), "Bold command rejected a collapsed caret");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "a****b",
+        "toolbar Bold command did not create a visible empty pair without a selection",
+      );
+    },
+  },
+  {
+    name: "editing list items keeps native circle and number geometry",
+    async run() {
+      for (const fixture of [
+        { markdown: "- ABC\n- DEF" },
+        { markdown: "1. ABC\n2. DEF" },
+      ]) {
+        const prose = await mount(fixture.markdown);
+        const item = await waitFor<HTMLElement>("li");
+        const markerBefore = getComputedStyle(item, "::before");
+        const before = {
+          listStyleType: getComputedStyle(item).listStyleType,
+          content: markerBefore.content,
+          height: markerBefore.height,
+          top: markerBefore.top,
+          width: markerBefore.width,
+        };
+        editor!.restoreSelection({ anchor: 3, head: 3 });
+        await nextFrames();
+        const markerAfter = getComputedStyle(item, "::before");
+        const after = {
+          listStyleType: getComputedStyle(item).listStyleType,
+          content: markerAfter.content,
+          height: markerAfter.height,
+          top: markerAfter.top,
+          width: markerAfter.width,
+        };
+        assert(
+          !item.classList.contains("nota-srcmark"),
+          "entering a list item still swaps in a pseudo source marker",
+        );
+        assertEqual(
+          JSON.stringify(after),
+          JSON.stringify(before),
+          "the list marker style changed when editing began",
+        );
+        assert(
+          Math.abs(item.getBoundingClientRect().left - prose.getBoundingClientRect().left) < 80,
+          "entering the list item moved its content box",
+        );
+      }
     },
   },
   {
@@ -1269,6 +1651,38 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "input methods own the caret for the full preedit",
+    async run() {
+      const prose = await mount("");
+      const cursor = document.querySelector<HTMLElement>(".nota-blink-caret");
+      assert(cursor, "the editor did not create its caret overlay");
+
+      prose.dispatchEvent(
+        new CompositionEvent("compositionstart", { bubbles: true, data: "" }),
+      );
+      await typeText("N");
+      await nextFrames();
+      assert(
+        prose.classList.contains("nota-ime-composing"),
+        "the editor did not hand the caret to the IME",
+      );
+      assert(
+        !cursor.classList.contains("nota-blink-caret-on"),
+        "the detached caret remained visible during IME composition",
+      );
+
+      prose.dispatchEvent(
+        new CompositionEvent("compositionend", { bubbles: true, data: "N" }),
+      );
+      await nextFrames();
+      assert(
+        !prose.classList.contains("nota-ime-composing"),
+        "the editor kept the IME caret after composition ended",
+      );
+      assertEqual(serialized(), "N", "the committed preedit was not kept exactly once");
+    },
+  },
+  {
     name: "smart quote pairing keeps apostrophes and original closers intact",
     async run() {
       await mount("", { autoPair: true });
@@ -1458,36 +1872,228 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
   {
     name: "code blocks keep a visible caret and a stable mono font",
     async run() {
-      await mount("```js\nconst x = 1;\n```");
+      for (const zoom of [1, 1.25, 1.5]) {
+        document.documentElement.style.zoom = String(zoom);
+        await mount("```js\nABCD\n```");
+        editor!.restoreSelection({ anchor: 2, head: 2 });
+        const content = await waitFor<HTMLElement>(".nota-code-cm .cm-content");
+        const line = await waitFor<HTMLElement>(".nota-code-cm .cm-line");
+        const before = getComputedStyle(line);
+        const beforeSize = before.fontSize;
+        const beforeFamily = before.fontFamily;
+        await nextFrames();
+        content.focus();
+        await nextFrames();
+        const after = getComputedStyle(line);
+        const ownCaret = await waitFor<HTMLElement>(
+          ".nota-code-caret-before, .nota-code-caret-after, .nota-code-empty-caret",
+        );
+        const caretStyle = getComputedStyle(ownCaret);
+        const caretPseudo = ownCaret.classList.contains("nota-code-caret-after")
+          ? "::after"
+          : "::before";
+        const paintedCaretStyle = getComputedStyle(ownCaret, caretPseudo);
+        const nativeCaret = getComputedStyle(content).caretColor;
+        assertEqual(
+          content.dataset.notaCaretBuild,
+          "inline-mark-v8",
+          `code block is missing the WebView2 inline caret guard at zoom=${zoom}`,
+        );
+        assertEqual(
+          after.fontSize,
+          beforeSize,
+          `code font size changed when the block gained focus at zoom=${zoom}`,
+        );
+        assertEqual(
+          after.fontFamily,
+          beforeFamily,
+          `code font family changed when the block gained focus at zoom=${zoom}`,
+        );
+        assert(
+          !ownCaret.hidden &&
+            caretStyle.display !== "none" &&
+            paintedCaretStyle.display !== "none",
+          `focused code block has no visible caret at zoom=${zoom} ` +
+            `(hidden=${ownCaret.hidden}, height=${ownCaret.style.height || "auto"}, ` +
+            `active=${document.activeElement?.className || document.activeElement?.tagName}, ` +
+            `selection=${JSON.stringify(editor!.selectionRange())}, ` +
+            `error=${ownCaret.dataset.error || "none"})`,
+        );
+        assert(
+          paintedCaretStyle.animationName === "nota-code-own-caret-blink",
+          `embedded code block caret is not blinking at zoom=${zoom}`,
+        );
+        assert(
+          nativeCaret === "transparent" ||
+            /^rgba\([^)]*,\s*0\)$/.test(nativeCaret),
+          `native code block caret is still visible at zoom=${zoom}: ${nativeCaret}`,
+        );
+        const caretHeight = Number.parseFloat(paintedCaretStyle.height);
+        const glyphLimit = Number.parseFloat(after.fontSize) * 1.2 + 0.5;
+        assert(
+          Number.isFinite(caretHeight) && caretHeight <= glyphLimit,
+          `embedded code block caret is taller than its glyph box at zoom=${zoom}: ` +
+            `caret=${paintedCaretStyle.height}, font=${after.fontSize}, limit=${glyphLimit}`,
+        );
+        const lineBox = line.getBoundingClientRect();
+        const caretBox = ownCaret.getBoundingClientRect();
+        assert(
+          caretBox.top >= lineBox.top - 1 &&
+            caretBox.bottom <= lineBox.bottom + 1 &&
+            caretBox.left >= lineBox.left - 1 &&
+            caretBox.left <= lineBox.right + 1,
+          `embedded code block caret escaped its source line at zoom=${zoom}: ` +
+            `line=${JSON.stringify(lineBox.toJSON())}, ` +
+            `caret=${JSON.stringify(caretBox.toJSON())}`,
+        );
+      }
+      document.documentElement.style.zoom = "";
+    },
+  },
+  {
+    name: "an empty code block starts its first caret at the text origin",
+    async run() {
+      document.documentElement.style.zoom = "1.25";
+      await mount("```js\n\n```");
+      editor!.restoreSelection({ anchor: 1, head: 1 });
       const content = await waitFor<HTMLElement>(".nota-code-cm .cm-content");
       const line = await waitFor<HTMLElement>(".nota-code-cm .cm-line");
-      const before = getComputedStyle(line);
-      const beforeSize = before.fontSize;
-      const beforeFamily = before.fontFamily;
       content.focus();
-      content.dispatchEvent(
+      await nextFrames();
+      const ownCaret = await waitFor<HTMLElement>(".nota-code-empty-caret");
+      const deadline = performance.now() + 2000;
+      while (ownCaret.hidden && performance.now() < deadline) {
+        await nextFrames();
+      }
+      assert(
+        !ownCaret.hidden,
+        `empty code block never displayed its first caret ` +
+          `(active=${document.activeElement?.className || document.activeElement?.tagName}, ` +
+          `selection=${JSON.stringify(editor!.selectionRange())}, ` +
+          `error=${ownCaret.dataset.error || "none"})`,
+      );
+      const nativeCaret = getComputedStyle(content).caretColor;
+      assertEqual(
+        content.dataset.notaCaretBuild,
+        "inline-mark-v8",
+        "empty code block is missing the WebView2 inline caret guard",
+      );
+      assert(
+        nativeCaret === "transparent" ||
+          /^rgba\([^)]*,\s*0\)$/.test(nativeCaret),
+        `native caret is still visible in an empty code block: ${nativeCaret}`,
+      );
+      await nextFrames();
+      const lineBox = line.getBoundingClientRect();
+      const caretBox = ownCaret.getBoundingClientRect();
+      assert(
+        caretBox.top >= lineBox.top - 1 &&
+          caretBox.bottom <= lineBox.bottom + 1 &&
+          caretBox.left >= lineBox.left - 1 &&
+          caretBox.left <= lineBox.right + 1,
+        `empty code block caret started outside its text line: ` +
+          `line=${JSON.stringify(lineBox.toJSON())}, ` +
+          `caret=${JSON.stringify(caretBox.toJSON())}`,
+      );
+      document.documentElement.style.zoom = "";
+    },
+  },
+  {
+    name: "code block surfaces stay inside the editor width",
+    async run() {
+      await mount("```js\nconst value = 42;\n```");
+      const pane = await waitFor<HTMLElement>(".editor-mount");
+      const codeBlock = await waitFor<HTMLElement>(".ProseMirror pre");
+      const editor = await waitFor<HTMLElement>(".nota-code-cm");
+      await nextFrames();
+      const paneRect = pane.getBoundingClientRect();
+      const blockRect = codeBlock.getBoundingClientRect();
+      const editorRect = editor.getBoundingClientRect();
+      assert(
+        pane.scrollWidth <= pane.clientWidth + 1,
+        `hidden code content expanded the editor width: ${pane.scrollWidth} > ${pane.clientWidth}`,
+      );
+      assert(
+        blockRect.left >= paneRect.left - 1 &&
+          blockRect.right <= paneRect.right + 1,
+        `code block escaped the editor bounds: block=${JSON.stringify(blockRect.toJSON())} pane=${JSON.stringify(paneRect.toJSON())}`,
+      );
+      assert(
+        editorRect.width > 0 && editorRect.width <= blockRect.width,
+        `CodeMirror surface has an invalid width: ${editorRect.width} vs ${blockRect.width}`,
+      );
+    },
+  },
+  {
+    name: "code blocks pair brackets but keep a single backtick literal",
+    async run() {
+      await mount("```js\n\n```");
+      let content = await waitFor<HTMLElement>(".nota-code-cm .cm-content", 10000);
+      content.focus();
+      await nextFrames();
+      await typeText("`");
+      let line = await waitFor<HTMLElement>(".nota-code-cm .cm-line");
+      assertEqual(line.textContent, "`", "a single backtick was auto-completed");
+
+      await mount("```js\n\n```");
+      content = await waitFor<HTMLElement>(".nota-code-cm .cm-content", 10000);
+      content.focus();
+      await nextFrames();
+      await typeText("(");
+      line = await waitFor<HTMLElement>(".nota-code-cm .cm-line");
+      assertEqual(line.textContent, "()", "ordinary bracket pairing stopped working");
+    },
+  },
+  {
+    name: "empty math fences show only the source surface",
+    async run() {
+      await mount("```math\n\n```");
+      const pre = await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math > pre");
+      pre.dispatchEvent(
         new MouseEvent("mousedown", {
           bubbles: true,
           cancelable: true,
           button: 0,
-          clientX: line.getBoundingClientRect().left + 4,
-          clientY: line.getBoundingClientRect().top + 4,
         }),
       );
+      await waitFor<HTMLElement>(".nota-code-wrap.nota-code-math .cm-content", 10000);
+      const preview = await waitFor<HTMLElement>(".nota-code-math-preview");
       await nextFrames();
-      const cursor = await waitFor<HTMLElement>(".nota-code-cm .cm-cursor");
-      content.focus();
-      await nextFrames();
-      const after = getComputedStyle(line);
-      const cursorStyle = getComputedStyle(cursor);
-      assertEqual(after.fontSize, beforeSize, "code font size changed when the block gained focus");
-      assertEqual(after.fontFamily, beforeFamily, "code font family changed when the block gained focus");
-      assert(cursorStyle.display !== "none", "focused code block did not draw a caret");
-      assert(cursorStyle.visibility !== "hidden", "focused code block caret is hidden");
       assert(
-        parseFloat(cursorStyle.borderLeftWidth) >= 1,
-        "focused code block caret has no visible stroke",
+        preview.hidden,
+        "empty math fence still rendered a second preview surface",
       );
+    },
+  },
+  {
+    name: "single-line code sources have no phantom trailing line",
+    async run() {
+      for (const source of [
+        "```js\nconst value = 42;\n```",
+        "```math\n\\\\LaTeX\n```",
+        "```js\r\nconst value = 42;\r\n```",
+        "```math\r\n\\\\LaTeX\r\n```",
+      ]) {
+        await mount(source);
+        const pre = await waitFor<HTMLElement>(".ProseMirror pre");
+        pre.dispatchEvent(
+          new MouseEvent("mousedown", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+          }),
+        );
+        await waitFor<HTMLElement>(".nota-code-cm .cm-line", 10000);
+        await nextFrames();
+        const lines = Array.from(
+          document.querySelectorAll<HTMLElement>(".nota-code-cm .cm-line"),
+        );
+        assertEqual(
+          lines.length,
+          1,
+          `single-line source rendered ${lines.length} CodeMirror lines: ${JSON.stringify(lines.map((line) => line.textContent))}`,
+        );
+      }
     },
   },
   {
@@ -2198,6 +2804,95 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       assert(/\[\^1\]:\s*注/.test(markdown), `footnote definition did not receive typed text: ${markdown}`);
       assert(document.querySelector('sup[data-type="footnote_reference"]') !== null, "reference node was not rendered");
       assert(document.querySelector('dl[data-type="footnote_definition"]') !== null, "definition node was not rendered");
+    },
+  },
+  {
+    name: "code block language uses one input for both label and search",
+    async run() {
+      await mount("```c\n\n```");
+      const field = await waitFor<HTMLInputElement>(".nota-code-lang-input");
+      assertEqual(field.value, "c", "the collapsed language label was not in the input");
+      assertEqual(
+        document.querySelector(".nota-code-lang"),
+        null,
+        "the separate dropdown trigger still exists",
+      );
+
+      field.focus();
+      await nextFrames();
+      const popup = await waitFor<HTMLElement>(".nota-lang-popup");
+      const fieldRect = field.getBoundingClientRect();
+      const popupRect = popup.getBoundingClientRect();
+      assert(
+        Math.abs(fieldRect.left - popupRect.left) <= 1 &&
+          Math.abs(fieldRect.width - popupRect.width) <= 1,
+        `the language list is not the same box as its input: ` +
+          `field=${JSON.stringify(fieldRect.toJSON())}, ` +
+          `popup=${JSON.stringify(popupRect.toJSON())}`,
+      );
+      assertEqual(
+        getComputedStyle(field).textAlign,
+        "center",
+        "the focused language field is not centered",
+      );
+      assertEqual(
+        popup.querySelector(".nota-lang-search, .nota-lang-input"),
+        null,
+        "the popup repeats the search input",
+      );
+
+      field.value = "py";
+      field.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          inputType: "insertText",
+          data: "py",
+        }),
+      );
+      await nextFrames();
+      const python = popup.querySelector<HTMLElement>('[data-lang="python"]');
+      assert(python, `language search did not expose python: ${popup.textContent}`);
+      python.click();
+      await nextFrames();
+      assertEqual(field.value, "python", "the selected language did not stay in the input");
+      assert(
+        editor!.getMarkdown().startsWith("```python"),
+        `selected language was not written to the fence: ${editor!.getMarkdown()}`,
+      );
+      assertEqual(
+        document.querySelector(".nota-lang-popup"),
+        null,
+        "the result list stayed open after selection",
+      );
+    },
+  },
+  {
+    name: "code block language picker is flush with the painted bottom edge across browser zooms",
+    async run() {
+      for (const zoom of [1, 1.25, 1.5]) {
+        document.documentElement.style.zoom = String(zoom);
+        await mount("```c\n#include <stdio.h>\nint main()\n```\n");
+        const pre = await waitFor<HTMLElement>(".ProseMirror pre");
+        const language = await waitFor<HTMLElement>(".nota-code-lang-wrap");
+        await nextFrames(4);
+        await sleep(250);
+        const preBox = pre.getBoundingClientRect();
+        const languageBox = language.getBoundingClientRect();
+        const gap = languageBox.top - preBox.bottom;
+        assert(
+          Math.abs(gap) <= 1.5,
+          `language picker detached at zoom=${zoom}: gap=${gap}, ` +
+            `pre=${JSON.stringify({ top: preBox.top, bottom: preBox.bottom })}, ` +
+            `language=${JSON.stringify({ top: languageBox.top, bottom: languageBox.bottom })}`,
+        );
+        const rightInset = preBox.right - languageBox.right;
+        assert(
+          Math.abs(rightInset - 8 * zoom) <= 2,
+          `language picker misaligned at zoom=${zoom}: ` +
+            `inset=${rightInset}, expected=${8 * zoom}`,
+        );
+      }
+      document.documentElement.style.zoom = "";
     },
   },
 ];

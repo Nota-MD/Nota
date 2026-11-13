@@ -67,6 +67,8 @@ export interface immersiveApi {
   focusMode: boolean;
   splitReplaceDedicatedNote: () => void;
   fullscreen: boolean;
+  /** Window is maximized, but not necessarily in native full screen. */
+  maximized: boolean;
   toggleFullscreen: () => void;
   /** 退出去（`Esc` 之外的地方要用，比如将来的菜单项）。 */
   exitImmersive: () => void;
@@ -80,11 +82,18 @@ export function useImmersive(w: immersiveWiring): immersiveApi {
 
   const [focusMode, setFocusMode] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [maximized, setMaximized] = useState(false);
 
   /** 读一次窗口，把上面那个镜像对齐。读不出来（窗口还没建好/已经没了）就维持现状。 */
-  const syncFullscreen = useCallback(async () => {
+  const syncWindowState = useCallback(async () => {
     try {
-      setFullscreen(await getCurrentWindow().isFullscreen());
+      const window = getCurrentWindow();
+      const [nextFullscreen, nextMaximized] = await Promise.all([
+        window.isFullscreen(),
+        window.isMaximized(),
+      ]);
+      setFullscreen(nextFullscreen);
+      setMaximized(nextMaximized);
     } catch {
       // ⚠️ 故意**不弹提示**：这不是用户发起的动作，报错也无从补救，
       // 弹出来只是多一条他关不掉的信息。
@@ -92,11 +101,11 @@ export function useImmersive(w: immersiveWiring): immersiveApi {
   }, []);
 
   useEffect(() => {
-    void syncFullscreen();
+    void syncWindowState();
     // 全屏切换一定伴随窗口尺寸变化，所以 `onResized` 是能接住它的那一个事件。
     let unsubscribe: (() => void) | null = null;
     void getCurrentWindow()
-      .onResized(() => void syncFullscreen())
+      .onResized(() => void syncWindowState())
       .then((f) => {
         unsubscribe = f;
       })
@@ -104,7 +113,7 @@ export function useImmersive(w: immersiveWiring): immersiveApi {
         // 订不上就退化成"只在挂载时同步一次"，界面仍然能用。
       });
     return () => unsubscribe?.();
-  }, [syncFullscreen]);
+  }, [syncWindowState]);
 
   const toggleFullscreen = useCallback(async () => {
     const win = getCurrentWindow();
@@ -116,9 +125,9 @@ export function useImmersive(w: immersiveWiring): immersiveApi {
       // ⚠️ **成败都要同步**：失败时窗口没动（同步一次是白做的），成功时窗口动了
       //（这一下才是让勾跟上）。写成"成功才同步"要多一个分支，而那个分支正好是
       // 唯一会漏更新的一条路。
-      void syncFullscreen();
+      void syncWindowState();
     }
-  }, [toast, syncFullscreen]);
+  }, [toast, syncWindowState]);
 
   const splitReplaceDedicatedNote = useCallback(() => setFocusMode((v) => !v), []);
 
@@ -185,5 +194,13 @@ export function useImmersive(w: immersiveWiring): immersiveApi {
     );
   }, [immersive, focusMode, fullscreen, toast]);
 
-  return { immersive, focusMode, splitReplaceDedicatedNote, fullscreen, toggleFullscreen, exitImmersive };
+  return {
+    immersive,
+    focusMode,
+    splitReplaceDedicatedNote,
+    fullscreen,
+    maximized,
+    toggleFullscreen,
+    exitImmersive,
+  };
 }

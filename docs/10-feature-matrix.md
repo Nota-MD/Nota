@@ -1,6 +1,6 @@
 # 10 · 功能对照矩阵
 
-> 最后同步：2026-10-25
+> 最后同步：2026-11-07
 
 这份文档回答两个问题：**一个成熟的 Markdown 编辑器该有哪些功能**、**Nota 已经有了哪些**。
 它是这件事的唯一权威：全部 **138** 个功能点、每一点的状态、以及判定该状态的依据。
@@ -8,6 +8,18 @@
 > ⚠️ **当前发布口径**（2026-10-11 起）：AI / Git / Slidev / 写作统计是**官方插件**，
 > 源码在独立仓库，**安装包不随附**。下文历史行里把开发态自动发现的它们叫“内置插件”，
 > 指的是“无需用户安装即可在开发检出中加载”，不是“发布包自带”。
+
+> **2026-11-07 developer access supersedes the MCP row.** The public
+> `--mcp` client, stdio server and single-instance session handshake are
+> removed. The current external development interface is the opt-in,
+> authenticated Host Control bridge described in `docs/07A`, `docs/02` and the
+> separate `Nota-devkit` repository. The row below is retained as history.
+> Nota DevKit is an external development tool and is not bundled with Nota.
+
+> **2026-11-08:** appearance gains a default-on expanded-window menu fallback.
+> Maximized or full-screen windows render the Nota menu even when the saved
+> preference is the system menu; leaving either state restores the saved
+> renderer. In full screen the 6px top reveal band still summons the menu.
 
 ⚠️ **状态列只写实测过的结论。** 写「✅」意味着有人真的在界面上点过它、并且它做了该做的事；
 「🟡」意味着代码在、但要么入口没有、要么只做了一半。拿不准的时候写「❓」并去开窗看一眼，

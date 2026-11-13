@@ -8,6 +8,7 @@
 //! 前缀不是装饰——它让前端代码里**一眼分得清**哪些是跨进程调用、哪些是本地函数。
 
 pub mod diagnostics;
+pub mod dev_bridge;
 pub mod diff;
 pub mod document;
 pub mod draft;

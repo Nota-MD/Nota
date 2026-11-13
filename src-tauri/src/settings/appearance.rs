@@ -159,6 +159,19 @@ pub enum MenuBarRenderer {
     System,
 }
 
+/// How the Preferences interface is presented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SettingsWindowStyle {
+    /// Fill the current application window, similar to Typora.
+    Full,
+    /// Use the current centered modal card.
+    #[default]
+    Embedded,
+    /// Open Preferences in a separate native WebView window.
+    External,
+}
+
 /// 文档主题在深色模式下是否换成**另一个**主题。
 ///
 /// ⚠️ 这一条只在**文档主题**这条轴上成立（`document_theme`），
@@ -212,6 +225,10 @@ pub struct Appearance {
     pub show_menu_bar: bool,
     /// 菜单栏由 Nota 自绘还是使用系统原生实现。
     pub menu_renderer: MenuBarRenderer,
+    /// Force Nota's self-drawn menu while the window is maximized or full
+    /// screen. This fallback keeps the menu reachable on macOS when a native
+    /// menu is hidden by the window manager.
+    pub force_nota_menu_when_expanded: bool,
     /// 阅读速度（词每分钟），只用来把字数换算成"约几分几秒读完"。
     /// 中文常见取值 382。
     pub reading_speed: u32,
@@ -283,6 +300,8 @@ pub struct Appearance {
     /// 如实记在这里：未保存的另一处落点是标签页上那颗点（`ui/TabBar.tsx`
     /// 的 `.tab-dot`），没有丢。
     pub show_filename_in_titlebar: bool,
+    /// Presentation mode for the Preferences interface.
+    pub settings_window_style: SettingsWindowStyle,
 }
 
 impl Default for Appearance {
@@ -300,6 +319,7 @@ impl Default for Appearance {
             // 总入口，默认藏了等于把界面清空。
             show_menu_bar: true,
             menu_renderer: MenuBarRenderer::Nota,
+            force_nota_menu_when_expanded: true,
             reading_speed: 382,
             // ⚠️ 见 `ToolbarMode::Never` 那段：本项默认**不显示**，是刻意的取舍。
             toolbar: ToolbarMode::Never,
@@ -321,6 +341,7 @@ impl Default for Appearance {
             // 而"任务栏里几份文档分不出来"正是第 51 项要治的病，
             // 治它的东西不该默认关着。
             show_filename_in_titlebar: true,
+            settings_window_style: SettingsWindowStyle::Embedded,
         }
     }
 }
@@ -361,6 +382,47 @@ mod tests {
             assert!(text.contains(&format!("menu_renderer = \"{词}\"")));
             let back: Appearance = toml::from_str(&text).expect("读得回来");
             assert_eq!(back.menu_renderer, renderer);
+        }
+    }
+
+    #[test]
+    fn expanded_window_menu_fallback_defaults_on() {
+        assert!(Appearance::default().force_nota_menu_when_expanded);
+        let old: Appearance = toml::from_str("").expect("old settings must still load");
+        assert!(
+            old.force_nota_menu_when_expanded,
+            "old settings should enable the full-screen and maximized fallback"
+        );
+        let text = toml::to_string_pretty(&Appearance {
+            force_nota_menu_when_expanded: false,
+            ..Appearance::default()
+        })
+        .expect("appearance settings should serialize");
+        let back: Appearance = toml::from_str(&text).expect("appearance settings should load");
+        assert!(!back.force_nota_menu_when_expanded);
+    }
+
+    #[test]
+    fn settings_window_style_defaults_to_embedded_and_roundtrips() {
+        assert_eq!(
+            Appearance::default().settings_window_style,
+            SettingsWindowStyle::Embedded
+        );
+        let old: Appearance = toml::from_str("").expect("old settings must still load");
+        assert_eq!(old.settings_window_style, SettingsWindowStyle::Embedded);
+        for (style, word) in [
+            (SettingsWindowStyle::Full, "full"),
+            (SettingsWindowStyle::Embedded, "embedded"),
+            (SettingsWindowStyle::External, "external"),
+        ] {
+            let text = toml::to_string_pretty(&Appearance {
+                settings_window_style: style,
+                ..Appearance::default()
+            })
+            .expect("settings should serialize");
+            assert!(text.contains(&format!("settings_window_style = \"{word}\"")));
+            let back: Appearance = toml::from_str(&text).expect("settings should load");
+            assert_eq!(back.settings_window_style, style);
         }
     }
 

@@ -14,7 +14,7 @@ import { chooseDirectory, pickFile } from "@/ui/file-picker";
 import { addableTemplates, exportTemplateInfo } from "@/ui/export-templates";
 import { Icon } from "@/ui/Icon";
 import { useModalTrap } from "@/ui/useModalTrap";
-import { ActionButton, Note, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
+import { ActionButton, Note, Select, SettingRow, SettingsGroup, TextInput, Toggle } from "../primitives";
 import { paneWriter, type PaneProps } from "./props";
 
 const FixedFixedPage = ["general", "pdf", "html", "html-plain", "image"] as const;
@@ -52,8 +52,8 @@ export function ExportPane({ settings, onChange }: PaneProps) {
   const [addAddOpen, setAddAddOpen] = useState(false);
   const [modelBoard, setModelBoard] = useState(addableTemplates[0]?.format ?? "pdf");
   const nameBoxid = "export-exporter-name";
+  const templateSelectId = "export-template-select";
   const addAddBox = useRef<HTMLDivElement>(null);
-  const modelBoardBox = useRef<HTMLSelectElement>(null);
 
   const currentCustom = useMemo(
     () => exporters.find((item) => item.id === selected) ?? null,
@@ -72,7 +72,9 @@ export function ExportPane({ settings, onChange }: PaneProps) {
 
   useEffect(() => {
     if (!addAddOpen) return;
-    const frame = requestAnimationFrame(() => modelBoardBox.current?.focus());
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(templateSelectId)?.focus();
+    });
     return () => cancelAnimationFrame(frame);
   }, [addAddOpen]);
 
@@ -95,6 +97,7 @@ export function ExportPane({ settings, onChange }: PaneProps) {
       name: name2,
       format: info.format,
       args: "",
+      base_args: "",
       style_file: "",
       open_after_export: false,
     };
@@ -351,13 +354,13 @@ export function ExportPane({ settings, onChange }: PaneProps) {
               </SettingRow>
               <SettingRow
                 label={t("Parameters")}
-                help={t("The built-in command for this template. It is shown for reference.")}
+                help={t("Base Pandoc arguments for this exporter. Nota still supplies --from, --to and the output path.")}
               >
                 <TextInput
-                  value={`--from=markdown --to=${currentCustom.format} --standalone`}
+                  value={currentCustom.base_args}
                   width="lg"
-                  disabled
-                  onChange={() => {}}
+                  placeholder={`--standalone --toc`}
+                  onChange={(base_args) => changeCustom(currentCustom.id, { base_args })}
                 />
               </SettingRow>
               <SettingRow
@@ -430,18 +433,15 @@ export function ExportPane({ settings, onChange }: PaneProps) {
                 <Icon name="folio-close-symbolic" size={14} />
               </button>
             </div>
-            <select
-              ref={modelBoardBox}
+            <Select
+              id={templateSelectId}
               value={modelBoard}
-              aria-label={t("Template")}
-              onChange={(event) => setModelBoard(event.target.value)}
-            >
-              {addableTemplates.map((item) => (
-                <option key={item.format} value={item.format}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              options={addableTemplates.map((item) => ({
+                value: item.format,
+                label: item.name,
+              }))}
+              onChange={setModelBoard}
+            />
             <div className="export-template-actions">
               <button
                 type="button"

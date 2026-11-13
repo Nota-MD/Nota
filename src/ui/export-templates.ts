@@ -30,6 +30,7 @@ export function defaultCustomExporter(): CustomExporter[] {
     name: item.name,
     format: item.format,
     args: "",
+    base_args: "",
     style_file: "",
     open_after_export: false,
   }));

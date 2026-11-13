@@ -54,10 +54,10 @@ export const MARK_ATTR = "data-srcmark";
 /**
  * 这个块该在左边显示什么标记。**返回 null = 不显示**（段落、表格等）。
  *
- * `parent` / `index` 只对列表项有用：有序列表的序号得知道"我是第几项"，
- * 而那是**父节点和同级位置**的信息，node 自己身上没有。
+ * `parent` / `index` remain in the signature for callers and tests, but list
+ * markers no longer use them: native list layout owns both circle and number.
  */
-export function blockMark(node: PMNode, parent: PMNode | null, index: number): string | null {
+export function blockMark(node: PMNode, _parent: PMNode | null, _index: number): string | null {
   switch (node.type.name) {
     case "heading":
       // Typora 在回车成块后不再回显标题语法；标题字号和层级已经由块本身表达。
@@ -69,20 +69,10 @@ export function blockMark(node: PMNode, parent: PMNode | null, index: number): s
       // progress look like two nested gutters.
       return null;
 
-    case "list_item": {
-      // 任务项（`- [x] …`）**不给短横**：它的方框已经画在同一个装订线里了
-      //（见 `task-list.ts` 与 `app.css`），再叠一个 `-` 就得二选一地挪位，
-      // 而挪出来的读序（`☐ -`）和 markdown 的（`- [x]`）是反的。
-      // 方框本身就是 `- [ ]` 这个结构渲染出来的样子。
-      if (node.attrs.checked != null) return null;
-
-      if (parent?.type.name === "ordered_list") {
-        // `order` 是列表的起始号（Markdown 允许从 3 开始），默认 1。
-        return `${Number(parent.attrs.order ?? 1) + index}.`;
-      }
-      // 无序列表（bullet_list）。
-      return "-";
-    }
+    case "list_item":
+      // Keep the native circle/number in both states. Replacing it with a
+      // pseudo source marker made the marker jump on the focus frame.
+      return null;
 
     case "code_block":
       // ⚠️ **只画三个反引号，不带语言名**（2026-09-22 改的，原来是 ```` + 语言名）。

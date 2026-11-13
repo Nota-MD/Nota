@@ -36,8 +36,8 @@
 
 /* ── 即时渲染：块级标记的浅灰标注 ─────────────────────────────────────────
    由 `src/editor/instant-render.ts` 用 `Decoration.node` 给块挂上
-   `.nota-srcmark` 和 `data-srcmark`（值就是该显示的文字：`##`、`>`、`1.`、
-   三个反引号）。**样式只此一处。**
+   `.nota-srcmark` 和 `data-srcmark`（值就是该显示的文字：`>` 或三个反引号）。
+   **样式只此一处。**
 
    ⚠️ 三条关键，动之前先读懂：
 
@@ -50,9 +50,8 @@
       `right: 100%` 必定落在块的左外侧，而且**不占文档流**。全部要求就这一条：
       正文一个字都不许因为标记的出现或消失而左右挪。
 
-   ③ **列表项要多一条 `list-style: none`**：默认的圆点也画在 li 左外侧，
-      不关掉就会跟短横**叠在一起**。关掉之后的光标行为：
-      光标进列表项，圆点让位给 `-`；光标一走，圆点回来。 */
+   ③ **列表项不走这条源码角标**：圆点与编号由列表层始终绘制，避免光标进入
+   时切换成另一套伪元素定位而闪动。 */
 
 :root {
   --nota-source-quote-icon: url("../assets/icons/nota-source-quote-symbolic.svg");
@@ -113,7 +112,6 @@
 /* 引用、无序列表与代码围栏使用自绘 SVG。SVG 只负责形状，前景色统一由
    `--fg-faint` 给出；CDE 通过同名变量换成自己的像素图标。 */
 .editor-mount .ProseMirror .nota-srcmark[data-srcmark=">"]::before,
-.editor-mount .ProseMirror .nota-srcmark[data-srcmark="-"]::before,
 .editor-mount .ProseMirror .nota-srcmark[data-srcmark="```"]::before {
   content: "";
   width: 14px;
@@ -132,41 +130,11 @@
   mask-image: var(--nota-source-quote-icon);
 }
 
-.editor-mount .ProseMirror .nota-srcmark[data-srcmark="-"]::before {
-  width: 10px;
-  height: 10px;
-  -webkit-mask-image: var(--nota-source-bullet-icon);
-  mask-image: var(--nota-source-bullet-icon);
-}
-
-/* 列表项的第一行才是标记的对齐基准；整个 li 的高度还会包含子列表。 */
-.editor-mount .ProseMirror li.nota-srcmark::before {
-  top: calc(var(--doc-line-height, 1.75) * 0.5em);
-  opacity: 1;
-}
-
-.editor-mount .ProseMirror li.nota-srcmark[data-srcmark="-"]::before {
-  background-color: var(--fg);
-}
-
-.editor-mount .ProseMirror li.nota-srcmark:not([data-srcmark="-"])::before {
-  color: var(--fg);
-  font-family: inherit;
-  font-size: inherit;
-}
-
 .editor-mount .ProseMirror .nota-srcmark[data-srcmark="```"]::before {
   width: 16px;
   height: 16px;
   -webkit-mask-image: var(--nota-source-code-icon);
   mask-image: var(--nota-source-code-icon);
-}
-
-/* 列表项：圆点让位给短横（理由见上面 ③）。
-   ⚠️ 只去掉 marker，**不动 padding**——缩进必须保持原样，否则光标一进一出，
-   整行文字会横向跳一下。 */
-.editor-mount .ProseMirror li.nota-srcmark {
-  list-style: none;
 }
 
 /* 代码块：标记要多退一截。
@@ -385,6 +353,18 @@
   height: auto !important;
   overflow: visible !important;
   vertical-align: baseline !important;
+}
+
+/* ProseMirror appends an inline separator and trailing break after a
+   contenteditable=false delimiter atom. WebKitGTK otherwise lays them out as
+   two extra lines, pushing every following block down. The real closing atom
+   remains in the document and still owns the caret boundary. */
+.editor-mount
+  .ProseMirror
+  :is(p, h1, h2, h3, h4, h5, h6, li)
+  > .nota-syntax-marker[data-side="right"]
+  ~ :is(img.ProseMirror-separator, br.ProseMirror-trailingBreak) {
+  display: none !important;
 }
 
 /* Escaped punctuation stays literal. Its source backslash is revealed only

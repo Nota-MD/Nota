@@ -501,7 +501,8 @@ export const diagramView = $view(
         previewStarted = true;
         void sameStep();
       };
-      if (typeof IntersectionObserver === "undefined") queueMicrotask(revealDiagram);
+      if (!view.editable) queueMicrotask(revealDiagram);
+      else if (typeof IntersectionObserver === "undefined") queueMicrotask(revealDiagram);
       else {
         visibilityObserver = new IntersectionObserver(
           (entries) => {

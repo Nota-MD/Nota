@@ -24,13 +24,15 @@
 //! 再起一份进程天然就是独立的（文档、工作区、插件各一份），代价只有一处：
 //! **跳过单实例那一关**（`cli.rs` 的 `--new-window`，判据与代价写在 `lib.rs` ⓿'）。
 
-use tauri::Manager;
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::error::{NotaError, Result};
 
 /// 主窗口的 label。⚠️ 与 `tauri.conf.json` 里那个窗口的 `label` **必须一致**；
 /// 写错了的症状是"点了没反应"（命令报"找不到窗口"，而按钮看着是亮的）。
 const 主窗口: &str = "main";
+const 设置窗口: &str = "settings";
+const 关于窗口: &str = "about";
 
 /// Put keyboard focus on Nota's GTK toplevel and then on the WebView child.
 ///
@@ -166,6 +168,101 @@ pub fn nota_window_open_new(path: Option<String>) -> Result<()> {
         })?;
     crate::日志!("[nota] new window: {}", 程序.display());
     Ok(())
+}
+
+/// Open Preferences as a dedicated native WebView window.
+#[tauri::command]
+pub fn nota_window_open_settings(app: tauri::AppHandle) -> Result<()> {
+    let window = app
+        .get_webview_window(设置窗口)
+        .map(Ok)
+        .unwrap_or_else(|| create_settings_window(&app))?;
+    window
+        .show()
+        .and_then(|_| window.unminimize())
+        .and_then(|_| window.set_focus())
+        .map_err(|e| NotaError::other(format!("聚焦设置窗口失败：{e}")))?;
+    Ok(())
+}
+
+/// Create the dedicated Preferences window ahead of time, without showing it.
+#[tauri::command]
+pub fn nota_window_prepare_settings(app: tauri::AppHandle) -> Result<()> {
+    if app.get_webview_window(设置窗口).is_none() {
+        create_settings_window(&app)?;
+    }
+    Ok(())
+}
+
+/// Hide rather than destroy Preferences so the next open is immediate.
+#[tauri::command]
+pub fn nota_window_hide_settings(app: tauri::AppHandle) -> Result<()> {
+    if let Some(window) = app.get_webview_window(设置窗口) {
+        window
+            .hide()
+            .map_err(|e| NotaError::other(format!("隐藏设置窗口失败：{e}")))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn nota_window_open_about(app: tauri::AppHandle) -> Result<()> {
+    let window = app
+        .get_webview_window(关于窗口)
+        .map(Ok)
+        .unwrap_or_else(|| create_about_window(&app))?;
+    window
+        .show()
+        .and_then(|_| window.unminimize())
+        .and_then(|_| window.set_focus())
+        .map_err(|e| NotaError::other(format!("聚焦关于窗口失败：{e}")))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn nota_window_prepare_about(app: tauri::AppHandle) -> Result<()> {
+    if app.get_webview_window(关于窗口).is_none() {
+        create_about_window(&app)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn nota_window_hide_about(app: tauri::AppHandle) -> Result<()> {
+    if let Some(window) = app.get_webview_window(关于窗口) {
+        window
+            .hide()
+            .map_err(|e| NotaError::other(format!("隐藏关于窗口失败：{e}")))?;
+    }
+    Ok(())
+}
+
+fn create_settings_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
+    WebviewWindowBuilder::new(
+        app,
+        设置窗口,
+        WebviewUrl::App("index.html?settings=1".into()),
+    )
+    .title("Nota")
+    .inner_size(1080.0, 700.0)
+    .min_inner_size(720.0, 520.0)
+    .visible(false)
+    .build()
+    .map_err(|e| NotaError::other(format!("创建设置窗口失败：{e}")))
+}
+
+fn create_about_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
+    WebviewWindowBuilder::new(
+        app,
+        关于窗口,
+        WebviewUrl::App("index.html?about=1".into()),
+    )
+    .title("Nota")
+    .inner_size(560.0, 720.0)
+    .min_inner_size(420.0, 560.0)
+    .visible(false)
+    .build()
+    .map_err(|e| NotaError::other(format!("创建关于窗口失败：{e}")))
 }
 
 /// **真的退出**（2026-10-16 新增，朋友清单第 7／16 条「退出软件时对更改进行保存/弹窗」）。

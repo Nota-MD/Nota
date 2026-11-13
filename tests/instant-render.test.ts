@@ -64,8 +64,8 @@ testCase("标题块不再显示 H1–H6 徽标", () => {
 
 testCase("引用只显示左边线、其余容器仍回显各自标记", () => {
   equal(blockMark(block("blockquote"), null, 0), null, "引用");
-  equal(blockMark(block("list_item"), block("bullet_list"), 0), "-", "无序列表");
-  equal(blockMark(block("list_item"), block("ordered_list", { order: 3 }), 2), "5.", "有序列表从 3 起、第三项");
+  equal(blockMark(block("list_item"), block("bullet_list"), 0), null, "无序列表保留原生圆点");
+  equal(blockMark(block("list_item"), block("ordered_list", { order: 3 }), 2), null, "有序列表保留原生编号");
   equal(blockMark(block("code_block"), null, 0), "```", "代码围栏");
 });
 

@@ -199,6 +199,10 @@ export function useModalTrap(
       const panel = panelRef.current;
       const target = e.target as Node | null;
       if (!panel || !target || panel.contains(target)) return;
+      // Portal-based descendants of the dialog are still part of its focus
+      // scope. Without this, the color picker pulls focus back to the settings
+      // panel on the first click and its input cannot receive typing.
+      if ((target as Element).closest?.('[data-modal-layer="true"]')) return;
       // ⚠️ 浮层里的焦点**不拽回来**：菜单一开就把焦点播种到自己第一项上，
       // 拽回来的话菜单画着、键盘却不在里面（`Esc`/方向键全失灵）。
       if (atFloatingLayerInside(target)) return;

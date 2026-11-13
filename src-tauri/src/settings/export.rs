@@ -51,6 +51,8 @@ pub struct CustomExporter {
     pub format: String,
     /// 这一份导出器自己的额外参数。
     pub args: String,
+    /// Editable baseline arguments for this exporter.
+    pub base_args: String,
     /// Word/ODT 的参考文档、EPUB 的 CSS 或 LaTeX/PDF 的头文件。
     pub style_file: String,
     /// 完成这一种导出后是否在文件管理器中定位结果。
@@ -64,6 +66,7 @@ impl CustomExporter {
             name: name.to_string(),
             format: format.to_string(),
             args: String::new(),
+            base_args: String::new(),
             style_file: String::new(),
             open_after_export: false,
         }

@@ -18,6 +18,9 @@ const LazyPluginDock = lazy(() =>
 const LazyFilePickerDialog = lazy(() =>
   import("@/ui/FilePickerDialog").then((m) => ({ default: m.FilePickerDialog })),
 );
+const LazyAboutDialog = lazy(() =>
+  import("@/ui/AboutDialog").then((m) => ({ default: m.AboutDialog })),
+);
 
 type DockProps = ComponentProps<(typeof import("@/ui/PluginDock"))["PluginDock"]>;
 type SettingsProps = ComponentProps<(typeof import("@/ui/settings/SettingsDialog"))["SettingsDialog"]>;
@@ -44,6 +47,16 @@ export function DeferredFilePickerDialog() {
   return (
     <Suspense fallback={null}>
       <LazyFilePickerDialog />
+    </Suspense>
+  );
+}
+
+export function DeferredAboutDialog(
+  props: ComponentProps<(typeof import("@/ui/AboutDialog"))["AboutDialog"]>,
+) {
+  return (
+    <Suspense fallback={null}>
+      <LazyAboutDialog {...props} />
     </Suspense>
   );
 }

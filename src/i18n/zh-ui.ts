@@ -415,7 +415,6 @@ export const uiMessages: Record<string, string> = {
   "LaTeX commands": "LaTeX 命令",
   "physics": "物理",
   "Code Language": "代码语言",
-  "Search or type a language": "搜索或输入语言",
   "Write your Markdown here…": "在这里写 Markdown 原文…",
   "Untitled": "未命名",
   "Untitled {0}": "未命名 {0}",
@@ -801,4 +800,6 @@ export const uiMessages: Record<string, string> = {
   "Link uses a dangerous protocol": "链接使用了危险协议",
   "Row-header boundary is not balanced": "行标题边界不配对",
   "Use First Column as Row Headers": "将第一列作为行标题",
+  "Could not open the Preferences window: {0}": "无法打开设置窗口：{0}",
+  "Could not open the About window: {0}": "无法打开关于窗口：{0}",
 };

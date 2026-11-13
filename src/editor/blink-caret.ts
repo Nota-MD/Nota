@@ -5,6 +5,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 const cursorClass = "nota-blink-caret";
 const showClass = "nota-blink-caret-on";
 const dimClass = "nota-blink-caret-dim";
+const imeComposingClass = "nota-ime-composing";
 const blinkHalfPeriodMs = 530;
 
 /**
@@ -134,6 +135,7 @@ function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
   const active = view.dom.ownerDocument.activeElement;
   if (
     view.isDestroyed ||
+    view.dom.classList.contains(imeComposingClass) ||
     !view.hasFocus() ||
     innerEditorOwnsCaret(active, view.dom) ||
     !isNoShowCursor(view.state)
@@ -266,12 +268,34 @@ export function flashSparkCursor(): Plugin {
         hideCursor(cursor);
         stopBlink();
       };
+      // The detached overlay cannot track IME preedits reliably. WebKit may
+      // keep the DOM selection at composition start while candidates advance,
+      // leaving the custom caret behind. Use the native caret until the IME
+      // commits, then resume the stable overlay for ordinary typing.
+      const beginComposition = () => {
+        view.dom.classList.add(imeComposingClass);
+        hideCursor(cursor);
+        stopBlink();
+      };
+      const endComposition = () => {
+        if (frame) cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          if (view.isDestroyed) return;
+          view.dom.classList.remove(imeComposingClass);
+          arrangeCursor(cursor, view);
+          restartBlink();
+        });
+      };
       const rollActionContainer = view.dom.closest(".editor-pane");
       const rulerInchWatchListen =
         typeof ResizeObserver === "undefined" ? null : new ResizeObserver(safeArrange);
 
       view.dom.addEventListener("focusin", safeArrange);
       view.dom.addEventListener("focusout", safeArrange);
+      view.dom.addEventListener("compositionstart", beginComposition);
+      view.dom.addEventListener("compositionupdate", beginComposition);
+      view.dom.addEventListener("compositionend", endComposition);
       rollActionContainer?.addEventListener("scroll", safeArrange, { passive: true });
       window.addEventListener("resize", safeArrange);
       window.addEventListener("scroll", safeArrange, true);
@@ -288,6 +312,10 @@ export function flashSparkCursor(): Plugin {
           stopBlink();
           view.dom.removeEventListener("focusin", safeArrange);
           view.dom.removeEventListener("focusout", safeArrange);
+          view.dom.removeEventListener("compositionstart", beginComposition);
+          view.dom.removeEventListener("compositionupdate", beginComposition);
+          view.dom.removeEventListener("compositionend", endComposition);
+          view.dom.classList.remove(imeComposingClass);
           rollActionContainer?.removeEventListener("scroll", safeArrange);
           window.removeEventListener("resize", safeArrange);
           window.removeEventListener("scroll", safeArrange, true);

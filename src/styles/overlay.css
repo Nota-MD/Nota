@@ -48,6 +48,21 @@
   box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
 }
 
+.confirm-backdrop[data-window-presentation="full"] {
+  top: 0;
+  padding: 0;
+  background: var(--bg);
+}
+
+.confirm-dialog[data-window-presentation="full"] {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 /* 所有自绘对话框共用同一颗右上角关闭按钮。位置相对 `.confirm-dialog`、
    `.settings-shell` 等对话框壳，不依赖各页面自己的标题栏结构。 */
 .dialog-close {

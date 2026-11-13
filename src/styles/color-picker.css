@@ -42,7 +42,7 @@
 }
 
 .stg-color-hex {
-  color: var(--fg-muted);
+  color: var(--fg);
   font-family: var(--font-mono);
   font-size: 0.9em;
 }

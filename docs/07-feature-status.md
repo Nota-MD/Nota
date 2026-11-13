@@ -1,6 +1,24 @@
 # 07 · 功能状态、缺陷清单与 backlog
 
-> 最后同步：2026-10-31
+> 最后同步：2026-11-07
+
+**2026-11-07 developer access:** the public `--mcp` server and socket transport
+were removed. The normal Nota build now contains an opt-in authenticated Host
+Control bridge and the separate Nota DevKit repository consumes it. Bridge
+verification covers Rust security predicates, frontend type checking, DevKit
+protocol/rendering tests, a real Xvfb window pass through all five randomized
+confirmation steps, password/IP form, running status, DevKit authentication,
+`commands.invoke`, `theme.reload`, real Markdown preview rendering and session
+revocation. Disabling developer mode stopped both IPv4 and IPv6 listeners.
+`capture.window` remains unverified in Xvfb because that display has no
+`_NET_CLIENT_LIST_STACKING`; packaged Linux/Windows capture needs desktop
+acceptance.
+
+Final automated checks for this batch: Rust **725 passed / 0 failed**, frontend
+**132 suites / at least 2089 assertions**,
+TypeScript, production build, WOFF2 check, i18n check and Linux/Windows GNU
+`cargo check`. DevKit passed **23 tests** and its own syntax check. The
+remaining Windows acceptance is packaging and desktop capture, not compilation.
 >
 > **日常执行队列见 [`07A-current-status.md`](07A-current-status.md)。**
 > 本文件保留永久编号、逐项证据、backlog 全文和日期历史，作为审计档案。

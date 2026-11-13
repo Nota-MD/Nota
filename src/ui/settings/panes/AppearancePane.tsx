@@ -436,6 +436,19 @@ export function AppearancePane({
             onChange={(menu_renderer) => write({ menu_renderer })}
           />
         </SettingRow>
+        <SettingRow
+          label={t("Force Nota menu when maximized or full screen")}
+          description={t(
+            "Keep the menu reachable when a window manager or macOS full-screen mode hides the system menu. The saved menu style returns after leaving maximized or full-screen mode.",
+          )}
+        >
+          <Toggle
+            checked={a.force_nota_menu_when_expanded}
+            onChange={(force_nota_menu_when_expanded) =>
+              write({ force_nota_menu_when_expanded })
+            }
+          />
+        </SettingRow>
       </SettingsGroup>
 
       <SettingsGroup title={t("Show status bar")}>
@@ -455,6 +468,22 @@ export function AppearancePane({
           <Toggle
             checked={a.show_filename_in_titlebar}
             onChange={(show_filename_in_titlebar) => write({ show_filename_in_titlebar })}
+          />
+        </SettingRow>
+        <SettingRow
+          label={t("Preferences presentation")}
+          help={t(
+            "Full fills the current window, Embedded keeps the centered card, and Separate window opens native Preferences window. Changes take effect the next time Preferences opens.",
+          )}
+        >
+          <Radio
+            value={a.settings_window_style}
+            options={[
+              { value: "full", label: t("Full window") },
+              { value: "embedded", label: t("Embedded card") },
+              { value: "external", label: t("Separate window") },
+            ]}
+            onChange={(settings_window_style) => write({ settings_window_style })}
           />
         </SettingRow>
       </SettingsGroup>

@@ -59,6 +59,7 @@ export function AppDialogs({
   closeDedicatedNoteTotalJoin,
   debugMode,
   onSetDebugMode,
+  windowPresentation,
 }: {
   dialog: Dialogs;
   /** 缺外部工具那张面板；`null` = 不显示（探通了就直接进保存对话框）。 */
@@ -78,6 +79,7 @@ export function AppDialogs({
   closeDedicatedNoteTotalJoin: () => void;
   debugMode: boolean;
   onSetDebugMode: (enabled: boolean) => void;
+  windowPresentation: "full" | "embedded" | "external";
 }) {
   const { confirmReq, answerConfirm, promptReq, answerPrompt } = dialog;
   const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = dialog;
@@ -129,8 +131,13 @@ export function AppDialogs({
           所以判的是 `emojiOpen` 那个布尔，不是某个请求对象。 */}
       {emojiOpen && <EmojiDialog onAnswer={answerEmoji} />}
 
-      {aboutOpen && (
-        <AboutDialog onClose={closeAbout} debugMode={debugMode} onSetDebugMode={onSetDebugMode} />
+      {aboutOpen && windowPresentation !== "external" && (
+        <AboutDialog
+          onClose={closeAbout}
+          debugMode={debugMode}
+          onSetDebugMode={onSetDebugMode}
+          presentation={windowPresentation === "full" ? "full" : "embedded"}
+        />
       )}
 
       {/* 强制专注这一轮的总结。⚠️ 排在最后＝**盖在最上面**：它是一份"你看完

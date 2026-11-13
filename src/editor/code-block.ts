@@ -602,6 +602,36 @@ export const codeBlockView = $view(
       // 结果是“上方公式、下方源码”，与 Mermaid、HTML 预览的方向相反。
       wrap.append(pre, numberLearn.element, preview.element);
 
+      let languageLayoutFrame = 0;
+      let languageLayoutObserver: ResizeObserver | null = null;
+      const placeLanguagePicker = () => {
+        languageLayoutFrame = 0;
+        const parent =
+          langWrap.offsetParent instanceof HTMLElement ? langWrap.offsetParent : wrap;
+        if (parent === pre) {
+          // `top` is relative to the containing block's padding box. Keep all
+          // arithmetic in layout units: viewport rectangles are multiplied by
+          // browser zoom, then CSS applies that zoom again to the assigned top.
+          langWrap.style.top = `${pre.offsetHeight - pre.clientTop}px`;
+          return;
+        }
+        const parentBox = parent.getBoundingClientRect();
+        const preBox = pre.getBoundingClientRect();
+        const zoom = window.visualViewport?.scale || 1;
+        const parentPaddingTop = parentBox.top + parent.clientTop;
+        langWrap.style.top = `${(preBox.bottom - parentPaddingTop) / zoom}px`;
+      };
+      const scheduleLanguageLayout = () => {
+        cancelAnimationFrame(languageLayoutFrame);
+        languageLayoutFrame = requestAnimationFrame(placeLanguagePicker);
+      };
+      if (typeof ResizeObserver !== "undefined") {
+        languageLayoutObserver = new ResizeObserver(scheduleLanguageLayout);
+        languageLayoutObserver.observe(pre);
+      }
+      window.addEventListener("resize", scheduleLanguageLayout);
+      document.addEventListener("scroll", scheduleLanguageLayout, true);
+
       // Keep hidden examples as lightweight textareas. Only code blocks near
       // the viewport or focused by the user instantiate CodeMirror.
       const startHeavyContent = () => {
@@ -612,7 +642,8 @@ export const codeBlockView = $view(
         ensureCodeBlockEditor();
       };
 
-      if (typeof IntersectionObserver === "undefined") queueMicrotask(startHeavyContent);
+      if (!view.editable) queueMicrotask(startHeavyContent);
+      else if (typeof IntersectionObserver === "undefined") queueMicrotask(startHeavyContent);
       else {
         visibilityObserver = new IntersectionObserver(
           (entries) => {
@@ -689,6 +720,7 @@ export const codeBlockView = $view(
         // ⚠️ 预览跟着**语言**决定露不露脸、跟着**内容**换 `srcdoc`
         // （内部去抖，见 `code-preview.ts` 文件头第 3 条）。
         if (heavyPreviewStarted) preview.sameStep(node);
+        scheduleLanguageLayout();
       };
 
       // Lightweight chrome is ready immediately. Preview engines wait until the
@@ -775,6 +807,10 @@ export const codeBlockView = $view(
         destroy: () => {
           editorDisposed = true;
           visibilityObserver?.disconnect();
+          languageLayoutObserver?.disconnect();
+          cancelAnimationFrame(languageLayoutFrame);
+          window.removeEventListener("resize", scheduleLanguageLayout);
+          document.removeEventListener("scroll", scheduleLanguageLayout, true);
           languagePicker.cancelDestroy();
           codeEditor?.cancelDestroy();
           // ⚠️ 预览自己那条待写的定时器也要撤（见 `code-preview.ts` 文件头）。

@@ -55,6 +55,9 @@ podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
 | `tauri-plugin-fs` | `2` | 前端直接读写文件的通道。⚠️ **注册了但没给权限**——`capabilities/default.json` 里**没有**它的任何 permission。原则写在那个文件的 `description` 里：能用 Nota 自己的 `#[tauri::command]` 走通的，就不开插件权限 |
 | `tauri-plugin-opener` | `2` | 用系统默认程序打开 URL。开了 `opener:allow-open-url` |
 | `serde` / `serde_json` | `1` / `1` | 序列化。插件命令的入参出参走 JSON（`commands/plugin.rs` 文件头解释了为什么不定自定义类型） |
+| `argon2` / `rand_core` | `0.5` / `0.6` (`getrandom`) | Developer bridge password hashing and OS-backed random salts/session tokens |
+| `tiny_http` | `0.12` | Authenticated Host Control HTTP listener. It is bound only while developer mode and the bridge setting are enabled |
+| `tauri-plugin-screenshots` | `2.2` | Window enumeration and capture for the authenticated `capture.window` method |
 | `toml` | `0.9` | 读两个 TOML：插件清单 `plugin.toml` 与用户设置 `settings.toml` |
 | `mlua` | `0.12`, features `["lua54", "vendored", "serialize", "send"]` | Lua 5.4 插件运行时。四个 feature 各有用处，逐条见 §1.4 之后那段 |
 | `thiserror` | `2` | `NotaError` 的样板代码 |
@@ -4228,6 +4231,17 @@ npm run build                                             # 类型闸门 ＋ 打
 `package.json` 用 override 把传递依赖 `source-map-js` 固定到 **1.2.2**，修掉事件循环
 DoS 高危项。`npm audit` 仍有 6 条 low，来自 KaTeX / Mermaid / remark-math；上游暂无
 无破坏升级路径，不能为了清零强行升大版本。
+
+**2026-11-07 single-instance transport:** the old `\0nota-mcp\n` session frame
+was removed together with the public `--mcp` entry. The Unix socket now carries
+only path frames. Authenticated developer access uses Host Control on a separate
+HTTP listener.
+
+**2026-11-08 Chromium geometry smoke:** `NOTA_E2E_ONLY='language picker'
+npm run test:e2e` mounts a real code block and compares the language picker's
+`getBoundingClientRect()` against the painted code-block bottom edge. This is
+the focused WebView2-equivalent check for the Windows-only detached-picker
+regression. Result: **1/1 passed**; the top gap was within the 1.5px tolerance.
 
 ⚠️ 想确认"屏幕上那一版是不是我刚改的"，**看 5273 那个 URL，别去翻 `dist/`**。
 反过来，想确认"打包产物里有没有我这一版"，才看 `dist/` 与 `npm run build` 的退出码。

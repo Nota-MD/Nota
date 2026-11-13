@@ -149,6 +149,8 @@
   --switch-h: 20px;
   --switch-knob: 14px;
   --switch-knob-bg: var(--bg);
+  --radio-on: var(--accent);
+  --radio-on-fg: var(--accent-fg);
   /* 开关"关着"时的轨道色。默认就是改之前那个 `--bg-active`，
      所以另外 15 格一个像素都不动；下面几档各自覆盖它。 */
   --switch-off: var(--bg-active);

@@ -1,0 +1,173 @@
+.dev-bridge-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-popup, 40) + 5);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 48%);
+}
+
+.dev-bridge-dialog {
+  width: min(560px, calc(100vw - 32px));
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-raised);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 28%);
+}
+
+.dev-bridge-dialog header,
+.dev-bridge-dialog footer,
+.dev-bridge-status,
+.dev-bridge-status > div {
+  display: flex;
+  align-items: center;
+}
+
+.dev-bridge-dialog header {
+  justify-content: space-between;
+}
+
+.dev-bridge-dialog header h2 {
+  margin: 3px 0 0;
+  font-size: 1.2rem;
+}
+
+.dev-bridge-kicker {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dev-bridge-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 22px;
+}
+
+.dev-bridge-warning,
+.dev-bridge-note,
+.dev-bridge-instruction {
+  color: var(--fg-muted);
+  line-height: 1.65;
+}
+
+.dev-bridge-warning {
+  min-height: 52px;
+  margin: 20px 0;
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.dev-bridge-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  grid-template-rows: repeat(3, 64px);
+  justify-content: center;
+  gap: 10px;
+  margin: 20px auto;
+}
+
+.dev-bridge-key {
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font: 700 20px/1 var(--font-ui);
+}
+
+.dev-bridge-key:nth-child(1) { grid-column: 2; grid-row: 1; }
+.dev-bridge-key:nth-child(2) { grid-column: 3; grid-row: 2; }
+.dev-bridge-key:nth-child(3) { grid-column: 3; grid-row: 3; }
+.dev-bridge-key:nth-child(4) { grid-column: 1; grid-row: 3; }
+.dev-bridge-key:nth-child(5) { grid-column: 1; grid-row: 2; }
+
+.dev-bridge-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.dev-bridge-instruction {
+  text-align: center;
+}
+
+.dev-bridge-progress {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 18px;
+}
+
+.dev-bridge-progress span {
+  width: 26px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.dev-bridge-progress .is-on {
+  background: var(--accent);
+}
+
+.dev-bridge-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.dev-bridge-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: 0.82rem;
+}
+
+.dev-bridge-form input,
+.dev-bridge-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font: inherit;
+}
+
+.dev-bridge-form footer {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dev-bridge-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.dev-bridge-status {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  padding: 2px 0;
+  text-align: right;
+}
+
+.dev-bridge-status > div {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dev-bridge-status span {
+  display: block;
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+}

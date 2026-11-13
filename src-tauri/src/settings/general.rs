@@ -62,6 +62,12 @@ pub struct General {
     /// 调试期间允许拖动选择菜单、状态栏、设置页和对话框等界面文字。
     /// 默认关闭；只在 `debug_mode` 同时开启时生效。
     pub select_ui_text: bool,
+    /// Whether the authenticated developer bridge should run.
+    pub dev_bridge_enabled: bool,
+    /// TCP port used by the authenticated developer bridge.
+    pub dev_bridge_port: u16,
+    /// IPv4/IPv6 addresses or CIDR ranges allowed to reach the bridge.
+    pub dev_bridge_whitelist: Vec<String>,
 }
 
 impl Default for General {
@@ -73,6 +79,9 @@ impl Default for General {
             element_inspector: false,
             lua_hot_reload: false,
             select_ui_text: false,
+            dev_bridge_enabled: false,
+            dev_bridge_port: 17321,
+            dev_bridge_whitelist: vec!["127.0.0.1".into(), "::1".into()],
         }
     }
 }
@@ -116,6 +125,20 @@ mod tests {
         assert!(!old.element_inspector);
         assert!(!old.lua_hot_reload);
         assert!(!old.select_ui_text);
+    }
+
+    #[test]
+    fn developer_bridge_defaults_to_loopback_and_disabled() {
+        let general = General::default();
+        assert!(!general.dev_bridge_enabled);
+        assert_eq!(general.dev_bridge_port, 17321);
+        assert_eq!(
+            general.dev_bridge_whitelist,
+            vec!["127.0.0.1".to_owned(), "::1".to_owned()]
+        );
+        let old: General = toml::from_str("language = \"auto\"").unwrap();
+        assert!(!old.dev_bridge_enabled);
+        assert_eq!(old.dev_bridge_port, 17321);
     }
 
     #[test]

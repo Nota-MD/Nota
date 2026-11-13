@@ -144,6 +144,7 @@ export function ColorPicker({
             style={place}
             role="dialog"
             aria-modal="false"
+            data-modal-layer="true"
             aria-label={t("Select Color")}
           >
             <div className="stg-color-popup-head">

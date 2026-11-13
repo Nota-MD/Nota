@@ -229,6 +229,8 @@ interface Props {
   debugMode: boolean;
   /** 外部请求打开某一页；通知的「查看更新」用。 */
   initialSection?: SectionId | null;
+  /** Render as the complete surface of a dedicated native Preferences window. */
+  standalone?: boolean;
 }
 
 export function SettingsDialog({
@@ -253,6 +255,7 @@ export function SettingsDialog({
   pluginAction,
   debugMode,
   initialSection,
+  standalone = false,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
   // 局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -297,6 +300,9 @@ export function SettingsDialog({
   );
 
   const panelRef = useRef<HTMLDivElement>(null);
+  const [openingWindowStyle] = useState(
+    () => settings.appearance.settings_window_style,
+  );
   /**
    * 开在哪一页。
    *
@@ -408,17 +414,23 @@ export function SettingsDialog({
 
   return (
     // 点遮罩 = 关掉。跟确认框同一个约定：想走的人会去点旁边。
-    <div className="confirm-backdrop" onMouseDown={onClose}>
+    <div
+      className={standalone ? "settings-standalone-root" : "confirm-backdrop"}
+      data-settings-window-style={standalone ? "full" : openingWindowStyle}
+      onMouseDown={standalone ? undefined : onClose}
+    >
       <div
         ref={panelRef}
         className="settings-shell"
+        data-settings-window-style={standalone ? "full" : openingWindowStyle}
+        data-settings-standalone={standalone || undefined}
         role="dialog"
         aria-modal="true"
         aria-label={t("Settings")}
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <DialogClose onClose={onClose} />
+        {!standalone && <DialogClose onClose={onClose} />}
         <aside className="settings-nav">
           <div className="settings-nav-search">
             <SearchField value={query} onChange={setQuery} />

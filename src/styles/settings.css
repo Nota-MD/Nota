@@ -68,11 +68,40 @@
   height: min(620px, 86vh);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--bg-raised);
+  background: var(--settings-window-bg, var(--bg-raised));
   color: var(--fg);
   box-shadow: var(--popup-shadow);
   overflow: hidden;
   outline: none;
+}
+
+.confirm-backdrop[data-settings-window-style="full"] {
+  top: 0;
+  padding: 0;
+  background: var(--bg);
+}
+
+.settings-shell[data-settings-window-style="full"] {
+  width: 100vw;
+  height: 100vh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.settings-standalone-root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.settings-standalone-root .settings-shell {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 /* ── 左栏 ──────────────────────────────────────────────────────────────── */
@@ -83,7 +112,7 @@
   flex: 0 0 208px;
   /* 一条竖分隔线，而不是给右栏加边框：这样右栏的内容可以贴着边滚。 */
   border-right: 1px solid var(--border);
-  background: var(--bg-subtle);
+  background: var(--sidebar-surface);
 }
 
 .settings-nav-search {

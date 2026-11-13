@@ -1,6 +1,6 @@
 # 第三方组件
 
-> 最后核对：**2026-11-01**
+> 最后核对：**2026-11-07**
 >
 > ⚠️ **2026-10-06 那一次：每一项都补上了仓库/主页链接**（用户：「**鸣谢里加上各个项目的仓库**」，并贴了 Typora 的鸣谢页当参照）。
 > 链接**不是凭印象写的**：Rust 那半从 `cargo metadata` 里读每个 crate 的 `repository` 字段，前端那半读 `node_modules/<包>/package.json` 的 `repository`。
@@ -25,6 +25,7 @@
 | crate | 版本 | 许可证 | 用来做什么 |
 |---|---|---|---|
 | [`ashpd`](https://github.com/bilelmoussaoui/ashpd) | 0.11.1 | MIT | **Linux XDG Desktop Portal 绑定**（2026-11-01 加）：系统打印先生成 PDF，再调用 `org.freedesktop.portal.Print`；GNOME 下由 GTK4 portal 画框，KDE 下跟随 Plasma。使用 `async-std` feature，与 Tauri 依赖树中的同一版本共享 |
+| [`argon2`](https://github.com/RustCrypto/password-hashes/tree/master/argon2) | 0.5.3 | MIT OR Apache-2.0 | Developer bridge password hashing and verification. The plaintext password is never written to settings or logs |
 | [`base64`](https://github.com/marshallpierce/rust-base64) | 0.22.1 | MIT OR Apache-2.0 | base64 编解码（图片的 data URL、导出、插件账本里那几处） |
 | [`chrono`](https://github.com/chronotope/chrono) | 0.4.45 | MIT OR Apache-2.0 | 日期与时间（`nota.time`、信任记录的时间戳） |
 | [`dirs`](https://github.com/soc/dirs-rs) | 6.0.0 | MIT OR Apache-2.0 | XDG 目录 |
@@ -33,6 +34,7 @@
 | [`libc`](https://github.com/rust-lang/libc) | 0.2.189 | MIT OR Apache-2.0 | Linux 原生打印框打开前，把 GTK/gettext 的 `LC_MESSAGES` 切到 Nota 当前语言，避免 `LC_ALL=C.UTF-8` 启动时系统打印框固定显示英语 |
 | [`mlua`](https://github.com/mlua-rs/mlua) | 0.12.1 | MIT | Lua 插件运行时 |
 | [`notify`](https://github.com/notify-rs/notify) | 8.2.0 | CC0-1.0 | ⚠️ **目前没用到**，见 §4 |
+| [`rand_core`](https://github.com/rust-random/rand) | 0.6.4 | MIT OR Apache-2.0 | OS-backed random salt/token generation for the developer bridge |
 | [`serde`](https://github.com/serde-rs/serde) | 1.0.229 | MIT OR Apache-2.0 | 序列化 |
 | [`serde_json`](https://github.com/serde-rs/json) | 1.0.151 | MIT OR Apache-2.0 | JSON |
 | [`sha2`](https://github.com/RustCrypto/hashes) | 0.10.9 | MIT OR Apache-2.0 | 哈希（插件包摘要 / 公钥指纹 / 文件监视那一路） |
@@ -43,7 +45,9 @@
 | [`tauri-plugin-clipboard-manager`](https://github.com/tauri-apps/plugins-workspace) | 2.4.2 | Apache-2.0 OR MIT | **读剪贴板**（`ui/useClipboard.ts` 的粘贴；⚠️ 只开 `allow-read-text` 一条权限，见 `capabilities/default.json`）。⚠️ 2026-10-11 补登记：它是 2026-10-11 那一批加进来的（「菜单里的粘贴真能粘」那一条），**当时漏了这儿** |
 | [`tauri-plugin-fs`](https://github.com/tauri-apps/plugins-workspace) | 2.5.2 | Apache-2.0 OR MIT | 前端读写文件 |
 | [`tauri-plugin-opener`](https://github.com/tauri-apps/plugins-workspace) | 2.5.5 | Apache-2.0 OR MIT | 用系统默认程序打开链接 |
+| [`tauri-plugin-screenshots`](https://github.com/ayangweb/tauri-plugin-screenshots) | 2.2.0 | MIT | Host Control window discovery and PNG capture. Its `xcap` backend is Apache-2.0 |
 | [`thiserror`](https://github.com/dtolnay/thiserror) | 2.0.20 | MIT OR Apache-2.0 | `NotaError` 的样板 |
+| [`tiny_http`](https://github.com/tiny-http/tiny-http) | 0.12.0 | MIT OR Apache-2.0 | Small authenticated HTTP listener for Host Control; request methods use the existing Tauri command layer |
 | [`toml`](https://github.com/toml-rs/toml) | 0.9.12+spec-1.1.0 | MIT OR Apache-2.0 | 读插件清单与设置文件 |
 | [`ureq`](https://github.com/algesten/ureq) | 3.4.0 | MIT OR Apache-2.0 | **`nota.http`，也就是只给插件发请求用**（2026-09-24）。默认 feature 就带下面那套 TLS，**不依赖系统 OpenSSL** |
 | [`webkit2gtk`](https://github.com/tauri-apps/webkit2gtk-rs) | 2.0.2 | MIT | Tauri 在 Linux 上的 WebView 绑定（与 `gtk` 同属"tauri 已经拖进来、我们直接引用"那一类） |

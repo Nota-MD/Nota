@@ -22,6 +22,12 @@
 | `cli.rs` | 命令行参数：`首个要打开的文件()`——把 `nota 笔记.md` / 文件管理器"用 Nota 打开"的那个路径挑出来。⚠️ **纯函数，不判存在性也不读文件**（挑出来交给前端那条开文档的路照常报错）；⚠️ 只认第一个非选项参数 |
 | `error.rs` | `NotaError`，中文 Display，自定义 `Serialize` 过 IPC |
 | `paths.rs` | XDG 目录、插件目录、**主题目录**的**唯一**算法所在地 |
+| `dev_bridge.rs` | **Authenticated Host Control**（2026-11-07）：Argon2 password verifier, IP/CIDR whitelist, loopback-only default bind, bearer sessions, failed-login rate limit, JSON/Host validation, concurrent request cap, theme/plugin reload, plugin inspection, logs, settings, screenshot and WebView command forwarding. `editor.status` returns the active and all open document summaries; `documents.*` exposes live read/write/open operations. `commands.invoke` sends `nota:dev-bridge-command`; `preview.render` calls the real `exportHtml`; pending replies are stored only in memory with a 30-second timeout. |
+| `dev_bridge/security.rs` | Password hashing/verification, private credential-file writes, CIDR parsing and matching, whitelist normalization, and loopback/network bind selection. Pure security predicates are unit tested here. |
+
+The real-window pass also exercised the WebView round trip: `commands.invoke`
+returned direct command results rather than the legacy MCP content envelope,
+and `preview.render` produced a complete HTML document from the live renderer.
 | `state.rs` | `AppState` 四个句柄 ＋ `settings_problem`（只读）＋ `app_lang`（**开机算一次，之后不变**）+ 锁序不变量。⚠️ `DevServerState` 与 `plugin::ReviewState` **故意不在这里**（见 `docs/01` §② 第 ⑤ 步） |
 | `settings/mod.rs` | `Settings` 与三条互相独立的外观轴，kebab-case 落盘；解析不了的原文件先备份成 `.bak`。2026-09-24 拆成模块目录；2026-10-18 新增 `download.rs`（高级下载替换规则），现在共十一个设置域文件 |
 | `themes.rs` | **文档主题**的发现与读盘：`DocThemeInfo` / `discover()` / `css_of()` / `user_themes_dir()` / 围栏 `check_id()`。传统 Nota 主题和原生 Typora 集合都参与发现；`css_of()` 在加载时展开 `@import`、内联相对资源。⛔ **不随包内置外部编辑器主题**，但用户可直接导入本机主题。⚠️ 入参是 **id 不是路径** |
@@ -52,6 +58,7 @@
 | `text_encoding.rs` | **文档编码探测与编解码**（2026-10-16 建，2026-11-01 接入）：BOM、合法 UTF-8、`chardetng` 依次判断；`Document.encoding` 保存规范编码名，打开/重载自动探测，保存按原编码写回。UTF-16 显式编码并写 BOM。 |
 | `commands/workspace.rs` | `nota_workspace_*` 五个命令 + `TreeNode` / `WorkspaceExcerpt` + 文件树遍历。⚠️ 2026-09-28 起 `tree` 多收一个 `TreeOptions`（排序 / 过滤 / 隐藏文件），并把 `show_hidden` / `tree_filter` 那两个死开关接上了线。📌 **2026-10-23 加 `nota_workspace_excerpts`**：文件列表按可见的 24 个一批请求标题与下一段文字；只读每份文件开头 16 KiB、走 `spawn_blocking` 和工作区围栏，不把整篇正文读进启动路径。 |
 | `commands/settings.rs` | `nota_settings_get/set/reset` ＋ `nota_settings_problem` ＋ `nota_settings_open_dir`（2026-09-25 由 `nota_settings_dir` 改名：**「打开」这一步也在宿主**，见 `docs/07` BUG-27）＋ `nota_app_lang`（2026-09-25 加：**前端 i18n 的唯一真相源**，返回 `AppLang { setting, effective, available }`——设置里那一格可能是 `auto`，前端要知道**实际生效**的是哪个；而 `available` **由宿主给**，前端不许自己列一份语言清单，那样多一门语言就要改两处） |
+| `commands/dev_bridge.rs` | `nota_dev_bridge_status/enable/disable/revoke/respond` five commands. Enable requires developer mode, validates port/whitelist/password, starts the listener before saving settings. Respond completes a pending WebView command by request id. |
 | `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir` / `nota_theme_import`（最后一条异步解 ZIP） |
 | `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir`（2026-09-26 新增）——**界面风格**那三条，与 `commands/theme.rs` 一一对应、同一套口径（id 不是路径；"打开"在宿主做；目录用到时才建） |
 | `commands/plugin.rs` | `nota_plugins_list` / `set_enabled` / `call` / `find_command` / `panels` / `panel_content` / **`review`** / **`review_close`** / `menus` / `install` / `uninstall` / `trust` / `trust_list` —— **13 条**（2026-09-25 多了装卸信任那四条；随后又多了 `review` 两条：**编辑区里摊着的那块面板**）。⚠️ **异步的是这五条**：`set_enabled` / `install` / `uninstall` / `call` / `panel_content`（都要跑 Lua 或解包，走 `spawn_blocking`）；⚠️ `review` / `review_close` 拿的是 `ReviewState`，**不碰 `plugins` 锁**——理由见 `docs/01` §第四条链路 |
@@ -93,9 +100,9 @@
 | `lua/api/json.rs` | `nota.json.decode`（2026-10-04 加）：**不需要任何能力**的纯解码表。⚠️ 成功给一个值、失败给 `nil, "原因"`（**不抛**）——「这段文本不是合法 JSON」是**环境**，插件该接得住。⚠️ **只解不编**：要发 JSON 走「`body` 写一张表、宿主当 JSON 发」那条路 |
 | `lua/api/unified_diff.rs` | `nota.diff.parse_unified`（2026-09-25）：把 `git diff` / `diff -u` 的**标准格式**解析成同一套 `{path, added, deleted, lines}`。⚠️ 三条规矩写在文件头：只有 `diff --git` 之后的 `---`/`---` 才算（**光跑 `diff -u` 得到空**）、**不认上下文行**、路径依赖 `-c core.quotePath=false`。⚠️ 与 `diff.rs` 分开是因为**输入格式完全不同**（那边是插件自己和模型定的 `nota-diff` 围栏） |
 | `lua/api/i18n.rs` | `nota.i18n`（2026-09-25）：`{app_lang, lang, ok, text(s)}`。**不要能力**——路径由宿主用**插件自己的目录**拼（`lang/<tag>.toml`），插件只交**键**；**键就是作者写下的那句原文**，取不到返回 `nil`。⚠️ **协商在加载时就做完**（`i18n::装`，在 `on_load` 之前），所以改语言要重启。⚠️ **`ok` 只看清单、不看文件**：声明了 `zh-CN` 却没放文件照样 `ok = true`（缺文件只退回原文、不把话说过头）。⚠️ `langs` 缺 `en` 是**拒载**，判据在 `plugin/manifest.rs` |
-| `mcp/tools.rs` | 五个工具 `nota_info` / `nota_documents` / `nota_read` / `nota_write` / `nota_open`（2026-09-27，492 行）。判据只有一条：**这件事不经 MCP 做不到或很别扭**——AI 客户端自己就能读盘写盘，它做不到的是够到 **Nota 里正开着的那一份**。⚠️ 三个"想做但这一版没做"的（细粒度编辑那一类）如实写在它文件头 |
-| `mcp/host.rs` | MCP 要用到的那几件**宿主能力**收成一个 `宿主` trait（2026-09-27，212 行）。⚠️ 抽 trait **不是为了"将来接别的宿主"（那是猜），是为了测得到**：真实现要 `AppHandle`、单测里建不出来。⚠️ 于是有条纪律：**工具里不许出现第二条"直接问应用"的路**，想让工具多做一件事就给它加一个 trait 方法，绕过 trait 直接摸 `AppState` 会变成"单测跑得到、真机上没人跑过"那半边绿 |
-| `mcp/mod.rs` | **MCP 服务器**（2026-09-27，**741 行**；2026-10-10 做 Windows 编译尝试时按 `#[cfg(unix)]` 分了档）：⚠️ `服务流` / `接上` / `代理` 只有 Unix 上有实现——别的平台给一个 `结局::平台不支持`（退出码 4）的桩，**不冒充「没人听」**（那句会把人引去开一份 Nota，而开了也没用）。⚠️ 分档是为了先把「编不过」变成「编得过、而且这一格明确说了没做」（那 17 个编译错里 3 个在这份文件）stdio 上一行一条 JSON-RPC 2.0，四个方法 `initialize` / `ping` / `tools/list` / `tools/call`。⚠️ **三种下场一个命令**（`nota --mcp`，2026-09-29 改口径）：已经有 Nota 在跑 → 这一份只当管子（够到**用户正开着的那一份**）；一份都没跑 → **说一句"请先打开 Nota"、退出码 2**（⚠️ 原来这里是"自己开窗并服务 MCP"，那正是用户报的「不停新建窗口」，见 BUG-55）；别的进程连上来 → `single_instance.rs` 认出暗号（`MCP暗号`）交给 `服务流`。⚠️ 所以 `--mcp` 今天**不建窗也不抢单实例的位置**|
+| `mcp/tools.rs` | Internal live-document operations reused by Host Control: `nota_info` / `nota_documents` / `nota_read` / `nota_write` / `nota_open`. The public MCP transport is gone; the tested host abstraction remains because DevKit calls these operations through `documents.*`. |
+| `mcp/host.rs` | Internal host abstraction for the document operations above. Keeping the trait makes the path testable without constructing a real Tauri `AppHandle`; it is not a second external protocol. |
+| `mcp/mod.rs` | Minimal private module gate. It exposes only `host`, `tools` and protocol version metadata. The stdio MCP server, `--mcp` client and single-instance magic handshake were removed on 2026-11-07. |
 
 **前端 `src/`**
 
@@ -107,6 +114,8 @@
 | `bridge/ipc-events.ts` | **事件订阅与频道名**（2026-10-17 从 `ipc.ts` 拆出，218 行）：`on()` 与 `events`。⚠️ 只放「发生类」事件；声明类走 `api.plugin.panels()` / `menus()` 拉（BUG-13）。 |
 | `bridge/types.ts` | **所有跨边界的形状**（2026-09-26 从 `ipc.ts` 拆出）：文档 / 设置 / 插件 / 导出 / 图像。⚠️ **纯类型文件**——不 import `@tauri-apps/api`、不写运行时值，所以谁都能引它而不背上副作用。⚠️ **2026-09-27 又拆了一次**（本文件 1009 行、① 行数闸 FAIL）：事件载荷那四个去了 `payloads.ts`，拆完 **967 行** |
 | `bridge/payloads.ts` | **事件载荷的形状**（2026-09-27 从 `types.ts` 拆出，69 行）：`NotifyPayload` / `PanelDirtyPayload` / `DocumentChangedPayload` / `FileChangedPayload`。⚠️ **拆的线**＝"命令的返回类型"（上面那份）vs"推过来的事件"（这份）——`events.*` 是**发生了一件事**，不是回答 |
+| `ui/DeveloperBridgeDialog.tsx` | Developer bridge security flow and status row: five randomized acknowledgement steps, shuffled numeric keypad, password/port/IP form, enable/disable/disconnect actions. |
+| `ui/useDevBridgeHost.ts` | WebView half of Host Control: subscribes to `nota:dev-bridge-command`, invokes registered host commands, handles the internal `nota_host_preview_render` command with the real HTML export pipeline, and posts results through `nota_dev_bridge_respond`. |
 | `ui/file-picker.ts` | **文件选择入口与回退队列**：`pickFile` 先调用 `nota_dialog_native`；只有 IPC 本身失败时才把请求放进应用内队列。`matchesFileFilters` 与 `resolveSavePath` 继续负责回退界面的筛选和保存后缀。路径拆分覆盖 Unix、Windows 盘符根与 UNC 路径。 |
 | `ui/FilePickerDialog.tsx` | **应用内文件选择器的回退界面**：打开 / 保存 / 选择文件夹三种模式共用左侧位置栏、路径栏、文件列表、隐藏文件开关、新建文件夹与覆盖确认。支持鼠标双击、方向键、Home / End 和 Enter；保存模式会补筛选后缀。正常路径优先使用 XDG Desktop Portal；GNOME 下即 GTK4 系统选择器，系统搜索、最近与书签不在这里重做。 |
 | `editor/create.ts` | Milkdown 封装（**所见即所得**），对外只有 `EditorHandle`。⚠️ `readOnly` 选项是给分屏预览用的 ⚠️ **2026-10-07 拆过（第 89 项）：1006 → 502 行**——「一次性把一切装上去」那一段整块搬去了 `editor/assemble.ts`（620 行），这边只留「实例建好之后怎么用」。 |
@@ -147,7 +156,7 @@
 | `editor/code-block-lift.ts` | 代码框开头 Backspace 的纯节点转换：把 `code_block` 按换行拆成 `paragraph[]`，空行也保留；不碰 `EditorView`，NodeView 与无 DOM 测试共用 |
 | `editor/deferred-snapshot.ts` | **大文件源码输入的延迟全文快照**（2026-10-25 新建，纯计时器工具）：连续输入只保留一个待执行定时器，到期调用一次 `getMarkdown()`；`cancel()` 处理卸载，`flush()` 留给需要立即交付的调用方。⚠️ 保存、导出与模式切换**不走这个定时器**，必须直接读编辑器，否则会丢最后一笔输入。判据 `tests/deferred-snapshot.test.ts` |
 | `editor/refractor-runtime.ts` | **长尾代码语言表的按需加载层**：`ensureFullLanguageTable()` 共享一次 `import("refractor/all")`，失败后允许下次重试；`languageTableReady()` 只供测试与诊断。语言选择器打开时加载并重画列表，代码块只在使用尚未注册的语言时才加载，避免普通 c/js/ts/python 文档常驻数百种解析器。判据 `tests/refractor-runtime.test.ts` 5 条 |
-| `editor/code-block-cm.ts` | **代码块里的 CodeMirror**（2026-10-06 新建）。📌 **2026-10-23 的字体口径**：CM baseTheme 自己会给 `.cm-scroller` 写 `font-family: monospace`，因此主题里不能只写 `inherit`；`.cm-scroller` / `.cm-content` / `.cm-line` 都显式使用 `var(--font-mono)`。2026-11-04 起首尾按**行**判断：第一行任意列 `←` / `↑` 调 `leaveHeadCell`，最后一行任意列 `→` / `↓` 调 `leaveTailCell`；单行代码块同时属于首尾。加载中的 textarea 也接同样四颗键。⚠️ 整行剪贴那一层（`整行剪贴`/`落剪贴板` ＋ `记按键`）：没有选区时 `Ctrl+C`/`Ctrl+X` 按**整行**来，并处理 WebKitGTK 重复派发 `copy`/`cut` 的问题 |
+| `editor/code-block-cm.ts` | **代码块里的 CodeMirror**（2026-10-06 新建）。📌 **2026-10-23 的字体口径**：CM baseTheme 自己会给 `.cm-scroller` 写 `font-family: monospace`，因此主题里不能只写 `inherit`；`.cm-scroller` / `.cm-content` / `.cm-line` 都显式使用 `var(--font-mono)`。2026-11-04 起首尾按**行**判断：第一行任意列 `←` / `↑` 调 `leaveHeadCell`，最后一行任意列 `→` / `↓` 调 `leaveTailCell`；单行代码块同时属于首尾。加载中的 textarea 也接同样四颗键。2026-11-08 起括号和引号仍自动配对，但反引号保持单字符字面输入。⚠️ 整行剪贴那一层（`整行剪贴`/`落剪贴板` ＋ `记按键`）：没有选区时 `Ctrl+C`/`Ctrl+X` 按**整行**来，并处理 WebKitGTK 重复派发 `copy`/`cut` 的问题 |
 | `editor/diagram-view.ts` | **图表块的 NodeView**：可编辑实例采用上下双区，上方是 **CodeMirror** 源码编辑器（折叠、复制、`mermaid` 标识），下方是独立边框的渲染区；源码经 250ms 防抖写回 `attrs.value`，撤销/重做仍归 ProseMirror。粘贴由 CM 自己接管，不能再落进外层正文。只读预览与导出只显示渲染结果。 |
 | `editor/diagram-render.ts` | **Mermaid 渲染层**：串行化全局 Mermaid 配置、从正文纸面推导明暗和 mindmap 配色、LRU 缓存、失败清理与动态加载。只在真正渲染时加载 Mermaid，绝不回写文档。 |
 | `editor/lang-picker.ts` | **代码块语言选择器**：自绘下拉，支持图标、输入筛选与完整语言表。弹层挂 `document.body`，NodeView 销毁时必须摘掉；键盘/点击/点外收口与右键菜单让路逻辑保持原样 |
@@ -9350,6 +9359,12 @@ toast 会自己消失）· **剪贴板尽力而为、能力先问后做**。
 ---
 
 ## `src-tauri/src/mcp/mod.rs`（725 行）
+
+> **2026-11-07 superseded:** the file is now a private 10-line module gate.
+> The public MCP server, `--mcp` transport and socket handshake no longer
+> exist. Host Control in `dev_bridge.rs` is the only external developer API.
+> Statements below describe the removed implementation and are retained only
+> as historical context.
 
 **MCP 服务器：让 AI 客户端够到用户正开着的那个 Nota**（2026-09-27 新增）。
 

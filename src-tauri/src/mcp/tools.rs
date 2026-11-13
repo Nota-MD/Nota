@@ -139,16 +139,25 @@ pub fn 清单() -> Value {
 /// * **工具跑了但没成**（没有这份文档、路径不存在……）→ 正常返回一份
 ///   `isError: true` 的内容，**模型看得见那句话并可自行纠错**——这是工具
 ///   该有的行为，不该升级成协议错误。
+#[cfg(test)]
 pub fn 跑一个(名: &str, 参: &Value, 宿主: &dyn 宿主) -> Result<Value, String> {
-    let 找 = 工具表
+    let tool = find_tool(名)?;
+    Ok(装内容((tool.跑)(宿主, 参)))
+}
+
+pub fn run_tool_raw(名: &str, 参: &Value, 宿主: &dyn 宿主) -> Result<Value, String> {
+    (find_tool(名)?.跑)(宿主, 参)
+}
+
+fn find_tool(name: &str) -> Result<&'static 工具, String> {
+    工具表
         .iter()
-        .find(|t| t.名 == 名)
-        .ok_or_else(|| format!("没有叫 {名} 的工具（用 tools/list 看现在有哪些）"))?;
-    let 结果 = (找.跑)(宿主, 参);
-    Ok(装内容(结果))
+        .find(|tool| tool.名 == name)
+        .ok_or_else(|| format!("没有叫 {name} 的工具（用 tools/list 看现在有哪些）"))
 }
 
 /// 把工具的结果装成 MCP 的 `tools/call` 结果。
+#[cfg(test)]
 fn 装内容(结果: Result<Value, String>) -> Value {
     match 结果 {
         Ok(值) => json!({
@@ -166,6 +175,7 @@ fn 装内容(结果: Result<Value, String>) -> Value {
 /// 缩进后的 JSON 会白白多出三四成 token，而模型读紧凑 JSON 毫无困难。
 /// 唯一做的加工是"只有一层对象且只有一个 `text` 字段时，直接把那段文字给它"
 /// ——`nota_read` 就是这种形状，让模型少解析一层壳。
+#[cfg(test)]
 fn 好看一点(值: &Value) -> String {
     match 值 {
         Value::String(s) => s.clone(),
@@ -193,7 +203,7 @@ fn 跑_info(宿主: &dyn 宿主, _参: &Value) -> Result<Value, String> {
     Ok(json!({
         "app": "Nota",
         "version": 宿主.应用版本(),
-        "protocol_versions": super::协议版本们,
+        "protocol_versions": super::MCP_PROTOCOL_VERSIONS,
         "open_documents": 概览们.len(),
         "active": 活动,
     }))
@@ -252,7 +262,7 @@ fn 跑_open(宿主: &dyn 宿主, 参: &Value) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::host::{概览, 全文};
+    use crate::mcp::host::{全文, 概览};
     use std::sync::Mutex;
 
     /// 一份假宿主：够跑通五个工具，且每一条**都记着被调过什么**。
@@ -270,8 +280,16 @@ mod tests {
     impl 假宿主 {
         fn 建两份() -> Self {
             let 这 = Self::default();
-            这.文档.lock().unwrap().push((1, "甲".into(), Some("/tmp/甲.md".into()), "第一篇".into()));
-            这.文档.lock().unwrap().push((2, "乙".into(), None, "".into()));
+            这.文档.lock().unwrap().push((
+                1,
+                "甲".into(),
+                Some("/tmp/甲.md".into()),
+                "第一篇".into(),
+            ));
+            这.文档
+                .lock()
+                .unwrap()
+                .push((2, "乙".into(), None, "".into()));
             *这.活动.lock().unwrap() = Some(2);
             *这.版本.lock().unwrap() = 7;
             这
@@ -339,7 +357,10 @@ mod tests {
 
     /// 取工具结果里那段文字。
     fn 文字(值: &Value) -> String {
-        值["content"][0]["text"].as_str().unwrap_or_default().to_string()
+        值["content"][0]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
     }
 
     #[test]
@@ -350,7 +371,13 @@ mod tests {
         let mut 名们: Vec<&str> = 工具们.iter().map(|t| t["name"].as_str().unwrap()).collect();
         assert_eq!(
             名们,
-            vec!["nota_info", "nota_documents", "nota_read", "nota_write", "nota_open"]
+            vec![
+                "nota_info",
+                "nota_documents",
+                "nota_read",
+                "nota_write",
+                "nota_open"
+            ]
         );
         名们.sort_unstable();
         let 去重 = {
@@ -360,7 +387,11 @@ mod tests {
         };
         assert_eq!(名们, 去重, "工具名不许重");
         for t in 工具们 {
-            assert!(!t["description"].as_str().unwrap().is_empty(), "{}没有说明", t["name"]);
+            assert!(
+                !t["description"].as_str().unwrap().is_empty(),
+                "{}没有说明",
+                t["name"]
+            );
             let 参数 = &t["inputSchema"];
             assert_eq!(参数["type"], "object", "{}", t["name"]);
             assert!(参数["properties"].is_object(), "{}", t["name"]);
@@ -433,11 +464,23 @@ mod tests {
     #[test]
     fn id_写错了就报错不猜() {
         let 这 = 假宿主::建两份();
-        for 坏 in [json!({ "id": "1" }), json!({ "id": -1 }), json!({ "id": 1.5 })] {
+        for 坏 in [
+            json!({ "id": "1" }),
+            json!({ "id": -1 }),
+            json!({ "id": 1.5 }),
+        ] {
             let 值 = 跑一个("nota_read", &坏, &这).unwrap();
             assert_eq!(值["isError"], true, "{坏} 该被挡下");
             assert!(文字(&值).contains("id"), "{}", 文字(&值));
         }
+    }
+
+    #[test]
+    fn raw_results_are_not_mcp_envelopes() {
+        let host = 假宿主::建两份();
+        let value = run_tool_raw("nota_documents", &json!({}), &host).unwrap();
+        assert!(value.get("documents").is_some());
+        assert!(value.get("content").is_none());
     }
 
     #[test]

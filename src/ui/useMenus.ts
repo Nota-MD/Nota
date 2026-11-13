@@ -151,6 +151,14 @@ export interface MenuState {
   usingNativeMenu: boolean;
 }
 
+export function effectiveMenuRenderer(
+  configured: MenuBarRenderer,
+  forceWhenExpanded: boolean,
+  expanded: boolean,
+): MenuBarRenderer {
+  return forceWhenExpanded && expanded ? "nota" : configured;
+}
+
 /**
  * **第二条判据**：这几条命令还要求"光标现在处在某个状态"。
  *
@@ -338,12 +346,12 @@ export function useMenus(w: MenuWiring): MenuState {
       //（`prosemirror-view` 的 `editHandlers.keydown` 末尾那一句），而它的监听器
       // 挂在**正文节点**上、比这里（`window`）早，所以事件冒到这一层时标记已经在了。
       //
-      // ⚠️ 少这一条的症状**不是"多执行一遍"，是那颗键彻底失灵**：
-      // `@milkdown/preset-commonmark` 自己绑了 `Mod-b` / `Mod-i`
-      //（`strongKeymap` / `emphasisKeymap`），本仓菜单表也绑了同样两颗
-      //（`fmt.bold` / `fmt.italic`）——**两个主人，两条命令都是 toggle，
-      // 跑两遍正好抵消**，看起来就是"按了没反应"。用户 2026-09-28 报的
-      // 「Ctrl B 没反应」就是这个（`docs/07` 的 BUG-49）。
+      // ⚠️ 少这一条的症状**不是"多执行一遍"，是那颗键彻底失灵**：上游
+      // `strongKeymap` / `emphasisKeymap` 已从 preset 中摘掉，现在由
+      // `inlineMarkKeymap` 在正文编辑器里统一处理。它返回 true 时已经
+      // `preventDefault()`，这一层必须放行，否则菜单表会对同一颗键再跑一遍。
+      // 用户 2026-09-28 报的「Ctrl B 没反应」曾是两份 toggle 互相抵消
+      //（`docs/07` 的 BUG-49）。
       //
       // ⚠️ 指纹是**同一个快捷键在两种模式下不同命**：源码模式那边 CodeMirror
       // 没绑 `Mod-b`（见 `source.ts` 的 `撞车键位`），只跑一遍，所以一直好使；

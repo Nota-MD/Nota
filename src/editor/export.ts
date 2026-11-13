@@ -208,6 +208,7 @@ const wholeBlockRemoveRemove = [
   /** 装 Mermaid 源码的 textarea。⚠️ 源码是 `value` 不是文本节点，所以它进不了
    *  `innerHTML`——但一个空的 `<textarea>` 在导出的 HTML 里照样是个框。 */
   ".nota-diagram-source",
+  ".nota-diagram-source-shell",
   /** 说明卡上那颗"编辑源码"按钮。⚠️ 卡片本身（`.nota-diagram-note`）**留着**：
    *  图渲染失败时它是唯一还说得清话的东西。 */
   ".nota-diagram-note-btn",
@@ -237,7 +238,14 @@ async function equalExceptionStepRender(pm: Element): Promise<void> {
   const limitMilliSeconds = 5000;
   const start4 = performance.now();
   while (performance.now() - start4 < limitMilliSeconds) {
-    if (!pm.querySelector('.nota-diagram-preview[data-state="loading"]')) return;
+    if (
+      !pm.querySelector('.nota-diagram-preview[data-state="loading"]') &&
+      !pm.querySelector('.nota-math-render[data-state="loading"]') &&
+      !pm.querySelector('.nota-math-preview[data-state="loading"]') &&
+      !pm.querySelector('.nota-code-math-preview[data-state="loading"]')
+    ) {
+      return;
+    }
     await new Promise((r) => setTimeout(r, 30));
   }
 }
@@ -349,6 +357,8 @@ async function removeBody(markdown: string, includeHtmlPreviews = false): Promis
         }
         if (language) code.setAttribute("class", `language-${language}`);
         pre.removeAttribute("data-language");
+        code.removeAttribute("style");
+        code.removeAttribute("aria-hidden");
         // ⚠️ `replaceChildren`：那一层 CM 的 DOM、行号、工具条、语言选择器
         // **一起**出局——不用逐个删（逐个删就是再抄一遍上面那份名单）。
         pre.replaceChildren(code);

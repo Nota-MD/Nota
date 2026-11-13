@@ -31,6 +31,11 @@ pub fn settings_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("settings.toml"))
 }
 
+/// Developer bridge credentials and paired sessions.
+pub fn dev_bridge_file() -> Result<PathBuf> {
+    Ok(config_dir()?.join("dev-bridge.toml"))
+}
+
 /// 插件启用状态的落点：`$XDG_CONFIG_HOME/nota/plugins.toml`。
 ///
 /// ⚠️ 与 `settings.toml` 同放 `config` 而不放 `data`，理由与

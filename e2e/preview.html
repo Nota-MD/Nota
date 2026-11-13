@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-ui-style="adwaita" data-ui-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nota Code Block Preview</title>
+    <style>
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg, #fff);
+      }
+
+      .preview-shell {
+        box-sizing: border-box;
+        width: min(1180px, calc(100vw - 40px));
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 28px 0 240px;
+      }
+
+      .preview-controls {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        z-index: 100;
+        display: flex;
+        gap: 8px;
+      }
+
+      .preview-controls button {
+        height: 32px;
+        padding: 0 12px;
+        border: 1px solid var(--border, #bbb);
+        border-radius: 6px;
+        background: var(--bg-raised, #f6f6f6);
+        color: var(--fg, #222);
+        cursor: pointer;
+      }
+
+      .preview-diagnostics {
+        position: fixed;
+        right: 12px;
+        bottom: 12px;
+        width: min(580px, calc(100vw - 24px));
+        max-height: 210px;
+        margin: 0;
+        padding: 12px;
+        overflow: auto;
+        border: 1px solid #777;
+        border-radius: 7px;
+        background: rgb(20 22 26 / 92%);
+        color: #f4f4f4;
+        font: 12px/1.45 monospace;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="preview-shell">
+      <section class="editor-pane">
+        <div class="editor-mount">
+          <div id="editor"></div>
+        </div>
+      </section>
+    </main>
+    <div class="preview-controls">
+      <button id="normal" type="button">Normal block</button>
+      <button id="empty" type="button">Empty block</button>
+      <button id="reload" type="button">Reload</button>
+    </div>
+    <pre id="diagnostics" class="preview-diagnostics">loading...</pre>
+    <script type="module" src="./preview.ts"></script>
+  </body>
+</html>

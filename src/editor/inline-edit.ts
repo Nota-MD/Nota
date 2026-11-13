@@ -51,8 +51,8 @@ export function insertPlainInlineText(
   return tr;
 }
 
-/** Characters that Typedown's Markdown syntax pairing handles. */
-export const inlinePairCharacters = "*_$`~";
+/** Markdown delimiters that may receive an automatic partner. */
+export const inlinePairCharacters = "*_$~";
 
 /**
  * Mirrors Typedown's Markdown-syntax pair gate.
@@ -94,9 +94,9 @@ export function shouldStepOverInlinePair(
 /**
  * Delete an empty delimiter pair as one user-visible unit.
  *
- * Typedown's bracket table includes these five Markdown characters. It
- * deliberately has no backtick entry, so a matched code-span pair keeps the
- * same ordinary Backspace behavior as the reference implementation.
+ * Inline code spans are intentionally absent: a lone backtick remains a
+ * literal character and a matched code span keeps ordinary Backspace
+ * behavior.
  */
 export function emptyInlinePairEdit(
   source: string,

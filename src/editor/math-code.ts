@@ -37,10 +37,12 @@ export function createNumberLearnCodeOutput(options: KatexOptions = {}): NumberL
       const source2 = source.trim();
       const selfOfRepresentNumber = ++representNumber;
       if (!source2) {
+        element.hidden = true;
         element.dataset.state = "empty";
         output.textContent = `< ${t("Empty Math Block")} >`;
         return;
       }
+      element.hidden = false;
       element.dataset.state = "loading";
       output.textContent = "";
       void renderCommonStyle(source2, output, { ...options, displayMode: true, throwOnError: false })

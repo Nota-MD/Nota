@@ -573,6 +573,14 @@ export type EditorCommand =
 源码模式同一判据：选区每行都已经是同一串 `#… ` 时再点同一级会清掉标题前缀。
 判据 `tests/heading-toggle.test.ts` **5 条**。
 
+📌 **2026-11-08 起行内标记的空光标语义与 Textus/Typora 对齐**：`Ctrl+B` /
+`Ctrl+I` 和工具栏按钮不再只偷偷设置 `storedMarks`。光标没有选区时，
+`command-table.ts` 会在当前源码位置插入可见的定界符对（粗体 `****`、斜体
+`**` 等），光标停在中间；继续输入即形成对应标记，从标记内部再次切换会摘掉
+当前整段标记。上游 `strongKeymap` / `emphasisKeymap` 已从 commonmark preset
+过滤，改由 `inlineMarkKeymap` 调同一命令入口，避免 stock toggle 与 Nota
+工具栏命令各跑一遍。Chromium 实键用例覆盖空光标创建、输入和再次取消。
+
 ⚠️⚠️ **2026-09-28：命令白名单（`COMMANDS` 表）整块从 `create.ts` 搬去了
 `src/editor/command-table.ts`**——搬的原因只有行数一个（那边到 **1010** 行、越过
 1000 行硬上限），**内容一个字节没改**。本文件里凡是说"某张表/某条命令在
@@ -2678,8 +2686,13 @@ VMark 的 `codePaste`（它的判据是行数 ≥ 2、≤ 50KB、打分 `confide
 半角 `()` `[]` `{}`、常用全角括号、直引号与智能弯引号。空选区输入开符号会补
 闭符；只有本插件插入的闭符会被跨过；空对 Backspace 一次删除两侧；有选区时包住；
 Tab/Shift+Tab 跨过相邻边界。代码、链接、URL 和 IME preedit 期间不介入。
-同一开关也授权 `inline-edit.ts` 处理 `*` `_` `$` 反引号 `~`；关闭时两侧都不得
+同一开关也授权 `inline-edit.ts` 处理 `*` `_` `$` `~`；关闭时两侧都不得
 追加用户没有按下的字符。
+
+📌 **2026-11-08 现行例外**：反引号不再进入 Markdown 智能配对表。单独输入一颗
+`` ` `` 就只写入这一颗，避免普通正文被擅自补成行内代码；用户继续输入正文和
+另一颗反引号时，仍按 Markdown 正常解析成代码跨度。嵌入式代码块的 CodeMirror
+`closeBrackets()` 同样不包含反引号，但括号与引号配对不受影响。
 
 输入法路径不能靠 `handleTextInput`：组字期间 ProseMirror 会绕开它。现行实现于
 `compositionstart` 记住选区，在 `compositionend` 后等待 50ms 且最多重试 5 次，
@@ -3242,9 +3255,42 @@ ProseMirror 文本插入，旁边的 `$` 不会变成 `notaLiteral` 原子；这
 
 ⚠️ **行内标记重解析必须排除代码块**：`code_block` 也是 `isTextblock`，只看这一项会让 `markHint` 把代码当普通段落重新配对 `*` / `_` 并回灌。2026-10-31 真窗口里每次在代码块输入都会把尾部复制成下面的顶层段落；四处行内重写入口现在统一用 `parent.type.spec.code` 拦住，代码块只走 CodeMirror → ProseMirror 的最小文本事务。
 
-⚠️ **代码块自己的括号配对仍由 CodeMirror 提供**：`closeBrackets()` 与 `closeBracketsKeymap` 对 `(` / `[` / `{` / 单双引号 / 反引号生效，包含补闭符、跨过已有闭符和空对退格。它只作用于嵌入的源码编辑器；正文另有 `auto-pair.ts` 的基础括号层，两者不共用状态。
+⚠️ **代码块自己的括号配对仍由 CodeMirror 提供**：`closeBrackets()` 与
+`closeBracketsKeymap` 对 `(` / `[` / `{` / 单双引号生效，包含补闭符、跨过已有
+闭符和空对退格。反引号要求保持字面输入，不自动补成模板字符串或 Markdown
+行内代码。它只作用于嵌入的源码编辑器；正文另有 `auto-pair.ts` 的基础括号层，
+两者不共用状态。
+
+📌 **2026-11-09 修正代码块首个光标的位置与高度**：CodeMirror 原生 caret
+受 `line-height: 1.6` 影响，Windows/WebView2 下会画成明显高于字形的长竖线；
+首次聚焦时若行盒还没测量，覆盖层坐标还可能落在源码面原点。这里有一处
+必须同时处理的 CSS 优先级：`editor.css` 曾为所有 `.cm-content` 写
+`caret-color: var(--accent) !important`，使代码块自己的 `transparent`
+失效，窗口里看到的仍是原生长光标。现在额外用
+`.nota-code-cm .cm-content { caret-color: transparent !important }`
+只在嵌入式代码块隐藏原生 caret，源码模式和公式输入框不受影响。每个
+CodeMirror 实例创建后还会在 `contentDOM` / `scrollDOM` 上写入内联
+`caret-color: rgba(0, 0, 0, 0) !important` 和
+`forced-color-adjust: none !important`，并标记
+`data-nota-caret-build="inline-mark-v8"`；这是高于文档主题和 Windows
+高对比调色板的最后一道 WebView2 兜底。
+代码块光标不再使用编辑器外覆盖层，也不在行尾放 Widget。WebKitGTK 实测会把
+行尾零宽 Widget 排到下一视觉行；现在改为 `Decoration.mark`：光标在字符前时
+装饰后一个字符并用 `::before` 画笔，光标在行尾时装饰前一个字符并用 `::after`
+画笔，空行使用 `Decoration.line`。光标因此始终绑定真实字符或行盒，行号、
+内边距、滚动、页面缩放和字符边界全部由 CodeMirror 行内布局决定。Chromium
+定向用例覆盖原生 caret 透明、普通代码块 100% / 125% / 150%、空代码块首次
+聚焦以及继续输入；Xvfb/WebKitGTK 另做行尾窗口复验。
 
 ⚠️ **外层 `pre` 的 `overflow` 必须是 `visible !important`**：语言选择器绝对定位在代码框下沿之外，而 GitHub 文档主题有 `#write pre { overflow:auto }`，ID 选择器会压过普通 Nota 规则并裁掉选择器，只剩顶部一截贴在边框里。`.nota-code-wrap` 也保持可见溢出。
+
+📌 **2026-11-08 已复现并修掉 Windows/缩放下的语言框空隙**：代码块右下角的
+定位原先取 `getBoundingClientRect()` 的视口坐标再写回 CSS `top`，浏览器缩放
+后视口矩形已经乘过一次比例，CSS 又乘第二次，125% 下 Chromium 实测多出
+`18.7px`。现在定位祖先就是 `pre` 时改用
+`pre.offsetHeight - pre.clientTop`，与 CSS `top` 使用同一套布局单位。
+Chromium 定向 E2E 在 100% / 125% / 150% 三档都验证语言框贴住代码块底边；
+右侧保留 8px 内缩，断言也按实际缩放换算，不再把合法的 8px 误判成偏移。
 
 ⚠️ **为什么不让 CodeMirror 直接当 contentDOM**：CM 的 DOM 是"一行一个
 `<div class="cm-line">`"，而 ProseMirror 按**文本偏移**往 contentDOM 里映射位置
@@ -3738,6 +3784,15 @@ Ctrl+W 确认关闭"这条路里，最后几次击键不进后端。
   "晚 250ms"更糟——它可能落在**另一份文档**头上。
 
 ### 5.3 插件的界面：**通知推、声明拉**（2026-09-22 起）
+
+**2026-11-07 新增开发者桥事件**：`nota:dev-bridge-theme` 携带已读取的 CSS，
+由 `useDocTheme` 直接应用到编辑区；`nota:dev-bridge-command` 携带
+`{ requestId, command, args }`，由 `useDevBridgeHost` 在 WebView 调用已有的
+`nota_*` 命令，再通过 `nota_dev_bridge_respond` 把结果交回正在等待的 HTTP
+请求。桥接线程最多等待 30 秒。`nota_host_preview_render` 是唯一的伪命令，
+它调用真实 `exportHtml` 生成 Markdown 预览，不注册成第二个 Tauri 命令。
+实际链路已验证 `theme.reload` 会触发该主题事件，`commands.invoke` 会返回原始
+命令结果，预览 HTML 包含当前渲染器的 KaTeX、代码块和 Mermaid。
 
 ⚠️ **这一节的原版把三样东西归成了一类，那是错的。** 原版说 `nota.ui` 的
 `notify` / `register_panel` / `register_menu` **都**走"发事件给前端"，

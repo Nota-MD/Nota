@@ -445,6 +445,7 @@ export function createSourceEditor(options: CreateSourceOptions): SourceHandle {
   const extensions: Extension[] = [
     history(),
     drawSelection(),
+    EditorView.lineWrapping,
     // 当前行那一层淡底（配色在 `notaTheme` 里那条 `.cm-activeLine`）。
     // ⚠️ **排在最前**是有意的：它只加一条 `Decoration.line`，不碰键位、不碰
     // 文档，所以顺序上无争——但放在 `keymap` 后面会让人以为它和键位有关。

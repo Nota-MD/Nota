@@ -32,17 +32,17 @@
   --bg: #fafafb;
   --bg-subtle: #f3f3f5;
   --bg-raised: #ffffff;
-  --fg: #1e1e1e;
+  --fg: #2e3436;
   /* 稿子：次要辅助文字 rgba(0,0,6,0.55)。它在 #f3f3f5 上只有 4.26:1，
      够不上 AA——这两个是算出来的（最差那层 5.67 / 4.53）。 */
-  --fg-muted: #606061;
-  --fg-faint: #6f6f70;
+  --fg-muted: #707073;
+  --fg-faint: #838386;
   --border: rgba(0, 0, 6, 0.12);
   /* ⚠️ 强调色**本来就是稿子这一支**（#3584e4），没动。它配白字是 3.77:1，
      低于本仓那条 4.5:1 的硬线——**这是唯一一处明知故犯**，理由：这一档是
      `auto` 落到的地方，也就是绝大多数人看到的样子，而 #3584e4 是 GNOME
      自己的强调色，换掉就不是 Adwaita 了。已在 `docs/04` 记一笔。 */
-  --accent: #3584e4;
+  --accent: #1c71d8;
   --accent-fg: #ffffff;
   /* 稿子：普通按钮**默认无背景**（扁平），hover/按下才出现一层薄底。 */
   --btn-bg: transparent;
@@ -52,20 +52,22 @@
   --switch-off: rgba(0, 0, 6, 0.15);
   --switch-on: #3584e4;
   --switch-knob-bg: #ffffff;
+  --sidebar-surface: #f3f3f5;
+  --settings-window-bg: #fafafb;
   /* 稿子：阴影 rgba(0,0,0,0.20)、y 4、模糊 18——"这几套里最舒展的一个"。 */
   --shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
 }
 [data-ui-style="adwaita"][data-ui-mode="dark"] {
   /* 稿子：面板 #222226、headerbar #2e2e32、分割线 rgba(255,255,255,0.12)。 */
   --bg: #222226;
-  --bg-subtle: #2e2e32;
+  --bg-subtle: #28282c;
   /* 稿子没给"抬起来那层"，在 headerbar 色上再抬一档。 */
   --bg-raised: #36363a;
-  --fg: #ffffff;
+  --fg: #e5e5e5;
   /* 稿子的 rgba(255,255,255,0.55) 在 #36363a 上是 4.34:1，差一点；
      这两个算出来是 5.63 / 4.51。 */
-  --fg-muted: #b1b1b5;
-  --fg-faint: #9e9ea3;
+  --fg-muted: #9d9da1;
+  --fg-faint: #858589;
   --border: rgba(255, 255, 255, 0.12);
   /* ⚠️ 暗色这一档**没照稿子用 #3584e4 + 白字**（3.77:1，读不出来）。
      沿用本仓原来那支 #78aeed + 深字（对比度 6.6:1）。 */
@@ -80,6 +82,8 @@
      白字）。 */
   --switch-on: #3584e4;
   --switch-knob-bg: #ffffff;
+  --sidebar-surface: #28282c;
+  --settings-window-bg: #242424;
   --shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
   /* 正文的底跟外壳一起走（同 macOS 深色那一块的理由）。 */
   --doc-bg: #222226;
@@ -426,6 +430,8 @@
   --switch-off: #dcdfe4;
   --switch-on: #e95420;
   --switch-knob-bg: #ffffff;
+  --radio-on: #e95420;
+  --radio-on-fg: #ffffff;
   --shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
 }
 [data-ui-style="yaru"][data-ui-mode="dark"] {
@@ -440,11 +446,10 @@
   --fg-faint: #a4a9b4;
   --border: #4c4c4c;
   --border-strong: #5c5c5c;
-  /* ⚠️ 暗色这一档**没照稿子用 #e95420**：稿子说暗色强调按钮也是 #e95420 +
-     白字，那是 3.1:1（它自己浅色那档就是同一个问题，见上面那段）。
-     本仓原来就用深色下更亮一档的 #f3732e + 深字，别改回去。 */
-  --accent: #f3732e;
-  --accent-fg: #24100a;
+  /* Yaru system chrome uses one orange across window controls, switches and
+     selected controls. Keep the app on the same value in dark mode. */
+  --accent: #e95420;
+  --accent-fg: #ffffff;
   --btn-bg: #383838;
   --btn-bg-hover: #444444;
   --btn-bg-active: #505050;
@@ -454,6 +459,8 @@
      开关上没有字，橙色轨道配白滑块是读得出来的。 */
   --switch-on: #e95420;
   --switch-knob-bg: #ffffff;
+  --radio-on: #e95420;
+  --radio-on-fg: #ffffff;
   --shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
   --doc-bg: #2c2c2c;
   --doc-fg: #f2f2f2;

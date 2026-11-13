@@ -316,6 +316,37 @@ export const api = {
     reset: () => invoke<Settings>("nota_settings_reset"),
   },
 
+  devBridge: {
+    status: () => invoke<import("./types").DevBridgeStatus>("nota_dev_bridge_status"),
+    enable: (
+      password: string | null,
+      port: number,
+      whitelist: string[],
+    ) =>
+      invoke<import("./types").DevBridgeStatus>("nota_dev_bridge_enable", {
+        password,
+        port,
+        whitelist,
+        enabled: true,
+      }),
+    disable: () =>
+      invoke<import("./types").DevBridgeStatus>("nota_dev_bridge_disable"),
+    revoke: () =>
+      invoke<import("./types").DevBridgeStatus>("nota_dev_bridge_revoke"),
+    execute: (command: string, args: Record<string, unknown>) =>
+      invoke<unknown>(command, args),
+    respond: (
+      requestId: string,
+      result: unknown = null,
+      error: string | null = null,
+    ) =>
+      invoke<boolean>("nota_dev_bridge_respond", {
+        requestId,
+        result,
+        error,
+      }),
+  },
+
   /**
    * 原生菜单（macOS）。
    *
@@ -870,6 +901,13 @@ export const api = {
      * 正文，界面上那一条是**灰的**（`ui/TabBar.tsx`）。
      */
     openNew: (path?: string) => invoke<void>("nota_window_open_new", { path: path ?? null }),
+    /** Open Preferences in a dedicated native WebView window. */
+    openSettings: () => invoke<void>("nota_window_open_settings"),
+    prepareSettings: () => invoke<void>("nota_window_prepare_settings"),
+    hideSettings: () => invoke<void>("nota_window_hide_settings"),
+    openAbout: () => invoke<void>("nota_window_open_about"),
+    prepareAbout: () => invoke<void>("nota_window_prepare_about"),
+    hideAbout: () => invoke<void>("nota_window_hide_about"),
     /**
      * **真的退出**（2026-10-16 加）。⚠️ **只在"该问的都问过了、答案是退"时才调**：
      * 它是最后那一下，调完进程就没了，没有任何回调、也没有第二次机会。

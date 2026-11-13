@@ -52,7 +52,7 @@ import { useExternalChanges } from "@/ui/useExternalChanges";
 import { useClipboard } from "@/ui/useClipboard";
 import { useFindBar } from "@/ui/useFindBar";
 import { useFocusSession } from "@/ui/useFocusSession";
-import { useMenus } from "@/ui/useMenus";
+import { effectiveMenuRenderer, useMenus } from "@/ui/useMenus";
 import type { CommandState } from "@/editor/command-state";
 import { useDocTheme, useDocThemeSlot } from "@/ui/useDocTheme";
 import { useUiStyles } from "@/ui/useUiStyles";
@@ -71,13 +71,14 @@ import { useCodeBlockPrefs } from "@/ui/useCodeBlockPrefs";
 import { useFocusDim } from "@/ui/useFocusDim";
 import { useStartup } from "@/ui/useStartup";
 import { useDocThemeInventory } from "@/ui/useDocThemeInventory";
-import { useAppEvents } from "@/ui/useAppEvents";
+import { useAppEvents, useDevBridgePreview } from "@/ui/useAppEvents";
 import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
 import { useSelectableUiText } from "@/ui/useSelectableUiText";
 import { ElementInspector } from "@/ui/element-inspector";
 import { useMenuTable } from "@/ui/useMenuTable";
 import { ContextMenu } from "@/ui/ContextMenu";
+import { StandaloneAboutWindow, aboutOnly, settingsOnly, useUtilityWindows } from "@/ui/useUtilityWindows";
 import { useSettingsWindow } from "@/ui/useSettingsWindow";
 import { useMenuFeatures } from "@/ui/useMenuFeatures";
 import { defaultExporter } from "@/ui/export-templates";
@@ -356,7 +357,15 @@ export default function App() {
   // 而那是**约定不是观察**——上游回调用 `useCallback` 包稳的规矩在
   // `ui/useStartup.ts` 文件头最后一段里，改那边之前先读那一段。
   useStartup({ setSettings, setWorkspace, setThemes, openPath, connectAboveMeetingSpeech, toast });
-  useAppEvents({ toast, refreshDocs, openPath, activeId, activeIdRef, editorRef });
+  useAppEvents({
+    toast,
+    refreshDocs,
+    openPath,
+    activeId,
+    activeIdRef,
+    editorRef,
+    setSettings,
+  });
   // ── 主题 ────────────────────────────────────────────────────────
   // ⚠️ 界面主题与缩放搬去了 `ui/useAppearance.ts`（2026-09-25，本文件顶着行数
   // 上限）。它**不在这个位置**——要等下面 `updateSettings` 存在，调用处在那里。
@@ -369,7 +378,6 @@ export default function App() {
   }, [refreshTree]);
 
   // ── 菜单命令 ────────────────────────────────────────────────────────────
-
   /** 改设置并落盘。改不动就把内存里的改回去，免得"界面上是新的、重开又变回去"。 */
   const updateSettings = useCallback(
     async (patch: Partial<Settings>) => {
@@ -461,7 +469,7 @@ export default function App() {
   // ⚠️ `专注总结 !== null` 那一条（2026-09-27 加的）：强制专注的总结框开着时
   // `Esc` 该归它（`ui/FocusSummaryDialog.tsx` 自己接了一个），不该顺手把沉浸模式
   // 也退掉——两个都关掉的话，用户只是想把报告收起来，却连外壳一起被拆了。
-  const { immersive, focusMode, splitReplaceDedicatedNote, fullscreen, toggleFullscreen } = useImmersive({
+  const { immersive, focusMode, splitReplaceDedicatedNote, fullscreen, maximized, toggleFullscreen } = useImmersive({
     hasFloatingLayer:
       settingsWindow.open ||
       confirmReq !== null ||
@@ -479,6 +487,7 @@ export default function App() {
   const { alwaysOnTop, toggleAlwaysOnTop, openDevTools, openNewWindow } = useWindowControls({ toast });
   const activeDoc = docs.find((d) => d.id === activeId) ?? null;
   const menuFeatures = useMenuFeatures({ docs, activeDoc, activeId, workspace, setActiveId, setSidebarOpen, setSidebarTab, refreshDocs, saveDoc, openFolder, openViaDialog, openNewWindow: openNewWindow, askConfirm, toast });
+  useDevBridgePreview({ markdown: getEditorMarkdown, themeId: slot.id, title: activeDoc?.title ?? "Nota" });
 
   // 文档主题那三件事（应用 / 切换 / 打开主题文件夹）搬去了
   // `ui/useDocTheme.ts`（2026-09-24，本文件顶着行数上限）。那边的文件头写着
@@ -501,7 +510,7 @@ export default function App() {
   // 用户**导入的**界面风格（取 CSS 注入 / 打开风格文件夹）在
   // `ui/useUiStyles.ts`（2026-09-26）。⚠️ 与上面那条不是一伙的：文档主题只管
   // 编辑区、它管整个外壳，注入方式还正好相反——细节在那边文件头。
-  const { styles: uiStyles, openStylesDir, refreshStyles, importTheme, importTyporaTheme } = useUiStyles(settings, toast, refreshThemes);
+  const { styles: uiStyles, openStylesDir, refreshStyles, importTheme, importTyporaTheme } = useUiStyles(settings, toast, refreshThemes, !settingsOnly);
 
   // 「复制为 Markdown」（`edit.copyAsMarkdown`）也搬去了 `ui/useClipboard.ts`
   // （2026-09-25），理由在那个文件的文件头；接线在下面 `剪贴板` 那一行。
@@ -719,7 +728,7 @@ export default function App() {
     // ⚠️ 勾在**你此刻看着的**那一套上（`槽.id`），不是 `settings.document_theme`：
     // 这个勾就是"现在用的是这套"，而菜单里选一套改的也正是这套（见上面 `槽`）。
     documentTheme: slot.id,
-    menuRenderer: settings?.appearance.menu_renderer ?? "nota",
+    menuRenderer: effectiveMenuRenderer(settings?.appearance.menu_renderer ?? "nota", settings?.appearance.force_nota_menu_when_expanded ?? true, maximized || fullscreen),
     onNativePick,
   });
 
@@ -757,13 +766,11 @@ export default function App() {
   // `Appearance::default().show_filename_in_titlebar` 一致（同
   // `useChromeVisibility` 里 `?? true` 那条注释的理由）：设置还没读回来时
   // 按默认走，读失败也不能把标题变成光秃秃一个 `Nota`。
-  useWindowTitle(
-    activeDoc?.title ?? null,
-    activeDoc?.dirty ?? false,
-    settings?.appearance.show_filename_in_titlebar ?? true,
-  );
+  useWindowTitle(settingsOnly ? null : activeDoc?.title ?? null, settingsOnly ? false : activeDoc?.dirty ?? false, !settingsOnly && (settings?.appearance.show_filename_in_titlebar ?? true));
 
   const { openConfigDir, resetSettings } = useSettingsFile({ setSettings, toast });
+
+  useUtilityWindows({ settingsOnly, aboutOpen: dialog.aboutOpen, closeAbout: dialog.closeAbout, style: settings?.appearance.settings_window_style, toast });
 
   // 右键菜单（2026-10-04）的接线。⚠️ 六样都**原样传下去**，一件也不在这里
   // 加工：分类、形状、键盘路径全在 `ui/ContextMenu.tsx` 头上。
@@ -780,7 +787,7 @@ export default function App() {
     <ErrorBoundary>
       {/* ⚠️ `data-zen` 只在沉浸时为真（`undefined` = 这个属性不出现），判据与
           收起哪些东西在 `styles/app.css` 里那一节。 */}
-      <div className="app" data-zen={immersive || undefined}>
+      <div className="app" data-zen={immersive || undefined} data-settings-only={settingsOnly || aboutOnly || undefined}>
         {/* ⚠️ 这层壳只为沉浸模式存在：它给顶栏一个**只有 6px 高的定位容器**，
             让顶栏能滑到窗口外面、再由鼠标碰那 6px 唤回来（见 app.css 那一节）。
             平时它是 `display: block` 的一层透明壳，布局上和没有它一样。 */}
@@ -946,34 +953,23 @@ export default function App() {
             />
           )}
         </div>
-        <Toasts
-          items={toasts}
-          onDismiss={dismiss}
-          position={settings?.updates.notification_position ?? "bottom-right"}
-        />
+        <Toasts items={toasts} onDismiss={dismiss} position={settings?.updates.notification_position ?? "bottom-right"} />
         <DeferredFilePickerDialog />
-        {settingsWindow.open && settings && (
+        {(settingsWindow.open || settingsOnly) && !aboutOnly && settings && (
           <DeferredSettingsDialog
-            settings={settings}
-            onChange={updateSettings}
-            onClose={settingsWindow.close}
-            docThemes={themes}
-            onOpenThemesDir={() => void openThemesDir()}
-            uiStyles={uiStyles}
-            onOpenStylesDir={() => void openStylesDir()}
-            onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()} onImportTyporaTheme={() => void importTyporaTheme()}
-            onOpenConfigDir={() => void openConfigDir()}
-            onResetSettings={() => void resetSettings()}
-            onClearRecent={() => void clearEmptyRecent()} onRestoreDrafts={() => void documentApi.restoreDrafts()}
-            menus={menu}
-            plugins={plugins}
-            pluginTrust={trustTable}
-            pluginUpdate={pluginUpdate}
-            pluginAction={pluginAction}
-            debugMode={settings.general.debug_mode}
-            initialSection={settingsWindow.initialSection}
+            standalone={settingsOnly} settings={settings} onChange={updateSettings}
+            onClose={settingsOnly ? () => void api.window.hideSettings() : settingsWindow.close}
+            docThemes={themes} onOpenThemesDir={() => void openThemesDir()}
+            uiStyles={uiStyles} onOpenStylesDir={() => void openStylesDir()}
+            onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()}
+            onImportTyporaTheme={() => void importTyporaTheme()} onOpenConfigDir={() => void openConfigDir()}
+            onResetSettings={() => void resetSettings()} onClearRecent={() => void clearEmptyRecent()}
+            onRestoreDrafts={() => void documentApi.restoreDrafts()} menus={menu} plugins={plugins}
+            pluginTrust={trustTable} pluginUpdate={pluginUpdate} pluginAction={pluginAction}
+            debugMode={settings.general.debug_mode} initialSection={settingsWindow.initialSection}
           />
         )}
+        {aboutOnly && <StandaloneAboutWindow debugMode={settings?.general.debug_mode ?? false} onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })} />}
         <ElementInspector enabled={(settings?.general.debug_mode ?? false) && (settings?.general.element_inspector ?? false)} />
 
         {/* 浮层那一族（pandoc 面板 ＋ 四个对话框 ＋ 专注总结）。⚠️ 整块 2026-09-27
@@ -986,6 +982,7 @@ export default function App() {
           dedicatedNoteTotalJoin={dedicatedNoteTotalJoin}
           closeDedicatedNoteTotalJoin={closeDedicatedNoteTotalJoin}
           debugMode={settings?.general.debug_mode ?? false}
+          windowPresentation={settings?.appearance.settings_window_style ?? "embedded"}
           onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })}
         />
 

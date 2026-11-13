@@ -22,6 +22,7 @@ pub mod cups;
 pub mod devserver;
 pub mod debug_log;
 pub mod diagnostics;
+pub mod dev_bridge;
 pub mod diff;
 pub mod document;
 pub mod draft;
@@ -34,7 +35,7 @@ pub mod image;
 pub mod lang;
 pub mod log;
 pub mod lua;
-pub mod mcp;
+mod mcp;
 pub mod native_menu;
 pub mod pandoc;
 pub mod pandoc_format;
@@ -213,52 +214,6 @@ pub fn run() {
     // 转交给已经在跑的那一份，它那边也调同一个函数）。
     let 这次要开的 = cli::首个要打开的文件(std::env::args_os());
 
-    // ── ⓿''' `--mcp`：AI 客户端连上来的入口（2026-09-27）────────────────────
-    // 形态一（**最常见的那一种**）：已经有一份 Nota 在跑 → 这一份进程**不开窗、
-    // 不当主人**，只把自己变成一根管子，把 stdio 接到那一份的 socket 上。
-    // AI 于是够到的是用户**此刻正在编辑的那份文档**（那正是这条功能的意义）。
-    //
-    // ⚠️⚠️ **三种结局全都在这里退出，一种都不许"继续往下走"**（2026-09-29 改）。
-    // 原来"一份 Nota 都没跑"是**照常启动**（开窗、抢单实例的位置、就地服务
-    // MCP），代价是：MCP 客户端每次重启它那个服务器进程，**用户桌上就多一个
-    // 他没要过的 Nota 窗口**，而客户端走的时候我们**故意不关窗**（用户正在
-    // 编辑的东西不该被 AI 带走），于是窗口留下来 —— 用户报的原话就是
-    // 「现在会不停新建窗口」。完整账在 `mcp` 模块头「为什么形态 2 不开窗」。
-    //
-    // ⚠️ 所以 `--mcp` 今天**既不建窗也不抢单实例的位置**了：它只有"转接"这
-    // 一件事，转接不成就说一句人话退出。
-    //
-    // ⚠️ 说给 **stderr**：stdout 是协议通道（虽然这会儿会话已经结束），
-    // 而 stderr 是 MCP 客户端会原样记进它自己日志的那一路——用户看不见我们的
-    // 界面，这句就是他能拿到的唯一一句解释。
-    let 要开_mcp = cli::要开_mcp(std::env::args_os());
-    if 要开_mcp {
-        let (码, 话) = match mcp::接上() {
-            // 会话跑完 = 这一份进程**什么都没建**（没建窗、没加载插件、没抢
-            // 位置），跟隔壁"已转交"那条一模一样，没有清理可做。
-            mcp::结局::会话跑完 => std::process::exit(0),
-            mcp::结局::没人听 => (
-                2,
-                "Nota 没在跑。请先打开 Nota——AI 客户端连上的是**它**手里的文档；\
-                 `nota --mcp` 只做转接，不会替你开一个窗口。"
-                    .to_string(),
-            ),
-            mcp::结局::会话断了(e) => (3, format!("与 Nota 的会话断了：{e}")),
-            // ⚠️ **只有别的平台走得到这一档**（`mcp/mod.rs` 里那个
-            // `#[cfg(not(unix))]` 的 `接上`）：Windows 上那条转接还没做。
-            // 如实说一句，别让它冒充"没人听"——那会把人引到"去开一份 Nota"，
-            // 而开了也没用。理由与欠账写在 `single_instance.rs` 文件尾。
-            mcp::结局::平台不支持 => (
-                4,
-                "这个平台上还没有 `--mcp` 转接：Nota 的 MCP 挂在单实例那个 Unix socket 上，\
-                 别的平台要另做一套（命名管道那一类）。"
-                    .to_string(),
-            ),
-        };
-        eprintln!("[nota] {话}");
-        std::process::exit(码);
-    }
-
     // ── ⓿' `--new-window`：**这一份进程不参与单实例**（2026-09-27）──────────
     // 标签页右键那一条「在新窗口中打开」就是靠它：Nota `spawn` 一份自己、
     // 带上这个选项和路径。用户要的是**第二个窗口**，而单实例那一关的语义正好
@@ -294,6 +249,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_screenshots::init())
         // 剪贴板（2026-10-11）：菜单里那条「粘贴」从前只能读 WebKit 的
         // `navigator.clipboard.readText()`，而那个被挡在权限后面——被拒时只能弹一句
         // "请按 Ctrl+V"（用户：「剪切板始终显示要CtrlV粘贴，但是我已经是CtrlV了」）。
@@ -414,6 +370,26 @@ pub fn run() {
                 // 与插件加载时用的是同一个值（上面 ②b 算的那个）。
                 app_lang: 应用语言,
             });
+            let bridge = dev_bridge::DevBridge::default();
+            app.manage(bridge);
+            let general = app
+                .state::<AppState>()
+                .settings
+                .lock()
+                .unwrap()
+                .general
+                .clone();
+            if general.debug_mode && general.dev_bridge_enabled {
+                if let Some(bridge) = app.try_state::<dev_bridge::DevBridge>() {
+                    if let Err(error) = bridge.start_existing(
+                        &app.handle(),
+                        &general.dev_bridge_whitelist,
+                        general.dev_bridge_port,
+                    ) {
+                        crate::日志!("[nota] developer bridge not started: {error}");
+                    }
+                }
+            }
             // 两份**不往 `AppState` 里塞**的托管状态，理由一样：它们都不在
             // 「plugins → documents → settings」那条锁序上，谁也不该拿它们去
             // 排进那条队伍。
@@ -468,21 +444,20 @@ pub fn run() {
             //    注册不上就是"点链接打不开"，那不该让应用起不来。
             //    ⚠️ 它**只在需要时**才动盘，见那个文件头（"幂等，而且只在必要时才动"）。
             url_scheme::注册();
-            // ⑨ ⚠️ **MCP 服务器那一格 2026-09-29 删掉了**，位置留在这里说明它
-            //    为什么不该回来：它原来是"这一份进程就是那个 Nota 时，在这个
-            //    进程里服务 MCP"（`mcp::起`）。今天 `--mcp` 在 ⓿''' 那一步
-            //    **三条路全都退出**（转接成功 / 没人在听 / 会话断了），根本走
-            //    不到 `setup`，所以那个分支永远为假。留着一个永远为假的分支，
-            //    读起来像"还存在一种在进程里直接服务 MCP 的形态"——而**那种
-            //    形态正是用户报的「不停新建窗口」**（完整账在 `mcp` 模块头
-            //    「为什么形态 2 不开窗」）。
-            //
-            // ⚠️ 真要让它回来，改的是 ⓿''' 那一段的口径，两处必须一起改。
+            // ⑨ Authenticated Host Control (2026-11-07). The public MCP
+            // server and socket transport were removed. The HTTP listener is
+            // created only when both developer mode and the bridge setting are
+            // enabled; failure is logged and never blocks the editor.
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::diagnostics::nota_diagnostics,
+            commands::dev_bridge::nota_dev_bridge_status,
+            commands::dev_bridge::nota_dev_bridge_enable,
+            commands::dev_bridge::nota_dev_bridge_disable,
+            commands::dev_bridge::nota_dev_bridge_revoke,
+            commands::dev_bridge::nota_dev_bridge_respond,
             commands::diagnostics::nota_debug_log_read,
             commands::diagnostics::nota_debug_log_write,
             commands::file_picker::nota_picker_places,
@@ -555,6 +530,12 @@ pub fn run() {
             commands::window::nota_window_show_main,
             commands::window::nota_quit,
             commands::window::nota_window_open_new,
+            commands::window::nota_window_open_settings,
+            commands::window::nota_window_prepare_settings,
+            commands::window::nota_window_hide_settings,
+            commands::window::nota_window_open_about,
+            commands::window::nota_window_prepare_about,
+            commands::window::nota_window_hide_about,
             // 拖放那条路要的「这条路径是什么」（`commands/paths.rs`）。
             commands::path_kind::nota_paths_kind,
             // 页面引擎身上的开关（`commands/webview.rs`）：拼写检查。
@@ -654,6 +635,11 @@ pub fn run() {
             // ⚠️ **只拦 `main`**（与下面 `Focused` / `Destroyed` 两段同一条口径）：
             // 别的窗口（对话框、以后插件自己开的窗）关掉就该立刻关掉。
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "settings" || window.label() == "about" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
                 if window.label() == "main" && 关窗前要问(window) {
                     api.prevent_close();
                     let _ = window.app_handle().emit("nota:close-requested", ());

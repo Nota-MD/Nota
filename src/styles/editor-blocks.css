@@ -74,9 +74,14 @@
      取大的那个，所以实际是 30px 而不是两者相加，别按"再加一个 0.85em"去算。
      ⚠️ 左右内边距那笔账见上面那条注释（现在是 `--nota-code-pad-l` 这个变量，
      上下那两个数不参与）。 */
-  border: 1px solid color-mix(in srgb, var(--border) 62%, transparent);
+  /* Older WebView2 runtimes ignore color-mix(), which previously dropped both
+     the border and background declarations and made code blocks look plain. */
+  border: 1px solid var(--border);
+  border-color: color-mix(in srgb, var(--border) 62%, transparent);
   border-radius: max(6px, var(--radius));
+  background: var(--bg-subtle);
   background: color-mix(in srgb, var(--bg-subtle) 76%, var(--doc-bg));
+  box-shadow: none;
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--doc-bg) 46%, transparent);
   font-family: var(--font-mono);
   font-size: 0.88em;
@@ -123,17 +128,6 @@
   text-align: left !important;
 }
 
-/* CodeMirror draws selection and caret through a generated layer. WebKitGTK
-   can inherit the surrounding `caret-color: transparent` from ProseMirror;
-   make the focused code-block caret explicit instead of relying on the
-   generated theme rule winning the cascade. */
-.editor-mount .ProseMirror .nota-code-cm.cm-focused .cm-cursorLayer .cm-cursor {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  border-left: 2px solid var(--accent) !important;
-}
-
 .editor-mount .ProseMirror .nota-source-surface .cm-gutters {
   border: 0;
   background: transparent;
@@ -174,6 +168,62 @@
   outline: none !important;
   border: 0 !important;
   box-shadow: none !important;
+}
+
+.editor-mount .ProseMirror .nota-code-caret-before,
+.editor-mount .ProseMirror .nota-code-caret-after,
+.editor-mount .ProseMirror .nota-code-empty-caret {
+  position: relative;
+}
+
+.editor-mount
+  .ProseMirror
+  :is(.nota-code-caret-before, .nota-code-empty-caret)::before,
+.editor-mount
+  .ProseMirror
+  .nota-code-caret-after::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 1.2em;
+  background: var(--accent);
+  transform: translateY(-50%);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  animation: nota-code-own-caret-blink 1.2s steps(1, end) infinite;
+}
+
+.editor-mount .ProseMirror .nota-code-caret-after::after {
+  left: calc(100% - 1px);
+}
+
+.editor-mount
+  .ProseMirror
+  :is(.nota-code-caret-before, .nota-code-empty-caret)::before {
+  left: -1px;
+}
+
+@keyframes nota-code-own-caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-mount
+    .ProseMirror
+    :is(.nota-code-caret-before, .nota-code-empty-caret)::before,
+  .editor-mount .ProseMirror .nota-code-caret-after::after {
+    animation: none;
+    opacity: 1;
+  }
 }
 
 /* 设置里关掉「代码块 → 自动换行」（`markdown.code_wrap`，默认开）。

@@ -1,13 +1,11 @@
 /**
- * 代码块的语言选择器：**自绘的下拉**，不是原生 `<select>`。
+ * 代码块的语言选择器：**单一可编辑输入框**，不是原生 `<select>`。
  *
  * # 为什么非自己画不可
  *
- * 原生 `<select>` 的弹层里**放不了图标**——HTML 规定 `<option>` 的内容模型是
- * 纯文字，`<img>` 塞进去不渲染（WebKit 下连 `background-image` 也不认）。
- * 用户 2026-09-25 明确要「连弹层里也要图标」，所以这是一条硬约束，
- * 不是审美偏好。⚠️ **代价要认**：原生弹层白送的东西全得自己补回来——
- * 打字跳转、键盘上下、开场滚到当前项、Escape 关、点外面关（下面都补了）。
+ * 原生 `<select>` 的弹层里**放不了图标**，而用户要求候选行带语言图标。
+ * 这里把触发器和搜索框合并成一个输入框：收起时显示当前语言，聚焦后可直接
+ * 改写并筛选；候选列表只负责展示与键盘导航，不再重复一颗搜索框。
  *
  * # 弹层为什么挂在 `document.body` 上
  *
@@ -67,7 +65,7 @@ const continueCarryOftoken = [
 ] as const;
 
 export type languagePicker = {
-  /** 放进 `.nota-code-lang-wrap` 里的那颗按钮。 */
+  /** 放进 `.nota-code-lang-wrap` 里的唯一输入框。 */
   dom: HTMLElement;
   /** 外部改了节点属性（比如源码模式里改的）时，把显示同步过来。 */
   setLanguage2(lang: string): void;
@@ -98,31 +96,26 @@ export function createLanguagePicker(option: {
   /** 选择完成、弹层移除后，把焦点交回代码编辑器。 */
   restoreFocus?: () => void;
 }): languagePicker {
-  // ── 闭合状态那颗按钮 ────────────────────────────────────────────────
-  // ⚠️ 用 `<button>` 而不是 `<div>`：键盘 Tab 能到、Enter/Space 天然可点。
-  // ⚠️ `.nota-code-lang` 这个 class **留着**，它是外观的载体（尺寸、边框、
-  // 颜色都在 CSS 里挂着它）——从 `<select>` 换成 `<button>` 是元素变了，
-  // 不是那颗框的视觉变了。
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "nota-code-lang";
-  btn.title = t("Code Language");
-  btn.setAttribute("aria-haspopup", "listbox");
-  btn.setAttribute("aria-expanded", "false");
-
-  const name2 = document.createElement("span");
-  name2.className = "nota-lang-name";
+  // The field is both the collapsed label and the live search input.
+  const field = document.createElement("input");
+  field.type = "text";
+  field.className = "nota-code-lang-input";
+  field.title = t("Code Language");
+  field.setAttribute("role", "combobox");
+  field.setAttribute("aria-haspopup", "listbox");
+  field.setAttribute("aria-expanded", "false");
+  field.autocomplete = "off";
+  field.spellcheck = false;
 
   /** 闭合状态显示什么（空语言显示「纯文本」）。 */
   function drawCloseCombine(lang: string) {
-    btn.replaceChildren(languageIcon(lang), name2);
-    name2.textContent = lang === NO_LANGUAGE ? plainText() : lang;
+    field.value = lang === NO_LANGUAGE ? plainText() : lang;
   }
   drawCloseCombine(option.currentLanguage());
 
   // ── 弹层 ────────────────────────────────────────────────────────────
   let popup: HTMLElement | null = null;
-  /** 弹层顶上那个输入框（重建列表时要用它的值）。关着时是 `null`。 */
+  /** 当前打开的输入框。关着时是 `null`。 */
   let input: HTMLInputElement | null = null;
   let currentItem = 0;
 
@@ -161,7 +154,10 @@ export function createLanguagePicker(option: {
     // ⚠️ 自定义那一行**也要给图标**，哪怕它是颗灰色的首字母徽章：那一列图标
     // 是各行对齐的基准，这一行空着会让它整行往左缩一格——看着像"这行不是
     // 选项"。而且闭合那颗按钮走的也是同一个 `languageIcon`，这里是同一个长相。
-    opt.append(languageIcon(lang), document.createTextNode(label));
+    const optionName = document.createElement("span");
+    optionName.className = "nota-lang-option-name";
+    optionName.textContent = label;
+    opt.append(languageIcon(lang), optionName);
     if (isCustom) {
       const tail = document.createElement("span");
       tail.className = "nota-lang-custom-note";
@@ -177,10 +173,10 @@ export function createLanguagePicker(option: {
     opt.addEventListener("click", () => {
       option.selectLanguage(lang);
       drawCloseCombine(lang);
-      close();
+      close(false);
       queueMicrotask(() => {
         if (option.restoreFocus) option.restoreFocus();
-        else btn.focus();
+        else field.focus();
       });
     });
     return opt;
@@ -253,29 +249,25 @@ export function createLanguagePicker(option: {
    */
   function rollToCanSee(item5: HTMLElement) {
     if (!popup) return;
-    // ⚠️ 顶上那个输入框是 `position: sticky` 的（`editor.css`），滚上去之后
-    // 它会**盖住**弹层最前面那几十像素。不把这几十像素算进来的话，高亮项会被
-    // 正好停在输入框底下——看着像"按了方向键但高亮没了"。
-    const head2 = popup.querySelector<HTMLElement>(".nota-lang-search")?.offsetHeight ?? 0;
     const top = item5.offsetTop;
     const bottom = top + item5.offsetHeight;
-    if (top < popup.scrollTop + head2) popup.scrollTop = Math.max(0, top - head2);
-    else if (bottom > popup.scrollTop + popup.clientHeight) popup.scrollTop = bottom - popup.clientHeight;
+    if (top < popup.scrollTop) popup.scrollTop = top;
+    else if (bottom > popup.scrollTop + popup.clientHeight) {
+      popup.scrollTop = bottom - popup.clientHeight;
+    }
   }
 
   /** 关掉弹层。⚠️ 幂等：没开的时候调它什么也不做。 */
-  function close() {
-    // ⚠️ 卸载这个 class 要放在**提前返回之前**：它是幂等的，而提前返回那条路上
-    // 也得保证它不在（宁可多删一次，也别留一颗"框一直亮着"的残状态）。
-    btn.classList.remove("nota-lang-open");
+  function close(reset = true) {
+    if (reset) drawCloseCombine(option.currentLanguage());
     if (!popup) return;
     popup.remove();
     popup = null;
     input = null;
-    btn.setAttribute("aria-expanded", "false");
+    field.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", pointExternalSurface, true);
     document.removeEventListener("keydown", allLayoutKeypress, true);
-    window.removeEventListener("resize", close);
+    window.removeEventListener("resize", closeOnResize);
     // ⚠️ 滚动也要关：弹层是 `position: fixed`，跟着滚动走的话它会**脱开**
     // 代码块飘在半空。关掉比"跟着挪"简单得多，而且不会挪错。
     window.removeEventListener("scroll", rollActionDone, true);
@@ -284,7 +276,7 @@ export function createLanguagePicker(option: {
   function pointExternalSurface(e: Event) {
     const t = e.target;
     if (!(t instanceof Node)) return;
-    if (popup?.contains(t) || btn.contains(t)) return;
+    if (popup?.contains(t) || field.contains(t)) return;
     close();
   }
 
@@ -303,52 +295,18 @@ export function createLanguagePicker(option: {
     close();
   }
 
-  /** 打开弹层。已经开着就先关（按钮再点一次＝收起）。 */
+  const closeOnResize = () => close();
+
+  /** 打开候选列表。输入框本身就是触发器与搜索框。 */
   function open() {
-    if (popup) {
-      close();
-      return;
-    }
+    if (popup) return;
 
     const isEmpty = option.currentLanguage();
 
     const pop = document.createElement("div");
     pop.className = "nota-lang-popup";
     pop.setAttribute("role", "listbox");
-
-    // ── 顶上那个输入框（用户 2026-09-26 要的）──────────────────────────
-    // ⚠️ 它**替掉了原先的"打字跳转"**（原生 `<select>` 白送的那条，本文件
-    // 之前手写补过）。两条路不能并存：那一条靠"焦点在按钮上、按字母跳项"，
-    // 而输入框一出现，焦点就在输入框里、字母当然要落进框里。
-    // 输入框这条路更好：它既筛列表（原来那条只能跳、不能筛），又能**装下
-    // 用户自己写的语言**——那正是 `refractor` 那 400 个里没图标的三百来个的入口。
-    const searchSearch = document.createElement("div");
-    searchSearch.className = "nota-lang-search";
-    const inp = document.createElement("input");
-    inp.type = "text";
-    inp.className = "nota-lang-input";
-    inp.placeholder = t("Search or type a language");
-    inp.setAttribute("aria-label", t("Code Language"));
-    // ⚠️ `autocomplete/spellcheck` 都关掉：语言名不是自然语言，浏览器的
-    // 拼写红线与历史下拉在这里只会挡住列表。
-    inp.autocomplete = "off";
-    inp.spellcheck = false;
-    // 选择框本身也承担输入框：打开后可直接改写当前语言，再按输入内容筛选。
-    inp.value = isEmpty;
-    searchSearch.appendChild(inp);
-    pop.appendChild(searchSearch);
-    input = inp;
-
-    inp.addEventListener("input", refreshNewValue);
-    inp.addEventListener("keydown", (e) => {
-      // ⚠️ 中文/日文输入法**组字当中**的回车不是"选中"——那是"上屏"。
-      // 不挡这一下，用户打完字按回车选词，语言就被当场定成了半截拼音。
-      if (e.isComposing) return;
-      if (e.key === "Escape") {
-        close();
-        btn.focus();
-      }
-    });
+    input = field;
 
     popup = pop;
     document.body.appendChild(pop);
@@ -374,10 +332,10 @@ export function createLanguagePicker(option: {
     // 事不再发生）。于是弹层默认只能拿到**界面**主题的值，结果是
     // "闭合的框跟文档主题、打开的弹层跟界面主题"——浅色文档配深色界面时，
     // 一打开就是两块对不上的颜色。
-    // 办法是开场从按钮身上（它在编辑区里，算出来的是文档主题的值）把要用的
+    // 办法是开场从输入框身上（它在编辑区里，算出来的是文档主题的值）把要用的
     // 那几个 token 抄到弹层上。⚠️ 抄的是**算完的值**，所以用户中途换主题时
     // 已经开着的那个弹层不会跟着变——它下一秒就关了，不值得为它挂监听。
-    const borrowComeOf = getComputedStyle(btn);
+    const borrowComeOf = getComputedStyle(field);
     for (const t of continueCarryOftoken) {
       const v = borrowComeOf.getPropertyValue(t).trim();
       if (v) pop.style.setProperty(t, v);
@@ -395,48 +353,34 @@ export function createLanguagePicker(option: {
     // 但这条判断**照旧不能省**：用户输一个字筛出来两项时，弹层就该矮下去。
     pop.style.maxHeight = `${popupMostLargeHeight}px`;
     // ⚠️ 必须在**入 DOM 之后**量，否则拿不到弹层自己的高（下面要用它判翻转）。
-    const r = btn.getBoundingClientRect();
+    const r = field.getBoundingClientRect();
     const height = pop.offsetHeight;
-    pop.style.minWidth = `${r.width}px`;
-    // 靠近窗口右侧时优先让弹层与按钮右缘对齐；仍然放不下就夹在视口内。
-    // 以前只写 `left = r.left`，按钮离右边太近时搜索框和列表会被整块裁掉。
+    // The candidates are a continuation of the field, not a second control.
+    // Reuse both horizontal edges instead of applying an independent minimum.
+    pop.style.width = `${r.width}px`;
+    pop.style.minWidth = "0";
     const width = pop.offsetWidth;
     const edgeDistance = 4;
     let left = r.left;
-    if (left + width > window.innerWidth - edgeDistance) left = r.right - width;
     left = Math.max(edgeDistance, Math.min(left, window.innerWidth - width - edgeDistance));
     pop.style.left = `${left}px`;
-    // 下面装不下就翻到按钮上方（按弹层底部对齐按钮上沿）。
+    // 下面装不下就翻到输入框上方。
     const belowSurfaceEnough = window.innerHeight - r.bottom > height + 8;
     if (belowSurfaceEnough) pop.style.top = `${r.bottom + 2}px`;
     else pop.style.top = `${Math.max(4, r.top - height - 2)}px`;
 
-    btn.setAttribute("aria-expanded", "true");
-    // ⚠️ 这一条是给**闭合框**用的，不是给弹层用的：弹层挂在 `body` 上，鼠标
-    // 从按钮往弹层里走时会离开代码块，`.nota-code-lang-wrap` 那两条 `:hover`
-    // 就都不成立了，框会淡出——而弹层还在，看着像"没有主"的一块浮在纸上。
-    // `editor.css` 里那条 `:has()` 靠这个 class 把框按住。
-    btn.classList.add("nota-lang-open");
+    field.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", pointExternalSurface, true);
     document.addEventListener("keydown", allLayoutKeypress, true);
-    window.addEventListener("resize", close);
+    window.addEventListener("resize", closeOnResize);
     window.addEventListener("scroll", rollActionDone, true);
 
     // 开场滚到当前语言那一项（找不到就回到第一项）。
-    // ⚠️ 找的时候要**跳过前一项**：`选项们()` 里没有输入框（它不带
-    // `.nota-lang-opt`），但 `高亮(0)` 是"第一项"，而第一项恒是「纯文本」
-    // ——列表顺序就是 `刷新()` 里那个顺序，这里不重复一遍。
     const i = options().findIndex((el) => el.dataset.lang === isEmpty);
     heightBright(i >= 0 ? i : 0);
-
-    // ⚠️ **焦点交给输入框**（放在最后）：这是"打开就是要打字"的那个交互，
-    // 而 `全局按键` 挂在 `document` 的捕获阶段，焦点在哪儿都收得到方向键与
-    // 回车。⚠️ 与按钮上那条 `mousedown → preventDefault` 不冲突：那条管的是
-    // **点按钮**别把编辑器选区弄丢，这条是**弹层已经开好之后**才聚焦。
-    inp.focus();
   }
 
-  /** 键盘导航。⚠️ 挂在 `document` 的捕获阶段：焦点在按钮上时它也能收到，
+  /** 键盘导航。⚠️ 挂在 `document` 的捕获阶段：焦点在输入框上时它也能收到，
    *  万一焦点跑到别处（比如用户点了别的地方又没触发关闭）也还接得住。 */
   function allLayoutKeypress(e: KeyboardEvent) {
     if (!popup) return;
@@ -460,7 +404,7 @@ export function createLanguagePicker(option: {
     switch (e.key) {
       case "Escape":
         close();
-        btn.focus();
+        field.focus();
         e.preventDefault();
         return;
       case "ArrowDown":
@@ -490,10 +434,10 @@ export function createLanguagePicker(option: {
           option.selectLanguage(lang);
           drawCloseCombine(lang);
         }
-        close();
+        close(false);
         queueMicrotask(() => {
           if (option.restoreFocus) option.restoreFocus();
-          else btn.focus();
+          else field.focus();
         });
         e.preventDefault();
         return;
@@ -505,17 +449,21 @@ export function createLanguagePicker(option: {
     // 把字符**吃掉**。筛选现在归输入框管（见 `刷新()`）。
   }
 
-  // ── 按钮自己的事件 ──────────────────────────────────────────────────
-  btn.addEventListener("mousedown", (e) => e.preventDefault()); // 别把编辑器选区弄丢
-  btn.addEventListener("click", () => {
-    // ⚠️ 先取一次当前语言：源码模式里改过属性之后，闭合显示可能是旧的。
-    drawCloseCombine(option.currentLanguage());
+  field.addEventListener("focus", () => {
+    field.select();
     open();
+  });
+  field.addEventListener("click", () => open());
+  field.addEventListener("input", () => {
+    if (!popup) open();
+    refreshNewValue();
   });
 
   return {
-    dom: btn,
-    setLanguage2: (lang) => drawCloseCombine(lang),
+    dom: field,
+    setLanguage2: (lang) => {
+      if (document.activeElement !== field || !popup) drawCloseCombine(lang);
+    },
     cancelDestroy: close,
   };
 }

@@ -59,6 +59,8 @@ export const events = {
   /** 应用更新包正在下载，或下载完成后的安装准备阶段。 */
   updateProgress: "nota:update-progress",
   notify: "nota:notify",
+  /** Successful settings write broadcast to every open WebView window. */
+  settingsChanged: "nota:settings-changed",
   documentChanged: "nota:document-changed",
   /**
    * **插件要在光标处改一笔**（`docs/07` 第 14 项，2026-10-04 加）。
@@ -95,6 +97,10 @@ export const events = {
   pluginPanel: "nota:plugin-panel",
   /** Developer-mode Lua hot reload completed or was rejected transactionally. */
   pluginReloaded: "nota:plugin-reloaded",
+  /** Live developer bridge theme replacement. */
+  devBridgeTheme: "nota:dev-bridge-theme",
+  /** Developer bridge request that must run in the WebView command host. */
+  devBridgeCommand: "nota:dev-bridge-command",
   /**
    * 编辑区里摊的那一块**换了**（插件喊了 `nota.ui.review`，或者用户按了
    * 「回到正文」）。载荷是空的——**收到就重拉**（`api.plugin.review()`）。

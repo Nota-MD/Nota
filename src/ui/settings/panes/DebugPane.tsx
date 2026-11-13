@@ -6,13 +6,32 @@
  * 出现「高级设置」和「开发者模式」两项，二者职责不混。
  */
 
+import { useEffect, useState } from "react";
+
 import { api } from "@/bridge/ipc";
+import type { DevBridgeStatus } from "@/bridge/types";
 import { useT } from "@/i18n";
+import {
+  DeveloperBridgeDialog,
+  DeveloperBridgeStatusRow,
+} from "@/ui/DeveloperBridgeDialog";
 import { ActionButton, SettingRow, SettingsGroup, Toggle, Value } from "../primitives";
 import type { PaneProps } from "./props";
 
 export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
   const t = useT();
+  const [bridgeStatus, setBridgeStatus] = useState<DevBridgeStatus | null>(null);
+  const [bridgeOpen, setBridgeOpen] = useState(false);
+
+  const refreshBridge = () => {
+    void api.devBridge.status().then(setBridgeStatus).catch(() => setBridgeStatus(null));
+  };
+
+  useEffect(() => {
+    refreshBridge();
+    const timer = window.setInterval(refreshBridge, 2000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <>
@@ -80,25 +99,58 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
             }
           />
         </SettingRow>
+        <SettingRow
+          label={t("Developer bridge")}
+          description={t(
+            "Expose the authenticated Host Control API to Nota DevKit. Access is protected by a password, a five-step confirmation and an IP whitelist.",
+          )}
+        >
+          <DeveloperBridgeStatusRow
+            status={bridgeStatus}
+            onEnable={() => setBridgeOpen(true)}
+            onDisable={() => {
+              void api.devBridge.disable().then(setBridgeStatus);
+              onChange({
+                general: { ...settings.general, dev_bridge_enabled: false },
+              });
+            }}
+            onRevoke={() => {
+              void api.devBridge.revoke().then(setBridgeStatus);
+            }}
+          />
+        </SettingRow>
         <SettingRow label={t("Settings file")}>
           <ActionButton onClick={onOpenConfigDir}>{t("Open Folder…")}</ActionButton>
         </SettingRow>
         <SettingRow label={t("Disable developer mode")}>
           <ActionButton
-            onClick={() =>
+            onClick={() => {
               onChange({
                 general: {
                   ...settings.general,
                   debug_mode: false,
                   lua_hot_reload: false,
+                  dev_bridge_enabled: false,
                 },
-              })
-            }
+              });
+              void api.devBridge.disable().then(setBridgeStatus);
+            }}
           >
             {t("Disable")}
           </ActionButton>
         </SettingRow>
       </SettingsGroup>
+      {bridgeOpen ? (
+        <DeveloperBridgeDialog
+          general={settings.general}
+          passwordSet={bridgeStatus?.password_set ?? false}
+          onChange={(general) => {
+            onChange({ general });
+            refreshBridge();
+          }}
+          onClose={() => setBridgeOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

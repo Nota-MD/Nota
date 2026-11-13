@@ -138,6 +138,12 @@ Linux 显示后端默认交给 GDK 自动选择；启动日志会记录
 
 ### ⓿ `Builder::build()` 之前那三步（单实例 / `--mcp` / `--new-window`）
 
+> **2026-11-07 superseded:** the public `--mcp` client and the
+> `single_instance` MCP handshake were removed. Startup now decides only
+> between single-instance forwarding and `--new-window`. Authenticated
+> developer access starts later through Host Control. The following table is
+> retained as historical context for BUG-55.
+
 上面那张图从 `tauri::Builder::default()` 开始，而这三步都排在它**前面**。
 它们判的是同一件事——**这一份进程到底要不要开窗**——所以必须在任何东西建起来之前
 判完（`lib.rs:107-172` 三段注释就是它们的理由，下面只讲结构上的四件事）。
@@ -163,6 +169,15 @@ Linux 显示后端默认交给 GDK 自动选择；启动日志会记录
 
 
 ### ② `setup()` 里的几步
+
+**2026-11-07 developer bridge:** after `AppState` and the WebView are
+available, setup creates `DevBridge`. If `debug_mode && dev_bridge_enabled`,
+it starts the authenticated HTTP listener from the saved whitelist and port.
+The listener is independent of the single-instance socket. A bridge start
+failure is logged and does not prevent the editor from opening.
+
+The real-window pass verified that the default whitelist creates separate
+`127.0.0.1` and `::1` listeners and that disabling developer mode removes both.
 
 | 步 | 做什么 | 为什么是这个位置 |
 |---|---|---|

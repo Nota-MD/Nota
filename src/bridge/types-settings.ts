@@ -403,6 +403,8 @@ export interface CustomExporter {
   /** `docx` / `odt` / `rtf` / `epub` / `latex` / `mediawiki` / `rst` / `textile` / `opml`。 */
   format: string;
   args: string;
+  /** Editable base Pandoc arguments for this exporter. */
+  base_args: string;
   /** Word/ODT 参考文档、EPUB CSS 或 LaTeX 头文件。空串＝不用。 */
   style_file: string;
   open_after_export: boolean;
@@ -451,6 +453,8 @@ export type StatusMetric = "words" | "characters" | "lines" | "minutes";
  * 是外观）。
  */
 export type FocusModeDim = "standard" | "strong" | "stronger";
+/** Preferences presentation mode. Mirrors settings::appearance::SettingsWindowStyle. */
+export type SettingsWindowStyle = "full" | "embedded" | "external";
 
 /** 菜单栏绘制方式。默认 `"nota"`，可切换为系统原生菜单。 */
 export type MenuBarRenderer = "nota" | "system";
@@ -484,6 +488,8 @@ export interface AppearanceSettings {
   show_menu_bar: boolean;
   /** 菜单栏由 Nota 自绘还是使用系统原生实现。默认 `"nota"`。 */
   menu_renderer: MenuBarRenderer;
+  /** 窗口最大化或全屏时强制使用 Nota 自绘菜单。默认 `true`。 */
+  force_nota_menu_when_expanded: boolean;
   /** 词每分钟，只用来把字数换算成"约几分几秒读完"。 */
   reading_speed: number;
   /** 格式工具栏什么时候露出来。⚠️ 默认 `"never"`（不显示）——见 Rust 侧 `ToolbarMode`。 */
@@ -539,6 +545,8 @@ export interface AppearanceSettings {
    * 原生窗口标题**——标签栏上的页签、状态栏里的路径都不动。
    */
   show_filename_in_titlebar: boolean;
+  /** How the Preferences interface is presented. Default `"embedded"`. */
+  settings_window_style: SettingsWindowStyle;
 }
 
 export interface GeneralSettings {
@@ -572,8 +580,20 @@ export interface GeneralSettings {
    * 默认关闭，并且只在 developer mode 同时开启时生效。
    */
   select_ui_text: boolean;
+  /** Authenticated Host Control bridge for Nota DevKit. */
+  dev_bridge_enabled: boolean;
+  dev_bridge_port: number;
+  dev_bridge_whitelist: string[];
   /* ⚠️ 这里**不会有**遥测、许可证、外部服务器。`settings/general.rs`
    * 里有一条测试盯着这些字符串。 */
+}
+
+export interface DevBridgeStatus {
+  running: boolean;
+  port: number;
+  whitelist: string[];
+  sessions: number;
+  password_set: boolean;
 }
 
 /** 普通设置项里的下载前缀替换规则。 */

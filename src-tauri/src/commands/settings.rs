@@ -1,6 +1,6 @@
 //! 设置相关命令。
 
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::error::{NotaError, Result};
@@ -162,13 +162,15 @@ pub async fn nota_settings_export(
 ///
 /// ⚠️ **两处都必须走这里**：各写一遍就会漏掉下面那段锁序（先 `settings`、
 /// 放掉、再 `documents`），而它是**承重**的，漏掉一半就是死锁。
-fn 落盘(app: &tauri::AppHandle, state: &AppState, next: Settings) -> Result<()> {
+pub(crate) fn 落盘(app: &tauri::AppHandle, state: &AppState, next: Settings) -> Result<()> {
+    let settings_snapshot = next.clone();
     let strict = next.strict_markdown;
     let debug_mode = next.general.debug_mode;
     let extensions_enabled = next.general.extensions_enabled;
     let lua_hot_reload = next.general.debug_mode && next.general.lua_hot_reload;
     let lua_hot_reload_changed;
     let extensions_changed;
+    let bridge_config_changed;
 
     // ⚠️ 这一对花括号不是装饰：`documents` 在锁序里**排在 `settings` 前面**
     // （`plugins → documents → settings`，见 `state.rs` 顶上），所以下面那段
@@ -180,6 +182,14 @@ fn 落盘(app: &tauri::AppHandle, state: &AppState, next: Settings) -> Result<()
         extensions_changed = previous.general.extensions_enabled != extensions_enabled;
         lua_hot_reload_changed =
             (previous.general.debug_mode && previous.general.lua_hot_reload) != lua_hot_reload;
+        bridge_config_changed = previous.general.dev_bridge_enabled
+            != next.general.dev_bridge_enabled
+            || previous.general.debug_mode != next.general.debug_mode
+            || previous.general.dev_bridge_port != next.general.dev_bridge_port
+            || previous.general.dev_bridge_whitelist != next.general.dev_bridge_whitelist;
+        let bridge_enabled = next.general.debug_mode && next.general.dev_bridge_enabled;
+        let bridge_port = next.general.dev_bridge_port;
+        let bridge_whitelist = next.general.dev_bridge_whitelist.clone();
         *current = next;
 
         // 先落盘，落盘失败就把内存里的改回去——否则会出现"界面上是新的、
@@ -187,6 +197,17 @@ fn 落盘(app: &tauri::AppHandle, state: &AppState, next: Settings) -> Result<()
         if let Err(e) = current.save() {
             *current = previous;
             return Err(e);
+        }
+        drop(current);
+
+        if bridge_config_changed {
+            if let Some(bridge) = app.try_state::<crate::dev_bridge::DevBridge>() {
+                if bridge_enabled {
+                    bridge.start_existing(app, &bridge_whitelist, bridge_port)?;
+                } else {
+                    bridge.stop();
+                }
+            }
         }
     }
 
@@ -211,5 +232,7 @@ fn 落盘(app: &tauri::AppHandle, state: &AppState, next: Settings) -> Result<()
             watch.set_enabled(app, lua_hot_reload);
         }
     }
+    app.emit("nota:settings-changed", &settings_snapshot)
+        .map_err(|e| NotaError::other(format!("广播设置更新失败：{e}")))?;
     Ok(())
 }

@@ -3,6 +3,13 @@
 Nota 采用面向发布线的简短记录。完整证据、缺陷编号与历史过程在
 [`docs/07-feature-status.md`](docs/07-feature-status.md)。
 
+## 0.14.3-beta
+
+- 修复代码块行号在 WebKitGTK 下被排成独立一行，导致全部编号在上方、
+  代码正文堆到下方的错位问题。
+- CodeMirror 嵌入式代码块显式锁定为横向单行 flex：行号 gutter 固定在左侧，
+  代码 content 在右侧扩展；编号与对应 `.cm-line` 共用行高和顶部坐标。
+
 ## 0.14.2-beta
 
 - 修复 Linux 主窗口被预创建在屏幕外后，Wayland 合成器无法可靠把它移回工作区，

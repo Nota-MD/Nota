@@ -136,8 +136,31 @@
   font-family: var(--font-mono);
 }
 
+/* WebKitGTK can collapse CodeMirror's generated scroller display rule under a
+   document theme. The gutter then becomes a full-width block above the code,
+   making every line number look vertically offset. Pin the intended row layout
+   explicitly for embedded code blocks. */
+.editor-mount .ProseMirror .nota-code-cm .cm-scroller {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-start !important;
+}
+
+.editor-mount .ProseMirror .nota-code-cm .cm-gutters {
+  flex: none !important;
+  align-self: stretch !important;
+}
+
+.editor-mount .ProseMirror .nota-code-cm .cm-content {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
 .editor-mount .ProseMirror .nota-source-surface .cm-lineNumbers .cm-gutterElement {
   padding: 0 8px 0 0;
+  box-sizing: border-box;
+  line-height: inherit !important;
 }
 
 /* Comments remain semantic through color. Italic synthesis is forbidden here:

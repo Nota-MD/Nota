@@ -1951,6 +1951,77 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "code block line numbers align with every source line",
+    async run() {
+      const source = Array.from(
+        { length: 20 },
+        (_, index) => `const value${index + 1} = ${index + 1};`,
+      ).join("\n");
+      document.documentElement.dataset.codeLineNumbers = "on";
+      await mount(`\`\`\`js\n${source}\n\`\`\``);
+      const content = await waitFor<HTMLElement>(".nota-code-cm .cm-content");
+      content.focus();
+      await waitFor<HTMLElement>(".nota-code-cm .cm-line");
+      await nextFrames(4);
+      const scroller = await waitFor<HTMLElement>(".nota-code-cm .cm-scroller");
+      const gutter = await waitFor<HTMLElement>(".nota-code-cm .cm-gutters");
+      assertEqual(
+        getComputedStyle(scroller).display,
+        "flex",
+        "the CodeMirror scroller is not laid out as a row",
+      );
+      assertEqual(
+        getComputedStyle(scroller).flexDirection,
+        "row",
+        "the gutter and code content are stacked vertically",
+      );
+      assertEqual(
+        getComputedStyle(scroller).flexWrap,
+        "nowrap",
+        "the gutter can wrap onto a separate row",
+      );
+      assert(
+        Math.abs(
+          gutter.getBoundingClientRect().top -
+            content.getBoundingClientRect().top,
+        ) < 2,
+        "the gutter starts above or below the code content",
+      );
+      const lines = Array.from(
+        document.querySelectorAll<HTMLElement>(".nota-code-cm .cm-line"),
+      );
+      const numbers = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          ".nota-code-cm .cm-lineNumbers .cm-gutterElement",
+        ),
+      ).filter((element) => element.textContent?.trim());
+      assert(lines.length >= 20, "the source fixture lost code lines");
+      assert(numbers.length >= lines.length, "the gutter lost line numbers");
+      const failures = lines.flatMap((line, index) => {
+        const number = numbers.find(
+          (element) => element.textContent?.trim() === String(index + 1),
+        );
+        if (!number) return [`${index + 1}:missing`];
+        const delta =
+          number.getBoundingClientRect().top - line.getBoundingClientRect().top;
+        return Math.abs(delta) <= 1
+          ? []
+          : [
+              `${index + 1}:${delta}` +
+                `(line=${getComputedStyle(line).lineHeight},` +
+                `gutter=${getComputedStyle(number).lineHeight},` +
+                `height=${number.getBoundingClientRect().height})`,
+            ];
+      });
+      assertEqual(
+        failures.join(","),
+        "",
+        "line numbers do not share source-line tops",
+      );
+      delete document.documentElement.dataset.codeLineNumbers;
+    },
+  },
+  {
     name: "an empty code block starts its first caret at the text origin",
     async run() {
       document.documentElement.style.zoom = "1.25";

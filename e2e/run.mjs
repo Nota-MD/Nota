@@ -147,7 +147,7 @@ async function cdpClient(webSocketUrl) {
 
 async function waitForReport(client) {
   const deadline = Date.now() + 90_000;
-  let handledNativeKey = "";
+  let handledNativeRequest = "";
   for (;;) {
     const evaluated = await client.send("Runtime.evaluate", {
       expression: `(() => {
@@ -164,19 +164,20 @@ async function waitForReport(client) {
       returnByValue: true,
     });
     const state = evaluated.result?.value;
-    if (state?.nativeKey && state.nativeKey !== handledNativeKey) {
-      handledNativeKey = state.nativeKey;
-      const isSpace = state.nativeKey.startsWith("space");
-      const isTab = state.nativeKey.startsWith("tab");
-      const isText = state.nativeKey.startsWith("text-");
-      const isArrowLeft = state.nativeKey.startsWith("arrow-left");
-      const isArrowRight = state.nativeKey.startsWith("arrow-right");
-      const isArrowUp = state.nativeKey.startsWith("arrow-up");
-      const isArrowDown = state.nativeKey.startsWith("arrow-down");
-      const isBackspace = state.nativeKey.startsWith("backspace");
-      const isDelete = state.nativeKey === "delete";
-      const isCtrlA = state.nativeKey === "ctrl-a";
-      const isCtrlB = state.nativeKey === "ctrl-b";
+    if (state?.nativeKey && state.nativeKey !== handledNativeRequest) {
+      handledNativeRequest = state.nativeKey;
+      const nativeKey = state.nativeKey.replace(/@\d+$/, "");
+      const isSpace = nativeKey.startsWith("space");
+      const isTab = nativeKey.startsWith("tab");
+      const isText = nativeKey.startsWith("text-");
+      const isArrowLeft = nativeKey.startsWith("arrow-left");
+      const isArrowRight = nativeKey.startsWith("arrow-right");
+      const isArrowUp = nativeKey.startsWith("arrow-up");
+      const isArrowDown = nativeKey.startsWith("arrow-down");
+      const isBackspace = nativeKey.startsWith("backspace");
+      const isDelete = nativeKey === "delete";
+      const isCtrlA = nativeKey === "ctrl-a";
+      const isCtrlB = nativeKey === "ctrl-b";
       const parameters =
         isSpace
           ? {
@@ -199,13 +200,13 @@ async function waitForReport(client) {
             : isText
               ? {
                   type: "keyDown",
-                  key: state.nativeKey.slice(5),
+                  key: nativeKey.slice(5),
                   code:
-                    state.nativeKey.slice(5) === "\\"
+                    nativeKey.slice(5) === "\\"
                       ? "Backslash"
-                      : `Key${state.nativeKey.slice(5).toUpperCase()}`,
-                  text: state.nativeKey.slice(5),
-                  unmodifiedText: state.nativeKey.slice(5),
+                      : `Key${nativeKey.slice(5).toUpperCase()}`,
+                  text: nativeKey.slice(5),
+                  unmodifiedText: nativeKey.slice(5),
                 }
               : isArrowLeft
                 ? {
@@ -287,7 +288,7 @@ async function waitForReport(client) {
         expression: `window.__notaE2E?.signalNativeKey(${JSON.stringify(state.nativeKey)})`,
       });
     } else if (!state?.nativeKey) {
-      handledNativeKey = "";
+      handledNativeRequest = "";
     }
     if (state?.status === "passed" || state?.status === "failed") {
       if (!state.report) throw new Error(`E2E page failed before producing structured results: ${state.text}`);

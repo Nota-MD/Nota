@@ -191,6 +191,13 @@ export const api = {
      * "这个平台做不到"的解释成本。别的平台（WebView2）没有这个接口，宿主那边是空实现。
      */
     scrollHard: () => invoke<void>("nota_webview_scroll_hard"),
+    /**
+     * Point WebKitGTK's input context at Nota's real viewport caret. Without
+     * this, fcitx candidates can stay at a stale document coordinate after
+     * the editor scrolls.
+     */
+    imeCursor: (rect: { x: number; y: number; width: number; height: number }) =>
+      invoke<void>("nota_webview_notify_ime_cursor", rect),
   },
   /**
    * 路径**是什么**（拖放那条路用，`ui/useFileDrop.ts`）。

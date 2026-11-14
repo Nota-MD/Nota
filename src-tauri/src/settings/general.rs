@@ -42,6 +42,8 @@ pub struct General {
     /// 3. 空串按 `auto` 处理（手写 `settings.toml` 的人可能清空它）。
     ///    这一条由 `lang::有效语言` 兜着，别在两处各判一次。
     pub language: String,
+    /// Whether the compact first-run guide has been dismissed.
+    pub onboarding_seen: bool,
     /// 调试模式：把内部的诊断信息也打到控制台。
     ///
     /// ⚠️ 默认**关**。开着的话控制台会很吵，而绝大多数用户看不到控制台——
@@ -74,6 +76,7 @@ impl Default for General {
     fn default() -> Self {
         Self {
             language: crate::lang::自动.to_owned(),
+            onboarding_seen: false,
             debug_mode: false,
             extensions_enabled: true,
             element_inspector: false,
@@ -107,6 +110,13 @@ mod tests {
     #[test]
     fn 调试模式默认关() {
         assert!(!General::default().debug_mode);
+    }
+
+    #[test]
+    fn onboarding_defaults_to_unseen_and_old_settings_remain_readable() {
+        assert!(!General::default().onboarding_seen);
+        let old: General = toml::from_str("language = \"auto\"").unwrap();
+        assert!(!old.onboarding_seen);
     }
 
     #[test]

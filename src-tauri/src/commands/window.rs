@@ -60,9 +60,8 @@ pub(crate) fn focus_linux_webview(webview: &webkit2gtk::WebView) {
 
 /// 编辑器和界面主题都就绪后，把预热窗口移到屏幕中央并显示。
 ///
-/// 窗口在 `tauri.conf.json` 里先创建在屏幕外、隐藏任务栏按钮。隐藏窗口的
-/// WebView 会被 WebKit 暂停动画帧，编辑器初始化反而可能永远等不到；因此让它在
-/// 屏幕外正常渲染，就绪后再移入视野。用户第一次看到窗口时，正文已经可输入。
+/// The main window starts hidden with no taskbar entry. Reveal happens only
+/// after the editor is editable and the document theme is installed.
 #[tauri::command]
 pub fn nota_window_show_main(app: tauri::AppHandle) -> Result<()> {
     let 窗 = app
@@ -70,10 +69,8 @@ pub fn nota_window_show_main(app: tauri::AppHandle) -> Result<()> {
         .ok_or_else(|| NotaError::other(format!("找不到窗口 `{主窗口}`")))?;
     窗.set_skip_taskbar(false)
         .map_err(|e| NotaError::other(format!("显示任务栏入口失败：{e}")))?;
-    // 窗口此前在屏幕外保持可见，以便 WebView 正常初始化。Windows 的 DWM
-    // 会把从 -10000,-10000 到屏幕中央的长距离移动演成开场动画；先收起再
-    // 定位显示可以只提交一次静态帧。X11 上这一对 hide/show 反而会多花近
-    // 一秒，因此只在 Windows 走这条路。
+    // Windows can animate a long move from an off-screen prewarm position.
+    // Hide first so the centered reveal submits one static frame.
     #[cfg(target_os = "windows")]
     窗.hide()
         .map_err(|e| NotaError::other(format!("收起预热窗口失败：{e}")))?;

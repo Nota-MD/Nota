@@ -30,6 +30,8 @@ pub mod error;
 pub mod file_move;
 pub mod focus;
 pub mod format_keys;
+#[cfg(target_os = "linux")]
+pub mod gtk4_dialogs;
 pub mod heartbeat;
 pub mod image;
 pub mod lang;
@@ -544,6 +546,7 @@ pub fn run() {
             commands::webview::nota_webview_spellcheck_set,
             commands::webview::nota_webview_spellcheck_languages_set,
             commands::webview::nota_webview_scroll_hard,
+            commands::webview::nota_webview_notify_ime_cursor,
             // 拼写检查的**独立后端**（不借内核，见 `spell/mod.rs` 文件头）：
             // 引擎编在程序里（zspell），词典是数据（用户目录 ＋ 系统目录）。
             // ⚠️ 后五条是 2026-10-11 加的（词典从哪儿来那一组）。

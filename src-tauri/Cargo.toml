@@ -49,12 +49,8 @@ mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"]
 
 # ── 杂项 ──────────────────────────────────────────────────────────────────
 thiserror = "2"
+regex = "1"
 dirs = "6"
-# 系统原生文件选择器。Linux 经 XDG Desktop Portal 调用桌面自己的选择器：
-# GNOME 下由 GTK4 portal 呈现，KDE 下由 Plasma 呈现，搜索、最近文件与书签均来自系统；
-# Windows 走 Common Item Dialog，macOS 走 NSOpenPanel/NSSavePanel。
-# 应用内选择器保留为命令不可用时的回退。
-rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "async-std"] }
 # `sys-locale`：**这台机器的系统语言**（`src-tauri/src/lang.rs::系统语言`）。
 #
 # ⚠️ 2026-10-16 提成直接依赖，理由与上面 `chrono` / `sha2` 那两条同源：**借别人的
@@ -160,9 +156,16 @@ version = "3"
 # GTK 3.24 是 2018 年的版本，本仓面向的 Fedora/Debian 现代发行版都远高于它。
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", features = ["v3_24"] }
+gtk4 = { version = "0.11.4", features = ["v4_14"] }
 webkit2gtk = "2.0"
 ashpd = { version = "0.11.1", default-features = false, features = ["async-std"] }
 libc = "0.2"
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+# Windows uses the Common Item Dialog; macOS uses NSOpenPanel/NSSavePanel.
+# Linux talks to XDG Desktop Portal directly in `commands/native_dialog.rs`,
+# so the GTK3/zenity fallbacks in rfd never enter the Linux binary.
+rfd = { version = "0.16", default-features = false }
 
 # ── 只有 Windows 用到：**让"打印"真的去打印**（2026-10-16）────────────────────
 #

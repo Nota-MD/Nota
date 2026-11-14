@@ -803,4 +803,28 @@ export const uiMessages: Record<string, string> = {
   "Use First Column as Row Headers": "将第一列作为行标题",
   "Could not open the Preferences window: {0}": "无法打开设置窗口：{0}",
   "Could not open the About window: {0}": "无法打开关于窗口：{0}",
+  "Getting started": "使用须知",
+  "Getting started with Nota": "开始使用 Nota",
+  "A quick look": "快速了解",
+  "Write Markdown. See the document.": "写下 Markdown，也看见最终文档。",
+  "Nota is a local-first writing app. Your notes stay ordinary Markdown files.":
+    "Nota 是一款本地优先的写作软件，你的笔记始终是普通 Markdown 文件。",
+  "Formatting appears in place while you type.": "输入时即可在原位看到排版。",
+  "Themes and extensions are optional and installed separately.":
+    "主题与拓展均为可选项，需要时再单独安装。",
+  "No account and no telemetry. Your writing stays on your device.":
+    "无需账号，也没有遥测；你的文字留在自己的设备上。",
+  "Before you begin": "开始之前",
+  "A short notice": "简短须知",
+  "The complete notice is shown below. It is an explanation, not a replacement for the license.":
+    "完整须知如下。本文只是便于阅读的说明，不能替代许可证原文。",
+  "Nota software notice": "Nota 软件使用须知",
+  "Rights and credits": "权利与鸣谢",
+  "License and third-party notices": "许可证与第三方声明",
+  "The full BSD-2-Clause text is included with Nota. Third-party components keep their own licenses and appear under About → Credits.":
+    "Nota 内附 BSD-2-Clause 许可证全文。第三方组件保留各自许可证，并可在「关于 → 鸣谢」中查看。",
+  "View license": "查看许可证",
+  "Skip": "跳过",
+  "Start writing": "开始写作",
+  "Step {0} of {1}": "第 {0} 步，共 {1} 步",
 };

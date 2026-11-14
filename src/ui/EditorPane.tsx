@@ -74,7 +74,7 @@ import {
 } from "@/bridge/ipc";
 import { DocumentTypographyVars } from "@/styles/doc-typography";
 import { useT } from "@/i18n";
-import { markEditorReady } from "@/ui/useBootReveal";
+import { finishEditorBootstrap } from "@/ui/useBootReveal";
 import { largeTextItemThresholdValue } from "@/editor/file-kind";
 import type { previewMode } from "@/editor/review";
 import {
@@ -759,10 +759,8 @@ export function EditorPane({
         // 插入点在哪儿由上一个事务决定——而 `trailing` 插尾段、`replaceAll`
         // 换全文**都会把插入点带到文末**，于是"打开一篇长文档，光标在屏幕外"。
         // 理由与两条机制写在 `EditorHandle.focusAtStart` 的注释里。
-        const rememberedSelection = recallEditorSelection(doc.id, mode); rememberedSelection ? handle.restoreSelection(rememberedSelection) : handle.focusAtStart();
-        // 窗口只在这一刻之后显示：实例已挂载、编辑区已聚焦，用户看到的第一帧
-        // 就能直接输入。
-        markEditorReady();
+        // Reveal only after the focused editor has a real editable surface.
+        finishEditorBootstrap(mount, handle, recallEditorSelection(doc.id, mode), !onlyReadMode);
         // ── 回到上次滚到的地方（`docs/07` 第 76 项）──────────────────────
         // ⚠️ **必须在 `focusAtStart()` 之后**：聚焦会派一次事务、把插入点放到
         // 文档开头，浏览器顺手会把视口拉到那儿——先滚的话会被它当场盖掉。

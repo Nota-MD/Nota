@@ -13,7 +13,8 @@
 </p>
 
 <p align="center">
-  <a href="README.zh-CN.md">简体中文</a> ·
+  <strong>English</strong> ·
+  <a href="README.zh-CN.md">Chinese (Simplified)</a> ·
   <a href="https://github.com/Nota-MD/Nota/releases">Download</a> ·
   <a href="https://nota-md.github.io/">Website</a> ·
   <a href="https://nota-md.github.io/docs/">Documentation</a>
@@ -21,7 +22,7 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="Release" src="https://img.shields.io/badge/release-v0.14.0--beta-e95420?style=flat-square">
+    <img alt="Release" src="https://img.shields.io/badge/release-v0.14.4--beta-e95420?style=flat-square">
   </a>
   <a href="LICENSE">
     <img alt="License" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
@@ -56,11 +57,11 @@ for decades without a proprietary database.
 | **GitHub Docs compatibility** | Named anchors, `<kbd>` keys, `{% rowheaders %}`, common Octicons, data variables and reusable tokens are rendered without executing Liquid; document checks catch missing alt text and structural issues. |
 | **Plain files** | Every document is saved as standard `.md`. There is no hidden JSON layer or private document format. |
 | **A real workspace** | Tabs, folder tree, outline, autosave, external-change detection and distraction-free writing modes share one focused interface. |
-| **Extensible in Lua** | AI, Git, presentation and writing-statistics extensions are installed separately and receive capabilities from an explicit manifest. |
+| **Extensible in Lua** | AI, Git, Slidev, writing statistics, Vim and knowledge-graph extensions are installed separately and receive capabilities from an explicit manifest. |
 | **Interface and document themes** | The shell and the document are independent visual axes. Interface themes can provide their own CSS, icons and fonts. |
 | **Native desktop packaging** | Linux and Windows packages are built from the same Rust and React codebase. |
 | **Verified updates** | Experimental application updates select the correct package kind; extensions can check their declared `latest.json` repositories. |
-| **Proxy-aware downloads** | Debug-only prefix replacement rules can route application and extension update downloads through a mirror. |
+| **Proxy-aware downloads** | Configurable prefix replacement rules can route application and extension update downloads through a mirror. |
 
 ## Interface themes
 
@@ -84,8 +85,9 @@ from **Settings → Appearance → Styles folder** or from the documented theme 
 | Repository | Purpose |
 |---|---|
 | [Nota](https://github.com/Nota-MD/Nota) | Desktop application, core editor and documentation |
-| [Nota-plugins](https://github.com/Nota-MD/Nota-plugins) | Official Lua extensions: AI, Git, Slidev and writing statistics |
+| [Nota-plugins](https://github.com/Nota-MD/Nota-plugins) | Official Lua extensions: AI, Git, Slidev, writing statistics, Vim and knowledge graph |
 | [Nota-themes](https://github.com/Nota-MD/Nota-themes) | Official interface and document themes |
+| [Nota-devkit](https://github.com/Nota-MD/Nota-devkit) | Authenticated developer bridge client, validators and live preview |
 | [Nota-docs](https://github.com/Nota-MD/Nota-docs) | Online user and developer documentation |
 | [nota-md.github.io](https://github.com/Nota-MD/nota-md.github.io) | Project website |
 
@@ -96,10 +98,6 @@ Download the package for your platform from
 
 The release builds include Linux packages and Windows installers.
 Official extensions and themes are installed separately.
-
-> Windows support is new and has received limited testing. Bug reports, compatibility
-> details and suggestions are welcome in
-> [GitHub Issues](https://github.com/Nota-MD/Nota/issues).
 
 ## Build from source
 

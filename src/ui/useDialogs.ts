@@ -221,6 +221,10 @@ export interface Dialogs {
   openAbout: () => void;
   /** 关掉它（× 键、`Esc`、点遮罩）。 */
   closeAbout: () => void;
+  /** Whether the compact first-run guide is open. */
+  firstRunOpen: boolean;
+  openFirstRun: () => void;
+  closeFirstRun: () => void;
 }
 
 export function useDialogs(): Dialogs {
@@ -316,6 +320,9 @@ export function useDialogs(): Dialogs {
   const [aboutOpen, setAbout] = useState(false);
   const openAbout = useCallback(() => setAbout(true), []);
   const closeAbout = useCallback(() => setAbout(false), []);
+  const [firstRunOpen, setFirstRunOpen] = useState(false);
+  const openFirstRun = useCallback(() => setFirstRunOpen(true), []);
+  const closeFirstRun = useCallback(() => setFirstRunOpen(false), []);
 
   return {
     confirmReq,
@@ -336,5 +343,8 @@ export function useDialogs(): Dialogs {
     aboutOpen,
     openAbout,
     closeAbout,
+    firstRunOpen,
+    openFirstRun,
+    closeFirstRun,
   };
 }

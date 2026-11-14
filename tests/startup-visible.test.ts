@@ -24,7 +24,7 @@ function assertValue(value: unknown, message: string): asserts value {
 
 console.log("\n【启动窗口可见性】");
 
-testCase("主窗口使用合成器支持的普通可见窗口", () => {
+testCase("主窗口先隐藏预热，就绪后再显示", () => {
   const config = JSON.parse(
     readFileSync(join(process.cwd(), "src-tauri/tauri.conf.json"), "utf8"),
   ) as {
@@ -41,8 +41,8 @@ testCase("主窗口使用合成器支持的普通可见窗口", () => {
     };
   };
   const main = config.app.windows.find((window) => window.label === "main");
-  assertValue(main?.visible === true, "主窗口必须以可见方式创建");
-  assertValue(main?.skipTaskbar === false, "主窗口不能隐藏任务栏入口");
+  assertValue(main?.visible === false, "主窗口不能在编辑器可输入前露出");
+  assertValue(main?.skipTaskbar === true, "预热阶段不能提前占用任务栏");
   assertValue(main?.x === undefined && main?.y === undefined, "不能把主窗口预创建在屏幕外");
 });
 
@@ -65,10 +65,46 @@ testCase("入口不再绘制 Nota 加载动画", () => {
 
 testCase("编辑器聚焦后才宣告 ready", () => {
   const source = readFileSync(join(process.cwd(), "src/ui/EditorPane.tsx"), "utf8");
-  const focus = source.indexOf("handle.focusAtStart()");
-  const ready = source.indexOf("markEditorReady()", focus);
-  assertValue(focus >= 0, "缺少 focusAtStart");
-  assertValue(ready > focus, "markEditorReady 必须排在聚焦之后");
+  const boot = readFileSync(join(process.cwd(), "src/ui/useBootReveal.ts"), "utf8");
+  assertValue(source.includes("finishEditorBootstrap("), "EditorPane 没有走统一启动收尾");
+  const helper = boot.indexOf("export function finishEditorBootstrap");
+  const focusFirst = boot.indexOf("editor.focusAtStart()", helper);
+  const editable = boot.indexOf('contenteditable="true"', helper);
+  const ready = boot.indexOf("markEditorReady();", helper);
+  assertValue(helper >= 0, "缺少编辑器启动收尾函数");
+  assertValue(focusFirst > helper && editable > focusFirst, "没有在聚焦后确认可编辑面");
+  assertValue(ready > editable, "markEditorReady 必须排在聚焦和可编辑面确认之后");
+});
+
+testCase("窗口同时等待界面主题和文档主题", () => {
+  const source = readFileSync(join(process.cwd(), "src/ui/useBootReveal.ts"), "utf8");
+  assertValue(source.includes("documentThemeReady"), "揭幕没有等待文档主题");
+  assertValue(source.includes("DOCUMENT_THEME_READY_EVENT"), "文档主题完成时不会唤醒揭幕");
+});
+
+testCase("字体诊断排在窗口揭幕后的空闲帧", () => {
+  const source = readFileSync(join(process.cwd(), "src/ui/useDocTheme.ts"), "utf8");
+  const gate = source.indexOf("deferUntilWindowIdle(() =>");
+  const load = source.indexOf("document.fonts.load", gate);
+  assertValue(gate >= 0, "字体诊断没有等待窗口揭幕");
+  assertValue(load > gate, "字体诊断仍在揭幕前主动加载全部主题字体");
+});
+
+testCase("大体积文档主题只保留最后一份绘制缓存", () => {
+  const source = readFileSync(join(process.cwd(), "src/styles/doc-theme.ts"), "utf8");
+  assertValue(
+    /paintedThemeCacheLimit\s*=\s*1\b/.test(source),
+    "大型导入主题仍可能同时保留四份 CSS 与绘制结果",
+  );
+});
+
+testCase("macOS 开关跟随主题色", () => {
+  const color = readFileSync(join(process.cwd(), "src/styles/theme/color.css"), "utf8");
+  const mac = color.match(/\[data-ui-style="macos"\]\[data-ui-mode="(?:light|dark)"\][\s\S]*?\n\}/g) ?? [];
+  assertValue(mac.length >= 2, "找不到 macOS 两档颜色");
+  for (const block of mac) {
+    assertValue(block.includes("--switch-on: var(--accent)"), "macOS 开关仍绕过主题色");
+  }
 });
 
 testCase("窗口真正显示后重新把焦点交给正文", () => {

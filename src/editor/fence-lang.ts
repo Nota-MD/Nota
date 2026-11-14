@@ -17,7 +17,12 @@ import { $prose } from "@milkdown/kit/utils";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 
-import { awaitLanguageTable, searchLanguages, relatedLanguages } from "./code-block";
+import {
+  awaitLanguageTable,
+  requestCodeBlockFocus,
+  searchLanguages,
+  relatedLanguages,
+} from "./code-block";
 import { languageIcon } from "./lang-icon";
 
 const candidateLimit = 3;
@@ -219,7 +224,7 @@ export const encloseBarLanguageFillAll = $prose(
           tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(from + 1, tr.doc.content.size))));
           view.dispatch(tr.scrollIntoView());
           close();
-          queueMicrotask(() => view.focus());
+          if (!requestCodeBlockFocus(view, from)) view.focus();
         };
 
         const heavyDraw = () => {

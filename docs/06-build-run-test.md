@@ -1,6 +1,6 @@
 # 06 · 依赖、构建、运行、调试与测试
 
-> 最后同步：2026-10-25
+> 最后同步：2026-11-14
 >
 > 本文是 `AGENTS.md` §3 的**展开**。§3 给的是"三条命令"，这里讲**为什么是这三条**、
 > 每一步的已知陷阱、不接显示器怎么看界面、以及 `cargo test` 里那 599 条各钉住了什么。
@@ -2476,7 +2476,8 @@ git 一升级那句就变。⚠️ 处置登记在 `docs/07` §3 末尾，属于
 
 📌 **另一条环境坑（本脚本第一版起不来）**：脚本里**别用中文变量名**。容器里跑它的那个 shell
 把 `文档=/tmp/…` 这一行当成**要执行的命令**，报「没有那个文件或目录」——现象看着像路径写错，
-其实是变量名不合法。本仓的注释与标识符用中文没问题，**shell 脚本里老老实实用 ASCII**。
+其实是变量名不合法。项目代码标识符使用英文，新增或重写的注释使用简洁英语；
+**shell 脚本的变量名和函数名老老实实用 ASCII**。
 
 **① 标题徽标**（夹具 `/tmp/nota-目检-夹具/en.md`：`# H-one` / `## H-two` / `### H-three` 三级
 阶梯 ＋ 一张两列表）——点进正文，光标停在哪一级就画哪一级：
@@ -4242,6 +4243,24 @@ npm run test:e2e` mounts a real code block and compares the language picker's
 `getBoundingClientRect()` against the painted code-block bottom edge. This is
 the focused WebView2-equivalent check for the Windows-only detached-picker
 regression. Result: **1/1 passed**; the top gap was within the 1.5px tolerance.
+
+**2026-11-14 large-document export fixture:** `tests/fixtures/cathedral-bazaar/`
+contains the complete official Markdown conversion of *The Cathedral and the
+Bazaar* (630 lines, about 104 KB), including its title, author, version,
+copyright, license, abstract, and all published sections. Its 16 headings,
+emphasis, links, quotations, lists, and inline code are pinned by
+`tests/cathedral-bazaar.test.ts`; the
+focused E2E runs the real `exportHtml` print path and checks both structural
+completeness and a 15-second export budget:
+
+```sh
+NOTA_E2E_ONLY='Cathedral and the Bazaar' npm run test:e2e
+```
+
+Result: **1/1 passed**. The fixture is test-only, is not bundled into the
+application, and carries its source and Open Publication License 2.0 provenance
+in `NOTICE.md`. This document is a large-prose performance fixture, not a
+general Markdown feature showcase.
 
 ⚠️ 想确认"屏幕上那一版是不是我刚改的"，**看 5273 那个 URL，别去翻 `dist/`**。
 反过来，想确认"打包产物里有没有我这一版"，才看 `dist/` 与 `npm run build` 的退出码。

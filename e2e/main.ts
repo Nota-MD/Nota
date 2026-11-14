@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 
 import { createEditor, type EditorHandle } from "@/editor/create";
 import { applyDocTheme } from "@/styles/doc-theme";
+import cathedralMarkdown from "../tests/fixtures/cathedral-bazaar/the-cathedral-and-the-bazaar.md?raw";
 
 import "@/styles/theme.css";
 import "@/styles/app.css";
@@ -27,12 +28,11 @@ if (!host || !report) throw new Error("E2E page is missing its editor or report 
 const editorHost = host;
 const resultReport = report;
 
-let nativeSignal = "";
+let nativeRequestSequence = 0;
 const nativeWaiters = new Map<string, () => void>();
 Object.assign(window, {
   __notaE2E: {
     signalNativeKey(name: string) {
-      nativeSignal = name;
       nativeWaiters.get(name)?.();
     },
   },
@@ -154,14 +154,10 @@ async function composeText(text: string): Promise<void> {
 }
 
 async function requestNativeKey(name: string): Promise<void> {
-  document.documentElement.dataset.e2eNativeKey = name;
-  if (nativeSignal === name) {
-    delete document.documentElement.dataset.e2eNativeKey;
-    nativeSignal = "";
-    return;
-  }
-  await new Promise<void>((resolveSignal) => nativeWaiters.set(name, resolveSignal));
-  nativeWaiters.delete(name);
+  const requestId = `${name}@${++nativeRequestSequence}`;
+  document.documentElement.dataset.e2eNativeKey = requestId;
+  await new Promise<void>((resolveSignal) => nativeWaiters.set(requestId, resolveSignal));
+  nativeWaiters.delete(requestId);
   delete document.documentElement.dataset.e2eNativeKey;
   await nextFrames();
   await sleep(150);
@@ -368,8 +364,6 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         await requestNativeKey(`arrow-right-delete-${index}`);
         await nextFrames();
       }
-      await requestNativeKey("delete");
-      await nextFrames();
       await requestNativeKey("delete");
       await nextFrames();
       assertEqual(serialized(), "**abc*", "Delete did not remove exactly one closing star");
@@ -2967,6 +2961,32 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "committing a fence language focuses the new code block",
+    async run() {
+      const prose = await mount("");
+      await typeText("```py");
+      await waitFor<HTMLElement>(".nota-fence-lang-popup");
+      press(prose, "Enter");
+      await nextFrames(6);
+      const content = await waitFor<HTMLElement>(".nota-code-cm .cm-content");
+      await nextFrames(2);
+      await typeText("fn");
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "```python\nfn\n```",
+        `fence language commit left the caret outside the block; active=${
+          document.activeElement?.className || document.activeElement?.tagName
+        }; html=${JSON.stringify(prose.innerHTML)}`,
+      );
+      assertEqual(
+        document.activeElement,
+        content,
+        "the embedded code editor did not receive focus after language commit",
+      );
+    },
+  },
+  {
     name: "code block language picker is flush with the painted bottom edge across browser zooms",
     async run() {
       for (const zoom of [1, 1.25, 1.5]) {
@@ -2995,7 +3015,58 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       document.documentElement.style.zoom = "";
     },
   },
+  {
+    name: "the full Cathedral and the Bazaar fixture exports within budget",
+    async run() {
+      const { exportHtml } = await import("@/editor/export");
+      const started = performance.now();
+      const html = await exportHtml(cathedralMarkdown, {
+        styled: true,
+        title: "The Cathedral and the Bazaar",
+        lightOutput: true,
+      });
+      const elapsed = performance.now() - started;
+      const exported = new DOMParser().parseFromString(html, "text/html");
+      assertValueForEasterEgg(cathedralMarkdown.includes("Given enough eyeballs, all bugs are shallow."));
+      assertEqual(exported.querySelectorAll("h1").length, 16, "the export lost top-level sections");
+      assertEqual(
+        exported.querySelector("h1")?.textContent,
+        "The Cathedral and the Bazaar",
+        "the export lost its title",
+      );
+      assert(exported.querySelectorAll("p").length > 100, "the exported body was truncated");
+      assert(
+        exported.querySelectorAll("em").length >= 50,
+        "the export flattened original emphasis",
+      );
+      assert(
+        exported.querySelectorAll("blockquote").length >= 20,
+        "the export lost its quotations",
+      );
+      assert(exported.querySelectorAll("a").length >= 20, "the export lost its links");
+      assert(
+        exported.body.textContent?.includes("Linus's Law") === true,
+        "the export lost the central bazaar argument",
+      );
+      assert(
+        exported.body.textContent?.includes("Given enough eyeballs, all bugs are shallow.") === true,
+        "the export lost the hidden fixture phrase",
+      );
+      assert(html.startsWith("<!DOCTYPE html>"), "the export is not a complete HTML document");
+      assert(html.includes("<style>"), "the styled export did not include its CSS");
+      assert(html.includes('data-nota-output="print"'), "the print output marker is missing");
+      assert(html.length > cathedralMarkdown.length, "the export is smaller than its source");
+      assert(
+        elapsed < 15_000,
+        `full fixture export took ${Math.round(elapsed)}ms; budget is 15000ms`,
+      );
+    },
+  },
 ];
+
+function assertValueForEasterEgg(value: unknown): asserts value {
+  if (!value) throw new Error("the bazaar easter egg disappeared from the E2E bundle");
+}
 
 function encodeResult(value: unknown): string {
   const bytes = new TextEncoder().encode(JSON.stringify(value));

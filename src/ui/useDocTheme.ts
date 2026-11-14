@@ -32,6 +32,7 @@ import { applyDocTheme } from "@/styles/doc-theme";
 import type { Toast } from "@/ui/Toasts";
 import { useUiMode } from "@/ui/useUiMode";
 import { debugError, debugEvent } from "@/ui/debug-log";
+import { markDocumentThemeReady } from "@/ui/useBootReveal";
 
 /**
  * 这一帧**该用**的文档主题 id，以及**该写**到哪个槽。
@@ -149,6 +150,45 @@ export interface themeApi {
  */
 const sayPassOfMissingCharacterBody = new Set<string>();
 
+function deferUntilWindowIdle(task: () => void): () => void {
+  let cancelled = false;
+  let timer = 0;
+  let idle = 0;
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (
+      callback: () => void,
+      options?: { timeout: number },
+    ) => number;
+    cancelIdleCallback?: (handle: number) => void;
+  };
+  const run = () => {
+    if (cancelled) return;
+    if (idleWindow.requestIdleCallback) {
+      idle = idleWindow.requestIdleCallback(() => {
+        if (!cancelled) task();
+      }, { timeout: 500 });
+      return;
+    }
+    timer = window.setTimeout(() => {
+      if (!cancelled) task();
+    }, 120);
+  };
+  const onShown = () => run();
+
+  if (document.documentElement.dataset.windowShown === "true") {
+    run();
+  } else {
+    window.addEventListener("nota-window-shown", onShown, { once: true });
+  }
+
+  return () => {
+    cancelled = true;
+    window.removeEventListener("nota-window-shown", onShown);
+    if (timer) window.clearTimeout(timer);
+    if (idle) idleWindow.cancelIdleCallback?.(idle);
+  };
+}
+
 export function useDocTheme(w: themeWiring): themeApi {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -172,6 +212,7 @@ export function useDocTheme(w: themeWiring): themeApi {
 
   useEffect(() => {
     let alive = true;
+    let stopFontAudit: (() => void) | null = null;
 
     (async () => {
       try {
@@ -184,26 +225,30 @@ export function useDocTheme(w: themeWiring): themeApi {
             theme: themeId || "none",
             css_bytes: css?.length ?? 0,
           });
-          void Promise.allSettled(
-            declaredFamilies.map((family) => document.fonts.load(`16px "${family}"`)),
-          ).then(() => document.fonts.ready).then(() => {
+          // Font diagnostics must not compete with editor construction before reveal.
+          stopFontAudit = deferUntilWindowIdle(() => {
             if (!alive) return;
-            const body = document.querySelector<HTMLElement>(".ProseMirror");
-            const families = Array.from(document.fonts)
-              .map((font) => font.family.replace(/^["']|["']$/g, ""))
-              .filter((family, index, all) => all.indexOf(family) === index);
-            const fontStatuses = Array.from(document.fonts)
-              .filter((font) => !font.family.startsWith("KaTeX_"))
-              .map((font) => `${font.family}:${font.status}`)
-              .join(",");
-            debugEvent("theme", "document theme font state", {
-              theme: themeId || "none",
-              computed_family: body ? getComputedStyle(body).fontFamily : "",
-              font_faces: document.fonts.size,
-              font_statuses: fontStatuses,
-              available_families: families
-                .filter((family) => document.fonts.check(`16px "${family}"`))
-                .join(","),
+            void Promise.allSettled(
+              declaredFamilies.map((family) => document.fonts.load(`16px "${family}"`)),
+            ).then(() => document.fonts.ready).then(() => {
+              if (!alive) return;
+              const body = document.querySelector<HTMLElement>(".ProseMirror");
+              const families = Array.from(document.fonts)
+                .map((font) => font.family.replace(/^["']|["']$/g, ""))
+                .filter((family, index, all) => all.indexOf(family) === index);
+              const fontStatuses = Array.from(document.fonts)
+                .filter((font) => !font.family.startsWith("KaTeX_"))
+                .map((font) => `${font.family}:${font.status}`)
+                .join(",");
+              debugEvent("theme", "document theme font state", {
+                theme: themeId || "none",
+                computed_family: body ? getComputedStyle(body).fontFamily : "",
+                font_faces: document.fonts.size,
+                font_statuses: fontStatuses,
+                available_families: families
+                  .filter((family) => document.fonts.check(`16px "${family}"`))
+                  .join(","),
+              });
             });
           });
         }
@@ -244,6 +289,10 @@ export function useDocTheme(w: themeWiring): themeApi {
         if (alive) {
           debugError("theme", "document theme failed", e, { theme: themeId || "none" });
         }
+      } finally {
+        // CSS injection is synchronous. This signal means the window no longer
+        // has to guess whether it would flash an unstyled document.
+        if (alive) markDocumentThemeReady();
       }
     })();
 
@@ -251,6 +300,7 @@ export function useDocTheme(w: themeWiring): themeApi {
     // 后回来，不挡住就会用**旧的那份** CSS 覆盖新的——而且看起来像"点错了"。
     return () => {
       alive = false;
+      stopFontAudit?.();
     };
   }, [themeId, themes, askConfirm, t]);
 

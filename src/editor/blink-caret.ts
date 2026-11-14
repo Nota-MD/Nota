@@ -279,13 +279,22 @@ export function flashSparkCursor(): Plugin {
       };
       const endComposition = () => {
         if (frame) cancelAnimationFrame(frame);
-        frame = requestAnimationFrame(() => {
-          frame = 0;
-          if (view.isDestroyed) return;
-          view.dom.classList.remove(imeComposingClass);
-          arrangeCursor(cursor, view);
-          restartBlink();
-        });
+        let attempts = 0;
+        const settle = () => {
+          frame = requestAnimationFrame(() => {
+            frame = 0;
+            if (view.isDestroyed) return;
+            if (view.composing && attempts < 5) {
+              attempts += 1;
+              settle();
+              return;
+            }
+            view.dom.classList.remove(imeComposingClass);
+            arrangeCursor(cursor, view);
+            restartBlink();
+          });
+        };
+        settle();
       };
       const rollActionContainer = view.dom.closest(".editor-pane");
       const rulerInchWatchListen =

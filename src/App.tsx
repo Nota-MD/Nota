@@ -75,6 +75,7 @@ import { useAppEvents, useDevBridgePreview } from "@/ui/useAppEvents";
 import { useSession } from "@/ui/useSession";
 import { useReviewView } from "@/ui/useReviewView";
 import { useSelectableUiText } from "@/ui/useSelectableUiText";
+import { useImeCursorBridge } from "@/ui/useImeCursorBridge";
 import { ElementInspector } from "@/ui/element-inspector";
 import { useMenuTable } from "@/ui/useMenuTable";
 import { ContextMenu } from "@/ui/ContextMenu";
@@ -144,6 +145,7 @@ export default function App() {
   // 文案照旧由这里给。那条 `ttlMs === 0` 的分支（不自动消失）见那个文件。
   const { toasts, toast, dismiss } = useToasts();
   useSelectableUiText(settings);
+  useImeCursorBridge();
   const settingsWindow = useSettingsWindow({ settings, toast });
 
   // ⚠️ 本文件里要翻的界面串只剩两处（下面「替换」那条提示、以及递给
@@ -356,7 +358,7 @@ export default function App() {
   // 文件走的就是那条路）。⚠️ 这两个 hook 里那几条 effect 都**只跑一次**，
   // 而那是**约定不是观察**——上游回调用 `useCallback` 包稳的规矩在
   // `ui/useStartup.ts` 文件头最后一段里，改那边之前先读那一段。
-  useStartup({ setSettings, setWorkspace, setThemes, openPath, connectAboveMeetingSpeech, toast });
+  useStartup({ setSettings, setWorkspace, setThemes, openPath, connectAboveMeetingSpeech, toast, showFirstRun: dialog.openFirstRun });
   useAppEvents({
     toast,
     refreshDocs,
@@ -984,6 +986,7 @@ export default function App() {
           debugMode={settings?.general.debug_mode ?? false}
           windowPresentation={settings?.appearance.settings_window_style ?? "embedded"}
           onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })}
+          firstRunSeen={settings?.general.onboarding_seen ?? true} onFirstRunDone={() => settings && void updateSettings({ general: { ...settings.general, onboarding_seen: true } })}
         />
 
         {/* 右键菜单（2026-10-04）：接管 WebKit 那份英文原生菜单。和

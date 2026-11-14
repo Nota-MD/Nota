@@ -240,6 +240,10 @@ testCase("IME 组合态交还原生光标并暂停覆盖层闪烁", () => {
     "组合态后续刷新仍可能把覆盖层光标画回来",
   );
   assertValue(
+    blinkSource.includes("view.composing && attempts < 5"),
+    "compositionend 没有等待 ProseMirror 收回最终上屏文本",
+  );
+  assertValue(
     css.includes(".ProseMirror.nota-ime-composing *") &&
       css.includes("caret-color: var(--accent) !important"),
     "IME 组合态没有恢复可移动的原生光标",

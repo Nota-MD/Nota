@@ -62,6 +62,20 @@ import {
 /** 下拉第一项：不指定语言。与 `code_block` 的 `language` 默认值一致。 */
 const NO_LANGUAGE = "";
 
+/** One-shot request used after a transaction creates a code block from text. */
+const codeBlockFocusEvent = "nota-code-block-focus";
+
+/**
+ * Ask a mounted code block NodeView to take focus once its editor is ready.
+ * Returns false when the node has no DOM view to receive the request.
+ */
+export function requestCodeBlockFocus(view: EditorView, pos: number): boolean {
+  const dom = view.nodeDOM(pos);
+  if (!(dom instanceof HTMLElement)) return false;
+  dom.dispatchEvent(new Event(codeBlockFocusEvent));
+  return true;
+}
+
 /** `math` 是 Nota 的数学围栏别名；refractor 没有同名语言，所以单独列入下拉。 */
 const numberLearnLanguageDistinguishName = "math";
 
@@ -642,6 +656,15 @@ export const codeBlockView = $view(
         ensureCodeBlockEditor();
       };
 
+      const requestFocus = () => {
+        startHeavyContent();
+        setNumberLearnEditEdit(true);
+        waitingFocus = true;
+        if (codeEditor) codeEditor.clusterFocus();
+        else bootstrap.focus();
+      };
+      wrap.addEventListener(codeBlockFocusEvent, requestFocus);
+
       if (!view.editable) queueMicrotask(startHeavyContent);
       else if (typeof IntersectionObserver === "undefined") queueMicrotask(startHeavyContent);
       else {
@@ -809,6 +832,7 @@ export const codeBlockView = $view(
           visibilityObserver?.disconnect();
           languageLayoutObserver?.disconnect();
           cancelAnimationFrame(languageLayoutFrame);
+          wrap.removeEventListener(codeBlockFocusEvent, requestFocus);
           window.removeEventListener("resize", scheduleLanguageLayout);
           document.removeEventListener("scroll", scheduleLanguageLayout, true);
           languagePicker.cancelDestroy();

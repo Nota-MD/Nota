@@ -25,6 +25,8 @@
 //! 稿子。想改正文就用 [`insert_at_cursor`]，别自己拼。
 
 use mlua::{Lua, Table};
+use regex::Regex;
+use std::sync::LazyLock;
 
 use super::{lua_err, mlua_to_nota};
 use crate::error::NotaError;
@@ -42,10 +44,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
         let get_text = lua
             .create_function(move |_, ()| {
                 let store = docs.lock().unwrap();
-                Ok(store
-                    .active()
-                    .map(|d| d.text.clone())
-                    .unwrap_or_default())
+                Ok(store.active().map(|d| d.text.clone()).unwrap_or_default())
             })
             .map_err(mlua_to_nota)?;
         t.set("get_text", get_text).map_err(mlua_to_nota)?;
@@ -126,9 +125,16 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
                 t.set("chars", 文本.chars().count())?;
                 // ⚠️ 「字/词」数（2026-09-27 加，用户点名「**如果是英文的话要统计词**」）：
                 // `chars` 那条口径对中文是对的、对英文是**错的**——`hello` 会被数成
-                // 5 个字，写一句英文的读数能虚高四五倍。规则见 `词数`。
-                t.set("words", 词数(&文本))?;
-                t.set("lines", if 文本.is_empty() { 0 } else { 文本.split('\n').count() })?;
+                // 5 个字，写一句英文的读数能虚高四五倍。规则见 `word_count`。
+                t.set("words", word_count(&文本))?;
+                t.set(
+                    "lines",
+                    if 文本.is_empty() {
+                        0
+                    } else {
+                        文本.split('\n').count()
+                    },
+                )?;
                 t.set("revision", 版本)?;
                 t.set("path", 路径)?;
                 t.set("clock_ms", 单调毫秒())?;
@@ -165,7 +171,8 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
                 Ok(mlua::Value::Table(t))
             })
             .map_err(mlua_to_nota)?;
-        t.set("get_selection", get_selection).map_err(mlua_to_nota)?;
+        t.set("get_selection", get_selection)
+            .map_err(mlua_to_nota)?;
     }
 
     // ── 写 ────────────────────────────────────────────────────────────────
@@ -255,53 +262,43 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
 fn 单调毫秒() -> u64 {
     static 起点: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
     // `as_millis` 是 u128：这个进程要跑满 u64 毫秒（≈5.8 亿年）才需要担心截断。
-    起点.get_or_init(std::time::Instant::now).elapsed().as_millis() as u64
+    起点
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_millis() as u64
 }
 
-/// 「字/词」数：**中文按字、英文按词**。
+/// Match Typora's word counter, including its CJK ranges and punctuation rules.
 ///
-/// 规则只有这一条（**没有分词器、没有词典、不数 token**）：
-///
-/// * 一段**连续的 ASCII 字母 / 数字** → 算 **1**（`hello`、`Nota2` 各算一个词）
-/// * 其中的 ASCII 撇号**不断词**（`don't` 算 **1**，不是 2）
-/// * 其余**非空白**字符 → 各算 **1**（汉字、全角标点、emoji 都算）
-/// * ASCII 标点与空白 → 算 **0**（`Hello, world!` 是 **2**，不是 4）
-///
-/// ⚠️ **为什么不做真分词**：用户 2026-09-27 的原话是「你可以选择同用 token 来
-/// 计数，当然这是我随口说的，**如果 token 拆分器写的代码量太多的话就不用了**」
-/// ——一条规则就能盖住他要的那件事（英文别按字母数），而真分词要引一份词典或
-/// 一个 crate，跟"插件面板上那一格写着『字』"的分量不匹配。
-///
-/// ⚠️ **已知的三处不精确，都是故意的**（改之前先看这里）：
-/// * 连字符**断词**：`well-known` 算 **2**（英文排版里两种数法都有人用，不挑一个）；
-/// * 破折号 / 弯引号这类**非 ASCII 标点算 1**（`—` 在中文里是要算的，而"一篇英文
-///   里用了几个破折号"这件事不值得为它单独列一张表）；
-/// * 不认代码 / URL：`https://a.b/c` 会被拆成 3~4 个词。
-///
-/// ⚠️ **目前只有 `stats()` 一个消费者**（写作统计插件）。要是前端也要（状态栏那个
-/// 「N 字符」想换成字/词），那时再把它搬去顶层模块——**现在不值得为一个 15 行的
-/// 纯函数开一个文件**（本仓新文件要登记五处，见 `docs/09` §2）。
-fn 词数(文本: &str) -> usize {
-    let mut 数 = 0usize;
-    // 此刻是不是正在一段字母/数字里。用它在**段首**记一次数（而不是每个字符都记）。
-    let mut 在词里 = false;
-    for c in 文本.chars() {
-        if c.is_ascii_alphanumeric() {
-            if !在词里 {
-                数 += 1;
-                在词里 = true;
-            }
-        } else if c == '\'' {
-            // 撇号什么都不做：**既不断词、自己也不成词**——`don't` 是 1，
-            // 而单独一个 `'` 是 0（"在词里"那一格不动，交给两边的字母决定）。
-        } else if c.is_whitespace() || c.is_ascii_punctuation() {
-            在词里 = false;
-        } else {
-            数 += 1;
-            在词里 = false;
-        }
+/// The frontend counter uses the same four regular expressions. Keeping the
+/// backend in step matters because Writing Stats reads `stats().words`.
+fn word_count(text: &str) -> usize {
+    static CJK: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"[\u{3040}-\u{ABFF}\u{D7A4}-\u{FAFF}]").expect("valid CJK word range")
+    });
+    static APOSTROPHE_WORD: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"['’][A-Za-z0-9_]+").expect("valid apostrophe word pattern"));
+    static STANDALONE_PUNCTUATION: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?m)(^|\s+)[\u{3000}-\u{303F}\x{21}-\x{2F}\x{3A}-\x{40}\x{5B}-\x{60}\x{7B}-\x{7E}]+(\s+|$)",
+        )
+        .expect("valid standalone punctuation pattern")
+    });
+    static WORD_SEPARATOR: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"[\u{3000}-\u{303F}\s\x{21}-\x{2C}\x{3A}-\x{40}\x{5B}-\x{60}\x{7B}-\x{7E}]+")
+            .expect("valid word separator pattern")
+    });
+
+    if text.trim().is_empty() {
+        return 0;
     }
-    数
+
+    let cjk = CJK.find_iter(text).count();
+    let normalized = CJK.replace_all(text, " ");
+    let normalized = APOSTROPHE_WORD.replace_all(&normalized, "b");
+    let normalized = STANDALONE_PUNCTUATION.replace_all(&normalized, " ");
+    let framed = format!("d {normalized} d");
+    cjk + WORD_SEPARATOR.split(&framed).count() - 2
 }
 
 /// 把"文档被插件改了"告诉前端。
@@ -344,51 +341,56 @@ fn emit_edit(app: &tauri::AppHandle, id: crate::document::DocId, text: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::词数;
+    use super::word_count;
 
     #[test]
     fn 中文按字算() {
-        assert_eq!(词数("你好"), 2);
-        // ⚠️ 全角标点也各算一个（与状态栏那个「N 字符」同一个口径——中文里
-        // 「字数」本来就把它算进去，Word 也是这么数的）。
-        assert_eq!(词数("你好，世界。"), 6);
+        assert_eq!(word_count("你好"), 2);
+        assert_eq!(word_count("你好，世界。"), 5);
     }
 
     #[test]
     fn 英文按词算而不是按字母() {
         // ⚠️ 这一条就是用户报的那件事：按 `chars` 会是 13，读完读数是虚的。
-        assert_eq!(词数("Hello, world!"), 2);
-        assert_eq!(词数("a b c"), 3);
+        assert_eq!(word_count("Hello, world!"), 2);
+        assert_eq!(word_count("a b c"), 3);
     }
 
     #[test]
-    fn 撇号不断词而连字符断词() {
-        assert_eq!(词数("don't"), 1);
-        assert_eq!(词数("well-known"), 2);
+    fn 撇号与连字符都不断词() {
+        assert_eq!(word_count("don't"), 1);
+        assert_eq!(word_count("well-known"), 1);
         // 孤立的一个撇号自己不成词（两边没有字母）。
-        assert_eq!(词数("'"), 0);
-        assert_eq!(词数("a ' b"), 2);
+        assert_eq!(word_count("'"), 0);
+        assert_eq!(word_count("a ' b"), 2);
     }
 
     #[test]
     fn 空白与_ascii_标点不计数() {
-        assert_eq!(词数("  \n\t  "), 0);
-        assert_eq!(词数("..."), 0);
-        assert_eq!(词数(""), 0);
-        assert_eq!(词数("Nota2"), 1);
+        assert_eq!(word_count("  \n\t  "), 0);
+        assert_eq!(word_count("..."), 0);
+        assert_eq!(word_count(""), 0);
+        assert_eq!(word_count("Nota2"), 1);
     }
 
     #[test]
     fn 中英混排各按自己的规则() {
         // `abc` 一个词 ＋ `中文` 两个字。
-        assert_eq!(词数("abc中文"), 3);
+        assert_eq!(word_count("abc中文"), 3);
         // 汉字**打断**一段字母：`写` 两侧的 `abc` / `def` 是两个词（＋`写` 自己）。
-        assert_eq!(词数("abc写def"), 3);
+        assert_eq!(word_count("abc写def"), 3);
     }
 
     #[test]
     fn 换行与空格在中文里也不计数() {
         // 打字机每敲一次回车都会让 `chars` 涨一，词数不该跟着涨。
-        assert_eq!(词数("第一段\n\n第二段"), 6);
+        assert_eq!(word_count("第一段\n\n第二段"), 6);
+    }
+
+    #[test]
+    fn matches_typora_punctuation_boundaries() {
+        assert_eq!(word_count("---\n#"), 0);
+        assert_eq!(word_count("foo_bar"), 2);
+        assert_eq!(word_count("foo.bar a/b"), 2);
     }
 }

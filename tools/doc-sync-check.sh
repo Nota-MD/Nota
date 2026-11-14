@@ -91,6 +91,7 @@ PAIRS=(
   # 2026-10-17：应用内打印（先 PDF 再预览，最后 lp 投递）。
   "src-tauri/src/print_job.rs                    02,04,06"
   "src-tauri/src/commands/print.rs               02,04"
+  "src-tauri/src/commands/native_dialog.rs       02,06"
   "src-tauri/src/commands/export.rs            02,04,05"
   "src-tauri/src/commands/image.rs             02,04,10"
   "src-tauri/src/image.rs                      02,03,10"
@@ -131,9 +132,7 @@ PAIRS=(
   "src-tauri/src/pandoc/tests.rs                  02,05,06"
   "src-tauri/src/pandoc_format.rs                 02,05,06,10"
   "src-tauri/src/pdf_print.rs                     02,05,06,10"
-  # 2026-10-11：拼写检查这一整套（引擎 / 词典 / 口径）。⚠️ 在这之前
-  # `spell/mod.rs` **没登记在这张表里**（⑤ 过得去是因为 AGENTS.md §2 里
-  # 有它那一行，而 ② 的"源改了文档没跟"根本管不到它）——今天补上。
+  "src-tauri/src/gtk4_dialogs.rs                  02,06" "src-tauri/src/bin/nota-gtk4-dialogs.rs         02,06"
   "src-tauri/src/spell/mod.rs                    02,03,04,07,10"
   "src-tauri/src/spell/native.rs                 02,03,07,10"
   "src-tauri/src/spell/store.rs                  02,03,07,10"
@@ -370,7 +369,7 @@ PAIRS=(
   "src/ui/useMenus.ts                             04,02"
   "src/ui/useDialogs.ts                           04,02"
   "src/ui/EmojiDialog.tsx                         04,02"
-  "src/ui/AppDialogs.tsx                          04,02"
+  "src/ui/AppDialogs.tsx                          04,02" "src/ui/FirstRunGuide.tsx                       03,04,07A"
   "src/ui/Sidebar.tsx                             04"
   "src/ui/DeferredUi.tsx                         02,04,10"
   "src/ui/useSettingsWindow.ts                   02,04,10"
@@ -401,7 +400,7 @@ PAIRS=(
   "src/ui/useToasts.ts 02,04"
   # 2026-09-28：`useAbout.ts` 拆成两份 —— 界面在 `AboutDialog.tsx`，
   # 开关并进了 `useDialogs.ts`（那一行本来就有，不用再加）。
-  "src/ui/AboutDialog.tsx 02,04"
+  "src/ui/AboutDialog.tsx 02,04" "tests/onboarding.test.ts                        03,04,07A"
   # 2026-10-04：许可证全文那张框（法律信息里那个超链接开的）。
   "src/ui/LicenseDialog.tsx 02,04"
   "src/ui/useFocusSession.ts 02,04"

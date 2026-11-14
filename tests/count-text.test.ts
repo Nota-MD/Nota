@@ -9,43 +9,37 @@
 import { countText } from "../src/ui/outline";
 
 let failures = 0;
+let passed = 0;
 function check(ok: boolean, message: string) {
-  if (ok) return;
+  if (ok) {
+    passed += 1;
+    return;
+  }
   failures += 1;
   console.error("FAIL:", message);
 }
 
+function typoraWords(markdown: string): number {
+  if (markdown.trim().length === 0) return 0;
+  let cjk = 0;
+  const normalized = markdown
+    .replace(/[\u3040-\uABFF\uD7A4-\uFAFF]/gi, () => {
+      cjk += 1;
+      return " ";
+    })
+    .replace(/['’]\w+/g, "b")
+    .replace(/(^|\s+)[(\u3000-\u303F)!-\/:-@\[-`{-~]+(\s+|$)/gm, " ");
+  return (
+    cjk +
+    ["d", normalized, "d"].join(" ").split(/[(\u3000-\u303F)\s!-,\\:-@\[-`{-~]+/g)
+      .length -
+    2
+  );
+}
+
 function oldCount(markdown: string, readingSpeed: number) {
   const characters = [...markdown].length;
-  let words = 0;
-  const runs = markdown.split(/\s+/);
-  for (const run of runs) {
-    if (!run) continue;
-    let latinBuf = "";
-    for (const ch of run) {
-      const cp = ch.codePointAt(0)!;
-      const cjk =
-        (cp >= 0x3040 && cp <= 0x30ff) ||
-        (cp >= 0x3400 && cp <= 0x4dbf) ||
-        (cp >= 0x4e00 && cp <= 0x9fff) ||
-        (cp >= 0xf900 && cp <= 0xfaff) ||
-        (cp >= 0xac00 && cp <= 0xd7af) ||
-        (cp >= 0x20000 && cp <= 0x2ebef);
-      if (cjk) {
-        if (latinBuf) {
-          words += 1;
-          latinBuf = "";
-        }
-        words += 1;
-      } else if (/[\p{L}\p{N}'’-]/u.test(ch)) {
-        latinBuf += ch;
-      } else if (latinBuf) {
-        words += 1;
-        latinBuf = "";
-      }
-    }
-    if (latinBuf) words += 1;
-  }
+  const words = typoraWords(markdown);
   const lines = markdown === "" ? 0 : markdown.split("\n").length;
   const speed = Number.isFinite(readingSpeed) && readingSpeed >= 1 ? readingSpeed : 382;
   return {
@@ -66,6 +60,9 @@ check(
   "ASCII、词与行",
 );
 check(countText("don't stop-case", 382).words === 2, "撇号与连字符属于同一个词");
+check(countText("---\n#", 382).words === 0, "纯 Markdown 标点不产生词");
+check(countText("foo_bar", 382).words === 2, "Typora 把下划线两侧拆成两个词");
+check(countText("foo.bar a/b", 382).words === 2, "Typora 保留点号和斜杠连接词");
 check(
   JSON.stringify(countText("你好 hello\n世界", 382)) ===
     JSON.stringify({ characters: 11, words: 5, lines: 2, readingMinutes: 1 }),
@@ -111,7 +108,7 @@ for (let sample = 0; sample < 200; sample += 1) {
     break;
   }
 }
-check(differentialOk, "200 份混合文本与旧算法逐字段一致");
+check(differentialOk, "200 份混合文本与 Typora 词数公式逐字段一致");
 
 const large = "word\n".repeat(200_000);
 const largeCount = countText(large, 382);
@@ -124,4 +121,4 @@ if (failures > 0) {
   console.error(`${failures} failed`);
   process.exit(1);
 }
-console.log("count text: 9 passed, 0 failed");
+console.log(`count text: ${passed} passed, ${failures} failed`);

@@ -6,18 +6,18 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeDialogFilter {
     name: String,
     extensions: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeDialogRequest {
     mode: String,
@@ -34,11 +34,20 @@ pub struct NativeDialogRequest {
 pub async fn nota_dialog_native(
     request: NativeDialogRequest,
 ) -> Result<Option<Vec<String>>> {
-    tauri::async_runtime::spawn_blocking(move || 打开(request))
-        .await
-        .map_err(|e| crate::error::NotaError::Other(format!("native dialog task failed: {e}")))
+    #[cfg(target_os = "linux")]
+    {
+        portal_dialog(request).await
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        tauri::async_runtime::spawn_blocking(move || 打开(request))
+            .await
+            .map_err(|e| crate::error::NotaError::Other(format!("native dialog task failed: {e}")))
+    }
 }
 
+#[cfg(not(target_os = "linux"))]
 fn 打开(request: NativeDialogRequest) -> Option<Vec<String>> {
     let mut dialog = rfd::FileDialog::new();
     if let Some(title) = request.title.as_deref() {
@@ -91,4 +100,109 @@ fn 打开(request: NativeDialogRequest) -> Option<Vec<String>> {
                 .collect(),
         )
     }
+}
+
+/// Linux file chooser: XDG Desktop Portal only.
+///
+/// This deliberately bypasses `rfd`'s GTK3/zenity fallbacks. GNOME serves the
+/// request from its GTK4 portal frontend and KDE from Plasma, so the dialog
+/// belongs to the desktop's native toolkit rather than the GTK3 main process.
+#[cfg(target_os = "linux")]
+async fn portal_dialog(request: NativeDialogRequest) -> Result<Option<Vec<String>>> {
+    use ashpd::desktop::file_chooser::{FileFilter, SelectedFiles};
+    use ashpd::desktop::{Request as PortalRequest, ResponseError};
+
+    match serde_json::to_value(&request)
+        .map_err(|error| crate::error::NotaError::other(error.to_string()))
+        .and_then(|request| crate::gtk4_dialogs::file_dialog(&request))
+    {
+        Ok(paths) => return Ok(paths),
+        Err(error) => crate::日志!("[nota] GTK4 dialog helper unavailable; using portal: {error}"),
+    }
+
+    let filters = request
+        .filters
+        .iter()
+        .filter_map(|filter| {
+            let mut portal = FileFilter::new(&filter.name);
+            let mut any = false;
+            for extension in &filter.extensions {
+                let extension = extension
+                    .trim()
+                    .trim_start_matches("*.")
+                    .trim_start_matches('.');
+                if extension.is_empty() {
+                    continue;
+                }
+                any = true;
+                portal = if extension == "*" {
+                    portal.glob("*")
+                } else {
+                    portal.glob(&format!("*.{extension}"))
+                };
+            }
+            any.then_some(portal)
+        })
+        .collect::<Vec<_>>();
+
+    let default_path = request.default_path.as_deref().map(Path::new);
+    let current_folder = default_path.and_then(|path| {
+        if path.is_dir() {
+            Some(path.to_path_buf())
+        } else {
+            path.parent().map(Path::to_path_buf)
+        }
+    });
+    let title = request.title.as_deref().filter(|title| !title.trim().is_empty());
+
+    let portal: PortalRequest<SelectedFiles> = if request.mode == "save" {
+        let current_name = default_path
+            .and_then(Path::file_name)
+            .and_then(std::ffi::OsStr::to_str);
+        let mut dialog = SelectedFiles::save_file()
+            .title(title)
+            .current_name(current_name)
+            .filters(filters);
+        if let Some(folder) = current_folder {
+            dialog = dialog
+                .current_folder::<PathBuf>(Some(folder))
+                .map_err(|e| crate::error::NotaError::other(format!("文件选择路径无效：{e}")))?;
+        }
+        dialog
+            .send()
+            .await
+            .map_err(|e| crate::error::NotaError::other(format!("GTK4 文件门户不可用：{e}")))?
+    } else {
+        let mut dialog = SelectedFiles::open_file()
+            .title(title)
+            .multiple(request.multiple)
+            .directory(request.mode == "directory")
+            .filters(filters);
+        if let Some(folder) = current_folder {
+            dialog = dialog
+                .current_folder::<PathBuf>(Some(folder))
+                .map_err(|e| crate::error::NotaError::other(format!("文件选择路径无效：{e}")))?;
+        }
+        dialog
+            .send()
+            .await
+            .map_err(|e| crate::error::NotaError::other(format!("GTK4 文件门户不可用：{e}")))?
+    };
+
+    let selected = match portal.response() {
+        Ok(selected) => selected,
+        Err(ashpd::Error::Response(ResponseError::Cancelled)) => return Ok(None),
+        Err(error) => {
+            return Err(crate::error::NotaError::other(format!(
+                "GTK4 文件门户没有返回结果：{error}"
+            )))
+        }
+    };
+    let paths = selected
+        .uris()
+        .iter()
+        .filter_map(|uri| uri.to_file_path().ok())
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    Ok((!paths.is_empty()).then_some(paths))
 }

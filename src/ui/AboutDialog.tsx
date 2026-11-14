@@ -129,12 +129,14 @@ export function AboutDialog({
   onSetDebugMode,
   presentation = "embedded",
   standalone = false,
+  onOpenGuide,
 }: {
   onClose: () => void;
   debugMode: boolean;
   onSetDebugMode: (enabled: boolean) => void;
   presentation?: "embedded" | "full";
   standalone?: boolean;
+  onOpenGuide?: () => void;
 }) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -518,6 +520,12 @@ export function AboutDialog({
                       });
                     }),
                   )}
+                </div>
+              )}
+
+              {onOpenGuide && (
+                <div className="about-rows">
+                  {lineShell({ key: "g", label: t("Getting started") }, "next", onOpenGuide)}
                 </div>
               )}
 

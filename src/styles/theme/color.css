@@ -159,9 +159,8 @@
   /* 关着的开关：轨道色照稿子（#d2d2d2）。原来是借 `--bg-active`（一个通用灰），
      而那个灰在别的风格里同时也当"选中"用——两件事共用一个值迟早会撞。 */
   --switch-off: #d2d2d2;
-  /* 开着的开关：稿子的绿 #34c759。⚠️ 深色那份是 **#30d158**，不是同一个色——
-     稿子两档各给了一个（深色下 #34c759 压不住，偏暗）。 */
-  --switch-on: #34c759;
+  /* The selected accent is the single source of truth for enabled switches. */
+  --switch-on: var(--accent);
   --switch-knob-bg: #ffffff;
 
   /* ── 下面这一组 2026-09-26 加：稿子逐个控件给了色号与尺寸 ──────────────
@@ -204,7 +203,7 @@
   --menu-fill: #0a84ff;
   --menu-fill-fg: #ffffff;
   --switch-off: #48484a;
-  --switch-on: #30d158;
+  --switch-on: var(--accent);
   --switch-knob-bg: #ffffff;
   --btn-bg: #3f3f41;
   --btn-bg-hover: #4c4c4e;

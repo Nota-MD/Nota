@@ -84,6 +84,7 @@ import { instantRender } from "./instant-render";
 // 两边的分工与"为什么占宽度"写在它自己的文件头上。
 import { inlineSyntaxNodePlugins, literalInlineInput, markHint } from "./mark-hint";
 import { inlineEscapeNodePlugins } from "./inline-escape";
+import { compositionPruneGuard, linuxImeEnterGuard } from "./ime-guard";
 // 任务项的复选框：画出来 + 点它勾上。DOM 钩子（`data-checked`）是
 // `preset-gfm` 早就给了的，缺的是 CSS 和点击，理由写在它自己的文件头上。
 import { taskList } from "./task-list";
@@ -427,6 +428,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // 那个 `[…].flat()`），所以按引用滤得掉；别处那几条输入规则（列表 `- `、
     // 引用 `> `、分割线 `---`）**照旧敲完就变**，只摘标题这一条。
     .use(encloseBarLanguageFillAll)
+    .use(readOnly ? [] : [compositionPruneGuard, linuxImeEnterGuard])
     .use(readOnly ? [] : [literalInlineInput(autoPair)])
     .use(readOnly ? [] : [inlineMarkKeymap])
     .use(

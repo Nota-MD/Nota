@@ -90,10 +90,12 @@ export interface StartActionWiring {
    */
   connectAboveMeetingSpeech: (startActionTextItem: string | null, startActionLevel: StartupAction) => Promise<void>;
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
+  /** Show the compact first-run guide after the native window is visible. */
+  showFirstRun: () => void;
 }
 
 export function useStartup(w: StartActionWiring): void {
-  const { setSettings, setWorkspace, setThemes, openPath, connectAboveMeetingSpeech, toast } = w;
+  const { setSettings, setWorkspace, setThemes, openPath, connectAboveMeetingSpeech, toast, showFirstRun } = w;
 
   useEffect(() => {
     let alive = true;
@@ -140,6 +142,11 @@ export function useStartup(w: StartActionWiring): void {
         // ⚠️ 在 `setSettings` 之前定语言（理由见文件头第 1 条）。
         if (uiLanguage) setLanguage(uiLanguage.effective);
         setSettings(s);
+        if (!s.general.onboarding_seen) {
+          const show = () => showFirstRun();
+          if (document.documentElement.dataset.windowShown === "true") window.setTimeout(show, 0);
+          else window.addEventListener("nota-window-shown", show, { once: true });
+        }
         debugEvent("startup", "settings ready", {
           language: uiLanguage?.effective ?? "unknown",
           ui_style: s.ui_style,
@@ -227,5 +234,5 @@ export function useStartup(w: StartActionWiring): void {
     // ⚠️ 这三个 `set*` 是 `useState` 给的稳定身份（React 保证），列进来是为了
     // 这条 effect 的依赖看起来是完整的；真正会变的是那三个回调，而它们**必须**
     // 是稳定的——理由见文件头最后一段。
-  }, [toast, openPath, connectAboveMeetingSpeech, setSettings, setWorkspace, setThemes]);
+  }, [toast, openPath, connectAboveMeetingSpeech, setSettings, setWorkspace, setThemes, showFirstRun]);
 }

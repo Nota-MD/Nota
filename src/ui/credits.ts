@@ -154,7 +154,6 @@ export function sendThanksNameSingle(t: (key: string) => string): SendThanksItem
       link: "https://github.com/vscode-icons/vscode-icons",
       license: "MIT",
     },
-
     // ── 拓展运行时，以及它要的那条网络与验签的路 ───────────────────────
     {
       name3: "mlua / Lua",

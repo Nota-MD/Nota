@@ -154,7 +154,6 @@ pub async fn nota_webview_spellcheck_languages_set(
     Ok(问主线程(app, 改动::语言(languages)).await?.languages)
 }
 
-
 /// 把活投给主线程：可选地**先改**，然后**无条件读一遍**回来。
 ///
 /// `改动` 是枚举而不是"另写几个函数"：读那一段（`读一眼`）在这几个命令里
@@ -282,5 +281,44 @@ fn 读一眼(_w: &tauri::webview::PlatformWebview, 要改: 改动) -> Option<拼
 #[tauri::command]
 pub async fn nota_webview_scroll_hard(app: tauri::AppHandle) -> Result<()> {
     let _ = 问主线程(app, 改动::硬滚动).await?;
+    Ok(())
+}
+
+/// Keep WebKitGTK's IME anchor on the visible caret.
+///
+/// Tauri 2 / WebKitGTK can keep a document-space cursor rectangle after the
+/// page scrolls, placing fcitx candidates at the bottom-right of the window.
+/// The frontend supplies a viewport-space caret rectangle on focus,
+/// composition, selection, scroll, and resize.
+#[tauri::command]
+pub async fn nota_webview_notify_ime_cursor(
+    app: tauri::AppHandle,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+) -> Result<()> {
+    let window = app
+        .get_webview_window(主窗口)
+        .ok_or_else(|| NotaError::other(format!("找不到窗口 `{主窗口}`")))?;
+
+    #[cfg(target_os = "linux")]
+    {
+        use webkit2gtk::{InputMethodContextExt as _, WebViewExt as _};
+
+        window
+            .with_webview(move |webview| {
+                if let Some(context) = webview.inner().input_method_context() {
+                    context.notify_cursor_area(x, y, width, height);
+                }
+            })
+            .map_err(|error| NotaError::other(format!("设置输入法光标位置失败：{error}")))?;
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (window, x, y, width, height);
+    }
+
     Ok(())
 }

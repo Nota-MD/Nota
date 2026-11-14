@@ -1,6 +1,6 @@
 # 02 · 逐文件接口参考
 
-> 最后同步：2026-10-25
+> 最后同步：2026-11-14
 
 **公开函数的签名以本文为准，本文与代码不一致时以代码为准并立即改本文。**
 本文只讲"这个函数做什么、参数什么意思、失败会怎样"，不讲为什么这样设计——
@@ -50,7 +50,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `upload/` | **「把一张图送到用户自己填的那台服务器上」的唯一一份实现**（2026-09-26 第二批）：`upload.rs`（707 行，算式与设置——拼多部件体 / 解析请求头 / 从响应按点路径取地址 / `nota-auto-upload` 前件 / 文件 0600 建）· `upload/net.rs`（181 行，**唯一碰网络的地方**）· `upload/tests.rs`（747 行，28 条用例）。⚠️ **不并进 `image.rs`**：那边最远只到磁盘，这边要**把用户的字节送出这台机器**。⚠️ **不预设任何服务商**（测试里钉着这件事）；**配置在 `~/.config/nota/image-upload.toml`，0600**，不许并进 0644 的 `settings.toml` |
 | `commands/mod.rs` | 只是各命令域子模块的声明（2026-10-23 现数：`diff` / `document` / **`file_picker`** / `export` / **`focus`** / `image` / `image_upload` / `menu` / **`native_dialog`** / `pandoc` / `plugin` / `print` / `settings` / `table_width` / `theme` / `ui_style` / `watch` / `workspace`）+ 命令层的分工说明（无函数） |
 | `commands/file_picker.rs` | **应用内文件选择器的宿主半边**：`nota_picker_places` 列主目录 / 桌面 / 文档 / 下载与文件系统根，`nota_picker_list` 读取一层目录并返回名称、路径、大小和修改时间，`nota_picker_create_dir` 新建文件夹。它不读文件内容、不保存文件；业务命令仍由文档、导出、插件等域处理。路径分隔符与隐藏文件判断按平台处理。 |
-| `commands/native_dialog.rs` | **系统原生文件选择器**（2026-10-23）：`nota_dialog_native` 统一处理打开、保存和选择目录。Linux 使用 `rfd` 的 XDG Desktop Portal 后端：GNOME 下由 GTK4 portal 绘制，KDE 下跟随 Plasma，搜索、最近文件、书签和常用位置都由系统维护。Windows/macOS 由 `rfd` 调用各自原生对话框。命令运行在 `spawn_blocking`，不阻塞 Tauri 主线程。 |
+| `commands/native_dialog.rs` | **系统原生文件选择器**（2026-10-23；2026-11-14 更新）：`nota_dialog_native` 统一处理打开、保存和选择目录。Linux 先调用独立的 `nota-gtk4-dialogs` helper；helper 不可用时直接走 XDG Desktop Portal。GNOME 下由 GTK4 portal 绘制，KDE 下跟随 Plasma，搜索、最近文件、书签和常用位置均由系统维护。Windows/macOS 使用 `rfd` 调用各自原生对话框。Linux 的 helper 与 portal 都是异步路径，不阻塞 Tauri 主线程。 |
 | `commands/image.rs` | `nota_image_place` 与 `nota_image_data_url`，都异步走 `spawn_blocking`。前者按宿主规则落图并返回 Markdown 地址；后者给编辑区显示本地图，限 32MB、只读主目录/文档/桌面/下载，返回 data URL。规则与文档位置不由前端提供。 |
 | `commands/image_upload.rs` | 「上传图片」那三条（`nota_image_upload_get` / `_set` / `_one`），**都是异步 ＋ `spawn_blocking`**（读盘、联网最长 60 秒）。⚠️ **手动与自动两条路共用同一次上传**，但方向相反：手动**先传、失败才落盘**，自动**先落盘、失败就保留本地地址**。⚠️ **三道闸缺一不可**（`enabled` / `auto` / 文档 YAML 里的 `nota-auto-upload`） |
 | `commands/document.rs` | `nota_doc_*` **十五个**命令（⚠️ **2026-10-04 现数**：新增 `nota_doc_cursor`）。⚠️ **这一层收的是"名字一段"或"目录一条"，不是整条路径**——前端手里的 `path` 是有损的（非 UTF-8 目录名会变成 `?`）。2026-11-01 起保存 / 重载 / 删除同时清理对应草稿，新文件换行符从 `editor.line_ending` 传入 |
@@ -69,7 +69,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `commands/pandoc.rs` | `nota_pandoc_probe` / `nota_pandoc_export` 两条，**都异步**（探测起进程、导出最长 180 秒，走 `spawn_blocking`）。⚠️ PDF **两条路**：pandoc 不通且 `pdf_print::available()` 时改走自带那套，返回值 `route` 说明走的哪条 |
 | `commands/focus.rs` | 强制专注那**六条**（2026-09-26，95 行）：`nota_focus_get` / `_start` / `_stop` / `_ack` / `_beep` / `_close_alarm`。⚠️ **无判据层**：只转给 `focus::*`、再 `广播`一份，规则一条都不在这儿（判据全在 `focus/mod.rs`）。⚠️ 在 **`FocusState` 与 `AppState` 两份**托管状态上操作（设置在后者）。⚠️ `close_alarm` 是给调试和退出用的，**前端一个调用点都没有**——前端明说了不自己关窗，收窗靠 `alarm::对账` |
 | `format_keys.rs` | **捕获相位的键盘控制器**（2026-09-28 新建，**210 行**）：**只在 Linux 装上**，在 `Builder::on_page_load` 里挂 `EventControllerKey`，命中 `Ctrl+B` / `Ctrl+I` 就发一条 `nota:format-key` 给前端（走和 keydown **一模一样**的那份判据——「加粗」是套 mark 还是别的写法，那份知识在前端）。⚠️⚠️ **2026-09-29 实测：这一层在真程序里一次都没拦到过键，与没装等价**（`NOTA_DEBUG=1` 下 4 次 `Ctrl+B` ＋ 1 次 `Ctrl+I`，日志里只有「已装上」、**0 条「拦到」**）。**BUG-49 / BUG-53 的真凶与真修法都在前端**：`Mod-b` / `Mod-i` 被绑了**两次**（上游 `strongKeymap` / `emphasisKeymap` ＋ 本仓菜单表的 `fmt.bold` / `fmt.italic`），两条命令都是 **toggle、跑两遍正好抵消**，看起来就是「按了没反应」；修法是 `ui/useMenus.ts` 那条 `window` 监听第一句加 `if (e.defaultPrevented) return;`（ProseMirror 的监听挂在 contenteditable 上、比 `window` 早）。⚠️ 当年那句「WebKitGTK 在派发给 DOM 之前就把这两颗键吃掉了」被两条实测推翻（最小复现里网页侧收得到 `key=b ctrl=true`；真程序里那个 `window` 监听也收得到）。⚠️ 这一层**目前留着**，**「删还是留」是待拍板项**（删它要连着动 `lib.rs` 的 `on_page_load`、前端那条 `nota:format-key` 监听、`ipc.ts` 的频道名和几份文档）。⚠️ 留在纸面上的两条仍然成立：**只在 Linux 装**（macOS / Windows 上这两颗键本来就到得了 DOM，装了会和 `ui/useMenus.ts` 那条 keydown 撞成执行两遍）、**挂点是 `on_page_load` 不是 `setup`**（那个钩子每加载一轮页面跑一次，所以里面有一道 `AtomicBool` 幂等闸）。⚠️ `gtk` 那个 crate 得显式开 `features = ["v3_24"]`。整篇论证在文件头、账在 `docs/07` 的 BUG-49 / BUG-53 |
-| `pdf_print.rs` | **Nota 自带的 PDF 排版与 Linux 系统打印**，只在 Linux 编译。静默排版仍用 WebKitGTK 打印后端兜底；系统打印对话框改为先由 `pdf_render.rs` 生成 PDF，再优先调用 `org.freedesktop.portal.Print`，GNOME 下显示 GTK4 portal、KDE 下跟随 Plasma，portal 不可用才回退 WebKitGTK/GTK3。⚠️ WebKitGTK 2.52 本身没有 PDF 导出 API |
+| `pdf_print.rs` | **Nota 自带的 PDF 排版与 Linux 系统打印**，只在 Linux 编译。静默排版仍用 WebKitGTK 打印后端；系统打印先由 `pdf_render.rs` 生成 PDF，再优先交给 `nota-gtk4-dialogs print`，失败后调用 `org.freedesktop.portal.Print`。GNOME 下由 GTK4 portal 绘制，KDE 下跟随 Plasma；两者都不可用时明确报错，不回退 WebKitGTK/GTK3 对话框。⚠️ WebKitGTK 2.52 本身没有 PDF 导出 API |
 | `theme_import.rs` | **主题导入分派**：官方 Nota 包识别 `ui/`、`ui-styles/`、`document/`、`themes/` 布局；目录、单个 CSS 与平铺 Typora ZIP 交给原生导入器。两类入口共用路径穿越、符号链接、文件数和体积限制，并原子替换已有集合 |
 | `theme_import/typora.rs` | **Typora 原生导入**（2026-11-01）：源 CSS、`@import`、字体、图片全部按原字节复制；只额外写 `.nota-themes.json` 登记每个根 CSS 的入口。运行期加载时才展开 import 和内联资源，磁盘上的第三方主题不被改写。支持目录、CSS 与包装目录 ZIP；`.user.css` 是旁路覆盖，不作为独立主题列出；缺失的可选 `@import` 按浏览器语义忽略 |
 | `pandoc.rs` | **借系统里那个 pandoc 导出由自定义导出器声明的格式**（当前词汇表十种：PDF / Word / RTF / EPUB / LaTeX / ODT / OPML / MediaWiki / reStructuredText / Textile）。⚠️ **不自带、不下载、不替用户装**，只探测；⚠️ **不存路径**，每次现探；⚠️ 正文走 **stdin**、`cwd` 与 `--resource-path` 都指向文档目录；自定义导出器的参数与样式文件由前端合并后传入，后端仍统一走 `shlex` 分词 |
@@ -224,7 +224,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `styles/share.css` | **分享图那一块面板的皮**（61 行，2026-09-27）：`.panel-share` / `.panel-share-img` / `.panel-share-actions` / `.panel-share-note`。⚠️ **另开一份是因为 `dock.css` 当时 961 行、贴着 1000 行硬线**。⚠️ 卡片自己的配色**不在这里**——那张 SVG 塞在 `<img>` 里、继承不到任何 CSS 变量。⚠️ 要在 `dock.css` 之后加载（借那边的 `.panel-btn`） |
 | `styles/heatmap.css` | **热力图那一块的皮**（83 行，2026-09-27）。⚠️ **另开一份是因为 `dock.css` 当时 971 行、顶着硬线**（同 `share.css` / `marks.css` 那两次拆）。⚠️ **列宽是弹性的**（`flex: 1`）：面板那一栏能从 260px 拖宽，写死像素的话拖宽之后整块图缩在左上角。⚠️ 格子深浅走 **`color-mix` 兑透明**、不写死五个颜色（兑透明才不会被底色的深浅两套吃掉） |
 | `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26 新增）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反（界面风格要改的就是整个外壳）；于是"同名覆盖内置"的**全部实现就是文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验 |
-| `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增）。清单、当前 CSS 与 `ready` 一次拉齐：主窗口在屏幕外预热，编辑器与样式都就绪后才移入屏幕，不会先画出默认配色或加载动画。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
+| `ui/useUiStyles.ts` | 用户导入的界面风格的**清单 / 注入 / 打开目录**（2026-09-26 新增）。清单、当前 CSS 与 `ready` 一次拉齐：主窗口先隐藏并预热，编辑器、界面样式与当前文档主题都就绪后才显示，不会先画出默认配色或加载动画。⚠️ 清单是**状态不是事件**：运行期间丢文件不触发，要重开应用。⚠️ 取失败安静退回内置那套，但**必须真的把注入的那份撤掉** |
 | `styles/themes/*.css` | 文档主题源文件。📌 安装包只内置 `adwaita` / `adwaita-dark`；`minimal` / `latex` / `cde` 留给独立官方主题仓库迁移，`BUILTIN` 不再引用它们。每套主题仍自带 `--code-*`。 |
 | `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：CodeMirror 源码区、渲染区、说明卡。⚠️ 渲染出来那张 `<svg>` 的宽度上限**主要不在 CSS 里**（`diagram-view.ts` 按 `viewBox` 自然宽取 `min(100%, 自然宽)`；只写 `max-width: 100%` 会让小图被容器宽度等比放大） |
 | `styles/math.css` | **公式那棵树**（2026-09-26）：面板 / 半透明分隔符 / 源码框 / 渲染区三种 `data-state` / 说明卡。公式源码与空态说明使用 `--font-math` 的数学衬线字体栈；KaTeX 渲染继续使用自带的数学衬线字形。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），别在 `.nota-math-panel` 上另写 `display: none` |
@@ -5040,8 +5040,9 @@ effect 上面**的原因——详情见 `docs/09` 的 `App.tsx` 一行。
 
 用一个 `alive` 标志挡住卸载后的 setState；`return` 里把 `alive` 置假。
 工作区与主题清单的后台任务各自检查一次 `alive`。编辑器揭幕不依赖这两项：
-`newDoc()` 或 `openPath()` 一旦让编辑器实例挂载并聚焦，`useBootReveal` 就显示窗口，
-侧栏和主题菜单可以在之后几十毫秒内补齐。
+`newDoc()` 或 `openPath()` 一旦让编辑器实例挂载并聚焦，且当前文档主题已经注入或确认不可用，
+`useBootReveal` 就显示窗口；侧栏和主题菜单可以在之后几十毫秒内补齐。主题字体诊断进一步
+排到窗口显示后的空闲帧，避免在首帧前遍历并主动加载全部字体。
 
 ⚠️ **侧栏折叠时文件列表不做递归扫描**：`FileList` 只有同时满足“文件页可见、侧栏
 未折叠”才读取子目录。否则恢复工作区会在后台扫整棵树，和编辑器首帧抢磁盘与主线程。
@@ -6123,7 +6124,7 @@ SSR）下它可能不存在。
 
 ---
 
-## `src/styles/doc-theme.ts`（317 行）
+## `src/styles/doc-theme.ts`（370 行）
 
 **「文档主题碰不到外壳」这条线的全部实现。** 把一份**按普通文档 CSS 写**的主题
 （内置三套在 `src/styles/themes/*.css`，用户自己写的也一样）改造成**只作用于正文**
@@ -6203,6 +6204,10 @@ loadDocTheme(id)  →  api.theme.css(id)  取回**文本**
 ⚠️ 用**一个固定的 `<style id="nota-doc-theme">`** 做替换，而不是每次 append 一个新的：
 后者在用户来回切主题时会原地堆出一串 `<style>`，而且旧的那份仍然生效，
 最终无法判断当前是哪套主题。
+
+⚠️ 涂抹结果只缓存**最后一份**。导入主题可能同时包含数 MB 源 CSS 与数 MB 限域结果；
+保留四份会把内存放大到几十 MB，而实际收益只是几次主题往返切换。单份缓存仍能吸收
+开发态 StrictMode 的重复应用，同时把常驻内存压到可预期的一档。
 
 ⚠️ 末尾还拼了一条 `::selection` 规则（`SELECTION_RULE`），用
 `var(--select-text-bg-color, highlight)` / `var(--select-text-font-color, highlighttext)`
@@ -6578,7 +6583,7 @@ t("Plugins")   // 中文表里有 → "插件"；没有 → "Plugins"（原样�
 1. **"英语界面是完整的"**——⚠️ 这一条**在 2026-09-28 翻转之后由构造保证**：
    英语成了**原文**，任何一句还没翻的都还是英语，不存在"英语表漏了一条"这种状态。
    翻转之前这条要靠人量（当时 `bash tools/i18n-check.sh` 量到 732 对 732、0 欠账），
-   现在**不必再量**，这个值于是是稳的；
+   现在**不必再量**，这个值因此是稳定的；
 2. **它是"未命中"的落点**：基准是英文，那么落点也该是英文——落到中文等于
    **替用户假定他读中文**，而"系统语区认不出来"恰好说明不了这件事。
 
@@ -6722,7 +6727,7 @@ t("Plugins")   // 中文表里有 → "插件"；没有 → "Plugins"（原样�
 
 ---
 
-## `src/ui/EditorPane.tsx`（935 行）
+## `src/ui/EditorPane.tsx`（997 行）
 
 编辑区：把编辑器实例接进 React 生命周期，并按**模式**摆一到两个窗格。
 架构与三条模式口径写在 `docs/05-editor-bridge.md` §3 / §3.1，这里只讲落地细节。
@@ -9358,13 +9363,13 @@ toast 会自己消失）· **剪贴板尽力而为、能力先问后做**。
 
 ---
 
-## `src-tauri/src/mcp/mod.rs`（725 行）
+## `src-tauri/src/mcp/mod.rs`（10 行）
 
-> **2026-11-07 superseded:** the file is now a private 10-line module gate.
+> **2026-11-07 superseded:** this file is now a private module gate.
 > The public MCP server, `--mcp` transport and socket handshake no longer
 > exist. Host Control in `dev_bridge.rs` is the only external developer API.
-> Statements below describe the removed implementation and are retained only
-> as historical context.
+> The paragraphs below describe the removed implementation and are retained
+> only as historical design notes.
 
 **MCP 服务器：让 AI 客户端够到用户正开着的那个 Nota**（2026-09-27 新增）。
 

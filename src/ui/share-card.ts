@@ -176,7 +176,7 @@ function profilePart(
   const avatarY = 108;
   const avatarSize = 82;
   const part = [
-    character((card.subtitle || t("Writing report")).toUpperCase(), 64, 64, {
+    character(fitText((card.subtitle || t("Writing report")).toUpperCase(), 760, 18, 700, measure), 64, 64, {
       size: 18,
       weight: 700,
       color: color.main,
@@ -214,7 +214,7 @@ function profilePart(
       weight: 700,
       color: color.character2,
     }),
-    character(card.title.toUpperCase(), 174, 184, {
+    character(fitText(card.title.toUpperCase(), 842, 17, 600, measure), 174, 184, {
       size: 17,
       weight: 600,
       color: color.faint,
@@ -235,7 +235,7 @@ function metricPart(
   while (numberSize > 140 && measure(value, numberSize, 800) > 720) numberSize -= 8;
   const numberWidth = measure(value, numberSize, 800);
   return [
-    character(card.label.toUpperCase(), 64, 278, {
+    character(fitText(card.label.toUpperCase(), 940, 20, 700, measure), 64, 278, {
       size: 20,
       weight: 700,
       color: color.faint,
@@ -530,10 +530,15 @@ function footerPart(
       qrPart(qr, 904, 1186, qrSize, color),
     );
   } else {
+    const brandSize = 25;
+    const markSize = 34;
+    const markGap = 14;
+    const brandWidth = measure("NOTA", brandSize, 750);
+    const markLeft = 1016 - brandWidth - markGap - markSize;
     part.push(
-      `<g opacity="0.95">${markRecognize(950, 1220, 34, "脚")}</g>`,
+      `<g opacity="0.95">${markRecognize(markLeft, 1220, markSize, "脚")}</g>`,
       character("NOTA", 1016, 1250, {
-        size: 25,
+        size: brandSize,
         weight: 750,
         color: color.character2,
         anchor: "end",

@@ -561,6 +561,8 @@ export interface GeneralSettings {
    * 运行中换语言得把所有插件重装一遍。理由写在 `settings/general.rs`。
    */
   language: string;
+  /** Whether the compact first-run guide has been dismissed. */
+  onboarding_seen: boolean;
   /** 把内部诊断信息也打到控制台。⚠️ **只加日志，不改行为**。 */
   debug_mode: boolean;
   /**

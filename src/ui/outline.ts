@@ -12,8 +12,10 @@
  * 口径：
  * - **字符数**按**码点**算，不是 UTF-16 码元——否则一个 emoji 会被算成 2，
  *   一个字的中文倒是对的（1）。混排时两种算法的差会让人对不上数。
- * - **词数**：CJK 字符**逐字算一个词**，其余按空白切。这是中英混排下最贴近
- *   直觉的口径；纯按空白切会把整段中文算成 1 个词（显然不对）。
+ * - **词数**：follow Typora's word counter exactly. CJK code points in its
+ *   configured ranges count one each; other text is split by Typora's
+ *   punctuation and whitespace rules. This keeps the same document at the
+ *   same count in Nota and Typora.
  */
 export interface Counts {
   characters: number;
@@ -23,32 +25,35 @@ export interface Counts {
   readingMinutes: number;
 }
 
-/** 粗略判一个码点算不算 CJK（含中日韩、全角标点）。 */
-function isCjk(cp: number): boolean {
-  return (
-    (cp >= 0x3040 && cp <= 0x30ff) || // 日文假名
-    (cp >= 0x3400 && cp <= 0x4dbf) || // 扩展 A
-    (cp >= 0x4e00 && cp <= 0x9fff) || // 基本汉字
-    (cp >= 0xf900 && cp <= 0xfaff) || // 兼容汉字
-    (cp >= 0xac00 && cp <= 0xd7af) || // 谚文
-    (cp >= 0x20000 && cp <= 0x2ebef) // 扩展 B~F
-  );
-}
-
 /**
- * 非 ASCII 文字与数字的判断。ASCII 在扫描器里走整数快路径，避免为大文件
- * 每个字符构造临时字符串并执行 Unicode 正则。
+ * Typora's documented-style word counter, kept byte-for-byte compatible with
+ * its JavaScript implementation. The two sentinel words make empty tokens at
+ * either edge harmless; the prefix punctuation pass prevents a standalone
+ * markdown marker from becoming a word.
  */
-const nonASCIISingleWordCharacter = /[\p{L}\p{N}'’-]/u;
+function countTyporaWords(markdown: string): number {
+  if (markdown.trim().length === 0) return 0;
+
+  let cjk = 0;
+  const normalized = markdown
+    .replace(/[\u3040-\uABFF\uD7A4-\uFAFF]/gi, () => {
+      cjk += 1;
+      return " ";
+    })
+    .replace(/['’]\w+/g, "b")
+    .replace(/(^|\s+)[(\u3000-\u303F)!-\/:-@\[-`{-~]+(\s+|$)/gm, " ");
+  const tokens = ["d", normalized, "d"]
+    .join(" ")
+    .split(/[(\u3000-\u303F)\s!-,\\:-@\[-`{-~]+/g);
+  return cjk + tokens.length - 2;
+}
 
 export function countText(markdown: string, readingSpeed: number): Counts {
   let characters = 0;
-  let words = 0;
   let lines = markdown === "" ? 0 : 1;
-  let inWord = false;
 
-  // 一遍扫描同时得到码点数、词数与行数。大文件上不能先 spread 成数组，
-  // 也不能给每个 ASCII 字母创建一个临时字符串。
+  // Count code points and lines in one pass. Word counting follows Typora's
+  // regex contract below so both editors report the same value.
   for (let i = 0; i < markdown.length; i += 1) {
     let cp = markdown.charCodeAt(i);
     characters += 1;
@@ -64,32 +69,9 @@ export function countText(markdown: string, readingSpeed: number): Counts {
 
     if (cp === 0x0a) {
       lines += 1;
-      if (inWord) {
-        words += 1;
-        inWord = false;
-      }
-    } else if (isCjk(cp)) {
-      if (inWord) {
-        words += 1;
-        inWord = false;
-      }
-      words += 1;
-    } else if (
-      cp < 0x80
-        ? (cp >= 0x30 && cp <= 0x39) ||
-          (cp >= 0x41 && cp <= 0x5a) ||
-          (cp >= 0x61 && cp <= 0x7a) ||
-          cp === 0x27 ||
-          cp === 0x2d
-        : nonASCIISingleWordCharacter.test(String.fromCodePoint(cp))
-    ) {
-      inWord = true;
-    } else if (inWord) {
-      words += 1;
-      inWord = false;
     }
   }
-  if (inWord) words += 1;
+  const words = countTyporaWords(markdown);
   // ⚠️ 这个除数**曾经是写死的 250**（"200 是英文、300 更贴中文，取折中"）。
   // 2026-09-25 起改用设置里的「阅读速度」（`appearance.reading_speed`，
   // 默认 382——中文常见取值）：那一条自己的说明写着"只用于把总字数换算成

@@ -20,8 +20,8 @@
         "minHeight": 520,
         "resizable": true,
         "decorations": true,
-        "visible": true,
-        "skipTaskbar": false,
+        "visible": false,
+        "skipTaskbar": true,
         "dragDropEnabled": true
       }
     ],

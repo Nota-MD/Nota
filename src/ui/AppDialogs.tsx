@@ -29,6 +29,9 @@ import type { exportApi, PandocGate } from "@/ui/useExport";
 const AboutDialog = lazy(() =>
   import("@/ui/AboutDialog").then((m) => ({ default: m.AboutDialog })),
 );
+const FirstRunGuide = lazy(() =>
+  import("@/ui/FirstRunGuide").then((m) => ({ default: m.FirstRunGuide })),
+);
 const ConfirmDialog = lazy(() =>
   import("@/ui/ConfirmDialog").then((m) => ({ default: m.ConfirmDialog })),
 );
@@ -60,6 +63,8 @@ export function AppDialogs({
   debugMode,
   onSetDebugMode,
   windowPresentation,
+  firstRunSeen,
+  onFirstRunDone,
 }: {
   dialog: Dialogs;
   /** 缺外部工具那张面板；`null` = 不显示（探通了就直接进保存对话框）。 */
@@ -80,10 +85,12 @@ export function AppDialogs({
   debugMode: boolean;
   onSetDebugMode: (enabled: boolean) => void;
   windowPresentation: "full" | "embedded" | "external";
+  firstRunSeen: boolean;
+  onFirstRunDone: () => void;
 }) {
   const { confirmReq, answerConfirm, promptReq, answerPrompt } = dialog;
   const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = dialog;
-  const { aboutOpen, closeAbout } = dialog;
+  const { aboutOpen, closeAbout, firstRunOpen, openFirstRun, closeFirstRun } = dialog;
 
   return (
     <Suspense fallback={null}>
@@ -136,7 +143,20 @@ export function AppDialogs({
           onClose={closeAbout}
           debugMode={debugMode}
           onSetDebugMode={onSetDebugMode}
+          onOpenGuide={() => {
+            closeAbout();
+            openFirstRun();
+          }}
           presentation={windowPresentation === "full" ? "full" : "embedded"}
+        />
+      )}
+
+      {firstRunOpen && (
+        <FirstRunGuide
+          onDone={() => {
+            closeFirstRun();
+            if (!firstRunSeen) onFirstRunDone();
+          }}
         />
       )}
 

@@ -14,6 +14,7 @@
 
 <p align="center">
   <a href="README.md">English</a> ·
+  <strong>简体中文</strong> ·
   <a href="https://github.com/Nota-MD/Nota/releases">下载</a> ·
   <a href="https://nota-md.github.io/zh-CN.html">官网</a> ·
   <a href="https://nota-md.github.io/docs/">文档</a>
@@ -21,7 +22,7 @@
 
 <p align="center">
   <a href="https://github.com/Nota-MD/Nota/releases">
-    <img alt="版本" src="https://img.shields.io/badge/release-v0.14.0--beta-e95420?style=flat-square">
+    <img alt="版本" src="https://img.shields.io/badge/release-v0.14.4--beta-e95420?style=flat-square">
   </a>
   <a href="LICENSE">
     <img alt="许可证" src="https://img.shields.io/badge/license-BSD--2--Clause-2e3440?style=flat-square">
@@ -54,7 +55,7 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 | **GitHub Markdown** | 支持 GFM、脚注、提示块、任务列表、徽章、公式与 Mermaid，并可直接加载 HTTPS/HTTP 远程图片。 |
 | **纯文件** | 每份文档都是标准 `.md`，没有私有 JSON 中间层，也没有锁定格式。 |
 | **完整写作工作区** | 标签页、文件树、大纲、自动保存、外部修改检测与专注写作模式共用一套克制界面。 |
-| **Lua 拓展** | AI、Git、演示与写作统计独立安装，并通过清单获得明确授权的能力。 |
+| **Lua 拓展** | AI、Git、Slidev、写作统计、Vim 与知识图谱独立安装，并通过清单获得明确授权的能力。 |
 | **界面与文档双主题** | 外壳与正文分别控制；界面主题可以提供自己的 CSS、图标和字体。 |
 | **原生桌面分发** | Linux 和 Windows 安装包由同一套 Rust 与 React 代码构建。 |
 | **可校验更新** | 实验性应用更新会按安装包类型选择资产；拓展可检查其声明的 `latest.json` 仓库。 |
@@ -82,8 +83,9 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 | 仓库 | 用途 |
 |---|---|
 | [Nota](https://github.com/Nota-MD/Nota) | 桌面应用、编辑器内核与文档 |
-| [Nota-plugins](https://github.com/Nota-MD/Nota-plugins) | 官方 Lua 拓展：AI、Git、Slidev 与写作统计 |
+| [Nota-plugins](https://github.com/Nota-MD/Nota-plugins) | 官方 Lua 拓展：AI、Git、Slidev、写作统计、Vim 与知识图谱 |
 | [Nota-themes](https://github.com/Nota-MD/Nota-themes) | 官方界面主题与文档主题 |
+| [Nota-devkit](https://github.com/Nota-MD/Nota-devkit) | 带认证的开发者桥客户端、校验器与实时预览 |
 | [Nota-docs](https://github.com/Nota-MD/Nota-docs) | 在线用户文档与开发者文档 |
 | [nota-md.github.io](https://github.com/Nota-MD/nota-md.github.io) | 项目官网 |
 
@@ -92,9 +94,6 @@ Nota 把 Markdown 当作一棵文档树，而不是一段等待预览的纯文�
 从 **[GitHub Releases](https://github.com/Nota-MD/Nota/releases)** 下载对应平台的安装包。
 
 Release 包含 Linux 与 Windows 的正式打包产物。官方拓展和主题需要单独安装。
-
-> Windows 版本尚属新增支持，当前测试范围有限。欢迎在
-> [GitHub Issues](https://github.com/Nota-MD/Nota/issues) 提交问题、兼容性信息和使用建议。
 
 ## 从源码运行
 

@@ -319,15 +319,36 @@ function splitTop(text: string): string[] {
  * ⚠️ 这个元素必须**追加到 `<head>` 末尾**：编辑区骨架的样式在 `editor.css`
  * 里，权重和主题规则相当（都是两条选择器），靠的就是后者覆盖前者。
  */
+const paintedThemeCache = new Map<string, string>();
+// Imported themes can contain several megabytes. Retain only the latest painted
+// copy so StrictMode reuse stays cheap without multiplying memory by four.
+const paintedThemeCacheLimit = 1;
+
+function paintThemeCss(css: string): string {
+  const cached = paintedThemeCache.get(css);
+  if (cached !== undefined) {
+    paintedThemeCache.delete(css);
+    paintedThemeCache.set(css, cached);
+    return cached;
+  }
+  const compatibility = typoraCompatibilityCss(css);
+  const painted =
+    scopeDocThemeCss(css) +
+    (compatibility ? `\n${compatibility}` : "") +
+    `\n${SELECTION_RULE}`;
+  paintedThemeCache.set(css, painted);
+  while (paintedThemeCache.size > paintedThemeCacheLimit) {
+    const oldest = paintedThemeCache.keys().next().value;
+    if (oldest === undefined) break;
+    paintedThemeCache.delete(oldest);
+  }
+  return painted;
+}
+
 export function applyDocTheme(css: string | null): void {
-  const compatibility = css ? typoraCompatibilityCss(css) : "";
   replaceInlineStyle(
     STYLE_ID,
-    css
-      ? scopeDocThemeCss(css) +
-          (compatibility ? `\n${compatibility}` : "") +
-          `\n${SELECTION_RULE}`
-      : null,
+    css ? paintThemeCss(css) : null,
   );
 }
 

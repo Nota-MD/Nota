@@ -799,3 +799,166 @@
      许可证是**按 80 列定宽**的正文，最容易撞上这条。 */
   padding-right: 12px;
 }
+
+/* Compact first-run guide. Keep one short screen per topic. */
+.first-run-dialog {
+  width: min(560px, calc(100vw - 40px));
+  min-height: 360px;
+  padding: 28px 30px 22px;
+}
+
+.first-run-progress {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 28px;
+}
+
+.first-run-progress span {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.first-run-progress span[data-active="true"] {
+  background: var(--accent);
+}
+
+.first-run-page {
+  min-height: 220px;
+}
+
+.first-run-kicker {
+  margin: 0 0 8px;
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.first-run-page h2 {
+  margin: 0 0 12px;
+  color: var(--fg);
+  font-size: 1.55rem;
+  line-height: 1.25;
+}
+
+.first-run-lead {
+  margin: 0 0 18px;
+  color: var(--fg-muted);
+  line-height: 1.65;
+  user-select: text;
+}
+
+.first-run-points {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--fg);
+  line-height: 1.55;
+  user-select: text;
+}
+
+.first-run-license {
+  margin-top: 6px;
+}
+
+.first-run-notice-text {
+  width: 100%;
+  height: min(34vh, 275px);
+  min-height: 190px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  overflow: auto;
+  overscroll-behavior: contain;
+  resize: none;
+  user-select: text;
+  white-space: normal;
+}
+
+.first-run-notice-text:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.first-run-notice-text h1 {
+  margin: 0 0 12px;
+  color: var(--fg);
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.first-run-notice-text p,
+.first-run-notice-text ul,
+.first-run-notice-text pre {
+  margin: 0 0 10px;
+}
+
+.first-run-notice-text ul {
+  padding-left: 1.35em;
+}
+
+.first-run-notice-text li + li {
+  margin-top: 5px;
+}
+
+.first-run-notice-text pre {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.first-run-note {
+  margin: 18px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-faint);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  user-select: text;
+}
+
+.first-run-actions,
+.first-run-next {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.first-run-actions {
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.first-run-skip {
+  color: var(--fg-muted);
+}
+
+@media (max-height: 520px) {
+  .first-run-dialog {
+    min-height: 0;
+  }
+
+  .first-run-page {
+    min-height: 0;
+  }
+
+  .first-run-progress {
+    margin-bottom: 16px;
+  }
+}

@@ -212,6 +212,10 @@ async function main(): Promise<void> {
     const svg = render(roundCard(), { identity, qr: [[true, false], [false, true]] });
     equal(count(svg, 'class="share-qr"'), 0, "关闭时不该有二维码");
     assertion(svg.includes(">NOTA</text>"), "品牌标识缺失");
+    const markLeft = Number(svg.match(/<svg x="([\d.]+)" y="1220"/)?.[1]);
+    const brandLeft = 1016 - measure("NOTA", 25, 750);
+    assertion(Number.isFinite(markLeft), "页脚标识坐标缺失");
+    assertion(markLeft + 34 <= brandLeft, `页脚标识压住了 NOTA 字标：mark=${markLeft}, text=${brandLeft}`);
   });
 
   await testCase("打开软件分享且矩阵已生成时写入可扫描的纯黑白二维码", () => {

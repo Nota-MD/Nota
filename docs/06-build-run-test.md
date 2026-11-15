@@ -230,9 +230,9 @@ Linux 三种反过来要 `dpkg-deb` / `rpmbuild` / linuxdeploy。
 dmg 只能在对应的机器上打——**交叉那一步 Tauri 不做**。
 
 所以落点是 `.github/workflows/release.yml`，六格矩阵。
-⚠️ Linux 两格固定在 **`ubuntu-22.04`** 而不是 `ubuntu-latest`：
-glibc 是**向前兼容、不向后兼容**的，在新系统上编的二进制在旧系统上会因为
-找不到新符号而启动失败，22.04 是 Tauri 文档推荐的下限。
+⚠️ Linux release runners use **Ubuntu 24.04** because the GTK4 4.14 dialog
+helper cannot be built against Ubuntu 22.04's GTK 4.6. This raises the practical
+glibc baseline for released Linux binaries.
 
 ⚠️ 工作流里 **`--bundles` 一定要给**。配置里写的是 `"targets": "all"`，
 在 Windows 上 `all` 会连 **MSI** 一起打，而目标是 exe 安装程序（NSIS）。

@@ -8,10 +8,8 @@
 #（`--target` 换了而已，SDK 是同一套），所以 arm64 不需要单独的机器。
 # 当前版本不发布 macOS 包。
 #
-# ⚠️ Linux 两格固定在 **22.04** 而不是 `ubuntu-latest`：打出来的包要能跑在
-# 老发行版上，而 glibc 是**向前兼容、不向后兼容**的（在新系统上编的二进制
-# 在旧系统上会因为找不到新符号而启动失败）。22.04 是 Tauri 文档推荐的下限。
-# `ubuntu-22.04-arm` 是 GitHub 的 arm64 托管机，不是自建。
+# Linux dialogs use a GTK4 4.14 helper. Ubuntu 22.04 only provides GTK 4.6,
+# so release builds use Ubuntu 24.04 for both architectures.
 
 name: 打包
 
@@ -31,11 +29,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-22.04
+          - platform: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             bundles: deb,rpm,appimage
             label: linux-x86_64
-          - platform: ubuntu-22.04-arm
+          - platform: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             bundles: deb,rpm,appimage
             label: linux-arm64
@@ -61,6 +59,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
+            libgtk-4-dev \
+            libgraphene-1.0-dev \
             libappindicator3-dev \
             librsvg2-dev \
             patchelf \
@@ -156,7 +156,7 @@ jobs:
   checksums:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

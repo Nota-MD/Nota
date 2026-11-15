@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       DOC_SYNC_BASE: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before || '' }}
@@ -37,7 +37,8 @@ jobs:
         run: |
           sudo apt-get install -y \
             build-essential curl file lua5.4 pkg-config \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libwebkit2gtk-4.1-dev libgtk-4-dev libgraphene-1.0-dev \
+            libappindicator3-dev librsvg2-dev \
             libssl-dev libxdo-dev patchelf
 
       - uses: actions/setup-node@v4

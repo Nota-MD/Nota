@@ -51,6 +51,7 @@ import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
 import type { MarkType } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
+import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
 /**
@@ -460,6 +461,45 @@ export function explicitLinkAtCursor(
 }
 
 /**
+ * Recognize a complete explicit link when the next transaction follows it with
+ * spaces or tabs. Some WebView input paths miss the closing-parenthesis event,
+ * so this keeps the boundary key from leaving valid source unrendered.
+ */
+export function explicitLinkAtTrailingWhitespace(
+  state: EditorState,
+  position: number,
+): Transaction | null {
+  if (!state.selection.empty || state.selection.from !== position) return null;
+  const resolved = state.doc.resolve(position);
+  if (!resolved.parent.inlineContent || resolved.parent.type.spec.code) return null;
+  const before = resolved.parent.textBetween(
+    0,
+    resolved.parentOffset,
+    "\n",
+    "\uFFFC",
+  );
+  const trailing = /[ \t]+$/.exec(before)?.[0] ?? "";
+  if (!trailing) return null;
+  const match2 = explicitLinkSyntax.exec(before.slice(0, -trailing.length));
+  if (!match2) return null;
+  const start6 = resolved.start() + before.length - trailing.length - match2[0].length;
+  const transaction = explicitLinkTransaction(
+    state,
+    match2,
+    start6,
+    position - trailing.length,
+  );
+  if (!transaction) return null;
+  transaction.setSelection(
+    TextSelection.create(
+      transaction.doc,
+      start6 + (match2[1] ?? "").length + trailing.length,
+    ),
+  );
+  return transaction;
+}
+
+/**
  * Complete explicit Markdown links directly from text input.
  *
  * This deliberately runs before auto-pair and the normal InputRule collection:
@@ -488,11 +528,35 @@ export function explicitLinkTyping() {
           if (transactions.some((transaction) => transaction.getMeta("composition") != null)) {
             return null;
           }
-          const transaction = explicitLinkAtCursor(
-            newState,
-            newState.selection.from,
-          );
+          // WebKit may commit the closing parenthesis without routing it through
+          // handleTextInput. Append transactions cannot distinguish a finished
+          // link from any character typed before an auto-paired closer, so only
+          // handle formats that already end at or before the caret here.
+          const position = newState.selection.from;
+          const transaction =
+            explicitLinkAtCursor(newState, position) ??
+            explicitLinkAtTrailingWhitespace(newState, position);
           return transaction?.setMeta(key, true) ?? null;
+        },
+        handleKeyDown: (view: EditorView, event: KeyboardEvent) => {
+          if (
+            event.key !== ")" ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.altKey ||
+            view.composing
+          ) {
+            return false;
+          }
+          const { selection } = view.state;
+          if (!selection.empty) return false;
+          const transaction = explicitLinkAtClosingParenthesis(
+            view.state,
+            selection.from,
+          );
+          if (!transaction) return false;
+          view.dispatch(transaction);
+          return true;
         },
       }),
   );

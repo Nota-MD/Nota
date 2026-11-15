@@ -89,7 +89,9 @@ import { api, events, on, type PanelDirtyPayload, type PanelStreamPayload, type 
 import { useT } from "@/i18n";
 import { DockResizer } from "@/ui/DockResizer";
 import { Icon } from "@/ui/Icon";
+import { MenuPopup } from "@/ui/MenuPopup";
 import { PanelBody } from "@/ui/PanelBody";
+import type { MenuEntry } from "@/ui/commands";
 import {
   recordRecall,
   recordHoldContentTable,
@@ -103,6 +105,7 @@ import { normalise } from "@/ui/panel-nodes";
 import { positionName, ableForceName, comeSourceDescription, languageTag, languageMismatch, languageHint } from "@/ui/pluginText";
 import type { PromptRequest } from "@/ui/useDialogs";
 import type { PluginPanelFocus, pluginAction } from "@/ui/usePlugins";
+import { reorderTabs, usePointerTabReorder } from "@/ui/tab-order";
 
 interface Props {
   plugins: PluginInfo[];
@@ -117,6 +120,7 @@ interface Props {
   onCall: (plugin: string, command: string, args?: unknown) => Promise<void>;
   /** 拖动**左缘**改宽（用户 2026-10-11：「拓展菜单左侧也可以拖动」）。 */
   onResize: (width: number) => void;
+  onCollapse: () => void;
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
   /** A pending request to reveal one panel in this dock. */
   focusRequest: PluginPanelFocus | null;
@@ -136,6 +140,7 @@ interface Props {
    * 锁由 `App` 决定，理由同 `ui/TabBar.tsx` 那一条。
    */
   inert?: boolean;
+  collapsed?: boolean;
 }
 
 /** 面板的坐标字符串。id 只在插件内部唯一，所以**必须**带上插件名。 */
@@ -156,11 +161,13 @@ export function PluginDock({
   messageTask,
   onCall,
   onResize,
+  onCollapse,
   askPrompt,
   focusRequest,
   onOpenFull,
   action,
   inert,
+  collapsed = false,
 }: Props) {
   // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
   // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
@@ -195,6 +202,20 @@ export function PluginDock({
     () => rightSideOf.map(coordinate),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [keyString],
+  );
+  const [tabOrder, setTabOrder] = useState<string[]>(() => [...recordRecall.tabOrder]);
+  const [closedTabs, setClosedTabs] = useState<Set<string>>(() => new Set(recordRecall.closedTabs));
+  const [addOpen, setAddOpen] = useState(false);
+  const orderedKeys = useMemo(
+    () => [
+      ...tabOrder.filter((key) => keys.includes(key)),
+      ...keys.filter((key) => !tabOrder.includes(key)),
+    ],
+    [keys, tabOrder],
+  );
+  const visibleKeys = useMemo(
+    () => orderedKeys.filter((key) => !closedTabs.has(key)),
+    [closedTabs, orderedKeys],
   );
 
   /**
@@ -237,12 +258,30 @@ export function PluginDock({
   useEffect(() => {
     recordRecall.actualTimeTable = actualTimeTable;
   }, [actualTimeTable]);
+  useEffect(() => {
+    recordRecall.tabOrder = tabOrder;
+  }, [tabOrder]);
+  useEffect(() => {
+    recordRecall.closedTabs = [...closedTabs];
+  }, [closedTabs]);
+  useEffect(() => {
+    setTabOrder((order) => [...order.filter((key) => keys.includes(key)), ...keys.filter((key) => !order.includes(key))]);
+    setClosedTabs((closed) => new Set([...closed].filter((key) => keys.includes(key))));
+  }, [keyString, keys]);
 
   /** 用户**手动**点过页签。点过之后就不再替用户选（他点了「插件」页就该留在那儿）。 */
   const handActionSelectPass = useRef(false);
   // ⚠️ 页签的方向键走 `useTablistKeys`（第 50 项，2026-10-04）：挪焦点不切换。
   const pageKeyBar = useRef<HTMLElement>(null);
   useTablistKeys(pageKeyBar);
+  const { dragId, dropTarget, begin } = usePointerTabReorder({
+    container: pageKeyBar,
+    onReorder: (sourceId, targetId, place) => {
+      setTabOrder((order) =>
+        reorderTabs(order.map((id) => ({ id })), sourceId, targetId, place).map((item) => item.id),
+      );
+    },
+  });
   const splitTo = (page: page) => {
     handActionSelectPass.current = true;
     setCurrent(page);
@@ -253,13 +292,13 @@ export function PluginDock({
   // 除非用户已经自己点过。
   // 反过来的情况（当前这页的插件被卸了／面板没了）也一样处理：落到第一页。
   useEffect(() => {
-    const hasEffect = current !== null && keys.includes(current);
+    const hasEffect = current !== null && visibleKeys.includes(current);
     if (hasEffect) return;
     if (handActionSelectPass.current && current !== null) return; // 用户选的页没了 → 下面兜底
     if (current === null && handActionSelectPass.current) return; // 用户自己停在「插件」页
-    setCurrent(keys[0] ?? null);
+    setCurrent(visibleKeys[0] ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyString]);
+  }, [keyString, visibleKeys]);
 
   const activity = current !== null && keys.includes(current) ? current : null;
   const activityPanel = rightSideOf.find((p) => coordinate(p) === activity) ?? null;
@@ -270,6 +309,12 @@ export function PluginDock({
     const key = `${focusRequest.plugin}/${focusRequest.id}`;
     if (!keys.includes(key)) return;
     handledFocus.current = focusRequest.serial;
+    setClosedTabs((closed) => {
+      if (!closed.has(key)) return closed;
+      const next = new Set(closed);
+      next.delete(key);
+      return next;
+    });
     handActionSelectPass.current = true;
     setCurrent(key);
   }, [focusRequest, keyString, keys]);
@@ -618,6 +663,33 @@ export function PluginDock({
     );
   })();
 
+  const closeDockTab = (key: string) => {
+    const index = visibleKeys.indexOf(key);
+    setClosedTabs((closed) => new Set(closed).add(key));
+    if (current === key) {
+      setCurrent(visibleKeys[index + 1] ?? visibleKeys[index - 1] ?? null);
+    }
+  };
+  const hiddenKeys = orderedKeys.filter((key) => closedTabs.has(key));
+  const hiddenEntries: MenuEntry[] = hiddenKeys.length
+    ? hiddenKeys.map((key) => {
+        const panel = rightSideOf.find((p) => coordinate(p) === key);
+        return { id: key, label: panel?.title || panel?.id || key };
+      })
+    : [{ id: "__none", label: t("No closed extension panels") }];
+  const hiddenDisabled = new Set(hiddenKeys.length ? [] : ["__none"]);
+
+  useEffect(() => {
+    if (!addOpen) return;
+    const away = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".dock-tab-add")) return;
+      setAddOpen(false);
+    };
+    document.addEventListener("pointerdown", away, true);
+    return () => document.removeEventListener("pointerdown", away, true);
+  }, [addOpen]);
+
   return (
     // ⚠️ `data-wide` 由**面板自己的声明**决定（`register_panel{ wide = true }`）：
     // 一块画布缩在 260px 里只是个缩略图。切页就回到默认宽度——宽度是
@@ -626,9 +698,10 @@ export function PluginDock({
     // ⚠️ 这一条以前写的是 `活动 === "@slidev"`：那是把一个**插件的名字**
     // 焊在外壳里，插件一改名/一搬家，这段就静默失灵（不报错，只是变窄）。
     <aside
-      className="plugin-dock"
       data-wide={activityPanel?.wide || undefined}
-      inert={inert || undefined}
+      data-collapsed={collapsed || undefined}
+      className={`plugin-dock${collapsed ? " plugin-dock-collapsed" : ""}`}
+      inert={inert || collapsed || undefined}
     >
       <nav className="dock-head">
         <span className="dock-title">
@@ -655,23 +728,74 @@ export function PluginDock({
           ⚠️ 页签**永远都在**，哪怕只有一个面板：它是"这里还有别的东西"的
           唯一线索，藏起来的话用户会以为这一栏就叫这个名字。 */}
       <nav ref={pageKeyBar} className="dock-tabs" role="tablist" aria-label={t("Extension panels")}>
-        {rightSideOf.map((p) => {
-          const key = coordinate(p);
+        {visibleKeys.map((key) => {
+          const p = rightSideOf.find((panel) => coordinate(panel) === key);
+          if (!p) return null;
           return (
-            <button
+            <div
               key={key}
-              type="button"
-              role="tab"
-              className="dock-tab"
+              className="dock-tab-shell"
+              data-tab-id={key}
               data-active={key === activity}
-              aria-selected={key === activity}
-              title={t("Provided by extension {0}", p.plugin)}
-              onClick={() => splitTo(key)}
+              data-dragging={dragId === key || undefined}
+              data-drop-before={dropTarget?.id === key && dropTarget.place === "before" || undefined}
+              data-drop-after={dropTarget?.id === key && dropTarget.place === "after" || undefined}
+              onPointerDown={(event) => begin(key, event)}
             >
-              {p.title || p.id}
-            </button>
+              <button
+                type="button"
+                role="tab"
+                className="dock-tab"
+                aria-selected={key === activity}
+                title={t("Provided by extension {0}", p.plugin)}
+                onClick={() => splitTo(key)}
+              >
+                {p.title || p.id}
+              </button>
+              <button
+                type="button"
+                className="dock-tab-close"
+                title={t("Close extension panel")}
+                aria-label={t("Close extension panel")}
+                data-no-tab-drag
+                onClick={() => closeDockTab(key)}
+              >
+                <Icon name="nota-tab-close-symbolic" size={12} />
+              </button>
+            </div>
           );
         })}
+        <div className="dock-tab-add">
+          <button
+            type="button"
+            className="dock-tab-add-button"
+            title={t("Open a closed extension panel")}
+            aria-label={t("Open a closed extension panel")}
+            aria-expanded={addOpen}
+            onClick={() => setAddOpen((open2) => !open2)}
+          >
+            +
+          </button>
+          {addOpen && (
+            <MenuPopup
+              label={t("Extension panels")}
+              entries={hiddenEntries}
+              disabled={hiddenDisabled}
+              checks={{}}
+              onPick={(key) => {
+                setClosedTabs((closed) => {
+                  const next = new Set(closed);
+                  next.delete(key);
+                  return next;
+                });
+                setCurrent(key);
+                setAddOpen(false);
+              }}
+              onDismiss={() => setAddOpen(false)}
+              onArrowOut={() => {}}
+            />
+          )}
+        </div>
         <button
           type="button"
           role="tab"
@@ -693,7 +817,7 @@ export function PluginDock({
       <div className="dock-body">
         {body2}
       </div>
-      <DockResizer onCommit={onResize} />
+      <DockResizer onCommit={onResize} onCollapse={onCollapse} />
     </aside>
   );
 }

@@ -49,7 +49,7 @@
 - 前端：React 19 + TypeScript + Vite，编辑器内核是 **Milkdown 7**（ProseMirror + remark）
 - 插件：**Lua 5.4**（mlua，`vendored`），每个插件一个**独立的 Lua 状态**
 - 应用 ID：`io.github.nota.Nota`
-- 版本：`0.14.4-beta`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
+- 版本：`0.15.0-beta`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
 - **代码标识符一律使用英文**（变量、函数、类型、参数、对象属性键与导出 API）；**代码注释使用极简英语**。长期经验记录放在 `docs/experience/*.md`，同样使用极简英语；面向用户的开发/产品文档和界面文案仍以中文为主。界面 `t()` 的键使用英文原文，中文译文集中在 `src/i18n/zh-*.ts`。⚠️ **新写的源码中，除语言包中文译文、测试输入/期望数据外不得出现中文**——不要新增中文函数名、中文测试函数名、中文注释或硬编码中文提示。
 
 **名字**：Nota 是意大利语「笔记」，与工作区里的 Folio（对开本）/ Fascia（幻灯片）/
@@ -148,6 +148,8 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `commands/table_width.rs` | **表格列宽**（2026-09-26，用户：「表格允许拖动改变大小（**咋存你来定**）」）：读/写/清三条。"咋存"定成**进程外的一份侧车文件**（`~/.local/share/nota/table-widths.toml`）——不写进 Markdown 正文，因为列宽是**给人看的排版偏好**、不是文档内容（写进正文会污染原文，还会在别的 Markdown 工具里露出来）。前端那一半在 `editor/table-width.ts` |
 | `commands/webview.rs` | **页面引擎（webview）身上的开关**（2026-09-27）：目前只有拼写检查一条（`editor.spellcheck` 从 2026-09-26 起就在界面上、**全仓没有一处读它**，一个拨了不生效的开关比没有更糟）。⚠️ 与 `commands/window.rs` 分开不是我们划的线——Tauri 的权限就给两套命名空间（`core:window:*` 与 `core:webview:*`，见 `capabilities/default.json`） |
 | `commands/window.rs` | **窗口自身的控制**（2026-09-27）：开发者工具 ＋ **「在新窗口中打开」**（`nota_window_open_new`，2026-09-27 晚加的，用户原话「标签页支持右键之后选择在新窗口中打开」）。⚠️ 两条命令分开不是我们划的线——Tauri 的权限给两套命名空间（`core:window:*` 与 `core:webview:*`，见 `capabilities/default.json`），开发者工具那条走 webview。⚠️ 「窗口置顶」**不在这里**——前端直接 `getCurrentWindow().setAlwaysOnTop()` 就够，而菜单上那个勾的判据**必须是"从窗口读回来的"**（与全屏同一条口径，见 `ui/useImmersive.ts`），走 IPC 反而要多一条"读回来"的命令。⚠️ **「在新窗口中打开」为什么是再起一份进程、不是 `WebviewWindowBuilder`**：同进程的两个窗口**共用 `AppState`**（文档表同一张），那不是用户要的"新窗口"。代价写在 `lib.rs` 那一处：这一份**不持有 socket**，收不到 `nota:second-instance`（用户明说不考虑拖回来）。⚠️ 空路径在这里**也判一次**（`NotaError::other`）——命令是对外开着的一条路，别指望调用方都守规矩（界面上那条已经灰了） |
+| `window_registry.rs` | **Cross-process window registry and tab transfer inbox**. Each main process reserves the first free positive ID, never renumbers live IDs, and removes only its own runtime records on normal exit. Requests and acknowledgements are atomic JSON files under `$XDG_RUNTIME_DIR/nota-window-registry-v1` (or the user temp directory); picker markers drive temporary title IDs. A source removes its tab only after the target acknowledges that the document opened. |
+| `commands/window_registry.rs` | IPC for window snapshots, picker-title mode, transfer send/take/ack, and optional target focus. Transfer waits off the UI thread. |
 | `plugin/mod.rs` | `PluginHost`：**发现 → 加载 → 派发 → 卸载**（装/卸/停用/信任那几段 2026-09-25 拆去了 `plugin/install.rs`）；`PluginInfo` 是给前端的只读快照（多了 `origin` / `signature` / `key_id` / `removable`）。⚠️ **停用 = 真卸载**（`LuaPlugin::disabled`，没有 Lua 状态），所以**重新启用会重跑 `on_load`**——对外的口径写在 `docs/11` §1.6 |
 | `plugin/watch.rs` | **Lua 拓展自刷新**（2026-11-01）：只在开发者模式且「Lua 拓展自刷新」开启时启动。监听用户与调试构建内置插件目录中的 `.lua` / `plugin.toml`，300ms 防抖后调用 `PluginHost::reload_dir`。新版本验证失败时保留旧 Lua 状态，并发送 `nota:plugin-reloaded` 错误事件。关闭开发者模式或开关后停止监听。 |
 | `plugin/install.rs` | **装 / 卸 / 停用 / 信任**（2026-09-25 从 `mod.rs` 拆出，那边当时 938 行）：`PluginHost::{装, 装_检查完再搬, 装_记账并加载, 卸, 信, 信任表}` ＋ `在用户目录里` / `把包写进` / `搬进落点` 三个自由函数。⚠️ **先查完再动磁盘**、**升级失败要把旧的挪回去**、**`plugin-settings/<id>.toml` 不动**——三条都在 `docs/11` §1.6.6 |
@@ -279,6 +281,11 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `ui/useStartup.ts` | **启动那一枪**（2026-09-26 从 `App.tsx` 搬出，那边当时 1049 行）：把设置、工作区、主题、开机问题、命令行文件、界面语言一次拉齐，然后握手。搬的时候一行逻辑没改，只是把外面那几个 `setState` 变成入参。⚠️ **2026-09-27 起它读取设置里的「启动时」那一档并当作入参递给 `接上会话`**（三档：`new-file` 什么都不恢复 ／ `last-file` 恢复标签 ／ `last-session` 连那个文件夹一起）——在那之前那三档是**摆设**（没有任何一处读它，而这一段无条件恢复一切＝永远按第三档办），所以**默认行为变了**：从没动过这一项的人，启动时从"什么都有"变成"一张白纸"（那正是第一档的词义，也是 `StartupAction::default()`） |
 | `ui/useAppEvents.ts` | 应用级的两条 effect（2026-09-26 从 `App.tsx` 搬出）：**宿主推来的事件** ＋ **活动文档变了要告诉后端**。⚠️ 不并进 `ui/usePlugins.ts`：那个管的是插件三样（清单/面板/菜单项），这两条与插件无关 |
 | `ui/useWindowControls.ts` | **窗口自身的三件事**（2026-09-27）：置顶 ＋ 开发者工具 ＋ **开新窗口**。⚠️ 放一起是因为它们都**只动窗口**——不碰文档、也不碰界面（缩放动的是 webview 里的内容，全屏/专注动的是外壳＋窗口尺寸，那两条另在 `ui/useZoom.ts` / `ui/useImmersive.ts`）。⚠️ 置顶那个勾的判据**必须从窗口读回来**（`isAlwaysOnTop()`），不能自己记。⚠️ **第三件（开新窗口）与前两件性质不同，别照着前两件的口径改**：前两件动的是**这一个**窗口，第三件是**再起一份进程**，所以它**没有可读回来的状态**（"现在有几个窗口"没人记），也不需要同步——它是个一次性的动作。⚠️ 传的是**路径不是文档 id**（新窗口是另一个进程，它那边根本没有这个 id）。⚠️ 它和开发者工具那条**都弹 toast**（都是用户点出来的动作），只有"读窗口对齐"那一路失败是安静的（见文件头） |
+| `ui/useWindowRegistry.ts` | Window polling, picker-title state, hold-to-show ID overlay, target transfer handling, and target acknowledgement. |
+| `ui/useAppWindowRegistry.ts` | App-level adapter that joins the registry to document open/create, title prefixes, and the focus-after-transfer setting. |
+| `ui/WindowPickerDialog.tsx` | Fixed-width window-ID prompt. Exact-width valid input auto-submits; Esc and invalid input keep the source tab intact. |
+| `ui/WindowIdOverlay.tsx` | Semi-transparent large window ID shown only while `Ctrl+Alt+I` is held. |
+| `ui/window-picker.ts` | Pure ID width, padding, and validation rules shared by the picker and tests. |
 | `ui/useSpellcheck.ts` | **把「拼写检查」那两格接到引擎上**（2026-09-27 建，**2026-10-11 大改**）：从前它拨的是 **WebKitGTK 自己的**拼写检查（跨一次 IPC，`commands/webview.rs`），今天波浪线由我们自己画（`editor/spell-check.ts`），所以这一份只做三件事——① **把内核那条路关掉**（`spellcheckSet(false)`，恒为 `false`；不关的话内核会自己再画一套原生波浪线叠上来）＋ 顺手关掉它的平滑滚动；② 把开关拨给我们自己那条插件（`设拼写开关`）；③ 问 `nota_spell_dictionaries` **这台机器上有没有这一门词典**，少了谁就弹一句（`Join` 那条：**只有用户真勾了语言才逐门报**，"跟随系统"那一档只在**一本词典都没有**时说话——否则中文环境的机器每次启动都弹"没有 zh_CN 的词典"） |
 | `ui/useCodeBlockPrefs.ts` | 代码块那四条外观偏好**落到 `<html>` 的 `data-*` 上**（`data-code-line-numbers` / `data-code-wrap` / `data-code-toolbar` / `data-code-lang-picker`），CSS 那边按属性选。⚠️ 走 `<html>` 而不是组件 props：那四条要能盖到**所有**代码块（包括预览那一半），属性和 `ui_style` / `ui_mode` 是同一种"全局档位" |
 | `ui/useFileDrop.ts` | **拖进窗口的东西该干什么**（2026-09-27）：它是窗口级拖放的**唯一订阅者**——分类在这里，动作派出去。⚠️ 图片那条路原先自己订过一次 `onDragDropEvent`（见 `ui/useImageInsert.ts`），**两条订阅同时在跑会把一张图插两次**，所以收拢成本文件 |
@@ -429,6 +436,7 @@ Forma（表格）同一家族。项目结构参照 Folio。
 | `styles/home.css` | **主页**（2026-09-29 从 `app.css` 拆出，170 行）：没开文档时那一屏与「最近打开」 |
 | `styles/toast.css` | **提示条**（2026-09-29 从 `app.css` 拆出，165 行）：`ui/Toasts.tsx` 那个固定在右下角的一层，`z-index: 80`（菜单之上、确认框之下） |
 | `styles/overlay.css` | **浮层那一族**（2026-09-27 新建，按职责从 `app.css` 拆出——加了 Emoji 选择框之后那份 1040 行、破了 1000 行硬线）：确认框 / 输入框 / 插图框 / **Emoji 选择框** / **Emoji 补全面板**。⚠️ **四个框必须待在同一个文件里**（它们共用遮罩与层叠顺序，分开放迟早出现"两个框一起冒出来时谁盖谁"说不清）。⚠️ **必须在 `app.css` 之后加载**：`.emoji-cat` 要盖掉 `.btn` 的内边距，靠的就是"后来居上"，顺序反了那排分类按钮会静默变回全尺寸 |
+| `styles/window-id.css` | Hold-to-show window ID overlay, kept separate from the dialog stylesheet. |
 | `styles/sidebar.css` | **左侧栏**：栏本身 + 文件树 + 大纲 + 右缘拖动把手。`.sidebar-empty-state` 在文件/大纲为空时仅在侧栏悬停或内部键盘焦点可见时显示，鼠标移到编辑区即淡出；鼠标点击留下的普通焦点不再让它常驻。📌 同时保留 2026-09-30 的开合动画与 6px 拖动命中区；拖动时 `body.resizing-col` 负责全局手型与禁选中 |
 | `styles/bars.css` | **编辑区上方那两条横条**（格式化工具栏 + 查找替换条）。2026-09-24 从 `app.css` 拆出（那时 880 多行）：那几条贴着编辑区、跟着 `mode` 走，外壳骨架那套不跟。⚠️ **必须在 `app.css` 之后加载** |
 | `styles/gate.css` | **「没装某样东西」那块面板**的样式（`.gate-*`）。2026-09-25 从 `slidev.css` 改名而来——**这套形状不专属于 Slidev**，pandoc 那条路、以及以后任何一个"要一个外部工具"的功能都用它。⚠️ **必须在 `app.css` 之后加载**（`.gate-panel` 要盖掉 `.confirm-dialog` 的 440px 宽度，同权重靠顺序） |
@@ -604,7 +612,7 @@ Xvfb + ImageMagick 那一条是验证过可用的。
 
 当前基线（2026-11-14）：
 
-- 源码版本 `0.14.4-beta`；安装包不随附插件或第三方主题。
+- 源码版本 `0.15.0-beta`；安装包不随附插件或第三方主题。
 - 开发态可从同级 `Nota-plugins` 仓库加载六个官方拓展。
 - 主窗口先隐藏预热；编辑器可输入、界面主题和当前文档主题就绪后显示。
 - Linux 原生文件选择与打印使用独立 GTK4 helper，失败按各自路径回退；

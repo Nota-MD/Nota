@@ -29,7 +29,7 @@ import { useFileKind } from "@/ui/useFileKindMode";
 // 这边留着的是那个句柄类型（`editorRef` 要它）。写成 `import type` 免得再被
 // 当成"没用上的组件"清掉。
 import type { EditorPaneHandle } from "@/ui/EditorPane";
-import { resolvePick } from "@/ui/commands";
+import { findMenuAccel, resolvePick } from "@/ui/commands";
 import { localizedDocumentTitle, useT } from "@/i18n";
 import { DeferredFilePickerDialog, DeferredPluginDock, DeferredSettingsDialog } from "@/ui/DeferredUi";
 import { Sidebar, type SidebarTab } from "@/ui/Sidebar";
@@ -39,6 +39,7 @@ import { useStatusBar } from "@/ui/useStatusBar";
 import { Toasts } from "@/ui/Toasts";
 import { useToasts } from "@/ui/useToasts";
 import { TabBar } from "@/ui/TabBar";
+import { reorderTabs } from "@/ui/tab-order";
 import { TopBar } from "@/ui/TopBar";
 import { useDialogs } from "@/ui/useDialogs";
 import { useDocumentCheck } from "@/ui/useDocumentCheck";
@@ -62,7 +63,8 @@ import { useChromeVisibility } from "@/ui/useChromeVisibility";
 import { useImmersive } from "@/ui/useImmersive";
 import { useWindowControls } from "@/ui/useWindowControls";
 import { EditorArea } from "@/ui/EditorArea";
-import { useWindowTitle } from "@/ui/useWindowTitle";
+import { useAppWindowRegistry } from "@/ui/useAppWindowRegistry";
+import { WindowIdOverlay } from "@/ui/WindowIdOverlay";
 import { useExportFeature } from "@/ui/useExportFeature";
 import { useCommandTable } from "@/ui/useCommandTable";
 import { usePlugins } from "@/ui/usePlugins";
@@ -191,8 +193,8 @@ export default function App() {
   const dialog = useDialogs();
   // ⚠️ 只解构本文件还用的那几个：`answerXxx` 由 `AppDialogs` 直接取；下面
   // `有浮层` 要数 `confirmReq` / `promptReq` / `imageReq` / `linkReq` / `emojiOpen`。
-  const { confirmReq, promptReq, imageReq, linkReq, emojiOpen } = dialog;
-  const { askConfirm, askPrompt, askLink, askImage, askEmoji } = dialog;
+  const { confirmReq, promptReq, windowPickReq, imageReq, linkReq, emojiOpen } = dialog;
+  const { askConfirm, askPrompt, askLink, askImage, askEmoji, askWindowPick } = dialog;
 
   // 插件那一整块：已装清单、声明的面板、声明的菜单项、以及"跑一条插件命令"。
   // 整块在 `ui/usePlugins.ts`——取数据、合成菜单栏、建处理函数三件事都在那边，
@@ -272,13 +274,14 @@ export default function App() {
     connectAboveCurrentHas,
     openViaDialog,
     openFolder,
-    loadDir,
+    loadDir, deletePath,
     saveDoc,
     switchDocument,
     closeDoc,
     reloadDoc,
     renameDoc,
     moveDoc,
+    transferDocToWindow,
   } = documentApi;
 
   // ── 外部改动（别的程序动了磁盘上那份文件）──────────────────────────────
@@ -476,6 +479,7 @@ export default function App() {
       settingsWindow.open ||
       confirmReq !== null ||
       promptReq !== null ||
+      windowPickReq !== null ||
       imageReq !== null ||
       linkReq !== null || // 「链接」框（第 96 ＋ 102 项）
       emojiOpen ||
@@ -488,7 +492,8 @@ export default function App() {
   // ——连"置顶那个勾为什么要从窗口读回来"一起说清楚了，这里只接线。
   const { alwaysOnTop, toggleAlwaysOnTop, openDevTools, openNewWindow } = useWindowControls({ toast });
   const activeDoc = docs.find((d) => d.id === activeId) ?? null;
-  const menuFeatures = useMenuFeatures({ docs, activeDoc, activeId, workspace, setActiveId, setSidebarOpen, setSidebarTab, refreshDocs, saveDoc, openFolder, openViaDialog, openNewWindow: openNewWindow, askConfirm, toast });
+  const windowRegistry = useAppWindowRegistry({ enabled: !settingsOnly && !aboutOnly, windowIdAccel: findMenuAccel(menu, "view.windowId"), activeDoc, focusTarget: settings?.appearance.focus_after_window_transfer ?? true, showFilenameInTitlebar: settings?.appearance.show_filename_in_titlebar ?? true, openPath, newDocWithText, transferDocToWindow, askWindowPick, toast, t });
+  const menuFeatures = useMenuFeatures({ docs, activeDoc, activeId, workspace, setActiveId, setSidebarOpen, setSidebarTab, refreshDocs, saveDoc, openFolder, openViaDialog, openNewWindow, windowRegistry, askConfirm, toast });
   useDevBridgePreview({ markdown: getEditorMarkdown, themeId: slot.id, title: activeDoc?.title ?? "Nota" });
 
   // 文档主题那三件事（应用 / 切换 / 打开主题文件夹）搬去了
@@ -661,6 +666,7 @@ export default function App() {
     splitReplaceDedicatedNote,
     splitReplaceStrongMakeDedicatedNote,
     toggleFullscreen,
+    showWindowId: windowRegistry.showWindowId,
     toggleAlwaysOnTop,
     openDevTools,
     setMode: TextItemType.setMode,
@@ -760,16 +766,6 @@ export default function App() {
         : null,
   });
 
-  // 窗口标题跟着**当前文档**走（第 51 项）：任务栏里几份文档要分得出来，
-  // 也要看得出哪一份有未保存的改动。⚠️ 改的是原生窗口标题
-  // （`getCurrentWindow().setTitle`），不是 `document.title`——后者传不出去，
-  // 理由写在 `ui/useWindowTitle.ts` 顶上那段。
-  // ⚠️ 第三格 `?? true` 必须与 Rust 侧
-  // `Appearance::default().show_filename_in_titlebar` 一致（同
-  // `useChromeVisibility` 里 `?? true` 那条注释的理由）：设置还没读回来时
-  // 按默认走，读失败也不能把标题变成光秃秃一个 `Nota`。
-  useWindowTitle(settingsOnly ? null : activeDoc?.title ?? null, settingsOnly ? false : activeDoc?.dirty ?? false, !settingsOnly && (settings?.appearance.show_filename_in_titlebar ?? true));
-
   const { openConfigDir, resetSettings } = useSettingsFile({ setSettings, toast });
 
   useUtilityWindows({ settingsOnly, aboutOpen: dialog.aboutOpen, closeAbout: dialog.closeAbout, style: settings?.appearance.settings_window_style, toast });
@@ -850,11 +846,12 @@ export default function App() {
                 });
               }
             }}
+            onCollapseFromResize={() => setSidebarOpen(false)}
             // 空态里那颗按钮走的是「文件 → 打开文件夹…」那条路，同一个函数。
             onOpenFolder={() => void openFolder()}
-            onNewFile={(name) => void newDoc(name)}
-            onNewFolder={() => void newFolder()}
-            onRefresh={() => void refreshTree()}
+            onNewFile={(name, directory) => void newDoc(name, directory)}
+            onNewFolder={(directory) => void newFolder(directory)}
+            onRefresh={() => void refreshTree()} onDeletePath={(path) => void deletePath(path)}
             searchRequest={menuFeatures.searchRequest}
             // 预览期间锁掉（`inert`）。理由见 `预览中` 那一段。
             inert={previewMiddle}
@@ -919,6 +916,8 @@ export default function App() {
                       // 标签页右键那一条（2026-09-27）。⚠️ 传过去的是**路径**：新窗口是
                       // 另一个进程，它那边没有本进程的 `DocId`（判据见 `ui/TabBar.tsx`）。
                       onOpenInNewWindow={(path) => void openNewWindow(path)}
+                      onMoveToWindow={(id) => void windowRegistry.moveTabToWindow(id)}
+                      onReorder={(source, target, place) => setDocs((items) => reorderTabs(items, source, target, place))}
                       // 预览期间锁掉（`inert`）：不然还能切文档、关标签——而预览画的
                       // 是**这一份**文档的改动，换掉之后那幅画就没有意义了。
                       inert={previewMiddle}
@@ -938,10 +937,11 @@ export default function App() {
             }}
           />
 
-          {extensionsEnabled && dockOpen && (
+          {extensionsEnabled && (
             <DeferredPluginDock
+              open={dockOpen}
               plugins={plugins} panels={panels} focusRequest={panelFocus} onOpenFull={openPanelFull}
-              messageTask={trustTable} onResize={(width: number) => void updateSettings({ appearance: { ...settings!.appearance, dock_width: width } })}
+              messageTask={trustTable} onResize={(width: number) => void updateSettings({ appearance: { ...settings!.appearance, dock_width: width } })} onCollapse={() => setDockOpen(false)}
               // ⚠️ 这里原来还给 `PluginDock` 塞一份 `slidev={…}`（预览那一页的
               // 接线）。2026-09-25 删了：预览现在是**插件自己的一个面板**，
               // 走的是通用那条路（`nota.ui.register_panel` ＋ `kind = "frame"`），
@@ -955,7 +955,7 @@ export default function App() {
             />
           )}
         </div>
-        <Toasts items={toasts} onDismiss={dismiss} position={settings?.updates.notification_position ?? "bottom-right"} />
+        <Toasts items={toasts} onDismiss={dismiss} position={settings?.updates.notification_position ?? "bottom-right"} tabbarVisible={docs.length >= 2} statusbarVisible={statusBarOpen} />{windowRegistry.peek && windowRegistry.id !== null && <WindowIdOverlay id={String(windowRegistry.id).padStart(String(Math.max(1, ...windowRegistry.ids)).length, "0")} />}
         <DeferredFilePickerDialog />
         {(settingsWindow.open || settingsOnly) && !aboutOnly && settings && (
           <DeferredSettingsDialog

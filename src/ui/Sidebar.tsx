@@ -127,11 +127,12 @@ interface Props {
    */
   onOpenFolder: () => void;
   /** 底栏「＋」：新建一份文档。 */
-  onNewFile: (workspaceFileName?: string) => void;
+  onNewFile: (workspaceFileName?: string, directory?: string) => void;
   /** 右键菜单：在当前工作区新建文件夹。 */
-  onNewFolder: () => void;
+  onNewFolder: (directory?: string) => void;
   /** 底栏更多菜单：重新读取当前工作区。 */
   onRefresh: () => void;
+  onDeletePath: (path: string) => void;
   /** 每次自增都把文件页切到搜索框并聚焦。 */
   searchRequest?: number;
   /**
@@ -150,6 +151,7 @@ interface Props {
    * 文件写穿。这里只接"拖完了，就这个数"。
    */
   onResize: (width: number) => void;
+  onCollapseFromResize?: () => void;
   /**
    * 收起来了（用户点的「显示/隐藏侧边栏」那三个入口之一，2026-09-30 加）。
    *
@@ -180,9 +182,11 @@ export function Sidebar({
   onNewFile,
   onNewFolder,
   onRefresh,
+  onDeletePath,
   searchRequest = 0,
   inert,
   onResize,
+  onCollapseFromResize,
   collapse2,
 }: Props) {
   // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
@@ -195,6 +199,8 @@ export function Sidebar({
     x: number;
     y: number;
     path: string | null;
+    deletePath: string | null;
+    directory: string | null;
   } | null>(null);
   const [footerMenu, setFooterMenu] = useState(false);
   const footer = useRef<HTMLDivElement>(null);
@@ -207,14 +213,19 @@ export function Sidebar({
   const pageKeyBar = useRef<HTMLElement>(null);
   useTablistKeys(pageKeyBar);
 
-  const startNewFile = useCallback(() => {
+  const startNewFile = useCallback((directory?: string) => {
+    const targetDirectory =
+      typeof directory === "string" && directory.trim() ? directory : undefined;
     if (!workspace) {
       onNewFile();
       return;
     }
-    setFileView("list");
+    if (fileView === "tree" || targetDirectory) {
+      onNewFile(undefined, targetDirectory ?? workspace);
+      return;
+    }
     setCreatingFile(true);
-  }, [onNewFile, workspace]);
+  }, [fileView, onNewFile, workspace]);
 
   useEffect(() => {
     if (!searchRequest) return;
@@ -290,12 +301,15 @@ export function Sidebar({
             e.preventDefault();
             const target = e.target as Element;
             const line3 = target.closest<HTMLElement>("[data-absolute-path]");
+            const itemDirectory = line3?.dataset.directoryPath ?? null;
             const width = 272;
             const height = 472;
             setContextMenu({
               x: Math.max(8, Math.min(e.clientX, window.innerWidth - width - 8)),
               y: Math.max(8, Math.min(e.clientY, window.innerHeight - height - 8)),
               path: line3?.dataset.absolutePath ?? activePath ?? null,
+              deletePath: line3?.dataset.absolutePath ?? null,
+              directory: itemDirectory ?? workspace,
             });
           }}
         >
@@ -384,7 +398,7 @@ export function Sidebar({
                 className="sidebar-footer-btn"
                 title={t("New Document")}
                 aria-label={t("New Document")}
-                onClick={startNewFile}
+                onClick={() => startNewFile()}
               >
                 <Icon name="folio-add-symbolic" />
               </button>
@@ -437,11 +451,13 @@ export function Sidebar({
           x={contextMenu.x}
           y={contextMenu.y}
           path={contextMenu.path}
+          deletePath={contextMenu.deletePath}
+          targetDirectory={contextMenu.directory}
           workspace={workspace}
           listMode={fileView === "list"}
           onClose={() => setContextMenu(null)}
-          onNewFile={startNewFile}
-          onNewFolder={onNewFolder}
+          onNewFile={(directory) => startNewFile(directory)}
+          onNewFolder={(directory) => onNewFolder(directory)}
           onSearch={() => {
             setFileView("list");
             setSearching(true);
@@ -464,13 +480,14 @@ export function Sidebar({
               console.warn("[nota] 打开文件位置失败：", e);
             });
           }}
+          onDelete={onDeletePath}
         />
       )}
 
       {/* 右缘那条可以拖的把手（2026-09-30）。⚠️ **必须是 `.sidebar` 的最后一个
           子元素**：它靠 `parentElement` 量这一栏的左缘（判据见
           `ui/SidebarResizer.tsx` 文件头），换个位置量到的就是别人。 */}
-      <SidebarResizer onCommit={onResize} />
+      <SidebarResizer onCommit={onResize} onCollapse={onCollapseFromResize} />
     </aside>
   );
 }
@@ -718,6 +735,16 @@ function FileTree(props: {
     for (const path of returnOpen) getValueLayer(path);
   }, [props.optionKey, open, getValueLayer]);
 
+  const aboveCountNodes = useRef(props.nodes);
+  useEffect(() => {
+    if (aboveCountNodes.current === props.nodes) return;
+    aboveCountNodes.current = props.nodes;
+    const returnOpen = [...open];
+    setKids({});
+    setErrors({});
+    for (const path of returnOpen) getValueLayer(path);
+  }, [props.nodes, open, getValueLayer]);
+
   const toggle = (path: string) => {
     if (open.has(path)) {
       setOpen((prev) => {
@@ -810,6 +837,9 @@ function TreeRow(props: {
   const pad = { paddingLeft: `${depth * 18 + 6}px` };
   const normalize = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
   const absolute = `${workspace}/${node.path}`;
+  const parentDirectory = node.path.includes("/")
+    ? `${workspace}/${node.path.slice(0, node.path.lastIndexOf("/"))}`
+    : workspace;
   const isActive =
     activePath !== null && normalize(activePath) === normalize(absolute);
 
@@ -826,6 +856,7 @@ function TreeRow(props: {
           aria-expanded={expanded}
           title={node.path}
           data-absolute-path={`${workspace}/${node.path}`}
+          data-directory-path={absolute}
           onClick={() => onToggleDir(node.path)}
         >
           <span className="tree-twisty" data-open={expanded}>
@@ -875,6 +906,7 @@ function TreeRow(props: {
         aria-current={isActive ? "page" : undefined}
         title={`${workspace}/${node.path}`}
         data-absolute-path={`${workspace}/${node.path}`}
+        data-directory-path={parentDirectory}
         onClick={() => onOpenFile(node.path)}
       >
         <Icon name="nota-tree-file-symbolic" size={16} />

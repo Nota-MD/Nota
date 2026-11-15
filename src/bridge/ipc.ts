@@ -25,6 +25,7 @@ import type {
   trustRecord, exportReport,
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintBackend, PrintEnvironment, PrintPreview,
+  WindowRegistrySnapshot, WindowTransferRequest,
 } from "./types";
 import type {
   SettingsExportInventory,
@@ -260,6 +261,7 @@ export const api = {
     open: (path: string) => invoke<string>("nota_workspace_open", { path }),
     close: () => invoke<void>("nota_workspace_close"),
     get: () => invoke<string | null>("nota_workspace_get"),
+    deletePath: (path: string) => invoke<void>("nota_workspace_delete_path", { path }),
     /**
      * 取一层（或 `depth` 层）文件树。
      *
@@ -908,6 +910,25 @@ export const api = {
      * 正文，界面上那一条是**灰的**（`ui/TabBar.tsx`）。
      */
     openNew: (path?: string) => invoke<void>("nota_window_open_new", { path: path ?? null }),
+    registrySnapshot: () => invoke<WindowRegistrySnapshot>("nota_window_registry_snapshot"),
+    pickerMode: (enabled: boolean) => invoke<void>("nota_window_picker_mode", { enabled }),
+    takeTransfer: () => invoke<WindowTransferRequest | null>("nota_window_take_transfer"),
+    transfer: (request: {
+      targetId: number;
+      path?: string | null;
+      text?: string | null;
+      titleHint?: string | null;
+      focusTarget: boolean;
+    }) =>
+      invoke<void>("nota_window_transfer", {
+        targetId: request.targetId,
+        path: request.path ?? null,
+        text: request.text ?? null,
+        titleHint: request.titleHint ?? null,
+        focusTarget: request.focusTarget,
+      }),
+    ackTransfer: (requestId: string, ok: boolean, error: string | null, focus: boolean) =>
+      invoke<void>("nota_window_ack_transfer", { requestId, ok, error, focus }),
     /** Open Preferences in a dedicated native WebView window. */
     openSettings: () => invoke<void>("nota_window_open_settings"),
     prepareSettings: () => invoke<void>("nota_window_prepare_settings"),

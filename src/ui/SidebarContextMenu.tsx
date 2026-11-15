@@ -5,11 +5,13 @@ interface Props {
   x: number;
   y: number;
   path: string | null;
+  deletePath: string | null;
+  targetDirectory: string | null;
   workspace: string | null;
   listMode: boolean;
   onClose: () => void;
-  onNewFile: () => void;
-  onNewFolder: () => void;
+  onNewFile: (directory?: string) => void;
+  onNewFolder: (directory?: string) => void;
   onSearch: () => void;
   onOpenFolder: () => void;
   onRefresh: () => void;
@@ -17,6 +19,7 @@ interface Props {
   onTree: () => void;
   onCopyPath: (path: string) => void;
   onReveal: (path: string) => void;
+  onDelete: (path: string) => void;
 }
 
 export function SidebarContextMenu(props: Props) {
@@ -25,6 +28,8 @@ export function SidebarContextMenu(props: Props) {
     x,
     y,
     path,
+    deletePath,
+    targetDirectory,
     workspace,
     listMode,
     onClose,
@@ -37,6 +42,7 @@ export function SidebarContextMenu(props: Props) {
     onTree,
     onCopyPath,
     onReveal,
+    onDelete,
   } = props;
 
   const closeThen = (action: () => void) => () => {
@@ -44,6 +50,9 @@ export function SidebarContextMenu(props: Props) {
     action();
   };
   const itemRecordName = workspace?.replaceAll("\\", "/").replace(/\/+$/, "").split("/").pop() ?? "";
+  const targetName =
+    targetDirectory?.replaceAll("\\", "/").replace(/\/+$/, "").split("/").pop() ??
+    itemRecordName;
 
   return (
     <div
@@ -65,16 +74,26 @@ export function SidebarContextMenu(props: Props) {
           <Icon name="folio-close-symbolic" size={14} />
         </button>
       </div>
+      {targetDirectory && (
+        <div className="sidebar-context-target" title={targetDirectory}>
+          <span>{t("Target folder")}</span>
+          <strong>{targetName}</strong>
+        </div>
+      )}
 
       <div className="sidebar-context-section" role="group">
-        <button type="button" role="menuitem" onClick={closeThen(onNewFile)}>
+        <button
+          type="button"
+          role="menuitem"
+          onClick={closeThen(() => onNewFile(targetDirectory ?? undefined))}
+        >
           {t("New File")}
         </button>
         <button
           type="button"
           role="menuitem"
           disabled={!workspace}
-          onClick={closeThen(onNewFolder)}
+          onClick={closeThen(() => onNewFolder(targetDirectory ?? undefined))}
         >
           {t("New Folder")}
         </button>
@@ -160,6 +179,18 @@ export function SidebarContextMenu(props: Props) {
           }}
         >
           {t("Open File Location")}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className="sidebar-context-danger"
+          disabled={!deletePath}
+          onClick={() => {
+            if (deletePath) onDelete(deletePath);
+            onClose();
+          }}
+        >
+          {t("Delete…")}
         </button>
       </div>
     </div>

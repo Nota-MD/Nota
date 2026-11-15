@@ -21,9 +21,10 @@
  */
 
 .toasts {
+  --toast-edge-gap: 16px;
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: var(--toast-edge-gap);
+  bottom: var(--toast-edge-gap);
   /* 80：在菜单弹层（`--z-popup`）**之上**、确认框（200）之下。提示说的可能
      正是"你刚点的那条菜单命令失败了"，被菜单盖住就白说了；而确认框是要用户
      **回答**的，它必须在最上面。 */
@@ -36,6 +37,23 @@
      底部那一整条就点不动了（状态栏、标签栏正在那附近）。吃鼠标的只有每条
      提示自己。 */
   pointer-events: none;
+}
+
+.toasts[data-position="bottom-right"][data-statusbar="true"] {
+  bottom: calc(var(--statusbar-height) + var(--toast-edge-gap));
+}
+
+.toasts[data-position="bottom-right"][data-statusbar="true"][data-tabbar="true"] {
+  bottom: calc(var(--statusbar-height) + var(--tabbar-height) + var(--toast-edge-gap));
+}
+
+.toasts[data-position="bottom-right"][data-statusbar="false"][data-tabbar="true"] {
+  bottom: calc(var(--tabbar-height) + var(--toast-edge-gap));
+}
+
+/* Immersive modes hide both bars with `display: none`; use the viewport edge. */
+.app[data-zen="true"] .toasts[data-position="bottom-right"] {
+  bottom: var(--toast-edge-gap);
 }
 
 .toasts[data-position="top-center"] {

@@ -99,7 +99,7 @@ import { markTitleReturnCarBecomeBlock, markTitleLineFirstBackCell } from "./hea
 import { paragraphWithoutBlankLine, documentMustNotExportEmptyRoot } from "./empty-paragraph";
 // 代码块的右下角那一条：语言选择器 / 复制 / 折叠。用 NodeView 的地方之一
 // （另一处是下面的图表块），理由写在它自己的文件头上。
-import { codeBlockView } from "./code-block";
+import { codeBlockKeyboardEntry, codeBlockView } from "./code-block";
 import { encloseBarLanguageFillAll } from "./fence-lang";
 // 图表块（```mermaid）的**节点**（schema/remark 转换/输入规则）2026-10-04 起
 // 是本仓自己的（`diagram-node.ts`，第 27 项）：`@milkdown/plugin-diagram` 整个
@@ -572,7 +572,7 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // ⚠️ **只给可编辑实例**（与 `markHint` 同一条）：只读那两份（分屏预览、
     // 导出用的离屏实例）没有"用户在按键盘"这回事，而且 PM 只读时本来也不发
     // 这些键——挂上去只是让阅读的人多问一句"预览里也会搬吗"。
-    .use(readOnly ? [] : [moveKeymap])
+    .use(readOnly ? [] : [codeBlockKeyboardEntry, moveKeymap])
     .use(indent)
     .use(trailing)
     .use(instantRender)

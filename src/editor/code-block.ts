@@ -27,10 +27,10 @@ import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
 import { katexOptionsCtx } from "./math-schema";
 import { redo, undo } from "@milkdown/kit/prose/history";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
-import type { Command } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey, type Command } from "@milkdown/kit/prose/state";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import type { EditorView, NodeView } from "@milkdown/kit/prose/view";
-import { $view } from "@milkdown/kit/utils";
+import { $prose, $view } from "@milkdown/kit/utils";
 import type { KatexOptions } from "katex";
 import { refractor } from "refractor";
 import { t } from "@/i18n";
@@ -40,6 +40,7 @@ import type { codeBlockEditor } from "./code-block-cm";
 import { liftCodeBlockToParagraphs } from "./code-block-lift";
 import {
   bootstrapCodeBlockExit,
+  codeBlockKeyboardEntryPosition,
   codeBlockExitTransaction,
   moveBootstrapCodeBlockCaret,
   type CodeBlockExitSide,
@@ -53,7 +54,11 @@ import {
   relatedIconLanguages,
   representTableLanguage,
 } from "./lang-icon-registry";
-import { createNumberLearnCodeOutput, isMathCodeLanguage } from "./math-code";
+import {
+  createNumberLearnCodeOutput,
+  isMathCodeLanguage,
+  normalizeMathCodeLanguage,
+} from "./math-code";
 import {
   ensureFullLanguageTable,
   languageTableReady,
@@ -75,6 +80,35 @@ export function requestCodeBlockFocus(view: EditorView, pos: number): boolean {
   dom.dispatchEvent(new Event(codeBlockFocusEvent));
   return true;
 }
+
+/** Focus an adjacent code block when Down/Up would otherwise stop on its atom. */
+export const codeBlockKeyboardEntry = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey("nota-code-block-keyboard-entry"),
+      view: (editorView) => {
+        const onKeyDown = (event: KeyboardEvent) => {
+          if (
+            editorView.composing ||
+            event.ctrlKey ||
+            event.metaKey ||
+            event.altKey ||
+            event.shiftKey
+          ) {
+            return;
+          }
+          const position = codeBlockKeyboardEntryPosition(editorView.state, event.key);
+          if (position === null || !requestCodeBlockFocus(editorView, position)) return;
+          event.preventDefault();
+          event.stopPropagation();
+        };
+        editorView.dom.addEventListener("keydown", onKeyDown, true);
+        return {
+          destroy: () => editorView.dom.removeEventListener("keydown", onKeyDown, true),
+        };
+      },
+    }),
+);
 
 /** `math` 是 Nota 的数学围栏别名；refractor 没有同名语言，所以单独列入下拉。 */
 const numberLearnLanguageDistinguishName = "math";
@@ -322,6 +356,7 @@ export const codeBlockView = $view(
        * ——代码块的 contentDOM 是零尺寸的，它挂的行内装饰画不出来。
        */
       const applyLanguage = (lang: string) => {
+        lang = normalizeMathCodeLanguage(lang);
         const pos = getPos();
         if (typeof pos !== "number") return;
 

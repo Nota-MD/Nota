@@ -912,6 +912,21 @@ export interface Diagnostics {
   webkit_runtime: string;
 }
 
+export interface WindowRegistrySnapshot {
+  id: number;
+  ids: number[];
+  pickerActive: boolean;
+}
+
+export interface WindowTransferRequest {
+  requestId: string;
+  sourceId: number;
+  path: string | null;
+  text: string | null;
+  titleHint: string | null;
+  focusTarget: boolean;
+}
+
 /**
  * **一台打印机**（2026-10-17，应用内打印）。
  *

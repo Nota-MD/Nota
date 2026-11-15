@@ -1110,7 +1110,7 @@ ProseMirror 把它渲染成一个真的 `<span>`，所以 `ContextMenu.tsx` 那�
 |---|---|---|---|
 | 标签题 | 文档标题（脏时前面有小圆点，`title="有未保存的改动"`） | `onSelect` → `setActiveId(id)`；⚠️ 后端那一侧的同步**不在这里**——`App.tsx` 有一个盯 `activeId` 的 effect 去调 `api.doc.setActive`（BUG-6 的修法就是那一段，见下） | ✅ 能用 |
 | 关闭 | `×`（`title="关闭"`） | `closeDoc(id)`：`doc.dirty && settings.confirm_unsaved` → `askConfirm({title:"有未保存的改动", confirmLabel:"丢弃并关闭", danger:true})` → `api.doc.close()` → `refreshDocs()` → 活动切到列表最后一份 | ✅ 能用 |
-| 右键标签 | 「在新窗口中打开」（**唯一一条**） | `onOpenInNewWindow(path)` → `App.tsx` 的 `开新窗口`（`ui/useWindowControls.ts`）→ `api.window.openNew(path)` → **再起一份进程**（`--new-window <path>`） | 🟡 2026-09-27 加，**没开窗点过**（`docs/07` §1 第 80 项那行；开窗时的逐条判据在 `docs/06` §5.34 的 C 段） |
+| 右键标签 | 「在新窗口中打开」`Ctrl+Alt+N` ／「移到其他窗口…」`Ctrl+Alt+M` | 前者再起一份进程并打开路径；后者打开固定宽度窗口 ID 输入框，完整 ID 一输入就自动提交，目标确认打开后源标签才关闭 | ✅ 2026-11-14 实窗双进程验证；目标聚焦受 `appearance.focus_after_window_transfer` 控制 |
 
 ⚠️ **右键菜单（2026-09-27）四条口径**（细节在 `TabBar.tsx` 文件头）：
 
@@ -1294,7 +1294,7 @@ alert 会**阻塞整个 WebView**，在编辑器里打字打到一半弹一个 a
 
 | 项 | 值 | 为什么 |
 |---|---|---|
-| 位置 | 固定右下角，离边 16px，`z-index: 80` | 右下角不与正文抢地方；`80` 在对话框之下、面板之上 |
+| 位置 | 固定右下角，离边 16px，`z-index: 80`；底栏可见时再叠加状态栏与标签栏高度 | 右下角不与正文抢地方；`80` 在对话框之下、面板之上；通知不得压住底部标签页或状态栏 |
 | 容器 | `pointer-events: none`（卡片自己恢复） | 空的一栏不该吃掉底下编辑区的点击——不然右下角那块地方永远点不动 |
 | 卡片 | 最大宽 360px，左边一条 3px 色带 | 色带是**唯一**的级别信号，底色跟着 `--bg-raised` 走，不自己造一套颜色 |
 | 色带 | 默认 `--fg-faint`，另有 `.toast-warn` / `.toast-error` / `.toast-success` | 四种 `level` 在 `ui/Toasts.tsx` 里 |

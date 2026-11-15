@@ -67,7 +67,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-marker-note::before {
-  content: "ⓘ Note";
+  content: "ⓘ";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-tip {
@@ -75,7 +75,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-marker-tip::before {
-  content: "◆ Tip";
+  content: "◆";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-important {
@@ -83,7 +83,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-marker-important::before {
-  content: "❗ Important";
+  content: "❗";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-warning {
@@ -91,7 +91,7 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-marker-warning::before {
-  content: "⚠ Warning";
+  content: "⚠";
 }
 
 .editor-mount .ProseMirror .nota-github-alert-caution {
@@ -99,5 +99,5 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-marker-caution::before {
-  content: "⛔ Caution";
+  content: "⛔";
 }

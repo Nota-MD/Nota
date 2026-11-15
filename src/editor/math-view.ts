@@ -580,9 +580,9 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
             t("Math Source (LaTeX)"),
           );
           editor.view.dom.addEventListener("keydown", (event) => {
-            const proposal = createProposal.keypress(event.key);
-            if (proposal.consume) {
+            if (createProposal.keypress(event.key).consume) {
               event.preventDefault();
+              event.stopPropagation();
               return;
             }
             if (event.key === "Escape") {
@@ -594,7 +594,7 @@ function createCommonStyleView(kindClass: "inline" | "block", option: KatexOptio
               event.preventDefault();
               removeRemoveSelfSelf();
             }
-          });
+          }, true);
           if (panelShouldOpen()) {
             requestAnimationFrame(() => {
               if (editor.view.hasFocus) return;

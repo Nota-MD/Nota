@@ -26,6 +26,8 @@
   flex-direction: column;
   gap: 12px;
   padding: 2px 0;
+  /* Wide Mermaid content follows Typora instead of the prose measure. */
+  max-width: none !important;
 }
 
 /* 被选中（点了一下图上）时描边亮起来——这个节点是 `atom`，ProseMirror 选中它
@@ -198,7 +200,8 @@
 .editor-mount .ProseMirror .nota-diagram-preview svg {
   display: block;
   margin: 0 auto;
-  max-width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   height: auto;
 }
 

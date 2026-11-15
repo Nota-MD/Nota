@@ -169,9 +169,16 @@
 /* Textus-style link source: the linked run is replaced by real editable text
    while the caret touches it, so selection, IME and undo stay native. */
 .editor-mount .ProseMirror .nota-link-source {
-  color: var(--link, var(--accent));
+  color: var(--link-color, var(--link, var(--accent)));
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.editor-mount .ProseMirror .nota-link-source-label {
+  color: var(--link-color, var(--link, var(--accent)));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
 }
 
 .editor-mount .ProseMirror .nota-link-source-syntax {

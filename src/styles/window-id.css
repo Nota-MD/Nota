@@ -1,0 +1,56 @@
+/* Hold-to-show window identifier overlay. */
+.window-id-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  pointer-events: none;
+  text-align: center;
+}
+
+.window-id-overlay::before {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.72;
+  content: "";
+}
+
+.window-id-overlay-copy {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: grid;
+  gap: 4px;
+  width: min(80vw, 460px);
+  transform: translate(-50%, calc(-50% - clamp(5.5rem, 15vw, 11rem)));
+}
+
+.window-id-overlay-label {
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.window-id-overlay-caption {
+  color: var(--fg-faint);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.window-id-overlay-number {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  font-size: clamp(5rem, 18vw, 13rem);
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  opacity: 1;
+}

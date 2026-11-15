@@ -192,12 +192,31 @@
 /* 右边那一格：键位 ＋ 最多三颗按钮横排。
    ⚠️ 用 `flex-wrap` 而不是 `nowrap`：设置框最窄是 `min(1080px, 94vw)`，
    窄窗口下四个元素挤在一行会把键位本身压得看不清，换行比压扁好。 */
+.stg-shortcuts {
+  --stg-col-title: 160px;
+}
+
 .stg-keys-cell {
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 6px 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  width: 100%;
+}
+
+.stg-keys-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: var(--control-height);
+}
+
+.stg-keys-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 /* 录制态。**虚框 ＋ 强调色**，和"就是这个键位"那个实框必须一眼分得开：

@@ -26,7 +26,7 @@
 .tabbar {
   display: flex;
   gap: 1px;
-  height: 32px;
+  height: var(--tabbar-height);
   flex: none;
   border-top: 1px solid var(--border);
   background: var(--bg-subtle);
@@ -37,20 +37,62 @@
    ⚠️ **尺寸必须是 0**：里面那个 `.menu-popup` 自己写着 `top: calc(100% + 5px)`，
    那是"挂在菜单栏那一栏下面"的算法——容器有高度的话菜单会被推到鼠标下面
    一整个容器身高的位置。0 高度 ＋ `fixed` 之后，它就落在光标下面 5px 处。
-   ⚠️ `z-index` 与弹层同层（弹层自己是 `--z-popup`）：这个锚是它的包含块，
-   比菜单栏那一层低就整条被压住。 */
+   The anchor is portaled to `body`, so the tab strip's horizontal overflow can
+   never clip this popup. It sits above the document like the global menu. */
 .tab-menu-anchor {
   position: fixed;
   width: 0;
   height: 0;
-  z-index: var(--z-popup);
+  z-index: var(--z-context-menu);
+}
+
+.tab-menu-anchor[data-open-up] .menu-popup {
+  top: auto;
+  bottom: 5px;
+  transform-origin: bottom left;
+  animation-name: menu-popup-in-up;
 }
 
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
   border-right: 1px solid var(--border);
   background: var(--bg-subtle);
+  touch-action: none;
+}
+
+body.tab-reordering {
+  cursor: grabbing;
+  user-select: none;
+}
+
+body.tab-reordering * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.tab[data-dragging] {
+  opacity: 0.45;
+}
+
+.tab[data-drop-before]::before,
+.tab[data-drop-after]::after {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+}
+
+.tab[data-drop-before]::before {
+  left: -2px;
+}
+
+.tab[data-drop-after]::after {
+  right: -2px;
 }
 
 .tab-active {
@@ -81,12 +123,19 @@
 }
 
 .tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: transparent;
   padding: 0 9px;
   cursor: pointer;
   color: var(--fg-faint);
   height: 100%;
+}
+
+[data-ui-style="macos"] .tab-close {
+  color: var(--fg-muted);
 }
 
 .tab-close:hover {

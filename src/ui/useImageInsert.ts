@@ -52,13 +52,14 @@
  * 网络图片自动去取等于替用户访问一个第三方，见 `commands/image.rs` 文件头。
  */
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import { api, type DocId, type ImageSourceArg } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { Dialogs } from "@/ui/useDialogs";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
-import { imageExtensionFromMime } from "@/editor/image-kind";
+import { imageAddressOfPastedText, imageExtensionFromMime } from "@/editor/image-kind";
+import { localLocalImageSliceAbsoluteCorrectPath } from "@/editor/video-view";
 import type { Toast } from "@/ui/Toasts";
 import { readImage } from "@tauri-apps/plugin-clipboard-manager";
 
@@ -103,7 +104,28 @@ export interface InsertImageOutputMouth {
 /** 事件的目标在编辑区里吗。 */
 function atEditorAreaInside(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
-  return !!el?.closest?.(".editor-pane");
+  if (el?.closest?.(".editor-pane")) return true;
+  const active = document.activeElement as HTMLElement | null;
+  return !!active?.closest?.(".editor-pane");
+}
+
+/** Pick the primary image from clipboard HTML. */
+export function imageOnlyFromClipboardHtml(
+  html: string,
+  allowVisibleText = false,
+): { src: string; alt: string } | null {
+  if (!html.trim()) return null;
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const images = Array.from(parsed.images);
+  if (
+    images.length !== 1 ||
+    (!allowVisibleText && (parsed.body.textContent ?? "").trim() !== "")
+  ) {
+    return null;
+  }
+  const src = images[0]?.getAttribute("src")?.trim();
+  if (!src) return null;
+  return { src, alt: images[0]?.getAttribute("alt") ?? "" };
 }
 
 /**
@@ -208,36 +230,125 @@ export function useImageInsert(w: InsertImageWiring): InsertImageOutputMouth {
 
   /** 剪贴板里那张图 → 落盘 → 插进正文。⚠️ 这条路**没有手动上传**（见文件头）。 */
   const receiveBelowCutPasteBoard = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, alt = "") => {
       if (!docId) {
         toast(t("Open a document before pasting an image."), "info");
         return;
       }
       try {
         const data = await editBecome_base64(blob);
-        await dropOneImage({ kind: "base64", data, ext: imageExtensionFromMime(blob.type) }, "");
+        await dropOneImage({ kind: "base64", data, ext: imageExtensionFromMime(blob.type) }, alt);
       } catch (e) {
         toast(t("Could not read the image from the clipboard: {0}", String(e)), "error");
       }
     },
     [docId, dropOneImage, toast],
   );
+  const pasteClipboardImageRef = useRef<() => Promise<boolean>>(async () => false);
 
   // ── 粘贴 ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const onPaste = (e: ClipboardEvent) => {
-      if (!atEditorAreaInside(e.target)) return;
-      const item5 = Array.from(e.clipboardData?.items ?? []);
-      const image = item5.find((i) => i.kind === "file" && i.type.startsWith("image/"));
-      const blob = image?.getAsFile();
-      if (!blob) return; // 不是图片：放行，让编辑器按它自己的规矩处理文本
-      // ⚠️ 必须拦住：不拦的话编辑器会把这次粘贴当成"没有可插入的内容"，
-      // 而我们已经异步去落盘了——两条路都在跑，谁先到看运气。
-      e.preventDefault();
-      void receiveBelowCutPasteBoard(blob);
+    const takeRichImage = (
+      data: DataTransfer | null,
+      event: Event,
+    ): boolean => {
+      const item5 = Array.from(data?.items ?? []);
+      const imageItem = item5.find((i) => i.kind === "file" && i.type.startsWith("image/"));
+      const blob = imageItem?.getAsFile();
+      if (blob) {
+        event.preventDefault();
+        event.stopPropagation();
+        void receiveBelowCutPasteBoard(blob);
+        return true;
+      }
+      if (imageItem) {
+        event.preventDefault();
+        event.stopPropagation();
+        void pasteClipboardImageRef.current();
+        return true;
+      }
+
+      // Rich image copies often expose no file item, only HTML with a temporary
+      // blob URL. Route that image through the same persistent placement path.
+      const html = data?.getData("text/html") ?? "";
+      const fromHtml = imageOnlyFromClipboardHtml(html, true);
+      const plain = data?.getData("text/plain").trim() ?? "";
+      const markdownImage = /^!?\[([^\]]*)\]\(\s*(?:<([^>]+)>|([^)\s]+))\s*\)$/.exec(plain);
+      const uriAddress =
+        data?.getData("text/uri-list")
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .find((line) => line && !line.startsWith("#")) ?? "";
+      const imageAddress =
+        imageAddressOfPastedText(uriAddress) ??
+        imageAddressOfPastedText(plain.split(/\s+/, 1)[0] ?? "");
+      const imageOnly =
+        fromHtml ??
+        (markdownImage
+          ? {
+              src: markdownImage[2] ?? markdownImage[3] ?? "",
+              alt: markdownImage[1] ?? "",
+            }
+          : imageAddress
+            ? { src: imageAddress, alt: "" }
+            : null);
+      if (!imageOnly || !/^(?:blob:|data:|https?:|file:|\/|[A-Za-z]:[\\/])/i.test(imageOnly.src)) {
+        return false;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const localPath = localLocalImageSliceAbsoluteCorrectPath(imageOnly.src, null);
+      const alt =
+        imageOnly.alt.trim() &&
+        !/^(?:file:|[A-Za-z]:[\\/]|\/)/i.test(imageOnly.alt.trim())
+          ? imageOnly.alt
+          : localPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? "";
+      if (localPath) {
+        void dropOneImage({ kind: "path", path: localPath }, alt);
+        return true;
+      }
+      if (/^(?:blob:|data:)/i.test(imageOnly.src)) {
+        void fetch(imageOnly.src)
+          .then((response) => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.blob();
+          })
+          .then((richBlob) => receiveBelowCutPasteBoard(richBlob, alt))
+          .catch((error: unknown) => {
+            toast(t("Could not read the image from the clipboard: {0}", String(error)), "error");
+          });
+      } else {
+        void dropOneImage({ kind: "url", url: imageOnly.src }, alt);
+      }
+      return true;
+    };
+
+    const onPaste = (event: ClipboardEvent) => {
+      if (!atEditorAreaInside(event.target)) return;
+      takeRichImage(event.clipboardData, event);
+    };
+    const onDrop = (event: DragEvent) => {
+      if (!atEditorAreaInside(event.target)) return;
+      takeRichImage(event.dataTransfer, event);
+    };
+    const onBeforeInput = (event: InputEvent) => {
+      if (
+        !atEditorAreaInside(event.target) ||
+        (event.inputType !== "insertFromPaste" &&
+          event.inputType !== "insertFromDrop")
+      ) {
+        return;
+      }
+      takeRichImage(event.dataTransfer, event);
     };
     document.addEventListener("paste", onPaste, true);
-    return () => document.removeEventListener("paste", onPaste, true);
+    document.addEventListener("drop", onDrop, true);
+    document.addEventListener("beforeinput", onBeforeInput, true);
+    return () => {
+      document.removeEventListener("paste", onPaste, true);
+      document.removeEventListener("drop", onDrop, true);
+      document.removeEventListener("beforeinput", onBeforeInput, true);
+    };
   }, [receiveBelowCutPasteBoard]);
 
   const insertImageLike = useCallback(async () => {
@@ -285,6 +396,7 @@ export function useImageInsert(w: InsertImageWiring): InsertImageOutputMouth {
       await image.close();
     }
   }, [dropOneImage, t, toast]);
+  pasteClipboardImageRef.current = pasteClipboardImage;
 
   return { insertImageLike, dropOneImage, pasteClipboardImage };
 }

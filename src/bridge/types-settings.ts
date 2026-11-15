@@ -545,6 +545,8 @@ export interface AppearanceSettings {
    * 原生窗口标题**——标签栏上的页签、状态栏里的路径都不动。
    */
   show_filename_in_titlebar: boolean;
+  /** Focus the destination window after moving a tab there. Default `true`. */
+  focus_after_window_transfer: boolean;
   /** How the Preferences interface is presented. Default `"embedded"`. */
   settings_window_style: SettingsWindowStyle;
 }

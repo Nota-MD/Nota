@@ -167,6 +167,7 @@ export interface CommandTableInput {
    */
   splitReplaceStrongMakeDedicatedNote: () => void;
   toggleFullscreen: () => void;
+  showWindowId: () => void;
   /**
    * 窗口那两件（`ui/useWindowControls.ts` 的出口）。
    *
@@ -248,6 +249,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
     splitReplaceDedicatedNote,
     splitReplaceStrongMakeDedicatedNote,
     toggleFullscreen,
+    showWindowId,
     toggleAlwaysOnTop,
     openDevTools,
     setMode,
@@ -287,6 +289,8 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
 
       "file.new": () => void newDoc(),
       "file.newWindow": () => menuFeatures.newWindow(),
+      "tab.openInNewWindow": () => menuFeatures.openActiveInNewWindow(),
+      "tab.moveToWindow": () => menuFeatures.moveActiveToWindow(),
       "file.open": () => void openViaDialog(),
       "file.openFolder": () => void openFolder(),
       "file.quickOpen": () => menuFeatures.quickOpen(),
@@ -497,6 +501,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
       "view.forceFocus": splitReplaceStrongMakeDedicatedNote,
       "view.typewriter": () => setTypewriter((v) => !v),
       "view.fullscreen": toggleFullscreen,
+      "view.windowId": showWindowId,
       // 窗口那两件（2026-09-27）。⚠️ 同上面那两条：直接引出口函数，不现写箭头。
       // ⚠️ 置顶那一条的**勾**不在这张表里算（表只管"能不能点"），判据在
       // `ui/useMenus.ts` 的 `menuChecks`，值从窗口读回来。

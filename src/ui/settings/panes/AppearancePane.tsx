@@ -471,6 +471,17 @@ export function AppearancePane({
           />
         </SettingRow>
         <SettingRow
+          label={t("Focus the target window after moving a tab")}
+          help={t(
+            "When a tab is moved to another Nota window, bring that window to the front after the document opens.",
+          )}
+        >
+          <Toggle
+            checked={a.focus_after_window_transfer}
+            onChange={(focus_after_window_transfer) => write({ focus_after_window_transfer })}
+          />
+        </SettingRow>
+        <SettingRow
           label={t("Preferences presentation")}
           help={t(
             "Full fills the current window, Embedded keeps the centered card, and Separate window opens native Preferences window. Changes take effect the next time Preferences opens.",

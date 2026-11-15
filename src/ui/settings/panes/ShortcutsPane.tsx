@@ -185,7 +185,7 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
   const changePass = (id: string) => id in coverCover;
 
   return (
-    <>
+    <div className="stg-shortcuts">
       {group.map(({ menu, items }) => (
         <SettingsGroup key={menu.id} title={t(menu.label)}>
           {items.map((s) => (
@@ -204,46 +204,44 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
               }
             >
               <span className="stg-keys-cell">
-                {recordMakeMiddle === s.id ? (
-                  // ⚠️ 录制态**画成一个 `<kbd>` 的样子**（不是提示条）：它就长在
-                  // 原来那个键位的格子里，用户的眼睛不用换地方。
-                  <kbd className="stg-kbd stg-kbd-rec">{t("Press the new keys…")}</kbd>
-                ) : s.accel ? (
-                  <kbd className="stg-kbd">{formatAccel(s.accel)}</kbd>
-                ) : (
-                  <span className="stg-keys-none">{t("Not set")}</span>
-                )}
-                <ActionButton
-                  onClick={() => {
-                    setCollideCar(null);
-                    setRecordMakeMiddle(recordMakeMiddle === s.id ? null : s.id);
-                  }}
-                  title={t("Press the keys you want to use; press Esc to cancel")}
-                >
-                  {recordMakeMiddle === s.id ? t("Cancel") : t("Change")}
-                </ActionButton>
-                {/* 「清除」只在**现在有键位**时出现：把这条设为"不要快捷键"。
-                    ⚠️ 它和下面那颗「恢复默认」**不是一回事**，两句话都得看得见：
-                    这一颗是"这条不要键位"，那一颗是"回到出厂那个键位"。 */}
-                {s.accel && (
-                  <ActionButton onClick={() => write({ [s.id]: "" })} title={t("No shortcut for this command")}>
-                    {t("Clear")}
-                  </ActionButton>
-                )}
-                {/* 「恢复默认」只在**用户动过它**时出现——没动过时它按下去什么都不会变，
-                    留一颗按了没反应的按钮，比没有这颗按钮更糟（`general.rs` 头上那句）。 */}
-                {changePass(s.id) && (
+                <span className="stg-keys-value">
+                  {recordMakeMiddle === s.id ? (
+                    // 录制态沿用键位格，避免眼睛换位置。
+                    <kbd className="stg-kbd stg-kbd-rec">{t("Press the new keys…")}</kbd>
+                  ) : s.accel ? (
+                    <kbd className="stg-kbd">{formatAccel(s.accel)}</kbd>
+                  ) : (
+                    <span className="stg-keys-none">{t("Not set")}</span>
+                  )}
+                </span>
+                <span className="stg-keys-actions">
                   <ActionButton
                     onClick={() => {
-                      const newValue = { ...coverCover };
-                      delete newValue[s.id];
-                      onChange({ keys: { overrides: newValue } });
+                      setCollideCar(null);
+                      setRecordMakeMiddle(recordMakeMiddle === s.id ? null : s.id);
                     }}
-                    title={t("Reset this one to its factory binding (or to none, if it never had one)")}
+                    title={t("Press the keys you want to use; press Esc to cancel")}
                   >
-                    {t("Reset")}
+                    {recordMakeMiddle === s.id ? t("Cancel") : t("Change")}
                   </ActionButton>
-                )}
+                  {s.accel && (
+                    <ActionButton onClick={() => write({ [s.id]: "" })} title={t("No shortcut for this command")}>
+                      {t("Clear")}
+                    </ActionButton>
+                  )}
+                  {changePass(s.id) && (
+                    <ActionButton
+                      onClick={() => {
+                        const newValue = { ...coverCover };
+                        delete newValue[s.id];
+                        onChange({ keys: { overrides: newValue } });
+                      }}
+                      title={t("Reset this one to its factory binding (or to none, if it never had one)")}
+                    >
+                      {t("Reset")}
+                    </ActionButton>
+                  )}
+                </span>
               </span>
             </SettingRow>
           ))}
@@ -270,6 +268,6 @@ export function ShortcutsPane({ menus, settings, onChange }: Props) {
           </span>
         </div>
       )}
-    </>
+    </div>
   );
 }

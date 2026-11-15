@@ -55,6 +55,11 @@
   text-overflow: clip;
 }
 
+.nota-code-lang-input::placeholder {
+  color: var(--fg-faint);
+  opacity: 0.55;
+}
+
 /* WebKitGTK applies a native input appearance over author colors. Keep
    `appearance: none` so the single language field follows the document tokens. */
 /* ── 语言图标（`editor/lang-icon.ts`）──────────────────────────────────

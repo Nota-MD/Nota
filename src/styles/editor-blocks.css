@@ -117,6 +117,19 @@
   line-height: inherit;
 }
 
+/* Keep code ligatures when a document theme disables them for prose. */
+.editor-mount .ProseMirror :is(
+  .nota-source-surface,
+  .nota-diagram-source,
+  .nota-html-source
+) :is(.cm-content, .cm-line, textarea),
+.editor-mount .ProseMirror pre .nota-code-bootstrap,
+.editor-pane-source .editor-mount .cm-content,
+.editor-pane-source .editor-mount .cm-line {
+  font-variant-ligatures: contextual common-ligatures !important;
+  font-feature-settings: "calt" 1, "liga" 1;
+}
+
 /* Typora diagram panels centre their rendered SVG. The same wrapper also
    contains our CodeMirror source, so reset text alignment explicitly while
    leaving the preview itself centred. */

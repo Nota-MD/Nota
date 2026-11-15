@@ -162,6 +162,7 @@ const nameTable = [
   "nota-spellcheck-symbolic", // 拼写检查（A + 对勾）
   "nota-unfold-more-symbolic", // 能展开一个菜单（上下双箭头）
   "nota-expand-symbolic", // 插件面板：在编辑区中放大
+  "nota-tab-close-symbolic", // 标签页的线性关闭叉
   // 右键菜单那一排剪贴板图标（`ui/ContextMenu.tsx`，2026-10-04）。
   // ⚠️ 这四枚**本来就是 Folio 那 96 枚里的**（文件一直躺在仓库里），只是到这批
   // 才有人用——所以是"拷文件"那一步早就完成了，"加一行"这一步现在才补。

@@ -61,6 +61,8 @@ import { useQuitGuard } from "@/ui/useQuitGuard";
 import { placeAtItemRecord, combinePath } from "@/ui/useExport";
 import type { Toast } from "@/ui/Toasts";
 import { debugError, debugEvent } from "@/ui/debug-log";
+import { savingTextOf } from "@/ui/document-save-text";
+import { useWorkspaceDelete } from "@/ui/useWorkspaceDelete";
 
 /**
  * 「上一次另存到哪一层目录了」。
@@ -163,16 +165,16 @@ export interface documentApi {
    * 不传文件名时保持原行为，建一份未命名的内存文档；传了文件名时，在当前
    * 工作区根目录下直接创建真实 Markdown 文件，再打开它。
    */
-  newDoc: (workspaceFileName?: string) => Promise<void>;
-  /** 在当前工作区根目录新建文件夹，成功后刷新侧栏树。 */
-  newFolder: () => Promise<void>;
+  newDoc: (workspaceFileName?: string, directory?: string) => Promise<void>;
+  /** Create a folder in the requested directory, or at the workspace root. */
+  newFolder: (directory?: string) => Promise<void>;
   /**
    * 用一段转换好的 Markdown 新建未命名文档并切过去。
    *
    * 标签一开始就是未保存状态；正文有标题时后端优先用标题，否则使用
    * `titleHint`（通常是导入前原文件的文件名）。
    */
-  newDocWithText: (text: string, titleHint: string | null) => Promise<void>;
+  newDocWithText: (text: string, titleHint: string | null) => Promise<boolean>;
   /** 打开对话框 → `openPath`。 */
   openViaDialog: () => Promise<void>;
   /**
@@ -196,6 +198,8 @@ export interface documentApi {
   openFolder: (path?: string) => Promise<void>;
   /** 侧栏展开子目录时按需取一层（`depth = 1`）。 */
   loadDir: (subPath: string) => Promise<TreeNode[]>;
+  /** Delete a file or directory selected in the workspace tree. */
+  deletePath: (path: string) => Promise<boolean>;
   /** 存盘。**返回值是"存上了没有"**（见下面那条注释）。`quiet` 见 `saveDoc`。 */
   saveDoc: (id: DocId, forceDialog?: boolean, quiet?: boolean) => Promise<boolean>;
   /** Persist an independent recovery copy without touching the source file. */
@@ -217,6 +221,8 @@ export interface documentApi {
   renameDoc: (id: DocId) => Promise<void>;
   /** **移动**：挪到另一个目录里（文件名不变）。 */
   moveDoc: (id: DocId) => Promise<void>;
+  /** Move a tab to another running Nota process after the target acknowledges it. */
+  transferDocToWindow: (id: DocId, targetId: number, focusTarget: boolean) => Promise<boolean>;
 }
 
 export function useDocuments(w: documentWiring): documentApi {
@@ -301,8 +307,14 @@ export function useDocuments(w: documentWiring): documentApi {
       try {
         // 存盘前**强制同步一次**——镜像可能还差最后几次击键
         //（见 document/mod.rs 顶上那段"代价与对策"）。
-        const text = editorRef.current?.getMarkdown();
-        if (text !== undefined) await api.doc.sync(id, text);
+        const mirrored = await api.doc.get(id);
+        const text = savingTextOf(
+          id,
+          activeIdRef.current,
+          editorRef.current?.getMarkdown(),
+          mirrored.text,
+        );
+        await api.doc.sync(id, text);
 
         const written = await api.doc.save(id, target);
         await refreshDocs();
@@ -326,7 +338,7 @@ export function useDocuments(w: documentWiring): documentApi {
         return false;
       }
     },
-    [editorRef, refreshDocs, toast],
+    [activeIdRef, editorRef, refreshDocs, toast],
   );
 
   const saveDraft = useCallback(
@@ -343,6 +355,26 @@ export function useDocuments(w: documentWiring): documentApi {
     },
     [activeIdRef, editorRef],
   );
+
+  const activateDocument = useCallback(
+    (id: DocId | null) => {
+      activeIdRef.current = id;
+      setActiveId(id);
+    },
+    [activeIdRef, setActiveId],
+  );
+
+  const deletePath = useWorkspaceDelete({
+    docsRef,
+    activeIdRef,
+    workspaceRef,
+    treeOptions: readMouthPath(settingsRef.current),
+    refreshDocs,
+    setTree,
+    activateDocument,
+    askConfirm,
+    toast,
+  });
 
   /**
    * 切到另一份文档。
@@ -366,14 +398,33 @@ export function useDocuments(w: documentWiring): documentApi {
       const splitPageBeforeFirstSave = settingsRef.current?.files.autosave_on_switch ?? false;
       if (splitPageBeforeFirstSave && current !== null && current !== id) {
         const doc = docsRef.current.find((d) => d.id === current);
-        const saved = Boolean(doc?.dirty && doc.path && (await saveDoc(current, false, true)));
+        const activeText = editorRef.current?.getMarkdown();
+        const changed =
+          Boolean(doc?.dirty) ||
+          (activeText !== undefined && activeText !== doc?.text);
+        if (activeText !== undefined) {
+          try {
+            await api.doc.sync(current, activeText);
+          } catch (e) {
+            toast(String(e), "error");
+          }
+        }
+        const saved = Boolean(changed && doc?.path && (await saveDoc(current, false, true)));
         if (!saved) await saveDraft(current);
       } else if (current !== null && current !== id) {
+        const activeText = editorRef.current?.getMarkdown();
+        if (activeText !== undefined) {
+          try {
+            await api.doc.sync(current, activeText);
+          } catch (e) {
+            toast(String(e), "error");
+          }
+        }
         await saveDraft(current);
       }
-      setActiveId(id);
+      activateDocument(id);
     },
-    [activeIdRef, saveDoc, saveDraft, setActiveId],
+    [activateDocument, activeIdRef, editorRef, saveDoc, saveDraft, toast],
   );
   const switchDocumentRef = useRef(switchDocument);
   switchDocumentRef.current = switchDocument;
@@ -424,19 +475,29 @@ export function useDocuments(w: documentWiring): documentApi {
     [treePointTexture],
   );
 
-  const newDoc = useCallback(async (workspaceFileName?: string) => {
+  const newDoc = useCallback(async (workspaceFileName?: string, directory?: string) => {
     // Some generic UI callbacks pass their click event here despite the public
     // signature accepting only a filename. Treat every non-string as absent;
     // otherwise the event object reaches `.trim()` and every click creates an
     // error toast instead of a new document.
-    const requestedName =
+    let requestedName =
       typeof workspaceFileName === "string" ? workspaceFileName.trim() : "";
+    const targetDirectory = directory ?? workspaceRef.current;
+    if (!requestedName && directory) {
+      const answer = await askPrompt({
+        title: t("New File"),
+        label: t("File name"),
+        initial: "Untitled.md",
+        confirmLabel: t("Create"),
+      });
+      if (!answer) return;
+      requestedName = answer.value.trim();
+    }
     let id: DocId | null = null;
     try {
       id = await api.doc.create();
 
-      const currentWorkWorkArea = workspaceRef.current;
-      if (requestedName && currentWorkWorkArea) {
+      if (requestedName && targetDirectory) {
         let textItemName = requestedName;
         if (!textItemName || /[\\/]/.test(textItemName) || textItemName === "." || textItemName === "..") {
           throw new Error(t("Enter a valid file name."));
@@ -444,7 +505,7 @@ export function useDocuments(w: documentWiring): documentApi {
         if (!mARKDOWNExtension.some((ext) => textItemName.toLowerCase().endsWith(`.${ext}`))) {
           textItemName += ".md";
         }
-        const DropPoint = combinePath(currentWorkWorkArea, textItemName);
+        const DropPoint = combinePath(targetDirectory, textItemName);
         const [savedAt] = await api.pathKind([DropPoint]);
         if (savedAt !== "missing") {
           throw new Error(t("A file with this name already exists."));
@@ -465,17 +526,17 @@ export function useDocuments(w: documentWiring): documentApi {
       });
       toast(String(e), "error");
     }
-  }, [refreshDocs, setTree, toast]);
+  }, [askPrompt, refreshDocs, setTree, t, toast]);
 
   const connectAboveCurrentHas = useCallback(async (): Promise<boolean> => {
     const list = await refreshDocs();
     const mostAfterOneDocument = list.at(-1);
     if (!mostAfterOneDocument) return false;
-    setActiveId(mostAfterOneDocument.id);
+    activateDocument(mostAfterOneDocument.id);
     return true;
-  }, [refreshDocs, setActiveId]);
+  }, [activateDocument, refreshDocs]);
 
-  const newFolder = useCallback(async () => {
+  const newFolder = useCallback(async (directory?: string) => {
     const root = workspaceRef.current;
     if (!root) return;
     const answer = await askPrompt({
@@ -485,7 +546,7 @@ export function useDocuments(w: documentWiring): documentApi {
     });
     if (!answer) return;
     try {
-      await api.picker.createDir(root, answer.value.trim());
+      await api.picker.createDir(directory ?? root, answer.value.trim());
       setTree(await api.workspace.tree(undefined, 1, readMouthPath(settingsRef.current)));
     } catch (e) {
       toast(String(e), "error");
@@ -498,8 +559,10 @@ export function useDocuments(w: documentWiring): documentApi {
         const id = await api.doc.createWithText(text, titleHint);
         await refreshDocs();
         await switchDocument(id);
+        return true;
       } catch (e) {
         toast(String(e), "error");
+        return false;
       }
     },
     [refreshDocs, switchDocument, toast],
@@ -630,7 +693,7 @@ export function useDocuments(w: documentWiring): documentApi {
         // ⚠️ **这里故意不绕 `切换文档`**：上面那段已经把"这份脏不脏"问过一遍了，
         // 三个答案都在那儿处理完了。再经过一次"切页前先存"的话，用户刚选的
         // 「丢弃并关闭」会被它**反手存回盘上**——那正是用户明确拒绝的事。
-        setActiveId(list.length ? list[list.length - 1]!.id : null);
+        activateDocument(list.length ? list[list.length - 1]!.id : null);
       } catch (e) {
         toast(String(e), "error");
       }
@@ -641,7 +704,7 @@ export function useDocuments(w: documentWiring): documentApi {
       activeIdRef,
       editorRef,
       refreshDocs,
-      setActiveId,
+      activateDocument,
       toast,
       askConfirm,
       saveDoc,
@@ -819,6 +882,39 @@ export function useDocuments(w: documentWiring): documentApi {
     [refreshDocs, t, toast],
   );
 
+  const transferDocToWindow = useCallback(
+    async (id: DocId, targetId: number, focusTarget: boolean) => {
+      const doc = docsRef.current.find((item) => item.id === id);
+      if (!doc) return false;
+      const activeText = id === activeIdRef.current ? editorRef.current?.getMarkdown() : undefined;
+      let path = doc.path;
+      const text = path ? null : (activeText ?? doc.text);
+      if (path) {
+        const changed = doc.dirty || (activeText !== undefined && activeText !== doc.text);
+        if (changed && !(await saveDoc(id, false, true))) return false;
+        path = docsRef.current.find((item) => item.id === id)?.path ?? path;
+      }
+      try {
+        await api.window.transfer({
+          targetId,
+          path,
+          text,
+          titleHint: path ? null : doc.title,
+          focusTarget,
+        });
+        if (doc.dirty) await api.draft.discardDocument(id);
+        await api.doc.close(id);
+        const list = await refreshDocs();
+        activateDocument(list.length ? list[list.length - 1]!.id : null);
+        return true;
+      } catch (e) {
+        toast(String(e), "error");
+        return false;
+      }
+    },
+    [activateDocument, activeIdRef, docsRef, editorRef, refreshDocs, saveDoc, toast],
+  );
+
   /**
    * 自动保存的定时那一半（`autosave_on_switch` 那半在 `切换文档` 里）。
    *
@@ -857,6 +953,7 @@ export function useDocuments(w: documentWiring): documentApi {
     openViaDialog,
     openFolder,
     loadDir,
+    deletePath,
     saveDoc,
     saveDraft,
     restoreDrafts,
@@ -866,5 +963,6 @@ export function useDocuments(w: documentWiring): documentApi {
     reloadDoc,
     renameDoc,
     moveDoc,
+    transferDocToWindow,
   };
 }

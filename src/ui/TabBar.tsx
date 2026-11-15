@@ -31,6 +31,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import type { DocId, Document } from "@/bridge/ipc";
 import { useT } from "@/i18n";
@@ -39,9 +40,11 @@ import { MenuPopup } from "@/ui/MenuPopup";
 import { popupSelfSelfAtRoll } from "@/ui/popup-scroll";
 import type { MenuEntry } from "@/ui/commands";
 import { useTablistKeys } from "@/ui/useTablistKeys";
+import { usePointerTabReorder } from "@/ui/tab-order";
 
 /** 右键菜单里那一条的 id。**不是命令**——它不进 `commands.ts` 那张表（见下）。 */
 const newValueWindowItem = "tab.openInNewWindow";
+const moveToWindowItem = "tab.moveToWindow";
 
 // ── 标签栏 ────────────────────────────────────────────────────────────────
 
@@ -56,6 +59,8 @@ export function TabBar(props: {
    * `开菜单` 里，没有路径的标签那一条是灰的。
    */
   onOpenInNewWindow: (path: string) => void;
+  onMoveToWindow: (id: DocId) => void;
+  onReorder: (source: DocId, target: DocId, place: "before" | "after") => void;
   /**
    * 摊着改动预览时把整条锁掉（`inert`：点不动、也聚焦不了）。
    *
@@ -74,13 +79,27 @@ export function TabBar(props: {
    *
    * ⚠️ 路径**当场取**，不存 `DocId`：见文件头那段。
    */
-  const [menu, setMenu] = useState<{ x: number; y: number; path: string | null } | null>(null);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    id: DocId;
+    path: string | null;
+    openUp: boolean;
+  } | null>(null);
   const anchor2 = useRef<HTMLDivElement>(null);
   // ⚠️ 方向键（←→/Home/End）走 `useTablistKeys`（第 50 项，2026-10-04）：
   // 在页签之间**挪焦点不切换**——每切一次文档要重挂编辑器，方向键连切
   // 三四个等于白挂三四个；Enter 由页签里那颗 `<button>` 自己点。
   const bar = useRef<HTMLDivElement>(null);
   useTablistKeys(bar);
+  const { dragId, dropTarget, begin } = usePointerTabReorder({
+    container: bar,
+    onReorder: (sourceId, targetId, place) => {
+      const source = props.docs.find((d) => String(d.id) === sourceId);
+      const target = props.docs.find((d) => String(d.id) === targetId);
+      if (source && target) props.onReorder(source.id, target.id, place);
+    },
+  });
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
@@ -91,7 +110,13 @@ export function TabBar(props: {
     // 轮不到它），量了反而要等一帧。
     const width = 232;
     const left = Math.max(0, Math.min(x, window.innerWidth - width));
-    setMenu({ x: left, y, path: d.path ?? null });
+    setMenu({
+      x: left,
+      y,
+      id: d.id,
+      path: d.path ?? null,
+      openUp: window.innerHeight - y < 96,
+    });
   }, []);
 
   // 点别处 / 按 Esc 关掉。⚠️ 与 `MenuBar.tsx` 那两条**同一条口径**，
@@ -134,7 +159,10 @@ export function TabBar(props: {
     };
   }, [menu, closeMenu]);
 
-  const item: MenuEntry[] = [{ id: newValueWindowItem, label: t("Open in New Window") }];
+  const item: MenuEntry[] = [
+    { id: newValueWindowItem, label: t("Open in New Window"), accel: "Ctrl+Alt+N" },
+    { id: moveToWindowItem, label: t("Move to Another Window…"), accel: "Ctrl+Alt+M" },
+  ];
   // ⚠️ 灰的判据就是"没有路径"，理由见文件头。
   const disabled = new Set(menu?.path ? [] : [newValueWindowItem]);
 
@@ -144,8 +172,13 @@ export function TabBar(props: {
         <div
           key={d.id}
           role="tab"
+          data-tab-id={String(d.id)}
           aria-selected={d.id === props.activeId}
           className={`tab ${d.id === props.activeId ? "tab-active" : ""}`}
+          data-dragging={dragId === String(d.id) || undefined}
+          data-drop-before={dropTarget?.id === String(d.id) && dropTarget.place === "before" || undefined}
+          data-drop-after={dropTarget?.id === String(d.id) && dropTarget.place === "after" || undefined}
+          onPointerDown={(event) => begin(String(d.id), event)}
           // ⚠️ `preventDefault` 是必需的：不拦的话 WebKitGTK 会弹出它自己那份
           // 默认菜单（"重新载入 / 检查元素…"），我们的菜单要么被盖住、要么并排出现。
           onContextMenu={(e) => {
@@ -162,33 +195,41 @@ export function TabBar(props: {
             className="tab-close"
             title={t("Close")}
             aria-label={t("Close this tab")}
+            data-no-tab-drag
             onClick={() => props.onClose(d.id)}
           >
-            <Icon name="folio-close-symbolic" />
+            <Icon name="nota-tab-close-symbolic" />
           </button>
         </div>
       ))}
 
-      {menu && (
-        <div className="tab-menu-anchor" ref={anchor2} style={{ left: menu.x, top: menu.y }}>
-          <MenuPopup
-            label={t("Tab")}
-            entries={item}
-            disabled={disabled}
-            checks={{}}
-            onPick={() => {
-              const path2 = menu.path;
-              closeMenu();
-              if (path2) props.onOpenInNewWindow(path2);
-            }}
-            onDismiss={closeMenu}
-            // ⚠️ `←` `→` 在这里**什么都不做**：菜单栏那一套是"往左右切一栏"，
-            // 而右键菜单是独立的一层、没有"邻栏"可切。传空函数而不是省略——
-            // 省略的话那一层会拿到 `undefined` 并在按键时炸。
-            onArrowOut={() => {}}
-          />
-        </div>
-      )}
+      {menu &&
+        createPortal(
+          <div
+            className="tab-menu-anchor"
+            data-open-up={menu.openUp || undefined}
+            ref={anchor2}
+            style={{ left: menu.x, top: menu.y }}
+          >
+            <MenuPopup
+              label={t("Tab")}
+              entries={item}
+              disabled={disabled}
+              checks={{}}
+              onPick={(id) => {
+                const docId = menu.id;
+                const path2 = menu.path;
+                closeMenu();
+                if (id === newValueWindowItem && path2) props.onOpenInNewWindow(path2);
+                if (id === moveToWindowItem) props.onMoveToWindow(docId);
+              }}
+              onDismiss={closeMenu}
+              // `←` / `→` have no adjacent menu when this popup is detached from the tab strip.
+              onArrowOut={() => {}}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

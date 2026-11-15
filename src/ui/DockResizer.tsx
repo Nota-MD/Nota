@@ -8,7 +8,7 @@
  * | 规矩 | 为什么 |
  * |---|---|
  * | 拖动期间**直接写 `<html>` 的 `--dock-width`**，松手才 `onCommit` 落盘 | 每挪一像素派一次 `updateSettings` 会把设置文件写穿，而且中途那些值都要作废 |
- * | 边界**夹住**（`夹右栏宽`） | 拖成 0 宽等于把这一栏弄丢了，而丢的方式是"看不见"，用户找不回来 |
+ * | 越过最小宽度立即折叠，最大处夹住 | 用户不必先松手；折叠后仍有工具栏开关与菜单入口 |
  * | `setPointerCapture` ＋ `pointercancel` 也收尾 | 不捕获，指针一快就滑出这 6px；不认 `pointercancel`，中途被系统抢走指针那次拖动**永远收不了尾** |
  *
  * ⚠️ **右边那条边从哪里量**：把手是这个 `<aside>` 的最后一个子元素，所以它的
@@ -39,8 +39,19 @@ export function clampRightBarWidth(width: number): number {
   return Math.min(rightBarWidthMostLarge, Math.max(rightBarWidthMostSmall, Math.round(width)));
 }
 
+/** Whether dragging has crossed the collapse threshold at the right edge. */
+export function shouldCollapseRightBar(width: number, canCollapse: boolean): boolean {
+  return canCollapse && Number.isFinite(width) && width < rightBarWidthMostSmall;
+}
+
 /** 那条把手。**渲染在 `.plugin-dock` 内部、作为它最后一个子元素**（理由见文件头）。 */
-export function DockResizer({ onCommit }: { onCommit: (width: number) => void }) {
+export function DockResizer({
+  onCommit,
+  onCollapse,
+}: {
+  onCommit: (width: number) => void;
+  onCollapse?: () => void;
+}) {
   const t = useT();
   const mostAfter = useRef(rightBarWidthDefault);
 
@@ -51,25 +62,40 @@ export function DockResizer({ onCommit }: { onCommit: (width: number) => void })
     document.body.classList.add("resizing-col");
     const box2 = takeHand.parentElement?.getBoundingClientRect();
     const rightEdge = box2?.right ?? window.innerWidth;
-    mostAfter.current = clampRightBarWidth(box2?.width ?? rightBarWidthDefault);
+    const previousWidth = clampRightBarWidth(box2?.width ?? rightBarWidthDefault);
+    mostAfter.current = previousWidth;
+    let collapseArmed = false;
 
     function move(ev: PointerEvent) {
-      const width = clampRightBarWidth(rightEdge - ev.clientX);
+      const rawWidth = rightEdge - ev.clientX;
+      collapseArmed = shouldCollapseRightBar(rawWidth, Boolean(onCollapse));
+      document.body.classList.toggle("dock-collapse-armed", collapseArmed);
+      const width = clampRightBarWidth(rawWidth);
       mostAfter.current = width;
       document.documentElement.style.setProperty("--dock-width", `${width}px`);
     }
 
-    function receive() {
+    function receive(commit: boolean) {
       takeHand.removeEventListener("pointermove", move);
-      takeHand.removeEventListener("pointerup", receive);
-      takeHand.removeEventListener("pointercancel", receive);
+      takeHand.removeEventListener("pointerup", finish);
+      takeHand.removeEventListener("pointercancel", cancel);
       document.body.classList.remove("resizing-col");
-      onCommit(mostAfter.current);
+      document.body.classList.remove("dock-collapse-armed");
+      if (commit && collapseArmed) {
+        document.documentElement.style.setProperty("--dock-width", `${previousWidth}px`);
+        onCollapse?.();
+      } else if (commit) {
+        onCommit(mostAfter.current);
+      } else {
+        document.documentElement.style.setProperty("--dock-width", `${previousWidth}px`);
+      }
     }
+    const finish = () => receive(true);
+    const cancel = () => receive(false);
 
     takeHand.addEventListener("pointermove", move);
-    takeHand.addEventListener("pointerup", receive);
-    takeHand.addEventListener("pointercancel", receive);
+    takeHand.addEventListener("pointerup", finish);
+    takeHand.addEventListener("pointercancel", cancel);
   }
 
   return (

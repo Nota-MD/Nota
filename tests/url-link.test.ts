@@ -46,6 +46,7 @@ import {
   explicitLinkAtClosingParenthesis,
   explicitLinkAtCursor,
   explicitLinkAtTypedParenthesis,
+  explicitLinkAtTrailingWhitespace,
   findLinkBeforeCursor,
   linkBoundarySpec,
   linkBoundaryMarkSpec,
@@ -395,6 +396,36 @@ testCase("自动配对已插入右括号时，输入的 `)` 仍能完成显式�
   equal(transaction!.selection.from, 4, "光标落在链接后的正文边界");
 });
 
+testCase("explicit links keep preceding text in place when the closer was auto-paired", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "int main[gfm](github.com)";
+  const paragraph = schema.node("paragraph", null, [schema.text(source)]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const caret = 1 + source.length - 1;
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, caret),
+  });
+  const transaction = explicitLinkAtClosingParenthesis(state, caret);
+  equal(transaction !== null, true, "the link was not recognized");
+  equal(transaction!.doc.textContent, "int maingfm", "preceding text moved or was absorbed");
+  const children = transaction!.doc.firstChild!;
+  equal(children.child(0).text, "int main", "prefix text");
+  equal(children.child(1).text, "gfm", "link label");
+  equal(String(children.child(1).marks[0]?.attrs.href), "https://github.com", "normalized href");
+  equal(transaction!.selection.from, 12, "caret stays after the completed link");
+});
+
 testCase("普通手工输入 `)` 时由文本输入口直接完成显式链接", () => {
   const schema = new Schema({
     nodes: {
@@ -453,6 +484,31 @@ testCase("文档变化后的兜底：光标前的完整链接语法也直接提�
   const label = transaction!.doc.firstChild!.firstChild!;
   equal(label.text, "gfm", "显示文字");
   equal(String(label.marks[0]?.attrs.href), "https://github.com", "地址");
+});
+
+testCase("typing a space commits a complete explicit link and preserves the space", () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+  const source = "int main[gfm](github.com) ";
+  const paragraph = schema.node("paragraph", null, [schema.text(source)]);
+  const doc = schema.node("doc", null, [paragraph]);
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 1 + source.length),
+  });
+  const transaction = explicitLinkAtTrailingWhitespace(state, 1 + source.length);
+  equal(transaction !== null, true, "the link was not recognized");
+  equal(transaction!.doc.textContent, "int maingfm ", "prefix or trailing space changed");
+  equal(transaction!.selection.from, 13, "caret stays after the trailing space");
 });
 
 testCase("link source nodes are not treated as freshly typed explicit links", () => {

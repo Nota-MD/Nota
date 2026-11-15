@@ -1,8 +1,16 @@
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { EditorView } from "@codemirror/view";
+import { createElement } from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
 
+import type { Document as NotaDocument } from "@/bridge/ipc";
 import { createEditor, type EditorHandle } from "@/editor/create";
 import { applyDocTheme } from "@/styles/doc-theme";
+import { imageOnlyFromClipboardHtml } from "@/ui/useImageInsert";
+import { TabBar } from "@/ui/TabBar";
+import { ZoomHud } from "@/ui/ZoomHud";
+import { showZoomHud } from "@/ui/zoom-hud-state";
 import cathedralMarkdown from "../tests/fixtures/cathedral-bazaar/the-cathedral-and-the-bazaar.md?raw";
 
 import "@/styles/theme.css";
@@ -14,6 +22,7 @@ import "@/styles/code-block.css";
 import "@/styles/marks.css";
 import "@/styles/diagram.css";
 import "@/styles/math.css";
+import "@/styles/tabs-status.css";
 import "katex/dist/katex.min.css";
 
 type TestResult = {
@@ -227,6 +236,150 @@ function readableWhitespace(value: string): string {
 }
 
 const tests: Array<{ name: string; run: () => Promise<void> }> = [
+  {
+    name: "zoom HUD appears in the top right with both directions and reset",
+    async run() {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const root = createRoot(host);
+      let plus = 0;
+      let minus = 0;
+      let reset = 0;
+      try {
+        flushSync(() => root.render(createElement(ZoomHud)));
+        showZoomHud(
+          "125%",
+          () => {
+            plus += 1;
+          },
+          () => {
+            minus += 1;
+          },
+          () => {
+            reset += 1;
+          },
+        );
+        await nextFrames();
+        const hud = await waitFor<HTMLElement>(".zoom-hud");
+        const rect = hud.getBoundingClientRect();
+        assert(rect.right > window.innerWidth - 24, `zoom HUD is not at the top right: ${rect.right}`);
+        assert(rect.top >= 45, `zoom HUD overlaps the menu bar: ${rect.top}`);
+        assertEqual(
+          Array.from(hud.children).map((element) => element.className || element.tagName).slice(0, 3).join(","),
+          "OUTPUT,zoom-hud-minus,zoom-hud-plus",
+          "zoom HUD control order",
+        );
+        assertEqual(hud.querySelector("output")?.textContent, "125%", "zoom percentage");
+        hud.querySelector<HTMLButtonElement>(".zoom-hud-plus")?.click();
+        hud.querySelector<HTMLButtonElement>(".zoom-hud-minus")?.click();
+        hud.querySelector<HTMLButtonElement>(".zoom-hud-reset")?.click();
+        assertEqual(JSON.stringify([plus, minus, reset]), JSON.stringify([1, 1, 1]), "zoom actions");
+      } finally {
+        flushSync(() => root.unmount());
+        host.remove();
+      }
+    },
+  },
+  {
+    name: "wide documents use a centered Typora-style page column",
+    async run() {
+      const prose = await mount("A wide document keeps comfortable side margins.");
+      const pane = prose.closest<HTMLElement>(".editor-pane");
+      assert(pane, "editor pane is missing");
+      const previousWidth = pane.style.width;
+      const previousFlex = pane.style.flex;
+      pane.style.width = "1800px";
+      pane.style.flex = "0 0 1800px";
+      await nextFrames(3);
+      const page = prose.getBoundingClientRect();
+      const shell = pane.getBoundingClientRect();
+      assert(page.width <= 1121, `page column is too wide: ${page.width}px`);
+      assert(
+        Math.abs(page.left - shell.left - (shell.right - page.right)) < 2,
+        `page column is not centered: left=${page.left - shell.left} right=${shell.right - page.right}`,
+      );
+      pane.style.width = previousWidth;
+      pane.style.flex = previousFlex;
+    },
+  },
+  {
+    name: "document tabs reorder through pointer dragging",
+    async run() {
+      const host = document.createElement("div");
+      host.style.cssText = "position:fixed;left:0;top:0;width:600px;z-index:-1";
+      document.body.append(host);
+      const root = createRoot(host);
+      let reordered: [number, number, "before" | "after"] | null = null;
+      const docs = [1, 2, 3].map((id) => ({
+        id,
+        title: `Tab ${id}`,
+        path: `/tmp/${id}/README.md`,
+        text: "",
+        draft_id: `draft-${id}`,
+        encoding: "utf-8",
+        line_ending: "lf",
+        dirty: false,
+        revision: 0,
+      })) as NotaDocument[];
+      try {
+        flushSync(() => {
+          root.render(
+            createElement(TabBar, {
+              docs,
+              activeId: 1,
+              onSelect: () => {},
+              onClose: () => {},
+              onOpenInNewWindow: () => {},
+              onMoveToWindow: () => {},
+              onReorder: (source, target, place) => {
+                reordered = [source, target, place];
+              },
+            }),
+          );
+        });
+        await nextFrames();
+        const tabs = Array.from(host.querySelectorAll<HTMLElement>(".tab"));
+        assertEqual(tabs.length, 3, "tab harness size");
+        const first = tabs[0]!.getBoundingClientRect();
+        const second = tabs[1]!.getBoundingClientRect();
+        tabs[0]!.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            button: 0,
+            pointerId: 9,
+            clientX: first.left + 8,
+            clientY: first.top + first.height / 2,
+          }),
+        );
+        window.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 9,
+            clientX: second.right - 2,
+            clientY: second.top + second.height / 2,
+          }),
+        );
+        window.dispatchEvent(
+          new PointerEvent("pointerup", {
+            bubbles: true,
+            pointerId: 9,
+            clientX: second.right - 2,
+            clientY: second.top + second.height / 2,
+          }),
+        );
+        await nextFrames();
+        assertEqual(
+          JSON.stringify(reordered),
+          JSON.stringify([1, 2, "after"]),
+          "pointer drag did not produce the target order",
+        );
+      } finally {
+        flushSync(() => root.unmount());
+        host.remove();
+      }
+    },
+  },
   {
     name: "Left from bold content start traverses both opening stars to paragraph start",
     async run() {
@@ -651,6 +804,25 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         JSON.stringify(editor!.selectionRange()),
         JSON.stringify({ anchor: 10, head: 10 }),
         "caret did not settle after the complete closing marker",
+      );
+    },
+  },
+  {
+    name: "an inherited bold mark does not add literal markers to a heading",
+    async run() {
+      const prose = await mount("");
+      press(prose, "b", { ctrlKey: true });
+      await typeText("#");
+      press(prose, " ");
+      await nextFrames();
+      await typeText("何以起源");
+      press(prose, "Enter");
+      await nextFrames();
+      assertEqual(serialized(), "# 何以起源", "heading gained literal bold delimiters");
+      assertEqual(
+        prose.querySelector("h1 strong"),
+        null,
+        "heading content kept a redundant strong mark",
       );
     },
   },
@@ -1465,6 +1637,51 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "text before an explicit Markdown link never joins its link mark",
+    async run() {
+      await mount("", { autoLinks: false, autoPair: true });
+      await typeText("int main[gfm](github.com)");
+      await nextFrames();
+      const links = [...document.querySelectorAll<HTMLAnchorElement>(".ProseMirror a")];
+      assertEqual(
+        links.length,
+        1,
+        `the explicit link was not recognized immediately: ${JSON.stringify(serialized())} ${JSON.stringify(document.querySelector(".ProseMirror")?.innerHTML)}`,
+      );
+      assertEqual(
+        links[0]?.textContent,
+        "gfm",
+        `the link label absorbed preceding text: ${JSON.stringify(document.querySelector(".ProseMirror")?.innerHTML)}`,
+      );
+      assertEqual(
+        serialized(),
+        "int main[gfm](https://github.com)",
+        "the preceding text or link source changed",
+      );
+    },
+  },
+  {
+    name: "a URL-labelled explicit link renders beside Chinese text",
+    async run() {
+      await mount("", { autoLinks: false, autoPair: true });
+      await typeText("CDE是上个世纪[https://zh.wikipedia.org/wiki/CDE](https://zh.wikipedia.org/wiki/CDE)留下");
+      await nextFrames();
+      const link = await waitFor<HTMLAnchorElement>(
+        'a[href="https://zh.wikipedia.org/wiki/CDE"]',
+      );
+      assertEqual(
+        link.textContent,
+        "https://zh.wikipedia.org/wiki/CDE",
+        "URL-labelled explicit link text changed",
+      );
+      assertEqual(
+        serialized(),
+        "CDE是上个世纪<https://zh.wikipedia.org/wiki/CDE>留下",
+        "URL-labelled explicit link source changed or was not serialized as a canonical link",
+      );
+    },
+  },
+  {
     name: "Enter recognizes an email as a mailto link",
     async run() {
       const prose = await mount("");
@@ -2160,6 +2377,68 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "clicking a rendered math fence enters its source editor",
+    async run() {
+      await mount("```math\nx^2\n```");
+      const render = await waitFor<HTMLElement>(".nota-code-math-render", 10000);
+      render.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      const content = await waitFor<HTMLElement>(".nota-code-cm .cm-content", 10000);
+      await nextFrames();
+      assert(
+        content === document.activeElement || content.contains(document.activeElement),
+        "clicking the rendered formula did not focus its source editor",
+      );
+    },
+  },
+  {
+    name: "Down from the paragraph before a math fence enters its source editor",
+    async run() {
+      const prose = await mount("before\n\n```math\nx^2\n```");
+      editor!.restoreSelection({ anchor: 1, head: 1 });
+      await nextFrames();
+      press(prose, "ArrowDown");
+      const content = await waitFor<HTMLElement>(".nota-code-cm .cm-content", 10000);
+      await nextFrames();
+      assert(
+        content === document.activeElement || content.contains(document.activeElement),
+        "Down did not enter the math fence from the preceding paragraph",
+      );
+    },
+  },
+  {
+    name: "latex and tex fence aliases become canonical math",
+    async run() {
+      for (const language of ["latex", "tex"]) {
+        await mount("");
+        await typeText("```" + language);
+        const prose = document.querySelector<HTMLElement>(".ProseMirror");
+        assert(prose, "editor is missing");
+        press(prose, "Enter");
+        await waitFor<HTMLElement>(".nota-code-cm .cm-content", 10000);
+        await nextFrames();
+        assert(
+          serialized().startsWith("```math\n"),
+          `${language} fence was not normalized: ${JSON.stringify(serialized())}`,
+        );
+      }
+    },
+  },
+  {
+    name: "empty code fences show a translucent language placeholder",
+    async run() {
+      await mount("```\n\n```");
+      const field = await waitFor<HTMLInputElement>(".nota-code-lang-input");
+      assertEqual(field.value, "", "empty language is rendered as a real value");
+      assert(field.placeholder.length > 0, "empty language has no placeholder");
+    },
+  },
+  {
     name: "single-line code sources have no phantom trailing line",
     async run() {
       for (const source of [
@@ -2503,6 +2782,49 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "LaTeX suggestions consume vertical arrows in a math block",
+    async run() {
+      const prose = await mount("before\n\n$$\nx\n$$");
+      editor!.focusAtStart();
+      press(prose, "End");
+      await nextFrames();
+      await requestNativeKey("arrow-down-into-math-suggestions");
+      const content = await waitFor<HTMLElement>(
+        ".nota-math-source-shell .cm-content",
+        10000,
+      );
+      const view = EditorView.findFromDOM(content);
+      assert(view, "math fence CodeMirror view is missing");
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: "\\f" },
+        selection: { anchor: 2 },
+      });
+      view.focus();
+      await nextFrames();
+      await sleep(250);
+      const suggestions = document.querySelector<HTMLElement>(".nota-math-suggest");
+      assert(
+        suggestions,
+        `LaTeX suggestion root is missing; editor=${view.state.doc.toString()} ` +
+          `mathHtml=${document.querySelector(".nota-math")?.outerHTML ?? "none"}`,
+      );
+      assert(!suggestions.hidden, "LaTeX suggestion root stayed hidden");
+      const before = content.getAttribute("aria-activedescendant");
+      const beforeDoc = serialized();
+
+      assert(!press(content, "ArrowDown"), "ArrowDown was not consumed by LaTeX suggestions");
+      await nextFrames();
+      const afterDown = content.getAttribute("aria-activedescendant");
+      assertEqual(document.activeElement, content, "ArrowDown moved focus out of the formula");
+      assert(afterDown !== before, "ArrowDown did not move the LaTeX selection");
+
+      assert(!press(content, "ArrowUp"), "ArrowUp was not consumed by LaTeX suggestions");
+      await nextFrames();
+      assertEqual(document.activeElement, content, "ArrowUp moved focus out of the formula");
+      assertEqual(serialized(), beforeDoc, "vertical navigation changed the formula source");
+    },
+  },
+  {
     name: "Mermaid labels use the document font without clipping theme colors",
     async run() {
       document.documentElement.style.setProperty(
@@ -2605,6 +2927,31 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "Mermaid escapes the optional prose width",
+    async run() {
+      const prose = await mount(
+        "```mermaid\nflowchart LR\n  A[Start] --> B[Finish]\n```",
+      );
+      prose.closest<HTMLElement>(".milkdown")?.style.setProperty("--content-width", "360px");
+      const svg = await waitFor<SVGSVGElement>(
+        '.nota-diagram-preview[data-state="ok"] svg',
+        15000,
+      );
+      await nextFrames(3);
+      const block = svg.closest<HTMLElement>(".nota-diagram");
+      assert(block, "diagram block wrapper is missing");
+      assert(
+        block.getBoundingClientRect().width > 600,
+        `diagram was constrained to the prose measure: ${block.getBoundingClientRect().width}px`,
+      );
+      assertEqual(
+        svg.style.width,
+        "100%",
+        "Mermaid kept an inline natural width instead of filling wide content",
+      );
+    },
+  },
+  {
     name: "failed images show an inline warning",
     async run() {
       await mount("![bad-image](data:image/png;base64,not-an-image)");
@@ -2614,6 +2961,31 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         `image failure warning did not identify the source: ${warning.textContent}`,
       );
       assertEqual(serialized(), "![bad-image](data:image/png;base64,not-an-image)", "warning changed Markdown");
+    },
+  },
+  {
+    name: "image-only clipboard HTML enters the image placement path",
+    async run() {
+      const candidate = imageOnlyFromClipboardHtml(
+        '<p><img src="blob:http://localhost:5273/image-id" alt="capture"></p>',
+      );
+      assertEqual(candidate?.src, "blob:http://localhost:5273/image-id", "clipboard image source");
+      assertEqual(candidate?.alt, "capture", "clipboard image alt text");
+      const fileCandidate = imageOnlyFromClipboardHtml(
+        '<img src="file:///home/user/%E7%B2%98%E8%B4%B4%E7%9A%84%E5%9B%BE%E5%83%8F.png" alt="/home/user/粘贴的图像.png">',
+      );
+      assertEqual(
+        fileCandidate?.src,
+        "file:///home/user/%E7%B2%98%E8%B4%B4%E7%9A%84%E5%9B%BE%E5%83%8F.png",
+        "file URL clipboard image source",
+      );
+      assertEqual(
+        imageOnlyFromClipboardHtml(
+          '<p><img src="blob:http://localhost:5273/image-id">caption</p>',
+        ),
+        null,
+        "HTML with visible text must keep the normal rich paste path",
+      );
     },
   },
   {
@@ -2701,6 +3073,17 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       await nextFrames();
       await typeText("Z");
       assertEqual(serialized(), "Z引用", "quote layers remained, or the space leaked into text");
+    },
+  },
+  {
+    name: "Typing a quote prefix and space creates a blockquote",
+    async run() {
+      const prose = await mount("");
+      await typeText(">");
+      press(prose, " ");
+      await nextFrames();
+      await typeText("quote");
+      assertEqual(serialized(), "> quote", "the quote prefix did not create a blockquote");
     },
   },
   {
@@ -3060,6 +3443,19 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         elapsed < 15_000,
         `full fixture export took ${Math.round(elapsed)}ms; budget is 15000ms`,
       );
+    },
+  },
+  {
+    name: "a plugin-style whole-document replacement is undone in one step",
+    async run() {
+      await mount("用Nota写作");
+      const before = serialized();
+      editor!.setMarkdown("用 Nota 写作");
+      await nextFrames();
+      assertEqual(serialized(), "用 Nota 写作", "whole-document replacement was not applied");
+      editor!.runCommand("undo");
+      await nextFrames();
+      assertEqual(serialized(), before, "one undo did not restore the original document");
     },
   },
 ];

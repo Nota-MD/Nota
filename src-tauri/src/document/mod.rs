@@ -708,6 +708,34 @@ mod tests {
     }
 
     #[test]
+    fn nested_documents_with_the_same_file_name_save_independently() {
+        let root = std::env::temp_dir().join("nota-docstore-same-name");
+        let _ = std::fs::remove_dir_all(&root);
+        let first = root.join("first");
+        let second = root.join("second");
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        let first_path = first.join("notes.md");
+        let second_path = second.join("notes.md");
+        std::fs::write(&first_path, "# First\n").unwrap();
+        std::fs::write(&second_path, "# Second\n").unwrap();
+
+        let mut store = DocumentStore::new(LAX);
+        let first_id = store.open(&first_path).unwrap();
+        let second_id = store.open(&second_path).unwrap();
+        assert_ne!(first_id, second_id);
+
+        store.sync(first_id, "# First changed\n".to_owned()).unwrap();
+        store.sync(second_id, "# Second changed\n".to_owned()).unwrap();
+        store.save(first_id, None).unwrap();
+        store.save(second_id, None).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&first_path).unwrap(), "# First changed\n");
+        assert_eq!(std::fs::read_to_string(&second_path).unwrap(), "# Second changed\n");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
     fn 存盘后_dirty_归零且另外存能改路径() {
         let dir = std::env::temp_dir().join("nota-docstore-save");
         let _ = std::fs::remove_dir_all(&dir);

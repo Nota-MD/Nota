@@ -81,7 +81,7 @@ export interface exportWiring {
   /** 深色主题下阻止打印或 PDF 导出时，用来显示只报信的弹窗。 */
   askConfirm: Dialogs["askConfirm"];
   /** 用导入转换得到的 Markdown 新建一份未命名文档。 */
-  openImported: (markdown: string, titleHint: string | null) => Promise<void>;
+  openImported: (markdown: string, titleHint: string | null) => Promise<boolean>;
 }
 
 export interface exportApi {

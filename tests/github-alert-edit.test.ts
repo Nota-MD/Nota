@@ -133,6 +133,10 @@ testCase("editing an Alert marker stays plain source text like Typora", () => {
     /border-left:\s*4px solid var\(--github-alert-color\);/.test(shell),
     "Alert no longer uses the semantic Typora-style left rule",
   );
+  assertValue(
+    !/content:\s*"(?:ⓘ Note|◆ Tip|❗ Important|⚠ Warning|⛔ Caution)"/.test(css),
+    "Alert labels still repeat the type name after the icon",
+  );
 });
 
 console.log(`\nPassed ${pass}; failed ${fail}`);

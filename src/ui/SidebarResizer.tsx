@@ -26,7 +26,7 @@
  *
  * | 事 | 怎么办 | 为什么 |
  * |---|---|---|
- * | 拖到比最小还窄 / 比最大还宽 | **夹住**（`夹侧栏宽`） | 拖成 0 宽等于把侧栏弄丢了，而丢的方式是"看不见"，用户找不回来 |
+ * | 拖到比最小还窄 / 比最大还宽 | 越过最小时立即折叠，最大处夹住 | 折叠有菜单和工具栏两个可找回入口；把最大宽度夹住是为了给正文留空间 |
  * | 拖动期间松开鼠标 | `pointerup` / `pointercancel` 都收尾（`onCommit` 照发） | 只认 `pointerup` 的话，中途被系统抢走指针（切窗口、弹菜单）那次拖动**永远收不了尾**：变量留着、光标还钉在 `col-resize` |
  * | 拖动期间选中正文 | `setPointerCapture` ＋ `user-select: none` | 不捕获的话指针一快就滑出这 6px 的把手，拖动当场断掉；不关选中的话整屏文字会被拖蓝 |
  *
@@ -58,10 +58,21 @@ export function clampSidebarWidth(width: number): number {
   return Math.min(sideBarWidthMostLarge, Math.max(sideBarWidthMostSmall, Math.round(width)));
 }
 
+/** Whether dragging has crossed the collapse threshold at the left edge. */
+export function shouldCollapseSidebar(width: number, canCollapse: boolean): boolean {
+  return canCollapse && Number.isFinite(width) && width < sideBarWidthMostSmall;
+}
+
 /**
  * 那条把手。**渲染在 `.sidebar` 内部、作为它最后一个子元素**（理由见文件头）。
  */
-export function SidebarResizer({ onCommit }: { onCommit: (width: number) => void }) {
+export function SidebarResizer({
+  onCommit,
+  onCollapse,
+}: {
+  onCommit: (width: number) => void;
+  onCollapse?: () => void;
+}) {
   const t = useT();
   // 本次拖动最后落在哪个数上。**放在 ref 里不是为了省一次渲染**，是因为
   // `pointerup` 那次回调要读它，而回调闭包捕获的是**按下那一刻**的值。
@@ -76,25 +87,40 @@ export function SidebarResizer({ onCommit }: { onCommit: (width: number) => void
     //（动的只有右缘，也就是正在拖的这条）。每次 move 都量要强制一次布局。
     const box2 = takeHand.parentElement?.getBoundingClientRect();
     const leftEdge = box2?.left ?? 0;
-    mostAfter.current = clampSidebarWidth(box2?.width ?? sideBarWidthDefault);
+    const previousWidth = clampSidebarWidth(box2?.width ?? sideBarWidthDefault);
+    mostAfter.current = previousWidth;
+    let collapseArmed = false;
 
     function move(ev: PointerEvent) {
-      const width = clampSidebarWidth(ev.clientX - leftEdge);
+      const rawWidth = ev.clientX - leftEdge;
+      collapseArmed = shouldCollapseSidebar(rawWidth, Boolean(onCollapse));
+      document.body.classList.toggle("sidebar-collapse-armed", collapseArmed);
+      const width = clampSidebarWidth(rawWidth);
       mostAfter.current = width;
       document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
     }
 
-    function receive() {
+    function receive(commit: boolean) {
       takeHand.removeEventListener("pointermove", move);
-      takeHand.removeEventListener("pointerup", receive);
-      takeHand.removeEventListener("pointercancel", receive);
+      takeHand.removeEventListener("pointerup", finish);
+      takeHand.removeEventListener("pointercancel", cancel);
       document.body.classList.remove("resizing-col");
-      onCommit(mostAfter.current);
+      document.body.classList.remove("sidebar-collapse-armed");
+      if (commit && collapseArmed) {
+        document.documentElement.style.setProperty("--sidebar-width", `${previousWidth}px`);
+        onCollapse?.();
+      } else if (commit) {
+        onCommit(mostAfter.current);
+      } else {
+        document.documentElement.style.setProperty("--sidebar-width", `${previousWidth}px`);
+      }
     }
+    const finish = () => receive(true);
+    const cancel = () => receive(false);
 
     takeHand.addEventListener("pointermove", move);
-    takeHand.addEventListener("pointerup", receive);
-    takeHand.addEventListener("pointercancel", receive);
+    takeHand.addEventListener("pointerup", finish);
+    takeHand.addEventListener("pointercancel", cancel);
   }
 
   return (

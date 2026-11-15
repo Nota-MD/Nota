@@ -226,6 +226,19 @@ testCase("思维导图向 Mermaid 显式传入明暗模式与完整节点配色"
     /\.nota-diagram-preview\s*\{[^}]*background:\s*var\(--doc-bg,\s*var\(--bg\)\)/s.test(diagramCss),
     "图表预览仍在用界面底色，深色外壳会把浅色文档中的图表衬黑",
   );
+  assertValue(
+    /\.nota-diagram\s*\{[^}]*max-width:\s*none\s*!important/s.test(diagramCss),
+    "Mermaid 仍被正文限宽约束",
+  );
+  assertValue(
+    /\.nota-diagram-preview svg\s*\{[^}]*width:\s*100%\s*!important/s.test(diagramCss),
+    "Mermaid SVG 没有使用可用内容宽度",
+  );
+  assertValue(
+    diagrams.includes('image.style.width = "100%"') &&
+      diagrams.includes('image.style.maxWidth = "100%"'),
+    "Mermaid 的内联宽度仍覆盖宽内容规则",
+  );
 });
 
 testCase("Mermaid 源码只在当前图表获得焦点时显示", () => {

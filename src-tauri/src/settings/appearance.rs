@@ -300,6 +300,8 @@ pub struct Appearance {
     /// 如实记在这里：未保存的另一处落点是标签页上那颗点（`ui/TabBar.tsx`
     /// 的 `.tab-dot`），没有丢。
     pub show_filename_in_titlebar: bool,
+    /// Focus the destination window after moving a tab there.
+    pub focus_after_window_transfer: bool,
     /// Presentation mode for the Preferences interface.
     pub settings_window_style: SettingsWindowStyle,
 }
@@ -341,6 +343,7 @@ impl Default for Appearance {
             // 而"任务栏里几份文档分不出来"正是第 51 项要治的病，
             // 治它的东西不该默认关着。
             show_filename_in_titlebar: true,
+            focus_after_window_transfer: true,
             settings_window_style: SettingsWindowStyle::Embedded,
         }
     }
@@ -743,5 +746,19 @@ mod tests {
             let back: Appearance = toml::from_str(&text).expect("读得回来");
             assert_eq!(back.show_filename_in_titlebar, 值);
         }
+    }
+
+    #[test]
+    fn focus_after_window_transfer_defaults_on_and_old_settings_still_load() {
+        assert!(Appearance::default().focus_after_window_transfer);
+        let old: Appearance = toml::from_str("").expect("old settings must still load");
+        assert!(old.focus_after_window_transfer);
+        let text = toml::to_string_pretty(&Appearance {
+            focus_after_window_transfer: false,
+            ..Appearance::default()
+        })
+        .expect("appearance settings should serialize");
+        let back: Appearance = toml::from_str(&text).expect("appearance settings should load");
+        assert!(!back.focus_after_window_transfer);
     }
 }

@@ -22,6 +22,35 @@ export function bindInlineMathSourceEvents(
 ): void {
   let composing = false;
 
+  (input as HTMLElement).addEventListener("keydown", (event: KeyboardEvent) => {
+    const isInput =
+      typeof HTMLInputElement === "undefined"
+        ? (input as HTMLElement).tagName === "INPUT"
+        : input instanceof HTMLInputElement;
+    if (
+      !isInput ||
+      composing ||
+      event.isComposing ||
+      event.key !== "\\" ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    // WebKit can move focus back to the document before the native input event.
+    event.preventDefault();
+    event.stopPropagation();
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    input.setRangeText("\\", start, end, "end");
+    events.updateLayout();
+    events.dispatchSource(input.value);
+    const cursor = input.selectionStart ?? input.value.length;
+    events.feed(input.value, cursor);
+    events.preserveFocus(cursor);
+  });
+
   const commit = () => {
     if (!input.isConnected) return;
     const inputOwnedFocus = document.activeElement === input;

@@ -171,6 +171,46 @@ pub fn nota_workspace_get(state: State<'_, AppState>) -> Result<Option<String>> 
     }
 }
 
+/// Delete one file or folder inside the active workspace.
+///
+/// The frontend confirms first. This command enforces the workspace boundary a
+/// second time and refuses to remove the workspace root itself.
+#[tauri::command]
+pub fn nota_workspace_delete_path(state: State<'_, AppState>, path: String) -> Result<()> {
+    let root = state
+        .workspace
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| NotaError::other("没有打开工作区"))?;
+    delete_workspace_path(&root, Path::new(&path))
+}
+
+fn delete_workspace_path(root: &Path, path: &Path) -> Result<()> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| NotaError::other("只能删除当前工作区里的文件"))?;
+    if relative.as_os_str().is_empty() {
+        return Err(NotaError::other("不能删除工作区根目录"));
+    }
+    let target = crate::lua::api::fs::resolve_in(root, &relative.to_string_lossy())?;
+    let metadata = std::fs::symlink_metadata(&target).map_err(|source| NotaError::Read {
+        path: target.clone(),
+        source,
+    })?;
+    if metadata.is_dir() && !metadata.file_type().is_symlink() {
+        std::fs::remove_dir_all(&target).map_err(|source| NotaError::Delete {
+            path: target,
+            source,
+        })
+    } else {
+        std::fs::remove_file(&target).map_err(|source| NotaError::Delete {
+            path: target,
+            source,
+        })
+    }
+}
+
 /// 批量读取文件列表要显示的标题与下一段文字。
 ///
 /// 只读每个文件开头 16 KiB，在阻塞线程池执行；打开工作区时不会为了摘要把整棵
@@ -826,6 +866,25 @@ mod tests {
         assert!(has_binary_suffix(Path::new("manual.pdf")));
         assert!(!has_binary_suffix(Path::new("notes.GBK.md")));
         assert!(!has_binary_suffix(Path::new("README")));
+    }
+
+    #[test]
+    fn workspace_delete_handles_files_directories_and_root_guards() {
+        let root = 搭个目录("delete-path");
+        let file = root.join("delete.md");
+        let nested = root.join("folder").join("delete.md");
+        std::fs::write(&file, "delete me").unwrap();
+        std::fs::create_dir_all(nested.parent().unwrap()).unwrap();
+        std::fs::write(&nested, "nested").unwrap();
+
+        delete_workspace_path(&root, &file).unwrap();
+        assert!(!file.exists());
+        delete_workspace_path(&root, nested.parent().unwrap()).unwrap();
+        assert!(!nested.parent().unwrap().exists());
+        assert!(delete_workspace_path(&root, &root).is_err());
+        assert!(delete_workspace_path(&root, Path::new("/tmp/outside-nota")).is_err());
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     /// ⚠️ **读不动要报 Err，不能是"空目录"**（2026-09-25 改的行为，见函数头那段）。

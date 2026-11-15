@@ -6,6 +6,7 @@ import { api } from "./bridge/ipc";
 import { t, setLanguage } from "./i18n";
 import { installErrorHooks } from "./ui/ErrorBoundary";
 import { FocusAlarmWindow } from "./ui/FocusAlarmWindow";
+import { ZoomHud } from "./ui/ZoomHud";
 import adwaitaFontLicense from "./assets/fonts/adwaita/LICENSE.txt?url";
 
 import "./styles/theme.css";
@@ -25,11 +26,13 @@ import "./styles/tabs-status.css";
 import "./styles/home.css";
 // 提示条（`ui/Toasts.tsx`，固定在右下角那一层；层叠关系见它文件头）。
 import "./styles/toast.css";
+import "./styles/zoom-hud.css";
 // 浮层那一族（四个对话框 ＋ Emoji 补全面板）。⚠️ **必须在 `app.css` 之后**——
 // `.emoji-cat` 要盖掉 `.btn` 的内边距，靠的就是"后来居上"；顺序反了，
 // 那排分类按钮会静默变回全尺寸。（2026-09-27 从 `app.css` 里按职责拆出来的，
 // 理由见那份文件头。）
 import "./styles/overlay.css";
+import "./styles/window-id.css";
 import "./styles/element-inspector.css";
 import "./styles/file-picker.css";
 import "./styles/update-debug.css";
@@ -239,7 +242,10 @@ ReactDOM.createRoot(root).render(
     {isWarnReportWindow ? (
       <FocusAlarmWindow />
     ) : (
-      <App />
+      <>
+        <App />
+        <ZoomHud />
+      </>
     )}
   </React.StrictMode>,
 );

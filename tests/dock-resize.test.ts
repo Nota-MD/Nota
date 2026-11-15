@@ -5,7 +5,15 @@
  * 是纯函数，而它恰好是"拖坏了找不到回来"的唯一防线：拖成 0 宽等于把这一栏弄丢，
  * 而丢的方式是**看不见**。所以这一条必须钉住。
  */
-import { clampRightBarWidth, rightBarWidthMostLarge, rightBarWidthMostSmall, rightBarWidthDefault } from "@/ui/DockResizer";
+import { readFileSync } from "node:fs";
+
+import {
+  clampRightBarWidth,
+  rightBarWidthMostLarge,
+  rightBarWidthMostSmall,
+  rightBarWidthDefault,
+  shouldCollapseRightBar,
+} from "@/ui/DockResizer";
 
 let pass = 0;
 let fail = 0;
@@ -26,6 +34,19 @@ testCase("比最小还小就夹到最小、比最大还大就夹到最大", () =
   equal(clampRightBarWidth(1), rightBarWidthMostSmall, "过小");
   equal(clampRightBarWidth(-999), rightBarWidthMostSmall, "负数");
   equal(clampRightBarWidth(99999), rightBarWidthMostLarge, "过大");
+});
+testCase("crossing below the minimum arms collapse at the edge", () => {
+  equal(shouldCollapseRightBar(rightBarWidthMostSmall, true), false, "threshold itself");
+  equal(shouldCollapseRightBar(rightBarWidthMostSmall - 1, true), true, "past threshold");
+  equal(shouldCollapseRightBar(0, true), true, "window edge");
+  equal(shouldCollapseRightBar(0, false), false, "collapse callback unavailable");
+});
+testCase("crossing the minimum arms a release guide", () => {
+  const source = readFileSync("src/ui/DockResizer.tsx", "utf8");
+  equal(source.includes('classList.toggle("dock-collapse-armed"'), true, "edge guide toggle");
+  equal(source.includes("if (commit && collapseArmed)"), true, "release-only collapse");
+  const css = readFileSync("src/styles/dock.css", "utf8");
+  equal(css.includes("body.dock-collapse-armed::after"), true, "right edge guide");
 });
 testCase("不是数就退回出厂值", () => {
   for (const strange of [NaN, Infinity, -Infinity]) equal(clampRightBarWidth(strange), rightBarWidthDefault, String(strange));

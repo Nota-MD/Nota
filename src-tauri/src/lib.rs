@@ -66,6 +66,7 @@ pub mod update;
 pub mod upload;
 pub mod url_scheme;
 pub mod watch;
+pub mod window_registry;
 
 use std::sync::{Arc, Mutex};
 
@@ -431,6 +432,7 @@ pub fn run() {
             //    没有排进 `plugins → documents → settings` 那条序。
             app.manage(focus::FocusState::default());
             focus::起(app.handle().clone());
+            app.manage(window_registry::WindowRegistry::register());
             // ⑦ 单实例（2026-09-27 加）。⚠️ **位置很要紧**：上面那一堆
             //    `manage` / `起` 都已经注册完，接收线程第一条连接就是奔着
             //    "打开一份文档"来的——它 emit 的那条事件要有人收，收的是**前端**，
@@ -523,6 +525,7 @@ pub fn run() {
             commands::workspace::nota_workspace_open,
             commands::workspace::nota_workspace_close,
             commands::workspace::nota_workspace_get,
+            commands::workspace::nota_workspace_delete_path,
             commands::workspace::nota_workspace_tree,
             commands::workspace::nota_workspace_excerpts,
             commands::settings::nota_settings_get,
@@ -532,6 +535,11 @@ pub fn run() {
             commands::window::nota_window_show_main,
             commands::window::nota_quit,
             commands::window::nota_window_open_new,
+            commands::window_registry::nota_window_registry_snapshot,
+            commands::window_registry::nota_window_picker_mode,
+            commands::window_registry::nota_window_transfer,
+            commands::window_registry::nota_window_take_transfer,
+            commands::window_registry::nota_window_ack_transfer,
             commands::window::nota_window_open_settings,
             commands::window::nota_window_prepare_settings,
             commands::window::nota_window_hide_settings,

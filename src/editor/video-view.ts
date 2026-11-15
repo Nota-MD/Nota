@@ -105,7 +105,13 @@ export function localLocalImageSliceAbsoluteCorrectPath(address: string, documen
   if (!original || isExternalPartAddress(original)) return null;
   if (original.toLowerCase().startsWith("file://")) {
     try {
-      return decodeURIComponent(original.slice("file://".length));
+      const url = new URL(original);
+      let pathname = decodeURIComponent(url.pathname);
+      if (/^\/[A-Za-z]:\//.test(pathname)) pathname = pathname.slice(1);
+      if (url.hostname && url.hostname !== "localhost") {
+        return `//${url.hostname}${pathname}`;
+      }
+      return pathname;
     } catch {
       return original.slice("file://".length);
     }

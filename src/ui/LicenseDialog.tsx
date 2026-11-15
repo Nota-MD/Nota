@@ -43,6 +43,13 @@ import { useModalTrap } from "@/ui/useModalTrap";
  */
 const shortName = "BSD-2-Clause";
 
+export const licenseShortName = shortName;
+
+/** License body shared by the dialog and the About window's own subpage. */
+export function LicenseText() {
+  return <pre className="lic-text">{licenseProveFullText}</pre>;
+}
+
 export function LicenseDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   // ⚠️ `useModalTrap` 的 `focusin` 兜底会把跑出框的焦点拉到这个容器上，
@@ -74,9 +81,7 @@ export function LicenseDialog({ onClose }: { onClose: () => void }) {
       >
         <DialogClose onClose={onClose} />
         <h2 className="confirm-title">{t("{0} License", shortName)}</h2>
-        {/* ⚠️ `<pre>` 是**故意的**：许可证正文的换行与缩进是它的一部分，
-            塞进 `<p>` 会被 CSS 折成一坨。`wrap` 那条见 `overlay.css`。 */}
-        <pre className="lic-text">{licenseProveFullText}</pre>
+        <LicenseText />
         <div className="confirm-actions">
           <button type="button" className="btn" ref={closeKey} onClick={onClose}>
             {t("Close")}

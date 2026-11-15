@@ -123,6 +123,12 @@ testCase("三个参数的缺省值就是「带文件名」（老调用点一个�
   equal(windowTitle("我的笔记", false), windowTitle("我的笔记", false, true), "缺省＝带");
 });
 
+testCase("窗口 ID 前缀只在 ID 展示模式出现", () => {
+  equal(windowTitle("我的笔记", false, true, "03"), "(03) 我的笔记 — Nota", "有 ID 时加前缀");
+  equal(windowTitle("我的笔记", false, true, null), "我的笔记 — Nota", "无 ID 时保持原名");
+  equal(windowTitle(null, false, true, "12"), "(12) Nota", "没有文档时 ID 仍在应用名前");
+});
+
 /* ── 组三：`应用名` 与 `tauri.conf.json` 必须同值 ─────────────────── */
 
 group("组三 初值对得上：`应用名` 就是建窗时那个标题");

@@ -183,6 +183,18 @@ export function ApplyKeyOverrides(
   return menus.map((m) => ({ ...m, items: walkValueLayer(m.items) }));
 }
 
+/** Effective accelerator for one command after user overrides have been applied. */
+export function findMenuAccel(
+  menus: readonly MenuSpec[],
+  id: string,
+): string | undefined {
+  let accel: string | undefined;
+  walkMenuItems(menus, (item) => {
+    if (item.id === id) accel = item.accel;
+  });
+  return accel;
+}
+
 /** 「无主题（内置）」那一项的 id。**不是命令**，是合成出来的。 */
 export const NO_THEME = "__theme-none";
 /** 主题项的 id 前缀，后面跟主题 **id**（不是显示名）。 */
@@ -287,6 +299,8 @@ export const MENUS: MenuSpec[] = [
     items: [
       { id: "file.new", label: "New", accel: "Ctrl+N" },
       { id: "file.newWindow", label: "New Window", accel: "Ctrl+Shift+N" },
+      { id: "tab.openInNewWindow", label: "Open Current Tab in New Window", accel: "Ctrl+Alt+N", needsDoc: true },
+      { id: "tab.moveToWindow", label: "Move Current Tab to Another Window…", accel: "Ctrl+Alt+M", needsDoc: true },
       "sep",
       { id: "file.open", label: "Open…", accel: "Ctrl+O" },
       { id: "file.openFolder", label: "Open Folder…" },
@@ -680,6 +694,7 @@ export const MENUS: MenuSpec[] = [
       // 那一节），所以标签从「切换全屏」改成「全屏」并加了勾：勾的是"窗口现在
       // 全屏着"，而"Full Screen"这两个字现在描述的是**一种状态**，不是一次动作。
       { id: "view.fullscreen", label: "Full Screen", accel: "F11", checkable: true },
+      { id: "view.windowId", label: "Show Window IDs", accel: "Ctrl+Alt+I" },
       // ⚠️ **有勾**，而且那个勾**是从窗口读回来的**（`isAlwaysOnTop()`，见
       // `ui/useWindowControls.ts` 文件头）：用户完全可能在窗口管理器里给这个
       // 窗勾上"总在最前"，那时内存里记一个 `false` 就会让菜单和窗口分叉——

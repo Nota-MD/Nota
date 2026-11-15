@@ -40,7 +40,7 @@ console.log("\n【菜单灰项接线】");
 
 testCase("除按状态出现的最近文件外，不再有永久灰项", () => {
   const implemented = new Set(
-    [...commandTable.matchAll(/"((?:file|edit|para|fmt|view|about)\.[^"]+)":/g)].map((m) => m[1]),
+    [...commandTable.matchAll(/"((?:file|edit|para|fmt|view|about|tab)\.[^"]+)":/g)].map((m) => m[1]),
   );
   const items = [];
   walkMenuItems(MENUS, (item) => items.push(item));
@@ -127,6 +127,11 @@ testCase("粘贴优先识别图片，剪贴板快捷键不绕进菜单文本通�
   contains(clipboard, "if (await pasteImage()) return;", "菜单粘贴没有先识别图片");
   contains(images, "await readImage()", "没有从宿主读取图片剪贴板");
   contains(images, "dropOneImage({ kind: \"base64\"", "剪贴板图片没有走落盘链");
+  contains(images, "new DOMParser()", "image-only clipboard HTML was not parsed");
+  contains(images, "fetch(imageOnly.src)", "blob image was not converted before placement");
+  contains(images, "dropOneImage({ kind: \"url\"", "remote clipboard image bypassed image settings");
+  contains(images, 'dropOneImage({ kind: "path"', "file URL images bypassed the copy settings");
+  contains(images, 'addEventListener("drop"', "dragged rich images bypassed the copy settings");
   contains(menus, "if (cutPasteBoardKey.has(id)) return;", "快捷键仍被菜单文本粘贴通道截获");
   contains(capability, "clipboard-manager:allow-read-image", "没有开放原生图片剪贴板读取权限");
 });
@@ -150,6 +155,21 @@ testCase("GitHub Alert children are wired and work in nested textblocks", () => 
   ]) {
     contains(commandTable, `"${id}":`, `Alert child ${id} has no real handler`);
   }
+});
+
+testCase("sidebar context actions target the selected directory and can delete", () => {
+  const sidebar = read("src/ui/Sidebar.tsx");
+  const menu = read("src/ui/SidebarContextMenu.tsx");
+  const documents = read("src/ui/useDocuments.ts");
+  const workspaceDelete = read("src/ui/useWorkspaceDelete.ts");
+  const app = read("src/App.tsx");
+  contains(sidebar, "data-directory-path={absolute}", "folder target is not recorded");
+  contains(sidebar, "onNewFile(undefined, targetDirectory ?? workspace)", "tree creation ignores the folder");
+  contains(menu, 'targetDirectory ?? undefined', "context menu does not pass its target folder");
+  contains(menu, 't("Delete…")', "context menu has no delete action");
+  contains(documents, "combinePath(targetDirectory, textItemName)", "new file ignores the target folder");
+  contains(workspaceDelete, "api.workspace.deletePath(path)", "workspace delete is not wired");
+  contains(app, "onDeletePath={(path) => void deletePath(path)}", "App does not connect deletePath");
 });
 
 testCase("list conversion keeps the only empty paragraph in a list item", () => {

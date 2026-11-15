@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { api, type Settings } from "@/bridge/ipc";
 import { t } from "@/i18n";
-import { DeferredAboutDialog } from "@/ui/DeferredUi";
+import { DeferredAboutDialog, DeferredFirstRunGuide } from "@/ui/DeferredUi";
 import type { Toast } from "@/ui/Toasts";
 
 const params = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
@@ -46,13 +46,25 @@ export function StandaloneAboutWindow({
   debugMode: boolean;
   onSetDebugMode: (enabled: boolean) => void;
 }) {
+  const [guideOpen, setGuideOpen] = useState(false);
+
   return (
-    <DeferredAboutDialog
-      presentation="full"
-      standalone
-      onClose={() => void api.window.hideAbout()}
-      debugMode={debugMode}
-      onSetDebugMode={onSetDebugMode}
-    />
+    <>
+      {guideOpen ? (
+        <DeferredFirstRunGuide
+          presentation="full"
+          onDone={() => setGuideOpen(false)}
+        />
+      ) : (
+        <DeferredAboutDialog
+          presentation="full"
+          standalone
+          onClose={() => void api.window.hideAbout()}
+          onOpenGuide={() => setGuideOpen(true)}
+          debugMode={debugMode}
+          onSetDebugMode={onSetDebugMode}
+        />
+      )}
+    </>
   );
 }

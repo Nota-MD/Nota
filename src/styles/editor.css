@@ -357,6 +357,10 @@
      empty paragraph starts at the centre. Fill the available column first;
      the theme's max-width can still centre the column itself. */
   width: 100%;
+  /* Typora keeps a readable paper column even on very wide windows. Themes
+     may override --doc-page-width together with their #write max-width. */
+  max-width: var(--doc-page-width, 1120px);
+  margin-inline: auto;
   /* ⚠️ **光标颜色要显式给**（2026-09-26）。在这之前整个所见即所得这一侧
      没有任何 `caret-color`，全靠浏览器默认——而源码模式那一半
      （`src/editor/source.ts`）早就写了 `caretColor: "var(--accent)"`，

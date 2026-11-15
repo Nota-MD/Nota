@@ -101,15 +101,16 @@ export function createLanguagePicker(option: {
   field.type = "text";
   field.className = "nota-code-lang-input";
   field.title = t("Code Language");
+  field.placeholder = t("Code Language");
   field.setAttribute("role", "combobox");
   field.setAttribute("aria-haspopup", "listbox");
   field.setAttribute("aria-expanded", "false");
   field.autocomplete = "off";
   field.spellcheck = false;
 
-  /** 闭合状态显示什么（空语言显示「纯文本」）。 */
+  /** Closed state: empty language is a true empty value with a placeholder. */
   function drawCloseCombine(lang: string) {
-    field.value = lang === NO_LANGUAGE ? plainText() : lang;
+    field.value = lang === NO_LANGUAGE ? "" : lang;
   }
   drawCloseCombine(option.currentLanguage());
 

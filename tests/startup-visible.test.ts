@@ -107,6 +107,19 @@ testCase("macOS 开关跟随主题色", () => {
   }
 });
 
+testCase("enabled switches follow the active accent across imported themes", () => {
+  const controls = readFileSync(join(process.cwd(), "src/styles/settings-controls.css"), "utf8");
+  const rule = /\.stg-switch\[aria-checked="true"\]\s*\{([\s\S]*?)\}/.exec(controls)?.[1] ?? "";
+  assertValue(rule.includes("background: var(--accent) !important"), "switch fill can be overridden by a theme");
+  assertValue(rule.includes("border-color: var(--accent) !important"), "switch border ignores the accent");
+
+  const theme = readFileSync(join(process.cwd(), "src/styles/applyTheme.ts"), "utf8");
+  assertValue(
+    theme.includes('root.style.setProperty(changeMeasure, value2, "important")'),
+    "user accent variables can be overridden by an imported theme",
+  );
+});
+
 testCase("窗口真正显示后重新把焦点交给正文", () => {
   const source = readFileSync(join(process.cwd(), "src/ui/EditorPane.tsx"), "utf8");
   const handler = source.indexOf("const focusAfterReveal");

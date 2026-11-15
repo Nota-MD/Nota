@@ -402,6 +402,35 @@ export const lineFirstBackCell =
     return true;
   };
 
+function preparePlainHeadingPrefix(view: EditorView): boolean {
+  if (!view.editable) return false;
+  const { $from, empty } = view.state.selection;
+  const paragraph2 = $from.parent;
+  const after = $from.nodeAfter;
+  if (
+    !empty ||
+    paragraph2.type.name !== "paragraph" ||
+    (after !== null && after.type.name !== "notaSyntax") ||
+    !/^#{1,6}$/.test(paragraph2.textContent)
+  ) {
+    return false;
+  }
+  const start5 = $from.before($from.depth);
+  const plain = paragraph2.type.create(
+    paragraph2.attrs,
+    view.state.schema.text(`${paragraph2.textContent} `),
+  );
+  const tr = view.state.tr.replaceWith(
+    start5,
+    start5 + paragraph2.nodeSize,
+    plain,
+  );
+  tr.setSelection(TextSelection.create(tr.doc, start5 + 3));
+  tr.setStoredMarks([]);
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
+
 /**
  * 把 [`行首退格`] 挂到 `Backspace` / `Delete` 上，**优先级压过上游那条**。
  *
@@ -443,7 +472,22 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
   return new Plugin({
     key: new PluginKey("nota-heading-on-enter"),
     props: {
+      handleTextInput: (view, from, to, text4) =>
+        text4 === " " && from === to && preparePlainHeadingPrefix(view),
       handleKeyDown: (view, event) => {
+        if (
+          event.key === " " &&
+          !event.shiftKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey &&
+          !view.composing
+        ) {
+          if (preparePlainHeadingPrefix(view)) {
+            event.preventDefault();
+            return true;
+          }
+        }
         // 只认**光秃秃的**回车。Shift+Enter（硬换行）、Ctrl/Alt+Enter 各有各的
         // 绑定，别抢；输入法正在组合的时候那一下回车是"选词"。
         if (

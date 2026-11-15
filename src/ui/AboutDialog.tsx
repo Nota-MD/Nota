@@ -69,18 +69,25 @@ import { sendThanksNameSingle } from "@/ui/credits";
 import type { Diagnostics } from "@/bridge/types";
 import { useT } from "@/i18n";
 import { DialogClose } from "@/ui/DialogClose";
-import { LicenseDialog } from "@/ui/LicenseDialog";
+import { LicenseText, licenseShortName } from "@/ui/LicenseDialog";
 import { SoftwareUpdatePane } from "@/ui/SoftwareUpdatePane";
 // 应用标识的**唯一手写源**是 `src-tauri/icons/nota.svg`，这里借分享图那一套
 // 嵌法（`标识()` 顺带做 id 改名与圆角裁剪），不再画第二遍。
 import { markRecognize, markRecognizeView } from "@/ui/nota-mark";
 
 /**
- * 五个子页。`null` ＝ 首页那一列行。
+ * Six subpages. `null` is the home row list.
  *
  * ⚠️ 这些值是**内部标识**，不显示给用户；标题统一走翻译表。
  */
-type AboutPage = null | "softwareUpdate" | "troubleshooting" | "permissions" | "credits" | "legal";
+type AboutPage =
+  | null
+  | "softwareUpdate"
+  | "troubleshooting"
+  | "permissions"
+  | "credits"
+  | "legal"
+  | "license";
 
 /**
  * 外面那两行要的网址。**今天是空的**（见文件头口径 ②），空着的行不画。
@@ -98,8 +105,6 @@ const feedback = "";
  * `ui/LicenseDialog.tsx` 里那个 `短名` 是同一个词（那边管标题、这边管这一行）。
  * 改一处就得改两处。
  */
-const licenseProve = "BSD-2-Clause";
-
 /** 一行「外链」：点它交给系统浏览器。 */
 interface ExternalChainLine {
   /** 助记键，小写一个字母（`accesskey` 用它，界面上画成 `(W)`）。 */
@@ -151,8 +156,6 @@ export function AboutDialog({
   const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   /** 拉诊断信息**炸了**。⚠️ 与"某几格是空的"是两回事：那是正常的，这是一条命令整个失败。 */
   const [diagnosticsFailed, setDiagnosticsFailed] = useState(false);
-  /** 许可证全文那张框开着没。 */
-  const [showLicenseProve, setShowLicenseProve] = useState(false);
   /**
    * 打开外链**失败**时要说的话（2026-10-06 加）。
    *
@@ -212,11 +215,6 @@ export function AboutDialog({
   useEffect(() => {
     const keypress = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      // ⚠️ **许可证那张框开着时不接**：它盖在本框上面，这一次 `Esc` 是它的
-      //（它自己那条走 `useModalTrap`，在捕获阶段）。不拦的话一次 `Esc`
-      // 会把两层一起关掉。⚠️ 本文件这条是**冒泡**阶段，所以拦不住它——
-      // 只能在这儿让路。
-      if (showLicenseProve) return;
       e.preventDefault();
       // ⚠️ 在子页里 `Esc` 也是**关掉整个框**，不是退回首页：这一层没有"没保存
       // 的东西"，而用户按 `Esc` 想要的从来是"把这块东西收起来"。
@@ -224,7 +222,7 @@ export function AboutDialog({
     };
     window.addEventListener("keydown", keypress);
     return () => window.removeEventListener("keydown", keypress);
-  }, [onClose, showLicenseProve]);
+  }, [onClose]);
 
   // 焦点跟着"当前页最上面那颗按钮"走（换页也要重给一次，否则翻进子页之后
   // 焦点还留在上一页被卸载掉的那颗按钮上——那时 `Tab` 会从文档开头重新数）。
@@ -330,6 +328,7 @@ export function AboutDialog({
     permissions: t("Permissions"),
     credits: t("Credits"),
     legal: t("Legal"),
+    license: t("{0} License", licenseShortName),
   };
 
   const ChildPageLine: readonly ChildPageLine[] = [
@@ -540,7 +539,7 @@ export function AboutDialog({
                   type="button"
                   className="about-back"
                   ref={headOneToken}
-                  onClick={() => setPage(null)}
+                  onClick={() => setPage(page === "license" ? "legal" : null)}
                 >
                   <span className="about-mark about-mark-back" aria-hidden="true" />
                   {t("Back")}
@@ -633,12 +632,18 @@ export function AboutDialog({
                       <button
                         type="button"
                         className="about-link"
-                        onClick={() => setShowLicenseProve(true)}
+                        onClick={() => setPage("license")}
                       >
-                        {t("{0} License", licenseProve)}
+                        {t("{0} License", licenseShortName)}
                       </button>
                     </div>
                     <div className="about-item-text">Copyright (c) 2026, Leo Lee</div>
+                  </div>
+                )}
+
+                {page === "license" && (
+                  <div className="about-license-text">
+                    <LicenseText />
                   </div>
                 )}
               </div>
@@ -646,10 +651,6 @@ export function AboutDialog({
           )}
         </div>
       </div>
-
-      {/* ⚠️ **兄弟节点、画在关于框后面**：两层的 `z-index` 都是 200，靠 DOM 顺序
-          分前后（许可证那张在上面）。`Esc` 的归属在那个 effect 里让了路。 */}
-      {showLicenseProve && <LicenseDialog onClose={() => setShowLicenseProve(false)} />}
     </>
   );
 }

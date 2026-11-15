@@ -4,20 +4,25 @@ import { useLanguage, useT } from "@/i18n";
 import noticeEn from "@/ui/first-run-notice.en.html?raw";
 import noticeZh from "@/ui/first-run-notice.zh.html?raw";
 import { DialogClose } from "@/ui/DialogClose";
-import { LicenseDialog } from "@/ui/LicenseDialog";
+import { LicenseText, licenseShortName } from "@/ui/LicenseDialog";
 import { useModalTrap } from "@/ui/useModalTrap";
 
 const pageCount = 3;
 
-export function FirstRunGuide({ onDone }: { onDone: () => void }) {
+export function FirstRunGuide({
+  onDone,
+  presentation = "embedded",
+}: {
+  onDone: () => void;
+  presentation?: "embedded" | "full";
+}) {
   const t = useT();
   const uiLanguage = useLanguage();
   const [page, setPage] = useState(0);
-  const [licenseOpen, setLicenseOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const primary = useRef<HTMLButtonElement>(null);
 
-  useModalTrap(root, { onEscape: licenseOpen ? () => undefined : onDone });
+  useModalTrap(root, { onEscape: onDone });
 
   useEffect(() => {
     primary.current?.focus();
@@ -30,9 +35,9 @@ export function FirstRunGuide({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <>
       <div
         className="confirm-backdrop"
+        data-window-presentation={presentation}
         onMouseDown={(event) => {
           if (event.target === event.currentTarget) finish();
         }}
@@ -40,6 +45,7 @@ export function FirstRunGuide({ onDone }: { onDone: () => void }) {
         <div
           ref={root}
           className="confirm-dialog first-run-dialog"
+          data-window-presentation={presentation}
           role="dialog"
           aria-modal="true"
           aria-label={t("Getting started with Nota")}
@@ -47,7 +53,7 @@ export function FirstRunGuide({ onDone }: { onDone: () => void }) {
           onMouseDown={(event) => event.stopPropagation()}
           data-page={page}
         >
-          <DialogClose onClose={finish} />
+          {presentation !== "full" && <DialogClose onClose={finish} />}
           <div className="first-run-progress" aria-label={t("Step {0} of {1}", page + 1, pageCount)}>
             {Array.from({ length: pageCount }, (_, index) => (
               <span key={index} data-active={index === page || undefined} />
@@ -95,9 +101,15 @@ export function FirstRunGuide({ onDone }: { onDone: () => void }) {
               <p className="first-run-lead">
                 {t("The full BSD-2-Clause text is included with Nota. Third-party components keep their own licenses and appear under About → Credits.")}
               </p>
-              <button type="button" className="btn first-run-license" onClick={() => setLicenseOpen(true)}>
-                {t("View license")}
-              </button>
+              <div
+                className="first-run-notice-text first-run-license-text"
+                aria-label={t("{0} License", licenseShortName)}
+                role="document"
+                tabIndex={0}
+              >
+                <h1>{t("{0} License", licenseShortName)}</h1>
+                <LicenseText />
+              </div>
             </section>
           )}
 
@@ -120,7 +132,5 @@ export function FirstRunGuide({ onDone }: { onDone: () => void }) {
           </div>
         </div>
       </div>
-      {licenseOpen && <LicenseDialog onClose={() => setLicenseOpen(false)} />}
-    </>
   );
 }

@@ -8,6 +8,7 @@ import { pathDirectory } from "@/ui/file-picker";
 import type { SidebarTab } from "@/ui/Sidebar";
 import type { Toast } from "@/ui/Toasts";
 import type { Dialogs } from "@/ui/useDialogs";
+import type { WindowRegistryApi } from "@/ui/useWindowRegistry";
 
 export interface menuFeatureWiring {
   docs: readonly Document[];
@@ -22,6 +23,7 @@ export interface menuFeatureWiring {
   openFolder: (path?: string) => Promise<void>;
   openViaDialog: () => Promise<void>;
   openNewWindow: (path?: string) => Promise<void>;
+  windowRegistry: Pick<WindowRegistryApi, "moveTabToWindow">;
   askConfirm: Dialogs["askConfirm"];
   toast: (message: string, level?: Toast["level"]) => void;
 }
@@ -30,6 +32,8 @@ export interface menuFeatureApi {
   readOnly: boolean;
   searchRequest: number;
   newWindow: () => void;
+  openActiveInNewWindow: () => void;
+  moveActiveToWindow: () => void;
   quickOpen: () => void;
   saveAll: () => void;
   revealActive: () => void;
@@ -125,6 +129,19 @@ export function useMenuFeatures(w: menuFeatureWiring): menuFeatureApi {
     void w.openNewWindow();
   }, [w.openNewWindow]);
 
+  const openActiveInNewWindow = useCallback(() => {
+    const path = w.activeDoc?.path;
+    if (!path) {
+      w.toast(t("Save the document before opening it in a new window."), "info");
+      return;
+    }
+    void w.openNewWindow(path);
+  }, [t, w.activeDoc?.path, w.openNewWindow, w.toast]);
+
+  const moveActiveToWindow = useCallback(() => {
+    if (w.activeId !== null) void w.windowRegistry.moveTabToWindow(w.activeId);
+  }, [w.activeId, w.windowRegistry]);
+
   const toggleReadOnly = useCallback(() => setReadOnly((value) => !value), []);
 
   return useMemo(
@@ -132,6 +149,8 @@ export function useMenuFeatures(w: menuFeatureWiring): menuFeatureApi {
       readOnly,
       searchRequest,
       newWindow,
+      openActiveInNewWindow,
+      moveActiveToWindow,
       quickOpen,
       saveAll,
       revealActive,
@@ -143,6 +162,8 @@ export function useMenuFeatures(w: menuFeatureWiring): menuFeatureApi {
     [
       deleteActive,
       newWindow,
+      moveActiveToWindow,
+      openActiveInNewWindow,
       quickOpen,
       readOnly,
       revealActive,

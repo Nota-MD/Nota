@@ -116,7 +116,10 @@ testCase("拓展功能总开关隐藏入口、停止运行并保留安装与单�
   assertValue(plugins.includes("useEditorInput(extensionsEnabled ? plugins : [])"), "关闭后编辑器输入适配器仍然生效");
 
   const app = read("src", "App.tsx");
-  assertValue(app.includes("extensionsEnabled && dockOpen"), "关闭后右侧拓展栏仍可渲染");
+  assertValue(
+    app.includes("{extensionsEnabled && (") && app.includes("open={dockOpen}"),
+    "关闭后右侧拓展栏仍可渲染",
+  );
   assertValue(app.includes("showDock={extensionsEnabled}"), "关闭后顶栏拓展入口仍可渲染");
 
   const host = read("src-tauri", "src", "plugin", "mod.rs");

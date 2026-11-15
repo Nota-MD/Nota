@@ -475,9 +475,10 @@ const theme = EditorView.theme({
   ".cm-line": { padding: "0", fontFamily: "var(--font-mono)" },
   // ⚠️⚠️ **第一条选择器要照 CM 自己那条写全**（理由与 `source.ts` 那处一字不差，
   // 2026-10-07 一起量出来的）：写短了权重压不过 CM 出厂的聚焦色，画出来是它的
-  // 淡紫而不是这里的 `--bg-active`，且聚焦紫、失焦灰两种色。
+  // 淡紫。选区用正文色的半透明混合，避免深色主题里 `--bg-active` 与代码底
+  // 对比不足；明暗两套会各自得到清晰但不过亮的灰层。
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-    backgroundColor: "var(--bg-active)",
+    backgroundColor: "color-mix(in srgb, var(--fg) 16%, transparent)",
   },
   // 当前行那一层淡底。
   //

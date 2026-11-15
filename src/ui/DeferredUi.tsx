@@ -5,7 +5,7 @@
  * 用户第一次打开对应界面时再取；`Suspense` 的空白时长是一次本地模块读取。
  */
 
-import { lazy, Suspense, useSyncExternalStore, type ComponentProps } from "react";
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type ComponentProps } from "react";
 
 import { currentFilePicker, subscribeFilePicker } from "@/ui/file-picker";
 
@@ -21,6 +21,9 @@ const LazyFilePickerDialog = lazy(() =>
 const LazyAboutDialog = lazy(() =>
   import("@/ui/AboutDialog").then((m) => ({ default: m.AboutDialog })),
 );
+const LazyFirstRunGuide = lazy(() =>
+  import("@/ui/FirstRunGuide").then((m) => ({ default: m.FirstRunGuide })),
+);
 
 type DockProps = ComponentProps<(typeof import("@/ui/PluginDock"))["PluginDock"]>;
 type SettingsProps = ComponentProps<(typeof import("@/ui/settings/SettingsDialog"))["SettingsDialog"]>;
@@ -33,10 +36,15 @@ export function DeferredSettingsDialog(props: SettingsProps) {
   );
 }
 
-export function DeferredPluginDock(props: DockProps) {
+export function DeferredPluginDock({ open, ...props }: DockProps & { open: boolean }) {
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  if (!mounted) return null;
   return (
     <Suspense fallback={null}>
-      <LazyPluginDock {...props} />
+      <LazyPluginDock {...props} collapsed={!open} />
     </Suspense>
   );
 }
@@ -57,6 +65,16 @@ export function DeferredAboutDialog(
   return (
     <Suspense fallback={null}>
       <LazyAboutDialog {...props} />
+    </Suspense>
+  );
+}
+
+export function DeferredFirstRunGuide(
+  props: ComponentProps<(typeof import("@/ui/FirstRunGuide"))["FirstRunGuide"]>,
+) {
+  return (
+    <Suspense fallback={null}>
+      <LazyFirstRunGuide {...props} />
     </Suspense>
   );
 }

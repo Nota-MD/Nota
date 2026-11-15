@@ -17,6 +17,7 @@ import {
   atEmptyTableCellOpenHead,
   deleteEmptyTable,
   exitEmptyListItem,
+  quoteFromTypedPrefix,
 } from "../src/editor/block-keys";
 import { VIM_ALLOW_STRUCTURE_META } from "../src/editor/plugin-vim-ops";
 
@@ -199,6 +200,29 @@ testCase("Backspace on an empty-only quote removes the quote", () => {
   const after = transactionShouldUseTo(stateAt(doc, pos), getClearAllReferenceUse);
   assertValue(!hasReferenceUseNode(after.doc), "empty quote should disappear");
   assertValue(after.doc.firstChild?.type.name === "paragraph", "a paragraph should remain");
+});
+
+testCase("Backspace removes an inserted Alert with an empty body", () => {
+  const doc = document(
+    referenceUse(paragraph2("[!NOTE]"), paragraph2()),
+  );
+  const pos = firstEmptyParagraphPosition(doc);
+  const after = transactionShouldUseTo(stateAt(doc, pos), getClearAllReferenceUse);
+  assertValue(!hasReferenceUseNode(after.doc), "empty Alert should disappear");
+  assertValue(after.doc.firstChild?.type.name === "paragraph", "a plain paragraph should remain");
+});
+
+testCase("A typed Markdown quote prefix opens a blockquote", () => {
+  const doc = document(paragraph2(">"));
+  const state = stateAt(doc, 2);
+  let after = state;
+  const accepted = quoteFromTypedPrefix(state, (tr) => {
+    after = state.apply(tr);
+  });
+  assertValue(accepted, "quote prefix was not accepted");
+  assertValue(after.doc.firstChild?.type.name === "blockquote", "blockquote was not created");
+  assertValue(after.doc.textContent === "", "the source prefix leaked into the quote");
+  assertValue(after.selection.$from.parent.content.size === 0, "caret is not in the quote body");
 });
 
 testCase("Enter on an empty list item leaves the list", () => {

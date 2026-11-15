@@ -126,6 +126,24 @@ body.resizing-col {
   user-select: none;
 }
 
+/* Release preview: crossing the minimum width moves the danger guide to the
+   window edge. The bar itself remains at its safe minimum until pointerup. */
+body.sidebar-collapse-armed::before {
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--danger) 0 6px,
+    transparent 6px 11px
+  );
+  content: "";
+  pointer-events: none;
+}
+
 /* 页签行 + 右上角那颗 ×。
    ⚠️ 那条下边框**挪到了这一层**：留在 `.sidebar-tabs` 上的话，线会在 × 左边
    就断掉（× 在 tabs 之外，见 `Sidebar.tsx` —— 它不能塞进 `role="tablist"`）。 */
@@ -619,6 +637,28 @@ body.resizing-col {
   flex-direction: column;
 }
 
+.sidebar-context-target {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0 2px 5px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-size: 0.84em;
+}
+
+.sidebar-context-target strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar-context-menu .sidebar-context-section button {
   display: flex;
   align-items: center;
@@ -646,6 +686,10 @@ body.resizing-col {
 
 .sidebar-context-menu .sidebar-context-section button:disabled:hover {
   background: transparent;
+}
+
+.sidebar-context-menu .sidebar-context-section .sidebar-context-danger:not(:disabled) {
+  color: var(--danger);
 }
 
 .sidebar-context-sep {

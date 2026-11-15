@@ -32,4 +32,5 @@ pub mod update;
 pub mod watch;
 pub mod webview;
 pub mod window;
+pub mod window_registry;
 pub mod workspace;

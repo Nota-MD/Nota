@@ -50,6 +50,26 @@ export function bootstrapCodeBlockExit(
   return null;
 }
 
+/** Target code block when Up/Down should enter it from an adjacent paragraph. */
+export function codeBlockKeyboardEntryPosition(
+  state: EditorState,
+  key: string,
+): number | null {
+  if (!state.selection.empty || (key !== "ArrowUp" && key !== "ArrowDown")) return null;
+  const { $from } = state.selection;
+  if (!$from.parent.isTextblock || $from.parent.type.spec.code) return null;
+  if (key === "ArrowDown") {
+    const after = $from.after($from.depth);
+    return state.doc.nodeAt(after)?.type.name === "code_block" ? after : null;
+  }
+  if ($from.depth === 0) return null;
+  const before = $from.before($from.depth);
+  const node = before > 0 ? state.doc.nodeAt(before - state.doc.resolve(before).nodeBefore!.nodeSize) : null;
+  return node?.type.name === "code_block"
+    ? before - node.nodeSize
+    : null;
+}
+
 /** Native textarea caret movement that never leaves the source control. */
 export function moveBootstrapCodeBlockCaret(
   value: string,

@@ -187,6 +187,10 @@
   line-height: 1.5;
 }
 
+.prompt-error {
+  color: var(--danger);
+}
+
 /* ── 插入图像框（`ui/ImageDialog.tsx`）─────────────────────────────────────
    ⚠️ 它和输入框借同一层壳（`.confirm-backdrop` / `.confirm-dialog` /
    `.prompt-dialog`），只是多了一排"来源"页签和一颗「浏览…」。 */
@@ -385,6 +389,24 @@
   min-width: 420px;
   max-width: 560px;
   /* 壳的 `padding: 20px 22px 16px` 留着；统一关闭按钮绝对定位到右上角。 */
+}
+
+.about-dialog[data-window-presentation="full"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.about-dialog[data-window-presentation="full"] .about-page {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.about-dialog[data-window-presentation="full"] .about-page-body {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 /* ── 首页：一列居中 ─────────────────────────────────────────────────────── */
@@ -604,6 +626,11 @@
   padding-right: 12px;
 }
 
+.about-license-text .lic-text {
+  max-height: none;
+  margin: 0;
+}
+
 .about-lead {
   margin: 0 0 10px;
   color: var(--fg-muted);
@@ -807,6 +834,13 @@
   padding: 28px 30px 22px;
 }
 
+.first-run-dialog[data-window-presentation="full"] {
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  padding: clamp(28px, 6vh, 72px) clamp(24px, 8vw, 120px);
+}
+
 .first-run-progress {
   display: flex;
   gap: 6px;
@@ -861,10 +895,6 @@
   user-select: text;
 }
 
-.first-run-license {
-  margin-top: 6px;
-}
-
 .first-run-notice-text {
   width: 100%;
   height: min(34vh, 275px);
@@ -878,12 +908,17 @@
   font-family: var(--font-ui);
   font-size: 0.82rem;
   line-height: 1.55;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
   resize: none;
   user-select: text;
   white-space: normal;
 }
+
+.first-run-license-text .lic-text { max-height: none; margin: 0; padding: 0; border: 0; background: transparent; overflow: visible; overscroll-behavior: auto; }
 
 .first-run-notice-text:focus-visible {
   outline: 2px solid var(--accent);

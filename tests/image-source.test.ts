@@ -56,6 +56,16 @@ testCase("Windows 盘符与反斜杠相对路径", () => {
 
 testCase("file:// 地址去掉协议并解码", () => {
   equal(localLocalImageSliceAbsoluteCorrectPath("file:///home/lqy/a%20b.png", null), "/home/lqy/a b.png", "file URL");
+  equal(
+    localLocalImageSliceAbsoluteCorrectPath("file:///C:/Users/Nota/a.png", null),
+    "C:/Users/Nota/a.png",
+    "Windows file URL",
+  );
+  equal(
+    localLocalImageSliceAbsoluteCorrectPath("file://server/share/a.png", null),
+    "//server/share/a.png",
+    "UNC file URL",
+  );
 });
 
 testCase("网络 / data / blob / asset 地址不碰", () => {

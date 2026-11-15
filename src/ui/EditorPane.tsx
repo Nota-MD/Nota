@@ -982,9 +982,7 @@ export function EditorPane({
         // `spellcheck_lang` 里那个下划线是 enchant 的写法，`lang` 那条 HTML 属性
         // 按 BCP-47 认（`zh-CN`）；两者的分工见 `Props` 上那一格。
         lang={combineWriteLanguage ? combineWriteLanguage.replace(/_/g, "-") : undefined}
-        style={
-          limitTextWidth ? { ["--content-width" as string]: `${contentWidth}px` } : undefined
-        }
+        style={limitTextWidth ? { ["--content-width" as string]: `${contentWidth}px`, ["--doc-page-width" as string]: `${contentWidth}px` } : undefined}
       />
       <VimStatusOverlay status={displayedVimStatus} anchor={paneRef} />
       {mode === "split" && (

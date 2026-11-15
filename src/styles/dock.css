@@ -83,7 +83,46 @@
      `data-wide="true"` 时宽度是 `min(560px, 45vw)`）得滑同样远，用 `--dock-width`
      的话宽面板只滑一半就"落位"了。 */
   --dock-slide: var(--dock-width);
+  box-sizing: border-box;
+  transition:
+    width calc(var(--duration-fast) * 1.6) var(--ease-out),
+    border-color calc(var(--duration-fast) * 1.6) var(--ease-out),
+    opacity calc(var(--duration-fast) * 1.6) var(--ease-out);
   animation: dock-in calc(var(--duration-fast) * 1.6) var(--ease-out);
+}
+
+.plugin-dock.plugin-dock-collapsed,
+.plugin-dock.plugin-dock-collapsed[data-wide="true"] {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-left-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.plugin-dock-collapsed .dock-resizer {
+  display: none;
+}
+
+body.resizing-col .plugin-dock {
+  transition: none;
+}
+
+body.dock-collapse-armed::after {
+  position: fixed;
+  z-index: 9999;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--danger) 0 6px,
+    transparent 6px 11px
+  );
+  content: "";
+  pointer-events: none;
 }
 
 @keyframes dock-in {
@@ -102,6 +141,7 @@
 @media (prefers-reduced-motion: reduce) {
   .plugin-dock {
     animation: none;
+    transition: none;
   }
 }
 
@@ -161,32 +201,110 @@
 }
 
 .dock-tab {
-  max-width: 100%;
+  max-width: min(160px, 100%);
   padding: 4px 8px;
   border: 0;
-  border-radius: 4px 4px 0 0;
+  border-radius: 4px 0 0 0;
   background: transparent;
   color: var(--fg-muted);
   font-family: inherit;
   font-size: 0.82em;
   cursor: pointer;
   /* 名字长的面板（"AI 助手"）不许把这一行顶宽：多余的字打点。 */
-  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dock-tab:hover {
+.dock-tab-shell {
+  position: relative;
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+  border-radius: 4px 4px 0 0;
+  touch-action: none;
+}
+
+.dock-tab-shell:hover,
+.dock-tab-shell[data-active="true"] {
   background: var(--bg-hover);
-  color: var(--fg);
 }
 
 /* 选中的那一页。⚠️ 用底色 ＋ 字重，**不用 accent 下划线**：
    下划线在折行的页签组上会指到"上一行"去。 */
-.dock-tab[data-active="true"] {
+.dock-tab-shell[data-active="true"] {
   background: var(--bg);
+}
+
+.dock-tab-shell[data-active="true"] .dock-tab {
   color: var(--fg);
   font-weight: 600;
+}
+
+.dock-tab-close {
+  display: grid;
+  flex: none;
+  width: 20px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0 4px 0 0;
+  background: transparent;
+  color: var(--fg-faint);
+}
+
+.dock-tab-close:hover {
+  background: var(--bg-active);
+  color: var(--fg);
+}
+
+.dock-tab-shell[data-dragging] {
+  opacity: 0.45;
+}
+
+.dock-tab-shell[data-drop-before]::before,
+.dock-tab-shell[data-drop-after]::after {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+}
+
+.dock-tab-shell[data-drop-before]::before {
+  left: -2px;
+}
+
+.dock-tab-shell[data-drop-after]::after {
+  right: -2px;
+}
+
+.dock-tab-add {
+  position: relative;
+  flex: none;
+}
+
+.dock-tab-add-button {
+  width: 24px;
+  padding: 3px 0;
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+}
+
+.dock-tab-add-button:hover,
+.dock-tab-add-button[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.dock-tab-add .menu-popup {
+  left: auto;
+  right: 0;
+  min-width: 220px;
 }
 
 

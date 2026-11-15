@@ -83,6 +83,24 @@ export function getClearAllReferenceUse(
     if (paragraph) {
       const paragraphStart = $from.before($from.depth);
       const quoteStart = $from.before(quoteDepth);
+      const firstLine = quote.firstChild?.textContent.trim() ?? "";
+      const markerOnlyAlert =
+        quote.childCount === 2 &&
+        /^\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/.test(firstLine) &&
+        $from.index(quoteDepth) === 1 &&
+        $from.parent.content.size === 0;
+      if (markerOnlyAlert) {
+        const tr = state.tr.replaceWith(
+          quoteStart,
+          quoteStart + quote.nodeSize,
+          paragraph,
+        );
+        tr.setSelection(TextSelection.create(tr.doc, quoteStart + 1));
+        tr.scrollIntoView();
+        tr.setMeta(VIM_ALLOW_STRUCTURE_META, true);
+        dispatch(tr);
+        return true;
+      }
       if (quote.childCount === 1) {
         const tr = state.tr
           .replaceWith(quoteStart, quoteStart + quote.nodeSize, paragraph);
@@ -133,6 +151,36 @@ export function getClearAllReferenceUse(
   return changed;
 }
 
+/** Turn an empty paragraph containing only `>` into a blockquote. */
+export function quoteFromTypedPrefix(
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void,
+): boolean {
+  const { selection } = state;
+  if (!selection.empty) return false;
+  const { $from } = selection;
+  if (!$from.parent.isTextblock || $from.parent.textContent !== ">") return false;
+  if ($from.parentOffset !== 1) return false;
+  if (!$from.parent.type.name.startsWith("paragraph")) return false;
+
+  const blockquote = state.schema.nodes.blockquote;
+  const paragraph = state.schema.nodes.paragraph?.createAndFill();
+  if (!blockquote || !paragraph) return false;
+  if (!dispatch) return true;
+
+  const from = $from.before($from.depth);
+  const to = $from.after($from.depth);
+  const tr = state.tr.replaceWith(
+    from,
+    to,
+    blockquote.create(null, paragraph),
+  );
+  tr.setSelection(TextSelection.create(tr.doc, from + 2));
+  tr.scrollIntoView();
+  dispatch(tr);
+  return true;
+}
+
 /** 单元格、行、段落等容器是否完全没有文字或原子内容。 */
 function nodeAsEmpty(node: PMNode): boolean {
   if (node.isText) return node.text?.trim() === "";
@@ -177,7 +225,13 @@ export const blockContainerKeypress = $prose(
             return false;
           }
           if (event.key === " " && !event.shiftKey) {
-            if (!atReferenceUseMostOpenHead(view.state)) return false;
+            if (!atReferenceUseMostOpenHead(view.state)) {
+              if (!quoteFromTypedPrefix(view.state, (tr) => view.dispatch(tr))) {
+                return false;
+              }
+              event.preventDefault();
+              return true;
+            }
             event.preventDefault();
             getClearAllReferenceUse(view.state, (tr) => view.dispatch(tr));
             return true;

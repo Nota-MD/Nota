@@ -92,6 +92,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 
 import type { Settings } from "@/bridge/ipc";
+import { showZoomHud } from "@/ui/zoom-hud-state";
 
 /** 缩放百分比的上下限与一格滚轮的步长。⚠️ 与 `AppearancePane` 里 `NumberInput` 的 min/max/step **必须一致**。 */
 const shrinkReleaseMostSmall = 50;
@@ -204,6 +205,12 @@ export function useZoom(
   // 还没有，按设置算的话连滚五格会被算成同一个数。⚠️ 两条轴各记一个。
   const alreadyShouldUseShrinkRelease = useRef(clamp(thinkShrinkRelease, shrinkReleaseMostSmall, shrinkReleaseMostLarge, 100));
   const alreadyShouldUseCharacterNumber = useRef(clamp(thinkCharacterNumber, characterNumberMostSmall, characterNumberMostLarge, recommendedEditorFontSize));
+  const publishedHud = useRef({
+    zoom: alreadyShouldUseShrinkRelease.current,
+    font: alreadyShouldUseCharacterNumber.current,
+  });
+  const shouldUseShrinkReleaseRef = useRef<(value: number) => void>(() => {});
+  const shouldUseCharacterNumberRef = useRef<(value: number) => void>(() => {});
   // 去抖窗口里设置可能被别处改掉（换个界面风格、改个字号），所以补丁要带上
   // **最新**的那份外观，不能用手抽那一帧闭包里的那份——否则会把别人刚改的值写回去。
   const mostNewValueAppearance = useRef(a);
@@ -269,9 +276,75 @@ export function useZoom(
       alreadyShouldUseShrinkRelease.current = belowValueCell;
       void setShrinkRelease(belowValueCell); // 先见效
       arrangeDropDiskShrinkRelease(belowValueCell); // 再落盘（去抖）
+      publishedHud.current.zoom = belowValueCell;
+      showZoomHud(
+        `${belowValueCell}%`,
+        () => shouldUseShrinkReleaseRef.current(belowValueCell + shrinkReleaseStepLength),
+        () => shouldUseShrinkReleaseRef.current(belowValueCell - shrinkReleaseStepLength),
+        () => shouldUseShrinkReleaseRef.current(100),
+      );
     },
     [arrangeDropDiskShrinkRelease],
   );
+  shouldUseShrinkReleaseRef.current = shouldUseShrinkRelease;
+
+  const shouldUseCharacterNumber = useCallback(
+    (value2: number) => {
+      const belowValueCell = clamp(
+        value2,
+        characterNumberMostSmall,
+        characterNumberMostLarge,
+        recommendedEditorFontSize,
+      );
+      if (belowValueCell === alreadyShouldUseCharacterNumber.current) return;
+      alreadyShouldUseCharacterNumber.current = belowValueCell;
+      setCharacterNumber(belowValueCell);
+      arrangeDropDiskCharacterNumber(belowValueCell);
+      publishedHud.current.font = belowValueCell;
+      showZoomHud(
+        `${Math.round((belowValueCell / recommendedEditorFontSize) * 100)}%`,
+        () => shouldUseCharacterNumberRef.current(belowValueCell + characterNumberStepLength),
+        () => shouldUseCharacterNumberRef.current(belowValueCell - characterNumberStepLength),
+        () => shouldUseCharacterNumberRef.current(recommendedEditorFontSize),
+      );
+    },
+    [arrangeDropDiskCharacterNumber],
+  );
+  shouldUseCharacterNumberRef.current = shouldUseCharacterNumber;
+
+  useEffect(() => {
+    if (!settingsReady) return;
+    const nextZoom = clamp(
+      thinkShrinkRelease,
+      shrinkReleaseMostSmall,
+      shrinkReleaseMostLarge,
+      100,
+    );
+    const nextFont = clamp(
+      thinkCharacterNumber,
+      characterNumberMostSmall,
+      characterNumberMostLarge,
+      recommendedEditorFontSize,
+    );
+    if (nextZoom !== publishedHud.current.zoom) {
+      publishedHud.current.zoom = nextZoom;
+      showZoomHud(
+        `${nextZoom}%`,
+        () => shouldUseShrinkReleaseRef.current(nextZoom + shrinkReleaseStepLength),
+        () => shouldUseShrinkReleaseRef.current(nextZoom - shrinkReleaseStepLength),
+        () => shouldUseShrinkReleaseRef.current(100),
+      );
+    }
+    if (nextFont !== publishedHud.current.font) {
+      publishedHud.current.font = nextFont;
+      showZoomHud(
+        `${Math.round((nextFont / recommendedEditorFontSize) * 100)}%`,
+        () => shouldUseCharacterNumberRef.current(nextFont + characterNumberStepLength),
+        () => shouldUseCharacterNumberRef.current(nextFont - characterNumberStepLength),
+        () => shouldUseCharacterNumberRef.current(recommendedEditorFontSize),
+      );
+    }
+  }, [settingsReady, thinkCharacterNumber, thinkShrinkRelease]);
 
   useEffect(() => {
     if (!allowAllowRollWheel) return;
@@ -283,17 +356,10 @@ export function useZoom(
       e.preventDefault();
 
       if (target === "font_size") {
-        const belowValueCell = clamp(
-          alreadyShouldUseCharacterNumber.current + (e.deltaY < 0 ? characterNumberStepLength : -characterNumberStepLength),
-          characterNumberMostSmall,
-          characterNumberMostLarge,
-          recommendedEditorFontSize,
+        shouldUseCharacterNumber(
+          alreadyShouldUseCharacterNumber.current +
+            (e.deltaY < 0 ? characterNumberStepLength : -characterNumberStepLength),
         );
-        // 已经顶到 12px 或 20px 了：别再改，也别再排一次落盘。
-        if (belowValueCell === alreadyShouldUseCharacterNumber.current) return;
-        alreadyShouldUseCharacterNumber.current = belowValueCell;
-        setCharacterNumber(belowValueCell); // 先见效
-        arrangeDropDiskCharacterNumber(belowValueCell); // 再落盘（去抖）
         return;
       }
 
@@ -307,7 +373,7 @@ export function useZoom(
     return () => window.removeEventListener("wheel", onWheel, { capture: true });
     // ⚠️ `目标` 在依赖里：换档之后要**重新挂**一次监听，否则闭包里那个 `目标`
     // 还是挂载时的那一档——症状是"设置里改成缩放，滚轮却还在改字号"。
-  }, [allowAllowRollWheel, target, shouldUseShrinkRelease, arrangeDropDiskCharacterNumber]);
+  }, [allowAllowRollWheel, target, shouldUseCharacterNumber, shouldUseShrinkRelease]);
 
   // 卸载时把还没落盘的那几次取消掉——应用退出时窗口已经在拆了，写盘没有意义，
   // 而且会跟"关窗时保存设置"那一路撞上。

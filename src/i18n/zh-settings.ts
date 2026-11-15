@@ -66,6 +66,9 @@ export const settingsTable: Record<string, string> = {
   // 这句话也要跟着改（`ui/commands.ts` 的 `view.focusMode`）。
   "Window": "窗口",
   "Show the file name in the title bar": "在标题栏显示文件名",
+  "Focus the target window after moving a tab": "标签页转移后聚焦目标窗口",
+  "When a tab is moved to another Nota window, bring that window to the front after the document opens.":
+    "标签页移到另一个 Nota 窗口后，在文档打开完成时把目标窗口带到前台。",
   "Preferences presentation": "设置窗口呈现方式",
   "Full fills the current window, Embedded keeps the centered card, and Separate window opens native Preferences window. Changes take effect the next time Preferences opens.":
     "“铺满”使用当前整个窗口，“内嵌”保留居中的设置卡片，“独立窗口”会打开一个原生设置窗口。修改会在下次打开设置时生效。",
@@ -308,7 +311,7 @@ export const settingsTable: Record<string, string> = {
   "Search settings": "搜索设置",
   "Search settings…": "搜索设置…",
   "Clear the search": "清空搜索",
-  "Change": "改",
+  "Change": "更改",
   "Clear": "清除",
   "Not set": "未设置",
   "Press the new keys…": "按下新的键位…",

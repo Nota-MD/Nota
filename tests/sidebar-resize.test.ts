@@ -40,6 +40,7 @@ import { join } from "node:path";
 import {
   SidebarResizer,
   clampSidebarWidth,
+  shouldCollapseSidebar,
   sideBarWidthMostLarge,
   sideBarWidthMostSmall,
   sideBarWidthDefault,
@@ -150,6 +151,21 @@ testCase("区间内的值**原样**通过", () => {
 testCase("两个边界本身**算合法**（不是被夹掉）", () => {
   equal(clampSidebarWidth(sideBarWidthMostSmall), sideBarWidthMostSmall, "正好最小");
   equal(clampSidebarWidth(sideBarWidthMostLarge), sideBarWidthMostLarge, "正好最大");
+});
+
+testCase("Crossing below the minimum arms collapse at the edge", () => {
+  equal(shouldCollapseSidebar(sideBarWidthMostSmall, true), false, "threshold itself");
+  equal(shouldCollapseSidebar(sideBarWidthMostSmall - 1, true), true, "past threshold");
+  equal(shouldCollapseSidebar(0, true), true, "window edge");
+  equal(shouldCollapseSidebar(0, false), false, "collapse callback unavailable");
+});
+
+testCase("Crossing the minimum arms an edge guide and collapses only on release", () => {
+  const source = readFileSync("src/ui/SidebarResizer.tsx", "utf8");
+  equal(source.includes('classList.toggle("sidebar-collapse-armed"'), true, "edge guide toggle");
+  equal(source.includes("if (commit && collapseArmed)"), true, "release-only collapse");
+  const css = readFileSync("src/styles/sidebar.css", "utf8");
+  equal(css.includes("body.sidebar-collapse-armed::before"), true, "left edge guide");
 });
 
 testCase("太窄 → 夹到最小：⚠️ 不能拖成 0", () => {

@@ -406,63 +406,66 @@
    稿子里写的也是「#e95420 + 白色文字」，改了就不是 Yaru 了。
    留着并在 `docs/04` 里记一笔。 */
 [data-ui-style="yaru"][data-ui-mode="light"] {
-  /* 稿子：面板 #ffffff、标题栏 #f7f7f7、分割线 #dcdfe4。⚠️ 稿子说**不做模糊**，
-     所以这一档没有 `--material-bg`（不在下面那组"有材料"的选择器里），
-     弹出层照旧用不透明的 `--bg-raised`。 */
-  --bg: #ffffff;
-  --bg-subtle: #f7f7f7;
+  /* Match Ubuntu Yaru GTK 4: window #fafafa, header #ebebeb, view #ffffff. */
+  --bg: #fafafa;
+  --bg-subtle: #ebebeb;
   --bg-raised: #ffffff;
-  --fg: #2e3440;
-  /* ⚠️ 稿子的次要色 #73798c 在 #f7f7f7 上只有 4.05:1，够不上 AA。
-     这两个算出来的（最差那层 5.66 / 4.54）。 */
-  --fg-muted: #5e6272;
-  --fg-faint: #6b7183;
-  --border: #dcdfe4;
-  --border-strong: #c6cad2;
+  --bg-hover: #e3e3e3;
+  --bg-active: #d6d6d6;
+  --fg: #3d3d3d;
+  --fg-muted: #6e6e6e;
+  --fg-faint: #828282;
+  --border: #cccccc;
+  --border-strong: #bdbdbd;
   --accent: #e95420;
   --accent-fg: #ffffff;
-  --btn-bg: #f0f0f0;
-  --btn-bg-hover: #e5e5e5;
-  --btn-bg-active: #d9d9d9;
-  /* 稿子：普通按钮"无边框"。写 transparent 而不是删掉 border（盒子会小 2px）。 */
-  --btn-border: transparent;
-  --switch-off: #dcdfe4;
+  --btn-bg: #ffffff;
+  --btn-bg-hover: #fafafa;
+  --btn-bg-active: #dbdbdb;
+  --btn-border: #cccccc;
+  --switch-off: #cfcfcf;
   --switch-on: #e95420;
   --switch-knob-bg: #ffffff;
   --radio-on: #e95420;
   --radio-on-fg: #ffffff;
-  --shadow: 0 3px 10px rgba(0, 0, 0, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.23);
+  --toolbar-surface: #ebebeb;
+  --sidebar-surface: #fafafa;
+  --doc-bg: #ffffff;
+  --doc-fg: #000000;
 }
 [data-ui-style="yaru"][data-ui-mode="dark"] {
-  /* 稿子：面板 #2c2c2c、标题栏 #383838、分割线 #4c4c4c、按钮 #383838。 */
+  /* Match Ubuntu Yaru GTK 4: window #2c2c2c, header #222222, view #272727. */
   --bg: #2c2c2c;
-  --bg-subtle: #383838;
-  --bg-raised: #3d3d3d;
-  --fg: #f2f2f2;
-  /* ⚠️ 稿子的 #9196a3 在 #3d3d3d 上只有 3.67:1，够不上 AA。
-     这两个算出来的（最差那层 5.64 / 4.50）。 */
-  --fg-muted: #b7bbc3;
-  --fg-faint: #a4a9b4;
-  --border: #4c4c4c;
-  --border-strong: #5c5c5c;
+  --bg-subtle: #222222;
+  --bg-raised: #1d1d1d;
+  --bg-hover: #3c3c3c;
+  --bg-active: #414141;
+  --fg: #f7f7f7;
+  --fg-muted: #a6a6a6;
+  --fg-faint: #929292;
+  --border: #131313;
+  --border-strong: #181818;
   /* Yaru system chrome uses one orange across window controls, switches and
      selected controls. Keep the app on the same value in dark mode. */
   --accent: #e95420;
   --accent-fg: #ffffff;
-  --btn-bg: #383838;
-  --btn-bg-hover: #444444;
-  --btn-bg-active: #505050;
-  --btn-border: transparent;
-  --switch-off: #4c4c4c;
+  --btn-bg: #3c3c3c;
+  --btn-bg-hover: #414141;
+  --btn-bg-active: #1b1b1b;
+  --btn-border: #131313;
+  --switch-off: #3c3c3c;
   /* ⚠️ 开关**照稿子**用 #e95420（上面那条只否掉了"按钮上的白字"）：
      开关上没有字，橙色轨道配白滑块是读得出来的。 */
   --switch-on: #e95420;
   --switch-knob-bg: #ffffff;
   --radio-on: #e95420;
   --radio-on-fg: #ffffff;
-  --shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
-  --doc-bg: #2c2c2c;
-  --doc-fg: #f2f2f2;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --toolbar-surface: #222222;
+  --sidebar-surface: #2c2c2c;
+  --doc-bg: #272727;
+  --doc-fg: #ffffff;
 }
 
 /* ⚠️ 这里原来还有一档 **Yaru Blue**（选择器里那个 id 是 `yaru-blue`，同一套 Yaru

@@ -274,6 +274,13 @@ export function linkSourceDecorations(state: EditorState): DecorationSet {
       );
     }
     if (bracket >= 0) {
+      if (source.startsWith("[") && bracket > 1) {
+        decorations.push(
+          Decoration.inline(position + 2, position + 1 + bracket, {
+            class: "nota-link-source-label",
+          }),
+        );
+      }
       decorations.push(
         Decoration.inline(position + 1 + bracket, position + node.nodeSize - 1, {
           class: "nota-link-source-syntax",

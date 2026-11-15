@@ -1,6 +1,10 @@
 /** `math` / `latex` / `tex` 围栏的语义与 Pandoc 转换。 */
 
-import { numberLearnCodeBlockConvertCommonStyle, isMathCodeLanguage } from "../src/editor/math-code";
+import {
+  numberLearnCodeBlockConvertCommonStyle,
+  isMathCodeLanguage,
+  normalizeMathCodeLanguage,
+} from "../src/editor/math-code";
 import { readFileSync } from "node:fs";
 
 let pass = 0;
@@ -29,6 +33,13 @@ testCase("三种数学语言别名", () => {
   assertValue(isMathCodeLanguage("LaTeX"), "大小写");
   assertValue(isMathCodeLanguage(" tex "), "空白");
   assertValue(!isMathCodeLanguage("javascript"), "普通代码不能误判");
+});
+
+testCase("new and edited math fences use the canonical math language", () => {
+  assertValue(normalizeMathCodeLanguage("latex") === "math", "latex");
+  assertValue(normalizeMathCodeLanguage(" TeX ") === "math", "tex");
+  assertValue(normalizeMathCodeLanguage("math") === "math", "math");
+  assertValue(normalizeMathCodeLanguage("javascript") === "javascript", "ordinary language");
 });
 
 testCase("反引号围栏转成 Pandoc 公式", () => {

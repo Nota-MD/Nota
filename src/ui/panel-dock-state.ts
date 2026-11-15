@@ -63,10 +63,18 @@ export interface PanelRecordRecall {
   current: page | undefined;
   contentTable: Record<string, PanelState>;
   actualTimeTable: Record<string, string>;
+  tabOrder: string[];
+  closedTabs: string[];
 }
 
 /** 这份记忆**只有一份**（一个应用一个窗口一栏）。 */
-export const recordRecall: PanelRecordRecall = { current: undefined, contentTable: {}, actualTimeTable: {} };
+export const recordRecall: PanelRecordRecall = {
+  current: undefined,
+  contentTable: {},
+  actualTimeTable: {},
+  tabOrder: [],
+  closedTabs: [],
+};
 
 /**
  * 这一栏**开起来的时候停在哪一页**。

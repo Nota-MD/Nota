@@ -307,20 +307,10 @@ export const diagramView = $view(
         preview.innerHTML = result2.imageShape;
         const image = preview.querySelector("svg");
         if (image instanceof SVGSVGElement) {
-          // ⚠️ mermaid 给的 `<svg>` 上带的是**内联**样式（`width="100%"` 属性 ＋
-          // 一条 `max-width`），内联权重高过样式表，所以只能在 DOM 上改
-          // （在 CSS 里跟它较劲要动 `!important`，那是最后手段）。
-          //
-          // ⚠️ 上限取**它自己的坐标系宽度**（`viewBox` 的宽，也就是 mermaid 算好的
-          // 自然尺寸），**不是** `100%`。
-          //
-          // 2026-09-26 开窗实测踩中：原先这里一律写 `max-width: 100%`（本意只是
-          // "窄窗格里别把正文列顶宽"），结果两行的小流程图被**撑满整栏**——
-          // `width="100%"` 配 `height: auto` 是按 viewBox 的宽高比**等比放大**的，
-          // 容器多宽它就放多大，`Start` 一个词占了半个屏幕、块还溢出到屏幕外。
-          // 换成"自然宽与容器宽取小"之后：宽窗格里按自然大小画，窄窗格里才缩。
-          const selfThenWidth = image.viewBox.baseVal.width;
-          image.style.maxWidth = selfThenWidth > 0 ? `min(100%, ${Math.ceil(selfThenWidth)}px)` : "100%";
+          // Mermaid writes width/max-width inline. Let the diagram use the
+          // available editor width, matching Typora's wide block treatment.
+          image.style.width = "100%";
+          image.style.maxWidth = "100%";
           image.style.height = "auto";
         }
       }

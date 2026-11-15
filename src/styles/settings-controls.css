@@ -158,8 +158,10 @@
 }
 
 .stg-switch[aria-checked="true"] {
-  border-color: var(--switch-on);
-  background: var(--switch-on);
+  /* The accent is the single visual source for the enabled state. Imported UI
+     themes must not replace it with a platform-specific green or orange. */
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
 }
 
 .stg-switch-knob {

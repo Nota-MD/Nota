@@ -1,0 +1,70 @@
+.zoom-hud {
+  position: fixed;
+  z-index: 500;
+  top: calc(var(--toolbar-height, 38px) + 10px);
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 7px 0 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-raised) 94%, transparent);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 24%);
+  color: var(--fg);
+  animation: zoom-hud-in 140ms var(--ease-out);
+  backdrop-filter: blur(14px);
+}
+
+.zoom-hud output {
+  min-width: 54px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.zoom-hud button {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.zoom-hud button:hover,
+.zoom-hud button:focus-visible {
+  background: var(--bg-hover);
+}
+
+.zoom-hud-plus,
+.zoom-hud-minus {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.zoom-hud-reset {
+  border: 1px solid var(--border) !important;
+  border-radius: 999px !important;
+}
+
+@keyframes zoom-hud-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zoom-hud {
+    animation: none;
+  }
+}

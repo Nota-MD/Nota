@@ -38,6 +38,9 @@ const ConfirmDialog = lazy(() =>
 const PromptDialog = lazy(() =>
   import("@/ui/PromptDialog").then((m) => ({ default: m.PromptDialog })),
 );
+const WindowPickerDialog = lazy(() =>
+  import("@/ui/WindowPickerDialog").then((m) => ({ default: m.WindowPickerDialog })),
+);
 const ImageDialog = lazy(() =>
   import("@/ui/ImageDialog").then((m) => ({ default: m.ImageDialog })),
 );
@@ -88,7 +91,7 @@ export function AppDialogs({
   firstRunSeen: boolean;
   onFirstRunDone: () => void;
 }) {
-  const { confirmReq, answerConfirm, promptReq, answerPrompt } = dialog;
+  const { confirmReq, answerConfirm, promptReq, answerPrompt, windowPickReq, answerWindowPick } = dialog;
   const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = dialog;
   const { aboutOpen, closeAbout, firstRunOpen, openFirstRun, closeFirstRun } = dialog;
 
@@ -128,6 +131,10 @@ export function AppDialogs({
 
       {promptReq && <PromptDialog {...promptReq} onAnswer={answerPrompt} />}
 
+      {windowPickReq && (
+        <WindowPickerDialog request={windowPickReq} onAnswer={answerWindowPick} />
+      )}
+
       {imageReq && <ImageDialog request={imageReq} onAnswer={answerImage} />}
 
       {/* 「链接」框（第 96 ＋ 102 项）。⚠️ 排在插图框后面、「关于」前面：
@@ -153,6 +160,7 @@ export function AppDialogs({
 
       {firstRunOpen && (
         <FirstRunGuide
+          presentation={windowPresentation === "full" ? "full" : "embedded"}
           onDone={() => {
             closeFirstRun();
             if (!firstRunSeen) onFirstRunDone();

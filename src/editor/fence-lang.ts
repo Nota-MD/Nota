@@ -24,6 +24,7 @@ import {
   relatedLanguages,
 } from "./code-block";
 import { languageIcon } from "./lang-icon";
+import { normalizeMathCodeLanguage } from "./math-code";
 
 const candidateLimit = 3;
 const popupClass = "nota-fence-lang-popup";
@@ -219,7 +220,7 @@ export const encloseBarLanguageFillAll = $prose(
             return;
           }
 
-          const node = type.create({ language: language });
+          const node = type.create({ language: normalizeMathCodeLanguage(language) });
           const tr = state.tr.replaceWith(from, to, node);
           tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(from + 1, tr.doc.content.size))));
           view.dispatch(tr.scrollIntoView());

@@ -230,6 +230,9 @@ export function FileList(props: {
                 aria-current={isActive ? "page" : undefined}
                 title={absolute}
                 data-absolute-path={absolute}
+                data-directory-path={
+                  file.parent ? `${props.workspace}/${file.parent}` : props.workspace
+                }
                 onClick={() => props.onOpenFile(absolute)}
               >
                 <span className="file-list-title">

@@ -97,7 +97,11 @@ export function applyTheme(settings: Settings): () => void {
     // `settings/appearance.rs` 的 `accent` 那段。
     const strongConfigure = accentVars(settings.appearance.accent);
     if (strongConfigure) {
-      for (const [changeMeasure, value2] of Object.entries(strongConfigure)) root.style.setProperty(changeMeasure, value2);
+      // Imported UI themes load after the built-in sheet. Keep the user's accent
+      // above their root declarations, including themes that mark tokens important.
+      for (const [changeMeasure, value2] of Object.entries(strongConfigure)) {
+        root.style.setProperty(changeMeasure, value2, "important");
+      }
     } else {
       // ⚠️ **这三个必须一起摘**。`--switch-on` 摘漏了的症状很隐蔽：用户点
       // 「跟随风格」之后 `--accent` 回去了、开关**留在上一个主题色上**——

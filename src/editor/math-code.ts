@@ -16,6 +16,11 @@ export function isMathCodeLanguage(language: string): boolean {
   return numberLearnLanguage.has(language.trim().toLowerCase());
 }
 
+/** Canonical math fence language used by new and edited blocks. */
+export function normalizeMathCodeLanguage(language: string): string {
+  return isMathCodeLanguage(language) ? "math" : language;
+}
+
 export interface NumberLearnCodeOutput {
   readonly element: HTMLElement;
   sameStep: (source: string) => void;

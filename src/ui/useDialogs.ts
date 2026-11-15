@@ -94,6 +94,11 @@ export interface PromptRequest {
   secret?: boolean;
 }
 
+export interface WindowPickerRequest {
+  currentId: number;
+  ids: number[];
+}
+
 /**
  * 插入图像框要问的话。
  *
@@ -177,6 +182,10 @@ export interface Dialogs {
   askPrompt: (req: PromptRequest) => Promise<{ value: string; second: string } | null>;
   /** 用户回答了（`ui/PromptDialog` 的 `onAnswer` 接这个）。 */
   answerPrompt: (value: string | null, second?: string) => void;
+
+  windowPickReq: WindowPickerRequest | null;
+  askWindowPick: (req: WindowPickerRequest) => Promise<number | null>;
+  answerWindowPick: (id: number | null) => void;
 
   imageReq: ImageRequest | null;
   /** 弹插入图像框，返回他选的图；取消给 `null`。 */
@@ -264,6 +273,23 @@ export function useDialogs(): Dialogs {
     resolve?.(value === null ? null : { value, second: second ?? "" });
   }, []);
 
+  const [windowPickReq, setWindowPickReq] = useState<WindowPickerRequest | null>(null);
+  const windowPickResolve = useRef<((id: number | null) => void) | null>(null);
+
+  const askWindowPick = useCallback((req: WindowPickerRequest) => {
+    return new Promise<number | null>((resolve) => {
+      windowPickResolve.current = resolve;
+      setWindowPickReq(req);
+    });
+  }, []);
+
+  const answerWindowPick = useCallback((id: number | null) => {
+    setWindowPickReq(null);
+    const resolve = windowPickResolve.current;
+    windowPickResolve.current = null;
+    resolve?.(id);
+  }, []);
+
   const [imageReq, setImageReq] = useState<ImageRequest | null>(null);
   const imageResolve = useRef<((a: ImageAnswer | null) => void) | null>(null);
 
@@ -331,6 +357,9 @@ export function useDialogs(): Dialogs {
     promptReq,
     askPrompt,
     answerPrompt,
+    windowPickReq,
+    askWindowPick,
+    answerWindowPick,
     imageReq,
     askImage,
     answerImage,

@@ -266,6 +266,7 @@ testCase("styles reveal both media kinds without touching document text", () => 
   const source3 = readFileSync("src/editor/keyboard-experience.ts", "utf8");
   const video = readFileSync("src/styles/video.css", "utf8");
   equal(marks.includes(".nota-keyboard-link-source"), true, "link source style");
+  equal(marks.includes(".nota-link-source-label"), true, "link-source label style");
   equal(
     marks.includes("caret-color: var(--accent) !important"),
     true,

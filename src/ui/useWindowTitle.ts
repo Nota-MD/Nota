@@ -50,9 +50,16 @@ export const shouldUseName = "Nota";
  * `带文件名` 为假时只有一个应用名——⚠️ **不拼一个"空标题的短版本"**：
  * 那是另一句话，迟早会漂成 ` — Nota` 这种留着一个破折号的写法。
  */
-export function windowTitle(markTitle: string | null, dirty: boolean, withTextItemName = true): string {
-  if (!markTitle || !withTextItemName) return shouldUseName;
-  return `${markTitle}${dirty ? " •" : ""} — ${shouldUseName}`;
+export function windowTitle(
+  markTitle: string | null,
+  dirty: boolean,
+  withTextItemName = true,
+  windowId: string | null = null,
+): string {
+  const title = !markTitle || !withTextItemName
+    ? shouldUseName
+    : `${markTitle}${dirty ? " •" : ""} — ${shouldUseName}`;
+  return windowId ? `(${windowId}) ${title}` : title;
 }
 
 /**
@@ -66,12 +73,13 @@ export function useWindowTitle(
   markTitle: string | null,
   dirty: boolean,
   withTextItemName = true,
+  windowId: string | null = null,
 ): void {
   useEffect(() => {
     void getCurrentWindow()
-      .setTitle(windowTitle(markTitle, dirty, withTextItemName))
+      .setTitle(windowTitle(markTitle, dirty, withTextItemName, windowId))
       .catch(() => {
         // 见上面那段：静默。
       });
-  }, [markTitle, dirty, withTextItemName]);
+  }, [markTitle, dirty, withTextItemName, windowId]);
 }

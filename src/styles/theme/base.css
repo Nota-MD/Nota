@@ -64,6 +64,7 @@
      跟文件树那种一行一个名字的密度不一样。 */
   --dock-width: 260px;
   --toolbar-height: 38px;
+  --tabbar-height: 32px;
   --statusbar-height: 26px;
   /* 沉浸模式（专注 / 全屏）下，窗口顶端那一条**唤回顶栏**的窄带高度。
      ⚠️ 它和 `--toolbar-height` 是一对：那条带子必须明显**比顶栏矮**，

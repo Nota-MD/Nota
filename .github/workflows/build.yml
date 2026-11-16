@@ -1,7 +1,7 @@
 name: 云端编译（不发布）
 
 # 只编译桌面安装包并上传 Actions artifact。不创建 tag、Release 或自动更新清单。
-# 完整测试在 verify.yml；平台工具链检查在 platform.yml；正式打包在 release.yml。
+# 轻量与完整测试分别在 verify.yml / verify-full.yml；平台工具链检查在 platform.yml；正式打包在 release.yml。
 on:
   workflow_dispatch:
 

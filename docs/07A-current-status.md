@@ -37,7 +37,7 @@
 | 文件安全 | ✅ 未编辑的现有文件执行保存时不进入序列化 / 写盘路径，LF、CRLF、UTF-8 BOM、表格分隔行和尾随空格逐字节不变；已有 CRLF 文件在真正编辑并保存后仍写回 CRLF，新文件采用 `editor.line_ending` |
 | 设置真实性 | ✅ 移除 `align_indent`、`unicode_punctuation`、`show_block_source`、`copy_markdown_source`、`copy_line_when_empty`、`typewriter_keep_caret_centered` 六个零消费者字段与控件；接通 `default_indent`、`line_ending`、`auto_pair` 和 Emoji 补全 |
 | 本轮反馈修复 | ✅ 代码块聚焦光标与字体稳定；状态栏显示选区字数；GBK/Big5/Shift_JIS/UTF-16 自动识别并按原编码保存；侧栏二进制文件不再生成摘要并增加文件类型图标；图片加载失败就地告警且可直接删除；空列表项 Enter 退出列表；引用空行 Backspace 退出引用。开发者模式新增默认关闭的「Lua 拓展自刷新」。2026-11-03 起普通文本序列化直接输出原值，永不自动添加反斜杠或原子化内容；GFM 表格单元格的 `\|` 改为 `&#124;` 字符引用。`1$\LaTeX$2` 保持单段，Right 可越过闭 `$` 后继续输入 |
-| CI | `verify.yml` 负责测试、`platform.yml` 负责平台工具链、`build.yml` 只手动编译预览包、`release.yml` 只在 tag 发布；彼此不再串联全量测试 |
+| CI | `verify.yml` 负责无原生依赖的轻量门禁，`verify-full.yml` 每周或手动跑前端全集、E2E、Rust、文档与插件仓库，`platform.yml` 负责平台工具链，`build.yml` 只手动编译预览包，`release.yml` 只在 tag 发布 |
 | 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖 10 个 x86_64 / ARM64 产物；Release 最终按 Windows x64、Linux x64、ARM64、索引文件顺序重传，`latest.json` 固定最后 |
 | 应用更新 | 🧪 实验功能；`latest.json` 随每个 Release 发布；按安装类型分流 deb / rpm / AppImage / 便携 EXE / 安装器 EXE；下载时显示百分比、已下载 / 总大小和安装阶段，并可终止下载；安装包准备完成后退出整个应用进程并重启新版本。Windows 安装版与 Textus 一样由 `ShellExecuteW` 直接启动 NSIS，使用 `/P /UPDATE /R` 显示被动进度、覆盖当前安装并在完成后重新启动，不再绕经等待 PID 的 PowerShell 脚本 |
 | 插件更新 | ✅ 插件 `[update] manifest` → 多插件 `latest.json` → SHA-256 → 原包验签 → 原子替换并重载 |
@@ -116,7 +116,7 @@ GitHub 官方验证的近期失败日志均为 runner 收到 shutdown signal，�
 ## 发布前硬条件
 
 1. `tools/check-version.sh <tag>` 通过。
-2. 验证工作流的前端全集、Rust、国际化、文档同步、插件仓库检查和生产构建全绿。
+2. `verify:light` 通过；发布前另跑 `verify:full`，前端全集、Rust、国际化、文档同步、插件仓库检查和生产构建全绿。
 3. 安装包不含插件；策略若变化，同批改 README、`docs/11` 和插件仓库说明。
 4. tag 只创建草稿 Release；人工核对产物、构建来源和校验和后再公开。
 

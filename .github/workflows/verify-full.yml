@@ -1,0 +1,93 @@
+name: Verify (full)
+
+# Complete cloud verification. This runs weekly and on demand because browser
+# E2E, the Rust suite, native dependencies, and the plugin repository make it
+# substantially more expensive than the lightweight pull-request gate.
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      base_sha:
+        description: "Base revision for the documentation synchronization check"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      DOC_SYNC_BASE: ${{ inputs.base_sha || github.event.before || '' }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out official plugins
+        uses: actions/checkout@v4
+        with:
+          repository: Nota-MD/Nota-plugins
+          ref: master
+          path: Nota-plugins
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential curl file lua5.4 pkg-config \
+            libwebkit2gtk-4.1-dev libgtk-4-dev libgraphene-1.0-dev \
+            libappindicator3-dev librsvg2-dev \
+            libssl-dev libxdo-dev patchelf
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify version consistency
+        run: bash tools/check-version.sh
+
+      - name: Check TypeScript
+        run: npm run typecheck
+
+      - name: Run all frontend tests
+        run: bash tools/test-frontend.sh
+
+      - name: Run browser E2E tests
+        run: npm run test:e2e
+
+      - name: Run Rust tests
+        run: cargo test --lib --locked
+        working-directory: src-tauri
+
+      - name: Check translations
+        run: bash tools/i18n-check.sh
+
+      - name: Check documentation synchronization
+        run: bash tools/doc-sync-check.sh --ci
+
+      - name: Validate official plugins
+        run: bash tools/check.sh
+        working-directory: Nota-plugins
+
+      - name: Build production frontend
+        run: npm run build

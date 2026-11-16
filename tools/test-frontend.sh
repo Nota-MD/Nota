@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 前端测试名册从 tests/*.test.ts 自动生成。此前手工 for 列表漏跑过测试；
-# 这里不再维护第二张名单。特殊入口只列构建开关，不列文件名。
+# The default suite is discovered from tests/*.test.ts. An explicit file list
+# enables the lightweight verification profile without maintaining a second
+# test registry. Per-file build flags remain limited to build requirements.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,7 +10,14 @@ trap 'rm -rf "$outdir"' EXIT
 total=0
 files=0
 
-for file in tests/*.test.ts; do
+if [ "$#" -gt 0 ]; then
+  test_files=("$@")
+else
+  mapfile -d '' test_files < <(printf '%s\0' tests/*.test.ts)
+fi
+
+for file in "${test_files[@]}"; do
+  [ -f "$file" ] || { echo "Missing test file: $file" >&2; exit 1; }
   name=$(basename "$file" .test.ts)
   flags=()
   if grep -q 'from "@/' "$file"; then

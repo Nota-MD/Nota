@@ -108,11 +108,11 @@ npm run app
 常用检查：
 
 ```sh
-npm run typecheck
-npm test
-npm run build
-cd src-tauri && cargo test --lib
+npm run verify:light
+npm run verify:full
 ```
+
+轻量档用于日常云端检查；完整档还会运行浏览器 E2E、Rust 全集、文档漂移检查和生产构建。
 
 各平台的系统依赖与无头测试流程见
 [`docs/06-build-run-test.md`](docs/06-build-run-test.md)。

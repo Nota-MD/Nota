@@ -112,12 +112,13 @@ npm run app
 Useful checks:
 
 ```sh
-npm run typecheck
-npm test
-npm run test:e2e
-npm run build
-cd src-tauri && cargo test --lib
+npm run verify:light
+npm run verify:full
 ```
+
+The lightweight profile is intended for routine cloud checks. The full profile
+also runs browser E2E, the complete Rust suite, documentation drift checks, and
+the production build.
 
 Detailed platform dependencies and headless test recipes are in
 [`docs/06-build-run-test.md`](docs/06-build-run-test.md).

@@ -1,85 +1,47 @@
-name: 验证
+name: Verify (light)
 
+# Fast pull-request and main-branch gate. It has no native dependencies and
+# intentionally skips browser E2E, Rust tests, documentation drift checks, and
+# the external plugin repository. The full workflow covers those separately.
 on:
   push:
     branches: ["main", "master"]
   pull_request:
   workflow_dispatch:
-  workflow_call:
-    inputs:
-      base_sha:
-        description: "文档同步检查的比较基线"
-        required: false
-        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: verify-light-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    env:
-      DOC_SYNC_BASE: ${{ inputs.base_sha || github.event.pull_request.base.sha || github.event.before || '' }}
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: 检出官方插件仓库
+      - name: Check out source
         uses: actions/checkout@v4
-        with:
-          repository: Nota-MD/Nota-plugins
-          ref: master
-          path: Nota-plugins
 
-      - name: 装系统依赖
-        run: |
-          sudo apt-get install -y \
-            build-essential curl file lua5.4 pkg-config \
-            libwebkit2gtk-4.1-dev libgtk-4-dev libgraphene-1.0-dev \
-            libappindicator3-dev librsvg2-dev \
-            libssl-dev libxdo-dev patchelf
-
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
-
-      - name: 安装依赖
+      - name: Install frontend dependencies
         run: npm ci
 
-      - name: 版本三处一致
+      - name: Verify version consistency
         run: bash tools/check-version.sh
 
-      - name: 类型检查
-        run: npm run typecheck
+      - name: Run focused frontend tests
+        run: npm run test:smoke
 
-      - name: 前端测试全集
-        run: bash tools/test-frontend.sh
-
-      - name: 浏览器 E2E
-        run: npm run test:e2e
-
-      - name: Rust 测试
-        run: cargo test --lib --locked
-        working-directory: src-tauri
-
-      - name: 国际化
-        run: bash tools/i18n-check.sh
-
-      - name: 文档同步与结构闸
-        run: bash tools/doc-sync-check.sh --ci
-
-      - name: 官方插件仓库自检
-        run: bash tools/check.sh
-        working-directory: Nota-plugins
-
-      - name: 前端生产构建
+      - name: Build production frontend
         run: npm run build
+
+      - name: Check translations
+        run: bash tools/i18n-check.sh

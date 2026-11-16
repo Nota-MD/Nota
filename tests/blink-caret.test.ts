@@ -15,6 +15,7 @@ import {
   caretTopInLine,
   flashSparkCursor,
   inlineMathBoundary,
+  inlineSyntaxBoundary,
   isNoShowCursor,
   usableCaretCoordinate,
 } from "../src/editor/blink-caret";
@@ -146,6 +147,34 @@ testCase("行内语法标记之间的光标仍由正文层显示", () => {
     8,
   );
   equal(isNoShowCursor(state), true, "`Typora|**` 边界仍把光标藏掉");
+});
+
+testCase("行内语法原子的两侧使用真实字符边界", () => {
+  const marker = schema.nodes.notaSyntax.create();
+  const paragraph = schema.nodes.paragraph.create(null, [
+    schema.text("word"),
+    marker,
+  ]);
+  const doc = document(paragraph);
+  const beforeMarker = 1 + schema.text("word").nodeSize;
+  const before = EditorState.create({
+    doc,
+    selection: TextSelection.create(doc, beforeMarker),
+  });
+  const after = EditorState.create({
+    doc,
+    selection: TextSelection.create(doc, beforeMarker + marker.nodeSize),
+  });
+  equal(
+    JSON.stringify(inlineSyntaxBoundary(before)),
+    JSON.stringify({ position: beforeMarker, side: "before" }),
+    "star left edge was not identified",
+  );
+  equal(
+    JSON.stringify(inlineSyntaxBoundary(after)),
+    JSON.stringify({ position: beforeMarker, side: "after" }),
+    "star right edge was not identified",
+  );
 });
 
 testCase("链接源码节点仍由正文层显示光标", () => {

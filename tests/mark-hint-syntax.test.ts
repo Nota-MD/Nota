@@ -169,7 +169,7 @@ testCase("标记 CSS 不产生独立行盒或上下跳动", () => {
   assertion(block.includes("line-height: inherit !important;"), "marker line-height differs");
   assertion(block.includes("vertical-align: baseline !important;"), "marker baseline differs");
   assertion(block.includes("font: inherit !important;"), "marker font metrics differ");
-  assertion(block.includes("font-size: 1.08em !important;"), "marker glyph is too small");
+  assertion(block.includes("font-size: inherit !important;"), "marker uses a second font size");
   assertion(block.includes(`.${noticeClass}`) || css.includes(`.${noticeClass}`), "notice class missing");
 });
 
@@ -249,6 +249,39 @@ testCase("从左开启组内侧逐键经过两颗星再到段首", () => {
     moveInlineCaret(state, syntax, "ArrowLeft"),
     null,
     "Left at paragraph start should be left to native block navigation",
+  );
+});
+
+testCase("Right crosses a closing star at the end of the line", () => {
+  const source = schema.node("doc", null, [
+    schema.node("paragraph", null, [schema.text("*memory*")]),
+  ]);
+  const initial = EditorState.create({
+    schema,
+    doc: source,
+    selection: TextSelection.create(source, 1),
+  });
+  const normalized = normalizeInlineBlock(initial, syntax);
+  assertion(normalized, "literal italic source did not normalize");
+  const normalizedState = initial.apply(normalized);
+  const right = listSyntaxMarkers(normalizedState.doc, syntax).find(
+    (marker) => marker.side === "right",
+  );
+  assertion(right, "closing italic marker is missing");
+  const state = normalizedState.apply(
+    normalizedState.tr.setSelection(
+      TextSelection.create(normalizedState.doc, right.from),
+    ),
+  );
+
+  const transaction = moveInlineCaret(state, syntax, "ArrowRight");
+  assertion(transaction, "Right at the closing italic star produced no transaction");
+  const next = state.apply(transaction);
+  equal(next.selection.from, right.to2, "Right did not cross the closing italic star");
+  equal(
+    next.selection.from,
+    next.doc.firstChild!.content.size + 1,
+    "caret did not reach the real end of the paragraph",
   );
 });
 

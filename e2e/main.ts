@@ -485,6 +485,52 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "Right crosses a closing italic star at the end of the line",
+    async run() {
+      const prose = await mount("*memory*");
+      press(prose, "End");
+      await requestNativeKey("arrow-left-before-final-italic-star");
+      const marker = prose.querySelector<HTMLElement>(
+        '.nota-syntax-marker[data-syntax="emphasis"][data-side="right"]',
+      );
+      assert(marker, "closing italic star is missing");
+      const markerRange = document.createRange();
+      markerRange.selectNodeContents(marker);
+      const markerRect = markerRange.getBoundingClientRect();
+      assertEqual(
+        getComputedStyle(marker).fontSize,
+        getComputedStyle(prose).fontSize,
+        "source marker uses a different font size from its line",
+      );
+      const caretBefore = document
+        .querySelector<HTMLElement>(".nota-blink-caret")
+        ?.getBoundingClientRect();
+      assert(
+        caretBefore && caretBefore.left <= markerRect.left + 1,
+        "caret did not start on the left side of the final italic star",
+      );
+
+      await requestNativeKey("arrow-right-after-final-italic-star");
+      assertEqual(
+        JSON.stringify(editor!.selectionRange()),
+        JSON.stringify({ anchor: 9, head: 9 }),
+        "Right did not move the document selection past the final italic star",
+      );
+      const caretAfter = document
+        .querySelector<HTMLElement>(".nota-blink-caret")
+        ?.getBoundingClientRect();
+      assert(
+        caretAfter && caretAfter.left >= markerRect.right - 1,
+        `painted caret did not follow the selection past the final italic star: ${
+          caretAfter ? `${caretAfter.left}/${markerRect.right}` : "missing"
+        }`,
+      );
+      editor!.insertAtCursorPlace("X");
+      await nextFrames();
+      assertEqual(serialized(), "*memory*X", "typed text entered the closing italic mark");
+    },
+  },
+  {
     name: "Backspace before a bold closing marker deletes text, not the marker group",
     async run() {
       await mount("**abc**");

@@ -327,8 +327,10 @@
      之后，WebKit 会在语法节点与相邻正文之间走不同的字形栅格化路径，星号和
      等号就会在“普通字符 / 提示字符”之间看起来忽高忽低。 */
   font: inherit !important;
-  /* Keep the source marker legible without changing the paragraph's line box. */
-  font-size: 1.08em !important;
+  /* Delimiters are characters in the same line, not a second typographic size.
+     Scaling them larger makes WebKit choose different vertical glyph metrics
+     and visibly breaks the common baseline, especially next to italics. */
+  font-size: inherit !important;
   font-synthesis: inherit;
   letter-spacing: normal;
   line-height: inherit !important;

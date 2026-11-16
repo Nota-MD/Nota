@@ -65,6 +65,11 @@ export interface InlineMathBoundary {
   side: "before" | "after";
 }
 
+export interface InlineSyntaxBoundary {
+  position: number;
+  side: "before" | "after";
+}
+
 /** Locate a collapsed caret immediately before or after inline math. */
 export function inlineMathBoundary(state: EditorState): InlineMathBoundary | null {
   if (!state.selection.empty) return null;
@@ -75,6 +80,24 @@ export function inlineMathBoundary(state: EditorState): InlineMathBoundary | nul
   }
   const after = $from.nodeAfter;
   if (after?.type.name === "math_inline") {
+    return { position: state.selection.from, side: "before" };
+  }
+  return null;
+}
+
+/** Locate a collapsed caret immediately before or after a source marker atom. */
+export function inlineSyntaxBoundary(state: EditorState): InlineSyntaxBoundary | null {
+  if (!state.selection.empty) return null;
+  const { $from } = state.selection;
+  const before = $from.nodeBefore;
+  if (before?.type.name === "notaSyntax") {
+    return {
+      position: state.selection.from - before.nodeSize,
+      side: "after",
+    };
+  }
+  const after = $from.nodeAfter;
+  if (after?.type.name === "notaSyntax") {
     return { position: state.selection.from, side: "before" };
   }
   return null;
@@ -131,6 +154,54 @@ function hideCursor(cursor: HTMLElement): void {
   cursor.classList.remove(showClass);
 }
 
+function markerTextRect(
+  view: EditorView,
+  boundary: InlineSyntaxBoundary,
+): DOMRect | null {
+  const element = view.nodeDOM(boundary.position);
+  if (!(element instanceof Element)) return null;
+  const range = element.ownerDocument.createRange();
+  range.selectNodeContents(element);
+  const rects = Array.from(range.getClientRects()).filter(
+    (rect) => rect.width > 0 && rect.height > 0,
+  );
+  return boundary.side === "after" ? (rects.at(-1) ?? null) : (rects[0] ?? null);
+}
+
+function arrangeCursorAtRect(
+  cursor: HTMLElement,
+  view: EditorView,
+  rect: DOMRect,
+  side: "before" | "after",
+): void {
+  const editorArea = view.dom.getBoundingClientRect();
+  if (rect.bottom < editorArea.top || rect.top > editorArea.bottom) {
+    hideCursor(cursor);
+    return;
+  }
+  const naturalHeight = Math.max(12, rect.height);
+  const baseFontSize = Number.parseFloat(getComputedStyle(view.dom).fontSize);
+  const height = caretHeightInLine(
+    view.state.selection.$head.parent.type.name,
+    naturalHeight,
+    baseFontSize,
+  );
+  const top = caretTopInLine(
+    naturalHeight,
+    height,
+    rect.top,
+    baseFontSize,
+  );
+  const boundedTop = Math.max(
+    editorArea.top,
+    Math.min(top, editorArea.bottom - height),
+  );
+  cursor.style.left = `${Math.round(side === "after" ? rect.right : rect.left)}px`;
+  cursor.style.top = `${Math.round(boundedTop)}px`;
+  cursor.style.height = `${height}px`;
+  cursor.classList.add(showClass);
+}
+
 function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
   const active = view.dom.ownerDocument.activeElement;
   if (
@@ -145,6 +216,15 @@ function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
   }
 
   try {
+    const syntaxBoundary = inlineSyntaxBoundary(view.state);
+    if (syntaxBoundary) {
+      const rect = markerTextRect(view, syntaxBoundary);
+      if (rect) {
+        arrangeCursorAtRect(cursor, view, rect, syntaxBoundary.side);
+        return;
+      }
+    }
+
     const mathBoundary = inlineMathBoundary(view.state);
     if (mathBoundary) {
       const element = view.nodeDOM(mathBoundary.position);

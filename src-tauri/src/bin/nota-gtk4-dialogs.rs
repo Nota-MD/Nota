@@ -7,7 +7,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 #[cfg(target_os = "linux")]
-#[path = "linux/nota-gtk4-dialogs-impl.rs"]
+#[path = "../gtk4_dialogs_helper.rs"]
 mod linux;
 
 #[cfg(target_os = "linux")]

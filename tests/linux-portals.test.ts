@@ -69,7 +69,7 @@ testCase("打印 Portal 传入 PDF 文件描述符", () => {
 
 testCase("正式的 Linux 次级窗口优先启动 GTK4 helper", () => {
   const bridge = read("src-tauri/src/gtk4_dialogs.rs");
-  const helper = read("src-tauri/src/bin/nota-gtk4-dialogs.rs");
+  const helper = read("src-tauri/src/bin/linux/nota-gtk4-dialogs-impl.rs");
   assertion(bridge.includes("nota-gtk4-dialogs"), "没有 helper 路径");
   assertion(helper.includes("gtk::FileDialog::new()"), "文件框不是 GTK4 FileDialog");
   assertion(helper.includes("gtk::PrintDialog::new()"), "打印框不是 GTK4 PrintDialog");

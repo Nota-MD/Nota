@@ -73,5 +73,15 @@ testCase("Windows 便携版由无提权的 Nota 单文件启动器承载，并�
   contains(updateManifest, "_x64-portable\\.(?:exe|zip)", "更新清单不认单文件便携 EXE");
 });
 
+testCase("Linux GTK4 dialog helper keeps a Windows-targetable entry point", () => {
+  const helper = read("src-tauri/src/bin/nota-gtk4-dialogs.rs");
+  contains(helper, '#[cfg(target_os = "linux")]', "GTK4 implementation is not Linux-gated");
+  contains(
+    helper,
+    '#[cfg(not(target_os = "linux"))]\nfn main()',
+    "Windows compilation would produce a crate without main",
+  );
+});
+
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
 if (fail) process.exitCode = 1;

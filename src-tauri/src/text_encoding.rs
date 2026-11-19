@@ -84,7 +84,23 @@ pub fn 读文件(path: &Path) -> Result<(String, String)> {
         path: path.to_path_buf(),
         source,
     })?;
+    if 疑似二进制(&字节) {
+        return Err(NotaError::other(format!(
+            "拒绝打开疑似二进制文件 {}：Nota 不会把它当文本重写",
+            path.display()
+        )));
+    }
     Ok(猜着解码(&字节))
+}
+
+/// 判断一份文件是否不适合进入文本编辑器。
+///
+/// 这里故意只做保守的安全闸门：NUL 字节是 PDF、图片、压缩包等常见二进制
+/// 文件的可靠信号；其他控制字符不能单独作为依据，因为 Markdown 可以合法包含
+/// 制表符、换页符和少量控制字符。判断发生在读盘之后、解码之前，避免“打开后看似
+/// 没改、保存时却把原始二进制改成替换字符”的静默损坏。
+fn 疑似二进制(bytes: &[u8]) -> bool {
+    bytes.contains(&0)
 }
 
 /// 按**指定**编码读（用户从「文件 → 编码」里点名的那一种）。
@@ -233,5 +249,11 @@ mod tests {
         for (标签, _) in 常用编码 {
             assert!(认编码(标签).is_some(), "表里的 {标签} 必须认得出");
         }
+    }
+
+    #[test]
+    fn 含nul的文件拒绝进入文本编辑器() {
+        assert!(疑似二进制(b"%PDF-1.7\0binary"));
+        assert!(!疑似二进制("Markdown\n\t正文".as_bytes()));
     }
 }

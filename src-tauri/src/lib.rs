@@ -699,6 +699,13 @@ pub fn run() {
                                 host.unload_all();
                             }
                         }
+                        // Linux/GTK does not reliably stop the Tauri event loop when
+                        // the last WebView is destroyed. Without an explicit exit,
+                        // the window disappears while nota keeps its single-instance
+                        // socket, so the next launch looks dead until `killall nota`.
+                        // app.exit() enters the normal exit flow directly; it does not
+                        // trigger CloseRequested again or create a close-event loop.
+                        window.app_handle().exit(0);
                     }
                     // 警报窗被关掉了（Alt+F4、或者窗口管理器直接关）——
                     // **当作"我回来了"**（2026-09-26 加）。

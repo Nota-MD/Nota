@@ -535,19 +535,22 @@ fn 替换_windows_便携版(_文件: &Path) -> Result<()> {
 fn 启动_power_shell_便携版替换(文件: &Path) -> Result<()> {
     let exe = std::env::current_exe()
         .map_err(|e| NotaError::other(format!("读不到当前 exe：{e}")))?;
-    let 目录 = exe
-        .parent()
-        .ok_or_else(|| NotaError::other("当前 exe 没有父目录"))?;
     let 脚本路径 = std::env::temp_dir().join("nota-apply-update.ps1");
     let 脚本 = format!(
         "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; \
-         $t=Join-Path $env:TEMP 'nota-update-extract'; Remove-Item $t -Recurse -Force -ErrorAction SilentlyContinue; \
-         Expand-Archive -LiteralPath '{}' -DestinationPath $t -Force; \
-         Copy-Item -Path (Join-Path $t 'Nota\\*') -Destination '{}' -Recurse -Force; \
+         $s='{}'; $d='{}'; \
+         if ($s -match '\\.zip$') { \
+           $t=Join-Path $env:TEMP 'nota-update-extract'; \
+           Remove-Item $t -Recurse -Force -ErrorAction SilentlyContinue; \
+           Expand-Archive -LiteralPath $s -DestinationPath $t -Force; \
+           $r=Get-ChildItem $t -Recurse -Filter 'nota.exe' | Select-Object -First 1; \
+           if (-not $r) { throw 'portable ZIP does not contain nota.exe' }; \
+           Copy-Item -Path (Join-Path $r.DirectoryName '*') -Destination (Split-Path $d) -Recurse -Force; \
+         } else { Move-Item -LiteralPath $s -Destination $d -Force }; \
          Start-Process -FilePath '{}'",
         std::process::id(),
         ps(文件),
-        ps(目录),
+        ps(&exe),
         ps(&exe),
     );
     fs::write(&脚本路径, 脚本)

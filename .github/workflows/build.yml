@@ -1,7 +1,7 @@
 name: 云端编译（不发布）
 
-# 只编译桌面安装包并上传 Actions artifact。不创建 tag、Release 或自动更新清单。
-# 轻量与完整测试分别在 verify.yml / verify-full.yml；平台工具链检查在 platform.yml；正式打包在 release.yml。
+# 只编译 Windows x64 安装包和便携 ZIP 并上传 Actions artifact。不创建 tag、Release 或自动更新清单。
+# 轻量与完整测试分别在 verify.yml / verify-full.yml；正式打包在 release.yml。
 on:
   workflow_dispatch:
 
@@ -14,10 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-            bundles: deb,rpm,appimage
-            label: linux-x86_64
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             bundles: nsis
@@ -27,20 +23,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: 安装 Linux 系统依赖
-        if: startsWith(matrix.platform, 'ubuntu')
-        run: |
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libgtk-4-dev \
-            libgraphene-1.0-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libxdo-dev \
-            build-essential \
-            xdg-utils
 
       - uses: actions/setup-node@v4
         with:
@@ -56,7 +38,11 @@ jobs:
           workspaces: src-tauri
           key: ${{ matrix.label }}
 
-      - run: npm ci
+      # package.json currently contains direct dependencies that are not yet
+      # represented by the historical npm lockfile. Install from the manifest
+      # so the preview workflow can compile the submitted test revision.
+      - name: 安装前端依赖
+        run: npm install --no-audit --no-fund
 
       - name: 编译安装包
         run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}

@@ -50,6 +50,8 @@ testCase("成功安装后退出整个应用并重启", () => {
   );
   assertValue(!installed.includes("Wait-Process"), "已安装版仍在等待旧进程 PID");
   assertValue(!installed.includes("powershell"), "已安装版仍绕道 PowerShell");
+  contains(update, "Move-Item -LiteralPath", "portable update does not replace a single-file launcher");
+  contains(update, "Expand-Archive -LiteralPath", "portable update does not support release ZIP assets");
   contains(update, "while kill -0", "Linux 等待旧进程退出");
   contains(update, "nohup", "Linux 安装后启动新版本");
 });

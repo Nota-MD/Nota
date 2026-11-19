@@ -61,7 +61,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Verify version consistency
         run: bash tools/check-version.sh

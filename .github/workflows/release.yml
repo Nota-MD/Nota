@@ -84,7 +84,7 @@ jobs:
           workspaces: src-tauri
           key: ${{ matrix.label }}
 
-      - run: npm ci
+      - run: npm install --no-audit --no-fund
 
       - uses: tauri-apps/tauri-action@v0
         env:

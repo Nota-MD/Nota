@@ -539,14 +539,14 @@ fn 启动_power_shell_便携版替换(文件: &Path) -> Result<()> {
     let 脚本 = format!(
         "$p={}; Wait-Process -Id $p -ErrorAction SilentlyContinue; \
          $s='{}'; $d='{}'; \
-         if ($s -match '\\.zip$') { \
+         if ($s -match '\\.zip$') {{ \
            $t=Join-Path $env:TEMP 'nota-update-extract'; \
            Remove-Item $t -Recurse -Force -ErrorAction SilentlyContinue; \
            Expand-Archive -LiteralPath $s -DestinationPath $t -Force; \
            $r=Get-ChildItem $t -Recurse -Filter 'nota.exe' | Select-Object -First 1; \
-           if (-not $r) { throw 'portable ZIP does not contain nota.exe' }; \
+           if (-not $r) {{ throw 'portable ZIP does not contain nota.exe' }}; \
            Copy-Item -Path (Join-Path $r.DirectoryName '*') -Destination (Split-Path $d) -Recurse -Force; \
-         } else { Move-Item -LiteralPath $s -Destination $d -Force }; \
+         }} else {{ Move-Item -LiteralPath $s -Destination $d -Force }}; \
          Start-Process -FilePath '{}'",
         std::process::id(),
         ps(文件),

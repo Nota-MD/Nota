@@ -143,13 +143,13 @@ pub(crate) fn 准备(source: &更新来源, 替换规则: &str) -> Result<准备
             source.name
         )));
     }
-    if !remote::地址可信(&entry.url) {
+    if !remote::is_trusted_address(&entry.url) {
         return Err(NotaError::other("插件包地址必须是 HTTPS"));
     }
     if entry.size.is_some_and(|size| size > PACKAGE_LIMIT) {
         return Err(NotaError::other("插件包超过 256 MiB 上限"));
     }
-    let bytes = remote::取(&entry.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
+    let bytes = remote::fetch(&entry.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
     let digest = format!("{:x}", Sha256::digest(&bytes));
     if digest != entry.sha256.to_ascii_lowercase() {
         return Err(NotaError::other(format!(
@@ -212,10 +212,10 @@ pub(crate) fn 安装(host: &mut PluginHost, prepared: 准备好的更新) -> Res
 }
 
 fn 取仓库(url: &str, 替换规则: &str) -> Result<仓库> {
-    if !remote::地址可信(url) {
+    if !remote::is_trusted_address(url) {
         return Err(NotaError::other("插件更新清单地址必须是 HTTPS"));
     }
-    let bytes = remote::取(url, 替换规则, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
+    let bytes = remote::fetch(url, 替换规则, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
     let repo: 仓库 = serde_json::from_slice(&bytes)
         .map_err(|e| NotaError::other(format!("插件更新清单解析失败：{e}")))?;
     if repo.schema != 1 {

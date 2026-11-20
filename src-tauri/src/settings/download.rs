@@ -1,8 +1,8 @@
-//! 更新下载的地址替换规则。
+//! Download URL replacement rules.
 //!
-//! 这是给网络环境受限的用户准备的轻量代理：每行一条
-//! `原地址前缀 => 替换后的地址前缀`。规则只在上游地址已通过官方围栏后应用，
-//! 替换结果仍必须是 HTTPS 或本机回环地址。
+//! Each non-empty line uses `original prefix => replacement prefix`. Rules are
+//! applied only after the caller's trust boundary accepts the original URL.
+//! Rewritten URLs must remain HTTPS or loopback.
 
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +11,7 @@ use crate::error::{NotaError, Result};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Download {
-    /// 多行规则。空串 = 不替换。
+    /// Newline-separated rules. Empty means no replacement.
     pub replacements: String,
 }
 
@@ -23,8 +23,8 @@ impl Default for Download {
     }
 }
 
-/// 解析 `旧前缀 => 新前缀`。空行和以 `#` 开头的注释行跳过。
-pub fn 解析规则(text: &str) -> Result<Vec<(String, String)>> {
+/// Parse `old prefix => new prefix` rules.
+pub fn parse_rules(text: &str) -> Result<Vec<(String, String)>> {
     let mut rules = Vec::new();
     for (index, raw) in text.lines().enumerate() {
         let line = raw.trim();
@@ -33,7 +33,7 @@ pub fn 解析规则(text: &str) -> Result<Vec<(String, String)>> {
         }
         let Some((old, new)) = line.split_once("=>") else {
             return Err(NotaError::other(format!(
-                "下载替换规则第 {} 行缺少 `=>`",
+                "Download replacement rule {} is missing `=>`",
                 index + 1
             )));
         };
@@ -41,7 +41,7 @@ pub fn 解析规则(text: &str) -> Result<Vec<(String, String)>> {
         let new = new.trim();
         if old.is_empty() || new.is_empty() {
             return Err(NotaError::other(format!(
-                "下载替换规则第 {} 行的前后缀不能为空",
+                "Download replacement rule {} has an empty prefix",
                 index + 1
             )));
         }
@@ -50,15 +50,15 @@ pub fn 解析规则(text: &str) -> Result<Vec<(String, String)>> {
     Ok(rules)
 }
 
-/// 按顺序应用替换规则。每条规则只替换第一次出现的位置。
-pub fn 改写地址(address: &str, replacements: &str) -> Result<String> {
-    let mut out = address.to_owned();
-    for (old, new) in 解析规则(replacements)? {
-        if let Some(index) = out.find(&old) {
-            out.replace_range(index..index + old.len(), &new);
+/// Apply rules in order. Each rule replaces only its first match.
+pub fn rewrite_address(address: &str, replacements: &str) -> Result<String> {
+    let mut output = address.to_owned();
+    for (old, new) in parse_rules(replacements)? {
+        if let Some(index) = output.find(&old) {
+            output.replace_range(index..index + old.len(), &new);
         }
     }
-    Ok(out)
+    Ok(output)
 }
 
 #[cfg(test)]
@@ -66,30 +66,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 空规则原样返回() {
+    fn empty_rules_keep_the_address() {
         assert_eq!(
-            改写地址("https://github.com/a", "").unwrap(),
+            rewrite_address("https://github.com/a", "").unwrap(),
             "https://github.com/a"
         );
     }
 
     #[test]
-    fn 按顺序替换前缀() {
+    fn rules_apply_in_order() {
         let rules = "github.com/ => gh-proxy.net/github.com/\nreleases/download/ => releases/download/";
         assert_eq!(
-            改写地址("https://github.com/Nota-MD/Nota", rules).unwrap(),
+            rewrite_address("https://github.com/Nota-MD/Nota", rules).unwrap(),
             "https://gh-proxy.net/github.com/Nota-MD/Nota"
         );
     }
 
     #[test]
-    fn 坏规则要说第几行() {
-        let err = 改写地址("https://github.com", "github.com").unwrap_err();
-        assert!(err.to_string().contains("第 1 行"));
+    fn invalid_rules_report_the_line() {
+        let error = rewrite_address("https://github.com", "github.com").unwrap_err();
+        assert!(error.to_string().contains("rule 1"));
     }
 
     #[test]
-    fn 注释和空行跳过() {
-        assert_eq!(解析规则("# 代理\n\n").unwrap().len(), 0);
+    fn comments_and_empty_lines_are_ignored() {
+        assert_eq!(parse_rules("# proxy\n\n").unwrap().len(), 0);
     }
 }

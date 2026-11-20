@@ -74,7 +74,7 @@ testCase("应用更新与插件更新都使用替换规则", () => {
   const remote = read("src-tauri", "src", "remote.rs");
   const appUpdate = read("src-tauri", "src", "update.rs");
   const pluginUpdate = read("src-tauri", "src", "plugin", "updater.rs");
-  assertValue(remote.includes("settings::download::改写地址"), "下载层没有应用替换规则");
+  assertValue(remote.includes("settings::download::rewrite_address"), "下载层没有应用替换规则");
   assertValue(appUpdate.includes("替换规则"), "应用更新没有传替换规则");
   assertValue(pluginUpdate.includes("替换规则"), "插件更新没有传替换规则");
 });

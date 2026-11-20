@@ -264,7 +264,7 @@ fn 取清单(替换规则: &str) -> Result<清单> {
 }
 
 fn 取网络(地址: &str, 替换规则: &str, 上限: u64, 超时: Duration) -> Result<Vec<u8>> {
-    remote::取(地址, 替换规则, 上限, 超时)
+    remote::fetch(地址, 替换规则, 上限, 超时)
 }
 
 fn 选包<'a>(清单: &'a 清单, 类型: 安装类型) -> Option<&'a 安装包> {
@@ -352,7 +352,7 @@ where
         return Err(NotaError::other("更新包地址不属于 Nota 官方 Release"));
     }
     let mut 上次报告 = 0_u64;
-    let 字节 = remote::取_带进度_可取消(
+    let 字节 = remote::fetch_with_progress_cancellable(
         &包.url,
         替换规则,
         PACKAGE_LIMIT,

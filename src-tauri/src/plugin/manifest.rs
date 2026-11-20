@@ -479,7 +479,7 @@ impl Manifest {
 
         // ── [update] ─────────────────────────────────────────────────────
         if let Some(spec) = &update {
-            if !crate::remote::地址可信(&spec.manifest) {
+            if !crate::remote::is_trusted_address(&spec.manifest) {
                 return Err(NotaError::Manifest {
                     file: file.to_path_buf(),
                     reason: format!(

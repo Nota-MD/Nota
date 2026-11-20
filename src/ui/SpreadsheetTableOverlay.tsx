@@ -85,15 +85,58 @@ function activeCell(table: HTMLTableElement, point: Point): HTMLTableCellElement
 }
 
 function boxForRange(table: HTMLTableElement, range: Range) {
-  const start = table.rows[range.top]?.cells[range.left]?.getBoundingClientRect();
-  const end = table.rows[range.bottom]?.cells[range.right]?.getBoundingClientRect();
-  if (!start || !end) return null;
+  const firstRow = table.rows[0];
+  const lastRow = table.rows[table.rows.length - 1];
+  const startCell = table.rows[range.top]?.cells[range.left];
+  const lastColumnCell = firstRow?.cells[firstRow.cells.length - 1];
+  const stableStart =
+    startCell?.getBoundingClientRect() ??
+    table.rows[0]?.cells[0]?.getBoundingClientRect();
+  const lastColumnRect = lastColumnCell?.getBoundingClientRect();
+  const lastRowRect = lastRow?.getBoundingClientRect();
+  if (!stableStart || !lastColumnRect || !lastRowRect) return null;
+  const existingEnd = table.rows[range.bottom]?.cells[range.right]?.getBoundingClientRect();
+  const endRight =
+    existingEnd?.right ??
+    lastColumnRect.right +
+      (range.right - ((firstRow?.cells.length ?? 1) - 1)) * lastColumnRect.width;
+  const endBottom =
+    existingEnd?.bottom ??
+    lastRowRect.bottom + (range.bottom - (table.rows.length - 1)) * lastRowRect.height;
   return {
-    left: Math.min(start.left, end.left),
-    top: Math.min(start.top, end.top),
-    width: Math.abs(end.right - start.left),
-    height: Math.abs(end.bottom - start.top),
+    left: stableStart.left,
+    top: stableStart.top,
+    width: Math.max(0, endRight - stableStart.left),
+    height: Math.max(0, endBottom - stableStart.top),
   };
+}
+
+function pointerPoint(
+  table: HTMLTableElement,
+  x: number,
+  y: number,
+): Point | null {
+  const direct = cellPoint(document.elementFromPoint(x, y));
+  if (direct) return direct;
+  const first = table.rows[0]?.cells[0]?.getBoundingClientRect();
+  const lastRow = table.rows[table.rows.length - 1];
+  const lastCell = table.rows[0]?.cells[table.rows[0].cells.length - 1];
+  const last = lastCell?.getBoundingClientRect();
+  const bottom = lastRow?.getBoundingClientRect().bottom ?? 0;
+  if (!first || !last) return null;
+  if (x >= first.left && x <= last.right && y > bottom) {
+    return {
+      row: table.rows.length + Math.floor((y - bottom) / Math.max(1, lastRow!.getBoundingClientRect().height)),
+      column: table.rows[0]!.cells[table.rows[0]!.cells.length - 1]!.cellIndex,
+    };
+  }
+  if (y >= first.top && y <= bottom && x > last.right) {
+    return {
+      row: table.rows[table.rows.length - 1]!.rowIndex,
+      column: table.rows[0]!.cells.length + Math.floor((x - last.right) / Math.max(1, last.width)),
+    };
+  }
+  return null;
 }
 
 export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
@@ -182,7 +225,7 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
     if (!visible || !layout) return;
     const table = layout.table;
     const updateFromPointer = (event: PointerEvent) => {
-      const point = cellPoint(document.elementFromPoint(event.clientX, event.clientY));
+      const point = pointerPoint(table, event.clientX, event.clientY);
       if (!point || !anchor.current) return null;
       selection.current = normalizeRange(anchor.current, point);
       setLayout((current) => {

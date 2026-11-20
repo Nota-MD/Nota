@@ -74,7 +74,7 @@ testCase("应用更新可终止，并在安装后自动重启", () => {
   const bridge = read("src", "bridge", "ipc.ts");
   const pane = read("src", "ui", "SoftwareUpdatePane.tsx");
   const remote = read("src-tauri", "src", "remote.rs");
-  assertValue(remote.includes("取_带进度_可取消"), "下载循环没有取消检查");
+  assertValue(remote.includes("fetch_with_progress_cancellable"), "下载循环没有取消检查");
   assertValue(commands.includes("nota_update_cancel"), "缺少取消命令");
   assertValue(bridge.includes('cancel: () => invoke<void>("nota_update_cancel")'), "前端取消桥缺失");
   assertValue(pane.includes('t("Cancel Download")'), "更新页没有终止下载按钮");

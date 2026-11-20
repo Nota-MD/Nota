@@ -1,112 +1,101 @@
-//! 更新器共用的受限 HTTP 下载。
+//! Shared restricted HTTP downloads for updater paths.
 //!
-//! 应用更新和插件更新都只从外部取两类东西：一份 JSON 清单与一个发布包。
-//! 两边都要有重定向上限、总时限、响应体上限和统一的 User-Agent，所以这里
-//! 只保留一条下载路径。调用方负责更严格的地址围栏与摘要校验。
+//! Callers provide the trust boundary and checksum verification. This module
+//! applies URL replacement rules, enforces trusted schemes, and bounds body
+//! size, time, redirects, and cancellation latency.
 
 use std::time::Duration;
 
 use crate::error::{NotaError, Result};
 
-/// GET 一个地址，响应体不得超过 `上限`。
-///
-/// `replacements` 是用户配置的 `旧前缀 => 新前缀` 规则。改写后的地址仍须通过
-/// HTTPS / 本机回环检查，避免一个替换规则把下载悄悄降成明文或非法协议。
-pub(crate) fn 取(
-    地址: &str,
-    替换规则: &str,
-    上限: u64,
-    超时: Duration,
+pub(crate) fn fetch(
+    address: &str,
+    replacements: &str,
+    limit: u64,
+    timeout: Duration,
 ) -> Result<Vec<u8>> {
-    取_带进度(地址, 替换规则, 上限, 超时, |_, _| {})
+    fetch_with_progress(address, replacements, limit, timeout, |_, _| {})
 }
 
-/// 与 [`取`] 相同，但每读一块就报告一次“已下载 / 总长度”。
-///
-/// 下载包只在内存里攒一份，不额外写临时分片；回调负责把进度推给界面。
-pub(crate) fn 取_带进度(
-    地址: &str,
-    替换规则: &str,
-    上限: u64,
-    超时: Duration,
-    进度: impl FnMut(u64, Option<u64>),
+pub(crate) fn fetch_with_progress(
+    address: &str,
+    replacements: &str,
+    limit: u64,
+    timeout: Duration,
+    progress: impl FnMut(u64, Option<u64>),
 ) -> Result<Vec<u8>> {
-    取_带进度_可取消(地址, 替换规则, 上限, 超时, || false, 进度)
+    fetch_with_progress_cancellable(address, replacements, limit, timeout, || false, progress)
 }
 
-/// 与 [`取_带进度`] 相同，但每个数据块之前都询问一次是否取消。
-///
-/// `cancelled` 在每次 `read` 前调用，因此按钮按下后最多等到当前 64 KiB
-/// 数据块返回就会退出。已经收下的字节只留在本次调用的局部变量里，取消或
-/// 失败都不会写出半个安装包。
-pub(crate) fn 取_带进度_可取消(
-    地址: &str,
-    替换规则: &str,
-    上限: u64,
-    超时: Duration,
+pub(crate) fn fetch_with_progress_cancellable(
+    address: &str,
+    replacements: &str,
+    limit: u64,
+    timeout: Duration,
     cancelled: impl Fn() -> bool,
-    mut 进度: impl FnMut(u64, Option<u64>),
+    mut progress: impl FnMut(u64, Option<u64>),
 ) -> Result<Vec<u8>> {
     use std::io::Read as _;
 
     if cancelled() {
-        return Err(NotaError::other("更新下载已取消"));
+        return Err(NotaError::other("Update download cancelled"));
     }
-    let 地址 = crate::settings::download::改写地址(地址, 替换规则)?;
-    if !地址可信(&地址) {
+    let address = crate::settings::download::rewrite_address(address, replacements)?;
+    if !is_trusted_address(&address) {
         return Err(NotaError::other(format!(
-            "下载地址替换后不是 HTTPS 或本机地址：{地址}"
+            "Rewritten download URL is not HTTPS or loopback: {address}"
         )));
     }
-    let 配置 = ureq::Agent::config_builder()
+    let config = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .max_redirects(5)
-        .timeout_global(Some(超时))
-        // 取消只能在一次阻塞读取返回后生效。给响应体读取单独设一个有界的
-        // 停顿上限，服务器卡住时“终止下载”也不会一直等到十分钟总时限。
+        .timeout_global(Some(timeout))
         .timeout_recv_body(Some(Duration::from_secs(15)))
         .user_agent(format!("Nota/{}", env!("CARGO_PKG_VERSION")))
         .build();
-    let 请求 = ureq::http::Request::builder()
+    let user_agent = format!("Nota/{}", env!("CARGO_PKG_VERSION"));
+    let request = ureq::http::Request::builder()
         .method("GET")
-        .uri(&地址)
-        .header("user-agent", format!("Nota/{}", env!("CARGO_PKG_VERSION")))
+        .uri(&address)
+        .header("user-agent", user_agent)
         .body(Vec::new())
-        .map_err(|e| NotaError::other(format!("更新请求无效：{e}")))?;
-    let mut 响应 = ureq::Agent::new_with_config(配置)
-        .run(请求)
-        .map_err(|e| NotaError::other(format!("更新请求失败：{e}")))?;
-    let 状态 = 响应.status().as_u16();
-    if !(200..300).contains(&状态) {
-        return Err(NotaError::other(format!("更新服务器返回 HTTP {状态}")));
+        .map_err(|error| NotaError::other(format!("Invalid update request: {error}")))?;
+    let mut response = ureq::Agent::new_with_config(config)
+        .run(request)
+        .map_err(|error| NotaError::other(format!("Update request failed: {error}")))?;
+    let status = response.status().as_u16();
+    if !(200..300).contains(&status) {
+        return Err(NotaError::other(format!(
+            "Update server returned HTTP {status}"
+        )));
     }
-    let 总长 = 响应.body().content_length();
-    let mut 读取 = 响应.body_mut().with_config().limit(上限).reader();
-    let mut 字节 = Vec::with_capacity(总长.unwrap_or(0).min(上限) as usize);
-    let mut 块 = [0_u8; 64 * 1024];
+    let total = response.body().content_length();
+    let mut reader = response.body_mut().with_config().limit(limit).reader();
+    let mut bytes = Vec::with_capacity(total.unwrap_or(0).min(limit) as usize);
+    let mut block = [0_u8; 64 * 1024];
     loop {
-        let 读入 = 读取
-            .read(&mut 块)
-            .map_err(|e| NotaError::other(format!("更新数据读取失败：{e}")))?;
-        if 读入 == 0 {
+        let read = reader
+            .read(&mut block)
+            .map_err(|error| NotaError::other(format!("Update read failed: {error}")))?;
+        if read == 0 {
             break;
         }
         if cancelled() {
-            return Err(NotaError::other("更新下载已取消"));
+            return Err(NotaError::other("Update download cancelled"));
         }
-        字节.extend_from_slice(&块[..读入]);
-        进度(字节.len() as u64, 总长);
+        bytes.extend_from_slice(&block[..read]);
+        progress(bytes.len() as u64, total);
     }
-    Ok(字节)
+    Ok(bytes)
 }
 
-/// 更新清单只接受 HTTPS。回环 HTTP 留给本地测试，不出本机。
-pub(crate) fn 地址可信(地址: &str) -> bool {
-    let 地址 = 地址.trim();
-    地址.starts_with("https://")
-        || 地址.starts_with("http://127.0.0.1:")
-        || 地址.starts_with("http://localhost:")
-        || 地址.starts_with("http://[::1]:")
+/// Update manifests and packages accept HTTPS and loopback HTTP only.
+pub(crate) fn is_trusted_address(address: &str) -> bool {
+    let address = address.trim();
+    address.starts_with("https://")
+        || address.starts_with("http://127.0.0.1:")
+        || address.starts_with("http://localhost:")
+        || address.starts_with("http://[::1]:")
 }
 
 #[cfg(test)]
@@ -114,8 +103,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 取消标记在发请求前就生效() {
-        let result = 取_带进度_可取消(
+    fn cancellation_happens_before_network_access() {
+        let result = fetch_with_progress_cancellable(
             "https://example.invalid/nota.pkg",
             "",
             1024,
@@ -123,6 +112,6 @@ mod tests {
             || true,
             |_, _| {},
         );
-        assert!(result.unwrap_err().to_string().contains("取消"));
+        assert!(result.unwrap_err().to_string().contains("cancelled"));
     }
 }

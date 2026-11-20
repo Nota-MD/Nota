@@ -37,6 +37,15 @@ jobs:
       - name: Verify version consistency
         run: bash tools/check-version.sh
 
+      - name: Reject new Chinese source violations
+        env:
+          LANGUAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: |
+          npm run audit:language
+          if [ -n "$LANGUAGE_BASE_SHA" ]; then
+            node tools/source-language-audit.mjs --check-diff "$LANGUAGE_BASE_SHA"
+          fi
+
       - name: Run focused frontend tests
         run: npm run test:smoke
 

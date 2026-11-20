@@ -2931,6 +2931,9 @@ React 那边组件照样渲染（拿临时 `<pre>` 试过，兄弟节点在、�
 - 出菜单子项时先尝试右侧；右侧放不下且左侧有空间就从左侧展开，动画起点随之翻到右上角。
 - 光标进入表格后，表格上方显示与表格同宽的结构快捷栏：调整行列数、当前列左 / 中 / 右对齐，删除按钮位于最右侧；
   表格内右键菜单增加「表格」子菜单，集中放置插入、移动、删除、复制与格式化命令。
+- Optional spreadsheet mode adds row and column headers, A1 references, a
+  formula bar, rectangular range selection and a fill handle. It edits only the
+  existing GFM table nodes; no private workbook or formula data is stored.
 - 软件更新下载显示百分比、已下载 / 总大小，并在完成后切换为安装阶段。
 - 自动配对采用保守上下文：单词内部 `_`、链接区域不补；`^` 与 `=` 只有在对应
   上标 / 高亮功能开启时才参与。

@@ -104,6 +104,8 @@ export interface EditorSettings {
   auto_pair: boolean;
   /** Reveal link and image Markdown source when the caret reaches their boundary. */
   keyboard_experience: boolean;
+  /** Enable spreadsheet-style controls for standard GFM tables. */
+  spreadsheet_tables: boolean;
   emoji_autocomplete: boolean;
   line_ending: LineEnding;
   /** 拼写检查总开关（WebKitGTK 提供）。 */

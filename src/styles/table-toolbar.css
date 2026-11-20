@@ -116,3 +116,110 @@
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+
+.sheet-formula-bar {
+  position: fixed;
+  z-index: 36;
+  display: grid;
+  grid-template-columns: 78px 28px minmax(0, 1fr);
+  align-items: center;
+  height: 30px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-raised);
+  box-shadow: var(--popup-shadow);
+  font-size: 0.82rem;
+}
+
+.sheet-reference {
+  padding: 0 8px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sheet-formula-mark {
+  color: var(--fg-faint);
+  font-family: var(--font-ui);
+  font-style: italic;
+  text-align: center;
+}
+
+.sheet-formula-bar input {
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  outline: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+}
+
+.sheet-formula-bar input:focus {
+  background: var(--bg-raised);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.sheet-header {
+  position: fixed;
+  z-index: 34;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg-subtle);
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.sheet-header:hover,
+.sheet-header:focus-visible,
+.sheet-header.is-selected {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-raised));
+  color: var(--accent);
+}
+
+.sheet-column-header {
+  border-radius: 5px 5px 0 0;
+}
+
+.sheet-row-header {
+  border-radius: 5px 0 0 5px;
+}
+
+.sheet-range-box {
+  position: fixed;
+  z-index: 33;
+  box-sizing: border-box;
+  border: 2px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  pointer-events: none;
+}
+
+.sheet-fill-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 10px;
+  height: 10px;
+  box-sizing: border-box;
+  padding: 0;
+  border: 2px solid var(--bg-raised);
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  cursor: crosshair;
+  pointer-events: auto;
+}

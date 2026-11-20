@@ -268,6 +268,7 @@ export function EditorArea({ wiring }: { wiring: editorAreaWiring }) {
         visible={viewMode === "wysiwyg" && Boolean(commandState?.inTable)}
         documentKey={activeDoc?.id ?? ""}
         run={runCommand}
+        spreadsheet={settings?.editor.spreadsheet_tables ?? false}
       />
       {inlineReview && (
         // 改动预览顶上那一条细条。⚠️ **排在编辑区前面**（同一个 flex

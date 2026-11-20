@@ -396,6 +396,10 @@ export const settingsTable: Record<string, string> = {
   "Charge per minute away": "离开 1 分钟扣多少",
   "Auto pair": "自动配对",
   "Keyboard experience optimization": "键盘体验优化",
+  "Spreadsheet table mode": "电子表格模式",
+  "Enable spreadsheet-style table controls": "启用电子表格式表格操作",
+  "Shows row and column headers, cell references, a formula bar, range selection and a fill handle. The document remains a standard GFM Markdown table.":
+    "显示行列标题、单元格地址、编辑栏、范围选择和填充柄。文档仍然是标准 GFM Markdown 表格。",
   "Reveal link and image source at the caret": "光标到达链接和图片时显示源码",
   "Show Markdown around links and images when the caret reaches them. Clicking a link also stays in the editor instead of opening the link dialog.":
     "光标进入链接或图片附近时显示 Markdown 源码；点击链接也留在编辑器中，不打开链接设置框。",

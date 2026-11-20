@@ -76,6 +76,10 @@ pub struct Editor {
     /// This is an optional interaction aid and defaults off. It only changes
     /// editor decorations; the document never receives inserted brackets or URLs.
     pub keyboard_experience: bool,
+    /// Show spreadsheet-style controls for Markdown tables.
+    ///
+    /// This is an interaction layer only. Tables remain ordinary GFM tables.
+    pub spreadsheet_tables: bool,
     /// 开启 Emoji 自动补全（`:sm` → 候选面板）。
     pub emoji_autocomplete: bool,
     /// 新文件的默认换行符。
@@ -128,6 +132,7 @@ impl Default for Editor {
             paragraph_indent_chars: 2,
             auto_pair: false,
             keyboard_experience: false,
+            spreadsheet_tables: false,
             emoji_autocomplete: true,
             line_ending: LineEnding::default(),
             spellcheck: true,
@@ -181,6 +186,22 @@ mod tests {
         assert!(text.contains("keyboard_experience = true"), "实际是：\n{text}");
         let back: Editor = toml::from_str(&text).unwrap();
         assert!(back.keyboard_experience, "开关没有活过一次 TOML 往返");
+    }
+
+    #[test]
+    fn spreadsheet_tables_default_off_and_round_trip() {
+        assert!(!Editor::default().spreadsheet_tables);
+        let old: Editor = toml::from_str("auto_pair = true\n").unwrap();
+        assert!(!old.spreadsheet_tables);
+
+        let enabled = Editor {
+            spreadsheet_tables: true,
+            ..Default::default()
+        };
+        let text = toml::to_string_pretty(&enabled).unwrap();
+        assert!(text.contains("spreadsheet_tables = true"), "actual:\n{text}");
+        let back: Editor = toml::from_str(&text).unwrap();
+        assert!(back.spreadsheet_tables);
     }
 
     #[test]

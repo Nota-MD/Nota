@@ -90,6 +90,9 @@ import {
   resizeCurrentTable,
   moveCurrentTableColumn,
   moveCurrentTableRow,
+  selectCurrentTableRange,
+  setCurrentTableCellText,
+  fillCurrentTableRange,
 } from "./table-context";
 import type { CommandPayload, EditorCommand } from "./create-types";
 
@@ -481,6 +484,33 @@ const COMMANDS: Record<BlockCommand, (editor: Editor, payload?: CommandPayload) 
   tableCopy: (e) => duplicateCurrentTable(e),
   tableFormat: (e) => formatCurrentTable(e),
   tableRowHeaders: (e) => toggleTableRowHeaders(e),
+  tableSelectRange: (e, p) =>
+    selectCurrentTableRange(
+      e,
+      p?.tableRow ?? 0,
+      p?.tableColumn ?? 0,
+      p?.tableToRow ?? p?.tableRow ?? 0,
+      p?.tableToColumn ?? p?.tableColumn ?? 0,
+    ),
+  tableSelectRow: (e, p) => selectCurrentTableRange(e, p?.tableRow ?? 0, 0, p?.tableRow ?? 0, 999),
+  tableSelectColumn: (e, p) => selectCurrentTableRange(e, 0, p?.tableColumn ?? 0, 999, p?.tableColumn ?? 0),
+  tableSetCell: (e, p) =>
+    setCurrentTableCellText(
+      e,
+      p?.tableRow ?? 0,
+      p?.tableColumn ?? 0,
+      p?.tableText ?? "",
+    ),
+  tableFill: (e, p) =>
+    fillCurrentTableRange(
+      e,
+      p?.tableRow ?? 0,
+      p?.tableColumn ?? 0,
+      p?.tableToRow ?? p?.tableRow ?? 0,
+      p?.tableToColumn ?? p?.tableColumn ?? 0,
+      p?.tableFillRow ?? p?.tableToRow ?? p?.tableRow ?? 0,
+      p?.tableFillColumn ?? p?.tableToColumn ?? p?.tableColumn ?? 0,
+    ),
 
   // 这两条**必须有 payload**：地址从外面进来（界面先问用户，见 `ui/ImageDialog.tsx`）。
   // 缺省值给空串而不是"不执行"——空串的语义是"插一个还没填地址的链接/图片"，

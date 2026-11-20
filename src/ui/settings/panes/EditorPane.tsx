@@ -124,6 +124,20 @@ export function EditorPane({ settings, onChange }: PaneProps) {
         </SettingRow>
       </SettingsGroup>
 
+      <SettingsGroup title={t("Spreadsheet table mode")}>
+        <SettingRow
+          label={t("Enable spreadsheet-style table controls")}
+          description={t(
+            "Shows row and column headers, cell references, a formula bar, range selection and a fill handle. The document remains a standard GFM Markdown table.",
+          )}
+        >
+          <Toggle
+            checked={e.spreadsheet_tables}
+            onChange={(spreadsheet_tables) => write({ spreadsheet_tables })}
+          />
+        </SettingRow>
+      </SettingsGroup>
+
       <SettingsGroup title={t("Emoji autocomplete")}>
         <SettingRow>
           <Toggle

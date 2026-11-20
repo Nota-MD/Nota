@@ -56,6 +56,7 @@ verification is missing.
 | P2 | BUG-68 | Code-block appearance | Needs verification | Recheck the missing-frame report against the current code-block implementation | The current behavior is accepted as intentional or corrected with a screenshot-backed test |
 | P2 | BUG-72 | Theme switching stability | Rare | Stress repeated theme and source-mode switches | No error boundary, blank editor, or crash occurs |
 | P2 | 118 | Sidebar appearance | Partial | Recheck tree and outline spacing, resizing and CDE theme consistency | Sidebar states are visually consistent under bundled and external themes |
+| P2 | 136 | Spreadsheet table mode | Needs real-window testing | Verify A1 headers, ranges, cell bar, fill handle and Markdown round trips | The optional mode works on Linux and Windows without changing the saved GFM table format |
 | P2 | MACOS-BUILD | macOS support | Planned | Define the CI runner, signing, notarization, DMG and Gatekeeper path | A signed build passes startup, editing, dialogs, printing, updates and installation checks |
 
 ## Recommended order

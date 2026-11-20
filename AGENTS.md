@@ -304,6 +304,7 @@ ui/FocusAlarmWindow.tsx
 ui/FocusMeter.tsx
 ui/PanelDiffBlock.tsx
 ui/ReviewBar.tsx
+ui/SpreadsheetTableOverlay.tsx
 ui/WindowIdOverlay.tsx
 ui/WindowPickerDialog.tsx
 ui/ZoomHud.tsx
@@ -341,4 +342,5 @@ ui/useWindowRegistry.ts
 ui/useWorkspaceDelete.ts
 ui/window-picker.ts
 ui/zoom-hud-state.ts
+tests/spreadsheet-table.test.ts
 ```

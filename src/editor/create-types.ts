@@ -92,6 +92,11 @@ export type EditorCommand =
   | "tableCopy"
   | "tableFormat"
   | "tableRowHeaders"
+  | "tableSelectRange"
+  | "tableSelectRow"
+  | "tableSelectColumn"
+  | "tableSetCell"
+  | "tableFill"
   | "insertText"
   /**
    * **写一条链接 / 去掉一条链接**（2026-10-07）。
@@ -203,6 +208,18 @@ export interface CommandPayload {
    *   那一步走界面上那颗明确的「删除」。
    */
   frontMatter?: string | null;
+  /** Zero-based table row used by spreadsheet-style table commands. */
+  tableRow?: number;
+  /** Zero-based table column used by spreadsheet-style table commands. */
+  tableColumn?: number;
+  /** Inclusive range end for table selection and fill commands. */
+  tableToRow?: number;
+  tableToColumn?: number;
+  /** Inclusive fill destination used by the spreadsheet fill handle. */
+  tableFillRow?: number;
+  tableFillColumn?: number;
+  /** Plain text written into the active table cell. */
+  tableText?: string;
 }
 
 /**

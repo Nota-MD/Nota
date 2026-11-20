@@ -6,11 +6,13 @@ import { createPortal } from "react-dom";
 import { useT } from "@/i18n";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import { Icon } from "@/ui/Icon";
+import { SpreadsheetTableOverlay } from "@/ui/SpreadsheetTableOverlay";
 
 interface Props {
   visible: boolean;
   documentKey: string | number;
   run: (command: EditorCommand, payload?: CommandPayload) => void;
+  spreadsheet: boolean;
 }
 
 interface Position {
@@ -19,7 +21,7 @@ interface Position {
   width: number;
 }
 
-export function TableToolbar({ visible, documentKey, run }: Props) {
+export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) {
   const t = useT();
   const [position, setPosition] = useState<Position | null>(null);
   const [current, setCurrent] = useState({ columns: 0, rows: 0 });
@@ -58,7 +60,10 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
         Math.min(rect.width, window.innerWidth - 16),
       );
       setPosition({
-        top: rect.top >= 44 ? rect.top - 34 : rect.bottom + 4,
+        top:
+          rect.top >= (spreadsheet ? 104 : 44)
+            ? rect.top - (spreadsheet ? 96 : 34)
+            : rect.bottom + 4,
         left: Math.max(
           8,
           Math.min(rect.left, window.innerWidth - width - 8),
@@ -80,7 +85,7 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
       window.removeEventListener("resize", locate);
       window.removeEventListener("scroll", locate, true);
     };
-  }, [visible, documentKey]);
+  }, [visible, documentKey, spreadsheet]);
 
   if (!visible || !position) return null;
 
@@ -89,18 +94,27 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
     setPicker(false);
   };
 
-  return createPortal(
-    <div
-      className="table-toolbar"
-      style={{
-        top: position.top,
-        left: position.left,
-        width: position.width,
-      }}
-      onMouseDown={(event) => event.preventDefault()}
-      role="toolbar"
-      aria-label={t("Table")}
-    >
+  return (
+    <>
+      {spreadsheet && (
+        <SpreadsheetTableOverlay
+          visible={visible}
+          documentKey={documentKey}
+          run={run}
+        />
+      )}
+      {createPortal(
+        <div
+          className="table-toolbar"
+          style={{
+            top: position.top,
+            left: position.left,
+            width: position.width,
+          }}
+          onMouseDown={(event) => event.preventDefault()}
+          role="toolbar"
+          aria-label={t("Table")}
+        >
       <button
         type="button"
         className="table-toolbar-btn"
@@ -154,31 +168,33 @@ export function TableToolbar({ visible, documentKey, run }: Props) {
         <Icon name="folio-delete-symbolic" />
       </button>
 
-      {picker && (
-        <div className="table-size-picker">
-          <div className="table-size-grid" onMouseLeave={() => setHover(current)}>
-            {cells.map((row) =>
-              row.map(({ row: rows, column: columns }) => (
-                <button
-                  type="button"
-                  key={`${columns}x${rows}`}
-                  className={
-                    columns <= hover.columns && rows <= hover.rows ? "is-active" : ""
-                  }
-                  aria-label={`${columns} × ${rows}`}
-                  onMouseEnter={() => setHover({ columns, rows })}
-                  onFocus={() => setHover({ columns, rows })}
-                  onClick={() => action("tableResize", { columns, rows })}
-                />
-              )),
-            )}
-          </div>
-          <div className="table-size-label">
-            {hover.columns} × {hover.rows}
-          </div>
-        </div>
+          {picker && (
+            <div className="table-size-picker">
+              <div className="table-size-grid" onMouseLeave={() => setHover(current)}>
+                {cells.map((row) =>
+                  row.map(({ row: rows, column: columns }) => (
+                    <button
+                      type="button"
+                      key={`${columns}x${rows}`}
+                      className={
+                        columns <= hover.columns && rows <= hover.rows ? "is-active" : ""
+                      }
+                      aria-label={`${columns} × ${rows}`}
+                      onMouseEnter={() => setHover({ columns, rows })}
+                      onFocus={() => setHover({ columns, rows })}
+                      onClick={() => action("tableResize", { columns, rows })}
+                    />
+                  )),
+                )}
+              </div>
+              <div className="table-size-label">
+                {hover.columns} × {hover.rows}
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body,
       )}
-    </div>,
-    document.body,
+    </>
   );
 }

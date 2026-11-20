@@ -346,6 +346,8 @@ export const uiMessages: Record<string, string> = {
   "Could not open extension panel {0}: {1}": "无法打开拓展面板 {0}：{1}",
   "Could not refresh reloaded extension: {0}": "刷新已重载的拓展失败：{0}",
   "Diff": "改动对比",
+  "Cell contents": "单元格内容",
+  "Fill selected cells": "填充选中单元格",
   "Show {0} unchanged lines": "展开 {0} 行未修改内容",
   "Collapse unchanged lines": "折叠未修改内容",
   "Result": "改后效果",

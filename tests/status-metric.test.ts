@@ -263,9 +263,11 @@ testCase("菜单四项的 i18n 键都在代码里以字面量出现", () => {
   }
 });
 
-testCase("status bar switches to selection word count", () => {
-  if (!stateBarSource.includes('t("{0} selected words", selectionCounts.words)')) {
-    throw new Error("selection word count is not wired to the main count");
+testCase("status bar shows selected and total counts", () => {
+  for (const unit of ["words", "characters", "lines", "minutes"]) {
+    if (!stateBarSource.includes(`"{0}/{1} ${unit}"`)) {
+      throw new Error(`selection/total ${unit} label is missing`);
+    }
   }
   if (!stateBarSource.includes("selection?.empty === false && selection.text.length > 0")) {
     throw new Error("empty caret and non-empty selection are not distinguished");

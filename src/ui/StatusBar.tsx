@@ -363,9 +363,21 @@ export function StatusBar({
     counts.readingMinutes,
   );
   const hasTextSelection = selection?.empty === false && selection.text.length > 0;
-  const countLabel = hasTextSelection
-    ? t("{0} selected words", selectionCounts.words)
-    : fourItem[metric];
+  const selectedCountLabel: Record<StatusMetric, string> = {
+    minutes: t(
+      "{0}/{1} minutes",
+      selectionCounts.readingMinutes,
+      counts.readingMinutes,
+    ),
+    lines: t("{0}/{1} lines", selectionCounts.lines, counts.lines),
+    words: t("{0}/{1} words", selectionCounts.words, counts.words),
+    characters: t(
+      "{0}/{1} characters",
+      selectionCounts.characters,
+      counts.characters,
+    ),
+  };
+  const countLabel = hasTextSelection ? selectedCountLabel[metric] : fourItem[metric];
   const countDetail = hasTextSelection
     ? t(
         "{0} selected words · {1} selected characters",

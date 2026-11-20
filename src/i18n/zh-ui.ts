@@ -558,7 +558,10 @@ export const uiMessages: Record<string, string> = {
   // 从"废键"变回"正在用的键"——**删它们的理由没了**（那时没有任何地方显示
   // 这三个数）。上面那一串里剩下的仍是废键，别一起搬回来。
   "{0} words": "{0} 词",
-  "{0} selected words": "已选 {0} 词",
+  "{0}/{1} words": "{0}/{1} 词",
+  "{0}/{1} characters": "{0}/{1} 字符",
+  "{0}/{1} lines": "{0}/{1} 行",
+  "{0}/{1} minutes": "{0}/{1} 分钟",
   "{0} selected words · {1} selected characters": "已选 {0} 词 · {1} 字符",
   "Delete image": "删除图片",
   "Delete video": "删除视频",

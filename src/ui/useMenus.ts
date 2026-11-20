@@ -45,6 +45,10 @@ import {
 import type { CommandState } from "@/editor/command-state";
 import { useLanguage } from "@/i18n";
 import { accelSig, buildAccelIndex, eventAccel, isOutsideEditor } from "@/ui/accel";
+import {
+  isDeveloperToolsShortcut,
+  shouldBlockBrowserShortcut,
+} from "@/ui/browser-shortcuts";
 import { walkMenuItems, type MenuItemSpec, type MenuSpec } from "@/ui/commands";
 import { buildNativeTree } from "@/ui/nativeMenu";
 
@@ -140,6 +144,10 @@ export interface MenuWiring {
    * 收到什么原样交出去。
    */
   onNativePick: (id: string) => void;
+  /** Developer mode permits the explicit DevTools command and developer chords. */
+  developerMode: boolean;
+  /** Allow WebView-native browser shortcuts in developer mode. */
+  webviewDefaultShortcuts: boolean;
 }
 
 export interface MenuState {
@@ -211,6 +219,8 @@ export function useMenus(w: MenuWiring): MenuState {
     documentTheme,
     menuRenderer,
     onNativePick,
+    developerMode,
+    webviewDefaultShortcuts,
   } = w;
   const {
     sidebarOpen,
@@ -242,6 +252,7 @@ export function useMenus(w: MenuWiring): MenuState {
         return item.submenu.every((child) => child === "sep" || isOff(child));
       }
       if (!menuHandlers[item.id]) return true;
+      if (item.id === "view.devtools" && !developerMode) return true;
       if (item.needsDoc && activeId === null) return true;
       // 第二条判据（见上面 `光标条件`）。只在读得出光标状态时生效。
       const seeCursor = cursorCondition[item.id];
@@ -257,7 +268,7 @@ export function useMenus(w: MenuWiring): MenuState {
       if (isOff(item)) out.add(item.id);
     });
     return out;
-  }, [menus, menuHandlers, activeId, commandState]);
+  }, [menus, menuHandlers, activeId, commandState, developerMode]);
 
   /**
    * 可勾选项的当前状态。
@@ -338,6 +349,21 @@ export function useMenus(w: MenuWiring): MenuState {
       // 输入法组字期间一概不接：中文/日文选字用的就是方向键和数字排，
       // 抢过来会让选字跳到别处去（同 `useMenuRovingFocus` 里那条判据）。
       if (e.isComposing || e.keyCode === 229) return;
+      if (
+        developerMode &&
+        webviewDefaultShortcuts &&
+        isDeveloperToolsShortcut(e)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        menuHandlers["view.devtools"]?.();
+        return;
+      }
+      if (shouldBlockBrowserShortcut(e, developerMode && webviewDefaultShortcuts)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
 
       // ⚠️ **编辑器自己已经处理过的键位不再接**（2026-09-29 加，BUG-49 的正主）。
       //
@@ -402,7 +428,13 @@ export function useMenus(w: MenuWiring): MenuState {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [accelIndex, menuHandlers, disabledCommands]);
+  }, [
+    accelIndex,
+    menuHandlers,
+    disabledCommands,
+    developerMode,
+    webviewDefaultShortcuts,
+  ]);
 
   /**
    * **宿主在 GTK 捕获阶段截下来的那两颗键**（`Ctrl+B` / `Ctrl+I`）。

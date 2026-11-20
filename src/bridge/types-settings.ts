@@ -586,6 +586,8 @@ export interface GeneralSettings {
    * 默认关闭，并且只在 developer mode 同时开启时生效。
    */
   select_ui_text: boolean;
+  /** Allow WebView-native browser shortcuts while developer mode is enabled. */
+  webview_default_shortcuts: boolean;
   /** Authenticated Host Control bridge for Nota DevKit. */
   dev_bridge_enabled: boolean;
   dev_bridge_port: number;

@@ -738,6 +738,8 @@ export default function App() {
     documentTheme: slot.id,
     menuRenderer: effectiveMenuRenderer(settings?.appearance.menu_renderer ?? "nota", settings?.appearance.force_nota_menu_when_expanded ?? true, maximized || fullscreen),
     onNativePick,
+    developerMode: settings?.general.debug_mode ?? false,
+    webviewDefaultShortcuts: settings?.general.webview_default_shortcuts ?? false,
   });
 
   // 状态栏那一堆 props 的接线（2026-09-30 搬去 `ui/useStatusBar.ts`：本文件那天
@@ -779,6 +781,7 @@ export default function App() {
     cursor: commandState,
     toast,
     copyImage: cutPasteBoard.copyImageSlice,
+    developerMode: settings?.general.debug_mode ?? false,
   };
 
   return (

@@ -730,6 +730,8 @@ export interface contextMenuWiring {
   toast: notice;
   /** 复制这一下右键命中的图片。不能等到命令表里再猜 DOM 选区。 */
   copyImage: (image: HTMLImageElement) => Promise<void>;
+  /** Developer mode is the only production surface that exposes DevTools. */
+  developerMode: boolean;
 }
 
 /** 现在开着的那一份。`null` = 没开。 */
@@ -793,7 +795,7 @@ interface CombineWriteScene {
  * 见 `ui/context-menu.ts` 文件头那张表。
  */
 export function ContextMenu(wiring: contextMenuWiring) {
-  const { commandTable, disabled2, check, cursor, toast, copyImage } = wiring;
+  const { commandTable, disabled2, check, cursor, toast, copyImage, developerMode } = wiring;
   const t = useT();
   const [open2, setOpen] = useState<isOpen | null>(null);
 
@@ -841,7 +843,7 @@ export function ContextMenu(wiring: contextMenuWiring) {
       const contextImage = el.closest("img");
       const onImage = contextImage instanceof HTMLImageElement ? contextImage : null;
       const hasSelection = cursor?.hasSelection ?? Boolean(window.getSelection()?.toString());
-      const rows = buildRows(drop, import.meta.env.DEV, CombineWriteLineSearch, Boolean(onImage), hasSelection);
+      const rows = buildRows(drop, developerMode, CombineWriteLineSearch, Boolean(onImage), hasSelection);
       // 外壳：只拦不弹（用户 2026-10-04 选的，见 `context-menu.ts`）。
       if (rows.length === 0) return setOpen(null);
 
@@ -906,7 +908,7 @@ export function ContextMenu(wiring: contextMenuWiring) {
     // 那两句动作名虽然是在这个监听里翻的，但 `t` **每次被调用时才读当前语言**，
     // 所以不用重挂。⚠️ 别把 `t` 写进依赖数组假装它是个依赖——它永远不会变，
     // 写了只会让人以为这里跟语言有关而漏掉真正该重挂的那一处。
-  }, []);
+  }, [developerMode]);
 
   const collapse = useCallback(() => {
     setOpen(null);

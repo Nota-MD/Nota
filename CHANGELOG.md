@@ -4,6 +4,22 @@ Nota keeps short release-line notes. Full evidence, defect identifiers and
 historical details are in
 [`docs/07-feature-status.md`](docs/07-feature-status.md).
 
+## 0.15.1-beta
+
+- Added optional spreadsheet-style table interaction with A1 references, row
+  and column headers, a cell bar, range selection and a fill handle.
+- Spreadsheet fills can extend GFM tables while preserving ordinary Markdown.
+- Empty table cells no longer write automatic `<br />` placeholders.
+- Reworked AI, Git and external diff rendering with clearer markers, hunk and
+  metadata styling, horizontal scrolling and collapsible unchanged context.
+- Status-bar selection metrics now show selected over total values.
+- Moved update checks, notifications and manual update actions into General
+  settings.
+- Blocked browser shortcuts by default and added an opt-in developer setting to
+  restore WebView-native reload, find, download, source and DevTools keys.
+- Consolidated maintainer rules and experience files and expanded language
+  enforcement.
+
 ## 0.15.0-beta
 
 - Running Nota windows receive stable numeric IDs. Tabs can move to another

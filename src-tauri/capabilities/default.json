@@ -12,7 +12,6 @@
     "core:window:allow-set-fullscreen",
     "core:window:allow-is-always-on-top",
     "core:window:allow-set-always-on-top",
-    "core:webview:allow-internal-toggle-devtools",
     "core:webview:allow-set-webview-zoom",
     "opener:allow-open-url",
     "clipboard-manager:allow-read-text",

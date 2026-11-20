@@ -32,3 +32,22 @@ exists. Re-run each item on current `main` before assigning a permanent BUG ID.
    remaining issue.
 5. Close an item only after an automated regression exists, or document why the
    behavior is an intentional product boundary.
+
+## Current release triage
+
+The 0.15.1 release line includes these changes and rechecks:
+
+- Empty GFM table cells no longer serialize automatic `<br />` placeholders.
+- Table-pipe, nested inline-mark and mixed line-ending regressions have byte-level
+  automated coverage.
+- Binary files containing NUL bytes are rejected before decoding so an unchanged
+  PDF or archive cannot be rewritten as text.
+- Browser reload, find-next, download, view-source and DevTools shortcuts are
+  blocked by default. Developer mode includes an opt-in "Enable WebView default
+  shortcuts" switch to restore native WebView behavior.
+- Rendered HTML is sanitized into the normal editor DOM rather than an iframe,
+  so the application context menu owns right-click behavior.
+
+The Vim extension findings remain extension-owned and require a separate retest
+against the current plugin release. Large-file drag and drop and source-mode
+visual quality remain tracked as current runtime or design items.

@@ -245,6 +245,7 @@ is not obvious from a top-level directory name:
 bridge/types-app-settings.ts
 bridge/types-settings-export.ts
 bridge/types-settings.ts
+tests/browser-shortcuts.test.ts
 commands/diff.rs
 commands/path_kind.rs
 commands/session.rs
@@ -309,6 +310,7 @@ ui/WindowIdOverlay.tsx
 ui/WindowPickerDialog.tsx
 ui/ZoomHud.tsx
 ui/document-save-text.ts
+ui/browser-shortcuts.ts
 ui/recentMenu.ts
 ui/settings/SettingsExportDialog.tsx
 ui/settings/panes/AppearancePane.tsx

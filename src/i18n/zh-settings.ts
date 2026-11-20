@@ -396,6 +396,9 @@ export const settingsTable: Record<string, string> = {
   "Charge per minute away": "离开 1 分钟扣多少",
   "Auto pair": "自动配对",
   "Keyboard experience optimization": "键盘体验优化",
+  "Enable WebView default shortcuts": "启用 WebView 默认快捷键",
+  "Allows WebView-native reload, find-next, download, view-source and developer-tools shortcuts. Effective only while developer mode is enabled.":
+    "允许 WebView 原生刷新、查找下一个、下载、查看源码和开发者工具快捷键。仅在开发者模式开启时生效。",
   "Spreadsheet table mode": "电子表格模式",
   "Enable spreadsheet-style table controls": "启用电子表格式表格操作",
   "Shows row and column headers, cell references, a formula bar, range selection and a fill handle. The document remains a standard GFM Markdown table.":

@@ -64,6 +64,9 @@ pub struct General {
     /// 调试期间允许拖动选择菜单、状态栏、设置页和对话框等界面文字。
     /// 默认关闭；只在 `debug_mode` 同时开启时生效。
     pub select_ui_text: bool,
+    /// Allow WebView-native reload, find-next, download, source and DevTools keys.
+    /// Default off; effective only while developer mode is enabled.
+    pub webview_default_shortcuts: bool,
     /// Whether the authenticated developer bridge should run.
     pub dev_bridge_enabled: bool,
     /// TCP port used by the authenticated developer bridge.
@@ -82,6 +85,7 @@ impl Default for General {
             element_inspector: false,
             lua_hot_reload: false,
             select_ui_text: false,
+            webview_default_shortcuts: false,
             dev_bridge_enabled: false,
             dev_bridge_port: 17321,
             dev_bridge_whitelist: vec!["127.0.0.1".into(), "::1".into()],
@@ -131,10 +135,12 @@ mod tests {
         assert!(!General::default().element_inspector);
         assert!(!General::default().lua_hot_reload);
         assert!(!General::default().select_ui_text);
+        assert!(!General::default().webview_default_shortcuts);
         let old: General = toml::from_str("language = \"auto\"").unwrap();
         assert!(!old.element_inspector);
         assert!(!old.lua_hot_reload);
         assert!(!old.select_ui_text);
+        assert!(!old.webview_default_shortcuts);
     }
 
     #[test]

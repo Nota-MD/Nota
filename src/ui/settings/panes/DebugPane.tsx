@@ -100,6 +100,21 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
           />
         </SettingRow>
         <SettingRow
+          label={t("Enable WebView default shortcuts")}
+          description={t(
+            "Allows WebView-native reload, find-next, download, view-source and developer-tools shortcuts. Effective only while developer mode is enabled.",
+          )}
+        >
+          <Toggle
+            checked={settings.general.webview_default_shortcuts}
+            onChange={(webview_default_shortcuts) =>
+              onChange({
+                general: { ...settings.general, webview_default_shortcuts },
+              })
+            }
+          />
+        </SettingRow>
+        <SettingRow
           label={t("Developer bridge")}
           description={t(
             "Expose the authenticated Host Control API to Nota DevKit. Access is protected by a password, a five-step confirmation and an IP whitelist.",
@@ -131,6 +146,7 @@ export function DebugPane({ settings, onChange, onOpenConfigDir }: PaneProps) {
                   debug_mode: false,
                   lua_hot_reload: false,
                   dev_bridge_enabled: false,
+                  webview_default_shortcuts: false,
                 },
               });
               void api.devBridge.disable().then(setBridgeStatus);

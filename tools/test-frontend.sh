@@ -28,8 +28,10 @@ for file in "${test_files[@]}"; do
   esac
   npx esbuild "$file" --bundle --platform=node --format=esm \
     "${flags[@]}" --outfile="$outdir/$name.mjs" >/dev/null
+  set +e
   output=$(node "$outdir/$name.mjs" 2>&1)
   code=$?
+  set -e
   printf '%s\n' "$output"
   [ "$code" -eq 0 ] || { echo "FAIL $name exit=$code" >&2; exit 1; }
   count=$(printf '%s\n' "$output" | grep -v '^[[:space:]]*$' \

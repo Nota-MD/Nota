@@ -326,6 +326,81 @@ html[data-code-wrap="off"] .editor-mount .ProseMirror pre {
 .editor-mount .ProseMirror .token.url {
   color: var(--fg-muted);
 }
+.editor-mount .ProseMirror .token.directive,
+.editor-mount .ProseMirror .token.directive-hash,
+.editor-mount .ProseMirror .token.macro,
+.editor-mount .ProseMirror .token.preprocessor {
+  color: var(--code-tag);
+}
+.editor-mount .ProseMirror .token.type,
+.editor-mount .ProseMirror .token.type-interface {
+  color: var(--code-keyword);
+}
+.editor-mount .ProseMirror .token.namespace {
+  color: var(--code-function);
+}
+.editor-mount .ProseMirror .token.parameter {
+  color: var(--code-attr);
+}
+.editor-mount .ProseMirror .token.escape,
+.editor-mount .ProseMirror .token.inserted {
+  color: var(--code-number);
+}
+
+/* Live `[TOC]`. The Markdown source stays intact and this widget is display-only. */
+.editor-mount .ProseMirror .nota-live-toc {
+  display: block;
+  margin: 1em 0;
+  padding: 0.2em 0;
+  color: var(--doc-fg, var(--fg));
+  font-size: var(--doc-font-size, 1em);
+  line-height: var(--doc-line-height, 1.65);
+}
+
+.editor-mount .ProseMirror .nota-live-toc-title {
+  display: block;
+  margin-bottom: 0.45em;
+  color: var(--fg-muted);
+  font-size: 0.76em;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.editor-mount .ProseMirror .nota-live-toc-list {
+  display: block;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-mount .ProseMirror .nota-live-toc-item {
+  position: relative;
+  display: block;
+  margin: 0.18em 0;
+  padding-inline-start: calc(var(--nota-toc-depth, 0) * 1.45em);
+}
+
+.editor-mount .ProseMirror .nota-live-toc-slot {
+  margin: 0;
+  font-size: 0;
+  line-height: 0;
+}
+
+.editor-mount .ProseMirror .nota-live-toc-item::before {
+  position: absolute;
+  inset-inline-start: calc(var(--nota-toc-depth, 0) * 1.45em + 0.15em);
+  color: var(--fg-faint);
+  content: "•";
+}
+
+.editor-mount .ProseMirror .nota-live-toc-item a {
+  padding-inline-start: 0.85em;
+  color: var(--link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
 
 /* ── 列表标记 ─────────────────────────────────────────────────────────────
  *

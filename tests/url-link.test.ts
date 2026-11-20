@@ -48,6 +48,7 @@ import {
   explicitLinkAtTypedParenthesis,
   explicitLinkAtTrailingWhitespace,
   findLinkBeforeCursor,
+  linkifiedPastedTextTransaction,
   linkBoundarySpec,
   linkBoundaryMarkSpec,
   selfActionLinkInput,
@@ -600,6 +601,71 @@ testCase("自动闭括号补全不在完整链接尾部时不误转换", () => {
     selection: TextSelection.create(doc, 11),
   });
   equal(explicitLinkAtClosingParenthesis(state, 11), null, "普通括号");
+});
+
+group("六、混合纯文本粘贴自动识别链接");
+
+function pasteSchema() {
+  return new Schema({
+    nodes: {
+      doc: { content: "block+" },
+      paragraph: { content: "inline*", group: "block" },
+      text: { group: "inline" },
+    },
+    marks: {
+      link: { attrs: { href: {} }, inclusive: false },
+    },
+  });
+}
+
+function pastedLinks(doc: import("@milkdown/kit/prose/model").Node): string[] {
+  const links: string[] = [];
+  doc.descendants((node) => {
+    if (!node.isText) return true;
+    const link = node.marks.find((mark) => mark.type.name === "link");
+    if (link) links.push(`${node.text}=${String(link.attrs.href)}`);
+    return true;
+  });
+  return links;
+}
+
+testCase("mixed prose keeps its visible text and linkifies every URL/email", () => {
+  const schema = pasteSchema();
+  const doc = schema.node("doc", null, [schema.node("paragraph")]);
+  const state = EditorState.create({ schema, doc, selection: TextSelection.create(doc, 1) });
+  const pasted = "See https://a.com/x, mail me@example.com, or www.b.dev. Done";
+  const transaction = linkifiedPastedTextTransaction(state, pasted);
+  equal(transaction !== null, true, "mixed paste was not recognized");
+  equal(transaction!.doc.textContent, pasted, "visible text changed");
+  equal(
+    JSON.stringify(pastedLinks(transaction!.doc)),
+    JSON.stringify([
+      "https://a.com/x=https://a.com/x",
+      "me@example.com=mailto:me@example.com",
+      "www.b.dev=https://www.b.dev",
+    ]),
+    "link marks",
+  );
+});
+
+testCase("selected text is replaced by the pasted prose, not wrapped as one link", () => {
+  const schema = pasteSchema();
+  const doc = schema.node("doc", null, [schema.node("paragraph", null, [schema.text("old text")])]);
+  const state = EditorState.create({
+    schema,
+    doc,
+    selection: TextSelection.create(doc, 1, 1 + "old text".length),
+  });
+  const transaction = linkifiedPastedTextTransaction(state, "new https://a.com");
+  equal(transaction?.doc.textContent, "new https://a.com", "selection was not replaced");
+  equal(pastedLinks(transaction!.doc)[0], "https://a.com=https://a.com", "URL inside paste was not linked");
+});
+
+testCase("plain pasted prose without links is left to the normal paste path", () => {
+  const schema = pasteSchema();
+  const doc = schema.node("doc", null, [schema.node("paragraph")]);
+  const state = EditorState.create({ schema, doc, selection: TextSelection.create(doc, 1) });
+  equal(linkifiedPastedTextTransaction(state, "README.md and node.js"), null, "bare filenames became links");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

@@ -172,6 +172,7 @@ import {
 // 后面**（它改的也是解析完的树）。
 import { blockHTMLParse, blockHTMLSpecPlugin } from "./html-block";
 import { blockHTMLDiagnostics, blockHTMLView } from "./html-block-view";
+import { liveToc } from "./live-toc";
 import { footnoteNavigation } from "./footnote";
 import { githubDocsCompat } from "./github-docs";
 import { gitHubNoticePlugin } from "./github-alert";
@@ -662,6 +663,8 @@ export async function installConfigureActualExample(parameter: InstallConfigureP
     // ⚠️ `mathView` 是个**数组**（两条线：`$prose` 那条管"当前是哪一块"，
     // `$view` 那条管怎么画），`.use()` 收数组。
     .use(mathView)
+    // Render a standalone `[TOC]` paragraph without changing its Markdown source.
+    .use(liveToc)
     // 图片语法里的地址指向视频时画成播放器（用户那句「图片语法指向 `.mp4`
     // 当视频」）。⚠️ **只画屏幕，不动源码**：节点类型、解析、序列化一概没碰，
     // 所以"打开再存字节不变"那条不变量与这一条无关（理由在文件头）。

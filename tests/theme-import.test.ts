@@ -119,9 +119,14 @@ testCase("Typora 文档变量桥接为 Nota 语义变量", () => {
   assertValue(bridge.includes("--doc-bg: var(--bg-color"), "纸张底色没有桥接");
   assertValue(bridge.includes("--doc-fg: var(--text-color"), "正文色没有桥接");
   assertValue(bridge.includes("--bg-subtle: var(--code-bg-color"), "代码底色没有桥接");
+  assertValue(bridge.includes("--link: var(--link-color"), "链接色没有跟随 Typora 主题");
   assertValue(bridge.includes("--code-keyword: var(--syntax-keyword-color"), "语法色没有桥接");
   assertValue(bridge.startsWith(".editor-pane {"), "桥接变量没有限制在文档作用域");
   assertValue(!typoraCompatibilityCss(":root { --doc-bg: white; }"), "内置主题不应被桥接覆盖");
+  const marks = read("src/styles/marks.css");
+  const blocks = read("src/styles/editor-blocks.css");
+  assertValue(!marks.includes("color: var(--link-color"), "link source still bypasses --link");
+  assertValue(!blocks.includes("color: var(--link-color"), "live TOC still bypasses --link");
 });
 
 testCase("Typora 主题只保留标题居中，正文块按书写方向靠左", () => {

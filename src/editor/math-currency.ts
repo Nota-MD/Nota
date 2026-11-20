@@ -115,8 +115,12 @@ export type code2 = number | null;
 /** 一个分词状态：吃掉一颗字符，返回下一个状态。 */
 export type state = (code: code2) => unknown;
 
-/** 上游那条构造的"工具箱"。我们只包 `consume`，其余原样转发。 */
-export type EffectResult = { consume: (code: code2) => void } & Record<string, unknown>;
+/** 上游那条构造的"工具箱"。Extra members are used by the escaped-dollar fix. */
+export type EffectResult = {
+  consume: (code: code2) => void;
+  enter?: (type: string) => { type?: string };
+  exit?: (type: string) => unknown;
+} & Record<string, unknown>;
 
 /** 一条 micromark 构造：只写本文件用得到的那几个字段。 */
 export type ConstructCreate = {
@@ -246,6 +250,134 @@ export function findUpstreamDollarDollar(extensionExtendTable: readonly unknown[
   return undefined;
 }
 
+type EventContext = {
+  events: { 0: string; 1: { type: string; start?: { offset?: number }; end?: { offset?: number } } }[];
+  sliceSerialize?: (token: unknown) => string;
+};
+
+function isInlineHTMLOpener(context: unknown): boolean {
+  const self = context as EventContext;
+  const last = self.events[self.events.length - 1];
+  if (last?.[0] !== "exit" || last[1].type !== "htmlText") return false;
+  const raw = self.sliceSerialize?.(last[1]) ?? "";
+  return /^<[A-Za-z][^>]*>$/.test(raw) && !/^<\//.test(raw) && !/\/>$/.test(raw);
+}
+
+function previousMathText(this: unknown, upstream: ConstructCreate, code: code2): boolean {
+  if (code === 36) {
+    const context = this as EventContext;
+    const last = context.events[context.events.length - 1];
+    if (last?.[1].type !== "characterEscape" && last?.[1].type !== undefined) {
+      if (isInlineHTMLOpener(this)) return false;
+    }
+  }
+  return upstream.previous ? upstream.previous(code) : code !== 36;
+}
+
+/**
+ * remark-math treats every unescaped dollar as a closing delimiter and can open
+ * math immediately after inline HTML. Both differ from Typora. This construct
+ * keeps remark-math's token shape while applying those two syntax fixes.
+ */
+export function receiveMathTextSyntax(upstream: ConstructCreate): ConstructCreate {
+  return {
+    resolve: upstream.resolve,
+    resolveTo: upstream.resolveTo,
+    resolveAll: upstream.resolveAll,
+    previous(code: code2): boolean {
+      return previousMathText.call(this, upstream, code);
+    },
+    tokenize(this: unknown, effectsRaw: EffectResult, ok: state, nok: state): unknown {
+      const effects = effectsRaw as Required<EffectResult>;
+      let sizeOpen = 0;
+      let size = 0;
+      let token: { type?: string };
+
+      const start = (code: code2): unknown => {
+        if (isInlineHTMLOpener(this)) return nok(code);
+        effects.enter("mathText");
+        effects.enter("mathTextSequence");
+        return sequenceOpen(code);
+      };
+
+      const sequenceOpen = (code: code2): unknown => {
+        if (code === 36) {
+          effects.consume(code);
+          sizeOpen++;
+          return sequenceOpen;
+        }
+        effects.exit("mathTextSequence");
+        return between(code);
+      };
+
+      const between = (code: code2): unknown => {
+        if (code === null) return nok(code);
+        if (code === 36) {
+          token = effects.enter("mathTextSequence");
+          size = 0;
+          return sequenceClose(code);
+        }
+        if (code === 32) {
+          effects.enter("space");
+          effects.consume(code);
+          effects.exit("space");
+          return between;
+        }
+        if (code < 0) {
+          effects.enter("lineEnding");
+          effects.consume(code);
+          effects.exit("lineEnding");
+          return between;
+        }
+        effects.enter("mathTextData");
+        return data(code);
+      };
+
+      const afterBackslash = (count: number, code: code2): unknown => {
+        if (code === 92) {
+          effects.consume(code);
+          return (next: code2) => afterBackslash(count + 1, next);
+        }
+        if (code === 36 && count % 2 === 1) {
+          effects.consume(code);
+          return data;
+        }
+        return data(code);
+      };
+
+      const data = (code: code2): unknown => {
+        if (code === null || code === 32 || code === 36 || code < 0) {
+          effects.exit("mathTextData");
+          return between(code);
+        }
+        if (code === 92) {
+          effects.consume(code);
+          return (next: code2) => afterBackslash(1, next);
+        }
+        effects.consume(code);
+        return data;
+      };
+
+      const sequenceClose = (code: code2): unknown => {
+        if (code === 36) {
+          effects.consume(code);
+          size++;
+          return sequenceClose;
+        }
+        if (size === sizeOpen) {
+          effects.exit("mathTextSequence");
+          effects.exit("mathText");
+          return ok(code);
+        }
+        if (token) token.type = "mathTextData";
+        return data(code);
+      };
+
+      return start;
+    },
+  };
+}
+
 /* ── 挂给 milkdown 的那一份 ───────────────────────────────────────────── */
 
 /**
@@ -265,7 +397,7 @@ export function receiveStrictDollarDollarPlugin(this: unknown): void {
   const upstream = findUpstreamDollarDollar(table2);
   if (!upstream) return;
   table2.push({
-    text: { 36: receiveNarrowDollarDollarCommonStyle(upstream) },
+    text: { 36: receiveNarrowDollarDollarCommonStyle(receiveMathTextSyntax(upstream)) },
     // ⚠️ 上游那条按名字停掉（它是来者不拒的，不停掉的话我们 `nok` 之后
     // 会在同一个位置上再问它一次，然后它又配成了公式）。
     disable: { null: ["mathText"] },

@@ -307,29 +307,18 @@ export function computeDecorationsItem(doc: PMNode, strict: boolean): PendingDec
 }
 
 /**
- * 把条目拼成装饰集。光标还在这一段时，井号后面那段文字只加粗
- * （`待成块类名`）；光标离开后，整段按该级标题排版，前缀藏起来。
- *
- * ⚠️ 2026-09-30 之前这里还有一个 `正在写的段` 参数，用来"跳过光标所在那一段"
- * （宽松档"输入时先不放大"）。那条路删掉之后参数和判据一起没了：
- * 现在的判据是**是不是标题块**，不看光标在哪儿。见文件头那张对照表。
+ * While the caret is anywhere inside a pending heading paragraph, keep the
+ * source form and emphasize the title text. Once the caret leaves, render the
+ * paragraph with heading typography and hide the prefix.
  */
 export function createDecorationCollection(
   doc: PMNode,
   item: readonly PendingDecoration[],
   cursor = -1,
-  settled?: WeakSet<PMNode>,
 ): DecorationSet {
   const decos = item.flatMap((item4) => {
-    const block = doc.nodeAt(item4.blockStart2);
     const inside = cursor >= item4.blockStart2 + 1 && cursor <= item4.blockEnd - 1;
-    if (!inside && block) settled?.add(block);
-    const correctAtEditEdit =
-      cursor < 0 ||
-      (inside &&
-        cursor === item4.blockEnd - 1 &&
-        !!block &&
-        !settled?.has(block));
+    const correctAtEditEdit = cursor < 0 || inside;
     const decoration: Decoration[] = [
       Decoration.inline(item4.prefixStart, item4.prefixEnd, { class: pendingBecomeBlockPrefixClassName }),
     ];
@@ -460,14 +449,11 @@ export const markTitleLineFirstBackCell = (strict: boolean) => $shortcut(() => (
  *
  * ⚠️ 条目**只取决于文档**，所以按"`state.doc` 还是不是同一个对象"缓存——
  * 纯光标移动也会让 ProseMirror 重新问一次 `decorations`，这里要遍历整篇，
- * 不缓存的话每按一次方向键都要全篇走一遍。✅ **2026-09-30 起这个缓存是唯一的
- * 可变状态了**：同一天删掉的那个 `state: { apply }` 是为了记"光标还在不在正在
- * 写的那一段"，而那个判据连同它要服务的长相一起被删了（见文件头「这一版推翻了
- * 什么」）。所以现在本插件**没有 `state` 分节**，也没有闭包变量跟着事务走。
+ * 不缓存的话每按一次方向键都要全篇走一遍。The document cache is the only
+ * mutable state here; cursor activity only rebuilds decorations.
  */
 export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
   let bufferSave: { doc: PMNode; item: PendingDecoration[] } | null = null;
-  const settled = new WeakSet<PMNode>();
 
   return new Plugin({
     key: new PluginKey("nota-heading-on-enter"),
@@ -511,7 +497,6 @@ export const markTitleReturnCarBecomeBlock = (strict: boolean) => $prose(() => {
           state.doc,
           bufferSave.item,
           state.selection.from,
-          settled,
         );
       },
     },

@@ -82,6 +82,10 @@ testCase("front matter 编辑区使用外壳配色，不继承浅色文档主题
   const base = readFileSync("src/styles/theme/base.css", "utf8");
   assertValue(banner.includes("background: color-mix(in srgb, CanvasText 6%, Canvas);"), "横幅仍使用文档底色");
   assertValue(banner.includes("color: CanvasText;"), "横幅仍使用文档文字色");
+  assertValue(
+    banner.includes("z-index: var(--z-editor-banner, 29);"),
+    "front matter banner is below editor widgets",
+  );
   assertValue(text.includes("background: Canvas;"), "输入框仍使用文档底色");
   assertValue(text.includes("color: CanvasText;"), "输入框仍使用文档文字色");
   assertValue(text.includes("appearance: none;"), "输入框仍交给 GTK 绘制原生外观");

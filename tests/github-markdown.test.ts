@@ -113,18 +113,48 @@ testCase("远程 HTTPS/HTTP 图片已加入 CSP img-src", () => {
   );
 });
 
-testCase("五种 GitHub Alert 都能识别，普通引用不误判", () => {
-  for (const type of ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]) {
+testCase("GitHub and Obsidian callout names and aliases are recognized", () => {
+  const aliases: Record<string, string> = {
+    note: "note",
+    abstract: "abstract",
+    summary: "abstract",
+    tldr: "abstract",
+    info: "info",
+    todo: "todo",
+    tip: "tip",
+    hint: "tip",
+    important: "important",
+    success: "success",
+    check: "success",
+    done: "success",
+    question: "question",
+    help: "question",
+    faq: "question",
+    warning: "warning",
+    caution: "caution",
+    attention: "warning",
+    failure: "failure",
+    fail: "failure",
+    missing: "failure",
+    danger: "danger",
+    error: "danger",
+    bug: "bug",
+    example: "example",
+    quote: "quote",
+    cite: "quote",
+  };
+  for (const [type, canonical] of Object.entries(aliases)) {
     assertValue(
-      recognizeDistinguishGitHubNotice(`[!${type}]`) === type.toLowerCase(),
+      recognizeDistinguishGitHubNotice(`[!${type}]`) === canonical,
       `${type} 未识别`,
     );
     assertValue(
-      recognizeDistinguishGitHubNotice(`[!${type}]\n正文`) === type.toLowerCase(),
+      recognizeDistinguishGitHubNotice(`[!${type}]\n正文`) === canonical,
       `${type} 带下一行正文时未识别`,
     );
   }
-  assertValue(recognizeDistinguishGitHubNotice("[!NOTE] 后面还有字") === null, "标记必须独占首行");
+  assertValue(recognizeDistinguishGitHubNotice("[!NOTE] Custom title") === "note", "optional title");
+  assertValue(recognizeDistinguishGitHubNotice("[!unknown]") === null, "unknown callout");
   assertValue(recognizeDistinguishGitHubNotice("普通引用") === null, "普通引用被误判");
 });
 

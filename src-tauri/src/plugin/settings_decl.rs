@@ -427,7 +427,7 @@ mod tests {
         write_manifest(
             &dir,
             &format!(
-                "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 2\ncapabilities = [{能力}]\n{设置段}"
+                "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.3\"\ncapabilities = [{能力}]\n{设置段}"
             ),
         );
         let r = Manifest::load(&dir.join("plugin.toml")).map_err(|e| e.to_string());

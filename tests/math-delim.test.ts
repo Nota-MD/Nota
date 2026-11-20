@@ -376,6 +376,15 @@ testCase("已有文件里的 `\\[\\LaTeX\\]` 解析成带分隔符信息的公�
   );
 });
 
+testCase("empty bracket and parenthesis math delimiters parse without empty text nodes", () => {
+  for (const source3 of ["甲 \\[\\] 乙\n", "甲 \\(\\) 乙\n"]) {
+    const result = roundtrip(source3);
+    if (!result.includes("甲") || !result.includes("乙")) {
+      throw new Error(`empty delimiter lost surrounding text: ${JSON.stringify(result)}`);
+    }
+  }
+});
+
 testCase("`$$x$$` → 那颗节点上标着 2；`$x$` → 1", () => {
   equal(readDollarCount(headOneTokenInline(parse("$$x$$"))!), 2, "两个 `$`");
   equal(readDollarCount(headOneTokenInline(parse("$x$"))!), 1, "一个 `$`");

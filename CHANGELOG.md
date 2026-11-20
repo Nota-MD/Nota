@@ -4,7 +4,7 @@ Nota keeps short release-line notes. Full evidence, defect identifiers and
 historical details are in
 [`docs/07-feature-status.md`](docs/07-feature-status.md).
 
-## 0.15.1-beta
+## 0.16.0-beta
 
 - Added optional spreadsheet-style table interaction with A1 references, row
   and column headers, a cell bar, range selection and a fill handle.
@@ -17,6 +17,48 @@ historical details are in
   settings.
 - Blocked browser shortcuts by default and added an opt-in developer setting to
   restore WebView-native reload, find, download, source and DevTools keys.
+- Added live Typora `[TOC]` rendering and expanded callouts across the Obsidian
+  aliases and the original GitHub alert types.
+- Escaped dollar signs now stay inside inline math, and dollars wrapped by inline
+  HTML no longer consume the rest of the line as a formula.
+- Unified link colors between source editing and rendered links. Command-click
+  on a link now opens it without first entering source editing.
+- Resting block math is borderless; only source and preview surfaces appear
+  while editing. Empty math delimiters no longer crash document loading.
+- Fixed Mermaid diagrams being enlarged beyond their natural size and restored
+  syntax colors for `gfm` fenced code. The language picker now follows document
+  theme colors.
+- Spreadsheet headers, range outlines and the A1 formula bar now stay below the
+  application menu and toolbar layers. The front matter banner sits between
+  application chrome and spreadsheet controls.
+- AI assistant replies now use safe Markdown rendering for headings, emphasis,
+  links, lists, tables and fenced code. DeepSeek-style reasoning streams show a
+  thinking state before final content, and mixed prose pastes linkify every URL
+  and email token without changing visible text.
+- AI extension 0.1.6 can import JSON, Markdown or plain-text personas and always
+  exposes a direct custom-preset editor. Presets are injected as explicit system
+  context without changing document content.
+- AI extensions now send the required POST request for streaming. DeepSeek-style
+  reasoning and answer chunks display incrementally instead of returning HTTP
+  405 and silently falling back to a complete response.
+- Extension APIs now use `vMAJOR.MINOR`. Host API `v2.3` accepts compatible
+  older minors, rejects incompatible versions, reports installed mismatches in
+  the extension list and on startup, and blocks incompatible imports without
+  writing them.
+- Link source editing now collapses after clicking anywhere outside the source.
+  Explicit, automatic and source-edit links all use the single `--link` theme
+  token.
+- Pending headings retain their source state while the caret is anywhere inside
+  the heading paragraph, and spreadsheet overlays continuously follow editor
+  scrolling and layout changes.
+- Sequence, flow and other Mermaid diagram fence aliases now use the shared
+  diagram frame and supply missing Mermaid type headers. PlantUML and Graphviz
+  fences also enter the frame for source editing with an explicit renderer
+  notice. Large diagrams scroll inside a height-bounded preview.
+- Spreadsheet overlays are clipped to the editor viewport, and clicking the A1
+  formula field keeps focus there instead of moving it into the document.
+- Fixed GTK4 writing-statistics image saves when the selected name has no folder
+  component.
 - Consolidated maintainer rules and experience files and expanded language
   enforcement.
 

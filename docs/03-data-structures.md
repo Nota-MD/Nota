@@ -1157,7 +1157,7 @@ ext4 要有 statx 才有 btime），**不是"排到最后"**：排到最后的�
 | `id` | `String` | ✅ | — | 非空；**只能用小写字母、数字、`.`、`-`、`_`** |
 | `name` | `String` | ✅ | — | 给人看的名字，不校验 |
 | `version` | `String` | | `"0.0.0"` | 插件自己的版本，**不代表 ABI** |
-| `api` | `u32` | ✅ | — | **精确匹配** `NOTA_PLUGIN_API_VERSION` |
+| `api` | `PluginApiVersion` | ✅ | — | Same major as the host; plugin minor must not exceed the host minor |
 | `entry` | `String` | | `"main.lua"` | 不许含 `..`，不许是绝对路径 |
 | `description` | `String` | | `""` | |
 | `authors` | `Vec<String>` | | `[]` | |
@@ -1303,10 +1303,12 @@ added_at = "2026-09-25"
 ## 8. `NOTA_PLUGIN_API_VERSION`
 
 ```rust
-pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
+pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 3);
 ```
 
-**当前是 2**（`manifest.rs:88`）。它是清单里 `api` 字段要精确匹配的那个数。⚠️ **本节 2026-09-26 之前一直写着 1，那是过期的**——真值、以及 1 → 2 那一轮的理由（加了 `process.devserver` 与 `ui.open_url` 两个能力取值，按下面第三条判据动号，虽然老插件不受影响），写在 `docs/02` 的 `manifest.rs` 那一节。
+The current version is `v2.3`. Plugins must use the same major version and may
+request an older or equal minor version. Legacy integer `api = 2` is read as
+`v2.0`.
 
 ### 什么时候该动号
 

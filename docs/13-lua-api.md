@@ -162,7 +162,7 @@ local kit   = require("kit")         -- <插件目录>/kit/init.lua
 | 字段 | 类型 | 值 | 来源 |
 |---|---|---|---|
 | `nota.version` | string | **宿主应用**的版本，当前 `"0.1.0"` | `env!("CARGO_PKG_VERSION")`，编译期定死 |
-| `nota.api_version` | integer | **ABI 号**，当前 `2` | `NOTA_PLUGIN_API_VERSION`（`manifest.rs:88`） |
+| `nota.api_version` | string | **API 版本**，当前 `"v2.3"` | `NOTA_PLUGIN_API_VERSION` |
 | `nota.plugin_id` | string | 清单里声明的 id **原样**（`"nota.git"`，**没有归一化**） | 清单 |
 
 ⚠️ 三个"版本"需要分清：清单里的 `api` 栏和 `nota.api_version` 是**同一件事**（ABI），

@@ -199,6 +199,10 @@ testCase("空文、没给语言、不认识的语言 → 一个区间都没有�
   equal(shareColor("", "javascript").length, 0, "空文");
   equal(shareColor("const a = 1", "").length, 0, "没给语言");
   equal(shareColor("const a = 1", "这门语言不存在").length, 0, "不认识的语言");
+  assertValue(
+    shareColor("# Heading\n\n**bold**", "gfm").some((block) => block.class.includes("heading") || block.class.includes("bold")),
+    "gfm alias did not produce Markdown tokens",
+  );
 });
 
 testCase("javascript：区间拼回去要逐字等于原文", () => {
@@ -494,6 +498,17 @@ testCase("代码块是首块或末块时创建一个空段落作为真实退出�
   equal(atTail.doc.childCount, 2, "末块退出没有创建落点段落");
   equal(atTail.doc.child(1).type.name, "paragraph", "末块后面没有空段落");
   equal(atTail.selection.from, code.nodeSize + 1, "末块退出后光标不在新段落里");
+});
+
+testCase("代码块配色区分预处理、类型、命名空间与转义", () => {
+  const css = readFileSync("src/styles/editor-blocks.css", "utf8");
+  for (const token of ["directive", "directive-hash", "macro", "preprocessor", "type", "namespace", "parameter", "escape"]) {
+    assertValue(css.includes(`.token.${token}`), `缺少 ${token} token 配色`);
+  }
+  const adwaita = readFileSync("src/styles/themes/adwaita/theme.css", "utf8");
+  assertValue(adwaita.includes("--code-keyword: #116329;"), "Adwaita keyword color is still muted");
+  assertValue(adwaita.includes("--code-string: #cf222e;"), "Adwaita string color is still muted");
+  assertValue(adwaita.includes("--code-function: #0550ae;"), "Adwaita function color is still muted");
 });
 
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */

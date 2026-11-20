@@ -38,6 +38,7 @@
 import type { PluginInfo, PluginUpdateInfo, trustRecord } from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import { comeSourceDescription, ableForceName, languageMismatch, languageHint, languageTag } from "@/ui/pluginText";
+import { pluginApiHintKey } from "@/ui/plugin-api";
 import type { pluginAction } from "@/ui/usePlugins";
 import { ActionButton, Note, SettingRow, SettingsGroup, Value } from "../primitives";
 
@@ -120,7 +121,7 @@ export function ExtensionsPane({ plugins, messageTask, updates, action }: Expand
               // 搜索要能搜到 id 与版本：用户常常是拿着报错信息里的 id 来找的，
               // 而 id 画在下面那段小字里，**那段小字是 JSX**（`description` 是
               // 字符串才会自动进搜索）。所以这里显式补一遍。
-              searchText={`${p.id} ${p.version}`}
+              searchText={`${p.id} ${p.version} ${p.api}`}
               description={<ExpandExtendDescription p={p} update={updateTable.get(p.id)} />}
             >
               <div className="stg-inline">
@@ -224,10 +225,11 @@ export function ExtensionsPane({ plugins, messageTask, updates, action }: Expand
  */
 function ExpandExtendDescription({ p, update }: { p: PluginInfo; update?: PluginUpdateInfo }) {
   const t = useT();
+  const apiHint = pluginApiHintKey(p.api, p.host_api);
   return (
     <>
       <span className="plugin-id">
-        {p.id} {p.version}
+        {p.id} {p.version} · API {p.api}
         {/* ⚠️ 来路与签名结论来自 `来源说明`，与插件栏**同一个函数**——
             两边说法不一致的话，用户只会觉得自己看错了。 */}
         <span className="plugin-origin">{comeSourceDescription(p)}</span>
@@ -259,6 +261,12 @@ function ExpandExtendDescription({ p, update }: { p: PluginInfo; update?: Plugin
       {/* ⚠️ 加载失败的**原因**必须看得见：这是用户唯一能拿去报告的东西。
           里面可能是 Lua 的报错原文（含行号），所以允许它换行。 */}
       {p.error && <span className="plugin-error">{p.error}</span>}
+      {!p.api_supported && apiHint === "update" && (
+        <span className="plugin-error">{t("Please check for a software update or contact the developer.")}</span>
+      )}
+      {!p.api_supported && apiHint === "contact" && (
+        <span className="plugin-error">{t("Please contact the developer.")}</span>
+      )}
 
       {p.capabilities.length > 0 ? (
         <span className="plugin-caps">

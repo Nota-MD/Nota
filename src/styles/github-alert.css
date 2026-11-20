@@ -26,7 +26,9 @@
 }
 
 .editor-mount .ProseMirror .nota-github-alert-marker {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
   font-size: 0;
   color: var(--github-alert-color);
   font-weight: 700;
@@ -34,15 +36,38 @@
   cursor: text;
 }
 
+.editor-mount
+  .ProseMirror
+  .nota-github-alert:not(.nota-github-alert-editing-title)
+  .nota-github-alert-marker {
+  display: block;
+  width: fit-content;
+  margin-bottom: 0.15em;
+}
+
 .editor-mount .ProseMirror .nota-github-alert-marker::before {
-  display: inline;
+  display: inline-block;
+  flex: none;
   color: var(--github-alert-color);
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 1.05rem;
+  letter-spacing: 0;
+  margin-inline-end: 0.45em;
+  pointer-events: none;
+}
+
+.editor-mount .ProseMirror .nota-github-alert-marker::after {
+  display: inline-block;
+  color: var(--github-alert-color);
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.35;
   pointer-events: none;
 }
 
 .editor-mount .ProseMirror .nota-github-alert-editing-title .nota-github-alert-marker {
+  display: inline;
   font-family: var(--font-mono);
   font-size: inherit;
   color: var(--doc-muted);
@@ -62,42 +87,156 @@
   display: none;
 }
 
-.editor-mount .ProseMirror .nota-github-alert-note {
-  --github-alert-color: var(--accent);
+.editor-mount .ProseMirror .nota-github-alert-editing-title .nota-github-alert-marker::after {
+  display: none;
 }
 
-.editor-mount .ProseMirror .nota-github-alert-marker-note::before {
-  content: "ⓘ";
-}
-
-.editor-mount .ProseMirror .nota-github-alert-tip {
-  --github-alert-color: var(--success);
-}
-
-.editor-mount .ProseMirror .nota-github-alert-marker-tip::before {
-  content: "◆";
-}
-
+.editor-mount .ProseMirror .nota-github-alert-note,
+.editor-mount .ProseMirror .nota-github-alert-abstract,
+.editor-mount .ProseMirror .nota-github-alert-info,
+.editor-mount .ProseMirror .nota-github-alert-todo,
+.editor-mount .ProseMirror .nota-github-alert-question,
+.editor-mount .ProseMirror .nota-github-alert-example,
 .editor-mount .ProseMirror .nota-github-alert-important {
   --github-alert-color: var(--accent);
 }
 
-.editor-mount .ProseMirror .nota-github-alert-marker-important::before {
-  content: "❗";
+.editor-mount .ProseMirror .nota-github-alert-tip,
+.editor-mount .ProseMirror .nota-github-alert-success {
+  --github-alert-color: var(--success);
 }
 
 .editor-mount .ProseMirror .nota-github-alert-warning {
   --github-alert-color: var(--warn);
 }
 
-.editor-mount .ProseMirror .nota-github-alert-marker-warning::before {
-  content: "⚠";
-}
-
+.editor-mount .ProseMirror .nota-github-alert-failure,
+.editor-mount .ProseMirror .nota-github-alert-danger,
+.editor-mount .ProseMirror .nota-github-alert-bug,
 .editor-mount .ProseMirror .nota-github-alert-caution {
   --github-alert-color: var(--danger);
 }
 
-.editor-mount .ProseMirror .nota-github-alert-marker-caution::before {
+.editor-mount .ProseMirror .nota-github-alert-quote {
+  --github-alert-color: var(--fg-muted);
+}
+
+.editor-mount .ProseMirror .nota-github-alert-note .nota-github-alert-marker::before {
+  content: "ⓘ";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-note .nota-github-alert-marker::after {
+  content: "Note";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-abstract .nota-github-alert-marker::before {
+  content: "¶";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-abstract .nota-github-alert-marker::after {
+  content: "Abstract";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-info .nota-github-alert-marker::before {
+  content: "ℹ";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-info .nota-github-alert-marker::after {
+  content: "Info";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-todo .nota-github-alert-marker::before {
+  content: "☐";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-todo .nota-github-alert-marker::after {
+  content: "Todo";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-tip .nota-github-alert-marker::before {
+  content: "✦";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-tip .nota-github-alert-marker::after {
+  content: "Tip";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-important .nota-github-alert-marker::before {
+  content: "‼";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-important .nota-github-alert-marker::after {
+  content: "Important";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-success .nota-github-alert-marker::before {
+  content: "✓";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-success .nota-github-alert-marker::after {
+  content: "Success";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-question .nota-github-alert-marker::before {
+  content: "?";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-question .nota-github-alert-marker::after {
+  content: "Question";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-warning .nota-github-alert-marker::before {
+  content: "⚠";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-warning .nota-github-alert-marker::after {
+  content: "Warning";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-caution .nota-github-alert-marker::before {
   content: "⛔";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-caution .nota-github-alert-marker::after {
+  content: "Caution";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-failure .nota-github-alert-marker::before {
+  content: "×";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-failure .nota-github-alert-marker::after {
+  content: "Failure";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-danger .nota-github-alert-marker::before {
+  content: "!";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-danger .nota-github-alert-marker::after {
+  content: "Danger";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-bug .nota-github-alert-marker::before {
+  content: "◆";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-bug .nota-github-alert-marker::after {
+  content: "Bug";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-example .nota-github-alert-marker::before {
+  content: "▦";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-example .nota-github-alert-marker::after {
+  content: "Example";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-quote .nota-github-alert-marker::before {
+  content: "❝";
+}
+
+.editor-mount .ProseMirror .nota-github-alert-quote .nota-github-alert-marker::after {
+  content: "Quote";
 }

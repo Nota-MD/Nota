@@ -141,8 +141,36 @@ testCase("`> [!NOTE]` 不再变成 `> \\[!NOTE]`", () => {
   equal(roundtrip("> [!NOTE]\n> 内容\n"), "> [!NOTE]\n> 内容\n", "GitHub 提示块");
 });
 
-testCase("五种 `[!TYPE]` 一个不落", () => {
-  for (const typeValue2 of ["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]) {
+testCase("all supported callout names survive a roundtrip", () => {
+  for (const typeValue2 of [
+    "note",
+    "abstract",
+    "summary",
+    "tldr",
+    "info",
+    "todo",
+    "tip",
+    "hint",
+    "important",
+    "success",
+    "check",
+    "done",
+    "question",
+    "help",
+    "faq",
+    "warning",
+    "caution",
+    "attention",
+    "failure",
+    "fail",
+    "missing",
+    "danger",
+    "error",
+    "bug",
+    "example",
+    "quote",
+    "cite",
+  ]) {
     const source3 = `> [!${typeValue2}]\n> 甲\n`;
     equal(roundtrip(source3), source3, `${typeValue2} 那一型`);
   }
@@ -173,8 +201,7 @@ testCase("行中间的 `[TOC]` 保持原样", () => {
 
 testCase("残缺或不认识的提示块文本保持原字节", () => {
   equal(roundtrip("[!NOTE\n"), "[!NOTE\n", "只有左中括号");
-  equal(roundtrip("[!NOPE]\n"), "[!NOPE]\n", "不是那五种之一");
-  equal(roundtrip("[!note]\n"), "[!note]\n", "小写文本保持原样");
+  equal(roundtrip("[!NOPE]\n"), "[!NOPE]\n", "unknown callout");
 });
 
 testCase("脚注引用与真链接**一个字节都不动**（它们本来就该是它们的样子）", () => {

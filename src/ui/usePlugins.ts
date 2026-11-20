@@ -51,6 +51,7 @@ import { askParameter } from "@/ui/plugin-prompt";
 import { keyNameDescription } from "@/ui/pluginText";
 import type { Toast } from "@/ui/Toasts";
 import type { ConfirmAnswer, ConfirmRequest, PromptRequest } from "@/ui/useDialogs";
+import { pluginApiHintFromError, pluginApiHintKey } from "@/ui/plugin-api";
 import type { VimInputConfig } from "@/editor/plugin-vim-types";
 import { useEditorInput } from "@/ui/useEditorInput";
 
@@ -201,6 +202,7 @@ export function usePlugins({
   /** 见 [`PluginsState::信任`]。拉法与前三个一样。 */
   const [trustTable, setTrustTable] = useState<trustRecord[]>([]);
   const [pluginUpdate, setPluginUpdate] = useState<PluginUpdateInfo[]>([]);
+  const announcedStartupApiMismatch = useRef(new Set<string>());
   /** 正忙哪一个（插件 id 或 `"装"`）。见 [`插件动作::忙`]。 */
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -260,6 +262,31 @@ export function usePlugins({
       }
     })();
   }, [heavyPull, toast]);
+
+  useEffect(() => {
+    const incompatible = plugins.filter((plugin) => !plugin.api_supported);
+    const unseen = incompatible.filter((plugin) => {
+      const key = `${plugin.id}@${plugin.api}`;
+      if (announcedStartupApiMismatch.current.has(key)) return false;
+      announcedStartupApiMismatch.current.add(key);
+      return true;
+    });
+    if (unseen.length === 0) return;
+
+    const needsUpdate = unseen.some(
+      (plugin) => pluginApiHintKey(plugin.api, plugin.host_api) === "update",
+    );
+    toast(
+      t(
+        "{0} extension(s) did not start because their API version is incompatible. {1}",
+        unseen.length,
+        needsUpdate
+          ? t("Please check for a software update or contact the developer.")
+          : t("Please contact the developer."),
+      ),
+      "error",
+    );
+  }, [plugins, toast]);
 
   useEffect(() => {
     if (!extensionsEnabled) return;
@@ -469,7 +496,12 @@ export function usePlugins({
    * 失败返回 `null`（那时 `跑` 已经 toast 过了）。
    */
   const run = useCallback(
-    async <T,>(mark: string, doWhatWhat: () => Promise<T>, becomeDone?: string): Promise<T | null> => {
+    async <T,>(
+      mark: string,
+      doWhatWhat: () => Promise<T>,
+      becomeDone?: string,
+      onError?: (error: unknown) => Promise<void> | void,
+    ): Promise<T | null> => {
       setBusy(mark);
       try {
         const value2 = await doWhatWhat();
@@ -477,7 +509,8 @@ export function usePlugins({
         if (becomeDone) toast(becomeDone, "info");
         return value2;
       } catch (e) {
-        toast(String(e), "error");
+        if (onError) await onError(e);
+        else toast(String(e), "error");
         return null;
       } finally {
         setBusy(null);
@@ -602,7 +635,27 @@ export function usePlugins({
     }).catch(() => null);
     if (typeof select !== "string") return; // 用户取消 / 平台没给路径
 
-    const id = await run("装", () => api.plugin.install(select));
+    const id = await run(
+      "装",
+      () => api.plugin.install(select),
+      undefined,
+      async (error) => {
+        const fallback = plugins.find((plugin) => plugin.host_api)?.host_api ?? "";
+        const detail = pluginApiHintFromError(error, fallback);
+        await askConfirm({
+          title: t("Extension installation rejected"),
+          message:
+            detail.hint === "update"
+              ? `${String(error)}\n\n${t("Please check for a software update or contact the developer.")}`
+              : detail.hint === "contact"
+                ? `${String(error)}\n\n${t("Please contact the developer.")}`
+                : String(error),
+          hideCancel: true,
+          danger: true,
+          confirmLabel: t("OK"),
+        });
+      },
+    );
     if (id === null) return; // 装失败了，`跑` 已经 toast 过
 
     // 装完**直接问**（而不是只 toast 一句"去列表里点信任"）：用户刚选完文件，
@@ -618,7 +671,7 @@ export function usePlugins({
     if (!p) return;
     toast(t("Installed: {0} ({1})", p.name, keyNameDescription(p.signature)), "info");
     if (p.signature === "unknown") await trustPlugin(p.id, p.key_id);
-  }, [run, trustPlugin, toast]);
+  }, [askConfirm, plugins, run, trustPlugin, toast]);
 
   const guideIt = useCallback(
     async (id: string) => {

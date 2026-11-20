@@ -985,9 +985,8 @@ export function ContextMenu(wiring: contextMenuWiring) {
     <ContextMenuPanel
       line3={open2.line3}
       DropPoint={open2.position2}
-      // ⚠️ **进来的时候挑一次**（`这一档的灰`）：输入框那一档一个都不灰。
-      // 拿外面那份原样的 `灰` 会把它那条**有实现**的「全选」按成灰的
-      // ——2026-10-04 开窗口检抓到的，理由与量到的画面见那个函数。
+      // Input locations use no disabled entries. Reusing the outer disabled
+      // map marked the implemented Select All command as unavailable.
       disabled2={disabledForLocation(open2.DropPoint, disabled2)}
       check={check}
       cursor={cursor}

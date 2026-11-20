@@ -1,9 +1,8 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
+import { api } from "@/bridge/ipc";
 import type { PanelNode } from "@/ui/panel-nodes";
 import { Select, Toggle } from "@/ui/settings/primitives";
-
-const FILE_IMPORT_LIMIT = 1024 * 1024;
 
 export type PanelControl = Extract<
   PanelNode,
@@ -78,8 +77,30 @@ function FileImportControl({
   disabled: boolean;
   onFile: (file: { name: string; text: string }) => void;
 }) {
-  const input = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
+  const [picking, setPicking] = useState(false);
+
+  const pick = async () => {
+    if (disabled || picking) return;
+    setPicking(true);
+    setError("");
+    try {
+      const filters = node.accept
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.startsWith("."))
+        .map((item) => item.slice(1));
+      const selected = await api.picker.textFile({
+        title: node.label,
+        filters: filters.length > 0 ? [{ name: node.label, extensions: filters }] : undefined,
+      });
+      if (selected) onFile(selected);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setPicking(false);
+    }
+  };
 
   return (
     <div className="panel-control panel-control-file">
@@ -87,33 +108,11 @@ function FileImportControl({
       <button
         type="button"
         className="panel-btn"
-        disabled={disabled}
-        onClick={() => input.current?.click()}
+        disabled={disabled || picking}
+        onClick={() => void pick()}
       >
         {node.buttonLabel}
       </button>
-      <input
-        ref={input}
-        hidden
-        type="file"
-        accept={node.accept}
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0];
-          event.currentTarget.value = "";
-          if (!file) return;
-          if (file.size > FILE_IMPORT_LIMIT) {
-            setError("File is larger than 1 MiB.");
-            return;
-          }
-          void file
-            .text()
-            .then((text) => {
-              setError("");
-              onFile({ name: file.name, text });
-            })
-            .catch((reason) => setError(String(reason)));
-        }}
-      />
       {error && <span className="panel-control-error">{error}</span>}
     </div>
   );

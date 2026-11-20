@@ -11,7 +11,7 @@ Feature completeness remains authoritative in
 
 | Item | Current state |
 |---|---|
-| Source version | `0.15.1-beta` |
+| Source version | `0.16.0-beta` |
 | Supported release platforms | Linux and Windows |
 | macOS | Adaptation exists, but no supported build or release pipeline yet |
 | Extensions | Six official extensions ship from `Nota-plugins`; installers do not bundle them |

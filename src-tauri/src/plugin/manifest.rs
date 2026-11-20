@@ -7,7 +7,7 @@
 //! id          = "nota.git"          # 全局唯一，点号分层；宿主用它做覆盖与依赖
 //! name        = "Git 版本控制"       # 给人看的名字
 //! version     = "0.1.0"             # 插件自己的版本，不代表 ABI
-//! api         = 2                   # 需要的宿主 API 版本，**精确匹配**
+//! api         = "v2.3"              # required host API, same major and no newer minor
 //! entry       = "main.lua"          # 入口脚本，相对插件目录
 //! description = "…"
 //! authors     = ["…"]
@@ -85,16 +85,17 @@
 //! 命令写在清单里（清单是随插件一起安装、走签名校验的那份文件），Lua 那边
 //! 交不出第二个程序名来。细节见 `src-tauri/src/devserver.rs`。
 //!
-//! # 为什么 `api` 是精确匹配而不是 `>=`
+//! # API compatibility
 //!
-//! 与 Folio 的 `FO_PLUGIN_API_VERSION` 同一条理由（见 `docs/11`）：宿主与内置插件
-//! 永远同批构建，`>=` 只会让"插件作者以为存在一个他没见过的新版本"这种事发生。
-//! 号一变，内置插件同批改号，没有迁移动作。什么时候该动号、什么时候不该动，
-//! 判据写在 `docs/11-writing-a-plugin.md`。
+//! API versions use `vMAJOR.MINOR`. Minor releases are backward compatible;
+//! major releases are not. A host accepts the same major version with a plugin
+//! minor version no newer than the host's supported minor.
 
+use std::fmt;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::{NotaError, Result};
 use crate::lang;
@@ -105,19 +106,84 @@ use super::settings_decl;
 // `commands/plugin.rs` 都在用）。
 pub use settings_decl::SettingDecl;
 
-/// 宿主 API 版本。**当前是 2**。
+/// Host API version. Current value: `v2.3`.
 ///
 /// 动它的判据（与 Folio 一致）：
-/// - 给 Lua 侧的 `nota.*` 表**增加**成员 —— 不动号（老插件照样跑）；
-/// - **改名**某个 `nota.*` 成员，或**改变它的语义** —— 动号（老插件会静默拿到别的东西）；
-/// - 增删 `capabilities` 里的取值，并让它影响放行 —— 动号。
-///
-/// ⚠️ **1 → 2 就是第三条**（2026-09-25）：加了 `process.devserver` 与
-/// `ui.open_url` 两个取值。它们**不影响老插件**（老插件申请不到、也不会去申请），
-/// 但按上面那条判据还是动了号——理由和 `>=` 不用是同一条：**号是一个整体承诺**，
-/// 分成"有时严格有时宽松"之后，插件作者就得记住哪些改动会动号、哪些不会，
-/// 而记错的表现是**插件在别人的机器上静默换了行为**。两个内置插件同批改成 2。
-pub const NOTA_PLUGIN_API_VERSION: u32 = 2;
+/// - Add members to `nota.*`: increment `MINOR`.
+/// - Rename a member or change its semantics: increment `MAJOR`.
+/// - Add capabilities compatibly: increment `MINOR`.
+/// - Remove or redefine capability behavior: increment `MAJOR`.
+pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 3);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PluginApiVersion {
+    pub major: u16,
+    pub minor: u16,
+}
+
+impl PluginApiVersion {
+    pub const fn new(major: u16, minor: u16) -> Self {
+        Self { major, minor }
+    }
+
+    pub fn supports(self, requested: Self) -> bool {
+        self.major == requested.major && requested.minor <= self.minor
+    }
+}
+
+impl fmt::Display for PluginApiVersion {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "v{}.{}", self.major, self.minor)
+    }
+}
+
+impl FromStr for PluginApiVersion {
+    type Err = String;
+
+    fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
+        let Some(rest) = value.strip_prefix('v') else {
+            return Err("API version must use vMAJOR.MINOR".to_owned());
+        };
+        let Some((major, minor)) = rest.split_once('.') else {
+            return Err("API version must use vMAJOR.MINOR".to_owned());
+        };
+        if major.is_empty() || minor.is_empty() || major.contains('.') || minor.contains('.') {
+            return Err("API version must use vMAJOR.MINOR".to_owned());
+        }
+        Ok(Self {
+            major: major.parse().map_err(|_| "invalid API major version".to_owned())?,
+            minor: minor.parse().map_err(|_| "invalid API minor version".to_owned())?,
+        })
+    }
+}
+
+impl Serialize for PluginApiVersion {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for PluginApiVersion {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Text(String),
+            Legacy(u16),
+        }
+
+        match Raw::deserialize(deserializer)? {
+            Raw::Text(value) => value.parse().map_err(serde::de::Error::custom),
+            Raw::Legacy(major) => Ok(Self::new(major, 0)),
+        }
+    }
+}
 
 /// 插件可以申请的能力。宿主按此放行 Lua API——
 /// **没申请就用不了**，不是"申请了就随便用"。
@@ -222,7 +288,7 @@ pub struct PluginMeta {
     pub name: String,
     #[serde(default = "default_version")]
     pub version: String,
-    pub api: u32,
+    pub api: PluginApiVersion,
     #[serde(default = "default_entry")]
     pub entry: String,
     #[serde(default)]
@@ -370,6 +436,16 @@ impl Manifest {
 
     /// 从 `plugin.toml` 读并校验。
     pub fn load(path: &Path) -> Result<Self> {
+        Self::load_maybe_unchecked(path, true)
+    }
+
+    /// Parse enough of a manifest to identify an incompatible plugin without
+    /// accepting it for execution.
+    pub(crate) fn load_unchecked(path: &Path) -> Result<Self> {
+        Self::load_maybe_unchecked(path, false)
+    }
+
+    fn load_maybe_unchecked(path: &Path, check_api: bool) -> Result<Self> {
         let text = std::fs::read_to_string(path).map_err(|source| NotaError::Read {
             path: path.to_path_buf(),
             source,
@@ -395,6 +471,7 @@ impl Manifest {
             file.settings,
             dir,
             path,
+            check_api,
         )
     }
 
@@ -405,6 +482,7 @@ impl Manifest {
         settings: Vec<SettingDecl>,
         dir: PathBuf,
         file: &Path,
+        check_api: bool,
     ) -> Result<Self> {
         // ── id：点号分层的小写标识 ───────────────────────────────────────
         if meta.id.is_empty() {
@@ -424,12 +502,12 @@ impl Manifest {
             });
         }
 
-        // ── api：精确匹配 ────────────────────────────────────────────────
-        if meta.api != NOTA_PLUGIN_API_VERSION {
+        // ── api：same major, requested minor not newer than host ─────────
+        if check_api && !NOTA_PLUGIN_API_VERSION.supports(meta.api) {
             return Err(NotaError::PluginApiMismatch {
                 id: meta.id.clone(),
-                wanted: meta.api,
-                have: NOTA_PLUGIN_API_VERSION,
+                wanted: meta.api.to_string(),
+                have: NOTA_PLUGIN_API_VERSION.to_string(),
             });
         }
 
@@ -672,7 +750,7 @@ pub(crate) mod tests {
 [plugin]
 id = "nota.git"
 name = "Git"
-api = 2
+api = "v2.3"
 capabilities = ["document.read", "process.git"]
 "#,
         );
@@ -711,18 +789,71 @@ capabilities = ["document.read", "process.git"]
         let _ = std::fs::remove_dir_all(&dir);
         write_manifest(
             &dir,
-            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 99\n",
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v3.0\"\n",
         );
 
         let err = Manifest::load(&dir.join("plugin.toml")).unwrap_err();
-        assert!(
-            // ⚠️ `have` 用常量而不是字面量：这条用例问的是"**版本不符会不会被拦**、
-            // 报的数对不对"，不是"宿主现在是第几版"。写死一个数的话，每次升版本
-            // 都会红一条**与它无关**的用例（2026-09-25 升 2 的时候就这样红过）。
-            matches!(err, NotaError::PluginApiMismatch { wanted: 99, have: NOTA_PLUGIN_API_VERSION, .. }),
-            "实际：{err}"
-        );
+        match err {
+            NotaError::PluginApiMismatch {
+                wanted,
+                have,
+                ..
+            } => {
+                assert_eq!(wanted, "v3.0");
+                assert_eq!(have, NOTA_PLUGIN_API_VERSION.to_string());
+            }
+            other => panic!("actual: {other}"),
+        }
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn api_minor_compatibility_is_one_way() {
+        let dir = std::env::temp_dir().join("nota-manifest-api-minor");
+        let _ = std::fs::remove_dir_all(&dir);
+        write_manifest(
+            &dir,
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.2\"\n",
+        );
+        assert!(Manifest::load(&dir.join("plugin.toml")).is_ok());
+
+        write_manifest(
+            &dir,
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.4\"\n",
+        );
+        assert!(Manifest::load(&dir.join("plugin.toml")).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn incompatible_directory_manifest_can_be_identified_without_being_accepted() {
+        let dir = std::env::temp_dir().join("nota-manifest-api-identified");
+        let _ = std::fs::remove_dir_all(&dir);
+        write_manifest(
+            &dir,
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v3.0\"\n",
+        );
+        let path = dir.join("plugin.toml");
+        assert!(Manifest::load(&path).is_err());
+        let manifest = Manifest::load_unchecked(&path).unwrap();
+        assert_eq!(manifest.meta.id, "x.y");
+        assert_eq!(manifest.meta.api.to_string(), "v3.0");
+        assert!(!NOTA_PLUGIN_API_VERSION.supports(manifest.meta.api));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn legacy_numeric_api_is_read_as_minor_zero() {
+        let dir = std::env::temp_dir().join("nota-manifest-api-legacy");
+        let _ = std::fs::remove_dir_all(&dir);
+        write_manifest(
+            &dir,
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 2\n",
+        );
+        let manifest = Manifest::load(&dir.join("plugin.toml")).unwrap();
+        assert_eq!(manifest.meta.api, PluginApiVersion::new(2, 0));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -732,7 +863,7 @@ capabilities = ["document.read", "process.git"]
         let _ = std::fs::remove_dir_all(&dir);
         write_manifest(
             &dir,
-            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 2\nentry = \"../../evil.lua\"\n",
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.3\"\nentry = \"../../evil.lua\"\n",
         );
 
         assert!(Manifest::load(&dir.join("plugin.toml")).is_err());
@@ -746,7 +877,7 @@ capabilities = ["document.read", "process.git"]
         let _ = std::fs::remove_dir_all(&dir);
         write_manifest(
             &dir,
-            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = 2\ncapabilities = [\"fs.everything\"]\n",
+            "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.3\"\ncapabilities = [\"fs.everything\"]\n",
         );
 
         let err = Manifest::load(&dir.join("plugin.toml")).unwrap_err();
@@ -764,10 +895,10 @@ capabilities = ["document.read", "process.git"]
     fn 点开头的目录不当插件() {
         let dir = std::env::temp_dir().join("nota-manifest-dotdir");
         let _ = std::fs::remove_dir_all(&dir);
-        write_manifest(&dir.join("a.b"), "[plugin]\nid = \"a.b\"\nname = \"A\"\napi = 2\n");
+        write_manifest(&dir.join("a.b"), "[plugin]\nid = \"a.b\"\nname = \"A\"\napi = \"v2.3\"\n");
         write_manifest(
             &dir.join(".装到一半-1"),
-            "[plugin]\nid = \"a.b\"\nname = \"A\"\napi = 2\n",
+            "[plugin]\nid = \"a.b\"\nname = \"A\"\napi = \"v2.3\"\n",
         );
 
         let 找到 = find_manifests(&dir);
@@ -787,7 +918,7 @@ capabilities = ["document.read", "process.git"]
 [plugin]
 id = "x.y"
 name = "X"
-api = 2
+api = "v2.3"
 
 [update]
 manifest = "http://example.com/latest.json"
@@ -801,7 +932,7 @@ manifest = "http://example.com/latest.json"
 [plugin]
 id = "x.y"
 name = "X"
-api = 2
+api = "v2.3"
 
 [update]
 manifest = "https://example.com/latest.json"

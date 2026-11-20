@@ -17,6 +17,12 @@ export const moveLineTable: Record<string, string> = {
   "Saved to {0}": "已保存到 {0}",
   "Copied to clipboard": "已复制到剪贴板",
   "Could not read extension status: {0}": "读取拓展状态失败：{0}",
+  "Extension installation rejected": "拓展安装被拒绝",
+  "Please check for a software update or contact the developer.":
+    "请检查软件版本或联系开发者。",
+  "Please contact the developer.": "请联系开发者。",
+  "{0} extension(s) did not start because their API version is incompatible. {1}":
+    "有 {0} 个拓展因 API 版本不兼容而未启动。{1}",
   "Could not read the in-editor preview status: {0}": "读取编辑区预览状态失败：{0}",
   "Could not close the preview: {0}": "收起预览失败：{0}",
   "Could not run “{1}” from extension {0}: {2}": "拓展 {0} 的「{1}」没跑成：{2}",

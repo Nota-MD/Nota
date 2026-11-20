@@ -178,6 +178,8 @@ interface Props {
   /** 只读：用来在「文档主题」那一页显示当前是哪套、以及深色主题的可选项。 */
   docThemes: DocThemeInfo[];
   onOpenThemesDir: () => void;
+  /** Rescan document themes after files are copied into the theme directory. */
+  onRefreshThemes: () => void;
   /** 只读：界面风格的清单（内置的 ＋ 用户导入的），「外观」那一页的下拉用。 */
   uiStyles: UiStyleInfo[];
   /** 打开用户界面风格目录（`~/.config/nota/themes/ui`）。 */
@@ -235,6 +237,7 @@ export function SettingsDialog({
   onClose,
   docThemes,
   onOpenThemesDir,
+  onRefreshThemes,
   uiStyles,
   onOpenStylesDir,
   onRefreshUiStyles,
@@ -351,6 +354,7 @@ export function SettingsDialog({
       onChange,
       docThemes,
       onOpenThemesDir,
+      onRefreshThemes,
       uiStyles,
       onOpenStylesDir,
       onRefreshUiStyles,

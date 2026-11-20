@@ -38,6 +38,7 @@
 import { Schema } from "@milkdown/kit/prose/model";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { EditorState } from "@milkdown/kit/prose/state";
+import { readFileSync } from "node:fs";
 
 import {
   createLinkTransaction,
@@ -380,6 +381,19 @@ testCase("摘链接事务：**文字一个字节不动**，掉的只有标记", 
 
 testCase("摘链接事务：空区间 → 不派事务", () => {
   equal(removeLinkTransaction(state(document(paragraph2(chain("Nota", "u")))), { from: 1, to: 1 }), null, "空区间");
+});
+
+testCase("Ctrl/Cmd click skips source reveal and reaches the opener path", () => {
+  const reveal = readFileSync("src/editor/link-source-reveal.ts", "utf8");
+  const click = readFileSync("src/ui/useLinkClick.ts", "utf8");
+  assertValue(
+    /mousedown:[\s\S]*?event\.ctrlKey[\s\S]*?event\.metaKey[\s\S]*?preventDefault\(\)/s.test(reveal),
+    "command-click still enters link source editing",
+  );
+  assertValue(
+    click.indexOf("if (e.ctrlKey || e.metaKey)") < click.indexOf("await askLink"),
+    "command-click reaches the edit dialog before the browser",
+  );
 });
 
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */

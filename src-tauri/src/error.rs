@@ -46,8 +46,8 @@ pub enum NotaError {
     #[error("拓展 {id} 需要 API 版本 {wanted}，宿主是 {have}")]
     PluginApiMismatch {
         id: String,
-        wanted: u32,
-        have: u32,
+        wanted: String,
+        have: String,
     },
 
     #[error("Lua 出错（拓展 {plugin}）：{message}")]

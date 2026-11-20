@@ -88,7 +88,7 @@
 .editor-frontmatter {
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: var(--z-editor-banner, 29);
   padding: calc(var(--spacing) / 2) var(--spacing);
   border-bottom: 1px solid color-mix(in srgb, CanvasText 16%, Canvas);
   /* 这一段属于编辑器外壳，不属于文档主题。`--fg` / `--bg` 会在

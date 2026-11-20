@@ -43,6 +43,13 @@ testCase("两个入口分别打开文档主题与界面主题目录", () => {
   contains(docPane, "Document themes folder…", "文档主题页入口不明确");
 });
 
+testCase("document theme folder row can rescan copied themes", () => {
+  const docPane = read("src/ui/settings/panes/DocThemePane.tsx");
+  contains(docPane, "onRefreshThemes", "document theme page has no refresh callback");
+  contains(docPane, '>{t("Refresh")}</ActionButton>', "document theme page has no refresh button");
+  contains(read("src/App.tsx"), "onRefreshThemes={() => void refreshThemes()}", "refresh callback is not wired");
+});
+
 testCase("文档主题页用自绘选择框，并按明暗模式写对应设置", () => {
   const docPane = read("src/ui/settings/panes/DocThemePane.tsx");
   contains(docPane, "<Select", "当前主题不是选择框");

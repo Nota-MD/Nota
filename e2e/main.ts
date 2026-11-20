@@ -8,6 +8,8 @@ import type { Document as NotaDocument } from "@/bridge/ipc";
 import { createEditor, type EditorHandle } from "@/editor/create";
 import { applyDocTheme } from "@/styles/doc-theme";
 import { imageOnlyFromClipboardHtml } from "@/ui/useImageInsert";
+import { PanelMarkdown } from "@/ui/panel-markdown";
+import { TableToolbar } from "@/ui/TableToolbar";
 import { TabBar } from "@/ui/TabBar";
 import { ZoomHud } from "@/ui/ZoomHud";
 import { showZoomHud } from "@/ui/zoom-hud-state";
@@ -22,6 +24,7 @@ import "@/styles/code-block.css";
 import "@/styles/marks.css";
 import "@/styles/diagram.css";
 import "@/styles/math.css";
+import "@/styles/github-alert.css";
 import "@/styles/tabs-status.css";
 import "katex/dist/katex.min.css";
 
@@ -73,7 +76,13 @@ async function waitFor<T extends Element>(selector: string, timeout = 5000): Pro
     const found = document.querySelector<T>(selector);
     if (found) return found;
     if (performance.now() - started > timeout) {
-      throw new Error(`Timed out waiting for ${selector}`);
+      const preview = document.querySelector<HTMLElement>(".nota-diagram-preview");
+      const detail = preview
+        ? `; diagram state=${preview.dataset.state ?? "unset"} text=${JSON.stringify(
+            preview.textContent?.slice(0, 500) ?? "",
+          )}`
+        : "";
+      throw new Error(`Timed out waiting for ${selector}${detail}`);
     }
     await sleep(20);
   }
@@ -1750,6 +1759,23 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       await pasteText("hi@nota.app");
       const pasted = await waitFor<HTMLAnchorElement>('a[href="mailto:hi@nota.app"]');
       assertEqual(pasted.textContent, "hi@nota.app", "pasted email display text changed");
+      await mount("");
+      const mixed = "See https://mixed.example.com, mail mixed@example.com";
+      await pasteText(mixed);
+      await nextFrames();
+      assertEqual(
+        serialized(),
+        "See <https://mixed.example.com>, mail <mixed@example.com>",
+        "mixed plain-text paste was not serialized as links",
+      );
+      assert(
+        document.querySelector('a[href="https://mixed.example.com"]') !== null,
+        "URL inside pasted prose was not linked",
+      );
+      assert(
+        document.querySelector('a[href="mailto:mixed@example.com"]') !== null,
+        "email inside pasted prose was not linked",
+      );
     },
   },
   {
@@ -2973,7 +2999,7 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "Mermaid escapes the optional prose width",
+    name: "Mermaid scales wide diagrams into the preview width",
     async run() {
       const prose = await mount(
         "```mermaid\nflowchart LR\n  A[Start] --> B[Finish]\n```",
@@ -2990,10 +3016,22 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         block.getBoundingClientRect().width > 600,
         `diagram was constrained to the prose measure: ${block.getBoundingClientRect().width}px`,
       );
-      assertEqual(
-        svg.style.width,
-        "100%",
-        "Mermaid kept an inline natural width instead of filling wide content",
+      const preview = svg.closest<HTMLElement>(".nota-diagram-preview");
+      assert(preview, "diagram preview frame is missing");
+      const previewStyle = getComputedStyle(preview);
+      const availableWidth =
+        preview.clientWidth -
+        (Number.parseFloat(previewStyle.paddingLeft) || 0) -
+        (Number.parseFloat(previewStyle.paddingRight) || 0);
+      const svgRect = svg.getBoundingClientRect();
+      const previewRect = preview.getBoundingClientRect();
+      assert(
+        svgRect.width <= availableWidth + 1,
+        `diagram SVG is clipped horizontally: svg=${svgRect.width}, available=${availableWidth}`,
+      );
+      assert(
+        svgRect.left >= previewRect.left && svgRect.right <= previewRect.right + 1,
+        "diagram SVG extends outside its preview frame",
       );
     },
   },
@@ -3488,6 +3526,283 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
       assert(
         elapsed < 15_000,
         `full fixture export took ${Math.round(elapsed)}ms; budget is 15000ms`,
+      );
+    },
+  },
+  {
+    name: "Typora math dollars, live TOC, callouts, and GFM code colors render",
+    async run() {
+      await mount([
+        "[TOC]",
+        "",
+        "# Intro",
+        "",
+        "> [!note] Custom note",
+        "> Body",
+        "",
+        "> [!abstract]",
+        "> Alias body",
+        "",
+        "```gfm",
+        "# Heading",
+        "",
+        "**bold**",
+        "```",
+        "",
+        "This expression uses `\\$` to display a dollar sign: $\\sqrt{\\$4}$",
+        "",
+        "To split <span>$</span>100 in half, we calculate $\u200b100/2$",
+      ].join("\n"));
+      await nextFrames(4);
+
+      await nextFrames(4);
+      const toc = document.querySelector<HTMLElement>(".nota-live-toc");
+      assert(toc, "live TOC did not render");
+      assert(toc.textContent?.includes("Intro") === true, "live TOC did not include the heading");
+      assert(
+        document.querySelectorAll(".nota-github-alert").length === 2,
+        "callout aliases did not produce two alert shells",
+      );
+      assert(
+        document.querySelector(".nota-github-alert-abstract") !== null,
+        "abstract callout alias is missing",
+      );
+      const noteMarker = document.querySelector<HTMLElement>(".nota-github-alert-marker-note");
+      assert(noteMarker, "note callout marker missing");
+      assert(
+        getComputedStyle(noteMarker, "::before").content.includes("ⓘ"),
+        `note callout icon missing: ${getComputedStyle(noteMarker, "::before").content}`,
+      );
+      assert(
+        getComputedStyle(noteMarker, "::after").content.includes("Note"),
+        `note callout title missing: ${getComputedStyle(noteMarker, "::after").content}`,
+      );
+      assert(
+        document.querySelectorAll(".nota-math-inline").length === 2,
+        "escaped or HTML-wrapped dollars split the math nodes",
+      );
+      assert(
+        document.querySelectorAll(".nota-math-inline .katex-error").length === 0,
+        "KaTeX reported an error for a dollar escape",
+      );
+      assert(
+        document.querySelectorAll(".nota-code-cm .token").length > 0,
+        "gfm fenced code has no syntax colors",
+      );
+      const markdown = serialized();
+      assert(markdown.includes("[TOC]"), "live TOC changed the Markdown source");
+      assert(markdown.includes("> [!abstract]"), "callout alias gained an escape on save");
+    },
+  },
+  {
+    name: "AI panel messages render safe Markdown",
+    async run() {
+      const host = document.createElement("div");
+      document.body.append(host);
+      const root = createRoot(host);
+      flushSync(() => {
+        root.render(
+          createElement(PanelMarkdown, {
+            text: [
+              "## Answer",
+              "",
+              "Use **bold**, `code`, a [link](https://example.com), and:",
+              "",
+              "- first",
+              "- second",
+              "",
+              "```ts",
+              "const value = 1;",
+              "```",
+              "",
+              "<script>window.__notaUnsafe = true</script>",
+            ].join("\n"),
+          }),
+        );
+      });
+      await nextFrames();
+      assert(host.querySelector(".panel-md-heading") !== null, "Markdown heading did not render");
+      assert(host.querySelector("strong")?.textContent === "bold", "Markdown bold did not render");
+      assert(host.querySelector("code")?.textContent === "code", "inline code did not render");
+      assert(host.querySelector("ol, ul") !== null, "Markdown list did not render");
+      assert(host.querySelector("pre code")?.textContent === "const value = 1;", "fenced code did not render");
+      assert(host.querySelector("a")?.getAttribute("href") === "https://example.com", "link did not render");
+      assert(!host.querySelector("script"), "raw HTML reached the AI message DOM");
+      assert(
+        host.textContent?.includes("<script>window.__notaUnsafe = true</script>") === true,
+        "raw HTML was not preserved as escaped text",
+      );
+      flushSync(() => root.unmount());
+      host.remove();
+    },
+  },
+  {
+    name: "sequence and flow fences render as diagrams without type headers",
+    async run() {
+      await mount(
+        [
+          "```sequence",
+          "对象A->>对象B: 你好",
+          "对象B-->>对象A: 你好",
+          "```",
+          "",
+          "```flow",
+          "A[Start] --> B[End]",
+          "```",
+        ].join("\n"),
+      );
+      const deadline = performance.now() + 12_000;
+      while (
+        document.querySelectorAll('.nota-diagram-preview[data-state="ok"]').length < 2 &&
+        performance.now() < deadline
+      ) {
+        await sleep(50);
+      }
+      assertEqual(
+        document.querySelectorAll(".nota-diagram").length,
+        2,
+        "sequence or flow fence did not enter the diagram frame",
+      );
+      assertEqual(
+        document.querySelectorAll('.nota-diagram-preview[data-state="ok"]').length,
+        2,
+        `sequence or flow diagram failed to render: ${JSON.stringify(document.querySelector(".ProseMirror")?.innerHTML)}`,
+      );
+      assert(
+        serialized().includes("```sequence") && serialized().includes("```flow"),
+        `diagram alias source was rewritten on save: ${JSON.stringify(serialized())}`,
+      );
+    },
+  },
+  {
+    name: "spreadsheet formula input accepts pointer focus",
+    async run() {
+      await mount(
+        [
+          "Before",
+          "",
+          "| A | B |",
+          "| --- | --- |",
+          "| one | two |",
+        ].join("\n"),
+      );
+      await requestNativeKey("arrow-down");
+      await requestNativeKey("arrow-right");
+      const host = document.createElement("div");
+      document.body.append(host);
+      const root = createRoot(host);
+      flushSync(() => {
+        root.render(
+          createElement(TableToolbar, {
+            visible: true,
+            documentKey: "spreadsheet-e2e",
+            run: () => undefined,
+            spreadsheet: true,
+          }),
+        );
+      });
+      await nextFrames(3);
+      const input = await waitFor<HTMLInputElement>(".sheet-formula-bar input");
+      input.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      input.dispatchEvent(
+        new MouseEvent("click", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      assertEqual(document.activeElement, input, "formula input did not receive focus");
+      flushSync(() => root.unmount());
+      host.remove();
+    },
+  },
+  {
+    name: "pending heading keeps source styling while the caret is inside",
+    async run() {
+      await mount("");
+      await typeText("# 下载代理");
+      await nextFrames();
+      assert(
+        document.querySelector(".nota-heading-pending") !== null,
+        "typed heading did not enter the pending source state",
+      );
+      await requestNativeKey("arrow-left");
+      assert(
+        document.querySelector(".nota-heading-pending") !== null,
+        "moving the caret inside a pending heading rendered it prematurely",
+      );
+      assert(
+        document.querySelector(".nota-heading-rendered-block") === null,
+        "pending heading switched to its rendered block while the caret was inside",
+      );
+    },
+  },
+  {
+    name: "link source collapses after clicking outside the editor",
+    async run() {
+      await mount("Before\n\n[Nota](https://example.com) after", { keyboardExperience: true });
+      const link = await waitFor<HTMLElement>(".ProseMirror a, .nota-link-source");
+      if (link.matches("a")) {
+        await requestNativeKey("arrow-down");
+        await requestNativeKey("arrow-right");
+      }
+      await nextFrames(3);
+      assert(
+        document.querySelector(".nota-link-source") !== null,
+        "clicking the link did not reveal its source",
+      );
+      const outside = document.createElement("div");
+      document.body.append(outside);
+      outside.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+        }),
+      );
+      await nextFrames(3);
+      assert(
+        document.querySelector(".nota-link-source") === null,
+        "link source remained visible after clicking outside",
+      );
+      assert(
+        document.querySelector(".ProseMirror a") !== null,
+        "collapsed link did not return to link form",
+      );
+      outside.remove();
+    },
+  },
+  {
+    name: "explicit and source link labels share one theme color",
+    async run() {
+      await mount("Before\n\n[One](https://a.com) and [Two](https://b.com)", {
+        keyboardExperience: true,
+      });
+      await waitFor<HTMLElement>(".ProseMirror a");
+      await requestNativeKey("arrow-down");
+      await requestNativeKey("arrow-right");
+      await nextFrames();
+      const pane = await waitFor<HTMLElement>(".editor-pane");
+      pane.style.setProperty("--link", "rgb(12, 34, 56)");
+      pane.style.setProperty("--link-color", "rgb(255, 0, 0)");
+      await nextFrames();
+      const sourceLabel = await waitFor<HTMLElement>(".nota-link-source-label");
+      const rendered = await waitFor<HTMLElement>(".ProseMirror a");
+      assertEqual(
+        getComputedStyle(sourceLabel).color,
+        getComputedStyle(rendered).color,
+        "source and rendered links use different colors",
+      );
+      assertEqual(
+        getComputedStyle(sourceLabel).color,
+        "rgb(12, 34, 56)",
+        "link source ignored the unified --link token",
       );
     },
   },

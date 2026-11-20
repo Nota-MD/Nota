@@ -21,6 +21,11 @@ These rules are mandatory for every source change.
 7. Do not add emoji to source code, comments, or English documentation.
 8. Maintainer documentation is concise English unless it is an explicit
    translation resource.
+9. Extension API versions use `vMAJOR.MINOR`.
+   Minor releases may add APIs but must remain backward compatible. Major
+   releases may make incompatible changes. Hosts accept plugins from the same
+   major version only, and the plugin's minor version must not exceed the
+   host's supported minor version.
 
 ## Exceptions
 

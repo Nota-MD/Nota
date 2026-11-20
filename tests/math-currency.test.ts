@@ -150,6 +150,34 @@ const schema = new Schema({
         runner: (state, node) => state.addNode("text", undefined, node.text as string),
       },
     },
+    inline_code: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { value: { default: "" } },
+      parseMarkdown: {
+        match: ({ type }) => type === "inlineCode",
+        runner: (state, node, type) => state.addNode(type, { value: node.value }),
+      },
+      toMarkdown: {
+        match: (node) => node.type.name === "inline_code",
+        runner: (state, node) => state.addNode("inlineCode", undefined, node.attrs.value),
+      },
+    },
+    html: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { value: { default: "" } },
+      parseMarkdown: {
+        match: ({ type }) => type === "html",
+        runner: (state, node, type) => state.addNode(type, { value: node.value }),
+      },
+      toMarkdown: {
+        match: (node) => node.type.name === "html",
+        runner: (state, node) => state.addNode("html", undefined, node.attrs.value),
+      },
+    },
     math_inline: ctx.get(inlineMathSpec.key)(ctx),
     math_block: ctx.get(mathBlockSchema.key)(ctx),
   },
@@ -198,6 +226,20 @@ function measureCommonStyle(source3: string, expected: string[], description: st
     throw new Error(`${description}：期望 ${JSON.stringify(expected)}，实际 ${JSON.stringify(actual)}`);
   }
 }
+
+group("一½、转义美元与行内 HTML");
+
+testCase("escaped dollar stays inside inline math", () => {
+  const source3 = "This expression uses `\\$` to display a dollar sign: $\\sqrt{\\$4}$\n";
+  measureCommonStyle(source3, ["\\sqrt{\\$4}"], "escaped dollar split the formula");
+  equal(roundtrip(source3), source3, "escaped math dollar changed on roundtrip");
+});
+
+testCase("a dollar inside inline HTML does not open math", () => {
+  const source3 = "To split <span>$</span>100 in half, we calculate $\u200b100/2$\n";
+  measureCommonStyle(source3, ["\u200b100/2"], "HTML dollar opened the next formula");
+  equal(roundtrip(source3), source3, "HTML dollar changed on roundtrip");
+});
 
 /* ── 一、判据（纯函数，不做任何分词）──────────────────────────────────── */
 

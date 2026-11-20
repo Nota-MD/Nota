@@ -64,6 +64,7 @@
   --radius-sm: 0;
   --accent: #1a1a1a; /* 强调色就是墨色：任务项那个勾是黑底白勾，最"极简"的一档 */
   --accent-fg: #ffffff;
+  --link: var(--fg);
 
   /* ── 排版 ── */
   --font-doc: Georgia, "Iowan Old Style", "Palatino Linotype", "Noto Serif CJK SC",

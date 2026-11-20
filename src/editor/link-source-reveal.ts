@@ -219,6 +219,7 @@ function settleLinks(
   syntaxType: NodeType,
   reveal: boolean,
   caretOverride?: number,
+  collapseAll = false,
 ): SettleResult | null {
   const positions = linkSourceRevealKey.getState(state)?.positions ?? [];
   const tr = state.tr;
@@ -229,6 +230,7 @@ function settleLinks(
     if (!node || node.type.name !== linkSourceName) continue;
     const end = position + node.nodeSize;
     if (
+      !collapseAll &&
       state.selection.from >= position &&
       state.selection.to <= end
     ) {
@@ -323,11 +325,18 @@ export const linkSourceReveal = $prose((ctx) => {
   const dispatchSettle = (
     editorView: EditorView,
     reveal: boolean,
+    collapseAll = false,
   ): void => {
     if (settling || editorView.isDestroyed) return;
     settling = true;
     try {
-      const result = settleLinks(editorView.state, syntaxType, reveal);
+      const result = settleLinks(
+        editorView.state,
+        syntaxType,
+        reveal,
+        undefined,
+        collapseAll,
+      );
       if (result) {
         editorView.dispatch(result.tr);
         if (result.revealedCaret !== null) {
@@ -381,8 +390,26 @@ export const linkSourceReveal = $prose((ctx) => {
     },
     view(editorView) {
       view = editorView;
+      const settleFromPointer = (event: MouseEvent) => {
+        if (event.ctrlKey || event.metaKey) return;
+        const target =
+          event.target instanceof Element
+            ? event.target
+            : event.target instanceof Node
+              ? event.target.parentElement
+              : null;
+        if (target?.closest(".nota-link-source")) return;
+        const outsideEditor = target === null || !editorView.dom.contains(target);
+        queueMicrotask(() => {
+          if (!editorView.isDestroyed) {
+            dispatchSettle(editorView, false, outsideEditor);
+          }
+        });
+      };
+      document.addEventListener("mousedown", settleFromPointer, true);
       return {
         destroy() {
+          document.removeEventListener("mousedown", settleFromPointer, true);
           cancelAnimationFrame(correctionFrame);
           view = null;
         },
@@ -391,6 +418,14 @@ export const linkSourceReveal = $prose((ctx) => {
     props: {
       decorations: linkSourceDecorations,
       handleDOMEvents: {
+        mousedown: (editorView, event) => {
+          if (!(event instanceof MouseEvent) || (!event.ctrlKey && !event.metaKey)) return false;
+          const target = event.target instanceof Element ? event.target : event.target instanceof Node ? event.target.parentElement : null;
+          if (!target?.closest("a[href]")) return false;
+          event.preventDefault();
+          editorView.dom.focus({ preventScroll: true });
+          return true;
+        },
         compositionend: () => {
           if (!view) return false;
           const editorView = view;

@@ -3071,12 +3071,11 @@ pub struct PluginPrompt {
 
 插件清单（`plugin.toml`）的解析与校验。文件头带着一份完整的清单样例与各栏的含义。
 
-### `pub const NOTA_PLUGIN_API_VERSION: u32 = 2;`
+### `pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 3);`
 
-宿主 API 版本，**当前是 2**。清单里的 `api` 与它**精确匹配**，不是 `>=`——
-与 Folio 的 `FO_PLUGIN_API_VERSION` 同一条理由：宿主与内置插件永远同批构建，
-`>=` 只会让"插件作者以为存在一个他没见过的新版本"这种事发生。号一变，内置插件同批改号，
-没有迁移动作。
+The current host API is `v2.3`. API versions use `vMAJOR.MINOR`. Minor releases
+are backward compatible; major releases are not. A plugin is accepted only when
+its major matches the host and its minor is not newer than the host minor.
 
 **什么时候该动号**（判据写在常量上方）：
 

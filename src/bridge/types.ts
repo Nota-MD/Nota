@@ -455,6 +455,9 @@ export interface PluginInfo {
   id: string;
   name: string;
   version: string;
+  api: string;
+  host_api: string;
+  api_supported: boolean;
   description: string;
   authors: string[];
   license: string;

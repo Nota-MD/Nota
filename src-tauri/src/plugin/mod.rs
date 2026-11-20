@@ -46,7 +46,7 @@ use crate::lua::api::i18n::语言包;
 use crate::lua::{HostContext, LuaPlugin, PluginState};
 use install::在用户目录里;
 use installed::{来路, Installed, Signature};
-use manifest::{find_manifests, Manifest};
+use manifest::{find_manifests, Manifest, NOTA_PLUGIN_API_VERSION};
 
 /// 上面 `types.rs` 里那些形状**原样转出**：`crate::plugin::PluginInfo`
 /// 这类路径一个字不用改（理由写在 `types.rs` 文件头）。
@@ -225,6 +225,30 @@ impl PluginHost {
             for manifest_path in find_manifests(&root) {
                 let manifest = match Manifest::load(&manifest_path) {
                     Ok(m) => m,
+                    Err(NotaError::PluginApiMismatch {
+                        id,
+                        wanted,
+                        have,
+                    }) => match Manifest::load_unchecked(&manifest_path) {
+                        Ok(manifest) => {
+                            let reason = format!(
+                                "extension {id} requires API {wanted}; this host supports {have}"
+                            );
+                            errors.push(format!("{}：{reason}", manifest_path.display()));
+                            if seen.insert(manifest.meta.id.clone()) {
+                                plugins.push(LuaPlugin::rejected(
+                                    manifest,
+                                    reason,
+                                    &base.应用语言,
+                                ));
+                            }
+                            continue;
+                        }
+                        Err(error) => {
+                            errors.push(format!("{}：{error}", manifest_path.display()));
+                            continue;
+                        }
+                    },
                     Err(e) => {
                         // 清单都读不了的插件，连 id 都不知道，只好单独记一笔。
                         errors.push(format!("{}：{e}", manifest_path.display()));
@@ -339,6 +363,9 @@ impl PluginHost {
                     // 账本全靠它）。理由见 `lua/api/i18n.rs::语言包::名字`。
                     name: p.语言.名字().unwrap_or(&m.name).to_owned(),
                     version: m.version.clone(),
+                    api: m.api.to_string(),
+                    host_api: NOTA_PLUGIN_API_VERSION.to_string(),
+                    api_supported: NOTA_PLUGIN_API_VERSION.supports(m.api),
                     // ⚠️ 简介与名字同一条规矩（保留键 `description` 盖掉清单里的）。
                     // 清单里写**英语**（主语言），中文那一份在 `lang/zh-CN.toml`。
                     description: p.语言.描述().unwrap_or(&m.description).to_owned(),

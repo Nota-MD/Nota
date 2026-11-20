@@ -209,7 +209,7 @@ mod tests {
         std::fs::write(
             dir.join("plugin.toml"),
             "[plugin]\nid = \"t.e\"\nname = \"导出测试\"\nversion = \"0.1.0\"\n\
-             api = 2\nentry = \"main.lua\"\ndescription = \"\"\n",
+             api = \"v2.3\"\nentry = \"main.lua\"\ndescription = \"\"\n",
         )
         .unwrap();
         std::fs::write(dir.join("main.lua"), "return {}\n").unwrap();

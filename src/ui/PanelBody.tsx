@@ -18,7 +18,7 @@
  * 宿主没实现、还是自己写错了字段名，而界面上一点线索都没有。
  */
 
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 
 import { useT } from "@/i18n";
 import { pushVerticalTick, formatNumber } from "@/ui/chart-ticks";
@@ -40,6 +40,7 @@ import type {
   PanelInput as PanelInputSpec,
   PanelNode,
 } from "@/ui/panel-nodes";
+import { PanelMarkdown } from "@/ui/panel-markdown";
 
 const PanelNetworkBlock = lazy(() =>
   import("@/ui/PanelNetwork").then((module) => ({ default: module.PanelNetworkBlock })),
@@ -456,8 +457,15 @@ function PanelInput({
   // ⚠️ 这是**另一个组件**，`PanelBody` 里那个 `t` 它够不着，得自己订阅一次
   // （`useT` 是 hook，不能在两个组件之间借用）。
   const t = useT();
-  const [draftDraft, setDraftDraft] = useState("");
+  const [draftDraft, setDraftDraft] = useState(spec.value);
+  const lastInitial = useRef(spec.value);
   const disabled2 = disabled || !spec.submit || !spec.arg;
+
+  useEffect(() => {
+    if (lastInitial.current === spec.value) return;
+    lastInitial.current = spec.value;
+    setDraftDraft(spec.value);
+  }, [spec.value]);
 
   const send = () => {
     const value2 = draftDraft.trim();
@@ -472,7 +480,7 @@ function PanelInput({
         {spec.multiline ? (
           <textarea
             className="panel-input-box"
-            rows={3}
+            rows={spec.rows}
             value={draftDraft}
             placeholder={spec.placeholder}
             disabled={disabled2}
@@ -576,9 +584,13 @@ function PanelMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> 
   return (
     <div className={`panel-msg panel-msg-${node.from}`}>
       <span className="panel-msg-who">{node.from === "user" ? "你" : "AI"}</span>
-      {/* 预格式：AI 的回答里换行是内容的一部分（列表、代码、改动块），
-          当普通段落会被折叠成一行。仍然走 `{text}`——React 转义。 */}
-      <span className="panel-msg-text">{node.text}</span>
+      {node.from === "ai" ? (
+        <div className="panel-msg-text panel-msg-markdown">
+          <PanelMarkdown text={node.text} />
+        </div>
+      ) : (
+        <span className="panel-msg-text">{node.text}</span>
+      )}
       {node.copy && node.text !== "" && (
         <div className="panel-msg-actions">
           <button type="button" className="panel-msg-action" onClick={copy}>

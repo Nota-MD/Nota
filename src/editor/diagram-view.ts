@@ -80,7 +80,7 @@ import {
   type CodeBlockExitSide,
 } from "@/editor/code-block-boundary";
 
-import { imageTableSpec } from "@/editor/diagram-node";
+import { imageTableSpec, mermaidSourceForLanguage } from "@/editor/diagram-node";
 import {
   checkBufferSave,
   distinguishAgainFollowDone,
@@ -150,7 +150,7 @@ export const diagramView = $view(
       sourceBootstrap.value = readSource(initialNode);
       sourceBootstrap.rows = Math.max(3, sourceBootstrap.value.split("\n").length);
       sourceBootstrap.spellcheck = false;
-      sourceBootstrap.setAttribute("aria-label", t("Diagram Source (Mermaid)"));
+      sourceBootstrap.setAttribute("aria-label", t("Diagram source"));
       sourceBox.append(sourceBootstrap);
 
       const preview = document.createElement("div");
@@ -169,11 +169,11 @@ export const diagramView = $view(
       copy.type = "button";
       copy.className = "nota-code-btn";
       copy.textContent = t("Copy");
-      copy.title = t("Copy Mermaid source");
+      copy.title = t("Copy diagram source");
 
       const language = document.createElement("span");
       language.className = "nota-diagram-language";
-      language.textContent = "mermaid";
+      language.textContent = String(initialNode.attrs.language ?? "mermaid");
 
       sourceBar.append(collapse2, copy, language);
       sourceShell.append(sourceBox, sourceBar);
@@ -202,6 +202,35 @@ export const diagramView = $view(
       let editorStarted = false;
       let previewStarted = false;
       let visibilityObserver: IntersectionObserver | null = null;
+      let diagramImage: SVGSVGElement | null = null;
+
+      function fitDiagramWidth(): void {
+        const image = diagramImage;
+        if (!image || !image.isConnected) return;
+
+        const style = getComputedStyle(preview);
+        const horizontalPadding =
+          (Number.parseFloat(style.paddingLeft) || 0) +
+          (Number.parseFloat(style.paddingRight) || 0);
+        const availableWidth = Math.max(1, preview.clientWidth - horizontalPadding);
+        const viewBoxWidth = image.viewBox.baseVal.width;
+        const attributeWidth = Number.parseFloat(image.getAttribute("width") ?? "");
+        const naturalWidth =
+          viewBoxWidth > 0
+            ? viewBoxWidth
+            : Number.isFinite(attributeWidth) && attributeWidth > 0
+              ? attributeWidth
+              : availableWidth;
+
+        image.style.setProperty("width", `${Math.min(naturalWidth, availableWidth)}px`, "important");
+        image.style.setProperty("max-width", "100%", "important");
+        image.style.setProperty("height", "auto", "important");
+        image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+      }
+
+      const previewResizeObserver =
+        typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fitDiagramWidth);
+      previewResizeObserver?.observe(preview);
       // ── 画 ────────────────────────────────────────────────────────────
 
       /**
@@ -274,6 +303,7 @@ export const diagramView = $view(
        */
       function draw(result2: RenderResult | null): void {
         rendered = true;
+        diagramImage = null;
         preview.replaceChildren();
 
         if (result2 === null) {
@@ -307,12 +337,21 @@ export const diagramView = $view(
         preview.innerHTML = result2.imageShape;
         const image = preview.querySelector("svg");
         if (image instanceof SVGSVGElement) {
-          // Mermaid writes width/max-width inline. Let the diagram use the
-          // available editor width, matching Typora's wide block treatment.
-          image.style.width = "100%";
-          image.style.maxWidth = "100%";
-          image.style.height = "auto";
+          diagramImage = image;
+          fitDiagramWidth();
         }
+      }
+
+      function drawExternal(languageName: string, source2: string): void {
+        rendered = true;
+        preview.dataset.state = "source";
+        preview.replaceChildren(
+          descriptionCard(
+            t("{0} diagrams use the diagram frame, but this build has no local renderer.", languageName),
+            source2,
+            t("Edit source"),
+          ),
+        );
       }
 
       /** 第一帧专用：还没画过任何东西时先摆一句，免得是个空盒子。 */
@@ -328,6 +367,8 @@ export const diagramView = $view(
        */
       async function sameStep(): Promise<void> {
         const source2 = readSource(current);
+        const languageName = String(current.attrs.language ?? "mermaid");
+        language.textContent = languageName;
         const theme = readDiagramTheme(dom, view.dom);
         renderedTheme = theme.key;
 
@@ -339,11 +380,18 @@ export const diagramView = $view(
           return;
         }
 
+        if (languageName === "plantuml" || languageName === "graphviz") {
+          representNumber++;
+          drawExternal(languageName, source2);
+          return;
+        }
+
         // ⚠️ 键里带明暗：同一份源码在深色/浅色下是**两张图**，不能互相顶。
         // ⚠️ `identity` 可能是空串（schema 的默认值）——那时这条键是共用的，
         // 但下面的源码比对会挡住错用，代价只是那种块之间会来回顶掉缓存。
-        const key = `${getBodyPart(current)}|${theme.key}`;
-        const match = checkBufferSave(key, source2);
+        const renderSource = mermaidSourceForLanguage(languageName, source2);
+        const key = `${getBodyPart(current)}|${languageName}|${theme.key}`;
+        const match = checkBufferSave(key, renderSource);
         if (match) {
           representNumber++;
           draw(match);
@@ -354,10 +402,10 @@ export const diagramView = $view(
         // ⚠️ 已经画过就**留着上一版**：改一个字闪一下白是更糟的观感。
         if (!rendered) drawMiddle();
 
-        const result2 = await render(source2, theme);
+        const result2 = await render(renderSource, theme);
         // 期间节点又变了（或者视图没了）→ 这份结果作废。
         if (selfOfRepresentNumber !== representNumber) return;
-        writeBufferSave(key, source2, result2);
+        writeBufferSave(key, renderSource, result2);
         renderedTheme = theme.key;
         draw(result2);
       }
@@ -457,7 +505,10 @@ export const diagramView = $view(
             if (editorDisposed || !dom.isConnected) return;
             const editor = createCodeBlockEditor({
               initialStartText: readSource(current),
-              initialStartLanguage: "mermaid",
+              initialStartLanguage:
+                String(current.attrs.language ?? "mermaid") === "mermaid"
+                  ? "mermaid"
+                  : "plaintext",
               nativeLineNumbers: true,
               textChangeConvert: convertSource,
               clusterFocus: () => {
@@ -472,7 +523,7 @@ export const diagramView = $view(
             });
             codeEditor = editor;
             sourceBox.replaceChildren(editor.view.dom);
-            editor.view.contentDOM.setAttribute("aria-label", t("Diagram Source (Mermaid)"));
+            editor.view.contentDOM.setAttribute("aria-label", t("Diagram source"));
             editor.view.dom.addEventListener("keydown", (event) => {
               if (event.key !== "Escape") return;
               event.preventDefault();
@@ -621,6 +672,7 @@ export const diagramView = $view(
         destroy: () => {
           editorDisposed = true;
           visibilityObserver?.disconnect();
+          previewResizeObserver?.disconnect();
           // 在飞的渲染结果作废（它回来时视图已经没了）。
           representNumber++;
           // 只在**真有待派发的内容**时补一次：销毁常常发生在整篇文档被换掉

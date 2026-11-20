@@ -121,12 +121,7 @@ fn file_dialog(request: FileRequest) -> Result<Vec<PathBuf>, String> {
 
     let default_path = request.default_path.as_deref().map(Path::new);
     if let Some(path) = default_path {
-        let folder = if path.is_dir() {
-            Some(path)
-        } else {
-            path.parent()
-        };
-        if let Some(folder) = folder {
+        if let Some(folder) = initial_folder(path) {
             dialog.set_initial_folder(Some(&gio::File::for_path(folder)));
         }
         if request.mode == "save" {
@@ -196,6 +191,13 @@ fn file_dialog(request: FileRequest) -> Result<Vec<PathBuf>, String> {
     Ok(files.into_iter().filter_map(|file| file.path()).collect())
 }
 
+/// Return a usable initial folder. A bare save filename has an empty parent,
+/// which GTK4 rejects as an unsupported location.
+fn initial_folder(path: &Path) -> Option<&Path> {
+    let folder = if path.is_dir() { path } else { path.parent()? };
+    (!folder.as_os_str().is_empty()).then_some(folder)
+}
+
 fn print_dialog(pdf: &Path) -> Result<(), String> {
     let dialog = gtk::PrintDialog::new();
     dialog.set_title("Nota");
@@ -226,4 +228,23 @@ fn print_dialog(pdf: &Path) -> Result<(), String> {
 
 fn dialog_was_cancelled(error: &gtk::glib::Error) -> bool {
     error.matches(gtk::DialogError::Cancelled) || error.matches(gtk::DialogError::Dismissed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::initial_folder;
+    use std::path::Path;
+
+    #[test]
+    fn bare_save_name_has_no_initial_folder() {
+        assert_eq!(initial_folder(Path::new("nota-stats.png")), None);
+    }
+
+    #[test]
+    fn nested_save_name_keeps_its_parent() {
+        assert_eq!(
+            initial_folder(Path::new("/tmp/nota-stats.png")),
+            Some(Path::new("/tmp"))
+        );
+    }
 }

@@ -37,7 +37,9 @@
   font: inherit;
   text-align: center;
   text-overflow: ellipsis;
+  -webkit-appearance: none;
   appearance: none;
+  box-shadow: none;
 }
 
 .nota-code-btn:hover,
@@ -51,6 +53,7 @@
   color: var(--fg);
   border-color: var(--accent);
   outline: none;
+  box-shadow: 0 0 0 1px var(--accent);
   text-align: center;
   text-overflow: clip;
 }
@@ -148,6 +151,7 @@
   border-radius: 9px;
   background: var(--bg-raised);
   background: color-mix(in srgb, var(--bg-raised) 96%, transparent);
+  color-scheme: inherit;
   /* 投影用写死的黑：它在浅色和深色下都成立，而拿主题色去做投影会在
      深色主题下变成一圈看不见的灰。 */
   box-shadow:

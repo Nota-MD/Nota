@@ -391,6 +391,7 @@ export const inlineMathSpec = $nodeSchema("math_inline", (ctx) => {
     parseMarkdown: {
       ...original.parseMarkdown,
       runner: (state, node, type) => {
+        const value = String(node.value ?? "");
         // `closeNode()` resets every active mark in Milkdown's parser. Add the
         // inline atom directly so an enclosing strong/emphasis survives it.
         state.addNode(
@@ -399,7 +400,7 @@ export const inlineMathSpec = $nodeSchema("math_inline", (ctx) => {
             [dollarCountAttribute]: readDollarCount({ data: node.data }),
             [mathDelimiterAttribute]: readMathDelimiter({ data: node.data }),
           },
-          [state.schema.text(node.value as string)],
+          value ? [state.schema.text(value)] : undefined,
         );
       },
     },
@@ -429,6 +430,23 @@ const upstreamSingleDollarDollar = mathToMarkdown();
 /** 上游那份，显式关掉单美元 ⇒ 一律 2 个 `$`。 */
 const upstreamDoubleDollarDollar = mathToMarkdown({ singleDollarTextMath: false });
 
+const escapedDollarSentinel = "\uE000";
+
+function maskEscapedDollars(value: string): string {
+  let output2 = "";
+  let slashes = 0;
+  for (const character of value) {
+    if (character === "\\") {
+      slashes++;
+      output2 += character;
+      continue;
+    }
+    output2 += character === "$" && slashes % 2 === 1 ? escapedDollarSentinel : character;
+    slashes = 0;
+  }
+  return output2;
+}
+
 /**
  * 本仓的行内公式处理器：**按 `dollars` 选上游那一份**，一个字都不自己拼。
  *
@@ -442,10 +460,16 @@ export function inlineMathHandler(): InlinePlaceManageDevice {
     const value2 = String(node.value ?? "");
     if (delimiter === "paren") return `\\(${value2}\\)`;
     if (delimiter === "bracket") return `\\[${value2}\\]`;
-    const select = readDollarCount(node) >= 2 ? upstreamDoubleDollarDollar : upstreamSingleDollarDollar;
+    const single = readDollarCount(node) < 2;
+    const select = single ? upstreamSingleDollarDollar : upstreamDoubleDollarDollar;
     const placeManage = select.handlers?.inlineMath;
     if (!placeManage) return "";
-    return placeManage(node, parent, state, info);
+    if (!single) return placeManage(node, parent, state, info);
+
+    const maskedValue = maskEscapedDollars(value2);
+    if (maskedValue === value2) return placeManage(node, parent, state, info);
+    const maskedNode = { ...node, value: maskedValue };
+    return placeManage(maskedNode, parent, state, info).replaceAll(escapedDollarSentinel, "$");
   };
 }
 
@@ -563,6 +587,17 @@ export function notConvertMeaningDollarDollar(source?: textHandler): textHandler
     if (!output.includes("\\$")) return output;
     const parentNode = parent as MdastNode | undefined;
     if (!parentNode || !recognizeObtainOfParent.has(parentNode.type)) return output; // 判据 1
+    const children = parentNode.children ?? [];
+    const index = children.indexOf(node as MdastNode);
+    const previous = index > 0 ? children[index - 1] : undefined;
+    const next = index >= 0 ? children[index + 1] : undefined;
+    const htmlWrappedDollar =
+      String((node as MdastNode).value ?? "").trim() === "$" &&
+      previous?.type === "html" &&
+      next?.type === "html" &&
+      /^<[A-Za-z][^>]*>$/.test(String(previous.value ?? "").trim()) &&
+      /^<\//.test(String(next.value ?? "").trim());
+    if (htmlWrappedDollar) return output.replace(isConvertMeaningOfDollarDollar, "$1$");
     if (countDollars(parentNode.children) !== countDollars((node as MdastNode).value)) return output; // 判据 2
     return output.replace(isConvertMeaningOfDollarDollar, "$1$");
   };

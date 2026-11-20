@@ -64,6 +64,7 @@
   --radius-sm: 2px;
   --accent: #1d12e2; /* hyperref colorlinks 的群青色 */
   --accent-fg: #ffffff;
+  --link: var(--accent);
 
   /* ── 排版 ──
      ⚠️ 这一串**不许精简**：前两档是 LaTeX 自己的字体（装了才有），

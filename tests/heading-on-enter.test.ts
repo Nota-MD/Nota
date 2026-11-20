@@ -293,25 +293,23 @@ testCase("前缀与正文分别套 `nota-heading-prefix` / `nota-heading-pending
   );
 });
 
-testCase("已经离开过的标题段落再点回来：仍是完整标题，不缩回待成块正文", () => {
+testCase("returning the caret to a pending heading keeps its source state visible", () => {
   const doc = combine2(paragraphGroup("# 已完成的标题"));
   const items = computeDecorationsItem(doc, false);
-  const settled = new WeakSet<typeof doc>();
-  settled.add(doc.firstChild!);
 
-  const collection = createDecorationCollection(doc, items, 4, settled);
+  const collection = createDecorationCollection(doc, items, 4);
   const classes = setAboveOf(collection).join(" ");
   assertion(
-    classes.includes("nota-heading-rendered-block"),
-    `点回已完成的标题后仍在使用待成块正文样式：${classes}`,
+    classes.includes("nota-heading-pending"),
+    `returning the caret did not restore source state: ${classes}`,
   );
   assertion(
-    !classes.includes("nota-heading-pending"),
-    `点回已完成的标题后仍加了待成块加粗：${classes}`,
+    !classes.includes("nota-heading-rendered-block"),
+    `returning the caret left the rendered block decoration active: ${classes}`,
   );
 });
 
-testCase("点击标题正文内部：即使第一次进入也按完整标题显示", () => {
+testCase("placing the caret anywhere inside a pending heading shows its source state", () => {
   const doc = combine2(paragraphGroup("# 已完成的标题"));
   const collection = createDecorationCollection(
     doc,
@@ -320,8 +318,8 @@ testCase("点击标题正文内部：即使第一次进入也按完整标题显�
   );
   const classes = setAboveOf(collection).join(" ");
   assertion(
-    classes.includes("nota-heading-rendered-block"),
-    `点击标题内部后仍缩回待成块正文：${classes}`,
+    classes.includes("nota-heading-pending"),
+    `the heading rendered while the caret was inside it: ${classes}`,
   );
 });
 

@@ -552,7 +552,7 @@ mod tests {
         std::fs::write(
             dir.join("plugin.toml"),
             format!(
-                "[plugin]\nid = \"nota.{name}\"\nname = \"T\"\napi = 2\n\
+                "[plugin]\nid = \"nota.{name}\"\nname = \"T\"\napi = \"v2.3\"\n\
                  capabilities = [\"process.devserver\"]\n\
                  \n[devserver]\ncmd = \"echo\"\nargs = [\"{{port}}\"]\n\
                  entry = \".nota-{name}-{{doc}}.md\"\n"

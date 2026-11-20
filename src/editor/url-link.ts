@@ -49,7 +49,7 @@ import { $inputRule } from "@milkdown/kit/utils";
 import { linkSchema } from "@milkdown/kit/preset/commonmark";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { InputRule } from "@milkdown/kit/prose/inputrules";
-import type { MarkType } from "@milkdown/kit/prose/model";
+import type { MarkType, Node as PMNode } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
@@ -726,4 +726,46 @@ export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: 
   return state.tr
     .addMark(selection.from, selection.to, link.create({ href: normalized.href }))
     .removeStoredMark(link);
+}
+
+/**
+ * Link recognized URL and email tokens inside a larger pasted plain-text block.
+ * The visible paste text remains byte-for-byte identical apart from the hidden
+ * link marks. Markdown source is handled by the Markdown paste path first.
+ */
+export function linkifiedPastedTextTransaction(
+  state: EditorState,
+  pastedText: string,
+): Transaction | null {
+  const link = state.schema.marks.link;
+  if (!link || pastedText === "") return null;
+  const { selection } = state;
+  if (!selection.$from.parent.inlineContent || !selection.$to.parent.inlineContent) {
+    return null;
+  }
+
+  const pattern =
+    /(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:mailto:\/{0,2})?[a-z0-9][a-z0-9._%+-]*@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+/gi;
+  const boundary = /[\s([{（【「『"'“‘>\uFFFC]/u;
+  const nodes: PMNode[] = [];
+  let cursor = 0;
+  let linked = 0;
+  for (const match of pastedText.matchAll(pattern)) {
+    const start = match.index ?? 0;
+    const raw = match[0] ?? "";
+    if (!raw) continue;
+    if (start > 0 && !boundary.test(pastedText[start - 1] ?? "")) continue;
+    if (start >= 2 && pastedText.slice(start - 2, start) === "](") continue;
+    const { url, tailPart } = splitTailPunctuation(raw);
+    const normalized = NormalizeLink(url);
+    if (!normalized) continue;
+    if (start > cursor) nodes.push(state.schema.text(pastedText.slice(cursor, start)));
+    nodes.push(state.schema.text(normalized.text, [link.create({ href: normalized.href })]));
+    if (tailPart) nodes.push(state.schema.text(tailPart));
+    cursor = start + raw.length;
+    linked++;
+  }
+  if (!linked) return null;
+  if (cursor < pastedText.length) nodes.push(state.schema.text(pastedText.slice(cursor)));
+  return state.tr.replaceWith(selection.from, selection.to, nodes).removeStoredMark(link);
 }

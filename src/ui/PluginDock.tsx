@@ -91,6 +91,7 @@ import { DockResizer } from "@/ui/DockResizer";
 import { Icon } from "@/ui/Icon";
 import { MenuPopup } from "@/ui/MenuPopup";
 import { PanelBody } from "@/ui/PanelBody";
+import { debugEvent } from "@/ui/debug-log";
 import type { MenuEntry } from "@/ui/commands";
 import {
   recordRecall,
@@ -404,6 +405,7 @@ export function PluginDock({
     let alive = true;
 
     void on<PanelStreamPayload>(events.pluginStream, ({ plugin, text }) => {
+      debugEvent("plugin", "panel stream", { plugin, length: text.length });
       setActualTimeTable((m) => ({ ...m, [plugin]: text }));
     }).then((u) => {
       if (alive) unlisten = u;

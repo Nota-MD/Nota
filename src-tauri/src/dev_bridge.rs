@@ -195,7 +195,7 @@ fn run_rpc(
                 "version": env!("CARGO_PKG_VERSION"),
                 "protocol": 1,
                 "documents": docs,
-                "apiVersion": crate::plugin::manifest::NOTA_PLUGIN_API_VERSION,
+                "apiVersion": crate::plugin::manifest::NOTA_PLUGIN_API_VERSION.to_string(),
             }))
         }
         "editor.status" => {
@@ -220,7 +220,7 @@ fn run_rpc(
                 "app": "Nota",
                 "version": env!("CARGO_PKG_VERSION"),
                 "protocol": 1,
-                "apiVersion": crate::plugin::manifest::NOTA_PLUGIN_API_VERSION,
+                "apiVersion": crate::plugin::manifest::NOTA_PLUGIN_API_VERSION.to_string(),
                 "active": active,
                 "documents": list,
             }))

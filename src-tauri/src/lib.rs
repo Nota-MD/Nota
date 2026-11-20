@@ -468,6 +468,7 @@ pub fn run() {
             commands::file_picker::nota_picker_list,
             commands::file_picker::nota_picker_create_dir,
             commands::native_dialog::nota_dialog_native,
+            commands::native_dialog::nota_dialog_text_file,
             commands::document::nota_doc_new,
             commands::document::nota_doc_new_with_text,
             commands::document::nota_doc_open,

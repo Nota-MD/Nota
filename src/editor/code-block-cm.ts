@@ -141,11 +141,18 @@ export type ColorBlock = { from: number; to2: number; class: string };
  */
 export function shareColor(text2: string, language: string): ColorBlock[] {
   if (!text2 || !language) return [];
-  if (!refractor.listLanguages().includes(language)) return [];
+  const languageAlias: Readonly<Record<string, string>> = {
+    gfm: "markdown",
+    md: "markdown",
+    mkd: "markdown",
+    latex: "latex",
+  };
+  const resolvedLanguage = languageAlias[language.toLowerCase()] ?? language;
+  if (!refractor.listLanguages().includes(resolvedLanguage)) return [];
 
   let tree: ShareWordNode;
   try {
-    tree = refractor.highlight(text2, language) as unknown as ShareWordNode;
+    tree = refractor.highlight(text2, resolvedLanguage) as unknown as ShareWordNode;
   } catch {
     return [];
   }

@@ -55,7 +55,7 @@ pub fn build(
 
     // ── 永远可用：身份 ────────────────────────────────────────────────────
     set(nota.set("version", env!("CARGO_PKG_VERSION")), lua)?;
-    set(nota.set("api_version", NOTA_PLUGIN_API_VERSION), lua)?;
+    set(nota.set("api_version", NOTA_PLUGIN_API_VERSION.to_string()), lua)?;
     set(nota.set("plugin_id", manifest.meta.id.clone()), lua)?;
 
     // ── 永远可用：拓展自带的只读资源 ─────────────────────────────────────
@@ -416,7 +416,7 @@ mod tests {
                 // ⚠️ 版本号用**常量**插值：宿主升版本时这份夹具跟着走。
                 // 写死一个数的话，那条 API 版本精确匹配的规矩会让这里先红——
                 // 而红灯指的方向（"改夹具里的数字"）与真正要改的东西毫无关系。
-                "[plugin]\nid = \"nota.{名字}\"\nname = \"T\"\napi = {版本}\ncapabilities = [{caps}]\n",
+                "[plugin]\nid = \"nota.{名字}\"\nname = \"T\"\napi = \"{版本}\"\ncapabilities = [{caps}]\n",
                 版本 = NOTA_PLUGIN_API_VERSION
             ),
         )

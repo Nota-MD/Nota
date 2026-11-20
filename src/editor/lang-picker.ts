@@ -54,9 +54,12 @@ const popupMostLargeHeight = 360;
 const continueCarryOftoken = [
   "--bg-raised",
   "--bg-subtle",
+  "--bg-hover",
   "--doc-bg",
   "--fg",
   "--fg-muted",
+  "--fg-faint",
+  "--border",
   "--border-strong",
   "--accent",
   "--accent-fg",

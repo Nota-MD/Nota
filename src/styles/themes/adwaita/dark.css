@@ -24,6 +24,7 @@
   /* ⚠️ 强调色**不翻**成浅蓝：Adwaita Dark 里那个蓝还是 `#3584e4`
      （深色下它照样够亮），翻浅了反而不像这一套了。 */
   --accent: #3584e4;
+  --link: var(--accent);
   --accent-fg: #ffffff;
   --select-text-bg-color: #1d5a9e;
   --select-text-font-color: #ffffff;

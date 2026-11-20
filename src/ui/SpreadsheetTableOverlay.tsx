@@ -146,6 +146,7 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
   const anchor = useRef<Point | null>(null);
   const selection = useRef<Range | null>(null);
   const fillSource = useRef<Range | null>(null);
+  const formulaInput = useRef<HTMLInputElement | null>(null);
   const dragging = useRef(false);
   const filling = useRef(false);
 
@@ -155,8 +156,9 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
       return;
     }
     let frame = 0;
+    let polling = 0;
+    let lastGeometry = "";
     const measure = () => {
-      frame = 0;
       const selected = window.getSelection();
       const element =
         selected?.anchorNode instanceof Element
@@ -167,33 +169,60 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
         setLayout(null);
         return;
       }
+      const pane = table.closest<HTMLElement>(".editor-pane");
+      const viewport = pane?.getBoundingClientRect();
+      if (!viewport) {
+        setLayout(null);
+        return;
+      }
+      const banner = pane?.querySelector<HTMLElement>(".editor-frontmatter");
+      const contentTop = Math.max(
+        viewport.top,
+        banner ? banner.getBoundingClientRect().bottom : viewport.top,
+      );
       const tableRect = table.getBoundingClientRect();
       const active = cellPoint(element) ?? { row: 0, column: 0 };
       const range = selection.current ?? normalizeRange(active, active);
       const box = boxForRange(table, range);
       if (!box) return;
-      const columns = Array.from(table.rows[0].cells).map((cell, index) => {
+      const columns = Array.from(table.rows[0].cells).flatMap((cell, index) => {
         const rect = cell.getBoundingClientRect();
-        return {
+        const top = Math.max(contentTop, rect.top - 27);
+        const bottom = Math.min(viewport.bottom, rect.top - 1);
+        if (bottom <= top) return [];
+        return [{
           index,
           label: columnLabel(index),
-          left: rect.left,
-          top: rect.top - 27,
-          width: rect.width,
-          height: 26,
-        };
-      });
-      const rows = Array.from(table.rows).map((row, index) => {
+          left: Math.max(viewport.left, rect.left),
+          top,
+          width: Math.max(0, Math.min(rect.right, viewport.right) - Math.max(viewport.left, rect.left)),
+          height: bottom - top,
+        }];
+      }).filter((column) => column.width > 0);
+      const rows = Array.from(table.rows).flatMap((row, index) => {
         const rect = row.getBoundingClientRect();
-        return {
+        const top = Math.max(contentTop, rect.top);
+        const bottom = Math.min(viewport.bottom, rect.bottom);
+        if (bottom <= top) return [];
+        return [{
           index,
           label: String(index + 1),
-          left: rect.left - 34,
-          top: rect.top,
+          left: Math.max(viewport.left, rect.left - 34),
+          top,
           width: 33,
-          height: rect.height,
-        };
+          height: bottom - top,
+        }];
       });
+      const visibleBox = {
+        left: Math.max(viewport.left, box.left),
+        top: Math.max(contentTop, box.top),
+        right: Math.min(viewport.right, box.left + box.width),
+        bottom: Math.min(viewport.bottom, box.top + box.height),
+      };
+      if (visibleBox.right <= visibleBox.left || visibleBox.bottom <= visibleBox.top) {
+        setLayout(null);
+        return;
+      }
       setLayout({
         table,
         tableRect,
@@ -201,20 +230,50 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
         rows,
         selection: range,
         active,
-        box,
-        formulaTop: Math.max(4, tableRect.top - 62),
+        box: {
+          left: visibleBox.left,
+          top: visibleBox.top,
+          width: visibleBox.right - visibleBox.left,
+          height: visibleBox.bottom - visibleBox.top,
+        },
+        formulaTop: Math.max(
+          contentTop + 4,
+          Math.min(viewport.bottom - 30, tableRect.top - 62),
+        ),
       });
       setDraft(activeCell(table, active)?.textContent ?? "");
+    };
+    const syncGeometry = () => {
+      const selected = window.getSelection();
+      const element =
+        selected?.anchorNode instanceof Element
+          ? selected.anchorNode
+          : selected?.anchorNode?.parentElement ?? null;
+      const table = element?.closest<HTMLTableElement>(".ProseMirror table");
+      const rect = table?.getBoundingClientRect();
+      const geometry = rect
+        ? `${rect.left}:${rect.top}:${rect.width}:${rect.height}:${window.innerWidth}`
+        : "none";
+      if (geometry === lastGeometry) return;
+      lastGeometry = geometry;
+      frame = 0;
+      measure();
+    };
+    const poll = () => {
+      syncGeometry();
+      polling = requestAnimationFrame(poll);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
     schedule();
+    polling = requestAnimationFrame(poll);
     document.addEventListener("selectionchange", schedule);
     window.addEventListener("resize", schedule);
     window.addEventListener("scroll", schedule, true);
     return () => {
       if (frame) cancelAnimationFrame(frame);
+      if (polling) cancelAnimationFrame(polling);
       document.removeEventListener("selectionchange", schedule);
       window.removeEventListener("resize", schedule);
       window.removeEventListener("scroll", schedule, true);
@@ -305,12 +364,24 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
       <div
         className="sheet-formula-bar"
         style={{ top: layout.formulaTop, left: formulaLeft, width }}
+        onMouseDown={(event) => {
+          if (event.target === formulaInput.current) return;
+          event.preventDefault();
+          formulaInput.current?.focus();
+        }}
       >
         <span className="sheet-reference">{rangeLabel(layout.selection)}</span>
         <span className="sheet-formula-mark" aria-hidden="true">fx</span>
         <input
+          ref={formulaInput}
           value={draft}
           aria-label={t("Cell contents")}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.focus();
+          }}
+          onClick={(event) => event.stopPropagation()}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
           onKeyDown={(event) => {

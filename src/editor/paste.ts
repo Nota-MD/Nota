@@ -73,7 +73,11 @@ import { $prose } from "@milkdown/kit/utils";
 import { guessCodeLanguage, looksLikeCode } from "./lang-guess";
 import { automaticImageName, imageAddressOfPastedText } from "./image-kind";
 import { clearManagePastePasteHTML } from "./paste-clean";
-import { NormalizeLink, pasteAboveUrlTransaction } from "./url-link";
+import {
+  NormalizeLink,
+  linkifiedPastedTextTransaction,
+  pasteAboveUrlTransaction,
+} from "./url-link";
 import {
   determineSeparatorLine,
   isTwoRowTable,
@@ -405,6 +409,15 @@ export function pastePastePlaceManage(autoLinks = true) {
             looksLikeMarkdownSource(plainText) &&
             pasteBecomeMarkdown(view, ctx.get(parserCtx), plainText)
           ) return true;
+          // Plain prose containing one or more URLs/emails keeps every visible
+          // character and gains only link marks.
+          if (autoLinks && html.length === 0) {
+            const linkified = linkifiedPastedTextTransaction(view.state, plainText);
+            if (linkified) {
+              view.dispatch(linkified.scrollIntoView());
+              return true;
+            }
+          }
           // ── ⑦ Tab / CSV 纯文本：高置信二维数据直接建表。
           if (html.length === 0) {
             const pasted = recognizePastedTable(plainText);

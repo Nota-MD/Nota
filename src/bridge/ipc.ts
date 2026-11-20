@@ -58,6 +58,14 @@ export const api = {
       filters?: { name: string; extensions: string[] }[];
       multiple?: boolean;
     }) => invoke<string[] | null>("nota_dialog_native", { request }),
+    textFile: (request: {
+      title?: string;
+      defaultPath?: string;
+      filters?: { name: string; extensions: string[] }[];
+    }) =>
+      invoke<{ name: string; text: string } | null>("nota_dialog_text_file", {
+        request: { ...request, mode: "open", multiple: false },
+      }),
   },
 
   /**

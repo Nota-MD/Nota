@@ -137,6 +137,35 @@ testCase("editing an Alert marker stays plain source text like Typora", () => {
     !/content:\s*"(?:ⓘ Note|◆ Tip|❗ Important|⚠ Warning|⛔ Caution)"/.test(css),
     "Alert labels still repeat the type name after the icon",
   );
+  assertValue(
+    /\.nota-github-alert:not\(\.nota-github-alert-editing-title\)\s+\.nota-github-alert-marker\s*\{[^}]*display:\s*block;[^}]*width:\s*fit-content;/s.test(
+      css,
+    ),
+    "Alert body still starts on the marker line",
+  );
+});
+
+testCase("only the marker span reveals source while the body keeps its own line", () => {
+  const alert = schema.nodes.blockquote!.create(null, [paragraph("[!NOTE] Body")]);
+  const doc = schema.node("doc", null, [alert]);
+
+  const bodyState = stateAt(doc, 11);
+  const bodyDecorations = createGitHubAlertDecorations(bodyState).find(0, doc.content.size);
+  const bodyShell = bodyDecorations.find((item) => item.from === 0 && item.to === alert.nodeSize);
+  assertValue(!!bodyShell, "body state lost the Alert shell");
+  assertValue(
+    !String(bodyShell.type.attrs.class).includes("nota-github-alert-editing-title"),
+    "cursor in body text still reveals the raw marker",
+  );
+
+  const markerState = stateAt(doc, 3);
+  const markerDecorations = createGitHubAlertDecorations(markerState).find(0, doc.content.size);
+  const markerShell = markerDecorations.find((item) => item.from === 0 && item.to === alert.nodeSize);
+  assertValue(!!markerShell, "marker state lost the Alert shell");
+  assertValue(
+    String(markerShell.type.attrs.class).includes("nota-github-alert-editing-title"),
+    "cursor inside the marker does not reveal its source",
+  );
 });
 
 console.log(`\nPassed ${pass}; failed ${fail}`);

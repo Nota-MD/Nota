@@ -204,6 +204,20 @@ testCase("语言选择只有一个可编辑输入框和结果列表", () => {
   assertValue(picker.includes("const popupMostLargeHeight = 360;"), "语言列表高度仍被压得过低");
 });
 
+testCase("language picker follows document tokens and gfm gets Markdown colors", () => {
+  assertValue(picker.includes('"--bg-hover"'), "picker does not inherit hover color");
+  assertValue(picker.includes('"--border"'), "picker does not inherit document border");
+  assertValue(picker.includes('"--fg-faint"'), "picker does not inherit faint text");
+  assertValue(
+    cm.includes('gfm: "markdown"') && cm.includes("languageAlias[language.toLowerCase()]"),
+    "gfm is not highlighted as Markdown",
+  );
+  assertValue(
+    /\.nota-code-lang-input\s*\{[\s\S]*?box-shadow:\s*none;/s.test(chromeCss),
+    "native language input shadow remains",
+  );
+});
+
 testCase("思维导图向 Mermaid 显式传入明暗模式与完整节点配色", () => {
   assertValue(diagramRender.includes("darkMode: dark"), "mindmap 没有显式告诉 Mermaid 明暗模式");
   assertValue(diagramRender.includes("mainBkg: surface"), "缺少主节点底色");
@@ -231,13 +245,20 @@ testCase("思维导图向 Mermaid 显式传入明暗模式与完整节点配色"
     "Mermaid 仍被正文限宽约束",
   );
   assertValue(
-    /\.nota-diagram-preview svg\s*\{[^}]*width:\s*100%\s*!important/s.test(diagramCss),
-    "Mermaid SVG 没有使用可用内容宽度",
+    /\.nota-diagram-preview svg\s*\{[^}]*width:\s*auto;/s.test(diagramCss) &&
+      !/\.nota-diagram-preview svg\s*\{[^}]*width:\s*auto\s*!important/s.test(diagramCss),
+    "Mermaid SVG 的 CSS 仍会覆盖运行时宽度",
   );
   assertValue(
-    diagrams.includes('image.style.width = "100%"') &&
-      diagrams.includes('image.style.maxWidth = "100%"'),
-    "Mermaid 的内联宽度仍覆盖宽内容规则",
+    /\.nota-diagram-preview\s*\{[\s\S]*?max-height:\s*min\(72vh,\s*760px\);[\s\S]*?overflow:\s*auto/s.test(diagramCss),
+    "large diagrams are not bounded by the editor viewport",
+  );
+  assertValue(
+    diagrams.includes("image.viewBox.baseVal.width") &&
+      diagrams.includes("fitDiagramWidth") &&
+      diagrams.includes('image.style.setProperty("max-width", "100%", "important")') &&
+      diagrams.includes("new ResizeObserver(fitDiagramWidth)"),
+    "Mermaid 没有使用自然宽度、容器上限并在缩放时重算",
   );
 });
 

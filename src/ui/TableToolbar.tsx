@@ -39,6 +39,8 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
       return;
     }
     let frame = 0;
+    let polling = 0;
+    let lastGeometry = "";
     const standaloneImmediatelyFixedPosition = () => {
       frame = 0;
       const selection = window.getSelection();
@@ -51,6 +53,13 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
         return;
       }
       const rect = table.getBoundingClientRect();
+      const pane = table.closest<HTMLElement>(".editor-pane");
+      const paneRect = pane?.getBoundingClientRect();
+      const banner = pane?.querySelector<HTMLElement>(".editor-frontmatter");
+      const topBoundary = Math.max(
+        paneRect?.top ?? 0,
+        banner ? banner.getBoundingClientRect().bottom : (paneRect?.top ?? 0),
+      );
       const columns = table.rows[0]?.cells.length ?? 0;
       const rows = table.rows.length;
       setCurrent({ columns, rows });
@@ -60,10 +69,12 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
         Math.min(rect.width, window.innerWidth - 16),
       );
       setPosition({
-        top:
+        top: Math.max(
+          topBoundary + 4,
           rect.top >= (spreadsheet ? 104 : 44)
             ? rect.top - (spreadsheet ? 96 : 34)
             : rect.bottom + 4,
+        ),
         left: Math.max(
           8,
           Math.min(rect.left, window.innerWidth - width - 8),
@@ -71,16 +82,36 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
         width,
       });
     };
+    const syncGeometry = () => {
+      const selection = window.getSelection();
+      const anchor = selection?.anchorNode;
+      const element =
+        anchor instanceof Element ? anchor : anchor?.parentElement ?? null;
+      const table = element?.closest<HTMLTableElement>(".ProseMirror table");
+      const rect = table?.getBoundingClientRect();
+      const geometry = rect
+        ? `${rect.left}:${rect.top}:${rect.width}:${rect.height}:${window.innerWidth}`
+        : "none";
+      if (geometry === lastGeometry) return;
+      lastGeometry = geometry;
+      standaloneImmediatelyFixedPosition();
+    };
+    const poll = () => {
+      syncGeometry();
+      polling = requestAnimationFrame(poll);
+    };
     const locate = () => {
       if (frame) return;
       frame = requestAnimationFrame(standaloneImmediatelyFixedPosition);
     };
     locate();
+    polling = requestAnimationFrame(poll);
     document.addEventListener("selectionchange", locate);
     window.addEventListener("resize", locate);
     window.addEventListener("scroll", locate, true);
     return () => {
       if (frame) cancelAnimationFrame(frame);
+      if (polling) cancelAnimationFrame(polling);
       document.removeEventListener("selectionchange", locate);
       window.removeEventListener("resize", locate);
       window.removeEventListener("scroll", locate, true);

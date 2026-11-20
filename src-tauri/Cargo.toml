@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.15.1-beta"
+version = "0.16.0-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota - a WYSIWYG Markdown editor with Lua extensions"

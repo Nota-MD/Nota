@@ -188,7 +188,7 @@ local 表   = require("kit")            -- <插件目录>/kit/init.lua 也行
 
 ⚠️ **当前空 `resources` 是有意的**，不是漏配；只有重新决定随包时才需要处理目录映射。
 
-跨仓库契约在插件仓库的 `compatibility.json`：宿主 `api = 2`，四个官方插件的版本与各自
+跨仓库契约在插件仓库的 `compatibility.json`：宿主 `api = "v2.3"`，官方插件的版本与各自
 `plugin.toml` 必须一致；`Nota-plugins/tools/check-compatibility.sh` 和两仓 CI 都会检查。
 主仓库验证工作流会检出同级插件仓库并跑它的 `tools/check.sh`。
 
@@ -428,7 +428,7 @@ API 密钥就在那儿）与**数据**（`plugin-data/<id>/`）**本来就不在
 |---|---|---|---|---|---|
 | `id` | **必填** | — | string | 非空；只允许**小写字母、数字、`.`、`-`、`_`** | 空 → 「id 不能为空」；有别的字符 → 「id `X` 只能用小写字母、数字、`.`、`-`、`_`」 |
 | `name` | **必填** | — | string | 无 | 缺 → serde 的 `missing field \`name\``（TOML 解析错） |
-| `api` | **必填** | — | 整数 | **必须恰好等于宿主那个常量**（当前 `2`，`NOTA_PLUGIN_API_VERSION`） | 不等 → 「插件 `{id}` 需要 API 版本 {要的}，宿主是 {宿主那个}」，**拒载**。见 §4 |
+| `api` | **必填** | — | string | `vMAJOR.MINOR`; same major and no newer minor than the host | mismatch → readable error, **rejected**. Legacy integer `2` is read as `v2.0`. See §4 |
 | `langs` | 可选 | `[]`（**空 = 不协商**） | string 数组 | 语言标记（`zh-CN`、`en`…，走 `lang.rs::规范`）；**必须含 `en`** | 缺 `en` → 「``langs`` 里没有 `en`（现在写的是 `["zh-CN"]`）——英语是必须有的兜底……」，**拒载**。一写就参与协商，见 §2.4 |
 | `version` | 可选 | `"0.0.0"` | string | 无 | — |
 | `entry` | 可选 | `"main.lua"` | string | **插件目录内的相对路径**：不许含 `..`，不许绝对路径 | 违规 → 「entry `X` 必须是插件目录内的相对路径」 |
@@ -816,7 +816,7 @@ SHA-256，再走原有的 `.nota-plugin` 验签、签名者连续性检查和原
 | 名字 | 是什么 |
 |---|---|
 | `nota.version` | 宿主版本字符串（`env!("CARGO_PKG_VERSION")`，当前 `"0.1.0"`） |
-| `nota.api_version` | ABI 号，当前 `2`（`NOTA_PLUGIN_API_VERSION`，`manifest.rs:88`） |
+| `nota.api_version` | API version string, currently `"v2.3"` |
 | `nota.i18n` | `{app_lang, lang, ok, text(s)}`——插件自己的**文案表**（2026-09-25）。⭐ **不要能力**：路径由宿主用插件自己的目录拼，插件只交**键**。键就是"作者写下的那句原文"，取不到返回 `nil`（标准写法 `nota.i18n.text(s) or s`）。契约是 §2.4，代码在 `lua/api/i18n.rs` |
 | `nota.plugin_id` | 这个插件在清单里声明的 id（**原样**，如 `nota.git`——没归一化） |
 | `nota.log.info/warn/error(msg)` | 往宿主 stderr 打一行（⚠️ **默认不打**，要 `NOTA_DEBUG=1`，见 §6.3），前缀 `[nota:<插件 id>]` + 级别 |
@@ -998,61 +998,56 @@ Ctrl+Z 才发现"是最坏的一种错。
 
 ---
 
-## 4. ABI 版本
+## 4. API versions
 
-### 4.1 常量与精确匹配
+### 4.1 Format and compatibility
 
-```rust
-pub const NOTA_PLUGIN_API_VERSION: u32 = 2;    // manifest.rs:88
+```toml
+api = "v2.3"
 ```
 
-清单里的 `api` 栏**必须恰好等于**它：
+The host currently supports `v2.3`. A plugin is accepted only when:
 
-```rust
-if meta.api != NOTA_PLUGIN_API_VERSION {
-    return Err(NotaError::PluginApiMismatch { id, wanted: meta.api, have: NOTA_PLUGIN_API_VERSION });
-}                                              // manifest.rs:345-351
-```
+1. its major version equals the host major version;
+2. its minor version is not newer than the host minor version.
 
-不匹配得到的是**一条可读的错误信息**：「插件 `nota.git` 需要 API 版本 1，宿主是 2」
-（措辞在 `error.rs:39`）。
-这个错误发生在 `Manifest::load()` 里，所以 ⚠️ **不匹配的插件根本不会出现在插件列表里**
-——只在启动日志里有一行（见 §6.1）。
+Minor releases are backward compatible and may add API members. Major releases
+may rename members, change semantics or remove capabilities.
 
-### 4.2 为什么是精确匹配而不是 `>=`
+Legacy numeric manifests such as `api = 2` remain readable as `v2.0`.
 
-理由与 Folio 的 `FO_PLUGIN_API_VERSION` 同一条
-（写在 `manifest.rs:76-87` 那段常量注释里）：**宿主与内置插件永远同批构建**，
-`>=` 只会让"插件作者以为存在一个他没见过的新版本"这种事发生。
-号一变，内置插件同批改号，**没有迁移动作**（`1 → 2` 就是这么走的：
-两个内置插件同批改成 2，谁都没写迁移代码）。
+### 4.2 Rejection
 
-⚠️ 这条依赖 `AGENTS.md` §0.5 那条"首次提交 GitHub 之前不必兼容老插件"的口径。
-**它是有触发条件的，会到期**：一旦对外发布，老插件就得能加载，那时"精确匹配"
-要么改成 `>=`，要么给出迁移路径。
+An incompatible manifest is rejected before installation or execution. A
+copied directory remains visible as a failed extension so the user can identify
+it, but no Lua state is created. Import, update and hot-reload paths all use the
+same manifest validation.
 
-### 4.3 什么时候该动号
+Existing incompatible directories show a red error in Extension Management
+without a popup. Actively importing an incompatible package opens a blocking
+rejection dialog and does not write the package. A newer required API says
+"Please check for a software update or contact the developer"; an older major
+API says "Please contact the developer."
 
-三条判据（`manifest.rs:80-83`，原文照抄）：
+### 4.3 Bumping the version
 
-| 改动 | 动不动号 | 为什么 |
-|---|---|---|
-| 给 Lua 侧的 `nota.*` 表**增加**成员 | **不动** | 老插件照样跑——它不知道的新成员，对它就是不存在 |
-| **改名**某个 `nota.*` 成员 | **动** | 老插件会**静默拿到别的东西**（或者拿到 `nil`） |
-| **改变**某个成员的**语义** | **动** | 同上：名字还在，行为变了 |
-| 增删 `capabilities` 里的取值，**并让它影响放行** | **动** | 老插件的清单可能申请了不再存在的值（那会被拒载），或者漏申请新拆出来的值（那是静默降级） |
-
-一句话：**加东西不动号，改东西/删东西动号。**
+| Change | Version change |
+|---|---|
+| Add a backward-compatible `nota.*` member | minor |
+| Add a backward-compatible capability | minor |
+| Rename an API member | major |
+| Change member semantics | major |
+| Remove a capability or change its permission boundary | major |
 
 ### 4.4 三个"版本"别搞混
 
 | 名字 | 在哪 | 是什么 |
 |---|---|---|
-| `api` 栏 / `nota.api_version` | 清单里 / Lua 侧 | **ABI 号**，当前 `2`。宿主与插件之间的契约版本 |
+| `api` 栏 / `nota.api_version` | 清单里 / Lua 侧 | **API 版本**，当前 `"v2.3"` |
 | `nota.version` | Lua 侧 | **宿主应用的版本**（`0.1.0`，来自 `Cargo.toml` 的 `package.version`） |
 | `version` 栏 / `PluginInfo.version` | 清单里 / 前端 | **插件自己的版本**。`plugin.toml:12` 的注释明确说了：**不代表 ABI** |
 
-⚠️ 所以一个插件写 `version = "9.9.9"` 而 `api = 2` 是**完全合法**的。
+⚠️ 所以一个插件写 `version = "9.9.9"` 而 `api = "v2.3"` 是**完全合法**的。
 
 ---
 

@@ -68,13 +68,48 @@ testCase("命名锚点与无障碍属性已进入 HTML 白名单", () => {
   assert(read("src/ui/useLinkClick.ts").includes("jumpToInternalAnchor"), "内部锚点未导航");
 });
 
-testCase("五种 GitHub Alert 标题都有类型图标", () => {
+testCase("GitHub and Obsidian callout titles use semantic icons", () => {
   const css = read("src/styles/github-alert.css");
-  for (const marker of ["ⓘ", "◆", "❗", "⚠", "⛔"]) {
-    assert(css.includes(`content: "${marker}"`), `缺少图标 ${marker}`);
+  for (const marker of [
+    "ⓘ",
+    "¶",
+    "ℹ",
+    "☐",
+    "✦",
+    "‼",
+    "✓",
+    "?",
+    "⚠",
+    "⛔",
+    "×",
+    "!",
+    "◆",
+    "▦",
+    "❝",
+  ]) {
+    assert(css.includes(`content: "${marker}"`), `missing callout icon ${marker}`);
+  }
+  for (const label of [
+    "Note",
+    "Abstract",
+    "Info",
+    "Todo",
+    "Tip",
+    "Important",
+    "Success",
+    "Question",
+    "Warning",
+    "Caution",
+    "Failure",
+    "Danger",
+    "Bug",
+    "Example",
+    "Quote",
+  ]) {
+    assert(css.includes(`content: "${label}"`), `missing callout title ${label}`);
   }
   assert(css.includes(".nota-github-alert-editing-title .nota-github-alert-marker"), "标题编辑态没有展开源码");
-  assert(css.includes(".nota-github-alert-marker::before"), "非编辑态没有显示类型图标");
+  assert(css.includes(".nota-github-alert-marker::before"), "callout label is not rendered");
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);

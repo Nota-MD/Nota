@@ -626,7 +626,7 @@ await testCase("块公式预览居中，源码复用与 Mermaid 相同的 CodeMi
   );
 });
 
-await testCase("块公式悬停标签与 HTML 共用灰色源码框", () => {
+await testCase("block math stays borderless until editing starts", () => {
   const math = readFileSync("src/styles/math.css", "utf8");
   const inline = readFileSync("src/styles/editor-inline.css", "utf8");
   const dom = create(block("E=mc^2"), blockPosition, false, false).perspective.view!.dom;
@@ -635,8 +635,12 @@ await testCase("块公式悬停标签与 HTML 共用灰色源码框", () => {
   assertion(kind?.classList.contains("nota-block-kind"), "块公式标签没有接入统一样式");
   assertion(kind?.parentNode === dom, "块公式标签仍被藏在不可见的面板里");
   assertion(
-    /\.nota-math-block:not\(\.nota-math-editing\):hover[\s\S]*?background:\s*color-mix/s.test(math),
-    "块公式悬停时没有灰底",
+    !/\.nota-math-block:not\(\.nota-math-editing\):hover[\s\S]*?background:\s*color-mix/s.test(math),
+    "块公式静止态仍绘制灰色外框",
+  );
+  assertion(
+    /\.nota-math-editing\.nota-math-block\s+\.nota-math-source-shell\s*\{[^}]*border:\s*1px solid/s.test(math),
+    "块公式编辑态源码框缺少边框",
   );
   assertion(
     /\.nota-block-kind::after\s*\{[^}]*content:\s*"<\/>"/s.test(inline),

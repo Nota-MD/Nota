@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::Result;
+use crate::error::{NotaError, Result};
+
+const TEXT_FILE_LIMIT: u64 = 1024 * 1024;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +47,48 @@ pub async fn nota_dialog_native(
             .await
             .map_err(|e| crate::error::NotaError::Other(format!("native dialog task failed: {e}")))
     }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTextFile {
+    name: String,
+    text: String,
+}
+
+/// Open the platform file dialog and return the selected UTF-8-compatible text.
+/// The path never crosses the frontend boundary.
+#[tauri::command]
+pub async fn nota_dialog_text_file(
+    mut request: NativeDialogRequest,
+) -> Result<Option<NativeTextFile>> {
+    request.mode = "open".to_owned();
+    request.multiple = false;
+    let Some(mut paths) = nota_dialog_native(request).await? else {
+        return Ok(None);
+    };
+    let Some(path) = paths.drain(..).next().map(PathBuf::from) else {
+        return Ok(None);
+    };
+    let metadata = std::fs::metadata(&path).map_err(|source| NotaError::Read {
+        path: path.clone(),
+        source,
+    })?;
+    if !metadata.is_file() {
+        return Err(NotaError::other("Selected path is not a file"));
+    }
+    if metadata.len() > TEXT_FILE_LIMIT {
+        return Err(NotaError::other("Selected file is larger than 1 MiB"));
+    }
+    let (text, _) = crate::text_encoding::读文件(&path)?;
+    Ok(Some(NativeTextFile {
+        name: path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("file")
+            .to_owned(),
+        text,
+    }))
 }
 
 #[cfg(not(target_os = "linux"))]

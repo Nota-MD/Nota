@@ -320,6 +320,10 @@ export interface PanelInput {
   submitLabel: string;
   placeholder: string;
   hint: string;
+  /** Initial editable text for settings-style forms. Chat inputs leave this empty. */
+  value: string;
+  /** Preferred textarea height. */
+  rows: number;
   /** 多行输入（默认单行）。谈话类用它。 */
   multiline: boolean;
   /**
@@ -527,6 +531,8 @@ function inputBox(raw: Record<string, unknown>): PanelInput {
     submitLabel: text2(raw.submit_label) || t("Submit"),
     placeholder: text2(raw.placeholder),
     hint: text2(raw.hint),
+    value: text2(raw.value),
+    rows: Math.max(1, Math.min(24, Number(raw.rows) || 3)),
     multiline: raw.multiline === true,
     // ⚠️ 小按钮与 `buttons` 那一条**共用一份收窄**：它们是一模一样的动作形状，
     // 只是摆的地方不同（这里在输入卡片里）。

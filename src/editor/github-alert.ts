@@ -11,16 +11,62 @@ import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
-export const gitHubNoticeType = ["note", "tip", "important", "warning", "caution"] as const;
+export const gitHubNoticeType = [
+  "note",
+  "abstract",
+  "info",
+  "todo",
+  "tip",
+  "important",
+  "success",
+  "question",
+  "warning",
+  "caution",
+  "failure",
+  "danger",
+  "bug",
+  "example",
+  "quote",
+] as const;
 export type GitHubNotice = (typeof gitHubNoticeType)[number];
 
-const noticeMark = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]$/;
+export const gitHubNoticeAlias: Readonly<Record<string, GitHubNotice>> = {
+  note: "note",
+  abstract: "abstract",
+  summary: "abstract",
+  tldr: "abstract",
+  info: "info",
+  todo: "todo",
+  tip: "tip",
+  hint: "tip",
+  important: "important",
+  success: "success",
+  check: "success",
+  done: "success",
+  question: "question",
+  help: "question",
+  faq: "question",
+  warning: "warning",
+  caution: "caution",
+  attention: "warning",
+  failure: "failure",
+  fail: "failure",
+  missing: "failure",
+  danger: "danger",
+  error: "danger",
+  bug: "bug",
+  example: "example",
+  quote: "quote",
+  cite: "quote",
+};
 
-/** 识别 GitHub Alert 的首行标记；标记后面同一行还有内容时不算。 */
+const noticeMark = /^\[!([A-Za-z][A-Za-z0-9_-]*)\](?:\s+.*)?$/;
+
+/** Recognize Obsidian callouts and GitHub alerts, including optional titles. */
 export function recognizeDistinguishGitHubNotice(value2: string): GitHubNotice | null {
   const firstLine = value2.split(/\r?\n/, 1)[0]!.trim();
   const match = noticeMark.exec(firstLine);
-  return match ? (match[1]!.toLowerCase() as GitHubNotice) : null;
+  return match ? (gitHubNoticeAlias[match[1]!.toLowerCase()] ?? null) : null;
 }
 
 /** Which GitHub Alert a blockquote represents, if any. */
@@ -40,7 +86,14 @@ export function createGitHubAlertDecorations(state: EditorState): DecorationSet 
     const firstParagraph = node.firstChild;
     if (!firstParagraph) return;
     const titleStart = pos + 1;
-    const titleEditing = selection.$from.parent === firstParagraph;
+    const titleSource = firstParagraph.textContent.trimStart();
+    const rawMarker = /^\[![^\]]+\]/.exec(titleSource)?.[0] ?? "";
+    const markerStart = pos + 2 + firstParagraph.textContent.length - titleSource.length;
+    const markerEnd = markerStart + rawMarker.length;
+    const titleEditing =
+      selection.$from.parent === firstParagraph &&
+      selection.from <= markerEnd &&
+      selection.to >= markerStart;
     decoration.push(
       Decoration.node(pos, pos + node.nodeSize, {
         class: `nota-github-alert nota-github-alert-${type}${
@@ -58,10 +111,11 @@ export function createGitHubAlertDecorations(state: EditorState): DecorationSet 
     if (firstToken?.isText) {
       const text2 = firstToken.text ?? "";
       const beforeGuideWhitespace = text2.length - text2.trimStart().length;
-      const markLengthDegree = `[!${type.toUpperCase()}]`.length;
+      const markLengthDegree = rawMarker.length;
       decoration.push(
         Decoration.inline(pos + 2 + beforeGuideWhitespace, pos + 2 + beforeGuideWhitespace + markLengthDegree, {
           class: `nota-github-alert-marker nota-github-alert-marker-${type}`,
+          "data-github-alert-label": type,
         }),
       );
     }

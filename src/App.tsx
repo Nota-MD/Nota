@@ -964,7 +964,7 @@ export default function App() {
           <DeferredSettingsDialog
             standalone={settingsOnly} settings={settings} onChange={updateSettings}
             onClose={settingsOnly ? () => void api.window.hideSettings() : settingsWindow.close}
-            docThemes={themes} onOpenThemesDir={() => void openThemesDir()}
+            docThemes={themes} onOpenThemesDir={() => void openThemesDir()} onRefreshThemes={() => void refreshThemes()}
             uiStyles={uiStyles} onOpenStylesDir={() => void openStylesDir()}
             onRefreshUiStyles={() => void refreshStyles()} onImportTheme={() => void importTheme()}
             onImportTyporaTheme={() => void importTyporaTheme()} onOpenConfigDir={() => void openConfigDir()}
@@ -991,10 +991,7 @@ export default function App() {
           onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })}
           firstRunSeen={settings?.general.onboarding_seen ?? true} onFirstRunDone={() => settings && void updateSettings({ general: { ...settings.general, onboarding_seen: true } })}
         />
-
-        {/* 右键菜单（2026-10-04）：接管 WebKit 那份英文原生菜单。和
-            `AppDialogs` 同属浮层那一族（portal 到 `document.body`、不占布局），
-            没开时返回 `null`。分摊的代价写在 `ui/ContextMenu.tsx` 头上。 */}
+        {/* Native context menu replacement: portals to `document.body`, follows `AppDialogs` overlays, and renders `null` when closed. */}
         <ContextMenu {...contextMenuWiring} />
       </div>
     </ErrorBoundary>

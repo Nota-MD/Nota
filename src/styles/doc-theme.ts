@@ -123,6 +123,7 @@ export function typoraCompatibilityCss(css: string): string {
   --bg-subtle: var(--code-bg-color, var(--surface-color, #fbfaf7));
   --bg-raised: var(--surface-color, var(--code-bg-color, #f7f4ee));
   --accent: var(--link-color, var(--text-color, #1d12e2));
+  --link: var(--link-color, var(--accent));
   --font-doc: var(--font-family, serif);
   --font-mono: var(--monospace, monospace);
   --font-math: var(--math-font, var(--monospace, serif));

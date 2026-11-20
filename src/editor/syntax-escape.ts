@@ -77,7 +77,7 @@ import type { textHandler } from "./text-handlers";
  *（而"该转义的被放过"正是这一族最容易做错的地方，见 `docs/07` 第 56 项）。
  */
 const isConvertMeaningOfAlreadyKnownLanguageMethod =
-  /(^|\n)\\(\[(?:TOC|toc)\]|\[!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])/g;
+  /(^|\n)\\(\[TOC\]|\[!(?:note|abstract|summary|tldr|info|todo|tip|hint|important|success|check|done|question|help|faq|warning|caution|attention|failure|fail|missing|danger|error|bug|example|quote|cite)\])/gi;
 
 /**
  * 包一层：把行首那个多余的 `\` 去掉（只去掉上面那张名字表认得的）。

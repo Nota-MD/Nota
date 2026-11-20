@@ -46,6 +46,7 @@
   --radius: 8px;
   --radius-sm: 5px;
   --accent: #2670c4; /* 自己配的蓝（白字压在上面刚好 5.0:1，过 AA 的 4.5） */
+  --link: var(--accent);
   --accent-fg: #ffffff;
 
   /* ── 排版 ── */
@@ -78,13 +79,13 @@
   --select-text-font-color: #14171a;
 
   /* ── 代码高亮：自己配的一套，深色 + 低饱和，和上面那几档灰不打架 ── */
-  --code-comment: #6e7175;
-  --code-keyword: #9c2a5c;
-  --code-string: #1f6b3a;
-  --code-number: #8a4b00;
-  --code-function: #5b3fa8;
-  --code-attr: #8a4b00;
-  --code-tag: #1a6488;
+  --code-comment: #6e7781;
+  --code-keyword: #116329;
+  --code-string: #cf222e;
+  --code-number: #953800;
+  --code-function: #0550ae;
+  --code-attr: #8250df;
+  --code-tag: #6639ba;
 }
 
 /* ── 标题 ─────────────────────────────────────────────────────────────── */

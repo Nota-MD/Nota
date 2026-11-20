@@ -415,8 +415,11 @@ export const uiMessages: Record<string, string> = {
   "Collapse": "折叠",
   "Collapse this diagram source": "折叠这段图表源码",
   "Expand this diagram source": "展开这段图表源码",
-  "Copy Mermaid source": "复制 Mermaid 源码",
-  "Diagram Source (Mermaid)": "图表源码（Mermaid）",
+  "Copy diagram source": "复制图表源码",
+  "Diagram source": "图表源码",
+  "Edit source": "编辑源码",
+  "{0} diagrams use the diagram frame, but this build has no local renderer.":
+    "{0} 图表会使用统一图表框，但当前构建还没有本地渲染器。",
   "Rendering the diagram…": "正在渲染图表…",
   "Mermaid is parsing this source.": "Mermaid 正在解析这份源码。",
   "The diagram has a syntax error and cannot be drawn (your source is untouched in the document).": "图表存在语法错误，当前无法渲染。文档中的源码未修改。",

@@ -29,6 +29,7 @@
   --bg-active: rgba(255, 255, 255, 0.1);
   --accent: #d7d6d2;
   --accent-fg: #17181b;
+  --link: var(--fg);
   --select-text-bg-color: #3a4250;
   --select-text-font-color: #ffffff;
   --code-comment: #6f7076;

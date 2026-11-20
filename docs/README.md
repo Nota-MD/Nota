@@ -1,103 +1,102 @@
-# Nota 文档
+# Nota documentation
 
-> **[`../AGENTS.md`](../AGENTS.md) 是唯一入口。** 本文是它 §6 那张索引表的展开版：
-> 告诉你**按什么顺序读**、以及**每份文档在什么情况下是权威**。
->
-> 贡献与 AI 使用规则见 [`../CONTRIBUTING.md`](../CONTRIBUTING.md)。
+[`../AGENTS.md`](../AGENTS.md) is the primary entry point. This file expands its
+documentation index and explains reading order and authority.
 
----
+Contribution and AI rules are in [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
+Core mandatory rules are in [`../CORE_RULES.md`](../CORE_RULES.md). Durable
+engineering lessons are in [`../DEVELOPMENT_EXPERIENCE.md`](../DEVELOPMENT_EXPERIENCE.md).
 
-## 三条阅读路径
+## Reading paths
 
-不要从 01 顺着读到 13。按你要做的事挑一条。
+Do not read every document in numeric order. Choose the path that matches the
+task.
 
-### A. 我要改代码（第一次来）
+### A. Change application code
 
-```
-AGENTS.md                → 硬性规则、代码地图、踩过的坑
-  ↓
-01-architecture.md       → 一个进程里都有什么、启动时按什么顺序发生什么
-  ↓
-02-modules.md            → 你要改的那个文件，每个公开函数是干什么的
-  ↓
-07A-current-status.md    → 当前状态、未修缺陷与执行队列
-  ↓
-07-feature-status.md     → 永久编号、证据与历史档案
-```
-
-改之前**一定要过一眼 `07`**。它存在的理由就是"这个按钮看起来在，其实没接线"。
-
-### B. 我要做界面 / 加个按钮
-
-```
-04-ui-map.md             → 控件树、每个按钮的回调与当前状态
-  ↓
-05-editor-bridge.md      → 编辑区那侧：Milkdown 装配、前后端两条通道
-  ↓
-08-development-guide.md  → 「加一个按钮」的步骤清单
-  ↓
-09-doc-sync-policy.md    → ⚠️ 改完要同步哪几份文档（这是完成定义的一部分）
+```text
+AGENTS.md              -> rules, code map and platform constraints
+  |
+01-architecture.md     -> runtime structure and startup sequence
+  |
+02-modules.md          -> file-level interfaces and responsibilities
+  |
+07A-current-status.md  -> current release facts and active queue
+  |
+07-feature-status.md   -> permanent identifiers, evidence and history
 ```
 
-### C. 我要写插件
+Always check `07A-current-status.md` and `07-feature-status.md` before concluding
+that a visible control is wired and functional.
 
+### B. Change the interface
+
+```text
+04-ui-map.md             -> control tree, callbacks and current state
+  |
+05-editor-bridge.md      -> Milkdown assembly and frontend/backend channels
+  |
+08-development-guide.md  -> step-by-step UI and feature recipes
+  |
+09-doc-sync-policy.md    -> required documentation updates
 ```
-11-writing-a-plugin.md   → 目录形状、清单逐栏、能力表、生命周期
-  ↓
-13-lua-api.md            → nota.* 每个表每个函数
-  ↓
-12-plugin-runtime.md     → 想知道"为什么是 Lua""沙箱边界画在哪"再读这份
+
+### C. Write a plugin
+
+```text
+11-writing-a-plugin.md  -> layout, manifest, capabilities and lifecycle
+  |
+13-lua-api.md            -> nota.* tables and functions
+  |
+12-plugin-runtime.md     -> Lua runtime and sandbox boundaries
 ```
 
-**最快的上手方式**：直接读**插件仓库**里那份 Git 插件（`Nota-plugins/plugins/git/`，
-与主仓库同级放着）——那是官方插件之一、能跑的活样例，比文档准。发布安装包不随附它。
-⚠️ **2026-10-09 起插件的源码不在本仓库了**（`plugins/` 已经搬去 `Nota-plugins`），
-所以这里不再是相对链接：本仓库的文档里凡是写 `plugins/<id>/…` 的地方，指的都是那个仓库。
+The Git plugin in the adjacent `Nota-plugins/plugins/git/` repository is a
+working reference implementation. Plugin source is not part of this repository
+and is not bundled with application installers. References to
+`plugins/<id>/...` in this repository refer to that separate repository.
 
----
+## Document index
 
-## 全部文档
-
-| # | 文档 | 权威范围（什么时候以它为准） |
+| ID | Document | Authority |
 |---|---|---|
-| — | [`../AGENTS.md`](../AGENTS.md) | **唯一入口**。硬性规则、代码地图、构建命令、平台坑 |
-| 01 | [`01-architecture.md`](01-architecture.md) | 运行时架构：两进程边界、启动顺序、事件流、锁顺序 |
-| 02 | [`02-modules.md`](02-modules.md) | **逐文件接口参考**。公开函数签名以它为准 |
-| 03 | [`03-data-structures.md`](03-data-structures.md) | `AppState` / `Document` / `Settings` / `Manifest` 的字段与常量 |
-| 04 | [`04-ui-map.md`](04-ui-map.md) | 控件树 + 每个按钮的回调/当前状态/目标行为，含界面外观那三条轴（文档主题第四条另算） |
-| 05 | [`05-editor-bridge.md`](05-editor-bridge.md) | Milkdown 装配、前后端两条通道、去抖与整篇替换语义 |
-| 06 | [`06-build-run-test.md`](06-build-run-test.md) | 依赖、构建、运行、调试旋钮、**无头目检**、测试清单 |
-| 07 | [`07-feature-status.md`](07-feature-status.md) | 永久缺陷编号、逐项证据、backlog 全文与日期历史（审计档案） |
-| 07A | [`07A-current-status.md`](07A-current-status.md) | **当前发布事实与执行队列**；日常先看这份，07 是审计档案 |
-| 08 | [`08-development-guide.md`](08-development-guide.md) | 如何新增按钮 / 命令 / 事件 / 插件 / 设置项 |
-| 09 | [`09-doc-sync-policy.md`](09-doc-sync-policy.md) | ⚠️ **文档同步政策与代码→文档映射表（强制）** |
-| 10 | [`10-feature-matrix.md`](10-feature-matrix.md) | ⚠️ **Markdown 编辑器功能对照矩阵（144 项）**（"该有哪些功能、有了哪些"的唯一权威） |
-| 11 | [`11-writing-a-plugin.md`](11-writing-a-plugin.md) | 怎么写一个插件：目录、清单、能力表、生命周期、构建接线 |
-| 12 | [`12-plugin-runtime.md`](12-plugin-runtime.md) | 插件**运行时**：为什么是 Lua + 独立状态、沙箱画在哪 |
-| 13 | [`13-lua-api.md`](13-lua-api.md) | **Lua API 参考**：`nota.*` 每个表每个函数 |
-| 经验 | [`experience/README.md`](experience/README.md) | 长期工程经验、被否方案与平台证据；正文使用极简英语，文件名带稳定 `EXP-*` 编号 |
-| 参考 | [`reference/cde-menu-pixel-fidelity.md`](reference/cde-menu-pixel-fidelity.md) | CDE/Motif 菜单源码与本项目实现的逐项对照，说明像素级还原的证据链与边界 |
-| 参考 | [`reference/theme-package-spec.md`](reference/theme-package-spec.md) | 文档主题与界面主题的包目录、选择器作用域、变量、资源、Typora 对照和发布检查表 |
-| 参考 | [`reference/typora-theme-compatibility.md`](reference/typora-theme-compatibility.md) | LaTeXTypora 2.1.4 的真实兼容测试、结构与字体映射及已知差异 |
+| - | [`../AGENTS.md`](../AGENTS.md) | Primary entry point, code map, build commands and platform constraints |
+| 01 | [`01-architecture.md`](01-architecture.md) | Runtime boundaries, startup order, event flow and lock order |
+| 02 | [`02-modules.md`](02-modules.md) | File-level interface reference |
+| 03 | [`03-data-structures.md`](03-data-structures.md) | `AppState`, `Document`, `Settings` and `Manifest` fields and constants |
+| 04 | [`04-ui-map.md`](04-ui-map.md) | Control tree, callbacks, current state and target behavior |
+| 05 | [`05-editor-bridge.md`](05-editor-bridge.md) | Milkdown assembly, IPC channels, debounce behavior and whole-document replacement |
+| 06 | [`06-build-run-test.md`](06-build-run-test.md) | Dependencies, builds, debugging, headless inspection and test recipes |
+| 07 | [`07-feature-status.md`](07-feature-status.md) | Permanent defect and backlog identifiers, evidence, history and audit trail |
+| 07A | [`07A-current-status.md`](07A-current-status.md) | Current release facts and active execution queue |
+| 08 | [`08-development-guide.md`](08-development-guide.md) | Recipes for UI, commands, events, plugins and settings |
+| 09 | [`09-doc-sync-policy.md`](09-doc-sync-policy.md) | Mandatory source-to-documentation mapping |
+| 10 | [`10-feature-matrix.md`](10-feature-matrix.md) | Authoritative Markdown editor feature matrix |
+| 11 | [`11-writing-a-plugin.md`](11-writing-a-plugin.md) | Plugin layout, manifest, capabilities, lifecycle and build integration |
+| 12 | [`12-plugin-runtime.md`](12-plugin-runtime.md) | Lua runtime, isolated states and sandbox boundaries |
+| 13 | [`13-lua-api.md`](13-lua-api.md) | Lua API reference for `nota.*` |
+| Experience | [`../DEVELOPMENT_EXPERIENCE.md`](../DEVELOPMENT_EXPERIENCE.md) | Durable engineering lessons and rejected approaches |
+| Reference | [`reference/cde-menu-pixel-fidelity.md`](reference/cde-menu-pixel-fidelity.md) | CDE/Motif menu comparison and pixel-fidelity evidence |
+| Reference | [`reference/theme-package-spec.md`](reference/theme-package-spec.md) | Theme package layout, selectors, variables, assets and Typora compatibility |
+| Reference | [`reference/typora-theme-compatibility.md`](reference/typora-theme-compatibility.md) | Typora theme compatibility tests and known differences |
 
-## 三份"会打脸"的文档
+## Documents that challenge assumptions
 
-其余文档是**描述性**的（描述代码长什么样）。下面三份是**判断性**的——
-它们会跟你唱反调，而且**唱对的时候你该听它们的**：
+Most documents are descriptive. These documents are authoritative when they
+contradict an assumption about readiness:
 
-| 文档 | 它专治 |
+| Document | Question it answers |
 |---|---|
-| **07** | 「这功能不是写完了吗？」——不，写了没接线。`07` 只认"有人在界面上点过" |
-| **10** | 「功能不是差不多了吗？」——144 项里 58 项 `🟡`、0 项 `⬜`、8 项明确不做。数字在那儿 |
-| **09** | 「代码改完了，收工」——文档没同步 = 没做完，脚本会拦你 |
+| `07` | Is the feature implemented, wired and verified in the real UI? |
+| `10` | Which editor features are complete, partial, missing or intentionally unsupported? |
+| `09` | Is the change actually complete, including its documentation updates? |
 
-## 约定
+## Conventions
 
-- **文档带编号**（`01`…`13`），代码注释里就按编号引用（"见 `docs/07` 第 12 项"）。
-  ⚠️ **`07` 的 backlog 与 BUG 编号是永久的**：删行、把号让给新条目，
-  会让散落各处的注释指向错误的地方，而这类错误**不会让任何东西编不过**。
-  改完跑 `bash tools/doc-sync-check.sh`，它会查编号是否存在。
-- **每份文档顶部有一行「最后同步：YYYY-MM-DD」**。它不自动更新，
-  是给人看的诚信标记——改过内容就顺手改它。
-- **发现文档与代码不一致**：以代码为准，**同一批**改文档；
-  并把"这一处是怎么漂的"记到 `07` §4 的漂移登记表里。别默默修掉。
+- Documents use stable numeric IDs (`01` through `13`). Source comments may cite
+  those IDs.
+- Backlog and BUG identifiers are permanent. Do not delete or reuse them.
+- Every document records its last synchronization date near the top. Update the
+  date when changing the document.
+- If documentation and code disagree, code is authoritative. Correct the
+  documentation in the same change and record the drift in `07`.

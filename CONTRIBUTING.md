@@ -1,53 +1,89 @@
-# 为 Nota 贡献
+# Contributing to Nota
 
-## AI 贡献明确欢迎
+## AI-assisted contributions are welcome
 
-Nota **明确支持使用 AI 辅助或生成贡献**，包括代码、测试、文档、图标、主题与问题分析。
-不因代码由 AI 参与而拒绝贡献；贡献质量与责任由提交者承担。
+Nota explicitly supports contributions created with or assisted by AI. This
+includes code, tests, documentation, icons, themes and issue analysis. The
+quality and final responsibility remain with the person submitting the change.
 
-使用 AI 时必须做到：
+When using AI:
 
-1. 在 PR、提交说明或变更记录中**声明用了 AI 以及它参与了什么**。
-2. **提交者本人完整测试所贡献的功能**。AI 说“已测试”、只跑过 CI、或只读过代码，都不算。
-3. 在 PR 中写明测试环境、测试步骤、实际结果和未验证边界；界面改动附截图或录屏。
-4. 对缺陷先复现再修复，并验证修前/修后差异。
-5. 确认代码、图标、字体和文本的来源与许可证；不得粘贴无授权的第三方内容。
-6. 不把私密源码、密钥、用户文档或未公开数据提交给未经批准的外部服务。
+1. Disclose the use of AI and the parts it influenced in the pull request,
+   commit message or change record.
+2. Personally test every contributed behavior. CI alone, code inspection alone
+   and an AI claim that something was tested do not count.
+3. Record the test environment, steps, actual results and unverified boundaries
+   in the pull request. Include screenshots or screen recordings for UI changes.
+4. Reproduce a defect before fixing it and verify the behavior before and after
+   the change.
+5. Verify the origin and license of code, icons, fonts and text. Do not submit
+   third-party material without permission.
+6. Do not send private source, credentials, user documents or unpublished data
+   to an external service without approval.
 
-维护者可以要求补充测试证据，或在证据不足时拒绝合并。AI 不能成为责任主体；
-**提交者对其签名、测试声明和贡献内容负责**。
+Maintainers may request more test evidence or reject a change when the evidence
+is insufficient. AI cannot accept responsibility. The submitter is responsible
+for the sign-off, test claims and contributed content.
 
-## 所有贡献的最低完成定义
+## Definition of done
 
-- 代码与对应文档在同一批修改。
-- 相关单元/集成测试通过；涉及界面的改动必须在真实窗口里走完主路径和关键错误路径。
-- `bash tools/check-version.sh`
-- `bash tools/test-frontend.sh`
-- `cargo test --lib --locked`（在 `src-tauri/`）
-- `bash tools/i18n-check.sh`
-- `bash tools/doc-sync-check.sh --ci`（CI）或本地不带 `--ci` 的提醒模式
-- `npm run build`
+Every contribution must meet all of these requirements:
 
-CI 是必要条件，不是充分条件。**提交者亲自测试是合并前必须完成的步骤。**
+- Code and affected documentation change together.
+- Relevant unit and integration tests pass.
+- UI changes are exercised through the main path and key error paths in a real
+  application window.
+- `bash tools/check-version.sh` passes.
+- `bash tools/test-frontend.sh` passes.
+- `cargo test --lib --locked` passes under `src-tauri/`.
+- `bash tools/i18n-check.sh` passes.
+- `bash tools/doc-sync-check.sh --ci` passes in CI, or the advisory local mode
+  passes without `--ci`.
+- `npm run build` passes.
 
-## 提交与 PR
+CI is necessary but not sufficient. Personal testing by the submitter is required
+before merge.
 
-- 一个 PR 聚焦一件事；不要混入无关格式化或大规模重命名。
-- 代码标识符使用英文；新增或重写的代码注释使用简洁英语。遗留中文注释随相关代码改动逐步迁移，不为单独翻译制造大批无关 diff。面向用户和开发者的文档以中文为主；界面翻译键保持英文原文，中文译文写入 `src/i18n/zh-*.ts`。
-- 缺陷引用永久编号（如 `BUG-74`），功能引用 backlog 编号。
-- 使用 PR 模板，逐项填写 AI 声明和测试证据。
-- 不得强制推送已进入审查的公共分支。
+## Code and documentation language
 
-## README 翻译
+- Production identifiers use English.
+- New or rewritten source comments use concise English.
+- Production source must not contain hard-coded Chinese. User-facing Chinese
+  belongs in `src/i18n/zh-*.ts`, plugin `lang/zh-*.toml` or bundled content.
+- Documentation uses concise English by default.
+- Chinese is allowed in explicit translation resources, localization files and
+  test data.
+- Do not add emoji to source code, comments or English documentation.
+- Migrate legacy Chinese comments and documentation with related changes. Do not
+  create unrelated large diffs solely for language cleanup.
 
-- `README.md` 是唯一的英文主版本，只写英文，不在同一文件里混排其他语言。
-- 翻译文件使用 `README.<BCP-47>.md`，例如简体中文为 `README.zh-CN.md`。
-- 每个语言版本顶部提供相同的语言入口；当前语言显示为粗体，其余语言链接到对应文件。
-- 新增翻译时同批更新所有已有 README 的语言入口，并保持命令、文件名、链接目标和代码块一致。
-- 翻译可以滞后于英文主版本，但不得改变产品行为、版本、许可证或安全说明的含义。
+## Issues and pull requests
 
-## 安全与许可证
+- Keep one pull request focused on one change. Do not mix unrelated formatting or
+  large renames into it.
+- Use permanent defect identifiers such as `BUG-74` and backlog identifiers where
+  available.
+- Complete the pull request template, including the AI disclosure and test
+  evidence.
+- Do not force-push a public branch that is already under review.
 
-- 安全漏洞按 [`SECURITY.md`](SECURITY.md) 私下报告。
-- 第三方内容必须更新 `THIRD-PARTY.md`；字体来源或许可不明确时不得随包分发。
-- 项目许可证是 BSD-2-Clause；第三方组件继续保持各自许可证。
+## README translations
+
+- `README.md` is the only English source version and must remain English-only.
+- Translation files use `README.<BCP-47>.md`; Simplified Chinese is
+  `README.zh-CN.md`.
+- Every language version exposes the same language selector. The current
+  language is bold and the others link to their matching files.
+- When adding a language, update every existing README selector in the same
+  change.
+- Preserve command names, filenames, link targets and code blocks exactly.
+- A translation may lag behind the English source, but it must not alter product
+  behavior, versions, licensing or security requirements.
+
+## Security and licensing
+
+- Report vulnerabilities privately according to [`SECURITY.md`](SECURITY.md).
+- Update [`THIRD-PARTY.md`](THIRD-PARTY.md) for third-party content.
+- Do not redistribute a font or asset when its source or license is unclear.
+- Nota uses the BSD 2-Clause License. Third-party components keep their own
+  licenses.

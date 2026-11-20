@@ -19,8 +19,8 @@ These rules are mandatory for every source change.
    Lock behavior with tests before renaming shared identifiers or moving
    user-facing strings.
 7. Do not add emoji to source code, comments, or English documentation.
-8. New documentation is concise English unless it is an explicit translation
-   resource.
+8. Maintainer documentation is concise English unless it is an explicit
+   translation resource.
 
 ## Exceptions
 

@@ -1,140 +1,208 @@
-# 变更记录
+# Changelog
 
-Nota 采用面向发布线的简短记录。完整证据、缺陷编号与历史过程在
-[`docs/07-feature-status.md`](docs/07-feature-status.md)。
+Nota keeps short release-line notes. Full evidence, defect identifiers and
+historical details are in
+[`docs/07-feature-status.md`](docs/07-feature-status.md).
 
 ## 0.15.0-beta
 
-- 运行中的 Nota 窗口获得稳定数字 ID，标签页可按 ID 转移到其他窗口，
-  焦点跟随、窗口 ID 提示与快捷键均可配置。
-- 文档标签和插件标签支持指针拖动排序；插件标签可关闭、从“＋”恢复，
-  并保留顺序和关闭状态。左右栏拖过安全阈值时以红线提示松手折叠。
-- 修复“保存全部”和退出保存把活动标签正文写入其他文档的问题；
-  不同目录的同名文件现在按各自文档 ID 和镜像保存。
-- 侧栏右键保留目标目录，可在任意子目录新建文件/文件夹且保持树视图；
-  文件和文件夹支持确认删除，后端禁止越过工作区或删除根目录。
-- 图片粘贴和拖入统一覆盖 HTML 图片、URL 列表、blob/data、file URI 和原生
-  剪贴板图片；网络图片按设置下载或复制后再写入 Markdown。
-- 标题继承粗体时不再自动写入 `**`；URL 标签显式链接可立即渲染，
-  链接源码态跟随文档主题链接色。
-- Mermaid 使用宽内容列，正文采用 Typora 风格居中纸面宽度；缩放变化显示
-  右上角“百分比 / 减号 / 加号 / 重置”浮层。
-- 新增首次启动引导、许可与须知展示、插件原生图标主题、窗口标签右键管理和
-  更多编辑手感修复。
-- 配套发布 Nota Plugins `0.9.0-beta` 与 Nota Themes `0.8.0-beta`。
+- Running Nota windows receive stable numeric IDs. Tabs can move to another
+  window by ID, with configurable focus following, ID hints and shortcuts.
+- Document and plugin tabs support pointer drag ordering. Plugin tabs can close
+  and reopen from the plus control while preserving order and closed state.
+  Dragging a side panel past its safe threshold shows a red collapse indicator.
+- Fixed Save All and save-on-exit writing the active tab text into other
+  documents. Same-named files in different directories now use independent
+  document IDs and mirror paths.
+- Sidebar context actions preserve the target directory, create files and
+  folders in any subtree during tree view, and require confirmation before
+  deletion. The backend rejects workspace escapes and root deletion.
+- Image paste and drop now handle HTML images, URL lists, blob/data URLs, file
+  URIs and native clipboard images. Remote images are downloaded or copied
+  according to settings before Markdown is updated.
+- Headings that inherit bold no longer gain automatic `**` markers. Explicit
+  URL-label links render immediately, and link source editing follows the
+  document-theme link color.
+- Mermaid uses a wide content column while prose uses a Typora-style centered
+  paper width. Zoom changes show a percentage, minus, plus and reset overlay in
+  the top-right corner.
+- Added first-run onboarding, license and notice screens, native plugin icon
+  themes, tab context management and additional editor-feel fixes.
+- Published with Nota Plugins `0.9.0-beta` and Nota Themes `0.8.0-beta`.
 
 ## 0.14.4-beta
 
-- 修复 Windows 安装版自动更新不启动安装程序：改为与 Textus 相同的原生
-  `ShellExecuteW` 启动路径，NSIS 使用 `/P /UPDATE /R` 显示被动进度、
-  覆盖当前安装并在完成后重新启动。
-- 更新安装完成后的退出改为终止整个应用进程，隐藏的设置与关于 WebView
-  不再阻止文件替换；Windows 更新不再依赖等待旧 PID 的 PowerShell 脚本。
-- 修复行内代码因等宽字体度量参与基线计算而使所在段落偶发高出 1–2px；
-  行高现在统一由外层正文控制，代码字框和背景外观保持不变。
+- Fixed Windows installed builds not launching the updater. The native
+  `ShellExecuteW` path matches Textus, and NSIS uses `/P /UPDATE /R` to show
+  passive progress, replace the current installation and restart.
+- Update completion now terminates the whole application so hidden Settings and
+  About webviews cannot block file replacement. Windows updates no longer depend
+  on a PowerShell script that waits for an old PID.
+- Fixed inline code occasionally adding 1-2 px to paragraph height because
+  monospace metrics participated in baseline calculation. Outer prose now owns
+  line height while code bounds and backgrounds remain unchanged.
 
 ## 0.14.3-beta
 
-- 修复代码块行号在 WebKitGTK 下被排成独立一行，导致全部编号在上方、
-  代码正文堆到下方的错位问题。
-- CodeMirror 嵌入式代码块显式锁定为横向单行 flex：行号 gutter 固定在左侧，
-  代码 content 在右侧扩展；编号与对应 `.cm-line` 共用行高和顶部坐标。
+- Fixed code-block line numbers becoming a separate row in WebKitGTK, which
+  placed every number above the code body.
+- Locked the embedded CodeMirror code block to a horizontal single-line flex
+  layout: the gutter stays at the left and the content expands at the right.
+  Line numbers and matching `.cm-line` elements share line height and top
+  coordinates.
 
 ## 0.14.2-beta
 
-- 修复 Linux 主窗口被预创建在屏幕外后，Wayland 合成器无法可靠把它移回工作区，
-  导致 `nota` 或桌面图标启动后看不到窗口的问题。
-- 主窗口现在由合成器在正常屏幕位置创建；重复启动时除了聚焦还会显式调用
-  `show()`，可以从隐藏或不可见状态恢复。
-- Windows 自动更新不再静默调用 NSIS。旧实例退出后会显示安装向导，并以
-  `/UPDATE /R` 覆盖安装和重新启动，避免“下载完成后安装器一闪而过但版本未变”。
+- Fixed the Linux main window being created off-screen, where Wayland
+  compositors could not reliably move it back. Launching from the `nota` command
+  or desktop icon now produces a visible window.
+- The compositor creates the main window at a normal screen position. Repeated
+  launches explicitly call `show()` after focusing so hidden or invisible
+  windows can recover.
+- Windows automatic updates no longer call NSIS silently. After the old process
+  exits, the installer shows progress and replaces the installation with
+  `/UPDATE /R`, preventing a brief installer flash without a version change.
 
 ## 0.14.1-beta
 
-- 修复中文输入法组合期间的自绘光标滞后：preedit 全程交还原生光标，
-  上屏稳定后再恢复 Nota 光标。
-- 修复代码块行首、行尾和空行光标跳到下一行；光标改为绑定真实字符或行盒。
-- 无序列表圆点和有序编号不再随光标进入切换绘制方式，消除错位与闪烁。
-- 修复 `Ctrl+B` 后 ProseMirror 辅助节点在 WebKitGTK 中额外占据两行、
-  推动后续段落的问题；保留真实 `**` 边界与源码编辑行为。
-- 代码块语言选择器合并为唯一居中输入框，候选列表与输入框严格同宽；
-  支持直接输入、筛选、别名搜索和自定义语言。
-- 修复设置页颜色输入框无法获得键盘焦点，并统一 Adwaita、Yaru 的控件尺寸、
-  强调色、单选按钮与窗口配色。
-- 设置和关于窗口支持铺满、内嵌、独立窗口三种呈现方式；独立窗口复用，
-  全屏与最大化不再出现顶部白条。
-- 开发者桥新增经过认证的拓展远程列表、安装、卸载、启停、更新检查和升级；
-  本地上传、宿主机路径安装及批量更新共用同一协议。
-- 源码模式固定使用等宽字体；完善主题导入、预览窗口、工具栏和自绘菜单细节。
+- Fixed the custom caret lagging during Chinese IME composition. Preedit uses
+  the native caret for its full lifetime, then Nota restores the custom caret
+  after the committed text settles.
+- Fixed code-block carets jumping to the next line at line starts, line ends and
+  empty lines. Carets now bind to real characters or line boxes.
+- Unordered bullets and ordered numbers no longer switch rendering modes when a
+  caret enters, eliminating misalignment and flicker.
+- Fixed ProseMirror helper nodes taking two extra lines in WebKitGTK after
+  `Ctrl+B` and pushing later paragraphs. Real `**` boundaries and source editing
+  remain available.
+- Consolidated the code-block language picker into one centered input. The
+  candidate list matches its width and supports direct input, filtering, alias
+  search and custom languages.
+- Fixed color inputs in Settings not receiving keyboard focus. Unified control
+  sizes, accent colors, radio controls and window colors across Adwaita and Yaru.
+- Settings and About windows support filled, embedded and independent-window
+  presentations. Independent windows are reused, and full-screen or maximized
+  mode no longer leaves a white strip at the top.
+- The developer bridge can list, install, uninstall, enable, disable, check and
+  upgrade extensions through authenticated remote commands. Local uploads,
+  host-path installation and batch upgrades share one protocol.
+- Source mode always uses a monospace font. Improved theme import, preview
+  windows, toolbars and custom menu details.
 
 ## 0.14.0-beta
 
-- 编辑手感切换到 Typedown 的完整源码偏移模型，并采用 Textus 的原位链接源码编辑；
-  粗体、斜体、高亮、上下标、链接与中文输入法的光标边界统一。
-- 修复链接尾部 Left、目标地址末尾编辑、连续导航、整篇选择和非法源码回退。
-- 直接兼容 Typora 主题目录、单 CSS 与 ZIP，保留原始字体、图片、`@import`
-  和相对资源；补充 Typora 页面结构、变量和 LaTeX 主题桥接。
-- 新增草稿恢复与文本编码/换行保持，未编辑文件保存时保持原字节。
-- Linux 打印进入 XDG Portal/GTK4，Windows 使用 WebView2 原生打印；HTML、
-  公式和 Mermaid 继续复用完整文档样式。
-- 完善图表、HTML 图片回退、块公式预览、代码块首尾导航与引用退出行为。
-- 开发者模式增加界面文字选择、元素检查和默认关闭的 Lua 拓展自刷新。
+- Switched editing behavior to Typedown's full source-offset model and Textus's
+  in-place link source editing. Bold, italic, highlight, superscript, subscript,
+  links and Chinese IME caret boundaries now share one model.
+- Fixed Left navigation at link tails, editing at destination ends, continuous
+  navigation, whole-document selection and invalid-source fallback.
+- Added direct Typora theme directory, standalone CSS and ZIP compatibility while
+  preserving bundled fonts, images, `@import` rules and relative assets. Added
+  Typora page structure, variables and LaTeX theme bridging.
+- Added draft recovery and text encoding/newline preservation. Unedited files are
+  saved with their original bytes.
+- Linux printing uses the XDG Portal and GTK4. Windows uses native WebView2
+  printing. HTML, math and Mermaid reuse the complete document style layer.
+- Improved diagrams, HTML image fallback, block-math preview, code-block boundary
+  navigation and quote exit behavior.
+- Developer mode adds UI text selection, an element inspector and an opt-in Lua
+  extension auto-reload setting that defaults to off.
 
 ## 0.9.0-beta
 
-- 普通段落输入 ``` 后可直接获得语言补全；`mat` 显示 `math`、`mathematica`、`matlab`，确认后生成代码块。
-- 行内标记提示扩展到粗体、斜体、行内代码、删除线、高亮、上下标与下划线，改用继承正文样式的实体左右符号。
-- 菜单栏新增渲染方式设置，默认 Nota 自绘，可即时切换系统原生菜单。
-- LaTeX 主题完成 Typora 对照排印与 CJK 衬线回退；数学围栏提供源码与下方独立预览。
-- 关于、设置和其他模态框统一使用 32px 点击区的官方风格关闭按钮。
-- 文件侧栏增加 Typora 式右键菜单、摘要、搜索、系统文件选择器与当前章节跟随。
-- 启动路径继续缩短，编辑器挂载并聚焦后才移入屏幕；数学与图表保持延后加载。
-- 表格快捷工具、Mermaid 源码/预览双区、更新下载进度与侧栏子菜单方向完成收口。
-- 官方界面主题依据 Figma UI Kit 更新；外置文档主题新增 Vellum。
-- 更新设置、可交互通知、编辑器开场键、单行表格回车与发布流程分层继续沿用
-  0.9 开发线；`update/latest.json` 在完整跨平台 Release 发布前仍指向
-  `0.8.0-beta`。
+- Typing three backticks in a normal paragraph provides language completion.
+  `mat` shows `math`, `mathematica` and `matlab`; confirming one creates a code
+  block.
+- Inline mark hints cover bold, italic, inline code, strike-through, highlight,
+  superscript, subscript and underline with real delimiters that inherit prose
+  styling.
+- Added a menu-bar rendering setting. Nota's custom menu is the default and the
+  native system menu can be selected immediately.
+- The LaTeX theme gained Typora-compatible typography and a CJK serif fallback.
+  Math fences provide source editing and a separate preview below the source.
+- About, Settings and other modal windows use the official-style close button
+  with a 32 px hit area.
+- The file sidebar gained a Typora-style context menu, summary, search, system
+  file picker and current-section tracking.
+- Startup is shorter. The editor mounts and focuses before the window moves
+  on-screen, while math and diagrams remain deferred.
+- Finished table tools, the Mermaid source/preview split, update progress and
+  sidebar submenu direction.
+- Updated official interface themes from the Figma UI Kit and added the external
+  Vellum document theme.
+- Continued the 0.9 development line for update settings, interactive
+  notifications, editor opening keys, single-row table Enter behavior and
+  release workflow separation. `update/latest.json` continues to point to
+  `0.8.0-beta` until a complete cross-platform release is published.
 
 ## 0.8.1-beta
 
-- 启动不再等待整套界面字体加载；导入主题 CSS 到达后即可显示窗口。
-- CDE 菜单改用 Motif 的整数几何，并补齐 F10、方向键、点击切栏、指针离开解除 armed 与子菜单逐层 Esc。
-- CDE 点阵字体运行时改为无损 WOFF2，显著缩短主题数据内联与 WebView 解析时间。
-- 工具栏代码块按钮改为可见的切换：不在代码块时转换，已经在代码块时退回普通段落。
-- 修复关于窗口与 CDE 弹层中由非 16px 字号导致的混合字体、助记符回退和文本基线异常。
+- Startup no longer waits for the complete interface font set. The window can
+  appear after imported theme CSS arrives.
+- CDE menus use Motif integer geometry and support F10, arrow navigation,
+  click-to-switch columns, pointer-leave disarm and one-level Esc for submenus.
+- CDE bitmap fonts use lossless WOFF2 at runtime, reducing theme data inlining
+  and WebView parsing time.
+- The toolbar code-block action is a visible toggle: outside a block it converts
+  the paragraph; inside a block it restores a normal paragraph.
+- Fixed mixed fonts, mnemonic fallback and text baseline issues caused by
+  non-16 px sizes in About and CDE popup surfaces.
 
 ## 0.8.0-beta
 
-- 新增仅在调试模式显示的高级设置页。连续点击「关于」里的版本号五次可开启或关闭调试模式。
-- 调试模式现在同时控制后端内部日志，不再需要用户编辑环境变量。
-- 下载支持 `原前缀 => 替换前缀` 规则，可应用到应用更新与插件更新的清单和安装包。
-- 拓展管理拆成「拓展管理」与「插件设置」两页，分别管理安装/更新和插件声明给宿主的设置。
-- 设置文件、恢复默认、运行信息和下载替换规则移入高级设置。
+- Added an Advanced Settings page visible only in debug mode. Clicking the About
+  version number five times toggles debug mode.
+- Debug mode also controls backend internal logs, so users no longer need to edit
+  environment variables.
+- Download settings support `original prefix => replacement prefix` rules for
+  application and extension update manifests and installers.
+- Extension management is split into Extension Management and Plugin Settings.
+  One page manages installs and updates; the other manages settings declared by
+  plugins to the host.
+- Moved settings-file access, reset, runtime information and download replacement
+  rules into Advanced Settings.
 
 ## 0.7.0-beta
 
-- 新增实验性应用更新检查。宿主按 deb、rpm、AppImage、Windows 便携版、Windows 安装器和开发构建选择资产。
-- 更新清单固定在官方仓库，安装包只能来自 Nota 官方 Release，并在执行前强制校验 SHA-256。
-- 新增插件仓库更新：插件可在 `[update] manifest` 指定一份可描述多个插件的 `latest.json`。
-- 插件更新复用原有的包摘要、Ed25519 验签、签名者连续性与原子替换流程。
-- GitHub Markdown 徽章、远程图片和 GitHub Alerts 的兼容修复进入 Beta 发布线。
+- Added experimental application update checks. The host selects assets for deb,
+  rpm, AppImage, Windows portable, Windows installer and development builds.
+- Update manifests use a fixed official repository. Installers must come from an
+  official Nota release and SHA-256 is verified before execution.
+- Added plugin repository updates. A plugin can declare an `[update] manifest`
+  pointing to a `latest.json` that describes multiple plugins.
+- Plugin updates reuse package digests, Ed25519 verification, signer continuity
+  and atomic replacement.
+- Entered the beta line with compatibility fixes for GitHub Markdown badges,
+  remote images and GitHub Alerts.
 
 ## 0.6.0-beta
 
-- 首个公开发布的 Beta 版本，提供 Linux 与 Windows 安装包。
-- 新增中英文 README、产品官网、用户文档与开发者文档。
-- 新增独立的官方主题仓库；CDE 风格样式、图标、字体与许可证完全外置。
-- 所有模态窗口统一提供右上角关闭按钮。
-- 界面文案改为中性、正式表达，移除可见状态 emoji 与口语化措辞。
-- 保持安装包不预装拓展和第三方主题。
+- First public beta with Linux and Windows packages.
+- Added English and Chinese READMEs, the product website and user and developer
+  documentation.
+- Added the independent official theme repository. CDE styles, icons, fonts and
+  licenses are fully external.
+- Every modal window provides a top-right close button.
+- Interface text uses neutral, formal language without visible status emoji or
+  conversational wording.
+- Installers continue to ship without extensions or third-party themes.
 
 ## 0.5.0-beta
 
-- CDE 界面与文档主题；真实 EBDT 点阵字随包分发（WQY 派生，许可见 `THIRD-PARTY.md` §9）。
-- 打印直连 CUPS Unix socket 的 IPP，不再依赖 `lpstat` / `lp`；PDF 仍经过正确的 CUPS 驱动链。CDE 改用完整 WQY EBDT 点阵宋，字体与许可同目录随包。
-- Linux 默认恢复 WebKit DMA-BUF/GPU 合成；长代码块语法着色改为 80ms 合并，改善滚动与打字帧率。
-- 安装包文档主题缩减为 Adwaita 浅色/深色，其余官方主题转入独立主题仓库策略。
-- 主题资源可由 CSS 自由声明图标、字体和图片；新增 CDE 自绘硬边图标集。
-- 改进 AI/Git/Slidev/写作统计插件；应用内打印与 HTML 代码预览。
-- Windows 交叉编译与安装包尝试。
-- 增加验证 CI、版本门禁、文档同步 CI 模式与发布追溯清单。
+- Added CDE interface and document themes. Real EBDT bitmap fonts are bundled
+  from a WQY derivative; licensing is documented in `THIRD-PARTY.md` section 9.
+- Printing uses IPP over the CUPS Unix socket instead of `lpstat` and `lp`. PDFs
+  still pass through the correct CUPS driver chain. CDE uses the complete WQY
+  EBDT Song font with its license beside the font.
+- Restored WebKit DMA-BUF/GPU compositing by default on Linux. Long code-block
+  syntax highlighting batches updates every 80 ms to improve scroll and typing
+  frame rate.
+- Reduced bundled document themes to Adwaita light and dark. Other official
+  themes moved to the independent theme repository.
+- Theme assets can declare icons, fonts and images in CSS. Added the CDE
+  custom-drawn hard-edge icon set.
+- Improved AI, Git, Slidev and writing-statistics extensions, in-app printing
+  and HTML code preview.
+- Experimented with Windows cross-compilation and installers.
+- Added verification CI, version gates, documentation-sync CI mode and release
+  provenance manifests.

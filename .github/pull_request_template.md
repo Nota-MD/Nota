@@ -1,41 +1,43 @@
-## 变更
+## Change
 
-<!-- 一件事、一个目标；关联 BUG-/backlog 编号。 -->
+<!-- One change and one goal. Link BUG-/backlog identifiers when available. -->
 
-## AI 使用声明（必填）
+## AI disclosure
 
-- [ ] 本 PR 使用了 AI 辅助或生成内容
-- 工具/模型：
-- 参与部分：代码 / 测试 / 文档 / 图标 / 主题 / 分析
-- [ ] 提交者已经检查并理解全部 AI 参与内容，对内容和许可证负责
-- [ ] 本 PR 未使用 AI
+- [ ] This pull request used AI assistance or generated content
+- Tool/model:
+- Areas affected: code / tests / documentation / icons / themes / analysis
+- [ ] The submitter reviewed and understands all AI-assisted content and accepts
+      responsibility for the content and licensing
+- [ ] This pull request did not use AI
 
-## 提交者亲自测试（必填）
+## Personal testing by the submitter
 
-> “CI 通过”或“AI 说测试过”不算。界面功能必须实际操作完整主路径。
+> "CI passed" and "the AI said it tested this" are not evidence. UI behavior
+> must be exercised through the complete main path.
 
-- 操作系统 / 版本：
-- 安装包或构建方式：
-- 实际测试步骤：
-1.
-2.
-3.
-- 实际结果：
-- 错误路径 / 边界：
-- 未验证项（如无写“无”）：
-- 截图、录屏或日志：
+- Operating system / version:
+- Installer or build method:
+- Actual test steps:
+  1.
+  2.
+  3.
+- Actual result:
+- Error paths / boundaries:
+- Unverified items:
+- Screenshots, recordings or logs:
 
-## 自动门禁
+## Automated checks
 
-- [ ] 版本一致
-- [ ] 前端测试全集
-- [ ] Rust 测试
-- [ ] 国际化检查
-- [ ] 文档同步
-- [ ] 生产构建
+- [ ] Version consistency
+- [ ] Complete frontend test suite
+- [ ] Rust tests
+- [ ] Localization checks
+- [ ] Documentation synchronization
+- [ ] Production build
 
-## 文档与许可证
+## Documentation and licensing
 
-- [ ] 相关文档已同批更新
-- [ ] 新第三方依赖 / 资源已更新 `THIRD-PARTY.md`
-- [ ] 字体、图标、主题资源的来源与许可证已核
+- [ ] Relevant documentation was updated in the same change
+- [ ] New third-party dependencies or assets are recorded in `THIRD-PARTY.md`
+- [ ] Font, icon and theme asset origins and licenses were verified

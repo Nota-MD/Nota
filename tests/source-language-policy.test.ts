@@ -41,6 +41,28 @@ testCase("root rule and experience files are concise English without emoji", () 
   }
 });
 
+testCase("maintainer documentation is English without emoji", () => {
+  const files = [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "RELEASE.md",
+    "SECURITY.md",
+    "artifacts/readme-demo.md",
+    "docs/README.md",
+    "src/styles/themes/adwaita/README.md",
+    "tools/menu-harness/README.md",
+    ".github/pull_request_template.md",
+    "release-notes/v0.10.1-beta.md",
+    "release-notes/v0.13.0-beta.md",
+  ];
+  for (const file of files) {
+    const text = read(file);
+    assert(!han.test(text), `${file} contains Chinese`);
+    assert(!emoji.test(text), `${file} contains emoji`);
+  }
+});
+
 testCase("language audit protects the migration baseline", () => {
   const tool = read("tools/source-language-audit.mjs");
   const baseline = JSON.parse(read("tools/source-language-baseline.json")) as {

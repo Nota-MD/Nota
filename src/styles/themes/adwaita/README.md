@@ -1,23 +1,23 @@
-# Adwaita（只读内置文档主题）
+# Adwaita read-only built-in document theme
 
-这个目录属于 Nota 安装内容，**不要在这里创建、修改或删除任何文件**。
-`theme.css` 与 `dark.css` 是随应用发布的只读内置主题；用户目录里的同名文件
-也不会覆盖它们。
+This directory is part of the Nota installation. Do not create, edit or delete
+files here. `theme.css` and `dark.css` are read-only built-in themes, and
+same-named files in the user directory cannot override them.
 
-## 自定义文档主题放哪里
+## User document theme location
 
-文档主题只管编辑区正文，不等同于界面风格。界面风格另有独立的 `themes/ui`
-目录。
+Document themes control editor content only. Interface styles are a separate
+theme axis and use the `themes/ui/` directory.
 
-### Linux / 其他 XDG Unix-like 系统
+### Linux and other XDG Unix-like systems
 
-默认目录：
+Default location:
 
 ```text
 ~/.config/nota/themes/document/
 ```
 
-设置了 `XDG_CONFIG_HOME` 时：
+When `XDG_CONFIG_HOME` is set:
 
 ```text
 $XDG_CONFIG_HOME/nota/themes/document/
@@ -35,21 +35,22 @@ $XDG_CONFIG_HOME/nota/themes/document/
 %APPDATA%\nota\themes\document\
 ```
 
-通常展开为：
+This normally expands to:
 
 ```text
-C:\Users\<用户名>\AppData\Roaming\nota\themes\document\
+C:\Users\<user>\AppData\Roaming\nota\themes\document\
 ```
 
-## 用户主题格式
+## User theme format
 
-用户主题 id 使用 ASCII 字母、数字、`-` 和 `_`。例如：
+User theme IDs use ASCII letters, digits, `-` and `_`. For example:
 
 ```text
 my-theme.css
 ```
 
-CSS 里可以用相对路径引用同目录或主题根目录内的资源：
+CSS may reference assets in the same directory or the theme root with relative
+paths:
 
 ```css
 @font-face {
@@ -64,9 +65,9 @@ CSS 里可以用相对路径引用同目录或主题根目录内的资源：
 }
 ```
 
-Unix-like 系统路径使用 `/`，Windows CSS URL 应使用 `/` 或正确转义的相对 URL；
-不要写死 `C:\...` 这类本机绝对路径。字体等第三方资源必须把许可证放在资源旁边。
+Use `/` in CSS paths on every platform or a correctly escaped relative URL. Do
+not hard-code local absolute paths such as `C:\...`. Third-party fonts and other
+assets must include their license beside the asset.
 
-`adwaita` 和 `adwaita-dark` 是保留 id，用户主题不能覆盖。
-界面风格不是文档主题，不要放进 `themes/document/`；界面风格使用
-`themes/ui/` 目录。
+`adwaita` and `adwaita-dark` are reserved IDs. User themes cannot override them.
+Interface styles belong in `themes/ui/`, not `themes/document/`.

@@ -5,9 +5,9 @@ function test(name: string, body: () => void): void {
   try {
     body();
     pass++;
-    console.log(`  ✔ ${name}`);
+    console.log(`  PASS ${name}`);
   } catch (e) {
-    console.log(`  ✘ ${name}\n      ${e instanceof Error ? e.message : String(e)}`);
+    console.log(`  FAIL ${name}\n       ${e instanceof Error ? e.message : String(e)}`);
     process.exitCode = 1;
   }
 }
@@ -18,36 +18,58 @@ const agents = readFileSync("AGENTS.md", "utf8");
 const readme = readFileSync("README.md", "utf8");
 const readmeZh = readFileSync("README.zh-CN.md", "utf8");
 
-test("明确欢迎 AI 贡献", () => {
-  if (!contributing.includes("明确支持使用 AI")) throw new Error("CONTRIBUTING 缺少明确欢迎");
-  if (!agents.includes("明确支持 AI 贡献")) throw new Error("AGENTS 缺少硬规则");
+test("AI contributions are explicitly welcome", () => {
+  if (!contributing.includes("explicitly supports contributions")) {
+    throw new Error("CONTRIBUTING does not explicitly welcome AI contributions");
+  }
+  if (!agents.includes("AI-assisted contributions are welcome")) {
+    throw new Error("AGENTS is missing the AI contribution rule");
+  }
 });
 
-test("提交者必须亲自完整测试", () => {
-  if (!contributing.includes("提交者本人完整测试")) throw new Error("CONTRIBUTING 缺少本人测试");
-  if (!pr.includes("提交者亲自测试")) throw new Error("PR 模板缺少亲自测试栏");
-  if (!pr.includes("AI 说测试过")) throw new Error("PR 模板没有排除 AI 代测");
+test("Submitter testing is mandatory", () => {
+  if (!contributing.includes("Personally test every contributed behavior")) {
+    throw new Error("CONTRIBUTING does not require personal testing");
+  }
+  if (!pr.includes("Personal testing by the submitter")) {
+    throw new Error("PR template is missing personal testing");
+  }
+  if (!pr.includes("the AI said it tested this")) {
+    throw new Error("PR template does not reject AI-only test claims");
+  }
 });
 
-test("PR 模板要求 AI 范围与许可证责任", () => {
-  if (!pr.includes("AI 使用声明")) throw new Error("缺少 AI 声明");
-  if (!pr.includes("许可证")) throw new Error("缺少许可证确认");
+test("PR template requires AI scope and licensing responsibility", () => {
+  if (!pr.includes("AI disclosure")) throw new Error("AI disclosure is missing");
+  if (!pr.includes("licensing")) throw new Error("Licensing responsibility is missing");
 });
 
-test("英文主 README 不混排中文", () => {
-  if (/[\u3400-\u9fff]/.test(readme)) throw new Error("README.md 含中文字符");
+test("English README contains no Chinese", () => {
+  if (/[\u3400-\u9fff]/.test(readme)) throw new Error("README.md contains Chinese");
 });
 
-test("README 语言入口双向且标出当前语言", () => {
-  if (!readme.includes('href="README.zh-CN.md"')) throw new Error("英文 README 缺少中文入口");
-  if (!readme.includes("<strong>English</strong>")) throw new Error("英文 README 未标出当前语言");
-  if (!readmeZh.includes('href="README.md"')) throw new Error("中文 README 缺少英文入口");
-  if (!readmeZh.includes("<strong>简体中文</strong>")) throw new Error("中文 README 未标出当前语言");
+test("README language entry points are bidirectional", () => {
+  if (!readme.includes('href="README.zh-CN.md"')) {
+    throw new Error("English README lacks a Chinese link");
+  }
+  if (!readme.includes("<strong>English</strong>")) {
+    throw new Error("English README does not mark English as current");
+  }
+  if (!readmeZh.includes('href="README.md"')) {
+    throw new Error("Chinese README lacks an English link");
+  }
+  if (!readmeZh.includes("<strong>简体中文</strong>")) {
+    throw new Error("Chinese README does not mark Chinese as current");
+  }
 });
 
-test("贡献规则说明 README 翻译命名与同步要求", () => {
-  if (!contributing.includes("README.<BCP-47>.md")) throw new Error("缺少翻译文件命名规则");
-  if (!contributing.includes("唯一的英文主版本")) throw new Error("缺少英文主版本规则");
+test("Contribution rules define README translation naming", () => {
+  if (!contributing.includes("README.<BCP-47>.md")) {
+    throw new Error("README translation naming rule is missing");
+  }
+  if (!contributing.includes("only English source version")) {
+    throw new Error("English source README rule is missing");
+  }
 });
 
-console.log(`通过 ${pass} 条`);
+console.log(`${pass} passed`);

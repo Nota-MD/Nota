@@ -1,25 +1,28 @@
-# 安全政策
+# Security policy
 
-## 报告漏洞
+## Reporting a vulnerability
 
-请不要在公开 Issue 中披露可利用细节。优先使用 GitHub 仓库的
-**Private vulnerability reporting / Security Advisory**；若该入口不可用，请联系仓库所有者
-并只提供最小必要信息。
+Do not disclose exploitable details in a public issue. Prefer GitHub private
+vulnerability reporting or a security advisory. If that is unavailable, contact
+the repository owner and provide only the minimum necessary information.
 
-报告中请包含：
+Include:
 
-- 受影响版本或提交；
-- 平台与安装方式；
-- 复现步骤与影响；
-- 是否涉及插件沙箱、文件越界、命令执行、凭证泄漏或供应链问题；
-- 你已尝试的缓解办法。
+- affected version or commit;
+- platform and installation method;
+- reproduction steps and impact;
+- whether the issue involves plugin sandbox escapes, path traversal, command
+  execution, credential disclosure or supply-chain risk;
+- mitigations already attempted.
 
-## 支持范围
+## Supported scope
 
-当前只维护最新发布线和 `main` 分支。预览版、第三方插件或用户自行修改的主题/字体，
-仍欢迎报告，但修复责任和许可需按来源分别判断。
+The latest release line and the `main` branch are maintained. Reports involving
+preview builds, third-party plugins or user-modified themes and fonts are also
+welcome, but responsibility and licensing are evaluated by source.
 
-## 插件边界
+## Plugin boundary
 
-Lua 插件只能使用清单声明且宿主提供的能力。涉及绕过能力围栏、读取未授权路径、
-执行外部程序或泄漏 API 密钥的报告按高优先级处理。
+Lua plugins may only use capabilities declared in their manifest and supplied by
+the host. Reports involving capability bypass, unauthorized path access, external
+process execution or API key disclosure receive high priority.

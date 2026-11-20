@@ -1,646 +1,344 @@
-# AGENTS.md — Nota 开发入口（AI 智能体与人类必读）
+# Nota development entry
 
-> 本文件是**唯一入口**。任何 AI 智能体或人类在修改本仓库前，必须先读本文件，
-> 再按需阅读 `docs/` 下的对应文档。目标是：**不读源码也能开始开发**。
+Read this file before changing the repository. Mandatory rules are in
+[`CORE_RULES.md`](CORE_RULES.md). Durable engineering lessons are in
+[`DEVELOPMENT_EXPERIENCE.md`](DEVELOPMENT_EXPERIENCE.md). Contribution and AI
+requirements are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
----
+## 0. Mandatory workflow
 
-## 0. 硬性规则（不可跳过）
+1. Read the relevant documents before changing code:
+   - [`docs/01-architecture.md`](docs/01-architecture.md)
+   - [`docs/02-modules.md`](docs/02-modules.md)
+   - [`docs/07A-current-status.md`](docs/07A-current-status.md)
+   - [`docs/07-feature-status.md`](docs/07-feature-status.md)
+   - [`docs/08-development-guide.md`](docs/08-development-guide.md) for new UI
+     or behavior.
+2. Update affected documentation in the same change. The source mapping is in
+   [`docs/09-doc-sync-policy.md`](docs/09-doc-sync-policy.md). Run
+   `bash tools/doc-sync-check.sh` before handoff.
+3. Do not assume that a visible control works. Check the current-status,
+   feature-status and UI-map documents first.
+4. Treat code as authoritative when it conflicts with documentation. Correct the
+   documentation immediately and record the drift.
+5. Keep one change focused. Do not mix a language cleanup with unrelated feature
+   work.
+6. Source files must not exceed 1000 lines. The target range is 300-800 lines.
+   Split by responsibility when a file approaches the warning threshold.
+7. Printing, system printing and PDF export require a light document theme.
+   Stop before layout and ask the user to select one when the active theme is
+   dark.
+8. AI-assisted contributions are welcome, but the submitter must personally
+   test the complete relevant behavior and accept responsibility for licensing.
 
-1. **先读文档，再改代码。** 至少阅读：
-   - `docs/01-architecture.md`（整体架构）
-   - `docs/02-modules.md`（要改的模块）
-   - `docs/07A-current-status.md`（当前状态与队列）＋ `docs/07-feature-status.md`（永久编号、证据与历史）
-   - 需要新增 UI/功能时，读 `docs/08-development-guide.md`。
-2. **改完代码必须同步文档。** 这不是建议，是完成定义（Definition of Done）的一部分。
-   映射关系见 `docs/09-doc-sync-policy.md`。提交前运行 `tools/doc-sync-check.sh` 自检。
-3. **不要假设某个按钮能用。** 先查 `docs/07A-current-status.md`、`docs/07-feature-status.md` 与 `docs/04-ui-map.md`。
-4. **不要凭猜测写接口。** 公开函数签名以 `docs/02-modules.md` 为准；
-   若文档与代码不一致，**以代码为准并立即修正文档**。
-5. **提交 GitHub 之前，不必兼容老文件 / 老插件 / 老接口**（沿用 Folio 同一条口径）。
-   改清单格式、改 Lua API、改设置项的键——**直接改**，同一批把插件、前端、用例、
-   文档一起改到新形状即可。
-   **触发条件（这条会到期）**：只在**首次提交到 GitHub 之前**成立。一旦对外发布
-   它就作废，从那以后老文档要能开、老插件要能加载。
-   ⚠️ **它不豁免"同一批必须全改干净"**：留着半新半旧两套形状比"不兼容"更糟。
-6. **任何 `.rs` / `.ts` / `.tsx` / `.lua` / `.css` / `.sh` 文件不得超过 1000 行**，
-   超了就地拆分（口径见 `docs/08-development-guide.md` §1.1）。`tools/doc-sync-check.sh`
-   会检查，**到 800 行就报 WARN**——那条 WARN 提醒的是**现在就规划怎么拆**，
-   不是"还能再写 200 行"（`src/App.tsx` 就是这么从 1118 行拆回来的）。
-   ⚠️ **2026-09-29 起尺子变紧**：用户原话「不要每个代码文件都 1000 行，998 行这样，要宽松一些。
-   比如 300、500、800 这样。**根据功能拆分**」——**目标是每个文件 300–800 行**，
-   WARN 线**从 900 收到 800**（FAIL 仍是 1000，清完手上那批再过到 900：
-   清单与理由在 `docs/07` 第 89 项）。
-7. **源码语言规范以根目录 `CORE_RULES.md` 为准。** 生产代码不得出现中文标识符、中文注释或硬编码中文；中文只允许留在语言包、内容资源与明确的测试数据中。长期经验写进根目录 `DEVELOPMENT_EXPERIENCE.md`，并使用极简英语。
-8. **明确支持 AI 贡献，但提交者必须亲自完整测试。** AI 辅助/生成代码、测试、文档、
-   图标、主题都欢迎；提交者必须在 PR 中声明 AI 参与范围，并写清本人实际执行的测试环境、
-   步骤和结果。只跑 CI、只读代码或“AI 说测过”不算完成。完整规则见 `CONTRIBUTING.md`。
-9. **打印与 PDF 只允许浅色主题。** 当前活动文档主题为深色时，打印、保存 PDF、
-   系统打印和 Pandoc PDF 都必须在开始排版前停止，并提示用户先选择浅色主题；
-   不允许静默替换主题，也不允许继续生成深色纸面。
+## 1. Project
 
----
+Nota is a local-first Markdown editor built with:
 
-## 1. 项目是什么
+- Tauri 2;
+- Rust under `src-tauri/`;
+- React 19, TypeScript and Vite under `src/`;
+- Milkdown 7, ProseMirror and remark in the editor;
+- Lua 5.4 for isolated extensions;
+- application ID `io.github.nota.Nota`.
 
-**Nota** 是一个 **Tauri 2** 桌面 Markdown 编辑器，带 **Lua 插件系统**、
-**AI 助手插件**与 **Git 版本控制插件**（逐项功能矩阵在 `docs/10-feature-matrix.md`）。
+The current version is stored consistently in `package.json`,
+`src-tauri/Cargo.toml` and `src-tauri/tauri.conf.json`.
 
-- 后端：Rust（`src-tauri/`），Tauri 2
-- 前端：React 19 + TypeScript + Vite，编辑器内核是 **Milkdown 7**（ProseMirror + remark）
-- 插件：**Lua 5.4**（mlua，`vendored`），每个插件一个**独立的 Lua 状态**
-- 应用 ID：`io.github.nota.Nota`
-- 版本：`0.15.0-beta`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
-- **源码语言规范的唯一入口是 [`CORE_RULES.md`](CORE_RULES.md)。** 生产代码使用英文标识符、极简英语注释与英文内部字符串；中文只允许出现在语言包、内容资源和测试数据中。长期经验写在 [`DEVELOPMENT_EXPERIENCE.md`](DEVELOPMENT_EXPERIENCE.md)。界面 `t()` 的键使用英文原文，中文译文集中在 `src/i18n/zh-*.ts`。
+### Core architecture
 
-**名字**：Nota 是意大利语「笔记」，与工作区里的 Folio（对开本）/ Fascia（幻灯片）/
-Forma（表格）同一家族。项目结构参照 Folio。
-
-### 与 Folio 的关键差别（那边的结论不能照搬）
-
-| 维度 | Folio | Nota |
-|---|---|---|
-| 界面层 | GTK4 + libadwaita（原生控件） | **WebView 里的 HTML/CSS**（`src/ui/*.tsx`） |
-| 编辑区 | WebKitGTK 6 里的 `contenteditable` | **WebKitGTK 4.1 里的 ProseMirror 文档树** |
-| 插件 | 进程内 C ABI（`.so`），**无沙箱** | **Lua 状态隔离 + 能力白名单**（宿主 API 按能力装配） |
-| 文档模型 | HTML（`.htd` / `.htdp`），格式表由插件认领 | **Markdown 纯文本**，无格式表 |
-| 构建 | Meson + Ninja | Cargo + npm/Vite |
-
-⚠️ **最要紧的一条**：Folio 的 `FoWindow` **不是 GObject**、`use-markup` 默认 TRUE 这类
-坑在 Nota 里**都不存在**（没有 GTK 控件树）。反过来 Nota 有自己的坑，见 §4b。
-
----
-
-## 2. 代码地图（一句话）
-
-### 后端 `src-tauri/src/`
-
-| 文件 | 职责 |
+| Layer | Responsibility |
 |---|---|
-| `main.rs` | 进程入口，只是 `nota_lib::run()` 的一层壳 |
-| `lib.rs` | `run()`：建 Tauri、装 fs/opener 插件、`setup()` 里载设置并建共享状态 → `manage(AppState)`；插件目录发现和 Lua 加载在窗口创建后由阻塞线程完成，不挡首帧。文件打开/保存/目录选择优先走 `native_dialog.rs` 的系统原生对话框，`file_picker.rs` 与前端应用内界面只作回退。全部 `nota_*` 命令的注册表；`on_window_event` 在窗口销毁时 `unload_all()` |
-| `cli.rs` | 命令行参数：`首个要打开的文件()` 挑出 `nota 笔记.md` / 文件管理器"用 Nota 打开"带的那个路径，由 `lib.rs::nota_startup_file` 转告前端。⚠️ **纯函数，不判存在性也不读文件**（读不出来的错由前端那条开文档的路照常弹）；⚠️ 只认第一个非选项参数。⚠️ **2026-09-27 起还有第二个参数**：`要开新窗口()` ＋ 常量 `新窗口选项`（`--new-window`）——「标签页右键 → 在新窗口中打开」时，`commands/window.rs` 用**常量**拼命令、`lib.rs` 用**同一个常量**判"这一份进程整关跳过单实例"，**两边必须是同一个串**，所以只在常量那一处定义。⚠️ **判据是 `OsStr` 整串相等**（比较用 `as_os_str()`），不是 `to_string_lossy` 之后的 `contains` —— 后者会把 `--new-windowish` 也认成新窗口，而且"能被有损转换"本身就不该当判据（与 `single_instance.rs` 里路径按原始字节传同一条口径） |
-| `error.rs` | `NotaError` 枚举，**中文 Display 消息**，自定义 `Serialize` 以便过 Tauri IPC |
-| `log.rs` | **调试输出的总闸门**（2026-09-25）：`开着()`（`NOTA_DEBUG` 只读一次、`OnceLock` 缓存）＋ `日志!` 宏。⚠️ **默认一个字都不往 stderr 写**，后端十处输出全走它——宿主是给人用的桌面程序，双击图标的人看不到 stderr，终端里的人只会被刷屏。⛔ **不要再往里写裸 `eprintln!`**，那会把"默认静默"这条规矩一点点漏掉。⚠️ 用户看得见的东西**不走这里**（设置坏掉是启动 toast，命令失败是 `NotaError`），前端的 `console.*` 也不走（它压根不进终端） |
-| `lang.rs` | **界面语言**（2026-09-25 新增）：`支持的语言` / `语言名`（**用那门语言自己写的名字**，语言选择器专用）· `插件兜底`（`en`，**对插件作者的要求**：应用语言不在插件的 `langs` 里时插件用哪一种）· `应用兜底`（`en`，**应用自己**落点：`settings.toml` 跟系统走而系统语言认不出来、或写了个应用没有的语言时，界面落到这儿。⚠️ **两个兜底 2026-09-26 才拆开**——此前共用一个 `兜底 = "en"`，那正是用户当天报的「界面中英混杂」的根因；拆开那天**上午**为了"英文表还只盖住插件那一面、落到 `en` 会把界面切成两半"取的是 `zh-CN`，**下午表铺齐（732/732）之后按那条常量注释里写下的条件翻了回来**。⚠️ **两个都**必须出现在 `支持的语言` 里，有用例钉着——用例名 `两个兜底是两个概念_今天恰好同值`，它钉的是"**两个概念没被合并成一个常量**"，不是"两个值不相等"：值今天相同只是因为同一个理由（英语是插件与 Markdown 生态的通用语），`应用兜底` 该不该动看前端那张表覆盖齐没有）· `自动`（设置里"跟系统走"那个值）· `规范`（`zh_CN.UTF-8` → `zh-CN`）· `匹配`（**先精确、再只往粗的一侧退**：应用 `zh-CN` 能命中插件的 `zh`，反过来不猜）· `读语言文件`（一份 TOML → `键 → 字`）· `有效语言`。⚠️ 它是**唯一**解释"什么算有效语言"的地方，应用与插件两个消费者都问它（理由在文件头） |
-| `paths.rs` | XDG 目录（`~/.config/nota`、`~/.local/share/nota`）、`settings_file()`、`session_file()`、`drafts_dir()`、`user_plugins_dir()`、`builtin_plugins_dirs()`（debug 构建额外返回仓库的 `plugins/`）、`user_themes_dir()`（⚠️ **只有这一个主题目录**，另两处外部编辑器的主题目录已按版权要求停止扫描） |
-| `dev_bridge.rs` | **Authenticated Host Control**（2026-11-07）：developer-mode-only HTTP listener, Argon2 password verification, default-loopback IP/CIDR whitelist, bearer sessions, request limits, theme/plugin reload, registered `nota_*` command forwarding, real `exportHtml` preview and window capture |
-| `draft.rs` | **可恢复草稿存储**（2026-11-01）：把未写入原文件的正文独立存到数据目录的 `drafts/`，每条记录带稳定草稿 id、原路径、标题、编码与换行符。原子写入、坏记录跳过、最多保留 100 份；恢复只覆盖编辑器内存，绝不直接改源文件 |
-| `commands/draft.rs` | **草稿 IPC**（2026-11-01）：保存 / 列出 / 恢复 / 丢弃，以及保存、重载、删除后清理对应草稿。列表过滤掉当前已恢复的标签；内容与磁盘干净版本相同时不保留草稿 |
-| `state.rs` | `AppState`：四个共享句柄 ＋ `settings_problem`（**只写一次、此后只读**，所以不是 `Mutex`）。**锁顺序不变量写在文件头**（`plugins → documents → settings`） |
-| `single_instance.rs` | **单实例**（2026-09-27，`docs/10` §9 那格）：`抢占()` 返回 `第一个(监听器)` 或 `已转交`——后者在 `lib.rs` 里直接 `std::process::exit(0)`。⚠️ **用 Unix socket 而不是锁文件**：`connect()` 能区分"文件在不在"与"有没有人在听"，`ECONNREFUSED`（上次崩了留下的陈旧文件）就删掉重绑，锁文件做不到这件事（要判持有者死没死）。⚠️ **路径按原始字节传**（`OsString`，不是 `String`）：Linux 上的路径可以不合法，`to_string_lossy` 出来的是**另一个路径**。⚠️ 收帧用 `read_to_end` ＋ 自己 `shutdown(Write)`，**空帧是合法的一条**（只是"把窗口抬起来"，不带文件）。⚠️ 落点在 `dirs::runtime_dir() ?? paths::data_dir()`（runtime 目录在会话结束时会自动清掉）。⚠️ **2026-09-27 晚起有一个例外，但例外开在 `lib.rs` 不在这里**：「在新窗口中打开」那一份进程带 `--new-window`，`lib.rs` 判到它**整关跳过单实例**（`None`）。这里一行没动——`抢占()` 的语义（"第二份要转交给第一份"）与"用户主动要再开一个窗口"正好相反，不是它该退让的地方 |
-| `mcp/mod.rs` | **Private internal document-tool gate**（2026-11-07）：only `host`, `tools` and protocol metadata remain. Public `--mcp`, stdio JSON-RPC and the single-instance MCP handshake were removed. Host Control is the only external developer API. |
-| `mcp/host.rs` | Internal testable host abstraction for live-document operations reused by Host Control. It is not an external protocol. |
-| `mcp/tools.rs` | Five internal document operations (`nota_info` / `nota_documents` / `nota_read` / `nota_write` / `nota_open`) reused by Host Control `documents.*` methods and covered with a fake host. |
-| `file_move.rs` | **重命名 / 移动的唯一实现**（2026-09-27，`docs/10` §1 那格「文件重命名 / 移动」）：`移动(从, 到)` 一条路，跨设备自己退化成"临时文件 → 复制 → 改名 → 删源"。⚠️ **三条硬口径**：**绝不覆盖**（目标在了就报错，一个字节都不动，坏链接也算"在了"）、**跨设备要能走**（判据用 `ErrorKind::CrossesDevices`，**不写裸错误码 `18`**——Windows 的同类错误是 17，两边的 kind 是同一个）、**失败不留半个东西**（临时文件在目标那一层目录里，复制失败就地删掉）。⚠️ 删源失败时**明说"两份都在"**，不假装成功——那是用户自己收拾得掉的局面。⚠️ 三条不做：不猜文件名（重名报错）、不挪目录、不服软链接。调用方只认 `移动` 一个函数，账户跟着搬的三笔（最近 / 列宽 / 监视基准）都在 `commands/document.rs::挪过去` |
-| `url_scheme.rs` | **`nota://` 的注册那一半**（2026-09-27，`docs/10` §9 那格；解析在 `cli.rs`）：写 `$XDG_DATA_HOME/applications/nota-url-handler.desktop`（`Exec="…" %u` ＋ `MimeType=x-scheme-handler/nota;`）再让 `xdg-mime default …` 去合并 `mimeapps.list`。⚠️ **文件名故意不叫 `nota.desktop`**：同名会盖住将来打包版装在 `/usr/share/applications` 的那一份。⚠️ **内容一样就既不写也不调 xdg-mime**——不是省时间，是别每次启动都碰用户的桌面配置。⚠️ **失败一律只记日志、不拦启动**（注册不上只是"点链接打不开"） |
-| `focus/mod.rs` | **强制专注的账本与计时线程**（2026-09-26 新增，**核心功能不是插件**——用户：「注意啊，这不是插件。这是核心功能」）。模型是用户点名的**账户余额**：余额上限＝「专注总时长」、开局余额＝「警报时长」、专注 1 分钟加 `gain_per_minute`、离开 1 分钟扣 `drain_per_minute`，余额归零就警报；⚠️ **单位是分钟、内部存毫秒整数**（浮点一秒一拍地累加会攒出可见漂移，而"显示还剩 0.0000001 分钟但就是不响"没人查得出来）。⚠️ **选账户模型而不是"每 20 分钟必响"是用户自己推翻前者时点的漏洞**：定时器下"每隔 19 分钟切回来 3 秒"就能一直不重置，账户模型下它自己就没了——切回来 3 秒只赚回 3 秒额度。⚠️ 三个不变量：**宽限期内不欠账**（过了 `grace_seconds` 才从第 11 秒起扣，不是"先记账回头一起还"）、**警报中账本冻结**（警报窗自己会抢焦点，不冻就自己扣自己、警报连环响）、**响过之后要攒到复活线**（`10s~60s`）。⚠️ 它是**唯一**的真相源：命令层与前端都只读它广播的快照，别在任何地方再判一次。⚠️ 13 条用例把时间**当参数传进去**（`走一拍(s, 设置, now)`），所以 20 分钟的行为在毫秒里跑完 |
-| `focus/alarm.rs` | **警报窗与警报声**（2026-09-26）：`开窗`（一个真窗口 `index.html#focus-alarm`：`decorations(false)` ＋ `always_on_top` ＋ `fullscreen` ＋ 抢焦点——⚠️ 必须是**另一个系统窗**，警报响的时候用户已经切到别的应用去了，盖在主窗里的红布他根本看不见）、`关窗`、**`对账(app, 阶段)`**、`响`（`sound` 开着才 emit `nota:focus-beep`，音色归前端）、`系统提示音`（**兜底**：`canberra-gtk-play` → `aplay`，三个都起不来就记一条日志收工，不弹任何东西）。⚠️⚠️ **`对账` 是 2026-09-26 开窗实测才补上的**：这个文件头一直写着"计时线程每一拍对一次账：是警报而窗没开就开、不是警报而窗开着就关"，而**计时线程里从来没有这一段**——症状是点了「我回来了」红屏赖着不走（`确认` 只改阶段，前端明说了不自己 `close()`，于是没人收窗；唯一的出路是 Alt+F4）。教训写在 `对账` 的文档里：**别把"打算这么做"当成"已经这么做"记下来** |
-| `commands/focus.rs` | `nota_focus_get` / `_start` / `_stop` / `_ack` / `_beep` / `_close_alarm` 六条（2026-09-26）。⚠️ 这一层**不做任何判断**：不判"该不该扣、该不该响"，只转发 ＋ `广播`（把新快照 emit 给**所有**窗口，警报窗也要看余额）。⚠️ **每一条都 emit**：余额每秒都在变，命令返回的那一份到前端时可能已经过时，所以以事件为准、返回值只当这一枪的回执。⚠️ `ack`（点了「我回来了」）故意不问确认；`close_alarm` 是给调试和退出用的，**别拿它当"停止专注"**（那是 `stop`，它同时清账本） |
-| `settings/focus.rs` | **「强制专注」那一页的设置**（2026-09-26）：`total_minutes` / `alarm_minutes` / `gain_per_minute` / `drain_per_minute` / `grace_seconds` / `sound` / `introduced`，默认 **25 / 20 / 1.0 / 1.0 / 10 / true / false**。⚠️ **`alarm_minutes` 才是"多久不写就响"那个数**（不是 `total_minutes`，那个是余额上限，写满就封顶、不许攒成免死金牌）；⚠️ `introduced`（首次说明看过没有）**必须落盘**——只在内存里的话每次重启都被拦一次，用户很快学会闭眼点掉，那正好把那次说明的意义抵消掉。⚠️ 10 条用例里有一条专钉"**设置里没有任何能看别的应用的东西**"，那是决定不做的那条边界 |
-| `settings/document.rs` | **「文档主题」那一页的可调项**（2026-09-27，`docs/10` §4）：正文的行距 / 段距 / 字体 / 字号，四项各是**「开关 ＋ 值」**（`custom_line_height`+`line_height` 等），默认**全部跟随主题**（开关为假）。⚠️ 表叫 `[document]` 而页叫「文档主题」是有意的：顶层老字段 `document_theme` 回答"**用哪一套**"，这张表回答"那套给的默认值里**哪几项我不听**"（叫 `[doc_theme]` 会被当成前者的另一种写法）。⚠️ **四项都是"开关＋值"、不许拿 `0` 当哨兵**——段距 0（段落之间不留空）是正当取值。⚠️ 覆盖值的唯一正确落点是 **`.editor-pane` 那一层的内联 style**（文档主题经 `styles/doc-theme.ts` 限域后变量声明就在 `.editor-pane` 自己身上，写在 `<html>` 上靠继承**盖不过**它），理由写在文件头最后一段 |
-| `settings/keys.rs` | **「快捷键」那一页的设置**（2026-09-27 新增，用户点名要的）。⚠️ 只有一个字段 `overrides`（命令 id → 键位串），而且**只放用户动过的那些**——不存整张键位表：那张表的真相源是前端 `src/ui/commands.ts` 的 `MENUS`，抄一份到这里就有两份真相（加一条新命令、改一条默认键位，两边就对不上了）。⚠️ 值的**三种含义**：**不在表里**＝用默认、**在表里但是空串**＝这条不要快捷键、**在表里且非空**＝就用它；所以"清除"和"恢复默认"在文件里是两件不同的事（前者留一条空串，后者把那条删掉）。⚠️ 用 `BTreeMap` 而不是 `HashMap`：写进 TOML 按键名排序，每次存盘字节一样，diff 不会满屏乱跳。⚠️ **不做清洗校验**（认不出的命令 id 前端静默丢弃，不报错也不清）——设置文件是给人看的，删用户写的东西比留一条没用的更需要理由。⚠️ 落盘形状是 `[keys.overrides]`（**一层套一层**，不是 `[keys]`），所以 `text.contains("[keys")` 才是对的断言 |
-| `heartbeat.rs` | **面板心跳**（2026-09-26）：给声明了 `live` 的插件面板**每秒**发一次"该重拉了"（写作统计那颗大红字就是靠它每秒重画）。⚠️ 它**不认识任何插件**——只把清单里声明过 `live` 的那几个 id 拿出来重拉。⚠️ 与计时线程**同频但各自独立**，`focus/mod.rs` 顶上写着别合并：一个是"面板内容可能变了"，一个是"账户在走账"。⚠️ 退出时不叫停也不拖住进程（同 `watch` / `devserver`） |
-| `settings/` | **模块目录**（一页一个文件）：`mod.rs` 装 `Settings` 与三条**互相独立**的外观轴（`ui_style` / `ui_mode` / `document_theme`），kebab-case 落盘；另有八个域文件 `files.rs` / `editor.rs` / `image.rs` / `markdown.rs` / `export.rs` / `appearance.rs` / `general.rs` / `document.rs`，各管界面上的一页（⚠️ 2026-09-27 又多了**第九个**：`keys.rs`，管「快捷键」那一页）。⚠️ 老字段一律留在 `mod.rs` 的顶层不搬（搬进 `[页名]` 表会让老设置文件里的值静默丢回默认），**新字段才进 `[页名]` 表**。⚠️ `files.rs` 2026-09-28 加了 `tree_sort`（`name` / `modified` / `created`，默认 `name`），同一批把摆了四天的 `show_hidden` / `tree_filter` 接上了线 |
-| `document/mod.rs` | `DocId` / `Document` / `DocumentStore` / `选区快照`；**「前端是文本的唯一真相、后端持有 300ms 镜像」这条口径写在文件头**。⚠️ `untitled_index`（未命名序号，建时定死）与 `clean_text`（比脏标记的那一份）不许省。⚠️ `选区`（编辑器报上来的选区）是**界面状态**，`serde(skip)` 且不许碰 `revision` / `dirty`——碰了就是"点两下光标变未保存"（`记选区`）。⚠️ 标题推导（`derive_title` 那一族）**2026-10-04 拆去了 `document/title.rs`**，本文件用一行 `pub use` 让老路径照旧 |
-| `document/title.rs` | **标题从哪来**（2026-10-04 从 `document/mod.rs` 拆出，那边过了 800 行）：`derive_title()`（front matter → 一级标题 → 文件名 → 「未命名 N」）＋ `front_matter_title` ＋ `first_heading` ＋ `strip_atx`。⚠️ 拆缝是**纯文本进、标题出**——不认识 `DocId`、不碰仓库、不取锁，所以谁都能调它、测试不必先造仓库。⚠️ `strip_atx` 是「什么算标题」在 **Rust 侧**的那一份，与前端 `editor/atx.ts` **同构**，两边一起改 |
-| `commands/mod.rs` | 命令模块的表；只有 `pub mod` 声明，没有逻辑 |
-| `commands/document.rs` | `nota_doc_*` **十五个**命令（⚠️ **2026-10-04 现数**：`grep -o 'commands::document::nota_doc_[a-z_]*' src-tauri/src/lib.rs | sort -u` 数出来 15 个——上一次写的是"十二"、`docs/02` 那份写的是"十四"，两处早就对不上，**这就是那条「一共 N 个要么现数、要么别写」的老毛病**；本批新增的是 `nota_doc_cursor`（第 14 项，编辑器把选区报上来）；多出来的是 `nota_doc_disk_text`，给外部改动提示条的「查看修改」用——读磁盘那份、一个字节的状态都不改）。⚠️ `settle` 是唯一一个**不当作编辑**的写入口（装载后的规范化认领），它有测试盯着，不要合并进 `sync`） |
-| `commands/workspace.rs` | `nota_workspace_*` 四个命令 + `TreeNode`（**相对路径、`/` 分隔**）。⚠️ **`nota_workspace_tree` 2026-09-28 起多收一个 `TreeOptions`**（排序 / 过滤 / 隐藏文件，三格逐格回落到 `[files]` 表）：**口径随请求走、不让宿主自己读设置**，因为设置那一路是"先改内存再写盘"，后端可能还拿着旧值（那种"拨了没反应、过一会儿自己好了"最难报）；同一批把 `show_hidden` / `tree_filter` 这两个**摆了四天的死开关**接上了线（在那之前 `read_dir_sorted` 里那两个判断是写死的：点开头的永远跳过、只列 markdown）。⚠️ `.git` 与 `node_modules` **永远跳过**，与 `show_hidden` 无关——拨开隐藏文件是冲着 `.github` / `.env` 去的，`.git/objects` 露出来等于这个开关废了。⚠️ 排序三档里**只有"按名字"是升序**，两个时间档都是新的在前；**目录永远排在文件前面**（三档都一样）。⚠️ **2026-09-27 起 `open` / `close` 顺手往会话侧车里记一笔**（`session::记工作区`）：设置里「启动时」的第三档要"恢复上次的文件**和文件夹**"，而工作区在那之前**只在内存里**（`AppState::workspace` 是个 `Mutex<Option<PathBuf>>`），冷启动必是空的。⚠️ **两份真相的分工**：内存那份是**这次**生效的（插件围栏读的就是它），侧车那份只是"上次是哪个文件夹"这句记忆、唯一用途是启动时恢复；所以**写侧车失败不算这条命令失败**（只记日志），而**侧车里有一份、内存里没有时围栏就是没有**（`nota_workspace_get` 读内存，不会拿旧路径去开围栏） |
-| `session.rs` | **会话与最近文件**（2026-09-27 新增，`docs/07` 第 76 项）：上次开着哪几份 ＋ 最近打开过哪些 ＋ 每份滚到哪儿 ＋ **上次开着哪个文件夹**，**五样放一份侧车** `~/.local/share/nota/session.toml`（`paths::session_file()`，上限写死在宿主：`最近最多` 20 / `会话最多` 12 / 滚动 64）。⚠️ **`workspace` 是 2026-09-27 加的第五样**（为「启动时」第三档）：在那之前工作区只在内存里，冷启动必是空的；写它的是 `commands/workspace.rs` 那两条命令，不是前端；手改出来的空串当没有（判据同 `active`）。⚠️ **不写进 `.md`**（那等于用户滚一下鼠标就动了他的字节，`docs/08`）、**不并进 `settings.toml`**（那一份是标量偏好，这里是一串随开随关一直在变的路径）——`config` 那边是**用户该能手改的**，这一份是**看的时候的状态**，所以落 `data`；⚠️ **坏文件当「空的」用、不报错**，代价是下一次写盘把它整个覆盖（后果只有「记忆没了」）；⚠️ 「最近」按**路径**去重，**另存为之后新旧两条同时在列表里**；⚠️ 滚动位置存的是**比例**不是像素。⚠️ 与 `table_width.rs` 是同一个判据下的例外，别把两份合成一份 |
-| `spell/mod.rs` + `spell/native.rs` + `spell/store.rs` + `spell/tests.rs` | **拼写检查的独立后端**（2026-10-11）：`Backend` trait ＋ 两个实现（`native.rs` 的**纯 Rust 引擎 zspell** 是主路，`mod.rs` 的 `命令行后端`（`enchant-2` / `hunspell`）是手里没这门语言词典时的退路）＋ 用户词表与"忽略"那一层（`加入用户词` / `忽略一个词` / `要真查的`）。`store.rs` 管**词典从哪儿来**（用户目录 `$XDG_CONFIG_HOME/nota/dictionaries` ＋ 系统目录 `/usr/share/hunspell` 那一族 ＋ `.zip` 导入）。宿主**七条**命令：`nota_spell_check` / `nota_spell_suggest` / `nota_spell_dictionaries` / `nota_spell_dict_dir` / `nota_spell_dict_reveal` / `nota_spell_dict_import` / `nota_spell_word_add` / `nota_spell_word_ignore`。⚠️ **不借浏览器内核**（用户原话）、**安装包里一本词典都不带**（用户 2026-10-11 拍板，照 Typora 那条 `❌ 词典数据不内置`）。⚠️ 那两个 `清缓存`/「导入后当场生效」的坑写在 `native.rs` 文件头 |
-| `commands/session.rs` | 会话那**六条**命令（2026-09-27）：`nota_session_get` / `_set_open` / `_set_scroll` / `_forget_recent` / `_clear` / `_file`。⚠️ **死链是在这一层滤的**，不在 `session.rs`：判「这条路径现在还存不存在」要碰一次文件系统，而存储那一层是**纯读文本**的，用例全靠「给一段文本、看读出来什么」来钉，塞进 `fs` 调用会让那些用例全都得先造真文件；⚠️ **过滤不等于清理**——文件删了那条只是**不再显示**，侧车里的字节要等下一次真的写盘才变（「打开一下应用、磁盘上某份文件就被改了」是看不见的写），要立刻消失得前端调 `_forget_recent`。⚠️ **工作区那一格单独滤**（`是目录()`，不是 `是文件()`——拿后者判目录**永远为假**，症状是第三档静默失效）；⚠️ **`_clear` 要留住工作区那一笔**：那颗按钮写的是"忘掉最近打开的**文件**"，抹掉的话症状是"清了记录，退出再开，左边那棵树没了"（同标签那笔账） |
-| `commands/settings.rs` | `nota_settings_get/set`（整份替换；保存失败则回滚内存）/ `reset` / `dir` / `problem`（开机读设置失败时那句给用户看的话）/ **`nota_app_lang`**（宿主此刻在说哪种语言，**启动时算好的那个**——前端拿它填文案表，所以改语言要重启，理由在 `settings/general.rs::language`） |
-| `commands/plugin.rs` | `nota_plugins_list` / `nota_plugin_set_enabled` / `nota_plugin_call` / `nota_plugin_find_command` / `nota_plugin_panels` / `nota_plugin_panel_content` / **`nota_plugin_review` / `nota_plugin_review_open` / `nota_plugin_review_close`**（把一个面板摊到编辑区里、收起来，见 `ui/ReviewPane.tsx`）/ `nota_plugin_menus` / `nota_plugin_install` / `nota_plugin_uninstall` / `nota_plugin_trust` / `nota_plugin_trust_list`。⚠️ 其中 **`set_enabled` / `install` / `uninstall` 三条是异步命令**（走 `spawn_blocking`）：前一条要真装卸（跑 Lua），后两条要解包、验签、落盘——同步命令跑在主线程上，在里面等就是冻界面。⚠️ `nota_plugin_call` 也是异步的：插件的 Lua 调用是阻塞的（`nota.http` / `nota.devserver.start` 都会等）。⚠️ `review_open` 故意**不取 plugins 锁**，长命令运行中也能把侧栏面板切到编辑区 |
-| `commands/menu.rs` | `nota_native_menu_apply` 一条，转给 `native_menu.rs`。⚠️ 返回值是**"挂上了没有"**，前端据此决定藏不藏自绘菜单栏——不要改成按平台判断 |
-| `pandoc/tests.rs` | **`pandoc.rs` 的用例**（2026-10-10 从那一份里搬出来：加完"文档主题 ＋ 额外参数"那批之后它 1024 行，过了 1000 硬线）。⚠️ **只搬行数，一个断言没改**（`use super::*;` 照旧）。拆法同 `lua/api/http/tests.rs` / `image/tests.rs`：主文件那侧留一句 `#[cfg(test)] mod tests;` |
-| `proc.rs` | **跑外部程序的那一层**（2026-09-25 从 `slidev.rs` 抽出来，pandoc 导出也要用）：`split_command`（⚠️ **只按空白分词**，不管引号）· `command_or_default`（读 env 优先于默认值）· `background_command` / `hide_console_window`（Windows 统一 `CREATE_NO_WINDOW`，禁止 Git、诊断、Pandoc、更新器等后台命令闪黑框）· `spawn_retrying`（⚠️ `ETXTBSY` 等一下再试，见 `docs/06` §3.9；并再次兜底设置无窗标志）· `run_capture(program, args, RunOpts)`（`process_group(0)` 起、可选喂 stdin、带超时、超时**杀整个进程组**）· `Ran` 四档（`Done` / `NoProgram` / `Timeout` / `Failed`——⚠️ **`NoProgram` 单独一档**，「没装」和「跑砸了」是两件事）· `kill_group`。⚠️ 任何运行期子进程都必须从 `background_command` 起；测试里的假命令**必须是真脚本文件**：`split_command` 不管引号，`sh -c '…'` 会被拆坏 |
-| `devserver.rs` | **开发服务器的通用机制**（2026-09-25 从 `slidev.rs` 提出来的）：挑空闲端口 → 把当前文档写成入口文件 → 起进程（自成进程组）→ **等到端口通** → 杀整棵进程树 → 删入口。⚠️ 提出的判据是**归属**不是行数：这件事**任何"预览当前文档"的拓展都要用**，所以是宿主的机制；"用哪条命令、装没装、界面长什么样"全在插件那侧（`plugins/slidev/`）。⚠️ **能力放行的是清单里那一条命令**：程序名与参数模板写在 `plugin.toml` 的 `[devserver]` 段，随插件过签名校验，`nota.devserver.start` **不收 `cmd` 参数**——Lua 交不出第二个程序名（同 `nota.git`）。⚠️ 一份**签过名的恶意插件**仍可以把那条命令写成任意东西：这道门挡的是"偷偷起别的进程"，不是"插件干了坏事"（归安装那步的信任判定管）。⚠️ **`start` 会阻塞到端口通**（默认 180 秒），和它的前身**故意相反**——前身由 Tauri 同步命令调着，等就是冻界面，所以等待推给了前端轮询；现在这条路走插件命令（`nota_plugin_call` 本来就在 `spawn_blocking` 上），于是那条 500ms 轮询及其竞态一起没了。⚠️ **一个插件最多一场会话**（键是插件 id）。⚠️ 其余机制照旧：入口写在**文档所在目录**（相对图片才解析得对）、杀的是**整个进程组**。⚠️ 2026-09-26 破 1000 行（`need` 那批用例顶上来的），**探测那一半拆去了 `devserver/probe.rs`**——判据是职责（「问能不能跑」是纯函数、「起一场会话」有状态），`probe` / `Probe` / `ProbeState` 仍从这里 `pub use` 转发，对外路径没变 |
-| `devserver/probe.rs` | **探测那一半**（2026-09-26 从 `devserver.rs` 拆出）：跑一次 `<命令> --version` 看装没装 → 看项目根（及各层父目录）里有没有 `project_marker` → 看 `need`（"**这份文档还缺什么**"）在不在。⚠️ **纯函数**：不起服务器、不占端口、不留状态，和 `devserver.rs` 那半的会话状态/`Drop`/日志环分得干干净净。⚠️ **里面没有一句人话**——事实归宿主、话由插件写（`plugins/slidev/main.lua::describe_probe`）。⚠️ `need` / `need_found` 的**三档**口径（没问 `nil` / 有 / 没有）见 `docs/13` §13.3b，⚠️ 别当布尔用 |
-| `text_encoding.rs` | **文件编码**（2026-10-16 新建，2026-11-01 接入文档读写）：`认编码` / `规范名` / `读文件`（BOM → 合法 UTF-8 → `chardetng` 猜）/ `按编码读` / `按编码写`。`Document.encoding` 随文档保存，打开和重载自动探测，存盘按原编码写回。UTF-16 显式编码并写 BOM，UTF-8 不写 BOM。 |
-| `themes.rs` | **文档主题**：安装包**只内置 Adwaita 浅色/深色**；用户传统包放 `themes/document/<id>/theme.css`，原生 Typora 集合则由 `.nota-themes.json` 索引。`css_of` 在加载时展开 Typora `@import` 并内联相对资源，磁盘源文件保持原样。⚠️ `check_id` 是安全边界。⛔ **不随包内置外部编辑器主题**（版权），但允许用户直接导入本机主题 |
-| `theme_import.rs` | **主题导入分派**：官方 Nota 包识别 `ui/`、`document/`、`themes/` 布局；目录、CSS 与平铺 Typora ZIP 交给 `theme_import/typora.rs`。所有入口共用路径、符号链接、文件数与体积限制 |
-| `theme_import/typora.rs` | **Typora 原生导入器**（2026-11-01）：接受平铺主题文件夹、单个 CSS 或同布局 ZIP；原样复制 CSS、`@import`、字体和图片，只额外写 `.nota-themes.json` 说明入口。运行期才展开 import、内联资源并优先使用字体内嵌数据，不回写导入文件 |
-| `commands/theme.rs` | `nota_doc_themes` / `nota_doc_theme_css` / `nota_doc_themes_open_dir` 三条。⚠️ 入参是 **id 不是路径**——路径由后端自己拼，前端没有"读任意文件"的能力。⚠️ 最后那条**连"打开"一起做完**（宿主调 `plugin-opener`）：让前端拿路径去调 `openPath` 会撞 Tauri 的 ACL（BUG-27），形状与 `commands/settings.rs::nota_settings_open_dir` 一致 |
-| `ui_styles.rs` | **界面风格的发现与读盘**（2026-09-26 新增），与 `themes.rs` **并行**——两条机制的区别写在它文件头上那张对照表里（目录 / 限不限域 / 怎么注入），⛔ **别把两份合成一份**。2026-10-21 起安装包**只随附 Adwaita**，并移除“自动匹配系统桌面主题”；旧设置里的 `auto` 兼容映射到 Adwaita。`BUILTIN_IDS` 是权威清单；Yaru、macOS、Windows、CDE 等从 `Nota-themes` 安装为自包含外部主题。⚠️ 用户把主题包放进 `~/.config/nota/themes/ui/<id>/theme.css`，后端**按 id 找文件**，所以 `check_id` / `check_size` 直接**复用 `themes.rs` 的 `pub(crate)` 那两个**（同一道安全边界两份实现，漂的是哪一份没人看得出来）。⚠️ **内置档没有独立文件**：`css_of` 只认用户的 `.css`，内置 Adwaita 样式打包在样式表里 |
-| `commands/ui_style.rs` | `nota_ui_styles` / `nota_ui_style_css` / `nota_ui_styles_open_dir` 三条（2026-09-26），形状与 `commands/theme.rs` 一一对应。⚠️ 目录**用到时才建**（首次打开"风格文件夹"时它多半还不存在） |
-| `cups.rs` | **最小 CUPS/IPP 客户端**（2026-10-17 新建）：直连 `/run/cups/cups.sock`，用 `CUPS-Get-Printers` 列打印机、`CUPS-Get-Default` 找默认项、`Print-Job` 投递 PDF。⚠️ 不执行 `lpstat` / `lp`。PDF 必须交给 CUPS 驱动链转换成打印机能吃的格式；**不能发 raw PDF**，否则 Epson 会把 `%PDF` 源文件当文本打印。⚠️ **发送后不要 `shutdown(Write)`**：CUPS 看到写半边关闭时只回 HTTP 头，不回 IPP 正文。 |
-| `print_job.rs` | **应用内打印**（2026-10-17）：`列打印机()` 把 `cups.rs` 的结果转成 `打印环境 { cups_available, problem, printers }`；`准备()` 走 WebKit PDF＋`pdfinfo`/`pdftoppm` 预览；`系统打印()` 直接起系统打印对话框；`投递()` 走 CUPS/IPP。⚠️ 预览与投递仍是同一份 PDF，临时目录仍只清纯数字子目录。 |
-| `commands/print.rs` | **打印接线**：`nota_print_supported` / `_printers` / `_prepare` / `_system` / `_send`。⚠️ `prepare`、`system` 都必须 `async`，否则主线程等主线程死锁。 |
-| `gtk4_dialogs.rs` | **GTK4 次级对话框父进程接口**（2026-11-14）：定位并启动同目录的 `nota-gtk4-dialogs`，通过临时 JSON 请求调用文件选择或打印。GTK3 主进程不能同时初始化 GTK4；helper 失败时文件选择回退 XDG portal，打印则明确报错 |
-| `bin/nota-gtk4-dialogs.rs` | **GTK4 次级对话框 helper**（2026-11-14）：只提供 `file` 与 `print` 子命令，不加载编辑器、插件或账号状态 |
-| `commands/native_dialog.rs` | **系统文件选择器**：Linux 先走 GTK4 helper，再走 XDG Desktop Portal；Windows/macOS 用 `rfd` 的原生对话框。Linux 不恢复 GTK3/zenity 回退 |
-| `commands/export.rs` | 导出与打印的 **IO 那半**（2026-09-24）：`nota_export_write`（写一段文本到指定路径）、`nota_export_write_bytes`（**二进制**那一路：前端先 base64，宿主解码再写——分享卡「保存为图片」存 PNG 走它；⚠️ **先解码再写盘**，base64 坏了不留半个文件）、`nota_export_print`（写成 HTML → 交给系统默认程序）与 `nota_export_reveal`（在文件管理器里**定位**它，不是打开它——导出设置那条「导出后打开所在目录」用）。⚠️ 四条命令共一个文件（2026-09-27 第九遍重数：此前本节与 `docs/01` 的分组表都只写了三条，`_write_bytes` 从上线起就没进过任何一张表）。⚠️ 借 pandoc 转的那七种**不在这里**，在 `commands/pandoc.rs`。⚠️ **这一层不认识 Markdown 也不认识 HTML**，生成在前端（`editor/export.ts`）——搬过来就是把渲染引擎实现两遍。⚠️ 打印落点跟**文档自己的目录**（相对路径的图片才解析得对），固定名 `.nota-print.html`、点号开头默认隐藏；⚠️ 打印**不是** `window.print()`，理由在文件头 |
-| `commands/image.rs` | `nota_image_place`：落图并返回 Markdown 地址；`nota_image_data_url`：编辑区显示本地图片，限 32MB、只读主目录/文档/桌面/下载，返回 data URL。两者都走 `spawn_blocking`；文档位置与插图规则由宿主提供。 |
-| `commands/image_upload.rs` | 「上传图片」那三条命令 ＋ **手动与自动两条路共用的那一次上传**（2026-09-26）：`nota_image_upload_get` / `_set` / `_one`。⚠️ **三道闸缺一不可**（`enabled` / `auto` / 文档 front matter 里的 `nota-auto-upload`），少一道就是「没传」——而「没传」必须**什么都不发生**，不是「悄悄走了另一条路」。⚠️ **网络图片永远不自动上传**，没有开关（自动去取别人的地址 = 替用户访问一个第三方；手动勾选时才走 `remote_field`）。⚠️ **上传失败绝不能把图弄丢**：自动那条路在 `place` **之后**跑（传成功才换 `src`，失败如实报错、保留本地地址），手动那条**反过来**（先传、失败才 `place`）——方向不同、结果一样：**文档里总有一条能用的地址**。⚠️ **配置每次都从盘上读**，不在 `AppState` 里缓存（它小、用户会手改、缓存要多一把新锁）。⚠️ 三条都是 **`async` ＋ `spawn_blocking`**（读盘、联网最长 60 秒） |
-| `image/` | **「这张图落到哪、文档里写什么」的全仓唯一一份实现**（2026-09-26 新增；同一天它自己长到 1232 行、顶破 1000 行硬线，于是**沿职责**拆成 `image.rs` ＋ 三个子文件）：`image.rs` 只放类型（`来源` / `规则` / `计划` / `做了` / `结果`）与常量，`image/address.rs` 管地址算术（网络判定 / 转义 / 相对路径），`image/target.rs` 管落点与文件名（`目标目录` / `定名`），`image/plan.rs` 管算计划与落地（**唯一碰网络的地方**），`image/tests.rs` 是那 **26** 条用例（2026-09-26 第二批又加了一条）。⚠️ **对外路径没变**（`crate::image::放置` 这种，靠 `image.rs` 的 `pub use`），所以拆的时候一个调用点都没改。⚠️ 三条口径写在 `image.rs` 文件头，**别在子文件里抄第二份**：`prefer_relative` 只朝一个方向动（绝对→相对）、同内容不重复写、`apply_to_remote` 默认关 |
-| `upload/` | **「把一张图送到用户自己填的那台服务器上」的全仓唯一一份实现**（2026-09-26 新增；`docs/07` 第 62 项第二批）：`upload.rs` 放**算式与设置**（拼多部件体、解析请求头、按点路径从响应里取地址、`nota-auto-upload` 前件、文件 **0600** 建），`upload/net.rs` 是**唯一碰网络的地方**，`upload/tests.rs` 是那 28 条用例。⚠️ **不并进 `image.rs`**：那边最远只到磁盘，这边要**把用户的字节送出这台机器**——默认值、出错方式、生命周期全不一样。⚠️ **不预设任何服务商**（没有 `smms` / `picgo` / `imgur` 那种名字，测试里钉着这件事）：地址、方法、字段名、请求头、从响应取哪一格全是用户填的。⚠️ **配置在 `~/.config/nota/image-upload.toml`，0600**（`paths::image_upload_file`），**不许并进 0644 的 `settings.toml`**——那份是裸 `fs::write`、权限跟着 umask 走，而用户会同步它、备份它、贴给别人看。⚠️ 与 `lua/api/http.rs` 的 https-only **故意相反**：这里 `http://` 放行（地址是用户自家服务器，内网明文是常见用法）；相同的是三条底线——有超时、有响应体大小上限、不跟着跳到别的域。⚠️ **token 只进请求、不进任何一句话**：每一处错误文案都只带地址与服务端的回话（否则一次失败就把密钥印进提示条与日志） |
-| `pandoc_format.rs` | 借 pandoc 转的**七种格式那份词汇表**（2026-09-25 从 `pandoc.rs` 拆出来，那边当时 985 行、越过软上限 900）：`Format` 枚举（`from_id` / `to` / `id` / `extension` / `名字`）· `ALL` · `FormatInfo` · `格式表()`（交给前端拼保存对话框的过滤器和默认名）。⚠️ **这张表只有这一份**：菜单 id、`pandoc --to=` 的名字、存盘后缀三处必须对得上——各写一份迟早出现「对话框说存 `.tex`、文件却是 `.latex`」。⚠️ 它不认识进程、路径、设置；探测和导出两边都从 `pandoc.rs` 那个 `pub(crate) use` 取名字 |
-| `pandoc_probe.rs` | pandoc 的**探测那一半**（2026-09-29 从 `pandoc.rs` 拆出，那一份当时 836 行）：`ProbeState` / `PandocProbe` / `probe()` / `find_engine()` / `装好了那句()`。⚠️ 线是「这台机器能不能用／真的去转一份文档」。⚠️ **探测结论不存盘**，每次现探。⚠️ 名字在 `pandoc.rs` 里原样转出，`commands/pandoc.rs` 的路径没变 |
-| `pandoc.rs` | **借系统里那个 pandoc 导出七种格式**（PDF / Word / RTF / EPUB / LaTeX / ODF / OPML，2026-09-25）。⚠️ Nota **不自带也不下载**它，只探测（`probe()`，形状照抄开发服务器那次探测（原 `slidev_probe.rs`，今在 `devserver.rs`）：`Ready` / `Missing` / `Unknown`，**中文判定的话由后端写**）；⚠️ **不存路径**——存下来的会过期（换机器、改 PATH、重装），每次现探；⚠️ 正文走 **stdin**、`cwd` 与 `--resource-path` 都指向文档目录（相对图片才解析得对），所以**不往用户目录里写中间文件**；⚠️ PDF 还要一个排版引擎（`xelatex` 优先，`find_engine` 在 PATH 里找），找到的传给 `--pdf-engine`——没找到**不等于**出不了 PDF，那条会退给 Nota 自带那套；调试口子 `NOTA_PANDOC_CMD` ⚠️ 2026-09-25 收尾：七种格式那份词汇表（id / `--to=` 名 / 后缀 / 中文名）搬去 `pandoc_format.rs`，这里 `pub(crate) use` 接回原名；⚠️ **子进程要补语言环境**——不是 UTF-8 时 pandoc 会**静默丢掉中文名的图片**（退出码 0、只报一句 `WARNING`），`补语言环境` 只在它现在不是 UTF-8 时补 `LC_ALL=C.UTF-8`；⚠️ **成功那一路也要扫 `stderr` 里的 `WARNING`**（`成功时的警告`）——「退出码 0」不等于「全都做成了」； |
-| `pdf_print.rs` | **Nota 自带的 PDF 排版与 Linux 系统打印**，**只有 Linux 有**；pandoc 那条路不通时兜底。静默排版使用 WebKitGTK 的 `Print to File` 后端：`PrintSettings` 必须同时设 `printer` 与 `output-uri`，窗口只 `realize()` 不 `show()`。系统打印先生成 PDF，再优先调用 GTK4 helper，失败后走 XDG 打印门户；**不回退 GTK3 对话框**。印刷对象生命周期与线程限制保留原三条约束 |
-| `format_keys.rs` | **`Ctrl+B` / `Ctrl+I` 的遗留 GTK 事件桥**（BUG-49 排查产物）：捕获相位的 `GtkEventControllerKey` 把按键发到 `nota:format-key`。⚠️ 当前快捷键正确性由前端 `ui/useMenus.ts` 的完整判据决定；不要再把旧结论「WebKitGTK 在 DOM 前吃掉按键」写成当前事实。删除这层桥要连同 `lib.rs`、事件频道与测试一起处理 |
-| `commands/pandoc.rs` | `nota_pandoc_probe` / `nota_pandoc_export` 两条。⚠️ 探测是**异步**的（起进程问版本，走 `spawn_blocking`），导出也是（最长 180 秒）。⚠️ PDF **两条路**（用户 2026-09-25 定：两条都留、pandoc 优先）——pandoc 失败且 `pdf_print::available()` 时改走自带那套；返回值里 `route` 说明走的哪条、`note` 是给用户看的中文（⚠️ **提示条是纯文本，里面不许出现 `**强调**`**）。⚠️ `一句话()` 做摘要时**跳过以冒号结尾的标题行**：本仓的报错是「结论 + 换行 + 病因」，只取第一行会得到「pandoc 没能生成 PDF：」这种**冒号后面空着**的提示语 |
-| `diagnostics.rs` | **「关于 → 故障排除」要的两组信息**（2026-10-04 新建）：**编译信息**（这个二进制什么时候、在哪台机器上、用什么工具链编出来的）＋ **本机信息**（现在跑着它的这台机器）。⚠️ **两组说的是两个不同机器的事实**，混起来是这一页最容易犯的错。⚠️ 编译期那一半**不在这儿采**：`build.rs` 写好 `OUT_DIR/build_info.rs`，这里 `include!` 进来。⚠️ **一条口径：取不到就写空串**（前端画「—」）——这一页的存在理由是"出事时一次问清楚"，绝不能因为缺一条而整页空白。⚠️ `gtk_runtime` 走 `gtk::major_version()`，`webkit_runtime` 只能走 `webkit2gtk::ffi`（那个 crate 没有安全封装） |
-| `commands/diagnostics.rs` | `nota_diagnostics` 一条（2026-10-04）。⚠️ **异步 ＋ `spawn_blocking`**：采集要起 `uname` 子进程，而 Tauri 的同步命令跑在**主线程**上——在那儿等就是把界面冻住（同 `nota_pandoc_probe`） |
-| `commands/diff.rs` | **差异**（2026-09-27，用户：「**将 diff 预览加入核心库调用吧。调用率挺高**」）：只有 `nota_diff_make` 一条，**把已经写好的生成器接出来**、不是重写一份（此前"看两份文本的差别"只有插件能要，核心自己反而拿不到）。今天的调用点是外部改动提示条的「查看修改」（`ui/useExternalChanges.ts`） |
-| `commands/watch.rs` | **外部改动监视那一层**（2026-09-26，用户「**此乃非插件**」）：命令只有一条——前端把"**现在打开着哪些文件**"整份报一遍（发现那一半在 `watch.rs`：盯目录、比对摘要、发 `nota:file-changed`）。⚠️ 整份报而不是增删两条：前端随时可能崩/重载，增删式的账在重载后必然对不上 |
-| `commands/path_kind.rs` | **一条路径是什么**（目录 / 文件 / 不存在，2026-09-27）。⚠️ 文件叫 `path_kind` 不叫 `paths`：仓里已经有一个 `src-tauri/src/paths.rs`（那是"Nota 自己的目录都在哪"），同名会让人每次写 `use` 都得先想一层 |
-| `commands/table_width.rs` | **表格列宽**（2026-09-26，用户：「表格允许拖动改变大小（**咋存你来定**）」）：读/写/清三条。"咋存"定成**进程外的一份侧车文件**（`~/.local/share/nota/table-widths.toml`）——不写进 Markdown 正文，因为列宽是**给人看的排版偏好**、不是文档内容（写进正文会污染原文，还会在别的 Markdown 工具里露出来）。前端那一半在 `editor/table-width.ts` |
-| `commands/webview.rs` | **页面引擎（webview）身上的开关**（2026-09-27）：目前只有拼写检查一条（`editor.spellcheck` 从 2026-09-26 起就在界面上、**全仓没有一处读它**，一个拨了不生效的开关比没有更糟）。⚠️ 与 `commands/window.rs` 分开不是我们划的线——Tauri 的权限就给两套命名空间（`core:window:*` 与 `core:webview:*`，见 `capabilities/default.json`） |
-| `commands/window.rs` | **窗口自身的控制**（2026-09-27）：开发者工具 ＋ **「在新窗口中打开」**（`nota_window_open_new`，2026-09-27 晚加的，用户原话「标签页支持右键之后选择在新窗口中打开」）。⚠️ 两条命令分开不是我们划的线——Tauri 的权限给两套命名空间（`core:window:*` 与 `core:webview:*`，见 `capabilities/default.json`），开发者工具那条走 webview。⚠️ 「窗口置顶」**不在这里**——前端直接 `getCurrentWindow().setAlwaysOnTop()` 就够，而菜单上那个勾的判据**必须是"从窗口读回来的"**（与全屏同一条口径，见 `ui/useImmersive.ts`），走 IPC 反而要多一条"读回来"的命令。⚠️ **「在新窗口中打开」为什么是再起一份进程、不是 `WebviewWindowBuilder`**：同进程的两个窗口**共用 `AppState`**（文档表同一张），那不是用户要的"新窗口"。代价写在 `lib.rs` 那一处：这一份**不持有 socket**，收不到 `nota:second-instance`（用户明说不考虑拖回来）。⚠️ 空路径在这里**也判一次**（`NotaError::other`）——命令是对外开着的一条路，别指望调用方都守规矩（界面上那条已经灰了） |
-| `window_registry.rs` | **Cross-process window registry and tab transfer inbox**. Each main process reserves the first free positive ID, never renumbers live IDs, and removes only its own runtime records on normal exit. Requests and acknowledgements are atomic JSON files under `$XDG_RUNTIME_DIR/nota-window-registry-v1` (or the user temp directory); picker markers drive temporary title IDs. A source removes its tab only after the target acknowledges that the document opened. |
-| `commands/window_registry.rs` | IPC for window snapshots, picker-title mode, transfer send/take/ack, and optional target focus. Transfer waits off the UI thread. |
-| `plugin/mod.rs` | `PluginHost`：**发现 → 加载 → 派发 → 卸载**（装/卸/停用/信任那几段 2026-09-25 拆去了 `plugin/install.rs`）；`PluginInfo` 是给前端的只读快照（多了 `origin` / `signature` / `key_id` / `removable`）。⚠️ **停用 = 真卸载**（`LuaPlugin::disabled`，没有 Lua 状态），所以**重新启用会重跑 `on_load`**——对外的口径写在 `docs/11` §1.6 |
-| `plugin/watch.rs` | **Lua 拓展自刷新**（2026-11-01）：只在开发者模式且「Lua 拓展自刷新」开启时启动。监听用户与调试构建内置插件目录中的 `.lua` / `plugin.toml`，300ms 防抖后调用 `PluginHost::reload_dir`。新版本验证失败时保留旧 Lua 状态，并发送 `nota:plugin-reloaded` 错误事件。关闭开发者模式或开关后停止监听。 |
-| `plugin/install.rs` | **装 / 卸 / 停用 / 信任**（2026-09-25 从 `mod.rs` 拆出，那边当时 938 行）：`PluginHost::{装, 装_检查完再搬, 装_记账并加载, 卸, 信, 信任表}` ＋ `在用户目录里` / `把包写进` / `搬进落点` 三个自由函数。⚠️ **先查完再动磁盘**、**升级失败要把旧的挪回去**、**`plugin-settings/<id>.toml` 不动**——三条都在 `docs/11` §1.6.6 |
-| `plugin/types.rs` | **插件对外声明的形状**（2026-09-29 从 `mod.rs` 拆出，那一份当时 819 行）：`PluginInfo` / `信任记录` / `PluginPanel` / `PluginMenuItem` / `PluginPrompt` / `ReviewKind` / `ReviewAction` / `ReviewState`。⚠️ 线是「说给别人的形状（字段名要穿过 IPC）／宿主自己的动作」；`REG_PANELS` / `REG_MENUS` / `EVENT_*` **留在 `mod.rs`**。⚠️ `mod.rs` 里 `pub use types::*;` 转出，老路径不动。⚠️ 改字段名 = 同批改前端（`bridge/types.ts` / `ui/panel-nodes.ts` / `ui/plugin-prompt.ts`）| 
-| `plugin/manifest.rs` | `Capability` 枚举、`PluginMeta`、`Manifest`、`NOTA_PLUGIN_API_VERSION`、**`channel_id()`**（事件通道名归一化）。⚠️ `find_manifests` **跳过点开头的目录**：安装用的临时目录 `.装到一半-<pid>` 就放在插件目录里，不跳的话一次半路死掉的安装会变成下次启动时的幽灵插件 |
-| `plugin/package.rs` | **`.nota-plugin`（zip）的解包与验签**（2026-09-25 接上编译，11 条用例开始跑）：`包::从zip` / `从目录` / `摘要` / `验签`、`路径合法吗`（**安全函数**，包内路径不许出目标目录）、`信任库`（TOFU，落盘在 `trusted-keys.toml`）。⚠️ **摘要算法是两份实现**（这里写、`tools/pack-plugin.py` 算），改算法＝同批改三处（本文件、`docs/11` §1.6.2、那个脚本） |
-| `plugin/trust.rs` | **信任的签名公钥表（TOFU）**（2026-09-29 从 `package.rs` 拆出，那一份当时 875 行）：`信任的钥匙` / `信任库`（`有没有` / `列` / `记下` / `记下不落盘`）/ `今天()` / `年月日`。⚠️ 线是「包本身（对字节的算术）／信谁（用户的一次表态）」；`package.rs` 里 `pub use trust::*;` 转出，老路径没变。⚠️ **签名的"是谁"全由这张表回答**——包里自带公钥，验签只证明"没被改过" |
-| `plugin/installed.rs` | **已装清单**（`$XDG_CONFIG_HOME/nota/plugins.toml`）：哪些开着、装进来时验出了什么（`Signature` 结论 + `key_id` + **公钥本身**）。⚠️ `没记过时开不开()` = `cfg!(debug_assertions)`——**删掉这个文件就是恢复出厂**，而两档构建的"出厂"不一样（`docs/11` §1.6.8）。⚠️ 存公钥不存指纹，理由在字段注释里 |
-| `plugin/export.rs` | **把一个已经装着的插件打回成一个 `.nota-plugin` 包**（2026-09-27 加，323 行）：`PluginHost::导出` / `导出默认名`。起因是用户那句「完全没有拓展管理面板。做一个。可以**导入，导出和卸载**拓展」——装（`plugin/install.rs`）与卸本来就在，缺的是导出。⚠️ 与 `plugin/package.rs` 那句「包是只读的」**不冲突**：那条管**造包**（作者侧 `tools/pack-plugin.py`，要拿私钥签名，私钥绝不能进宿主），这条管**把用户磁盘上已经躺着的那份原样收拢**，一个字节都不签。⚠️ 两条用处：内置插件（`origin == "builtin"`）**卸不掉**，导出是把它拷出来改一改的唯一一条路；自己装的插件想备份／发给别人也走它。⚠️ **导出的包里没有用户的东西**——插件设置（`plugin-settings/<id>.toml`，AI 的密钥就在那儿）与插件数据（`plugin-data/<id>/`）**本来就不在插件目录里**（`paths.rs` 三个目录分开），所以不是靠一份排除名单做到的。改这个流程时别把这条性质弄丢 |
-| `plugin/settings_decl.rs` | **`[[settings]]` 那一格：插件声明、宿主画**（2026-10-04 从 `manifest.rs` 拆出，391 行）：`SettingDecl`（`key` / `kind` / `label` / `help` / `min` / `max` / `default` / `step` / `unit`）/ `check_settings()`（五条硬规矩）/ `夹紧()` ＋ `小数位()`。起因是用户要写作统计那个大数字按"最近 Δt 秒"算、而 Δt 要做成拓展设置页上的一根滑杆（1–60 秒，默认 5）。⚠️ 线是「清单的公共部分／宿主替插件画一格设置」；`manifest.rs` 里 `pub use settings_decl::SettingDecl;` 转出，老路径不动。⚠️ 现在只有 `range` 一种控件，加下一种要动哪几处写在 `docs/11` §2.5。⚠️ 写了 `[[settings]]` **必须**同时申请 `settings.own`（反方向不报：AI 那种"设置自己在面板里画"的插件是正常的）。⚠️ 从此**插件设置文件有两个写者**（插件自己 ＋ 宿主界面 → `nota_plugin_setting_set`），三条纪律在 `docs/13` §10.1 |
-| `lua/mod.rs` | `HostContext` / `LuaPlugin` / `PluginState`；一个插件一个 `Lua`。⚠️ 2026-09-27 起还给插件装一个**只在本插件目录里找 `.lua`** 的 `require`（`装require`，插件多文件用，见 `docs/12` §5.9） |
-| `lua/require_tests.rs` | `require` 那一组用例（2026-09-27 从 `lua/mod.rs` 搬出来，`mod.rs` 就此停在 909 行）；⚠️ 它往临时目录写文件，不许改去读 `plugins/` |
-| `lua/tests.rs` | `lua/mod.rs` 那一组用例（**7** 条，2026-09-29 从 `mod.rs` 搬出，那一份当时 913 行）：沙箱（BUG-10）· 内置插件编译（**每个插件目录下每一份 `.lua`**）· **多文件插件的 `require` 链真的跑得通**（2026-09-29 加，插件那两条分层：前者只编译、后者才 `require`）· 能力白名单 |
-| `lua/api/ui/tests.rs` | `lua/api/ui.rs` 那一组用例（**20** 条，2026-09-29 搬出）：层级归一化 · 注册与读回（BUG-13）· 面板内容三条上限。⚠️ 是 `ui` 的**子模块**（要用私有项），不是同级文件 |
-| `lua/api/mod.rs` | `nota` 表的构造：**按清单声明的能力决定装哪些子表**；辅助函数 `lua_err` / `lua_to_json`。⚠️ **本文件里没有"装了但不能用"的表**——曾经为 `http`/`settings` 装过假表，2026-09-24 两张都落地后那个 `not_implemented()` 已删，`nil` 只意味着"没申请" |
-| `lua/api/assets.rs` | **插件自带资源的只读访问**：`nota.assets.read(path)` 只能读插件安装目录内的相对路径，不碰工作区，最大 1 MiB；供 JSON 配置档、模板等静态资源使用，不需要能力且不改 API 版本 |
-| `lua/api/document.rs` | `nota.document`：读（`get_text` 等）/ 写（`set_text` / `append_text`，写完发事件通知前端）。⚠️ 2026-09-26 起读那边多一个 **`stats`**（`chars` / `lines` / `revision` / `path` / `clock_ms`），2026-09-27 又多一个 **`words`**（**字/词数**：中文一字算 1 ＋ 连续英文/数字算 1 个词，`fn 词数` 那条规则表）——「写作统计」插件读的是 `words`，`chars` 是码点数、两者并存（`docs/13` §5.1a）。⚠️ `clock_ms` 是**单调钟**，沙箱里没有 `os`，这是插件唯一拿得到的时间 |
-| `lua/api/fs.rs` | `nota.fs`：读写文件，**限死在当前工作区内**；裁决逻辑是纯函数 `resolve_in()` |
-| `lua/api/git.rs` | `nota.git`：**子进程**跑 `git`，不是 libgit2；拒绝会重定向目标目录的参数 |
-| `lua/api/http.rs` | `nota.http`（2026-09-24）：`request` / `get` / `post`。⚠️ 是**同步**的（ureq），所以整条命令走 `spawn_blocking`——插件那一侧本来就是一条阻塞的 Lua 调用。**两道围栏**：`https://` 随便、`http://` **只放行回环**（本机大模型服务），⚠️ 按**主机名**判（`127.0.0.1.evil.com` 不是本机）；`4xx/5xx` **不是错误**（关掉了 `http_status_as_error`），响应体回 `{code, text}`、能解析时另给 `json`（数组下标**从 1 起**，Lua 没有 JSON 库）。理由与两条坑（`host` 解析、重复 `content-type`）在文件头，见 `docs/13` §9。⚠️ **2026-10-04 多了 `stream`**（`docs/07` 第 58 项）：读一块交一块（`切出完整段` 攒够一个完整 UTF-8 才交，**绝不把半个汉字递给插件**），回调返回 `false` 才算中断；⚠️ **"连不上/超时/读断了"现在折成结果表返回、不再抛**（`落定`，第 60 项）——抛只剩"作者把参数写错了"那一类 |
-| `lua/api/http/tests.rs` | `lua/api/http.rs` 那一组用例（2026-10-04 搬出）：⚠️ 其中 **`流式的每一块都不切半个汉字`** 是流式那条路上**唯一**没别处能验的事——`tools/ai-stream-test.lua` 那个桩宿主是按字符切的，验不到宿主这一侧 |
-| `lua/api/json.rs` | `nota.json`（2026-10-04）：`decode(text)`——**不需要任何能力**的纯解码表，与 `diff` / `time` / `i18n` 同类。⚠️ 成功给一个值、失败给 `nil, "原因"`（**不抛**）；传表/布尔才抛。加它的理由：宿主本来就在做 JSON → Lua 表（`http.rs::json_to_lua`），插件自己再手写一个解码器是同一件事写两遍，**而写坏的那份不会有人发现**。⚠️ **只解不编**：要往外发 JSON 走"表体当 JSON 发"那条路（`http.rs` 自己补 `content-type`） |
-| `lua/api/settings.rs` | `nota.settings`（2026-09-24）：`get` / `set` / `all`，**一个插件一个明文 TOML**（`~/.config/nota/plugin-settings/<安全文件名(id)>.toml`，文件 0600 / 目录 0700）。⚠️ 键名只认 ASCII 且**不含点**（`a.b` 在 TOML 里是嵌套表）；`set(k, nil)` 是**删掉**。⚠️ **明文是决定不是欠账**（不做系统密钥环的理由在 `docs/12` §4.5），所以**界面上不许说它"安全"** |
-| `lua/api/ui.rs` | `nota.ui`：`notify` / `register_panel` / `register_menu` / **`refresh`**（"我这边的面板内容变了"，前端收到就重拉） / **`show`**（打开右侧插件栏并切到已在册的面板） / **`review`**（把一个**已在册**的面板摊到编辑区里，`nil` 收起来；后五个都归 `ui.panel` 管） / **`stream`**（`docs/07` 第 58 项，2026-10-04：**推一段正在生成的字**给面板，空串＝收工）。⚠️ `stream` 是「声明走拉、发生走推」那条规矩的**唯一一处例外**，而且它**带内容**——理由只有一个：跑着的时候宿主握着插件锁，`refresh` 那条**拉**的路在这中间回不来（走通的每一步写在 `实时表` 顶上）。⚠️ 它只许送**临时的显示数据**（宿主只留最后 8000 字），收工时**照样得 `refresh()` 一次**。⚠️ 2026-09-22 起**不再是全都发事件**：`notify` / `show` 推事件（发生/意图），其余写 registry 供宿主**拉**（声明）。判据见 `docs/07` BUG-13。⚠️ `register_panel` 的 `render` 每次拉都**现跑**，由 `面板内容()` 剥成 JSON 交给前端（`面板文本上限` 20000 字 / 常规数组 200 项 / `network` 的 nodes、edges 各 800 项）。⚠️ `wide` 决定面板摊到编辑区时占多宽 |
-| `lua/api/unified_diff.rs` | `nota.diff.parse_unified`（2026-09-25）：**unified diff**（`git diff` / `diff -u` 那套 `---`/`+++`/`@@`）的解析，输出与 `kind = "diff"` 内容块同形状（`{ op = "del"|"add", text = … }`）。⚠️ 与 `diff.rs` 的「改动块」**不是一个格式**，两者只共用"挂在同一张表下、输出同一个形状"；分开写是因为**出错的样子不同**（模型写的可以少围栏、混解释；git 的输出是机器生成的）。⚠️ 三条规矩：只为 `diff --git` 开出来的段落认 `---`/`+++`（裸 `diff -u` 解析出来是**空的**——宁可不画，也不能把正文当文件头）· **上下文行不画**（只有 `del`/`add`）· 路径靠 `lua/api/git.rs` 统一加的 `-c core.quotePath=false` 才掐得掉前缀 |
-| `lua/api/i18n.rs` | `nota.i18n`（2026-09-25）：插件自己的文案表——`app_lang` / `lang`（没声明 `langs` 时是 `nil`）/ `ok` / `text(key)`。⚠️ **不需要任何能力**：它只读**插件自己目录里**的 `lang/<tag>.toml`，路径由宿主拼（`text` 收的是**键**，不是路径）。⚠️ **缺键就给 `nil`**，插件的惯用写法是 `nota.i18n.text(s) or s`——**键就是作者写下的那句原文**。⚠️ **`ok` 只看"清单里有没有这门语言"，不看文件在不在**（文件缺失退化成"这个语言下全是原文"，正是 `langs = ["en"]` 那种插件的正常样子）。⚠️ `lang/<tag>.toml` 里的保留键 `name` 覆盖清单里的 `name`（**不覆盖 id**） |
-| `lua/api/devserver.rs` | `nota.devserver`（2026-09-25，需 `process.devserver`）：`probe{root=}` / `start{doc=}` / `status()` / `open_in_browser()` / `log()` / `stop()`。⚠️ 是**通用机制**不是给某个插件的后门（机制的实现在 `src/devserver.rs`）。⚠️ `start` **会等**（返回时端口一定通了），**别在 `on_load` 里调**。⚠️ 面板里那块 `kind = "frame"` 的 `url` **由宿主填**（只指向这个插件自己那场会话，`填_frame`），插件在自己的 `render` 里写 `url` 没用 |
-| `lua/api/time.rs` | `nota.time`（2026-09-27）：`now()` → **一张表**（`now_ms` / `day_start_ms` / `ymd` / `y` `mo` `d` `hh` `mi` `ss` / `wday` / `tz_offset_min`）。⚠️ **一次调用＝一个瞬间**（分成几个函数会让插件跨零点时拿到自相矛盾的两套值）；⚠️ 按**本地**日期算不按 UTC（这个日期要画进分享图、发出去给别人看，错一天是**分享之后**才被指出的那种错）；⚠️ **不需要能力**——只报系统时钟，不碰文档不碰磁盘。⚠️ 它**不是**"用户在哪"：时区偏移是本地时间的副产品。⚠️ 沙箱里没有 `os` / `date`，另一个时间 `document.stats().clock_ms` 是**单调钟**、回答不了"今天是哪一天" |
-| `lua/api/data.rs` | `nota.data`（2026-09-27，需 `data.own`）：`dir` / `read(name)` / `write(name, text)` / `remove(name)`，落点 `$XDG_DATA_HOME/nota/plugin-data/<插件 id>/`。⚠️ **第三样东西**：`nota.fs` 围的是**用户的工作区**（没开工作区就整个不能用）、`nota.settings` 只存"文本/数字/布尔"没有数组，而这里给的是**一个目录 ＋ 一串文本文件**（插件自己定格式，宿主只保证"这是你的、别人碰不到、跨重启还在"）。⚠️ **三条硬边界**：名字只认 ASCII 字母数字与 `.` `-` `_` 且**不许子目录**（拿插件给的名字拼路径就是一条任意路径写入口）、写**原子**（`.tmp` ＋ fsync ＋ rename）、一次读写 **1 MiB** 封顶（**防呆**不是防恶意）。⚠️ `read` 读不到给 `nil`（"还没记过"是正常状态）**但读坏了要报错**——合并成一种就会把坏账当成新的一天 |
-| `lua/api/diff.rs` | `nota.diff`（2026-09-24）：**改动块**的解析与应用——`parse`（拆出正文 / 改动 / 坏行数）与 `apply`（逐字找到 `-` 那几行、就地替换）。⚠️ **纯函数、不需要任何能力**；⚠️ **不碰文档**（写进去的是插件的事，所以那条确认永远在插件那侧）；⚠️ **失败＝什么都没做**（不给半截结果）；⚠️ 契约改一处要改三处（本文件 ＋ `plugins/ai/main.lua` 的 `SYSTEM_PROMPT` ＋ `docs/13` §11） |
-| `native_menu.rs` | **可选的系统原生菜单**：默认使用 Nota 自绘；外观设置切到系统后，macOS 显示顶端应用菜单，Windows/Linux 使用窗口系统菜单。空树会卸载，创建失败回退自绘。⚠️ **这里没有菜单定义**——树由前端推来（`ui/nativeMenu.ts`），这里只管建；点了只把 id 用 `nota:native-menu` 发回前端去执行 |
+| Rust host | Window lifecycle, documents, files, settings, plugins, printing, updates and native integration |
+| React UI | Application shell, settings, sidebars, dialogs, tabs and status surfaces |
+| Editor | Markdown document tree, source editing, inline atoms, IME integration and rendering |
+| Lua host | Per-plugin state, manifest capabilities and a restricted host API |
+| Themes | Independent interface and document theme axes |
 
-### 前端 `src/`
+The frontend owns live document text. The backend mirrors text after a debounce.
+Any backend mutation must notify the frontend, or saved content can diverge from
+what the editor shows.
 
-| 文件 | 职责 |
-|---|---|
-| `main.tsx` | React 入口 |
-| `App.tsx` | 外壳与全部状态：文档表、活动文档、设置、工作区、**12 个 state ＋ 4 个 ref**（toast、状态栏/格式栏的开关、专注/全屏、剪贴板与文档那几块 2026-09-25 都已不在这里；**查找条的开与命中状态 2026-09-27 搬去 `ui/useFindBar.ts`**、**预览的「看法」搬去 `ui/useReviewView.ts`**）、打字机开关、光标状态、主题表。⚠️ **`menuHandlers` 是"菜单项能不能点"的唯一真相**——灰不灰由它推出来，不另设标志位，**三条入口（自绘菜单 / 快捷键 / 原生菜单）都汇到它**。⚠️ 2026-09-24 起沿职责往外拆（1016 → 864 行，**当前 932 行**〔`wc -l src/App.tsx` 现场量的〕——又长回来过三轮，前两轮那批同时往 `App.tsx` 里加了工具栏/查找条/外观与缩放的接线，**第三轮是 2026-09-26 的「插入图片」那批**（接上 `ui/useImageInsert.ts` 与 `ui/ImageDialog.tsx` 的挂载，只涨不缩）；**第四轮是 2026-09-27 那三批**（Emoji 选择框 / 查找条 / 最近文件——同一天又拆出 `ui/useFindBar.ts` 与 `ui/useReviewView.ts`，才从 1017 回到 985））：菜单判据与快捷键分发 → `ui/useMenus.ts`、两个对话框的状态 → `ui/useDialogs.ts`、导出与打印 → `ui/useExport.ts`、文档主题三件事 → `ui/useDocTheme.ts`、「把命令送进编辑器」→ `ui/useEditorCommands.ts`、文档的开关存 → `ui/useDocuments.ts`、剪贴板四条 → `ui/useClipboard.ts`、外壳显隐 → `ui/useChromeVisibility.ts`、沉浸模式 → `ui/useImmersive.ts`、提示条 → `ui/useToasts.ts`、自动存盘 → `ui/useAutosave.ts`、设置文件两件事 → `ui/useSettingsFile.ts`、外观两条轴 → `ui/useAppearance.ts`、界面缩放 → `ui/useZoom.ts`、窗口标题 → `ui/useWindowTitle.ts`、查找条那几件 → `ui/useFindBar.ts`（2026-09-27）、预览的形态与看法 → `ui/useReviewView.ts`（2026-09-27，拆完落地 985 行）、会话与最近文件的前端一半 → `ui/useSession.ts`（2026-09-27）、**强制专注那一整档 → `ui/useFocusSession.ts`（2026-09-28，连同「关于」那一摊的重做，998 → 932 行）**。⚠️ **拆的是职责不是行数**："降到多少行"不是验收口径——贴着 900 就该想怎么拆（`tools/doc-sync-check.sh` ① 的 WARN 线） |
-| `i18n/index.ts` | **界面国际化的前端那一半**（2026-09-25）：`t(原文, …参数)` / `语言()` / `定语言()` / **`useT()`** / **`use语言()`**（后者 2026-09-26 加）。⚠️ **键就是原文，缺键就用原文**——⚠️ **2026-09-28 起"原文"是英文**（用户那天定的方向：**英语才是主语言，中文是翻译包**；此前是反过来——键是中文原文、译文进英文表）。所以：**英语没有表**（英语是原文，任何一句还没翻的都还是英语，英语界面永远完整），要翻译的才进中文表 `zh-*.ts`；中文缺哪条就退回英语，照样读得懂。⚠️ 代价两边同一条：**改了英文原文＝改了一个键**，那条中文会**静默失效**（退回英文，不报错）——`bash tools/i18n-check.sh` 把废键揪出来。⚠️ 于是**代码里不该再有中文的界面文字**（出现了就是漏网），那道闸的第 ④ 栏拦这一条。⚠️ 语言由宿主（`nota_app_lang`）在启动时报来，所以**改语言要重启**。⚠️ 做成了模块级的订阅式小 store 而不是 context：`PluginDock.tsx` / `ReviewPane.tsx` 里的纯函数拿不到 context。⚠️ **组件里必须 `const t = useT()`**——直接调模块级的 `t` 没人通知它重画，首帧永远是兜底语言。⚠️ **`useT()` 与 `use语言()` 是两个用途**：**要画字**用 `useT`（它顺手把订阅做了），**把语言当依赖**（推原生菜单、重算某个 memo）用 `use语言`——拿 `useT()` 去干后者会多一个没人看的 `t`，被 `noUnusedLocals` 拦下。⚠️ 覆盖面**2026-09-26 起是整个界面**（此前只有插件那一面） |
-| `i18n/zh.ts` | **中文（简体）文案表的总入口**（2026-09-28 由 `en.ts` 翻转而来）：**只剩文件头** ＋ 汇总导出 `export const 中文表: Record<string, string> = { ...界面表, ...设置表, ...运行表 }`。⚠️ 2026-09-26 拆的（拆之前那一个文件 **985 行**，眼看要撞 `tools/doc-sync-check.sh` ① 那条 1000 行硬上限）——**新的条目不许再堆进这个文件**，就近加进下面三份里。⚠️ 它是 `tools/i18n-check.sh` 的比对基准：**代码里有、表里没有 = 欠账**（列出，不算错）；**表里有、代码里找不到 = 废键**（FAIL，说明原文改过或键写错了，那条中文**没有生效**）。⚠️ 那张脚本按 `src/i18n/zh*.ts` 扫、取每个文件**第一个 `= {` 之后**的内容当表体，所以这四份里都**不许**再出现第二个 `export const 中文表`；文件头里也**不要**出现 `= {`（连注释里举例也不行） |
-| `i18n/zh-ui.ts` | 中文表的**第一部分**：**界面骨架**（菜单栏、插件栏、编辑区预览、`src/editor/` 那一层、界面上那些小件），导出 `界面表`。⚠️ 规矩全在 `zh.ts` 的文件头，加条目之前先读那一段。⚠️ 只放**中文与英文写法不一样**的键——`Markdown` / `PDF…` 这种两边一样的**不要**抄一遍 |
-| `i18n/zh-settings.ts` | 中文表的**第二部分**：**偏好设置那十页**（`ui/settings/panes/`），导出 `设置表`。⚠️ 说明句正常断句、末尾不加句号；反过来**提示条 / 报错 / 空态**一律完整句子、**加句号** |
-| `i18n/zh-runtime.ts` | 中文表的**第三部分**：`ui/use*.ts` 那些**钩子**与它们弹出来的消息、报错、状态栏提示，导出 `运行表`。⚠️ 以 `{0}` 这类占位符收尾的那几条**不加句号**（句号会被拼进参数的值后面） |
-| `bridge/payloads.ts` | **事件载荷的形状**（2026-09-27 从 `bridge/types.ts` 拆出，69 行）：`NotifyPayload` / `PanelDirtyPayload` / `DocumentChangedPayload` / `FileChangedPayload` 四个——`ipc.ts` 里 `on` / `events` 那几条**推过来**的消息长什么样。⚠️ **与命令返回类型分家的理由就是拆的线**：一边是"我问一句、宿主答一句"，一边是"此刻发生了一件事"。⚠️ 只有形状、没有行为，唯一那个 `import type { DocId }` 编译后一行都不剩（与 `types.ts` 那点循环引用在运行期不存在）。⚠️ **事件里不塞内容**这条口径写在 `FileChangedPayload` 那段注释里（`watch.rs` / BUG-13 同一路：内容要用的时候去拉） |
-| `bridge/ipc-events.ts` | **事件订阅与频道名**（2026-10-17 从 `bridge/ipc.ts` 拆出，218 行）：`on()` 订阅函数与 `events` 常量。⚠️ 切点是命令调用 vs 事件通道；`ipc.ts` 原样再导出，调用点不变。⚠️ 表中只该有「发生类」事件，声明类走 `api.plugin.panels()` / `menus()` 拉（BUG-13）。 |
-| `bridge/types.ts` | **前端这一侧的协议形状**（2026-09-26 从 `ipc.ts` 拆出）：与 Rust 结构体一一对应的全部 `interface` / `type`。⚠️ **2026-09-27 把事件载荷那一段拆去了 `payloads.ts`**（本文件那天 1009 行、顶破 1000 行硬线）：那段和这里**命令的返回类型**是两回事（一边是"我问一句、宿主答一句"，一边是"此刻发生了一件事"），缝就画在那儿；末尾一行 `export * from "./payloads"` 让调用方看不见这次搬家。⚠️ 拆完 **967 行**——已经在 900 那条 WARN 线以上，再加东西之前先想清楚该往哪儿放。⚠️ **只有形状、没有行为**——它**不 import `@tauri-apps/api`**，所以纯展示组件与测试都能安全地 import。⚠️ 改 Rust 字段必须同批改这里（`invoke` 不会报错，只会在某个 `.map` 上炸）。⚠️ 2026-09-27 起 `会话` 多了第五样 `workspace`（上次那个文件夹，只留现在还在的目录） |
-| `bridge/types-settings.ts` | **`types.ts` 那一份的一半**（2026-09-27 从 `types.ts` 搬出，那边 1053 行破了 1000 行硬线）：与 `src-tauri/src/settings/*.rs` 一一对应的**设置类型**（`StartupAction` 起到 `GeneralSettings` 止这一段）。⚠️ **纯搬家、一个字节没改**；切点按依赖选——这 382 行没引用过 `types.ts` 里的任何类型，所以两边一条 import 都不需要。⚠️⚠️ **它不是"所有设置表"**：`DocumentSettings` 与 `FocusSettings`（连同 `FocusState`）**留在 `types.ts`**（在分节注释上面，不在被搬的区间里）。⚠️ 原位留 `export * from "./types-settings";` 保外部路径不变，但 **`export *` 不会把名字带进本文件的局部作用域**——`types.ts` 里还要用的那几个必须**再点名 `import type`**。⚠️ **2026-09-27**：`StartupAction` 的第三档从 `"folder"` 改名成 `"last-session"`（老名字说的是"只打开文件夹"，而这一档实际连文件带文件夹一起恢复）——**宿主那边留了 serde 别名，这一侧不用留**（前端不读老值） |
-| `editor/create.ts` | Milkdown 封装（**所见即所得**）。对外只有 `EditorHandle` **十六条**（⚠️ **2026-10-04 现数**：这一格此前写着"十二条"，而按接口体现数是十六——漏掉的是 `focusAtStart` / `setReview` / `跳到标题` / `选区` 这四条，它们各自那批都只改了 `docs/05` 的表、忘了这一格）：老的五个（`getMarkdown` / `setMarkdown` / `focus` / `runCommand` / `destroy`）＋ **查找五条** ＋ `setWritingModes` ＋ **`focusAtStart`** ＋ **`setReview`** ＋ **`跳到标题`** ＋ **`选区`** ＋ **`插入在光标处`**（第 14 项，2026-10-04；⚠️ **只读实例返 `false`**、不做任何事）。⚠️ **逐条的表在 `docs/05` §4**，类型本体在 `create-types.ts`。⚠️ `runCommand` **返回"这条通路上有没有实现"**（所见即所得恒 `true`，源码模式表格那十条给 `false`），调用方据此提示用户。⚠️ `插入在光标处` 的返回值**不是「成没成」**——`true` 只代表「这笔事务派出去了」（它由 `nota:document-edit` 驱动，见 §2 的 `editor/caret-snapshot.ts` 那一格）。⚠️ 插件清单里**没有什么**和有什么一样重要，理由在函数注释里。⚠️ `readOnly` 只给分屏预览用，要**两件事同时成立**才算只读 |
-⚠️ **2026-09-28：命令白名单那一串搬去了 `editor/command-table.ts`**——那边到 1010 行、越过硬上限，搬完本文件 **885** 行。⚠️ 本文件里对 `insert.ts` / `footnote.ts` **不再直接引用**（消费者跟着表一起走了），对 `insert.ts` 也不再是"唯一的调用点"。⚠️ 搬完 **885** 行（已回到 900 那条 WARN 线以内），但离 1000 的硬线也只有一百多行，下次往里加东西先想清楚该往哪儿放 |
-| `editor/assemble.ts` | **装配一个编辑器实例**：`.config()` 那一段 ＋ 整条 `.use()` 插件链（2026-10-07 从 `create.ts` **整块搬出**——那边那天 1006 行，第 89 项）。⚠️ 切这一刀的依据是**职责**：`create.ts` 管"实例建好之后怎么用"（句柄那十三条命令、front matter 的四个口子、列宽摆回去、存盘拼回），这里管**一次性地把一切装上去**（ctx 初值、序列化器、输入规则、NodeView、各种可选插件）。⚠️ 它收**一个参数对象**（三个开关 ＋ 六个设置 ＋ 四个回调），不收一长串位置参数——十几个按位置传的布尔在调用点上是读不出来的（同一条理由在 `ui/pane-editors.ts`）。⚠️ **两样必须走回调、不能传值**：`取前置块`（`markdownUpdated` 拼回去的必须是**这一刻**那一段，传值就把建实例那一刻的钉死了）与 `记账列宽`（`setMarkdown` 要读**活的那一张表**把宽度摆回去）。⚠️⚠️ **`.use()` 的顺序就是语义**（`$inputRule` 先中者赢、schema 登记与解析转换器的先后、`handlePaste` 按插件顺序问……），搬的时候**一字未改**、注释跟着代码一起过来了——要动顺序，先把那一条注释读完。📌 **2026-10-16 往那条链上加了一个 `覆写插件()`，位置在 `history` 之前**（`editor/overtype.ts`）：排后面的话一次覆写会被记成两笔历史（先插后删）、撤销一次只退一半。⚠️ 只给可编辑实例挂（同 `markHint` / `移动键位`） |
-| `editor/source-commands.ts` | 源码模式的**命令落点**（2026-10-07 从 `source.ts` 搬出）：`applyCommand` 与文本小工具；对外只有 `applyCommand`，且不 import `source.ts`。⚠️ 行内标记开关判据只在 `source-mark.ts`。📌 **2026-10-17 起 H1/H2/H3 也是开关**：选区所有非空行都已是同一串标题前缀时，再点同层会清掉前缀退回正文。 |
-| `editor/command-table.ts` | **命令白名单的实体**（2026-09-28 从 `create.ts` 整段搬出）。一张 `Record<EditorCommand, …>`：键是**编辑器命令**名，值是"怎么把它派给 Milkdown"。⚠️ **`h1`~`h6` 不在表里**——它们在 `跑命令` 里单独分流；📌 **2026-10-17 起是开关**：当前块已是 H1 时再点 H1 走 `turnIntoTextCommand` 退回正文，H2 点 H1 仍改成 H1。⚠️ 表里存的是 `$Command` 的**回调**而不是 `$Command` 本身。⚠️ 加命令要同时改 `create-types.ts`、这里与菜单接线。📌 2026-10-07 加了 `selectLine` / `selectWord` / `selectSentence` / `deleteWord` / `moveLineUp` / `moveLineDown`。 |
-| `editor/create-types.ts` | 编辑器内核那几份**对外类型**（`create.ts` 的公共形状，2026-09-26 从 `create.ts` 整段搬出——那边当时 1036 行、越过硬上限，**内容一个字节没改**）。⚠️ 它们**仍然从 `@/editor/create` 出去**（那边有 `export type { … } from`），外部引用路径不变 |
-| `editor/front-matter.ts` | **开头那段 YAML front matter 的拆分与拼回**（2026-09-26，BUG-39）：进编辑器前把那段**原文切片**切下来（`拆前置块`），出边界时原样拼回（`拼回前置块`）——**编辑器从头到尾看不见它**，两个纯函数、没有状态。⚠️ 病根：所见即所得这侧是 **CommonMark**，而 CommonMark 里 `---` 独占一行叫**分割线**，front matter 在文档树里**根本不是节点**——所以「打开再存盘」会把它毁掉（`---` / `theme: seriph` / `---` → `---` ＋ 空行 ＋ **`## theme: seriph`**），是**静默丢数据**（用户没碰过那一行、界面上也看不出来）。⚠️ 认它要**三条同时成立**：首行整行 `---` ＋ 找得到闭栏（`---` / `...`）＋ 中间几行**看起来像 YAML 映射**；**判据保守**（`---` 首先是分割线），已知误伤与"为什么两害相权取其轻"在文件头。⚠️ 是**原文切片不是拼行**（CRLF / 行尾空格 / 缩进写法一个字节不变）；⚠️ **围栏后面那几行空行也算前置块**（不留住的话，正文开头那个空行会被编辑器规范化掉——第 56 项同族）。⚠️ 四个口子全在 `editor/create.ts`，**只走"整篇进出"**；`setMarkdown` 必须**重新切一次**；**只读实例也切**（分屏预览 / 导出只该画正文）；**源码模式不经过这里**。⚠️ **没有**做成所见即所得里可编辑的节点（要引 `remark-frontmatter` ＋ schema/parser/serializer/NodeView，是另一个量级）——要不要做见 `docs/07` 第 64 项，**待用户拍板** |
-| `editor/command-state.ts` | **光标状态的只读观察者**（`CommandState`）。喂给三处：格式工具栏的高亮、菜单的第二条判据（表格那十条要 `inTable`）、状态栏那个 `OVR` 小标。⚠️ 报的是**签名串比对**之后的差异，直接回调等于每次光标动一下都重渲染。⚠️ **加一格要同时改三处**：形状、`空状态`、**`签名()`**——2026-10-16 就漏了第三处（症状：`Insert` 按下去真的生效了，而状态栏那个 `OVR` **永远不出现**，因为"变了没有"这一关先把它滤掉了） |
-| `editor/overtype.ts` | **覆写模式**（2026-10-16 新建，朋友清单第 12 条「INSERT 键无法使用」，107 行）。`Insert` 切开关（住在**插件 state** 里，`PluginKey<boolean>`，**不改文档**、不进撤销栈）；开着时敲**单个普通字符**就把右边那一个顶掉——组字、多字上屏、行尾一律照常插入。⚠️ **`assemble.ts` 里必须排在 `history` 之前**（排后面"一次覆写"会被拆成两笔历史）。⚠️ 开关是元数据，所以它靠 `command-state.ts` 的签名串被看见（见上一格） |
-| `editor/caret-snapshot.ts` | **选区上报的一半**（2026-10-04 新建，`docs/07` 第 14 项）：`读选区快照(state)` ＋ `选区快照插件(onSelection)`（`$prose` 薄壳）＋ `建选区快照插件`（裸 `Plugin`，为的是测试能直接驱动 `spec.view`、不必有 DOM）。报的是 `{ text, empty }`——**选中的那段字，不是偏移量**。⚠️⚠️ **文件头那张量测表是这个文件存在的全部理由**：Markdown 字符偏移这个坐标系**在块边界上不存在**（在列表项开头插字会多出 `- `、在段落之间插字会多出空行），所以"按偏移拼接"**必然**与编辑器真实结果对不上——量测用真 ProseMirror ＋ 真 milkdown 序列化器跑的，钉在 `tests/caret-snapshot.test.ts` 第三组，**改之前先读它**。⚠️ 想改正文只有一条路：把**意图**交给编辑器（`insert_at_cursor` → `nota:document-edit` → 一次真事务），别自己拼字符串。⚠️ `empty` 不能省（选中图片/公式时 `text` 是空的、选区不空），⚠️ 签名去重（`empty|text`），⚠️ `EditorPane` 里还有 250ms 防抖——三层缺一层就是"光标动一下打一次 IPC" |
-| `editor/select.ts` | **选择命令的四条判据**（2026-10-07 新建，**337 行**）：`选行` / `选词` / `选句` / `删词`（`Ctrl+L` / `Ctrl+D` / `Ctrl+E` / `Ctrl+Shift+D`）。⚠️ **分三层**：纯文本 ＋ 偏移（`区间` / `选词区间` / `选句区间`）→ ProseMirror 文档 ＋ 位置（`摊开块` / `落选区`）→ `Editor` 命令——**判据全在第一层**，所以 `tests/select.test.ts` 那 **25 条**不用 jsdom。⚠️ 分词先试 `Intl.Segmenter`、没有就退回 `\p{L}\p{N}_` 那条正则；三条"贴边"规则（光标**贴着词尾**选的是**刚过去**那个词——判据用 `<=` 不是 `===`、贴着句读收**刚过去那一句**、`.` 不拆小数）与"`\n` 永不进选区"都写在文件里。⚠️ **代码块返回 `null`**（`摊开块` 认 `node.type.spec.code`）——块里那四条归 `code-block-cm.ts`，**菜单点它们因此不动**（`docs/07` 第 106 项⑥，是设计边界不是缺陷）。⚠️ 源码模式那侧走 CodeMirror 自己的 `selectLine`（**含末尾换行**），与所见即所得**不是同一个语义**——差异记在 `docs/05` §4.25，**不打算改** |
-| `editor/move-block.ts` | **整块上移 / 下移**（2026-10-07 新建，**235 行**，`Alt+↑` / `Alt+↓`）：`算移动`（**纯计划**：`删` 哪儿 / `插到` 哪儿 / `光标` 落哪儿——⚠️ **`删` 与 `插到` 是两个不同时间基的坐标**，删完之后的偏移会挪）/ `移动块视图` / `建移动键位`（`$prose` ＋ `PluginKey("nota-move-block")`）。⚠️ **挪"块"不挪"行"**：光标在列表里挪**最里层那一项**，否则挪顶层块；**表格返回 `null`、到文档两端也返回 `null`**（＝不动）。⚠️ 它**得从 `baseKeymap` 嘴里抢 `Alt+↑/↓`**（那两颗原本归 `joinUp` / `joinDown`，还带 `preventDefault`），所以 `handleKeyDown` 必须**认下这颗键**——另有"认下但不动"的两条（`event.defaultPrevented` / 没有计划）也 `return true`，判据是 `Alt+↓` 再 `Alt+↑` 的**往返复原**。⚠️ 落点不是文本块时选区退回 `NodeSelection`。判据 `tests/move-block.test.ts` **20 条** |
-| `editor/link-edit.ts` | **链接**这一族（2026-10-07 新建，第 96 ＋ 102 项）：`装链接`（`linkSet`：把"名称 ＋ 地址"写进文档）＋ `摘链接`（`linkRemove`：**只摘标记、文字一个字节不动**）。**三层**：纯字符串（`链接落点` / `源文链接区间` / `源文链接` / `摘源文链接`）→ PM 文档 ＋ 位置（`链接区间` / `建链接事务` / `摘链接事务`）→ 一个 `Editor`。⚠️ **上游那条 `toggleLinkCommand` 只挂标记、一个字符都不插**（空光标时只设 `storedMarks`），所以"光标停在空处点插入链接，屏幕上什么都不会出现"；这一份补的正是"把文字一起写进去"。⚠️⚠️ **地址为空或危险协议（`javascript:` 那一族）时不写链接、落纯文字**（用户填的字不丢，能执行的链接一条都不进文档；与自动识别**同一个答案**）。⚠️ 名称为空时**用地址顶上**；**连续的同地址兄弟节点合成一条**；**代码块给 `null`**；建链接事务只摘 link 存储标记，不清空加粗等其他格式。⚠️ 源码模式调的是**同一组纯函数**（`source-commands.ts` 的两个 `case`）。判据 `tests/link-edit.test.ts` **35 条** |
-| `editor/keyboard-experience.ts` | **键盘体验优化**（2026-11-05 新建，`settings.editor.keyboard_experience`，默认关）：链接边界先显示不可编辑预览；点击或按方向键后切到原生 `<input>` 源码层，底层镜像分别渲染标签、URL 与标点。WebKitGTK 不允许 widget 内嵌套 contenteditable 稳定聚焦，因此真实输入控件必须用 input。逐帧等待挂载后聚焦并设置原生字符插入点。标签用链接强调色，括号用正文色，URL 用正文色加下划线。宽度由隐藏尺子按实际像素测量并复测。编辑态隐藏 Vim 块光标并让正文自绘光标退出。文档变化强制回预览态，保证刚完成链接后的文字留在链接外。底层链接不原子化，输入期间不改文档。图片同样按时显示源码框。判据 `tests/keyboard-experience.test.ts` **15 条** |
-| `editor/link-source-reveal.ts` | **Textus 式链接源码原位编辑**（2026-11-06）：光标碰到链接时，用一个 `notaLinkSource` 内联节点替换链接内容，源码 `[label](href)` 就是可编辑正文；离开后解析回 link mark，原生 Ctrl+A、IME、选区与撤销都继续工作。`keyboard-experience.ts` 保留为旧图片/兼容实现，生产装配由本文件接管链接 |
-| `ui/LinkDialog.tsx` | **「链接」那个框**（2026-10-07 新建，第 96 ＋ 102 项）：两个字段「链接显示名称」＋「链接内容」。⚠️ **它不是 `PromptDialog`**：那个框的主字段是**第一个**（清空 = 取消），链接的主字段是**第二个**（地址空着这条链接就没有意义，而名字空着是正常的——会用地址顶上），判据正好反着；它还多一颗**「去掉链接」**（只在"本来就在一条链接上"时画），那是**第三条路**，`PromptDialog` 的返回值放不下。⚠️ 规矩与另外三个自绘框逐字一致（遮罩 `mousedown` ＝ 取消、`Esc` ＝ 取消、第一个框自动聚焦并全选、主字段清空 ＝ 取消）。⚠️ **它自己不碰编辑器**——怎么写全在 `editor/link-edit.ts` |
-| `ui/font-check.ts` | **主题首选字体在不在**（2026-10-17）：系统字体用画布宽度量（三种兜底）＋真实 DOM 复核；`首选字体` 从主题 CSS 抠 `--font-doc` 第一项。📌 **`Nota WenQuanYi Bitmap Song` 是随包 `@font-face` 字体**，`是随包字体()` 直接判可用，不再误报“系统没装”。⚠️ 拿不到 canvas 时返回「有」——判不了就别打扰用户 |
-| `ui/PrintDialog.tsx` | **应用内打印框**（2026-10-17 新建）：左边整页预览（一次一页、`↑ 第 N / M 页 ↓`），右边打印机/纸张/方向/边距/份数/页码范围。⚠️ 改版面会**重新出 PDF ＋ 重出预览**（去抖 350ms）；⚠️ 用一个递增令牌**丢掉过期结果**；⚠️ CUPS 不可达、IPP 查询失败、无配置打印机分别提示。⚠️ 只 Linux 出现。判据在 `docs/06` §5.68。 |
-| `ui/useQuitGuard.ts` | **退出前把没存的那几份问一遍**（2026-10-16 新建，朋友清单第 7／16 条「退出软件时对更改进行保存/弹窗」）。两段式：宿主在 `CloseRequested` 里**把这一下挡回去**并发 `nota:close-requested`，这一层问 → 存 → `api.window.quit()`。⚠️ **"取消"就是不收尾**（窗口已经被挡住了，什么都不做才是停在原地）——所以它**不需要**再往回发一条"我不退了"。⚠️ **与 `closeDoc` 是两件事**：那条问"这一份"、这条问"全部"，措辞刻意不一样。⚠️ **存不上就不退**（同 `closeDoc` 那条判据）。⚠️ 它**长在 `useDocuments` 里**（`App.tsx` 常年贴着 1000 行硬线，而那四样东西这一层全有）。⚠️ 文案用**模块级 `t(...)`** 而不是 `useT()`：这一层什么都不画，订阅只会让语言一变就重挂一次监听，而"订阅只挂一次"正是它的要点 |
-| `ui/useLinkClick.ts` | **正文里点一下链接那件事**（2026-10-07 新建，第 96 项）：单击 → 弹同一个「链接」框（两个框里都是现值）；`Ctrl`（或 `⌘`）＋单击 → 交给系统浏览器（危险协议**一个都不放行**）；**只读那一侧什么都不做**。⚠️ 只读那一侧靠 **`contenteditable`** 认（分屏右侧预览是同一套 Milkdown 建的、也画真的 `<a href>`；按窗格类名判的话"改动预览那种临时只读"会漏）。⚠️ **`preventDefault` 不能省**：那是真的 `<a href>`，WebView 的默认动作就是**导航**。⚠️ 读 `getAttribute("href")` 而不是 `锚.href`（后者是解析过的绝对地址）。⚠️ 它还提供 `光标处那条链接()`——「插入链接」预填现值用它（读 DOM 选区） |
-| `editor/insert.ts` | 几条**非命令式**的编辑动作：`转成任务列表` / `清除格式` / `表格删行删列删表` / `插公式块`（2026-09-26 加）。⚠️ **入口只有 `create.ts` 一个**——本文件不许被界面层直接调用。（⚠️ 这一格原写「插链接 / 插图片的节点构造」，2026-09-26 改对：链接与图片走 `callCommand`，早就不在这里） |
-| `editor/find.ts` | **查找与替换**。纯匹配函数 `在文本里找匹配` 是**唯一一份**语义（两种编辑模式都调它）＋ ProseMirror 适配器 ＋ 装饰插件。⚠️ 高亮是**装饰**（不进文档、不进撤销栈），替换才是文档改动。⚠️ **命中区间的口径**：`descendants` 给文本节点的 `pos` **就是它第一个字符的位置**（不是 `pos + 1`）——BUG-67 那个"高亮向后位移一位"就是这么来的。📌 **2026-10-16 加通配符**（朋友清单第 9 条）：`FindOptions.wildcard` ＋ `通配符转正则()`，`*` 配任意多、`?` 配恰好一个；⚠️ **先整条转义、再把那两颗换回来**（反了就顺手把 `.` 也变成元字符），⚠️ 与"正则"那颗**互斥**。判据 `tests/find.test.ts` **53 条**（2026-10-06 新建；判据是 `doc.textBetween(命中)` 必须正好等于查询串，不是"命中几个"） |
-| `editor/writing-modes.ts` | **专注模式 + 打字机模式**。专注：从光标那层往上**把同层兄弟压暗**（⚠️ 不是"所有块压暗、当前块加亮"——`opacity` 不会因为子元素亮回来而恢复，那样嵌套就错了）。打字机：把光标那行滚到**容器正中**。⚠️ 容器**不写死选择器**（两种编辑器的滚动元素不是同一个），偏差 <1px 不动。⚠️ **2026-09-25 起专注模式只有一半在这里**：另一半是"把外壳收起来"（菜单栏/侧栏/插件栏/标签栏/状态栏），在 `ui/useImmersive.ts` 与 `styles/app.css` 的「沉浸模式」一节——这边对"外壳还在不在"一无所知 |
-| `editor/export.ts` | **导出 HTML**。⚠️ 走**同一条渲染路径**——起一个只读 Milkdown 实例、摘它渲染出来的 DOM（`DOMSerializer` 那条路会丢掉宽松模式下的标题显示与任务项方框，导出对不上屏幕）。⚠️ 摘编辑时的零件**分两半**（**2026-09-27 定的**）：**装饰**（挂在正文元素上的类名）按 `^nota-` 前缀一条规则洗掉；**容器**（行号、语言选择器、图表的按钮条与源码框、公式的源码面板与悬浮预览——摘了类名元素还在）**必须逐个登记进 `整块删掉` 名单**，漏一个就跟着导出走（用户那次拿到的 PDF 里带着行号和语言按钮）。⚠️ 摘之前先 `await 等异步渲染`（图表是 mermaid 串行队列画的，不等就导出一张"正在渲染…"的说明卡），且那个离屏子树**钉成浅色**（`data-ui-mode="light"`——深色界面下不钉，mermaid 会在白纸上画深色图）。⚠️「含样式」嵌**三份** `?inline`（`theme/base.css` 变量层 ＋ `editor.css` 正文 ＋ `katex.min.css` 公式）再叠文档主题压其后；**缺变量的症状是"代码块没底色、任务框消失"，缺 katex 的症状是"公式画两遍"** |
-| `editor/instant-render.ts` | 光标所在块的 Markdown 标记（`>`、`-`、代码围栏等）浅灰画在块左边。⚠️ 标题回车成块后不再画 `H1`…`H6` 徽标；标题语法由 `heading-on-enter.ts` 在回车前处理。⚠️ 用 **`Decoration.node` 不是 widget** |
-| `editor/heading-on-enter.ts` | 标题四态：`##` 是实体；空格出现后 `## ` 半透明、正文暂定加粗；光标离开时整段按该级标题的 `--doc-h*` 变量排版并隐藏前缀；回车后变真标题并新开一段。全篇标题范围按文档缓存，光标只影响当前条目的装饰 |
-| `editor/mark-hint.ts` | **全部行内标记的语法提示**：粗体、斜体、行内代码、删除线、高亮、上标、下标、下划线都用有文档位置的真实原子节点显示左右源码符号。⚠️ 每个字符各是一颗节点，`**` / `</u>` 不是不可分文字块；字体和字号继承正文，颜色用 `--fg-faint`。⚠️ 与 `instant-render.ts` 分工为行内 vs 块级；原子节点的 serializer 为空，只挂可编辑实例。⚠️ 光标离开某段标记后只隐藏 token、不删除节点；删掉会让闭组前后两个光标边界塌成一个。2026-11-02 起定界符输入同步整段解析，不再等待 24ms；方向键、退格、Delete 与输入状态机拆到 `editor/inline-edit.ts`，按 Typedown 的完整源码字符偏移处理 |
-| `editor/plain-syntax.ts` | **未完成 Markdown 标点段的字形稳定层**（2026-10-31）：只给光标所在文本块里的 `*` / `_` / `~` / `=` / `^` / 反引号 / `$` 连续段加 inline decoration，关闭标点段的上下文连字与字距。⚠️ 解决的是 Adwaita Sans＋WebKitGTK 会让相邻星号/等号栅格化成不同灰度、看起来上下摆动的问题；它不改文档、不改选中范围，代码与链接里的同形字符不处理 |
-| `editor/atom-space.ts` | 敲在**行内原子节点**（公式、图片这类 `contenteditable=false` 的叶子，以及硬换行）后面的那颗空格：把它**按回普通空格**。⚠️ 症状（2026-09-26 目检发现的）：行内公式后紧跟的空格存盘是 **U+00A0**（不换行空格）——`cat -A` 里是 `M-BM- `，同一份文件里「两边都是普通文字」的空格是正常的。⚠️ 根因是 **WebKit**：它怕这颗空格挨着非文本元素被折叠掉，于是改用 NBSP，代价是那颗 NBSP 成了**文档里的字符**（不换行、看不见、用户没敲过）。⚠️ **修法换了三版，前两版都是错的**：① 拦在编辑器里（`handleTextInput`）——**那颗空格会在紧跟着的下一次编辑里丢掉**（单测全绿、真窗口丢字符）；② 挂 `$remark` 插件——**静默空操作**，unified 的 `stringify()` 只调编译器、**不跑转换器**，而 Milkdown 的序列化器走的正是 `remark.stringify(...)`；③（现在）**包一层 `handlers.text`**，挂在 `create.ts` 的 `.config()` 里、与 `不转义行首井号` 套在同一份处理器上。⚠️ 判据收得很紧：**文本节点开头那颗 NBSP ＋ 前一个兄弟是行内原子**，缺一不可；那张表里的名字是 **mdast 的节点名**（`inlineMath` / `image` / **`break`**）——⚠️ **硬换行是 `break`、不是 `html`**，写错不报错、只是一直不生效。⚠️ 代价如实记着：**编辑器里那颗字符仍然是 NBSP**（`Ctrl+F` 搜不到、复制出去带 NBSP），这是换来「空格不会丢」所付的钱。⚠️ 不是这次改动引入的（改之前那条上游规则落盘一样是 `M-BM- `） |
-| `editor/text-handlers.ts` | **普通文本按原值序列化**（2026-11-03）：`textHandlerChain()` 不再调用上游 `state.safe()`，**永不自动添加反斜杠，也不把内容替换成原子**。用户写下的 `*`、`$`、`[`、`#` 或已有反斜杠都按 `node.value` 原样输出。仅保留真行内原子后 WebKit NBSP→普通空格这一条规范化；GFM 表格单元格里的字面 `|` 使用 `&#124;` 字符引用避免切列，不使用 `\|`。判据在 `tests/syntax-escape.test.ts` 与 `tests/atom-space.test.ts` |
-| `editor/atx.ts` | **「什么算标题」的唯一判据**——宽松/严格两种口径的正则、以及"这段文本算几级标题"都只在这里。⚠️ 三个调用点（`lax-heading.ts` / `source.ts` / `outline.ts`）都得往这儿问，不各自再写一份；Rust 侧那份同构实现在 `document/title.rs::strip_atx` |
-| `editor/lax-heading.ts` | 宽松模式的那一半：`不转义行首井号`（序列化时不往原文的井号上加反斜杠）。⚠️ **2026-09-26 另一半（`宽松标题显示`）删掉了**：那是给 `#标签` 挂 `Decoration.node` + `nodeName: "h1"` **按标题排版**的显示层，用户连着报两次（第二次带截图，`# 你好` 与 `#你好` 两行同字号），最后一句是「应该作为标识符的 `#` 不要变换位置和大小」——所以**非严格模式下 `#你好` 就是普通正文**，字号行距位置全不变。⚠️ **文件名留着**（改名要连带动 `tools/doc-sync-check.sh` 那份映射，而剩下这一半的内容没变）；⚠️ **"认不认宽松井号"这件事没有取消**，`atx.ts` 判据 / 源码模式 / 大纲 / 后端 `strip_atx` 四处照旧走宽松口径——取消的只有正文的长相。⚠️⚠️ **宽松模式一个字节都不改**（用户 2026-09-24 定的死规矩），理由在文件头 |
-| `editor/task-list.ts` | 任务项复选框：画方框 + 点它勾上。⚠️ **不改 schema**——`data-checked` 是 `preset-gfm` 本来就给的 |
-| `editor/code-block.ts` | 代码块 NodeView：语言选择器 / 复制 / 折叠。⚠️ **第一个 `$view`**（第二个是 `editor/diagram-view.ts`，2026-09-26）。📌 **2026-10-06（第 101 项）起，代码块里那段文本由 CodeMirror 编辑**：`pre` 下并排两层 DOM——隐藏的 `<code class="nota-code-text">`（ProseMirror 的 contentDOM，文档树/撤销/存盘读的是它）与可见的 `.cm-editor`（用户打字那一层）。三件手感（配对 / 回车续行 / `Tab`）归 CM；**撤销归 ProseMirror**（CM 那边刻意不装 `history()`）。⚠️ 两把 `同步中` 锁是这一段的核心（防回声），细节在 `editor/code-block-cm.ts` 文件头 |
-| `editor/plugin-vim-engine.js` / `editor/plugin-vim-mappings.js` / `editor/plugin-vim-input.ts` / `editor/plugin-vim-ops.ts` / `editor/plugin-vim-text.ts` / `editor/plugin-vim-types.ts` / `editor/plugin-vim-engine.d.ts` | **Vi/Vim 输入适配器**（2026-10-31）：`editor.input` 插件发布配置，宿主本地运行状态机；普通/插入/可视/可视行、计数、操作符、文本对象、寄存器、宏、点重复、搜索、Ex、vimrc 映射与块光标。`plugin-vim-ops.ts` 把状态机动作落成受信的 ProseMirror 事务，`plugin-vim-input.ts` 在普通模式拦截键盘和输入法文本；插件停用后释放全部按键。📌 2026-11-01：`plugin-vim-types.ts::initialVimStatus` 给新进程窗口提供初始 `NORMAL` 指示，避免插件回调到达前模式标签缺席；`EditorPane.tsx` 用它做渲染兜底。 |
-| `styles/vim.css` | Vim 模式块光标、隐藏普通模式原生光标与 `NORMAL` / `INSERT` / `VISUAL` 模式提示的样式；颜色取 `Canvas` / `CanvasText`，跟随界面明暗而不跟随文档主题。 |
-| `editor/code-block-cm.ts` | **代码块里的 CodeMirror 实例**（2026-10-06 第 101 项新建）：`创建代码块编辑器()` ＋ 三个纯函数。⚠️ **着色唯一来源仍是 refractor**（类名沿用 `token xxx`）。⚠️ 自动换行走 `Compartment` 盯 `<html data-code-wrap>`。2026-11-02 起源码偏移 0 的 `←` / `↑` 通过 `leaveHeadCell` 显式退出到代码块之前的正文，不再依赖事件冒泡。CM 的 scroller/content/line 显式使用 `var(--font-mono)` |
-| `editor/code-preview.ts` | **HTML 代码块下面那块预览**（2026-10-16 新建，122 行，用户点名「如果代码框语言是html的话，在下面可以直接显示预览，类似流程图那样」）：`是HTML(语言)`（纯函数，`html`/`htm`/`xhtml`）＋ `建HTML预览()`（交给 NodeView 一个 `{元素, 同步, 销毁}`）。⚠️ **沙箱是最要紧的一条**：`sandbox="allow-scripts"` 而**不给** `allow-same-origin`（两个一起给等于没沙箱：iframe 能自己把那个属性摘掉）。⚠️ `srcdoc` 一写就是一个新文档，所以**去抖 300ms**（不然打一个字就重置一次滚动与表单）。⚠️ **它是编辑时零件**：`.nota-code-preview` 必须在 `editor/export.ts` 的 `整块删掉` 名单里（漏了的话导出的 PDF里嵌着一份 iframe）；同批还拆掉了它为占文档流而套的那层 `div.nota-code-wrap`。判据 `tests/code-preview.test.ts` **14 条** ＋ 开窗目检（`docs/06` §5.67） |
-| `editor/lang-picker.ts` | 代码块那颗语言下拉的**自绘弹层**（2026-09-25）。⚠️ 为什么不能用原生 `<select>`：`<option>` 的内容模型是**纯文字**，弹层里放不下图标——这是硬约束，不是审美偏好。⚠️ 代价是原生白送的东西全得自己补：打字跳转 / 上下键 / 开场滚到当前项 / Escape / 点外面关，少一条用户就会发现。⚠️ 弹层挂 `document.body`（挂 `pre` 里会被编辑区的滚动容器算进可滚范围，在文档底部打开一次整篇会被顶出去）→ 三条连带：① 它在**编辑器 DOM 之外**，ProseMirror 的 `stopEvent`/`ignoreMutation` 看不到它，不必去扩 `code-block.ts` 的 `inChrome`；② **必须自己收尾**，`code-block.ts` 的 `destroy` 里调 `销毁()`；③ **文档主题的 token 够不到它**（那些变量写在 `.editor-pane` 上），开场从按钮身上抄一份（见 `继承的token`）。⚠️ 两个实测出来的坑写在 `滚动了`／`滚到可见` 的注释里：弹层自己的滚动会经**捕获阶段**被 `window` 收到（"滚动就关"把刚开的弹层当场关掉，且只在当前语言排在后面时才发作），以及 `高亮` 不能用 `scrollIntoView`（它会连带滚祖先，同样触发上面那条） |
-| `editor/fence-lang.ts` | **围栏语言的行内补全**：普通段落里输入 ``` + 前缀即显示候选，`mat` 固定给 `math` / `mathematica` / `matlab`。确认前不改文档；Enter / Tab / Space / 点击才用一笔事务换成 `code_block(language)`。弹层复用语言图标，↑↓ / Esc / 点外关闭与视口翻转都在插件内处理 |
-| `editor/lang-icon.ts` | 语言图标：**字母缩写徽章**（底色＝该语言约定俗成的那个色，字色按底色亮度算出来）。⚠️ 语言有 400 个，**没有任何图标集覆盖得全**，所以"没有专属图标怎么办"是主路径不是边角情况。⚠️ **2026-09-26 起徽章只是兜底**：先问 `lang-icons-real.ts` 要真图，问不到才回落成徽章（用户当天指定 vscode-icons，「代码框语言图标只支持热门语言即可。但是要画真图标」）。⚠️ 历史：2026-09-25 那句「找不用署名的」让"上 GitHub 找"走不通（MIT / BSD-2 / BSD-3 都要求保留版权声明，真正免署名的 CC0 / 0BSD / Unlicense 没有成套语言 logo），所以当时走的是自画；**现在这条路是通的**，因为许可是 MIT 而版权声明落在 `THIRD-PARTY.md`（不是"不用署名"，是"署了名"）。⚠️ 加一个语言只动 `颜色表` 一处：对比色是同一步算出来的（`对比色`），分两处写就会出现"浅色底 + 白字"只在那一个语言上出错 |
-| `editor/lang-icons-real.ts` | **语言图标的真图那一半**（2026-09-26，接在 `lang-icon.ts` 前面）：`refractor` 的语言 id → `src/assets/lang-icons/` 里 93 颗 vscode-icons 的 SVG（tag `v12.19.0`，**逐字节**搬来，MIT，`tools/fetch-lang-icons.sh` 抓取/`--verify` 对 `SHA256SUMS`，版权正文见 `THIRD-PARTY.md` §6）。⚠️ **那批 .svg 一个字节都不许改**（连"顺手调个颜色"也不行）——"和上游那个 tag 一模一样"是它能被一眼核对的前提。⚠️ **少一个语言不是错**：400 个 id 里绝大多数一辈子不会有人贴，判据写在 `图标组` 那张表里。⚠️ 一条**一组**不是一行一个语言（上游只有一颗 `shell`，`refractor` 把终端拆成 `bash`/`sh`/`sh-session`… 六个 id）。⚠️ 走 `background-image` 的 **data URI**，不是把 `<svg>` 插进 DOM：① 这批图里有好几份都定义 `id="a"`（渐变引用），内联进同一份文档会**互相串色**；② 下拉里一次摆几十颗，`innerHTML`/`createElementNS` 等于为几十个外来字符串开口子。⚠️ 彩色图标**不跟主题变**，也**不要**用 `mask-image` 刷色（那会把 93 颗彩色 logo 变成一片纯色；`assets/icons/` 那套界面图标才走 mask） |
-| `editor/inline-marks.ts` | **高亮 / 上标 / 下标 / 下划线**四种行内标记的**整套**（2026-09-27 新建，901 行）：`$markSchema` 四颗 mark ＋ `$remark` 解析标注 ＋ 各自的 `toMarkdown` 处理器 ＋ 输入规则 ＋ 存盘那一侧的 `handlers.text`。⚠️ 这四种在现代 markdown 里**都没有原生语法**（`==高亮==` 是扩展，`<sup>`/`<sub>`/`<u>` 是 HTML 标签），所以**四层缺一层都是静默失败**（markdown ↔ `remark-parse` ↔ mdast ↔ `$remark` 转换器 ↔ PM 文档树 ↔ `remark-stringify` 的 handlers ↔ markdown）——不报错，屏幕上什么也看不出来。⚠️⚠️ `标记规格` 里 **`标签`（PM 的 mark 名，也是 `CommandState`/`FormatBar` 的键）与 `html标签`（编辑区真正渲染出来的元素名，`parseDOM`/`toDOM` 认的那个）是两个东西**：原来一位两用，后果是编辑区渲染出 `<highlight>` 这种浏览器不认识的自造元素（CSS 只能写 `highlight { … }`），并且**丢掉 `<sup>`/`<sub>` 自带的排版**（2026-09-27 拆开）。⚠️ 三个开关（`highlight` / `superscript` / `subscript`）来自 `MarkdownSettings`，**下划线没有开关**（有意）；`EditorPane` 把三个布尔值 `useMemo` 成对象再进 effect 依赖，因为对象字面量会让编辑器每帧重建。⚠️ 判据 `tests/inline-marks.test.ts` 37 条（叠加 / 半重叠 / 配对守卫）|
-| `editor/inline-delimiter.ts`（2026-11-03） | 行内强调解析：含 `*` / `_` 的普通段落直接使用 micromark/GFM 的 delimiter-run 与左右 flanking 规则；Nota 专有语法（高亮、上下标、波浪号标记、HTML 下划线、行内代码）继续走扩展规则。文件的 Markdown → mdast 路径不再用自定义树替换标准 strong/emphasis AST |
-| `editor/block-keys.ts` | **块容器退出键**（2026-11-01）：引用框绝对开头或空行按空格/退格退出全部引用层；空列表项按 Enter 抬起一层；空表格开头退格删表。引用中的空行会移到引用外成为普通段落，而不是把已写的引用正文一起删掉。判据 `tests/block-keys.test.ts` 8 条 |
-| `editor/html-block.ts` | **块级裸 HTML 与 HTML 注释**（2026-09-27 新建，240 行）：`<div>x</div>` / `<!-- 注 -->` 独占一行时给它一颗 `group:"block"` 的原子节点。⭐ **它修的是一个真缺陷：整篇文档打不开**——`remark-parse` 把独占一行的 HTML 产成 **root 的直属孩子**，而 preset 的 `htmlSchema` 是 `group:"inline", inline:true`（`preset-commonmark/lib/index.js:1510`）/ `doc.content` 是 `"block+"`（`:414`），于是 `createAndFill` 失败。触发门槛低到离谱：**一份文件只要以一行裸 HTML 开头**（后面还有正常正文也一样）。⚠️ **行内那些一个字节都不动**——`甲<u>乙</u>丙` 里那两颗仍归 preset，抢过来会让一句话变成三个块；判据是"父节点在 `块级容器`（`root`/`blockquote`/`listItem`/`footnoteDefinition`，**穷举**）里"。⚠️ 编辑区里**显示成源码**（灰底等宽），**不是渲染后的 HTML**：① 真渲染得先把"html ＋ text ＋ html"三颗合成一颗带内容的节点，那是重写 HTML 解析器；② 编辑区是活文档，渲染等于让 `<script>`/`onerror=` 跑起来。**导出与打印不受影响**（那边吃的是序列化后的 markdown）。⚠️ 判据 `tests/html-block.test.ts` 14 条 |
-| `editor/github-alert.ts` | **GitHub Alerts 的屏幕装饰**（2026-10-18）：识别引用块首段的 `[!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]`，通过 ProseMirror 装饰加类型类。⚠️ 只改显示，不改 schema 或序列化，源文件仍是标准 `> [!TYPE]` GitHub Markdown。样式在 `styles/github-alert.css`；判据在 `tests/github-markdown.test.ts` |
-| `editor/smart-punctuation.ts` | **智能标点**（`--` → `–`、`---` → `—`、`...` → `…`、`"` → `“ ”`，2026-09-27 新建）。⚠️ **它是一笔"存了值没人读"的账的偿还**：`settings/markdown.rs` 里 `smart_punctuation` / `smart_quotes` / `smart_quotes_double` / `smart_quotes_single` / `smart_dashes` / `dash_style` **六个字段从 2026-09-24 就摆着、界面上也有整组控件，全仓却一个消费者都没有**（与 2026-09-25 修掉的那六个外观字段同类）。三档（`off` / `render` / `input`，默认 `input`），**`render` 一个字节都不写**（靠 `Decoration.inline` 把原文压成 0 宽 ＋ 紧挨着挂一颗 `Decoration.widget` 画替身，CSS 在 `editor.css` 的 `.nota-smart-hide`）。⚠️⚠️ **它会把「分割线」弄坏，靠 `是横线骨架行` 那道守卫救着**：敲 `---` 走三次 `handleTextInput`，第二下时前文正好是 `--`，本文件的 `-{2}$` 会当场换掉、上游那条 `/^(?:---\|___\s\|\*\*\*\s)$/` 再也认不出来——改这一段之前先读那个函数。⚠️ `规则选项` 里 **`inCodeMark: false` 必须写**：上游默认值是 `true`，不写这一句行内代码（`` `--` ``）里照转不误。⚠️ **导出那条路不许传它**（`editor/export.ts` 另建实例、直接取 `pm.innerHTML`，传了会让 `render` 档从后门漏进导出文件）；分屏预览**要**传。⚠️ 判据 `tests/smart-punctuation.test.ts` 32 条 |
-| `editor/headings.ts` | **大纲抽取**（2026-09-27 新建，约 100 行）：`extractOutline` ＋ `OutlineItem` **整段**从 `src/ui/outline.ts` 搬来。⚠️ 搬家的理由是**依赖方向**——`src/editor/` 从不 import `@/ui/`，而「内容目录」这条命令（`editor/toc.ts`）与侧栏「大纲」页要的是**同一份判据**；留在界面层那边就得让编辑器反向依赖。⚠️ 两个消费者：`ui/Sidebar.tsx` 的「大纲」页 与 `editor/toc.ts` 的「内容目录」。⚠️ `ui/outline.ts` **文件名没改**（"outline" 仍与侧栏那一页对得上），只留 `countText` / `Counts` / `isCjk`。⚠️ 已知的宽松模式分歧照旧：`#标签`（井号后没空格）在宽松档下**文档树里是段落**，但这里那句正则仍把它算成标题（侧栏大纲照进） |
-| `editor/toc.ts` | **内容目录（TOC）的纯文本那半**（2026-09-27 新建，约 200 行）：`生成目录` / `锚点` / `算目录块` / `找目录` / `替换目录` / `是目录标记`。⚠️ 形状是**一段普通 markdown 列表**，两头用导出常量 `目录开始标记` / `目录结束标记`（`<!-- nota:toc -->` / `<!-- /nota:toc -->`）夹住——**不是粒子节点**：要能在源码模式里看得见、能整个删掉，也不必动 schema。⚠️ **它是快照，不会自己变新**（有意为之，三条理由写在文件头）：实时更新要么加 NodeView 要么每次按键全文序列化，而"程序替用户改他写的东西"违背本仓对 `lax-heading.ts` 那条"存盘会改字"的立场；**再点一次命令 = 原地更新**。⚠️ 锚点走 GitHub 口径（转小写 / 去标点 / 空白转 `-` / 重名加 `-1` / 空标题落 `section`）；**编辑区里点目录链接不跳**（与 `footnote.ts` 的"不跳转"同一个边界口径，有意），**导出的 HTML 里能跳**（`editor/export.ts` 给 `h1..h6` 补 `id`）。⚠️ 与侧栏大纲**同源**，都用 `editor/headings.ts` 的 `extractOutline`。⚠️ 判据 `tests/toc.test.ts` 22 条 |
-| `editor/auto-correct.ts` | **自动更正**（英文错拼那一张固定表，2026-09-27 新建）。⚠️ 这一格在 `docs/10` §8 里**只有一行光秃秃的 ⬜**，全仓没有任何一处给过它定义——口径是那天定的，记在 `settings/markdown.rs` 的 `auto_correct` 上：**只认一张表**（四十来条）、**只在敲下词尾空格那一下动手**（触发字符只有空格与制表符）、**`Ctrl+Z` 一步能撤销**。⭐ **入表判据只有一条、可检验：小写形式在英文里不是一个词**——所以 `cant` / `wont` / `wether` / `lets` / `its` **一个都不收**（它们本身就是合法词，收进去的症状是"把对的改成错的"，那是这份表唯一不能犯的错）。大小写跟着原词走（`teh`→`the` / `Teh`→`The` / `TEH`→`THE`），**混着写的（`tEh`）不猜**。⚠️ 不做语法检查、不做句首自动大写、不碰中文（正则只认 `[A-Za-z]`）。⚠️ 判据 `tests/auto-correct.test.ts` 20 条，其中一组**遍历整张表**防死行 |
-| `editor/url-link.ts` | **裸 URL、显式链接 ＋ 粘贴网址**（2026-09-28 新建）：裸 URL 的打字与粘贴共用 `NormalizeLink`；裸域名仍不自动成链，但显式 `[GFM](github.com)` 会补成 `https://`。显式链接有三道同判据入口：用户真正敲下 `)` 时提交、自动配对闭括号在用户跨过它时提交、以及文本变化后仅检查光标**之前**是否已有完整语法。光标仍在自动预插闭括号之前时绝不提前转换，因此 `(g)` 可以继续输入成完整 URL。判据 `tests/url-link.test.ts` **42 条**。 |
-| `editor/auto-pair.ts` | **可选正文配对**（2026-11-01）：半角 `(` `[` `{` 与常用全角括号、弯引号自动补闭符；已有闭符时跳过；空配对 Backspace 一次删两侧；选区包裹；Tab / Shift+Tab 跨越。输入法组字期间不修改文档，`compositionend` 后延迟核对提交字符。受 `settings.editor.auto_pair`（**默认关**）控制；同一开关也授权 `inline-edit.ts` 的 Markdown 定界符配对。 |
-| `editor/paste.ts` | **粘贴的分发口**（2026-09-28 新建，约 185 行）：⚠️⚠️ **必须 `.use()` 在 `@milkdown/plugin-clipboard` 前面，不能挪**——PM 按 `state.plugins` 顺序问 `handlePaste`，第一个返回 `true` 的赢，而上游那条**总会**返回 `true`。四条判据按序：① 剪贴板里干干净净就是一条网址 → 交给 `url-link.ts` 的 `贴上网址事务`；② 有 HTML → `paste-clean.ts` 洗净再让上游解析；③ 纯文本 ＋ 像代码 → 认语言包成 `code_block`（**上限 50KB**，抄 VMark 的 `codePaste`）；④ 其余原样交给上游（**粘贴 Markdown 源码 → 富文本**就是上游 `clipboard` 的 `parser(text)`，在那里留了记号，别「补坏」）。⚠️ 代码块里粘网址是纯文本（与上游同一处口径） |
-| `editor/paste-clean.ts` | **洗粘进来的 HTML**（2026-09-28 新建，约 630 行）：Word / 网页那段 HTML 转成 schema 认得的样子。**不用 `DOMParser`**——没有 jsdom 就不是纯函数、测不了，所以自己扫标签（⚠️ 代价如实记：畸形 HTML 处理不了）。三件事：① **整块删**（`script` / `style` / `head`… 连内容一起）；② **丢壳**（`span` / `font` / `section`… 只丢标签留内容，⚠️ `div` **刻意不丢**——ProseMirror 的 `blockTags` 靠它把两段分开）；③ **样式换成语义标签**（`font-weight` → `<strong>`、`<b>` → `<strong>`…）。⚠️ `<pre>` 上的 `data-language` 是**着色能不能活下来的唯一通道**（`code_block` 的 `parseDOM` 读 `dom.dataset.language`），所以 `找语言线索` 认 GitHub / Highlight.js / Prism 那五种写法。⚠️⚠️ **两张表**（2026-09-28 修的真 bug）：扩展名那一族查 `lang-guess.ts` 的 `扩展名表`，语言长名那一族（`python` / `rust`——`lang-python` 与 `data-language="rust"` 是最常见的两种写法）查本文件的 `语言名表`；只查前者的话**一个都落空**，症状只是「粘进来的代码块没有语言」（脚本一个字都不报）。⚠️ 栈上每一项记着**开标签输出过没有**（`丢壳` 与命名空间那两类没有），不然闭合标签会漏出来（`<span>甲</span>` 洗成 `甲</span>`）。⚠️ 判据 `tests/paste-clean.test.ts` 25 条 |
-| `editor/lang-guess.ts` | **猜代码语言**（2026-09-28 新建，约 490 行）：两个入口——`按文件名线索`（开头注释里写着 `// a.ts`）优先于 `按内容猜语言`（`#!/bin/bash` / `package main` / `fn main()` 这些头几行的特征），都认不出给**空串**（`code_block` 的 `language` 默认就是它）。还有 `按扩展名推语言`（110 个语言 id）与**粘贴那道闸** `像代码`。⚠️ `像代码` 三条否决里最要紧的是**少于两行一律不算**（一行 `pip install x` 是命令，不是代码）与**中文正文**（汉字占比 ≥ 两成、或出现中文句读就否决）——它错了的症状是「用户粘一段散文进来变成了代码块」。⚠️ 命令行那条判据**按行计分**（`重复计分上限 = 3`），词表**刻意剔掉 `go` / `make` / `node`**（常见的英文句子开头，会误伤）。⚠️ 判据 `tests/lang-guess.test.ts` 31 条，其中第八组拿 `refractor.listLanguages()` 核表里每个 id 真的存在（写错一个**不报错**，只是「这个功能没生效」） |
-| `editor/file-kind.ts` | **这一份是什么类型、该用哪种模式打开**（2026-09-28 新建，约 145 行，**纯函数、一个 React 都不碰**）：`MARKDOWN后缀`（六种，**全仓唯一一份**）· `后缀()`（⚠️ `点 <= 0` 挡住 `.bashrc`——按"最后一个点"取会把它取成 `bashrc`）· `认文件类型` · `大文件阈值 = 1_000_000`（⚠️ **是判断、不是量出来的转折点**，理由写在常量上）· `降级缘由(路径, 字符数)`（⚠️ 路径可以是 `null` ＝ 没存盘的新文档：名字这条判不了，大小照判；⚠️ 两条缘由**分开返回**、不合成一个布尔）· `实际模式(偏好, 缘由)`（有缘由一律 `source`，三档都压——`split` 右半那份只读 Milkdown 一样卡、一样解析错）。⚠️ 后缀表收进来之前**在四个地方各写一遍、而且已经不一致**（`.txt` 在拖放那侧不算 Markdown），真值源是 Rust 的 `commands/workspace.rs::is_markdown`，`tests/file-kind.test.ts` 第一组**去读那份 Rust 源码**逐个对。⚠️ 它**不管**"能不能当文本打开"（那是 `ui/useFileDrop.ts` 那张更宽的 `文本后缀`，两张表故意不一样：合并就成了"Nota 只打得开 Markdown"）。消费者：`ui/useFileKindMode.ts`、`ui/EditorArea.tsx`、`ui/useDocuments.ts`（对话框筛选）、`ui/useFileDrop.ts` |
-| `editor/emoji.ts` | **Emoji 短代码 ＋ 补全面板**（2026-09-27 新建，约 924 行）：一张 **503 条**的表（十一个分类，最大一档是「表情」103 条）＋ 一条输入规则（`:smile: ` 敲下空格当场变 😄）＋ 一颗**浮在 `document.body` 上的补全面板**（敲 `:` 之后边打边筛，上下键选、回车/点击插入）。⚠️ **一件开关管两件事**：`settings.editor.emoji_autocomplete` 同时管替换与面板——两者都是"编辑器在用户的 emoji 输入上插手"，拆两个开关只会让人"关掉一个还弹另一个"。⚠️ **输入规则正则导出成了常量 `输入规则正则`**（`/:([a-zA-Z0-9_+-]{1,}):[ \t]$/`），测试拿**同一条正则**去核表里每一条短代码——防的是"面板选得到、却永远敲不出来"的死行。⚠️ 量词是 `{1,}` 不是 `{2,}`（表里有 `:x:` / `:v:`）。⚠️ **面板只画不改**（`Plugin.view` ＋ `replaceChildren`，文档树一个字都不动），坐标每次 `coordsAtPos` 现算；鼠标走 `mousedown` ＋ `preventDefault()`（否则 WebKit 抢走焦点、光标丢失），键盘走 `handleKeyDown`。⚠️ **`apply` 里必须先读 `tr.getMeta(emoji补全键)`**：上下键那两条只改"高亮第几条"、没改文档，走重算会被前缀重置回 0（症状是"按 ↓ 没反应"）。⚠️ **只读实例不挂面板**（分屏预览点击也会弹，纯噪声），输入规则照挂（只读时是零成本死代码）。⚠️ 导出那条路**不受影响**（`editor/export.ts` 另建的是 `readOnly` 实例：面板本来就不挂，输入规则只在打字时动手）。⚠️ 判据 `tests/emoji.test.ts` 32 条 |
+Lock order is:
 
-| `editor/image-attrs.ts` | **图片装载兜底**（2026-09-24，P0 数据丢失的补丁）：上游 preset 少写了一个 `\|null`，于是**不带 title 的图片在装载时被整节点丢掉**（打开含图文档 → 存盘 → 图从文件里消失）。这里挂一个 `$remark` 插件，在 mdast 上把 `null` 抹成 `""`。⚠️ **`editor/create.ts` 里的 `.use(补全图片属性)` 不许删**；⚠️ 只读实例（分屏预览、导出）同样要走 `createEditor` 才带上它。根因与实测记录在文件头，`docs/05` §4.8 |
-| `editor/video-view.ts` | **图片/视频 NodeView**：仍是 `imageSchema.node` 的 `$view`，源码与序列化不动。📌 2026-10-17 起本地绝对路径与相对路径都先算成绝对路径，再由宿主 `nota_image_data_url` 读成 data URL；这修掉了 asset 协议在中文路径、SVG、dev server 下静默破图。📌 2026-11-01：加载失败显示就地告警；悬停或选中时提供直接删除按钮，两者的编辑期 DOM 都从导出中剔除。视频判据仍是短后缀表。 |
-| `editor/math-macros.ts` | **数学宏表**（2026-09-24）：physics 那一套 `\qty`/`\dv`/`\braket`… 共 **108 条** + 每条一份可渲染样例，交给 `create.ts` 的 `katexOptionsCtx`。⚠️ KaTeX **官方没有 physics**，`katex-physics`（2019、无 LICENSE）**刻意没引**，这张表因此是自己写的。⚠️ 三条硬约束（参数要带花括号 / **KaTeX 的宏完全不支持可选参** / 星号不吃）与"默认关"的理由（会重定义 `\div` `\Re` `\Im`）都在文件头；**做不到的写法逐条列在 `docs/10` §11.1**。⚠️⚠️ 2026-09-24 修过一轮静默画错（`\dv` / `\dd` 那一族），**判据不能只是"能不能渲染"**——还有一张 `PHYSICS_EQUIVALENTS` 对照表 |
-| `editor/heading-on-enter.ts` | **标题"回车才成块"**（2026-09-26，照 Typora）：`# 你好` 在按下回车之前**一直是段落**（井号就是普通字符，位置字号都不变，只是井号后那段按粗体显示），回车才换成真标题**并把下一段开出来**。⚠️ 上游 `wrapInHeadingInputRule`（打空格即成块）在 `create.ts` 里被 **`.filter()` 摘掉**了，摘的就是它——那条规则正是用户抱怨的「输入 `#` 后按空格 `#` 就变位置、还变大」。⚠️ **行首退格也在这个文件里**（`标题行首退格`，2026-09-26 第二轮）。上游 `downgradeHeadingCommand` 那一套是**逐级降级**（`###`→`##`→`#`→段落），用户点名不要它：「在任何标题前按退格统一直接删除所有标题，而非从 ### 变到 ## 再 #」。所以本文件用 `$shortcut` 在 `Backspace`/`Delete` 上以 `priority: 60` 盖掉上游那条，一次退回段落。⚠️ 它与本文件里"回车才成块"是一对相反方向的动作——改一个先看另一个。⚠️ 它**不改文件里的字节**：段落 `# 你好` 与标题 `# 你好` 序列化出去是同一串（⚠️ **宽松那条除外**，见下）。📌 **2026-09-30 起这个文件还管正文那条标题装饰**（第 90 项，**当天改过两轮**）：`算装饰条目(doc, strict)` 扫全篇 ＋ `建装饰集(doc, 条目)` 给井号后面那段文字**加粗**（`.nota-heading-pending`）——**宽松档（`#你好`）与严格档走完全同一条路**：没按回车只加粗，**按了回车才成块放大**（用户原话「类似 `# 你好`。就是不回车只是显示加粗，回车变成标题。」）。⚠️ 判"写完了没有"靠的是**节点类型**（还是段落 ＝ 没写完），**不看光标位置**——所以点走／切窗口／敲方向键**什么都不发生**。⚠️ **第一批那套**（"正在写的那一段先不放大、光标一走开才按该级字号排"）当天被用户推翻，**别照旧稿搬回来**。⚠️ **代价一处**：宽松档下 `#你好` 成块后序列化出去是 `# 你好`（**多一颗空格**），这是"宽松模式一个字节都不改"**唯一的例外**，且只由用户按下的回车产生。判据与代价落在 `docs/05` §4.9c（真窗口跑法见 `docs/06` §5.39，⚠️ 那六帧是第一批拍的，节首写着哪几帧还能用） |
-| `editor/table-input.ts` | **表格输入规则**（2026-09-26）：敲表头行 → 回车 → 敲分隔行 → 回车，两段被吃成一张真表格（此前只能用菜单插）。⚠️ 判据与"不改字"那条规矩照 `image-attrs.ts` / `lax-heading.ts` 的既有口径；格子里的回车归它管，所以 `heading-on-enter.ts` 显式绕开 `table_cell` / `table_header` |
-| `editor/table-pipe.ts` | **行首那颗多余的反斜杠**（2026-09-27 新建，**276 行**）：`| 1 | 2 | 3 |` 这样一行**正文**，在所见即所得与源码模式之间切一次回来就被加上一颗 `\`（用户原话：「切换到所见即所得模式再切换回来会自动添加「\」，表格出不来」）。⚠️ 那颗反斜杠**不是本仓写的**，是 `mdast-util-gfm-table` 的 unsafe 表（`{atBreak: true, character: '|', after: '[\t :-]'}`）——序列化器**一行一行地写**，写到这一行时看不见下一行是不是分隔行，只好一律转义。⚠️ **判据 2026-10-04 换过**（用户第二次报同一句，还附了截图）：老判据问"这一段物理上只能占一行才去掉"（值里没有 `\n`、**且**兄弟里没有 `break`），而他那两行（表头行 ＋ 硬换行 ＋ `$ 你好 $`）在**同一段**里 ⇒ 两条都不成立 ⇒ 病照旧。新判据问"**下一行长什么样**"：**只有"下一行像表格的分隔行"时才把转义留下，其余一律放回去**（三档：像 / 一定不是 / 说不准（留））；`state.stack` 里有 `tableCell` 时一律不动（格子里那颗竖线是分界线）。⚠️ **"下一行像不像"要比它写在文件里的原样**——预先抹掉那颗 `\` 会把"两颗都被转义的伤文件"放成一张首格被拼成 `| 1` 的残表；不预先改写就两颗一起放、重新打开是一张**完整**的表。⚠️ 顺带推翻了自己一个假设：**"GFM 表格必从段落第一行起"是错的**（`甲` ＋ 表头行 ＋ 分隔行 ⇒ 段落 ＋ 表格，探针验过、测试钉着），所以新判据里没有"位次"这一项。⚠️ **用户那句话的后半截不在这颗反斜杠上**：它会被分词器当转义吃掉，表照样成形（同名测试第四组最后一条钉着实测）——这一层修的是"**文件里多出一颗用户没打过的字符**"（破了用户定的「存盘不要自动修复」）。⚠️ 判据 **39 条**在 `tests/table-pipe.test.ts`；⚠️ 挂载点在 `editor/text-handlers.ts` 那条链的**最外层** |
-| `editor/table-tab.ts` | **表格里的 `Tab` / `Shift+Tab`**（2026-10-04 新建，**264 行**，`docs/07` 第 55 项 ②③）：⚠️ 上游 `preset-gfm` 的 `tableKeymap` **已经绑了这两颗键**（`NextCell` / `PrevCell`，各自转手调一次 `goToNextCell(±1)`），本文件接的是它**撂挑子**的两种现场——**最后一格 `Tab`**（旧行为：键落到 `@milkdown/plugin-indent` 手里，而它一句 `tr.insertText("  ", to)` **不看选区在哪**就往里塞两颗空格，那两颗**会写进文件** ⇒ 现在在下面加一行、光标进新行第一格）与**第一格 `Shift+Tab`**（旧行为：`indent` 只绑 `Tab`，键落到浏览器手里，而它给 `Shift+Tab` 的默认动作是「**把焦点移出编辑器**」——页面上看不出变化，接着打的字却落到别处 ⇒ 现在**吃掉这颗键**）。⚠️ **加行不用上游 `addRow`**：它按**角色名**找节点，而 `preset-gfm` 那条独立的表头行 `table_header_row` 是 `...originalSchema.table_row` 摊出来的 ⇒ 它与 `table_row` 的 `tableRole` **都是 `"row"`**、抢同一个槽位、**谁在 `schema.nodes` 里靠后谁赢**（那个次序由 Milkdown 内部组合顺序决定、**本仓管不着**），真落到表头行上拼出来的就是 schema 不合法的文档——所以走 `行格类型`「**先认名字**（与 `preset-gfm` 源码同名）、**认不到才退回角色表**」。⚠️⚠️ **"认键"得看 `keyCode`**：GTK/X11 上 `Shift+Tab` 送到网页里的**根本不是 `Tab`**——X 发的是另一个 keysym `ISO_Left_Tab`（`0xFE20`），WebKit 给不出名字，于是 `event.key` 是 **`"Unidentified"`**（`code` 一样是空的），只有 `keyCode` 还是 `9`；上游 `prosemirror-keymap` 认键正是先查 `keyNames[event.keyCode]`。**只比 `event.key === "Tab"` 的那一版单元测试 55 条全绿、到真窗口里 `Shift+Tab` 却被放行给浏览器 ⇒ 焦点静默飞出、病修了等于没修**（抓它的六个判官见 `docs/06` §5.48——**这是"单测全绿、真窗口却是坏的"那个故事的出处**）。⚠️ 表格之外一律放行（`Tab` 照旧缩进、列表照旧缩进）；**不改上游 `tableKeymap`**、**不给 `CellSelection` 写特例**、**不碰源码模式**；`.use()` 排在 `配对处理` **后面**、`indent` **前面**（`docs/05` §4.21）。⚠️ **58 条**在 `tests/table-tab.test.ts` |
-| `editor/empty-paragraph.ts` | **空段落不写 `<br />`**（2026-09-26 第二轮，用户：「enter 默认是真 enter 而非 `<br>`」）。上游 `paragraph` 的序列化会给"不是最后一个顶层节点"的空段落塞一个 `{type:"html", value:"<br />"}` 占位（`preset-commonmark/lib/index.js:490`），本文件把空段落整条跳过。⚠️ **实测口径**（2026-09-26）：本仓默认配置下 `shouldPreserveEmptyLine(ctx)` 取到的是**假**，所以**上游本来也不写**——补丁的作用是把这个行为**钉死成确定的**（不随上游配置漂移），不是"修一个正在发生的错"。⚠️⚠️ **它必须和同文件的 `文档别导出空根` 成对**：只留前者时，整篇都是空段落的文档会产出**零个 mdast 节点**，root 的 `children` 是 `undefined`，序列化在 `mdast-util-to-markdown` 的 root handler 当场抛 `undefined is not an object (evaluating 'node.children.some')`。**症状不是报错弹窗，是分屏右栏永远停在「正在准备编辑器…」**（2026-09-26 全新 dist 下 A/B 复现：只留补丁 → 右栏卡住；两条都留 → 正常）。⚠️ 空文档存盘实测是 **0 字节**，不是 `<br />`——占位那条只保证"不崩"，不往用户文件里写东西 |
-| `editor/table-width.ts` | **表格列宽：把用户拖出来的宽度记住**（2026-09-26，用户：「允许拖动改变大小（**咋存你来定**）」）。⚠️ 缺的是**三样**不是一样：「能拖」要两半（列上那条可拖的分隔线 ＋ 拖完把宽度写进节点属性），「拖完记得住」是第三半——**落盘那一半在 Rust**（`commands/table_width.rs`，侧车文件 `~/.local/share/nota/table-widths.toml`），本文件只管前端这一侧 |
-| `editor/diagram-view.ts` | **图表块（` ```mermaid `）的 NodeView**：把源码画成图，并且还能改源码。⚠️ 上游 `@milkdown/plugin-diagram` **从不调 `mermaid.render`**（它的 `toDOM` 只有一句 `dom.textContent = code`），所以"画出来"这件事一直是空的；`diagram` 是 `atom: true`、源码在 `attrs.value` 里（不在子节点里），所以只能由 NodeView 自己摆一个输入控件再写回属性。⚠️ **文档里的真相永远是源码**，渲染失败**绝不回写文档**（那一步一次 `dispatch` 都没有）。⚠️ 渲染出来的 `<svg>` 宽度上限按 `viewBox` 的自然宽取 `min(100%, 自然宽)`——**别改回 `100%`**，那会让小图被容器宽度等比放大（2026-09-26 实测）。⚠️ mermaid 是 `package.json` 里的**显式依赖**（别改成嵌套路径 import，那两条路都被 `exports` 堵死） |
-| `editor/math-view.ts` | **公式就地编辑与 KaTeX 预览**：`math_inline` 源码在内容里，`math_block` 在 `attrs.value` 里，写错会静默丢字。行内源码框使用 `max-content` 隐藏尺子，并在字体加载完成后重测，防止 Typora 主题字体切换留下大段假空白；预览和实际渲染共用按需加载的 KaTeX。只读实例只画上游 `toDOM` |
-| `editor/review.ts` | **就地改动预览的公共那一半**（2026-09-26）：顶上那条细条的 DOM、两种看法（`diff` / `result`）、装饰用的那几个类名，以及**切换看法**（`设看法` / `摘看法`）。⚠️ **换看法只换编辑器根节点上一个 class**，不重算、不派事务——重算的话滚动位置与光标会跳。⚠️ `result` 看法下把被删的 `display:none` 掉，**藏起来的是装饰**：文档一个字没动、撤销栈里也没有这一段。⚠️ 它不知道"改动从哪来"，两种编辑器各有一份适配层（`review-prose.ts` / `review-source.ts`） |
-| `editor/review-prose.ts` | **所见即所得那一套适配**：按**顶层块**序列化成 markdown 逐块比对，删除 = 行内装饰、新增 = 块级 widget。⚠️ 比的是序列化之后的文本，不是 PM 节点——节点比对认不出"改了一个字"和"换了一个节点"的差别 |
-| `editor/review-source.ts` | **源码模式（CodeMirror）那一套适配**：按**行**比对。⚠️ `增件` 必须带 `eq`（重算装饰时不重建 DOM，不然每敲一下光标都跳），⚠️ 新增挂在"**最近的前一个 同/删**那一行的行尾"（挂在别处会在折叠/换行时跑到别段去） |
-| `ui/useCommandTable.ts` | **菜单命令表的唯一装配点**（2026-09-26 从 `App.tsx` 搬出）：把那一大坨回调收成一张 `id → 动作` 的表。⚠️ 它同时是**两条路的判据**——`ui/useMenus.ts` 的"灰不灰"由这张表推出来，同一个 hook 里那个 keydown 第一句也是查它。⚠️ 于是 `预览中` 这一个开关**返回空表**就同时挡住菜单与快捷键；返回空表而**不是**"每个值换成空函数"——空函数会让条目亮着、点了没反应，那是界面撒谎。⚠️ **2026-10-04（右键菜单那批）多接了三格**：`edit.delete`（＝`run("insertText", { text: "" })`，**和「剪切」差的就是那一步写剪贴板**）与「复制为」那栏里先前**空着**的两格 `edit.copyAsPlain` / `edit.copyAsHtml`。⚠️ 后两格不补的话，Typora 那份形状的「复制为…」子菜单会**两条永远灰着**（父项的灰法正是"子项全灰才灰"），而用户的评价会是"灰条看着像坏了"。⚠️ **输入框那一档不走这张表**：它的六条各有一份作用在 DOM 输入框上的实现，住在 `ui/ContextMenu.tsx` 的 `落到输入框` 里（`edit.select` 就是**只在那边**有实现的那一条）。📌 **2026-10-07（「选择」那批）又多接七格**：`edit.pastePlain`（与 `edit.paste` **同一个处理器**——Nota 的粘贴本来就只进纯文本）＋ 选择四条 `edit.selectLine` / `edit.selectWord` / `edit.selectSentence` / `edit.deleteWord` ＋ `edit.moveLineUp` / `edit.moveLineDown`。⚠️ **`edit.select` 这个 id 故意不在表里**：它 2026-10-07 起是「选择 ▸」那个**子菜单的父项**，父项不该有动作（有动作的话它自己就点得动、子菜单反而像摆设）——"父项不进表"正是"子项全灰才灰"那套灰法的前提 |
-| `ui/ReviewBar.tsx` | **就地预览顶上那条细条**（2026-09-26）：标题、两种看法的开关、插件的按钮（接受 / 放弃）、Esc 提示。⚠️ 高度**不写死**（`min-height` + 允许换行）：措辞来自插件，写死会在英文串变长时把按钮挤出去 |
-| `lua/api/review.rs` | **`nota.ui.review_diff`**（2026-09-26，181 行）：`nota.ui` 那条"把一个面板摊到编辑区"（`nota.ui.review`）的**就地版**——插件给的是**整篇目标文本**（不是补丁、不是 hunk），宿主自己算出改了什么。⚠️ 传 `nil` 清除。⚠️ 宿主**只画不改**：文档在预览期间是只读的，接受那一下才是一笔真编辑（`docs/11` `docs/13`） |
-| `editor/math-delim.ts` | **行内公式用几个 `$`，存盘照原样写回去**（2026-09-27 新建，**419 行**，用户拍「保留 `$$`」；⚠️ **2026-10-04 长出第四格**）：`$$x$$` 存盘**还是 `$$x$$`**（前一天会变成 `$x$`）。⭐ **三处缺一不可、缺哪一处都静默失效**（不报错、屏幕上一点变化都看不出来）：① 解析那趟一个 `$remark` 标注插件，照**源码偏移**数出开头几个 `$` 写进 mdast 的 `data`；② `math_inline` 的规格**多一个 `dollars` 属性**（默认 1）＋ 两个 `runner` 搬它；③ 序列化按这个数**选一条上游现成的处理器**（`mathToMarkdown({singleDollarTextMath:false})`，不自己拼 `"'$'".repeat(n)`——那会绕开上游首尾补空格与"值里的换行防块级陷阱"两段）。⚠️⚠️ **⛔ 别拿 `mathInlineSchema.extendSchema` 改那份规格**：`@milkdown/plugin-math@7.5.9` 自己嵌了一份 `@milkdown/utils@7.5.9`，那份 `extendSchema` 是**另一套实现**——它把节点**挪到 `nodesCtx` 末尾**（顶层 7.22.1 那份才是 `upsertById` 就地替换），而两份写的是**同一个 `nodesCtx`**；所以这里用顶层 `$nodeSchema` 重建（顺带多个好处：它带 `.key`，测试取得出来）。⚠️ 代价如实记：`math_inline` 从此有 `attrs`，`tests/math-view.test.ts` 里"连 attrs 都没有"那条量的是**上游那份规格**。⚠️ 打字那条路**不走 ①**（`math-input.ts` 当场盖章），**粘贴/拖拽**拿不到这个数、落到默认 1（有意）。⚠️ **2026-10-04 的第四格 `不转义美元`**（BUG-59，用户同日第二次报「还是会自动插入斜杠」）：上游 `mdast-util-math` 的 unsafe 表给**正文里每一颗 `$`** 都加了一颗反斜杠（`价格 100$ 起` ⇒ `价格 100\$ 起`），这一层放回来——判据是"**这一段的 `$` 全在这一颗文本节点里**"（①②见文件头；⚠️ 算不清的一律不动，如 `公式 $x$ 和 100$`）。⚠️ 判据 `tests/math-delim.test.ts` **47 条**（⚠️ **2026-10-04 当天还长过第五格 `收严公式`（"值紧挨着空格的 `$…$` 还原成正文"）——加了当天就整条撤回了**：用户下午在分屏预览里发现它把 `$ \LaTeX $` 也判成普通文字，拍了「整条撤回」；那 131 行与 `create.ts` 的 `.use()` 全删，行为回到上游默认（**任何 `$…$` 都是公式**），代价见 `docs/07` BUG-62 与 `docs/05` §4.17 ⑦），建不了 `Editor` 那一段（`$remark` 有没有挂上 `remarkCtx`）**没验**、如实写在文件头 |
-| `editor/math-currency.ts` | **`$` 当钱写的时候不算公式**（2026-10-04 新建，**283 行**，`docs/07` 第 54 项）：`价格 $100 和 $200 元` 原来会在屏幕上凭空冒出一块公式（⚠️ **存盘字节原样**，只是看着不对）。⭐ **它包的是分词器上那条 `mathText`，不是 mdast 那一层**——mdast 那层只有"上游已经配好的那一对"，算不出"配错了该退到哪里"，硬凑的典型后果是把 `50，公式 ` 吃进公式里；包在 tokenizer 上**退回正文 = 把这一对否掉**，剩下交给 micromark 自己重扫。⚠️ **口径不是 backlog 上原记的那句**「`$` 后紧跟数字就不认」（那句话单独用会误伤真公式：`$2+2$ 和 $x$` ⇒ 第一颗被拒之后**它右边那颗顶上当开定界符**，`2+2$ 和 ` 整段成了公式），现在是**门槛 ＋ Pandoc 第 2、3 条**：开头**只有一颗** `$` 且右边**紧跟数字**才进门，过门之后要「闭的右边紧跟数字」**或**「闭的左边是空白」才判成正文。⚠️ **`$ \LaTeX $` 连门都进不来 ⇒ 照旧渲染**（第五格那次整条撤回的口径**一个字节没被碰**）。⚠️ **挂法三件事少一件就静默失效**：现场取上游那条 `mathText`（不自己 import `micromark-extension-math` 造）／包一层（影子 `effects` **O(1)** 记开头几颗 `$`、第一颗非 `$`、最后两颗）／把上游那条**按名字停掉**（`disable: {null: ["mathText"]}`，⚠️ 代价是我们那条不能叫这个名字）。⚠️ **必须排在 `remark-math` 后面**，这条约束测试量得到。判据 `tests/math-currency.test.ts` **23 条** |
-| `editor/syntax-escape.ts` | **行首 `[TOC]` / `[!NOTE]` 这类语法别被加反斜杠**（2026-10-04 新建，约 70 行，`docs/07` 第 56 项那一族的收尾）：上游 unsafe 表里 `{character: '[', inConstruct: 'phrasing'}` 让**文本节点里每一颗 `[` 都转义**，于是 `[TOC]` 存成 `\[TOC]`、`> [!NOTE]` 存成 `> \[!NOTE]`。⭐ **判据的立足点是「解析期就配过对了」**：文档里有 `[TOC]: http://…` 时，正文那颗 `[TOC]` **就是链接**、压根走不到文本处理器，所以「看得见这个文本节点」本身就证明了没有配对定义。⚠️ **只认行首 ＋ 只认名字在册的**（`TOC`/`toc` ＋ 五种 `[!TYPE]`），不做大赦。⚠️ 代价：特意写的 `\[TOC]` 会变回 `[TOC]`（知情接受，与 `\==重点==` 同性质）。它是那种链的**第七层**。判据 `tests/syntax-escape.test.ts` **13 条** |
-| `editor/math-input.ts` | **行内公式的打字规则**（2026-09-26，用户要「`$$…$$` 不必独占一行」）：敲 `$$x$$` **或** `$x$` 当场变成一颗 `math_inline`。⚠️ **换掉了上游哪一条**：`@milkdown/plugin-math` 只有 `mathInlineInputRule`（正则 `/(?:\$)([^$]+)(?:\$)$/`），它**认不出 `$$…$$`**——用户敲到 `A$$bb$` 那一下尾巴上的 `$bb$` 就够匹配了，当场变出「文本 `A$` ＋ 公式 `bb`」，等他补最后一个 `$` 已经是**另一段文字**了；**"行内 `$$…$$` 打不出来"的根因就在这儿，跟解析器无关**（解析器本来就认）。所以 `create.ts` 按引用把它 `.filter()` 掉（与标题那条 `wrapInHeadingInputRule` 同一个手法），换成这里两条。⚠️ `$…$` 那条多一道**守卫**：前面紧挨着**还是 `$`** 时 `null` 让开（`null` 在 `prosemirror-inputrules` 里是"这条不接、试下一条"），等 `$$` 齐了由上一条接管。⚠️ 口径是"**解析器怎么读，我就怎么转**"（`table-input.ts` 那条规矩）：我转出来的东西，存盘再打开必须还是它；两行**有意留着的 ✘**（`$$a$b$$`、`A$$$ab$$`）与"输入规则只看光标前 500 字符、解析器看整行"这条差别都在文件头。⚠️ **2026-09-27 起 `$$x$$` 存盘还是 `$$x$$`**（前一天这里写的是"存的不是打的"，用户拍了「保留」）：机制**不在这里、在 `editor/math-delim.ts`**，本文件只是**当场盖章**——两条输入规则各多带一个 `dollars` 参数，敲了几个 `$` 自己知道。⚠️ 判据 `tests/math-input.test.ts` **28 条**（含"敲的就是存的"逐字节往返），那条**有意留着的 ✘**（`$$a$b$$`）仍然没变。⚠️ **2026-10-04 同批还有两件**：① 加过第二道守卫（"值紧挨着空白不算公式"）后又**当天撤回**（与 `math-delim.ts` 那第五格一起——两侧一把尺子，只撤一边就成了"打字不转、打开又渲染"），**现在只剩一道守卫**；② 上游的 `mathBlockInputRule`（`/^\$\$\s$/`，「`$$` ＋一颗空格」就凭空建一块空公式）被摘掉，换成 `公式块回车`（回车才建块） |
-| `ui/EditorArea.tsx` | **编辑区里画什么**（2026-09-27 从 `App.tsx` 搬出，那边 995 行、硬上限 1000）：`<main class="app-main">` 里那一整棵——外部改动提示条 · 查找替换条 · 格式化工具栏 · 改动预览细条 · **正文**（没文档时是主页）· 插件面板 · 外部改动对照。判据是老规矩（见 `App.tsx` 文件头）：这一块自己有一份完整的理由可写 |
-| `ui/useStartup.ts` | **启动那一枪**（2026-09-26 从 `App.tsx` 搬出，那边当时 1049 行）：把设置、工作区、主题、开机问题、命令行文件、界面语言一次拉齐，然后握手。搬的时候一行逻辑没改，只是把外面那几个 `setState` 变成入参。⚠️ **2026-09-27 起它读取设置里的「启动时」那一档并当作入参递给 `接上会话`**（三档：`new-file` 什么都不恢复 ／ `last-file` 恢复标签 ／ `last-session` 连那个文件夹一起）——在那之前那三档是**摆设**（没有任何一处读它，而这一段无条件恢复一切＝永远按第三档办），所以**默认行为变了**：从没动过这一项的人，启动时从"什么都有"变成"一张白纸"（那正是第一档的词义，也是 `StartupAction::default()`） |
-| `ui/useAppEvents.ts` | 应用级的两条 effect（2026-09-26 从 `App.tsx` 搬出）：**宿主推来的事件** ＋ **活动文档变了要告诉后端**。⚠️ 不并进 `ui/usePlugins.ts`：那个管的是插件三样（清单/面板/菜单项），这两条与插件无关 |
-| `ui/useWindowControls.ts` | **窗口自身的三件事**（2026-09-27）：置顶 ＋ 开发者工具 ＋ **开新窗口**。⚠️ 放一起是因为它们都**只动窗口**——不碰文档、也不碰界面（缩放动的是 webview 里的内容，全屏/专注动的是外壳＋窗口尺寸，那两条另在 `ui/useZoom.ts` / `ui/useImmersive.ts`）。⚠️ 置顶那个勾的判据**必须从窗口读回来**（`isAlwaysOnTop()`），不能自己记。⚠️ **第三件（开新窗口）与前两件性质不同，别照着前两件的口径改**：前两件动的是**这一个**窗口，第三件是**再起一份进程**，所以它**没有可读回来的状态**（"现在有几个窗口"没人记），也不需要同步——它是个一次性的动作。⚠️ 传的是**路径不是文档 id**（新窗口是另一个进程，它那边根本没有这个 id）。⚠️ 它和开发者工具那条**都弹 toast**（都是用户点出来的动作），只有"读窗口对齐"那一路失败是安静的（见文件头） |
-| `ui/useWindowRegistry.ts` | Window polling, picker-title state, hold-to-show ID overlay, target transfer handling, and target acknowledgement. |
-| `ui/useAppWindowRegistry.ts` | App-level adapter that joins the registry to document open/create, title prefixes, and the focus-after-transfer setting. |
-| `ui/WindowPickerDialog.tsx` | Fixed-width window-ID prompt. Exact-width valid input auto-submits; Esc and invalid input keep the source tab intact. |
-| `ui/WindowIdOverlay.tsx` | Semi-transparent large window ID shown only while `Ctrl+Alt+I` is held. |
-| `ui/window-picker.ts` | Pure ID width, padding, and validation rules shared by the picker and tests. |
-| `ui/useSpellcheck.ts` | **把「拼写检查」那两格接到引擎上**（2026-09-27 建，**2026-10-11 大改**）：从前它拨的是 **WebKitGTK 自己的**拼写检查（跨一次 IPC，`commands/webview.rs`），今天波浪线由我们自己画（`editor/spell-check.ts`），所以这一份只做三件事——① **把内核那条路关掉**（`spellcheckSet(false)`，恒为 `false`；不关的话内核会自己再画一套原生波浪线叠上来）＋ 顺手关掉它的平滑滚动；② 把开关拨给我们自己那条插件（`设拼写开关`）；③ 问 `nota_spell_dictionaries` **这台机器上有没有这一门词典**，少了谁就弹一句（`Join` 那条：**只有用户真勾了语言才逐门报**，"跟随系统"那一档只在**一本词典都没有**时说话——否则中文环境的机器每次启动都弹"没有 zh_CN 的词典"） |
-| `ui/useCodeBlockPrefs.ts` | 代码块那四条外观偏好**落到 `<html>` 的 `data-*` 上**（`data-code-line-numbers` / `data-code-wrap` / `data-code-toolbar` / `data-code-lang-picker`），CSS 那边按属性选。⚠️ 走 `<html>` 而不是组件 props：那四条要能盖到**所有**代码块（包括预览那一半），属性和 `ui_style` / `ui_mode` 是同一种"全局档位" |
-| `ui/useFileDrop.ts` | **拖进窗口的东西该干什么**（2026-09-27）：它是窗口级拖放的**唯一订阅者**——分类在这里，动作派出去。⚠️ 图片那条路原先自己订过一次 `onDragDropEvent`（见 `ui/useImageInsert.ts`），**两条订阅同时在跑会把一张图插两次**，所以收拢成本文件 |
-| `ui/useExternalChanges.ts` | **外部改动**：别的程序动了我们打开着的那份文件（2026-09-26，用户「加入对本地其他程序修改后提示支持…**此乃非插件**」）：提示条那一份状态 ＋ **忽略 / 重新载入 / 查看修改**三条动作。⚠️ 一条改动**一分为二**：发现（后端 `watch.rs` 发 `nota:file-changed`）与"怎么办"（这里），本文件只负责后者 |
-| `ui/ExternalChangeBar.tsx` | **外部改动提示条**（2026-09-26）：编辑区顶上那一条，三颗按钮（忽略 / 重新载入 / 查看修改）。⚠️ **是"条"不是 toast**：外面有个程序在动我正编辑的文件，这件事得**一直摆在那儿**直到用户作出选择，飘一下就没的提示条会把"文件被别的程序改了"这件事漏过去 |
-| `ui/ExternalDiffPane.tsx` | **磁盘上的改动**（2026-09-26）：提示条上点「查看修改」之后在编辑区里摊开的那份对照。⚠️ 摊开的**位置不是新挑的**——用户 2026-09-25 已经把"diff 要摊在哪儿"说过：就摊在编辑区域（`.review-pane`，样式在 `styles/review.css`），与插件面板同一块地方 |
-| `ui/EditorPane.tsx` | 编辑器挂载点，**按 `mode` 分派**三种模式（`wysiwyg` → Milkdown / `source` → CodeMirror / `split` → 左源码 + 右只读预览）。**那个 div 从不被 React 重新渲染**（Milkdown 拥有那棵 DOM）。⚠️ 它把**十二条**句柄（`EditorPaneHandle`）**原样转发**给当前那个 handle——⚠️ `EditorHandle` / `SourceHandle` 是**十六条**，差的四条（`focusAtStart` / `setWritingModes` / `setReview` / `destroy`）是接线与生命周期的事，由它自己在对的时机调、不外发；少一条就是"切到源码模式后查找条整个失灵"。⚠️ 切模式是**换实例**，不是复用——两家的撤销栈不通用。⚠️ effect 依赖是 `[doc.id, mode, strict, physics]`，**两个写作开关刻意不在里面**（走 `setWritingModes`，拨开关不重建实例）。⚠️ **2026-10-07 拆过（第 89 项）：1171 → 800 行**，搬出去六份（下面那六行）——它们各自都是一件事，不是一个文件碎成六块；**边界是"搬出去的那几件事别再搬回来"**，文件头那张表列着谁在哪儿 |
-| `ui/FrontMatterBanner.tsx` | 正文上方那条 **YAML front matter 横幅**（2026-10-04 第 64 项；2026-10-07 从 `ui/EditorPane.tsx` 拆出，第 89 项）：读、改、插入、删除开头那段 YAML，加**两击确认**。⚠️ 三件分工：这个组件管"横幅长什么样、输入框里**正在打**的那几个字、两击确认"，`EditorPane` 管"编辑器实例 ＋ 编辑器最后报来的那份文本"，`editor/front-matter.ts` 管切 / 拼 / 判据 / 模板（**纯函数，唯一判据**）。⚠️ **改的路只有一条**：`runCommand("frontMatter", …)`——那段文本归编辑器那一侧持有（`create.ts` 里那个 `前置块` 变量），这里**绝不自己拼一份存起来**，两处各存一份的话插件整篇替换文本之后横幅里那份就成了旧的。⚠️ 文本由外面**推**进来（`同步(markdown)`，走 `useImperativeHandle`），**不进 React 状态**：每敲一下重渲染整棵树、而且"编辑器报来的"与"React 记着的"两份会互相追。⚠️⚠️ **切源码模式时它照样挂着**（那一档只让它渲染 `null`）：状态得一直跟着，不然切回来时横幅里是切走那一刻的旧内容；**不要**改成"源码模式下不渲染这个组件"。⚠️ 输入框是**受控**的但**不跟着文档走**——无脑覆盖会把用户正打的字顶掉（回声识别靠 `前置块基准Ref`）。⚠️ 「删除」是两击确认（`删除确认毫秒` 4 秒）不是弹窗，理由在那个常量上面 |
-| `ui/pane-editors.ts` | **编辑区那三个实例各传哪些选项**（2026-10-07 从 `ui/EditorPane.tsx` 拆出，第 89 项）：`建所见即所得编辑器` / `建源码编辑器` / `建预览编辑器`。搬出来是因为它们原来是三段各二十来行、夹着大段理由的实参列表，把那个 effect 淹掉了——而"哪一侧传什么"本身是**成体系**的一件事。⚠️ **三种口径**：`physics` / `inlineMarks` / `标点` / `自动更正` / `emoji` / `智能符号` **只有所见即所得那一份传**（源码模式是 CodeMirror，没有这些东西）；预览那一份要跟主编辑器**逐项一致**（`inlineMarks` / `标点` 不一样的话，`==甲==` 在左边高亮、右边光秃秃，用户会以为分屏坏了），但**不传 `自动更正`**（只读，挂上去是纯死代码）、**不传 `emoji` / `智能符号`**（只读里弹补全面板只是噪声）。⚠️ **造了不负责拆**：三个函数都只是 `createEditor` / `createSourceEditor` 的装配，`destroy()` 由调用方按它自己那两道闸管 |
-| `ui/useEditorSettings.ts` | **设置 → 编辑器开关**那一步（2026-10-07 从 `ui/EditorPane.tsx` 拆出，第 89 项）：`use编辑器开关(markdown)` 交出 `{行内扩展, 标点, 自动更正}`。⚠️ 依赖是**逐字段**的、**不是整个 `markdown` 对象**——挂整个对象的话改任何一个设置都会重建编辑器，撤销栈与光标一起没。⚠️ 六个标点字段**一律重建**：热更新那几条会静默不生效（"改了设置没反应"）。⚠️ `undefined` 落回出厂值，其中 `自动更正 = true` |
-| `ui/useEditorHandle.ts` | **十三条句柄命令的转发**（2026-10-07 从 `ui/EditorPane.tsx` 拆出，第 89 项）：`use编辑器句柄(…)` 用 `useImperativeHandle` 把 `EditorPaneHandle` 接到当前那个 handle 上。⚠️ 每一条都是 `?.` ＋ 安全默认值，**它绝不抛**——建 / 拆实例的那一瞬间正好落进来一条命令，抛出去会把整棵 React 树带走。⚠️ `setMarkdown` 那一格例外：它还要更新"编辑器最后报来的文本"（`最新文本Ref`）并推给预览句柄。⚠️ 与 `ui/EditorPane.tsx` 是**类型上的环**（`import type` 会被擦掉，运行期没有环） |
-| `ui/useCursorSnapshot.ts` | **选区快照 → 后端镜像**（2026-10-04 第 14 项；2026-10-07 从 `ui/EditorPane.tsx` 拆出，第 89 项）：编辑器每报一份选区，**压一道 250ms** 再推 `api.doc.cursor(doc.id, 快照)` 给插件看。⚠️ 编辑器那一侧去重的键是**"快照变没变"**，这里的键是**"多久没推过了"**——只挪光标、不改字的那条路不触发 `sync`，所以"光标停在哪儿"完全靠这一条。⚠️ 推失败**只吞掉**、不弹提示条：它只是给插件看的一条旁路，下一笔事务自愈，为它弹一条提示是拿噪声换噪声。⚠️ **清定时器由外面调**（清理函数里调 `清快照定时`）：挂载那个大 effect 一拆，那一笔会打在**已经换掉的那份文档**的 id 上——改的是另一份文档的选区，界面上完全看不出来 |
-| `ui/table-widths.ts` | **表格列宽侧车的读写**（2026-10-07 从 `ui/EditorPane.tsx` 拆出，第 89 项）：`读表格列宽(路径)` / `存表格列宽(路径, 表)`。⚠️ 它管"哪一份文档、什么时候读、什么时候写"，**怎么算列宽、怎么认指纹**在 `editor/table-width.ts`。⚠️⚠️ **没有 `doc.path` 就一个字都不碰**（读不到、也写不了）——这也是**为什么不把路径传进 `createEditor`**："存到哪儿"是调用方的事，编辑器只该报"哪张表拖成了什么样"。⚠️ 拖了列宽但还没落盘的文档**不会**在保存之后补记（那一笔当场丢掉，是有意的：记一份还不存在的路径，等它改名之后就是一条永远对不上的垃圾）。⚠️ **两个方向都不许拦路**：读失败按自动排版显示（侧车是排版偏好，不该拦住"打开文档"）；写失败只 warn（用户已经看到表被拖宽了，弹提示也换不回什么） |
-| `ui/FormatBar.tsx` | 格式工具栏（2026-09-24）：一排按钮，高亮读 `commandState`、点击走 `runCommand`。⚠️ **没有自己的状态**；⚠️ 快捷键提示**从菜单表派生**，不手写第二份；⚠️ 每颗按钮 `onMouseDown` 拦默认行为（不拦的话按钮会先把选区抢走，命令跑在一个已经塌掉的光标上）。**图标与文字字形混排**：Folio 那套里没有 H1/引用/任务列表的图标，那几颗就留文字（`H1`、`引`、`任`），理由写在 `按钮.icon` 那段注释里。⚠️ **2026-10-04 右端补了一颗 ×**（第 49 项）：`.format-bar-close`，`title`/`aria-label` 都是「收起格式工具栏」，回调是本组件的 `onHide` prop——⚠️ **它是这一排里唯一不走 `runCommand` 的**（不是编辑命令，白名单里没有它），落点是 `ui/useChromeVisibility.ts` 的 `收起工具栏`＝`setChrome({ toolbar: "never" })`，**与菜单 `view.toolbarNever` 一个字不差**。⚠️ 它在 `.format-bar` **里面** ＋ `position: sticky`（这一条 `overflow-x: auto`，跟着滚就白加了）。⚠️ **2026-10-04 又导出四样给右键菜单**（`按钮表` / `按钮亮着` / `字形类` / `提示`）：图标行的那三排与工具栏是**同一批 id、同一个亮不亮的判据**。⚠️ 用法约定写在 `按钮表` 上面那段——**只准用它取 `icon`、`按钮亮着`、`字形类`、`提示`，不许取 `cmd`**：`cmd` 是"过 `onCommand` 直接喂 `EditorCommand`"那条路，和"按 id 走 `menuHandlers`"混进一个文件就迟早有人接错，而接错的症状是"点了没反应"或"点错了命令"。⚠️ `TITLES` 与 `提示` 的名字**故意留在组件体里**（那是 i18n 检查器认字面量的立足点） |
-| `ui/Icon.tsx` | **界面图标**（2026-09-24）：把 `src/assets/icons/` 里那 96 个 Folio 图标（BSD-2，来路见 `THIRD-PARTY.md` §5）当**遮罩**用——`?url` 只把网址带进 JS，形状由 `mask-image` 取，颜色由 `.icon` 的 `currentColor` 给，所以文件里写死的 `fill="#2e3436"` 不参与渲染。⚠️ 名字表**手写**（`import.meta.glob` 的键是 `string`，写错一个字母类型不报），加载时**逐个核对文件在不在**，缺了就 `console.error` + 画虚线框。⚠️ 调用处写错名字是**编译期**红。只搬"动作"图标，**不搬 Folio 的应用图标**。⚠️ **自画的那几枚**（`nota-quote` / `nota-task` / `nota-markdown-symbolic` / `nota-doc-theme-symbolic` / `nota-keys-symbolic` / **`nota-sidebar-toggle-symbolic` ＋ `nota-sidebar-collapse-symbolic`**，最后两枚 2026-09-30 照 Typora 画：空心圆与左向尖括号）走同一条路，不受"Folio 那 96 枚一个字节都不许改"的约束（`THIRD-PARTY.md` §5） |
-| `ui/FindBar.tsx` | 查找与替换条（2026-09-24）。⚠️ 它是**显示端 + 输入端**，命中数一律是编辑器报上来的。⚠️ Esc 收在**条子自己身上**且带 `isComposing` 判据；查询上报走 **ref 读**（`onQuery` 每次渲染都是新身份，进依赖会让光标乱跳） |
-| `editor/key-conflicts.ts` | **CodeMirror 默认键位里与本应用撞车的那几条**（2026-10-04 从 `source.ts` 拆出，**101 行**，BUG-58）：`撞车键位`（摘掉：`Mod-/` `Mod-i` `Shift-Mod-k` `Mod-z` `Mod-y` **`Mod-u`** **`Alt-ArrowUp`** **`Alt-ArrowDown`**）。⭐ **拆出来是为了能被测试读到**：名单原来只有人眼在看，于是漏了 `Mod-u`（CodeMirror 的 `undoSelection` **带 `preventDefault: true`**，`ui/useMenus.ts` 那句 `if (e.defaultPrevented) return;` 把它放行 ⇒ **什么都不发生**，与「功能没做」长得一模一样，躲了四个月）。⚠️ **2026-10-07 那份 `故意不摘` 名单整条删了**（原来只有它装着 `Alt-ArrowUp` / `Alt-ArrowDown`，理由是"应用侧那两条 handler 还没写"）：这一批**真把 `Alt+↑/↓` 接上了**（`editor/move-block.ts`），豁免的理由消失，两条并进 `撞车键位` 这一份——⚠️ 摘的理由是**键位只能有一个主人**（两条实现各自的边界判据哪天差一点，症状就是"菜单与键上结果不同"），不是"只跑一遍"（那段解释写在文件头）。⚠️ 它**纯**（不 import CodeMirror、不 import DOM），`tests/key-conflicts.test.ts` **19 条**（2026-10-07 从 21 降下来，少的就是豁免那两条的用例）拿 CodeMirror 自己那两张表反过来查它 |
-| `ui/useFindBar.ts` | **查找条的状态与四个动作**（2026-09-27 从 `App.tsx` 搬出，那边顶着 1000 行硬线）：条子开着没有（`查找开着`）、编辑器报上来的命中情况、关 / 开·关 / 替换当前 / 全部替换。⚠️ 管**状态**不管长相（条子长什么样在 `ui/FindBar.tsx`），也**不管怎么找**（逐节点问／整篇字符串各问各的，在 `editor/find.ts` 与 `editor/source.ts` 两条通路里）；⚠️ 命中数**不在这里算** |
-| `ui/PromptDialog.tsx` | 自绘单行输入框（2026-09-24），替掉 `window.prompt`——**它在 WebKitGTK 上默认被关掉、调用静默返回 `null`** |
-| `ui/ImageDialog.tsx` | **「插入图像」那个框**（2026-09-26）：两页（本地文件 / 网络地址）＋ 替代文字，本地那页带「浏览…」（走 `plugin-dialog` 的 `open`，认得的八个后缀与 `image.rs` 同一套）。⚠️ **它不自己算路径**："复制到哪儿、写成哪条地址"全在宿主（`src-tauri/src/image.rs`，那边 26 条用例）；在这儿再算一遍 = 两份实现，迟早不一样。⚠️ 所以框里那句说明**只说"看设置"**，不预告落点；真落了盘由宿主回事实、界面报一句（`ui/useImageInsert.ts`）。⚠️ 三条行为与另两个框一致：Esc 取消、点遮罩取消、主字段为空 = 取消。⚠️ 2026-09-26 第二批加了一条**「插入后上传到上传服务器」勾选框**，它有**三种样子、分别对应三种事实**（都由宿主算好带进来，框里不自己判断）：① `会自动上传` → 不画勾选框、改画一句**说明**（这份文档的 YAML 里写着 `nota-auto-upload`，插入后会直接传上去，正文里写传回来的网址，并附一句「去掉这个行为就把 YAML 里那一行删掉」）；② `能上传` → 画勾选框，**默认不勾**；③ 两个都不成立 → 整行不出现。⚠️ 它自己**不记**「要不要上传」这件事——勾选只进这一次请求的参数 |
-| `ui/EmojiDialog.tsx` | **「插入 Emoji」那个挑选框**（2026-09-27 新建）：搜索框 ＋ 11 个分类按钮 ＋ 网格，回车选第一条。⚠️ **搜索做的是子串 `includes`，与补全面板的"只做前缀匹配"故意不一致**——面板是"边打边筛"（前缀才不至于跳出用户没打的词），这个框是"我知道我要找什么"（理由写在文件头）。⚠️ 它**只回一个字符**（`askEmoji()` 不带请求参数，`answerEmoji(字符)` 直接兑现），**不碰文档**：插进哪儿由 `App.tsx` 的 `插入Emoji` 交给 `run("insertText", …)`。⚠️ 11 个分类名走 `分类文案(一类)` 那个 `switch` 写成**字面量 `t("表情")`**——`tools/i18n-check.sh` 只认字面量，写 `t(变量)` 会让这 11 条英文被算成"废键"（FAIL） |
-| `ui/AppDialogs.tsx` | **浮层那一族的总装**：pandoc 面板、确认 / 输入 / 插图 / 链接 / Emoji 对话框、关于窗、首次引导和专注总结。⚠️ **这里的顺序就是层叠顺序**。它只收**一个 `对话框` 对象**，不把十来个函数摊成 props——漏一个就有一个框**永远关不掉** |
-| `ui/FirstRunGuide.tsx` | **首次启动引导**（2026-11-14）：窗口揭幕后显示，固定三页，内容是功能概览、简短须知、许可证与第三方声明。许可证复用 `LicenseDialog`；跳过、关闭或完成会写入 `general.onboarding_seen`。不做自动轮播、联网内容或强制停留 |
-| `ui/settings/panes/ImageUploadGroup.tsx` | **「上传服务器」那一组**（住在「图像」页里，2026-09-26 加）：`api.image.uploadGet` / `uploadSet`，**每改一项立刻写一次盘**（与其余七页同一条口径：没有「确定」，一个「取消」撤销不了它）。⚠️ **它不走 `paneWriter`，是全仓唯一一组这样做的**：它的值**不在 `settings.toml` 里**，而在 `~/.config/nota/image-upload.toml`（0600，装着令牌），所以这一组**自己读、自己写、自己存一份 state**。⚠️ 于是「恢复出厂默认」那把换整份 `Settings` 的按钮**不碰这一组**，这是**故意的**——把用户的令牌一起清掉是那种「点了一下才发现」的损失。⚠️ 写失败**退回上一个值**并说一句，否则屏幕上是个从没落过盘的值，用户下次打开发现改动没了、还不知道是什么时候没的 |
-| `ui/useMenus.ts` | **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出）：三条判据（有没有处理函数 / `needsDoc` / `光标条件`）→ `disabledCommands` / `menuChecks` / `usingNativeMenu`。⚠️ **"能不能点"只有这一处真相源**，它派生出自绘菜单、原生菜单、键盘三个消费者——各写一份的症状是**"菜单灰着、快捷键却照跑"**。⚠️ **键盘那个消费者有两条路，都要喂同一份判据**：一条是 `window` 上的 `keydown`（正常派发到 DOM 的那些键位），另一条是宿主发回来的 `nota:format-key`（2026-09-28 加，**只有 `Ctrl+B` / `Ctrl+I`**——WebKitGTK 在派发到 DOM 之前就把这两颗吃掉了，所以 keydown 一次都收不到，只能由 `src-tauri/src/format_keys.rs` 在 GTK 捕获相位截下来转发；用户报的「Ctrl B没反应」＝ BUG-49）。⚠️ 两条路的判据**必须一模一样**（外面 / 灰掉 / 没实现都不接），漏一条就是上面那种不一致。⚠️ 第二条路只能看 `document.activeElement`（那条路上没有 DOM 事件可问） |
-| `ui/useDialogs.ts` | 两个自绘对话框的"谁在等答案"（2026-09-24 从 `App.tsx` 搬出）。⚠️ 每个框后面是**单个 ref 不是队列**：今天所有调用点都是用户动作直接触发的，不存在并发 |
-| `ui/useDocuments.ts` | 文档的**开 / 新建 / 存 / 关 / 重载 / 切页 / 草稿恢复**（2026-09-25 从 `App.tsx` 搬出）。⚠️ 关一份有未保存改动的文档时那个三选一（保存并关闭 / 丢弃 / 取消）走这里——**「保存并关闭」拿默认焦点**；⚠️ 存盘成功要同时清脏标记、刷新镜像并删除草稿；⚠️ **切页一律走 `切换文档`**，自动保存源文件失败时先保存独立草稿；⚠️ **`openPath` 的身份是承重的**，所以这里读文档列表一律走 `docsRef`、**别把 `docs` 放进 `saveDoc` / `切换文档` 的依赖数组**（踩过一次，见 `docs/07` §4）。⚠️ 2026-09-28 起 `loadDir` / `openFolder` 取树时**带上当前口径**（`ui/tree-options.ts`），而依赖数组里放的是那个**字符串指纹**、不是 `settings` |
-| `ui/useFileKindMode.ts` | **这一份该用哪种模式打开**（2026-09-28 新建，约 195 行）：把 `editor/file-kind.ts` 那两条纯规则接到 React 上——**每份只判一次**（`判过` 那本账；判据里有"文档有多长"，跟着变的话症状是**写着写着编辑器自己换成源码模式**：光标跳组件、撤销栈换一份）＋ **提示条只说一次、且只在它成为前台那一份时**（一次拖进五个文件，为另外四份各弹一条等于刷屏）＋ `解除降级`（⚠️ 用户**自己**选一次模式就解除这一份的降级，`App.tsx` 的 `updateSettings` 里那一行调它——没有这条出口就是"菜单里 ✓ 在所见即所得上、点它却纹丝不动"，那是把用户锁在外面）。⚠️ **"这一份是不是 Markdown"不从这儿出去**：那是**文件的属性**，由 `ui/EditorArea.tsx` 按 `activeDoc.path` 现算——用户手动解除降级之后它**仍然**不是 Markdown，源码模式里照样不该染 Markdown 色 |
-| `ui/useSession.ts` | **会话侧车的前端那一半**（2026-09-27 新增，约 290 行，`docs/07` 第 76 项）：恢复上次的标签 ＋ 最近文件列表 ＋ 滚动位置 ＋ **上次那个文件夹**（2026-09-27 加的第五件），外加三个纯函数 `文件名` / `父目录名` / `最近条目名`（菜单与列表共用一套标签口径）。⚠️ 「启动时」那一档是**入参**（`接上会话(启动文件, 启动档)`），**不是这个 hook 的字段**：写成字段就是闭包捕获的值，而 `useStartup` 那条 effect 只该跑一次（见那边文件头最后一段）——设置一改、`接上会话` 身份跟着变，那条 effect 就会重跑，把命令行那份文件**再开一遍**。⚠️ 恢复文件夹走的是 `api.workspace.open`（宿主那一侧才是围栏的真相，只设界面这一半会"看着能用其实插件读写不了"），失败**只记一笔**不弹错；⚠️ 第一档**不是"什么都不干"**——`set最近` / `set滚动` 照做（「最近打开」是另一个设置项管的功能，不该被启动档连坐）⚠️ **三条围栏，缺一条就出错**：① **首帧不许写**（`就绪` ref 由 `接上会话` 的 `finally` 翻开——启动第一帧 `docs` 是空的，那时写 `open = []` 会把上次的标签抹掉，紧接着的恢复读到一份空白）；② **去抖**（正文 400ms / 滚动 500ms）；③ **打不开就摘掉**（`openPath` 因此改成返回 `Promise<boolean>`——打不开的最近条目要 `忘掉最近`，不然它永远点不动、也永远赖在列表里）；⚠️ 记录 effect 的依赖是**两串字符串**（`路径键` / `前台`），体内现拆，**不闭包捕获 `docs`**；⚠️ `滚动位置` 没有记录时返回 `undefined` 而不是 `0`（`0` 会把用户弹回顶上）；⚠️ `清空最近` 清完要立刻 `setOpen(列表, 前台)`——宿主 `clear` 清的是整份侧车，不补这一下会把打开的标签一起清掉 |
-| `ui/tree-options.ts` | **文件树的口径**（2026-09-28 新建，76 行）：排序档 / 过滤档 / 隐藏文件三格——`读口径(settings)` ／ `口径键(口径)` ／ `缺省口径`。⚠️ 建这个文件的理由是**这三格有三个使用点**（`App.tsx` 换工作区要重取、`ui/useDocuments.ts` 的 `loadDir` / `openFolder`、`ui/Sidebar.tsx` 的树），各写一遍就会有"某一个入口的排序跟别的入口不一样"，而那种错用户得点两下才看得出来。⚠️ **口径是随每次取树的请求递给宿主的**（`commands/workspace.rs::TreeOptions`），不是让宿主自己去读设置：设置那一路"先改内存再写盘"，时序上后端可能还拿着旧值。⚠️ `口径键` 是给依赖数组用的**字符串指纹**——`读口径` 每次返回新对象，拿它当依赖等于每次渲染都重取一遍已经展开的目录。⚠️ `缺省口径` 必须与宿主 `Files::default` **逐格一致**（启动那几百毫秒走的是它，不一致的表现是树先按一种规则排、眨一下眼又重排），`tests/tree-options.test.ts` 第三组直接读 Rust 源码把三档的名字与默认值逐个对一遍 |
-| `ui/useAutosave.ts` | 自动保存的**定时那一半**（2026-09-25）：`autosave_seconds` 停笔 N 秒到点写原文件；另有独立的安全副本计时器，停笔 1.5 秒后把脏正文交给 `draft` 存储。⚠️ 原文件写入仍只走 `saveDoc`；草稿不改源文件，因此未命名文档与关闭自动保存时也有恢复能力 |
-| `ui/useClipboard.ts` | **剪贴板四条**（2026-09-25 从 `App.tsx` 搬出）：剪切 / 复制 / 粘贴 / 复制为 Markdown。⚠️ 前三条绕开 `EditorCommand` 是因为它们**不改文档**（白名单的判据是"编辑动作"）；⚠️ 「剪切」**先复制成功再删**，反了就会丢字；⚠️ 读系统剪贴板可能被 WebKit 拒，被拒时给的话是"请按 Ctrl+V"（那条路永远可用）；⚠️ 「复制为 Markdown」拿的是**整篇源码**、不看选区 |
-| `ui/useEditorCommands.ts` | 「把一条菜单命令送进编辑器」（2026-09-24 从 `App.tsx` 搬出）：`run` 转交 ＋「插入链接」先问参数再转交。⚠️ 转交时**必须看 `runCommand` 的返回值**——`false` 说的是"这个编辑模式下没有这个实现"，不看它用户就只会看到"点了没反应"。⚠️ 「插入图像」2026-09-26 **搬去了 `ui/useImageInsert.ts`**：它不只是"问一句再转交" |
-| `ui/useImageInsert.ts` | **把一张图弄进文档的三条路**（2026-09-26）：对话框（菜单/工具栏/快捷键）、**粘贴**、**拖入**。三条共用 `落一张`：`api.image.place` 交宿主落地 → `run("image", {src, alt})` 插进正文 → 按宿主回的**事实**（`did` / `action`）报一句。⚠️ **粘贴挂在 `document` 的捕获阶段**且只在目标是编辑区里时动手——编辑器会把剪贴板里的图片二进制丢掉，不拦就什么都不发生；不在编辑区时**一律放行**。⚠️ **拖入走 Tauri 的 `onDragDropEvent`**（`dragDropEnabled: true` 之下 HTML5 `drop` 拿不到文件），只认"编辑区有焦点"，插入点是**当前光标**。⚠️ **勾了「上传」时方向反过来**（2026-09-26 第二批加）：**先传、失败才 `place`**——手动上传那条路走 `api.image.uploadOne`，成功就直接写 URL（磁盘上不留第二份），失败才退回本地那条路并把错误如实报回去。⚠️ 与主机那条自动路（`place` **之后**才传）**方向相反、结果相同**：**文档里总有一条能用的地址**。⚠️ 剪贴板来的图**必须落盘**（宿主退回「复制到 ./assets」），有一句专门说明——这是全仓唯一一处"设置说的和做的不一样" |
-| `ui/useUiMode.ts` | **"现在到底是浅色还是深色"的唯一判据**（2026-09-25 新增）：`ui_mode` 三档（浅 / 深 / 跟随系统）解析成 `"light"` / `"dark"`，**订阅过 `matchMedia`**（只有 `auto` 那档挂监听）。⚠️ 抽出来是因为同一个问题有三个问的人（「外观」那两张缩略图、「文档主题」那页显示的是哪套、`useDocTheme` 该取哪份 CSS），各写一份就会出现"面板说深色、缩略图是浅色"。⚠️ 别改成直接读 `settings.ui_mode`——那就把 `auto` 那档吃掉了 |
-| `ui/useDocTheme.ts` | 文档主题的**应用 / 切换 / 打开主题文件夹**（2026-09-24 从 `App.tsx` 搬出）。⚠️ 和 `applyTheme`（界面主题）**分开**：界面主题是纯写属性，文档主题要**取回来 + 限域**才能注入，是异步的，节奏不同不塞一个 effect。⚠️ `themeId` 进依赖、`themes` 也进（清单重扫后要能重取）；取不到 CSS **安静退回无主题**，不弹错。⚠️ 2026-09-25 起多了一层**槽**：`useDocThemeSlot` 给出「现在生效的是哪一套（`槽.id`）」＋「换主题该写哪个槽（`槽.写`）」，因为 `appearance.dark_theme_separate` 打开后深色下生效的是 `dark_document_theme` 那份——**"读哪份"和"写哪份"必须是同一个判据**，分叉的症状是"点了菜单屏幕不动、提示却说换好了"。判据的两个纯函数（`生效的文档主题` / `深色专用在生效`）**导出给设置页显示用**，别在那边重写一遍 |
-| `ui/useAppearance.ts` | **「外观」那两条轴的接线**（2026-09-25 新增）：界面主题落进 `<html>`（`applyTheme` 的退订必须交出去，BUG-7）＋ 缩放落到 webview。⚠️ **2026-09-27 起它交出一个返回值**：`ui/useZoom.ts` 那三档缩放动作（放大/缩小/实际大小），一路到 `ui/useCommandTable.ts` 的菜单与快捷键。⚠️ 转的是**同一个对象**（`useMemo` 过，身份稳定），理由与剪贴板那四件必须拆开写的区别就在这一条 |⚠️ 两条轴落点不同却同住一页，合成一处是为了"改外观那一页时知道代码在哪"。⚠️ **`[appearance]` 那半张表不在这里**（各有各的读者）；⚠️ **文档主题也不在这里**（2026-09-23 划的界面/文档那条线）。⚠️ 调用位置必须在 `updateSettings` 之后（缩放的滚轮档要落盘） |
-| `ui/useZoom.ts` | 界面缩放 ＋ **键盘那三档**（2026-09-25 新增，接上 `appearance.zoom`；2026-09-27 加「视图 → 放大/缩小/实际大小」，`docs/07` 第 75 项）。⚠️ 键盘与滚轮**共用 `应用缩放(值)`**，但**不看** `ctrl_wheel_zoom`、**不跟** `ctrl_wheel_target` 走（那两格管的是滚轮）。⚠️ 复位是 **`Ctrl+Shift+0` 不是 `Ctrl+0`**——后者是本仓「正文」，撞车由 `tools/menu-harness` 的 `#accel` 场报出。⚠️ 走 **`webview.setZoom()` 而不是 CSS**：这条应用是 `100vh` 撑满的，CSS 放大之后内容比窗口高，底边会被切掉（判据表在文件头）。⚠️ Ctrl+滚轮**自己写**：实测这一套 WebKitGTK 不因 Ctrl+滚轮缩放页面，所以不会重叠。⚠️ 滚轮是热路径——**立刻改、攒 400ms 再落盘**；累加要按"已经落到 webview 上的那个值"算（落盘是去抖的，按设置算会连滚五格只动一格）。⚠️ 写回时 `appearance` 要整张表一起给；设置还没到就**什么都别写** |
-| `ui/useSettingsFile.ts` | 设置文件的两件事（2026-09-24 从 `App.tsx` 搬出）：`openConfigDir` / `resetSettings`，落点是「偏好设置 → 通用 → 高级设置」那一组。⚠️ **恢复默认拿的是后端返回的那一份**——默认值由 `Settings::default()` 说了算，前端自己拼会出现「恢复之后有几项还是老值」**而且只在那几项上**，看着像随机故障；⚠️ 打开那个目录走 `api.settings.openDir()`——**路径的取法和"打开"这一步都在后端那一条命令里**，前端既不该拼 `~/.config/nota`（散落的路径拼接是换存法时最先烂的地方），也不该自己拿路径去调 `plugin-opener`（Tauri 的 ACL，BUG-27） |
-| `ui/useChromeVisibility.ts` | **状态栏 / 格式化工具栏 / 菜单栏的显隐**（2026-09-25 从 `App.tsx` 搬出，同批修掉一个 bug；**菜单栏 2026-09-28 加**）。⚠️ 两个值**不是 state，是 `settings.appearance` 的派生值**：搬之前它们各有一份内存 state，而设置页那两个同名开关没有任何读者——"视图"菜单里关掉重启就回来、设置里关掉屏幕上什么都不发生。⚠️ **别退回 state**；⚠️ 写回时 `appearance` 要整张表一起给。⚠️ 工具栏是**三档**（`always` / `hover` / `never`，默认 `never`），「悬停」那一档靠这里一段**量鼠标位置的窥视带**实现（不是 CSS `:hover`），判据表在文件头。⚠️ **菜单栏那一条（`show_menu_bar`，默认 `true`）多一件事**：它藏下去的那一刻要发一条 6 秒的提示（`Alt+M` ＋ 设置页两条路）——因为菜单栏自己是"哪儿能改回来"的唯一指示牌，它一藏就没别的字写着它还能开回来。⚠️ 判据是**字段的跳变**不是"现在是隐藏的"，而且那条提示**刻意不挂在菜单项的处理函数里**（挂那儿的话从设置页关掉就没提示了）。⚠️ **2026-10-04 多了一个出口 `收起工具栏`**（第 49 项）：工具栏右端那颗 × 走它，写的是 `setChrome({ toolbar: "never" })`——**与菜单 `view.toolbarNever` 同一个 setter、同一个参数**。放这儿而不是在 `FormatBar` 里现写箭头，因为"工具栏的显隐"这个状态的主人就是这一份 |
-| `ui/useImmersive.ts` | **沉浸模式：专注 ＋ 全屏合成的那一件事**（2026-09-25 从 `App.tsx` 搬出）。⚠️ 两条**共用一套外壳规则**（`.app[data-zen]`，CSS 在 `styles/app.css`），区别只有"动不动窗口、压不压暗正文"；⚠️ 全屏那一格是**从窗口读回来的**（`isFullscreen()` ＋ 订阅 `onResized`），不是内存里自己记的，否则用户用 WM 快捷键进全屏会让菜单的勾和窗口分叉；⚠️ `Esc` 要先让给浮层（`有浮层` 入参）；⚠️ 三条出路与进沉浸时那条 6 秒提示的理由都在文件头 |
-| `ui/useToasts.ts` | **提示条的宿主**（2026-09-25 从 `App.tsx` 搬出）。⚠️ 只管“什么时候消失”：`error` 8 秒、其余 3.2 秒、**`ttlMs === 0` 是不自动消失**——它专门给“描述状态、而不是描述刚做的那件事”的提示用（目前唯一调用点是开机读设置失败）。⚠️ **长什么样**在 `styles/app.css` 的「提示条」一节（那一节 2026-09-25 才补，之前 `.toasts` 一条 CSS 都没有，看到的是浏览器默认样式） |
-| `ui/useFocusDim.ts` | **专注模式压多暗那一档落到 `<html>` 上**（2026-10-04 新增，第 45 项，照 VMark 窗口版补的）：读 `appearance.focus_mode_dim` 三档（`standard` / `strong` / `stronger`）写 `data-focus-dim`，CSS 那边按属性选 `--focus-dim`。⚠️ 与 `ui/useCodeBlockPrefs.ts` 同一个手法（`data-*` 上 `<html>`，不重建编辑器），**默认那一档不落属性**（DOM 才干净）；`settings === null`（还没读回来）走 `默认档 = "standard"`，**必须与 Rust 的 `#[default]` 同名**，否则启动第一帧按一个值画、读回来自己跳一下。⚠️ 三档的**数值在 CSS 里**（`:root { --focus-dim }` 与两条 `html[data-focus-dim=…]`），两条压暗选择器（`.nota-dim` / `.cm-editor.nota-focus …`）都读**同一个变量**——各写一个数的症状是"拨了开关只有一半跟着变"。`tests/focus-dim.test.ts` 把五个名字钉在一起 |
-| `ui/useWindowTitle.ts` | **窗口标题跟着当前文档走**（2026-09-25 新增，第 51 项）：`{标题}{ •} — Nota`，没开文档就是 `Nota`。⚠️ 走 **`getCurrentWindow().setTitle()`**，不是 `document.title`——后者传不出 WebView，原生窗口标题是建窗时的一份拷贝。⚠️ 权限 `core:window:allow-set-title` **早就写在能力集里、一直没人调**（那正是「入口等于还没有」的形状）。⚠️ 标题取后端的 `title` 而不是路径的文件名，为的是与标签栏**同一个字符串**。
-| `ui/useExport.ts` | 导出与打印的编排（2026-09-24 从 `App.tsx` 搬出）。⚠️ 正文**从编辑器拿，不是从 `doc.text`**（后者是 300ms 去抖后的镜像，屏幕上和导出里会不一致）；⚠️ 打印**不是在应用里打印**——写成 HTML 交给系统默认程序，如实把两步都说给用户听。⚠️ 2026-09-25 起多了**借 pandoc 那七种**（`导出为(id)`）：**先探测再决定**——`ready` 直接进保存对话框、**不弹面板**，`missing`/`unknown` 才出 `ui/PandocPanel.tsx`；PDF **总是**备一份带样式的 HTML（兜底那条要用），返回值里的 `note` **必须**转述给用户（走的是 pandoc 还是 Nota 自己排的版）。⚠️ **导出与另存为不是一回事**：导出的默认落点是「设置里的 `default_folder` → 文档自己那一层目录 → 交给对话框」，而另存为换的是*这份文档自己*的路径——别把两边的落点逻辑混起来 |
-| `ui/TopBar.tsx` | 顶栏（品牌字 + 菜单栏 + 「插件」开关）。**纯展示、零状态**。⚠️ `hideMenuBar` 是**两条理由合成的一个布尔**（`App.tsx` 现场算）：① 后端的返回值（只有后端说"原生菜单真挂上了"才隐藏自绘那条，**不是按平台判**）；② 用户在外观设置里关掉了菜单栏（`appearance.show_menu_bar`，2026-09-28）。**组件不需要知道是哪一条**——它只知道"顶上那一条画不画" |
-| `ui/TabBar.tsx` | 标签栏（脏点 + × ＋ **2026-09-27 起右键菜单**）。纯展示，也**不管"关之前要不要存盘"**——`confirmReq` 在 `App.tsx` 手上。⚠️ 键盘切标签今天**没有**。**右键**目前只有一条「在新窗口中打开」；⚠️ **不是"把标签搬过去"**——新窗口是另一个进程，旧窗口里这一份照旧开着（用户明说不考虑拖回来），所以这条菜单**不需要知道**原标签之后怎么了。⚠️ **没有路径的标签那一条是灰的**（新进程只能按路径读盘，拿不到内存里的正文）。⚠️ **弹层复用 `MenuPopup`，但锚点是自己搭的**：`.menu-popup` 自己 `position:absolute; top:calc(100%+5px)`（"挂在菜单栏那一栏下面"），所以外面套一个**零高度**的定点容器 `.tab-menu-anchor`（`styles/app.css`）。⚠️ 关闭用 **`mousedown`**（与 `MenuBar.tsx` 同一条口径）、另加 `resize`/`scroll` 关掉（菜单是 `fixed` 的，底下一滚就指错标签）、`onContextMenu` 里**必须 `preventDefault()`**（不拦的话 WebKitGTK 会弹它自己那份）。⚠️ **2026-10-04 起这是全应用唯一的例外**：`ui/ContextMenu.tsx` 在 window 的**捕获相位**装了一个全局右键监听（会**先**跑），它 `判落点` 里"已被认领 → **不弹**"那一档**连 `preventDefault` 都不做**——就是给这里让路。⚠️ 那一档要是被当成"外壳"处理，右键一个标签就什么都不弹，标签上这份菜单（连同"在新窗口中打开"）从此消失，而且**不报错** |
-| `ui/MenuBar.tsx` | 顶部菜单栏（文件/编辑/段落/格式/视图/主题/帮助）。**只管"哪一栏开着"**，栏里的内容与键盘导航在 `useMenuRovingFocus.ts` / `MenuPopup.tsx`。⚠️ 关闭用 **`mousedown` 不是 `click`**，主题那一栏是**动态**的（条目来自 `nota_doc_themes`）。⛔ 这一栏**只装文档主题**，界面风格/明暗在偏好设置里 |
-| `ui/MenuPopup.tsx` | 一层弹层 + 它飞出的子菜单。⚠️ 子菜单走 **portal 到 `body` ＋ `position: fixed`**（父弹层的 `overflow-y:auto` 会把它裁掉），坐标自己量、夹回视口。**只支持一层子菜单**。⚠️ **2026-10-04 起 `SubMenu`（连 `SubMenuProps`）导出给右键菜单用**：那边三栏（「复制为」/「段落」/「插入」）和这里是一模一样的东西，重写一份要把 BUG-17 那条"划过开的 vs 点开的"、坐标系那两条裁剪坑、`focusItem` 那个"state 没变所以 effect 不跑"的坑**全再踩一遍**。⚠️ 它自己**不认位置**，`anchor` 由调用方量好传进来 |
-| `ui/useMenuRovingFocus.ts` | 菜单的方向键导航（漫游 tabindex）。⚠️ 吃掉的键**必须 `stopPropagation`**——子菜单套在父弹层里，不拦住父层会把同一个键再处理一遍。`focusItem` 与 `setFocusedIndex` 的差别写在文件头（值没变时 effect 不跑）。⚠️ **2026-10-04 起右键菜单也用它的图标行**：`onRight(item, index)` / `onLeft()`（**收不到下标**，那边靠一面镜像 ref 绕开）是排内翻格的扩展点 |
-| `ui/context-menu.ts` | **右键菜单的内容表与落点判据**（2026-10-04 新增，约 270 行）：**纯数据 ＋ 纯函数，不 import React**（与弹层分成两份的理由见它文件头），所以 `tests/context-menu.test.ts` 能在 node 里直接读它（本仓没有 vitest/jsdom，见 `docs/06` §6.3）。⚠️ 分成两份的**真正**理由是这一份最容易**静默**坏掉：id 打错一个字符不报错，只让菜单里那一条**永远灰着**，而"少了一条能点的"肉眼几乎看不出来。`判落点` 吃三个布尔吐四档（`不弹` / `输入框` / `编辑器` / `外壳`），⚠️ **顺序要紧**：认领 → 输入框 → 编辑器 → 外壳；⚠️ `输入框` 排在 `编辑器` **前面**是反直觉且必须的（公式源码框、图表源码框、代码块语言框都在 `.editor-pane` 里，见 `ui/accel.ts` 那条 2026-09-26 的教训），且**不许**和 `accel.ts::isOutsideEditor` 合并——那两个问的是两件事、答案故意相反。⚠️ `外壳` 那一档是用户 2026-10-04 选的「只拦不弹」，代价（右键侧栏什么都不发生）写在 `docs/04`。⚠️ 条目表**大量借 `MENUS` 的现成 id**（借 id ＝ 共用译文），两份子菜单的父项 `ctx.paragraph` / `ctx.insert` 则是**右键菜单独有**的、`MENUS` 里没有。⚠️ **2026-10-04 开窗口检补进 `这一档的灰(位置, 灰)`**：**输入框那一档一个都不灰**——那六条不住在命令表里，套菜单栏那份 `disabledCommands` 会把「有实现、点得动」的 `edit.select` 画成灰的 |
-| `ui/ContextMenu.tsx` | **右键菜单那一层**（2026-10-04 新增，约 700 行）：上半是组件 `ContextMenu`（window **捕获相位**的 `contextmenu` 监听 ＋ 分流 ＋ 派发），下半是弹层 `ContextMenuPanel`。⚠️ **整个接管**的理由：WebKitGTK 那份原生菜单（英文 `Cut / Copy / Paste / … / Inspect Element`）的文案来自它自己的 gettext、受**进程 locale** 控制，**和 Nota 的语言设置（`src/i18n/`）没有半点关系**——改不动，只能拦掉重画（先例：`ui/TabBar.tsx` 早就这么干过）。⚠️ **图标行整排只算一个漫游落点**：`useMenuRovingFocus` 是线性的，排内 ←→ 走 `onRight`/`onLeft` 在排内翻格（`行内下一格`，**不绕回**），↑↓ 照旧交给那个 hook——**没有第二套 keydown**。⚠️ 图标按钮必须 `onMouseDown` 里 `preventDefault`：用户是"**先选中、再右键**"的，不拦就把编辑区的选区抢走。⚠️ 输入框那一档走**另一套实现**（`落到输入框`，**不经过** `menuHandlers`）：打开时要**先记下 `selectionStart/End`**（漫游钩子一开就把焦点挪走了），点条目时再还回去，否则撤销/重做/全选那三条 `execCommand` 全作用在菜单按钮上。⚠️ **2026-10-04 开窗口检又量到**：焦点**没还成**时 `execCommand("selectAll")` 作用于**整篇文档**（再打一个字就是全篇替换），所以 `还焦()` **改成返回布尔**、五处调用点先问这一句；同日另修三处：菜单 `z-index` 要盖过模态遮罩、键盘焦点要画得出（三处 `.menu-item-open` ＋ 图标行的 `data-current`）、收起时要把焦点还给右键前那个元素 |⚠️ 画的是组件不是 hook（hook 返回的元素不会自己进树），`App.tsx` 里画一次；没开时返回 `null`，画出来的东西 portal 到 `document.body` |
-| `ui/useMenuTable.ts` | **菜单表 ＋「最近文件」那一层 ＋ 用户改过的键位**（2026-10-04 从 `App.tsx` 搬出，那次本文件 998 行、离 1000 硬线只剩 2 行，而右键菜单那批还要往里加）。⚠️ 搬的时候只把 `全部菜单` / `最近` 换成入参，一行逻辑没动。⚠️ 它交出去的这一份是**全应用唯一一份**对外发出去的菜单表（自绘菜单、按键分发、macOS 原生菜单栏、设置里那张快捷键表**一起**跟着变），所以键位覆盖叠在**这一处**、而不是每个消费方各自记得去查。⚠️ 没改过时 `应用键位覆盖` 原样返回入参（保住引用），所以依赖里多一个对象不会让菜单的身份抖动。⚠️ 入参那个 `覆盖` 的两个 `?.` **不是啰嗦**：类型上 `keys` 不是可选的，但**跑起来的后端可能是旧的**，少一个就是启动即白屏 |
-| `ui/hints.ts` | **功能提示的注册表**（2026-10-06 新建）：用户那天点的两件事——① 提示要能「不再显示」；② **「提示要确定——如果说出现了那些情况才显示提示」**。所以这里是一张表（`id` / `类型` / **一句话写死的触发条件** / 默认 / 文案），**不是**散落的 if。⚠️ **三种消费者读同一张表**：展示（`ui/HintBar.tsx`）、静音（设置里那张 `[hints]`）、设置新页「提示」——各写一份的下场是"设置里关了、屏幕上还在弹"。⚠️ 两类触发：**当场**（条件在就出现、条件消失就收起）与**首次**（一辈子只来一次）。⚠️ **报错类不许进表**（项目硬口径「报错不是文案」），`ExternalChangeBar` 与强制专注红屏也不进（理由各在文件头）。⚠️ `条件` 那一栏是**给人看的判据**，实现要照着它写；`tests/hints.test.ts` 钉着"每条都必须写清条件"。⚠️ 文案写成 `() => t("…")`：模块级求值会把译文锁死在加载那一刻的语言上（BUG-38 那个坑） |
-| `ui/useModalTrap.ts` | 弹层的键盘封闭（2026-10-04 新增，第 50 项）：Tab **两个方向都夹住** ＋ `focusin` 兜底 ＋ Esc；`SettingsDialog` 那套抽出来给 `ConfirmDialog` / `PromptDialog` 共用。⚠️ **组字期间一律不接**（`PromptDialog` 当年的原话理由，抽共用必须带上）。`陷阱落点` 纯函数，`tests/modal-trap.test.ts` 钉着 |
-| `ui/useTablistKeys.ts` | 页签方向键（2026-10-04 新增，第 50 项）：←→/Home/End **挪焦点不切换**、Enter 由 `button` 自己点。五处消费者：`TabBar` / `Sidebar` / `PluginDock` / `EmojiDialog` / `ImageDialog`。`页签下一个` 纯函数，`tests/tablist-keys.test.ts` 钉着 |
-| `editor/diagram-node.ts` | 图表的**节点**（2026-10-04 新增，第 27 项：`@milkdown/plugin-diagram` 退役、本仓自造）：remark 转换 ＋ schema ＋ 输入规则 ＋ 命令，**判据逐行照抄上游 7.7.0**（`attrs.value`/`identity`、`div[data-type="diagram"]`、`` ^```mermaid$ `` 别动）。渲染在 `diagram-view.ts`（mermaid 动态 import） |
-| `editor/math-schema.ts` | 数学节点的轻量 schema（2026-10-23）：保留 `math_inline` / `math_block`、remark 解析与序列化，不静态导入 KaTeX |
-| `editor/katex-runtime.ts` | KaTeX 异步运行层：公式 NodeView、命令候选和数学代码围栏共用同一份去重 Promise。窗口预热仍等 `nota-window-shown`；用户已经打开公式时直接按需加载，不再因为错过揭幕事件让预览永久停在空 `loading` |
-| `editor/micromark-math-html-placeholder.ts` | 生产构建替换 `micromark-extension-math` 未使用的 HTML 分支，避免它再次静态拖入 KaTeX |
-| `ui/ReviewPane.tsx` | **把插件的一个面板摊到编辑区里**（2026-09-25）：插件喊 `nota.ui.review(id)` → 这个壳在正文位置画那块面板（`data-review` 属性给 CSS 当开关，样式在 `styles/review.css`），顶上一行「← 回到文档」收起来。2026-10-31 起还有一颗通用「侧栏」按钮：收起全屏并让同一面板回到右栏。⚠️ **它不认识插件**：内容照样是宿主拉来的面板 JSON（`ui/PanelBody.tsx` 的白名单 `kind`），所以"哪个插件、画什么"一律不在这里判。⚠️ 插件直接调用 `review(id)` 时两处仍可能同时画；宿主的侧栏/放大按钮会主动切走另一处 |
-| `ui/useReviewView.ts` | **编辑区上面那一份预览的「形态与看法」**（2026-09-27 从 `App.tsx` 搬出，那时它 1017 行、硬上限 1000）：分派 `活跃预览`（`kind === "diff"`，画在编辑区自己身上）/ `面板预览`（`kind === "panel"`）、记住看法（对比 / 改后）、`Esc` 之后干什么。⚠️ **分派只做一次、就在这里**——`kind` 散到渲染里到处判，加第三种形态时漏一处**不报错**，只是那块界面什么都不显示；⚠️ **看法归这一层**（`EditorPane` 与 `ReviewBar` 两边都得知道现在哪一面，只能放在它们共同的那一层）；⚠️ `Esc` **优先走插件给的「放弃」**（那份补丁在插件手里，只收起编辑区的话插件仍认为「有一份改动等着你」，下次开面板它还在）；⚠️ 出口类型必须是**窄的那个**（`PluginReviewDiff` / `PluginReviewPanel`），写宽了每个用它的地方都要自己再判一次 `kind` |
-
-| `ui/nativeMenu.ts` | 把菜单树＋当前状态转成 `NativeMenuNode[]` 推给 Rust。⚠️ **只做形状转换，不重算"该不该灰"**——那是 `App.tsx` 的 `disabledCommands` 说了算 |
-| `ui/accel.ts` | **快捷键的唯一真相源**：解析 `commands.ts` 里的 `accel` 文本，反过来驱动按键分发。⚠️ 判键名**优先 `e.code`**（Shift 之下 `e.key` 是上档字符，`Ctrl+Shift+1` 曾经因此永远不成立）；`Ctrl` 在 macOS 上指 ⌘（显示成 `⇧⌘S`）。⚠️ **2026-09-27 起多了 `accelToText()`**（`Accel` → 键位串，改键位那一页把它**写回**设置用）：它和 `parseAccel` 是**一对**——写出来的串必须能被读回同一个键位（`tests/keymap.test.ts` 54 条里第一条就是这件事，读不回来＝"用户改完重启、那条快捷键静默失效"）。它返回 **`null`** 表示"这个键位写不回去"，三种情况：光按修饰键、认不出的键名、**不带修饰的单字符**——⚠️ 最后那条判据**不能**写成"必须带修饰键"，全仓有 `F8`/`F9`/`F11` 三条裸功能键 |
-| `ui/settings/` | **偏好设置**（文件 → 偏好设置… / `Ctrl+,`），共**十六个**文件（`find src/ui/settings -type f` 现数得 16，2026-10-10）：`SettingsDialog.tsx`（左栏**十一页** + 搜索的壳，`ORDER` 是页面顺序的唯一真相源）· `primitives.tsx`（行/组/控件）· `panes/`（一页一个文件：`FilesPane.tsx` / `EditorPane.tsx` / `ImagePane.tsx` / `ImageUploadGroup.tsx` / `MarkdownPane.tsx` / `ExportPane.tsx` / `AppearancePane.tsx` / `DocThemePane.tsx` / `ShortcutsPane.tsx` / `GeneralPane.tsx` / `FocusPane.tsx`，＋ **`ExtensionsPane.tsx`**（2026-09-27 加的「拓展」页），· **`panes/SpellLangPicker.tsx`**（2026-10-10：「拼写检查语言」那一格的控件——**能同时勾几门** ＋ 一格自定义标签，`docs/07` 第 113 项。⚠️它**不是页面**，与 `ImageUploadGroup.tsx` 同一类，所以上面"十一页"没变）+ 共用的 `props.ts`——入参与 `paneWriter`。⚠️ **「快捷键」那一页 2026-09-27 起是可改的**（此前只读），改的落地是 `settings.keys.overrides`（`settings/keys.rs`）。⚠️ **它的条目来自 `props.菜单`（`App.tsx` 那一份，已经叠过用户的覆盖），⛔ 不许改成 import 常量 `MENUS`**——那是**出厂**键位，用户改过之后它就不对了；见 `ShortcutsPane.tsx` 文件头。⚠️ `ImageUploadGroup.tsx` 是 `panes/` 里**唯一一个不叫 `*Pane` 的页面之外的文件**：它不是一个页面，是「图像」页里的一组，而且**不走 `paneWriter`**（值在 `image-upload.toml` 里，不在 `settings.toml`——理由见它自己的那一行）。版式照 VMark 的偏好面板（用户 2026-09-23 要求；出处、许可与"借到什么程度"记在 `docs/10-feature-matrix.md` §11.3）。⚠️ **改动即时生效，没有「确定」也没有「取消」**，理由写在文件头 |
-| `ui/PandocPanel.tsx` | pandoc **没探通**时那个面板（2026-09-25，照着当时那块 `SlidevPanel.tsx` 写、**共用同一套 CSS 类**——⚠️ 那个文件 2026-09-25 已随 Slidev 拆成插件一起删除，见 `docs/04` §2.6c）。⚠️ 只在 `missing` / `unknown` 时出现——探通了**不弹面板**，直接进保存对话框。⚠️ 它必须说清 **PDF 有第二条路**：没装 pandoc 但 `fallback_pdf` 为真时，主按钮是**「用 Nota 自己排版导出」**而不是「去官网」；⚠️ 其余情况**永远再留一条「仍然试一次」**（探测是有根据的猜测，不是证明） |
-| `ui/AboutDialog.tsx` | 关于窗：标识、作者、版本药丸，以及软件更新、故障排除、权限列表、鸣谢、法律信息五个子页。2026-11-14 起首页另有一行「使用须知」，可重新打开首次启动引导。⚠️ 版本从正在运行的二进制读取；取不到时显示 Unknown，不阻止打开。⚠️ 开关状态在 `ui/useDialogs.ts`，`ui/AppDialogs.tsx` 是唯一渲染点 |
-| `ui/useFocusSession.ts` | **强制专注那一档的接线**（2026-09-28 从 `App.tsx` 整块搬出，那边因此从 998 回到 932 行）：`useForceFocus` ＋ `useFocusAlarmSound` ＋ `useFocusIntro` ＋ `useFocusTrace` 四个 hook 收成一个出口（`专注状态` / `专注运行中` / `切换强制专注` / `专注总结` / `关掉专注总结`）。⚠️ **搬的是一整档功能不是几行**——从「谁在跑」到「点了菜单那一项走哪条路」全在这一份里，`App.tsx` 那边只剩一句解构。⚠️⚠️ **它和 `ui/useImmersive.ts` 那个「专注」毫无关系**：那边是「把外壳收起来」（沉浸），这边是**记账**（人在写就涨、切走就扣、扣光弹红屏）。⚠️ 调用位置有两道约束（搬出来后由 `App.tsx` 负责）：必须在 `updateSettings` 与 `askConfirm` **之后**（两个都是入参），且必须在 `useImmersive` **之前**（那边那个 `有浮层` 要数进这里交出去的 `专注总结`）；⚠️ `切换强制专注` 的身份稳定性是**硬要求**（那张表要喂给原生菜单栏），所以依赖里只有 `专注运行中` 那个布尔，不能把每秒都在变的 `专注状态` 写进去 |
-| `ui/commands.ts` | 菜单的**静态骨架**：一栏一项整理自用户 2026-09-22 给的界面截图。⚠️ 这里**没有** `disabled` 标志位——灰不灰由 App 的 `menuHandlers` 推。`accel` 是**出厂**键位的真相源（`ui/accel.ts` 反过来查它）。⚠️ **2026-09-27 起它不是"用户手上那一份"**：`应用键位覆盖(菜单, overrides)`（同文件）把 `settings.keys.overrides` 叠上去，**只放动过的那些**，叠加发生在 `App.tsx`（那一份才是全应用唯一的那张表）。⚠️ 没改过时它**原样返回入参**（保住引用，`useMemo` 才有意义）。「主题」那栏的条目与勾是合成的（`themeEntries` / `themeChecks` / `resolvePick`），自绘与原生两边共用。⚠️ 「视图」那一栏**分两段**（2026-09-27 用户点名要的那条线：线上面"外壳上画出什么"、线下面"正文那一块怎么呈现"）；**2026-10-04（第 49 项）把 `view.statusBar` 与 `view.menuBar` 从下面那段挪了上来**（它们原来夹在「打字机模式」与「全屏」中间）。⚠️ 往这一栏加条目之前先想清楚它属于哪一组，`tests/bar-close.test.ts` 组三把这一段钉住了。⚠️ **2026-10-04（右键菜单那批）多了一条 `edit.delete`**：删除选区的**唯一**入口，**故意不给 `accel`**——`Delete`/`Backspace` 这两个键 ProseMirror 自己处理得很好（合并相邻段落、列表项降级、表格里删单元格…），在 `MENUS` 里再绑一遍等于同一条路两个实现，而**命令表那条会先跑**，于是"按 Delete 删一个字"这种最基础的手感要由我们负责。⚠️ **同批还多出四个只给右键菜单用的导出**：`取条目(id)`（按 id 取一条，供 `ui/context-menu.ts` 摊条目）、`摊条目(ids)`（id 数组 → `MenuEntry[]`，跳过 `"sep"`、查不到的**整条静默丢掉**）、`右键段落项` / `右键插入项`（两份子菜单的父项，`MENUS` 里**没有**）。⚠️ 那两条的 `label`（`"Paragraph"` / `"Insert"`）**必须住在这个文件里**：`tools/i18n-check.sh` 只在 `src/ui/commands.ts` 这几份文件里认 `label:`，搬到别处那两个键会被当成废键、闸门 FAIL |
-| `ui/Sidebar.tsx` | 侧栏**两页**：文件（工作区树）/ 大纲。⚠️ 页数改过两次：2026-09-22 第三页「插件」搬到右边、2026-09-27 补过一页「文档列表」、**2026-09-28 用户点名把那页删了**（「<文档列表>这一栏可以删了」，同批删掉菜单项与 `Ctrl+Shift+2`；那份最近文件的列表仍在「文件」菜单和主页上）。⚠️ **2026-09-30 起栏的右缘可拖宽度**——最后那个子元素是 `ui/SidebarResizer.tsx`（⚠️ **顺序不能挪**，它靠 `parentElement` 量栏的左缘），收尾的 `onResize` 只收"松手后的最终值"。⚠️ `tab` 是**受控**属性（菜单栏也要能切它）。（被删的那一页原先每行 = 打开按钮 ＋ ×——× 只从列表里去掉，默认 `opacity: 0`，悬停/聚焦才显形；一条记录都没有时是一句话空态。这段是历史记录，代码已不在。）⚠️ 2026-09-24 补了右上角那颗 **×（收起本栏）**与空工作区里的**「打开文件夹…」**——两处都是为了让收起或空置的状态下仍有一个入口，但**开合状态仍只有 `App.tsx` 的 `sidebarOpen` 一份**（× 只是第二个入口）。⚠️ 2026-09-28 起 `FileTree` 收一格 `口径键`：**口径一变（换排序 / 换过滤 / 拨开隐藏文件），已经取回来的那几层就过期了**，靠它触发"清缓存 ＋ 对还开着的路径逐条重取"——⚠️ 不能只重取"已经在 `kids` 里"的那些（过滤档放宽后新露出来的**目录**本来就没有缓存，而无缓存的目录是不展开的），也不能顺手把 `open` 收回（展开状态与排序偏好无关）。📌 **2026-09-30 深夜**：新增一格 `折叠?: boolean`（第 91 项）——收起时**不卸载**（卸载了就画不出开合那 160ms 的中间帧），只加 `.sidebar-collapsed` 并把宽度交给 CSS，同时上 `inert` 让 Tab 与读屏进不去；`App.tsx` 传的是 `折叠={!sidebarOpen}`，**与 `onClose` 是同一个开关的两面** |
-| `ui/SidebarFiles.tsx` | **侧栏文件页的扁平列表**（2026-10-23 从 `Sidebar.tsx` 拆出）：工作区递归扫描、24 个一批加载 `WorkspaceExcerpt`、新文件输入行。页签、大纲、底栏和树形视图仍在 `Sidebar.tsx`。 |
-| `ui/file-icon.ts` | **侧栏文件类型图标**（2026-11-01）：按后缀把文件分为 Markdown、代码、图片、普通文档与未知类型，复用现有内置 SVG 图标。 |
-| `ui/useSettingsWindow.ts` | 设置浮层的开关、目标页与更新通知入口；`openUpdateSettings` 直接落到「更新」页 |
-| `ui/DeferredUi.tsx` | 首屏按需加载大型界面：设置对话框、右侧拓展栏和文件选择器 |
-| `ui/SidebarResizer.tsx` | **侧栏右缘那条能拖的把手**（2026-09-30 新建）：`夹侧栏宽`（180~480，`NaN` → 默认 240）＋ 一个用 `setPointerCapture` 的组件（按住拖动时逐像素往 `<html>` 写 `--sidebar-width`，松手才 `onCommit` 落盘）。⚠️ **它必须是 `.sidebar` 的最后一个子元素**——宽度是从 **`parentElement` 的 `getBoundingClientRect()` 左缘**减出来的，插在中间会量到半截。⚠️ **拖动期间不落盘**（同 `useZoom.ts` 那条"热路径别写穿设置文件"），所以拖到一半杀进程宽度不留。⚠️ `tests/sidebar-resize.test.ts` 第一组盯着 **CSS / TS / Rust 三处的 240 必须同值**（分居三种语言，谁改一个另两处都不吭声，症状是"冷启动宽度跳一下"） |
-| `ui/DockResizer.tsx` | **侧栏右缘那条能拖的把手**（2026-09-30 新建）：`夹侧栏宽`（180~480，`NaN` → 默认 240）＋ 一个用 `setPointerCapture` 的组件（按住拖动时逐像素往 `<html>` 写 `--sidebar-width`，松手才 `onCommit` 落盘）。⚠️ **它必须是 `.sidebar` 的最后一个子元素**——宽度是从 **`parentElement` 的 `getBoundingClientRect()` 左缘**减出来的，插在中间会量到半截。⚠️ **拖动期间不落盘**（同 `useZoom.ts` 那条"热路径别写穿设置文件"），所以拖到一半杀进程宽度不留。⚠️ `tests/sidebar-resize.test.ts` 第一组盯着 **CSS / TS / Rust 三处的 240 必须同值**（分居三种语言，谁改一个另两处都不吭声，症状是"冷启动宽度跳一下"） |
-| `ui/PluginDock.tsx` | 右侧插件栏：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」；叠着画时两块内容抢同一个滚动条，而面板会自己长高）＋「插件」页的清单与"没有落脚处"。2026-10-31 起活动面板标题栏有通用的四角展开按钮，走 `nota_plugin_review_open` 摊到编辑区。⚠️ **只拉活动页**（非活动页连 `render` 都不跑；切过去时现拉一次）。⚠️ 面板内容**是拉的**，`nota:plugin-panel` 只是失效信号；`nota:plugin-panel-focus` 也只带 `{plugin,id}` 定位意图，不带内容（`docs/07` BUG-13）。 |
-| `ui/pluginText.ts` | **插件在界面上那几句人话**（2026-09-27 新建，136 行）：它从哪儿来、签没签、语言对不对得上、能力叫什么、面板摆在哪儿。⚠️ 起因是同一句「自装 · 已验证」要在**两个界面**上出现（右侧插件栏 ＋ 设置里的「拓展」页）：谁抄第二份，往后就是"改一处、另一处不动"，而那种不一致**不报错**——两个界面各说各的，用户只会觉得自己看错了。⚠️ **只有文案**：没有 JSX、没有状态、不碰 `api`，摆成什么样归两个界面自己。⚠️ **全是函数，不是模块级常量表**：模块级求值时 `t` 还是没订阅的那个版本（首帧画兜底语言，之后也没人通知它重画）；另外 `tools/i18n-check.sh` 数的是源码里**字面写出来**的 `t("…")`，写成 `t(表[id])` 会被判成废键 → 闸门 FAIL |
-| `ui/PanelBody.tsx` | **面板节点的渲染**（2026-09-24）：**十九种** `kind` 各一段 JSX（`heading` / `text` / `fields` / `list` / `buttons` / `toggle` / `select` / `file` / `empty` / `separator` ＋ `message` / `diff` / `input`——对话框要的三块：一问一答、增删对照、输入框 ＋ `frame`——嵌本机开发服务器的画面，2026-09-25 ＋ `graph`——提交树，2026-09-26 ＋ `chart` / `heatmap` / `share` / **`cards`**——写作统计，2026-09-26/27 与 **2026-10-04**）。⚠️ `input` 是**面板里唯一的文本输入控件**，发出去＝调 `submit` 命令、参数 `{ [arg] = 输入 }`，跟按钮零区别。⚠️ **没有 `dangerouslySetInnerHTML`**，字符串永远只是文本；没有 `command` 的按钮**画成灰的并写明原因**，不是静默不画 |
-| `ui/PanelControls.tsx` | **所有插件面板共用的交互控件**（2026-10-31 新建）：`toggle` 开关、`select` 下拉和 `file` 文件导入。⚠️ 文件只读取用户亲手选择的单个文件（≤ 1 MiB），把 `{ name, text }` 交给插件，不开放任意路径读取；控件复用设置页同一套 `Toggle` / `Select` |
-| `ui/share-card.ts` | **国际主义风格的 1080×1350 分享图 SVG**：写作统计与专注总结共用。版式采用严格网格、超大数字、平直分隔线和纯色纸面，不再使用渐变与圆角指标卡。插件只给字段；宿主负责作者头像、曲线/热力图、指标栏和可选二维码。二维码以局部 SVG 路径嵌入，头像只接受 PNG/JPEG/WebP data URL，因此离屏转 PNG 时不会因外链污染画布。光栅化与预览调用同一个 `shareCardSvg` |
-| `ui/share-card-identity.ts` | **分享图的作者身份与软件分享开关**：用户名、头像 data URL、是否包含 Nota 官网二维码；用 localStorage 持久化，经 `useSyncExternalStore` 同步到写作统计分享图和专注总结。头像协议白名单、姓名去控制字符、默认不启用推广二维码 |
-| `ui/avatar-crop.ts` / `ui/AvatarCropDialog.tsx` | **头像圆形裁切**：方形源图先按 cover 缩放，用户可拖动和 100–300% 缩放；圆形遮罩显示最终保留范围，并报告约占原图多少。确认后输出 512×512 JPEG data URL，不请求网络。几何运算在纯函数 `avatar-crop.ts` 中，弹层复用焦点陷阱 |
-| `ui/ShareCard.tsx` | **分享图那一块的唯一实现**：`useShareCard`（存盘／剪贴板两条出路）＋ `ShareCardPreview`＋ `ShareCardBlock`。2026-10-31 起预览下方提供作者头像/姓名编辑和官网二维码开关；二维码模块只在开关打开时动态加载。⚠️ 结果留在原地而不是 toast、剪贴板能力先问后做、`useCardPalette` 用 `MutationObserver` 跟界面明暗 |
-| `ui/nota-mark.ts` | **把标识嵌进别人的 SVG**（2026-09-27 新建）：把 `src-tauri/icons/nota.svg` **当字符串读进来**（Vite `?raw`），去掉 XML 声明/注释/外壳，再拼成 `<svg x= y= width= viewBox=…>` 片段。⚠️ **改图标只需改那一份 `.svg`**。⚠️ 同一张分享图上有**两个**图标，所以每个实例的 id 都带前缀（同名的 id 在同一份文档里浏览器只认第一个——两个图标恰好一样只是**运气**）；⚠️ 外面套一个 `<clipPath>`，裁剪框取图标自己那个圆角底衬——不裁的话深色卡片上会出现一个**白色方块**（图标四周留白是白的） |
-| `ui/heatmap.ts` | **长期记录的热力图**（2026-09-27 新建，256 行，用户「类似 Contribution Graph 那样的热力图，记录长期数据。仅记录打字数」）：一格一天的小方格，写作统计要的。⚠️ **只算格子的位置，不画**（与 `ui/chart-ticks.ts` 同一条分工：插件说数据、这里说版式、`PanelBody.tsx` 画），所以"哪一格是哪一天"能**脱离 React** 单独测。⚠️ 三条口径：**一列 = 一周、从周一起**；**最后那一列到 `止` 那天为止、下面留空**（把未来几天画成"0 字"是编数据）；**缺的那些天当 0 不当"没有"**（热力图回答的是"最近勤不勤"，空白格正是答案的一半）。⚠️ 它**不认识"今天"**——右端由插件给的 `止` 定（同"插件说数据"那条）。⚠️ 列数夹在 8~53；记录**走一个字符串**（`面板节点上限` 200 逼得插件不能一天一项地发）。⚠️ 月份标签走 `Intl`、语言取全局那一份——**不写死「月」**，这张图是要发出去的。⚠️ 判据 `tests/heatmap.test.ts` **20 条**（⚠️ 跑它要 `--alias:@=./src`） |
-| `ui/chart-ticks.ts` | **图上的刻度**（2026-09-27 新建，用户「横纵坐标的刻度要标，现在是没有的」）：`读刻度`（读插件给的 `xTicks`/`yTicks`，坏项丢掉**但不补齐**、`at` 夹在 0~1、最多 8 档 12 字）＋ `推纵刻度`（不写 `yTicks` 时按 `points` 的极值推三档；上下界相等时**只给一档**摆中间）＋ `格式化数`。⚠️ **两条轴分工不同**：纵轴只有数据知道上下界（曲线的纵轴就是 `points` 自己归一化的），横轴只有插件知道（序号对应哪一刻）。⚠️ 位置是 **0~1 的比例**不是像素（面板宽度会变）。⚠️ 面板那边刻度只能是 **HTML 覆盖层、不能是 SVG `<text>`**（`preserveAspectRatio="none"` 会把文字一起拉变形）。⚠️ `share-card.ts` 从这里只 import `格式化数` 与类型，**纵刻度的推法各写各的**——卡片的曲线被 `pow(比, 0.42)` 压过，等距档位在那边不成立 |
-| `ui/panel-nodes.ts` | **面板内容的形状校验**（2026-09-24）。⚠️ 这里是**唯一**一处判"形状对不对"——宿主那边只管"是 JSON ＋ 大小上限"。三条规矩：认不出的 `kind` 如实显示、字段类型不对给默认值、**只有这里定义过的字段能到 DOM**。⚠️ 2026-10-10 拆出 `ui/panel-data-nodes.ts`（四种**数据块**的形状：`chart` / `share` / `heatmap` / `cards`——字段最多、注释最长的那一族），本文件 `export type { … } from` 原样转出，调用点一行没改 |
-| `ui/panel-dock-state.ts` | **插件栏那三份凭据（当前哪一页 / 每页拉回来的内容 / 正在吐的那段字）住在组件外面**（2026-10-10 新增，`docs/07` 第 111 项）。⚠️ 理由是用户报的那一条：「AI插件运行中关掉插件面板再打开就找不到了」——① 关掉插件栏 = `PluginDock` 被卸载、组件里的 state 全丢；② 而插件的一条命令跑着时宿主握着 `plugins` 锁，`nota_plugin_panel_content` 要的正是同一把锁，所以重开时那次"重拉"回不来。这个文件装着那份 `记忆`（`起始页` 那个三态、`记住内容表` 抹掉 `busy` 的那一手，见下）与纯函数 `这一页画什么`（其中一条是**内容拉不回来但有流式文字时先把字画出来**）。⚠️ `busy` 故意**不进记忆**：跑完那一下的"再拉"落在已卸载的组件上，记下来的话重开是一排永远解不开的灰按钮。⚠️ 判据是 `tests/panel-dock-state.test.ts`（44 条） |
-| `ui/credits.ts` | **「关于 → 鸣谢」那一页的名单**（2026-10-10 从 `ui/AboutDialog.tsx` 搬出来并**补全**：用户原话「将 Codemirror 等引入的 BSD/MIT 库写入"鸣谢"」）。判据是"**直接依赖里那些宽松许可的**"（MIT / BSD / ISC / Apache-2.0 / CDLA），逐条对着 `THIRD-PARTY.md` §1/§2 抄——**两份必须同批改**。⚠️ 写成**函数**（收一个 `t` 进来现调）而不是模块级常量，理由同 `ui/pluginText.ts`；每条 `用处` 都是字面量 `t("…")`（`tools/i18n-check.sh` 只认那种写法） |
-| `ui/panel-data-nodes.ts` | **面板里四种数据块的形状**（2026-10-10 从 `ui/panel-nodes.ts` 拆出，那一份当天被两批新 `kind` 顶到 1010 行）：`PanelChart` / `PanelShare` / `PanelShareStat` / `PanelHeatmap` / `PanelCard` / `PanelCardsTotal` / `PanelCards` / `PanelCardIcon`，**只有类型**。⚠️ 它**一个字节都不许 import `panel-nodes.ts`**（那边要 `import type` 这些形状当函数的返回类型，反过来引就是环）：今天只依赖 `ui/chart-ticks.ts` 的 `刻度` 与 `ui/heatmap.ts` 的 `热力图`。⚠️ 把 JSON 收成这些形状的那些函数（`图块` / `分享卡` / `记录卡列表` …）**留在 `panel-nodes.ts`** 里挨着那个总派发 |
-| `ui/pluginMenus.ts` | 把插件声明的菜单项合成**一栏「插件」**（2026-09-24），插在「关于」前面。⚠️ 沿用既有的那条路：id 是合成的 `__plugin:<插件>:<命令>`，`resolvePick` / `menuHandlers` / 加速键索引**一行都没为插件改**；`menu` 写别的值的条目**不静默丢掉**，照样摆出来、写明"想挂到哪一栏"、且是灰的 |
-| `ui/recentMenu.ts` | **运行时合成「打开最近文件」那一层子菜单**（2026-09-27 新增，约 100 行）：形如 `file.recent:/home/…/笔记.md` 的合成 id。⚠️ **不进 `commands.ts` 的 `MENUS`**——那一张是模块级常量，而「最近打开过哪些」只有跑起来才知道（与「主题」那一栏同一个处境、同一条路：表里留占位项，渲染前换掉）；⚠️ 一条记录都没有时**原样返回**，占位项 `{ id: "file.recent" }` 照旧**灰着**（「灰不灰」由命令表里没有这个 id 推出来，见 `ui/useCommandTable.ts`）——一份空列表配一层要飞出去才看得见的空子菜单，比灰着更难懂；⚠️ 分隔线与「清除最近记录」**编进同一个数组**（拆成两个 `MenuEntry` 不参与键盘漫游焦点）；⚠️ 自绘菜单与原生菜单走的是**同一份注入后的表** |
-| `ui/plugin-prompt.ts` | 「点之前先问一句」（2026-09-24）：把菜单项/面板按钮上的 `prompt` 规格交给 `ui/PromptDialog.tsx`，答完把用户输入并进 `args` 再跑命令。⚠️ 返回的是 `{args} \| null`——**"用户取消"和"没有参数"必须分得开**，取消就**不调**命令 |
-| `ui/usePlugins.ts` | 插件那三样（清单 / 面板 / 菜单项）**一起拉** ＋ 跑一条插件命令（2026-09-24 从 `App.tsx` 搬出）。⚠️ 三者是一个 `Promise.all`：分开拉会让菜单栏短暂少一栏。⚠️ 命令失败**弹 toast 不抛**。2026-10-31 起还订阅 `nota:plugin-panel-focus`：打开插件栏、定位面板；另提供侧栏/编辑区双向切换的宿主动作。`editor.input` 适配器由 `ui/useEditorInput.ts` 单独拉取。 |
-| `ui/useEditorInput.ts` | **编辑器输入适配器的前端接线**：从已加载且声明 `editor.input` 的插件拉取 `editor_input_profile`，只接受当前支持的 `kind = "vim"`；订阅插件自己的 profile 变更事件后重新拉取。插件被停用或卸载后会从插件清单里消失，配置随之置空，编辑器立即恢复原生键盘。 |
-| `ui/LicenseDialog.tsx` | **许可证全文那张框**（2026-10-04 新建）：「关于 → 法律信息」里点那个超链接打开它。⭐ **全文不抄第二份**——走 Vite 的 `?raw` 把仓库根目录那份 `LICENSE` 读成字符串（`ui/nota-mark.ts` 读 `nota.svg` 同款手法），改了 `LICENSE` 这个框跟着变。⚠️ **开在进程内**：交系统浏览器要走 `opener:allow-open-url`、真开 OS 窗口要 `core:window:allow-create`，这条路两样都不碰。⚠️ 壳与别的框**共用**（`.confirm-backdrop` / `.confirm-dialog`），只加 `.lic-*`。⚠️ 它盖在关于框上面（两层 z-index 都是 200，靠 DOM 顺序），`Esc` 的归属由 `ui/AboutDialog.tsx` 那条 effect 让路 |
-| `ui/ConfirmDialog.tsx` | 自绘确认框，替掉 `window.confirm`（**它阻塞 WebView、会打断输入法组合态**）。⚠️ **受控**：开与答案都由 `ui/useDialogs.ts` 给 |
-| `ui/Home.tsx` | 没有文档时那一屏（新建 / 打开文件 / 打开文件夹三颗大按钮 ＋ 2026-09-27 起的**「最近打开」**一节，一条记录都没有时**整节不画**） |
-| `ui/StatusBar.tsx` | **下栏**。⚠️⚠️ **2026-09-30 照 Typora 整个重做过**（用户原话「修改下栏逻辑。这是Typora。其中左边圆圈是显示/隐藏侧边栏；第二个是切换代码/所见即所得模式。右边一个极简的统计token的显示区」）：**左手两枚开关**（侧栏显隐 ○/‹ ＋ 源码↔所见即所得 `</>`）**＋ 右手一个数**（`N 词`，四个数的详情在悬停 `title` 里），**强制专注那一格只在跑着时出现**。⚠️ 旧规格（未保存 / 路径 / `● 已修改` / 模式名 / 严格 / 四项字数）**全删**——`● 已修改` 搬到标签页的小圆点上、模式名改成 `</>` 的亮灭、其余并进悬停。📌 **同日晚又按用户五张参考图补了"悬停那一半"**：指针进到这条栏里 → 右边多出 `A✓`（拼写检查开关）与 `⌄`（「字数统计」菜单，**四项各带此刻的数值**，点一项就换那一格）两颗按钮，**点左边开关之后它们会一直亮着**（焦点还在栏里，是有意的）。⚠️ 参考图里那个**长语言列表没做**（WebKitGTK 没有枚举词典的接口），那个菜单只有两项。⚠️ **没文档时两枚开关照画**（BUG-45 的教训）。⚠️ 它 2026-09-30 起画在 `main.app-main` 里，不再横跨窗口。⚠️ **2026-10-04 最右端补了第五颗：那颗 ×**（`.status-btn.statusbar-close`，第 49 项）——走 `onHide` prop → `useStatusBar` 递进来的 `设界面`（＝ `App.tsx` 那个 `setChrome`），**只关不开**（写 `!` 的话，× 不在屏幕上的那种状态下点它会**把栏打开**）。⚠️ 它**不跟**悬停才出现的那两颗（`.status-aux`）、**也不省**在没文档的时候；⚠️ 位置必须**在 `.status-right` 里面**（`space-between` ＋ 第三个孩子会把字数那一格挤到中间） ⚠️ **2026-10-11：拼写那一层整块搬去了 `ui/SpellMenu.tsx`**（用户贴了一张 Typora 的「选择拼写检查语言」，说「**学学人家的菜单，你也这么做**」）——那一层现在要**自己问一次词典**（一次 IPC ＋ 一份 `useState`），而这一份是「一个 `useState` 都没有」的纯展示；同天那两个回调也合并成了**一条 `onChangeSpell`**（一次写入）。 |
-| `ui/SpellMenu.tsx` | **状态栏那个「选择拼写检查语言」菜单**（2026-10-11 新建，用户贴 Typora 的截图点名要那份形状）：小标题 ＋ 「自动检测语言」与「不使用拼写检查」两项 ＋ 一整列**本地语名字 ＋ 短码**（现从 `nota_spell_dictionaries` 拉，能滚）＋底下一条「全局设置…」。⚠️ 它自己问一次词典、自己拿一份 `useState`，正是为了不破坏下面那两份「一个 `useState` 都没有」的规矩。 |
-| `ui/spell-langs.ts` | **语言目录**（2026-10-11 新建）：标签（`de_DE`）→ **本地语名字**（`Deutsch`）＋ **短码**（`DE-CH`）。两份界面（状态栏那个菜单与设置页那一格）共用这一份。⚠️ 名字**不走 `t()`**（要服务的正是“只认得自己那门语言怎么写的人”）；⚠️ 带地区的那些**必须**缀上后缀（`en_AG` → `English (AG)`）——不缀的话左一列是一排一模一样的 `English`。 |
-| `ui/popup-scroll.ts` | **“这一发 `scroll` 是弹层自己在滚”**（2026-10-11 新建，约 45 行）：修的是用户报的那个缺陷——「选择拼写检查语言的列表**无法下滑**，一下滑就直接消失」。根因是三处“弹层开着时滚一下就关掉”的监听（`StatusBar` / `ContextMenu` / `TabBar`）**没把自己也算出去**：用户在菜单里拨滚轮 → 滚的是菜单内部 → 同一个事件照样冒到 `window` 的捕获相 → 菜单当场关掉、焦点掉回正文。判据：`event.target`（`scroll` 的目标就是**正在滚的那个元素**）能不能在 `.menu-popup` / `.menu-sub` / `[data-context-menu]` 里找到祖先。 |
-| ~~`ui/settings/open-request.ts`~~ | ⚠️ **2026-10-16 整份删掉了**（原来那 30 行不再存在）：它是「把设置窗开到某一页」的一次性信箱，为状态栏拼写菜单底下那条「全局设置…」而建。用户当天看截图点名「**我认为这里不应该有"全局设置"的按钮**」，那条链一起收了——**信箱只有一个投递方**，留着就是"没人写、有人读"的死账。⚠️ 同批删的还有 `MenuPopup::stickyLast`（钉底部那一行，只服务那一条）。`SettingsDialog` 的开页 `useState` 回到"只有自己说了算" |
-| `ui/useStatusBar.ts` | **状态栏那一堆 props 的接线**（2026-09-30 晚从 `App.tsx` 搬出，**108 行**；那次 `App.tsx` 1003 行越了 1000 硬线）。四格值分别读写 `appearance.status_metric` / `editor.spellcheck` / **模式**（2026-10-07 起是会话内状态：家们在 `ui/useFileKindMode.ts`，值由 `App.tsx` 传进来；此前是 `settings.view_mode`） / `App.tsx` 的 `sidebarOpen`。⚠️ **它一个 `useState` 都没有**（`StatusBar.tsx` 那条"不要第三个真相"在这一层的落法）。⚠️ 两条写回 patch 都**先把整张表铺开**（`updateSettings` 只做顶层浅合并）。⚠️ 返回类型取自 `ComponentProps<typeof StatusBar>`，**不手抄一份 props 类型**。⚠️ **2026-10-04 多收一格 `设界面`**（第 49 项那颗 ×）：`App.tsx` 交给它的**就是那个 `setChrome`**，所以 × 与菜单「视图 → 状态栏」写的是同一格；⚠️ **故意让调用方把 setter 递进来、不在这儿铺一遍 `appearance`**——铺了就是同一个设置的第二条写路 ⚠️ **2026-10-11 多了一格 `onChangeSpell`**：它把从前的 `onSetSpellcheck` ＋ `onPickLanguages` **合并成一次写入**——⚠️ 拆成两次写、各拿一份旧快照时，后一次会把前一次抹回去（开窗实测：勾 `English (AG)` 之后盘上 `spellcheck_langs` 仍是 `[]`）。⚠️ **同日为拼写菜单底下那条「全局设置…」还多收过一格 `打开设置页`，2026-10-16 随那条按钮一起删了**（同批删掉的还有 `MenuPopup::stickyLast` 与 `ui/settings/open-request.ts`，见 `ui/SpellMenu.tsx` 文件头）。 |
-| `ui/Toasts.tsx` | 提示条 |
-| `ui/ErrorBoundary.tsx` | 兜住前端渲染错误 |
-| `ui/outline.ts` | 字数的**纯函数**（`countText` / `Counts` / `isCjk`）。⚠️ 2026-09-27 起**大纲那一半搬走了**（`extractOutline` ＋ `OutlineItem` → `editor/headings.ts`，理由是依赖方向，见 `editor/headings.ts` 那一行）；⚠️ **文件名没改**——"outline" 仍与侧栏那一页对得上，改名要连带动 `docs/02` / `docs/09` 两张登记表 |
-| `ui/view-modes.ts` | 三种编辑模式的**显示名**与出厂顺序（**45 行**）。⚠️ **2026-09-30 起只有一列**（原先还有一列短名给状态栏那一格，下栏改版后那一格没了，短名没消费者、同批删掉——**别再往回加第二列**）。⚠️ **2026-10-07 起它一个读者都没有**（偏好设置里那个「编辑模式」下拉随"模式不再存盘"一起删），**文件照旧留着**：那张 `Record<ViewMode, string>` 是"加第四种模式"时唯一会当场编译不过的地方（理由在它文件头，**别当死代码清掉**）。⚠️ 只是名字，**不含任何切换逻辑**——切换走 `ui/useFileKindMode.ts` 的 `设模式` |
-| `ui/useForceFocus.ts` | 强制专注的**状态订阅 ＋ 四条命令**（2026-09-26），主窗与警报窗共用。⚠️ 返回宿主那份快照的**原样**，一个字的文案都没有——两个窗口要说的话不一样（主窗说"余额还剩 12 分钟"，警报窗说"立刻回来写作"），在 hook 里选一种就是替另一个做决定。⚠️ **它就是"读 ＋ 转发"**：什么时候扣、什么时候响全在宿主那个计时线程里，在这里再判一次就是两个真相源。⚠️ `state === null`（还没拉到）与 `running: false`（没在跑）**必须分得开**：合成一个的话挂载那一瞬间会闪一下"开始专注"，而用户其实正在专注中。同一文件里另有 `说时长`（毫秒 → `12:34`／`1:02:03`，⚠️ **是一段时长不是时钟时间**） |
-| `ui/useLiveSelection.ts` | **实时选区快照的 UI 状态**（2026-11-01）：保存当前编辑器的 `SelectionSnapshot`，切换文档时清空；状态栏据此在选区非空时显示“已选 N 词”。后端镜像仍由 `useCursorSnapshot` 独立去抖推送。 |
-| `ui/FocusMeter.tsx` | 状态栏那一格**余额表**（2026-09-26）：`专注` ＋ 按比例画的条 ＋ `mm:ss`。⚠️ **只在跑的时候画**——没跑时状态栏一个字都不占。⚠️ 它是**只读指示、不是开关**（同 `StatusBar.tsx` 那条口径）：点一下就能停看着顺，但那会让"停掉专注"多出一个**没有确认**的入口，而这个动作不可逆（余额清零、这一轮白坐），起停走「视图 → 强制专注」。⚠️ 三个阶段颜色语义要一眼分开：专注＝平常色、走神＝黄的（宽限期内还要说"这几秒不扣钱"）、警报＝红的。⚠️ **BUG-45**：「没文档」那一支返回的状态栏里**没有它**，于是主页开着专注时余额一个字都看不见——2026-09-27 修，判据是"这一格说的是应用在替你记什么账，不是这份文档有多少字"（`docs/07` §2） |
-| `ui/focus-summary.ts` | **一轮专注的读数与那张卡**（2026-09-27 新建，265 行，用户「做一下专注模式结束后的总结功能就是将这一次专注模式的情况显示出来，并且像心电图那样也支持导出」）：`记一笔` / `抽稀` / `造总结` / `专注率` / `说时刻` / `文件时刻` / `横刻度` / `造分享卡`。⚠️ **宿主一行没改**——计时线程每秒广播的那份快照里已经有 `elapsed_ms` / `focused_ms` / `away_total_ms` / `alarms` / `balance_ms`，**这一轮的全部账目都在里面**；真正缺的只有一条曲线，而那正是"每秒那一个余额"攒出来的。⚠️ 三条判据：**采样上限 900（＝15 分钟）之后把间隔翻倍、相邻两点取余额大的那个**（保峰——"什么时候被扣空、什么时候攒回上限"两个尖角都在极值上，平均一下就磨圆了；代价是"扣到底"那一刻可能记成"还没到底"，所以卡片上另有**警报次数**当判据）；**专注率的分母是「专注＋离开」**（警报冻住那段账本不动，既没写也没扣，算进去等于因为"警报响了"而拉低专注率——而警报恰恰是他**回来过**的证据）；**分母为 0 时返回 `null` 而不是 0%**（画破折号；画 0% 是在说他一次都没专注过，那是假话）。⚠️ 卡片右上的时刻**走 `t()` 一条格式串**（`{0}年{1}月{2}日 {3}`），不按语言写 `if`；时分在这里补好零再传（`t()` 只换占位符、不做数字格式化）。⚠️ 大数字选**专注时长**不选总时长（那张卡要能拿去给人看）。⚠️ `subtitle` 是字面量 `"Focus Session"`、**不过 `t()`**（同写作统计那张卡）。⚠️ 判据 `tests/focus-summary.test.ts` **34 条**（跑它要 `--alias:@=./src`） |
-| `ui/useFocusTrace.ts` | **强制专注这一轮的轨迹 ＋ 结束时交总结**（2026-09-27 新建）：把每秒那一个快照攒成一条余额曲线，`running` 从 true 掉到 false 那一下造出 `总结` 交给上层（`App.tsx` 再递给 `ui/FocusSummaryDialog.tsx`）。⭐ **为什么必须在前端攒**：宿主 `nota_focus_stop` 会把账本清成空快照（`focus::停下` → `快照::空()`），所以"这一轮到底怎么样"只能在结束**之前**就留着。⚠️ 三条坑写在文件头：曲线存 `useRef`（每秒 `setState` 白跑，而且 `setState` 进依赖会**转成死循环**——`记一笔` 对同一秒返回的是新数组）；`在跑` 那个 ref 是**挂载时那一发空快照**的补丁（否则一进来就被判成"刚结束"，总结当场弹出来）；`收起` 之后 `结算` 要清干净。⚠️ 它**不认识卡片**，只交一份 `总结` |
-| `ui/FocusSummaryDialog.tsx` | **一轮专注结束后那份报告**（2026-09-27 新建）：左边五格（本轮时长 / 专注 / 离开 / 警报 / 专注占比）、右边分享卡预览、底下三颗按钮（保存分享图 / 复制分享图 / 知道了）。⚠️ **它不是 `useDialogs` 那一族**：那四个框（确认／输入／图像／Emoji）都是"问一句、等一个答案"（`askXxx` 返回 Promise、`answerXxx` 兑现），而这个框**不问任何事**——它是一份看完点掉的报告，硬塞进那个 Promise 形状就得凭空造一个谁也不读的返回值。所以由 `App.tsx` 直接持有（`useFocusTrace` 给的 `结算`），不走 `askXxx`。⚠️ 外壳借 `.confirm-*`，但 `role` 是 **`dialog` 而不是 `alertdialog`**（后者是"打断你、必须回答"，这一份是用户自己按了"停止专注"之后的回执）。⚠️ **只接 Esc、不接 Enter**（Enter 交给按钮自己：焦点在「知道了」上是关掉、在「保存分享图」上是存图——那正是用户的意思，这里再抢一次会让存图那颗按不动）。⚠️ 默认焦点给「知道了」（按完"停止专注"手还在键盘上，回车就该收工）。⚠️ ⚠️ **`App.tsx` 里它必须排在 `useImmersive` 之前**：`有浮层` 要数进 `专注总结`，否则总结框开着按 Esc 会连沉浸模式一起退掉 |
-| `ui/FocusAlarmWindow.tsx` | **警报窗那一整棵树**（2026-09-26）。⚠️ 它**不在 `App.tsx` 那棵里**：`main.tsx` 按 `location.hash` 分叉，`#focus-alarm` 走这里，所以这里**不取**文档/插件/设置状态（那个窗口里根本没有编辑器），也**不挂** `useFocusAlarmSound`（宿主那一枪是发给所有窗口的，两边都订就是同一段警报响两遍）。⚠️ 唯一出口是「我回来了」，故意不留"稍后再说/最小化"，窗连标题栏都没有；**Esc 等价于点那颗按钮、走同一条 `ack`，不是后门**。⚠️ **Alt+F4 留着而且是必须留**——一个抢焦点、置顶、关不掉的窗是恶意软件的行为而不是自律工具（`lib.rs` 的 `Destroyed` 分派里也调一次 `确认`，少了它会出现"窗被关掉、阶段还停在警报、下一拍又开一个"） |
-| `ui/useFocusAlarmSound.ts` | 警报声（2026-09-26）：**前端 Web Audio 合成**是主路径（880/1245 Hz 交替、渐强淡出），一份代码全平台通用；**只在主窗挂**。⚠️ **预热必须落在用户手势的同步段里**——`AudioContext` 一旦跨过 `await` 就永远是 `suspended`，警报响的时候一声都没有。⚠️ 合成不出来时调 `nota_focus_beep` 让宿主兜底（那条只在 Linux 上有程序可叫） |
-| `ui/useFocusIntro.ts` | **首次说明**那段话（2026-09-26，用户点名要的）：把「开始」包一层——`introduced` 还是假就先弹一次说明（要哪三样系统能力、不读键盘不截屏不外传、随时可停），看过了就直接跑。⚠️ 之后仍可在设置页里重新打开那段说明（那颗按钮不是装饰） |
-| `ui/settings/panes/FocusPane.tsx` | 「强制专注」页（2026-09-26）：四个旋钮 ＋ 声音开关 ＋ 「再看一遍说明」＋ 那段权限说明。⚠️ **它排在「通用」前面**——通用那页一直是"别的都归不到一起的东西"的收尾页，而强制专注是一整块有自己账本的功能（2026-09-27 起「拓展」插在**它和通用之间**，见 `SettingsDialog.tsx` 的 `ORDER`）。⚠️ 它**不提供起停**（起停只在「视图 → 强制专注」）。⚠️ 「依据在开什么应用而判断」那条**明确不做**，留着一颗 disabled 的按钮把理由写在 `title` 里，而不是藏起来——藏起来下次还会有人提 |
-| `ui/settings/panes/ExtensionsPane.tsx` | **「拓展」那一页**（2026-09-27 新建，275 行；设置里的第**十**页）：用户「完全没有拓展管理面板。做一个。可以导入，导出和卸载拓展」。⚠️ 与右侧「插件」栏的分工是**诊断 vs 管理**：那一栏是出问题时第一眼看的地方（栏宽 260px、插件一多就得滚着读），这一页把装 / 导出 / 卸载三件事摆在一条行上、宽度够、能对着读完再决定。⚠️ 两边用的是**同一份数据、同一批动作**（`usePlugins` 的 `plugins` 与 `动作`），所以不会出现"这一栏说装好了、那一页还没有"这种两份真相源。⚠️ 三件事里**只有导出是这一轮新做的**（装与卸早就在、右侧栏一直在用），宿主那半在 `plugin/export.rs`；文案在 `ui/pluginText.ts` |
-| `styles/focus.css` | 强制专注那**三块**的样式（2026-09-26 两块，2026-09-27 加第三块）：状态栏那一格（`.status-focus` 三态）＋ 警报窗（`.alarm-root` 整块红屏 + 大白字 + 那颗按钮）＋ **结束后的总结框**（`.focus-summary*`）。⚠️ 警报窗那份要按**整块屏幕**写，**不借** `.app-shell` 那套布局——它压根不在那个壳里。⚠️ **BUG-44**：`.alarm-card` 原来写 `max-width: 22ch`，而 `ch` 量的是**卡片自己的**字号（继承 `body` 的 15px），标题却是 `clamp(2.5rem, 9vw, 7rem)`（800 宽的屏上就是 72px），再扣掉卡片自己那条 `padding: 0 5vw`——留给字的只剩几十像素，标题一行一个字竖排、按钮被挤出视口；现在跟着 `--alarm-title-size` 走（`calc(... * 9)`），**宽度与标题字号同一个出处**。⚠️ 总结框那一族用**两个类**（`.confirm-dialog.focus-summary`）而不是靠 import 顺序：`gate.css` 那种写法把正确性押在 `main.tsx` 上，失效时不报错 |
-| `styles/theme.css` | **界面主题的唯一入口**——2026-09-26 起只剩四行 `@import`（原 1117 行顶破本仓 1000 行硬线，**就地按职责拆成四份**）。⚠️ **四份的顺序是承重的**：`base` → `shape` → `color` → `extras`；`base` 与 `shape` 的选择器权重都是 (0,1,0)、靠源序决胜，**换顺序会让所有风格的圆角与控件高静默失效**；`extras` 必须在最后。⚠️ 拆完**不必**去改全仓那些"见 `theme.css` 的某个变量"的注释——变量还是从这条路进来的。⛔ 文档主题一个变量都不许经这里中转 |
-| `styles/theme/base.css` | 拆出来的第 ① 份：`:root` 公共量（**两条轴本身**）＋ `[data-ui-mode]` 两段。三条字体栈（`--font-ui` / `--font-mono` / `--font-doc`）定义在这里：⛔ `--font-ui` **不许出现衬线**（用户 2026-09-24：「绝对不要用衬线字体做UI字体」；`tools/doc-sync-check.sh` 的 ⑥ 与 ⑥之二 查这个），`--font-doc` 可以是衬线但**只有 `.editor-pane` 下的正文能引**。2026-10-21 起默认界面主题固定为 Adwaita，自动匹配系统主题已移除。 |
-| `styles/theme/shape.css` | 拆出来的第 ② 份：**轴一（形状）**。安装包实际可选的具体内置风格只有 **Adwaita**；其他官方风格的完整自包含 CSS 在 `Nota-themes`。含 `--find-hit` / `--find-current`（查找高亮要盖在**正文**上，和 `--accent` 在暗色下的合适值差得很远，所以单独两个）。⛔ **一个颜色都不许写进来**——写死颜色这一档就配不了暗色了。`doc-sync-check.sh` ⑦ 只要求 `ui_styles.rs::BUILTIN_IDS` 的每一项都有形状与前端落点。CDE、Yaru 等外置风格不在这里登记 |
-| `styles/theme/color.css` | 拆出来的第 ③ 份：**轴一 × 轴二（颜色）**，七档 × 明暗 = **14 段**都要有；`[data-ui-mode]` 只给颜色，确有识别色的风格（GitHub 的冷灰蓝边框、Yaru 的橙…）写成**两属性**选择器放在最后（比单属性更具体，稳定压过上面两段）。⚠️ 规范里的强调色**次色/按下色故意没 token 化**（全仓共用一条 `filter: brightness()`），欠账与理由记在 `docs/04` §3.2c |
-| `styles/theme/extras.css` | 拆出来的第 ④ 份：**变量表达不了的那几件事**，是四份里唯一带组件选择器的，必须在最后加载（它要盖住的正是前面定下来的值） |
-| `styles/ui-style.ts` | **用户导入的界面风格的注入器**（2026-09-26）：塞进固定的 `<style id="nota-user-ui-style">`、**追加到 `<head>` 末尾**。⚠️⚠️ **故意什么都不改写**——`doc-theme.ts` 那边必须限域，这边正好相反：界面风格要改的就是整个外壳，套前缀等于把用户那份文件整个废掉而且**不报错**。于是"同名覆盖内置"的全部实现就是**文档顺序**（后者胜出），一条冲突检测代码都不用写。⚠️ 没有解析也就没有校验，语法错由 WebKit 自己丢那一条 |
-| `styles/inline-style.ts` | **运行时 `<style>` 的统一注入器**（2026-10-29）：文档主题与用户界面主题都经这里复用固定元素并继承页面 CSP nonce。⚠️ Tauri 发行版会把 `style-src` 收窄到 nonce；普通 `createElement("style")` 虽然出现在 DOM 里，但 `style.sheet === null`，主题会静默退回默认配色。已有无 nonce 的旧元素必须重建，不能只补属性 |
-| `styles/icons.css` | 那一套搬来的图标怎么画：`.icon`（`mask-image` + `background-color: currentColor`，**`-webkit-` 前缀两条都要留**——真窗口是 WebKitGTK、试验台是 Chrome）、`.icon-missing`（名字对不上文件时画虚线框，避免它"空着像设计如此"）、`.btn-with-icon`（图标 + 文字的 `gap`）。⚠️ 与前后几份样式**没有重叠选择器**，加载顺序不影响结果 |
-| `styles/applyTheme.ts` | 把 `ui_style` / `ui_mode` 两条轴写到 `<html>` 的属性上；旧值 `ui_style = "auto"` 兼容映射为 Adwaita，但不再探测桌面。还负责**界面第三条轴「主题色」**（`appearance.accent` → 内联 `--accent` / `--accent-fg` / `--switch-on` 三个变量）。⚠️ 2026-09-30 起它还管**侧栏宽度**（`appearance.sidebar_width` → `--sidebar-width`，夹 180~480，与 `ui/SidebarResizer.tsx` 同一个区间）。⚠️ 那一段里**"不是数就退回 240"那道兜底不能少**（`Number.isFinite`）。 |
-| `styles/accent.ts` | **界面外观第三轴「主题色」的纯函数**（2026-09-26）：`parseAccent`（三/六位十六进制，认不出来返回 `null` = 跟随风格）＋ `accentFg`（强调色上那行字用黑还是白）＋ `accentVars`（`applyTheme` 直接拿它去 `setProperty`；⚠️ 输出是**三个**键——`--accent` / `--accent-fg` / `--switch-on`，第三个 2026-09-30 加，理由写在那个函数上面）。⚠️⚠️ **`accentFg` 的判据是一个亮度阈值 0.25，不是"挑对比度高的那个"**——后者和出厂那 15 对有 7 对不一致（连 Adwaita 的旗舰蓝都会翻成黑字），0.25 是从出厂值里读出来的，`tests/accent.test.ts` 第二组直接读 `color.css` 钉着它。⚠️ 本文件不碰 DOM，所以能在 node 里跑 |
-| `styles/code-block.css` | 代码块上的**挂件**（2026-09-26 从 `editor.css` 整段搬出，原第 373–698 行——那边当时 961 行、离硬上限只剩 39 行，**内容一个字节没改**）：折叠/复制那一条、语言图标、语言下拉。⚠️ **顺序仍然要紧**：这一份里那几条选择器要盖住 `editor.css` 里对 `pre` / `code` 的规则，所以 `editor.css` 必须 `@import` 它、且排在后面。📌 **2026-10-06（第 101 项）起代码块里有两层文本**，本文件里**凡是以 `pre > code` 为靶子的规则都要重新问一句"它收的是不是那一层零尺寸的隐藏层"**：折叠那条已经从 `> code` 改成 `> .cm-editor`（BUG-69——改之前按钮会翻字、画面一动不动）。⚠️ `pre` 的框（`--bg-subtle` 底色 ＋ `--border` 边框 ＋ `--radius` 圆角）在 `styles/editor-blocks.css`，**不在本文件**——查"框怎么没了"要去那儿 |
-| `styles/doc-typography.ts` | **「文档主题」那四个可调项 → 四个 CSS 变量**（2026-09-27 新建，98 行，纯函数不碰 DOM）：`--doc-line-height` / `--doc-para-gap` / `--font-doc` / `--doc-font-size`，由 `ui/EditorPane.tsx` 写进 `.editor-pane` 的内联 style。⚠️ **前三个变量文档主题自己也会定义**（`styles/themes/*.css` 的 `:root`），也就是"主题给一套默认、用户逐项盖掉"——所以输出**必须落在 `.editor-pane` 那一层**（声明就在那层，写 `<html>` 靠继承盖不过它，见 `settings/document.rs` 文件头）。⚠️ 这也是它和 `styles/accent.ts` 的差别：那个的结果由 `applyTheme.ts` 写进 `<html>`，这个不能。⚠️ **只有打开的项才写**：关着的一项一个字都不写（写成"等于默认值"会顶掉主题那套）。⚠️ 三档字体栈**每档都带通用族兜底**、且不捆绑任何字体文件（`docs/10` §11.2 那条边界）；等宽那档交给 `--font-mono`，不抄一份 |
-| `styles/doc-theme.ts` | **文档主题的限域与注入**。用户主题会写 `h1 {…}` 这种裸选择器，注入前把**每条选择器挂到 `.editor-pane` 之下**（`:root`/`html`/`body` **改写**成锚点，不是加前缀）。⚠️ **这是"文档主题碰不到界面"的唯一保证**。Typora 主题的 `--bg-color` / `--syntax-*` / 字体变量与 `.cm-*` token 也在文档作用域内桥接，不能提升到外壳。⚠️ 与 `styles/ui-style.ts` 正好相反：那份界面主题**故意不限域** |
-| `ui/useUiStyles.ts` | 用户导入的**界面风格**的清单 / 注入 / 打开目录（2026-09-26）。⚠️ **判据是"这一档有没有文件"，不是"是不是内置那七档之一"**——用户放一个 `adwaita.css` 就是覆盖内置，那时 `data-ui-style` 仍是 `adwaita`，但那份 CSS 得取回来；这个信息只有清单的 `builtin` 那格有。⚠️ 清单是**状态不是事件**（同 `panels` / `themes`）：运行期间往目录里丢文件不会触发通知，要重开应用。⚠️ 取失败**安静退回内置那套**，但必须真的把注入的那份撤掉，否则用户看到"我删了文件、风格还在" |
-| `styles/themes/cde.css` | **CDE 文档主题迁移源**：深底浅字、方角、无装饰线。文档主题源码仍留在仓库供独立官方主题仓库迁移，但不在 `themes.rs::BUILTIN`，不会编进安装包 |
-| `styles/external-themes/cde/` | **完全外置的 CDE 界面风格包**：`theme.css`、自绘图标和 WQY 点阵字体/许可证全部自包含，不静态导入、不登记进 `BUILTIN_IDS`。主程序二进制不得出现针对 `cde` 的分支；用户安装到界面风格目录后由通用 CSS 变量和相对资源机制加载 |
-| `src-tauri/src/theme_assets.rs` | **主题相对资源内联**（2026-10-17）：把用户主题 CSS 里的 `url("./…")` 按 CSS 文件所在目录解析，转成 data URI 再交给 WebView；图标和 `@font-face` 走同一条路。⚠️ 只许读取 `themes/ui/` 或 `themes/document/` 根目录内部，拒绝逃逸、绝对路径与未知后缀；单件 8 MiB、合计 24 MiB |
-| `styles/themes/adwaita/` | **只读内置 Adwaita 文档主题**：`theme.css` ＋ `dark.css` ＋ `README.md`，2026-10-18 起安装包仅内置这两个主题 id。README 明确禁止在目录内修改，并分别列出 Linux/macOS 的 `~/.config/nota/themes` / `~/Library/Application Support/nota/themes` 与 Windows 的 `%APPDATA%\nota\themes`。`minimal` / `latex` / `cde` 源文件留作独立官方仓库迁移，不随包。 |
-| `styles/diagram.css` | **图表块**（` ```mermaid `）的样式：源码框、渲染区、说明卡（空/出错/正在渲染）。⚠️ 渲染出来的 `<svg>` 上限的**真正落点不在这里**——`diagram-view.ts` 按 `viewBox` 的自然宽取 `min(100%, 自然宽)`，这里那条 `max-width: 100%` 只管"内联样式还没改上"的那一帧（2026-09-26 实测：只写 `100%` 会让小图被容器宽度等比放大） |
-| `styles/math.css` | **公式那棵树**（2026-09-26）：`.nota-math-panel`（面板）、`.nota-math-delim`（半透明分隔符）、`.nota-math-source`（源码框）、`.nota-math-render` 的三种 `data-state`、`.nota-math-note`（说明卡）。⚠️ 开合走**根上那两个类**（`.nota-math-editing` / `.nota-math-readonly`），**别在 `.nota-math-panel` 上另写一条 `display: none`**——两处都写得出效果，于是「改一处没反应、改另一处才有」（那一段注释就在文件里）。⚠️ KaTeX 自己那份 `katex/dist/katex.min.css` **管不着这个文件**：那份只画 `.katex` 那棵树。⚠️ 行内公式编辑时渲染区 `display: none`（Typora 式：源码框替掉结果）——想改成两边都显示**只删这一条**，别动 JS |
-| `styles/video.css` | **视频那颗播放器**（2026-09-28 新建，60 行）：`.nota-video > video` 的宽度上限、圆角，以及两条 `:fullscreen` 保险（⚠️ 作者样式一旦在全屏里也管用，画面会变成"宽度撑满、高度按比例"的一条，底下留一片黑；WebKit 的 UA 样式很可能带 `!important`，真是那样这两条就是空转——空转没有代价）。⚠️ **只有三条规则**：视频的长相是浏览器给的（原生控件），任何一条都可能盖住控件自己的定位。⚠️ **尺寸那条在文档主题里还有一份**（`themes/*.css` 的 `video`），因为导出会把 `nota-` 类名摘掉、那边只认元素选择器——改一处要想着另一处 |
-| `styles/marks.css` | **"光标所在的标记"那两类提示的样式**：`.nota-srcmark` 管块级装订线；`.nota-markhint` 管所有行内标记的逐字符真实文字 widget。行内标记继承正文字体与字号，使用 `--fg-faint` 保持语法层级，并锁常规字重/正体。两类都不进文档、不参与导出 |
-| `styles/app.css` | **外壳骨架**：全局 reset、窗口骨架、沉浸模式、工具条、按钮原语。⚠️ ⚠️ 2026-09-29 按功能拆成五份**（那一份当时 836 行，用户当天给的新尺子）：骨架与 reset（本行）＋ `menubar.css`（菜单栏与弹层）＋ `tabs-status.css`（标签栏与状态栏）＋ `home.css`（主页与最近打开）＋ `toast.css`（提示条）。⚠️ **`app.css` 必须是五份里第一个加载的**（那段 `*` / `html, body` 的 reset 是别人的底子）。⚠️ **不含左侧栏**（栏本身/文件树/大纲，在 `sidebar.css`）。⚠️ 2026-09-27 晚多了 `.tab-menu-anchor`（标签栏右键菜单的锚）：`position: fixed` ＋ **尺寸必须是 0**——`MenuPopup` 自己带 `top: calc(100% + 5px)`，锚有高度就会把菜单推走。⚠️ 父层不能有 `transform`/`filter`/`contain`（`.app` 只有 `position: relative`，安全） |
-| `styles/menubar.css` | **菜单栏**与弹层（`.menubar` / `.menu-popup`，含分组、项、快捷键、勾、子菜单）。2026-10-25 按 Typora 收紧为无栏间 gap、24px 菜单项与 7px 横向内边距。⚠️ 弹层层叠与 `--z-popup` 绑定 |
-| `styles/tabs-status.css` | **标签栏与状态栏**（2026-09-29 从 `app.css` 拆出）：正文那一列底下那两条。⚠️ `.tab-menu-anchor`（标签栏右键菜单的锚）在这里：`position: fixed` 且**尺寸必须是 0**。⚠️ **2026-09-30 起这两条只横跨正文那一列**（原来横跨整窗），且状态栏左边那两枚是小按钮（`.status-btn`，`[data-on]` 走强调色）——旧的 `.status-dirty` / `.status-mode` / `.status-strict` 三个类**同批删了** |
-| `styles/home.css` | **主页**（2026-09-29 从 `app.css` 拆出，170 行）：没开文档时那一屏与「最近打开」 |
-| `styles/toast.css` | **提示条**（2026-09-29 从 `app.css` 拆出，165 行）：`ui/Toasts.tsx` 那个固定在右下角的一层，`z-index: 80`（菜单之上、确认框之下） |
-| `styles/overlay.css` | **浮层那一族**（2026-09-27 新建，按职责从 `app.css` 拆出——加了 Emoji 选择框之后那份 1040 行、破了 1000 行硬线）：确认框 / 输入框 / 插图框 / **Emoji 选择框** / **Emoji 补全面板**。⚠️ **四个框必须待在同一个文件里**（它们共用遮罩与层叠顺序，分开放迟早出现"两个框一起冒出来时谁盖谁"说不清）。⚠️ **必须在 `app.css` 之后加载**：`.emoji-cat` 要盖掉 `.btn` 的内边距，靠的就是"后来居上"，顺序反了那排分类按钮会静默变回全尺寸 |
-| `styles/window-id.css` | Hold-to-show window ID overlay, kept separate from the dialog stylesheet. |
-| `styles/sidebar.css` | **左侧栏**：栏本身 + 文件树 + 大纲 + 右缘拖动把手。`.sidebar-empty-state` 在文件/大纲为空时仅在侧栏悬停或内部键盘焦点可见时显示，鼠标移到编辑区即淡出；鼠标点击留下的普通焦点不再让它常驻。📌 同时保留 2026-09-30 的开合动画与 6px 拖动命中区；拖动时 `body.resizing-col` 负责全局手型与禁选中 |
-| `styles/bars.css` | **编辑区上方那两条横条**（格式化工具栏 + 查找替换条）。2026-09-24 从 `app.css` 拆出（那时 880 多行）：那几条贴着编辑区、跟着 `mode` 走，外壳骨架那套不跟。⚠️ **必须在 `app.css` 之后加载** |
-| `styles/gate.css` | **「没装某样东西」那块面板**的样式（`.gate-*`）。2026-09-25 从 `slidev.css` 改名而来——**这套形状不专属于 Slidev**，pandoc 那条路、以及以后任何一个"要一个外部工具"的功能都用它。⚠️ **必须在 `app.css` 之后加载**（`.gate-panel` 要盖掉 `.confirm-dialog` 的 440px 宽度，同权重靠顺序） |
-| `styles/diff.css` | **增删对照**的样式（`.diff-line` / `.diff-del` / `.diff-add`）。⚠️ 两条路**共用同一份**：插件栏里的 `kind = "diff"` 内容块，和编辑区里的改动预览（`docs/04`）——同一次改动在两处画得不一样是最容易让人怀疑数据的那种不一致。⚠️ 由 `dock.css` 引（`dock.css` 那段注释指的就是这里） |
-| `styles/review.css` | **摊到编辑区那块面板**（`ui/ReviewPane.tsx`）的样式：`[data-review]` 之下编辑区让位、那条「← 回到文档」的横条。2026-09-25 新增 |
-| `styles/heatmap.css` | **热力图那一块的皮**（2026-09-27 新建，83 行）。⚠️ **另开一份是因为 `dock.css` 当时 971 行、顶着 1000 行硬线**（同 `share.css` / `marks.css` 那两次拆）。⚠️ **列宽是弹性的**（`flex: 1`）：面板那一栏能从 260px 拖宽，写死像素的话拖宽之后整块图缩在左上角。⚠️ 格子深浅走 **`color-mix` 兑透明**、不写死五个颜色（同 `dock.css` 的 `.pg-row.is-picked`）：兑透明才不会被底色的深浅两套吃掉 |
-| `styles/share.css` | **分享图那一块面板的皮**（2026-09-27 新建）：`.panel-share` / `.panel-share-img` / `.panel-share-actions` / `.panel-share-note`。⚠️ **另开一份是因为 `dock.css` 当时 961 行、贴着 1000 行硬线**（同 `marks.css` 那次拆的理由）。⚠️ 卡片自己的配色**不在这里**——那张 SVG 塞在 `<img>` 里、继承不到任何 CSS 变量，配色由 `PanelBody` 的 `useCardPalette()` 读 `<html data-ui-mode>` 决定。⚠️ 要在 `dock.css` 之后加载（借那边的 `.panel-btn`） |
-| `styles/dock.css` | **右侧插件栏的骨架**（2026-09-24 从 `app.css` 拆出，那时 1043 行）：栏头、页签、栏内分区、面板容器、`frame` 块（嵌进来的画面）。⚠️ 2026-09-29 按功能拆成四份（本文件当时 971 行）：骨架（本行）＋ `panel.css`（面板内容块）＋ `panel-data.css`（提交树与曲线刻度）＋ `plugin-list.css`（插件清单）。⚠️ **四份都必须在 `app.css` 之后加载**——都借那边的 `.btn` 那套按钮底子（同权重靠顺序） |
-| `styles/panel.css` | **面板内容块**（2026-09-29 从 `dock.css` 拆出）：`ui/PanelBody.tsx` 把插件给的 JSON 画成的那一套——标题、正文、字段表、列表、对话三块（`message`/`diff`/`input`）、语气色（`tone-*`）、认不出与读不出来的那两块。⚠️ 这里是**插件给的 JSON 的落点**，**不许有任何一条规则把插件给的字符串变成视觉**（插件的内容全是文本节点，见 `ui/panel-nodes.ts` 顶上那三条） |
-| `styles/panel-data.css` | **面板里的数据块**（2026-09-29 从 `dock.css` 拆出）：提交树（`kind = "graph"`）、曲线刻度（`kind = "chart"`）与**记录卡**（`kind = "cards"`，2026-10-04 加，版式出自用户给的两张运动手表截图）。⚠️ 与 `panel.css` 的分工是"文字怎么排"对"图怎么画"；两块都活在 260px 里，刻度文字走 HTML 而不是 SVG 的 `<text>`（那个 svg 横竖不等比，字会被拉扁） |
-| `styles/plugin-list.css` | **已装插件清单**（2026-09-29 从 `dock.css` 拆出）：插件栏最右那一页的 `.plugin-*` 与「已信任的签名者」（`.trust-*`）。⚠️ 它画的**不是插件给的 JSON**，是宿主自己列的清单。⚠️ 偏好设置「拓展」那一页穿的是**同一套类名**（`ui/settings/panes/ExtensionsPane.tsx`），改尺寸两处一起动 |
-| `styles/settings.css` | 偏好设置那个框的**壳与版式**（`.settings-*` 壳 ＋ `.stg-group` / `.stg-row` 那套三列对齐；自成一体的覆盖层，复用 `app.css` 的遮罩底子）。⚠️ 加载顺序在 `app.css` **之后**；框体**不复用** `.confirm-dialog`。⚠️ **2026-09-29 按功能拆成三份**（那一份当时 962 行）：壳与版式（本行）＋ `settings-controls.css`（控件原语）＋ `settings-widgets.css`（某一页专用的小件） |
-| `styles/settings-controls.css` | 设置框里的**控件原语**（2026-09-29 从 `settings.css` 拆出）：`.stg-select` / `.stg-switch` / `.stg-range` / `.stg-radio` / `.stg-input` / `.stg-number` / `.stg-action` 与明暗缩略图。⚠️ **只管控件长什么样，不管摆在哪一栏**——三列对齐在 `settings.css` 的 `.stg-row` 里 |
-| `styles/settings-widgets.css` | 设置框里的三块**专用小件**（2026-09-29 从 `settings.css` 拆出）：`?` 气泡（`.stg-help*`）与快捷键那一页（`.stg-keys*` / `.stg-kbd*`）。⚠️ 气泡是绝对定位的浮层，长哪边按"会不会被内容区裁掉"分情况——**改之前先读它上面的注释** |
-| `styles/editor.css` | **正文编辑区的壳与版式**：编辑区本体、分屏、正文列宽、段首缩进、写作模式。⚠️ 2026-09-22 因撞 1000 行上限从 `app.css` 按职责拆出；加载顺序必须是 `theme → app → settings → editor`。⚠️ **2026-09-29 按功能拆成三份**（那一份当时 945 行）：外壳与版式（本行）＋ `editor-inline.css`（行内那一层）＋ `editor-blocks.css`（块级那一层）。⚠️ **代码块上下都是 30px**（2026-09-26 照 Typora 改的，原来是 `0 0 30px`）：上面 30px、下面 30px，与相邻段落的 `margin` **取大的那个**（不是相加，别按"再加一个 0.85em"去算）。⚠️ `.nota-lang-icon--logo`（透明底 + 一张 vscode-icons 真图，`background-size: contain`）与 `.nota-lang-icon`（底色 + 字母徽章）是**两套互相矛盾**的 `background-*`，**别合到一条规则里** |
-
-### 插件与工具
-
-| 路径 | 职责 |
-|---|---|
-| ⚠️ `plugins/`（**2026-10-09 起不在这里**） | 四个官方插件（`nota.ai` / `nota.git` / `nota.slidev` / `nota.stats`）的源码在独立仓库 `Nota-plugins`。开发态从 `NOTA_PLUGINS_DIR` → 同级仓库 → 老落点发现；**安装包不随附插件**，用户安装 `.nota-plugin` |
-| `src-tauri/icons/nota.svg` | **图标的手写矢量母版**（用户设计的蓝色 `N` + 光标条 + 折角纸）。其余图标文件全由它派生，**不要手改那些 PNG**——改这个 SVG 再走 `docs/06` §2.4 那两步。⚠️ 2026-09-23 换过两版，**逐条差异记在它自己的文件头里**，改之前先读那段 |
-| `tools/gen-squircle.py` | 生成 `nota.svg` 里那块浅灰底衬（**超椭圆**，不是圆角矩形）的路径数据。⚠️ 那条 `d` 是采样出来的，改大小**只能重新生成**。默认参数跑出来的和**第一版**里那条**逐字符一致**（验过）。⚠️ **现在没有调用点了**：第二版底衬换成了普通圆角矩形 `rx=250`。留着是因为原图那块底衬确实是超椭圆的形状，要更贴原图还得靠它 |
-| `tools/doc-sync-check.sh` | 文档同步与行数上限的启发式检查（见 `docs/09`） |
-| `tools/check-version.sh` | 钉住三份版本文件，并校验发布 tag |
-| `tools/test-frontend.sh` | 从 `tests/*.test.ts` 自动生成前端测试名册 |
-| `e2e/` | **浏览器端到端工装**（2026-11-01）：`npm run test:e2e` 类型检查并构建真实编辑器页面，再由系统 Chrome 通过 CDP 执行 34 个场景。覆盖行内标记、公式边界与嵌套、自动链接、基础括号与弯引号配对、真实 Tab、模拟 composition 上屏、代码块光标/字体、图片失败告警与删除、智能标点、自动更正、Emoji、脚注、标题、引用框等。⚠️ 它不启动 Tauri/WebKitGTK，不能替代原生对话框、真实 IME 候选窗、系统打印、Lua 热重载与 OS 快捷键的手工验收；场景和边界见 `docs/06` §5.74 |
-| `tools/woff2-fonts.ts` | **构建期字体收敛**（2026-11-01）：把被 CSS 引用的 TTF/OTF 转成 WOFF2，每个 `@font-face` 只留一个 WOFF2 源，并删除 WOFF/TTF 回退；`check-woff2-assets.mjs` 在 `npm run build` 末尾复核产物。源码母版可保留，安装包只带 WOFF2 |
-| `tools/i18n-check.sh` | **界面文案的账**（2026-09-25）：前端 `t("…")` 的键 ↔ **`src/i18n/en*.ts` 那四份表**（`en.ts` 汇总 ＋ `en-ui` / `en-settings` / `en-runtime`；⚠️ 判据是"取每个文件第一个 `= {` 之后的内容当表体"）、插件 `T("…")` ↔ `lang/*.toml`。⚠️ **废键（表里有、代码里找不到）是 FAIL**——那意味着原文被改过、那条翻译已经失效，而失效的样子是**静默退回原文**，不报错。⚠️ 2026-09-26 起第 ④ 栏「**硬编码中文泄漏**」（`t(...)` 压根没包的那一类）**从"只打印"改成计入 FAIL**——改的时机是当天把最后两条真漏网（`FormatBar.tsx` 的 `aria-label="格式化"`、`EditorPane.tsx` 的 `正在准备编辑器…`）清掉之后；理由：闸门不拦的规矩等于没这条规矩。另查两条插件硬伤：声明了 `langs` 却没有 `lang/en.toml`、有 `lang/` 却**没声明** `langs`（后者宿主根本不会读那张表） |
-| ⚠️ `tools/pack-plugin.py`（**2026-10-09 起在插件仓库**） | **打包 `.nota-plugin`（zip）＋签名**（2026-09-25）：摘要算法是两份实现，改它要同批改 `src-tauri/src/plugin/package.rs` 与 `docs/11` §1.6.2
-| `tests/` | **前端的可运行测试**（2026-09-26 起不再只是一个空目录）：**五十九份、共 1485 条**（📌 **2026-10-07 当天最晚那一批（「链接」那个框）现数**：**59 份**一份一份跑完、**全部 exit=0**——`for` 里 **55 份 1331 条** ＋ 单列四份 **154 条**；这一批只有一笔账：新增 `link-edit` **34 条**。⚠️ **再往前那一批（傍晚「选择」那一族）的账**：新增 `select` **25** ＋ `move-block` **20**（两份都当批进了那个 `for` 循环）、`key-conflicts` **21 → 19**（豁免名单删了）、`code-block-editing` **21 → 31**（剪贴板那一层）；⚠️ **顺带补上一份漏网的**：`code-block-editing` 是 2026-10-06 建的、当时**没进** §6.3 那张逐份表，这一批拿 `ls tests/*.test.ts` 对账才发现——所以上一版那个"56 份"**本身就是少的**；⚠️ 逐份条数只在 `docs/06` §6.3 记，这儿一律引它。<br>📌 **2026-10-07 上午那一批现数**：56 份一份一份跑完、**全部 exit=0**——那份 `for` 里 **52 份 1244 条** ＋ 单列的四份 **154 条**；本批的账只有两处：① `math-view` 51 → **31**、另立新文件 **`math-wiring` 20**（第 89 项把那份 **1024 行**的测试按**职责**切两半——「公式节点自己」五组留 `math-view`、「公式之外围」三组（`插公式块` 命令 / 序列化不给行首井号加反斜杠 / 命令补全弹窗接线）去 `math-wiring`，共用的地基抽成 `math-fixture.ts`；两半 20 ＋ 31 ＝ 51 一条不差。⚠️ 触因是**行数**不是速度）；② `find` 42 → **48**（给 `正则写坏了` 那个新出口补的 6 条）。⚠️ 上一版是五十份、1252 条（📌 **2026-10-04（第 64 项 front matter 可编辑 ＋ 第 45 项外观那两格）再全跑一遍：50 份 0 失败**（`for` 里 46 份 **1098 条** ＋ 单列 4 份 **154 条**）——本批**新加三份**：`front-matter` **32 条**（⭐ 它当场抓到一个老 off-by-one：文件正好停在闭栏那一行时 `前置块行数` 多数一行，`docs/07` 第 64 项）、`focus-dim` **15 条**（专注压暗那条轴的**五个名字**分居五个文件、三种语言，读源码对账）、`window-title` **8 条**（`窗口标题` 那个纯函数 ＋ `应用名` 与 `tauri.conf.json` 的 `title` 逐字相同），其余 47 份的读数与下面那一遍**逐份相同**；📌 **2026-10-04 深夜（第 14 项「选区上报」）再全跑一遍：47 份 0 失败**（`for` 里 43 份 **1043 条** ＋ 单列 4 份 **154 条**）——本批**只新加一份**：`caret-snapshot` **10 条**（选区上报，⚠️ 第三组是那张**量测表**：按 markdown 偏移拼接重建不出光标处插入），其余 46 份的读数与下面那一遍**逐份相同**；📌 **2026-10-04 晚（序列化第七层 `syntax-escape`）再全跑一遍：46 份 0 失败**（`for` 里 42 份 **1033 条** ＋ 单列 4 份 **154 条**）——本批**新加一份**：`syntax-escape` **13 条**（行首 `[TOC]` / `[!NOTE]` 不被加反斜杠；⚠️ 同批把 `table-pipe` / `math-delim` / `atom-space` 各重跑了一遍），其余 45 份的读数与下面那一遍**逐份相同**；📌 **2026-10-04 晚（第 54 项 `$` 判据 ＋ 第 47 项列表缩进那一批）再全跑一遍：45 份 0 失败**（`for` 里 41 份 **1020 条** ＋ 单列 4 份 **154 条**）——那一批**新加两份**：`math-currency` **23 条**（`$` 当钱不算公式：真值表 ＋ 门槛 ＋ Pandoc 那两条 ＋ "摘掉我们这一层就复现出病"的对照 ＋ `create.ts` 里挂载顺序）、`list-indent` **16 条**（列表缩进五组量测），其余 43 份的读数与下面那一遍**逐份相同**；📌 **2026-10-04（第 49 项那批：四栏那颗就地 ×）再全跑一遍：43 份 0 失败**（`for` 里 39 份 **981 条** ＋ 单列 4 份 **154 条**）——本批**新加一份 `bar-close` 13 条**，其余 42 份的读数与下面那几遍**逐份相同**；📌 **2026-10-04（第 55 项 ②③ 那一批）再全跑一遍：42 份 0 失败**（`for` 里 38 份 **968 条** ＋ 单列 4 份 **154 条**）——本批**新加一份 `table-tab` 58 条**（表格里的 `Tab` / `Shift+Tab`，⚠️ 它同时是"单测全绿、真窗口却是坏的"那个故事的出处，见 `docs/06` §5.48），其余 41 份的读数与下面那几遍**逐份相同**；📌 **2026-10-04 下午再全跑一遍：41 份 0 失败**（`for` 里 37 份 ＋ 单列 4 份）——本批新加一份 `key-conflicts` **21 条**，`math-delim` 51 → **47**（第五格当天撤回）、`math-input` 仍 **28**；📌 **2026-10-04 深夜再全跑一遍：40 份 0 失败**；⚠️ 同一批早先那一版是三十八份、958 条、再上一版是 2026-09-30 晚的三十六份、903 条；⚠️ **逐份条数只在 `docs/06` §6.3 记，别处一律引它**——那个数每加一批就变，抄在这儿必然过期；最新一份是 `source-mark.test.ts`，**28 条**，测「源码模式那八个行内标记是开关而不是只会包」——`source.ts` 的 `切换行内标记` 问 `editor/source-mark.ts` 的 `试摘定界符`「选中的文字带不带这一对」，⚠️ 三路返回（没带／认出来但不动／摘掉）与两种几何形态是那一批最容易做错的两处，见 `docs/07` BUG-57）——`empty-doc-save.test.ts`（**8 条**，2026-09-27，**空文档存盘必须 0 字节**：钉住 `empty-paragraph.ts` 那条"保镖"占位符的两种形状 ＋ "空文档序列化不许抛错"）——`keymap.test.ts`（**54 条**，2026-09-27，与设置里「快捷键」那一页同批：`accelToText` 写出来的串**必须能被 `parseAccel` 读回同一个键位**（这条是承重的——读不回来就是"用户改完重启、那条快捷键静默失效"）＋ 三种"不该绑"（光按修饰键／写不回去的键名／不带修饰的单字符，⚠️ 判据**不能**写成"必须带修饰键"，全仓有 `F8`/`F9`/`F11` 三条）＋ `应用键位覆盖` 怎么叠（没改过**原样返回入参**保住引用／空串＝摘掉 `accel` 字段而不是设成空串／认不出的 id 静默丢弃／子菜单里也改得到）。⚠️ 它**证明不了**真按一下键会怎么样（那半截在 `ShortcutsPane` 的 `keydown` 里，要真 DOM）、也证明不了界面画得对不对、更不碰 `settings.toml`（那一侧是 `settings/keys.rs` 的五条 Rust 用例））、`doc-typography.test.ts`（**11 条**，文档主题那四个可调项到四个 CSS 变量的映射——⚠️ 它**长期不在任何名册里**，跑法与条数见 `docs/06` §6.3）、`slash.test.ts`（**49 条**，2026-09-27，斜杠菜单：表本身的账（id 不重名／关键词全 ASCII／每条都筛得到自己／**故意不在表里的那些 id 确实不在**）＋ `筛项`（空查询命中**全部**、子串不是词）＋ `认查询`（只在行首、有空格就断、**非 `paragraph` 不认**、一条不中给 `null`）＋ `采用`（删的范围、**先删再执行**的顺序、越界不动）＋ 插件（`apply` 那条 **meta 分支**——按 ↓ 的高亮为什么不会被重算冲掉、四条键与两条早退））、`math-view.test.ts`（**51 条**，公式那一块 ＋ `insert.ts` 的 `插公式块` ＋ `lax-heading.ts` 的装饰 ＋（2026-10-04 加的第八组）**命令补全弹窗的接线**——挂在哪、只读不挂、行内用 `span`、回车收下、Esc 第一下只收弹窗、点一条、`aria-activedescendant`、丢焦点只收弹窗）——`math-commands.test.ts`（**35 条**，2026-10-04，命令表的**纯逻辑**那一半：表本身（两份规模、名字不重名、`\div` 那条同名顶替、每条都成形、`常用` 恰好 10 条且 `<= 候选上限`、physics 参数个数、关掉 physics 时 `\vb` 不在）＋ `找当场`（反斜杠**奇偶**判据——`\\` 不是命令头、`\\\` 是）＋ `挑候选`（前缀、短优先、大小写不敏感、**不模糊**、截断）＋ `套用`（光标落进第一个 `{}`））与 `math-suggest.test.ts`（**27 条**，2026-10-04，弹窗那一层的纯逻辑：开与合／键盘（Esc 只收弹窗、↑↓ 到头就停、回车与 Tab 走同一个收下口子）／鼠标／无障碍（`role` 与 `aria-activedescendant` 报给调用方）／预览（缓存 ＋ 画不出来**吞掉**不打断输入）／physics 角标 ＋ `span`·`div` 两档）、`table-input.test.ts`（**39 条**，2026-09-27 深夜，BUG-51：手打表格那一行在这边的判据下算不算表格行（拆单元格 ／ 判分隔行 ／ 判两行）＋ **NBSP 回归**（WebKit 在**行末**把空格存成 U+00A0，判据与输入规则都得把它当空白）＋ 那道「匹配盖住整段」的闸（`prosemirror-inputrules` 拿「文档文字 ＋ 刚敲进去那颗字符」拼匹配串，逐字比会在 NBSP↔竖线上翻车）＋ 输入规则那条正则；⚠️ 它**证明不了**真窗口里敲下去会不会建表——那半截在 `docs/06` §5.36）、`share-card.test.ts`（**46 条**，2026-09-27，分享卡那张 SVG 的骨架/两轴刻度/曲线/**两套配色各自的强调色**/文件名消毒 ＋ base64 编码；⚠️ **唯一需要 `--loader:.svg=text` 的一份**（它和 `heatmap.test.ts` 都要 `--alias:@=./src`））、`chart-ticks.test.ts`（**12 条**，2026-09-27，图上的刻度：纵刻度推法 ＋ 插件给的横刻度 ＋ 数字怎么写——钉着"`格式化数(109.5)` 曾经写成 `11`"那条**差十倍**的回归）、`instant-render.test.ts`（**17 条**，2026-09-26 建、2026-09-27 才登记，标题徽标 `H几` 越界时不许出现 `H0`/`H7`）、`accent.test.ts`（**18 条**，主题色那几条纯函数，**直接 `readFileSync` 读 `color.css` 钉出厂那 15 对**）、`mark-hint.test.ts`（**18 条**，含"提示表里的名字是不是真 preset 的 mark id"这条防线）、`math-input.test.ts`（**28 条**，两条输入规则与解析器逐行对照 ＋ **敲的就是存的**逐字节往返 ＋（2026-10-04 加的）守卫二「值紧挨着空白不算公式」＋ 第四组**块公式回车才建**（`公式块回车` 的四条守卫 ＋ "我们滤的那两条真的在 `math` 里"那条防静默失效））、`lang-icons.test.ts`（**14 条**，拿真 SVG 文件列表与真 prism id 对账）、`atom-space.test.ts`（**19 条**，原子后那颗 NBSP 的判据 ＋ 包装那层找前一个兄弟 ＋ "U+00A0 只许来自 `\u00a0` 这个转义"）、`math-delim.test.ts`（**51 条**，2026-09-27 建、**2026-10-04 加四组**，行内公式用几个 `$` 那三处机制 ＋ 第四格 `不转义美元`（BUG-59）＋ 第五格 `收严公式`（值紧挨着空格的 `$…$` 还原成正文，照 Typora；**第九组**钉着"打开再存逐字节不变"）——**不建 Editor，但拿真 `Ctx` ＋ 真 `ParserState`/`SerializerState` 跑**）、`heatmap.test.ts`（**20 条**，2026-09-27，热力图哪一格是哪一天 ＋ 那种"错的图看着完全正常"的坏）、`emoji.test.ts`（**32 条**，2026-09-27，Emoji 那张 503 条的表 ＋ 前缀匹配 ＋ 输入规则正则（拿**同一条导出常量**核每一条短代码）＋ 候选采用 ＋ 装配）、`footnote.test.ts`（**30 条**，2026-09-27，脚注的编号分配（最小未用／补洞／非数字标签只占位）＋ 两个 `null` 出口 ＋ `脚注事务` 的文档树与光标落点 ＋ **逐字节往返**（真 `unified()` ＋ 真 `ParserState`/`SerializerState`））、`smart-punctuation.test.ts`（**36 条**）、`inline-marks.test.ts`（**37 条**，2026-09-27 夜 BUG-48 那批：叠加矩阵的嵌套与**半重叠**、配对守卫（行内节点不算边界）、孤立波浪号不被转义——⚠️ 这一份的工装**从前没挂 `remark-gfm`**，「`~下~` 不许被改写成 `~~下~~`」那三条因此是**假绿**，见 `docs/06` §6.3 末条 📌）、`auto-correct.test.ts`（**20 条**）、`html-block.test.ts`（**14 条**）、`toc.test.ts`（**22 条**，2026-09-27，内容目录：锚点／生成／查找替换／`目录事务`——⚠️ 测试里那份 `remarkStringify` **必须带 `{ bullet: "-" }`** 才与生产对齐，否则断的是"存盘会变样"的假象）＋ `fake-dom.ts`（只够跑逻辑的假 DOM）。⚠️ **本仓没有测试框架、也不许为这件事装包**，所以跑法是 `npx esbuild … --bundle --platform=node --format=esm` 再 `node`（两条命令见 `docs/06` §6.3）。⚠️ 它们**不建 Editor、不开窗、不碰真 DOM**：用一颗真 `Ctx` 把**真插件自己那份节点规格**取出来建真 `Schema`，所以「源码在内容里还是在属性里」「存盘读哪一个」都由**真代码**回答。⚠️ 别把它当成「前端有测试覆盖了」：被盖住的只有纯逻辑，React 组件、编辑器生命周期、CSS 一条都没有。⚠️ **加一份测试要跟着改四处**（`docs/06` §6.3 那一段列着）：§6、本行、`docs/09` §2、`docs/02`。⚠️ **还有第五处，闸门管不着**：`docs/06` §6.3 那个跑测试的 `for` 循环里的名字是**穷举**的——漏了谁就悄没声地不跑谁（2026-09-27 就发现**三份**建好之后从没进过那个循环、也没进过任何名册：`chart-ticks` / `instant-render` / `doc-typography`）。📌 **2026-10-04 加两份**：`modal-trap.test.ts`（**9 条**，第 50 项：焦点陷阱的 `陷阱落点`——没有格子／焦点在外面／首尾互跳两个方向／格子中间放行；⚠️ **DOM 那一半没验**，真浏览器里 Tab 怎么挪要开窗）与 `tablist-keys.test.ts`（**6 条**，第 50 项：`页签下一个` 的下标算术——边界／Home·End／绕圈）；同批 `toc.test.ts` **22 → 27**（front matter 判据合并的「二½」组）。⚠️ **2026-10-04 深夜又加两份、并按现跑的数校准了三份**（`math-view` 41 → **51**、`math-delim` 43 → **51**、`math-input` 19 → **28**）：`math-commands.test.ts`（**35 条**）与 `math-suggest.test.ts`（**27 条**）——用户拿 Typora 截图点的那三件事里**第三件**（「加 LaTeX 命令补全」）的两层纯逻辑测试；同批这件事的**前两件**（「空格判据按 Typora 改」见 `math-delim` 第九组 ＋ `math-input` 第一组、`math-delim` 第五格）也各有判据。⚠️ **两份都当批进了 `docs/06` §6.3 那个 `for` 循环**（这一次拿 `ls tests/*.test.ts` 对下来是**四十份**，四份带额外开关的不在里面，见 §6.3）——`table-tab.test.ts`（**58 条**，2026-10-04，第 55 项 ②③：表格里的 `Tab` / `Shift+Tab`——四组：四道闸（组字期间／修饰键（⚠️ **`Shift` 不算修饰键**）／**`keyCode === 9` 那道认键闸**／非 `Tab` 放行）／四种现场（不在表格里放行／中间格挪／最后一格加行／第一格 `Shift+Tab` 吃掉）／加行那一段的坐标（`新行起点` ＋ `首格落点` 那个 **`+2`**）与节点类型（**先认名字**）／三种输入形状的认键（X11 的 `Unidentified` ＋ `keyCode: 9` **必须接住**）；⚠️ **`TextSelection.near()` 有容差**，所以"光标落在新行第一格"那条**不能靠选区断言**，只有纯函数钉得住那个 `+2`；⚠️ 它**证明不了**"`Shift+Tab` 在真平台上送不送得到这里"——**那正是它证不了的那一件**，那半截只能开窗，见 `docs/06` §5.48）——`bar-close.test.ts`（**13 条**，2026-10-04，第 49 项：四栏那颗就地 × 的口径——三组：① 四栏各**恰好**一颗带 `close` 的 className、同一个图标 `folio-close-symbolic`、`title` 与 `aria-label` 是同一个键、四条文案都译了**且同句式**（`收起…`）、四个 class 在各自 CSS 里都有规则；② 那条链子接满了（`FormatBar.onHide` → `EditorArea.收起格式化栏` → `useChromeVisibility.收起工具栏`）＋ **两个入口写的是同一句**（`收起工具栏` 与菜单 `view.toolbarNever` 都是 `setChrome({ toolbar: "never" })`）＋ 状态栏那颗**只关不开**（`show_status_bar: false`，不是 `!`）；③ **读 `MENUS` 结构**：视图那一栏按 `"sep"` 切段，含 `view.statusBar` 的那段必须正好是 `[toggleDock, toolbar, statusBar, menuBar]`，且四种编辑模式/只读/专注/打字机都不在里面。⚠️ **三组读的都是源码文本与数据表**，所以它**证明不了**"点下去真的收起来了"（本仓没有 jsdom），那半截的账在 `docs/06` §6.2；⚠️ 组三红了先读那条 `说明`：往「外壳上画出什么」那一族**加**了一条就更新期望值，加的是别的东西说明**放错了边**）。📌 **2026-10-04（第五轮：写作统计面板改成运动手表那套版式）新加一份 `panel-cards` 37 条**（`kind = "cards"` 的形状收窄：五个图标名与兜底／`文本()` 把数写成字、表与 `null` 才丢成空串／`points` 只留有限数字且留最后 200 个／`total` 的 `null` 与"三个空串"是两件事）——**那一版现数 51 份 1289 条**，逐份见 `docs/06` §6.3；⚠️ 份数/条数只在 `docs/06` §6.3 记，这儿引它 |
-| `.github/workflows/release.yml` | 六个平台的打包矩阵（Windows x64/arm64 的 exe、macOS 双架构 dmg、Linux 双架构 deb/rpm/AppImage）。**每个平台只能在自己的系统上打**，理由在文件头 |
-| `THIRD-PARTY.md` | **第三方组件与许可证清单**。加/删依赖要同批改它（`docs/09` §2.3） |
-
----
-
-## 3. 快速开始（构建与运行）
-
-**开发机是 Fedora，宿主没有工具链**（`gcc` / `cargo` / `node` 全无），构建走
-toolbox 容器 `tauri-dev`。宿主的 `sudo` 要密码，但 `podman exec -u 0` 免密。
-
-```sh
-# 一次性：装工具链（容器里跑，-u 0 免密，不用 sudo）
-podman exec -u 0 tauri-dev dnf install -y gcc gcc-c++ make pkgconf-pkg-config \
-    webkit2gtk4.1-devel openssl-devel libappindicator-gtk3-devel librsvg2-devel \
-    nodejs npm git
+```text
+plugins -> documents -> settings
 ```
 
-日常三条命令（**一律以 uid 1000 跑，不用 root**，否则产物归 root）：
+Never acquire these locks in reverse order. Never hold a lock across `.await`.
+
+## 2. Code map
+
+The authoritative file-level reference is
+[`docs/02-modules.md`](docs/02-modules.md). The main areas are:
+
+| Path | Responsibility |
+|---|---|
+| `src-tauri/src/lib.rs` | Tauri setup, shared state and command registration |
+| `src-tauri/src/document/` | Document model, loading, saving, encoding and mirror state |
+| `src-tauri/src/settings/` | Settings schema, persistence and migration |
+| `src-tauri/src/plugin/` | Plugin discovery, manifests, install, trust, update and reload |
+| `src-tauri/src/lua/` | Lua runtime and host APIs |
+| `src-tauri/src/commands/` | Tauri command boundary |
+| `src-tauri/src/image/` and `upload/` | Image placement, remote resources and upload |
+| `src-tauri/src/pandoc*`, `print_job.rs`, `pdf_print.rs` | Export, printing and PDF paths |
+| `src-tauri/src/dev_bridge.rs` | Authenticated Host Control bridge |
+| `src/App.tsx` | Application composition and shared UI state |
+| `src/editor/` | Milkdown assembly, source editing, input behavior and rendering |
+| `src/ui/` | React shell, commands, menus, dialogs, settings, sidebar and status bar |
+| `src/styles/` | Interface shell styles, document themes and external theme assets |
+| `src/bridge/` | Typed IPC and shared frontend types |
+| `src/i18n/` | English source keys and translation resources |
+| `plugins/` | Development-only plugin workspace when present; official plugins live in `Nota-plugins` |
+| `tests/` | Focused frontend and policy tests |
+| `tools/` | Verification, synchronization, packaging and development utilities |
+
+Detailed behavior, signatures and historical evidence must be documented in the
+appropriate `docs/` file instead of growing this index.
+
+## 3. Build and run
+
+The standard development environment uses a Podman container named `tauri-dev`.
+Run build commands as UID 1000 so generated files remain owned by the developer.
 
 ```sh
-cd /home/lqy/项目/30_计算机/30-01_一些AI编程项目/Nota
+podman exec -u 1000 -w "$PWD" tauri-dev npm install
+podman exec -u 1000 -w "$PWD" tauri-dev npm run app
+```
 
-# ① 只编译后端
-podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test
+Useful checks:
 
-# ② 类型检查 + 前端构建
+```sh
 podman exec -u 1000 -w "$PWD" tauri-dev npx tsc --noEmit
-podman exec -u 1000 -w "$PWD" tauri-dev npm run test:e2e
+podman exec -u 1000 -w "$PWD" tauri-dev bash tools/test-frontend.sh
+podman exec -u 1000 -w "$PWD/src-tauri" tauri-dev cargo test --lib --locked
 podman exec -u 1000 -w "$PWD" tauri-dev npx vite build
-
-# ③ 跑起来
-podman exec -u 1000 -w "$PWD" tauri-dev npm run app      # = tauri dev（自己带 vite）
 ```
 
-⚠️ **在容器外直接 `cargo build` 会失败**（没有 GTK/WebKit 开发头）。⚠️
-**`cargo build` 出来的 debug 二进制定死在 `devUrl`（`localhost:5273`）**——
-不带 vite dev server 直接跑它会看到 "Could not connect to localhost: Connection refused"。
-想跑单文件二进制就先 `npx vite`，或 `npm run app` 让 tauri 自己起。
+Use `npm run verify:light` for routine cloud checks and `npm run verify:full`
+for E2E, the complete Rust suite, documentation checks and the production build.
 
-**无头目检（容器里没有真显示器时）**：见 `docs/06-build-run-test.md` §5，
-Xvfb + ImageMagick 那一条是验证过可用的。
+Platform dependencies, headless window recipes and detailed test commands are in
+[`docs/06-build-run-test.md`](docs/06-build-run-test.md).
 
-细节、调试旋钮与测试清单见 `docs/06-build-run-test.md`。
-
----
-
-## 4. 编码约定
+## 4. Engineering conventions
 
 ### Rust
 
-- 每个 `.rs` 顶部有一段中文模块说明，讲**为什么**这样设计，而不是复述代码。
-- 错误统一走 `NotaError`，消息是**中文**且**按用户看得懂的说法写**——面向的是用户，不是开发者。
-- **锁顺序**：`plugins → documents → settings`，**绝不能反向**（见 `docs/03` §锁序）。
-  拿多把锁之前先确定自己处在哪一层。
-- **不要跨 `.await` 持锁**。
-- 需要单元测试时，**把纯逻辑从依赖 Tauri 的壳里剥出来**——
-  `fs.rs` 的 `resolve_in()`、`git.rs` 的 `挑工作目录()` 都是这么做的。
-  `HostContext` 要真的 `AppHandle`，构造不出来，所以**安全边界写在它里面就永远测不了**。
+- Use `NotaError` for command errors.
+- Keep user-facing localization outside production logic.
+- Move pure policy into testable functions instead of hiding it inside
+  `AppHandle`-dependent shells.
+- Keep module comments concise and explain why the boundary exists.
 
-### TypeScript / React
+### TypeScript and React
 
-- `@/` 别名指向 `src/`。**`vite.config.ts` 的 `resolve.alias` 与 `tsconfig.json` 的
-  `paths` 两处必须一致**，改一处就得改另一处（不一致的表现是"tsc 过了、vite 报错"）。
-- 调后端**只走 `src/bridge/ipc.ts`**，不在组件里直接 `invoke()`。
-- `tsconfig` 开了 `noUnusedLocals` / `noUnusedParameters` / `noUncheckedIndexedAccess`——
-  下标访问要处理 `undefined`。
+- `@/` resolves to `src/`; Vite aliases and TypeScript paths must stay aligned.
+- Call the backend through `src/bridge/ipc.ts`.
+- `noUnusedLocals`, `noUnusedParameters` and `noUncheckedIndexedAccess` are
+  enabled.
+- Prefer pure helpers for policy and state transitions.
 
-### Lua 插件
+### Lua
 
-- **能力申请只写真的用到的**（见 `plugins/git/plugin.toml` 顶部的说明）。
-- 插件里的**环境问题**（没开工作区、目录不是仓库）要能在**不抛错**的前提下表现——
-  宿主侧已经把这类失败折成 `code ~= 0` 的结果表（见 `docs/13` §错误处理）。
+- Request only capabilities declared by the plugin manifest.
+- Plugin failures should normally return structured results instead of throwing
+  across the host boundary.
+- Never use plain `Lua::new()` for untrusted plugins. Use the hardened runtime.
 
----
+### Documentation
 
-## 4b. 平台事实与踩过的坑
+- Maintainer documentation uses concise English.
+- Chinese belongs in explicit translations, localization resources and test
+  data.
+- Do not add emoji.
+- Preserve identifiers, commands, paths, links and code examples exactly during
+  translation.
 
-- **Tauri 的事件名只允许字母数字与 `-` `/` `:` `_`**，**点号不合法**。
-  而插件清单的 id 允许点（`nota.git`），所以**拼事件通道名必须过
-  `plugin::manifest::channel_id()`**。漏了的表现是：插件加载"成功"，
-  但第一次 `emit` 抛 `only alphanumeric, '-', '/', ':', '_' permitted`——
-  静态看代码完全看不出来（BUG-3）。
-- **`Lua` 要放进 Tauri 托管状态，mlua 必须开 `send` feature**。没有它这整个
-  结构根本编不过，而报错信息不会提"你需要 `send`"。
-- ⚠️⚠️ **插件的 `Lua` 只能从 `lua::硬化的_lua()` 拿，不许写 `Lua::new()`**。
-  mlua 的 `Lua::new()` 号称"安全子集"，**它的 "safe" 只等于"不能加载 C 模块"**——
-  `io` / `os` / `package` / `require` **全都在**（源码：`ALL_SAFE = (1 << 30) - 1`，
-  只排除 bit31 的 `debug`）。用它的后果是**能力围栏变成装饰**：一个只申请
-  `ui.notify` 的插件能 `os.execute("rm -rf ~")`、`io.open("/etc/shadow")`。
-  这就是 **BUG-10**。⚠️ 另外**光列 `StdLib` 白名单也不够**：`loadfile` / `dofile`
-  属于**无条件加载的 base 库**，掩码关不掉，必须显式置 `nil`——
-  否则插件仍能读并执行磁盘上任意 `.lua`（实测过）。
-  **库里的 `safe` 字面不是安全承诺**，那是它自己定义的口径，只能读源码。
-- **前端是文本的唯一真相**，后端是 300ms 去抖的镜像。任何"后端改文本"的路径
-  都必须**发事件通知前端**，否则编辑器里看到的和存盘的不是一份东西。
-- **`replaceAll` 一个语法坏掉的 markdown 不会报错**，remark 会按它的理解尽力解析，
-  结果是"一段看起来对但不完全对的内容"。所以进编辑器的文本要先过解析
-  （`parseMarkdown()`，见 `docs/05`）。
-- **`@milkdown/kit` 的 `exports` 里没有 `plugin/prism`、`plugin/math`、`plugin/diagram`**，
-  这三个要从各自的包进，而且**三个都得显式写进 `package.json`**——它们是**直接依赖**，
-  不是 kit 的间接依赖。kit 的 `dependencies` 里只有 block/clipboard/cursor/diff/history/
-  indent/listener/slash/streaming/tooltip/trailing/upload 这 12 个 `plugin-*`，
-  prism/math/diagram 都不在其中。
-- **不要同时写 `index.html` 的 CSP meta 与 `tauri.conf.json` 的 `csp`**——
-  两个策略会**同时生效并互相冲突**。CSP 只放在 `tauri.conf.json`。
-- ⚠️ **`asset://` 在 WebKitGTK 上传不了字体**：wry 给自定义协议注册了
-  `register_uri_scheme_as_secure`，**但没注册 `register_uri_scheme_as_cors_enabled`**；
-  而 `@font-face` 的装载**永远走 CORS 模式**，于是字体请求直接被判 NetworkError
-  ——**图片却能正常显示**（`<img>` 不走 CORS），所以只看图片会以为协议是通的。
-  ⚠️ 这条今天**已经没有代码依赖它**（文档主题不再加载任何外部资源，自带的
-  主题一套字体都不带），但它仍然是"要不要往 WebView 里塞字体"这个决定的前提，
-  所以留着。连带一条：**CSP 的 `font-src` 里不要加 `asset:`**，加了也没用。
-  经过见 `docs/07` §4；⚠️ 这条**不是** BUG-11（那是打包丢插件）。
-- **菜单栏里的 Shift+数字快捷键判据是 `e.code === "Digit1"`，不是 `e.key`**。
-  Shift 按住时 `e.key` 是 `"!"` 这类符号（Shift+1 给的是 `"!"`，不是 `"1"`），
-  拿 `e.key` 比 `"1"` 的快捷键**永远不触发**，而且静态看代码完全看不出来。
-- **Tauri 2 的 `bundle.category` 枚举里没有 `Office`**（那是 Tauri 1 的值）。
-  写错不会在 `cargo build` 时报——⚠️ **编到最后一个打包步骤**才
-  `failed to build bundler settings: invalid category`，此前几分钟的编译不会报出这个问题。
-  用 `Productivity`。
-- ⚠️ **当前发布策略：安装包一个插件都不带**（`bundle.resources = {}`）。四个官方插件从
-  独立仓库单独发布，用户安装 `.nota-plugin`。开发态仍从 `NOTA_PLUGINS_DIR` 或同级
-  `Nota-plugins` 仓库发现插件。若将来改回随包，必须同批修改 README、`docs/11`、
-  插件仓库说明和安装包验收；且 `bundle.resources` 的键必须写目录而不是 glob。
-- ⚠️⚠️ **Rust 报一堆 `cannot find macro panic` / `cannot find trait Clone`，
-  先去看有没有 `error[E0514]`——那是工具链在说话，不是代码。**
-  本机 rustc 是 Fedora 打过补丁的 RPM（sysroot 在 `/usr`，**没有 rustup**），
-  与 `static.rust-lang.org` 发的 `rust-std` 哈希对不上；`E0514` 把 `core` 判成
-  "别的编译器编的"，于是**凡是从 `core` 来的东西全部找不到**，
-  一个包能塌出几千个 E0425/E0405，**看着像整个仓库都写坏了**。
-  判断 std 是不是本机编的：`rpm -qf <libstd 路径>`——**查不到包名的就是外来的**。
-  ⚠️ Windows 交叉编译**要走 `x86_64-pc-windows-gnu`**（`rust-std-static-x86_64-pc-windows-gnu`
-  是 Fedora 自带的），**`msvc` 在 Fedora 上没有 std 可装**。见 `docs/06` §2.4。
+## 5. Platform constraints
 
----
+### Tauri
 
-## 5. 当前状态速查
+- Event names allow only alphanumerics and `-`, `/`, `:`, `_`.
+- Plugin IDs may contain dots, so event channel names must pass through
+  `plugin::manifest::channel_id()`.
+- Keep CSP only in `tauri.conf.json`. Do not duplicate it in `index.html`.
+- The Tauri 2 bundle category is `Productivity`, not `Office`.
 
-⚠️ **不要在本文件维护会持续变化的计数快照。** 当前发布事实与执行队列看
-`docs/07A-current-status.md`；功能完成度看 `docs/10-feature-matrix.md`；
-永久 BUG/backlog 编号与历史证据看 `docs/07-feature-status.md`。
+### Lua isolation
 
-当前基线（2026-11-14）：
+- Plugin Lua states must come from the hardened runtime.
+- `Lua::new()` is not a capability sandbox.
+- `loadfile` and `dofile` must be removed explicitly even when using a standard
+  library allowlist.
 
-- 源码版本 `0.15.0-beta`；安装包不随附插件或第三方主题。
-- 开发态可从同级 `Nota-plugins` 仓库加载六个官方拓展。
-- 主窗口先隐藏预热；编辑器可输入、界面主题和当前文档主题就绪后显示。
-- Linux 原生文件选择与打印使用独立 GTK4 helper，失败按各自路径回退；
-  Linux 打印不回退 GTK3 对话框。
-- 公开 MCP 入口已删除；外部开发访问统一走默认关闭的 Host Control 桥。
-- 当前功能矩阵为 **144 项：✅ 78 / 🟡 58 / ⬜ 0 / ➖ 8**。
+### WebView
 
-动手前先查当前状态文档。未修 P1 问题优先于 backlog 新功能；AI 生成的测试摘要
-不能代替提交者在真实窗口中的复验。
+- Parse Markdown before replacing a whole editor document. Remark may silently
+  accept malformed input.
+- Custom protocol font loading has CORS limitations in WebKitGTK. Do not assume
+  that an image succeeding means a font request will succeed.
+- Use `event.code` for shortcuts where `event.key` changes under Shift.
 
----
+### Windows
 
-## 6. 文档索引
+- Runtime child processes must use the hidden-process launcher.
+- Cross-compilation uses `x86_64-pc-windows-gnu`.
+- Keep updater launching, silent overwrite and restart behavior aligned with
+  native Windows process rules.
 
-| 文档 | 内容 |
+### Linux
+
+- Native file and print dialogs may use the separate GTK4 helper process.
+- Do not initialize GTK3 and GTK4 in the same process.
+- Main windows must be created at a normal screen position so Wayland
+  compositors can display them reliably.
+
+### Packaging
+
+- Application installers do not bundle extensions or third-party themes.
+- Official plugins and themes use their separate repositories.
+- New third-party dependencies and assets require `THIRD-PARTY.md` updates.
+
+## 6. Current status and authority
+
+Do not maintain moving test counts or feature-score snapshots in this file.
+
+- Current release facts and active queue:
+  [`docs/07A-current-status.md`](docs/07A-current-status.md)
+- Permanent feature and defect record:
+  [`docs/07-feature-status.md`](docs/07-feature-status.md)
+- Authoritative feature matrix:
+  [`docs/10-feature-matrix.md`](docs/10-feature-matrix.md)
+- Mandatory source-to-documentation mapping:
+  [`docs/09-doc-sync-policy.md`](docs/09-doc-sync-policy.md)
+
+Unresolved P1 defects take priority over new backlog work. A generated test
+summary cannot replace the submitter's verification in a real window.
+
+## 7. Documentation index
+
+| Document | Authority |
 |---|---|
-| `docs/README.md` | 文档索引与推荐阅读顺序 |
-| `docs/01-architecture.md` | 运行时架构、启动顺序、两进程边界、事件流、锁顺序 |
-| `docs/02-modules.md` | 逐文件接口参考（每个公开函数的签名与行为） |
-| `docs/03-data-structures.md` | `AppState` / `Document` / `Settings` / `Manifest` 字段、常量、**锁序**、两条真相口径 |
-| `docs/04-ui-map.md` | 控件树 + 每个按钮的回调/当前状态/目标行为，**含界面外观那三条轴**（文档主题是第四条、另算） |
-| `docs/05-editor-bridge.md` | Milkdown 装配、前端↔后端两条通道、去抖与整篇替换语义 |
-| `docs/06-build-run-test.md` | 依赖、构建、运行、调试旋钮、**无头目检**、测试清单 |
-| `docs/07-feature-status.md` | **功能矩阵 + 缺陷清单 + backlog（编号）** |
-| `docs/08-development-guide.md` | 如何新增按钮/命令/事件/插件/设置项 |
-| `docs/09-doc-sync-policy.md` | **文档同步政策与代码→文档映射表（强制）** |
-| `docs/10-feature-matrix.md` | **逐项功能对照矩阵**（功能覆盖率的唯一权威） |
-| `docs/11-writing-a-plugin.md` | 怎么写一个插件：目录形状、清单逐栏、**能力表**、生命周期、构建接线 |
-| `docs/12-plugin-runtime.md` | 插件**运行时**：为什么是 Lua + 独立状态、沙箱边界画在哪 |
-| `docs/13-lua-api.md` | **Lua API 参考**：`nota.*` 每个表每个函数 |
+| [`docs/README.md`](docs/README.md) | Reading order and full index |
+| [`docs/01-architecture.md`](docs/01-architecture.md) | Runtime architecture and process boundaries |
+| [`docs/02-modules.md`](docs/02-modules.md) | File-level interfaces |
+| [`docs/03-data-structures.md`](docs/03-data-structures.md) | Shared data structures, constants and lock order |
+| [`docs/04-ui-map.md`](docs/04-ui-map.md) | UI control tree and behavior |
+| [`docs/05-editor-bridge.md`](docs/05-editor-bridge.md) | Editor assembly and IPC semantics |
+| [`docs/06-build-run-test.md`](docs/06-build-run-test.md) | Build, run, debug and test recipes |
+| [`docs/07-feature-status.md`](docs/07-feature-status.md) | Permanent features, defects and backlog history |
+| [`docs/07A-current-status.md`](docs/07A-current-status.md) | Current release facts and active queue |
+| [`docs/08-development-guide.md`](docs/08-development-guide.md) | UI, command, event, plugin and settings recipes |
+| [`docs/09-doc-sync-policy.md`](docs/09-doc-sync-policy.md) | Required documentation synchronization |
+| [`docs/10-feature-matrix.md`](docs/10-feature-matrix.md) | Feature coverage matrix |
+| [`docs/11-writing-a-plugin.md`](docs/11-writing-a-plugin.md) | Plugin authoring guide |
+| [`docs/12-plugin-runtime.md`](docs/12-plugin-runtime.md) | Plugin runtime and sandbox |
+| [`docs/13-lua-api.md`](docs/13-lua-api.md) | Lua API reference |
+
+## 8. Source registry
+
+The synchronization check uses these stable keys for files whose responsibility
+is not obvious from a top-level directory name:
+
+```text
+bridge/types-app-settings.ts
+bridge/types-settings-export.ts
+bridge/types-settings.ts
+commands/diff.rs
+commands/path_kind.rs
+commands/session.rs
+commands/table_width.rs
+commands/watch.rs
+commands/window_registry.rs
+debug-log.tsx
+editor/block-keys.ts
+editor/create-types.ts
+editor/document-audit.ts
+editor/github-alert-edit.ts
+editor/github-docs.ts
+editor/image-kind.ts
+editor/ime-guard.ts
+editor/inline-escape.ts
+editor/math-current.ts
+editor/math-inline-focus.ts
+editor/plugin-vim-engine.d.ts
+editor/plugin-vim-input.ts
+editor/plugin-vim-ops.ts
+editor/plugin-vim-text.ts
+editor/plugin-vim-types.ts
+editor/review-prose.ts
+editor/review-source.ts
+editor/review.ts
+editor/spell-check.ts
+lua/api/review.rs
+pandoc/tests.rs
+session.rs
+settings/appearance.rs
+settings/document.rs
+settings/editor.rs
+settings/files.rs
+settings/focus.rs
+settings/general.rs
+settings/image.rs
+settings/markdown.rs
+settings/mod.rs
+settings/updates.rs
+settings_export.rs
+table_width.rs
+window_registry.rs
+styles/code-block.css
+styles/focus.css
+styles/github-alert.css
+styles/settings-export.css
+styles/theme/adwaita-fonts.css
+styles/themes/dark/latex.css
+styles/themes/dark/minimal.css
+styles/themes/latex.css
+styles/themes/minimal.css
+styles/vim.css
+styles/zoom-hud.css
+ui/ExternalChangeBar.tsx
+ui/ExternalDiffPane.tsx
+ui/FocusAlarmWindow.tsx
+ui/FocusMeter.tsx
+ui/ReviewBar.tsx
+ui/WindowIdOverlay.tsx
+ui/WindowPickerDialog.tsx
+ui/ZoomHud.tsx
+ui/document-save-text.ts
+ui/recentMenu.ts
+ui/settings/SettingsExportDialog.tsx
+ui/settings/panes/AppearancePane.tsx
+ui/settings/panes/DocThemePane.tsx
+ui/settings/panes/EditorPane.tsx
+ui/settings/panes/FilesPane.tsx
+ui/settings/panes/FocusPane.tsx
+ui/settings/panes/GeneralPane.tsx
+ui/settings/panes/MarkdownPane.tsx
+ui/settings/panes/SpellLangPicker.tsx
+ui/settings/panes/UpdatePane.tsx
+ui/settings/panes/props.ts
+ui/tab-order.ts
+ui/useAppEvents.ts
+ui/useAppWindowRegistry.ts
+ui/useDocThemeInventory.ts
+ui/useDocumentCheck.ts
+ui/useEditorInput.ts
+ui/useExternalChanges.ts
+ui/useFindBar.ts
+ui/useFocusAlarmSound.ts
+ui/useFocusIntro.ts
+ui/useForceFocus.ts
+ui/useImeCursorBridge.ts
+ui/useReviewView.ts
+ui/useSession.ts
+ui/useSpellcheck.ts
+ui/useStartup.ts
+ui/useUpdateNotifications.ts
+ui/useUtilityWindows.tsx
+ui/useWindowRegistry.ts
+ui/useWorkspaceDelete.ts
+ui/window-picker.ts
+ui/zoom-hud-state.ts
+```

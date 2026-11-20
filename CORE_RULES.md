@@ -9,7 +9,7 @@ These rules are mandatory for every source change.
    User-facing Chinese belongs in `src/i18n/zh-*.ts`, plugin `lang/zh-*.toml`,
    or bundled notice/document files.
 3. Comments in source code must be concise English.
-   Put durable rationale in `docs/experience/*.md` instead of long code comments.
+   Put durable rationale in `DEVELOPMENT_EXPERIENCE.md` instead of long code comments.
 4. Tests may contain Chinese input and expected data.
    Test names, helper identifiers, assertions, and comments remain English.
 5. Existing violations are migration debt.
@@ -18,6 +18,9 @@ These rules are mandatory for every source change.
 6. Every language cleanup must be behavior-neutral.
    Lock behavior with tests before renaming shared identifiers or moving
    user-facing strings.
+7. Do not add emoji to source code, comments, or English documentation.
+8. New documentation is concise English unless it is an explicit translation
+   resource.
 
 ## Exceptions
 

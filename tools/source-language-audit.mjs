@@ -90,14 +90,35 @@ if (diffBase) {
   );
   let file = "";
   const added = [];
+  const removedSequences = new Map();
+  const sequence = (line) => line.match(/[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/gu)?.join("") ?? "";
+  const isSubsequence = (candidate, previous) => {
+    let index = 0;
+    for (const character of previous) {
+      if (character === candidate[index]) index += 1;
+      if (index === candidate.length) return true;
+    }
+    return candidate.length === 0;
+  };
   for (const line of diff.split(/\r?\n/)) {
     if (line.startsWith("+++ b/")) {
       file = line.slice(6);
       continue;
     }
+    if (line.startsWith("-") && !line.startsWith("---")) {
+      const sequences = removedSequences.get(file) ?? [];
+      sequences.push(sequence(line.slice(1)));
+      removedSequences.set(file, sequences);
+      continue;
+    }
     if (!line.startsWith("+") || line.startsWith("+++")) continue;
     if (excluded(file)) continue;
-    if (han.test(line.slice(1))) added.push(`${file}: ${line.slice(1).trim()}`);
+    if (!han.test(line.slice(1))) continue;
+    const current = sequence(line.slice(1));
+    const sequences = removedSequences.get(file) ?? [];
+    const match = sequences.findIndex((previous) => isSubsequence(current, previous));
+    if (match >= 0) sequences.splice(match, 1);
+    else added.push(`${file}: ${line.slice(1).trim()}`);
   }
   if (added.length) {
     console.error("Chinese source added in this change:");

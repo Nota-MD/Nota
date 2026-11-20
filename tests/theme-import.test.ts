@@ -67,6 +67,9 @@ testCase("后台同时支持主题包和原生 Typora 布局", () => {
   assertValue(backend.includes("pub(crate) mod typora"), "没有启用 Typora 导入器");
   assertValue(typora.includes("MANIFEST_FILE"), "Typora 集合没有清单");
   assertValue(typora.includes("collect_source_files"), "Typora 文件没有原样复制");
+  assertValue(typora.includes("collect_css_dependencies"), "单个 CSS 仍会复制无关的同目录文件");
+  assertValue(typora.includes("install_source_bundle"), "平铺 CSS / 文件夹没有自动区分 UI 与文档主题");
+  assertValue(backend.includes("user_ui_styles_dir()"), "单个 UI CSS 仍被送进文档主题目录");
   assertValue(typora.includes("install_zip"), "ZIP 下载的 Typora 主题不能直接导入");
   assertValue(typora.includes("load_runtime_css"), "加载时没有解释 Typora @import");
   assertValue(lib.includes("commands::theme::nota_theme_import"), "主题导入命令没有注册");

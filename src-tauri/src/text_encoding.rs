@@ -79,7 +79,7 @@ pub fn 规范名(label: &str) -> Option<String> {
 /// **读一份文件**：先看 BOM，再看是不是合法 UTF-8，最后交给探测器猜。
 ///
 /// 返回解出来的文本与**用的那份编码**——后者要跟着文档一起存着，存盘时按它写回去。
-pub fn 读文件(path: &Path) -> Result<(String, String)> {
+pub fn read_file(path: &Path) -> Result<(String, String)> {
     let 字节 = std::fs::read(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
         source,

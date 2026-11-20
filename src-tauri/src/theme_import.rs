@@ -417,7 +417,11 @@ pub fn import_path(path: &Path) -> Result<ThemeImportReport> {
         .and_then(|value| value.to_str())
         .is_some_and(|value| value.eq_ignore_ascii_case("css"));
     if path.is_dir() || is_css {
-        return typora::install_source(path, &paths::user_themes_dir()?);
+        return typora::install_source_bundle(
+            path,
+            &paths::user_ui_styles_dir()?,
+            &paths::user_themes_dir()?,
+        );
     }
     let file = File::open(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
@@ -425,7 +429,11 @@ pub fn import_path(path: &Path) -> Result<ThemeImportReport> {
     })?;
     let packages = read_archive(file)?;
     if packages.is_empty() {
-        return typora::install_zip(path, &paths::user_themes_dir()?);
+        return typora::install_zip(
+            path,
+            &paths::user_ui_styles_dir()?,
+            &paths::user_themes_dir()?,
+        );
     }
     install_packages(
         prepare_packages(packages)?,

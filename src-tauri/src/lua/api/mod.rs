@@ -126,7 +126,7 @@ pub fn build(
     // 所以这里只是把结果装成一张表。换语言要重启，理由写在 `settings/general.rs`
     // 的 `language` 字段注释里。
     set(
-        nota.set("i18n", i18n::build(lua, 语言, ctx.应用语言.as_str())?),
+        nota.set("i18n", i18n::build(lua, 语言, ctx.application_language.as_str())?),
         lua,
     )?;
 

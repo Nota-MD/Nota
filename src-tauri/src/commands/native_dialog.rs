@@ -80,7 +80,7 @@ pub async fn nota_dialog_text_file(
     if metadata.len() > TEXT_FILE_LIMIT {
         return Err(NotaError::other("Selected file is larger than 1 MiB"));
     }
-    let (text, _) = crate::text_encoding::读文件(&path)?;
+    let (text, _) = crate::text_encoding::read_file(&path)?;
     Ok(Some(NativeTextFile {
         name: path
             .file_name()

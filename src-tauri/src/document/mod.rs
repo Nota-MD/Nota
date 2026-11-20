@@ -270,7 +270,7 @@ impl DocumentStore {
             return Ok(id);
         }
 
-        let (text, encoding) = crate::text_encoding::读文件(path)?;
+        let (text, encoding) = crate::text_encoding::read_file(path)?;
         let line_ending = detect_line_ending(&text);
 
         let clean = text.clone();
@@ -341,7 +341,7 @@ impl DocumentStore {
             .get(id)
             .and_then(|d| d.path.clone())
             .ok_or(NotaError::NoActiveDocument)?;
-        let (text, encoding) = crate::text_encoding::读文件(&path)?;
+        let (text, encoding) = crate::text_encoding::read_file(&path)?;
         let line_ending = detect_line_ending(&text);
         let doc = self.get_mut(id).ok_or(NotaError::NoActiveDocument)?;
         let idx = doc.untitled_index;

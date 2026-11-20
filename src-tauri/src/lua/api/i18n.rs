@@ -2,7 +2,7 @@
 //!
 //! # 用户要的是什么（2026-09-25 原话）
 //!
-//! > 插件也支持。插件必须包含英语。如果应用语言在插件语言列表内，则直接使用；
+//! > 插件也支持。插件必须包含英语。如果application_language在插件语言列表内，则直接使用；
 //! > 否则，显示"此插件不支持您的语言"，并且使用英语。
 //!
 //! 规矩本身（归一化、精确/前缀匹配、`en` 兜底）在 `crate::lang`，那边是
@@ -150,8 +150,8 @@ impl 语言包 {
 
 /// 给某个插件**协商 + 读表**。
 ///
-/// `应用语言` 是宿主此刻在说的语言（`crate::lang::有效语言` 算出来的那个）。
-pub fn 装(manifest: &Manifest, 应用语言: &str) -> 语言包 {
+/// `application_language` 是宿主此刻在说的语言（`crate::lang::有效语言` 算出来的那个）。
+pub fn 装(manifest: &Manifest, application_language: &str) -> 语言包 {
     let id = &manifest.meta.id;
     let langs = &manifest.meta.langs;
 
@@ -161,15 +161,15 @@ pub fn 装(manifest: &Manifest, 应用语言: &str) -> 语言包 {
         return 语言包::default();
     }
 
-    let (tag, ok) = match lang::匹配(应用语言, langs) {
+    let (tag, ok) = match lang::匹配(application_language, langs) {
         Some(t) => (t, true),
         None => (lang::插件兜底.to_owned(), false),
     };
 
     // ⚠️ 文件读不到 / 写坏了**不改 `ok`**（2026-09-25 定的口径）。
     //
-    // `ok` 回答的是用户那句话里的问题——**应用语言在不在插件的语言列表里**
-    // （「如果应用语言在插件语言列表内，则直接使用；否则，显示…」）。文件在不在
+    // `ok` 回答的是用户那句话里的问题——**application_language在不在插件的语言列表里**
+    // （「如果application_language在插件语言列表内，则直接使用；否则，显示…」）。文件在不在
     // 是另一件事：表空了就退回插件自己写下的原文（`text() or 原文`），
     // 而那**恰好**就是"只用英语写"的插件（`langs = ["en"]`、一份表都不带，
     // 最常见的一种）该有的样子——拿文件缺失去判 `ok=false`，会让这类插件
@@ -210,9 +210,9 @@ fn 读(dir: &std::path::Path, tag: &str) -> std::result::Result<HashMap<String, 
 ///
 /// 四个成员，各自的意思写在 [`语言包`] 上，插件那边只需要记：
 /// **`text(key) or "英文原文"`**。
-pub fn build(lua: &Lua, 包: &语言包, 应用语言: &str) -> Result<Table, NotaError> {
+pub fn build(lua: &Lua, 包: &语言包, application_language: &str) -> Result<Table, NotaError> {
     let t = lua.create_table().map_err(mlua_to_nota)?;
-    t.set("app_lang", 应用语言.to_owned()).map_err(mlua_to_nota)?;
+    t.set("app_lang", application_language.to_owned()).map_err(mlua_to_nota)?;
     // 没声明 `langs`：`nil` 是"没得协商"，不是"不知道自己在说什么语言"。
     // 插件作者要那个值就读 `app_lang`（它永远在）。
     match &包.lang {

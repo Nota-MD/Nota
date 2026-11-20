@@ -340,14 +340,14 @@ pub fn run() {
             // 文案表（`lang/<tag>.toml`），运行中再变就会出现"外壳中文、插件英文"
             // 那种谁也解释不清的中间态。所以设置里那一格改完要**重启**才生效
             // ——这条写进了界面上那一行，也写进了 `settings/general.rs`。
-            let 应用语言 = {
+            let application_language = {
                 let 设定 = settings_arc
                     .lock()
                     .map(|s| s.general.language.clone())
                     .unwrap_or_else(|_| crate::lang::自动.to_owned());
                 crate::lang::有效语言(&设定, crate::lang::系统语言())
             };
-            crate::日志!("[nota] interface language: {应用语言}");
+            crate::日志!("[nota] interface language: {application_language}");
 
             let resource_dir = app.path().resource_dir().ok();
             let base = HostContext {
@@ -356,7 +356,7 @@ pub fn run() {
                 settings: settings_arc.clone(),
                 workspace: workspace.clone(),
                 plugin_id: String::new(), // 每个插件加载时会被换成自己的 id
-                应用语言: 应用语言.clone(),
+                application_language: application_language.clone(),
             };
             // 插件发现要扫描清单、建 Lua 状态并跑 on_load。它不应挡住窗口创建：
             // 先把空宿主托管进去，等系统窗口和 WebView 开始绘制后，再由后台线程
@@ -371,7 +371,7 @@ pub fn run() {
                 plugins: Mutex::new(plugins),
                 settings_problem: 启动时的问题,
                 // 与插件加载时用的是同一个值（上面 ②b 算的那个）。
-                app_lang: 应用语言,
+                app_lang: application_language,
             });
             let bridge = dev_bridge::DevBridge::default();
             app.manage(bridge);

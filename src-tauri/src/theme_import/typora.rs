@@ -40,6 +40,32 @@ pub(crate) fn read_manifest(package: &Path) -> Option<CollectionManifest> {
     (manifest.version <= MANIFEST_VERSION).then_some(manifest)
 }
 
+/// Import a flat CSS file, folder or archive as either UI or document themes.
+pub(super) fn install_source_bundle(
+    path: &Path,
+    ui_root: &Path,
+    document_root: &Path,
+) -> Result<ThemeImportReport> {
+    let root = if path.is_dir() {
+        canonical(path)?
+    } else {
+        canonical(path.parent().ok_or_else(|| {
+            NotaError::other("Theme CSS has no parent directory")
+        })?)?
+    };
+    let selected = if path.is_dir() {
+        None
+    } else {
+        Some(
+            path.file_name()
+                .and_then(|value| value.to_str())
+                .ok_or_else(|| NotaError::other("Theme CSS filename is not UTF-8"))?
+                .to_owned(),
+        )
+    };
+    install_flat_source(&root, selected.as_deref(), ui_root, document_root)
+}
+
 pub(super) fn install_source(
     path: &Path,
     document_root: &Path,
@@ -91,7 +117,10 @@ pub(super) fn install_source(
             .then_with(|| left.id.cmp(&right.id))
     });
 
-    let mut files = collect_source_files(&root)?;
+    let mut files = match selected.as_deref() {
+        Some(css) => collect_css_dependencies(&root, css)?,
+        None => collect_source_files(&root)?,
+    };
     let manifest = CollectionManifest {
         version: MANIFEST_VERSION,
         themes: themes.clone(),
@@ -112,8 +141,75 @@ pub(super) fn install_source(
     })
 }
 
+fn install_flat_source(
+    root: &Path,
+    selected: Option<&str>,
+    ui_root: &Path,
+    document_root: &Path,
+) -> Result<ThemeImportReport> {
+    let css_files = root_css_files(root)?;
+    let selected_files = css_files
+        .into_iter()
+        .filter(|css| selected.is_none_or(|name| name == css))
+        .collect::<Vec<_>>();
+
+    let mut has_document = false;
+    let mut ui_files = Vec::new();
+    for css in &selected_files {
+        let path = root.join(css);
+        if is_document_theme_path(&path, root, &mut BTreeSet::new())? {
+            has_document = true;
+        } else if is_ui_theme_path(&path)? {
+            ui_files.push(css.clone());
+        }
+    }
+
+    let mut report = ThemeImportReport {
+        ui: Vec::new(),
+        document: Vec::new(),
+    };
+    if has_document {
+        let document = if selected.is_some() {
+            install_source(
+                &root.join(selected.ok_or_else(|| NotaError::other("No theme CSS was selected"))?),
+                document_root,
+            )?
+        } else {
+            install_source(root, document_root)?
+        };
+        report.document.extend(document.document);
+    }
+    for css in ui_files {
+        report.ui.push(install_ui_css(root, &css, ui_root)?);
+    }
+    if report.ui.is_empty() && report.document.is_empty() {
+        return Err(NotaError::other(
+            "No importable Nota UI theme or Typora document theme was found",
+        ));
+    }
+    Ok(report)
+}
+
+fn install_ui_css(root: &Path, css: &str, ui_root: &Path) -> Result<String> {
+    let path = root.join(css);
+    let text = read_css_text(&path)?;
+    let folder_id = Path::new(css)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| NotaError::other("UI theme CSS filename is not UTF-8"))?;
+    let id = super::primary_ui_scope(folder_id, &text)?;
+    let mut package = ThemeFiles {
+        files: collect_css_dependencies(root, css)?,
+    };
+    super::normalize_main_css(&id, &mut package)?;
+    super::validate_theme(super::ThemeKind::Ui, &id, &mut package)?;
+    install(ui_root, &id, &package)?;
+    Ok(id)
+}
+
 pub(super) fn install_zip(
     path: &Path,
+    ui_root: &Path,
     document_root: &Path,
 ) -> Result<ThemeImportReport> {
     let file = std::fs::File::open(path).map_err(|source| NotaError::Read {
@@ -181,9 +277,9 @@ pub(super) fn install_zip(
         })?;
     }
     let root = find_theme_root(&temp.path)?.ok_or_else(|| {
-        NotaError::other("ZIP 里没有找到平铺的 Typora 主题 CSS")
+        NotaError::other("ZIP contains no flat Nota UI or Typora document theme CSS")
     })?;
-    install_source(&root, document_root)
+    install_flat_source(&root, None, ui_root, document_root)
 }
 
 struct TemporaryDirectory {
@@ -219,11 +315,10 @@ fn find_theme_root(root: &Path) -> Result<Option<PathBuf>> {
     while let Some(dir) = queue.pop_front() {
         let css = root_css_files(&dir)?;
         for name in css {
-            if is_document_theme_path(
-                &dir.join(name),
-                root,
-                &mut BTreeSet::new(),
-            )? {
+            let path = dir.join(name);
+            if is_document_theme_path(&path, root, &mut BTreeSet::new())?
+                || is_ui_theme_path(&path)?
+            {
                 return Ok(Some(dir));
             }
         }
@@ -333,7 +428,13 @@ fn read_css_text(path: &Path) -> Result<String> {
 }
 
 fn is_document_theme(css: &str) -> bool {
+    let css = super::without_css_comments(css);
     css.contains("#write") || css.contains("--doc-bg")
+}
+
+fn is_ui_theme_path(path: &Path) -> Result<bool> {
+    let css = read_css_text(path)?;
+    Ok(super::without_css_comments(&css).contains("data-ui-style="))
 }
 
 fn is_document_theme_path(
@@ -370,6 +471,190 @@ fn collect_source_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
     let mut total = 0usize;
     collect_directory(root, root, &mut out, &mut total)?;
     Ok(out)
+}
+
+/// Copy one CSS file and only the local files it actually references.
+///
+/// A downloaded CSS file usually sits in a directory that also contains
+/// unrelated downloads. Treating that directory as a theme package can exceed
+/// the source limits and reject an otherwise valid theme.
+fn collect_css_dependencies(root: &Path, css: &str) -> Result<BTreeMap<String, Vec<u8>>> {
+    let root = canonical(root)?;
+    let mut out = BTreeMap::new();
+    let mut total = 0usize;
+    let mut seen = BTreeSet::new();
+    collect_dependency(&root.join(css), &root, &mut out, &mut total, &mut seen)?;
+    Ok(out)
+}
+
+fn collect_dependency(
+    path: &Path,
+    root: &Path,
+    out: &mut BTreeMap<String, Vec<u8>>,
+    total: &mut usize,
+    seen: &mut BTreeSet<PathBuf>,
+) -> Result<()> {
+    if !path.is_file() {
+        return Ok(());
+    }
+    let full = canonical(path)?;
+    if !full.starts_with(root) || !seen.insert(full.clone()) {
+        return Ok(());
+    }
+    if out.len() >= MAX_SOURCE_FILES {
+        return Err(NotaError::other("Theme contains too many files"));
+    }
+    let bytes = std::fs::read(&full).map_err(|source| NotaError::Read {
+        path: full.clone(),
+        source,
+    })?;
+    if bytes.len() > super::MAX_FILE_BYTES {
+        return Err(NotaError::other("Theme file is too large"));
+    }
+    *total = total.saturating_add(bytes.len());
+    if *total > MAX_SOURCE_BYTES {
+        return Err(NotaError::other("Theme exceeds 128 MiB"));
+    }
+    let relative = full
+        .strip_prefix(root)
+        .map_err(|_| NotaError::other("Theme file is outside the import directory"))?
+        .to_string_lossy()
+        .replace('\\', "/");
+    out.insert(relative, bytes.clone());
+
+    if full
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_none_or(|value| !value.eq_ignore_ascii_case("css"))
+    {
+        return Ok(());
+    }
+    let Ok(css) = std::str::from_utf8(&bytes) else {
+        return Ok(());
+    };
+    let base = full.parent().unwrap_or(root);
+
+    let mut cursor = 0usize;
+    while let Some(import) = find_import(css, cursor) {
+        if let Some(target) = local_import(&import.target) {
+            collect_dependency(&base.join(target), root, out, total, seen)?;
+        }
+        cursor = import.end;
+    }
+
+    cursor = 0usize;
+    while let Some((raw, end)) = find_url(css, cursor) {
+        if let Some(target) = local_url_path(&raw) {
+            collect_dependency(&base.join(target), root, out, total, seen)?;
+        }
+        cursor = end;
+    }
+    Ok(())
+}
+
+fn find_url(css: &str, from: usize) -> Option<(String, usize)> {
+    let bytes = css.as_bytes();
+    let mut at = from;
+    let mut quote = 0u8;
+    while at < bytes.len() {
+        if quote != 0 {
+            if bytes[at] == b'\\' {
+                at = (at + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[at] == quote {
+                quote = 0;
+            }
+            at += 1;
+            continue;
+        }
+        if bytes.get(at..at + 2) == Some(b"/*") {
+            at += 2;
+            while at + 1 < bytes.len() && bytes.get(at..at + 2) != Some(b"*/") {
+                at += 1;
+            }
+            at = (at + 2).min(bytes.len());
+            continue;
+        }
+        if bytes[at] == b'"' || bytes[at] == b'\'' {
+            quote = bytes[at];
+            at += 1;
+            continue;
+        }
+        if bytes
+            .get(at..at + 4)
+            .is_some_and(|token| token.eq_ignore_ascii_case(b"url("))
+        {
+            return url_target(css, at + 4);
+        }
+        at += 1;
+    }
+    None
+}
+
+fn url_target(css: &str, mut at: usize) -> Option<(String, usize)> {
+    let bytes = css.as_bytes();
+    while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+        at += 1;
+    }
+    let (value, end) = if bytes
+        .get(at)
+        .is_some_and(|value| *value == b'"' || *value == b'\'')
+    {
+        let quote = bytes[at];
+        let start = at + 1;
+        at = start;
+        while at < bytes.len() && bytes[at] != quote {
+            at += 1;
+        }
+        if at >= bytes.len() {
+            return None;
+        }
+        let value = css[start..at].to_owned();
+        at += 1;
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        if bytes.get(at) != Some(&b')') {
+            return None;
+        }
+        (value, at + 1)
+    } else {
+        let start = at;
+        while at < bytes.len() && bytes[at] != b')' {
+            at += 1;
+        }
+        if at >= bytes.len() {
+            return None;
+        }
+        (css[start..at].trim().to_owned(), at + 1)
+    };
+    Some((value, end))
+}
+
+fn local_url_path(raw: &str) -> Option<&str> {
+    let value = raw.trim();
+    if value.is_empty()
+        || value.contains("var(")
+        || value.bytes().any(|byte| byte == b'\0' || byte == b'\\')
+    {
+        return None;
+    }
+    let lower = value.to_ascii_lowercase();
+    if lower.starts_with("data:")
+        || lower.starts_with("http:")
+        || lower.starts_with("https:")
+        || lower.starts_with("blob:")
+        || lower.starts_with("asset:")
+        || lower.starts_with("file:")
+        || lower.starts_with("//")
+        || lower.starts_with('#')
+    {
+        return None;
+    }
+    let end = value.find(['?', '#']).unwrap_or(value.len());
+    let path = &value[..end];
+    (!path.is_empty() && !Path::new(path).is_absolute()).then_some(path)
 }
 
 fn collect_directory(
@@ -723,6 +1008,60 @@ mod tests {
     }
 
     #[test]
+    fn imports_one_css_with_only_its_dependencies() {
+        let root = temp_root("single-css");
+        std::fs::create_dir_all(root.join("parts")).unwrap();
+        std::fs::create_dir_all(root.join("images")).unwrap();
+        std::fs::write(root.join("parts/base.css"), "body { color: black; }\n").unwrap();
+        std::fs::write(root.join("images/bg.png"), [0, 1, 2, 3]).unwrap();
+        std::fs::write(
+            root.join("theme.css"),
+            "@import \"parts/base.css\";\n:root { --doc-bg: white; background: url(images/bg.png); }\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("unrelated-large-download.bin"), vec![0; 1024 * 1024]).unwrap();
+
+        let installed = root.join("installed");
+        let report = install_source(&root.join("theme.css"), &installed).unwrap();
+        assert_eq!(report.document.len(), 1);
+        let package = installed.join(collection_id(&root));
+        assert!(package.join("theme.css").is_file());
+        assert!(package.join("parts/base.css").is_file());
+        assert!(package.join("images/bg.png").is_file());
+        assert!(!package.join("unrelated-large-download.bin").exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn imports_one_ui_css_into_the_ui_theme_root() {
+        let root = temp_root("single-ui-css");
+        std::fs::create_dir_all(root.join("images")).unwrap();
+        std::fs::write(root.join("images/close.svg"), "<svg/>").unwrap();
+        std::fs::write(
+            root.join("my-ui.css"),
+            "[data-ui-style=\"my-ui\"] { --icon-close: url(images/close.svg); }\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("unrelated-large-download.bin"), vec![0; 1024 * 1024]).unwrap();
+
+        let ui_root = root.join("ui-installed");
+        let document_root = root.join("document-installed");
+        let report = install_source_bundle(
+            &root.join("my-ui.css"),
+            &ui_root,
+            &document_root,
+        )
+        .unwrap();
+        assert_eq!(report.ui, vec!["my-ui"]);
+        assert!(report.document.is_empty());
+        assert!(ui_root.join("my-ui/theme.css").is_file());
+        assert!(ui_root.join("my-ui/images/close.svg").is_file());
+        assert!(!document_root.join("my-ui").exists());
+        assert!(!ui_root.join("my-ui/unrelated-large-download.bin").exists());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn does_not_list_user_overrides_as_themes() {
         let root = temp_root("user-override");
         std::fs::write(
@@ -798,7 +1137,7 @@ mod tests {
             zip.finish().unwrap();
         }
         let installed = root.join("installed");
-        let report = install_zip(&archive, &installed).unwrap();
+        let report = install_zip(&archive, &root.join("ui-installed"), &installed).unwrap();
         assert_eq!(report.document.len(), 1);
         let package = installed.join(collection_id(&root.join("wrapper")));
         assert_eq!(

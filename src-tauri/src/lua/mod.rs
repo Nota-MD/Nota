@@ -106,7 +106,7 @@ pub struct HostContext {
     /// 用户在设置里改了语言要重启才生效（`settings/general.rs` 的 `language`
     /// 字段注释里写了为什么），而插件在启动时就按这个值读好了自己的文案表。
     /// 所以别在运行中去改它——那会造出"外壳说中文、插件说英文"的中间态。
-    pub 应用语言: String,
+    pub application_language: String,
 }
 
 /// `require` 的模块缓存 / 在途标记（registry 两个名字）。
@@ -316,7 +316,7 @@ pub struct LuaPlugin {
     /// 这个插件这次在用的文案表（协商结果 + 表本身）。
     ///
     /// ⚠️ 加载时就定下来，**停用/重新启用会重算一遍**——重算的结果和上次一样
-    /// （应用语言没变），但"重启用 = 重跑 on_load"这条口径要求它跟着重来。
+    /// （application_language没变），但"重启用 = 重跑 on_load"这条口径要求它跟着重来。
     pub 语言: crate::lua::api::i18n::语言包,
     /// `on_unload` 存在时存这里，卸载时调。
     ///
@@ -344,7 +344,7 @@ impl LuaPlugin {
         // 文案表在**建沙箱之前**就定下来：它只读插件自己目录里的文件，跟脚本
         // 跑不跑得起来无关。⚠️ 但 `state = Failed` 的插件也带着这份表——界面上
         // 那一行的名字要靠它（`PluginInfo.name` 会被表里的保留键 `name` 盖掉）。
-        let 语言 = crate::lua::api::i18n::装(&manifest, &ctx.应用语言);
+        let 语言 = crate::lua::api::i18n::装(&manifest, &ctx.application_language);
         // ⚠️ 从这里拿 `Lua`，**不要**写回 `Lua::new()`（BUG-10）。
         let lua = match 硬化的_lua() {
             Ok(lua) => lua,
@@ -399,8 +399,8 @@ impl LuaPlugin {
     ///
     /// ⚠️ 这里那个 `Lua` 是**死状态**：`state` 是 `Failed`，宿主不会往里跑任何插件代码
     /// （`run_entry` 只在 `load` 里调）。所以用 `硬化的_lua()` 失败时的兜底路径也无妨。
-    pub fn rejected(manifest: Manifest, reason: String, 应用语言: &str) -> Self {
-        let 语言 = crate::lua::api::i18n::装(&manifest, 应用语言);
+    pub fn rejected(manifest: Manifest, reason: String, application_language: &str) -> Self {
+        let 语言 = crate::lua::api::i18n::装(&manifest, application_language);
         Self {
             manifest,
             lua: 硬化的_lua().unwrap_or_else(|_| Lua::new()),
@@ -419,8 +419,8 @@ impl LuaPlugin {
     /// 停用就该和"没装"一样干净——不留计时器、不留后台线程、不留已注册的命令、
     /// 不留一块等着被 `nota.ui.refresh` 点着跑的脚本。理由见
     /// [`crate::plugin::PluginHost::set_enabled`]：用户要的是"关了它就当它不存在"。
-    pub fn disabled(manifest: Manifest, 应用语言: &str) -> Self {
-        let 语言 = crate::lua::api::i18n::装(&manifest, 应用语言);
+    pub fn disabled(manifest: Manifest, application_language: &str) -> Self {
+        let 语言 = crate::lua::api::i18n::装(&manifest, application_language);
         Self {
             manifest,
             lua: 硬化的_lua().unwrap_or_else(|_| Lua::new()),

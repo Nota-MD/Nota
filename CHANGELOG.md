@@ -59,6 +59,10 @@ historical details are in
   formula field keeps focus there instead of moving it into the document.
 - Fixed GTK4 writing-statistics image saves when the selected name has no folder
   component.
+- Standalone CSS theme imports now detect UI and document themes, route them to
+  the correct theme directory and copy only the selected stylesheet and its
+  local imports, fonts and images. Downloads folders with unrelated files no
+  longer exceed the theme import limits.
 - Consolidated maintainer rules and experience files and expanded language
   enforcement.
 

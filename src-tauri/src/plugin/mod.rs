@@ -239,7 +239,7 @@ impl PluginHost {
                                 plugins.push(LuaPlugin::rejected(
                                     manifest,
                                     reason,
-                                    &base.应用语言,
+                                    &base.application_language,
                                 ));
                             }
                             continue;
@@ -280,7 +280,7 @@ impl PluginHost {
                          拓展 id 里的 `.` 在事件名里写作 `-`，换一个 id"
                     );
                     errors.push(format!("{}：{reason}", manifest.meta.id));
-                    plugins.push(LuaPlugin::rejected(manifest, reason, &base.应用语言));
+                    plugins.push(LuaPlugin::rejected(manifest, reason, &base.application_language));
                     continue;
                 }
 
@@ -294,7 +294,7 @@ impl PluginHost {
                 let 插件 = if extensions_enabled && installed.is_enabled(&manifest.meta.id) {
                     LuaPlugin::load(manifest, ctx)
                 } else {
-                    LuaPlugin::disabled(manifest, &base.应用语言)
+                    LuaPlugin::disabled(manifest, &base.application_language)
                 };
                 plugins.push(插件);
             }
@@ -440,7 +440,7 @@ impl PluginHost {
         let replacement = if enabled {
             LuaPlugin::load(manifest, self.上下文(&id))
         } else {
-            LuaPlugin::disabled(manifest, &self.base.应用语言)
+            LuaPlugin::disabled(manifest, &self.base.application_language)
         };
         if let PluginState::Failed(reason) = &replacement.state {
             return Err(NotaError::other(format!(
@@ -489,7 +489,7 @@ impl PluginHost {
                 }
                 self.收摊(&id);
                 let manifest = self.plugins[i].manifest.clone();
-                self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.应用语言);
+                self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.application_language);
             }
         }
         crate::日志!(
@@ -539,7 +539,7 @@ impl PluginHost {
             }
             self.收摊(id);
             let manifest = self.plugins[i].manifest.clone();
-            self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.应用语言);
+            self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.application_language);
         }
         Ok(())
     }

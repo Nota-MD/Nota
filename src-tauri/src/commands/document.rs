@@ -200,7 +200,7 @@ pub fn nota_doc_save(
     }
     // Monitor the bytes that were actually written. The editor mirror uses LF,
     // while the document may intentionally save as CRLF.
-    let 文本 = crate::text_encoding::读文件(&written)
+    let 文本 = crate::text_encoding::read_file(&written)
         .map(|(text, _)| text)
         .unwrap_or_default();
     监.记下(&written, &文本);
@@ -443,7 +443,7 @@ pub fn nota_doc_disk_text(state: State<'_, AppState>, id: DocId) -> Result<Strin
             .and_then(|d| d.path.clone())
             .ok_or_else(|| NotaError::other("这份文档还没有路径"))?
     };
-    Ok(crate::text_encoding::读文件(&路径)?.0)
+    Ok(crate::text_encoding::read_file(&路径)?.0)
 }
 
 /// 有没有未保存的改动。退出前前端拿它决定要不要弹框。

@@ -1,5 +1,5 @@
 {
-  "total": 40141,
+  "total": 40140,
   "files": {
     "src/App.tsx": 362,
     "src/bridge/ipc-events.ts": 134,
@@ -31,7 +31,7 @@
     "src/editor/diagram-view.ts": 130,
     "src/editor/document-audit.ts": 4,
     "src/editor/emoji.ts": 647,
-    "src/editor/empty-paragraph.ts": 121,
+    "src/editor/empty-paragraph.ts": 120,
     "src/editor/export-assets.ts": 6,
     "src/editor/export.ts": 254,
     "src/editor/fence-lang.ts": 25,

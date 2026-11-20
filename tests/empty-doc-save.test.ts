@@ -236,6 +236,22 @@ testCase("⚠️ 一个 `<br />` 都不许漏出来", () => {
   }
 });
 
+testCase("empty table-cell paragraphs emit no placeholder", () => {
+  const paragraph = getSpec("paragraph") as unknown as {
+    toMarkdown: { runner: (state: unknown, node: unknown) => unknown };
+  };
+  const calls: string[] = [];
+  const state = {
+    top: () => ({ type: "tableCell" }),
+    openNode: () => calls.push("open"),
+    addNode: () => calls.push("add"),
+    next: () => calls.push("next"),
+    closeNode: () => calls.push("close"),
+  };
+  paragraph.toMarkdown.runner(state, schema.node("paragraph"));
+  equal(calls.length, 0, "empty table-cell serialization");
+});
+
 /* ── 二、保镖那条不许丢：空 root 不能把序列化器弄崩 ───────────────────── */
 
 group("二、保镖那条还在（空 root 不崩）");

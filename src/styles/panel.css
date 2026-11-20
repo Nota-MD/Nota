@@ -429,18 +429,21 @@
   margin: 0 0 8px;
   padding: 4px 0;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--bg-subtle);
   font-family: var(--font-mono);
   font-size: 0.82em;
   line-height: 1.45;
-  /* ⚠️ 2026-09-26 起**不折行**（此前是 `pre-wrap` + `overflow-wrap: anywhere`）：
-     差异是横着读的，折下来的第二行看着像新起的一行。长行交给这里的横向滚动。
-     这一条**两个地方共用**（这一栏 260px 与编辑区那一大块），所以两边行为
-     一样：在窄栏里也得横着滚——正是「在编辑区看」那颗按钮存在的理由。
-     ⚠️ 代价写在 `plugins/git/main.lua` 那段注释里：窄栏里一行只见小半截。 */
-  white-space: pre;
+  max-height: 60vh;
   overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  tab-size: 4;
+}
+
+.panel-diff:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* Interactive note relationship graph (`kind = "network"`). */
@@ -541,10 +544,7 @@
   line-height: 1.4;
 }
 
-/* ⚠️ 每一行的长相（底色、删除线、下划线）**不在这份文件里**——
-   编辑区里那份改动预览也要画同样的行，两处必须一样，所以只在
-   `src/styles/diff.css` 里写一遍（`.diff-line` / `.diff-del` / `.diff-add`）。
-   这里只留外层的 `<pre>`：等宽字体、折行、那一圈边框。 */
+/* Row colors and markers live in `diff.css` because review surfaces reuse them. */
 
 .panel-input {
   margin: 8px 0 2px;

@@ -28,39 +28,48 @@ function read(...paragraph2: string[]): string {
 
 console.log("\n【更新设置与通知】");
 
-testCase("更新设置是独立持久化页面", () => {
+testCase("update settings are persisted", () => {
   const rust = read("src-tauri", "src", "settings", "updates.rs");
   const types = read("src", "bridge", "types-settings.ts");
   const dialog = read("src", "ui", "settings", "SettingsDialog.tsx");
+  const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
+  const windowHook = read("src", "ui", "useSettingsWindow.ts");
   assertValue(rust.includes("check_on_startup"), "Rust 缺少启动检查字段");
   assertValue(rust.includes("notify_when_available"), "Rust 缺少更新通知字段");
   assertValue(rust.includes("notification_position"), "Rust 缺少通知位置字段");
   assertValue(types.includes("export interface UpdateSettings"), "前端缺少更新设置类型");
-  assertValue(dialog.includes('| "updates"'), "设置左栏缺少更新页");
-  assertValue(dialog.includes("<UpdatePane"), "更新页没有接线");
+  assertValue(!dialog.includes('| "updates"'), "设置左栏仍保留独立更新页");
+  assertValue(!dialog.includes("<UpdatePane"), "独立更新页仍在接线");
+  assertValue(general.includes('title={t("Updates")}'), "通用页缺少更新设置组");
+  assertValue(
+    general.includes("<SoftwareUpdatePane autoCheck={false} />"),
+    "通用页缺少手动更新操作",
+  );
+  assertValue(windowHook.includes('setInitialSection("general")'), "更新通知没有打开通用页");
+  assertValue(!windowHook.includes('setInitialSection("updates")'), "仍会打开旧更新页");
 });
 
-testCase("通知开关依赖启动检查，且许可证不再重复在通用页", () => {
-  const pane = read("src", "ui", "settings", "panes", "UpdatePane.tsx");
+testCase("notification toggle depends on startup checks", () => {
   const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
-  assertValue(pane.includes("disabled={!u.check_on_startup}"), "通知开关没有依赖启动检查");
+  assertValue(
+    general.includes("disabled={!settings.updates.check_on_startup}"),
+    "通知开关没有依赖启动检查",
+  );
   assertValue(!general.includes('title={t("License")}'), "通用页仍重复许可证组");
 });
 
-testCase("通知支持位置和操作按钮", () => {
+testCase("notifications support position and actions", () => {
   const general = read("src", "ui", "settings", "panes", "GeneralPane.tsx");
-  const update = read("src", "ui", "settings", "panes", "UpdatePane.tsx");
   const toasts = read("src", "ui", "Toasts.tsx");
   const css = read("src", "styles", "toast.css");
   assertValue(general.includes('label={t("Notification position")}'), "通知位置没有落在通用页");
-  assertValue(!update.includes('label={t("Notification position")}'), "更新页仍重复通知位置");
   assertValue(toasts.includes("data-position"), "通知容器没有位置属性");
   assertValue(toasts.includes("ToastAction"), "通知没有操作类型");
   assertValue(toasts.includes("toast-action"), "通知没有操作按钮");
   assertValue(css.includes('[data-position="top-center"]'), "缺少顶部通知样式");
 });
 
-testCase("启动检查只在首份设置到岸后执行一次", () => {
+testCase("startup checks run once after settings load", () => {
   const hook = read("src", "ui", "useUpdateNotifications.ts");
   assertValue(hook.includes("started.current"), "没有防重复检查");
   assertValue(hook.includes("check_on_startup"), "没有读取启动检查开关");

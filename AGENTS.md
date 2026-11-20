@@ -302,6 +302,7 @@ ui/ExternalChangeBar.tsx
 ui/ExternalDiffPane.tsx
 ui/FocusAlarmWindow.tsx
 ui/FocusMeter.tsx
+ui/PanelDiffBlock.tsx
 ui/ReviewBar.tsx
 ui/WindowIdOverlay.tsx
 ui/WindowPickerDialog.tsx
@@ -317,7 +318,6 @@ ui/settings/panes/FocusPane.tsx
 ui/settings/panes/GeneralPane.tsx
 ui/settings/panes/MarkdownPane.tsx
 ui/settings/panes/SpellLangPicker.tsx
-ui/settings/panes/UpdatePane.tsx
 ui/settings/panes/props.ts
 ui/tab-order.ts
 ui/useAppEvents.ts

@@ -85,7 +85,6 @@ import { ImagePane } from "./panes/ImagePane";
 import { MarkdownPane } from "./panes/MarkdownPane";
 import { PluginSettingsPane } from "./panes/PluginSettingsPane";
 import { ShortcutsPane } from "./panes/ShortcutsPane";
-import { UpdatePane } from "./panes/UpdatePane";
 import type { PaneProps } from "./panes/props";
 
 export type SectionId =
@@ -94,7 +93,6 @@ export type SectionId =
   | "image"
   | "markdown"
   | "export"
-  | "updates"
   | "appearance"
   | "docTheme"
   | "shortcuts"
@@ -131,7 +129,6 @@ const SECTIONS: Record<SectionId, iconName> = {
   // 那说的是"显示编辑标记"，是**另一个设置项**，指错了东西（2026-09-25 换）。
   markdown: "nota-markdown-symbolic",
   export: "folio-document-export-symbolic",
-  updates: "nota-update-symbolic",
   // 一枚窗口 = 整个应用的样子（外观页管外壳，不管正文）
   appearance: "folio-window-symbolic",
   // 一枚"拼图"= 拓展那一页（装 / 导出 / 卸载）。⚠️ 这一枚是 **Nota 自己画的**
@@ -164,7 +161,6 @@ const ORDER: SectionId[] = [
   "image",
   "markdown",
   "export",
-  "updates",
   "appearance",
   "docTheme",
   "shortcuts",
@@ -277,7 +273,6 @@ export function SettingsDialog({
     // ⚠️ 这一条**不包 `t()`**：Markdown 是同一门语言的词，中英两版一模一样。
     markdown: "Markdown",
     export: t("Export"),
-    updates: t("Updates"),
     appearance: t("Appearance"),
     docTheme: t("Document Themes"),
     shortcuts: t("Shortcuts"),
@@ -378,8 +373,6 @@ export function SettingsDialog({
         return <MarkdownPane {...props} />;
       case "export":
         return <ExportPane {...props} />;
-      case "updates":
-        return <UpdatePane {...props} />;
       case "docTheme":
         return <DocThemePane {...props} />;
       // ⚠️ 快捷键页**不吃 `{...props}`**（2026-09-27 起它可编辑了，但吃的仍然只有

@@ -251,19 +251,16 @@ export const settingsTable: Record<string, string> = {
   "Disable": "关闭",
   "Downloads": "下载",
   "Updates": "更新",
-  "Update checks": "更新检查",
   "Check for updates at startup": "启动时检查更新",
   "Runs one update check in the background after Nota starts. Nota never downloads or installs an update without confirmation.":
     "Nota 启动后在后台检查一次更新。未确认时，Nota 不会下载或安装更新。",
   "Notify me when an update is available": "有更新时通知我",
   "Shows a persistent notification when the startup check finds a newer version. This option is available only when startup checks are enabled.":
     "启动检查发现新版本时显示一条常驻通知。只有启用启动检查时才能选择此项。",
-  "Notifications": "通知",
   "Notification position": "通知位置",
   "Applies to all in-app notifications.": "应用于所有应用内通知。",
   "Bottom right": "右下角",
   "Top center": "最上方",
-  "Manual update check": "手动检查更新",
   "Check for updates now": "立即检查更新",
   "Checks the fixed official release manifest and shows the package selected for this installation.":
     "检查固定的官方发布清单，并显示为当前安装类型选择的安装包。",

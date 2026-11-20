@@ -46,6 +46,7 @@ import {
   Value,
 } from "../primitives";
 import { SettingsExportDialog } from "../SettingsExportDialog";
+import { SoftwareUpdatePane } from "@/ui/SoftwareUpdatePane";
 import { paneWriter, type PaneProps } from "./props";
 
 export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) {
@@ -121,7 +122,30 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
         </SettingRow>
       </SettingsGroup>
 
-      <SettingsGroup title={t("Notifications")}>
+      <SettingsGroup title={t("Updates")}>
+        <SettingRow
+          label={t("Check for updates at startup")}
+          description={t(
+            "Runs one update check in the background after Nota starts. Nota never downloads or installs an update without confirmation.",
+          )}
+        >
+          <Toggle
+            checked={settings.updates.check_on_startup}
+            onChange={(check_on_startup) => writeUpdate({ check_on_startup })}
+          />
+        </SettingRow>
+        <SettingRow
+          label={t("Notify me when an update is available")}
+          description={t(
+            "Shows a persistent notification when the startup check finds a newer version. This option is available only when startup checks are enabled.",
+          )}
+        >
+          <Toggle
+            checked={settings.updates.notify_when_available}
+            disabled={!settings.updates.check_on_startup}
+            onChange={(notify_when_available) => writeUpdate({ notify_when_available })}
+          />
+        </SettingRow>
         <SettingRow
           label={t("Notification position")}
           description={t("Applies to all in-app notifications.")}
@@ -131,6 +155,16 @@ export function GeneralPane({ settings, onChange, onResetSettings }: PaneProps) 
             options={POSITIONS}
             onChange={(notification_position) => writeUpdate({ notification_position })}
           />
+        </SettingRow>
+        <SettingRow
+          label={t("Check for updates now")}
+          description={t(
+            "Checks the fixed official release manifest and shows the package selected for this installation.",
+          )}
+        >
+          <div className="stg-update-panel">
+            <SoftwareUpdatePane autoCheck={false} />
+          </div>
         </SettingRow>
       </SettingsGroup>
 

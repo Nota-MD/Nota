@@ -35,7 +35,7 @@ export function useSettingsWindow({
       openExternal();
       return;
     }
-    setInitialSection("updates");
+    setInitialSection("general");
     setOpen(true);
   }, [openExternal, style]);
 

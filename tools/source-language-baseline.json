@@ -1,5 +1,5 @@
 {
-  "total": 40157,
+  "total": 40141,
   "files": {
     "src/App.tsx": 362,
     "src/bridge/ipc-events.ts": 134,
@@ -140,7 +140,7 @@
     "src/ui/MenuBar.tsx": 97,
     "src/ui/MenuPopup.tsx": 167,
     "src/ui/PandocPanel.tsx": 43,
-    "src/ui/PanelBody.tsx": 219,
+    "src/ui/PanelBody.tsx": 206,
     "src/ui/PluginDock.tsx": 218,
     "src/ui/PromptDialog.tsx": 53,
     "src/ui/ReviewBar.tsx": 46,
@@ -200,7 +200,6 @@
     "src/ui/settings/panes/PluginSettingsPane.tsx": 4,
     "src/ui/settings/panes/ShortcutsPane.tsx": 77,
     "src/ui/settings/panes/SpellLangPicker.tsx": 53,
-    "src/ui/settings/panes/UpdatePane.tsx": 3,
     "src/ui/settings/panes/props.ts": 64,
     "src/ui/settings/primitives.tsx": 173,
     "src/ui/share-card.ts": 2,

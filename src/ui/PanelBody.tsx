@@ -30,11 +30,11 @@ import { ShareCardBlock } from "@/ui/ShareCard";
 import type { PromptRequest } from "@/ui/useDialogs";
 import { PanelControlBlock, type PanelControl } from "@/ui/PanelControls";
 import { CardIcon } from "@/ui/CardIcon";
+import { PanelDiffBlock } from "@/ui/PanelDiffBlock";
 import type {
   PanelAction,
   PanelCards,
   PanelChart,
-  PanelDiffOp,
   PanelGraphLine,
   PanelHeatmap,
   PanelInput as PanelInputSpec,
@@ -44,26 +44,6 @@ import type {
 const PanelNetworkBlock = lazy(() =>
   import("@/ui/PanelNetwork").then((module) => ({ default: module.PanelNetworkBlock })),
 );
-
-/**
- * 差异行**行首那一列标记**。
- *
- * 不只是好看：`src/styles/diff.css` 里给颜色配的装饰（删除线 / 下划线）和
- * 底色一起，才让"这行是删的还是加的"不**只**靠颜色能读出来。行首这个字符
- * 是第三道冗余——红绿色觉障碍的用户靠它读（Folio 那边也是这么说的：
- * 「颜色只是加了一层冗余信息——每行开头的 +/- 一直都在」）。
- *
- * ⚠️ 加/删各占两个字符（标记 + 一个空格），上下文补**两个空格**好让三类行的
- * 文字左边缘对齐。段头与文件信息给空串：它们是**整行原样**（`@@ -1,4 +1,4 @@`、
- * `diff --git a/x b/x` 自己就带着标记），再补一个前缀就成了 `@@ @@ -1,4 …`。
- */
-const DIFF_MARK: Record<PanelDiffOp, string> = {
-  add: "+ ",
-  del: "- ",
-  ctx: "  ",
-  hunk: "",
-  meta: "",
-};
 
 interface Props {
   /** 这些按钮属于哪个插件。`panelContent(plugin, id)` 里的那个 `plugin`。 */
@@ -268,23 +248,7 @@ export function PanelBody({ plugin, nodes, onCall, askPrompt, busy }: Props) {
             return <PanelMessage key={i} node={node} />;
 
           case "diff":
-            return (
-              <pre key={i} className="panel-diff">
-                {node.items.map((l, j) => (
-                  // 粘在一行里的 `-`/`+` 行没有可点的东西，所以这里不需要交互；
-                  // 应用由插件那条命令负责（它才知道该改哪儿）。
-                  //
-                  // ⚠️ `diff-line` / `diff-<op>` 是**和编辑区那份改动预览
-                  // 共用**的类（`src/styles/diff.css`）：同一次改动在两处
-                  // 必须长一样，否则用户会以为是两回事。
-                  <span key={j} className={`diff-line diff-${l.op}`}>
-                    {DIFF_MARK[l.op]}
-                    {l.text}
-                    {"\n"}
-                  </span>
-                ))}
-              </pre>
-            );
+            return <PanelDiffBlock key={i} items={node.items} />;
 
           case "graph":
             return (

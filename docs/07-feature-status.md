@@ -691,6 +691,8 @@ Linux 三种包**真打出来验过内容**（BUG-11）；Windows 的**可执行
 | 133 | ⬜ **未做（2026-11-20 用户登记）** —— **把“更新”并入通用设置页** | 当前“更新”是设置侧栏中的独立页面，用户要求把它归入“通用”设置。迁移时保留启动检查、可用更新通知、手动检查与软件更新操作，并避免与“通知位置”“下载替换规则”重复或分散；同步删除独立侧栏入口、图标映射和旧翻译键。**验收**：通用页能完成原有全部更新操作；侧栏不再出现单独“更新”；设置搜索仍可定位相关项目；旧配置字段无需迁移 |
 | 134 | 🟡 **迁移中（2026-11-20）** —— **生产源码英文化** | 规则原本已在 `AGENTS.md` §1 存在，问题是没有完整执行。现以根目录 `CORE_RULES.md` 为唯一规则入口，新增 `tools/source-language-audit.mjs` 与基线门禁：新增中文源码行会使轻量验证失败。首次全量扫描有 **378 个生产源码文件、40,229 行含中文**，包含标识符、内部字符串和旧注释。已完成 `settings/download.rs` 与 `remote.rs` 的行为等价英文化；其余按模块分批清理，并将用户可见中文迁入语言包、长期经验迁入根目录 `DEVELOPMENT_EXPERIENCE.md`。**验收**：生产源码中文基线归零后删除 `tools/source-language-baseline.json`；TS/Rust 编译、前端全集、Rust 全集和语言检查通过 |
 
+| 135 | 🟡 **迁移中（2026-11-20）** - **Maintainer documentation English migration** | Maintainer-facing Markdown defaults to concise English. Translation resources, localization data and test fixtures remain Chinese where intended. Root policies, contribution documents, release notes and the documentation index have been translated. Remaining work is concentrated in `docs/01` through `docs/13`, `THIRD-PARTY.md` and reference archives. **Acceptance**: no Chinese remains in maintainer documentation except explicit translations or source-derived test data; commands, links, identifiers and technical meanings are preserved; documentation sync and language-policy checks pass |
+
 ## 4. 文档漂移登记
 
 发现"文档说的与代码做的不一样"时记在这里，并在同一批修正文档。

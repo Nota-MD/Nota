@@ -1,129 +1,127 @@
-# 07A · 当前状态与执行队列
+# Current status and execution queue
 
-> 最后同步：2026-11-14
+Last synchronized: 2026-11-20
 
-这里只回答“现在是什么状态、下一步做什么”。永久编号、缺陷复盘和日期历史在
-[`07-feature-status.md`](07-feature-status.md)，后者是审计档案。
+This file is the current execution view. Permanent identifiers, evidence and
+historical decisions remain in [`07-feature-status.md`](07-feature-status.md).
+Feature completeness remains authoritative in
+[`10-feature-matrix.md`](10-feature-matrix.md).
 
-## 当前发布事实
+## Release baseline
 
-| 项 | 当前值 |
+| Item | Current state |
 |---|---|
-| 源码版本 | `0.15.0-beta` |
-| 插件策略 | **安装包不随附插件**；六个官方插件从独立仓库发布 |
-| 文档主题策略 | **安装包只随附 Adwaita 浅色/深色**；其他官方主题预留独立主题仓库 |
-| 文档主题明暗 | ✅ 主题 id 原样生效，不因界面深色自动替换为 `*-dark`；显式选择深色主题，或开启「深色模式下单独用一套」才使用深色文档。Adwaita Dark 的表头、隔行底色、行内代码与引用均使用暗面配色 |
-| 界面风格策略 | **主程序只随附 Adwaita**，不再自动匹配系统桌面主题；Yaru、GitHub、Breeze、macOS、Windows、CDE 等以自包含外置主题包维护 |
-| 对话框规范 | 所有 `role="dialog"` / `role="alertdialog"` 都显示统一的右上角关闭按钮 |
-| 界面文字选择 | ✅ 外壳默认 `user-select: none`，菜单、标签、状态栏、侧栏、插件栏、设置页、对话框和提示条文案不能拖选；正文、CodeMirror、输入控件和 contenteditable 仍可正常选择复制。开发者模式页提供默认关闭的「界面文字可选中」开关，开启后临时放开外壳文字选择 |
-| 文件选择 | ✅ Linux 首选 XDG Desktop Portal，GNOME 下显示 GTK4 系统选择器，KDE 下跟随 Plasma；Windows/macOS 使用各自原生选择器。Portal 不可用时回退到应用内选择器；应用内界面支持路径栏、筛选、隐藏文件、新建文件夹、覆盖确认与键盘导航 |
-| 打印 / PDF 配色 | ✅ **只允许浅色主题**；活动文档主题为深色时，打印与 PDF 导出在排版前停止并提示先选择浅色主题，不做静默替换 |
-| 导出渲染 | ✅ HTML 与 PDF 共用完整正文样式层；代码块、公式、Mermaid 图与 HTML 预览均通过真实导出目检。HTML 保留可交互的沙箱预览，PDF 只保留静态文档内容 |
-| 导出设置 | ✅ 按 Typora 分成固定项与自定义导出器：通用、PDF、HTML、无样式 HTML、图片不可增删排序；下方默认 Word、OpenDocument、RTF、Epub、LaTeX、MediaWiki、reStructuredText、Textile、OPML 九项，可添加模板、删除、排序和改名。每项支持独立 Pandoc 参数、样式文件与导出后定位，并即时同步到「文件 → 导出」菜单。预设项的基础参数同样可编辑，保存为 `base_args`；`--from`、`--to` 与输出路径仍由 Nota 提供，模板选择器使用自绘菜单 |
-| 代码块外观 | ✅ 代码块、语言选择器与 CodeMirror 输入面共用主题底色、边框和等宽字体。语言选择器按布局单位锚定代码块底边，避免 WebView2 / Chromium 缩放时把已经缩放的视口坐标再次写入 `top`；Chromium 100% / 125% / 150% 定向用例均通过。上游不支持 `color-mix()` 时仍保留纯色边框和底色回退 |
-| PDF 临时文件 | ✅ 中间 HTML 与 Chromium profile 只写系统临时目录；渲染结束由 RAII 整目录删除，目标目录不会出现 `print-render.html` |
-| 数学围栏 | ✅ 语言为 `math` / `latex` / `tex` 的围栏按 LaTeX 处理：光标移走后只显示带框线的渲染结果，进入编辑时源码在上、公式预览在下；点击源码、进入块内选区或空闲进入视口都会启动按需 KaTeX 预览，不再出现编辑态空框。Pandoc 输入转换为标准 `$$…$$` |
-| 块公式 | ✅ 双美元块编辑时显示上方 `Math` 源码区与下方独立 KaTeX 预览框，预览占文档流、不遮挡下一段；光标离开后只保留渲染结果。行内公式的 `$` 与正文同字号、同行高；源码与闭 `$` 之间按实际字形像素贴合，空公式只保留光标宽度，不显示任何预览或占位。输入首个字符后才显示视口层预览框。IME 组合期间源码不写回 ProseMirror，候选上屏后一次性提交最终文本；组合态 Enter/Escape/方向键交给输入法处理。每次源码输入都保持“输入框原有焦点与光标位置”不变量，反斜杠等字符不会在事务后被正文光标越过闭 `$`。预览按源码缓存，行内源码开头 Left、末尾 Right 会越过对应 `$` 回到正文 |
-| 启动显示 | ✅ 主窗口先隐藏并预热、暂不占用任务栏；编辑器挂载并可输入、界面主题与当前文档主题都就绪后才居中显示。没有网页启动动画；主题字体诊断延后到显示后的空闲帧，大型导入主题的绘制缓存只保留最后一份。2026-11-14 开发态隐藏预热连测约 1.86–2.62 秒，均未触发 5 秒故障兜底 |
-| 首次启动引导 | ✅ **2026-11-14 新增**：主窗口揭幕后显示一个三页的紧凑引导，分别介绍核心功能、简短使用须知、许可证与第三方声明；许可证复用应用内全文框。跳过、关闭或完成会写入 `general.onboarding_seen`，之后不自动出现；“关于 → 使用须知”可重新打开。无自动轮播、联网内容或强制停留 |
-| 正文光标 | ✅ 普通段落、标题与表格单元格使用跟随主题强调色的 2px 覆盖层插入光标，1.06 秒周期闪烁；覆盖层在正文 DOM 之外，不会阻断输入。代码块使用行盒约束的独立覆盖光标：高度不超过字形的 `1.2em`，首次聚焦等待 CodeMirror 完成行盒测量，浏览器缩放时按布局单位换算，不再从框体左上角起步或画成整行高。公式块和图表块继续使用各自编辑器的光标。系统启用减少动态效果时光标保持常亮 |
-| Markdown 兼容 | GitHub Flavored Markdown、脚注（引用/定义双向跳转）、五种 GitHub Alerts（菜单与 `/` 插入、类型图标；列表/引用内也可插入；标题显示时点击即可展开并编辑原始 `[!TYPE]`）。Alert 与普通引用按 Typora 只显示左边线，不再叠加 `>` 源码角标或圆角灰卡片；标题编辑时显示无底色源码，光标进入正文后恢复类型标题。行内标记的定界符是逐字符 `notaSyntax` 位置，并按 Typedown 的完整源码字符偏移顺序导航：输完 `**1**` 后光标停在右组之后，手动导航可停在 `**1*|*`；从粗体正文起点向左会先停在 `**|1**`，再离开整组，Home 到正文行首。行内公式编辑时只有 `$` 弱化，LaTeX 源码保持强调色。任务列表、徽章图片、公式与 Mermaid 12.2；Mermaid 可编辑块采用源码在上、独立渲染在下。块级 HTML 与块公式悬停时共用浅灰底、细边框和 `HTML </>` / `公式 </>` 标签，渲染区使用普通指针；HTML 源码编辑框与代码/LaTeX 共用同一套紧凑 CodeMirror 外壳。远程 HTML 图片首次加载后缓存为内存 data URL，打开相对 HTML 链接再返回时徽章立即恢复，不再出现一段空白。另支持命名锚点、文档内锚点导航、`<kbd>`、GitHub Docs `{% rowheaders %}`、常见 Octicons、data/reusables Liquid 标记显示，以及不修改源文的文档检查 |
-| 编辑手感 | ✅ 以 Typedown 的“完整 Markdown 源码字符偏移 + 独立输入控制器”为行为基线。非活动定界符节点零宽隐藏，闭组前后保留不同光标位置。定界符输入在当前事务内同步归一化。**自动补全默认关闭**：关闭时每个按键只写用户按下的一个字符；开启后反引号仍是例外，单独输入只保留单字符。`*` / `_` 的实时解析直接采用 micromark/GFM 的 delimiter-run 与左右 flanking 规则。普通内容永不自动原子化，退格留下未配对标点时也保持普通文本；保存层不自动添加反斜杠。行内标记使用逐字符原子，并保留 IME 边界保护。空光标按 `Ctrl+B` / `Ctrl+I` 或格式化工具栏按钮会立即生成可见定界符对并停在中间，从已有标记内部再次切换会摘掉当前整段标记。普通代码块、`math/latex/tex` 围栏、Mermaid 图表源码和 `$$…$$` 公式块共用首尾退出：只有源码绝对开头 `←` / `↑` 与绝对末尾 `→` / `↓` 越块，中间位置始终留给内部编辑器；首块和末块会创建空段落承接文档光标。 |
-| 源码模式 | ✅ 全区域强制使用 `--font-mono`，包括 CodeMirror 容器、正文、行和行号；文档主题不能把它改回衬线字体。源码行启用自动换行，并隐藏横向滚动条，避免底部出现独立的小滚动框 |
-| 设置与关于窗口 | ✅ 外观页新增「设置窗口呈现方式」：铺满菜单下方区域、内嵌居中卡片、独立原生窗口；关于窗口遵循同一设置。默认内嵌，改动在下次打开时生效。外部模式启用时隐藏预热设置/关于窗口，关闭后改为隐藏复用，避免创建延迟与首帧白条；它们与主窗口通过 `nota:settings-changed` 同步 |
-| Adwaita 界面 | ✅ 按本地 Adwaita Design Kit 的 `.fig` 实测值校准：控件 34px、按钮/输入圆角 6px、浮层圆角 12px、关闭控件 24px、开关 48×26/滑块 22px；浅色强调色 `#1c71d8`，深色强调色 `#78aeed`。设置窗口深色底 `#242424`、侧栏表面 `#28282c`、正文 `#e5e5e5`，与设计稿的 Window / Secondary Sidebar / Dialog 色彩角色对齐 |
-| 链接与可选配对 | ✅ 自动链接设置真正控制裸链接输入和粘贴，识别 HTTP(S)、`www.`、邮箱与显式 `mailto:`；空格、Enter 和粘贴共用同一判据，中文句读留在链接外。`[标签](地址)` 独立于自动链接开关，支持裸域名、相对路径和锚点，链接完成后的新输入默认留在链接外。「键盘体验优化」默认关闭；开启后采用 Textus 的原位源码模型：光标碰到链接时真实替换为可编辑的 `[标签](地址)` 节点，离开后解析回链接。URL 在闭 `)` 前可直接编辑，Ctrl+A 仍是全文档选择，连续 Left 不会在链接边界反复激活；非法源码退化为普通文本。括号、引号和 Markdown 定界符配对共用 `auto_pair`，**默认关闭**；开启后支持半角/常用全角括号、成对弯引号、Markdown 符号、只跨插件插入的闭符、空对退格、选区包裹和 Tab/Shift+Tab 跨越。IME preedit 期间完全不改文档，`compositionend` 后延迟核对提交字符。 |
-| 草稿恢复 | ✅ **2026-11-01 接通**：脏正文停笔 1.5 秒后写入 `data_dir()/drafts/`，与自动保存原文件完全分离。设置页「恢复草稿」会恢复未打开副本；原路径仍在时先打开原文件再覆盖编辑器内存，原文件缺失则转成未命名脏标签，保存前绝不修改源文件。保存、重载、删除、明确丢弃会删除副本；普通异常退出保留 |
-| 文件安全 | ✅ 未编辑的现有文件执行保存时不进入序列化 / 写盘路径，LF、CRLF、UTF-8 BOM、表格分隔行和尾随空格逐字节不变；已有 CRLF 文件在真正编辑并保存后仍写回 CRLF，新文件采用 `editor.line_ending` |
-| 设置真实性 | ✅ 移除 `align_indent`、`unicode_punctuation`、`show_block_source`、`copy_markdown_source`、`copy_line_when_empty`、`typewriter_keep_caret_centered` 六个零消费者字段与控件；接通 `default_indent`、`line_ending`、`auto_pair` 和 Emoji 补全 |
-| 本轮反馈修复 | ✅ 代码块聚焦光标与字体稳定；状态栏显示选区字数；GBK/Big5/Shift_JIS/UTF-16 自动识别并按原编码保存；侧栏二进制文件不再生成摘要并增加文件类型图标；图片加载失败就地告警且可直接删除；空列表项 Enter 退出列表；引用空行 Backspace 退出引用。开发者模式新增默认关闭的「Lua 拓展自刷新」。2026-11-03 起普通文本序列化直接输出原值，永不自动添加反斜杠或原子化内容；GFM 表格单元格的 `\|` 改为 `&#124;` 字符引用。`1$\LaTeX$2` 保持单段，Right 可越过闭 `$` 后继续输入 |
-| CI | `verify.yml` 负责无原生依赖的轻量门禁，`verify-full.yml` 每周或手动跑前端全集、E2E、Rust、文档与插件仓库，`platform.yml` 负责平台工具链，`build.yml` 只手动编译预览包，`release.yml` 只在 tag 发布 |
-| 发布追溯 | `BUILD-INFO.json` 记录 tag / commit / run，`SHA256SUMS.txt` 覆盖 10 个 x86_64 / ARM64 产物；Release 最终按 Windows x64、Linux x64、ARM64、索引文件顺序重传，`latest.json` 固定最后 |
-| 应用更新 | 🧪 实验功能；`latest.json` 随每个 Release 发布；按安装类型分流 deb / rpm / AppImage / 便携 EXE / 安装器 EXE；下载时显示百分比、已下载 / 总大小和安装阶段，并可终止下载；安装包准备完成后退出整个应用进程并重启新版本。Windows 安装版与 Textus 一样由 `ShellExecuteW` 直接启动 NSIS，使用 `/P /UPDATE /R` 显示被动进度、覆盖当前安装并在完成后重新启动，不再绕经等待 PID 的 PowerShell 脚本 |
-| 插件更新 | ✅ 插件 `[update] manifest` → 多插件 `latest.json` → SHA-256 → 原包验签 → 原子替换并重载 |
-| 插件面板视图 | ✅ 通用侧栏 / 编辑区切换：活动面板标题栏可放大到编辑区，编辑区标题栏可切回侧栏。`nota.ui.show(id)` 让插件菜单默认打开侧栏；知识图谱已从“菜单直接占满编辑区”改为侧栏优先，并在真实窗口中往返复验 |
-| Vim 拓展状态 | ✅ 面板、总开关、Modern Vim / Classic BSD vi 配置档、JSON 导入、vimrc 风格映射、普通/插入/可视/可视行模式、计数、操作符、文本对象、寄存器、宏、点重复、搜索、Ex 命令、块光标与模式提示均已接入。扩展通过 `editor.input` 能力发布 `editor_input_profile`，宿主只对已加载插件启用该适配器；停用后立即恢复原生键盘输入。新进程窗口在插件回调到达前先用配置推导 `-- NORMAL --`，不会再只出现块光标而没有模式指示。模式提示现在挂在 body portal，按编辑区实际矩形固定在左下角、标签栏上方，滚动正文时保持可见 |
-| 写作统计分享图 | ✅ 国际主义网格版式：纯色纸面、作者头像/姓名、大数字、整数标尺、三栏指标与可选 Nota 官网二维码。头像上传后先进入圆形裁切框，可拖动、缩放并显示保留比例，确认后输出 512×512；作者身份持久化，默认不启用推广二维码。预览、PNG 保存与剪贴板共用同一份 SVG。真实窗口：隔离 profile 中打开“今日分享图”、改用户名、选择并裁切头像、开关二维码均成功 |
-| 下载替换 | ✅ 普通设置 → 通用 → 下载；`原前缀 => 新前缀`，应用更新与插件更新共用 |
-| 设置结构 | ✅ 拓展管理、插件设置、更新设置独立分页；「恢复出厂设置」在通用；开发者模式由版本号五连点开启。「通用 → 拓展功能」可全局停止所有拓展并隐藏其菜单、面板与设置入口，不删除安装文件，也不改写每个拓展自己的启停状态。主题色使用自绘色板；外观页与文档主题页均可导入 ZIP，同一包可同时包含界面主题、文档主题及相对资源。 |
-| Typora 主题导入 | ✅ **2026-11-01 切到 Typora 原生标准**：可直接选平铺主题目录、单个 CSS，或导入同布局 ZIP。原始 CSS、`@import`、字体和图片逐字节保留，只额外写 `.nota-themes.json` 登记入口；加载时才展开 import 和内联资源。2026-11-02 补齐运行期变量桥；2026-11-04 再补 `thead`、`figure`、首行缩进、任务/Alert/HTML/公式结构别名，并让 Typora 正文块按书写方向靠左，标题继续保留主题的居中规则。正文根显式吃满可用列宽，主题的 `#write { margin:0 auto; max-width… }` 只居中内容列，不再把空文档或正文缩到中间。LaTeXTypora 的 `latex` / `latex-dark` / `latex-dev-dark` 已接入 |
-| 开发者模式 | ✅ 开启后只增加「开发者模式」页，并把后端的 `日志!` 与前端生命周期事件持续写入调试日志。覆盖启动设置与语言、工作区、文档打开/保存、编辑器模式切换、文档主题装载、插件加载/停用/失败；不记录按键、滚动、正文、选区或凭据。日志在 `--debug-log-window` 独立进程中实时滚动，编辑器与插件不在该进程内；可复制全文或导出 `.log`；`Show Diagnostics` 显示编译、系统与平台 WebView 信息。Linux 调试窗口显示后显式把 GTK 焦点交给 WebView 并在 XWayland 激活后重试，修复顶层已激活但 fcitx5/Rime 无输入上下文的问题。完全无 WebView 时保留 `--debug-log` 快照模式。📌 「元素悬停检查」是开发者页内独立开关：显示实际字体、颜色、盒尺寸与内边距，默认关闭。📌 「Lua 拓展自刷新」同样默认关闭；开启后监听 `.lua` / `plugin.toml` 并事务式重载，失败保留旧实例。后续扩展方向应优先补“可操作”的诊断：插件生命周期时间线、打开文档/路径与 IPC 失败关联、可复制诊断包、渲染性能分段，而不是继续堆只读字段 |
-| 开发者宿主桥 | ✅ **2026-11-07 新增**：普通构建内置、默认关闭的 Host Control。只有开发者模式与设置中的桥接同时开启才监听；必须设置 Argon2 密码，经过五步随机数字确认，并通过默认 `127.0.0.1` / `::1` 的 IP/CIDR 白名单。会话为 12 小时有效、绑定客户端 IP、仅保存在内存，可从设置页一次断开。接口提供文档读写、主题/扩展重载、通用 `nota_*` 命令、真实 `exportHtml` 预览、插件检查、日志、设置和窗口截图。公开 `--mcp` 入口与单实例 MCP 暗号分支已移除；`mcp/host.rs` / `mcp/tools.rs` 仅作为桥接复用的内部文档实现保留 |
-| 最大化/全屏菜单兜底 | ✅ **2026-11-08**：外观页新增默认开启的「最大化或全屏时强制使用 Nota 菜单」。窗口镜像同时读取 `isMaximized()` 与 `isFullscreen()`；任一成立时实际菜单渲染器覆盖为自绘，退出后恢复用户保存的 Nota / 系统菜单选择。真正全屏仍收起为顶部 6px 唤回带，鼠标移到窗口最上方会滑下自绘菜单 |
-| 下载代理 | ✅ 普通「设置 → 通用 → 下载」；不再放在高级设置 |
-| 关于 | ✅ 菜单栏最后一栏为「关于」，只保留「关于 Nota」；独立帮助页和 `F1` 入口已移除 |
-| Windows 次级窗口 | ✅ 日志在 `--debug-log-window` 独立进程中加载，编辑器与插件不在该进程内；警报使用独立 HTML；两者都不依赖初始 fragment。设置与 KaTeX 按需模块使用相对基址，且关闭不稳定的 Vite modulepreload 包装 |
-| Windows 子进程 | ✅ 所有运行期外部命令统一通过 `proc::background_command` 启动，并使用 Win32 `CREATE_NO_WINDOW`。获取系统信息、Git、Pandoc、开发服务器、更新器与 `taskkill` 不再闪出 `cmd` 控制台窗口 |
-| Windows / Linux 打印 | ✅ `Ctrl+P` 直接打开平台原生打印界面：Windows 使用 WebView2/Chromium 原生打印预览；Linux 先把当前文档排成 PDF，再优先通过独立的 GTK4 helper 打开系统打印对话框，失败后改走 `org.freedesktop.portal.Print`，GNOME 下由 GTK4 portal 绘制，KDE 跟随 Plasma。两者都不可用时明确报错，**不再回退 WebKitGTK/GTK3 对话框**。旧自绘打印框已移除；两端共用浅色主题门禁与完整导出 HTML |
-| Windows 便携版 | ✅ `tools/make-windows-portable.sh` 生成带 Nota 图标和 `asInvoker` 清单的单文件启动器；首次运行解到当前用户的 `%LOCALAPPDATA%\Nota\Portable\<版本>`，不请求管理员权限、不显示 7-Zip 安装器身份 |
-| 拼写词典提醒 | ✅ 每种缺失语言只提示一次；词典补上后可重新提示 |
-| 发布包性能基线 | ✅ 2026-10-31 使用 release 与持久 Wayland profile 连测：首次建立配置 **1.437 秒**，随后三测 **0.919 / 0.954 / 0.983 秒**。这是发布包性能基线，不应与 2026-11-14 的开发态隐藏预热计时混为同一组数据。生产主包由 **2.01 MB** 降到约 **1.26 MB**；CodeMirror、DOMPurify、KaTeX、Mermaid、长尾语言表、真实语言图标和分享图二维码模块均按需加载。WebKit 的 `DocumentViewer` / `WebBrowser` / 默认缓存模式无显著差异，因此没有为缓存单独修改 Tauri |
-| 运行内存与 CPU | 🧪 **Linux release，原生 Wayland，隔离配置**：空白文档进程树 PSS **377 MiB**、RSS 总和 673 MiB；空闲 CPU **4.1%**，关闭系统动态效果后的 WebKit 基线约 **2.4%**。普通文档只保留 62 种常用代码语言；代码块、HTML、公式和 Mermaid 的预览/源码编辑器按视口或首次需要加载。⚠️ **整个 WebKitGTK 进程树无法保证 100 MiB**：空文档的渲染进程本身约 222 MiB；关闭 JIT / GPU 最多只省约 20–27 MiB，却会明显损害输入与滚动，因此不作为默认策略 |
-| 触摸板滚动 | ✅ 编辑区滚动记账直接读取事件目标，并按动画帧合并；表格浮动栏的滚动定位也不再对每个事件同步测量 |
-| 大文件 | ✅ 超过 20 万字符自动使用源码模式；同步去抖放宽到 1 秒，整表 `list()` 回拉限制为至少 1.5 秒一次。源码输入时不再每键复制全文，连续输入只保留一个快照定时器，停笔后读取一次当前 CodeMirror 文档。5.32 MB 文档单次 `toString()` 实测约 12.6 ms，旧路径已从每键一次降为每次停笔一次。状态栏字数统计改为单遍 UTF-16 扫描，5.18 MB 样例由约 1.89 秒降至约 0.12 秒 |
-| 文档同步 | CI 用 git diff；mtime 只在本地模式用于提醒 |
-| 菜单入口 | ✅ 静态、最近文件、文档主题和插件四类菜单叶子都有处理器或明确动态路由；无定义行为的“其他格式”占位已移除。GitHub Alert 父项展开五个真实子项，普通段落和列表内段落均已开窗插入验证 |
+| Source version | `0.15.0-beta` |
+| Supported release platforms | Linux and Windows |
+| macOS | Adaptation exists, but no supported build or release pipeline yet |
+| Extensions | Six official extensions ship from `Nota-plugins`; installers do not bundle them |
+| Interface themes | Only Adwaita is bundled. Other official themes use `Nota-themes` |
+| Document themes | Adwaita light and dark are bundled |
+| Printing | Native Linux and Windows print paths; light document theme required |
+| Updates | Application updates remain experimental; extension updates are implemented |
+| External developer access | Authenticated Host Control only; public MCP entry is removed |
+| Open GitHub issues | None at the time of this synchronization |
 
-最近一次本地验证（2026-11-14）：完整前端套件 **136 份 / 至少 2123 条**全部 exit=0；
-TypeScript、生产构建、WOFF2 资源、国际化与文档同步检查通过。本轮没有重新运行浏览器 E2E；
-上一次完整 E2E 记录为 **73/73**，仍保留在历史验证账中。
-完整 E2E 覆盖行内标记边界、链接原位源码编辑、中文 IME、主题桥接、代码块与公式
-退出、HTML 图片回退、Vim、脚注和自动链接等发布前关键场景。
-自动更正 E2E 早前抓到并修掉 NBSP 不触发、替换区间少删一个字符以及
-一次撤销清空整段输入的 BUG-80，扩展场景又抓到并修掉行内容器重建丢失公式、
-Milkdown `closeNode` 清空活动 mark 的 BUG-81。其余结果：
-TypeScript **0**、Rust **742 / 0**、Windows GNU 目标 `cargo check` **0 警告**、
-release 构建通过、国际化检查 **OK**、
-文档同步 **0 FAIL**、生产构建通过。隔离窗口使用 GitHub 浅色主题实量：外观字号
-18 → 29px、正文大小倍数 102% → 150% 均即时生效；`==1==` 后继续输入英文和中文，
-新增字符保持在高亮外；`==1==` 后输入 `~` 得到外侧的 `==1==~`，一次撤销恢复
-正常的 `==1==`。IME 误落边界与历史标记清理判据通过。新窗口 Vim 指示器实测从
-`-- NORMAL --` 切换到 `-- INSERT --`。Linux 独立调试窗口按 `Tab` / `Enter`
-可切换诊断页，证明键盘焦点已进入 WebView；超高图片边界光标的高度判据也通过。
-主题 ZIP 已通过真实系统文件选择器复验：官方界面包导入 8 套并保留下拉即时刷新，
-官方文档包导入 5 套外置明暗主题；两者均保留相对资源，内置只读主题不被覆盖。
-本轮没有重新打包安装包。
-上一轮完整本地验证（2026-10-21）：前端 **74 份 / 至少 1639 条**、Rust **671 / 0**、
-插件仓库 **0 FAIL / 2 行数 WARN**、Windows 目标 cargo check **0 警告**、
-TypeScript、生产构建、deb/rpm/AppImage 与 Windows NSIS/便携 ZIP 打包通过。
-GitHub 官方验证的近期失败日志均为 runner 收到 shutdown signal，发生在 Rust 测试阶段，
-不是编译或断言失败；本地同一提交完整通过。
-更新链路实测：用 0.7.0-beta 的 Debian 二进制读取 0.8.0-beta Release，界面正确显示
-当前 `0.7.0-beta`、最新 `0.8.0-beta`、安装类型 `Debian 软件包（.deb）` 和可下载入口。
-2026-10-19 更新器补齐检查/安装单飞闸与 `nota:update-progress` 分块进度事件；
-下载阶段显示百分比或不确定进度，完成后切换为安装阶段。
-0.8.0-beta 二进制已开窗复验：版本号五连点会落盘 `debug_mode = true` 并出现「高级设置」；
-左栏同时显示独立的「插件设置」「拓展管理」「高级设置」，关闭调试模式后 `debug_mode = false`
-且高级页从导航消失。设置页目检截图保存在本地临时目录，未提交到仓库。
-依赖审计：`source-map-js` 的高危 DoS 已用 override 固定到 **1.2.2**；余下
-**6 条 low** 来自 KaTeX/Mermaid/remark-math，当前上游没有无破坏升级路径，继续跟踪。
+## Priority definitions
 
-## 执行队列
+| Priority | Meaning |
+|---|---|
+| P0 | Data loss, security, crash, or a defect that blocks the next supported release |
+| P1 | Important user workflow, platform compatibility, migration, or release acceptance |
+| P2 | Visible quality issue with an available workaround |
+| P3 | Polish, optional feature, or work intentionally deferred |
 
-| ID | 类别 | 状态 | 优先级 | 目标版本 | 依赖 | 验收 |
-|---|---|---|---|---|---|---|
-| BUG-31 | 稳定性 | 未定位 | P1 | 0.5.x | 复现无头实例整套窗口消失 | 长时间压力运行无 `malloc` 崩溃 |
-| BUG-56 | 编辑行为 | 未修/待确认 | P1 | 0.5.x | 确认用户当时所指现象 | 真窗口复现、修复、开窗回归 |
-| BUG-68 | 代码块外观 | 未关闭 | P2 | 0.5.x | BUG-70/71 后的事实已澄清 | 用户复验“框”是否仍存在 |
-| BUG-72 | 稳定性 | 未复现 | P2 | 0.5.x | 切主题后立即切源码 | 连续切换无错误边界 |
-| 110 | Windows | 部分完成 | P1 | 0.5.x | Windows 真机验收 | 安装、单实例、开发者桥、插件安装逐项通过 |
-| 118 | 侧栏视觉 | 部分完成 | P3 | 0.6 | 用户目检 | 树/大纲与 CDE 主题一致 |
-| 122 | Windows 清单 | 部分完成 | P1 | 0.5.x | 文件编码与剩余清单 | 每条有通过/不做结论 |
-| 123 | 插件自更新 | 已实现 | P1 | 0.7 | 插件仓库 `latest.json` | 下载→SHA-256→验签→签名者连续性→原子替换→重载 |
-| 124 | 应用更新 | 实验实现 | P1 | 0.7 | GitHub Release 资产与安装类型检测 | 0.7 → 0.8 各包类型实测覆盖安装 |
-| MACOS-BUILD | macOS 构建 | 计划中 | P1 | 下一个功能版本 | macOS CI runner、签名与公证策略 | 生成可安装 DMG；启动、编辑器、原生对话框、打印、更新和 Gatekeeper 路径完成真机验收 |
+Unresolved defects take priority over new features. A task marked as implemented
+still requires real-window verification when the permanent record says that
+verification is missing.
 
-## 发布前硬条件
+## Execution queue
 
-1. `tools/check-version.sh <tag>` 通过。
-2. `verify:light` 通过；发布前另跑 `verify:full`，前端全集、Rust、国际化、文档同步、插件仓库检查和生产构建全绿。
-3. 安装包不含插件；策略若变化，同批改 README、`docs/11` 和插件仓库说明。
-4. tag 只创建草稿 Release；人工核对产物、构建来源和校验和后再公开。
+| Priority | ID | Area | State | Next action | Exit criteria |
+|---|---|---|---|---|---|
+| P0 | 126 | Linux stability | Open | Reproduce close, restart, and single-instance cleanup; inspect WebKit child processes and the Unix socket owner | Ten consecutive close/restart cycles need no `killall`; stale sockets and child processes do not block startup |
+| P0 | 130 | Windows settings window | Open | Trace independent `WebviewWindow` creation, reuse, permissions, focus and taskbar behavior | First open and reopening work after restart; switching presentation modes leaves no hidden blocker; failures show an error |
+| P0 | 132 | Windows title bar | Open | Record WebView2 and DWM window events; isolate prewarm, maximize/fullscreen listeners and title-bar recalculation | System title bar runs five minutes without flicker; normal, maximized and fullscreen transitions stay stable |
+| P0 | 110 | Windows acceptance | Partial | Complete the real-device checklist after 122, 130, 131 and 132 | Install, update, single-instance, Host Control, plugins and restart paths each have a pass/fail record |
+| P1 | 122 | Windows feedback checklist | Partial | Re-audit remaining items in the external 17-item report and close or split every unresolved item | Every original item has a current evidence-backed conclusion |
+| P1 | 129 | External test report | Needs retest | Retest the 2026-11-20 ODT report on current `main` before implementing anything | Each reported issue is marked fixed, reproducible, duplicate, or invalid |
+| P1 | 131 | Theme icons on Windows | Open | Verify package icon mappings, protocol URLs, theme reload order and per-icon fallback | Installed custom icons work on Windows and Linux and update without restart |
+| P1 | BUG-31 | Native crash | Unlocated | Reproduce the old glibc `malloc` abort under stress with isolated profiles and native logging | A controlled reproduction exists, or the item is downgraded with a clear evidence boundary |
+| P1 | 125 | Diff rendering | Open | Determine whether poor output comes from AI diffs, Git unified diffs, or both; unify renderer semantics | Add, delete, context, hunk and metadata rows are visually distinct; indentation and long lines remain readable |
+| P1 | 128 | Code and source appearance | Open | Obtain a current reproduction and compare source mode, embedded code blocks and diff code views | Font metrics, line height, gutters, selection, caret, padding and zoom remain aligned across themes |
+| P1 | 133 | Settings structure | Open | Move Update controls into General and remove the standalone sidebar page and obsolete keys | All update actions remain available from General; search still finds them; no duplicate settings surface remains |
+| P1 | 134 | Source English migration | In progress | Continue behavior-neutral cleanup by leaf module and move user-facing text into localization resources | Chinese production-source baseline reaches zero and its baseline file is removed |
+| P1 | 135 | Documentation English migration | In progress | Translate `docs/01` through `docs/13`, `THIRD-PARTY.md` and reference archives in focused batches | Maintainer documentation is concise English except explicit translations and test content |
+| P1 | BUG-56 | Editing behavior | Needs clarification | Reconfirm the exact user-visible behavior before changing code | The reported sequence is reproduced or the item is closed as invalid |
+| P2 | 127 | Startup behavior | Open | Add a persistent "Show landing screen after startup" option and define precedence rules | Explicit CLI files win; session restore remains predictable; both modes pass repeated startup checks |
+| P2 | BUG-68 | Code-block appearance | Needs verification | Recheck the missing-frame report against the current code-block implementation | The current behavior is accepted as intentional or corrected with a screenshot-backed test |
+| P2 | BUG-72 | Theme switching stability | Rare | Stress repeated theme and source-mode switches | No error boundary, blank editor, or crash occurs |
+| P2 | 118 | Sidebar appearance | Partial | Recheck tree and outline spacing, resizing and CDE theme consistency | Sidebar states are visually consistent under bundled and external themes |
+| P2 | MACOS-BUILD | macOS support | Planned | Define the CI runner, signing, notarization, DMG and Gatekeeper path | A signed build passes startup, editing, dialogs, printing, updates and installation checks |
 
-## 单一事实源
+## Recommended order
 
-- 功能矩阵计数：`docs/10-feature-matrix.md` §1。
-- 永久 BUG/backlog 编号：`docs/07-feature-status.md`。
-- 版本：三份版本文件 + `tools/check-version.sh`。
-- 插件兼容：插件清单 `api = 2` + 宿主清单校验。
-- 发布来源：CI 的 `BUILD-INFO.json`。
+1. Complete 129 first so old external reports do not create duplicate work.
+2. Fix and verify the Windows blockers in 130, 131 and 132, then finish 110 and 122.
+3. Fix Linux lifecycle residue in 126.
+4. Improve the highest-impact editor quality issues in 125 and 128.
+5. Reconfirm BUG-31, BUG-56, BUG-68 and BUG-72 with current builds.
+6. Finish settings and startup changes in 127 and 133.
+7. Continue the behavior-neutral source and documentation migrations in 134 and 135.
+8. Start macOS release engineering only after Windows acceptance is stable.
+
+## Needs evidence before implementation
+
+- BUG-31: no reliable reproduction exists for the old native heap abort.
+- BUG-56: the original user-visible sequence is still unclear.
+- BUG-68: the current code-block frame behavior needs a fresh comparison.
+- BUG-72: the theme-switch failure was seen once but has not been reproduced.
+- 129: the external report spans several versions and must be retested.
+
+## Deferred
+
+- Image export remains unscheduled because Pandoc cannot provide a raster
+  renderer.
+- A full shell migration away from Tauri or WebKit is not planned. The cost and
+  platform constraints are recorded in the permanent history.
+- Optional plugin features should remain outside the core unless they preserve a
+  clear host boundary.
+
+## Current migration baseline
+
+The source-language audit currently records:
+
+```text
+377 production files
+40,157 Chinese-containing lines
+```
+
+Chinese identifiers in TypeScript are at zero. Remaining source debt is mainly
+legacy comments, internal strings and user-facing text that still needs to move
+into localization resources.
+
+## Verification expectations
+
+- Run focused tests while developing.
+- Run `npm run verify:light` for routine cloud-safe validation.
+- Run `npm run verify:full` before release candidates, not for every small edit.
+- UI changes require real-window verification. CI and generated test summaries do
+  not replace the submitter's manual check.
+- Printing and PDF verification must use a light document theme.
+
+## Release gates
+
+1. `tools/check-version.sh <tag>` passes.
+2. `verify:light` passes; `verify:full` passes before publication.
+3. Installers do not contain extensions or third-party themes.
+4. Manual Windows and Linux acceptance records are complete for the release.
+5. A tag creates a draft release; publish only after validating artifacts,
+   provenance and checksums.
+
+## Authoritative sources
+
+- Feature and defect history: [`07-feature-status.md`](07-feature-status.md)
+- Feature matrix: [`10-feature-matrix.md`](10-feature-matrix.md)
+- Version consistency: `package.json`, `src-tauri/Cargo.toml`,
+  `src-tauri/tauri.conf.json` and `tools/check-version.sh`
+- Release provenance: `BUILD-INFO.json` uploaded by CI

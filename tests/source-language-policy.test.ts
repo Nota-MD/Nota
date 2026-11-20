@@ -50,6 +50,7 @@ testCase("maintainer documentation is English without emoji", () => {
     "SECURITY.md",
     "artifacts/readme-demo.md",
     "docs/README.md",
+    "docs/07A-current-status.md",
     "src/styles/themes/adwaita/README.md",
     "tools/menu-harness/README.md",
     ".github/pull_request_template.md",

@@ -31,7 +31,7 @@
    比如 300、500、800 这样。**根据功能拆分**」——**目标是每个文件 300–800 行**，
    WARN 线**从 900 收到 800**（FAIL 仍是 1000，清完手上那批再过到 900：
    清单与理由在 `docs/07` 第 89 项）。
-7. **源码语言规范以根目录 `CORE_RULES.md` 为准。** 生产代码不得出现中文标识符、中文注释或硬编码中文；中文只允许留在语言包、内容资源与明确的测试数据中。长期经验写进 `docs/experience/*.md`，并使用极简英语。
+7. **源码语言规范以根目录 `CORE_RULES.md` 为准。** 生产代码不得出现中文标识符、中文注释或硬编码中文；中文只允许留在语言包、内容资源与明确的测试数据中。长期经验写进根目录 `DEVELOPMENT_EXPERIENCE.md`，并使用极简英语。
 8. **明确支持 AI 贡献，但提交者必须亲自完整测试。** AI 辅助/生成代码、测试、文档、
    图标、主题都欢迎；提交者必须在 PR 中声明 AI 参与范围，并写清本人实际执行的测试环境、
    步骤和结果。只跑 CI、只读代码或“AI 说测过”不算完成。完整规则见 `CONTRIBUTING.md`。
@@ -51,7 +51,7 @@
 - 插件：**Lua 5.4**（mlua，`vendored`），每个插件一个**独立的 Lua 状态**
 - 应用 ID：`io.github.nota.Nota`
 - 版本：`0.15.0-beta`（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json` 三处；CI 由 `tools/check-version.sh` 钉住一致）
-- **源码语言规范的唯一入口是 [`CORE_RULES.md`](CORE_RULES.md)。** 生产代码使用英文标识符、极简英语注释与英文内部字符串；中文只允许出现在语言包、内容资源和测试数据中。长期经验写在 `docs/experience/*.md`。界面 `t()` 的键使用英文原文，中文译文集中在 `src/i18n/zh-*.ts`。
+- **源码语言规范的唯一入口是 [`CORE_RULES.md`](CORE_RULES.md)。** 生产代码使用英文标识符、极简英语注释与英文内部字符串；中文只允许出现在语言包、内容资源和测试数据中。长期经验写在 [`DEVELOPMENT_EXPERIENCE.md`](DEVELOPMENT_EXPERIENCE.md)。界面 `t()` 的键使用英文原文，中文译文集中在 `src/i18n/zh-*.ts`。
 
 **名字**：Nota 是意大利语「笔记」，与工作区里的 Folio（对开本）/ Fascia（幻灯片）/
 Forma（表格）同一家族。项目结构参照 Folio。

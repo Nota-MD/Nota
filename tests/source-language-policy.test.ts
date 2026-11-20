@@ -21,6 +21,7 @@ function assert(value: unknown, message: string): asserts value {
 
 const read = (path: string) => readFileSync(path, "utf8");
 const han = /[\u3400-\u9fff]/;
+const emoji = /\p{Extended_Pictographic}/u;
 
 console.log("\n[Source language policy]");
 
@@ -30,6 +31,14 @@ testCase("core rules are linked from the repository entry point", () => {
   assert(rules.includes("Production identifiers must be ASCII English."), "identifier rule missing");
   assert(rules.includes("Comments in source code must be concise English."), "comment rule missing");
   assert(agents.includes("`CORE_RULES.md`"), "AGENTS.md does not reference core rules");
+});
+
+testCase("root rule and experience files are concise English without emoji", () => {
+  for (const file of ["CORE_RULES.md", "DEVELOPMENT_EXPERIENCE.md"]) {
+    const text = read(file);
+    assert(!han.test(text), `${file} contains Chinese`);
+    assert(!emoji.test(text), `${file} contains emoji`);
+  }
 });
 
 testCase("language audit protects the migration baseline", () => {

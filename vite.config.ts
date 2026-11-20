@@ -5,29 +5,26 @@ import react from "@vitejs/plugin-react";
 
 import { woff2OnlyFonts } from "./tools/woff2-fonts";
 
-// Tauri 约定：dev 时固定端口，供 src-tauri/tauri.conf.json 的 devUrl 指向。
+// Tauri uses a fixed development port referenced by `devUrl`.
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
   plugins: [react(), woff2OnlyFonts()],
 
-  // Tauri 在 Windows 上通过 `http://tauri.localhost` 提供内置资源。相对基址
-  // 让入口 HTML、静态资源和按需加载的模块都从当前页面解析，不依赖协议处理
-  // 器如何重写以 `/` 开头的路径。
+  // Windows serves bundled assets through `http://tauri.localhost`. A relative
+  // base resolves entry HTML, static assets and lazy chunks from the page.
   base: "./",
 
   resolve: {
-    // `@/…` → `src/…`。**必须与 tsconfig.json 的 paths 保持一致**——
-    // 两处不一致时的表现是：`tsc` 过了、`vite build` 挂了（或者反过来）。
+    // `@/...` maps to `src/...`. Keep this aligned with `tsconfig.json` paths.
     alias: [
       {
         find: "@",
         replacement: fileURLToPath(new URL("./src", import.meta.url)),
       },
       {
-        // `micromark-extension-math` 的 index 同时导出语法与 HTML 扩展，而
-        // HTML 扩展在顶层静态导入 KaTeX。编辑器只用语法；把这个未使用的分支
-        // 换掉后，KaTeX 才能留在后台 chunk 里。
+        // The package index exports both syntax and HTML extensions. The HTML
+        // branch imports KaTeX eagerly; the editor only needs the syntax branch.
         find: /micromark-extension-math\/lib\/html\.js$/,
         replacement: fileURLToPath(
           new URL("./src/editor/micromark-math-html-placeholder.ts", import.meta.url),
@@ -36,8 +33,8 @@ export default defineConfig({
     ],
   },
 
-  // Tauri 期望一个固定端口，端口被占用时**直接失败**而不是悄悄换一个
-  // （换端口会让 Tauri 的 devUrl 指向空处）。
+  // Fail when the fixed port is occupied instead of selecting another port that
+  // `devUrl` does not target.
   clearScreen: false,
   server: {
     port: 5273,
@@ -45,21 +42,19 @@ export default defineConfig({
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 5274 } : undefined,
     watch: {
-      // src-tauri 由 cargo 自己盯着，vite 不用管。
+      // Cargo watches `src-tauri`; Vite does not.
       ignored: ["**/src-tauri/**"],
     },
   },
 
-  // Tauri 用的是 WebKitGTK（webkit2gtk-4.1）。目标定在它能稳吃的语法上，
-  // 免得 esbuild 吐出新语法在旧 WebKit 上白屏。
+  // Target syntax supported by WebKitGTK 4.1 so older WebViews do not fail.
   build: {
     target: "es2021",
     minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
-    // 设置与 KaTeX 都是按需模块。Vite 默认会为它们注入 `<link rel=modulepreload>`
-    // 与一层预加载断言；Windows/WebView2 在自定义协议下只要预加载链接的处理
-    // 与模块 URL 有任何差异，真正需要该模块时就会整块静默失败。原生动态
-    // `import()` 已经由浏览器并行取依赖，这里不需要这层包装。
+    // Settings and KaTeX are lazy modules. Avoid Vite's modulepreload wrapper,
+    // which can fail under the Windows custom protocol. Native dynamic import
+    // already loads dependencies in parallel.
     modulePreload: false,
     rollupOptions: {
       input: {

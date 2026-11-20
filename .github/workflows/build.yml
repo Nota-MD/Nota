@@ -1,7 +1,8 @@
-name: 云端编译（不发布）
+name: Cloud build (preview)
 
-# 只编译 Windows x64 安装包和便携 ZIP 并上传 Actions artifact。不创建 tag、Release 或自动更新清单。
-# 轻量与完整测试分别在 verify.yml / verify-full.yml；正式打包在 release.yml。
+# Build the Windows x64 installer and portable ZIP as Actions artifacts.
+# This workflow does not create tags, releases or update manifests.
+# Routine and full verification live in verify.yml and verify-full.yml.
 on:
   workflow_dispatch:
 
@@ -41,13 +42,13 @@ jobs:
       # package.json currently contains direct dependencies that are not yet
       # represented by the historical npm lockfile. Install from the manifest
       # so the preview workflow can compile the submitted test revision.
-      - name: 安装前端依赖
+      - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
-      - name: 编译安装包
+      - name: Build packages
         run: npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
-      - name: 生成 Windows 便携 ZIP
+      - name: Create Windows portable ZIP
         if: startsWith(matrix.platform, 'windows')
         shell: pwsh
         run: |

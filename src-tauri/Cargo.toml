@@ -3,15 +3,14 @@ name = "nota"
 version = "0.15.0-beta"
 edition = "2021"
 rust-version = "1.85"
-description = "Nota — 所见即所得的 Markdown 编辑器，带 Lua 插件系统"
+description = "Nota - a WYSIWYG Markdown editor with Lua extensions"
 authors = ["Leo Lee"]
 license = "BSD-2-Clause"
 repository = "https://github.com/nota/nota"
 default-run = "nota"
 
 [lib]
-# Tauri 2 的惯例：逻辑放 lib，main.rs 只做壳。
-# 这样将来要加第二个二进制（比如 CLI、或者像 Folio 那样的多应用共享核心）不用搬代码。
+# Keep application logic in the library so additional binaries can reuse it.
 name = "nota_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
@@ -19,13 +18,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# ── 宿主框架 ──────────────────────────────────────────────────────────────
+# Host framework.
 tauri = { version = "2", features = ["protocol-asset", "devtools"] }
 tauri-plugin-fs = "2"
 tauri-plugin-opener = "2"
 open = "5"
 
-# ── 序列化 / 配置 ─────────────────────────────────────────────────────────
+# Serialization and configuration.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 argon2 = "0.5"
@@ -33,127 +32,50 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 tiny_http = "0.12"
 tauri-plugin-screenshots = "2.2"
 toml = "0.9"
-# ⚠️ 曾经有个 `base64`，是给外部编辑器主题把字体内联成 data: URL 用的。
-# 那条兼容链已按用户要求整个拆掉（版权，见 `src/themes.rs` 文件头），依赖一起删。
 
-# ── Lua 插件运行时 ────────────────────────────────────────────────────────
-# vendored：把 Lua 5.4 源码一起编进来，不依赖系统 liblua（容器里也没有）。
-# send：Lua 状态要放进 Tauri 的 managed state（跨线程），不加这个 feature
-#       编译期就会因为 Lua 不是 Send 而卡住。
-# ⚠️ mlua 的 Lua::new() **不能**当沙箱用：它的 "safe" 只等于"不能加载 C 模块"，
-#    io / os / package / require 全都在（ALL_SAFE = (1 << 30) - 1，只排除 bit31 的
-#    debug）。所以第一道闸在 src/lua/mod.rs 的 硬化的_lua() 里自己列白名单，
-#    不要再退回 Lua::new()。第二道闸在 src/lua/api/ 里按清单声明的能力放行。
-#    详见 docs/07 BUG-10。
+# Lua extension runtime.
+# `vendored` embeds Lua 5.4. `send` allows the state to live in Tauri managed
+# state. `Lua::new()` is not a sandbox; use the hardened runtime in `lua/mod.rs`.
 mlua = { version = "0.12", features = ["lua54", "vendored", "serialize", "send"] }
 
-# ── 杂项 ──────────────────────────────────────────────────────────────────
+# General dependencies.
 thiserror = "2"
 regex = "1"
 dirs = "6"
-# `sys-locale`：**这台机器的系统语言**（`src-tauri/src/lang.rs::系统语言`）。
-#
-# ⚠️ 2026-10-16 提成直接依赖，理由与上面 `chrono` / `sha2` 那两条同源：**借别人的
-# 传递依赖用是要不得的**（它本来就在树里——`zspell` 拖进来的）。而它解决的是一件
-# 只靠环境变量解决不了的事：**Windows 上没有 `LANG` 那三个变量**，于是"跟随系统"
-# 在中文 Windows 上落到 `en`（朋友实测报回来的：第一次打开就是英文）。这个 crate
-# 各平台走各自的官方接口（Windows `GetUserDefaultLocaleName` / macOS `NSLocale` /
-# Linux 那三个环境变量），Linux 上仍然是我们原来的老路。
+# Direct dependency for reliable system-language detection. Windows does not
+# provide the Linux `LANG` environment variables.
 sys-locale = "0.3"
-# `chrono`：**本地日期与时间**（`src-tauri/src/lua/api/time.rs`）。
-#
-# ⚠️ 它本来就在依赖树里（`package.rs` 那段注释写过"为了一个给人看的栏去引
-# chrono 不值当"），本轮**提成直接依赖**的理由与上面 `sha2` 那条一模一样：
-# 借别人的传递依赖用是要不得的。
-#
-# ⚠️ 为什么这回**值当**了：心电图要算"今日"（`docs/07` 第 65 项第二轮的分享图），
-# 而插件沙箱里没有 `os`、没有 `date`，宿主也不给它时区——UTC 的"今天"在
-# 东八区凌晨 0 点到 8 点之间是**前一天**，一个会被用户看见并分享出去的
-# 日期错一天，就不是"注释级偏差"了（对比 `plugin/package.rs::今天()`：
-# 那一栏没人看，所以它至今仍是 UTC）。
-#
-# `default-features = false` + `clock` + `std`：`clock` 才是 `Local` 那一支
-#（它要 `iana-time-zone` 去读本机时区）；`wasmbind` 我们不在 wasm 里跑，
-# `serde` 不需要（这里只产出数字与字符串，不序列化 `DateTime`）。
+# Local date and time support. Only `clock` and `std` are needed.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
-notify = "8"          # 文件树 / 外部改动监视
-similar = "3"         # AI 插件的 diff、Git 插件的变更预览
-shlex = "1"           # Git 插件拼命令行时的转义
+notify = "8"          # File tree and external-change monitoring.
+similar = "3"         # AI diffs and Git change previews.
+shlex = "1"           # Git command argument escaping.
 
-# ── 插件包（zip）的读取与验签 ─────────────────────────────────────────────
-# 插件**分发**用的格式是 `.nota-plugin`（zip 基底），见 docs/11 §1.6。
-# ⚠️ 这一组是 2026-09-24 加的四条，理由各不相同：
-#
-# `zip`：只**读**不写（打包那半在 `tools/pack-plugin.py`）。
-#   `default-features = false` + `deflate`——默认那套会把 bzip2/zstd/lzma
-#   三家的解压实现全拖进来，而插件包里只会出现 deflate（别的格式
-#   `zip` 自己不写，这里也用不上）。
-#
-# `sha2`：包摘要（`docs/11` §1.6 那套"按路径排序算两遍"）。
-#   它本来就在依赖树里（`ureq` 的 rustls 那一支要它），这里只是把它
-#   提成**直接**依赖——⚠️ 借别人的传递依赖用是要不得的，上游哪天换了
-#   实现就会跟着变。
-#
-# `ed25519-dalek`：验签。选 Ed25519 而不是 RSA 的理由是**签名短、密钥短、
-#   没有参数可配错**（RSA 的 padding/曲线那一堆选项正是最容易配出
-#   "验得过但并不安全"的地方）。⚠️ 只用它的 `verify`——
-#   **签名那半在 `tools/pack-plugin.py` 里走 `openssl` 命令行**，
-#   宿主没有任何地方需要私钥，`Cargo.toml` 里也就不该出现 `sign` 那条路。
-#   ⚠️ `default-features = false` 会连 `rand_core` 一起关掉，那是签名用的；
-#   验证只要 `std`。
-#
-# `base64`：签名块里那两串（公钥、签名）是人能拿编辑器看的文本格式。
-#   ⚠️ 与上面那条注释里提到的那次删除**不冲突**：那次删的是"给外部编辑器主题
-#   内联字体"的用法，这条是插件包格式自己的需要。
+# Extension package reading and signature verification.
+# ZIP support is read-only and needs only deflate. SHA-256 implements package
+# digests. Ed25519 provides small deterministic signatures. The host verifies
+# signatures but never needs a private key.
 sha2 = "0.10"
 ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
 zip = { version = "8", default-features = false, features = ["deflate"] }
 tauri-plugin-clipboard-manager = "2.3.3"
-# 拼写检查的**引擎**（纯 Rust，无 C 依赖，编进程序）。⚠️ `unstable-suggestions`
-# 是给右键菜单那条「替换为…」用的（`spell/native.rs::建议`）——它在这份 crate 里
-# 还没稳定，所以名字带 unstable；真拿不到建议时**只少一列候选**，不影响"这个词
-# 是错的"那个判断。版本与三条实测（建表 155 ms / 查 2000 词 0.2 ms / 大小写）
-# 记在 `spell/native.rs` 文件头。
+# Pure Rust spelling engine. Suggestions are optional; validation remains
+# available when suggestion generation is unavailable.
 zspell = { version = "0.5.5", features = ["unstable-suggestions"] }
 
-# ── 文件编码（2026-10-16，朋友清单第 6 条「打开,保存编码增加」）──────────────
-# 两个都是 MIT / Apache-2.0 双许可（与 BSD-2 相容），作者都是 Henri Sivonen：
-# `encoding_rs` 是编解码本体（Firefox 里那份的 Rust 版），`chardetng` 是探测器。
-# ⚠️ 探测器只在**没有 BOM 而且不是合法 UTF-8** 时才用（判据在 `text_encoding.rs`）。
+# Text encoding and detection. Detection runs only without a BOM and without
+# valid UTF-8.
 encoding_rs = "0.8"
 chardetng = "0.1"
 
-# ── 网络 ──────────────────────────────────────────────────────────────────
-# 只给 `nota.http`（`src/lua/api/http.rs`）用，也就是**只给插件**用。
-#
-# 为什么是 ureq 而不是 reqwest：ureq 是**同步**的。插件那一侧本来就是
-# 一条阻塞的 Lua 调用，宿主把它放进 `spawn_blocking` 就完事；换成
-# reqwest 得把 async 一路引到 Lua 桥的每一层，换来的是这里根本用不上的并发。
-#
-# 默认 feature 就带 `rustls` + `webpki-roots`（不依赖系统 OpenSSL，
-# 容器里也不用装 libssl-dev），另有 `flate2` 解 gzip。
-# ⚠️ 默认**不**带 `native-tls`——不要顺带开，那会把系统库拖回来。
+# Synchronous HTTP client for the blocking Lua plugin API. Defaults use rustls
+# and bundled roots. Do not enable native-tls.
 [dependencies.ureq]
 version = "3"
 
-# ── 只有 Linux 用到：PDF 那条兜底 ─────────────────────────────────────────
-# `src/pdf_print.rs`（WebKit 静默打印 → PDF）是**除 pandoc 之外**的那条路，
-# 用户 2026-09-25 定的"两条都留、pandoc 优先"。它是 WebKitGTK 的打印后端，
-# 别的平台上要走完全不同的 API（macOS `WKWebView.createPDF`、Windows
-# `WebView2.PrintToPdfAsync`），**没写也没验过**——所以只有 Linux 编。
-#
-# ⚠️ 版本必须和 tauri 拖进来的那一套**同一个大版本**（gtk 0.18 / webkit2gtk 2.0）：
-# 不一致时 GTK 会在同一个进程里被加载两份，那是"看着能编译、跑起来崩"的经典配方。
-# 这两个 crate 本来是传递依赖，这里只是把它们提成**直接**依赖——和 `sha2`
-# 那条注释同一个理由：借别人的传递依赖用是要不得的。
-#
-# ⚠️ `features = ["v3_24"]` 是**必需**的，不是顺手开的：`format_keys.rs` 要用的
-# `gtk::EventControllerKey`（捕获阶段拦 `Ctrl+B`/`Ctrl+I`，见那个文件头）
-# 整个模块被 `#[cfg(feature = "v3_24")]` 门控着，而这个 crate 的 `[features]`
-# 段里**没有 `default` 项**——不显式点名就根本没有那个类型，报的是
-# "cannot find `EventControllerKey` in `gtk`"，看着像版本不够，其实是 feature 没开。
-# GTK 3.24 是 2018 年的版本，本仓面向的 Fedora/Debian 现代发行版都远高于它。
+# Linux printing and native integration. Keep GTK and WebKit major versions
+# aligned with Tauri.
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = { version = "0.18", features = ["v3_24"] }
 gtk4 = { version = "0.11.4", features = ["v4_14"] }
@@ -167,22 +89,7 @@ libc = "0.2"
 # so the GTK3/zenity fallbacks in rfd never enter the Linux binary.
 rfd = { version = "0.16", default-features = false }
 
-# ── 只有 Windows 用到：**让"打印"真的去打印**（2026-10-16）────────────────────
-#
-# 用户朋友报的：「**「打印」功能绑定浏览器而非使用默认打开方式**」。
-# 我们那条路本来就是"写成 HTML 交给系统默认程序"（`commands/export.rs`
-# `nota_export_print`）——而 Windows 上 `.html` 的默认程序就是浏览器，于是
-# 屏幕上多出一个标签页、还得自己按 `Ctrl+P`。
-#
-# ShellExecuteW 的 **`print` 动词**才是"打印"这个动作本身：系统会找注册了
-# 打印动词的那个程序（浏览器都注册）并**直接把它的打印对话框叫出来**。
-# ⚠️ 它**没有跨平台等价物**（Linux 的 xdg-open 没有 print 动词），所以这一块
-# 挂在 `cfg(windows)` 下，别的平台照旧走"交给默认程序"那条路。
-#
-# ⚠️ `windows-sys` 本来就**在依赖树里**（tauri 拖进来的）——和 `sha2` / `gtk`
-# 那两条注释同一个理由：借别人的传递依赖用是要不得的，所以这里提成直接依赖，
-# 而且**只开这三个 feature**（基础类型 ＋ 外壳 ＋ 窗口消息框），不要把整个
-# Win32 表面开进来。
+# Windows native APIs. `ShellExecuteW` provides the native print verb.
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",

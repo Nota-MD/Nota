@@ -47,8 +47,8 @@
       "icons/icon.icns"
     ],
     "category": "Productivity",
-    "shortDescription": "所见即所得的 Markdown 编辑器",
-    "longDescription": "Nota 是一款所见即所得的 Markdown 编辑器，带 Lua 插件系统。",
+    "shortDescription": "A WYSIWYG Markdown editor",
+    "longDescription": "Nota is a WYSIWYG Markdown editor with Lua extensions.",
     "windows": {
       "nsis": {
         "languages": ["SimpChinese", "English"],

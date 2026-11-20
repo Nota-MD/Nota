@@ -1,31 +1,30 @@
-# 前端
+# Frontend
 node_modules/
 dist/
 *.local
 .vite/
 e2e/dist/
 
-# Rust / Tauri（旧后端，移植期间留着当参照）
+# Rust and Tauri
 src-tauri/target/
 src-tauri/gen/
 
-# 编辑器
+# Editor
 *.swp
 *~
 .idea/
 .vscode/
 
-# 构建产物
+# Build output
 artifacts/
 build/
 *.AppImage
 *.deb
 *.rpm
 
-# ⚠️ 2026-10-09：这条原来挡的是 `plugins/*/dist/`（打出来的 `.nota-plugin` 包）——
-# 插件源码搬去独立仓库（`Nota-plugins`）之后，同一条规矩归那个仓库的 `.gitignore` 管。
+# Plugin build output is ignored by the separate Nota-plugins repository.
 
-# 本机的开窗脚本（容器名 / 显示号 / Xauthority 取法都是这台机器的事，别入库）
+# Local window-development helpers
 tools/open-window.sh
 tools/share-preview.sh
 tools/share-preview.ts

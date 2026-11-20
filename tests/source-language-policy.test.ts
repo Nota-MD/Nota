@@ -81,5 +81,26 @@ testCase("migrated download modules contain no Chinese", () => {
   }
 });
 
+testCase("root configuration and i18n wrapper remain ASCII", () => {
+  const nonAscii = /[^\x00-\x7f]/;
+  const files = [
+    ".gitignore",
+    ".github/workflows/build.yml",
+    ".github/workflows/platform.yml",
+    ".github/workflows/release.yml",
+    "CONTRIBUTORS.md",
+    "index.html",
+    "package.json",
+    "src-tauri/Cargo.toml",
+    "src-tauri/capabilities/default.json",
+    "src-tauri/tauri.conf.json",
+    "src/i18n/index.ts",
+    "vite.config.ts",
+  ];
+  for (const file of files) {
+    assert(!nonAscii.test(read(file)), `${file} contains non-ASCII text`);
+  }
+});
+
 console.log(`\nSource language policy: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;

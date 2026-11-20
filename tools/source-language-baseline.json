@@ -1,5 +1,5 @@
 {
-  "total": 40229,
+  "total": 40157,
   "files": {
     "src/App.tsx": 362,
     "src/bridge/ipc-events.ts": 134,
@@ -103,7 +103,6 @@
     "src/editor/url-link.ts": 140,
     "src/editor/video-view.ts": 100,
     "src/editor/writing-modes.ts": 57,
-    "src/i18n/index.ts": 72,
     "src/main.tsx": 134,
     "src/styles/accent.ts": 153,
     "src/styles/applyTheme.ts": 76,

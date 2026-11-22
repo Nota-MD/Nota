@@ -88,6 +88,27 @@ testCase("工具栏不占正文流，停靠在底部并向上展开菜单", () =
   assertValue(chrome.includes("MutationObserver"), "状态栏或标签栏出现/消失时没有重新测量");
 });
 
+testCase("工具栏和内部控件跟随主题圆角，而不是强制胶囊", () => {
+  const base = readFileSync("src/styles/theme/base.css", "utf8");
+  assertValue(
+    base.includes("--format-bar-radius: var(--radius);"),
+    "悬浮工具栏没有继承当前主题的圆角",
+  );
+  const selector = css.slice(css.indexOf(".format-selector"), css.indexOf(".format-caret"));
+  const button = css.slice(
+    css.indexOf(".app-main > .format-bar .format-btn"),
+    css.indexOf(".app-main > .format-bar .format-btn:hover"),
+  );
+  assertValue(
+    selector.includes("border-radius: var(--radius-sm);"),
+    "段落下拉仍在使用独立胶囊圆角",
+  );
+  assertValue(
+    button.includes("border-radius: var(--radius-sm);"),
+    "工具栏按钮仍在使用独立胶囊圆角",
+  );
+});
+
 testCase("悬停显示从底部感应，且菜单打开时不会误收起", () => {
   assertValue(chrome.includes("bottomPartTriggerBand"), "悬停触发仍按顶部计算");
   assertValue(chrome.includes("mainArea.bottom - bottomPartTriggerBand"), "底部触发带没有接到主区下沿");

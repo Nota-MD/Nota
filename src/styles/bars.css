@@ -238,7 +238,7 @@
   height: 32px;
   padding: 0 9px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg-muted);
   font: inherit;
@@ -276,7 +276,7 @@
   min-width: 32px;
   height: 32px;
   padding: 0 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   color: var(--fg-muted);
   gap: 4px;
   transition:

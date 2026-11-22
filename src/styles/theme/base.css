@@ -138,7 +138,7 @@
   --format-bar-bg: var(--bg-raised);
   --format-bar-border: var(--border);
   --format-bar-shadow: var(--popup-shadow);
-  --format-bar-radius: 999px;
+  --format-bar-radius: var(--radius);
 
   --switch-on: var(--accent);
 

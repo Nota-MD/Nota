@@ -239,7 +239,10 @@ if (diffBase) {
   const diff = execFileSync(
     "git",
     ["diff", "--unified=0", `${diffBase}...HEAD`, "--", ...roots],
-    { encoding: "utf8" },
+    {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+    },
   );
   let file = "";
   const added = [];

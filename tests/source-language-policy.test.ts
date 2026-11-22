@@ -71,6 +71,10 @@ testCase("language audit protects the migration baseline", () => {
   };
   assert(tool.includes("--check"), "audit has no check mode");
   assert(tool.includes("--update"), "audit cannot refresh the baseline");
+  assert(
+    tool.includes("maxBuffer"),
+    "diff audit must tolerate large behavior-neutral source migrations",
+  );
   assert(baseline.total >= 0, "baseline total is invalid");
   assert(Object.keys(baseline.files).length >= 0, "baseline files are invalid");
 });

@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod assets;
 pub mod data;
 pub mod devserver;
@@ -76,6 +77,10 @@ pub fn build(
     )?;
 
     set(nota.set("time", time::build(lua)?), lua)?;
+
+    if manifest.has(Capability::AiContextRead) || manifest.has(Capability::AiContextWrite) {
+        set(nota.set("ai", ai::build(lua, manifest, ctx)?), lua)?;
+    }
 
     if manifest.has(Capability::DocumentRead) || manifest.has(Capability::DocumentWrite) {
         set(

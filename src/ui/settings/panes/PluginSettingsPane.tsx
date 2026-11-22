@@ -14,6 +14,7 @@ import {
   Range,
   SettingRow,
   SettingsGroup,
+  TextArea,
   TextInput,
   Toggle,
 } from "../primitives";
@@ -66,6 +67,14 @@ export function PluginSettingsPane({
               ) : setting.kind === "toggle" ? (
                 <Toggle
                   checked={setting.on}
+                  onChange={(value) => void action.settings(plugin.id, setting.key, value)}
+                />
+              ) : setting.multiline ? (
+                <TextArea
+                  value={setting.text}
+                  rows={6}
+                  placeholder={setting.placeholder || undefined}
+                  title={setting.help || undefined}
                   onChange={(value) => void action.settings(plugin.id, setting.key, value)}
                 />
               ) : (

@@ -168,7 +168,13 @@ export type PanelNode =
 
 
 
-  | { kind: "message"; from: PanelFrom; text: string; copy: boolean }
+  | {
+      kind: "message";
+      from: PanelFrom;
+      text: string;
+      copy: boolean;
+      streaming: boolean;
+    }
 
   | { kind: "diff"; items: PanelDiffLine[] }
 
@@ -861,6 +867,7 @@ function oneBlock(raw: Record<string, unknown>): PanelNode {
         from: raw.from === "user" ? "user" : "ai",
         text: text2(raw.text, clearMessageLimit),
         copy: raw.copy === true,
+        streaming: raw.streaming === true,
       };
     case "diff":
       return {

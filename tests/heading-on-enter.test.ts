@@ -106,6 +106,9 @@ const schema = new Schema({
     // 标题块。⚠️ 这一版新增：`#你好` 现在**真的会**变成它（回车那一下），
     // 而"已经不是段落的不该再进装饰"是这一版判"写完了没有"的方式。
     heading: { content: "inline*", defining: true, attrs: { level: { default: 1 } } },
+    table: { content: "table_row+" },
+    table_row: { content: "table_cell+" },
+    table_cell: { content: "block+" },
   },
   marks: {
     strong: {},
@@ -219,6 +222,16 @@ testCase("`#**你好**`：正文那颗加粗节点**整颗**都在范围里", ()
 testCase("多段：只有那段标题写法有条目，位置按整篇算", () => {
   //  第 1 段占 0…3（`#你好` 三颗字 ＋ 一对哨兵位），所以第 2 段从 5 起。
   equal(items(combine2(paragraphGroup("#你好"), paragraphGroup("正文")), false).join(" "), "2-4", "条目");
+});
+
+testCase("table cells never become pending headings", () => {
+  const table = schema.nodes.table.create(null, [
+    schema.nodes.table_row.create(null, [
+      schema.nodes.table_cell.create(null, paragraphGroup("#ffffff")),
+      schema.nodes.table_cell.create(null, paragraphGroup("#161616")),
+    ]),
+  ]);
+  equal(items(combine2(table), false).join(" "), "", "hex color values in table cells");
 });
 
 group("二、已经是标题块的不再进装饰（这条是「写完了没有」的判据）");

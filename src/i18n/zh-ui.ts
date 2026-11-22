@@ -58,6 +58,8 @@ export const uiMessages: Record<string, string> = {
   "Redo": "重做",
   "Cut": "剪切",
   "Copy": "复制",
+  "Back to latest": "回到底部",
+  "Resume automatic scrolling": "恢复自动滚动",
   "Copy Image": "拷贝图片",
   "Paste": "粘贴",
   "Copy As": "复制为",

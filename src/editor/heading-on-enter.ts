@@ -280,6 +280,11 @@ export function computeDecorationsItem(doc: PMNode, strict: boolean): PendingDec
 
 
     if (node.type.name !== "paragraph") return true;
+    const resolved = doc.resolve(pos + 1);
+    for (let depth = 1; depth <= resolved.depth; depth++) {
+      const name = resolved.node(depth).type.name;
+      if (name === "table_cell" || name === "table_header") return true;
+    }
     const first = node.firstChild;
     if (!first || !first.isText || !first.text) return true;
 

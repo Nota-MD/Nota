@@ -8,6 +8,13 @@ export interface ComputedBox {
   padding: string;
   align: string;
   background: string;
+  ink: string;
+  fontFamily: string;
+  fontSize: string;
+  fontStyle: string;
+  fontWeight: string;
+  lineHeight: string;
+  letterSpacing: string;
   error: boolean;
   selected: boolean;
 }
@@ -58,6 +65,32 @@ function isFormulaError(value: string): boolean {
   return /^#[A-Z0-9/?!]+$/i.test(value);
 }
 
+function paintedBackground(cell: HTMLTableCellElement): string {
+  let element: HTMLElement | null = cell;
+  while (element) {
+    const style = getComputedStyle(element);
+    if (style.backgroundImage !== "none") {
+      return style.background;
+    }
+    if (
+      style.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+      style.backgroundColor !== "transparent"
+    ) {
+      return style.backgroundColor;
+    }
+    if (element.classList.contains("ProseMirror")) break;
+    element = element.parentElement;
+  }
+  const fallback = getComputedStyle(
+    cell.closest<HTMLElement>(".editor-pane") ?? document.documentElement,
+  );
+  return (
+    fallback.getPropertyValue("--doc-bg").trim() ||
+    fallback.backgroundColor ||
+    "transparent"
+  );
+}
+
 export function applyComputed(
   table: HTMLTableElement,
   cells: Record<string, string>,
@@ -65,6 +98,7 @@ export function applyComputed(
   for (const cell of table.querySelectorAll<HTMLTableCellElement>("td, th")) {
     cell.classList.remove("nota-sheet-computed", "nota-sheet-error");
     cell.removeAttribute("data-nota-sheet-value");
+    cell.style.removeProperty("--nota-cell-ink");
     cell.style.removeProperty("color");
     cell.style.removeProperty("text-shadow");
     cell.style.removeProperty("position");
@@ -78,6 +112,8 @@ export function applyComputed(
     if (!point) continue;
     const cell = table.rows[point.row]?.cells[point.column];
     if (!cell) continue;
+    const ink = getComputedStyle(cell).color;
+    cell.style.setProperty("--nota-cell-ink", ink);
     cell.dataset.notaSheetValue = value;
     cell.classList.add("nota-sheet-computed");
     if (isFormulaError(value)) cell.classList.add("nota-sheet-error");
@@ -103,12 +139,6 @@ export function computedBoxesFor(
     if (!cell) continue;
     const rect = cell.getBoundingClientRect();
     const style = getComputedStyle(cell);
-    const rowBackground = getComputedStyle(cell.parentElement ?? cell).backgroundColor;
-    const cellBackground =
-      style.backgroundColor === "rgba(0, 0, 0, 0)" ||
-      style.backgroundColor === "transparent"
-        ? rowBackground
-        : style.backgroundColor;
     const error = isFormulaError(value);
     const inset = 1;
     boxes.push({
@@ -121,11 +151,18 @@ export function computedBoxesFor(
       padding: `${style.paddingTop} ${style.paddingRight} ${style.paddingBottom} ${style.paddingLeft}`,
       align: style.textAlign || "left",
       background: error
-        ? "color-mix(in srgb, var(--danger) 12%, var(--bg))"
-        : cellBackground === "rgba(0, 0, 0, 0)" ||
-            cellBackground === "transparent"
-          ? "var(--bg)"
-          : cellBackground,
+        ? "color-mix(in srgb, var(--danger) 12%, var(--doc-bg, var(--bg)))"
+        : paintedBackground(cell),
+      ink:
+        style.getPropertyValue("--nota-cell-ink").trim() ||
+        style.color ||
+        "var(--doc-fg)",
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontStyle: style.fontStyle,
+      fontWeight: style.fontWeight,
+      lineHeight: style.lineHeight,
+      letterSpacing: style.letterSpacing,
       error,
       selected: false,
     });

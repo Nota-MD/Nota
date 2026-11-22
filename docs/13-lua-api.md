@@ -1066,7 +1066,7 @@ prompt = {
 | `refresh(id)` | 面板 id（可省，省略 = 你这个插件唯一那块） | 告诉界面"我这边的面板内容变了"——前端收到就**重拉**一次 `nota_plugin_panel_content`（`render` 现跑，§8.2）。⚠️ 面板那一页**没开着**时不必调：切过去时会现拉（`ui/PluginDock.tsx`）。⚠️ 它是**失效信号，不带内容**：判据是"丢掉它，打开面板仍然对" |
 | `show(id)` | 面板 id（必填） | 打开右侧插件栏并切到这个面板。宿主先确认它是本插件**已经在册**的面板，再发 `nota:plugin-panel-focus`；前端只负责切页，内容仍按普通 `panel_content` 拉。插件打开自己的主面板时默认用这条，例如知识图谱菜单项。⚠️ 不需要新能力，仍归 `ui.panel` |
 | `review([id])` | 面板 id；**传 `nil` 收起来** | 把**已经在册的**这块面板摊到**编辑区**里看（`ui/ReviewPane.tsx`）——插件栏那 260px 宽，预览、长对话在那儿都嫌窄。⚠️ 从宿主界面切换视图时，放大动作会收起侧栏、切回侧栏会收起编辑区；插件直接调用本函数只改编辑区那一格。⚠️ **收起来也得插件自己说**（`review(nil)`）：宿主收不了，它不知道面板上那些按钮是什么意思。⚠️ `register_panel` 里的 `wide` 决定摊开时占多宽（§8.2） |
-| `stream(text)` | 一段文本；**空串 = 收工** | ⚠️⚠️ **这个会真的送内容过去**——它就是"边生成边显示"（`docs/07` 第 58 项，2026-10-04 加）。见下面那一段 |
+| `stream(text)` | One text snapshot; an empty string explicitly clears the preview | This sends content, not just a refresh. It powers live generation previews. See below. |
 
 ⚠️ **侧栏与编辑区可以互相切换，而且不需要插件另写命令**：右侧面板标题栏有一颗
 「在编辑区中打开」，编辑区面板标题栏有一颗「侧栏」。后者调宿主自己的
@@ -1093,14 +1093,16 @@ nota_plugin_panel_content →                    等锁 ⏳（一直等到上面
 四条口径：
 
 * **推的是"到此刻为止的全文"**，不是这一小段的增量。两端都别自己攒——一边攒一边断线就会错位。
-  空串是**收工**（把那段临时的字撤掉）。
+  An empty string explicitly clears the temporary text. On success, a plugin
+  may keep the final preview until its refreshed panel content arrives; the
+  panel clears it after that pull, avoiding a blank transition frame.
 * **只留最后 8000 个字符**（`ui.rs::实时上限`）。它是**临时的显示数据**，
   不是第二个"面板内容"口子——真内容仍然要走 `render`。
 * **收工时照样得 `refresh()` 一次**，否则面板上留下的只是最后那一眼。
 * **别拿它干别的**：传进去的东西**不经 `render`**，也就没有 §8.5 那一套节点校验
   （前端按一条 `message` 处理）。想显示结构化内容，那是 `render` 的事。
 
-⚠️ 正在用它的只有 AI 插件（`plugins/ai/request.lua::stream_request`，每 80 毫秒推一次）。
+⚠️ 正在用它的只有 AI 插件（`plugins/ai/request.lua::stream_request`），当前推送间隔为 32 毫秒。
 ⚠️ 三条都归 `ui.panel` 管（`register_panel` 的同一件事），不需要额外能力。
 
 ---
@@ -1215,6 +1217,17 @@ end)
   一直在吐就不会失败——从前它会在总时限那一刻被掐掉（用户 2026-10-10 报的
   `timeout: global` 就是它）。
 
+OpenAI-compatible chat streams use SSE lines such as
+`data: {"choices":[{"delta":{"content":"Hello"}}]}` and terminate with
+`data: [DONE]`. DeepSeek reasoning models send `delta.reasoning_content`
+fragments before the final `delta.content` fragments. The AI extension treats
+the reasoning field only as a progress signal and displays “Thinking…”, rather
+than exposing private reasoning text. Both fields are deltas; content fragments
+must be appended instead of treating each payload as a cumulative snapshot.
+Fields named `content` or `reasoning_content` may be `null` on frames that do
+not carry that kind of text. The final usage object is metadata and is not
+answer text.
+
 ⚠️ **`stream` 不会自己往界面上画字**。要"边生成边显示"，得在回调里调
 `nota.ui.stream`（§8.6）——**两件事、两个函数**：`nota.http.stream` 是"别一次等完"，
 `nota.ui.stream` 是"把这一段先画上去"。为什么后者必须是**推**而不是 `refresh`，
@@ -1308,8 +1321,8 @@ local all = nota.settings.all()               -- 一张普通表
 ```
 ~~~
 
-**三条规矩**（`diff.rs` 文件头有同一张表，`plugins/ai/main.lua` 的
-`SYSTEM_PROMPT` 里也有——**改一处要改三处**）：
+**三条规矩**（`diff.rs` 文件头有同一张表，`plugins/ai/prompt.lua` 的
+system prompt 里也有——**改一处要改三处**）：
 
 | # | 规矩 | 为什么 |
 |---|---|---|
@@ -1743,7 +1756,7 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 | **`789-792`** | **`pcall(refresh, nota, true)` + `nota.log.warn`** | **全文件最值得套用的一段**：`on_load` 末尾的调用一定要兜底，否则"环境不具备"会变成"插件加载失败"（§7.3）。⚠️ 也正因为 `refresh` 会走到 `notify`，而 `on_load` 时前端还没起来——见 §8.1 那条推/拉的提醒 |
 | `795-798` | 空的 `on_unload` | 没有要落盘的状态——**空着是正确做法**，不需要刻意补内容 |
 
-### 14.2 `Nota-plugins/plugins/ai/`（`main.lua` 328 ＋ `chat.lua` 740 ＋ `panel.lua` 623 ＋ `request.lua` 356 ＋ `store.lua` 241 ＋ `util.lua` 210 ＋ `scope.lua` 175）—— "联网插件 ＋ 对话框怎么写"
+### 14.2 `Nota-plugins/plugins/ai/` - prompt, requests, chat, storage and panel
 
 > 2026-09-24 大改：从"一问一答 ＋ 预览"改成**多对话对话框 ＋ 末尾附改动块**。
 > 改动块的**格式与实现搬去了 §11**，这一块里只剩两句转发。
@@ -1756,7 +1769,7 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 > 五段 `[[settings]]` 画，见 `docs/11` §2.5）。⇒ 这个插件**成了"两种设置写法都用"的
 > 第一个样例**：今天它只**读**设置（`util.read_setting`），一个字节都不写。
 >
-> ⚠️ **2026-09-29 起它不是一个文件了**，2026-10-04 又拆了一次。现在有**七份**，
+> The extension is split by responsibility into **eight Lua modules**.
 > 拆的线是「**谁碰什么**」——这也是这一族最值得学的地方（`docs/12` §5.9）：
 >
 > | 文件 | 管什么 | 碰什么 |
@@ -1764,6 +1777,7 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 > | `main.lua` | 插件外壳：`on_load` / 命令注册 / 菜单与面板声明 | 什么都不碰，只管接线 |
 > | `util.lua` | 公共词汇：设置项的键与默认值、`read_setting` / `join_url` / `len` / `cut` / `trim` / `clean_error` / `now_ms` / **`stream_on`** | 只读设置 |
 > | **`request.lua`** | **发一次请求**（2026-10-04 从 `chat.lua` 拆出）：整段/流式两条路、组规格、解回包 | 网络（唯一一处） |
+> | **`prompt.lua`** | System instructions, document identity, history labels and extension format notes | Pure prompt assembly |
 > | `chat.lua` | 对话状态（`chats` / `cur` / `next_id`）、`M.send`、改动块的解析与应用、几条改状态的命令 | 文档 ＋ 网络（经 `request`） |
 > | `store.lua` | 对话**落盘**：一份自定的行格式 ＋ 编解码 | `nota.data` |
 > | `scope.lua` | 「AI 可读的文件」：列 `.md`、开关、拼进系统消息 | `nota.fs`（只读） |
@@ -1793,10 +1807,10 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 |---|---|
 | `chat.lua 68-84` | 上限：`SHOW_MSGS` / `SHOW_DIFF_LINES` / `MAX_CHATS` / `HISTORY_MAX`。⚠️ 每个数都是"面板放不下/发得太贵"，且都写明了超了会怎样 |
 | `chat.lua 85-126` | `PRESET_ORDER` ＋ `PRESETS`。⚠️ 顺序**另写一张数组**而不是 `pairs` 遍历：`pairs` 顺序不保证，界面上那排按钮会每次重开都换位置，而且不报错。⚠️ 预设 `ask` 写的是**用户会说的那句话**——它要以用户消息的身份出现在对话里 |
-| `chat.lua 127-175` | `SYSTEM_PROMPT`：一个**完整的围栏样例** ＋ 六条编号规矩（末尾、逐字一致、连续、别加解释行、不改的地方不要抄进来…）。⚠️ **三处契约改一处要改三处**（`diff.rs` / 这里 / §11） |
+| `prompt.lua` | Owns the stable system prompt, compact GFM contract, current-document block, history labels and extension format notes. The diff contract is mirrored in `diff.rs` and §11. |
 | `chat.lua 201-329` | 对话状态。⚠️ 身份用**编号**不用下标（删掉一个之后下标整体前移，而面板按钮里存的是编号）；下标越界**拉回第一个**不报错；⚠️ 身份还是**闭包干净**的（`chat_is_fresh` 换 `cur` 时要认 id，不然两个对话的"新鲜度"会互相污染） |
 | `chat.lua 421-495` | `M.send`——**所有走网络的路都收在这一个函数**（网络那一截现在只是 `request.ask` 一行）。失败也**留在对话里**（`role = "error"`），不是"面板闪一下、输入的内容也丢了"；⚠️ 新回复里**没有改动块 → 上一处作废**（留着它，几轮之后点的「应用」会是过时的那一处）。⚠️ 第四个参数 `again`（2026-10-10 加）＝"**不再往对话里追加一条用户消息**"，「重试」走的就是它——**不在 `retry_last` 里抄一份 `send`**：抄第二份就一定有一处会漂 |
-| `chat.lua 421-495` 里那三行 | **流式的收尾**：`request.ask(nota, messages, function(text) pushed = true; nota.ui.stream(text) end)`，返回后 `if pushed then nota.ui.stream("") end`（**收工那一声**），末尾照旧 `nota.ui.refresh("ai")`。⚠️ 半截回答（`r.partial`）**也落进对话**——见 §9.1 |
+| `chat.lua` send/stream completion | `request.ask(...)` streams full snapshots. On failure, clear the temporary preview explicitly; on success, keep it until the refreshed panel replaces it. Half replies (`r.partial`) still enter the transcript. See §9.1. |
 | `chat.lua 510-539` | `M.retry_last`（2026-10-10 加）：把**最后一条回答**丢掉、拿上一条用户消息重发。⚠️ 判据是"**最后一条是 `assistant`**"——末尾是错误说明时不给（重试一次还是同样结果）；⚠️ 那条**待应用的改动一起作废**（它多半就是这条回答带出来的，而重试会带来新的一份） |
 | `panel.lua 502-` | `M.content`：整栏的次序（**标签页 → 模型那一行 → 消息/空态 → 待应用的改动 → 输入卡片 → 两张次要开关 → 摊开的那两块 → "设置在哪"**）。⚠️ 那两块（可读文件 / 已关掉的对话）**默认收着**，状态住在本模块（`show_scope` / `show_closed`，同 `diff.lua` 那份 `show_diff`）：摊开时各占半屏，而主视线只该有"消息 ＋ 输入框" |
 | `request.lua 56-79` | 段注释：**两条路一张表**（整段 / 流式各什么时候走）。⚠️ 两条路的**输出形状完全一样**，所以 `chat.lua::M.send` 不需要知道走的是哪条——判断只在 `M.ask` 里做一次 |
@@ -1932,6 +1946,8 @@ nota.devserver.probe({ need = "node_modules/@slidev/theme-default" })
 | `process.git` | `nota.git.run` / `status` / `parse_status` / `log_graph` / `diff` / `repo_root` |
 | **`process.devserver`** | **`nota.devserver.probe`（`{}` 不等、`{force=true}` 等，§13.3a）/ `start` / `status` / `open_in_browser` / `log` / `stop`** （§13；⚠️ 放行的是**清单里那一条命令**） |
 | `network.http` | `nota.http.request` / `get` / `post` （§9）／ **`stream`**（§9.1，2026-10-04 加） |
+| **`ai.context.read`** | **`nota.ai.format_context`**（§19） |
+| **`ai.context.write`** | **`nota.ai.add_format_context` / `clear_format_context`**（§19） |
 | `ui.notify` | `nota.ui.notify` |
 | `ui.panel` | `nota.ui.register_panel` / `refresh` / **`show`** / `review` / **`stream`** （+ `render` 面板 DSL，§8.5；+ `wide`；+ **`live`**） |
 | `ui.menu` | `nota.ui.register_menu` （+ `prompt`） |
@@ -2205,3 +2221,44 @@ nota.table.register_action({
 ```
 
 The action appears in the table section of the custom right-click menu.
+
+## 19. `nota.ai` - extension format context
+
+This table exists only when `ai.context.read` or `ai.context.write` is declared.
+It shares append-only Markdown format notes with the separate `nota.ai`
+extension. The protected system prompt is never exposed.
+
+### `nota.ai.add_format_context(text)` - `ai.context.write`
+
+Registers or replaces the current extension's format note. The host trims the
+text, applies stable plugin-id ordering and enforces these limits:
+
+- 20,000 bytes per extension;
+- 80,000 bytes total across all enabled extensions.
+
+An empty or whitespace-only string removes the current extension's note. The
+same call from the same plugin replaces its previous note.
+
+```lua
+nota.ai.add_format_context([[
+This extension adds ::: note blocks. Their body is Markdown.
+]])
+```
+
+### `nota.ai.clear_format_context()` - `ai.context.write`
+
+Removes only the calling extension's note.
+
+### `nota.ai.format_context()` - `ai.context.read`
+
+Returns an array:
+
+```lua
+{
+  { plugin = "nota.example", text = "This extension adds ::: note blocks." },
+}
+```
+
+The result is ordered by plugin id for stable prompts. It contains only notes
+registered through this API. It does not expose the base system prompt, the
+active document, reference files, credentials or private settings.

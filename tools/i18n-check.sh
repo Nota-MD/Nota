@@ -300,6 +300,13 @@ for 目录 in sorted(glob.glob(插件根 + "/*")):
     for m in re.finditer(r'\b(?:label|help)\s*=\s*"((?:[^"\\]|\\.)*)"',
                           open(清单, encoding="utf-8").read()):
         用的键.add(解转义(m.group(1)))
+    # Placeholders can be prose or literal examples. Only prose needs translation;
+    # URLs, model ids and masked keys must stay unchanged.
+    for m in re.finditer(r'\bplaceholder\s*=\s*"((?:[^"\\]|\\.)*)"',
+                          open(清单, encoding="utf-8").read()):
+        值 = 解转义(m.group(1))
+        if any(c.isspace() for c in 值):
+            用的键.add(值)
     表们 = sorted(glob.glob(目录 + "/lang/*.toml"))
     for toml in 表们:
         键们 = 读表(toml)

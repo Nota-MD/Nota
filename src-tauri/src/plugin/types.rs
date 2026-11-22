@@ -65,6 +65,8 @@ pub struct PluginSetting {
     pub secret: bool,
 
     pub placeholder: String,
+
+    pub multiline: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

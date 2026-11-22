@@ -262,6 +262,7 @@ pub fn run() {
             let settings_arc = Arc::new(Mutex::new(settings));
             let workspace = Arc::new(Mutex::new(None));
             let table_bridge = Arc::new(Mutex::new(table_bridge::TableBridge::default()));
+            let ai_context = Arc::new(Mutex::new(lua::api::ai::ContextRegistry::default()));
 
 
 
@@ -284,6 +285,7 @@ pub fn run() {
                 settings: settings_arc.clone(),
                 workspace: workspace.clone(),
                 table_bridge: table_bridge.clone(),
+                ai_context,
                 plugin_id: String::new(),
                 application_language: application_language.clone(),
             };
@@ -427,6 +429,7 @@ pub fn run() {
             commands::table_width::nota_table_widths_forget,
             commands::table::nota_table_snapshot_sync,
             commands::table::nota_table_actions,
+            commands::table::nota_table_renders,
 
             commands::session::nota_session_get,
             commands::session::nota_session_set_open,
@@ -559,7 +562,7 @@ pub fn run() {
         .on_menu_event(|app, event| {
             let _ = app.emit("nota:native-menu", event.id().0.clone());
         })
-        .on_window_event(|window, event| {
+        .on_window_event(move |window, event| {
 
 
 
@@ -579,6 +582,11 @@ pub fn run() {
 
 
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if standalone_settings_window && window.label() == "main" {
+                    api.prevent_close();
+                    window.app_handle().exit(0);
+                    return;
+                }
                 if window.label() == "settings" || window.label() == "about" {
                     api.prevent_close();
                     let _ = window.hide();

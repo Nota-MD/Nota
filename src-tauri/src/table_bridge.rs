@@ -83,8 +83,15 @@ impl TableBridge {
     }
 
     pub fn sync_snapshot(&mut self, snapshot: Option<TableSnapshot>) {
+        let same_document = self
+            .snapshot
+            .as_ref()
+            .zip(snapshot.as_ref())
+            .is_some_and(|(old, new)| old.document_id == new.document_id);
         self.snapshot = snapshot;
-        self.renders.clear();
+        if !same_document {
+            self.renders.clear();
+        }
     }
 
     pub fn render(&mut self, plugin: &str, cells: BTreeMap<String, String>) -> Option<TableRender> {
@@ -96,7 +103,10 @@ impl TableBridge {
             extension_content: !cells.is_empty(),
             cells,
         };
-        self.renders.insert(plugin.to_owned(), render.clone());
+        self.renders.insert(
+            format!("{}:{}", render.plugin, render.table_id),
+            render.clone(),
+        );
         Some(render)
     }
 
@@ -134,6 +144,10 @@ impl TableBridge {
 
     pub fn has_extension_content(&self) -> bool {
         self.renders.values().any(|render| render.extension_content)
+    }
+
+    pub fn renders(&self) -> Vec<TableRender> {
+        self.renders.values().cloned().collect()
     }
 }
 
@@ -222,5 +236,49 @@ mod tests {
         let render = bridge.render("nota.test", cells).unwrap();
         assert!(render.extension_content);
         assert!(bridge.has_extension_content());
+    }
+
+    #[test]
+    fn table_renders_survive_switching_tables_inside_one_document() {
+        let mut bridge = TableBridge::default();
+        bridge.sync_snapshot(Some(TableSnapshot {
+            document_id: 7,
+            table_id: "7:0".to_owned(),
+            rows: vec![vec!["=SUM(A1)".into()]],
+            selection: TableRange::default(),
+            active: TablePoint::default(),
+        }));
+        let mut cells = BTreeMap::new();
+        cells.insert("A1".to_owned(), "1".to_owned());
+        bridge.render("nota.sheet-formulas", cells);
+
+        bridge.sync_snapshot(Some(TableSnapshot {
+            document_id: 7,
+            table_id: "7:1".to_owned(),
+            rows: vec![vec!["plain".into()]],
+            selection: TableRange::default(),
+            active: TablePoint::default(),
+        }));
+        let mut second_cells = BTreeMap::new();
+        second_cells.insert("A1".to_owned(), "2".to_owned());
+        bridge.render("nota.sheet-formulas", second_cells);
+        assert!(bridge.has_extension_content());
+        assert_eq!(
+            bridge
+                .renders()
+                .iter()
+                .map(|render| render.table_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["7:0", "7:1"]
+        );
+
+        bridge.sync_snapshot(Some(TableSnapshot {
+            document_id: 8,
+            table_id: "8:0".to_owned(),
+            rows: vec![vec!["plain".into()]],
+            selection: TableRange::default(),
+            active: TablePoint::default(),
+        }));
+        assert!(!bridge.has_extension_content());
     }
 }

@@ -49,6 +49,9 @@ pub struct SettingDecl {
     pub default_text: Option<String>,
 
     #[serde(default)]
+    pub multiline: bool,
+
+    #[serde(default)]
     pub default_on: Option<bool>,
 }
 
@@ -221,13 +224,14 @@ pub(crate) fn check_settings(
         };
         let has_data =
             s.min.is_some() || s.max.is_some() || s.default.is_some() || s.step.is_some();
-        let has_text = s.secret || !s.placeholder.is_empty() || s.default_text.is_some();
+        let has_text =
+            s.secret || !s.placeholder.is_empty() || s.default_text.is_some() || s.multiline;
         let has_enabled_default = s.default_on.is_some();
         match s.kind.as_str() {
             "range" => {
                 if has_text {
                     return Err(not_required(
-                        "secret / placeholder / default_text",
+                        "secret / placeholder / default_text / multiline",
                         "this field belongs to `text`",
                     ));
                 }
@@ -259,7 +263,7 @@ pub(crate) fn check_settings(
                 }
                 if has_text {
                     return Err(not_required(
-                        "secret / placeholder / default_text",
+                        "secret / placeholder / default_text / multiline",
                         "this field belongs to `text`",
                     ));
                 }
@@ -514,6 +518,28 @@ default_on = true
             m.settings[0].default_on, None,
             "\u{53ea}\u{6709} toggle \u{90a3}\u{4e00}\u{6863}\u{624d}\u{8ba4}\u{5b83}"
         );
+    }
+
+    #[test]
+    fn multiline_text_setting_is_parsed_and_rejected_on_non_text_kinds() {
+        let multiline = r#"
+[[settings]]
+key = "persona_prompt"
+kind = "text"
+label = "Custom preset instructions"
+multiline = true
+"#;
+        let m = pending_settings_manifest("multiline-text", multiline, "\"settings.own\"").unwrap();
+        assert!(m.settings[0].multiline);
+
+        let err = pending_settings_manifest(
+            "multiline-toggle",
+            &TEXT_AND_TOGGLE_SETTINGS
+                .replace("default_on = true", "default_on = true\nmultiline = true"),
+            "\"settings.own\"",
+        )
+        .unwrap_err();
+        assert!(err.contains("cannot use"), "unexpected error: {err}");
     }
 
     #[test]

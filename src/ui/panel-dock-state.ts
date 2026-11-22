@@ -144,7 +144,11 @@ export function thisValuePageDrawWhatWhat(state2: PanelState, actualTime: string
   }
 
   const actualTimeNode =
-    actualTime === "" ? null : (normalise([{ kind: "message", from: "ai", text: actualTime }])[0] ?? null);
+    actualTime === ""
+      ? null
+      : (normalise([
+          { kind: "message", from: "ai", text: actualTime, streaming: true },
+        ])[0] ?? null);
 
   if (state2.state === "loading") {
 

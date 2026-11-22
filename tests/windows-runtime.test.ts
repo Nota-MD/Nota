@@ -49,33 +49,33 @@ testCase("日志与警报窗口各有独立 HTML 入口", () => {
   const windowCommand = read("src-tauri/src/commands/window.rs");
   contains(
     windowCommand,
-    "if show_settings_window(&app).is_ok()",
-    "设置窗口没有优先使用统一的快速路径",
+    '#[cfg(not(target_os = "windows"))]\n#[tauri::command]\npub fn nota_window_open_settings(app: tauri::AppHandle)',
+    "非 Windows 设置窗口快速路径丢失",
   );
   contains(
     windowCommand,
-    ".arg(crate::cli::SETTINGS_WINDOW_FLAG)",
-    "设置窗口缺少独立进程回退",
+    '#[cfg(target_os = "windows")]\n#[tauri::command]\npub fn nota_window_open_settings(_app: tauri::AppHandle)',
+    "Windows 设置窗口没有走独立进程",
   );
   contains(
     windowCommand,
-    "pub fn nota_window_prepare_settings(app: tauri::AppHandle)",
-    "设置窗口预热命令没有复用后台窗口",
+    "open_settings_process(true)",
+    "Windows 没有直接启动设置进程",
+  );
+  contains(
+    windowCommand,
+    "open_settings_process(false)",
+    "非 Windows 设置窗口缺少进程回退",
+  );
+  contains(
+    windowCommand,
+    "pub fn nota_window_prepare_settings(_app: tauri::AppHandle)",
+    "Windows 设置预热没有变成无操作",
   );
   contains(
     windowCommand,
     "fn ensure_settings_window",
-    "设置窗口没有统一的创建或复用入口",
-  );
-  contains(
-    windowCommand,
-    ".focused(false)",
-    "预热设置窗口会抢主窗口焦点",
-  );
-  contains(
-    windowCommand,
-    ".set_skip_taskbar(false)",
-    "显示设置窗口时没有恢复任务栏入口",
+    "非 Windows 设置窗口创建入口丢失",
   );
   const ipc = read("src/bridge/ipc.ts");
   contains(ipc, "prepareSettings: () => invoke", "前端没有设置窗口预热接口");
@@ -85,6 +85,11 @@ testCase("日志与警报窗口各有独立 HTML 入口", () => {
   const runtime = read("src-tauri/src/lib.rs");
   contains(runtime, "opens_debug_window || standalone_settings_window", "设置进程仍会撞上主实例");
   contains(runtime, "index.html?settings=1", "设置进程没有独立页面导航");
+  contains(
+    runtime,
+    'standalone_settings_window && window.label() == "main"',
+    "独立设置进程的原生关闭按钮没有退出该进程",
+  );
   const alarm = read("src-tauri/src/focus/alarm.rs");
   contains(alarm, 'WebviewUrl::App("focus-alarm.html"', "警报窗口不得依赖 fragment");
 });

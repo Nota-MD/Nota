@@ -632,6 +632,7 @@ help    = "An OpenAI-compatible URL …"   # 可选。名字下面那句小字
 placeholder = "https://…"     # text：输入框里那句灰字（要翻译）
 secret      = true            # text：画成密码框（只管显示，不改存储）
 default_text = "gpt-4o-mini"  # text：用户还没填过时框里显示什么
+multiline   = true            # text: render a multiline textarea
 
 [[settings]]
 key        = "stream"
@@ -663,6 +664,7 @@ unit    = "s"                # 可选，读数后面跟的那个单位
 | `placeholder` | 可选（`text`） | `""` | 无 | —（⚠️ **要翻译**：它是一句话，与 `unit` 那条不同） |
 | `secret` | 可选（`text`） | `false` | 布尔 | —。⚠️ **只管显示**（`type = "password"`）：那份设置文件还是明文的 |
 | `default_text` | 可选（`text`） | `""` | 无 | — |
+| `multiline` | Optional (`text`) | `false` | Boolean | Renders a multiline textarea. It is rejected on `range` and `toggle` settings. |
 | `default_on` | 可选（`toggle`） | `false` | 布尔 | — |
 
 校验在 `plugin/settings_decl.rs::check_settings()`（2026-10-04 从 `manifest.rs` 拆出，
@@ -796,6 +798,8 @@ SHA-256，再走原有的 `.nota-plugin` 验签、签名者连续性检查和原
 | `process.devserver` | `nota.devserver.probe/start/status/open_in_browser/log/stop`（`lua/api/devserver.rs`） | **起清单里 `[devserver]` 段声明的那一条命令**（`cmd` / `args` / `entry` / `probe_args` / `project_marker`…），并把它 `http://localhost:<port>` 嵌进面板的 `frame` 块。⚠️ 与 `process.git` 同一条判据：放行的是**那一条命令**，不是"任意命令"——`nota.devserver.start` **只收"哪份文档"**，交不出第二个程序名来。⚠️ `start` 是**阻塞**的（最长 180 s，等端口起来），**不许在 `on_load` 里调**。⚠️ `probe` 有**两个档**：`probe{}` **不等**（有结论就回，没有就回一张 `state = "checking"` 并在后台探，探完宿主发事件叫前端重拉），`probe{force=true}` **才等**（最多 20 s）——⚠️ **面板的 `render` 里只能用不等那一路**，不然那一页要等 1.3 s（最坏 20 s）才画得出来（`docs/07` BUG-36）。⚠️ `state` 一共**四个**词（`ready` / `missing` / `unknown` / `checking`），最后一档**不是结论**——细节见 `docs/13` §13.3a；⚠️ 插件自己那侧还能多出**第五档 `notheme`**（2026-09-26 补），它不是宿主给的，是插件拿下面那个 `need` 判出来的。⚠️ `probe` 还收一个**可选** `probe{need = "node_modules/@slidev/theme-default"}`：问的是"**这份文档还缺什么**"，宿主拿文档的绝对路径**连同各层父目录**去找那个相对路径（插件自己办不到——`nota.fs` 只认工作区内的相对路径，`resolve_in` 拒绝对路径）。⚠️ 回话在 `need_found` 里，**三档**（没问 `nil` / 有 / 没有），别当布尔用——§13.3b。判据是"**宿主只回答有没有，不解释那是什么**"：`notheme` 这个词、那句"装一个就行"，全是插件写的⚠️ 一个插件**同时只有一个**开发服务器会话。⚠️ 申请了它却没有 `[devserver]` 段 = 能力空转，**加载时就报错**（`manifest.rs:419` `check_devserver`）。⚠️ 它是给"删掉插件这项功能就彻底不存在"的那类重功能准备的（`plugins/slidev` 就是第一个用户） |
 | `ui.open_url` | `nota.ui.open_url(url)`（`lua/api/ui.rs:101-148`） | **把用户的系统浏览器打开到某个地址**——⚠️ **这是唯一一个"插件能让用户跳出 Nota"的口子**，所以边界卡在**协议**上：**只认 `https://`**，别的 scheme 一律拒（`file:` / 自定义 scheme 等于把用户送到别处）。用途是"去官网看文档"——⚠️ **`plugins/slidev` 用它去的是安装指南**（`https://sli.dev/guide/`，只在探测说"这台机器跑不起来"那两档的按钮组里出现），**不是**"用浏览器打开预览"：那条走 `nota.devserver.open_in_browser`（两道闸的判据之别见 `docs/13` §13.4）。要在 Nota 里说话仍然走 `nota.ui.notify` |
 | `network.http` | `nota.http.request(spec)` / `.get(url或表)` / `.post(url或表)` / **`.stream(spec, on_chunk)`**（`lua/api/http.rs`） | 声明了它等于信任插件**把文档内容发到任意地址**——这是整张表里最重的一条。**两道围栏**：`https://` 随便，`http://` **只放行回环**（本机大模型服务用）；响应体 2 MiB、请求体 1 MiB 封顶。⚠️ **它是阻塞的**（跑在 `spawn_blocking` 线程里，界面不冻）——不想一次等完就用 `.stream`（2026-10-04 加，契约见 `docs/13` §9.1）：读一块交一块，⚠️ **块的边界既不是行边界也不是字符边界**（跨 UTF-8 由宿主兜住，所以最小单位是一个字符），一行 `data:` 横跨两块是常事。⚠️ 它**不负责往界面上画字**，要"边生成边显示"还得在回调里调 `nota.ui.stream`（`docs/13` §8.6）——那是**推**，因为跑着的时候宿主握着锁、`refresh` 那条拉的路回不来。⚠️ 密钥不写死在插件里——用 `settings.own` 存 |
+| **`ai.context.write`** | `nota.ai.add_format_context(text)` / `.clear_format_context()` | 向 Nota AI 的**追加格式上下文**登记一段本插件说明。AI 插件每次请求都会读取它并放进系统消息；内容只能补充 Markdown 语法或格式约定，不能覆盖身份、系统规则、证据优先级或文档改动协议。单插件 20,000 字节、总计 80,000 字节封顶；登记按插件 id 稳定排序。⚠️ 这是独立数据通道，**不会授予文档、网络或设置权限** |
+| **`ai.context.read`** | `nota.ai.format_context()` | 读取所有启用插件登记的追加格式说明，返回 `{ { plugin, text }, ... }`。⚠️ 只含追加说明，**绝不暴露完整系统提示词、当前文档或插件私密设置**。AI 插件申请的是这一条；其余拓展通常只需要 `ai.context.write` |
 | `ui.notify` | `nota.ui.notify(msg, level)`（`lua/api/ui.rs:35-53`） | 在界面上弹一条提示条。⚠️ 它能**冒充宿主的口径**对用户说话（提示里看不出是插件发的），所以不用它做误导性文案。⚠️ 这是三条里**唯一推事件**的（`nota:notify`），所以**在 `on_load` 里调它，前端还没起来，那条提示会静默丢掉**（Tauri 的 `emit` 对没有监听者的频道是静默成功的） |
 | `ui.panel` | `nota.ui.register_panel(spec)`（`lua/api/ui.rs:75-227`） | 在**右侧栏**声明**一个页签（一页）**，`render` 里返回一串内容块决定它长什么样（**面板 DSL**，**十五种** `kind`，见 `docs/13` §8.5）。⚠️ 右侧栏**一次只显示一个插件的那一页**（2026-09-24 起，用户要求"两个拓展不能同时占用"）——别的插件那一页不会与它同时显示，但也**不刷新**：用户切过去时现拉（`docs/04` §右侧栏）。⚠️ **它推的不是事件，是状态**：写进 `nota_panels` registry，前端挂载后拉一次（BUG-13，见 §5.7）。⚠️ `render` 是**每次拉都现跑**的——里面必须是"此刻"，不是"加载时"。⚠️ 写 `wide = true` 让这一页占满（见 `docs/13` §8.2）；⚠️ 写 `live = true` 让宿主**每秒**喊一次"该重拉了"（这一页的 `render` 每秒跑一遍，见下 §3.5 与 `docs/12` §4.7a） |
 | `ui.menu` | `nota.ui.register_menu(spec)`（`lua/api/ui.rs:115-149`） | 往菜单里**加条目**，点了回调插件自己注册过的命令。同上，**走 registry 拉**。✅ **2026-09-24 起接进菜单栏了**：合成一栏「插件」，插在「关于」前面（backlog 第 42 项，规则见 `docs/13` §8.3）。⚠️ `accelerator` 走内置菜单同一条索引、同一条"先到先得"，**内置键位永远赢**。⚠️ 写 `prompt` 就是「点击后先询问一次」（见 §3.5 末）。⚠️ 它和另外三条 `ui.*` 是**任选其一**就能拿到 `nota.ui` 这张表——但"表在"不等于"那几个函数都在"，见 §3.4 |
@@ -839,6 +843,7 @@ SHA-256，再走原有的 `.nota-plugin` 验签、签名者连续性检查和原
 | `nota.ui` | `ui.notify` **或** `ui.panel` **或** `ui.menu` **或** `ui.open_url`（**四条** `ui.*` 都要列——见下） |
 | `nota.devserver` | `process.devserver`（**而且要真有 `[devserver]` 段**，否则加载就报错） |
 | `nota.http` | `network.http` |
+| `nota.ai` | `ai.context.read` **或** `ai.context.write`；表内成员再按能力分开安装 |
 | `nota.settings` | `settings.own` |
 | `nota.data` | `data.own`（2026-09-27 加，`lua/api/mod.rs`）⭐ 它**没有第二层**：这一张表里就四个函数（`dir` / `read` / `write` / `remove`），四个一起出现一起消失——因为它们围的是**同一个目录**，不像 `nota.ui` 那样四条能力各管一件事 |
 

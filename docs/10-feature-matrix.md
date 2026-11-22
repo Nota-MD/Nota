@@ -561,6 +561,8 @@ WebKitGTK 那份英文原生右键菜单。它没进表，所以**"它改不动"
 | `table.write` | Implemented | One undoable batch of source-cell edits |
 | `table.context_action` | Implemented | Localized right-click table actions |
 | `spreadsheet.require` | Implemented | Own and restore the spreadsheet setting |
+| `ai.context.read` | Implemented | Read append-only Markdown format notes registered by enabled extensions |
+| `ai.context.write` | Implemented | Append one namespaced Markdown format note for Nota AI requests |
 
 `nota.sheet-formulas` lives in the separate extensions repository. It evaluates
 Excel-compatible formulas without writing computed values to Markdown; **Keep

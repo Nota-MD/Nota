@@ -146,7 +146,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `editor/mark-hint-source.ts` | **行内语法节点与整段源码重建**：`notaSyntax` 规格、可见节点序列化、转义节点、禁用标记过滤与整段重解析。非活动语法节点通过 `nota-syntax-hidden` decoration 保持零宽，节点本身仍留在文档树中，和 Typedown 的隐藏 token 一样保住闭组前后两个光标边界。无视图状态，供 `mark-hint.ts` 调用并供 Node 测试直接验证 |
 | `editor/plain-syntax.ts` | **未完成 Markdown 标点段的字形稳定层**（2026-10-31 新建）：`plainSyntaxRanges` 识别当前文本块里未被转义的连续 `*` / `_` / `~` / `=` / `^` / 反引号 / `$`，`inlineSyntaxDecorations` 只发临时 inline decoration。CSS 对 `.nota-syntax-text` 与已确认的 `.nota-syntax-marker` 关闭 `font-variant-ligatures` / `font-kerning`，避免 WebKitGTK 对相邻标点采用不同上下文字形与 LCD 栅格化相位。不改文档、不改变语义，代码与链接内容明确跳过 |
 | `editor/atx.ts` | **「什么算标题」的唯一判据**（宽松/严格两套正则 ＋ `atxPrefix()` 这个给文本用的入口）。⚠️ 所有调用点都往这儿问（大纲、源码模式、标签页标题、正文装饰、回车成块），**别处不许自己数井号**（前缀长度是现算的）。📌 **2026-09-30 起正文那两处也走它**——宽松档 `#你好` 因此和 `# 你好` 并成一条路，见 `docs/05` §4.9c |
-| `editor/heading-on-enter.ts` | **标题四态**（照 Typora）：`##` 未加空格时是普通实体；空格出现后 `## ` 前缀变半透明、正文用 `.nota-heading-pending` 暂定加粗；光标离开该段时整段按 `.nota-heading-rendered-block[data-heading-level]` 和主题的 `--doc-h*` 变量渲染为标题并隐藏前缀；回车后转成真 `heading` 并新开一段。还管"行头退格把标题拆回段落"。全篇标题范围按文档对象缓存，光标移动只重建条目装饰 |
+| `editor/heading-on-enter.ts` | **标题四态**（照 Typora）：`##` 未加空格时是普通实体；空格出现后 `## ` 前缀变半透明、正文用 `.nota-heading-pending` 暂定加粗；光标离开该段时整段按 `.nota-heading-rendered-block[data-heading-level]` 和主题的 `--doc-h*` 变量渲染为标题并隐藏前缀；回车后转成真 `heading` 并新开一段。Pending previews explicitly skip table cells, keeping `#ffffff` literal. |
 | `editor/export.ts` | **HTML 导出**：另起一个屏外只读 Milkdown 实例**摘它渲染出来的 DOM**（不是再写一遍序列化——那样宽松标题的显示、任务框都会在导出里丢掉），加外壳 + 限域主题 CSS。⚠️ **2026-09-27 起多两段**：① 摘掉 `data-type="html-block"` 里那对**目录标记**（`is 目录标记`）——`innerHTML` 会把标记里的 `<` 转义成 `&lt;`，留着的话导出文件里会出现**看得见的** `<!-- nota:toc -->`；② 给 `h1..h6` 补 `id`（用 `editor/toc.ts` 的 `锚点()`，与目录里那些 `#锚点` **同一份判据**），否则导出的目录点了不跳。⚠️ 用 `?inline` 复用编辑器自己那三份 CSS（`theme/base.css` ＋ `editor.css` ＋ `katex.min.css`），不是第二套样式表。⚠️ 摘零件**分两半**（2026-09-27）：装饰按 `nota-` 前缀洗掉，**容器要逐个登记**进 `整块删掉`——漏了就会跟着导出走。⚠️ 2026-09-25 起 `导出选项.title` 那段注释把 **「导出」与「另存为」的分界**写死了：导出产出的是一份**别的文件**，当前文档一个字节都不动 |
 | `editor/lax-heading.ts` | 宽松模式认的 `#标题` 在**序列化层**的处理：**不给井号加反斜杠**（不加的话 `#你好` 存盘会变成 `\#你好`，那就是"自动修复"）。⚠️ **2026-09-26 显示那半边被删过一次**（用户原话「应该作为标识符的 `#` 不要变换位置和大小」），📌 **2026-09-29 用户改口要它按标题排**，装饰于是回来了——**但搬进了 `heading-on-enter.ts`**；📌 **2026-09-30 那份长相又被推翻一次**（用户要的是"和 `# 你好` 一样，回车才成块"，"按该级字号排"当天删掉，见 `docs/05` §4.9c）。⚠️ **本文件只剩 `不转义行首井号` 一个导出**（`create.ts` 引它进序列化扩展，`tests/math-view.test.ts` 第七组盖它）。⚠️ 文件本身**不能删**，删了 `#你好` 存盘就会被加上反斜杠 |
 | `editor/task-list.ts` | 任务项复选框：`- [x]` 画方框、点它勾上、回车切出来的新项**不继承勾** |
@@ -267,7 +267,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `ui/DeferredUi.tsx` | 首屏按需加载的大型界面：设置对话框、右侧拓展栏和文件选择器。只有真正打开时才请求对应 chunk |
 | `ui/PluginDock.tsx` | 右侧插件栏（⚠️ 2026-10-04 起页签有 ←→/Home/End，`useTablistKeys`，第 50 项）：**页签式，一次只画一页**（2026-09-24 用户要求「一个拓展独占一页，两个不能同时开」）＋「插件」页的清单与"没有落脚处"。2026-10-31 起活动面板标题栏有通用的「在编辑区中打开」按钮，走宿主 `nota_plugin_review_open`，插件不必为自己再加一条放大命令。⚠️ **只拉活动页**——没显示的那几页连 `render` 都不跑（代价：切过去时现拉一次，慢接口会闪一下「正在读取…」）。⚠️ 面板**内容**不在它手里，内容由 `ui/PanelBody.tsx` 现拉现画 |
 | `ui/pluginText.ts` | **插件在界面上那几句人话**（2026-09-27 新建，136 行）：来源 / 签名 / 语言 / 能力名 / 位置名。⚠️ 起因是同一句「自装 · 已验证」要在**两个界面**上出现（右侧插件栏 ＋ 设置里的「拓展」页），谁抄第二份，往后就是"改一处、另一处不动"，而那种不一致**不报错**。⚠️ **只有文案**（没有 JSX、没有状态、不碰 `api`）；⚠️ **全是函数不是模块级常量表**——模块级求值时 `t` 还没订阅，且 `tools/i18n-check.sh` 只数为字面量写出来的 `t(…)` |
-| `ui/PanelBody.tsx` | **一张插件面板的身体**（2026-09-24）：拉 `nota_plugin_panel_content` → 交给 `panel-nodes.ts` 认形状 → 按白名单画。⚠️ 拉是**每次打开都拉**，不是缓存；`nota:plugin-panel` 那条事件只是"去重拉"的信号。⚠️ 2026-09-24 起多了三种块：`message`（一问一答，保留换行）/ `diff`（增删对照，**只画**）/ `input`（**面板里唯一的输入控件**，发出去＝调 `submit` 命令、参数 `{ [arg] = 输入 }`，跟按钮零区别） ⚠️ **2026-10-10 又加了两块**（AI 插件改成现代对话框那批）：`tabs`（上方的标签页：点字面切、点小叉关、末尾一颗「＋」）与 `hero`（空态那行大字）；`message` 多了 `copy`（那颗「复制」是**宿主**画的——插件那套 API 里没有剪贴板）、`input` 多了 `chips`（卡片里那排预设小按钮）＋ **发送键改成一枚圆形箭头**。⚠️ 消息那一块自此**有自己的状态**（"已复制"那 1.6 秒的反馈），同 `PanelInput` 的草稿 |
+| `ui/PanelBody.tsx` | **一张插件面板的身体**（2026-09-24）：拉 `nota_plugin_panel_content` → 交给 `panel-nodes.ts` 认形状 → 按白名单画。Live `nota.ui.stream` messages use the generic smooth renderer: the latest snapshot is the target, `smooth-stream.ts` releases code points through rAF, reduced motion jumps directly to the target, and manual scrolling pauses bottom-follow. |
 | `ui/panel-nodes.ts` | **面板 DSL 的形状判据**（2026-09-24）：`normalise` 把后端给的 JSON 认成**十六种**节点（`heading`/`text`/`fields`/`list`/`buttons`/`empty`/`separator` ＋ `message`/`diff`/`input`/`frame` ＋ `graph` ＋ `chart`/`heatmap`/`share`/`cards`），认不出的如实变成 `unknown`。⚠️ **形状校验只在这里**——Rust 侧只管"是 JSON、有上限"，不管形状。⚠️ `消息上限 = 20000` 与宿主那个 `面板文本上限` 是同一个数，改要一起改。⚠️ 形状的判据是那几份**能脱离 React 跑**的测试（记录卡那份是 `tests/panel-cards.test.ts` **37 条**、热力图那份是 `tests/heatmap.test.ts` **20 条**），其余多半只由 `tsc` ＋ 开窗看着 |
 | `ui/pluginMenus.ts` | **把插件菜单项并进菜单表**（2026-09-24，backlog 第 42 项）：合成 id `__plugin:<plugin>:<command>`，插件那一列插在 `help` 之前。⚠️ **先到先得**的快捷键索引 ⇒ 内置永远赢（`docs/13` §8.3）。📌 `extensionsEnabled = false` 时连「视图 → 拓展栏」也一起摘掉，快捷键索引随之消失 |
 | `ui/plugin-prompt.ts` | **「点之前先问一句」的统一入口**（2026-09-24）：菜单项的 `prompt` 与面板按钮的 `prompt` 两条路都汇进 `问参数`。⚠️ 取消 ⇒ **命令根本不调**（不是调一个空参数） |
@@ -280,6 +280,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `ui/useMenus.ts` | **菜单与快捷键的接线**（2026-09-24 从 `App.tsx` 搬出）：三条判据 → `disabledCommands` / `menuChecks` / `usingNativeMenu`。⚠️ **2026-09-29（BUG-53）多接了一条判据：编辑器自己已经处理过的不再接手**——那条 `window` keydown 监听的第一句是 `if (e.defaultPrevented) return;`（ProseMirror 只要有一条 `handleKeyDown` 返回 `true` 就会 `preventDefault()`，而它的监听挂在 contenteditable 上、比 `window` 早）。少了这一句，`Mod-b` / `Mod-i` 会被上下两处各跑一遍，而两条命令都是 toggle、正好抵消 = 「按了没反应」。⚠️ 推原生菜单那个 effect 的依赖里有**语言**（`use语言()`，2026-09-26 加）。📌 **2026-10-07（497 行）：剪贴板那四颗键多了一道放行口**——`剪贴板键 = {edit.copy, edit.cut, edit.paste, edit.pastePlain}`，目标是**块里那颗 CodeMirror**（`目标.closest(".nota-code-cm")`）时**不进全局那条路**（它有自己的整行剪贴板处理，见 `editor/code-block-cm.ts`） |
 | `ui/useDialogs.ts` | **两个自绘对话框的"谁在等答案"**（2026-09-24 从 `App.tsx` 搬出）：两个 `useState` + 两个 resolve ref |
 | `ui/panel-dock-state.ts` | **插件栏那三份凭据（当前哪一页 / 每页拉回来的内容 / 正在吐的那段字）住在组件外面**（2026-10-10 新增，`docs/07` 第 111 项）：关掉插件栏 = `PluginDock` 被卸载、组件里的 state 全丢；而插件的一条命令跑着时宿主握着 `plugins` 锁，`nota_plugin_panel_content` 要的**正是同一把锁**，所以重开时那次"重拉"回不来（用户报的「关掉面板再打开就找不到了」）。这里装着那份 `记忆`（`起始页` 那个三态：`undefined` 才是"没选过"、`null` 是"用户自己停在插件清单页"；`记住内容表` 抹掉 `busy`——不抹的话重开是一排永远解不开的灰按钮）与纯函数 `这一页画什么`（其中一条是**内容拉不回来但有流式文字时先把字画出来**）。⚠️ 进程内、不落盘。判据 `tests/panel-dock-state.test.ts`（44 条） |
+| `ui/table-snapshot.ts` | Shared table identity and snapshot construction. `useTableBridge` publishes every table on document open; the spreadsheet overlay reuses the same helper for active-cell snapshots. |
 | `ui/credits.ts` | **「关于 → 鸣谢」那一页的名单**（2026-10-10 从 `ui/AboutDialog.tsx` 搬出来并补全：用户「将 Codemirror 等引入的 BSD/MIT 库写入"鸣谢"」）：判据是"**直接依赖里那些宽松许可的**"（MIT / BSD / ISC / Apache-2.0 / CDLA），逐条对着 `THIRD-PARTY.md` §1/§2 抄——**两份必须同批改**。⚠️ 写成**函数**（收一个 `t` 进来现调）而不是模块级常量，理由同 `ui/pluginText.ts`；每条 `用处` 都是字面量 `t("…")`（`tools/i18n-check.sh` 只认那种写法）。⚠️ 仍然不是"完整的传递依赖闭包"（那有几百个包） ⚠️ **2026-10-16 多了一行 `Monoton`**（「Nota」那三个字的字标字体，OFL-1.1，出处与义务在 `THIRD-PARTY.md` §8）。 |
 | `ui/settings/panes/SpellLangPicker.tsx` | **「拼写检查语言」那一格的控件 ＋ 词典从哪儿来**（2026-10-10 建，**2026-10-11 大改**）：一个**能同时勾几门**的列表（跟随系统是列表第一个勾——勾上就是清空，不是并列的开关）＋ 一格"添加自定义标签"＋ 底下那一段**装词典**（导入 `.zip` / 在文件夹里显示词典目录 / 目录路径 / 三条出路的提示）。⚠️⚠️ **候选的本事反过来了**：2026-10-10 那一版是一张**写死的表**（那时候列不出"这台机器装了什么"，四种列法全不靠谱，实测在 `commands/webview.rs` 文件头）；今天引擎是我们自己的（只认 `.aff`/`.dic`），"扫得到"与"用得了"成了同一件事，所以列表**分两档**画：**装着的**（来自 `nota_spell_dictionaries`）与**常见但没装的**（勾得上、旁边写"未安装"——做成点不动的用户会以为"这软件不支持德语"）。⚠️ 它**不是页面**，是「编辑器」页里的一格（值走 `paneWriter` 写的 `spellcheck_langs`） |
 | `ui/useExport.ts` | **导出、导入与打印的接线**（2026-09-24 从 `App.tsx` 搬出）：取正文 → 取主题 → 生成 HTML → 问落点/交给系统 → 报结果。⚠️ 正文**必须从编辑器拿**；主题取不到**不算失败**。📌 **2026-10-25 自定义导出器**：`导出为(id)` 服务固定 PDF，`导出自定义(id)` 读取设置里那一项的参数、样式文件与“导出后定位”开关；两者共用同一条 Pandoc 探测、保存对话框与 PDF 浅色闸门。2026-10-19 的五种导入仍走同一探测。⚠️ 默认落点三档，且**与「另存为」不是一回事** |
@@ -1996,14 +1997,14 @@ std::process::Command::new(&程序)
 ⚠️ 程序自己那条路径用 `std::env::current_exe()` 取，**不缓存、也不从设置里读**：
 新窗口必须与当前这一份是同一个可执行文件。
 
-### Settings window prewarm and fallback
+### Settings window prewarm and platform split
 
-`nota_window_prepare_settings` creates the hidden Settings webview through the
-same `ensure_settings_window` function used by the open command. Prewarming is
-delayed by the frontend, creates the window without focus, and keeps it hidden.
-Opening reuses that webview, restores the taskbar entry, shows, unminimizes and
-focuses it. If creation, showing or focus fails, `nota_window_open_settings`
-keeps the existing `--settings-window` child-process fallback.
+Linux and macOS prewarm a hidden in-process Settings webview and reuse it.
+Windows does not prewarm or reuse a hidden WebView2: `nota_window_open_settings`
+always launches the console-free `--settings-window` child process directly.
+The child bypasses single-instance, navigates to `index.html?settings=1`, then
+restores its taskbar entry, shows and focuses. A native close exits only that
+settings process.
 
 ### `nota_window_open_debug_log() -> Result<()>`
 

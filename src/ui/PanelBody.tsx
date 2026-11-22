@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useT } from "@/i18n";
 import { pushVerticalTick, formatNumber } from "@/ui/chart-ticks";
@@ -20,6 +20,7 @@ import type {
   PanelNode,
 } from "@/ui/panel-nodes";
 import { PanelMarkdown } from "@/ui/panel-markdown";
+import { nextStreamRelease } from "@/ui/smooth-stream";
 
 const PanelNetworkBlock = lazy(() =>
   import("@/ui/PanelNetwork").then((module) => ({ default: module.PanelNetworkBlock })),
@@ -468,6 +469,13 @@ function PanelInput({
 
 
 function PanelMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> }) {
+  if (node.streaming) {
+    return <PanelStreamMessage node={node} />;
+  }
+  return <PanelRegularMessage node={node} />;
+}
+
+function PanelRegularMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> }) {
   const t = useT();
   const [result2, setResult] = useState<"idle" | "ok" | "fail">("idle");
 
@@ -506,6 +514,144 @@ function PanelMessage({ node }: { node: Extract<PanelNode, { kind: "message" }> 
             </span>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduced(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  return reduced;
+}
+
+function PanelStreamMessage({
+  node,
+}: {
+  node: Extract<PanelNode, { kind: "message" }>;
+}) {
+  const t = useT();
+  const text = node.text;
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const scrollFrame = useRef(0);
+  const countRef = useRef(0);
+  const carryRef = useRef(0);
+  const previousTarget = useRef("");
+  const backlogStarted = useRef<number | null>(null);
+  const reduced = useReducedMotion();
+  const glyphs = useMemo(() => Array.from(text), [text]);
+  const [count, setCount] = useState(0);
+  const [follow, setFollow] = useState(true);
+
+  useEffect(() => {
+    if (!text.startsWith(previousTarget.current)) {
+      const initial = glyphs.length === 0 ? 0 : 1;
+      countRef.current = initial;
+      carryRef.current = 0;
+      backlogStarted.current = null;
+      setCount(initial);
+    }
+    previousTarget.current = text;
+
+    if (reduced) {
+      countRef.current = glyphs.length;
+      setCount(glyphs.length);
+      return;
+    }
+
+    let frame = 0;
+    let last = 0;
+    let alive = true;
+    const tick = (now: number) => {
+      if (!alive) return;
+      if (last === 0) last = now;
+      const released = nextStreamRelease(
+        countRef.current,
+        glyphs.length,
+        now - last,
+        carryRef.current,
+        backlogStarted.current === null ? 0 : now - backlogStarted.current,
+      );
+      carryRef.current = released.carry;
+      last = now;
+      if (released.count !== countRef.current) {
+        countRef.current = released.count;
+        setCount(released.count);
+      }
+      if (countRef.current >= glyphs.length) backlogStarted.current = null;
+      else if (backlogStarted.current === null) backlogStarted.current = now;
+      if (countRef.current < glyphs.length) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => {
+      alive = false;
+      cancelAnimationFrame(frame);
+    };
+  }, [glyphs.length, reduced, text]);
+
+  useEffect(() => {
+    const scroll = rootRef.current?.closest<HTMLElement>(".dock-body") ?? null;
+    scrollRef.current = scroll;
+    if (!scroll) return;
+    const update = () => {
+      const remaining = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight;
+      setFollow(remaining <= 36);
+    };
+    // A new stream starts in follow mode even when the previous transcript was
+    // scrolled upward. Only a user scroll during this stream should disable it.
+    scroll.addEventListener("scroll", update, { passive: true });
+    return () => scroll.removeEventListener("scroll", update);
+  }, []);
+
+  const visible = useMemo(() => glyphs.slice(0, count).join(""), [count, glyphs]);
+  const streaming = count < glyphs.length;
+
+  useLayoutEffect(() => {
+    const scroll = scrollRef.current;
+    if (!follow || !scroll) return;
+    cancelAnimationFrame(scrollFrame.current);
+    scrollFrame.current = requestAnimationFrame(() => {
+      scroll.scrollTop = scroll.scrollHeight;
+    });
+    return () => cancelAnimationFrame(scrollFrame.current);
+  }, [follow, visible]);
+
+  const backToLatest = () => {
+    setFollow(true);
+    const scroll = scrollRef.current;
+    if (scroll) scroll.scrollTop = scroll.scrollHeight;
+  };
+
+  return (
+    <div
+      ref={rootRef}
+      className={`panel-msg panel-msg-${node.from} panel-stream`}
+      data-streaming={streaming || undefined}
+      aria-busy={streaming}
+    >
+      <span className="panel-msg-who">{node.from === "user" ? "you" : "AI"}</span>
+      <div className="panel-msg-text panel-msg-markdown">
+        <PanelMarkdown text={visible} />
+      </div>
+      {!follow && (
+        <button
+          type="button"
+          className="panel-stream-follow"
+          title={t("Resume automatic scrolling")}
+          onClick={backToLatest}
+        >
+          {t("Back to latest")}
+        </button>
       )}
     </div>
   );

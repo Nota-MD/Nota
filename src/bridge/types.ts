@@ -573,6 +573,8 @@ export interface PluginSetting {
   secret: boolean;
 
   placeholder: string;
+
+  multiline: boolean;
 }
 
 

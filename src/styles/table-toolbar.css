@@ -185,12 +185,10 @@
 
 .sheet-formula-function {
   color: color-mix(in srgb, var(--accent) 78%, var(--fg));
-  font-weight: 600;
 }
 
 .sheet-formula-reference {
   color: var(--sheet-range-tone);
-  font-weight: 600;
 }
 
 .sheet-tone-0 { --sheet-range-tone: #5f8ced; }
@@ -213,7 +211,11 @@
   background: transparent;
   color: var(--fg);
   caret-color: var(--accent);
+  font: inherit;
   font-family: var(--font-mono);
+  letter-spacing: normal;
+  line-height: 1;
+  appearance: none;
   pointer-events: auto;
 }
 
@@ -319,10 +321,6 @@
   pointer-events: none;
 }
 
-.sheet-computed-value.is-selected {
-  color: var(--nota-selection-ink, var(--fg));
-}
-
 .sheet-computed-value.is-error {
   color: var(--danger);
   font-weight: 600;
@@ -371,12 +369,17 @@ th.nota-sheet-computed:not(.nota-sheet-range)::after {
   padding: inherit;
   box-sizing: border-box;
   overflow: hidden;
-  color: var(--fg);
+  color: var(--nota-cell-ink, var(--doc-fg, var(--fg)));
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
   z-index: 1;
+}
+
+td.nota-sheet-range.nota-sheet-computed::after,
+th.nota-sheet-range.nota-sheet-computed::after {
+  color: var(--nota-selection-ink, var(--nota-cell-ink, var(--doc-fg, var(--fg))));
 }
 
 td.nota-sheet-error::after,

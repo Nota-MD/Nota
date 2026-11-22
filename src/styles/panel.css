@@ -269,6 +269,66 @@
   color: var(--fg-faint);
 }
 
+.panel-stream .panel-msg-who::after {
+  content: "";
+  display: inline-block;
+  width: 0.34em;
+  height: 0.9em;
+  margin-inline-start: 0.4em;
+  border-radius: 1px;
+  background: currentColor;
+  vertical-align: -0.12em;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+.panel-stream[data-streaming="true"] .panel-msg-who::after {
+  opacity: 0.48;
+  animation: panel-stream-pulse 1.15s ease-in-out infinite;
+}
+
+.panel-stream-follow {
+  position: sticky;
+  z-index: 2;
+  bottom: 8px;
+  display: block;
+  width: fit-content;
+  margin: 8px 0 2px auto;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  color: var(--fg-muted);
+  font-family: var(--font-ui);
+  font-size: 0.78em;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+}
+
+.panel-stream-follow:hover {
+  color: var(--fg);
+  border-color: var(--border-strong);
+}
+
+@keyframes panel-stream-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  50% {
+    opacity: 0.62;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-stream[data-streaming="true"] .panel-msg-who::after {
+    animation: none;
+    opacity: 0.48;
+  }
+}
+
 
 
 .panel-msg-text {

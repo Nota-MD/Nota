@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal, flushSync } from "react-dom";
 
-import { events, on, type TableRenderPayload } from "@/bridge/ipc";
+import { api, events, on, type TableRenderPayload } from "@/bridge/ipc";
 import {
   computedBoxesFor,
   recordTableExtensionContent,
@@ -14,9 +14,7 @@ interface Props {
 }
 
 function computedValueClass(box: ComputedBox): string {
-  return `sheet-computed-value${box.selected ? " is-selected" : ""}${
-    box.error ? " is-error" : ""
-  }`;
+  return `sheet-computed-value${box.error ? " is-error" : ""}`;
 }
 
 export function PersistentTableComputedOverlay({ active, documentKey }: Props) {
@@ -34,6 +32,21 @@ export function PersistentTableComputedOverlay({ active, documentKey }: Props) {
     let frame = 0;
     let unlisten: (() => void) | null = null;
     const documentId = Number(documentKey);
+    const pullRenders = async () => {
+      try {
+        const payloads = await api.table.renders();
+        if (disposed) return;
+        renders.current.clear();
+        for (const payload of payloads) {
+          if (payload.documentId === documentId) {
+            renders.current.set(`${payload.plugin}:${payload.tableId}`, payload);
+          }
+        }
+        measure(true);
+      } catch {
+        // Live render events still provide the display data.
+      }
+    };
 
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(() => measure(false));
@@ -113,16 +126,19 @@ export function PersistentTableComputedOverlay({ active, documentKey }: Props) {
       measure(true);
     };
     document.addEventListener("selectionchange", onSelectionChange);
+    window.addEventListener("nota-table-snapshots-ready", pullRenders);
     window.addEventListener("nota-selection-theme-changed", schedule);
     window.addEventListener("resize", schedule);
     window.addEventListener("scroll", schedule, true);
     schedule();
+    void pullRenders();
 
     return () => {
       disposed = true;
       if (frame) cancelAnimationFrame(frame);
       mutations.disconnect();
       document.removeEventListener("selectionchange", onSelectionChange);
+      window.removeEventListener("nota-table-snapshots-ready", pullRenders);
       window.removeEventListener("nota-selection-theme-changed", schedule);
       window.removeEventListener("resize", schedule);
       window.removeEventListener("scroll", schedule, true);
@@ -133,7 +149,7 @@ export function PersistentTableComputedOverlay({ active, documentKey }: Props) {
   if (!active || boxes.length === 0) return null;
   return createPortal(
     <>
-      {boxes.map((box) => (
+      {boxes.filter((box) => !box.selected).map((box) => (
         <div
           key={box.ref}
           className={computedValueClass(box)}
@@ -145,6 +161,13 @@ export function PersistentTableComputedOverlay({ active, documentKey }: Props) {
             padding: box.padding,
             textAlign: box.align as CSSProperties["textAlign"],
             background: box.background,
+            color: box.error ? "var(--danger)" : box.ink,
+            fontFamily: box.fontFamily,
+            fontSize: box.fontSize,
+            fontStyle: box.fontStyle,
+            fontWeight: box.fontWeight,
+            lineHeight: box.lineHeight,
+            letterSpacing: box.letterSpacing,
           }}
         >
           {box.value}

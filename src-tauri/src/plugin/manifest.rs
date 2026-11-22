@@ -113,6 +113,12 @@ pub enum Capability {
     #[serde(rename = "network.http")]
     NetworkHttp,
 
+    #[serde(rename = "ai.context.read")]
+    AiContextRead,
+
+    #[serde(rename = "ai.context.write")]
+    AiContextWrite,
+
     #[serde(rename = "ui.notify")]
     UiNotify,
 
@@ -160,6 +166,8 @@ impl Capability {
             "process.git" => Self::ProcessGit,
             "process.devserver" => Self::ProcessDevServer,
             "network.http" => Self::NetworkHttp,
+            "ai.context.read" => Self::AiContextRead,
+            "ai.context.write" => Self::AiContextWrite,
             "ui.notify" => Self::UiNotify,
             "ui.open_url" => Self::UiOpenUrl,
             "ui.panel" => Self::UiPanel,

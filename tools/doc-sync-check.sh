@@ -154,18 +154,13 @@ PAIRS=(
   "src-tauri/src/mcp/mod.rs                        01,02,07"
   "src-tauri/src/mcp/host.rs                       02"
   "src-tauri/src/mcp/tools.rs                      02,07"
-  "src-tauri/src/lua/api/mod.rs                   12,13"
+  "src-tauri/src/lua/api/mod.rs 12,13"
+  "src-tauri/src/lua/api/ai.rs                    13,11,10"
   "src-tauri/src/lua/api/document.rs              13,05"
   "src-tauri/src/lua/api/fs.rs                    13"
   "src-tauri/src/lua/api/git.rs                   13,11"
   "src-tauri/src/lua/api/ui.rs                    13,04"
   "src-tauri/src/lua/api/http.rs                  13,12,02,06"
-  # ⚠️ 2026-10-04 补两行（第 58/60 项那一批）：
-  #  · `http/tests.rs`——`http.rs` 那套房子的**测试**，跟着主文件走（先例：`image/tests.rs`
-  #    记的是 `02`）。它钉的几条（每块都不切汉字、结果表的形状）在 `docs/13` §9 与
-  #    `docs/06` §5.13 的桩脚本配方里都写着。
-  #  · `json.rs`——`nota.json`（**不需要能力**的纯解码表）。记法与 `diff.rs` / `time.rs`
-  #    一样是 `13,11`：契约在 `docs/13`，插件作者怎么用（别自己写解码器）在 `docs/11`。
   "src-tauri/src/lua/api/http/tests.rs           13,12,02,06"
   "src-tauri/src/lua/api/json.rs 13,11" "src-tauri/src/lua/api/settings.rs 13,12,07"
   "src-tauri/src/lua/api/i18n.rs 13,11,12" "src-tauri/src/lua/api/devserver.rs 13,12,11"

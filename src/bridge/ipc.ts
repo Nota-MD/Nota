@@ -26,7 +26,7 @@ import type {
   PickerEntry, PickerPlace, PluginUpdateInfo, PluginUpdateResult, UpdateInstallResult, UpdateStatus,
   MeetingSpeech, PathKindClass, CombineWriteWordDictionary, PrintBackend, PrintEnvironment, PrintPreview,
   WindowRegistrySnapshot, WindowTransferRequest,
-  TableContextAction, TableSnapshot,
+  TableContextAction, TableRenderPayload, TableSnapshot,
 } from "./types";
 import type {
   SettingsExportInventory,
@@ -846,6 +846,7 @@ export const api = {
     syncSnapshot: (snapshot: TableSnapshot | null) =>
       invoke<void>("nota_table_snapshot_sync", { snapshot }),
     actions: () => invoke<TableContextAction[]>("nota_table_actions"),
+    renders: () => invoke<TableRenderPayload[]>("nota_table_renders"),
   },
 
 

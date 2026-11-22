@@ -40,7 +40,7 @@ verification is missing.
 | Priority | ID | Area | State | Next action | Exit criteria |
 |---|---|---|---|---|---|
 | P0 | 126 | Linux stability | Open | Reproduce close, restart, and single-instance cleanup; inspect WebKit child processes and the Unix socket owner | Ten consecutive close/restart cycles need no `killall`; stale sockets and child processes do not block startup |
-| P0 | 130 | Windows settings window | Partial | Hidden same-process webview is prewarmed after idle and reused; complete real Windows taskbar, focus, restart and fallback acceptance | First open and reopening work after restart; switching presentation modes leaves no hidden blocker; failures show an error |
+| P0 | 130 | Windows settings window | Implemented; Windows acceptance pending | Windows now launches Preferences directly as a standalone process; verify first open, reopen, native close and presentation switching on a real Windows build | First open and reopening work after restart; switching presentation modes leaves no hidden blocker; failures show an error |
 | P0 | 132 | Windows title bar | Open | Record WebView2 and DWM window events; isolate prewarm, maximize/fullscreen listeners and title-bar recalculation | System title bar runs five minutes without flicker; normal, maximized and fullscreen transitions stay stable |
 | P0 | 110 | Windows acceptance | Partial | Complete the real-device checklist after 122, 130, 131 and 132 | Install, update, single-instance, Host Control, plugins and restart paths each have a pass/fail record |
 | P1 | 122 | Windows feedback checklist | Partial | Re-audit remaining items in the external 17-item report and close or split every unresolved item | Every original item has a current evidence-backed conclusion |

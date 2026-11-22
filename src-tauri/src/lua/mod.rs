@@ -19,6 +19,8 @@ pub struct HostContext {
 
     pub table_bridge: Arc<Mutex<TableBridge>>,
 
+    pub ai_context: Arc<Mutex<crate::lua::api::ai::ContextRegistry>>,
+
     pub workspace: Arc<Mutex<Option<std::path::PathBuf>>>,
 
     pub plugin_id: String,
@@ -199,6 +201,9 @@ impl LuaPlugin {
         };
 
         if let Err(e) = Self::install(&lua, &manifest, &ctx, &language_2) {
+            if let Ok(mut context) = ctx.ai_context.lock() {
+                context.remove(&ctx.plugin_id);
+            }
             return Self {
                 manifest,
                 lua,
@@ -217,13 +222,18 @@ impl LuaPlugin {
                 state: PluginState::Loaded,
                 has_unload,
             },
-            Err(e) => Self {
-                manifest,
-                lua,
-                language_2,
-                state: PluginState::Failed(e.to_string()),
-                has_unload: false,
-            },
+            Err(e) => {
+                if let Ok(mut context) = ctx.ai_context.lock() {
+                    context.remove(&ctx.plugin_id);
+                }
+                Self {
+                    manifest,
+                    lua,
+                    language_2,
+                    state: PluginState::Failed(e.to_string()),
+                    has_unload: false,
+                }
+            }
         }
     }
 

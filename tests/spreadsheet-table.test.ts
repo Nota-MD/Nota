@@ -4,6 +4,7 @@ import {
   cellLabel,
   columnLabel,
   formulaTokens,
+  insertFormulaReference,
 } from "@/ui/SpreadsheetTableOverlay";
 import {
   adaptiveSelectionPalette,
@@ -202,6 +203,44 @@ testCase("formula references use matching OnlyOffice-style colors", () => {
   );
 });
 
+testCase("editing a formula can insert single cells and dragged ranges", () => {
+  const range = insertFormulaReference("=SUM()", 5, 5, {
+    top: 1,
+    left: 0,
+    bottom: 2,
+    right: 2,
+  });
+  assert(range.value === "=SUM(A2:C3)", `dragged range was not inserted: ${range.value}`);
+  assert(range.caret === 10, `caret did not move after the inserted range: ${range.caret}`);
+
+  const single = insertFormulaReference("=A1+1", 1, 3, {
+    top: 3,
+    left: 3,
+    bottom: 3,
+    right: 3,
+  });
+  assert(single.value === "=D4+1", "selected reference text was not replaced");
+  assert(single.caret === 3, "caret did not stay after the single-cell reference");
+
+  assert(
+    overlay.includes("referencing.current") &&
+      overlay.includes("insertFormulaReference(") &&
+      overlay.includes("input.setSelectionRange(released.caret, released.caret)"),
+    "formula editing does not keep focus while cells are clicked or dragged",
+  );
+
+  const functionRule = /\.sheet-formula-function\s*\{([^}]*)\}/.exec(tableCss)?.[1] ?? "";
+  const referenceRule = /\.sheet-formula-reference\s*\{([^}]*)\}/.exec(tableCss)?.[1] ?? "";
+  const inputRule = /\.sheet-formula-bar input\s*\{([^}]*)\}/.exec(tableCss)?.[1] ?? "";
+  assert(
+    !functionRule.includes("font-weight") &&
+      !referenceRule.includes("font-weight") &&
+      inputRule.includes("font: inherit") &&
+      inputRule.includes("letter-spacing: normal"),
+    "colored formula tokens can drift from the transparent input caret metrics",
+  );
+});
+
 testCase("spreadsheet overlays stay inside the editor viewport", () => {
   assert(overlay.includes('table.closest<HTMLElement>(".editor-pane")'), "editor viewport is not measured");
   assert(overlay.includes('querySelector<HTMLElement>(".editor-frontmatter")'), "front matter boundary is not measured");
@@ -214,8 +253,9 @@ testCase("spreadsheet overlays stay inside the editor viewport", () => {
 testCase("table extensions receive source snapshots and display-only results", () => {
   const bridge = read("src-tauri/src/table_bridge.rs");
   const bridgeHook = read("src/ui/useTableBridge.ts");
+  const snapshotHelper = read("src/ui/table-snapshot.ts");
   assert(overlay.includes("api.table.syncSnapshot(snapshot)"), "active table snapshot is not published");
-  assert(overlay.includes("table.dataset.notaTableId = tableId"), "tables have no stable bridge identity");
+  assert(snapshotHelper.includes("table.dataset.notaTableId = tableId"), "tables have no stable bridge identity");
   assert(bridge.includes("pub struct TableSnapshot"), "host snapshot shape is missing");
   assert(bridge.includes("pub struct TableWriteRequest"), "host write intent is missing");
   assert(
@@ -231,9 +271,12 @@ testCase("table extensions receive source snapshots and display-only results", (
     "computed values do not survive after the caret leaves the table",
   );
   assert(
-    tableComputed.includes("getComputedStyle(cell.parentElement ?? cell).backgroundColor") &&
-      tableComputed.includes("isFormulaError(value)"),
-    "processed values either flash on entry or lose row background layers",
+    tableComputed.includes("paintedBackground(cell)") &&
+      tableComputed.includes("fontSize: style.fontSize") &&
+      tableComputed.includes("--nota-cell-ink") &&
+      persistent.includes("fontFamily: box.fontFamily") &&
+      tableCss.includes("var(--nota-cell-ink"),
+    "computed values do not inherit the rendered cell typography, ink and background",
   );
   assert(
     toolbar.includes("PersistentTableComputedOverlay") &&
@@ -243,6 +286,15 @@ testCase("table extensions receive source snapshots and display-only results", (
     "rendered table values are not repainted after editor DOM updates",
   );
   assert(bridgeHook.includes('runCommand("tableSetCells"'), "extension write intent is not applied");
+  assert(
+    bridgeHook.includes('querySelectorAll<HTMLTableElement>(".ProseMirror table")') &&
+      bridgeHook.includes("snapshotForTable(table, documentId") &&
+      bridgeHook.includes("api.table.syncSnapshot(snapshot)") &&
+      bridgeHook.includes('dispatchEvent(new Event("nota-table-snapshots-ready"))') &&
+      persistent.includes("api.table.renders()") &&
+      !overlay.includes("void api.table.syncSnapshot(null)"),
+    "opening a document does not publish its first table before the caret enters it",
+  );
 });
 
 testCase("extension-rendered table content is included in save feedback", () => {
@@ -265,6 +317,7 @@ testCase("extension-rendered table content is included in save feedback", () => 
 testCase("formula source stays in the formula bar and errors are visible", () => {
   assert(
     persistent.includes("computedBoxesFor(table, payload.cells)") &&
+      persistent.includes("boxes.filter((box) => !box.selected)") &&
       !persistent.includes("table === currentTable"),
     "a selected formula cell still reveals its source inside the table",
   );

@@ -116,24 +116,49 @@ pub fn nota_window_open_new(path: Option<String>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub fn nota_window_open_settings(app: tauri::AppHandle) -> Result<()> {
     if show_settings_window(&app).is_ok() {
         return Ok(());
     }
+    open_settings_process(false)
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub fn nota_window_open_settings(_app: tauri::AppHandle) -> Result<()> {
+    open_settings_process(true)
+}
+
+fn open_settings_process(startup_log: bool) -> Result<()> {
     let program = std::env::current_exe()
         .map_err(|e| NotaError::other(format!("Could not locate the Nota executable: {e}")))?;
     crate::proc::background_command(&program)
         .arg(crate::cli::SETTINGS_WINDOW_FLAG)
         .spawn()
         .map(|_| {
-            crate::debug_log!("[nota] settings window: {}", program.display());
+            if startup_log {
+                crate::debug_log!(
+                    "[nota] settings window launched directly: {}",
+                    program.display()
+                );
+            } else {
+                crate::debug_log!("[nota] settings window fallback: {}", program.display());
+            }
         })
         .map_err(|error| {
             NotaError::other(format!("Could not start the Preferences window: {error}"))
         })
 }
 
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub fn nota_window_prepare_settings(_app: tauri::AppHandle) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub fn nota_window_prepare_settings(app: tauri::AppHandle) -> Result<()> {
     ensure_settings_window(&app)?;
@@ -200,6 +225,7 @@ fn create_about_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
     .map_err(|error| NotaError::other(format!("Could not create the About window: {error}")))
 }
 
+#[cfg(not(target_os = "windows"))]
 fn ensure_settings_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
         return Ok(window);
@@ -218,6 +244,7 @@ fn ensure_settings_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow
     .map_err(|error| NotaError::other(format!("Could not start the Preferences window: {error}")))
 }
 
+#[cfg(not(target_os = "windows"))]
 fn show_settings_window(app: &tauri::AppHandle) -> Result<()> {
     let window = ensure_settings_window(app)?;
     window

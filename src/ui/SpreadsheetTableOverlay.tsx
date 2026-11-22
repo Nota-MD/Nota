@@ -15,6 +15,7 @@ import {
   needsComputedPaint,
   recordTableExtensionContent,
 } from "@/ui/table-computed";
+import { snapshotForTable, tableIdentifier } from "@/ui/table-snapshot";
 
 interface Point {
   row: number;
@@ -100,6 +101,21 @@ function rangeLabel(range: Range): string {
   const start = cellLabel({ row: range.top, column: range.left });
   const end = cellLabel({ row: range.bottom, column: range.right });
   return start === end ? start : `${start}:${end}`;
+}
+
+export function insertFormulaReference(
+  value: string,
+  selectionStart: number,
+  selectionEnd: number,
+  range: Range,
+): { value: string; caret: number } {
+  const start = Math.max(0, Math.min(value.length, selectionStart));
+  const end = Math.max(start, Math.min(value.length, selectionEnd));
+  const reference = rangeLabel(range);
+  return {
+    value: value.slice(0, start) + reference + value.slice(end),
+    caret: start + reference.length,
+  };
 }
 
 function cellPoint(element: Element | null): Point | null {
@@ -201,33 +217,13 @@ export function referenceBoxesFor(
   return boxes;
 }
 
-function tableIdentifier(table: HTMLTableElement, documentKey: string | number): string {
-  const pane = table.closest(".ProseMirror");
-  const index = pane
-    ? Array.from(pane.querySelectorAll<HTMLTableElement>("table")).indexOf(table)
-    : -1;
-  return `${String(documentKey)}:${Math.max(0, index)}`;
-}
-
 function snapshotFor(
   table: HTMLTableElement,
   documentKey: string | number,
   range: Range,
   active: Point,
 ): TableSnapshot | null {
-  const documentId = typeof documentKey === "number" ? documentKey : Number(documentKey);
-  if (!Number.isSafeInteger(documentId)) return null;
-  const tableId = tableIdentifier(table, documentKey);
-  table.dataset.notaTableId = tableId;
-  return {
-    documentId,
-    tableId,
-    rows: Array.from(table.rows, (row) =>
-      Array.from(row.cells, (cell) => cell.textContent ?? ""),
-    ),
-    selection: range,
-    active,
-  };
+  return snapshotForTable(table, documentKey, range, active);
 }
 
 function paintRange(table: HTMLTableElement, range: Range): void {
@@ -347,6 +343,7 @@ export function SpreadsheetTableOverlay({
   const formulaHighlight = useRef<HTMLDivElement | null>(null);
   const formulaActive = useRef(false);
   const formulaTarget = useRef<Point | null>(null);
+  const referencing = useRef(false);
   const lastSnapshot = useRef("");
   const lastRender = useRef<TableRenderPayload | null>(null);
   const dragging = useRef(false);
@@ -356,11 +353,13 @@ export function SpreadsheetTableOverlay({
     layoutRef.current = layout;
   }, [layout]);
 
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
   useLayoutEffect(() => {
     if (!visible) {
       formulaActive.current = false;
       formulaTarget.current = null;
-      void api.table.syncSnapshot(null);
       lastSnapshot.current = "";
       setLayout(null);
       return;
@@ -622,6 +621,36 @@ export function SpreadsheetTableOverlay({
       const table = activeTableFor(layout);
       const point = cellPoint(event.target as Element);
       if (!point) return;
+      if (formulaActive.current && formulaTarget.current) {
+        if (
+          point.row === formulaTarget.current.row &&
+          point.column === formulaTarget.current.column
+        ) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        anchor.current = point;
+        selection.current = normalizeRange(point, point);
+        paintRange(table, selection.current);
+        dragging.current = true;
+        referencing.current = true;
+        filling.current = false;
+        setLayout((current) => {
+          if (!current) return current;
+          const box = boxForRange(table, selection.current!);
+          return box
+            ? {
+                ...current,
+                selection: selection.current!,
+                active: formulaTarget.current!,
+                box,
+              }
+            : current;
+        });
+        requestAnimationFrame(() => formulaInput.current?.focus({ preventScroll: true }));
+        return;
+      }
       event.preventDefault();
       anchor.current = point;
       selection.current = normalizeRange(point, point);
@@ -644,7 +673,27 @@ export function SpreadsheetTableOverlay({
         event.preventDefault();
       }
     };
-    const up = () => {
+    const up = (event: PointerEvent) => {
+      if (referencing.current && selection.current && formulaInput.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        const input = formulaInput.current;
+        const released = insertFormulaReference(
+          draftRef.current,
+          input.selectionStart ?? draftRef.current.length,
+          input.selectionEnd ?? draftRef.current.length,
+          selection.current,
+        );
+        draftRef.current = released.value;
+        setDraft(released.value);
+        referencing.current = false;
+        dragging.current = false;
+        requestAnimationFrame(() => {
+          input.focus({ preventScroll: true });
+          input.setSelectionRange(released.caret, released.caret);
+        });
+        return;
+      }
       if (filling.current && layout && selection.current) {
         const source = fillSource.current;
         const range = selection.current;
@@ -668,6 +717,7 @@ export function SpreadsheetTableOverlay({
       }
       dragging.current = false;
       filling.current = false;
+      referencing.current = false;
     };
     const preserveSecondarySelection = (event: MouseEvent) => {
       if (event.button !== 2 || !selection.current) return;

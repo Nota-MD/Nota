@@ -4,7 +4,7 @@ use tauri::Manager;
 
 use crate::error::{NotaError, Result};
 use crate::state::AppState;
-use crate::table_bridge::{TableAction, TableSnapshot};
+use crate::table_bridge::{TableAction, TableRender, TableSnapshot};
 
 #[tauri::command]
 pub async fn nota_table_snapshot_sync(
@@ -18,7 +18,14 @@ pub async fn nota_table_snapshot_sync(
             bridge.sync_snapshot(snapshot.clone());
         }
         if let Some(snapshot) = snapshot {
-            let plugins = state.plugins.lock().unwrap();
+            let plugins = loop {
+                let guard = state.plugins.lock().unwrap();
+                if guard.is_ready() {
+                    break guard;
+                }
+                drop(guard);
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
             plugins.notify_table_snapshot(&snapshot);
         }
         Ok(())
@@ -47,4 +54,15 @@ pub async fn nota_table_actions(app: tauri::AppHandle) -> Result<Vec<TableAction
     })
     .await
     .map_err(|error| NotaError::other(format!("table action thread failed: {error}")))?
+}
+
+#[tauri::command]
+pub async fn nota_table_renders(app: tauri::AppHandle) -> Result<Vec<TableRender>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let renders = state.table_bridge.lock().unwrap().renders();
+        Ok(renders)
+    })
+    .await
+    .map_err(|error| NotaError::other(format!("table render thread failed: {error}")))?
 }

@@ -840,6 +840,8 @@ ProseMirror 把它渲染成一个真的 `<span>`，所以 `ContextMenu.tsx` 那�
 | 标题 | 活动页的名字（面板的 `title`，或「插件」） | 无 | ✅ |
 | 关闭 | 「×」 | `setDockOpen(false)`，**整个 `<aside>` 不再渲染** | ✅ 实测过 |
 | **页签** | 每个右侧面板一个 ＋「插件」 | 点了 → 切页（**只画那一页**） | ✅ **2026-09-24 起（用户要求：一个拓展独占一页，两个不能同时开）**。⚠️ **2026-09-25 起这一栏里不再有内置页**：Slidev 从那天起是普通插件、走 `register_panel`（§2.8），`PluginDock` 里手写的那一页 `@slidev` 删了。**验收标准**：把 `plugins/slidev/` 删掉，这一栏里有关它的东西应当一条不剩 |
+| **实时消息** | Any temporary `nota.ui.stream` text on the active panel | Releases characters smoothly, follows the bottom until the user scrolls up, offers “Back to latest”, and keeps Markdown rendering in the same message surface | Generic across extensions; no AI-specific branch |
+| **Formula result cells** | Computed table cells | Unselected results inherit the cell font, ink and painted background; selecting a formula cell hides the result overlay and reveals its source in the cell and `fx` bar. While editing a formula, clicking a cell inserts its reference and dragging inserts the selected range | Prevents size/color jumps, duplicate source text and manual reference typing |
 | 面板·内容 | 由插件的 `render` 决定（见下） | 按钮点下去 → `问参数` → `plugin.call` | ✅ **2026-09-24 起是真的内容**（`docs/07` 第 15 项结清）。📌 之前这里写的是「面板内容尚未接入。」一行字 |
 | **面板·正在生成的字**（`实时表`） | 插件推过来的那段字（画成一条 `message`） | 无（**不是按钮，是内容**） | ✅ **2026-10-04 加**（`docs/07` 第 58 项，「边生成边显示」）。⚠️ 见下面单独一段 |
 | **面板·视图切换** | 活动面板标题栏右端一颗四角展开图标 | 点了 → `nota_plugin_review_open` → 同一块面板摊到编辑区；编辑区标题栏的「侧栏」再切回来 | ✅ **2026-10-31 加**。这是**宿主提供的通用能力**，不需要插件自己注册第二条命令；图谱菜单默认走侧栏 |
@@ -2851,7 +2853,7 @@ WebKitGTK 静默忽略 `backdrop-filter`**——实测：透明度 0.55 时后�
 
 | 编辑器那一节·符号配对 | **2026-10-30 删除**：不再显示「智能符号补全」设置，`smart_symbols` 字段与编辑器中全部自动补全/配对插件均已移除。旧 `settings.toml` 里的 `match_brackets`、`match_markdown`、`smart_symbols` 作为未知键忽略，不影响设置加载。 |
 | 编辑器那一节·自动配对 | **可选功能，默认关闭**：设置组「自动配对」里的开关控制半角/常用全角括号、直引号与智能弯引号、`*` `_` `$` `~` 等 Markdown 定界符。开启后覆盖补闭符、只跨插件插入的闭符、空对退格、选区包裹和 Tab/Shift+Tab 跨越；代码、链接、URL 与 IME 组字不介入。反引号始终按单字符字面输入，不自动补成行内代码。关闭时每个按键严格只写入用户按下的字符。字段为 `editor.auto_pair`。 |
-| 外观·设置窗口呈现 | **三档，默认内嵌**：`full` 铺满菜单下方区域，`embedded` 保留居中卡片，`external` 使用隐藏预热、关闭后隐藏复用的独立原生 WebView。In external mode the main UI creates the hidden Settings webview after a short idle delay, so the first open only shows and focuses an existing window. If creation or showing fails, the backend starts the standalone `--settings-window` process fallback. The window restores its taskbar entry before showing and never takes focus while prewarming. 设置与关于共用字段 `appearance.settings_window_style`；帮助提示和实现均明确“下次打开生效”，外部窗口与主窗口通过 `nota:settings-changed` 同步 |
+| 外观·设置窗口呈现 | **三档，默认内嵌**：`full` 铺满菜单下方区域，`embedded` 保留居中卡片，`external` opens native Preferences. Linux and macOS reuse a hidden in-process WebView; Windows always launches a dedicated `--settings-window` process using the console-free process launcher, because WebView2 hidden-window reuse can return success without producing a visible window. The standalone process bypasses single-instance, restores its taskbar entry, shows/focuses after navigation, and native close exits only that process. |
 | 导出·自定义导出器 | 预设九项与新增项都可修改 `base_args`；`--from`、`--to`、输出路径仍由 Nota 提供。模板选择器使用自绘菜单。导入器的同类自定义应作为独立导入方向实现，不能直接复用导出器数组 |
 | 源码模式字体 | **强制等宽**：`.editor-pane-source` 下的 CodeMirror 根、scroller、content、line 与 gutter 都使用 `--font-mono !important`；正文主题只能调整等宽字族变量，不能把源码切回衬线字体。源码启用自动换行并隐藏横向滚动条 |
 | 编辑器那一节·键盘体验优化 | **可选功能，默认关闭**：开关字段 `editor.keyboard_experience`。开启后，光标在链接内部或左右端点时显示 `[` 与 `](地址)`，图片在 NodeSelection 或相邻空光标时显示 Markdown 源码框；普通点击链接留在编辑器，不打开链接设置框。只读预览与导出不挂该交互。 |
@@ -3348,8 +3350,8 @@ which replaces selected formulas in one undoable transaction.
 
 Row and column headers enter the same immediate range-selection path as pointer
 drags, and active ranges use the theme accent surface. Preferences creation uses
-one cross-platform fast path: create and show the in-process settings window
-first, then fall back to the standalone process if creation fails.
+the in-process fast path on Linux/macOS and a dedicated process directly on
+Windows.
 
 ## 7. ✅ 与 `07` / `10` 的四处不一致（**已全部结清，2026-09-22**）
 

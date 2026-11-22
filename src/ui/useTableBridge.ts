@@ -1,13 +1,16 @@
 import { useEffect, type RefObject } from "react";
 
 import {
+  api,
   events,
   on,
+  type TableSnapshot,
   type TableWritePayload,
 } from "@/bridge/ipc";
 import type { EditorPaneHandle } from "@/ui/EditorPane";
 import type { Toast } from "@/ui/Toasts";
 import { useT } from "@/i18n";
+import { snapshotForTable } from "@/ui/table-snapshot";
 
 interface Wiring {
   enabled: boolean;
@@ -25,6 +28,45 @@ export function useTableBridge({
   toast,
 }: Wiring): void {
   const t = useT();
+
+  useEffect(() => {
+    if (!enabled || documentId === null) return;
+    let active = true;
+    let frame = 0;
+    let attempts = 0;
+    const publishTables = () => {
+      if (!active) return;
+      const tables = Array.from(
+        root.current?.querySelectorAll<HTMLTableElement>(".ProseMirror table") ?? [],
+      );
+      if (tables.length > 0) {
+        const origin: TableSnapshot["active"] = { row: 0, column: 0 };
+        const selection: TableSnapshot["selection"] = {
+          top: 0,
+          left: 0,
+          bottom: 0,
+          right: 0,
+        };
+        void (async () => {
+          for (const table of tables) {
+            if (!active) return;
+            const snapshot = snapshotForTable(table, documentId, selection, origin);
+            if (snapshot) await api.table.syncSnapshot(snapshot);
+          }
+          if (active) window.dispatchEvent(new Event("nota-table-snapshots-ready"));
+        })();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 120) frame = requestAnimationFrame(publishTables);
+    };
+    frame = requestAnimationFrame(publishTables);
+    return () => {
+      active = false;
+      cancelAnimationFrame(frame);
+      void api.table.syncSnapshot(null);
+    };
+  }, [documentId, enabled, root]);
 
   useEffect(() => {
     if (!enabled) {

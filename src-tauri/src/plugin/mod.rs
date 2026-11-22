@@ -114,6 +114,9 @@ impl PluginHost {
     pub fn discover(resource_dir: Option<PathBuf>, base: &HostContext) -> Self {
         let installed = Installed::load();
         let extensions_enabled = extensions_enabled_from(base);
+        if let Ok(mut context) = base.ai_context.lock() {
+            context.clear();
+        }
         let mut seen: HashSet<String> = HashSet::new();
 
         let mut channels: HashMap<String, String> = HashMap::new();
@@ -334,6 +337,12 @@ impl PluginHost {
             return Ok(None);
         };
         let id = self.plugins[i].manifest.meta.id.clone();
+        let previous_ai_context = self
+            .base
+            .ai_context
+            .lock()
+            .ok()
+            .and_then(|mut context| context.remove(&id));
         let manifest = Manifest::load(&dir.join(package::MANIFEST_FILE))?;
         if manifest.meta.id != id {
             return Err(NotaError::other(format!(
@@ -350,6 +359,11 @@ impl PluginHost {
             LuaPlugin::disabled(manifest, &self.base.application_language)
         };
         if let PluginState::Failed(reason) = &replacement.state {
+            if let Some(text) = previous_ai_context {
+                if let Ok(mut context) = self.base.ai_context.lock() {
+                    let _ = context.add(&id, &text);
+                }
+            }
             return Err(NotaError::other(format!(
                 "extension {id} failed to hot reload; keeping the previous version: {reason}"
             )));
@@ -379,6 +393,11 @@ impl PluginHost {
         }
         self.extensions_enabled = enabled;
         let mut changed = 0usize;
+        if !enabled {
+            if let Ok(mut context) = self.base.ai_context.lock() {
+                context.clear();
+            }
+        }
 
         for i in 0..self.plugins.len() {
             let id = self.plugins[i].manifest.meta.id.clone();
@@ -431,6 +450,9 @@ impl PluginHost {
             }
         } else {
             self.installed.set_enabled(id, false)?;
+            if let Ok(mut context) = self.base.ai_context.lock() {
+                context.remove(id);
+            }
             if self.plugins[i].state == PluginState::Loaded {
                 self.plugins[i].unload();
             }
@@ -606,6 +628,7 @@ fn settings(manifest: &Manifest, language_2: &LanguagePack) -> Vec<PluginSetting
                 ),
                 secret: s.secret,
                 placeholder: value_3(language_2, &s.placeholder),
+                multiline: s.multiline && s.kind == "text",
             }
         })
         .collect()

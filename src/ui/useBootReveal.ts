@@ -1,18 +1,18 @@
-/**
- * 显示主窗口。
- *
- * 主窗口在 `tauri.conf.json` 里先创建在屏幕外并隐藏任务栏入口。屏幕外的窗口
- * 仍会正常渲染，避免 WebKit 在隐藏窗口里暂停动画帧；等界面风格与编辑器实例
- * 都就绪后，才由宿主移入屏幕。用户第一次看到窗口时，正文已经可以输入，不存在
- * “Nota”启动文字、纯色动画或半成品界面。
- *
- * ⚠️ **不要把 `document.fonts.ready` 放进这条必经链**。用户导入的 CDE 主题带
- * 一支 2.1 MB 的多字符集点阵字体；等整套字体解析完再揭幕，会把每次冷启动硬拖长
- * 最多 2 秒（旧实现还真有一个 2 秒超时）。字体是主题样式的一部分，但它的装载
- * **不需要挡住应用窗口的第一帧**：`@font-face` 已经由浏览器并行获取，样式与布局
- * 也已经在 CSS 注入时确定。编辑器就绪后直接移入视野；不能用 rAF 等首帧，
- * 因为屏幕外 WebView 的帧与计时器可能被 WebKit 暂停。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { useEffect } from "react";
 
@@ -23,7 +23,7 @@ const EDITOR_READY_EVENT = "nota-editor-ready";
 const DOCUMENT_THEME_READY_EVENT = "nota-document-theme-ready";
 const STARTUP_READY_EVENT = "nota-startup-ready";
 
-/** 编辑器实例已经建好，可以接收输入。 */
+
 export function markEditorReady(): void {
   document.documentElement.dataset.editorReady = "true";
   window.dispatchEvent(new Event(EDITOR_READY_EVENT));
@@ -57,7 +57,7 @@ export function markDocumentThemeReady(): void {
   window.dispatchEvent(new Event(DOCUMENT_THEME_READY_EVENT));
 }
 
-/** 启动数据与会话已经接上。保留给诊断和异常兜底，不作为“已可编辑”的同义词。 */
+
 export function markStartupReady(): void {
   document.documentElement.dataset.startupReady = "true";
   window.dispatchEvent(new Event(STARTUP_READY_EVENT));
@@ -77,8 +77,8 @@ export function useBootReveal(ready: boolean): void {
       void api.window
         .showMain()
         .then(() => {
-          // 窗口已经真正显示后才开始加载 KaTeX 等增强 chunk。计时器里再让
-          // 一拍，确保 WebKit 先提交首帧；失败时同样放行，不能把公式永远卡住。
+
+
           document.documentElement.dataset.windowShown = "true";
           window.dispatchEvent(new Event("nota-window-shown"));
           const preheatOptionalEditors = () => {
@@ -101,7 +101,7 @@ export function useBootReveal(ready: boolean): void {
           }
         })
         .catch((error) => {
-          console.error("[nota] 显示主窗口失败：", error);
+          console.error("[nota] Could not show the main window:", error);
           document.documentElement.dataset.windowShown = "true";
           window.dispatchEvent(new Event("nota-window-shown"));
         });
@@ -122,8 +122,8 @@ export function useBootReveal(ready: boolean): void {
       window.addEventListener(event, maybeReveal);
     }
     maybeReveal();
-    // 编辑器初始化真的失败时不能永远隐藏窗口。正常路径由 `markEditorReady()`
-    // 显示；这里是故障兜底，不是常规开窗计时器。
+
+
     timer = window.setTimeout(reveal, 5000);
     return () => {
       cancelled = true;

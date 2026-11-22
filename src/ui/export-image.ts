@@ -1,4 +1,4 @@
-/** 把导出的完整 HTML 文档光栅化成一张纵向 PNG。 */
+
 
 const drawDistributeLimit = 32_000;
 
@@ -12,10 +12,10 @@ export async function htmlToPngBase64(html: string): Promise<string> {
   try {
     await new Promise<void>((resolve, reject) => {
       frame.addEventListener("load", () => resolve(), { once: true });
-      frame.addEventListener("error", () => reject(new Error("HTML 预览加载失败")), { once: true });
+      frame.addEventListener("error", () => reject(new Error("HTML preview failed to load")), { once: true });
     });
     const doc = frame.contentDocument;
-    if (!doc?.documentElement || !doc.body) throw new Error("HTML 预览没有文档树");
+    if (!doc?.documentElement || !doc.body) throw new Error("HTML preview has no document tree");
     await doc.fonts?.ready.catch(() => {});
     await Promise.all(
       [...doc.images].map((image) =>
@@ -31,7 +31,7 @@ export async function htmlToPngBase64(html: string): Promise<string> {
 
     const width = Math.max(800, Math.ceil(doc.documentElement.scrollWidth));
     const height = Math.max(1, Math.ceil(doc.documentElement.scrollHeight));
-    if (height > drawDistributeLimit * 4) throw new Error("文档太长，无法安全生成单张图片");
+    if (height > drawDistributeLimit * 4) throw new Error("Document is too long to render safely as one image");
     const scale = Math.min(2, drawDistributeLimit / width, drawDistributeLimit / height);
     const styles = [...doc.head.querySelectorAll("style, link[rel='stylesheet']")]
       .map((node) => node.outerHTML)
@@ -53,7 +53,7 @@ ${styles}
     canvas.width = Math.max(1, Math.round(width * scale));
     canvas.height = Math.max(1, Math.round(height * scale));
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("无法创建图片画布");
+    if (!context) throw new Error("Could not create the image canvas");
     context.fillStyle = "#fff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);

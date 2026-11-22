@@ -72,8 +72,30 @@ testCase("按尺子的实际字形像素收缩，而不是按字符数乘 ch", (
   equal(input.style["--nota-math-source-width"], "49px", "CSS 像素宽度变量");
 });
 
+testCase("WebKit 尚未量出首字符时，非空源码仍有可见光标槽", () => {
+  const input = new fakeElement("input");
+  const ruler = new fakeElement("span");
+  ruler.getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 20,
+    width: 0,
+    height: 20,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+
+  for (const source of ["/", "\\"]) {
+    fitInlineSourceWidth(input, ruler, source, "");
+    equal(input.style.width, "9px", `${JSON.stringify(source)} 的兜底宽度`);
+    equal(input.style["--nota-math-source-width"], "9px", `${JSON.stringify(source)} 的 CSS 宽度`);
+  }
+});
+
 testCase("CSS 没有恢复 2ch 表单下限或额外尾反斜杠间距", () => {
-  const css = readFileSync("src/styles/math.css", "utf8");
+  const css = readFileSync("src/styles/math.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   assertion(
     /\.nota-math-inline \.nota-math-source\s*\{[^}]*min-width:\s*0/s.test(css),
     "行内源码仍有表单最小宽度",
@@ -90,6 +112,12 @@ testCase("CSS 没有恢复 2ch 表单下限或额外尾反斜杠间距", () => {
     /\.nota-math-ruler\s*\{[^}]*width:\s*max-content/s.test(css),
     "隐藏尺子没有按内容取宽",
   );
+  const suggest = /\.nota-math-suggest\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+  const description = /\.nota-math-suggest-desc\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+  assertion(!suggest.includes("overflow-y: auto"), "补全候选仍在窄格子里被双向裁切");
+  assertion(suggest.includes("overflow: visible"), "补全候选没有同时放开两个溢出轴");
+  assertion(description.includes("min-width: 0"), "长说明无法收缩，补全列表仍会横向溢出");
+  assertion(description.includes("text-overflow: ellipsis"), "长说明没有优雅截断");
 });
 
 testCase("字体稳定与后续加载都会重测，首次挂载也补一次布局帧", async () => {

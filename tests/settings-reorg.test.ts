@@ -75,15 +75,27 @@ testCase("应用更新与插件更新都使用替换规则", () => {
   const appUpdate = read("src-tauri", "src", "update.rs");
   const pluginUpdate = read("src-tauri", "src", "plugin", "updater.rs");
   assertValue(remote.includes("settings::download::rewrite_address"), "下载层没有应用替换规则");
-  assertValue(appUpdate.includes("替换规则"), "应用更新没有传替换规则");
-  assertValue(pluginUpdate.includes("替换规则"), "插件更新没有传替换规则");
+  assertValue(appUpdate.includes("replacements"), "应用更新没有传替换规则");
+  assertValue(pluginUpdate.includes("replacements"), "插件更新没有传替换规则");
 });
 
 testCase("调试设置会动态打开后端日志闸门", () => {
   const settings = read("src-tauri", "src", "commands", "settings.rs");
   const logs = read("src-tauri", "src", "log.rs");
-  assertValue(settings.includes("log::设置调试模式"), "保存设置时没有同步日志闸门");
-  assertValue(logs.includes("pub fn 设置调试模式"), "日志模块没有运行期开关");
+  assertValue(settings.includes("log::set_debug_mode"), "保存设置时没有同步日志闸门");
+  assertValue(logs.includes("pub fn set_debug_mode"), "日志模块没有运行期开关");
+});
+
+testCase("工作区命令同步更新内存状态", () => {
+  const workspace = read("src-tauri", "src", "commands", "workspace.rs");
+  assertValue(
+    workspace.includes("*state.workspace.lock().unwrap() = Some(canonical.clone())"),
+    "打开工作区时没有更新内存状态",
+  );
+  assertValue(
+    workspace.includes("*state.workspace.lock().unwrap() = None"),
+    "关闭工作区时没有清理内存状态",
+  );
 });
 
 testCase("Lua hot reload is an opt-in developer setting", () => {
@@ -125,7 +137,10 @@ testCase("拓展功能总开关隐藏入口、停止运行并保留安装与单�
   const host = read("src-tauri", "src", "plugin", "mod.rs");
   assertValue(host.includes("pub fn set_extensions_enabled"), "宿主没有全局拓展开关");
   assertValue(host.includes("self.extensions_enabled && self.installed.is_enabled(id)"), "总开关没有参与可调用判据");
-  assertValue(host.includes("LuaPlugin::disabled(manifest, &self.base.应用语言)"), "关闭后没有卸载 Lua 状态");
+  assertValue(
+    host.includes("LuaPlugin::disabled(manifest, &self.base.application_language)"),
+    "关闭后没有卸载 Lua 状态",
+  );
   assertValue(host.includes("self.installed.is_enabled(&id)"), "重新开启时没有按原账本恢复");
 
   const settings = read("src-tauri", "src", "settings", "general.rs");

@@ -1,17 +1,17 @@
-/**
- * GitHub Alerts 的插入动作。
- *
- * 解析、屏幕样式与源码往返由 `github-alert.ts` 负责；这里只负责从菜单或斜杠
- * 菜单凭空造出一块合法的引用块。源码仍是标准的：
- *
- * ```md
- * > [!NOTE]
- * >
- * > 正文
- * ```
- *
- * 新块先放一行标记和一段空正文，光标落在正文段，用户可以直接打字。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { editorViewCtx, type Editor } from "@milkdown/kit/core";
 import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
@@ -31,10 +31,10 @@ export function githubAlertNode(
   });
 }
 
-/**
- * 在当前文本块的位置建立 Alert。把事务构造单独拿出来，测试才能在无 DOM
- * 的 ProseMirror state 上验证列表、引用等嵌套上下文，不必只相信菜单接线。
- */
+
+
+
+
 export function githubAlertTransaction(
   state: EditorState,
   kind: GitHubNotice,

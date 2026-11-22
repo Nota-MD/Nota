@@ -4,6 +4,41 @@ Nota keeps short release-line notes. Full evidence, defect identifiers and
 historical details are in
 [`docs/07-feature-status.md`](docs/07-feature-status.md).
 
+## 0.17.0-beta
+
+- Added extension API v2.4 table snapshots, temporary rendering, undoable writes
+  and localized context actions.
+- Added the `nota.sheet-formulas` extension with Excel-compatible references,
+  arithmetic, logical, text and lookup functions plus cycle detection.
+  Calculated values remain display-only until the table **Keep Values** action
+  is chosen.
+- Formula cells now follow the selected table cell, and the native formula input
+  supports normal caret placement and text selection.
+- Vim input now applies inside fenced code, Mermaid and block LaTeX source
+  editors while preserving each CodeMirror instance's selection and undo state.
+- Preferences now use one cross-platform fast path: create and show an in-process
+  settings window first, then fall back to the established standalone process
+  only if creation fails.
+- Release builds now favor artifact size with `opt-level="s"`, fat LTO and abort
+  unwinding.
+- The spreadsheet formula bar keeps its cell target and input mounted while the
+  native selection temporarily leaves the table, so pointer focus and typing no
+  longer unmount the toolbar.
+- Inline LaTeX suggestions inside table cells no longer clip KaTeX samples or
+  long descriptions, and a first `/` or `\` in empty math keeps a visible source
+  slot in WebKitGTK. WebKit's temporarily stale input selection no longer moves
+  the caret before the inserted character or outside the closing `$`.
+- Inline LaTeX suggestions now render in a fixed viewport layer above the table
+  selection and formula preview. Live math previews use the active theme's
+  surface and border instead of an opaque black card, eliminating the
+  table-line/preview layering conflict.
+- Mermaid previews now fit both the available width and height before falling
+  back to scrolling, so tall mindmaps and flowcharts no longer show a clipped
+  lower half.
+- The Separate window Preferences mode now launches a dedicated Nota process
+  and top-level window, matching the reliable debug-log window lifecycle on
+  Windows/WebView2.
+
 ## 0.16.0-beta
 
 - Added optional spreadsheet-style table interaction with A1 references, row

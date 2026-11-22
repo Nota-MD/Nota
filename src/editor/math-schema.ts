@@ -1,10 +1,10 @@
-/**
- * 数学节点的轻量 schema。
- *
- * 这里只保留 Markdown ⇄ ProseMirror 的节点形状与 remark 转换，不引 KaTeX。
- * KaTeX 的 JS/CSS 由 `katex-runtime.ts` 在实际要画公式时动态加载，避免空白
- * 文档的冷启动先支付整套数学排版引擎。
- */
+
+
+
+
+
+
+
 
 import { $ctx, $nodeSchema, $remark } from "@milkdown/kit/utils";
 import { Fragment, type Schema } from "@milkdown/kit/prose/model";
@@ -98,5 +98,5 @@ export const mathBlockSchema = $nodeSchema(blockName, () => ({
   },
 }));
 
-/** 与上游 `math` 导出的数组兼容；输入规则由本仓 `math-input.ts` 接管。 */
+
 export const math = [remarkMathPlugin, katexOptionsCtx, mathInlineSchema, mathBlockSchema].flat();

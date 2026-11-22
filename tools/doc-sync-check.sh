@@ -175,15 +175,16 @@ PAIRS=(
   #  · `json.rs`——`nota.json`（**不需要能力**的纯解码表）。记法与 `diff.rs` / `time.rs`
   #    一样是 `13,11`：契约在 `docs/13`，插件作者怎么用（别自己写解码器）在 `docs/11`。
   "src-tauri/src/lua/api/http/tests.rs           13,12,02,06"
-  "src-tauri/src/lua/api/json.rs                 13,11"
-  "src-tauri/src/lua/api/settings.rs              13,12,07"
-  "src-tauri/src/lua/api/i18n.rs                  13,11,12"
-  "src-tauri/src/lua/api/devserver.rs             13,12,11"
-  "src-tauri/src/lua/api/unified_diff.rs          13,11"
-  "src-tauri/src/lua/api/diff.rs                  13,11"
+  "src-tauri/src/lua/api/json.rs 13,11" "src-tauri/src/lua/api/settings.rs 13,12,07"
+  "src-tauri/src/lua/api/i18n.rs 13,11,12" "src-tauri/src/lua/api/devserver.rs 13,12,11"
+  "src-tauri/src/lua/api/unified_diff.rs 13,11" "src-tauri/src/lua/api/diff.rs 13,11"
   # ⚠️ 2026-09-27 补的两行：写作统计第二轮加的两张表（`nota.time` / `nota.data`）。
   "src-tauri/src/lua/api/time.rs                  13,11"
   "src-tauri/src/lua/api/data.rs                  13,11,12"
+  "src-tauri/src/lua/api/table.rs 13,11,12" "src-tauri/src/plugin/setting_locks.rs 02,03,11,12"
+  "src-tauri/src/plugin/manifest/tests.rs         02"
+  "src-tauri/src/table_bridge.rs                  02,03,05"
+  "src-tauri/src/commands/table.rs                02,04"
   # 前端
   "src/main.tsx                                   06"
   "src/App.tsx                                    02,04"
@@ -199,6 +200,7 @@ PAIRS=(
   "src/bridge/ipc.ts                              02,05"
   "src/bridge/types.ts                            02,05"
   "src/bridge/payloads.ts                         02,05"
+  "src/bridge/types-table.ts                      02,05"
   "src/editor/create.ts                           05"
   # 2026-09-28：命令白名单（COMMANDS 表）整块搬出 `create.ts`（那边到 1010 行、破了硬线）。
   "src/editor/command-table.ts                    05"
@@ -211,17 +213,14 @@ PAIRS=(
   # 文件头是一张**量测表**：Markdown 偏移量在块边界上不存在，所以这条路只报
   # 「选中的那段字」、不报偏移。改它之前先读那张表，别把偏移量加回来。
   "src/editor/caret-snapshot.ts                  05,07"
-  "src/editor/atx.ts                              05,03,10"
-  "src/editor/lax-heading.ts                      05,03,07"
-  "src/editor/command-state.ts                    05,04"
-  "src/editor/insert.ts                           05"
-  "src/editor/lang-icon.ts                        05,04"
-  "src/editor/lang-icon-registry.ts               02,05"
-  "src/editor/lang-picker.ts                      05,04"
-  "src/editor/refractor-runtime.ts                05,02,07A"
-  "src/editor/html-sanitize-policy.ts             02,05"
-  "src/editor/html-sanitize.ts                    02,05"
+  "src/editor/atx.ts 05,03,10" "src/editor/lax-heading.ts 05,03,07"
+  "src/editor/command-state.ts 05,04" "src/editor/insert.ts 05"
+  "src/editor/lang-icon.ts 05,04" "src/editor/lang-icon-registry.ts 02,05"
+  "src/editor/lang-picker.ts 05,04" "src/editor/refractor-runtime.ts 05,02,07A"
+  "src/editor/html-sanitize-policy.ts 02,05" "src/editor/html-sanitize.ts 02,05"
   "src/editor/fence-lang.ts                       05,04,02,10"
+  "src/editor/diagram-size.ts                     05,02"
+  "src/editor/code-vim.ts 05,02,06" "src-tauri/src/theme_import/typora/tests.rs 06,02"
   "src/editor/find.ts                             05,04"
   "src/editor/scroll-into-view.ts                 05,04,10"
   "src/editor/writing-modes.ts                    05,04"
@@ -250,6 +249,8 @@ PAIRS=(
   "src/editor/link-edit.ts                      05,02,04,10"
   "src/ui/LinkDialog.tsx                        04,02"
   "src/ui/useLinkClick.ts                       04,02,05"
+  "src/ui/useTableBridge.ts                     04,05"
+  "src/ui/context-menu-spell.ts                 02,04"
   "tests/link-edit.test.ts                      02,06"
   # ⚠️ 2026-10-07 补：这一份**建好就一直在 `docs/09` §2 里、这里却没有**——
   # 与 2026-09-27 那两份（`chart-ticks` / `instant-render`）一模一样的漏法。
@@ -927,12 +928,12 @@ fi
 #    形状段也没有颜色段——`shape.css` 里找不到它是**对的**。
 #    这条判据 2026-09-26 第一次跑就报了它，遂加这一句过滤。
 head_ "⑦ 内置界面风格的 id 都有落点"
-RUST_IDS=$(sed -n '/pub const BUILTIN_IDS/,/^];/p' src-tauri/src/ui_styles.rs 2>/dev/null \
+RUST_IDS=$(sed -n '/pub const BUILTIN_IDS/,/;/p' src-tauri/src/ui_styles.rs 2>/dev/null \
   | grep -oE '"[a-z0-9-]+"' | tr -d '"' | grep -vx auto | sort -u || true)
 CSS_IDS=$(grep -rhoE '\[data-ui-style="[a-z0-9-]+"\]' src/styles/theme/shape.css 2>/dev/null \
   | grep -oE '"[a-z0-9-]+"' | tr -d '"' | grep -vx auto | sort -u || true)
 # 前端那份写在数组字面量里，取 `STYLE_ORDER` 到 `];` 之间
-TS_IDS=$(sed -n '/const STYLE_ORDER/,/^\];/p' src/ui/settings/panes/AppearancePane.tsx 2>/dev/null \
+TS_IDS=$(sed -n '/const STYLE_ORDER/,/;/p' src/ui/settings/panes/AppearancePane.tsx 2>/dev/null \
   | grep -oE '"[a-z0-9-]+"' | tr -d '"' | grep -vx auto | sort -u || true)
 if [ -z "$RUST_IDS" ] || [ -z "$CSS_IDS" ] || [ -z "$TS_IDS" ]; then
   warn 'Rule 7 received an empty id list; the check itself is invalid (Rust/CSS/TS line counts: '"$(printf '%s\n' "${RUST_IDS:-x}" | wc -l)"'/'"$(printf '%s\n' "${CSS_IDS:-x}" | wc -l)"'/'"$(printf '%s\n' "${TS_IDS:-x}" | wc -l)"')'

@@ -1,5 +1,3 @@
-//! Authenticated developer control bridge.
-
 use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
@@ -202,7 +200,7 @@ fn run_rpc(
             let documents = crate::mcp::tools::run_tool_raw(
                 "nota_documents",
                 params,
-                &crate::mcp::host::应用宿主::新(app),
+                &crate::mcp::host::AppHost::xin(app),
             )?;
             let list = documents
                 .get("documents")
@@ -228,22 +226,22 @@ fn run_rpc(
         "documents.list" => crate::mcp::tools::run_tool_raw(
             "nota_documents",
             params,
-            &crate::mcp::host::应用宿主::新(app),
+            &crate::mcp::host::AppHost::xin(app),
         ),
         "documents.read" => crate::mcp::tools::run_tool_raw(
             "nota_read",
             params,
-            &crate::mcp::host::应用宿主::新(app),
+            &crate::mcp::host::AppHost::xin(app),
         ),
         "documents.write" => crate::mcp::tools::run_tool_raw(
             "nota_write",
             params,
-            &crate::mcp::host::应用宿主::新(app),
+            &crate::mcp::host::AppHost::xin(app),
         ),
         "documents.open" => crate::mcp::tools::run_tool_raw(
             "nota_open",
             params,
-            &crate::mcp::host::应用宿主::新(app),
+            &crate::mcp::host::AppHost::xin(app),
         ),
         "theme.reload" => {
             let path = params
@@ -295,7 +293,7 @@ fn run_rpc(
                 .ok_or_else(|| "plugin.inspect requires path".to_string())?;
             let mut manifest_path = PathBuf::from(path);
             if manifest_path.is_dir() {
-                manifest_path.push(crate::plugin::package::清单文件);
+                manifest_path.push(crate::plugin::package::MANIFEST_FILE);
             }
             let manifest = crate::plugin::manifest::Manifest::load(&manifest_path)
                 .map_err(|error| error.to_string())?;
@@ -321,9 +319,7 @@ fn run_rpc(
                 .ok_or_else(|| "Application state is not ready".to_string())?;
             let mut host = state.plugins.lock().unwrap();
             if let Some(path) = params.get("path").and_then(Value::as_str) {
-                let id = host
-                    .装(Path::new(path))
-                    .map_err(|e| e.to_string())?;
+                let id = host.install_2(Path::new(path)).map_err(|e| e.to_string())?;
                 return Ok(json!({ "id": id, "path": path }));
             }
             let encoded = params
@@ -347,7 +343,7 @@ fn run_rpc(
                 extension
             ));
             fs::write(&temp, bytes).map_err(|e| e.to_string())?;
-            let installed = host.装(&temp);
+            let installed = host.install_2(&temp);
             let _ = fs::remove_file(&temp);
             let id = installed.map_err(|e| e.to_string())?;
             Ok(json!({ "id": id, "filename": filename }))
@@ -361,7 +357,7 @@ fn run_rpc(
                 .try_state::<AppState>()
                 .ok_or_else(|| "Application state is not ready".to_string())?;
             let mut host = state.plugins.lock().unwrap();
-            host.卸(id).map_err(|e| e.to_string())?;
+            host.uninstall(id).map_err(|e| e.to_string())?;
             Ok(json!({ "id": id, "uninstalled": true }))
         }
         "plugins.setEnabled" => {
@@ -386,19 +382,18 @@ fn run_rpc(
                 .ok_or_else(|| "Application state is not ready".to_string())?;
             let sources = {
                 let host = state.plugins.lock().unwrap();
-                crate::plugin::updater::来源(&host)
+                crate::plugin::updater::sources(&host)
             };
             let replacements = state
                 .settings
                 .lock()
                 .map(|settings| settings.download.replacements.clone())
                 .unwrap_or_default();
-            let updates = tauri::async_runtime::block_on(
-                tauri::async_runtime::spawn_blocking(move || {
-                    crate::plugin::updater::检查(&sources, &replacements)
-                }),
-            )
-            .map_err(|e| format!("Plugin update check failed: {e}"))?;
+            let updates =
+                tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || {
+                    crate::plugin::updater::check_updates(&sources, &replacements)
+                }))
+                .map_err(|e| format!("Plugin update check failed: {e}"))?;
             serde_json::to_value(updates).map_err(|e| e.to_string())
         }
         "plugins.update" => {
@@ -411,7 +406,7 @@ fn run_rpc(
                 .ok_or_else(|| "Application state is not ready".to_string())?;
             let source = {
                 let host = state.plugins.lock().unwrap();
-                crate::plugin::updater::来源(&host)
+                crate::plugin::updater::sources(&host)
                     .into_iter()
                     .find(|source| source.id == id)
                     .ok_or_else(|| format!("Extension {id} has no update source"))?
@@ -421,15 +416,14 @@ fn run_rpc(
                 .lock()
                 .map(|settings| settings.download.replacements.clone())
                 .unwrap_or_default();
-            let prepared = tauri::async_runtime::block_on(
-                tauri::async_runtime::spawn_blocking(move || {
-                    crate::plugin::updater::准备(&source, &replacements)
-                }),
-            )
-            .map_err(|e| format!("Plugin update download failed: {e}"))?
-            .map_err(|e| e.to_string())?;
+            let prepared =
+                tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || {
+                    crate::plugin::updater::prepare_update(&source, &replacements)
+                }))
+                .map_err(|e| format!("Plugin update download failed: {e}"))?
+                .map_err(|e| e.to_string())?;
             let mut host = state.plugins.lock().unwrap();
-            let result = crate::plugin::updater::安装(&mut host, prepared)
+            let result = crate::plugin::updater::install_update(&mut host, prepared)
                 .map_err(|e| e.to_string())?;
             serde_json::to_value(result).map_err(|e| e.to_string())
         }
@@ -439,19 +433,18 @@ fn run_rpc(
                 .ok_or_else(|| "Application state is not ready".to_string())?;
             let sources = {
                 let host = state.plugins.lock().unwrap();
-                crate::plugin::updater::来源(&host)
+                crate::plugin::updater::sources(&host)
             };
             let replacements = state
                 .settings
                 .lock()
                 .map(|settings| settings.download.replacements.clone())
                 .unwrap_or_default();
-            let updates = tauri::async_runtime::block_on(
-                tauri::async_runtime::spawn_blocking(move || {
-                    crate::plugin::updater::检查(&sources, &replacements)
-                }),
-            )
-            .map_err(|e| format!("Plugin update check failed: {e}"))?;
+            let updates =
+                tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(move || {
+                    crate::plugin::updater::check_updates(&sources, &replacements)
+                }))
+                .map_err(|e| format!("Plugin update check failed: {e}"))?;
             let mut results = Vec::new();
             for update in updates
                 .into_iter()
@@ -459,7 +452,7 @@ fn run_rpc(
             {
                 let source = {
                     let host = state.plugins.lock().unwrap();
-                    crate::plugin::updater::来源(&host)
+                    crate::plugin::updater::sources(&host)
                         .into_iter()
                         .find(|source| source.id == update.id)
                 };
@@ -472,20 +465,20 @@ fn run_rpc(
                     .lock()
                     .map(|settings| settings.download.replacements.clone())
                     .unwrap_or_default();
-                let prepared = tauri::async_runtime::block_on(
-                    tauri::async_runtime::spawn_blocking(move || {
-                        crate::plugin::updater::准备(&source, &replacements)
-                    }),
-                );
+                let prepared =
+                    tauri::async_runtime::block_on(tauri::async_runtime::spawn_blocking(
+                        move || crate::plugin::updater::prepare_update(&source, &replacements),
+                    ));
                 match prepared {
                     Ok(Ok(prepared)) => {
                         let installed = {
                             let mut host = state.plugins.lock().unwrap();
-                            crate::plugin::updater::安装(&mut host, prepared)
+                            crate::plugin::updater::install_update(&mut host, prepared)
                         };
                         results.push(match installed {
-                            Ok(result) => serde_json::to_value(result)
-                                .unwrap_or_else(|e| json!({ "id": update.id, "error": e.to_string() })),
+                            Ok(result) => serde_json::to_value(result).unwrap_or_else(
+                                |e| json!({ "id": update.id, "error": e.to_string() }),
+                            ),
                             Err(error) => json!({ "id": update.id, "error": error.to_string() }),
                         });
                     }
@@ -500,19 +493,19 @@ fn run_rpc(
             Ok(json!({ "results": results }))
         }
         "diagnostics.info" => {
-            let diagnostics = crate::diagnostics::收集();
+            let diagnostics = crate::diagnostics::collect();
             Ok(json!({
                 "version": env!("CARGO_PKG_VERSION"),
                 "target": option_env!("TARGET").unwrap_or(std::env::consts::ARCH),
                 "debug": cfg!(debug_assertions),
-                "log_enabled": crate::log::开着(),
+                "log_enabled": crate::log::enabled(),
                 "diagnostics": diagnostics,
-                "document_tools": crate::mcp::tools::清单(),
+                "document_tools": crate::mcp::tools::manifest_2(),
             }))
         }
         "logs.read" => {
             let offset = params.get("offset").and_then(Value::as_u64).unwrap_or(0);
-            let chunk = crate::log::读取增量(offset)
+            let chunk = crate::log::read_increment(offset)
                 .map_err(|error| format!("Could not read debug log: {error}"))?;
             Ok(json!({
                 "text": chunk.text,
@@ -538,7 +531,8 @@ fn run_rpc(
             let state = app
                 .try_state::<AppState>()
                 .ok_or_else(|| "Application state is not ready".to_string())?;
-            crate::commands::settings::落盘(&app, &state, settings).map_err(|e| e.to_string())?;
+            crate::commands::settings::save_settings(&app, &state, settings)
+                .map_err(|e| e.to_string())?;
             Ok(json!({ "saved": true }))
         }
         "commands.invoke" => {
@@ -920,6 +914,7 @@ impl DevBridge {
                 }
             }));
         }
+
         *self.handle.lock().unwrap() = Some(BridgeHandle {
             stop,
             servers,

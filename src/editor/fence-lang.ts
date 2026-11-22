@@ -1,17 +1,17 @@
-/**
- * 围栏语言补全：在普通段落里输入 ```mat 时，直接把语言候选显示在光标下方。
- *
- * 这里**不提前把段落换成代码块**。用户还在输入语言名时，文档仍是普通段落；
- * 选定候选（Enter / Tab / Space / 点击）之后才用一笔事务换成真正的
- * `code_block(language=...)`。这样：
- *
- * - 退格、修改查询都仍然是普通文本编辑；
- * - 候选不会把半截语言写进节点属性；
- * - 上游原有的“```＋空格/回车”输入规则照旧可用，这里只是一条更快的路径。
- *
- * 弹层挂在 `document.body`，与 `lang-picker.ts` 相同：编辑区会滚动、会重排，
- * 固定定位要按视口坐标自己算；弹层也不该进入 ProseMirror 的文档 DOM。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { $prose } from "@milkdown/kit/utils";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
@@ -31,7 +31,7 @@ const popupClass = "nota-fence-lang-popup";
 const optionClass = "nota-fence-lang-option";
 const selectedClass = "nota-fence-lang-on";
 
-/** 高频语言优先；不在表里的按字母序。`mat` 因此稳定得到截图里的三行。 */
+
 const goodFirstLanguage = new Map(
   [
     "math",
@@ -57,16 +57,16 @@ const goodFirstLanguage = new Map(
   ].map((name3, i) => [name3, i] as const),
 );
 
-/** 从一段普通文本里取出围栏后的语言查询；不是“```＋语言”就返回 null。 */
+
 export function encloseBarLanguageQuery(text2: string): string | null {
   const match = /^```([A-Za-z0-9_+.#-]*)$/.exec(text2);
   return match ? (match[1] ?? "") : null;
 }
 
-/**
- * 按前缀挑语言。`mat` 只保留 `math`、`mathematica`、`matlab` 这类前缀命中；
- * 不做“包含”匹配，避免 `icu-message-format` 这种完全不相干的长尾混进来。
- */
+
+
+
+
 export function encloseBarLanguageCandidate(
   query: string,
   language: readonly string[] = searchLanguages(),
@@ -94,21 +94,21 @@ export type EncloseBarLanguageKeypressAction =
   | "commit"
   | null;
 
-/**
- * 候选弹层的按键语义。
- *
- * ⚠️ 真窗口里按键先经过编辑器的 DOM capture 监听，再轮到 ProseMirror 的普通
- * `handleKeyDown`。安装和候选显示那两帧常常紧挨着，走普通 prop 时 Enter 会被
- * 段落换行抢走；这个纯函数只定义动作，接线必须用 capture，理由见插件 view。
- */
+
+
+
+
+
+
+
 export function encloseBarLanguageKeypress(
   key: string,
   isComposing: boolean,
   keyCode: number,
 ): EncloseBarLanguageKeypressAction {
   if (isComposing || keyCode === 229) return "composition";
-  // ⚠️ WebKitGTK 在部分键盘布局上会把 `key` 报成 `Unidentified`；`keyCode`
-  // 仍保留标准值，所以两条判据都要看（与表格里的 Shift+Tab 是同一类现场）。
+
+
   if (key === "Escape" || keyCode === 27) return "close";
   if (key === "ArrowDown" || keyCode === 40) return "next";
   if (key === "ArrowUp" || keyCode === 38) return "previous";
@@ -118,7 +118,7 @@ export function encloseBarLanguageKeypress(
   return null;
 }
 
-/** 当前光标所在的顶层普通段落，以及它在文档里的位置。 */
+
 function currentEncloseBarParagraph(view: EditorView): {
   from: number;
   to: number;
@@ -135,10 +135,10 @@ function currentEncloseBarParagraph(view: EditorView): {
   return { from: $from.before(darkDegree), to: $from.after(darkDegree), query };
 }
 
-/**
- * 只给可编辑实例装。只读预览与导出离屏实例不会有输入，装了也不会出现；
- * 仍在这里明确返回空，避免将来只读 DOM 里混进一条浮层。
- */
+
+
+
+
 export const encloseBarLanguageFillAll = $prose(
   () =>
     new Plugin({
@@ -243,7 +243,7 @@ export const encloseBarLanguageFillAll = $prose(
                 if (popup && paragraph) heavyDraw();
               })
               .catch((error: unknown) => {
-                console.warn("[nota] 完整代码语言表加载失败；围栏提示保留基础语言：", error);
+                console.warn("[nota] Full code-language list failed to load; code fences use the core list:", error);
               });
           }
           if (candidate.length === 0) {
@@ -305,8 +305,8 @@ export const encloseBarLanguageFillAll = $prose(
           event.stopPropagation();
         };
 
-        // ⚠️ 这是本插件在真窗口里的主路径。普通 `props.handleKeyDown` 会与
-        // 上游普通回车处理争同一颗键，症状正是“候选已经显示，Enter 却换了一行”。
+
+
         if (view.editable) view.dom.addEventListener("keydown", keypress, true);
 
         return {

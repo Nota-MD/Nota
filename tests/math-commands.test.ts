@@ -130,8 +130,8 @@ testCase("⚠️ 命令名不许重（physics 开与关都不许）——`\\div`
 testCase("⚠️ `\\div` 这条冲突：physics 关着是「除号」（手写的），开着让位给 physics 那条", () => {
   const close4 = get(withoutPhysics, "\\div");
   assertion(close4, "关着时该有 `\\div`");
-  equal(close4?.family, "命令", "关着时是手写那条");
-  equal(close4?.description, "除号 ÷", "关着时说的是除号");
+  equal(close4?.family, "command", "关着时是手写那条");
+  equal(close4?.description, "division ÷", "关着时说的是除号");
 
   const open2 = hasObjectManage.filter((item4) => item4.command === "\\div");
   equal(open2.length, 1, "开着时 `\\div` 只能有一条");

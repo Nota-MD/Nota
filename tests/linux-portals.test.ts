@@ -51,7 +51,7 @@ testCase("打印对话框只走 Portal，不再回退 GTK3", () => {
     print.indexOf("pub fn print_html_dialog_with"),
     print.indexOf("#[cfg(target_os = \"linux\")]\nmod linux"),
   );
-  assertion(face.includes("linux::印刷"), "缺少无可见窗口的 PDF 生成兜底");
+  assertion(face.includes("linux::yin_shua"), "缺少无可见窗口的 PDF 生成兜底");
   assertion(face.includes("linux::portal_print"), "打印框没有调用 XDG Portal");
   assertion(!face.includes("linux::对话框"), "打印框仍回退 GTK3");
   assertion(!print.includes(".run_dialog("), "仍保留 WebKitGTK GTK3 打印框");

@@ -1,6 +1,6 @@
 [package]
 name = "nota"
-version = "0.16.0-beta"
+version = "0.17.0-beta"
 edition = "2021"
 rust-version = "1.85"
 description = "Nota - a WYSIWYG Markdown editor with Lua extensions"
@@ -101,6 +101,9 @@ windows-sys = { version = "0.59", features = [
 # Thin LTO removes cross-crate duplication without the full-LTO link-time cost;
 # stripping symbols keeps the installed binary materially smaller.
 [profile.release]
-lto = "thin"
+# Optimize distribution artifact size while keeping editor responsiveness.
+opt-level = "s"
+lto = "fat"
 codegen-units = 1
+panic = "abort"
 strip = "symbols"

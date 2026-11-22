@@ -39,6 +39,15 @@ interface VimInputMeta {
 }
 
 export const vimInputKey = new PluginKey<VimInputState>("nota-vim-input");
+const vimHooksByView = new WeakMap<EditorView, VimInputHooks>();
+
+export function vimInputConfig(state: EditorState): VimInputConfig | null {
+  return vimInputKey.getState(state)?.config ?? null;
+}
+
+export function vimInputHooks(view: EditorView): VimInputHooks {
+  return vimHooksByView.get(view) ?? {};
+}
 
 function isImeKeydown(event: KeyboardEvent): boolean {
   return event.isComposing || event.keyCode === 229 || event.key === "Process";
@@ -147,9 +156,9 @@ export function vimInputPlugin(
                 parent: view.state.selection.$from.parent.type.name,
               });
             }
-            // 引用框开头的空格/退格属于块结构退出，不属于光标移动或删字。
-            // 交给 `blockContainerKeypress`，否则 Vim normal 的 Backspace
-            // 只做左移，引用标记永远消不掉。
+
+
+
             if (
               atReferenceUseMostOpenHead(view.state) &&
               (event.key === "Backspace" || (event.key === " " && !event.shiftKey))
@@ -201,6 +210,7 @@ export function vimInputPlugin(
           },
         },
         view(view) {
+          vimHooksByView.set(view, hooks);
           const ops = new VimEditorOps(view, (style) => {
             const input = vimInputKey.getState(view.state);
             if (!input || input.cursor === style) return;
@@ -250,6 +260,7 @@ export function vimInputPlugin(
               );
             },
             destroy() {
+              vimHooksByView.delete(view);
               configureVim(null, null);
               hooks.onStatus?.({ enabled: false, mode: "normal", label: "" });
             },

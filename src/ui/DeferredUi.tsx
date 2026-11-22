@@ -1,9 +1,9 @@
-/**
- * 只在真正打开时才加载的大型界面。
- *
- * 设置十页与右侧拓展栏都不参与“主窗口首帧可编辑”。把它们从入口 chunk 拆出，
- * 用户第一次打开对应界面时再取；`Suspense` 的空白时长是一次本地模块读取。
- */
+
+
+
+
+
+
 
 import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type ComponentProps } from "react";
 

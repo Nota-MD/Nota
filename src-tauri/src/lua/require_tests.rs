@@ -1,251 +1,248 @@
-//! `require`（插件多文件）那一组用例——2026-09-27 从 `src/lua/mod.rs` 的
-//! `mod tests` 里搬出来的，**只搬了行数，没搬内容**（`mod.rs` 加完 `装require`
-//! 之后 1144 行，顶破了 `docs/09` §4 那条 1000 行上限）。
-//!
-//! 被测的东西是 `super::装require`：它给插件里那颗 `require` 装上"只认自己
-//! 目录、只认 `.lua`"的规矩（理由与边界在 `docs/12` §5.9）。
-//!
-//! ⚠️ 这些用例**往临时目录里写文件**（造模块），所以一条一目录、跑完收摊；
-//! 绝不能改去读 `plugins/`——那是仓库里的真插件。
-
 use super::*;
 
-/* ── 插件多文件：`require`（2026-09-27）─────────────────────────────── */
-
-/// 一条用例一个临时插件目录。
-///
-/// ⚠️ **不引 `tempfile`**：`Cargo.toml` 里没有它（与 `table_width` 顶上那条
-/// 注释同一个理由）。⚠️ 也**绝不能**拿真插件的目录来试——`装require` 只读，
-/// 但这些用例要**往里写文件**（造模块），写到 `plugins/` 里就成了"跑一次测试
-/// 在用户/仓库的插件目录里留下一堆垃圾"。
-fn 插件目录(名: &str) -> std::path::PathBuf {
-    let 唯一 = std::time::SystemTime::now()
+fn plugin_directory(ming: &str) -> std::path::PathBuf {
+    let wei_yi = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    let 目录 = std::env::temp_dir().join(format!(
-        "nota-require-{名}-{}-{唯一}",
+    let directory_2 = std::env::temp_dir().join(format!(
+        "nota-require-{ming}-{}-{wei_yi}",
         std::process::id()
     ));
-    std::fs::create_dir_all(&目录).expect("建临时拓展目录");
-    目录
+    std::fs::create_dir_all(&directory_2)
+        .expect("\u{5efa}\u{4e34}\u{65f6}\u{62d3}\u{5c55}\u{76ee}\u{5f55}");
+    directory_2
 }
 
-/// 收摊。⚠️ 用例中途断言失败会漏一个临时目录——**故意的**（同 `table_width`）。
-fn 收摊(目录: &std::path::Path) {
-    let _ = std::fs::remove_dir_all(目录);
+fn receive_tan(directory_2: &std::path::Path) {
+    let _ = std::fs::remove_dir_all(directory_2);
 }
 
-/// 一个装了 `require` 的沙箱 ＋ 它的（临时）插件目录。
-fn 带require的沙箱(名: &str) -> (Lua, std::path::PathBuf) {
-    let lua = 硬化的_lua().expect("沙箱该建得起来");
-    let 目录 = 插件目录(名);
-    装require(&lua, &目录).expect("装 require");
-    (lua, 目录)
+fn dai_require_de_sha_xiang(ming: &str) -> (Lua, std::path::PathBuf) {
+    let lua = ying_hua_de_lua().expect("\u{6c99}\u{7bb1}\u{8be5}\u{5efa}\u{5f97}\u{8d77}\u{6765}");
+    let directory_2 = plugin_directory(ming);
+    install_require(&lua, &directory_2).expect("\u{88c5} require");
+    (lua, directory_2)
 }
 
-/// 往临时插件目录里写一份模块。路径带 `/` 时会先建目录。
-fn 写模块(根: &std::path::Path, 相对: &str, 源码: &str) {
-    let p = 根.join(相对);
-    if let Some(父) = p.parent() {
-        std::fs::create_dir_all(父).expect("建子目录");
+fn write_mo_kuai(root_2: &std::path::Path, xiang_dui: &str, source_ma: &str) {
+    let p = root_2.join(xiang_dui);
+    if let Some(fu) = p.parent() {
+        std::fs::create_dir_all(fu).expect("\u{5efa}\u{5b50}\u{76ee}\u{5f55}");
     }
-    std::fs::write(&p, 源码).expect("写模块");
+    std::fs::write(&p, source_ma).expect("\u{5199}\u{6a21}\u{5757}");
 }
 
-/// 调一次 `require`（从**全局**拿，不是直接调函数：钉的就是"它真装上了"）。
-fn 要(lua: &Lua, 名: &str) -> mlua::Value {
-    let f: mlua::Function = lua.globals().get("require").expect("`require` 该装上了");
-    f.call(名.to_owned()).expect("这次 require 不该抛")
+fn yao(lua: &Lua, ming: &str) -> mlua::Value {
+    let f: mlua::Function = lua
+        .globals()
+        .get("require")
+        .expect("`require` \u{8be5}\u{88c5}\u{4e0a}\u{4e86}");
+    f.call(ming.to_owned())
+        .expect("\u{8fd9}\u{6b21} require \u{4e0d}\u{8be5}\u{629b}")
 }
 
-/// 调一次 `require`，要它抛，把话拿回来。
-fn 要错(lua: &Lua, 名: &str) -> String {
-    let f: mlua::Function = lua.globals().get("require").expect("`require` 该装上了");
-    f.call::<mlua::Value>(名.to_owned())
-        .expect_err("这次 require 该抛")
+fn yao_cuo(lua: &Lua, ming: &str) -> String {
+    let f: mlua::Function = lua
+        .globals()
+        .get("require")
+        .expect("`require` \u{8be5}\u{88c5}\u{4e0a}\u{4e86}");
+    f.call::<mlua::Value>(ming.to_owned())
+        .expect_err("\u{8fd9}\u{6b21} require \u{8be5}\u{629b}")
         .to_string()
 }
 
-/// ⚠️ **这条是整个 `require` 的地基**：两种写法都认得出来。
 #[test]
-fn require_认得两种写法() {
-    let (lua, 根) = 带require的沙箱("两种写法");
-    写模块(&根, "chart.lua", r#"return { name = "chart" }"#);
-    写模块(&根, "ui/palette.lua", r#"return { fg = '#fff' }"#);
-    // ⚠️ 模块名必须是 ASCII（名字里出现中文会让 `require` 的**报错信息**本身
-    //    变成乱码，而报错正是它的用处），所以这个目录只能叫 `kit`。
-    写模块(&根, "kit/init.lua", r#"return { kind = "包" }"#);
+fn require_ren_de_liang_zhong_write_fa() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{4e24}\u{79cd}\u{5199}\u{6cd5}");
+    write_mo_kuai(&root_2, "chart.lua", r#"return { name = "chart" }"#);
+    write_mo_kuai(&root_2, "ui/palette.lua", r#"return { fg = '#fff' }"#);
 
-    let 甲 = 要(&lua, "chart");
-    let 甲 = 甲.as_table().expect("`chart` 该给一张表");
-    assert_eq!(甲.get::<String>("name").unwrap(), "chart");
+    write_mo_kuai(&root_2, "kit/init.lua", "return { kind = \"\u{5305}\" }");
 
-    // 点号 = 目录分隔（`ui.palette` → `ui/palette.lua`），照 Lua 的惯例。
-    let 乙 = 要(&lua, "ui.palette");
-    let 乙 = 乙.as_table().expect("`ui.palette` 该给一张表");
-    assert_eq!(乙.get::<String>("fg").unwrap(), "#fff");
+    let jia_4 = yao(&lua, "chart");
+    let jia_4 = jia_4
+        .as_table()
+        .expect("`chart` \u{8be5}\u{7ed9}\u{4e00}\u{5f20}\u{8868}");
+    assert_eq!(jia_4.get::<String>("name").unwrap(), "chart");
 
-    // `<名>/init.lua`：这样"一个模块一个目录"也能用。
-    let 丙 = 要(&lua, "kit");
-    let 丙 = 丙.as_table().expect("`kit` 该给一张表");
-    assert_eq!(丙.get::<String>("kind").unwrap(), "包");
+    let yi_2 = yao(&lua, "ui.palette");
+    let yi_2 = yi_2
+        .as_table()
+        .expect("`ui.palette` \u{8be5}\u{7ed9}\u{4e00}\u{5f20}\u{8868}");
+    assert_eq!(yi_2.get::<String>("fg").unwrap(), "#fff");
 
-    收摊(&根);
+    let bing = yao(&lua, "kit");
+    let bing = bing
+        .as_table()
+        .expect("`kit` \u{8be5}\u{7ed9}\u{4e00}\u{5f20}\u{8868}");
+    assert_eq!(bing.get::<String>("kind").unwrap(), "\u{5305}");
+
+    receive_tan(&root_2);
 }
 
-/// 一个模块**只求值一次**，第二次拿的是**同一个表**（不是"长得一样的表"）。
 #[test]
-fn require_只跑一次_第二次给的是同一个表() {
-    let (lua, 根) = 带require的沙箱("只跑一次");
-    // ⚠️ 模块里的**标识符也只能是 ASCII**（`__n`，不能写成 `__次`）：
-    //    Lua 的 `isalpha` 不认 UTF-8 字节，用了中文名字就是语法错误——
-    //    这一条在本仓踩过不止一次（`内置插件都能被_lua_编译` 那段注释）。
-    写模块(
-        &根,
+fn require_zhi_pao_yi_ci_di_er_ci_provided_shi_tong_yi_ge_table() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{53ea}\u{8dd1}\u{4e00}\u{6b21}");
+
+    write_mo_kuai(
+        &root_2,
         "counter.lua",
         "_G.__n = (_G.__n or 0) + 1\nreturn { n = _G.__n }",
     );
 
-    let 一 = 要(&lua, "counter");
-    let 一 = 一.as_table().expect("该给一张表").clone();
-    let 二 = 要(&lua, "counter");
-    let 二 = 二.as_table().expect("该给一张表").clone();
+    let yi = yao(&lua, "counter");
+    let yi = yi
+        .as_table()
+        .expect("\u{8be5}\u{7ed9}\u{4e00}\u{5f20}\u{8868}")
+        .clone();
+    let er = yao(&lua, "counter");
+    let er = er
+        .as_table()
+        .expect("\u{8be5}\u{7ed9}\u{4e00}\u{5f20}\u{8868}")
+        .clone();
 
-    assert_eq!(二.get::<i64>("n").unwrap(), 1, "模块被求值了两遍");
-    // ⚠️ 光看 `n` 还不够：两份"各自求值一次"的表也是 `n == 1`。同一个**对象**
-    //    才是真 `require` 的语义，也是本仓那些"模块里存了状态"的插件
-    //    （缓存、连接、注册表）不炸的前提。
-    一.set("后来加的", 42i64).unwrap();
-    assert_eq!(二.get::<i64>("后来加的").unwrap(), 42, "两次拿到的不是同一个表");
-
-    收摊(&根);
-}
-
-/// 什么都不返回的模块**当 `true`**（真 `require` 的老规矩）。
-#[test]
-fn require_什么都不返回时第二次给_true() {
-    let (lua, 根) = 带require的沙箱("返回空");
-    写模块(&根, "empty.lua", "local x = 1");
-
-    // 第一次给的是**模块自己的返回值**（它没返回，就是 `nil`）。
-    let 首 = 要(&lua, "empty");
-    assert!(首.is_nil(), "第一次该是 `nil`（模块没有返回值）");
-    // ⚠️ 第二次必须给 `true`、**不是**再求值一遍。缓存里存 `nil` 等于没缓存
-    //    （上面 `if !旧.is_nil()` 那一句会把 `nil` 当"没求过"），症状是同一个
-    //    文件被反复执行——只在模块里存了状态时才露头。
-    let 二 = 要(&lua, "empty");
-    assert!(
-        matches!(二, mlua::Value::Boolean(true)),
-        "第二次该给 `true`，实际：{二:?}"
+    assert_eq!(
+        er.get::<i64>("n").unwrap(),
+        1,
+        "\u{6a21}\u{5757}\u{88ab}\u{6c42}\u{503c}\u{4e86}\u{4e24}\u{904d}"
     );
 
-    收摊(&根);
+    yi.set("\u{540e}\u{6765}\u{52a0}\u{7684}", 42i64).unwrap();
+    assert_eq!(
+        er.get::<i64>("\u{540e}\u{6765}\u{52a0}\u{7684}").unwrap(),
+        42,
+        "\u{4e24}\u{6b21}\u{62ff}\u{5230}\u{7684}\u{4e0d}\u{662f}\u{540c}\u{4e00}\u{4e2a}\u{8868}"
+    );
+
+    receive_tan(&root_2);
 }
 
-/// 名字里跑出插件目录的花样，一律**在碰文件之前**就拒掉。
 #[test]
-fn require_名字不合法的直接拒() {
-    let (lua, 根) = 带require的沙箱("名字");
-    for 坏 in [
-        "", "   ", "/etc/passwd", "../外面", "a/../../外面", "a..b", "有中文", "a b", "a;b",
-        "a$b", "a\\b",
+fn require_shen_me_dou_bu_fan_hui_shi_di_er_ci_gei_true() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{8fd4}\u{56de}\u{7a7a}");
+    write_mo_kuai(&root_2, "empty.lua", "local x = 1");
+
+    let shou = yao(&lua, "empty");
+    assert!(shou.is_nil(), "\u{7b2c}\u{4e00}\u{6b21}\u{8be5}\u{662f} `nil`\u{ff08}\u{6a21}\u{5757}\u{6ca1}\u{6709}\u{8fd4}\u{56de}\u{503c}\u{ff09}");
+
+    let er = yao(&lua, "empty");
+    assert!(
+        matches!(er, mlua::Value::Boolean(true)),
+        "\u{7b2c}\u{4e8c}\u{6b21}\u{8be5}\u{7ed9} `true`\u{ff0c}\u{5b9e}\u{9645}\u{ff1a}{er:?}"
+    );
+
+    receive_tan(&root_2);
+}
+
+#[test]
+fn require_name_bu_he_fa_de_zhi_jie_ju() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{540d}\u{5b57}");
+    for huai in [
+        "",
+        "   ",
+        "/etc/passwd",
+        "../\u{5916}\u{9762}",
+        "a/../../\u{5916}\u{9762}",
+        "a..b",
+        "\u{6709}\u{4e2d}\u{6587}",
+        "a b",
+        "a;b",
+        "a$b",
+        "a\\b",
     ] {
-        let 话 = 要错(&lua, 坏);
+        let hua = yao_cuo(&lua, huai);
         assert!(
-            话.contains("不合法"),
-            "`{坏}` 该被**名字那道闸**拒掉（理由得说名字，不是「找不到模块」），实际：{话}"
+            hua.contains("Invalid require name"),
+            "`{huai}` should be rejected by the name check, got: {hua}"
         );
     }
-    收摊(&根);
+    receive_tan(&root_2);
 }
 
-/// 软链指向插件目录外面时也拒——与 `nota.fs.*` 用**同一把尺**（`resolve_in`）。
 #[test]
-fn require_软链逃不出插件目录() {
-    let (lua, 根) = 带require的沙箱("软链");
-    let 外面 = 根
+fn require_ruan_lian_tao_bu_chu_plugin_directory() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{8f6f}\u{94fe}");
+    let wai_mian = root_2
         .parent()
-        .expect("临时目录该有爹")
-        .join(format!("nota-require-偷来的-{}.lua", std::process::id()));
-    std::fs::write(&外面, r#"return { 偷来的 = true }"#).expect("写外面的文件");
+        .expect("\u{4e34}\u{65f6}\u{76ee}\u{5f55}\u{8be5}\u{6709}\u{7239}")
+        .join(format!(
+            "nota-require-\u{5077}\u{6765}\u{7684}-{}.lua",
+            std::process::id()
+        ));
+    std::fs::write(&wai_mian, "return { \u{5077}\u{6765}\u{7684} = true }")
+        .expect("\u{5199}\u{5916}\u{9762}\u{7684}\u{6587}\u{4ef6}");
 
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(&外面, 根.join("link.lua")).expect("建软链");
-        let 话 = 要错(&lua, "link");
+        std::os::unix::fs::symlink(&wai_mian, root_2.join("link.lua"))
+            .expect("\u{5efa}\u{8f6f}\u{94fe}");
+        let hua = yao_cuo(&lua, "link");
         assert!(
-            话.contains("找不到模块"),
-            "软链该被 `resolve_in` 挡在门外（名字是合法的，所以不是「不合法」那句），实际：{话}"
+            hua.contains("resolves outside the workspace"),
+            "the symlink should be rejected by resolve_in, got: {hua}"
         );
     }
 
-    let _ = std::fs::remove_file(&外面);
-    收摊(&根);
+    let _ = std::fs::remove_file(&wai_mian);
+    receive_tan(&root_2);
 }
 
-/// 循环 require 给一句能读的话，不是把栈撞死。
 #[test]
-fn require_转圈报的是人话() {
-    let (lua, 根) = 带require的沙箱("转圈");
-    写模块(&根, "a.lua", r#"return require("b")"#);
-    写模块(&根, "b.lua", r#"return require("a")"#);
+fn require_zhuan_quan_bao_de_shi_ren_hua() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{8f6c}\u{5708}");
+    write_mo_kuai(&root_2, "a.lua", r#"return require("b")"#);
+    write_mo_kuai(&root_2, "b.lua", r#"return require("a")"#);
 
-    let 话 = 要错(&lua, "a");
-    assert!(话.contains("转圈"), "循环依赖该给人话，实际：{话}");
+    let hua = yao_cuo(&lua, "a");
+    assert!(hua.contains("\u{8f6c}\u{5708}"), "\u{5faa}\u{73af}\u{4f9d}\u{8d56}\u{8be5}\u{7ed9}\u{4eba}\u{8bdd}\u{ff0c}\u{5b9e}\u{9645}\u{ff1a}{hua}");
 
-    // ⚠️ 失败之后那个模块**还能被再 require 一次**：`在途` 标记是"求值期间"
-    //    的东西，求值结束（成或败）都必须摘掉——热重载、或者调用方 `pcall`
-    //    之后重试都会走这条路。标记漏了的话，第二次报的是"转圈"，而它其实
-    //    不是循环——那是最难查的一种。
-    let 话2 = 要错(&lua, "a");
-    assert!(话2.contains("转圈"), "第二次该是同一句话，实际：{话2}");
+    let hua_2 = yao_cuo(&lua, "a");
+    assert!(hua_2.contains("\u{8f6c}\u{5708}"), "\u{7b2c}\u{4e8c}\u{6b21}\u{8be5}\u{662f}\u{540c}\u{4e00}\u{53e5}\u{8bdd}\u{ff0c}\u{5b9e}\u{9645}\u{ff1a}{hua_2}");
 
-    收摊(&根);
+    receive_tan(&root_2);
 }
 
-/// 找不到模块时，话里得说清"试过哪两个文件名"和"只在自己目录里找"。
 #[test]
-fn require_找不到时话里有线索() {
-    let (lua, 根) = 带require的沙箱("找不到");
-    写模块(&根, "there.lua", "return 1");
+fn require_zhao_bu_dao_shi_hua_li_you_xian_suo() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{627e}\u{4e0d}\u{5230}");
+    write_mo_kuai(&root_2, "there.lua", "return 1");
 
-    let 话 = 要错(&lua, "missing");
-    assert!(话.contains("missing.lua"), "该说出试过哪个文件名：{话}");
-    assert!(话.contains("init.lua"), "两种写法都该提到：{话}");
+    let hua = yao_cuo(&lua, "missing");
+    assert!(hua.contains("missing.lua"), "\u{8be5}\u{8bf4}\u{51fa}\u{8bd5}\u{8fc7}\u{54ea}\u{4e2a}\u{6587}\u{4ef6}\u{540d}\u{ff1a}{hua}");
     assert!(
-        话.contains("只在本拓展自己的目录里找"),
-        "该说清搜索范围（不然拓展作者会去翻 `package.path`）：{话}"
+        hua.contains("init.lua"),
+        "\u{4e24}\u{79cd}\u{5199}\u{6cd5}\u{90fd}\u{8be5}\u{63d0}\u{5230}\u{ff1a}{hua}"
+    );
+    assert!(
+        hua.contains("inside the extension directory"),
+        "expected the module search scope: {hua}"
     );
 
-    // ⚠️ **只认 `.lua`**：`.so` 是绕过整个沙箱的一条路（C 扩展里什么都能干），
-    //    而"能不能加载 C 模块"正是 `硬化的_lua()` 当初必须自己抹一遍的原因。
-    写模块(&根, "native.so", "");
-    let 话2 = 要错(&lua, "native");
-    assert!(话2.contains("找不到模块"), "`.so` 不许被 require 到：{话2}");
+    write_mo_kuai(&root_2, "native.so", "");
+    let hua_2 = yao_cuo(&lua, "native");
+    assert!(
+        hua_2.contains("was not found as"),
+        "`.so` must not be require-able: {hua_2}"
+    );
 
-    收摊(&根);
+    receive_tan(&root_2);
 }
 
-/// `require` 补回来了，但 `package` / `io` / `os` **一个都没跟着回来**。
-///
-/// ⚠️ 这条是**补这个洞时最该防的那个副作用**：为了让插件能多文件，把
-/// `mlua::StdLib::PACKAGE` 整个开回去是最省事的写法，而那等于把 BUG-10
-/// 又放回来一次（`package.loadlib` 能加载 C 模块）。
 #[test]
-fn 补上_require_不等于把_package_装回来() {
-    let (lua, 根) = 带require的沙箱("包");
-    for 名字 in ["package", "io", "os", "debug", "loadfile", "dofile"] {
-        let v: mlua::Value = lua.globals().get(名字).unwrap();
+fn bu_shang_require_bu_deng_yu_ba_package_install_hui_lai() {
+    let (lua, root_2) = dai_require_de_sha_xiang("\u{5305}");
+    for name_2 in ["package", "io", "os", "debug", "loadfile", "dofile"] {
+        let v: mlua::Value = lua.globals().get(name_2).unwrap();
         assert!(
             v.is_nil(),
-            "`{名字}` 不该跟着 `require` 一起回来——补的是**一个函数**，\
-             不是那个标准库（BUG-10 的闸不能拆）"
+            "`{name_2}` \u{4e0d}\u{8be5}\u{8ddf}\u{7740} `require` \u{4e00}\u{8d77}\u{56de}\u{6765}\u{2014}\u{2014}\u{8865}\u{7684}\u{662f}**\u{4e00}\u{4e2a}\u{51fd}\u{6570}**\u{ff0c}\
+             \u{4e0d}\u{662f}\u{90a3}\u{4e2a}\u{6807}\u{51c6}\u{5e93}\u{ff08}BUG-10 \u{7684}\u{95f8}\u{4e0d}\u{80fd}\u{62c6}\u{ff09}"
         );
     }
-    // 而 `require` 自己这次确实在（不然上面几条全都在测空气）。
-    let r: mlua::Value = lua.globals().get("require").unwrap();
-    assert!(!r.is_nil(), "`require` 该装上——用例本身的前提没了");
 
-    收摊(&根);
+    let r: mlua::Value = lua.globals().get("require").unwrap();
+    assert!(!r.is_nil(), "`require` \u{8be5}\u{88c5}\u{4e0a}\u{2014}\u{2014}\u{7528}\u{4f8b}\u{672c}\u{8eab}\u{7684}\u{524d}\u{63d0}\u{6ca1}\u{4e86}");
+
+    receive_tan(&root_2);
 }

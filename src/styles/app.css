@@ -1,32 +1,32 @@
-/**
- * 外壳的**骨架**：全局 reset、窗口骨架、沉浸模式、工具条、按钮那套原语。
- *
- * 2026-09-29 按功能拆成五份（那一份当时 836 行，用户当天给的新尺子见 `docs/09` §4）：
- *
- * | 文件 | 管什么 |
- * |---|---|
- * | **本文件** `app.css` | 全局 reset、窗口骨架、沉浸模式、工具条、按钮原语 |
- * | `menubar.css` | **菜单栏**（`.menubar` / `.menu-popup` 那一整棵树） |
- * | `tabs-status.css` | **标签栏与状态栏**（窗口上下那两条） |
- * | `home.css` | **主页**与它的「最近打开」 |
- * | `toast.css` | **提示条**（`ui/Toasts.tsx`，固定在右下角那一层） |
- *
- * ⚠️ **`app.css` 必须是这几份里第一个加载的**：那一段 `*` / `html, body` 的
- * reset 是所有人的底子（`main.tsx` 里它紧跟在 `theme.css` 之后）。
- * 其余四份彼此之间**不承重**（选择器不重叠），排在哪都行，但都在本文件之后。
- *
- * ⚠️ **对话框与浮层那一族不在这里**（确认框 / 输入框 / 插入图像框 /
- * Emoji 选择框 / Emoji 补全面板），在 `overlay.css` —— 2026-09-27 按职责
- * 拆的（本文件加了 Emoji 选择框那一段之后 1040 行，超了上限）。
- *
- * ⚠️ **正文编辑区在 `editor.css`**（`editor-inline.css` / `editor-blocks.css`），
- * **左侧栏在 `sidebar.css`**，**右侧插件栏在 `dock.css`**（`panel.css` /
- * `panel-data.css` / `plugin-list.css`），都是历次按职责拆出去的，
- * 每条线怎么划见各自文件头。
- *
- * 颜色与尺寸**一律走变量**（见 `theme.css`），本文件里不该出现写死的色值或圆角
- * ——写死一个就少支持一种风格组合。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 * {
   box-sizing: border-box;
@@ -41,14 +41,14 @@ body,
 
 body {
   font-family: var(--font-ui);
-  /* ⚠️ **`1rem` 就是 `--ui-font-size`**（见下面 `html` 那一条）：这一行是"没写明
-     字号的地方"的基准。⚠️ 别再写回 `var(--ui-font-size)`——那样 `em` 会相对
-     `html`（1rem 基准）再相对 body 各算一次，两处基准不一致。 */
+
+
+
   font-size: 1rem;
   color: var(--fg);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
-  overflow: hidden; /* 滚动条交给各自的面板，body 不滚 */
+  overflow: hidden;
   /* Application chrome is operated, not copied as text. Individual controls
      used to disable selection one by one, which always left gaps in menus,
      labels, status cells and dialogs. Opt editable/user-owned surfaces back in
@@ -90,10 +90,10 @@ html[data-ui-text-selectable="true"] body * {
   -webkit-user-select: text !important;
 }
 
-/* ── 滚动条 ─────────────────────────────────────────────────────────────
- * WebKitGTK 默认画一条实心方角滑块，和圆角、半透明的主题控件不是一套语言。
- * 轨道保持透明，滑块用正文弱化色兑透明；3px 透明边框把真实可见宽度收到
- * 4px，命中区仍有 10px。悬停 / 拖动时只加深，不突然加宽，避免正文横跳。 */
+
+
+
+
 * {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--fg-faint) 38%, transparent) transparent;
@@ -127,26 +127,26 @@ html[data-ui-text-selectable="true"] body * {
   display: none;
 }
 
-/* ── 界面字号**真的管到整个界面**（2026-10-16 修）──────────────────────
- *
- * 用户报的：「这里的字体控制只能控制编辑区的，而不是整个界面的所有文字。」
- * 根因：`--ui-font-size` 原来只喂 `body { font-size }`，也就是**只对"没写明
- * 字号"的元素生效**；而界面上各处写死了 25 处 `font-size: Npx`（菜单、工具栏、
- * 代码块挂件、提示条…），那些地方**一个像素都不动**。正文反而跟着动，因为
- * 它继承的就是 body 那一份。
- *
- * 修法两步，缺一不可：
- * ① 这里把 `--ui-font-size` 落到**根元素**上（`1rem` 从此等于它）——
- *    默认 15px，与改之前 `body` 那份**一模一样**，所以不选"自定义"的人
- *    一个像素都看不出差别；
- * ② 那 25 处 px 换成 `rem`（同一个换算：12px → 0.8rem）。⚠️ 用 `rem` 不用
- *    `em`：`em` 相对的是**父元素**，嵌套几层之后会自己叠上去，改一个地方
- *    却动了三处。
- *
- * ⚠️ **这条和「界面缩放」是两件事，别合并**：缩放（`ui/useZoom.ts`）改的是
- * 整个 WebView 的渲染比例（连图标、间距一起放大），字号只该动文字。用户
- * 2026-10-16 那句话把两者的分工说得很清楚：「如果是"界面缩放"是改变所有的
- * 字体大小」——那是缩放的**副作用**，不是它的定义。 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 html {
   font-size: var(--ui-font-size);
 }
@@ -156,47 +156,47 @@ button {
   color: inherit;
 }
 
-/* ── 外壳布局 ─────────────────────────────────────────────────────────── */
+
 
 .app {
   display: flex;
   flex-direction: column;
   height: 100%;
-  /* 沉浸模式下那条唤回顶栏的窄带要 `position: absolute` 挂在顶上，
-     而它必须**相对窗口**定位——所以基准定在这里，不是 body。 */
+
+
   position: relative;
 }
 
-/* ── 沉浸模式（专注 / 全屏）────────────────────────────────────────────
- *
- * 2026-09-25。用户原话：「你现在的全屏模式和专注模式也不是那么的好……因为
- * 现在没有提到实际的让用户更专注的作用」。改之前的两条是：全屏只把窗口放大，
- * 菜单栏/侧栏/插件栏/标签栏/状态栏**一条不少**地留在原地；专注只把非当前段落
- * 压暗（那段在 `editor.css`），外壳一点没动。两条都没把"视线里多余的东西"
- * 拿掉，而写作时真正碍事的正是那些。
- *
- * 现在的分工：
- *
- * | | 窗口 | 外壳（这一节） | 正文 |
- * |---|---|---|---|
- * | 全屏 `F11` | 全屏 | **收起** | 不动 |
- * | 专注 `F8` | 不动 | **收起** | 压暗非当前段落（`writing-modes.ts`） |
- *
- * ⚠️ 两条**共用 `data-zen` 一个属性**，不是各写一套。理由是"沉浸"只有一种长相：
- * 用户在专注里已经学会了"顶栏从上面滑回来"，全屏里换个规矩就等于要学两遍。
- * React 那侧只算一个布尔（`沉浸 = 专注 ∨ 全屏`，见 `App.tsx`）。
- *
- * ⚠️ **只用 `display: none` 藏，不 `unmount`**：这些面板里各自存着"看的时候的
- * 状态"（侧栏选的是文件树还是大纲、插件栏停在哪一页、标签栏正在拖…）。卸载
- * 再挂回来是把它们悄悄归零——退出沉浸之后界面跟进去之前不是一个样子，而用户
- * 并没有要求"重置"。CSS 藏起来则原样回来。
- *
- * ⚠️ **正文不在收起的名单里**：这一节只碰外壳。专注模式压暗正文那半在
- * `editor.css`（`.nota-dim` 那条），两边合起来才是"专注模式"。
- */
 
-/* 顶栏的外壳。平时它**不存在**（`display: block` 的一层壳，里面那条工具条照旧
-   是 `.app` 这个纵向 flex 的一项）；沉浸时才变成一个绝对定位的容器。 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .zen-top {
   flex: none;
 }
@@ -207,13 +207,13 @@ button {
   left: 0;
   right: 0;
   height: var(--zen-peek);
-  /* 比 `--z-popup` 高：顶栏里挂着的菜单弹层（工具条本身就是弹层的层叠基准）
-     不能被正文或标签栏盖住一截。 */
+
+
   z-index: 60;
 }
 
-/* 顶栏本体：平时**滑到窗口外面**（`translateY(-100%)`），不是 `display: none`
-   ——`display` 变不了，就没有"滑回来"这个动作可做。 */
+
+
 .app[data-zen="true"] .zen-top .toolbar {
   position: absolute;
   top: 0;
@@ -223,25 +223,25 @@ button {
   transition: transform var(--duration-fast) var(--ease-out);
 }
 
-/* 鼠标碰到最上面那一条窄带 → 顶栏滑下来。
- *
- * ⚠️ 判据是 **`:hover` 挂在 `.zen-top` 上**，不是挂在工具条自己身上：
- * 工具条滑下来之后**盖住了那条带子**，挂在它自己身上的 `:hover` 会在指针
- * 落进工具条的那一刻失效——顶栏刚要露头就缩回去，一碰就抖。
- * 而 `:hover` 对祖先的规则是"指针在它**或它的后代**之上"，工具条是它的子元素，
- * 于是指针从带子一路往下滑进菜单，这段 hover 不会断。（和 `useChromeVisibility`
- * 里那条"已经露出来之后放宽成还在它下沿以上"是同一个道理，那一条用 JS 算是因为
- * 那里要量的下沿随界面风格变，这里只是一个固定高度的带子，CSS 就够。）
- *
- * ⚠️ 那 `.zen-top` 只有 6px 高、工具条是它的绝对定位子元素，**看起来**超出父框
- * 的部分会不会不算 hover？不会——`:hover` 判的是命中测试，不是父框的几何。 */
+
+
+
+
+
+
+
+
+
+
+
+
 .app[data-zen="true"] .zen-top:hover .toolbar {
   transform: translateY(0);
 }
 
-/* 收起的外壳。⚠️ 这里**逐个点名**，别写成 `.app[data-zen] > *:not(.app-body)`
-   那种一律排除的写法：以后往里加一条"沉浸时也该留着"的东西（比如某个状态提示），
-   一律排除的写法会让它**默认消失**，而没人会去查一条 CSS 才知道它为什么不显示。 */
+
+
+
 .app[data-zen="true"] .sidebar,
 .app[data-zen="true"] .plugin-dock,
 .app[data-zen="true"] .tabbar,
@@ -252,10 +252,10 @@ button {
 .app-body {
   display: flex;
   flex: 1;
-  min-height: 0; /* 没有这行，flex 子项的滚动区会被撑破 */
+  min-height: 0;
 }
 
-/* 前端崩溃页：两个动作并排，避免“试着继续”与“退出”挤成一段普通文字。 */
+
 .crash-actions {
   display: flex;
   flex-wrap: wrap;
@@ -269,20 +269,20 @@ button {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* ⚠️ 2026-10-06：给查找条当定位祖先——它现在是**浮层**，不再占流
-     （理由见 `bars.css` 里 `.find-bar` 那一段）。 */
+
+
   position: relative;
 }
 
-/* ── 工具条 ───────────────────────────────────────────────────────────── */
+
 
 .toolbar {
   display: flex;
   align-items: center;
   gap: var(--spacing);
   height: var(--toolbar-height);
-  /* 顶栏只承载一行紧凑菜单。按钮、菜单项再高也不允许把整条栏撑开； */
-  /* 外置主题仍可把它设得更矮，但不能突破这个上限。 */
+
+
   max-height: 28px;
   padding: 0 var(--spacing);
   border-bottom: 1px solid var(--toolbar-border);
@@ -290,17 +290,17 @@ button {
   color: var(--toolbar-fg);
   box-shadow: var(--toolbar-shadow);
   flex: none;
-  /* ⚠️ 这两行是给菜单弹层用的。工具条在 DOM 里排在 `.app-body` **前面**，
-     不提升层级的话，展开的菜单会被下面的侧栏和正文盖住一截。 */
+
+
   position: relative;
   z-index: 30;
 }
 
-/* 顶栏里的普通按钮与菜单标题共用同一套前景 / 悬停色。放在这里而不是每个
-   主题各写一遍，保证浅色 Adwaita 的深色菜单栏上文字仍然可读。 */
+
+
 .toolbar > .btn {
-  /* 顶栏容器固定不超过 28px；按钮高度不能继续跟随主题里的
-     `--toolbar-height`，否则外置主题设一个大值时按钮会穿出顶栏。 */
+
+
   height: 24px;
   min-height: 0;
   max-height: 24px;
@@ -323,20 +323,20 @@ button {
   color: var(--toolbar-fg);
 }
 
-/* ⚠️ 这里曾经有一个 `.toolbar-brand`（工具条最左边那两个字 "Nota"）。
-   用户 2026-09-23 说「工具栏最左边的纯文字 Nota 可以删掉了」——删掉了。
-   **别再"加回去"**：窗口标题栏上本来就有应用名，工具条那一份是重复的，
-   而且它挤在菜单前面，看着像菜单的一部分。 */
 
-/* ── 按钮 ─────────────────────────────────────────────────────────────── */
 
-/* ⚠️ 底色/边框/悬停/按下走**专用变量**（`--btn-*`），不再直接借
-   `--bg-raised` / `--bg-hover` / `--bg-active` / `--border`。
-   理由（2026-09-26）：那几条同时也给文件树、菜单项、输入框用，而几份设计稿
-   是**逐个控件**给色号的——一档风格想让按钮变成"扁平无底色"（Adwaita 稿子
-   就是这么写的），借通用变量就会连文件树一起改。
-   变量的默认值写在 `theme.css` 的 `:root` 里，**逐字等于改之前那几个表达式**，
-   所以没声明 `--btn-*` 的风格一个像素都不动。 */
+
+
+
+
+
+
+
+
+
+
+
+
 .btn {
   height: var(--control-height);
   padding: 0 10px;
@@ -346,34 +346,34 @@ button {
   font-weight: var(--btn-font-weight);
   cursor: pointer;
   transition: background 90ms ease;
-  /* ⚠️ **这一行是通用"3D 斜面"能力唯一的消费者。**
-     `--bevel` 默认没定义 ⇒ `none` ⇒ 不使用该能力的外置主题**一个像素都不变**。
-     为什么不给别的元素也挂上：`.menu-popup` / 提示条那些**已经有自己的
-     `box-shadow`**（`--shadow`），在这里再写一条同属性声明会把它们盖掉——
-     而"某个风格下弹层没有阴影了"这种症状没人会往这儿查。 */
+
+
+
+
+
   box-shadow: var(--bevel, none);
 }
 
-/**
- * **按下去 / 开着的时候，那一圈斜面反过来**（通用外置主题能力）。
- *
- * 用户原话：「如果按钮按下去会有显示的变化（那种 90 年代电脑 UI 自带的粗粝简单的
- * 3D），从突起到凹陷，**是持续的**而不是我鼠标一走就没了」。
- *
- * 所以这里分两类，缺一不可：
- *
- * - `:active`——鼠标**正按着**的那一下（抬起来就回来，这是"按"的语义）；
- * - `.btn-on` / `[data-on="true"]` / `[aria-pressed="true"]`——**这一颗现在是开着的**
- *   （插件栏那颗开关、工具栏那些 `B`/`I`、状态栏那两枚）。⚠️ 这才是用户说的
- *   "持续"那一半：开着就一直凹着，鼠标走开也不回来。
- *
- * ⚠️ **三种标记都要列**，它们是三个不同年代的写法：`.btn-on` 是顶栏那颗开关、
- * `data-on` 是工具栏/状态栏那一族按钮、`aria-pressed` 是给读屏器的那一份。
- * 只认一种的症状是"隔壁那颗按下去有反应、这颗没有"，而且**没人会往这里查**。
- *
- * ⚠️ 默认 `--bevel-sunken` 不存在 ⇒ 落回 `--bevel`（也没定义 ⇒ `none`），
- * 所以**别的七档一个像素都不变**。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .btn:active,
 .btn.btn-on,
 .btn[data-on="true"],
@@ -381,14 +381,14 @@ button {
   box-shadow: var(--bevel-sunken, var(--bevel, none));
 }
 
-/* ⚠️ 灰底那两条**必须把 `.btn-primary` / `.btn-danger` 排除掉**。
-   这两条的选择器权重是 (0,3,0)，而 `.btn-primary` 只有 (0,1,0)——
-   于是"悬停变灰"会把强调色/危险色**整个盖掉**，字色却还是 `--accent-fg`：
-   亮色下就是白字白底。2026-09-23 在偏好设置那个「完成」上实测到的
-   （蓝 #3584E4 一悬停变 #EBECEE），但它先于那次改动就存在，
-   确认框里的「保存」「丢弃并关闭」是同一份。
-   这两种按钮的悬停改成 `filter: brightness()`：跟着底色走，
-   任何风格的强调色都对，不用为每个风格再开一个色号。 */
+
+
+
+
+
+
+
+
 .btn:hover:not(:disabled):not(.btn-primary):not(.btn-danger) {
   background: var(--btn-bg-hover);
 }

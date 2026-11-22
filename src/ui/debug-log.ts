@@ -1,10 +1,10 @@
-/**
- * 前端生命周期事件 → 宿主调试日志。
- *
- * 粒度约束：记录用户能感知的阶段变化与失败上下文，不记录按键、滚动、正文、
- * 选区文本、剪贴板或凭据。后端仍由调试模式闸门决定是否落盘；这里只负责在
- * 事件发生时追加一条可检索的英文记录。
- */
+
+
+
+
+
+
+
 
 import { api } from "@/bridge/ipc";
 
@@ -27,7 +27,7 @@ export function debugEvent(
     : "";
   const message = tail ? `${event} ${tail}` : event;
   void api.debugLog.write(scope, message).catch(() => {
-    // 调试日志是旁路；写不进去不能影响正在诊断的应用本身。
+
   });
 }
 

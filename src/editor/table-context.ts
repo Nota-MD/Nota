@@ -1,8 +1,8 @@
-/**
- * 表格浮动工具栏和右键「表格」子菜单用到的结构操作。
- *
- * 列宽拖动已经移除；这里的 resize 是“改变整张表的行列数”，不是拖列边界。
- */
+
+
+
+
+
 
 import { editorViewCtx, parserCtx, serializerCtx, type Editor } from "@milkdown/kit/core";
 import { Fragment, type Node as PMNode, type NodeType } from "@milkdown/kit/prose/model";
@@ -43,7 +43,7 @@ function configureWholeLine(line3: PMNode, columnCount: number, modelBoard: PMNo
   return line3.type.create(line3.attrs, Fragment.from(cells));
 }
 
-/** 把光标所在表格调整为目标列数 / 行数（行数包含表头行）。 */
+
 export function resizeCurrentTable(editor: Editor, columnCount: number, rowCount: number): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
@@ -82,10 +82,10 @@ export function resizeCurrentTable(editor: Editor, columnCount: number, rowCount
 
 export type tableColumnAlignment = "left" | "center" | "right";
 
-/**
- * 只改光标所在列的对齐。列对齐是 GFM 分隔行上的逐列属性，不是整张表的属性；
- * 因此一次事务只更新 `TableMap` 中当前列覆盖到的格子，其他列保持不变。
- */
+
+
+
+
 export function currentColumnAlignmentTransaction(
   state: EditorState,
   alignment: tableColumnAlignment,
@@ -105,7 +105,7 @@ export function currentColumnAlignmentTransaction(
   return tr.docChanged ? tr : null;
 }
 
-/** 对齐光标所在的整列；表头与数据格一起更新。 */
+
 export function alignCurrentTableColumn(editor: Editor, alignment: tableColumnAlignment): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
@@ -114,7 +114,7 @@ export function alignCurrentTableColumn(editor: Editor, alignment: tableColumnAl
   });
 }
 
-/** 上移 / 下移当前行；表头行不参与移动。 */
+
 export function moveCurrentTableRow(editor: Editor, direction: -1 | 1): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
@@ -131,7 +131,7 @@ export function moveCurrentTableRow(editor: Editor, direction: -1 | 1): void {
   });
 }
 
-/** 左移 / 右移当前列。 */
+
 export function moveCurrentTableColumn(editor: Editor, direction: -1 | 1): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
@@ -147,7 +147,7 @@ export function moveCurrentTableColumn(editor: Editor, direction: -1 | 1): void 
   });
 }
 
-/** 把当前表格按 Markdown 序列化后的规范列宽重排一次。 */
+
 export function formatCurrentTable(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
@@ -172,7 +172,7 @@ export function formatCurrentTable(editor: Editor): void {
   });
 }
 
-/** 复制当前表格；同时提供 HTML 与纯文本，与常见表格软件的剪贴板一致。 */
+
 export function duplicateCurrentTable(editor: Editor): void {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
@@ -262,6 +262,34 @@ export function setCurrentTableCellText(
         .replaceWith(position + 1, position + cell.nodeSize - 1, paragraph)
         .scrollIntoView(),
     );
+  });
+}
+
+export function setCurrentTableCells(
+  editor: Editor,
+  updates: readonly { row: number; column: number; text: string }[],
+): void {
+  if (updates.length === 0) return;
+  editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const rect = selectedRect(view.state);
+    const paragraphType = view.state.schema.nodes.paragraph;
+    if (!paragraphType) return;
+    const tr = view.state.tr;
+    for (const update of updates) {
+      const position = tableCellPosition(rect, update.row, update.column);
+      if (position === null) continue;
+      const cell = view.state.doc.nodeAt(position);
+      if (!cell) continue;
+      const paragraph = paragraphType.create(
+        null,
+        update.text ? view.state.schema.text(update.text) : undefined,
+      );
+      const from = tr.mapping.map(position + 1);
+      const to = tr.mapping.map(position + cell.nodeSize - 1);
+      tr.replaceWith(from, to, paragraph);
+    }
+    if (tr.docChanged) view.dispatch(tr.scrollIntoView());
   });
 }
 

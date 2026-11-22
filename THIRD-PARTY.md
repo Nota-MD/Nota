@@ -97,6 +97,8 @@
 | [`@codemirror/language`](https://code.haverbeke.berlin/codemirror/language) | 6.12.4 | MIT | — |
 | [`@codemirror/state`](https://code.haverbeke.berlin/codemirror/state) | 6.7.6 | MIT | — |
 | [`@codemirror/view`](https://code.haverbeke.berlin/codemirror/view) | 6.43.13 | MIT | — |
+| [`@replit/codemirror-vim`](https://github.com/replit/codemirror-vim) | 6.4.0 | MIT | Vim input inside fenced code, Mermaid source and block LaTeX editors |
+| [`@replit/codemirror-vim-core`](https://github.com/replit/codemirror-vim) | 0.1.0 | MIT | Editor-independent Vim engine used by the CodeMirror adapter |
 | [`@lezer/highlight`](https://github.com/lezer-parser/highlight) | 1.2.3 | MIT | — |
 | [`@milkdown/kit`](https://github.com/Milkdown/milkdown) | 7.22.1 | MIT | 编辑器内核（ProseMirror + remark 的封装） |
 | [`@milkdown/plugin-math`](https://github.com/Milkdown/milkdown) | 7.5.9 | MIT | 数学公式。⚠️ 同上（渲染那一半在 `src/editor/…` 与 `katexOptionsCtx`） |

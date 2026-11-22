@@ -75,8 +75,8 @@ pub fn nota_draft_list(state: State<'_, AppState>) -> Result<Vec<DraftInfo>> {
 /// Restore one draft as an open document without touching its source path.
 #[tauri::command]
 pub fn nota_draft_restore(state: State<'_, AppState>, id: String) -> Result<DocId> {
-    let value = draft::read(&id)?
-        .ok_or_else(|| NotaError::other("That recovery copy no longer exists"))?;
+    let value =
+        draft::read(&id)?.ok_or_else(|| NotaError::other("That recovery copy no longer exists"))?;
     let mut docs = state.documents.lock().unwrap();
     let document_id = docs.restore_draft(&value)?;
     if docs.get(document_id).is_some_and(|doc| !doc.dirty) {

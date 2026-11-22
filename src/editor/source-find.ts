@@ -1,24 +1,24 @@
-/**
- * 源码模式的**查找**（CodeMirror 6）：一份状态、一组效果、一层装饰。
- *
- * # 它为什么单独一个文件
- *
- * 2026-09-28 从 `source.ts` 里**整块**搬出来的：那天给"插入表格"的模板套
- * `t()`，`source.ts` 顶到了 1001 行，撞上 `tools/doc-sync-check.sh` 的
- * 1000 行硬上限。搬的是一整块职责（查找的全部机制），不是为凑行数随便切一刀
- * ——对外只有 [`查找字段`]、[`查找装饰`]、三条效果、[`查找状态`]、[`源码选中`]
- * 这几个名字，`source.ts` 原样 import 回去，用法一字未改。
- *
- * ⚠️ **自己写的，因为 `@codemirror/search` 不在 `node_modules` 里**
- * （`package.json` 没列，而这台机器上没有网——见 `find.ts` 文件头）。
- *
- * 结构上刻意与 `find.ts` 那套**同形**：一份状态（查询 + 命中表 + 当前下标）、
- * 一组效果（设/走/清）、一层装饰（只改 class，不进文档）。两个编辑器长得像，
- * 读的人就不用为"同一个功能"记两套心智模型。
- *
- * ⚠️ 唯一的实质差别：这里的偏移量**就是文档偏移**（整篇就是一条字符串），
- * 不必像 ProseMirror 那边逐节点换算。匹配本身仍然调 `在文本里找匹配`。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { StateEffect, StateField } from "@codemirror/state";
 import { Decoration, EditorView } from "@codemirror/view";
@@ -78,7 +78,7 @@ export const findField = StateField.define<sourceFindState>({
   },
 });
 
-/** 命中高亮的 class，与所见即所得那一侧**同名**（`find.ts` 里的常量）。 */
+
 const matchClass = "nota-find-hit";
 const currentClass = "nota-find-current";
 
@@ -91,19 +91,19 @@ export const findDecoration = EditorView.decorations.compute([findField], (state
         class: i === s.index ? `${matchClass} ${currentClass}` : matchClass,
       }).range(m.start, m.end),
     ),
-    // ⚠️ `sort: true`：`Decoration.set` 要求区间按位置排好，而命中表本身
-    // 就是有序的——写出来是防着以后有人改匹配顺序，那时不排会**抛异常**
-    //（不是画错，是直接崩）。
+
+
+
     true,
   );
 });
 
-/** 从状态算一份给界面看的东西。 */
+
 export function findState(s: sourceFindState): FindStatus {
   return { query: s.query, total: s.matches.length, current: s.index + 1 };
 }
 
-/** 把光标送到某个命中上，并滚动到可见。 */
+
 export function sourceSelection(view: EditorView, m: TextMatch): void {
   view.dispatch({
     selection: { anchor: m.start, head: m.end },

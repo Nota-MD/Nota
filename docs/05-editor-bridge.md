@@ -4099,6 +4099,25 @@ markdown 标记本身也会影响词数——`# 标题` 里 `标题` 算 1 词�
 
 ---
 
+## 8A. Table bridge
+
+`SpreadsheetTableOverlay.tsx` publishes the active table source, selection and
+active cell through `nota_table_snapshot_sync`. The host forwards that snapshot
+to `nota.table.on_snapshot` callbacks.
+
+An extension can publish temporary values through `nota.table.render`; the
+`nota:table-render` event applies them as display-only cell attributes.
+`nota.table.replace_cells` emits `nota:table-write`; the frontend checks the
+document/table identity and dispatches `tableSetCells`, which changes every
+requested cell in one ProseMirror transaction and therefore one undo step.
+
+The document source remains the only persisted truth.
+
+When the Vim extension is enabled, embedded CodeMirror editors for fenced code,
+Mermaid source and block LaTeX use the same extension activation state. Each
+instance owns its Vim mode, selection and undo history; disabling the extension
+reconfigures those instances in place.
+
 ## 9. 与本文相关的、容易踩的坑（汇总）
 
 | # | 坑 | 落在哪 |

@@ -38,7 +38,28 @@ testCase("日志与警报窗口各有独立 HTML 入口", () => {
   contains(debugLog, 'src="/src/debug-log.tsx"', "日志页独立轻量入口");
   contains(read("src/debug-log.tsx"), "<DebugLogWindow />", "独立日志入口挂载");
   const rust = read("src-tauri/src/commands/window.rs");
-  contains(rust, "调试窗口选项", "调试窗口必须在独立进程中启动");
+  contains(rust, "DEBUG_WINDOW_FLAG", "调试窗口必须在独立进程中启动");
+  contains(rust, "SETTINGS_WINDOW_FLAG", "设置窗口必须在独立进程中启动");
+  contains(rust, "background_command", "独立窗口没有使用无控制台的进程启动器");
+  if (rust.includes("create_settings_window")) {
+    throw new Error("Windows 仍在主进程内创建辅助设置 WebView");
+  }
+  const cli = read("src-tauri/src/cli.rs");
+  contains(cli, 'pub const SETTINGS_WINDOW_FLAG: &str = "--settings-window"', "缺少设置窗口进程参数");
+  const windowCommand = read("src-tauri/src/commands/window.rs");
+  contains(
+    windowCommand,
+    "if show_settings_window(&app).is_ok()",
+    "设置窗口没有优先使用统一的快速路径",
+  );
+  contains(
+    windowCommand,
+    ".arg(crate::cli::SETTINGS_WINDOW_FLAG)",
+    "设置窗口缺少独立进程回退",
+  );
+  const runtime = read("src-tauri/src/lib.rs");
+  contains(runtime, "opens_debug_window || standalone_settings_window", "设置进程仍会撞上主实例");
+  contains(runtime, "index.html?settings=1", "设置进程没有独立页面导航");
   const alarm = read("src-tauri/src/focus/alarm.rs");
   contains(alarm, 'WebviewUrl::App("focus-alarm.html"', "警报窗口不得依赖 fragment");
 });

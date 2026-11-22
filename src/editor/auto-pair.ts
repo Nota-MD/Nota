@@ -7,7 +7,7 @@ import type { EditorView } from "@milkdown/kit/prose/view";
 import type { punctuationSettings } from "./smart-punctuation";
 import { explicitLinkAtClosingParenthesis } from "./url-link";
 
-/** Opening characters paired by the basic Typora-style policy. */
+
 export const bracketPairs: Readonly<Record<string, string>> = {
   "(": ")",
   "[": "]",
@@ -41,7 +41,7 @@ interface WrappedComposition {
   sizeAfter: number;
 }
 
-/** Wait until ProseMirror has read the committed IME text back into state. */
+
 export const bracketCompositionDelayMs = 50;
 
 function isCodeContext(state: EditorState, position: number): boolean {
@@ -160,12 +160,12 @@ function wrapComposition(
   });
 }
 
-/**
- * Apply the pairing that ordinary text input would have done after an IME
- * commits its text. ProseMirror deliberately bypasses `handleTextInput`
- * during composition, so this reconciliation must happen after
- * `compositionend` instead of mutating the document under the preedit.
- */
+
+
+
+
+
+
 export function compositionPairTransaction(
   state: EditorState,
   committed: string,
@@ -221,7 +221,7 @@ export function compositionPairTransaction(
   });
 }
 
-/** Create the pair transaction used by ordinary text input. */
+
 export function pairedInputTransaction(
   state: EditorState,
   from: number,
@@ -263,7 +263,7 @@ export function pairedInputTransaction(
   });
 }
 
-/** Delete both halves when Backspace is pressed inside an auto-created pair. */
+
 export function deleteEmptyPairTransaction(
   state: EditorState,
   pairs = pairStateKey.getState(state) ?? [],
@@ -283,7 +283,7 @@ export function deleteEmptyPairTransaction(
   return state.tr.delete(pair.open, pair.close + pair.closer.length).scrollIntoView();
 }
 
-/** Move across a pair inserted by this plugin without editing the document. */
+
 export function skipPairBoundaryTransaction(
   state: EditorState,
   direction: 1 | -1,
@@ -309,7 +309,7 @@ export function skipPairBoundaryTransaction(
 export const autoPairKey = new PluginKey<PairRecord[]>("nota-auto-pair");
 const pairStateKey = autoPairKey;
 
-/** Basic bracket and quote pairing for ordinary text blocks. */
+
 export const autoPair = (
   enabled = true,
   punctuation: punctuationSettings,

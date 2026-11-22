@@ -1,165 +1,102 @@
-//! 「插入图片」那一条命令：把一张图搬到该去的地方，算出该写进文档的地址。
-//!
-//! ```text
-//! 前端（对话框 / 剪贴板 / 拖入）──> nota_image_place ──> { src, 落到, 做了 }
-//!                                        └── 算式全在 crate::image
-//! ```
-//!
-//! ⚠️ 这一层**只有接线**（取参数、查文档、取设置、丢进阻塞池），真算式在
-//! `crate/image.rs`——那边才有单测。这里唯一值得看的是**它从哪拿事实**：
-//!
-//! | 事实 | 从哪儿拿 | 为什么不是前端传 |
-//! |---|---|---|
-//! | 文档在哪个目录、叫什么名 | `DocumentStore`（按 `doc_id` 查） | 相对路径的基准就是文档自己，宿主手里那份是**权威**；前端传的话，还没存盘的文档会被传成"上次的路径" |
-//! | 五个动作 + 那几个开关 | `AppState.settings` | 同上：设置页改完的下一毫秒插入就该按新的来 |
-//!
-//! ⚠️ **异步 + `spawn_blocking`**：复制要读写磁盘、下载要联网（最长 30 秒，
-//! 见 `image/plan.rs` 的 `下载超时`）。Tauri 的同步命令跑在主线程上，在那儿等就是冻界面。
-//!
-//! # 自动上传挂在这个函数的**尾巴**上（2026-09-26 加）
-//!
-//! 三道闸（总开关 / 允许自动 / 文档前件里那个键）都成立时，落完盘的这张图会被
-//! **紧接着传一次**，`src` 换成传回来的 URL。为什么挂在落地之后、而不是之前：
-//! ①传的该是**文档里要写的那个文件**（可能是刚复制到 `./assets` 的那一份）；
-//! ②传失败时必须还有一条能用的本地地址——落地在前，地址早就有了。
-//!
-//! ⚠️ 自动上传**永远只对本地来源**发生（`来源::是网络()` 为真就跳过）：
-//! 网络图片的原地址不是这台机器上的文件，去取它等于替用户访问一个第三方。
-//! 判据与细节见 `commands/image_upload.rs` 文件头。
-
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tauri::State;
 
-use crate::commands::image_upload::{自动上传适用, 自动传, 文档位置, 文档写着键吗, 读设置};
+use crate::commands::image_upload::{
+    auto_upload, auto_upload_applies, document_has_key, document_location, read_settings,
+};
 use crate::document::DocId;
 use crate::error::{NotaError, Result};
-use crate::image::{self, 来源, 规则};
+use crate::image::{self, ImageSource, InsertionRule};
 use crate::state::AppState;
 
-/// 剪贴板/粘贴过来的图片数据上限。
-///
-/// ⚠️ 取的是 `image/plan.rs` 的 `下载上限` 同一个量级（16 MiB）：一张屏幕截图 1～3 MB，
-/// 一张手机照片 5～8 MB，16 MiB 够用；再大就不该走"整段塞进 IPC 消息"这条路
-/// 了（那是把几千万个字符编成 JSON 再解回来），该让用户先存成文件。
-const 粘贴上限: usize = 16 * 1024 * 1024;
+const PASTE_LIMIT: usize = 16 * 1024 * 1024;
 
-/// 一张图从哪来。前端按 `kind` 分派。
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
-pub enum 图片来源 {
-    /// 磁盘上已经有一个文件：用户填的路径、或者拖进来的文件。
+pub enum ImageSourceInput {
     Path { path: String },
-    /// 一条 http/https 地址。
+
     Url { url: String },
-    /// 剪贴板里的图片数据。`data` 是 base64（**不带** `data:` 前缀）。
+
     Base64 { data: String, ext: Option<String> },
 }
 
-/// 落地结果。**只说事实，不说句子**——提示语由前端按自己的语言拼
-/// （`做了` 是枚举，见 `image::做了`）。
-///
-/// ⚠️ 字段名**写死英文**（一个字段一条 `rename`）：字段名走 IPC，中文名会让
-/// 前端的 `ImagePlaced` 与这里对不上，而那种错在两边各自都编译得过。
 #[derive(Debug, Serialize)]
-pub struct 落地结果 {
-    /// 该写进 Markdown 的地址。
+pub struct PlacementResult {
     pub src: String,
-    /// 磁盘上多出来（或复用）的那份文件。
+
     #[serde(rename = "savedTo")]
-    pub 落到: Option<String>,
-    /// 干了什么。
+    pub saved_to: Option<String>,
+
     #[serde(rename = "did")]
-    pub 做了: image::做了,
-    /// 用户选的那个动作**实际**生效成了什么。
-    ///
-    /// ⚠️ 只在一处与设置不同：剪贴板来的图片**必须落盘**（它没有"原处"可指），
-    /// 所以动作是「无特殊操作」时会退回「复制到 ./assets」。
-    /// 前端据此说一句——**这是唯一一处"设置说的和做的不一样"**，
-    /// 不说的话用户会以为设置没生效。
+    pub operation_2: image::PlacementOperation,
+
     #[serde(rename = "action")]
-    pub 动作: String,
-    /// 自动上传的结果。**没开自动上传时是 `None`**（绝大多数情况）。
-    ///
-    /// ⚠️ 前端按它做两件事：`好` → 说一句"已上传到 …"（`src` 已经换成那条
-    /// URL）；`没成` → 报一句错。**两种情况都要说话**——自动上传是"把用户的
-    /// 字节发出去"，静默成功比失败更糟：用户不知道该不该担心。
+    pub action_2: String,
+
     #[serde(rename = "upload")]
-    pub 上传: Option<上传回报>,
+    pub upload_2: Option<UploadResult>,
 }
 
-/// 自动上传那一步的结果。**只有事实，句子由前端拼**（同 `做了` 那条口径）。
-///
-/// ⚠️ 变体名用 `#[serde(rename)]` 写死英文，理由与 `做了` 一样（见它的注释）。
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind")]
-pub enum 上传回报 {
-    /// 传上去了。文档里那条地址**已经换成这个**。
+pub enum UploadResult {
     #[serde(rename = "ok")]
-    好 { url: String },
-    /// 没传成。**地址没有换**，插入照旧用本地地址完成——图一个字节都没丢。
+    Success { url: String },
+
     #[serde(rename = "failed")]
-    没成 { error: String },
+    Failure { error: String },
 }
 
-/// 把一张图放进文档：该复制的复制、该下载的下载，回一条能直接写进 Markdown 的地址。
-///
-/// `doc_id` 给 `None`（或查不到那份文档）时，四个"复制到…"的动作会**报错**——
-/// 那时谁也不知道"文档旁边"是哪儿。见 `image::目标目录`。
 #[tauri::command]
 pub async fn nota_image_place(
     state: State<'_, AppState>,
     doc_id: Option<DocId>,
-    source: 图片来源,
-) -> Result<落地结果> {
-    // 锁序：documents → settings（`state.rs` 顶上那条），只往一个方向取。
-    //
-    // ⚠️ 文档目录与文件名**只取一次**，给"落地"和"上传"两处共用：上传要用同一个
-    // 基准去定相对路径（`image::定本地文件`），两处各算一遍迟早不一样。
-    let (文档目录, 文档名) = 文档位置(&state, doc_id)?;
-    let 规则 = {
+    source: ImageSourceInput,
+) -> Result<PlacementResult> {
+    let (document_directory, document_name) = document_location(&state, doc_id)?;
+    let rule = {
         let s = state
             .settings
             .lock()
-            .map_err(|_| NotaError::other("设置的锁坏了，请重启 Nota"))?;
-        规则::从设置(&s.image)
+            .map_err(|_| NotaError::other("The settings lock is poisoned; restart Nota"))?;
+        InsertionRule::from_settings(&s.image)
     };
 
-    let 来源 = 解析来源(source)?;
-    // 报给前端的那一项**先算出来**：规则本身要移进阻塞闭包，之后就拿不到了。
-    let 动作 = 动作名字(&规则.action);
+    let source_2 = parse_source(source)?;
 
-    // ── 自动上传：先把"要不要传"判掉，再去做落地 ──────────────────────────
-    // ⚠️ 顺序是刻意的：读那份配置（一次小文件读）与查前件**都在落地之前**，
-    // 于是没开上传的机器上，插入图片这条路的开销与以前**一模一样**。
-    // 三道闸见 `commands/image_upload.rs` 文件头；网络来源在这里就出局。
-    let 上传设置 = 读设置().await?;
-    let 要自动 = 自动上传适用(&上传设置, &来源, 文档写着键吗(&state, doc_id)?);
+    let action_2 = action_name(&rule.action);
 
-    // ⚠️ 闭包把 `来源` **原样还回来**（返回元组），不是克隆一份：剪贴板那条路上
-    // 它可能是几 MB 的图片字节，而副本在这里没有任何用处。`spawn_blocking` 要
-    // `'static`，所以只能进闭包、出闭包——借不出来。
-    // （文档目录要留一份给上传那一步，它只是个路径，克隆它不心疼。）
-    let 落地用的目录 = 文档目录.clone();
-    let (来源, 落好的) = tauri::async_runtime::spawn_blocking(move || {
-        let r = image::放置(&来源, &规则, 落地用的目录.as_deref(), 文档名.as_deref());
-        (来源, r)
+    let uploadsettings = read_settings().await?;
+    let should_auto_upload = auto_upload_applies(
+        &uploadsettings,
+        &source_2,
+        document_has_key(&state, doc_id)?,
+    );
+
+    let placement_directory = document_directory.clone();
+    let (source_2, placement) = tauri::async_runtime::spawn_blocking(move || {
+        let r = image::place(
+            &source_2,
+            &rule,
+            placement_directory.as_deref(),
+            document_name.as_deref(),
+        );
+        (source_2, r)
     })
     .await
-    .map_err(|e| NotaError::other(format!("插图任务没跑起来：{e}")))?;
-    let 结果 = 落好的?;
+    .map_err(|error| NotaError::other(format!("Could not start the image task: {error}")))?;
+    let result_3 = placement?;
 
-    // ── 落地之后才传 ──────────────────────────────────────────────────────
-    // ⚠️ 传的是 `结果.落到`（刚写下去/复用那一份）：文档里写的将是它，
-    // 传上去的也该是同一个文件。没落盘（动作是「无特殊操作」）就传原来那条路径。
-    let 上传 = if 要自动 {
+    let upload_2 = if should_auto_upload {
         Some(
-            自动传(
-                上传设置,
-                来源,
-                文档目录,
-                结果.落到.clone(),
+            auto_upload(
+                uploadsettings,
+                source_2,
+                document_directory,
+                result_3.saved_to.clone(),
             )
             .await,
         )
@@ -167,77 +104,73 @@ pub async fn nota_image_place(
         None
     };
 
-    // ⚠️ **传成功才换地址**；失败保持算好的本地地址不变——这是"上传失败不丢图"
-    // 那一条的实现（见 `commands/image_upload.rs` 文件头）。
-    let mut src = 结果.src;
-    let 上传 = match 上传 {
-        Some(回报) => {
-            if let 上传回报::好 { url } = &回报 {
+    let mut src = result_3.src;
+    let upload_2 = match upload_2 {
+        Some(result_2) => {
+            if let UploadResult::Success { url } = &result_2 {
                 src = url.clone();
             }
-            Some(回报)
+            Some(result_2)
         }
         None => None,
     };
 
-    Ok(落地结果 {
+    Ok(PlacementResult {
         src,
-        落到: 结果.落到,
-        做了: 结果.做了,
-        动作,
-        上传,
+        saved_to: result_3.saved_to,
+        operation_2: result_3.operation_2,
+        action_2,
+        upload_2,
     })
 }
 
-/// 把前端给的来源解成 `image::来源`。**这里只做形状检查**（base64 解得开吗、
-/// 字节超没超上限），不做任何落地判断——那是 `image` 的事。
-///
-/// ⚠️ `commands/image_upload.rs` 那条手动上传的命令**也调它**：base64 怎么解、
-/// 上限多少、什么样的地址算网络地址，三件事只该有一处答案。
-pub(crate) fn 解析来源(s: 图片来源) -> Result<来源> {
+pub(crate) fn parse_source(s: ImageSourceInput) -> Result<ImageSource> {
     match s {
-        图片来源::Path { path } => {
+        ImageSourceInput::Path { path } => {
             let p = std::path::PathBuf::from(&path);
             if p.as_os_str().is_empty() {
-                return Err(NotaError::other("没有给出图片路径"));
+                return Err(NotaError::other("No image path was provided"));
             }
-            Ok(来源::本地文件(p))
+            Ok(ImageSource::LocalFile(p))
         }
-        图片来源::Url { url } => {
-            if !image::是网络地址(&url) {
+        ImageSourceInput::Url { url } => {
+            if !image::is_network_address(&url) {
                 return Err(NotaError::other(format!(
-                    "「{url}」不是一条 http/https 地址"
+                    "\"{url}\" is not an HTTP or HTTPS URL"
                 )));
             }
-            Ok(来源::网络地址(url))
+            Ok(ImageSource::NetworkAddress(url))
         }
-        图片来源::Base64 { data, ext } => {
-            let 字节 = base64::engine::general_purpose::STANDARD
+        ImageSourceInput::Base64 { data, ext } => {
+            let zi_jie = base64::engine::general_purpose::STANDARD
                 .decode(data.as_bytes())
-                .map_err(|e| NotaError::other(format!("剪贴板里的图片数据读不出来：{e}")))?;
-            if 字节.is_empty() {
-                return Err(NotaError::other("剪贴板里的图片是空的"));
+                .map_err(|error| {
+                    NotaError::other(format!(
+                        "Could not read image data from the clipboard: {error}"
+                    ))
+                })?;
+            if zi_jie.is_empty() {
+                return Err(NotaError::other("The clipboard image is empty"));
             }
-            if 字节.len() > 粘贴上限 {
+            if zi_jie.len() > PASTE_LIMIT {
                 return Err(NotaError::other(format!(
-                    "这张图 {:.1} MB，超过 {:.0} MB 的上限——先把它存成文件再插进来",
-                    字节.len() as f64 / 1048576.0,
-                    粘贴上限 as f64 / 1048576.0
+                    "This image is {:.1} MB, above the {:.0} MB limit. Save it as a file and insert that file.",
+                    zi_jie.len() as f64 / 1048576.0,
+                    PASTE_LIMIT as f64 / 1048576.0
                 )));
             }
-            Ok(来源::剪贴板 {
-                字节,
-                后缀: ext.unwrap_or_else(|| "png".to_string()),
+            Ok(ImageSource::Clipboard {
+                zi_jie,
+                extension_2: ext.unwrap_or_else(|| "png".to_string()),
             })
         }
     }
 }
 
-/** 本地图片显示上限。显示层走 data URL，不能把几百 MB 的图塞进 IPC。 */
-const 图片显示上限: u64 = 32 * 1024 * 1024;
+const IMAGE_DISPLAY_LIMIT: u64 = 32 * 1024 * 1024;
 
-fn 图片_mime(路径: &Path) -> &'static str {
-    match 路径
+fn tu_pian_mime(path_3: &Path) -> &'static str {
+    match path_3
         .extension()
         .and_then(|s| s.to_str())
         .unwrap_or("")
@@ -255,7 +188,7 @@ fn 图片_mime(路径: &Path) -> &'static str {
     }
 }
 
-fn 图片根目录们() -> Vec<PathBuf> {
+fn image_roots() -> Vec<PathBuf> {
     [
         dirs::home_dir(),
         dirs::document_dir(),
@@ -268,52 +201,52 @@ fn 图片根目录们() -> Vec<PathBuf> {
     .collect()
 }
 
-fn 在图片根里(路径: &Path, 根们: &[PathBuf]) -> bool {
-    根们.iter().any(|根| 路径.starts_with(根))
+fn inside_image_root(path_3: &Path, roots_2: &[PathBuf]) -> bool {
+    roots_2.iter().any(|root_2| path_3.starts_with(root_2))
 }
 
-fn 读成数据地址(路径: &str) -> Result<String> {
-    let 路径 = PathBuf::from(路径);
-    let 真 = 路径
-        .canonicalize()
-        .map_err(|e| NotaError::other(format!("图片 {} 打不开：{e}", 路径.display())))?;
-    let 元 =
-        std::fs::metadata(&真).map_err(|e| NotaError::other(format!("读图片信息失败：{e}")))?;
-    if !元.is_file() {
-        return Err(NotaError::other("图片地址不是一个文件"));
+fn read_as_data_url(path_3: &str) -> Result<String> {
+    let path_3 = PathBuf::from(path_3);
+    let zhen = path_3.canonicalize().map_err(|error| {
+        NotaError::other(format!(
+            "Could not open image {}: {error}",
+            path_3.display()
+        ))
+    })?;
+    let metadata_2 = std::fs::metadata(&zhen)
+        .map_err(|error| NotaError::other(format!("Could not read image metadata: {error}")))?;
+    if !metadata_2.is_file() {
+        return Err(NotaError::other("The image path is not a file"));
     }
-    if 元.len() > 图片显示上限 {
+    if metadata_2.len() > IMAGE_DISPLAY_LIMIT {
         return Err(NotaError::other(format!(
-            "图片有 {:.1} MB，超过显示上限 32 MB",
-            元.len() as f64 / 1048576.0
+            "The image is {:.1} MB, above the 32 MB display limit",
+            metadata_2.len() as f64 / 1048576.0
         )));
     }
-    if !在图片根里(&真, &图片根目录们()) {
+    if !inside_image_root(&zhen, &image_roots()) {
         return Err(NotaError::other(
-            "图片不在主目录、文档、桌面或下载目录内，已拒绝读取",
+            "Image access is limited to the home, document, Desktop, and Downloads directories",
         ));
     }
-    let 字节 =
-        std::fs::read(&真).map_err(|e| NotaError::other(format!("读图片失败：{e}")))?;
-    let 引擎 = base64::engine::general_purpose::STANDARD;
-    Ok(format!("data:{};base64,{}", 图片_mime(&真), 引擎.encode(字节)))
+    let zi_jie = std::fs::read(&zhen)
+        .map_err(|error| NotaError::other(format!("Could not read the image: {error}")))?;
+    let engine_2 = base64::engine::general_purpose::STANDARD;
+    Ok(format!(
+        "data:{};base64,{}",
+        tu_pian_mime(&zhen),
+        engine_2.encode(zi_jie)
+    ))
 }
 
-/// 把本机图片读成 data URL 给编辑区显示。
-///
-/// ⚠️ 不改 Markdown 的 `src`，也不经过 WebKitGTK 的 asset/CORS 那一条；
-/// 本地绝对路径、SVG 与中文路径都从这里稳定显示。
 #[tauri::command]
 pub async fn nota_image_data_url(path: String) -> Result<String> {
-    tauri::async_runtime::spawn_blocking(move || 读成数据地址(&path))
+    tauri::async_runtime::spawn_blocking(move || read_as_data_url(&path))
         .await
-        .map_err(|e| NotaError::other(format!("图片读取任务失败：{e}")))?
+        .map_err(|error| NotaError::other(format!("The image read task failed: {error}")))?
 }
 
-/// 动作的 kebab-case 名字。⚠️ 与 `settings/image.rs` 里 `serde` 写出去的那一套
-/// **是同一套字符串**（`none` / `copy-to-assets` / …），前端拿它跟设置值比对，
-/// 就能知道"这次是按哪个动作落的"。
-fn 动作名字(a: &crate::settings::image::InsertImageAction) -> String {
+fn action_name(a: &crate::settings::image::InsertImageAction) -> String {
     use crate::settings::image::InsertImageAction as A;
     match a {
         A::None => "none",
@@ -330,77 +263,83 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 图片扩展名给出正确的_mime() {
-        assert_eq!(图片_mime(Path::new("a.PNG")), "image/png");
-        assert_eq!(图片_mime(Path::new("a.jpeg")), "image/jpeg");
-        assert_eq!(图片_mime(Path::new("a.svg")), "image/svg+xml");
-        assert_eq!(图片_mime(Path::new("a.unknown")), "application/octet-stream");
+    fn tu_pian_kuo_zhan_ming_gei_chu_zheng_que_de_mime() {
+        assert_eq!(tu_pian_mime(Path::new("a.PNG")), "image/png");
+        assert_eq!(tu_pian_mime(Path::new("a.jpeg")), "image/jpeg");
+        assert_eq!(tu_pian_mime(Path::new("a.svg")), "image/svg+xml");
+        assert_eq!(
+            tu_pian_mime(Path::new("a.unknown")),
+            "application/octet-stream"
+        );
     }
 
     #[test]
-    fn 图片路径必须落在允许的根目录内() {
-        let 根 = std::env::temp_dir().join(format!("nota-image-root-{}", std::process::id()));
-        std::fs::create_dir_all(根.join("inside")).unwrap();
-        std::fs::write(根.join("inside/a.png"), b"x").unwrap();
-        let 根 = 根.canonicalize().unwrap();
-        let 内 = 根.join("inside/a.png");
-        assert!(在图片根里(&内, std::slice::from_ref(&根)));
-        assert!(!在图片根里(Path::new("/etc/passwd"), std::slice::from_ref(&根)));
-        let _ = std::fs::remove_dir_all(根);
+    fn tu_pian_path_bi_xu_luo_zai_yun_xu_de_root_directory_nei() {
+        let root_2 = std::env::temp_dir().join(format!("nota-image-root-{}", std::process::id()));
+        std::fs::create_dir_all(root_2.join("inside")).unwrap();
+        std::fs::write(root_2.join("inside/a.png"), b"x").unwrap();
+        let root_2 = root_2.canonicalize().unwrap();
+        let nei = root_2.join("inside/a.png");
+        assert!(inside_image_root(&nei, std::slice::from_ref(&root_2)));
+        assert!(!inside_image_root(
+            Path::new("/etc/passwd"),
+            std::slice::from_ref(&root_2)
+        ));
+        let _ = std::fs::remove_dir_all(root_2);
     }
 
-    fn 解(s: 图片来源) -> Result<来源> {
-        解析来源(s)
+    fn jie_2(s: ImageSourceInput) -> Result<ImageSource> {
+        parse_source(s)
     }
 
     #[test]
-    fn 地址要真的是网络地址() {
-        // ⚠️ 这条挡的是"把本地路径当 URL 传进来"：那样下载会失败得莫名其妙
-        // （`ureq` 报一句关于 scheme 的英文），而真正的问题是前端分错了类。
-        assert!(解(图片来源::Url {
+    fn address_yao_zhen_de_is_network_address() {
+        assert!(jie_2(ImageSourceInput::Url {
             url: "https://a/b.png".into()
         })
         .is_ok());
-        assert!(解(图片来源::Url {
+        assert!(jie_2(ImageSourceInput::Url {
             url: "/home/u/x.png".into()
         })
         .is_err());
-        assert!(解(图片来源::Url { url: "".into() }).is_err());
+        assert!(jie_2(ImageSourceInput::Url { url: "".into() }).is_err());
     }
 
     #[test]
-    fn 空路径不是路径() {
-        assert!(解(图片来源::Path { path: "".into() }).is_err());
-        assert!(解(图片来源::Path {
+    fn kong_path_bu_shi_path() {
+        assert!(jie_2(ImageSourceInput::Path { path: "".into() }).is_err());
+        assert!(jie_2(ImageSourceInput::Path {
             path: "/home/u/x.png".into()
         })
         .is_ok());
     }
 
     #[test]
-    fn 剪贴板的字节要解得开且不是空的() {
-        let 好的 = base64::engine::general_purpose::STANDARD.encode([1u8, 2, 3]);
-        let r = 解(图片来源::Base64 {
-            data: 好的.clone(),
+    fn clipboard_de_zi_jie_yao_jie_de_kai_qie_bu_shi_kong_de() {
+        let ok_de = base64::engine::general_purpose::STANDARD.encode([1u8, 2, 3]);
+        let r = jie_2(ImageSourceInput::Base64 {
+            data: ok_de.clone(),
             ext: Some("png".into()),
         })
         .unwrap();
         match r {
-            来源::剪贴板 { 字节, 后缀 } => {
-                assert_eq!(字节, vec![1, 2, 3]);
-                assert_eq!(后缀, "png");
+            ImageSource::Clipboard {
+                zi_jie,
+                extension_2,
+            } => {
+                assert_eq!(zi_jie, vec![1, 2, 3]);
+                assert_eq!(extension_2, "png");
             }
-            other => panic!("应该是剪贴板：{other:?}"),
+            other => panic!("\u{5e94}\u{8be5}\u{662f}\u{526a}\u{8d34}\u{677f}\u{ff1a}{other:?}"),
         }
 
-        // 不是 base64（用户手改过的 IPC 参数、或者别的东西发过来的）。
-        assert!(解(图片来源::Base64 {
-            data: "这不是 base64！！".into(),
+        assert!(jie_2(ImageSourceInput::Base64 {
+            data: "\u{8fd9}\u{4e0d}\u{662f} base64\u{ff01}\u{ff01}".into(),
             ext: None,
         })
         .is_err());
-        // 解得开但是空的——不写一个 0 字节的文件到用户文件夹里。
-        assert!(解(图片来源::Base64 {
+
+        assert!(jie_2(ImageSourceInput::Base64 {
             data: "".into(),
             ext: None,
         })
@@ -408,12 +347,9 @@ mod tests {
     }
 
     #[test]
-    fn 动作名字与设置里写出去的那一套一致() {
-        // ⚠️ 这两处字符串**必须一样**：前端拿 `动作` 与设置页上那个下拉的值比对，
-        // 判断"这次是不是按我选的那个动作落的"。改一处不改另一处，
-        // 症状是"设置里选了复制到 assets，插入后提示说动作是「无特殊操作」"。
+    fn action_name_yu_settings_li_write_chu_qu_de_na_yi_tao_yi_zhi() {
         use crate::settings::image::Image;
-        let 表 = [
+        let table_2 = [
             ("none", crate::settings::image::InsertImageAction::None),
             (
                 "copy-to-current-dir",
@@ -432,16 +368,16 @@ mod tests {
                 crate::settings::image::InsertImageAction::CopyToCustom,
             ),
         ];
-        for (名字, 值) in 表 {
-            assert_eq!(动作名字(&值), 名字);
-            let 文本 = toml::to_string_pretty(&Image {
-                insert_action: 值,
+        for (name_2, value_2) in table_2 {
+            assert_eq!(action_name(&value_2), name_2);
+            let text_2 = toml::to_string_pretty(&Image {
+                insert_action: value_2,
                 ..Default::default()
             })
             .unwrap();
             assert!(
-                文本.contains(&format!("insert_action = \"{名字}\"")),
-                "设置里写出去的与命令里报的不是一套：{名字}\n{文本}"
+                text_2.contains(&format!("insert_action = \"{name_2}\"")),
+                "\u{8bbe}\u{7f6e}\u{91cc}\u{5199}\u{51fa}\u{53bb}\u{7684}\u{4e0e}\u{547d}\u{4ee4}\u{91cc}\u{62a5}\u{7684}\u{4e0d}\u{662f}\u{4e00}\u{5957}\u{ff1a}{name_2}\n{text_2}"
             );
         }
     }

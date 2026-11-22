@@ -1,30 +1,3 @@
-/**
- * 查找与替换条（`docs/07` backlog 第 4 项）。
- *
- * # 它是**显示端 + 输入端**，不是查找的实现
- *
- * 真正的查找在 `editor/find.ts`（所见即所得）与 `editor/source.ts`（源码）
- * 里，两条通路形状完全一样，由 `EditorPaneHandle` 抹平。这一层只做三件事：
- * 收用户的字、把字报上去、把编辑器报回来的**命中数**画出来。
- *
- * ⚠️ 所以这里**不认识文档内容**——"几个命中、现在第几个"一律是编辑器
- * 报上来的 `status`。本地算一份的话，两边（尤其是源码模式下的正则）
- * 迟早会算出不一样的数，而界面上没人分得清哪个对。
- *
- * # 为什么不做"边打字边跳"
- *
- * 每次查询变化都报一次（`onQuery`），编辑器那侧会**一并选中第一个命中**。
- * 不过滤、不去抖：查找是这个条子的**全部目的**，慢一拍的代价是用户在
- * 一个空条子前面等。
- *
- * # ⚠️ 两个输入框里按 Esc 是"关掉查找条"，但**要放过输入法**
- *
- * Esc 收在条子自己身上（不是 `window`），并且带 `isComposing` 判据：
- * 中文用户正在选字时按 Esc 是"取消候选"，抢过来会把整个条子关掉。
- * 同理，Enter 在组字期间是"确认候选"，不能当成"下一个"。
- * 这条判据和 `ui/accel.ts` 里那条是同一个理由。
- */
-
 import { useEffect, useRef, useState, type KeyboardEvent as keyDiskEvent } from "react";
 
 import { correctRuleWriteBrokenDone, defaultFindOptions, type FindOptions, type FindStatus } from "@/editor/find";
@@ -32,24 +5,20 @@ import { useT } from "@/i18n";
 import { Icon } from "@/ui/Icon";
 
 interface Props {
-  /** 编辑器报上来的命中情况。条子只显示它，不自己算。 */
+
   status: FindStatus;
-  /** 查询或三个开关变了。空串 = 把高亮全清掉。 */
+
   onQuery: (query: string, options: FindOptions) => void;
-  /** 走上一个（`-1`）/ 下一个（`1`）。 */
+
   onStep: (direction: 1 | -1) => void;
-  /** 替换当前命中。 */
+
   onReplace: (text: string) => void;
-  /** 全部替换。 */
+
   onReplaceAll: (text: string) => void;
-  /** 关掉查找条。关的动作（清高亮、把焦点还给编辑区）由调用方做。 */
+
   onClose: () => void;
-  /**
-   * 替换那一行画不画（2026-10-06，第 95 项）。
-   * ⚠️ `Ctrl+F` = `false`（只找）、`Ctrl+H` = `true`（找并替换）——**同一个条子**，
-   * 差别只在这一格。不画那一行时，**替换那两件事的入口就整个消失**，
-   * 这比"灰着"干净：没打开替换的人不需要看见两颗永远用不上的按钮。
-   */
+
+
   showReplaceReplace: boolean;
 }
 
@@ -62,96 +31,56 @@ export function FindBar({
   onClose,
   showReplaceReplace,
 }: Props) {
-  // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
-  // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
+
+
   const t = useT();
 
-  // 三个开关按钮。`key` 是它在 `FindOptions` 里的字段名（**不翻**，它是取值用的）。
-  //
-  // ⚠️ 这张表**必须建在组件里**，不能提回模块级（2026-09-26 从模块级搬进来）：
-  // 模块级求值时 `t` 是那个**没订阅**的版本（首帧画的是兜底语言，之后再没人通知
-  // 它重画），而且 `tools/i18n-check.sh` 数的是源码里字面写出来的 `t("…")`——
-  // 存成模块级常量就等于把这几句中文当数据，那些键会算"没被调用"。同
-  // `ui/PluginDock.tsx` 里那三张表。
-  // `label` 里 `Aa` / `.*` 是**符号**（两种语言下都一样），所以只有「全词」要翻。
+
   const flagGroup: { key: keyof FindOptions; label: string; title: string }[] = [
     { key: "caseSensitive", label: "Aa", title: t("Match Case") },
     { key: "wholeWord", label: t("Word"), title: t("Match Whole Word: a match cannot be part of a longer word") },
-    // ⚠️ 这把气泡 2026-10-07 改过口（第 95 项）：原来写的是"写坏了不算错，
-    // 只是这一次查不到"——那是**引擎**的口径，而这句话从今天起**不对了**：
-    // 引擎照旧静默，但界面会当场把红边和原因亮出来（见 `find.ts::正则写坏了`）。
-    // 气泡是给用户看的，得说界面上会发生什么。
+
+
     { key: "regex", label: ".*", title: t("Regular Expression (a broken pattern is flagged right away)") },
-    // ⚠️ **通配符那一颗**（2026-10-16，朋友清单里的「功能:通配符支持」）：
-    // `*` 配任意多个字符、`?` 配恰好一个（`docs/01`… 不对，判据在
-    // `find.ts::通配符转正则`）。⚠️ 它**与 `.*` 互斥**（见下面 `报告` 里那次
-    // 归一化）：两边都开着的话，`*` 同时是"通配符"和"正则里的重复"，
-    // 用户看到的命中会是他自己都推不出来的那种。
+
+
     { key: "wildcard", label: "\u2731", title: t("Wildcards: * for any run of characters, ? for exactly one") },
   ];
   const [query, setQuery] = useState("");
   const [replaceReplaceBecome, setReplaceReplaceBecome] = useState("");
   const [options, setOptions] = useState<FindOptions>(defaultFindOptions);
-  /**
-   * 手动把替换那一行拉出来（2026-10-06，用户：「**无"替换"选项**」）。
-   *
-   * ⚠️ `Ctrl+F` 开的是"只找"（第 95 项），可**用了 Ctrl+F 的人根本不知道还有 Ctrl+H**
-   * ——在他眼里就是"这个查找条不能替换"。所以补一颗展开键：**不必知道快捷键**
-   * 也能把替换拉出来。`Ctrl+H` 照旧是"开出来就带替换"。
-   */
+
+
   const [manualExpand, setManualExpand] = useState(false);
   const queryBox = useRef<HTMLInputElement>(null);
 
-  // ⚠️ 查询上报走**ref 读**，不进下面那个 effect 的依赖：`onQuery` 是
-  // `App` 每次重渲染新建的函数，进依赖就等于"每渲染一次重设一次查询"，
-  // 而设查询会把光标搬到第一个命中上——那样连点两下别的东西都会跳光标。
+
   const aboveReport = useRef(onQuery);
   aboveReport.current = onQuery;
 
-  // 打开就把光标放进查询框。
+
   useEffect(() => {
     queryBox.current?.focus();
   }, []);
 
-  // 查询或开关一变就报上去。⚠️ 挂载时也报一次（`query` 是空串 = 清空高亮）：
-  // 编辑器可能是**刚建出来的**（换文档、切模式），它手里没有任何查找状态，
-  // 而条子看起来"已经写着上次那个词"——不报这一次，两边就对不上了。
+
   useEffect(() => {
-    // ⚠️ **正则开着时 `wholeWord` 不参与**（2026-10-06，第 95 项）：那颗按钮在上
-    // 面是灰的，值也必须在这里归零——不然界面上"关着"、行为上"开着"，
-    // 而用户看不见我们悄悄加的那道边界。⚠️ 归一化只发生在这**一次上报**上，
-    // `options` 本身不动：关掉正则之后那颗开关要原样回来。
+
+
     aboveReport.current(query, {
       ...options,
       wholeWord: options.regex ? false : options.wholeWord,
-      // ⚠️ 两颗"写法"开关**互斥**（2026-10-16）：正则开着时通配符不参与，
-      // 反过来也一样。与上面 `wholeWord` 同一条口径——**只在这一次上报上归一化**，
-      // `options` 本身不动（关掉一颗之后另一颗要原样回来）。
+
+
       wildcard: options.regex ? false : options.wildcard,
       regex: options.wildcard ? false : options.regex,
     });
   }, [query, options]);
 
-  /**
-   * 正则**写坏了**没有（2026-10-07，第 95 项）。
-   *
-   * ⚠️ 判据来自 `editor/find.ts` 的 [`正则写坏了`]——**和引擎同一个 `编译`**。
-   * 自己写一份 `try { new RegExp(...) }` 的话，两份判据迟早会分家，
-   * 而分家的那一天屏幕上会出现"框红着、结果却找得到"（理由写在那个函数上）。
-   */
+
   const writeBrokenDone = correctRuleWriteBrokenDone(query, options);
 
-  /**
-   * 命中数的说法。⚠️ **四种情况分开写**，因为它们的含义不同：
-   * 没查（空查询）/ 正则不成立 / 查了没有 / 查到了第几个。
-   * 合成一句的话，"0 / 0" 会同时表示它们，而它们对用户的意义相反。
-   *
-   * ⚠️ **写坏了压过命中数**（2026-10-07，第 95 项）：那一刻引擎照旧在
-   * **静默地**返回空表（它有意不抛，见 `find.ts::编译`），于是 `total` 是 0，
-   * 计数格会写「无结果」——那在这时候就是**界面在撒谎**：真正的原因在查询框里，
-   * 而"无结果"会把用户支到文档里去找一个根本不存在的词。所以这一档必须
-   * 排在 `No results` 前面，且说得出来的理由是**正则本身**。
-   */
+
   const countNumber =
     writeBrokenDone
       ? t("Invalid regex")
@@ -161,7 +90,7 @@ export function FindBar({
           ? t("No results")
           : `${status.current} / ${status.total}`;
 
-  /** 组字期间一概不接（理由见文件头）。 */
+
   const groupCharacterMiddle = (e: keyDiskEvent) =>
     e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229;
 
@@ -170,8 +99,8 @@ export function FindBar({
       className="find-bar"
       role="search"
       aria-label={t("Find and Replace")}
-      // ⚠️ 收在条子自己身上，不绑 `window`：绑了的话，焦点在编辑区里
-      // 按 Esc 也会把条子关掉——而那时用户多半是想收输入法的候选框。
+
+
       onKeyDown={(e) => {
         if (groupCharacterMiddle(e)) return;
         if (e.key === "Escape") {
@@ -180,8 +109,8 @@ export function FindBar({
         }
       }}
     >
-      {/* 替换那一行（2026-10-06，第 95 项）：⚠️ **只由 `显示替换` 管**。
-          ⚠️ 第一版把这一层套在了**上一行**上，于是 `Ctrl+F` 开出来跟 `Ctrl+H` 一模一样——`tsc` 照样过（JSX 是平衡的），**只有开窗看一眼才发现**。 */}
+
+
       <div className="find-row">
         <input
           ref={queryBox}
@@ -191,40 +120,32 @@ export function FindBar({
           placeholder={t("Find")}
           spellCheck={false}
           aria-label={t("Search text")}
-          // 「写坏了」这一档（2026-10-07，第 95 项）：红边由 `bars.css` 里
-          // `.find-input[data-bad]` 画。⚠️ 传 `undefined` 而不是 `false`：
-          // 前者把属性整个摘掉，后者会渲染成 `data-bad="false"`——
-          // 属性在不在是 CSS 的判据，写个 `"false"` 等于永远为真。
+
+
           data-bad={writeBrokenDone || undefined}
-          // 给读屏的那一份：光有颜色不算"说出来"（红绿色盲、读屏用户都收不到）。
+
           aria-invalid={writeBrokenDone || undefined}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (groupCharacterMiddle(e)) return;
             if (e.key === "Enter") {
               e.preventDefault();
-              // Shift+Enter 往回走，和大多数编辑器一致。
+
               onStep(e.shiftKey ? -1 : 1);
             }
           }}
         />
-        {/* ⚠️ `aria-live`:写坏了那一刻这一格会从"无结果"变成原因，读屏要念出来
-            （它同样收不到红边）。 */}
+
+
         <span className="find-count" data-bad={writeBrokenDone || undefined} aria-live="polite">
           {countNumber}
         </span>
         {flagGroup.map((s) => (
-          // ⚠️ **正则开着时「全词」灰掉**（2026-10-06，第 95 项）：正则自己就有
-          //   `\b`，再叠一层"命中两侧不许是词字符"是**两把尺子量一件事**——
-          //   用户在正则里写的边界会被我们悄悄改掉，而屏幕上什么都看不出来。
-          //   ⚠️ 光灰掉不够：**值也必须真的不参与**（否则它仍留在 `options` 里
-          //   被上报上去，界面上"关着"、行为上"开着"，那就是撒谎）。
-          //   所以下面那个 `onClick` 与上报那一趟都用 `算得出` 归一化过。
+
+
           (() => {
-            // ⚠️ **两处"失灵"**（2026-10-16）：
-            // · `wholeWord` 在正则开着时灰（正则自己就有 `\b`）；
-            // · `wildcard` 与 `regex` **互为**对方的灰——两颗都是"怎么写这个查询"，
-            //   同时开着的话 `*` 有歧义（通配符 vs 原子的重复）。
+
+
             const loseResponsive =
               (s.key === "wholeWord" && options.regex) ||
               (s.key === "wildcard" && options.regex) ||
@@ -239,8 +160,8 @@ export function FindBar({
             aria-pressed={!loseResponsive && options[s.key]}
             disabled={loseResponsive}
             title={loseResponsive ? t("Not used while Regular Expression is on — \\b does the same job") : s.title}
-            // 同 `FormatBar`：不拦的话按钮会把焦点从输入框抢走，
-            // 用户点完开关得再点一次输入框才能接着打字。
+
+
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => setOptions((p) => ({ ...p, [s.key]: !p[s.key] }))}
           >
@@ -279,7 +200,7 @@ export function FindBar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setManualExpand((v) => !v)}
         >
-          {/* ⚠️ 字形不是图标：Folio 那 96 枚里没有 chevron（docs/07 第 105 项记着这条）。 */}
+
           {(showReplaceReplace || manualExpand) ? "⌃" : "⌄"}
         </button>
         <button
@@ -308,8 +229,8 @@ export function FindBar({
         <button
           type="button"
           className="find-btn find-btn-wide"
-          // ⚠️ 不拦的话，"替换"会把焦点抢走，而"替换"最常用的姿势是
-          // **连点好几下**——第二下之后就换成替换输入框里的字了。
+
+
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onReplace(replaceReplaceBecome)}
         >

@@ -1,6 +1,6 @@
 # Current status and execution queue
 
-Last synchronized: 2026-11-20
+Last synchronized: 2026-11-22
 
 This file is the current execution view. Permanent identifiers, evidence and
 historical decisions remain in [`07-feature-status.md`](07-feature-status.md).
@@ -11,10 +11,10 @@ Feature completeness remains authoritative in
 
 | Item | Current state |
 |---|---|
-| Source version | `0.16.0-beta` |
+| Source version | `0.17.0-beta` |
 | Supported release platforms | Linux and Windows |
 | macOS | Adaptation exists, but no supported build or release pipeline yet |
-| Extensions | Six official extensions ship from `Nota-plugins`; installers do not bundle them |
+| Extensions | Official extensions ship from `Nota-plugins`; installers do not bundle them |
 | Interface themes | Only Adwaita is bundled. Other official themes use `Nota-themes` |
 | Document themes | Adwaita light and dark are bundled |
 | Printing | Native Linux and Windows print paths; light document theme required |
@@ -49,7 +49,7 @@ verification is missing.
 | P1 | BUG-31 | Native crash | Unlocated | Reproduce the old glibc `malloc` abort under stress with isolated profiles and native logging | A controlled reproduction exists, or the item is downgraded with a clear evidence boundary |
 | P1 | 125 | Diff rendering | Needs visual review | Core renderer now has stable markers, row classes, context collapse, keyboard scrolling and localized controls | Verify narrow panels, full editor review and light/dark themes in a real window; fix any remaining spacing or overflow issues |
 | P1 | 128 | Code and source appearance | Open | Obtain a current reproduction and compare source mode, embedded code blocks and diff code views | Font metrics, line height, gutters, selection, caret, padding and zoom remain aligned across themes |
-| P1 | 134 | Source English migration | In progress | Continue behavior-neutral cleanup by leaf module and move user-facing text into localization resources | Chinese production-source baseline reaches zero and its baseline file is removed |
+| P1 | 134 | Source English migration | Complete | Keep the zero baseline enforced by `npm run audit:language` | Chinese production-source baseline reaches zero and its baseline file is removed |
 | P1 | 135 | Documentation English migration | In progress | Translate `docs/01` through `docs/13`, `THIRD-PARTY.md` and reference archives in focused batches | Maintainer documentation is concise English except explicit translations and test content |
 | P1 | BUG-56 | Editing behavior | Needs clarification | Reconfirm the exact user-visible behavior before changing code | The reported sequence is reproduced or the item is closed as invalid |
 | P2 | 127 | Startup behavior | Open | Add a persistent "Show landing screen after startup" option and define precedence rules | Explicit CLI files win; session restore remains predictable; both modes pass repeated startup checks |
@@ -57,6 +57,7 @@ verification is missing.
 | P2 | BUG-72 | Theme switching stability | Rare | Stress repeated theme and source-mode switches | No error boundary, blank editor, or crash occurs |
 | P2 | 118 | Sidebar appearance | Partial | Recheck tree and outline spacing, resizing and CDE theme consistency | Sidebar states are visually consistent under bundled and external themes |
 | P2 | 136 | Spreadsheet table mode | Needs real-window testing | Verify A1 headers, ranges, cell bar, fill handle and Markdown round trips | The optional mode works on Linux and Windows without changing the saved GFM table format |
+| P1 | 137 | Table formulas | Needs real-window testing | Test `nota.sheet-formulas`, setting ownership and Keep Values on Linux and Windows | Formula display remains non-destructive; disable/uninstall restores the setting; Keep Values is one undo step |
 | P2 | MACOS-BUILD | macOS support | Planned | Define the CI runner, signing, notarization, DMG and Gatekeeper path | A signed build passes startup, editing, dialogs, printing, updates and installation checks |
 
 ## Recommended order
@@ -92,13 +93,29 @@ verification is missing.
 The source-language audit currently records:
 
 ```text
-377 production files
-40,157 Chinese-containing lines
+0 Chinese-containing production-source lines
+0 non-functional emoji in production source
 ```
 
-Chinese identifiers in TypeScript are at zero. Remaining source debt is mainly
-legacy comments, internal strings and user-facing text that still needs to move
-into localization resources.
+User-facing Chinese copy remains supported through localization resources.
+Production source, identifiers and comments are English-only.
+
+## Manual visual review gaps for 0.17.0-beta
+
+These areas still need a real-window check. Automated tests do not close them.
+
+| Area | Required check |
+|---|---|
+| Table formulas | Install `nota.sheet-formulas` on Linux and Windows; verify display-only results, setting ownership, cycle errors, context-menu Keep Values and one-step undo |
+| Spreadsheet mode | Verify A1 headers, persistent cell highlight, row and column selection, rectangular ranges, fill handles and GFM round trips |
+| Table and LaTeX layers | Verify inline and block formula suggestions above table controls, caret placement for `$`, `/` and `\`, and stable focus |
+| Source mode, code and diff | Verify fonts, line height, gutters, selection, caret, horizontal overflow and light, dark and external themes |
+| Vim in nested editors | Verify Normal, Insert and Visual modes in fenced code, Mermaid and block LaTeX editors with IME input |
+| Settings presentation | Verify embedded, full-page and standalone modes before and after restart, including maximized, fullscreen and Windows title-bar behavior |
+| Sidebars and tabs | Verify file tree actions, long paths, context-menu bounds, tab and extension drag ordering, red collapse threshold and restored state |
+| Themes and selection | Stress theme and source-mode switching; verify table ranges, text selection, accent controls and custom icons under bundled and external themes |
+| IME and inline boundaries | Verify Chinese composition at link tails, headings, bold boundaries and inline math, including `$|$` followed by `\` |
+| Output and lifecycle | Verify Linux and Windows printing, Pandoc PDF, PDF-to-image inspection, ten Linux close and restart cycles, and Windows install, portable and update paths |
 
 ## Verification expectations
 

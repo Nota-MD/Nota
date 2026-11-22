@@ -1,17 +1,17 @@
-/**
- * 左侧栏的样式：**栏本身、文件树、大纲**。
- *
- * ⚠️ 2026-09-24 从 `app.css` 里拆出来的——加上折叠三角之后它顶破了 1000 行
- * 上限（`docs/09` §4）。划线理由是**"这块东西归谁"**而不是行数：文件树与大纲
- * 都是"左侧栏里的一棵树"，折叠的写法（转三角、缩进、按层级隐藏）两处是同一套；
- * 右侧插件栏**不在这里**（它跟侧栏是两套独立的类，见 `app.css` 那段注释）。
- *
- * ⚠️ **必须在 `app.css` 之后引入**：这里的选择器比 `app.css` 里的通用规则
- * （按钮、行）更具体，靠顺序而不是靠 `!important` 压过去。
- *
- * 颜色与尺寸一律走变量（见 `theme.css`）。
- */
-/* ── 侧栏 ─────────────────────────────────────────────────────────────── */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 .sidebar {
   width: var(--sidebar-width);
@@ -25,23 +25,23 @@
   background: var(--sidebar-surface);
   box-shadow: var(--sidebar-shadow);
   min-height: 0;
-  /* ⚠️ 这两行是给右缘那条拖动把手（`ui/SidebarResizer.tsx`）定位用的：
-     它 `position: absolute; right: 0`，而它必须**相对这一栏**、不是相对
-     `.app-body`——挂错基准的话把手会跑到窗口最右边（插件栏那条边上）。 */
+
+
+
   position: relative;
-  /* 开合那一下的小动画（2026-09-30，用户点名的「展开侧边栏加一个小动画，
-     不用很长，不要对使用产生影响」）。
-     ⚠️ **只动 `width`，不动 `transform`**：这一栏在 flex 行里，
-     `translateX` 滑出去的话编辑区**不会跟着变宽**，中间会留一条空的。
-     ⚠️ **160ms** 是"不用很长"那一句的落点——比它长就开始觉得"点完要等一下"。
-     ⚠️ `overflow: hidden` 是让内容被**裁掉**而不是被挤扁（见下面那条 `min-width`）。 */
+
+
+
+
+
+
   overflow: hidden;
   transition: width 160ms ease, border-right-width 160ms ease;
 }
 
-/* 收起来了（`ui/Sidebar.tsx` 的 `折叠`：**不卸载，只加这个类**）。
-   ⚠️ `border-right-width` 一起收，否则那一栏收成 0 宽之后**还留着一条 1px
-   的竖线**杵在编辑区最左边。 */
+
+
+
 .sidebar-collapsed {
   width: 0;
   margin: 0;
@@ -50,19 +50,19 @@
   box-shadow: none;
 }
 
-/* ⚠️ 栏里那两块**必须保持原宽**：不写的话，动画那 160ms 里文件树与页签会
-   跟着容器一路重排（文字一行行跳），看着像抖；写了就是"整块往左挪出视野"，
-   这也正是用户要的那个观感。宽度交给外层 `overflow: hidden` 去裁。 */
+
+
+
 .sidebar-head,
 .sidebar-body {
   min-width: var(--sidebar-width);
 }
 
-/* ⚠️ **拖动把手那一瞬间不能有动画**：`ui/SidebarResizer.tsx` 是逐像素直接写
-   `--sidebar-width` 的，带着 `transition` 拖起来会像抹了阻尼、慢半拍
-   （用户要的是"不影响使用"）。拖动期间那一栏本来就挂着 `body.resizing-col`
-   （同一个组件加的），借它把动画停掉即可。
-   ⚠️ 只停这一条，别写成 `transition: none` 打在 `:root` 或 `body` 上。 */
+
+
+
+
+
 body.resizing-col .sidebar {
   transition: none;
 }
@@ -73,19 +73,19 @@ body.resizing-col .sidebar {
   }
 }
 
-/* ── 右缘那条可以拖的把手（2026-09-30）──────────────────────────────────
- *
- * 用户照 Typora 点名：「侧边栏右侧可以自由拖动」。拖动本身的判据全在
- * `ui/SidebarResizer.tsx` 里，这里只管三件事：**命中区比看得见的线宽**、
- * **光标是 `col-resize`**、**只有悬停/拖动时才看得见**。
- *
- * ⚠️ 6px 而不是 1px：贴着边框边缘精确点中一条 1px 的线，指针稍微快一点就
- * 滑开了（同 `tabs-status.css` 里 `.tab` 那条"命中区要够大"的道理）。
- * 线本身还是 1px（`::after`），所以平时看着和原来那条边框一样。
- *
- * ⚠️ `z-index` 要压过 `.sidebar-body` 里那棵树：文件树的行铺满整栏，
- * 不提升层级的话把手会被行盖住——**看着有、点不着**。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
 .sidebar-resizer {
   position: absolute;
   top: 0;
@@ -94,13 +94,13 @@ body.resizing-col .sidebar {
   width: 6px;
   z-index: 5;
   cursor: col-resize;
-  /* 别让它把点击吞掉之后又选中文字（拖动期间还挂了 `body.resizing-col`，
-     那一条管的是指针滑出这 6px 之后的情形）。 */
+
+
   touch-action: none;
 }
 
-/* 悬停 / 拖动时那一条强调色的竖线。⚠️ 用 `::after` 而不是给把手本身
-   上底色：把手是 6px 的命中区，画成 6px 宽的色带太粗，看着像栏宽变了。 */
+
+
 .sidebar-resizer::after {
   content: "";
   position: absolute;
@@ -118,9 +118,9 @@ body.resizing-col .sidebar-resizer::after {
   opacity: 1;
 }
 
-/* 拖动期间：整窗口都是 `col-resize`，而且不许选中任何东西。
-   ⚠️ 挂在 `body` 上而不是只在把手上：指针一快就滑出那 6px，
-   这时候光标变回箭头、文字被拖蓝，看着像那把拖动断了。 */
+
+
+
 body.resizing-col {
   cursor: col-resize;
   user-select: none;
@@ -144,9 +144,9 @@ body.sidebar-collapse-armed::before {
   pointer-events: none;
 }
 
-/* 页签行 + 右上角那颗 ×。
-   ⚠️ 那条下边框**挪到了这一层**：留在 `.sidebar-tabs` 上的话，线会在 × 左边
-   就断掉（× 在 tabs 之外，见 `Sidebar.tsx` —— 它不能塞进 `role="tablist"`）。 */
+
+
+
 .sidebar-head {
   display: flex;
   align-items: stretch;
@@ -160,14 +160,14 @@ body.sidebar-collapse-armed::before {
 .sidebar-tabs {
   display: flex;
   flex: 1;
-  /* ⚠️ `min-width: 0` 不能省：不加的话页签文字会把这个 flex 子项撑得比容器
-     还宽，那颗 × 就被挤出可见区——而"叉看不见"正是这次要修的东西。 */
+
+
   min-width: 0;
 }
 
-/* 收起侧边栏。⚠️ 与右侧插件栏那颗 ×（`app.css` 的 `.dock-close`）**同一套值**：
-   两栏并排站着，一颗有叉一颗没有、或者两颗长得不一样，都像两个人做的。
-   高度靠父层 `align-items: stretch` 撑满，所以这里不写 `height`。 */
+
+
+
 .sidebar-close {
   flex: none;
   border: 0;
@@ -241,8 +241,8 @@ body.sidebar-collapse-armed::before {
   line-height: 1.6;
 }
 
-/* 空态里的那句话。⚠️ 余白只写在下边：那一节现在是个 `div`（里面还有一颗
-   按钮），不归零的话段落的上下余白会和 `.sidebar-empty` 自己的 padding 叠加。 */
+
+
 .sidebar-empty-lead {
   margin: 0 0 calc(var(--spacing) * 0.75);
 }
@@ -268,7 +268,7 @@ body.sidebar-collapse-armed::before {
   opacity: 1;
 }
 
-/* ── 底栏 ────────────────────────────────────────────────────────────── */
+
 
 .sidebar-footer {
   position: relative;
@@ -422,7 +422,7 @@ body.sidebar-collapse-armed::before {
   margin-left: 5px;
 }
 
-/* ── 扁平文件列表 ────────────────────────────────────────────────────── */
+
 
 .file-list-search {
   position: sticky;
@@ -592,7 +592,7 @@ body.sidebar-collapse-armed::before {
   font-size: 0.82em;
 }
 
-/* 文件页的右键菜单。位置由 React 按指针坐标写进行内 left/top；这里只管皮。 */
+
 .sidebar-context-menu {
   position: fixed;
   z-index: var(--z-popup);
@@ -760,7 +760,7 @@ body.sidebar-collapse-armed::before {
   background: var(--accent);
 }
 
-/* ── 文件树 ───────────────────────────────────────────────────────────── */
+
 
 .tree,
 .outline,
@@ -795,8 +795,8 @@ body.sidebar-collapse-armed::before {
   color: var(--fg);
 }
 
-/* 展开态的那个三角：**同一个字形转 90°**，不是换一个字符。
-   换字符（▸/▾）在字体缺字时会出现"点一下那一格变空白"。 */
+
+
 .tree-twisty,
 .outline-twisty {
   flex: none;
@@ -834,13 +834,13 @@ body.sidebar-collapse-armed::before {
   color: var(--fg);
 }
 
-/* ── 2026-10-11：侧栏正文那棵树重排了一遍（用户：「我的意思是左侧菜单下面的有点丑」）──
-   ⚠️ 判据不是"好看"这种话说不出所以然的东西，是**三件能指出来**的事：
-   ① **行太挤**：原来行高只有 `padding: 3px`（≈20px），侧栏里那一串文件名挨成一坨；
-   ② **层次只有字重**：文件夹是粗的、文件是普通色，两者**同一个颜色**——扫一眼分不出
-      "这一行是个容器还是个文件"；
-   ③ **当前打开的那一份看不出来**：树里没有"我就是你现在看的那篇"的记号，
-      只能靠标题去对。 */
+
+
+
+
+
+
+
 .tree-dir-btn,
 .tree-file-btn,
 .outline-item {
@@ -854,17 +854,17 @@ body.sidebar-collapse-armed::before {
   color: var(--fg);
 }
 
-/* ② 文件行比文件夹**轻一档**（文件夹粗且亮、文件细且静音）——这样一眼扫下去是
-   "几个容器，每个下面躺着几张纸"。悬停时再抬到正文色（上面那条 :hover）。 */
+
+
 .tree-file-btn {
   color: var(--fg-muted);
   font-size: 0.92em;
   transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
-/* ③ 现在打开的哪一份：左边一条 2px 的强调色竖线 ＋ 加粗。
-   ⚠️ 属性名认两个（`aria-current` 是标准写法、`data-active` 是本仓内部习惯）——
-   两边任一出现都吃，写错一个也只是这一条不生效，不影响别的。 */
+
+
+
 .tree-file-btn[aria-current="page"],
 .tree-file-btn[data-active="true"] {
   color: var(--fg);
@@ -897,14 +897,14 @@ body.sidebar-collapse-armed::before {
   font-size: 0.85em;
 }
 
-/* ⚠️ 这里原来是「文档列表」（最近打开的文件）那一页的样式：那一页 2026-09-28
-   随用户那句「<文档列表>这一栏可以删了」删掉，一组 `.sidebar-list` / `.sidebar-item*`
-   规则没人再用了，一起删（`src/ui/Sidebar.tsx` 文件头）。 */
 
-/* ── 大纲 ─────────────────────────────────────────────────────────────── */
 
-/* 一行 = 三角 + 标题（+ 折起来的条数）。⚠️ 缩进在下发时按层级算好写在
-   行内，见 `Sidebar.tsx`——层级是数据的一部分，不该再在 CSS 里算一遍。 */
+
+
+
+
+
+
 .outline-row {
   display: flex;
   align-items: center;
@@ -918,14 +918,14 @@ body.sidebar-collapse-armed::before {
   cursor: pointer;
 }
 
-/* 没有子标题的那一行留一个同宽的占位，否则叶子和父标题的文字起点差 14px。 */
+
 .outline-twisty-leaf {
   cursor: default;
 }
 
 .outline-item {
-  /* ⚠️ `min-width: 0` 不能省：flex 子项默认 `min-width: auto`，长标题
-     会把整行撑宽、把条数挤出去而不是自己出省略号。 */
+
+
   min-width: 0;
   flex: 1;
   padding: 0 8px;
@@ -934,10 +934,10 @@ body.sidebar-collapse-armed::before {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* ⚠️ 2026-09-25 起这一条是 **`<button>`** 而不是 `<span>`（第 48 项：
-     点了要能跳过去，键盘也得够得着）。所以先把按钮那套默认样子抹平——
-     不抹的话会出现一圈系统边框、字号也不跟侧栏走，和旁边的三角挤在一起
-     看着像两个控件。 */
+
+
+
+
   border: 0;
   background: transparent;
   font: inherit;
@@ -955,7 +955,7 @@ body.sidebar-collapse-armed::before {
   color: var(--fg);
 }
 
-/* 折起来时在右边点一下"里面有几条"，比只留一个转过来的三角清楚。 */
+
 .outline-folded-count {
   flex: none;
   padding-right: 6px;

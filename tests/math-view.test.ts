@@ -663,7 +663,7 @@ await testCase("行内那一棵也有悬浮预览（两种公式一套长相）"
   equal(find(dom, "nota-math-render")?.dataset.state, "", "编辑态：行内正文那格同样空着");
 });
 
-await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览是下方深色浮层", () => {
+await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览使用统一的主题浮层", () => {
   const css = readFileSync("src/styles/math.css", "utf8");
   assertion(
     /\.nota-math-inline\.nota-math-editing\s*\{[^}]*background:\s*transparent/s.test(css),
@@ -696,6 +696,18 @@ await testCase("行内公式只有 `$` 弱化，源码保持强调色，预览�
   assertion(
     /\.nota-math-preview-floating\.nota-math-preview-visible\s*\{[^}]*display:\s*flex/s.test(css),
     "行内预览的打开态不是 flex 居中盒",
+  );
+  assertion(
+    /body > \.nota-math-preview\.nota-math-preview-floating\s*\{[^}]*z-index:\s*calc\(var\(--z-editor-widget,\s*24\) \+ 4\)/s.test(css),
+    "行内公式预览仍会被表格选区覆盖",
+  );
+  assertion(
+    /body > \.nota-math-suggest\s*\{[^}]*position:\s*fixed;[^}]*z-index:\s*calc\(var\(--z-popup,\s*40\) - 1\)/s.test(css),
+    "LaTeX 补全仍在表格单元格内部被裁切",
+  );
+  assertion(
+    /body > \.nota-math-preview\.nota-math-preview-floating\s*\{[^}]*background:\s*var\(--bg-raised\)/s.test(css),
+    "行内公式预览仍是与主题割裂的黑色浮层",
   );
   equal(
     JSON.stringify(inlinePreviewCenter({
@@ -748,8 +760,8 @@ await testCase("行内：面板开、源码框是 input、整体是行内元素�
   equal(box2?.value, "x^2", "框里是当前源码");
   equal(box2?.placeholder, "", "行内空公式不应显示示例占位提示");
   equal(box2?.getAttribute("size"), null, "行内源码框仍在用原生字符列数");
-  equal(box2?.style["--nota-math-source-width"], "1px", "行内源码框没有可测量的像素宽度");
-  equal(box2?.style.width, "1px", "行内源码框没有设置直接宽度");
+  equal(box2?.style["--nota-math-source-width"], "9px", "非空源码没有可见的兜底光标槽");
+  equal(box2?.style.width, "9px", "非空源码没有设置兜底直接宽度");
   const separator2 = box2?.parentNode?.childNodes.filter((c) => c.classList.contains("nota-math-delim"));
   equal(separator2?.length, 2, "行内也是两颗分隔符");
   equal(separator2?.[0]?.textContent, "$", "行内分隔符是单个 `$`");
@@ -757,8 +769,8 @@ await testCase("行内：面板开、源码框是 input、整体是行内元素�
   box2!.value = "y_1+1";
   box2!.dispatch("input");
   equal(box2?.getAttribute("size"), null, "输入后源码框又落回原生字符列数");
-  equal(box2?.style["--nota-math-source-width"], "1px", "脱离布局的假尺子不应伪造字符宽度");
-  equal(box2?.style.width, "1px", "输入后直接宽度没有更新");
+  equal(box2?.style["--nota-math-source-width"], "9px", "输入后非空源码退回了一像素空槽");
+  equal(box2?.style.width, "9px", "输入后没有保留最小可见宽度");
   const changed = getState().doc.nodeAt(inlinePosition);
   if (!changed) throw new Error("改完之后节点不见了");
   equal(changed.textContent, "y_1+1", "内容");

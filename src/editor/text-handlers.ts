@@ -17,9 +17,9 @@ import { remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 
 import { ReplaceNbspAfterInlineAtom } from "./atom-space";
 
-/** remark 序列化选项的类型：**从 ctx 反推出来**（同 `lax-heading.ts`）。 */
+
 type StringConvertOption = ReturnType<typeof remarkStringifyOptionsCtx._typeInfo>;
-/** mdast 的文本处理器（`handlers.text` 那一条）。 */
+
 export type textHandler = NonNullable<NonNullable<StringConvertOption["handlers"]>["text"]>;
 
 interface TextNodeLike {

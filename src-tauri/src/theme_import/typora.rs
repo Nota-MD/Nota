@@ -1,9 +1,3 @@
-//! Native import for flat Typora theme directories.
-//!
-//! Source CSS and assets are copied unchanged. A small manifest tells Nota
-//! which root CSS files are document themes; import expansion and asset
-//! inlining happen only when the theme is loaded into the webview.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -40,7 +34,6 @@ pub(crate) fn read_manifest(package: &Path) -> Option<CollectionManifest> {
     (manifest.version <= MANIFEST_VERSION).then_some(manifest)
 }
 
-/// Import a flat CSS file, folder or archive as either UI or document themes.
 pub(super) fn install_source_bundle(
     path: &Path,
     ui_root: &Path,
@@ -49,9 +42,10 @@ pub(super) fn install_source_bundle(
     let root = if path.is_dir() {
         canonical(path)?
     } else {
-        canonical(path.parent().ok_or_else(|| {
-            NotaError::other("Theme CSS has no parent directory")
-        })?)?
+        canonical(
+            path.parent()
+                .ok_or_else(|| NotaError::other("Theme CSS has no parent directory"))?,
+        )?
     };
     let selected = if path.is_dir() {
         None
@@ -66,21 +60,19 @@ pub(super) fn install_source_bundle(
     install_flat_source(&root, selected.as_deref(), ui_root, document_root)
 }
 
-pub(super) fn install_source(
-    path: &Path,
-    document_root: &Path,
-) -> Result<ThemeImportReport> {
+pub(super) fn install_source(path: &Path, document_root: &Path) -> Result<ThemeImportReport> {
     let (root, selected) = if path.is_dir() {
         (canonical(path)?, None)
     } else {
         (
-            canonical(path.parent().ok_or_else(|| {
-                NotaError::other("这个 CSS 文件没有上一级目录")
-            })?)?,
+            canonical(
+                path.parent()
+                    .ok_or_else(|| NotaError::other("The CSS file has no parent directory"))?,
+            )?,
             Some(
                 path.file_name()
                     .and_then(|value| value.to_str())
-                    .ok_or_else(|| NotaError::other("主题 CSS 文件名不是 UTF-8"))?
+                    .ok_or_else(|| NotaError::other("Theme CSS filename is not valid UTF-8"))?
                     .to_owned(),
             ),
         )
@@ -99,7 +91,7 @@ pub(super) fn install_source(
         let stem = Path::new(&css)
             .file_stem()
             .and_then(|value| value.to_str())
-            .ok_or_else(|| NotaError::other("主题 CSS 文件名不是 UTF-8"))?;
+            .ok_or_else(|| NotaError::other("Theme CSS filename is not valid UTF-8"))?;
         themes.push(ThemeEntry {
             id: theme_id(&collection_id, &css),
             name: stem.to_owned(),
@@ -108,7 +100,7 @@ pub(super) fn install_source(
     }
     if themes.is_empty() {
         return Err(NotaError::other(
-            "没有找到可导入的 Typora 文档主题（#write 或 --doc-bg）",
+            "No importable Typora document theme was found (#write or --doc-bg)",
         ));
     }
     themes.sort_by(|left, right| {
@@ -127,14 +119,11 @@ pub(super) fn install_source(
     };
     files.insert(
         MANIFEST_FILE.to_owned(),
-        serde_json::to_vec_pretty(&manifest)
-            .map_err(|error| NotaError::other(format!("主题清单编码失败：{error}")))?,
+        serde_json::to_vec_pretty(&manifest).map_err(|error| {
+            NotaError::other(format!("Could not encode the theme manifest: {error}"))
+        })?,
     );
-    install(
-        document_root,
-        &collection_id,
-        &ThemeFiles { files },
-    )?;
+    install(document_root, &collection_id, &ThemeFiles { files })?;
     Ok(ThemeImportReport {
         ui: Vec::new(),
         document: themes.into_iter().map(|theme| theme.id).collect(),
@@ -217,24 +206,31 @@ pub(super) fn install_zip(
         source,
     })?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|error| NotaError::other(format!("主题 ZIP 打不开：{error}")))?;
+        .map_err(|error| NotaError::other(format!("Could not open theme ZIP: {error}")))?;
     let temp = TemporaryDirectory::new()?;
     let mut files = 0usize;
     let mut total = 0usize;
     for index in 0..archive.len() {
-        let entry = archive
-            .by_index(index)
-            .map_err(|error| NotaError::other(format!("读取主题 ZIP 条目失败：{error}")))?;
+        let entry = archive.by_index(index).map_err(|error| {
+            NotaError::other(format!("Could not read theme ZIP entry: {error}"))
+        })?;
         let Some(parts) = super::safe_parts(entry.name()) else {
             return Err(NotaError::other(format!(
-                "主题 ZIP 包含非法路径：{}",
+                "Theme ZIP contains an invalid path: {}",
                 entry.name()
             )));
         };
-        if entry.unix_mode().is_some_and(|mode| mode & 0o170000 == 0o120000) {
-            return Err(NotaError::other("主题 ZIP 不能包含符号链接"));
+        if entry
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err(NotaError::other(
+                "Theme ZIP must not contain symbolic links",
+            ));
         }
-        let target = parts.iter().fold(temp.path.clone(), |path, part| path.join(part));
+        let target = parts
+            .iter()
+            .fold(temp.path.clone(), |path, part| path.join(part));
         if entry.is_dir() {
             std::fs::create_dir_all(&target).map_err(|source| NotaError::Write {
                 path: target,
@@ -244,10 +240,10 @@ pub(super) fn install_zip(
         }
         files += 1;
         if files > super::MAX_FILES {
-            return Err(NotaError::other("Typora 主题文件数超过上限"));
+            return Err(NotaError::other("Typora theme exceeds the file limit"));
         }
         if entry.size() as usize > super::MAX_FILE_BYTES {
-            return Err(NotaError::other("Typora 主题里的单个文件太大"));
+            return Err(NotaError::other("A file in the Typora theme is too large"));
         }
         if let Some(parent) = target.parent() {
             std::fs::create_dir_all(parent).map_err(|source| NotaError::Write {
@@ -259,22 +255,24 @@ pub(super) fn install_zip(
         entry
             .take(super::MAX_FILE_BYTES as u64 + 1)
             .read_to_end(&mut bytes)
-            .map_err(|error| NotaError::other(format!("读取主题文件失败：{error}")))?;
+            .map_err(|error| NotaError::other(format!("Could not read theme file: {error}")))?;
         if bytes.len() > super::MAX_FILE_BYTES {
-            return Err(NotaError::other("Typora 主题里的单个文件太大"));
+            return Err(NotaError::other("A file in the Typora theme is too large"));
         }
         total = total.saturating_add(bytes.len());
         if total > super::MAX_TOTAL_BYTES {
-            return Err(NotaError::other("Typora 主题解压后超过 128 MiB"));
+            return Err(NotaError::other("Typora theme expands beyond 128 MiB"));
         }
         let mut output = std::fs::File::create(&target).map_err(|source| NotaError::Write {
             path: target.clone(),
             source,
         })?;
-        output.write_all(&bytes).map_err(|source| NotaError::Write {
-            path: target,
-            source,
-        })?;
+        output
+            .write_all(&bytes)
+            .map_err(|source| NotaError::Write {
+                path: target,
+                source,
+            })?;
     }
     let root = find_theme_root(&temp.path)?.ok_or_else(|| {
         NotaError::other("ZIP contains no flat Nota UI or Typora document theme CSS")
@@ -339,13 +337,10 @@ fn find_theme_root(root: &Path) -> Result<Option<PathBuf>> {
     Ok(None)
 }
 
-/// Build the CSS delivered to the webview without modifying the installed
-/// source files. Relative imports are expanded and local assets become data
-/// URIs because the webview receives CSS as text rather than a theme URL.
 pub(crate) fn load_runtime_css(css_path: &Path) -> Result<String> {
     let root = css_path
         .parent()
-        .ok_or_else(|| NotaError::other("主题 CSS 没有上一级目录"))?;
+        .ok_or_else(|| NotaError::other("Theme CSS has no parent directory"))?;
     let root = canonical(root)?;
     expand_css(css_path, &root, &mut BTreeSet::new(), 0)
 }
@@ -389,10 +384,7 @@ fn theme_id(collection: &str, css: &str) -> String {
         .unwrap_or("theme");
     let digest = Sha256::digest(format!("{collection}\0{css}").as_bytes());
     let suffix = u32::from_be_bytes(digest[..4].try_into().unwrap());
-    format!(
-        "typora-{}-{suffix:08x}",
-        slug_limited(stem, 36),
-    )
+    format!("typora-{}-{suffix:08x}", slug_limited(stem, 36),)
 }
 
 fn root_css_files(root: &Path) -> Result<Vec<String>> {
@@ -437,11 +429,7 @@ fn is_ui_theme_path(path: &Path) -> Result<bool> {
     Ok(super::without_css_comments(&css).contains("data-ui-style="))
 }
 
-fn is_document_theme_path(
-    path: &Path,
-    root: &Path,
-    seen: &mut BTreeSet<PathBuf>,
-) -> Result<bool> {
+fn is_document_theme_path(path: &Path, root: &Path, seen: &mut BTreeSet<PathBuf>) -> Result<bool> {
     if !path.is_file() {
         return Ok(false);
     }
@@ -473,11 +461,6 @@ fn collect_source_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
     Ok(out)
 }
 
-/// Copy one CSS file and only the local files it actually references.
-///
-/// A downloaded CSS file usually sits in a directory that also contains
-/// unrelated downloads. Treating that directory as a theme package can exceed
-/// the source limits and reject an otherwise valid theme.
 fn collect_css_dependencies(root: &Path, css: &str) -> Result<BTreeMap<String, Vec<u8>>> {
     let root = canonical(root)?;
     let mut out = BTreeMap::new();
@@ -511,7 +494,7 @@ fn collect_dependency(
     if bytes.len() > super::MAX_FILE_BYTES {
         return Err(NotaError::other("Theme file is too large"));
     }
-    *total = total.saturating_add(bytes.len());
+
     if *total > MAX_SOURCE_BYTES {
         return Err(NotaError::other("Theme exceeds 128 MiB"));
     }
@@ -684,20 +667,20 @@ fn collect_directory(
             continue;
         }
         if out.len() >= MAX_SOURCE_FILES {
-            return Err(NotaError::other("Typora 主题文件数超过上限"));
+            return Err(NotaError::other("Typora theme exceeds the file limit"));
         }
         let relative = path
             .strip_prefix(root)
-            .map_err(|_| NotaError::other("主题文件不在导入目录内"))?
+            .map_err(|_| NotaError::other("Theme file is outside the import directory"))?
             .to_string_lossy()
             .replace('\\', "/");
         let bytes = std::fs::read(&path).map_err(|source| NotaError::Read {
             path: path.clone(),
             source,
         })?;
-        *total = total.saturating_add(bytes.len());
+
         if *total > MAX_SOURCE_BYTES {
-            return Err(NotaError::other("Typora 主题超过 128 MiB"));
+            return Err(NotaError::other("Typora theme exceeds 128 MiB"));
         }
         out.insert(relative, bytes);
     }
@@ -711,7 +694,7 @@ fn expand_css(
     depth: usize,
 ) -> Result<String> {
     if depth > MAX_IMPORT_DEPTH {
-        return Err(NotaError::other("Typora 主题的 @import 层级太深"));
+        return Err(NotaError::other("Typora theme @import nesting is too deep"));
     }
     if !path.is_file() {
         return Ok(String::new());
@@ -719,7 +702,7 @@ fn expand_css(
     let full = canonical(path)?;
     if !full.starts_with(root) {
         return Err(NotaError::other(format!(
-            "主题引用了文件夹外的 CSS：{}",
+            "Theme references CSS outside its directory: {}",
             path.display()
         )));
     }
@@ -958,237 +941,4 @@ fn split_sources(value: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn temp_root(name: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "nota-typora-theme-{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&root).unwrap();
-        root
-    }
-
-    #[test]
-    fn imports_flat_directory_without_rewriting_its_css() {
-        let root = temp_root("directory");
-        let source = "#write { --doc-bg: white; }\n";
-        std::fs::write(root.join("paper.css"), source).unwrap();
-        std::fs::write(
-            root.join("paper-dark.css"),
-            "@import \"./paper.css\";\n:root { --doc-bg: black; }",
-        )
-        .unwrap();
-        std::fs::write(root.join("notes.css"), "p { color: black; }").unwrap();
-        let installed = root.join("installed");
-        let report = install_source(&root, &installed).unwrap();
-
-        let collection = collection_id(&root);
-        assert_eq!(
-            report.document,
-            vec![
-                theme_id(&collection, "paper.css"),
-                theme_id(&collection, "paper-dark.css"),
-            ]
-        );
-        let package = installed.join(&collection);
-        assert_eq!(
-            std::fs::read_to_string(package.join("paper.css")).unwrap(),
-            source
-        );
-        assert!(!package.join("theme.css").exists());
-        let manifest = read_manifest(&package).unwrap();
-        assert_eq!(manifest.themes[0].name, "paper");
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn imports_one_css_with_only_its_dependencies() {
-        let root = temp_root("single-css");
-        std::fs::create_dir_all(root.join("parts")).unwrap();
-        std::fs::create_dir_all(root.join("images")).unwrap();
-        std::fs::write(root.join("parts/base.css"), "body { color: black; }\n").unwrap();
-        std::fs::write(root.join("images/bg.png"), [0, 1, 2, 3]).unwrap();
-        std::fs::write(
-            root.join("theme.css"),
-            "@import \"parts/base.css\";\n:root { --doc-bg: white; background: url(images/bg.png); }\n",
-        )
-        .unwrap();
-        std::fs::write(root.join("unrelated-large-download.bin"), vec![0; 1024 * 1024]).unwrap();
-
-        let installed = root.join("installed");
-        let report = install_source(&root.join("theme.css"), &installed).unwrap();
-        assert_eq!(report.document.len(), 1);
-        let package = installed.join(collection_id(&root));
-        assert!(package.join("theme.css").is_file());
-        assert!(package.join("parts/base.css").is_file());
-        assert!(package.join("images/bg.png").is_file());
-        assert!(!package.join("unrelated-large-download.bin").exists());
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn imports_one_ui_css_into_the_ui_theme_root() {
-        let root = temp_root("single-ui-css");
-        std::fs::create_dir_all(root.join("images")).unwrap();
-        std::fs::write(root.join("images/close.svg"), "<svg/>").unwrap();
-        std::fs::write(
-            root.join("my-ui.css"),
-            "[data-ui-style=\"my-ui\"] { --icon-close: url(images/close.svg); }\n",
-        )
-        .unwrap();
-        std::fs::write(root.join("unrelated-large-download.bin"), vec![0; 1024 * 1024]).unwrap();
-
-        let ui_root = root.join("ui-installed");
-        let document_root = root.join("document-installed");
-        let report = install_source_bundle(
-            &root.join("my-ui.css"),
-            &ui_root,
-            &document_root,
-        )
-        .unwrap();
-        assert_eq!(report.ui, vec!["my-ui"]);
-        assert!(report.document.is_empty());
-        assert!(ui_root.join("my-ui/theme.css").is_file());
-        assert!(ui_root.join("my-ui/images/close.svg").is_file());
-        assert!(!document_root.join("my-ui").exists());
-        assert!(!ui_root.join("my-ui/unrelated-large-download.bin").exists());
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn does_not_list_user_overrides_as_themes() {
-        let root = temp_root("user-override");
-        std::fs::write(
-            root.join("paper.css"),
-            "@import \"paper.user.css\";\n#write { --doc-bg: white; }",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("paper.user.css"),
-            "#write { --text-color: black; }",
-        )
-        .unwrap();
-        let installed = root.join("installed");
-        let report = install_source(&root, &installed).unwrap();
-        assert_eq!(report.document.len(), 1);
-        let package = installed.join(collection_id(&root));
-        let css = load_runtime_css(&package.join("paper.css")).unwrap();
-        assert!(css.contains("--text-color: black"));
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn runtime_expands_imports_and_inlines_relative_assets() {
-        let root = temp_root("runtime");
-        std::fs::create_dir_all(root.join("fonts")).unwrap();
-        std::fs::write(root.join("fonts/base.css"), "p { color: red; }").unwrap();
-        std::fs::write(root.join("assets.svg"), "<svg/>").unwrap();
-        std::fs::write(
-            root.join("demo.css"),
-            "@import url(\"./fonts/base.css\");\n#write { background: url(./assets.svg); }",
-        )
-        .unwrap();
-        let css = load_runtime_css(&root.join("demo.css")).unwrap();
-        assert!(css.find("color: red").unwrap() < css.find("--doc-bg").unwrap_or(usize::MAX));
-        assert!(css.contains("data:image/svg+xml;base64"));
-        assert!(!css.contains("@import"));
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn runtime_ignores_missing_optional_imports() {
-        let root = temp_root("optional-import");
-        std::fs::write(
-            root.join("theme.css"),
-            "@import \"theme.user.css\";\n@import \"missing.user.css\";\n#write { --doc-bg: white; }",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("theme.user.css"),
-            "#write { --text-color: black; }",
-        )
-        .unwrap();
-        let css = load_runtime_css(&root.join("theme.css")).unwrap();
-        assert!(css.contains("--text-color: black"));
-        assert!(css.contains("--doc-bg: white"));
-        assert!(!css.contains("@import"));
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn imports_flat_typora_zip_without_conversion() {
-        let root = temp_root("zip");
-        let archive = root.join("theme.zip");
-        {
-            let file = std::fs::File::create(&archive).unwrap();
-            let mut zip = zip::ZipWriter::new(file);
-            let options = zip::write::SimpleFileOptions::default();
-            zip.start_file("wrapper/paper.css", options).unwrap();
-            zip.write_all(b"#write { --doc-bg: white; }\n").unwrap();
-            zip.start_file("wrapper/fonts/face.woff2", options)
-                .unwrap();
-            zip.write_all(b"font").unwrap();
-            zip.finish().unwrap();
-        }
-        let installed = root.join("installed");
-        let report = install_zip(&archive, &root.join("ui-installed"), &installed).unwrap();
-        assert_eq!(report.document.len(), 1);
-        let package = installed.join(collection_id(&root.join("wrapper")));
-        assert_eq!(
-            std::fs::read_to_string(package.join("paper.css")).unwrap(),
-            "#write { --doc-bg: white; }\n"
-        );
-        assert_eq!(
-            std::fs::read(package.join("fonts/face.woff2")).unwrap(),
-            b"font"
-        );
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn prefers_embedded_font_data_and_drops_local_fallback() {
-        let css = "@font-face { src: url(\"./font.otf\") format(\"opentype\"), url(\"data:font/woff2;base64,AA\") format(\"woff2\"); }";
-        let simplified = simplify_font_sources(css);
-        assert!(!simplified.contains("font.otf"));
-        assert!(simplified.contains("data:font/woff2"));
-    }
-
-    #[test]
-    fn audits_external_theme_paths_from_environment() {
-        let Some(paths) = std::env::var_os("NOTA_TYPO_AUDIT_PATHS") else {
-            return;
-        };
-        let installed = temp_root("external-audit");
-        for path in std::env::split_paths(&paths) {
-            match install_source(&path, &installed) {
-                Ok(report) => {
-                    for id in report.document {
-                        let package = installed.join(collection_id(&path));
-                        let manifest = read_manifest(&package).unwrap();
-                        let theme = manifest.themes.iter().find(|theme| theme.id == id).unwrap();
-                        let css = load_runtime_css(&package.join(&theme.css)).unwrap();
-                        let font_faces = css.matches("@font-face").count();
-                        let data_urls = css.matches("url(\"data:").count()
-                            + css.matches("url(data:").count()
-                            + css.matches("url('data:").count();
-                        let imports = css.matches("@import").count();
-                        println!(
-                            "AUDIT\t{}\t{}\tbytes={}\tfont_faces={font_faces}\tdata_urls={data_urls}\timports={imports}",
-                            path.display(),
-                            id,
-                            css.len()
-                        );
-                    }
-                }
-                Err(error) => panic!("{}: {error}", path.display()),
-            }
-        }
-        let _ = std::fs::remove_dir_all(installed);
-    }
-}
+mod tests;

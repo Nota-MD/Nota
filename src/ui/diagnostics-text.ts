@@ -1,6 +1,6 @@
 import type { Diagnostics } from "@/bridge/ipc";
 
-/** 调试日志窗口里的系统诊断文本。固定英文，不进入翻译表。 */
+
 export function formatDiagnosticText(
   diagnostics: Diagnostics,
   userAgent: string,

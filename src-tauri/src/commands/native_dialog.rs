@@ -1,9 +1,3 @@
-//! 系统原生文件选择器。
-//!
-//! 前端优先调用这里；只有命令本身不可用时才退回应用内自绘选择器。这样
-//! GNOME/KDE 的搜索、最近文件、书签与 Windows 常用位置都由操作系统提供，
-//! 不依赖 Nota 自己维护一份永远追不上的导航列表。
-
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -31,11 +25,8 @@ pub struct NativeDialogRequest {
     multiple: bool,
 }
 
-/// 打开系统文件选择器。返回 `None` 表示用户取消。
 #[tauri::command]
-pub async fn nota_dialog_native(
-    request: NativeDialogRequest,
-) -> Result<Option<Vec<String>>> {
+pub async fn nota_dialog_native(request: NativeDialogRequest) -> Result<Option<Vec<String>>> {
     #[cfg(target_os = "linux")]
     {
         portal_dialog(request).await
@@ -43,7 +34,7 @@ pub async fn nota_dialog_native(
 
     #[cfg(not(target_os = "linux"))]
     {
-        tauri::async_runtime::spawn_blocking(move || 打开(request))
+        tauri::async_runtime::spawn_blocking(move || open_native_dialog(request))
             .await
             .map_err(|e| crate::error::NotaError::Other(format!("native dialog task failed: {e}")))
     }
@@ -56,8 +47,6 @@ pub struct NativeTextFile {
     text: String,
 }
 
-/// Open the platform file dialog and return the selected UTF-8-compatible text.
-/// The path never crosses the frontend boundary.
 #[tauri::command]
 pub async fn nota_dialog_text_file(
     mut request: NativeDialogRequest,
@@ -92,7 +81,7 @@ pub async fn nota_dialog_text_file(
 }
 
 #[cfg(not(target_os = "linux"))]
-fn 打开(request: NativeDialogRequest) -> Option<Vec<String>> {
+fn open_native_dialog(request: NativeDialogRequest) -> Option<Vec<String>> {
     let mut dialog = rfd::FileDialog::new();
     if let Some(title) = request.title.as_deref() {
         if !title.trim().is_empty() {
@@ -146,11 +135,6 @@ fn 打开(request: NativeDialogRequest) -> Option<Vec<String>> {
     }
 }
 
-/// Linux file chooser: XDG Desktop Portal only.
-///
-/// This deliberately bypasses `rfd`'s GTK3/zenity fallbacks. GNOME serves the
-/// request from its GTK4 portal frontend and KDE from Plasma, so the dialog
-/// belongs to the desktop's native toolkit rather than the GTK3 main process.
 #[cfg(target_os = "linux")]
 async fn portal_dialog(request: NativeDialogRequest) -> Result<Option<Vec<String>>> {
     use ashpd::desktop::file_chooser::{FileFilter, SelectedFiles};
@@ -161,7 +145,9 @@ async fn portal_dialog(request: NativeDialogRequest) -> Result<Option<Vec<String
         .and_then(|request| crate::gtk4_dialogs::file_dialog(&request))
     {
         Ok(paths) => return Ok(paths),
-        Err(error) => crate::日志!("[nota] GTK4 dialog helper unavailable; using portal: {error}"),
+        Err(error) => {
+            crate::debug_log!("[nota] GTK4 dialog helper unavailable; using portal: {error}")
+        }
     }
 
     let filters = request
@@ -197,7 +183,10 @@ async fn portal_dialog(request: NativeDialogRequest) -> Result<Option<Vec<String
             path.parent().map(Path::to_path_buf)
         }
     });
-    let title = request.title.as_deref().filter(|title| !title.trim().is_empty());
+    let title = request
+        .title
+        .as_deref()
+        .filter(|title| !title.trim().is_empty());
 
     let portal: PortalRequest<SelectedFiles> = if request.mode == "save" {
         let current_name = default_path
@@ -210,12 +199,13 @@ async fn portal_dialog(request: NativeDialogRequest) -> Result<Option<Vec<String
         if let Some(folder) = current_folder {
             dialog = dialog
                 .current_folder::<PathBuf>(Some(folder))
-                .map_err(|e| crate::error::NotaError::other(format!("文件选择路径无效：{e}")))?;
+                .map_err(|e| {
+                    crate::error::NotaError::other(format!("Invalid file picker path: {e}"))
+                })?;
         }
-        dialog
-            .send()
-            .await
-            .map_err(|e| crate::error::NotaError::other(format!("GTK4 文件门户不可用：{e}")))?
+        dialog.send().await.map_err(|e| {
+            crate::error::NotaError::other(format!("GTK4 file portal is unavailable: {e}"))
+        })?
     } else {
         let mut dialog = SelectedFiles::open_file()
             .title(title)
@@ -225,12 +215,13 @@ async fn portal_dialog(request: NativeDialogRequest) -> Result<Option<Vec<String
         if let Some(folder) = current_folder {
             dialog = dialog
                 .current_folder::<PathBuf>(Some(folder))
-                .map_err(|e| crate::error::NotaError::other(format!("文件选择路径无效：{e}")))?;
+                .map_err(|e| {
+                    crate::error::NotaError::other(format!("Invalid file picker path: {e}"))
+                })?;
         }
-        dialog
-            .send()
-            .await
-            .map_err(|e| crate::error::NotaError::other(format!("GTK4 文件门户不可用：{e}")))?
+        dialog.send().await.map_err(|e| {
+            crate::error::NotaError::other(format!("GTK4 file portal is unavailable: {e}"))
+        })?
     };
 
     let selected = match portal.response() {
@@ -238,7 +229,7 @@ async fn portal_dialog(request: NativeDialogRequest) -> Result<Option<Vec<String
         Err(ashpd::Error::Response(ResponseError::Cancelled)) => return Ok(None),
         Err(error) => {
             return Err(crate::error::NotaError::other(format!(
-                "GTK4 文件门户没有返回结果：{error}"
+                "GTK4 file portal returned no result: {error}"
             )))
         }
     };

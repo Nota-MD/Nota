@@ -1,50 +1,3 @@
-/**
- * **自动链接**：用户打出来（或粘进来）的 HTTP(S)、`www.`、邮箱和
- * 显式 `mailto:` 地址自动变成链接。
- * 2026-09-28 落地，用户原话：「**裸 URL 自动识别成链接**」「粘贴 URL 到选中文字
- * → 自动包成链接」。
- *
- * # 两件事，一处判据
- *
- * | 什么时候 | 怎么进 | 落到文档上的样子 |
- * |---|---|---|
- * | 打到**边界**（空格 / Tab / Enter） | 输入规则 ＋ `autoLinkBoundary` | 那段文字挂上 `link` 标记 |
- * | **粘**进来 | 粘贴插件（`editor/paste.ts` 调 {@link 贴上网址事务}） | 同上；**选区非空时是给选中那段挂标记** |
- *
- * ⚠️ **两路的"这是不是一个网址"必须是同一个答案**：判据只有
- * {@link 正规化网址} 一个出口（`find.ts` 那条"匹配逻辑只有
- * 一份"的规矩）。分成两份的症状是"打出来是链接、粘进来不是"，而用户没法
- * 理解为什么。
- *
- * # 口径（四条，都是取舍）
- *
- * 1. **只认明确的链接形状**：带 `http(s)://`、`www.`、完整邮箱，或显式 `mailto:`。
- *    ⚠️ **裸域名（`example.com`）不认**——这一条是**故意**的，不是漏了。
- *    认了的话，`README.md` / `node.js` / `index.html` / `图.png` / `v1.2`
- *    全都变成链接，而"把用户写的普通文字改成一个链接"是这件事唯一不能犯的错
- *    （与 `auto-correct.ts` 的入表判据同一条道理）。GitHub 认裸域名，
- *    代价正是这几类误报。
- * 2. **危险协议一个都不放**：{@link 危险协议} 那张黑名单。
- *    ⚠️ 上游 `linkSchema` **不校验 `href`**（`toggleLinkCommand` 原样收字符串），
- *    而这里的一个输入源是**剪贴板**——粘一段带 `javascript:` 的东西进来，
- *    等于把一段可执行文本写成链接，点一下就跑了。所以进 `link` 标记之前必须
- *    过这一道。⚠️ 这是**纵深防御的第二层**：插件也是从这条路进来的，
- *    但真正拦住它们的不该只有这一处。
- * 3. **只动"刚敲进去 / 刚粘进来"的那一串**：输入规则走 `prosemirror-inputrules`，
- *    `Ctrl+Z` 一步退回纯文本（与智能标点、自动更正同一条口径）；粘贴在
- *    一次事务里，同样一步可退。**已有文本一个字节不改。**
- * 4. **网址末尾的标点留在链接外面**（{@link 切尾标点}），这是 linkify 的通用
- *    做法，也是"每句话末尾多一颗句号在链接里"那个常见毛病的解药。
- *
- * # 已知边界（如实记着）
- *
- * - **空格和 Enter 共用边界插件**：链接先落标记，随后同一颗键再交给原有输入或
- *   块级键位处理，所以不会绕开标题、列表、表格的分段语义。
- * - ⚠️ **行内代码与围栏代码块里不触发**（`规则选项` 那条注释讲了机制）。
- * - ⚠️ **不做"输入时把已有文本重扫一遍"**：只认刚敲的、刚粘的，老文档一个
- *   字节不改（Nota 那条"存盘不要自动修复"的铁律）。
- */
-
 import { $inputRule } from "@milkdown/kit/utils";
 import { linkSchema } from "@milkdown/kit/preset/commonmark";
 import { Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
@@ -54,16 +7,7 @@ import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 
-/**
- * Links end at their last visible character.
- *
- * ProseMirror marks are inclusive by default: a caret at the tail of an existing
- * link inherits that link for the next insertion. Milkdown's CommonMark link
- * schema does not override that default, which makes every following character
- * stick to the link. Marking the link explicitly non-inclusive fixes the rule at
- * the schema boundary, so it covers parsed Markdown, typed links, pasted links
- * and links written through the dialog instead of patching each transaction.
- */
+
 export function linkBoundaryMarkSpec<T extends { inclusive?: boolean }>(previous: T): T {
   return {
     ...previous,
@@ -75,64 +19,23 @@ export const linkBoundarySpec = linkSchema.extendSchema(
   (previous) => (ctx) => linkBoundaryMarkSpec(previous(ctx)),
 );
 
-/* ── 第一格：判据（纯函数，测试只用这一层）──────────────────────────────── */
 
-/**
- * 这些协议一律不许写成链接。
- *
- * ⚠️ 表里**没有** `mailto:` / `tel:` ——那两条是**正当**协议，用户写
- * `[写信](mailto:a@b.c)` 是常规做法，挡掉它们等于挡掉一条真功能。
- * 裸 URL 那一路本来也不会把 `mailto:` 认成网址（{@link 正规化网址} 只认
- * http/https/www），所以这里放行是安全的。
- */
 const dangerousProtocolTable = ["javascript:", "vbscript:", "data:", "file:", "blob:"] as const;
 
-/**
- * 这条地址危不危险（危险 = 不许进文档）。
- *
- * @param 地址 已经写成 href 的那串（`https://…` 或 `javascript:…`）。
- *
- * ⚠️ **判据是"去掉全部空白与控制符之后的前缀"**，不是字符串开头——否则
- * `java\tscript:` 这种写法会从这道闸底下钻过去（浏览器解析 `href` 时会把
- * 里面的制表符与换行吃掉，它**仍然是**一条 `javascript:`）。
- */
+
 export function DangerousProtocol(address: string): boolean {
   const doValue = address.replace(/[\s\u0000-\u001f\u007f]/g, "").toLowerCase();
   return dangerousProtocolTable.some((broken) => doValue.startsWith(broken));
 }
 
-/**
- * 这一串像不像主机名。
- *
- * 三档放行：`localhost`（本地开发天天用）、IPv4 点分四段、以及
- * **至少带一颗点、且最后一段是 ≥2 个字母**的普通域名。
- *
- * ⚠️ 最后那条"最后一段 ≥2 个字母"是**这里唯一有份量的判据**：没有它的话
- * `www.v2` / `www.1` 这种半截东西也会变成链接；有了它，`www.nota.app` 认、
- * `www.x` 不认。IDN（`例子.中国`）走 `new URL()` 会被转成 punycode，
- * 到了这一步已经是 `xn--…`，最后一段是字母，照样放行。
- */
+
 function isLikeMainMachineName(mainMachine: string): boolean {
   if (mainMachine === "localhost") return true;
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(mainMachine)) return true;
   return /^[^.\s/]+(\.[^.\s/]+)*\.[a-z]{2,}$/i.test(mainMachine);
 }
 
-/**
- * 一串**候选**文字能不能当网址用；能的话给出去的 href 是什么，不能给 `null`。
- *
- * 三档：
- *
- * | 输入 | 结果 | 说明 |
- * |---|---|---|
- * | `https://a.b/c` | 原样 | 已经带协议 |
- * | `HTTP://A.B/C` | 原样 | 大小写不影响可用性，不规范化 |
- * | `www.a.b/c` | `https://` ＋ 原样 | 补的**一定是 https**（2026 年了，http 是错的默认） |
- * | 别的（含裸域名 `a.b`） | `null` | 理由在文件头第 1 条 |
- *
- * ⚠️ **纯函数**：{@link 自动链接输入} 与 {@link 贴上网址事务} 用的是同一个它，
- * 测试（`tests/url-link.test.ts`）也是。
- */
+
 export function NormalizeUrl(candidate: string): string | null {
   const text4 = candidate.trim();
   if (text4 === "" || /\s/.test(text4)) return null;
@@ -149,8 +52,8 @@ export function NormalizeUrl(candidate: string): string | null {
   try {
     parse = new URL(address);
   } catch {
-    // `new URL` 抛 = 这串压根不是个地址（`https://` 后面什么都没有、
-    // 或者中间有浏览器不接受的字符）。**当没看见**，不是报错。
+
+
     return null;
   }
   if (parse.protocol !== "http:" && parse.protocol !== "https:") return null;
@@ -158,7 +61,7 @@ export function NormalizeUrl(candidate: string): string | null {
   return address;
 }
 
-/** A recognized bare link and the href that should back it. */
+
 export interface NormalizedLink {
   text: string;
   href: string;
@@ -167,13 +70,7 @@ export interface NormalizedLink {
 const emailAddressPattern =
   /^(?:(mailto:\/{0,2}))?([a-z0-9][a-z0-9._%+-]{0,63})@((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63})$/i;
 
-/**
- * Normalize an HTTP(S), www, email, or explicit mailto address.
- *
- * Bare domains remain excluded. Email recognition is separate from
- * {@link NormalizeUrl} so image detection and link editing keep their existing
- * URL-only contracts.
- */
+
 export function NormalizeLink(candidate: string): NormalizedLink | null {
   const text4 = candidate.trim();
   const url = NormalizeUrl(text4);
@@ -184,18 +81,12 @@ export function NormalizeLink(candidate: string): NormalizedLink | null {
   return { text: text4, href: /^mailto:/i.test(text4) ? text4 : `mailto:${text4}` };
 }
 
-/** {@link 是裸URL} 的判据出口（测试用）。 */
+
 export function isBareURL(candidate: string): boolean {
   return NormalizeUrl(candidate) !== null;
 }
 
-/**
- * Destination normalization for explicit `[label](destination)` syntax.
- *
- * The bracket/parenthesis syntax removes the ambiguity that keeps bare domains
- * out of plain-text auto-linking. `github.com` therefore becomes an HTTPS
- * destination, while relative Markdown links and fragments remain unchanged.
- */
+
 export function normalizeExplicitLinkDestination(candidate: string): string | null {
   const text4 = candidate.trim();
   if (text4 === "" || /\s/.test(text4) || DangerousProtocol(text4)) return null;
@@ -206,7 +97,7 @@ export function normalizeExplicitLinkDestination(candidate: string): string | nu
   return isLikeMainMachineName(host) ? `https://${text4}` : text4;
 }
 
-/** 左括号 / 左引号 → 右括号 / 右引号。{@link 切尾标点} 第 ② 条用它配对。 */
+
 const rightConfigureLeft: Readonly<Record<string, string>> = {
   ")": "(",
   "]": "[",
@@ -216,35 +107,15 @@ const rightConfigureLeft: Readonly<Record<string, string>> = {
   "»": "«",
   "”": "“",
   "’": "‘",
-  /* 中文那一族的右括号。⚠️ 2026-09-28 补上：`「https://a.com」` 是中文正文里
-     最常见的写法，而下面那条判据要按"左右各几颗"配对，**表里没有右角括号
-     就等于永远不切**——症状是链接尾巴上粘着一颗 `」`。 */
+
+
   "」": "「",
   "』": "『",
   "》": "《",
   "〉": "〈",
 };
 
-/**
- * URL **末尾**那些不属于它的字符切下来。
- *
- * 两种：
- *
- * ① **句读**（`.,;:!?`）**一律切**。理由：`见 https://a.com/b.` 里的句号是
- *    句子的一部分，不是地址的一部分。代价如实记：真以句号结尾的地址
- *    （极罕见）会被切掉一颗，用户要么用 `[文字](地址)` 写法、要么点进去之后
- *    自己补——比"每句话末尾都多一颗句号在链接里"划算得多。
- * ② **右括号 / 右引号**（`)]}"»”’` 与中文那一族 `」』》〉`）**数着切**：
- *    它前面若还有一颗**没被配掉**的左括号，才切。这是维基百科链接与 linkify 库
- *    通用的那一条——`https://en.wikipedia.org/wiki/A_(b)` 必须以 `)` 结尾
- *    （切了它，左边就多出一颗 `(` 没人配），而 `https://a.com)` 那颗 `)`
- *    是外层括号的（切了它正好配平）。左右引号字符不同，单独数一对更准，
- *    所以它们也在这一族里。
- *
- *
- * @returns `网址` 是切干净的（**可能为空串**，调用方自己判），`尾巴` 是切下来的
- *   那一截（**原样**、顺序不变），调用方要把它当普通文字放回原处。
- */
+
 export function splitTailPunctuation(source: string): { url: string; tailPart: string } {
   const number2 = (s: string, c: string) => s.split(c).length - 1;
   let end3 = source.length;
@@ -256,9 +127,8 @@ export function splitTailPunctuation(source: string): { url: string; tailPart: s
     }
     const left = rightConfigureLeft[end];
     if (left !== undefined) {
-      // ⚠️ `终` 是"最后一颗之后"的那个下标，所以 `slice(0, 终)` **已经含**
-      // 当前这一颗了——不要再自己 `+ 1`。2026-09-28 写测试时加了那一颗，
-      // 症状是**配平的地址反被切掉尾巴**（`.../A_(b)` 变成 `.../A_(b`）。
+
+
       const alreadyHas = source.slice(0, end3);
       if (number2(alreadyHas, end) > number2(alreadyHas, left)) {
         end3--;
@@ -270,61 +140,28 @@ export function splitTailPunctuation(source: string): { url: string; tailPart: s
   return { url: source.slice(0, end3), tailPart: source.slice(end3) };
 }
 
-/* ── 第二格：输入规则（打字那一路）────────────────────────────────────── */
 
-/**
- * 每一条规则都要带的那份选项。⚠️ 理由与 `smart-punctuation.ts` /
- * `auto-correct.ts` 里那两个同名常量**完全一样**（`inCodeMark` 的默认值是
- * `true`，不写这一句行内代码里也会生效），那段长注释在 `smart-punctuation.ts`
- * 那边，这里不重复。
- */
 const ruleRuleOption = { inCodeMark: false } as const;
 
-/**
- * 打到词尾那一下的匹配式。**导出是给测试用的**。
- *
- * 拆开看：
- *
- * | 段 | 作用 |
- * |---|---|
- * | `(?:^\|[\s([{（【「『"'“‘>\uFFFC])` | 前面必须是**行首 / 空白 / 左括号那一族**。⚠️ 末尾那颗 `\uFFFC` 是 `U+FFFC`（`textBetween` 给图片这类叶子节点的占位符）——网址紧跟在图片后面时前一个"字符"就是它 |
- * | 第二组 | 网址或邮箱本体。⚠️ URL 收尾字符里排出 `<>"` 与反引号；邮箱必须含 `@` 和至少一级域名 |
- * | `[ \t]$` | 词尾的触发字符。⚠️ **只有空格与制表符**，与 `auto-correct.ts` 同一条口径 |
- *
- * ⚠️ 匹配式**必须在光标处收尾**（末尾那颗 `$`）：`prosemirror-inputrules` 用
- * `始 = 光标 - match[0].length` 反推位置，不收尾就会把位置算错一个偏移，
- * 症状是"链接包住了 URL 前面那颗空格"。
- */
-export const bareURLCorrectRule =
-  /(?:^|[\s([{（【「『"'“‘>\uFFFC])((?:(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:mailto:\/{0,2})?[a-z0-9][a-z0-9._%+-]*@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+[?!.,:**_~;，。；：！？、]*))[ \t]$/i;
 
-/**
- * 挂进 `.use()` 的输入规则：**打到词尾那一下**把外面那串变成链接。
- *
- * ⚠️ **由 `markdown.autolink` 控制**：关闭时连同边界插件与粘贴识别一起移除。
- *
- * ⚠️ **排在整串 `.use()` 的后面**（`create.ts` 里挂在自动更正旁边）：上游那些
- * 输入规则要的分隔符是 `#` / `>` / `-` / 数字 / 反引号 / `$`，与"字母冒号
- * 斜杠那一串"不重合，抢不起来；排后面是零代价的保险。
- */
+export const bareURLCorrectRule =
+  /(?:^|[\s([{（【「『"'“‘>\uFFFC])((?:(?:https?:\/\/|www\.)[^\s<>"'\x60]+|(?:mailto:\/{0,2})?[a-z0-9][a-z0-9._%+-]*@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+[?!.,:**_~;，。；：！？、]*))[ \t]$/i;
+
 export function selfActionLinkInput(enabled = true) {
   if (!enabled) return [];
   return [
     $inputRule(() =>
       new InputRule(bareURLCorrectRule, (state, match2, start6, end3) => {
         const original = match2[1]!;
-        // ⚠️ 先切尾标点**再**判网址：`https://a.com/b.` 里那颗句号让
-        // `new URL` 仍然成功，而 `https://a.com/b,` 里那颗逗号未必——顺序反了
-        // 会出现"带逗号的不认、带句号的认"这种说不通的差别。
+
+
         const { url, tailPart } = splitTailPunctuation(original);
         const normalized = NormalizeLink(url);
         if (!normalized) return null;
         const link = state.schema.marks.link;
         if (!link) return null;
-        // ⚠️ `匹配[0]` 是"**前缀字符 ＋ 网址 ＋ 触发空白**"，`始` 落在前缀
-        // 字符上、`终` 在光标（触发空白之后）。所以网址本体的区间是
-        // `[始 + 前缀长, 终 - 1)`。前缀长**只能这么算**，不能写死：
-        // 行首时前缀是空的（`^` 那一支），写死 1 会把第一个字符切掉。
+
+
         const prefixLength = match2[0].length - original.length - 1;
         const from = start6 + prefixLength;
         const to = end3 - 1;
@@ -340,7 +177,7 @@ export function selfActionLinkInput(enabled = true) {
   ];
 }
 
-/** `[label](destination)` becomes a link as soon as `)` is typed. */
+
 export const explicitLinkSyntax = /\[([^\]\n]+)\]\(([^()\s]+)\)$/;
 
 function explicitLinkTransaction(
@@ -374,15 +211,7 @@ export function explicitLinkInput() {
   ];
 }
 
-/**
- * Complete an explicit link when its closing `)` already exists in the
- * document because the optional auto-pair plugin inserted it.
- *
- * In that case typing `)` is consumed by the auto-pair boundary step, so the
- * normal InputRule never sees the character. The caret sits immediately before
- * the auto-inserted closer; match the full source around that caret and consume
- * the existing closer in the same transaction.
- */
+
 export function explicitLinkAtClosingParenthesis(
   state: EditorState,
   position: number,
@@ -394,12 +223,12 @@ export function explicitLinkAtClosingParenthesis(
   if (resolved.parent.textBetween(resolved.parentOffset, resolved.parentOffset + 1) !== ")") {
     return null;
   }
+
   const before = resolved.parent.textBetween(0, resolved.parentOffset, "\n", "\uFFFC");
   const match2 = explicitLinkSyntax.exec(`${before})`);
   if (!match2) return null;
-  // `match[0]` includes the existing closer after the caret, while `before`
-  // ends immediately before it. Subtract one for that virtual suffix so the
-  // replacement starts at the real opening `[`, not one position too early.
+
+
   const start6 = resolved.start() + before.length - match2[0].length + 1;
   return explicitLinkTransaction(state, match2, start6, position + 1);
 }
@@ -424,10 +253,8 @@ export function explicitLinkAtTypedParenthesis(
   );
   const match2 = explicitLinkSyntax.exec(`${before})`);
   if (!match2) return null;
-  // The typed `)` is not in the document yet: `match[0]` adds one virtual
-  // character solely for recognition. Keep the transaction's start on the real
-  // opening bracket. Without this correction the next text input lands one
-  // character inside the label.
+
+
   const start6 = resolved.start() + before.length - match2[0].length + 1;
   return explicitLinkTransaction(state, match2, start6, position);
 }
@@ -439,7 +266,7 @@ export function explicitLinkAtCursor(
   if (!state.selection.empty || state.selection.from !== position) return null;
   const resolved = state.doc.resolve(position);
   if (!resolved.parent.inlineContent || resolved.parent.type.spec.code) return null;
-  // Revealed source is already Markdown, not a freshly typed link.
+
   const linkSourceType = state.schema.nodes.notaLinkSource;
   if (
     linkSourceType &&
@@ -460,11 +287,7 @@ export function explicitLinkAtCursor(
   return explicitLinkTransaction(state, match2, start6, position);
 }
 
-/**
- * Recognize a complete explicit link when the next transaction follows it with
- * spaces or tabs. Some WebView input paths miss the closing-parenthesis event,
- * so this keeps the boundary key from leaving valid source unrendered.
- */
+
 export function explicitLinkAtTrailingWhitespace(
   state: EditorState,
   position: number,
@@ -499,13 +322,7 @@ export function explicitLinkAtTrailingWhitespace(
   return transaction;
 }
 
-/**
- * Complete explicit Markdown links directly from text input.
- *
- * This deliberately runs before auto-pair and the normal InputRule collection:
- * the typed `)` may already exist as an auto-inserted closer, in which case the
- * InputRule never sees it.
- */
+
 export function explicitLinkTyping() {
   const key = new PluginKey("nota-explicit-link-typing");
   return $prose(
@@ -528,10 +345,8 @@ export function explicitLinkTyping() {
           if (transactions.some((transaction) => transaction.getMeta("composition") != null)) {
             return null;
           }
-          // WebKit may commit the closing parenthesis without routing it through
-          // handleTextInput. Append transactions cannot distinguish a finished
-          // link from any character typed before an auto-paired closer, so only
-          // handle formats that already end at or before the caret here.
+
+
           const position = newState.selection.from;
           const transaction =
             explicitLinkAtCursor(newState, position) ??
@@ -562,7 +377,7 @@ export function explicitLinkTyping() {
   );
 }
 
-/** A link-shaped token immediately before the cursor in one text block. */
+
 export interface LinkBeforeCursor {
   from: number;
   to: number;
@@ -571,12 +386,7 @@ export interface LinkBeforeCursor {
   tail: string;
 }
 
-/**
- * Find a link-shaped token ending at the cursor.
- *
- * This does not mutate the document. It exists so Enter can use the same
- * normalization and trailing-punctuation rules as the space/Tab input rule.
- */
+
 export function findLinkBeforeCursor(parentText: string): LinkBeforeCursor | null {
   const match = /(\S+)$/u.exec(parentText);
   if (!match) return null;
@@ -601,7 +411,7 @@ export function findLinkBeforeCursor(parentText: string): LinkBeforeCursor | nul
   };
 }
 
-/** Convert the link token before the cursor without changing its visible text. */
+
 export function autoLinkBeforeCursor(state: EditorState): Transaction | null {
   const { selection } = state;
   if (!selection.empty || !selection.$from.parent.inlineContent) return null;
@@ -621,12 +431,7 @@ export function autoLinkBeforeCursor(state: EditorState): Transaction | null {
   return replaceLink(state, from, to, found.text, "", found.href, linkType);
 }
 
-/**
- * Recognize a link immediately before the cursor when Enter starts a new block.
- *
- * Returning `false` lets the normal block handlers process the same Enter after
- * the link transaction has been dispatched.
- */
+
 export const autoLinkBoundary = (enabled = true) =>
   $prose(() =>
     new Plugin({
@@ -653,19 +458,7 @@ export const autoLinkBoundary = (enabled = true) =>
     }),
   );
 
-/**
- * 把 `[始, 终)` 那段文字换成"挂上链接标记的同一段文字（＋尾巴）"。
- *
- * ⚠️ **三个可能的坑，都在这儿一次踩完**：
- *
- * ① **不能用 `addMark`**：那一段现在是纯文本，`addMark` 只加标记、不改文字，
- *    看着也能用——但**尾标点那一段要留在链接外面**，而 `addMark` 是整段一刀，
- *    分不出外面。所以走 `replaceWith` ＋ 显式带 mark 的 `schema.text`。
- * ② **`removeStoredMark`**：ProseMirror 的"存储标记"会让**紧接着**敲的下一个
- *    字也带上链接——用户打完 URL 接着写正文，会发现自己在一个链接里。
- *    粘贴那一路同理。
- * ③ **顺序**：链接节点在前、尾巴在后，一次 `replaceWith` 传数组。
- */
+
 function replaceLink(
   state: EditorState,
   start6: number,
@@ -680,30 +473,7 @@ function replaceLink(
   return state.tr.replaceWith(start6, end3, node).removeStoredMark(link);
 }
 
-/* ── 第三格：粘贴那一路的入口 ──────────────────────────────────────────── */
 
-/**
- * 剪贴板里那串纯文本是个网址时，算出"贴进去"该派的事务；不是网址、或者落点
- * 不合适时给 `null`（调用方接着往下判，交给别的处理器）。
- *
- * 两种落法：
- *
- * | 选区 | 动作 |
- * |---|---|
- * | **非空**（选中了"这里"两个字） | 给**选中那段**挂上链接，文字一个字节不动（用户原话：「粘贴 URL 到选中文字 → 自动包成链接」） |
- * | 空 | 插入网址本身，**当场就是链接**（不用再等下一个空格） |
- *
- * ⚠️ **只认"剪贴板里干干净净就是一条网址"**（前后空白算干净，中间有空白不算）。
- * 粘一段"看这里 https://a.com 很有意思"不该把整段变成链接——那既不可能是
- * 用户要的，也会把正文吃掉。
- *
- * ⚠️ **代码块那一道闸在调用方**（`paste.ts`，与上游 `clipboard` 插件同一处口径）：
- * 代码块里粘网址就该是纯文本。
- *
- * ⚠️ **选区是不是"行内"必须自己看**：NodeSelection（选中一整张图片、一个代码块）
- * 上 `from`/`to` 之间是一整个**块节点**，`addMark` 会在它身上挂链接标记，
- * 存盘序列化出来没法看。所以只给 `inlineContent` 的两端挂。
- */
 export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: string): Transaction | null {
   const normalized = NormalizeLink(cutPasteBoardText);
   if (!normalized) return null;
@@ -711,9 +481,8 @@ export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: 
   if (!link) return null;
   const { selection } = state;
   if (selection.empty) {
-    // ⚠️ **不能用 `insertText`**：它的签名里**没有** marks 那一格
-    //（`insertText(text, from?, to?)`），带上第四参会编译报错。要"插进去就带
-    // 标记"只能自己造一个 text 节点递给 `replaceWith`。
+
+
     return state.tr
       .replaceWith(
         selection.from,
@@ -728,11 +497,7 @@ export function pasteAboveUrlTransaction(state: EditorState, cutPasteBoardText: 
     .removeStoredMark(link);
 }
 
-/**
- * Link recognized URL and email tokens inside a larger pasted plain-text block.
- * The visible paste text remains byte-for-byte identical apart from the hidden
- * link marks. Markdown source is handled by the Markdown paste path first.
- */
+
 export function linkifiedPastedTextTransaction(
   state: EditorState,
   pastedText: string,

@@ -1,44 +1,11 @@
-//! **窗口自身的控制**（2026-09-27）：开发者工具、开一个新窗口。
-//!
-//! # 为什么这里只有两条命令
-//!
-//! 「窗口置顶」**不在这里**——它前端直接用 JS API 就够了
-//! （`getCurrentWindow().setAlwaysOnTop()`，读回来是 `isAlwaysOnTop()`），
-//! 而菜单上那个勾的判据**必须是"从窗口读回来的"**（与全屏同一条口径，
-//! 见 `ui/useImmersive.ts`）。走 IPC 的话要多一条"读回来"的命令，
-//! 而那条命令除了转发没有任何判断，纯属多一层。
-//!
-//! 「开发者工具」不一样：**它没有 JS API**。Tauri 的 `devtools` feature 只给了
-//! Rust 侧一个 `WebviewWindow::open_devtools()`，前端够不着，所以必须在这儿开一条。
-//!
-//! ⚠️ **`devtools` 是在 `Cargo.toml` 里显式打开的**（`tauri = { features =
-//! ["protocol-asset", "devtools"] }`）。去掉那个 feature，这个文件**编译不过**
-//! ——不是"静默失效"，这正是要的：菜单里那一条要么真的能开，要么整仓编译失败。
-//!
-//! # 「在新窗口中打开」为什么是**再起一份进程**，不是 `WebviewWindowBuilder`
-//!
-//! 同一个进程里再建一个 webview 是能做到的（Tauri 就那一个 API），但那样两个
-//! 窗口共用同一份 `AppState`：**文档表是同一张**，于是"新窗口"里看到的还是原来
-//! 那一堆标签，关一个两边一起变。那不是用户要的"新窗口"。
-//!
-//! 再起一份进程天然就是独立的（文档、工作区、插件各一份），代价只有一处：
-//! **跳过单实例那一关**（`cli.rs` 的 `--new-window`，判据与代价写在 `lib.rs` ⓿'）。
-
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::error::{NotaError, Result};
 
-/// 主窗口的 label。⚠️ 与 `tauri.conf.json` 里那个窗口的 `label` **必须一致**；
-/// 写错了的症状是"点了没反应"（命令报"找不到窗口"，而按钮看着是亮的）。
-const 主窗口: &str = "main";
-const 设置窗口: &str = "settings";
-const 关于窗口: &str = "about";
+const MAIN_WINDOW: &str = "main";
+const SETTINGS_WINDOW: &str = "settings";
+const ABOUT_WINDOW: &str = "about";
 
-/// Put keyboard focus on Nota's GTK toplevel and then on the WebView child.
-///
-/// `WebviewWindow::set_focus()` is not enough on XWayland: it can report
-/// success while the compositor keeps another toplevel active. Move through
-/// every layer explicitly before the frontend restores ProseMirror's caret.
 #[cfg(target_os = "linux")]
 pub(crate) fn focus_linux_webview(webview: &webkit2gtk::WebView) {
     use gtk::prelude::{Cast as _, GtkWindowExt as _, WidgetExt as _};
@@ -58,146 +25,129 @@ pub(crate) fn focus_linux_webview(webview: &webkit2gtk::WebView) {
     webview.grab_focus();
 }
 
-/// 编辑器和界面主题都就绪后，把预热窗口移到屏幕中央并显示。
-///
-/// The main window starts hidden with no taskbar entry. Reveal happens only
-/// after the editor is editable and the document theme is installed.
 #[tauri::command]
 pub fn nota_window_show_main(app: tauri::AppHandle) -> Result<()> {
-    let 窗 = app
-        .get_webview_window(主窗口)
-        .ok_or_else(|| NotaError::other(format!("找不到窗口 `{主窗口}`")))?;
-    窗.set_skip_taskbar(false)
-        .map_err(|e| NotaError::other(format!("显示任务栏入口失败：{e}")))?;
-    // Windows can animate a long move from an off-screen prewarm position.
-    // Hide first so the centered reveal submits one static frame.
+    let window = app
+        .get_webview_window(MAIN_WINDOW)
+        .ok_or_else(|| NotaError::other(format!("Window `{MAIN_WINDOW}` not found")))?;
+    window.set_skip_taskbar(false).map_err(|error| {
+        NotaError::other(format!("Could not reveal the taskbar entry: {error}"))
+    })?;
+
     #[cfg(target_os = "windows")]
-    窗.hide()
-        .map_err(|e| NotaError::other(format!("收起预热窗口失败：{e}")))?;
-    窗.center()
-        .map_err(|e| NotaError::other(format!("居中主窗口失败：{e}")))?;
-    窗.show()
-        .map_err(|e| NotaError::other(format!("显示主窗口失败：{e}")))?;
-    窗.set_focus()
-        .map_err(|e| NotaError::other(format!("聚焦主窗口失败：{e}")))?;
+    window.hide().map_err(|error| {
+        NotaError::other(format!("Could not hide the prewarmed window: {error}"))
+    })?;
+    window
+        .center()
+        .map_err(|error| NotaError::other(format!("Could not center the main window: {error}")))?;
+    window
+        .show()
+        .map_err(|error| NotaError::other(format!("Could not show the main window: {error}")))?;
+    window
+        .set_focus()
+        .map_err(|error| NotaError::other(format!("Could not focus the main window: {error}")))?;
 
-    // A focused native window does not necessarily mean GTK has handed keyboard
-    // focus to its WebView. On Linux the window can be active while the view
-    // still ignores keys until it is clicked. Grab the child explicitly before
-    // returning; the frontend then restores ProseMirror's own selection focus.
     #[cfg(target_os = "linux")]
-    窗.with_webview(|webview| focus_linux_webview(&webview.inner()))
-    .map_err(|e| NotaError::other(format!("聚焦正文 WebView 失败：{e}")))?;
+    window
+        .with_webview(|webview| focus_linux_webview(&webview.inner()))
+        .map_err(|error| {
+            NotaError::other(format!("Could not focus the editor WebView: {error}"))
+        })?;
 
-    // Wayland/XWayland activation is asynchronous: the first `present()` can
-    // run before the compositor has declared the surface active. Re-present
-    // once after the show request has crossed the event loop, then ask the
-    // frontend to restore ProseMirror's selection focus again.
     #[cfg(target_os = "linux")]
     {
         let app2 = app.clone();
         gtk::glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || {
-            let Some(window) = app2.get_webview_window(主窗口) else {
+            let Some(window) = app2.get_webview_window(MAIN_WINDOW) else {
                 return;
             };
             let _ = window.set_focus();
-            let _ =
-                window.with_webview(|webview| focus_linux_webview(&webview.inner()));
+            let _ = window.with_webview(|webview| focus_linux_webview(&webview.inner()));
             let _ = window.eval("window.dispatchEvent(new Event('nota-window-shown'))");
         });
     }
 
-    crate::日志!("[nota] editor ready; showing main window");
+    crate::debug_log!("[nota] editor ready; showing main window");
     Ok(())
 }
 
-/// 打开独立的原始调试日志窗口。
-///
-/// ⚠️ 永远启动新进程，不在主进程里再建一个 WebView。Windows/WebView2 上
-/// 在主进程里追加辅助 WebView 曾表现为白屏和整窗无响应；日志查看器本身坏掉
-/// 也不能拖住正在编辑的文档。
 #[tauri::command]
 pub fn nota_window_open_debug_log() -> Result<()> {
-    crate::日志!("[nota] opening debug log");
-    let 程序 = std::env::current_exe()
-        .map_err(|e| NotaError::other(format!("找不到 Nota 自己的可执行文件：{e}")))?;
-    crate::proc::background_command(&程序)
-        .arg(crate::cli::调试窗口选项)
+    crate::debug_log!("[nota] opening debug log");
+    let program = std::env::current_exe().map_err(|error| {
+        NotaError::other(format!("Could not locate the Nota executable: {error}"))
+    })?;
+    crate::proc::background_command(&program)
+        .arg(crate::cli::DEBUG_WINDOW_FLAG)
         .spawn()
-        .map_err(|e| NotaError::other(format!("启动调试日志失败：{e}")))?;
+        .map_err(|error| {
+            NotaError::other(format!("Could not start the debug log window: {error}"))
+        })?;
     Ok(())
 }
 
-/// 打开主窗口的开发者工具（菜单「视图 → 开发者工具」/ `Shift+F12`）。
-///
-/// ⚠️ **再点一次是"聚焦"而不是"关掉"**：`open_devtools()` 在已经开着的时候
-/// 只把它调到前面。前端菜单**不留勾**（它是动作不是状态）——「开发者工具开着没有」
-/// 这件事 WebKitGTK 没有可读的接口，硬记一个内存状态就会和实际分叉。
 #[tauri::command]
 pub fn nota_window_open_devtools(app: tauri::AppHandle) -> Result<()> {
-    let 窗 = app
-        .get_webview_window(主窗口)
-        .ok_or_else(|| NotaError::other(format!("找不到窗口 `{主窗口}`")))?;
-    窗.open_devtools();
+    let window = app
+        .get_webview_window(MAIN_WINDOW)
+        .ok_or_else(|| NotaError::other(format!("Window `{MAIN_WINDOW}` not found")))?;
+    window.open_devtools();
     Ok(())
 }
 
-/// 开一个新进程窗口；有路径时顺便打开那份文档，没有路径时打开空白工作区。
-///
-/// 标签页右键传路径；「文件 → 新建窗口」不传路径。未保存的内存文档仍只能
-/// 留在原进程，不能跨进程复制。
-///
-/// ⚠️ **不 `wait()`**：等它退出等于把主窗口一起卡住，而新窗口活多久与这里无关。
-/// 但 `spawn` 的失败**如实报错**（可执行文件没了、权限不对），别静默——
-/// "点了菜单什么都没发生"是最难查的一种症状。
 #[tauri::command]
 pub fn nota_window_open_new(path: Option<String>) -> Result<()> {
-    let 程序 = std::env::current_exe()
-        .map_err(|e| NotaError::other(format!("找不到 Nota 自己的可执行文件：{e}")))?;
-    let mut command = crate::proc::background_command(&程序);
-    command.arg(crate::cli::新窗口选项);
+    let program = std::env::current_exe().map_err(|error| {
+        NotaError::other(format!("Could not locate the Nota executable: {error}"))
+    })?;
+    let mut command = crate::proc::background_command(&program);
+    command.arg(crate::cli::NEW_WINDOW_FLAG);
     if let Some(path) = path.filter(|path| !path.trim().is_empty()) {
         command.arg(&path);
     }
-    command.spawn()
-        .map_err(|e| {
-            NotaError::other(format!("起不了新窗口（{}）：{e}", 程序.display()))
-        })?;
-    crate::日志!("[nota] new window: {}", 程序.display());
+    command.spawn().map_err(|error| {
+        NotaError::other(format!(
+            "Could not open a new window with {}: {error}",
+            program.display()
+        ))
+    })?;
+    crate::debug_log!("[nota] new window: {}", program.display());
     Ok(())
 }
 
-/// Open Preferences as a dedicated native WebView window.
 #[tauri::command]
 pub fn nota_window_open_settings(app: tauri::AppHandle) -> Result<()> {
-    let window = app
-        .get_webview_window(设置窗口)
-        .map(Ok)
-        .unwrap_or_else(|| create_settings_window(&app))?;
-    window
-        .show()
-        .and_then(|_| window.unminimize())
-        .and_then(|_| window.set_focus())
-        .map_err(|e| NotaError::other(format!("聚焦设置窗口失败：{e}")))?;
-    Ok(())
-}
-
-/// Create the dedicated Preferences window ahead of time, without showing it.
-#[tauri::command]
-pub fn nota_window_prepare_settings(app: tauri::AppHandle) -> Result<()> {
-    if app.get_webview_window(设置窗口).is_none() {
-        create_settings_window(&app)?;
+    if show_settings_window(&app).is_ok() {
+        return Ok(());
     }
+    let program = std::env::current_exe()
+        .map_err(|e| NotaError::other(format!("Could not locate the Nota executable: {e}")))?;
+    crate::proc::background_command(&program)
+        .arg(crate::cli::SETTINGS_WINDOW_FLAG)
+        .spawn()
+        .map(|_| {
+            crate::debug_log!("[nota] settings window: {}", program.display());
+        })
+        .map_err(|error| {
+            NotaError::other(format!("Could not start the Preferences window: {error}"))
+        })
+}
+
+#[tauri::command]
+pub fn nota_window_prepare_settings() -> Result<()> {
     Ok(())
 }
 
-/// Hide rather than destroy Preferences so the next open is immediate.
 #[tauri::command]
 pub fn nota_window_hide_settings(app: tauri::AppHandle) -> Result<()> {
-    if let Some(window) = app.get_webview_window(设置窗口) {
-        window
-            .hide()
-            .map_err(|e| NotaError::other(format!("隐藏设置窗口失败：{e}")))?;
+    if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
+        window.hide().map_err(|error| {
+            NotaError::other(format!("Could not hide the Preferences window: {error}"))
+        })?;
+    }
+    if crate::cli::opens_settings_window(std::env::args_os()) {
+        app.exit(0);
     }
     Ok(())
 }
@@ -205,20 +155,20 @@ pub fn nota_window_hide_settings(app: tauri::AppHandle) -> Result<()> {
 #[tauri::command]
 pub fn nota_window_open_about(app: tauri::AppHandle) -> Result<()> {
     let window = app
-        .get_webview_window(关于窗口)
+        .get_webview_window(ABOUT_WINDOW)
         .map(Ok)
         .unwrap_or_else(|| create_about_window(&app))?;
     window
         .show()
         .and_then(|_| window.unminimize())
         .and_then(|_| window.set_focus())
-        .map_err(|e| NotaError::other(format!("聚焦关于窗口失败：{e}")))?;
+        .map_err(|error| NotaError::other(format!("Could not focus the About window: {error}")))?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn nota_window_prepare_about(app: tauri::AppHandle) -> Result<()> {
-    if app.get_webview_window(关于窗口).is_none() {
+    if app.get_webview_window(ABOUT_WINDOW).is_none() {
         create_about_window(&app)?;
     }
     Ok(())
@@ -226,32 +176,18 @@ pub fn nota_window_prepare_about(app: tauri::AppHandle) -> Result<()> {
 
 #[tauri::command]
 pub fn nota_window_hide_about(app: tauri::AppHandle) -> Result<()> {
-    if let Some(window) = app.get_webview_window(关于窗口) {
-        window
-            .hide()
-            .map_err(|e| NotaError::other(format!("隐藏关于窗口失败：{e}")))?;
+    if let Some(window) = app.get_webview_window(ABOUT_WINDOW) {
+        window.hide().map_err(|error| {
+            NotaError::other(format!("Could not hide the About window: {error}"))
+        })?;
     }
     Ok(())
-}
-
-fn create_settings_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
-    WebviewWindowBuilder::new(
-        app,
-        设置窗口,
-        WebviewUrl::App("index.html?settings=1".into()),
-    )
-    .title("Nota")
-    .inner_size(1080.0, 700.0)
-    .min_inner_size(720.0, 520.0)
-    .visible(false)
-    .build()
-    .map_err(|e| NotaError::other(format!("创建设置窗口失败：{e}")))
 }
 
 fn create_about_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
     WebviewWindowBuilder::new(
         app,
-        关于窗口,
+        ABOUT_WINDOW,
         WebviewUrl::App("index.html?about=1".into()),
     )
     .title("Nota")
@@ -259,30 +195,38 @@ fn create_about_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
     .min_inner_size(420.0, 560.0)
     .visible(false)
     .build()
-    .map_err(|e| NotaError::other(format!("创建关于窗口失败：{e}")))
+    .map_err(|error| NotaError::other(format!("Could not create the About window: {error}")))
 }
 
-/// **真的退出**（2026-10-16 新增，朋友清单第 7／16 条「退出软件时对更改进行保存/弹窗」）。
-///
-/// # 它为什么存在：退出的决定权在前端，退出的动作在后端
-///
-/// 「关窗口时还有没保存的改动」这句话**只有前端答得出**：文档的正文真相在编辑器
-/// 那棵树上（宿主手里那份是镜像），而"哪几份是脏的"是 `ui/useDocuments.ts` 那份
-/// 列表。所以流程是**两段**：
-///
-/// 1. 用户点窗口的叉（或 `Alt+F4`、或桌面环境的关闭）→ `lib.rs` 的
-///    `WindowEvent::CloseRequested` **先把这一下挡回去**（`api.prevent_close()`），
-///    发一条 `nota:close-requested` 给前端；
-/// 2. 前端按设置（`confirm_unsaved`）与那几份文档脏不脏去问用户、按答案存盘，
-///    **答案是要退**的时候才调这一条命令——它就是这里的 `app.exit(0)`。
-///
-/// ⚠️ **`app.exit(0)` 不会再走一次 `CloseRequested`**（它直接进退出流程），
-/// 所以这里**不需要**再记一个"已经确认过了"的标志位去防自锁。反过来也成立：
-/// 真要有第二道闸，就会出现"确认过了、但它又问一遍"的循环。
-///
-/// ⚠️ **它不给参数、也没有"退出码"这一格**：正常退出就是 0。
+fn show_settings_window(app: &tauri::AppHandle) -> Result<()> {
+    let window = if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
+        window
+    } else {
+        WebviewWindowBuilder::new(
+            app,
+            SETTINGS_WINDOW,
+            WebviewUrl::App("index.html?settings=1".into()),
+        )
+        .title("Nota Settings")
+        .inner_size(1080.0, 700.0)
+        .min_inner_size(720.0, 520.0)
+        .visible(false)
+        .build()
+        .map_err(|error| {
+            NotaError::other(format!("Could not start the Preferences window: {error}"))
+        })?
+    };
+    window
+        .show()
+        .and_then(|_| window.unminimize())
+        .and_then(|_| window.set_focus())
+        .map_err(|error| {
+            NotaError::other(format!("Could not start the Preferences window: {error}"))
+        })
+}
+
 #[tauri::command]
 pub fn nota_quit(app: tauri::AppHandle) {
-    crate::日志!("[nota] quit confirmed by frontend");
+    crate::debug_log!("[nota] quit confirmed by frontend");
     app.exit(0);
 }

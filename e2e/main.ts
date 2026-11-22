@@ -14,6 +14,7 @@ import { TabBar } from "@/ui/TabBar";
 import { ZoomHud } from "@/ui/ZoomHud";
 import { showZoomHud } from "@/ui/zoom-hud-state";
 import cathedralMarkdown from "../tests/fixtures/cathedral-bazaar/the-cathedral-and-the-bazaar.md?raw";
+import adwaitaThemeCss from "../src/styles/themes/adwaita/theme.css?raw";
 
 import "@/styles/theme.css";
 import "@/styles/app.css";
@@ -1750,7 +1751,7 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
   {
     name: "Space and paste use the same automatic-link rules",
     async run() {
-      await mount("");
+      await mount("", { autoPair: true, keyboardExperience: true });
       await typeText("www.example.com");
       await requestNativeKey("space-auto-link");
       const spaced = await waitFor<HTMLAnchorElement>(".ProseMirror a");
@@ -1999,34 +2000,84 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
-    name: "backslash in empty inline math stays before the closing dollar",
+    name: "the first slash or backslash in empty inline math keeps its visible caret slot",
     async run() {
-      await mount("$ $");
-      const input = await openInlineMath();
-      input.value = "";
-      input.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          inputType: "deleteContentBackward",
-        }),
-      );
+      for (const [character, nativeKey, expected] of [
+        ["/", "text-/", "$/$"],
+        ["\\", "text-\\", "$\\$"],
+      ] as const) {
+        await mount("$ $");
+        const input = await openInlineMath();
+        input.value = "";
+        input.dispatchEvent(
+          new InputEvent("input", {
+            bubbles: true,
+            inputType: "deleteContentBackward",
+          }),
+        );
+        await nextFrames();
+        const emptyRect = input.getBoundingClientRect();
+        input.focus();
+        input.setSelectionRange(0, 0);
+        await requestNativeKey(nativeKey);
+        await nextFrames();
+
+        assertEqual(input.value, character, `${JSON.stringify(character)} was changed in the source input`);
+        assertEqual(input.selectionStart, 1, `${JSON.stringify(character)} lost the source caret`);
+        assertEqual(document.activeElement, input, `${JSON.stringify(character)} moved focus out of the formula`);
+        assertEqual(serialized(), expected, `${JSON.stringify(character)} changed the serialized source`);
+
+        const opening = await waitFor<HTMLElement>(".nota-math-delim");
+        const closing = await waitFor<HTMLElement>(".nota-math-delim-close");
+        const filledRect = input.getBoundingClientRect();
+        const metrics = JSON.stringify({
+          emptyWidth: emptyRect.width,
+          filledWidth: filledRect.width,
+          clientWidth: input.clientWidth,
+          scrollWidth: input.scrollWidth,
+          openingRight: opening.getBoundingClientRect().right,
+          inputLeft: filledRect.left,
+          inputRight: filledRect.right,
+          closingLeft: closing.getBoundingClientRect().left,
+        });
+        assert(
+          filledRect.width > emptyRect.width + 1,
+          `${JSON.stringify(character)} kept the one-pixel empty slot: ${metrics}`,
+        );
+        assert(
+          input.scrollWidth <= input.clientWidth + 1,
+          `${JSON.stringify(character)} is clipped inside the source input: ${metrics}`,
+        );
+        assert(
+          opening.getBoundingClientRect().right <= filledRect.left + 1,
+          `${JSON.stringify(character)} overlaps the opening delimiter: ${metrics}`,
+        );
+        assert(
+          filledRect.right <= closing.getBoundingClientRect().left + 1,
+          `${JSON.stringify(character)} overlaps the closing delimiter: ${metrics}`,
+        );
+      }
+    },
+  },
+  {
+    name: "dollar auto-pair enters formula source before the second character",
+    async run() {
+      await mount("", { autoPair: true, keyboardExperience: true });
+      await requestNativeKey("text-$");
       await nextFrames();
-      input.focus();
-      input.setSelectionRange(0, 0);
       await requestNativeKey("text-\\");
-      await nextFrames();
+      await nextFrames(3);
+      const input = await waitFor<HTMLInputElement>(".nota-math-inline .nota-math-source");
+      assertEqual(document.activeElement, input, "first backslash did not focus the formula source");
+      assertEqual(input.value, "\\", "first backslash did not enter the math node");
+      assertEqual(input.selectionStart, 1, "first backslash caret moved outside the source");
 
-      assertEqual(input.value, "\\", "the source input gained or lost a backslash");
-      assertEqual(input.selectionStart, 1, "the source caret did not stay after the backslash");
-      assertEqual(document.activeElement, input, "typing a backslash moved focus out of the formula");
-      assertEqual(serialized(), "$\\$", "the closing dollar moved into the formula source");
-
-      const closing = document.querySelector<HTMLElement>(".nota-math-delim-close");
-      assert(closing, "the closing dollar is missing");
-      assert(
-        input.getBoundingClientRect().right <= closing.getBoundingClientRect().left + 1,
-        "the source input extends past the closing dollar",
-      );
+      await typeText("l");
+      await nextFrames(3);
+      assertEqual(document.activeElement, input, "typing the next character lost formula focus");
+      assertEqual(input.value, "\\l", "second character did not stay in the source");
+      assertEqual(serialized(), "$\\l$", "formula source collapsed into body text");
+      assert(document.querySelector(".nota-math-inline"), "inline math node disappeared");
     },
   },
   {
@@ -3036,6 +3087,85 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
     },
   },
   {
+    name: "Adwaita Mermaid nodes keep separate fill, border and text colors",
+    async run() {
+      applyDocTheme(adwaitaThemeCss);
+      await mount(
+        "```mermaid\nflowchart TD\n  A[Start] --> B{Condition?}\n  B -- Yes --> C[Action]\n```",
+      );
+      const svg = await waitFor<SVGSVGElement>(
+        '.nota-diagram-preview[data-state="ok"] svg',
+        15000,
+      );
+      await nextFrames(3);
+      const shape = svg.querySelector<SVGElement>(".node rect, .node polygon, .node path");
+      const label = svg.querySelector<SVGTextElement>(".node text, .node tspan, .node foreignObject");
+      assert(shape, "Mermaid node shape is missing");
+      assert(
+        label,
+        `Mermaid node label is missing: ${svg.querySelector(".node")?.outerHTML ?? svg.outerHTML}`,
+      );
+      const fill = getComputedStyle(shape).fill;
+      const stroke = getComputedStyle(shape).stroke;
+      const textFill = getComputedStyle(label).fill;
+      assert(
+        fill !== "rgb(0, 0, 0)" && fill !== "none",
+        `Adwaita node fill collapsed to black/none: fill=${fill} stroke=${stroke} text=${textFill}`,
+      );
+      assert(
+        textFill !== fill,
+        `Adwaita node text and fill are the same color: fill=${fill} text=${textFill}`,
+      );
+      applyDocTheme(null);
+    },
+  },
+  {
+    name: "Mermaid scales a tall diagram to show the complete graph",
+    async run() {
+      await mount(
+        [
+          "```mermaid",
+          "flowchart TD",
+          "  A[Start] --> B{Condition?}",
+          "  B -- Yes --> C[Action 1]",
+          "  B -- No --> D[Action 2]",
+          "  C --> E[More work]",
+          "  D --> F[More checks]",
+          "  E --> G[Final action]",
+          "  F --> G",
+          "  G --> H[End]",
+          "```",
+        ].join("\n"),
+      );
+      const svg = await waitFor<SVGSVGElement>(
+        '.nota-diagram-preview[data-state="ok"] svg',
+        15000,
+      );
+      await nextFrames(3);
+      const preview = svg.closest<HTMLElement>(".nota-diagram-preview");
+      assert(preview, "diagram preview frame is missing");
+      const style = getComputedStyle(preview);
+      const availableHeight =
+        preview.clientHeight -
+        (Number.parseFloat(style.paddingTop) || 0) -
+        (Number.parseFloat(style.paddingBottom) || 0);
+      const svgRect = svg.getBoundingClientRect();
+      const previewRect = preview.getBoundingClientRect();
+      assert(
+        svgRect.height <= availableHeight + 1,
+        `tall diagram still extends below the frame: svg=${svgRect.height}, available=${availableHeight}`,
+      );
+      assert(
+        svgRect.top >= previewRect.top && svgRect.bottom <= previewRect.bottom + 1,
+        "tall diagram is vertically clipped by the preview frame",
+      );
+      assert(
+        preview.scrollHeight <= preview.clientHeight + 1,
+        `tall diagram still needs an inner vertical scrollbar: ${preview.scrollHeight} > ${preview.clientHeight}`,
+      );
+    },
+  },
+  {
     name: "failed images show an inline warning",
     async run() {
       await mount("![bad-image](data:image/png;base64,not-an-image)");
@@ -3718,8 +3848,53 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
         }),
       );
       assertEqual(document.activeElement, input, "formula input did not receive focus");
+      const focusTrail: string[] = [];
+      document.addEventListener(
+        "focusin",
+        (event) => focusTrail.push((event.target as Element | null)?.className || "none"),
+        { once: false },
+      );
+      await requestNativeKey("text-x");
+      await nextFrames(3);
+      assertEqual(
+        document.activeElement,
+        input,
+        `formula focus was lost after editing began: ${JSON.stringify({
+          activeTag: document.activeElement?.tagName,
+          activeClass: document.activeElement?.className,
+          inputConnected: input.isConnected,
+          inputValue: input.value,
+          focusTrail,
+        })}`,
+      );
+      assert(input.value.endsWith("x"), `formula draft was overwritten: ${JSON.stringify(input.value)}`);
       flushSync(() => root.unmount());
       host.remove();
+    },
+  },
+  {
+    name: "inline LaTeX suggestions are not clipped inside a table cell",
+    async run() {
+      await mount(["| A |", "| --- |", "| $x$ |"].join("\n"));
+      const input = await openInlineMath();
+      input.value = "\\frac";
+      input.setSelectionRange(input.value.length, input.value.length);
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "c" }));
+      await nextFrames(3);
+
+      const popup = await waitFor<HTMLElement>(".nota-math-suggest");
+      const item = await waitFor<HTMLElement>(".nota-math-suggest-item");
+      const sample = await waitFor<HTMLElement>(".nota-math-suggest-sample");
+      const popupRect = popup.getBoundingClientRect();
+      const itemRect = item.getBoundingClientRect();
+      const sampleRect = sample.getBoundingClientRect();
+      const style = getComputedStyle(popup);
+      assertEqual(popup.parentElement, document.body, "suggestion popup is still trapped inside the table");
+      assertEqual(style.position, "fixed", "suggestion popup is not in the viewport stacking layer");
+      assert(Number(style.zIndex) >= 39, `suggestion popup z-index is too low: ${style.zIndex}`);
+      assertEqual(style.overflow, "visible", "suggestion root still clips an overflow axis");
+      assert(itemRect.right <= popupRect.right + 1, "suggestion row is clipped by its scroll box");
+      assert(sampleRect.right <= popupRect.right + 1, "KaTeX sample is clipped by the suggestion panel");
     },
   },
   {

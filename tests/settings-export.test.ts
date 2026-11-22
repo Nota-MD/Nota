@@ -52,7 +52,7 @@ testCase("程序设置与插件设置/数据分别可选", () => {
 testCase("敏感项默认不勾选，但仍可手动选择", () => {
   contains(dialog, "item.available && !item.sensitive", "敏感项默认排除");
   contains(dialog, "Contains credentials", "界面明确提示凭据");
-  contains(rust, '"image-upload" => (源种类::文件, "program/image-upload.toml", true)', "后端标记敏感");
+  contains(rust, '"image-upload" => (SourceKind::File, "program/image-upload.toml", true)', "后端标记敏感");
 });
 
 testCase("目录导出跳过符号链接与依赖缓存", () => {
@@ -60,6 +60,7 @@ testCase("目录导出跳过符号链接与依赖缓存", () => {
   contains(rust, "meta.file_type().is_symlink()", "收集时跳过链接");
   contains(rust, 'name == ".git" || name == "node_modules"', "跳过依赖缓存");
   contains(rust, "skipped_symlinks", "清单记录跳过数量");
+  contains(rust, "*skipped_symlinks += 1", "跳过链接时没有计数");
 });
 
 testCase("设置包命令已注册，默认后缀不是安装包", () => {

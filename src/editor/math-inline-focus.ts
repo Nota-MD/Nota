@@ -30,6 +30,9 @@ export function preserveInlineMathSourceFocus(
   restore();
   queueMicrotask(restore);
   globalThis.requestAnimationFrame?.(restore);
+  globalThis.requestAnimationFrame?.(() => {
+    globalThis.requestAnimationFrame?.(restore);
+  });
 }
 
 export interface InlineMathFocusSchedule {

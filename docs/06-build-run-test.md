@@ -6970,3 +6970,9 @@ composition 场景只模拟标准事件序列，平台相关部分仍按 §5 的
 ⚠️ **边界**：Typora 自己特有的文件树、megamenu、快速打开等外壳控件不会决定 Nota 外壳；
 导入主题只作用于正文。正文里的 Typora 类名与 `#write` 已映射，但第三方主题若专门依赖
 Typora 编辑器内部 DOM（例如独有的代码框工具栏节点），那部分会保留 Nota 自己的控件。
+
+## Release artifact size
+
+The release profile uses `opt-level = "s"`, fat LTO, one codegen unit, symbol
+stripping and abort unwinding. Formula parsing remains in the extension package;
+the core gains only the narrow table bridge.

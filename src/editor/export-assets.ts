@@ -1,11 +1,11 @@
-/**
- * 把导出 CSS 里的本地资源内联成 data URL。
- *
- * KaTeX 的样式表引用二十来个字体文件。开发态它们是 `/node_modules/...`，
- * 构建后是 `/assets/...`；导出的 HTML 一旦离开 Nota 的 origin，这些路径都
- * 会失效，公式就会退回系统字体。这里只处理 `url(...)` 指向的本地资源，
- * `data:` / `blob:` 与取不到的资源保持原样。
- */
+
+
+
+
+
+
+
+
 
 const canInsideLinkExtension: Record<string, string> = {
   woff2: "font/woff2",
@@ -55,7 +55,7 @@ export async function inlineCssAssets(css: string): Promise<string> {
         const bytes = new Uint8Array(await response.arrayBuffer());
         replaceReplace.set(raw, `data:${mime};base64,${bytesToBase64(bytes)}`);
       } catch {
-        // 取不到就保留原地址；导出不应因为一个可选资源而整体失败。
+
       }
     }),
   );

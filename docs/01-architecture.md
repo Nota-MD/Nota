@@ -146,7 +146,7 @@ Linux 显示后端默认交给 GDK 自动选择；启动日志会记录
 | 顺序 | 什么时候走 | 做什么 | 为什么在这个位置 |
 |---|---|---|---|
 | ⓿' `--new-window` | 用户选择「在新窗口中打开」 | **整关跳过单实例**：这一份既不 `connect` 也不 `bind` | 单实例的语义是"第二份把参数转交给第一份、自己退出"，与"用户主动再开一个窗口"正好相反。⚠️ 跳过的是**抢**不是**收**：`nota.sock` 仍归第一份，第三次普通启动照旧转交给**第一份**。⚠️ 这一份不持有 socket，收不到 `nota:second-instance` |
-| ⓿ 单实例 | 每一次普通启动 | `single_instance::抢占()` → `第一个(听)` 留着接收线程 / `已转交` 直接 `exit(0)` / `Err` 照常单开 | ⚠️ **必须早于 `Builder::build()`**：晚了会先闪出一个空窗口再退出。⚠️ 转交失败属于便利功能故障，不阻止应用启动 |
+| ⓿ 单实例 | 每一次普通启动 | `single_instance::claim()` → `Claim::First(listener)` keeps the receive thread / `Claim::Forwarded` exits / `Err` continues without single-instance | Must run before `Builder::build()` to avoid flashing an empty window. |
 
 ⚠️ **两条判定都落在 `lib.rs`，不往 `single_instance.rs` 里搬**：
 `single_instance.rs` 只负责"第二份转交给第一份"，不负责解释 `--new-window`。
@@ -171,7 +171,7 @@ The real-window pass verified that the default whitelist creates separate
 | ④ 托管 | `app.manage(AppState { documents, settings, workspace, plugins, settings_problem, app_lang })` | 命令层与 `unload_all` 都从托管状态里取句柄，必须最后做。⚠️ `AppState` 是**手写字面量**——它**没有构造函数**（2026-09-24 删了那个没人调用的 `AppState::new`，理由见 `docs/02`）。⚠️ `app_lang` 与插件加载时用的是**同一个值**（③ 算的那个），不是各算一遍 |
 | ⑤ 另外**五个**托管状态 | `DevServerState`（开发服务器）＋ `ReviewState`（编辑区里摊着的那块面板）＋ `ProbeCache`（探测结论的缓存）＋ **`Heartbeat`**（面板心跳，2026-09-26 加）＋ **`FocusState`**（强制专注的账本，2026-09-26 加） | ⚠️ **它们都不进 `AppState`**：五个都不在「plugins → documents → settings」那条锁序上，谁也不该拿它们去排进那条队伍。`ReviewState` 尤其明确——**拿它不需要 `plugins` 锁**，因为插件正跑着（宿主握着那把锁）的时候「回到正文」那颗按钮还得能按。⚠️ `ProbeCache` 同理，而且**它必须是另外一把锁**：面板的 `render` 跑在 `plugins` 锁里面，探测的收尾（后台线程 `收下` 结论）**不能去等那把锁**——不然"不阻塞"就白做了（`docs/12`）。⚠️ `Heartbeat` 与 `FocusState` 同理——`Heartbeat` **一秒握一下 `plugins` 锁、读完就放**，`FocusState` 的账本自己一把锁（每拍读一次设置，也是「读了就放开、再动自己的账本」），两条都没排进那条序 |
 | ⑥ 起两个**后台线程** | `heartbeat::起()`（面板心跳，每秒一拍）＋ `focus::起()`（强制专注的账本，每秒一拍） | ⚠️ **两个都是裸 `std::thread`，不是 `tokio::time`**（这个仓里没有一处 tokio 定时器）。⚠️ **起线程这一步只做一次**，没有「重启」这一说；心跳退出靠 `Heartbeat::stop()`（`RunEvent::Exit`，最多晚一拍），账本线程自己检查托管状态还在不在。⚠️ **强制专注不是插件**——用户原话「注意啊，这不是插件。这是核心功能」，它要窗口焦点、要开置顶窗、要出声，三样都在插件沙箱之外 |
-| ⑦ 单实例的**接收**那一半 | `app.manage(single_instance::落点::default())` ＋ 抢到位置时 `single_instance::起(app.handle().clone(), 听)` | ⚠️ **位置很要紧**：上面那一堆 `manage` / `起` 都已经注册完，接收线程第一条连接就是奔着"打开一份文档"来的，而它 emit 的那条事件收的是**前端**——所以这里只要把托管状态（退出时删 socket 要用的路径）先挂上。⚠️ 抢位置那一步在上面 ⓿，**这一格是"收"那一半** |
+| ⑦ 单实例 receive side | `app.manage(single_instance::Endpoint::default())` and `single_instance::start(app.handle().clone(), listener)` | Register the endpoint before the receive thread emits frontend events. |
 | ⑧ 把 `nota://` 接到本程序上 | `url_scheme::注册()` | **解析**那一半在 `cli.rs`；⚠️ 失败**不拦启动**（注册不上就是"点链接打不开"），而且它**只在需要时才动盘**（幂等，见文件头）——所以正常启动是**不碰**用户桌面配置的 |
 | ⑨ ~~MCP 服务器~~ | **已删除** | 公开 stdio MCP 服务已由 Host Control 取代；不再保留永远为假的服务分支 |
 

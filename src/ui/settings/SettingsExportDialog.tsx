@@ -229,9 +229,9 @@ export function SettingsExportDialog({ onClose, onExported, onError }: Props) {
                       <small>
                         {copy.help}
                         {item.available
-                          ? ` · ${item.files} ${t("files")} · ${prettyBytes(item.bytes)}`
-                          : ` · ${t("Not available")}`}
-                        {item.sensitive ? ` · ${t("Contains credentials")}` : ""}
+                          ? ` / ${item.files} ${t("files")} / ${prettyBytes(item.bytes)}`
+                          : ` / ${t("Not available")}`}
+                        {item.sensitive ? ` / ${t("Contains credentials")}` : ""}
                       </small>
                     </span>
                   </label>
@@ -271,7 +271,7 @@ export function SettingsExportDialog({ onClose, onExported, onError }: Props) {
                         />
                         {t("Data")}
                         <small>
-                          {plugin.data_files} {t("files")} · {prettyBytes(plugin.data_bytes)}
+                          {plugin.data_files} {t("files")} / {prettyBytes(plugin.data_bytes)}
                         </small>
                       </label>
                     </div>

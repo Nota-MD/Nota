@@ -6,10 +6,10 @@ const paperSizeMm: Record<string, [number, number]> = {
   legal: [215.9, 355.6],
 };
 
-/**
- * Windows 的浏览器打印后端：把同一份导出 HTML 连同 `@page` 版面注入 iframe。
- * Nota 的自绘框负责预览与版面，WebView2 只在最后弹出系统确认框。
- */
+
+
+
+
 export function browserPrintHtml(
   html: string,
   paper: string,

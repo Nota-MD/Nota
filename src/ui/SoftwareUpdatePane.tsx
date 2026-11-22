@@ -1,10 +1,10 @@
-/**
- * 「关于 → 软件更新」。
- *
- * 更新命令由宿主执行；前端不能交 URL，也不能选择资产。页面只展示宿主判定后的
- * 安装类型、可用版本与结果。实验阶段默认手动触发安装，避免用户启动应用时
- * 突然被提权或替换文件。
- */
+
+
+
+
+
+
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";

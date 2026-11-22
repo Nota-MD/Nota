@@ -1,4 +1,4 @@
-/* 设置包选择框。它是设置页里的二级模态框，但内容远多于普通确认框。 */
+
 
 .settings-export-dialog {
   width: min(720px, calc(100vw - 40px));

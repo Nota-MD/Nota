@@ -168,12 +168,7 @@ pub fn read_from(dir: &Path, id: &str) -> Result<Option<Draft>> {
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(source) => {
-            return Err(NotaError::Read {
-                path,
-                source,
-            })
-        }
+        Err(source) => return Err(NotaError::Read { path, source }),
     };
     let draft = serde_json::from_slice::<Draft>(&bytes)
         .map_err(|error| NotaError::other(format!("Cannot decode draft: {error}")))?;
@@ -299,7 +294,13 @@ mod tests {
 
         assert_eq!(read_from(&dir, "new").unwrap().unwrap().text, "# Draft\n");
         let listed = list_from(&dir).unwrap();
-        assert_eq!(listed.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(), ["new", "old"]);
+        assert_eq!(
+            listed
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["new", "old"]
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -311,7 +312,10 @@ mod tests {
         changed.text = "# Changed\n".to_owned();
         save_in(&dir, &changed).unwrap();
 
-        assert_eq!(read_from(&dir, "same").unwrap().unwrap().text, "# Changed\n");
+        assert_eq!(
+            read_from(&dir, "same").unwrap().unwrap().text,
+            "# Changed\n"
+        );
         assert_eq!(list_from(&dir).unwrap().len(), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }

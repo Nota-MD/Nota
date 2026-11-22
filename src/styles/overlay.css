@@ -1,28 +1,28 @@
-/**
- * 界面上的**浮层那一族**：五个对话框（确认 / 输入 / 插入图像 / Emoji 选择 /
- * 关于，共用同一个壳）＋ 打字时跟着光标弹的 Emoji 补全面板。
- *
- * # 为什么从 `app.css` 里拆出来（2026-09-27）
- *
- * ⚠️ **只为 1000 行那条硬线**（`tools/doc-sync-check.sh` ①）：`app.css` 加了
- * Emoji 选择框那一段之后 1040 行、超了。拆出来的这一份是**按职责切的**
- * ——"浮在与正文无关的一层上的东西"与"骨架／工具条／状态栏"不是一回事。
- *
- * ⚠️ **五段用的是同一层壳**（`.confirm-backdrop` ＋ `.confirm-dialog`）：
- * 它们长得一样、行为也一样（Esc = 取消、点遮罩 = 取消），这一条从第一个框
- * 立下起就没变过。所以它们**必须待在同一个文件里**——分开放的结果是
- * 某一天有人只改了其中一个框的宽度，而"看着不一样"要等到用户报上来
- *（与 `docs/03` 那条"同一个东西只能有一处定义"同一条道理）。
- *
- * ⚠️ **导入顺序**：`main.tsx` 里紧跟 `app.css`。搬出来之前这些规则就在
- * `app.css` 中间、在 `.btn` 那一段**之后**（`.emoji-cat` 靠"后来居上"盖掉
- * `.btn` 的内边距），所以这里也必须排在 `app.css` 之后——顺序反了，
- * Emoji 选择框里那排分类按钮会静默变回全尺寸。
- */
 
-/* ── 确认框（`ui/ConfirmDialog.tsx`）───────────────────────────────────────
-   替掉 `window.confirm` 的那个。它阻塞 WebView、会打断输入法组合态，
-   而"关一份没存盘的文档"随时会发生。 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 .confirm-backdrop {
   position: fixed;
@@ -41,8 +41,8 @@
   padding: 20px 22px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  /* 用 `--bg-raised` 那一层：它在亮色下是纯白、暗色下比 `--bg` 高一档，
-     正好是"浮在正文上面"该有的关系。 */
+
+
   background: var(--bg-raised);
   color: var(--fg);
   box-shadow: 0 12px 32px rgb(0 0 0 / 28%);
@@ -63,8 +63,8 @@
   box-shadow: none;
 }
 
-/* 所有自绘对话框共用同一颗右上角关闭按钮。位置相对 `.confirm-dialog`、
-   `.settings-shell` 等对话框壳，不依赖各页面自己的标题栏结构。 */
+
+
 .dialog-close {
   position: absolute;
   top: 10px;
@@ -110,25 +110,25 @@
   margin: 0 0 18px;
   color: var(--fg-muted);
   line-height: 1.6;
-  /* 长文件名/长路径不要撑破框 */
+
   overflow-wrap: anywhere;
-  /* 消息里的换行要**真的换行**。它是个 `<p>`，默认会把 `\n` 折成空格——
-     两条现成的消息就靠它分行：`ui/useFocusIntro.ts` 那段首次说明（一组
-     短句，空行分段），`ui/usePlugins.ts` 那段「信任这个签名吗」（指纹
-     一行、解释两行）。⚠️ **2026-09-28 起「关于 Nota」那条不再走这里**，
-     它整份搬去了 `.about-page-body`（下面那条同名的 55vh 就是跟着搬的）。 */
+
+
+
+
+
   white-space: pre-line;
-  /* ⚠️ 上限这一条当年是为「关于 Nota」那条二十来行的权限清单加的（在
-     440px 宽的框里会折成四五十行、**比屏幕还高**——框是居中的，上下两头
-     会被切在屏幕外，按钮也跟着看不见）。那一页 2026-09-28 搬走了，这条
-     **照旧留着**：上面那两条现成的消息也不短（首次说明十来段），而且
-     `askConfirm` 是公开的一层——谁再喂一条长的进来，不该靠"记得改 CSS"。
-     ⚠️ 55vh + 标题和按钮那约 130px 得留在 100vh 里，50~60 是安全区间；
-     写成 70vh 之类的，矮屏上照样切。 */
+
+
+
+
+
+
+
   max-height: 55vh;
   overflow-y: auto;
-  /* 滚到底/滚到顶时不要把滚动传给背后的正文（正文是可编辑的，
-     一条滚动手势漏过去就是"我明明在滚这个框，文档却动了"）。 */
+
+
   overscroll-behavior: contain;
 }
 
@@ -138,15 +138,15 @@
   gap: 8px;
 }
 
-/* ── 输入框（`ui/PromptDialog.tsx`）────────────────────────────────────────
-   替掉 `window.prompt` 的那个。⚠️ 它的理由比确认框还硬：`prompt` 在
-   WebKitGTK 上默认被关掉，调用会**静默返回 null**——菜单点下去什么都不发生。
 
-   ⚠️ 它借的是上面那层壳（`.confirm-backdrop` / `.confirm-dialog`）：两个框
-   长得一样、行为也一样（Esc = 取消、点遮罩 = 取消），样式不该有两套。 */
+
+
+
+
+
 
 .prompt-dialog {
-  /* 比确认框宽一点：它要装一整个 URL，440px 下长地址要横向滚。 */
+
   min-width: 420px;
 }
 
@@ -157,7 +157,7 @@
   font-size: 0.9em;
 }
 
-/* 第二个字段的标签要跟上一个输入框拉开距离，否则两行会粘在一起。 */
+
 .prompt-input + .prompt-label,
 .prompt-input + .prompt-hint {
   margin-top: 12px;
@@ -191,9 +191,9 @@
   color: var(--danger);
 }
 
-/* ── 插入图像框（`ui/ImageDialog.tsx`）─────────────────────────────────────
-   ⚠️ 它和输入框借同一层壳（`.confirm-backdrop` / `.confirm-dialog` /
-   `.prompt-dialog`），只是多了一排"来源"页签和一颗「浏览…」。 */
+
+
+
 
 .image-src-tabs {
   display: flex;
@@ -201,8 +201,8 @@
   margin-bottom: 12px;
 }
 
-/* 地址输入框与「浏览…」同一行：按钮跟着输入框走，不另起一行——另起一行的话
-   它离它要影响的那个框太远，看起来像页面级的动作。 */
+
+
 .image-src-row {
   display: flex;
   gap: 8px;
@@ -218,11 +218,11 @@
   flex: none;
 }
 
-/* 「插入后上传」那个勾选框（2026-09-26 加）。
-   ⚠️ 它是一个 `<label>` 包着 `<input type=checkbox>`，所以整行文字都可点——
-   那一行字比那颗小方块宽得多，不加这个的话用户得瞄着方块点。
-   `.prompt-input + .prompt-hint` 那条间距规则管不到它（它不是 `.prompt-input`），
-   所以上下留白在这儿自己给。 */
+
+
+
+
+
 .image-upload-row {
   display: flex;
   align-items: center;
@@ -239,13 +239,13 @@
   accent-color: var(--accent);
 }
 
-/* ── Emoji 选择框（`ui/EmojiDialog.tsx`）───────────────────────────────────
-   ⚠️ 同样借 `.confirm-backdrop` / `.confirm-dialog` / `.prompt-input` /
-   `.btn` 那几层壳：四个框长得一样、行为也一样（Esc = 取消、点遮罩 = 取消）。
-   这里只加它独有的三样：分类那排小按钮、网格、每格的"字 ＋ 短代码"。 */
+
+
+
+
 
 .emoji-dialog {
-  /* 比输入框宽：网格要按 84px 一列排，太窄一列就装不下两三个。 */
+
   min-width: 460px;
   max-width: 560px;
 }
@@ -254,21 +254,21 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  /* ⚠️ 上面那条留白是给搜索框和它拉开的（`.prompt-input + .emoji-cats`
-     在 `prompt-input` 那一段的间距规则之外，所以这儿自己给）。 */
+
+
   margin: 12px 0;
 }
 
-/* 分类按钮比普通按钮矮一档：十一个挤在一行里，用全高会占掉半屏。 */
+
 .emoji-cat {
   height: 26px;
   padding: 0 8px;
   font-size: 0.85em;
 }
 
-/* ⚠️ 网格自己滚（`max-height` ＋ `overflow`），**不是整个框滚**：搜索框与
-   分类那排要一直停在原地——滚下去之后看不见分类、也改不了搜索词，那个框
-   就只剩"翻"一条路了。 */
+
+
+
 .emoji-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
@@ -292,21 +292,21 @@
   cursor: pointer;
 }
 
-/* ⚠️ 悬停**不能只靠底色**（`--bg-hover` 在某些界面风格里几乎和 `--bg` 一样）：
-   再加一道框，两种都看得见。 */
+
+
 .emoji-cell:hover {
   border-color: var(--border);
   background: var(--bg-hover);
 }
 
-/* ⚠️ 字号大是这一格的主角——用户是**看图**在挑，短代码只是"顺手看一眼"。 */
+
 .emoji-glyph {
   font-size: 1.6em;
   line-height: 1.1;
 }
 
-/* ⚠️ 短代码会超出一格（`:thumbsdown:` 这种），截断比换行好：换行会让每一格
-   高度不一，网格看起来像坏的。完整短代码在 `title` 里（鼠标停一下就有）。 */
+
+
 .emoji-name {
   max-width: 100%;
   overflow: hidden;
@@ -316,16 +316,16 @@
   white-space: nowrap;
 }
 
-/* ── Emoji 补全面板（`editor/emoji.ts` 的 `emoji补全`）─────────────────────
-   ⚠️ 它和上面那个**选择框**是两样东西：那个整屏、要用户主动叫；这个是
-   打字时跟着光标弹的一小条（打 `:smi` 就出来）。
-   ⚠️ 它挂在 `document.body` 上（`position: fixed`，与 `editor/lang-picker.ts`
-   同一条路子），所以这份样式**进不了导出那条路**（导出只嵌
-   `theme/base.css` ＋ `editor.css` ＋ `katex.min.css`）——这正是要的：
-   面板是屏幕上的东西，不该出现在导出的 HTML 里。
-   ⚠️ 因为它落在 `body` 下、不在编辑器 DOM 里，那些 `var(--…)` 拿的是
-   **界面主题**（`body` 上的值），拿不到文档主题——与 `lang-picker` 那边的
-   处境一样，但这里不需要抄 token：面板本来就该跟着界面主题走。 */
+
+
+
+
+
+
+
+
+
+
 
 .nota-emoji-pop {
   position: fixed;
@@ -336,7 +336,7 @@
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--bg-raised);
-  /* 投影用写死的黑：它在浅色和深色下都成立（同 `.nota-lang-popup`）。 */
+
   box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
   font-family: var(--font-ui, inherit);
   font-size: 0.7333rem;
@@ -352,9 +352,9 @@
   cursor: pointer;
 }
 
-/* 高亮的那一条（上下键换的就是它）。
-   ⚠️ 底色 ＋ 一道强调色内边**两样都给**：`--bg-active` 在某些界面风格里
-   淡到看不出来，而"当前选的是哪条"是这一块唯一要传达的信息。 */
+
+
+
 .nota-emoji-item.is-on {
   background: var(--bg-active);
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -364,7 +364,7 @@
   background: var(--bg-hover);
 }
 
-/* 字符是主角（用户是看图在挑），短代码是陪衬。 */
+
 .nota-emoji-glyph {
   font-size: 1.0rem;
   line-height: 1;
@@ -374,21 +374,21 @@
   color: var(--fg-muted);
 }
 
-/* ── 关于框（`ui/AboutDialog.tsx`）──────────────────────────────────────────
-   2026-09-28 按 GNOME 的关于窗重做（用户原话「关于界面这么做」＋一张截图）。
-   ⚠️ 它借的是上面那层壳（`.confirm-backdrop` / `.confirm-dialog`）：Esc 关、
-   点遮罩关，与前四个框一模一样，所以壳照旧共用。这里只加 `.about-*`。
 
-   ⚠️ **它比另外四个框宽、而且会很高**：故障排除那一页是二十来条权限说明。
-   所以正文区（`.about-page-body`）自己滚，标题行与返回键**不跟着滚**——
-   滚到一半还得能按返回，这一条是那一页能不能用的关键。 */
+
+
+
+
+
+
+
 
 .about-dialog {
-  /* 壳给的 320/440 是"一行话 ＋ 两颗按钮"的尺度，这里要装一节带小标题的
-     清单，两边各放一档。 */
+
+
   min-width: 420px;
   max-width: 560px;
-  /* 壳的 `padding: 20px 22px 16px` 留着；统一关闭按钮绝对定位到右上角。 */
+
 }
 
 .about-dialog[data-window-presentation="full"] {
@@ -409,7 +409,7 @@
   max-height: none;
 }
 
-/* ── 首页：一列居中 ─────────────────────────────────────────────────────── */
+
 
 .about-home {
   display: flex;
@@ -417,26 +417,26 @@
   align-items: center;
 }
 
-/* 图标自己那张底衬只占画布 74%，所以看上去会比 128 小一圈——那是系统对话框
-   的样子（图标自带留白），不是尺寸写错了。 */
+
+
 .about-icon {
   width: 128px;
   height: 128px;
 }
 
-/* ── 「Nota」字标（2026-10-17 改为 **SVG 轮廓**）────────────────────────
- *
- * 用户：「最好不要搞任何随包字体。我的建议是你把那个 monoton 的随包字体给换掉。
- * **把这几个字换成 svg 就可以了**」。
- *
- * 所以 `src/assets/fonts/Monoton-Regular.ttf` **已经删掉**（连同它的 OFL 文本），
- * 换成 `src/assets/nota-wordmark.svg`——从 Monoton 里把 **N o t a** 四个字形转成
- * **矢量路径**（不是 `<text>`，所以不依赖任何字体文件）。
- *
- * ⚠️ 落地和图标同一招：**`mask-image` ＋ `background: currentColor`**——
- * 颜色跟着 `color` 走（深色/浅色、强调色都不用另做一份图）。
- * 鸣谢里那一条**保留**（OFL 要求保留出处），只是措辞改成「轮廓、不随包带字体」。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
 .about-name {
   width: 111px;
   height: 34px;
@@ -458,7 +458,7 @@
   font-size: 0.9em;
 }
 
-/* 版本那颗药丸。⚠️ `tabular-nums`：版本号将来两位数时，宽度不该跟着抖。 */
+
 .about-version {
   margin-top: 10px;
   padding: 3px 12px;
@@ -478,7 +478,7 @@
   font-size: 0.85em;
 }
 
-/* ── 两组行（外链那组 / 子页那组）────────────────────────────────────────── */
+
 
 .about-rows {
   display: flex;
@@ -503,8 +503,8 @@
   cursor: pointer;
 }
 
-/* 与 `.emoji-cell` 同一条：悬停**不能只靠底色**（某些界面风格里 `--bg-hover`
-   几乎和 `--bg` 一样），所以再加一道内边。 */
+
+
 .about-row:hover {
   background: var(--bg-hover);
   box-shadow: inset 0 0 0 1px var(--border);
@@ -516,15 +516,15 @@
   gap: 6px;
 }
 
-/* 助记键那对括号（`(W)`）。⚠️ 它是**陪衬**：小一号、灰一档，
-   看着像系统对话框里那一对，而不是标签的一部分。 */
+
+
 .about-row-key {
   color: var(--fg-muted);
   font-size: 0.85em;
 }
 
-/* 行尾记号。⚠️ 不再依赖 `›` / `↗` 文本字形：这些字符很容易落到不是界面点阵
-   字体的 fallback 里，大小与基线都会跳。这里用边框画固定 10×10 的硬边箭头。 */
+
+
 .about-mark {
   position: relative;
   display: inline-block;
@@ -572,13 +572,13 @@
   transform-origin: right center;
 }
 
-/* ── 子页（故障排除 / 鸣谢 / 法律信息）──────────────────────────────────── */
+
 
 .about-page {
   display: flex;
   flex-direction: column;
-  /* ⚠️ 这一条是下面 `.about-page-body` 能滚的前提：flex 子项默认
-     `min-height: auto`，不给它 0 的话那一块会把整个框撑高、永远不滚。 */
+
+
   min-height: 0;
 }
 
@@ -612,17 +612,17 @@
   font-weight: 600;
 }
 
-/* ⚠️ 55vh + 标题行那约 40px 得留在 100vh 里（同 `.confirm-message` 那条）；
-   矮屏上写 70vh 照样把返回键顶出屏幕。 */
+
+
 .about-page-body {
   overflow-y: auto;
   max-height: 55vh;
-  /* 滚到两头时不要把滚动漏给背后的正文（那条理由同 `.confirm-message`）。 */
+
   overscroll-behavior: contain;
-  /* ⚠️ **2026-10-04 目检抓出来的**：WebKitGTK 在这台机器上用的是**浮层滚动条**
-     （没有轨道、直接压在内容上）。不留这条 `padding-right`，最长的那一行
-     （权限表右列、「本机信息」里的 `rustc …`）**最后一个字就被那根条压住**。
-     `scrollbar-gutter` 管不了浮层滚动条，只能用留白。 */
+
+
+
+
   padding-right: 12px;
 }
 
@@ -649,14 +649,14 @@
 .about-item-text {
   color: var(--fg-muted);
   line-height: 1.6;
-  /* 长路径 / 长能力名（`core:window:*`）不要撑破框。 */
+
   overflow-wrap: anywhere;
 }
 
-/* 鸣谢里那一行**许可**（2026-10-06 加）。
-   ⚠️ 比上面那句"用来做什么"再淡一档：一屏十几条时，浓淡不分开就分不出
-   "这是什么"和"它按什么条款授权"。⚠️ 字比正文再小一点点，但**不许用 `--fg-faint`**——
-   那是"标记符号"那一档（`marks.css` 的配方），许可名称是要读的内容，不是装饰。 */
+
+
+
+
 .about-item-license {
   font-size: 0.92em;
   color: var(--fg-muted);
@@ -664,31 +664,31 @@
   overflow-wrap: anywhere;
 }
 
-/* 外链打不开时那一行（2026-10-06）。⚠️ 用 `--danger`：它与旁边那些
-   `--fg-muted` 是一眼能分出来的两种东西——"资料"和"刚才那件事没成"。 */
+
+
 .about-err {
   color: var(--danger);
   overflow-wrap: anywhere;
 }
 
-/* ── 表格（2026-10-04）──────────────────────────────────────────────────────
-   故障排除那两张「项 ｜ 值」表、以及权限列表那张「权限说明 ｜ 备注」表。
-   用户原话：「用表格的形式展示权限说明和备注」。
 
-   ⚠️ 这里**不写 `border-collapse: separate` 那一套**：GNOME 的关于窗里这类
-   信息是**无框线**的，靠行距和颜色分栏。画满格线会让一页十来行变成一张格子纸，
-   而这个框里已经有足够的层次（小标题 / 灰字）了。 */
+
+
+
+
+
+
 
 .about-table {
   width: 100%;
   margin: 0 0 14px;
   border-collapse: collapse;
-  /* 单元格之间的默认 2px 沟去掉，行高由 `td` 的 padding 定。 */
+
   line-height: 1.55;
 }
 
-/* 小标题（「编译信息」「本机信息」）。⚠️ 比正文重、比页标题轻——它是**分组**，
-   不是新的一层。 */
+
+
 .about-sub {
   margin: 0 0 6px;
   color: var(--fg);
@@ -701,12 +701,12 @@
   padding: 3px 0;
   text-align: left;
   vertical-align: top;
-  /* 长值（`uname` 那一行、长路径）不要撑破框。 */
+
   overflow-wrap: anywhere;
 }
 
-/* 「项 ｜ 值」那张表：左列是标签。⚠️ 不给固定宽度——`webkit2gtk` 那种长名字
-   该占多宽就占多宽，写死一个 px 反而会在窄字体下换行。 */
+
+
 .about-table th[scope="row"] {
   padding-right: 14px;
   color: var(--fg-muted);
@@ -714,7 +714,7 @@
   white-space: nowrap;
 }
 
-/* 「权限说明 ｜ 备注」那张表的表头。 */
+
 .about-table-2col thead th {
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
@@ -722,32 +722,32 @@
   font-weight: 600;
 }
 
-/* ⚠️⚠️ **这两条是 2026-10-04 目检抓出来的，不是修饰。**
-   不写它们的时候这张表**挤成一坨**：上面那条 `overflow-wrap: anywhere` 把每个
-   单元格的 min-content 宽度压到**一个字**，`table-layout: auto` 于是把左列
-   压到四五个字宽，右列**紧贴着**左列排——两列的字看着像一句话，
-   「用默认程」后面直接接着「正文里点到…」。表本身是合法的，就是读不了。
-   `fixed` ＋ 给左列一个百分比，列宽就**不再由内容反推**，两列各占各的。 */
+
+
+
+
+
+
 .about-table-2col {
   table-layout: fixed;
 }
 
 .about-table-2col thead th:first-child,
 .about-table-2col tbody td:first-child {
-  /* 名字都很短（中文最长一句十几个字），三成够放，也让右列那块长备注有地方摊开。 */
+
   width: 32%;
   padding-right: 16px;
 }
 
-/* 权限说明那一列（左边）。⚠️ 它比右列重：一眼扫的是**要了什么**，
-   备注是补话。 */
+
+
 .about-cell-name {
   padding-right: 16px;
   font-weight: 600;
 }
 
-/* 法律信息里那个许可证名。**画成链接的样子**（用户原话："用超链接显示"）——
-   所以它要点得出颜色差、并且有下划线，否则它会像一句普通的粗体字。 */
+
+
 .about-link {
   padding: 0;
   border: 0;
@@ -760,7 +760,7 @@
 }
 
 .about-link:hover {
-  /* 悬停时**不要只靠颜色**（某些界面风格里 `--accent` 与正文对比不高）。 */
+
   text-decoration-thickness: 2px;
 }
 
@@ -769,7 +769,7 @@
   outline-offset: 2px;
 }
 
-/* 软件更新页。数据仍用无框线表格；命令单独画成可选择、可换行的等宽块。 */
+
 .update-command {
   display: inline-block;
   padding: 4px 7px;
@@ -797,20 +797,20 @@
   align-items: center;
 }
 
-/* ── 许可证全文（`ui/LicenseDialog.tsx`）────────────────────────────────────
-   ⚠️ 它借的是确认框那层壳（`.confirm-backdrop` / `.confirm-dialog`），
-   只加这两条。 */
+
+
+
 
 .lic-dialog {
-  /* 正文是 30 来行的固定宽度文本，比确认框宽一档才不憋。 */
+
   min-width: 480px;
   max-width: 640px;
 }
 
 .lic-text {
   margin: 0 0 18px;
-  /* ⚠️ 55vh + 标题行 + 按钮行得留在 100vh 里（同 `.about-page-body` 那条）；
-     矮屏上照样能滚到底下的「关闭」。 */
+
+
   max-height: 55vh;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -818,12 +818,12 @@
   font-family: var(--font-mono);
   font-size: 0.85em;
   line-height: 1.5;
-  /* ⚠️ `pre-wrap` 而不是 `pre`：许可证正文是按 80 列排的，框比那窄时
-     （用户把界面字号调大就会）该折行，而不是横着滚出去。 */
+
+
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  /* ⚠️ 同 `.about-page-body` 那条：浮层滚动条会压住每行最后一个字。
-     许可证是**按 80 列定宽**的正文，最容易撞上这条。 */
+
+
   padding-right: 12px;
 }
 

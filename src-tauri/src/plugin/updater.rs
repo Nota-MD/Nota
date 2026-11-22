@@ -1,12 +1,3 @@
-//! 插件仓库检查与更新。
-//!
-//! 一个插件可以在 `plugin.toml` 的 `[update] manifest` 里指向一份 `latest.json`。
-//! 清单格式与官方插件仓库一致：一份文件列多个插件，宿主按 id 取当前插件那一项。
-//! 这让任意插件作者可以维护自己的仓库，也可以让多个插件共用一个仓库。
-//!
-//! 网络读取不在 `plugins` 锁内进行。只有最后的安装动作持锁，并复用原有的
-//! `.nota-plugin` 校验、验签与原子替换流程。
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
@@ -24,21 +15,19 @@ const PACKAGE_LIMIT: u64 = 256 * 1024 * 1024;
 const MANIFEST_TIMEOUT: Duration = Duration::from_secs(30);
 const PACKAGE_TIMEOUT: Duration = Duration::from_secs(600);
 
-/// 一个已安装插件声明的更新来源快照。
 #[derive(Debug, Clone)]
-pub struct 更新来源 {
+pub struct UpdateSource {
     pub id: String,
     pub name: String,
     pub version: String,
     pub manifest: String,
-    /// 当前安装记录里的签名者指纹。更新包若换了签名者，自动替换直接拒绝。
+
     pub signer: Option<String>,
 }
 
-/// 检查结果。一个插件的仓库坏了不会妨碍同一批里别的插件。
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct 插件更新状态 {
+pub struct PluginUpdateStatus {
     pub id: String,
     pub name: String,
     pub current_version: String,
@@ -51,21 +40,21 @@ pub struct 插件更新状态 {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct 插件更新结果 {
+pub struct PluginUpdateResult {
     pub id: String,
     pub from_version: String,
     pub to_version: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct 仓库 {
+struct UpdateRepository {
     schema: u32,
     #[serde(default)]
-    plugins: Vec<仓库项>,
+    plugins: Vec<RepositoryEntry>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct 仓库项 {
+struct RepositoryEntry {
     id: String,
     version: String,
     file: String,
@@ -77,175 +66,187 @@ struct 仓库项 {
     size: Option<u64>,
 }
 
-pub(crate) struct 准备好的更新 {
-    source: 更新来源,
-    entry: 仓库项,
+pub(crate) struct PreparedUpdate {
+    source: UpdateSource,
+    entry: RepositoryEntry,
     path: PathBuf,
 }
 
-/// 从宿主内存里的插件清单抄一份更新来源。调用方拿到后应立即释放 `plugins` 锁。
-pub fn 来源(host: &PluginHost) -> Vec<更新来源> {
+pub fn sources(host: &PluginHost) -> Vec<UpdateSource> {
     host.plugins
         .iter()
         .filter_map(|p| {
             let spec = p.manifest.update.as_ref()?;
-            Some(更新来源 {
+            Some(UpdateSource {
                 id: p.manifest.meta.id.clone(),
                 name: p.manifest.meta.name.clone(),
                 version: p.manifest.meta.version.clone(),
                 manifest: spec.manifest.clone(),
-                signer: host.installed.record(&p.manifest.meta.id).and_then(|r| r.key_id.clone()),
+                signer: host
+                    .installed
+                    .record(&p.manifest.meta.id)
+                    .and_then(|r| r.key_id.clone()),
             })
         })
         .collect()
 }
 
-/// 检查全部已声明更新源的插件。
-pub fn 检查(sources: &[更新来源], 替换规则: &str) -> Vec<插件更新状态> {
-    let mut 按地址: BTreeMap<String, Result<仓库>> = BTreeMap::new();
+pub fn check_updates(sources: &[UpdateSource], replacements: &str) -> Vec<PluginUpdateStatus> {
+    let mut by_url: BTreeMap<String, Result<UpdateRepository>> = BTreeMap::new();
     for source in sources {
-        按地址
+        by_url
             .entry(source.manifest.clone())
-            .or_insert_with(|| 取仓库(&source.manifest, 替换规则));
+            .or_insert_with(|| fetch_repository(&source.manifest, replacements));
     }
 
     sources
         .iter()
         .map(|source| {
-            let result = 按地址
+            let result = by_url
                 .get(&source.manifest)
-                .expect("每个来源都已取过仓库");
+                .expect("every source has fetched a repository");
             match result {
-                Ok(repo) => match 找仓库项(repo, &source.id) {
-                    Some(entry) => 状态(source, entry),
-                    None => 错误状态(
+                Ok(repo) => match find_entry(repo, &source.id) {
+                    Some(entry) => status_from_entry(source, entry),
+                    None => error_status(
                         source,
-                        format!("仓库 {} 里没有 `{}`", source.manifest, source.id),
+                        format!(
+                            "Repository {} does not contain plugin {}",
+                            source.manifest, source.id
+                        ),
                     ),
                 },
-                Err(e) => 错误状态(source, e.to_string()),
+                Err(error) => error_status(source, error.to_string()),
             }
         })
         .collect()
 }
 
-/// 准备一个插件更新：重新读取仓库、验证地址与 SHA-256，并写到临时文件。
-///
-/// 返回后调用方应持 `plugins` 锁执行 `PluginHost::装`，再删除临时文件。
-pub(crate) fn 准备(source: &更新来源, 替换规则: &str) -> Result<准备好的更新> {
-    let repo = 取仓库(&source.manifest, 替换规则)?;
-    let entry = 找仓库项(&repo, &source.id).cloned().ok_or_else(|| {
-        NotaError::other(format!("仓库 {} 里没有 `{}`", source.manifest, source.id))
+pub(crate) fn prepare_update(source: &UpdateSource, replacements: &str) -> Result<PreparedUpdate> {
+    let repo = fetch_repository(&source.manifest, replacements)?;
+    let entry = find_entry(&repo, &source.id).cloned().ok_or_else(|| {
+        NotaError::other(format!(
+            "Repository {} does not contain plugin {}",
+            source.manifest, source.id
+        ))
     })?;
-    if !crate::update::版本大于(&entry.version, &source.version) {
+    if !crate::update::version_greater(&entry.version, &source.version) {
         return Err(NotaError::other(format!(
-            "{} 已经是当前版本或没有更新",
+            "{} is already current or has no available update",
             source.name
         )));
     }
     if !remote::is_trusted_address(&entry.url) {
-        return Err(NotaError::other("插件包地址必须是 HTTPS"));
+        return Err(NotaError::other("Plugin package URL must use HTTPS"));
     }
     if entry.size.is_some_and(|size| size > PACKAGE_LIMIT) {
-        return Err(NotaError::other("插件包超过 256 MiB 上限"));
+        return Err(NotaError::other("Plugin package exceeds the 256 MiB limit"));
     }
-    let bytes = remote::fetch(&entry.url, 替换规则, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
+    let bytes = remote::fetch(&entry.url, replacements, PACKAGE_LIMIT, PACKAGE_TIMEOUT)?;
     let digest = format!("{:x}", Sha256::digest(&bytes));
     if digest != entry.sha256.to_ascii_lowercase() {
         return Err(NotaError::other(format!(
-            "插件包校验失败：期望 {}，实际 {digest}",
+            "Plugin package checksum mismatch: expected {}, got {digest}",
             entry.sha256
         )));
     }
     if let Some(expected) = &source.signer {
-        let package = super::package::包::从zip(&bytes)?;
+        let package = super::package::Package::cong_zip(&bytes)?;
         let actual = package
-            .签名
+            .qian_ming
             .as_ref()
-            .map(|sig| super::installed::公钥指纹(&sig.public_key));
+            .map(|sig| super::installed::gong_yao_fingerprint(&sig.public_key));
         if actual.as_deref() != Some(expected.as_str()) {
             return Err(NotaError::other(format!(
-                "{} 的更新包签名者与原安装不一致，已拒绝自动替换",
+                "The update signer for {} differs from the installed package; automatic replacement was rejected",
                 source.name
             )));
         }
     }
 
     let dir = std::env::temp_dir().join("nota-plugin-update");
-    fs::create_dir_all(&dir)
-        .map_err(|e| NotaError::other(format!("插件更新临时目录建不出来：{e}")))?;
+    fs::create_dir_all(&dir).map_err(|e| {
+        NotaError::other(format!(
+            "Could not create the plugin update temp directory: {e}"
+        ))
+    })?;
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_nanos())
         .unwrap_or(0);
     let path = dir.join(format!(
         "{}-{}-{}-{nonce}.nota-plugin",
-        crate::paths::安全文件名(&source.id),
-        crate::paths::安全文件名(&entry.version),
+        crate::paths::an_fulldocument_jian_ming(&source.id),
+        crate::paths::an_fulldocument_jian_ming(&entry.version),
         std::process::id(),
     ));
     fs::write(&path, bytes)
-        .map_err(|e| NotaError::other(format!("插件更新包写不进去：{e}")))?;
-    Ok(准备好的更新 {
+        .map_err(|e| NotaError::other(format!("Could not write the plugin update package: {e}")))?;
+    Ok(PreparedUpdate {
         source: source.clone(),
         entry,
         path,
     })
 }
 
-/// 安装已经准备好的更新，并给出实际版本变化。
-pub(crate) fn 安装(host: &mut PluginHost, prepared: 准备好的更新) -> Result<插件更新结果> {
-    let result = host.装(&prepared.path);
+pub(crate) fn install_update(
+    host: &mut PluginHost,
+    prepared: PreparedUpdate,
+) -> Result<PluginUpdateResult> {
+    let result = host.install_2(&prepared.path);
     let _ = fs::remove_file(&prepared.path);
     let installed = result?;
     if installed != prepared.source.id {
         return Err(NotaError::other(format!(
-            "更新包装成了另一个插件 `{installed}`，期望 `{}`",
+            "Updated package installed plugin {installed}, expected {}",
             prepared.source.id
         )));
     }
-    Ok(插件更新结果 {
+    Ok(PluginUpdateResult {
         id: installed,
         from_version: prepared.source.version,
         to_version: prepared.entry.version,
     })
 }
 
-fn 取仓库(url: &str, 替换规则: &str) -> Result<仓库> {
+fn fetch_repository(url: &str, replacements: &str) -> Result<UpdateRepository> {
     if !remote::is_trusted_address(url) {
-        return Err(NotaError::other("插件更新清单地址必须是 HTTPS"));
+        return Err(NotaError::other(
+            "Plugin update manifest URL must use HTTPS",
+        ));
     }
-    let bytes = remote::fetch(url, 替换规则, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
-    let repo: 仓库 = serde_json::from_slice(&bytes)
-        .map_err(|e| NotaError::other(format!("插件更新清单解析失败：{e}")))?;
+    let bytes = remote::fetch(url, replacements, MANIFEST_LIMIT, MANIFEST_TIMEOUT)?;
+    let repo: UpdateRepository = serde_json::from_slice(&bytes).map_err(|e| {
+        NotaError::other(format!("Could not parse the plugin update manifest: {e}"))
+    })?;
     if repo.schema != 1 {
         return Err(NotaError::other(format!(
-            "插件更新清单版本 {} 不受支持",
+            "Unsupported plugin update manifest version {}",
             repo.schema
         )));
     }
     Ok(repo)
 }
 
-fn 找仓库项<'a>(repo: &'a 仓库, id: &str) -> Option<&'a 仓库项> {
+fn find_entry<'a>(repo: &'a UpdateRepository, id: &str) -> Option<&'a RepositoryEntry> {
     repo.plugins.iter().find(|entry| entry.id == id)
 }
 
-fn 状态(source: &更新来源, entry: &仓库项) -> 插件更新状态 {
-    插件更新状态 {
+fn status_from_entry(source: &UpdateSource, entry: &RepositoryEntry) -> PluginUpdateStatus {
+    PluginUpdateStatus {
         id: source.id.clone(),
         name: source.name.clone(),
         current_version: source.version.clone(),
         latest_version: Some(entry.version.clone()),
-        available: crate::update::版本大于(&entry.version, &source.version),
+        available: crate::update::version_greater(&entry.version, &source.version),
         asset_name: Some(entry.file.clone()),
         notes: entry.notes.clone(),
         error: None,
     }
 }
 
-fn 错误状态(source: &更新来源, error: String) -> 插件更新状态 {
-    插件更新状态 {
+fn error_status(source: &UpdateSource, error: String) -> PluginUpdateStatus {
+    PluginUpdateStatus {
         id: source.id.clone(),
         name: source.name.clone(),
         current_version: source.version.clone(),
@@ -262,8 +263,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 同一份仓库能按_id_分清多个插件() {
-        let repo: 仓库 = serde_json::from_str(
+    fn one_repository_updates_plugins_by_id() {
+        let repo: UpdateRepository = serde_json::from_str(
             r#"{
               "schema": 1,
               "plugins": [
@@ -275,8 +276,10 @@ mod tests {
             }"#,
         )
         .unwrap();
-        assert_eq!(找仓库项(&repo, "nota.ai").unwrap().file, "ai.nota-plugin");
-        assert_eq!(找仓库项(&repo, "nota.git").unwrap().file, "git.nota-plugin");
+        assert_eq!(find_entry(&repo, "nota.ai").unwrap().file, "ai.nota-plugin");
+        assert_eq!(
+            find_entry(&repo, "nota.git").unwrap().file,
+            "git.nota-plugin"
+        );
     }
-
 }

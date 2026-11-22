@@ -48,6 +48,10 @@ testCase("Icon 把逻辑名拼成 --icon-<id> 并由默认图兜底", () => {
     Icon.includes("`var(--icon-${name}, var(--icon-base))`"),
     "逻辑名没有拼成 --icon-<id>，或者默认图没有兜底",
   );
+  assertValue(
+    Icon.includes("WebkitMaskImage: override") && Icon.includes("maskImage: override"),
+    "WebView2 仍要经过第二层自定义属性替换才能解析主题图标",
+  );
   assertValue(iconsCss.includes("var(--icon-override, var(--icon-base))"), "遮罩没有消费覆盖变量");
 });
 

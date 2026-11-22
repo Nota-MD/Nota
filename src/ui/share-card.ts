@@ -197,7 +197,7 @@ function profilePart(
       `<image href="${convertMeaning(identity.avatar)}" x="${avatarX}" y="${avatarY}" width="${avatarSize}" height="${avatarSize}" preserveAspectRatio="xMidYMid slice" clip-path="url(#avatar-clip)"/>`,
     );
   } else if (!identity.name) {
-    part.push(markRecognize(avatarX + 16, avatarY + 16, 50, "顶"));
+    part.push(markRecognize(avatarX + 16, avatarY + 16, 50, "top"));
   } else {
     part.push(
       character(shareInitials(author), avatarX + avatarSize / 2, avatarY + 53, {
@@ -536,7 +536,7 @@ function footerPart(
     const brandWidth = measure("NOTA", brandSize, 750);
     const markLeft = 1016 - brandWidth - markGap - markSize;
     part.push(
-      `<g opacity="0.95">${markRecognize(markLeft, 1220, markSize, "脚")}</g>`,
+      `<g opacity="0.95">${markRecognize(markLeft, 1220, markSize, "footnote")}</g>`,
       character("NOTA", 1016, 1250, {
         size: brandSize,
         weight: 750,

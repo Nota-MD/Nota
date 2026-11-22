@@ -1,376 +1,319 @@
-//! MCP 的工具清单：**AI 客户端能对 Nota 做的每一件事**。
-//!
-//! # 五个工具，为什么是这五个
-//!
-//! 判据只有一条：**这件事在不经 MCP 的时候做不到或很别扭**。
-//! AI 客户端自己就能读盘上的文件、能写文件，所以"再给一个读文件的口子"
-//! 一点价值都没有；它做不到的是**够到 Nota 里正开着的那一份**——那份文档
-//! 可能还没存盘、可能刚被用户改了一半、可能还没有路径（`未命名 N`）。
-//! 于是清单是：
-//!
-//! | 工具 | 一句话 |
-//! |---|---|
-//! | `nota_info` | 对面那个 Nota 还活着吗、它手里有什么 |
-//! | `nota_documents` | 现在开着哪几份（含未存盘的那几份） |
-//! | `nota_read` | 读一份的全文（**读到的是窗口里此刻的内容**，不是盘上那份） |
-//! | `nota_write` | 整篇替换一份（用户在窗口里看得见、Ctrl+Z 撤得回） |
-//! | `nota_open` | 请 Nota 打开一个文件（进一个新标签页） |
-//!
-//! ⚠️ **不做的事，如实记三件**（都是"想做但这一版没做"，不是"想过了决定不做"）：
-//!
-//! 1. **不做细粒度编辑**（在某个位置插入一段、替换选中内容、动光标）。
-//!    那需要前端把"编辑器事务"暴露成一套可远程调用的动作（还要处理"用户
-//!    此刻正在打字"的并发），是本模块之外的一大块。整篇替换已经能覆盖
-//!    "AI 帮我改这篇文章"的主流用法，而且**撤销栈是完整的**。
-//! 2. **不执行 Nota 自己的命令**（导出 PDF、新建标签页、切换主题……）。
-//!    宿主侧发命令这条路今天不存在：那些命令是前端 `invoke` 进来的，
-//!    方向是"前端问宿主"。要做得先有一条宿主→前端的请求/应答通道。
-//! 3. **不做 HTTP 传输**（只做 stdio）。加 HTTP 要引一个 web 框架，
-//!    而本仓的规矩是不加依赖、且 MCP 官方客户端默认就是 stdio 起进程。
-//!
-//! # 说明书为什么用中文写
-//!
-//! `description` 是给**模型**读的，本仓的用户与它的 AI 都说中文，中文说明书
-//! 在这条链路上更短也更准。要换成英文只改这一个文件里的字符串——协议那边
-//! （`mod.rs`）一个字都不用动。
-
 use serde_json::{json, Value};
 
-use super::host::宿主;
+use super::host::Host;
 
-/// 一个工具：名字、给模型看的说明、参数的 JSON Schema、以及怎么跑。
-///
-/// ⚠️ `跑` 是 `fn` 指针而不是闭包：清单要放在 `const` 里（AI 客户端拉的
-/// `tools/list` 与文档里那张表必须**同源**，写成运行期拼的 `Vec` 就会有两份）。
-pub struct 工具 {
-    pub 名: &'static str,
-    pub 说明: &'static str,
-    pub 参数: fn() -> Value,
-    pub 跑: fn(&dyn 宿主, &Value) -> Result<Value, String>,
+pub struct ToolSpec {
+    pub ming: &'static str,
+    pub shuo_ming: &'static str,
+    pub args_2: fn() -> Value,
+    pub pao: fn(&dyn Host, &Value) -> Result<Value, String>,
 }
 
-/// 那几个工具的**唯一**名册。`tools/list` 与 `tools/call` 都读它。
-pub const 工具表: &[工具] = &[
-    工具 {
-        名: "nota_info",
-        说明: "看对面的 Nota 是什么状态：版本、开着几份文档、当前活动的是哪一份。\
-               不读正文，也不改任何东西——用它来确认「我连上的那个 Nota 手里有什么」。",
-        参数: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-        跑: 跑_info,
+pub const GONG_JU_TABLE: &[ToolSpec] = &[
+    ToolSpec {
+        ming: "nota_info",
+        shuo_ming: "Show the connected Nota version, open document count, and active document without reading content or changing state.",
+        args_2: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
+        pao: pao_info,
     },
-    工具 {
-        名: "nota_documents",
-        说明: "列出 Nota 现在打开着的每一份文档（含还没存盘的「未命名 N」）。\
-               ⚠️ 这是**窗口里开着的那几份**，不是某个目录下的文件清单——要文件清单请直接用你自己的文件工具。",
-        参数: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
-        跑: 跑_documents,
+    ToolSpec {
+        ming: "nota_documents",
+        shuo_ming: "List the documents currently open in Nota, including unsaved documents. This is not a filesystem listing.",
+        args_2: || json!({ "type": "object", "properties": {}, "additionalProperties": false }),
+        pao: pao_documents,
     },
-    工具 {
-        名: "nota_read",
-        说明: "读一份文档的全文（markdown 原文）。⚠️ 读到的是**窗口里此刻的内容**：\
-               用户刚打了一半还没存盘的字也在里面，而这正是它比「直接读盘上那个文件」有用的地方。",
-        参数: || {
+    ToolSpec {
+        ming: "nota_read",
+        shuo_ming: "Read the current Markdown source of a document, including unsaved edits visible in the window.",
+        args_2: || {
             json!({
                 "type": "object",
                 "properties": {
-                    "id": { "type": "integer", "minimum": 1, "description": "文档 id（见 nota_documents）。不写＝当前活动的那一份。" }
+                    "id": { "type": "integer", "minimum": 1, "description": "Document ID from nota_documents. Omit it to use the active document." }
                 },
                 "additionalProperties": false
             })
         },
-        跑: 跑_read,
+        pao: pao_read,
     },
-    工具 {
-        名: "nota_write",
-        说明: "把一份文档**整篇**替换成新的正文（markdown 原文）。用户在 Nota 窗口里会立刻看到这次改动，\
-               并且可以用 Ctrl+Z 撤销——所以这里不需要额外的确认。⚠️ 它替换的是整篇，不是某一处：\
-               先 nota_read 拿到当前正文，改完再整篇写回来。",
-        参数: || {
+    ToolSpec {
+        ming: "nota_write",
+        shuo_ming: "Replace the entire Markdown source of a document. The user can undo the change with Ctrl+Z. Read the current source before replacing it.",
+        args_2: || {
             json!({
                 "type": "object",
                 "properties": {
-                    "text": { "type": "string", "description": "整篇新正文（markdown 原文，不要带代码围栏）" },
-                    "id": { "type": "integer", "minimum": 1, "description": "文档 id。不写＝当前活动的那一份。" }
+                    "text": { "type": "string", "description": "New complete Markdown source without a code fence" },
+                    "id": { "type": "integer", "minimum": 1, "description": "Document ID. Omit it to use the active document." }
                 },
                 "required": ["text"],
                 "additionalProperties": false
             })
         },
-        跑: 跑_write,
+        pao: pao_write,
     },
-    工具 {
-        名: "nota_open",
-        说明: "请 Nota 打开一个文件（进一个新的标签页）。⚠️ 这是**请求**：出错的提示落在 Nota 界面上，\
-               返回 `requested` 只表示请求发出去了。路径必须存在，且得是 Nota 能读的文本文件。",
-        参数: || {
+    ToolSpec {
+        ming: "nota_open",
+        shuo_ming: "Ask Nota to open a file in a new tab. A `requested` result only means the request was sent; errors appear in Nota.",
+        args_2: || {
             json!({
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "description": "文件的绝对路径" }
+                    "path": { "type": "string", "description": "Absolute file path" }
                 },
                 "required": ["path"],
                 "additionalProperties": false
             })
         },
-        跑: 跑_open,
+        pao: pao_open,
     },
 ];
 
-/// `tools/list` 的 `result`。
-pub fn 清单() -> Value {
+pub fn manifest_2() -> Value {
     json!({
-        "tools": 工具表
+        "tools": GONG_JU_TABLE
             .iter()
             .map(|t| json!({
-                "name": t.名,
-                "description": t.说明,
-                "inputSchema": (t.参数)(),
+                "name": t.ming,
+                "description": t.shuo_ming,
+                "inputSchema": (t.args_2)(),
             }))
             .collect::<Vec<_>>()
     })
 }
 
-/// 跑一个工具。
-///
-/// ⚠️ 两条错误通道分开（这是 MCP 自己的规定，不是我们的口味）：
-///
-/// * **叫不出名字的工具** → 返回 `Err`，由 `mod.rs` 当成 JSON-RPC 的 `-32602`
-///   协议错误（这说明客户端拿错了名册）；
-/// * **工具跑了但没成**（没有这份文档、路径不存在……）→ 正常返回一份
-///   `isError: true` 的内容，**模型看得见那句话并可自行纠错**——这是工具
-///   该有的行为，不该升级成协议错误。
 #[cfg(test)]
-pub fn 跑一个(名: &str, 参: &Value, 宿主: &dyn 宿主) -> Result<Value, String> {
-    let tool = find_tool(名)?;
-    Ok(装内容((tool.跑)(宿主, 参)))
+pub fn pao_yi_ge(ming: &str, can_2: &Value, su_zhu: &dyn Host) -> Result<Value, String> {
+    let tool = find_tool(ming)?;
+    Ok(install_content((tool.pao)(su_zhu, can_2)))
 }
 
-pub fn run_tool_raw(名: &str, 参: &Value, 宿主: &dyn 宿主) -> Result<Value, String> {
-    (find_tool(名)?.跑)(宿主, 参)
+pub fn run_tool_raw(ming: &str, can_2: &Value, su_zhu: &dyn Host) -> Result<Value, String> {
+    (find_tool(ming)?.pao)(su_zhu, can_2)
 }
 
-fn find_tool(name: &str) -> Result<&'static 工具, String> {
-    工具表
+fn find_tool(name: &str) -> Result<&'static ToolSpec, String> {
+    GONG_JU_TABLE
         .iter()
-        .find(|tool| tool.名 == name)
-        .ok_or_else(|| format!("没有叫 {name} 的工具（用 tools/list 看现在有哪些）"))
+        .find(|tool| tool.ming == name)
+        .ok_or_else(|| format!("Unknown tool: {name}. Use tools/list to inspect available tools."))
 }
 
-/// 把工具的结果装成 MCP 的 `tools/call` 结果。
 #[cfg(test)]
-fn 装内容(结果: Result<Value, String>) -> Value {
-    match 结果 {
-        Ok(值) => json!({
-            "content": [{ "type": "text", "text": 好看一点(&值) }],
+fn install_content(result_3: Result<Value, String>) -> Value {
+    match result_3 {
+        Ok(value_2) => json!({
+            "content": [{ "type": "text", "text": ok_kan_yi_dian(&value_2) }],
             "isError": false,
         }),
-        Err(为什么) => json!({
-            "content": [{ "type": "text", "text": 为什么 }],
+        Err(wei_shen_me) => json!({
+            "content": [{ "type": "text", "text": wei_shen_me }],
             "isError": true,
         }),
     }
 }
 
-/// 给模型看的那段文字。**JSON 原样给**（不缩进、不包裹）：
-/// 缩进后的 JSON 会白白多出三四成 token，而模型读紧凑 JSON 毫无困难。
-/// 唯一做的加工是"只有一层对象且只有一个 `text` 字段时，直接把那段文字给它"
-/// ——`nota_read` 就是这种形状，让模型少解析一层壳。
 #[cfg(test)]
-fn 好看一点(值: &Value) -> String {
-    match 值 {
+fn ok_kan_yi_dian(value_2: &Value) -> String {
+    match value_2 {
         Value::String(s) => s.clone(),
-        _ => 值.to_string(),
+        _ => value_2.to_string(),
     }
 }
 
-// ── 五个工具的实现 ────────────────────────────────────────────────────────
-
-/// 取 `id` 参数：不写是 `None`，写错了就报错（**不猜**）。
-fn 取可选id(参: &Value) -> Result<Option<u64>, String> {
-    match 参.get("id") {
+fn qu_ke_xuan_id(can_2: &Value) -> Result<Option<u64>, String> {
+    match can_2.get("id") {
         None | Some(Value::Null) => Ok(None),
         Some(Value::Number(n)) => n
             .as_u64()
-            .ok_or_else(|| format!("id 得是正整数，收到的是 {n}"))
+            .ok_or_else(|| format!("id must be a positive integer, received {n}"))
             .map(Some),
-        Some(别的) => Err(format!("id 得是正整数，收到的是 {别的}")),
+        Some(other) => Err(format!("id must be a positive integer, received {other}")),
     }
 }
 
-fn 跑_info(宿主: &dyn 宿主, _参: &Value) -> Result<Value, String> {
-    let 概览们 = 宿主.概览们();
-    let 活动 = 概览们.iter().find(|g| g.active);
+fn pao_info(su_zhu: &dyn Host, _can: &Value) -> Result<Value, String> {
+    let overview_men = su_zhu.overview_men();
+    let huo_dong = overview_men.iter().find(|g| g.active);
     Ok(json!({
         "app": "Nota",
-        "version": 宿主.应用版本(),
+        "version": su_zhu.app_ban_ben(),
         "protocol_versions": super::MCP_PROTOCOL_VERSIONS,
-        "open_documents": 概览们.len(),
-        "active": 活动,
+        "open_documents": overview_men.len(),
+        "active": huo_dong,
     }))
 }
 
-fn 跑_documents(宿主: &dyn 宿主, _参: &Value) -> Result<Value, String> {
-    Ok(json!({ "documents": 宿主.概览们() }))
+fn pao_documents(su_zhu: &dyn Host, _can: &Value) -> Result<Value, String> {
+    Ok(json!({ "documents": su_zhu.overview_men() }))
 }
 
-fn 跑_read(宿主: &dyn 宿主, 参: &Value) -> Result<Value, String> {
-    let id = 取可选id(参)?;
-    let 全文 = 宿主.读(id)?;
+fn pao_read(su_zhu: &dyn Host, can_2: &Value) -> Result<Value, String> {
+    let id = qu_ke_xuan_id(can_2)?;
+    let fulldocument = su_zhu.read_2(id)?;
     Ok(json!({
-        "id": 全文.概览.id,
-        "title": 全文.概览.title,
-        "path": 全文.概览.path,
-        "dirty": 全文.概览.dirty,
-        "revision": 全文.概览.revision,
-        // ⚠️ 正文**最后**写：`serde_json` 的 `json!` 保序（默认那个 `preserve_order`
-        // feature 在本仓是开着的，靠的是 tauri 那一串依赖），上面几个字段先出现，
-        // 模型一眼就能看到"这是哪一份"。
-        "text": 全文.正文,
+        "id": fulldocument.overview.id,
+        "title": fulldocument.overview.title,
+        "path": fulldocument.overview.path,
+        "dirty": fulldocument.overview.dirty,
+        "revision": fulldocument.overview.revision,
+
+
+
+        "text": fulldocument.body_2,
     }))
 }
 
-fn 跑_write(宿主: &dyn 宿主, 参: &Value) -> Result<Value, String> {
-    let 正文 = match 参.get("text") {
+fn pao_write(su_zhu: &dyn Host, can_2: &Value) -> Result<Value, String> {
+    let body_2 = match can_2.get("text") {
         Some(Value::String(s)) => s.clone(),
-        Some(别的) => return Err(format!("text 得是字符串，收到的是 {别的}")),
-        None => return Err("少了 text：整篇新正文是必填的".to_string()),
+        Some(bie_de) => return Err(format!("text must be a string, received {bie_de}")),
+        None => return Err("Missing text: the complete new source is required".to_string()),
     };
-    let id = 取可选id(参)?;
-    let (文档号, 版本) = 宿主.写(id, &正文)?;
+    let id = qu_ke_xuan_id(can_2)?;
+    let (document_hao, ban_ben) = su_zhu.write_2(id, &body_2)?;
     Ok(json!({
-        "id": 文档号,
-        "revision": 版本,
-        "chars": 正文.chars().count(),
-        "note": "已写进 Nota，窗口里看得见，用户可以用 Ctrl+Z 撤销",
+        "id": document_hao,
+        "revision": ban_ben,
+        "chars": body_2.chars().count(),
+        "note": "Written to Nota. The user can undo the change with Ctrl+Z.",
     }))
 }
 
-fn 跑_open(宿主: &dyn 宿主, 参: &Value) -> Result<Value, String> {
-    let 路径 = match 参.get("path") {
+fn pao_open(su_zhu: &dyn Host, can_2: &Value) -> Result<Value, String> {
+    let path_3 = match can_2.get("path") {
         Some(Value::String(s)) if !s.trim().is_empty() => s.clone(),
-        Some(Value::String(_)) => return Err("path 是空的".to_string()),
-        Some(别的) => return Err(format!("path 得是字符串，收到的是 {别的}")),
-        None => return Err("少了 path".to_string()),
+        Some(Value::String(_)) => return Err("path is empty".to_string()),
+        Some(bie_de) => return Err(format!("path must be a string, received {bie_de}")),
+        None => return Err("Missing path".to_string()),
     };
-    宿主.请求打开(&路径)?;
+    su_zhu.qing_qiu_open(&path_3)?;
     Ok(json!({
-        "requested": 路径,
-        "note": "请求已经交给 Nota；它开不出来时提示会出现在 Nota 界面上（这里看不到）",
+        "requested": path_3,
+        "note": "The request was sent to Nota; open errors appear in the Nota interface",
     }))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mcp::host::{全文, 概览};
+    use crate::mcp::host::{FullDocument, HostOverview};
     use std::sync::Mutex;
 
-    /// 一份假宿主：够跑通五个工具，且每一条**都记着被调过什么**。
-    ///
-    /// ⚠️ 它不只是"返回点假数据"：`写` 会真的改掉自己那份文本、
-    /// `请求打开` 会记下路径——不然测出来的是"函数返回了 Ok"，不是"它做了那件事"。
     #[derive(Default)]
-    struct 假宿主 {
-        文档: Mutex<Vec<(u64, String, Option<String>, String)>>, // id, 标题, 路径, 正文
-        活动: Mutex<Option<u64>>,
-        版本: Mutex<u64>,
-        打开过: Mutex<Vec<String>>,
+    struct TestAppHost {
+        document_2: Mutex<Vec<(u64, String, Option<String>, String)>>,
+        huo_dong: Mutex<Option<u64>>,
+        ban_ben: Mutex<u64>,
+        open_guo: Mutex<Vec<String>>,
     }
 
-    impl 假宿主 {
-        fn 建两份() -> Self {
-            let 这 = Self::default();
-            这.文档.lock().unwrap().push((
+    impl TestAppHost {
+        fn jian_liang_fen() -> Self {
+            let zhe = Self::default();
+            zhe.document_2.lock().unwrap().push((
                 1,
-                "甲".into(),
-                Some("/tmp/甲.md".into()),
-                "第一篇".into(),
+                "\u{7532}".into(),
+                Some("/tmp/\u{7532}.md".into()),
+                "\u{7b2c}\u{4e00}\u{7bc7}".into(),
             ));
-            这.文档
+            zhe.document_2
                 .lock()
                 .unwrap()
-                .push((2, "乙".into(), None, "".into()));
-            *这.活动.lock().unwrap() = Some(2);
-            *这.版本.lock().unwrap() = 7;
-            这
+                .push((2, "\u{4e59}".into(), None, "".into()));
+            *zhe.huo_dong.lock().unwrap() = Some(2);
+            *zhe.ban_ben.lock().unwrap() = 7;
+            zhe
         }
     }
 
-    impl 宿主 for 假宿主 {
-        fn 应用版本(&self) -> String {
-            "0.0.0-假".into()
+    impl Host for TestAppHost {
+        fn app_ban_ben(&self) -> String {
+            "0.0.0-\u{5047}".into()
         }
-        fn 概览们(&self) -> Vec<概览> {
-            let 活动 = *self.活动.lock().unwrap();
-            self.文档
+        fn overview_men(&self) -> Vec<HostOverview> {
+            let huo_dong = *self.huo_dong.lock().unwrap();
+            self.document_2
                 .lock()
                 .unwrap()
                 .iter()
-                .map(|(id, 标题, 路径, _)| 概览 {
+                .map(|(id, biao_ti, path_3, _)| HostOverview {
                     id: *id,
-                    title: 标题.clone(),
-                    path: 路径.clone(),
+                    title: biao_ti.clone(),
+                    path: path_3.clone(),
                     dirty: *id == 2,
-                    revision: *self.版本.lock().unwrap(),
-                    active: 活动 == Some(*id),
+                    revision: *self.ban_ben.lock().unwrap(),
+                    active: huo_dong == Some(*id),
                 })
                 .collect()
         }
-        fn 读(&self, id: Option<u64>) -> Result<全文, String> {
-            let 要 = id.or(*self.活动.lock().unwrap()).ok_or("没有活动文档")?;
-            let 概览 = self
-                .概览们()
+        fn read_2(&self, id: Option<u64>) -> Result<FullDocument, String> {
+            let yao = id
+                .or(*self.huo_dong.lock().unwrap())
+                .ok_or("\u{6ca1}\u{6709}\u{6d3b}\u{52a8}\u{6587}\u{6863}")?;
+            let overview = self
+                .overview_men()
                 .into_iter()
-                .find(|g| g.id == 要)
-                .ok_or_else(|| format!("没有 id 为 {要} 的文档"))?;
-            let 正文 = self
-                .文档
+                .find(|g| g.id == yao)
+                .ok_or_else(|| {
+                    format!("\u{6ca1}\u{6709} id \u{4e3a} {yao} \u{7684}\u{6587}\u{6863}")
+                })?;
+            let body_2 = self
+                .document_2
                 .lock()
                 .unwrap()
                 .iter()
-                .find(|(i, _, _, _)| *i == 要)
+                .find(|(i, _, _, _)| *i == yao)
                 .map(|(_, _, _, t)| t.clone())
                 .unwrap_or_default();
-            Ok(全文 { 概览, 正文 })
+            Ok(FullDocument { overview, body_2 })
         }
-        fn 写(&self, id: Option<u64>, 正文: &str) -> Result<(u64, u64), String> {
-            let 要 = id.or(*self.活动.lock().unwrap()).ok_or("没有活动文档")?;
-            let mut 文档 = self.文档.lock().unwrap();
-            let 一份 = 文档
+        fn write_2(&self, id: Option<u64>, body_2: &str) -> Result<(u64, u64), String> {
+            let yao = id
+                .or(*self.huo_dong.lock().unwrap())
+                .ok_or("\u{6ca1}\u{6709}\u{6d3b}\u{52a8}\u{6587}\u{6863}")?;
+            let mut document_2 = self.document_2.lock().unwrap();
+            let yi_fen = document_2
                 .iter_mut()
-                .find(|(i, _, _, _)| *i == 要)
-                .ok_or_else(|| format!("没有 id 为 {要} 的文档"))?;
-            一份.3 = 正文.to_string();
-            drop(文档);
-            let mut 版本 = self.版本.lock().unwrap();
-            *版本 += 1;
-            Ok((要, *版本))
+                .find(|(i, _, _, _)| *i == yao)
+                .ok_or_else(|| {
+                    format!("\u{6ca1}\u{6709} id \u{4e3a} {yao} \u{7684}\u{6587}\u{6863}")
+                })?;
+            yi_fen.3 = body_2.to_string();
+            drop(document_2);
+            let mut ban_ben = self.ban_ben.lock().unwrap();
+            *ban_ben += 1;
+            Ok((yao, *ban_ben))
         }
-        fn 请求打开(&self, 路径: &str) -> Result<(), String> {
-            if 路径 == "/不存在" {
-                return Err(format!("路径不存在：{路径}"));
+        fn qing_qiu_open(&self, path_3: &str) -> Result<(), String> {
+            if path_3 == "/\u{4e0d}\u{5b58}\u{5728}" {
+                return Err(format!(
+                    "\u{8def}\u{5f84}\u{4e0d}\u{5b58}\u{5728}\u{ff1a}{path_3}"
+                ));
             }
-            self.打开过.lock().unwrap().push(路径.to_string());
+            self.open_guo.lock().unwrap().push(path_3.to_string());
             Ok(())
         }
     }
 
-    /// 取工具结果里那段文字。
-    fn 文字(值: &Value) -> String {
-        值["content"][0]["text"]
+    fn wen_zi(value_2: &Value) -> String {
+        value_2["content"][0]["text"]
             .as_str()
             .unwrap_or_default()
             .to_string()
     }
 
     #[test]
-    fn 清单里的每个工具都有名字说明与对象形态的参数() {
-        let 名册 = 清单();
-        let 工具们 = 名册["tools"].as_array().unwrap();
-        assert_eq!(工具们.len(), 5);
-        let mut 名们: Vec<&str> = 工具们.iter().map(|t| t["name"].as_str().unwrap()).collect();
+    fn manifest_li_de_mei_ge_gong_ju_dou_you_name_shuo_ming_yu_dui_xiang_xing_tai_de_args() {
+        let ming_ce = manifest_2();
+        let gong_ju_men = ming_ce["tools"].as_array().unwrap();
+        assert_eq!(gong_ju_men.len(), 5);
+        let mut ming_men: Vec<&str> = gong_ju_men
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
         assert_eq!(
-            名们,
+            ming_men,
             vec![
                 "nota_info",
                 "nota_documents",
@@ -379,157 +322,192 @@ mod tests {
                 "nota_open"
             ]
         );
-        名们.sort_unstable();
-        let 去重 = {
-            let mut a = 名们.clone();
+        ming_men.sort_unstable();
+        let qu_zhong = {
+            let mut a = ming_men.clone();
             a.dedup();
             a
         };
-        assert_eq!(名们, 去重, "工具名不许重");
-        for t in 工具们 {
+        assert_eq!(
+            ming_men, qu_zhong,
+            "\u{5de5}\u{5177}\u{540d}\u{4e0d}\u{8bb8}\u{91cd}"
+        );
+        for t in gong_ju_men {
             assert!(
                 !t["description"].as_str().unwrap().is_empty(),
-                "{}没有说明",
+                "{}\u{6ca1}\u{6709}\u{8bf4}\u{660e}",
                 t["name"]
             );
-            let 参数 = &t["inputSchema"];
-            assert_eq!(参数["type"], "object", "{}", t["name"]);
-            assert!(参数["properties"].is_object(), "{}", t["name"]);
-            // ⚠️ 本仓的口径：参数表里**只列认得的**，多给一个字段要报错而不是忽略
-            //    （模型瞎编字段时要能当场看出来，见 `取可选id` 那条"不猜"）。
-            assert_eq!(参数["additionalProperties"], false, "{}", t["name"]);
+            let args_2 = &t["inputSchema"];
+            assert_eq!(args_2["type"], "object", "{}", t["name"]);
+            assert!(args_2["properties"].is_object(), "{}", t["name"]);
+
+            assert_eq!(args_2["additionalProperties"], false, "{}", t["name"]);
         }
     }
 
     #[test]
-    fn 叫不出名字的工具是协议错误() {
-        let 这 = 假宿主::建两份();
-        let 错 = 跑一个("nota_不存在的", &json!({}), &这).unwrap_err();
-        assert!(错.contains("没有叫"), "{错}");
+    fn jiao_bu_chu_name_de_gong_ju_shi_xie_yi_error() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let cuo = pao_yi_ge("nota_\u{4e0d}\u{5b58}\u{5728}\u{7684}", &json!({}), &zhe).unwrap_err();
+        assert!(cuo.contains("Unknown tool"), "{cuo}");
     }
 
     #[test]
-    fn info_报出活动那一份与版本() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_info", &json!({}), &这).unwrap();
-        let t: Value = 文字(&值).parse().unwrap();
+    fn info_bao_chu_huo_dong_na_yi_fen_yu_ban_ben() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge("nota_info", &json!({}), &zhe).unwrap();
+        let t: Value = wen_zi(&value_2).parse().unwrap();
         assert_eq!(t["app"], "Nota");
-        assert_eq!(t["version"], "0.0.0-假");
+        assert_eq!(t["version"], "0.0.0-\u{5047}");
         assert_eq!(t["open_documents"], 2);
-        assert_eq!(t["active"]["id"], 2, "活动那份是乙");
+        assert_eq!(
+            t["active"]["id"], 2,
+            "\u{6d3b}\u{52a8}\u{90a3}\u{4efd}\u{662f}\u{4e59}"
+        );
         assert!(t["protocol_versions"].as_array().unwrap().len() >= 3);
-        assert_eq!(值["isError"], false);
+        assert_eq!(value_2["isError"], false);
     }
 
     #[test]
-    fn documents_列出每一份含未存盘的() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_documents", &json!({}), &这).unwrap();
-        let t: Value = 文字(&值).parse().unwrap();
-        let 们 = t["documents"].as_array().unwrap();
-        assert_eq!(们.len(), 2);
-        assert_eq!(们[1]["id"], 2);
-        assert_eq!(们[1]["path"], Value::Null, "未存盘的那份 path 是 null");
-        assert_eq!(们[1]["dirty"], true);
-        assert_eq!(们[0]["path"], "/tmp/甲.md");
+    fn documents_lie_chu_mei_yi_fen_han_wei_cun_pan_de() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge("nota_documents", &json!({}), &zhe).unwrap();
+        let t: Value = wen_zi(&value_2).parse().unwrap();
+        let men = t["documents"].as_array().unwrap();
+        assert_eq!(men.len(), 2);
+        assert_eq!(men[1]["id"], 2);
+        assert_eq!(
+            men[1]["path"],
+            Value::Null,
+            "\u{672a}\u{5b58}\u{76d8}\u{7684}\u{90a3}\u{4efd} path \u{662f} null"
+        );
+        assert_eq!(men[1]["dirty"], true);
+        assert_eq!(men[0]["path"], "/tmp/\u{7532}.md");
     }
 
     #[test]
-    fn read_不写id读活动那一份() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_read", &json!({}), &这).unwrap();
-        let t: Value = 文字(&值).parse().unwrap();
+    fn read_bu_write_id_read_huo_dong_na_yi_fen() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge("nota_read", &json!({}), &zhe).unwrap();
+        let t: Value = wen_zi(&value_2).parse().unwrap();
         assert_eq!(t["id"], 2);
-        assert_eq!(t["title"], "乙");
+        assert_eq!(t["title"], "\u{4e59}");
         assert_eq!(t["text"], "");
     }
 
     #[test]
-    fn read_写id读指定那一份() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_read", &json!({ "id": 1 }), &这).unwrap();
-        let t: Value = 文字(&值).parse().unwrap();
+    fn read_write_id_read_zhi_ding_na_yi_fen() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge("nota_read", &json!({ "id": 1 }), &zhe).unwrap();
+        let t: Value = wen_zi(&value_2).parse().unwrap();
         assert_eq!(t["id"], 1);
-        assert_eq!(t["text"], "第一篇");
+        assert_eq!(t["text"], "\u{7b2c}\u{4e00}\u{7bc7}");
     }
 
     #[test]
-    fn read_读不到的那一份是工具错误不是协议错误() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_read", &json!({ "id": 99 }), &这).unwrap();
-        assert_eq!(值["isError"], true);
-        assert!(文字(&值).contains("99"), "那句话里得有它要的那个 id");
+    fn read_read_bu_dao_de_na_yi_fen_shi_gong_ju_error_bu_shi_xie_yi_error() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge("nota_read", &json!({ "id": 99 }), &zhe).unwrap();
+        assert_eq!(value_2["isError"], true);
+        assert!(wen_zi(&value_2).contains("99"), "\u{90a3}\u{53e5}\u{8bdd}\u{91cc}\u{5f97}\u{6709}\u{5b83}\u{8981}\u{7684}\u{90a3}\u{4e2a} id");
     }
 
     #[test]
-    fn id_写错了就报错不猜() {
-        let 这 = 假宿主::建两份();
-        for 坏 in [
+    fn id_write_cuo_le_jiu_bao_cuo_bu_cai() {
+        let zhe = TestAppHost::jian_liang_fen();
+        for huai in [
             json!({ "id": "1" }),
             json!({ "id": -1 }),
             json!({ "id": 1.5 }),
         ] {
-            let 值 = 跑一个("nota_read", &坏, &这).unwrap();
-            assert_eq!(值["isError"], true, "{坏} 该被挡下");
-            assert!(文字(&值).contains("id"), "{}", 文字(&值));
+            let value_2 = pao_yi_ge("nota_read", &huai, &zhe).unwrap();
+            assert_eq!(
+                value_2["isError"], true,
+                "{huai} \u{8be5}\u{88ab}\u{6321}\u{4e0b}"
+            );
+            assert!(wen_zi(&value_2).contains("id"), "{}", wen_zi(&value_2));
         }
     }
 
     #[test]
     fn raw_results_are_not_mcp_envelopes() {
-        let host = 假宿主::建两份();
+        let host = TestAppHost::jian_liang_fen();
         let value = run_tool_raw("nota_documents", &json!({}), &host).unwrap();
         assert!(value.get("documents").is_some());
         assert!(value.get("content").is_none());
     }
 
     #[test]
-    fn write_真的换了正文并报了新版本() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_write", &json!({ "text": "改过的乙" }), &这).unwrap();
-        let t: Value = 文字(&值).parse().unwrap();
+    fn write_zhen_de_huan_le_body_bing_bao_le_xin_ban_ben() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge(
+            "nota_write",
+            &json!({ "text": "\u{6539}\u{8fc7}\u{7684}\u{4e59}" }),
+            &zhe,
+        )
+        .unwrap();
+        let t: Value = wen_zi(&value_2).parse().unwrap();
         assert_eq!(t["id"], 2);
         assert_eq!(t["revision"], 8);
         assert_eq!(t["chars"], 4);
-        // 真的落到宿主那份里了——不是"返回了 Ok"
-        let 读回 = 跑一个("nota_read", &json!({ "id": 2 }), &这).unwrap();
-        let t2: Value = 文字(&读回).parse().unwrap();
-        assert_eq!(t2["text"], "改过的乙");
+
+        let read_hui = pao_yi_ge("nota_read", &json!({ "id": 2 }), &zhe).unwrap();
+        let t2: Value = wen_zi(&read_hui).parse().unwrap();
+        assert_eq!(t2["text"], "\u{6539}\u{8fc7}\u{7684}\u{4e59}");
     }
 
     #[test]
-    fn write_少了text是工具错误() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_write", &json!({}), &这).unwrap();
-        assert_eq!(值["isError"], true);
-        assert!(文字(&值).contains("text"));
-        let 值 = 跑一个("nota_write", &json!({ "text": 5 }), &这).unwrap();
-        assert_eq!(值["isError"], true);
+    fn write_shao_le_text_shi_gong_ju_error() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge("nota_write", &json!({}), &zhe).unwrap();
+        assert_eq!(value_2["isError"], true);
+        assert!(wen_zi(&value_2).contains("text"));
+        let value_2 = pao_yi_ge("nota_write", &json!({ "text": 5 }), &zhe).unwrap();
+        assert_eq!(value_2["isError"], true);
     }
 
     #[test]
-    fn open_把路径交给了宿主() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_open", &json!({ "path": "/tmp/新.md" }), &这).unwrap();
-        assert_eq!(值["isError"], false);
-        assert_eq!(这.打开过.lock().unwrap().as_slice(), ["/tmp/新.md"]);
+    fn open_ba_path_jiao_gei_le_su_zhu() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge("nota_open", &json!({ "path": "/tmp/\u{65b0}.md" }), &zhe).unwrap();
+        assert_eq!(value_2["isError"], false);
+        assert_eq!(
+            zhe.open_guo.lock().unwrap().as_slice(),
+            ["/tmp/\u{65b0}.md"]
+        );
     }
 
     #[test]
-    fn open_路径不在就是工具错误() {
-        let 这 = 假宿主::建两份();
-        let 值 = 跑一个("nota_open", &json!({ "path": "/不存在" }), &这).unwrap();
-        assert_eq!(值["isError"], true);
-        assert!(文字(&值).contains("/不存在"), "{}", 文字(&值));
-        assert!(这.打开过.lock().unwrap().is_empty(), "错了就不该再往下发");
+    fn open_path_bu_zai_jiu_shi_gong_ju_error() {
+        let zhe = TestAppHost::jian_liang_fen();
+        let value_2 = pao_yi_ge(
+            "nota_open",
+            &json!({ "path": "/\u{4e0d}\u{5b58}\u{5728}" }),
+            &zhe,
+        )
+        .unwrap();
+        assert_eq!(value_2["isError"], true);
+        assert!(
+            wen_zi(&value_2).contains("/\u{4e0d}\u{5b58}\u{5728}"),
+            "{}",
+            wen_zi(&value_2)
+        );
+        assert!(
+            zhe.open_guo.lock().unwrap().is_empty(),
+            "\u{9519}\u{4e86}\u{5c31}\u{4e0d}\u{8be5}\u{518d}\u{5f80}\u{4e0b}\u{53d1}"
+        );
     }
 
     #[test]
-    fn open_空路径与缺路径都挡下() {
-        let 这 = 假宿主::建两份();
-        for 坏 in [json!({ "path": "   " }), json!({}), json!({ "path": 7 })] {
-            let 值 = 跑一个("nota_open", &坏, &这).unwrap();
-            assert_eq!(值["isError"], true, "{坏} 该被挡下");
+    fn open_kong_path_yu_que_path_dou_dang_xia() {
+        let zhe = TestAppHost::jian_liang_fen();
+        for huai in [json!({ "path": "   " }), json!({}), json!({ "path": 7 })] {
+            let value_2 = pao_yi_ge("nota_open", &huai, &zhe).unwrap();
+            assert_eq!(
+                value_2["isError"], true,
+                "{huai} \u{8be5}\u{88ab}\u{6321}\u{4e0b}"
+            );
         }
     }
 }

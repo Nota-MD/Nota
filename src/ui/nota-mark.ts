@@ -1,78 +1,78 @@
-/**
- * Nota 的**标识**（分享图左上角与页脚那两个小图标）。
- *
- * # 为什么是"读进来再嵌进去"，不是"再画一遍"
- *
- * 图标的手写源只有一份：`src-tauri/icons/nota.svg`（那份文件头上写着它是照
- * 用户的设计稿逆向出来的、以及 2026-09-23 换过一版）。分享图上要用它，就得让
- * 它进到**同一张 SVG**里——`<img src="…">` 在光栅化的那条路上有两个坑：
- *
- * 1. **外链的 SVG 进不了 canvas**（画上去会把 canvas 弄脏，`toBlob` 直接抛），
- *    而分享图最后要变成 PNG 存盘/进剪贴板；
- * 2. 就算不脏，图标是**另一份文件**，将来图标改了、分享图那边不会跟着变。
- *
- * 所以这里把那份 `.svg` **当字符串读进来**（Vite 的 `?raw`），去掉 XML 声明、
- * 注释和外层标签，再把内容和自己的 `<svg x= y= width= height= viewBox=…>` 拼成
- * 一段能塞进别人 SVG 里的片段。**改图标只需改那一份 .svg**。
- *
- * # ⚠️ 改名的原因：同一个 SVG 里不能有两套同名 id
- *
- * 图标里那三个渐变（`tile` / `sheet` / `fold`）是**按 id 引用的**，而一张分享图
- * 上要放**两个**图标（顶上一个、页脚一个）。同名的 id 在同一份文档里重复，浏览器
- * 只会认第一个——两个图标恰好长得一样，所以表现上看不出来，但那是运气，不是设计。
- * 于是每个实例的 id 都带一个前缀（调用方传的 `前缀`）。**只改 id 和 `url(#…)`，
- * 别的字节一律不动**——几何、颜色、渐变方向都不该由这个文件说了算。
- *
- * # ⚠️ 那个裁剪框
- *
- * 图标自己画了一张"圆角底衬 ＋ 四周留白"（底衬只占画布 74%，`nota.svg` 头上
- * 记着这件事）。直接嵌进深色卡片上会是一个**白色方块**——留白那圈是白的。
- * 所以外面套一个 `<clipPath>`，裁剪框**就取底衬那个圆角矩形**：白的只剩圆角
- * 那一块，看着就是个 app 图标。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import source3 from "../../src-tauri/icons/nota.svg?raw";
 
-/**
- * 标识自己的坐标系。⚠️ 是 **1254×1254**，不是常见的 1024——那是照原图像素量的
- * （`nota.svg` 里所有几何都落在这个空间里），所以这里必须跟着它，别写 1024。
- */
+
+
+
+
 export const markRecognizeView = "0 0 1254 1254";
 
-/**
- * 底衬（那张圆角"瓷砖"）在标识坐标系里的位置，抄自 `nota.svg` 里那个
- * `rect x=92 y=95 width=1070 height=1066 rx=255`。
- *
- * ⚠️ **2026-10-16 跟着新版图标换过一次**（上一版是 `167/155/920/948/rx250`）：
- * 用户换了一张新标识（斜纹 N，见 `nota.svg` 头上那段），新那张的瓷砖更大
- * （占画布 85% 而不是 74%）。这几个数**必须**跟它一致，理由见下面那段。
- *
- * ⚠️ 抄一份数在这是**有意的取舍**：裁剪框要跟着它走。图标那边改了几何，这里的
- * 裁剪框就会错位——错位的表现是"图标缺一个角"，一眼能看出来，不会静默。
- */
+
+
+
+
+
+
+
+
+
+
+
 const bottomLiner = { x: 92, y: 95, width: 1070, height: 1066, circleCorner: 255 };
 
-/** 图标那串路径（不含外层 `<svg>`）。模块加载时算一次，之后只做改名。 */
+
 const insideCore = (() => {
   const goShell = source3
-    // XML 声明：嵌进别人的 SVG 之后它出现在文档中间，是无效字节。
+
     .replace(/<\?xml[\s\S]*?\?>/g, "")
-    // 注释：`nota.svg` 头上那几十行说明是给改图标的人看的，不该跟着进分享图。
+
     .replace(/<!--[\s\S]*?-->/g, "");
   const match2 = goShell.match(/<svg[^>]*>([\s\S]*)<\/svg>/);
-  // 匹配不上说明那份文件不再是"一个 svg 包着内容"的形状——那时**只留空**，
-  // 让分享图上少一个图标，而不是把半段 XML 灌进 SVG 里（那会整张图不渲染）。
+
+
   return (match2?.[1] ?? "").trim();
 })();
 
-/** 给一段 SVG 里的 id 与引用统一加前缀（理由见文件头）。 */
+
 function addPrefix(fragment: string, prefix: string): string {
   const callMethod = new Map<string, string>();
-  // 先收集一遍 id：`url(#tile)` 要改成 `url(#<前缀>tile)`，改名规则只有一处。
+
   for (const m of fragment.matchAll(/\bid="([^"]+)"/g)) {
-    // ⚠️ 捕获组在类型上是 `string | undefined`（`noUncheckedIndexedAccess`）。
-    // 这条正则只会匹配到"有一个非空捕获组的 id"，所以那个 `if` 永远成立——
-    // 留着它是为了让类型收窄，而不是在防一个真会出现的情况。
+
+
+
     const name3 = m[1];
     if (name3) callMethod.set(name3, prefix + name3);
   }
@@ -81,23 +81,23 @@ function addPrefix(fragment: string, prefix: string): string {
     .replace(/url\(#([^)]+)\)/g, (_All, name3: string) => `url(#${callMethod.get(name3) ?? name3})`);
 }
 
-/**
- * 一块能嵌进别的 SVG 的标识。
- *
- * @param 左 左上角 x（外层的用户坐标）
- * @param 上 左上角 y
- * @param 尺寸 画成多大（正方形，外层单位）。⚠️ 传的是**显示尺寸**，不是坐标系里的
- *   1254——`viewBox` 会自己按比例缩放，调用方不必换算。
- * @param 前缀 这一份实例的 id 前缀。**同一张图上两个实例必须传不同的值**。
- */
+
+
+
+
+
+
+
+
+
 export function markRecognize(left: number, above: number, rulerInch: number, prefix: string): string {
   const inside = addPrefix(insideCore, prefix);
   return (
     `<svg x="${left}" y="${above}" width="${rulerInch}" height="${rulerInch}" viewBox="${markRecognizeView}">` +
-    `<defs><clipPath id="${prefix}裁">` +
+    `<defs><clipPath id="${prefix}clip">` +
     `<rect x="${bottomLiner.x}" y="${bottomLiner.y}" width="${bottomLiner.width}" height="${bottomLiner.height}" rx="${bottomLiner.circleCorner}"/>` +
     `</clipPath></defs>` +
-    `<g clip-path="url(#${prefix}裁)">${inside}</g>` +
+    `<g clip-path="url(#${prefix}clip)">${inside}</g>` +
     `</svg>`
   );
 }

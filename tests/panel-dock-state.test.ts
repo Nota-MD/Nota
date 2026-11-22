@@ -75,7 +75,7 @@ function texts(draw: ReturnType<typeof thisValuePageDrawWhatWhat>): string[] {
 {
   const emptyValue = thisValuePageDrawWhatWhat(pullToValueHalf(), "");
   eq(emptyValue.nodes, [], "还在拉、没有流式文字：一个节点都不画");
-  eq(emptyValue.notice, "载入", "还在拉：画那句「正在读取…」");
+  eq(emptyValue.notice, "load", "还在拉：画那句「正在读取…」");
   eq(emptyValue.error, null, "还在拉不算错");
   eq(emptyValue.busy, null, "还没拿到内容，没有 busy 可言");
 
@@ -91,7 +91,7 @@ function texts(draw: ReturnType<typeof thisValuePageDrawWhatWhat>): string[] {
 
   const assertValueEmpty = thisValuePageDrawWhatWhat(pullToDone(), "");
   eq(assertValueEmpty.nodes, [], "插件这一刻没有内容可显示");
-  eq(assertValueEmpty.notice, "空", "空**不是错误**：如实说「这一页现在没东西」");
+  eq(assertValueEmpty.notice, "empty", "空**不是错误**：如实说「这一页现在没东西」");
   eq(assertValueEmpty.error, null, "空也不是错");
 }
 

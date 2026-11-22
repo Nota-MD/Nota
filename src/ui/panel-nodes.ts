@@ -1,35 +1,35 @@
-/**
- * 面板内容的**白名单**：宿主发来的那一份 JSON 在这里被收成
- * `PanelNode[]`，之后渲染层拿到的是一份**字段全齐**的类型。
- *
- * # ⚠️ 为什么校验在这一层，不在宿主
- *
- * 宿主（`src-tauri/src/lua/api/ui.rs::面板内容`）保证两件事：**是 JSON**、
- * **有大小上限**（文本多长、一层几项、嵌套几层）。它**不校验形状**，
- * 也不知道 `kind` 有哪些取值。
- *
- * 这么分是刻意的：形状的真相源**只能在渲染这一侧**——因为最终决定
- * "这个 `kind` 画成什么"的代码就在这儿。宿主也存一份枚举的话，两边就是
- * 又一对"改一处忘一处"，而症状是**内容静默地不显示**（认不出的 kind
- * 被宿主扔掉），比在这儿看得见地画一句"不认识这种内容块"难查得多。
- *
- * # 三条规矩
- *
- * 1. **认不出的 `kind` 如实显示**，不静默丢掉，更不猜它是哪种；
- * 2. **字段类型不对就用默认值**（`text` 是数字 → 空串）。缺一个字段让整块
- *    消失是最糟的处理：用户看到的界面和插件作者以为的对不上；
- * 3. **只产出这里定义的字段**——插件塞的别的键一概**不往 DOM 上带**。
- *    这条是"不许注入"的落点：没有任何一条路能把字符串变成 HTML 或属性。
- *
- * ⚠️ 这里**没有**（也永远不该有）`dangerouslySetInnerHTML`。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { t } from "@/i18n";
 import type { PluginPrompt } from "@/bridge/ipc";
 import { readTick } from "@/ui/chart-ticks";
 import { readHotForceRecordRecord, computeHeatmap } from "@/ui/heatmap";
 
-/** 一块内容的语气。渲染层按它上色。 */
+
 export type PanelTone = "normal" | "muted" | "success" | "warn" | "danger";
 
 export interface PanelField {
@@ -47,11 +47,11 @@ export interface PanelListItem {
 
 export interface PanelButton {
   label: string;
-  /** 点了调这个插件的哪条命令。**空串 = 这块按钮不可用**（会画成灰的）。 */
+
   command: string;
-  /** 传给命令的参数（`args`）。 */
+
   args: unknown;
-  /** 非空 = 点之前先用宿主的输入框问一句，答案放进 `args[prompt.arg]`。 */
+
   prompt: PluginPrompt | null;
   style: "normal" | "primary" | "danger";
   disabled: boolean;
@@ -62,36 +62,36 @@ export interface PanelSelectOption {
   value: string;
 }
 
-/**
- * 一行上的一颗"点得动的东西"（`kind = "graph"` 用，2026-09-26 加）。
- *
- * 与 `PanelButton` 的差别只有两处，都是有意的：
- * - **没有 `label`**——提交树上那串字是**内容**（哈希 + 标题），不是按钮名，
- *   所以它走 `PanelGraphLine.text`，`title` 只当鼠标提示；
- * - **没有 `prompt`**——树上的点击都是"看一眼"，没有需要先问一句的。
- *   （真需要问的时候，那一条路是 `buttons`，别再往这儿加字段。）
- */
+
+
+
+
+
+
+
+
+
 export interface PanelAction {
   command: string;
   args: unknown;
-  /** 鼠标停上去的那句话。**空串 = 没有提示**（不画 `title` 属性）。 */
+
   title: string;
 }
 
-/**
- * 提交树里的一行（`kind = "graph"`）。
- *
- * ⚠️ 一行的**两头是两颗不同的东西**，这正是加这个 `kind` 的全部理由：
- * 左边那截图线（`art`）是"键"——它通向某个提交；右边那串字（`text`）是
- * 提交本身。`buttons` 那种一块按钮表达不了"一行上两颗"，而把两者合成一颗
- * 又会逼出一个二选一：点一下到底是"看这一条键通向什么"还是"选中它"。
- *
- * - `art`：图线前缀，**等宽原样画**（`* `、`|\`、`| |`）。空格是它的一部分。
- * - `text`：哈希 + 分支标签 + 标题。**纯连接线行是空串**（那一行只有键）。
- * - `picked`：这一行的提交是不是被选中的（界面自己画底色或标记）。
- * - `bond` / `pick`：两颗动作，**各自可以为 `null`**（那颗就画成纯文字，
- *   不是灰按钮——画成灰的会让人以为"这里本来能点，只是现在不能"）。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export interface PanelGraphLine {
   art: string;
   text: string;
@@ -162,20 +162,20 @@ export type PanelNode =
     }
   | { kind: "empty"; text: string }
   | { kind: "separator" }
-  /**
-   * 对话框里的一条消息（2026-09-24 加，AI 插件那张「对话框」用的）。
-   * ⚠️ `from` **只认 `user` / `ai`**，别的一律当 `ai`。
-   * ⚠️ `copy = true`（2026-10-10 加）→ 底下画一颗「复制」。**复制是宿主做的一件事**
-   *（`navigator.clipboard`）：插件那套 API 里没有剪贴板，而它是现代对话框里最常用的一颗。
-   */
+
+
+
+
+
+
   | { kind: "message"; from: PanelFrom; text: string; copy: boolean }
-  /** 一块改动（见 `PanelDiffLine`）。**只画，不应用**——应用得插件自己去点。 */
+
   | { kind: "diff"; items: PanelDiffLine[] }
-  /**
-   * 一棵提交树（`kind = "graph"`，2026-09-26 加，git 插件要的）。
-   * ⚠️ **唯一一种带交互位置**的块（一行的两头各是一颗可点的东西）。它不是画布：
-   * 条目内容全是插件给的字符串、由 React 转义。
-   */
+
+
+
+
+
   | { kind: "graph"; items: PanelGraphLine[] }
   /**
    * An interactive force-directed note graph.
@@ -186,136 +186,136 @@ export type PanelNode =
    * the host.
    */
   | { kind: "network"; spec: PanelNetwork }
-  /**
-   * 一排**标签页**（`kind = "tabs"`，2026-10-10 加，AI 插件的对话要的）。
-   * 用户原话是「**对话用标签页管理，在上方**」。⚠️ 一颗标签是**两件事**（点字面切过去、
-   * 点右边那颗小叉关掉），所以它得是一个新 `kind`；`close = null` = 不画那颗叉。
-   */
+
+
+
+
+
   | { kind: "tabs"; items: PanelTab[]; act: PanelAction | null }
-  /**
-   * 空态那句**大字 ＋ 一行小字**（`kind = "hero"`，2026-10-10 加）。
-   * ⚠️ 与 `empty` 的差别是**份量**：那个是"这里没有东西"，这个是"现在就开始吧"。
-   */
+
+
+
+
   | { kind: "hero"; title: string; subtitle: string }
-  /** 一行输入框 ＋ 一个提交按钮。**面板里唯一能打字的地方。** */
+
   | { kind: "input"; spec: PanelInput }
-  /**
-   * 嵌一块**本机开发服务器**的画面（`kind = "frame"`）。
-   *
-   * ⚠️ `url` **只能是宿主填的**。插件在自己的 `render` 里写 `url` 没用——
-   * 宿主会把它抹掉再按"这个插件自己那场会话"填（`lua/api/devserver.rs::填_frame`）。
-   * 所以这里**再判一次**不是为了防插件，而是因为这份 JSON 也可能来自别处
-   * （手改过的数据、测试、以后别的前端入口）：只认 `http://localhost:…`，
-   * 别的当"没有地址"。
-   *
-   * 这一条是本仓唯一一处"把外部内容嵌进 DOM"的地方，所以口子开在这儿、
-   * 也只开到这么大：`src-tauri/tauri.conf.json` 的 CSP 里 `frame-src` 只列了
-   * `http://localhost:*` 和 `http://127.0.0.1:*`，别的地址**浏览器那头也不认**。
-   */
+
+
+
+
+
+
+
+
+
+
+
+
+
   | { kind: "frame"; url: string; alive: boolean; height: number }
-  /**
-   * 一块**会动的数字与曲线**（`kind = "chart"`，2026-09-26 加，写作统计要的）。
-   *
-   * 数字在上（大号）、曲线在下——这是**一块**，不是"`fields` ＋ 图"两块：
-   * 它们说的是同一件事的两个面（"现在多快"和"刚才一路多快"），拆成两块
-   * 就意味着插件要自己保证两块对得上，而它们本来就是同一次采样算出来的。
-   *
-   * ⚠️ **它和 `graph` 不是一回事**，尽管名字像：`graph` 画的是 git 那棵提交树
-   * （一行的两头各有一颗可点的东西，是**排版**），这里画的是**数值曲线**。
-   * 两条唯一的共同点是"都用了'图'这个字"。
-   *
-   * ⚠️ 曲线是 React 直接生成的 `<svg>`（`PanelBody.tsx`），**不是 canvas、
-   * 更不是 HTML 字符串**：`points` 里那些数只会变成路径指令里的数字，
-   * 没有任何一条路能变成标签或属性（那三条规矩的第 1 条）。
-   */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   | { kind: "chart"; spec: PanelChart }
-  /**
-   * 一张**分享卡**（`kind = "share"`，2026-09-27 加，写作统计要的）。
-   *
-   * 与 `chart` 的区别不是画法而是**用途**：`chart` 是"此刻这一屏上的一块"，
-   * `share` 是"要**带走**的一张图"——同一份数据，两种去处。所以它自带宽高
-   * （1080×1350 的一张海报）、自己的品牌与页脚，渲染层还给它配了两颗按钮
-   * （存 PNG / 复制到剪贴板）。
-   *
-   * ⚠️ **画的是宿主**（`ui/share-card.ts`），插件只给字段：Lua 沙箱里没有
-   * 剪贴板、也生成不了图片（`docs/10` §11.2 那张边界表）。所以这一块的字段
-   * 全是"文案与数"，一个像素都不由插件说了算——插件想换版式得改宿主。
-   */
+
+
+
+
+
+
+
+
+
+
+
+
   | { kind: "share"; spec: PanelShare }
-  /**
-   * 一张**热力图**（`kind = "heatmap"`，2026-09-27 加，写作统计要的）。
-   *
-   * 用户原话：「加一个功能，类似 Contribution Graph 那样的热力图，记录长期数据。
-   * 仅记录打字数。」——一格一天、一列一周，看的是**几个月到一年**的勤快程度。
-   *
-   * ⚠️ 与 `chart` 的分工是**时间尺度**，不是画法：`chart` 画的是"刚才这几分钟"
-   * （采样点，一秒一个），`heatmap` 画的是"这半年每一天"（一天一格）。两者
-   * 共用一页，因为它们是同一个问题的两个尺度——"现在多快"和"长期写了多少"。
-   *
-   * ⚠️ 记录走的是**一个字符串**而不是数组：宿主的 `面板节点上限`（200）是按
-   * "一层里的项数"算的，而一年 365 天。理由与格式写在 `ui/heatmap.ts` 头上，
-   * 那是这个字段唯一的解析处。
-   */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   | { kind: "heatmap"; spec: PanelHeatmap }
-  /**
-   * 一串**记录卡**（`kind = "cards"`，2026-10-04 加，写作统计要的）。
-   *
-   * 用户当天甩来两张运动手表的截图当参考（「运动记录」那两屏），一句「卡片是
-   * 说一个框框」定下了版式：**一条记录一个圆角框**——左边一颗圆图标，右边一个
-   * 大数 ＋ 一行小字，框底下那行是这些记录的**汇总**。
-   *
-   * ⚠️ 与 `fields` 的分工是**主次**：`fields` 是"一行一项、左标签右值"的**表**
-   * （用于概览），这里是"一条记录一块牌子"。两者都是小字，但一个平铺、一个立着。
-   * ⚠️ 与 `share` 的分工是**去处**：`share` 是"要**带走**的一张海报"（1080×1350，
-   * 自带品牌与页脚），这里是"面板上的一行"。同一份数据想两处都出，插件报两次。
-   * ⚠️ 框里那条窄曲线与 `chart` 是**同一份数据、两种去处**（"此刻这一屏"vs
-   * "这一条记录里"），不是两个真相源。
-   */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   | { kind: "cards"; spec: PanelCards }
-  /**
-   * 认不出的 `kind`。**带着原始 JSON 的简写**，画一句"不认识"——
-   * 静默丢掉的话，插件作者看到的是"面板少了一块"，而没有任何线索。
-   */
+
+
+
+
   | { kind: "unknown"; raw: string };
 
-/** 一条消息是谁说的。 */
+
 export type PanelFrom = "user" | "ai";
 
-/**
- * 差异里一行是哪一种。
- *
- * ⚠️ 这五个字面量**必须和宿主 `unified_diff.rs::种类到op` 一一对上**。
- * 那边多一个、这里少一个，后果不是"少画一行"，而是**静默变色**——
- * 下面认不出的 op 一律当 `add`（见 `差异op()`）。用户不会把这种 bug 报上来，
- * 他只会觉得"这行明明删了怎么画成绿的"。
- */
+
+
+
+
+
+
+
+
 export type PanelDiffOp = "del" | "add" | "ctx" | "hunk" | "meta";
 
-/**
- * 改动块里的一行。
- *
- * - `del` / `add`：被换掉的原行 / 换上来的新行；
- * - `hunk`：`@@ -1,4 +1,4 @@`，只标"改在文件的哪一段"，不是内容；
- * - `meta`：`diff --git` / `index` / `---` / `+++` / `\ No newline …` 这类文件信息；
- * - `ctx`：hunk 里**没变**的那部分（上下文）。
- *
- * ⚠️ 后三种是 2026-09-26 加的（对齐 Folio 的 Git 拓展那个差异视图）。
- * 在那之前只画增删，代价是**看不出"改在哪一段"**——紧挨着改动的那几行是谁，
- * 正是判断"这一改对不对"要看的东西。
- *
- * ⚠️ `text` 对加/删/上下文**不含行首标记**（界面自己补 `+`/`-`/空格），
- * 对 `hunk`/`meta` 是**整行原样**（`@@ …` 那串要原样留着）。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export interface PanelDiffLine {
   op: PanelDiffOp;
   text: string;
 }
 
-/** 面板里的输入框（`kind = "input"`）。 */
+
 export interface PanelInput {
-  /** 用户敲的内容放进 `args[arg]` 传给 `submit` 那条命令。空串 = 这个框不可用。 */
+
   arg: string;
-  /** 点了调哪条命令。空串 = 画成灰的。 */
+
   submit: string;
   submitLabel: string;
   placeholder: string;
@@ -324,33 +324,33 @@ export interface PanelInput {
   value: string;
   /** Preferred textarea height. */
   rows: number;
-  /** 多行输入（默认单行）。谈话类用它。 */
+
   multiline: boolean;
-  /**
-   * 输入框里那排**小按钮**（2026-10-10 加，现代对话框里"深度思考"那个位置）。点了
-   * 就跑各自的命令，与 `buttons` 一样——只是摆在卡片里。⚠️ 给"一句话的快捷入口"用，
-   * **不是**"开关模式"：那种得由插件自己记状态并画成 `style = "primary"`。
-   */
+
+
+
+
+
   chips: PanelButton[];
 }
 
-/**
- * 一颗标签页（`kind = "tabs"`）。
- *
- * ⚠️ `label` 是**给人看的那串字**（对话标题），不是按钮名——同 `graph` 那串提交
- * 标题：内容由插件给，样式由宿主定（`title` 只当鼠标提示）。
- */
+
+
+
+
+
+
 export interface PanelTab {
   label: string;
-  /** 是不是当前这一个（选中的那面亮、其余暗）。 */
+
   active: boolean;
-  /** 点这颗标签调哪条命令。⚠️ 没有的话这一颗**画成灰的**（同 `buttons`）。 */
+
   pick: PanelAction | null;
-  /** 右边那颗小叉。`null` = 这颗标签不能关（连叉都不画）。 */
+
   close: PanelAction | null;
 }
-// ── 四种**数据块**的形状搬去了 `ui/panel-data-nodes.ts`（2026-10-10）──────
-// ⚠️ **门牌没动**：下面那行把老路径原样转出，调用点一行没改。
+
+
 export type {
   PanelCard,
   PanelCardIcon,
@@ -372,37 +372,37 @@ import type {
 } from "./panel-data-nodes";
 
 
-/** 一块内容最多这么多项（和宿主的 `面板节点上限` 同量级，但**各自把关**）。 */
+
 const eachBlockLimit = 200;
 
 /** Graph datasets are larger than ordinary panel lists, but still bounded. */
 const networkItemLimit = 800;
 
-/** 分享卡上最多几格指标。多出来的丢掉：版式只有三格，第四格没地方放。 */
+
 const pointMarkLimit = 3;
 
-/**
- * 热力图铺多少列。**8~53 由 `算热力` 夹**，这里只负责"把 `weeks` 变成数"，
- * 认不出来给 0（= 没写，那边用默认的半年）。
- *
- * ⚠️ 不在这里夹一次的理由：夹了之后**两个地方各有一个范围**，改一个忘一个
- * 就成了另一对能对不上的数。范围与理由都在 `ui/heatmap.ts`（那是唯一知道
- * "一列是几天"的地方）。
- */
+
+
+
+
+
+
+
+
 function weekNumber(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
-/** 文本兜底上限。宿主已经截过一刀，这是防手改过的数据。 */
+
 const textLimit = 4000;
 
-/**
- * 一条**消息**的兜底上限，比别的块宽得多。
- *
- * ⚠️ 对话面板里的一条消息就是**一段完整的回答**（一节稿子、一份翻译），
- * 4000 字会把正经内容从中间劈掉，而截断只留一个 `…`，用户会以为模型就
- * 写到那儿。宿主那边同样是 20000（`ui.rs::面板文本上限`），两处对齐。
- */
+
+
+
+
+
+
+
 const clearMessageLimit = 20000;
 
 function text2(v: unknown, limit = textLimit): string {
@@ -418,9 +418,9 @@ function languageGas(v: unknown): PanelTone {
     case "warn":
     case "danger":
       return v;
-    // 别名。宿主的通知层级用的是 `info`/`error`/`warning`（见 `ui.rs`
-    // 的 `normalise_level`），插件作者很容易照着抄过来。
-    // **两处都认**，免得一个 `tone = "info"` 变成静默的 normal。
+
+
+
     case "info":
       return "normal";
     case "error":
@@ -436,14 +436,14 @@ function isTable(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/**
- * 一条差异行的 op。认不出的一律当 `add`。
- *
- * ⚠️ 这个兜底**不是**"宽容"，它是一条看得见的坏味道：宿主或插件多出来一种
- * 新 op 时，界面上会有一类行**画成绿的**，而不是整块消失——**颜色错了比
- * 内容没了更难查**，但也比悄悄吞掉强（见本文件顶上三条规矩里的第 1 条）。
- * 所以它和宿主那五个字面量之间是**两份手抄的清单**，改一处必须改两处。
- */
+
+
+
+
+
+
+
+
 function differenceExceptionop(v: unknown): PanelDiffOp {
   switch (v) {
     case "del":
@@ -457,21 +457,21 @@ function differenceExceptionop(v: unknown): PanelDiffOp {
   }
 }
 
-/** 把一张表的某个键读成"表数组"。不是数组就空。 */
+
 function tableArray(v: unknown): Record<string, unknown>[] {
   if (!Array.isArray(v)) return [];
   return v.filter(isTable).slice(0, eachBlockLimit);
 }
 
-/**
- * 一颗动作（`kind = "graph"` 的行上那两颗）。
- *
- * **没有 `command` 就是 `null`**（那一头画成纯文字），不是"一颗点了没事发生的
- * 按钮"——与 `buttons` 那条"少写了一根线要看得见"的规矩**不同**，差别是有理由
- * 的：按钮那块里一颗灰按钮是"这里本该有东西"的信号，而提交树上"这一头没有
- * 动作"是**正常状态**（纯连接线行就没有右边的提交）。画成灰的会让整棵树
- * 布满灰块，反而看不出哪一头是真的能点。
- */
+
+
+
+
+
+
+
+
+
 function action(v: unknown): PanelAction | null {
   if (!isTable(v)) return null;
   const command = text2(v.command);
@@ -481,8 +481,8 @@ function action(v: unknown): PanelAction | null {
 
 function imageLine(v: Record<string, unknown>): PanelGraphLine {
   return {
-    // ⚠️ `art` 的**空格不能 trim**：那是图线的一部分（`| ` 和 `  ` 不同），
-    // 去掉了整棵树就散架。`文本()` 本来就不动首尾空白，这里只是写明白。
+
+
     art: text2(v.art),
     text: text2(v.text),
     tone: languageGas(v.tone),
@@ -495,12 +495,12 @@ function imageLine(v: Record<string, unknown>): PanelGraphLine {
 function notice(v: unknown): PluginPrompt | null {
   if (!isTable(v)) return null;
   const arg = text2(v.arg);
-  // 没有 `arg` 的提示是空的——问了也送不出去。宁可当没写，
-  // 也不要弹一个"填完什么都不会发生"的框。
+
+
   if (!arg) return null;
-  // 第二个字段：**键名和标签两个都给才算数**，与 Rust 的 `读提示` 同一套判据。
-  // 宿主的 `PromptDialog` 是"给了 `secondLabel` 才画第二行"，所以标签为空时
-  // 让 `secondArg` 也跟着空——否则值会被悄悄丢掉（框都没画，哪来的值）。
+
+
+
   const secondArg = text2(v.secondArg);
   const secondLabel = text2(v.secondLabel);
   const twoAllGive = Boolean(secondArg && secondLabel);
@@ -516,14 +516,14 @@ function notice(v: unknown): PluginPrompt | null {
   };
 }
 
-/**
- * 读一个输入框。
- *
- * ⚠️ **没有 `arg` 或没有 `submit` 时仍然画出来**（画成灰的、不能提交）：
- * 这与 `buttons` 那条规矩一致——少写了一根线要**看得见**，
- * 而不是让整块消失。`提示()` 那边相反（没有 `arg` 就当没写），因为那时
- * 弹出来的框"填完什么都不会发生"，多一个框比少一个框更坏。
- */
+
+
+
+
+
+
+
+
 function inputBox(raw: Record<string, unknown>): PanelInput {
   return {
     arg: text2(raw.arg),
@@ -534,8 +534,8 @@ function inputBox(raw: Record<string, unknown>): PanelInput {
     value: text2(raw.value),
     rows: Math.max(1, Math.min(24, Number(raw.rows) || 3)),
     multiline: raw.multiline === true,
-    // ⚠️ 小按钮与 `buttons` 那一条**共用一份收窄**：它们是一模一样的动作形状，
-    // 只是摆的地方不同（这里在输入卡片里）。
+
+
     chips: tableArray(raw.chips)
       .slice(0, eachBlockLimit)
       .map((it) => ({
@@ -549,10 +549,10 @@ function inputBox(raw: Record<string, unknown>): PanelInput {
   };
 }
 
-/**
- * 一颗标签页（`kind = "tabs"`）。⚠️ 没有 `pick` 的**留着但画成灰的**（同 `buttons`）；
- * `close` 缺了就是**不画那颗叉**——那是"这排标签只让看"的正常写法。
- */
+
+
+
+
 function label(it: Record<string, unknown>): PanelTab {
   return {
     label: text2(it.label),
@@ -562,28 +562,28 @@ function label(it: Record<string, unknown>): PanelTab {
   };
 }
 
-/**
- * 一条曲线上的点：**只收数，且只留最后 `每块上限` 个**。
- *
- * ⚠️ **`NaN` / `Infinity` 必须在这里滤掉，不能留给渲染层**：它们进了 SVG 的
- * 路径指令就变成 `M NaN 12`，浏览器要么整条线不画、要么画出一根穿过面板的
- * 怪线——而症状看着像"图画错了"，其实是数据里有一个坏点。
- * ⚠️ 顺带把非数字的项也滤掉（`"12"` 这种字符串不认）：曲线上的点只能是数，
- * 而"字符串能不能当数"这种判据放这儿一次就够了，别让渲染层再猜一遍。
- * ⚠️ 切的是**前面**（最旧的），`slice(-n)` 留的是尾巴：图上最右边那段才是"刚才"。
- *
- * ⚠️ **三处共用**（`chart` / `share` / `cards`）：2026-10-04 加 `cards` 时那一段
- * 是抄第三遍，抄的那两遍已经在各自注释里写着"同上面那条判据"——与其写三遍再
- * 指望三处一起改，不如让它只有一处。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function curveLinePoint(v: unknown): number[] {
   const original = Array.isArray(v) ? v : [];
   return original.filter((n): n is number => typeof n === "number" && Number.isFinite(n)).slice(-eachBlockLimit);
 }
 
-/**
- * `chart` 块（`kind = "chart"`）。
- */
+
+
+
 function imageBlock(raw: Record<string, unknown>): PanelChart {
   const points = curveLinePoint(raw.points);
   return {
@@ -592,23 +592,23 @@ function imageBlock(raw: Record<string, unknown>): PanelChart {
     label: text2(raw.label),
     caption: text2(raw.caption),
     points,
-    // 刻度走 `ui/chart-ticks.ts`：坏项在那儿丢掉、位置在那儿夹到 0~1。
-    // ⚠️ 纵轴**这里不推**：推的那一步要拿到 `points` 的极值，而那是渲染层
-    // 才知道的事（它才是按极值归一化的那一方）。见那个文件头那张分工表。
+
+
+
     xTicks: readTick(raw.x_ticks),
     yTicks: readTick(raw.y_ticks),
   };
 }
 
-/**
- * `share` 块（`kind = "share"`）。
- *
- * ⚠️ 与 `图块` 共用同一条"数字才收"的判据（`曲线点()`）：一个坏点进了卡片的
- * 路径指令，整条曲线就不画了，而那一头看着像"数据是空的"。
- * ⚠️ 文案一律走 `文本()`（长度上限 ＋ 类型收窄），**一个字都不进 HTML 或属性**：
- * 它们最后会进 SVG 的 `<text>`，而 SVG 是**XML**——`&` 和 `<` 在里面是有含义的
- * （`ui/share-card.ts` 那边还会再转义一次，两道都在，谁漏了都不至于出洞）。
- */
+
+
+
+
+
+
+
+
+
 function shareEnjoyCard(raw: Record<string, unknown>): PanelShare {
   const points = curveLinePoint(raw.points);
 
@@ -629,13 +629,13 @@ function shareEnjoyCard(raw: Record<string, unknown>): PanelShare {
     value: text2(raw.value),
     unit: text2(raw.unit),
     points,
-    // ⚠️ 卡片这里**自己给上限**（默认那 8 档是给面板一块 260px 宽的图定的）：
-    // 全日那张卡的横轴是**钟点**，8 小时都标不满一天，而两档之间还有小格。
+
+
     xTicks: readTick(raw.x_ticks, cardTickLimit),
     xMinor: horizontalThinShareNumber(raw.x_minor),
-    // 中间那块图画哪一种。⚠️ 判据是 `raw.shape === "heat"`（而不是"有没有给
-    // `days`"）：哪天热力图多一个字段、或者插件手滑多发了一个 `days`，都没有
-    // "这块该画什么"来得要紧。
+
+
+
     shape: raw.shape === "heat" ? "heat" : "curve",
     heat:
       raw.shape === "heat"
@@ -649,34 +649,34 @@ function shareEnjoyCard(raw: Record<string, unknown>): PanelShare {
   };
 }
 
-/**
- * 分享卡横轴的主刻度最多几档。比面板那 8 档宽——理由见上面那一句。
- */
+
+
+
 const cardTickLimit = 13;
 
-/**
- * 认得的图标名。**不在这里的名字一律当 `"record"`**（画一颗中性的圆点）。
- *
- * ⚠️ 白名单而不是"把插件给的字符串透给渲染层"：那个字符串最后要变成
- * `<path d="…">` 之类的**结构**，而"插件给的字符串能不能变成结构"正是本仓
- * 从头到尾在拆的那颗雷（`PanelBody.tsx` 文件头）。名字对不上顶多画错一颗图标，
- * 透一个名字进去就可能是一段注入。
- */
+
+
+
+
+
+
+
+
 const iconName: PanelCardIcon[] = ["round", "today", "long", "doc", "record"];
 
-/** `raw.icon` → 白名单里的一个；认不出、或者压根没写，都给 `"record"`。 */
+
 function icon(raw: unknown): PanelCardIcon {
   const s = typeof raw === "string" ? raw : "";
   return iconName.includes(s as PanelCardIcon) ? (s as PanelCardIcon) : "record";
 }
 
-/**
- * `cards` 块（`kind = "cards"`）。
- *
- * ⚠️ **一条都不给就什么都不画**（返回空 `items`，渲染层画一块空气）：这里不替
- * 插件决定"那该说句什么"——"没有记录"那句话该由插件按自己的话讲
- * （`plugins/stats/main.lua` 里那句 muted），而不是让宿主编一句通用文案。
- */
+
+
+
+
+
+
+
 function recordRecordCardColumnTable(raw: Record<string, unknown>): PanelCards {
   const items: PanelCard[] = [];
   for (const item5 of tableArray(raw.items)) {
@@ -689,9 +689,9 @@ function recordRecordCardColumnTable(raw: Record<string, unknown>): PanelCards {
     });
   }
 
-  // 汇总那行：`total` 不是一个表就当没有（`null`）。⚠️ 与 `items` 不同，这里
-  // **不判空**——一行"总计 0 字"是插件有意报的（今天真的一字没写），
-  // 而"少发一个 `total`"才是"这一块没有可汇总的"。
+
+
+
   const total = isTable(raw.total)
     ? {
         label: text2(raw.total.label),
@@ -703,30 +703,30 @@ function recordRecordCardColumnTable(raw: Record<string, unknown>): PanelCards {
   return { title: text2(raw.title), items, total };
 }
 
-/**
- * `x_minor` 读成一个 0~10 的整数。认不出来就是 0（= 不画小格）。
- *
- * ⚠️ **取整而不是照抄**：`2.5` 格没法画，而"照抄之后画出来的是 2 格"这种账
- * 不如在入口就说清楚。⚠️ 也不接受负数——负的格数会让下面那个循环一次都不跑，
- * 结果与 0 相同，但"设置里写了个 -1"是个该被发现的手误。
- */
+
+
+
+
+
+
+
 function horizontalThinShareNumber(raw: unknown): number {
   if (typeof raw !== "number" || !Number.isFinite(raw)) return 0;
   return Math.max(0, Math.min(10, Math.floor(raw)));
 }
 
-/**
- * `frame` 块只认**本机**的地址。不是本机的 → 空串（渲染层当"没地址"处理）。
- *
- * ⚠️ 判据是**协议 + 主机名**，两样都要对：
- * - 协议必须 `http:`（开发服务器都是 http；`https:` 指向本机反而少见，
- *   真出现了再加，不要先放一个用不上的口子）；
- * - 主机名必须 `localhost` / `127.0.0.1` / `[::1]`——**不能只看"以 http:// 开头"**，
- *   `http://evil.example/` 也满足那个前缀。
- *
- * 宿主那边填出来的一定是 `http://localhost:<port>/`，所以这条**正常情况下
- * 一次都不会触发**；它的用处是在数据不是宿主填的那种情况下兜底。
- */
+
+
+
+
+
+
+
+
+
+
+
+
 function localMachineAddress(v: unknown): string {
   const s = text2(v);
   if (!s) return "";
@@ -736,18 +736,18 @@ function localMachineAddress(v: unknown): string {
     if (!["localhost", "127.0.0.1", "[::1]", "::1"].includes(u.hostname)) return "";
     return s;
   } catch {
-    // 连 URL 都解析不出来（`new URL` 会抛）——当没地址。
+
     return "";
   }
 }
 
-/**
- * `frame` 块的高度。**只认数字，且夹在 120–2000 之间**。
- *
- * 两头都要夹：太小（一块 10px 的框）看不清任何东西，用户只会以为坏了；
- * 太大（有人写 99999）会把面板撑成一整屏、把别的块挤到看不见的地方。
- * 这个范围是"一块画布"的尺寸，不是"页面该多高"的规格。
- */
+
+
+
+
+
+
+
 function heightDegree(v: unknown): number {
   const n = typeof v === "number" && Number.isFinite(v) ? v : 480;
   return Math.min(2000, Math.max(120, Math.round(n)));
@@ -812,8 +812,8 @@ function oneBlock(raw: Record<string, unknown>): PanelNode {
         items: tableArray(raw.items).map((it) => ({
           label: text2(it.label),
           command: text2(it.command),
-          // `args` **原样带着**：它的形状由插件和它自己的命令约定，
-          // 宿主和这里都不解析。`undefined` 也是一种合法的"没有参数"。
+
+
           args: it.args,
           prompt: notice(it.prompt),
           style: it.style === "primary" || it.style === "danger" ? it.style : "normal",
@@ -878,8 +878,8 @@ function oneBlock(raw: Record<string, unknown>): PanelNode {
       return {
         kind: "tabs",
         items: tableArray(raw.items).slice(0, eachBlockLimit).map(label),
-        // ⚠️ 末尾那颗「＋」是**整排的一个动作**（不是第 N 颗标签），所以挂在块上：
-        // 标签页的次序在界面上就是"哪一颗在哪儿"，它只能落在最后。
+
+
         act: action(raw.new),
       };
     case "hero":
@@ -902,8 +902,8 @@ function oneBlock(raw: Record<string, unknown>): PanelNode {
         spec: {
           title: text2(raw.title),
           unit: text2(raw.unit),
-          // ⚠️ `to` 走 `文本()`：它不是给人看的字，但也要是同一种收窄
-          // （数字/布尔会被 `String()` 掉，日期本来就不该长成那样）。
+
+
           grid: computeHeatmap(readHotForceRecordRecord(raw.days), text2(raw.to), weekNumber(raw.weeks)),
         },
       };
@@ -921,12 +921,12 @@ function oneBlock(raw: Record<string, unknown>): PanelNode {
   }
 }
 
-/**
- * 宿主发来的一份 JSON → 一串能渲染的内容块。
- *
- * 不认识的顶层项（不是表的）**丢掉**——它连 `kind` 都没有，没有任何可说的。
- * 认不出的 `kind` 留着（见上面那条）。
- */
+
+
+
+
+
+
 export function normalise(raw: unknown): PanelNode[] {
   if (!Array.isArray(raw)) return [];
   return raw

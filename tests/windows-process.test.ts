@@ -47,7 +47,7 @@ testCase("Git 与直接 spawn 的运行期路径都走统一封装", () => {
   const window = read("src-tauri/src/commands/window.rs");
   const update = read("src-tauri/src/update.rs");
   assertValue(git.includes('crate::proc::background_command("git")'), "nota.git 仍直接启动 git");
-  assertValue(window.includes("crate::proc::background_command(&程序)"), "窗口/日志子进程绕过封装");
+  assertValue(window.includes("crate::proc::background_command(&program)"), "窗口/日志子进程绕过封装");
   assertValue(update.includes('crate::proc::background_command("powershell")'), "更新 PowerShell 绕过封装");
 });
 

@@ -144,9 +144,21 @@ testCase("设置界面支持铺满、内嵌和独立窗口", () => {
   assertValue(dialog.includes("standalone"), "设置框没有独立窗口模式");
   assertValue(css.includes('.settings-shell[data-settings-window-style="full"]'), "缺少铺满样式");
   assertValue(windowCommand.includes("nota_window_open_settings"), "缺少独立设置窗口命令");
+  assertValue(
+    windowCommand.includes("crate::cli::SETTINGS_WINDOW_FLAG") &&
+      windowCommand.includes("crate::proc::background_command"),
+    "独立设置窗口没有像调试窗口一样启动独立进程",
+  );
+  assertValue(
+    !windowCommand.includes("create_settings_window"),
+    "Windows 仍在主进程内创建辅助设置 WebView",
+  );
   assertValue(windowCommand.includes("nota_window_open_about"), "关于窗口没有复用呈现方式");
   assertValue(windowCommand.includes("nota_window_prepare_about"), "关于窗口没有预热");
-  assertValue(windowCommand.includes(".visible(false)"), "独立窗口创建时会先闪出未完成界面");
+  assertValue(
+    read("src-tauri", "src", "lib.rs").includes('window.location.replace(\'index.html?settings=1\')'),
+    "设置进程没有导航到独立设置页面",
+  );
   assertValue(
     read("src-tauri", "src", "lib.rs").includes('window.label() == "about"'),
     "关闭关于窗口时没有改为隐藏复用",

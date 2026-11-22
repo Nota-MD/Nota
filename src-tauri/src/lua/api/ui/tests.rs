@@ -1,433 +1,419 @@
-//! `lua/api/ui.rs` 那一组用例——2026-09-29 从 `mod tests` 里搬出来的，
-//! **只搬了行数，没搬内容**（`ui.rs` 当时 867 行，过了 `docs/09` §4 那条 800）。
-//!
-//! 被测的东西：`nota.ui` 那几张表的行为边界——通知层级归一化（`normalise_level`）、
-//! 面板内容那条路的三条上限（文本 / 节点数 / 层数，`剥成_json` ＋ `截断`）、
-//! 以及重名声明怎么判（`如果重名`）。
-//!
-//! ⚠️ **位置和 `lua/mod.rs` 那一份不一样**：那一份搬成了同级文件
-//! （`lua/tests.rs`），这一份落在 **`lua/api/ui/tests.rs`**，是 `ui` 的**子模块**。
-//! 差别在**能不能看见私有项**：这一组用到 `normalise_level` / `截断` /
-//! 面板那三个上限，它们都是 `ui.rs` 的私有项，只有子模块看得见。改成同级文件就得
-//! 把那几样放宽成 `pub(crate)`——为测试去改产品代码的可见性，不值当。
-//!
-//! ⚠️ 内容一个字没改，只是去掉 `mod tests` 那层壳、统一少四格缩进。
-
 use super::*;
 
 #[test]
-fn 通知层级归一化() {
+fn tong_zhi_ceng_ji_gui_yi_hua() {
     assert_eq!(normalise_level(None), "info");
     assert_eq!(normalise_level(Some("warn")), "warn");
     assert_eq!(normalise_level(Some("warning")), "warn");
     assert_eq!(normalise_level(Some("error")), "error");
-    assert_eq!(normalise_level(Some("随便写的")), "info");
+    assert_eq!(
+        normalise_level(Some("\u{968f}\u{4fbf}\u{5199}\u{7684}")),
+        "info"
+    );
 }
 
-// ── BUG-13 的回归用例 ─────────────────────────────────────────────────
-// 这几条**故意让写的一侧和读的一侧都参与**：`register_panel` 写进 registry，
-// `plugin::读面板` 读出来。BUG-13 的病灶就是这两头各写各的——
-// 只测一头永远测不出来。
-
-/// 走一遍完整来回：注册 → 读回。
 #[test]
-fn 注册的面板读得回来() {
+fn zhu_ce_de_mian_ban_read_de_hui_lai() {
     let lua = Lua::new();
-    let register = 面板表(&lua, "nota.t").unwrap();
+    let register = mian_ban_table(&lua, "nota.t").unwrap();
 
     let spec = lua.create_table().unwrap();
     spec.set("id", "git").unwrap();
     spec.set("title", "Git").unwrap();
     register.call::<()>(spec).unwrap();
 
-    let got = crate::plugin::读面板(&lua, "nota.t");
-    assert_eq!(got.len(), 1, "注册了一个，就该读回一个");
+    let got = crate::plugin::read_mian_ban(&lua, "nota.t");
+    assert_eq!(got.len(), 1, "\u{6ce8}\u{518c}\u{4e86}\u{4e00}\u{4e2a}\u{ff0c}\u{5c31}\u{8be5}\u{8bfb}\u{56de}\u{4e00}\u{4e2a}");
     assert_eq!(got[0].plugin, "nota.t");
     assert_eq!(got[0].id, "git");
     assert_eq!(got[0].title, "Git");
     assert_eq!(
         got[0].location, "right",
-        "不写 `location` 该默认到右侧拓展栏——默认值 `sidebar` 是左栏还兼职装拓展时的事"
+        "\u{4e0d}\u{5199} `location` \u{8be5}\u{9ed8}\u{8ba4}\u{5230}\u{53f3}\u{4fa7}\u{62d3}\u{5c55}\u{680f}\u{2014}\u{2014}\u{9ed8}\u{8ba4}\u{503c} `sidebar` \u{662f}\u{5de6}\u{680f}\u{8fd8}\u{517c}\u{804c}\u{88c5}\u{62d3}\u{5c55}\u{65f6}\u{7684}\u{4e8b}"
     );
 }
 
 #[test]
-fn 面板不写_title_就拿_id_顶上() {
+fn mian_ban_bu_write_title_jiu_na_id_ding_shang() {
     let lua = Lua::new();
-    let register = 面板表(&lua, "nota.t").unwrap();
+    let register = mian_ban_table(&lua, "nota.t").unwrap();
     let spec = lua.create_table().unwrap();
     spec.set("id", "only-id").unwrap();
     register.call::<()>(spec).unwrap();
 
-    let got = crate::plugin::读面板(&lua, "nota.t");
+    let got = crate::plugin::read_mian_ban(&lua, "nota.t");
     assert_eq!(got[0].title, "only-id");
 }
 
 #[test]
-fn 面板重名要报错() {
+fn mian_ban_zhong_ming_yao_bao_cuo() {
     let lua = Lua::new();
-    let register = 面板表(&lua, "nota.t").unwrap();
+    let register = mian_ban_table(&lua, "nota.t").unwrap();
     let spec = lua.create_table().unwrap();
     spec.set("id", "dup").unwrap();
     register.call::<()>(spec.clone()).unwrap();
 
     let err = register.call::<()>(spec).unwrap_err().to_string();
-    assert!(err.contains("重复注册面板"), "实际报的是：{err}");
-    // 报错之后**不能**留下半条：读回来还是一个。
-    assert_eq!(crate::plugin::读面板(&lua, "nota.t").len(), 1);
+    assert!(
+        err.contains("registered a duplicate panel"),
+        "unexpected error: {err}"
+    );
+
+    assert_eq!(crate::plugin::read_mian_ban(&lua, "nota.t").len(), 1);
 }
 
 #[test]
-fn 没声明过就读回空表() {
-    // 没申请能力的插件，registry 里压根没有这个键——读回空表，**不是报错**。
-    // 报错会让"装了但不带面板的插件"看起来像坏了。
+fn mei_declaration_guo_jiu_read_hui_kong_table() {
     let lua = Lua::new();
-    assert!(crate::plugin::读面板(&lua, "nota.t").is_empty());
-    assert!(crate::plugin::读菜单(&lua, "nota.t").is_empty());
+    assert!(crate::plugin::read_mian_ban(&lua, "nota.t").is_empty());
+    assert!(crate::plugin::read_cai_dan(&lua, "nota.t").is_empty());
 }
 
 #[test]
-fn 注册的菜单项读得回来() {
+fn zhu_ce_de_cai_dan_xiang_read_de_hui_lai() {
     let lua = Lua::new();
-    let register = 菜单表(&lua, "nota.t").unwrap();
+    let register = cai_dan_table(&lua, "nota.t").unwrap();
 
     let spec = lua.create_table().unwrap();
-    spec.set("label", "提交…").unwrap();
+    spec.set("label", "\u{63d0}\u{4ea4}\u{2026}").unwrap();
     spec.set("command", "commit").unwrap();
     register.call::<()>(spec).unwrap();
 
-    let got = crate::plugin::读菜单(&lua, "nota.t");
+    let got = crate::plugin::read_cai_dan(&lua, "nota.t");
     assert_eq!(got.len(), 1);
-    assert_eq!(got[0].menu, "plugins", "不写 `menu` 默认挂在 plugins 下");
+    assert_eq!(
+        got[0].menu, "plugins",
+        "\u{4e0d}\u{5199} `menu` \u{9ed8}\u{8ba4}\u{6302}\u{5728} plugins \u{4e0b}"
+    );
     assert_eq!(got[0].command, "commit");
     assert_eq!(got[0].accelerator, None);
-    assert!(got[0].prompt.is_none(), "没写 `prompt` 就是直接跑，不该问");
+    assert!(got[0].prompt.is_none(), "\u{6ca1}\u{5199} `prompt` \u{5c31}\u{662f}\u{76f4}\u{63a5}\u{8dd1}\u{ff0c}\u{4e0d}\u{8be5}\u{95ee}");
 }
 
-/// 「提交…」要的就是这个：点了先弹框问提交信息，答完才跑命令。
-///
-/// ⚠️ 走真的 Lua 源码（`lua.load(...)`）而不是手搭 `mlua::Table`：
-/// 插件作者写的是源码，两条路之间差着 Lua 自己的表构造。
 #[test]
-fn 菜单项的_prompt_读得回来() {
+fn cai_dan_xiang_de_prompt_read_de_hui_lai() {
     let lua = Lua::new();
-    let register = 菜单表(&lua, "nota.t").unwrap();
+    let register = cai_dan_table(&lua, "nota.t").unwrap();
     let spec: Table = lua
         .load(
-            r#"return {
-                 label = "提交…", command = "commit",
-                 prompt = { arg = "message", label = "提交信息", placeholder = "一句话说清这次改了什么" },
-               }"#,
+            "return {\n                 label = \"\u{63d0}\u{4ea4}\u{2026}\", command = \"commit\",\n                 prompt = { arg = \"message\", label = \"\u{63d0}\u{4ea4}\u{4fe1}\u{606f}\", placeholder = \"\u{4e00}\u{53e5}\u{8bdd}\u{8bf4}\u{6e05}\u{8fd9}\u{6b21}\u{6539}\u{4e86}\u{4ec0}\u{4e48}\" },\n               }",
         )
         .eval()
         .unwrap();
     register.call::<()>(spec).unwrap();
 
-    let got = crate::plugin::读菜单(&lua, "nota.t");
-    let p = got[0].prompt.as_ref().expect("`prompt` 该跟着回来");
-    assert_eq!(p.arg, "message", "没有 `arg` 的话用户填的值没有地方放");
-    assert_eq!(p.label, "提交信息");
-    assert_eq!(p.placeholder, "一句话说清这次改了什么");
-    assert!(!p.secret, "不写 `secret` 就是明文显示");
-    assert_eq!(p.hint, "", "没写的字段给空串，不是 panic");
+    let got = crate::plugin::read_cai_dan(&lua, "nota.t");
+    let p = got[0]
+        .prompt
+        .as_ref()
+        .expect("`prompt` \u{8be5}\u{8ddf}\u{7740}\u{56de}\u{6765}");
+    assert_eq!(p.arg, "message", "\u{6ca1}\u{6709} `arg` \u{7684}\u{8bdd}\u{7528}\u{6237}\u{586b}\u{7684}\u{503c}\u{6ca1}\u{6709}\u{5730}\u{65b9}\u{653e}");
+    assert_eq!(p.label, "\u{63d0}\u{4ea4}\u{4fe1}\u{606f}");
+    assert_eq!(
+        p.placeholder,
+        "\u{4e00}\u{53e5}\u{8bdd}\u{8bf4}\u{6e05}\u{8fd9}\u{6b21}\u{6539}\u{4e86}\u{4ec0}\u{4e48}"
+    );
+    assert!(
+        !p.secret,
+        "\u{4e0d}\u{5199} `secret` \u{5c31}\u{662f}\u{660e}\u{6587}\u{663e}\u{793a}"
+    );
+    assert_eq!(p.hint, "", "\u{6ca1}\u{5199}\u{7684}\u{5b57}\u{6bb5}\u{7ed9}\u{7a7a}\u{4e32}\u{ff0c}\u{4e0d}\u{662f} panic");
 }
 
-/// 没有 `arg` 的 `prompt` **当没写**：问了也送不出去，那就别问。
 #[test]
-fn 没有_arg_的_prompt_当没写() {
+fn mei_you_arg_de_prompt_dang_mei_write() {
     let lua = Lua::new();
-    let register = 菜单表(&lua, "nota.t").unwrap();
+    let register = cai_dan_table(&lua, "nota.t").unwrap();
     let spec: Table = lua
-        .load(r#"return { label = "提交…", command = "commit", prompt = { label = "提交信息" } }"#)
+        .load("return { label = \"\u{63d0}\u{4ea4}\u{2026}\", command = \"commit\", prompt = { label = \"\u{63d0}\u{4ea4}\u{4fe1}\u{606f}\" } }")
         .eval()
         .unwrap();
     register.call::<()>(spec).unwrap();
 
-    assert!(crate::plugin::读菜单(&lua, "nota.t")[0].prompt.is_none());
+    assert!(crate::plugin::read_cai_dan(&lua, "nota.t")[0]
+        .prompt
+        .is_none());
 }
 
-/// 第二个字段（Git 身份的"名字 + 邮箱"要的就是这个）。
-///
-/// ⚠️ 字段名是 **camelCase**（`secondArg`/`secondLabel`/`secondPlaceholder`）：
-/// 插件在 Lua 里写的、前端 TS 类型里读的、这里断言的，必须是同一套拼法。
-/// 结构体上那行 `rename_all` 就是干这个的——要是有人把它删了，
-/// 这个用例会红，而不是等到"弹框里第二行不见了"才发现。
 #[test]
-fn 两个字段的_prompt_读得回来() {
+fn liang_ge_zi_duan_de_prompt_read_de_hui_lai() {
     let lua = Lua::new();
-    let register = 菜单表(&lua, "nota.t").unwrap();
+    let register = cai_dan_table(&lua, "nota.t").unwrap();
     let spec: Table = lua
         .load(
-            r#"return {
-                 label = "填身份…", command = "set_identity",
-                 prompt = { arg = "name", label = "Git 身份", placeholder = "名字，比如：张三",
-                            secondArg = "email", secondLabel = "邮箱",
-                            secondPlaceholder = "you@example.com" },
-               }"#,
+            "return {\n                 label = \"\u{586b}\u{8eab}\u{4efd}\u{2026}\", command = \"set_identity\",\n                 prompt = { arg = \"name\", label = \"Git \u{8eab}\u{4efd}\", placeholder = \"\u{540d}\u{5b57}\u{ff0c}\u{6bd4}\u{5982}\u{ff1a}\u{5f20}\u{4e09}\",\n                            secondArg = \"email\", secondLabel = \"\u{90ae}\u{7bb1}\",\n                            secondPlaceholder = \"you@example.com\" },\n               }",
         )
         .eval()
         .unwrap();
     register.call::<()>(spec).unwrap();
 
-    let got = crate::plugin::读菜单(&lua, "nota.t");
-    let p = got[0].prompt.as_ref().expect("`prompt` 该跟着回来");
+    let got = crate::plugin::read_cai_dan(&lua, "nota.t");
+    let p = got[0]
+        .prompt
+        .as_ref()
+        .expect("`prompt` \u{8be5}\u{8ddf}\u{7740}\u{56de}\u{6765}");
     assert_eq!(p.arg, "name");
-    assert_eq!(p.second_arg, "email", "第二个值的键名");
-    assert_eq!(p.second_label, "邮箱");
+    assert_eq!(
+        p.second_arg, "email",
+        "\u{7b2c}\u{4e8c}\u{4e2a}\u{503c}\u{7684}\u{952e}\u{540d}"
+    );
+    assert_eq!(p.second_label, "\u{90ae}\u{7bb1}");
     assert_eq!(p.second_placeholder, "you@example.com");
 }
 
-/// 第二个字段**只给一半等于没给**。
-///
-/// 判据与 `arg` 那条同源：缺了键名，用户填的值没有地方放。这里两个方向都试
-/// （只给键名 / 只给标签），因为漏的可以是任一半。
 #[test]
-fn 第二个字段只给一半等于没给() {
-    for 半截 in [
+fn di_er_ge_zi_duan_zhi_gei_yi_ban_deng_yu_mei_gei() {
+    for ban_jie in [
         r#"secondArg = "email""#,
-        r#"secondLabel = "邮箱", secondPlaceholder = "you@example.com""#,
+        "secondLabel = \"\u{90ae}\u{7bb1}\", secondPlaceholder = \"you@example.com\"",
     ] {
         let lua = Lua::new();
-        let register = 菜单表(&lua, "nota.t").unwrap();
+        let register = cai_dan_table(&lua, "nota.t").unwrap();
         let code = format!(
-            r#"return {{ label = "填身份…", command = "set_identity",
-                         prompt = {{ arg = "name", label = "Git 身份", {半截} }} }}"#
+            "return {{ label = \"\u{586b}\u{8eab}\u{4efd}\u{2026}\", command = \"set_identity\",\n                         prompt = {{ arg = \"name\", label = \"Git \u{8eab}\u{4efd}\", {ban_jie} }} }}"
         );
         let spec: Table = lua.load(&code).eval().unwrap();
         register.call::<()>(spec).unwrap();
 
-        let got = crate::plugin::读菜单(&lua, "nota.t");
-        let p = got[0].prompt.as_ref().expect("`prompt` 本身还在");
-        assert_eq!(p.arg, "name", "第一个字段不受影响");
-        assert_eq!(p.second_arg, "", "只给一半：{半截}");
+        let got = crate::plugin::read_cai_dan(&lua, "nota.t");
+        let p = got[0]
+            .prompt
+            .as_ref()
+            .expect("`prompt` \u{672c}\u{8eab}\u{8fd8}\u{5728}");
+        assert_eq!(
+            p.arg, "name",
+            "\u{7b2c}\u{4e00}\u{4e2a}\u{5b57}\u{6bb5}\u{4e0d}\u{53d7}\u{5f71}\u{54cd}"
+        );
+        assert_eq!(
+            p.second_arg, "",
+            "\u{53ea}\u{7ed9}\u{4e00}\u{534a}\u{ff1a}{ban_jie}"
+        );
         assert_eq!(p.second_label, "");
         assert_eq!(p.second_placeholder, "");
     }
 }
 
-// ── 面板内容（`render`）的来回 ────────────────────────────────────────
-// 这里同样是"写的一侧 → 读的一侧"整条走一遍：`register_panel` 把 `render`
-// 存进 registry，`面板内容` 现调它、剥成 JSON。只测一头测不出
-// "存进去时丢了 render" 这种病。
-
-/// 装一个带 `render` 的面板，返回 `(lua, 面板 id)`。
-fn 带渲染的面板(body: &str) -> Lua {
+fn dai_render_de_mian_ban(body: &str) -> Lua {
     let lua = Lua::new();
-    let register = 面板表(&lua, "nota.t").unwrap();
+    let register = mian_ban_table(&lua, "nota.t").unwrap();
 
-    // 用真的 Lua 源码拼 `render`，而不是在 Rust 里 `create_function`——
-    // 插件作者写的是源码，读回来的是它**跑出来的**东西，中间经过
-    // Lua 的表构造。手搭一个 `mlua::Table` 就绕过了这一步。
-    let code = format!(
-        "return {{ id = 'p', title = 'P', render = function() {body} end }}"
-    );
+    let code = format!("return {{ id = 'p', title = 'P', render = function() {body} end }}");
     let spec: Table = lua.load(&code).eval().unwrap();
     register.call::<()>(spec).unwrap();
     lua
 }
 
 #[test]
-fn 面板渲染出来的内容读得回来() {
-    let lua = 带渲染的面板(
-        r#"return {
-             { kind = "heading", text = "main" },
-             { kind = "list", items = { { title = "a.md", badge = "已修改" } } },
-             { kind = "buttons", items = { { label = "刷新", command = "refresh" } } },
-           }"#,
+fn mian_ban_render_chu_lai_de_content_read_de_hui_lai() {
+    let lua = dai_render_de_mian_ban(
+        "return {\n             { kind = \"heading\", text = \"main\" },\n             { kind = \"list\", items = { { title = \"a.md\", badge = \"\u{5df2}\u{4fee}\u{6539}\" } } },\n             { kind = \"buttons\", items = { { label = \"\u{5237}\u{65b0}\", command = \"refresh\" } } },\n           }",
     );
 
-    let v = 面板内容(&lua, "nota.t", "p").unwrap();
-    let arr = v.as_array().expect("该是一个数组");
+    let v = mian_ban_content(&lua, "nota.t", "p").unwrap();
+    let arr = v
+        .as_array()
+        .expect("\u{8be5}\u{662f}\u{4e00}\u{4e2a}\u{6570}\u{7ec4}");
     assert_eq!(arr.len(), 3);
     assert_eq!(arr[0]["kind"], "heading");
     assert_eq!(arr[0]["text"], "main");
-    assert_eq!(arr[1]["items"][0]["badge"], "已修改");
+    assert_eq!(arr[1]["items"][0]["badge"], "\u{5df2}\u{4fee}\u{6539}");
     assert_eq!(arr[2]["items"][0]["command"], "refresh");
 }
 
-/// ⚠️ **这条钉的是"内容每次都是现跑的"。**
-///
-/// 面板内容不是快照——git 的改动列表每次都得现问 git。做成"注册时跑一次存起来"
-/// 的话，界面上会一直显示应用刚启动那一刻的改动，而且**看着像是对的**。
 #[test]
-fn 每次读都重新跑一遍_render() {
+fn mei_ci_read_dou_zhong_xin_pao_yi_bian_render() {
     let lua = Lua::new();
-    let register = 面板表(&lua, "nota.t").unwrap();
+    let register = mian_ban_table(&lua, "nota.t").unwrap();
     let spec: Table = lua
         .load(
-            r#"
-            local n = 0
-            return { id = "p", render = function()
-                n = n + 1
-                return { { kind = "text", text = "第 " .. n .. " 次" } }
-            end }
-            "#,
+            "\n            local n = 0\n            return { id = \"p\", render = function()\n                n = n + 1\n                return { { kind = \"text\", text = \"\u{7b2c} \" .. n .. \" \u{6b21}\" } }\n            end }\n            ",
         )
         .eval()
         .unwrap();
     register.call::<()>(spec).unwrap();
 
-    for 期望 in ["第 1 次", "第 2 次", "第 3 次"] {
-        let v = 面板内容(&lua, "nota.t", "p").unwrap();
-        assert_eq!(v[0]["text"], 期望, "render 没有每次现跑");
+    for expected_2 in [
+        "\u{7b2c} 1 \u{6b21}",
+        "\u{7b2c} 2 \u{6b21}",
+        "\u{7b2c} 3 \u{6b21}",
+    ] {
+        let v = mian_ban_content(&lua, "nota.t", "p").unwrap();
+        assert_eq!(
+            v[0]["text"], expected_2,
+            "render \u{6ca1}\u{6709}\u{6bcf}\u{6b21}\u{73b0}\u{8dd1}"
+        );
     }
 }
 
-/// `render` 里抛错 → **一句人话**，不是一个裸的 Lua 栈。
 #[test]
-fn 渲染抛错时报的是插件自己的错() {
-    let lua = 带渲染的面板(r#"error("磁盘满了")"#);
-    let err = 面板内容(&lua, "nota.t", "p").unwrap_err().to_string();
-    assert!(err.contains("磁盘满了"), "实际报的是：{err}");
-    assert!(err.contains("渲染失败"), "该说清是渲染这一步出的错：{err}");
+fn render_pao_cuo_shi_bao_de_shi_plugin_zi_ji_de_cuo() {
+    let lua = dai_render_de_mian_ban("error(\"\u{78c1}\u{76d8}\u{6ee1}\u{4e86}\")");
+    let err = mian_ban_content(&lua, "nota.t", "p")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("\u{78c1}\u{76d8}\u{6ee1}\u{4e86}"),
+        "unexpected error: {err}"
+    );
+    assert!(
+        err.contains("Could not render panel"),
+        "expected a render-stage error: {err}"
+    );
 }
 
 #[test]
-fn 没有_render_的面板如实说没有() {
+fn mei_you_render_de_mian_ban_ru_shi_shuo_mei_you() {
     let lua = Lua::new();
-    let register = 面板表(&lua, "nota.t").unwrap();
+    let register = mian_ban_table(&lua, "nota.t").unwrap();
     let spec = lua.create_table().unwrap();
     spec.set("id", "bare").unwrap();
     register.call::<()>(spec).unwrap();
 
-    let err = 面板内容(&lua, "nota.t", "bare").unwrap_err().to_string();
-    assert!(err.contains("没有提供 `render`"), "实际报的是：{err}");
+    let err = mian_ban_content(&lua, "nota.t", "bare")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("has no `render` function"),
+        "unexpected error: {err}"
+    );
 }
 
 #[test]
-fn 没有的面板要报出来而不是给空() {
-    let lua = 带渲染的面板("return {}");
-    let err = 面板内容(&lua, "nota.t", "不存在").unwrap_err().to_string();
-    assert!(err.contains("没有声明面板"), "实际报的是：{err}");
+fn mei_you_de_mian_ban_yao_bao_chu_lai_er_bu_shi_gei_kong() {
+    let lua = dai_render_de_mian_ban("return {}");
+    let err = mian_ban_content(&lua, "nota.t", "\u{4e0d}\u{5b58}\u{5728}")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err.contains("does not declare panel"),
+        "unexpected error: {err}"
+    );
 }
 
-/// `render` 写的不是函数 → **注册时就报**。
-///
-/// 拖到用户打开面板才报的话，报错的地方（前端一个渲染失败）离病因
-/// （插件里把 `render` 写成了表）已经很远了。
 #[test]
-fn render_不是函数当场就报() {
+fn render_bu_shi_han_shu_dang_chang_jiu_bao() {
     let lua = Lua::new();
-    let register = 面板表(&lua, "nota.t").unwrap();
+    let register = mian_ban_table(&lua, "nota.t").unwrap();
     let spec: Table = lua
-        .load(r#"return { id = "p", render = { "我是一张表" } }"#)
+        .load("return { id = \"p\", render = { \"\u{6211}\u{662f}\u{4e00}\u{5f20}\u{8868}\" } }")
         .eval()
         .unwrap();
     let err = register.call::<()>(spec).unwrap_err().to_string();
-    assert!(err.contains("必须是一个函数"), "实际报的是：{err}");
+    assert!(
+        err.contains("requires a `render` function"),
+        "unexpected error: {err}"
+    );
 }
 
-/// 超长文本按**字符**截，且一个汉字不该被劈成半个。
 #[test]
-fn 超长文本截断且不劈开汉字() {
-    let lua = 带渲染的面板(&format!(
-        r#"return {{ {{ kind = "text", text = string.rep("汉", {}) }} }}"#,
-        面板文本上限 + 500
+fn chao_zhang_text_truncate_qie_bu_pi_kai_han_zi() {
+    let lua = dai_render_de_mian_ban(&format!(
+        "return {{ {{ kind = \"text\", text = string.rep(\"\u{6c49}\", {}) }} }}",
+        MIAN_BAN_TEXT_SHANG_XIAN + 500
     ));
-    let v = 面板内容(&lua, "nota.t", "p").unwrap();
+    let v = mian_ban_content(&lua, "nota.t", "p").unwrap();
     let text = v[0]["text"].as_str().unwrap();
-    assert_eq!(text.chars().count(), 面板文本上限 + 1, "截断长度不对（+1 是那个省略号）");
-    assert!(text.ends_with('…'), "截断该留个记号：{}", &text[..10]);
-    assert!(text.chars().all(|c| c == '汉' || c == '…'), "汉字被劈开了");
+    assert_eq!(text.chars().count(), MIAN_BAN_TEXT_SHANG_XIAN + 1, "\u{622a}\u{65ad}\u{957f}\u{5ea6}\u{4e0d}\u{5bf9}\u{ff08}+1 \u{662f}\u{90a3}\u{4e2a}\u{7701}\u{7565}\u{53f7}\u{ff09}");
+    assert!(
+        text.ends_with('\u{2026}'),
+        "\u{622a}\u{65ad}\u{8be5}\u{7559}\u{4e2a}\u{8bb0}\u{53f7}\u{ff1a}{}",
+        &text[..10]
+    );
+    assert!(
+        text.chars().all(|c| c == '\u{6c49}' || c == '\u{2026}'),
+        "\u{6c49}\u{5b57}\u{88ab}\u{5288}\u{5f00}\u{4e86}"
+    );
 }
 
-/// 函数、userdata 这些过不了 JSON 的值，**替换成 null 而不是变成假字符串**。
-///
-/// ⚠️ 键名只能是 ASCII——Lua 的标识符不含汉字（`回调 = …` 是**语法错**，
-/// 不是"能跑但取不到"）。这一条我实测踩过，别改回来。
 #[test]
-fn 过不了_json_的值变成_null() {
-    let lua = 带渲染的面板(
-        r#"return { { kind = "text", text = "x", cb = function() end } }"#,
+fn guo_bu_le_json_de_value_bian_cheng_null() {
+    let lua =
+        dai_render_de_mian_ban(r#"return { { kind = "text", text = "x", cb = function() end } }"#);
+    let v = mian_ban_content(&lua, "nota.t", "p").unwrap();
+    assert!(
+        v[0]["cb"].is_null(),
+        "\u{51fd}\u{6570}\u{8be5}\u{53d8}\u{6210} null\u{ff0c}\u{5b9e}\u{9645}\u{662f} {}",
+        v[0]["cb"]
     );
-    let v = 面板内容(&lua, "nota.t", "p").unwrap();
-    assert!(v[0]["cb"].is_null(), "函数该变成 null，实际是 {}", v[0]["cb"]);
-    assert_eq!(v[0]["text"], "x", "同一个表里别的字段不该受影响");
+    assert_eq!(v[0]["text"], "x", "\u{540c}\u{4e00}\u{4e2a}\u{8868}\u{91cc}\u{522b}\u{7684}\u{5b57}\u{6bb5}\u{4e0d}\u{8be5}\u{53d7}\u{5f71}\u{54cd}");
 }
 
-/// 自引用的表不能把栈打穿——层数上限兜住。
 #[test]
-fn 自引用的表不会打穿栈() {
-    let lua = 带渲染的面板(
-        r#"local t = { kind = "text" }; t.me = t; return { t }"#,
-    );
-    let v = 面板内容(&lua, "nota.t", "p").unwrap();
-    // 走到层数上限就停：一路是 `me`，最后一层是 null。
+fn zi_yin_yong_de_table_bu_hui_da_chuan_zhan() {
+    let lua = dai_render_de_mian_ban(r#"local t = { kind = "text" }; t.me = t; return { t }"#);
+    let v = mian_ban_content(&lua, "nota.t", "p").unwrap();
+
     let mut cur = &v[0]["me"];
-    let mut 层 = 0;
+    let mut ceng = 0;
     while !cur.is_null() {
         cur = &cur["me"];
-        层 += 1;
-        assert!(层 <= 面板层数上限 + 2, "递归没有停下来");
+        ceng += 1;
+        assert!(
+            ceng <= MIAN_BAN_CENG_SHU_SHANG_XIAN + 2,
+            "\u{9012}\u{5f52}\u{6ca1}\u{6709}\u{505c}\u{4e0b}\u{6765}"
+        );
     }
-    assert!(层 > 1, "至少该往下走几层才对");
+    assert!(
+        ceng > 1,
+        "\u{81f3}\u{5c11}\u{8be5}\u{5f80}\u{4e0b}\u{8d70}\u{51e0}\u{5c42}\u{624d}\u{5bf9}"
+    );
 }
 
-/// 一个数组里的项数有上限。**不是为了防坏人，是为了防手滑**：
-/// 一个插件把整个目录树铺进面板，前端会卡死。
 #[test]
-fn 一层的项数有上限() {
-    let lua = 带渲染的面板(&format!(
+fn yi_ceng_de_xiang_shu_you_shang_xian() {
+    let lua = dai_render_de_mian_ban(&format!(
         r#"local items = {{}}
            for i = 1, {} do items[i] = {{ title = "x" }} end
            return {{ {{ kind = "list", items = items }} }}"#,
-        面板节点上限 + 50
+        MIAN_BAN_NODE_SHANG_XIAN + 50
     ));
-    let v = 面板内容(&lua, "nota.t", "p").unwrap();
-    assert_eq!(v[0]["items"].as_array().unwrap().len(), 面板节点上限);
+    let v = mian_ban_content(&lua, "nota.t", "p").unwrap();
+    assert_eq!(
+        v[0]["items"].as_array().unwrap().len(),
+        MIAN_BAN_NODE_SHANG_XIAN
+    );
 }
 
 #[test]
-fn 网络面板的节点数组使用更高的专用上限() {
-    let lua = 带渲染的面板(&format!(
+fn network_mian_ban_de_node_shu_zu_shi_yong_geng_gao_de_zhuan_yong_shang_xian() {
+    let lua = dai_render_de_mian_ban(&format!(
         r#"local nodes = {{}}
            for i = 1, {} do nodes[i] = {{ id = tostring(i), label = "x" }} end
            return {{ {{ kind = "network", nodes = nodes, edges = {{}} }} }}"#,
-        网络元素上限 + 50
+        NETWORK_METADATA_SU_SHANG_XIAN + 50
     ));
-    let v = 面板内容(&lua, "nota.t", "p").unwrap();
+    let v = mian_ban_content(&lua, "nota.t", "p").unwrap();
     assert_eq!(
         v[0]["nodes"].as_array().unwrap().len(),
-        网络元素上限,
+        NETWORK_METADATA_SU_SHANG_XIAN,
         "network nodes should use the graph-specific limit"
     );
 }
 
-// ───────────────────────── `nota.ui.stream`（2026-10-04） ─────────────────────────
-//
-// ⚠️ **这条只钉得住纯的那一半**：`实时表` 本体要一个真的 `tauri::AppHandle` 才
-// 发得出事件，单元测试里造不出来（`refresh` 那条路也一样，所以上面那一片用例
-// 里没有一个碰过它）。真正"发出去、前端收到"那一段只能靠开窗目检——
-// 那正是 `docs/07` 第 58 项剩下的验收动作。
-//
-// 下面这两条盯的是**唯一一处会算错的地方**：按字节取尾巴。
-
-/// 短的一律原样给回，一个字都不动。
 #[test]
-fn 要的尾巴比原文还长就原样给回() {
-    assert_eq!(取尾巴("短", 10), "短");
-    assert_eq!(取尾巴("", 10), "");
-    assert_eq!(取尾巴("正好五个字", 5), "正好五个字");
+fn yao_de_wei_ba_bi_yuan_wen_hai_zhang_jiu_yuan_yang_gei_hui() {
+    assert_eq!(qu_wei_ba("\u{77ed}", 10), "\u{77ed}");
+    assert_eq!(qu_wei_ba("", 10), "");
+    assert_eq!(
+        qu_wei_ba("\u{6b63}\u{597d}\u{4e94}\u{4e2a}\u{5b57}", 5),
+        "\u{6b63}\u{597d}\u{4e94}\u{4e2a}\u{5b57}"
+    );
 }
 
-/// ⚠️ 按**字符**取，不按字节。
-///
-/// 这条要是写成按字节取（`&s[s.len()-n..]`），截出来的多半是半个汉字——那半个
-/// 汉字进 JSON、进前端就是一个 `U+FFFD`。`http.rs::切出完整段` 是同一个坑的
-/// 另一处落点，那边是**分块读**踩到的，这边是**截尾巴**踩到的。
 #[test]
-fn 取尾巴按字符不按字节() {
-    let 原文 = "一二三四五六七八九十";
-    assert_eq!(取尾巴(原文, 3), "八九十");
-    // 按字节取的话这三个汉字的字节数是 9，取 9 个字节会切在"八"的中间。
-    assert_eq!(取尾巴(原文, 3).chars().count(), 3);
+fn qu_wei_ba_an_zi_fu_bu_an_zi_jie() {
+    let yuan_wen =
+        "\u{4e00}\u{4e8c}\u{4e09}\u{56db}\u{4e94}\u{516d}\u{4e03}\u{516b}\u{4e5d}\u{5341}";
+    assert_eq!(qu_wei_ba(yuan_wen, 3), "\u{516b}\u{4e5d}\u{5341}");
+
+    assert_eq!(qu_wei_ba(yuan_wen, 3).chars().count(), 3);
 }
 
-/// 实时上限是给 `取尾巴` 的那把尺子；这个数本身不参与计算，但**它得和
-/// `plugins/ai/panel.lua::HOST_TEXT_MAX` 差着量级**（收工时整段走拉那条路画，
-/// 比这儿宽松是故意的）。钉住它只是为了让"哪天有人手滑改成 100000"当场红。
 #[test]
-fn 实时上限是个小数量级() {
-    assert_eq!(实时上限, 8000);
-    assert!(实时上限 < 20_000, "得比收工时那条路小");
+fn shi_shi_shang_xian_shi_ge_xiao_shu_liang_ji() {
+    assert_eq!(SHI_SHI_SHANG_XIAN, 8000);
+    assert!(
+        SHI_SHI_SHANG_XIAN < 20_000,
+        "\u{5f97}\u{6bd4}\u{6536}\u{5de5}\u{65f6}\u{90a3}\u{6761}\u{8def}\u{5c0f}"
+    );
 }

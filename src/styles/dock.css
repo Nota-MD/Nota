@@ -1,61 +1,61 @@
-/* 右侧插件栏的**骨架**：栏本身、打开它的开关、页签、栏内分区、
- * 面板容器，以及面板里那块 `frame`（嵌进来的画面）。
- *
- * # 这一份管什么、不管什么（2026-09-29 按功能拆过一回）
- *
- * 原来这一支 971 行，把"一栏的骨架"和"栏里画的东西"混在一起。用户 2026-09-29
- * 给了新尺子（「不要每个代码文件都 1000 行，998 行这样……比如 300、500、800
- * 这样，根据功能拆分」），于是按**三块各自讲得圆的东西**分了家：
- *
- * | 文件 | 管什么 |
- * |---|---|
- * | **本文件** `dock.css` | 栏的骨架：栏头、页签、栏内分区、面板容器、`frame` 块 |
- * | `panel.css` | **面板内容块**（`ui/PanelBody.tsx` 画的那一套：标题、字段、列表、对话、输入、错误） |
- * | `panel-data.css` | 面板里的**数据块**：提交树（`kind = "graph"`）与曲线刻度（`kind = "chart"`） |
- * | `plugin-list.css` | **已装插件清单**（`kind` 之外的「插件」那一页 ＋ 已信任的签名者） |
- *
- * ⚠️ 分家的线是"**这条规则在画栏，还是在画插件给的内容**"，
- * 不是按行数从中间切一刀。
- *
- * # 为什么它从 `app.css` 里出来（2026-09-24）
- *
- * 那支文件当时 1043 行、过了 1000 行上限。拆的是**一整块能自己讲圆的东西**：
- * 插件栏从 `ui/PluginDock.tsx` 到 `ui/PanelBody.tsx` 全是它自己的，和外壳骨架
- * （菜单、标签栏、状态栏）没有一条共用规则。
- *
- * ⚠️ **必须在 `app.css` 之后引**（见 `main.tsx`）。它借了 `app.css` 里
- * `.btn` / `.btn-primary` / `.btn-danger` 那套按钮底子（`.panel-btn` 是在
- * 那上面收小一号、`.btn-on` 是换底色），顺序反过来就会被那几条盖掉。
- * ⚠️ `panel.css` / `panel-data.css` / `plugin-list.css` 三份同样要排在
- * `app.css` 之后（`panel.css` 里的 `.panel-btn` 同样借那套按钮底子）。
- *
- * # 一栏一页签（`.dock-tabs`，2026-09-24）
- *
- * 用户要求「每一个拓展应该独占一个窗口……两个拓展面板不能同时打开」。
- * 改之前是几个面板**沿着这一栏叠起来**，而面板是会自己长高的（AI 那页一轮
- * 问答就长出好几屏）——叠起来的结果是两边互相把对方挤没，用户想看的那个
- * 常常在屏幕外。这不是"高度没调好"，是**两样东西共用一个滚动条**本身错。
- *
- * ⚠️ 三个高度层级是**分开的**，别把 `.dock-tabs` 挪进 `.dock-body`：
- * `dock-head`（栏名＋收起）／`dock-tabs`（页签）在外，`.dock-body` 内滚动。
- * 页签跟着内容一起滚走的话，一个长面板滚到底部就再也切不回去了。
- *
- * ⚠️ 面板标题（`.panel-head` / `.panel-title` / `.panel-from`）**全删了**：
- * 一页只画一个面板之后，标题在页签上、来源在页签的 `title` 里，
- * 卡片头上再写一遍是同一句话说三次。
- */
 
-/* ── 右侧插件栏 ───────────────────────────────────────────────────────────
-   为什么插件在右边见 `ui/PluginDock.tsx` 的文件头。这里只记样式上的两条：
 
-   ① 它**不是 `.sidebar` 加一个 `flex-direction: row-reverse`**。左右两侧
-      边框、圆角、将来要加的折叠动效方向都相反，共用一套类名只会让每条规则
-      都要写 `:first/last` 的特例。**是两套独立的类。**
-   ② 宽度走 `--dock-width`，与 `--sidebar-width` 分开——见 theme.css 那句。 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 .plugin-dock {
-  /* ⚠️ `position: relative` 是给左缘那条把手当定位父级的（2026-10-11）——
-    和 `.sidebar` 上那一条同理：把手要量"这一栏的右缘"，只有现场量得准。 */
+
+
   position: relative;
   width: var(--dock-width);
   flex: none;
@@ -64,24 +64,24 @@
   border-left: 1px solid var(--border);
   background: var(--bg-subtle);
   min-height: 0;
-  /* ── 开栏那一下**滑进来**，不硬切（2026-10-16）─────────────────────────
 
-     用户原话：「**拓展界面打开时要求也有一个动画，别硬切**」。
 
-     ⚠️ **滑的是 `margin-right`，不是 `transform`**：这一栏是 `.app-body` 里
-     最后一个 flex 项，给它一个负的右外边距就等于**把它自己推出窗口右缘**，
-     而 `flex: 1` 的正文列会跟着一点点变宽——于是"面板滑进来"与"正文列让位"
-     是**同一段动画**（正文不会在开头那一帧硬跳一下，字幕跟着重排）。用
-     `translateX` 只挪画面、不挪布局，正文列会在第一帧就跳到最终宽度。
 
-     ⚠️ 滑出去的那一半**靠 `body { overflow: hidden }` 裁掉**（`app.css` 顶上
-     那一条），**不是**给这一栏加 `overflow: hidden`——那样会把左缘那条
-     拖动把手（`.dock-resizer`，`left: -3px`）一起裁掉，而那正是 2026-10-11
-     用户点名要的东西。
 
-     ⚠️ 距离走 `--dock-slide` 而不是直接写 `--dock-width`：加宽档（画布类面板，
-     `data-wide="true"` 时宽度是 `min(560px, 45vw)`）得滑同样远，用 `--dock-width`
-     的话宽面板只滑一半就"落位"了。 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   --dock-slide: var(--dock-width);
   box-sizing: border-box;
   transition:
@@ -136,8 +136,8 @@ body.dock-collapse-armed::after {
   }
 }
 
-/* ⚠️ 系统开了"减少动态效果"就**不要动画**（同菜单 / 提示条那两条：这类用户里
-   有一部分是前庭功能敏感，位移类动画会真的让人不舒服）。 */
+
+
 @media (prefers-reduced-motion: reduce) {
   .plugin-dock {
     animation: none;
@@ -186,11 +186,11 @@ body.dock-collapse-armed::after {
   background: var(--bg-hover);
 }
 
-/* ── 页签：一个插件一页，一次只开一页 ──────────────────────────────────────
 
-   ⚠️ `flex-wrap: wrap` 是**故意的**：这一栏只有 260px，页签多了横着放不下。
-   横向滚动条在这一栏里是没法用的（见下面 `.panel-body` 那段），所以宁可
-   让它折成第二行——多出来的高度是有界的（页签数 = 插件数），横向溢出没有。 */
+
+
+
+
 .dock-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -210,7 +210,7 @@ body.dock-collapse-armed::after {
   font-family: inherit;
   font-size: 0.82em;
   cursor: pointer;
-  /* 名字长的面板（"AI 助手"）不许把这一行顶宽：多余的字打点。 */
+
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -229,8 +229,8 @@ body.dock-collapse-armed::after {
   background: var(--bg-hover);
 }
 
-/* 选中的那一页。⚠️ 用底色 ＋ 字重，**不用 accent 下划线**：
-   下划线在折行的页签组上会指到"上一行"去。 */
+
+
 .dock-tab-shell[data-active="true"] {
   background: var(--bg);
 }
@@ -308,8 +308,8 @@ body.dock-collapse-armed::after {
 }
 
 
-/* 「插件」页（清单）。**它永远在最右**，表示"这里还有不属于任何插件的东西"，
-   和插件页签之间留一道空隙，免得看起来像是某个插件的页。 */
+
+
 .dock-tab-plugins {
   margin-left: auto;
   padding: 3px 6px;
@@ -324,11 +324,11 @@ body.dock-collapse-armed::after {
   min-height: 0;
 }
 
-/* ── 栏内分区：插件声明的面板 / 没落脚处的 / 已装插件 ──────────────────────
 
-   面板在上（那是这一栏的理由），清单在下（诊断用）。分区标题用 `.dock-subtitle`，
-   与 `.dock-title`（栏标题）**分开**：栏标题要盖过内容，分区标题是内容的注脚，
-   两者字重和色阶不同，共用一个类就得在每处写覆盖。 */
+
+
+
+
 
 .dock-subtitle {
   margin: var(--spacing) 0 calc(var(--spacing) * 0.75);
@@ -344,8 +344,8 @@ body.dock-collapse-armed::after {
   margin-top: 0;
 }
 
-/* 一页里就这一个面板，所以**没有卡片边框了**：页签已经是它的边框，
-   再套一层框就是"框里有框"，而这一栏总共只有 260px 宽。 */
+
+
 .panel {
   margin: 0;
 }
@@ -354,8 +354,8 @@ body.dock-collapse-armed::after {
   padding: var(--spacing) calc(var(--spacing) * 1.25);
 }
 
-/* 「正在读取…」这句。**故意做得显眼但不刺眼**——它是句实话，
-   不是错误；做成红色会让人以为插件坏了。 */
+
+
 .panel-pending {
   margin: 0;
   font-size: 0.85em;
@@ -382,30 +382,30 @@ body.dock-collapse-armed::after {
   font-size: 0.85em;
 }
 
-/* 工具条上那个开关。推到最右靠 `auto` 外边距，不靠 spacer 元素。 */
+
 .toolbar-dock-toggle {
   margin-left: auto;
 }
 
-/* 开关处于「开着」的状态。⚠️ 用的是 `bg-active` 而不是 `accent` 底：
-   accent 在这一栏里已经表示"有未保存改动"（`.tab-dot`/`.status-dirty`），
-   同一个色再表示一次"面板开着"，两个意思就糊了。 */
+
+
+
 .btn-on {
   background: var(--bg-active);
 }
 
-/* ── 嵌进来的画面（面板里的 `kind = "frame"` 块）─────────────────────────
- *
- * 2026-09-25 加。这一块是**通用**的：任何插件都能在自己的 `render` 里放一块
- * `{ kind = "frame", height = 520 }`，宿主填上地址（只指向**它自己**那场开发
- * 服务器会话），前端在这儿把 iframe 摆出来。
- *
- * ⚠️ 高度**由那一块自己声明**（`panel-nodes.ts` 里夹在 120–2000 之间），
- * 不是"撑满剩下的高度"。这是和以前那个内置预览页最大的区别：那时的规则是
- * "这一页要撑满"，于是 `.dock-body` 得停止滚动、去掉内边距，多出 `data-fill`
- * 那一套；现在画面只是面板里的**一个块**，面板照旧"内容多高就多高、超出滚动"。
- * 一条滚动规则，不再分两种。
- */
+
+
+
+
+
+
+
+
+
+
+
+
 .panel-frame {
   display: block;
   width: 100%;
@@ -415,30 +415,30 @@ body.dock-collapse-armed::after {
   /* The slide is an independent viewport. Isolate its layout and paint so its
      animation loop does not invalidate the surrounding plugin dock. */
   contain: layout paint style;
-  /* ⚠️ 底色**故意留浅底而不是 `#fff`**：给纯白的话，深色界面里每次重载都闪
-     一块白；留浅底，载入完成前看着就是"还没内容"，比闪一下白诚实。 */
+
+
 }
 
-/* 画布类的面板把这一栏**加宽**（`register_panel{ wide = true }`）。
-   ⚠️ 260px（`theme.css` 的 `--dock-width`）是给普通插件面板定的：那些面板全是
-   一列字段＋按钮，窄才对。而幻灯片是 16:9 的一整页，缩到 260px 里只是个
-   缩略图——看得出"渲染出来没有"，看不出内容。所以由**面板自己**声明要宽，
-   切回别的页就缩回去（宽度是页签的函数，没有多存一份状态）。
-   ⚠️ 上限 `45vw`：不能让预览把正文挤到没法写。
-   ⚠️ 这个判据以前是 `活动 === "@slidev"`——**把一个插件的名字焊在外壳里**，
-   插件一改名就静默失灵（不报错，只是变窄）。现在读的是面板清单里的 `wide`。 */
+
+
+
+
+
+
+
+
 .plugin-dock[data-wide="true"] {
   width: min(560px, 45vw);
-  /* 加宽档要**滑同样远**（见上面 `--dock-slide` 那一段）。 */
+
   --dock-slide: min(560px, 45vw);
 }
 
-/* ── 左缘那条可以拖的把手（2026-10-11，用户：「拓展菜单左侧也可以拖动」）────────
 
-   ⚠️ 与 `.sidebar-resizer` **镜像**：那条在右缘、这条在左缘，命中区都是 6px，
-   光标都是 `col-resize`（`.resizing-col` 那条全局光标复用侧栏那一套）。
-   宽度写在 `<html>` 的 `--dock-width` 上（拖动期间直接写、松手才落盘），
-   见 `ui/DockResizer.tsx` 文件头。 */
+
+
+
+
+
 .dock-resizer {
   position: absolute;
   top: 0;

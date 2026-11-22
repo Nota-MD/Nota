@@ -1,8 +1,20 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import {
+  api,
+  events,
+  on,
+  type TableRenderPayload,
+  type TableSnapshot,
+} from "@/bridge/ipc";
 import { useT } from "@/i18n";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
+import {
+  applyComputed,
+  needsComputedPaint,
+  recordTableExtensionContent,
+} from "@/ui/table-computed";
 
 interface Point {
   row: number;
@@ -27,6 +39,7 @@ interface HeaderBox {
 
 interface Layout {
   table: HTMLTableElement;
+  tableId: string;
   tableRect: DOMRect;
   columns: HeaderBox[];
   rows: HeaderBox[];
@@ -36,10 +49,27 @@ interface Layout {
   formulaTop: number;
 }
 
+interface ReferenceBox {
+  key: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  tone: number;
+  range: boolean;
+}
+
+interface FormulaToken {
+  text: string;
+  kind: "plain" | "reference" | "function";
+  tone: number;
+}
+
 interface Props {
   visible: boolean;
   documentKey: string | number;
   run: (command: EditorCommand, payload?: CommandPayload) => void;
+  onFormulaActiveChange?: (active: boolean) => void;
 }
 
 export function columnLabel(index: number): string {
@@ -82,6 +112,165 @@ function cellPoint(element: Element | null): Point | null {
 
 function activeCell(table: HTMLTableElement, point: Point): HTMLTableCellElement | null {
   return table.rows[point.row]?.cells[point.column] ?? null;
+}
+
+function parseCellReference(reference: string): Point | null {
+  const match = /^\$?([A-Za-z]+)\$?([1-9]\d*)$/.exec(reference);
+  if (!match) return null;
+  const letters = match[1];
+  const number = match[2];
+  if (!letters || !number) return null;
+  let column = 0;
+  for (const letter of letters.toUpperCase()) {
+    column = column * 26 + letter.charCodeAt(0) - 64;
+  }
+  return { row: Number(number) - 1, column: column - 1 };
+}
+
+const formulaReferenceSource =
+  String.raw`\$?[A-Za-z]{1,4}\$?[1-9]\d*(?::\$?[A-Za-z]{1,4}\$?[1-9]\d*)?`;
+const formulaTokenPattern = new RegExp(
+  `(${formulaReferenceSource})(?=\\s*(?:[+\\-*/^&,)]|$))|([A-Za-z_][A-Za-z0-9_.]*)(?=\\s*\\()`,
+  "g",
+);
+
+function referenceTone(
+  reference: string,
+  assignedTones: Map<string, number>,
+): number {
+  const key = reference.replaceAll("$", "").toUpperCase();
+  const assigned = assignedTones.get(key);
+  if (assigned !== undefined) return assigned;
+  const tone = assignedTones.size % 7;
+  assignedTones.set(key, tone);
+  return tone;
+}
+
+export function formulaTokens(value: string): FormulaToken[] {
+  if (!value.startsWith("=")) {
+    return value ? [{ text: value, kind: "plain", tone: 0 }] : [];
+  }
+  const tokens: FormulaToken[] = [];
+  const assignedTones = new Map<string, number>();
+  let position = 0;
+  for (const match of value.matchAll(formulaTokenPattern)) {
+    const index = match.index ?? 0;
+    if (index > position) tokens.push({ text: value.slice(position, index), kind: "plain", tone: 0 });
+    const reference = match[1];
+    tokens.push(
+      reference
+        ? { text: reference, kind: "reference", tone: referenceTone(reference, assignedTones) }
+        : { text: match[0], kind: "function", tone: 0 },
+    );
+    position = index + match[0].length;
+  }
+  if (position < value.length) tokens.push({ text: value.slice(position), kind: "plain", tone: 0 });
+  return tokens;
+}
+
+export function referenceBoxesFor(
+  table: HTMLTableElement,
+  draft: string,
+): ReferenceBox[] {
+  if (!draft.startsWith("=")) return [];
+  const boxes: ReferenceBox[] = [];
+  for (const [index, token] of formulaTokens(draft).entries()) {
+    if (token.kind !== "reference") continue;
+    const parts = token.text.replaceAll("$", "").split(":");
+    const first = parseCellReference(parts[0] ?? "");
+    if (!first) continue;
+    const last = parseCellReference(parts[1] ?? parts[0] ?? "") ?? first;
+    const top = Math.max(0, Math.min(first.row, last.row));
+    const bottom = Math.min(table.rows.length - 1, Math.max(first.row, last.row));
+    const columnCount = table.rows[0]?.cells.length ?? 0;
+    const left = Math.max(0, Math.min(first.column, last.column));
+    const right = Math.min(columnCount - 1, Math.max(first.column, last.column));
+    const start = table.rows[top]?.cells[left]?.getBoundingClientRect();
+    const end = table.rows[bottom]?.cells[right]?.getBoundingClientRect();
+    if (!start || !end) continue;
+    boxes.push({
+      key: `${index}-${token.tone}-${token.text}`,
+      left: Math.min(start.left, end.left),
+      top: Math.min(start.top, end.top),
+      width: Math.max(start.right, end.right) - Math.min(start.left, end.left),
+      height: Math.max(start.bottom, end.bottom) - Math.min(start.top, end.top),
+      tone: token.tone,
+      range: parts.length > 1,
+    });
+  }
+  return boxes;
+}
+
+function tableIdentifier(table: HTMLTableElement, documentKey: string | number): string {
+  const pane = table.closest(".ProseMirror");
+  const index = pane
+    ? Array.from(pane.querySelectorAll<HTMLTableElement>("table")).indexOf(table)
+    : -1;
+  return `${String(documentKey)}:${Math.max(0, index)}`;
+}
+
+function snapshotFor(
+  table: HTMLTableElement,
+  documentKey: string | number,
+  range: Range,
+  active: Point,
+): TableSnapshot | null {
+  const documentId = typeof documentKey === "number" ? documentKey : Number(documentKey);
+  if (!Number.isSafeInteger(documentId)) return null;
+  const tableId = tableIdentifier(table, documentKey);
+  table.dataset.notaTableId = tableId;
+  return {
+    documentId,
+    tableId,
+    rows: Array.from(table.rows, (row) =>
+      Array.from(row.cells, (cell) => cell.textContent ?? ""),
+    ),
+    selection: range,
+    active,
+  };
+}
+
+function paintRange(table: HTMLTableElement, range: Range): void {
+  for (const [rowIndex, row] of Array.from(table.rows).entries()) {
+    for (const [columnIndex, cell] of Array.from(row.cells).entries()) {
+      cell.classList.toggle(
+        "nota-sheet-range",
+        rowIndex >= range.top &&
+          rowIndex <= range.bottom &&
+          columnIndex >= range.left &&
+          columnIndex <= range.right,
+      );
+    }
+  }
+}
+
+function rangeCellCount(range: Range): number {
+  return (range.bottom - range.top + 1) * (range.right - range.left + 1);
+}
+
+function rangeContains(range: Range, point: Point): boolean {
+  return (
+    point.row >= range.top &&
+    point.row <= range.bottom &&
+    point.column >= range.left &&
+    point.column <= range.right
+  );
+}
+
+function liveTables(tableId: string | undefined): HTMLTableElement[] {
+  if (!tableId) return [];
+  const index = Number(tableId.slice(tableId.lastIndexOf(":") + 1));
+  if (!Number.isSafeInteger(index) || index < 0) return [];
+  return Array.from(document.querySelectorAll<HTMLTableElement>(".ProseMirror table"))
+    .filter((table) => {
+      const root = table.closest(".ProseMirror");
+      if (!root) return false;
+      return Array.from(root.querySelectorAll("table")).indexOf(table) === index;
+    });
+}
+
+function activeTableFor(layout: Layout): HTMLTableElement {
+  return liveTables(layout.tableId)[0] ?? layout.table;
 }
 
 function boxForRange(table: HTMLTableElement, range: Range) {
@@ -139,19 +328,40 @@ function pointerPoint(
   return null;
 }
 
-export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
+export function SpreadsheetTableOverlay({
+  visible,
+  documentKey,
+  run,
+  onFormulaActiveChange,
+}: Props) {
   const t = useT();
   const [layout, setLayout] = useState<Layout | null>(null);
+  const layoutRef = useRef<Layout | null>(null);
   const [draft, setDraft] = useState("");
+  const [referenceBoxes, setReferenceBoxes] = useState<ReferenceBox[]>([]);
+  const [formulaComposing, setFormulaComposing] = useState(false);
   const anchor = useRef<Point | null>(null);
   const selection = useRef<Range | null>(null);
   const fillSource = useRef<Range | null>(null);
   const formulaInput = useRef<HTMLInputElement | null>(null);
+  const formulaHighlight = useRef<HTMLDivElement | null>(null);
+  const formulaActive = useRef(false);
+  const formulaTarget = useRef<Point | null>(null);
+  const lastSnapshot = useRef("");
+  const lastRender = useRef<TableRenderPayload | null>(null);
   const dragging = useRef(false);
   const filling = useRef(false);
 
   useLayoutEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
+
+  useLayoutEffect(() => {
     if (!visible) {
+      formulaActive.current = false;
+      formulaTarget.current = null;
+      void api.table.syncSnapshot(null);
+      lastSnapshot.current = "";
       setLayout(null);
       return;
     }
@@ -166,6 +376,10 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
           : selected?.anchorNode?.parentElement ?? null;
       const table = element?.closest<HTMLTableElement>(".ProseMirror table");
       if (!table?.rows[0]?.cells[0]) {
+        // Focusing the native formula input can temporarily move the browser
+        // selection out of the table. Keep the overlay mounted while that input
+        // owns the interaction, otherwise React unmounts it on pointer focus.
+        if (formulaActive.current) return;
         setLayout(null);
         return;
       }
@@ -183,6 +397,17 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
       const tableRect = table.getBoundingClientRect();
       const active = cellPoint(element) ?? { row: 0, column: 0 };
       const range = selection.current ?? normalizeRange(active, active);
+      paintRange(table, range);
+      const currentTableId = tableIdentifier(table, documentKey);
+      const render = lastRender.current;
+      if (render?.tableId === currentTableId) {
+        const tables = liveTables(currentTableId);
+        for (const liveTable of tables.length > 0 ? tables : [table]) {
+          if (needsComputedPaint(liveTable, Object.keys(render.cells).length)) {
+            applyComputed(liveTable, render.cells);
+          }
+        }
+      }
       const box = boxForRange(table, range);
       if (!box) return;
       const columns = Array.from(table.rows[0].cells).flatMap((cell, index) => {
@@ -225,6 +450,7 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
       }
       setLayout({
         table,
+        tableId: currentTableId,
         tableRect,
         columns,
         rows,
@@ -241,7 +467,13 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
           Math.min(viewport.bottom - 30, tableRect.top - 62),
         ),
       });
-      setDraft(activeCell(table, active)?.textContent ?? "");
+      if (
+        !formulaActive.current ||
+        formulaTarget.current?.row !== active.row ||
+        formulaTarget.current?.column !== active.column
+      ) {
+        setDraft(activeCell(table, active)?.textContent ?? "");
+      }
     };
     const syncGeometry = () => {
       const selected = window.getSelection();
@@ -261,6 +493,24 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
     };
     const poll = () => {
       syncGeometry();
+      const liveLayout = layoutRef.current;
+      const table = liveLayout ? activeTableFor(liveLayout) : null;
+      if (
+        table &&
+        selection.current &&
+        table.querySelectorAll(".nota-sheet-range").length !==
+          rangeCellCount(selection.current)
+      ) {
+        paintRange(table, selection.current);
+      }
+      const render = lastRender.current;
+      if (render) {
+        for (const liveTable of liveTables(render.tableId)) {
+          if (needsComputedPaint(liveTable, Object.keys(render.cells).length)) {
+            applyComputed(liveTable, render.cells);
+          }
+        }
+      }
       polling = requestAnimationFrame(poll);
     };
     const schedule = () => {
@@ -269,11 +519,20 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
     schedule();
     polling = requestAnimationFrame(poll);
     document.addEventListener("selectionchange", schedule);
+    const editorRoot = document.querySelector(".ProseMirror") ?? document.body;
+    const mutations = new MutationObserver((records) => {
+      if (records.some((record) => !(record.target instanceof Element) ||
+        Boolean((record.target as Element).closest("table")))) {
+        schedule();
+      }
+    });
+    mutations.observe(editorRoot, { childList: true, subtree: true, characterData: true });
     window.addEventListener("resize", schedule);
     window.addEventListener("scroll", schedule, true);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       if (polling) cancelAnimationFrame(polling);
+      mutations.disconnect();
       document.removeEventListener("selectionchange", schedule);
       window.removeEventListener("resize", schedule);
       window.removeEventListener("scroll", schedule, true);
@@ -282,11 +541,75 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
 
   useEffect(() => {
     if (!visible || !layout) return;
-    const table = layout.table;
+    const tableId = tableIdentifier(layout.table, documentKey);
+    if (lastRender.current?.tableId === tableId) {
+      const targets = liveTables(tableId);
+      for (const table of targets.length > 0 ? targets : [layout.table]) {
+        applyComputed(table, lastRender.current.cells);
+      }
+    }
+    const snapshot = snapshotFor(
+      layout.table,
+      documentKey,
+      layout.selection,
+      layout.active,
+    );
+    if (!snapshot) return;
+    const signature = JSON.stringify(snapshot);
+    if (signature === lastSnapshot.current) return;
+    lastSnapshot.current = signature;
+    void api.table.syncSnapshot(snapshot);
+  }, [documentKey, layout, visible]);
+
+  useLayoutEffect(() => {
+    if (!visible || !layout) {
+      setReferenceBoxes([]);
+      return;
+    }
+    let frame = 0;
+    frame = requestAnimationFrame(() => {
+      setReferenceBoxes(referenceBoxesFor(activeTableFor(layout), draft));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draft, layout, visible]);
+
+  useEffect(() => {
+    if (!visible || !layout) return;
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    void on<TableRenderPayload>(events.tableRender, (payload) => {
+      if (disposed || payload.documentId !== Number(documentKey)) return;
+      recordTableExtensionContent(
+        payload.documentId,
+        payload.tableId,
+        payload.extensionContent,
+      );
+      const tableId = tableIdentifier(layout.table, documentKey);
+      if (payload.tableId !== tableId) return;
+      lastRender.current = payload;
+      const tables = liveTables(tableId);
+      const appliedTables = tables.length > 0 ? tables : [layout.table];
+      for (const liveTable of appliedTables) {
+        applyComputed(liveTable, payload.cells);
+      }
+    }).then((dispose) => {
+      if (disposed) dispose();
+      else unlisten = dispose;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [documentKey, layout, visible]);
+
+  useEffect(() => {
+    if (!visible || !layout) return;
     const updateFromPointer = (event: PointerEvent) => {
+      const table = activeTableFor(layout);
       const point = pointerPoint(table, event.clientX, event.clientY);
       if (!point || !anchor.current) return null;
       selection.current = normalizeRange(anchor.current, point);
+      paintRange(table, selection.current);
       setLayout((current) => {
         if (!current) return current;
         const box = boxForRange(table, selection.current!);
@@ -295,13 +618,24 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
       return point;
     };
     const down = (event: PointerEvent) => {
+      if (event.button !== 0) return;
+      const table = activeTableFor(layout);
       const point = cellPoint(event.target as Element);
       if (!point) return;
+      event.preventDefault();
       anchor.current = point;
       selection.current = normalizeRange(point, point);
+      paintRange(table, selection.current);
       dragging.current = true;
       filling.current = false;
       setDraft(activeCell(table, point)?.textContent ?? "");
+      setLayout((current) => {
+        if (!current) return current;
+        const box = boxForRange(table, selection.current!);
+        return box
+          ? { ...current, selection: selection.current!, active: point, box }
+          : current;
+      });
     };
     const move = (event: PointerEvent) => {
       if (!dragging.current && !filling.current) return;
@@ -325,39 +659,82 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
         });
       } else if (dragging.current && selection.current) {
         const range = selection.current;
-        if (range.top !== range.bottom || range.left !== range.right) {
-          run("tableSelectRange", {
-            tableRow: range.top,
-            tableColumn: range.left,
-            tableToRow: range.bottom,
-            tableToColumn: range.right,
-          });
-        }
+        run("tableSelectRange", {
+          tableRow: range.top,
+          tableColumn: range.left,
+          tableToRow: range.bottom,
+          tableToColumn: range.right,
+        });
       }
       dragging.current = false;
       filling.current = false;
     };
-    table.addEventListener("pointerdown", down);
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    const preserveSecondarySelection = (event: MouseEvent) => {
+      if (event.button !== 2 || !selection.current) return;
+      const point = cellPoint(event.target as Element);
+      if (!point || !rangeContains(selection.current, point)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    const preserveContextSelection = (event: MouseEvent) => {
+      if (!selection.current) return;
+      const point = cellPoint(event.target as Element);
+      if (!point || !rangeContains(selection.current, point)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      requestAnimationFrame(() => {
+        const range = selection.current;
+        if (!range) return;
+        run("tableSelectRange", {
+          tableRow: range.top,
+          tableColumn: range.left,
+          tableToRow: range.bottom,
+          tableToColumn: range.right,
+        });
+      });
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("mousedown", preserveSecondarySelection, true);
+    document.addEventListener("contextmenu", preserveContextSelection, true);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", up, true);
     return () => {
-      table.removeEventListener("pointerdown", down);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("mousedown", preserveSecondarySelection, true);
+      document.removeEventListener("contextmenu", preserveContextSelection, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", up, true);
     };
   }, [layout, run, visible]);
 
   if (!visible || !layout) return null;
 
   const commit = () => {
+    const target = formulaTarget.current ?? layout.active;
     run("tableSetCell", {
-      tableRow: layout.active.row,
-      tableColumn: layout.active.column,
+      tableRow: target.row,
+      tableColumn: target.column,
       tableText: draft,
     });
   };
   const width = Math.max(280, layout.tableRect.width);
   const formulaLeft = Math.max(8, Math.min(layout.tableRect.left, window.innerWidth - width - 8));
+  const highlightTokens = formulaTokens(draft);
+  const applyLocalRange = (range: Range, active: Point) => {
+    const table = activeTableFor(layout);
+    const tableId = tableIdentifier(table, documentKey);
+    selection.current = range;
+    anchor.current = active;
+    paintRange(table, range);
+    setLayout((current) => {
+      if (!current) return current;
+      const box = boxForRange(table, range);
+      return box
+        ? { ...current, table, tableId, selection: range, active, box }
+        : current;
+    });
+    setDraft(activeCell(table, active)?.textContent ?? "");
+  };
 
   return createPortal(
     <>
@@ -372,24 +749,59 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
       >
         <span className="sheet-reference">{rangeLabel(layout.selection)}</span>
         <span className="sheet-formula-mark" aria-hidden="true">fx</span>
-        <input
-          ref={formulaInput}
-          value={draft}
-          aria-label={t("Cell contents")}
-          onMouseDown={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            event.currentTarget.focus();
-          }}
-          onClick={(event) => event.stopPropagation()}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={commit}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.currentTarget.blur();
-            }
-          }}
-        />
+        <div className="sheet-formula-input-shell">
+          <div
+            ref={formulaHighlight}
+            className="sheet-formula-highlight"
+            aria-hidden="true"
+            style={{ opacity: formulaComposing ? 0 : 1 }}
+          >
+            {highlightTokens.map((token, index) => (
+              <span
+                key={`${index}-${token.kind}`}
+                className={`sheet-formula-token sheet-formula-${token.kind} sheet-tone-${token.tone}`}
+              >
+                {token.text}
+              </span>
+            ))}
+          </div>
+          <input
+            ref={formulaInput}
+            value={draft}
+            aria-label={t("Cell contents")}
+            style={{ color: formulaComposing ? "var(--fg)" : "transparent" }}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            onFocus={() => {
+              formulaActive.current = true;
+              formulaTarget.current = layout.active;
+              onFormulaActiveChange?.(true);
+            }}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) => setDraft(event.target.value)}
+            onCompositionStart={() => setFormulaComposing(true)}
+            onCompositionEnd={() => {
+              requestAnimationFrame(() => setFormulaComposing(false));
+            }}
+            onScroll={(event) => {
+              if (formulaHighlight.current) {
+                formulaHighlight.current.style.transform = `translateX(${-event.currentTarget.scrollLeft}px)`;
+              }
+            }}
+            onBlur={() => {
+              formulaActive.current = false;
+              onFormulaActiveChange?.(false);
+              commit();
+              formulaTarget.current = null;
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.currentTarget.blur();
+              }
+            }}
+          />
+        </div>
       </div>
       {layout.columns.map((column) => (
         <button
@@ -403,13 +815,14 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
           style={{ left: column.left, top: column.top, width: column.width, height: column.height }}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
-            selection.current = {
+            const range = {
               top: 0,
-              bottom: layout.rows.length - 1,
+              bottom: layout.table.rows.length - 1,
               left: column.index,
               right: column.index,
             };
-            anchor.current = { row: 0, column: column.index };
+            formulaInput.current?.blur();
+            applyLocalRange(range, { row: 0, column: column.index });
             run("tableSelectColumn", { tableColumn: column.index });
           }}
         >
@@ -428,18 +841,35 @@ export function SpreadsheetTableOverlay({ visible, documentKey, run }: Props) {
           style={{ left: row.left, top: row.top, width: row.width, height: row.height }}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
-            selection.current = {
+            const range = {
               top: row.index,
               bottom: row.index,
               left: 0,
-              right: layout.columns.length - 1,
+              right: layout.table.rows[0]?.cells.length
+                ? layout.table.rows[0].cells.length - 1
+                : 0,
             };
-            anchor.current = { row: row.index, column: 0 };
+            formulaInput.current?.blur();
+            applyLocalRange(range, { row: row.index, column: 0 });
             run("tableSelectRow", { tableRow: row.index });
           }}
         >
           {row.label}
         </button>
+      ))}
+      {referenceBoxes.map((box) => (
+        <div
+          key={box.key}
+          className={`sheet-reference-box sheet-tone-${box.tone}${
+            box.range ? " is-range" : ""
+          }`}
+          style={{
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            height: box.height,
+          }}
+        />
       ))}
       <div
         className="sheet-range-box"

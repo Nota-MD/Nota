@@ -528,8 +528,8 @@ export function PanelNetworkBlock({ spec, disabled, onAction }: Props) {
       <div className="panel-network-toolbar">
         <span>
           {t("{0} notes", notes)}
-          {missing > 0 ? ` · ${t("{0} unresolved", missing)}` : ""}
-          {" · "}
+          {missing > 0 ? ` / ${t("{0} unresolved", missing)}` : ""}
+          {" / "}
           {t("{0} links", spec.edges.length)}
         </span>
         <input

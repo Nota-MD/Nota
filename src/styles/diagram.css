@@ -1,25 +1,25 @@
-/**
- * 图表块（`src/editor/diagram-view.ts` 那棵树）的长相。
- *
- * # 位置
- *
- * 在 `main.tsx` 里**紧跟 `editor.css` 之后**引（正文区的样式在那边，这里是
- * 正文里一种块的长相，靠后引才能盖住通用的 `pre` / `.ProseMirror > *` 几条）。
- *
- * # 颜色只用变量，一个写死的都不许有
- *
- * 三套新主题在并行做，而块的颜色跟着**文档主题**走（`--doc-bg` / `--bg-subtle`
- * / `--border` / `--fg-muted` 都由主题在自己的作用域里覆盖）。这里写死一个
- * `#f6f7f9` 的底、或者 `#333` 的字，深色纸面上当场瞎掉。
- *
- * # SVG 的颜色**不归本文件管**
- *
- * mermaid 把配色在渲染时烤进 SVG（内联样式 + 它自己那段 `<style>`），
- * 所以"深色纸面上画深色图"这件事靠**换 mermaid 主题重画**解决，不是靠 CSS
- * 覆盖——`diagram-view.ts` 的 `读明暗` / `渲染` 两条就是干这个的。
- */
 
-/* ── 卡片本体 ─────────────────────────────────────────────────────────── */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 .editor-mount .ProseMirror .nota-diagram {
   display: flex;
@@ -30,8 +30,8 @@
   max-width: none !important;
 }
 
-/* 被选中（点了一下图上）时描边亮起来——这个节点是 `atom`，ProseMirror 选中它
-   就是把整块选中，用户接着才会去按 Backspace / Ctrl+C。 */
+
+
 .editor-mount .ProseMirror .nota-diagram.ProseMirror-selectednode {
   outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
   outline-offset: 3px;
@@ -44,13 +44,13 @@
   gap: 12px;
 }
 
-/* ── 源码外壳：独立代码框 ─────────────────────────────────────────────── */
+
 
 .editor-mount .ProseMirror .nota-diagram-source-shell {
   display: none;
 }
 
-/* 与块公式一致：平时只显示渲染结果，当前块进入编辑后才展开源码。 */
+
 .editor-mount .ProseMirror .nota-diagram-editing .nota-diagram-source-shell {
   display: block;
 }
@@ -155,7 +155,7 @@
   font-size: 0.78rem;
 }
 
-/* 只读预览与导出不需要源码区。 */
+
 .editor-mount .ProseMirror .nota-diagram-readonly .nota-diagram-source {
   display: none;
 }
@@ -169,7 +169,7 @@
   outline-offset: -1px;
 }
 
-/* ── 渲染区 ───────────────────────────────────────────────────────────── */
+
 
 .editor-mount .ProseMirror .nota-diagram-preview {
   min-height: 280px;
@@ -177,8 +177,8 @@
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  /* 图表画在文档纸面上，不是界面外壳上。深色外壳 + 浅色 Adwaita 文档时，
-     `--bg` 是近黑色，会把透明底的 Mermaid SVG 整体衬成黑块。 */
+
+
   background: var(--doc-bg, var(--bg));
   /* Large diagrams scroll inside their own frame instead of consuming the
      entire document viewport. Small diagrams keep their natural size. */
@@ -190,16 +190,16 @@
   min-height: 0;
 }
 
-/* 说明卡（空 / 出错 / 正在渲染）也得有个像样的高度，不然那一下是个薄片。 */
+
 .editor-mount .ProseMirror .nota-diagram-preview:not([data-state="ok"]) {
   min-height: 46px;
 }
 
-/* mermaid 画出来的图：居中、别溢出。
-   ⚠️ 这里的 `max-width: 100%` 只管"内联样式还没来得及改"的那一帧（NodeView 是
-   先 `innerHTML` 再改 svg 的内联样式）。**真正生效的上限在 `diagram-view.ts`**：
-   它按 `viewBox` 的自然宽取 `min(100%, 自然宽)`——只写 `100%` 会让小图被
-   容器宽度等比放大（2026-09-26 实测，理由写在那边的注释里）。 */
+
+
+
+
+
 .editor-mount .ProseMirror .nota-diagram-preview svg {
   display: block;
   margin: 0 auto;
@@ -208,14 +208,14 @@
   height: auto;
 }
 
-/* ── 说明卡 ───────────────────────────────────────────────────────────── */
+
 
 .editor-mount .ProseMirror .nota-diagram-note {
   padding: 10px 12px;
   border: 1px dashed var(--border);
   border-radius: var(--radius-sm);
   color: var(--fg-muted);
-  /* 卡是**界面**不是正文：说清一件状态的事，用界面字体（同代码块那条按钮条）。 */
+
   font-family: var(--font-ui, inherit);
   font-size: 0.9em;
   line-height: 1.6;
@@ -226,8 +226,8 @@
   font-weight: 600;
 }
 
-/* 出错那张卡：**只换描边和标题色**，不铺一整块红底。mermaid 自己那张报错图
-   是"红炸弹"，用户对那个观感的原话是不要照抄——这里要的是"看得懂、还能改"。 */
+
+
 .editor-mount .ProseMirror .nota-diagram-preview[data-state="error"] .nota-diagram-note {
   border-style: solid;
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
@@ -238,7 +238,7 @@
   color: var(--danger);
 }
 
-/* mermaid 的报错原文（多行、带插入符对齐）与空块示例源码：都得原样保留空白。 */
+
 .editor-mount .ProseMirror .nota-diagram-note-detail {
   margin: 6px 0 0;
   max-height: 180px;

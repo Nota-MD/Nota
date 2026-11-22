@@ -4,7 +4,9 @@ use crate::error::{NotaError, Result};
 use crate::window_registry::{RegistrySnapshot, TransferRequest, WindowRegistry};
 
 #[tauri::command]
-pub fn nota_window_registry_snapshot(registry: State<'_, WindowRegistry>) -> Result<RegistrySnapshot> {
+pub fn nota_window_registry_snapshot(
+    registry: State<'_, WindowRegistry>,
+) -> Result<RegistrySnapshot> {
     registry.snapshot()
 }
 
@@ -56,4 +58,3 @@ pub fn nota_window_ack_transfer(
     }
     Ok(())
 }
-

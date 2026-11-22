@@ -1,85 +1,85 @@
-/**
- * 「主题色」（**强调色**）——用户自己定的那一个颜色。
- *
- * 用户 2026-09-26 的设想：「这个主题只包含一个 UI 的设计样式，比如说圆角的半径，
- * 而不包含主题颜色，这样用户可以根据自己的喜好来定制。」
- *
- * 落到本仓就是**第三条外观轴**（前两条：`ui_style` 形状、`ui_mode` 明暗）：
- *
- * | 轴 | 设置项 | 管什么 |
- * |---|---|---|
- * | 界面风格 | `ui_style` | 圆角、间距、控件高度、动效——**只形状** |
- * | 明暗 | `ui_mode` | 整套底色 / 字色 |
- * | 主题色 | `appearance.accent` | `--accent`、`--accent-fg`、`--switch-on` **三个变量** |
- *
- * ⚠️ **本文件是纯函数，不碰 DOM**（`applyTheme.ts` 负责把结果写进 `<html>`）。
- * 理由是它能被 `tests/accent.test.ts` 直接跑——对比度挑字色这种事"看着差不多"
- * 是最不可靠的判据，必须有断言钉着。
- *
- * ⚠️⚠️ **为什么只覆盖 `--accent` / `--accent-fg` 两个变量，而不是让用户配一整套**
- * （底色、字色、边框色……）：那会变成"用户要自己调出配色协调的一整套"，
- * 而他想要的只是"我的强调色"。**其余颜色的协调由明暗那条轴保证**——这也是
- * `theme/color.css` 那 14 格存在的意义。反过来说：将来若真要让三档轴变成
- * 用户填一整套颜色，那不是在这里加字段。
- *
- * ⚠️ **内联写在 `<html>` 上的自定义属性优先于 `[data-ui-style]` / `[data-ui-mode]`
- * 那些选择器块**，所以颜色矩阵 CSS 一行都不用改。强调色的 hover / 按下两态走的是
- * 全仓那条与风格无关的 `filter: brightness(0.94) / (0.88)`，会自己跟着走
- * （`theme/color.css` 顶上写着这件事，以及"为什么不给 hover 单独定 token"）。
- *
- * ⚠️ **空串 = 跟随当前风格**，那是默认，也是 2026-09-26 之前唯一的行为。
- * **认不出来的值也按"跟随风格"处理，不报错、不在落盘时清洗**——理由与
- * `ui_style` 拼错时同源（`settings/appearance.rs` 的 `accent` 那段写着）：
- * 这一格是用户自己敲进去的，让一个拼错的颜色**把整份设置读不回来**比让它
- * 安静失效坏得多。界面上会把它标出来（`AppearancePane` 的「（认不出…）」）。
- */
 
-/** 强调色上的**白**字。与 `theme/color.css` 里各家用的那个白一致。 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export const white = "#ffffff";
 
-/**
- * 强调色上的**近黑**字。
- *
- * ⚠️ 用 `#10131a` 而不是 `#000000`：纯黑排在彩色上会发脏，
- * 而那 14 格也是这个值（`theme/color.css` 里 `--accent-fg` 的深色那一半）。
- * **这里跟着抄它是可以的**——它是一条判据的取值，不是一份配色表。
- */
+
+
+
+
+
+
+
 export const nearBlack = "#10131a";
 
-/**
- * 把设置里那一格解析成 `#rrggbb`（**小写**）；认不出来返回 `null`。
- *
- * 认这几种写法：`#rgb` / `#rrggbb`，前导 `#` 可省，大小写不限。
- * 短写法按 CSS 的规矩**逐位翻倍**（`#abc` → `#aabbcc`，不是补零）。
- *
- * ⚠️ **不认 `rgb()` / `hsl()` / 颜色名**（`red`、`rebeccapurple`）。不是做不到，
- * 是**故意不做**：界面上那个 `<input type="color">` 只会产出 `#rrggbb`，
- * 于是"认出来的写法"就只有一种；再放宽只会让"我手写的 `red` 为什么没生效"
- * 变成一个需要排查的问题，而它本该是一眼就能看出来的。
- */
+
+
+
+
+
+
+
+
+
+
+
 export function parseAccent(raw: string): string | null {
   const s = raw.trim().replace(/^#/, "");
-  // ⚠️ 逐位翻倍用 `replace(/./g, …)`，**不写 `s[0] + s[0] + …`**：
-  // 本仓开着 `noUncheckedIndexedAccess`，按位取字符的类型是 `string | undefined`，
-  // 于是要么加一串 `!`、要么加一串兜底——而这里根本不需要按下标取。
+
+
+
   if (/^[0-9a-fA-F]{3}$/.test(s)) return `#${s.replace(/./g, (c) => c + c)}`.toLowerCase();
   if (/^[0-9a-fA-F]{6}$/.test(s)) return `#${s.toLowerCase()}`;
   return null;
 }
 
-/**
- * 颜色的 **WCAG 相对亮度**（0 = 黑，1 = 白）。
- *
- * 公式是 WCAG 2.x 那一条：每个通道先从 sRGB 转到线性，再按 0.2126 / 0.7152 /
- * 0.0722 加权。⚠️ **不能图省事直接用 (r+g+b)/3 或 0.299/0.587/0.114**——那是
- * 感知亮度的近似，在**黄**这类颜色上偏得最厉害，而黄恰恰是用户最爱挑的强调色
- * 之一（`#ffd400` 用平均法会算出"该配白字"，实际白字排上去几乎看不见）。
- */
+
+
+
+
+
+
+
+
 export function RelativeLuminance(hex: string): number {
   const n = Number.parseInt(hex.slice(1), 16);
-  // ⚠️ 三个通道**当场摊开算**（而不是 `map` 成一个数组再按下标取）：本仓开着
-  // `noUncheckedIndexedAccess`，按下标取要写 `!` 或兜底，而这里摊开既不用取下标、
-  // 也让 0.2126 / 0.7152 / 0.0722 这三个权重各自对着哪个通道**一眼可查**。
+
+
+
   const throughWay = (v: number): number => {
     const c = v / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -89,108 +89,108 @@ export function RelativeLuminance(hex: string): number {
   );
 }
 
-/**
- * 两个亮度的 WCAG 对比度（1:1 ～ 21:1）。无所谓谁大谁小。
- *
- * ⚠️ 本函数**不在 `accentFg` 的判据里**（那条判据是一个亮度阈值，理由见下），
- * 它存在的意义有两个：给 `tests/accent.test.ts` 量"出厂那 13 对到底是多少比多少"，
- * 以及给将来想把判据换成"永远挑对比度高的那个"的人一个现成的工具。
- * 仓库里没有第二份对比度实现——**别在别处再写一遍**。
- */
+
+
+
+
+
+
+
+
 export function correctCompareDegree(a: number, b: number): number {
   const [height, low] = a > b ? [a, b] : [b, a];
   return (height + 0.05) / (low + 0.05);
 }
 
-/**
- * 白字 / 近黑字的分界（**相对亮度**）。`< 0.25` 用白字。
- *
- * ⚠️⚠️ **这不是从对比度算出来的数，是从我们自己的取色里"读"出来的**——
- * 2026-09-26 定这条线时，把 `theme/color.css` 里 13 对 `--accent` / `--accent-fg`
- * 全量过了一遍（`tests/accent.test.ts` 现在也在盯着这件事）：
- *
- * | 出厂用**白**字的，亮度最高的一对 | 出厂用**深**字的，亮度最低的一对 |
- * |---|---|
- * | `#e95420`（Yaru 橙）0.238 | `#f3732e`（Yaru 深色）0.315 |
- *
- * 0.25 就卡在这两个数中间。**换句话说这条线是"抄我们自己的取舍"**。
- * ⚠️ **2026-10-07 那一格换过人**：深字那侧原本最低的是 Yaru 蓝深色的 `#208fe9`
- * （0.258），而那一档当天整档删掉了（用户：「只需要 Yaru，不需要 Yaru Blue 了」）。
- * 新的一对是 `#f3732e`（0.315）——**0.25 仍然夹在中间，而且余量更大了**。
- *
- * ⚠️ **为什么不直接用"挑对比度高的那个"**（那是更直觉的判据，也是本文件
- * 第一版写的）：它和出厂那 13 对里**有 7 对不一致**，包括最显眼的
- * `#3584e4`（Adwaita 浅色的旗舰蓝）——对比度算下来近黑字 4.93:1 比白字
- * 3.77:1 高，于是照那条判据 Adwaita 的蓝底会变成**黑字**。用户在「主题色」
- * 里填一个 `#3584e4` 却和 Adwaita 自带的蓝长得不一样，那看着就是个 bug。
- *
- * ⚠️ 代价要如实说：这条线**认了"白字可以低到 3.5:1"**，低于 WCAG AA 对正文的
- * 4.5:1（够 AA 对大字号的 3:1，也够 UI 组件的 3:1）。这是**跟出厂值一致**
- * 的代价，不是新引入的——13 对里最低的本来就是 3.65:1（`#0a84ff`，
- * Yaru 橙 `#e95420` 也是同一档）。
- * 用户挑了浅色（黄、浅绿、白）时这条线会翻到深字，那种组合都在 4.5:1 以上。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const luminanceCutoff = 0.25;
 
-/**
- * 强调色上面那行字该用黑还是白。
- *
- * ⚠️ **不让用户自己填**（`settings/appearance.rs` 的 `accent` 那段写着为什么）：
- * 存下来的话，改一次主题色就可能留下一对"白字排在浅黄上"的组合，而那种组合
- * 在设置界面里怎么看都看不出来——它只在真正用上的那一处露出来，而那地方
- * 未必正开着。
- *
- * ⚠️ 判据的来历（**以及为什么不是"挑对比度高的那个"**）写在 `分界亮度` 那段，
- * 动手改之前先读它。
- */
+
+
+
+
+
+
+
+
+
+
+
 export function accentFg(accent: string): string {
   return RelativeLuminance(accent) < luminanceCutoff ? white : nearBlack;
 }
 
-/**
- * 颜色的**色相**（0~360）。
- *
- * 导出它只为一件事：`tests/accent.test.ts` 要断言"卡片挪亮度时色相没被改掉"，
- * 而那条断言必须有一个**独立于被测代码**的取值方式——在测试里再抄一份 HSL
- * 换算是本仓明确不干的事（`对比度` 那段写着同一条理由：**别在别处再写一遍**）。
- */
+
+
+
+
+
+
+
 export function hue(hex: string): number {
   return toHsl(hex).h;
 }
 
-// ── 分享卡上的强调色（2026-09-27）────────────────────────────────────────────
-//
-// 用户当天两句话：「分享卡颜色强调是跟随自己的主题」＋「可以稍微调整一下，
-// 视觉上美观就可以」。
-//
-// 于是这一节做两件事：**跟随**（拿用户那一格，没设就跟随当前风格）与
-// **调整**（底色深浅差得太远时把它挪到看得清的那一段）。
 
-/** 分享图那张卡片的默认强调色（照设计稿）。⚠️ 深浅两套**本来就不同值**：深底要更亮才看得清。 */
+
+
+
+
+
+
+
+
 const darkCardAccent = "#4f82fb";
 const lightCardAccent = "#2f63d8";
 
-/**
- * 卡片上强调色的**亮度下限 / 上限**（深底要够亮、浅底要够暗）。
- *
- * ⚠️ 这两个数是**照着设计稿那两个值定的**，不是从对比度公式推出来的
- * （同 `分界亮度` 那条的来历）：
- *
- * | 设计稿那两套的强调色 | 相对亮度 |
- * |---|---|
- * | 深色卡 `#4f82fb` | **0.246** |
- * | 浅色卡 `#2f63d8` | **0.145** |
- *
- * 下限 **0.20** 卡在 0.145 与 0.246 中间：设计稿自己那两个值**一个都不用动**，
- * 而把设计稿的浅色强调色放到深色卡上（0.145 ＜ 0.20）会被抬亮——那正是设计稿
- * 分成两套的理由。上限 **0.28** 比 `分界亮度`（0.25）略高，好让上面那两个值、
- * 以及 Adwaita 那个 `#3584e4`（0.229）都不动，只拦真正排不出来的（黄 `#ffd400`
- * 是 0.684，白底上对比度 1.4:1，不压下去等于没画）。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const cardSliceDarkBackgroundBelowLimit = 0.2;
 const cardSliceLightBackgroundLimit = 0.28;
 
-/** `#rrggbb` → `{h: 0~360, s: 0~1, l: 0~1}`。 */
+
 export function toHsl(hex: string): { h: number; s: number; l: number } {
   const n = Number.parseInt(hex.slice(1), 16);
   const r = ((n >> 16) & 0xff) / 255;
@@ -203,8 +203,8 @@ export function toHsl(hex: string): { h: number; s: number; l: number } {
   const l = and / 2;
   if (difference === 0) return { h: 0, s: 0, l };
   const s = l > 0.5 ? difference / (2 - and) : difference / and;
-  // ⚠️ 三个分支**摊开写**而不是查表按下标取：本仓开着 `noUncheckedIndexedAccess`
-  // （同 `相对亮度` 那段里说的那条理由）。
+
+
   let h: number;
   if (large === r) h = ((g - b) / difference + (g < b ? 6 : 0)) / 6;
   else if (large === g) h = ((b - r) / difference + 2) / 6;
@@ -212,7 +212,7 @@ export function toHsl(hex: string): { h: number; s: number; l: number } {
   return { h: h * 360, s, l };
 }
 
-/** `{h,s,l}` → `#rrggbb`。`s` / `l` 是 0~1。 */
+
 function toHex(h: number, s: number, l: number): string {
   const hue = ((h % 360) + 360) % 360 / 360;
   const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
@@ -231,20 +231,20 @@ function toHex(h: number, s: number, l: number): string {
   return `#${twoDigits(shareMeasure(hue + 1 / 3))}${twoDigits(shareMeasure(hue))}${twoDigits(shareMeasure(hue - 1 / 3))}`;
 }
 
-/**
- * 分享卡上用的强调色：**跟随用户自己的主题色**，排不出来时挪到能看的那一段。
- *
- * @param 强调色 用户那一格（`appearance.accent`），**没设 / 认不出来**时给 `null`
- * @param 深底   卡片是深色那一套吗（`share-card.ts` 知道，由它传）
- *
- * ⚠️ **没设就保持设计稿那两个值**，不拿界面风格自带的强调色去顶：设计稿是对着
- * 这两个值调过版的（曲线、大数字、渐变都在它们上面配平），用户没表达偏好时
- * 就该是设计稿的样子。
- *
- * ⚠️ **只动亮度（HSL 的 L），色相与饱和度一律不动**：用户挑的是那个颜色，
- * 我们只负责让它在另一种底色上站得住——把一个橙色调成棕色是必要的，
- * 把它调成另一个色相就是"没跟随"了。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function cardAccent(accent: string | null, darkBackground: boolean): string {
   const start5 = accent ? parseAccent(accent) : null;
   if (!start5) return darkBackground ? darkCardAccent : lightCardAccent;
@@ -253,8 +253,8 @@ export function cardAccent(accent: string | null, darkBackground: boolean): stri
   if (darkBackground ? RelativeLuminance(start5) >= target : RelativeLuminance(start5) <= target) return start5;
 
   const { h, s, l } = toHsl(start5);
-  // 一步步挪（1% 一档）：比解方程好读，而且**一定停在"刚够"的那一档**附近，
-  // 不会把颜色甩过头。最多 100 档就是 0 → 1 走满，走不到就返回最后那次。
+
+
   let currentValue = start5;
   for (let i = 1; i <= 100; i++) {
     const belowValue = l + (darkBackground ? i : -i) / 100;
@@ -265,13 +265,13 @@ export function cardAccent(accent: string | null, darkBackground: boolean): stri
   return currentValue;
 }
 
-/**
- * 此刻界面上真正生效的强调色（`--accent` 的计算值）。
- *
- * ⚠️ **拿不到就返回 `null`**（`null` 交给 `卡片主色` 去落设计稿那两个值）：
- * 纯 `vite` 开着看页面、或者将来某个环境没把那个变量铺上，都不该让分享图
- * 画不出来。
- */
+
+
+
+
+
+
+
 export function uiAccent(): string | null {
   try {
     const value2 = getComputedStyle(document.documentElement).getPropertyValue("--accent");
@@ -281,55 +281,55 @@ export function uiAccent(): string | null {
   }
 }
 
-/**
- * 把设置里那一格落成要写进 `<html>` 的 CSS 变量。
- *
- * 返回 `null` = **一个变量都别写**（跟随风格 / 值认不出来），调用方要把上一次
- * 写的三个**摘掉**——只写不摘的话，"改成跟随风格"这个动作在界面上不生效，
- * 用户会以为设置没保存。
- *
- * # 为什么第三个是 `--switch-on`（2026-09-30）
- *
- * 用户报的原话：「**右侧开关还是橙色的**」——他把主题色设成了蓝的
- * （`#208fe9`），「主题色」那一行的色块**当场就变蓝了**，可设置页里
- * **右侧那些开关仍然是橙的**（`#e95420`，Yaru 的识别色）。
- *
- * 根因是**两处颜色分家了**：
- *
- * | 变量 | 谁写它 | 跟不跟用户那一格 |
- * |---|---|---|
- * | `--accent` | 本函数内联写 | **跟** |
- * | `--switch-on` | 各风格在 `theme/color.css` 里**各写各的字面值** | **不跟** |
- *
- * ⚠️ `theme/base.css` 的 `:root` 里**本来有一句** `--switch-on: var(--accent)`
- * （那就是"开关跟强调色"这个意图的原文），但它是**死代码**：各风格那 14 格用的
- * 是 `[data-ui-style="x"][data-ui-mode="y"]`（两个属性 = 0,2,0），**比 `:root`
- * 的 (0,1,0) 更具体**，于是每一档都把那句话盖掉了。只有**没写** `--switch-on`
- * 的风格（ghub 那种只写差异的）才轮到它生效——所以"开关跟不跟强调色"在
- * 改这一版之前是**按风格各不相同的**，而界面上完全看不出来。
- *
- * # 为什么只加这一格，不加 `--switch-off` / 按钮那两族
- *
- * 判据是**用户改主题色时，他期望哪几处跟着动**：
- *
- * - `--switch-on`：**加**。开关是"强调色"在界面上最显眼的那几处之一，用户
- *   改完颜色一抬头就看见它，看见它没变就等于"我这次设置没生效"。
- * - `--switch-off`：**不加**。那是"关"状态的轨道色，各风格都给的灰
- *   （`rgba(0,0,6,0.15)` 一类），跟强调色不是一回事。
- * - `--btn-bg` 三态 / `--btn-border`：**不加**。多数风格给的是
- *   `transparent` ＋ 半透明 hover 底——它画的是"有没有底"，不是一个色相。
- *
- * ⚠️ **没设主题色时一个内联变量都不写**（本函数返回 `null`）：开关仍读
- * 当前风格自己的 `--switch-on`。风格可以把这一格指向 `--accent`（macOS
- * 现在如此），也可以保留自己的识别色（例如 Yaru 橙）。
- * 这也是"摘掉内联"那一支必须把 `--switch-on` 一起摘掉的理由：摘漏了，
- * 用户点「跟随风格」之后开关会**留在上一个主题色上**，比不跟还怪。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function accentVars(raw: string): Record<string, string> | null {
   const hex = parseAccent(raw);
   if (!hex) return null;
-  // ⚠️ `--switch-on` 拿的是**同一个 `hex`**，不另算一个色：开关上没有字，
-  // 不涉及"上面的字读不读得出来"，所以 `--accent-fg` 那套对比度判据在这里
-  // 用不上——它就是强调色本身。
+
+
+
   return { "--accent": hex, "--accent-fg": accentFg(hex), "--switch-on": hex };
 }

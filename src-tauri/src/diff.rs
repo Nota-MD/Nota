@@ -1,184 +1,82 @@
-//! 统一格式 diff 的**生成**：两段文本进，一份逐行差异出。
-//!
-//! # 这一半为什么在核心里
-//!
-//! 宿主的两个 diff 模块此前**只会解析**：`lua/api/diff.rs` 认模型写的
-//! ```nota-diff 围栏，`lua/api/unified_diff.rs` 认 `git diff` 那套 `---`/`+++`/`@@`。
-//! 而"两段文本 → 一份 diff"这件事，前端只好自己手写了一遍
-//!（`src/editor/review.ts` 里那份 LCS，连"掐公共前后缀"和"单元格上限"都是手写的）。
-//!
-//! 调用点还在一处处长（改动预览、AI 建议的"改前/改后"、插件的变更面板），
-//! 所以它归核心：**一份格式两处实现迟早会漂**，而漂的症状是"同一个改动，
-//! 预览里画的和应用时认的不是一回事"——这种 bug 没有人会报上来。
-//!
-//! # 它和 `lua/api/unified_diff.rs` 是一对
-//!
-//! 那边**读**（把现成的一份 diff 解析成 `{ op, text }`），这里**写**
-//!（把两段文本变成同一种 `{ op, text }`）。两边共用同一套 `op` 字面量
-//!（见下面 `一行` 那段），所以**生成出来的一份和解析出来的一份在界面上长得一样**：
-//! 同一块 `kind = "diff"` 的渲染，同一套上色规矩。
-//! 改这边的口径之前，先读 `unified_diff.rs` 顶上那三条——它们讲的是读的那半。
-//!
-//! # 几条已经定下来的口径
-//!
-//! 1. **空进空出**：两边都切不出行时给空 `Vec`，**不造空段头**。
-//!    `@@ -0,0 +0,0 @@` 画在界面上是一行孤零零的蓝字、下面什么都没有，
-//!    用户只会以为界面坏了。
-//! 2. **"行"按 `\n` 切，收尾那个换行不算一行**：`"甲\n"` 和 `"甲"` 之间
-//!    **没有**差异。尺子必须和读的那半一样（`unified_diff.rs` 用 `lines()`
-//!    而不是 `split('\n')`，理由写在它文件头）——两头两把尺子的话，
-//!    "生成出来再解析回去"会凭空多出上下文行。
-//! 3. **`\r` 掐掉**：CRLF 的文本切出来每行都拖着 `\r`，不掐的话界面上行尾
-//!    多一个小方块，而且"LF 的一份"和"CRLF 的一份"会被判成两种完全不同的
-//!    文本（每一行都是删一行、加一行）。
-//! 4. **段头自己拼**：`op = "hunk"`、`text` 是整行原样（`@@ -1,4 +1,5 @@`）。
-//!    露几行上下文由调用方给，这里不写死。
-//!
-//! # 为什么用 `similar`
-//!
-//! `Cargo.toml` 里这条依赖声明了很久却一处没用上（`THIRD-PARTY.md` 登记过），
-//! 而"两份文本的逐行差异"正是它最拿手的一件事：`grouped_ops(n)` 就是
-//! "按 n 行上下文切段"（空隙不超过 2×上下文就并进同一段，和 `git diff -U n`
-//! 一个规矩）。手写 LCS 只会再长出第二份要自己维护、自己测的最坏情况实现
-//!（超大文件、两份完全不相干的文本）。
-//!
-//! # 这里不碰 Lua
-//!
-//! `统一差异` 是个**普通的 Rust 函数**，只有 `lua/api/diff.rs` 的 `build()` 那一层
-//! 做包装。理由和那边一样：它的输入是**用户/模型现编的两段文字**，线上撞见的形状
-//!（收尾换行、CRLF、空文件、全篇重写）用接口试是试不完的，得能被单元测试按住。
-
 use similar::{DiffTag, TextDiff};
 
-/// 统一格式里的一行。字段名与 `lua/api/unified_diff.rs` 交给界面的形状**对齐**：
-/// 序列化出来就是前端 `PanelDiffLine`（`src/ui/panel-nodes.ts`）要的
-/// `{ op = "…", text = "…" }`。
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct 一行 {
-    /// `"ctx"` | `"add"` | `"del"` | `"hunk"`。
-    ///
-    /// ⚠️ 这几个字面量**必须**和前端 `panel-nodes.ts` 的 `PanelDiffOp` 对得上
-    ///（以及 `unified_diff.rs::种类到op`）：那边认不出的 op 一律当 `add`
-    ///（画成绿的），所以这里多一个、那边少一个，界面上就是"明明删了却画成绿的"，
-    /// 而没有人会报这种 bug。两处各写了一遍注释，改一处必须改两处。
-    ///
-    /// ⚠️ 生成器只会给这四个，**没有 `meta`**：它不认识"文件"（输入只是两段文本，
-    /// 不是一份 diff），而 `meta` 是"读"的那半用来装 `diff --git` / `index` 那几行的。
+pub struct DiffLine {
     pub op: String,
-    /// 行内容。加/删/上下文都**不含行首那个标记**（界面自己补 `+`/`-`/空格）；
-    /// 段头是**整行原样**（`@@ -1,4 +1,5 @@`）。
-    ///
-    /// ⚠️ 内容本身以 `+`/`-`/空格开头时也**照原样给**（不替界面补标记、
-    /// 也不多掐一个字符）：多掐一个字的症状是"正文里少了一个字"。
+
     pub text: String,
 }
 
-/// 上下文行数的上限。见 `统一差异` 里"为什么要夹一刀"那段。
-pub const 最长上下文: usize = 10_000;
+pub const MAX_DIFF_CONTEXT: usize = 10_000;
 
-/// 两段文本 → 一份统一格式的逐行差异。
-///
-/// `上下文` 是每段改动前后**各**露几行没变的内容（`git diff -U n` 的那个 n）。
-/// 默认值不在这儿定：调用方给多少就是多少（`nota.diff.make` 省略时给 3，
-/// 见 `lua/api/diff.rs` 的 `默认上下文`）。
-///
-/// 两段文本没有差异（含两边都是空）时给**空 `Vec`**，不造空段头。
-pub fn 统一差异(旧: &str, 新: &str, 上下文: usize) -> Vec<一行> {
-    let 旧行 = 切行(旧);
-    let 新行 = 切行(新);
+pub fn unified_diff_2(jiu: &str, xin: &str, shang_xia_wen: usize) -> Vec<DiffLine> {
+    let jiu_xing = qie_xing(jiu);
+    let xin_xing = qie_xing(xin);
 
-    // 两边都切不出行 = "什么都没有"，不是"一整篇都是空的"：直接给空表。
-    // （下面那条路本来也是空表，这里只是把契约写在最显眼的地方。）
-    if 旧行.is_empty() && 新行.is_empty() {
+    if jiu_xing.is_empty() && xin_xing.is_empty() {
         return Vec::new();
     }
 
-    // ⚠️ 这一刀是防**溢出**的：`grouped_ops` 内部算 `len > n * 2`，
-    // n 给到 `usize::MAX` 时那个乘法在 debug 构建里会当场 panic
-    //（Lua 那边一个数就能捅过来，`nota.diff.make(旧, 新, 很大的数)`）。
-    // 夹到一万还有个好处：超过它本来就等于"整篇都当上下文"，再多没有意义。
-    let 上下文 = 上下文.min(最长上下文);
+    let shang_xia_wen = shang_xia_wen.min(MAX_DIFF_CONTEXT);
 
-    let 差异 = TextDiff::from_slices(&旧行, &新行);
-    let mut 结果: Vec<一行> = Vec::new();
+    let cha_yi = TextDiff::from_slices(&jiu_xing, &xin_xing);
+    let mut result_3: Vec<DiffLine> = Vec::new();
 
-    for 组 in 差异.grouped_ops(上下文) {
-        // ⚠️ **一行改动都没有的组不画**：上下文给 0 时，`grouped_ops` 会在
-        // 改动之间留下一串零长度的"相等"组（它按"空隙 > 2×上下文"切段，
-        // 上下文是 0 时连零长度的空隙也切一刀）。照单全收的话，段头下面
-        // 一行都没有——界面上是一行孤零零的蓝 `@@ -0,0 +0,0 @@`。
-        // git 自己从不打这种段（裸 `diff -u` 也不打），所以这里丢掉。
-        if !组.iter().any(|o| o.tag() != DiffTag::Equal) {
+    for zu in cha_yi.grouped_ops(shang_xia_wen) {
+        if !zu.iter().any(|o| o.tag() != DiffTag::Equal) {
             continue;
         }
 
-        let 旧起 = 组.first().map_or(0, |o| o.old_range().start);
-        let 新起 = 组.first().map_or(0, |o| o.new_range().start);
-        let 旧数: usize = 组.iter().map(|o| o.old_range().len()).sum();
-        let 新数: usize = 组.iter().map(|o| o.new_range().len()).sum();
-        结果.push(一行 {
+        let jiu_qi = zu.first().map_or(0, |o| o.old_range().start);
+        let xin_qi = zu.first().map_or(0, |o| o.new_range().start);
+        let jiu_shu: usize = zu.iter().map(|o| o.old_range().len()).sum();
+        let xin_shu: usize = zu.iter().map(|o| o.new_range().len()).sum();
+        result_3.push(DiffLine {
             op: "hunk".to_owned(),
-            // 段头是**整行原样**（前端原样显示，不认里面的数字）：
-            // `@@ -旧起,旧数 +新起,新数 @@`，形状照 `git diff` 自己那套。
-            text: format!("@@ -{} +{} @@", 半边(旧起, 旧数), 半边(新起, 新数)),
+
+            text: format!(
+                "@@ -{} +{} @@",
+                ban_bian(jiu_qi, jiu_shu),
+                ban_bian(xin_qi, xin_shu)
+            ),
         });
 
-        for op in &组 {
+        for op in &zu {
             match op.tag() {
-                DiffTag::Equal => 推(&mut 结果, "ctx", &旧行, op.old_range()),
-                DiffTag::Delete => 推(&mut 结果, "del", &旧行, op.old_range()),
-                DiffTag::Insert => 推(&mut 结果, "add", &新行, op.new_range()),
+                DiffTag::Equal => tui(&mut result_3, "ctx", &jiu_xing, op.old_range()),
+                DiffTag::Delete => tui(&mut result_3, "del", &jiu_xing, op.old_range()),
+                DiffTag::Insert => tui(&mut result_3, "add", &xin_xing, op.new_range()),
                 DiffTag::Replace => {
-                    // ⚠️ **先删后加**，不是先加后删：一份 diff 从上往下读的时候，
-                    // "删掉了什么"要排在"换成了什么"前面（git 就是这么打的）。
-                    // 反过来的症状是预览里红绿两行的顺序跟终端里的对不上。
-                    推(&mut 结果, "del", &旧行, op.old_range());
-                    推(&mut 结果, "add", &新行, op.new_range());
+                    tui(&mut result_3, "del", &jiu_xing, op.old_range());
+                    tui(&mut result_3, "add", &xin_xing, op.new_range());
                 }
             }
         }
     }
 
-    结果
+    result_3
 }
 
-// ── 内部 ──────────────────────────────────────────────────────────────────
-
-/// 段头里的一半（`-1,4` 那一截）。`起` 是**零基**下标。
-///
-/// ⚠️ 三档写法**照 `git diff` 自己的来**（不是随手写的）：
-/// 条数是 1 时只写行号（`-1` 而不是 `-1,1`），条数是 0 时行号**不加一**
-///（空的那半边写的是"它前面有几行"，插在文件开头就是 `-0,0`）。
-/// 读的那半（`unified_diff.rs`）只把段头整行存下来、不解析数字，
-/// 但界面上是**原样显示**的，所以形状要跟用户看惯的终端输出一致。
-fn 半边(起: usize, 数: usize) -> String {
-    match 数 {
-        0 => format!("{起},0"),
-        1 => format!("{}", 起 + 1),
-        数 => format!("{},{}", 起 + 1, 数),
+fn ban_bian(qi: usize, shu: usize) -> String {
+    match shu {
+        0 => format!("{qi},0"),
+        1 => format!("{}", qi + 1),
+        shu => format!("{},{}", qi + 1, shu),
     }
 }
 
-/// 把文本切成"行"。
-///
-/// ⚠️ 口径**和 `unified_diff.rs` 那边一模一样**：用 `lines()` 的语义，
-/// 不是 `split('\n')`——后者的收尾换行会多切出一个空串，而那个空串**不是
-/// diff 里的一行**（那边 2026-09-26 加上下文行时当场踩过：每个文件块末尾
-/// 凭空多一条空的上下文行，界面上是一行灰底空行）。
-/// `lines()` 顺带把 `\r\n` 的 `\r` 也吃掉（`strip_suffix` 留着是防有人换回 split）。
-fn 切行(文本: &str) -> Vec<&str> {
-    文本
+fn qie_xing(text_2: &str) -> Vec<&str> {
+    text_2
         .lines()
         .map(|l| l.strip_suffix('\r').unwrap_or(l))
         .collect()
 }
 
-/// 把一段范围里的行按同一个 op 推进结果里。
-fn 推(结果: &mut Vec<一行>, op: &str, 行们: &[&str], 范围: std::ops::Range<usize>) {
-    for i in 范围 {
-        结果.push(一行 {
+fn tui(result_3: &mut Vec<DiffLine>, op: &str, xing_men: &[&str], fan_wei: std::ops::Range<usize>) {
+    for i in fan_wei {
+        result_3.push(DiffLine {
             op: op.to_owned(),
-            text: 行们[i].to_owned(),
+            text: xing_men[i].to_owned(),
         });
     }
 }
@@ -187,275 +85,263 @@ fn 推(结果: &mut Vec<一行>, op: &str, 行们: &[&str], 范围: std::ops::Ra
 mod tests {
     use super::*;
 
-    /// 断言用的小构造器：`行("add", "新的一章")`。
-    fn 行(op: &str, text: &str) -> 一行 {
-        一行 {
+    fn xing(op: &str, text: &str) -> DiffLine {
+        DiffLine {
             op: op.into(),
             text: text.into(),
         }
     }
 
-    /// 纯插入：新旧两份只差中间多出来的那行。
     #[test]
-    fn 纯插入() {
+    fn chun_cha_ru() {
         assert_eq!(
-            统一差异("一\n三\n", "一\n二\n三\n", 3),
+            unified_diff_2("\u{4e00}\n\u{4e09}\n", "\u{4e00}\n\u{4e8c}\n\u{4e09}\n", 3),
             vec![
-                行("hunk", "@@ -1,2 +1,3 @@"),
-                行("ctx", "一"),
-                行("add", "二"),
-                行("ctx", "三"),
+                xing("hunk", "@@ -1,2 +1,3 @@"),
+                xing("ctx", "\u{4e00}"),
+                xing("add", "\u{4e8c}"),
+                xing("ctx", "\u{4e09}"),
             ]
         );
     }
 
-    /// 纯删除。
     #[test]
-    fn 纯删除() {
+    fn chun_delete() {
         assert_eq!(
-            统一差异("一\n二\n三\n", "一\n三\n", 3),
+            unified_diff_2("\u{4e00}\n\u{4e8c}\n\u{4e09}\n", "\u{4e00}\n\u{4e09}\n", 3),
             vec![
-                行("hunk", "@@ -1,3 +1,2 @@"),
-                行("ctx", "一"),
-                行("del", "二"),
-                行("ctx", "三"),
+                xing("hunk", "@@ -1,3 +1,2 @@"),
+                xing("ctx", "\u{4e00}"),
+                xing("del", "\u{4e8c}"),
+                xing("ctx", "\u{4e09}"),
             ]
         );
     }
 
-    /// 改动：一行换一行。
     #[test]
-    fn 一行换成一行的段头是短的那个() {
-        // 条数是 1 时 git 不写 `,1`（`-1` 而不是 `-1,1`），段头照它的形状来。
+    fn yi_xing_huan_cheng_yi_xing_de_duan_tou_shi_duan_de_na_ge() {
         assert_eq!(
-            统一差异("他慢慢地走了过来。\n", "他走过来。\n", 3),
+            unified_diff_2(
+                "\u{4ed6}\u{6162}\u{6162}\u{5730}\u{8d70}\u{4e86}\u{8fc7}\u{6765}\u{3002}\n",
+                "\u{4ed6}\u{8d70}\u{8fc7}\u{6765}\u{3002}\n",
+                3
+            ),
             vec![
-                行("hunk", "@@ -1 +1 @@"),
-                行("del", "他慢慢地走了过来。"),
-                行("add", "他走过来。"),
+                xing("hunk", "@@ -1 +1 @@"),
+                xing(
+                    "del",
+                    "\u{4ed6}\u{6162}\u{6162}\u{5730}\u{8d70}\u{4e86}\u{8fc7}\u{6765}\u{3002}"
+                ),
+                xing("add", "\u{4ed6}\u{8d70}\u{8fc7}\u{6765}\u{3002}"),
             ]
         );
     }
 
-    /// 两边一样 → 空表（含上下文给 0 的那种）。
     #[test]
-    fn 一样的两份给空表() {
-        assert!(统一差异("甲\n乙\n", "甲\n乙\n", 3).is_empty());
+    fn yi_yang_de_liang_fen_gei_kong_table() {
+        assert!(unified_diff_2("\u{7532}\n\u{4e59}\n", "\u{7532}\n\u{4e59}\n", 3).is_empty());
         assert!(
-            统一差异("甲\n乙\n", "甲\n乙\n", 0).is_empty(),
-            "上下文 0 也不许挤出空段头"
+            unified_diff_2("\u{7532}\n\u{4e59}\n", "\u{7532}\n\u{4e59}\n", 0).is_empty(),
+            "\u{4e0a}\u{4e0b}\u{6587} 0 \u{4e5f}\u{4e0d}\u{8bb8}\u{6324}\u{51fa}\u{7a7a}\u{6bb5}\u{5934}"
         );
     }
 
-    /// 空输入：契约是"空进空出"，**不造空段头**。
     #[test]
-    fn 空进空出不造空段头() {
-        assert!(统一差异("", "", 3).is_empty());
-        assert!(统一差异("", "", 0).is_empty());
+    fn kong_jin_kong_chu_bu_zao_kong_duan_tou() {
+        assert!(unified_diff_2("", "", 3).is_empty());
+        assert!(unified_diff_2("", "", 0).is_empty());
 
-        // 一边空、另一边有内容：从零开始的一份插入，段头空的那半边是 `0,0`。
         assert_eq!(
-            统一差异("", "甲\n乙\n", 3),
+            unified_diff_2("", "\u{7532}\n\u{4e59}\n", 3),
             vec![
-                行("hunk", "@@ -0,0 +1,2 @@"),
-                行("add", "甲"),
-                行("add", "乙"),
+                xing("hunk", "@@ -0,0 +1,2 @@"),
+                xing("add", "\u{7532}"),
+                xing("add", "\u{4e59}"),
             ]
         );
-        // 反过来是整篇删掉。
+
         assert_eq!(
-            统一差异("甲\n", "", 3),
-            vec![行("hunk", "@@ -1 +0,0 @@"), 行("del", "甲")]
+            unified_diff_2("\u{7532}\n", "", 3),
+            vec![xing("hunk", "@@ -1 +0,0 @@"), xing("del", "\u{7532}")]
         );
     }
 
-    /// 收尾换行差不出一行。
     #[test]
-    fn 收尾换行差不出一行() {
-        // ⚠️ 这是**刻意**的：`"甲\n"` 和 `"甲"` 切出来都是 `["甲"]` 一行。
-        // 收尾那个换行在界面上画不出东西，读的那半也是这个口径
-        //（`unified_diff.rs` 用 `lines()`）——两头同一把尺子，"生成出来再解析
-        // 回去"才不会凭空多出一行。
-        assert!(统一差异("甲\n", "甲", 3).is_empty());
-        assert!(统一差异("甲", "甲\n", 3).is_empty());
+    fn receive_wei_huan_xing_cha_bu_chu_yi_xing() {
+        assert!(unified_diff_2("\u{7532}\n", "\u{7532}", 3).is_empty());
+        assert!(unified_diff_2("\u{7532}", "\u{7532}\n", 3).is_empty());
 
-        // 但"中间多一个空行"是实打实的一行差（空行也是一行）。
         assert_eq!(
-            统一差异("甲\n乙\n", "甲\n\n乙\n", 3),
+            unified_diff_2("\u{7532}\n\u{4e59}\n", "\u{7532}\n\n\u{4e59}\n", 3),
             vec![
-                行("hunk", "@@ -1,2 +1,3 @@"),
-                行("ctx", "甲"),
-                行("add", ""),
-                行("ctx", "乙"),
+                xing("hunk", "@@ -1,2 +1,3 @@"),
+                xing("ctx", "\u{7532}"),
+                xing("add", ""),
+                xing("ctx", "\u{4e59}"),
             ]
         );
     }
 
-    /// CRLF：行内容里**不许**留回车。
     #[test]
-    fn crlf_不给行尾留下回车() {
+    fn crlf_bu_gei_xing_wei_liu_xia_hui_che() {
         assert_eq!(
-            统一差异("甲\r\n乙\r\n", "甲\r\n丙\r\n", 3),
+            unified_diff_2("\u{7532}\r\n\u{4e59}\r\n", "\u{7532}\r\n\u{4e19}\r\n", 3),
             vec![
-                行("hunk", "@@ -1,2 +1,2 @@"),
-                行("ctx", "甲"),
-                行("del", "乙"),
-                行("add", "丙"),
+                xing("hunk", "@@ -1,2 +1,2 @@"),
+                xing("ctx", "\u{7532}"),
+                xing("del", "\u{4e59}"),
+                xing("add", "\u{4e19}"),
             ],
-            "`\\r` 不掐的话，界面上每行行尾多一个方块"
+            "`\\r` \u{4e0d}\u{6390}\u{7684}\u{8bdd}\u{ff0c}\u{754c}\u{9762}\u{4e0a}\u{6bcf}\u{884c}\u{884c}\u{5c3e}\u{591a}\u{4e00}\u{4e2a}\u{65b9}\u{5757}"
         );
 
-        // ⚠️ LF 与 CRLF 之间**不算差异**：掐掉 `\r` 之后就是同一份文本。
-        // 反过来（把 `\r` 留着比）的症状是"用户只把文件存成了 CRLF，
-        // 预览里说整篇都改了"。
-        assert!(统一差异("甲\n乙\n", "甲\r\n乙\r\n", 3).is_empty());
+        assert!(unified_diff_2("\u{7532}\n\u{4e59}\n", "\u{7532}\r\n\u{4e59}\r\n", 3).is_empty());
     }
 
-    /// 上下文 0 与 3 差在段头的行号/条数和行数上。
     #[test]
-    fn 上下文零和三是两份不同的段头() {
-        let 旧 = "1\n2\n3\n4\n5\n";
-        let 新 = "1\n2\nX\n4\n5\n";
+    fn shang_xia_wen_ling_he_san_shi_liang_fen_bu_tong_de_duan_tou() {
+        let jiu = "1\n2\n3\n4\n5\n";
+        let xin = "1\n2\nX\n4\n5\n";
 
-        // 上下文 3：改动前后各露三行（这里只够两行），整篇一段。
         assert_eq!(
-            统一差异(旧, 新, 3),
+            unified_diff_2(jiu, xin, 3),
             vec![
-                行("hunk", "@@ -1,5 +1,5 @@"),
-                行("ctx", "1"),
-                行("ctx", "2"),
-                行("del", "3"),
-                行("add", "X"),
-                行("ctx", "4"),
-                行("ctx", "5"),
+                xing("hunk", "@@ -1,5 +1,5 @@"),
+                xing("ctx", "1"),
+                xing("ctx", "2"),
+                xing("del", "3"),
+                xing("add", "X"),
+                xing("ctx", "4"),
+                xing("ctx", "5"),
             ]
         );
 
-        // 上下文 0：只剩改动那一行，行号也从"整段从 1 开始"变成"这一行在第 3 行"。
         assert_eq!(
-            统一差异(旧, 新, 0),
-            vec![行("hunk", "@@ -3 +3 @@"), 行("del", "3"), 行("add", "X")]
+            unified_diff_2(jiu, xin, 0),
+            vec![
+                xing("hunk", "@@ -3 +3 @@"),
+                xing("del", "3"),
+                xing("add", "X")
+            ]
         );
     }
 
-    /// 只有一行不同（单行文件，两边都没收尾换行）。
     #[test]
-    fn 只有一行不同() {
+    fn zhi_you_yi_xing_bu_tong() {
         assert_eq!(
-            统一差异("甲", "乙", 3),
-            vec![行("hunk", "@@ -1 +1 @@"), 行("del", "甲"), 行("add", "乙")]
+            unified_diff_2("\u{7532}", "\u{4e59}", 3),
+            vec![
+                xing("hunk", "@@ -1 +1 @@"),
+                xing("del", "\u{7532}"),
+                xing("add", "\u{4e59}")
+            ]
         );
     }
 
-    /// 两处改动的**空隙够大**时是两个 `@@` 段，各给各的行号。
     #[test]
-    fn 隔得远的两处改动是两个段头() {
-        let 旧 = "第一章\n第一句\n第二句\n第三句\n第四句\n第五句\n第六句\n第七句\n第八句\n第九句\n第十句\n";
-        let 新 = "第一章\n开头一句\n第二句\n第三句\n第四句\n第五句\n第六句\n第七句\n第八句\n第九句\n收尾一句\n";
+    fn ge_de_yuan_de_liang_chu_change_shi_liang_ge_duan_tou() {
+        let jiu = "\u{7b2c}\u{4e00}\u{7ae0}\n\u{7b2c}\u{4e00}\u{53e5}\n\u{7b2c}\u{4e8c}\u{53e5}\n\u{7b2c}\u{4e09}\u{53e5}\n\u{7b2c}\u{56db}\u{53e5}\n\u{7b2c}\u{4e94}\u{53e5}\n\u{7b2c}\u{516d}\u{53e5}\n\u{7b2c}\u{4e03}\u{53e5}\n\u{7b2c}\u{516b}\u{53e5}\n\u{7b2c}\u{4e5d}\u{53e5}\n\u{7b2c}\u{5341}\u{53e5}\n";
+        let xin = "\u{7b2c}\u{4e00}\u{7ae0}\n\u{5f00}\u{5934}\u{4e00}\u{53e5}\n\u{7b2c}\u{4e8c}\u{53e5}\n\u{7b2c}\u{4e09}\u{53e5}\n\u{7b2c}\u{56db}\u{53e5}\n\u{7b2c}\u{4e94}\u{53e5}\n\u{7b2c}\u{516d}\u{53e5}\n\u{7b2c}\u{4e03}\u{53e5}\n\u{7b2c}\u{516b}\u{53e5}\n\u{7b2c}\u{4e5d}\u{53e5}\n\u{6536}\u{5c3e}\u{4e00}\u{53e5}\n";
 
-        let 结果 = 统一差异(旧, 新, 3);
+        let result_3 = unified_diff_2(jiu, xin, 3);
         assert_eq!(
-            结果
+            result_3
                 .iter()
                 .filter(|l| l.op == "hunk")
                 .map(|l| l.text.as_str())
                 .collect::<Vec<_>>(),
             vec!["@@ -1,5 +1,5 @@", "@@ -8,4 +8,4 @@"],
-            "空隙有 8 行 > 2×3，切两段：{:?}",
-            结果
+            "\u{7a7a}\u{9699}\u{6709} 8 \u{884c} > 2\u{d7}3\u{ff0c}\u{5207}\u{4e24}\u{6bb5}\u{ff1a}{:?}",
+            result_3
         );
-        assert_eq!(结果.len(), 13, "第一段 1+6 行、第二段 1+5 行");
-        // 第二段的上下文是从**第七句**起算的（第一段已经把中间那 8 行里的
-        // 前 3 行当上下文吃掉了，两段不重叠）。
         assert_eq!(
-            结果[7..].to_vec(),
+            result_3.len(),
+            13,
+            "\u{7b2c}\u{4e00}\u{6bb5} 1+6 \u{884c}\u{3001}\u{7b2c}\u{4e8c}\u{6bb5} 1+5 \u{884c}"
+        );
+
+        assert_eq!(
+            result_3[7..].to_vec(),
             vec![
-                行("hunk", "@@ -8,4 +8,4 @@"),
-                行("ctx", "第七句"),
-                行("ctx", "第八句"),
-                行("ctx", "第九句"),
-                行("del", "第十句"),
-                行("add", "收尾一句"),
+                xing("hunk", "@@ -8,4 +8,4 @@"),
+                xing("ctx", "\u{7b2c}\u{4e03}\u{53e5}"),
+                xing("ctx", "\u{7b2c}\u{516b}\u{53e5}"),
+                xing("ctx", "\u{7b2c}\u{4e5d}\u{53e5}"),
+                xing("del", "\u{7b2c}\u{5341}\u{53e5}"),
+                xing("add", "\u{6536}\u{5c3e}\u{4e00}\u{53e5}"),
             ],
-            "整份：{:?}",
-            结果
+            "\u{6574}\u{4efd}\u{ff1a}{:?}",
+            result_3
         );
     }
 
-    /// 空隙不够大（没超过 2×上下文）时**并进同一段**，和 `git diff -U3` 一样。
     #[test]
-    fn 挨得近的两处改动并成一段() {
-        // 两处改动之间只隔 2 行（没有超过 2×3），git 也是一段。
-        let 结果 = 统一差异("甲\n乙\n丙\n丁\n", "改甲\n乙\n丙\n改丁\n", 3);
+    fn ai_de_jin_de_liang_chu_change_bing_cheng_yi_duan() {
+        let result_3 = unified_diff_2(
+            "\u{7532}\n\u{4e59}\n\u{4e19}\n\u{4e01}\n",
+            "\u{6539}\u{7532}\n\u{4e59}\n\u{4e19}\n\u{6539}\u{4e01}\n",
+            3,
+        );
         assert_eq!(
-            结果.iter().filter(|l| l.op == "hunk").count(),
+            result_3.iter().filter(|l| l.op == "hunk").count(),
             1,
-            "该并成一段：{:?}",
-            结果
+            "\u{8be5}\u{5e76}\u{6210}\u{4e00}\u{6bb5}\u{ff1a}{:?}",
+            result_3
         );
         assert_eq!(
-            结果[0],
-            行("hunk", "@@ -1,4 +1,4 @@"),
-            "并起来之后行号是整篇的：{:?}",
-            结果
+            result_3[0],
+            xing("hunk", "@@ -1,4 +1,4 @@"),
+            "\u{5e76}\u{8d77}\u{6765}\u{4e4b}\u{540e}\u{884c}\u{53f7}\u{662f}\u{6574}\u{7bc7}\u{7684}\u{ff1a}{:?}",
+            result_3
         );
     }
 
-    /// 内容自己以 `+`/`-` 开头时照原样给。
     #[test]
-    fn text_里不含行首标记() {
-        // ⚠️ 不替界面补标记、也**不多掐一个字符**：多掐一个字的症状是
-        // "正文里少了一个字"，而且用户看不出来是渲染吃掉的。
-        // 读的那半是同一条规矩（`unified_diff.rs` 的"行首的标记只掐一个"）。
+    fn text_li_bu_han_xing_shou_biao_ji() {
         assert_eq!(
-            统一差异("+ 这一行以加号开头\n-- 分隔线\n", "", 3),
+            unified_diff_2("+ \u{8fd9}\u{4e00}\u{884c}\u{4ee5}\u{52a0}\u{53f7}\u{5f00}\u{5934}\n-- \u{5206}\u{9694}\u{7ebf}\n", "", 3),
             vec![
-                行("hunk", "@@ -1,2 +0,0 @@"),
-                行("del", "+ 这一行以加号开头"),
-                行("del", "-- 分隔线"),
+                xing("hunk", "@@ -1,2 +0,0 @@"),
+                xing("del", "+ \u{8fd9}\u{4e00}\u{884c}\u{4ee5}\u{52a0}\u{53f7}\u{5f00}\u{5934}"),
+                xing("del", "-- \u{5206}\u{9694}\u{7ebf}"),
             ]
         );
     }
 
-    /// 四个字面量：**给前端那份联合类型立的靶子**。
     #[test]
-    fn 四个字面量和前端对齐() {
-        // 前端 `panel-nodes.ts` 的 `PanelDiffOp` 是
-        // `"del" | "add" | "ctx" | "hunk" | "meta"`，认不出的 op 一律当 `add`。
-        // 生成器只出前面四个（`meta` 是"读"的那半才有的，见 `一行` 那段）。
-        let 结果 = 统一差异("一\n二\n三\n", "一\n改\n三\n", 3);
-        let 见过的: Vec<&str> = 结果.iter().map(|l| l.op.as_str()).collect();
-        assert_eq!(见过的, vec!["hunk", "ctx", "del", "add", "ctx"]);
-        for op in 见过的 {
+    fn si_ge_zi_mian_liang_he_qian_duan_dui_qi() {
+        let result_3 = unified_diff_2(
+            "\u{4e00}\n\u{4e8c}\n\u{4e09}\n",
+            "\u{4e00}\n\u{6539}\n\u{4e09}\n",
+            3,
+        );
+        let jian_guo_de: Vec<&str> = result_3.iter().map(|l| l.op.as_str()).collect();
+        assert_eq!(jian_guo_de, vec!["hunk", "ctx", "del", "add", "ctx"]);
+        for op in jian_guo_de {
             assert!(
                 ["del", "add", "ctx", "hunk"].contains(&op),
-                "`{op}` 不在前端认得的字面量里（那边会静默画成绿的）"
+                "`{op}` \u{4e0d}\u{5728}\u{524d}\u{7aef}\u{8ba4}\u{5f97}\u{7684}\u{5b57}\u{9762}\u{91cf}\u{91cc}\u{ff08}\u{90a3}\u{8fb9}\u{4f1a}\u{9759}\u{9ed8}\u{753b}\u{6210}\u{7eff}\u{7684}\u{ff09}"
             );
         }
     }
 
-    /// 段头是**整行原样**。
     #[test]
-    fn 段头是整行原样() {
-        let 结果 = 统一差异("一\n二\n", "一\n改\n", 3);
-        assert_eq!(结果[0].op, "hunk");
-        assert!(结果[0].text.starts_with("@@ -"), "{}", 结果[0].text);
-        assert!(结果[0].text.ends_with(" @@"), "{}", 结果[0].text);
+    fn duan_tou_shi_zheng_xing_yuan_yang() {
+        let result_3 = unified_diff_2("\u{4e00}\n\u{4e8c}\n", "\u{4e00}\n\u{6539}\n", 3);
+        assert_eq!(result_3[0].op, "hunk");
+        assert!(result_3[0].text.starts_with("@@ -"), "{}", result_3[0].text);
+        assert!(result_3[0].text.ends_with(" @@"), "{}", result_3[0].text);
     }
 
-    /// 上下文给到天上也不炸。
     #[test]
-    fn 上下文给到天上也不炸() {
-        // ⚠️ `grouped_ops` 内部算 `len > n * 2`：n 给 `usize::MAX` 时那个乘法
-        // 在 debug 构建里会**溢出 panic**（Lua 那边一个数就能捅过来），
-        // 所以 `统一差异` 里夹了一刀。这条钉住"怎么给都不炸"。
+    fn shang_xia_wen_gei_dao_tian_shang_ye_bu_zha() {
         assert_eq!(
-            统一差异("一\n二\n", "一\n改\n", usize::MAX),
+            unified_diff_2("\u{4e00}\n\u{4e8c}\n", "\u{4e00}\n\u{6539}\n", usize::MAX),
             vec![
-                行("hunk", "@@ -1,2 +1,2 @@"),
-                行("ctx", "一"),
-                行("del", "二"),
-                行("add", "改"),
+                xing("hunk", "@@ -1,2 +1,2 @@"),
+                xing("ctx", "\u{4e00}"),
+                xing("del", "\u{4e8c}"),
+                xing("add", "\u{6539}"),
             ]
         );
     }

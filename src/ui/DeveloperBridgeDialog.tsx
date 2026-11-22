@@ -228,7 +228,7 @@ export function DeveloperBridgeStatusRow({
       <strong>{status?.running ? t("Developer bridge is running") : t("Developer bridge is off")}</strong>
       <span>
         {status?.running
-          ? t("Port {0} · {1} active session(s)", String(status.port), String(status.sessions))
+          ? t("Port {0} / {1} active session(s)", String(status.port), String(status.sessions))
           : t("No local developer API is listening.")}
       </span>
       <div>

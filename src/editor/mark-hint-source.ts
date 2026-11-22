@@ -1,9 +1,9 @@
-/**
- * 行内语法节点、序列化与整段源码重建。
- *
- * 主插件只保留光标判断和事务编排；这一份负责“Markdown 源码 ↔ 可见标记”
- * 的无视图转换，便于独立验证，也避免单个文件越过行数硬线。
- */
+
+
+
+
+
+
 
 import { $nodeSchema } from "@milkdown/kit/utils";
 import { TextSelection, type EditorState, type Transaction } from "@milkdown/kit/prose/state";
@@ -24,30 +24,30 @@ import {
   type InlineMarkName,
 } from "./inline-delimiter";
 
-/** 真实语法字符节点上的 class。CSS 见 `src/styles/marks.css`。 */
+
 export const noticeClass = "nota-syntax-marker";
 
-/**
- * 提示哪几种标记、各画什么左右符号。**就这一张表**；本仓自造的高亮 / 上下标 /
- * 下划线从 `inline-marks.ts` 的标记表取源码符号，避免第二份真相源。
- *
- * ⚠️ `名` 是 **schema 里那个 mark 的 id**，不是中文、不是节点名、也**不是
- * Markdown 语法里的名字**。取不到就跳过那一行（`state.schema.marks[名]` 为
- * `undefined`），所以写错名字的症状是"**那一种标记的提示不出现**"，不报错。
- * 2026-09-26 就栽在这儿：斜体那一行写的是 `"em"`，而
- * `@milkdown/preset-commonmark` 里那个 mark 的 id 是 **`"emphasis"`**
- * （见 `node_modules/@milkdown/preset-commonmark` 里 `$markSchema("emphasis", …)`；
- * 本仓 `src/editor/command-state.ts` 早就在用 `有("emphasis")`）。
- * 于是"加粗的 `**` 出来了、斜体的 `*` 怎么都不出来"，悄悄错了一版。
- * 现在有两道防线：`tests/mark-hint.test.ts` 拿**真 preset** 的 id 对一遍，
- * 运行期取不到会 `console.warn`（见 `算提示`）。
- *
- * ⚠️ 每行的左右符号要与 serializer 一致：加粗/斜体为 `**`/`*`，行内代码为
- * 反引号，删除线 `~~`，高亮 `==`，上下标 `^`/`~`，下划线 `<u>`/`</u>`。
- * 左右分开声明，不能假设两边相同。
- *
- * 📌 导出只给 `tests/mark-hint.test.ts` 用（它拿真 preset 的 id 对这张表）。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export const noticeTable: readonly { name3: string; left: string; right: string }[] = [
   { name3: "strong", left: "**", right: "**" },
   { name3: "emphasis", left: "*", right: "*" },
@@ -66,14 +66,14 @@ export interface SyntaxNodeAttribute {
   symbol: string;
 }
 
-/**
- * 临时语法字符节点。
- *
- * 每个星号是一颗独立行内原子节点：它有真实文档位置，光标可以停在任意两颗
- * 星号之间，但它自己**不能承载输入文字**。这一点必须用 atom；带内容的行内
- * 节点会把外层边界的输入吸进星号节点，导致“在右星号后面打字”反而钻进标记。
- * `toMarkdown.runner` 不 `addNode`，所以它不会被重复写回文件。
- */
+
+
+
+
+
+
+
+
 export const inlineSyntaxNodeSpec = $nodeSchema("notaSyntax", () => ({
   inline: true,
   group: "inline",
@@ -117,7 +117,7 @@ export const inlineSyntaxNodeSpec = $nodeSchema("notaSyntax", () => ({
   },
 }));
 
-/** `$nodeSchema` 的两元组必须整份摊平，同其他 schema。 */
+
 export const inlineSyntaxNodePlugins = inlineSyntaxNodeSpec.flat() as unknown as MilkdownPlugin[];
 
 interface InlineSourceSegment {
@@ -601,33 +601,33 @@ export function normalizeInlineBlock(
   return tr;
 }
 
-/**
- * 从 `位置` 往两边扫，找出**连续带这个标记**的那一整段。扫不到返回 `null`。
- *
- * ⚠️ 边界只看**所在的文本块**（`$位.start()` / `$位.end()`）：mark 本来就
- * 不跨块，但 `doc.resolve()` 在块外面也能问出东西来——不夹这个边界的话，
- * 段落末尾的加粗会把下一段的字符也扫进来（两段的 mark 恰好相同时看不出来，
- * 隔着别的块时就是一根跨越块边界的高亮）。
- *
- * ⚠️⚠️ **不要拿 `doc.resolve(p).marks()` 当"第 p 个字符的标记"用。**
- * 它答的是"**在 p 这个位置打字会拿到什么 mark**"，也就是**左边那个字符**的
- * mark，而且在节点边界上还会给出 `undefined`。2026-09-26 的第一版就是这么
- * 写的，无头目检里量出来的症状是**两端的标记都画在全段右移一格的地方**：
- * 加粗的 `一二三四五` 显示成了 `一**二三四五***`（左边那个 `**` 落在第二个
- * 字前面，右边那个落到了段外）。原因是 `marks()` 取的是左邻居：
- *
- * - 在"加粗段的**起点**"那一处问，左边是没加粗的字 → 答"没有" → 左边界
- *   只肯退到 `起点 + 1`（**晚一格**）；
- * - 在"加粗段的**终点**"那一处问，左边是加粗的字 → 答"有" → 右边界
- *   一直走出去（**远一格**）。
- *
- * 所以下面**自己数**：把这一块的行内孩子挨个摊平成一串位置区间，直接问
- * "第 j 个位置落在哪个孩子里、那个孩子带不带这个标记"。行内原子（行内公式、
- * 图片、软换行）各占**一个**位置、一律算"不带标记"——它们本来就不能带 mark。
- *
- * 这段是**线性**的（每个位置都要从后往前扫一遍孩子表），但 n 是"这一块里
- * 行内孩子的个数"，一段文字最多几十个，而且只在光标所在的那一块上跑。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export interface SyntaxMarkerRange {
   from: number;
@@ -647,13 +647,13 @@ export interface ActiveMarkRange {
   rightMarker: SyntaxMarkerRange | null;
 }
 
-/**
- * 找光标当前所在、且与光标相邻的那一段同一行内标记。
- *
- * 与旧的 `scanOneParagraph` 不同，这里的文档允许已经存在真实语法字符。
- * 光标停在 `**|粗体**`、`**粗体|**`、`**粗体**|` 三个位置时都算命中；
- * 只有再向外走进普通正文时，语法字符才会收起。
- */
+
+
+
+
+
+
+
 export function findActiveMarkRange(
   doc: PMNode,
   position2: number,
@@ -662,8 +662,8 @@ export function findActiveMarkRange(
 ): ActiveMarkRange | null {
   const at = doc.resolve(position2);
   let depth = at.depth;
-  // 光标停在临时语法节点的文字里时，`$from.parent` 是 `notaSyntax` 自己；
-  // 真正要找的带格式文本与相邻节点在上一层段落里。
+
+
   while (depth > 0 && at.node(depth).type === syntaxType) depth--;
   const parent = at.node(depth);
   if (!parent.inlineContent) return null;

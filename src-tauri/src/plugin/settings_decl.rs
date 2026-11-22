@@ -1,20 +1,3 @@
-//! `[[settings]]` 那一格：**插件声明、宿主画**的设置（2026-10-04 从 `manifest.rs` 拆出）。
-//!
-//! # 为什么拆
-//!
-//! 这一批（写作统计的 Δt 滑杆）往 `manifest.rs` 里加了 `SettingDecl` 与它的九条测试，
-//! 那份文件顶到 1077 行，而 `.rs` 的硬上限是 1000（`docs/09` §4）。挑中这一截是因为
-//! 它**自己成一个题目**：上面是清单的公共部分（`[plugin]` / `[devserver]` / 能力表），
-//! 这里是"宿主替插件画一格设置"这一件事的全部——结构体、夹紧、校验。`manifest.rs`
-//! 那边只留 `pub use`（老路径 `plugin::manifest::SettingDecl` 照旧能用）。
-//!
-//! # 两处名字里的中文
-//!
-//! ⚠️ `夹紧` / `小数位` 这两个**函数名是中文的，这是有意的**，与
-//! `src-tauri/src/lua/api/settings.rs` 里那批一致：本仓 Rust 侧的中文标识符是允许的
-//! （不许的是 **Lua** 那边，见 `plugins/stats/main.lua` 顶上那条）。它们是**私有**的，
-//! 不出这个模块，所以不会成为一条要读的 API。
-
 use std::path::Path;
 
 use serde::Deserialize;
@@ -23,96 +6,48 @@ use crate::error::{NotaError, Result};
 
 use super::manifest::Capability;
 
-/// 一格设置**此刻的值**——三个档位各一种形状（`SettingDecl::求值` 收出来）。
-///
-/// ⚠️ 它只活在宿主里（`plugin/mod.rs` 把它摊进 `PluginSetting` 那几个平铺字段，
-/// 见那里的注释）：前端拿到的是"按 `kind` 分派之后能直接用"的那一份。
-pub enum 设置值 {
-    数(f64),
-    文(String),
-    开关(bool),
+pub enum SettingsValue {
+    Number(f64),
+    Text(String),
+    Toggle(bool),
 }
-/// `[[settings]]` 段：插件声明"我有一格设置，请宿主画在「设置 → 拓展」那一页上"
-/// （2026-10-04 加）。
-///
-/// # 它是干什么的
-///
-/// 用户 2026-10-04 要求写作统计那个大数字**不再按整整一分钟算**，改成"最近 Δt 秒
-/// 里打了多少字"，而 Δt **要做成一根滑杆放在拓展的设置页上**（1–60 秒，默认 5 秒）。
-/// 于是宿主第一次有了"替插件画一格设置"这件事：插件在清单里声明这一格长什么样、
-/// 什么范围、默认多少，宿主负责画，值写进插件自己那份设置文件
-/// （`~/.config/nota/plugin-settings/<id>.toml`）。
-///
-/// # ⚠️ 它和 `settings.own` 不是一回事
-///
-/// | | 界面谁画 | 值存在哪儿 | 谁写进去 |
-/// |---|---|---|---|
-/// | 有 `[[settings]]` | **宿主**（设置页那一栏） | 插件设置文件 | 用户拖滑杆 → 宿主的命令 |
-/// | 只有 `settings.own` | 插件自己（面板里那套） | 同一个文件 | 插件的 `nota.settings.set` |
-///
-/// AI 插件是第二种（API key 在它自己的面板里填），写作统计现在两种都有。
-/// 两种同时用**不冲突**：文件是同一个，键各是各的。
-///
-/// ⚠️ 写了 `[[settings]]` **必须**同时申请 `settings.own`——宿主写的就是那个文件，
-/// 没申请却让宿主从旁边去写，等于绕过能力表开了一个口子。
-///
-/// # 三种控件：`range` / `text` / `toggle`
-///
-/// ⚠️ **2026-10-10 从一种加到三种**，因为 AI 插件那一批要把自己面板上那几格设置
-/// （API 地址、模型、密钥）**挪进「设置 → 拓展」这个窗口**，而那三格里有两种不是滑杆：
-/// 地址与模型是文本，密钥是文本 ＋ 遮屏。用户当天的原话是「**API等设置专门放一个
-/// 窗口**」——多一种控件比"让插件自己在面板里画"更值得，因为那样设置就散在两个地方。
-/// 加下一种时该动的地方（宿主三处 ＋ 前端两处 ＋ 文档）写在
-/// `docs/11-writing-a-plugin.md` 的「给拓展做一格设置」那一节。
-///
-/// ⚠️ **每一档只认自己那几个字段**（`range` 不许写 `placeholder`，`toggle` 不许写
-/// `min`…）：写错了**在加载时就报**，而不是让用户看着一根"拖不动"或者"值不生效"的
-/// 控件猜。判据在 [`check_settings`] 的第 ③ 条。
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SettingDecl {
-    /// 设置键。规则与 `lua/api/settings.rs::键合法吗` **逐字相同**：不含点的 ASCII 词。
     pub key: String,
-    /// 控件类型。现在只认 `range`（滑杆）。认不出的值**报错**，不静默降级。
+
     #[serde(default = "default_setting_kind")]
     pub kind: String,
-    /// 给人看的名字。**写英语**（清单是英语的，同 `name` / `description`），
-    /// 译文进这个插件的 `lang/<tag>.toml`（键就是这句英语原文）。
+
     pub label: String,
-    /// 名字下面那句小字。同上：英语原文，可翻译。不写就是没有。
+
     #[serde(default)]
     pub help: String,
-    /// `range` 的下界。**`range` 必须给**（一个没有范围的滑杆画不出来）。
+
     #[serde(default)]
     pub min: Option<f64>,
-    /// 上界。同上。
+
     #[serde(default)]
     pub max: Option<f64>,
-    /// 默认值（用户还没拖过的那个值）。同上。
+
     #[serde(default)]
     pub default: Option<f64>,
-    /// 步长。不写是 `1`——整数挡。⚠️ **要小数就得自己写**（`0.05` 那种）：
-    /// 一个 0～1 的滑杆只走整数，是作者第一次试就能看见的东西，不是静默出错。
+
     #[serde(default)]
     pub step: Option<f64>,
-    /// 读数后面跟的那个单位（`s` / `%` / `px`）。⚠️ **不进 i18n**：这几个符号
-    /// 两门语言写出来一个样（同 `ui/usePlugins.ts::大小说明` 那条）。
+
     #[serde(default)]
     pub unit: String,
-    /// `text`：输入框里那句灰字（占位符）。**要翻译**（写英语原文，译文进
-    /// 插件的 `lang/<tag>.toml`）——它是一句话，不是一个符号，与 `unit` 那条不同。
+
     #[serde(default)]
     pub placeholder: String,
-    /// `text`：是不是**密文**（`type = "password"`）。API key 那一格用。
-    ///
-    /// ⚠️ 它**只管显示**，不改存储方式：`plugin-settings/<id>.toml` 是明文的
-    /// （`docs/12` §插件设置为什么不加密）。写成 `true` 挡的是"别人从背后看一眼
-    /// 你的屏幕"，不是"读到了那个文件的人"——两件事别混。
+
     #[serde(default)]
     pub secret: bool,
-    /// `text` 的默认值（用户还没填过时框里显示什么）。不写就是空串。
+
     #[serde(default)]
     pub default_text: Option<String>,
-    /// `toggle` 的默认值。不写就是 `false`（关着）。
+
     #[serde(default)]
     pub default_on: Option<bool>,
 }
@@ -122,32 +57,27 @@ fn default_setting_kind() -> String {
 }
 
 impl SettingDecl {
-    /// 步长（不写就是 1）。
     pub fn step(&self) -> f64 {
         self.step.unwrap_or(1.0)
     }
 
-    /// 这一格**此刻的值**（文件里那个键，按档位收成一种）。
-    ///
-    /// ⚠️ 口径与 [`Self::夹紧`] 同源：**用户手改过那份文件，什么形状都可能**——
-    /// 数的位置躺着 `"五秒"`、文字的位置躺着 `999`、开关的位置躺着 `"1"`
-    /// （老版本 AI 插件存的就是字符串 `"1"` / `"0"`）。三种都**按"没设过"处理**、
-    /// 退回清单里的默认值：一个设置页不该因为一行手改的值画不出来。
-    pub fn 求值(&self, 文件里: Option<&toml::Value>) -> 设置值 {
+    pub fn qiu_value(&self, file_li: Option<&toml::Value>) -> SettingsValue {
         match self.kind.as_str() {
             "text" => {
-                let 从文件 = match 文件里 {
+                let cong_file = match file_li {
                     Some(toml::Value::String(s)) => Some(s.clone()),
                     _ => None,
                 };
-                设置值::文(从文件.or_else(|| self.default_text.clone()).unwrap_or_default())
+                SettingsValue::Text(
+                    cong_file
+                        .or_else(|| self.default_text.clone())
+                        .unwrap_or_default(),
+                )
             }
             "toggle" => {
-                let 从文件 = match 文件里 {
+                let cong_file = match file_li {
                     Some(toml::Value::Boolean(b)) => Some(*b),
-                    // ⚠️ 老 AI 插件把开关存成字符串（`"1"` / `"0"`），而这一格
-                    // 2026-10-10 才搬进设置页。认它一下，用户的旧设置就不会"看着
-                    // 被重置了"——只认这两个值，别的（`"yes"`）仍然当没设过。
+
                     Some(toml::Value::String(s)) => match s.as_str() {
                         "1" | "true" => Some(true),
                         "0" | "false" => Some(false),
@@ -155,245 +85,215 @@ impl SettingDecl {
                     },
                     _ => None,
                 };
-                设置值::开关(从文件.unwrap_or_else(|| self.default_on.unwrap_or(false)))
+                SettingsValue::Toggle(cong_file.unwrap_or_else(|| self.default_on.unwrap_or(false)))
             }
-            // `range` 与"认不出的档位"都走数：认不出的档位在加载时就被挡下了
-            //（见 `check_settings`），所以到这一步只可能是 `range`。
+
             _ => {
-                let 从文件 = match 文件里 {
+                let cong_file = match file_li {
                     Some(toml::Value::Integer(i)) => Some(*i as f64),
                     Some(toml::Value::Float(f)) => Some(*f),
                     _ => None,
                 };
-                设置值::数(self.夹紧(从文件.unwrap_or_else(|| self.default.unwrap_or(0.0))))
+                SettingsValue::Number(
+                    self.jia_jin(cong_file.unwrap_or_else(|| self.default.unwrap_or(0.0))),
+                )
             }
         }
     }
 
-    /// 把前端交上来的一个值收成 TOML 能存的那种，**按档位校验**。
-    ///
-    /// ⚠️ 前端本来就是照着这一格画的控件，正常不会送错形状；但"前端不会乱发"
-    /// 不是一个该被信任的前提（`commands/plugin.rs` 那段注释里说的是同一件事）。
-    /// 送错形状**报错**而不是静默丢弃：那是界面上的一根线接错了，不是用户的操作。
-    pub fn 收值(&self, v: &serde_json::Value) -> Result<toml::Value> {
-        let 不像 =
-            |要: &str| NotaError::other(format!("`{}` 这一格要的是{要}", self.key));
+    pub fn receive_value(&self, v: &serde_json::Value) -> Result<toml::Value> {
+        let bu_xiang =
+            |yao: &str| NotaError::other(format!("Setting `{}` requires {yao}", self.key));
         match self.kind.as_str() {
             "text" => {
-                let s = v.as_str().ok_or_else(|| 不像("一段文本"))?;
-                // ⚠️ 上限 4000 字符：这一格存的是密钥/地址/模型名，而它每敲一键
-                // 就写一次盘（同 `ui/settings/primitives.tsx::TextInput` 那条）。
-                // 一段几万字的文本贴进来多半是贴错了框。
+                let s = v.as_str().ok_or_else(|| bu_xiang("a string"))?;
+
                 if s.chars().count() > 4000 {
-                    return Err(不像("不超过 4000 个字符的一段文本"));
+                    return Err(bu_xiang("a string of at most 4000 characters"));
                 }
                 Ok(toml::Value::String(s.to_owned()))
             }
             "toggle" => {
-                let b = v.as_bool().ok_or_else(|| 不像("开或关"))?;
+                let b = v.as_bool().ok_or_else(|| bu_xiang("a toggle value"))?;
                 Ok(toml::Value::Boolean(b))
             }
             _ => {
-                let n = v.as_f64().ok_or_else(|| 不像("一个数"))?;
-                Ok(toml::Value::Float(self.夹紧(n)))
+                let n = v.as_f64().ok_or_else(|| bu_xiang("a number"))?;
+                Ok(toml::Value::Float(self.jia_jin(n)))
             }
         }
     }
 
-    /// 把用户（可能被手改）的值夹进 `[min, max]` 并按 `step` 对齐。
-    ///
-    /// ⚠️ **夹而不是拒**：这个文件用户可以直接拿编辑器改（`lua/api/settings.rs`
-    /// 的文件头就是这么说的），写进去一个 `999` 或 `"五秒"` 都不该让设置页白屏——
-    /// 与那个文件"读不出来就是空的"是同一条口径。插件那一侧自己还会再夹一次
-    /// （它不能假设宿主一定先跑过）。
-    pub fn 夹紧(&self, v: f64) -> f64 {
+    pub fn jia_jin(&self, v: f64) -> f64 {
         let lo = self.min.unwrap_or(0.0);
         let hi = self.max.unwrap_or(0.0);
         if !v.is_finite() {
             return self.default.unwrap_or(lo);
         }
-        let 夹过 = v.max(lo).min(hi);
+        let jia_guo = v.max(lo).min(hi);
         let step = self.step();
         if step <= 0.0 {
-            return 夹过;
+            return jia_guo;
         }
-        // ⚠️ 按**下界**对齐（不是从 0 起）：`1..60 step 1` 的滑杆上，1 是个合法值，
-        // 而从 0 起对齐会把它推成 0。
-        let n = ((夹过 - lo) / step).round();
-        let 对齐 = lo + n * step;
-        // 浮点乘出来可能是 `5.000000000000001`，四舍五入到 step 的小数位。
-        let 位 = 小数位(step);
-        let 收 = (对齐 * 10f64.powi(位)).round() / 10f64.powi(位);
-        收.max(lo).min(hi)
+
+        let n = ((jia_guo - lo) / step).round();
+        let dui_qi = lo + n * step;
+
+        let wei = xiao_shu_wei(step);
+        let receive_3 = (dui_qi * 10f64.powi(wei)).round() / 10f64.powi(wei);
+        receive_3.max(lo).min(hi)
     }
 }
 
-/// 一个数写出来有几位小数（`1` → 0，`0.05` → 2）。只认到 6 位——再细的步长
-/// 不该出现在一个滑杆上。
-fn 小数位(step: f64) -> i32 {
-    for 位 in 0..=6 {
-        let 放大 = 10f64.powi(位);
-        if (step * 放大).fract().abs() < 1e-9 {
-            return 位;
+fn xiao_shu_wei(step: f64) -> i32 {
+    for wei in 0..=6 {
+        let fang_da = 10f64.powi(wei);
+        if (step * fang_da).fract().abs() < 1e-9 {
+            return wei;
         }
     }
     6
 }
-/// 校验 `[[settings]]` 那一串。
-///
-/// 口径与 [`check_devserver`] 同源：**能挡在门口的就别留到运行时**。
-/// 六条，每条都是"写错了就该当场说，而不是等用户拖一根不会动的滑杆"：
-///
-/// 1. **写了 `[[settings]]` 却没申请 `settings.own`** —— 宿主写的就是那份设置文件，
-///    没申请却从旁边去写，等于绕过能力表开了一个口子。
-///    ⚠️ **反方向不报**：只有 `settings.own`、什么都不声明的插件（git / slidev
-///    那种没有设置可填的）是**正常**的，`docs/11` 那张分工表写着。
-/// 2. **键不合法 / 重复** —— 键的规则与 `lua/api/settings.rs::键合法吗` 一字不差
-///    （不含点的 ASCII 词，点号会让 TOML 把它当成嵌套表）。重复的键会让后一格
-///    悄悄盖掉前一格。
-/// 3. **认不出的 `kind`** —— 静默降级的话，作者写的滑杆会在界面上变成别的东西。
-/// 4. **档位与字段对不上**（2026-10-10 加）—— `toggle` 上写着 `min`、`text` 上写着
-///    `unit` 这种笔误的后果是那个字段**一声不响地不生效**，作者会以为它有用。
-/// 5. **`range` 三件套缺一个** —— 没有范围的滑杆画不出来，没有默认值的滑杆
-///    在用户拖之前没有值可显示。
-/// 6. **`min >= max`、`default` 出界、`step <= 0`** —— 都是"这根滑杆拖不动"。
+
 pub(crate) fn check_settings(
-    串: Vec<SettingDecl>,
+    chuan: Vec<SettingDecl>,
     capabilities: &[Capability],
     file: &Path,
 ) -> Result<Vec<SettingDecl>> {
-    if 串.is_empty() {
-        return Ok(串);
+    if chuan.is_empty() {
+        return Ok(chuan);
     }
 
-    let 报 = |原因: String| NotaError::Manifest {
+    let bao_2 = |reason_2: String| NotaError::Manifest {
         file: file.to_path_buf(),
-        reason: 原因,
+        reason: reason_2,
     };
 
     if !capabilities.contains(&Capability::SettingsOwn) {
-        return Err(报(
-            "写了 `[[settings]]` 却没申请 `settings.own` 能力——\
-             宿主画的那一格写的就是插件自己那份设置文件，这份能力放行的正是它"
+        return Err(bao_2(
+            "`[[settings]]` requires the `settings.own` capability because the rendered control writes the extension's settings file"
                 .to_owned(),
         ));
     }
 
-    let mut 见过的: Vec<&str> = Vec::new();
-    for s in &串 {
-        // ① 键
+    let mut jian_guo_de: Vec<&str> = Vec::new();
+    for s in &chuan {
         if s.key.is_empty() {
-            return Err(报("`[[settings]]` 的 key 不能为空".to_owned()));
+            return Err(bao_2("A `[[settings]]` key cannot be empty".to_owned()));
         }
         if !s
             .key
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
         {
-            return Err(报(format!(
-                "`[[settings]]` 的 key `{}` 不合法：只能用 ASCII 字母、数字、`-`、`_`\
-                 （点号会让 TOML 把它当成嵌套的表，见 `lua/api/settings.rs`）",
+            return Err(bao_2(format!(
+                "Invalid `[[settings]]` key `{}`; use ASCII letters, digits, `-`, and `_`",
                 s.key
             )));
         }
-        if 见过的.contains(&s.key.as_str()) {
-            return Err(报(format!(
-                "`[[settings]]` 里有两格用同一个 key `{}`——后一格会悄悄盖掉前一格",
-                s.key
-            )));
+        if jian_guo_de.contains(&s.key.as_str()) {
+            return Err(bao_2(format!("Duplicate `[[settings]]` key `{}`", s.key)));
         }
-        见过的.push(&s.key);
+        jian_guo_de.push(&s.key);
 
         if s.label.trim().is_empty() {
-            return Err(报(format!("`[[settings]] {}` 没写 label", s.key)));
+            return Err(bao_2(format!(
+                "`[[settings]] {}` is missing a label",
+                s.key
+            )));
         }
 
-        // ② 控件类型：`range` / `text` / `toggle`（2026-10-10 从一种加到三种）。
         if !matches!(s.kind.as_str(), "range" | "text" | "toggle") {
-            return Err(报(format!(
-                "`[[settings]] {}` 的 kind `{}` 认不出：只有 `range`（滑杆）、\
-                 `text`（文本）与 `toggle`（开关）三种，见 docs/11「给拓展做一格设置」",
+            return Err(bao_2(format!(
+                "Unknown `[[settings]] {}` kind `{}`; use `range`, `text`, or `toggle`",
                 s.key, s.kind
             )));
         }
 
-        // ③ **每一档只认自己那几个字段**。
-        //
-        // ⚠️ 这一条是"能挡在门口的就别留到运行时"的直接后果：`toggle` 上写着
-        // `min = 1` 是很自然的一种笔误（从上面那格复制下来忘了删），而它的后果
-        // 是那个字段**一声不响地不生效**——作者会以为这根开关有范围限制。
-        let 不许 = |字段: &str, 为什么: &str| {
-            报(format!(
-                "`[[settings]] {}` 是 `{}`，不该写 `{字段}`（{为什么}）",
+        let bu_xu = |zi_duan: &str, wei_shen_me: &str| {
+            bao_2(format!(
+                "`[[settings]] {}` has kind `{}` and cannot use `{zi_duan}` ({wei_shen_me})",
                 s.key, s.kind
             ))
         };
-        let 有数 = s.min.is_some() || s.max.is_some() || s.default.is_some() || s.step.is_some();
-        let 有文 = s.secret || !s.placeholder.is_empty() || s.default_text.is_some();
-        let 有开关默认 = s.default_on.is_some();
+        let you_shu = s.min.is_some() || s.max.is_some() || s.default.is_some() || s.step.is_some();
+        let you_wen = s.secret || !s.placeholder.is_empty() || s.default_text.is_some();
+        let you_enabled_default = s.default_on.is_some();
         match s.kind.as_str() {
             "range" => {
-                if 有文 {
-                    return Err(不许("secret / placeholder / default_text", "那是 `text` 的"));
+                if you_wen {
+                    return Err(bu_xu(
+                        "secret / placeholder / default_text",
+                        "this field belongs to `text`",
+                    ));
                 }
-                if 有开关默认 {
-                    return Err(不许("default_on", "那是 `toggle` 的"));
+                if you_enabled_default {
+                    return Err(bu_xu("default_on", "this field belongs to `toggle`"));
                 }
             }
             "text" => {
-                if 有数 {
-                    return Err(不许("min / max / default / step", "那是 `range` 的；\
-                        文本没有范围，默认值写 `default_text`"));
+                if you_shu {
+                    return Err(bu_xu(
+                        "min / max / default / step",
+                        "this field belongs to `range`; text settings use `default_text`",
+                    ));
                 }
-                if 有开关默认 {
-                    return Err(不许("default_on", "那是 `toggle` 的"));
+                if you_enabled_default {
+                    return Err(bu_xu("default_on", "this field belongs to `toggle`"));
                 }
                 if !s.unit.is_empty() {
-                    return Err(不许("unit", "文本读数后面没有单位"));
+                    return Err(bu_xu("unit", "Text settings cannot define a unit"));
                 }
             }
-            // `toggle`：只认 `default_on`（`unit` 也不给——开关没有读数）。
+
             _ => {
-                if 有数 {
-                    return Err(不许("min / max / default / step", "那是 `range` 的"));
+                if you_shu {
+                    return Err(bu_xu(
+                        "min / max / default / step",
+                        "this field belongs to `range`",
+                    ));
                 }
-                if 有文 {
-                    return Err(不许("secret / placeholder / default_text", "那是 `text` 的"));
+                if you_wen {
+                    return Err(bu_xu(
+                        "secret / placeholder / default_text",
+                        "this field belongs to `text`",
+                    ));
                 }
                 if !s.unit.is_empty() {
-                    return Err(不许("unit", "开关没有读数"));
+                    return Err(bu_xu("unit", "Toggle settings cannot define a unit"));
                 }
             }
         }
 
-        // ④ `range` 的范围三件套 ＋ 那两个数得讲得通。
         if s.kind == "range" {
-            let (Some(lo), Some(hi), Some(默认)) = (s.min, s.max, s.default) else {
-                return Err(报(format!(
-                    "`[[settings]] {}` 是 `range`，min / max / default 三个都要给\
-                     （少了范围或者默认值的滑杆画不出来）",
+            let (Some(lo), Some(hi), Some(default_2)) = (s.min, s.max, s.default) else {
+                return Err(bao_2(format!(
+                    "`[[settings]] {}` is a `range` and requires min, max, and default",
                     s.key
                 )));
             };
-            if !lo.is_finite() || !hi.is_finite() || !默认.is_finite() {
-                return Err(报(format!("`[[settings]] {}` 的范围里有不是数的值", s.key)));
-            }
-            if lo >= hi {
-                return Err(报(format!(
-                    "`[[settings]] {}` 的 min ({lo}) 不小于 max ({hi})——这根滑杆拖不动",
+            if !lo.is_finite() || !hi.is_finite() || !default_2.is_finite() {
+                return Err(bao_2(format!(
+                    "`[[settings]] {}` has a non-numeric range value",
                     s.key
                 )));
             }
-            if 默认 < lo || 默认 > hi {
-                return Err(报(format!(
-                    "`[[settings]] {}` 的 default ({默认}) 不在 {lo}..{hi} 里",
+            if lo >= hi {
+                return Err(bao_2(format!(
+                    "`[[settings]] {}` has min ({lo}) greater than or equal to max ({hi})",
+                    s.key
+                )));
+            }
+            if default_2 < lo || default_2 > hi {
+                return Err(bao_2(format!(
+                    "`[[settings]] {}` default ({default_2}) is outside {lo}..{hi}",
                     s.key
                 )));
             }
             if let Some(step) = s.step {
                 if !(step > 0.0) || !step.is_finite() || step > hi - lo {
-                    return Err(报(format!(
-                        "`[[settings]] {}` 的 step ({step}) 不合法：要在 0 与 {:.0} 之间",
+                    return Err(bao_2(format!(
+                        "`[[settings]] {}` step ({step}) must be between 0 and {:.0}",
                         s.key,
                         hi - lo
                     )));
@@ -402,32 +302,24 @@ pub(crate) fn check_settings(
         }
     }
 
-    Ok(串)
+    Ok(chuan)
 }
 
-// ── 测试 ─────────────────────────────────────────────────────────────────
-//
-// ⚠️ 这一块 2026-10-04 从 `manifest.rs` 的 `mod tests` 搬过来（同一天那些用例是跟着
-// `[[settings]]` 一起写的）。搬的理由与拆模块那条同源：`manifest.rs` 搬完之后 862 行，
-// 过了 800 那条 WARN 线（`docs/09` §4 的目标区间是 300–800，硬上限 1000）。
-//
-// ⚠️ 它们测的是**清单解析这条整路**（`Manifest::load`），不是 `SettingDecl` 一个人：
-// "写了设置却没申请能力要报错"这类判据只有走到 `load` 才成立。所以下面用的是
-// `manifest::Manifest` 与 `manifest::tests::write_manifest`——测试跟着**它要验的那条
-// 规矩**走（这一格设置），而不是跟着那个函数走。
 #[cfg(test)]
 mod tests {
-    use super::super::manifest::{Manifest, tests::write_manifest};
-    // ── `[[settings]]`（2026-10-04 加）────────────────────────────────────
+    use super::super::manifest::{tests::write_manifest, Manifest};
 
-    /// 写一份"声明了一格设置"的清单，跑一遍解析。
-    fn 带设置的清单(名: &str, 设置段: &str, 能力: &str) -> std::result::Result<Manifest, String> {
-        let dir = std::env::temp_dir().join(format!("nota-manifest-set-{名}"));
+    fn dai_settings_de_manifest(
+        ming: &str,
+        settings_duan: &str,
+        neng_li: &str,
+    ) -> std::result::Result<Manifest, String> {
+        let dir = std::env::temp_dir().join(format!("nota-manifest-set-{ming}"));
         let _ = std::fs::remove_dir_all(&dir);
         write_manifest(
             &dir,
             &format!(
-                "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.3\"\ncapabilities = [{能力}]\n{设置段}"
+                "[plugin]\nid = \"x.y\"\nname = \"X\"\napi = \"v2.3\"\ncapabilities = [{neng_li}]\n{settings_duan}"
             ),
         );
         let r = Manifest::load(&dir.join("plugin.toml")).map_err(|e| e.to_string());
@@ -435,7 +327,7 @@ mod tests {
         r
     }
 
-    const 好设置: &str = r#"
+    const TEST_SETTINGS: &str = r#"
 [[settings]]
 key = "window_seconds"
 kind = "range"
@@ -448,8 +340,8 @@ unit = "s"
 "#;
 
     #[test]
-    fn 声明了设置就解析得出来() {
-        let m = 带设置的清单("good", 好设置, "\"settings.own\"").unwrap();
+    fn declaration_le_settings_jiu_parse_de_chu_lai() {
+        let m = dai_settings_de_manifest("good", TEST_SETTINGS, "\"settings.own\"").unwrap();
         assert_eq!(m.settings.len(), 1);
         let s = &m.settings[0];
         assert_eq!(s.key, "window_seconds");
@@ -458,100 +350,128 @@ unit = "s"
         assert_eq!(s.max, Some(60.0));
         assert_eq!(s.default, Some(5.0));
         assert_eq!(s.unit, "s");
-        // ⚠️ 不写 step 就是 1（整数挡）。写小数步长的作者会当场看见，
-        // 不是静默出错——所以这里钉着那个默认值。
+
         assert_eq!(s.step(), 1.0);
     }
 
-    /// ⚠️ 值要**夹紧并对齐**：用户手改过设置文件之后，界面上的读数和文件里的值
-    /// 本来就可能对不上（`999`、`-3`、`2.7`）。
     #[test]
-    fn 设置的值会夹进范围并对齐步长() {
-        let m = 带设置的清单("clamp", 好设置, "\"settings.own\"").unwrap();
+    fn settings_de_value_hui_jia_jin_fan_wei_bing_dui_qi_bu_zhang() {
+        let m = dai_settings_de_manifest("clamp", TEST_SETTINGS, "\"settings.own\"").unwrap();
         let s = &m.settings[0];
-        assert_eq!(s.夹紧(5.0), 5.0, "范围内的原样");
-        assert_eq!(s.夹紧(999.0), 60.0, "超上界夹到上界");
-        assert_eq!(s.夹紧(-3.0), 1.0, "低于下界夹到下界");
-        assert_eq!(s.夹紧(2.7), 3.0, "步长 1 上对齐到 3");
-        assert_eq!(s.夹紧(2.4), 2.0);
-        // ⚠️ 不是数的（文件里被手改成字符串，读出来给不到这里）走 default。
-        assert_eq!(s.夹紧(f64::NAN), 5.0, "不是数就用默认值");
-        // ⚠️ 按**下界**对齐：`1..60 step 1` 上 1 是合法值，从 0 起对齐会把它推成 0。
-        assert_eq!(s.夹紧(1.0), 1.0);
+        assert_eq!(
+            s.jia_jin(5.0),
+            5.0,
+            "\u{8303}\u{56f4}\u{5185}\u{7684}\u{539f}\u{6837}"
+        );
+        assert_eq!(
+            s.jia_jin(999.0),
+            60.0,
+            "\u{8d85}\u{4e0a}\u{754c}\u{5939}\u{5230}\u{4e0a}\u{754c}"
+        );
+        assert_eq!(
+            s.jia_jin(-3.0),
+            1.0,
+            "\u{4f4e}\u{4e8e}\u{4e0b}\u{754c}\u{5939}\u{5230}\u{4e0b}\u{754c}"
+        );
+        assert_eq!(
+            s.jia_jin(2.7),
+            3.0,
+            "\u{6b65}\u{957f} 1 \u{4e0a}\u{5bf9}\u{9f50}\u{5230} 3"
+        );
+        assert_eq!(s.jia_jin(2.4), 2.0);
+
+        assert_eq!(
+            s.jia_jin(f64::NAN),
+            5.0,
+            "\u{4e0d}\u{662f}\u{6570}\u{5c31}\u{7528}\u{9ed8}\u{8ba4}\u{503c}"
+        );
+
+        assert_eq!(s.jia_jin(1.0), 1.0);
     }
 
-    /// 写了 `[[settings]]` 却没申请 `settings.own` = 宿主去写一个它没被放行的文件。
     #[test]
-    fn 声明了设置却没申请能力要报错() {
-        let err = 带设置的清单("nocap", 好设置, "\"ui.panel\"").unwrap_err();
-        assert!(err.contains("settings.own"), "实际：{err}");
+    fn declaration_le_settings_que_mei_shen_qing_neng_li_yao_bao_cuo() {
+        let err = dai_settings_de_manifest("nocap", TEST_SETTINGS, "\"ui.panel\"").unwrap_err();
+        assert!(
+            err.contains("settings.own"),
+            "\u{5b9e}\u{9645}\u{ff1a}{err}"
+        );
     }
 
-    /// ⚠️ **反方向不报错**：只有 `settings.own`、什么都不声明的插件（AI 那种，
-    /// 设置界面它自己在面板里画）是正常的一种。
     #[test]
-    fn 只有能力不声明设置是正常的() {
-        let m = 带设置的清单("caponly", "", "\"settings.own\"").unwrap();
+    fn zhi_you_neng_li_bu_declaration_settings_shi_zheng_chang_de() {
+        let m = dai_settings_de_manifest("caponly", "", "\"settings.own\"").unwrap();
         assert!(m.settings.is_empty());
     }
 
     #[test]
-    fn 认不出的控件类型要报错() {
-        let 段 = 好设置.replace("kind = \"range\"", "kind = \"slider\"");
-        let err = 带设置的清单("kind", &段, "\"settings.own\"").unwrap_err();
-        assert!(err.contains("slider"), "实际：{err}");
-    }
-
-    /// `range` 少了范围/默认值 = 一根画不出来的滑杆。
-    #[test]
-    fn range_三件套缺一个要报错() {
-        let 段 = 好设置.replace("default = 5\n", "");
-        let err = 带设置的清单("nodefault", &段, "\"settings.own\"").unwrap_err();
-        assert!(err.contains("default"), "实际：{err}");
-
-        let 段 = 好设置.replace("max = 60\n", "");
-        let err = 带设置的清单("nomax", &段, "\"settings.own\"").unwrap_err();
-        assert!(err.contains("min / max / default"), "实际：{err}");
+    fn ren_bu_chu_de_kong_jian_lei_xing_yao_bao_cuo() {
+        let duan = TEST_SETTINGS.replace("kind = \"range\"", "kind = \"slider\"");
+        let err = dai_settings_de_manifest("kind", &duan, "\"settings.own\"").unwrap_err();
+        assert!(err.contains("slider"), "\u{5b9e}\u{9645}\u{ff1a}{err}");
     }
 
     #[test]
-    fn 默认值出界或范围颠倒要报错() {
-        let err = 带设置的清单(
+    fn range_san_jian_tao_que_yi_ge_yao_bao_cuo() {
+        let duan = TEST_SETTINGS.replace("default = 5\n", "");
+        let err = dai_settings_de_manifest("nodefault", &duan, "\"settings.own\"").unwrap_err();
+        assert!(err.contains("default"), "\u{5b9e}\u{9645}\u{ff1a}{err}");
+
+        let duan = TEST_SETTINGS.replace("max = 60\n", "");
+        let err = dai_settings_de_manifest("nomax", &duan, "\"settings.own\"").unwrap_err();
+        assert!(
+            err.contains("requires min, max, and default"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn default_value_chu_jie_huo_fan_wei_dian_dao_yao_bao_cuo() {
+        let err = dai_settings_de_manifest(
             "outofrange",
-            &好设置.replace("default = 5", "default = 99"),
+            &TEST_SETTINGS.replace("default = 5", "default = 99"),
             "\"settings.own\"",
         )
         .unwrap_err();
-        assert!(err.contains("不在"), "实际：{err}");
+        assert!(err.contains("is outside"), "unexpected error: {err}");
 
-        let err = 带设置的清单("inverted", &好设置.replace("max = 60", "max = 0"), "\"settings.own\"")
-            .unwrap_err();
-        assert!(err.contains("不小于"), "实际：{err}");
+        let err = dai_settings_de_manifest(
+            "inverted",
+            &TEST_SETTINGS.replace("max = 60", "max = 0"),
+            "\"settings.own\"",
+        )
+        .unwrap_err();
+        assert!(
+            err.contains("greater than or equal"),
+            "unexpected error: {err}"
+        );
     }
 
-    /// 两格用同一个键 = 后一格悄悄盖掉前一格。
     #[test]
-    fn 设置键重复要报错() {
-        let 段 = format!("{好设置}{好设置}");
-        let err = 带设置的清单("dup", &段, "\"settings.own\"").unwrap_err();
-        assert!(err.contains("同一个 key"), "实际：{err}");
+    fn settings_jian_zhong_fu_yao_bao_cuo() {
+        let duan = format!("{TEST_SETTINGS}{TEST_SETTINGS}");
+        let err = dai_settings_de_manifest("dup", &duan, "\"settings.own\"").unwrap_err();
+        assert!(
+            err.contains("Duplicate `[[settings]]` key"),
+            "unexpected error: {err}"
+        );
     }
 
-    /// 键的规则与 `lua/api/settings.rs` 那条**一字不差**（点号会被 TOML 当成嵌套表）。
     #[test]
-    fn 设置键里有怪字符要报错() {
-        let err = 带设置的清单(
+    fn settings_jian_li_you_guai_zi_fu_yao_bao_cuo() {
+        let err = dai_settings_de_manifest(
             "badkey",
-            &好设置.replace("window_seconds", "window.seconds"),
+            &TEST_SETTINGS.replace("window_seconds", "window.seconds"),
             "\"settings.own\"",
         )
         .unwrap_err();
-        assert!(err.contains("不合法"), "实际：{err}");
+        assert!(
+            err.contains("Invalid `[[settings]]` key"),
+            "unexpected error: {err}"
+        );
     }
 
-    // ── `text` / `toggle` 那两档（2026-10-10 加，AI 插件那几格设置要的）──────
-
-    const 文字与开关: &str = r#"
+    const TEXT_AND_TOGGLE_SETTINGS: &str = r#"
 [[settings]]
 key = "base_url"
 kind = "text"
@@ -572,126 +492,147 @@ default_on = true
 "#;
 
     #[test]
-    fn 文字与开关那两档解析得出来() {
-        let m = 带设置的清单("text-toggle", 文字与开关, "\"settings.own\"").unwrap();
+    fn wen_zi_yu_enabled_na_liang_dang_parse_de_chu_lai() {
+        let m =
+            dai_settings_de_manifest("text-toggle", TEXT_AND_TOGGLE_SETTINGS, "\"settings.own\"")
+                .unwrap();
         assert_eq!(m.settings.len(), 3);
         assert_eq!(m.settings[0].kind, "text");
         assert_eq!(m.settings[0].placeholder, "https://api.openai.com/v1");
         assert!(!m.settings[0].secret);
-        // 不写默认值 = 空串（框里什么都不显示），不是"这一格没有值"。
+
         assert_eq!(m.settings[0].default_text, None);
         assert!(m.settings[1].secret);
         assert_eq!(m.settings[2].kind, "toggle");
         assert_eq!(m.settings[2].default_on, Some(true));
-        // ⚠️ 不写 `default_on` 就是**关着**（同 `on` 那格的口径：开关的默认方向
-        // 一变，用户看到的是"我以为关掉了，它其实开着"）。
+
         assert_eq!(
-            m.settings[0].default_on,
-            None,
-            "只有 toggle 那一档才认它"
+            m.settings[0].default_on, None,
+            "\u{53ea}\u{6709} toggle \u{90a3}\u{4e00}\u{6863}\u{624d}\u{8ba4}\u{5b83}"
         );
     }
 
-    /// ⚠️ **档位与字段对不上要在加载时报**：`toggle` 上写着 `min = 1` 是很自然的
-    /// 一种笔误（从上面那格复制下来忘了删），而它的后果是那个字段一声不响地不生效。
     #[test]
-    fn 档位与字段对不上要报错() {
-        let err = 带设置的清单(
+    fn dang_wei_yu_zi_duan_dui_bu_shang_yao_bao_cuo() {
+        let err = dai_settings_de_manifest(
             "toggle-min",
-            &文字与开关.replace("default_on = true", "default_on = true\nmin = 1"),
+            &TEXT_AND_TOGGLE_SETTINGS.replace("default_on = true", "default_on = true\nmin = 1"),
             "\"settings.own\"",
         )
         .unwrap_err();
-        assert!(err.contains("不该写"), "实际：{err}");
+        assert!(err.contains("cannot use"), "unexpected error: {err}");
 
-        let err = 带设置的清单(
+        let err = dai_settings_de_manifest(
             "text-unit",
-            &文字与开关.replace("label = \"API key\"", "label = \"API key\"\nunit = \"px\""),
+            &TEXT_AND_TOGGLE_SETTINGS
+                .replace("label = \"API key\"", "label = \"API key\"\nunit = \"px\""),
             "\"settings.own\"",
         )
         .unwrap_err();
-        assert!(err.contains("不该写"), "实际：{err}");
+        assert!(err.contains("cannot use"), "unexpected error: {err}");
 
-        // `range` 那一侧同样只认自己那几个：写法照抄上面那格的作者会当场看见。
-        let err = 带设置的清单(
+        let err = dai_settings_de_manifest(
             "range-secret",
-            &好设置.replace("unit = \"s\"", "unit = \"s\"\nsecret = true"),
+            &TEST_SETTINGS.replace("unit = \"s\"", "unit = \"s\"\nsecret = true"),
             "\"settings.own\"",
         )
         .unwrap_err();
-        assert!(err.contains("不该写"), "实际：{err}");
+        assert!(err.contains("cannot use"), "unexpected error: {err}");
     }
 
-    /// 值是怎么读回来的：**按档位收**，而且用户手改过那份文件的形状也要认。
     #[test]
-    fn 三档的值都读得回来() {
-        let m = 带设置的清单("values", &format!("{好设置}{文字与开关}"), "\"settings.own\"")
+    fn san_dang_de_value_dou_read_de_hui_lai() {
+        let m = dai_settings_de_manifest(
+            "values",
+            &format!("{TEST_SETTINGS}{TEXT_AND_TOGGLE_SETTINGS}"),
+            "\"settings.own\"",
+        )
+        .unwrap();
+        let zi_2 = m.settings.iter().find(|s| s.key == "base_url").unwrap();
+        let enabled_2 = m.settings.iter().find(|s| s.key == "stream").unwrap();
+        let hua_gan = m
+            .settings
+            .iter()
+            .find(|s| s.key == "window_seconds")
             .unwrap();
-        let 字 = m.settings.iter().find(|s| s.key == "base_url").unwrap();
-        let 开关 = m.settings.iter().find(|s| s.key == "stream").unwrap();
-        let 滑杆 = m.settings.iter().find(|s| s.key == "window_seconds").unwrap();
 
-        // 文件里没有这个键 → 默认值。
         assert!(matches!(
-            字.求值(None),
-            super::设置值::文(v) if v == ""
+            zi_2.qiu_value(None),
+            super::SettingsValue::Text(v) if v == ""
         ));
-        assert!(matches!(开关.求值(None), super::设置值::开关(true)));
-        assert!(matches!(滑杆.求值(None), super::设置值::数(v) if v == 5.0));
+        assert!(matches!(
+            enabled_2.qiu_value(None),
+            super::SettingsValue::Toggle(true)
+        ));
+        assert!(matches!(hua_gan.qiu_value(None), super::SettingsValue::Number(v) if v == 5.0));
 
-        // ⚠️ 老 AI 插件把那个开关存成字符串 `"1"` / `"0"`——这一格 2026-10-10 才
-        // 搬进设置页，认一下它，用户的旧设置才不会"看着被重置了"。
         assert!(matches!(
-            开关.求值(Some(&toml::Value::String("1".into()))),
-            super::设置值::开关(true)
+            enabled_2.qiu_value(Some(&toml::Value::String("1".into()))),
+            super::SettingsValue::Toggle(true)
         ));
         assert!(matches!(
-            开关.求值(Some(&toml::Value::String("0".into()))),
-            super::设置值::开关(false)
+            enabled_2.qiu_value(Some(&toml::Value::String("0".into()))),
+            super::SettingsValue::Toggle(false)
         ));
-        // 认不出的形状一律**退回默认**（不是报错、也不是悄悄当 false）。
+
         assert!(matches!(
-            开关.求值(Some(&toml::Value::Integer(7))),
-            super::设置值::开关(true)
+            enabled_2.qiu_value(Some(&toml::Value::Integer(7))),
+            super::SettingsValue::Toggle(true)
         ));
         assert!(matches!(
-            字.求值(Some(&toml::Value::Integer(9))),
-            super::设置值::文(v) if v == ""
+            zi_2.qiu_value(Some(&toml::Value::Integer(9))),
+            super::SettingsValue::Text(v) if v == ""
         ));
-        // 手改过的数照样夹进范围（滑杆那条口径没变）。
+
         assert!(matches!(
-            滑杆.求值(Some(&toml::Value::Integer(999))),
-            super::设置值::数(v) if v == 60.0
+            hua_gan.qiu_value(Some(&toml::Value::Integer(999))),
+            super::SettingsValue::Number(v) if v == 60.0
         ));
     }
 
-    /// 前端交上来的值**按档位校验**（形状不对要报错，不是静默丢弃）。
     #[test]
-    fn 收值按档位校验() {
-        let m = 带设置的清单("collect", &format!("{好设置}{文字与开关}"), "\"settings.own\"")
+    fn receive_value_an_dang_wei_xiao_yan() {
+        let m = dai_settings_de_manifest(
+            "collect",
+            &format!("{TEST_SETTINGS}{TEXT_AND_TOGGLE_SETTINGS}"),
+            "\"settings.own\"",
+        )
+        .unwrap();
+        let zi_2 = m.settings.iter().find(|s| s.key == "base_url").unwrap();
+        let enabled_2 = m.settings.iter().find(|s| s.key == "stream").unwrap();
+        let hua_gan = m
+            .settings
+            .iter()
+            .find(|s| s.key == "window_seconds")
             .unwrap();
-        let 字 = m.settings.iter().find(|s| s.key == "base_url").unwrap();
-        let 开关 = m.settings.iter().find(|s| s.key == "stream").unwrap();
-        let 滑杆 = m.settings.iter().find(|s| s.key == "window_seconds").unwrap();
 
         assert_eq!(
-            字.收值(&serde_json::json!("https://x/v1")).unwrap(),
+            zi_2.receive_value(&serde_json::json!("https://x/v1"))
+                .unwrap(),
             toml::Value::String("https://x/v1".into())
         );
-        assert!(字.收值(&serde_json::json!(12)).is_err(), "文本那档不收数");
+        assert!(
+            zi_2.receive_value(&serde_json::json!(12)).is_err(),
+            "\u{6587}\u{672c}\u{90a3}\u{6863}\u{4e0d}\u{6536}\u{6570}"
+        );
         assert_eq!(
-            开关.收值(&serde_json::json!(true)).unwrap(),
+            enabled_2.receive_value(&serde_json::json!(true)).unwrap(),
             toml::Value::Boolean(true)
         );
-        assert!(开关.收值(&serde_json::json!("1")).is_err(), "开关那档不收字符串");
-        // ⚠️ 滑杆那档**夹紧**：前端本来就是从这根滑杆上读的数，但"前端不会乱发"
-        // 不是一个该被信任的前提。
+        assert!(
+            enabled_2.receive_value(&serde_json::json!("1")).is_err(),
+            "\u{5f00}\u{5173}\u{90a3}\u{6863}\u{4e0d}\u{6536}\u{5b57}\u{7b26}\u{4e32}"
+        );
+
         assert_eq!(
-            滑杆.收值(&serde_json::json!(999)).unwrap(),
+            hua_gan.receive_value(&serde_json::json!(999)).unwrap(),
             toml::Value::Float(60.0)
         );
-        // ⚠️ 一段几万字的文本多半是贴错了框（这一格每敲一键就写一次盘）。
-        let 长 = "字".repeat(4001);
-        assert!(字.收值(&serde_json::json!(长)).is_err(), "过长的文本要拒");
+
+        let zhang = "\u{5b57}".repeat(4001);
+        assert!(
+            zi_2.receive_value(&serde_json::json!(zhang)).is_err(),
+            "\u{8fc7}\u{957f}\u{7684}\u{6587}\u{672c}\u{8981}\u{62d2}"
+        );
     }
 }

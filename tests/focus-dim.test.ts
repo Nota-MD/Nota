@@ -118,9 +118,10 @@ testCase("`#[default]` 在 `Standard` 那一档上（不是 Stronger）", () => 
 });
 
 testCase("枚举上有 `rename_all = \"snake_case\"`（否则落盘是 `\"Standard\"`）", () => {
-  const paragraph2 = rust.slice(rust.indexOf("/// **专注模式下非聚焦内容压多暗**"));
-  const toTokenEnumerate = paragraph2.slice(0, paragraph2.indexOf("pub enum FocusDim"));
-  assertValue(/rename_all = "snake_case"/.test(toTokenEnumerate), "那一行 `serde` 属性该在枚举前面");
+  const enumStart = rust.indexOf("pub enum FocusDim");
+  assertValue(enumStart >= 0, "该有 `pub enum FocusDim`");
+  const attributes = rust.slice(Math.max(0, enumStart - 300), enumStart);
+  assertValue(/rename_all = "snake_case"/.test(attributes), "那一行 `serde` 属性该在枚举前面");
 });
 
 testCase("`Appearance` 上有 `focus_mode_dim` 这一格，默认是标准", () => {

@@ -33,7 +33,7 @@ testCase("host accepts lower compatible minors and rejects newer or foreign majo
   const source = readFileSync("src-tauri/src/plugin/manifest.rs", "utf8");
   assert(source.includes("requested.minor <= self.minor"), "minor compatibility is not one-way");
   assert(source.includes("self.major == requested.major"), "major compatibility is not enforced");
-  assert(source.includes('PluginApiVersion::new(2, 3)'), "host API is not v2.3");
+  assert(source.includes('PluginApiVersion::new(2, 4)'), "host API is not v2.4");
 });
 
 testCase("existing incompatible directories stay as red list entries", () => {

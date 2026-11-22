@@ -18,7 +18,7 @@ export const exportTemplate: readonly ExportTemplate[] = [
   { format: "opml", name: "OPML", extension: "opml" },
 ];
 
-/** 「从模板添加」里额外允许新建 PDF；默认自定义列表仍从 Word 开始。 */
+
 export const addableTemplates: readonly ExportTemplate[] = [
   { format: "pdf", name: "PDF", extension: "pdf" },
   ...exportTemplate,
@@ -53,7 +53,7 @@ export function customExportCommand(id: string): string {
   return `file.exportCustom:${id}`;
 }
 
-/** 把一个样式文件转成 pandoc 参数。路径先统一成 `/`，再按 shlex 规则加引号。 */
+
 export function styleStyleTextItemParameter(format: string, path: string): string {
   const clearManage = path.trim();
   if (!clearManage) return "";

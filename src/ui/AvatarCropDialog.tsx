@@ -162,7 +162,7 @@ export function AvatarCropDialog({ source, fileName, onCancel, onConfirm }: Prop
           <output>{Math.round(zoom * 100)}%</output>
         </label>
         <div className="avatar-crop-facts">
-          <span>{t("Round crop · 512 × 512")}</span>
+          <span>{t("Round crop / 512 × 512")}</span>
           <span>{t("Visible: {0}% of the source", geometry.visiblePercent)}</span>
         </div>
         {fileName && <p className="avatar-crop-file" title={fileName}>{fileName}</p>}

@@ -161,7 +161,7 @@ testCase("GitHub and Obsidian callout names and aliases are recognized", () => {
 testCase("公式、Mermaid 与块级 HTML 的处理链仍已接线", () => {
   const installConfigure = read("src", "editor", "assemble.ts");
   const styleStyleEnterMouth = read("src", "main.tsx");
-  assertValue(installConfigure.includes(".use(math.filter("), "缺少公式插件");
+  assertValue(installConfigure.includes(".use(math)"), "缺少公式插件");
   assertValue(installConfigure.includes(".use(diagramView)"), "缺少 Mermaid 图表解析");
   assertValue(installConfigure.includes(".use(blockHTMLSpecPlugin)"), "缺少块级 HTML 节点");
   assertValue(installConfigure.includes(".use(gitHubNoticePlugin)"), "缺少 GitHub Alert 装饰");

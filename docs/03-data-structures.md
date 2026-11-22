@@ -1230,7 +1230,7 @@ names`——静态看代码完全看不出来（`docs/07` BUG-3）。
 | 文件 | 回答的问题 | 代码 |
 |---|---|---|
 | `plugins.toml` | **这台机器上**：哪些插件开着、当初装进来时验签验出了什么 | `plugin/installed.rs::Installed` |
-| `trusted-keys.toml` | **谁签的算数**：我信任哪几把签名公钥（TOFU） | `plugin/trust.rs::信任库`（2026-09-29 从 `plugin/package.rs` 拆出） |
+| `trusted-keys.toml` | TOFU trust store for signing keys | `plugin/trust.rs::TrustStore` |
 
 #### ① `plugins.toml`
 
@@ -1295,7 +1295,7 @@ added_at = "2026-09-25"
 "方便人看"——验签时会拿公钥**重算一遍再对比**，对不上就拒。否则改一个
 `key_id` 就能冒充别人已经信任的那把钥匙。
 
-⚠️ **坏掉的信任库当空表**（`从文本` 里 `unwrap_or_default`）：它不该让应用打不开。
+⚠️ A broken trust store is treated as empty (`TrustStore::from_text` uses `unwrap_or_default`).
 同理 `plugins.toml` 读不了就当没记过——这条降级是安全的（回到按构建档的默认值）。
 
 ---
@@ -1303,10 +1303,10 @@ added_at = "2026-09-25"
 ## 8. `NOTA_PLUGIN_API_VERSION`
 
 ```rust
-pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 3);
+pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 4);
 ```
 
-The current version is `v2.3`. Plugins must use the same major version and may
+The current version is `v2.4`. Plugins must use the same major version and may
 request an older or equal minor version. Legacy integer `api = 2` is read as
 `v2.0`.
 
@@ -1488,7 +1488,7 @@ request an older or equal minor version. Legacy integer `api = 2` is read as
 | `image::做了` | `export type ImageDid` | `"kept" \| "copied" \| "downloaded" \| "written" \| "existing"`。⚠️ **这里只有事实，句子在前端拼**（宿主不替界面决定用什么语言、怎么说）——所以两边不一致时症状不是报错，是**界面上少一句解释** |
 
 ⚠️ `NotaError::Read` / `Write` 里那个 `{source}`（`std::io::Error`）**不直接显示**：
-先过一道 `error.rs` 的 `人话()`，把 `NotFound` / `PermissionDenied` / `InvalidData` /
+Pass through `error.rs::io_message()`, which handles `NotFound` / `PermissionDenied` / `InvalidData` /
 `IsADirectory` / `AlreadyExists` / `StorageFull` 翻成中文，**没见过的 kind 原样透出**
 （那句英文虽然夹生，但它说的是到底哪儿不对；换成一句笼统的"读文件失败"等于把线索丢了）。
 起因是打开一个非 UTF-8 文件时界面上弹的是 "stream did not contain valid UTF-8"。
@@ -1506,6 +1506,24 @@ Shift_JIS、UTF-16 等不再被强行当 UTF-8；编码名也会在状态栏统�
 `Serialize` 派生），两边一致由 serde 保证——这正是"改成拉"时一并修掉的一处隐患。
 
 ---
+
+## 10A. Table bridge state (API v2.4)
+
+| Shape | Meaning |
+|---|---|
+| `TableSnapshot` | Document id, stable table id, source cells, selected range and active cell |
+| `TableRender` | Temporary extension-owned display values keyed by A1 references |
+| `TableCellUpdate` | Zero-based row/column plus replacement source text |
+| `TableWriteRequest` | Plugin id, document id, table id and one batch of cell updates |
+| `TableAction` | Localized context-menu label and the plugin command it invokes |
+
+`AppState.table_bridge` is an `Arc<Mutex<TableBridge>>`. Plugin callbacks may
+hold the `plugins` lock before taking this lock; no path acquires them in the
+opposite order.
+
+`PluginRecord.setting_backups` stores the value the user had before an active
+extension acquired `editor.spreadsheet_tables`. Disable, uninstall or turning
+off all extensions restores and clears that backup.
 
 ## 11. 已知缺陷与容易踩的坑
 

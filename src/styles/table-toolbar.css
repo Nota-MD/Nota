@@ -1,4 +1,4 @@
-/* 当前表格上方的浮动快捷栏。列宽拖动已移除，这里只做结构操作。 */
+
 
 .table-toolbar {
   position: fixed;
@@ -149,6 +149,58 @@
   text-align: center;
 }
 
+.sheet-formula-input-shell {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.sheet-formula-highlight {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0 8px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: inherit;
+  line-height: 1;
+  white-space: pre;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.sheet-formula-token {
+  white-space: pre;
+}
+
+.sheet-formula-plain {
+  color: var(--fg);
+}
+
+.sheet-formula-function {
+  color: color-mix(in srgb, var(--accent) 78%, var(--fg));
+  font-weight: 600;
+}
+
+.sheet-formula-reference {
+  color: var(--sheet-range-tone);
+  font-weight: 600;
+}
+
+.sheet-tone-0 { --sheet-range-tone: #5f8ced; }
+.sheet-tone-1 { --sheet-range-tone: #eb5e60; }
+.sheet-tone-2 { --sheet-range-tone: #8d61c2; }
+.sheet-tone-3 { --sheet-range-tone: #2d9639; }
+.sheet-tone-4 { --sheet-range-tone: #bf4c91; }
+.sheet-tone-5 { --sheet-range-tone: #e38222; }
+.sheet-tone-6 { --sheet-range-tone: #377f9e; }
+
 .sheet-formula-bar input {
   position: relative;
   z-index: 1;
@@ -157,17 +209,22 @@
   box-sizing: border-box;
   padding: 0 8px;
   border: 0;
-  border-left: 1px solid var(--border);
   outline: 0;
-  background: var(--bg);
+  background: transparent;
   color: var(--fg);
+  caret-color: var(--accent);
   font-family: var(--font-mono);
   pointer-events: auto;
 }
 
-.sheet-formula-bar input:focus {
+.sheet-formula-input-shell:focus-within {
   background: var(--bg-raised);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.sheet-formula-bar input::selection {
+  color: transparent;
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
 .sheet-header {
@@ -191,8 +248,23 @@
 .sheet-header:hover,
 .sheet-header:focus-visible,
 .sheet-header.is-selected {
-  background: color-mix(in srgb, var(--accent) 18%, var(--bg-raised));
-  color: var(--accent);
+  background: var(
+    --nota-sheet-selection-bg,
+    color-mix(in srgb, var(--accent) 24%, var(--bg-raised))
+  );
+  color: var(--nota-selection-ink, var(--accent));
+}
+
+.editor-pane .editor-mount .ProseMirror table :is(td, th).nota-sheet-range {
+  background: var(
+    --nota-sheet-selection-bg,
+    color-mix(in srgb, var(--accent) 28%, transparent)
+  ) !important;
+  color: var(--nota-selection-ink, inherit) !important;
+}
+
+.editor-pane .editor-mount .ProseMirror table :is(td, th).nota-sheet-range * {
+  color: inherit !important;
 }
 
 .sheet-column-header {
@@ -207,9 +279,53 @@
   position: fixed;
   z-index: var(--z-editor-widget, 24);
   box-sizing: border-box;
-  border: 2px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border: 2px solid var(--nota-selection-outline, var(--accent));
+  background: color-mix(
+    in srgb,
+    var(--nota-sheet-selection-bg, var(--accent)) 40%,
+    transparent
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--nota-selection-outline, var(--accent)) 35%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--bg-raised) 72%, transparent);
   pointer-events: none;
+}
+
+.sheet-reference-box {
+  position: fixed;
+  z-index: var(--z-editor-widget, 24);
+  box-sizing: border-box;
+  border: 1.5px solid var(--sheet-range-tone);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--sheet-range-tone) 8%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sheet-range-tone) 24%, transparent);
+  pointer-events: none;
+}
+
+.sheet-reference-box.is-range {
+  border-style: dashed;
+}
+
+.sheet-computed-value {
+  position: fixed;
+  z-index: var(--z-editor-widget, 24);
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: var(--nota-result-ink, var(--fg));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.sheet-computed-value.is-selected {
+  color: var(--nota-selection-ink, var(--fg));
+}
+
+.sheet-computed-value.is-error {
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .sheet-fill-handle {
@@ -226,4 +342,45 @@
   box-shadow: 0 0 0 1px var(--accent);
   cursor: crosshair;
   pointer-events: auto;
+}
+
+.ProseMirror td.nota-sheet-computed:not(.nota-sheet-range),
+.ProseMirror th.nota-sheet-computed:not(.nota-sheet-range) {
+  position: relative;
+}
+
+td.nota-sheet-computed:not(.nota-sheet-range) > *,
+th.nota-sheet-computed:not(.nota-sheet-range) > * {
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+td.nota-sheet-computed:not(.nota-sheet-range),
+th.nota-sheet-computed:not(.nota-sheet-range) {
+  color: transparent !important;
+  text-shadow: none !important;
+}
+
+td.nota-sheet-computed:not(.nota-sheet-range)::after,
+th.nota-sheet-computed:not(.nota-sheet-range)::after {
+  content: attr(data-nota-sheet-value);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: inherit;
+  box-sizing: border-box;
+  overflow: hidden;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1;
+}
+
+td.nota-sheet-error::after,
+th.nota-sheet-error::after {
+  color: var(--danger);
+  font-weight: 600;
 }

@@ -1,29 +1,3 @@
-//! `nota.document` —— 读写当前文档。
-//!
-//! 读的方法要 `document.read`，写的要 `document.write`；两者各自装表，
-//! 只申请了读的插件拿到的 `nota.document` 上**没有** `set_text` 这一格。
-//!
-//! # 两条路：整篇换掉，和请编辑器替你改一处
-//!
-//! **`set_text` / `append_text` 是"整篇替换"**：改的是后端镜像，
-//! **前端编辑器不会自己知道**。所以每次写完都往 `nota:document-changed` 发一条
-//! 事件，前端收到就把编辑器内容换掉、光标落到合理位置。这条链路见
-//! `docs/05-editor-bridge.md` §4.8。
-//!
-//! ⚠️ 整篇替换的代价：撤销栈断掉、光标跳走、表格列宽之类的排版状态全丢。
-//! 用它做"在光标处插一句"是拿大炮打蚊子。
-//!
-//! **`insert_at_cursor` 是"请编辑器替你改一处"**（第 14 项加）：宿主只往
-//! `nota:document-edit` 上发一条**意图**，由前端拿一次真正的 ProseMirror 事务
-//! 去落地——撤销栈、光标、滚动位置全都活着。
-//!
-//! ⚠️ **插件拿不到光标偏移量，这是故意的**。`get_selection` 给的是**选中的那段字**
-//! （`{ text, empty }`），不是 `{ from, to }`。原因在 `src/editor/caret-snapshot.ts`
-//! 的文件头，一句话：**"Markdown 字符偏移"这个坐标系在块边界上不存在**——
-//! 在列表项开头插字，Markdown 会多出一个 `- `；在两个段落之间插字，会多出一个空行。
-//! 收偏移量的插件一定会拿它去拼字符串，然后拼出一份跟编辑器真实结果**不一样**的
-//! 稿子。想改正文就用 [`insert_at_cursor`]，别自己拼。
-
 use mlua::{Lua, Table};
 use regex::Regex;
 use std::sync::LazyLock;
@@ -38,7 +12,6 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
     let can_read = manifest.has(Capability::DocumentRead);
     let can_write = manifest.has(Capability::DocumentWrite);
 
-    // ── 读 ────────────────────────────────────────────────────────────────
     if can_read {
         let docs = ctx.documents.clone();
         let get_text = lua
@@ -85,74 +58,38 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
             .map_err(mlua_to_nota)?;
         t.set("is_dirty", is_dirty).map_err(mlua_to_nota)?;
 
-        // ── stats：一份"现在多大、多久了"的快照（2026-09-26 加）─────────────
-        //
-        // 为「写作统计」加的（`plugins/stats`）：它要算**每分钟打了多少**，
-        // 而那需要两样东西——**长度**和一个**时刻**。长度这一侧本来就能拿
-        // （`get_text` 之后自己数），可**时刻**这一侧沙箱里根本没有：
-        // 标准库里没有 `os`（`lua/mod.rs` 的硬化名单里抹掉了），
-        // 所以插件拿不到任何形式的时间（`docs/13` §13.3a 那句"插件拿不到时间"
-        // 就是这个意思）。把这一条补在这里，而不是给沙箱开一个 `os.time`：
-        // 开了 `os` 就同时开出了 `os.exit`（`docs/12` §6 那张表）和
-        // `os.remove`/`os.execute` 那一串，代价远不止一个时间戳。
-        //
-        // ⚠️ `clock_ms` 是**单调时钟**（自 Nota 启动起算的毫秒，`Instant` 出身），
-        // **不是墙上时间**：插件要的从来只是"两次之间差了多少"，而墙上时间
-        // 会被对表、时区、夏令时拨来拨去（差值甚至能是负的，画出来的曲线会往回跑）。
-        // 名字刻意**不叫 `now`**——那会让人以为能拿去显示"现在几点"。
-        //
-        // ⚠️ 数的是**后端这份镜像**，也就是前端 `nota_doc_sync` 推上来的那一份，
-        // 不是磁盘上的文件（同上面 `get_text`，两者在没存盘时本来就不一样）。
-        // 它也不是"绝对实时"：前端那条路有 500ms 防抖（`EditorPane.tsx`），
-        // 所以这个数最多落后半秒。对"每秒采样一次"的用法完全够。
         let docs = ctx.documents.clone();
         let stats = lua
             .create_function(move |lua, ()| {
                 let store = docs.lock().unwrap();
-                // ⚠️ 借 `store` 的那几行全部在这一段里做完（出来的都是自有值），
-                // 下面 `drop` 之后不再碰它——同上面 `set_text` 那条的形状。
-                let (文本, 版本, 路径) = match store.active() {
+
+                let (text_2, ban_ben, path_3) = match store.active() {
                     Some(d) => (d.text.clone(), d.revision, d.path_string()),
                     None => (String::new(), 0, None),
                 };
                 drop(store);
 
                 let t = lua.create_table()?;
-                // ⚠️ **码点**（`chars()`），与状态栏那个「N 字符」同一个口径
-                // （前端是 `[...text].length`，`ui/outline.ts::countText`）。
-                // ⚠️ 不是字节、也不是 UTF-16 单元：一份中文文档如果按字节数，
-                // 数字会是显示值的三倍，"字/分钟"直接变成另一个量级。
-                t.set("chars", 文本.chars().count())?;
-                // ⚠️ 「字/词」数（2026-09-27 加，用户点名「**如果是英文的话要统计词**」）：
-                // `chars` 那条口径对中文是对的、对英文是**错的**——`hello` 会被数成
-                // 5 个字，写一句英文的读数能虚高四五倍。规则见 `word_count`。
-                t.set("words", word_count(&文本))?;
+
+                t.set("chars", text_2.chars().count())?;
+
+                t.set("words", word_count(&text_2))?;
                 t.set(
                     "lines",
-                    if 文本.is_empty() {
+                    if text_2.is_empty() {
                         0
                     } else {
-                        文本.split('\n').count()
+                        text_2.split('\n').count()
                     },
                 )?;
-                t.set("revision", 版本)?;
-                t.set("path", 路径)?;
-                t.set("clock_ms", 单调毫秒())?;
+                t.set("revision", ban_ben)?;
+                t.set("path", path_3)?;
+                t.set("clock_ms", dan_diao_hao_miao())?;
                 Ok(t)
             })
             .map_err(mlua_to_nota)?;
         t.set("stats", stats).map_err(mlua_to_nota)?;
 
-        // ── get_selection：用户现在选着哪段字（第 14 项，2026-10-04 加）───────
-        //
-        // ⚠️ 返回 `{ text, empty }`，**没有偏移量**——理由见文件头那一段，
-        // 简单说就是偏移量在块边界上不可换算，给了就一定会被拿去拼错。
-        //
-        // ⚠️ **没选区时返回 `nil`，不是空表**。这两件事不一样：
-        // * `nil` = "编辑器还没报过"（刚打开、或没挂编辑器）——"我不知道"；
-        // * `{ text = "", empty = true }` = "我知道，光标是个点、没选东西"。
-        // 让插件能分清"不知道"和"知道是空的"，它才能决定要不要退回
-        // `get_text()` 自己算。用空表代替 `nil` 就把这两种情况糊成一种了。
         let docs = ctx.documents.clone();
         let get_selection = lua
             .create_function(move |lua, ()| {
@@ -160,14 +97,13 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
                 let Some(d) = store.active() else {
                     return Ok(mlua::Value::Nil);
                 };
-                let Some(快照) = d.选区.as_ref() else {
+                let Some(snapshot_2) = d.xuan_qu.as_ref() else {
                     return Ok(mlua::Value::Nil);
                 };
                 let t = lua.create_table()?;
-                t.set("text", 快照.text.clone())?;
-                // ⚠️ `empty` 不能靠 `text == ""` 推：选中一张图片或一个公式时
-                // `text` 也是空的，但选区**不是**空的（见 `document::选区快照`）。
-                t.set("empty", 快照.empty)?;
+                t.set("text", snapshot_2.text.clone())?;
+
+                t.set("empty", snapshot_2.empty)?;
                 Ok(mlua::Value::Table(t))
             })
             .map_err(mlua_to_nota)?;
@@ -175,7 +111,6 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
             .map_err(mlua_to_nota)?;
     }
 
-    // ── 写 ────────────────────────────────────────────────────────────────
     if can_write {
         let docs = ctx.documents.clone();
         let app = ctx.app.clone();
@@ -213,18 +148,6 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
             .map_err(mlua_to_nota)?;
         t.set("append_text", append_text).map_err(mlua_to_nota)?;
 
-        // ── insert_at_cursor：请编辑器在光标处插一段（第 14 项，2026-10-04 加）─
-        //
-        // ⚠️ 这里**一个字都不改镜像**。发出去的是一条**意图**（`nota:document-edit`），
-        // 落地的人是前端编辑器。所以：
-        // * 返回 `false` 不代表失败，代表"我发出去了"——真正插没插进去，
-        //   插件**这一瞬间无从知道**（编辑器可能没挂、可能用户已经切走了文档）。
-        //   想确认就下一次 `get_text()` 里找。
-        // * `text` 是空串时直接返回 `false`、连事件都不发：空插入在 PM 里是
-        //   一次空事务，前端那边会白跑一趟，不如这里挡掉。
-        //
-        // ⚠️ 跟 `set_text` 不同，**这里不碰 `revision`**。镜像没变，正文是编辑器
-        // 稍后通过 `nota_doc_sync` 推上来的那一份变的——到那时候 `revision` 才动。
         let docs = ctx.documents.clone();
         let app = ctx.app.clone();
         let insert_at_cursor = lua
@@ -232,8 +155,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
                 if text.is_empty() {
                     return Ok(false);
                 }
-                // ⚠️ 取完 `id` 就把锁放掉再发事件（同上面 `set_text` 的形状）：
-                // 发事件会走到前端，前端那边可能反过来再调一条要拿这把锁的命令。
+
                 let id = {
                     let store = docs.lock().unwrap();
                     match store.active_id() {
@@ -252,32 +174,22 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
     Ok(t)
 }
 
-/// 自 Nota 启动起算的毫秒数。**单调**：对表、改时区、夏令时都动不了它。
-///
-/// ⚠️ `OnceLock` 而不是"每次现取一个 `Instant::now` 当零点"：那样两次调用
-/// 的零点不一样，减出来的差值毫无意义。起点必须**全进程只有一份**。
-///
-/// ⚠️ 为什么不用 `SystemTime`（墙钟）：见 `stats` 里那段——插件要的是差值，
-/// 而墙钟会被拨回去，差值能是负的。
-fn 单调毫秒() -> u64 {
-    static 起点: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
-    // `as_millis` 是 u128：这个进程要跑满 u64 毫秒（≈5.8 亿年）才需要担心截断。
-    起点
+fn dan_diao_hao_miao() -> u64 {
+    static QI_DIAN: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+
+    QI_DIAN
         .get_or_init(std::time::Instant::now)
         .elapsed()
         .as_millis() as u64
 }
 
-/// Match Typora's word counter, including its CJK ranges and punctuation rules.
-///
-/// The frontend counter uses the same four regular expressions. Keeping the
-/// backend in step matters because Writing Stats reads `stats().words`.
 fn word_count(text: &str) -> usize {
     static CJK: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"[\u{3040}-\u{ABFF}\u{D7A4}-\u{FAFF}]").expect("valid CJK word range")
+        Regex::new(r"[\x{3040}-\x{ABFF}\x{D7A4}-\x{FAFF}]").expect("valid CJK word range")
     });
-    static APOSTROPHE_WORD: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"['’][A-Za-z0-9_]+").expect("valid apostrophe word pattern"));
+    static APOSTROPHE_WORD: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new("['\u{2019}][A-Za-z0-9_]+").expect("valid apostrophe word pattern")
+    });
     static STANDALONE_PUNCTUATION: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
             r"(?m)(^|\s+)[\u{3000}-\u{303F}\x{21}-\x{2F}\x{3A}-\x{40}\x{5B}-\x{60}\x{7B}-\x{7E}]+(\s+|$)",
@@ -301,11 +213,6 @@ fn word_count(text: &str) -> usize {
     cjk + WORD_SEPARATOR.split(&framed).count() - 2
 }
 
-/// 把"文档被插件改了"告诉前端。
-
-///
-/// 事件名与宿主自己的 `nota:document-changed` 一致——**前端不必区分**
-/// 是插件改的还是别处改的，反正都是"后端这份跟你的不一致了，来拿"。
 fn emit_changed(app: &tauri::AppHandle, id: crate::document::DocId, text: &str) {
     use tauri::Emitter;
     let _ = app.emit(
@@ -318,15 +225,6 @@ fn emit_changed(app: &tauri::AppHandle, id: crate::document::DocId, text: &str) 
     );
 }
 
-/// 把"请替我在光标处插一段"这条**意图**告诉前端（第 14 项）。
-///
-/// ⚠️ 跟上面 [`emit_changed`] 是**反方向**的两件事，别照着这个改那个：
-/// `changed` 是"我已经改完了、这是新的"；本函数是"我改不了、你来"。
-/// 判据写在 `crate::document::EVENT_EDIT` 上。
-///
-/// ⚠️ `op` 这一格是留给以后的（替换选区、包围选区……）。现在只有
-/// `"insert-at-cursor"` 一种，但**不在前端按"只有一种"来写**：前端拿到不认识的
-/// `op` 要静默丢掉、而不是拿 `text` 硬当插入用。
 fn emit_edit(app: &tauri::AppHandle, id: crate::document::DocId, text: &str) {
     use tauri::Emitter;
     let _ = app.emit(
@@ -344,29 +242,31 @@ mod tests {
     use super::word_count;
 
     #[test]
-    fn 中文按字算() {
-        assert_eq!(word_count("你好"), 2);
-        assert_eq!(word_count("你好，世界。"), 5);
+    fn zhong_wen_an_zi_suan() {
+        assert_eq!(word_count("\u{4f60}\u{597d}"), 2);
+        assert_eq!(
+            word_count("\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}\u{3002}"),
+            5
+        );
     }
 
     #[test]
-    fn 英文按词算而不是按字母() {
-        // ⚠️ 这一条就是用户报的那件事：按 `chars` 会是 13，读完读数是虚的。
+    fn ying_wen_an_ci_suan_er_bu_shi_an_zi_mu() {
         assert_eq!(word_count("Hello, world!"), 2);
         assert_eq!(word_count("a b c"), 3);
     }
 
     #[test]
-    fn 撇号与连字符都不断词() {
+    fn pie_hao_yu_lian_zi_fu_dou_bu_duan_ci() {
         assert_eq!(word_count("don't"), 1);
         assert_eq!(word_count("well-known"), 1);
-        // 孤立的一个撇号自己不成词（两边没有字母）。
+
         assert_eq!(word_count("'"), 0);
         assert_eq!(word_count("a ' b"), 2);
     }
 
     #[test]
-    fn 空白与_ascii_标点不计数() {
+    fn kong_bai_yu_ascii_biao_dian_bu_ji_shu() {
         assert_eq!(word_count("  \n\t  "), 0);
         assert_eq!(word_count("..."), 0);
         assert_eq!(word_count(""), 0);
@@ -374,17 +274,18 @@ mod tests {
     }
 
     #[test]
-    fn 中英混排各按自己的规则() {
-        // `abc` 一个词 ＋ `中文` 两个字。
-        assert_eq!(word_count("abc中文"), 3);
-        // 汉字**打断**一段字母：`写` 两侧的 `abc` / `def` 是两个词（＋`写` 自己）。
-        assert_eq!(word_count("abc写def"), 3);
+    fn zhong_ying_hun_pai_ge_an_zi_ji_de_rule() {
+        assert_eq!(word_count("abc\u{4e2d}\u{6587}"), 3);
+
+        assert_eq!(word_count("abc\u{5199}def"), 3);
     }
 
     #[test]
-    fn 换行与空格在中文里也不计数() {
-        // 打字机每敲一次回车都会让 `chars` 涨一，词数不该跟着涨。
-        assert_eq!(word_count("第一段\n\n第二段"), 6);
+    fn huan_xing_yu_kong_ge_zai_zhong_wen_li_ye_bu_ji_shu() {
+        assert_eq!(
+            word_count("\u{7b2c}\u{4e00}\u{6bb5}\n\n\u{7b2c}\u{4e8c}\u{6bb5}"),
+            6
+        );
     }
 
     #[test]

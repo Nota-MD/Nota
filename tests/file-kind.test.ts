@@ -33,14 +33,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
-  mARKDOWNExtension,
+  markdownExtensions,
   extension,
   isLargeTextItem,
   actualMode,
   largeTextItemThresholdValue,
   isMarkdownExtension,
   recognizeTextItemType,
-  LowerLevelReason,
+  lowerLevelReason,
 } from "@/editor/file-kind";
 
 /* ── 一支极小的测试工装（与 `auto-correct.test.ts` 同一套长相）── */
@@ -98,11 +98,11 @@ function readHostExtensionTable(): string[] {
   return output2;
 }
 
-testCase("⚠️ `MARKDOWN后缀` 必须与 `commands/workspace.rs::is_markdown` 一字不差", () => {
+testCase("⚠️ `markdownExtensions` 必须与 `commands/workspace.rs::is_markdown` 一字不差", () => {
   // ⚠️ 对不上的症状：文件树里**不列**这一类文件（宿主那头说它不是 markdown），
   // 而拖进来、写进「打开」对话框里又能开——同一份文件两处口径不一样。
   equal(
-    [...mARKDOWNExtension].sort().join(","),
+    [...markdownExtensions].sort().join(","),
     readHostExtensionTable().sort().join(","),
     "两边的 Markdown 后缀单子",
   );
@@ -125,8 +125,8 @@ testCase("`ui/useFileDrop.ts` 与 `ui/useDocuments.ts` 都得**引**这张表，
   // 字"：`useFileDrop.ts` 里还有一张更宽的 `文本后缀`（`.json` `.toml` …），
   // 它回答的是**另一个问题**（能不能当文本文档打开），那一条**本来就该在**。
   for (const [textItem, name2] of [
-    ["useFileDrop.ts", "是Markdown后缀"],
-    ["useDocuments.ts", "MARKDOWN后缀"],
+    ["useFileDrop.ts", "isMarkdownExtension"],
+    ["useDocuments.ts", "markdownExtensions"],
   ] as const) {
     const source3 = readFileSync(join("src", "ui", textItem), "utf8");
     if (!source3.includes(`from "@/editor/file-kind"`) || !source3.includes(name2)) {
@@ -159,8 +159,8 @@ testCase("没有后缀、或者点在目录里，都给空串", () => {
   equal(extension(""), "", "空串");
 });
 
-testCase("`是Markdown后缀` 认那六种，别的一律不认", () => {
-  for (const tail of mARKDOWNExtension) {
+testCase("`isMarkdownExtension` 认那六种，别的一律不认", () => {
+  for (const tail of markdownExtensions) {
     equal(isMarkdownExtension(`x.${tail}`), true, `.${tail}`);
     equal(isMarkdownExtension(`x.${tail.toUpperCase()}`), true, `.${tail} 大写`);
   }
@@ -174,35 +174,35 @@ testCase("`是Markdown后缀` 认那六种，别的一律不认", () => {
 group("三、降级缘由（先看名字，再看大小）");
 
 testCase("Markdown 且不大 → 不降级", () => {
-  equal(LowerLevelReason("/a/稿子.md", 1000), null, "正常的 Markdown");
+  equal(lowerLevelReason("/a/稿子.md", 1000), null, "正常的 Markdown");
 });
 
 testCase("不是 Markdown → `text`（跟大小无关）", () => {
   // ⚠️ 小文件也要降级：一个 200 字节的 `.py` 拿 CommonMark 去读照样是错的。
-  equal(LowerLevelReason("/a/foo.py", 200), "text", "小 .py");
-  equal(LowerLevelReason("/a/foo.py", largeTextItemThresholdValue + 1), "text", "大 .py 也报 text 而不是 large");
+  equal(lowerLevelReason("/a/foo.py", 200), "text", "小 .py");
+  equal(lowerLevelReason("/a/foo.py", largeTextItemThresholdValue + 1), "text", "大 .py 也报 text 而不是 large");
 });
 
 testCase("⚠️ 两条缘由的**优先级**：不是 Markdown 就报 `text`，不报 `large`", () => {
   // ⚠️ 顺序反过来的症状：拖一篇巨大的 `.py` 进来，提示条说"文件太大"——
   // 而真正的原因是**它根本不是 Markdown**，用户会去想办法把它改小。
-  equal(LowerLevelReason("/a/big.py", 999_999_999), "text", "巨大但不是 Markdown");
+  equal(lowerLevelReason("/a/big.py", 999_999_999), "text", "巨大但不是 Markdown");
 });
 
 testCase("⚠️ 还没存盘的新文档（`path` 是 `null`）按 Markdown 算，但大小照判", () => {
   // ⚠️ `Document.path` 就是 `string | null`，新建那份是 `null`。写成
   // `认文件类型(路径)` 的话这里会**崩**（`null.split` 报错），而崩的位置是
   // `App.tsx` 的渲染里——整块界面白屏，跟"文件名"这件事看不出关系。
-  equal(LowerLevelReason(null, 1000), null, "新建的空白文档");
+  equal(lowerLevelReason(null, 1000), null, "新建的空白文档");
   equal(
-    LowerLevelReason(null, largeTextItemThresholdValue + 1),
+    lowerLevelReason(null, largeTextItemThresholdValue + 1),
     "large",
     "粘进来的一篇超大文档，没名字也降级",
   );
 });
 
 testCase("Markdown 但太大 → `large`", () => {
-  equal(LowerLevelReason("/a/大稿.md", largeTextItemThresholdValue + 1), "large", "超过阈值");
+  equal(lowerLevelReason("/a/大稿.md", largeTextItemThresholdValue + 1), "large", "超过阈值");
 });
 
 testCase("⚠️ 阈值那一刻：**正好等于不算超**", () => {

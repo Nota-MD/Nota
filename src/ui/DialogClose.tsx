@@ -7,13 +7,13 @@ interface Props {
   onClose: () => void;
 }
 
-/**
- * 对话框右上角的统一关闭按钮。
- *
- * 所有模态窗口都提供同一位置、同一图标和同一可读名称。按钮留在 DOM
- * 内而不是由宿主画标题栏，因此网页层、Windows WebView2 与各界面主题
- * 都能得到一致行为。
- */
+
+
+
+
+
+
+
 export const DialogClose = forwardRef<HTMLButtonElement, Props>(function DialogClose(
   { onClose },
   ref,

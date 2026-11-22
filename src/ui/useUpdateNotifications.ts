@@ -1,10 +1,10 @@
-/**
- * 启动时的一次更新检查。
- *
- * 这条 hook 只在首份设置到岸时检查一次；用户运行中打开或关闭这个开关不会立刻
- * 再联网，下一次启动才按新值执行。检查失败在启动阶段保持安静——用户没有主动
- * 点“检查更新”，网络错误不该变成开机噪音；手动检查页仍会如实显示错误。
- */
+
+
+
+
+
+
+
 
 import { useEffect, useRef } from "react";
 
@@ -47,7 +47,7 @@ export function useUpdateNotifications({ settings, toast, openUpdateSettings }: 
         );
       })
       .catch(() => {
-        // 启动检查是后台动作；失败留给手动检查页说明。
+
       });
   }, [settings, t, toast, openUpdateSettings]);
 }

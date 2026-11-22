@@ -117,7 +117,7 @@ export function usableCaretCoordinate(
   return null;
 }
 
-/** 当前选区是否应该由正文层绘制插入光标。 */
+
 export function isNoShowCursor(state: EditorState): boolean {
   const selection = state.selection;
   if (!selection.empty) return false;
@@ -303,13 +303,13 @@ function arrangeCursor(cursor: HTMLElement, view: EditorView): void {
   }
 }
 
-/**
- * 用编辑器外的一层覆盖物画闪烁光标。
- *
- * 不能改成 `Decoration.widget`：ProseMirror 会给这类 widget 写
- * `contenteditable=false`，而 WebKitGTK 在紧邻这种节点的折叠选区上无法正常
- * 接收输入。覆盖物不进入文档 DOM，因此不参与解析、选择、撤销或导出。
- */
+
+
+
+
+
+
+
 export function flashSparkCursor(): Plugin {
   return new Plugin({
     view(view) {

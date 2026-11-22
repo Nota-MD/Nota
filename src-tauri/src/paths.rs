@@ -1,181 +1,77 @@
-//! 目录布局。**所有路径只在这里算**，别处一律调这里取——
-//! 散落的 `dirs::config_dir()` 是将来"换存法"时最先烂掉的地方。
-
 use std::path::{Path, PathBuf};
 
 use crate::error::{NotaError, Result};
 
-/// 应用名。用作 XDG 目录下的子目录名。
 pub const APP_DIR: &str = "nota";
 
-/// 配置目录：`$XDG_CONFIG_HOME/nota`（一般是 `~/.config/nota`）。
 pub fn config_dir() -> Result<PathBuf> {
     let base = dirs::config_dir().ok_or(NotaError::NoHomeDir)?;
     Ok(base.join(APP_DIR))
 }
 
-/// 数据目录：`$XDG_DATA_HOME/nota`（一般是 `~/.local/share/nota`）。
 pub fn data_dir() -> Result<PathBuf> {
     let base = dirs::data_dir().ok_or(NotaError::NoHomeDir)?;
     Ok(base.join(APP_DIR))
 }
 
-/// 缓存目录：`$XDG_CACHE_HOME/nota`。
 pub fn cache_dir() -> Result<PathBuf> {
     let base = dirs::cache_dir().ok_or(NotaError::NoHomeDir)?;
     Ok(base.join(APP_DIR))
 }
 
-/// 用户设置文件。
 pub fn settings_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("settings.toml"))
 }
 
-/// Developer bridge credentials and paired sessions.
 pub fn dev_bridge_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("dev-bridge.toml"))
 }
 
-/// 插件启用状态的落点：`$XDG_CONFIG_HOME/nota/plugins.toml`。
-///
-/// ⚠️ 与 `settings.toml` 同放 `config` 而不放 `data`，理由与
-/// [`plugin_settings_dir`] 那条一样：**这是用户该能拿编辑器直接改的东西**。
-/// "我装的插件怎么不见了"这一类问题的第一现场就是它，藏在 `data` 下会显得像
-/// "应用自己的缓存，不该动"。
-///
-/// ⚠️ 与 `settings.toml` **分开两个文件**（不并进 `Settings`）：那份是"外观与编辑
-/// 口径"的设置，是一张**标量表**（`docs/03`）；而这里是**一张 id 名单**，
-/// 形状不同、生命周期也不同（装着插件的时候它一直在变）。
-/// 并进去会让 `nota_settings_set` 那条"整份替换 + 落盘"的口径多带一份容易丢的名单。
 pub fn plugin_state_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("plugins.toml"))
 }
 
-/// 信任的签名公钥表：`$XDG_CONFIG_HOME/nota/trusted-keys.toml`。
-///
-/// ⚠️ 与 `plugins.toml` 同放 `config`，理由也一样：**这是用户该能拿编辑器直接看
-/// 和直接改的东西**——"这个包是谁签的、我信任了哪几把钥匙"必须能被人核对，
-/// 藏在 `data` 下就变成"应用自己的缓存"了。参照物是 SSH 的 `known_hosts`。
-///
-/// ⚠️ **签名私钥从来不在这台机器上**（宿主只做验签，见 `docs/11` §1.6），
-/// 所以这个文件里出现的只有公钥，泄露它没有风险，**被篡改**才有。
 pub fn trusted_keys_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("trusted-keys.toml"))
 }
 
-/// 用户自装插件目录，以及插件状态的落点。
 pub fn user_plugins_dir() -> Result<PathBuf> {
     Ok(data_dir()?.join("plugins"))
 }
 
-/// 插件自己的设置目录：`$XDG_CONFIG_HOME/nota/plugin-settings`。
-///
-/// 与 `settings.toml` 同放在 `config` 下，理由是一样的：**这是用户该能拿编辑器
-/// 直接改的东西**（AI 插件的 API 密钥就存在这里）。放 `data` 或 `cache` 下
-/// 会让它看起来像"应用自己的缓存，不该动"。
 pub fn plugin_settings_dir() -> Result<PathBuf> {
     Ok(config_dir()?.join("plugin-settings"))
 }
 
-/// 一个插件的设置文件：`plugin-settings/<id>.toml`。
-///
-/// ⚠️ 文件名**必须过一遍 [`安全文件名`]**：插件 id 是插件清单里写的字符串，
-/// 里面出现 `/` 或 `..` 的话（`nota/../../etc/passwd`）这个函数就成了一个
-/// 任意路径写入口。清单的校验挡不住这个——它只查 id 的字符集合，
-/// 而这里要的是"拿它当文件名安全"。
 pub fn plugin_settings_file(plugin_id: &str) -> Result<PathBuf> {
-    Ok(plugin_settings_dir()?.join(format!("{}.toml", 安全文件名(plugin_id))))
+    Ok(plugin_settings_dir()?.join(format!("{}.toml", an_fulldocument_jian_ming(plugin_id))))
 }
 
-/// 图床上传的配置文件：`$XDG_CONFIG_HOME/nota/image-upload.toml`。
-///
-/// ⚠️ **与 `settings.toml` 分开、单独一个文件**，理由是权限：那一份走
-/// `Settings::save_to`（裸 `std::fs::write`，权限跟 umask 走，通常 0644），
-/// 而这一份里会有用户的 token（「请求头」那一栏）。`plugin_settings_file`
-/// 单开一份也是同一个理由。**两份文件放同一个目录**（都是用户该能拿编辑器
-/// 直接改的东西），只是这一份按 0600 建——见 `crate::upload` 文件头。
 pub fn image_upload_file() -> Result<PathBuf> {
     Ok(config_dir()?.join("image-upload.toml"))
 }
 
-/// 表格列宽的侧车文件：`$XDG_DATA_HOME/nota/table-widths.toml`。
-///
-/// ⚠️ **这一份放 `data`，是"放 config"那一串里的第一个例外**（同一条判据下
-/// 还有 [`plugin_data_dir`] 与 [`session_file`]），判据就是本文件顶上那条：
-/// `config` 放的是**用户该能拿编辑器直接改的东西**（`settings.toml` /
-/// `plugins.toml` / `trusted-keys.toml` / `image-upload.toml` 全在那儿，用户排查
-/// "我的设置怎么变了"时第一眼看的就是那个目录）。而列宽是**看的时候的状态**
-/// ——是界面上拖出来的，不是一条"偏好"，用户不会去手改它；摆进 `config`
-/// 反而会让人以为"这是我有意设的、删了会丢东西"。删掉它的后果只是
-/// **所有表格回到自动列宽**，文档正文一个字节都不受影响。
-///
-/// ⚠️ 它是**侧车**：列宽**不写进 `.md`**（本仓「不改用户的字节」那条死规矩）。
-/// 形状与那些账写在 `crate::table_width` 的文件头。
 pub fn table_widths_file() -> Result<PathBuf> {
     Ok(data_dir()?.join("table-widths.toml"))
 }
 
-/// 会话与最近文件的落点：`$XDG_DATA_HOME/nota/session.toml`。
-///
-/// ⚠️ **放 `data` 不放 `config`**，判据与 [`table_widths_file`] 完全一样：
-/// `config` 里放的是**用户该能拿编辑器直接改的东西**（`settings.toml` /
-/// `plugins.toml` / `trusted-keys.toml` / `image-upload.toml`），而这一份是
-/// **看的时候的状态**——上次开着哪几份、最近开过哪些、滚到哪儿。用户不会去手改它，
-/// 摆进 `config` 反而会让人以为"这是我有意设的、删了会丢东西"。
-///
-/// ⚠️ 删掉它的后果**只有"记忆没了"**：标签不恢复、最近列表空掉、滚动回到顶上，
-/// 文档正文一个字节都不受影响。形状与三条账写在 `crate::session` 文件头。
-///
-/// ⚠️ 与 `table-widths.toml` **分开两个文件**：两者形状不同（那边是
-/// 路径→指纹→宽度 的两层表，这边是四样东西），写入的时刻也不同（那边随手拖、
-/// 这边开关文档）。并成一份会让"拖一下表格"和"关一个标签"互相覆盖。
 pub fn session_file() -> Result<PathBuf> {
     Ok(data_dir()?.join("session.toml"))
 }
 
-/// Recoverable drafts live beside session state, never beside the source file.
-///
 /// A draft is an application safety copy, not a user document. Keeping it under
-/// the data directory prevents crash recovery from creating surprise files in
-/// the user's notes folder.
+
 pub fn drafts_dir() -> Result<PathBuf> {
     Ok(data_dir()?.join("drafts"))
 }
 
-/// 插件自己的数据目录：`$XDG_DATA_HOME/nota/plugin-data/<id>/`。
-///
-/// ⚠️ **放 `data` 不放 `config`**，判据就是本文件顶上那条：`config` 里放的是
-/// **用户该能拿编辑器直接改的东西**（`settings.toml` / `plugins.toml` /
-/// `plugin-settings/` 全在那儿，用户排查"我的设置怎么变了"时第一眼看的就是它）。
-/// 而这里是**插件自己写、插件自己读**的东西（写作统计那些按天记的账），
-/// 用户不该去手改——摆进 `config` 反而会让人以为"这也是我要维护的一份配置"。
-/// 与 [`table_widths_file`] 是同一条判据下的第二个例外。
-///
-/// ⚠️ 删掉一个插件的这个目录，后果只是**那个插件的记忆没了**（比如"今天的
-/// 写作记录"从头开始），文档正文一个字节都不受影响。这条是刻意的：插件的数据
-/// 不许成为"删了就丢文档"的东西。
-///
-/// ⚠️ 文件名同样要过 [`安全文件名`]（理由见 [`plugin_settings_file`]：
-/// 插件 id 是插件自己带的字符串，拿它拼路径就是一条任意路径写入口）。
 pub fn plugin_data_dir(plugin_id: &str) -> Result<PathBuf> {
-    Ok(data_dir()?.join("plugin-data").join(安全文件名(plugin_id)))
+    Ok(data_dir()?
+        .join("plugin-data")
+        .join(an_fulldocument_jian_ming(plugin_id)))
 }
 
-/// 把插件 id 变成一个**安全的文件名**。
-///
-/// 规则很短：ASCII 字母数字、`.`、`-`、`_` 原样留；**别的字符一律换成 `_`**；
-/// 空串和 `.` / `..` 这种特殊名加上一段前缀避开。
-///
-/// ⚠️ 这是**有损**的：两个不同的 id 可能映到同一个文件名（`nota.ai` 与
-/// `nota/ai`）。**接受这个损失**——因为 id 在宿主里已经过
-/// `manifest::id_合法吗` 式的校验（`.` 与 `-` 是允许集合里的全部特殊字符），
-/// 走得到这里的 id 本来就不可能含 `/`。这一层是**兜底**：万一将来校验放宽了、
-/// 或者有人绕过它，也不能让文件名把路径带出去。
-///
-/// ⚠️ 中文 id 会被整个换成 `_`（一个汉字一个 `_`）——这是刻意的：
-/// 非 ASCII 文件名在跨平台/打包/同步时是另一类麻烦，而这是**内部**文件名，
-/// 用户看到的插件名走的是 `name` 字段，不走这里。
-pub fn 安全文件名(plugin_id: &str) -> String {
+pub fn an_fulldocument_jian_ming(plugin_id: &str) -> String {
     let mut out = String::with_capacity(plugin_id.len());
     for c in plugin_id.chars() {
         if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
@@ -184,7 +80,7 @@ pub fn 安全文件名(plugin_id: &str) -> String {
             out.push('_');
         }
     }
-    // 退化情况：空串、`.`、`..` 都会变成一个"看起来像目录"的名字。
+
     if out.is_empty() || out.chars().all(|c| c == '.') {
         out.insert_str(0, "plugin-");
     }
@@ -195,52 +91,57 @@ pub fn 安全文件名(plugin_id: &str) -> String {
 mod tests {
     use super::*;
 
-    /// 开发态那几档的**顺序**：环境变量 → 同级插件仓库 → 老落点 → 资源快照。
-    ///
-    /// ⚠️ 同名插件**先扫到的算数**（`PluginHost::discover`），所以顺序就是"谁生效"。
-    /// 这条钉的是两个具体踩过的坑：
-    /// ① 资源快照（`cargo build` 拷进 `target/debug/plugins/` 的那份）排在前面时，
-    ///    会盖掉正在改的那份源码，症状是"我的改动没生效"——不报错、没提示；
-    /// ② 2026-10-09 插件独立成仓库之后，**同级那个 `Nota-plugins/` 才是真相**，
-    ///    主仓库里那个老落点如果还在（老检出），只能排在它后面。
     #[test]
-    fn 开发态先看环境变量再看同级插件仓库再看老落点() {
-        let 资源 = Path::new("/假资源目录");
-        let 主仓库 = Path::new(env!("CARGO_MANIFEST_DIR"))
+    fn kai_emit_tai_xian_kan_huan_jing_bian_liang_zai_kan_tong_ji_plugin_cang_ku_zai_kan_lao_target(
+    ) {
+        let zi_source = Path::new("/\u{5047}\u{8d44}\u{6e90}\u{76ee}\u{5f55}");
+        let zhu_cang_ku = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .expect("src-tauri 的上一级");
-        let 兄弟 = 主仓库.parent().expect("工作区那一级").join("Nota-plugins").join("plugins");
-        let 老落点 = 主仓库.join("plugins");
-        // ⚠️ 不在这里调 `builtin_plugins_dirs`：它会读进程环境，而 CI / 本地都可能设了
-        // `NOTA_PLUGINS_DIR`。测顺序就用纯函数，资源快照手工垫到最后。
-        let mut 目录们 = 开发态候选(None, 主仓库);
-        目录们.push(资源.join("plugins"));
-        let i兄弟 = 目录们.iter().position(|p| p == &兄弟).expect("同级插件仓库那一档在");
-        let i老 = 目录们.iter().position(|p| p == &老落点).expect("老落点那一档在");
-        assert!(i兄弟 < i老, "同级插件仓库必须排在这个之前：{目录们:?}");
-        assert_eq!(目录们.last(), Some(&资源.join("plugins")), "资源快照永远垫底");
+            .expect("src-tauri \u{7684}\u{4e0a}\u{4e00}\u{7ea7}");
+        let xiong_di = zhu_cang_ku
+            .parent()
+            .expect("\u{5de5}\u{4f5c}\u{533a}\u{90a3}\u{4e00}\u{7ea7}")
+            .join("Nota-plugins")
+            .join("plugins");
+        let lao_target = zhu_cang_ku.join("plugins");
 
-        // 不设环境变量时的三档：同级插件仓库 → 老落点。
-        let 候选 = 开发态候选(None, 主仓库);
-        assert_eq!(候选.first(), Some(&兄弟), "同级插件仓库必须是第一个：{候选:?}");
-        assert_eq!(候选.last(), Some(&老落点), "老落点垫底");
+        let mut directory_men = kai_emit_tai_candidates(None, zhu_cang_ku);
+        directory_men.push(zi_source.join("plugins"));
+        let i_xiong_di = directory_men.iter().position(|p| p == &xiong_di).expect(
+            "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{90a3}\u{4e00}\u{6863}\u{5728}",
+        );
+        let i_lao = directory_men
+            .iter()
+            .position(|p| p == &lao_target)
+            .expect("\u{8001}\u{843d}\u{70b9}\u{90a3}\u{4e00}\u{6863}\u{5728}");
+        assert!(i_xiong_di < i_lao, "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{5fc5}\u{987b}\u{6392}\u{5728}\u{8fd9}\u{4e2a}\u{4e4b}\u{524d}\u{ff1a}{directory_men:?}");
+        assert_eq!(
+            directory_men.last(),
+            Some(&zi_source.join("plugins")),
+            "\u{8d44}\u{6e90}\u{5feb}\u{7167}\u{6c38}\u{8fdc}\u{57ab}\u{5e95}"
+        );
 
-        // 设了环境变量就**只认它**（显式覆盖：CI / 别的目录布局 / 想跑一份干净的）。
-        let 候选 = 开发态候选(Some(PathBuf::from("/别处/plugins")), 主仓库);
-        assert_eq!(候选, vec![PathBuf::from("/别处/plugins")], "设了就不许再兜底");
+        let candidates_2 = kai_emit_tai_candidates(None, zhu_cang_ku);
+        assert_eq!(candidates_2.first(), Some(&xiong_di), "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{5fc5}\u{987b}\u{662f}\u{7b2c}\u{4e00}\u{4e2a}\u{ff1a}{candidates_2:?}");
+        assert_eq!(
+            candidates_2.last(),
+            Some(&lao_target),
+            "\u{8001}\u{843d}\u{70b9}\u{57ab}\u{5e95}"
+        );
+
+        let candidates_2 = kai_emit_tai_candidates(
+            Some(PathBuf::from("/\u{522b}\u{5904}/plugins")),
+            zhu_cang_ku,
+        );
+        assert_eq!(
+            candidates_2,
+            vec![PathBuf::from("/\u{522b}\u{5904}/plugins")],
+            "\u{8bbe}\u{4e86}\u{5c31}\u{4e0d}\u{8bb8}\u{518d}\u{515c}\u{5e95}"
+        );
     }
 
-    /// ⚠️ **这条是安全用例，不是格式用例。**
-    ///
-    /// `plugin_settings_file` 的入参来自插件清单，而清单是**插件自己带的文件**。
-    /// 它一旦不设防，`nota.settings.set` 就是一个任意路径写入。
-    ///
-    /// ⚠️ 判据只能钉三条**结果**，钉不了"里面含不含 `..`"——因为
-    /// `nota/../../etc/passwd` 会被归一成 `nota_.._.._etc_passwd`，
-    /// 它**含** `..` 但那两个点已经只是普通字符，不是目录跳转了。
-    /// 会出事的形状只有"含分隔符"和"整名都是点"这两种。
     #[test]
-    fn 插件id里的路径分隔符出不了文件名() {
+    fn plugin_id_li_de_path_fen_ge_fu_chu_bu_le_filename() {
         for id in [
             "nota/../../etc/passwd",
             "../../x",
@@ -252,28 +153,30 @@ mod tests {
             "...",
             "\0",
         ] {
-            let 名 = 安全文件名(id);
+            let ming = an_fulldocument_jian_ming(id);
             assert!(
-                !名.contains('/') && !名.contains('\\'),
-                "`{id}` 变成 `{名}`，里面还有路径分隔符——那就能写到别的目录去"
+                !ming.contains('/') && !ming.contains('\\'),
+                "`{id}` \u{53d8}\u{6210} `{ming}`\u{ff0c}\u{91cc}\u{9762}\u{8fd8}\u{6709}\u{8def}\u{5f84}\u{5206}\u{9694}\u{7b26}\u{2014}\u{2014}\u{90a3}\u{5c31}\u{80fd}\u{5199}\u{5230}\u{522b}\u{7684}\u{76ee}\u{5f55}\u{53bb}"
             );
-            assert!(!名.is_empty(), "`{id}` 变成了空文件名");
             assert!(
-                !名.chars().all(|c| c == '.'),
-                "`{id}` 变成 `{名}`，还是个纯点的名字（`..` 指向上级目录）"
+                !ming.is_empty(),
+                "`{id}` \u{53d8}\u{6210}\u{4e86}\u{7a7a}\u{6587}\u{4ef6}\u{540d}"
+            );
+            assert!(
+                !ming.chars().all(|c| c == '.'),
+                "`{id}` \u{53d8}\u{6210} `{ming}`\u{ff0c}\u{8fd8}\u{662f}\u{4e2a}\u{7eaf}\u{70b9}\u{7684}\u{540d}\u{5b57}\u{ff08}`..` \u{6307}\u{5411}\u{4e0a}\u{7ea7}\u{76ee}\u{5f55}\u{ff09}"
             );
         }
     }
 
-    /// 正常 id 一个字符都不该变——变了会让老用户的设置文件找不到。
     #[test]
-    fn 正常的插件id原样保留() {
-        assert_eq!(安全文件名("nota.ai"), "nota.ai");
-        assert_eq!(安全文件名("nota_git-2"), "nota_git-2");
+    fn zheng_chang_de_plugin_id_yuan_yang_bao_liu() {
+        assert_eq!(an_fulldocument_jian_ming("nota.ai"), "nota.ai");
+        assert_eq!(an_fulldocument_jian_ming("nota_git-2"), "nota_git-2");
     }
 
     #[test]
-    fn 旧主题包复制到新目录且不覆盖已有内容() {
+    fn jiu_theme_bao_fu_zhi_dao_xin_directory_qie_bu_fu_gai_yi_you_content() {
         let root = std::env::temp_dir().join(format!(
             "nota-theme-migrate-{}-{}",
             std::process::id(),
@@ -297,7 +200,7 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(current.join("cde/theme.css")).unwrap(),
             "keep",
-            "规范目录已有主题时不能覆盖"
+            "\u{89c4}\u{8303}\u{76ee}\u{5f55}\u{5df2}\u{6709}\u{4e3b}\u{9898}\u{65f6}\u{4e0d}\u{80fd}\u{8986}\u{76d6}"
         );
         assert_eq!(
             std::fs::read_to_string(current.join("latex/theme.css")).unwrap(),
@@ -307,41 +210,20 @@ mod tests {
     }
 }
 
-/// 用户自己的文档主题目录（`~/.config/nota/themes/document`）。
-///
-/// ⚠️ **只扫这一个目录**。此前还会扫描外部编辑器的主题安装位置，那条路径
-/// 已按用户要求删除（版权问题，见 `src-tauri/src/themes.rs` 文件头）。
 pub fn user_themes_dir() -> Result<PathBuf> {
     Ok(config_dir()?.join("themes").join("document"))
 }
 
-/// 用户自己的**界面风格**目录（`~/.config/nota/themes/ui`）。
-///
-/// ⚠️ 与 `user_themes_dir`（文档主题）是**两个目录，故意不合并**：
-/// 文档主题只作用编辑区、界面风格作用整个外壳，两者的 CSS **写法要求完全不同**
-/// （文档主题写裸选择器、由前端限域；界面风格必须以 `[data-ui-style="…"]` 起头、
-/// 不限域）。混在一个目录里，用户迟早会把两者当成同一种东西放错位置，
-/// 而放错的后果是"整个界面变了"或"一个字都没变"——都不报错。
-///
 pub fn user_ui_styles_dir() -> Result<PathBuf> {
     Ok(config_dir()?.join("themes").join("ui"))
 }
 
-/// 启动时准备好两个主题根目录。
-///
-/// 用户明确要求软件打开时就创建 `themes/document` 与 `themes/ui`，让两个“打开主题
-/// 文件夹”入口第一次点击时都有明确落点，也避免用户猜目录名。
 pub fn ensure_theme_directories() -> Result<()> {
     ensure_dir(&user_themes_dir()?)?;
     ensure_dir(&user_ui_styles_dir()?)?;
     Ok(())
 }
 
-/// 把旧版两个落点里的主题包复制到当前规范目录。
-///
-/// 旧版文档主题在 `themes/<id>`，界面主题在 `ui-styles/<id>`；当前规范是
-/// `themes/document/<id>` 与 `themes/ui/<id>`。只复制缺失的主题包，不覆盖
-/// 新目录里已有内容，不跟随符号链接，也不删除旧文件。
 pub fn migrate_legacy_theme_directories() -> Result<()> {
     let config = config_dir()?;
     let themes = config.join("themes");
@@ -366,7 +248,9 @@ fn migrate_theme_children(from: &Path, to: &Path, skip: &[&str]) -> Result<()> {
         }
     };
     for entry in entries.flatten() {
-        let Ok(kind) = entry.file_type() else { continue };
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
         if !kind.is_dir() || kind.is_symlink() {
             continue;
         }
@@ -419,59 +303,28 @@ fn remove_tree(path: &Path) -> std::io::Result<()> {
     }
 }
 
-/// **开发态**那几档插件源码目录，按优先级（整张表在 [`builtin_plugins_dirs`] 上）。
-///
-/// ⚠️ `env` 是从外面递进来的（正式调用传 `NOTA_PLUGINS_DIR`），**不是在函数里读**：
-/// 环境变量是进程级的，测试里 `set_var` 会与别的用例互相踩（Rust 2024 起它本身也是
-/// `unsafe`）。递进来之后这条判据就是**纯函数**，测得住。
-fn 开发态候选(env: Option<PathBuf>, 主仓库: &Path) -> Vec<PathBuf> {
-    // ⚠️ **设了 `NOTA_PLUGINS_DIR` 就只认它**（显式覆盖，不再往后面兜）：
-    // 这是环境变量该有的语义——"这次就从这儿读"。兜底的话，"指到一个空目录"
-    // 与"指到一个坏路径"都会静默退回同级仓库，用户会以为自己指错了地方。
-    // ⚠️ 代价：路径写错就是**一个插件都没有**（面板空着），那是显式配置的账。
+fn kai_emit_tai_candidates(env: Option<PathBuf>, zhu_cang_ku: &Path) -> Vec<PathBuf> {
     if let Some(e) = env {
         return vec![e];
     }
     let mut out = Vec::new();
-    if let Some(工作区) = 主仓库.parent() {
-        out.push(工作区.join("Nota-plugins").join("plugins"));
+    if let Some(workspace_2) = zhu_cang_ku.parent() {
+        out.push(workspace_2.join("Nota-plugins").join("plugins"));
     }
-    out.push(主仓库.join("plugins"));
+    out.push(zhu_cang_ku.join("plugins"));
     out
 }
 
-/// 内置插件目录，**按优先级**（`PluginHost::discover` 是"先扫到的算数"，
-/// 所以谁在前面谁生效；用户自装的同名插件覆盖前面这些）。
-///
-/// | 档 | 落点 | 什么时候在 |
-/// |---|---|---|
-/// | ① | `$NOTA_PLUGINS_DIR` | 想指哪儿指哪儿（CI、别的目录布局、想跑一份干净的）——**设了就只认它**，不再往后面兜 |
-/// | ② | `<主仓库>/../Nota-plugins/plugins` | **真相**：2026-10-09 起插件独立成仓库，与主仓库同级放着 |
-/// | ③ | `<主仓库>/plugins` | 老落点（独立之前主仓库自带的那份），留着只是让老检出还能跑 |
-/// | ④ | `<资源目录>/plugins` | 打包后（`cargo build` 按 `tauri.conf.json` 的 `bundle.resources` 拷进去的快照） |
-///
-/// ⚠️⚠️ **顺序是承重的，踩过两次**：
-/// - **2026-09-25**：先推资源目录时，改完 `plugins/*.lua` 重启看到的还是**编那份快照时
-///   的旧行为**——不报错、不提示，看起来就像"我的改动没生效"（而 `docs/01`/`06`/`11`
-///   三处都写着"debug 下扫仓库那份，改完存盘即生效"）。所以开发态那几档必须排在快照前面。
-/// - **2026-10-09**：插件搬去独立仓库（`Nota-plugins`）之后，**②才是真相**——老检出里
-///   如果还留着 ③ 的副本，它只能垫在 ② 后面（同名插件先扫到的算数）。
-///
-/// 打包后不存在这个问题（`cfg!(debug_assertions)` 为假，只剩 ④ 一个落点）。
-/// 顺带一提，快照那份照样在 `target/debug/plugins` 里躺着——**忽略它是对的**。
 pub fn builtin_plugins_dirs(resource_dir: Option<&Path>) -> Vec<PathBuf> {
     let mut out = Vec::new();
 
-    // 开发态那几档：CARGO_MANIFEST_DIR 是 src-tauri/，往上一级是主仓库、再上一级是工作区。
-    // ⚠️ 必须排在下面那个前面，理由见函数头。
     if cfg!(debug_assertions) {
-        if let Some(主仓库) = Path::new(env!("CARGO_MANIFEST_DIR")).parent() {
+        if let Some(zhu_cang_ku) = Path::new(env!("CARGO_MANIFEST_DIR")).parent() {
             let env = std::env::var_os("NOTA_PLUGINS_DIR").map(PathBuf::from);
-            out.extend(开发态候选(env, 主仓库));
+            out.extend(kai_emit_tai_candidates(env, zhu_cang_ku));
         }
     }
 
-    // 打包后的落点。
     if let Some(res) = resource_dir {
         out.push(res.join("plugins"));
     }
@@ -479,15 +332,12 @@ pub fn builtin_plugins_dirs(resource_dir: Option<&Path>) -> Vec<PathBuf> {
     out
 }
 
-/// 把路径转成 String，非 UTF-8 时**报错而不是丢字符**。
-/// （Unix 路径允许任意字节，但文档模型、Lua、JSON 全都按 UTF-8 走。）
 pub fn path_to_string(path: &Path) -> Result<String> {
     path.to_str()
         .map(str::to_owned)
         .ok_or_else(|| NotaError::NonUtf8Path(path.to_path_buf()))
 }
 
-/// 确保目录存在。
 pub fn ensure_dir(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path).map_err(|source| NotaError::Write {
         path: path.to_path_buf(),

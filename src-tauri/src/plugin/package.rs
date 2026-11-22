@@ -1,251 +1,175 @@
-//! 插件**包**（`.nota-plugin`，zip 基底）的解开与验签。
-//!
-//! 格式与那套"签什么、怎么算摘要"的口径写在 `docs/11` §1.6，这里只说**为什么**。
-//!
-//! # 为什么是 zip
-//!
-//! 插件最小合法形状是"一个 `plugin.toml` + 一个入口 lua"（`docs/11` §1.3），
-//! 但真插件会带图标、模板、多个 lua 模块。目录形式在开发时最方便（改完存盘即
-//! 生效），**分发**时却不行——用户拿到一个压缩包之前得先会解压。
-//! zip 是唯一一个"三个平台上双击就能看、命令行里也现成"的容器，
-//! 而且它不需要额外的依赖就能读（`flate2` 本来就在依赖树里）。
-//!
-//! ⚠️ **包是只读的**：宿主只**解**包，不**打**包。打包那半在
-//! `tools/pack-plugin.py`（要 `openssl` 签，那是作者侧的动作，不该進宿主）。
-//!
-//! # 摘要怎么算（这是整个验签的关键）
-//!
-//! 签的是**载荷摘要**，不是 zip 字节。规则三条：
-//!
-//! 1. 条目**按路径排序**（zip 里条目的顺序是打包工具的自由，不该影响签名）；
-//! 2. 每条算成 `路径字节 + \0 + 内容 sha256 的 32 字节`；
-//! 3. 把这些拼起来再 sha256 一次。
-//!
-//! ⚠️ **签名文件自己不参与摘要**——它要是参与了就成了自指（签名里含自己的摘要）。
-//! 所以它是"附加在包上的东西"，不是"包里的东西"。
-//!
-//! 这套算法有个好性质：**重新压缩一遍（改了时间戳、换了压缩级别）摘要不变**。
-//! 所以作者可以重打包而不必重签，验证方也不必关心 zip 是怎么压的。
-//!
-//! # 三条失败通道，别混
-//!
-//! | 情况 | 结果 |
-//! |---|---|
-//! | 包本身坏了（不是 zip、解不开、zip 炸弹） | `Err` —— 连"这是个包"都不成立 |
-//! | **有**签名但验不过 | `Err` —— 可能是被改过，**拒装**（见文件头"没有这一档"） |
-//! | 没有签名 | `Ok(Signature::Unsigned)` —— 允许，但要标出来 |
-//!
-//! ⚠️ 第三条是刻意的：开发态的文件夹插件必然没有签名，拒掉它等于把开发流程堵死。
-//! 但"没签名"和"验过了"在界面上**长得不一样**（插件行上那个标签），
-//! 用户看得见自己在信一个什么东西。
-
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
 use super::installed::Signature;
-/// 信任库那一段（2026-09-29 拆去 `plugin/trust.rs`）**原样转出**：
-/// `package::信任库` 这类老路径一个字不用改（`install.rs` / `export.rs` 都走它）。
+
 pub use super::trust::*;
 use crate::error::{NotaError, Result};
 
-/// 插件包的后缀。点号是它的一部分（`git` 那种"扩展名"的读法统一按带点写）。
-pub const 包后缀: &str = ".nota-plugin";
+pub const PACKAGE_EXTENSION: &str = ".nota-plugin";
 
-/// 签名块在包里的固定名字。**这一个字符串有两份实现必须一致**：
-/// 读的一侧在这里，写的一侧在 `tools/pack-plugin.py`。
-pub const 签名文件: &str = "nota-signature.toml";
+pub const SIGNATURE_FILE: &str = "nota-signature.toml";
 
-/// 清单在包里的固定名字。同上，两份实现（这里是读，`docs/11` §1.3 是形状）。
-pub const 清单文件: &str = "plugin.toml";
+pub const MANIFEST_FILE: &str = "plugin.toml";
 
-/// 包解开之后**总字节数**的上限。
-///
-/// ⚠️ 这三条上限是**防 zip 炸弹**的，不是"怕文件大"：一个 4 KiB 的 zip 能解出
-/// 几个 GB（deflate 的压缩比可以到 1000:1），而这里的做法是**先全解到内存里**再验签
-/// ——没有上限的话，用户双击一个恶意包就是一次 OOM。
-/// 32 MiB 对插件来说宽得离谱（现在这两个插件加起来不到 100 KiB）。
-const 总上限: u64 = 32 * 1024 * 1024;
-const 单文件上限: u64 = 16 * 1024 * 1024;
-const 条目上限: usize = 2048;
-/// 条目名的字节上限。同上是防炸弹（超长名字本身就能当攻击面）。
-const 名字上限: usize = 512;
+const ZONG_SHANG_XIAN: u64 = 32 * 1024 * 1024;
+const DAN_FILE_SHANG_XIAN: u64 = 16 * 1024 * 1024;
+const TIAO_MU_SHANG_XIAN: usize = 2048;
 
-/// 包里的一个文件。
+const NAME_SHANG_XIAN: usize = 512;
+
 #[derive(Debug, Clone)]
-pub struct 包文件 {
-    /// 包内相对路径，**已经过 [`路径合法吗`] 归一**。
-    pub 路径: String,
-    pub 内容: Vec<u8>,
+pub struct PackageFile {
+    pub path_3: String,
+    pub content_2: Vec<u8>,
 }
 
-/// 包里的签名块（`nota-signature.toml`）。
-///
-/// ```toml
-/// [signature]
-/// algorithm = "ed25519"
-/// key_id = "a1b2c3d4e5f60718"
-/// public_key = "…base64…"   # 32 字节原始公钥
-/// signature = "…base64…"    # 64 字节签名
-/// signed_at = "2026-09-24"
-/// ```
 #[derive(Debug, Clone)]
-pub struct 包签名 {
+pub struct PackageSignature {
     pub algorithm: String,
-    /// 公钥指纹。⚠️ **只是给人看的**，验签时拿公钥重算（见 [`包::验签`]）。
+
     pub key_id: String,
     pub public_key: [u8; 32],
     pub signature: [u8; 64],
     pub signed_at: String,
 }
 
-/// 一个解开的包：文件们 + 可能有签名。
 #[derive(Debug, Clone)]
-pub struct 包 {
-    pub 文件们: Vec<包文件>,
-    pub 签名: Option<包签名>,
+pub struct Package {
+    pub files_2: Vec<PackageFile>,
+    pub qian_ming: Option<PackageSignature>,
 }
 
-impl 包 {
-    /// 从一个 `.nota-plugin`（或任何 zip）的字节解开。
-    pub fn 从zip(bytes: &[u8]) -> Result<Self> {
-        let mut ar = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-            .map_err(|e| NotaError::other(format!("这不是一个能读的拓展包：{e}")))?;
+impl Package {
+    pub fn cong_zip(bytes: &[u8]) -> Result<Self> {
+        let mut ar = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| {
+            NotaError::other(format!("This is not a readable extension package: {e}"))
+        })?;
 
-        if ar.len() > 条目上限 {
+        if ar.len() > TIAO_MU_SHANG_XIAN {
             return Err(NotaError::other(format!(
-                "包里条目太多（{} 条，上限 {条目上限}）——多半不是拓展包",
+                "The package has too many entries ({}; limit {TIAO_MU_SHANG_XIAN})",
                 ar.len()
             )));
         }
 
-        let mut 文件们 = Vec::new();
-        let mut 总: u64 = 0;
+        let mut files_2 = Vec::new();
+        let mut zong: u64 = 0;
 
         for i in 0..ar.len() {
-            let mut e = ar
-                .by_index(i)
-                .map_err(|e| NotaError::other(format!("包里的第 {} 条读不出来：{e}", i + 1)))?;
+            let mut e = ar.by_index(i).map_err(|e| {
+                NotaError::other(format!("Could not read package entry {}: {e}", i + 1))
+            })?;
             if e.is_dir() {
-                continue; // 目录条目不带内容，路径本身由文件条目补
+                continue;
             }
-            let 路径 = 路径合法吗(e.name())?;
+            let path_3 = path_he_fa_ma(e.name())?;
 
-            let mut 内容 = Vec::new();
-            // ⚠️ `take(上限 + 1)` 而不是 `read_to_end`：读完才知道有没有超，
-            // 而"读完"这一步正是要防的（一条声称 4 GiB 的条目）。
-            // 多读那 1 个字节是为了分清"正好等于上限"和"超了"。
+            let mut content_2 = Vec::new();
+
             e.by_ref()
-                .take(单文件上限 + 1)
-                .read_to_end(&mut 内容)
-                .map_err(|e| NotaError::other(format!("包里的 `{路径}` 解不开：{e}")))?;
-            if 内容.len() as u64 > 单文件上限 {
+                .take(DAN_FILE_SHANG_XIAN + 1)
+                .read_to_end(&mut content_2)
+                .map_err(|e| {
+                    NotaError::other(format!(
+                        "Could not extract `{path_3}` from the package: {e}"
+                    ))
+                })?;
+            if content_2.len() as u64 > DAN_FILE_SHANG_XIAN {
                 return Err(NotaError::other(format!(
-                    "包里的 `{路径}` 超过 {单文件上限} 字节"
+                    "Package entry `{path_3}` exceeds {DAN_FILE_SHANG_XIAN} bytes"
                 )));
             }
 
-            总 += 内容.len() as u64;
-            if 总 > 总上限 {
+            zong += content_2.len() as u64;
+            if zong > ZONG_SHANG_XIAN {
                 return Err(NotaError::other(format!(
-                    "包解开之后超过 {总上限} 字节——不装了（防 zip 炸弹）"
+                    "The extracted package exceeds {ZONG_SHANG_XIAN} bytes and was rejected"
                 )));
             }
-            文件们.push(包文件 { 路径, 内容 });
+            files_2.push(PackageFile { path_3, content_2 });
         }
 
-        Self::从文件们(文件们)
+        Self::cong_files(files_2)
     }
 
-    /// 从一个**目录**读（开发态、或者用户选了个文件夹）。
-    ///
-    /// 与 zip 那条走**同一套**规则：同一个 [`路径合法吗`]、同一组上限、
-    /// 同样的摘要。所以"文件夹里验过的签名"和"打回包里再验"结果一样。
-    pub fn 从目录(root: &Path) -> Result<Self> {
-        let mut 文件们 = Vec::new();
-        let mut 总: u64 = 0;
-        收目录(root, root, &mut 文件们, &mut 总)?;
-        Self::从文件们(文件们)
+    pub fn cong_directory(root: &Path) -> Result<Self> {
+        let mut files_2 = Vec::new();
+        let mut zong: u64 = 0;
+        receive_directory(root, root, &mut files_2, &mut zong)?;
+        Self::cong_files(files_2)
     }
 
-    /// 两条来源的汇合点：**摘掉签名文件、解析它、剩下的才是载荷**。
-    fn 从文件们(mut 文件们: Vec<包文件>) -> Result<Self> {
-        let 签名 = match 文件们.iter().position(|f| f.路径 == 签名文件) {
+    fn cong_files(mut files_2: Vec<PackageFile>) -> Result<Self> {
+        let qian_ming = match files_2.iter().position(|f| f.path_3 == SIGNATURE_FILE) {
             None => None,
             Some(i) => {
-                let f = 文件们.remove(i);
-                let text = String::from_utf8(f.内容)
-                    .map_err(|_| NotaError::other("签名块不是 UTF-8 文本"))?;
-                Some(读签名(&text)?)
+                let f = files_2.remove(i);
+                let text = String::from_utf8(f.content_2)
+                    .map_err(|_| NotaError::other("The signature block is not UTF-8 text"))?;
+                Some(read_qian_ming(&text)?)
             }
         };
-        文件们.sort_by(|a, b| a.路径.cmp(&b.路径));
-        Ok(Self { 文件们, 签名 })
+        files_2.sort_by(|a, b| a.path_3.cmp(&b.path_3));
+        Ok(Self { files_2, qian_ming })
     }
 
-    /// 载荷摘要。算法见文件头，**这里就是那一份实现**。
-    pub fn 摘要(&self) -> [u8; 32] {
+    pub fn summary(&self) -> [u8; 32] {
         use sha2::{Digest, Sha256};
         let mut h = Sha256::new();
-        for f in &self.文件们 {
-            h.update(f.路径.as_bytes());
+        for f in &self.files_2 {
+            h.update(f.path_3.as_bytes());
             h.update([0u8]);
-            h.update(Sha256::digest(&f.内容));
+            h.update(Sha256::digest(&f.content_2));
         }
         h.finalize().into()
     }
 
-    /// 取一个文件的内容。
-    pub fn 找(&self, 路径: &str) -> Option<&[u8]> {
-        self.文件们
+    pub fn zhao(&self, path_3: &str) -> Option<&[u8]> {
+        self.files_2
             .iter()
-            .find(|f| f.路径 == 路径)
-            .map(|f| f.内容.as_slice())
+            .find(|f| f.path_3 == path_3)
+            .map(|f| f.content_2.as_slice())
     }
 
-    /// 验签。**结果只有三种可能**（见文件头那张表），验不过就是 `Err`。
-    pub fn 验签(&self, 信任库: &信任库) -> Result<Signature> {
-        let Some(sig) = &self.签名 else {
+    pub fn yan_qian(&self, trust_store: &TrustStore) -> Result<Signature> {
+        let Some(sig) = &self.qian_ming else {
             return Ok(Signature::Unsigned);
         };
 
         if sig.algorithm != "ed25519" {
             return Err(NotaError::other(format!(
-                "不认识的签名算法 `{}`（只认 ed25519）",
+                "Unsupported signature algorithm `{}`; only Ed25519 is accepted",
                 sig.algorithm
             )));
         }
 
-        // ⚠️ `from_bytes` 会拒掉不合法的公钥（不是曲线上一个合法点）。
-        let key = ed25519_dalek::VerifyingKey::from_bytes(&sig.public_key)
-            .map_err(|e| NotaError::other(format!("签名块里的公钥不合法：{e}")))?;
+        let key = ed25519_dalek::VerifyingKey::from_bytes(&sig.public_key).map_err(|e| {
+            NotaError::other(format!("Invalid public key in the signature block: {e}"))
+        })?;
 
-        // ⚠️ `verify_strict` 而不是 `verify`：前者额外拒掉**小阶公钥**那类
-        // "同一个签名对多把钥匙都成立"的构造。用 `verify` 的话，攻击者能拿
-        // 一把构造出来的钥匙冒充别人——而那正是签名要防的事。
         key.verify_strict(
-            &self.摘要(),
+            &self.summary(),
             &ed25519_dalek::Signature::from_bytes(&sig.signature),
         )
         .map_err(|_| {
             NotaError::other(
-                "签名对不上——这个包**在签完之后被改过**，或者签名块是坏的。\
-                 不装（这是唯一一条硬拒的路径）"
+                "Signature verification failed; the package was modified after signing or the signature block is invalid."
                     .to_owned(),
             )
         })?;
 
-        // ⚠️ 指纹**重算**，不信包里那一栏。
-        let 真指纹 = super::installed::公钥指纹(&sig.public_key);
-        if 真指纹 != sig.key_id {
+        let zhen_fingerprint = super::installed::gong_yao_fingerprint(&sig.public_key);
+        if zhen_fingerprint != sig.key_id {
             return Err(NotaError::other(format!(
-                "签名块里的 key_id（`{}`）与公钥对不上（算出来是 `{真指纹}`）",
+                "Signature key_id (`{}`) does not match the public key (`{zhen_fingerprint}`)",
                 sig.key_id
             )));
         }
 
-        Ok(if 信任库.有没有(&真指纹) {
+        Ok(if trust_store.contains(&zhen_fingerprint) {
             Signature::Verified
         } else {
             Signature::Unknown
@@ -253,22 +177,19 @@ impl 包 {
     }
 }
 
-impl 包签名 {
-    /// 公钥的 base64 原文（标准字母表，带 `=` 补位）。
-    ///
-    /// ⚠️ 编码这件事**只在这里实现一次**：写包的那一侧在 `tools/pack-plugin.py`，
-    /// 读的一侧是 [`读签名`]；而"把公钥存进 `plugins.toml` 好让「信任」按钮
-    /// 事后还能用"是第三种用途。三处各写一遍就是"两处相乘"那个病
-    /// ——某天换了字母表（比如 url-safe），漏掉一处就验不过，且症状只在装了
-    /// 签名的包上出现。
-    pub fn 公钥base64(&self) -> String {
+impl PackageSignature {
+    pub fn gong_yao_base64(&self) -> String {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD.encode(self.public_key)
     }
 }
 
-/// 递归收一个目录。跳过符号链接，理由见下。
-fn 收目录(root: &Path, dir: &Path, out: &mut Vec<包文件>, 总: &mut u64) -> Result<()> {
+fn receive_directory(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<PackageFile>,
+    zong: &mut u64,
+) -> Result<()> {
     let entries = std::fs::read_dir(dir).map_err(|source| NotaError::Read {
         path: dir.to_path_buf(),
         source,
@@ -281,101 +202,89 @@ fn 收目录(root: &Path, dir: &Path, out: &mut Vec<包文件>, 总: &mut u64) -
             Err(_) => continue,
         };
 
-        // ⚠️ 符号链接**整条跳过**（文件与目录都跳）：跟随它的话，一个指向上级
-        // 目录的链接就是一次无限递归——而且是在用户点完「安装」之后才开始，
-        // 界面卡死、栈溢出，看不出跟这个链接有关。插件包里本来也不该有链接。
         if ty.is_symlink() {
             continue;
         }
 
         if ty.is_dir() {
-            收目录(root, &path, out, 总)?;
+            receive_directory(root, &path, out, zong)?;
             continue;
         }
         if !ty.is_file() {
-            continue; // 管道、设备文件之类
+            continue;
         }
 
-        let 相对 = path
-            .strip_prefix(root)
-            .map_err(|_| NotaError::other(format!("{} 不在拓展目录里", path.display())))?;
-        let 名 = 相对.to_string_lossy().replace('\\', "/");
-        let 路径 = 路径合法吗(&名)?;
+        let xiang_dui = path.strip_prefix(root).map_err(|_| {
+            NotaError::other(format!(
+                "{} is not inside the extension directory",
+                path.display()
+            ))
+        })?;
+        let ming = xiang_dui.to_string_lossy().replace('\\', "/");
+        let path_3 = path_he_fa_ma(&ming)?;
 
-        let 内容 = std::fs::read(&path).map_err(|source| NotaError::Read {
+        let content_2 = std::fs::read(&path).map_err(|source| NotaError::Read {
             path: path.clone(),
             source,
         })?;
-        if 内容.len() as u64 > 单文件上限 {
+        if content_2.len() as u64 > DAN_FILE_SHANG_XIAN {
             return Err(NotaError::other(format!(
-                "`{路径}` 超过 {单文件上限} 字节"
+                "`{path_3}` exceeds {DAN_FILE_SHANG_XIAN} bytes"
             )));
         }
-        *总 += 内容.len() as u64;
-        if *总 > 总上限 {
+
+        if *zong > ZONG_SHANG_XIAN {
             return Err(NotaError::other(format!(
-                "拓展目录总共超过 {总上限} 字节——不装了"
+                "The extension directory exceeds {ZONG_SHANG_XIAN} bytes and was rejected"
             )));
         }
-        out.push(包文件 { 路径, 内容 });
+        out.push(PackageFile { path_3, content_2 });
     }
 
-    if out.len() > 条目上限 {
-        return Err(NotaError::other(format!("文件太多（上限 {条目上限}）")));
+    if out.len() > TIAO_MU_SHANG_XIAN {
+        return Err(NotaError::other(format!(
+            "Too many files (limit {TIAO_MU_SHANG_XIAN})"
+        )));
     }
     Ok(())
 }
 
-/// 归一 + 校验一个包内路径。
-///
-/// # ⚠️ 这是安全函数，不是格式函数
-///
-/// 包是**别人给的文件**，而里面的路径会被拿去拼落点（`目标目录.join(路径)`）。
-/// 不设防的话 `../../.config/autostart/x.desktop` 就是一个任意路径写入口
-/// ——"装个插件"变成"往哪儿都能写"。所以规则宁可严：
-///
-/// - 反斜杠一律**当成**分隔符（zip 里两种都有，Windows 打的包会用 `\`）；
-/// - 不许绝对路径、不许盘符；
-/// - 不许出现 `.` / `..` / 空段（`a//b` 也拒）；
-/// - 不许空名、不许超长。
-///
-/// ⚠️ 只在**解包时**校验一次，之后一律用归一过的那个字符串——
-/// 解包时验、落盘时再验第二遍，就是"两处相乘"：改一处忘一处，
-/// 而这里漏一处就是任意路径写。
-pub fn 路径合法吗(名: &str) -> Result<String> {
-    let 名 = 名.replace('\\', "/");
-    let 名 = 名.trim_end_matches('/').to_owned();
+pub fn path_he_fa_ma(ming: &str) -> Result<String> {
+    let ming = ming.replace('\\', "/");
+    let ming = ming.trim_end_matches('/').to_owned();
 
-    if 名.is_empty() {
-        return Err(NotaError::other("包里有一个空路径的条目"));
+    if ming.is_empty() {
+        return Err(NotaError::other("The package contains an empty path"));
     }
-    if 名.len() > 名字上限 {
-        return Err(NotaError::other(format!("包里有一个超长路径（{} 字节）", 名.len())));
-    }
-    if 名.starts_with('/') || 名.contains(':') {
+    if ming.len() > NAME_SHANG_XIAN {
         return Err(NotaError::other(format!(
-            "包里的路径 `{名}` 是绝对路径或带盘符——不装这种包"
+            "The package contains an overlong path ({} bytes)",
+            ming.len()
         )));
     }
-    for 段 in 名.split('/') {
-        if 段.is_empty() || 段 == "." || 段 == ".." {
+    if ming.starts_with('/') || ming.contains(':') {
+        return Err(NotaError::other(format!(
+            "Package path `{ming}` is absolute or includes a drive prefix"
+        )));
+    }
+    for duan in ming.split('/') {
+        if duan.is_empty() || duan == "." || duan == ".." {
             return Err(NotaError::other(format!(
-                "包里的路径 `{名}` 含 `.` / `..` / 空段——这是想把文件写到目标目录外面"
+                "Package path `{ming}` contains `.`, `..`, or an empty segment"
             )));
         }
     }
-    Ok(名)
+    Ok(ming)
 }
 
-/// 读一个签名块。**缺栏就说清缺哪一栏**，别让作者对着一句"格式不对"猜。
-fn 读签名(text: &str) -> Result<包签名> {
+fn read_qian_ming(text: &str) -> Result<PackageSignature> {
     #[derive(Deserialize)]
-    struct 文件 {
-        signature: 段,
+    struct SignatureFile {
+        signature: SignatureData,
     }
     #[derive(Deserialize)]
-    struct 段 {
-        #[serde(default = "默认算法")]
+    struct SignatureData {
+        #[serde(default = "default_suan_fa")]
         algorithm: String,
         key_id: String,
         public_key: String,
@@ -383,36 +292,41 @@ fn 读签名(text: &str) -> Result<包签名> {
         #[serde(default)]
         signed_at: String,
     }
-    fn 默认算法() -> String {
+    fn default_suan_fa() -> String {
         "ed25519".to_owned()
     }
 
-    let f: 文件 = toml::from_str(text)
-        .map_err(|e| NotaError::other(format!("签名块读不出来（要 `[signature]` 一段）：{e}")))?;
+    let f: SignatureFile = toml::from_str(text).map_err(|e| {
+        NotaError::other(format!(
+            "Could not read the signature block; a `[signature]` section is required: {e}"
+        ))
+    })?;
 
-    let 解 = |s: &str, 要: usize, 名: &str| -> Result<Vec<u8>> {
+    let jie_2 = |s: &str, yao: usize, ming: &str| -> Result<Vec<u8>> {
         use base64::Engine;
         let v = base64::engine::general_purpose::STANDARD
             .decode(s.trim())
-            .map_err(|e| NotaError::other(format!("签名块的 `{名}` 不是合法 base64：{e}")))?;
-        if v.len() != 要 {
+            .map_err(|e| {
+                NotaError::other(format!("Signature field `{ming}` is not valid base64: {e}"))
+            })?;
+        if v.len() != yao {
             return Err(NotaError::other(format!(
-                "签名块的 `{名}` 应该是 {要} 字节，实际 {} 字节",
+                "Signature field `{ming}` must be {yao} bytes, received {}",
                 v.len()
             )));
         }
         Ok(v)
     };
 
-    let pk = 解(&f.signature.public_key, 32, "public_key")?;
-    let sg = 解(&f.signature.signature, 64, "signature")?;
+    let pk = jie_2(&f.signature.public_key, 32, "public_key")?;
+    let sg = jie_2(&f.signature.signature, 64, "signature")?;
 
     let mut public_key = [0u8; 32];
     public_key.copy_from_slice(&pk);
     let mut signature = [0u8; 64];
     signature.copy_from_slice(&sg);
 
-    Ok(包签名 {
+    Ok(PackageSignature {
         algorithm: f.signature.algorithm,
         key_id: f.signature.key_id,
         public_key,
@@ -421,30 +335,26 @@ fn 读签名(text: &str) -> Result<包签名> {
     })
 }
 
-
-/// 把一个路径读成字节：`.nota-plugin` / `.zip` 走解包，目录走 [`包::从目录`]。
-pub fn 读一个包(path: &Path) -> Result<包> {
+pub fn read_yi_ge_bao(path: &Path) -> Result<Package> {
     if path.is_dir() {
-        return 包::从目录(path);
+        return Package::cong_directory(path);
     }
     let bytes = std::fs::read(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
         source,
     })?;
-    包::从zip(&bytes)
+    Package::cong_zip(&bytes)
 }
 
-/// 这个路径看起来是个包文件吗（拿后缀判）。
-pub fn 像包文件(path: &Path) -> bool {
+pub fn xiang_bao_file(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),
         Some("nota-plugin") | Some("zip")
     )
 }
 
-/// 把一个相对路径拼到目标目录下。⚠️ 只接受 [`路径合法吗`] 的产物。
-pub fn 拼落点(目标: &Path, 路径: &str) -> PathBuf {
-    目标.join(路径)
+pub fn pin_target(target_2: &Path, path_3: &str) -> PathBuf {
+    target_2.join(path_3)
 }
 
 #[cfg(test)]
@@ -452,173 +362,183 @@ mod tests {
     use super::*;
     use ed25519_dalek::Signer;
 
-    /// 造一个签好名的包：返回 (包文件们, 签名块文本, 公钥指纹)。
-    /// 用同一套算法**独立实现一遍**摘要，才谈得上"钉住格式"
-    /// ——直接调 `包::摘要()` 再用它签，等于拿被测对象证明被测对象。
-    fn 打个包(载荷: &[(&str, &str)]) -> (Vec<(String, Vec<u8>)>, String, String) {
+    fn da_ge_bao(zai_he: &[(&str, &str)]) -> (Vec<(String, Vec<u8>)>, String, String) {
         use base64::Engine;
         use sha2::{Digest, Sha256};
 
         let key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
         let pk = key.verifying_key().to_bytes();
 
-        let mut 有序: Vec<(String, Vec<u8>)> = 载荷
+        let mut you_xu: Vec<(String, Vec<u8>)> = zai_he
             .iter()
             .map(|(p, c)| ((*p).to_owned(), c.as_bytes().to_vec()))
             .collect();
-        有序.sort_by(|a, b| a.0.cmp(&b.0));
+        you_xu.sort_by(|a, b| a.0.cmp(&b.0));
 
         let mut h = Sha256::new();
-        for (p, c) in &有序 {
+        for (p, c) in &you_xu {
             h.update(p.as_bytes());
             h.update([0u8]);
             h.update(Sha256::digest(c));
         }
-        let 摘要: [u8; 32] = h.finalize().into();
-        let sig = key.sign(&摘要).to_bytes();
+        let summary: [u8; 32] = h.finalize().into();
+        let sig = key.sign(&summary).to_bytes();
 
-        let 指纹 = super::super::installed::公钥指纹(&pk);
-        let 签名块 = format!(
-            "[signature]\nalgorithm = \"ed25519\"\nkey_id = \"{指纹}\"\n\
+        let fingerprint_2 = super::super::installed::gong_yao_fingerprint(&pk);
+        let qian_ming_kuai = format!(
+            "[signature]\nalgorithm = \"ed25519\"\nkey_id = \"{fingerprint_2}\"\n\
              public_key = \"{}\"\nsignature = \"{}\"\nsigned_at = \"2026-09-24\"\n",
             base64::engine::general_purpose::STANDARD.encode(pk),
             base64::engine::general_purpose::STANDARD.encode(sig),
         );
-        (有序, 签名块, 指纹)
+        (you_xu, qian_ming_kuai, fingerprint_2)
     }
 
-    fn 带签名的包(载荷: &[(&str, &str)]) -> (包, String) {
-        let (mut 文件们, 签名块, 指纹) = 打个包(载荷);
-        let 文件们: Vec<包文件> = 文件们
+    fn dai_qian_ming_de_bao(zai_he: &[(&str, &str)]) -> (Package, String) {
+        let (mut files_2, qian_ming_kuai, fingerprint_2) = da_ge_bao(zai_he);
+        let files_2: Vec<PackageFile> = files_2
             .drain(..)
-            .map(|(路径, 内容)| 包文件 { 路径, 内容 })
+            .map(|(path_3, content_2)| PackageFile { path_3, content_2 })
             .collect();
         (
-            包::从文件们({
-                let mut v = 文件们;
-                v.push(包文件 {
-                    路径: 签名文件.to_owned(),
-                    内容: 签名块.into_bytes(),
+            Package::cong_files({
+                let mut v = files_2;
+                v.push(PackageFile {
+                    path_3: SIGNATURE_FILE.to_owned(),
+                    content_2: qian_ming_kuai.into_bytes(),
                 });
                 v
             })
             .unwrap(),
-            指纹,
+            fingerprint_2,
         )
     }
 
-    /// 没签名 = `Unsigned`（开发态的文件夹插件必然是这样，拒掉它等于堵死开发流程）。
     #[test]
-    fn 没签名就是未签名不是错误() {
-        let p = 包::从文件们(vec![
-            包文件 {
-                路径: 清单文件.to_owned(),
-                内容: b"[plugin]\nid = \"a.b\"\n".to_vec(),
+    fn mei_qian_ming_jiu_shi_wei_qian_ming_bu_shi_error() {
+        let p = Package::cong_files(vec![
+            PackageFile {
+                path_3: MANIFEST_FILE.to_owned(),
+                content_2: b"[plugin]\nid = \"a.b\"\n".to_vec(),
             },
-            // 名字故意排在后头，钉"排序"那一步真的做了
-            包文件 {
-                路径: "main.lua".to_owned(),
-                内容: b"return {}\n".to_vec(),
+            PackageFile {
+                path_3: "main.lua".to_owned(),
+                content_2: b"return {}\n".to_vec(),
             },
         ])
         .unwrap();
-        assert!(p.签名.is_none());
-        assert_eq!(p.验签(&信任库::从文本("")).unwrap(), Signature::Unsigned);
-        assert_eq!(p.文件们.len(), 2);
-        assert_eq!(p.文件们[0].路径, "main.lua", "按路径排序");
-    }
-
-    /// 签过、而且钥匙在信任库里 → `Verified`。
-    #[test]
-    fn 签名对且信任就是已验证() {
-        let (p, 指纹) = 带签名的包(&[(清单文件, "[plugin]\nid = \"a.b\"\n"), ("main.lua", "x")]);
-        let 库 = 信任库::从文本(&format!(
-            "[keys.\"{指纹}\"]\nname = \"测试\"\npublic_key = \"AA==\"\n"
-        ));
-        assert_eq!(p.验签(&库).unwrap(), Signature::Verified);
-    }
-
-    /// 签过但钥匙没被信任 → `Unknown`（装得进来，但界面上要标出来）。
-    #[test]
-    fn 签名对但没信任就是未知签名者() {
-        let (p, _) = 带签名的包(&[(清单文件, "[plugin]\nid = \"a.b\"\n")]);
+        assert!(p.qian_ming.is_none());
         assert_eq!(
-            p.验签(&信任库::从文本("")).unwrap(),
+            p.yan_qian(&TrustStore::from_text("")).unwrap(),
+            Signature::Unsigned
+        );
+        assert_eq!(p.files_2.len(), 2);
+        assert_eq!(
+            p.files_2[0].path_3, "main.lua",
+            "\u{6309}\u{8def}\u{5f84}\u{6392}\u{5e8f}"
+        );
+    }
+
+    #[test]
+    fn qian_ming_dui_qie_trust_ren_jiu_shi_yi_yan_zheng() {
+        let (p, fingerprint_2) = dai_qian_ming_de_bao(&[
+            (MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n"),
+            ("main.lua", "x"),
+        ]);
+        let ku = TrustStore::from_text(&format!(
+            "[keys.\"{fingerprint_2}\"]\nname = \"\u{6d4b}\u{8bd5}\"\npublic_key = \"AA==\"\n"
+        ));
+        assert_eq!(p.yan_qian(&ku).unwrap(), Signature::Verified);
+    }
+
+    #[test]
+    fn qian_ming_dui_dan_mei_trust_ren_jiu_shi_wei_zhi_qian_ming_zhe() {
+        let (p, _) = dai_qian_ming_de_bao(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
+        assert_eq!(
+            p.yan_qian(&TrustStore::from_text("")).unwrap(),
             Signature::Unknown
         );
     }
 
-    /// ⚠️ 这条是**安全用例**：签完之后动一个字节，就必须拒。
     #[test]
-    fn 签完再改一个字节就拒() {
-        let (mut p, _) = 带签名的包(&[(清单文件, "[plugin]\nid = \"a.b\"\n"), ("main.lua", "x")]);
+    fn qian_wan_zai_gai_yi_ge_zi_jie_jiu_ju() {
+        let (mut p, _) = dai_qian_ming_de_bao(&[
+            (MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n"),
+            ("main.lua", "x"),
+        ]);
         let f = p
-            .文件们
+            .files_2
             .iter_mut()
-            .find(|f| f.路径 == "main.lua")
+            .find(|f| f.path_3 == "main.lua")
             .unwrap();
-        f.内容 = b"y".to_vec(); // 一个字节：x → y
+        f.content_2 = b"y".to_vec();
 
-        let err = p.验签(&信任库::从文本("")).unwrap_err().to_string();
-        assert!(err.contains("签名对不上"), "实际：{err}");
+        let err = p
+            .yan_qian(&TrustStore::from_text(""))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("Signature verification failed"),
+            "unexpected error: {err}"
+        );
     }
 
-    /// ⚠️ 这条也是**安全用例**：改 `key_id` 冒充一把已信任的钥匙，必须拒。
     #[test]
-    fn 改_key_id_冒充信任的钥匙要拒() {
-        let (mut p, _) = 带签名的包(&[(清单文件, "[plugin]\nid = \"a.b\"\n")]);
-        // 把签名块里的 key_id 换成"另一把"（公钥不动）
-        let sig = p.签名.as_mut().unwrap();
+    fn rejects_spoofed_key_id_for_trusted_key() {
+        let (mut p, _) = dai_qian_ming_de_bao(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
+
+        let sig = p.qian_ming.as_mut().unwrap();
         sig.key_id = "0000000000000000".to_owned();
 
-        let err = p.验签(&信任库::从文本("")).unwrap_err().to_string();
-        assert!(err.contains("对不上"), "实际：{err}");
+        let err = p
+            .yan_qian(&TrustStore::from_text(""))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("does not match"), "unexpected error: {err}");
     }
 
-    /// ⚠️ 这条是**安全用例**：摘要不含签名文件自己。
-    /// 如果它参与了，加进签名块会让摘要变，签名就永远验不过——
-    /// 但更糟的是有人"顺手把它算进去"，于是改签名块里的 `signed_at`
-    /// 就变成一次签名失效。钉住它。
     #[test]
-    fn 摘要不含签名文件自己() {
-        let (p, _) = 带签名的包(&[(清单文件, "[plugin]\nid = \"a.b\"\n")]);
-        let 只有载荷 = 包::从文件们(p.文件们.clone()).unwrap();
-        assert!(只有载荷.签名.is_none());
-        assert_eq!(p.摘要(), 只有载荷.摘要(), "签名文件不该影响摘要");
+    fn summary_bu_han_qian_ming_file_zi_ji() {
+        let (p, _) = dai_qian_ming_de_bao(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
+        let zhi_you_zai_he = Package::cong_files(p.files_2.clone()).unwrap();
+        assert!(zhi_you_zai_he.qian_ming.is_none());
+        assert_eq!(
+            p.summary(),
+            zhi_you_zai_he.summary(),
+            "\u{7b7e}\u{540d}\u{6587}\u{4ef6}\u{4e0d}\u{8be5}\u{5f71}\u{54cd}\u{6458}\u{8981}"
+        );
     }
 
-    /// 重新排序条目**不改**摘要——这是"重打包不必重签"那条性质的根据。
     #[test]
-    fn 条目顺序不影响摘要() {
-        let a = 包::从文件们(vec![
-            包文件 {
-                路径: "a".to_owned(),
-                内容: b"1".to_vec(),
+    fn tiao_mu_shun_xu_bu_ying_xiang_summary() {
+        let a = Package::cong_files(vec![
+            PackageFile {
+                path_3: "a".to_owned(),
+                content_2: b"1".to_vec(),
             },
-            包文件 {
-                路径: "b".to_owned(),
-                内容: b"2".to_vec(),
+            PackageFile {
+                path_3: "b".to_owned(),
+                content_2: b"2".to_vec(),
             },
         ])
         .unwrap();
-        let b = 包::从文件们(vec![
-            包文件 {
-                路径: "b".to_owned(),
-                内容: b"2".to_vec(),
+        let b = Package::cong_files(vec![
+            PackageFile {
+                path_3: "b".to_owned(),
+                content_2: b"2".to_vec(),
             },
-            包文件 {
-                路径: "a".to_owned(),
-                内容: b"1".to_vec(),
+            PackageFile {
+                path_3: "a".to_owned(),
+                content_2: b"1".to_vec(),
             },
         ])
         .unwrap();
-        assert_eq!(a.摘要(), b.摘要());
+        assert_eq!(a.summary(), b.summary());
     }
 
-    /// ⚠️ 这条是**安全用例**：包里的路径不许把文件写到目标目录外面去。
     #[test]
-    fn 包里的路径跳不出目标目录() {
-        for 坏 in [
+    fn bao_li_de_path_tiao_bu_chu_target_directory() {
+        for huai in [
             "../evil",
             "a/../../evil",
             "/etc/passwd",
@@ -629,26 +549,32 @@ mod tests {
             "",
             "..",
         ] {
-            assert!(路径合法吗(坏).is_err(), "`{坏}` 该被拒");
+            assert!(
+                path_he_fa_ma(huai).is_err(),
+                "`{huai}` \u{8be5}\u{88ab}\u{62d2}"
+            );
         }
-        for 好 in ["plugin.toml", "main.lua", "icons/a.png", "a/b/c/d.lua"] {
-            assert_eq!(路径合法吗(好).unwrap(), 好, "`{好}` 是合法路径");
+        for ok_2 in ["plugin.toml", "main.lua", "icons/a.png", "a/b/c/d.lua"] {
+            assert_eq!(
+                path_he_fa_ma(ok_2).unwrap(),
+                ok_2,
+                "`{ok_2}` \u{662f}\u{5408}\u{6cd5}\u{8def}\u{5f84}"
+            );
         }
-        // 反斜杠归一成正斜杠（Windows 打的包）
-        assert_eq!(路径合法吗("a\\b").unwrap(), "a/b");
-        // 尾斜杠是目录条目的写法，归一掉
-        assert_eq!(路径合法吗("a/b/").unwrap(), "a/b");
+
+        assert_eq!(path_he_fa_ma("a\\b").unwrap(), "a/b");
+
+        assert_eq!(path_he_fa_ma("a/b/").unwrap(), "a/b");
     }
 
-    /// 解出来的包能读出来内容（顺带钉住 `zip` 那条路真的走得通）。
     #[test]
-    fn 从zip解开能读到文件() {
+    fn cong_zip_jie_kai_neng_read_dao_file() {
         use std::io::Write;
         let mut buf = Vec::new();
         {
             let mut w = zip::ZipWriter::new(std::io::Cursor::new(&mut buf));
-            let opts: zip::write::FileOptions<'_, ()> =
-                zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Stored);
+            let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
             w.start_file("plugin.toml", opts).unwrap();
             w.write_all(b"[plugin]\nid = \"a.b\"\n").unwrap();
             w.start_file("main.lua", opts).unwrap();
@@ -656,72 +582,68 @@ mod tests {
             w.finish().unwrap();
         }
 
-        let p = 包::从zip(&buf).unwrap();
-        assert_eq!(p.文件们.len(), 2);
-        assert_eq!(p.找("main.lua").unwrap(), b"return {}\n");
-        assert_eq!(p.找("没有这个"), None);
-        assert!(p.签名.is_none());
+        let p = Package::cong_zip(&buf).unwrap();
+        assert_eq!(p.files_2.len(), 2);
+        assert_eq!(p.zhao("main.lua").unwrap(), b"return {}\n");
+        assert_eq!(p.zhao("\u{6ca1}\u{6709}\u{8fd9}\u{4e2a}"), None);
+        assert!(p.qian_ming.is_none());
     }
 
-    /// 不是 zip 就得说清"这不是一个能读的插件包"，不要 panic。
     #[test]
-    fn 不是zip就报错不panic() {
-        let err = 包::从zip("这是一段普通文本，不是 zip".as_bytes())
+    fn bu_shi_zip_jiu_bao_cuo_bu_panic() {
+        let err = Package::cong_zip("\u{8fd9}\u{662f}\u{4e00}\u{6bb5}\u{666e}\u{901a}\u{6587}\u{672c}\u{ff0c}\u{4e0d}\u{662f} zip".as_bytes())
             .unwrap_err()
             .to_string();
-        assert!(err.contains("拓展包"), "实际：{err}");
+        assert!(err.contains("extension package"), "unexpected error: {err}");
     }
 
-    /// 坏掉的信任库当空表——它不该让应用打不开。
     #[test]
-    fn 坏掉的信任库当空表() {
-        let 库 = 信任库::从文本("不是 TOML {{{");
-        assert!(!库.有没有("随便"));
-        assert_eq!(库.有几把(), 0);
+    fn broken_trust_store_is_treated_as_empty() {
+        let ku = TrustStore::from_text("\u{4e0d}\u{662f} TOML {{{");
+        assert!(!ku.contains("\u{968f}\u{4fbf}"));
+        assert_eq!(ku.len(), 0);
     }
 
-    /// 日期换算钉几个**手算得出来**的点：纪元零点、往前一天（`div_euclid`
-    /// 写错就会在这里露馅——负数除法是这套算术最容易栽的地方）、
-    /// 一个普通年份、以及一个**百年不闰**的年（2000 是闰年，1900 不是，
-    /// 但 `days_from_civil` 那套是按 400 年一轮算的，所以挑 2000-02-29 钉住
-    /// "世纪闰年被算进去了"）。
     #[test]
-    fn 天数换成公历日期() {
-        assert_eq!(年月日(0), (1970, 1, 1));
-        assert_eq!(年月日(-1), (1969, 12, 31));
-        assert_eq!(年月日(19_723), (2024, 1, 1));
-        assert_eq!(年月日(11_016), (2000, 2, 29));
-        assert_eq!(年月日(20_721), (2026, 9, 25));
+    fn tian_shu_huan_cheng_gong_li_ri_qi() {
+        assert_eq!(civil_date(0), (1970, 1, 1));
+        assert_eq!(civil_date(-1), (1969, 12, 31));
+        assert_eq!(civil_date(19_723), (2024, 1, 1));
+        assert_eq!(civil_date(11_016), (2000, 2, 29));
+        assert_eq!(civil_date(20_721), (2026, 9, 25));
     }
 
-    /// `今天()` 的形状：`YYYY-MM-DD`，十位，两位是连字符。
-    ///
-    /// ⚠️ **只钉形状，不钉具体哪一天**——钉了的话这条用例到了明天就红。
     #[test]
-    fn 今天长得像个日期() {
-        let t = 今天();
-        assert_eq!(t.len(), 10, "实际：{t}");
-        let 位: Vec<char> = t.chars().collect();
-        assert_eq!(位[4], '-');
-        assert_eq!(位[7], '-');
-        for (i, c) in 位.iter().enumerate() {
+    fn jin_tian_zhang_de_xiang_ge_ri_qi() {
+        let t = today();
+        assert_eq!(t.len(), 10, "\u{5b9e}\u{9645}\u{ff1a}{t}");
+        let wei: Vec<char> = t.chars().collect();
+        assert_eq!(wei[4], '-');
+        assert_eq!(wei[7], '-');
+        for (i, c) in wei.iter().enumerate() {
             if i == 4 || i == 7 {
                 continue;
             }
-            assert!(c.is_ascii_digit(), "第 {i} 位不是数字：{t}");
+            assert!(
+                c.is_ascii_digit(),
+                "\u{7b2c} {i} \u{4f4d}\u{4e0d}\u{662f}\u{6570}\u{5b57}\u{ff1a}{t}"
+            );
         }
-        assert!(t.starts_with("20"), "这个字段是给人看的，四位年：{t}");
+        assert!(t.starts_with("20"), "\u{8fd9}\u{4e2a}\u{5b57}\u{6bb5}\u{662f}\u{7ed9}\u{4eba}\u{770b}\u{7684}\u{ff0c}\u{56db}\u{4f4d}\u{5e74}\u{ff1a}{t}");
     }
 
-    /// 记一把钥匙会**顺手填上日期**（`added_at` 曾经一直是空串，见那一段的注释）。
-    ///
-    /// ⚠️ 走的是 `记下不落盘`：`记下` 会写**真的**信任表，用例不能碰。
     #[test]
-    fn 记下的钥匙带日期() {
-        let mut 库 = 信任库::从文本("");
-        库.记下不落盘("deadbeefdeadbeef", "某人", "AAA=");
-        let 文本 = 库.到文本().unwrap();
-        assert!(!文本.contains(r#"added_at = """#), "日期是空的：{文本}");
-        assert!(文本.contains(&今天()), "实际：{文本}");
+    fn ji_xia_de_yao_shi_dai_ri_qi() {
+        let mut ku = TrustStore::from_text("");
+        ku.insert_memory("deadbeefdeadbeef", "\u{67d0}\u{4eba}", "AAA=");
+        let text_2 = ku.to_text().unwrap();
+        assert!(
+            !text_2.contains(r#"added_at = """#),
+            "\u{65e5}\u{671f}\u{662f}\u{7a7a}\u{7684}\u{ff1a}{text_2}"
+        );
+        assert!(
+            text_2.contains(&today()),
+            "\u{5b9e}\u{9645}\u{ff1a}{text_2}"
+        );
     }
 }

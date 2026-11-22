@@ -24,7 +24,6 @@ export function useUtilityWindows({
 }): void {
   useEffect(() => {
     if (!inSettingsWindow && style === "external") {
-      void api.window.prepareSettings().catch(() => undefined);
       void api.window.prepareAbout().catch(() => undefined);
     }
   }, [inSettingsWindow, style]);

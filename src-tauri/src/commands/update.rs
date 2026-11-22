@@ -2,69 +2,69 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{Emitter, Manager};
 
-use crate::update::{self, 安装结果, 下载进度, 更新状态};
+use crate::update::{self, DownloadProgress, InstallResult, UpdateStatus};
 
 pub const EVENT_UPDATE_PROGRESS: &str = "nota:update-progress";
 
-static 检查中: AtomicBool = AtomicBool::new(false);
-static 安装中: AtomicBool = AtomicBool::new(false);
-static 取消下载: AtomicBool = AtomicBool::new(false);
+static CHECKING: AtomicBool = AtomicBool::new(false);
+static INSTALLING: AtomicBool = AtomicBool::new(false);
+static CANCEL_DOWNLOAD: AtomicBool = AtomicBool::new(false);
 
-struct 单飞<'a>(&'a AtomicBool);
+struct SingleFlight<'a>(&'a AtomicBool);
 
-impl<'a> 单飞<'a> {
-    fn 拿(标志: &'a AtomicBool, 忙话: &str) -> crate::error::Result<Self> {
-        标志
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .map_err(|_| crate::error::NotaError::other(忙话.to_string()))?;
-        Ok(Self(标志))
+impl<'a> SingleFlight<'a> {
+    fn acquire(flag: &'a AtomicBool, busy_message: &str) -> crate::error::Result<Self> {
+        flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| crate::error::NotaError::other(busy_message.to_string()))?;
+        Ok(Self(flag))
     }
 }
 
-impl Drop for 单飞<'_> {
+impl Drop for SingleFlight<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Release);
     }
 }
 
 #[tauri::command]
-pub async fn nota_update_check(app: tauri::AppHandle) -> crate::error::Result<更新状态> {
-    let _单飞 = 单飞::拿(&检查中, "正在检查更新，请稍候")?;
-    let 替换规则 = 下载规则(&app);
-    tauri::async_runtime::spawn_blocking(move || update::检查(&替换规则))
+pub async fn nota_update_check(app: tauri::AppHandle) -> crate::error::Result<UpdateStatus> {
+    let _flight = SingleFlight::acquire(&CHECKING, "An update check is already running")?;
+    let replacements = download_rules(&app);
+    tauri::async_runtime::spawn_blocking(move || update::check(&replacements))
         .await
-        .map_err(|e| crate::error::NotaError::other(format!("更新检查线程挂了：{e}")))?
+        .map_err(|e| crate::error::NotaError::other(format!("Update check worker failed: {e}")))?
 }
 
 #[tauri::command]
-pub async fn nota_update_install(app: tauri::AppHandle) -> crate::error::Result<安装结果> {
-    let _单飞 = 单飞::拿(&安装中, "更新正在下载或安装，请稍候")?;
-    取消下载.store(false, Ordering::Release);
-    let 替换规则 = 下载规则(&app);
-    let 推送 = app.clone();
+pub async fn nota_update_install(app: tauri::AppHandle) -> crate::error::Result<InstallResult> {
+    let _flight = SingleFlight::acquire(
+        &INSTALLING,
+        "An update is already downloading or installing",
+    )?;
+    CANCEL_DOWNLOAD.store(false, Ordering::Release);
+    let replacements = download_rules(&app);
+    let emitter = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        update::安装(
-            &替换规则,
-            |进度: 下载进度| {
-                let _ = 推送.emit(EVENT_UPDATE_PROGRESS, 进度);
+        update::install(
+            &replacements,
+            |progress: DownloadProgress| {
+                let _ = emitter.emit(EVENT_UPDATE_PROGRESS, progress);
             },
-            || 取消下载.load(Ordering::Acquire),
+            || CANCEL_DOWNLOAD.load(Ordering::Acquire),
         )
     })
     .await
-    .map_err(|e| crate::error::NotaError::other(format!("更新安装线程挂了：{e}")))?;
-    取消下载.store(false, Ordering::Release);
+    .map_err(|e| crate::error::NotaError::other(format!("Update install worker failed: {e}")))?;
+    CANCEL_DOWNLOAD.store(false, Ordering::Release);
     result
 }
 
-/// 请求中止正在下载的更新。真正的检查在下载循环每读一块之前执行，
-/// 已经下载的临时包不会进入校验或安装阶段。
 #[tauri::command]
 pub fn nota_update_cancel() {
-    取消下载.store(true, Ordering::Release);
+    CANCEL_DOWNLOAD.store(true, Ordering::Release);
 }
 
-fn 下载规则(app: &tauri::AppHandle) -> String {
+fn download_rules(app: &tauri::AppHandle) -> String {
     let state = app.state::<crate::state::AppState>();
     state
         .settings

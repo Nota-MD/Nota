@@ -1,4 +1,4 @@
-/** 可选择设置包（`.nota-backup`，标准 ZIP）的 IPC 形状。 */
+
 
 export interface SettingsExportItem {
   id: string;

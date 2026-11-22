@@ -933,3 +933,17 @@ C 层 abort。§6 那几条之所以是"没实现"而不是"不会发生"，就�
 
 **一句话总结现状**：**故障隔离有了，安全隔离还没有。**
 `docs/11` 的能力表按"宿主 API 可见性"读是对的，按"权限清单"读是**超前**的。
+
+## 7. Table bridge boundary
+
+The table bridge is a narrow capability boundary. Extensions receive a source
+snapshot and may return only temporary display values, one batch write intent,
+or localized context actions.
+
+Snapshot callbacks run while the plugin host is locked, as with command
+dispatch. They publish intent through separate state, so display and edit
+messages can still reach the frontend. The host validates A1 references and
+table bounds; the frontend applies edits through ProseMirror.
+
+Setting locks are persisted in `plugins.toml`. The host writes the user's prior
+value before forcing the declared value and restores it when the owner stops.

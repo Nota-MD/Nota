@@ -69,7 +69,7 @@ testCase("日志窗口在独立进程启动，不再给主进程追加 WebView",
   contains(read("debug-log.html"), 'data-window="debug-log"', "日志入口标记");
   contains(read("debug-log.html"), 'src="/src/debug-log.tsx"', "日志页独立轻量入口");
   contains(read("src/debug-log.tsx"), "<DebugLogWindow />", "独立日志入口挂载");
-  contains(rust, ".arg(crate::cli::调试窗口选项)", "独立日志进程");
+  contains(rust, ".arg(crate::cli::DEBUG_WINDOW_FLAG)", "独立日志进程");
   const debugLogCommand = rust.slice(
     rust.indexOf("pub fn nota_window_open_debug_log"),
     rust.indexOf("pub fn nota_window_open_devtools"),
@@ -110,7 +110,7 @@ testCase("后端日志同时写入持久文件，并提供增量读取命令", (
   const bridge = read("src/bridge/ipc.ts");
   contains(log, "nota-debug.log", "持久日志路径");
   contains(log, "OpenOptions::new()", "追加写入");
-  contains(log, "pub fn 读取增量", "增量读取");
+  contains(log, "pub fn read_increment", "增量读取");
   contains(commands, "nota_debug_log_read", "IPC 命令");
   contains(commands, "nota_debug_log_write", "前端事件写入命令");
   contains(lib, "commands::diagnostics::nota_debug_log_write", "写入命令注册");

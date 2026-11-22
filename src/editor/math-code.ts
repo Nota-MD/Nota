@@ -1,9 +1,9 @@
-/**
- * `math` / `latex` / `tex` 围栏代码块的数学语义。
- *
- * 文件里的 Markdown 字节不改，仍然是普通围栏代码块；编辑器、HTML 导出和
- * Pandoc 出口在读取时把这些围栏按 LaTeX 数学处理。
- */
+
+
+
+
+
+
 
 import type { KatexOptions } from "katex";
 
@@ -26,7 +26,7 @@ export interface NumberLearnCodeOutput {
   sameStep: (source: string) => void;
 }
 
-/** 建一块用于代码块编辑器的 KaTeX 输出。 */
+
 export function createNumberLearnCodeOutput(options: KatexOptions = {}): NumberLearnCodeOutput {
   const element = document.createElement("div");
   element.className = "nota-code-math-preview";
@@ -63,12 +63,12 @@ export function createNumberLearnCodeOutput(options: KatexOptions = {}): NumberL
   };
 }
 
-/**
- * 把 Pandoc 输入里的数学围栏转成标准 `$$…$$`。
- *
- * 只改围栏的类型，不改里面一个字符；未闭合的数学围栏保持原样，避免把后续
- * 整篇正文吞进公式。
- */
+
+
+
+
+
+
 export function numberLearnCodeBlockConvertCommonStyle(markdown: string): string {
   const rows = markdown.split("\n");
   const output: string[] = [];

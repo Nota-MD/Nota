@@ -3300,6 +3300,27 @@ plugin 13 / frontendReady 1 / startupFile 1），**从未被调用过的有 4 �
 
 ---
 
+## 6A. Table extension controls
+
+Spreadsheet mode keeps the existing GFM table and adds a formula bar, range
+selection and extension context actions. A table-capable extension may publish
+temporary values: an unselected computed cell shows the value, while selecting
+the cell reveals and edits the Markdown source.
+
+When `[[setting_lock]]` owns `editor.spreadsheet_tables`, the Editor settings
+toggle stays visibly enabled but disabled. The note says it is managed by an
+installed extension. Disabling or uninstalling that extension restores the
+user's prior value.
+
+The right-click table section includes actions registered through
+`nota.table.register_action`. `nota.sheet-formulas` registers **Keep Values**,
+which replaces selected formulas in one undoable transaction.
+
+Row and column headers enter the same immediate range-selection path as pointer
+drags, and active ranges use the theme accent surface. Preferences creation uses
+one cross-platform fast path: create and show the in-process settings window
+first, then fall back to the standalone process if creation fails.
+
 ## 7. ✅ 与 `07` / `10` 的四处不一致（**已全部结清，2026-09-22**）
 
 `docs/09` §1 第 1 条：**文档与代码不一致时以代码为准**，同一批改文档，并记入 `docs/07` §4

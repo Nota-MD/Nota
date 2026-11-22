@@ -107,7 +107,9 @@ impl WindowRegistry {
         let inner = self.inner()?;
         let mut ids = active_ids(inner);
         ids.sort_unstable();
-        let picker_active = ids.iter().any(|id| inner.picker_dir().join(format!("{id}.json")).is_file());
+        let picker_active = ids
+            .iter()
+            .any(|id| inner.picker_dir().join(format!("{id}.json")).is_file());
         Ok(RegistrySnapshot {
             id: inner.id,
             ids,
@@ -146,7 +148,9 @@ impl WindowRegistry {
         }
         let ids = active_ids(inner);
         if !ids.contains(&target_id) {
-            return Err(NotaError::other(format!("window {target_id} is not available")));
+            return Err(NotaError::other(format!(
+                "window {target_id} is not available"
+            )));
         }
         if path.as_deref().unwrap_or("").is_empty() && text.is_none() {
             return Err(NotaError::other("no document data to transfer"));
@@ -179,7 +183,9 @@ impl WindowRegistry {
                     return Ok(());
                 }
                 return Err(NotaError::other(
-                    result.error.unwrap_or_else(|| "target window rejected the transfer".into()),
+                    result
+                        .error
+                        .unwrap_or_else(|| "target window rejected the transfer".into()),
                 ));
             }
             std::thread::sleep(Duration::from_millis(40));
@@ -234,9 +240,13 @@ impl WindowRegistry {
     }
 
     fn inner(&self) -> Result<&Inner> {
-        self.inner
-            .as_deref()
-            .ok_or_else(|| NotaError::other(self.problem.clone().unwrap_or_else(|| "window registry unavailable".into())))
+        self.inner.as_deref().ok_or_else(|| {
+            NotaError::other(
+                self.problem
+                    .clone()
+                    .unwrap_or_else(|| "window registry unavailable".into()),
+            )
+        })
     }
 }
 
@@ -387,4 +397,3 @@ mod tests {
         assert!(!safe_request_id(""));
     }
 }
-

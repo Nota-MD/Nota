@@ -1,19 +1,10 @@
-//! 「更新设置」页。
-//!
-//! 这里只保存更新检查与通知的偏好。网络请求、安装包选择、摘要校验和覆盖安装
-//! 都在 `crate::update`；设置层不持有任何更新状态，也不决定某个平台能否安装。
-//!
-//! ⚠️ 启动检查默认关闭。更新下载会访问网络，实验阶段不应在用户没选过的情况下
-//! 自动发起请求。
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum NotificationPosition {
-    /// 窗口上方居中。
     TopCenter,
-    /// 窗口右下角。与旧版提示位置一致。
+
     #[default]
     BottomRight,
 }
@@ -21,15 +12,10 @@ pub enum NotificationPosition {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Updates {
-    /// 每次启动后在后台检查一次。
     pub check_on_startup: bool,
-    /// 检查发现新版本时显示一条可操作的常驻通知。
-    /// 只有 `check_on_startup` 开启时界面才允许修改这一项。
+
     pub notify_when_available: bool,
-    /// 所有应用内通知的位置。
-    ///
-    /// ⚠️ 2026-10-24 起界面入口在「通用」页；字段仍留在 `[updates]` 是为了
-    /// 不破坏已存在的设置文件。它描述的是全应用通知，不是更新专用行为。
+
     pub notification_position: NotificationPosition,
 }
 
@@ -48,18 +34,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 更新检查默认不联网() {
+    fn update_check_is_offline_by_default() {
         let u = Updates::default();
         assert!(!u.check_on_startup);
         assert!(u.notify_when_available);
-        assert_eq!(
-            u.notification_position,
-            NotificationPosition::BottomRight
-        );
+        assert_eq!(u.notification_position, NotificationPosition::BottomRight);
     }
 
     #[test]
-    fn 更新设置能按固定枚举值往返() {
+    fn update_settings_round_trip_with_stable_enum_values() {
         let u = Updates {
             check_on_startup: true,
             notify_when_available: false,

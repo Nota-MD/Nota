@@ -62,7 +62,7 @@ testCase("后台同时支持主题包和原生 Typora 布局", () => {
   }
   assertValue(backend.includes("data-ui-style"), "界面主题没有做作用域校验");
   assertValue(backend.includes("--doc-bg"), "文档主题没有做内容校验");
-  assertValue(backend.includes("不能包含符号链接"), "ZIP 符号链接没有被拒绝");
+  assertValue(backend.includes("must not contain symbolic links"), "ZIP 符号链接没有被拒绝");
   assertValue(backend.includes("MAX_TOTAL_BYTES"), "ZIP 解压没有总大小上限");
   assertValue(backend.includes("pub(crate) mod typora"), "没有启用 Typora 导入器");
   assertValue(typora.includes("MANIFEST_FILE"), "Typora 集合没有清单");

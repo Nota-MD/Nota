@@ -78,7 +78,7 @@ export function inspectorRows(
     {
       label: "font",
       value: compactInspectorValue(
-        `${style.fontSize} / ${style.lineHeight} · ${style.fontWeight}`,
+        `${style.fontSize} / ${style.lineHeight} / ${style.fontWeight}`,
       ),
     },
     { label: "font-family", value: compactInspectorValue(style.fontFamily) },
@@ -86,7 +86,7 @@ export function inspectorRows(
     { label: "background", value: compactInspectorValue(style.backgroundColor) },
     {
       label: "box",
-      value: `${Math.round(width)} × ${Math.round(height)} · ${style.display}`,
+      value: `${Math.round(width)} × ${Math.round(height)} / ${style.display}`,
     },
     { label: "padding", value: compactInspectorValue(style.padding) },
     { label: "radius", value: compactInspectorValue(style.borderRadius) },

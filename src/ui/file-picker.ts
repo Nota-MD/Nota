@@ -1,4 +1,4 @@
-/** 应用内文件选择器的请求队列。 */
+
 
 import { api } from "@/bridge/ipc";
 
@@ -39,11 +39,11 @@ function pickInApp(request: FilePickerRequest): Promise<string | null> {
   });
 }
 
-/**
- * 先问系统原生选择器。GNOME/KDE 的搜索、最近文件与书签，以及 Windows 的
- * 常用位置都由操作系统负责；只有这次 IPC 本身失败时才打开应用内回退。
- * 用户点取消会正常返回 `null`，不会再弹第二层选择器。
- */
+
+
+
+
+
 export async function pickFile(request: FilePickerRequest): Promise<string | null> {
   try {
     const paths = await api.picker.native({
@@ -86,11 +86,11 @@ export const saveFile = (options: Omit<FilePickerRequest, "mode">) =>
 export const chooseDirectory = (options: Omit<FilePickerRequest, "mode"> = {}) =>
   pickFile({ ...options, mode: "directory" });
 
-/** `@tauri-apps/plugin-dialog` 兼容入口；内部永远走应用内选择器。 */
+
 export const open = (options: Omit<FilePickerRequest, "mode"> = {}) =>
   options.directory ? chooseDirectory(options) : openFile(options);
 
-/** `@tauri-apps/plugin-dialog` 兼容入口；内部永远走应用内选择器。 */
+
 export const save = (options: Omit<FilePickerRequest, "mode"> = {}) =>
   saveFile(options);
 
@@ -121,7 +121,7 @@ export function parentPath(path: string): string | null {
   return !dir || dir === path ? null : dir;
 }
 
-/** 文件名是否命中选择器中的任一筛选组；`*` 表示不过滤。 */
+
 export function matchesFileFilters(name: string, filters: FileFilter[]): boolean {
   if (!filters.length) return true;
   const lower = name.toLowerCase();
@@ -133,13 +133,13 @@ export function matchesFileFilters(name: string, filters: FileFilter[]): boolean
   );
 }
 
-/**
- * 保存框最终写出的路径。
- *
- * 文件名没有可识别后缀时补第一个具体筛选后缀；`All files (*)` 这类通配筛选
- * 不参与补全。这样设置包的 `nota-backup, zip` 也会得到 `.nota-backup`，而不是
- * 一个只有基础名的文件。
- */
+
+
+
+
+
+
+
 export function resolveSavePath(
   directory: string,
   fileName: string,

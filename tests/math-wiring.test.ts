@@ -52,7 +52,7 @@ import type { Transaction } from "@milkdown/kit/prose/state";
 import { insertCommonStyleBlock } from "../src/editor/insert";
 import { readSource } from "../src/editor/math-view";
 import { notConvertMeaningLineFirstHashNumber } from "../src/editor/lax-heading";
-import { fakeElement, find, number2, type FakeEvent } from "./fake-dom";
+import { fakeDocumentBody, fakeElement, find, number2, type FakeEvent } from "./fake-dom";
 import { saveToDiskValueStroke, block, blockPosition, inline, inlinePosition, create, ctx, schema, paragraph } from "./math-fixture";
 
 /* ── 一支极小的测试工装 ───────────────────────────────────────────────── */
@@ -283,9 +283,10 @@ await testCase("行内公式那档：弹窗是 `span`（整棵 NodeView 活在�
   const { perspective } = create(inline("x"), inlinePosition);
   const dom = perspective.view?.dom;
   if (!dom) throw new Error("没建出 dom");
-  const popup2 = find(dom, "nota-math-suggest");
+  const popup2 = find(fakeDocumentBody(), "nota-math-suggest");
   assertion(popup2, "该有弹窗");
   equal(popup2?.tagName, "SPAN", "行内那档的根元素");
+  equal(find(dom, "nota-math-suggest"), null, "行内弹窗仍留在会被表格裁切的子树里");
 });
 
 await testCase("敲进 `\\fr`：弹窗自己开了，第一条是 `\\frac`", () => {

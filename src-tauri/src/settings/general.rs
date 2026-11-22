@@ -1,84 +1,35 @@
-//! 「通用」那一页的设置。
-//!
-//! ⚠️⚠️ **这一页面向普通用户只显示 `language`。** `debug_mode` 仍是设置字段，
-//! 但入口改成「关于」版本号连点五下，且只有开启后左栏才出现「高级设置」。界面上还列出几条
-//! **不做**的，逐条说明为什么，而且这些理由要**出现在界面上**（见
-//! `src/ui/settings/panes/GeneralPane.tsx`）——不是"偷偷不做"，而是"明说这一条
-//! 为什么不该有"。逐个：
-//!
-//! | 界面上列出的 | Nota |
-//! |---|---|
-//! | 语言（重启后生效） | **做了**（2026-09-25，用户要求）。字段是本文件里的 `language`；「重启后生效」这句仍然成立——见下面那个字段的注释。 |
-//! | 许可证信息 | **不适用**。Nota 是 BSD-2-Clause，没有"激活"这回事，因此没有激活状态可显示。界面上换成许可证那一行。 |
-//! | 快捷键 [自定义快捷键] | 有，但**不在这页**——Nota 有独立的「快捷键」页（`src/ui/settings/panes/ShortcutsPane.tsx`）。这页放一个跳过去的入口。 |
-//! | 对话框 [重置全部警告提示对话框] | **不做**。它要的是一份"用户点过不再提示"的记录，而 Nota 目前一个可静音的对话框都没有。留一个按了没反应的按钮更糟。 |
-//! | 高级设置 [打开高级设置] [重置高级设置] | **做**，但落法不同（见下）。 |
-//! | 发送匿名使用数据 | ⛔ **绝不做**。`docs/10` §11.2 的「不做的事与理由」表把遥测列在「联网与账号类」一条里。 |
-//! | 外部服务器设置 | **不适用**。Nota 不发任何网络请求，没有可指向的服务器。 |
-//!
-//! ⚠️ 「高级设置」常见的形式是**另开一个窗口**编辑一份 JSON。Nota 不做第二个
-//! 设置界面——设置本身就是一份 TOML，直接打开那个文件、
-//! 或者一键恢复默认，比再造一个窗口诚实也简单。这两个动作**不是设置项**，
-//! 所以这里没有字段，它们是界面上的两颗按钮。
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct General {
-    /// 界面语言。`auto`（默认）= 跟系统走，别的值是 BCP-47 的短横线写法。
-    ///
-    /// 取值的判定与它到底怎么生效，全在 `src/lang.rs`（那是**唯一**一处解释
-    /// "什么算有效语言"的地方）。这里只说三条**属于设置**的事：
-    ///
-    /// 1. **存的是设定，不是结果。** 存 `auto` 的机器换一个 `LANG` 就该跟着变，
-    ///    所以别在保存时把它翻译成具体语言——那是一次性的、事后改不回来的猜测；
-    /// 2. ⚠️ **重启后生效**，界面上也是这么写的。理由：插件在**启动时**按这个
-    ///    语言加载自己的文案表（`lang/<tag>.toml`），运行中换语言就得把所有插件
-    ///    重新装一遍（跑 `on_unload` / `on_load`，里面有 git、有 HTTP）；
-    ///    而"改个下拉就把用户的插件挨个重启一遍"不是个省事的取舍。
-    ///    前端那半张文案表其实可以立刻换，但**两半必须同时换**，
-    ///    否则会出现"界面是英文、插件是中文"这种更难解释的中间态；
-    /// 3. 空串按 `auto` 处理（手写 `settings.toml` 的人可能清空它）。
-    ///    这一条由 `lang::有效语言` 兜着，别在两处各判一次。
     pub language: String,
-    /// Whether the compact first-run guide has been dismissed.
+
     pub onboarding_seen: bool,
-    /// 调试模式：把内部的诊断信息也打到控制台。
-    ///
-    /// ⚠️ 默认**关**。开着的话控制台会很吵，而绝大多数用户看不到控制台——
-    /// 他只会觉得"这软件怎么这么慢"。要排查问题的人通过「关于」版本号连点五下打开。
-    ///
-    /// ⚠️ 它**只加日志，不改行为**。任何"开着调试模式就换一套代码路径"的设计
-    /// 都会让"在我这里没问题"这句话失去意义。
+
     pub debug_mode: bool,
-    /// 全局拓展总开关。关闭后不扫描运行插件代码，但保留所有已安装文件和每个
-    /// 拓展自己的启停账本；重新开启时按原账本恢复。默认开启。
+
     pub extensions_enabled: bool,
-    /// 开发者模式的元素悬停检查。开启后指针经过界面元素时显示计算后的字体、
-    /// 颜色、尺寸和内边距。默认关闭，并且只在 `debug_mode` 同时开启时生效。
+
     pub element_inspector: bool,
-    /// 开发者模式下监听插件目录，并在 `.lua` / `plugin.toml` 保存后热重载。
-    /// 默认关闭；关闭时不启动文件轮询线程。
+
     pub lua_hot_reload: bool,
-    /// 调试期间允许拖动选择菜单、状态栏、设置页和对话框等界面文字。
-    /// 默认关闭；只在 `debug_mode` 同时开启时生效。
+
     pub select_ui_text: bool,
-    /// Allow WebView-native reload, find-next, download, source and DevTools keys.
-    /// Default off; effective only while developer mode is enabled.
+
     pub webview_default_shortcuts: bool,
-    /// Whether the authenticated developer bridge should run.
+
     pub dev_bridge_enabled: bool,
-    /// TCP port used by the authenticated developer bridge.
+
     pub dev_bridge_port: u16,
-    /// IPv4/IPv6 addresses or CIDR ranges allowed to reach the bridge.
+
     pub dev_bridge_whitelist: Vec<String>,
 }
 
 impl Default for General {
     fn default() -> Self {
         Self {
-            language: crate::lang::自动.to_owned(),
+            language: crate::lang::AUTO.to_owned(),
             onboarding_seen: false,
             debug_mode: false,
             extensions_enabled: true,
@@ -98,21 +49,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 通用里没有遥测也没有服务器() {
-        // ⚠️ 这条是**承重**的，不是形式主义。`docs/10` §11.2 的「联网与账号类」一条：
-        // 不做遥测。要加这一项，先改那份文档，然后这条测试会红，
-        // 然后改它的人必须解释为什么。
+    fn general_settings_have_no_telemetry_or_server() {
         let text = toml::to_string_pretty(&General::default()).unwrap();
-        for 禁 in ["telemetry", "analytics", "usage_data", "server", "license"] {
+        for forbidden in ["telemetry", "analytics", "usage_data", "server", "license"] {
             assert!(
-                !text.to_lowercase().contains(禁),
-                "通用设置里不该出现「{禁}」：\n{text}"
+                !text.to_lowercase().contains(forbidden),
+                "General settings must not contain {forbidden}:\n{text}"
             );
         }
     }
 
     #[test]
-    fn 调试模式默认关() {
+    fn debug_mode_is_off_by_default() {
         assert!(!General::default().debug_mode);
     }
 
@@ -124,14 +72,14 @@ mod tests {
     }
 
     #[test]
-    fn 拓展默认开启且旧设置补默认值() {
+    fn extensions_are_enabled_by_default_and_old_settings_backfill() {
         assert!(General::default().extensions_enabled);
         let old: General = toml::from_str("language = \"auto\"").unwrap();
         assert!(old.extensions_enabled);
     }
 
     #[test]
-    fn 元素悬停检查默认关闭且旧设置补默认值() {
+    fn developer_features_are_off_by_default_and_old_settings_backfill() {
         assert!(!General::default().element_inspector);
         assert!(!General::default().lua_hot_reload);
         assert!(!General::default().select_ui_text);
@@ -158,9 +106,7 @@ mod tests {
     }
 
     #[test]
-    fn 语言默认跟系统走() {
-        // ⚠️ 存的是**设定**（`auto`）而不是解析结果：同一份配置换一台机器
-        // 该跟着新机器的 `LANG` 变。理由在字段注释里。
-        assert_eq!(General::default().language, crate::lang::自动);
+    fn language_follows_the_system_by_default() {
+        assert_eq!(General::default().language, crate::lang::AUTO);
     }
 }

@@ -1,10 +1,10 @@
-/**
- * 侧栏「文件」页的扁平列表。
- *
- * 从 `Sidebar.tsx` 拆出的理由是职责完整：工作区递归扫描、列表/树切换由外层
- * 负责，这里只做扁平列表、文件摘要与新文件输入行。摘要按可见文件分批读取，
- * 完整正文不进入启动路径。
- */
+
+
+
+
+
+
+
 
 import { useEffect, useRef, useState } from "react";
 
@@ -15,9 +15,9 @@ import { Icon } from "@/ui/Icon";
 
 interface FlatFile {
   name: string;
-  /** 去掉最后一段后缀的显示名。扩展名单独淡色显示，与 Typora 的文件列表一致。 */
+
   base: string;
-  /** 含点的末段后缀；没有后缀时为空串。 */
+
   extension: string;
   path: string;
   parent: string | null;
@@ -45,7 +45,7 @@ export function FileList(props: {
   activePath: string | null;
   onOpenFile: (path: string) => void;
   loadDir: (path: string) => Promise<TreeNode[]>;
-  /** 页面现在真的可见吗。折叠侧栏或切到大纲时，不要在后台递归扫描工作区。 */
+
   active: boolean;
   creating: boolean;
   searching: boolean;
@@ -98,7 +98,7 @@ export function FileList(props: {
             return next;
           });
         } catch {
-          // 摘要只是增强信息；读不到就保留文件名与目录，不打断列表。
+
         }
       }
     };

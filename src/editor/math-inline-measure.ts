@@ -23,13 +23,17 @@ export function fitInlineSourceWidth(
   const text = source || placeholder;
   ruler.textContent = text;
   const measured = ruler.getBoundingClientRect().width;
-  // One extra pixel keeps the text caret visible at the end instead of
-  // clipping it against the closing `$`. Empty math therefore renders as a
-  // one-pixel editable slot, with the surrounding hit zones providing a larger
-  // pointer target.
-  const width = Number.isFinite(measured) && measured > 0
-    ? Math.ceil(measured) + 1
-    : 1;
+  // WebKitGTK can report zero for a freshly inserted `\` or `/` before the
+  // hidden ruler has laid out. A non-empty source must never collapse back to
+  // the one-pixel empty slot, or text and caret overlap the closing `$`.
+  const minimumTextWidth = source ? 8 : 0;
+  const contentWidth =
+    Number.isFinite(measured) && measured > minimumTextWidth
+      ? Math.ceil(measured)
+      : minimumTextWidth;
+  // One extra pixel keeps the caret visible at the end instead of clipping it
+  // against the closing `$`. Empty math remains a one-pixel editable slot.
+  const width = contentWidth > 0 ? contentWidth + 1 : 1;
   input.removeAttribute("size");
   input.style.setProperty("--nota-math-source-width", `${width}px`);
   input.style.setProperty("width", `${width}px`, "important");

@@ -19,7 +19,7 @@ import {
  * adapter. The adapter's transaction filter blocks every other document
  * change while normal or visual mode owns the keyboard. */
 export const VIM_INPUT_META = "nota-vim-input";
-/** 显式的块结构编辑（例如取消引用）在 Vim 普通模式下也允许写回文档。 */
+
 export const VIM_ALLOW_STRUCTURE_META = "nota-vim-allow-structure";
 
 export type EditorOp =

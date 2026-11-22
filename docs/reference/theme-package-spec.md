@@ -158,6 +158,18 @@ Nota 编辑区里的正文根等价于 Typora 的 `#write`。主题可以写：
 主题可以定义自己的变量，但不应占用界面主题变量，例如
 `--sidebar-width`、`--toolbar-height`、`--font-ui`。
 
+文字选区和表格范围选区使用同一套主题色板。主题可以提供：
+
+```css
+#write {
+  --select-text-bg-color: #a6c8ff;
+  --select-text-font-color: #161616;
+  --selection-outline: #0f62fe;
+}
+```
+
+`--selection-bg` 和 `--selection-ink` 也是可接受的语义别名。宿主会读取实际页面背景并计算对比度；低于填充 2.5:1、文字 4.5:1 或描边 3:1 时，会从 `--accent` 自动派生安全颜色。不要为满足对比度而把所有主题统一写死成黑白。
+
 ### 3.4 深色文档
 
 单文件主题可以写：

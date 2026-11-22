@@ -1,63 +1,63 @@
-/**
- * 文档主题的**限域**与注入。**这是"文档主题碰不到界面"的唯一保证。**
- *
- * # 为什么要有这个文件
- *
- * 文档主题是一段用户（或本仓）写的 CSS。它会写 `h1 { … }`、`body { … }`
- * 这种**裸选择器**——因为写主题的人心里想的是"一份文档"，不是"应用里的
- * 一个格子"。原样注入 `<style>` 的后果是外壳的标题、按钮、侧栏一起被改。
- *
- * 所以注入前把**每条选择器都挂到编辑区之下**：`h1` → `.editor-pane h1`。
- * 这条守卫是机械执行的，**不靠写主题时自觉**——主题文件里就算写错了，
- * 也漏不到界面上。
- *
- * # 上一版为什么被拆掉
- *
- * 上一版做的是"把外部编辑器的主题关进 `#write`"，
- * 另外还做两件事：展开 `@import`、把字体 `url()` 内联成 data: URL。
- * 用户 2026-09-23 说了两条，这个文件因此缩到现在这个大小：
- *
- * 1. **不要内置外部编辑器的主题，会侵权**；不复制第三方主题。
- *    用户自己的主题包可以带资源，宿主会把包内相对 `url()` 内联；`@import`
- *    与远程资源仍在这一层删除。
- * 2. 「这是文档风格，不是界面风格，不应该影响到UI主题」
- *    —— 上一版还会把主题的 `:root` 变量**提升到全局**，再由 `theme.css`
- *    的桥接规则喂给外壳。那正是"选个浅色文档主题、整个应用跟着变亮"的
- *    根源。现在 `:root` 被**改写**成编辑区，变量再也出不去。
- *
- * # 改写规则（顺序不能换）
- *
- * 1. 已经含 `.editor-pane` 的**原样放过**——主题自己写了前缀，再套一层会
- *    变成 `.editor-pane .editor-pane h1`，永远命不中（这是最容易犯的错）；
- * 2. `:root` / `html` / `body` 单独出现时**换成** `.editor-pane`（不是加前缀）
- *    —— 它们指的就是"正文那棵树的根"；
- * 3. 其余一律加 `.editor-pane ` 前缀；
- * 4. `@media` / `@supports` 要**下钻**（里面的选择器同样要收拢）；
- * 5. `@font-face` / `@keyframes` / `@page` **原样放过**——它们的内容不是
- *    选择器，套上前缀会当场失效；
- * 6. `@import` 与不认识的 at 规则**丢掉**：本机离线优先，`@import` 要么
- *    变成一个超时，要么引入一个本仓控制不了的第三方请求。
- *
- * # 为什么用浏览器的解析器而不是正则
- *
- * 正则切 CSS 是经典的出错场景（注释里的花括号、`content: "}"`、嵌套 `@media`）。
- * `CSSStyleSheet` 是最准的那个解析器，而且免费。解析失败时返回空串**不抛**：
- * 换主题失败不该带崩编辑器。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { replaceInlineStyle } from "./inline-style";
 
-/** 限域的锚点：整块文档区（含左右留白），不是外壳。见 `EditorPane.tsx`。 */
+
 const ANCHOR = ".editor-pane";
 const CONTENT = `${ANCHOR} .editor-mount .ProseMirror`;
 
-/** 主题自己的 `<style>` 元素的 id。 */
+
 const STYLE_ID = "nota-doc-theme";
 
-/** 指代"正文那棵树的根"的选择器。 */
+
 const ROOT_LIKE_RE = /^(:root|html|body)$/i;
 
-/** 认一下 `html body` / `body > p` 这种连续的前导 html/body。 */
+
 const LEADING_ROOT_RE = /^(?:html|body)\b\s*/i;
 
 const TYPORA_CODE_TOKEN_SELECTORS: readonly [RegExp, string][] = [
@@ -141,21 +141,271 @@ ${ANCHOR} .editor-mount .ProseMirror :is(p, li, blockquote, td, th) {
 }`;
 }
 
-/**
- * 把一份文档主题 CSS 改造成"只作用于编辑区"的样式。**同步**，解析是同步的。
- *
- * 出参可直接塞进 `<style>`。
- */
+export interface RgbaColor {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
+export interface SelectionPalette {
+  background: RgbaColor;
+  ink: RgbaColor;
+  outline: RgbaColor;
+  backgroundContrast: number;
+  inkContrast: number;
+  outlineContrast: number;
+}
+
+const DARK_SELECTION_INK: RgbaColor = { r: 22, g: 22, b: 22, a: 1 };
+const LIGHT_SELECTION_INK: RgbaColor = { r: 244, g: 244, b: 244, a: 1 };
+const MIN_SELECTION_BACKGROUND_CONTRAST = 2.5;
+
+function clampChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function channel(value: string, scale: number): number {
+  return value.endsWith("%")
+    ? (Number.parseFloat(value) / 100) * 255
+    : Number.parseFloat(value) * scale;
+}
+
+export function parseColor(value: string): RgbaColor | null {
+  const text = value.trim().toLowerCase();
+  const hex = /^#([0-9a-f]{3,8})$/.exec(text);
+  if (hex) {
+    let digits = hex[1] ?? "";
+    if (digits.length === 3 || digits.length === 4) {
+      digits = digits
+        .slice(0, 3)
+        .split("")
+        .map((digit) => digit + digit)
+        .join("");
+    }
+    if (digits.length === 6 || digits.length === 8) {
+      return {
+        r: Number.parseInt(digits.slice(0, 2), 16),
+        g: Number.parseInt(digits.slice(2, 4), 16),
+        b: Number.parseInt(digits.slice(4, 6), 16),
+        a: digits.length === 8 ? Number.parseInt(digits.slice(6, 8), 16) / 255 : 1,
+      };
+    }
+  }
+  const rgb = /^rgba?\((.*)\)$/.exec(text);
+  if (!rgb) return null;
+  const parts = (rgb[1] ?? "")
+    .replaceAll(",", " ")
+    .replace("/", " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length < 3) return null;
+  const alpha = parts[3]?.endsWith("%")
+    ? Number.parseFloat(parts[3]) / 100
+    : parts[3] === undefined
+      ? 1
+      : Number.parseFloat(parts[3]);
+  return {
+    r: clampChannel(channel(parts[0] ?? "0", 1)),
+    g: clampChannel(channel(parts[1] ?? "0", 1)),
+    b: clampChannel(channel(parts[2] ?? "0", 1)),
+    a: Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1,
+  };
+}
+
+export function contrastRatio(a: RgbaColor, b: RgbaColor): number {
+  const luminance = (color: RgbaColor): number => {
+    const linear = (value: number): number => {
+      const unit = value / 255;
+      return unit <= 0.03928 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+    };
+    return (
+      0.2126 * linear(color.r) +
+      0.7152 * linear(color.g) +
+      0.0722 * linear(color.b)
+    );
+  };
+  const left = luminance(a);
+  const right = luminance(b);
+  return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
+}
+
+function blend(base: RgbaColor, top: RgbaColor, amount: number): RgbaColor {
+  const alpha = Math.max(0, Math.min(1, amount));
+  return {
+    r: clampChannel(base.r + (top.r - base.r) * alpha),
+    g: clampChannel(base.g + (top.g - base.g) * alpha),
+    b: clampChannel(base.b + (top.b - base.b) * alpha),
+    a: 1,
+  };
+}
+
+function over(background: RgbaColor, foreground: RgbaColor): RgbaColor {
+  return foreground.a >= 1 ? { ...foreground, a: 1 } : blend(background, foreground, foreground.a);
+}
+
+function betterInk(background: RgbaColor, preferred: RgbaColor): RgbaColor {
+  if (contrastRatio(background, preferred) >= 4.5) return preferred;
+  return contrastRatio(background, DARK_SELECTION_INK) >= contrastRatio(background, LIGHT_SELECTION_INK)
+    ? DARK_SELECTION_INK
+    : LIGHT_SELECTION_INK;
+}
+
+function ensureOutline(accent: RgbaColor, background: RgbaColor): RgbaColor {
+  if (contrastRatio(accent, background) >= 3) return { ...accent, a: 1 };
+  const target =
+    contrastRatio(DARK_SELECTION_INK, background) >=
+    contrastRatio(LIGHT_SELECTION_INK, background)
+      ? DARK_SELECTION_INK
+      : LIGHT_SELECTION_INK;
+  let result = { ...accent, a: 1 };
+  for (let step = 1; step <= 20; step += 1) {
+    result = blend(accent, target, step / 20);
+    if (contrastRatio(result, background) >= 3) return result;
+  }
+  return target;
+}
+
+export function adaptiveSelectionPalette(
+  pageBackground: RgbaColor,
+  accent: RgbaColor,
+  requestedBackground = accent,
+  requestedInk = DARK_SELECTION_INK,
+): SelectionPalette {
+  const requested = over(pageBackground, requestedBackground);
+  let background =
+    contrastRatio(requested, pageBackground) >= MIN_SELECTION_BACKGROUND_CONTRAST &&
+    contrastRatio(requested, requestedInk) >= 4.5
+      ? requested
+      : pageBackground;
+  let ink = betterInk(background, requestedInk);
+
+  if (background === pageBackground) {
+    for (let step = 1; step <= 16; step += 1) {
+      const candidate = blend(pageBackground, accent, step / 25);
+      const candidateInk = betterInk(candidate, requestedInk);
+      if (
+        contrastRatio(candidate, pageBackground) >= MIN_SELECTION_BACKGROUND_CONTRAST &&
+        contrastRatio(candidate, candidateInk) >= 4.5
+      ) {
+        background = candidate;
+        ink = candidateInk;
+        break;
+      }
+    }
+  }
+
+  if (contrastRatio(background, pageBackground) < MIN_SELECTION_BACKGROUND_CONTRAST) {
+    background = accent.a > 0 ? { ...accent, a: 1 } : LIGHT_SELECTION_INK;
+    ink = betterInk(background, requestedInk);
+  }
+  const outline = ensureOutline(accent, pageBackground);
+  return {
+    background,
+    ink,
+    outline,
+    backgroundContrast: contrastRatio(background, pageBackground),
+    inkContrast: contrastRatio(background, ink),
+    outlineContrast: contrastRatio(outline, pageBackground),
+  };
+}
+
+function cssColor(color: RgbaColor): string {
+  return `rgb(${color.r}, ${color.g}, ${color.b})`;
+}
+
+function resolveCssColor(value: string, anchor: HTMLElement): RgbaColor | null {
+  const direct = parseColor(value);
+  if (direct) return direct;
+  if (!value.trim()) return null;
+  const probe = document.createElement("span");
+  probe.style.color = value;
+  probe.style.display = "none";
+  anchor.appendChild(probe);
+  const resolved = getComputedStyle(probe).color;
+  probe.remove();
+  return parseColor(resolved);
+}
+
+export function applyAdaptiveSelectionTheme(
+  anchor = document.querySelector<HTMLElement>(".editor-pane"),
+): SelectionPalette | null {
+  if (!anchor) return null;
+  const root = document.documentElement;
+  for (const property of [
+    "--nota-selection-bg",
+    "--nota-selection-ink",
+    "--nota-selection-outline",
+    "--nota-result-ink",
+    "--nota-sheet-selection-bg",
+  ]) {
+    anchor.style.removeProperty(property);
+    root.style.removeProperty(property);
+  }
+  const style = getComputedStyle(anchor);
+  const pageBackground =
+    resolveCssColor(style.getPropertyValue("--doc-bg"), anchor) ??
+    parseColor(style.backgroundColor) ??
+    parseColor("rgb(255, 255, 255)")!;
+  const accent =
+    resolveCssColor(style.getPropertyValue("--accent"), anchor) ??
+    resolveCssColor(style.getPropertyValue("--link"), anchor) ??
+    parseColor(style.color) ??
+    parseColor("rgb(47, 111, 208)")!;
+  const requestedBackground =
+    resolveCssColor(style.getPropertyValue("--selection-bg"), anchor) ??
+    resolveCssColor(style.getPropertyValue("--select-text-bg-color"), anchor) ??
+    accent;
+  const requestedInk =
+    resolveCssColor(style.getPropertyValue("--selection-ink"), anchor) ??
+    resolveCssColor(style.getPropertyValue("--select-text-font-color"), anchor) ??
+    resolveCssColor(style.getPropertyValue("--doc-fg"), anchor) ??
+    parseColor(style.color) ??
+    DARK_SELECTION_INK;
+  const resultInk =
+    resolveCssColor(style.getPropertyValue("--doc-fg"), anchor) ??
+    parseColor(style.color) ??
+    DARK_SELECTION_INK;
+  const palette = adaptiveSelectionPalette(
+    pageBackground,
+    accent,
+    requestedBackground,
+    requestedInk,
+  );
+  root.style.setProperty("--nota-selection-bg", cssColor(palette.background));
+  root.style.setProperty("--nota-selection-ink", cssColor(palette.ink));
+  root.style.setProperty("--nota-selection-outline", cssColor(palette.outline));
+  root.style.setProperty("--nota-result-ink", cssColor(resultInk));
+  root.style.setProperty("--nota-sheet-selection-bg", cssColor(palette.background));
+  window.dispatchEvent(new Event("nota-selection-theme-changed"));
+  return palette;
+}
+
+let adaptiveSelectionFrame = 0;
+
+export function scheduleAdaptiveSelectionTheme(): void {
+  if (adaptiveSelectionFrame) cancelAnimationFrame(adaptiveSelectionFrame);
+  adaptiveSelectionFrame = requestAnimationFrame(() => {
+    adaptiveSelectionFrame = 0;
+    applyAdaptiveSelectionTheme();
+  });
+}
+
+
+
+
+
+
 export function scopeDocThemeCss(css: string): string {
-  // `@charset` / `@import` 在**解析之前**先删掉。构造式样式表本来就会忽略
-  // `@import`，但不该依赖那个行为——路径上少一次网络请求总是好的。
+
+
   const cleaned = css.replace(AT_IMPORT_RE, "");
 
   const sheet = new CSSStyleSheet();
   try {
     sheet.replaceSync(cleaned);
   } catch {
-    // 语法坏到浏览器都不认。返回空串而不是抛——换主题失败不该带崩编辑器。
+
     return "";
   }
 
@@ -166,7 +416,7 @@ export function scopeDocThemeCss(css: string): string {
 
 const AT_IMPORT_RE = /@(?:import|charset)\s+[^;]*;/gi;
 
-/** 递归遍历规则表。 */
+
 function walk(rules: CSSRuleList, out: string[]): void {
   for (let i = 0; i < rules.length; i++) {
     const rule = rules[i];
@@ -177,7 +427,7 @@ function walk(rules: CSSRuleList, out: string[]): void {
         emitStyleRule(rule as CSSStyleRule, out);
         break;
 
-      // `@media` / `@supports`：条件本身不动，里面的规则照样要收拢。
+
       case CSSRule.MEDIA_RULE: {
         const media = rule as CSSMediaRule;
         const inner: string[] = [];
@@ -194,30 +444,30 @@ function walk(rules: CSSRuleList, out: string[]): void {
         break;
       }
 
-      // 描述符/关键帧不是选择器，套前缀会当场失效。原样放过。
+
       case CSSRule.FONT_FACE_RULE:
       case CSSRule.KEYFRAMES_RULE:
       case CSSRule.PAGE_RULE:
         out.push(rule.cssText);
         break;
 
-      // 剩下的（`@charset`、浏览器不认的东西）一律丢掉。
+
       default:
         break;
     }
   }
 }
 
-/** 一条普通规则 → 一条限域后的规则。 */
+
 function emitStyleRule(rule: CSSStyleRule, out: string[]): void {
   const selectors = splitTop(rule.selectorText).map(scopeDocThemeSelector).filter(Boolean);
   if (!selectors.length) return;
   out.push(`${selectors.join(", ")} {\n  ${rule.style.cssText}\n}`);
 }
 
-/**
- * 把一个选择器收拢到编辑区之下。四条规矩见文件头。
- */
+
+
+
 export function scopeDocThemeSelector(sel: string): string {
   let s = sel.trim();
   if (!s) return "";
@@ -228,8 +478,8 @@ export function scopeDocThemeSelector(sel: string): string {
       : `${ANCHOR}, ${CONTENT}`;
   }
 
-  // Typora 结构名 → Nota 语义结构。这里只做稳定的结构别名，不猜主题 id，
-  // 也不为任何单个主题增加程序分支。
+
+
   for (const [pattern, replacement] of TYPORA_STRUCTURE_SELECTORS) {
     s = s.replace(pattern, replacement);
   }
@@ -249,15 +499,15 @@ export function scopeDocThemeSelector(sel: string): string {
     s = s.replace(pattern, replacement);
   }
 
-  // Typora 主题把正文根写成 `#write`。Nota 没有那个 id，但 ProseMirror 的
-  // 内容根承担同一个角色。先做这一层兼容替换，其余资源与排版规则就能按
-  // Typora 主题的常见写法落地；组件专用选择器仍需按 Nota DOM 改写。
+
+
+
   if (/(^|[\s>+~,(])#write(?![\w-])/.test(s)) {
     const replaced = s.replace(/(^|[\s>+~,(])#write(?![\w-])/g, `$1${CONTENT}`);
     return replaced.includes(ANCHOR) ? replaced : `${ANCHOR} ${replaced}`;
   }
 
-  // 连续的前导 html/body 一并换成锚点：`html body > p` → `.editor-pane > p`。
+
   let rest = s;
   let replaced = false;
   for (;;) {
@@ -276,10 +526,10 @@ export function scopeDocThemeSelector(sel: string): string {
   return `${CONTENT} ${s}`;
 }
 
-/**
- * 按**顶层**逗号切选择器。`:is(a, b) h1` 里的那个逗号不是分隔符，
- * 直接 `split(",")` 会把它切坏。
- */
+
+
+
+
 function splitTop(text: string): string[] {
   const out: string[] = [];
   let depth = 0;
@@ -310,16 +560,16 @@ function splitTop(text: string): string[] {
   return out;
 }
 
-/**
- * 注入文档主题。传 `null` 表示"无主题"，把主题样式整个撤掉。
- *
- * ⚠️ 用**一个固定的 style 元素**做替换，而不是每次 append 一个新的：
- * 后者在用户来回切主题时会原地堆出一串 `<style>`，而且旧的那份仍然生效，
- * 最后谁都说不清当前是哪套主题。
- *
- * ⚠️ 这个元素必须**追加到 `<head>` 末尾**：编辑区骨架的样式在 `editor.css`
- * 里，权重和主题规则相当（都是两条选择器），靠的就是后者覆盖前者。
- */
+
+
+
+
+
+
+
+
+
+
 const paintedThemeCache = new Map<string, string>();
 // Imported themes can contain several megabytes. Retain only the latest painted
 // copy so StrictMode reuse stays cheap without multiplying memory by four.
@@ -351,21 +601,22 @@ export function applyDocTheme(css: string | null): void {
     STYLE_ID,
     css ? paintThemeCss(css) : null,
   );
+  scheduleAdaptiveSelectionTheme();
 }
 
-/**
- * 选中文字的底色。跟着文档主题走——底色是主题挑的，选中色必须和它配套。
- *
- * ⚠️ **fallback 必须是 `highlight` / `highlighttext` 这两个系统色**，
- * 不能不给。`background: var(--x)` 在 `--x` 不存在时整条声明失效、
- * 回落到 `unset`——也就是 `transparent`，结果就是**选中了看不见**。
- * 给系统色，最差也是"浏览器默认的选中样子"。
- *
- * ⚠️ 两条分开写，各自带各自的 fallback：主题只给了一半时，
- * 另一半也要能单独回落。
- */
+
+
+
+
+
+
+
+
+
+
+
 const SELECTION_RULE = `${ANCHOR} .ProseMirror::selection,
 ${ANCHOR} .ProseMirror *::selection {
-  background: var(--select-text-bg-color, highlight);
-  color: var(--select-text-font-color, highlighttext);
+  background: var(--nota-selection-bg, var(--select-text-bg-color, highlight));
+  color: var(--nota-selection-ink, var(--select-text-font-color, highlighttext));
 }`;

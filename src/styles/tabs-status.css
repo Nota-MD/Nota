@@ -1,27 +1,27 @@
-/**
- * 窗口上下那两条：**标签栏**（`.tabbar`）与**状态栏**（`.statusbar`）。
- *
- * 2026-09-29 从 `app.css` 里按功能拆出来（那一份当时 836 行）。它们能合成一份，
- * 是因为同一条性质：**都是贴在外壳上、高度固定的横条**，里面装的全是
- * "当前有哪些文档 / 当前这份文档什么状态"的读数，与正文区无关。
- *
- * ⚠️ **2026-09-30 起这两条挂在 `.app-main` 里**（不是 `.app` 的直接子项）。
- * 用户照 Typora 提的要求是「注意下方变化」：**侧栏要一直通到窗口底**。
- * 原来两条排在 `.app-body` 外面，横跨整个窗口宽、也就横跨了侧栏底下那一段——
- * 侧栏因此短了一截。现在它们只占中间那一栏（正文所在的那一列），
- * 侧栏与右侧插件栏都通到底。
- *
- * ⚠️ 所以这一条**不是**"标签栏跑到正文下面去了"：它原先就在正文下方
- * （`.tabbar` 上是 `border-top`，页签贴着内容区下沿），只是那份"下方"以前
- * 一直延伸到了侧栏底下。
- *
- * ⚠️ 必须在 `app.css` 之后加载。
- * ⚠️ 这两条里出现的状态点（`.tab-dot` / `.status-focus`）用的是 `--accent`，
- * 而插件栏那个 `.btn-on` 特意**不用** accent（同一个色表示两个意思会糊）——
- * 改配色时两边一起看，理由写在 `dock.css` 里 `.btn-on` 那一条上。
- */
 
-/* ── 标签栏 ───────────────────────────────────────────────────────────── */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 .tabbar {
   display: flex;
@@ -33,12 +33,12 @@
   overflow-x: auto;
 }
 
-/* 标签页右键菜单的锚（2026-09-27）。
-   ⚠️ **尺寸必须是 0**：里面那个 `.menu-popup` 自己写着 `top: calc(100% + 5px)`，
-   那是"挂在菜单栏那一栏下面"的算法——容器有高度的话菜单会被推到鼠标下面
-   一整个容器身高的位置。0 高度 ＋ `fixed` 之后，它就落在光标下面 5px 处。
-   The anchor is portaled to `body`, so the tab strip's horizontal overflow can
-   never clip this popup. It sits above the document like the global menu. */
+
+
+
+
+
+
 .tab-menu-anchor {
   position: fixed;
   width: 0;
@@ -143,7 +143,7 @@ body.tab-reordering * {
   background: var(--bg-hover);
 }
 
-/* ── 状态栏 ───────────────────────────────────────────────────────────── */
+
 
 .statusbar {
   display: flex;
@@ -159,11 +159,11 @@ body.tab-reordering * {
   color: var(--fg-muted);
 }
 
-/* 左边那两颗开关（2026-09-30 照 Typora 加的：侧栏开合、源码/所见即所得）。
-   ⚠️ 这一格以前是**文件路径 ＋ ● 已修改**（`{overflow:hidden; text-overflow}`
-   那三行就是为它写的），用户那天说「其余全删」一起走了：
-   「● 已修改」的落点是窗口标题（`ui/useWindowTitle.ts`），路径在标签页和
-   标题里各有一份。 */
+
+
+
+
+
 .status-left {
   display: flex;
   align-items: center;
@@ -190,13 +190,13 @@ body.tab-reordering * {
   color: var(--fg);
 }
 
-/* 收起这一栏那颗 ×（2026-10-04，`docs/07` 第 49 项）。
-   ⚠️ 只覆盖颜色两项，尺寸/悬停底色全走上面 `.status-btn`：**与侧栏那颗
-   （`sidebar.css` 的 `.sidebar-close`）、插件栏那颗（`dock.css` 的
-   `.dock-close`）同一套长相**——三颗并排站着，一颗有叉一颗没有、或者三颗
-   长得不一样，都像三个人做的。
-   ⚠️ 淡一档（`--fg-faint`）是那两颗的选择：它是"收起来"而不是这一栏的正事，
-   正事那几颗（左边的开关、右边那格统计）用的是 `--fg-muted`。 */
+
+
+
+
+
+
+
 .statusbar-close {
   color: var(--fg-faint);
 }
@@ -205,9 +205,9 @@ body.tab-reordering * {
   color: var(--fg);
 }
 
-/* 源码模式那颗点亮。⚠️ **用文字色而不是底色**：这一条栏里底色那块已经
-   被悬停占了，两个意思挤同一个表现的话，"鼠标正停着"和"现在是源码模式"
-   会长得一样。 */
+
+
+
 .status-btn[data-on] {
   color: var(--accent);
 }
@@ -219,28 +219,28 @@ body.tab-reordering * {
   flex: none;
 }
 
-/* 那一格统计连同它两边那两颗按钮（2026-09-30）。
-   ⚠️ `gap` 要比 `.status-right` 那个 12px **小得多**：这三样是**一件事**
-   （"这份文档有多少内容"），挨在一起才对；12px 会把它们推成三件不相干的
-   东西，而其中两颗还是悬停才出现的。 */
+
+
+
+
 .status-count-group {
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
-/* 那一格词数。⚠️ `cursor: default` 是**故意**的：里面的信息全在那个
-   `title` 提示里，而 `title` 只在指针**停住**时才弹——画成文本光标（I 形）
-   会让它看着像可以选中复制的正文。 */
-/**
- * **覆写模式的小标 `OVR`**（2026-10-16，朋友那条「INSERT 键无法使用」）。
- *
- * ⚠️ 它**不跟** `.status-aux` 那一族（悬停才出现）：覆写开着是**当前状态**，
- * 不是"悬停才有的入口"——用户得随时看得见它，否则症状是"我敲一个字、
- * 屏幕上少一个字"（同右端那颗 × 的理由）。
- * ⚠️ 长相与那一个数同一档（`--fg-faint`、等宽、不发光）：它是**提示**不是按钮
- * （点不动，也没有 title 以外的交互）。
- */
+
+
+
+
+
+
+
+
+
+
+
+
 .status-ovr {
   margin-right: 6px;
   color: var(--fg-faint);
@@ -254,19 +254,19 @@ body.tab-reordering * {
   cursor: default;
 }
 
-/* ── 鼠标移进来才出现的那两颗（2026-09-30 照 Typora）────────────────────────
-   用户原话：「平时如图1，当鼠标移到区域内时，如图2」——平时那一格只有
-   「N 词」，指针进到这条栏里才补上**拼写检查**与**展开统计菜单**两颗按钮。
 
-   ⚠️ 用 `opacity` 而不是 `display: none` / `visibility: hidden`：后两者会让
-   这两颗在**键盘上**也一起消失（Tab 走不到、读屏念不到），而"平时看不见"
-   说的只是"鼠标没停在这一栏上"这一件事。
-   ⚠️ 正因为 `opacity: 0` 的元素**照样能聚焦**，下面那条 `:focus-within`
-   是**必需**的：键盘走到那颗按钮上时它得现形，否则焦点落在一样看不见的东西上
-   ——那是最难自己发现的一类故障。
-   ⚠️ 副作用一条，明写在这儿：**点左边那两颗开关之后，右边这两颗也会一直亮着**
-   （焦点还在这一栏里）。这是"焦点在这一栏内"的字面意思，而把它拆细
-   （只认右边那两颗自己的焦点）要动 JS，不值。 */
+
+
+
+
+
+
+
+
+
+
+
+
 .status-aux {
   opacity: 0;
   transition: opacity var(--duration-fast) var(--ease-out);
@@ -277,13 +277,13 @@ body.tab-reordering * {
   opacity: 1;
 }
 
-/* 状态栏那个菜单的锚（2026-09-30）。框架与 `.tab-menu-anchor` 同一套：
-   **零高度 ＋ `fixed`**，里面那个 `.menu-popup` 才有正确的落点
-   （理由见上面 `.tab-menu-anchor` 那段）。
-   ⚠️ **只有一处不同，而这一处是全部理由：它是往上弹的。** 这条栏贴着窗口
-   底边，照菜单栏那套往下弹就是弹到窗口外面去。锚点因此放在**底栏顶边**上
-   （量坐标那段在 `StatusBar.tsx`），`bottom: calc(100% + 5px)` 出来的
-   就是"这一栏的上面 5px"。 */
+
+
+
+
+
+
+
 .status-menu-anchor {
   position: fixed;
   width: 0;
@@ -296,7 +296,7 @@ body.tab-reordering * {
   bottom: calc(100% + 5px);
   left: auto;
   right: 0;
-  /* 往上弹的那一下也得**从右下角长出来**（镜像自菜单栏那套的左上角）。 */
+
   transform-origin: bottom right;
   animation-name: menu-popup-in-up;
 }

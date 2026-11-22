@@ -1,25 +1,25 @@
-/**
- * 偏好设置那个框里的**控件原语**：`.stg-*` 那套下拉、开关、滑块、单选、
- * 数字／文本输入、按钮排、以及「明暗缩略图」那个选择器。
- *
- * 2026-09-29 从 `settings.css` 里按功能拆出来（那一份当时 962 行）。分家的线是
- * 「**壳与版式** / **控件** / **某一页专用的小件**」：本文件是**每个页都在用**的
- * 那一层原语，壳与版式留在 `settings.css`，`?` 气泡与快捷键页那几格去了
- * `settings-widgets.css`。
- *
- * ⚠️ **本文件不定义版式**：控件自己长什么样（高度、圆角、状态色）在这里，
- * 它**摆在哪一栏、离左边多远**在 `settings.css` 的 `.stg-group` / `.stg-row`
- * 那几节里（三列对齐是 `.stg-row` 的 `grid-template-columns` 定的）。
- * 改一个控件的宽度要同时看两处，这是这套拆法的代价，写在这里免得踩。
- *
- * ⚠️ 颜色尺寸一律走变量（见 `theme.css`），**一个写死的色值都不许有**——
- * 同 `settings.css` 文件头那条理由。
- */
 
-/* ── 控件 ──────────────────────────────────────────────────────────────── */
 
-/* 自绘下拉。展开列表 portal 到 body，避免被设置框的滚动容器裁切；
-   trigger 与 listbox 都只读 `--select-*`，主题可以完整接管外观。 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .stg-select {
   position: relative;
   display: inline-flex;
@@ -64,8 +64,8 @@
   white-space: nowrap;
 }
 
-/* 箭头用两层 border 转 45° 画出来（一条 V 形），**不用字符也不用图片**：
-   字符会跟着字体变形，图片会把颜色写死。 */
+
+
 .stg-select::after {
   content: "";
   position: absolute;
@@ -134,16 +134,16 @@
   background: var(--select-option-selected-bg);
 }
 
-/* 开关：iOS 那种胶囊，36×20。 */
-/* ⚠️ 开关的尺寸与颜色走**专用变量**（`--switch-*`，默认值在 `theme.css`
-   的 `:root`，逐字等于改之前那套 iOS 胶囊 36×20/14）。
-   理由同 `.btn`：几份设计稿逐个给了开关的宽高与滑块直径（macOS 48×28、
-   Breeze 44×22、Windows 40×20、Yaru 42×22、Adwaita 44×22），
-   借通用变量就得连别的控件一起改。
-   ⚠️ 滑块的位置**不能用 `left: 18px` 写死**：宽度一变就跑出去了。起点仍是
-   2px，终点 = `2px + --switch-travel`，而 `--switch-travel` 是按
-   `外壳宽 − 2×边框 − 滑块 − 两端各 2px` 算出来的（公式在 `theme.css` 的
-   `:root` 里，每一档都重算过一次）。 */
+
+
+
+
+
+
+
+
+
+
 .stg-switch {
   position: relative;
   flex: none;
@@ -186,7 +186,7 @@
   outline-offset: 2px;
 }
 
-/* 滑杆 + 读数。读数定宽，数字变宽变窄时滑杆不抖。 */
+
 .stg-range {
   display: flex;
   align-items: center;
@@ -204,7 +204,7 @@
 }
 
 .stg-range-value {
-  /* `ch` 而不是 `px`：读数带 `px` 后缀，定宽要按**字符数**给才不会被截。 */
+
   min-width: 5ch;
   font-size: 0.88em;
   font-variant-numeric: tabular-nums;
@@ -212,9 +212,9 @@
   text-align: right;
 }
 
-/* 单选。⚠️ 这里用的是**原生** `<input type="radio">`，不像搜索框那颗自己的
-   「×」——原生单选框在 WebKitGTK 里行为是对的（点得动、`change` 照发、
-   方向键能在一组里上下走）。只有"点了不派发事件"的东西才需要自己画。 */
+
+
+
 .stg-radio {
   display: inline-flex;
   align-items: center;
@@ -259,8 +259,8 @@
   outline-offset: 2px;
 }
 
-/* 单行文本 / 数字。宽度**按语义分档**，不写死像素——写死的那个数换一套
-   界面风格（字号不一样）就不对了。 */
+
+
 .stg-input {
   height: var(--control-height);
   padding: 0 9px;
@@ -295,8 +295,8 @@
 }
 
 .stg-input-lg {
-  /* 路径要能看见尾巴。`flex: 1` 让它吃掉「选择…」按钮之外剩下的地方，
-     `max-width` 挡住窗口很宽时它拉成一条。 */
+
+
   flex: 1;
   width: 34ch;
   max-width: 46ch;
@@ -306,10 +306,10 @@
   width: 8ch;
 }
 
-/* 多行文本（`TextArea`）。⚠️ `.stg-input` 那一套里有 `height`（控件的固定
-   高度），对多行框是错的——必须用 `auto` 把它救回来，否则只看得见一行。
-   宽度按 `lg` 那一档的语义（"要能看见内容"），但不吃 `flex: 1`：
-   它站在 `.stg-row-control` 那一格里，而那一格不是 flex 容器。 */
+
+
+
+
 .stg-textarea {
   height: auto;
   min-height: calc(var(--control-height) * 2);
@@ -317,8 +317,8 @@
   width: 34ch;
   max-width: 46ch;
   line-height: 1.5;
-  /* ⚠️ 只让纵向拖：横向拖出滚动条之后，行尾就看不见了，而这一栏
-     恰恰是"一行一条"，看不见行尾等于看不出自己写错没有。 */
+
+
   resize: vertical;
 }
 
@@ -327,7 +327,7 @@
   font-size: 0.86em;
 }
 
-/* 数字框里面跟的单位（`%`）。用绝对定位压在右边，免得它跟着数字宽度跑。 */
+
 .stg-number {
   position: relative;
   display: inline-flex;
@@ -344,7 +344,7 @@
 
 .stg-number .stg-input-num {
   padding-right: 24px;
-  /* 原生那对上下小箭头在深色主题下是两团黑点，去掉。 */
+
   appearance: textfield;
   -moz-appearance: textfield;
 }
@@ -355,23 +355,23 @@
   margin: 0;
 }
 
-/* 动作按钮。⚠️ 它的底子是 `.btn`（`app.css`），这里只做"在这张框里"的微调：
-   字号跟着设置框的缩放走，而不是跟外壳。 */
+
+
 .stg-action {
   font-size: 0.9em;
   white-space: nowrap;
 }
 
-/* 「卸载」是不可逆的那一颗：用 danger 色描边，别和"停用""导出"长得一样
- * （同右侧插件栏的 `.plugin-action-danger`，两处是同一颗按钮的两个落点）。 */
+
+
 .stg-action-danger {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
-/* ⚠️ **灰着的控件要说得出为什么**。这些控件的 `disabled` 不是占位，是
-   "这一条现在不成立"（没勾父项、或功能还没做）——所以标题上都有 `help` 或
-   `title` 解释。鼠标指针也要跟着变，不然用户会一直点。 */
+
+
+
 .stg-switch:disabled,
 .stg-select-trigger:disabled,
 .stg-input:disabled,
@@ -386,13 +386,13 @@
   cursor: not-allowed;
 }
 
-/* ── 「拼写检查」那几门语言（2026-10-10 晚，"多语言"那一批）──────────────
- *
- * 一个能勾多门的列表 ＋ 一格自定义标签。⚠️ 它是**这一页里唯一会长出滚动的
- * 控件**（词典多的机器上光 `en_*` 就有二十几本），所以那一段自己有
- * `max-height` ＋ `overflow`：让设置框的整体高度由别的东西说了算，
- * 而不是由"这台机器装了多少词典"说了算（那会让同一个设置页在两台机器上
- * 长得完全不一样）。 */
+
+
+
+
+
+
+
 .stg-langs {
   display: flex;
   flex-direction: column;
@@ -411,9 +411,9 @@
   border-radius: var(--radius-sm);
 }
 
-/* 一行一个语言：勾 ＋ 标签 ＋ （认得出时）人话名字 ＋ （没装时）那句话。
- * ⚠️ `cursor: pointer` 落在**整行**上：只勾得中那个小方框的话，
- * 这一列二十几行会难用到没法点。 */
+
+
+
 .stg-lang {
   display: flex;
   align-items: center;
@@ -431,8 +431,8 @@
   margin: 0;
 }
 
-/* 语言标签本身（`en_US`）。**等宽**：它是"写下来的值"，与旁边那句人话
- * 分得开——用户要照着它去别的机器上填同一个串。 */
+
+
 .stg-lang-tag {
   font-family: var(--font-mono, monospace);
   font-size: 0.92em;
@@ -455,11 +455,11 @@
   flex: 1 1 auto;
 }
 
-/* ── 词典从哪儿来（2026-10-11）────────────────────────────────────────────
-   安装包里**一本词典都不带**（用户拍板「默认随包不分发任何字典」，照 Typora），
-   所以"选哪一门"旁边必须摆着"去哪儿弄"：两颗按钮 ＋ 目录本身 ＋ 一句安装提示。
-   ⚠️ 目录那行**要能选中复制**（`user-select: text` ＋ 等宽）：用户最常见的下一步
-   是把这段路径拷进文件管理器，而不是靠那颗按钮（他可能想在别的程序里用它）。 */
+
+
+
+
+
 .stg-lang-missing {
   color: var(--fg-faint);
   font-size: 0.92em;

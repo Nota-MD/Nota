@@ -1,4 +1,4 @@
-/** 公式的“当前编辑态”判定、装饰和块内选区归位。 */
+
 
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import type { EditorState, Transaction } from "@milkdown/kit/prose/state";
@@ -9,7 +9,7 @@ import { $prose } from "@milkdown/kit/utils";
 export const inlineName = "math_inline";
 export const blockName = "math_block";
 const currentClass = "nota-math-current";
-const currentMark = "数学当前";
+const currentMark = "math current";
 
 export function recognizeNode(node: PMNode): "inline" | "block" | null {
   if (node.type.name === inlineName) return "inline";
@@ -49,7 +49,7 @@ export function computeDecorations(
   ]);
 }
 
-/** 光标落进块公式内容时，改成整块选中。 */
+
 export function returnPositionSelection(state: EditorState): Transaction | null {
   const select = state.selection;
   if (select instanceof NodeSelection) return null;
@@ -66,12 +66,19 @@ export function returnPositionSelection(state: EditorState): Transaction | null 
 
 interface CommonStyleCurrentState {
   suppressedAt: number | null;
+  pendingFocusAt: number | null;
 }
 
 export const commonStyleCurrentKey = new PluginKey<CommonStyleCurrentState>("nota-math-current-state");
+export const inlineMathFocusRequest = "nota-inline-math-focus-request";
+export const inlineMathFocusConsumed = "nota-inline-math-focus-consumed";
+
+export function pendingInlineMathFocus(state: EditorState): number | null {
+  return commonStyleCurrentKey.getState(state)?.pendingFocusAt ?? null;
+}
 
 function currentStateOf(state: EditorState): CommonStyleCurrentState {
-  return commonStyleCurrentKey.getState(state) ?? { suppressedAt: null };
+  return commonStyleCurrentKey.getState(state) ?? { suppressedAt: null, pendingFocusAt: null };
 }
 
 export const commonStyleCurrent = $prose(
@@ -79,15 +86,22 @@ export const commonStyleCurrent = $prose(
     new Plugin({
       key: commonStyleCurrentKey,
       state: {
-        init: (): CommonStyleCurrentState => ({ suppressedAt: null }),
+        init: (): CommonStyleCurrentState => ({ suppressedAt: null, pendingFocusAt: null }),
         apply: (tr, value) => {
           const own = tr.getMeta(commonStyleCurrentKey) as number | null | undefined;
-          if (own !== undefined) return { suppressedAt: own };
-          if (tr.docChanged) return { suppressedAt: null };
+          const focusAt = tr.getMeta(inlineMathFocusRequest) as number | undefined;
+          const consumed = tr.getMeta(inlineMathFocusConsumed) === true;
+          if (own !== undefined || focusAt !== undefined || consumed) {
+            return {
+              suppressedAt: own !== undefined ? own : value.suppressedAt,
+              pendingFocusAt: consumed ? null : focusAt ?? value.pendingFocusAt,
+            };
+          }
+          if (tr.docChanged) return { suppressedAt: null, pendingFocusAt: value.pendingFocusAt };
           if (tr.selectionSet) {
             const samePoint =
               value.suppressedAt !== null && tr.selection.from === value.suppressedAt;
-            return samePoint ? value : { suppressedAt: null };
+            return samePoint ? value : { ...value, suppressedAt: null };
           }
           return value;
         },

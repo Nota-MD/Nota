@@ -122,7 +122,7 @@ function pointObtainActionOf(rows: readonly line3[]): string[] {
 }
 
 /** 一份菜单里那些**只展开子菜单、自己不执行**的父项 id。 */
-function pointNotActionOf(rows: readonly line3[] = buildRows("编辑器", true)): string[] {
+function pointNotActionOf(rows: readonly line3[] = buildRows("editor", true)): string[] {
   return rows
     .filter((r) => r.kind === "item" && Boolean(r.spec.submenu))
     .map((r) => (r as Extract<line3, { kind: "item" }>).spec.id);
@@ -133,11 +133,11 @@ function pointNotActionOf(rows: readonly line3[] = buildRows("编辑器", true))
 group("判落点 · 四档与两条顺序");
 
 testCase("什么都不沾 → 外壳", () => {
-  equal(determineDropPoint({ alreadyIsRecognizeLead: false, isInputBox: false, atEditorInside: false }), "外壳", "普通处");
+  equal(determineDropPoint({ alreadyIsRecognizeLead: false, isInputBox: false, atEditorInside: false }), "shell", "普通处");
 });
 
 testCase("编辑区里 → 编辑器", () => {
-  equal(determineDropPoint({ alreadyIsRecognizeLead: false, isInputBox: false, atEditorInside: true }), "编辑器", "正文");
+  equal(determineDropPoint({ alreadyIsRecognizeLead: false, isInputBox: false, atEditorInside: true }), "editor", "正文");
 });
 
 testCase("⚠️ 输入框**优先于**编辑器（公式源码框就在编辑区里）", () => {
@@ -145,7 +145,7 @@ testCase("⚠️ 输入框**优先于**编辑器（公式源码框就在编辑�
   // 图表源码框、代码块的语言框，见 `ui/accel.ts` 那条 2026-09-26 的教训）。
   // 顺序反过来的话，在公式源码框里右键会拿到整份 markdown 菜单，而那些命令
   // 打的是**文档**、不是那个框——用户会以为"在框里加粗"没反应。
-  equal(determineDropPoint({ alreadyIsRecognizeLead: false, isInputBox: true, atEditorInside: true }), "输入框", "框里");
+  equal(determineDropPoint({ alreadyIsRecognizeLead: false, isInputBox: true, atEditorInside: true }), "Input", "框里");
 });
 
 testCase("⚠️ 已被认领 → 不弹（而且这一档不许 preventDefault）", () => {
@@ -154,12 +154,12 @@ testCase("⚠️ 已被认领 → 不弹（而且这一档不许 preventDefault�
   // 标签上那份菜单（连同"在新窗口中打开"）从此消失，而且不报错。
   equal(
     determineDropPoint({ alreadyIsRecognizeLead: true, isInputBox: false, atEditorInside: true }),
-    "不弹",
+    "no menu",
     "标签栏认领过的那一下，在编辑区里也一样",
   );
   equal(
     determineDropPoint({ alreadyIsRecognizeLead: true, isInputBox: true, atEditorInside: false }),
-    "不弹",
+    "no menu",
     "认领优先于输入框",
   );
 });
@@ -212,7 +212,7 @@ testCase("三份子菜单父项里只有右键独有组合不在 MENUS 中", () 
     "para.tableCopy",
     "para.tableFormat",
   ]);
-  for (const child3 of pointObtainActionOf(buildRows("编辑器", true)).filter((id) => !tablePrivateHas.has(id))) {
+  for (const child3 of pointObtainActionOf(buildRows("editor", true)).filter((id) => !tablePrivateHas.has(id))) {
     assertValue(Boolean(getItem(child3)), `子菜单里的 \`${child3}\` 在 MENUS 里查不到`);
   }
 });
@@ -241,7 +241,7 @@ group("处理器对账 · 编辑器那一档");
 
 testCase("点得动的每一条，`useCommandTable.ts` 里都有 `\"id\":` ", () => {
   const source3 = read("ui", "useCommandTable.ts");
-  const missing = pointObtainActionOf(buildRows("编辑器", true)).filter((id) => !source3.includes(`"${id}":`));
+  const missing = pointObtainActionOf(buildRows("editor", true)).filter((id) => !source3.includes(`"${id}":`));
   // ⚠️ `edit.copyAs` 不在这份判据里：它带子菜单，按回车是"展开"不是"执行"
   // （`点得动的` 收的是它**子项**）。`ctx.paragraph` / `ctx.insert` 同理。
   assertValue(
@@ -261,7 +261,7 @@ group("处理器对账 · 输入框那一档");
 
 testCase("这一档的每一条都在 `ContextMenu.tsx::落到输入框` 的 switch 里", () => {
   const source3 = read("ui", "ContextMenu.tsx");
-  const missing = buildRows("输入框", true)
+  const missing = buildRows("Input", true)
     .filter((r): r is Extract<line3, { kind: "item" }> => r.kind === "item")
     .map((r) => r.spec.id)
     .filter((id) => !source3.includes(`case "${id}":`));
@@ -295,12 +295,12 @@ testCase("⚠️ 输入框那一档**一个都不灰**", () => {
   // 输入框里也照样点得动——它们的实现住在 `ContextMenu.tsx::落到输入框`，
   // 和命令表没有一分钱关系。
   const fullyDisabled = new Set(inputBoxItem.filter((id) => id !== "sep"));
-  equal(disabledForLocation("输入框", fullyDisabled).size, 0, "输入框那一档套了菜单栏的灰名单");
+  equal(disabledForLocation("Input", fullyDisabled).size, 0, "输入框那一档套了菜单栏的灰名单");
 });
 
 testCase("其余三档**原样透传**（编辑器那一档的灰名单还是同一份）", () => {
   const disabled2 = new Set(["para.tableDel"]);
-  for (const level of ["编辑器", "外壳", "不弹"] as const) {
+  for (const level of ["editor", "shell", "no menu"] as const) {
     assertValue(disabledForLocation(level, disabled2) === disabled2, `\`${level}\` 那一档把灰名单换掉了——它该原样用那份`);
   }
 });
@@ -386,16 +386,16 @@ testCase("带子菜单的父项：**子项全灰才算灰**", () => {
 group("给行 · 三档各画出什么");
 
 testCase("外壳 → 什么都不画（用户 2026-10-04 选的「只拦不弹」）", () => {
-  equal(buildRows("外壳", true).length, 0, "外壳那一档");
-  equal(buildRows("外壳", false).length, 0, "外壳那一档（正式构建）");
+  equal(buildRows("shell", true).length, 0, "外壳那一档");
+  equal(buildRows("shell", false).length, 0, "外壳那一档（正式构建）");
 });
 
 testCase("不弹 → 同样什么都不画（这一档由 TabBar 自己画）", () => {
-  equal(buildRows("不弹", true).length, 0, "不弹那一档");
+  equal(buildRows("no menu", true).length, 0, "不弹那一档");
 });
 
 testCase("输入框 → 短菜单，且**不含**任何一行图标", () => {
-  const rows = buildRows("输入框", true);
+  const rows = buildRows("Input", true);
   assertValue(rows.length > 0, "输入框那一档是空的");
   assertValue(
     rows.every((r) => r.kind !== "icons"),
@@ -406,7 +406,7 @@ testCase("输入框 → 短菜单，且**不含**任何一行图标", () => {
 });
 
 testCase("编辑器 → 三排图标 ＋ 三个子菜单父项", () => {
-  const rows = buildRows("编辑器", false);
+  const rows = buildRows("editor", false);
   const arrange = rows.filter((r) => r.kind === "icons");
   equal(arrange.length, 3, "图标排数");
   assertValue(
@@ -418,7 +418,7 @@ testCase("编辑器 → 三排图标 ＋ 三个子菜单父项", () => {
 });
 
 testCase("没有选中文本时隐藏「复制为」", () => {
-  const rows = buildRows("编辑器", false, null, false, false);
+  const rows = buildRows("editor", false, null, false, false);
   assertValue(
     !rows.some((r) => r.kind === "item" && r.spec.id === "edit.copyAs"),
     "没有选区仍显示「复制为」",
@@ -426,14 +426,14 @@ testCase("没有选中文本时隐藏「复制为」", () => {
 });
 
 testCase("⚠️ 开发者工具只在开发模式里出现", () => {
-  const has = buildRows("编辑器", true).some((r) => r.kind === "item" && r.spec.id === "view.devtools");
-  const without = buildRows("编辑器", false).some((r) => r.kind === "item" && r.spec.id === "view.devtools");
+  const has = buildRows("editor", true).some((r) => r.kind === "item" && r.spec.id === "view.devtools");
+  const without = buildRows("editor", false).some((r) => r.kind === "item" && r.spec.id === "view.devtools");
   assertValue(has, "开发模式下没有「开发者工具」——被拦掉的原生菜单里有 `Inspect Element`，得留个门");
   assertValue(!without, "正式构建里不该有「开发者工具」");
 });
 
 testCase("行的 key 不重复（重复了 React 只会让某一行认错身份，不报错）", () => {
-  const key = buildRows("编辑器", true).map((r) => r.key);
+  const key = buildRows("editor", true).map((r) => r.key);
   equal(new Set(key).size, key.length, "`给行` 出来的 key 有重复");
 });
 
@@ -483,7 +483,7 @@ testCase("⚠️ 一条建议都没有时**不画那一格空行**，但两个�
 });
 
 testCase("给行 · 错词那一段挂在**最前面**（不比剪贴那排靠后）", () => {
-  const rows = buildRows("编辑器", true, oneDocumentLineSearch);
+  const rows = buildRows("editor", true, oneDocumentLineSearch);
   assertValue(rows[0]?.kind === "spell", "第一行不是拼写那一段");
   const iconRowIndex = rows.findIndex((r) => r.kind === "icons");
   const mostAfterCombineWriteBelowMark = rows.map((r) => r.kind).lastIndexOf("spell");
@@ -491,14 +491,14 @@ testCase("给行 · 错词那一段挂在**最前面**（不比剪贴那排靠�
 });
 
 testCase("给行 · 没落在错词上时一行都不多（默认参数那条路）", () => {
-  const rows = buildRows("编辑器", true);
+  const rows = buildRows("editor", true);
   assertValue(!rows.some((r) => r.kind === "spell"), "没给线索却画出了拼写那一格");
 });
 
 testCase("给行 · 输入框那一档不挂拼写（那里没有正文、也没有波浪线）", () => {
   // ⚠️ 编辑区里**真有输入框**（公式源码框、代码块的语言框），而它们里头的
   // 文字不属于正文——波浪线画不到那儿，"加入词典"更无从谈起。
-  const rows = buildRows("输入框", true, oneDocumentLineSearch);
+  const rows = buildRows("Input", true, oneDocumentLineSearch);
   assertValue(!rows.some((r) => r.kind === "spell"), "输入框那一档混进了拼写条目");
 });
 
@@ -512,10 +512,10 @@ testCase("⚠️ 拼写那一段**永远不灰**（它不在 `灰名单` 里，�
   }
 });
 
-testCase("三个动作在 `ContextMenu.tsx::落到拼写` 里都有落点（id 打错就永远点不动）", () => {
+testCase("三个动作在 `context-menu-spell.ts` 里都有落点（id 打错就永远点不动）", () => {
   // 这一条与组四那条同一个理由：这几条的处理器**不在命令表里**（它们的 id 是
   // 现场造的），所以"有没有人实现"只能对着那一份源码查。
-  const source3 = read("ui", "ContextMenu.tsx");
+  const source3 = read("ui", "context-menu-spell.ts");
   // ⚠️ 源码里写的是**常量名**（`id === 拼写加词典`），不是那个字面量
   //（`"spell.add"` 住在 `context-menu.ts` 一处）。所以这里查的是"有没有
   // 人拿这两个常量比过"——那正是"加了一条菜单、忘了实现"的判据。

@@ -1,299 +1,157 @@
-//! 界面语言：**设定 → 系统 → 有效**这三步，以及"某个语言标记在不在这一串里"。
-//!
-//! # 用户要的是什么（2026-09-25 原话）
-//!
-//! > 优化界面国际化系统。支持多语言。插件也支持。插件必须包含英语。
-//! > 如果application_language在插件语言列表内，则直接使用；否则，显示"此插件不支持您的语言"，
-//! > 并且使用英语。
-//!
-//! 所以这套东西有**两个消费者**，用的是**同一条规矩**：
-//!
-//! 1. **应用自己**（界面上的字）：有效语言 ∈ 应用自带的那几份文案表；
-//!    一个都没有就落到 `en`；
-//! 2. **插件**（插件面板里的字）：插件在清单里声明自己有哪些语言
-//!    （`[plugin] langs = [...]`，**必须含 `en`**）。应用的有效语言在其中就
-//!    用那个，不在就用 `en` 并在界面上说一句「此插件不支持您的语言」。
-//!
-//! 两边同一条规矩，是为了**能对用户讲清楚**：他不需要记两套。
-//!
-//! # ⚠️ 为什么 `en` 是兜底，而不是"哪个都行"
-//!
-//! 兜底语言必须是**作者一定会写的那一个**。插件作者写得出英语，写不出所有
-//! 语言；`en` 是唯一能要求所有插件都提供的。这不是"英语优先"，是"总得有一个
-//! 谁都得给的"，而那个角色历史地落在 `en` 上。
-//!
-//! # 语言标记的写法
-//!
-//! 一律按 **BCP-47 的短横线写法**（`zh-CN` / `en` / `pt-BR`），因为：
-//!
-//! - 环境变量里是 `zh_CN.UTF-8`（下划线 + 编码后缀），**要归一化**才能比；
-//! - 比的时候**先精确、再按主语言前缀**：应用是 `zh-CN`、插件只有 `zh` 时算命中
-//!   （反过来也成立）。这一条是为了让"只写了 `zh` 的插件"也能被中文用户用上，
-//!   而不是因为少写了地区码就被判成"不支持你的语言"。
-//!
-//! ⚠️ 前缀匹配**只往"更粗"的方向走**（`zh-CN` 命中 `zh`），不做 `zh` 命中
-//! `zh-CN` 那种猜测：`zh` 的文案未必是给 `zh-CN` 写的（可能是 `zh-TW` 的用词）。
-//! 猜错的话用户看到的是**另一种中文**，那比看到英语更让人莫名其妙。
-
 use std::collections::HashMap;
 
-/// 应用自带的文案表有哪些语言。**顺序即界面上下拉的顺序**。
-///
-/// ⚠️ `en` 必须在这个表里（上面那段写着理由）——它是所有语言缺失时的兜底。
-pub const 支持的语言: [&str; 2] = ["zh-CN", "en"];
+pub const SUPPORTED_LANGUAGES: [&str; 2] = ["zh-CN", "en"];
 
-/// 每门语言**用它自己那门语言写的名字**，给界面上的语言选择器用。
-///
-/// ⚠️ 语言选择器就该这么显示：一个只看得懂中文的人，在英文界面里也得找得到
-/// 「中文（简体）」——写成 "Chinese (Simplified)" 他就找不着了。所以这张表
-/// **不跟着界面语言变**，也不进文案表。
-///
-/// ⚠️ 顺序、长度都必须与 [`支持的语言`] 对齐，有测试钉着（两条表错位的话，
-/// 界面上会出现"选了 English 界面变成中文"这种查起来最费劲的错）。
-pub const 语言名: [&str; 2] = ["中文（简体）", "English"];
+pub const LANGUAGE_NAMES: [&str; 2] = ["Chinese (Simplified)", "English"];
 
-/// **插件**那一侧的兜底语言：application_language不在插件的 `langs` 里时，插件用哪一种。
-///
-/// ⚠️ 它必须出现在 [`支持的语言`] 里，有测试钉着。
-///
-/// ⚠️ **这条是"对插件作者的要求"，不是"应用自己的兜底"**——两件事以前共用一个
-/// 常量（都叫 `兜底`），2026-09-26 拆开了：那天用户报「界面中英混杂」，查出来
-/// 正是这个共用造成的（应用自己也落到 `en`，而 `en` 那张表只覆盖插件那一面）。
-/// 详见 [`应用兜底`]。**`en` 这个值本身不能改**（用户 2026-09-25 的原话：
-/// 「插件必须包含英语」；`plugin/manifest.rs` 拿它当"清单里有没有 en"的判据）。
-pub const 插件兜底: &str = "en";
+pub const PLUGIN_FALLBACK: &str = "en";
 
-/// **应用自己**的兜底语言：`settings.toml` 里的语言跟系统走、而系统语言认不出来
-/// （或者写了个我们没做的语言）时，界面用哪一种。
-///
-/// # 这个值来回改过一次，两次的理由都写在这儿（2026-09-26 一天之内）
-///
-/// **第一次：`en` → `zh-CN`。** 用户当天报「界面中英混杂」。机制：`src/i18n/en.ts`
-/// 那张英语表当时**只覆盖插件那一面**——`src/i18n/index.ts` 顶上自己写着
-/// 「应用其余部分还是硬编码中文」。所以只要有效语言落到 `en`，界面必然被切成
-/// 两半：插件栏英语、别处全是中文原文。而"系统语言认不出来"这条路（容器里没设
-/// `LANG`、桌面启动项没带 locale、`LANG=C`、`settings.toml` 里手写了一个没做的
-/// 语言）落到的正是这里。中文是**原文**（缺键就用原文），那时它是唯一能保证
-/// "整块界面自洽"的选项。当时的代价也如实写了：`zh-TW` 的人会看到简体中文。
-///
-/// ⚠️ **第二次：`zh-CN` → `en`（同一天下午，用户「赶紧把翻译弄一下」之后）。**
-/// 上面那段自己写着「**这个取舍会翻回来**：等 `en` 那张表覆盖到整个界面，
-/// 兜底就该回到 `en`」——那天下午表就铺齐了（`tools/i18n-check.sh`：代码里
-/// `t("…")` 的调用与英文表 730 对 730、0 欠账；2026-09-26 晚实测 732 / 732），
-/// 于是按原来写下的条件翻了回来。⚠️ 这个数**会自己动**，引用前先跑一遍闸门。
-/// **翻的条件是"覆盖齐"，不是"翻一下试试"**：没齐就翻等于把界面切成另一种两半。
-/// （📌 2026-09-28 补：这条"覆盖齐"的条件**在语言翻转之后不用再看了**——
-/// 英语成了原文，完整性由构造保证。见下面「第三次」。）
-///
-/// 为什么基准该是英语：它是**未命中的落点**。系统语区认不出来时，我们没有
-/// 任何证据说明用户读中文——而英语是插件生态与 Markdown 生态的通用语
-/// （[`插件兜底`] 也是 `en`，理由见那条）。落到中文等于**替用户假定他读中文**。
-///
-/// ⚠️ 它**不是**"默认语言"：中文语区的用户照旧拿到中文界面（`zh-CN` 在
-/// [`支持的语言`] 里，系统语区算得出来）。这里只在**认不出来**时才用上。
-///
-/// ⚠️ 前端那边（`src/i18n/index.ts` 的 `兜底`）**必须同值**——它是宿主答话之前
-/// 首帧用的那个值。两边不同值时，症状是"启动的一瞬间是英文、然后跳成中文"
-/// （或反过来），而那几毫秒里的字是错的。
-///
-/// # 📌 第三次：2026-09-28 之后它**不再需要那个条件了**
-///
-/// 用户那天定了方向：**英语才是主语言，中文是翻译包**。前端的键于是从中文原文
-/// 翻成英文原文（`src/i18n/en*.ts` → `src/i18n/zh-*.ts`，见
-/// `src/i18n/index.ts` 的文件头）。于是"英语界面完不完整"这件事**由构造保证**：
-/// 英语是原文，任何一句还没翻的都还是英语——上面那条"等表覆盖齐了再翻"的
-/// 条件自动成立，而且**再也不会失效**（不存在"英语表漏了一条"这种状态）。
-///
-/// ⚠️ 所以这个值从此是**稳的**：再有人问"能不能改成别的"，答案与上面
-/// 「为什么基准该是英语」那一段完全一样，且不必再去数覆盖率。
-pub const 应用兜底: &str = "en";
+pub const APP_FALLBACK: &str = "en";
 
-/// 设置里"跟系统走"的那个值。界面上是「自动」。
-pub const 自动: &str = "auto";
+pub const AUTO: &str = "auto";
 
-/// 一个语言标记的**归一化**写法：`zh_CN.UTF-8` → `zh-CN`，`EN` → `en`。
-///
-/// 归一化只做三件事：去掉编码后缀（`.UTF-8`）、下划线换短横线、**主语言小写**。
-/// 地区码**照原样留着**（`zh-cn` → `zh-CN` 这一手也做，因为环境变量大小写不牢靠）。
-pub fn 规范(tag: &str) -> String {
-    // `zh_CN.UTF-8@euro` 这种后缀（`@` 是修饰符）也一并去掉。
-    let 主 = tag
+pub fn gui_fan(tag: &str) -> String {
+    let zhu = tag
         .split(['.', '@'])
         .next()
         .unwrap_or(tag)
         .trim()
         .replace('_', "-");
-    if 主.is_empty() {
+    if zhu.is_empty() {
         return String::new();
     }
 
-    let mut 段 = 主.split('-');
-    let 语言 = 段.next().unwrap_or("").to_ascii_lowercase();
-    let 其余: Vec<String> = 段.map(|s| {
-        // 地区码是两位字母（CN）→ 大写；脚本/变体（Hans / Latn）→ 首字母大写。
-        if s.len() == 2 && s.chars().all(|c| c.is_ascii_alphabetic()) {
-            s.to_ascii_uppercase()
-        } else if s.len() == 4 && s.chars().all(|c| c.is_ascii_alphabetic()) {
-            let mut c = s.chars();
-            match c.next() {
-                Some(首) => 首.to_ascii_uppercase().to_string() + &c.as_str().to_ascii_lowercase(),
-                None => String::new(),
+    let mut duan = zhu.split('-');
+    let language_2 = duan.next().unwrap_or("").to_ascii_lowercase();
+    let qi_yu: Vec<String> = duan
+        .map(|s| {
+            if s.len() == 2 && s.chars().all(|c| c.is_ascii_alphabetic()) {
+                s.to_ascii_uppercase()
+            } else if s.len() == 4 && s.chars().all(|c| c.is_ascii_alphabetic()) {
+                let mut c = s.chars();
+                match c.next() {
+                    Some(shou) => {
+                        shou.to_ascii_uppercase().to_string() + &c.as_str().to_ascii_lowercase()
+                    }
+                    None => String::new(),
+                }
+            } else {
+                s.to_ascii_lowercase()
             }
-        } else {
-            s.to_ascii_lowercase()
-        }
-    }).collect();
+        })
+        .collect();
 
-    if 其余.is_empty() {
-        语言
+    if qi_yu.is_empty() {
+        language_2
     } else {
-        format!("{语言}-{}", 其余.join("-"))
+        format!("{language_2}-{}", qi_yu.join("-"))
     }
 }
 
-/// 系统语言。
-///
-/// # 两条路，先问平台再问环境变量（2026-10-16 改）
-///
-/// ⚠️⚠️ **从前只有环境变量那条路**（`LC_ALL` → `LC_MESSAGES` → `LANG`），
-/// 而 **Windows 上没有 `LANG` 这一套**——于是「跟随系统」在中文 Windows 上落到
-/// `en`（**第一次打开就是英文**）。这是朋友实测报回来的：设置页写着
-/// 「Automatic (follow the system)」、下面一行「In use right now: en」，
-/// 而系统明明是中文。
-///
-/// 现在先问 [`sys_locale::get_locale`]：那个 crate 在各平台走**各自的官方接口**
-/// （Windows 是 `GetUserDefaultLocaleName`、macOS 是 `NSLocale`、Linux 才是
-/// 那三个环境变量），正好补上这一格。⚠️ 它 Linux 上也只是读环境变量，
-/// 所以那条老路**留着当第二道**：平台接口给不出东西时（极少）再走一遍。
-///
-/// ⚠️ **两条路的结果都过同一次 [`规范`]**：Windows 给的是 `zh-CN`、
-/// Linux 给的是 `zh_CN.UTF-8`，不归一化成同一种写法就比不出"这是不是中文"。
-///
-/// ⚠️ `C` / `POSIX` 是"没设"而不是"某种语言"：它们的意思是"不翻译"，
-/// 所以当成取不到。
-pub fn 系统语言() -> Option<String> {
-    if let Some(平台给的) = sys_locale::get_locale() {
-        let 一 = 规范(&平台给的);
-        if !一.is_empty() && 一 != "c" && 一 != "posix" {
-            return Some(一);
+pub fn xi_tong_language() -> Option<String> {
+    if let Some(ping_tai_provided) = sys_locale::get_locale() {
+        let yi = gui_fan(&ping_tai_provided);
+        if !yi.is_empty() && yi != "c" && yi != "posix" {
+            return Some(yi);
         }
     }
-    for 键 in ["LC_ALL", "LC_MESSAGES", "LANG"] {
-        let Ok(值) = std::env::var(键) else { continue };
-        let 一 = 规范(&值);
-        if 一.is_empty() || 一 == "c" || 一 == "posix" {
+    for jian_2 in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        let Ok(value_2) = std::env::var(jian_2) else {
+            continue;
+        };
+        let yi = gui_fan(&value_2);
+        if yi.is_empty() || yi == "c" || yi == "posix" {
             continue;
         }
-        return Some(一);
+        return Some(yi);
     }
     #[cfg(target_os = "linux")]
-    for 路径 in ["/etc/default/locale", "/etc/locale.conf"] {
-        if let Ok(内容) = std::fs::read_to_string(路径) {
-            if let Some(语言) = 从语言配置取(&内容) {
-                return Some(语言);
+    for path_3 in ["/etc/default/locale", "/etc/locale.conf"] {
+        if let Ok(content_2) = std::fs::read_to_string(path_3) {
+            if let Some(language_2) = cong_language_pei_zhi_qu(&content_2) {
+                return Some(language_2);
             }
         }
     }
     None
 }
 
-/// 从 `key=value` 形状的系统 locale 配置里取一个可用语言。
-///
-/// 这是 Linux 上环境变量全为 `C` / `POSIX` 时的最后一道回退。Virtualenv、
-/// Toolbx、Steam Runtime 和部分桌面启动项会把 `LC_ALL=C.UTF-8` 注入进程，
-/// 但 `/etc/default/locale` / `/etc/locale.conf` 仍是发行版安装时选的语言。
-/// `LANGUAGE=zh_CN:zh` 这种候选列表只取第一项。
-pub fn 从语言配置取(内容: &str) -> Option<String> {
-    for 键 in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
-        for 行 in 内容.lines() {
-            let 行 = 行.trim();
-            let Some(值) = 行.strip_prefix(&format!("{键}=")) else {
+pub fn cong_language_pei_zhi_qu(content_2: &str) -> Option<String> {
+    for jian_2 in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
+        for xing in content_2.lines() {
+            let xing = xing.trim();
+            let Some(value_2) = xing.strip_prefix(&format!("{jian_2}=")) else {
                 continue;
             };
-            let 首项 = 值.trim().trim_matches(['"', '\'']).split(':').next()?;
-            let 归一 = 规范(首项);
-            if !归一.is_empty() && 归一 != "c" && 归一 != "posix" {
-                return Some(归一);
+            let shou_xiang = value_2.trim().trim_matches(['"', '\'']).split(':').next()?;
+            let gui_yi = gui_fan(shou_xiang);
+            if !gui_yi.is_empty() && gui_yi != "c" && gui_yi != "posix" {
+                return Some(gui_yi);
             }
         }
     }
     None
 }
 
-/// `想要的语言` 在 `可选` 里吗？命中就给**可选里那一个**的写法（原样返回）。
-///
-/// 先精确（`zh-CN` == `zh-CN`），再按主语言前缀往"更粗"的方向找
-/// （想要 `zh-CN`、可选里有 `zh` 也算命中）。理由见文件头。
-pub fn 匹配(想要: &str, 可选: &[String]) -> Option<String> {
-    let 想要 = 规范(想要);
-    if 想要.is_empty() {
+pub fn pi_pei(xiang_yao: &str, ke_xuan: &[String]) -> Option<String> {
+    let xiang_yao = gui_fan(xiang_yao);
+    if xiang_yao.is_empty() {
         return None;
     }
-    if let Some(一) = 可选.iter().find(|c| 规范(c) == 想要) {
-        return Some(一.clone());
+    if let Some(yi) = ke_xuan.iter().find(|c| gui_fan(c) == xiang_yao) {
+        return Some(yi.clone());
     }
-    let 主 = 主语言(&想要);
-    // ⚠️ 只有**可选那一边更粗**才算（`zh-CN` 想要、`zh` 可选）。
-    // 反过来（想要 `zh`、可选 `zh-CN`）不算：那是往细里猜，见文件头。
-    可选
+    let primary = primary_language(&xiang_yao);
+
+    ke_xuan
         .iter()
-        .find(|c| 主语言(&规范(c)) == 主 && 规范(c).len() < 想要.len())
+        .find(|c| primary_language(&gui_fan(c)) == primary && gui_fan(c).len() < xiang_yao.len())
         .cloned()
 }
 
-/// 语言标记的主语言部分（`zh-CN` → `zh`）。
-pub fn 主语言(tag: &str) -> String {
+pub fn primary_language(tag: &str) -> String {
     tag.split('-').next().unwrap_or(tag).to_ascii_lowercase()
 }
 
-/// **应用此刻在说哪种语言。**
-///
-/// - `设定` 是 `auto`（或空）→ 看系统；系统那个语言应用自己有没有文案表
-///   （[`支持的语言`]），有就用它，没有就落到 [`兜底`]；
-/// - `设定` 是具体语言 → 同样要过 [`支持的语言`] 这一关（用户可能手改了
-///   `settings.toml`，写了个应用没有的语言；那时**落到兜底并在界面上照实说**，
-///   而不是假装在用那个语言）。
-///
-/// 纯函数（系统语言由调用方传进来）：这样"自动 + 日语系统"这类分支
-/// 才测得动，而不用去改进程的环境变量（改环境变量的测试会和别的用例互相干扰）。
-pub fn 有效语言(设定: &str, 系统: Option<String>) -> String {
-    let 想要 = if 设定.trim().is_empty() || 规范(设定) == 规范(自动) {
-        系统.unwrap_or_else(|| 应用兜底.to_owned())
+pub fn effective_language(she_ding: &str, xi_tong: Option<String>) -> String {
+    let xiang_yao = if she_ding.trim().is_empty() || gui_fan(she_ding) == gui_fan(AUTO) {
+        xi_tong.unwrap_or_else(|| APP_FALLBACK.to_owned())
     } else {
-        设定.to_owned()
+        she_ding.to_owned()
     };
 
-    匹配(&想要, &支持的语言.iter().map(|s| s.to_string()).collect::<Vec<_>>())
-        .unwrap_or_else(|| 应用兜底.to_owned())
+    pi_pei(
+        &xiang_yao,
+        &SUPPORTED_LANGUAGES
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|| APP_FALLBACK.to_owned())
 }
-/// 解析一份"键 = 值"的语言文件（插件的 `lang/<tag>.toml`）。
-///
-/// 只收**顶层、值是字符串**的项：语言文件就该长这样，出现别的形状
-/// （嵌套表、数组、数字）说明作者写错了，如实报出来比悄悄丢掉好。
-///
-/// 保留键 `name`：插件在这个语言下**叫什么名字**（界面上那一行、页签名）。
-/// 别的键都是插件自己的文案，宿主不解释。
-pub fn 读语言文件(文本: &str) -> Result<HashMap<String, String>, String> {
-    let 值: toml::Value = toml::from_str(文本).map_err(|e| format!("语言文件不是合法 TOML：{e}"))?;
-    let 表 = 值
-        .as_table()
-        .ok_or_else(|| "语言文件最外层必须是一张表".to_owned())?;
 
-    let mut 出 = HashMap::new();
-    for (键, v) in 表 {
+pub fn read_language_file(text_2: &str) -> Result<HashMap<String, String>, String> {
+    let value_2: toml::Value =
+        toml::from_str(text_2).map_err(|e| format!("Language file is not valid TOML: {e}"))?;
+    let table_2 = value_2
+        .as_table()
+        .ok_or_else(|| "The language file root must be a table".to_owned())?;
+
+    let mut chu = HashMap::new();
+    for (jian_2, v) in table_2 {
         match v {
             toml::Value::String(s) => {
-                出.insert(键.clone(), s.clone());
+                chu.insert(jian_2.clone(), s.clone());
             }
-            别的 => {
+            bie_de => {
                 return Err(format!(
-                    "语言文件里的 `{键}` 是{}，只收字符串（拓展的文案一条一条列平，别嵌套）",
-                    别的.type_str()
+                    "Language entry `{jian_2}` has type {}; only flat string values are accepted",
+                    bie_de.type_str()
                 ))
             }
         }
     }
-    Ok(出)
+    Ok(chu)
 }
 
 #[cfg(test)]
@@ -301,130 +159,119 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 归一化() {
-        assert_eq!(规范("zh_CN.UTF-8"), "zh-CN");
-        assert_eq!(规范("zh-cn"), "zh-CN");
-        assert_eq!(规范("EN"), "en");
-        assert_eq!(规范("en_US"), "en-US");
-        assert_eq!(规范("pt_BR@euro"), "pt-BR");
-        assert_eq!(规范("zh_Hans_CN"), "zh-Hans-CN");
-        assert_eq!(规范("  "), "");
-        assert_eq!(规范("C"), "c");
+    fn gui_yi_hua() {
+        assert_eq!(gui_fan("zh_CN.UTF-8"), "zh-CN");
+        assert_eq!(gui_fan("zh-cn"), "zh-CN");
+        assert_eq!(gui_fan("EN"), "en");
+        assert_eq!(gui_fan("en_US"), "en-US");
+        assert_eq!(gui_fan("pt_BR@euro"), "pt-BR");
+        assert_eq!(gui_fan("zh_Hans_CN"), "zh-Hans-CN");
+        assert_eq!(gui_fan("  "), "");
+        assert_eq!(gui_fan("C"), "c");
     }
 
     #[test]
-    fn 语言名和语言表一一对应() {
-        // ⚠️ 承重：两张表错位 = 下拉里选的标签与真正生效的语言对不上，
-        // 而症状是"选了英文界面变中文"。宁可在编译期/测试期炸。
+    fn language_names_match_supported_languages() {
         assert_eq!(
-            语言名.len(),
-            支持的语言.len(),
-            "支持的语言 {支持语言:?} 与 语言名 {语言名:?} 数量不一致",
-            支持语言 = 支持的语言
+            LANGUAGE_NAMES.len(),
+            SUPPORTED_LANGUAGES.len(),
+            "supported languages {supported:?} and labels {labels:?} have different lengths",
+            supported = SUPPORTED_LANGUAGES,
+            labels = LANGUAGE_NAMES
         );
-        assert!(!语言名.iter().any(|n| n.trim().is_empty()), "名字不能空着");
-    }
-
-    #[test]
-    fn 两个兜底都必须在支持的语言里() {
-        // ⚠️ 这条是**承重**的：兜底是"最后一定会用上的那一份文案表"，它自己得先
-        // 在表里。抽掉 `en` 的文案表却留着它当兜底，界面上会一片空白键名。
-        // ⚠️ 内插的是**变量名**（`插件兜底`），别写成界面上那个词「拓展」——
-        // 2026-09-27 把界面词统一成「拓展」时，这里连着标识符一起改了，
-        // 于是 `cargo test` 编不过：`cannot find value 拓展兜底 in this scope`。
-        assert!(支持的语言.contains(&插件兜底), "插件兜底 {插件兜底} 不在 {支持的语言:?} 里");
-        assert!(支持的语言.contains(&应用兜底), "应用兜底 {应用兜底} 不在 {支持的语言:?} 里");
-    }
-
-    #[test]
-    fn 两个兜底是两个概念_今天恰好同值() {
-        // ⚠️ **这条原来是 `assert_ne!(应用兜底, 插件兜底)`**，2026-09-26 上午拆开
-        // 两者时加进来钉那次拆分。同一天下午 `应用兜底` 按它自己注释里写下的条件
-        // 翻回了 `en`，两者于是同值，`assert_ne!` 当场变红。
-        //
-        // ⚠️ **那时候不能把整条测试删掉**：它钉的是"这两个概念没被合并成一个
-        // 常量"，而那条约束跟两个值相不相等**无关**——
-        //
-        // - `插件兜底` 是**对插件作者的要求**（用户 2026-09-25：「插件必须包含
-        //   英语」），`plugin/manifest.rs` 拿它当"清单里有没有 en"的判据；
-        // - `应用兜底` 是**应用自己**的落点。2026-09-26 那天它跟着"前端英文表
-        //   覆盖到哪儿"走；2026-09-28 语言翻成"英语是原文"之后这层依赖没了
-        //   （英语界面由构造保证完整），那个值也就不再需要条件，见它的注释。
-        //
-        // 两者今天同值是因为**同一个理由**（英语是插件与 Markdown 生态的通用语），
-        // 不是一个常量被两处引用。所以这里改成：`插件兜底` 照旧钉死，
-        // `应用兜底` 钉住"今天是 en"并写明**它凭什么可以改**——将来前端表再变，
-        // 动的只有第二个。
-        assert_eq!(插件兜底, "en", "拓展兜底是用户点名要的英语，不能改");
-        assert_eq!(
-            应用兜底, "en",
-            "应用兜底 2026-09-26 翻回 en；2026-09-28 语言翻转后英语是原文、这个值不再有条件，再改它要另找理由"
+        assert!(
+            !LANGUAGE_NAMES.iter().any(|name| name.trim().is_empty()),
+            "labels must not be empty"
         );
     }
 
     #[test]
-    fn 匹配_精确在前_前缀兜底() {
-        let 可选 = vec!["en".to_owned(), "zh".to_owned(), "ja".to_owned()];
-        assert_eq!(匹配("zh", &可选).as_deref(), Some("zh"));
-        // 应用是 zh-CN、插件只有 zh：算命中（理由见文件头）。
-        assert_eq!(匹配("zh-CN", &可选).as_deref(), Some("zh"));
-        // 应用是 zh、插件只有 zh-CN：不算——不往细里猜。
-        let 细 = vec!["zh-CN".to_owned()];
-        assert_eq!(匹配("zh", &细), None);
-        // 精确优先于前缀：插件同时有 zh 和 zh-CN 时用 zh-CN。
-        let 两个 = vec!["zh".to_owned(), "zh-CN".to_owned()];
-        assert_eq!(匹配("zh-CN", &两个).as_deref(), Some("zh-CN"));
-        // `ja-JP` 命中更粗的 `ja`——这条正是"往粗里找"的意思。
-        assert_eq!(匹配("ja-JP", &可选).as_deref(), Some("ja"));
-        // 可选里一门都没有的语言：None。
-        assert_eq!(匹配("ko-KR", &可选), None);
-        assert_eq!(匹配("", &可选), None);
+    fn both_fallbacks_are_supported_languages() {
+        assert!(SUPPORTED_LANGUAGES.contains(&PLUGIN_FALLBACK));
+        assert!(SUPPORTED_LANGUAGES.contains(&APP_FALLBACK));
     }
 
     #[test]
-    fn 有效语言_自动跟系统但不认识的落到应用兜底() {
-        assert_eq!(有效语言(自动, Some("zh-CN".to_owned())), "zh-CN");
-        // 繁中：应用只有 zh-CN / en 两份文案表，而 `zh-TW` **不会**去命中 `zh-CN`
-        // ——那是往细里猜（见 `匹配` 那段）。
-        // ⚠️ 落到哪一边 2026-09-26 一天里变了两次（`en` → `zh-CN` → `en`），
-        // 两次的理由都写在 `应用兜底` 那条常量上。这里只写符号名，**不要**把
-        // 具体值抄进来——抄进来就会在下次翻转时变成一句假话。
-        assert_eq!(有效语言(自动, Some("zh-TW".to_owned())), 应用兜底);
-        assert_eq!(有效语言(自动, Some("en-US".to_owned())), "en");
-        assert_eq!(有效语言(自动, None), 应用兜底, "取不到系统语言就落到应用兜底");
-        assert_eq!(有效语言(自动, Some("ja-JP".to_owned())), 应用兜底, "日语没有文案表");
+    fn liang_ge_dou_di_shi_liang_ge_gai_nian_jin_tian_qia_ok_tong_value() {
+        assert_eq!(
+            PLUGIN_FALLBACK, "en",
+            "the extension fallback must remain English"
+        );
+        assert_eq!(
+            APP_FALLBACK, "en",
+            "the app fallback changed back to English on 2026-09-26 and must not change without a new rationale"
+        );
     }
 
     #[test]
-    fn 虚拟环境只有_c_locale_时从系统配置找回中文() {
-        let 配置 = "LANG=\"zh_CN.UTF-8\"\nLANGUAGE=\"zh_CN:zh\"\n";
-        assert_eq!(从语言配置取(配置).as_deref(), Some("zh-CN"));
-        assert_eq!(从语言配置取("LANG=C.UTF-8\n").as_deref(), None);
-        assert_eq!(从语言配置取("LANG=en_US.UTF-8\n").as_deref(), Some("en-US"));
+    fn pi_pei_jing_que_zai_qian_qian_zhui_dou_di() {
+        let ke_xuan = vec!["en".to_owned(), "zh".to_owned(), "ja".to_owned()];
+        assert_eq!(pi_pei("zh", &ke_xuan).as_deref(), Some("zh"));
+
+        assert_eq!(pi_pei("zh-CN", &ke_xuan).as_deref(), Some("zh"));
+
+        let xi = vec!["zh-CN".to_owned()];
+        assert_eq!(pi_pei("zh", &xi), None);
+
+        let liang_ge = vec!["zh".to_owned(), "zh-CN".to_owned()];
+        assert_eq!(pi_pei("zh-CN", &liang_ge).as_deref(), Some("zh-CN"));
+
+        assert_eq!(pi_pei("ja-JP", &ke_xuan).as_deref(), Some("ja"));
+
+        assert_eq!(pi_pei("ko-KR", &ke_xuan), None);
+        assert_eq!(pi_pei("", &ke_xuan), None);
     }
 
     #[test]
-    fn 有效语言_手动选的认不出就落到应用兜底() {
-        assert_eq!(有效语言("zh-CN", None), "zh-CN");
-        assert_eq!(有效语言("zh_CN", None), "zh-CN", "手写 settings.toml 的人可能写成下划线");
-        assert_eq!(有效语言("en", None), "en");
-        // 用户在 settings.toml 里写了个应用没有的语言：落到应用兜底，不假装。
-        assert_eq!(有效语言("fr", None), 应用兜底);
-        assert_eq!(有效语言("", None), 应用兜底);
+    fn automatic_language_follows_the_system_and_uses_the_app_fallback() {
+        assert_eq!(effective_language(AUTO, Some("zh-CN".to_owned())), "zh-CN");
+
+        assert_eq!(
+            effective_language(AUTO, Some("zh-TW".to_owned())),
+            APP_FALLBACK
+        );
+        assert_eq!(effective_language(AUTO, Some("en-US".to_owned())), "en");
+        assert_eq!(
+            effective_language(AUTO, None),
+            APP_FALLBACK,
+            "missing system locale uses the app fallback"
+        );
+        assert_eq!(
+            effective_language(AUTO, Some("ja-JP".to_owned())),
+            APP_FALLBACK,
+            "Japanese has no translation table"
+        );
     }
 
     #[test]
-    fn 读语言文件_只收平的字符串() {
-        // ⚠️ 名字**不能**叫 `读语言文件`：那样会把 `use super::*` 引进来的同名函数
-        // 遮住（同一层里本地项优先于 glob 导入），于是下面调的其实是这个测试自己
-        // ——编译报"传了参数给一个不收参数的函数"。这是踩过一次的坑。
-        let 表 = 读语言文件("name = \"AI\"\nhint = \"hi\"\n").unwrap();
-        assert_eq!(表.get("name").map(String::as_str), Some("AI"));
-        assert_eq!(表.get("hint").map(String::as_str), Some("hi"));
+    fn xu_ni_huan_jing_zhi_you_c_locale_shi_cong_xi_tong_pei_zhi_zhao_hui_zhong_wen() {
+        let pei_zhi = "LANG=\"zh_CN.UTF-8\"\nLANGUAGE=\"zh_CN:zh\"\n";
+        assert_eq!(cong_language_pei_zhi_qu(pei_zhi).as_deref(), Some("zh-CN"));
+        assert_eq!(cong_language_pei_zhi_qu("LANG=C.UTF-8\n").as_deref(), None);
+        assert_eq!(
+            cong_language_pei_zhi_qu("LANG=en_US.UTF-8\n").as_deref(),
+            Some("en-US")
+        );
+    }
 
-        // 嵌套 / 非字符串：**报错**，不是静默丢掉——作者写错了要看得见。
-        assert!(读语言文件("[a]\nb = 1\n").is_err());
-        assert!(读语言文件("n = 3\n").is_err());
-        assert!(读语言文件("这不是 toml").is_err());
+    #[test]
+    fn unknown_manual_language_uses_the_app_fallback() {
+        assert_eq!(effective_language("zh-CN", None), "zh-CN");
+        assert_eq!(effective_language("zh_CN", None), "zh-CN", "\u{624b}\u{5199} settings.toml \u{7684}\u{4eba}\u{53ef}\u{80fd}\u{5199}\u{6210}\u{4e0b}\u{5212}\u{7ebf}");
+        assert_eq!(effective_language("en", None), "en");
+
+        assert_eq!(effective_language("fr", None), APP_FALLBACK);
+        assert_eq!(effective_language("", None), APP_FALLBACK);
+    }
+
+    #[test]
+    fn read_language_file_zhi_receive_ping_de_zi_fu_chuan() {
+        let table_2 = read_language_file("name = \"AI\"\nhint = \"hi\"\n").unwrap();
+        assert_eq!(table_2.get("name").map(String::as_str), Some("AI"));
+        assert_eq!(table_2.get("hint").map(String::as_str), Some("hi"));
+
+        assert!(read_language_file("[a]\nb = 1\n").is_err());
+        assert!(read_language_file("n = 3\n").is_err());
+        assert!(read_language_file("\u{8fd9}\u{4e0d}\u{662f} toml").is_err());
     }
 }

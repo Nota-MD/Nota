@@ -23,19 +23,24 @@ fn helper_path() -> Option<PathBuf> {
             return Some(path);
         }
     }
-    let path = std::env::current_exe().ok()?.parent()?.join("nota-gtk4-dialogs");
+    let path = std::env::current_exe()
+        .ok()?
+        .parent()?
+        .join("nota-gtk4-dialogs");
     path.is_file().then_some(path)
 }
 
 pub fn file_dialog(request: &serde_json::Value) -> Result<Option<Vec<String>>> {
-    let helper = helper_path()
-        .ok_or_else(|| NotaError::other("GTK4 dialog helper is not installed"))?;
+    let helper =
+        helper_path().ok_or_else(|| NotaError::other("GTK4 dialog helper is not installed"))?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|value| value.as_nanos())
         .unwrap_or(0);
-    let request_path =
-        std::env::temp_dir().join(format!("nota-gtk4-file-{}-{stamp}.json", std::process::id()));
+    let request_path = std::env::temp_dir().join(format!(
+        "nota-gtk4-file-{}-{stamp}.json",
+        std::process::id()
+    ));
     let body = serde_json::to_vec(request)
         .map_err(|error| NotaError::other(format!("GTK4 dialog request failed: {error}")))?;
     std::fs::write(&request_path, body)
@@ -47,8 +52,9 @@ pub fn file_dialog(request: &serde_json::Value) -> Result<Option<Vec<String>>> {
         .stdin(Stdio::null())
         .output();
     let _ = std::fs::remove_file(&request_path);
-    let output = output
-        .map_err(|error| NotaError::other(format!("GTK4 dialog helper failed to start: {error}")))?;
+    let output = output.map_err(|error| {
+        NotaError::other(format!("GTK4 dialog helper failed to start: {error}"))
+    })?;
     if !output.status.success() {
         let error = String::from_utf8_lossy(&output.stderr).trim().to_string();
         return Err(NotaError::other(if error.is_empty() {
@@ -63,8 +69,8 @@ pub fn file_dialog(request: &serde_json::Value) -> Result<Option<Vec<String>>> {
 }
 
 pub fn print_pdf(pdf: &Path) -> Result<()> {
-    let helper = helper_path()
-        .ok_or_else(|| NotaError::other("GTK4 dialog helper is not installed"))?;
+    let helper =
+        helper_path().ok_or_else(|| NotaError::other("GTK4 dialog helper is not installed"))?;
     let output = crate::proc::background_command(&helper)
         .arg("print")
         .arg(pdf)

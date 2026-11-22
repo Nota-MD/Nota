@@ -1,24 +1,24 @@
-/**
- * 「Markdown」那一页：十一页中组数最多的一页，共七组。
- *
- * 分组与顺序：
- *
- * ```text
- * Markdown 语法偏好  ← 严格模式 / 标题样式 / 无序列表 / 有序列表
- * Markdown 扩展语法  ← 自动识别链接 / 内联公式 / 下标 / 上标 / 高亮 / 警报框 / 图表
- * 智能标点          ← 模式 / 引号 / 破折号 / Unicode 标点
- * 代码块            ← 行号 / 自动换行 / Shift+Tab / 缩进 / 默认语言 / 自动加语言
- * 公式              ← 行内公式(与上面同一个) / 定界符 / 代码块公式 / physics / 兼容 / 编号 / 输出
- * 空格与换行         ← 首行缩进 / 显示 <br/> / 编辑时 / 导出与打印
- * ```
- *
- * ⚠️ 两项读写**顶层字段**（`strict_markdown`、`enable_physics`），不在
- * `[markdown]` 表内：二者自 2026-09-22 / 09-24 起就在顶层，移入表内会使旧设置
- * 文件中的值静默恢复默认。界面不体现这一区别，改这块代码的人需要知道。
- *
- * ⚠️ 「内联公式」出现在两处（扩展语法组与公式组），是版式安排而非两个设置，
- * 两者操作同一个 `inline_math`。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import type {
   AutoLanguage,
@@ -44,14 +44,14 @@ import {
 import { paneWriter, type PaneProps } from "./props";
 
 export function MarkdownPane({ settings, onChange }: PaneProps) {
-  // ⚠️ **这一行不只是取值**：它订阅了语言（宿主报来语言之后这一块要重画，见
-  // `i18n/index.ts::useT`）。局部这个名字盖住模块级的 `t`，下面全都用它。
+
+
   const t = useT();
 
-  // ⚠️ 下面这几张表**在组件里现建**，不能留在模块级：模块级求值时语言还没定，
-  // 而且之后**没有任何东西会通知它重画**（同上）；`tools/i18n-check.sh` 数的
-  // 是源码里**字面写出来**的 `t("…")`，表留在模块级这些键就不算被调用。
-  // 同一件事的先例见 `PluginDock.tsx::能力名` 那张表。
+
+
+
+
   const HEADING: Array<{ value: HeadingStyle; label: string }> = [
     { value: "atx", label: t("ATX (## Heading)") },
     { value: "setext", label: t("Setext (heading + ===/---)") },

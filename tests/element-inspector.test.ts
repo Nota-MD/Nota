@@ -61,11 +61,11 @@ const rows = inspectorRows(
   32.2,
 );
 equal(rows, [
-  { label: "font", value: "15px / 22px · 600" },
+  { label: "font", value: "15px / 22px / 600" },
   { label: "font-family", value: "Adwaita Sans, sans-serif" },
   { label: "color", value: "rgb(31, 35, 40)" },
   { label: "background", value: "rgb(246, 248, 250)" },
-  { label: "box", value: "118 × 32 · inline-flex" },
+  { label: "box", value: "118 × 32 / inline-flex" },
   { label: "padding", value: "4px 10px" },
   { label: "radius", value: "6px" },
 ], "字体、颜色、盒尺寸和内边距都进入提示");

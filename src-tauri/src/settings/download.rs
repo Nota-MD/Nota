@@ -75,7 +75,8 @@ mod tests {
 
     #[test]
     fn rules_apply_in_order() {
-        let rules = "github.com/ => gh-proxy.net/github.com/\nreleases/download/ => releases/download/";
+        let rules =
+            "github.com/ => gh-proxy.net/github.com/\nreleases/download/ => releases/download/";
         assert_eq!(
             rewrite_address("https://github.com/Nota-MD/Nota", rules).unwrap(),
             "https://gh-proxy.net/github.com/Nota-MD/Nota"

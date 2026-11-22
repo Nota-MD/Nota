@@ -1,20 +1,20 @@
-/**
- * 块级 HTML 的显示层：**安全渲染，源码保持原样**。
- *
- * `html-block.ts` 负责把块级 `html` 节点接进 ProseMirror，并在存盘时逐字写回。
- * 本文件只接 `toDOM` 之后的显示：把 `attrs.value` 交给 DOMPurify，按受控的
- * 标签与属性白名单生成一个只读视图。它不参与 Markdown 的解析或序列化，因此
- * “打开再保存，字节不变”仍由 schema 那一侧保证。
- *
- * 渲染范围覆盖 README 中常见的 HTML 片段：居中段落、标题、链接、图片、徽章、
- * 表格、引用、代码、details/summary 等。脚本、iframe、表单、内联样式、事件
- * 属性与危险 URL 不会进入编辑区 DOM。
- *
- * HTML 块在普通状态下显示渲染结果。鼠标经过或选中该块时会出现一个 `HTML`
- * 按钮；点击后在块内编辑源码，再次点击恢复渲染。所有源码修改仍通过一笔
- * ProseMirror 事务写回 `attrs.value`，所以撤销、自动保存和源码模式使用同一份
- * 文档真相。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { redo, undo } from "@milkdown/kit/prose/history";
@@ -61,9 +61,9 @@ function rememberRemoteHtmlImage(image: HTMLImageElement): void {
   if (!address || !image.complete || image.naturalWidth <= 0) return;
   if (remoteHtmlImages.has(address) || remoteHtmlImagePending.has(address)) return;
 
-  // 单纯把已解码的 `<img>` 留在内存里，WebKitGTK 在编辑区重建后仍会重新
-  // 请求图片。这里在原图成功加载后读取同一份资源，缓存成 data URL；不支持
-  // CORS 的服务器仍照常显示远程图片，只是不进入这份缓存。
+
+
+
   remoteHtmlImagePending.add(address);
   void fetch(address, {
     mode: "cors",
@@ -93,7 +93,7 @@ function rememberRemoteHtmlImage(image: HTMLImageElement): void {
       }
     })
     .catch(() => {
-      // 不支持 CORS 的资源无法读成字节；原图照常显示，继续走 WebView 缓存。
+
     })
     .finally(() => remoteHtmlImagePending.delete(address));
 }
@@ -167,7 +167,7 @@ function observeHtmlImage(
   if (image.complete) queueMicrotask(settle);
 }
 
-/** 本地图片在插入文档前先摘掉 src，避免 WebView 对相对路径发一次无用请求。 */
+
 function removeOutputLocalLocalImageSlice(root: DocumentFragment, documentPath: string | null): PendingReadImageSlice[] {
   const result2: PendingReadImageSlice[] = [];
   for (const element of Array.from(root.querySelectorAll("img[src]"))) {
@@ -199,7 +199,7 @@ function writeImageSlice(imageSlice: PendingReadImageSlice, path: string, afterW
     });
 }
 
-/** 块级 HTML 的 NodeView。文档路径固定于实例，节点更新只改 attrs.value。 */
+
 export function blockHTMLView(documentPath: string | null = null) {
   let alreadyReportNoteBook = false;
   let alreadyReportConstructCreate = false;
@@ -374,10 +374,10 @@ export function blockHTMLView(documentPath: string | null = null) {
           }
         });
 
-        // 渲染区本身不是可选文本，而是进入源码编辑的命中区域。必须在
-        // `mousedown` 就直接切换：WebKit 在原子块里的图片上可能吞掉后续 click，
-        // 只靠根节点那条 click 兜底会表现为“点图片没有任何反应”。链接和按钮
-        // 仍由各自的分支处理。
+
+
+
+
         show.addEventListener("mousedown", (event) => {
           if (event.button !== 0) return;
           const target = event.target;
@@ -396,15 +396,15 @@ export function blockHTMLView(documentPath: string | null = null) {
           }
         }, true);
 
-        // 整块渲染区域都是“进入源码编辑”的命中范围。链接不在这里导航，图片、
-        // 徽章和空白处也都算同一块；右上角勾号负责结束编辑。
+
+
         root.addEventListener("click", (event) => {
           if (event.button !== 0) return;
           const target = event.target;
           if (!(target instanceof Element)) return;
           if (target.closest("button, textarea")) return;
-          // 链接交给应用统一的链接分流：普通 Markdown 链接仍编辑地址，
-          // 自绘 HTML 里的链接则直接打开，不抢成“进入 HTML 编辑”。
+
+
           if (target.closest("a[href]")) return;
           if (sourceMode) return;
           event.preventDefault();
@@ -454,7 +454,7 @@ export function blockHTMLView(documentPath: string | null = null) {
   );
 }
 
-/** 调试模式下记录一次文档里 HTML 节点和其他顶层块的形状。 */
+
 export const blockHTMLDiagnostics = $prose(
   () =>
     new Plugin({

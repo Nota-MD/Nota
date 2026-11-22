@@ -1,9 +1,3 @@
-//! 自绘文件选择器需要的只读目录浏览能力。
-//!
-//! 原生 GTK 文件对话框无法跟随 Nota 的界面主题，因此在应用内绘制选择器。宿主只
-//! 提供位置清单、目录列表和“新建文件夹”；文件的打开、保存等业务命令仍由各自
-//! 原有命令处理，这里不读写文件内容。
-
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -30,9 +24,16 @@ pub struct PickerEntry {
     pub hidden: bool,
 }
 
-fn push_place(out: &mut Vec<PickerPlace>, seen: &mut std::collections::HashSet<PathBuf>, kind: &str, path: Option<PathBuf>) {
+fn push_place(
+    out: &mut Vec<PickerPlace>,
+    seen: &mut std::collections::HashSet<PathBuf>,
+    kind: &str,
+    path: Option<PathBuf>,
+) {
     let Some(path) = path else { return };
-    let Ok(canonical) = path.canonicalize() else { return };
+    let Ok(canonical) = path.canonicalize() else {
+        return;
+    };
     if !canonical.is_dir() || !seen.insert(canonical.clone()) {
         return;
     }
@@ -64,12 +65,7 @@ pub fn nota_picker_places() -> Vec<PickerPlace> {
         );
     }
     #[cfg(not(target_os = "windows"))]
-    push_place(
-        &mut out,
-        &mut seen,
-        "root",
-        Some(PathBuf::from("/")),
-    );
+    push_place(&mut out, &mut seen, "root", Some(PathBuf::from("/")));
 
     out
 }
@@ -95,11 +91,11 @@ fn is_hidden(path: &Path, name: &str) -> bool {
 pub fn nota_picker_list(path: String, show_hidden: bool) -> Result<Vec<PickerEntry>> {
     let dir = PathBuf::from(path);
     if !dir.is_dir() {
-        return Err(NotaError::other("这个位置不是文件夹"));
+        return Err(NotaError::other("The selected path is not a directory"));
     }
     let mut out = Vec::new();
     let read = std::fs::read_dir(&dir)
-        .map_err(|e| NotaError::other(format!("读取文件夹失败：{e}")))?;
+        .map_err(|e| NotaError::other(format!("Could not read the directory: {e}")))?;
     for entry in read.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
         if name.is_empty() {
@@ -147,15 +143,17 @@ pub fn nota_picker_create_dir(parent: String, name: String) -> Result<String> {
         || name.contains('\\')
         || name.contains('\0')
     {
-        return Err(NotaError::other("文件夹名不能为空，也不能包含路径分隔符"));
+        return Err(NotaError::other(
+            "Folder name must not be empty or contain path separators",
+        ));
     }
     let parent = PathBuf::from(parent);
     if !parent.is_dir() {
-        return Err(NotaError::other("当前位置不是文件夹"));
+        return Err(NotaError::other("The current location is not a directory"));
     }
     let target = parent.join(name);
     std::fs::create_dir(&target)
-        .map_err(|e| NotaError::other(format!("新建文件夹失败：{e}")))?;
+        .map_err(|e| NotaError::other(format!("Could not create the folder: {e}")))?;
     paths::path_to_string(&target)
 }
 
@@ -164,23 +162,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 新建文件夹拒绝路径分隔符() {
+    fn create_folder_rejects_path_separators() {
         let parent = std::env::temp_dir();
         for bad in ["", "..", "a/b", "a\\b"] {
-            assert!(nota_picker_create_dir(
-                parent.to_string_lossy().to_string(),
-                bad.to_string()
-            )
-            .is_err());
+            assert!(
+                nota_picker_create_dir(parent.to_string_lossy().to_string(), bad.to_string())
+                    .is_err()
+            );
         }
     }
 
     #[test]
-    fn 目录列表目录在前且可隐藏_hidden() {
-        let root = std::env::temp_dir().join(format!(
-            "nota-picker-test-{}",
-            std::process::id()
-        ));
+    fn directory_list_puts_folders_first_and_can_hide_dotfiles() {
+        let root = std::env::temp_dir().join(format!("nota-picker-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("dir")).unwrap();
         std::fs::write(root.join("b.txt"), b"b").unwrap();

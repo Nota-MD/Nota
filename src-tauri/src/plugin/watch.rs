@@ -96,7 +96,11 @@ fn snapshot(roots: &[PathBuf]) -> Snapshot {
     output
 }
 
-fn changed_plugin_dirs(roots: &[PathBuf], before: &Snapshot, after: &Snapshot) -> BTreeSet<PathBuf> {
+fn changed_plugin_dirs(
+    roots: &[PathBuf],
+    before: &Snapshot,
+    after: &Snapshot,
+) -> BTreeSet<PathBuf> {
     let changed = before
         .keys()
         .chain(after.keys())

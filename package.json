@@ -1,7 +1,7 @@
 {
   "name": "nota",
   "private": true,
-  "version": "0.16.0-beta",
+  "version": "0.17.0-beta",
   "type": "module",
   "description": "Nota - a WYSIWYG Markdown editor with Lua extensions (Tauri + ProseMirror)",
   "license": "BSD-2-Clause",
@@ -34,6 +34,7 @@
     "@milkdown/plugin-math": "^7.5.9",
     "@milkdown/plugin-prism": "^7.22.1",
     "@milkdown/prose": "^7.23.0",
+    "@replit/codemirror-vim": "^6.4.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "2.4.2",
     "@tauri-apps/plugin-fs": "2.5.2",

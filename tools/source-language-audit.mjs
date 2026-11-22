@@ -8,6 +8,7 @@ const roots = ["src", "src-tauri/src"];
 const extensions = new Set([".rs", ".ts", ".tsx"]);
 const baselinePath = "tools/source-language-baseline.json";
 const han = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
+const emoji = /\p{Emoji_Presentation}/u;
 
 function excluded(file) {
   const normalized = file.split(path.sep).join("/");
@@ -31,18 +32,133 @@ function collect(directory, files = []) {
   return files;
 }
 
-const counts = {};
-let total = 0;
-for (const root of roots) {
-  if (!fs.existsSync(root)) continue;
-  for (const file of collect(root)) {
-    const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
-    const count = lines.filter((line) => han.test(line)).length;
-    if (count === 0) continue;
-    const key = file.split(path.sep).join("/");
-    counts[key] = count;
-    total += count;
+function decodeEscapes(value) {
+  return value
+    .replace(/\\u\{([0-9a-fA-F]{1,6})\}/g, (_, hex) =>
+      String.fromCodePoint(Number.parseInt(hex, 16)),
+    )
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_, hex) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    );
+}
+
+function maskRust(source) {
+  const output = source.split("");
+  let index = 0;
+  const blank = (from, to) => {
+    for (let cursor = from; cursor < to; cursor += 1) {
+      if (output[cursor] !== "\n" && output[cursor] !== "\r") output[cursor] = " ";
+    }
+  };
+
+  while (index < source.length) {
+    if (source.startsWith("//", index)) {
+      const end = source.indexOf("\n", index + 2);
+      const stop = end < 0 ? source.length : end;
+      blank(index, stop);
+      index = stop;
+      continue;
+    }
+    if (source.startsWith("/*", index)) {
+      let depth = 1;
+      let cursor = index + 2;
+      while (cursor < source.length && depth > 0) {
+        if (source.startsWith("/*", cursor)) {
+          depth += 1;
+          cursor += 2;
+        } else if (source.startsWith("*/", cursor)) {
+          depth -= 1;
+          cursor += 2;
+        } else {
+          cursor += 1;
+        }
+      }
+      blank(index, cursor);
+      index = cursor;
+      continue;
+    }
+
+    const character = /^(?:b)?'(?:\\.|\\u\{[0-9a-fA-F]+\}|[^'\\\r\n])'/.exec(
+      source.slice(index),
+    );
+    if (character) {
+      blank(index, index + character[0].length);
+      index += character[0].length;
+      continue;
+    }
+
+    const raw = /^(?:b?r)(#*)"/.exec(source.slice(index));
+    if (raw) {
+      const opener = raw[0].length;
+      const closer = `"${raw[1]}`;
+      const end = source.indexOf(closer, index + opener);
+      const stop = end < 0 ? source.length : end + closer.length;
+      blank(index, stop);
+      index = stop;
+      continue;
+    }
+    if (source[index] === '"' || source.startsWith('b"', index)) {
+      const start = source[index] === '"' ? index : index + 1;
+      let cursor = start + 1;
+      while (cursor < source.length) {
+        if (source[cursor] === "\\") cursor += 2;
+        else if (source[cursor] === '"') {
+          cursor += 1;
+          break;
+        } else {
+          cursor += 1;
+        }
+      }
+      blank(index, cursor);
+      index = cursor;
+      continue;
+    }
+    index += 1;
   }
+  return output.join("");
+}
+
+function matchingBrace(masked, open) {
+  let depth = 0;
+  for (let index = open; index < masked.length; index += 1) {
+    if (masked[index] === "{") depth += 1;
+    else if (masked[index] === "}") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+  return masked.length - 1;
+}
+
+function rustTestRanges(text) {
+  const masked = maskRust(text);
+  const ranges = [];
+  for (const marker of ["#[cfg(test)]", "#[test]"]) {
+    let position = 0;
+    while ((position = masked.indexOf(marker, position)) >= 0) {
+      const open = masked.indexOf("{", position + marker.length);
+      if (open < 0) break;
+      ranges.push([position, matchingBrace(masked, open)]);
+      position = open + 1;
+    }
+  }
+  return ranges;
+}
+
+function productionLines(file, text) {
+  if (!file.endsWith(".rs")) return text.split(/\r?\n/);
+  const ranges = rustTestRanges(text);
+  const output = [];
+  let offset = 0;
+  for (const line of text.split(/\r?\n/)) {
+    const ignored = ranges.some(([start, end]) => offset >= start && offset <= end);
+    output.push(ignored ? "" : decodeEscapes(line));
+    offset += line.length + 1;
+  }
+  return output;
 }
 
 const update = process.argv.includes("--update");
@@ -51,13 +167,46 @@ const details = process.argv.includes("--details");
 const diffIndex = process.argv.indexOf("--check-diff");
 const diffBase = diffIndex >= 0 ? process.argv[diffIndex + 1] : "";
 
-if (details) {
-  for (const [file, count] of Object.entries(counts).sort((a, b) => b[1] - a[1])) {
-    console.log(`${String(count).padStart(5)} ${file}`);
+const counts = {};
+const matchedLines = {};
+let total = 0;
+let emojiCount = 0;
+for (const root of roots) {
+  if (!fs.existsSync(root)) continue;
+  for (const file of collect(root)) {
+    const key = file.split(path.sep).join("/");
+    const text = fs.readFileSync(file, "utf8");
+    if (details && process.argv.includes("--ranges") && key.endsWith(".rs")) {
+      console.error(`${key}: ${JSON.stringify(rustTestRanges(text))}`);
+    }
+    const lines = productionLines(key, text);
+    const count = lines.filter((line) => han.test(line)).length;
+    if (
+      !key.endsWith("src/editor/emoji.ts") &&
+      !key.endsWith("src/editor/github-docs.ts")
+    ) {
+      emojiCount += lines.filter((line) => emoji.test(line)).length;
+    }
+    if (count === 0) continue;
+    counts[key] = count;
+    matchedLines[key] = lines
+      .map((line, index) => (han.test(line) ? index + 1 : 0))
+      .filter(Boolean);
+    total += count;
   }
 }
 
-console.log(JSON.stringify({ files: Object.keys(counts).length, lines: total }));
+if (details) {
+  for (const [file, count] of Object.entries(counts).sort((a, b) => b[1] - a[1])) {
+    console.log(
+      `${String(count).padStart(5)} ${file}: ${matchedLines[file].join(", ")}`,
+    );
+  }
+}
+
+console.log(
+  JSON.stringify({ files: Object.keys(counts).length, lines: total, emojiLines: emojiCount }),
+);
 
 if (update) {
   fs.writeFileSync(baselinePath, `${JSON.stringify({ total, files: counts }, null, 2)}\n`);
@@ -77,6 +226,10 @@ if (check) {
   if (regressions.length) {
     console.error("New Chinese source violations:");
     for (const item of regressions) console.error(`- ${item}`);
+    process.exit(1);
+  }
+  if (emojiCount > 0) {
+    console.error(`Production source contains emoji on ${emojiCount} lines.`);
     process.exit(1);
   }
   console.log("No new Chinese source violations.");

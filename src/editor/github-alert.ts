@@ -1,10 +1,10 @@
-/**
- * GitHub Markdown 提示块（Alerts）。
- *
- * `> [!NOTE]`、`[!TIP]`、`[!IMPORTANT]`、`[!WARNING]`、`[!CAUTION]`
- * 在源码里仍是普通引用块。这里只加装饰，不改 schema、不改序列化，因此打开再存
- * 不会多出任何字符。
- */
+
+
+
+
+
+
+
 
 import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
@@ -125,9 +125,9 @@ export function createGitHubAlertDecorations(state: EditorState): DecorationSet 
 
 const pluginKey = new PluginKey<DecorationSet>("nota-github-alert");
 
-/**
- * 装饰只影响屏幕。文件里仍然是标准的 `> [!TYPE]` GitHub 语法。
- */
+
+
+
 export const gitHubNoticePlugin = $prose(
   () =>
     new Plugin<DecorationSet>({

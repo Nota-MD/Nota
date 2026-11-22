@@ -1,4 +1,4 @@
-/* 应用内文件选择器。所有颜色与尺寸都跟随当前界面主题。 */
+
 .file-picker-backdrop {
   position: fixed;
   inset: 0;

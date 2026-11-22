@@ -1,17 +1,3 @@
-//! Import a self-contained theme ZIP into the user theme directories.
-//!
-//! Accepted layouts:
-//!
-//! ```text
-//! ui/<id>/theme.css
-//! ui-styles/<id>/theme.css
-//! document/<id>/theme.css
-//! themes/<id>/theme.css
-//! ```
-//!
-//! A single wrapper directory is allowed. Interface themes may use one root CSS
-//! file whose name differs from the theme id; it is normalized to `theme.css`.
-
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Seek};
@@ -49,7 +35,9 @@ struct ThemeFiles {
 fn safe_parts(path: &str) -> Option<Vec<String>> {
     let normalized = path.replace('\\', "/");
     if normalized.starts_with('/')
-        || normalized.get(1..).is_some_and(|tail| tail.starts_with(':'))
+        || normalized
+            .get(1..)
+            .is_some_and(|tail| tail.starts_with(':'))
     {
         return None;
     }
@@ -127,14 +115,15 @@ fn normalize_main_css(id: &str, package: &mut ThemeFiles) -> Result<()> {
         .collect();
     if root_css.len() != 1 {
         return Err(NotaError::other(format!(
-            "主题 {id} 缺少主样式文件：需要 theme.css、{id}.css，或根目录里恰好一个 .css"
+            "Theme {id} has no primary stylesheet. Expected theme.css, {id}.css, or exactly one root CSS file."
         )));
     }
     let source = root_css[0].clone();
-    let bytes = package
-        .files
-        .remove(&source)
-        .ok_or_else(|| NotaError::other(format!("读不到主题 {id} 的主样式")))?;
+    let bytes = package.files.remove(&source).ok_or_else(|| {
+        NotaError::other(format!(
+            "Could not read the primary stylesheet for theme {id}"
+        ))
+    })?;
     package.files.insert("theme.css".to_owned(), bytes);
     Ok(())
 }
@@ -144,23 +133,23 @@ fn validate_theme(kind: ThemeKind, id: &str, package: &mut ThemeFiles) -> Result
     let css = package
         .files
         .get("theme.css")
-        .ok_or_else(|| NotaError::other(format!("主题 {id} 缺少 theme.css")))?;
+        .ok_or_else(|| NotaError::other(format!("Theme {id} is missing theme.css")))?;
     let text = std::str::from_utf8(css)
-        .map_err(|_| NotaError::other(format!("主题 {id} 的 CSS 不是 UTF-8 文本")))?;
+        .map_err(|_| NotaError::other(format!("Theme {id} CSS is not valid UTF-8 text")))?;
     match kind {
         ThemeKind::Ui => {
             let double = format!("[data-ui-style=\"{id}\"]");
             let single = format!("[data-ui-style='{id}']");
             if !text.contains(&double) && !text.contains(&single) {
                 return Err(NotaError::other(format!(
-                    "界面主题 {id} 的每条组件样式必须用 [data-ui-style=\"{id}\"] 限域"
+                    "Every component rule in UI theme {id} must be scoped by [data-ui-style=\"{id}\"]"
                 )));
             }
         }
         ThemeKind::Document => {
             if !text.contains("--doc-bg") && !text.contains("#write") {
                 return Err(NotaError::other(format!(
-                    "文档主题 {id} 没有找到 --doc-bg 或 #write"
+                    "Document theme {id} defines neither --doc-bg nor #write"
                 )));
             }
         }
@@ -183,12 +172,6 @@ fn without_css_comments(css: &str) -> String {
     out
 }
 
-/// Interface scopes ordered by how much of the stylesheet they own.
-///
-/// Official themes can include shared overrides for several built-in ids, and
-/// documentation comments may contain example selectors. The primary theme id
-/// is therefore the most frequent real selector, with the containing folder as
-/// a tie-breaker when it is one of the candidates.
 fn ui_scope_ids(css: &str) -> Vec<String> {
     let css = without_css_comments(css);
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
@@ -220,7 +203,7 @@ fn primary_ui_scope(folder_id: &str, css: &str) -> Result<String> {
     let mut ids = ui_scope_ids(css);
     if ids.is_empty() {
         return Err(NotaError::other(format!(
-            "界面主题 {folder_id} 没有声明 [data-ui-style=\"…\"]"
+            "UI theme {folder_id} does not declare [data-ui-style=\"...\"]"
         )));
     }
     if let Some(index) = ids.iter().position(|id| id == folder_id) {
@@ -261,7 +244,7 @@ fn install(root: &Path, id: &str, package: &ThemeFiles) -> Result<bool> {
     if replaced {
         std::fs::rename(&destination, &previous).map_err(|error| {
             let _ = std::fs::remove_dir_all(&staging);
-            NotaError::other(format!("无法替换已有主题 {id}：{error}"))
+            NotaError::other(format!("Could not replace existing theme {id}: {error}"))
         })?;
     }
     if let Err(error) = std::fs::rename(&staging, &destination) {
@@ -269,7 +252,9 @@ fn install(root: &Path, id: &str, package: &ThemeFiles) -> Result<bool> {
             let _ = std::fs::rename(&previous, &destination);
         }
         let _ = std::fs::remove_dir_all(&staging);
-        return Err(NotaError::other(format!("安装主题 {id} 失败：{error}")));
+        return Err(NotaError::other(format!(
+            "Could not install theme {id}: {error}"
+        )));
     }
     if replaced {
         let _ = std::fs::remove_dir_all(&previous);
@@ -279,48 +264,61 @@ fn install(root: &Path, id: &str, package: &ThemeFiles) -> Result<bool> {
 
 fn read_archive<R: Read + Seek>(reader: R) -> Result<BTreeMap<(ThemeKind, String), ThemeFiles>> {
     let mut archive = zip::ZipArchive::new(reader)
-        .map_err(|error| NotaError::other(format!("主题 ZIP 打不开：{error}")))?;
+        .map_err(|error| NotaError::other(format!("Could not open theme ZIP: {error}")))?;
     let mut packages: BTreeMap<(ThemeKind, String), ThemeFiles> = BTreeMap::new();
     let mut total = 0usize;
     let mut files = 0usize;
 
     for index in 0..archive.len() {
-        let entry = archive
-            .by_index(index)
-            .map_err(|error| NotaError::other(format!("读取主题 ZIP 条目失败：{error}")))?;
+        let entry = archive.by_index(index).map_err(|error| {
+            NotaError::other(format!("Could not read theme ZIP entry: {error}"))
+        })?;
         if safe_parts(entry.name()).is_none() {
             return Err(NotaError::other(format!(
-                "主题 ZIP 包含非法路径：{}",
+                "Theme ZIP contains an invalid path: {}",
                 entry.name()
             )));
         }
         if entry.is_dir() {
             continue;
         }
-        if entry.unix_mode().is_some_and(|mode| mode & 0o170000 == 0o120000) {
-            return Err(NotaError::other("主题 ZIP 不能包含符号链接"));
+        if entry
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err(NotaError::other(
+                "Theme ZIP must not contain symbolic links",
+            ));
         }
         let Some((kind, id, relative)) = classify(entry.name()) else {
             continue;
         };
         files += 1;
         if files > MAX_FILES {
-            return Err(NotaError::other(format!("主题 ZIP 文件数超过上限 {MAX_FILES}")));
+            return Err(NotaError::other(format!(
+                "Theme ZIP exceeds the file limit of {MAX_FILES}"
+            )));
         }
         if entry.size() as usize > MAX_FILE_BYTES {
-            return Err(NotaError::other(format!("主题文件 {relative} 太大")));
+            return Err(NotaError::other(format!(
+                "Theme file {relative} is too large"
+            )));
         }
         let mut bytes = Vec::new();
         entry
             .take(MAX_FILE_BYTES as u64 + 1)
             .read_to_end(&mut bytes)
-            .map_err(|error| NotaError::other(format!("读取主题文件 {relative} 失败：{error}")))?;
+            .map_err(|error| {
+                NotaError::other(format!("Could not read theme file {relative}: {error}"))
+            })?;
         if bytes.len() > MAX_FILE_BYTES {
-            return Err(NotaError::other(format!("主题文件 {relative} 太大")));
+            return Err(NotaError::other(format!(
+                "Theme file {relative} is too large"
+            )));
         }
         total = total.saturating_add(bytes.len());
         if total > MAX_TOTAL_BYTES {
-            return Err(NotaError::other("主题 ZIP 解压后超过 128 MiB"));
+            return Err(NotaError::other("Theme ZIP expands beyond 128 MiB"));
         }
         packages
             .entry((kind, id))
@@ -371,9 +369,9 @@ fn prepare_packages(
                 package
                     .files
                     .get("theme.css")
-                    .ok_or_else(|| NotaError::other("界面主题缺少 theme.css"))?,
+                    .ok_or_else(|| NotaError::other("UI theme is missing theme.css"))?,
             )
-            .map_err(|_| NotaError::other("界面主题的 CSS 不是 UTF-8 文本"))?;
+            .map_err(|_| NotaError::other("UI theme CSS is not valid UTF-8 text"))?;
             primary_ui_scope(&folder_id, css)?
         } else {
             folder_id
@@ -450,7 +448,7 @@ pub fn import_zip(path: &Path) -> Result<ThemeImportReport> {
     let packages = prepare_packages(read_archive(file)?)?;
     if packages.is_empty() {
         return Err(NotaError::other(
-            "ZIP 里没有识别到 Nota 主题布局；Typora 平铺主题请使用 import_path",
+            "No Nota theme layout was recognized in the ZIP; use import_path for flat Typora themes",
         ));
     }
     install_packages(
@@ -460,7 +458,6 @@ pub fn import_zip(path: &Path) -> Result<ThemeImportReport> {
     )
 }
 
-/// Load any user theme CSS through the same native Typora-compatible path.
 pub fn load_theme_css(path: &Path) -> Result<String> {
     typora::load_runtime_css(path)
 }
@@ -525,10 +522,10 @@ mod tests {
         }
         bytes.set_position(0);
         let error = match read_archive(bytes) {
-            Ok(_) => panic!("路径穿越条目不应通过"),
+            Ok(_) => panic!("path traversal entry must be rejected"),
             Err(error) => error.to_string(),
         };
-        assert!(error.contains("非法路径"), "实际：{error}");
+        assert!(error.contains("invalid path"), "actual: {error}");
     }
 
     #[test]
@@ -571,7 +568,11 @@ mod tests {
         for path in std::env::split_paths(&paths) {
             let file = File::open(&path).unwrap();
             let packages = prepare_packages(read_archive(file).unwrap()).unwrap();
-            assert!(!packages.is_empty(), "{} contains no Nota theme", path.display());
+            assert!(
+                !packages.is_empty(),
+                "{} contains no Nota theme",
+                path.display()
+            );
             for ((kind, id), package) in packages {
                 let css = package.files.get("theme.css").unwrap();
                 println!(
@@ -622,18 +623,12 @@ mod tests {
             ]),
         };
         assert!(!install(&root, "demo", &first).unwrap());
-        assert_eq!(
-            std::fs::read(root.join("demo/theme.css")).unwrap(),
-            b"one"
-        );
+        assert_eq!(std::fs::read(root.join("demo/theme.css")).unwrap(), b"one");
         let second = ThemeFiles {
             files: BTreeMap::from([("theme.css".to_owned(), b"two".to_vec())]),
         };
         assert!(install(&root, "demo", &second).unwrap());
-        assert_eq!(
-            std::fs::read(root.join("demo/theme.css")).unwrap(),
-            b"two"
-        );
+        assert_eq!(std::fs::read(root.join("demo/theme.css")).unwrap(), b"two");
         assert!(!root.join("demo/assets/icon.svg").exists());
         let _ = std::fs::remove_dir_all(root);
     }

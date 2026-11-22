@@ -1,49 +1,3 @@
-//! 文档主题：内置的那几套 ＋ 用户自己放进来的。
-//!
-//! # 文档主题和界面主题是**两回事**
-//!
-//! 用户 2026-09-23 把这条划得很死：
-//!
-//! | 轴 | 值 | 作用范围 |
-//! |---|---|---|
-//! | 界面风格 `ui_style` | Adwaita / GitHub / KDE Plasma / macOS / Windows / Yaru | 整个应用外壳 |
-//! | 明暗 `ui_mode` | 跟随系统 / 浅色 / 深色 | 整个应用外壳 |
-//! | 文档主题 `document_theme` | 本模块列出的那些 | **只有编辑区** |
-//!
-//! 前两条相乘 = 对外承诺的界面外观；第三条**不许影响外壳**。
-//! 之前那版把文档主题的配色桥接进 UI 变量（`--nota-bridge-*`），结果是
-//! 选一个浅色文档主题、界面跟着变亮，整个应用一半亮一半暗。那一整套桥接
-//! 已经拆干净，守住这条线的机制在 `src/styles/doc-theme.ts`——注入前把每条
-//! 选择器统一挂到编辑区之下，**不靠写主题时自觉**。
-//!
-//! # ⛔ 不内置任何第三方主题
-//!
-//! 第三方主题文件的**版权归各自的作者**，随包分发属于侵权，
-//! 用户 2026-09-23 明确划了这条线。
-//! 所以：既不扫描外部编辑器的主题安装目录，也不复制第三方主题。用户自己的
-//! 主题包可以带图片和字体，相对 `url()` 由 `theme_assets` 在注入前内联；
-//! `@import` 仍被前端限域器删除，不允许主题引入远程或跨包样式。
-//!
-//! 内置的这几套是**自己写的**（`src/styles/themes/*.css`），
-//! 用 `include_str!` 编进二进制，所以新装的机器上主题菜单不是空的。
-//!
-//! ⚠️ 「自己写的」这条对**名字里有别人招牌**的那一套同样成立：
-//! `adwaita.css` 是照 GNOME 那套主题的**风格取向**自己配的，
-//! `latex.css` 是照 LaTeX 的**排版规则**自己写的——**两份都没有复制
-//! 任何第三方 CSS 或色值**，也没有内嵌任何字体文件（那两件事都各自
-//! 撞一条许可证）。判据是"文件里的每一行都是本仓写的"，不是"名字眼熟
-//! 就算侵权"；改这两套时也请守住同一条线。
-//!
-//! # 用户主题放哪儿
-//!
-//! `~/.config/nota/themes/document/<id>/theme.css`。**只扫这一个目录**。
-//! 目录名就是 id。**Adwaita / Adwaita Dark 是只读内置主题**：
-//! 用户目录里的同名文件会被忽略；其他 id 才能作为用户主题加入。
-//!
-//! ⚠️ 这条覆盖规则意味着 id 是**用户可控的字符串**，所以 `css_of` 里
-//! 有一道 id 形状检查——不能让 `../../etc/passwd` 这样的名字拼进路径。
-//! 判据是"只允许字母数字和 `-` `_`"，比"过滤掉 `..`"更难绕过。
-
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
@@ -52,43 +6,25 @@ use crate::error::{NotaError, Result};
 use crate::paths;
 use crate::theme_import::typora;
 
-/// 主题 CSS 的体积上限。超过这个数基本可以断定不是在装主题。
 const MAX_CSS_BYTES: u64 = 8 * 1024 * 1024;
 
-/// 一套内置主题。三个字段都是编译期常量。
 struct Builtin {
-    /// 唯一键。内置主题不可被用户目录里的同名文件覆盖。
     id: &'static str,
-    /// 菜单里显示的名字。**中文**——界面文案一律中文。
+
     name: &'static str,
-    /// CSS 正文，编译期嵌进来。
+
     css: &'static str,
 }
 
-/// 内置主题清单。**2026-10-18 起安装包只带 Adwaita 浅色/深色。**
-///
-/// 用户要求：「主题除了一个 Adwaita 之外，其他的不再随包分发。到时候专门建
-/// 一个官方主题的仓库来存储官方主题。」所以极简、LaTeX、CDE 的源码继续留在
-/// 仓库供官方主题仓库迁移，但不再进 `BUILTIN`，也不由 `include_str!` 编进应用。
 const BUILTIN: &[Builtin] = &[
     Builtin {
         id: "adwaita",
         name: "Adwaita",
         css: include_str!("../../src/styles/themes/adwaita/theme.css"),
     },
-    // ── Adwaita 深色 ─────────────────────────────────────────────────
-    //
-    // ⚠️⚠️ **它们是"浅色那份 ＋ 一层颜色补丁"拼出来的**，不是另写一份完整主题：
-    // 排版（字体、字号、行高、圆角、标题边距）只有一份，**颜色**是深色那份的
-    // 全部内容。`concat!` 是编译期拼字符串（两个 `include_str!` 都是常量），
-    // 所以运行时一个字节都不多花。
-    // ⚠️ 为什么这么做：**深色不是把浅色反色**——反色会把 `--border`、
-    // `--code-string` 那些中间色一起变成灰糊糊的一团。每个值都得照"深色纸面上
-    // 还看得清"重挑（三份补丁的文件头都写着这一条）。
-    //
     Builtin {
         id: "adwaita-dark",
-        name: "Adwaita（深色）",
+        name: "Adwaita Dark",
         css: concat!(
             include_str!("../../src/styles/themes/adwaita/theme.css"),
             "\n",
@@ -97,22 +33,16 @@ const BUILTIN: &[Builtin] = &[
     },
 ];
 
-/// 菜单/设置里要列的一项。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DocThemeInfo {
-    /// 唯一键。存进 `settings.document_theme` 的就是它。空串表示"无主题"。
     pub id: String,
-    /// 显示名（中文）。
+
     pub name: String,
-    /// 是不是内置的只读主题。Adwaita 永远为真，用户目录不能覆盖。
+
     pub builtin: bool,
 }
 
-/// 列出所有可用主题：内置的 ＋ 用户目录里多出来的。
-///
-/// 内置 Adwaita 是只读的；用户目录只能增加其他 id，不能覆盖内置主题。
 pub fn discover() -> Vec<DocThemeInfo> {
-    // 内置的在前，保持 `BUILTIN` 里排好的顺序，并永远标成只读内置。
     let mut out: Vec<DocThemeInfo> = BUILTIN
         .iter()
         .map(|b| DocThemeInfo {
@@ -122,8 +52,6 @@ pub fn discover() -> Vec<DocThemeInfo> {
         })
         .collect();
 
-    // 然后是用户自己新加的（id 不与内置重合的那些）。
-    // **排序**：`read_dir` 的顺序在不同文件系统上不一样，不排就是随机的。
     let mut seen: std::collections::HashSet<String> =
         out.iter().map(|theme| theme.id.clone()).collect();
     let mut extra = user_theme_infos();
@@ -141,11 +69,6 @@ pub(crate) fn is_builtin(id: &str) -> bool {
     BUILTIN.iter().any(|theme| theme.id == id)
 }
 
-/// 取一份主题的 CSS 文本。
-///
-/// 内置主题永远优先且不可覆盖；其他 id 再从用户目录读取。找不到就报错——
-/// 这里**不能静默给空串**：静默的后果是"设置里记着一个名字、界面上一片默认"，
-/// 而用户看不出是名字错了还是文件没了。
 pub fn css_of(id: &str) -> Result<String> {
     check_id(id)?;
 
@@ -155,24 +78,15 @@ pub fn css_of(id: &str) -> Result<String> {
 
     let root = paths::user_themes_dir()?;
     let path = resolve_user_css(&root, id)
-        .ok_or_else(|| NotaError::other(format!("没有名为 {id} 的文档主题")))?;
+        .ok_or_else(|| NotaError::other(format!("No document theme named {id}")))?;
     if path.is_file() {
         check_size(&path, MAX_CSS_BYTES)?;
         return crate::theme_import::load_theme_css(&path);
     }
 
-    Err(NotaError::other(format!("没有名为 {id} 的文档主题")))
+    Err(NotaError::other(format!("No document theme named {id}")))
 }
 
-/// 用户主题只接受 Typora 式的自包含目录：
-///
-/// ```text
-/// themes/document/<id>/theme.css
-/// themes/document/<id>/<id>.css
-/// themes/document/<id>/assets/...
-/// ```
-///
-/// 资源内联的允许根是主题目录自身，不允许一个主题穿过 `../` 读取别的主题资源。
 pub(crate) fn resolve_user_css(root: &Path, id: &str) -> Option<PathBuf> {
     if check_id(id).is_err() {
         return None;
@@ -212,10 +126,7 @@ fn safe_relative_css(value: &str) -> Option<PathBuf> {
     let path = Path::new(value);
     if path.is_absolute()
         || value.contains('\0')
-        || value
-            .replace('\\', "/")
-            .split('/')
-            .any(|part| part == "..")
+        || value.replace('\\', "/").split('/').any(|part| part == "..")
         || !value.to_ascii_lowercase().ends_with(".css")
     {
         return None;
@@ -232,17 +143,6 @@ pub(crate) fn css_scope_root(root: &Path, css_path: &Path) -> PathBuf {
     }
 }
 
-/// id 的形状检查。**这是本模块的安全边界**，见文件头那段。
-///
-/// 白名单而不是黑名单：只放行 ASCII 字母、数字、`-`、`_`，长度 1–64。
-/// 中文文件名（`极简.css`）因此用不了——**这是有意的取舍**：主题的显示名
-/// 在文件里写着（菜单显示中文），文件名只是个键，用 ASCII 键换掉一整类
-/// 路径穿越问题，划算。
-///
-/// ⚠️ **`pub(crate)` 是给 `ui_styles.rs` 用的**（界面风格，同一套"用户往目录里
-/// 丢 CSS"的机制）。那条边界**只有这一份**——两份实现会漂，而漂的那一份
-/// 正好是安全边界时没人看得出来。那边的测试 `界面风格的_id_判据与文档主题同一套`
-/// 钉着"改这里，那边也得跟着成立"。
 pub(crate) fn check_id(id: &str) -> Result<()> {
     let ok = !id.is_empty()
         && id.len() <= 64
@@ -252,14 +152,10 @@ pub(crate) fn check_id(id: &str) -> Result<()> {
     if ok {
         Ok(())
     } else {
-        Err(NotaError::other(format!("主题 id「{id}」不合法")))
+        Err(NotaError::other(format!("Invalid theme id: {id}")))
     }
 }
 
-/// 用户主题目录里的所有 id（文件名去掉 `.css`）。目录不存在就是空表。
-///
-/// 认不出来的文件名**跳过**（不符合 `check_id` 的直接不要），
-/// 免得清单里出现一个读不了的条目。
 pub(crate) fn scan_user_css_ids(dir: &Path) -> Vec<String> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
@@ -332,7 +228,6 @@ fn user_theme_infos() -> Vec<DocThemeInfo> {
     out
 }
 
-/// 体积闸。⚠️ 与 `check_id` 一样是 `pub(crate)` 给 `ui_styles.rs` 复用的。
 pub(crate) fn check_size(path: &Path, limit: u64) -> Result<()> {
     let meta = std::fs::metadata(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
@@ -340,7 +235,7 @@ pub(crate) fn check_size(path: &Path, limit: u64) -> Result<()> {
     })?;
     if meta.len() > limit {
         return Err(NotaError::other(format!(
-            "主题文件 {} 有 {} 字节，超过 {} 字节的上限",
+            "Theme file {} is {} bytes, exceeding the {} byte limit",
             path.display(),
             meta.len(),
             limit
@@ -349,9 +244,6 @@ pub(crate) fn check_size(path: &Path, limit: u64) -> Result<()> {
     Ok(())
 }
 
-/// 用户主题目录，**用到时才建**。返回它的绝对路径。
-///
-/// 「打开主题文件夹」菜单项要能把它建出来再打开——首次使用时它多半还不存在。
 pub fn user_themes_dir() -> Result<String> {
     let dir: PathBuf = paths::user_themes_dir()?;
     paths::ensure_dir(&dir)?;
@@ -363,16 +255,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn 内置主题的_id_与文件名一一对应() {
-        // 每一条都要能取到 CSS，而且不是空的。这条挡的是"加了条目忘了建文件"、
-        // 或者 `include_str!` 指错了路径——后者在编译期就会炸，但**空文件不会**。
+    fn builtin_theme_ids_and_files_match() {
         let mut ids = Vec::new();
         for b in BUILTIN {
-            assert!(check_id(b.id).is_ok(), "内置 id 自己都不合法：{}", b.id);
-            assert!(!b.name.is_empty(), "{} 没有显示名", b.id);
+            assert!(check_id(b.id).is_ok(), "invalid built-in id: {}", b.id);
+            assert!(!b.name.is_empty(), "{} has no display name", b.id);
             assert!(
                 b.css.contains("--doc-bg"),
-                "{} 没定义 --doc-bg，多半不是一份文档主题",
+                "{} does not define --doc-bg and is probably not a document theme",
                 b.id
             );
             ids.push(b.id);
@@ -380,41 +270,44 @@ mod tests {
         let n = ids.len();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), n, "内置 id 有重复");
-        assert_eq!(ids, vec!["adwaita", "adwaita-dark"], "安装包只带 Adwaita");
+        assert_eq!(ids.len(), n, "duplicate built-in id");
+        assert_eq!(
+            ids,
+            vec!["adwaita", "adwaita-dark"],
+            "the bundle should only include Adwaita"
+        );
     }
 
     #[test]
-    fn 内置主题不碰界面变量() {
-        // ⚠️ 这条是**回归闸**：上一版就是文档主题里定义了界面变量、
-        // 再靠桥接规则漏进外壳的。文档主题只许定义 `--doc-*` / `--code-*`
-        // / `--select-*` 这一批，以及 `--fg*` `--bg*` `--border*` `--radius*`
-        // `--accent*`（这些在编辑区里被 editor.css 消费，作用域已收拢）。
-        //
-        // 界面独有的那几个变量名一旦出现在主题文件里，就说明有人又开始
-        // 往"让文档主题改外壳"那条路上走了。
-        const UI_ONLY: &[&str] = &["--ui-font-size", "--font-ui", "--sidebar-width",
-            "--dock-width", "--toolbar-height", "--statusbar-height", "--zen-peek",
-            "--shadow"];
+    fn builtin_themes_do_not_touch_interface_variables() {
+        const UI_ONLY: &[&str] = &[
+            "--ui-font-size",
+            "--font-ui",
+            "--sidebar-width",
+            "--dock-width",
+            "--toolbar-height",
+            "--statusbar-height",
+            "--zen-peek",
+            "--shadow",
+        ];
         for b in BUILTIN {
             for bad in UI_ONLY {
                 assert!(
                     !b.css.contains(bad),
-                    "{} 里出现了界面变量 {bad}——文档主题不许碰外壳",
+                    "{} contains interface variable {bad}; document themes must not style the shell",
                     b.id
                 );
             }
             assert!(
                 !b.css.contains("--nota-bridge"),
-                "{} 里还有桥接变量，那是已经拆掉的老路",
+                "{} still contains a bridge variable from the removed legacy path",
                 b.id
             );
         }
     }
 
     #[test]
-    fn 内置主题都带自己的一套代码高亮() {
-        // 底色是主题挑的，沿用界面那套会出现"深底配深字"。
+    fn builtin_themes_ship_their_own_code_highlighting() {
         for b in BUILTIN {
             for tok in [
                 "--code-comment",
@@ -425,76 +318,88 @@ mod tests {
                 "--code-attr",
                 "--code-tag",
             ] {
-                assert!(b.css.contains(tok), "{} 少了 {tok}", b.id);
+                assert!(b.css.contains(tok), "{} is missing {tok}", b.id);
             }
         }
     }
 
     #[test]
-    fn 拒绝形状不对的_id() {
-        // 路径穿越与空 id。判据是白名单，所以这些一律进不来。
-        for bad in ["", "..", "../../etc/passwd", "a/b", "a\\b", "素纸", ".hidden"] {
-            assert!(check_id(bad).is_err(), "「{bad}」不该被放行");
+    fn malformed_ids_are_rejected() {
+        for bad in [
+            "",
+            "..",
+            "../../etc/passwd",
+            "a/b",
+            "a\\b",
+            "\u{7d20}\u{7eb8}",
+            ".hidden",
+        ] {
+            assert!(check_id(bad).is_err(), "invalid id was accepted: {bad}");
         }
         for good in ["paper", "my-theme", "my_theme_2", "A1"] {
-            assert!(check_id(good).is_ok(), "「{good}」该被放行");
+            assert!(check_id(good).is_ok(), "valid id was rejected: {good}");
         }
     }
 
     #[test]
-    fn 取一份不存在的主题要报错而不是给空串() {
+    fn missing_theme_returns_an_error() {
         let err = css_of("no-such-theme-xyz").unwrap_err();
-        assert!(err.to_string().contains("没有名为"), "实际：{err}");
+        assert!(
+            err.to_string().contains("No document theme named"),
+            "actual: {err}"
+        );
     }
 
     #[test]
-    fn 目录不存在时清单只剩内置的() {
-        // 用户目录不存在（新机器）时，内置那几套必须还在——这正是
-        // "新装的机器主题菜单是空的"那个问题的反面。
+    fn missing_user_directory_leaves_only_builtin_themes() {
         let list = discover();
         let builtin_count = list.iter().filter(|t| t.builtin).count();
         assert!(builtin_count <= BUILTIN.len());
         for b in BUILTIN {
             assert!(
                 list.iter().any(|t| t.id == b.id),
-                "内置主题 {} 从清单里消失了",
+                "built-in theme {} disappeared from discovery",
                 b.id
             );
         }
     }
 
     #[test]
-    fn 内置_adwaita_永远只读且不能被用户目录覆盖() {
+    fn builtin_adwaita_is_read_only_and_cannot_be_overridden() {
         for id in ["adwaita", "adwaita-dark"] {
             let css = css_of(id).unwrap();
-            assert!(css.contains("--doc-bg"), "{id} 没有取到内置 CSS");
+            assert!(
+                css.contains("--doc-bg"),
+                "{id} did not load its built-in CSS"
+            );
         }
     }
 
     #[test]
-    fn 只发现主题包目录并忽略旧版扁平_css() {
+    fn only_theme_packages_are_discovered() {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
-            "nota-theme-layout-{}-{stamp}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("nota-theme-layout-{}-{stamp}", std::process::id()));
         std::fs::create_dir_all(root.join("dusk/assets")).unwrap();
         std::fs::write(root.join("legacy.css"), "--doc-bg: white;").unwrap();
         std::fs::write(root.join("dusk/theme.css"), "--doc-bg: black;").unwrap();
         std::fs::write(root.join("flat.css"), "--doc-bg: red;").unwrap();
 
-        assert!(resolve_user_css(&root, "legacy").is_none(), "扁平 CSS 不再兼容");
-        assert!(resolve_user_css(&root, "flat").is_none(), "根目录 CSS 不再发现");
+        assert!(
+            resolve_user_css(&root, "legacy").is_none(),
+            "flat CSS is no longer supported"
+        );
+        assert!(
+            resolve_user_css(&root, "flat").is_none(),
+            "root CSS is no longer discovered"
+        );
         let package = resolve_user_css(&root, "dusk").unwrap();
         assert_eq!(package, root.join("dusk/theme.css"));
         assert_eq!(css_scope_root(&root, &package), root.join("dusk"));
-        assert_eq!(
-            scan_user_css_ids(&root),
-            vec!["dusk".to_owned()]
-        );
+        assert_eq!(scan_user_css_ids(&root), vec!["dusk".to_owned()]);
         std::fs::remove_dir_all(root).unwrap();
     }
 }

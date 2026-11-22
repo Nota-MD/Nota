@@ -100,9 +100,9 @@ testCase("插件清单声明更新源且复用现有包校验", () => {
   const manifest = read("src-tauri", "src", "plugin", "manifest.rs");
   const updater = read("src-tauri", "src", "plugin", "updater.rs");
   assertValue(manifest.includes("pub struct UpdateSpec"), "插件清单没有 [update] 结构");
-  assertValue(updater.includes("latest.json") || updater.includes("仓库"), "插件仓库解析缺失");
+  assertValue(updater.includes("latest.json") || updater.includes("UpdateRepository"), "插件仓库解析缺失");
   assertValue(updater.includes("Sha256::digest"), "插件包 SHA-256 缺失");
-  assertValue(updater.includes("host.装"), "插件更新没有复用原子安装流程");
+  assertValue(updater.includes("host.install_2"), "插件更新没有复用原子安装流程");
   assertValue(updater.includes("source.signer"), "缺少签名者连续性检查");
 });
 

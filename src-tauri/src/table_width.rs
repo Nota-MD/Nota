@@ -1,72 +1,3 @@
-//! Markdown 表格的**列宽**：存在一份**侧车**里，**不进文档正文**。
-//!
-//! # ⚠️⚠️ 为什么单开一份侧车，而不是写进 `.md`
-//!
-//! 用户拖宽一列，改的是**看的时候的状态**，不是文档内容。写进正文的话，只是拖了
-//! 一下表格，用户那份 `.md` 就变了一个字节——而本仓有一条死规矩：**不改用户的
-//! 字节**（`docs/08`）。所以列宽走 Nota 自己的一个文件：
-//!
-//! ```text
-//! ~/.local/share/nota/table-widths.toml     ← 这一份（`paths::table_widths_file`）
-//! /path/to/笔记.md                            ← 用户那份，一个字节都不动
-//! ```
-//!
-//! ⚠️ **放 `data` 而不放 `config`**：判据就是 `paths.rs` 顶上那条——`config` 放的是
-//! **用户该能拿编辑器直接改的东西**（`settings.toml` / `plugins.toml` /
-//! `image-upload.toml` 全在那儿），而这一份是界面上拖出来的**状态**，用户不会去
-//! 手改它、也不该在"设置目录"里看见它。放 `config` 还会让人以为"这是我有意设的偏好"。
-//! 详见 [`crate::paths::table_widths_file`]。
-//!
-//! # 形状
-//!
-//! ```toml
-//! [widths."/home/lqy/笔记.md"]
-//! "表头:姓名|年龄" = [
-//!     160,
-//!     240,
-//! ]
-//! ```
-//!
-//! ⚠️ 列宽数组是**一行一个数字**的——那是 `toml::to_string_pretty` 的形状（本仓
-//! `plugins.toml` 也是它），`toml` 0.9 没有留下"数组在内联"的公开开关。不算毛病：
-//! 一行一个数字意味着**改一列就是一行 diff**，比一长条内联数组好读。
-//!
-//! 外层键＝**文档的完整路径**，内层键＝**指纹**（哪个表格），值＝每一列多宽。
-//! 两层 `BTreeMap` 而不是一串 `[[记录]]`：这样"同一份文档的同一个表格"在结构上
-//! 就只可能有一条，[`记`] 是 `insert`（覆盖）而不是"先查重再决定"，也不存在
-//! "写进去两条一样的、读的时候哪条算数"这种问题。
-//!
-//! # ⚠️ 指纹是**前端**的东西，后端只当字符串存
-//!
-//! [`记录::指纹`] 由前端算出来（拿表头文字＋列数那一类东西），宿主**不解释、
-//! 不校验格式**。两条理由：①算它需要 Markdown 解析结果，那是前端手里才有的东西；
-//! ②在宿主这一层再定一套算法，就是**第二个真相源**——两边哪天一不一致，症状是
-//! "我拖过的列宽有时候记得住、有时候记不住"，而这是最难查的一类毛病。
-//!
-//! ⚠️ 指纹不是内容的哈希：表格改了表头或列数，身份就变了，列宽**故意**不跟着走
-//! （跟着走的后果是把上一次的宽度套到一个完全不同的表格上）。
-//!
-//! # ⚠️ 账一：记录按**路径**挂，不按内容
-//!
-//! 外层键就是文档的**完整路径**（`to_string_lossy()`）。这条账要如实记下：
-//!
-//! - 文档**重命名 / 移动**之后，新路径在侧车里找不到记录，表格回到自动列宽——
-//!   记录**不会跟着走**（跟不动：宿主不去扫全盘对账，也不该去猜"这份新文件是不是
-//!   原来那份"）；
-//! - 旧路径那条残留**不会自动清理**。它是死的、无害的（谁也不读它），想清就手动
-//!   删那一节；「另存为」之后清旧路径走 [`忘`]。
-//! - `to_string_lossy()` 是**有损**的：路径里含非 UTF-8 字节时那几个字节会变成
-//!   `�`，两个不同的非 UTF-8 路径**可能**映到同一个键上。**接受这个损失**——
-//!   另一条路（[`crate::paths::path_to_string`]）是直接报错，那就变成"这样命名的
-//!   文档拖不了列宽"，而列宽没了是小事、功能整个用不了才是大事。
-//!
-//! # ⚠️ 账二：坏文件当"空的"用，而"空的"会被下一次写盘覆盖
-//!
-//! 读不出来 / 坏 TOML **一律当空的用，不报错**（口径与 `upload::读`、
-//! `lua::api::settings` 的 `读` 一致）。代价是**下一次 [`记`] 会把那份读不懂的
-//! 文件整个覆盖掉**——写盘是整体的（读一份、改内存、写回），没有局部改写。
-//! 这条是"当空的用"的必然代价，不是 BUG；真被覆盖了，后果也只是列宽回到自动值。
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -75,324 +6,237 @@ use serde::{Deserialize, Serialize};
 use crate::error::NotaError;
 use crate::paths;
 
-/* ── 形状 ──────────────────────────────────────────────────────────────── */
-
-/// 一条记录：某份文档里**某个表格**的列宽。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct 记录 {
-    /// 文档路径。
-    ///
-    /// ⚠️ 从侧车里读出来时，它是**键**那个字符串还原出来的路径（也就是
-    /// `to_string_lossy()` 的产物），所以可能不是当初那个字节原样的路径。
-    /// 由 [`取`] 直接交给调用方的那条，走的是调用方传进来的路径，是原样的。
-    pub 文档: PathBuf,
-    /// 表格的身份。**前端算好传进来的短字符串**，宿主只当字符串存，不解释格式。
-    pub 指纹: String,
-    /// 每一列多宽。单位由前端定（这里只记这一串数）。
-    ///
-    /// ⚠️ `u32` 而不是 `i32`：负宽度没有意义，**类型层面就挡住**，
-    /// 不需要运行期再校验一遍（也不会出现"-1 表示自动"这种暗号）。
-    pub 宽度: Vec<u32>,
+pub struct TableWidthRecord {
+    pub document_2: PathBuf,
+
+    pub fingerprint_2: String,
+
+    pub width_2: Vec<u32>,
 }
 
-/// 落盘形状。`toml` 要求顶层是一个表，所以包一层。
-///
-/// ⚠️ 字段名用英文 `snake_case`，与设置页那七张表一致（`upload.rs` 顶上那条注释
-/// 说的是同一件事）：这个文件是**给人和别的工具看**的，键名不该只有 Rust 里好看。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct 存档 {
-    /// 外层键＝完整路径，内层键＝指纹，值＝列宽。
-    ///
-    /// ⚠️ `BTreeMap` 顺带给出**稳定**的输出顺序（路径、指纹都排过序）：同一个状态
-    /// 写两次的字节一模一样，用例好钉、人也好看。
+struct TableWidthArchive {
     #[serde(default)]
     widths: BTreeMap<String, BTreeMap<String, Vec<u32>>>,
 }
 
-/// 文件头。用户翻到这个文件时先看到它，知道这是什么、删了会怎样。
-const 文件头: &str = "\
-# 这个文件是 Nota 的「表格列宽」侧车：哪份文档里的哪个表格被拖成了多宽。
-# ⚠️ 列宽**不在你的 Markdown 正文里**——删掉这个文件 = 所有表格回到自动列宽，
-#    文档本身一个字节都不受影响。
-# ⚠️ 记录是按**文档路径**挂的：文档改名或移走之后，那一条就不会再被用上，
-#    也不会自动删掉（旧路径的残留留着无害）。
-";
+const FILE_TOU: &str = "# Nota table width sidecar data.\n# Deleting this file resets all tables to automatic widths without changing Markdown files.\n# Records are keyed by document path and become inactive when a document moves.\n";
 
-/* ── 纯函数那一半（用例主要钉这里） ────────────────────────────────────── */
-
-/// 路径 → 键。⚠️ `to_string_lossy()` 是**有损**的，账写在文件头。
-fn 路径键(文档: &Path) -> String {
-    文档.to_string_lossy().into_owned()
+fn path_jian(document_2: &Path) -> String {
+    document_2.to_string_lossy().into_owned()
 }
 
-/// 落盘形状 → 一条条记录。
-fn 展开(存档: 存档) -> Vec<记录> {
+fn zhan_kai(archive_2: TableWidthArchive) -> Vec<TableWidthRecord> {
     let mut out = Vec::new();
-    for (路径, 表们) in 存档.widths {
-        for (指纹, 宽度) in 表们 {
-            out.push(记录 {
-                // 键是 lossy 的字符串，还原出来的路径也就是 lossy 那份。
-                // （用 `as_str()` 借一下：外层那个 `路径` 要陪内层这一圈循环走完，
-                // 不能整条移走。）
-                文档: PathBuf::from(路径.as_str()),
-                指纹,
-                宽度,
+    for (path_3, table_men) in archive_2.widths {
+        for (fingerprint_2, width_2) in table_men {
+            out.push(TableWidthRecord {
+                document_2: PathBuf::from(path_3.as_str()),
+                fingerprint_2,
+                width_2,
             });
         }
     }
     out
 }
 
-/// 一条条记录 → 落盘形状。
-///
-/// ⚠️ 这里**顺手把空记录丢掉**：宽度是空的 = 这条记录不存在（见 [`记`]），
-/// 所以任何一条写盘的路都不该写出一个空数组来。
-fn 收拢(记录们: &[记录]) -> 存档 {
-    let mut 存档 = 存档::default();
-    for r in 记录们 {
-        if r.宽度.is_empty() {
+fn receive_long(ji_lu_men: &[TableWidthRecord]) -> TableWidthArchive {
+    let mut archive_2 = TableWidthArchive::default();
+    for r in ji_lu_men {
+        if r.width_2.is_empty() {
             continue;
         }
-        存档
+        archive_2
             .widths
-            .entry(路径键(&r.文档))
+            .entry(path_jian(&r.document_2))
             .or_default()
-            .insert(r.指纹.clone(), r.宽度.clone());
+            .insert(r.fingerprint_2.clone(), r.width_2.clone());
     }
-    存档
+    archive_2
 }
 
-/// 文本 → 记录。**纯函数**：不打日志、不碰盘。
-///
-/// ⚠️ 坏 TOML 当"空的"用，**不报错**——一份被手改坏的侧车不该让"打开文档"这件事
-/// 失败，降级的后果只是那些表格回到自动列宽（列宽是装饰，不是内容）。
-/// 与 [`读存档`] 里那条坏文件分支是**同一条口径**，只是这里没有路径可打日志。
-pub fn 从文本(text: &str) -> Vec<记录> {
-    展开(toml::from_str::<存档>(text).unwrap_or_default())
+pub fn cong_text(text: &str) -> Vec<TableWidthRecord> {
+    zhan_kai(toml::from_str::<TableWidthArchive>(text).unwrap_or_default())
 }
 
-/// 记录 → 文本（带文件头）。
-///
-/// 返回值是 `String` 而不是 `NotaError`：序列化失败在这里只可能是"我们的形状
-/// 写不成 TOML"，那是**宿主自己的 bug**，不是用户能处理的事——文案照
-/// `plugin::installed::到文本` 那一句写。
-pub fn 到文本(记录们: &[记录]) -> Result<String, String> {
-    存档到文本(&收拢(记录们))
+pub fn dao_text(ji_lu_men: &[TableWidthRecord]) -> Result<String, String> {
+    archive_dao_text(&receive_long(ji_lu_men))
 }
 
-fn 存档到文本(存档: &存档) -> Result<String, String> {
-    let body = toml::to_string_pretty(存档)
-        .map_err(|e| format!("表格列宽写不成 TOML（这是个 bug，请上报）：{e}"))?;
-    Ok(format!("{文件头}{body}"))
+fn archive_dao_text(archive_2: &TableWidthArchive) -> Result<String, String> {
+    let body = toml::to_string_pretty(archive_2)
+        .map_err(|e| format!("Could not serialize table widths as TOML (internal error): {e}"))?;
+    Ok(format!("{FILE_TOU}{body}"))
 }
 
-/* ── 落盘那一半 ────────────────────────────────────────────────────────── */
-
-/// 从一份**具体的**侧车路径读出落盘形状。
-///
-/// 文件不在 / 读不出来 / 坏 TOML → **空的那一份**，不报错（口径见文件头"账二"）。
-fn 读存档(侧车: &Path) -> 存档 {
-    let Ok(text) = std::fs::read_to_string(侧车) else {
-        return 存档::default(); // 文件不在 = 一份都没记过
+fn read_archive_2(ce_che: &Path) -> TableWidthArchive {
+    let Ok(text) = std::fs::read_to_string(ce_che) else {
+        return TableWidthArchive::default();
     };
-    match toml::from_str::<存档>(&text) {
+    match toml::from_str::<TableWidthArchive>(&text) {
         Ok(s) => s,
         Err(e) => {
-            crate::日志!(
+            crate::debug_log!(
                 "[nota] table-width file unreadable; using empty state: {}: {e}",
-                侧车.display()
+                ce_che.display()
             );
-            存档::default()
+            TableWidthArchive::default()
         }
     }
 }
 
-/// 把落盘形状写到一份具体的侧车路径。**整体写**：不是局部改写。
-fn 写存档(侧车: &Path, 存档: &存档) -> Result<(), NotaError> {
-    let text = 存档到文本(存档).map_err(NotaError::other)?;
-    if let Some(父) = 侧车.parent() {
-        paths::ensure_dir(父)?;
+fn write_archive(ce_che: &Path, archive_2: &TableWidthArchive) -> Result<(), NotaError> {
+    let text = archive_dao_text(archive_2).map_err(NotaError::other)?;
+    if let Some(fu) = ce_che.parent() {
+        paths::ensure_dir(fu)?;
     }
-    // ⚠️ 裸 `std::fs::write`，与 `plugin::installed::save`（写 `plugins.toml`）同一套。
-    // **刻意不按 0600 建**：这一份里没有秘密（`image-upload.toml` 与
-    // `plugin-settings/` 要 0600 是因为里面有 token），权限跟着 umask 走就行。
-    std::fs::write(侧车, text).map_err(|source| NotaError::Write {
-        path: 侧车.to_path_buf(),
+
+    std::fs::write(ce_che, text).map_err(|source| NotaError::Write {
+        path: ce_che.to_path_buf(),
         source,
     })
 }
 
-/// 内部错误（[`NotaError`] 的 Display 已经是人话中文）→ 给前端的那一句话。
-///
-/// ⚠️ 前面加一句"是哪件事失败了"：[`NotaError`] 只说"写文件失败 /path：…"，
-/// 而用户是从表格上拖出来的，得让他知道这一枪跟**表格列宽**有关
-/// （`error.rs` 顶上那条"每一个跨 IPC 边界的错误都要能读懂"）。
-fn 人话(e: NotaError) -> String {
-    format!("表格列宽没记上：{e}")
+fn error_message(error: NotaError) -> String {
+    format!("Could not save table widths: {error}")
 }
 
-/* ── 对外 ──────────────────────────────────────────────────────────────── */
-
-/// 读整份侧车。**文件不在 / 读不出来 / 坏文件一律当"空的"**，不报错。
-pub fn 读() -> Vec<记录> {
+pub fn read_2() -> Vec<TableWidthRecord> {
     match paths::table_widths_file() {
-        Ok(侧车) => 读文件(&侧车),
-        // 连家目录都探不到：当一份都没记过（与 `upload::读` 同一条退路）。
+        Ok(ce_che) => read_file_2(&ce_che),
+
         Err(e) => {
-            crate::日志!("[nota] table-width path unavailable; using empty state: {e}");
+            crate::debug_log!("[nota] table-width path unavailable; using empty state: {e}");
             Vec::new()
         }
     }
 }
 
-/// 从一个具体路径读。用例走这个，[`读`] 只是把路径算出来的那一层。
-pub fn 读文件(侧车: &Path) -> Vec<记录> {
-    展开(读存档(侧车))
+pub fn read_file_2(ce_che: &Path) -> Vec<TableWidthRecord> {
+    zhan_kai(read_archive_2(ce_che))
 }
 
-/// 把一串记录**整体**写到一份具体的侧车路径（覆盖那份文件）。
-///
-/// ⚠️ 这一条是"整份替换"的口径：谁调它，谁就得把**完整**的记录集合递进来
-/// （所以生产代码那条路走 `记`，它先读一份、改内存、再整体写回）。
-/// 宽度是空数组的记录在这一层被丢掉（见 [`收拢`]）。
-pub fn 写文件(侧车: &Path, 记录们: &[记录]) -> Result<(), String> {
-    写存档(侧车, &收拢(记录们)).map_err(人话)
+pub fn write_file_2(ce_che: &Path, ji_lu_men: &[TableWidthRecord]) -> Result<(), String> {
+    write_archive(ce_che, &receive_long(ji_lu_men)).map_err(error_message)
 }
 
-/// 取一份文档的全部记录。没有它的记录就是空的 `Vec`（不是错误）。
-pub fn 取(文档: &Path) -> Vec<记录> {
+pub fn qu_2(document_2: &Path) -> Vec<TableWidthRecord> {
     match paths::table_widths_file() {
-        Ok(侧车) => 取文件(&侧车, 文档),
+        Ok(ce_che) => qu_file(&ce_che, document_2),
         Err(e) => {
-            crate::日志!("[nota] table-width path unavailable; using empty state: {e}");
+            crate::debug_log!("[nota] table-width path unavailable; using empty state: {e}");
             Vec::new()
         }
     }
 }
 
-/// 从一个具体路径取一份文档的记录。
-///
-/// ⚠️ 读不出来（坏文件）时给空的：调用方拿到的就是"这个表格没被拖过"，
-/// 于是按自动列宽画——这正是我们要的降级。
-pub fn 取文件(侧车: &Path, 文档: &Path) -> Vec<记录> {
-    let mut 存档 = 读存档(侧车);
-    match 存档.widths.remove(&路径键(文档)) {
-        Some(表们) => 表们
+pub fn qu_file(ce_che: &Path, document_2: &Path) -> Vec<TableWidthRecord> {
+    let mut archive_2 = read_archive_2(ce_che);
+    match archive_2.widths.remove(&path_jian(document_2)) {
+        Some(table_men) => table_men
             .into_iter()
-            .map(|(指纹, 宽度)| 记录 {
-                // 这一条走的是调用方传进来的路径，是原样的（不是 lossy 那份）。
-                文档: 文档.to_path_buf(),
-                指纹,
-                宽度,
+            .map(|(fingerprint_2, width_2)| TableWidthRecord {
+                document_2: document_2.to_path_buf(),
+                fingerprint_2,
+                width_2,
             })
             .collect(),
         None => Vec::new(),
     }
 }
 
-/// 记一条（同文档＋同指纹**覆盖**，不叠加）。宽度是空数组 = **删掉这条记录**
-/// （不留一条空记录）。
-///
-/// 写盘是**整体的**：读一份、改内存、写回。
-pub fn 记(文档: &Path, 指纹: &str, 宽度: &[u32]) -> Result<(), String> {
-    记文件(
-        &paths::table_widths_file().map_err(人话)?,
-        文档,
-        指纹,
-        宽度,
+pub fn ji(document_2: &Path, fingerprint_2: &str, width_2: &[u32]) -> Result<(), String> {
+    ji_file(
+        &paths::table_widths_file().map_err(error_message)?,
+        document_2,
+        fingerprint_2,
+        width_2,
     )
 }
 
-/// 从一个具体路径记一条。用例走这个。
-pub fn 记文件(侧车: &Path, 文档: &Path, 指纹: &str, 宽度: &[u32]) -> Result<(), String> {
-    let mut 存档 = 读存档(侧车);
-    let 键 = 路径键(文档);
+pub fn ji_file(
+    ce_che: &Path,
+    document_2: &Path,
+    fingerprint_2: &str,
+    width_2: &[u32],
+) -> Result<(), String> {
+    let mut archive_2 = read_archive_2(ce_che);
+    let jian_2 = path_jian(document_2);
 
-    let 原来这一条 = 存档.widths.get(&键).and_then(|表们| 表们.get(指纹));
-    let 要写的 = if 宽度.is_empty() {
+    let yuan_lai_zhe_yi_tiao = archive_2
+        .widths
+        .get(&jian_2)
+        .and_then(|table_men| table_men.get(fingerprint_2));
+    let yao_write_de = if width_2.is_empty() {
         None
     } else {
-        Some(宽度.to_vec())
+        Some(width_2.to_vec())
     };
 
-    // ⚠️ **一样就别写盘**。拖列宽是一条连续的动作（前端一次拖动会报很多次），
-    // 每次都落一次盘没必要；而且"把同一个值再记一遍"本来就不该动文件
-    // （顺带：宽度为空且本来就没这条记录时，这里也直接返回，于是**不会凭空造出
-    // 一个文件**来）。
-    if 原来这一条 == 要写的.as_ref() {
+    if yuan_lai_zhe_yi_tiao == yao_write_de.as_ref() {
         return Ok(());
     }
 
-    let 表们 = 存档.widths.entry(键.clone()).or_default();
-    match 要写的 {
-        Some(宽) => {
-            表们.insert(指纹.to_string(), 宽);
+    let table_men = archive_2.widths.entry(jian_2.clone()).or_default();
+    match yao_write_de {
+        Some(kuan) => {
+            table_men.insert(fingerprint_2.to_string(), kuan);
         }
         None => {
-            表们.remove(指纹);
+            table_men.remove(fingerprint_2);
         }
     }
-    // 内层空了就把外层那一节也去掉：不留一个"这份文档一条记录都没有"的空壳。
-    if 存档.widths.get(&键).is_some_and(|表们| 表们.is_empty()) {
-        存档.widths.remove(&键);
+
+    if archive_2
+        .widths
+        .get(&jian_2)
+        .is_some_and(|table_men| table_men.is_empty())
+    {
+        archive_2.widths.remove(&jian_2);
     }
 
-    写存档(侧车, &存档).map_err(人话)
+    write_archive(ce_che, &archive_2).map_err(error_message)
 }
 
-/// 忘掉一份文档的全部记录（「另存为」之后旧路径的残留、文档改名等场景）。
-///
-/// ⚠️ **只忘这一份文档**：别的文档的记录一条都不动。
-pub fn 忘(文档: &Path) -> Result<(), String> {
-    忘文件(&paths::table_widths_file().map_err(人话)?, 文档)
-}
-
-/// **一份文件改了名 / 挪了地方**：它那几张列宽表跟着搬到新路径上
-/// （2026-09-27，`docs/10` §2「文件重命名 / 移动」）。
-///
-/// ⚠️ **为什么不"忘掉老路径"了事**：列宽是用户拖出来的（一次要拖几列），
-/// 而"改个文件名"与"列宽"在用户脑子里是两件不相干的事——搬走之后他要
-/// 重新拖一遍，还多半以为是自己哪一步点错了。
-///
-/// ⚠️ 一次读改写（不是"取老 ＋ 记新 ＋ 忘老"三条命令）：那三条之间进程若
-/// 退出，账就落在两处，症状是**同一个文件有两条记录**（且再也合并不回去）。
-/// ⚠️ 老路径本来就没有记录时**不写盘**（同 `忘文件`：不凭空造一个文件出来）。
-pub fn 改路径(老: &Path, 新: &Path) -> Result<(), String> {
-    改路径文件(
-        &paths::table_widths_file().map_err(人话)?,
-        老,
-        新,
+pub fn forget(document_2: &Path) -> Result<(), String> {
+    forget_file(
+        &paths::table_widths_file().map_err(error_message)?,
+        document_2,
     )
 }
 
-/// 从一个具体路径改一份文档的账。用例走这个。
-pub fn 改路径文件(侧车: &Path, 老: &Path, 新: &Path) -> Result<(), String> {
-    let 老键 = 路径键(老);
-    let 新键 = 路径键(新);
-    if 老键 == 新键 {
-        return Ok(()); // 名字没变（同一个文件的不同写法），什么都不用做
-    }
-
-    let mut 存档 = 读存档(侧车);
-    let 表们 = match 存档.widths.remove(&老键) {
-        Some(表们) => 表们,
-        None => return Ok(()), // 没有它的记录：不改盘
-    };
-    // ⚠️ 盖掉新键上原有的那一份：新路径**刚刚才被挪出来**（`file_move` 那边
-    // 不许覆盖已存在的文件），所以那一份只可能是一条陈旧残留。
-    存档.widths.insert(新键, 表们);
-    写存档(侧车, &存档).map_err(人话)
+pub fn replace_path(lao: &Path, xin: &Path) -> Result<(), String> {
+    replace_path_file(
+        &paths::table_widths_file().map_err(error_message)?,
+        lao,
+        xin,
+    )
 }
 
-/// 从一个具体路径忘掉一份文档。用例走这个。
-pub fn 忘文件(侧车: &Path, 文档: &Path) -> Result<(), String> {
-    let mut 存档 = 读存档(侧车);
-    if 存档.widths.remove(&路径键(文档)).is_none() {
-        // 本来就没有它的记录：不改盘（也不凭空造一个文件出来）。
-        // 于是"忘两次"是安全的——前端重复调用不该炸。
+pub fn replace_path_file(ce_che: &Path, lao: &Path, xin: &Path) -> Result<(), String> {
+    let lao_jian = path_jian(lao);
+    let xin_jian = path_jian(xin);
+    if lao_jian == xin_jian {
         return Ok(());
     }
-    写存档(侧车, &存档).map_err(人话)
+
+    let mut archive_2 = read_archive_2(ce_che);
+    let table_men = match archive_2.widths.remove(&lao_jian) {
+        Some(table_men) => table_men,
+        None => return Ok(()),
+    };
+
+    archive_2.widths.insert(xin_jian, table_men);
+    write_archive(ce_che, &archive_2).map_err(error_message)
+}
+
+pub fn forget_file(ce_che: &Path, document_2: &Path) -> Result<(), String> {
+    let mut archive_2 = read_archive_2(ce_che);
+    if archive_2.widths.remove(&path_jian(document_2)).is_none() {
+        return Ok(());
+    }
+    write_archive(ce_che, &archive_2).map_err(error_message)
 }
 
 #[cfg(test)]
@@ -400,286 +244,287 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    /// 一条用例一个临时目录：`std::env::temp_dir()` ＋ 进程号 ＋ 序号 ＋ 纳秒 ＋ 名字。
-    ///
-    /// ⚠️⚠️ **用例一律走带显式路径的那几个入口**（`读文件` / `写文件` / `取文件` /
-    /// `记文件` / `忘文件` / `从文本` / `到文本`），**一条都不许调** `读()` / `取()` /
-    /// `记()` / `忘()`——那四个会把路径算到用户**真实**的
-    /// `~/.local/share/nota/table-widths.toml` 上（[`paths::table_widths_file`]）。
-    /// 那是"跑一次测试把用户的列宽清空"的路，而且它**不会报错**。
-    ///
-    /// ⚠️ **不引 `tempfile`**：`Cargo.toml` 里没有它，为了几条用例拖一个依赖进来
-    /// 不是这里能单方面决定的事（与 `upload::新边界` 顶上那条注释同一个理由）。
-    ///
-    /// ⚠️ 目录名带中文是**故意的**：真实用户的文档目录名本来就是中文，
-    /// 顺手把"路径里全是中文"这一路也钉上。
-    fn 临时目录(名: &str) -> PathBuf {
-        static 序号: AtomicU64 = AtomicU64::new(0);
-        let 唯一 = format!(
+    fn temp_directory(ming: &str) -> PathBuf {
+        static TEST_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+        let wei_yi = format!(
             "{}-{}-{}",
             std::process::id(),
-            序号.fetch_add(1, Ordering::Relaxed),
+            TEST_SEQUENCE.fetch_add(1, Ordering::Relaxed),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         );
-        let 目录 = std::env::temp_dir().join(format!("nota-表格宽度-{唯一}-{名}"));
-        std::fs::create_dir_all(&目录).expect("建临时目录");
-        目录
+        let directory_2 = std::env::temp_dir().join(format!(
+            "nota-\u{8868}\u{683c}\u{5bbd}\u{5ea6}-{wei_yi}-{ming}"
+        ));
+        std::fs::create_dir_all(&directory_2).expect("\u{5efa}\u{4e34}\u{65f6}\u{76ee}\u{5f55}");
+        directory_2
     }
 
-    /// 收摊。⚠️ 用例中途断言失败时会漏一个临时目录——**故意的**：漏在 `/tmp` 里
-    /// 只占几个字节，而"为了清理把断言包进 `catch_unwind`"会让用例难读得多。
-    fn 收摊(目录: &Path) {
-        let _ = std::fs::remove_dir_all(目录);
+    fn receive_tan(directory_2: &Path) {
+        let _ = std::fs::remove_dir_all(directory_2);
     }
 
-    /// 文件不在 = 一份都没记过。**不报错**。
     #[test]
-    fn 读不到文件当空的() {
-        let 目录 = 临时目录("读不到");
-        let 侧车 = 目录.join("宽度.toml");
+    fn read_bu_dao_file_dang_kong_de() {
+        let directory_2 = temp_directory("\u{8bfb}\u{4e0d}\u{5230}");
+        let ce_che = directory_2.join("\u{5bbd}\u{5ea6}.toml");
 
-        assert!(读文件(&侧车).is_empty(), "文件不在就该是空的");
-        assert!(从文本("").is_empty(), "空文本也是空的");
-        assert!(从文本(文件头).is_empty(), "只有注释的文件同样是空的");
-        assert!(取文件(&侧车, &目录.join("没记过.md")).is_empty());
+        assert!(
+            read_file_2(&ce_che).is_empty(),
+            "\u{6587}\u{4ef6}\u{4e0d}\u{5728}\u{5c31}\u{8be5}\u{662f}\u{7a7a}\u{7684}"
+        );
+        assert!(
+            cong_text("").is_empty(),
+            "\u{7a7a}\u{6587}\u{672c}\u{4e5f}\u{662f}\u{7a7a}\u{7684}"
+        );
+        assert!(cong_text(FILE_TOU).is_empty(), "\u{53ea}\u{6709}\u{6ce8}\u{91ca}\u{7684}\u{6587}\u{4ef6}\u{540c}\u{6837}\u{662f}\u{7a7a}\u{7684}");
+        assert!(qu_file(&ce_che, &directory_2.join("\u{6ca1}\u{8bb0}\u{8fc7}.md")).is_empty());
 
-        收摊(&目录);
+        receive_tan(&directory_2);
     }
 
-    /// 写完能读回来，**中文路径与中文指纹都原样**（本项目里这是常态，不是边角）。
-    /// 顺带钉住"同一个状态写两次，字节一模一样"——`BTreeMap` 的稳定顺序。
     #[test]
-    fn 写完能读回来_中文路径与中文指纹() {
-        let 目录 = 临时目录("往返");
-        let 侧车 = 目录.join("侧车.toml");
-        let 文档 = 目录.join("第一章 绪论.md");
-        let 记录们 = vec![
-            记录 {
-                文档: 文档.clone(),
-                指纹: "表头:姓名|年龄|备注".to_string(),
-                宽度: vec![160, 240, 96],
+    fn write_wan_neng_read_hui_lai_zhong_wen_path_yu_zhong_wen_fingerprint() {
+        let directory_2 = temp_directory("\u{5f80}\u{8fd4}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        let document_2 = directory_2.join("\u{7b2c}\u{4e00}\u{7ae0} \u{7eea}\u{8bba}.md");
+        let ji_lu_men = vec![
+            TableWidthRecord {
+                document_2: document_2.clone(),
+                fingerprint_2:
+                    "\u{8868}\u{5934}:\u{59d3}\u{540d}|\u{5e74}\u{9f84}|\u{5907}\u{6ce8}"
+                        .to_string(),
+                width_2: vec![160, 240, 96],
             },
-            记录 {
-                文档: 文档.clone(),
-                指纹: "第二张表".to_string(),
-                宽度: vec![80],
+            TableWidthRecord {
+                document_2: document_2.clone(),
+                fingerprint_2: "\u{7b2c}\u{4e8c}\u{5f20}\u{8868}".to_string(),
+                width_2: vec![80],
             },
         ];
 
-        写文件(&侧车, &记录们).expect("写盘");
+        write_file_2(&ce_che, &ji_lu_men).expect("\u{5199}\u{76d8}");
 
-        // 盘上那份是**给人看**的，所以路径与指纹要真的出现在文本里。
-        let 文本 = std::fs::read_to_string(&侧车).expect("读盘");
-        assert!(文本.contains("第一章 绪论.md"), "路径要在文件里：{文本}");
+        let text_2 = std::fs::read_to_string(&ce_che).expect("\u{8bfb}\u{76d8}");
         assert!(
-            文本.contains("表头:姓名|年龄|备注"),
-            "中文指纹要在文件里：{文本}"
+            text_2.contains("\u{7b2c}\u{4e00}\u{7ae0} \u{7eea}\u{8bba}.md"),
+            "\u{8def}\u{5f84}\u{8981}\u{5728}\u{6587}\u{4ef6}\u{91cc}\u{ff1a}{text_2}"
         );
-        assert!(文本.starts_with('#'), "文件头要在最前面：{文本}");
-
-        let 回 = 读文件(&侧车);
-        assert_eq!(回.len(), 2);
-        assert!(回.contains(&记录们[0]), "往返要一模一样：{回:?}");
-        assert!(回.contains(&记录们[1]));
-        assert_eq!(取文件(&侧车, &文档).len(), 2, "同一份文档的两条都取得到");
-
-        // 稳定：同一个状态再写一遍，字节不该变（否则每次落盘都是无谓的 diff）。
-        assert_eq!(
-            到文本(&记录们).unwrap(),
-            到文本(&读文件(&侧车)).unwrap()
+        assert!(
+            text_2.contains("\u{8868}\u{5934}:\u{59d3}\u{540d}|\u{5e74}\u{9f84}|\u{5907}\u{6ce8}"),
+            "\u{4e2d}\u{6587}\u{6307}\u{7eb9}\u{8981}\u{5728}\u{6587}\u{4ef6}\u{91cc}\u{ff1a}{text_2}"
+        );
+        assert!(
+            text_2.starts_with('#'),
+            "\u{6587}\u{4ef6}\u{5934}\u{8981}\u{5728}\u{6700}\u{524d}\u{9762}\u{ff1a}{text_2}"
         );
 
-        收摊(&目录);
-    }
+        let hui_2 = read_file_2(&ce_che);
+        assert_eq!(hui_2.len(), 2);
+        assert!(
+            hui_2.contains(&ji_lu_men[0]),
+            "\u{5f80}\u{8fd4}\u{8981}\u{4e00}\u{6a21}\u{4e00}\u{6837}\u{ff1a}{hui_2:?}"
+        );
+        assert!(hui_2.contains(&ji_lu_men[1]));
+        assert_eq!(qu_file(&ce_che, &document_2).len(), 2, "\u{540c}\u{4e00}\u{4efd}\u{6587}\u{6863}\u{7684}\u{4e24}\u{6761}\u{90fd}\u{53d6}\u{5f97}\u{5230}");
 
-    /// 同一份文档＋同一个指纹：后记的**覆盖**先记的，不是两条。
-    #[test]
-    fn 同文档同指纹是覆盖不是叠加() {
-        let 目录 = 临时目录("覆盖");
-        let 侧车 = 目录.join("侧车.toml");
-        let 文档 = 目录.join("笔记.md");
-
-        记文件(&侧车, &文档, "表一", &[100, 200]).unwrap();
-        记文件(&侧车, &文档, "表一", &[300]).unwrap();
-
-        let 取回 = 取文件(&侧车, &文档);
-        assert_eq!(取回.len(), 1, "同文档同指纹只能有一条：{取回:?}");
-        assert_eq!(取回[0].宽度, vec![300], "留下的是后记的那一份");
-
-        // 换个指纹就不该被覆盖：指纹是"哪个表格"，不是"这份文档"。
-        记文件(&侧车, &文档, "表二", &[7]).unwrap();
-        assert_eq!(取文件(&侧车, &文档).len(), 2);
-
-        收摊(&目录);
-    }
-
-    /// `忘` 之后取不到；**而且只忘这一份文档**，别人的一条不动。
-    #[test]
-    fn 忘掉之后取不到() {
-        let 目录 = 临时目录("忘");
-        let 侧车 = 目录.join("侧车.toml");
-        let 甲 = 目录.join("甲.md");
-        let 乙 = 目录.join("乙.md");
-        记文件(&侧车, &甲, "表一", &[10]).unwrap();
-        记文件(&侧车, &乙, "表一", &[20]).unwrap();
-
-        忘文件(&侧车, &甲).unwrap();
-        assert!(取文件(&侧车, &甲).is_empty(), "忘掉的那份取不到");
         assert_eq!(
-            取文件(&侧车, &乙).len(),
+            dao_text(&ji_lu_men).unwrap(),
+            dao_text(&read_file_2(&ce_che)).unwrap()
+        );
+
+        receive_tan(&directory_2);
+    }
+
+    #[test]
+    fn tong_document_tong_fingerprint_shi_fu_gai_bu_shi_die_jia() {
+        let directory_2 = temp_directory("\u{8986}\u{76d6}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        let document_2 = directory_2.join("\u{7b14}\u{8bb0}.md");
+
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e00}", &[100, 200]).unwrap();
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e00}", &[300]).unwrap();
+
+        let qu_hui = qu_file(&ce_che, &document_2);
+        assert_eq!(qu_hui.len(), 1, "\u{540c}\u{6587}\u{6863}\u{540c}\u{6307}\u{7eb9}\u{53ea}\u{80fd}\u{6709}\u{4e00}\u{6761}\u{ff1a}{qu_hui:?}");
+        assert_eq!(
+            qu_hui[0].width_2,
+            vec![300],
+            "\u{7559}\u{4e0b}\u{7684}\u{662f}\u{540e}\u{8bb0}\u{7684}\u{90a3}\u{4e00}\u{4efd}"
+        );
+
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e8c}", &[7]).unwrap();
+        assert_eq!(qu_file(&ce_che, &document_2).len(), 2);
+
+        receive_tan(&directory_2);
+    }
+
+    #[test]
+    fn forget_diao_zhi_hou_qu_bu_dao() {
+        let directory_2 = temp_directory("\u{5fd8}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        let jia_4 = directory_2.join("\u{7532}.md");
+        let yi_2 = directory_2.join("\u{4e59}.md");
+        ji_file(&ce_che, &jia_4, "\u{8868}\u{4e00}", &[10]).unwrap();
+        ji_file(&ce_che, &yi_2, "\u{8868}\u{4e00}", &[20]).unwrap();
+
+        forget_file(&ce_che, &jia_4).unwrap();
+        assert!(
+            qu_file(&ce_che, &jia_4).is_empty(),
+            "\u{5fd8}\u{6389}\u{7684}\u{90a3}\u{4efd}\u{53d6}\u{4e0d}\u{5230}"
+        );
+        assert_eq!(
+            qu_file(&ce_che, &yi_2).len(),
             1,
-            "别的文档一条都不许动：{:?}",
-            读文件(&侧车)
+            "\u{522b}\u{7684}\u{6587}\u{6863}\u{4e00}\u{6761}\u{90fd}\u{4e0d}\u{8bb8}\u{52a8}\u{ff1a}{:?}",
+            read_file_2(&ce_che)
         );
 
-        // 忘第二次不报错（「另存为」之后再点一次不该炸）。
-        忘文件(&侧车, &甲).unwrap();
+        forget_file(&ce_che, &jia_4).unwrap();
 
-        收摊(&目录);
+        receive_tan(&directory_2);
     }
 
-    /// **改名之后列宽要跟着走**（2026-09-27，`docs/10` §2 那一格）。
-    ///
-    /// ⚠️ 这是"用户拖了半天的列宽，改个文件名就没了"那条路：搬不过去的话
-    /// 他多半会以为是自己点错了，而不是"改名会清列宽"。
     #[test]
-    fn 改名之后列宽跟着搬过去() {
-        let 目录 = 临时目录("改路径");
-        let 侧车 = 目录.join("侧车.toml");
-        let 老 = 目录.join("老名字.md");
-        let 新 = 目录.join("新名字.md");
-        let 别的 = 目录.join("别的.md");
-        记文件(&侧车, &老, "表一", &[160, 240]).unwrap();
-        记文件(&侧车, &老, "表二", &[80]).unwrap();
-        记文件(&侧车, &别的, "表一", &[10]).unwrap();
+    fn gai_ming_zhi_hou_lie_kuan_gen_zhe_ban_guo_qu() {
+        let directory_2 = temp_directory("\u{6539}\u{8def}\u{5f84}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        let lao = directory_2.join("\u{8001}\u{540d}\u{5b57}.md");
+        let xin = directory_2.join("\u{65b0}\u{540d}\u{5b57}.md");
+        let bie_de = directory_2.join("\u{522b}\u{7684}.md");
+        ji_file(&ce_che, &lao, "\u{8868}\u{4e00}", &[160, 240]).unwrap();
+        ji_file(&ce_che, &lao, "\u{8868}\u{4e8c}", &[80]).unwrap();
+        ji_file(&ce_che, &bie_de, "\u{8868}\u{4e00}", &[10]).unwrap();
 
-        改路径文件(&侧车, &老, &新).unwrap();
+        replace_path_file(&ce_che, &lao, &xin).unwrap();
 
         assert_eq!(
-            取文件(&侧车, &新)
+            qu_file(&ce_che, &xin)
                 .iter()
-                .map(|r| (r.指纹.clone(), r.宽度.clone()))
+                .map(|r| (r.fingerprint_2.clone(), r.width_2.clone()))
                 .collect::<Vec<_>>(),
             vec![
-                ("表一".to_string(), vec![160, 240]),
-                ("表二".to_string(), vec![80])
+                ("\u{8868}\u{4e00}".to_string(), vec![160, 240]),
+                ("\u{8868}\u{4e8c}".to_string(), vec![80])
             ],
-            "两张表的列宽都要在，且宽度原样"
+            "\u{4e24}\u{5f20}\u{8868}\u{7684}\u{5217}\u{5bbd}\u{90fd}\u{8981}\u{5728}\u{ff0c}\u{4e14}\u{5bbd}\u{5ea6}\u{539f}\u{6837}"
         );
-        assert!(取文件(&侧车, &老).is_empty(), "老路径那份要清掉");
-        assert_eq!(取文件(&侧车, &别的).len(), 1, "别的文档一条都不许动");
-
-        收摊(&目录);
-    }
-
-    /// ⚠️ 老路径**本来就没有记录**时**不写盘**（同 `忘文件` 那条判据）：
-    /// 写一次就会凭空造出一个只有文件头的侧车来。
-    #[test]
-    fn 没有记录的文件改名不写盘() {
-        let 目录 = 临时目录("改路径没记录");
-        let 侧车 = 目录.join("侧车.toml");
-
-        改路径文件(&侧车, &目录.join("甲.md"), &目录.join("乙.md")).unwrap();
-
-        assert!(!侧车.exists(), "没有它的记录就不该造出文件来");
-        收摊(&目录);
-    }
-
-    /// ⚠️ 坏 TOML **当空的用**：不 panic、不报错——一份被手改坏的侧车不该让
-    /// "打开文档"失败。
-    ///
-    /// ⚠️ 顺带把那条**代价**也钉住（文件头"账二"）：坏文件被当空的用，
-    /// 所以下一次 `记` 会把它整个覆盖掉。这是刻意的取舍，不是顺手写出来的行为。
-    #[test]
-    fn 坏掉的_toml当空的用() {
-        let 目录 = 临时目录("坏文件");
-        let 侧车 = 目录.join("侧车.toml");
-        std::fs::write(&侧车, "这不是 TOML {{{ [").unwrap();
-
-        assert!(读文件(&侧车).is_empty(), "坏文件当空的");
-        assert!(从文本("这不是 TOML {{{ [").is_empty());
         assert!(
-            从文本("[widths]\n\"a\" = \"不是数组\"").is_empty(),
-            "类型不对（该是数组的地方给了字符串）也是空的"
+            qu_file(&ce_che, &lao).is_empty(),
+            "\u{8001}\u{8def}\u{5f84}\u{90a3}\u{4efd}\u{8981}\u{6e05}\u{6389}"
+        );
+        assert_eq!(
+            qu_file(&ce_che, &bie_de).len(),
+            1,
+            "\u{522b}\u{7684}\u{6587}\u{6863}\u{4e00}\u{6761}\u{90fd}\u{4e0d}\u{8bb8}\u{52a8}"
         );
 
-        // 在坏文件上接着记：能成，而且那份读不懂的东西被整体覆盖掉了。
-        let 文档 = 目录.join("笔记.md");
-        记文件(&侧车, &文档, "表一", &[42]).unwrap();
-        assert_eq!(取文件(&侧车, &文档)[0].宽度, vec![42]);
-
-        收摊(&目录);
+        receive_tan(&directory_2);
     }
 
-    /// 空宽度 = **删掉这条记录**，不留一条空的；这份文档一条都不剩时，
-    /// 连它的那一节也一起消失（文件里不留空壳）。
     #[test]
-    fn 空宽度等于删掉这条记录() {
-        let 目录 = 临时目录("空宽度");
-        let 侧车 = 目录.join("侧车.toml");
-        let 文档 = 目录.join("笔记.md");
-        记文件(&侧车, &文档, "表一", &[10, 20]).unwrap();
-        记文件(&侧车, &文档, "表二", &[30]).unwrap();
+    fn mei_you_ji_lu_de_file_gai_ming_bu_write_pan() {
+        let directory_2 = temp_directory("\u{6539}\u{8def}\u{5f84}\u{6ca1}\u{8bb0}\u{5f55}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
 
-        记文件(&侧车, &文档, "表一", &[]).unwrap(); // 删表一
-        let 剩 = 取文件(&侧车, &文档);
-        assert_eq!(剩.len(), 1, "删掉的那条不该还在：{剩:?}");
-        assert_eq!(剩[0].指纹, "表二");
+        replace_path_file(
+            &ce_che,
+            &directory_2.join("\u{7532}.md"),
+            &directory_2.join("\u{4e59}.md"),
+        )
+        .unwrap();
 
-        记文件(&侧车, &文档, "表二", &[]).unwrap(); // 删表二 → 这份文档一条不剩
-        assert!(取文件(&侧车, &文档).is_empty());
-        assert!(读文件(&侧车).is_empty());
-
-        let 文本 = std::fs::read_to_string(&侧车).expect("读盘");
-        assert!(!文本.contains("笔记.md"), "空壳的那一节要一起消失：{文本}");
-        assert!(!文本.contains("表二"), "空数组不该被写出来：{文本}");
-
-        收摊(&目录);
+        assert!(!ce_che.exists(), "\u{6ca1}\u{6709}\u{5b83}\u{7684}\u{8bb0}\u{5f55}\u{5c31}\u{4e0d}\u{8be5}\u{9020}\u{51fa}\u{6587}\u{4ef6}\u{6765}");
+        receive_tan(&directory_2);
     }
 
-    /// 多份文档、一份文档的多条记录，**互不串**。⚠️ 键是**完整路径**不是文件名：
-    /// 两份同名的文档放在不同目录里就是两条不同的账。
     #[test]
-    fn 一份文档的多条记录不互相串() {
-        let 目录 = 临时目录("不串");
-        let 侧车 = 目录.join("侧车.toml");
-        let 甲目录 = 目录.join("甲");
-        let 乙目录 = 目录.join("乙");
-        std::fs::create_dir_all(&甲目录).unwrap();
-        std::fs::create_dir_all(&乙目录).unwrap();
-        let 甲 = 甲目录.join("笔记.md");
-        let 乙 = 乙目录.join("笔记.md"); // ⚠️ 文件名一样，路径不一样
+    fn huai_diao_de_toml_dang_kong_de_yong() {
+        let directory_2 = temp_directory("\u{574f}\u{6587}\u{4ef6}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        std::fs::write(&ce_che, "\u{8fd9}\u{4e0d}\u{662f} TOML {{{ [").unwrap();
 
-        记文件(&侧车, &甲, "表一", &[1, 2]).unwrap();
-        记文件(&侧车, &甲, "表二", &[3]).unwrap();
-        记文件(&侧车, &乙, "表一", &[9]).unwrap();
+        assert!(
+            read_file_2(&ce_che).is_empty(),
+            "\u{574f}\u{6587}\u{4ef6}\u{5f53}\u{7a7a}\u{7684}"
+        );
+        assert!(cong_text("\u{8fd9}\u{4e0d}\u{662f} TOML {{{ [").is_empty());
+        assert!(
+            cong_text("[widths]\n\"a\" = \"\u{4e0d}\u{662f}\u{6570}\u{7ec4}\"").is_empty(),
+            "\u{7c7b}\u{578b}\u{4e0d}\u{5bf9}\u{ff08}\u{8be5}\u{662f}\u{6570}\u{7ec4}\u{7684}\u{5730}\u{65b9}\u{7ed9}\u{4e86}\u{5b57}\u{7b26}\u{4e32}\u{ff09}\u{4e5f}\u{662f}\u{7a7a}\u{7684}"
+        );
 
-        assert_eq!(取文件(&侧车, &甲).len(), 2);
-        assert_eq!(取文件(&侧车, &乙).len(), 1, "同名的那一份不能被混进来");
-        assert_eq!(取文件(&侧车, &乙)[0].宽度, vec![9]);
+        let document_2 = directory_2.join("\u{7b14}\u{8bb0}.md");
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e00}", &[42]).unwrap();
+        assert_eq!(qu_file(&ce_che, &document_2)[0].width_2, vec![42]);
 
-        收摊(&目录);
+        receive_tan(&directory_2);
     }
 
-    /// 宽度**原样往返**：不排序、不去重、不截断，`u32` 的两头都留得住。
-    ///
-    /// ⚠️ 这条钉的不是"数字对不对"，是**存取路上别加什么范围处理**：
-    /// 负宽度这件事在类型上是 `u32`，编译期就不存在，不需要运行期再挡一道。
     #[test]
-    fn 宽度按_u32原样往返() {
-        let 目录 = 临时目录("原样");
-        let 侧车 = 目录.join("侧车.toml");
-        let 文档 = 目录.join("笔记.md");
-        let 宽度 = vec![0, u32::MAX, 3, 3, 1];
+    fn kong_width_deng_yu_shan_diao_zhe_tiao_ji_lu() {
+        let directory_2 = temp_directory("\u{7a7a}\u{5bbd}\u{5ea6}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        let document_2 = directory_2.join("\u{7b14}\u{8bb0}.md");
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e00}", &[10, 20]).unwrap();
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e8c}", &[30]).unwrap();
 
-        记文件(&侧车, &文档, "表一", &宽度).unwrap();
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e00}", &[]).unwrap();
+        let sheng = qu_file(&ce_che, &document_2);
+        assert_eq!(sheng.len(), 1, "\u{5220}\u{6389}\u{7684}\u{90a3}\u{6761}\u{4e0d}\u{8be5}\u{8fd8}\u{5728}\u{ff1a}{sheng:?}");
+        assert_eq!(sheng[0].fingerprint_2, "\u{8868}\u{4e8c}");
 
-        assert_eq!(取文件(&侧车, &文档)[0].宽度, 宽度);
-        assert_eq!(读文件(&侧车)[0].宽度, 宽度, "从盘上读回来也要一样");
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e8c}", &[]).unwrap();
+        assert!(qu_file(&ce_che, &document_2).is_empty());
+        assert!(read_file_2(&ce_che).is_empty());
 
-        收摊(&目录);
+        let text_2 = std::fs::read_to_string(&ce_che).expect("\u{8bfb}\u{76d8}");
+        assert!(!text_2.contains("\u{7b14}\u{8bb0}.md"), "\u{7a7a}\u{58f3}\u{7684}\u{90a3}\u{4e00}\u{8282}\u{8981}\u{4e00}\u{8d77}\u{6d88}\u{5931}\u{ff1a}{text_2}");
+        assert!(!text_2.contains("\u{8868}\u{4e8c}"), "\u{7a7a}\u{6570}\u{7ec4}\u{4e0d}\u{8be5}\u{88ab}\u{5199}\u{51fa}\u{6765}\u{ff1a}{text_2}");
+
+        receive_tan(&directory_2);
+    }
+
+    #[test]
+    fn yi_fen_document_de_duo_tiao_ji_lu_bu_hu_xiang_chuan() {
+        let directory_2 = temp_directory("\u{4e0d}\u{4e32}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        let jia_directory = directory_2.join("\u{7532}");
+        let yi_directory = directory_2.join("\u{4e59}");
+        std::fs::create_dir_all(&jia_directory).unwrap();
+        std::fs::create_dir_all(&yi_directory).unwrap();
+        let jia_4 = jia_directory.join("\u{7b14}\u{8bb0}.md");
+        let yi_2 = yi_directory.join("\u{7b14}\u{8bb0}.md");
+
+        ji_file(&ce_che, &jia_4, "\u{8868}\u{4e00}", &[1, 2]).unwrap();
+        ji_file(&ce_che, &jia_4, "\u{8868}\u{4e8c}", &[3]).unwrap();
+        ji_file(&ce_che, &yi_2, "\u{8868}\u{4e00}", &[9]).unwrap();
+
+        assert_eq!(qu_file(&ce_che, &jia_4).len(), 2);
+        assert_eq!(qu_file(&ce_che, &yi_2).len(), 1, "\u{540c}\u{540d}\u{7684}\u{90a3}\u{4e00}\u{4efd}\u{4e0d}\u{80fd}\u{88ab}\u{6df7}\u{8fdb}\u{6765}");
+        assert_eq!(qu_file(&ce_che, &yi_2)[0].width_2, vec![9]);
+
+        receive_tan(&directory_2);
+    }
+
+    #[test]
+    fn width_an_u32_yuan_yang_wang_fan() {
+        let directory_2 = temp_directory("\u{539f}\u{6837}");
+        let ce_che = directory_2.join("\u{4fa7}\u{8f66}.toml");
+        let document_2 = directory_2.join("\u{7b14}\u{8bb0}.md");
+        let width_2 = vec![0, u32::MAX, 3, 3, 1];
+
+        ji_file(&ce_che, &document_2, "\u{8868}\u{4e00}", &width_2).unwrap();
+
+        assert_eq!(qu_file(&ce_che, &document_2)[0].width_2, width_2);
+        assert_eq!(
+            read_file_2(&ce_che)[0].width_2,
+            width_2,
+            "\u{4ece}\u{76d8}\u{4e0a}\u{8bfb}\u{56de}\u{6765}\u{4e5f}\u{8981}\u{4e00}\u{6837}"
+        );
+
+        receive_tan(&directory_2);
     }
 }

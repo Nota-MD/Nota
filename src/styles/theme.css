@@ -1,53 +1,53 @@
-/**
- * 外观的两条轴，**相乘**。
- *
- *   [data-ui-style="…"]  定**形状**：圆角、间距、控件比例、字体栈、阴影
- *   [data-ui-mode="…"]   定**颜色**：前景/背景/边框/强调色
- *
- * 两条轴都作用于**整个应用外壳**，内置风格相乘就是 7 风格 × 2 模式 = 14 种外观，
- * 每一种都必须是能看的（用户 2026-09-23 点着名要的就是这个：
- * 「ghub(light&dark) yaru(light&dark) plasma(light&dark) adwaita(light&dark)
- * macos(light&dark) windows(light&dark)」；2026-09-26 又加了 `windows10`——
- * 用户给了 Win11 Mica 和 Win10 Acrylic 两份稿子，两份长相不一样）。
- *
- * ⚠️ **写新风格时别把颜色写进 style 那一段**。颜色一旦在 style 里写死，
- * 这个风格就没法配暗色了——而"我要 macOS 风格 + 暗色"是必然会出现的需求。
- * 反过来也一样：mode 那一段只管颜色，不许改圆角和行为性尺寸。
- * 确有识别色的风格（GitHub 的冷灰蓝边框、Yaru 的橙）写成
- * `[data-ui-style="x"][data-ui-mode="y"]` 这种**两属性**选择器，
- * 放在最后那一段——它比单属性选择器更具体，稳定压过上面两段。
- *
- * ⛔ **文档主题不在这条链上，一个变量都不许经这里中转。**
- * 之前有过一版：文档主题把配色写进 `--nota-bridge-*`，再由本节的颜色块
- * `var(--nota-bridge-x, 默认值)` 消费——于是选一个浅色文档主题，侧栏、
- * 菜单、插件栏跟着一起变亮，整个应用一半亮一半暗（用户截图报的 bug）。
- * 那一整套桥接已拆干净。文档主题现在只作用在 `.editor-pane` 之下，
- * 由 `doc-theme.ts` 强制限域，**结构性碰不到这里任何一个变量**。
- *
- * 加一条新轴上的新值时，要改的地方：`theme/shape.css` 与 `theme/color.css`
- * 各一段、`src-tauri/src/ui_styles.rs` 的 `BUILTIN_IDS`、
- * `src/styles/applyTheme.ts` 的探测表、`ui/settings/panes/AppearancePane.tsx`
- * 的 `STYLE_ORDER`、`docs/04-ui-map.md` 的外观一节。⚠️ **内置档 id 有三份抄本**
- * （Rust 那份、`shape.css` 那份、前端那份），三份必须一致——
- * `tools/doc-sync-check.sh` ⑦ 查这个。
- *
- * ⚠️⚠️ **2026-09-26：这份文件本身只剩下面四行 `@import`。** 它原来 1117 行，
- * 顶破了本仓 1000 行的硬线（`tools/doc-sync-check.sh` ①），于是**就地按职责
- * 拆成四份**放在 `styles/theme/` 下：
- *
- *   ① `theme/base.css`   两条轴本身：`:root` 公共量 ＋ `[data-ui-mode]` 两段
- *   ② `theme/shape.css`  轴一：七档内置风格的**形状**
- *   ③ `theme/color.css`  轴一 × 轴二：七档 × 明暗 = 14 段**颜色**
- *   ④ `theme/extras.css` 变量表达不了的那几件事（唯一带组件选择器的一份）
- *
- * ⚠️ **顺序不能换，四个都要在**：`base` 必须在 `shape` 前面——那两处的选择器
- * 权重都是 (0,1,0)，靠"后来居上"决出胜负，调换顺序会让**所有风格的圆角与
- * 控件高静默失效**。`extras` 必须在最后（它要盖住的正是前面定下来的值）。
- *
- * ⚠️ **这份文件仍然是唯一入口**（`main.tsx` import 的就是它），全仓那些
- * "见 `theme.css` 的某个变量"的注释**不用改**——变量还是从这条路进来的。
- * 改哪一份之前，先看那一份自己的文件头。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @import "./theme/base.css";
 @import "./theme/shape.css";
 @import "./theme/color.css";

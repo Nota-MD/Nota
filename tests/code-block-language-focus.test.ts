@@ -47,7 +47,7 @@ testCase("点击选项和回车提交后都回到原代码编辑器", () => {
 
 testCase("改语言只更新节点属性，不替换代码文本或光标", () => {
   const start = block.indexOf("const applyLanguage");
-  const end = block.indexOf("// ⚠️ 语言框", start);
+  const end = block.indexOf('const langWrap = document.createElement("span")', start);
   const implementation = block.slice(start, end);
   assertValue(implementation.includes("setNodeMarkup"), "语言没有写回节点属性");
   assertValue(!implementation.includes("replaceWith"), "改语言仍在替换整块内容");
@@ -255,10 +255,12 @@ testCase("思维导图向 Mermaid 显式传入明暗模式与完整节点配色"
   );
   assertValue(
     diagrams.includes("image.viewBox.baseVal.width") &&
-      diagrams.includes("fitDiagramWidth") &&
+      diagrams.includes("fitDiagramToPreview") &&
       diagrams.includes('image.style.setProperty("max-width", "100%", "important")') &&
-      diagrams.includes("new ResizeObserver(fitDiagramWidth)"),
-    "Mermaid 没有使用自然宽度、容器上限并在缩放时重算",
+      diagrams.includes("new ResizeObserver(fitDiagramToPreview)") &&
+      diagrams.includes("availableHeight") &&
+      diagrams.includes("fitDiagramSize"),
+    "Mermaid 没有同时按预览框宽高缩放并在尺寸变化时重算",
   );
 });
 

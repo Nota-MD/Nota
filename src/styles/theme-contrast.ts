@@ -1,10 +1,10 @@
-/**
- * 判断一份文档主题是否会产出深色纸面。
- *
- * 打印和 PDF 只接受浅色主题。这里不按主题 id 或某套内置主题写分支，只看
- * 主题 CSS 自己声明的 `color-scheme`、`--doc-bg` 与 `--doc-fg/--fg`：
- * 用户从主题仓库安装的主题与内置主题走同一条判据。
- */
+
+
+
+
+
+
+
 
 export interface Rgb {
   r: number;
@@ -29,7 +29,7 @@ function byte(value: string, scale = 255): number | null {
   return Math.max(0, Math.min(255, number));
 }
 
-/** 解析主题里最常见的 CSS 颜色写法；认不出时返回 `null`，不猜。 */
+
 export function parseCssColor(value: string): Rgb | null {
   const text = value.trim().toLowerCase();
   const named = namedColor[text];
@@ -58,7 +58,7 @@ export function parseCssColor(value: string): Rgb | null {
   return r === null || g === null || b === null ? null : { r, g, b };
 }
 
-/** WCAG 相对亮度；0 = 黑，1 = 白。 */
+
 export function relativeLuminance({ r, g, b }: Rgb): number {
   const channel = (value: number) => {
     const x = value / 255;
@@ -85,12 +85,12 @@ function lastColor(css: string, properties: string[]): Rgb | null {
   return null;
 }
 
-/**
- * 这份主题是否应以深色纸面处理。
- *
- * 判据顺序：显式 `color-scheme: dark`；能解析的 `--doc-bg` 亮度；最后才用
- * 前景色兜底。无法解析时不阻止，避免把一份浅色主题误判成深色。
- */
+
+
+
+
+
+
 export function documentThemeLooksDark(css: string): boolean {
   if (!css.trim()) return false;
   const scheme = lastDeclaration(css, "color-scheme");

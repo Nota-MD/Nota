@@ -82,8 +82,8 @@ import { pitTrapDropPoint } from "../src/ui/useModalTrap";
 group("一、面板里一个格子都没有");
 
 testCase("Tab 与 Shift+Tab 都是「原地不动」", () => {
-  equal(pitTrapDropPoint([], null, false).action, "原地不动", "正向");
-  equal(pitTrapDropPoint([], null, true).action, "原地不动", "反向");
+  equal(pitTrapDropPoint([], null, false).action, "stay in place", "正向");
+  equal(pitTrapDropPoint([], null, true).action, "stay in place", "反向");
 });
 
 /* ── 二、焦点在面板外 ─────────────────────────────────────────────────── */
@@ -93,23 +93,23 @@ group("二、焦点在面板外（含容器自己）");
 testCase("焦点为 null：Tab 拉回第一格、Shift+Tab 拉回最后一格", () => {
   const cell = [cell2(0), cell2(1), cell2(2)];
   const determineFixed = pitTrapDropPoint(cell, null, false);
-  equal(determineFixed.action, "送到", "送回面板");
-  assertValue(determineFixed.action === "送到" && determineFixed.target === cell[0], "正向送第一格");
+  equal(determineFixed.action, "send to", "送回面板");
+  assertValue(determineFixed.action === "send to" && determineFixed.target === cell[0], "正向送第一格");
   const reverseDetermineFixed = pitTrapDropPoint(cell, null, true);
-  assertValue(reverseDetermineFixed.action === "送到" && reverseDetermineFixed.target === cell[2], "反向送最后一格");
+  assertValue(reverseDetermineFixed.action === "send to" && reverseDetermineFixed.target === cell[2], "反向送最后一格");
 });
 
 testCase("焦点是面板容器自己（tabIndex=-1 那颗）：按「从外面进来」算", () => {
   const container = cell2(9);
   const cell = [cell2(0), cell2(1)];
-  assertValue(pitTrapDropPoint(cell, container, false).action === "送到", "容器不在格子里");
+  assertValue(pitTrapDropPoint(cell, container, false).action === "send to", "容器不在格子里");
 });
 
 testCase("焦点在页面里别的东西上：拉回", () => {
   const cell = [cell2(0), cell2(1)];
   const externalSurface = cell2(7);
-  assertValue(pitTrapDropPoint(cell, externalSurface, false).action === "送到", "正向外人送回");
-  assertValue(pitTrapDropPoint(cell, externalSurface, true).action === "送到", "反向外人送回");
+  assertValue(pitTrapDropPoint(cell, externalSurface, false).action === "send to", "正向外人送回");
+  assertValue(pitTrapDropPoint(cell, externalSurface, true).action === "send to", "反向外人送回");
 });
 
 /* ── 三、首尾互跳 ─────────────────────────────────────────────────────── */
@@ -119,21 +119,21 @@ group("三、首尾互跳（两个方向都夹住）");
 testCase("第一格 Shift+Tab → 最后一格", () => {
   const cell = [cell2(0), cell2(1), cell2(2)];
   const determineFixed = pitTrapDropPoint(cell, cell[0]!, true);
-  equal(determineFixed.action, "送到", "绕到尾部");
-  assertValue(determineFixed.action === "送到" && determineFixed.target === cell[2]!, "目标就是最后一格");
+  equal(determineFixed.action, "send to", "绕到尾部");
+  assertValue(determineFixed.action === "send to" && determineFixed.target === cell[2]!, "目标就是最后一格");
 });
 
 testCase("最后一格 Tab → 第一格", () => {
   const cell = [cell2(0), cell2(1), cell2(2)];
   const determineFixed = pitTrapDropPoint(cell, cell[2]!, false);
-  equal(determineFixed.action, "送到", "绕回头部");
-  assertValue(determineFixed.action === "送到" && determineFixed.target === cell[0]!, "目标就是第一格");
+  equal(determineFixed.action, "send to", "绕回头部");
+  assertValue(determineFixed.action === "send to" && determineFixed.target === cell[0]!, "目标就是第一格");
 });
 
 testCase("只有一颗格子：两个方向都送回它自己", () => {
   const cell = [cell2(0)];
-  assertValue(pitTrapDropPoint(cell, cell[0]!, false).action === "送到", "正向");
-  assertValue(pitTrapDropPoint(cell, cell[0]!, true).action === "送到", "反向");
+  assertValue(pitTrapDropPoint(cell, cell[0]!, false).action === "send to", "正向");
+  assertValue(pitTrapDropPoint(cell, cell[0]!, true).action === "send to", "反向");
 });
 
 /* ── 四、格子中间 ─────────────────────────────────────────────────────── */
@@ -142,13 +142,13 @@ group("四、格子中间：自然移动（不拦）");
 
 testCase("中间的格子往两个方向都让浏览器自己挪", () => {
   const cell = [cell2(0), cell2(1), cell2(2)];
-  equal(pitTrapDropPoint(cell, cell[1]!, false).action, "自然移动", "正向");
-  equal(pitTrapDropPoint(cell, cell[1]!, true).action, "自然移动", "反向");
+  equal(pitTrapDropPoint(cell, cell[1]!, false).action, "natural motion", "正向");
+  equal(pitTrapDropPoint(cell, cell[1]!, true).action, "natural motion", "反向");
 });
 
 testCase("第一格按 Tab（还有下一格）也是自然移动", () => {
   const cell = [cell2(0), cell2(1)];
-  equal(pitTrapDropPoint(cell, cell[0]!, false).action, "自然移动", "首格正向不该绕");
+  equal(pitTrapDropPoint(cell, cell[0]!, false).action, "natural motion", "首格正向不该绕");
 });
 
 /* ── 收尾 ─────────────────────────────────────────────────────────────── */

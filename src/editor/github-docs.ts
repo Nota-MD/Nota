@@ -1,18 +1,18 @@
-/**
- * GitHub Docs Liquid 标记的本地兼容层。
- *
- * GitHub Docs 仓库里的 `{% rowheaders %}`、`{% octicon ... %}`、`{% data ... %}`
- * 不是 GFM 标准，因此这里不执行 Liquid、不联网、也不改写 Markdown 源文。
- * 编辑器只对屏幕做三件事：
- *
- * 1. `{% rowheaders %}` / `{% endrowheaders %}` 作为不可见边界，给中间表格加
- *    第一列行标题样式；
- * 2. 常见 Octicon 指令显示成带 `aria-label` 的本地符号；
- * 3. `{% data variables... %}` 与 reusables 保持可见，显示为代码色。
- *
- * 导出时再由 `editor/export.ts` 把 rowheaders 转成真正带 `scope="row"` 的
- * `<th>`，把 Octicon 转成可访问的普通 HTML；源文件一个字节不动。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import { Plugin, PluginKey } from "@milkdown/kit/prose/state";
@@ -109,7 +109,7 @@ export function isGithubRowDirective(text: string): boolean {
   return rowDirective.test(text.trim());
 }
 
-/** 导出前把只在 Nota 里显示的 Liquid 兼容标记落成普通、可访问的 HTML。 */
+
 export function applyGithubDocsToExport(root: Element): void {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const textNodes: Text[] = [];

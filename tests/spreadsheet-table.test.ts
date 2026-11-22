@@ -1,6 +1,19 @@
 import { readFileSync } from "node:fs";
 
-import { cellLabel, columnLabel } from "@/ui/SpreadsheetTableOverlay";
+import {
+  cellLabel,
+  columnLabel,
+  formulaTokens,
+} from "@/ui/SpreadsheetTableOverlay";
+import {
+  adaptiveSelectionPalette,
+  parseColor,
+} from "@/styles/doc-theme";
+import {
+  clearTableExtensionContent,
+  hasExtensionTableContent,
+  recordTableExtensionContent,
+} from "@/ui/table-computed";
 
 let passed = 0;
 let failed = 0;
@@ -26,6 +39,8 @@ const rust = read("src-tauri/src/settings/editor.rs");
 const types = read("src/bridge/types-settings.ts");
 const pane = read("src/ui/settings/panes/EditorPane.tsx");
 const overlay = read("src/ui/SpreadsheetTableOverlay.tsx");
+const persistent = read("src/ui/PersistentTableComputedOverlay.tsx");
+const tableComputed = read("src/ui/table-computed.ts");
 const toolbar = read("src/ui/TableToolbar.tsx");
 const tableCss = read("src/styles/table-toolbar.css");
 const commands = read("src/editor/command-table.ts");
@@ -90,12 +105,100 @@ testCase("spreadsheet geometry follows scroll and layout changes", () => {
   assert(toolbar.includes("polling = requestAnimationFrame(poll)"), "table toolbar does not keep coordinates current");
 });
 
+testCase("active cells and row or column headers select immediately", () => {
+  assert(
+    overlay.includes("const applyLocalRange") &&
+      overlay.includes("active: point") &&
+      overlay.includes("paintRange(table, selection.current)"),
+    "pointer entry does not paint and store the active cell immediately",
+  );
+  assert(
+    overlay.includes('run("tableSelectColumn"') &&
+      overlay.includes('run("tableSelectRow"') &&
+      overlay.includes("applyLocalRange(range, { row: row.index, column: 0 })"),
+    "row or column headers do not enter the shared range-selection path",
+  );
+  assert(
+    tableCss.includes(".nota-sheet-range") &&
+      tableCss.includes("--nota-sheet-selection-bg"),
+    "the active cell range has no visible highlight",
+  );
+});
+
 testCase("cell formula input keeps focus when clicked", () => {
   assert(
     overlay.includes("onMouseDown={(event) => {") &&
-      overlay.includes("event.preventDefault();") &&
-      overlay.includes("event.currentTarget.focus();"),
-    "formula input lets the document selection steal focus",
+      overlay.includes("event.stopPropagation();"),
+    "formula input lets the document selection steal pointer events",
+  );
+  assert(
+    !overlay.includes("event.preventDefault();\n            event.stopPropagation();\n            event.currentTarget.focus();"),
+    "formula input still blocks native caret placement and text selection",
+  );
+  assert(
+    overlay.includes("formulaTarget.current?.row !== active.row") &&
+      overlay.includes("formulaTarget.current?.column !== active.column"),
+    "formula bar can keep stale text while the cell changes",
+  );
+  assert(
+    overlay.includes("active: point") &&
+      overlay.includes("const range = selection.current;") &&
+      overlay.includes('run("tableSelectRange"'),
+    "single-cell pointer selection does not update the shared active cell",
+  );
+  assert(
+    overlay.includes("const formulaActive = useRef(false)") &&
+      overlay.includes("if (formulaActive.current) return") &&
+      overlay.includes("formulaTarget.current?.row !== active.row"),
+    "focusing the formula input can still unmount the spreadsheet overlay",
+  );
+  assert(
+    overlay.includes("const formulaTarget = useRef<Point | null>(null)") &&
+      overlay.includes("const target = formulaTarget.current ?? layout.active"),
+    "formula edits are not pinned to the cell that opened the formula bar",
+  );
+  assert(
+    toolbar.includes("const spreadsheetEditing = useRef(false)") &&
+      toolbar.includes("if (spreadsheetEditing.current) return") &&
+      overlay.includes("onFormulaActiveChange?.(true)"),
+    "the parent table toolbar can still unmount while its formula input is active",
+  );
+});
+
+testCase("formula references use matching OnlyOffice-style colors", () => {
+  const tokens = formulaTokens("=SUM(A1:A2)+B1+A1+A1");
+  const references = tokens.filter((token) => token.kind === "reference");
+  assert(tokens.some((token) => token.kind === "function" && token.text === "SUM"), "formula function is not highlighted");
+  assert(references.map((token) => token.text).join(",") === "A1:A2,B1,A1,A1", "references are not tokenized in source order");
+  assert(references[2]?.tone === references[3]?.tone, "repeated references must keep the same color");
+  assert(references[0]?.tone !== references[1]?.tone, "distinct references must receive distinct colors");
+  assert(
+    overlay.includes("function activeTableFor(") &&
+      overlay.includes("useLayoutEffect") &&
+      overlay.includes("activeTableFor(layout)"),
+    "reference overlays are not measured against the live table after layout",
+  );
+  assert(
+    overlay.includes("formulaReferenceSource") &&
+      overlay.includes("referenceBoxesFor(activeTableFor(layout), draft)"),
+    "formula references do not drive cell overlays",
+  );
+  assert(
+    tableCss.includes(".sheet-formula-highlight") &&
+      tableCss.includes(".sheet-formula-reference") &&
+      tableCss.includes(".sheet-reference-box"),
+    "the formula text and cell reference overlays are not styled",
+  );
+  for (const tone of ["0", "1", "2", "3", "4", "5", "6"]) {
+    assert(
+      tableCss.includes(`.sheet-tone-${tone}`),
+      `formula reference tone ${tone} is missing`,
+    );
+  }
+  assert(
+    tableCss.includes("border: 1.5px solid var(--sheet-range-tone)") &&
+      tableCss.includes("border-style: dashed"),
+    "cell references and ranges are not visually distinguished",
   );
 });
 
@@ -106,6 +209,136 @@ testCase("spreadsheet overlays stay inside the editor viewport", () => {
   assert(overlay.includes("Math.min(viewport.bottom, box.top + box.height)"), "range box is not clipped to the editor");
   assert(overlay.includes("bottom <= top"), "row headers are not clipped at the editor boundary");
   assert(toolbar.includes("const topBoundary = Math.max("), "table toolbar can overlap front matter");
+});
+
+testCase("table extensions receive source snapshots and display-only results", () => {
+  const bridge = read("src-tauri/src/table_bridge.rs");
+  const bridgeHook = read("src/ui/useTableBridge.ts");
+  assert(overlay.includes("api.table.syncSnapshot(snapshot)"), "active table snapshot is not published");
+  assert(overlay.includes("table.dataset.notaTableId = tableId"), "tables have no stable bridge identity");
+  assert(bridge.includes("pub struct TableSnapshot"), "host snapshot shape is missing");
+  assert(bridge.includes("pub struct TableWriteRequest"), "host write intent is missing");
+  assert(
+    tableComputed.includes("cell.dataset.notaSheetValue = value") &&
+      overlay.includes("applyComputed(liveTable, payload.cells)"),
+    "computed values are not display-only",
+  );
+  assert(
+    persistent.includes("events.tableRender") &&
+      persistent.includes("renders.current.set(") &&
+      persistent.includes("computedBoxesFor(table, payload.cells)") &&
+      !persistent.includes("currentTable && currentRange"),
+    "computed values do not survive after the caret leaves the table",
+  );
+  assert(
+    tableComputed.includes("getComputedStyle(cell.parentElement ?? cell).backgroundColor") &&
+      tableComputed.includes("isFormulaError(value)"),
+    "processed values either flash on entry or lose row background layers",
+  );
+  assert(
+    toolbar.includes("PersistentTableComputedOverlay") &&
+      persistent.includes("new MutationObserver") &&
+      persistent.includes('document.addEventListener("selectionchange", onSelectionChange)') &&
+      read("src/ui/EditorArea.tsx").includes("spreadsheetPersistent="),
+    "rendered table values are not repainted after editor DOM updates",
+  );
+  assert(bridgeHook.includes('runCommand("tableSetCells"'), "extension write intent is not applied");
+});
+
+testCase("extension-rendered table content is included in save feedback", () => {
+  recordTableExtensionContent(501, "doc:0", false);
+  assert(!hasExtensionTableContent(501), "plain tables were marked as extension-rendered");
+  recordTableExtensionContent(501, "doc:1", true);
+  assert(hasExtensionTableContent(501), "rendered table content was not recorded");
+  clearTableExtensionContent(501);
+  assert(!hasExtensionTableContent(501), "document table state was not cleared");
+  const bridge = read("src-tauri/src/table_bridge.rs");
+  const documents = read("src/ui/useDocuments.ts");
+  assert(
+    bridge.includes("pub extension_content: bool") &&
+      bridge.includes("has_extension_content") &&
+      documents.includes("Table content is rendered by extensions"),
+    "save feedback or the additive extension API is missing",
+  );
+});
+
+testCase("formula source stays in the formula bar and errors are visible", () => {
+  assert(
+    persistent.includes("computedBoxesFor(table, payload.cells)") &&
+      !persistent.includes("table === currentTable"),
+    "a selected formula cell still reveals its source inside the table",
+  );
+  assert(
+    tableComputed.includes('/^#[A-Z0-9/?!]+$/i') &&
+      persistent.includes("box.error") &&
+      tableCss.includes(".sheet-computed-value.is-error") &&
+      tableCss.includes("td.nota-sheet-error::after"),
+    "formula errors do not have a distinct warning treatment",
+  );
+});
+
+testCase("selection colors keep contrast under IBM light and dark themes", () => {
+  const light = adaptiveSelectionPalette(
+    parseColor("#ffffff")!,
+    parseColor("#0f62fe")!,
+    parseColor("#d0e2ff")!,
+    parseColor("#161616")!,
+  );
+  const dark = adaptiveSelectionPalette(
+    parseColor("#262626")!,
+    parseColor("#78a9ff")!,
+    parseColor("#525252")!,
+    parseColor("#f4f4f4")!,
+  );
+  for (const palette of [light, dark]) {
+    assert(palette.backgroundContrast >= 2.5, "selection fill is too close to the page");
+    assert(palette.inkContrast >= 4.5, "selected text contrast is below WCAG AA");
+    assert(palette.outlineContrast >= 3, "selection outline contrast is below 3:1");
+  }
+  assert(
+    tableCss.includes("--nota-sheet-selection-bg") &&
+      tableCss.includes("--nota-selection-outline") &&
+      tableCss.includes("--nota-result-ink") &&
+      read("src/styles/doc-theme.ts").includes("var(--nota-selection-bg"),
+    "selection and spreadsheet range colors are not using the adaptive palette",
+  );
+});
+
+testCase("multi-cell selection survives drag and secondary click", () => {
+  assert(
+    overlay.includes('window.addEventListener("pointermove", move, true)') &&
+      overlay.includes("event.preventDefault();\n      anchor.current = point;") &&
+      overlay.includes("activeTableFor(layout)"),
+    "drag selection is still intercepted by the editor or a stale table node",
+  );
+  assert(
+    overlay.includes("if (event.button !== 0) return;") &&
+      overlay.includes('document.addEventListener("contextmenu", preserveContextSelection, true)') &&
+      overlay.includes("rangeContains(selection.current, point)"),
+    "secondary click collapses the selected table range",
+  );
+});
+
+testCase("extension table edits and setting ownership are explicit", () => {
+  const commandTable = read("src/editor/command-table.ts");
+  const context = read("src/editor/table-context.ts");
+  const locks = read("src-tauri/src/plugin/setting_locks.rs");
+  const pane = read("src/ui/settings/panes/EditorPane.tsx");
+  assert(commandTable.includes("tableSetCells:"), "batch cell command is not wired");
+  assert(context.includes("export function setCurrentTableCells"), "batch transaction is missing");
+  assert(context.includes("tr.replaceWith(from, to, paragraph)"), "batch cells do not share one transaction");
+  assert(locks.includes("remember_setting_backup"), "previous setting is not recorded");
+  assert(locks.includes("set_setting_value"), "owned setting is not forced");
+  assert(pane.includes('settingLocks.has("editor.spreadsheet_tables")'), "owned setting is not disabled in UI");
+});
+
+testCase("table context actions carry plugin commands and a single undo step", () => {
+  const menu = read("src/ui/context-menu.ts");
+  const contextMenu = read("src/ui/ContextMenu.tsx");
+  assert(menu.includes("export const tableActionPrefix"), "table action ids are missing");
+  assert(menu.includes("tableActions.map"), "registered table actions are not rendered");
+  assert(contextMenu.includes("onTableAction(action.plugin, action.command, action.id)"), "table action command is not dispatched");
+  assert(tableContext.includes("if (tr.docChanged) view.dispatch(tr.scrollIntoView())"), "batch edit can create multiple undo steps");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

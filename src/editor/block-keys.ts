@@ -1,13 +1,13 @@
-/**
- * 块容器开头的三个退出动作。
- *
- * - 引用块最开头按空格：拆掉光标外的**全部**引用层，空格本身不再插入；
- * - 引用块最开头按退格：同样拆掉全部引用层，光标留在正文原来的位置；
- * - 空表格里任一空段落开头按退格：删掉整张表。
- *
- * 两件事都是 ProseMirror 的命令判据，不按主题或文档内容写特殊分支。键位挂在
- * `handleKeyDown`，因此在输入规则和 `baseKeymap` 之前决定是否消费这一下。
- */
+
+
+
+
+
+
+
+
+
+
 
 import type { Node as PMNode } from "@milkdown/kit/prose/model";
 import {
@@ -24,7 +24,7 @@ import { $prose } from "@milkdown/kit/utils";
 import { debugEvent } from "@/ui/debug-log";
 import { VIM_ALLOW_STRUCTURE_META } from "./plugin-vim-ops";
 
-/** 光标是否在引用框的一个合法退出点：绝对开头，或一条空正文行。 */
+
 export function atReferenceUseMostOpenHead(state: EditorState): boolean {
   const { selection } = state;
   if (!selection.empty) return false;
@@ -37,13 +37,13 @@ export function atReferenceUseMostOpenHead(state: EditorState): boolean {
   for (let layer = 1; layer <= $from.depth; layer += 1) {
     if ($from.node(layer).type.name !== "blockquote") continue;
     hasReferenceUse = true;
-    // 有文字时仍要求它是每一级的第一个孩子；空行在引用中任何位置都允许退出。
+
     if (!emptyLine && $from.index(layer - 1) !== 0) return false;
   }
   return hasReferenceUse;
 }
 
-/** 空列表项按 Enter：抬起一层；顶层项会回落成普通段落。 */
+
 export function exitEmptyListItem(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
@@ -57,13 +57,13 @@ export function exitEmptyListItem(
   return liftListItem($from.node(depth).type)(state, dispatch);
 }
 
-/**
- * 取消光标外全部引用层。
- *
- * `lift` 一次只抬一层。循环在同一个 `EditorState` 上依次 apply 捕获到的事务并
- * 交给 view；这样嵌套引用会全部退出，而列表等别的容器只在确实挡住引用时参与
- * `lift` 的合法性判断。
- */
+
+
+
+
+
+
+
 export function getClearAllReferenceUse(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,
@@ -181,7 +181,7 @@ export function quoteFromTypedPrefix(
   return true;
 }
 
-/** 单元格、行、段落等容器是否完全没有文字或原子内容。 */
+
 function nodeAsEmpty(node: PMNode): boolean {
   if (node.isText) return node.text?.trim() === "";
   if (node.isLeaf) return false;
@@ -192,7 +192,7 @@ function nodeAsEmpty(node: PMNode): boolean {
   return emptyValue;
 }
 
-/** 光标是否在空表格的一个空段落开头。 */
+
 export function atEmptyTableCellOpenHead(state: EditorState): boolean {
   const { selection } = state;
   if (!selection.empty || selection.$from.parentOffset !== 0) return false;
@@ -201,7 +201,7 @@ export function atEmptyTableCellOpenHead(state: EditorState): boolean {
   return table2 !== null && nodeAsEmpty(table2.node);
 }
 
-/** 在空表格开头退格时删掉整张表。 */
+
 export function deleteEmptyTable(
   state: EditorState,
   dispatch?: (tr: Transaction) => void,

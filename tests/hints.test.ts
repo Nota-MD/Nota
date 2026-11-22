@@ -74,7 +74,7 @@ testCase("⚠️ 每一条都写清了触发条件（用户那条「提示要确
 
 testCase("类型只有那两种，默认值是布尔", () => {
   for (const item4 of noticeTable) {
-    assertValue(item4.type === "当场" || item4.type === "首次", `${item4.id} 的类型不认得：${item4.type}`);
+    assertValue(item4.type === "immediate" || item4.type === "first", `${item4.id} 的类型不认得：${item4.type}`);
     equal(typeof item4.default, "boolean", `${item4.id} 的默认值`);
   }
 });
@@ -89,8 +89,8 @@ testCase("每条的文案都取得到，而且非空（⚠️ 是函数，不是
 
 group("二、`该显示吗` 那三条规则");
 
-const WhenScene = noticeTable.find((item4) => item4.type === "当场");
-const firstCount = noticeTable.find((item4) => item4.type === "首次");
+const WhenScene = noticeTable.find((item4) => item4.type === "immediate");
+const firstCount = noticeTable.find((item4) => item4.type === "first");
 
 testCase("上下文不成立 → 不显示（哪怕没静音、没看过）", () => {
   for (const item4 of noticeTable) {

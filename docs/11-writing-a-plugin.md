@@ -188,7 +188,7 @@ local 表   = require("kit")            -- <插件目录>/kit/init.lua 也行
 
 ⚠️ **当前空 `resources` 是有意的**，不是漏配；只有重新决定随包时才需要处理目录映射。
 
-跨仓库契约在插件仓库的 `compatibility.json`：宿主 `api = "v2.3"`，官方插件的版本与各自
+跨仓库契约在插件仓库的 `compatibility.json`：宿主 `api = "v2.4"`，官方插件的版本与各自
 `plugin.toml` 必须一致；`Nota-plugins/tools/check-compatibility.sh` 和两仓 CI 都会检查。
 主仓库验证工作流会检出同级插件仓库并跑它的 `tools/check.sh`。
 
@@ -816,7 +816,7 @@ SHA-256，再走原有的 `.nota-plugin` 验签、签名者连续性检查和原
 | 名字 | 是什么 |
 |---|---|
 | `nota.version` | 宿主版本字符串（`env!("CARGO_PKG_VERSION")`，当前 `"0.1.0"`） |
-| `nota.api_version` | API version string, currently `"v2.3"` |
+| `nota.api_version` | API version string, currently `"v2.4"` |
 | `nota.i18n` | `{app_lang, lang, ok, text(s)}`——插件自己的**文案表**（2026-09-25）。⭐ **不要能力**：路径由宿主用插件自己的目录拼，插件只交**键**。键就是"作者写下的那句原文"，取不到返回 `nil`（标准写法 `nota.i18n.text(s) or s`）。契约是 §2.4，代码在 `lua/api/i18n.rs` |
 | `nota.plugin_id` | 这个插件在清单里声明的 id（**原样**，如 `nota.git`——没归一化） |
 | `nota.log.info/warn/error(msg)` | 往宿主 stderr 打一行（⚠️ **默认不打**，要 `NOTA_DEBUG=1`，见 §6.3），前缀 `[nota:<插件 id>]` + 级别 |
@@ -1003,10 +1003,10 @@ Ctrl+Z 才发现"是最坏的一种错。
 ### 4.1 Format and compatibility
 
 ```toml
-api = "v2.3"
+api = "v2.4"
 ```
 
-The host currently supports `v2.3`. A plugin is accepted only when:
+The host currently supports `v2.4`. A plugin is accepted only when:
 
 1. its major version equals the host major version;
 2. its minor version is not newer than the host minor version.
@@ -1043,11 +1043,11 @@ API says "Please contact the developer."
 
 | 名字 | 在哪 | 是什么 |
 |---|---|---|
-| `api` 栏 / `nota.api_version` | 清单里 / Lua 侧 | **API 版本**，当前 `"v2.3"` |
+| `api` 栏 / `nota.api_version` | 清单里 / Lua 侧 | **API 版本**，当前 `"v2.4"` |
 | `nota.version` | Lua 侧 | **宿主应用的版本**（`0.1.0`，来自 `Cargo.toml` 的 `package.version`） |
 | `version` 栏 / `PluginInfo.version` | 清单里 / 前端 | **插件自己的版本**。`plugin.toml:12` 的注释明确说了：**不代表 ABI** |
 
-⚠️ 所以一个插件写 `version = "9.9.9"` 而 `api = "v2.3"` 是**完全合法**的。
+⚠️ 所以一个插件写 `version = "9.9.9"` 而 `api = "v2.4"` 是**完全合法**的。
 
 ---
 
@@ -1322,6 +1322,36 @@ end
 关闭开关或退出开发者模式后停止文件监听。
 
 ---
+
+## 6A. Table capabilities (v2.4)
+
+Declare only the table capabilities the extension uses:
+
+```toml
+capabilities = [
+  "table.read",
+  "table.render",
+  "table.write",
+  "table.context_action",
+]
+```
+
+`nota.table` appears only when at least one table capability is declared.
+Individual members follow their own capability. Register a snapshot callback
+once in `on_load`; it runs whenever the active GFM table or selection changes.
+
+Extensions that require spreadsheet controls also declare:
+
+```toml
+capabilities = ["spreadsheet.require"]
+
+[[setting_lock]]
+setting = "editor.spreadsheet_tables"
+value = true
+```
+
+The capability and lock must appear together. The host records the user's
+previous value and restores it after disable or uninstall.
 
 ## 7. 插件之间怎么协作（现状）
 

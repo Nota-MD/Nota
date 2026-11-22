@@ -445,7 +445,7 @@ testCase("⚠️ 已知差别：`$ \\LaTeX $` 存盘之后里外两颗空格没�
 
 group("六、挂法（读 `assemble.ts` 量登记顺序）");
 
-testCase("`assemble.ts` 里：`.use(math…)` → `.use(标美元数)` → `.use(收严美元)`", () => {
+testCase("`assemble.ts` 里：`.use(math)` → `.use(markDollarDollarNumber)` → `.use(receiveStrictDollarDollar)`", () => {
   // ⚠️ 用 `process.cwd()` 而不是 `import.meta.url`：这份测试**先被 esbuild 打成
   // 一个 `.mjs` 再跑**，那一步之后 `import.meta.url` 指的是 `/tmp` 里那个文件
   // （`lang-icons.test.ts` 的文件头记着同一件事）。跑法里写明了 `cd <仓库>`。
@@ -453,7 +453,7 @@ testCase("`assemble.ts` 里：`.use(math…)` → `.use(标美元数)` → `.use
   //    链搬去了那边（`docs/07` 第 89 项）。顺序的判据在哪儿都成立，但"哪一行
   //    在哪一行前面"只有真挂着那条链的文件答得了。
   const source3 = readFileSync(resolve(process.cwd(), "src/editor/assemble.ts"), "utf8");
-  const numberLearn = source3.indexOf(".use(math.filter(");
+  const numberLearn = source3.indexOf(".use(math)");
   const mark2 = source3.indexOf(".use(markDollarDollarNumber)");
   const receive = source3.indexOf(".use(receiveStrictDollarDollar)");
   if (numberLearn < 0 || mark2 < 0 || receive < 0) {

@@ -128,7 +128,7 @@ function shouldRemove(
 ): void {
   const result3: RemoveFixedBoundary | null = tryRemoveFixedBoundarySymbol(text4, from, to, before, after);
   if (result3 === null) throw new Error(`判成了"没带标记"（会去包一层），但应当摘：${text4}`);
-  if (result3.result2 === "不动") throw new Error(`判成了"不动"，但应当摘：${text4}`);
+  if (result3.result2 === "stationary") throw new Error(`判成了"不动"，但应当摘：${text4}`);
   equal(setChangeAction2(text4, result3.changeAction), expectedText, `${text4} 摘完的文本`);
   equalDark(result3.selection, expectedSelection, `${text4} 摘完的选区`);
 }
@@ -137,7 +137,7 @@ function shouldRemove(
 function shouldNotAction(text4: string, from: number, to: number, before: string, after: string): void {
   const result3 = tryRemoveFixedBoundarySymbol(text4, from, to, before, after);
   if (result3 === null) throw new Error(`判成了"没带标记"，但应当"不动"：${text4}`);
-  equal(result3.result2, "不动", `${text4} 的判定`);
+  equal(result3.result2, "stationary", `${text4} 的判定`);
 }
 
 /** 断言"没带这一对定界符"（调用方会去包一层）。 */
@@ -265,7 +265,7 @@ testCase("⚠️ 拨两下回到原样（摘一次、再按原样包一次）", 
   const from = 5;
   const to = 7; // `很重`
   const result3 = tryRemoveFixedBoundarySymbol(text4, from, to, "**", "**");
-  if (result3 === null || result3.result2 === "不动") throw new Error("第一次应当判成摘");
+  if (result3 === null || result3.result2 === "stationary") throw new Error("第一次应当判成摘");
   const removeAfter = setChangeAction2(text4, result3.changeAction);
   equal(removeAfter, "这个词很重要", "第一次摘完的文本");
   // ⚠️ 第二次要用**第一次返回的选区**（不是原来那个）：这正是"选区也得跟着

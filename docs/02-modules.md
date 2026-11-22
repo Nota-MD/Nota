@@ -73,7 +73,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `theme_import.rs` | **主题导入分派**：官方 Nota 包识别 `ui/`、`ui-styles/`、`document/`、`themes/` 布局；目录、单个 CSS 与平铺 Typora ZIP 交给原生导入器。两类入口共用路径穿越、符号链接、文件数和体积限制，并原子替换已有集合 |
 | `theme_import/typora.rs` | **Typora 原生导入**（2026-11-01）：源 CSS、`@import`、字体、图片全部按原字节复制；只额外写 `.nota-themes.json` 登记每个根 CSS 的入口。运行期加载时才展开 import 和内联资源，磁盘上的第三方主题不被改写。支持目录、CSS 与包装目录 ZIP；`.user.css` 是旁路覆盖，不作为独立主题列出；缺失的可选 `@import` 按浏览器语义忽略 |
 | `pandoc.rs` | **借系统里那个 pandoc 导出由自定义导出器声明的格式**（当前词汇表十种：PDF / Word / RTF / EPUB / LaTeX / ODT / OPML / MediaWiki / reStructuredText / Textile）。⚠️ **不自带、不下载、不替用户装**，只探测；⚠️ **不存路径**，每次现探；⚠️ 正文走 **stdin**、`cwd` 与 `--resource-path` 都指向文档目录；自定义导出器的参数与样式文件由前端合并后传入，后端仍统一走 `shlex` 分词 |
-| `pandoc_format.rs` | 上面十种格式的**词汇表**：`Format` 及其 `from_id` / `to` / `id` / `extension` / `名字` · `ALL` · `FormatInfo` · `格式表()`。⚠️ **全仓只有这一份**——菜单 id、`pandoc --to=` 的名字、存盘后缀三处对不上就是「对话框说存 `.tex`、文件却是 `.latex`」 |
+| `pandoc_format.rs` | Ten-format vocabulary: `Format`, `from_id`, `to`, `id`, `extension`, `display_name`, `ALL`, `FormatInfo`, and `format_table()`. |
 | `devserver.rs` | **开发服务器：宿主替插件起一个本机进程，再把地址交给界面**（2026-09-25 从 `slidev.rs` 提出来，判据是**归属**不是行数）：挑空闲端口 · 写入口文件 · 起进程（自成进程组）· 探端口通没通 · 杀整棵进程树 · 日志环（最后 30 行）· `填_frame`（把地址填进面板的 `frame` 块）。⚠️ **一条命令都不注册**——发起那条路是插件的命令（`nota_plugin_call`）。⚠️ **能力放行的是清单里 `[devserver]` 声明的那一条命令**，不是"任意命令"（与 `process.git` 同一条判据）。⚠️ **一个插件最多一场会话**（`HashMap` 的键是插件 id）。⚠️ `start` **阻塞**（默认 180 秒等端口），这和它的前身**故意相反**：前身被同步命令调着，在那儿等就是冻界面。⚠️ 退出时 `RunEvent::Exit` → `stop_all()` 兜底（不收就是漏：子进程不在 Tauri 管理范围内，主进程一退它们接着跑）。⚠️ 2026-09-26 破 1000 行，**探测那一半拆去了 `devserver/probe.rs`**（「问」与「跑」是两件事）|
 | `devserver/probe.rs` | **探测那一半**（2026-09-26 从 `devserver.rs` 拆出）：跑一次 `<命令> --version` 看装没装 · 项目根（及各层父目录）里有没有 `project_marker` · `need` 那条"这份文档还缺什么"（§下面「探测缓存」一节、`docs/13` §13.3b）。⚠️ **纯函数，不留状态、不起服务器**，和那一半的会话状态/`Drop`/日志环分得干干净净 |
 | `proc.rs`（补充） | ⚠️ 2026-09-25 之前 `proc.rs` 是"从 `slidev.rs` 抽出来"的，现在那句话要改成"**从 `devserver.rs` 的前身抽出来**"——`slidev.rs` 已经不在了，但这一层的归属没变 |
@@ -83,7 +83,7 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `plugin/updater.rs` | **插件仓库更新**：从已装插件清单收集 `[update] manifest`，同地址去重读取多插件 `latest.json`，比较版本，校验 HTTPS、SHA-256 与原签名者连续性；0.8 起与主更新共用下载替换规则。安装仍复用 `PluginHost::装` |
 | `plugin/install.rs` | 装卸一条龙：`装` / `装_检查完再搬` / `装_记账并加载` / `卸` / `信` / `信任表`；纯函数 `把包写进` / `搬进落点`（先把旧的挪开让位、失败要回滚）|
 | `plugin/package.rs` | `.nota-plugin` 包（就是个 zip）：解包、算摘要、验 `[signature]`、给三种结论。**不打包也不签名**（作者侧在 `tools/pack-plugin.py` 里）；**只有「签名验不过」是硬拒**，没签名的照装 |
-| `plugin/trust.rs` | **信任的签名公钥表**（TOFU，2026-09-29 从 `package.rs` 拆出）：`信任的钥匙` / `信任库`（`有没有` / `列` / `记下` / `记下不落盘`）/ `今天()` / `年月日`。⚠️ **签名的"是谁"全由这张表回答**，包里自带公钥——见下面单独一节 |
+| `plugin/trust.rs` | TOFU trust store: `TrustedKey`, `TrustStore`, `contains`, `entries`, `insert`, `insert_memory`, `today`, and `civil_date`. |
 | `plugin/installed.rs` | 两个记账文件：`plugins.toml`（启用与否）与 `trusted-keys.toml`（TOFU 信任表）|
 | `plugin/export.rs` | **把一个已装插件打回成 `.nota-plugin` 包**（2026-09-27，323 行）：`PluginHost::导出` / `导出默认名`。⚠️ 与 `package.rs` 那句"包是只读的"**不冲突**——那条管**造包**（作者侧、要私钥），这条管**把磁盘上已有的那份原样收拢**、一个字节都不签。⚠️ 包里**没有**插件设置与插件数据（它们本来就不在插件目录里，见 `paths.rs`）|
 | `plugin/types.rs` | **插件对外声明的形状**（2026-09-29 从 `mod.rs` 拆出）：`PluginInfo` / `信任记录` / `PluginPanel` / `PluginMenuItem` / `PluginPrompt` / `ReviewKind` / `ReviewAction` / `ReviewState`。⚠️ `REG_*` / `EVENT_*` 留在 `mod.rs` |
@@ -895,8 +895,8 @@ pub fn 要开新窗口(args: impl IntoIterator<Item = OsString>) -> bool {
 
 | 变体 | Display 模板 | 什么时候出 |
 |---|---|---|
-| `Read { path, source }` | `读文件失败 {path}：{人话(source)}` | 读文件/目录失败 |
-| `Write { path, source }` | `写文件失败 {path}：{人话(source)}` | 写文件、建目录、删文件失败 |
+| `Read { path, source }` | `Could not read {path}: {io_message(source)}` | Read failures |
+| `Write { path, source }` | `Could not write {path}: {io_message(source)}` | Write or directory failures |
 | `NonUtf8Path(PathBuf)` | `路径不是合法的 UTF-8：{0}` | `paths::path_to_string` 转换失败 |
 | `NoHomeDir` | `找不到用户目录（$HOME / $XDG_CONFIG_HOME 都没探到）` | `dirs::*_dir()` 返回 `None` |
 | `Config(String)` | `配置读写失败：{0}` | 设置解析/序列化失败 |
@@ -906,7 +906,7 @@ pub fn 要开新窗口(args: impl IntoIterator<Item = OsString>) -> bool {
 | `NoActiveDocument` | `没有活动文档` | 需要活动文档但没有 |
 | `Other(String)` | `{0}` | 兜底，直接当消息用 |
 
-### `fn 人话(e: &std::io::Error) -> String`（私有）
+### `fn io_message(error: &std::io::Error) -> String` (private)
 
 `Read` / `Write` 里那个 `{source}` **不直接显示**：先过这一道，按 `io::ErrorKind`
 翻成中文——`NotFound` → 「路径不存在」、`PermissionDenied` → 「没有权限」、
@@ -1917,7 +1917,7 @@ pub struct TreeOptions {
 | `pub async fn nota_plugin_install(app: tauri::AppHandle, path: String) -> Result<String>` | 装一个包，返回它的 id。⚠️ `path` 由**前端**用应用内文件选择器问出来，宿主不自己弹框——那是界面的事，而且宿主弹框在无头测试里没法验。⚠️ 异步：装完**当场加载**（跑 `on_load`）。⚠️ 只收 `path` **一个**参数：`trust` 是**装完之后**的另一个动作（`nota_plugin_trust`）|
 | `pub async fn nota_plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<()>` | 卸掉：磁盘删、内存拿掉、账本忘掉。⚠️ 异步，而且是**不可逆**的（目录真的没了），前端必须先问一句 |
 | `pub fn nota_plugin_trust(state: State<'_, AppState>, id: String) -> Result<()>` | 信任这个插件的签名者（TOFU ＋ 显式信任），透传 `PluginHost::信` |
-| `pub fn nota_plugin_trust_list(state: State<'_, AppState>) -> Result<Vec<信任记录>>` | 信任库里现在有哪几把钥匙。界面「已信任的签名者」那一块用它 |
+| `pub fn nota_plugin_trust_list(state: State<'_, AppState>) -> Result<Vec<TrustRecord>>` | Returns the trusted signers shown in Settings. |
 | `pub fn nota_plugin_menus(state: State<'_, AppState>) -> Result<Vec<PluginMenuItem>>` | `host.menus()`。📌 **2026-09-24 起有调用者了**（backlog 第 42 项）：条目挂在原生菜单栏的「插件」那一栏下 |
 
 ### `nota_plugin_call` 的四步
@@ -2156,7 +2156,7 @@ WebView，并在 60ms 后再确认一次；只调 Tauri 的顶层 `set_focus()` 
 | `Format::id` / `extension` / `名字` | 菜单 id / 存盘后缀 / 中文名（面板与对话框显示用） |
 | `pub(crate) const ALL: [Format; 10]` | 十种，**顺序就是探测报告与新增模板的顺序** |
 | `pub struct FormatInfo` | 交给前端的形状：`{ id, name, extension }`（拼保存对话框的过滤器与默认名） |
-| `pub(crate) fn 格式表() -> Vec<FormatInfo>` | 上面那张表的构造 |
+| `pub(crate) fn format_table() -> Vec<FormatInfo>` | Builds the format list. |
 
 ### ⚠️ 为什么单开一个文件：三处名字必须同源
 
@@ -3071,9 +3071,9 @@ pub struct PluginPrompt {
 
 插件清单（`plugin.toml`）的解析与校验。文件头带着一份完整的清单样例与各栏的含义。
 
-### `pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 3);`
+### `pub const NOTA_PLUGIN_API_VERSION: PluginApiVersion = PluginApiVersion::new(2, 4);`
 
-The current host API is `v2.3`. API versions use `vMAJOR.MINOR`. Minor releases
+The current host API is `v2.4`. API versions use `vMAJOR.MINOR`. Minor releases
 are backward compatible; major releases are not. A plugin is accepted only when
 its major matches the host and its minor is not newer than the host minor.
 
@@ -9777,3 +9777,16 @@ handler 一直没接，`key-conflicts.ts` 里那份 `故意不摘` 名单就是�
 | 编辑器装配与去抖/整篇替换语义 | `docs/05-editor-bridge.md` |
 | 已知缺陷与 backlog（编号） | `docs/07-feature-status.md` |
 | 能力表与怎么写插件 | `docs/11-writing-a-plugin.md`、`docs/13-lua-api.md` |
+
+## Table bridge (API v2.4)
+
+`src-tauri/src/table_bridge.rs` owns the active GFM table snapshot, temporary
+display map, context actions and write intents. `commands/table.rs` exposes the
+snapshot and action registry to the frontend. `lua/api/table.rs` exposes the
+same state to extensions through `nota.table`.
+
+The bridge never edits Markdown. Snapshot sync comes from
+`SpreadsheetTableOverlay.tsx`; temporary values are applied by
+`useTableBridge.ts`; write intents become one `tableSetCells` editor
+transaction. `plugin/setting_locks.rs` owns settings declared through
+`[[setting_lock]]`.

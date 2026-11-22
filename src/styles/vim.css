@@ -21,9 +21,9 @@
 }
 
 .nota-vim-status {
-  /* `.editor-pane` 自己就是滚动容器：绝对定位的徽标会跟着正文滚走，而且
-     `z-index: 8` 会被编辑区里的浮层盖住。实际坐标由 `VimStatusOverlay`
-     按编辑区可视矩形计算：左下角、避开标签栏和状态栏。 */
+
+
+
   position: fixed;
   z-index: 190;
   min-width: 72px;

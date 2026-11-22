@@ -1,17 +1,7 @@
-//! `http.rs` 的单元测试。
-//!
-//! ⚠️ 2026-10-04 从 `http.rs` 里搬出来的：那一份加了流式之后要过 800 行
-//!（`docs/09` §4 的软线），而测试本来就是最好搬的一块。
-
 use super::*;
 
-/// ⚠️ **这条是这一整个模块里最该在的一条。**
-///
-/// 明文 http 会把插件的 API key 和文档内容一起发在裸链路上。
-/// 唯一的例外是本机回环——那是给 Ollama / LM Studio 这类
-/// 跑在自己机器上的大模型服务留的口子，流量根本不出这台机器。
 #[test]
-fn 只放行_https_和回环的_http() {
+fn zhi_fang_xing_https_he_hui_huan_de_http() {
     for ok in [
         "https://api.anthropic.com/v1/messages",
         "https://example.com",
@@ -20,132 +10,136 @@ fn 只放行_https_和回环的_http() {
         "http://[::1]:8080/x",
         "http://LOCALHOST:1/x",
     ] {
-        assert!(检查地址(ok).is_ok(), "`{ok}` 该放行，却被挡了");
+        assert!(
+            check_address(ok).is_ok(),
+            "`{ok}` \u{8be5}\u{653e}\u{884c}\u{ff0c}\u{5374}\u{88ab}\u{6321}\u{4e86}"
+        );
     }
 
     for bad in [
-        "http://api.anthropic.com/v1/messages", // 明文发密钥
-        "http://192.168.1.10:8080/",            // 局域网，不是回环
-        "http://0.0.0.0:8080/",                 // 0.0.0.0 不是回环
+        "http://api.anthropic.com/v1/messages",
+        "http://192.168.1.10:8080/",
+        "http://0.0.0.0:8080/",
         "ftp://example.com/x",
         "file:///etc/passwd",
-        "api.anthropic.com", // 没协议头
+        "api.anthropic.com",
     ] {
-        assert!(检查地址(bad).is_err(), "`{bad}` 该被挡，却放行了");
+        assert!(
+            check_address(bad).is_err(),
+            "`{bad}` \u{8be5}\u{88ab}\u{6321}\u{ff0c}\u{5374}\u{653e}\u{884c}\u{4e86}"
+        );
     }
 }
 
 #[test]
-fn 取主机要能拆出端口和_userinfo() {
-    assert_eq!(取主机("example.com/a/b?c#d"), "example.com");
-    assert_eq!(取主机("example.com:8443/a"), "example.com");
-    assert_eq!(取主机("user:pw@example.com/a"), "example.com");
-    assert_eq!(取主机("[::1]:8080/x"), "::1");
-    assert_eq!(取主机("Example.COM"), "example.com");
-    // ⚠️ 这条是安全用例：`127.0.0.1@evil.com` 的主机是 `evil.com`，
-    // 不是 `127.0.0.1`。判反了就是一个"看着像回环、实际指向外网"的口子。
-    assert_eq!(取主机("127.0.0.1@evil.com/x"), "evil.com");
+fn qu_zhu_ji_yao_neng_chai_chu_duan_kou_he_userinfo() {
+    assert_eq!(qu_zhu_ji("example.com/a/b?c#d"), "example.com");
+    assert_eq!(qu_zhu_ji("example.com:8443/a"), "example.com");
+    assert_eq!(qu_zhu_ji("user:pw@example.com/a"), "example.com");
+    assert_eq!(qu_zhu_ji("[::1]:8080/x"), "::1");
+    assert_eq!(qu_zhu_ji("Example.COM"), "example.com");
+
+    assert_eq!(qu_zhu_ji("127.0.0.1@evil.com/x"), "evil.com");
 }
 
 #[test]
-fn 主机名骗不过回环判定() {
-    // `127.0.0.1.evil.com` 与 `localhost.evil.com` 都不是本机。
+fn zhu_ji_ming_pian_bu_guo_hui_huan_pan_ding() {
     for host in ["127.0.0.1.evil.com", "localhost.evil.com", "notlocalhost"] {
-        assert!(!是回环(host), "`{host}` 被当成了回环");
+        assert!(
+            !shi_hui_huan(host),
+            "`{host}` \u{88ab}\u{5f53}\u{6210}\u{4e86}\u{56de}\u{73af}"
+        );
     }
-    assert!(是回环("127.0.0.1"));
-    assert!(是回环("localhost"));
-    assert!(是回环("::1"));
+    assert!(shi_hui_huan("127.0.0.1"));
+    assert!(shi_hui_huan("localhost"));
+    assert!(shi_hui_huan("::1"));
 }
 
 #[test]
-fn 方法只有那六个() {
-    assert!(允许的方法.contains(&"GET"));
-    assert!(允许的方法.contains(&"POST"));
-    assert!(!允许的方法.contains(&"CONNECT"));
-    assert!(!允许的方法.contains(&"TRACE"));
+fn fang_fa_zhi_you_na_liu_ge() {
+    assert!(YUN_XU_DE_FANG_FA.contains(&"GET"));
+    assert!(YUN_XU_DE_FANG_FA.contains(&"POST"));
+    assert!(!YUN_XU_DE_FANG_FA.contains(&"CONNECT"));
+    assert!(!YUN_XU_DE_FANG_FA.contains(&"TRACE"));
 }
 
-/// 超时要截到上限，不是报错——插件写一个很大的数，意思是"可能很慢"。
 #[test]
-fn 超时截到上限() {
+fn chao_shi_jie_dao_shang_xian() {
     let lua = Lua::new();
     let t = lua.create_table().unwrap();
-    assert_eq!(超时(&t).unwrap(), 默认超时);
+    assert_eq!(chao_shi(&t).unwrap(), DEFAULT_CHAO_SHI);
 
     t.set("timeout_ms", 5_000u64).unwrap();
-    assert_eq!(超时(&t).unwrap(), Duration::from_secs(5));
+    assert_eq!(chao_shi(&t).unwrap(), Duration::from_secs(5));
 
     t.set("timeout_ms", 600_000u64).unwrap();
-    assert_eq!(超时(&t).unwrap(), 最长超时, "超长的超时该被截到上限");
+    assert_eq!(
+        chao_shi(&t).unwrap(),
+        ZUI_ZHANG_CHAO_SHI,
+        "\u{8d85}\u{957f}\u{7684}\u{8d85}\u{65f6}\u{8be5}\u{88ab}\u{622a}\u{5230}\u{4e0a}\u{9650}"
+    );
 
     t.set("timeout_ms", 0u64).unwrap();
-    assert!(超时(&t).is_err(), "0 是没意义的超时，该报错");
+    assert!(chao_shi(&t).is_err(), "0 \u{662f}\u{6ca1}\u{610f}\u{4e49}\u{7684}\u{8d85}\u{65f6}\u{ff0c}\u{8be5}\u{62a5}\u{9519}");
 }
 
-/// `get("url")` 与 `get{url=…}` 两种写法都该归一化。
 #[test]
-fn 两种写法都归一化() {
+fn liang_zhong_write_fa_dou_gui_yi_hua() {
     let lua = Lua::new();
 
-    let t = 归一化(&lua, Value::String(lua.create_string("https://x/").unwrap()), "GET").unwrap();
+    let t = gui_yi_hua(
+        &lua,
+        Value::String(lua.create_string("https://x/").unwrap()),
+        "GET",
+    )
+    .unwrap();
     assert_eq!(t.get::<String>("url").unwrap(), "https://x/");
     assert_eq!(t.get::<String>("method").unwrap(), "GET");
 
-    // ⚠️ 传 `spec.clone()` 而不是 `spec`：归一化是**就地改**那张表，
-    // 所以放进去的那一份和外面这一份是同一个东西（这也正是它该有的行为）。
     let spec = lua.create_table().unwrap();
     spec.set("url", "https://y/").unwrap();
-    归一化(&lua, Value::Table(spec.clone()), "POST").unwrap();
+    gui_yi_hua(&lua, Value::Table(spec.clone()), "POST").unwrap();
     assert_eq!(spec.get::<String>("method").unwrap(), "POST");
 
-    // 插件自己写的 method 不被覆盖。
     let spec2 = lua.create_table().unwrap();
     spec2.set("url", "https://z/").unwrap();
     spec2.set("method", "PUT").unwrap();
-    let t = 归一化(&lua, Value::Table(spec2), "POST").unwrap();
+    let t = gui_yi_hua(&lua, Value::Table(spec2), "POST").unwrap();
     assert_eq!(t.get::<String>("method").unwrap(), "PUT");
 
-    // 认不出的类型要报错，别静默当 GET 发出去。
-    assert!(归一化(&lua, Value::Integer(1), "GET").is_err());
+    assert!(gui_yi_hua(&lua, Value::Integer(1), "GET").is_err());
 }
 
-/// 插件自己写了 content-type 就得认出来——不然表体那一下会补出
-/// **第二个** content-type 头（`Request::builder().header()` 是追加）。
 #[test]
-fn 认得插件自己写的_content_type() {
+fn ren_de_plugin_zi_ji_write_de_content_type() {
     let lua = Lua::new();
 
-    let 空 = lua.create_table().unwrap();
-    assert!(!写了_content_type(&空));
+    let kong = lua.create_table().unwrap();
+    assert!(!write_le_content_type(&kong));
 
-    // 只有别的头时不算。
-    let 别的 = lua.create_table().unwrap();
-    别的.set("authorization", "Bearer sk-x").unwrap();
-    assert!(!写了_content_type(&别的));
+    let bie_de = lua.create_table().unwrap();
+    bie_de.set("authorization", "Bearer sk-x").unwrap();
+    assert!(!write_le_content_type(&bie_de));
 
-    // 大小写不同也是同一个头（HTTP 头名不区分大小写）。
-    let 大写 = lua.create_table().unwrap();
-    大写.set("Content-Type", "application/json; charset=utf-8").unwrap();
-    assert!(写了_content_type(&大写));
+    let da_write = lua.create_table().unwrap();
+    da_write
+        .set("Content-Type", "application/json; charset=utf-8")
+        .unwrap();
+    assert!(write_le_content_type(&da_write));
 
-    let 小写 = lua.create_table().unwrap();
-    小写.set("content-type", "text/plain").unwrap();
-    assert!(写了_content_type(&小写));
+    let xiao_write = lua.create_table().unwrap();
+    xiao_write.set("content-type", "text/plain").unwrap();
+    assert!(write_le_content_type(&xiao_write));
 }
 
-/// 响应是 JSON 就顺手拆好——AI 插件读 `choices[1].message.content` 靠它。
-///
-/// ⚠️ 下标从 **1** 起那条要在这里钉住：写成 0 起的话数组第一个元素会
-/// 静默丢掉（`#t` 也对不上），而插件那边看到的是"模型没给出回答"。
 #[test]
-fn 响应是_json就拆好放进去() {
+fn xiang_ying_shi_json_jiu_chai_ok_fang_jin_qu() {
     let lua = Lua::new();
-    let t = 收口(
+    let t = receive_kou(
         &lua,
-        Ok(落定::回包(回包 {
+        Ok(RequestOutcome::Response(HttpResponse {
             code: 200,
-            text: r#"{"choices":[{"message":{"content":"你好"}},{"message":{"content":"第二"}}],"ok":true}"#
+            text: "{\"choices\":[{\"message\":{\"content\":\"\u{4f60}\u{597d}\"}},{\"message\":{\"content\":\"\u{7b2c}\u{4e8c}\"}}],\"ok\":true}"
                 .to_owned(),
         })),
     )
@@ -155,7 +149,7 @@ fn 响应是_json就拆好放进去() {
     let json = t.get::<Table>("json").unwrap();
     assert_eq!(json.get::<bool>("ok").unwrap(), true);
     let choices = json.get::<Table>("choices").unwrap();
-    assert_eq!(choices.raw_len(), 2, "两个元素都该在，一个都不能少");
+    assert_eq!(choices.raw_len(), 2, "\u{4e24}\u{4e2a}\u{5143}\u{7d20}\u{90fd}\u{8be5}\u{5728}\u{ff0c}\u{4e00}\u{4e2a}\u{90fd}\u{4e0d}\u{80fd}\u{5c11}");
     assert_eq!(
         choices
             .get::<Table>(1)
@@ -164,18 +158,16 @@ fn 响应是_json就拆好放进去() {
             .unwrap()
             .get::<String>("content")
             .unwrap(),
-        "你好"
+        "\u{4f60}\u{597d}"
     );
 }
 
-/// 不是 JSON（HTML 错误页、空体）时**没有 `json` 这个键**，`text` 照旧。
-/// 这条是"别把解析失败当错误"那条注释的落点。
 #[test]
-fn 不是_json就没有_json这个键() {
+fn bu_shi_json_jiu_mei_you_json_zhe_ge_jian() {
     let lua = Lua::new();
-    let t = 收口(
+    let t = receive_kou(
         &lua,
-        Ok(落定::回包(回包 {
+        Ok(RequestOutcome::Response(HttpResponse {
             code: 502,
             text: "<html>502 Bad Gateway</html>".to_owned(),
         })),
@@ -185,356 +177,353 @@ fn 不是_json就没有_json这个键() {
     assert_eq!(t.get::<u16>("code").unwrap(), 502);
     assert!(
         matches!(t.get::<Value>("json").unwrap(), Value::Nil),
-        "HTML 不该被当成 JSON 解析出什么来"
+        "HTML \u{4e0d}\u{8be5}\u{88ab}\u{5f53}\u{6210} JSON \u{89e3}\u{6790}\u{51fa}\u{4ec0}\u{4e48}\u{6765}"
     );
-    assert_eq!(t.get::<String>("text").unwrap(), "<html>502 Bad Gateway</html>");
+    assert_eq!(
+        t.get::<String>("text").unwrap(),
+        "<html>502 Bad Gateway</html>"
+    );
 }
 
-/// ✅ **第 60 项那条根因的落点**（`docs/07`）：环境类失败是**一个值**，
-/// 不是一次抛出。
-///
-/// ⚠️ 这条用例真正钉住的是"**别抛**"：写成 `Err(...)` 的话插件那边又得
-/// 自己 `pcall` ＋ 掐栈，而掐漏一次就是"断网时整块面板糊满栈信息"
-/// （BUG-20 见过的样子）。
 #[test]
-fn 环境类失败是结果表不抛错() {
+fn huan_jing_lei_shi_bai_shi_result_table_bu_pao_cuo() {
     let lua = Lua::new();
-    let t = 收口(&lua, Ok(落定::环境失败("请求失败：连接被拒".to_owned())))
-        .expect("环境类失败**不许**变成 Lua 错误");
+    let t = receive_kou(&lua, Ok(RequestOutcome::EnvironmentFailure("\u{8bf7}\u{6c42}\u{5931}\u{8d25}\u{ff1a}\u{8fde}\u{63a5}\u{88ab}\u{62d2}".to_owned())))
+        .expect("\u{73af}\u{5883}\u{7c7b}\u{5931}\u{8d25}**\u{4e0d}\u{8bb8}**\u{53d8}\u{6210} Lua \u{9519}\u{8bef}");
 
     assert_eq!(t.get::<bool>("ok").unwrap(), false);
-    assert_eq!(t.get::<String>("error").unwrap(), "请求失败：连接被拒");
-    // ⚠️ 失败那一侧**不给 `code`**：没有回应，哪来的状态码。
-    // 给了的话插件会把 `nil` 当成"未知状态码"去判断，越判越乱。
+    assert_eq!(
+        t.get::<String>("error").unwrap(),
+        "\u{8bf7}\u{6c42}\u{5931}\u{8d25}\u{ff1a}\u{8fde}\u{63a5}\u{88ab}\u{62d2}"
+    );
+
     assert!(matches!(t.get::<Value>("code").unwrap(), Value::Nil));
     assert!(matches!(t.get::<Value>("text").unwrap(), Value::Nil));
 }
 
-/// 参数写错**照旧抛**——那两种错不该混成一种（`落定` 那张表）。
 #[test]
-fn 参数写错照旧抛() {
+fn args_write_cuo_zhao_jiu_pao() {
     let lua = Lua::new();
-    let e = 收口(&lua, Err(NotaError::other("不支持 `TRACE` 方法")));
-    assert!(e.is_err(), "作者写错了程序，栈信息要留给作者");
+    let e = receive_kou(
+        &lua,
+        Err(NotaError::other(
+            "\u{4e0d}\u{652f}\u{6301} `TRACE` \u{65b9}\u{6cd5}",
+        )),
+    );
+    assert!(e.is_err(), "\u{4f5c}\u{8005}\u{5199}\u{9519}\u{4e86}\u{7a0b}\u{5e8f}\u{ff0c}\u{6808}\u{4fe1}\u{606f}\u{8981}\u{7559}\u{7ed9}\u{4f5c}\u{8005}");
 }
 
-/// 成功那一侧**必须**带 `ok = true`：插件靠它分流，缺席的话
-/// `if not r.ok` 会把 200 也当成失败。
 #[test]
-fn 拿到回应时_ok_是真的() {
+fn na_dao_hui_ying_shi_ok_shi_zhen_de() {
     let lua = Lua::new();
-    let t = 收口(
+    let t = receive_kou(
         &lua,
-        Ok(落定::回包(回包 {
+        Ok(RequestOutcome::Response(HttpResponse {
             code: 404,
             text: "not found".to_owned(),
         })),
     )
     .unwrap();
 
-    // ⚠️ 4xx 也是"拿到了回应"：`ok` 判的是**请求走通了没有**，不是状态码好不好。
     assert_eq!(t.get::<bool>("ok").unwrap(), true);
     assert_eq!(t.get::<u16>("code").unwrap(), 404);
 }
 
-// ── 流式（`docs/07` 第 58 项）────────────────────────────────────────────────
-//
-// ⚠️ 这一组里**有一条真的开了一次 socket**（回环地址上的桩服务器）。理由：
-// "边收边给"这件事的全部内容就是"块什么时候到"，而拿一个 `Vec<u8>` 假扮
-// 读取器是**证不出这件事的**——那只能证明"我把给你的字节转交了"。桩服务器
-// 一次写一小段、中间歇一下，读到的块数才是真的。
-
-/// 一个只会说一句话的桩服务器：收一条请求，回一段 `响应头` ＋ 按顺序慢慢吐
-/// 出的 `块们`。返回它的地址（形如 `http://127.0.0.1:PORT/`）与那条线程的把手。
-///
-/// ⚠️ 写完**先把请求读完再关**（`shutdown(Write)` 之后读到 EOF）：不读干净就
-/// 关，内核会给对面发一个 RST，而 ureq 那边看到的可能不是"我读完了"，是
-/// "连接被重置"——那会让这条用例变得看运气。
-fn 桩服务器(响应头: String, 块们: Vec<Vec<u8>>) -> (String, std::thread::JoinHandle<()>) {
+fn zhuang_fu_wu_qi(
+    xiang_ying_tou: String,
+    kuai_men: Vec<Vec<u8>>,
+) -> (String, std::thread::JoinHandle<()>) {
     use std::io::{Read as _, Write as _};
-    let 监听 = std::net::TcpListener::bind("127.0.0.1:0").expect("绑不上回环端口");
-    let 地址 = 监听.local_addr().unwrap();
-    let 把手 = std::thread::spawn(move || {
-        let (mut 连, _) = 监听.accept().expect("没人连上来");
-        // 把请求读干净（到 EOF 为止）。⚠️ 不能只读到 `\r\n\r\n` 就停：请求体
-        // 还在缓冲区里，带着没读完的字节关连接同样会发 RST。
-        let mut 倒掉 = [0u8; 4096];
-        let _ = 连.read(&mut 倒掉);
-        连.write_all(响应头.as_bytes()).unwrap();
-        连.flush().unwrap();
-        for 块 in 块们 {
-            连.write_all(&块).unwrap();
-            连.flush().unwrap();
+    let jian_ting = std::net::TcpListener::bind("127.0.0.1:0")
+        .expect("\u{7ed1}\u{4e0d}\u{4e0a}\u{56de}\u{73af}\u{7aef}\u{53e3}");
+    let address_2 = jian_ting.local_addr().unwrap();
+    let ba_shou = std::thread::spawn(move || {
+        let (mut lian, _) = jian_ting
+            .accept()
+            .expect("\u{6ca1}\u{4eba}\u{8fde}\u{4e0a}\u{6765}");
+
+        let mut dao_diao = [0u8; 4096];
+        let _ = lian.read(&mut dao_diao);
+        lian.write_all(xiang_ying_tou.as_bytes()).unwrap();
+        lian.flush().unwrap();
+        for kuai_2 in kuai_men {
+            lian.write_all(&kuai_2).unwrap();
+            lian.flush().unwrap();
             std::thread::sleep(Duration::from_millis(20));
         }
-        let _ = 连.shutdown(std::net::Shutdown::Write);
-        // 对面把剩下的请求发完就散伙。
-        while let Ok(n) = 连.read(&mut 倒掉) {
+        let _ = lian.shutdown(std::net::Shutdown::Write);
+
+        while let Ok(n) = lian.read(&mut dao_diao) {
             if n == 0 {
                 break;
             }
         }
     });
-    (format!("http://{地址}/v1/chat/completions"), 把手)
+    (format!("http://{address_2}/v1/chat/completions"), ba_shou)
 }
 
-/// 造一个"分块吐出来的" HTTP 响应（用 `content-length`，不用 chunked——
-/// ⚠️ 两者都合法，但 `content-length` 让"服务端就是慢慢写的"这件事更直白：
-/// 响应体是**一整份**，只是路上被 TCP 分成了几段）。
-///
-/// ⚠️ 切出来的块是 **`Vec<u8>` 不是 `String`**：按字节切就一定会切出"半个
-/// 汉字"，而那种字节**根本没有合法的 `String` 表示**——写成 `String` 的话只能
-/// 过一遍 `from_utf8_lossy`，那一步会把半个汉字就地换成 `U+FFFD`，
-/// **损坏发生在桩这一侧、根本到不了线路上**，于是"宿主不切半个汉字"这件事
-/// 永远验不到（第一版就是这么写的，三条用例一起红，而红的是测试夹具）。
-fn 分块响应(体: &str) -> (String, Vec<Vec<u8>>) {
-    let 头 = format!(
+fn fen_kuai_xiang_ying(ti: &str) -> (String, Vec<Vec<u8>>) {
+    let tou = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\n\r\n",
-        体.len()
+        ti.len()
     );
-    // 按 8 个字节一段切开——汉字 3 字节，所以**一定会切出半个汉字**。
-    let 块们 = 体.as_bytes().chunks(8).map(|c| c.to_vec()).collect();
-    (头, 块们)
+
+    let kuai_men = ti.as_bytes().chunks(8).map(|c| c.to_vec()).collect();
+    (tou, kuai_men)
 }
 
-/// 把一个 Lua 回调接成"把每一块塞进这个 Vec"。
-fn 收集块() -> (std::sync::Arc<std::sync::Mutex<Vec<String>>>, Lua, mlua::Function) {
+fn receive_ji_kuai() -> (
+    std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    Lua,
+    mlua::Function,
+) {
     use std::sync::{Arc, Mutex};
     let lua = Lua::new();
-    let 筐 = Arc::new(Mutex::new(Vec::new()));
-    let 筐2 = 筐.clone();
+    let kuang = Arc::new(Mutex::new(Vec::new()));
+    let kuang_2 = kuang.clone();
     let f = lua
-        .create_function(move |_, 块: String| {
-            筐2.lock().unwrap().push(块);
+        .create_function(move |_, kuai_2: String| {
+            kuang_2.lock().unwrap().push(kuai_2);
             Ok(())
         })
         .unwrap();
-    (筐, lua, f)
+    (kuang, lua, f)
 }
 
-/// 回调里的每一块都必须是**合法 UTF-8**、而且拼起来要**逐字等于**响应体。
-///
-/// ⚠️ 这条钉的是 `切出完整段`：桩服务器按 8 字节切，而中文一个字 3 字节，
-/// 所以"不切半个汉字"这件事在这里一定会被撞上（不是理论上会）。
 #[test]
-fn 流式的每一块都不切半个汉字() {
-    let 体 = "data: {\"choices\":[{\"delta\":{\"content\":\"你好，世界\"}}]}\n\n\
-              data: {\"choices\":[{\"delta\":{\"content\":\"再见\"}}]}\n\n\
+fn liu_shi_de_mei_yi_kuai_dou_bu_qie_ban_ge_han_zi() {
+    let ti = "data: {\"choices\":[{\"delta\":{\"content\":\"\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}\"}}]}\n\n\
+              data: {\"choices\":[{\"delta\":{\"content\":\"\u{518d}\u{89c1}\"}}]}\n\n\
               data: [DONE]\n\n";
-    let (头, 块们) = 分块响应(体);
-    let (地址, 把手) = 桩服务器(头, 块们);
+    let (tou, kuai_men) = fen_kuai_xiang_ying(ti);
+    let (address_2, ba_shou) = zhuang_fu_wu_qi(tou, kuai_men);
 
-    let (筐, lua, f) = 收集块();
+    let (kuang, lua, f) = receive_ji_kuai();
     let spec = lua.create_table().unwrap();
-    spec.set("url", 地址).unwrap();
+    spec.set("url", address_2).unwrap();
     spec.set("method", "POST").unwrap();
 
-    let 落 = 流式(&lua, &spec, &f).unwrap();
-    let (包, 块数, 中断) = match 落 {
-        super::落定::流完 { 包, 块数, 中断 } => (包, 块数, 中断),
-        _ => panic!("该是流完"),
+    let luo = liu_shi(&lua, &spec, &f).unwrap();
+    let (bao, kuai_shu, zhong_duan) = match luo {
+        super::RequestOutcome::Streamed {
+            bao,
+            kuai_shu,
+            zhong_duan,
+        } => (bao, kuai_shu, zhong_duan),
+        _ => panic!("\u{8be5}\u{662f}\u{6d41}\u{5b8c}"),
     };
-    把手.join().unwrap();
+    ba_shou.join().unwrap();
 
-    assert_eq!(包.code, 200);
-    assert!(!中断);
-    assert_eq!(包.text, 体, "攒起来的全文要**逐字**等于响应体");
-    let 块们 = 筐.lock().unwrap();
-    assert_eq!(块们.concat(), 体, "交给回调的那些块拼起来也要逐字等于响应体");
+    assert_eq!(bao.code, 200);
+    assert!(!zhong_duan);
+    assert_eq!(bao.text, ti, "\u{6512}\u{8d77}\u{6765}\u{7684}\u{5168}\u{6587}\u{8981}**\u{9010}\u{5b57}**\u{7b49}\u{4e8e}\u{54cd}\u{5e94}\u{4f53}");
+    let kuai_men = kuang.lock().unwrap();
+    assert_eq!(kuai_men.concat(), ti, "\u{4ea4}\u{7ed9}\u{56de}\u{8c03}\u{7684}\u{90a3}\u{4e9b}\u{5757}\u{62fc}\u{8d77}\u{6765}\u{4e5f}\u{8981}\u{9010}\u{5b57}\u{7b49}\u{4e8e}\u{54cd}\u{5e94}\u{4f53}");
     assert!(
-        块数 >= 3,
-        "桩分了 {} 段慢写，拿到 {块数} 块——太少说明是憋完才给的",
-        体.len() / 8
+        kuai_shu >= 3,
+        "\u{6869}\u{5206}\u{4e86} {} \u{6bb5}\u{6162}\u{5199}\u{ff0c}\u{62ff}\u{5230} {kuai_shu} \u{5757}\u{2014}\u{2014}\u{592a}\u{5c11}\u{8bf4}\u{660e}\u{662f}\u{618b}\u{5b8c}\u{624d}\u{7ed9}\u{7684}",
+        ti.len() / 8
     );
-    // 每条都合法 UTF-8 这件事由 `String` 本身保证；这里再钉一下"没有替换字符"，
-    // 因为把半个汉字硬塞进 `String` 的唯一后果就是它。
-    for (i, 块) in 块们.iter().enumerate() {
-        assert!(!块.contains('\u{FFFD}'), "第 {i} 块里有替换字符：{块:?}");
+
+    for (i, kuai_2) in kuai_men.iter().enumerate() {
+        assert!(!kuai_2.contains('\u{FFFD}'), "\u{7b2c} {i} \u{5757}\u{91cc}\u{6709}\u{66ff}\u{6362}\u{5b57}\u{7b26}\u{ff1a}{kuai_2:?}");
     }
 }
 
-/// ⚠️⚠️ **用户 2026-10-10 报的那一条**（截图：`读响应失败（响应体上限 2097152
-/// 字节，超了也算失败）：timeout: global`）：一个**慢慢吐、但一直在吐**的长回答，
-/// 总时长超过了 `timeout_ms` —— 从前的"整件事一个总时限"会在半路把它掐掉，
-/// 而服务器每一步都没做错。
-///
-/// 这一条钉的是**分步计时**：桩服务器 30 块、每块之间歇 40ms（＝总时长约 1.2 秒），
-/// 而 `timeout_ms = 600`。⇒ 旧口径必红（≈0.6 秒那一刻 `timeout: global`），
-/// 新口径要**完整收下**（没有哪一次等待超过 600ms）。
 #[test]
-fn 慢慢吐的长回答不该被总时限掐掉() {
-    // ⚠️ 自己数时间，别写死平台差异：一条回合制流就是"来一块、歇一下"。
-    let 块 = 30;
-    let 体: String = (0..块).map(|i| format!("data: {{\"i\":{i}}}\n\n")).collect();
-    let 头 = format!(
+fn man_man_tu_de_zhang_hui_da_bu_gai_bei_zong_shi_xian_qia_diao() {
+    let kuai_2 = 30;
+    let ti: String = (0..kuai_2)
+        .map(|i| format!("data: {{\"i\":{i}}}\n\n"))
+        .collect();
+    let tou = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\n\r\n",
-        体.len()
+        ti.len()
     );
-    let 块们: Vec<Vec<u8>> = 体.as_bytes().chunks(体.len() / 块).map(|c| c.to_vec()).collect();
-    // 桩服务器每块之间歇 20ms（见它自己的实现），所以这里把块数拉够长。
-    let (地址, 把手) = 桩服务器(头, 块们);
+    let kuai_men: Vec<Vec<u8>> = ti
+        .as_bytes()
+        .chunks(ti.len() / kuai_2)
+        .map(|c| c.to_vec())
+        .collect();
 
-    let (筐, lua, f) = 收集块();
+    let (address_2, ba_shou) = zhuang_fu_wu_qi(tou, kuai_men);
+
+    let (kuang, lua, f) = receive_ji_kuai();
     let spec = lua.create_table().unwrap();
-    spec.set("url", 地址).unwrap();
+    spec.set("url", address_2).unwrap();
     spec.set("method", "POST").unwrap();
-    // ⚠️ 比总时长小得多：**每一步**的时限，不是整件事的时限。
+
     spec.set("timeout_ms", 600).unwrap();
 
-    let 起 = std::time::Instant::now();
-    let 落 = 流式(&lua, &spec, &f).unwrap();
-    let 用了 = 起.elapsed();
-    let (包, 块数, 中断) = match 落 {
-        super::落定::流完 { 包, 块数, 中断 } => (包, 块数, 中断),
-        super::落定::环境失败(话) => panic!("不该失败，实际：{话}"),
-        _ => panic!("该是流完"),
+    let qi = std::time::Instant::now();
+    let luo = liu_shi(&lua, &spec, &f).unwrap();
+    let yong_le = qi.elapsed();
+    let (bao, kuai_shu, zhong_duan) = match luo {
+        super::RequestOutcome::Streamed {
+            bao,
+            kuai_shu,
+            zhong_duan,
+        } => (bao, kuai_shu, zhong_duan),
+        super::RequestOutcome::EnvironmentFailure(hua) => {
+            panic!("\u{4e0d}\u{8be5}\u{5931}\u{8d25}\u{ff0c}\u{5b9e}\u{9645}\u{ff1a}{hua}")
+        }
+        _ => panic!("\u{8be5}\u{662f}\u{6d41}\u{5b8c}"),
     };
-    let _ = 把手.join();
+    let _ = ba_shou.join();
 
-    assert_eq!(包.code, 200);
-    assert!(!中断, "没有任何一块该被掐掉");
-    assert_eq!(包.text, 体, "全文要逐字收齐");
-    assert_eq!(筐.lock().unwrap().concat(), 体);
+    assert_eq!(bao.code, 200);
     assert!(
-        块数 >= 块,
-        "桩分了 {块} 段慢写，只拿到 {块数} 块——说明中途被掐了"
+        !zhong_duan,
+        "\u{6ca1}\u{6709}\u{4efb}\u{4f55}\u{4e00}\u{5757}\u{8be5}\u{88ab}\u{6390}\u{6389}"
     );
-    // ⚠️ 总时长**确实**超过了那个时限：不然这条用例证明不了什么
-    //（比如桩被优化成一口气写完，那它就退化成"没超时"，看着还是绿的）。
+    assert_eq!(
+        bao.text, ti,
+        "\u{5168}\u{6587}\u{8981}\u{9010}\u{5b57}\u{6536}\u{9f50}"
+    );
+    assert_eq!(kuang.lock().unwrap().concat(), ti);
     assert!(
-        用了 > Duration::from_millis(600),
-        "这条用例要的是「总时长超过时限」，实测只用了 {用了:?}——夹具太快了？"
+        kuai_shu >= kuai_2,
+        "\u{6869}\u{5206}\u{4e86} {kuai_2} \u{6bb5}\u{6162}\u{5199}\u{ff0c}\u{53ea}\u{62ff}\u{5230} {kuai_shu} \u{5757}\u{2014}\u{2014}\u{8bf4}\u{660e}\u{4e2d}\u{9014}\u{88ab}\u{6390}\u{4e86}"
+    );
+
+    assert!(
+        yong_le > Duration::from_millis(600),
+        "\u{8fd9}\u{6761}\u{7528}\u{4f8b}\u{8981}\u{7684}\u{662f}\u{300c}\u{603b}\u{65f6}\u{957f}\u{8d85}\u{8fc7}\u{65f6}\u{9650}\u{300d}\u{ff0c}\u{5b9e}\u{6d4b}\u{53ea}\u{7528}\u{4e86} {yong_le:?}\u{2014}\u{2014}\u{5939}\u{5177}\u{592a}\u{5feb}\u{4e86}\u{ff1f}"
     );
 }
 
-/// 回调返回 `false` ⇒ **当场收工**，后面那几块一个都不许再交。
-///
-/// ⚠️ 这是"用户关掉面板 / 切走对话时怎么收尾"那条（`docs/07` 第 58 项）。
-/// 没有它，一条在飞的请求只能等它自己说完——而模型可能还要喷半分钟。
 #[test]
-fn 回调返回_false_就当场收工() {
-    let 体 = "第一块\n第二块\n第三块\n第四块\n第五块\n第六块\n第七块\n第八块\n";
-    let (头, 块们) = 分块响应(体);
-    let (地址, 把手) = 桩服务器(头, 块们);
+fn hui_diao_fan_hui_false_jiu_dang_chang_receive_gong() {
+    let ti = "\u{7b2c}\u{4e00}\u{5757}\n\u{7b2c}\u{4e8c}\u{5757}\n\u{7b2c}\u{4e09}\u{5757}\n\u{7b2c}\u{56db}\u{5757}\n\u{7b2c}\u{4e94}\u{5757}\n\u{7b2c}\u{516d}\u{5757}\n\u{7b2c}\u{4e03}\u{5757}\n\u{7b2c}\u{516b}\u{5757}\n";
+    let (tou, kuai_men) = fen_kuai_xiang_ying(ti);
+    let (address_2, ba_shou) = zhuang_fu_wu_qi(tou, kuai_men);
 
     let lua = Lua::new();
-    let 收到 = lua
-        .create_function(|_, _块: String| Ok(false))
-        .unwrap();
+    let receive_dao = lua.create_function(|_, _chunk: String| Ok(false)).unwrap();
     let spec = lua.create_table().unwrap();
-    spec.set("url", 地址).unwrap();
+    spec.set("url", address_2).unwrap();
     spec.set("method", "POST").unwrap();
 
-    let 落 = 流式(&lua, &spec, &收到).unwrap();
-    let (包, 块数, 中断) = match 落 {
-        super::落定::流完 { 包, 块数, 中断 } => (包, 块数, 中断),
-        _ => panic!("该是流完"),
+    let luo = liu_shi(&lua, &spec, &receive_dao).unwrap();
+    let (bao, kuai_shu, zhong_duan) = match luo {
+        super::RequestOutcome::Streamed {
+            bao,
+            kuai_shu,
+            zhong_duan,
+        } => (bao, kuai_shu, zhong_duan),
+        _ => panic!("\u{8be5}\u{662f}\u{6d41}\u{5b8c}"),
     };
 
-    assert!(中断, "回调说了停，`aborted` 必须是 true");
-    assert_eq!(块数, 1, "喊停之后一块都不许再交");
-    assert_eq!(包.text, &体[..包.text.len()], "攒下来的全文只能是喊停前收到的那点");
-    assert!(包.text.len() < 体.len(), "喊停得够早，全文不该是完整那份");
-    // ⚠️ **不 join 那条线程**：它还在往里写（写完才发现对面不读了），
-    // 拿 join 等它等于把这条用例变成看服务器脸色。进程退出时它自己会散。
-    drop(把手);
+    assert!(
+        zhong_duan,
+        "\u{56de}\u{8c03}\u{8bf4}\u{4e86}\u{505c}\u{ff0c}`aborted` \u{5fc5}\u{987b}\u{662f} true"
+    );
+    assert_eq!(
+        kuai_shu, 1,
+        "\u{558a}\u{505c}\u{4e4b}\u{540e}\u{4e00}\u{5757}\u{90fd}\u{4e0d}\u{8bb8}\u{518d}\u{4ea4}"
+    );
+    assert_eq!(bao.text, &ti[..bao.text.len()], "\u{6512}\u{4e0b}\u{6765}\u{7684}\u{5168}\u{6587}\u{53ea}\u{80fd}\u{662f}\u{558a}\u{505c}\u{524d}\u{6536}\u{5230}\u{7684}\u{90a3}\u{70b9}");
+    assert!(bao.text.len() < ti.len(), "\u{558a}\u{505c}\u{5f97}\u{591f}\u{65e9}\u{ff0c}\u{5168}\u{6587}\u{4e0d}\u{8be5}\u{662f}\u{5b8c}\u{6574}\u{90a3}\u{4efd}");
+
+    drop(ba_shou);
 }
 
-/// `时间到` 之外的两条：`chunks` 与 `aborted` **怎么出现在结果表里**。
 #[test]
-fn 流式的结果表只在真中断时才有_aborted() {
+fn liu_shi_de_result_table_zhi_zai_zhen_zhong_duan_shi_cai_you_aborted() {
     let lua = Lua::new();
 
-    let 收完 = 收口(
+    let receive_wan = receive_kou(
         &lua,
-        Ok(落定::流完 {
-            包: 回包 { code: 200, text: "abc".to_owned() },
-            块数: 3,
-            中断: false,
+        Ok(RequestOutcome::Streamed {
+            bao: HttpResponse {
+                code: 200,
+                text: "abc".to_owned(),
+            },
+            kuai_shu: 3,
+            zhong_duan: false,
         }),
     )
     .unwrap();
-    assert_eq!(收完.get::<bool>("ok").unwrap(), true);
-    assert_eq!(收完.get::<usize>("chunks").unwrap(), 3);
+    assert_eq!(receive_wan.get::<bool>("ok").unwrap(), true);
+    assert_eq!(receive_wan.get::<usize>("chunks").unwrap(), 3);
     assert!(
-        matches!(收完.get::<Value>("aborted").unwrap(), Value::Nil),
-        "没中断就不该有 `aborted` 这个键——`if r.aborted` 会把 false 也当没中断，\
-         但 `if r.aborted ~= nil` 会把 false 当中断"
+        matches!(receive_wan.get::<Value>("aborted").unwrap(), Value::Nil),
+        "\u{6ca1}\u{4e2d}\u{65ad}\u{5c31}\u{4e0d}\u{8be5}\u{6709} `aborted` \u{8fd9}\u{4e2a}\u{952e}\u{2014}\u{2014}`if r.aborted` \u{4f1a}\u{628a} false \u{4e5f}\u{5f53}\u{6ca1}\u{4e2d}\u{65ad}\u{ff0c}\
+         \u{4f46} `if r.aborted ~= nil` \u{4f1a}\u{628a} false \u{5f53}\u{4e2d}\u{65ad}"
     );
 
-    let 中场 = 收口(
+    let zhong_chang = receive_kou(
         &lua,
-        Ok(落定::流完 {
-            包: 回包 { code: 200, text: "ab".to_owned() },
-            块数: 2,
-            中断: true,
+        Ok(RequestOutcome::Streamed {
+            bao: HttpResponse {
+                code: 200,
+                text: "ab".to_owned(),
+            },
+            kuai_shu: 2,
+            zhong_duan: true,
         }),
     )
     .unwrap();
-    assert_eq!(中场.get::<bool>("aborted").unwrap(), true);
-    assert_eq!(中场.get::<usize>("chunks").unwrap(), 2);
+    assert_eq!(zhong_chang.get::<bool>("aborted").unwrap(), true);
+    assert_eq!(zhong_chang.get::<usize>("chunks").unwrap(), 2);
 
-    // 一次性那两条路**没有** `chunks`：那是流式专有的说法，多给一个键
-    // 只会让插件去猜"我这边的 0 是什么意思"。
-    let 一次 = 收口(
+    let yi_ci = receive_kou(
         &lua,
-        Ok(落定::回包(回包 { code: 200, text: "x".to_owned() })),
+        Ok(RequestOutcome::Response(HttpResponse {
+            code: 200,
+            text: "x".to_owned(),
+        })),
     )
     .unwrap();
-    assert!(matches!(一次.get::<Value>("chunks").unwrap(), Value::Nil));
+    assert!(matches!(yi_ci.get::<Value>("chunks").unwrap(), Value::Nil));
 }
 
-/// `切出完整段` 的三种落定，逐条钉（上面那条端到端用例只撞得到第一种）。
 #[test]
-fn 切出完整段的三条路() {
-    // ① 整段合法 ⇒ 全交出去，缓冲清空。
-    let mut b = "你好".as_bytes().to_vec();
-    assert_eq!(切出完整段(&mut b).unwrap(), "你好");
+fn qie_chu_wan_zheng_duan_de_san_tiao_lu() {
+    let mut b = "\u{4f60}\u{597d}".as_bytes().to_vec();
+    assert_eq!(qie_chu_wan_zheng_duan(&mut b).unwrap(), "\u{4f60}\u{597d}");
     assert!(b.is_empty());
-    assert!(切出完整段(&mut b).is_none(), "空缓冲给 None");
+    assert!(
+        qie_chu_wan_zheng_duan(&mut b).is_none(),
+        "\u{7a7a}\u{7f13}\u{51b2}\u{7ed9} None"
+    );
 
-    // ② 尾巴是**没读完的**多字节字符 ⇒ 好的交出去，尾巴留着。
-    //    "好" 是三字节，这里只给前两个。
     let mut b = Vec::new();
     b.extend_from_slice("ab".as_bytes());
-    b.extend_from_slice(&"好".as_bytes()[..2]);
-    assert_eq!(切出完整段(&mut b).unwrap(), "ab");
-    assert_eq!(b.len(), 2, "剩下的那半个字要留在缓冲里等下一块");
+    b.extend_from_slice(&"\u{597d}".as_bytes()[..2]);
+    assert_eq!(qie_chu_wan_zheng_duan(&mut b).unwrap(), "ab");
+    assert_eq!(b.len(), 2, "\u{5269}\u{4e0b}\u{7684}\u{90a3}\u{534a}\u{4e2a}\u{5b57}\u{8981}\u{7559}\u{5728}\u{7f13}\u{51b2}\u{91cc}\u{7b49}\u{4e0b}\u{4e00}\u{5757}");
     assert!(
-        切出完整段(&mut b).is_none(),
-        "只有半个字时什么都不交——等，不是取巧"
+        qie_chu_wan_zheng_duan(&mut b).is_none(),
+        "\u{53ea}\u{6709}\u{534a}\u{4e2a}\u{5b57}\u{65f6}\u{4ec0}\u{4e48}\u{90fd}\u{4e0d}\u{4ea4}\u{2014}\u{2014}\u{7b49}\u{ff0c}\u{4e0d}\u{662f}\u{53d6}\u{5de7}"
     );
 
-    // 补上最后那个字节，这一块就出来了。
-    b.push("好".as_bytes()[2]);
-    assert_eq!(切出完整段(&mut b).unwrap(), "好");
+    b.push("\u{597d}".as_bytes()[2]);
+    assert_eq!(qie_chu_wan_zheng_duan(&mut b).unwrap(), "\u{597d}");
 
-    // ③ 中间是真的坏字节 ⇒ 换成 U+FFFD，**继续往后走**（不然会卡住整条流）。
-    //    ⚠️ 一个坏字节换一个 `U+FFFD`（与 `String::from_utf8_lossy` 同一条口径），
-    //    所以这里**切几刀是不确定的**——用例只认"一路切到空"拼出来的那一串。
     let mut b = vec![b'a', 0xFF, 0xFE, b'b'];
-    let mut 全部 = String::new();
-    while let Some(s) = 切出完整段(&mut b) {
-        全部.push_str(&s);
+    let mut quan_bu = String::new();
+    while let Some(s) = qie_chu_wan_zheng_duan(&mut b) {
+        quan_bu.push_str(&s);
     }
-    assert_eq!(全部, "a\u{FFFD}\u{FFFD}b");
-    assert!(b.is_empty(), "坏字节也要往前走，不许卡在缓冲里");
+    assert_eq!(quan_bu, "a\u{FFFD}\u{FFFD}b");
+    assert!(b.is_empty(), "\u{574f}\u{5b57}\u{8282}\u{4e5f}\u{8981}\u{5f80}\u{524d}\u{8d70}\u{ff0c}\u{4e0d}\u{8bb8}\u{5361}\u{5728}\u{7f13}\u{51b2}\u{91cc}");
 }
 
-/// `stream` 装上了，而且**第二个参数是必填的**——少给一个就报错，
-/// 不许默默退化成一次性请求（退化了用户看到的还是"憋完才出现"）。
 #[test]
-fn 装上了_stream_而且回调是必填的() {
+fn install_shang_le_stream_er_qie_hui_diao_shi_bi_tian_de() {
     let lua = Lua::new();
     let http = build(&lua).unwrap();
     assert!(
         matches!(http.get::<Value>("stream").unwrap(), Value::Function(_)),
-        "`nota.http.stream` 该在表里"
+        "`nota.http.stream` \u{8be5}\u{5728}\u{8868}\u{91cc}"
     );
 
-    // 只给规格表 ⇒ 参数个数不对，抛。
-    let 规格 = lua.create_table().unwrap();
-    规格.set("url", "http://127.0.0.1:1/x").unwrap();
+    let gui_ge = lua.create_table().unwrap();
+    gui_ge.set("url", "http://127.0.0.1:1/x").unwrap();
     let f = http.get::<mlua::Function>("stream").unwrap();
-    assert!(f.call::<Value>(规格).is_err(), "少一个回调参数该报错");
+    assert!(
+        f.call::<Value>(gui_ge).is_err(),
+        "\u{5c11}\u{4e00}\u{4e2a}\u{56de}\u{8c03}\u{53c2}\u{6570}\u{8be5}\u{62a5}\u{9519}"
+    );
 }

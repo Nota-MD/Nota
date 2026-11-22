@@ -1,11 +1,12 @@
-/** 当前表格上方的快捷工具栏：调整尺寸、对齐与删除。 */
 
-import { useLayoutEffect, useMemo, useState } from "react";
+
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "@/i18n";
 import type { CommandPayload, EditorCommand } from "@/editor/create";
 import { Icon } from "@/ui/Icon";
+import { PersistentTableComputedOverlay } from "@/ui/PersistentTableComputedOverlay";
 import { SpreadsheetTableOverlay } from "@/ui/SpreadsheetTableOverlay";
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
   documentKey: string | number;
   run: (command: EditorCommand, payload?: CommandPayload) => void;
   spreadsheet: boolean;
+  spreadsheetPersistent: boolean;
 }
 
 interface Position {
@@ -21,12 +23,19 @@ interface Position {
   width: number;
 }
 
-export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) {
+export function TableToolbar({
+  visible,
+  documentKey,
+  run,
+  spreadsheet,
+  spreadsheetPersistent,
+}: Props) {
   const t = useT();
   const [position, setPosition] = useState<Position | null>(null);
   const [current, setCurrent] = useState({ columns: 0, rows: 0 });
   const [picker, setPicker] = useState(false);
   const [hover, setHover] = useState(current);
+  const spreadsheetEditing = useRef(false);
   const cells = useMemo(
     () => Array.from({ length: 8 }, (_, row) => Array.from({ length: 8 }, (_, column) => ({ row: row + 1, column: column + 1 }))),
     [],
@@ -34,6 +43,7 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
 
   useLayoutEffect(() => {
     if (!visible) {
+      spreadsheetEditing.current = false;
       setPosition(null);
       setPicker(false);
       return;
@@ -49,6 +59,7 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
         anchor instanceof Element ? anchor : anchor?.parentElement ?? null;
       const table = element?.closest<HTMLTableElement>(".ProseMirror table");
       if (!table) {
+        if (spreadsheetEditing.current) return;
         setPosition(null);
         return;
       }
@@ -118,7 +129,13 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
     };
   }, [visible, documentKey, spreadsheet]);
 
-  if (!visible || !position) return null;
+  const persistentComputed = (
+    <PersistentTableComputedOverlay
+      active={spreadsheetPersistent && Boolean(documentKey)}
+      documentKey={documentKey}
+    />
+  );
+  if (!visible || !position) return persistentComputed;
 
   const action = (command: EditorCommand, payload?: CommandPayload) => {
     run(command, payload);
@@ -127,11 +144,15 @@ export function TableToolbar({ visible, documentKey, run, spreadsheet }: Props) 
 
   return (
     <>
+      {persistentComputed}
       {spreadsheet && (
         <SpreadsheetTableOverlay
           visible={visible}
           documentKey={documentKey}
           run={run}
+          onFormulaActiveChange={(active) => {
+            spreadsheetEditing.current = active;
+          }}
         />
       )}
       {createPortal(

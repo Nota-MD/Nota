@@ -1,8 +1,8 @@
-/* GitHub Markdown Alerts。 */
+
 .editor-mount .ProseMirror .nota-github-alert {
   --github-alert-color: var(--accent);
-  /* Follow Typora: an Alert is a quotation with one semantic rule and a
-     colored title, not a second card nested inside the document theme. */
+
+
   margin: 0.9em 0;
   padding: 0.12em 0 0.12em 1.15em;
   border: 0;
@@ -74,10 +74,10 @@
   background: transparent;
   box-shadow: none;
   border-radius: 0;
-  /* ProseMirror splits an inline decoration around the caret. Horizontal
-     padding is then repeated for every fragment, leaving a large gap around
-     the cursor. Keep only the outer fragment decoration; the text itself
-     already provides visual separation from the Alert body. */
+
+
+
+
   padding: 0;
   box-decoration-break: slice;
   -webkit-box-decoration-break: slice;

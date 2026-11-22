@@ -1,39 +1,39 @@
-/**
- * 「上传服务器」那一组（住在「图像」页里，2026-09-26 加）。
- *
- * ```text
- * 这一组 ──> api.image.uploadGet()   ──> image-upload.toml（0600）
- *        └─> api.image.uploadSet(整份) ──> 每改一项立刻写一次
- * ```
- *
- * # ⚠️ 它**不走 `paneWriter`**，这是本仓唯一一组这样做的
- *
- * 其余七页的设置都在 `settings.toml` 里（`nota_settings_set` 整份替换，
- * 内存里那份由 `AppState` 热更新）。这一组**在另一个文件里**
- * （`~/.config/nota/image-upload.toml`，0600）：它装着用户的令牌，
- * 而 `settings.toml` 是 0644 的普通写盘——同一个文件里放不下两种权限。
- * 所以这一组**自己读、自己写、自己存一份 state**：
- *
- * - `settings` / `onChange`（`PaneProps` 那两个）在这一组里用不上，
- *   改这一组也不会顺手多写一次 `settings.toml`；
- * - 于是「恢复出厂默认」（那把整份 `Settings` 换掉的按钮）**不碰这一组**，
- *   这是**故意的**：把用户的令牌一起清掉，是那种"点了一下才发现"的损失。
- *   `docs/06` 那条口径（重置只重置 `settings.toml`）在这儿仍然成立。
- *
- * # 每改一项就写一次盘，没有「确定」
- *
- * 与其余七页同一条口径（`SettingsDialog` 顶上那段：改动已经写盘了，一个
- * 「取消」撤销不了它）。⚠️ 每次写都是**整份替换**，界面上先改、写失败就
- * **退回上一个值**并说一句——不退回的话，屏幕上显示的是一个从没落过盘的值，
- * 用户下次打开设置会发现自己的改动没了，而且不知道是什么时候没的。
- *
- * # ⚠️ 这里是"发令牌"的那一页，所以每一栏都写清楚字节往哪儿走
- *
- * 一栏 `headers` 里坐着令牌，而它**同时**要写进磁盘（0600）和发到一个用户填的
- * 地址上。这两件事都不适合"聪明一点"：不做服务商预设（没有 smms / picgo /
- * imgur 那种名字）、不做"自动探测接口"、不把令牌拆成一个密码框——拆成密码框
- * 就得**假定**所有服务都把它放在 `Authorization` 上。
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -52,52 +52,52 @@ import {
 import type { PaneProps } from "./props";
 
 export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
-  // 订阅语言（宿主报来语言之后这一块要重画，见 `i18n/index.ts::useT`）。
-  // 局部这个名字盖住模块级的 `t`，下面全都用它。
+
+
   const t = useT();
 
-  /**
-   * 上传方式那一格的下拉。
-   *
-   * ⚠️ **必须写在组件里现建**，不能提到模块级当常量——理由与
-   * `PluginDock.tsx::能力名` 那三张表相同：模块级求值时 `t` 还是**没订阅**的
-   * 那个版本（首帧画的是兜底语言，之后也没人通知它重画）；另外
-   * `tools/i18n-check.sh` 数的是**源码里字面写出来的 `t("…")`**，写成模块级的
-   * `t(表[i])` 就不算调用，`en.ts` 里那几条会算"废键"→ 闸门 FAIL。
-   */
+
+
+
+
+
+
+
+
+
   const squareMethodTable: Array<{ value: ImageUploadMethod; label: string }> = [
-    // ⚠️ 这一条也包了：句子里那个括号是**全角**的，英文界面上不该原样露出来。
+
     { value: "post", label: t("POST (multipart/form-data)") },
     { value: "put", label: t("PUT (raw bytes)") },
   ];
 
-  // ⚠️ `null` = 还没读回来。读之前**什么都不画**：先画一份默认值再被真值替换，
-  // 用户会看见"地址栏里的字闪了一下就没了"。
+
+
   const [settings, setSettings] = useState<ImageUploadSettings | null>(null);
-  /** 与 `设置` 同一份值，但**读得到最新的**——写失败时要退回的是它。
-   *  （不能靠 state 的闭包：`写` 是个稳定的 callback，闭包里的 `设置` 是旧的。） */
+
+
   const current = useRef<ImageUploadSettings | null>(null);
 
-  /**
-   * 两条**报错**（2026-10-04）。
-   *
-   * ⚠️⚠️ **它们不是"说明文案"，是错误回执，谁都不许按"删掉大段描述"那一批删掉。**
-   * 这一组有一半的动作会失败（读文件、写文件、两样都碰磁盘），失败时如果只是
-   * 静默 `return null` 或者把值弹回去，用户看到的是"这一组不见了"或"我改的东西
-   * 自己弹回来了"——**两样都像 Nota 坏了，而不像一次可解释的失败**。
-   * （2026-10-04 那一批清理里这两条被误删过一次，`docs/06` §5.44 记着。）
-   *
-   * ⚠️ 存的是**原始错误串、不是翻译好的句子**：`t` 要在**渲染时**取，不然
-   * 用户中途换语言，这条已经算好的旧句子会留在屏幕上。
-   */
+
+
+
+
+
+
+
+
+
+
+
+
   const [readError, setReadError] = useState<string | null>(null);
   const [writeError, setWriteError] = useState<string | null>(null);
 
   useEffect(() => {
     let splitDone = false;
-    // ⚠️ `docId` 给 `null`：这一页**不知道当前是哪份文档**（设置框不收 docId），
-    // 而它要的只是配置本身。返回值里那个 `willAutoUpload` 是"这份文档要不要
-    // 自动传"，在这一页上没有意义（那张勾选框在插图框里，见 `ImageDialog`）。
+
+
+
     api.image
       .uploadGet(null)
       .then((s) => {
@@ -114,14 +114,14 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
     };
   }, []);
 
-  /**
-   * 改一项：先改界面，再落盘；落盘失败就退回上一个值并说一句。
-   *
-   * ⚠️ **写盘不放进 `set设置` 的那个函数里**。那个函数是 React 的更新函数，
-   * 要求是纯的：`StrictMode` 下它会跑两遍（开发模式），于是每一次改动会发两次
-   * `uploadSet`——一次成功一次的报错看起来像"保存偶尔失败"。
-   * 所以值从 `当前` 那个 ref 上取，更新函数只负责算出新的一份。
-   */
+
+
+
+
+
+
+
+
   const write = useCallback((fillSmall: Partial<ImageUploadSettings>) => {
     const oldValue = current.current;
     if (!oldValue) return;
@@ -132,20 +132,20 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
       .uploadSet(newValue)
       .then(() => setWriteError(null))
       .catch((e: unknown) => {
-        // 退回**上一个值**（不是默认值）：写失败只说明这一次没成，
-        // 前面那几次改动还在盘上。
+
+
         current.current = oldValue;
         setSettings(oldValue);
-        // ⚠️ **退回的同时必须说一句**（见上面 `写错误` 那段）：光弹回去，
-        // 用户看到的是"我改的东西自己变回来了"，查不出是权限、是盘满、还是坏了。
+
+
         setWriteError(String(e));
       });
   }, []);
 
   if (!settings) {
-    // ⚠️ 读失败时说一句，**不画**一组灰控件：那些控件按下去也是往一个读不出来的
-    // 路径里写。⚠️ 也**不能什么都不画**——那样这一组看起来就像"不在这台机器上"。
-    // 读成功但还没回来时什么都不画（见上面那条注释）。
+
+
+
     if (readError === null) return null;
     return <Note>{t("Could not read the upload settings: ") + readError}</Note>;
   }
@@ -211,8 +211,8 @@ export function ImageUploadGroup({ onOpenConfigDir }: PaneProps) {
         </>
       )}
 
-      {/* ⚠️ 这个按钮不存任何值，是"做一件事"（`ActionButton`）。给它的用途是：
-          这一组里有一栏是"一行一条"，手改那个文件往往比在这个框里改省事。 */}
+      {
+                                              }
       <SettingRow label={t("Open the folder holding the settings file")}>
         <ActionButton onClick={onOpenConfigDir}>{t("Open in the file manager")}</ActionButton>
       </SettingRow>

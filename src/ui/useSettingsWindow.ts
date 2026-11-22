@@ -1,4 +1,4 @@
-/** 偏好设置窗口的开关、目标页与启动更新通知。 */
+
 
 import { useCallback, useState } from "react";
 

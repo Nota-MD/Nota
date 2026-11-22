@@ -20,7 +20,7 @@ function assert(value: unknown, message: string): asserts value {
 }
 
 const read = (path: string) => readFileSync(path, "utf8");
-const han = /[\u3400-\u9fff]/;
+const cjkPattern = /[\u3400-\u9fff]/;
 const emoji = /\p{Extended_Pictographic}/u;
 
 console.log("\n[Source language policy]");
@@ -36,7 +36,7 @@ testCase("core rules are linked from the repository entry point", () => {
 testCase("root rule and experience files are concise English without emoji", () => {
   for (const file of ["CORE_RULES.md", "DEVELOPMENT_EXPERIENCE.md"]) {
     const text = read(file);
-    assert(!han.test(text), `${file} contains Chinese`);
+    assert(!cjkPattern.test(text), `${file} contains Chinese`);
     assert(!emoji.test(text), `${file} contains emoji`);
   }
 });
@@ -58,7 +58,7 @@ testCase("maintainer documentation is English without emoji", () => {
   ];
   for (const file of files) {
     const text = read(file);
-    assert(!han.test(text), `${file} contains Chinese`);
+    assert(!cjkPattern.test(text), `${file} contains Chinese`);
     assert(!emoji.test(text), `${file} contains emoji`);
   }
 });
@@ -81,7 +81,7 @@ testCase("language audit protects the migration baseline", () => {
 
 testCase("migrated download modules contain no Chinese", () => {
   for (const file of ["src-tauri/src/remote.rs", "src-tauri/src/settings/download.rs"]) {
-    assert(!han.test(read(file)), `${file} still contains Chinese`);
+    assert(!cjkPattern.test(read(file)), `${file} still contains Chinese`);
   }
 });
 

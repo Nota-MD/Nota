@@ -18,34 +18,37 @@ pub struct ExportReport {
 impl PluginHost {
     pub fn export_2(&self, id: &str, target_2: &Path) -> Result<ExportReport> {
         let i = self
-            .wei_zhi(id)
+            .position_only(id)
             .ok_or_else(|| NotaError::other(format!("Extension not found: {id}")))?;
         let dir = self.plugins[i].manifest.dir.clone();
 
-        let bao = package::Package::cong_directory(&dir)?;
+        let package = package::Package::from_directory(&dir)?;
 
-        let (qian_ming_qu_xiang, qian_ming_yuan_wen) = match &bao.qian_ming {
+        let (before_name_get_item, before_name_source_text) = match &package.before_name {
             None => ("none", None),
             Some(_) => {
-                let yuan_wen = std::fs::read(dir.join(package::SIGNATURE_FILE)).ok();
-                match (bao.yan_qian(&package::TrustStore::load()), yuan_wen) {
-                    (Ok(_), Some(yuan_wen)) => ("kept", Some(yuan_wen)),
+                let source_text = std::fs::read(dir.join(package::SIGNATURE_FILE)).ok();
+                match (
+                    package.validate_before(&package::TrustStore::load()),
+                    source_text,
+                ) {
+                    (Ok(_), Some(source_text)) => ("kept", Some(source_text)),
 
                     _ => ("dropped", None),
                 }
             }
         };
 
-        let mut file_shu = 0usize;
-        let mut zi_jie_shu = 0u64;
-        let mut huan_chong = std::io::Cursor::new(Vec::new());
+        let mut file_data = 0usize;
+        let mut character_boundary_data = 0u64;
+        let mut replace_duplicate = std::io::Cursor::new(Vec::new());
         {
-            let mut zw = zip::ZipWriter::new(&mut huan_chong);
-            let xuan_xiang = zip::write::SimpleFileOptions::default()
+            let mut zw = zip::ZipWriter::new(&mut replace_duplicate);
+            let select_item = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated);
 
-            for f in &bao.files_2 {
-                zw.start_file(f.path_3.clone(), xuan_xiang).map_err(|e| {
+            for f in &package.files_2 {
+                zw.start_file(f.path_3.clone(), select_item).map_err(|e| {
                     NotaError::other(format!("Could not add `{}` to the package: {e}", f.path_3))
                 })?;
                 zw.write_all(&f.content_2).map_err(|e| {
@@ -54,18 +57,18 @@ impl PluginHost {
                         f.path_3
                     ))
                 })?;
-                file_shu += 1;
-                zi_jie_shu += f.content_2.len() as u64;
+                file_data += 1;
+                character_boundary_data += f.content_2.len() as u64;
             }
-            if let Some(yuan_wen) = &qian_ming_yuan_wen {
-                zw.start_file(package::SIGNATURE_FILE, xuan_xiang)
+            if let Some(source_text) = &before_name_source_text {
+                zw.start_file(package::SIGNATURE_FILE, select_item)
                     .map_err(|e| {
                         NotaError::other(format!("Could not write the signature block: {e}"))
                     })?;
-                zw.write_all(yuan_wen).map_err(|e| {
+                zw.write_all(source_text).map_err(|e| {
                     NotaError::other(format!("Could not write the signature block contents: {e}"))
                 })?;
-                zi_jie_shu += yuan_wen.len() as u64;
+                character_boundary_data += source_text.len() as u64;
             }
 
             zw.finish().map_err(|e| {
@@ -75,41 +78,41 @@ impl PluginHost {
             })?;
         }
 
-        let da_bao_ok = huan_chong.into_inner();
+        let large_package_ok = replace_duplicate.into_inner();
 
-        if let Some(fu) = target_2.parent() {
-            if !fu.as_os_str().is_empty() {
-                crate::paths::ensure_dir(fu)?;
+        if let Some(service) = target_2.parent() {
+            if !service.as_os_str().is_empty() {
+                crate::paths::ensure_dir(service)?;
             }
         }
-        std::fs::write(target_2, &da_bao_ok).map_err(|source| NotaError::Write {
+        std::fs::write(target_2, &large_package_ok).map_err(|source| NotaError::Write {
             path: target_2.to_path_buf(),
             source,
         })?;
 
         Ok(ExportReport {
             id: id.to_owned(),
-            files: file_shu,
-            bytes: zi_jie_shu,
-            signature: qian_ming_qu_xiang.to_owned(),
+            files: file_data,
+            bytes: character_boundary_data,
+            signature: before_name_get_item.to_owned(),
             path: crate::paths::path_to_string(target_2)?,
         })
     }
 
     pub fn default_export_name(&self, id: &str) -> Result<String> {
         let i = self
-            .wei_zhi(id)
+            .position_only(id)
             .ok_or_else(|| NotaError::other(format!("Extension not found: {id}")))?;
         let m = &self.plugins[i].manifest.meta;
-        Ok(default_bao_ming(id, &m.version))
+        Ok(default_package_name(id, &m.version))
     }
 }
 
-fn default_bao_ming(id: &str, ban_ben: &str) -> String {
+fn default_package_name(id: &str, half_current: &str) -> String {
     format!(
         "{}-{}{}",
-        crate::paths::an_fulldocument_jian_ming(id),
-        ban_ben,
+        crate::paths::safe_filename(id),
+        half_current,
         package::PACKAGE_EXTENSION
     )
 }
@@ -118,9 +121,9 @@ fn default_bao_ming(id: &str, ban_ben: &str) -> String {
 mod tests {
     use super::*;
 
-    fn zao_directory(ming: &str) -> PathBuf {
+    fn create_directory(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "nota-\u{5bfc}\u{51fa}-{ming}-{}",
+            "nota-\u{5bfc}\u{51fa}-{name}-{}",
             std::process::id()
         ));
         let _ = std::fs::remove_dir_all(&dir);
@@ -136,58 +139,58 @@ mod tests {
         dir
     }
 
-    fn da_ge_bao(directory_2: &Path, dai_qian_ming: bool) -> Vec<u8> {
-        let bao = package::Package::cong_directory(directory_2).unwrap();
-        let mut huan_chong = std::io::Cursor::new(Vec::new());
+    fn create_package(directory_2: &Path, pending_before_name: bool) -> Vec<u8> {
+        let package = package::Package::from_directory(directory_2).unwrap();
+        let mut replace_duplicate = std::io::Cursor::new(Vec::new());
         {
-            let mut zw = zip::ZipWriter::new(&mut huan_chong);
-            let xuan_xiang = zip::write::SimpleFileOptions::default()
+            let mut zw = zip::ZipWriter::new(&mut replace_duplicate);
+            let select_item = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated);
-            for f in &bao.files_2 {
-                zw.start_file(f.path_3.clone(), xuan_xiang).unwrap();
+            for f in &package.files_2 {
+                zw.start_file(f.path_3.clone(), select_item).unwrap();
                 zw.write_all(&f.content_2).unwrap();
             }
-            if dai_qian_ming {
-                let yuan_wen = std::fs::read(directory_2.join(package::SIGNATURE_FILE)).unwrap();
-                zw.start_file(package::SIGNATURE_FILE, xuan_xiang).unwrap();
-                zw.write_all(&yuan_wen).unwrap();
+            if pending_before_name {
+                let source_text = std::fs::read(directory_2.join(package::SIGNATURE_FILE)).unwrap();
+                zw.start_file(package::SIGNATURE_FILE, select_item).unwrap();
+                zw.write_all(&source_text).unwrap();
             }
             zw.finish().unwrap();
         }
-        huan_chong.into_inner()
+        replace_duplicate.into_inner()
     }
 
     #[test]
-    fn export_de_bao_neng_bei_zi_ji_read_hui_lai() {
-        let dir = zao_directory("\u{8bfb}\u{56de}\u{6765}");
-        let bytes = da_ge_bao(&dir, false);
+    fn export_package_can_passive_character_record_read_return_incoming() {
+        let dir = create_directory("\u{8bfb}\u{56de}\u{6765}");
+        let bytes = create_package(&dir, false);
 
-        let read_hui = package::Package::cong_zip(&bytes).unwrap();
-        let yuan_di = package::Package::cong_directory(&dir).unwrap();
+        let read_return = package::Package::from_zip(&bytes).unwrap();
+        let source_base = package::Package::from_directory(&dir).unwrap();
 
-        assert_eq!(read_hui.files_2.len(), yuan_di.files_2.len());
-        for (a, b) in read_hui.files_2.iter().zip(yuan_di.files_2.iter()) {
+        assert_eq!(read_return.files_2.len(), source_base.files_2.len());
+        for (a, b) in read_return.files_2.iter().zip(source_base.files_2.iter()) {
             assert_eq!(a.path_3, b.path_3);
             assert_eq!(a.content_2, b.content_2);
         }
 
-        assert_eq!(read_hui.summary(), yuan_di.summary());
+        assert_eq!(read_return.summary(), source_base.summary());
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn zhong_wen_path_yuan_yang_jin_chu() {
-        let dir = zao_directory("\u{4e2d}\u{6587}");
-        let bytes = da_ge_bao(&dir, false);
-        let read_hui = package::Package::cong_zip(&bytes).unwrap();
+    fn middle_text_path_source_sample_enter_out() {
+        let dir = create_directory("\u{4e2d}\u{6587}");
+        let bytes = create_package(&dir, false);
+        let read_return = package::Package::from_zip(&bytes).unwrap();
         assert!(
-            read_hui
+            read_return
                 .files_2
                 .iter()
                 .any(|f| f.path_3 == "lua/\u{5de5}\u{5177}.lua"),
             "\u{8bfb}\u{56de}\u{6765}\u{7684}\u{8def}\u{5f84}\u{662f}\u{ff1a}{:?}",
-            read_hui
+            read_return
                 .files_2
                 .iter()
                 .map(|f| &f.path_3)
@@ -198,15 +201,15 @@ mod tests {
     }
 
     #[test]
-    fn receive_directory_tiao_guo_fu_hao_lian_jie() {
-        let dir = zao_directory("\u{94fe}\u{63a5}");
+    fn receive_directory_item_passed_service_number_link_boundary() {
+        let dir = create_directory("\u{94fe}\u{63a5}");
         let target_2 = dir.join("\u{771f}\u{5b9e}.lua");
         std::fs::write(&target_2, "return 1\n").unwrap();
         #[cfg(unix)]
         std::os::unix::fs::symlink(&target_2, dir.join("\u{94fe}\u{63a5}.lua")).unwrap();
 
-        let bao = package::Package::cong_directory(&dir).unwrap();
-        assert!(!bao
+        let package = package::Package::from_directory(&dir).unwrap();
+        assert!(!package
             .files_2
             .iter()
             .any(|f| f.path_3 == "\u{94fe}\u{63a5}.lua"));
@@ -215,25 +218,25 @@ mod tests {
     }
 
     #[test]
-    fn default_bao_ming_yong_id_er_bu_shi_zhong_wen_name() {
+    fn default_package_name_use_id_two_not_is_middle_text_name() {
         assert_eq!(
-            default_bao_ming("nota.ai", "0.1.0"),
+            default_package_name("nota.ai", "0.1.0"),
             "nota.ai-0.1.0.nota-plugin"
         );
 
         assert_eq!(
-            default_bao_ming("nota.git", "0.0.9"),
+            default_package_name("nota.git", "0.0.9"),
             "nota.git-0.0.9.nota-plugin"
         );
     }
 
     #[test]
-    fn default_bao_ming_ba_dai_xie_gang_de_id_gui_yi() {
+    fn default_package_name_handle_pending_write_just_id_normalize_one() {
         assert_eq!(
-            default_bao_ming("nota/../../etc/passwd", "1"),
+            default_package_name("nota/../../etc/passwd", "1"),
             "nota_.._.._etc_passwd-1.nota-plugin"
         );
 
-        assert_eq!(default_bao_ming("..", "1"), "plugin-..-1.nota-plugin");
+        assert_eq!(default_package_name("..", "1"), "plugin-..-1.nota-plugin");
     }
 }

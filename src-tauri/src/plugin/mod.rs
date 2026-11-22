@@ -27,7 +27,7 @@ use tauri::Manager;
 use crate::error::{NotaError, Result};
 use crate::lua::api::i18n::LanguagePack;
 use crate::lua::{HostContext, LuaPlugin, PluginState};
-use install::zai_yong_hu_directory_li;
+use install::at_use_call_directory_inner;
 use installed::{InstallSource, Installed, Signature};
 use manifest::{find_manifests, Capability, Manifest, NOTA_PLUGIN_API_VERSION};
 
@@ -62,24 +62,24 @@ impl DeferredDiscovery {
         else {
             return;
         };
-        let plugin_xian_cheng = app.clone();
+        let plugin_thread_success = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
             std::thread::sleep(std::time::Duration::from_millis(350));
             let loaded = PluginHost::discover(resource_dir, &base);
             crate::debug_log!("[nota] loaded {} plugins", loaded.count());
-            let state = plugin_xian_cheng.state::<crate::state::AppState>();
+            let state = plugin_thread_success.state::<crate::state::AppState>();
             if let Ok(mut slot) = state.plugins.lock() {
                 *slot = loaded;
             };
-            let enabled = plugin_xian_cheng
+            let enabled = plugin_thread_success
                 .state::<crate::state::AppState>()
                 .settings
                 .lock()
                 .map(|settings| settings.general.debug_mode && settings.general.lua_hot_reload)
                 .unwrap_or(false);
-            plugin_xian_cheng
+            plugin_thread_success
                 .state::<watch::PluginWatch>()
-                .set_enabled(&plugin_xian_cheng, enabled);
+                .set_enabled(&plugin_thread_success, enabled);
         });
     }
 }
@@ -244,7 +244,7 @@ impl PluginHost {
             .iter()
             .map(|p| {
                 let m = &p.manifest.meta;
-                let ji_de = self.installed.record(&m.id);
+                let record = self.installed.record(&m.id);
                 let (state, error) = match (&p.state, self.is_enabled(&m.id)) {
                     (_, false) => ("disabled", None),
                     (PluginState::Loaded, _) => ("loaded", None),
@@ -261,7 +261,11 @@ impl PluginHost {
                     host_api: NOTA_PLUGIN_API_VERSION.to_string(),
                     api_supported: NOTA_PLUGIN_API_VERSION.supports(m.api),
 
-                    description: p.language_2.miao_shu().unwrap_or(&m.description).to_owned(),
+                    description: p
+                        .language_2
+                        .description_data()
+                        .unwrap_or(&m.description)
+                        .to_owned(),
                     authors: m.authors.clone(),
                     license: m.license.clone(),
                     capabilities: m.capabilities.clone(),
@@ -270,15 +274,15 @@ impl PluginHost {
                     state: state.to_owned(),
                     error,
                     langs: m.langs.clone(),
-                    lang: p.language_2.lang.clone(),
-                    lang_ok: p.language_2.ok,
-                    origin: if zai_yong_hu_directory_li(&p.manifest.dir) {
+                    language: p.language_2.language.clone(),
+                    language_ok: p.language_2.ok,
+                    origin: if at_use_call_directory_inner(&p.manifest.dir) {
                         "user"
                     } else {
                         "builtin"
                     }
                     .to_owned(),
-                    signature: ji_de.and_then(|r| r.signature).map(|s| {
+                    signature: record.and_then(|r| r.signature).map(|s| {
                         match s {
                             Signature::Verified => "verified",
                             Signature::Unknown => "unknown",
@@ -286,10 +290,10 @@ impl PluginHost {
                         }
                         .to_owned()
                     }),
-                    key_id: ji_de.and_then(|r| r.key_id.clone()),
+                    key_id: record.and_then(|r| r.key_id.clone()),
                     removable: true,
 
-                    settings: settings_ge(&p.manifest, &p.language_2),
+                    settings: settings(&p.manifest, &p.language_2),
                     setting_locks: p
                         .manifest
                         .setting_locks
@@ -305,11 +309,11 @@ impl PluginHost {
         self.plugins.iter().find(|p| p.manifest.meta.id == id)
     }
 
-    fn wei_zhi(&self, id: &str) -> Option<usize> {
+    fn position_only(&self, id: &str) -> Option<usize> {
         self.plugins.iter().position(|p| p.manifest.meta.id == id)
     }
 
-    fn shang_xia_wen(&self, id: &str) -> HostContext {
+    fn upper_lower_text(&self, id: &str) -> HostContext {
         HostContext {
             plugin_id: id.to_owned(),
             ..self.base.clone()
@@ -341,7 +345,7 @@ impl PluginHost {
 
         let enabled = self.extensions_enabled && self.installed.is_enabled(&id);
         let replacement = if enabled {
-            LuaPlugin::load(manifest, self.shang_xia_wen(&id))
+            LuaPlugin::load(manifest, self.upper_lower_text(&id))
         } else {
             LuaPlugin::disabled(manifest, &self.base.application_language)
         };
@@ -355,7 +359,7 @@ impl PluginHost {
         if old.state == PluginState::Loaded {
             old.unload();
         }
-        self.receive_tan(&id);
+        self.receive_probe(&id);
         if let Err(error) = self.apply_setting_locks() {
             if std::env::var_os("NOTA_DEBUG").is_some() {
                 eprintln!("[nota] could not reapply setting locks after reload: {error}");
@@ -381,7 +385,7 @@ impl PluginHost {
             if enabled {
                 if self.installed.is_enabled(&id) && self.plugins[i].state != PluginState::Loaded {
                     let manifest = self.plugins[i].manifest.clone();
-                    let ctx = self.shang_xia_wen(&id);
+                    let ctx = self.upper_lower_text(&id);
                     self.plugins[i] = LuaPlugin::load(manifest, ctx);
                     changed += 1;
                 }
@@ -390,7 +394,7 @@ impl PluginHost {
                     self.plugins[i].unload();
                     changed += 1;
                 }
-                self.receive_tan(&id);
+                self.receive_probe(&id);
                 let manifest = self.plugins[i].manifest.clone();
                 self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.application_language);
             }
@@ -414,7 +418,7 @@ impl PluginHost {
             ));
         }
         let i = self
-            .wei_zhi(id)
+            .position_only(id)
             .ok_or_else(|| NotaError::other(format!("Extension not found: {id}")))?;
 
         if enabled {
@@ -422,7 +426,7 @@ impl PluginHost {
 
             if self.plugins[i].state != PluginState::Loaded {
                 let manifest = self.plugins[i].manifest.clone();
-                let ctx = self.shang_xia_wen(id);
+                let ctx = self.upper_lower_text(id);
                 self.plugins[i] = LuaPlugin::load(manifest, ctx);
             }
         } else {
@@ -430,7 +434,7 @@ impl PluginHost {
             if self.plugins[i].state == PluginState::Loaded {
                 self.plugins[i].unload();
             }
-            self.receive_tan(id);
+            self.receive_probe(id);
             let manifest = self.plugins[i].manifest.clone();
             self.plugins[i] = LuaPlugin::disabled(manifest, &self.base.application_language);
         }
@@ -438,7 +442,7 @@ impl PluginHost {
         Ok(())
     }
 
-    fn receive_tan(&self, id: &str) {
+    fn receive_probe(&self, id: &str) {
         crate::devserver::stop(
             &self.base.app.state::<crate::devserver::DevServerState>(),
             id,
@@ -452,7 +456,7 @@ impl PluginHost {
         }
     }
 
-    fn ke_diao_yong_de(&self, plugin_id: &str) -> Result<&LuaPlugin> {
+    fn can_drop_use(&self, plugin_id: &str) -> Result<&LuaPlugin> {
         let plugin = self
             .get(plugin_id)
             .ok_or_else(|| NotaError::other(format!("Extension not found: {plugin_id}")))?;
@@ -477,22 +481,22 @@ impl PluginHost {
         command: &str,
         args: mlua::Value,
     ) -> Result<mlua::Value> {
-        self.ke_diao_yong_de(plugin_id)?.call_command(command, args)
+        self.can_drop_use(plugin_id)?.call_command(command, args)
     }
 
     pub fn panel_content(&self, plugin_id: &str, panel_id: &str) -> Result<serde_json::Value> {
-        let plugin = self.ke_diao_yong_de(plugin_id)?;
-        crate::lua::api::ui::mian_ban_content(&plugin.lua, plugin_id, panel_id)
+        let plugin = self.can_drop_use(plugin_id)?;
+        crate::lua::api::ui::surface_half_content(&plugin.lua, plugin_id, panel_id)
     }
 
-    fn sheng_xiao_de(&self) -> impl Iterator<Item = &LuaPlugin> {
+    fn generate_small(&self) -> impl Iterator<Item = &LuaPlugin> {
         self.plugins
             .iter()
             .filter(|p| p.is_loaded() && self.is_enabled(&p.manifest.meta.id))
     }
 
     pub fn find_command_owner(&self, command: &str) -> Option<&str> {
-        self.sheng_xiao_de()
+        self.generate_small()
             .find(|p| {
                 p.lua
                     .named_registry_value::<mlua::Table>("nota_commands")
@@ -503,16 +507,16 @@ impl PluginHost {
     }
 
     pub fn panels(&self) -> Vec<PluginPanel> {
-        self.sheng_xiao_de()
-            .flat_map(|p| read_mian_ban(&p.lua, &p.manifest.meta.id))
+        self.generate_small()
+            .flat_map(|p| read_surface_half(&p.lua, &p.manifest.meta.id))
             .collect()
     }
 
     pub fn live_panels(&self) -> Vec<(String, String)> {
-        self.sheng_xiao_de()
+        self.generate_small()
             .flat_map(|p| {
                 let id = p.manifest.meta.id.clone();
-                read_mian_ban(&p.lua, &id)
+                read_surface_half(&p.lua, &id)
                     .into_iter()
                     .filter(|panel| panel.live)
                     .map(|panel| (id.clone(), panel.id))
@@ -522,8 +526,8 @@ impl PluginHost {
     }
 
     pub fn menus(&self) -> Vec<PluginMenuItem> {
-        self.sheng_xiao_de()
-            .flat_map(|p| read_cai_dan(&p.lua, &p.manifest.meta.id))
+        self.generate_small()
+            .flat_map(|p| read_extract_single(&p.lua, &p.manifest.meta.id))
             .collect()
     }
 
@@ -549,13 +553,11 @@ impl PluginHost {
         }
     }
 
-    fn pin_dao_bei_zhan(&self, id: &str) -> Option<String> {
-        let wo_de = manifest::channel_id(id);
+    fn spell_to_passive_expand(&self, id: &str) -> Option<String> {
+        let my = manifest::channel_id(id);
         self.plugins
             .iter()
-            .find(|p| {
-                p.manifest.meta.id != id && manifest::channel_id(&p.manifest.meta.id) == wo_de
-            })
+            .find(|p| p.manifest.meta.id != id && manifest::channel_id(&p.manifest.meta.id) == my)
             .map(|p| p.manifest.meta.id.clone())
     }
 }
@@ -567,25 +569,25 @@ fn extensions_enabled_from(base: &HostContext) -> bool {
         .unwrap_or(true)
 }
 
-fn settings_ge(manifest: &Manifest, language_2: &LanguagePack) -> Vec<PluginSetting> {
+fn settings(manifest: &Manifest, language_2: &LanguagePack) -> Vec<PluginSetting> {
     if manifest.settings.is_empty() {
         return Vec::new();
     }
 
-    let file_li = crate::lua::api::settings::read_quan_bu(&manifest.meta.id);
+    let file_inner = crate::lua::api::settings::read_full_not(&manifest.meta.id);
 
     manifest
         .settings
         .iter()
         .map(|s| {
-            let value_2 = s.qiu_value(file_li.get(&s.key));
+            let value_2 = s.request_value(file_inner.get(&s.key));
 
             PluginSetting {
                 key: s.key.clone(),
                 kind: s.kind.clone(),
 
-                label: yi_3(language_2, &s.label),
-                help: yi_3(language_2, &s.help),
+                label: value_3(language_2, &s.label),
+                help: value_3(language_2, &s.help),
                 min: s.min.unwrap_or(0.0),
                 max: s.max.unwrap_or(0.0),
                 step: s.step(),
@@ -603,21 +605,24 @@ fn settings_ge(manifest: &Manifest, language_2: &LanguagePack) -> Vec<PluginSett
                     crate::plugin::settings_decl::SettingsValue::Toggle(true)
                 ),
                 secret: s.secret,
-                placeholder: yi_3(language_2, &s.placeholder),
+                placeholder: value_3(language_2, &s.placeholder),
             }
         })
         .collect()
 }
 
-fn yi_3(language_2: &LanguagePack, yuan_wen: &str) -> String {
-    if yuan_wen.is_empty() {
+fn value_3(language_2: &LanguagePack, source_text: &str) -> String {
+    if source_text.is_empty() {
         return String::new();
     }
-    language_2.qu_2(yuan_wen).unwrap_or(yuan_wen).to_owned()
+    language_2
+        .get_2(source_text)
+        .unwrap_or(source_text)
+        .to_owned()
 }
 
-pub(crate) fn read_mian_ban(lua: &Lua, plugin_id: &str) -> Vec<PluginPanel> {
-    declaration_de(lua, REG_PANELS)
+pub(crate) fn read_surface_half(lua: &Lua, plugin_id: &str) -> Vec<PluginPanel> {
+    declaration(lua, REG_PANELS)
         .into_iter()
         .map(|s| PluginPanel {
             plugin: plugin_id.to_owned(),
@@ -642,8 +647,8 @@ pub(crate) fn read_mian_ban(lua: &Lua, plugin_id: &str) -> Vec<PluginPanel> {
         .collect()
 }
 
-pub(crate) fn read_cai_dan(lua: &Lua, plugin_id: &str) -> Vec<PluginMenuItem> {
-    declaration_de(lua, REG_MENUS)
+pub(crate) fn read_extract_single(lua: &Lua, plugin_id: &str) -> Vec<PluginMenuItem> {
+    declaration(lua, REG_MENUS)
         .into_iter()
         .map(|s| PluginMenuItem {
             plugin: plugin_id.to_owned(),
@@ -655,12 +660,12 @@ pub(crate) fn read_cai_dan(lua: &Lua, plugin_id: &str) -> Vec<PluginMenuItem> {
             prompt: s
                 .get::<mlua::Table>("prompt")
                 .ok()
-                .and_then(|p| read_ti_shi(&p)),
+                .and_then(|p| read_question_is(&p)),
         })
         .collect()
 }
 
-fn read_ti_shi(t: &mlua::Table) -> Option<PluginPrompt> {
+fn read_question_is(t: &mlua::Table) -> Option<PluginPrompt> {
     let arg: String = t.get("arg").ok()?;
     if arg.is_empty() {
         return None;
@@ -668,7 +673,7 @@ fn read_ti_shi(t: &mlua::Table) -> Option<PluginPrompt> {
 
     let second_arg = t.get::<String>("secondArg").unwrap_or_default();
     let second_label = t.get::<String>("secondLabel").unwrap_or_default();
-    let liang_ge_dou_gei = !second_arg.is_empty() && !second_label.is_empty();
+    let two_all_give = !second_arg.is_empty() && !second_label.is_empty();
     Some(PluginPrompt {
         arg,
         label: t
@@ -679,17 +684,17 @@ fn read_ti_shi(t: &mlua::Table) -> Option<PluginPrompt> {
         placeholder: t.get::<String>("placeholder").unwrap_or_default(),
         hint: t.get::<String>("hint").unwrap_or_default(),
         secret: t.get::<bool>("secret").unwrap_or(false),
-        second_arg: if liang_ge_dou_gei {
+        second_arg: if two_all_give {
             second_arg
         } else {
             String::new()
         },
-        second_label: if liang_ge_dou_gei {
+        second_label: if two_all_give {
             second_label
         } else {
             String::new()
         },
-        second_placeholder: if liang_ge_dou_gei {
+        second_placeholder: if two_all_give {
             t.get::<String>("secondPlaceholder").unwrap_or_default()
         } else {
             String::new()
@@ -697,7 +702,7 @@ fn read_ti_shi(t: &mlua::Table) -> Option<PluginPrompt> {
     })
 }
 
-fn declaration_de(lua: &Lua, reg: &str) -> Vec<mlua::Table> {
+fn declaration(lua: &Lua, reg: &str) -> Vec<mlua::Table> {
     let Ok(list) = lua.named_registry_value::<mlua::Table>(reg) else {
         return Vec::new();
     };

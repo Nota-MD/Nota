@@ -60,20 +60,20 @@ use settings::Settings;
 use state::AppState;
 use tauri::{Emitter, Manager};
 
-fn pei_zhi_webkit_render_qi() {
+fn match_only_webkit_render_start() {
     if !cfg!(target_os = "linux") {
         return;
     }
     if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
         return;
     }
-    let an_quan_hui_tui = std::env::var("NOTA_SAFE_RENDERING").is_ok_and(|v| {
+    let by_full_return_derive = std::env::var("NOTA_SAFE_RENDERING").is_ok_and(|v| {
         matches!(
             v.trim().to_ascii_lowercase().as_str(),
             "1" | "true" | "yes" | "on"
         )
     });
-    if !an_quan_hui_tui {
+    if !by_full_return_derive {
         crate::debug_log!("[nota] WebKitGTK using default DMA-BUF/GPU rendering");
         return;
     }
@@ -84,7 +84,7 @@ fn pei_zhi_webkit_render_qi() {
     );
 }
 
-fn ji_lu_linux_display_backend() {
+fn record_path_linux_display_backend() {
     if !cfg!(target_os = "linux") {
         return;
     }
@@ -107,7 +107,7 @@ fn ji_lu_linux_display_backend() {
 }
 
 #[cfg(target_os = "linux")]
-fn pei_zhi_webview_huan_cun(app: &tauri::AppHandle) {
+fn match_only_webview_replace_store(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
@@ -135,15 +135,15 @@ fn pei_zhi_webview_huan_cun(app: &tauri::AppHandle) {
 }
 
 #[cfg(not(target_os = "linux"))]
-fn pei_zhi_webview_huan_cun(_app: &tauri::AppHandle) {}
+fn match_only_webview_replace_store(_app: &tauri::AppHandle) {}
 
 pub fn run() {
     let opens_debug_window = cli::wants_debug_window(std::env::args_os());
     let standalone_settings_window = cli::opens_settings_window(std::env::args_os());
 
     crate::debug_log!("[nota] debug mode enabled (NOTA_DEBUG); log output is normally suppressed");
-    pei_zhi_webkit_render_qi();
-    ji_lu_linux_display_backend();
+    match_only_webkit_render_start();
+    record_path_linux_display_backend();
 
     if cli::wants_debug_log(std::env::args_os()) {
         match debug_log::create_and_open() {
@@ -204,7 +204,7 @@ pub fn run() {
 
 
 
-            let (settings, qi_dong_shi_de_wen_ti) = match Settings::load() {
+            let (settings, start_dynamic_is_text_question) = match Settings::load() {
                 Ok(s) => (s, None),
                 Err(e) => {
                     crate::debug_log!("[nota] settings read failed; using defaults: {e}");
@@ -213,12 +213,12 @@ pub fn run() {
 
 
 
-                    let hua = e
+                    let render = e
                         .to_string()
                         .split_whitespace()
                         .collect::<Vec<_>>()
                         .join(" ");
-                    (Settings::default(), Some(hua))
+                    (Settings::default(), Some(render))
                 }
             };
             log::set_debug_mode(settings.general.debug_mode);
@@ -269,11 +269,11 @@ pub fn run() {
 
 
             let application_language = {
-                let she_ding = settings_arc
+                let set_define = settings_arc
                     .lock()
                     .map(|s| s.general.language.clone())
                     .unwrap_or_else(|_| crate::lang::AUTO.to_owned());
-                crate::lang::effective_language(&she_ding, crate::lang::xi_tong_language())
+                crate::lang::effective_language(&set_define, crate::lang::system_language())
             };
             crate::debug_log!("[nota] interface language: {application_language}");
 
@@ -299,9 +299,9 @@ pub fn run() {
                 workspace,
                 plugins: Mutex::new(plugins),
                 table_bridge,
-                settings_problem: qi_dong_shi_de_wen_ti,
+                settings_problem: start_dynamic_is_text_question,
 
-                app_lang: application_language,
+                app_language: application_language,
             });
             let bridge = dev_bridge::DevBridge::default();
             app.manage(bridge);
@@ -361,7 +361,7 @@ pub fn run() {
 
 
             app.manage(focus::FocusState::default());
-            focus::qi(app.handle().clone());
+            focus::start(app.handle().clone());
             app.manage(window_registry::WindowRegistry::register());
 
 
@@ -372,12 +372,12 @@ pub fn run() {
                 single_instance::start(app.handle().clone(), listener);
             }
             app.manage(plugin::DeferredDiscovery::new(resource_dir, base));
-            pei_zhi_webview_huan_cun(app.handle());
+            match_only_webview_replace_store(app.handle());
 
 
 
 
-            url_scheme::zhu_ce();
+            url_scheme::main_side();
 
 
 
@@ -501,7 +501,7 @@ pub fn run() {
             spell::nota_spell_word_ignore,
             commands::settings::nota_settings_open_dir,
             commands::settings::nota_settings_problem,
-            commands::settings::nota_app_lang,
+            commands::settings::nota_app_language,
             commands::settings::nota_settings_reset,
             commands::settings::nota_settings_export_inventory,
             commands::settings::nota_settings_export,
@@ -584,7 +584,7 @@ pub fn run() {
                     let _ = window.hide();
                     return;
                 }
-                if window.label() == "main" && guan_window_qian_yao_wen(window) {
+                if window.label() == "main" && close_window_before_need_text(window) {
                     api.prevent_close();
                     let _ = window.app_handle().emit("nota:close-requested", ());
                 }
@@ -602,10 +602,10 @@ pub fn run() {
 
 
 
-            if let tauri::WindowEvent::Focused(you_jiao_dian) = event {
+            if let tauri::WindowEvent::Focused(has_call_point) = event {
                 if window.label() == "main" {
                     if let Some(status_2) = window.try_state::<focus::FocusState>() {
-                        focus::window_kou_jiao_dian(&status_2, *you_jiao_dian);
+                        focus::window_port_call_point(&status_2, *has_call_point);
                     }
                 }
             }
@@ -795,16 +795,16 @@ pub fn run() {
         })
 }
 
-fn guan_window_qian_yao_wen(window: &tauri::Window) -> bool {
+fn close_window_before_need_text(window: &tauri::Window) -> bool {
     let Some(state) = window.try_state::<AppState>() else {
         return false;
     };
-    let you_wei_save = state
+    let has_position_save = state
         .documents
         .lock()
         .map(|docs| docs.has_unsaved())
         .unwrap_or(false);
-    if !you_wei_save {
+    if !has_position_save {
         return false;
     }
     state

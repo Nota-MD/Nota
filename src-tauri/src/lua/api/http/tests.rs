@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn zhi_fang_xing_https_he_hui_huan_de_http() {
+fn only_method_line_https_and_return_replace_http() {
     for ok in [
         "https://api.anthropic.com/v1/messages",
         "https://example.com",
@@ -32,62 +32,62 @@ fn zhi_fang_xing_https_he_hui_huan_de_http() {
 }
 
 #[test]
-fn qu_zhu_ji_yao_neng_chai_chu_duan_kou_he_userinfo() {
-    assert_eq!(qu_zhu_ji("example.com/a/b?c#d"), "example.com");
-    assert_eq!(qu_zhu_ji("example.com:8443/a"), "example.com");
-    assert_eq!(qu_zhu_ji("user:pw@example.com/a"), "example.com");
-    assert_eq!(qu_zhu_ji("[::1]:8080/x"), "::1");
-    assert_eq!(qu_zhu_ji("Example.COM"), "example.com");
+fn get_main_record_need_can_split_out_segment_port_and_userinfo() {
+    assert_eq!(get_main_record("example.com/a/b?c#d"), "example.com");
+    assert_eq!(get_main_record("example.com:8443/a"), "example.com");
+    assert_eq!(get_main_record("user:pw@example.com/a"), "example.com");
+    assert_eq!(get_main_record("[::1]:8080/x"), "::1");
+    assert_eq!(get_main_record("Example.COM"), "example.com");
 
-    assert_eq!(qu_zhu_ji("127.0.0.1@evil.com/x"), "evil.com");
+    assert_eq!(get_main_record("127.0.0.1@evil.com/x"), "evil.com");
 }
 
 #[test]
-fn zhu_ji_ming_pian_bu_guo_hui_huan_pan_ding() {
+fn main_record_name_piece_not_passed_return_replace_parse_define() {
     for host in ["127.0.0.1.evil.com", "localhost.evil.com", "notlocalhost"] {
         assert!(
-            !shi_hui_huan(host),
+            !is_return_replace(host),
             "`{host}` \u{88ab}\u{5f53}\u{6210}\u{4e86}\u{56de}\u{73af}"
         );
     }
-    assert!(shi_hui_huan("127.0.0.1"));
-    assert!(shi_hui_huan("localhost"));
-    assert!(shi_hui_huan("::1"));
+    assert!(is_return_replace("127.0.0.1"));
+    assert!(is_return_replace("localhost"));
+    assert!(is_return_replace("::1"));
 }
 
 #[test]
-fn fang_fa_zhi_you_na_liu_ge() {
-    assert!(YUN_XU_DE_FANG_FA.contains(&"GET"));
-    assert!(YUN_XU_DE_FANG_FA.contains(&"POST"));
-    assert!(!YUN_XU_DE_FANG_FA.contains(&"CONNECT"));
-    assert!(!YUN_XU_DE_FANG_FA.contains(&"TRACE"));
+fn method_method_only_has_that_stream() {
+    assert!(RUN_REQUIRED_METHOD_METHOD.contains(&"GET"));
+    assert!(RUN_REQUIRED_METHOD_METHOD.contains(&"POST"));
+    assert!(!RUN_REQUIRED_METHOD_METHOD.contains(&"CONNECT"));
+    assert!(!RUN_REQUIRED_METHOD_METHOD.contains(&"TRACE"));
 }
 
 #[test]
-fn chao_shi_jie_dao_shang_xian() {
+fn overflow_is_boundary_to_upper_thread() {
     let lua = Lua::new();
     let t = lua.create_table().unwrap();
-    assert_eq!(chao_shi(&t).unwrap(), DEFAULT_CHAO_SHI);
+    assert_eq!(overflow_is(&t).unwrap(), DEFAULT_OVERFLOW_IS);
 
     t.set("timeout_ms", 5_000u64).unwrap();
-    assert_eq!(chao_shi(&t).unwrap(), Duration::from_secs(5));
+    assert_eq!(overflow_is(&t).unwrap(), Duration::from_secs(5));
 
     t.set("timeout_ms", 600_000u64).unwrap();
     assert_eq!(
-        chao_shi(&t).unwrap(),
-        ZUI_ZHANG_CHAO_SHI,
+        overflow_is(&t).unwrap(),
+        MOST_LENGTH_OVERFLOW_IS,
         "\u{8d85}\u{957f}\u{7684}\u{8d85}\u{65f6}\u{8be5}\u{88ab}\u{622a}\u{5230}\u{4e0a}\u{9650}"
     );
 
     t.set("timeout_ms", 0u64).unwrap();
-    assert!(chao_shi(&t).is_err(), "0 \u{662f}\u{6ca1}\u{610f}\u{4e49}\u{7684}\u{8d85}\u{65f6}\u{ff0c}\u{8be5}\u{62a5}\u{9519}");
+    assert!(overflow_is(&t).is_err(), "0 \u{662f}\u{6ca1}\u{610f}\u{4e49}\u{7684}\u{8d85}\u{65f6}\u{ff0c}\u{8be5}\u{62a5}\u{9519}");
 }
 
 #[test]
-fn liang_zhong_write_fa_dou_gui_yi_hua() {
+fn two_middle_write_method_all_normalize_one_render() {
     let lua = Lua::new();
 
-    let t = gui_yi_hua(
+    let t = normalize_one_render(
         &lua,
         Value::String(lua.create_string("https://x/").unwrap()),
         "GET",
@@ -98,44 +98,44 @@ fn liang_zhong_write_fa_dou_gui_yi_hua() {
 
     let spec = lua.create_table().unwrap();
     spec.set("url", "https://y/").unwrap();
-    gui_yi_hua(&lua, Value::Table(spec.clone()), "POST").unwrap();
+    normalize_one_render(&lua, Value::Table(spec.clone()), "POST").unwrap();
     assert_eq!(spec.get::<String>("method").unwrap(), "POST");
 
     let spec2 = lua.create_table().unwrap();
     spec2.set("url", "https://z/").unwrap();
     spec2.set("method", "PUT").unwrap();
-    let t = gui_yi_hua(&lua, Value::Table(spec2), "POST").unwrap();
+    let t = normalize_one_render(&lua, Value::Table(spec2), "POST").unwrap();
     assert_eq!(t.get::<String>("method").unwrap(), "PUT");
 
-    assert!(gui_yi_hua(&lua, Value::Integer(1), "GET").is_err());
+    assert!(normalize_one_render(&lua, Value::Integer(1), "GET").is_err());
 }
 
 #[test]
-fn ren_de_plugin_zi_ji_write_de_content_type() {
+fn person_plugin_character_record_write_content_type() {
     let lua = Lua::new();
 
-    let kong = lua.create_table().unwrap();
-    assert!(!write_le_content_type(&kong));
+    let empty = lua.create_table().unwrap();
+    assert!(!write_content_type(&empty));
 
-    let bie_de = lua.create_table().unwrap();
-    bie_de.set("authorization", "Bearer sk-x").unwrap();
-    assert!(!write_le_content_type(&bie_de));
+    let other = lua.create_table().unwrap();
+    other.set("authorization", "Bearer sk-x").unwrap();
+    assert!(!write_content_type(&other));
 
-    let da_write = lua.create_table().unwrap();
-    da_write
+    let large_write = lua.create_table().unwrap();
+    large_write
         .set("Content-Type", "application/json; charset=utf-8")
         .unwrap();
-    assert!(write_le_content_type(&da_write));
+    assert!(write_content_type(&large_write));
 
-    let xiao_write = lua.create_table().unwrap();
-    xiao_write.set("content-type", "text/plain").unwrap();
-    assert!(write_le_content_type(&xiao_write));
+    let small_write = lua.create_table().unwrap();
+    small_write.set("content-type", "text/plain").unwrap();
+    assert!(write_content_type(&small_write));
 }
 
 #[test]
-fn xiang_ying_shi_json_jiu_chai_ok_fang_jin_qu() {
+fn item_should_is_json_old_split_ok_method_enter_get() {
     let lua = Lua::new();
-    let t = receive_kou(
+    let t = receive_port(
         &lua,
         Ok(RequestOutcome::Response(HttpResponse {
             code: 200,
@@ -163,9 +163,9 @@ fn xiang_ying_shi_json_jiu_chai_ok_fang_jin_qu() {
 }
 
 #[test]
-fn bu_shi_json_jiu_mei_you_json_zhe_ge_jian() {
+fn not_is_json_old_each_has_json_check() {
     let lua = Lua::new();
-    let t = receive_kou(
+    let t = receive_port(
         &lua,
         Ok(RequestOutcome::Response(HttpResponse {
             code: 502,
@@ -186,9 +186,9 @@ fn bu_shi_json_jiu_mei_you_json_zhe_ge_jian() {
 }
 
 #[test]
-fn huan_jing_lei_shi_bai_shi_result_table_bu_pao_cuo() {
+fn replace_static_kind_is_percent_is_result_table_not_run_error() {
     let lua = Lua::new();
-    let t = receive_kou(&lua, Ok(RequestOutcome::EnvironmentFailure("\u{8bf7}\u{6c42}\u{5931}\u{8d25}\u{ff1a}\u{8fde}\u{63a5}\u{88ab}\u{62d2}".to_owned())))
+    let t = receive_port(&lua, Ok(RequestOutcome::EnvironmentFailure("\u{8bf7}\u{6c42}\u{5931}\u{8d25}\u{ff1a}\u{8fde}\u{63a5}\u{88ab}\u{62d2}".to_owned())))
         .expect("\u{73af}\u{5883}\u{7c7b}\u{5931}\u{8d25}**\u{4e0d}\u{8bb8}**\u{53d8}\u{6210} Lua \u{9519}\u{8bef}");
 
     assert_eq!(t.get::<bool>("ok").unwrap(), false);
@@ -202,9 +202,9 @@ fn huan_jing_lei_shi_bai_shi_result_table_bu_pao_cuo() {
 }
 
 #[test]
-fn args_write_cuo_zhao_jiu_pao() {
+fn args_write_error_find_old_run() {
     let lua = Lua::new();
-    let e = receive_kou(
+    let e = receive_port(
         &lua,
         Err(NotaError::other(
             "\u{4e0d}\u{652f}\u{6301} `TRACE` \u{65b9}\u{6cd5}",
@@ -214,9 +214,9 @@ fn args_write_cuo_zhao_jiu_pao() {
 }
 
 #[test]
-fn na_dao_hui_ying_shi_ok_shi_zhen_de() {
+fn that_to_return_should_is_ok_is_real() {
     let lua = Lua::new();
-    let t = receive_kou(
+    let t = receive_port(
         &lua,
         Ok(RequestOutcome::Response(HttpResponse {
             code: 404,
@@ -229,245 +229,248 @@ fn na_dao_hui_ying_shi_ok_shi_zhen_de() {
     assert_eq!(t.get::<u16>("code").unwrap(), 404);
 }
 
-fn zhuang_fu_wu_qi(
-    xiang_ying_tou: String,
-    kuai_men: Vec<Vec<u8>>,
+fn state_service_none_start(
+    item_should_header: String,
+    block_list: Vec<Vec<u8>>,
 ) -> (String, std::thread::JoinHandle<()>) {
     use std::io::{Read as _, Write as _};
-    let jian_ting = std::net::TcpListener::bind("127.0.0.1:0")
+    let check_listen = std::net::TcpListener::bind("127.0.0.1:0")
         .expect("\u{7ed1}\u{4e0d}\u{4e0a}\u{56de}\u{73af}\u{7aef}\u{53e3}");
-    let address_2 = jian_ting.local_addr().unwrap();
-    let ba_shou = std::thread::spawn(move || {
-        let (mut lian, _) = jian_ting
+    let address_2 = check_listen.local_addr().unwrap();
+    let handle_receive = std::thread::spawn(move || {
+        let (mut link, _) = check_listen
             .accept()
             .expect("\u{6ca1}\u{4eba}\u{8fde}\u{4e0a}\u{6765}");
 
-        let mut dao_diao = [0u8; 4096];
-        let _ = lian.read(&mut dao_diao);
-        lian.write_all(xiang_ying_tou.as_bytes()).unwrap();
-        lian.flush().unwrap();
-        for kuai_2 in kuai_men {
-            lian.write_all(&kuai_2).unwrap();
-            lian.flush().unwrap();
+        let mut to_drop = [0u8; 4096];
+        let _ = link.read(&mut to_drop);
+        link.write_all(item_should_header.as_bytes()).unwrap();
+        link.flush().unwrap();
+        for value_2 in block_list {
+            link.write_all(&value_2).unwrap();
+            link.flush().unwrap();
             std::thread::sleep(Duration::from_millis(20));
         }
-        let _ = lian.shutdown(std::net::Shutdown::Write);
+        let _ = link.shutdown(std::net::Shutdown::Write);
 
-        while let Ok(n) = lian.read(&mut dao_diao) {
+        while let Ok(n) = link.read(&mut to_drop) {
             if n == 0 {
                 break;
             }
         }
     });
-    (format!("http://{address_2}/v1/chat/completions"), ba_shou)
+    (
+        format!("http://{address_2}/v1/chat/completions"),
+        handle_receive,
+    )
 }
 
-fn fen_kuai_xiang_ying(ti: &str) -> (String, Vec<Vec<u8>>) {
-    let tou = format!(
+fn part_block_item_should(question: &str) -> (String, Vec<Vec<u8>>) {
+    let header = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\n\r\n",
-        ti.len()
+        question.len()
     );
 
-    let kuai_men = ti.as_bytes().chunks(8).map(|c| c.to_vec()).collect();
-    (tou, kuai_men)
+    let block_list = question.as_bytes().chunks(8).map(|c| c.to_vec()).collect();
+    (header, block_list)
 }
 
-fn receive_ji_kuai() -> (
+fn receive_record_block() -> (
     std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     Lua,
     mlua::Function,
 ) {
     use std::sync::{Arc, Mutex};
     let lua = Lua::new();
-    let kuang = Arc::new(Mutex::new(Vec::new()));
-    let kuang_2 = kuang.clone();
+    let frame = Arc::new(Mutex::new(Vec::new()));
+    let frame_2 = frame.clone();
     let f = lua
-        .create_function(move |_, kuai_2: String| {
-            kuang_2.lock().unwrap().push(kuai_2);
+        .create_function(move |_, value_2: String| {
+            frame_2.lock().unwrap().push(value_2);
             Ok(())
         })
         .unwrap();
-    (kuang, lua, f)
+    (frame, lua, f)
 }
 
 #[test]
-fn liu_shi_de_mei_yi_kuai_dou_bu_qie_ban_ge_han_zi() {
-    let ti = "data: {\"choices\":[{\"delta\":{\"content\":\"\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}\"}}]}\n\n\
+fn stream_is_each_one_block_all_not_cut_half_contain_character() {
+    let question = "data: {\"choices\":[{\"delta\":{\"content\":\"\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}\"}}]}\n\n\
               data: {\"choices\":[{\"delta\":{\"content\":\"\u{518d}\u{89c1}\"}}]}\n\n\
               data: [DONE]\n\n";
-    let (tou, kuai_men) = fen_kuai_xiang_ying(ti);
-    let (address_2, ba_shou) = zhuang_fu_wu_qi(tou, kuai_men);
+    let (header, block_list) = part_block_item_should(question);
+    let (address_2, handle_receive) = state_service_none_start(header, block_list);
 
-    let (kuang, lua, f) = receive_ji_kuai();
+    let (frame, lua, f) = receive_record_block();
     let spec = lua.create_table().unwrap();
     spec.set("url", address_2).unwrap();
     spec.set("method", "POST").unwrap();
 
-    let luo = liu_shi(&lua, &spec, &f).unwrap();
-    let (bao, kuai_shu, zhong_duan) = match luo {
+    let land = stream_is(&lua, &spec, &f).unwrap();
+    let (package, block_data, middle_segment) = match land {
         super::RequestOutcome::Streamed {
-            bao,
-            kuai_shu,
-            zhong_duan,
-        } => (bao, kuai_shu, zhong_duan),
+            package,
+            block_data,
+            middle_segment,
+        } => (package, block_data, middle_segment),
         _ => panic!("\u{8be5}\u{662f}\u{6d41}\u{5b8c}"),
     };
-    ba_shou.join().unwrap();
+    handle_receive.join().unwrap();
 
-    assert_eq!(bao.code, 200);
-    assert!(!zhong_duan);
-    assert_eq!(bao.text, ti, "\u{6512}\u{8d77}\u{6765}\u{7684}\u{5168}\u{6587}\u{8981}**\u{9010}\u{5b57}**\u{7b49}\u{4e8e}\u{54cd}\u{5e94}\u{4f53}");
-    let kuai_men = kuang.lock().unwrap();
-    assert_eq!(kuai_men.concat(), ti, "\u{4ea4}\u{7ed9}\u{56de}\u{8c03}\u{7684}\u{90a3}\u{4e9b}\u{5757}\u{62fc}\u{8d77}\u{6765}\u{4e5f}\u{8981}\u{9010}\u{5b57}\u{7b49}\u{4e8e}\u{54cd}\u{5e94}\u{4f53}");
+    assert_eq!(package.code, 200);
+    assert!(!middle_segment);
+    assert_eq!(package.text, question, "\u{6512}\u{8d77}\u{6765}\u{7684}\u{5168}\u{6587}\u{8981}**\u{9010}\u{5b57}**\u{7b49}\u{4e8e}\u{54cd}\u{5e94}\u{4f53}");
+    let block_list = frame.lock().unwrap();
+    assert_eq!(block_list.concat(), question, "\u{4ea4}\u{7ed9}\u{56de}\u{8c03}\u{7684}\u{90a3}\u{4e9b}\u{5757}\u{62fc}\u{8d77}\u{6765}\u{4e5f}\u{8981}\u{9010}\u{5b57}\u{7b49}\u{4e8e}\u{54cd}\u{5e94}\u{4f53}");
     assert!(
-        kuai_shu >= 3,
-        "\u{6869}\u{5206}\u{4e86} {} \u{6bb5}\u{6162}\u{5199}\u{ff0c}\u{62ff}\u{5230} {kuai_shu} \u{5757}\u{2014}\u{2014}\u{592a}\u{5c11}\u{8bf4}\u{660e}\u{662f}\u{618b}\u{5b8c}\u{624d}\u{7ed9}\u{7684}",
-        ti.len() / 8
+        block_data >= 3,
+        "\u{6869}\u{5206}\u{4e86} {} \u{6bb5}\u{6162}\u{5199}\u{ff0c}\u{62ff}\u{5230} {block_data} \u{5757}\u{2014}\u{2014}\u{592a}\u{5c11}\u{8bf4}\u{660e}\u{662f}\u{618b}\u{5b8c}\u{624d}\u{7ed9}\u{7684}",
+        question.len() / 8
     );
 
-    for (i, kuai_2) in kuai_men.iter().enumerate() {
-        assert!(!kuai_2.contains('\u{FFFD}'), "\u{7b2c} {i} \u{5757}\u{91cc}\u{6709}\u{66ff}\u{6362}\u{5b57}\u{7b26}\u{ff1a}{kuai_2:?}");
+    for (i, value_2) in block_list.iter().enumerate() {
+        assert!(!value_2.contains('\u{FFFD}'), "\u{7b2c} {i} \u{5757}\u{91cc}\u{6709}\u{66ff}\u{6362}\u{5b57}\u{7b26}\u{ff1a}{value_2:?}");
     }
 }
 
 #[test]
-fn man_man_tu_de_zhang_hui_da_bu_gai_bei_zong_shi_xian_qia_diao() {
-    let kuai_2 = 30;
-    let ti: String = (0..kuai_2)
+fn full_full_image_length_return_large_not_change_passive_total_is_thread_match_drop() {
+    let value_2 = 30;
+    let question: String = (0..value_2)
         .map(|i| format!("data: {{\"i\":{i}}}\n\n"))
         .collect();
-    let tou = format!(
+    let header = format!(
         "HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: {}\r\n\r\n",
-        ti.len()
+        question.len()
     );
-    let kuai_men: Vec<Vec<u8>> = ti
+    let block_list: Vec<Vec<u8>> = question
         .as_bytes()
-        .chunks(ti.len() / kuai_2)
+        .chunks(question.len() / value_2)
         .map(|c| c.to_vec())
         .collect();
 
-    let (address_2, ba_shou) = zhuang_fu_wu_qi(tou, kuai_men);
+    let (address_2, handle_receive) = state_service_none_start(header, block_list);
 
-    let (kuang, lua, f) = receive_ji_kuai();
+    let (frame, lua, f) = receive_record_block();
     let spec = lua.create_table().unwrap();
     spec.set("url", address_2).unwrap();
     spec.set("method", "POST").unwrap();
 
     spec.set("timeout_ms", 600).unwrap();
 
-    let qi = std::time::Instant::now();
-    let luo = liu_shi(&lua, &spec, &f).unwrap();
-    let yong_le = qi.elapsed();
-    let (bao, kuai_shu, zhong_duan) = match luo {
+    let start = std::time::Instant::now();
+    let land = stream_is(&lua, &spec, &f).unwrap();
+    let elapsed = start.elapsed();
+    let (package, block_data, middle_segment) = match land {
         super::RequestOutcome::Streamed {
-            bao,
-            kuai_shu,
-            zhong_duan,
-        } => (bao, kuai_shu, zhong_duan),
-        super::RequestOutcome::EnvironmentFailure(hua) => {
-            panic!("\u{4e0d}\u{8be5}\u{5931}\u{8d25}\u{ff0c}\u{5b9e}\u{9645}\u{ff1a}{hua}")
+            package,
+            block_data,
+            middle_segment,
+        } => (package, block_data, middle_segment),
+        super::RequestOutcome::EnvironmentFailure(render) => {
+            panic!("\u{4e0d}\u{8be5}\u{5931}\u{8d25}\u{ff0c}\u{5b9e}\u{9645}\u{ff1a}{render}")
         }
         _ => panic!("\u{8be5}\u{662f}\u{6d41}\u{5b8c}"),
     };
-    let _ = ba_shou.join();
+    let _ = handle_receive.join();
 
-    assert_eq!(bao.code, 200);
+    assert_eq!(package.code, 200);
     assert!(
-        !zhong_duan,
+        !middle_segment,
         "\u{6ca1}\u{6709}\u{4efb}\u{4f55}\u{4e00}\u{5757}\u{8be5}\u{88ab}\u{6390}\u{6389}"
     );
     assert_eq!(
-        bao.text, ti,
+        package.text, question,
         "\u{5168}\u{6587}\u{8981}\u{9010}\u{5b57}\u{6536}\u{9f50}"
     );
-    assert_eq!(kuang.lock().unwrap().concat(), ti);
+    assert_eq!(frame.lock().unwrap().concat(), question);
     assert!(
-        kuai_shu >= kuai_2,
-        "\u{6869}\u{5206}\u{4e86} {kuai_2} \u{6bb5}\u{6162}\u{5199}\u{ff0c}\u{53ea}\u{62ff}\u{5230} {kuai_shu} \u{5757}\u{2014}\u{2014}\u{8bf4}\u{660e}\u{4e2d}\u{9014}\u{88ab}\u{6390}\u{4e86}"
+        block_data >= value_2,
+        "\u{6869}\u{5206}\u{4e86} {value_2} \u{6bb5}\u{6162}\u{5199}\u{ff0c}\u{53ea}\u{62ff}\u{5230} {block_data} \u{5757}\u{2014}\u{2014}\u{8bf4}\u{660e}\u{4e2d}\u{9014}\u{88ab}\u{6390}\u{4e86}"
     );
 
     assert!(
-        yong_le > Duration::from_millis(600),
-        "\u{8fd9}\u{6761}\u{7528}\u{4f8b}\u{8981}\u{7684}\u{662f}\u{300c}\u{603b}\u{65f6}\u{957f}\u{8d85}\u{8fc7}\u{65f6}\u{9650}\u{300d}\u{ff0c}\u{5b9e}\u{6d4b}\u{53ea}\u{7528}\u{4e86} {yong_le:?}\u{2014}\u{2014}\u{5939}\u{5177}\u{592a}\u{5feb}\u{4e86}\u{ff1f}"
+        elapsed > Duration::from_millis(600),
+        "\u{8fd9}\u{6761}\u{7528}\u{4f8b}\u{8981}\u{7684}\u{662f}\u{300c}\u{603b}\u{65f6}\u{957f}\u{8d85}\u{8fc7}\u{65f6}\u{9650}\u{300d}\u{ff0c}\u{5b9e}\u{6d4b}\u{53ea}\u{7528}\u{4e86} {elapsed:?}\u{2014}\u{2014}\u{5939}\u{5177}\u{592a}\u{5feb}\u{4e86}\u{ff1f}"
     );
 }
 
 #[test]
-fn hui_diao_fan_hui_false_jiu_dang_chang_receive_gong() {
-    let ti = "\u{7b2c}\u{4e00}\u{5757}\n\u{7b2c}\u{4e8c}\u{5757}\n\u{7b2c}\u{4e09}\u{5757}\n\u{7b2c}\u{56db}\u{5757}\n\u{7b2c}\u{4e94}\u{5757}\n\u{7b2c}\u{516d}\u{5757}\n\u{7b2c}\u{4e03}\u{5757}\n\u{7b2c}\u{516b}\u{5757}\n";
-    let (tou, kuai_men) = fen_kuai_xiang_ying(ti);
-    let (address_2, ba_shou) = zhuang_fu_wu_qi(tou, kuai_men);
+fn return_drop_reverse_return_false_old_when_long_receive_work() {
+    let question = "\u{7b2c}\u{4e00}\u{5757}\n\u{7b2c}\u{4e8c}\u{5757}\n\u{7b2c}\u{4e09}\u{5757}\n\u{7b2c}\u{56db}\u{5757}\n\u{7b2c}\u{4e94}\u{5757}\n\u{7b2c}\u{516d}\u{5757}\n\u{7b2c}\u{4e03}\u{5757}\n\u{7b2c}\u{516b}\u{5757}\n";
+    let (header, block_list) = part_block_item_should(question);
+    let (address_2, handle_receive) = state_service_none_start(header, block_list);
 
     let lua = Lua::new();
-    let receive_dao = lua.create_function(|_, _chunk: String| Ok(false)).unwrap();
+    let receive_to = lua.create_function(|_, _chunk: String| Ok(false)).unwrap();
     let spec = lua.create_table().unwrap();
     spec.set("url", address_2).unwrap();
     spec.set("method", "POST").unwrap();
 
-    let luo = liu_shi(&lua, &spec, &receive_dao).unwrap();
-    let (bao, kuai_shu, zhong_duan) = match luo {
+    let land = stream_is(&lua, &spec, &receive_to).unwrap();
+    let (package, block_data, middle_segment) = match land {
         super::RequestOutcome::Streamed {
-            bao,
-            kuai_shu,
-            zhong_duan,
-        } => (bao, kuai_shu, zhong_duan),
+            package,
+            block_data,
+            middle_segment,
+        } => (package, block_data, middle_segment),
         _ => panic!("\u{8be5}\u{662f}\u{6d41}\u{5b8c}"),
     };
 
     assert!(
-        zhong_duan,
+        middle_segment,
         "\u{56de}\u{8c03}\u{8bf4}\u{4e86}\u{505c}\u{ff0c}`aborted` \u{5fc5}\u{987b}\u{662f} true"
     );
     assert_eq!(
-        kuai_shu, 1,
+        block_data, 1,
         "\u{558a}\u{505c}\u{4e4b}\u{540e}\u{4e00}\u{5757}\u{90fd}\u{4e0d}\u{8bb8}\u{518d}\u{4ea4}"
     );
-    assert_eq!(bao.text, &ti[..bao.text.len()], "\u{6512}\u{4e0b}\u{6765}\u{7684}\u{5168}\u{6587}\u{53ea}\u{80fd}\u{662f}\u{558a}\u{505c}\u{524d}\u{6536}\u{5230}\u{7684}\u{90a3}\u{70b9}");
-    assert!(bao.text.len() < ti.len(), "\u{558a}\u{505c}\u{5f97}\u{591f}\u{65e9}\u{ff0c}\u{5168}\u{6587}\u{4e0d}\u{8be5}\u{662f}\u{5b8c}\u{6574}\u{90a3}\u{4efd}");
+    assert_eq!(package.text, &question[..package.text.len()], "\u{6512}\u{4e0b}\u{6765}\u{7684}\u{5168}\u{6587}\u{53ea}\u{80fd}\u{662f}\u{558a}\u{505c}\u{524d}\u{6536}\u{5230}\u{7684}\u{90a3}\u{70b9}");
+    assert!(package.text.len() < question.len(), "\u{558a}\u{505c}\u{5f97}\u{591f}\u{65e9}\u{ff0c}\u{5168}\u{6587}\u{4e0d}\u{8be5}\u{662f}\u{5b8c}\u{6574}\u{90a3}\u{4efd}");
 
-    drop(ba_shou);
+    drop(handle_receive);
 }
 
 #[test]
-fn liu_shi_de_result_table_zhi_zai_zhen_zhong_duan_shi_cai_you_aborted() {
+fn stream_is_result_table_only_at_real_middle_segment_is_extract_has_aborted() {
     let lua = Lua::new();
 
-    let receive_wan = receive_kou(
+    let receive_complete = receive_port(
         &lua,
         Ok(RequestOutcome::Streamed {
-            bao: HttpResponse {
+            package: HttpResponse {
                 code: 200,
                 text: "abc".to_owned(),
             },
-            kuai_shu: 3,
-            zhong_duan: false,
+            block_data: 3,
+            middle_segment: false,
         }),
     )
     .unwrap();
-    assert_eq!(receive_wan.get::<bool>("ok").unwrap(), true);
-    assert_eq!(receive_wan.get::<usize>("chunks").unwrap(), 3);
+    assert_eq!(receive_complete.get::<bool>("ok").unwrap(), true);
+    assert_eq!(receive_complete.get::<usize>("chunks").unwrap(), 3);
     assert!(
-        matches!(receive_wan.get::<Value>("aborted").unwrap(), Value::Nil),
+        matches!(receive_complete.get::<Value>("aborted").unwrap(), Value::Nil),
         "\u{6ca1}\u{4e2d}\u{65ad}\u{5c31}\u{4e0d}\u{8be5}\u{6709} `aborted` \u{8fd9}\u{4e2a}\u{952e}\u{2014}\u{2014}`if r.aborted` \u{4f1a}\u{628a} false \u{4e5f}\u{5f53}\u{6ca1}\u{4e2d}\u{65ad}\u{ff0c}\
          \u{4f46} `if r.aborted ~= nil` \u{4f1a}\u{628a} false \u{5f53}\u{4e2d}\u{65ad}"
     );
 
-    let zhong_chang = receive_kou(
+    let middle_long = receive_port(
         &lua,
         Ok(RequestOutcome::Streamed {
-            bao: HttpResponse {
+            package: HttpResponse {
                 code: 200,
                 text: "ab".to_owned(),
             },
-            kuai_shu: 2,
-            zhong_duan: true,
+            block_data: 2,
+            middle_segment: true,
         }),
     )
     .unwrap();
-    assert_eq!(zhong_chang.get::<bool>("aborted").unwrap(), true);
-    assert_eq!(zhong_chang.get::<usize>("chunks").unwrap(), 2);
+    assert_eq!(middle_long.get::<bool>("aborted").unwrap(), true);
+    assert_eq!(middle_long.get::<usize>("chunks").unwrap(), 2);
 
-    let yi_ci = receive_kou(
+    let one_word = receive_port(
         &lua,
         Ok(RequestOutcome::Response(HttpResponse {
             code: 200,
@@ -475,43 +478,52 @@ fn liu_shi_de_result_table_zhi_zai_zhen_zhong_duan_shi_cai_you_aborted() {
         })),
     )
     .unwrap();
-    assert!(matches!(yi_ci.get::<Value>("chunks").unwrap(), Value::Nil));
+    assert!(matches!(
+        one_word.get::<Value>("chunks").unwrap(),
+        Value::Nil
+    ));
 }
 
 #[test]
-fn qie_chu_wan_zheng_duan_de_san_tiao_lu() {
+fn cut_out_complete_validate_segment_three_item_path() {
     let mut b = "\u{4f60}\u{597d}".as_bytes().to_vec();
-    assert_eq!(qie_chu_wan_zheng_duan(&mut b).unwrap(), "\u{4f60}\u{597d}");
+    assert_eq!(
+        cut_out_complete_validate_segment(&mut b).unwrap(),
+        "\u{4f60}\u{597d}"
+    );
     assert!(b.is_empty());
     assert!(
-        qie_chu_wan_zheng_duan(&mut b).is_none(),
+        cut_out_complete_validate_segment(&mut b).is_none(),
         "\u{7a7a}\u{7f13}\u{51b2}\u{7ed9} None"
     );
 
     let mut b = Vec::new();
     b.extend_from_slice("ab".as_bytes());
     b.extend_from_slice(&"\u{597d}".as_bytes()[..2]);
-    assert_eq!(qie_chu_wan_zheng_duan(&mut b).unwrap(), "ab");
+    assert_eq!(cut_out_complete_validate_segment(&mut b).unwrap(), "ab");
     assert_eq!(b.len(), 2, "\u{5269}\u{4e0b}\u{7684}\u{90a3}\u{534a}\u{4e2a}\u{5b57}\u{8981}\u{7559}\u{5728}\u{7f13}\u{51b2}\u{91cc}\u{7b49}\u{4e0b}\u{4e00}\u{5757}");
     assert!(
-        qie_chu_wan_zheng_duan(&mut b).is_none(),
+        cut_out_complete_validate_segment(&mut b).is_none(),
         "\u{53ea}\u{6709}\u{534a}\u{4e2a}\u{5b57}\u{65f6}\u{4ec0}\u{4e48}\u{90fd}\u{4e0d}\u{4ea4}\u{2014}\u{2014}\u{7b49}\u{ff0c}\u{4e0d}\u{662f}\u{53d6}\u{5de7}"
     );
 
     b.push("\u{597d}".as_bytes()[2]);
-    assert_eq!(qie_chu_wan_zheng_duan(&mut b).unwrap(), "\u{597d}");
+    assert_eq!(
+        cut_out_complete_validate_segment(&mut b).unwrap(),
+        "\u{597d}"
+    );
 
     let mut b = vec![b'a', 0xFF, 0xFE, b'b'];
-    let mut quan_bu = String::new();
-    while let Some(s) = qie_chu_wan_zheng_duan(&mut b) {
-        quan_bu.push_str(&s);
+    let mut full_not = String::new();
+    while let Some(s) = cut_out_complete_validate_segment(&mut b) {
+        full_not.push_str(&s);
     }
-    assert_eq!(quan_bu, "a\u{FFFD}\u{FFFD}b");
+    assert_eq!(full_not, "a\u{FFFD}\u{FFFD}b");
     assert!(b.is_empty(), "\u{574f}\u{5b57}\u{8282}\u{4e5f}\u{8981}\u{5f80}\u{524d}\u{8d70}\u{ff0c}\u{4e0d}\u{8bb8}\u{5361}\u{5728}\u{7f13}\u{51b2}\u{91cc}");
 }
 
 #[test]
-fn install_shang_le_stream_er_qie_hui_diao_shi_bi_tian_de() {
+fn install_upper_stream_two_cut_return_drop_is_must_field() {
     let lua = Lua::new();
     let http = build(&lua).unwrap();
     assert!(
@@ -519,11 +531,11 @@ fn install_shang_le_stream_er_qie_hui_diao_shi_bi_tian_de() {
         "`nota.http.stream` \u{8be5}\u{5728}\u{8868}\u{91cc}"
     );
 
-    let gui_ge = lua.create_table().unwrap();
-    gui_ge.set("url", "http://127.0.0.1:1/x").unwrap();
+    let normalize = lua.create_table().unwrap();
+    normalize.set("url", "http://127.0.0.1:1/x").unwrap();
     let f = http.get::<mlua::Function>("stream").unwrap();
     assert!(
-        f.call::<Value>(gui_ge).is_err(),
+        f.call::<Value>(normalize).is_err(),
         "\u{5c11}\u{4e00}\u{4e2a}\u{56de}\u{8c03}\u{53c2}\u{6570}\u{8be5}\u{62a5}\u{9519}"
     );
 }

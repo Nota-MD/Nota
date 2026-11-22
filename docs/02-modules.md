@@ -299,6 +299,8 @@ and `preview.render` produced a complete HTML document from the live renderer.
 | `ui/useLinkClick.ts` | **正文里点一下链接那件事**（2026-10-07 新增，第 96 项）：普通 Markdown 链接单击 → 弹同一个「链接」框（填的是现值）；`Ctrl`/`⌘` ＋单击 → 系统浏览器。📌 **2026-10-25 起裸 HTML 块里的链接优先打开**：`http(s)` / `mailto` / `tel` 交给系统，相对路径按当前文档目录解析后交给文档打开流程，不再被整块 HTML 编辑入口吞掉。危险协议不放行；只读那一侧什么都不做。⚠️ `preventDefault` 不能省——那是真的 `<a href>`。⚠️ 另出一个 `光标处那条链接()`，「插入链接」预填现值用它 |
 | `ui/EmojiDialog.tsx` | **「插入 Emoji」那个挑选框**（2026-09-27 新增；⚠️ 2026-10-04 起分类页签有 ←→/Home/End，第 50 项）：搜索框 ＋ 11 个分类按钮 ＋ 网格，回车选第一条。⚠️ **搜索做子串 `includes`，与补全面板的"只做前缀匹配"故意不一致**（面板是边打边筛，这个框是"我知道我要找什么"；理由写在文件头）。⚠️ 它**只回一个字符**（`askEmoji()` 不带请求参数）、**不碰文档**：插到哪儿由 `App.tsx` 的 `插入Emoji` 交给 `run("insertText", …)`。⚠️ 11 个分类名走 `分类文案(一类)` 的 `switch` 写成**字面量 `t("表情")`**：`tools/i18n-check.sh` 只认字面量，写 `t(变量)` 会让这 11 条英文被算成"废键"（FAIL） |
 | `ui/AppDialogs.tsx` | **浮层那一族的总装**（2026-09-27 新增，约 70 行）：pandoc 面板 ＋ 确认框 / 输入框 / 插图框 / Emoji 选择框。⚠️ **只为 1000 行那条硬线**从 `App.tsx` 搬出（加了 Emoji 后那份 1024 行），搬的是"浮在正文之上、跟哪份文档无关的一层"。⚠️ 它只收**一个 `对话框` 对象**（`ui/useDialogs.ts` 那套 promise 式问答），不摊成十来个 props——漏一个就有一个框**永远关不掉**，且不报错。⚠️ **这里的顺序就是层叠顺序**（后画的盖住先画的） |
+| `ui/CommandPalette.tsx` | **Shell command palette** (2026-11-22): `Ctrl+Shift+P`, search, availability states, focus trap and keyboard navigation. It closes before dispatch and reuses the normal menu route. |
+| `ui/command-palette.ts` | **Command palette policy**: flatten the effective menu tree, merge dynamic theme entries, deduplicate ids, rank search matches and skip disabled commands. |
 | `ui/LicenseDialog.tsx` | **许可证全文那张框**（2026-10-04 新增）：「关于 → 法律信息」里点那个超链接打开它。⭐ **全文不抄第二份**：走 Vite 的 `?raw` 把**仓库根目录那份 `LICENSE`** 读成字符串（`ui/nota-mark.ts` 读 `nota.svg` 同款手法），改了 `LICENSE` 这个框跟着变、一行代码都不用动。⚠️ **开在进程内**（不交系统浏览器、也不新开 OS 窗口）：前者要走 `opener:allow-open-url`、后者要 `core:window:allow-create` 一类能力，这条路两样都不碰。⚠️ 壳（`.confirm-backdrop` / `.confirm-dialog`）与别的框**共用**，只加 `.lic-*`（`src/styles/overlay.css`）。⚠️ 它**盖在关于框上面**（两层 z-index 都是 200，靠 DOM 顺序分前后），`Esc` 的归属由 `ui/AboutDialog.tsx` 那条 effect 让路 |
 | `ui/AboutDialog.tsx` | **「帮助 → 关于 Nota」那张框**（2026-09-28 新增，取代 `ui/useAbout.ts`——那一份**已删**）：按 GNOME 的关于窗重做（大图标 ＋ 名字 ＋ 作者 ＋ 版本药丸，底下**首页 ＋ 四个子页**＋ 两行外链）。⚠️ **2026-10-04 改过一次**：故障排除从"权限清单"改成**编译信息 ＋ 本机信息两张表**（`nota_diagnostics`）；权限搬到**新开的「权限列表」页**、改成两列表格（权限说明 ｜ 备注）；法律信息里的许可证名成了**超链接**（开 `ui/LicenseDialog.tsx`）；⚠️ **「什么没申请」那七条 ＋ 鸣谢底下那句 THIRD-PARTY.md 的指引都删了**——用户这一轮的总口径是**全删**（"删掉各种菜单下面大段大段的无用ai味描述"），要加回来加在这里。⚠️ **它从前是一个 `ConfirmDialog`**，当年那笔账的最后一句是「真到要**分节跳转 / 可折叠 / 带图标**的那天再拆」——**那天到了**。⚠️ **开关不在这份里**（`关于开着` / `开关于` / `关关于` 三格在 `ui/useDialogs.ts`，与另外四个框**不同路**：它不问任何事，是一份看完就关的报告）；⚠️ 两张表（致谢 / 权限）**在渲染里现建**，不是模块级常量（模块级求值时语言还没定）；⚠️ **取不到版本照样要弹**（「关于」正是用户来查版本的地方）；⚠️ 助记键走 HTML `accesskey`，**在 WebKitGTK 上认不认没开窗验过**（`docs/07` 的账） | ⚠️ **2026-10-06：「鸣谢」那一页每一条都多了两样——项目主页链接与许可证**（用户：「这个里的链接和许可证公示」，参照 Typora 的鸣谢页）。名字本身就是那颗外链（走 `opener:allow-open-url`，与「法律信息」那条**开进程内的框**是两回事）；许可单独占一行（`.about-item-license`，比"用来做什么"再淡一档）。⚠️ **链接不许凭印象写**：与 `THIRD-PARTY.md` 那批同源（crate 读 `cargo metadata` 的 `repository`、npm 读 `package.json` 的 `repository`）。
 | `ui/useFocusSession.ts` | **强制专注那一整档**（2026-09-28 新增，从 `App.tsx` 搬出，**130 行**）：把四个 hook（`useForceFocus` / `useFocusAlarmSound` / `useFocusIntro` / `useFocusTrace`）收成**一个出口**，`App.tsx` 那边只剩一句解构。⚠️ **搬它的理由就是 1000 行那条硬线**（当时 `App.tsx` 998 行），不是「这几个 hook 长得像」——四个各管各的，只有「都是强制专注这一档」这一条把它们圈在一起 |
@@ -1993,6 +1995,15 @@ std::process::Command::new(&程序)
 路径，「文件 → 新建窗口」不传。
 ⚠️ 程序自己那条路径用 `std::env::current_exe()` 取，**不缓存、也不从设置里读**：
 新窗口必须与当前这一份是同一个可执行文件。
+
+### Settings window prewarm and fallback
+
+`nota_window_prepare_settings` creates the hidden Settings webview through the
+same `ensure_settings_window` function used by the open command. Prewarming is
+delayed by the frontend, creates the window without focus, and keeps it hidden.
+Opening reuses that webview, restores the taskbar entry, shows, unminimizes and
+focuses it. If creation, showing or focus fails, `nota_window_open_settings`
+keeps the existing `--settings-window` child-process fallback.
 
 ### `nota_window_open_debug_log() -> Result<()>`
 
@@ -9790,3 +9801,11 @@ The bridge never edits Markdown. Snapshot sync comes from
 `useTableBridge.ts`; write intents become one `tableSetCells` editor
 transaction. `plugin/setting_locks.rs` owns settings declared through
 `[[setting_lock]]`.
+
+## Inline review implementation
+
+`src/editor/review.ts` owns block and inline diff policy.
+`src/editor/review-prose.ts` applies the result as ProseMirror decorations and
+widgets without changing the document. `tests/review-inline.test.ts` covers the
+Unicode-safe text diff, insertion/deletion offsets, CJK and emoji boundaries,
+and the large-input fallback.

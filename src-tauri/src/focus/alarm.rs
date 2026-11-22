@@ -32,7 +32,9 @@ pub fn open_window(app: &tauri::AppHandle) {
         ALARM_LABEL,
         tauri::WebviewUrl::App("focus-alarm.html".into()),
     )
-    .title(alarm_title(&app.state::<crate::state::AppState>().app_lang))
+    .title(alarm_title(
+        &app.state::<crate::state::AppState>().app_language,
+    ))
     .decorations(false)
     .always_on_top(true)
     .fullscreen(true)

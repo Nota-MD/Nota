@@ -9,53 +9,53 @@ use crate::error::{NotaError, Result as NotaResult};
 use crate::paths;
 
 pub fn build(lua: &Lua, plugin_id: &str) -> NotaResult<Table> {
-    let cun_chu = qu_cun_chu(plugin_id)?;
+    let store_out = get_store_out(plugin_id)?;
 
     let t = lua.create_table().map_err(mlua_to_nota)?;
 
-    let s = cun_chu.clone();
+    let s = store_out.clone();
     let get = lua
         .create_function(move |lua, key: String| {
-            let value_men = s.lock().map_err(suo_huai_le)?;
-            match value_men.value_men.get(&key) {
-                Some(v) => toml_zhuan_lua(lua, v),
+            let value_list = s.lock().map_err(lock_broken)?;
+            match value_list.value_list.get(&key) {
+                Some(v) => toml_convert_lua(lua, v),
                 None => Ok(Value::Nil),
             }
         })
         .map_err(mlua_to_nota)?;
     t.set("get", get).map_err(mlua_to_nota)?;
 
-    let s = cun_chu.clone();
+    let s = store_out.clone();
     let set = lua
         .create_function(move |_, (key, value): (String, Value)| {
-            jian_he_fa_ma(&key)?;
-            let toml_value = value_zhuan_toml(&value)?;
+            check_and_method(&key)?;
+            let toml_value = value_convert_toml(&value)?;
 
-            let mut value_men = s.lock().map_err(suo_huai_le)?;
+            let mut value_list = s.lock().map_err(lock_broken)?;
             match toml_value {
                 Some(v) => {
-                    value_men.value_men.insert(key, v);
+                    value_list.value_list.insert(key, v);
                 }
 
                 None => {
-                    if value_men.value_men.remove(&key).is_none() {
+                    if value_list.value_list.remove(&key).is_none() {
                         return Ok(());
                     }
                 }
             }
 
-            write_2(&value_men.path_3, &value_men.value_men).map_err(super::lua_err)
+            write_2(&value_list.path_3, &value_list.value_list).map_err(super::lua_err)
         })
         .map_err(mlua_to_nota)?;
     t.set("set", set).map_err(mlua_to_nota)?;
 
-    let s = cun_chu.clone();
+    let s = store_out.clone();
     let all = lua
         .create_function(move |lua, ()| {
-            let value_men = s.lock().map_err(suo_huai_le)?;
+            let value_list = s.lock().map_err(lock_broken)?;
             let out = lua.create_table()?;
-            for (k, v) in &value_men.value_men {
-                out.set(k.as_str(), toml_zhuan_lua(lua, v)?)?;
+            for (k, v) in &value_list.value_list {
+                out.set(k.as_str(), toml_convert_lua(lua, v)?)?;
             }
             Ok(out)
         })
@@ -65,34 +65,34 @@ pub fn build(lua: &Lua, plugin_id: &str) -> NotaResult<Table> {
     Ok(t)
 }
 
-fn suo_huai_le<E: std::fmt::Display>(e: E) -> mlua::Error {
-    mlua::Error::RuntimeError(suo_bao_cuo(e))
+fn lock_broken<E: std::fmt::Display>(e: E) -> mlua::Error {
+    mlua::Error::RuntimeError(lock_package_error(e))
 }
 
-fn suo_bao_cuo<E: std::fmt::Display>(e: E) -> String {
+fn lock_package_error<E: std::fmt::Display>(e: E) -> String {
     format!("Extension settings state is invalid: {e}")
 }
 
 struct StorageState {
     path_3: PathBuf,
-    value_men: BTreeMap<String, toml::Value>,
+    value_list: BTreeMap<String, toml::Value>,
 }
 
-fn zhu_ce_table() -> &'static Mutex<HashMap<String, Arc<Mutex<StorageState>>>> {
+fn main_side_table() -> &'static Mutex<HashMap<String, Arc<Mutex<StorageState>>>> {
     static TABLE_2: OnceLock<Mutex<HashMap<String, Arc<Mutex<StorageState>>>>> = OnceLock::new();
     TABLE_2.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn qu_cun_chu(plugin_id: &str) -> NotaResult<Arc<Mutex<StorageState>>> {
+fn get_store_out(plugin_id: &str) -> NotaResult<Arc<Mutex<StorageState>>> {
     let path_3 = paths::plugin_settings_file(plugin_id)?;
 
     let ge = {
-        let mut table_2 = zhu_ce_table().lock().unwrap();
+        let mut table_2 = main_side_table().lock().unwrap();
         table_2
             .entry(plugin_id.to_owned())
             .or_insert_with(|| {
                 Arc::new(Mutex::new(StorageState {
-                    value_men: BTreeMap::new(),
+                    value_list: BTreeMap::new(),
                     path_3: path_3.clone(),
                 }))
             })
@@ -100,45 +100,49 @@ fn qu_cun_chu(plugin_id: &str) -> NotaResult<Arc<Mutex<StorageState>>> {
     };
 
     {
-        let mut s = ge.lock().map_err(|e| NotaError::other(suo_bao_cuo(e)))?;
-        s.value_men = read_2(&s.path_3);
+        let mut s = ge
+            .lock()
+            .map_err(|e| NotaError::other(lock_package_error(e)))?;
+        s.value_list = read_2(&s.path_3);
     }
     Ok(ge)
 }
 
 pub fn host_write_one(plugin_id: &str, key: &str, value_2: toml::Value) -> NotaResult<()> {
-    let ge = qu_cun_chu(plugin_id)?;
-    write_jin_ge(&ge, key, value_2)
+    let ge = get_store_out(plugin_id)?;
+    write_enter(&ge, key, value_2)
 }
 
-fn write_jin_ge(ge: &Arc<Mutex<StorageState>>, key: &str, value_2: toml::Value) -> NotaResult<()> {
-    jian_rule(key).map_err(NotaError::other)?;
-    let mut s = ge.lock().map_err(|e| NotaError::other(suo_bao_cuo(e)))?;
+fn write_enter(ge: &Arc<Mutex<StorageState>>, key: &str, value_2: toml::Value) -> NotaResult<()> {
+    check_rule(key).map_err(NotaError::other)?;
+    let mut s = ge
+        .lock()
+        .map_err(|e| NotaError::other(lock_package_error(e)))?;
 
-    if s.value_men
-        .get(key)
-        .is_some_and(|jiu_de| *jiu_de == value_2)
-    {
+    if s.value_list.get(key).is_some_and(|old| *old == value_2) {
         return Ok(());
     }
-    s.value_men.insert(key.to_owned(), value_2);
+    s.value_list.insert(key.to_owned(), value_2);
 
-    write_2(&s.path_3, &s.value_men)
+    write_2(&s.path_3, &s.value_list)
 }
 
-pub fn read_quan_bu(plugin_id: &str) -> BTreeMap<String, toml::Value> {
-    let Ok(ge) = qu_cun_chu(plugin_id) else {
+pub fn read_full_not(plugin_id: &str) -> BTreeMap<String, toml::Value> {
+    let Ok(ge) = get_store_out(plugin_id) else {
         return BTreeMap::new();
     };
 
-    let chu = match ge.lock() {
-        Ok(s) => s.value_men.clone(),
+    let out = match ge.lock() {
+        Ok(s) => s.value_list.clone(),
         Err(e) => {
-            crate::debug_log!("[nota] plugin settings state poisoned: {}", suo_bao_cuo(e));
+            crate::debug_log!(
+                "[nota] plugin settings state poisoned: {}",
+                lock_package_error(e)
+            );
             BTreeMap::new()
         }
     };
-    chu
+    out
 }
 
 fn read_2(path_3: &Path) -> BTreeMap<String, toml::Value> {
@@ -157,21 +161,21 @@ fn read_2(path_3: &Path) -> BTreeMap<String, toml::Value> {
     }
 }
 
-const FILE_TOU: &str = "\
+const FILE_HEADER: &str = "\
 # Nota extension settings.
 # Edit this file directly; changes take effect after saving.
 # It may contain plaintext secrets. Keep this file private.
 ";
 
-fn write_2(path_3: &Path, value_men: &BTreeMap<String, toml::Value>) -> NotaResult<()> {
+fn write_2(path_3: &Path, value_list: &BTreeMap<String, toml::Value>) -> NotaResult<()> {
     if let Some(dir) = path_3.parent() {
         paths::ensure_dir(dir)?;
-        receive_jin_directory_quan_xian(dir);
+        receive_enter_directory_full_thread(dir);
     }
 
-    let body = toml::to_string(value_men)
+    let body = toml::to_string(value_list)
         .map_err(|e| NotaError::other(format!("Could not serialize extension settings: {e}")))?;
-    let text = format!("{FILE_TOU}{body}");
+    let text = format!("{FILE_HEADER}{body}");
 
     #[cfg(unix)]
     {
@@ -204,15 +208,15 @@ fn write_2(path_3: &Path, value_men: &BTreeMap<String, toml::Value>) -> NotaResu
 }
 
 #[cfg(unix)]
-fn receive_jin_directory_quan_xian(dir: &Path) {
+fn receive_enter_directory_full_thread(dir: &Path) {
     use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
 }
 
 #[cfg(not(unix))]
-fn receive_jin_directory_quan_xian(_dir: &Path) {}
+fn receive_enter_directory_full_thread(_dir: &Path) {}
 
-fn jian_rule(key: &str) -> std::result::Result<(), String> {
+fn check_rule(key: &str) -> std::result::Result<(), String> {
     if key.is_empty() {
         return Err("The setting key cannot be empty".to_owned());
     }
@@ -227,11 +231,11 @@ fn jian_rule(key: &str) -> std::result::Result<(), String> {
     Ok(())
 }
 
-fn jian_he_fa_ma(key: &str) -> mlua::Result<()> {
-    jian_rule(key).map_err(mlua::Error::RuntimeError)
+fn check_and_method(key: &str) -> mlua::Result<()> {
+    check_rule(key).map_err(mlua::Error::RuntimeError)
 }
 
-fn value_zhuan_toml(v: &Value) -> mlua::Result<Option<toml::Value>> {
+fn value_convert_toml(v: &Value) -> mlua::Result<Option<toml::Value>> {
     Ok(match v {
         Value::Nil => None,
         Value::Boolean(b) => Some(toml::Value::Boolean(*b)),
@@ -241,13 +245,13 @@ fn value_zhuan_toml(v: &Value) -> mlua::Result<Option<toml::Value>> {
         other => {
             return Err(mlua::Error::RuntimeError(format!(
                 "Extension settings support strings, numbers, and booleans, not {}; serialize structured data as text",
-                lei_xing_ming(other)
+                kind_line_name(other)
             )))
         }
     })
 }
 
-fn toml_zhuan_lua(lua: &Lua, v: &toml::Value) -> mlua::Result<Value> {
+fn toml_convert_lua(lua: &Lua, v: &toml::Value) -> mlua::Result<Value> {
     Ok(match v {
         toml::Value::String(s) => Value::String(lua.create_string(s)?),
         toml::Value::Integer(i) => Value::Integer(*i),
@@ -258,7 +262,7 @@ fn toml_zhuan_lua(lua: &Lua, v: &toml::Value) -> mlua::Result<Value> {
     })
 }
 
-fn lei_xing_ming(v: &Value) -> &'static str {
+fn kind_line_name(v: &Value) -> &'static str {
     match v {
         Value::Table(_) => "table",
         Value::Function(_) => "function",
@@ -272,31 +276,34 @@ fn lei_xing_ming(v: &Value) -> &'static str {
 mod tests {
     use super::*;
 
-    fn temp_directory(ming: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("nota-settings-test-{ming}"));
+    fn temp_directory(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("nota-settings-test-{name}"));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
     }
 
     #[test]
-    fn write_xia_qu_de_value_read_de_hui_lai() {
+    fn write_lower_get_value_read_return_incoming() {
         let path_3 = temp_directory("roundtrip").join("t.toml");
-        let mut value_men = BTreeMap::new();
-        value_men.insert("api_key".to_owned(), toml::Value::String("sk-1".to_owned()));
-        value_men.insert("model".to_owned(), toml::Value::String("x".to_owned()));
-        value_men.insert("max_tokens".to_owned(), toml::Value::Integer(4096));
+        let mut value_list = BTreeMap::new();
+        value_list.insert("api_key".to_owned(), toml::Value::String("sk-1".to_owned()));
+        value_list.insert("model".to_owned(), toml::Value::String("x".to_owned()));
+        value_list.insert("max_tokens".to_owned(), toml::Value::Integer(4096));
 
-        write_2(&path_3, &value_men).unwrap();
+        write_2(&path_3, &value_list).unwrap();
 
-        let read_hui = read_2(&path_3);
-        assert_eq!(read_hui["api_key"], toml::Value::String("sk-1".to_owned()));
-        assert_eq!(read_hui["max_tokens"], toml::Value::Integer(4096));
-        assert_eq!(read_hui.len(), 3);
+        let read_return = read_2(&path_3);
+        assert_eq!(
+            read_return["api_key"],
+            toml::Value::String("sk-1".to_owned())
+        );
+        assert_eq!(read_return["max_tokens"], toml::Value::Integer(4096));
+        assert_eq!(read_return.len(), 3);
     }
 
     #[test]
-    fn file_tou_na_duan_zhu_shi_bu_ying_xiang_read() {
+    fn file_header_that_segment_main_is_not_should_item_read() {
         let path_3 = temp_directory("header").join("t.toml");
         write_2(&path_3, &BTreeMap::new()).unwrap();
         let text = std::fs::read_to_string(&path_3).unwrap();
@@ -309,7 +316,7 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn settings_file_shi_0600() {
+    fn settings_file_is_0600() {
         use std::os::unix::fs::PermissionsExt;
         let path_3 = temp_directory("mode").join("t.toml");
         write_2(&path_3, &BTreeMap::new()).unwrap();
@@ -322,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn huai_file_dang_kong_de_yong_er_bu_shi_bao_cuo() {
+    fn broken_file_when_empty_use_two_not_is_package_error() {
         let dir = temp_directory("broken");
         let path_3 = dir.join("t.toml");
         std::fs::write(&path_3, "\u{8fd9}\u{4e0d}\u{662f} = = toml").unwrap();
@@ -333,39 +340,41 @@ mod tests {
     }
 
     #[test]
-    fn jian_li_bu_xu_you_dian_he_guai_zi_fu() {
-        assert!(jian_he_fa_ma("api_key").is_ok());
-        assert!(jian_he_fa_ma("max-tokens2").is_ok());
-        let err = jian_he_fa_ma("a.b").unwrap_err().to_string();
+    fn check_inner_not_required_has_point_and_unexpected_character_service() {
+        assert!(check_and_method("api_key").is_ok());
+        assert!(check_and_method("max-tokens2").is_ok());
+        let err = check_and_method("a.b").unwrap_err().to_string();
         assert!(
             err.contains("Invalid setting key"),
             "unexpected error: {err}"
         );
         assert!(
-            jian_he_fa_ma("").is_err(),
+            check_and_method("").is_err(),
             "\u{7a7a}\u{952e}\u{8981}\u{62a5}\u{9519}"
         );
-        assert!(jian_he_fa_ma("\u{6a21}\u{578b}").is_err(), "\u{975e} ASCII \u{952e}\u{8981}\u{62a5}\u{9519}\u{ff08}\u{672c}\u{4ed3}\u{81ea}\u{884c}\u{62fc}\u{63a5}\u{7684}\u{952e}\u{5747}\u{4e3a} ASCII\u{ff09}");
+        assert!(check_and_method("\u{6a21}\u{578b}").is_err(), "\u{975e} ASCII \u{952e}\u{8981}\u{62a5}\u{9519}\u{ff08}\u{672c}\u{4ed3}\u{81ea}\u{884c}\u{62fc}\u{63a5}\u{7684}\u{952e}\u{5747}\u{4e3a} ASCII\u{ff09}");
     }
 
     #[test]
-    fn zhi_receive_san_zhong_biao_liang() {
+    fn only_receive_three_middle_table_two() {
         let lua = Lua::new();
         assert!(
-            value_zhuan_toml(&Value::Nil).unwrap().is_none(),
+            value_convert_toml(&Value::Nil).unwrap().is_none(),
             "nil = \u{5220}\u{6389}\u{8fd9}\u{4e2a}\u{952e}"
         );
-        assert!(value_zhuan_toml(&Value::Boolean(true)).unwrap().is_some());
-        assert!(value_zhuan_toml(&Value::Integer(1)).unwrap().is_some());
-        assert!(value_zhuan_toml(&Value::Number(1.5)).unwrap().is_some());
+        assert!(value_convert_toml(&Value::Boolean(true)).unwrap().is_some());
+        assert!(value_convert_toml(&Value::Integer(1)).unwrap().is_some());
+        assert!(value_convert_toml(&Value::Number(1.5)).unwrap().is_some());
         assert!(
-            value_zhuan_toml(&Value::String(lua.create_string("x").unwrap()))
+            value_convert_toml(&Value::String(lua.create_string("x").unwrap()))
                 .unwrap()
                 .is_some()
         );
 
         let t = lua.create_table().unwrap();
-        let err = value_zhuan_toml(&Value::Table(t)).unwrap_err().to_string();
+        let err = value_convert_toml(&Value::Table(t))
+            .unwrap_err()
+            .to_string();
         assert!(
             err.contains("support strings, numbers, and booleans"),
             "expected a table rejection, got: {err}"
@@ -373,10 +382,10 @@ mod tests {
     }
 
     #[test]
-    fn shou_gai_chu_lai_de_fu_he_value_read_hui_lai_shi_text_bu_shi_nil() {
+    fn receive_change_out_incoming_service_and_value_read_return_incoming_is_text_not_is_nil() {
         let lua = Lua::new();
         let arr = toml::Value::Array(vec![toml::Value::Integer(1)]);
-        let v = toml_zhuan_lua(&lua, &arr).unwrap();
+        let v = toml_convert_lua(&lua, &arr).unwrap();
         assert!(!v.is_nil(), "\u{590d}\u{5408}\u{503c}\u{8bfb}\u{56de}\u{6765}\u{53d8}\u{6210}\u{4e86} nil\u{ff0c}\u{62d3}\u{5c55}\u{4f1a}\u{628a}\u{7528}\u{6237}\u{7684}\u{8bbe}\u{7f6e}\u{8986}\u{76d6}\u{6389}");
         assert!(
             matches!(v, Value::String(_)),
@@ -384,24 +393,27 @@ mod tests {
         );
     }
 
-    fn yi_ge(ming: &str) -> (Arc<Mutex<StorageState>>, PathBuf) {
-        let path_3 = temp_directory(ming).join("t.toml");
+    fn one(name: &str) -> (Arc<Mutex<StorageState>>, PathBuf) {
+        let path_3 = temp_directory(name).join("t.toml");
         let ge = Arc::new(Mutex::new(StorageState {
-            value_men: read_2(&path_3),
+            value_list: read_2(&path_3),
             path_3: path_3.clone(),
         }));
         (ge, path_3)
     }
 
     #[test]
-    fn su_zhu_write_de_value_nei_cun_he_pan_shang_dou_you() {
-        let (ge, path_3) = yi_ge("hostwrite");
+    fn speed_main_write_value_inner_store_and_parse_upper_all_has() {
+        let (ge, path_3) = one("hostwrite");
 
-        write_jin_ge(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
+        write_enter(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
 
-        let nei_cun = ge.lock().unwrap();
-        assert_eq!(nei_cun.value_men["window_seconds"], toml::Value::Integer(5));
-        drop(nei_cun);
+        let inner_store = ge.lock().unwrap();
+        assert_eq!(
+            inner_store.value_list["window_seconds"],
+            toml::Value::Integer(5)
+        );
+        drop(inner_store);
 
         assert_eq!(
             read_2(&path_3)["window_seconds"],
@@ -411,12 +423,12 @@ mod tests {
     }
 
     #[test]
-    fn value_mei_bian_jiu_bu_write_pan() {
-        let (ge, path_3) = yi_ge("nowrite");
-        write_jin_ge(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
+    fn value_each_edit_old_not_write_parse() {
+        let (ge, path_3) = one("nowrite");
+        write_enter(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
 
         std::fs::write(&path_3, "window_seconds = 7\n").unwrap();
-        write_jin_ge(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
+        write_enter(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
 
         assert_eq!(
             read_2(&path_3)["window_seconds"],
@@ -424,14 +436,14 @@ mod tests {
             "\u{503c}\u{6ca1}\u{53d8}\u{5374}\u{53c8}\u{5199}\u{4e86}\u{4e00}\u{6b21}\u{76d8}"
         );
 
-        write_jin_ge(&ge, "window_seconds", toml::Value::Integer(9)).unwrap();
+        write_enter(&ge, "window_seconds", toml::Value::Integer(9)).unwrap();
         assert_eq!(read_2(&path_3)["window_seconds"], toml::Value::Integer(9));
     }
 
     #[test]
-    fn su_zhu_write_huai_jian_yao_bao_cuo() {
-        let (ge, _) = yi_ge("badkey");
-        let err = write_jin_ge(&ge, "a.b", toml::Value::Integer(1))
+    fn speed_main_write_broken_check_need_package_error() {
+        let (ge, _) = one("badkey");
+        let err = write_enter(&ge, "a.b", toml::Value::Integer(1))
             .unwrap_err()
             .to_string();
         assert!(
@@ -442,10 +454,10 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn su_zhu_write_chu_lai_de_file_ye_shi_0600() {
+    fn speed_main_write_out_incoming_file_page_is_0600() {
         use std::os::unix::fs::PermissionsExt;
-        let (ge, path_3) = yi_ge("hostmode");
-        write_jin_ge(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
+        let (ge, path_3) = one("hostmode");
+        write_enter(&ge, "window_seconds", toml::Value::Integer(5)).unwrap();
         let mode = std::fs::metadata(&path_3).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "\u{6743}\u{9650}\u{6210}\u{4e86} {mode:o}");
     }

@@ -26,15 +26,15 @@ pub struct FullDocument {
 }
 
 pub trait Host: Send + Sync {
-    fn app_ban_ben(&self) -> String;
+    fn app_half_current(&self) -> String;
 
-    fn overview_men(&self) -> Vec<HostOverview>;
+    fn overview_list(&self) -> Vec<HostOverview>;
 
     fn read_2(&self, id: Option<u64>) -> Result<FullDocument, String>;
 
     fn write_2(&self, id: Option<u64>, body_2: &str) -> Result<(u64, u64), String>;
 
-    fn qing_qiu_open(&self, path_3: &str) -> Result<(), String>;
+    fn request_request_open(&self, path_3: &str) -> Result<(), String>;
 }
 
 pub struct AppHost {
@@ -42,7 +42,7 @@ pub struct AppHost {
 }
 
 impl AppHost {
-    pub fn xin(app: tauri::AppHandle) -> Self {
+    pub fn new(app: tauri::AppHandle) -> Self {
         Self { app }
     }
 
@@ -53,80 +53,88 @@ impl AppHost {
     }
 }
 
-fn tan(d: &crate::document::Document, huo_dong: Option<u64>) -> HostOverview {
+fn probe(d: &crate::document::Document, active_dynamic: Option<u64>) -> HostOverview {
     HostOverview {
         id: d.id.0,
         title: d.title.clone(),
         path: d.path_string(),
         dirty: d.dirty,
         revision: d.revision,
-        active: huo_dong == Some(d.id.0),
+        active: active_dynamic == Some(d.id.0),
     }
 }
 
 impl Host for AppHost {
-    fn app_ban_ben(&self) -> String {
+    fn app_half_current(&self) -> String {
         env!("CARGO_PKG_VERSION").to_string()
     }
 
-    fn overview_men(&self) -> Vec<HostOverview> {
+    fn overview_list(&self) -> Vec<HostOverview> {
         let status_2 = match self.status_2() {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
-        let cang = status_2.documents.lock().unwrap();
-        let huo_dong = cang.active_id().map(|i| i.0);
-        let mut chu_de: Vec<HostOverview> = cang.list().iter().map(|d| tan(d, huo_dong)).collect();
+        let store = status_2.documents.lock().unwrap();
+        let active_dynamic = store.active_id().map(|i| i.0);
+        let mut out: Vec<HostOverview> = store
+            .list()
+            .iter()
+            .map(|d| probe(d, active_dynamic))
+            .collect();
 
-        if let Some(wei) = chu_de.iter().position(|g| g.active) {
-            let yi_fen = chu_de.remove(wei);
-            chu_de.insert(0, yi_fen);
+        if let Some(position) = out.iter().position(|g| g.active) {
+            let one_part = out.remove(position);
+            out.insert(0, one_part);
         }
-        chu_de
+        out
     }
 
     fn read_2(&self, id: Option<u64>) -> Result<FullDocument, String> {
         let status_2 = self.status_2()?;
-        let cang = status_2.documents.lock().unwrap();
-        let huo_dong = cang.active_id().map(|i| i.0);
+        let store = status_2.documents.lock().unwrap();
+        let active_dynamic = store.active_id().map(|i| i.0);
         let document_2 = match id {
-            Some(yao) => cang.list().iter().find(|d| d.id.0 == yao).ok_or_else(|| {
-                format!("No document has ID {yao}; use nota_documents to list open documents")
-            })?,
-            None => cang
+            Some(need) => store
+                .list()
+                .iter()
+                .find(|d| d.id.0 == need)
+                .ok_or_else(|| {
+                    format!("No document has ID {need}; use nota_documents to list open documents")
+                })?,
+            None => store
                 .active()
                 .ok_or_else(|| "Nota has no open documents".to_string())?,
         };
         Ok(FullDocument {
-            overview: tan(document_2, huo_dong),
+            overview: probe(document_2, active_dynamic),
             body_2: document_2.text.clone(),
         })
     }
 
     fn write_2(&self, id: Option<u64>, body_2: &str) -> Result<(u64, u64), String> {
         let status_2 = self.status_2()?;
-        let (document_hao, ban_ben) = {
-            let mut cang = status_2.documents.lock().unwrap();
-            let yao = match id {
-                Some(yao) => crate::document::DocId(yao),
-                None => cang
+        let (document_number, half_current) = {
+            let mut store = status_2.documents.lock().unwrap();
+            let need = match id {
+                Some(need) => crate::document::DocId(need),
+                None => store
                     .active_id()
                     .ok_or_else(|| "Nota has no open documents".to_string())?,
             };
-            let ban_ben = cang
-                .sync(yao, body_2.to_string())
+            let half_current = store
+                .sync(need, body_2.to_string())
                 .map_err(|e| e.to_string())?;
-            (yao.0, ban_ben)
+            (need.0, half_current)
         };
 
         let _ = self.app.emit(
             "nota:document-changed",
-            json!({ "id": document_hao, "text": body_2, "origin": "mcp" }),
+            json!({ "id": document_number, "text": body_2, "origin": "mcp" }),
         );
-        Ok((document_hao, ban_ben))
+        Ok((document_number, half_current))
     }
 
-    fn qing_qiu_open(&self, path_3: &str) -> Result<(), String> {
+    fn request_request_open(&self, path_3: &str) -> Result<(), String> {
         let target_2 = PathBuf::from(path_3);
         if !target_2.exists() {
             return Err(format!("Path does not exist: {path_3}"));

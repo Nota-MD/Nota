@@ -2,7 +2,7 @@ use mlua::{Lua, Table};
 
 use crate::plugin::{ReviewAction, ReviewKind};
 
-pub(crate) fn yu_lan_table(
+pub(crate) fn and_panel_table(
     lua: &Lua,
     plugin_id: &str,
     app: tauri::AppHandle,
@@ -12,7 +12,7 @@ pub(crate) fn yu_lan_table(
     lua.create_function(move |lua, id: Option<String>| {
         use tauri::Emitter;
         if let Some(panel) = id.as_deref() {
-            if !super::ui::you_mian_ban_ma(lua, panel) {
+            if !super::ui::has_surface_half(lua, panel) {
                 return Err(mlua::Error::RuntimeError(format!(
                     "Extension {plugin_id} does not declare panel `{panel}`"
                 )));
@@ -34,7 +34,7 @@ pub(crate) fn yu_lan_table(
     })
 }
 
-pub(crate) fn yu_lan_change_table(
+pub(crate) fn and_panel_change_table(
     lua: &Lua,
     plugin_id: &str,
     app: tauri::AppHandle,
@@ -46,17 +46,17 @@ pub(crate) fn yu_lan_change_table(
         let ge = match args_2 {
             None => None,
             Some(t) => {
-                let text = qu_zi_fu_chuan(&t, "text")?.ok_or_else(|| {
+                let text = get_character_service_stream(&t, "text")?.ok_or_else(|| {
                     mlua::Error::RuntimeError(
                         "nota.ui.review_diff requires text containing the complete proposed document, not a patch or hunk"
                             .to_owned(),
                     )
                 })?;
                 Some(ReviewKind::Diff {
-                    title: qu_zi_fu_chuan(&t, "title")?.unwrap_or_default(),
+                    title: get_character_service_stream(&t, "title")?.unwrap_or_default(),
                     text,
-                    accept: qu_an_niu(&t, "accept")?,
-                    reject: qu_an_niu(&t, "reject")?,
+                    accept: get_by_button(&t, "accept")?,
+                    reject: get_by_button(&t, "reject")?,
                 })
             }
         };
@@ -76,29 +76,29 @@ pub(crate) fn yu_lan_change_table(
     })
 }
 
-fn qu_zi_fu_chuan(t: &Table, jian_2: &str) -> mlua::Result<Option<String>> {
-    match t.get::<mlua::Value>(jian_2)? {
+fn get_character_service_stream(t: &Table, value_2: &str) -> mlua::Result<Option<String>> {
+    match t.get::<mlua::Value>(value_2)? {
         mlua::Value::Nil => Ok(None),
         mlua::Value::String(s) => Ok(Some(s.to_str()?.to_owned())),
-        bie_de => Err(mlua::Error::RuntimeError(format!(
-            "nota.ui.review_diff field `{jian_2}` must be a string, received {}",
-            bie_de.type_name()
+        other => Err(mlua::Error::RuntimeError(format!(
+            "nota.ui.review_diff field `{value_2}` must be a string, received {}",
+            other.type_name()
         ))),
     }
 }
 
-fn qu_an_niu(t: &Table, jian_2: &str) -> mlua::Result<Option<ReviewAction>> {
-    let Some(zi) = t.get::<Option<Table>>(jian_2)? else {
+fn get_by_button(t: &Table, value_2: &str) -> mlua::Result<Option<ReviewAction>> {
+    let Some(character) = t.get::<Option<Table>>(value_2)? else {
         return Ok(None);
     };
-    let label = zi.get::<Option<String>>("label")?.ok_or_else(|| {
+    let label = character.get::<Option<String>>("label")?.ok_or_else(|| {
         mlua::Error::RuntimeError(format!(
-            "nota.ui.review_diff field `{jian_2}` requires a label"
+            "nota.ui.review_diff field `{value_2}` requires a label"
         ))
     })?;
-    let command = zi.get::<Option<String>>("command")?.ok_or_else(|| {
+    let command = character.get::<Option<String>>("command")?.ok_or_else(|| {
         mlua::Error::RuntimeError(format!(
-            "nota.ui.review_diff field `{jian_2}` requires a command"
+            "nota.ui.review_diff field `{value_2}` requires a command"
         ))
     })?;
     Ok(Some(ReviewAction { label, command }))

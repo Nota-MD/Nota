@@ -133,8 +133,11 @@
 
 
 .nota-review-diff .nota-review-del {
+  padding: 0 1px;
+  border-radius: 2px;
   background: var(--diff-del-bg);
   color: var(--danger);
+  box-decoration-break: clone;
   text-decoration: line-through;
 }
 
@@ -163,14 +166,42 @@
 
 
 .nota-review-add {
-  border-left: 3px solid var(--success);
-  padding-left: 6px;
-  margin: 2px 0;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0 1px;
+  margin: 0;
   border-radius: 2px;
+  box-decoration-break: clone;
 }
 
 .nota-review-diff .nota-review-add {
   background: var(--diff-add-bg);
+  text-decoration: underline;
+  text-decoration-color: var(--success);
+  text-underline-offset: 0.12em;
+}
+
+.nota-review-inline-add {
+  padding: 0 1px;
+  margin: 0;
+  border-radius: 2px;
+  background: var(--diff-add-bg);
+  box-decoration-break: clone;
+  text-decoration: underline;
+  text-decoration-color: var(--success);
+  text-underline-offset: 0.12em;
+}
+
+.nota-review-diff .nota-review-inline-add {
+  background: var(--diff-add-bg);
+}
+
+.nota-review-result .nota-review-inline-add {
+  padding: 0;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  text-decoration: none;
 }
 
 

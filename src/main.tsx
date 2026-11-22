@@ -20,6 +20,7 @@ import "./styles/theme/adwaita-fonts.css";
 import "./styles/app.css";
 
 import "./styles/menubar.css";
+import "./styles/command-palette.css";
 
 import "./styles/tabs-status.css";
 

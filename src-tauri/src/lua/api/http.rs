@@ -5,17 +5,17 @@ use mlua::{Lua, Table, Value};
 use super::{lua_err, lua_to_json, mlua_to_nota};
 use crate::error::{NotaError, Result as NotaResult};
 
-const DEFAULT_CHAO_SHI: Duration = Duration::from_secs(30);
+const DEFAULT_OVERFLOW_IS: Duration = Duration::from_secs(30);
 
-const ZUI_ZHANG_CHAO_SHI: Duration = Duration::from_secs(180);
+const MOST_LENGTH_OVERFLOW_IS: Duration = Duration::from_secs(180);
 
-const XIANG_YING_SHANG_XIAN: u64 = 2 * 1024 * 1024;
+const ITEM_SHOULD_UPPER_THREAD: u64 = 2 * 1024 * 1024;
 
-const QING_QIU_SHANG_XIAN: usize = 1024 * 1024;
+const REQUEST_REQUEST_UPPER_THREAD: usize = 1024 * 1024;
 
-const ZUI_DA_ZHONG_DING_XIANG: u32 = 5;
+const MOST_LARGE_MIDDLE_DEFINE_ITEM: u32 = 5;
 
-const YUN_XU_DE_FANG_FA: [&str; 6] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"];
+const RUN_REQUIRED_METHOD_METHOD: [&str; 6] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"];
 
 struct HttpResponse {
     code: u16,
@@ -26,9 +26,9 @@ enum RequestOutcome {
     Response(HttpResponse),
 
     Streamed {
-        bao: HttpResponse,
-        kuai_shu: usize,
-        zhong_duan: bool,
+        package: HttpResponse,
+        block_data: usize,
+        middle_segment: bool,
     },
 
     EnvironmentFailure(String),
@@ -38,23 +38,23 @@ pub fn build(lua: &Lua) -> NotaResult<Table> {
     let t = lua.create_table().map_err(mlua_to_nota)?;
 
     let request = lua
-        .create_function(move |lua, spec: Table| receive_kou(lua, emit_yi_ci(lua, &spec)))
+        .create_function(move |lua, spec: Table| receive_port(lua, emit_one_word(lua, &spec)))
         .map_err(mlua_to_nota)?;
     t.set("request", request).map_err(mlua_to_nota)?;
 
-    for (ming, fang_fa) in [("get", "GET"), ("post", "POST")] {
+    for (name, method_method) in [("get", "GET"), ("post", "POST")] {
         let f = lua
             .create_function(move |lua, spec: Value| {
-                let spec = gui_yi_hua(lua, spec, fang_fa)?;
-                receive_kou(lua, emit_yi_ci(lua, &spec))
+                let spec = normalize_one_render(lua, spec, method_method)?;
+                receive_port(lua, emit_one_word(lua, &spec))
             })
             .map_err(mlua_to_nota)?;
-        t.set(ming, f).map_err(mlua_to_nota)?;
+        t.set(name, f).map_err(mlua_to_nota)?;
     }
 
     let stream = lua
-        .create_function(move |lua, (spec, receive_dao): (Table, mlua::Function)| {
-            receive_kou(lua, liu_shi(lua, &spec, &receive_dao))
+        .create_function(move |lua, (spec, receive_to): (Table, mlua::Function)| {
+            receive_port(lua, stream_is(lua, &spec, &receive_to))
         })
         .map_err(mlua_to_nota)?;
     t.set("stream", stream).map_err(mlua_to_nota)?;
@@ -62,96 +62,96 @@ pub fn build(lua: &Lua) -> NotaResult<Table> {
     Ok(t)
 }
 
-fn receive_kou(lua: &Lua, r: NotaResult<RequestOutcome>) -> mlua::Result<Table> {
+fn receive_port(lua: &Lua, r: NotaResult<RequestOutcome>) -> mlua::Result<Table> {
     let out = lua.create_table()?;
-    let (bao, liu) = match r {
+    let (package, stream) = match r {
         Err(e) => return Err(lua_err(e)),
-        Ok(RequestOutcome::EnvironmentFailure(wei_shen_me)) => {
+        Ok(RequestOutcome::EnvironmentFailure(position_deep)) => {
             out.set("ok", false)?;
-            out.set("error", wei_shen_me)?;
+            out.set("error", position_deep)?;
             return Ok(out);
         }
-        Ok(RequestOutcome::Response(bao)) => (bao, None),
+        Ok(RequestOutcome::Response(package)) => (package, None),
         Ok(RequestOutcome::Streamed {
-            bao,
-            kuai_shu,
-            zhong_duan,
-        }) => (bao, Some((kuai_shu, zhong_duan))),
+            package,
+            block_data,
+            middle_segment,
+        }) => (package, Some((block_data, middle_segment))),
     };
     out.set("ok", true)?;
-    out.set("code", bao.code)?;
-    if let Some((kuai_shu, zhong_duan)) = liu {
-        out.set("chunks", kuai_shu)?;
+    out.set("code", package.code)?;
+    if let Some((block_data, middle_segment)) = stream {
+        out.set("chunks", block_data)?;
 
-        if zhong_duan {
+        if middle_segment {
             out.set("aborted", true)?;
         }
     }
-    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&bao.text) {
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&package.text) {
         out.set("json", super::json_to_lua(lua, &v)?)?;
     }
-    out.set("text", bao.text)?;
+    out.set("text", package.text)?;
     Ok(out)
 }
 
-fn gui_yi_hua(lua: &Lua, spec: Value, fang_fa: &str) -> mlua::Result<Table> {
+fn normalize_one_render(lua: &Lua, spec: Value, method_method: &str) -> mlua::Result<Table> {
     match spec {
         Value::String(s) => {
             let t = lua.create_table()?;
             t.set("url", s)?;
-            t.set("method", fang_fa)?;
+            t.set("method", method_method)?;
             Ok(t)
         }
         Value::Table(t) => {
             if t.get::<Option<String>>("method")?.is_none() {
-                t.set("method", fang_fa)?;
+                t.set("method", method_method)?;
             }
             Ok(t)
         }
         other => Err(mlua::Error::RuntimeError(format!(
             "nota.http.{}(...) expects a URL string or request table, received {}",
-            fang_fa.to_lowercase(),
-            lei_xing_ming(&other)
+            method_method.to_lowercase(),
+            kind_line_name(&other)
         ))),
     }
 }
 
-fn write_le_content_type(headers: &Table) -> bool {
+fn write_content_type(headers: &Table) -> bool {
     headers
         .pairs::<String, Value>()
         .flatten()
         .any(|(k, _)| k.eq_ignore_ascii_case("content-type"))
 }
 
-fn pin_qing_qiu(lua: &Lua, spec: &Table) -> NotaResult<ureq::http::Request<Vec<u8>>> {
+fn spell_request_request(lua: &Lua, spec: &Table) -> NotaResult<ureq::http::Request<Vec<u8>>> {
     let url: String = spec
         .get("url")
         .map_err(|_| NotaError::other("nota.http requires a `url` field"))?;
     check_address(&url)?;
 
-    let fang_fa = spec
+    let method_method = spec
         .get::<Option<String>>("method")
         .ok()
         .flatten()
         .unwrap_or_else(|| "GET".to_owned())
         .to_ascii_uppercase();
-    if !YUN_XU_DE_FANG_FA.contains(&fang_fa.as_str()) {
+    if !RUN_REQUIRED_METHOD_METHOD.contains(&method_method.as_str()) {
         return Err(NotaError::other(format!(
-            "Unsupported HTTP method `{fang_fa}`; allowed methods: {}",
-            YUN_XU_DE_FANG_FA.join(" / ")
+            "Unsupported HTTP method `{method_method}`; allowed methods: {}",
+            RUN_REQUIRED_METHOD_METHOD.join(" / ")
         )));
     }
 
     let mut req = ureq::http::Request::builder()
-        .method(fang_fa.as_str())
+        .method(method_method.as_str())
         .uri(&url);
 
     req = req.header("user-agent", format!("Nota/{}", env!("CARGO_PKG_VERSION")));
 
-    let mut shi_json = false;
-    let tou_table = spec.get::<Option<Table>>("headers").ok().flatten();
-    let zi_ji_write_le_content_type = tou_table.as_ref().is_some_and(write_le_content_type);
-    if let Some(headers) = tou_table {
+    let mut is_json = false;
+    let header_table = spec.get::<Option<Table>>("headers").ok().flatten();
+    let character_record_write_content_type = header_table.as_ref().is_some_and(write_content_type);
+    if let Some(headers) = header_table {
         for pair in headers.pairs::<String, Value>() {
             let (k, v) = pair.map_err(mlua_to_nota)?;
 
@@ -164,7 +164,7 @@ fn pin_qing_qiu(lua: &Lua, spec: &Table) -> NotaResult<ureq::http::Request<Vec<u
                 other => {
                     return Err(NotaError::other(format!(
                         "Header `{k}` has type {}; only string, number, and boolean values are supported",
-                        lei_xing_ming(&other)
+                        kind_line_name(&other)
                     )))
                 }
             };
@@ -181,54 +181,54 @@ fn pin_qing_qiu(lua: &Lua, spec: &Table) -> NotaResult<ureq::http::Request<Vec<u
             body = serde_json::to_vec(&json).map_err(|e| {
                 NotaError::other(format!("Could not encode the request body as JSON: {e}"))
             })?;
-            shi_json = true;
+            is_json = true;
         }
         Ok(other) => {
             return Err(NotaError::other(format!(
                 "The request body must be text or a table encoded as JSON, not {}",
-                lei_xing_ming(&other)
+                kind_line_name(&other)
             )))
         }
     }
-    if body.len() > QING_QIU_SHANG_XIAN {
+    if body.len() > REQUEST_REQUEST_UPPER_THREAD {
         return Err(NotaError::other(format!(
-            "The request body is {} bytes, above the {QING_QIU_SHANG_XIAN} byte limit",
+            "The request body is {} bytes, above the {REQUEST_REQUEST_UPPER_THREAD} byte limit",
             body.len()
         )));
     }
-    if shi_json && !zi_ji_write_le_content_type {
+    if is_json && !character_record_write_content_type {
         req = req.header("content-type", "application/json");
     }
 
-    let qing_qiu = req
+    let request_data = req
         .body(body)
         .map_err(|e| NotaError::other(format!("Could not build the request: {e}")))?;
-    Ok(qing_qiu)
+    Ok(request_data)
 }
 
-fn dai_li(spec: &Table) -> NotaResult<ureq::Agent> {
-    let shi_xian = chao_shi(spec)?;
+fn pending_inner(spec: &Table) -> NotaResult<ureq::Agent> {
+    let is_thread = overflow_is(spec)?;
     Ok(ureq::Agent::new_with_config(
         ureq::Agent::config_builder()
             .http_status_as_error(false)
-            .max_redirects(ZUI_DA_ZHONG_DING_XIANG)
+            .max_redirects(MOST_LARGE_MIDDLE_DEFINE_ITEM)
             .timeout_global(None)
             .timeout_per_call(None)
-            .timeout_resolve(Some(shi_xian))
-            .timeout_connect(Some(shi_xian))
-            .timeout_send_request(Some(shi_xian))
+            .timeout_resolve(Some(is_thread))
+            .timeout_connect(Some(is_thread))
+            .timeout_send_request(Some(is_thread))
             .timeout_recv_response(None)
-            .timeout_recv_body(Some(shi_xian))
+            .timeout_recv_body(Some(is_thread))
             .user_agent(format!("Nota/{}", env!("CARGO_PKG_VERSION")))
             .build(),
     ))
 }
 
-fn emit_yi_ci(lua: &Lua, spec: &Table) -> NotaResult<RequestOutcome> {
-    let qing_qiu = pin_qing_qiu(lua, spec)?;
-    let shi_xian = chao_shi(spec)?;
+fn emit_one_word(lua: &Lua, spec: &Table) -> NotaResult<RequestOutcome> {
+    let request_data = spell_request_request(lua, spec)?;
+    let is_thread = overflow_is(spec)?;
 
-    let mut resp = match dai_li(spec)?.run(qing_qiu) {
+    let mut resp = match pending_inner(spec)?.run(request_data) {
         Ok(r) => r,
         Err(e) => {
             return Ok(RequestOutcome::EnvironmentFailure(format!(
@@ -241,13 +241,13 @@ fn emit_yi_ci(lua: &Lua, spec: &Table) -> NotaResult<RequestOutcome> {
     let text = match resp
         .body_mut()
         .with_config()
-        .limit(XIANG_YING_SHANG_XIAN)
+        .limit(ITEM_SHOULD_UPPER_THREAD)
         .read_to_string()
     {
         Ok(t) => t,
         Err(e) => {
             return Ok(RequestOutcome::EnvironmentFailure(
-                read_xiang_ying_shi_bai_de_hua(&e, shi_xian),
+                read_item_should_is_percent_render(&e, is_thread),
             ))
         }
     };
@@ -255,32 +255,32 @@ fn emit_yi_ci(lua: &Lua, spec: &Table) -> NotaResult<RequestOutcome> {
     Ok(RequestOutcome::Response(HttpResponse { code, text }))
 }
 
-fn read_xiang_ying_shi_bai_de_hua(e: &ureq::Error, shi_xian: Duration) -> String {
+fn read_item_should_is_percent_render(e: &ureq::Error, is_thread: Duration) -> String {
     match e {
         ureq::Error::BodyExceedsLimit(_) => {
-            format!("The response body exceeded the {XIANG_YING_SHANG_XIAN} byte limit: {e}")
+            format!("The response body exceeded the {ITEM_SHOULD_UPPER_THREAD} byte limit: {e}")
         }
 
         ureq::Error::Timeout(_) => format!(
             "Timed out reading the response after {} seconds without new data: {e}",
-            shi_xian.as_secs()
+            is_thread.as_secs()
         ),
         _ => format!("Could not read the response: {e}"),
     }
 }
 
-fn read_xiang_ying_shi_bai_de_hua_io(e: &std::io::Error, shi_xian: Duration) -> String {
+fn read_item_should_is_percent_render_io(e: &std::io::Error, is_thread: Duration) -> String {
     match e.kind() {
         std::io::ErrorKind::TimedOut => {
             format!(
                 "Timed out reading the response after {} seconds without new data: {e}",
-                shi_xian.as_secs()
+                is_thread.as_secs()
             )
         }
         _ => {
-            let yuan_hua = e.to_string();
-            if yuan_hua.contains("BodyExceedsLimit") || yuan_hua.contains("limit") {
-                format!("The response body exceeded the {XIANG_YING_SHANG_XIAN} byte limit: {e}")
+            let source_render = e.to_string();
+            if source_render.contains("BodyExceedsLimit") || source_render.contains("limit") {
+                format!("The response body exceeded the {ITEM_SHOULD_UPPER_THREAD} byte limit: {e}")
             } else {
                 format!("Could not read the response: {e}")
             }
@@ -288,11 +288,11 @@ fn read_xiang_ying_shi_bai_de_hua_io(e: &std::io::Error, shi_xian: Duration) -> 
     }
 }
 
-fn liu_shi(lua: &Lua, spec: &Table, receive_dao: &mlua::Function) -> NotaResult<RequestOutcome> {
-    let qing_qiu = pin_qing_qiu(lua, spec)?;
-    let shi_xian = chao_shi(spec)?;
+fn stream_is(lua: &Lua, spec: &Table, receive_to: &mlua::Function) -> NotaResult<RequestOutcome> {
+    let request_data = spell_request_request(lua, spec)?;
+    let is_thread = overflow_is(spec)?;
 
-    let mut resp = match dai_li(spec)?.run(qing_qiu) {
+    let mut resp = match pending_inner(spec)?.run(request_data) {
         Ok(r) => r,
         Err(e) => {
             return Ok(RequestOutcome::EnvironmentFailure(format!(
@@ -305,72 +305,72 @@ fn liu_shi(lua: &Lua, spec: &Table, receive_dao: &mlua::Function) -> NotaResult<
     let mut read_2 = resp
         .body_mut()
         .with_config()
-        .limit(XIANG_YING_SHANG_XIAN)
+        .limit(ITEM_SHOULD_UPPER_THREAD)
         .reader();
 
-    let mut fulldocument = String::new();
-    let mut dai_xu: Vec<u8> = Vec::new();
-    let mut kuai_shu = 0usize;
-    let mut huan_chong = [0u8; 8192];
+    let mut full_document = String::new();
+    let mut pending_required: Vec<u8> = Vec::new();
+    let mut block_data = 0usize;
+    let mut replace_duplicate = [0u8; 8192];
 
     loop {
-        let n = match std::io::Read::read(&mut read_2, &mut huan_chong) {
+        let n = match std::io::Read::read(&mut read_2, &mut replace_duplicate) {
             Ok(0) => break,
             Ok(n) => n,
             Err(e) => {
                 return Ok(RequestOutcome::EnvironmentFailure(
-                    read_xiang_ying_shi_bai_de_hua_io(&e, shi_xian),
+                    read_item_should_is_percent_render_io(&e, is_thread),
                 ))
             }
         };
-        dai_xu.extend_from_slice(&huan_chong[..n]);
+        pending_required.extend_from_slice(&replace_duplicate[..n]);
 
-        while let Some(kuai_2) = qie_chu_wan_zheng_duan(&mut dai_xu) {
-            kuai_shu += 1;
-            fulldocument.push_str(&kuai_2);
+        while let Some(value_2) = cut_out_complete_validate_segment(&mut pending_required) {
+            block_data += 1;
+            full_document.push_str(&value_2);
 
-            let hui_hua: Value = receive_dao.call(kuai_2).map_err(mlua_to_nota)?;
-            if matches!(hui_hua, Value::Boolean(false)) {
+            let return_render: Value = receive_to.call(value_2).map_err(mlua_to_nota)?;
+            if matches!(return_render, Value::Boolean(false)) {
                 return Ok(RequestOutcome::Streamed {
-                    bao: HttpResponse {
+                    package: HttpResponse {
                         code,
-                        text: fulldocument,
+                        text: full_document,
                     },
-                    kuai_shu,
-                    zhong_duan: true,
+                    block_data,
+                    middle_segment: true,
                 });
             }
         }
     }
 
-    if !dai_xu.is_empty() {
-        let wei_2 = String::from_utf8_lossy(&dai_xu).into_owned();
-        kuai_shu += 1;
-        fulldocument.push_str(&wei_2);
-        let hui_hua: Value = receive_dao.call(wei_2).map_err(mlua_to_nota)?;
-        if matches!(hui_hua, Value::Boolean(false)) {
+    if !pending_required.is_empty() {
+        let position_2 = String::from_utf8_lossy(&pending_required).into_owned();
+        block_data += 1;
+        full_document.push_str(&position_2);
+        let return_render: Value = receive_to.call(position_2).map_err(mlua_to_nota)?;
+        if matches!(return_render, Value::Boolean(false)) {
             return Ok(RequestOutcome::Streamed {
-                bao: HttpResponse {
+                package: HttpResponse {
                     code,
-                    text: fulldocument,
+                    text: full_document,
                 },
-                kuai_shu,
-                zhong_duan: true,
+                block_data,
+                middle_segment: true,
             });
         }
     }
 
     Ok(RequestOutcome::Streamed {
-        bao: HttpResponse {
+        package: HttpResponse {
             code,
-            text: fulldocument,
+            text: full_document,
         },
-        kuai_shu,
-        zhong_duan: false,
+        block_data,
+        middle_segment: false,
     })
 }
 
-fn qie_chu_wan_zheng_duan(buf: &mut Vec<u8>) -> Option<String> {
+fn cut_out_complete_validate_segment(buf: &mut Vec<u8>) -> Option<String> {
     if buf.is_empty() {
         return None;
     }
@@ -381,20 +381,20 @@ fn qie_chu_wan_zheng_duan(buf: &mut Vec<u8>) -> Option<String> {
             Some(out)
         }
         Err(e) => {
-            let ok_de = e.valid_up_to();
+            let ok = e.valid_up_to();
             match e.error_len() {
                 None => {
-                    if ok_de == 0 {
+                    if ok == 0 {
                         return None;
                     }
-                    let out = String::from_utf8_lossy(&buf[..ok_de]).into_owned();
-                    buf.drain(..ok_de);
+                    let out = String::from_utf8_lossy(&buf[..ok]).into_owned();
+                    buf.drain(..ok);
                     Some(out)
                 }
-                Some(huai) => {
-                    let mut out = String::from_utf8_lossy(&buf[..ok_de]).into_owned();
+                Some(broken) => {
+                    let mut out = String::from_utf8_lossy(&buf[..ok]).into_owned();
                     out.push('\u{FFFD}');
-                    buf.drain(..ok_de + huai);
+                    buf.drain(..ok + broken);
                     Some(out)
                 }
             }
@@ -402,15 +402,15 @@ fn qie_chu_wan_zheng_duan(buf: &mut Vec<u8>) -> Option<String> {
     }
 }
 
-fn chao_shi(spec: &Table) -> NotaResult<Duration> {
+fn overflow_is(spec: &Table) -> NotaResult<Duration> {
     let ms = spec.get::<Option<u64>>("timeout_ms").ok().flatten();
     let Some(ms) = ms else {
-        return Ok(DEFAULT_CHAO_SHI);
+        return Ok(DEFAULT_OVERFLOW_IS);
     };
     if ms == 0 {
         return Err(NotaError::other("timeout_ms cannot be 0"));
     }
-    Ok(Duration::from_millis(ms).min(ZUI_ZHANG_CHAO_SHI))
+    Ok(Duration::from_millis(ms).min(MOST_LENGTH_OVERFLOW_IS))
 }
 
 fn check_address(url: &str) -> NotaResult<()> {
@@ -423,12 +423,12 @@ fn check_address(url: &str) -> NotaResult<()> {
     match scheme.to_ascii_lowercase().as_str() {
         "https" => Ok(()),
         "http" => {
-            let zhu_ji = qu_zhu_ji(rest);
-            if shi_hui_huan(&zhu_ji) {
+            let main_record = get_main_record(rest);
+            if is_return_replace(&main_record) {
                 Ok(())
             } else {
                 Err(NotaError::other(format!(
-                    "Refusing a plaintext request to `{zhu_ji}`: `http://` is limited to loopback addresses (127.0.0.1, localhost, ::1); use `https://` for other hosts"
+                    "Refusing a plaintext request to `{main_record}`: `http://` is limited to loopback addresses (127.0.0.1, localhost, ::1); use `https://` for other hosts"
                 )))
             }
         }
@@ -438,7 +438,7 @@ fn check_address(url: &str) -> NotaResult<()> {
     }
 }
 
-fn qu_zhu_ji(rest: &str) -> String {
+fn get_main_record(rest: &str) -> String {
     let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
 
     let host = authority.rsplit('@').next().unwrap_or(authority);
@@ -453,11 +453,11 @@ fn qu_zhu_ji(rest: &str) -> String {
     host.split(':').next().unwrap_or(host).to_ascii_lowercase()
 }
 
-fn shi_hui_huan(host: &str) -> bool {
+fn is_return_replace(host: &str) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "::1")
 }
 
-fn lei_xing_ming(v: &Value) -> &'static str {
+fn kind_line_name(v: &Value) -> &'static str {
     match v {
         Value::Nil => "nil",
         Value::Boolean(_) => "boolean",

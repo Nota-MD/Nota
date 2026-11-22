@@ -600,6 +600,13 @@ export type EditorCommand =
 2026-09-28 改对）。
 另外**行内标记**（`**`、反引号）也不在这里，那是 `docs/07` 第 39 项要动 schema 的事。
 
+**Command palette dispatch (2026-11-22).** The command palette is a shell-level
+search surface, not a second editor command system. A selected result closes the
+palette and calls the same `resolvePick` and menu handler used by custom and
+native menus. Editor-backed results therefore continue through `runCommand`;
+shell actions, theme changes, recent files, and extension commands keep their
+existing routes.
+
 ⚠️ **菜单栏里已经有不属于这张表的项了**：`ui/commands.ts` 是「菜单项 → 动作」的**全表**，
 而其中只有一部分会落到 `EditorCommand` 上。判据是**那件事是不是在改编辑器里的东西**——
 ⚠️ 2026-09-25 起这些"不属于"的项里**多了一整类：插件自己声明的菜单项**
@@ -3638,6 +3645,27 @@ div.nota-code-wrap          ← 新套的一层，自己不画任何东西
 - **图片删除和失败告警**：图片/视频节点悬停或选中时出现直接删除按钮；
   本地读取或浏览器加载失败时在媒体下方显示就地告警。两个控件都是编辑期元素，
   导出时整块删除。
+
+### 4.30 In-place rendered review and inline diff (2026-11-22)
+
+Review remains a decoration layer over the live editor. The document is never
+replaced during preview, and review transactions are blocked.
+
+- Top-level blocks are aligned first.
+- A deleted/replaced structural or rich block uses red delete styling.
+- A new structural or rich block is rendered as a read-only widget.
+- When an old and new block have the same node type and contain only text,
+  `inlineDifference` compares Unicode code points and emits inline delete
+  decorations plus inline insert widgets. Inserted slices serialize the target
+  text with its original marks, so bold, links and other inline formatting keep
+  their rendered appearance inside the green change span.
+- `Result` hides deleted content and removes insertion backgrounds. It therefore
+  reads like the target document without mutating it.
+- Large inline comparisons fall back to the existing whole-block path.
+- Rich inserted blocks still use `DOMSerializer`; NodeView-only rendering such as
+  KaTeX or Mermaid remains a documented fallback limit.
+
+The pure inline diff has focused tests in `tests/review-inline.test.ts`.
 
 ---
 

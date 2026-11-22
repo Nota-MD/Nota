@@ -23,12 +23,12 @@ pub fn nota_export_write(path: String, content: String) -> Result<String> {
 
 #[tauri::command]
 pub fn nota_export_write_bytes(path: String, base64: String) -> Result<String> {
-    let zi_jie = base64::engine::general_purpose::STANDARD
+    let bytes = base64::engine::general_purpose::STANDARD
         .decode(base64.as_bytes())
         .map_err(|error| NotaError::other(format!("Invalid base64 data: {error}")))?;
 
     let target = PathBuf::from(&path);
-    std::fs::write(&target, &zi_jie).map_err(|source| NotaError::Write {
+    std::fs::write(&target, &bytes).map_err(|source| NotaError::Write {
         path: target.clone(),
         source,
     })?;
@@ -69,16 +69,16 @@ fn hand_to_system_print(path_3: &str) -> bool {
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-    fn kuan(s: &str) -> Vec<u16> {
+    fn width(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(std::iter::once(0)).collect()
     }
-    let dong_ci = kuan("print");
-    let file_3 = kuan(path_3);
+    let dynamic_word = width("print");
+    let file_3 = width(path_3);
 
     let result_3 = unsafe {
         ShellExecuteW(
             std::ptr::null_mut::<c_void>() as _,
-            dong_ci.as_ptr(),
+            dynamic_word.as_ptr(),
             file_3.as_ptr(),
             std::ptr::null(),
             std::ptr::null(),
@@ -111,10 +111,10 @@ fn print_target(doc_path: Option<&str>, title: &str) -> PathBuf {
             return dir.join(PRINT_FILE);
         }
     }
-    std::env::temp_dir().join(format!("{PRINT_FILE_TMP}-{}.html", qing_filename(title)))
+    std::env::temp_dir().join(format!("{PRINT_FILE_TMP}-{}.html", request_filename(title)))
 }
 
-fn qing_filename(title: &str) -> String {
+fn request_filename(title: &str) -> String {
     let cleaned: String = title
         .trim()
         .chars()
@@ -136,13 +136,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn print_target_gen_zhe_document_directory_zou() {
+    fn print_target_uses_the_document_directory() {
         let p = print_target(Some("/home/u/docs/\u{7b14}\u{8bb0}.md"), "\u{7b14}\u{8bb0}");
         assert_eq!(p, PathBuf::from("/home/u/docs").join(PRINT_FILE));
     }
 
     #[test]
-    fn mei_you_document_path_jiu_saved_to_xi_tong_temp_directory() {
+    fn missing_document_path_uses_the_system_temp_directory() {
         let p = print_target(None, "\u{65b0}\u{5efa}\u{6587}\u{6863}");
         assert_eq!(p.parent(), Some(std::env::temp_dir().as_path()));
 
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn biao_ti_li_de_fen_ge_fu_hui_bei_huan_diao_er_bu_shi_pin_chu_zi_directory() {
+    fn title_separators_are_replaced_instead_of_escaping_the_directory() {
         let p = print_target(None, "a/b:c");
         let name = p.file_name().unwrap().to_string_lossy().to_string();
         assert!(!name.contains('/'), "{name}");
@@ -160,14 +160,13 @@ mod tests {
     }
 
     #[test]
-    fn biao_ti_xi_cheng_kong_chuan_huo_zhi_sheng_heng_gang_shi_bu_liu_xia_wu_trust_xi_ye_bu_liu_xia_yin_cang_file(
-    ) {
-        for yuan in ["", "   ", "///"] {
-            let p = print_target(None, yuan);
+    fn empty_or_slash_only_titles_leave_no_untracked_or_hidden_file() {
+        for source in ["", "   ", "///"] {
+            let p = print_target(None, source);
             let name = p.file_name().unwrap().to_string_lossy().to_string();
             assert!(
                 name.contains("Untitled"),
-                "\u{300c}{yuan}\u{300d}\u{2192} {name}"
+                "\u{300c}{source}\u{300d}\u{2192} {name}"
             );
         }
     }
@@ -186,23 +185,23 @@ mod tests {
     }
 
     #[test]
-    fn base64_write_chu_lai_de_zi_jie_yu_encoding_qian_yi_mo_yi_yang() {
+    fn base64_write_out_incoming_character_boundary_and_encoding_before_one_suffix_one_sample() {
         let dir = std::env::temp_dir().join("nota-export-bytes-test");
         std::fs::create_dir_all(&dir).unwrap();
         let target = dir.join("out.png");
 
-        let yuan = [
+        let source = [
             0x89u8, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0x80,
         ];
-        let encoding_2 = base64::engine::general_purpose::STANDARD.encode(yuan);
+        let encoding_2 = base64::engine::general_purpose::STANDARD.encode(source);
         nota_export_write_bytes(target.to_string_lossy().to_string(), encoding_2).unwrap();
-        assert_eq!(std::fs::read(&target).unwrap(), yuan);
+        assert_eq!(std::fs::read(&target).unwrap(), source);
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn huai_diao_de_base64_bao_cuo_er_qie_bu_liu_xia_ban_ge_file() {
+    fn broken_drop_base64_package_error_two_cut_not_stream_lower_half_file() {
         let dir = std::env::temp_dir().join("nota-export-bad-b64-test");
         std::fs::create_dir_all(&dir).unwrap();
         let target = dir.join("out.png");

@@ -100,20 +100,20 @@ impl RunOpts {
 }
 
 pub(crate) fn spawn_retrying(command: &mut Command) -> std::io::Result<Child> {
-    const DENG: [Duration; 3] = [
+    const WAIT: [Duration; 3] = [
         Duration::from_millis(5),
         Duration::from_millis(20),
         Duration::from_millis(60),
     ];
 
     hide_console_window(command);
-    let mut di_ji_ci = 0;
+    let mut base_record_word = 0;
     loop {
         match command.spawn() {
             Ok(child) => return Ok(child),
-            Err(e) if file_zheng_bei_write(&e) && di_ji_ci < DENG.len() => {
-                std::thread::sleep(DENG[di_ji_ci]);
-                di_ji_ci += 1;
+            Err(e) if file_validate_passive_write(&e) && base_record_word < WAIT.len() => {
+                std::thread::sleep(WAIT[base_record_word]);
+                base_record_word += 1;
             }
             Err(e) => return Err(e),
         }
@@ -121,12 +121,12 @@ pub(crate) fn spawn_retrying(command: &mut Command) -> std::io::Result<Child> {
 }
 
 #[cfg(unix)]
-fn file_zheng_bei_write(e: &std::io::Error) -> bool {
+fn file_validate_passive_write(e: &std::io::Error) -> bool {
     e.raw_os_error() == Some(26)
 }
 
 #[cfg(not(unix))]
-fn file_zheng_bei_write(_: &std::io::Error) -> bool {
+fn file_validate_passive_write(_: &std::io::Error) -> bool {
     false
 }
 
@@ -176,11 +176,11 @@ pub(crate) fn run_capture(program: &str, args: &[String], opts: RunOpts) -> Ran 
     };
 
     if let Some(text) = opts.stdin {
-        if let Some(mut si) = child.stdin.take() {
+        if let Some(mut four) = child.stdin.take() {
             std::thread::spawn(move || {
-                let _ = si.write_all(text.as_bytes());
+                let _ = four.write_all(text.as_bytes());
 
-                drop(si);
+                drop(four);
             });
         }
     }
@@ -210,7 +210,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn chai_ming_ling_an_kong_bai_fen_ci() {
+    fn split_name_zero_by_empty_percent_part_word() {
         assert_eq!(
             split_command("npx @slidev/cli").unwrap(),
             ("npx".to_string(), vec!["@slidev/cli".to_string()])
@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn provided_shi_zheng_ge_jin_cheng_zu() {
+    fn provided_is_validate_enter_success_group() {
         #[cfg(unix)]
         {
             let args = kill_args(4321);
@@ -238,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn huan_jing_bian_liang_you_xian_yu_default_value() {
+    fn replace_static_edit_two_has_thread_and_default_value() {
         assert_eq!(
             command_or_default(
                 "NOTA_\u{7edd}\u{5bf9}\u{6ca1}\u{6709}\u{8fd9}\u{4e2a}\u{53d8}\u{91cf}",
@@ -250,27 +250,28 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn file_zheng_bei_bie_ren_write_zhe_shi_deng_yi_xia_zai_qi() {
+    fn file_validate_passive_other_person_write_is_wait_one_lower_at_start() {
         use std::io::Write as _;
         use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("nota-proc-test-busy-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let jiao_ben = dir.join("\u{5047}\u{547d}\u{4ee4}");
-        let an_zhu = {
-            let mut f = std::fs::File::create(&jiao_ben).unwrap();
+        let call_current = dir.join("\u{5047}\u{547d}\u{4ee4}");
+        let by_main = {
+            let mut f = std::fs::File::create(&call_current).unwrap();
             f.write_all("#!/bin/sh\necho \u{8d77}\u{6765}\u{4e86}\n".as_bytes())
                 .unwrap();
-            std::fs::set_permissions(&jiao_ben, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::set_permissions(&call_current, std::fs::Permissions::from_mode(0o755))
+                .unwrap();
             f
         };
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(40));
-            drop(an_zhu);
+            drop(by_main);
         });
 
         let ran = run_capture(
-            &jiao_ben.display().to_string(),
+            &call_current.display().to_string(),
             &[],
             RunOpts::timeout(Duration::from_secs(10)),
         );
@@ -279,14 +280,14 @@ mod tests {
                 assert!(ok);
                 assert!(stdout.contains("\u{8d77}\u{6765}\u{4e86}"), "{stdout}");
             }
-            bie_de => panic!("\u{8be5}\u{7b49}\u{4e00}\u{4e0b}\u{4e4b}\u{540e}\u{8d77}\u{6765}\u{ff0c}\u{5374}\u{662f} {bie_de:?}"),
+            other => panic!("\u{8be5}\u{7b49}\u{4e00}\u{4e0b}\u{4e4b}\u{540e}\u{8d77}\u{6765}\u{ff0c}\u{5374}\u{662f} {other:?}"),
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     #[cfg(unix)]
-    fn pao_dao_program_zi_ji_de_shu_chu() {
+    fn run_to_program_character_record_data_out() {
         let out = run_capture(
             "printf",
             &["%s".to_string(), "1.2.3".to_string()],
@@ -302,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn zhao_bu_dao_program_shi_dan_du_yi_dang() {
+    fn find_not_to_program_is_single_read_one_when() {
         let out = run_capture(
             "nota-\u{7edd}\u{5bf9}\u{6ca1}\u{6709}\u{8fd9}\u{4e2a}\u{547d}\u{4ee4}",
             &[],
@@ -313,7 +314,7 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn gua_zhu_de_ming_ling_hui_chao_shi_er_bu_shi_yi_zhi_deng() {
+    fn attach_main_name_zero_return_overflow_is_two_not_is_one_only_wait() {
         let out = run_capture(
             "sleep",
             &["30".to_string()],
@@ -327,7 +328,7 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn biao_zhun_shu_ru_wei_de_jin_qu() {
+    fn table_ready_data_into_position_enter_get() {
         let out = run_capture(
             "cat",
             &[],
@@ -345,7 +346,7 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn tui_chu_ma_fei_ling_shi_ba_shu_chu_liu_xia_lai() {
+    fn derive_out_invalid_zero_is_handle_data_out_stream_lower_incoming() {
         let out = run_capture(
             "sh",
             &[

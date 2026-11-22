@@ -20,7 +20,7 @@ pub async fn nota_print_prepare(
     margin_mm: f64,
 ) -> Result<PrintPreview> {
     let directory_2: Option<PathBuf> = base_dir.map(PathBuf::from);
-    print_job::zhun_bei(
+    print_job::ready_passive(
         &app,
         &html,
         directory_2.as_deref(),

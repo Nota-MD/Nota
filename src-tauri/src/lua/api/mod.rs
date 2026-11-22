@@ -99,7 +99,7 @@ pub fn build(
         )?;
     }
 
-    if install_ui_ma(manifest) {
+    if install_ui(manifest) {
         set(nota.set("ui", ui::build(lua, manifest, ctx)?), lua)?;
     }
 
@@ -262,22 +262,22 @@ pub fn json_to_lua(lua: &Lua, v: &serde_json::Value) -> mlua::Result<Value> {
     })
 }
 
-const UI_NENG_LI: [Capability; 4] = [
+const UI_CAN_INNER: [Capability; 4] = [
     Capability::UiNotify,
     Capability::UiPanel,
     Capability::UiMenu,
     Capability::UiOpenUrl,
 ];
 
-fn install_ui_ma(manifest: &Manifest) -> bool {
-    UI_NENG_LI.iter().any(|c| manifest.has(*c))
+fn install_ui(manifest: &Manifest) -> bool {
+    UI_CAN_INNER.iter().any(|c| manifest.has(*c))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn neng_li_ming(c: Capability) -> String {
+    fn can_inner_name(c: Capability) -> String {
         serde_json::to_value(c)
             .unwrap()
             .as_str()
@@ -285,13 +285,13 @@ mod tests {
             .to_owned()
     }
 
-    fn zao_manifest(name_2: &str, neng_li: &[Capability]) -> Manifest {
+    fn create_manifest(name_2: &str, can_inner: &[Capability]) -> Manifest {
         let dir = std::env::temp_dir().join(format!("nota-api-test-{name_2}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let caps = neng_li
+        let caps = can_inner
             .iter()
-            .map(|c| format!("\"{}\"", neng_li_ming(*c)))
+            .map(|c| format!("\"{}\"", can_inner_name(*c)))
             .collect::<Vec<_>>()
             .join(", ");
         std::fs::write(
@@ -300,8 +300,8 @@ mod tests {
 
 
 
-                "[plugin]\nid = \"nota.{name_2}\"\nname = \"T\"\napi = \"{ban_ben}\"\ncapabilities = [{caps}]\n",
-                ban_ben = NOTA_PLUGIN_API_VERSION
+                "[plugin]\nid = \"nota.{name_2}\"\nname = \"T\"\napi = \"{half_current}\"\ncapabilities = [{caps}]\n",
+                half_current = NOTA_PLUGIN_API_VERSION
             ),
         )
         .unwrap();
@@ -309,46 +309,46 @@ mod tests {
     }
 
     #[test]
-    fn mei_yi_tiao_ui_neng_li_dou_neng_dan_du_install_chu_nota_ui() {
-        for (i, c) in UI_NENG_LI.iter().enumerate() {
-            let m = zao_manifest(&format!("u{i}"), &[*c]);
+    fn each_one_item_ui_can_inner_all_can_single_read_install_out_nota_ui() {
+        for (i, c) in UI_CAN_INNER.iter().enumerate() {
+            let m = create_manifest(&format!("u{i}"), &[*c]);
             assert!(
-                install_ui_ma(&m),
+                install_ui(&m),
                 "\u{53ea}\u{7533}\u{8bf7} `{}` \u{4e5f}\u{5e94}\u{8be5}\u{88c5}\u{51fa} nota.ui \u{2014}\u{2014} \u{6f0f}\u{4e86}\u{5b83}\u{ff0c}\u{62d3}\u{5c55}\u{4f1a}\u{62ff}\u{5230} nil \u{5e76}\u{62a5} \
                  `attempt to index a nil value`\u{ff08}BUG-8\u{ff09}",
-                neng_li_ming(*c)
+                can_inner_name(*c)
             );
         }
     }
 
     #[test]
-    fn mei_shen_qing_ui_neng_li_jiu_bu_install_nota_ui() {
-        let m = zao_manifest("empty", &[Capability::ProcessGit, Capability::DocumentRead]);
-        assert!(!install_ui_ma(&m), "\u{6ca1}\u{7533}\u{8bf7}\u{4efb}\u{4f55} ui.* \u{7684}\u{62d3}\u{5c55}\u{4e0d}\u{8be5}\u{62ff}\u{5230} nota.ui");
+    fn each_deep_request_ui_can_inner_old_not_install_nota_ui() {
+        let m = create_manifest("empty", &[Capability::ProcessGit, Capability::DocumentRead]);
+        assert!(!install_ui(&m), "\u{6ca1}\u{7533}\u{8bf7}\u{4efb}\u{4f55} ui.* \u{7684}\u{62d3}\u{5c55}\u{4e0d}\u{8be5}\u{62ff}\u{5230} nota.ui");
     }
 
     #[test]
-    fn ui_neng_li_manifest_yao_he_ui_rs_dui_de_shang() {
+    fn ui_can_inner_manifest_need_and_ui_rs_pair_upper() {
         let src = include_str!("ui.rs");
-        let shi_ji = src.matches("manifest.has(Capability::Ui").count();
+        let is_record = src.matches("manifest.has(Capability::Ui").count();
         assert_eq!(
-            shi_ji,
-            UI_NENG_LI.len(),
-            "`ui.rs` \u{91cc}\u{6709} {shi_ji} \u{5904} `manifest.has(Capability::Ui\u{2026})`\u{ff0c}\
+            is_record,
+            UI_CAN_INNER.len(),
+            "`ui.rs` \u{91cc}\u{6709} {is_record} \u{5904} `manifest.has(Capability::Ui\u{2026})`\u{ff0c}\
              \u{800c} `UI\u{80fd}\u{529b}` \u{53ea}\u{6709} {} \u{9879}\u{3002}\u{4e24}\u{5904}\u{5fc5}\u{987b}\u{4e00}\u{4e00}\u{5bf9}\u{5e94}\u{ff1a}\u{5f80} `UI\u{80fd}\u{529b}` \u{8865}\u{4e0a}\u{7f3a}\u{7684}\u{90a3}\u{4e00}\u{9879}\u{ff0c}\
              \u{5e76}\u{5728} `api/mod.rs` \u{7684}\u{8868}\u{88c5}\u{914d}\u{91cc}\u{4e5f}\u{5e26}\u{4e0a}\u{5b83}\u{2014}\u{2014}\u{6f0f}\u{4e00}\u{9879} = \u{90a3}\u{6761}\u{80fd}\u{529b}\u{5f62}\u{540c}\u{865a}\u{8bbe}\u{ff08}BUG-8\u{ff09}",
-            UI_NENG_LI.len()
+            UI_CAN_INNER.len()
         );
     }
 
     #[test]
-    fn neng_li_de_serde_name_yu_parse_shuo_tong_yi_tao_hua() {
-        for c in UI_NENG_LI {
-            let ming = neng_li_ming(c);
+    fn can_inner_serde_name_and_parse_say_same_one_escape_render() {
+        for c in UI_CAN_INNER {
+            let name = can_inner_name(c);
             assert_eq!(
-                Capability::parse(&ming).unwrap(),
+                Capability::parse(&name).unwrap(),
                 c,
-                "`{ming}` \u{8fd9}\u{4e2a}\u{540d}\u{5b57} `parse()` \u{8ba4}\u{ff0c}\u{4f46}\u{8ba4}\u{56de}\u{6765}\u{7684}\u{4e0d}\u{662f}\u{540c}\u{4e00}\u{4e2a}\u{53d8}\u{4f53}"
+                "`{name}` \u{8fd9}\u{4e2a}\u{540d}\u{5b57} `parse()` \u{8ba4}\u{ff0c}\u{4f46}\u{8ba4}\u{56de}\u{6765}\u{7684}\u{4e0d}\u{662f}\u{540c}\u{4e00}\u{4e2a}\u{53d8}\u{4f53}"
             );
         }
     }

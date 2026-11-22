@@ -15,7 +15,7 @@ pub enum Signature {
 }
 
 impl Signature {
-    pub fn shuo_ming(self) -> &'static str {
+    pub fn say_name(self) -> &'static str {
         match self {
             Self::Verified => "Verified",
             Self::Unknown => "Unknown signer",
@@ -50,15 +50,15 @@ fn is_false(value: &bool) -> bool {
 }
 
 pub struct InstallSource {
-    pub jie: Signature,
+    pub boundary: Signature,
     pub key_id: Option<String>,
     pub public_key: Option<String>,
 }
 
 impl InstallSource {
-    pub fn mei_qian() -> Self {
+    pub fn each_before() -> Self {
         Self {
-            jie: Signature::Unsigned,
+            boundary: Signature::Unsigned,
             key_id: None,
             public_key: None,
         }
@@ -78,11 +78,11 @@ pub struct Installed {
 }
 
 impl Installed {
-    pub fn unrecorded_shi_kai_bu_kai() -> bool {
+    pub fn unrecorded_is_start_not_start() -> bool {
         cfg!(debug_assertions)
     }
 
-    pub fn cong_text(text: &str, unrecorded: bool) -> Self {
+    pub fn from_text(text: &str, unrecorded: bool) -> Self {
         let PluginArchive { plugins } = toml::from_str(text).unwrap_or_default();
         Self {
             map: plugins,
@@ -90,8 +90,8 @@ impl Installed {
         }
     }
 
-    pub fn cong_text_an_current_dang(text: &str) -> Self {
-        Self::cong_text(text, Self::unrecorded_shi_kai_bu_kai())
+    pub fn from_text_by_current_when(text: &str) -> Self {
+        Self::from_text(text, Self::unrecorded_is_start_not_start())
     }
 
     pub fn load() -> Self {
@@ -99,10 +99,10 @@ impl Installed {
             .ok()
             .and_then(|p| std::fs::read_to_string(p).ok())
             .unwrap_or_default();
-        Self::cong_text_an_current_dang(&text)
+        Self::from_text_by_current_when(&text)
     }
 
-    pub fn dao_text(&self) -> Result<String> {
+    pub fn to_text(&self) -> Result<String> {
         let archive_2 = PluginArchive {
             plugins: self.map.clone(),
         };
@@ -115,10 +115,10 @@ impl Installed {
 
     pub fn save(&self) -> Result<()> {
         let path = crate::paths::plugin_state_file()?;
-        if let Some(fu) = path.parent() {
-            crate::paths::ensure_dir(fu)?;
+        if let Some(service) = path.parent() {
+            crate::paths::ensure_dir(service)?;
         }
-        std::fs::write(&path, self.dao_text()?).map_err(|source| NotaError::Write { path, source })
+        std::fs::write(&path, self.to_text()?).map_err(|source| NotaError::Write { path, source })
     }
 
     pub fn is_enabled(&self, id: &str) -> bool {
@@ -128,7 +128,7 @@ impl Installed {
             .unwrap_or(self.unrecorded)
     }
 
-    pub fn ji_guo_mei_you(&self, id: &str) -> bool {
+    pub fn record_passed_each_has(&self, id: &str) -> bool {
         self.map.contains_key(id)
     }
 
@@ -136,7 +136,7 @@ impl Installed {
         self.map.get(id)
     }
 
-    fn qu_huo_jian(&mut self, id: &str) -> &mut PluginRecord {
+    fn get_active_check(&mut self, id: &str) -> &mut PluginRecord {
         let default_2 = self.unrecorded;
         self.map.entry(id.to_owned()).or_insert(PluginRecord {
             enabled: default_2,
@@ -145,7 +145,7 @@ impl Installed {
     }
 
     pub fn set_enabled(&mut self, id: &str, on: bool) -> Result<()> {
-        let record = self.qu_huo_jian(id);
+        let record = self.get_active_check(id);
         record.enabled = on;
         record.removed = false;
         self.save()
@@ -156,17 +156,17 @@ impl Installed {
     }
 
     pub fn mark_removed(&mut self, id: &str) -> Result<()> {
-        let record = self.qu_huo_jian(id);
+        let record = self.get_active_check(id);
         record.enabled = false;
         record.removed = true;
         self.save()
     }
 
-    pub fn ji_lai_lu(&mut self, id: &str, lai_lu: InstallSource) -> Result<()> {
-        let r = self.qu_huo_jian(id);
-        r.signature = Some(lai_lu.jie);
-        r.key_id = lai_lu.key_id;
-        r.public_key = lai_lu.public_key;
+    pub fn record_incoming_path(&mut self, id: &str, incoming_path: InstallSource) -> Result<()> {
+        let r = self.get_active_check(id);
+        r.signature = Some(incoming_path.boundary);
+        r.key_id = incoming_path.key_id;
+        r.public_key = incoming_path.public_key;
         self.save()
     }
 
@@ -224,13 +224,13 @@ impl Installed {
             .collect()
     }
 
-    pub fn forget_diao(&mut self, id: &str) -> Result<()> {
+    pub fn forget_drop(&mut self, id: &str) -> Result<()> {
         self.map.remove(id);
         self.save()
     }
 }
 
-pub fn gong_yao_fingerprint(public_key: &[u8; 32]) -> String {
+pub fn work_need_fingerprint(public_key: &[u8; 32]) -> String {
     use sha2::{Digest, Sha256};
     let d = Sha256::digest(public_key);
     d.iter().take(8).map(|b| format!("{b:02x}")).collect()
@@ -241,21 +241,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn emit_bu_dang_li_unrecorded_de_plugin_shi_guan_zhe_de() {
-        let s = Installed::cong_text("", false);
+    fn emit_not_when_inner_unrecorded_plugin_is_close() {
+        let s = Installed::from_text("", false);
         assert!(!s.is_enabled("nota.git"));
-        assert!(!s.ji_guo_mei_you("nota.git"));
+        assert!(!s.record_passed_each_has("nota.git"));
     }
 
     #[test]
-    fn diao_shi_dang_li_unrecorded_de_plugin_shi_kai_zhe_de() {
-        let s = Installed::cong_text("", true);
+    fn drop_is_when_inner_unrecorded_plugin_is_start() {
+        let s = Installed::from_text("", true);
         assert!(s.is_enabled("nota.git"));
     }
 
     #[test]
-    fn ji_guo_de_an_ji_de_lai() {
-        let s = Installed::cong_text(
+    fn record_passed_by_record_incoming() {
+        let s = Installed::from_text(
             r#"
 [plugins."nota.git"]
 enabled = false
@@ -270,35 +270,35 @@ enabled = false
     }
 
     #[test]
-    fn gong_yao_fingerprint_zhi_you_gong_yao_jue_ding() {
+    fn work_need_fingerprint_only_has_work_need_absolute_define() {
         let a = [1u8; 32];
         let b = [2u8; 32];
-        assert_eq!(gong_yao_fingerprint(&a), gong_yao_fingerprint(&a));
-        assert_ne!(gong_yao_fingerprint(&a), gong_yao_fingerprint(&b));
+        assert_eq!(work_need_fingerprint(&a), work_need_fingerprint(&a));
+        assert_ne!(work_need_fingerprint(&a), work_need_fingerprint(&b));
         assert_eq!(
-            gong_yao_fingerprint(&a).len(),
+            work_need_fingerprint(&a).len(),
             16,
             "\u{6307}\u{7eb9}\u{662f} 8 \u{5b57}\u{8282}\u{7684}\u{5341}\u{516d}\u{8fdb}\u{5236}"
         );
-        assert!(gong_yao_fingerprint(&a)
+        assert!(work_need_fingerprint(&a)
             .chars()
             .all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]
-    fn cun_le_neng_read_hui_lai() {
-        let mut s = Installed::cong_text("", true);
+    fn store_can_read_return_incoming() {
+        let mut s = Installed::from_text("", true);
         s.set_enabled("nota.git", false).unwrap();
-        s.ji_lai_lu(
+        s.record_incoming_path(
             "nota.git",
             InstallSource {
-                jie: Signature::Verified,
+                boundary: Signature::Verified,
                 key_id: Some("abc123".into()),
                 public_key: Some("AAAA".into()),
             },
         )
         .unwrap();
-        let text = s.dao_text().unwrap();
+        let text = s.to_text().unwrap();
         assert!(
             text.contains("[plugins.\"nota.git\"]"),
             "\u{5b9e}\u{9645}\u{ff1a}{text}"
@@ -312,19 +312,21 @@ enabled = false
             "\u{5b9e}\u{9645}\u{ff1a}{text}"
         );
 
-        let hui_2 = Installed::cong_text(&text, true);
-        assert!(!hui_2.is_enabled("nota.git"), "\u{5199}\u{76d8}\u{518d}\u{8bfb}\u{56de}\u{6765}\u{5f00}\u{5173}\u{4e0d}\u{80fd}\u{53d8}");
+        let return_2 = Installed::from_text(&text, true);
+        assert!(!return_2.is_enabled("nota.git"), "\u{5199}\u{76d8}\u{518d}\u{8bfb}\u{56de}\u{6765}\u{5f00}\u{5173}\u{4e0d}\u{80fd}\u{53d8}");
         assert_eq!(
-            hui_2.record("nota.git").and_then(|r| r.signature),
+            return_2.record("nota.git").and_then(|r| r.signature),
             Some(Signature::Verified)
         );
         assert_eq!(
-            hui_2.record("nota.git").and_then(|r| r.key_id.as_deref()),
+            return_2
+                .record("nota.git")
+                .and_then(|r| r.key_id.as_deref()),
             Some("abc123")
         );
 
         assert_eq!(
-            hui_2
+            return_2
                 .record("nota.git")
                 .and_then(|r| r.public_key.as_deref()),
             Some("AAAA")
@@ -332,29 +334,30 @@ enabled = false
     }
 
     #[test]
-    fn mei_qian_ming_de_bao_lai_lu_shi_kong_zhe_de() {
-        let mut s = Installed::cong_text("", true);
-        s.ji_lai_lu("a.b", InstallSource::mei_qian()).unwrap();
+    fn each_before_name_package_incoming_path_is_empty() {
+        let mut s = Installed::from_text("", true);
+        s.record_incoming_path("a.b", InstallSource::each_before())
+            .unwrap();
         let r = s.record("a.b").unwrap();
         assert_eq!(r.signature, Some(Signature::Unsigned));
         assert!(r.key_id.is_none());
         assert!(r.public_key.is_none());
-        let text = s.dao_text().unwrap();
+        let text = s.to_text().unwrap();
         assert!(!text.contains("key_id"), "\u{5b9e}\u{9645}\u{ff1a}{text}");
     }
 
     #[test]
-    fn forget_diao_shi_lian_enabled_yi_qi_forget() {
-        let mut s = Installed::cong_text("", true);
+    fn forget_drop_is_link_enabled_one_start_forget() {
+        let mut s = Installed::from_text("", true);
         s.set_enabled("nota.git", false).unwrap();
-        s.forget_diao("nota.git").unwrap();
-        assert!(!s.ji_guo_mei_you("nota.git"));
+        s.forget_drop("nota.git").unwrap();
+        assert!(!s.record_passed_each_has("nota.git"));
         assert!(s.is_enabled("nota.git"), "\u{56de}\u{5230}\u{9ed8}\u{8ba4}\u{503c}\u{ff08}\u{8c03}\u{8bd5}\u{6863}=\u{5f00}\u{7740}\u{ff09}");
     }
 
     #[test]
-    fn read_bu_chu_lai_de_pei_zhi_dang_unrecorded() {
-        let s = Installed::cong_text("\u{8fd9}\u{4e0d}\u{662f} TOML {{{", true);
+    fn read_not_out_incoming_match_only_when_unrecorded() {
+        let s = Installed::from_text("\u{8fd9}\u{4e0d}\u{662f} TOML {{{", true);
         assert!(s.is_enabled("\u{4efb}\u{4f55}\u{4e1c}\u{897f}"));
     }
 }

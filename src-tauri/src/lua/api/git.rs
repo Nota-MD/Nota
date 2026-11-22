@@ -6,7 +6,7 @@ use super::{lua_err, mlua_to_nota};
 use crate::error::{NotaError, Result as NotaResult};
 use crate::lua::HostContext;
 
-const JIN_ZHI_DE_ARGS: &[&str] = &["-C", "--git-dir", "--work-tree", "--namespace"];
+const ENTER_ONLY_ARGS: &[&str] = &["-C", "--git-dir", "--work-tree", "--namespace"];
 
 pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
     let t = lua.create_table().map_err(mlua_to_nota)?;
@@ -18,7 +18,7 @@ pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
 
             let cwd = match working_dir(&ctx2) {
                 Ok(cwd) => cwd,
-                Err(msg) => return mei_you_gong_zuo_directory_de_result(lua, "stdout", msg),
+                Err(msg) => return each_has_work_left_directory_result(lua, "stdout", msg),
             };
             let out = run_git(&cwd, &argv).map_err(lua_err)?;
 
@@ -63,7 +63,7 @@ pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
         .create_function(move |lua, n: Option<i64>| -> mlua::Result<Table> {
             let cwd = match working_dir(&ctx2) {
                 Ok(cwd) => cwd,
-                Err(msg) => return mei_you_gong_zuo_directory_de_result(lua, "rows", msg),
+                Err(msg) => return each_has_work_left_directory_result(lua, "rows", msg),
             };
 
             let n = n.unwrap_or(60).clamp(1, 200).to_string();
@@ -76,7 +76,7 @@ pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
                     "--no-color",
                     "-n",
                     &n,
-                    TU_GE_SHI,
+                    IMAGE_IS,
                 ],
             )
             .map_err(lua_err)?;
@@ -86,7 +86,7 @@ pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
             t.set("ok", out.code == 0)?;
             t.set("stderr", out.stderr)?;
             let rows = lua.create_table()?;
-            for (i, row) in parse_tu_ri_zhi(&out.stdout).into_iter().enumerate() {
+            for (i, row) in parse_image_date_only(&out.stdout).into_iter().enumerate() {
                 let item = lua.create_table()?;
                 item.set("art", row.art)?;
                 if let Some(hash) = row.hash {
@@ -108,7 +108,7 @@ pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
         .create_function(move |lua, ()| -> mlua::Result<Table> {
             let cwd = match working_dir(&ctx2) {
                 Ok(cwd) => cwd,
-                Err(msg) => return mei_you_gong_zuo_directory_de_result(lua, "raw", msg),
+                Err(msg) => return each_has_work_left_directory_result(lua, "raw", msg),
             };
 
             let out = run_git(&cwd, &["status", "--porcelain=v1", "-z", "-b"]).map_err(lua_err)?;
@@ -126,7 +126,7 @@ pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
         .create_function(move |lua, staged: Option<bool>| -> mlua::Result<Table> {
             let cwd = match working_dir(&ctx2) {
                 Ok(cwd) => cwd,
-                Err(msg) => return mei_you_gong_zuo_directory_de_result(lua, "text", msg),
+                Err(msg) => return each_has_work_left_directory_result(lua, "text", msg),
             };
             let mut argv = vec!["diff", "--no-color"];
             if staged.unwrap_or(false) {
@@ -160,7 +160,7 @@ pub fn build(lua: &Lua, ctx: &HostContext) -> NotaResult<Table> {
     Ok(t)
 }
 
-fn mei_you_gong_zuo_directory_de_result(
+fn each_has_work_left_directory_result(
     lua: &Lua,
     text_key: &str,
     msg: String,
@@ -183,14 +183,14 @@ struct GitOutput {
 fn run_git<S: AsRef<str>>(cwd: &PathBuf, argv: &[S]) -> NotaResult<GitOutput> {
     for arg in argv {
         let arg = arg.as_ref();
-        if JIN_ZHI_DE_ARGS.contains(&arg) {
+        if ENTER_ONLY_ARGS.contains(&arg) {
             return Err(NotaError::other(format!(
                 "nota.git does not accept `{arg}` because it redirects operations outside the workspace"
             )));
         }
 
         if let Some((head, _)) = arg.split_once('=') {
-            if JIN_ZHI_DE_ARGS.contains(&head) {
+            if ENTER_ONLY_ARGS.contains(&head) {
                 return Err(NotaError::other(format!(
                     "nota.git does not accept `{head}=...` because it redirects operations outside the workspace"
                 )));
@@ -231,10 +231,10 @@ fn working_dir(ctx: &HostContext) -> Result<PathBuf, String> {
         .and_then(|d| d.path.as_ref())
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf());
-    tiao_gong_zuo_directory(workspace, doc_dir)
+    item_work_left_directory(workspace, doc_dir)
 }
 
-fn tiao_gong_zuo_directory(
+fn item_work_left_directory(
     workspace: Option<PathBuf>,
     doc_dir: Option<PathBuf>,
 ) -> Result<PathBuf, String> {
@@ -307,7 +307,7 @@ fn parse_status_2(raw: &str) -> (String, Vec<ChangedEntry>) {
         }
 
         out.push(ChangedEntry {
-            state: gui_lei(&index, &work),
+            state: normalize_kind(&index, &work),
             index,
             work,
             path,
@@ -318,7 +318,7 @@ fn parse_status_2(raw: &str) -> (String, Vec<ChangedEntry>) {
     (branch, out)
 }
 
-fn gui_lei(index: &str, work: &str) -> &'static str {
+fn normalize_kind(index: &str, work: &str) -> &'static str {
     if index == "?" && work == "?" {
         "untracked"
     } else if index != " " && work != " " {
@@ -330,7 +330,7 @@ fn gui_lei(index: &str, work: &str) -> &'static str {
     }
 }
 
-const TU_GE_SHI: &str = "--format=%x1f%h%x1f%p%x1f%d%x1f%s";
+const IMAGE_IS: &str = "--format=%x1f%h%x1f%p%x1f%d%x1f%s";
 
 #[derive(Debug, PartialEq)]
 struct GraphEntry {
@@ -344,7 +344,7 @@ struct GraphEntry {
     subject: String,
 }
 
-fn parse_tu_ri_zhi(stdout: &str) -> Vec<GraphEntry> {
+fn parse_image_date_only(stdout: &str) -> Vec<GraphEntry> {
     let mut out = Vec::new();
     for line in stdout.split('\n') {
         if line.is_empty() {
@@ -383,43 +383,43 @@ fn parse_tu_ri_zhi(stdout: &str) -> Vec<GraphEntry> {
 mod tests {
     use super::*;
 
-    fn bei_wei_lan_ju_le(r: &NotaResult<GitOutput>) -> bool {
+    fn passive_position_panel_sentence(r: &NotaResult<GitOutput>) -> bool {
         matches!(r, Err(e) if e.to_string().contains("does not accept"))
     }
 
     #[test]
-    fn zhong_ding_xiang_target_directory_de_args_yao_ju() {
+    fn middle_define_item_target_directory_args_need_sentence() {
         let cwd = std::env::temp_dir();
         let r = run_git(&cwd, &["-C", "/tmp", "status"]);
         assert!(
-            bei_wei_lan_ju_le(&r),
+            passive_position_panel_sentence(&r),
             "`-C` \u{5e94}\u{5f53}\u{88ab}\u{56f4}\u{680f}\u{62d2}\u{6389}"
         );
     }
 
     #[test]
-    fn deng_hao_write_fa_de_zhong_ding_xiang_tong_yang_yao_ju() {
+    fn wait_number_write_method_middle_define_item_same_sample_need_sentence() {
         let cwd = std::env::temp_dir();
-        assert!(bei_wei_lan_ju_le(&run_git(
+        assert!(passive_position_panel_sentence(&run_git(
             &cwd,
             &["--git-dir=/tmp/x", "status"]
         )));
-        assert!(bei_wei_lan_ju_le(&run_git(
+        assert!(passive_position_panel_sentence(&run_git(
             &cwd,
             &["--work-tree=/tmp/x", "status"]
         )));
     }
 
     #[test]
-    fn pu_tong_args_bu_gai_bei_wei_lan_wu_shang() {
+    fn plain_same_args_not_change_passive_position_panel_none_upper() {
         let cwd = std::env::temp_dir();
         let r = run_git(&cwd, &["status", "--porcelain=v1"]);
-        assert!(!bei_wei_lan_ju_le(&r), "\u{666e}\u{901a}\u{53c2}\u{6570}\u{88ab}\u{56f4}\u{680f}\u{8bef}\u{4f24}\u{4e86}\u{ff1a}{r:?}");
+        assert!(!passive_position_panel_sentence(&r), "\u{666e}\u{901a}\u{53c2}\u{6570}\u{88ab}\u{56f4}\u{680f}\u{8bef}\u{4f24}\u{4e86}\u{ff1a}{r:?}");
     }
 
     #[test]
-    fn kai_le_workspace_jiu_yong_workspace() {
-        let got = tiao_gong_zuo_directory(
+    fn start_workspace_old_use_workspace() {
+        let got = item_work_left_directory(
             Some(PathBuf::from("/\u{5de5}\u{4f5c}\u{533a}")),
             Some(PathBuf::from("/\u{6587}\u{7a3f}")),
         );
@@ -427,38 +427,38 @@ mod tests {
     }
 
     #[test]
-    fn mei_workspace_jiu_tui_dao_document_suo_zai_directory() {
-        let got = tiao_gong_zuo_directory(None, Some(PathBuf::from("/\u{6587}\u{7a3f}")));
+    fn each_workspace_old_derive_to_document_lock_at_directory() {
+        let got = item_work_left_directory(None, Some(PathBuf::from("/\u{6587}\u{7a3f}")));
         assert_eq!(got.unwrap(), PathBuf::from("/\u{6587}\u{7a3f}"));
     }
 
     #[test]
-    fn liang_ge_dou_mei_you_shi_huan_jing_bu_ju_bei_bu_shi_plugin_huai() {
-        let err = tiao_gong_zuo_directory(None, None).unwrap_err();
+    fn two_all_each_has_is_replace_static_not_sentence_passive_not_is_plugin_broken() {
+        let err = item_work_left_directory(None, None).unwrap_err();
         assert!(
             err.contains("Cannot determine a Git directory"),
             "unexpected error: {err}"
         );
     }
 
-    fn status_2(duan: &[&str]) -> String {
-        duan.join("\0")
+    fn status_2(segment: &[&str]) -> String {
+        segment.join("\0")
     }
 
     #[test]
-    fn kong_shu_chu_shi_kong_lie_table_er_bu_shi_yi_ju_bao_cuo() {
+    fn empty_data_out_is_empty_list_table_two_not_is_one_sentence_package_error() {
         assert_eq!(parse_status_2(""), (String::new(), Vec::new()));
     }
 
     #[test]
-    fn fen_zhi_xing_lian_shang_you_he_ahead_yi_qi_na_chu_lai() {
+    fn part_only_line_link_upper_has_and_ahead_one_start_that_out_incoming() {
         let (branch, entries) = parse_status_2(&status_2(&["## main...origin/main [ahead 1]"]));
         assert_eq!(branch, "main...origin/main [ahead 1]");
         assert!(entries.is_empty());
     }
 
     #[test]
-    fn mei_you_fen_zhi_duan_shi_di_yi_tiao_change_bu_neng_bei_chi_diao() {
+    fn each_has_part_only_segment_is_base_one_item_change_not_can_passive_hold_drop() {
         let (branch, entries) = parse_status_2(&status_2(&[" M \u{7532}.md", "?? \u{4e59}.md"]));
         assert_eq!(branch, "");
         assert_eq!(entries.len(), 2);
@@ -466,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn zhong_wen_path_yuan_yang_chu_lai() {
+    fn middle_text_path_source_sample_out_incoming() {
         let (_, entries) = parse_status_2(&status_2(&[
             "## main",
             " M \u{4e2d}\u{6587} \u{6587}\u{4ef6}\u{540d}.md",
@@ -478,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn si_zhong_status_ge_zi_gui_dui_lei() {
+    fn four_middle_status_character_normalize_pair_kind() {
         let (_, e) = parse_status_2(&status_2(&[
             "## main",
             "?? \u{65b0}.md",
@@ -491,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    fn zhong_ming_ming_yao_duo_chi_diao_yi_duan_yuan_path() {
+    fn middle_name_name_need_multiple_hold_drop_one_segment_source_path() {
         let (_, e) = parse_status_2(&status_2(&["## main", "R  b.md", "a.md", " M c.md"]));
         assert_eq!(e.len(), 2);
         assert_eq!(e[0].path, "b.md");
@@ -502,14 +502,14 @@ mod tests {
 
     #[test]
 
-    fn fu_zhi_de_c_ye_suan_duo_yi_duan() {
+    fn service_only_c_page_compute_multiple_one_segment() {
         let (_, e) = parse_status_2(&status_2(&["## main", "C  b.md", "a.md"]));
         assert_eq!(e.len(), 1);
         assert_eq!(e[0].orig.as_deref(), Some("a.md"));
     }
 
     #[test]
-    fn tiao_mu_shao_yi_duan_ye_bu_hui_zha() {
+    fn item_target_few_one_segment_page_not_return_click() {
         let (_, e) = parse_status_2(&status_2(&["## main", "R  b.md"]));
         assert_eq!(e.len(), 1);
         assert_eq!(e[0].orig, None);
@@ -527,8 +527,8 @@ mod tests {
     );
 
     #[test]
-    fn tu_ri_zhi_qie_de_chu_tu_xian_yu_zi_duan() {
-        let rows = parse_tu_ri_zhi(GRAPH_SAMPLE);
+    fn image_date_only_cut_out_image_thread_and_character_segment() {
+        let rows = parse_image_date_only(GRAPH_SAMPLE);
         assert_eq!(
             rows.len(),
             8,
@@ -544,8 +544,8 @@ mod tests {
     }
 
     #[test]
-    fn chun_lian_jie_xian_xing_mei_you_ti_jiao_dan_tu_xian_liu_zhe() {
-        let rows = parse_tu_ri_zhi(GRAPH_SAMPLE);
+    fn pure_link_boundary_thread_line_each_has_question_call_single_image_thread_stream() {
+        let rows = parse_image_date_only(GRAPH_SAMPLE);
         assert_eq!(rows[1].hash, None);
         assert_eq!(rows[1].art, "|\\  ");
         assert_eq!(rows[5].hash, None);
@@ -553,8 +553,8 @@ mod tests {
     }
 
     #[test]
-    fn root_ti_jiao_de_fu_shi_kong_chuan_er_bu_shi_que_zi_duan() {
-        let rows = parse_tu_ri_zhi(GRAPH_SAMPLE);
+    fn root_question_call_service_is_empty_stream_two_not_is_missing_character_segment() {
+        let rows = parse_image_date_only(GRAPH_SAMPLE);
         let root = &rows[7];
         assert_eq!(root.hash.as_deref(), Some("0a703e9"));
         assert_eq!(root.parent, "");
@@ -562,18 +562,18 @@ mod tests {
     }
 
     #[test]
-    fn mei_you_fen_zhi_biao_qian_de_ti_jiao_refs_shi_kong_chuan() {
-        let rows = parse_tu_ri_zhi(GRAPH_SAMPLE);
+    fn each_has_part_only_table_before_question_call_refs_is_empty_stream() {
+        let rows = parse_image_date_only(GRAPH_SAMPLE);
         assert_eq!(rows[2].refs, "");
         assert_eq!(rows[2].subject, "\u{4e3b}\u{7ebf}\u{5f80}\u{524d}\u{8d70}");
         assert_eq!(rows[3].refs, "\u{652f}\u{7ebf}");
     }
 
     #[test]
-    fn kong_shu_chu_he_wei_sui_huan_xing_dou_bu_hui_duo_chu_yi_xing() {
-        assert!(parse_tu_ri_zhi("").is_empty());
+    fn empty_data_out_and_position_follow_replace_line_all_not_return_multiple_out_one_line() {
+        assert!(parse_image_date_only("").is_empty());
         assert_eq!(
-            parse_tu_ri_zhi("* \u{1f}abc\u{1f}\u{1f}\u{1f}\u{6807}\u{9898}\n").len(),
+            parse_image_date_only("* \u{1f}abc\u{1f}\u{1f}\u{1f}\u{6807}\u{9898}\n").len(),
             1
         );
     }

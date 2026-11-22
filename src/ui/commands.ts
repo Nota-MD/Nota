@@ -307,7 +307,8 @@ export const MENUS: MenuSpec[] = [
 
 
 
-      { id: "file.quickOpen", label: "Quick Open…", accel: "Ctrl+Shift+P" },
+      { id: "file.commandPalette", label: "Command Palette…", accel: "Ctrl+Shift+P" },
+      { id: "file.quickOpen", label: "Quick Open…" },
       { id: "file.recent", label: "Open Recent File" },
       { id: "file.reload", label: "Reload from Disk", needsDoc: true },
       "sep",

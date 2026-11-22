@@ -12,7 +12,7 @@ use crate::plugin::manifest::Manifest;
 pub struct LanguagePack {
     pub declaration_2: bool,
 
-    pub lang: Option<String>,
+    pub language: Option<String>,
 
     pub ok: bool,
 
@@ -23,7 +23,7 @@ impl Default for LanguagePack {
     fn default() -> Self {
         Self {
             declaration_2: false,
-            lang: None,
+            language: None,
             ok: true,
             table_2: HashMap::new(),
         }
@@ -35,17 +35,17 @@ impl LanguagePack {
         self.table_2.get("name").map(String::as_str)
     }
 
-    pub fn miao_shu(&self) -> Option<&str> {
+    pub fn description_data(&self) -> Option<&str> {
         self.table_2.get("description").map(String::as_str)
     }
 
-    pub fn qu_2(&self, key: &str) -> Option<&str> {
+    pub fn get_2(&self, key: &str) -> Option<&str> {
         self.table_2.get(key).map(String::as_str)
     }
 
     fn file_3(dir: &std::path::Path, tag: &str) -> PathBuf {
         dir.join("lang")
-            .join(format!("{}.toml", lang::gui_fan(tag)))
+            .join(format!("{}.toml", lang::normalize_language_tag(tag)))
     }
 }
 
@@ -57,7 +57,7 @@ pub fn install_2(manifest: &Manifest, application_language: &str) -> LanguagePac
         return LanguagePack::default();
     }
 
-    let (tag, ok) = match lang::pi_pei(application_language, langs) {
+    let (tag, ok) = match lang::match_language(application_language, langs) {
         Some(t) => (t, true),
         None => (lang::PLUGIN_FALLBACK.to_owned(), false),
     };
@@ -65,14 +65,14 @@ pub fn install_2(manifest: &Manifest, application_language: &str) -> LanguagePac
     let table_2 = read_2(&manifest.dir, &tag).unwrap_or_else(|reason_2| {
         crate::debug_log!(
             "[nota:{id}] missing lang/{}.toml ({reason_2}); falling back to source strings",
-            lang::gui_fan(&tag)
+            lang::normalize_language_tag(&tag)
         );
         HashMap::new()
     });
 
     LanguagePack {
         declaration_2: true,
-        lang: Some(lang::gui_fan(&tag)),
+        language: Some(lang::normalize_language_tag(&tag)),
         ok,
         table_2,
     }
@@ -82,28 +82,28 @@ fn read_2(
     dir: &std::path::Path,
     tag: &str,
 ) -> std::result::Result<HashMap<String, String>, String> {
-    let lu = LanguagePack::file_3(dir, tag);
-    let text_2 = std::fs::read_to_string(&lu)
-        .map_err(|e| format!("Could not read {}: {e}", lu.display()))?;
+    let path = LanguagePack::file_3(dir, tag);
+    let text_2 = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Could not read {}: {e}", path.display()))?;
     lang::read_language_file(&text_2)
 }
 
 pub fn build(
     lua: &Lua,
-    bao: &LanguagePack,
+    package: &LanguagePack,
     application_language: &str,
 ) -> Result<Table, NotaError> {
     let t = lua.create_table().map_err(mlua_to_nota)?;
     t.set("app_lang", application_language.to_owned())
         .map_err(mlua_to_nota)?;
 
-    match &bao.lang {
+    match &package.language {
         Some(l) => t.set("lang", l.clone()).map_err(mlua_to_nota)?,
         None => t.set("lang", Value::Nil).map_err(mlua_to_nota)?,
     }
-    t.set("ok", bao.ok).map_err(mlua_to_nota)?;
+    t.set("ok", package.ok).map_err(mlua_to_nota)?;
 
-    let table_2 = bao.table_2.clone();
+    let table_2 = package.table_2.clone();
     let text = lua
         .create_function(move |_, key: String| Ok(table_2.get(&key).cloned()))
         .map_err(mlua_to_nota)?;
@@ -142,87 +142,88 @@ mod tests {
         }
     }
 
-    fn jian(dir: &std::path::Path, tag: &str, content_2: &str) {
+    fn check(dir: &std::path::Path, tag: &str, content_2: &str) {
         std::fs::create_dir_all(dir.join("lang")).unwrap();
         std::fs::write(dir.join("lang").join(format!("{tag}.toml")), content_2).unwrap();
     }
 
-    fn temp_directory(ming: &str) -> PathBuf {
-        let p = std::env::temp_dir().join(format!("nota-i18n-test-{ming}-{}", std::process::id()));
+    fn temp_directory(name: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("nota-i18n-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
     }
 
     #[test]
-    fn bu_declaration_langs_jiu_bu_xie_shang_ye_bu_ti_shi() {
+    fn not_declaration_langs_old_not_write_upper_page_not_question_is() {
         let dir = temp_directory("\u{6ca1}\u{58f0}\u{660e}");
-        let bao = install_2(&manifest_2(dir.clone(), &[]), "zh-CN");
-        assert!(!bao.declaration_2);
-        assert_eq!(bao.lang, None);
-        assert!(bao.ok, "\u{6ca1}\u{58f0}\u{660e} `langs` \u{7684}\u{62d3}\u{5c55}\u{4e0d}\u{8be5}\u{88ab}\u{5224}\u{6210}\u{300c}\u{4e0d}\u{652f}\u{6301}\u{4f60}\u{7684}\u{8bed}\u{8a00}\u{300d}");
-        assert!(bao.table_2.is_empty());
+        let package = install_2(&manifest_2(dir.clone(), &[]), "zh-CN");
+        assert!(!package.declaration_2);
+        assert_eq!(package.language, None);
+        assert!(package.ok, "\u{6ca1}\u{58f0}\u{660e} `langs` \u{7684}\u{62d3}\u{5c55}\u{4e0d}\u{8be5}\u{88ab}\u{5224}\u{6210}\u{300c}\u{4e0d}\u{652f}\u{6301}\u{4f60}\u{7684}\u{8bed}\u{8a00}\u{300d}");
+        assert!(package.table_2.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn ming_zhong_de_language_yong_na_yi_fen_mei_ming_zhong_jiu_yong_ying_yu_bing_shuo_yi_ju() {
+    fn name_middle_language_use_that_one_part_each_name_middle_old_use_should_and_and_say_one_sentence(
+    ) {
         let dir = temp_directory("\u{547d}\u{4e2d}");
-        jian(&dir, "zh-CN", "name = \"\u{4e2d}\u{6587}\u{540d}\"\ndescription = \"\u{4e2d}\u{6587}\u{7b80}\u{4ecb}\"\nhint = \"\u{4f60}\u{597d}\"\n");
-        jian(&dir, "en", "name = \"English name\"\nhint = \"hi\"\n");
+        check(&dir, "zh-CN", "name = \"\u{4e2d}\u{6587}\u{540d}\"\ndescription = \"\u{4e2d}\u{6587}\u{7b80}\u{4ecb}\"\nhint = \"\u{4f60}\u{597d}\"\n");
+        check(&dir, "en", "name = \"English name\"\nhint = \"hi\"\n");
 
-        let zhong_wen = install_2(&manifest_2(dir.clone(), &["zh-CN", "en"]), "zh-CN");
-        assert!(zhong_wen.ok);
-        assert_eq!(zhong_wen.lang.as_deref(), Some("zh-CN"));
-        assert_eq!(zhong_wen.name_2(), Some("\u{4e2d}\u{6587}\u{540d}"));
+        let middle_text = install_2(&manifest_2(dir.clone(), &["zh-CN", "en"]), "zh-CN");
+        assert!(middle_text.ok);
+        assert_eq!(middle_text.language.as_deref(), Some("zh-CN"));
+        assert_eq!(middle_text.name_2(), Some("\u{4e2d}\u{6587}\u{540d}"));
         assert_eq!(
-            zhong_wen.miao_shu(),
+            middle_text.description_data(),
             Some("\u{4e2d}\u{6587}\u{7b80}\u{4ecb}")
         );
-        assert_eq!(zhong_wen.qu_2("hint"), Some("\u{4f60}\u{597d}"));
+        assert_eq!(middle_text.get_2("hint"), Some("\u{4f60}\u{597d}"));
 
-        let ying_wen = install_2(&manifest_2(dir.clone(), &["zh-CN", "en"]), "ja-JP");
-        assert!(!ying_wen.ok, "\u{65e5}\u{8bed}\u{4e0d}\u{5728} langs \u{91cc} \u{2192} \u{8bf4}\u{300c}\u{4e0d}\u{652f}\u{6301}\u{4f60}\u{7684}\u{8bed}\u{8a00}\u{300d}");
-        assert_eq!(ying_wen.lang.as_deref(), Some("en"));
-        assert_eq!(ying_wen.name_2(), Some("English name"));
+        let should_text = install_2(&manifest_2(dir.clone(), &["zh-CN", "en"]), "ja-JP");
+        assert!(!should_text.ok, "\u{65e5}\u{8bed}\u{4e0d}\u{5728} langs \u{91cc} \u{2192} \u{8bf4}\u{300c}\u{4e0d}\u{652f}\u{6301}\u{4f60}\u{7684}\u{8bed}\u{8a00}\u{300d}");
+        assert_eq!(should_text.language.as_deref(), Some("en"));
+        assert_eq!(should_text.name_2(), Some("English name"));
 
-        assert_eq!(ying_wen.miao_shu(), None, "\u{8868}\u{91cc}\u{6ca1}\u{5199}\u{5c31}\u{9000}\u{56de}\u{6e05}\u{5355}\u{ff0c}\u{522b}\u{51ed}\u{7a7a}\u{9020}\u{4e00}\u{53e5}");
+        assert_eq!(should_text.description_data(), None, "\u{8868}\u{91cc}\u{6ca1}\u{5199}\u{5c31}\u{9000}\u{56de}\u{6e05}\u{5355}\u{ff0c}\u{522b}\u{51ed}\u{7a7a}\u{9020}\u{4e00}\u{53e5}");
 
         let dir2 = temp_directory("\u{524d}\u{7f00}");
-        jian(&dir2, "zh", "name = \"\u{4e2d}\u{6587}\"\n");
-        jian(&dir2, "en", "name = \"English\"\n");
+        check(&dir2, "zh", "name = \"\u{4e2d}\u{6587}\"\n");
+        check(&dir2, "en", "name = \"English\"\n");
         let cu = install_2(&manifest_2(dir2.clone(), &["zh", "en"]), "zh-CN");
         assert!(cu.ok);
-        assert_eq!(cu.lang.as_deref(), Some("zh"));
+        assert_eq!(cu.language.as_deref(), Some("zh"));
 
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&dir2);
     }
 
     #[test]
-    fn que_file_zhi_tui_hui_yuan_wen_bu_ba_hua_shuo_guo_tou() {
+    fn missing_file_only_derive_return_source_text_not_handle_render_say_passed_header() {
         let dir = temp_directory("\u{7f3a}\u{6587}\u{4ef6}");
-        let bao = install_2(&manifest_2(dir.clone(), &["zh-CN", "en"]), "zh-CN");
-        assert!(bao.ok, "\u{6e05}\u{5355}\u{91cc}\u{6709} zh-CN\u{ff0c}\u{5c31}\u{4e0d}\u{8be5}\u{8bf4}\u{300c}\u{4e0d}\u{652f}\u{6301}\u{4f60}\u{7684}\u{8bed}\u{8a00}\u{300d}");
-        assert_eq!(bao.lang.as_deref(), Some("zh-CN"));
-        assert!(bao.table_2.is_empty(), "\u{8868}\u{7a7a}\u{4e86}\u{ff0c}\u{4ea4}\u{7ed9}\u{62d3}\u{5c55}\u{7684} `or \u{539f}\u{6587}` \u{515c}\u{5e95}");
-        assert_eq!(bao.name_2(), None);
+        let package = install_2(&manifest_2(dir.clone(), &["zh-CN", "en"]), "zh-CN");
+        assert!(package.ok, "\u{6e05}\u{5355}\u{91cc}\u{6709} zh-CN\u{ff0c}\u{5c31}\u{4e0d}\u{8be5}\u{8bf4}\u{300c}\u{4e0d}\u{652f}\u{6301}\u{4f60}\u{7684}\u{8bed}\u{8a00}\u{300d}");
+        assert_eq!(package.language.as_deref(), Some("zh-CN"));
+        assert!(package.table_2.is_empty(), "\u{8868}\u{7a7a}\u{4e86}\u{ff0c}\u{4ea4}\u{7ed9}\u{62d3}\u{5c55}\u{7684} `or \u{539f}\u{6587}` \u{515c}\u{5e95}");
+        assert_eq!(package.name_2(), None);
 
-        let ying = install_2(&manifest_2(dir.clone(), &["en"]), "zh-CN");
-        assert!(!ying.ok, "zh-CN \u{4e0d}\u{5728}\u{5b83}\u{7684}\u{5217}\u{8868}\u{91cc} \u{2192} \u{8bf4}\u{8fd9}\u{53e5}\u{ff0c}\u{7528} en");
-        assert_eq!(ying.lang.as_deref(), Some("en"));
-        assert!(ying.table_2.is_empty());
+        let should = install_2(&manifest_2(dir.clone(), &["en"]), "zh-CN");
+        assert!(!should.ok, "zh-CN \u{4e0d}\u{5728}\u{5b83}\u{7684}\u{5217}\u{8868}\u{91cc} \u{2192} \u{8bf4}\u{8fd9}\u{53e5}\u{ff0c}\u{7528} en");
+        assert_eq!(should.language.as_deref(), Some("en"));
+        assert!(should.table_2.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
-    fn table_li_mei_you_na_tiao_jian_shi_text_gei_nil() {
+    fn table_inner_each_has_that_item_check_is_text_give_nil() {
         let dir = temp_directory("\u{7f3a}\u{952e}");
-        jian(&dir, "en", "a = \"\u{7532}\"\n");
-        let bao = install_2(&manifest_2(dir.clone(), &["en"]), "en");
+        check(&dir, "en", "a = \"\u{7532}\"\n");
+        let package = install_2(&manifest_2(dir.clone(), &["en"]), "en");
 
         let lua = Lua::new();
-        let t = build(&lua, &bao, "en").unwrap();
+        let t = build(&lua, &package, "en").unwrap();
         assert_eq!(
             t.get::<Option<String>>("app_lang").unwrap().as_deref(),
             Some("en")
@@ -248,11 +249,11 @@ mod tests {
     }
 
     #[test]
-    fn mei_declaration_langs_shi_lang_shi_nil_er_app_lang_hai_zai() {
+    fn each_declaration_langs_is_language_is_nil_two_app_language_still_at() {
         let dir = temp_directory("nil");
-        let bao = install_2(&manifest_2(dir.clone(), &[]), "zh-CN");
+        let package = install_2(&manifest_2(dir.clone(), &[]), "zh-CN");
         let lua = Lua::new();
-        let t = build(&lua, &bao, "zh-CN").unwrap();
+        let t = build(&lua, &package, "zh-CN").unwrap();
         assert_eq!(t.get::<Option<String>>("lang").unwrap(), None);
         assert_eq!(
             t.get::<Option<String>>("app_lang").unwrap().as_deref(),
@@ -263,17 +264,17 @@ mod tests {
     }
 
     #[test]
-    fn filename_an_gui_fan_write_fa_zhao() {
+    fn filename_by_normalize_reverse_write_method_find() {
         let dir = temp_directory("\u{89c4}\u{8303}");
-        jian(
+        check(
             &dir,
             "zh-CN",
             "hint = \"\u{4e0b}\u{5212}\u{7ebf}\u{4e5f}\u{8ba4}\"\n",
         );
-        let bao = install_2(&manifest_2(dir.clone(), &["zh_CN", "en"]), "zh-CN");
-        assert!(bao.ok, "\u{6e05}\u{5355}\u{91cc}\u{7684}\u{4e0b}\u{5212}\u{7ebf}\u{5199}\u{6cd5}\u{8981}\u{80fd}\u{88ab}\u{5f52}\u{4e00}\u{5316}");
+        let package = install_2(&manifest_2(dir.clone(), &["zh_CN", "en"]), "zh-CN");
+        assert!(package.ok, "\u{6e05}\u{5355}\u{91cc}\u{7684}\u{4e0b}\u{5212}\u{7ebf}\u{5199}\u{6cd5}\u{8981}\u{80fd}\u{88ab}\u{5f52}\u{4e00}\u{5316}");
         assert_eq!(
-            bao.qu_2("hint"),
+            package.get_2("hint"),
             Some("\u{4e0b}\u{5212}\u{7ebf}\u{4e5f}\u{8ba4}")
         );
         let _ = std::fs::remove_dir_all(&dir);

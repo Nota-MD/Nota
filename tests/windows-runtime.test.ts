@@ -57,6 +57,31 @@ testCase("日志与警报窗口各有独立 HTML 入口", () => {
     ".arg(crate::cli::SETTINGS_WINDOW_FLAG)",
     "设置窗口缺少独立进程回退",
   );
+  contains(
+    windowCommand,
+    "pub fn nota_window_prepare_settings(app: tauri::AppHandle)",
+    "设置窗口预热命令没有复用后台窗口",
+  );
+  contains(
+    windowCommand,
+    "fn ensure_settings_window",
+    "设置窗口没有统一的创建或复用入口",
+  );
+  contains(
+    windowCommand,
+    ".focused(false)",
+    "预热设置窗口会抢主窗口焦点",
+  );
+  contains(
+    windowCommand,
+    ".set_skip_taskbar(false)",
+    "显示设置窗口时没有恢复任务栏入口",
+  );
+  const ipc = read("src/bridge/ipc.ts");
+  contains(ipc, "prepareSettings: () => invoke", "前端没有设置窗口预热接口");
+  const utility = read("src/ui/useUtilityWindows.tsx");
+  contains(utility, "api.window.prepareSettings()", "启动后没有预热设置窗口");
+  contains(utility, "}, 700)", "设置窗口预热没有延后到启动稳定之后");
   const runtime = read("src-tauri/src/lib.rs");
   contains(runtime, "opens_debug_window || standalone_settings_window", "设置进程仍会撞上主实例");
   contains(runtime, "index.html?settings=1", "设置进程没有独立页面导航");

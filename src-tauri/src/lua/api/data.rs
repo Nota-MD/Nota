@@ -6,7 +6,7 @@ use super::mlua_to_nota;
 use crate::error::{NotaError, Result as NotaResult};
 use crate::paths;
 
-const SHANG_XIAN_ZI_JIE: u64 = 1024 * 1024;
+const UPPER_THREAD_CHARACTER_BOUNDARY: u64 = 1024 * 1024;
 
 pub fn build(lua: &Lua, plugin_id: &str) -> NotaResult<Table> {
     install_2(lua, &paths::plugin_data_dir(plugin_id)?)
@@ -16,13 +16,13 @@ fn install_2(lua: &Lua, directory_2: &Path) -> NotaResult<Table> {
     let directory_2 = directory_2.to_path_buf();
     let t = lua.create_table().map_err(mlua_to_nota)?;
 
-    let path_chuan = paths::path_to_string(&directory_2)?;
-    t.set("dir", path_chuan).map_err(mlua_to_nota)?;
+    let path_stream = paths::path_to_string(&directory_2)?;
+    t.set("dir", path_stream).map_err(mlua_to_nota)?;
 
     let d = directory_2.clone();
     let read = lua
         .create_function(move |lua, name: String| {
-            name_he_fa_ma(&name)?;
+            name_and_method(&name)?;
             match read_file_2(&d.join(&name)).map_err(super::lua_err)? {
                 Some(text) => Ok(mlua::Value::String(lua.create_string(text)?)),
                 None => Ok(mlua::Value::Nil),
@@ -34,8 +34,8 @@ fn install_2(lua: &Lua, directory_2: &Path) -> NotaResult<Table> {
     let d = directory_2.clone();
     let write = lua
         .create_function(move |_, (name, text): (String, String)| {
-            name_he_fa_ma(&name)?;
-            da_xiao_he_fa_ma(&name, text.len() as u64)?;
+            name_and_method(&name)?;
+            large_small_and_method(&name, text.len() as u64)?;
             paths::ensure_dir(&d).map_err(super::lua_err)?;
             write_file_2(&d.join(&name), &text).map_err(super::lua_err)?;
             Ok(true)
@@ -46,7 +46,7 @@ fn install_2(lua: &Lua, directory_2: &Path) -> NotaResult<Table> {
     let d = directory_2.clone();
     let remove = lua
         .create_function(move |_, name: String| {
-            name_he_fa_ma(&name)?;
+            name_and_method(&name)?;
             match std::fs::remove_file(d.join(&name)) {
                 Ok(()) => Ok(true),
 
@@ -63,7 +63,7 @@ fn install_2(lua: &Lua, directory_2: &Path) -> NotaResult<Table> {
     Ok(t)
 }
 
-fn name_he_fa_ma(name: &str) -> mlua::Result<()> {
+fn name_and_method(name: &str) -> mlua::Result<()> {
     if name.is_empty() {
         return Err(mlua::Error::RuntimeError(
             "The data file name cannot be empty".to_owned(),
@@ -90,10 +90,10 @@ fn name_he_fa_ma(name: &str) -> mlua::Result<()> {
     Ok(())
 }
 
-fn da_xiao_he_fa_ma(name: &str, zi_jie: u64) -> mlua::Result<()> {
-    if zi_jie > SHANG_XIAN_ZI_JIE {
+fn large_small_and_method(name: &str, bytes: u64) -> mlua::Result<()> {
+    if bytes > UPPER_THREAD_CHARACTER_BOUNDARY {
         return Err(mlua::Error::RuntimeError(format!(
-            "Could not write `{name}`: {zi_jie} bytes exceeds the {SHANG_XIAN_ZI_JIE} byte limit"
+            "Could not write `{name}`: {bytes} bytes exceeds the {UPPER_THREAD_CHARACTER_BOUNDARY} byte limit"
         )));
     }
     Ok(())
@@ -110,9 +110,9 @@ fn read_file_2(path_3: &Path) -> NotaResult<Option<String>> {
             })
         }
     };
-    if metadata_2.len() > SHANG_XIAN_ZI_JIE {
+    if metadata_2.len() > UPPER_THREAD_CHARACTER_BOUNDARY {
         return Err(NotaError::other(format!(
-            "Data file {} is {} bytes, above the {SHANG_XIAN_ZI_JIE} byte read limit",
+            "Data file {} is {} bytes, above the {UPPER_THREAD_CHARACTER_BOUNDARY} byte read limit",
             path_3.display(),
             metadata_2.len()
         )));
@@ -175,16 +175,16 @@ fn temp_path_2(path_3: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    fn temp_directory(ming: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("nota-data-test-{ming}"));
+    fn temp_directory(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("nota-data-test-{name}"));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).expect("\u{5efa}\u{4e34}\u{65f6}\u{76ee}\u{5f55}");
         d
     }
 
     #[test]
-    fn name_li_de_path_fen_ge_fu_yu_dian_dian_chu_bu_qu() {
-        for huai in [
+    fn name_inner_path_part_service_and_point_point_out_not_get() {
+        for broken in [
             "",
             ".",
             "..",
@@ -194,7 +194,8 @@ mod tests {
             "/etc/passwd",
             "\u{4e2d}\u{6587}.txt",
         ] {
-            let e = name_he_fa_ma(huai).expect_err(&format!("`{huai}` \u{8be5}\u{88ab}\u{62d2}"));
+            let e =
+                name_and_method(broken).expect_err(&format!("`{broken}` \u{8be5}\u{88ab}\u{62d2}"));
             assert!(
                 e.to_string().contains("Invalid data file name")
                     || e.to_string().contains("cannot be empty"),
@@ -203,12 +204,12 @@ mod tests {
         }
 
         for ok_2 in ["history.txt", "day-2026-09-27", "a_b.c", "x"] {
-            name_he_fa_ma(ok_2).expect("\u{8fd9}\u{4e9b}\u{8be5}\u{653e}\u{884c}");
+            name_and_method(ok_2).expect("\u{8fd9}\u{4e9b}\u{8be5}\u{653e}\u{884c}");
         }
     }
 
     #[test]
-    fn write_le_neng_read_hui_lai_shan_le_jiu_mei_you_le() {
+    fn write_can_read_return_incoming_delete_old_each_has() {
         let d = temp_directory("\u{6765}\u{56de}");
         let p = d.join("history.txt");
         assert_eq!(read_file_2(&p).expect("\u{8bfb}\u{4e0d}\u{5b58}\u{5728}\u{7684}\u{6587}\u{4ef6}\u{4e0d}\u{8be5}\u{62a5}\u{9519}"), None, "\u{8fd8}\u{6ca1}\u{6709}");
@@ -230,15 +231,15 @@ mod tests {
             "\u{53ea}\u{6709}\u{8fd9}\u{4e00}\u{6761}\n"
         );
 
-        let can_liu: Vec<_> = std::fs::read_dir(&d)
+        let arguments_stream: Vec<_> = std::fs::read_dir(&d)
             .expect("\u{5217}\u{76ee}\u{5f55}")
             .filter_map(|e| e.ok())
             .map(|e| e.file_name().to_string_lossy().to_string())
             .filter(|n| n.ends_with(".tmp"))
             .collect();
         assert!(
-            can_liu.is_empty(),
-            "\u{4e0d}\u{8be5}\u{7559}\u{4e0b}\u{4e34}\u{65f6}\u{6587}\u{4ef6}\u{ff1a}{can_liu:?}"
+            arguments_stream.is_empty(),
+            "\u{4e0d}\u{8be5}\u{7559}\u{4e0b}\u{4e34}\u{65f6}\u{6587}\u{4ef6}\u{ff1a}{arguments_stream:?}"
         );
 
         std::fs::remove_file(&p).expect("\u{5220}");
@@ -250,14 +251,14 @@ mod tests {
     }
 
     #[test]
-    fn tai_da_jiu_bu_write() {
+    fn platform_large_old_not_write() {
         let d = temp_directory("\u{592a}\u{5927}");
         let lua = Lua::new();
         let t = install_2(&lua, &d).expect("\u{88c5}\u{8868}");
         let write: mlua::Function = t.get("write").expect("\u{6709} write");
-        let da = "\u{5b57}".repeat(SHANG_XIAN_ZI_JIE as usize);
+        let large = "\u{5b57}".repeat(UPPER_THREAD_CHARACTER_BOUNDARY as usize);
         let e = write
-            .call::<bool>(("big.txt", da))
+            .call::<bool>(("big.txt", large))
             .expect_err("\u{8be5}\u{88ab}\u{4e0a}\u{9650}\u{6321}\u{4f4f}");
         assert!(
             e.to_string().contains("byte limit"),
@@ -270,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn zai_lua_li_zou_yi_bian_read_write_shan() {
+    fn at_lua_inner_walk_one_edit_read_write_delete() {
         let d = temp_directory("\u{5728}lua\u{91cc}");
         let lua = Lua::new();
         let t = install_2(&lua, &d).expect("\u{88c5}\u{8868}");
@@ -316,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn huai_name_jin_bu_le_file_xi_tong() {
+    fn broken_name_enter_not_file_system_same() {
         let d = temp_directory("\u{574f}\u{540d}\u{5b57}");
         let lua = Lua::new();
         let t = install_2(&lua, &d).expect("\u{88c5}\u{8868}");

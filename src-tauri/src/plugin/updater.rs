@@ -151,11 +151,11 @@ pub(crate) fn prepare_update(source: &UpdateSource, replacements: &str) -> Resul
         )));
     }
     if let Some(expected) = &source.signer {
-        let package = super::package::Package::cong_zip(&bytes)?;
+        let package = super::package::Package::from_zip(&bytes)?;
         let actual = package
-            .qian_ming
+            .before_name
             .as_ref()
-            .map(|sig| super::installed::gong_yao_fingerprint(&sig.public_key));
+            .map(|sig| super::installed::work_need_fingerprint(&sig.public_key));
         if actual.as_deref() != Some(expected.as_str()) {
             return Err(NotaError::other(format!(
                 "The update signer for {} differs from the installed package; automatic replacement was rejected",
@@ -176,8 +176,8 @@ pub(crate) fn prepare_update(source: &UpdateSource, replacements: &str) -> Resul
         .unwrap_or(0);
     let path = dir.join(format!(
         "{}-{}-{}-{nonce}.nota-plugin",
-        crate::paths::an_fulldocument_jian_ming(&source.id),
-        crate::paths::an_fulldocument_jian_ming(&entry.version),
+        crate::paths::safe_filename(&source.id),
+        crate::paths::safe_filename(&entry.version),
         std::process::id(),
     ));
     fs::write(&path, bytes)

@@ -26,60 +26,60 @@ pub struct HostContext {
     pub application_language: String,
 }
 
-const ZHU_CE_MO_KUAI_HUAN_CUN: &str = "nota_require_cache";
-const ZHU_CE_ZAI_TU: &str = "nota_require_loading";
+const MAIN_SIDE_SUFFIX_BLOCK_REPLACE_STORE: &str = "nota_require_cache";
+const MAIN_SIDE_AT_IMAGE: &str = "nota_require_loading";
 
 fn install_require(lua: &Lua, root_2: &Path) -> Result<()> {
     lua.set_named_registry_value(
-        ZHU_CE_MO_KUAI_HUAN_CUN,
+        MAIN_SIDE_SUFFIX_BLOCK_REPLACE_STORE,
         lua.create_table().map_err(mlua_err)?,
     )
     .map_err(mlua_err)?;
-    lua.set_named_registry_value(ZHU_CE_ZAI_TU, lua.create_table().map_err(mlua_err)?)
+    lua.set_named_registry_value(MAIN_SIDE_AT_IMAGE, lua.create_table().map_err(mlua_err)?)
         .map_err(mlua_err)?;
 
     let root_2 = root_2.to_path_buf();
     let f = lua
-        .create_function(move |lua, ming: String| {
-            let ming = ming.trim().to_string();
+        .create_function(move |lua, name: String| {
+            let name = name.trim().to_string();
 
 
-            if ming.is_empty()
-                || !ming.chars().all(|c| c.is_ascii_alphanumeric() || "_.-/".contains(c))
-                || ming.starts_with('/')
-                || ming.contains("..")
+            if name.is_empty()
+                || !name.chars().all(|c| c.is_ascii_alphanumeric() || "_.-/".contains(c))
+                || name.starts_with('/')
+                || name.contains("..")
             {
                 return Err(mlua::Error::RuntimeError(format!(
-                    "Invalid require name `{ming}`; use ASCII letters, digits, `_`, `.`, `-`, and `/`, without `..`"
+                    "Invalid require name `{name}`; use ASCII letters, digits, `_`, `.`, `-`, and `/`, without `..`"
                 )));
             }
 
-            let huan_cun: Table = lua.named_registry_value(ZHU_CE_MO_KUAI_HUAN_CUN)?;
-            let zai_tu: Table = lua.named_registry_value(ZHU_CE_ZAI_TU)?;
+            let replace_store: Table = lua.named_registry_value(MAIN_SIDE_SUFFIX_BLOCK_REPLACE_STORE)?;
+            let at_image: Table = lua.named_registry_value(MAIN_SIDE_AT_IMAGE)?;
 
-            let jiu: mlua::Value = huan_cun.get(ming.as_str())?;
-            if !jiu.is_nil() {
-                return Ok(jiu);
+            let old: mlua::Value = replace_store.get(name.as_str())?;
+            if !old.is_nil() {
+                return Ok(old);
             }
 
 
-            if zai_tu.get::<bool>(ming.as_str()).unwrap_or(false) {
+            if at_image.get::<bool>(name.as_str()).unwrap_or(false) {
                 return Err(mlua::Error::RuntimeError(format!(
-                    "Circular require: `{ming}` required itself during evaluation"
+                    "Circular require: `{name}` required itself during evaluation"
                 )));
             }
 
-            let xiang_dui = ming.replace('.', "/");
+            let module_path = name.replace('.', "/");
 
 
-            let mut mo_wei_error = String::new();
-            for candidates_2 in [format!("{xiang_dui}.lua"), format!("{xiang_dui}/init.lua")] {
+            let mut module_error = String::new();
+            for candidate in [format!("{module_path}.lua"), format!("{module_path}/init.lua")] {
 
 
-                let path = match crate::lua::api::fs::resolve_in(&root_2, &candidates_2) {
+                let path = match crate::lua::api::fs::resolve_in(&root_2, &candidate) {
                     Ok(p) => p,
                     Err(e) => {
-                        mo_wei_error = e.to_string();
+                        module_error = e.to_string();
                         continue;
                     }
                 };
@@ -90,7 +90,7 @@ fn install_require(lua: &Lua, root_2: &Path) -> Result<()> {
                     mlua::Error::RuntimeError(format!("Could not read `{}`: {source}", path.display()))
                 })?;
 
-                zai_tu.set(ming.as_str(), true)?;
+                at_image.set(name.as_str(), true)?;
 
 
                 let result_3 = lua
@@ -99,23 +99,23 @@ fn install_require(lua: &Lua, root_2: &Path) -> Result<()> {
                     .eval::<mlua::Value>();
 
 
-                zai_tu.set(ming.as_str(), mlua::Value::Nil)?;
+                at_image.set(name.as_str(), mlua::Value::Nil)?;
                 let value_2 = result_3?;
 
 
 
 
-                let cun = if value_2.is_nil() {
+                let store = if value_2.is_nil() {
                     mlua::Value::Boolean(true)
                 } else {
                     value_2.clone()
                 };
-                huan_cun.set(ming.as_str(), cun)?;
+                replace_store.set(name.as_str(), store)?;
                 return Ok(value_2);
             }
 
             Err(mlua::Error::RuntimeError(format!(
-                "Module `{ming}` was not found as `{xiang_dui}.lua` or `{xiang_dui}/init.lua` inside the extension directory. {mo_wei_error}"
+                "Module `{name}` was not found as `{module_path}.lua` or `{module_path}/init.lua` inside the extension directory. {module_error}"
             )))
         })
         .map_err(mlua_err)?;
@@ -129,7 +129,7 @@ fn mlua_err(e: mlua::Error) -> NotaError {
     ))
 }
 
-fn plugin_biao_zhun_ku() -> mlua::StdLib {
+fn plugin_table_ready_store() -> mlua::StdLib {
     mlua::StdLib::COROUTINE
         | mlua::StdLib::TABLE
         | mlua::StdLib::STRING
@@ -137,20 +137,20 @@ fn plugin_biao_zhun_ku() -> mlua::StdLib {
         | mlua::StdLib::MATH
 }
 
-const BI_XU_WEI_KONG_DE_QUAN_JU: [&str; 7] = [
+const MUST_REQUIRED_POSITION_EMPTY_FULL_SENTENCE: [&str; 7] = [
     "io", "os", "package", "require", "dofile", "loadfile", "debug",
 ];
 
-fn ying_hua_de_lua() -> Result<Lua> {
-    ying_hua_de_lua_huo_cuo().map_err(NotaError::other)
+fn should_render_lua() -> Result<Lua> {
+    should_render_lua_active_error().map_err(NotaError::other)
 }
 
-fn ying_hua_de_lua_huo_cuo() -> std::result::Result<Lua, String> {
-    let lua = Lua::new_with(plugin_biao_zhun_ku(), mlua::LuaOptions::default())
+fn should_render_lua_active_error() -> std::result::Result<Lua, String> {
+    let lua = Lua::new_with(plugin_table_ready_store(), mlua::LuaOptions::default())
         .map_err(|e| format!("Could not create the Lua state: {e}"))?;
 
     let globals = lua.globals();
-    for name in BI_XU_WEI_KONG_DE_QUAN_JU {
+    for name in MUST_REQUIRED_POSITION_EMPTY_FULL_SENTENCE {
         globals
             .set(name, mlua::Value::Nil)
             .map_err(|e| format!("Could not remove global `{name}`: {e}"))?;
@@ -182,7 +182,7 @@ impl LuaPlugin {
     pub fn load(manifest: Manifest, ctx: HostContext) -> Self {
         let language_2 = crate::lua::api::i18n::install_2(&manifest, &ctx.application_language);
 
-        let lua = match ying_hua_de_lua() {
+        let lua = match should_render_lua() {
             Ok(lua) => lua,
 
             Err(e) => {
@@ -231,7 +231,7 @@ impl LuaPlugin {
         let language_2 = crate::lua::api::i18n::install_2(&manifest, application_language);
         Self {
             manifest,
-            lua: ying_hua_de_lua().unwrap_or_else(|_| Lua::new()),
+            lua: should_render_lua().unwrap_or_else(|_| Lua::new()),
             language_2,
             state: PluginState::Failed(reason),
             has_unload: false,
@@ -242,7 +242,7 @@ impl LuaPlugin {
         let language_2 = crate::lua::api::i18n::install_2(&manifest, application_language);
         Self {
             manifest,
-            lua: ying_hua_de_lua().unwrap_or_else(|_| Lua::new()),
+            lua: should_render_lua().unwrap_or_else(|_| Lua::new()),
             language_2,
             state: PluginState::Disabled,
             has_unload: false,

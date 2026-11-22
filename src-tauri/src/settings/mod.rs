@@ -135,12 +135,15 @@ impl Settings {
     pub fn load_from(path: &Path) -> Result<Self> {
         match std::fs::read_to_string(path) {
             Ok(text) => toml::from_str(&text).map_err(|e| {
-                let bei_fen = liu_yi_fen_bei_fen(path);
-                let wei_ba = match &bei_fen {
+                let passive_part = stream_one_part_passive_part(path);
+                let position_handle = match &passive_part {
                     Some(b) => format!("(the original file was saved as {})", b.display()),
                     None => String::new(),
                 };
-                NotaError::Config(format!("Could not parse {}: {e}{wei_ba}", path.display()))
+                NotaError::Config(format!(
+                    "Could not parse {}: {e}{position_handle}",
+                    path.display()
+                ))
             }),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(NotaError::Read {
@@ -168,7 +171,7 @@ impl Settings {
     }
 }
 
-fn liu_yi_fen_bei_fen(path: &Path) -> Option<PathBuf> {
+fn stream_one_part_passive_part(path: &Path) -> Option<PathBuf> {
     let mut raw = path.as_os_str().to_owned();
     raw.push(".bak");
     let bak = PathBuf::from(raw);
@@ -181,7 +184,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn read_bu_dong_de_settings_hui_xian_liu_yi_fen_bei_fen() {
+    fn read_not_dynamic_settings_return_thread_stream_one_part_passive_part() {
         let dir = std::env::temp_dir().join("nota-settings-backup-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -214,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn settings_file_bu_cun_zai_shi_gei_default_value_qie_bu_liu_bei_fen() {
+    fn settings_file_not_store_at_is_give_default_value_cut_not_stream_passive_part() {
         let dir = std::env::temp_dir().join("nota-settings-absent-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -228,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn default_settings_neng_wang_fan_xu_lie_hua() {
+    fn default_settings_can_web_reverse_required_list_render() {
         let dir = std::env::temp_dir().join("nota-settings-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -252,14 +255,14 @@ mod tests {
     }
 
     #[test]
-    fn file_bu_cun_zai_shi_hui_default_er_bu_shi_bao_cuo() {
+    fn file_not_store_at_is_return_default_two_not_is_package_error() {
         let path = std::env::temp_dir().join("nota-does-not-exist-xyz/settings.toml");
         let s = Settings::load_from(&path).unwrap();
         assert_eq!(s.ui_style, DEFAULT_UI_STYLE);
     }
 
     #[test]
-    fn mei_ju_luo_pan_yong_kebab_feng_ge() {
+    fn each_sentence_land_parse_use_kebab_style() {
         let s = Settings {
             ui_style: "macos".to_owned(),
             ..Default::default()
@@ -272,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn physics_default_shi_guan_de_qie_neng_wang_fan() {
+    fn physics_default_is_close_cut_can_web_reverse() {
         assert!(!Settings::default().enable_physics);
 
         let s = Settings {
@@ -289,7 +292,7 @@ mod tests {
     }
 
     #[test]
-    fn qi_ye_settings_neng_zheng_fen_wang_fan() {
+    fn start_page_settings_can_validate_part_web_reverse() {
         let dir = std::env::temp_dir().join("nota-settings-panes-test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -341,25 +344,25 @@ mod tests {
     }
 
     #[test]
-    fn biao_liang_write_zai_table_qian_mian_fou_ze_toml_hui_ju_receive() {
+    fn table_two_write_at_table_before_surface_fou_rule_toml_return_sentence_receive() {
         let s = Settings::default();
         let text = toml::to_string_pretty(&s).expect("\u{5e8f}\u{5217}\u{5316}\u{8be5}\u{6210}\u{529f}\u{ff08}\u{5b57}\u{6bb5}\u{987a}\u{5e8f}\u{9519}\u{4e86}\u{5c31}\u{4f1a}\u{5728}\u{8fd9}\u{513f}\u{70b8}\u{ff09}");
 
-        let di_yi_zhang_table = text
+        let base_one_length_table = text
             .find("\n[")
             .expect("\u{8be5}\u{6709}\u{81f3}\u{5c11}\u{4e00}\u{5f20}\u{8868}");
-        let zui_hou_de_biao_liang = text
+        let most_after_table_two = text
             .rfind("\nenable_physics = ")
             .expect("enable_physics \u{8be5}\u{662f}\u{6700}\u{540e}\u{4e00}\u{4e2a}\u{9876}\u{5c42}\u{6807}\u{91cf}");
         assert!(
-            zui_hou_de_biao_liang < di_yi_zhang_table,
+            most_after_table_two < base_one_length_table,
             "\u{6807}\u{91cf}\u{5fc5}\u{987b}\u{6392}\u{5728}\u{6240}\u{6709}\u{8868}\u{4e4b}\u{524d}\u{ff0c}\u{5b9e}\u{9645}\u{987a}\u{5e8f}\u{662f}\u{ff1a}\n{text}"
         );
     }
 
     #[test]
-    fn lao_settings_file_li_mei_you_na_qi_zhang_table_shi_quan_shi_default_value() {
-        let lao_file = r#"
+    fn old_settings_file_inner_each_has_that_start_length_table_is_full_is_default_value() {
+        let old_file = r#"
 ui_style = "ghub"
 ui_mode = "dark"
 document_theme = "night"
@@ -371,7 +374,7 @@ autosave_seconds = 60
 strict_markdown = true
 enable_physics = true
 "#;
-        let s: Settings = toml::from_str(lao_file).expect(
+        let s: Settings = toml::from_str(old_file).expect(
             "\u{8001}\u{6587}\u{4ef6}\u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}",
         );
 

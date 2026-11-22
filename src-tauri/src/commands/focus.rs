@@ -10,7 +10,7 @@ fn broadcast(app: &tauri::AppHandle, status_2: &FocusSnapshot) {
 
 #[tauri::command]
 pub fn nota_focus_get(focus_2: State<'_, FocusState>) -> FocusSnapshot {
-    focus::xian_zai(&focus_2)
+    focus::now(&focus_2)
 }
 
 #[tauri::command]

@@ -214,6 +214,12 @@ export interface Dialogs {
 
   answerEmoji: (character: string | null) => void;
 
+  commandPaletteOpen: boolean;
+
+  openCommandPalette: () => void;
+
+  closeCommandPalette: () => void;
+
 
 
 
@@ -239,6 +245,10 @@ export interface Dialogs {
 export function useDialogs(): Dialogs {
   const [confirmReq, setConfirmReq] = useState<ConfirmRequest | null>(null);
   const confirmResolve = useRef<((answer: ConfirmAnswer) => void) | null>(null);
+
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const openCommandPalette = useCallback(() => setCommandPaletteOpen(true), []);
+  const closeCommandPalette = useCallback(() => setCommandPaletteOpen(false), []);
 
   const [promptReq, setPromptReq] = useState<PromptRequest | null>(null);
   const promptResolve = useRef<
@@ -369,6 +379,9 @@ export function useDialogs(): Dialogs {
     emojiOpen,
     askEmoji,
     answerEmoji,
+    commandPaletteOpen,
+    openCommandPalette,
+    closeCommandPalette,
     aboutOpen,
     openAbout,
     closeAbout,

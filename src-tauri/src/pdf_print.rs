@@ -16,21 +16,21 @@ pub(crate) fn available() -> bool {
 
 #[derive(Debug, Clone, Copy)]
 pub struct PdfLayout {
-    pub kuan_hao_mi: f64,
-    pub gao_hao_mi: f64,
+    pub width_number_mi: f64,
+    pub height_number_mi: f64,
 
-    pub heng_xiang: bool,
+    pub horizontal_item: bool,
 
-    pub bian_ju_hao_mi: f64,
+    pub edit_sentence_number_mi: f64,
 }
 
 impl Default for PdfLayout {
     fn default() -> Self {
         Self {
-            kuan_hao_mi: 210.0,
-            gao_hao_mi: 297.0,
-            heng_xiang: false,
-            bian_ju_hao_mi: 12.0,
+            width_number_mi: 210.0,
+            height_number_mi: 297.0,
+            horizontal_item: false,
+            edit_sentence_number_mi: 12.0,
         }
     }
 }
@@ -42,7 +42,7 @@ pub fn print_html_to_pdf(
     base_dir: Option<&Path>,
     target: &Path,
 ) -> Result<()> {
-    linux::yin_shua(app, html, base_dir, target, PdfLayout::default())
+    linux::infer_refresh(app, html, base_dir, target, PdfLayout::default())
 }
 
 #[cfg(target_os = "linux")]
@@ -53,7 +53,7 @@ pub fn print_html_to_pdf_with(
     target: &Path,
     layout_2: PdfLayout,
 ) -> Result<()> {
-    linux::yin_shua(app, html, base_dir, target, layout_2)
+    linux::infer_refresh(app, html, base_dir, target, layout_2)
 }
 
 #[cfg(target_os = "linux")]
@@ -72,7 +72,7 @@ pub fn print_html_dialog_with(
         std::process::id()
     ));
     if crate::pdf_render::render_2(app, html, base_dir, &pdf, layout_2).is_err() {
-        linux::yin_shua(app, html, base_dir, &pdf, layout_2)?;
+        linux::infer_refresh(app, html, base_dir, &pdf, layout_2)?;
     }
     if crate::gtk4_dialogs::print_pdf(&pdf).is_ok() {
         let _ = std::fs::remove_file(&pdf);
@@ -139,7 +139,7 @@ mod linux {
     const KEY_FORMAT: &str = "output-file-format";
 
     thread_local! {
-        static YIN_SHUA_ZHONG: RefCell<Option<RenderSession>> = const { RefCell::new(None) };
+        static INFER_REFRESH_MIDDLE: RefCell<Option<RenderSession>> = const { RefCell::new(None) };
     }
 
     struct RenderSession {
@@ -154,24 +154,24 @@ mod linux {
         }
     }
 
-    fn receive_gong() {
-        YIN_SHUA_ZHONG.with(|c| {
+    fn receive_work() {
+        INFER_REFRESH_MIDDLE.with(|c| {
             let _ = c.borrow_mut().take();
         });
     }
 
-    pub(super) fn yin_shua(
+    pub(super) fn infer_refresh(
         app: &AppHandle,
         html: &str,
         base_dir: Option<&Path>,
         target: &Path,
         layout_2: super::PdfLayout,
     ) -> Result<()> {
-        let target_uri = zhuan_address(target)?;
+        let target_uri = convert_address(target)?;
 
         let base_uri = match base_dir {
             Some(dir) => {
-                let mut uri = zhuan_address(dir)?;
+                let mut uri = convert_address(dir)?;
                 if !uri.ends_with('/') {
                     uri.push('/');
                 }
@@ -184,7 +184,7 @@ mod linux {
         let html = html.to_string();
 
         app.run_on_main_thread(move || {
-            qi_yin_shua(&html, base_uri.as_deref(), &target_uri, layout_2, tx)
+            start_infer_refresh(&html, base_uri.as_deref(), &target_uri, layout_2, tx)
         })
         .map_err(|e| {
             NotaError::other(format!(
@@ -196,7 +196,7 @@ mod linux {
             Ok(Ok(())) => Ok(()),
             Ok(Err(e)) => Err(NotaError::other(e)),
             Err(RecvTimeoutError::Timeout) => {
-                let _ = app.run_on_main_thread(receive_gong);
+                let _ = app.run_on_main_thread(receive_work);
                 Err(NotaError::other(format!(
                     "Printing this PDF exceeded {} seconds and was cancelled",
                     PRINT_TIMEOUT.as_secs()
@@ -208,7 +208,7 @@ mod linux {
         }
     }
 
-    fn zhuan_address(path: &Path) -> Result<String> {
+    fn convert_address(path: &Path) -> Result<String> {
         glib::filename_to_uri(path, None)
             .map(|u| u.to_string())
             .map_err(|e| {
@@ -219,7 +219,7 @@ mod linux {
             })
     }
 
-    fn qi_yin_shua(
+    fn start_infer_refresh(
         html: &str,
         base_uri: Option<&str>,
         target_uri: &str,
@@ -231,7 +231,7 @@ mod linux {
         window.add(&webview);
         window.realize();
 
-        YIN_SHUA_ZHONG.with(|c| {
+        INFER_REFRESH_MIDDLE.with(|c| {
             let _ = c.borrow_mut().replace(RenderSession {
                 window: window.clone(),
                 op: None,
@@ -244,21 +244,21 @@ mod linux {
         settings.set(KEY_URI, Some(target_uri));
         settings.set(KEY_FORMAT, Some(FORMAT));
 
-        let (kuan, gao) = if layout_2.heng_xiang {
-            (layout_2.gao_hao_mi, layout_2.kuan_hao_mi)
+        let (width, height) = if layout_2.horizontal_item {
+            (layout_2.height_number_mi, layout_2.width_number_mi)
         } else {
-            (layout_2.kuan_hao_mi, layout_2.gao_hao_mi)
+            (layout_2.width_number_mi, layout_2.height_number_mi)
         };
-        let zhi_2 = gtk::PaperSize::new_custom("nota-print", "Nota", kuan, gao, gtk::Unit::Mm);
-        let ye_mian = gtk::PageSetup::new();
-        ye_mian.set_paper_size(&zhi_2);
-        ye_mian.set_top_margin(layout_2.bian_ju_hao_mi, gtk::Unit::Mm);
-        ye_mian.set_bottom_margin(layout_2.bian_ju_hao_mi, gtk::Unit::Mm);
-        ye_mian.set_left_margin(layout_2.bian_ju_hao_mi, gtk::Unit::Mm);
-        ye_mian.set_right_margin(layout_2.bian_ju_hao_mi, gtk::Unit::Mm);
+        let only_2 = gtk::PaperSize::new_custom("nota-print", "Nota", width, height, gtk::Unit::Mm);
+        let page_surface = gtk::PageSetup::new();
+        page_surface.set_paper_size(&only_2);
+        page_surface.set_top_margin(layout_2.edit_sentence_number_mi, gtk::Unit::Mm);
+        page_surface.set_bottom_margin(layout_2.edit_sentence_number_mi, gtk::Unit::Mm);
+        page_surface.set_left_margin(layout_2.edit_sentence_number_mi, gtk::Unit::Mm);
+        page_surface.set_right_margin(layout_2.edit_sentence_number_mi, gtk::Unit::Mm);
 
         webview.connect_load_changed(
-            glib::clone!(@strong settings, @strong ye_mian, @strong tx => move |view, event| {
+            glib::clone!(@strong settings, @strong page_surface, @strong tx => move |view, event| {
 
                 if event != webkit2gtk::LoadEvent::Finished {
                     return;
@@ -267,25 +267,25 @@ mod linux {
                 op.set_print_settings(&settings);
 
 
-                op.set_page_setup(&ye_mian);
+                op.set_page_setup(&page_surface);
 
-                YIN_SHUA_ZHONG.with(|c| {
+                INFER_REFRESH_MIDDLE.with(|c| {
                     if let Some(s) = c.borrow_mut().as_mut() {
                         s.op = Some(op.clone());
                     }
                 });
 
-                let cheng_gong = tx.clone();
+                let success_work = tx.clone();
                 op.connect_finished(move |_| {
 
 
-                    glib::idle_add_local_once(receive_gong);
-                    let _ = cheng_gong.send(Ok(()));
+                    glib::idle_add_local_once(receive_work);
+                    let _ = success_work.send(Ok(()));
                 });
-                let shi_bai = tx.clone();
+                let is_percent = tx.clone();
                 op.connect_failed(move |_, err| {
-                    glib::idle_add_local_once(receive_gong);
-                    let _ = shi_bai.send(Err(format!("WebKit PDF printing failed: {err}")));
+                    glib::idle_add_local_once(receive_work);
+                    let _ = is_percent.send(Err(format!("WebKit PDF printing failed: {err}")));
                 });
 
                 op.print();

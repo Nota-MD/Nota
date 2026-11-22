@@ -14,11 +14,11 @@ pub const SIGNATURE_FILE: &str = "nota-signature.toml";
 
 pub const MANIFEST_FILE: &str = "plugin.toml";
 
-const ZONG_SHANG_XIAN: u64 = 32 * 1024 * 1024;
-const DAN_FILE_SHANG_XIAN: u64 = 16 * 1024 * 1024;
-const TIAO_MU_SHANG_XIAN: usize = 2048;
+const TOTAL_UPPER_THREAD: u64 = 32 * 1024 * 1024;
+const SINGLE_FILE_UPPER_THREAD: u64 = 16 * 1024 * 1024;
+const ITEM_TARGET_UPPER_THREAD: usize = 2048;
 
-const NAME_SHANG_XIAN: usize = 512;
+const NAME_UPPER_THREAD: usize = 512;
 
 #[derive(Debug, Clone)]
 pub struct PackageFile {
@@ -39,24 +39,24 @@ pub struct PackageSignature {
 #[derive(Debug, Clone)]
 pub struct Package {
     pub files_2: Vec<PackageFile>,
-    pub qian_ming: Option<PackageSignature>,
+    pub before_name: Option<PackageSignature>,
 }
 
 impl Package {
-    pub fn cong_zip(bytes: &[u8]) -> Result<Self> {
+    pub fn from_zip(bytes: &[u8]) -> Result<Self> {
         let mut ar = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| {
             NotaError::other(format!("This is not a readable extension package: {e}"))
         })?;
 
-        if ar.len() > TIAO_MU_SHANG_XIAN {
+        if ar.len() > ITEM_TARGET_UPPER_THREAD {
             return Err(NotaError::other(format!(
-                "The package has too many entries ({}; limit {TIAO_MU_SHANG_XIAN})",
+                "The package has too many entries ({}; limit {ITEM_TARGET_UPPER_THREAD})",
                 ar.len()
             )));
         }
 
         let mut files_2 = Vec::new();
-        let mut zong: u64 = 0;
+        let mut total: u64 = 0;
 
         for i in 0..ar.len() {
             let mut e = ar.by_index(i).map_err(|e| {
@@ -65,55 +65,58 @@ impl Package {
             if e.is_dir() {
                 continue;
             }
-            let path_3 = path_he_fa_ma(e.name())?;
+            let path_3 = path_and_method(e.name())?;
 
             let mut content_2 = Vec::new();
 
             e.by_ref()
-                .take(DAN_FILE_SHANG_XIAN + 1)
+                .take(SINGLE_FILE_UPPER_THREAD + 1)
                 .read_to_end(&mut content_2)
                 .map_err(|e| {
                     NotaError::other(format!(
                         "Could not extract `{path_3}` from the package: {e}"
                     ))
                 })?;
-            if content_2.len() as u64 > DAN_FILE_SHANG_XIAN {
+            if content_2.len() as u64 > SINGLE_FILE_UPPER_THREAD {
                 return Err(NotaError::other(format!(
-                    "Package entry `{path_3}` exceeds {DAN_FILE_SHANG_XIAN} bytes"
+                    "Package entry `{path_3}` exceeds {SINGLE_FILE_UPPER_THREAD} bytes"
                 )));
             }
 
-            zong += content_2.len() as u64;
-            if zong > ZONG_SHANG_XIAN {
+            total += content_2.len() as u64;
+            if total > TOTAL_UPPER_THREAD {
                 return Err(NotaError::other(format!(
-                    "The extracted package exceeds {ZONG_SHANG_XIAN} bytes and was rejected"
+                    "The extracted package exceeds {TOTAL_UPPER_THREAD} bytes and was rejected"
                 )));
             }
             files_2.push(PackageFile { path_3, content_2 });
         }
 
-        Self::cong_files(files_2)
+        Self::from_files(files_2)
     }
 
-    pub fn cong_directory(root: &Path) -> Result<Self> {
+    pub fn from_directory(root: &Path) -> Result<Self> {
         let mut files_2 = Vec::new();
-        let mut zong: u64 = 0;
-        receive_directory(root, root, &mut files_2, &mut zong)?;
-        Self::cong_files(files_2)
+        let mut total: u64 = 0;
+        receive_directory(root, root, &mut files_2, &mut total)?;
+        Self::from_files(files_2)
     }
 
-    fn cong_files(mut files_2: Vec<PackageFile>) -> Result<Self> {
-        let qian_ming = match files_2.iter().position(|f| f.path_3 == SIGNATURE_FILE) {
+    fn from_files(mut files_2: Vec<PackageFile>) -> Result<Self> {
+        let before_name = match files_2.iter().position(|f| f.path_3 == SIGNATURE_FILE) {
             None => None,
             Some(i) => {
                 let f = files_2.remove(i);
                 let text = String::from_utf8(f.content_2)
                     .map_err(|_| NotaError::other("The signature block is not UTF-8 text"))?;
-                Some(read_qian_ming(&text)?)
+                Some(read_before_name(&text)?)
             }
         };
         files_2.sort_by(|a, b| a.path_3.cmp(&b.path_3));
-        Ok(Self { files_2, qian_ming })
+        Ok(Self {
+            files_2,
+            before_name,
+        })
     }
 
     pub fn summary(&self) -> [u8; 32] {
@@ -127,15 +130,15 @@ impl Package {
         h.finalize().into()
     }
 
-    pub fn zhao(&self, path_3: &str) -> Option<&[u8]> {
+    pub fn find(&self, path_3: &str) -> Option<&[u8]> {
         self.files_2
             .iter()
             .find(|f| f.path_3 == path_3)
             .map(|f| f.content_2.as_slice())
     }
 
-    pub fn yan_qian(&self, trust_store: &TrustStore) -> Result<Signature> {
-        let Some(sig) = &self.qian_ming else {
+    pub fn validate_before(&self, trust_store: &TrustStore) -> Result<Signature> {
+        let Some(sig) = &self.before_name else {
             return Ok(Signature::Unsigned);
         };
 
@@ -161,15 +164,15 @@ impl Package {
             )
         })?;
 
-        let zhen_fingerprint = super::installed::gong_yao_fingerprint(&sig.public_key);
-        if zhen_fingerprint != sig.key_id {
+        let real_fingerprint = super::installed::work_need_fingerprint(&sig.public_key);
+        if real_fingerprint != sig.key_id {
             return Err(NotaError::other(format!(
-                "Signature key_id (`{}`) does not match the public key (`{zhen_fingerprint}`)",
+                "Signature key_id (`{}`) does not match the public key (`{real_fingerprint}`)",
                 sig.key_id
             )));
         }
 
-        Ok(if trust_store.contains(&zhen_fingerprint) {
+        Ok(if trust_store.contains(&real_fingerprint) {
             Signature::Verified
         } else {
             Signature::Unknown
@@ -178,7 +181,7 @@ impl Package {
 }
 
 impl PackageSignature {
-    pub fn gong_yao_base64(&self) -> String {
+    pub fn work_need_base64(&self) -> String {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD.encode(self.public_key)
     }
@@ -188,7 +191,7 @@ fn receive_directory(
     root: &Path,
     dir: &Path,
     out: &mut Vec<PackageFile>,
-    zong: &mut u64,
+    total: &mut u64,
 ) -> Result<()> {
     let entries = std::fs::read_dir(dir).map_err(|source| NotaError::Read {
         path: dir.to_path_buf(),
@@ -207,84 +210,84 @@ fn receive_directory(
         }
 
         if ty.is_dir() {
-            receive_directory(root, &path, out, zong)?;
+            receive_directory(root, &path, out, total)?;
             continue;
         }
         if !ty.is_file() {
             continue;
         }
 
-        let xiang_dui = path.strip_prefix(root).map_err(|_| {
+        let item_pair = path.strip_prefix(root).map_err(|_| {
             NotaError::other(format!(
                 "{} is not inside the extension directory",
                 path.display()
             ))
         })?;
-        let ming = xiang_dui.to_string_lossy().replace('\\', "/");
-        let path_3 = path_he_fa_ma(&ming)?;
+        let name = item_pair.to_string_lossy().replace('\\', "/");
+        let path_3 = path_and_method(&name)?;
 
         let content_2 = std::fs::read(&path).map_err(|source| NotaError::Read {
             path: path.clone(),
             source,
         })?;
-        if content_2.len() as u64 > DAN_FILE_SHANG_XIAN {
+        if content_2.len() as u64 > SINGLE_FILE_UPPER_THREAD {
             return Err(NotaError::other(format!(
-                "`{path_3}` exceeds {DAN_FILE_SHANG_XIAN} bytes"
+                "`{path_3}` exceeds {SINGLE_FILE_UPPER_THREAD} bytes"
             )));
         }
 
-        if *zong > ZONG_SHANG_XIAN {
+        if *total > TOTAL_UPPER_THREAD {
             return Err(NotaError::other(format!(
-                "The extension directory exceeds {ZONG_SHANG_XIAN} bytes and was rejected"
+                "The extension directory exceeds {TOTAL_UPPER_THREAD} bytes and was rejected"
             )));
         }
         out.push(PackageFile { path_3, content_2 });
     }
 
-    if out.len() > TIAO_MU_SHANG_XIAN {
+    if out.len() > ITEM_TARGET_UPPER_THREAD {
         return Err(NotaError::other(format!(
-            "Too many files (limit {TIAO_MU_SHANG_XIAN})"
+            "Too many files (limit {ITEM_TARGET_UPPER_THREAD})"
         )));
     }
     Ok(())
 }
 
-pub fn path_he_fa_ma(ming: &str) -> Result<String> {
-    let ming = ming.replace('\\', "/");
-    let ming = ming.trim_end_matches('/').to_owned();
+pub fn path_and_method(name: &str) -> Result<String> {
+    let name = name.replace('\\', "/");
+    let name = name.trim_end_matches('/').to_owned();
 
-    if ming.is_empty() {
+    if name.is_empty() {
         return Err(NotaError::other("The package contains an empty path"));
     }
-    if ming.len() > NAME_SHANG_XIAN {
+    if name.len() > NAME_UPPER_THREAD {
         return Err(NotaError::other(format!(
             "The package contains an overlong path ({} bytes)",
-            ming.len()
+            name.len()
         )));
     }
-    if ming.starts_with('/') || ming.contains(':') {
+    if name.starts_with('/') || name.contains(':') {
         return Err(NotaError::other(format!(
-            "Package path `{ming}` is absolute or includes a drive prefix"
+            "Package path `{name}` is absolute or includes a drive prefix"
         )));
     }
-    for duan in ming.split('/') {
-        if duan.is_empty() || duan == "." || duan == ".." {
+    for segment in name.split('/') {
+        if segment.is_empty() || segment == "." || segment == ".." {
             return Err(NotaError::other(format!(
-                "Package path `{ming}` contains `.`, `..`, or an empty segment"
+                "Package path `{name}` contains `.`, `..`, or an empty segment"
             )));
         }
     }
-    Ok(ming)
+    Ok(name)
 }
 
-fn read_qian_ming(text: &str) -> Result<PackageSignature> {
+fn read_before_name(text: &str) -> Result<PackageSignature> {
     #[derive(Deserialize)]
     struct SignatureFile {
         signature: SignatureData,
     }
     #[derive(Deserialize)]
     struct SignatureData {
-        #[serde(default = "default_suan_fa")]
+        #[serde(default = "default_compute_method")]
         algorithm: String,
         key_id: String,
         public_key: String,
@@ -292,7 +295,7 @@ fn read_qian_ming(text: &str) -> Result<PackageSignature> {
         #[serde(default)]
         signed_at: String,
     }
-    fn default_suan_fa() -> String {
+    fn default_compute_method() -> String {
         "ed25519".to_owned()
     }
 
@@ -302,24 +305,24 @@ fn read_qian_ming(text: &str) -> Result<PackageSignature> {
         ))
     })?;
 
-    let jie_2 = |s: &str, yao: usize, ming: &str| -> Result<Vec<u8>> {
+    let boundary_2 = |s: &str, need: usize, name: &str| -> Result<Vec<u8>> {
         use base64::Engine;
         let v = base64::engine::general_purpose::STANDARD
             .decode(s.trim())
             .map_err(|e| {
-                NotaError::other(format!("Signature field `{ming}` is not valid base64: {e}"))
+                NotaError::other(format!("Signature field `{name}` is not valid base64: {e}"))
             })?;
-        if v.len() != yao {
+        if v.len() != need {
             return Err(NotaError::other(format!(
-                "Signature field `{ming}` must be {yao} bytes, received {}",
+                "Signature field `{name}` must be {need} bytes, received {}",
                 v.len()
             )));
         }
         Ok(v)
     };
 
-    let pk = jie_2(&f.signature.public_key, 32, "public_key")?;
-    let sg = jie_2(&f.signature.signature, 64, "signature")?;
+    let pk = boundary_2(&f.signature.public_key, 32, "public_key")?;
+    let sg = boundary_2(&f.signature.signature, 64, "signature")?;
 
     let mut public_key = [0u8; 32];
     public_key.copy_from_slice(&pk);
@@ -335,25 +338,25 @@ fn read_qian_ming(text: &str) -> Result<PackageSignature> {
     })
 }
 
-pub fn read_yi_ge_bao(path: &Path) -> Result<Package> {
+pub fn read_one_package(path: &Path) -> Result<Package> {
     if path.is_dir() {
-        return Package::cong_directory(path);
+        return Package::from_directory(path);
     }
     let bytes = std::fs::read(path).map_err(|source| NotaError::Read {
         path: path.to_path_buf(),
         source,
     })?;
-    Package::cong_zip(&bytes)
+    Package::from_zip(&bytes)
 }
 
-pub fn xiang_bao_file(path: &Path) -> bool {
+pub fn item_package_file(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),
         Some("nota-plugin") | Some("zip")
     )
 }
 
-pub fn pin_target(target_2: &Path, path_3: &str) -> PathBuf {
+pub fn spell_target(target_2: &Path, path_3: &str) -> PathBuf {
     target_2.join(path_3)
 }
 
@@ -362,21 +365,21 @@ mod tests {
     use super::*;
     use ed25519_dalek::Signer;
 
-    fn da_ge_bao(zai_he: &[(&str, &str)]) -> (Vec<(String, Vec<u8>)>, String, String) {
+    fn create_package(at_and: &[(&str, &str)]) -> (Vec<(String, Vec<u8>)>, String, String) {
         use base64::Engine;
         use sha2::{Digest, Sha256};
 
         let key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
         let pk = key.verifying_key().to_bytes();
 
-        let mut you_xu: Vec<(String, Vec<u8>)> = zai_he
+        let mut has_required: Vec<(String, Vec<u8>)> = at_and
             .iter()
             .map(|(p, c)| ((*p).to_owned(), c.as_bytes().to_vec()))
             .collect();
-        you_xu.sort_by(|a, b| a.0.cmp(&b.0));
+        has_required.sort_by(|a, b| a.0.cmp(&b.0));
 
         let mut h = Sha256::new();
-        for (p, c) in &you_xu {
+        for (p, c) in &has_required {
             h.update(p.as_bytes());
             h.update([0u8]);
             h.update(Sha256::digest(c));
@@ -384,28 +387,28 @@ mod tests {
         let summary: [u8; 32] = h.finalize().into();
         let sig = key.sign(&summary).to_bytes();
 
-        let fingerprint_2 = super::super::installed::gong_yao_fingerprint(&pk);
-        let qian_ming_kuai = format!(
+        let fingerprint_2 = super::super::installed::work_need_fingerprint(&pk);
+        let before_name_block = format!(
             "[signature]\nalgorithm = \"ed25519\"\nkey_id = \"{fingerprint_2}\"\n\
              public_key = \"{}\"\nsignature = \"{}\"\nsigned_at = \"2026-09-24\"\n",
             base64::engine::general_purpose::STANDARD.encode(pk),
             base64::engine::general_purpose::STANDARD.encode(sig),
         );
-        (you_xu, qian_ming_kuai, fingerprint_2)
+        (has_required, before_name_block, fingerprint_2)
     }
 
-    fn dai_qian_ming_de_bao(zai_he: &[(&str, &str)]) -> (Package, String) {
-        let (mut files_2, qian_ming_kuai, fingerprint_2) = da_ge_bao(zai_he);
+    fn pending_before_name_package(at_and: &[(&str, &str)]) -> (Package, String) {
+        let (mut files_2, before_name_block, fingerprint_2) = create_package(at_and);
         let files_2: Vec<PackageFile> = files_2
             .drain(..)
             .map(|(path_3, content_2)| PackageFile { path_3, content_2 })
             .collect();
         (
-            Package::cong_files({
+            Package::from_files({
                 let mut v = files_2;
                 v.push(PackageFile {
                     path_3: SIGNATURE_FILE.to_owned(),
-                    content_2: qian_ming_kuai.into_bytes(),
+                    content_2: before_name_block.into_bytes(),
                 });
                 v
             })
@@ -415,8 +418,8 @@ mod tests {
     }
 
     #[test]
-    fn mei_qian_ming_jiu_shi_wei_qian_ming_bu_shi_error() {
-        let p = Package::cong_files(vec![
+    fn each_before_name_old_is_position_before_name_not_is_error() {
+        let p = Package::from_files(vec![
             PackageFile {
                 path_3: MANIFEST_FILE.to_owned(),
                 content_2: b"[plugin]\nid = \"a.b\"\n".to_vec(),
@@ -427,9 +430,9 @@ mod tests {
             },
         ])
         .unwrap();
-        assert!(p.qian_ming.is_none());
+        assert!(p.before_name.is_none());
         assert_eq!(
-            p.yan_qian(&TrustStore::from_text("")).unwrap(),
+            p.validate_before(&TrustStore::from_text("")).unwrap(),
             Signature::Unsigned
         );
         assert_eq!(p.files_2.len(), 2);
@@ -440,29 +443,29 @@ mod tests {
     }
 
     #[test]
-    fn qian_ming_dui_qie_trust_ren_jiu_shi_yi_yan_zheng() {
-        let (p, fingerprint_2) = dai_qian_ming_de_bao(&[
+    fn before_name_pair_cut_trust_person_old_is_one_validate_validate() {
+        let (p, fingerprint_2) = pending_before_name_package(&[
             (MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n"),
             ("main.lua", "x"),
         ]);
-        let ku = TrustStore::from_text(&format!(
+        let store = TrustStore::from_text(&format!(
             "[keys.\"{fingerprint_2}\"]\nname = \"\u{6d4b}\u{8bd5}\"\npublic_key = \"AA==\"\n"
         ));
-        assert_eq!(p.yan_qian(&ku).unwrap(), Signature::Verified);
+        assert_eq!(p.validate_before(&store).unwrap(), Signature::Verified);
     }
 
     #[test]
-    fn qian_ming_dui_dan_mei_trust_ren_jiu_shi_wei_zhi_qian_ming_zhe() {
-        let (p, _) = dai_qian_ming_de_bao(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
+    fn before_name_pair_single_each_trust_person_old_is_position_only_before_name() {
+        let (p, _) = pending_before_name_package(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
         assert_eq!(
-            p.yan_qian(&TrustStore::from_text("")).unwrap(),
+            p.validate_before(&TrustStore::from_text("")).unwrap(),
             Signature::Unknown
         );
     }
 
     #[test]
-    fn qian_wan_zai_gai_yi_ge_zi_jie_jiu_ju() {
-        let (mut p, _) = dai_qian_ming_de_bao(&[
+    fn before_complete_at_change_one_character_boundary_old_sentence() {
+        let (mut p, _) = pending_before_name_package(&[
             (MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n"),
             ("main.lua", "x"),
         ]);
@@ -474,7 +477,7 @@ mod tests {
         f.content_2 = b"y".to_vec();
 
         let err = p
-            .yan_qian(&TrustStore::from_text(""))
+            .validate_before(&TrustStore::from_text(""))
             .unwrap_err()
             .to_string();
         assert!(
@@ -485,33 +488,34 @@ mod tests {
 
     #[test]
     fn rejects_spoofed_key_id_for_trusted_key() {
-        let (mut p, _) = dai_qian_ming_de_bao(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
+        let (mut p, _) =
+            pending_before_name_package(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
 
-        let sig = p.qian_ming.as_mut().unwrap();
+        let sig = p.before_name.as_mut().unwrap();
         sig.key_id = "0000000000000000".to_owned();
 
         let err = p
-            .yan_qian(&TrustStore::from_text(""))
+            .validate_before(&TrustStore::from_text(""))
             .unwrap_err()
             .to_string();
         assert!(err.contains("does not match"), "unexpected error: {err}");
     }
 
     #[test]
-    fn summary_bu_han_qian_ming_file_zi_ji() {
-        let (p, _) = dai_qian_ming_de_bao(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
-        let zhi_you_zai_he = Package::cong_files(p.files_2.clone()).unwrap();
-        assert!(zhi_you_zai_he.qian_ming.is_none());
+    fn summary_not_contain_before_name_file_character_record() {
+        let (p, _) = pending_before_name_package(&[(MANIFEST_FILE, "[plugin]\nid = \"a.b\"\n")]);
+        let only_has_at_and = Package::from_files(p.files_2.clone()).unwrap();
+        assert!(only_has_at_and.before_name.is_none());
         assert_eq!(
             p.summary(),
-            zhi_you_zai_he.summary(),
+            only_has_at_and.summary(),
             "\u{7b7e}\u{540d}\u{6587}\u{4ef6}\u{4e0d}\u{8be5}\u{5f71}\u{54cd}\u{6458}\u{8981}"
         );
     }
 
     #[test]
-    fn tiao_mu_shun_xu_bu_ying_xiang_summary() {
-        let a = Package::cong_files(vec![
+    fn item_target_sequence_required_not_should_item_summary() {
+        let a = Package::from_files(vec![
             PackageFile {
                 path_3: "a".to_owned(),
                 content_2: b"1".to_vec(),
@@ -522,7 +526,7 @@ mod tests {
             },
         ])
         .unwrap();
-        let b = Package::cong_files(vec![
+        let b = Package::from_files(vec![
             PackageFile {
                 path_3: "b".to_owned(),
                 content_2: b"2".to_vec(),
@@ -537,8 +541,8 @@ mod tests {
     }
 
     #[test]
-    fn bao_li_de_path_tiao_bu_chu_target_directory() {
-        for huai in [
+    fn package_inner_path_item_not_out_target_directory() {
+        for broken in [
             "../evil",
             "a/../../evil",
             "/etc/passwd",
@@ -550,25 +554,25 @@ mod tests {
             "..",
         ] {
             assert!(
-                path_he_fa_ma(huai).is_err(),
-                "`{huai}` \u{8be5}\u{88ab}\u{62d2}"
+                path_and_method(broken).is_err(),
+                "`{broken}` \u{8be5}\u{88ab}\u{62d2}"
             );
         }
         for ok_2 in ["plugin.toml", "main.lua", "icons/a.png", "a/b/c/d.lua"] {
             assert_eq!(
-                path_he_fa_ma(ok_2).unwrap(),
+                path_and_method(ok_2).unwrap(),
                 ok_2,
                 "`{ok_2}` \u{662f}\u{5408}\u{6cd5}\u{8def}\u{5f84}"
             );
         }
 
-        assert_eq!(path_he_fa_ma("a\\b").unwrap(), "a/b");
+        assert_eq!(path_and_method("a\\b").unwrap(), "a/b");
 
-        assert_eq!(path_he_fa_ma("a/b/").unwrap(), "a/b");
+        assert_eq!(path_and_method("a/b/").unwrap(), "a/b");
     }
 
     #[test]
-    fn cong_zip_jie_kai_neng_read_dao_file() {
+    fn from_zip_boundary_start_can_read_to_file() {
         use std::io::Write;
         let mut buf = Vec::new();
         {
@@ -582,16 +586,16 @@ mod tests {
             w.finish().unwrap();
         }
 
-        let p = Package::cong_zip(&buf).unwrap();
+        let p = Package::from_zip(&buf).unwrap();
         assert_eq!(p.files_2.len(), 2);
-        assert_eq!(p.zhao("main.lua").unwrap(), b"return {}\n");
-        assert_eq!(p.zhao("\u{6ca1}\u{6709}\u{8fd9}\u{4e2a}"), None);
-        assert!(p.qian_ming.is_none());
+        assert_eq!(p.find("main.lua").unwrap(), b"return {}\n");
+        assert_eq!(p.find("\u{6ca1}\u{6709}\u{8fd9}\u{4e2a}"), None);
+        assert!(p.before_name.is_none());
     }
 
     #[test]
-    fn bu_shi_zip_jiu_bao_cuo_bu_panic() {
-        let err = Package::cong_zip("\u{8fd9}\u{662f}\u{4e00}\u{6bb5}\u{666e}\u{901a}\u{6587}\u{672c}\u{ff0c}\u{4e0d}\u{662f} zip".as_bytes())
+    fn not_is_zip_old_package_error_not_panic() {
+        let err = Package::from_zip("\u{8fd9}\u{662f}\u{4e00}\u{6bb5}\u{666e}\u{901a}\u{6587}\u{672c}\u{ff0c}\u{4e0d}\u{662f} zip".as_bytes())
             .unwrap_err()
             .to_string();
         assert!(err.contains("extension package"), "unexpected error: {err}");
@@ -599,13 +603,13 @@ mod tests {
 
     #[test]
     fn broken_trust_store_is_treated_as_empty() {
-        let ku = TrustStore::from_text("\u{4e0d}\u{662f} TOML {{{");
-        assert!(!ku.contains("\u{968f}\u{4fbf}"));
-        assert_eq!(ku.len(), 0);
+        let store = TrustStore::from_text("\u{4e0d}\u{662f} TOML {{{");
+        assert!(!store.contains("\u{968f}\u{4fbf}"));
+        assert_eq!(store.len(), 0);
     }
 
     #[test]
-    fn tian_shu_huan_cheng_gong_li_ri_qi() {
+    fn field_data_replace_success_work_inner_date_start() {
         assert_eq!(civil_date(0), (1970, 1, 1));
         assert_eq!(civil_date(-1), (1969, 12, 31));
         assert_eq!(civil_date(19_723), (2024, 1, 1));
@@ -614,13 +618,13 @@ mod tests {
     }
 
     #[test]
-    fn jin_tian_zhang_de_xiang_ge_ri_qi() {
+    fn enter_field_length_item_date_start() {
         let t = today();
         assert_eq!(t.len(), 10, "\u{5b9e}\u{9645}\u{ff1a}{t}");
-        let wei: Vec<char> = t.chars().collect();
-        assert_eq!(wei[4], '-');
-        assert_eq!(wei[7], '-');
-        for (i, c) in wei.iter().enumerate() {
+        let position: Vec<char> = t.chars().collect();
+        assert_eq!(position[4], '-');
+        assert_eq!(position[7], '-');
+        for (i, c) in position.iter().enumerate() {
             if i == 4 || i == 7 {
                 continue;
             }
@@ -633,10 +637,10 @@ mod tests {
     }
 
     #[test]
-    fn ji_xia_de_yao_shi_dai_ri_qi() {
-        let mut ku = TrustStore::from_text("");
-        ku.insert_memory("deadbeefdeadbeef", "\u{67d0}\u{4eba}", "AAA=");
-        let text_2 = ku.to_text().unwrap();
+    fn record_lower_need_is_pending_date_start() {
+        let mut store = TrustStore::from_text("");
+        store.insert_memory("deadbeefdeadbeef", "\u{67d0}\u{4eba}", "AAA=");
+        let text_2 = store.to_text().unwrap();
         assert!(
             !text_2.contains(r#"added_at = """#),
             "\u{65e5}\u{671f}\u{662f}\u{7a7a}\u{7684}\u{ff1a}{text_2}"

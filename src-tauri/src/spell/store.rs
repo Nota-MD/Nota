@@ -5,40 +5,40 @@ use serde::Serialize;
 
 use crate::error::{NotaError, Result};
 
-const JIE_BAO_SHANG_XIAN: u64 = 128 * 1024 * 1024;
+const BOUNDARY_PACKAGE_UPPER_THREAD: u64 = 128 * 1024 * 1024;
 
-pub fn yong_hu_ci_dian_directory() -> Result<PathBuf> {
+pub fn use_call_word_point_directory() -> Result<PathBuf> {
     Ok(crate::paths::config_dir()?.join("dictionaries"))
 }
 
-pub fn yong_hu_ci_table_file() -> Result<PathBuf> {
-    Ok(yong_hu_ci_dian_directory()?.join("user-words.txt"))
+pub fn use_call_word_table_file() -> Result<PathBuf> {
+    Ok(use_call_word_point_directory()?.join("user-words.txt"))
 }
 
-pub fn xi_tong_ci_dian_directory_men() -> Vec<PathBuf> {
-    let mut chu = Vec::new();
+pub fn system_same_word_point_directory_list() -> Vec<PathBuf> {
+    let mut out = Vec::new();
     #[cfg(target_os = "linux")]
     {
-        chu.push(PathBuf::from("/usr/share/hunspell"));
-        chu.push(PathBuf::from("/usr/share/myspell"));
-        chu.push(PathBuf::from("/usr/share/myspell/dicts"));
-        chu.push(PathBuf::from("/usr/local/share/hunspell"));
+        out.push(PathBuf::from("/usr/share/hunspell"));
+        out.push(PathBuf::from("/usr/share/myspell"));
+        out.push(PathBuf::from("/usr/share/myspell/dicts"));
+        out.push(PathBuf::from("/usr/local/share/hunspell"));
     }
     #[cfg(target_os = "macos")]
     {
-        chu.push(PathBuf::from("/Library/Spelling"));
-        if let Some(jia_3) = std::env::var_os("HOME") {
-            chu.push(PathBuf::from(jia_3).join("Library/Spelling"));
+        out.push(PathBuf::from("/Library/Spelling"));
+        if let Some(add_3) = std::env::var_os("HOME") {
+            out.push(PathBuf::from(add_3).join("Library/Spelling"));
         }
     }
     #[cfg(target_os = "windows")]
     {
-        let pan = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_string());
-        chu.push(PathBuf::from(format!(
-            "{pan}\\Program Files\\LibreOffice\\share\\extensions"
+        let parse = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".to_string());
+        out.push(PathBuf::from(format!(
+            "{parse}\\Program Files\\LibreOffice\\share\\extensions"
         )));
     }
-    chu
+    out
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -58,8 +58,8 @@ pub struct DictionaryEntry {
     pub directory_2: String,
 }
 
-fn gui_yi(biao_qian: &str) -> String {
-    biao_qian
+fn normalize_one(table_before: &str) -> String {
+    table_before
         .chars()
         .map(|c| match c {
             '-' | '_' => '_',
@@ -68,25 +68,25 @@ fn gui_yi(biao_qian: &str) -> String {
         .collect()
 }
 
-fn directory_li_zhao_yi_dui(
+fn directory_inner_find_one_pair(
     directory_2: &Path,
-    biao_qian: &str,
+    table_before: &str,
 ) -> Option<(Option<PathBuf>, PathBuf)> {
-    let xiang_yao = gui_yi(biao_qian);
+    let wanted_content = normalize_one(table_before);
     let mut dic = None;
     let mut aff = None;
-    for tiao in std::fs::read_dir(directory_2).ok()?.flatten() {
-        let path_3 = tiao.path();
+    for item in std::fs::read_dir(directory_2).ok()?.flatten() {
+        let path_3 = item.path();
         if !path_3.is_file() {
             continue;
         }
         let Some(extension_2) = path_3.extension().and_then(|e| e.to_str()) else {
             continue;
         };
-        let Some(jing_2) = path_3.file_stem().and_then(|s| s.to_str()) else {
+        let Some(static_2) = path_3.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
-        if gui_yi(jing_2) != xiang_yao {
+        if normalize_one(static_2) != wanted_content {
             continue;
         }
         match extension_2.to_ascii_lowercase().as_str() {
@@ -98,43 +98,43 @@ fn directory_li_zhao_yi_dui(
     Some((aff, dic?))
 }
 
-pub fn zhao_yi_dui(
-    biao_qian: &str,
-    yong_hu_directory: Option<&Path>,
+pub fn find_one_pair(
+    table_before: &str,
+    use_call_directory: Option<&Path>,
 ) -> Option<(Option<PathBuf>, PathBuf)> {
-    if let Some(directory_2) = yong_hu_directory {
-        if let Some(dui) = directory_li_zhao_yi_dui(directory_2, biao_qian) {
-            return Some(dui);
+    if let Some(directory_2) = use_call_directory {
+        if let Some(pair) = directory_inner_find_one_pair(directory_2, table_before) {
+            return Some(pair);
         }
     }
-    for directory_2 in xi_tong_ci_dian_directory_men() {
-        if let Some(dui) = directory_li_zhao_yi_dui(&directory_2, biao_qian) {
-            return Some(dui);
+    for directory_2 in system_same_word_point_directory_list() {
+        if let Some(pair) = directory_inner_find_one_pair(&directory_2, table_before) {
+            return Some(pair);
         }
     }
     None
 }
 
-pub fn lie_chu(yong_hu_directory: Option<&Path>) -> Vec<DictionaryEntry> {
-    let mut ge_fang_xiang: Vec<(DictionarySource, PathBuf)> = Vec::new();
-    if let Some(directory_2) = yong_hu_directory {
-        ge_fang_xiang.push((DictionarySource::User, directory_2.to_path_buf()));
+pub fn list_out(use_call_directory: Option<&Path>) -> Vec<DictionaryEntry> {
+    let mut method_item: Vec<(DictionarySource, PathBuf)> = Vec::new();
+    if let Some(directory_2) = use_call_directory {
+        method_item.push((DictionarySource::User, directory_2.to_path_buf()));
     }
-    for directory_2 in xi_tong_ci_dian_directory_men() {
-        ge_fang_xiang.push((DictionarySource::System, directory_2));
+    for directory_2 in system_same_word_point_directory_list() {
+        method_item.push((DictionarySource::System, directory_2));
     }
-    lie_chu_cong(ge_fang_xiang)
+    list_out_from(method_item)
 }
 
-fn lie_chu_cong(ge_fang_xiang: Vec<(DictionarySource, PathBuf)>) -> Vec<DictionaryEntry> {
-    let mut chu: Vec<DictionaryEntry> = Vec::new();
-    let mut jian_guo: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for (source_2, directory_2) in ge_fang_xiang {
-        let Ok(tiao_mu_men) = std::fs::read_dir(&directory_2) else {
+fn list_out_from(method_item: Vec<(DictionarySource, PathBuf)>) -> Vec<DictionaryEntry> {
+    let mut out: Vec<DictionaryEntry> = Vec::new();
+    let mut check_passed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (source_2, directory_2) in method_item {
+        let Ok(item_target_list) = std::fs::read_dir(&directory_2) else {
             continue;
         };
-        for tiao in tiao_mu_men.flatten() {
-            let path_3 = tiao.path();
+        for item in item_target_list.flatten() {
+            let path_3 = item.path();
             if !path_3.is_file() {
                 continue;
             }
@@ -146,52 +146,55 @@ fn lie_chu_cong(ge_fang_xiang: Vec<(DictionarySource, PathBuf)>) -> Vec<Dictiona
             if extension_2 != "dic" {
                 continue;
             }
-            let Some(jing_2) = path_3.file_stem().and_then(|s| s.to_str()) else {
+            let Some(static_2) = path_3.file_stem().and_then(|s| s.to_str()) else {
                 continue;
             };
 
-            if gui_yi(jing_2) == "index" {
+            if normalize_one(static_2) == "index" {
                 continue;
             }
-            if !jian_guo.insert(gui_yi(jing_2)) {
+            if !check_passed.insert(normalize_one(static_2)) {
                 continue;
             }
-            chu.push(DictionaryEntry {
-                tag: jing_2.to_string(),
+            out.push(DictionaryEntry {
+                tag: static_2.to_string(),
                 source_2,
                 directory_2: directory_2.display().to_string(),
             });
         }
     }
-    chu.sort_by(|a, b| a.tag.cmp(&b.tag));
-    chu
+    out.sort_by(|a, b| a.tag.cmp(&b.tag));
+    out
 }
 
-fn biao_qian_of(bao_nei_path: &str) -> Option<String> {
-    let duan: Vec<&str> = bao_nei_path.split('/').filter(|s| !s.is_empty()).collect();
-    let file_3 = *duan.last()?;
-    let jing_2 = file_3.rsplit_once('.').map(|(a, _)| a).unwrap_or(file_3);
-    if !jing_2.eq_ignore_ascii_case("index") {
-        return Some(jing_2.to_string());
+fn table_before_of(package_inner_path: &str) -> Option<String> {
+    let segment: Vec<&str> = package_inner_path
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
+    let file_3 = *segment.last()?;
+    let static_2 = file_3.rsplit_once('.').map(|(a, _)| a).unwrap_or(file_3);
+    if !static_2.eq_ignore_ascii_case("index") {
+        return Some(static_2.to_string());
     }
 
-    Some(duan.get(duan.len().checked_sub(2)?)?.to_string())
+    Some(segment.get(segment.len().checked_sub(2)?)?.to_string())
 }
 
 struct DictionaryArchive {
-    biao_qian: String,
+    table_before: String,
     aff: Option<Vec<u8>>,
     dic: Option<Vec<u8>>,
 }
 
-pub fn dao_ru_ya_suo_bao(path_3: &Path) -> Result<String> {
-    let zi_jie = std::fs::read(path_3)
+pub fn to_into_press_lock_package(path_3: &Path) -> Result<String> {
+    let bytes = std::fs::read(path_3)
         .map_err(|e| NotaError::other(format!("Could not read this file: {e}")))?;
-    let mut ar = zip::ZipArchive::new(std::io::Cursor::new(zi_jie))
+    let mut ar = zip::ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| NotaError::other(format!("This is not a readable ZIP package: {e}")))?;
 
-    let mut dui_men: Vec<DictionaryArchive> = Vec::new();
-    let mut zong: u64 = 0;
+    let mut pair_list: Vec<DictionaryArchive> = Vec::new();
+    let mut total: u64 = 0;
     for i in 0..ar.len() {
         let Ok(mut e) = ar.by_index(i) else { continue };
         if e.is_dir() {
@@ -199,11 +202,11 @@ pub fn dao_ru_ya_suo_bao(path_3: &Path) -> Result<String> {
         }
         let name_2 = e.name().to_string();
 
-        let mo_duan = name_2.rsplit('/').next().unwrap_or("");
-        if name_2.starts_with("__MACOSX/") || mo_duan.starts_with("._") {
+        let suffix_segment = name_2.rsplit('/').next().unwrap_or("");
+        if name_2.starts_with("__MACOSX/") || suffix_segment.starts_with("._") {
             continue;
         }
-        let extension_2 = mo_duan
+        let extension_2 = suffix_segment
             .rsplit('.')
             .next()
             .unwrap_or_default()
@@ -211,27 +214,27 @@ pub fn dao_ru_ya_suo_bao(path_3: &Path) -> Result<String> {
         if extension_2 != "aff" && extension_2 != "dic" {
             continue;
         }
-        let Some(biao_qian) = biao_qian_of(&name_2) else {
+        let Some(table_before) = table_before_of(&name_2) else {
             continue;
         };
         let mut content_2 = Vec::new();
 
         if e.by_ref()
-            .take(JIE_BAO_SHANG_XIAN + 1)
+            .take(BOUNDARY_PACKAGE_UPPER_THREAD + 1)
             .read_to_end(&mut content_2)
             .is_err()
         {
             continue;
         }
-        zong += content_2.len() as u64;
-        if zong > JIE_BAO_SHANG_XIAN {
+        total += content_2.len() as u64;
+        if total > BOUNDARY_PACKAGE_UPPER_THREAD {
             return Err(NotaError::other(
                 "The extracted ZIP is too large to be a dictionary".to_string(),
             ));
         }
-        match dui_men
+        match pair_list
             .iter_mut()
-            .find(|f| gui_yi(&f.biao_qian) == gui_yi(&biao_qian))
+            .find(|f| normalize_one(&f.table_before) == normalize_one(&table_before))
         {
             Some(cao) => {
                 if extension_2 == "aff" {
@@ -240,42 +243,42 @@ pub fn dao_ru_ya_suo_bao(path_3: &Path) -> Result<String> {
                     cao.dic = Some(content_2);
                 }
             }
-            None => dui_men.push(DictionaryArchive {
-                biao_qian,
+            None => pair_list.push(DictionaryArchive {
+                table_before,
                 aff: (extension_2 == "aff").then_some(content_2.clone()),
                 dic: (extension_2 == "dic").then_some(content_2),
             }),
         }
     }
 
-    let Some(shi_dao) = dui_men.into_iter().find(|f| f.dic.is_some()) else {
+    let Some(is_to) = pair_list.into_iter().find(|f| f.dic.is_some()) else {
         return Err(NotaError::other(
             "The ZIP does not contain a required `.dic` word list".to_string(),
         ));
     };
 
-    let target_directory = yong_hu_ci_dian_directory()?;
+    let target_directory = use_call_word_point_directory()?;
     std::fs::create_dir_all(&target_directory)
         .map_err(|e| NotaError::other(format!("Could not create the dictionary directory: {e}")))?;
-    let ci_table = shi_dao.dic.expect("already checked with dic.is_some()");
+    let word_table = is_to.dic.expect("already checked with dic.is_some()");
     std::fs::write(
-        target_directory.join(format!("{}.dic", shi_dao.biao_qian)),
-        ci_table,
+        target_directory.join(format!("{}.dic", is_to.table_before)),
+        word_table,
     )
     .map_err(|e| NotaError::other(format!("Could not write the word list: {e}")))?;
-    let aff = shi_dao
+    let aff = is_to
         .aff
-        .unwrap_or_else(|| zui_xiao_affix().as_bytes().to_vec());
+        .unwrap_or_else(|| most_small_affix().as_bytes().to_vec());
     std::fs::write(
-        target_directory.join(format!("{}.aff", shi_dao.biao_qian)),
+        target_directory.join(format!("{}.aff", is_to.table_before)),
         aff,
     )
     .map_err(|e| NotaError::other(format!("Could not write the affix configuration: {e}")))?;
 
-    Ok(shi_dao.biao_qian)
+    Ok(is_to.table_before)
 }
 
-pub fn zui_xiao_affix() -> &'static str {
+pub fn most_small_affix() -> &'static str {
     "SET UTF-8\n"
 }
 
@@ -284,71 +287,72 @@ mod tests {
     use super::*;
 
     #[test]
-    fn lian_zi_fu_yu_xia_hua_xian_shi_tong_yi_men_language() {
-        assert_eq!(gui_yi("en-US"), gui_yi("en_US"));
-        assert_eq!(gui_yi("EN_us"), gui_yi("en_US"));
-        assert_ne!(gui_yi("en_US"), gui_yi("en_GB"));
+    fn link_character_service_and_lower_render_thread_is_same_one_list_language() {
+        assert_eq!(normalize_one("en-US"), normalize_one("en_US"));
+        assert_eq!(normalize_one("EN_us"), normalize_one("en_US"));
+        assert_ne!(normalize_one("en_US"), normalize_one("en_GB"));
     }
 
     #[test]
-    fn bao_li_de_biao_qian_an_san_zhong_xian_chang_qu() {
-        assert_eq!(biao_qian_of("en_US.dic").unwrap(), "en_US");
+    fn package_inner_table_before_by_three_middle_thread_long_get() {
+        assert_eq!(table_before_of("en_US.dic").unwrap(), "en_US");
 
-        assert_eq!(biao_qian_of("en_US/en_US.aff").unwrap(), "en_US");
+        assert_eq!(table_before_of("en_US/en_US.aff").unwrap(), "en_US");
 
         assert_eq!(
-            biao_qian_of("dictionaries/en-US/index.aff").unwrap(),
+            table_before_of("dictionaries/en-US/index.aff").unwrap(),
             "en-US"
         );
     }
 
     #[test]
-    fn yong_hu_zai_na_ge_directory_jiu_xian_kan_na_ge() {
+    fn use_call_at_that_directory_old_thread_see_that() {
         let root_2 = std::env::temp_dir().join(format!("nota-store-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root_2);
-        let yong_hu = root_2.join("user");
-        std::fs::create_dir_all(&yong_hu).unwrap();
-        std::fs::write(yong_hu.join("en_US.dic"), "1\nmine\n").unwrap();
+        let use_call = root_2.join("user");
+        std::fs::create_dir_all(&use_call).unwrap();
+        std::fs::write(use_call.join("en_US.dic"), "1\nmine\n").unwrap();
 
-        let (aff, dic) = zhao_yi_dui("en_US", Some(&yong_hu)).unwrap();
-        assert!(dic.starts_with(&yong_hu));
+        let (aff, dic) = find_one_pair("en_US", Some(&use_call)).unwrap();
+        assert!(dic.starts_with(&use_call));
         assert!(aff.is_none(), "\u{53ea}\u{6709}\u{8bcd}\u{8868}\u{65f6} aff \u{8be5}\u{662f} None\u{ff0c}\u{522b}\u{51ed}\u{7a7a}\u{9020}\u{4e00}\u{4efd}");
 
-        assert!(zhao_yi_dui("en-us", Some(&yong_hu)).is_some());
+        assert!(find_one_pair("en-us", Some(&use_call)).is_some());
 
-        assert!(zhao_yi_dui("zz_ZZ", Some(&yong_hu)).is_none());
+        assert!(find_one_pair("zz_ZZ", Some(&use_call)).is_none());
         let _ = std::fs::remove_dir_all(&root_2);
     }
 
     #[test]
-    fn lie_chu_lai_de_bu_xu_zhong_yang_yong_hu_na_ben_gai_zhu_xi_tong_na_ben() {
+    fn list_out_incoming_not_required_middle_sample_use_call_that_current_change_main_system_same_that_current(
+    ) {
         let root_2 = std::env::temp_dir().join(format!("nota-store-list-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root_2);
-        let yong_hu = root_2.join("user");
-        let xi_tong = root_2.join("sys");
-        std::fs::create_dir_all(&yong_hu).unwrap();
-        std::fs::create_dir_all(&xi_tong).unwrap();
+        let use_call = root_2.join("user");
+        let system_same = root_2.join("sys");
+        std::fs::create_dir_all(&use_call).unwrap();
+        std::fs::create_dir_all(&system_same).unwrap();
 
-        std::fs::write(yong_hu.join("de_DE.dic"), "1\nhallo\n").unwrap();
-        std::fs::write(yong_hu.join("en_US.dic"), "1\nmine\n").unwrap();
-        std::fs::write(xi_tong.join("en_US.dic"), "1\nours\n").unwrap();
-        std::fs::write(xi_tong.join("fr_FR.dic"), "1\nbonjour\n").unwrap();
+        std::fs::write(use_call.join("de_DE.dic"), "1\nhallo\n").unwrap();
+        std::fs::write(use_call.join("en_US.dic"), "1\nmine\n").unwrap();
+        std::fs::write(system_same.join("en_US.dic"), "1\nours\n").unwrap();
+        std::fs::write(system_same.join("fr_FR.dic"), "1\nbonjour\n").unwrap();
 
-        std::fs::write(yong_hu.join("index.dic"), "1\nx\n").unwrap();
-        std::fs::write(yong_hu.join("notes.txt"), "x").unwrap();
+        std::fs::write(use_call.join("index.dic"), "1\nx\n").unwrap();
+        std::fs::write(use_call.join("notes.txt"), "x").unwrap();
 
-        let chu = lie_chu_cong(vec![
-            (DictionarySource::User, yong_hu.clone()),
-            (DictionarySource::System, xi_tong),
+        let out = list_out_from(vec![
+            (DictionarySource::User, use_call.clone()),
+            (DictionarySource::System, system_same),
         ]);
-        let biao_qian_men: Vec<&str> = chu.iter().map(|d| d.tag.as_str()).collect();
-        assert_eq!(biao_qian_men, vec!["de_DE", "en_US", "fr_FR"]);
+        let table_before_list: Vec<&str> = out.iter().map(|d| d.tag.as_str()).collect();
+        assert_eq!(table_before_list, vec!["de_DE", "en_US", "fr_FR"]);
         assert_eq!(
-            chu.iter().find(|d| d.tag == "en_US").unwrap().source_2,
+            out.iter().find(|d| d.tag == "en_US").unwrap().source_2,
             DictionarySource::User
         );
         assert_eq!(
-            chu.iter().find(|d| d.tag == "fr_FR").unwrap().source_2,
+            out.iter().find(|d| d.tag == "fr_FR").unwrap().source_2,
             DictionarySource::System
         );
         let _ = std::fs::remove_dir_all(&root_2);
@@ -357,7 +361,7 @@ mod tests {
     static TEST_ENVIRONMENT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
-    fn dao_ru_yi_ge_zhen_zip_san_zhong_xian_chang_dou_luo_de_xia_qu() {
+    fn to_into_one_real_zip_three_middle_thread_long_all_land_lower_get() {
         use std::io::Write as _;
         let _guard = TEST_ENVIRONMENT_LOCK
             .lock()
@@ -365,10 +369,10 @@ mod tests {
         let root_2 = std::env::temp_dir().join(format!("nota-store-zip-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root_2);
         std::fs::create_dir_all(&root_2).unwrap();
-        let jiu = std::env::var_os("XDG_CONFIG_HOME");
+        let old = std::env::var_os("XDG_CONFIG_HOME");
         std::env::set_var("XDG_CONFIG_HOME", &root_2);
 
-        for (dang, tiao_mu_men) in [
+        for (when, item_target_list) in [
             (
                 "en_US",
                 vec![
@@ -385,42 +389,42 @@ mod tests {
             ),
             ("fr_FR", vec![("fr_FR.dic", "1\nbonjour\n")]),
         ] {
-            let bao = root_2.join(format!("{dang}.zip"));
-            let mut write_2 = zip::ZipWriter::new(std::fs::File::create(&bao).unwrap());
-            let xuan_xiang = zip::write::SimpleFileOptions::default()
+            let package = root_2.join(format!("{when}.zip"));
+            let mut write_2 = zip::ZipWriter::new(std::fs::File::create(&package).unwrap());
+            let select_item = zip::write::SimpleFileOptions::default()
                 .compression_method(zip::CompressionMethod::Deflated);
-            for (ming, wen) in tiao_mu_men {
-                write_2.start_file(ming, xuan_xiang).unwrap();
-                write_2.write_all(wen.as_bytes()).unwrap();
+            for (name, text) in item_target_list {
+                write_2.start_file(name, select_item).unwrap();
+                write_2.write_all(text.as_bytes()).unwrap();
             }
             write_2.finish().unwrap();
 
-            let biao_qian =
-                dao_ru_ya_suo_bao(&bao).expect("\u{5bfc}\u{5165}\u{8be5}\u{6210}\u{529f}");
-            assert_eq!(biao_qian, dang);
-            let target_3 = yong_hu_ci_dian_directory().unwrap();
-            let ci_table = std::fs::read_to_string(target_3.join(format!("{dang}.dic"))).unwrap();
+            let table_before = to_into_press_lock_package(&package)
+                .expect("\u{5bfc}\u{5165}\u{8be5}\u{6210}\u{529f}");
+            assert_eq!(table_before, when);
+            let target_3 = use_call_word_point_directory().unwrap();
+            let word_table = std::fs::read_to_string(target_3.join(format!("{when}.dic"))).unwrap();
             assert!(
-                ci_table.contains("2\n") || ci_table.starts_with('1'),
-                "\u{8bcd}\u{8868}\u{5185}\u{5bb9}\u{4e0d}\u{5bf9}\u{ff1a}{ci_table}"
+                word_table.contains("2\n") || word_table.starts_with('1'),
+                "\u{8bcd}\u{8868}\u{5185}\u{5bb9}\u{4e0d}\u{5bf9}\u{ff1a}{word_table}"
             );
 
             assert!(
-                target_3.join(format!("{dang}.aff")).is_file(),
-                "\u{6ca1}\u{843d} aff\u{ff1a}{dang}"
+                target_3.join(format!("{when}.aff")).is_file(),
+                "\u{6ca1}\u{843d} aff\u{ff1a}{when}"
             );
         }
 
-        let kong_bao = root_2.join("\u{7a7a}.zip");
-        let mut write_2 = zip::ZipWriter::new(std::fs::File::create(&kong_bao).unwrap());
+        let empty_package = root_2.join("\u{7a7a}.zip");
+        let mut write_2 = zip::ZipWriter::new(std::fs::File::create(&empty_package).unwrap());
         write_2
             .start_file("readme.txt", zip::write::SimpleFileOptions::default())
             .unwrap();
         write_2.write_all(b"not a dictionary").unwrap();
         write_2.finish().unwrap();
-        assert!(dao_ru_ya_suo_bao(&kong_bao).is_err(), "\u{4e00}\u{4e2a}\u{6ca1}\u{6709} .dic \u{7684}\u{5305}\u{4e0d}\u{8be5}\u{88ab}\u{5f53}\u{6210}\u{8bcd}\u{5178}");
+        assert!(to_into_press_lock_package(&empty_package).is_err(), "\u{4e00}\u{4e2a}\u{6ca1}\u{6709} .dic \u{7684}\u{5305}\u{4e0d}\u{8be5}\u{88ab}\u{5f53}\u{6210}\u{8bcd}\u{5178}");
 
-        match jiu {
+        match old {
             Some(v) => std::env::set_var("XDG_CONFIG_HOME", v),
             None => std::env::remove_var("XDG_CONFIG_HOME"),
         }
@@ -428,12 +432,16 @@ mod tests {
     }
 
     #[test]
-    fn dao_ru_de_san_zhong_xian_chang_dou_ren_de_chu_lai() {
-        let ping_pu = biao_qian_of("en_US.dic").unwrap();
-        let dai_directory = biao_qian_of("en_US/en_US.aff").unwrap();
-        let wooorm = biao_qian_of("dictionaries/en-US/index.dic").unwrap();
+    fn to_into_three_middle_thread_long_all_person_out_incoming() {
+        let level_plain = table_before_of("en_US.dic").unwrap();
+        let pending_directory = table_before_of("en_US/en_US.aff").unwrap();
+        let wooorm = table_before_of("dictionaries/en-US/index.dic").unwrap();
         assert_eq!(
-            (ping_pu.as_str(), dai_directory.as_str(), wooorm.as_str()),
+            (
+                level_plain.as_str(),
+                pending_directory.as_str(),
+                wooorm.as_str()
+            ),
             ("en_US", "en_US", "en-US")
         );
     }

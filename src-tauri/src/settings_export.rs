@@ -104,7 +104,7 @@ pub fn inventory(state: &AppState) -> ExportInventory {
         .iter()
         .map(|id| match program_source(id) {
             Some(source) => {
-                let (files, bytes) = tong_ji(&source.path_3, source.kind_2);
+                let (files, bytes) = same_record(&source.path_3, source.kind_2);
                 ExportItem {
                     id: (*id).to_owned(),
                     available: source.path_3.exists(),
@@ -171,7 +171,7 @@ pub fn inventory(state: &AppState) -> ExportInventory {
                 .unwrap_or(0);
             let (data_files, data_bytes) = data
                 .as_deref()
-                .map(|p| tong_ji(p, SourceKind::Directory))
+                .map(|p| same_record(p, SourceKind::Directory))
                 .unwrap_or((0, 0));
             if settings_bytes == 0 && data_files == 0 {
                 return None;
@@ -225,7 +225,7 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
             NotaError::other(format!("No data source exists for settings category: {id}"))
         })?;
         if source.path_3.exists() {
-            receive_ji(
+            receive_record(
                 &source.path_3,
                 Path::new(source.archive_prefix),
                 &mut files,
@@ -235,7 +235,7 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
     }
 
     for (id, choice) in plugin_selection {
-        let safe = paths::an_fulldocument_jian_ming(id);
+        let safe = paths::safe_filename(id);
         if choice.settings {
             let path = paths::plugin_settings_file(id)?;
             if path.is_file() {
@@ -250,7 +250,7 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
         if choice.data {
             let root = paths::plugin_data_dir(id)?;
             if root.is_dir() {
-                receive_ji(
+                receive_record(
                     &root,
                     &PathBuf::from(format!("plugins/{safe}/data")),
                     &mut files,
@@ -288,7 +288,7 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
         .and_then(|n| n.to_str())
         .unwrap_or("Nota-settings.nota-backup");
     let temp = parent.join(format!(".{file_name}.tmp-{}-{stamp}", std::process::id()));
-    let result = write_bao(&temp, request, &files, &skipped_symlinks, total_bytes);
+    let result = write_package(&temp, request, &files, &skipped_symlinks, total_bytes);
     if let Err(error) = result {
         let _ = fs::remove_file(&temp);
         return Err(error);
@@ -309,7 +309,7 @@ pub fn export(request: &ExportRequest) -> Result<ExportReport> {
     })
 }
 
-fn write_bao(
+fn write_package(
     path: &Path,
     request: &ExportRequest,
     files: &[ExportPlanFile],
@@ -394,7 +394,7 @@ fn program_source(id: &str) -> Option<ExportSource> {
         "image-upload" => paths::image_upload_file().ok()?,
         "themes" => paths::user_themes_dir().ok()?,
         "ui-styles" => paths::user_ui_styles_dir().ok()?,
-        "dictionaries" => crate::spell::store::yong_hu_ci_dian_directory().ok()?,
+        "dictionaries" => crate::spell::store::use_call_word_point_directory().ok()?,
         _ => return None,
     };
     let (kind_2, archive_prefix, sensitive) = match id {
@@ -417,7 +417,7 @@ fn program_source(id: &str) -> Option<ExportSource> {
     })
 }
 
-fn tong_ji(path: &Path, kind: SourceKind) -> (usize, u64) {
+fn same_record(path: &Path, kind: SourceKind) -> (usize, u64) {
     let Ok(meta) = fs::symlink_metadata(path) else {
         return (0, 0);
     };
@@ -444,7 +444,7 @@ fn tong_ji(path: &Path, kind: SourceKind) -> (usize, u64) {
             }
             let child = entry.path();
             let (f, b) = if ft.is_dir() {
-                tong_ji(&child, SourceKind::Directory)
+                same_record(&child, SourceKind::Directory)
             } else if ft.is_file() {
                 fs::metadata(&child).map(|m| (1, m.len())).unwrap_or((0, 0))
             } else {
@@ -457,7 +457,7 @@ fn tong_ji(path: &Path, kind: SourceKind) -> (usize, u64) {
     (files, bytes)
 }
 
-fn receive_ji(
+fn receive_record(
     path: &Path,
     archive: &Path,
     out: &mut Vec<ExportPlanFile>,
@@ -486,7 +486,7 @@ fn receive_ji(
         if name == ".git" || name == "node_modules" {
             continue;
         }
-        receive_ji(&child, &archive.join(name), out, skipped_symlinks)?;
+        receive_record(&child, &archive.join(name), out, skipped_symlinks)?;
     }
     Ok(())
 }
@@ -562,7 +562,7 @@ mod tests {
             data: true,
         };
         assert!(both.settings && both.data);
-        assert_eq!(paths::an_fulldocument_jian_ming(&both.id), "nota.ai");
+        assert_eq!(paths::safe_filename(&both.id), "nota.ai");
     }
 
     #[test]
@@ -589,7 +589,7 @@ mod tests {
             archive: "program/settings.toml".into(),
             bytes: 15,
         }];
-        write_bao(&package, &request, &files, &0, 15).unwrap();
+        write_package(&package, &request, &files, &0, 15).unwrap();
 
         let mut zip = zip::ZipArchive::new(File::open(&package).unwrap()).unwrap();
         assert!(

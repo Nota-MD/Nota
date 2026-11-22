@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en" data-ui-style="adwaita" data-ui-mode="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nota Rendered Review</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 30%),
+          var(--bg);
+      }
+
+      .review-preview-page {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .review-preview-appbar {
+        flex: none;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 18px;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-raised);
+      }
+
+      .review-preview-brand {
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+
+      .review-preview-subtitle {
+        color: var(--fg-muted);
+        font-size: 0.88rem;
+      }
+
+      .review-preview-main {
+        flex: 1;
+        min-height: 0;
+      }
+
+      .review-preview-main > .editor-pane {
+        flex: 1;
+        min-height: 0;
+      }
+
+      .review-preview-caption {
+        position: fixed;
+        right: 22px;
+        bottom: 18px;
+        z-index: 20;
+        display: flex;
+        gap: 14px;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--bg-raised);
+        color: var(--fg-muted);
+        box-shadow: var(--shadow);
+        font-size: 0.8rem;
+      }
+
+      .review-preview-caption b:first-child {
+        color: var(--danger);
+      }
+
+      .review-preview-caption b:last-child {
+        color: var(--success);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-preview-page">
+      <header class="review-preview-appbar">
+        <span class="review-preview-brand">Nota</span>
+        <span class="review-preview-subtitle">Rendered review preview</span>
+      </header>
+      <main class="app-main review-preview-main" data-review="inline">
+        <div id="review-bar"></div>
+        <section class="editor-pane">
+          <div class="editor-mount">
+            <div id="editor"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div class="review-preview-caption">
+      <span><b>Red</b> removed</span>
+      <span><b>Green</b> added</span>
+    </div>
+    <script type="module" src="./review-preview.ts"></script>
+  </body>
+</html>

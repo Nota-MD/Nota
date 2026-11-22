@@ -11,9 +11,6 @@
 
 
 
-
-
-
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -483,6 +480,7 @@ export default function App() {
       imageReq !== null ||
       linkReq !== null ||
       emojiOpen ||
+      dialog.commandPaletteOpen ||
       dialog.aboutOpen ||
       pandocGate !== null || dedicatedNoteTotalJoin !== null,
     toast,
@@ -618,6 +616,7 @@ export default function App() {
     pluginHandler,
     newDocument: newDoc,
     openFile: openViaDialog,
+    openCommandPalette: dialog.openCommandPalette,
     openFolder: openFolder,
 
 
@@ -990,6 +989,7 @@ export default function App() {
           windowPresentation={settings?.appearance.settings_window_style ?? "embedded"}
           onSetDebugMode={(enabled) => settings && void updateSettings({ general: { ...settings.general, debug_mode: enabled } })}
           firstRunSeen={settings?.general.onboarding_seen ?? true} onFirstRunDone={() => settings && void updateSettings({ general: { ...settings.general, onboarding_seen: true } })}
+          commandPalette={dialog.commandPaletteOpen ? { menus: menu, disabled: disabledCommands, checks: menuChecks, themes, currentTheme: slot.id, onPick: onNativePick, onClose: dialog.closeCommandPalette } : null}
         />
         {/* Native context menu replacement: portals to `document.body`, follows `AppDialogs` overlays, and renders `null` when closed. */}
         <ContextMenu {...contextMenuWiring} />

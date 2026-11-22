@@ -254,9 +254,9 @@ mod tests {
 
     #[test]
     fn invalid_link_is_not_silently_dropped() {
-        let tiao_dao = first_open_file(args_3(&["nota", "nota://open?nope=1"]));
+        let item_to = first_open_file(args_3(&["nota", "nota://open?nope=1"]));
         assert_eq!(
-            tiao_dao,
+            item_to,
             Some(PathBuf::from("nota://open?nope=1")),
             "keep the URL so it can be reported instead of silently ignoring it"
         );

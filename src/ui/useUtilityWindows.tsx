@@ -23,9 +23,12 @@ export function useUtilityWindows({
   toast: (message: string, level?: Toast["level"], ttlMs?: number) => void;
 }): void {
   useEffect(() => {
-    if (!inSettingsWindow && style === "external") {
-      void api.window.prepareAbout().catch(() => undefined);
-    }
+    if (inSettingsWindow || style !== "external") return;
+    void api.window.prepareAbout().catch(() => undefined);
+    const timer = window.setTimeout(() => {
+      void api.window.prepareSettings().catch(() => undefined);
+    }, 700);
+    return () => window.clearTimeout(timer);
   }, [inSettingsWindow, style]);
 
   useEffect(() => {

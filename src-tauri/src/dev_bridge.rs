@@ -200,7 +200,7 @@ fn run_rpc(
             let documents = crate::mcp::tools::run_tool_raw(
                 "nota_documents",
                 params,
-                &crate::mcp::host::AppHost::xin(app),
+                &crate::mcp::host::AppHost::new(app),
             )?;
             let list = documents
                 .get("documents")
@@ -226,22 +226,22 @@ fn run_rpc(
         "documents.list" => crate::mcp::tools::run_tool_raw(
             "nota_documents",
             params,
-            &crate::mcp::host::AppHost::xin(app),
+            &crate::mcp::host::AppHost::new(app),
         ),
         "documents.read" => crate::mcp::tools::run_tool_raw(
             "nota_read",
             params,
-            &crate::mcp::host::AppHost::xin(app),
+            &crate::mcp::host::AppHost::new(app),
         ),
         "documents.write" => crate::mcp::tools::run_tool_raw(
             "nota_write",
             params,
-            &crate::mcp::host::AppHost::xin(app),
+            &crate::mcp::host::AppHost::new(app),
         ),
         "documents.open" => crate::mcp::tools::run_tool_raw(
             "nota_open",
             params,
-            &crate::mcp::host::AppHost::xin(app),
+            &crate::mcp::host::AppHost::new(app),
         ),
         "theme.reload" => {
             let path = params

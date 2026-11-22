@@ -6,7 +6,7 @@ pub(crate) fn write_manifest(dir: &Path, body: &str) {
 }
 
 #[test]
-fn ok_manifest_neng_parse_chu_neng_li() {
+fn ok_manifest_can_parse_out_can_inner() {
     let dir = std::env::temp_dir().join("nota-manifest-good");
     let _ = std::fs::remove_dir_all(&dir);
     write_manifest(
@@ -33,7 +33,7 @@ capabilities = ["document.read", "process.git"]
 }
 
 #[test]
-fn tong_dao_ming_li_de_dian_yao_huan_cheng_lian_zi_fu() {
+fn same_to_name_inner_point_need_replace_success_link_character_service() {
     assert_eq!(channel_id("nota.git"), "nota-git");
     assert_eq!(channel_id("nota.ai"), "nota-ai");
 
@@ -55,7 +55,7 @@ fn tong_dao_ming_li_de_dian_yao_huan_cheng_lian_zi_fu() {
 }
 
 #[test]
-fn api_ban_ben_bu_fu_yao_ju_zai() {
+fn api_half_current_not_service_need_sentence_at() {
     let dir = std::env::temp_dir().join("nota-manifest-apimismatch");
     let _ = std::fs::remove_dir_all(&dir);
     write_manifest(
@@ -122,7 +122,7 @@ fn legacy_numeric_api_is_read_as_minor_zero() {
 }
 
 #[test]
-fn entry_bu_xu_tao_chu_plugin_directory() {
+fn entry_not_required_escape_out_plugin_directory() {
     let dir = std::env::temp_dir().join("nota-manifest-escape");
     let _ = std::fs::remove_dir_all(&dir);
     write_manifest(
@@ -136,7 +136,7 @@ fn entry_bu_xu_tao_chu_plugin_directory() {
 }
 
 #[test]
-fn bu_ren_shi_de_neng_li_yao_bao_cuo_er_bu_shi_jing_mo_hu_lve() {
+fn not_person_is_can_inner_need_package_error_two_not_is_static_suffix_call_ignore() {
     let dir = std::env::temp_dir().join("nota-manifest-unknowncap");
     let _ = std::fs::remove_dir_all(&dir);
     write_manifest(
@@ -154,7 +154,7 @@ fn bu_ren_shi_de_neng_li_yao_bao_cuo_er_bu_shi_jing_mo_hu_lve() {
 }
 
 #[test]
-fn dian_kai_tou_de_directory_bu_dang_plugin() {
+fn point_start_header_directory_not_when_plugin() {
     let dir = std::env::temp_dir().join("nota-manifest-dotdir");
     let _ = std::fs::remove_dir_all(&dir);
     write_manifest(
@@ -166,23 +166,23 @@ fn dian_kai_tou_de_directory_bu_dang_plugin() {
         "[plugin]\nid = \"a.b\"\nname = \"A\"\napi = \"v2.3\"\n",
     );
 
-    let zhao_dao = find_manifests(&dir);
+    let find_to = find_manifests(&dir);
     assert_eq!(
-        zhao_dao.len(),
+        find_to.len(),
         1,
-        "\u{5b9e}\u{9645}\u{627e}\u{5230}\u{ff1a}{zhao_dao:?}"
+        "\u{5b9e}\u{9645}\u{627e}\u{5230}\u{ff1a}{find_to:?}"
     );
     assert!(
-        zhao_dao[0].ends_with("a.b/plugin.toml"),
+        find_to[0].ends_with("a.b/plugin.toml"),
         "\u{5b9e}\u{9645}\u{ff1a}{:?}",
-        zhao_dao[0]
+        find_to[0]
     );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
-fn update_manifest_bi_xu_shi_https_huo_ben_ji_hui_huan() {
+fn update_manifest_must_required_is_https_active_current_record_return_replace() {
     let dir = std::env::temp_dir().join("nota-manifest-update-url");
     let _ = std::fs::remove_dir_all(&dir);
     write_manifest(

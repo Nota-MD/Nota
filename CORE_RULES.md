@@ -5,6 +5,7 @@ These rules are mandatory for every source change.
 1. Production identifiers must be ASCII English.
    This includes variables, functions, types, traits, modules, constants,
    parameters, fields, properties, command names, IPC keys, and API names.
+   Pinyin transliterations are not English identifiers.
 2. Production source must not contain hard-coded Chinese.
    User-facing Chinese belongs in `src/i18n/zh-*.ts`, plugin `lang/zh-*.toml`,
    or bundled notice/document files.
@@ -36,6 +37,8 @@ These rules are mandatory for every source change.
 ## Review checklist
 
 - No Han characters in production identifiers.
+- No pinyin transliterations in production identifiers; run
+  `npm run audit:pinyin`.
 - No Han characters in comments.
 - No hard-coded Chinese outside localization resources or approved test data.
 - Compile, type check, and relevant tests pass after renames.

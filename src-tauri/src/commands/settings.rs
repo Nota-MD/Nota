@@ -26,7 +26,7 @@ pub fn nota_settings_problem(state: State<'_, AppState>) -> Option<String> {
 }
 
 #[tauri::command]
-pub fn nota_app_lang(state: State<'_, AppState>) -> AppLang {
+pub fn nota_app_language(state: State<'_, AppState>) -> AppLang {
     let setting = state
         .settings
         .lock()
@@ -34,7 +34,7 @@ pub fn nota_app_lang(state: State<'_, AppState>) -> AppLang {
         .unwrap_or_else(|_| crate::lang::AUTO.to_owned());
     AppLang {
         setting,
-        effective: state.app_lang.clone(),
+        effective: state.app_language.clone(),
 
         available: crate::lang::SUPPORTED_LANGUAGES
             .iter()

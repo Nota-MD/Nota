@@ -5,7 +5,7 @@ use crate::settings::image::InsertImageAction;
 
 use super::RECOGNIZED_EXTENSIONS;
 
-const NAME_SHANG_XIAN: usize = 80;
+const NAME_UPPER_LIMIT: usize = 80;
 
 pub fn target_directory(
     action: InsertImageAction,
@@ -13,140 +13,141 @@ pub fn target_directory(
     doc_stem: Option<&str>,
     custom_dir: &str,
 ) -> Result<Option<PathBuf>> {
-    let yao_document_pang_bian = |zuo_shen_me: &str| -> Result<PathBuf> {
-        let d = doc_dir.ok_or_else(|| {
+    let need_document_side_edit = |left_deep: &str| -> Result<PathBuf> {
+        let directory = doc_dir.ok_or_else(|| {
             NotaError::other(format!(
-                "\"{zuo_shen_me}\" needs the document directory; save the document with Ctrl+S before inserting the image"
+                "\"{left_deep}\" needs the document directory; save the document with Ctrl+S before inserting the image"
             ))
         })?;
-        Ok(d.to_path_buf())
+        Ok(directory.to_path_buf())
     };
     match action {
         InsertImageAction::None => Ok(None),
-        InsertImageAction::CopyToCurrentDir => Ok(Some(yao_document_pang_bian(
+        InsertImageAction::CopyToCurrentDir => Ok(Some(need_document_side_edit(
             "Copy to the current directory",
         )?)),
         InsertImageAction::CopyToAssets => Ok(Some(
-            yao_document_pang_bian("Copy to ./assets")?.join("assets"),
+            need_document_side_edit("Copy to ./assets")?.join("assets"),
         )),
         InsertImageAction::CopyToDocAssets => {
-            let directory_2 = yao_document_pang_bian("Copy to ./$(filename).assets")?;
-            let ming = doc_stem.filter(|s| !s.is_empty()).ok_or_else(|| {
+            let directory_2 = need_document_side_edit("Copy to ./$(filename).assets")?;
+            let name = doc_stem.filter(|stem| !stem.is_empty()).ok_or_else(|| {
                 NotaError::other(
                     "The document has no file name, so `$(filename).assets` cannot be resolved",
                 )
             })?;
-            Ok(Some(directory_2.join(format!("{ming}.assets"))))
+            Ok(Some(directory_2.join(format!("{name}.assets"))))
         }
         InsertImageAction::CopyToCustom => {
-            let yao = custom_dir.trim();
-            if yao.is_empty() {
+            let need = custom_dir.trim();
+            if need.is_empty() {
                 return Err(NotaError::other(
                     "No custom image path is configured; set one in image settings or choose another insert action",
                 ));
             }
-            let p = PathBuf::from(yao);
+            let p = PathBuf::from(need);
             if p.is_absolute() {
                 Ok(Some(p))
             } else {
                 Ok(Some(
-                    yao_document_pang_bian("Copy to a custom path")?.join(p),
+                    need_document_side_edit("Copy to a custom path")?.join(p),
                 ))
             }
         }
     }
 }
 
-fn receive_shi_name(xiang_yao: &str) -> String {
-    let mo_duan = xiang_yao
+fn sanitize_image_name(wanted_content: &str) -> String {
+    let suffix_segment = wanted_content
         .rsplit(['/', '\\'])
         .next()
-        .unwrap_or(xiang_yao)
+        .unwrap_or(wanted_content)
         .trim()
         .trim_start_matches('.');
-    let qing_guo: String = mo_duan
+    let request_passed: String = suffix_segment
         .chars()
         .filter(|c| {
             !c.is_control() && !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')
         })
-        .take(NAME_SHANG_XIAN)
+        .take(NAME_UPPER_LIMIT)
         .collect();
-    let qing_guo = qing_guo.trim().to_string();
-    if qing_guo.is_empty() {
+    let cleaned = request_passed.trim().to_string();
+    if cleaned.is_empty() {
         "image.png".to_string()
     } else {
-        qing_guo
+        cleaned
     }
 }
 
-fn qu_extension_2(name_2: &str) -> Option<String> {
-    let duan = name_2.rsplit_once('.')?;
-    let wei_2 = duan.1.to_ascii_lowercase();
-    if RECOGNIZED_EXTENSIONS.contains(&wei_2.as_str()) {
-        Some(wei_2)
+fn recognized_extension(name: &str) -> Option<String> {
+    let (_, extension) = name.rsplit_once('.')?;
+    let extension = extension.to_ascii_lowercase();
+    if RECOGNIZED_EXTENSIONS.contains(&extension.as_str()) {
+        Some(extension)
     } else {
         None
     }
 }
 
-pub(super) fn content_duan_ming(zi_jie: &[u8]) -> String {
+pub(super) fn content_segment_name(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    let mut h = Sha256::new();
-    h.update(zi_jie);
-    let d = h.finalize();
-    d.iter().take(4).map(|b| format!("{b:02x}")).collect()
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hasher
+        .finalize()
+        .iter()
+        .take(4)
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
-fn qu_extension(name_2: &str) -> &str {
-    match name_2.rsplit_once('.') {
-        Some((qian, _)) => qian,
-        None => name_2,
+fn strip_extension(name: &str) -> &str {
+    match name.rsplit_once('.') {
+        Some((stem, _)) => stem,
+        None => name,
     }
 }
 
-pub fn ding_ming(
+pub fn define_name(
     directory_2: &Path,
-    xiang_yao_de_name: &str,
+    wanted_name: &str,
     content_2: Option<&[u8]>,
 ) -> (PathBuf, bool) {
-    let name_2 = receive_shi_name(xiang_yao_de_name);
-    let zhu_gan = qu_extension(&name_2).to_string();
-    let extension_2 = qu_extension_2(&name_2)
+    let name = sanitize_image_name(wanted_name);
+    let stem = strip_extension(&name).to_string();
+    let extension = recognized_extension(&name)
         .map(|e| format!(".{e}"))
         .unwrap_or_default();
     for i in 0..1000u32 {
         let candidates_2 = if i == 0 {
-            directory_2.join(&name_2)
+            directory_2.join(&name)
         } else {
-            directory_2.join(format!("{zhu_gan}-{i}{extension_2}"))
+            directory_2.join(format!("{stem}-{i}{extension}"))
         };
         if !candidates_2.exists() {
             return (candidates_2, true);
         }
         if let Some(content_2) = content_2 {
-            if std::fs::read(&candidates_2).is_ok_and(|jiu| jiu == content_2) {
+            if std::fs::read(&candidates_2).is_ok_and(|existing| existing == content_2) {
                 return (candidates_2, false);
             }
         }
     }
-    (
-        directory_2.join(format!("{zhu_gan}-999{extension_2}")),
-        true,
-    )
+    (directory_2.join(format!("{stem}-999{extension}")), true)
 }
 
-pub(super) fn cong_address_cai_name(address_2: &str) -> String {
-    let mo_duan = address_2
+pub(super) fn extract_name_from_address(address: &str) -> String {
+    let tail = address
         .split(['?', '#'])
         .next()
-        .unwrap_or(address_2)
+        .unwrap_or(address)
         .rsplit('/')
         .next()
         .unwrap_or("");
-    let name_2 = receive_shi_name(mo_duan);
-    if qu_extension_2(&name_2).is_some() {
-        name_2
+    let name = sanitize_image_name(tail);
+    if recognized_extension(&name).is_some() {
+        name
     } else {
-        format!("image-{}.png", content_duan_ming(address_2.as_bytes()))
+        format!("image-{}.png", content_segment_name(address.as_bytes()))
     }
 }

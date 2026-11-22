@@ -6,7 +6,7 @@ use crate::error::{NotaError, Result};
 use crate::pdf_print::PdfLayout;
 use crate::proc::{run_capture, split_command, Ran, RunOpts};
 
-static TEMP_XU_HAO: AtomicU64 = AtomicU64::new(0);
+static TEMP_REQUIRED_NUMBER: AtomicU64 = AtomicU64::new(0);
 
 struct TempDirectory(PathBuf);
 
@@ -17,7 +17,7 @@ impl Drop for TempDirectory {
 }
 
 fn create_temp_directory() -> Result<TempDirectory> {
-    let unique = TEMP_XU_HAO.fetch_add(1, Ordering::Relaxed);
+    let unique = TEMP_REQUIRED_NUMBER.fetch_add(1, Ordering::Relaxed);
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
@@ -32,35 +32,35 @@ fn create_temp_directory() -> Result<TempDirectory> {
     Ok(TempDirectory(root))
 }
 
-fn ye_mian_yang_shi(layout_2: PdfLayout) -> String {
-    let (kuan, gao) = if layout_2.heng_xiang {
-        (layout_2.gao_hao_mi, layout_2.kuan_hao_mi)
+fn page_surface_sample_is(layout_2: PdfLayout) -> String {
+    let (width, height) = if layout_2.horizontal_item {
+        (layout_2.height_number_mi, layout_2.width_number_mi)
     } else {
-        (layout_2.kuan_hao_mi, layout_2.gao_hao_mi)
+        (layout_2.width_number_mi, layout_2.height_number_mi)
     };
-    let bian_ju = layout_2.bian_ju_hao_mi;
+    let edit_sentence = layout_2.edit_sentence_number_mi;
     format!(
         "<style data-nota-print-page>\
-         @page {{ size: {kuan}mm {gao}mm; margin: {bian_ju}mm; }}\
+         @page {{ size: {width}mm {height}mm; margin: {edit_sentence}mm; }}\
          html {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}\
          </style>"
     )
 }
 
-fn zhu_ru_ye_mian_yang_shi(html: &str, layout_2: PdfLayout) -> String {
-    let yang_shi = ye_mian_yang_shi(layout_2);
+fn main_into_page_surface_sample_is(html: &str, layout_2: PdfLayout) -> String {
+    let sample_is = page_surface_sample_is(layout_2);
     if let Some(index) = html.to_ascii_lowercase().rfind("</head>") {
-        let mut out = String::with_capacity(html.len() + yang_shi.len());
+        let mut out = String::with_capacity(html.len() + sample_is.len());
         out.push_str(&html[..index]);
-        out.push_str(&yang_shi);
+        out.push_str(&sample_is);
         out.push_str(&html[index..]);
         out
     } else {
-        format!("{yang_shi}{html}")
+        format!("{sample_is}{html}")
     }
 }
 
-fn zhu_ru_ji_zhun(html: String, base_dir: Option<&Path>) -> String {
+fn main_into_record_ready(html: String, base_dir: Option<&Path>) -> String {
     let Some(dir) = base_dir else {
         return html;
     };
@@ -79,7 +79,7 @@ fn zhu_ru_ji_zhun(html: String, base_dir: Option<&Path>) -> String {
     }
 }
 
-fn liu_lan_qi_candidates() -> Vec<(String, Vec<String>)> {
+fn stream_panel_start_candidates() -> Vec<(String, Vec<String>)> {
     if let Ok(custom) = std::env::var("NOTA_BROWSER_CMD") {
         if let Some((program, prefix)) = split_command(&custom) {
             return vec![(program, prefix)];
@@ -159,7 +159,7 @@ fn run_checked(
     }
 }
 
-fn wai_bu_render_qi(
+fn wai_not_render_start(
     html: &str,
     base_dir: Option<&Path>,
     target: &Path,
@@ -171,8 +171,9 @@ fn wai_bu_render_qi(
     let temp_root_2 = create_temp_directory()?;
     let directory_2 = &temp_root_2.0;
     let temp_2 = directory_2.join("document.html");
-    let ye_mian = zhu_ru_ji_zhun(zhu_ru_ye_mian_yang_shi(html, layout_2), base_dir);
-    std::fs::write(&temp_2, ye_mian)
+    let page_surface =
+        main_into_record_ready(main_into_page_surface_sample_is(html, layout_2), base_dir);
+    std::fs::write(&temp_2, page_surface)
         .map_err(|e| NotaError::other(format!("Could not write print HTML: {e}")))?;
     let file_address = tauri::Url::from_file_path(&temp_2)
         .map_err(|_| NotaError::other("Could not convert the print HTML path to a file URL"))?;
@@ -180,9 +181,9 @@ fn wai_bu_render_qi(
     let file_text = file_address.as_str().to_string();
 
     let mut error_2 = Vec::new();
-    for (liu_lan_qi, prefix) in liu_lan_qi_candidates() {
+    for (stream_panel_start, prefix) in stream_panel_start_candidates() {
         let profile: PathBuf =
-            directory_2.join(format!("chromium-{}", liu_lan_qi.replace('.', "-")));
+            directory_2.join(format!("chromium-{}", stream_panel_start.replace('.', "-")));
         let mut args_2 = prefix;
         args_2.extend([
             "--headless=new".to_string(),
@@ -196,11 +197,11 @@ fn wai_bu_render_qi(
             "--print-to-pdf-no-header".to_string(),
             file_text.clone(),
         ]);
-        match run_checked(&liu_lan_qi, &args_2, Duration::from_secs(60)) {
+        match run_checked(&stream_panel_start, &args_2, Duration::from_secs(60)) {
             Ok(()) if target.is_file() && std::fs::metadata(target).is_ok_and(|m| m.len() > 0) => {
-                return Ok(liu_lan_qi);
+                return Ok(stream_panel_start);
             }
-            Ok(()) => error_2.push(format!("{liu_lan_qi} did not produce a PDF")),
+            Ok(()) => error_2.push(format!("{stream_panel_start} did not produce a PDF")),
             Err(e) => error_2.push(e),
         }
     }
@@ -241,7 +242,7 @@ pub fn render_2(
     target: &Path,
     layout_2: PdfLayout,
 ) -> Result<String> {
-    match wai_bu_render_qi(html, base_dir, target, layout_2) {
+    match wai_not_render_start(html, base_dir, target, layout_2) {
         Ok(engine) => return Ok(engine),
         Err(external) => {
             #[cfg(target_os = "linux")]
@@ -271,20 +272,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ye_mian_yang_shi_write_jin_head_qie_heng_shu_chi_cun_hui_jiao_huan() {
+    fn page_surface_sample_is_write_enter_head_cut_horizontal_data_hold_store_return_call_replace()
+    {
         let html = "<html><head><title>x</title></head><body>x</body></html>";
-        let shu_chu = zhu_ru_ye_mian_yang_shi(
+        let data_out = main_into_page_surface_sample_is(
             html,
             PdfLayout {
-                kuan_hao_mi: 210.0,
-                gao_hao_mi: 297.0,
-                heng_xiang: true,
-                bian_ju_hao_mi: 12.0,
+                width_number_mi: 210.0,
+                height_number_mi: 297.0,
+                horizontal_item: true,
+                edit_sentence_number_mi: 12.0,
             },
         );
-        assert!(shu_chu.contains("size: 297mm 210mm"));
-        assert!(shu_chu.contains("margin: 12mm"));
-        assert!(shu_chu.find(data_marker()).unwrap() < shu_chu.find("</head>").unwrap());
+        assert!(data_out.contains("size: 297mm 210mm"));
+        assert!(data_out.contains("margin: 12mm"));
+        assert!(data_out.find(data_marker()).unwrap() < data_out.find("</head>").unwrap());
     }
 
     fn data_marker() -> &'static str {
@@ -292,13 +294,13 @@ mod tests {
     }
 
     #[test]
-    fn mei_you_head_shi_yang_shi_fang_zai_zui_qian_mian() {
-        let shu_chu = zhu_ru_ye_mian_yang_shi("<p>x</p>", PdfLayout::default());
-        assert!(shu_chu.starts_with("<style data-nota-print-page>"));
+    fn each_has_head_is_sample_is_method_at_most_before_surface() {
+        let data_out = main_into_page_surface_sample_is("<p>x</p>", PdfLayout::default());
+        assert!(data_out.starts_with("<style data-nota-print-page>"));
     }
 
     #[test]
-    fn render_jie_shu_hui_shan_diao_zheng_ge_temp_directory() {
+    fn render_boundary_data_return_delete_drop_validate_temp_directory() {
         let directory_2 = create_temp_directory().unwrap();
         let path_3 = directory_2.0.clone();
         std::fs::write(path_3.join("document.html"), "x").unwrap();
@@ -310,7 +312,7 @@ mod tests {
     #[cfg(target_os = "linux")]
     #[test]
     fn linux_browser_candidates_include_absolute_install_paths() {
-        let candidates = liu_lan_qi_candidates();
+        let candidates = stream_panel_start_candidates();
         for expected in ["/opt/google/chrome/chrome", "/opt/microsoft/msedge/msedge"] {
             assert!(
                 candidates.iter().any(|(program, _)| program == expected),

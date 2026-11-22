@@ -288,7 +288,7 @@ pub async fn nota_plugin_panel_content(
             let host = state.plugins.lock().unwrap();
             host.panel_content(&plugin, &id)?
         };
-        crate::lua::api::devserver::tian_frame(&app, &plugin, &mut content_2);
+        crate::lua::api::devserver::field_frame(&app, &plugin, &mut content_2);
         Ok(content_2)
     })
     .await

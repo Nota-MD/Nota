@@ -8,7 +8,7 @@ use crate::error::{NotaError, Result};
 
 const MAIN_WINDOW: &str = "main";
 
-const DENG_HUI_HUA: Duration = Duration::from_millis(800);
+const WAIT_RETURN_RENDER: Duration = Duration::from_millis(800);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SpellState {
@@ -61,7 +61,7 @@ async fn ask_main_thread(app: tauri::AppHandle, changes: SpellChange) -> Result<
             NotaError::other(format!("Could not access the window webview: {error}"))
         })?;
 
-    match receive_3.recv_timeout(DENG_HUI_HUA) {
+    match receive_3.recv_timeout(WAIT_RETURN_RENDER) {
         Ok(Some(v)) => Ok(v),
 
         Ok(None) => Err(NotaError::other(
@@ -77,10 +77,10 @@ async fn ask_main_thread(app: tauri::AppHandle, changes: SpellChange) -> Result<
 fn read_once(w: &tauri::webview::PlatformWebview, changes: SpellChange) -> Option<SpellState> {
     use webkit2gtk::{WebContextExt as _, WebViewExt as _};
 
-    let shang = w.inner().context()?;
+    let upper = w.inner().context()?;
     match changes {
         SpellChange::ReadOnly => {}
-        SpellChange::Enabled(kai) => shang.set_spell_checking_enabled(kai),
+        SpellChange::Enabled(start) => upper.set_spell_checking_enabled(start),
         SpellChange::HardScroll => {
             use webkit2gtk::SettingsExt as _;
             if let Some(settings_2) = w.inner().settings() {
@@ -89,14 +89,14 @@ fn read_once(w: &tauri::webview::PlatformWebview, changes: SpellChange) -> Optio
         }
         SpellChange::Languages(language_2) => {
             let borrow: Vec<&str> = language_2.iter().map(String::as_str).collect();
-            shang.set_spell_checking_languages(&borrow);
+            upper.set_spell_checking_languages(&borrow);
         }
     }
 
     Some(SpellState {
-        on: shang.is_spell_checking_enabled(),
+        on: upper.is_spell_checking_enabled(),
 
-        languages: shang
+        languages: upper
             .spell_checking_languages()
             .iter()
             .map(|l| l.to_string())
@@ -108,8 +108,8 @@ fn read_once(w: &tauri::webview::PlatformWebview, changes: SpellChange) -> Optio
 fn read_once(_w: &tauri::webview::PlatformWebview, changes: SpellChange) -> Option<SpellState> {
     match changes {
         SpellChange::ReadOnly => {}
-        SpellChange::Enabled(kai) => {
-            let _ = kai;
+        SpellChange::Enabled(start) => {
+            let _ = start;
         }
         SpellChange::Languages(language_2) => {
             let _ = language_2;

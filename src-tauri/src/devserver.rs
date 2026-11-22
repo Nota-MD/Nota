@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn tiao_chu_lai_de_duan_kou_liang_tao_zhan_dou_neng_bang() {
+    fn item_out_incoming_segment_port_two_escape_expand_all_can_help() {
         let mut last = String::new();
         for _ in 0..10 {
             let port = pick_port().expect("\u{5e94}\u{8be5}\u{6311}\u{5f97}\u{5230}");
@@ -445,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn ru_kou_write_zai_xiang_mu_root_li() {
+    fn into_port_write_at_item_target_root_inner() {
         let dir = temp_dir("entry");
         let path = write_entry(
             &spec(Some(".nota-slidev-{doc}.md")),
@@ -466,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn xiang_mu_root_write_bu_jin_qu_shi_tui_hui_shu_ju_directory() {
+    fn item_target_root_write_not_enter_get_is_derive_return_data_sentence_directory() {
         let missing = std::env::temp_dir()
             .join("nota-devserver-\u{4e0d}\u{5b58}\u{5728}-\u{7684}\u{76ee}\u{5f55}");
         let path = write_entry(
@@ -491,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    fn mei_declaration_ru_kou_file_shi_bu_write_file() {
+    fn each_declaration_into_port_file_is_not_write_file() {
         let dir = temp_dir("no-entry");
         let out = write_entry(
             &spec(None),
@@ -511,20 +511,20 @@ mod tests {
     }
 
     #[test]
-    fn ru_kou_name_gen_zhe_document_zou_bu_hui_hu_xiang_fu_gai() {
+    fn into_port_name_root_document_walk_not_return_call_item_service_change() {
         let s = spec(Some(".nota-preview-{doc}.md"));
         assert_ne!(s.entry_name(1), s.entry_name(2));
         assert!(s.entry_name(1).unwrap().starts_with('.'));
     }
 
     #[test]
-    fn qi_dong_ming_ling_de_huan_jing_bian_liang_xuan_niu_you_xian() {
+    fn start_dynamic_name_zero_replace_static_edit_two_select_button_has_thread() {
         let s = spec(None);
         assert_eq!(s.command(), "npx @slidev/cli");
     }
 
     #[test]
-    fn ri_zhi_huan_zhi_liu_zui_hou_ji_xing() {
+    fn date_only_replace_only_stream_most_after_record_line() {
         let log: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         for i in 0..(LOG_TAIL + 10) {
             push_log(&log, format!("\u{7b2c} {i} \u{884c}"));
@@ -539,7 +539,7 @@ mod tests {
     }
 
     #[test]
-    fn mei_zai_pao_de_shi_hou_wen_shen_me_dou_shi_kong_de() {
+    fn each_at_run_is_after_text_deep_all_is_empty() {
         let state = DevServerState::new();
         assert!(status(&state, "nota.\u{6d4b}\u{8bd5}").is_none());
         assert_eq!(log_tail(&state, "nota.\u{6d4b}\u{8bd5}"), "");
@@ -548,10 +548,10 @@ mod tests {
     }
 
     #[test]
-    fn document_bian_le_zhi_shua_ding_zhe_ta_de_na_yi_chang() {
+    fn document_edit_only_refresh_define_it_that_one_long() {
         let dir = temp_dir("refresh");
-        let ru_kou = dir.join("\u{5165}\u{53e3}.md");
-        std::fs::write(&ru_kou, "\u{65e7}").unwrap();
+        let into_port = dir.join("\u{5165}\u{53e3}.md");
+        std::fs::write(&into_port, "\u{65e7}").unwrap();
 
         let state = DevServerState::new();
         let mut cmd = Command::new("sleep");
@@ -565,7 +565,7 @@ mod tests {
             plugin: "nota.\u{6d4b}\u{8bd5}".to_owned(),
             port: 1,
             url: "http://localhost:1/".to_owned(),
-            entry: Some(ru_kou.display().to_string()),
+            entry: Some(into_port.display().to_string()),
             alive: true,
         };
         state.0.lock().unwrap().insert(
@@ -579,17 +579,17 @@ mod tests {
         );
 
         refresh(&state, DocId(8), "\u{522b}\u{4eba}\u{7684}\u{6b63}\u{6587}");
-        assert_eq!(std::fs::read_to_string(&ru_kou).unwrap(), "\u{65e7}");
+        assert_eq!(std::fs::read_to_string(&into_port).unwrap(), "\u{65e7}");
 
         refresh(&state, DocId(7), "\u{65b0}\u{6b63}\u{6587}");
         assert_eq!(
-            std::fs::read_to_string(&ru_kou).unwrap(),
+            std::fs::read_to_string(&into_port).unwrap(),
             "\u{65b0}\u{6b63}\u{6587}"
         );
 
         state.stop_all();
         assert!(
-            !ru_kou.exists(),
+            !into_port.exists(),
             "\u{6536}\u{644a}\u{8be5}\u{628a}\u{5165}\u{53e3}\u{6587}\u{4ef6}\u{5220}\u{6389}"
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -597,7 +597,7 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn receive_tan_zhi_hou_jin_cheng_zhen_mei_le() {
+    fn receive_probe_only_after_enter_success_real_each() {
         let mut cmd = Command::new("sleep");
         cmd.arg("300").stdout(Stdio::null()).stderr(Stdio::null());
         {

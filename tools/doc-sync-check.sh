@@ -24,40 +24,32 @@
 # 退出码：0 = 全过；1 = 有 FAIL；0 但打 WARN = 过但有可疑项。
 
 set -uo pipefail
-
 cd "$(dirname "$0")/.." || exit 1
 ROOT=$PWD
-
 # CI 模式：② 不用 mtime，而是拿 `DOC_SYNC_BASE...HEAD` 的 git diff 判
 # “源文件改了、映射文档没改”。干净 checkout 上没有可靠的 mtime。
 CI_MODE=0
 if [ "${1:-}" = "--ci" ]; then
   CI_MODE=1
 fi
-
 # ── 输出小工具 ───────────────────────────────────────────────────────────
 if [ -t 1 ]; then
   R=$'\e[31m'; Y=$'\e[33m'; G=$'\e[32m'; B=$'\e[1m'; N=$'\e[0m'
 else
   R=''; Y=''; G=''; B=''; N=''
 fi
-
 FAILS=0
 WARNS=0
-
 fail() { printf '%sFAIL%s %s\n' "$R" "$N" "$1"; FAILS=$((FAILS + 1)); }
 warn() { printf '%sWARN%s %s\n' "$Y" "$N" "$1"; WARNS=$((WARNS + 1)); }
 ok()   { printf '%s  ok%s %s\n' "$G" "$N" "$1"; }
 head_() { printf '\n%s── %s%s\n' "$B" "$1" "$N"; }
-
 # 读文件的 mtime（秒）。取不到就给 0——宁可漏报，不要因为一个 stat 失败
 # 把整轮检查变成噪音。
 mtime_of() { stat -c %Y "$1" 2>/dev/null || echo 0; }
-
 # ── 代码 → 文档映射表 ────────────────────────────────────────────────────
 # 格式：源路径（相对仓库根，不带引号）后跟一个空格，再跟逗号分隔的文档编号。
 # 这张表是 docs/09-doc-sync-policy.md §2 的机读副本，两边必须一致。
-# 加源文件就加一行，否则 ⑤ 会报「文件没登记」。
 PAIRS=(
   # 后端
   "src-tauri/src/main.rs                          06"
@@ -371,6 +363,8 @@ PAIRS=(
   "src/ui/useDialogs.ts                           04,02"
   "src/ui/EmojiDialog.tsx                         04,02"
   "src/ui/AppDialogs.tsx                          04,02" "src/ui/FirstRunGuide.tsx                       03,04,07A"
+  "src/ui/CommandPalette.tsx                     04,05"
+  "src/ui/command-palette.ts                     04,05"
   "src/ui/Sidebar.tsx                             04"
   "src/ui/DeferredUi.tsx                         02,04,10"
   "src/ui/useSettingsWindow.ts                   02,04,10"
@@ -419,6 +413,9 @@ PAIRS=(
   "src/ui/useFocusDim.ts 02,04"
   "src/ui/useZoom.ts 02,04"
   "src/editor/export.ts 05,10"
+  "src/editor/review.ts                          05,04"
+  "src/editor/review-prose.ts                    05,04"
+  "src/editor/review-source.ts                   05,04"
   "src/ui/nativeMenu.ts                           04"
   "src/ui/accel.ts                                04,05"
   "src/ui/commands.ts                             04,05"
@@ -582,6 +579,7 @@ PAIRS=(
   "src/styles/plugin-list.css                     04"
   # ⚠️ 2026-09-27 从 `app.css` 拆出来的浮层那一族（四个对话框 ＋ Emoji 补全面板）。
   "src/styles/overlay.css                         04"
+  "src/styles/command-palette.css                04"
   "src/styles/github-alert.css                    04"
   "src/styles/gate.css                            04"
   "src/styles/diff.css                            04,05"
@@ -680,6 +678,8 @@ PAIRS=(
   "tests/focus-summary.test.ts                   06,07"
   "tests/heatmap.test.ts                         02,06"
   "tests/keymap.test.ts                          02,06"
+  "tests/command-palette.test.ts                 02,06"
+  "tests/review-inline.test.ts                   02,06"
   "tests/table-input.test.ts                     02,06"
   "tests/toc.test.ts                             02,06"
   "tests/lang-guess.test.ts                      02,06"

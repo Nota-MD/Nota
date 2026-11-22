@@ -10,11 +10,11 @@ mod target;
 mod tests;
 
 pub use address::{
-    is_network_address, jia_dian_dian_xie_gang, resolve_local_file, rule_shi_yong, xiang_dui_path,
-    zhuan_yi_address,
+    encode_markdown_address, is_network_address, prefix_relative_path, relative_path,
+    resolve_local_file, rule_applies,
 };
-pub use plan::{luo_di, place, suan_ji_hua};
-pub use target::{ding_ming, target_directory};
+pub use plan::{compute_record_render, land_base, place};
+pub use target::{define_name, target_directory};
 
 pub const RECOGNIZED_EXTENSIONS: [&str; 8] =
     ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "avif"];
@@ -25,10 +25,7 @@ pub enum ImageSource {
 
     NetworkAddress(String),
 
-    Clipboard {
-        zi_jie: Vec<u8>,
-        extension_2: String,
-    },
+    Clipboard { bytes: Vec<u8>, extension_2: String },
 }
 
 impl ImageSource {
@@ -36,11 +33,11 @@ impl ImageSource {
         matches!(self, ImageSource::NetworkAddress(_))
     }
 
-    pub fn bi_xu_luo_pan(&self) -> bool {
+    pub fn must_required_land_parse(&self) -> bool {
         matches!(self, ImageSource::Clipboard { .. })
     }
 
-    pub fn miao_shu(&self) -> String {
+    pub fn description_data(&self) -> String {
         match self {
             ImageSource::LocalFile(p) => p
                 .file_name()
@@ -84,18 +81,18 @@ pub enum PlacementPlan {
     },
 
     Copy {
-        cong: PathBuf,
-        dao: PathBuf,
+        from: PathBuf,
+        to: PathBuf,
     },
 
     Download {
         address_2: String,
-        dao: PathBuf,
+        to: PathBuf,
     },
 
     WriteToDisk {
-        zi_jie: Vec<u8>,
-        dao: PathBuf,
+        bytes: Vec<u8>,
+        to: PathBuf,
         name_2: String,
     },
 }

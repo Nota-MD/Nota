@@ -60,6 +60,7 @@ export interface CommandTableInput {
 
   newDocument: () => Promise<void>;
   openFile: () => Promise<void>;
+  openCommandPalette: () => void;
 
 
 
@@ -206,6 +207,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
     pluginHandler,
     newDocument: newDoc,
     openFile: openViaDialog,
+    openCommandPalette,
     openFolder: openFolder,
     recent,
     openRecent,
@@ -292,6 +294,7 @@ export function useCommandTable(input: CommandTableInput): Record<string, () => 
       "tab.openInNewWindow": () => menuFeatures.openActiveInNewWindow(),
       "tab.moveToWindow": () => menuFeatures.moveActiveToWindow(),
       "file.open": () => void openViaDialog(),
+      "file.commandPalette": openCommandPalette,
       "file.openFolder": () => void openFolder(),
       "file.quickOpen": () => menuFeatures.quickOpen(),
 

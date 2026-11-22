@@ -63,7 +63,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
             .create_function(move |lua, ()| {
                 let store = docs.lock().unwrap();
 
-                let (text_2, ban_ben, path_3) = match store.active() {
+                let (text_2, half_current, path_3) = match store.active() {
                     Some(d) => (d.text.clone(), d.revision, d.path_string()),
                     None => (String::new(), 0, None),
                 };
@@ -82,9 +82,9 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
                         text_2.split('\n').count()
                     },
                 )?;
-                t.set("revision", ban_ben)?;
+                t.set("revision", half_current)?;
                 t.set("path", path_3)?;
-                t.set("clock_ms", dan_diao_hao_miao())?;
+                t.set("clock_ms", single_drop_number_description())?;
                 Ok(t)
             })
             .map_err(mlua_to_nota)?;
@@ -97,7 +97,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
                 let Some(d) = store.active() else {
                     return Ok(mlua::Value::Nil);
                 };
-                let Some(snapshot_2) = d.xuan_qu.as_ref() else {
+                let Some(snapshot_2) = d.select_get.as_ref() else {
                     return Ok(mlua::Value::Nil);
                 };
                 let t = lua.create_table()?;
@@ -174,10 +174,10 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> Result<Table,
     Ok(t)
 }
 
-fn dan_diao_hao_miao() -> u64 {
-    static QI_DIAN: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+fn single_drop_number_description() -> u64 {
+    static START_POINT: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
 
-    QI_DIAN
+    START_POINT
         .get_or_init(std::time::Instant::now)
         .elapsed()
         .as_millis() as u64
@@ -242,7 +242,7 @@ mod tests {
     use super::word_count;
 
     #[test]
-    fn zhong_wen_an_zi_suan() {
+    fn middle_text_by_character_compute() {
         assert_eq!(word_count("\u{4f60}\u{597d}"), 2);
         assert_eq!(
             word_count("\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}\u{3002}"),
@@ -251,13 +251,13 @@ mod tests {
     }
 
     #[test]
-    fn ying_wen_an_ci_suan_er_bu_shi_an_zi_mu() {
+    fn should_text_by_word_compute_two_not_is_by_character_target() {
         assert_eq!(word_count("Hello, world!"), 2);
         assert_eq!(word_count("a b c"), 3);
     }
 
     #[test]
-    fn pie_hao_yu_lian_zi_fu_dou_bu_duan_ci() {
+    fn slash_number_and_link_character_service_all_not_segment_word() {
         assert_eq!(word_count("don't"), 1);
         assert_eq!(word_count("well-known"), 1);
 
@@ -266,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn kong_bai_yu_ascii_biao_dian_bu_ji_shu() {
+    fn empty_percent_and_ascii_table_point_not_record_data() {
         assert_eq!(word_count("  \n\t  "), 0);
         assert_eq!(word_count("..."), 0);
         assert_eq!(word_count(""), 0);
@@ -274,14 +274,14 @@ mod tests {
     }
 
     #[test]
-    fn zhong_ying_hun_pai_ge_an_zi_ji_de_rule() {
+    fn middle_should_hybrid_schedule_by_character_record_rule() {
         assert_eq!(word_count("abc\u{4e2d}\u{6587}"), 3);
 
         assert_eq!(word_count("abc\u{5199}def"), 3);
     }
 
     #[test]
-    fn huan_xing_yu_kong_ge_zai_zhong_wen_li_ye_bu_ji_shu() {
+    fn replace_line_and_empty_at_middle_text_inner_page_not_record_data() {
         assert_eq!(
             word_count("\u{7b2c}\u{4e00}\u{6bb5}\n\n\u{7b2c}\u{4e8c}\u{6bb5}"),
             6

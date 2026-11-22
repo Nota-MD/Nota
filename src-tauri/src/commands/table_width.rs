@@ -5,15 +5,15 @@ use crate::error::Result;
 
 #[tauri::command]
 pub fn nota_table_widths_get(path: String) -> Result<HashMap<String, Vec<u32>>> {
-    Ok(crate::table_width::qu_2(&PathBuf::from(path))
+    Ok(crate::table_width::get_2(&PathBuf::from(path))
         .into_iter()
-        .map(|yi| (yi.fingerprint_2, yi.width_2))
+        .map(|one| (one.fingerprint_2, one.width_2))
         .collect())
 }
 
 #[tauri::command]
 pub fn nota_table_widths_set(path: String, fingerprint: String, widths: Vec<u32>) -> Result<()> {
-    crate::table_width::ji(&PathBuf::from(path), &fingerprint, &widths)
+    crate::table_width::record(&PathBuf::from(path), &fingerprint, &widths)
         .map_err(crate::error::NotaError::other)
 }
 

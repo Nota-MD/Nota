@@ -142,25 +142,25 @@ pub(crate) fn parse_source(s: ImageSourceInput) -> Result<ImageSource> {
             Ok(ImageSource::NetworkAddress(url))
         }
         ImageSourceInput::Base64 { data, ext } => {
-            let zi_jie = base64::engine::general_purpose::STANDARD
+            let bytes = base64::engine::general_purpose::STANDARD
                 .decode(data.as_bytes())
                 .map_err(|error| {
                     NotaError::other(format!(
                         "Could not read image data from the clipboard: {error}"
                     ))
                 })?;
-            if zi_jie.is_empty() {
+            if bytes.is_empty() {
                 return Err(NotaError::other("The clipboard image is empty"));
             }
-            if zi_jie.len() > PASTE_LIMIT {
+            if bytes.len() > PASTE_LIMIT {
                 return Err(NotaError::other(format!(
                     "This image is {:.1} MB, above the {:.0} MB limit. Save it as a file and insert that file.",
-                    zi_jie.len() as f64 / 1048576.0,
+                    bytes.len() as f64 / 1048576.0,
                     PASTE_LIMIT as f64 / 1048576.0
                 )));
             }
             Ok(ImageSource::Clipboard {
-                zi_jie,
+                bytes,
                 extension_2: ext.unwrap_or_else(|| "png".to_string()),
             })
         }
@@ -169,7 +169,7 @@ pub(crate) fn parse_source(s: ImageSourceInput) -> Result<ImageSource> {
 
 const IMAGE_DISPLAY_LIMIT: u64 = 32 * 1024 * 1024;
 
-fn tu_pian_mime(path_3: &Path) -> &'static str {
+fn image_piece_mime(path_3: &Path) -> &'static str {
     match path_3
         .extension()
         .and_then(|s| s.to_str())
@@ -207,13 +207,13 @@ fn inside_image_root(path_3: &Path, roots_2: &[PathBuf]) -> bool {
 
 fn read_as_data_url(path_3: &str) -> Result<String> {
     let path_3 = PathBuf::from(path_3);
-    let zhen = path_3.canonicalize().map_err(|error| {
+    let real = path_3.canonicalize().map_err(|error| {
         NotaError::other(format!(
             "Could not open image {}: {error}",
             path_3.display()
         ))
     })?;
-    let metadata_2 = std::fs::metadata(&zhen)
+    let metadata_2 = std::fs::metadata(&real)
         .map_err(|error| NotaError::other(format!("Could not read image metadata: {error}")))?;
     if !metadata_2.is_file() {
         return Err(NotaError::other("The image path is not a file"));
@@ -224,18 +224,18 @@ fn read_as_data_url(path_3: &str) -> Result<String> {
             metadata_2.len() as f64 / 1048576.0
         )));
     }
-    if !inside_image_root(&zhen, &image_roots()) {
+    if !inside_image_root(&real, &image_roots()) {
         return Err(NotaError::other(
             "Image access is limited to the home, document, Desktop, and Downloads directories",
         ));
     }
-    let zi_jie = std::fs::read(&zhen)
+    let bytes = std::fs::read(&real)
         .map_err(|error| NotaError::other(format!("Could not read the image: {error}")))?;
     let engine_2 = base64::engine::general_purpose::STANDARD;
     Ok(format!(
         "data:{};base64,{}",
-        tu_pian_mime(&zhen),
-        engine_2.encode(zi_jie)
+        image_piece_mime(&real),
+        engine_2.encode(bytes)
     ))
 }
 
@@ -263,24 +263,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tu_pian_kuo_zhan_ming_gei_chu_zheng_que_de_mime() {
-        assert_eq!(tu_pian_mime(Path::new("a.PNG")), "image/png");
-        assert_eq!(tu_pian_mime(Path::new("a.jpeg")), "image/jpeg");
-        assert_eq!(tu_pian_mime(Path::new("a.svg")), "image/svg+xml");
+    fn image_piece_expand_expand_name_give_out_validate_missing_mime() {
+        assert_eq!(image_piece_mime(Path::new("a.PNG")), "image/png");
+        assert_eq!(image_piece_mime(Path::new("a.jpeg")), "image/jpeg");
+        assert_eq!(image_piece_mime(Path::new("a.svg")), "image/svg+xml");
         assert_eq!(
-            tu_pian_mime(Path::new("a.unknown")),
+            image_piece_mime(Path::new("a.unknown")),
             "application/octet-stream"
         );
     }
 
     #[test]
-    fn tu_pian_path_bi_xu_luo_zai_yun_xu_de_root_directory_nei() {
+    fn image_piece_path_must_required_land_at_run_required_root_directory_inner() {
         let root_2 = std::env::temp_dir().join(format!("nota-image-root-{}", std::process::id()));
         std::fs::create_dir_all(root_2.join("inside")).unwrap();
         std::fs::write(root_2.join("inside/a.png"), b"x").unwrap();
         let root_2 = root_2.canonicalize().unwrap();
-        let nei = root_2.join("inside/a.png");
-        assert!(inside_image_root(&nei, std::slice::from_ref(&root_2)));
+        let inner = root_2.join("inside/a.png");
+        assert!(inside_image_root(&inner, std::slice::from_ref(&root_2)));
         assert!(!inside_image_root(
             Path::new("/etc/passwd"),
             std::slice::from_ref(&root_2)
@@ -288,58 +288,55 @@ mod tests {
         let _ = std::fs::remove_dir_all(root_2);
     }
 
-    fn jie_2(s: ImageSourceInput) -> Result<ImageSource> {
+    fn boundary_2(s: ImageSourceInput) -> Result<ImageSource> {
         parse_source(s)
     }
 
     #[test]
-    fn address_yao_zhen_de_is_network_address() {
-        assert!(jie_2(ImageSourceInput::Url {
+    fn address_need_real_is_network_address() {
+        assert!(boundary_2(ImageSourceInput::Url {
             url: "https://a/b.png".into()
         })
         .is_ok());
-        assert!(jie_2(ImageSourceInput::Url {
+        assert!(boundary_2(ImageSourceInput::Url {
             url: "/home/u/x.png".into()
         })
         .is_err());
-        assert!(jie_2(ImageSourceInput::Url { url: "".into() }).is_err());
+        assert!(boundary_2(ImageSourceInput::Url { url: "".into() }).is_err());
     }
 
     #[test]
-    fn kong_path_bu_shi_path() {
-        assert!(jie_2(ImageSourceInput::Path { path: "".into() }).is_err());
-        assert!(jie_2(ImageSourceInput::Path {
+    fn empty_path_not_is_path() {
+        assert!(boundary_2(ImageSourceInput::Path { path: "".into() }).is_err());
+        assert!(boundary_2(ImageSourceInput::Path {
             path: "/home/u/x.png".into()
         })
         .is_ok());
     }
 
     #[test]
-    fn clipboard_de_zi_jie_yao_jie_de_kai_qie_bu_shi_kong_de() {
-        let ok_de = base64::engine::general_purpose::STANDARD.encode([1u8, 2, 3]);
-        let r = jie_2(ImageSourceInput::Base64 {
-            data: ok_de.clone(),
+    fn clipboard_character_boundary_need_boundary_start_cut_not_is_empty() {
+        let ok = base64::engine::general_purpose::STANDARD.encode([1u8, 2, 3]);
+        let r = boundary_2(ImageSourceInput::Base64 {
+            data: ok.clone(),
             ext: Some("png".into()),
         })
         .unwrap();
         match r {
-            ImageSource::Clipboard {
-                zi_jie,
-                extension_2,
-            } => {
-                assert_eq!(zi_jie, vec![1, 2, 3]);
+            ImageSource::Clipboard { bytes, extension_2 } => {
+                assert_eq!(bytes, vec![1, 2, 3]);
                 assert_eq!(extension_2, "png");
             }
             other => panic!("\u{5e94}\u{8be5}\u{662f}\u{526a}\u{8d34}\u{677f}\u{ff1a}{other:?}"),
         }
 
-        assert!(jie_2(ImageSourceInput::Base64 {
+        assert!(boundary_2(ImageSourceInput::Base64 {
             data: "\u{8fd9}\u{4e0d}\u{662f} base64\u{ff01}\u{ff01}".into(),
             ext: None,
         })
         .is_err());
 
-        assert!(jie_2(ImageSourceInput::Base64 {
+        assert!(boundary_2(ImageSourceInput::Base64 {
             data: "".into(),
             ext: None,
         })
@@ -347,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn action_name_yu_settings_li_write_chu_qu_de_na_yi_tao_yi_zhi() {
+    fn action_name_and_settings_inner_write_out_get_that_one_escape_one_only() {
         use crate::settings::image::Image;
         let table_2 = [
             ("none", crate::settings::image::InsertImageAction::None),

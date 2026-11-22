@@ -23,11 +23,15 @@
 import { lazy, Suspense } from "react";
 
 import type { TotalJoin } from "@/ui/focus-summary";
+import type { CommandPaletteWiring } from "@/ui/CommandPalette";
 import type { Dialogs } from "@/ui/useDialogs";
 import type { exportApi, PandocGate } from "@/ui/useExport";
 
 const AboutDialog = lazy(() =>
   import("@/ui/AboutDialog").then((m) => ({ default: m.AboutDialog })),
+);
+const CommandPalette = lazy(() =>
+  import("@/ui/CommandPalette").then((m) => ({ default: m.CommandPalette })),
 );
 const FirstRunGuide = lazy(() =>
   import("@/ui/FirstRunGuide").then((m) => ({ default: m.FirstRunGuide })),
@@ -68,6 +72,7 @@ export function AppDialogs({
   windowPresentation,
   firstRunSeen,
   onFirstRunDone,
+  commandPalette,
 }: {
   dialog: Dialogs;
 
@@ -90,6 +95,7 @@ export function AppDialogs({
   windowPresentation: "full" | "embedded" | "external";
   firstRunSeen: boolean;
   onFirstRunDone: () => void;
+  commandPalette: CommandPaletteWiring | null;
 }) {
   const { confirmReq, answerConfirm, promptReq, answerPrompt, windowPickReq, answerWindowPick } = dialog;
   const { imageReq, answerImage, linkReq, answerLink, emojiOpen, answerEmoji } = dialog;
@@ -97,6 +103,7 @@ export function AppDialogs({
 
   return (
     <Suspense fallback={null}>
+      {commandPalette && <CommandPalette {...commandPalette} />}
       {                                           }
       {pandocGate && (
         <PandocPanel probe={pandocGate.probe} format={pandocGate.format} {...pandocGateActions} />

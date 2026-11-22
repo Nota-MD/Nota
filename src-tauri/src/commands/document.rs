@@ -155,28 +155,28 @@ pub fn nota_doc_save(
 #[tauri::command]
 pub fn nota_doc_rename(state: State<'_, AppState>, id: DocId, name: String) -> Result<String> {
     let name_2 = clean_filename(&name)?;
-    let lao = old_path(&state, id)?;
-    let fu = lao.parent().ok_or_else(|| {
+    let old = old_path(&state, id)?;
+    let service = old.parent().ok_or_else(|| {
         NotaError::other(format!(
             "Cannot move \"{}\": no parent directory",
-            lao.display()
+            old.display()
         ))
     })?;
-    let target_2 = fu.join(name_2);
-    move_to(&state, id, &lao, target_2)
+    let target_2 = service.join(name_2);
+    move_to(&state, id, &old, target_2)
 }
 
 #[tauri::command]
 pub fn nota_doc_move(state: State<'_, AppState>, id: DocId, dir: String) -> Result<String> {
-    let lao = old_path(&state, id)?;
-    let ming = lao
+    let old = old_path(&state, id)?;
+    let name = old
         .file_name()
         .ok_or_else(|| {
-            NotaError::other(format!("Cannot move \"{}\": no file name", lao.display()))
+            NotaError::other(format!("Cannot move \"{}\": no file name", old.display()))
         })?
         .to_os_string();
-    let target_2 = PathBuf::from(dir).join(ming);
-    move_to(&state, id, &lao, target_2)
+    let target_2 = PathBuf::from(dir).join(name);
+    move_to(&state, id, &old, target_2)
 }
 
 fn old_path(state: &AppState, id: DocId) -> Result<PathBuf> {
@@ -208,25 +208,25 @@ fn clean_filename(name_2: &str) -> Result<String> {
 fn move_to(
     state: &AppState,
     id: DocId,
-    lao: &std::path::Path,
+    old: &std::path::Path,
     target_2: PathBuf,
 ) -> Result<String> {
-    let xin = {
+    let new = {
         let mut docs = state.documents.lock().unwrap();
         docs.move_to_2(id, target_2.clone())?
     };
 
     let (old_text, new_text) = (
-        lao.to_string_lossy().into_owned(),
-        xin.to_string_lossy().into_owned(),
+        old.to_string_lossy().into_owned(),
+        new.to_string_lossy().into_owned(),
     );
     if let Err(e) = crate::session::replace_recent(&old_text, &new_text) {
         crate::debug_log!("[nota] recent list not updated after rename: {e}");
     }
-    if let Err(e) = crate::table_width::replace_path(lao, &xin) {
+    if let Err(e) = crate::table_width::replace_path(old, &new) {
         crate::debug_log!("[nota] table widths not updated after rename: {e}");
     }
-    crate::paths::path_to_string(&xin)
+    crate::paths::path_to_string(&new)
 }
 
 #[tauri::command]

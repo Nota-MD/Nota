@@ -32,9 +32,9 @@ pub struct PluginInfo {
 
     pub langs: Vec<String>,
 
-    pub lang: Option<String>,
+    pub language: Option<String>,
 
-    pub lang_ok: bool,
+    pub language_ok: bool,
 
     pub settings: Vec<PluginSetting>,
 

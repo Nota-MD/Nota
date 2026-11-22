@@ -36,7 +36,12 @@ impl ProbeCache {
         Self(Mutex::new(HashMap::new()))
     }
 
-    fn qu_huo_zhan_wei(&self, plugin: &str, root: &Option<String>, need: &Option<String>) -> Peek {
+    fn get_active_expand_position(
+        &self,
+        plugin: &str,
+        root: &Option<String>,
+        need: &Option<String>,
+    ) -> Peek {
         let mut m = self.0.lock().unwrap();
         if let Some(slot) = m.get(plugin) {
             if slot.root == *root && slot.need == *need {
@@ -58,7 +63,7 @@ impl ProbeCache {
         Peek::Go
     }
 
-    fn receive_xia(&self, plugin: &str, root: &Option<String>, need: &Option<String>, p: Probe) {
+    fn receive_lower(&self, plugin: &str, root: &Option<String>, need: &Option<String>, p: Probe) {
         let mut m = self.0.lock().unwrap();
         if let Some(slot) = m.get_mut(plugin) {
             if slot.root == *root && slot.need == *need {
@@ -76,7 +81,7 @@ impl ProbeCache {
         );
     }
 
-    fn tan_huo_bu_tan(
+    fn probe_active_not_probe(
         &self,
         plugin: &str,
         spec: &DevServerSpec,
@@ -85,7 +90,7 @@ impl ProbeCache {
         app: &AppHandle,
     ) -> Option<Probe> {
         let root_2 = root.as_ref().map(|p| p.display().to_string());
-        match self.qu_huo_zhan_wei(plugin, &root_2, &need) {
+        match self.get_active_expand_position(plugin, &root_2, &need) {
             Peek::Ready(p) => return Some(p),
             Peek::Running => return None,
             Peek::Go => {}
@@ -94,12 +99,12 @@ impl ProbeCache {
         let plugin = plugin.to_owned();
         let spec = spec.clone();
         let app = app.clone();
-        let yao_de = need.clone();
+        let need = need.clone();
         std::thread::spawn(move || {
-            let p = devserver::probe(&spec, root.as_deref(), yao_de.as_deref());
+            let p = devserver::probe(&spec, root.as_deref(), need.as_deref());
 
             if let Some(cache) = app.try_state::<ProbeCache>() {
-                cache.receive_xia(&plugin, &root_2, &need, p);
+                cache.receive_lower(&plugin, &root_2, &need, p);
             }
 
             use tauri::Emitter;
@@ -118,7 +123,7 @@ impl Default for ProbeCache {
     }
 }
 
-fn tan_bao_table(lua: &Lua, p: &Probe) -> mlua::Result<Table> {
+fn probe_package_table(lua: &Lua, p: &Probe) -> mlua::Result<Table> {
     let t = lua.create_table()?;
     t.set("state", probe_state_str(p.state))?;
     t.set("command", p.command.clone())?;
@@ -131,7 +136,7 @@ fn tan_bao_table(lua: &Lua, p: &Probe) -> mlua::Result<Table> {
     Ok(t)
 }
 
-fn check_zhong_table(lua: &Lua, spec: &DevServerSpec, root: Option<&Path>) -> mlua::Result<Table> {
+fn check_middle_table(lua: &Lua, spec: &DevServerSpec, root: Option<&Path>) -> mlua::Result<Table> {
     let t = lua.create_table()?;
     t.set("state", "checking")?;
     t.set("command", spec.command())?;
@@ -160,7 +165,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
                 .and_then(|o| o.get::<Option<String>>("root").ok().flatten())
             {
                 Some(s) => Some(PathBuf::from(s)),
-                None => huo_dong_document(&ctx2).and_then(|d| d.0),
+                None => active_dynamic_document(&ctx2).and_then(|d| d.0),
             };
 
             let force = opts
@@ -179,17 +184,17 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
             if force {
                 let p = devserver::probe(&spec2, root.as_deref(), need.as_deref());
                 if let Some(c) = cache.as_deref() {
-                    c.receive_xia(&plugin2, &root_2, &need, p.clone());
+                    c.receive_lower(&plugin2, &root_2, &need, p.clone());
                 }
-                return tan_bao_table(lua, &p);
+                return probe_package_table(lua, &p);
             }
 
             match cache.as_deref().and_then(|c| {
-                c.tan_huo_bu_tan(&plugin2, &spec2, root.clone(), need.clone(), &ctx2.app)
+                c.probe_active_not_probe(&plugin2, &spec2, root.clone(), need.clone(), &ctx2.app)
             }) {
-                Some(p) => tan_bao_table(lua, &p),
+                Some(p) => probe_package_table(lua, &p),
 
-                None => check_zhong_table(lua, &spec2, root.as_deref()),
+                None => check_middle_table(lua, &spec2, root.as_deref()),
             }
         })
         .map_err(mlua_to_nota)?;
@@ -204,7 +209,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
                 .as_ref()
                 .and_then(|o| o.get::<Option<i64>>("doc").ok().flatten())
                 .map(|n| DocId(n as u64));
-            let (dir, text, id) = tiao_document(&ctx2, doc).ok_or_else(|| {
+            let (dir, text, id) = item_document(&ctx2, doc).ok_or_else(|| {
                 mlua::Error::RuntimeError(
                     "No active document and no `doc` argument were provided".to_owned(),
                 )
@@ -277,7 +282,7 @@ fn status_2(app: &AppHandle) -> tauri::State<'_, DevServerState> {
     app.state::<DevServerState>()
 }
 
-fn tiao_document(
+fn item_document(
     ctx: &HostContext,
     doc: Option<DocId>,
 ) -> Option<(Option<PathBuf>, String, DocId)> {
@@ -290,8 +295,8 @@ fn tiao_document(
     Some((dir, d.text.clone(), d.id))
 }
 
-fn huo_dong_document(ctx: &HostContext) -> Option<(Option<PathBuf>, String, DocId)> {
-    tiao_document(ctx, None)
+fn active_dynamic_document(ctx: &HostContext) -> Option<(Option<PathBuf>, String, DocId)> {
+    item_document(ctx, None)
 }
 
 fn info_table(lua: &Lua, info: &Info) -> mlua::Result<Table> {
@@ -311,29 +316,29 @@ fn probe_state_str(s: ProbeState) -> &'static str {
     }
 }
 
-pub(crate) fn tian_frame(app: &AppHandle, plugin_id: &str, v: &mut serde_json::Value) {
+pub(crate) fn field_frame(app: &AppHandle, plugin_id: &str, v: &mut serde_json::Value) {
     match v {
         serde_json::Value::Array(items) => {
             for item in items {
-                tian_frame(app, plugin_id, item);
+                field_frame(app, plugin_id, item);
             }
         }
         serde_json::Value::Object(map) => {
             if map.get("kind").and_then(|k| k.as_str()) == Some("frame") {
                 map.remove("url");
                 map.remove("alive");
-                let you_2 = devserver::status(&status_2(app), plugin_id).filter(|i| i.alive);
+                let has_2 = devserver::status(&status_2(app), plugin_id).filter(|i| i.alive);
                 map.insert(
                     "url".to_owned(),
-                    you_2
+                    has_2
                         .as_ref()
                         .map(|i| serde_json::Value::String(i.url.clone()))
                         .unwrap_or(serde_json::Value::Null),
                 );
-                map.insert("alive".to_owned(), serde_json::Value::Bool(you_2.is_some()));
+                map.insert("alive".to_owned(), serde_json::Value::Bool(has_2.is_some()));
             }
             for (_, child) in map.iter_mut() {
-                tian_frame(app, plugin_id, child);
+                field_frame(app, plugin_id, child);
             }
         }
         _ => {}
@@ -344,7 +349,7 @@ pub(crate) fn tian_frame(app: &AppHandle, plugin_id: &str, v: &mut serde_json::V
 mod tests {
     use super::*;
 
-    fn zao_manifest(name: &str) -> Manifest {
+    fn create_manifest(name: &str) -> Manifest {
         let dir = std::env::temp_dir().join(format!("nota-devapi-{name}"));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -362,14 +367,14 @@ mod tests {
     }
 
     #[test]
-    fn status_zi_mian_liang_shi_duan_heng_xian_na_tao() {
+    fn status_character_surface_two_is_segment_horizontal_thread_that_escape() {
         assert_eq!(probe_state_str(ProbeState::Ready), "ready");
         assert_eq!(probe_state_str(ProbeState::Missing), "missing");
         assert_eq!(probe_state_str(ProbeState::Unknown), "unknown");
     }
 
     #[test]
-    fn frame_kuai_li_plugin_zi_ji_write_de_address_hui_bei_mo_diao() {
+    fn frame_block_inner_plugin_character_record_write_address_return_passive_suffix_drop() {
         let mut v = serde_json::json!({
             "kind": "frame",
             "url": "https://example.com/\u{5077}\u{6765}\u{7684}",
@@ -388,13 +393,13 @@ mod tests {
     }
 
     #[test]
-    fn manifest_li_de_ru_kou_mo_ban_an_document_zhan_kai() {
-        let m = zao_manifest("tpl");
+    fn manifest_inner_into_port_suffix_half_by_document_expand_start() {
+        let m = create_manifest("tpl");
         let spec = m.devserver.as_ref().expect("[devserver] \u{8be5}\u{5728}");
         assert_eq!(spec.entry_name(7).unwrap(), ".nota-tpl-7.md");
     }
 
-    fn jia_jie_lun() -> Probe {
+    fn add_boundary_argument() -> Probe {
         Probe {
             state: ProbeState::Ready,
             command: "npx @slidev/cli".to_owned(),
@@ -407,81 +412,96 @@ mod tests {
     }
 
     #[test]
-    fn tan_de_guo_cheng_zhong_zai_wen_bu_hui_you_kai_yi_tiao() {
+    fn probe_passed_success_middle_at_text_not_return_has_start_one_item() {
         let c = ProbeCache::new();
         assert!(
-            matches!(c.qu_huo_zhan_wei("nota.a", &None, &None), Peek::Go),
+            matches!(
+                c.get_active_expand_position("nota.a", &None, &None),
+                Peek::Go
+            ),
             "\u{7b2c}\u{4e00}\u{6b21}\u{8be5}\u{53bb}\u{5f00}\u{63a2}\u{6d4b}"
         );
         assert!(
-            matches!(c.qu_huo_zhan_wei("nota.a", &None, &None), Peek::Running),
+            matches!(c.get_active_expand_position("nota.a", &None, &None), Peek::Running),
             "\u{8fd8}\u{5728}\u{63a2}\u{7684}\u{65f6}\u{5019}\u{518d}\u{95ee}\u{ff0c}\u{8be5}\u{8bf4}\u{300c}\u{5728}\u{63a2}\u{300d}\u{800c}\u{4e0d}\u{662f}\u{518d}\u{5f00}\u{4e00}\u{6761}"
         );
-        c.receive_xia("nota.a", &None, &None, jia_jie_lun());
+        c.receive_lower("nota.a", &None, &None, add_boundary_argument());
         assert!(
-            matches!(c.qu_huo_zhan_wei("nota.a", &None, &None), Peek::Ready(_)),
+            matches!(
+                c.get_active_expand_position("nota.a", &None, &None),
+                Peek::Ready(_)
+            ),
             "\u{7ed3}\u{8bba}\u{56de}\u{6765}\u{4e86}"
         );
     }
 
     #[test]
-    fn huan_le_xiang_mu_root_yao_zhong_tan() {
+    fn replace_item_target_root_need_middle_probe() {
         let c = ProbeCache::new();
-        c.receive_xia("nota.a", &None, &None, jia_jie_lun());
+        c.receive_lower("nota.a", &None, &None, add_boundary_argument());
         assert!(matches!(
-            c.qu_huo_zhan_wei("nota.a", &None, &None),
+            c.get_active_expand_position("nota.a", &None, &None),
             Peek::Ready(_)
         ));
-        let bie_de_root = Some("/tmp/\u{522b}\u{7684}\u{9879}\u{76ee}".to_owned());
+        let other_root = Some("/tmp/\u{522b}\u{7684}\u{9879}\u{76ee}".to_owned());
         assert!(
-            matches!(c.qu_huo_zhan_wei("nota.a", &bie_de_root, &None), Peek::Go),
+            matches!(
+                c.get_active_expand_position("nota.a", &other_root, &None),
+                Peek::Go
+            ),
             "\u{6839}\u{6362}\u{4e86}\u{8981}\u{91cd}\u{63a2}"
         );
     }
 
     #[test]
-    fn huan_le_yao_wen_de_dong_xi_ye_yao_zhong_tan() {
+    fn replace_need_text_dynamic_system_page_need_middle_probe() {
         let c = ProbeCache::new();
         let root_2 = Some("/tmp/\u{9879}\u{76ee}".to_owned());
-        let jia_4 = Some("node_modules/@slidev/theme-default".to_owned());
-        let yi_2 = Some("node_modules/@slidev/theme-seriph".to_owned());
+        let value_4 = Some("node_modules/@slidev/theme-default".to_owned());
+        let value_2 = Some("node_modules/@slidev/theme-seriph".to_owned());
         assert!(matches!(
-            c.qu_huo_zhan_wei("nota.a", &root_2, &jia_4),
+            c.get_active_expand_position("nota.a", &root_2, &value_4),
             Peek::Go
         ));
-        c.receive_xia("nota.a", &root_2, &jia_4, jia_jie_lun());
+        c.receive_lower("nota.a", &root_2, &value_4, add_boundary_argument());
         assert!(
-            matches!(c.qu_huo_zhan_wei("nota.a", &root_2, &jia_4), Peek::Ready(_)),
+            matches!(
+                c.get_active_expand_position("nota.a", &root_2, &value_4),
+                Peek::Ready(_)
+            ),
             "\u{540c}\u{4e00}\u{4e2a}\u{95ee}\u{9898}\u{6709}\u{7ed3}\u{8bba}"
         );
         assert!(
-            matches!(c.qu_huo_zhan_wei("nota.a", &root_2, &yi_2), Peek::Go),
+            matches!(
+                c.get_active_expand_position("nota.a", &root_2, &value_2),
+                Peek::Go
+            ),
             "\u{6362}\u{4e86}\u{4e2a}\u{4e1c}\u{897f}\u{8981}\u{91cd}\u{63a2}"
         );
     }
 
     #[test]
-    fn gei_cuo_root_de_jie_lun_hui_bei_diu_diao() {
+    fn give_error_root_boundary_argument_return_passive_discard_drop() {
         let c = ProbeCache::new();
-        let xin_root = Some("/tmp/\u{65b0}".to_owned());
+        let new_root = Some("/tmp/\u{65b0}".to_owned());
         assert!(matches!(
-            c.qu_huo_zhan_wei("nota.a", &xin_root, &None),
+            c.get_active_expand_position("nota.a", &new_root, &None),
             Peek::Go
         ));
 
-        c.receive_xia("nota.a", &None, &None, jia_jie_lun());
+        c.receive_lower("nota.a", &None, &None, add_boundary_argument());
         assert!(
-            matches!(c.qu_huo_zhan_wei("nota.a", &xin_root, &None), Peek::Running),
+            matches!(c.get_active_expand_position("nota.a", &new_root, &None), Peek::Running),
             "\u{65e7}\u{6839}\u{7684}\u{7ed3}\u{8bba}\u{4e0d}\u{8bb8}\u{9876}\u{66ff}\u{65b0}\u{6839}\u{90a3}\u{6b21}\u{63a2}\u{6d4b}"
         );
     }
 
     #[test]
-    fn check_zhong_na_zhang_table_bu_dai_hai_mei_kan_guo_de_shi_shi() {
+    fn check_middle_that_length_table_not_pending_still_each_see_passed_is_is() {
         let lua = Lua::new();
-        let m = zao_manifest("checking");
+        let m = create_manifest("checking");
         let spec = m.devserver.as_ref().expect("[devserver] \u{8be5}\u{5728}");
-        let t = check_zhong_table(&lua, spec, Some(Path::new("/tmp/\u{9879}\u{76ee}"))).unwrap();
+        let t = check_middle_table(&lua, spec, Some(Path::new("/tmp/\u{9879}\u{76ee}"))).unwrap();
 
         assert_eq!(t.get::<String>("state").unwrap(), "checking");
         assert_eq!(t.get::<String>("command").unwrap(), spec.command());

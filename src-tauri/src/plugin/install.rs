@@ -2,7 +2,7 @@ use super::*;
 
 impl PluginHost {
     pub fn install_2(&mut self, source_2: &Path) -> Result<String> {
-        use package::{read_yi_ge_bao, MANIFEST_FILE};
+        use package::{read_one_package, MANIFEST_FILE};
 
         if !source_2.exists() {
             return Err(NotaError::other(format!(
@@ -10,21 +10,21 @@ impl PluginHost {
                 source_2.display()
             )));
         }
-        let bao = read_yi_ge_bao(source_2)?;
+        let package = read_one_package(source_2)?;
 
-        let manifest_text = bao.zhao(MANIFEST_FILE).ok_or_else(|| {
+        let manifest_text = package.find(MANIFEST_FILE).ok_or_else(|| {
             NotaError::other(
                 "The package does not contain `plugin.toml` and is not an extension package"
                     .to_owned(),
             )
         })?;
 
-        let yong_hu_directory = crate::paths::user_plugins_dir()?;
-        if !yong_hu_directory.is_dir() {
-            crate::paths::ensure_dir(&yong_hu_directory)?;
+        let use_call_directory = crate::paths::user_plugins_dir()?;
+        if !use_call_directory.is_dir() {
+            crate::paths::ensure_dir(&use_call_directory)?;
         }
 
-        let temp_2 = yong_hu_directory.join(format!(".partial-install-{}", std::process::id()));
+        let temp_2 = use_call_directory.join(format!(".partial-install-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp_2);
         crate::paths::ensure_dir(&temp_2)?;
         let temp_manifest = temp_2.join(MANIFEST_FILE);
@@ -33,9 +33,9 @@ impl PluginHost {
             source,
         })?;
 
-        match self.install_check_wan_zai_ban(&bao, &temp_2) {
-            Ok((id, target_3, jie)) => {
-                self.install_ji_zhang_bing_load(&id, &target_3, &bao, jie)?;
+        match self.install_check_complete_at_half(&package, &temp_2) {
+            Ok((id, target_3, boundary)) => {
+                self.install_record_length_and_load(&id, &target_3, &package, boundary)?;
                 Ok(id)
             }
             Err(e) => {
@@ -45,9 +45,9 @@ impl PluginHost {
         }
     }
 
-    fn install_check_wan_zai_ban(
+    fn install_check_complete_at_half(
         &mut self,
-        bao: &package::Package,
+        package: &package::Package,
         temp_2: &Path,
     ) -> Result<(String, PathBuf, Signature)> {
         use package::{TrustStore, MANIFEST_FILE};
@@ -55,47 +55,47 @@ impl PluginHost {
         let manifest_2 = Manifest::load(&temp_2.join(MANIFEST_FILE))?;
         let id = manifest_2.meta.id.clone();
 
-        if let Some(zhan) = self.pin_dao_bei_zhan(&id) {
+        if let Some(expand) = self.spell_to_passive_expand(&id) {
             return Err(NotaError::other(format!(
-                "Extension `{id}` conflicts with installed extension `{zhan}` on the same event channel; choose another extension ID."
+                "Extension `{id}` conflicts with installed extension `{expand}` on the same event channel; choose another extension ID."
             )));
         }
 
-        let ku = TrustStore::load();
-        let jie = bao.yan_qian(&ku)?;
+        let store = TrustStore::load();
+        let boundary = package.validate_before(&store)?;
 
-        ba_bao_write_jin(bao, temp_2)?;
-        let yong_hu_directory = crate::paths::user_plugins_dir()?;
-        let target_3 = yong_hu_directory.join(crate::paths::an_fulldocument_jian_ming(&id));
-        ban_jin_target(temp_2, &target_3)?;
-        Ok((id, target_3, jie))
+        handle_package_write_enter(package, temp_2)?;
+        let use_call_directory = crate::paths::user_plugins_dir()?;
+        let target_3 = use_call_directory.join(crate::paths::safe_filename(&id));
+        half_enter_target(temp_2, &target_3)?;
+        Ok((id, target_3, boundary))
     }
 
-    fn install_ji_zhang_bing_load(
+    fn install_record_length_and_load(
         &mut self,
         id: &str,
         target_3: &Path,
-        bao: &package::Package,
-        jie: Signature,
+        package: &package::Package,
+        boundary: Signature,
     ) -> Result<()> {
-        let sig = bao.qian_ming.as_ref();
-        self.installed.ji_lai_lu(
+        let sig = package.before_name.as_ref();
+        self.installed.record_incoming_path(
             id,
             InstallSource {
-                jie,
-                key_id: sig.map(|s| installed::gong_yao_fingerprint(&s.public_key)),
-                public_key: sig.map(|s| s.gong_yao_base64()),
+                boundary,
+                key_id: sig.map(|s| installed::work_need_fingerprint(&s.public_key)),
+                public_key: sig.map(|s| s.work_need_base64()),
             },
         )?;
 
         self.installed.set_enabled(id, true)?;
 
         let manifest_2 = Manifest::load(&target_3.join(package::MANIFEST_FILE))?;
-        if let Some(i) = self.wei_zhi(id) {
+        if let Some(i) = self.position_only(id) {
             self.plugins[i].unload();
             self.plugins.remove(i);
         }
-        let ctx = self.shang_xia_wen(id);
+        let ctx = self.upper_lower_text(id);
         self.plugins.push(if self.extensions_enabled {
             LuaPlugin::load(manifest_2, ctx)
         } else {
@@ -109,12 +109,12 @@ impl PluginHost {
 
     pub fn uninstall(&mut self, id: &str) -> Result<()> {
         let i = self
-            .wei_zhi(id)
+            .position_only(id)
             .ok_or_else(|| NotaError::other(format!("Extension not found: {id}")))?;
         let dir = self.plugins[i].manifest.dir.clone();
-        if !zai_yong_hu_directory_li(&dir) {
+        if !at_use_call_directory_inner(&dir) {
             self.plugins[i].unload();
-            self.receive_tan(id);
+            self.receive_probe(id);
             self.installed.mark_removed(id)?;
             self.plugins.remove(i);
             self.apply_setting_locks()?;
@@ -122,18 +122,18 @@ impl PluginHost {
         }
         self.plugins[i].unload();
 
-        self.receive_tan(id);
+        self.receive_probe(id);
         std::fs::remove_dir_all(&dir)
             .map_err(|e| NotaError::other(format!("Could not delete `{}`: {e}", dir.display())))?;
         self.plugins.remove(i);
         self.restore_setting_backups_for(id)?;
-        self.installed.forget_diao(id)?;
+        self.installed.forget_drop(id)?;
         self.apply_setting_locks()?;
         Ok(())
     }
 
     pub fn trust_2(&mut self, id: &str) -> Result<()> {
-        let (key_id, gong_yao, name_2) = {
+        let (key_id, work_need, name_2) = {
             let r = self.installed.record(id).ok_or_else(|| {
                 NotaError::other(format!(
                     "No source record exists for `{id}`; it is probably built in"
@@ -153,13 +153,13 @@ impl PluginHost {
                 }
             }
         };
-        package::TrustStore::load().insert(&key_id, &name_2, &gong_yao)?;
-        self.installed.ji_lai_lu(
+        package::TrustStore::load().insert(&key_id, &name_2, &work_need)?;
+        self.installed.record_incoming_path(
             id,
             InstallSource {
-                jie: Signature::Verified,
+                boundary: Signature::Verified,
                 key_id: Some(key_id),
-                public_key: Some(gong_yao),
+                public_key: Some(work_need),
             },
         )?;
         Ok(())
@@ -174,29 +174,29 @@ impl PluginHost {
     }
 }
 
-pub(super) fn zai_yong_hu_directory_li(dir: &Path) -> bool {
+pub(super) fn at_use_call_directory_inner(dir: &Path) -> bool {
     crate::paths::user_plugins_dir()
-        .map(|yong_hu_directory| {
-            !yong_hu_directory.as_os_str().is_empty() && dir.starts_with(&yong_hu_directory)
+        .map(|use_call_directory| {
+            !use_call_directory.as_os_str().is_empty() && dir.starts_with(&use_call_directory)
         })
         .unwrap_or(false)
 }
 
-fn ba_bao_write_jin(bao: &package::Package, target_2: &Path) -> Result<()> {
-    for f in &bao.files_2 {
-        let luo = package::pin_target(target_2, &f.path_3);
-        if let Some(fu) = luo.parent() {
-            crate::paths::ensure_dir(fu)?;
+fn handle_package_write_enter(package: &package::Package, target_2: &Path) -> Result<()> {
+    for f in &package.files_2 {
+        let land = package::spell_target(target_2, &f.path_3);
+        if let Some(service) = land.parent() {
+            crate::paths::ensure_dir(service)?;
         }
-        std::fs::write(&luo, &f.content_2)
-            .map_err(|source| NotaError::Write { path: luo, source })?;
+        std::fs::write(&land, &f.content_2)
+            .map_err(|source| NotaError::Write { path: land, source })?;
     }
     Ok(())
 }
 
-fn ban_jin_target(temp_2: &Path, target_3: &Path) -> Result<()> {
-    let jiu = match target_3.parent() {
-        Some(fu) => fu.join(format!(".old-{}", std::process::id())),
+fn half_enter_target(temp_2: &Path, target_3: &Path) -> Result<()> {
+    let old = match target_3.parent() {
+        Some(service) => service.join(format!(".old-{}", std::process::id())),
         None => {
             return Err(NotaError::other(format!(
                 "Destination has no parent directory: {}",
@@ -204,10 +204,10 @@ fn ban_jin_target(temp_2: &Path, target_3: &Path) -> Result<()> {
             )))
         }
     };
-    let _ = std::fs::remove_dir_all(&jiu);
+    let _ = std::fs::remove_dir_all(&old);
 
-    let nuo_kai_guo = if target_3.exists() {
-        std::fs::rename(target_3, &jiu).map_err(|e| {
+    let move_start_passed = if target_3.exists() {
+        std::fs::rename(target_3, &old).map_err(|e| {
             NotaError::other(format!(
                 "Could not move the existing `{}` aside: {e}",
                 target_3.display()
@@ -219,16 +219,16 @@ fn ban_jin_target(temp_2: &Path, target_3: &Path) -> Result<()> {
     };
 
     if let Err(e) = std::fs::rename(temp_2, target_3) {
-        if nuo_kai_guo {
-            let _ = std::fs::rename(&jiu, target_3);
+        if move_start_passed {
+            let _ = std::fs::rename(&old, target_3);
         }
         return Err(NotaError::other(format!(
             "Could not install to `{}`: {e}",
             target_3.display()
         )));
     }
-    if nuo_kai_guo {
-        let _ = std::fs::remove_dir_all(&jiu);
+    if move_start_passed {
+        let _ = std::fs::remove_dir_all(&old);
     }
     Ok(())
 }
@@ -237,16 +237,16 @@ fn ban_jin_target(temp_2: &Path, target_3: &Path) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn jian_ge_directory(ming: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("nota-plugin-{ming}-{}", std::process::id()));
+    fn check_directory(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("nota-plugin-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
 
     #[test]
-    fn ban_jin_target_hui_huan_diao_jiu_de() {
-        let root_2 = jian_ge_directory("\u{642c}\u{6210}\u{529f}");
+    fn half_enter_target_return_replace_drop_old() {
+        let root_2 = check_directory("\u{642c}\u{6210}\u{529f}");
         let target_3 = root_2.join("a.b");
         std::fs::create_dir_all(&target_3).unwrap();
         std::fs::write(target_3.join("plugin.toml"), "\u{65e7}\u{7684}").unwrap();
@@ -255,7 +255,7 @@ mod tests {
         std::fs::create_dir_all(&temp_2).unwrap();
         std::fs::write(temp_2.join("plugin.toml"), "\u{65b0}\u{7684}").unwrap();
 
-        ban_jin_target(&temp_2, &target_3).unwrap();
+        half_enter_target(&temp_2, &target_3).unwrap();
 
         assert_eq!(
             std::fs::read_to_string(target_3.join("plugin.toml")).unwrap(),
@@ -265,44 +265,44 @@ mod tests {
             !temp_2.exists(),
             "\u{4e34}\u{65f6}\u{76ee}\u{5f55}\u{8be5}\u{88ab}\u{642c}\u{8d70}\u{4e86}"
         );
-        let zha_2: Vec<_> = std::fs::read_dir(&root_2)
+        let click_2: Vec<_> = std::fs::read_dir(&root_2)
             .unwrap()
             .flatten()
             .map(|e| e.file_name().to_string_lossy().into_owned())
             .filter(|n| n.starts_with('.'))
             .collect();
         assert!(
-            zha_2.is_empty(),
-            "\u{7559}\u{4e0b}\u{4e86}\u{70b9}\u{5f00}\u{5934}\u{7684}\u{6e23}\u{ff1a}{zha_2:?}"
+            click_2.is_empty(),
+            "\u{7559}\u{4e0b}\u{4e86}\u{70b9}\u{5f00}\u{5934}\u{7684}\u{6e23}\u{ff1a}{click_2:?}"
         );
 
         let _ = std::fs::remove_dir_all(&root_2);
     }
 
     #[test]
-    fn ban_jin_target_dui_quan_xin_an_install_ye_cheng_li() {
-        let root_2 = jian_ge_directory("\u{642c}\u{5168}\u{65b0}");
+    fn half_enter_target_pair_full_new_by_install_page_success_inner() {
+        let root_2 = check_directory("\u{642c}\u{5168}\u{65b0}");
         let target_3 = root_2.join("a.b");
         let temp_2 = root_2.join(".\u{88c5}\u{5230}\u{4e00}\u{534a}");
         std::fs::create_dir_all(&temp_2).unwrap();
         std::fs::write(temp_2.join("main.lua"), "return {}").unwrap();
 
-        ban_jin_target(&temp_2, &target_3).unwrap();
+        half_enter_target(&temp_2, &target_3).unwrap();
         assert!(target_3.join("main.lua").is_file());
 
         let _ = std::fs::remove_dir_all(&root_2);
     }
 
     #[test]
-    fn ban_bu_dong_de_shi_hou_ba_jiu_de_yuan_yang_liu_xia() {
-        let root_2 = jian_ge_directory("\u{642c}\u{5931}\u{8d25}");
+    fn half_not_dynamic_is_after_handle_old_source_sample_stream_lower() {
+        let root_2 = check_directory("\u{642c}\u{5931}\u{8d25}");
         let target_3 = root_2.join("a.b");
         std::fs::create_dir_all(&target_3).unwrap();
         std::fs::write(target_3.join("plugin.toml"), "\u{65e7}\u{7684}").unwrap();
 
         let temp_2 = root_2.join(".\u{88c5}\u{5230}\u{4e00}\u{534a}");
 
-        let err = ban_jin_target(&temp_2, &target_3).unwrap_err();
+        let err = half_enter_target(&temp_2, &target_3).unwrap_err();
         assert!(
             err.to_string().contains("Could not install to"),
             "unexpected error: {err}"
@@ -317,9 +317,9 @@ mod tests {
     }
 
     #[test]
-    fn write_bao_hui_bu_chu_zhong_jian_de_directory() {
-        let root_2 = jian_ge_directory("\u{5199}\u{5305}");
-        let bao = package::Package {
+    fn write_package_return_not_out_middle_check_directory() {
+        let root_2 = check_directory("\u{5199}\u{5305}");
+        let package = package::Package {
             files_2: vec![
                 package::PackageFile {
                     path_3: "plugin.toml".to_owned(),
@@ -330,10 +330,10 @@ mod tests {
                     content_2: b"return {}".to_vec(),
                 },
             ],
-            qian_ming: None,
+            before_name: None,
         };
 
-        ba_bao_write_jin(&bao, &root_2).unwrap();
+        handle_package_write_enter(&package, &root_2).unwrap();
         assert!(root_2
             .join("lua/\u{5de5}\u{5177}/\u{5927}\u{5c0f}\u{5199}.lua")
             .is_file());

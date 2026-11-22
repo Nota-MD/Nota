@@ -33,36 +33,37 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
     }
 
     if manifest.has(Capability::UiPanel) {
-        let zhu_ce = mian_ban_table(lua, &manifest.meta.id).map_err(mlua_to_nota)?;
-        t.set("register_panel", zhu_ce).map_err(mlua_to_nota)?;
+        let main_side = surface_half_table(lua, &manifest.meta.id).map_err(mlua_to_nota)?;
+        t.set("register_panel", main_side).map_err(mlua_to_nota)?;
 
-        let shua_xin =
-            shua_xin_table(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
-        t.set("refresh", shua_xin).map_err(mlua_to_nota)?;
+        let refresh_new =
+            refresh_new_table(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
+        t.set("refresh", refresh_new).map_err(mlua_to_nota)?;
 
-        let liu = shi_shi_table(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
-        t.set("stream", liu).map_err(mlua_to_nota)?;
+        let stream = is_is_table(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
+        t.set("stream", stream).map_err(mlua_to_nota)?;
         let show =
             show_panel_table(lua, &manifest.meta.id, ctx.app.clone()).map_err(mlua_to_nota)?;
         t.set("show", show).map_err(mlua_to_nota)?;
 
-        let yu_lan = super::review::yu_lan_table(lua, &manifest.meta.id, ctx.app.clone())
+        let and_panel = super::review::and_panel_table(lua, &manifest.meta.id, ctx.app.clone())
             .map_err(mlua_to_nota)?;
-        t.set("review", yu_lan).map_err(mlua_to_nota)?;
+        t.set("review", and_panel).map_err(mlua_to_nota)?;
 
-        let yu_lan_change =
-            super::review::yu_lan_change_table(lua, &manifest.meta.id, ctx.app.clone())
+        let and_panel_change =
+            super::review::and_panel_change_table(lua, &manifest.meta.id, ctx.app.clone())
                 .map_err(mlua_to_nota)?;
-        t.set("review_diff", yu_lan_change).map_err(mlua_to_nota)?;
+        t.set("review_diff", and_panel_change)
+            .map_err(mlua_to_nota)?;
     }
 
     if manifest.has(Capability::UiMenu) {
-        let zhu_ce = cai_dan_table(lua, &manifest.meta.id).map_err(mlua_to_nota)?;
-        t.set("register_menu", zhu_ce).map_err(mlua_to_nota)?;
+        let main_side = extract_single_table(lua, &manifest.meta.id).map_err(mlua_to_nota)?;
+        t.set("register_menu", main_side).map_err(mlua_to_nota)?;
     }
 
     if manifest.has(Capability::UiOpenUrl) {
-        let open_2 = open_wang_zhi_table(lua, ctx.app.clone()).map_err(mlua_to_nota)?;
+        let open_2 = open_web_only_table(lua, ctx.app.clone()).map_err(mlua_to_nota)?;
         t.set("open_url", open_2).map_err(mlua_to_nota)?;
     }
 
@@ -78,7 +79,7 @@ pub(crate) fn show_panel_table(
 
     lua.create_function(move |lua, id: String| {
         use tauri::Emitter;
-        if !you_mian_ban_ma(lua, &id) {
+        if !has_surface_half(lua, &id) {
             return Err(mlua::Error::RuntimeError(format!(
                 "Extension {plugin_id} does not declare panel `{id}`"
             )));
@@ -94,7 +95,7 @@ pub(crate) fn show_panel_table(
     })
 }
 
-fn open_wang_zhi_table(lua: &Lua, app: tauri::AppHandle) -> mlua::Result<mlua::Function> {
+fn open_web_only_table(lua: &Lua, app: tauri::AppHandle) -> mlua::Result<mlua::Function> {
     use tauri_plugin_opener::OpenerExt;
 
     lua.create_function(move |_, url: String| {
@@ -112,7 +113,7 @@ fn open_wang_zhi_table(lua: &Lua, app: tauri::AppHandle) -> mlua::Result<mlua::F
     })
 }
 
-pub(crate) fn mian_ban_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Function> {
+pub(crate) fn surface_half_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Function> {
     lua.set_named_registry_value(REG_PANELS, lua.create_table()?)?;
     let plugin_id = plugin_id.to_owned();
 
@@ -157,7 +158,7 @@ pub(crate) fn mian_ban_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::F
             Err(_) => {}
         }
 
-        zhui_jia_declaration(
+        append_add_declaration(
             lua,
             REG_PANELS,
             "id",
@@ -171,7 +172,7 @@ pub(crate) fn mian_ban_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::F
     Ok(register)
 }
 
-pub(crate) fn shua_xin_table(
+pub(crate) fn refresh_new_table(
     lua: &Lua,
     plugin_id: &str,
     app: tauri::AppHandle,
@@ -191,7 +192,7 @@ pub(crate) fn shua_xin_table(
     })
 }
 
-pub(crate) fn shi_shi_table(
+pub(crate) fn is_is_table(
     lua: &Lua,
     plugin_id: &str,
     app: tauri::AppHandle,
@@ -200,7 +201,7 @@ pub(crate) fn shi_shi_table(
 
     lua.create_function(move |_, text: Option<String>| {
         use tauri::Emitter;
-        let text_2 = qu_wei_ba(&text.unwrap_or_default(), SHI_SHI_SHANG_XIAN);
+        let text_2 = get_position_handle(&text.unwrap_or_default(), IS_IS_UPPER_THREAD);
         app.emit(
             crate::plugin::EVENT_PANEL_STREAM,
             serde_json::json!({ "plugin": plugin_id, "text": text_2 }),
@@ -210,17 +211,17 @@ pub(crate) fn shi_shi_table(
     })
 }
 
-const SHI_SHI_SHANG_XIAN: usize = 8000;
+const IS_IS_UPPER_THREAD: usize = 8000;
 
-fn qu_wei_ba(s: &str, n: usize) -> String {
-    let zi_shu = s.chars().count();
-    if zi_shu <= n {
+fn get_position_handle(s: &str, n: usize) -> String {
+    let character_data = s.chars().count();
+    if character_data <= n {
         return s.to_owned();
     }
-    s.chars().skip(zi_shu - n).collect()
+    s.chars().skip(character_data - n).collect()
 }
 
-pub(crate) fn you_mian_ban_ma(lua: &Lua, id: &str) -> bool {
+pub(crate) fn has_surface_half(lua: &Lua, id: &str) -> bool {
     let Ok(list) = lua.named_registry_value::<Table>(REG_PANELS) else {
         return false;
     };
@@ -229,7 +230,7 @@ pub(crate) fn you_mian_ban_ma(lua: &Lua, id: &str) -> bool {
     })
 }
 
-pub(crate) fn mian_ban_content(
+pub(crate) fn surface_half_content(
     lua: &Lua,
     plugin_id: &str,
     panel_id: &str,
@@ -241,14 +242,14 @@ pub(crate) fn mian_ban_content(
     })?;
 
     for i in 1..=list.raw_len() {
-        let Ok(tiao_mu) = list.raw_get::<Table>(i) else {
+        let Ok(item_target) = list.raw_get::<Table>(i) else {
             continue;
         };
-        if !matches!(tiao_mu.get::<String>("id"), Ok(v) if v == panel_id) {
+        if !matches!(item_target.get::<String>("id"), Ok(v) if v == panel_id) {
             continue;
         }
 
-        let Ok(mlua::Value::Function(render)) = tiao_mu.get::<mlua::Value>("render") else {
+        let Ok(mlua::Value::Function(render)) = item_target.get::<mlua::Value>("render") else {
             return Err(NotaError::other(format!(
                 "Panel `{panel_id}` in extension {plugin_id} has no `render` function"
             )));
@@ -259,7 +260,11 @@ pub(crate) fn mian_ban_content(
             message: format!("Could not render panel `{panel_id}`: {e}"),
         })?;
 
-        return Ok(bo_cheng_json(&value_2, 0, MIAN_BAN_NODE_SHANG_XIAN));
+        return Ok(broadcast_success_json(
+            &value_2,
+            0,
+            SURFACE_HALF_NODE_UPPER_THREAD,
+        ));
     }
 
     Err(NotaError::other(format!(
@@ -267,18 +272,22 @@ pub(crate) fn mian_ban_content(
     )))
 }
 
-const MIAN_BAN_TEXT_SHANG_XIAN: usize = 20000;
+const SURFACE_HALF_TEXT_UPPER_THREAD: usize = 20000;
 
-const MIAN_BAN_NODE_SHANG_XIAN: usize = 200;
+const SURFACE_HALF_NODE_UPPER_THREAD: usize = 200;
 
-const NETWORK_METADATA_SU_SHANG_XIAN: usize = 800;
+const NETWORK_METADATA_SPEED_UPPER_THREAD: usize = 800;
 
-const MIAN_BAN_CENG_SHU_SHANG_XIAN: usize = 6;
+const SURFACE_HALF_LAYER_DATA_UPPER_THREAD: usize = 6;
 
-fn bo_cheng_json(v: &mlua::Value, ceng: usize, shu_zu_shang_xian: usize) -> serde_json::Value {
+fn broadcast_success_json(
+    v: &mlua::Value,
+    layer: usize,
+    data_group_upper_thread: usize,
+) -> serde_json::Value {
     use serde_json::Value as J;
 
-    if ceng > MIAN_BAN_CENG_SHU_SHANG_XIAN {
+    if layer > SURFACE_HALF_LAYER_DATA_UPPER_THREAD {
         return J::Null;
     }
 
@@ -293,10 +302,14 @@ fn bo_cheng_json(v: &mlua::Value, ceng: usize, shu_zu_shang_xian: usize) -> serd
         mlua::Value::Table(t) => {
             let len = t.raw_len();
             if len > 0 {
-                let mut arr = Vec::with_capacity(len.min(shu_zu_shang_xian));
-                for i in 1..=len.min(shu_zu_shang_xian) {
+                let mut arr = Vec::with_capacity(len.min(data_group_upper_thread));
+                for i in 1..=len.min(data_group_upper_thread) {
                     if let Ok(x) = t.raw_get::<mlua::Value>(i) {
-                        arr.push(bo_cheng_json(&x, ceng + 1, shu_zu_shang_xian));
+                        arr.push(broadcast_success_json(
+                            &x,
+                            layer + 1,
+                            data_group_upper_thread,
+                        ));
                     }
                 }
                 J::Array(arr)
@@ -310,13 +323,16 @@ fn bo_cheng_json(v: &mlua::Value, ceng: usize, shu_zu_shang_xian: usize) -> serd
                         let key = ks.to_string_lossy();
                         let child_limit = if is_network && matches!(key.as_ref(), "nodes" | "edges")
                         {
-                            NETWORK_METADATA_SU_SHANG_XIAN
+                            NETWORK_METADATA_SPEED_UPPER_THREAD
                         } else {
-                            MIAN_BAN_NODE_SHANG_XIAN
+                            SURFACE_HALF_NODE_UPPER_THREAD
                         };
-                        map.insert(truncate_2(&key), bo_cheng_json(&val, ceng + 1, child_limit));
+                        map.insert(
+                            truncate_2(&key),
+                            broadcast_success_json(&val, layer + 1, child_limit),
+                        );
                     }
-                    if map.len() >= MIAN_BAN_NODE_SHANG_XIAN {
+                    if map.len() >= SURFACE_HALF_NODE_UPPER_THREAD {
                         break;
                     }
                 }
@@ -329,15 +345,15 @@ fn bo_cheng_json(v: &mlua::Value, ceng: usize, shu_zu_shang_xian: usize) -> serd
 }
 
 fn truncate_2(s: &str) -> String {
-    if s.chars().count() <= MIAN_BAN_TEXT_SHANG_XIAN {
+    if s.chars().count() <= SURFACE_HALF_TEXT_UPPER_THREAD {
         return s.to_owned();
     }
-    let mut out: String = s.chars().take(MIAN_BAN_TEXT_SHANG_XIAN).collect();
+    let mut out: String = s.chars().take(SURFACE_HALF_TEXT_UPPER_THREAD).collect();
     out.push('\u{2026}');
     out
 }
 
-pub(crate) fn cai_dan_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Function> {
+pub(crate) fn extract_single_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Function> {
     lua.set_named_registry_value(REG_MENUS, lua.create_table()?)?;
     let plugin_id = plugin_id.to_owned();
 
@@ -367,7 +383,7 @@ pub(crate) fn cai_dan_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Fu
             entry.set("prompt", p)?;
         }
 
-        zhui_jia_declaration(
+        append_add_declaration(
             lua,
             REG_MENUS,
             "label",
@@ -381,31 +397,31 @@ pub(crate) fn cai_dan_table(lua: &Lua, plugin_id: &str) -> mlua::Result<mlua::Fu
     Ok(register)
 }
 
-fn zhui_jia_declaration(
+fn append_add_declaration(
     lua: &Lua,
     reg: &str,
-    jian_2: &str,
-    value_2: &str,
-    tiao_mu: &Table,
-    bao_cuo_qian_zhui: &str,
+    key: &str,
+    value: &str,
+    item_target: &Table,
+    package_error_prefix: &str,
 ) -> mlua::Result<()> {
     let list: Table = lua.named_registry_value(reg)?;
     for i in 1..=list.raw_len() {
-        let Ok(ji_you) = list.raw_get::<Table>(i) else {
+        let Ok(record_has) = list.raw_get::<Table>(i) else {
             continue;
         };
 
-        if ru_guo_zhong_ming(ji_you.get::<String>(jian_2), value_2) {
+        if into_passed_middle_name(record_has.get::<String>(key), value) {
             return Err(mlua::Error::RuntimeError(format!(
-                "{bao_cuo_qian_zhui} `{value_2}`"
+                "{package_error_prefix} `{value}`"
             )));
         }
     }
-    list.set(list.raw_len() + 1, tiao_mu.clone())
+    list.set(list.raw_len() + 1, item_target.clone())
 }
 
-fn ru_guo_zhong_ming(read_dao: mlua::Result<String>, value_2: &str) -> bool {
-    matches!(read_dao, Ok(v) if v == value_2)
+fn into_passed_middle_name(read_result: mlua::Result<String>, value: &str) -> bool {
+    matches!(read_result, Ok(existing) if existing == value)
 }
 
 fn normalise_level(level: Option<&str>) -> &'static str {

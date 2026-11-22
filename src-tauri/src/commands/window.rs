@@ -135,7 +135,9 @@ pub fn nota_window_open_settings(app: tauri::AppHandle) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn nota_window_prepare_settings() -> Result<()> {
+pub fn nota_window_prepare_settings(app: tauri::AppHandle) -> Result<()> {
+    ensure_settings_window(&app)?;
+    crate::debug_log!("[nota] settings window prewarmed");
     Ok(())
 }
 
@@ -198,26 +200,29 @@ fn create_about_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
     .map_err(|error| NotaError::other(format!("Could not create the About window: {error}")))
 }
 
+fn ensure_settings_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow> {
+    if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
+        return Ok(window);
+    }
+    WebviewWindowBuilder::new(
+        app,
+        SETTINGS_WINDOW,
+        WebviewUrl::App("index.html?settings=1".into()),
+    )
+    .title("Nota Settings")
+    .inner_size(1080.0, 700.0)
+    .min_inner_size(720.0, 520.0)
+    .visible(false)
+    .focused(false)
+    .build()
+    .map_err(|error| NotaError::other(format!("Could not start the Preferences window: {error}")))
+}
+
 fn show_settings_window(app: &tauri::AppHandle) -> Result<()> {
-    let window = if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
-        window
-    } else {
-        WebviewWindowBuilder::new(
-            app,
-            SETTINGS_WINDOW,
-            WebviewUrl::App("index.html?settings=1".into()),
-        )
-        .title("Nota Settings")
-        .inner_size(1080.0, 700.0)
-        .min_inner_size(720.0, 520.0)
-        .visible(false)
-        .build()
-        .map_err(|error| {
-            NotaError::other(format!("Could not start the Preferences window: {error}"))
-        })?
-    };
+    let window = ensure_settings_window(app)?;
     window
-        .show()
+        .set_skip_taskbar(false)
+        .and_then(|_| window.show())
         .and_then(|_| window.unminimize())
         .and_then(|_| window.set_focus())
         .map_err(|error| {

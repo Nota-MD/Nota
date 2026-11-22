@@ -61,7 +61,7 @@ pub async fn nota_pandoc_export(
         Ok(warning) => Ok(PandocExport {
             path: target.display().to_string(),
             route: Route::Pandoc,
-            note: pandoc_na_ju(kind, &warning),
+            note: pandoc_that_sentence(kind, &warning),
         }),
 
         Err(e) if kind == Format::Pdf => {
@@ -95,7 +95,7 @@ pub async fn nota_pandoc_export(
     }
 }
 
-fn pandoc_na_ju(kind: Format, warning: &str) -> String {
+fn pandoc_that_sentence(kind: Format, warning: &str) -> String {
     let mut s = format!(
         "{} was converted by the system Pandoc.",
         kind.display_name()
@@ -123,19 +123,19 @@ fn document_directory(doc_path: Option<&str>) -> Option<PathBuf> {
 
 fn message_2(e: &NotaError) -> String {
     let text = e.to_string();
-    let mut xing = text.lines().map(str::trim).filter(|l| !l.is_empty());
-    let first_line_2 = xing.next().unwrap_or("");
+    let mut line = text.lines().map(str::trim).filter(|l| !l.is_empty());
+    let first_line_2 = line.next().unwrap_or("");
 
     let line = if ends_with_colon(first_line_2) {
-        xing.find(|l| !ends_with_colon(l)).unwrap_or(first_line_2)
+        line.find(|l| !ends_with_colon(l)).unwrap_or(first_line_2)
     } else {
         first_line_2
     };
-    let duan_2: String = line.chars().take(120).collect();
-    if duan_2.is_empty() {
+    let segment_2: String = line.chars().take(120).collect();
+    if segment_2.is_empty() {
         "Unknown error".to_string()
     } else {
-        duan_2
+        segment_2
     }
 }
 
@@ -148,7 +148,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn document_directory_zhi_ren_cun_guo_pan_de_document() {
+    fn document_directory_only_person_store_passed_parse_document() {
         assert_eq!(
             document_directory(Some("/home/u/\u{6587}\u{6863}/\u{7b14}\u{8bb0}.md")),
             Some(PathBuf::from("/home/u/\u{6587}\u{6863}"))
@@ -160,18 +160,18 @@ mod tests {
     }
 
     #[test]
-    fn summary_zhi_qu_di_yi_xing_qie_bu_hui_tai_zhang() {
+    fn summary_only_get_base_one_line_cut_not_return_platform_length() {
         let e = NotaError::other("\u{7b2c}\u{4e00}\u{884c}\u{662f}\u{91cd}\u{70b9}\n\u{7b2c}\u{4e8c}\u{884c}\u{662f}\u{7ec6}\u{8282}");
         assert_eq!(
             message_2(&e),
             "\u{7b2c}\u{4e00}\u{884c}\u{662f}\u{91cd}\u{70b9}"
         );
 
-        let zhang = NotaError::other(format!(
+        let length = NotaError::other(format!(
             "{}\n\u{540e}\u{9762}\u{8fd8}\u{6709}",
             "\u{554a}".repeat(300)
         ));
-        let s = message_2(&zhang);
+        let s = message_2(&length);
         assert_eq!(s.chars().count(), 120);
         assert!(!s.contains('\n'));
     }
@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn summary_tiao_guo_zhi_you_jie_lun_na_yi_xing() {
+    fn summary_item_passed_only_has_boundary_argument_that_one_line() {
         let e = NotaError::other("pandoc \u{6ca1}\u{80fd}\u{751f}\u{6210}PDF\u{ff1a}\npdflatex not found. Please select \u{2026}");
         assert_eq!(message_2(&e), "pdflatex not found. Please select \u{2026}");
 

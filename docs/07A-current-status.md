@@ -40,7 +40,7 @@ verification is missing.
 | Priority | ID | Area | State | Next action | Exit criteria |
 |---|---|---|---|---|---|
 | P0 | 126 | Linux stability | Open | Reproduce close, restart, and single-instance cleanup; inspect WebKit child processes and the Unix socket owner | Ten consecutive close/restart cycles need no `killall`; stale sockets and child processes do not block startup |
-| P0 | 130 | Windows settings window | Open | Trace independent `WebviewWindow` creation, reuse, permissions, focus and taskbar behavior | First open and reopening work after restart; switching presentation modes leaves no hidden blocker; failures show an error |
+| P0 | 130 | Windows settings window | Partial | Hidden same-process webview is prewarmed after idle and reused; complete real Windows taskbar, focus, restart and fallback acceptance | First open and reopening work after restart; switching presentation modes leaves no hidden blocker; failures show an error |
 | P0 | 132 | Windows title bar | Open | Record WebView2 and DWM window events; isolate prewarm, maximize/fullscreen listeners and title-bar recalculation | System title bar runs five minutes without flicker; normal, maximized and fullscreen transitions stay stable |
 | P0 | 110 | Windows acceptance | Partial | Complete the real-device checklist after 122, 130, 131 and 132 | Install, update, single-instance, Host Control, plugins and restart paths each have a pass/fail record |
 | P1 | 122 | Windows feedback checklist | Partial | Re-audit remaining items in the external 17-item report and close or split every unresolved item | Every original item has a current evidence-backed conclusion |
@@ -49,7 +49,7 @@ verification is missing.
 | P1 | BUG-31 | Native crash | Unlocated | Reproduce the old glibc `malloc` abort under stress with isolated profiles and native logging | A controlled reproduction exists, or the item is downgraded with a clear evidence boundary |
 | P1 | 125 | Diff rendering | Needs visual review | Core renderer now has stable markers, row classes, context collapse, keyboard scrolling and localized controls | Verify narrow panels, full editor review and light/dark themes in a real window; fix any remaining spacing or overflow issues |
 | P1 | 128 | Code and source appearance | Open | Obtain a current reproduction and compare source mode, embedded code blocks and diff code views | Font metrics, line height, gutters, selection, caret, padding and zoom remain aligned across themes |
-| P1 | 134 | Source English migration | Complete | Keep the zero baseline enforced by `npm run audit:language` | Chinese production-source baseline reaches zero and its baseline file is removed |
+| P1 | 134 | Source English and identifier migration | Complete | Keep both zero baselines enforced by `npm run audit:language` and `npm run audit:pinyin` | Chinese production-source baseline and pinyin identifier baseline both remain at zero |
 | P1 | 135 | Documentation English migration | In progress | Translate `docs/01` through `docs/13`, `THIRD-PARTY.md` and reference archives in focused batches | Maintainer documentation is concise English except explicit translations and test content |
 | P1 | BUG-56 | Editing behavior | Needs clarification | Reconfirm the exact user-visible behavior before changing code | The reported sequence is reproduced or the item is closed as invalid |
 | P2 | 127 | Startup behavior | Open | Add a persistent "Show landing screen after startup" option and define precedence rules | Explicit CLI files win; session restore remains predictable; both modes pass repeated startup checks |
@@ -95,6 +95,7 @@ The source-language audit currently records:
 ```text
 0 Chinese-containing production-source lines
 0 non-functional emoji in production source
+0 pinyin-transliteration identifiers
 ```
 
 User-facing Chinese copy remains supported through localization resources.

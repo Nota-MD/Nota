@@ -64,7 +64,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
         let ctx2 = ctx.clone();
         let root = lua
             .create_function(move |_, ()| {
-                let root = gong_zuo_root(&ctx2).map_err(lua_err)?;
+                let root = work_left_root(&ctx2).map_err(lua_err)?;
                 root.to_str().map(str::to_owned).ok_or_else(|| {
                     lua_err(NotaError::other(
                         "The workspace root is not valid UTF-8 and cannot be referenced as a string",
@@ -77,7 +77,7 @@ pub fn build(lua: &Lua, manifest: &Manifest, ctx: &HostContext) -> NotaResult<Ta
         let ctx2 = ctx.clone();
         let relative = lua
             .create_function(move |_, path: String| {
-                let root = gong_zuo_root(&ctx2).map_err(lua_err)?;
+                let root = work_left_root(&ctx2).map_err(lua_err)?;
                 Ok(relative_in(&root, &path))
             })
             .map_err(mlua_to_nota)?;
@@ -161,11 +161,11 @@ fn relative_in(root: &Path, given: &str) -> Option<String> {
 }
 
 fn resolve(ctx: &HostContext, given: &str) -> mlua::Result<PathBuf> {
-    let root = gong_zuo_root(ctx).map_err(lua_err)?;
+    let root = work_left_root(ctx).map_err(lua_err)?;
     resolve_in(&root, given).map_err(lua_err)
 }
 
-fn gong_zuo_root(ctx: &HostContext) -> NotaResult<PathBuf> {
+fn work_left_root(ctx: &HostContext) -> NotaResult<PathBuf> {
     let workspace = ctx.workspace.lock().unwrap().clone();
     let doc_dir = ctx
         .documents
@@ -175,10 +175,10 @@ fn gong_zuo_root(ctx: &HostContext) -> NotaResult<PathBuf> {
         .and_then(|d| d.path.as_ref())
         .and_then(|p| p.parent())
         .map(|p| p.to_path_buf());
-    tiao_root(workspace, doc_dir).map_err(NotaError::other)
+    item_root(workspace, doc_dir).map_err(NotaError::other)
 }
 
-fn tiao_root(workspace: Option<PathBuf>, doc_dir: Option<PathBuf>) -> Result<PathBuf, String> {
+fn item_root(workspace: Option<PathBuf>, doc_dir: Option<PathBuf>) -> Result<PathBuf, String> {
     workspace.or(doc_dir).ok_or_else(|| {
         "nota.fs is unavailable because there is no workspace and the document has not been saved".to_owned()
     })
@@ -244,15 +244,18 @@ mod tests {
     }
 
     #[test]
-    fn root_you_xian_workspace_mei_kai_workspace_jiu_yong_document_directory() {
-        let qu = PathBuf::from("/tmp/\u{67d0}\u{5de5}\u{4f5c}\u{533a}");
-        let wen = PathBuf::from("/tmp/\u{67d0}\u{5904}");
+    fn root_has_thread_workspace_each_start_workspace_old_use_document_directory() {
+        let get = PathBuf::from("/tmp/\u{67d0}\u{5de5}\u{4f5c}\u{533a}");
+        let text = PathBuf::from("/tmp/\u{67d0}\u{5904}");
 
-        assert_eq!(tiao_root(Some(qu.clone()), None).unwrap(), qu);
-        assert_eq!(tiao_root(Some(qu.clone()), Some(wen.clone())).unwrap(), qu);
-        assert_eq!(tiao_root(None, Some(wen.clone())).unwrap(), wen);
+        assert_eq!(item_root(Some(get.clone()), None).unwrap(), get);
+        assert_eq!(
+            item_root(Some(get.clone()), Some(text.clone())).unwrap(),
+            get
+        );
+        assert_eq!(item_root(None, Some(text.clone())).unwrap(), text);
 
-        let err = tiao_root(None, None).unwrap_err();
+        let err = item_root(None, None).unwrap_err();
         assert!(err.contains("unavailable"), "unexpected error: {err}");
         assert!(
             err.contains("has not been saved"),
@@ -261,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn pu_tong_xiang_dui_path_neng_guo() {
+    fn plain_same_item_pair_path_can_passed() {
         let root = temp_workspace("plain");
         let got = resolve_in(&root, "\u{5b50}\u{76ee}\u{5f55}/a.md").unwrap();
         assert_eq!(got, root.join("\u{5b50}\u{76ee}\u{5f55}/a.md"));
@@ -269,7 +272,7 @@ mod tests {
     }
 
     #[test]
-    fn dian_kai_tou_de_qing_chu_diao_dan_bu_yue_jie() {
+    fn point_start_header_request_out_drop_single_not_month_boundary() {
         let root = temp_workspace("curdir");
         let got = resolve_in(&root, "./\u{5b50}\u{76ee}\u{5f55}/./a.md").unwrap();
         assert_eq!(got, root.join("\u{5b50}\u{76ee}\u{5f55}/a.md"));
@@ -277,14 +280,14 @@ mod tests {
     }
 
     #[test]
-    fn jue_dui_path_zhi_jie_ju() {
+    fn absolute_pair_path_only_boundary_sentence() {
         let root = temp_workspace("abs");
         assert!(resolve_in(&root, "/etc/passwd").is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn yong_dian_dian_pa_chu_qu_yao_ju() {
+    fn use_point_point_climb_out_get_need_sentence() {
         let root = temp_workspace("dotdot");
 
         assert!(resolve_in(&root, "../\u{9003}\u{9038}.md").is_err());
@@ -295,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn fu_hao_lian_jie_zhi_xiang_wai_mian_yao_ju() {
+    fn service_number_link_boundary_only_item_wai_surface_need_sentence() {
         let root = temp_workspace("symlink");
         let outside = std::env::temp_dir().join("nota-fs-sandbox-outside");
         let _ = std::fs::remove_dir_all(&outside);
@@ -314,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn xiang_dui_path_bao_gao_tong_shi_jie_shou_current_document_jue_dui_path_yu_workspace_xiang_dui_path(
+    fn item_pair_path_package_height_same_is_boundary_receive_current_document_absolute_pair_path_and_workspace_item_pair_path(
     ) {
         let root = temp_workspace("relative");
         let file = root.join("\u{5b50}\u{76ee}\u{5f55}/a.md");

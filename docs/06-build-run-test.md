@@ -3580,6 +3580,9 @@ npm test
 
 2026-10-17 起测试名册**自动扫** `tests/*.test.ts`，不再维护手抄 `for` 名单；
 📌 2026-10-31 新增长尾代码语言表测试 `tests/refractor-runtime.test.ts`（5 条）：它直接钉住“导入运行层不加载 `refractor/all`、主动请求后扩展到 400 个名字”。完整名册由脚本自动发现；分享图重做后本次实跑为 **115 套 / 至少 1792 条**（`share-card` 从旧版式的 46 条改为 18 条结构与裁切几何判据）。
+📌 2026-11-22 新增 `command-palette` (4 assertions) and `review-inline`
+(6 assertions). The first covers menu-derived search and disabled-command
+navigation; the second covers Unicode-safe inline review diff and its fallback.
 CI 的 `verify-full.yml` 跑的就是这一份；`verify.yml` 只跑无原生依赖的轻量档。
 下面保留早期逐名列表作为历史跑法。
 

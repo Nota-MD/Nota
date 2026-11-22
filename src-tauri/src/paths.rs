@@ -44,7 +44,7 @@ pub fn plugin_settings_dir() -> Result<PathBuf> {
 }
 
 pub fn plugin_settings_file(plugin_id: &str) -> Result<PathBuf> {
-    Ok(plugin_settings_dir()?.join(format!("{}.toml", an_fulldocument_jian_ming(plugin_id))))
+    Ok(plugin_settings_dir()?.join(format!("{}.toml", safe_filename(plugin_id))))
 }
 
 pub fn image_upload_file() -> Result<PathBuf> {
@@ -68,10 +68,10 @@ pub fn drafts_dir() -> Result<PathBuf> {
 pub fn plugin_data_dir(plugin_id: &str) -> Result<PathBuf> {
     Ok(data_dir()?
         .join("plugin-data")
-        .join(an_fulldocument_jian_ming(plugin_id)))
+        .join(safe_filename(plugin_id)))
 }
 
-pub fn an_fulldocument_jian_ming(plugin_id: &str) -> String {
+pub fn safe_filename(plugin_id: &str) -> String {
     let mut out = String::with_capacity(plugin_id.len());
     for c in plugin_id.chars() {
         if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
@@ -92,46 +92,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn kai_emit_tai_xian_kan_huan_jing_bian_liang_zai_kan_tong_ji_plugin_cang_ku_zai_kan_lao_target(
+    fn start_emit_platform_thread_see_replace_static_edit_two_at_see_same_record_plugin_store_store_at_see_old_target(
     ) {
-        let zi_source = Path::new("/\u{5047}\u{8d44}\u{6e90}\u{76ee}\u{5f55}");
-        let zhu_cang_ku = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let character_source = Path::new("/\u{5047}\u{8d44}\u{6e90}\u{76ee}\u{5f55}");
+        let main_store_store = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("src-tauri \u{7684}\u{4e0a}\u{4e00}\u{7ea7}");
-        let xiong_di = zhu_cang_ku
+        let sibling_base = main_store_store
             .parent()
             .expect("\u{5de5}\u{4f5c}\u{533a}\u{90a3}\u{4e00}\u{7ea7}")
             .join("Nota-plugins")
             .join("plugins");
-        let lao_target = zhu_cang_ku.join("plugins");
+        let old_target = main_store_store.join("plugins");
 
-        let mut directory_men = kai_emit_tai_candidates(None, zhu_cang_ku);
-        directory_men.push(zi_source.join("plugins"));
-        let i_xiong_di = directory_men.iter().position(|p| p == &xiong_di).expect(
-            "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{90a3}\u{4e00}\u{6863}\u{5728}",
-        );
-        let i_lao = directory_men
+        let mut directory_list = start_emit_platform_candidates(None, main_store_store);
+        directory_list.push(character_source.join("plugins"));
+        let i_sibling_base = directory_list
             .iter()
-            .position(|p| p == &lao_target)
+            .position(|p| p == &sibling_base)
+            .expect(
+                "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{90a3}\u{4e00}\u{6863}\u{5728}",
+            );
+        let i_old = directory_list
+            .iter()
+            .position(|p| p == &old_target)
             .expect("\u{8001}\u{843d}\u{70b9}\u{90a3}\u{4e00}\u{6863}\u{5728}");
-        assert!(i_xiong_di < i_lao, "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{5fc5}\u{987b}\u{6392}\u{5728}\u{8fd9}\u{4e2a}\u{4e4b}\u{524d}\u{ff1a}{directory_men:?}");
+        assert!(i_sibling_base < i_old, "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{5fc5}\u{987b}\u{6392}\u{5728}\u{8fd9}\u{4e2a}\u{4e4b}\u{524d}\u{ff1a}{directory_list:?}");
         assert_eq!(
-            directory_men.last(),
-            Some(&zi_source.join("plugins")),
+            directory_list.last(),
+            Some(&character_source.join("plugins")),
             "\u{8d44}\u{6e90}\u{5feb}\u{7167}\u{6c38}\u{8fdc}\u{57ab}\u{5e95}"
         );
 
-        let candidates_2 = kai_emit_tai_candidates(None, zhu_cang_ku);
-        assert_eq!(candidates_2.first(), Some(&xiong_di), "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{5fc5}\u{987b}\u{662f}\u{7b2c}\u{4e00}\u{4e2a}\u{ff1a}{candidates_2:?}");
+        let candidates_2 = start_emit_platform_candidates(None, main_store_store);
+        assert_eq!(candidates_2.first(), Some(&sibling_base), "\u{540c}\u{7ea7}\u{63d2}\u{4ef6}\u{4ed3}\u{5e93}\u{5fc5}\u{987b}\u{662f}\u{7b2c}\u{4e00}\u{4e2a}\u{ff1a}{candidates_2:?}");
         assert_eq!(
             candidates_2.last(),
-            Some(&lao_target),
+            Some(&old_target),
             "\u{8001}\u{843d}\u{70b9}\u{57ab}\u{5e95}"
         );
 
-        let candidates_2 = kai_emit_tai_candidates(
+        let candidates_2 = start_emit_platform_candidates(
             Some(PathBuf::from("/\u{522b}\u{5904}/plugins")),
-            zhu_cang_ku,
+            main_store_store,
         );
         assert_eq!(
             candidates_2,
@@ -141,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    fn plugin_id_li_de_path_fen_ge_fu_chu_bu_le_filename() {
+    fn plugin_id_inner_path_part_service_out_not_filename() {
         for id in [
             "nota/../../etc/passwd",
             "../../x",
@@ -153,30 +156,30 @@ mod tests {
             "...",
             "\0",
         ] {
-            let ming = an_fulldocument_jian_ming(id);
+            let name = safe_filename(id);
             assert!(
-                !ming.contains('/') && !ming.contains('\\'),
-                "`{id}` \u{53d8}\u{6210} `{ming}`\u{ff0c}\u{91cc}\u{9762}\u{8fd8}\u{6709}\u{8def}\u{5f84}\u{5206}\u{9694}\u{7b26}\u{2014}\u{2014}\u{90a3}\u{5c31}\u{80fd}\u{5199}\u{5230}\u{522b}\u{7684}\u{76ee}\u{5f55}\u{53bb}"
+                !name.contains('/') && !name.contains('\\'),
+                "`{id}` \u{53d8}\u{6210} `{name}`\u{ff0c}\u{91cc}\u{9762}\u{8fd8}\u{6709}\u{8def}\u{5f84}\u{5206}\u{9694}\u{7b26}\u{2014}\u{2014}\u{90a3}\u{5c31}\u{80fd}\u{5199}\u{5230}\u{522b}\u{7684}\u{76ee}\u{5f55}\u{53bb}"
             );
             assert!(
-                !ming.is_empty(),
+                !name.is_empty(),
                 "`{id}` \u{53d8}\u{6210}\u{4e86}\u{7a7a}\u{6587}\u{4ef6}\u{540d}"
             );
             assert!(
-                !ming.chars().all(|c| c == '.'),
-                "`{id}` \u{53d8}\u{6210} `{ming}`\u{ff0c}\u{8fd8}\u{662f}\u{4e2a}\u{7eaf}\u{70b9}\u{7684}\u{540d}\u{5b57}\u{ff08}`..` \u{6307}\u{5411}\u{4e0a}\u{7ea7}\u{76ee}\u{5f55}\u{ff09}"
+                !name.chars().all(|c| c == '.'),
+                "`{id}` \u{53d8}\u{6210} `{name}`\u{ff0c}\u{8fd8}\u{662f}\u{4e2a}\u{7eaf}\u{70b9}\u{7684}\u{540d}\u{5b57}\u{ff08}`..` \u{6307}\u{5411}\u{4e0a}\u{7ea7}\u{76ee}\u{5f55}\u{ff09}"
             );
         }
     }
 
     #[test]
-    fn zheng_chang_de_plugin_id_yuan_yang_bao_liu() {
-        assert_eq!(an_fulldocument_jian_ming("nota.ai"), "nota.ai");
-        assert_eq!(an_fulldocument_jian_ming("nota_git-2"), "nota_git-2");
+    fn validate_long_plugin_id_source_sample_package_stream() {
+        assert_eq!(safe_filename("nota.ai"), "nota.ai");
+        assert_eq!(safe_filename("nota_git-2"), "nota_git-2");
     }
 
     #[test]
-    fn jiu_theme_bao_fu_zhi_dao_xin_directory_qie_bu_fu_gai_yi_you_content() {
+    fn old_theme_package_service_only_to_new_directory_cut_not_service_change_one_has_content() {
         let root = std::env::temp_dir().join(format!(
             "nota-theme-migrate-{}-{}",
             std::process::id(),
@@ -303,15 +306,15 @@ fn remove_tree(path: &Path) -> std::io::Result<()> {
     }
 }
 
-fn kai_emit_tai_candidates(env: Option<PathBuf>, zhu_cang_ku: &Path) -> Vec<PathBuf> {
+fn start_emit_platform_candidates(env: Option<PathBuf>, main_store_store: &Path) -> Vec<PathBuf> {
     if let Some(e) = env {
         return vec![e];
     }
     let mut out = Vec::new();
-    if let Some(workspace_2) = zhu_cang_ku.parent() {
+    if let Some(workspace_2) = main_store_store.parent() {
         out.push(workspace_2.join("Nota-plugins").join("plugins"));
     }
-    out.push(zhu_cang_ku.join("plugins"));
+    out.push(main_store_store.join("plugins"));
     out
 }
 
@@ -319,9 +322,9 @@ pub fn builtin_plugins_dirs(resource_dir: Option<&Path>) -> Vec<PathBuf> {
     let mut out = Vec::new();
 
     if cfg!(debug_assertions) {
-        if let Some(zhu_cang_ku) = Path::new(env!("CARGO_MANIFEST_DIR")).parent() {
+        if let Some(main_store_store) = Path::new(env!("CARGO_MANIFEST_DIR")).parent() {
             let env = std::env::var_os("NOTA_PLUGINS_DIR").map(PathBuf::from);
-            out.extend(kai_emit_tai_candidates(env, zhu_cang_ku));
+            out.extend(start_emit_platform_candidates(env, main_store_store));
         }
     }
 

@@ -395,7 +395,9 @@ impl Manifest {
             }
         }
 
-        if !meta.langs.is_empty() && lang::pi_pei(lang::PLUGIN_FALLBACK, &meta.langs).is_none() {
+        if !meta.langs.is_empty()
+            && lang::match_language(lang::PLUGIN_FALLBACK, &meta.langs).is_none()
+        {
             return Err(NotaError::Manifest {
                 file: file.to_path_buf(),
                 reason: format!(
@@ -481,10 +483,10 @@ fn check_devserver(
     capabilities: &[Capability],
     file: &Path,
 ) -> Result<Option<DevServerSpec>> {
-    let shen_qing_le = capabilities.contains(&Capability::ProcessDevServer);
+    let deep_request = capabilities.contains(&Capability::ProcessDevServer);
 
     let Some(spec) = spec else {
-        if shen_qing_le {
+        if deep_request {
             return Err(NotaError::Manifest {
                 file: file.to_path_buf(),
                 reason: "`process.devserver` requires a `[devserver]` section".to_owned(),
@@ -493,7 +495,7 @@ fn check_devserver(
         return Ok(None);
     };
 
-    if !shen_qing_le {
+    if !deep_request {
         return Err(NotaError::Manifest {
             file: file.to_path_buf(),
             reason: "`[devserver]` requires the `process.devserver` capability".to_owned(),
@@ -508,10 +510,10 @@ fn check_devserver(
     }
 
     if let Some(name) = &spec.entry {
-        let yue_jie = Path::new(name)
+        let month_boundary = Path::new(name)
             .components()
             .any(|c| !matches!(c, std::path::Component::Normal(_)));
-        if yue_jie {
+        if month_boundary {
             return Err(NotaError::Manifest {
                 file: file.to_path_buf(),
                 reason: format!("`[devserver] entry` must be a file name; received `{name}`"),

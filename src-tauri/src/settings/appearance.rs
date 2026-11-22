@@ -148,12 +148,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn suo_fang_default_yi_bai_er_bu_shi_ling() {
+    fn lock_method_default_one_percent_two_not_is_zero() {
         assert_eq!(Appearance::default().zoom, 100);
     }
 
     #[test]
-    fn cai_dan_lan_yang_shi_default_nota_bing_ke_qie_huan_xi_tong() {
+    fn extract_single_panel_sample_is_default_nota_and_can_cut_replace_system_same() {
         assert_eq!(
             Appearance::default().menu_renderer,
             MenuBarRenderer::Nota,
@@ -165,7 +165,7 @@ mod tests {
             MenuBarRenderer::Nota,
             "\u{65e7}\u{8bbe}\u{7f6e}\u{6587}\u{4ef6}\u{7f3a} menu_renderer \u{65f6}\u{5fc5}\u{987b}\u{8865}\u{6210} Nota"
         );
-        for (renderer, ci) in [
+        for (renderer, word) in [
             (MenuBarRenderer::Nota, "nota"),
             (MenuBarRenderer::System, "system"),
         ] {
@@ -174,7 +174,7 @@ mod tests {
                 ..Appearance::default()
             })
             .expect("\u{5e8f}\u{5217}\u{5316}\u{8be5}\u{6210}\u{529f}");
-            assert!(text.contains(&format!("menu_renderer = \"{ci}\"")));
+            assert!(text.contains(&format!("menu_renderer = \"{word}\"")));
             let back: Appearance = toml::from_str(&text).expect("\u{8bfb}\u{5f97}\u{56de}\u{6765}");
             assert_eq!(back.menu_renderer, renderer);
         }
@@ -222,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn zi_hao_zhi_you_yi_fen_er_zhe_ge_bu_er_zhi_shi_suan_bu_suan_shu() {
+    fn character_number_only_has_one_part_two_not_two_only_is_compute_not_compute_data() {
         let a = Appearance::default();
         assert!(!a.custom_font_size, "\u{9ed8}\u{8ba4}\u{8be5}\u{662f}\u{300c}\u{81ea}\u{52a8}\u{300d}\u{ff0c}\u{4e0d}\u{662f}\u{300c}\u{81ea}\u{5b9a}\u{4e49}\u{300d}");
 
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_gun_lun_default_gai_zi_hao_er_bu_shi_suo_fang() {
+    fn ctrl_gun_argument_default_change_character_number_two_not_is_lock_method() {
         assert_eq!(
             Appearance::default().ctrl_wheel_target,
             CtrlWheelTarget::FontSize
@@ -239,8 +239,8 @@ mod tests {
     }
 
     #[test]
-    fn ctrl_gun_lun_liang_dang_zai_settings_file_li_shi_zhe_liang_ge_ci() {
-        for (target, ci) in [
+    fn ctrl_gun_argument_two_when_at_settings_file_inner_is_two_word() {
+        for (target, word) in [
             (CtrlWheelTarget::FontSize, "font_size"),
             (CtrlWheelTarget::Zoom, "zoom"),
         ] {
@@ -250,8 +250,8 @@ mod tests {
             })
             .expect("\u{5e8f}\u{5217}\u{5316}\u{8be5}\u{6210}\u{529f}");
             assert!(
-                text.contains(&format!("ctrl_wheel_target = \"{ci}\"")),
-                "`{target:?}` \u{8be5}\u{843d}\u{6210} `{ci}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
+                text.contains(&format!("ctrl_wheel_target = \"{word}\"")),
+                "`{target:?}` \u{8be5}\u{843d}\u{6210} `{word}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
             );
             let back: Appearance = toml::from_str(&text).expect("\u{8bfb}\u{5f97}\u{56de}\u{6765}");
             assert_eq!(back.ctrl_wheel_target, target);
@@ -259,9 +259,9 @@ mod tests {
     }
 
     #[test]
-    fn lao_settings_file_li_mei_you_gun_lun_target_na_yi_ge_ye_neng_read() {
-        let lao_table = "ctrl_wheel_zoom = true\nzoom = 150\n";
-        let a: Appearance = toml::from_str(lao_table)
+    fn old_settings_file_inner_each_has_gun_argument_target_that_one_page_can_read() {
+        let old_table = "ctrl_wheel_zoom = true\nzoom = 150\n";
+        let a: Appearance = toml::from_str(old_table)
             .expect("\u{8001}\u{8868}\u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}");
         assert_eq!(a.ctrl_wheel_target, CtrlWheelTarget::FontSize);
         assert!(a.ctrl_wheel_zoom, "\u{8001}\u{6587}\u{4ef6}\u{91cc}\u{90a3}\u{4e2a}\u{5f00}\u{5173}\u{5fc5}\u{987b}\u{7167}\u{65e7}\u{8ba4}");
@@ -269,13 +269,13 @@ mod tests {
     }
 
     #[test]
-    fn gong_ju_lan_default_bu_xian_shi_shi_gu_yi_de() {
+    fn work_sentence_panel_default_not_thread_is_is_estimate_one() {
         assert_eq!(Appearance::default().toolbar, ToolbarMode::Never);
     }
 
     #[test]
-    fn gong_ju_lan_san_dang_zai_settings_file_li_shi_zhe_san_ge_ci() {
-        for (mode, ci) in [
+    fn work_sentence_panel_three_when_at_settings_file_inner_is_three_word() {
+        for (mode, word) in [
             (ToolbarMode::Always, "always"),
             (ToolbarMode::Hover, "hover"),
             (ToolbarMode::Never, "never"),
@@ -286,8 +286,8 @@ mod tests {
             })
             .expect("\u{5e8f}\u{5217}\u{5316}\u{8be5}\u{6210}\u{529f}");
             assert!(
-                text.contains(&format!("toolbar = \"{ci}\"")),
-                "`{mode:?}` \u{8be5}\u{843d}\u{6210} `{ci}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
+                text.contains(&format!("toolbar = \"{word}\"")),
+                "`{mode:?}` \u{8be5}\u{843d}\u{6210} `{word}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
             );
 
             let back: Appearance = toml::from_str(&text).expect("\u{8bfb}\u{5f97}\u{56de}\u{6765}");
@@ -296,9 +296,9 @@ mod tests {
     }
 
     #[test]
-    fn lao_settings_file_li_de_na_ge_bu_er_bei_hu_lve_er_bu_shi_bao_cuo() {
-        let lao_table = "show_toolbar = true\n";
-        let a: Appearance = toml::from_str(lao_table)
+    fn old_settings_file_inner_that_not_two_passive_call_ignore_two_not_is_package_error() {
+        let old_table = "show_toolbar = true\n";
+        let a: Appearance = toml::from_str(old_table)
             .expect("\u{8001}\u{8868}\u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}");
         assert_eq!(a.toolbar, ToolbarMode::Never);
 
@@ -306,32 +306,32 @@ mod tests {
     }
 
     #[test]
-    fn status_lan_tong_ji_liang_default_shi_ci_shu_lao_table_li_mei_you_zhe_yi_ge_ye_read_de_jin_lai(
+    fn status_panel_same_record_two_default_is_word_data_old_table_inner_each_has_one_page_read_enter_incoming(
     ) {
-        let lao_table = "zoom = 120\nshow_status_bar = true\n";
-        let a: Appearance = toml::from_str(lao_table)
+        let old_table = "zoom = 120\nshow_status_bar = true\n";
+        let a: Appearance = toml::from_str(old_table)
             .expect("\u{8001}\u{8868}\u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}");
         assert_eq!(a.status_metric, StatusMetric::Words);
         assert_eq!(a.zoom, 120, "\u{540c}\u{4e00}\u{5f20}\u{8868}\u{91cc}\u{522b}\u{7684}\u{9879}\u{4e0d}\u{80fd}\u{53d7}\u{5f71}\u{54cd}");
 
-        for (wen_zi, expected_2) in [
+        for (text_value, expected_2) in [
             ("words", StatusMetric::Words),
             ("characters", StatusMetric::Characters),
             ("lines", StatusMetric::Lines),
             ("minutes", StatusMetric::Minutes),
         ] {
-            let table_2 = format!("status_metric = {wen_zi:?}\n");
+            let table_2 = format!("status_metric = {text_value:?}\n");
             let b: Appearance = toml::from_str(&table_2)
-                .unwrap_or_else(|e| panic!("`{wen_zi}` \u{8be5}\u{80fd}\u{8bfb}\u{ff1a}{e}"));
+                .unwrap_or_else(|e| panic!("`{text_value}` \u{8be5}\u{80fd}\u{8bfb}\u{ff1a}{e}"));
             assert_eq!(
                 b.status_metric, expected_2,
-                "`{wen_zi}` \u{8ba4}\u{9519}\u{4e86}\u{9879}"
+                "`{text_value}` \u{8ba4}\u{9519}\u{4e86}\u{9879}"
             );
         }
     }
 
     #[test]
-    fn status_lan_tong_ji_liang_cun_xia_qu_zai_read_hui_lai_bu_bian() {
+    fn status_panel_same_record_two_store_lower_get_at_read_return_incoming_not_edit() {
         for value_2 in [
             StatusMetric::Words,
             StatusMetric::Characters,
@@ -349,12 +349,12 @@ mod tests {
     }
 
     #[test]
-    fn theme_se_default_gen_sui_feng_ge() {
+    fn theme_color_default_root_follow_style() {
         assert_eq!(Appearance::default().accent, "");
     }
 
     #[test]
-    fn theme_se_yuan_yang_cun_qu_bu_gai_write() {
+    fn theme_color_source_sample_store_get_not_change_write() {
         for value_2 in ["#3584e4", "#3584E4", "3584e4", ""] {
             let text = toml::to_string_pretty(&Appearance {
                 accent: value_2.to_string(),
@@ -370,12 +370,13 @@ mod tests {
     }
 
     #[test]
-    fn theme_se_write_zhe_yi_ge_ren_bu_chu_lai_de_value_ye_bu_xu_ba_settings_read_si() {
-        for huai in ["red", "#12345", "rgb(1,2,3)", "\u{1f7e5}", "   "] {
-            let table_2 = format!("accent = {huai:?}\n");
+    fn theme_color_write_one_person_not_out_incoming_value_page_not_required_handle_settings_read_four(
+    ) {
+        for broken in ["red", "#12345", "rgb(1,2,3)", "\u{1f7e5}", "   "] {
+            let table_2 = format!("accent = {broken:?}\n");
             let a: Appearance = toml::from_str(&table_2)
-                .unwrap_or_else(|e| panic!("`{huai}` \u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}\u{ff0c}\u{5b9e}\u{9645}\u{62a5}\u{9519}\u{ff1a}{e}"));
-            assert_eq!(a.accent, huai, "\u{540e}\u{7aef}\u{8be5}\u{539f}\u{6837}\u{7559}\u{7740}\u{ff0c}\u{4ea4}\u{7ed9}\u{524d}\u{7aef}\u{5224}");
+                .unwrap_or_else(|e| panic!("`{broken}` \u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}\u{ff0c}\u{5b9e}\u{9645}\u{62a5}\u{9519}\u{ff1a}{e}"));
+            assert_eq!(a.accent, broken, "\u{540e}\u{7aef}\u{8be5}\u{539f}\u{6837}\u{7559}\u{7740}\u{ff0c}\u{4ea4}\u{7ed9}\u{524d}\u{7aef}\u{5224}");
 
             assert_eq!(a.zoom, 100);
             assert_eq!(a.toolbar, ToolbarMode::Never);
@@ -383,9 +384,9 @@ mod tests {
     }
 
     #[test]
-    fn lao_settings_file_li_mei_you_theme_se_na_yi_ge_ye_neng_read() {
-        let lao_table = "zoom = 120\ntoolbar = \"always\"\n";
-        let a: Appearance = toml::from_str(lao_table)
+    fn old_settings_file_inner_each_has_theme_color_that_one_page_can_read() {
+        let old_table = "zoom = 120\ntoolbar = \"always\"\n";
+        let a: Appearance = toml::from_str(old_table)
             .expect("\u{8001}\u{8868}\u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}");
         assert_eq!(a.accent, "", "\u{7f3a}\u{952e}\u{8be5}\u{8865}\u{6210}\u{300c}\u{8ddf}\u{968f}\u{98ce}\u{683c}\u{300d}");
         assert_eq!(a.zoom, 120, "\u{540c}\u{4e00}\u{5f20}\u{8868}\u{91cc}\u{522b}\u{7684}\u{9879}\u{4e0d}\u{80fd}\u{53d7}\u{5f71}\u{54cd}");
@@ -393,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn cai_dan_lan_default_xian_shi_er_gong_ju_lan_default_bu_xian_shi_shi_liang_tiao_bu_tong_de_qu_she(
+    fn extract_single_panel_default_thread_is_two_work_sentence_panel_default_not_thread_is_is_two_item_not_same_get_set(
     ) {
         let a = Appearance::default();
         assert!(
@@ -408,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn cai_dan_lan_enabled_yuan_yang_cun_qu() {
+    fn extract_single_panel_enabled_source_sample_store_get() {
         for value_2 in [true, false] {
             let text = toml::to_string_pretty(&Appearance {
                 show_menu_bar: value_2,
@@ -425,43 +426,43 @@ mod tests {
     }
 
     #[test]
-    fn lao_settings_file_li_mei_you_cai_dan_lan_na_yi_ge_jiu_shi_xian_shi() {
-        let lao_table = "zoom = 120\n";
-        let a: Appearance = toml::from_str(lao_table)
+    fn old_settings_file_inner_each_has_extract_single_panel_that_one_old_is_thread_is() {
+        let old_table = "zoom = 120\n";
+        let a: Appearance = toml::from_str(old_table)
             .expect("\u{8001}\u{8868}\u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}");
         assert!(a.show_menu_bar, "\u{7f3a}\u{952e}\u{8be5}\u{8865}\u{6210}\u{300c}\u{663e}\u{793a}\u{300d}\u{ff0c}\u{4e0d}\u{80fd}\u{662f}\u{300c}\u{9690}\u{85cf}\u{300d}");
         assert_eq!(a.zoom, 120, "\u{540c}\u{4e00}\u{5f20}\u{8868}\u{91cc}\u{522b}\u{7684}\u{9879}\u{4e0d}\u{80fd}\u{53d7}\u{5f71}\u{54cd}");
     }
 
     #[test]
-    fn zhuan_zhu_ya_an_default_biao_zhun_er_bu_shi_geng_qiang() {
+    fn convert_main_press_by_default_table_ready_two_not_is_more_qiang() {
         assert_eq!(Appearance::default().focus_mode_dim, FocusDim::Standard);
     }
 
     #[test]
-    fn zhuan_zhu_ya_an_san_dang_zai_settings_file_li_shi_zhe_san_ge_ci() {
-        for (dang, ci) in [
+    fn convert_main_press_by_three_when_at_settings_file_inner_is_three_word() {
+        for (when, word) in [
             (FocusDim::Standard, "standard"),
             (FocusDim::Strong, "strong"),
             (FocusDim::Stronger, "stronger"),
         ] {
             let text = toml::to_string_pretty(&Appearance {
-                focus_mode_dim: dang,
+                focus_mode_dim: when,
                 ..Appearance::default()
             })
             .expect("\u{5e8f}\u{5217}\u{5316}\u{8be5}\u{6210}\u{529f}");
             assert!(
-                text.contains(&format!("focus_mode_dim = \"{ci}\"")),
-                "`{dang:?}` \u{8be5}\u{843d}\u{6210} `{ci}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
+                text.contains(&format!("focus_mode_dim = \"{word}\"")),
+                "`{when:?}` \u{8be5}\u{843d}\u{6210} `{word}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
             );
             let back: Appearance = toml::from_str(&text).expect("\u{8bfb}\u{5f97}\u{56de}\u{6765}");
-            assert_eq!(back.focus_mode_dim, dang);
+            assert_eq!(back.focus_mode_dim, when);
         }
     }
 
     #[test]
-    fn lao_settings_file_li_mei_you_zhuan_zhu_ya_an_na_yi_ge_ye_neng_read() {
-        let lao_table = "zoom = 120\nfocus_mode_dim = \"strong\"\n";
+    fn old_settings_file_inner_each_has_convert_main_press_by_that_one_page_can_read() {
+        let old_table = "zoom = 120\nfocus_mode_dim = \"strong\"\n";
         let a: Appearance = toml::from_str("zoom = 120\n")
             .expect("\u{8001}\u{8868}\u{5fc5}\u{987b}\u{4ecd}\u{7136}\u{80fd}\u{89e3}\u{6790}");
         assert_eq!(
@@ -471,22 +472,22 @@ mod tests {
         );
         assert_eq!(a.zoom, 120, "\u{540c}\u{4e00}\u{5f20}\u{8868}\u{91cc}\u{522b}\u{7684}\u{9879}\u{4e0d}\u{80fd}\u{53d7}\u{5f71}\u{54cd}");
 
-        let b: Appearance = toml::from_str(lao_table).expect("\u{8bfb}\u{5f97}\u{56de}\u{6765}");
+        let b: Appearance = toml::from_str(old_table).expect("\u{8bfb}\u{5f97}\u{56de}\u{6765}");
         assert_eq!(b.focus_mode_dim, FocusDim::Strong);
     }
 
     #[test]
-    fn biao_ti_lan_filename_default_dai_er_zhe_yi_ge_guan_de_diao() {
+    fn table_question_panel_filename_default_pending_two_one_close_drop() {
         assert!(Appearance::default().show_filename_in_titlebar);
-        for (value_2, ci) in [(true, "true"), (false, "false")] {
+        for (value_2, word) in [(true, "true"), (false, "false")] {
             let text = toml::to_string_pretty(&Appearance {
                 show_filename_in_titlebar: value_2,
                 ..Appearance::default()
             })
             .expect("\u{5e8f}\u{5217}\u{5316}\u{8be5}\u{6210}\u{529f}");
             assert!(
-                text.contains(&format!("show_filename_in_titlebar = {ci}")),
-                "\u{8be5}\u{843d}\u{6210} `show_filename_in_titlebar = {ci}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
+                text.contains(&format!("show_filename_in_titlebar = {word}")),
+                "\u{8be5}\u{843d}\u{6210} `show_filename_in_titlebar = {word}`\u{ff0c}\u{5b9e}\u{9645}\u{662f}\u{ff1a}\n{text}"
             );
             let back: Appearance = toml::from_str(&text).expect("\u{8bfb}\u{5f97}\u{56de}\u{6765}");
             assert_eq!(back.show_filename_in_titlebar, value_2);

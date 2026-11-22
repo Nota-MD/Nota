@@ -46,14 +46,14 @@ testCase("rfd 不再编入 Linux 主程序", () => {
   assertion(/^rfd\s*=/m.test(nonLinux), "非 Linux 原生选择器依赖缺失");
 });
 
-testCase("打印对话框只走 Portal，不再回退 GTK3", () => {
+testCase("print dialog uses Portal without a GTK3 fallback", () => {
   const face = print.slice(
     print.indexOf("pub fn print_html_dialog_with"),
     print.indexOf("#[cfg(target_os = \"linux\")]\nmod linux"),
   );
-  assertion(face.includes("linux::yin_shua"), "缺少无可见窗口的 PDF 生成兜底");
+  assertion(face.includes("linux::infer_refresh"), "missing hidden-window PDF fallback");
   assertion(face.includes("linux::portal_print"), "打印框没有调用 XDG Portal");
-  assertion(!face.includes("linux::对话框"), "打印框仍回退 GTK3");
+  assertion(!face.includes("linux::dialog"), "print dialog still falls back to GTK3");
   assertion(!print.includes(".run_dialog("), "仍保留 WebKitGTK GTK3 打印框");
 });
 

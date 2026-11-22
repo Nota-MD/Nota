@@ -297,10 +297,13 @@ styles/themes/dark/latex.css
 styles/themes/dark/minimal.css
 styles/themes/latex.css
 styles/themes/minimal.css
+styles/command-palette.css
 styles/vim.css
 styles/zoom-hud.css
 ui/ExternalChangeBar.tsx
 ui/ExternalDiffPane.tsx
+ui/CommandPalette.tsx
+ui/command-palette.ts
 ui/FocusAlarmWindow.tsx
 ui/FocusMeter.tsx
 ui/PanelDiffBlock.tsx

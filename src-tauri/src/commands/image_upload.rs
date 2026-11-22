@@ -70,13 +70,13 @@ pub(crate) async fn upload_this(
     settings_2: UploadSettings,
     source_2: image::ImageSource,
     document_directory: Option<PathBuf>,
-    saved_to_de: Option<String>,
+    saved_to: Option<String>,
 ) -> Result<String> {
     tauri::async_runtime::spawn_blocking(move || {
         let content_2 = upload_payload(
             &source_2,
             document_directory.as_deref(),
-            saved_to_de.as_deref(),
+            saved_to.as_deref(),
         )?;
         upload::upload_once(&settings_2, content_2)
     })
@@ -87,40 +87,37 @@ pub(crate) async fn upload_this(
 fn upload_payload(
     source_3: &ImageSource,
     document_directory: Option<&Path>,
-    saved_to_de: Option<&str>,
+    saved_to: Option<&str>,
 ) -> Result<UploadPayload> {
-    if let Some(path_3) = saved_to_de {
+    if let Some(path_3) = saved_to {
         let p = Path::new(path_3);
-        let zi_jie = std::fs::read(p).map_err(|e| NotaError::Read {
+        let bytes = std::fs::read(p).map_err(|e| NotaError::Read {
             path: p.to_path_buf(),
             source: e,
         })?;
         return Ok(UploadPayload::LocalFile {
-            zi_jie,
+            bytes,
             filename_2: filename_2(p),
         });
     }
     Ok(match source_3 {
         ImageSource::LocalFile(provided) => {
             let p = image::resolve_local_file(provided, document_directory);
-            let zi_jie = std::fs::read(&p).map_err(|e| NotaError::Read {
+            let bytes = std::fs::read(&p).map_err(|e| NotaError::Read {
                 path: p.clone(),
                 source: e,
             })?;
 
             UploadPayload::LocalFile {
-                zi_jie,
+                bytes,
                 filename_2: filename_2(&p),
             }
         }
         ImageSource::NetworkAddress(u) => UploadPayload::NetworkAddress {
             original_address: u.clone(),
         },
-        ImageSource::Clipboard {
-            zi_jie,
-            extension_2,
-        } => UploadPayload::LocalFile {
-            zi_jie: zi_jie.clone(),
+        ImageSource::Clipboard { bytes, extension_2 } => UploadPayload::LocalFile {
+            bytes: bytes.clone(),
             filename_2: format!("image.{extension_2}"),
         },
     })
@@ -181,9 +178,9 @@ pub(crate) async fn auto_upload(
     settings_2: UploadSettings,
     source_2: image::ImageSource,
     document_directory: Option<PathBuf>,
-    saved_to_de: Option<String>,
+    saved_to: Option<String>,
 ) -> UploadResult {
-    match upload_this(settings_2, source_2, document_directory, saved_to_de).await {
+    match upload_this(settings_2, source_2, document_directory, saved_to).await {
         Ok(url) => UploadResult::Success { url },
 
         Err(e) => UploadResult::Failure {

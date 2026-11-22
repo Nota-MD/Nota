@@ -3828,6 +3828,7 @@ const tests: Array<{ name: string; run: () => Promise<void> }> = [
             documentKey: "spreadsheet-e2e",
             run: () => undefined,
             spreadsheet: true,
+            spreadsheetPersistent: false,
           }),
         );
       });

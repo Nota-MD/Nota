@@ -62,8 +62,8 @@ function gutterWidth(view: EditorView): number {
 
 
 
-function toggleTaskItem(view: EditorView, li: HTMLElement): boolean {
-  const $pos = view.state.doc.resolve(view.posAtDOM(li, 0));
+function toggleTaskItem(view: EditorView, itemElement: HTMLElement): boolean {
+  const $pos = view.state.doc.resolve(view.posAtDOM(itemElement, 0));
 
   let depth = $pos.depth;
   while (depth > 0 && $pos.node(depth).type.name !== "list_item") depth--;
@@ -187,14 +187,14 @@ export const taskList = $prose(
             const gutter = gutterWidth(view);
             const items = view.dom.querySelectorAll<HTMLElement>(TASK_ITEM_SELECTOR);
 
-            for (const li of Array.from(items)) {
-              const rect = li.getBoundingClientRect();
+            for (const itemElement of Array.from(items)) {
+              const rect = itemElement.getBoundingClientRect();
               const inRow = event.clientY >= rect.top && event.clientY <= rect.bottom;
               const inGutter =
                 event.clientX < rect.left && event.clientX >= rect.left - gutter;
               if (inRow && inGutter) {
                 event.preventDefault();
-                return toggleTaskItem(view, li);
+                return toggleTaskItem(view, itemElement);
               }
             }
             return false;

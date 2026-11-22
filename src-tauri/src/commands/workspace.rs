@@ -54,17 +54,17 @@ impl Default for ResolvedTreeOptions {
     }
 }
 
-fn parse_options(opts: Option<TreeOptions>, she: &Files) -> ResolvedTreeOptions {
+fn parse_options(opts: Option<TreeOptions>, set: &Files) -> ResolvedTreeOptions {
     ResolvedTreeOptions {
-        sort: opts.as_ref().and_then(|o| o.sort).unwrap_or(she.tree_sort),
+        sort: opts.as_ref().and_then(|o| o.sort).unwrap_or(set.tree_sort),
         filter: opts
             .as_ref()
             .and_then(|o| o.filter)
-            .unwrap_or(she.tree_filter),
+            .unwrap_or(set.tree_filter),
         show_hidden: opts
             .as_ref()
             .and_then(|o| o.show_hidden)
-            .unwrap_or(she.show_hidden),
+            .unwrap_or(set.show_hidden),
     }
 }
 
@@ -349,8 +349,8 @@ pub fn nota_workspace_tree(
         .unwrap_or_default();
 
     let options_2 = {
-        let she = state.settings.lock().unwrap();
-        parse_options(opts, &she.files)
+        let set = state.settings.lock().unwrap();
+        parse_options(opts, &set.files)
     };
 
     read_dir_sorted(&base, &base_rel, depth.unwrap_or(1), options_2)
@@ -367,7 +367,7 @@ fn read_dir_sorted(
         source,
     })?;
 
-    const YONG_YUAN_TIAO_GUO: [&str; 2] = [".git", "node_modules"];
+    const USE_SOURCE_ITEM_PASSED: [&str; 2] = [".git", "node_modules"];
 
     struct FileCandidate {
         node_2: TreeNode,
@@ -384,7 +384,7 @@ fn read_dir_sorted(
             continue;
         }
 
-        if YONG_YUAN_TIAO_GUO.contains(&name.as_str()) {
+        if USE_SOURCE_ITEM_PASSED.contains(&name.as_str()) {
             continue;
         }
 
@@ -470,7 +470,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ren_ling_de_markdown_extension() {
+    fn person_zero_markdown_extension() {
         assert!(is_markdown("a.md"));
         assert!(
             is_markdown("A.MD"),
@@ -482,7 +482,7 @@ mod tests {
     }
 
     #[test]
-    fn file_summary_tiao_guo_front_matter_bing_qu_liang_xing() {
+    fn file_summary_item_passed_front_matter_and_get_two_line() {
         let text = "---\ntitle: \u{5143}\u{6570}\u{636e}\n---\n\n# UNIX\u{ae}\n\n**\u{53a6}\u{95e8}\u{5e02}\u{69df}\u{6994}\u{4e2d}\u{5b66}** 2024\u{ff08}12\u{ff09} \u{674e}\u{9f50}\n\n\u{540e}\u{6587}";
         let (title, detail) = take_summary(text);
         assert_eq!(title.as_deref(), Some("UNIX\u{ae}"));
@@ -490,7 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn file_shu_zhi_lie_markdown_bing_qie_directory_zai_qian() {
+    fn file_data_only_list_markdown_and_cut_directory_at_before() {
         let root = std::env::temp_dir().join("nota-tree-test");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("zeta")).unwrap();
@@ -507,7 +507,7 @@ mod tests {
     }
 
     #[test]
-    fn depth_wei_1_shi_bu_gei_zi_node() {
+    fn depth_position_1_is_not_give_character_node() {
         let root = std::env::temp_dir().join("nota-tree-depth");
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("d")).unwrap();
@@ -524,79 +524,79 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    fn da_ge_directory(ming: &str) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("nota-tree-{ming}"));
+    fn large_directory(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("nota-tree-{name}"));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root
     }
 
-    fn ming_men(shu_2: &[TreeNode]) -> Vec<String> {
-        shu_2.iter().map(|n| n.name.clone()).collect()
+    fn name_list(data_2: &[TreeNode]) -> Vec<String> {
+        data_2.iter().map(|n| n.name.clone()).collect()
     }
 
     #[test]
-    fn options_zhu_ge_hui_luo() {
-        let she = Files {
+    fn options_main_return_land() {
+        let set = Files {
             tree_sort: TreeSort::Modified,
             tree_filter: FileFilter::All,
             show_hidden: true,
             ..Default::default()
         };
 
-        let quan_que = parse_options(None, &she);
-        assert_eq!(quan_que.sort, TreeSort::Modified);
-        assert_eq!(quan_que.filter, FileFilter::All);
-        assert!(quan_que.show_hidden);
+        let full_missing = parse_options(None, &set);
+        assert_eq!(full_missing.sort, TreeSort::Modified);
+        assert_eq!(full_missing.filter, FileFilter::All);
+        assert!(full_missing.show_hidden);
 
-        let zhi_gei_pai_xu = parse_options(
+        let only_give_schedule_required = parse_options(
             Some(TreeOptions {
                 sort: Some(TreeSort::Name),
                 ..Default::default()
             }),
-            &she,
+            &set,
         );
-        assert_eq!(zhi_gei_pai_xu.sort, TreeSort::Name);
+        assert_eq!(only_give_schedule_required.sort, TreeSort::Name);
         assert_eq!(
-            zhi_gei_pai_xu.filter,
+            only_give_schedule_required.filter,
             FileFilter::All,
             "\u{6ca1}\u{7ed9}\u{7684}\u{90a3}\u{683c}\u{8be5}\u{7167}\u{8bbe}\u{7f6e}\u{8d70}"
         );
         assert!(
-            zhi_gei_pai_xu.show_hidden,
+            only_give_schedule_required.show_hidden,
             "\u{6ca1}\u{7ed9}\u{7684}\u{90a3}\u{683c}\u{8be5}\u{7167}\u{8bbe}\u{7f6e}\u{8d70}"
         );
 
-        let xian_shi_guan_diao_yin_cang = parse_options(
+        let thread_is_close_drop_infer_store = parse_options(
             Some(TreeOptions {
                 show_hidden: Some(false),
                 ..Default::default()
             }),
-            &she,
+            &set,
         );
         assert!(
-            !xian_shi_guan_diao_yin_cang.show_hidden,
+            !thread_is_close_drop_infer_store.show_hidden,
             "\u{663e}\u{5f0f} false \u{5fc5}\u{987b}\u{771f}\u{7684}\u{5173}\u{6389}"
         );
     }
 
     #[test]
-    fn an_xiu_gai_shi_jian_pai_shi_xin_de_zai_qian() {
-        let root = da_ge_directory("modified");
+    fn modified_time_sorted_newest_first() {
+        let root = large_directory("modified");
 
         std::fs::write(root.join("a-\u{8001}.md"), "a").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(20));
         std::fs::write(root.join("b-\u{65b0}.md"), "b").unwrap();
 
-        let an_ming =
+        let by_name =
             read_dir_sorted(&root, Path::new(""), 1, ResolvedTreeOptions::default()).unwrap();
         assert_eq!(
-            ming_men(&an_ming),
+            name_list(&by_name),
             vec!["a-\u{8001}.md", "b-\u{65b0}.md"],
             "\u{540d}\u{5b57}\u{6863}\u{7167}\u{65e7}\u{5347}\u{5e8f}"
         );
 
-        let an_shi_jian = read_dir_sorted(
+        let by_is_check = read_dir_sorted(
             &root,
             Path::new(""),
             1,
@@ -607,7 +607,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            ming_men(&an_shi_jian),
+            name_list(&by_is_check),
             vec!["b-\u{65b0}.md", "a-\u{8001}.md"],
             "\u{4fee}\u{6539}\u{65f6}\u{95f4}\u{6863}\u{ff1a}\u{65b0}\u{7684}\u{5728}\u{524d}"
         );
@@ -616,13 +616,13 @@ mod tests {
     }
 
     #[test]
-    fn shi_jian_dang_li_directory_reng_zai_file_qian_mian() {
-        let root = da_ge_directory("dirs-first");
+    fn is_check_when_inner_directory_still_at_file_before_surface() {
+        let root = large_directory("dirs-first");
         std::fs::create_dir_all(root.join("d")).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(20));
         std::fs::write(root.join("\u{540e}\u{6765}\u{7684}.md"), "x").unwrap();
 
-        let shu_2 = read_dir_sorted(
+        let data_2 = read_dir_sorted(
             &root,
             Path::new(""),
             1,
@@ -633,14 +633,14 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(ming_men(&shu_2), vec!["d", "\u{540e}\u{6765}\u{7684}.md"]);
+        assert_eq!(name_list(&data_2), vec!["d", "\u{540e}\u{6765}\u{7684}.md"]);
 
         let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
-    fn xian_shi_yin_cang_file_dan_git_yu_node_modules_yong_bu_chu_xian() {
-        let root = da_ge_directory("hidden");
+    fn thread_is_infer_store_file_single_git_and_node_modules_use_not_out_thread() {
+        let root = large_directory("hidden");
         std::fs::write(root.join("\u{770b}\u{5f97}\u{5230}.md"), "x").unwrap();
         std::fs::write(root.join(".env"), "A=1").unwrap();
         std::fs::create_dir_all(root.join(".github")).unwrap();
@@ -650,12 +650,12 @@ mod tests {
         let default_2 =
             read_dir_sorted(&root, Path::new(""), 1, ResolvedTreeOptions::default()).unwrap();
         assert_eq!(
-            ming_men(&default_2),
+            name_list(&default_2),
             vec!["\u{770b}\u{5f97}\u{5230}.md"],
             "\u{9ed8}\u{8ba4}\u{6863}\u{8fde} .env \u{90fd}\u{4e0d}\u{5217}"
         );
 
-        let zhi_bo_yin_cang = read_dir_sorted(
+        let only_broadcast_infer_store = read_dir_sorted(
             &root,
             Path::new(""),
             1,
@@ -666,12 +666,12 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            ming_men(&zhi_bo_yin_cang),
+            name_list(&only_broadcast_infer_store),
             vec![".github", "\u{770b}\u{5f97}\u{5230}.md"],
             "\u{9690}\u{85cf}\u{5f00}\u{4e86}\u{3001}\u{8fc7}\u{6ee4}\u{6ca1}\u{5f00}"
         );
 
-        let bo_kai = read_dir_sorted(
+        let broadcast_start = read_dir_sorted(
             &root,
             Path::new(""),
             1,
@@ -682,17 +682,17 @@ mod tests {
             },
         )
         .unwrap();
-        let ming = ming_men(&bo_kai);
-        for gai_zai in [".env", ".github"] {
+        let name = name_list(&broadcast_start);
+        for change_at in [".env", ".github"] {
             assert!(
-                ming.contains(&gai_zai.to_string()),
-                "{gai_zai} \u{8be5}\u{9732}\u{51fa}\u{6765}\u{4e86}\u{ff1a}{ming:?}"
+                name.contains(&change_at.to_string()),
+                "{change_at} \u{8be5}\u{9732}\u{51fa}\u{6765}\u{4e86}\u{ff1a}{name:?}"
             );
         }
-        for yong_bu_zai in [".git", "node_modules"] {
+        for use_not_at in [".git", "node_modules"] {
             assert!(
-                !ming.contains(&yong_bu_zai.to_string()),
-                "{yong_bu_zai} \u{6c38}\u{8fdc}\u{4e0d}\u{8be5}\u{51fa}\u{73b0}\u{ff1a}{ming:?}"
+                !name.contains(&use_not_at.to_string()),
+                "{use_not_at} \u{6c38}\u{8fdc}\u{4e0d}\u{8be5}\u{51fa}\u{73b0}\u{ff1a}{name:?}"
             );
         }
 
@@ -700,16 +700,16 @@ mod tests {
     }
 
     #[test]
-    fn guo_lv_dang_all_shi_lie_chu_fei_markdown_file() {
-        let root = da_ge_directory("filter");
+    fn passed_lv_when_all_is_list_out_invalid_markdown_file() {
+        let root = large_directory("filter");
         std::fs::write(root.join("a.md"), "x").unwrap();
         std::fs::write(root.join("b.png"), "x").unwrap();
 
-        let zhi_markdown =
+        let only_markdown =
             read_dir_sorted(&root, Path::new(""), 1, ResolvedTreeOptions::default()).unwrap();
-        assert_eq!(ming_men(&zhi_markdown), vec!["a.md"]);
+        assert_eq!(name_list(&only_markdown), vec!["a.md"]);
 
-        let quan_bu = read_dir_sorted(
+        let full_not = read_dir_sorted(
             &root,
             Path::new(""),
             1,
@@ -719,7 +719,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(ming_men(&quan_bu), vec!["a.md", "b.png"]);
+        assert_eq!(name_list(&full_not), vec!["a.md", "b.png"]);
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -739,7 +739,7 @@ mod tests {
 
     #[test]
     fn workspace_delete_handles_files_directories_and_root_guards() {
-        let root = da_ge_directory("delete-path");
+        let root = large_directory("delete-path");
         let file = root.join("delete.md");
         let nested = root.join("folder").join("delete.md");
         std::fs::write(&file, "delete me").unwrap();

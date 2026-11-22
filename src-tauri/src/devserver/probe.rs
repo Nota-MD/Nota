@@ -87,24 +87,24 @@ pub fn probe(spec: &DevServerSpec, root: Option<&Path>, need: Option<&str>) -> P
     }
 
     if let Some(rel) = need {
-        if he_fa_de_xiang_dui_path(rel) {
-            out.need_found = Some(root.is_some_and(|dir| you_zhe_ceng(dir, rel)));
+        if and_method_item_pair_path(rel) {
+            out.need_found = Some(root.is_some_and(|dir| has_layer(dir, rel)));
         }
     }
 
     out
 }
 
-fn you_zhe_ceng(root: &Path, rel: &str) -> bool {
+fn has_layer(root: &Path, rel: &str) -> bool {
     root.ancestors().any(|d| d.join(rel).exists())
 }
 
-fn he_fa_de_xiang_dui_path(rel: &str) -> bool {
+fn and_method_item_pair_path(rel: &str) -> bool {
     !rel.is_empty()
         && !rel.contains('\\')
         && rel
             .split('/')
-            .all(|duan| !duan.is_empty() && duan != "." && duan != "..")
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
 }
 
 #[derive(Debug)]
@@ -217,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn biao_ji_directory_yao_wang_shang_zhao() {
+    fn table_record_directory_need_web_upper_find() {
         let dir = temp_dir("marker");
         let deep = dir.join("\u{7b14}\u{8bb0}").join("\u{9879}\u{76ee}");
         std::fs::create_dir_all(
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn e_wai_yao_zhao_de_dong_xi_ye_wang_shang_zhao() {
+    fn e_wai_need_find_dynamic_system_page_web_upper_find() {
         let dir = temp_dir("need");
         let document_directory = dir.join("\u{7b14}\u{8bb0}").join("\u{6f14}\u{793a}");
         std::fs::create_dir_all(&document_directory).unwrap();
@@ -245,12 +245,12 @@ mod tests {
         std::fs::create_dir_all(&theme_2).unwrap();
         std::fs::write(theme_2.join("package.json"), "{}").unwrap();
 
-        assert!(you_zhe_ceng(
+        assert!(has_layer(
             &document_directory,
             "node_modules/@slidev/theme-seriph/package.json"
         ));
 
-        assert!(!you_zhe_ceng(
+        assert!(!has_layer(
             &document_directory,
             "node_modules/@slidev/theme-default/package.json"
         ));
@@ -258,13 +258,13 @@ mod tests {
     }
 
     #[test]
-    fn xiang_dui_path_de_pan_ju() {
-        assert!(he_fa_de_xiang_dui_path(
+    fn item_pair_path_parse_sentence() {
+        assert!(and_method_item_pair_path(
             "node_modules/@slidev/theme-default"
         ));
-        assert!(he_fa_de_xiang_dui_path("node_modules/.bin/nota"));
+        assert!(and_method_item_pair_path("node_modules/.bin/nota"));
 
-        for huai in [
+        for broken in [
             "",
             "/etc/passwd",
             "../../.ssh/id_ed25519",
@@ -272,12 +272,12 @@ mod tests {
             "a\\b",
             "a//b",
         ] {
-            assert!(!he_fa_de_xiang_dui_path(huai), "`{huai}` \u{4e0d}\u{8be5}\u{88ab}\u{5224}\u{6210}\u{5408}\u{6cd5}\u{7684}\u{76f8}\u{5bf9}\u{8def}\u{5f84}");
+            assert!(!and_method_item_pair_path(broken), "`{broken}` \u{4e0d}\u{8be5}\u{88ab}\u{5224}\u{6210}\u{5408}\u{6cd5}\u{7684}\u{76f8}\u{5bf9}\u{8def}\u{5f84}");
         }
     }
 
     #[test]
-    fn ming_ling_bu_cun_zai_shi_bao_de_shi_ren_hua() {
+    fn name_zero_not_store_at_is_package_is_person_render() {
         let s = DevServerSpec {
             cmd: "nota-\u{7edd}\u{5bf9}\u{6ca1}\u{6709}\u{8fd9}\u{4e2a}\u{547d}\u{4ee4}".to_owned(),
             cmd_env: None,
@@ -296,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn bu_he_fa_de_yao_zhao_de_dong_xi_bu_suan_wen_guo() {
+    fn not_and_method_need_find_dynamic_system_not_compute_text_passed() {
         let s = spec();
         let p = probe(&s, Some(Path::new("/tmp")), Some("../../etc/passwd"));
         assert_eq!(p.need_found, None, "\u{4e0d}\u{5408}\u{6cd5} = \u{4e0d}\u{56de}\u{7b54}\u{ff0c}\u{4e0d}\u{662f}\u{300c}\u{6ca1}\u{6709}\u{300d}");

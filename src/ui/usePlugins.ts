@@ -237,7 +237,7 @@ export function usePlugins({
       setDockOpen(false);
       return;
     }
-    const [ps, pn, mn, tk, ta] = await Promise.all([
+    const [plugins, panels, menus, trustEntries, tableActions] = await Promise.all([
       api.plugin.list(),
       api.plugin.panels(),
       api.plugin.menus(),
@@ -245,11 +245,11 @@ export function usePlugins({
       api.table.actions(),
     ]);
     if (!activeActive.current) return;
-    setPlugins(ps);
-    setPanels(pn);
-    setMenuItems(mn);
-    setTrustTable(tk);
-    setTableActions(ta);
+    setPlugins(plugins);
+    setPanels(panels);
+    setMenuItems(menus);
+    setTrustTable(trustEntries);
+    setTableActions(tableActions);
   }, [extensionsEnabled, setDockOpen]);
 
 

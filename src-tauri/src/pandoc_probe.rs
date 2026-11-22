@@ -53,7 +53,7 @@ pub(crate) fn parse_2(command: &str) -> Option<ProbeTarget> {
         });
     }
 
-    if zai_path_li(&program_2) {
+    if at_path_inner(&program_2) {
         return Some(ProbeTarget {
             program: program_2,
             args,
@@ -63,10 +63,10 @@ pub(crate) fn parse_2(command: &str) -> Option<ProbeTarget> {
     }
 
     for candidates_2 in candidates_directory() {
-        let quan = candidates_2.dir.join(&program_2);
-        if ke_zhi_xing_file(&quan) {
+        let full = candidates_2.dir.join(&program_2);
+        if can_only_line_file(&full) {
             return Some(ProbeTarget {
-                program: quan.display().to_string(),
+                program: full.display().to_string(),
                 args,
                 env: candidates_2.env,
                 source_2: candidates_2.source_2,
@@ -82,7 +82,7 @@ pub(crate) fn parse_2(command: &str) -> Option<ProbeTarget> {
     })
 }
 
-pub(crate) fn zai_path_li(name_2: &str) -> bool {
+pub(crate) fn at_path_inner(name_2: &str) -> bool {
     match std::env::var_os("PATH") {
         Some(path) => find_in_path(&[name_2], &path).is_some(),
         None => false,
@@ -90,30 +90,30 @@ pub(crate) fn zai_path_li(name_2: &str) -> bool {
 }
 
 pub(crate) fn candidates_directory() -> Vec<ProbeCandidate> {
-    let mut chu = Vec::new();
-    if let Some(jia_3) = dirs::home_dir() {
-        chu.push(ProbeCandidate::pu_tong(
-            jia_3.join(".local/bin"),
+    let mut out = Vec::new();
+    if let Some(add_3) = dirs::home_dir() {
+        out.push(ProbeCandidate::plain_same(
+            add_3.join(".local/bin"),
             "~/.local/bin",
         ));
-        chu.push(ProbeCandidate::pu_tong(
-            jia_3.join(".cabal/bin"),
+        out.push(ProbeCandidate::plain_same(
+            add_3.join(".cabal/bin"),
             "~/.cabal/bin",
         ));
     }
-    chu.push(ProbeCandidate::pu_tong(
+    out.push(ProbeCandidate::plain_same(
         PathBuf::from("/usr/local/bin"),
         "/usr/local/bin",
     ));
-    chu.push(ProbeCandidate::pu_tong(
+    out.push(ProbeCandidate::plain_same(
         PathBuf::from("/opt/homebrew/bin"),
         "/opt/homebrew/bin",
     ));
-    chu.push(ProbeCandidate::pu_tong(
+    out.push(ProbeCandidate::plain_same(
         PathBuf::from("/opt/pandoc"),
         "/opt/pandoc",
     ));
-    chu.push(ProbeCandidate::pu_tong(
+    out.push(ProbeCandidate::plain_same(
         PathBuf::from("/snap/bin"),
         "/snap/bin",
     ));
@@ -121,14 +121,14 @@ pub(crate) fn candidates_directory() -> Vec<ProbeCandidate> {
     for directory_2 in ["/run/host/usr/local/bin", "/run/host/usr/bin"] {
         let dir = PathBuf::from(directory_2);
         if dir.is_dir() {
-            chu.push(ProbeCandidate {
+            out.push(ProbeCandidate {
                 dir,
                 source_2: format!("host-provided {directory_2}"),
-                env: su_zhu_dian_pian(),
+                env: speed_main_point_piece(),
             });
         }
     }
-    chu
+    out
 }
 
 pub(crate) struct ProbeCandidate {
@@ -140,7 +140,7 @@ pub(crate) struct ProbeCandidate {
 }
 
 impl ProbeCandidate {
-    fn pu_tong(dir: PathBuf, source_2: &str) -> Self {
+    fn plain_same(dir: PathBuf, source_2: &str) -> Self {
         Self {
             dir,
             source_2: source_2.to_string(),
@@ -149,61 +149,61 @@ impl ProbeCandidate {
     }
 }
 
-pub(crate) fn su_zhu_dian_pian() -> Vec<(String, String)> {
-    let mut chu = Vec::new();
+pub(crate) fn speed_main_point_piece() -> Vec<(String, String)> {
+    let mut out = Vec::new();
 
-    let ku = su_zhu_ku_directory();
-    if !ku.is_empty() {
-        chu.push(("LD_LIBRARY_PATH".to_string(), ku.join(":")));
+    let store = speed_main_store_directory();
+    if !store.is_empty() {
+        out.push(("LD_LIBRARY_PATH".to_string(), store.join(":")));
     }
 
-    let lu = "/run/host/usr/local/bin:/run/host/usr/bin:/run/host/bin";
-    let yuan = std::env::var("PATH").unwrap_or_default();
-    chu.push((
+    let host_path = "/run/host/usr/local/bin:/run/host/usr/bin:/run/host/bin";
+    let source = std::env::var("PATH").unwrap_or_default();
+    out.push((
         "PATH".to_string(),
-        if yuan.is_empty() {
-            lu.to_string()
+        if source.is_empty() {
+            host_path.to_string()
         } else {
-            format!("{lu}:{yuan}")
+            format!("{source}:{host_path}")
         },
     ));
 
     if Path::new("/run/host/usr/share/pandoc").is_dir() {
-        chu.push((
+        out.push((
             "pandoc_datadir".to_string(),
             "/run/host/usr/share/pandoc".to_string(),
         ));
     }
-    chu
+    out
 }
 
-fn su_zhu_ku_directory() -> Vec<String> {
-    let mut chu: Vec<String> = Vec::new();
-    for fu in ["/run/host/usr/lib", "/run/host/lib"] {
-        let fu = Path::new(fu);
-        if !fu.is_dir() {
+fn speed_main_store_directory() -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for service in ["/run/host/usr/lib", "/run/host/lib"] {
+        let service = Path::new(service);
+        if !service.is_dir() {
             continue;
         }
-        chu.push(fu.display().to_string());
-        if let Ok(tiao_mu) = std::fs::read_dir(fu) {
-            for tiao in tiao_mu.flatten() {
-                let p = tiao.path();
-                let shi_duo_jia_gou = p
+        out.push(service.display().to_string());
+        if let Ok(item_target) = std::fs::read_dir(service) {
+            for item in item_target.flatten() {
+                let p = item.path();
+                let is_multiple_add_construct = p
                     .file_name()
                     .map(|n| n.to_string_lossy().contains("-linux-gnu"))
                     .unwrap_or(false);
-                if p.is_dir() && shi_duo_jia_gou {
-                    chu.push(p.display().to_string());
+                if p.is_dir() && is_multiple_add_construct {
+                    out.push(p.display().to_string());
                 }
             }
         }
     }
-    for bian_ping in ["/run/host/usr/lib64", "/run/host/lib64"] {
-        if Path::new(bian_ping).is_dir() {
-            chu.push(bian_ping.to_string());
+    for edit_level in ["/run/host/usr/lib64", "/run/host/lib64"] {
+        if Path::new(edit_level).is_dir() {
+            out.push(edit_level.to_string());
         }
     }
-    chu
+    out
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -254,18 +254,18 @@ pub(crate) fn probe_with(command: &str) -> PandocProbe {
         import_formats: import_formats(),
     };
 
-    let Some(luo) = parse_2(command) else {
+    let Some(land) = parse_2(command) else {
         out.message = format!("{ENV_CMD} is empty; there is no command to run.");
         return out;
     };
 
-    out.command = luo.program.clone();
-    let program = luo.program;
-    let mut args = luo.args;
+    out.command = land.program.clone();
+    let program = land.program;
+    let mut args = land.args;
     args.push(VERSION_FLAG.to_string());
 
     let mut opts = RunOpts::timeout(CHECK_TIMEOUT).env("NO_COLOR", "1");
-    for (k, v) in &luo.env {
+    for (k, v) in &land.env {
         opts = opts.env(k, v);
     }
     match run_capture(&program, &args, opts) {
@@ -274,12 +274,12 @@ pub(crate) fn probe_with(command: &str) -> PandocProbe {
         } => {
             out.state = ProbeState::Ready;
             out.version = first_line(&stdout);
-            out.message = install_ok_le_na_ju(&out);
+            out.message = install_ok_that_sentence(&out);
 
-            if luo.source_2 != "PATH" {
+            if land.source_2 != "PATH" {
                 out.message.push_str(&format!(
                     "(This executable is not on PATH; found through {}.)",
-                    luo.source_2
+                    land.source_2
                 ));
             }
         }
@@ -323,7 +323,7 @@ pub(crate) fn probe_with(command: &str) -> PandocProbe {
     out
 }
 
-pub(crate) fn install_ok_le_na_ju(out: &PandocProbe) -> String {
+pub(crate) fn install_ok_that_sentence(out: &PandocProbe) -> String {
     let version = out.version.as_deref().unwrap_or("Unknown version");
     let mut s = format!("Found pandoc ({version}); formats from the export table are available.");
     if let Some(engine) = &out.pdf_engine {
@@ -365,15 +365,15 @@ pub(crate) fn tail_of(text: &str) -> String {
 
 pub(crate) fn find_engine() -> Option<String> {
     if let Some(path) = std::env::var_os("PATH") {
-        if let Some(ming) = find_in_path(ENGINES, &path) {
-            return Some(ming);
+        if let Some(name) = find_in_path(ENGINES, &path) {
+            return Some(name);
         }
     }
 
     let directory_2: Vec<PathBuf> = candidates_directory().into_iter().map(|c| c.dir).collect();
     for name in ENGINES {
         for dir in &directory_2 {
-            if ke_zhi_xing_file(&dir.join(name)) {
+            if can_only_line_file(&dir.join(name)) {
                 return Some((*name).to_string());
             }
         }
@@ -388,7 +388,7 @@ pub(crate) fn find_in_path(names: &[&str], path: &OsString) -> Option<String> {
             if dir.as_os_str().is_empty() {
                 continue;
             }
-            if ke_zhi_xing_file(&dir.join(name)) {
+            if can_only_line_file(&dir.join(name)) {
                 return Some((*name).to_string());
             }
         }
@@ -397,7 +397,7 @@ pub(crate) fn find_in_path(names: &[&str], path: &OsString) -> Option<String> {
 }
 
 #[cfg(unix)]
-pub(crate) fn ke_zhi_xing_file(path: &Path) -> bool {
+pub(crate) fn can_only_line_file(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     std::fs::metadata(path)
         .map(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
@@ -405,7 +405,7 @@ pub(crate) fn ke_zhi_xing_file(path: &Path) -> bool {
 }
 
 #[cfg(windows)]
-pub(crate) fn ke_zhi_xing_file(path: &Path) -> bool {
+pub(crate) fn can_only_line_file(path: &Path) -> bool {
     path.is_file()
         && path
             .extension()

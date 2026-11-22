@@ -45,5 +45,5 @@ pub struct AppState {
     ///
 
     ///
-    pub app_lang: String,
+    pub app_language: String,
 }

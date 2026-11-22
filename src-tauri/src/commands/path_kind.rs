@@ -36,7 +36,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn directory_file_bu_cun_zai_san_zhong_dou_ren_de_chu() {
+    fn directory_file_not_store_at_three_middle_all_person_out() {
         let temp_2 = std::env::temp_dir().join(format!("nota-paths-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp_2);
         std::fs::create_dir_all(&temp_2).unwrap();
@@ -61,7 +61,8 @@ mod tests {
     }
 
     #[test]
-    fn kong_ru_can_gei_kong_chu_can_yi_tiao_huai_de_ye_bu_tuo_kua_zheng_pi() {
+    fn empty_into_arguments_give_empty_out_arguments_one_item_broken_page_not_escape_cross_validate_batch(
+    ) {
         assert!(nota_paths_kind(vec![]).unwrap().is_empty());
 
         let result_3 = nota_paths_kind(vec![
@@ -74,7 +75,7 @@ mod tests {
     }
 
     #[test]
-    fn kua_ipc_de_qu_value_shi_ying_wen_xiao_write() {
+    fn cross_ipc_get_value_is_should_text_small_write() {
         for (kind_2, expected_2) in [
             (PathKind::Dir, "\"dir\""),
             (PathKind::File, "\"file\""),

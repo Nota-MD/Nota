@@ -27,19 +27,19 @@ const IPP_STATUS_CLIENT_NOT_FOUND: u16 = 0x0406;
 
 #[derive(Debug, Clone)]
 pub(crate) struct Printer {
-    pub ming: String,
-    pub miao_shu: String,
-    pub shi_default: bool,
+    pub name: String,
+    pub description_data: String,
+    pub is_default: bool,
 }
 
 #[derive(Debug)]
 pub(crate) struct PrinterList {
-    pub fu_wu_available: bool,
-    pub print_ji: Vec<Printer>,
-    pub wen_ti: Option<String>,
+    pub service_none_available: bool,
+    pub print_record: Vec<Printer>,
+    pub text_question: Option<String>,
 }
 
-fn tao_jie_zi_path() -> Option<PathBuf> {
+fn escape_boundary_character_path() -> Option<PathBuf> {
     [
         PathBuf::from("/run/cups/cups.sock"),
         PathBuf::from("/var/run/cups/cups.sock"),
@@ -56,30 +56,30 @@ fn tao_jie_zi_path() -> Option<PathBuf> {
 }
 
 pub(crate) fn list_printers() -> PrinterList {
-    let Some(socket) = tao_jie_zi_path() else {
+    let Some(socket) = escape_boundary_character_path() else {
         return PrinterList {
-            fu_wu_available: false,
-            print_ji: Vec::new(),
-            wen_ti: None,
+            service_none_available: false,
+            print_record: Vec::new(),
+            text_question: None,
         };
     };
-    match cha_xun_print_ji(&socket) {
-        Ok(mut chu) => {
-            if let Ok(Some(default_2)) = cha_xun_default(&socket) {
-                for p in &mut chu {
-                    p.shi_default = p.ming == default_2;
+    match check_search_print_record(&socket) {
+        Ok(mut out) => {
+            if let Ok(Some(default_2)) = check_search_default(&socket) {
+                for p in &mut out {
+                    p.is_default = p.name == default_2;
                 }
             }
             PrinterList {
-                fu_wu_available: true,
-                print_ji: chu,
-                wen_ti: None,
+                service_none_available: true,
+                print_record: out,
+                text_question: None,
             }
         }
         Err(e) => PrinterList {
-            fu_wu_available: true,
-            print_ji: Vec::new(),
-            wen_ti: Some(e.to_string()),
+            service_none_available: true,
+            print_record: Vec::new(),
+            text_question: Some(e.to_string()),
         },
     }
 }
@@ -90,24 +90,24 @@ pub(crate) fn submit(
     copies: u32,
     ranges: Option<&str>,
 ) -> Result<String> {
-    let ming = printer.trim();
-    if ming.is_empty() {
+    let name = printer.trim();
+    if name.is_empty() {
         return Err(NotaError::other("No printer was selected"));
     }
-    let socket = tao_jie_zi_path().ok_or_else(|| {
+    let socket = escape_boundary_character_path().ok_or_else(|| {
         NotaError::other("Could not find the CUPS Unix socket (/run/cups/cups.sock)")
     })?;
-    let uri = print_ji_uri(ming);
-    let mut qing_qiu = qi_shi_qing_qiu(PRINT_JOB, 2);
-    jia_zi_fu_chuan(&mut qing_qiu, IPP_URI, "printer-uri", &uri);
-    jia_zi_fu_chuan(
-        &mut qing_qiu,
+    let uri = print_record_uri(name);
+    let mut request_data = start_is_request_request(PRINT_JOB, 2);
+    add_character_service_stream(&mut request_data, IPP_URI, "printer-uri", &uri);
+    add_character_service_stream(
+        &mut request_data,
         IPP_NAME,
         "requesting-user-name",
         &std::env::var("USER").unwrap_or_else(|_| "nota".to_string()),
     );
-    jia_zi_fu_chuan(
-        &mut qing_qiu,
+    add_character_service_stream(
+        &mut request_data,
         IPP_NAME,
         "job-name",
         pdf.file_stem()
@@ -115,132 +115,136 @@ pub(crate) fn submit(
             .filter(|s| !s.is_empty())
             .unwrap_or("Nota"),
     );
-    jia_zi_fu_chuan(
-        &mut qing_qiu,
+    add_character_service_stream(
+        &mut request_data,
         IPP_MIME_TYPE,
         "document-format",
         "application/pdf",
     );
     if copies > 1 {
-        jia_zheng_shu(&mut qing_qiu, "copies", copies);
+        add_validate_data(&mut request_data, "copies", copies);
     }
-    if let Some(fan_wei) = ranges.map(str::trim).filter(|s| !s.is_empty()) {
-        let qu_duan = parse_ye_ma_fan_wei(fan_wei)?;
-        jia_qu_jian_shu_xing(&mut qing_qiu, "page-ranges", &qu_duan);
+    if let Some(reverse_position) = ranges.map(str::trim).filter(|s| !s.is_empty()) {
+        let get_segment = parse_page_reverse_position(reverse_position)?;
+        add_get_check_data_line(&mut request_data, "page-ranges", &get_segment);
     }
-    qing_qiu.push(IPP_END);
+    request_data.push(IPP_END);
 
     let path_3 = uri
         .strip_prefix("ipp://localhost")
         .filter(|p| p.starts_with('/'))
         .unwrap_or("/");
-    let xiang_ying = emit_qing_qiu(
+    let item_should = emit_request_request(
         &socket,
         path_3,
-        &qing_qiu,
+        &request_data,
         Some(pdf),
         Duration::from_secs(90),
     )
     .map_err(|e| NotaError::other(format!("CUPS request failed: {e}")))?;
-    let document_2 = parse_xiang_ying(&xiang_ying)
+    let document_2 = parse_item_should(&item_should)
         .map_err(|e| NotaError::other(format!("CUPS returned an invalid response: {e}")))?;
-    confirm_cheng_gong(document_2.status_2)?;
+    confirm_success_work(document_2.status_2)?;
 
-    if let Some(id) = zhao_di_yi_ge(&document_2.shu_xing, "job-id").and_then(read_zheng_shu) {
-        return Ok(format!("{ming}-{id}"));
+    if let Some(id) = find_base_one(&document_2.data_line, "job-id").and_then(read_validate_data) {
+        return Ok(format!("{name}-{id}"));
     }
-    if let Some(uri) = zhao_di_yi_ge(&document_2.shu_xing, "job-uri").and_then(read_zi_fu_chuan) {
+    if let Some(uri) =
+        find_base_one(&document_2.data_line, "job-uri").and_then(read_character_service_stream)
+    {
         return Ok(uri.rsplit('/').next().unwrap_or(&uri).to_string());
     }
     Ok("Submitted".to_string())
 }
 
-fn cha_xun_print_ji(socket: &Path) -> Result<Vec<Printer>> {
-    let mut qing_qiu = qi_shi_qing_qiu(CUPS_GET_PRINTERS, 1);
-    for ming_cheng in [
+fn check_search_print_record(socket: &Path) -> Result<Vec<Printer>> {
+    let mut request_data = start_is_request_request(CUPS_GET_PRINTERS, 1);
+    for display_name in [
         "printer-name",
         "printer-info",
         "printer-uri-supported",
         "printer-state",
         "printer-is-accepting-jobs",
     ] {
-        jia_zi_fu_chuan(
-            &mut qing_qiu,
+        add_character_service_stream(
+            &mut request_data,
             IPP_KEYWORD,
             "requested-attributes",
-            ming_cheng,
+            display_name,
         );
     }
-    qing_qiu.push(IPP_END);
-    let xiang_ying = emit_qing_qiu(socket, "/", &qing_qiu, None, Duration::from_secs(15))
-        .map_err(|e| NotaError::other(format!("Could not connect to CUPS: {e}")))?;
-    let document_2 = parse_xiang_ying(&xiang_ying)
+    request_data.push(IPP_END);
+    let item_should =
+        emit_request_request(socket, "/", &request_data, None, Duration::from_secs(15))
+            .map_err(|e| NotaError::other(format!("Could not connect to CUPS: {e}")))?;
+    let document_2 = parse_item_should(&item_should)
         .map_err(|e| NotaError::other(format!("CUPS returned an invalid response: {e}")))?;
-    confirm_cheng_gong(document_2.status_2)?;
+    confirm_success_work(document_2.status_2)?;
 
-    let mut chu = Vec::new();
-    for zu in an_zu(&document_2.shu_xing, IPP_PRINTER_ATTRIBUTES) {
-        let Some(ming) = zu_zi_fu_chuan(&zu, "printer-name") else {
+    let mut out = Vec::new();
+    for group in by_group(&document_2.data_line, IPP_PRINTER_ATTRIBUTES) {
+        let Some(name) = group_character_service_stream(&group, "printer-name") else {
             continue;
         };
-        let info = zu_zi_fu_chuan(&zu, "printer-info").unwrap_or_default();
-        let state = zu
+        let info = group_character_service_stream(&group, "printer-info").unwrap_or_default();
+        let state = group
             .get("printer-state")
             .and_then(|v| v.first())
-            .and_then(|v| read_zheng_shu(v));
-        let accepting = zu
+            .and_then(|v| read_validate_data(v));
+        let accepting = group
             .get("printer-is-accepting-jobs")
             .and_then(|v| v.first())
-            .and_then(|v| read_bu_er(v));
+            .and_then(|v| read_not_two(v));
         let status_2 = match state {
             Some(3) => "idle",
             Some(4) => "processing",
             Some(5) => "stopped",
             _ => "unknown",
         };
-        let mut miao_shu = if info.is_empty() {
+        let mut description_data = if info.is_empty() {
             status_2.to_string()
         } else {
             format!("{status_2} \u{b7} {info}")
         };
         if accepting == Some(false) {
-            miao_shu.push_str(" \u{b7} not accepting jobs");
+            description_data.push_str(" \u{b7} not accepting jobs");
         }
-        chu.push(Printer {
-            ming,
-            miao_shu,
-            shi_default: false,
+        out.push(Printer {
+            name,
+            description_data,
+            is_default: false,
         });
     }
-    Ok(chu)
+    Ok(out)
 }
 
-fn cha_xun_default(socket: &Path) -> Result<Option<String>> {
-    let mut qing_qiu = qi_shi_qing_qiu(CUPS_GET_DEFAULT, 3);
-    for ming_cheng in ["printer-name", "printer-uri-supported"] {
-        jia_zi_fu_chuan(
-            &mut qing_qiu,
+fn check_search_default(socket: &Path) -> Result<Option<String>> {
+    let mut request_data = start_is_request_request(CUPS_GET_DEFAULT, 3);
+    for display_name in ["printer-name", "printer-uri-supported"] {
+        add_character_service_stream(
+            &mut request_data,
             IPP_KEYWORD,
             "requested-attributes",
-            ming_cheng,
+            display_name,
         );
     }
-    qing_qiu.push(IPP_END);
-    let xiang_ying = emit_qing_qiu(socket, "/", &qing_qiu, None, Duration::from_secs(15))
-        .map_err(|e| NotaError::other(format!("Could not connect to CUPS: {e}")))?;
-    let document_2 = parse_xiang_ying(&xiang_ying)
+    request_data.push(IPP_END);
+    let item_should =
+        emit_request_request(socket, "/", &request_data, None, Duration::from_secs(15))
+            .map_err(|e| NotaError::other(format!("Could not connect to CUPS: {e}")))?;
+    let document_2 = parse_item_should(&item_should)
         .map_err(|e| NotaError::other(format!("CUPS returned an invalid response: {e}")))?;
     if document_2.status_2 == IPP_STATUS_CLIENT_NOT_FOUND {
         return Ok(None);
     }
-    confirm_cheng_gong(document_2.status_2)?;
-    Ok(an_zu(&document_2.shu_xing, IPP_PRINTER_ATTRIBUTES)
+    confirm_success_work(document_2.status_2)?;
+    Ok(by_group(&document_2.data_line, IPP_PRINTER_ATTRIBUTES)
         .first()
-        .and_then(|zu| zu_zi_fu_chuan(zu, "printer-name")))
+        .and_then(|group| group_character_service_stream(group, "printer-name")))
 }
 
-fn qi_shi_qing_qiu(operation: u16, request_id: u32) -> Vec<u8> {
-    let mut chu = vec![
+fn start_is_request_request(operation: u16, request_id: u32) -> Vec<u8> {
+    let mut out = vec![
         1,
         1,
         (operation >> 8) as u8,
@@ -251,137 +255,137 @@ fn qi_shi_qing_qiu(operation: u16, request_id: u32) -> Vec<u8> {
         request_id as u8,
         IPP_OPERATION_ATTRIBUTES,
     ];
-    jia_zi_fu_chuan(&mut chu, IPP_CHARSET, "attributes-charset", "utf-8");
-    jia_zi_fu_chuan(
-        &mut chu,
+    add_character_service_stream(&mut out, IPP_CHARSET, "attributes-charset", "utf-8");
+    add_character_service_stream(
+        &mut out,
         IPP_NATURAL_LANGUAGE,
         "attributes-natural-language",
         "en",
     );
-    chu
+    out
 }
 
-fn jia_zi_fu_chuan(chu: &mut Vec<u8>, tag: u8, name: &str, value: &str) {
-    jia_value(chu, tag, name, value.as_bytes());
+fn add_character_service_stream(out: &mut Vec<u8>, tag: u8, name: &str, value: &str) {
+    add_value(out, tag, name, value.as_bytes());
 }
 
-fn jia_zheng_shu(chu: &mut Vec<u8>, name: &str, value: u32) {
-    jia_value(chu, IPP_INTEGER, name, &value.to_be_bytes());
+fn add_validate_data(out: &mut Vec<u8>, name: &str, value: u32) {
+    add_value(out, IPP_INTEGER, name, &value.to_be_bytes());
 }
 
-fn jia_value(chu: &mut Vec<u8>, tag: u8, name: &str, value: &[u8]) {
-    let ming = name.as_bytes();
-    chu.push(tag);
-    chu.extend_from_slice(&(ming.len() as u16).to_be_bytes());
-    chu.extend_from_slice(ming);
-    chu.extend_from_slice(&(value.len() as u16).to_be_bytes());
-    chu.extend_from_slice(value);
+fn add_value(out: &mut Vec<u8>, tag: u8, name: &str, value: &[u8]) {
+    let name = name.as_bytes();
+    out.push(tag);
+    out.extend_from_slice(&(name.len() as u16).to_be_bytes());
+    out.extend_from_slice(name);
+    out.extend_from_slice(&(value.len() as u16).to_be_bytes());
+    out.extend_from_slice(value);
 }
 
-fn jia_qu_jian_shu_xing(chu: &mut Vec<u8>, name: &str, ranges: &[(u32, u32)]) {
-    for (i, (qi, zhi)) in ranges.iter().enumerate() {
-        let ming = if i == 0 { name } else { "" };
+fn add_get_check_data_line(out: &mut Vec<u8>, name: &str, ranges: &[(u32, u32)]) {
+    for (i, (start, only)) in ranges.iter().enumerate() {
+        let name = if i == 0 { name } else { "" };
         let mut value_2 = Vec::with_capacity(8);
-        value_2.extend_from_slice(&qi.to_be_bytes());
-        value_2.extend_from_slice(&zhi.to_be_bytes());
-        jia_value(chu, IPP_RANGE, ming, &value_2);
+        value_2.extend_from_slice(&start.to_be_bytes());
+        value_2.extend_from_slice(&only.to_be_bytes());
+        add_value(out, IPP_RANGE, name, &value_2);
     }
 }
 
-fn parse_ye_ma_fan_wei(text_2: &str) -> Result<Vec<(u32, u32)>> {
-    let mut chu = Vec::new();
-    for xiang_2 in text_2.split(',') {
-        let xiang_2 = xiang_2.trim();
-        if xiang_2.is_empty() {
+fn parse_page_reverse_position(text_2: &str) -> Result<Vec<(u32, u32)>> {
+    let mut out = Vec::new();
+    for range_item in text_2.split(',') {
+        let range_item = range_item.trim();
+        if range_item.is_empty() {
             return Err(NotaError::other("The page range contains an empty item"));
         }
-        let (qi, zhi) = match xiang_2.split_once('-') {
+        let (start, only) = match range_item.split_once('-') {
             Some((a, b)) => (a.trim().parse::<u32>(), b.trim().parse::<u32>()),
             None => {
-                let n = xiang_2.parse::<u32>().map_err(|_| {
-                    NotaError::other(format!("Page range item \"{xiang_2}\" is not a number"))
+                let n = range_item.parse::<u32>().map_err(|_| {
+                    NotaError::other(format!("Page range item \"{range_item}\" is not a number"))
                 })?;
                 (Ok(n), Ok(n))
             }
         };
-        let qi = qi.map_err(|_| {
+        let start = start.map_err(|_| {
             NotaError::other(format!(
-                "The start of page range \"{xiang_2}\" is not a number"
+                "The start of page range \"{range_item}\" is not a number"
             ))
         })?;
-        let zhi = zhi.map_err(|_| {
+        let only = only.map_err(|_| {
             NotaError::other(format!(
-                "The end of page range \"{xiang_2}\" is not a number"
+                "The end of page range \"{range_item}\" is not a number"
             ))
         })?;
-        if qi == 0 || zhi < qi {
+        if start == 0 || only < start {
             return Err(NotaError::other(format!(
-                "Invalid page range: \"{xiang_2}\""
+                "Invalid page range: \"{range_item}\""
             )));
         }
-        chu.push((qi, zhi));
+        out.push((start, only));
     }
-    Ok(chu)
+    Ok(out)
 }
 
-fn print_ji_uri(ming: &str) -> String {
-    format!("ipp://localhost/printers/{}", encoding_path_duan(ming))
+fn print_record_uri(name: &str) -> String {
+    format!("ipp://localhost/printers/{}", encoding_path_segment(name))
 }
 
-fn encoding_path_duan(value_2: &str) -> String {
-    let mut chu = String::new();
+fn encoding_path_segment(value_2: &str) -> String {
+    let mut out = String::new();
     for b in value_2.as_bytes() {
-        let yuan_yang = b.is_ascii_alphanumeric() || matches!(*b, b'-' | b'.' | b'_' | b'~');
-        if yuan_yang {
-            chu.push(*b as char);
+        let source_sample = b.is_ascii_alphanumeric() || matches!(*b, b'-' | b'.' | b'_' | b'~');
+        if source_sample {
+            out.push(*b as char);
         } else {
-            chu.push_str(&format!("%{b:02X}"));
+            out.push_str(&format!("%{b:02X}"));
         }
     }
-    chu
+    out
 }
 
-fn emit_qing_qiu(
+fn emit_request_request(
     socket: &Path,
     path: &str,
     ipp: &[u8],
     document_file: Option<&Path>,
-    chao_shi: Duration,
+    overflow_is: Duration,
 ) -> io::Result<Vec<u8>> {
     use std::os::unix::net::UnixStream;
 
-    let mut liu = UnixStream::connect(socket)?;
-    liu.set_read_timeout(Some(chao_shi))?;
-    liu.set_write_timeout(Some(chao_shi))?;
-    let file_zhang = match document_file {
+    let mut stream = UnixStream::connect(socket)?;
+    stream.set_read_timeout(Some(overflow_is))?;
+    stream.set_write_timeout(Some(overflow_is))?;
+    let file_length = match document_file {
         Some(path_3) => std::fs::metadata(path_3)?.len(),
         None => 0,
     };
-    let zong_zhang = ipp.len() as u64 + file_zhang;
+    let total_length = ipp.len() as u64 + file_length;
     crate::debug_log!(
         "[cups] POST {path}: IPP {} bytes, document {} bytes",
         ipp.len(),
-        file_zhang
+        file_length
     );
     write!(
-        liu,
-        "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/ipp\r\nAccept: application/ipp\r\nContent-Length: {zong_zhang}\r\nConnection: close\r\n\r\n"
+        stream,
+        "POST {path} HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/ipp\r\nAccept: application/ipp\r\nContent-Length: {total_length}\r\nConnection: close\r\n\r\n"
     )?;
-    liu.write_all(ipp)?;
+    stream.write_all(ipp)?;
     if let Some(path_3) = document_file {
         let mut f = File::open(path_3)?;
-        io::copy(&mut f, &mut liu)?;
+        io::copy(&mut f, &mut stream)?;
     }
-    liu.flush()?;
+    stream.flush()?;
 
-    let mut xiang_ying = Vec::new();
-    liu.read_to_end(&mut xiang_ying)?;
-    crate::debug_log!("[cups] response body: {} bytes", xiang_ying.len());
-    http_body(xiang_ying)
+    let mut item_should = Vec::new();
+    stream.read_to_end(&mut item_should)?;
+    crate::debug_log!("[cups] response body: {} bytes", item_should.len());
+    http_body(item_should)
 }
 
-fn http_body(xiang_ying: Vec<u8>) -> io::Result<Vec<u8>> {
-    let fen_ge = xiang_ying
+fn http_body(item_should: Vec<u8>) -> io::Result<Vec<u8>> {
+    let part = item_should
         .windows(4)
         .position(|w| w == b"\r\n\r\n")
         .ok_or_else(|| {
@@ -390,10 +394,10 @@ fn http_body(xiang_ying: Vec<u8>) -> io::Result<Vec<u8>> {
                 "The HTTP response is missing the end of its headers",
             )
         })?;
-    let tou = std::str::from_utf8(&xiang_ying[..fen_ge]).map_err(|_| {
+    let header = std::str::from_utf8(&item_should[..part]).map_err(|_| {
         io::Error::new(io::ErrorKind::InvalidData, "The HTTP headers are not UTF-8")
     })?;
-    let status_2 = tou
+    let status_2 = header
         .lines()
         .next()
         .and_then(|l| l.split_whitespace().nth(1))
@@ -405,14 +409,14 @@ fn http_body(xiang_ying: Vec<u8>) -> io::Result<Vec<u8>> {
             format!("CUPS HTTP status {status_2}"),
         ));
     }
-    let ti = &xiang_ying[fen_ge + 4..];
+    let question = &item_should[part + 4..];
     crate::debug_log!(
         "[cups] HTTP header {} bytes, body {} bytes, total {} bytes",
-        fen_ge,
-        ti.len(),
-        xiang_ying.len()
+        part,
+        question.len(),
+        item_should.len()
     );
-    let kuai_2 = tou.lines().any(|l| {
+    let value_2 = header.lines().any(|l| {
         l.split_once(':')
             .map(|(k, v)| {
                 k.eq_ignore_ascii_case("transfer-encoding")
@@ -420,35 +424,35 @@ fn http_body(xiang_ying: Vec<u8>) -> io::Result<Vec<u8>> {
             })
             .unwrap_or(false)
     });
-    if kuai_2 {
-        return jie_kuai(ti);
+    if value_2 {
+        return boundary_block(question);
     }
-    let zhang_du = tou.lines().find_map(|l| {
+    let length_read = header.lines().find_map(|l| {
         let (k, v) = l.split_once(':')?;
         k.eq_ignore_ascii_case("content-length")
             .then(|| v.trim().parse::<usize>().ok())
             .flatten()
     });
-    if let Some(n) = zhang_du {
-        if ti.len() < n {
+    if let Some(n) = length_read {
+        if question.len() < n {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 format!(
                     "Truncated IPP body: expected {n} bytes, received {}",
-                    ti.len()
+                    question.len()
                 ),
             ));
         }
-        return Ok(ti[..n].to_vec());
+        return Ok(question[..n].to_vec());
     }
-    Ok(ti.to_vec())
+    Ok(question.to_vec())
 }
 
-fn jie_kuai(ti: &[u8]) -> io::Result<Vec<u8>> {
+fn boundary_block(question: &[u8]) -> io::Result<Vec<u8>> {
     let mut read_2 = 0;
-    let mut chu = Vec::new();
+    let mut out = Vec::new();
     loop {
-        let xing_wei = ti[read_2..]
+        let line_position = question[read_2..]
             .windows(2)
             .position(|w| w == b"\r\n")
             .ok_or_else(|| {
@@ -458,34 +462,34 @@ fn jie_kuai(ti: &[u8]) -> io::Result<Vec<u8>> {
                 )
             })?
             + read_2;
-        let zhang_text = std::str::from_utf8(&ti[read_2..xing_wei]).map_err(|_| {
+        let length_text = std::str::from_utf8(&question[read_2..line_position]).map_err(|_| {
             io::Error::new(io::ErrorKind::InvalidData, "The chunk length is not ASCII")
         })?;
-        let zhang_text = zhang_text.split(';').next().unwrap_or("").trim();
-        let zhang = usize::from_str_radix(zhang_text, 16).map_err(|_| {
+        let length_text = length_text.split(';').next().unwrap_or("").trim();
+        let length = usize::from_str_radix(length_text, 16).map_err(|_| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 "The chunk length is not hexadecimal",
             )
         })?;
-        read_2 = xing_wei + 2;
-        if zhang == 0 {
-            return Ok(chu);
+        read_2 = line_position + 2;
+        if length == 0 {
+            return Ok(out);
         }
-        if ti.len() < read_2 + zhang + 2 {
+        if question.len() < read_2 + length + 2 {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
                 "A chunk body is truncated",
             ));
         }
-        chu.extend_from_slice(&ti[read_2..read_2 + zhang]);
-        read_2 += zhang + 2;
+        out.extend_from_slice(&question[read_2..read_2 + length]);
+        read_2 += length + 2;
     }
 }
 
 #[derive(Debug, Clone)]
 struct IppAttribute {
-    zu: u8,
+    group: u8,
     name: String,
     value: Vec<u8>,
 }
@@ -493,112 +497,121 @@ struct IppAttribute {
 #[derive(Debug)]
 struct IppDocument {
     status_2: u16,
-    shu_xing: Vec<IppAttribute>,
+    data_line: Vec<IppAttribute>,
 }
 
-fn parse_xiang_ying(shu_ju: &[u8]) -> std::result::Result<IppDocument, String> {
-    if shu_ju.len() < 8 {
+fn parse_item_should(data_value: &[u8]) -> std::result::Result<IppDocument, String> {
+    if data_value.len() < 8 {
         return Err("The IPP header is shorter than 8 bytes".into());
     }
-    let status_2 = u16::from_be_bytes([shu_ju[2], shu_ju[3]]);
+    let status_2 = u16::from_be_bytes([data_value[2], data_value[3]]);
     let mut i = 8;
-    let mut zu = 0;
-    let mut shang_yi_tiao_name = String::new();
-    let mut shu_xing = Vec::new();
-    while i < shu_ju.len() {
-        let tag = shu_ju[i];
+    let mut group = 0;
+    let mut upper_one_item_name = String::new();
+    let mut data_line = Vec::new();
+    while i < data_value.len() {
+        let tag = data_value[i];
         i += 1;
         if tag == IPP_END {
             break;
         }
         if matches!(tag, 0x01..=0x05) {
-            zu = tag;
-            shang_yi_tiao_name.clear();
+            group = tag;
+            upper_one_item_name.clear();
             continue;
         }
         let name_2 =
-            read_u16(shu_ju, &mut i).ok_or("An attribute name length is missing")? as usize;
-        if i + name_2 > shu_ju.len() {
+            read_u16(data_value, &mut i).ok_or("An attribute name length is missing")? as usize;
+        if i + name_2 > data_value.len() {
             return Err("An attribute name is out of bounds".into());
         }
         let name = if name_2 == 0 {
-            shang_yi_tiao_name.clone()
+            upper_one_item_name.clone()
         } else {
-            let s = std::str::from_utf8(&shu_ju[i..i + name_2])
+            let s = std::str::from_utf8(&data_value[i..i + name_2])
                 .map_err(|_| "An attribute name is not UTF-8")?
                 .to_string();
-            shang_yi_tiao_name = s.clone();
+            upper_one_item_name = s.clone();
             s
         };
         i += name_2;
-        let zhang =
-            read_u16(shu_ju, &mut i).ok_or("An attribute value length is missing")? as usize;
-        if i + zhang > shu_ju.len() {
+        let length =
+            read_u16(data_value, &mut i).ok_or("An attribute value length is missing")? as usize;
+        if i + length > data_value.len() {
             return Err("An attribute value is out of bounds".into());
         }
-        shu_xing.push(IppAttribute {
-            zu,
+        data_line.push(IppAttribute {
+            group,
             name,
-            value: shu_ju[i..i + zhang].to_vec(),
+            value: data_value[i..i + length].to_vec(),
         });
-        i += zhang;
+        i += length;
     }
-    Ok(IppDocument { status_2, shu_xing })
+    Ok(IppDocument {
+        status_2,
+        data_line,
+    })
 }
 
-fn read_u16(shu_ju: &[u8], i: &mut usize) -> Option<u16> {
-    if *i + 2 > shu_ju.len() {
+fn read_u16(data_value: &[u8], i: &mut usize) -> Option<u16> {
+    if *i + 2 > data_value.len() {
         return None;
     }
-    let chu = u16::from_be_bytes([shu_ju[*i], shu_ju[*i + 1]]);
+    let out = u16::from_be_bytes([data_value[*i], data_value[*i + 1]]);
     *i += 2;
-    Some(chu)
+    Some(out)
 }
 
-fn an_zu(shu_xing: &[IppAttribute], zu: u8) -> Vec<HashMap<String, Vec<Vec<u8>>>> {
-    let mut chu: Vec<HashMap<String, Vec<Vec<u8>>>> = Vec::new();
-    for a in shu_xing.iter().filter(|a| a.zu == zu) {
-        if a.name == "printer-name" || chu.is_empty() {
-            chu.push(HashMap::new());
+fn by_group(data_line: &[IppAttribute], group: u8) -> Vec<HashMap<String, Vec<Vec<u8>>>> {
+    let mut out: Vec<HashMap<String, Vec<Vec<u8>>>> = Vec::new();
+    for a in data_line.iter().filter(|a| a.group == group) {
+        if a.name == "printer-name" || out.is_empty() {
+            out.push(HashMap::new());
         }
-        if let Some(last) = chu.last_mut() {
+        if let Some(last) = out.last_mut() {
             last.entry(a.name.clone())
                 .or_default()
                 .push(a.value.clone());
         }
     }
-    chu
+    out
 }
 
-fn zu_zi_fu_chuan(zu: &HashMap<String, Vec<Vec<u8>>>, name: &str) -> Option<String> {
-    zu.get(name)?.first().and_then(|v| read_zi_fu_chuan(v))
+fn group_character_service_stream(
+    group: &HashMap<String, Vec<Vec<u8>>>,
+    name: &str,
+) -> Option<String> {
+    group
+        .get(name)?
+        .first()
+        .and_then(|v| read_character_service_stream(v))
 }
 
-fn zhao_di_yi_ge<'a>(shu_xing: &'a [IppAttribute], name: &str) -> Option<&'a [u8]> {
-    shu_xing
+fn find_base_one<'a>(data_line: &'a [IppAttribute], name: &str) -> Option<&'a [u8]> {
+    data_line
         .iter()
         .find(|a| a.name == name)
         .map(|a| a.value.as_slice())
 }
 
-fn read_zi_fu_chuan(value_2: &[u8]) -> Option<String> {
+fn read_character_service_stream(value_2: &[u8]) -> Option<String> {
     std::str::from_utf8(value_2).ok().map(ToString::to_string)
 }
 
-fn read_zheng_shu(value_2: &[u8]) -> Option<u32> {
+fn read_validate_data(value_2: &[u8]) -> Option<u32> {
     (value_2.len() == 4)
         .then(|| u32::from_be_bytes([value_2[0], value_2[1], value_2[2], value_2[3]]))
 }
 
-fn read_bu_er(value_2: &[u8]) -> Option<bool> {
+fn read_not_two(value_2: &[u8]) -> Option<bool> {
     (value_2.len() == 1).then(|| value_2[0] != 0)
 }
 
-fn confirm_cheng_gong(status_2: u16) -> Result<()> {
+fn confirm_success_work(status_2: u16) -> Result<()> {
     if status_2 <= 0x00ff {
         return Ok(());
     }
-    let ming = match status_2 {
+    let name = match status_2 {
         0x0400 => "client-error-bad-request",
         0x0401 => "client-error-forbidden",
         0x0402 => "client-error-not-authenticated",
@@ -614,7 +627,7 @@ fn confirm_cheng_gong(status_2: u16) -> Result<()> {
         _ => "unknown-ipp-error",
     };
     Err(NotaError::other(format!(
-        "CUPS rejected the request: {ming} (0x{status_2:04X})"
+        "CUPS rejected the request: {name} (0x{status_2:04X})"
     )))
 }
 
@@ -627,82 +640,90 @@ mod tests {
     const IPP_JOB_ATTRIBUTES: u8 = 0x02;
 
     #[test]
-    fn ye_ma_fan_wei_ren_dan_ye_yu_qu_jian() {
-        assert_eq!(parse_ye_ma_fan_wei("1-3, 5").unwrap(), vec![(1, 3), (5, 5)]);
-        assert!(parse_ye_ma_fan_wei("0-2").is_err());
-        assert!(parse_ye_ma_fan_wei("4-2").is_err());
-        assert!(parse_ye_ma_fan_wei("1,,2").is_err());
+    fn page_reverse_position_person_single_page_and_get_check() {
+        assert_eq!(
+            parse_page_reverse_position("1-3, 5").unwrap(),
+            vec![(1, 3), (5, 5)]
+        );
+        assert!(parse_page_reverse_position("0-2").is_err());
+        assert!(parse_page_reverse_position("4-2").is_err());
+        assert!(parse_page_reverse_position("1,,2").is_err());
     }
 
     #[test]
-    fn print_ji_name_jin_uri_hui_encoding() {
+    fn print_record_name_enter_uri_return_encoding() {
         assert_eq!(
-            print_ji_uri("\u{529e}\u{516c}\u{5ba4} MFP"),
+            print_record_uri("\u{529e}\u{516c}\u{5ba4} MFP"),
             "ipp://localhost/printers/%E5%8A%9E%E5%85%AC%E5%AE%A4%20MFP"
         );
     }
 
     #[test]
-    fn xiang_ying_parse_ren_chu_print_ji_zu_yu_status() {
-        let mut shu_ju = vec![1, 1, 0, 0, 0, 0, 0, 1, IPP_PRINTER_ATTRIBUTES];
-        jia_zi_fu_chuan(&mut shu_ju, IPP_NAME, "printer-name", "L3150");
-        jia_zi_fu_chuan(&mut shu_ju, IPP_TEXT, "printer-info", "Epson L3150");
-        jia_zi_fu_chuan(
-            &mut shu_ju,
+    fn item_should_parse_person_out_print_record_group_and_status() {
+        let mut data_value = vec![1, 1, 0, 0, 0, 0, 0, 1, IPP_PRINTER_ATTRIBUTES];
+        add_character_service_stream(&mut data_value, IPP_NAME, "printer-name", "L3150");
+        add_character_service_stream(&mut data_value, IPP_TEXT, "printer-info", "Epson L3150");
+        add_character_service_stream(
+            &mut data_value,
             IPP_URI,
             "printer-uri-supported",
             "ipp://localhost/printers/L3150",
         );
-        jia_value(&mut shu_ju, IPP_ENUM, "printer-state", &3u32.to_be_bytes());
-        shu_ju.push(IPP_END);
-        let document_2 = parse_xiang_ying(&shu_ju).unwrap();
+        add_value(
+            &mut data_value,
+            IPP_ENUM,
+            "printer-state",
+            &3u32.to_be_bytes(),
+        );
+        data_value.push(IPP_END);
+        let document_2 = parse_item_should(&data_value).unwrap();
         assert_eq!(document_2.status_2, 0);
-        let zu = an_zu(&document_2.shu_xing, IPP_PRINTER_ATTRIBUTES);
-        assert_eq!(zu.len(), 1);
+        let group = by_group(&document_2.data_line, IPP_PRINTER_ATTRIBUTES);
+        assert_eq!(group.len(), 1);
         assert_eq!(
-            zu_zi_fu_chuan(&zu[0], "printer-name").as_deref(),
+            group_character_service_stream(&group[0], "printer-name").as_deref(),
             Some("L3150")
         );
         assert_eq!(
-            zu[0]["printer-state"]
+            group[0]["printer-state"]
                 .first()
-                .and_then(|v| read_zheng_shu(v)),
+                .and_then(|v| read_validate_data(v)),
             Some(3)
         );
     }
 
     #[test]
-    fn http_chunked_ye_neng_jie() {
-        let yuan_shi = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n".to_vec();
-        assert_eq!(http_body(yuan_shi).unwrap(), b"abcde");
+    fn http_chunked_page_can_boundary() {
+        let source_is = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n".to_vec();
+        assert_eq!(http_body(source_is).unwrap(), b"abcde");
     }
 
     #[test]
-    fn que_cups_socket_shi_fan_hui_fu_wu_bu_available() {
+    fn missing_cups_socket_is_reverse_return_service_none_not_available() {
         let result_3 = list_printers();
         if !Path::new("/run/cups/cups.sock").exists()
             && !Path::new("/var/run/cups/cups.sock").exists()
         {
-            assert!(!result_3.fu_wu_available);
+            assert!(!result_3.service_none_available);
         }
     }
 
     #[test]
-    fn bu_er_yu_zheng_shu_zhi_ren_zheng_que_width() {
-        assert_eq!(read_bu_er(&[1]), Some(true));
-        assert_eq!(read_bu_er(&[1, 0]), None);
-        assert_eq!(read_zheng_shu(&[0, 0, 0, 7]), Some(7));
-        assert_eq!(read_zheng_shu(&[7]), None);
+    fn not_two_and_validate_data_only_person_validate_missing_width() {
+        assert_eq!(read_not_two(&[1]), Some(true));
+        assert_eq!(read_not_two(&[1, 0]), None);
+        assert_eq!(read_validate_data(&[0, 0, 0, 7]), Some(7));
+        assert_eq!(read_validate_data(&[7]), None);
     }
 
     #[test]
-    fn ipp_job_shu_xing_zu_li_neng_read_chu_job_id() {
-        let mut shu_ju = vec![1, 1, 0, 0, 0, 0, 0, 2, IPP_JOB_ATTRIBUTES];
-        jia_zheng_shu(&mut shu_ju, "job-id", 42);
-        shu_ju.push(IPP_END);
-        let document_2 = parse_xiang_ying(&shu_ju).unwrap();
+    fn ipp_job_data_line_group_inner_can_read_out_job_id() {
+        let mut data_value = vec![1, 1, 0, 0, 0, 0, 0, 2, IPP_JOB_ATTRIBUTES];
+        add_validate_data(&mut data_value, "job-id", 42);
+        data_value.push(IPP_END);
+        let document_2 = parse_item_should(&data_value).unwrap();
         assert_eq!(
-            zhao_di_yi_ge(&document_2.shu_xing, "job-id").and_then(read_zheng_shu),
+            find_base_one(&document_2.data_line, "job-id").and_then(read_validate_data),
             Some(42)
         );
     }

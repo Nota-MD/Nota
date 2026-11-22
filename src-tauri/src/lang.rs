@@ -10,102 +10,109 @@ pub const APP_FALLBACK: &str = "en";
 
 pub const AUTO: &str = "auto";
 
-pub fn gui_fan(tag: &str) -> String {
-    let zhu = tag
+pub fn normalize_language_tag(tag: &str) -> String {
+    let normalized = tag
         .split(['.', '@'])
         .next()
         .unwrap_or(tag)
         .trim()
         .replace('_', "-");
-    if zhu.is_empty() {
+    if normalized.is_empty() {
         return String::new();
     }
 
-    let mut duan = zhu.split('-');
-    let language_2 = duan.next().unwrap_or("").to_ascii_lowercase();
-    let qi_yu: Vec<String> = duan
-        .map(|s| {
-            if s.len() == 2 && s.chars().all(|c| c.is_ascii_alphabetic()) {
-                s.to_ascii_uppercase()
-            } else if s.len() == 4 && s.chars().all(|c| c.is_ascii_alphabetic()) {
-                let mut c = s.chars();
-                match c.next() {
-                    Some(shou) => {
-                        shou.to_ascii_uppercase().to_string() + &c.as_str().to_ascii_lowercase()
+    let mut segments = normalized.split('-');
+    let language = segments.next().unwrap_or("").to_ascii_lowercase();
+    let qualifiers: Vec<String> = segments
+        .map(|segment| {
+            if segment.len() == 2 && segment.chars().all(|c| c.is_ascii_alphabetic()) {
+                segment.to_ascii_uppercase()
+            } else if segment.len() == 4 && segment.chars().all(|c| c.is_ascii_alphabetic()) {
+                let mut chars = segment.chars();
+                match chars.next() {
+                    Some(first) => {
+                        first.to_ascii_uppercase().to_string()
+                            + &chars.as_str().to_ascii_lowercase()
                     }
                     None => String::new(),
                 }
             } else {
-                s.to_ascii_lowercase()
+                segment.to_ascii_lowercase()
             }
         })
         .collect();
 
-    if qi_yu.is_empty() {
-        language_2
+    if qualifiers.is_empty() {
+        language
     } else {
-        format!("{language_2}-{}", qi_yu.join("-"))
+        format!("{language}-{}", qualifiers.join("-"))
     }
 }
 
-pub fn xi_tong_language() -> Option<String> {
-    if let Some(ping_tai_provided) = sys_locale::get_locale() {
-        let yi = gui_fan(&ping_tai_provided);
-        if !yi.is_empty() && yi != "c" && yi != "posix" {
-            return Some(yi);
+pub fn system_language() -> Option<String> {
+    if let Some(platform_locale) = sys_locale::get_locale() {
+        let tag = normalize_language_tag(&platform_locale);
+        if !tag.is_empty() && tag != "c" && tag != "posix" {
+            return Some(tag);
         }
     }
-    for jian_2 in ["LC_ALL", "LC_MESSAGES", "LANG"] {
-        let Ok(value_2) = std::env::var(jian_2) else {
+    for variable in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        let Ok(value) = std::env::var(variable) else {
             continue;
         };
-        let yi = gui_fan(&value_2);
-        if yi.is_empty() || yi == "c" || yi == "posix" {
+        let tag = normalize_language_tag(&value);
+        if tag.is_empty() || tag == "c" || tag == "posix" {
             continue;
         }
-        return Some(yi);
+        return Some(tag);
     }
     #[cfg(target_os = "linux")]
-    for path_3 in ["/etc/default/locale", "/etc/locale.conf"] {
-        if let Ok(content_2) = std::fs::read_to_string(path_3) {
-            if let Some(language_2) = cong_language_pei_zhi_qu(&content_2) {
-                return Some(language_2);
+    for path in ["/etc/default/locale", "/etc/locale.conf"] {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Some(language) = extract_system_language(&content) {
+                return Some(language);
             }
         }
     }
     None
 }
 
-pub fn cong_language_pei_zhi_qu(content_2: &str) -> Option<String> {
-    for jian_2 in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
-        for xing in content_2.lines() {
-            let xing = xing.trim();
-            let Some(value_2) = xing.strip_prefix(&format!("{jian_2}=")) else {
+pub fn extract_system_language(content: &str) -> Option<String> {
+    for variable in ["LC_ALL", "LC_MESSAGES", "LANG", "LANGUAGE"] {
+        for line in content.lines() {
+            let line = line.trim();
+            let Some(value) = line.strip_prefix(&format!("{variable}=")) else {
                 continue;
             };
-            let shou_xiang = value_2.trim().trim_matches(['"', '\'']).split(':').next()?;
-            let gui_yi = gui_fan(shou_xiang);
-            if !gui_yi.is_empty() && gui_yi != "c" && gui_yi != "posix" {
-                return Some(gui_yi);
+            let first = value.trim().trim_matches(['"', '\'']).split(':').next()?;
+            let tag = normalize_language_tag(first);
+            if !tag.is_empty() && tag != "c" && tag != "posix" {
+                return Some(tag);
             }
         }
     }
     None
 }
 
-pub fn pi_pei(xiang_yao: &str, ke_xuan: &[String]) -> Option<String> {
-    let xiang_yao = gui_fan(xiang_yao);
-    if xiang_yao.is_empty() {
+pub fn match_language(wanted: &str, candidates: &[String]) -> Option<String> {
+    let wanted = normalize_language_tag(wanted);
+    if wanted.is_empty() {
         return None;
     }
-    if let Some(yi) = ke_xuan.iter().find(|c| gui_fan(c) == xiang_yao) {
-        return Some(yi.clone());
-    }
-    let primary = primary_language(&xiang_yao);
-
-    ke_xuan
+    if let Some(exact) = candidates
         .iter()
-        .find(|c| primary_language(&gui_fan(c)) == primary && gui_fan(c).len() < xiang_yao.len())
+        .find(|candidate| normalize_language_tag(candidate) == wanted)
+    {
+        return Some(exact.clone());
+    }
+    let primary = primary_language(&wanted);
+
+    candidates
+        .iter()
+        .find(|candidate| {
+            primary_language(&normalize_language_tag(candidate)) == primary
+                && normalize_language_tag(candidate).len() < wanted.len()
+        })
         .cloned()
 }
 
@@ -113,45 +120,47 @@ pub fn primary_language(tag: &str) -> String {
     tag.split('-').next().unwrap_or(tag).to_ascii_lowercase()
 }
 
-pub fn effective_language(she_ding: &str, xi_tong: Option<String>) -> String {
-    let xiang_yao = if she_ding.trim().is_empty() || gui_fan(she_ding) == gui_fan(AUTO) {
-        xi_tong.unwrap_or_else(|| APP_FALLBACK.to_owned())
+pub fn effective_language(setting: &str, system_language: Option<String>) -> String {
+    let wanted = if setting.trim().is_empty()
+        || normalize_language_tag(setting) == normalize_language_tag(AUTO)
+    {
+        system_language.unwrap_or_else(|| APP_FALLBACK.to_owned())
     } else {
-        she_ding.to_owned()
+        setting.to_owned()
     };
 
-    pi_pei(
-        &xiang_yao,
+    match_language(
+        &wanted,
         &SUPPORTED_LANGUAGES
             .iter()
-            .map(|s| s.to_string())
+            .map(|language| language.to_string())
             .collect::<Vec<_>>(),
     )
     .unwrap_or_else(|| APP_FALLBACK.to_owned())
 }
 
-pub fn read_language_file(text_2: &str) -> Result<HashMap<String, String>, String> {
-    let value_2: toml::Value =
-        toml::from_str(text_2).map_err(|e| format!("Language file is not valid TOML: {e}"))?;
-    let table_2 = value_2
+pub fn read_language_file(text: &str) -> Result<HashMap<String, String>, String> {
+    let value: toml::Value =
+        toml::from_str(text).map_err(|e| format!("Language file is not valid TOML: {e}"))?;
+    let table = value
         .as_table()
         .ok_or_else(|| "The language file root must be a table".to_owned())?;
 
-    let mut chu = HashMap::new();
-    for (jian_2, v) in table_2 {
-        match v {
-            toml::Value::String(s) => {
-                chu.insert(jian_2.clone(), s.clone());
+    let mut entries = HashMap::new();
+    for (key, value) in table {
+        match value {
+            toml::Value::String(text) => {
+                entries.insert(key.clone(), text.clone());
             }
-            bie_de => {
+            other => {
                 return Err(format!(
-                    "Language entry `{jian_2}` has type {}; only flat string values are accepted",
-                    bie_de.type_str()
+                    "Language entry `{key}` has type {}; only flat string values are accepted",
+                    other.type_str()
                 ))
             }
         }
     }
-    Ok(chu)
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -159,15 +168,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gui_yi_hua() {
-        assert_eq!(gui_fan("zh_CN.UTF-8"), "zh-CN");
-        assert_eq!(gui_fan("zh-cn"), "zh-CN");
-        assert_eq!(gui_fan("EN"), "en");
-        assert_eq!(gui_fan("en_US"), "en-US");
-        assert_eq!(gui_fan("pt_BR@euro"), "pt-BR");
-        assert_eq!(gui_fan("zh_Hans_CN"), "zh-Hans-CN");
-        assert_eq!(gui_fan("  "), "");
-        assert_eq!(gui_fan("C"), "c");
+    fn normalizes_language_tags() {
+        assert_eq!(normalize_language_tag("zh_CN.UTF-8"), "zh-CN");
+        assert_eq!(normalize_language_tag("zh-cn"), "zh-CN");
+        assert_eq!(normalize_language_tag("EN"), "en");
+        assert_eq!(normalize_language_tag("en_US"), "en-US");
+        assert_eq!(normalize_language_tag("pt_BR@euro"), "pt-BR");
+        assert_eq!(normalize_language_tag("zh_Hans_CN"), "zh-Hans-CN");
+        assert_eq!(normalize_language_tag("  "), "");
+        assert_eq!(normalize_language_tag("C"), "c");
     }
 
     #[test]
@@ -192,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn liang_ge_dou_di_shi_liang_ge_gai_nian_jin_tian_qia_ok_tong_value() {
+    fn both_fallbacks_keep_the_documented_english_value() {
         assert_eq!(
             PLUGIN_FALLBACK, "en",
             "the extension fallback must remain English"
@@ -204,22 +213,22 @@ mod tests {
     }
 
     #[test]
-    fn pi_pei_jing_que_zai_qian_qian_zhui_dou_di() {
-        let ke_xuan = vec!["en".to_owned(), "zh".to_owned(), "ja".to_owned()];
-        assert_eq!(pi_pei("zh", &ke_xuan).as_deref(), Some("zh"));
+    fn matches_exact_tags_before_primary_language_fallbacks() {
+        let candidates = vec!["en".to_owned(), "zh".to_owned(), "ja".to_owned()];
+        assert_eq!(match_language("zh", &candidates).as_deref(), Some("zh"));
 
-        assert_eq!(pi_pei("zh-CN", &ke_xuan).as_deref(), Some("zh"));
+        assert_eq!(match_language("zh-CN", &candidates).as_deref(), Some("zh"));
 
-        let xi = vec!["zh-CN".to_owned()];
-        assert_eq!(pi_pei("zh", &xi), None);
+        let specific = vec!["zh-CN".to_owned()];
+        assert_eq!(match_language("zh", &specific), None);
 
-        let liang_ge = vec!["zh".to_owned(), "zh-CN".to_owned()];
-        assert_eq!(pi_pei("zh-CN", &liang_ge).as_deref(), Some("zh-CN"));
+        let both = vec!["zh".to_owned(), "zh-CN".to_owned()];
+        assert_eq!(match_language("zh-CN", &both).as_deref(), Some("zh-CN"));
 
-        assert_eq!(pi_pei("ja-JP", &ke_xuan).as_deref(), Some("ja"));
+        assert_eq!(match_language("ja-JP", &candidates).as_deref(), Some("ja"));
 
-        assert_eq!(pi_pei("ko-KR", &ke_xuan), None);
-        assert_eq!(pi_pei("", &ke_xuan), None);
+        assert_eq!(match_language("ko-KR", &candidates), None);
+        assert_eq!(match_language("", &candidates), None);
     }
 
     #[test]
@@ -244,12 +253,12 @@ mod tests {
     }
 
     #[test]
-    fn xu_ni_huan_jing_zhi_you_c_locale_shi_cong_xi_tong_pei_zhi_zhao_hui_zhong_wen() {
-        let pei_zhi = "LANG=\"zh_CN.UTF-8\"\nLANGUAGE=\"zh_CN:zh\"\n";
-        assert_eq!(cong_language_pei_zhi_qu(pei_zhi).as_deref(), Some("zh-CN"));
-        assert_eq!(cong_language_pei_zhi_qu("LANG=C.UTF-8\n").as_deref(), None);
+    fn locale_files_can_supply_a_supported_language() {
+        let config = "LANG=\"zh_CN.UTF-8\"\nLANGUAGE=\"zh_CN:zh\"\n";
+        assert_eq!(extract_system_language(config).as_deref(), Some("zh-CN"));
+        assert_eq!(extract_system_language("LANG=C.UTF-8\n").as_deref(), None);
         assert_eq!(
-            cong_language_pei_zhi_qu("LANG=en_US.UTF-8\n").as_deref(),
+            extract_system_language("LANG=en_US.UTF-8\n").as_deref(),
             Some("en-US")
         );
     }
@@ -265,10 +274,10 @@ mod tests {
     }
 
     #[test]
-    fn read_language_file_zhi_receive_ping_de_zi_fu_chuan() {
-        let table_2 = read_language_file("name = \"AI\"\nhint = \"hi\"\n").unwrap();
-        assert_eq!(table_2.get("name").map(String::as_str), Some("AI"));
-        assert_eq!(table_2.get("hint").map(String::as_str), Some("hi"));
+    fn language_file_accepts_only_flat_strings() {
+        let table = read_language_file("name = \"AI\"\nhint = \"hi\"\n").unwrap();
+        assert_eq!(table.get("name").map(String::as_str), Some("AI"));
+        assert_eq!(table.get("hint").map(String::as_str), Some("hi"));
 
         assert!(read_language_file("[a]\nb = 1\n").is_err());
         assert!(read_language_file("n = 3\n").is_err());

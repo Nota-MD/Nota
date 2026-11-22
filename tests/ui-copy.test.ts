@@ -36,6 +36,7 @@ function columnOutput(itemRecord: string): string[] {
 
 const banEndOfMark = /[⚠️✅❌🚀✨🎉🔒📌💡👉👈]/u;
 const banEndOfMouthLanguage = /别担心|不会丢|这就会|放心吧|搞定|一键|轻松|智能地|为你|帮你|亲爱的|哈喽|太棒了|超赞|完美|快来|点这里|注意啦/u;
+const banColloquialChinese = /哪儿|东西|那边|没让|没跑|没存上|打不开|开不了|留着|丢了|图没有丢|点一下|试试|先按|要存吗|不动|搞定|一键|轻松|帮你|为你|亲爱的|哈喽|太棒了|超赞|完美|快来|注意啦/u;
 
 console.log("\n【界面文案语体】");
 
@@ -55,6 +56,15 @@ testCase("中文界面译文不含状态 emoji", () => {
     const source3 = readFileSync(join(process.cwd(), "src", "i18n", name3), "utf8");
     for (const match2 of source3.matchAll(/:\s*"([^"\n]*)"/g)) {
       assertValue(!banEndOfMark.test(match2[1]), `${name3}：${match2[1]}`);
+    }
+  }
+});
+
+testCase("中文界面译文使用正式、可执行的表达", () => {
+  for (const name3 of ["zh-ui.ts", "zh-settings.ts", "zh-runtime.ts"]) {
+    const source3 = readFileSync(join(process.cwd(), "src", "i18n", name3), "utf8");
+    for (const match2 of source3.matchAll(/:\s*"([^"\n]*)"/g)) {
+      assertValue(!banColloquialChinese.test(match2[1]), `${name3}：${match2[1]}`);
     }
   }
 });

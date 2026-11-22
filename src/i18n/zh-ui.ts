@@ -160,7 +160,7 @@ export const uiMessages: Record<string, string> = {
   // 成了废键。⚠️ 底下这条**不是**废弃的：它是**藏起菜单栏之后弹的那句提示**，
   // 属于运行期消息，留着。
   "Menu bar hidden. Press Alt+M or open Settings ▸ Appearance ▸ Show menu bar to bring it back.":
-    "菜单栏已隐藏。按 Alt+M，或到「设置 → 外观 → 显示菜单栏」开回来。",
+    "菜单栏已隐藏。按 Alt+M，或前往“设置 → 外观 → 显示菜单栏”重新显示。",
   "Zoom In": "放大",
   "Zoom Out": "缩小",
   "Reset Zoom": "实际大小",
@@ -174,9 +174,9 @@ export const uiMessages: Record<string, string> = {
   "{0} (customized)": "{0}（已自定义）",
   "Saved {0} documents.": "已保存 {0} 份文档。",
   "There are no unsaved changes.": "没有未保存的改动。",
-  "Save the document before opening its location.": "先保存文档，才能打开它所在的位置。",
-  "Save the document before revealing it in the sidebar.": "先保存文档，才能在侧栏中定位它。",
-  "Use Close for a document that has not been saved.": "尚未保存的文档请使用「关闭」。",
+  "Save the document before opening its location.": "请先保存文档，再打开其所在位置。",
+  "Save the document before revealing it in the sidebar.": "请先保存文档，再在侧边栏中定位。",
+  "Use Close for a document that has not been saved.": "未保存的文档请使用“关闭”。",
   "Delete file?": "删除文件？",
   "Delete folder?": "删除文件夹？",
   "Delete “{0}” from disk? This cannot be undone.": "要从磁盘删除「{0}」吗？此操作无法撤销。",
@@ -184,7 +184,7 @@ export const uiMessages: Record<string, string> = {
   "That file no longer exists.": "该文件已不存在。",
   "Deleted “{0}”": "已删除「{0}」",
   "Place the cursor on an image or select exactly one image first.":
-    "请先把光标放到图片上，或只选中一张图片。",
+    "请将光标置于图片上，或仅选择一张图片。",
   "Copied the image to the clipboard.": "已将图片复制到剪贴板。",
   "Could not copy the image: {0}": "无法复制图片：{0}",
   "Export Image": "导出图片",
@@ -203,7 +203,7 @@ export const uiMessages: Record<string, string> = {
   // ⚠️ 左列里 `rustc` / `cargo` / `node` / `npm` / `tauri` / `webkit2gtk` /
   // `gtk` / `mlua` 八个**故意不翻**（程序名与包名，翻了找不到），所以这里没有它们。
   "Loading…": "正在读取…",
-  "Could not read the information.": "没读到这些信息。",
+  "Could not read the information.": "未能读取相关信息。",
   "Checking for updates…": "正在检查更新…",
   "Nota {0} is available.": "Nota {0} 已可用。",
   "Review Update": "查看更新",
@@ -278,13 +278,13 @@ export const uiMessages: Record<string, string> = {
   "{0} License": "{0} 许可证",
   "Extensions": "拓展",
   "Extension panels": "拓展面板",
-  "Installed extensions": "已装拓展",
-  "Installed extensions (look here when something is wrong)": "已装拓展清单（出问题时看这里）",
+  "Installed extensions": "已安装拓展",
+  "Installed extensions (look here when something is wrong)": "已安装拓展（出现问题时请查看此处）",
   "Hide the extension dock": "收起拓展栏",
   "Provided by extension {0}": "由拓展 {0} 提供",
   "Close extension panel": "关闭拓展面板",
   "Open a closed extension panel": "打开已关闭的拓展面板",
-  "No closed extension panels": "没有已关闭的拓展面板",
+  "No closed extension panels": "暂无已关闭的拓展面板",
   "Install from an extension package (.nota-plugin)": "从一个拓展包（.nota-plugin）安装",
   "Installing…": "正在安装…",
   "Install from file…": "从文件安装…",
@@ -307,7 +307,7 @@ export const uiMessages: Record<string, string> = {
   "Trust {0}": "信任 {0}",
   "this signer": "这个签名者",
   "No extensions installed. Use “Install from file…” above.": "尚未安装拓展。请使用上方的“从文件安装…”选项。",
-  "No extensions are installed. Use “Install from file…” to install one. An extension package includes plugin.toml and its entry file, and is available immediately after installation.": "尚未安装拓展。请使用“从文件安装…”安装。拓展包包含 plugin.toml 和入口文件，安装后即可使用。",
+  "No extensions are installed. Use “Install from file…” to install one. An extension package includes plugin.toml and its entry file, and is available immediately after installation.": "尚未安装拓展。请使用“从文件安装…”选项。拓展包包含 plugin.toml 与入口文件，安装完成后即可使用。",
   "user": "自装",
   "builtin": "内置",
   "verified": "已验证",
@@ -317,7 +317,7 @@ export const uiMessages: Record<string, string> = {
   "These panels are laid over the editing area; the extension opens one when it needs to (e.g. “View in editor” after the AI proposes a change).": "这些面板摊在正文那一块，由拓展在需要时打开（比如 AI 提了改动之后的「在编辑区看」）。",
   "editing area": "编辑区",
   "Nowhere to land": "没有落脚处",
-  "These panels declare a location that does not exist yet, so they are not shown anywhere.": "这些面板声明的位置目前还没有对应的地方，所以哪儿都没显示。",
+  "These panels declare a location that does not exist yet, so they are not shown anywhere.": "这些面板声明的位置尚不存在，因此当前未显示。",
   "Trusted signers": "已信任的签名者",
   "Packages signed by these fingerprints count as verified. Edit ": "这些指纹签的包都当成「已验证」。核对不上的要去改",
   " to fix a mismatch.": "。",
@@ -337,7 +337,7 @@ export const uiMessages: Record<string, string> = {
   "English": "英语",
   "Chinese (Simplified)": "中文（简体）",
   "The extension has nothing to show.": "拓展没有给出内容。",
-  "This extension does not support your language": "此拓展不支持您的语言",
+  "This extension does not support your language": "此拓展不支持当前界面语言",
   "Back to the document": "回到正文",
   "Open in the editing area": "在编辑区中打开",
   "Open in sidebar": "在侧栏中打开",
@@ -359,8 +359,8 @@ export const uiMessages: Record<string, string> = {
   "(no kind)": "（没写 kind）",
   "Enter a value": "请输入",
   "Submit": "提交",
-  "This button has no `command`, so clicking it does nothing": "这个按钮没有写 `command`，点了也没事发生",
-  "This input box has no `submit` / `arg`, so clicking it does nothing": "这个输入框没有写 `submit` / `arg`，点了也没事发生",
+  "This button has no `command`, so clicking it does nothing": "此按钮未声明 `command`，点击后不会执行操作。",
+  "This input box has no `submit` / `arg`, so clicking it does nothing": "此输入框未声明 `submit` / `arg`，点击后不会执行操作。",
   "A curve with {0} points": "曲线，共 {0} 个点",
   "A curve with {0} points, vertical axis {1} to {2}": "曲线，共 {0} 个点，纵轴 {1} 到 {2}",
   "Share image preview: {0} {1}": "分享图预览：{0} {1}",
@@ -372,7 +372,7 @@ export const uiMessages: Record<string, string> = {
   "Crop profile image": "裁切头像",
   "Drag to position the portrait. The circle is what will remain.": "拖动图片调整位置。圆形范围内就是最终保留的部分。",
   "Zoom": "缩放",
-  "Round crop · 512 × 512": "圆形裁切 · 512 × 512",
+  "Round crop / 512 × 512": "圆形裁切 / 512 × 512",
   "Visible: {0}% of the source": "保留原图的 {0}%",
   "Use this crop": "使用此裁切",
   "Creator": "作者",
@@ -387,17 +387,17 @@ export const uiMessages: Record<string, string> = {
   "Save as image": "保存为图片",
   "Copy to clipboard": "复制到剪贴板",
   "Could not save: {0}": "保存失败：{0}",
-  "Could not save a setting for extension {0}: {1}": "没能存下拓展 {0} 的设置：{1}",
+  "Could not save a setting for extension {0}: {1}": "无法保存拓展 {0} 的设置：{1}",
   // 两条"为什么它是源码模式"的提示（`ui/useFileKindMode.ts`，2026-09-28）。
   // ⚠️ 文案里那两个是**弯引号**（`“ ”`），与代码里的键一个字都不能差——
   // 差一个字符这条中文就废了（闸门第 ② 条会报出来）。
   "“{0}” is not a Markdown file, so it opened in Source mode.": "「{0}」不是 Markdown 文件，已按源码模式打开。",
-  "“{0}” is very large ({1} characters), so it opened in Source mode to keep typing responsive.": "「{0}」太大了（{1} 个字符），已按源码模式打开，免得打字卡顿。",
+  "“{0}” is very large ({1} characters), so it opened in Source mode to keep typing responsive.": "“{0}”内容较大（{1} 个字符），已使用源码模式打开，以保持输入响应。",
   "This environment cannot put images on the clipboard": "这个环境不支持把图片放进剪贴板",
-  "Could not write to the clipboard ({0}). Try “Save as image” instead.": "没能写进剪贴板（{0}）。可以改按「保存为图片」。",
+  "Could not write to the clipboard ({0}). Try “Save as image” instead.": "无法写入剪贴板（{0}）。请改用“保存为图片”。",
   "Extension preview": "拓展预览",
   "The preview URL is not acceptable, so it cannot be embedded.": "预览的地址不对，嵌不进来。",
-  "The preview is not running. Press “Stop”, then “Preview” again.": "预览没有在跑。「停止」之后再点一次「预览」试试。",
+  "The preview is not running. Press “Stop”, then “Preview” again.": "预览当前未运行。请先停止，再重新启动预览。",
   // front matter 那条横幅（`ui/EditorPane.tsx`，`docs/07` 第 64 项，2026-10-04）。
   // 老的那一条（"…switch to Source mode to change it."）随横幅改版作废了：
   // 现在就地能改，再说"改不了"就是句谎。
@@ -428,12 +428,12 @@ export const uiMessages: Record<string, string> = {
   "Math Source (LaTeX)": "公式源码（LaTeX）",
   "Empty Math Block": "空公式块",
   "Empty inline math": "空的行内公式",
-  "Empty math block — click to write LaTeX": "空的公式块：点一下就能写 LaTeX",
+  "Empty math block — click to write LaTeX": "空公式块，点击后可输入 LaTeX。",
   "e.g. \\frac{a}{b}": "例如 \\frac{a}{b}",
   "LaTeX commands": "LaTeX 命令",
   "physics": "物理",
   "Code Language": "代码语言",
-  "Write your Markdown here…": "在这里写 Markdown 原文…",
+  "Write your Markdown here…": "在此输入 Markdown 原文…",
   "Untitled": "未命名",
   "Untitled {0}": "未命名 {0}",
   "Cancel": "取消",
@@ -442,7 +442,7 @@ export const uiMessages: Record<string, string> = {
   "Try to Continue": "试着继续",
   "Quit Nota": "退出 Nota",
   "Component stack: {0}": "组件栈：{0}",
-  "What you were editing is still stored in the backend, so nothing is lost. Note down the information below, then restart Nota.": "你正在编辑的内容还在后端存着，没有丢。可以先把下面这段信息记下来， 然后重启 Nota。",
+  "What you were editing is still stored in the backend, so nothing is lost. Note down the information below, then restart Nota.": "当前编辑内容仍保存在后端，未丢失。请记录以下信息，然后重启 Nota。",
   "Find": "查找",
   "Replace": "替换",
   "Replace with": "替换为",
@@ -470,13 +470,13 @@ export const uiMessages: Record<string, string> = {
   "Some folders could not be read.": "部分文件夹无法读取。",
   "Open File": "打开文件",
   "Open Folder": "打开文件夹",
-  "Use a whole folder as a workspace": "把一整个目录当工作区",
+  "Use a whole folder as a workspace": "将整个文件夹用作工作区",
   "Recently Opened": "最近打开",
   "Loaded": "已加载",
   "Disabled": "已禁用",
   "Failed": "失败",
   "No extensions found.": "没有发现拓展。",
-  "{0} extensions failed to load. See the “Extensions” dock on the right for details.": "有 {0} 个拓展没能加载，详情见右侧「拓展」栏。",
+  "{0} extensions failed to load. See the “Extensions” dock on the right for details.": "{0} 个拓展加载失败。详情请查看右侧“拓展”栏。",
   "Insert Emoji…": "插入 Emoji…",
   "Insert Emoji": "插入 Emoji",
   "Search shortcodes, e.g. smi or check": "搜索短代码，比如 smi 或 check",
@@ -521,7 +521,7 @@ export const uiMessages: Record<string, string> = {
   "Check Again": "重新检测",
   "Checking…": "检测中…",
   "Checking for pandoc on this system…": "正在检查系统中的 pandoc…",
-  "Not found in PATH": "没在 PATH 里找到",
+  "Not found in PATH": "未在 PATH 中找到",
   "Try Anyway": "仍然试一次",
   "Export {0}": "导出 {0}",
   "Exporting {0}": "开始导出 {0}",
@@ -538,7 +538,7 @@ export const uiMessages: Record<string, string> = {
   "Hide the formatting toolbar": "收起格式工具栏",
   // 侧栏右缘那条拖动把手（2026-09-30）。读屏用户看不到宽度、也没有键盘拖动
   // 这条路，所以这句话要说清"拖它能干什么"，不是只念一声"分隔条"。
-  "Resize the sidebar": "拖动可以调整侧边栏宽度",
+  "Resize the sidebar": "拖动以调整侧边栏宽度",
   "Expand this section": "展开这一节",
   "Collapse this section": "折叠这一节",
   "Cannot read this folder: {0}": "读不了这个文件夹：{0}",
@@ -555,7 +555,7 @@ export const uiMessages: Record<string, string> = {
   // `tools/i18n-check.sh` 那一条会 FAIL（同上面侧栏那两段）。
   //
   // ⚠️ 它们说的那些数**一个都没少**，只是改成悬停才看：新的合成键是下面
-  // 那一条 `{0} words · {1} characters · …`。`{0} words` 仍然留着——
+  // 那一条 `{0} words / {1} characters / …`。`{0} words` 仍然留着——
   // 它是那一格上写着的那句话，悬停提示才是详细版。
   //
   // ⚠️ **2026-09-30 第二轮又把其中三个请回来了**（用户照 Typora 给的五张图）：
@@ -569,11 +569,11 @@ export const uiMessages: Record<string, string> = {
   "{0}/{1} characters": "{0}/{1} 字符",
   "{0}/{1} lines": "{0}/{1} 行",
   "{0}/{1} minutes": "{0}/{1} 分钟",
-  "{0} selected words · {1} selected characters": "已选 {0} 词 · {1} 字符",
+  "{0} selected words / {1} selected characters": "已选 {0} 词 / {1} 字符",
   "Delete image": "删除图片",
   "Delete video": "删除视频",
   "Image could not be loaded: {0}": "图片无法加载：{0}",
-  "{0} words · {1} characters · {2} lines · about {3} min": "{0} 词 · {1} 字符 · {2} 行 · 约 {3} 分钟",
+  "{0} words / {1} characters / {2} lines / about {3} min": "{0} 词 / {1} 字符 / {2} 行 / 约 {3} 分钟",
   "{0} characters": "{0} 字符",
   "{0} lines": "{0} 行",
   "{0} minutes": "{0} 分钟",
@@ -596,7 +596,7 @@ export const uiMessages: Record<string, string> = {
   //（`MenuPopup` 的 `heading` 收的是**键**、由它翻）——同一个东西两处两个名字的话，
   // 改一处另一处静默退回英文。
   "Select spell check language": "选择拼写检查语言",
-  "No dictionaries on this machine": "这台机器上还没有词典",
+  "No dictionaries on this machine": "当前系统尚未安装词典",
   // 搜索框里打了字、一门都没搜到（2026-10-11）。
   "No matching languages": "没有匹配的语言",
   "Rename": "重命名",
@@ -646,10 +646,10 @@ export const uiMessages: Record<string, string> = {
   "Add to dictionary": "加入词典",
   "Show what differs between the file on disk and what is in the editor": "在编辑区里看磁盘上那份和编辑器里这份的差别",
   "Hide the comparison and go back to the document (the file on disk is left alone)": "收起对照，回到正文（磁盘上那份不会被改动）",
-  "Replace the editor contents with the file on disk (unsaved changes are lost — you are asked first)": "用磁盘上那份替换编辑器里的（没存的改动会丢，会先问你一次）",
-  "Leave it alone: keep editing, and overwrite the file on disk when you save": "不管它：继续编辑，存盘时覆盖磁盘上那份",
+  "Replace the editor contents with the file on disk (unsaved changes are lost — you are asked first)": "使用磁盘文件替换编辑器内容；未保存的修改将丢失，操作前会请求确认。",
+  "Leave it alone: keep editing, and overwrite the file on disk when you save": "保留当前内容；继续编辑，并在保存时覆盖磁盘文件。",
   "Changes on disk": "磁盘上的改动",
-  "The file on disk and the editor match.": "磁盘上那份和编辑器里这份没有差别。",
+  "The file on disk and the editor match.": "磁盘文件与编辑器内容一致。",
   "Back to Writing": "立刻回来写作",
   "This is alarm {0} of this session.": "这一轮第 {0} 次响警报了。",
   "The account balance has been charged to zero.": "账户余额扣到零了。",
@@ -690,7 +690,7 @@ export const uiMessages: Record<string, string> = {
   "Reading images under your home folder (read-only)": "读你主目录下的图片（只读）",
   "Image files in the home, Documents, Desktop, and Downloads folders can be read and displayed in a document (assetProtocol.scope). Note: this range is wider than the opened folder because images may use any absolute path. Files are read as images only and are never written, modified, or transmitted.": "主目录、文档、桌面和下载目录中的图片可在文档中读取并显示（assetProtocol.scope）。此范围大于已打开的文件夹，因为图片可以使用任意绝对路径。文件仅作为图片读取，不会被写入、修改或传输。",
   "The interface layer cannot go online on its own": "界面层不能自己联网",
-  "The content security policy allows connect-src only for itself and internal IPC (tauri.conf.json's csp), so even if someone slipped code into the interface, it could not send a request.": "内容安全策略里 connect-src 只放行自身和内部 IPC（tauri.conf.json 的 csp），所以就算界面代码被人塞了东西，它也发不出请求。",
+  "The content security policy allows connect-src only for itself and internal IPC (tauri.conf.json's csp), so even if someone slipped code into the interface, it could not send a request.": "内容安全策略中 connect-src 仅允许自身和内部 IPC（tauri.conf.json 的 csp）。因此，即使界面代码被注入，也无法发起网络请求。",
   "Reading and writing the files and folders you open": "读写你打开的文件和文件夹",
   "Open, edit, save, and Save As. Within a workspace folder, file changes are also monitored (inotify) so changes made by another program can be reported. Only the opened folder is monitored.": "用于打开、编辑、保存和另存为。在工作区文件夹中还会通过 inotify 监听文件变化，并在其他程序修改文件时提示。仅监听已打开的文件夹。",
   "Clipboard": "剪贴板",
@@ -706,7 +706,7 @@ export const uiMessages: Record<string, string> = {
   "Export…": "导出…",
   "Working…": "处理中…",
   "Save as a .nota-plugin package — to hand to someone else to install, or as a backup.": "保存为 .nota-plugin 包，可用于分发安装或备份。",
-  "Delete this extension from disk. Its settings file is kept.": "把这个拓展从磁盘上删掉。它的设置文件会留着。",
+  "Delete this extension from disk. Its settings file is kept.": "从磁盘删除此拓展；其设置文件将保留。",
   "It asks for no capabilities.": "它没有申请任何能力。",
   "Read/write its own data": "读写自己的数据",
   "Opened the extension folder in your file manager": "已在文件管理器里打开拓展文件夹",
@@ -729,10 +729,10 @@ export const uiMessages: Record<string, string> = {
   // ⑤ 退出前那一问（`ui/useQuitGuard.ts`，2026-10-16 新建，朋友清单第 7／16 条）。
   // ⚠️ 与「关掉一份文档」那一组（`"Save and Close"` / `"Discard and Close"`）
   // **措辞必须不一样**：那组问的是"这一份"，这组问的是"全部"。
-  "Still unsaved: {0}. Save before quitting?": "还没保存：{0}。退出前要存吗？",
+  "Still unsaved: {0}. Save before quitting?": "以下文档尚未保存：{0}。是否在退出前保存？",
   "Save All and Quit": "全部保存并退出",
   "Discard and Quit": "不保存，直接退出",
-  "Could not save “{0}”, so Nota is staying open": "「{0}」没存上，所以 Nota 先不退出了",
+  "Could not save “{0}”, so Nota is staying open": "无法保存“{0}”，因此 Nota 暂不退出。",
   "{0} and {1} more": "{0} 等 {1} 份",
 
   // 2026-10-16 补账：`tools/i18n-check.sh` 那天报的 29 条欠账里，**中文与英文
@@ -759,13 +759,13 @@ export const uiMessages: Record<string, string> = {
 
   // ③ 状态栏与拓展栏（`ui/StatusBar.tsx` / `ui/DockResizer.tsx`）。
   "Overtype: typing replaces the character to the right": "覆写模式：输入会覆盖右边的字符",
-  "Resize the extension dock": "拖动调整拓展栏宽度",
+  "Resize the extension dock": "拖动以调整拓展栏宽度",
 
   // ④ 鸣谢里那两条（`ui/credits.ts`）。
   "Spell checking engine": "拼写检查引擎",
   "Reading the clipboard": "正在读取剪切板",
   "Could not open the link: {0}": "无法打开链接：{0}",
-  "Developer mode enabled.": "开发者模式已开启。",
+  "Developer mode enabled.": "开发者模式已启用。",
   "Developer mode disabled.": "开发者模式已关闭。",
   "GPL-2.0-or-later (external program — Nota does not bundle it)": "GPL-2.0-or-later（外部程序——Nota 不随包分发）",
 

@@ -6,6 +6,8 @@ historical details are in
 
 ## 0.17.0-beta
 
+- Stop reinstalling an unchanged macOS system menu on every editor cursor update,
+  which previously dismissed the open File menu and made items unclickable.
 - Added extension API v2.4 table snapshots, temporary rendering, undoable writes
   and localized context actions.
 - Added the `nota.sheet-formulas` extension with Excel-compatible references,

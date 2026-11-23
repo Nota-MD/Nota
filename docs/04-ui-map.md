@@ -582,6 +582,13 @@ MENUS (唯一真源，和上面同一份)
 决定要不要隐藏自绘菜单栏（`TopBar` 的 `hideMenuBar`）——**只有后端说真挂上了
 才隐藏**。所以任何平台万一挂失败，退化到自绘菜单，而不是"一个菜单都没有"。
 
+⚠️ **macOS：相同载荷不得再次 `set_menu`**（2026-11-23）。`AppHandle::set_menu`
+会拆掉当前打开的系统菜单。光标/`commandState` 一抖，`disabledCommands` 就是
+**新的 `Set` 身份**，effect 会再跑——若树的 enabled/checked **内容没变**却仍
+`apply`，顶栏 File 会闪开又闪关、点不进去。`ui/nativeMenu.ts::nativeMenuPayloadKey`
+＋ `ui/useMenus.ts` 里对上次成功指纹的跳过（并短防抖）钉住这件事；单测在
+`tests/menu-features.test.ts`。
+
 ⚠️ **代码用 `cfg!` 不用 `#[cfg]`**，所以这份代码在 Linux 上也照样过类型检查。
 不这么写的话，macOS 专属的代码在开发机上**从来没被编译过**——
 等到打包那天一次性爆一堆错。

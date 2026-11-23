@@ -10,6 +10,7 @@ import {
   themeEntries,
   walkMenuItems,
 } from "../src/ui/commands";
+import { buildNativeTree, nativeMenuPayloadKey } from "../src/ui/nativeMenu";
 import { recentItem, recentPath } from "../src/ui/recentMenu";
 
 let pass = 0;
@@ -196,6 +197,23 @@ testCase("dynamic theme and recent entries all resolve to executable routes", ()
     assertValue(recentPath(entry.id) === "/tmp/a.md", "recent route lost its path");
   }
   contains(commandTable, "recent.map((path) => [recentItemid(path)", "recent routes have no handlers");
+});
+
+testCase("identical native menu trees share a stable payload key", () => {
+  const disabled = new Set<string>(["file.reload"]);
+  const checks = { "view.statusBar": true } as Record<string, boolean>;
+  const themes = [{ id: "adwaita", name: "Adwaita", builtin: true }];
+  const a = buildNativeTree(MENUS, disabled, checks, themes, "adwaita");
+  const b = buildNativeTree(MENUS, new Set(disabled), { ...checks }, themes, "adwaita");
+  assertValue(
+    nativeMenuPayloadKey(a) === nativeMenuPayloadKey(b),
+    "same enabled/checked payload must fingerprint identically",
+  );
+  const changed = buildNativeTree(MENUS, new Set(), checks, themes, "adwaita");
+  assertValue(
+    nativeMenuPayloadKey(a) !== nativeMenuPayloadKey(changed),
+    "enabling a previously disabled item must change the fingerprint",
+  );
 });
 
 console.log(`\n通过 ${pass} 条，失败 ${fail} 条`);
